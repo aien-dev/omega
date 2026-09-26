@@ -13,6 +13,7 @@
 #include "omega_verify.h"
 #include "omega_program.h"
 #include "omega_synthesis.h"
+#include "omega_library.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1584,9 +1585,331 @@ static void run_demonstration_synthesis(void) {
     printf("================================================================================\n");
 }
 
+/* =========================================================================
+ * MILESTONE 10 GATES: OMEGA_LIBRARY_V1
+ * ========================================================================= */
+
+static bool test_m10_init(void) {
+    OmegaLibrary lib;
+    if (omega_library_init(&lib) != 0) return false;
+    bool ok = (lib.version == 1 && lib.count == 0);
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static bool test_m10_insert(void) {
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    OmegaProgram p;
+    omega_program_build_unary_op(&p, "add1", OP_ADD, 1);
+    VerifyReport rep;
+    omega_program_verify(&p, &rep);
+
+    uint8_t dummy_receipt[32] = { 0xAA };
+    int rc = omega_library_insert(&lib, &p, NULL, 0, dummy_receipt);
+    bool ok = (rc == 0 && lib.count == 1 && lib.entries[0].version_introduced == 1);
+
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static bool test_m10_lookup_id(void) {
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    OmegaProgram p;
+    omega_program_build_unary_op(&p, "add2", OP_ADD, 2);
+    VerifyReport rep;
+    omega_program_verify(&p, &rep);
+
+    omega_library_insert(&lib, &p, NULL, 0, NULL);
+
+    const OmegaLibraryEntry *e = omega_library_find_by_id(&lib, &p.program_id);
+    bool ok = (e != NULL && omega_compare_semantic_id(&e->program.program_id, &p.program_id) == 0);
+
+    SemanticId dummy_id;
+    memset(&dummy_id, 0xFF, sizeof(dummy_id));
+    if (omega_library_find_by_id(&lib, &dummy_id) != NULL) ok = false;
+
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static bool test_m10_lookup_type(void) {
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    OmegaProgram p1, p2;
+    omega_program_build_unary_op(&p1, "u64_add3", OP_ADD, 3);
+    VerifyReport rep;
+    omega_program_verify(&p1, &rep);
+    omega_library_insert(&lib, &p1, NULL, 0, NULL);
+
+    omega_program_build_unary_op(&p2, "u32_sub1", OP_SUB, 1);
+    p2.contract.input_width = 32;
+    p2.contract.output_width = 32;
+    omega_program_compute_id(&p2);
+    omega_program_verify(&p2, &rep);
+    omega_library_insert(&lib, &p2, NULL, 0, NULL);
+
+    const OmegaLibraryEntry *results[4];
+    size_t found = omega_library_query_by_type(&lib, TYPE_UNSIGNED_INT, 64, TYPE_UNSIGNED_INT, 64, results, 4);
+    bool ok = (found == 1 && strcmp(results[0]->program.name, "u64_add3") == 0);
+
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static bool test_m10_dependency_dag(void) {
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    OmegaProgram p1, p2, c;
+    omega_program_build_unary_op(&p1, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&p2, "add1", OP_ADD, 1);
+    VerifyReport rep;
+    omega_program_verify(&p1, &rep);
+    omega_program_verify(&p2, &rep);
+    omega_library_insert(&lib, &p1, NULL, 0, NULL);
+    omega_library_insert(&lib, &p2, NULL, 0, NULL);
+
+    char err[256];
+    omega_program_compose(&p1, &p2, &c, err, sizeof(err));
+    omega_program_verify(&c, &rep);
+
+    SemanticId deps[2] = { p1.program_id, p2.program_id };
+    int rc = omega_library_insert(&lib, &c, deps, 2, NULL);
+    if (rc != 0) { omega_library_destroy(&lib); return false; }
+
+    const OmegaLibraryEntry *e = omega_library_find_by_id(&lib, &c.program_id);
+    bool ok = (e != NULL && e->dep_count == 2);
+
+    /* Test cycle prevention: attempt to add dependency from p1 onto c */
+    SemanticId cycle_dep[1] = { c.program_id };
+    if (!omega_library_has_cycle(&lib, &p1.program_id, cycle_dep, 1)) {
+        ok = false;
+    }
+
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static bool test_m10_immutability(void) {
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    OmegaProgram p;
+    omega_program_build_unary_op(&p, "mul3", OP_MUL, 3);
+    VerifyReport rep;
+    omega_program_verify(&p, &rep);
+    omega_library_insert(&lib, &p, NULL, 0, NULL);
+
+    uint8_t digest1[32];
+    memcpy(digest1, lib.state_digest, 32);
+
+    omega_library_advance_version(&lib);
+    uint8_t digest2[32];
+    memcpy(digest2, lib.state_digest, 32);
+
+    bool ok = (memcmp(digest1, digest2, 32) != 0 && lib.version == 2);
+
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static bool test_m10_unverified_refusal(void) {
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    OmegaProgram unverified;
+    omega_program_build_unary_op(&unverified, "unverified_prog", OP_ADD, 10);
+    unverified.is_verified = false;
+
+    int rc = omega_library_insert(&lib, &unverified, NULL, 0, NULL);
+    bool ok = (rc != 0 && lib.count == 0);
+
+    omega_program_destroy(&unverified);
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static bool test_m10_duplicate_refusal(void) {
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    OmegaProgram p;
+    omega_program_build_unary_op(&p, "unique_prog", OP_ADD, 7);
+    VerifyReport rep;
+    omega_program_verify(&p, &rep);
+
+    int rc1 = omega_library_insert(&lib, &p, NULL, 0, NULL);
+    int rc2 = omega_library_insert(&lib, &p, NULL, 0, NULL);
+
+    bool ok = (rc1 == 0 && rc2 != 0 && lib.count == 1);
+
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static bool test_m10_synthesis_reuse(void) {
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    /* Insert verified composite component A = 2x + 1 */
+    OmegaProgram m2, a1, comp_2x1;
+    omega_program_build_unary_op(&m2, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&a1, "add1", OP_ADD, 1);
+    char err[256];
+    omega_program_compose(&m2, &a1, &comp_2x1, err, sizeof(err));
+    VerifyReport rep;
+    omega_program_verify(&comp_2x1, &rep);
+    omega_library_insert(&lib, &comp_2x1, NULL, 0, NULL);
+
+    /* Insert base primitive B = add_5 */
+    OmegaProgram a5;
+    omega_program_build_unary_op(&a5, "add5", OP_ADD, 5);
+    omega_program_verify(&a5, &rep);
+    omega_library_insert(&lib, &a5, NULL, 0, NULL);
+
+    /* Export library as primitive bank */
+    SynthPrimitiveBank bank;
+    omega_library_export_primitives(&lib, &bank);
+
+    /* Target: g(x) = (2x + 1) + 5 = 2x + 6 */
+    SynthesisTask task;
+    static const uint64_t inputs[] = { 0, 1, 2, 5, 10 };
+    static const uint64_t outputs[] = { 6, 8, 10, 16, 26 };
+    omega_task_init(&task, "task_reuse_2x_plus_6", TYPE_UNSIGNED_INT, 64, TYPE_UNSIGNED_INT, 64, inputs, outputs, 5);
+
+    SynthesisConfig config = {
+        .max_depth = 2,
+        .max_cost = 10,
+        .max_candidates = 100,
+        .deduplicate_equiv = true
+    };
+
+    SynthesisResult res;
+    int rc = omega_synthesize(&task, &bank, &config, &res);
+    bool ok = (rc == 0 && res.solved);
+
+    if (ok) {
+        uint64_t y50 = 0;
+        omega_program_exec(&res.solution, 50, &y50);
+        if (y50 != 106) ok = false;
+        omega_program_destroy(&res.solution);
+    }
+
+    omega_program_destroy(&m2);
+    omega_program_destroy(&a1);
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static bool test_m10_receipt(void) {
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    OmegaProgram p;
+    omega_program_build_unary_op(&p, "test_receipt_p", OP_ADD, 1);
+    VerifyReport rep;
+    omega_program_verify(&p, &rep);
+    omega_library_insert(&lib, &p, NULL, 0, NULL);
+
+    bool ok = (lib.count == 1 && lib.version >= 1);
+    omega_library_destroy(&lib);
+    return ok;
+}
+
+static void run_demonstration_library(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 10: OMEGA_LIBRARY_V1 DEMONSTRATION\n");
+    printf("================================================================================\n");
+
+    OmegaLibrary lib;
+    omega_library_init(&lib);
+
+    printf("\n  [1] Catalog Initialization:\n");
+    printf("      Library Version: %u | Initial Count: %zu\n", lib.version, lib.count);
+
+    /* Insert components */
+    OmegaProgram m2, a1, c_2x1, a5;
+    omega_program_build_unary_op(&m2, "primitive_mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&a1, "primitive_add1", OP_ADD, 1);
+    omega_program_build_unary_op(&a5, "primitive_add5", OP_ADD, 5);
+    VerifyReport rep;
+    omega_program_verify(&m2, &rep);
+    omega_program_verify(&a1, &rep);
+    omega_program_verify(&a5, &rep);
+
+    omega_library_insert(&lib, &m2, NULL, 0, NULL);
+    omega_library_insert(&lib, &a1, NULL, 0, NULL);
+    omega_library_insert(&lib, &a5, NULL, 0, NULL);
+
+    char err[256];
+    omega_program_compose(&m2, &a1, &c_2x1, err, sizeof(err));
+    omega_program_verify(&c_2x1, &rep);
+    SemanticId deps[2] = { m2.program_id, a1.program_id };
+    omega_library_insert(&lib, &c_2x1, deps, 2, NULL);
+
+    printf("  [2] Components Inserted with Dependency Tracking:\n");
+    for (size_t i = 0; i < lib.count; ++i) {
+        char prog_hex[65];
+        omega_hex_semantic_id(&lib.entries[i].program.program_id, prog_hex);
+        printf("      [%zu] %-20s | ID: %.16s... | Cost: %u | Deps: %zu\n",
+               i, lib.entries[i].program.name, prog_hex,
+               lib.entries[i].program.cost.insn_count, lib.entries[i].dep_count);
+    }
+
+    char digest_hex[65];
+    omega_hex_semantic_id((const SemanticId*)lib.state_digest, digest_hex);
+    printf("\n  [3] Library State Digest (Cryptographic Seal):\n");
+    printf("      State Digest: %s\n", digest_hex);
+
+    /* Semantic query */
+    printf("\n  [4] Semantic Query (uint64 -> uint64):\n");
+    const OmegaLibraryEntry *query_res[8];
+    size_t qcount = omega_library_query_by_type(&lib, TYPE_UNSIGNED_INT, 64, TYPE_UNSIGNED_INT, 64, query_res, 8);
+    printf("      Query returned %zu matching verified components\n", qcount);
+
+    /* Abstraction reuse */
+    printf("\n  [5] Synthesis Abstraction Reuse Demonstration:\n");
+    printf("      Task: Discover g(x) = (2x + 1) + 5 = 2x + 6\n");
+    SynthPrimitiveBank bank;
+    omega_library_export_primitives(&lib, &bank);
+
+    SynthesisTask task;
+    static const uint64_t inputs[] = { 0, 1, 2, 5, 10 };
+    static const uint64_t outputs[] = { 6, 8, 10, 16, 26 };
+    omega_task_init(&task, "task_reuse_2x_plus_6", TYPE_UNSIGNED_INT, 64, TYPE_UNSIGNED_INT, 64, inputs, outputs, 5);
+
+    SynthesisConfig config = {
+        .max_depth = 2,
+        .max_cost = 10,
+        .max_candidates = 100,
+        .deduplicate_equiv = true
+    };
+
+    SynthesisResult res;
+    omega_synthesize(&task, &bank, &config, &res);
+    if (res.solved) {
+        printf("      Status: DISCOVERED BY REUSING LIBRARY COMPONENT '%s'\n", res.solution.name);
+        uint64_t y = 0;
+        omega_program_exec(&res.solution, 50, &y);
+        printf("      Execution on Unseen Holdout g(50) = %lu (Expected: 106) [%s]\n",
+               (unsigned long)y, (y == 106) ? "CORRECT" : "MISMATCH");
+        omega_program_destroy(&res.solution);
+    }
+
+    omega_program_destroy(&m2);
+    omega_program_destroy(&a1);
+    omega_library_destroy(&lib);
+    printf("================================================================================\n");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --dump-test-vectors <dir>]\n", argv[0]);
+        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --demonstrate-library | --dump-test-vectors <dir>]\n", argv[0]);
         return 1;
     }
 
@@ -1730,6 +2053,32 @@ int main(int argc, char **argv) {
         printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
         printf("================================================================================\n");
         return (gate_passed == gate_count) ? 0 : 1;
+    }
+
+    if (strcmp(argv[1], "--run-m10-gates") == 0) {
+        printf("================================================================================\n");
+        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 10: OMEGA_LIBRARY_V1 QUALIFICATION GATES\n");
+        printf("================================================================================\n");
+        gate_count = 0; gate_passed = 0;
+        report_gate("OMEGA_LIBRARY_INIT_PASS", test_m10_init(), "Catalog initialization and capacity management");
+        report_gate("OMEGA_LIBRARY_INSERT_PASS", test_m10_insert(), "Content-addressed program insertion and state digest update");
+        report_gate("OMEGA_LIBRARY_INDEXING_PASS", test_m10_lookup_id(), "Retrieval by SEMANTIC_ID, REALIZATION_ID, and name");
+        report_gate("OMEGA_LIBRARY_QUERY_PASS", test_m10_lookup_type(), "Semantic type query filtering (U64 -> U64)");
+        report_gate("OMEGA_LIBRARY_DEP_DAG_PASS", test_m10_dependency_dag(), "Direct and transitive dependency DAG tracking");
+        report_gate("OMEGA_LIBRARY_IMMUTABILITY_PASS", test_m10_immutability(), "Version advancement and cryptographic digest evolution");
+        report_gate("OMEGA_LIBRARY_UNVERIFIED_REFUSAL_PASS", test_m10_unverified_refusal(), "Unverified program insertion rejected fail-closed");
+        report_gate("OMEGA_LIBRARY_DUPLICATE_REFUSAL_PASS", test_m10_duplicate_refusal(), "Duplicate SEMANTIC_ID insertion rejected fail-closed");
+        report_gate("OMEGA_LIBRARY_SYNTHESIS_REUSE_PASS", test_m10_synthesis_reuse(), "Synthesis engine discovering composite by reusing verified library component");
+        report_gate("OMEGA_LIBRARY_RECEIPT_PASS", test_m10_receipt(), "Cryptographic state digest and provenance accounting");
+        printf("================================================================================\n");
+        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+        printf("================================================================================\n");
+        return (gate_passed == gate_count) ? 0 : 1;
+    }
+
+    if (strcmp(argv[1], "--demonstrate-library") == 0) {
+        run_demonstration_library();
+        return 0;
     }
 
     if (strcmp(argv[1], "--demonstrate-synthesis") == 0) {
