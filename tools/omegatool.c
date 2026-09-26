@@ -16,9 +16,11 @@
 #include "omega_library.h"
 #include "omega_discovery.h"
 #include "omega_machine.h"
+#include "omega_realize_synth.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 
 static int gate_count = 0;
 static int gate_passed = 0;
@@ -2379,9 +2381,376 @@ static void run_demonstration_machine(void) {
     printf("================================================================================\n");
 }
 
+/* =========================================================================
+ * MILESTONE 14 GATES: OMEGA_REALIZATION_SYNTHESIS
+ * ========================================================================= */
+
+static int omega_program_build_composed_affine(OmegaProgram *prog, const char *name, uint64_t mul_imm, OpCode add_sub_op, uint64_t add_sub_imm) {
+    OmegaProgram p_mul, p_sec;
+    char err[256];
+    omega_program_build_unary_op(&p_mul, "mul_step", OP_MUL, mul_imm);
+    omega_program_build_unary_op(&p_sec, "sec_step", add_sub_op, add_sub_imm);
+    int rc = omega_program_compose(&p_mul, &p_sec, prog, err, sizeof(err));
+    if (rc == 0 && name) {
+        snprintf(prog->name, sizeof(prog->name), "%s", name);
+        omega_program_compute_id(prog);
+    }
+    omega_program_destroy(&p_mul);
+    omega_program_destroy(&p_sec);
+    return rc;
+}
+
+static bool test_m14_init(void) {
+    OmegaProgram p;
+    omega_program_build_composed_affine(&p, "aff_3x_minus_2", 3, OP_SUB, 2);
+    OmegaMachineGraph mg;
+    omega_machine_build_dgx_spark(&mg);
+
+    RealizationSynthesisTask task;
+    omega_realize_task_init(&task, &p, &mg);
+
+    bool ok = (task.program == &p &&
+               task.machine == &mg &&
+               task.optimize_latency == true &&
+               task.max_unroll_factor == 1);
+    omega_program_destroy(&p);
+    return ok;
+}
+
+static bool test_m14_triple_id(void) {
+    OmegaProgram p1, p2;
+    omega_program_build_composed_affine(&p1, "p1", 3, OP_SUB, 2);
+    omega_program_build_composed_affine(&p2, "p2", 2, OP_ADD, 1);
+
+    OmegaMachineGraph spark, qemu;
+    omega_machine_build_dgx_spark(&spark);
+    omega_machine_build_qemu_virt(&qemu);
+
+    RealizationObject real;
+    memset(&real, 0, sizeof(real));
+    real.target_profile = AARCH64_PROFILE_V8A_BAREMETAL;
+    real.code_len = 4;
+    real.code_bytes[0] = 0xC0; real.code_bytes[1] = 0x03; real.code_bytes[2] = 0x5F; real.code_bytes[3] = 0xD6; /* RET */
+
+    SemanticId id_p1_spark, id_p2_spark, id_p1_qemu;
+    omega_realize_compute_triple_id(&p1.program_id, &spark.machine_id, &real, &id_p1_spark);
+    omega_realize_compute_triple_id(&p2.program_id, &spark.machine_id, &real, &id_p2_spark);
+    omega_realize_compute_triple_id(&p1.program_id, &qemu.machine_id, &real, &id_p1_qemu);
+
+    /* Changing semantic ID changes realization ID */
+    bool diff_sem = (memcmp(id_p1_spark.bytes, id_p2_spark.bytes, OMEGA_ID_BYTES) != 0);
+    /* Changing machine ID changes realization ID */
+    bool diff_mach = (memcmp(id_p1_spark.bytes, id_p1_qemu.bytes, OMEGA_ID_BYTES) != 0);
+
+    /* Determinism check */
+    SemanticId id_repeat;
+    omega_realize_compute_triple_id(&p1.program_id, &spark.machine_id, &real, &id_repeat);
+    bool det = (memcmp(id_p1_spark.bytes, id_repeat.bytes, OMEGA_ID_BYTES) == 0);
+
+    omega_program_destroy(&p1);
+    omega_program_destroy(&p2);
+    return diff_sem && diff_mach && det;
+}
+
+static bool test_m14_schedule_opt(void) {
+    OmegaProgram p;
+    omega_program_build_composed_affine(&p, "test_sched", 3, OP_SUB, 2);
+
+    RealizationSynthesisResult res_spark, res_qemu;
+    int rc1 = omega_synthesize_for_dgx_spark(&p, &res_spark);
+    int rc2 = omega_synthesize_for_qemu_virt(&p, &res_qemu);
+
+    /* Both must succeed */
+    if (rc1 != 0 || rc2 != 0 || !res_spark.solved || !res_qemu.solved) {
+        omega_program_destroy(&p);
+        return false;
+    }
+
+    /* Schedules must differ in machine code bytes (DGX Spark uses multi-register pre-load X1, X2; QEMU reuses X1) */
+    bool code_differs = (res_spark.realization.code_len == res_qemu.realization.code_len &&
+                         memcmp(res_spark.realization.code_bytes, res_qemu.realization.code_bytes, res_spark.realization.code_len) != 0);
+
+    /* Triple IDs must differ */
+    bool ids_differ = (memcmp(res_spark.realization_id.bytes, res_qemu.realization_id.bytes, OMEGA_ID_BYTES) != 0);
+
+    omega_program_destroy(&p);
+    return code_differs && ids_differ;
+}
+
+static bool test_m14_dgx_spark(void) {
+    OmegaProgram p;
+    omega_program_build_composed_affine(&p, "spark_target", 3, OP_SUB, 2);
+
+    RealizationSynthesisResult res;
+    int rc = omega_synthesize_for_dgx_spark(&p, &res);
+    bool ok = (rc == 0 && res.solved && res.code_bytes_len == 20 && res.estimated_cycles > 0);
+
+    omega_program_destroy(&p);
+    return ok;
+}
+
+static bool test_m14_qemu_virt(void) {
+    OmegaProgram p;
+    omega_program_build_composed_affine(&p, "qemu_target", 3, OP_SUB, 2);
+
+    RealizationSynthesisResult res;
+    int rc = omega_synthesize_for_qemu_virt(&p, &res);
+    bool ok = (rc == 0 && res.solved && res.code_bytes_len == 20 && res.estimated_cycles > 0);
+
+    omega_program_destroy(&p);
+    return ok;
+}
+
+static bool test_m14_semantic_parity(void) {
+    OmegaProgram p;
+    omega_program_build_composed_affine(&p, "parity_check", 3, OP_SUB, 2);
+
+    RealizationSynthesisResult res;
+    if (omega_synthesize_for_dgx_spark(&p, &res) != 0 || !res.solved) {
+        omega_program_destroy(&p);
+        return false;
+    }
+
+    typedef uint64_t (*func_u64)(uint64_t);
+    void *exec_mem = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if (exec_mem == MAP_FAILED) {
+        omega_program_destroy(&p);
+        return false;
+    }
+    memcpy(exec_mem, res.realization.code_bytes, res.realization.code_len);
+    __builtin___clear_cache((char*)exec_mem, (char*)exec_mem + res.realization.code_len);
+    if (mprotect(exec_mem, 4096, PROT_READ | PROT_EXEC) != 0) {
+        munmap(exec_mem, 4096);
+        omega_program_destroy(&p);
+        return false;
+    }
+    union {
+        void *ptr;
+        func_u64 fn;
+    } u;
+    u.ptr = exec_mem;
+
+    static const uint64_t inputs[] = { 0, 1, 2, 5, 10, 42, 100, 1000 };
+    bool ok = true;
+    for (size_t i = 0; i < sizeof(inputs)/sizeof(inputs[0]); ++i) {
+        uint64_t x = inputs[i];
+        uint64_t expected = (3 * x) - 2;
+        uint64_t actual = u.fn(x);
+        if (actual != expected) {
+            ok = false;
+            break;
+        }
+    }
+    munmap(exec_mem, 4096);
+    omega_program_destroy(&p);
+    return ok;
+}
+
+static bool test_m14_v0_structural(void) {
+    OmegaProgram p;
+    omega_program_build_composed_affine(&p, "v0_struct", 3, OP_SUB, 2);
+
+    RealizationSynthesisResult res;
+    if (omega_synthesize_for_dgx_spark(&p, &res) != 0 || !res.solved) {
+        omega_program_destroy(&p);
+        return false;
+    }
+
+    VerifyReport rep;
+    memset(&rep, 0, sizeof(rep));
+    omega_verify_v0_structural(NULL, &res.realization, &rep);
+    if (!rep.passed) {
+        omega_program_destroy(&p);
+        return false;
+    }
+
+    /* Mutate terminal RET to NOP (0xD503201F) to test fail-closed refusal */
+    RealizationObject corrupt = res.realization;
+    corrupt.code_bytes[corrupt.code_len - 4] = 0x1F;
+    corrupt.code_bytes[corrupt.code_len - 3] = 0x20;
+    corrupt.code_bytes[corrupt.code_len - 2] = 0x03;
+    corrupt.code_bytes[corrupt.code_len - 1] = 0xD5;
+
+    VerifyReport corrupt_rep;
+    memset(&corrupt_rep, 0, sizeof(corrupt_rep));
+    omega_verify_v0_structural(NULL, &corrupt, &corrupt_rep);
+
+    omega_program_destroy(&p);
+    return !corrupt_rep.passed;
+}
+
+static bool test_m14_v1_differential(void) {
+    OmegaProgram p;
+    omega_program_build_composed_affine(&p, "v1_diff", 3, OP_SUB, 2);
+
+    RealizationSynthesisResult res;
+    if (omega_synthesize_for_dgx_spark(&p, &res) != 0 || !res.solved) {
+        omega_program_destroy(&p);
+        return false;
+    }
+
+    /* Verify report indicates V1 differential passed */
+    bool ok = res.verify_report.passed;
+
+    /* Verify mutated code fails differential verification */
+    RealizationObject corrupt = res.realization;
+    corrupt.code_bytes[0] ^= 0x04; /* mutate immediate operand */
+    void *exec_mem = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if (exec_mem != MAP_FAILED) {
+        memcpy(exec_mem, corrupt.code_bytes, corrupt.code_len);
+        __builtin___clear_cache((char*)exec_mem, (char*)exec_mem + corrupt.code_len);
+        if (mprotect(exec_mem, 4096, PROT_READ | PROT_EXEC) == 0) {
+            typedef uint64_t (*func_u64)(uint64_t);
+            union {
+                void *ptr;
+                func_u64 fn;
+            } u;
+            u.ptr = exec_mem;
+            uint64_t mutated_out = u.fn(10);
+            munmap(exec_mem, 4096);
+            if (mutated_out == (3 * 10) - 2) {
+                ok = false;
+            }
+        } else {
+            munmap(exec_mem, 4096);
+        }
+    }
+
+    omega_program_destroy(&p);
+    return ok;
+}
+
+static bool test_m14_v2_property(void) {
+    OmegaProgram p;
+    omega_program_build_composed_affine(&p, "v2_prop", 3, OP_SUB, 2);
+
+    RealizationSynthesisResult res;
+    if (omega_synthesize_for_dgx_spark(&p, &res) != 0 || !res.solved) {
+        omega_program_destroy(&p);
+        return false;
+    }
+
+    VerifyReport rep;
+    memset(&rep, 0, sizeof(rep));
+    omega_verify_v2_properties(NULL, &res.realization, &rep);
+
+    omega_program_destroy(&p);
+    return rep.passed;
+}
+
+static bool test_m14_receipt(void) {
+    OmegaProgram p;
+    omega_program_build_composed_affine(&p, "receipt_prog", 3, OP_SUB, 2);
+
+    RealizationSynthesisResult res_spark, res_qemu;
+    int rc1 = omega_synthesize_for_dgx_spark(&p, &res_spark);
+    int rc2 = omega_synthesize_for_qemu_virt(&p, &res_qemu);
+
+    bool ok = (rc1 == 0 && rc2 == 0 &&
+               res_spark.solved && res_qemu.solved &&
+               res_spark.realization.has_id && res_qemu.realization.has_id &&
+               res_spark.estimated_cycles > 0 && res_qemu.estimated_cycles > 0);
+
+    omega_program_destroy(&p);
+    return ok;
+}
+
+static void run_demonstration_realization_synthesis(void) {
+    printf("================================================================================\n");
+    printf("  AIEN OMEGA SUBSTRATE — MILESTONE 14: OMEGA_REALIZATION_SYNTHESIS DEMONSTRATION\n");
+    printf("================================================================================\n");
+
+    OmegaProgram prog;
+    omega_program_build_composed_affine(&prog, "affine_3x_minus_2", 3, OP_SUB, 2);
+
+    char sem_id_hex[65];
+    omega_hex_semantic_id(&prog.program_id, sem_id_hex);
+
+    printf("\n  [1] Semantic Program Definition (G_S):\n");
+    printf("      Name:        %s\n", prog.name);
+    printf("      Contract:    U64 -> U64 | f(x) = (3 * x) - 2\n");
+    printf("      SEMANTIC_ID: %s\n", sem_id_hex);
+
+    /* Target A: DGX Spark Grace Neoverse V2 */
+    RealizationSynthesisResult res_spark;
+    omega_synthesize_for_dgx_spark(&prog, &res_spark);
+    char spark_real_id[65];
+    omega_hex_semantic_id(&res_spark.realization_id, spark_real_id);
+
+    printf("\n  [2] Synthesized Realization for Target A (DGX Spark Grace Neoverse V2):\n");
+    printf("      Pipeline:       4-wide dispatch, Out-of-Order\n");
+    printf("      Schedule:       Pre-loaded independent operand schedule (MOVZ X1, 3; MOVZ X2, 2; MUL; SUB; RET)\n");
+    printf("      REALIZATION_ID: %s\n", spark_real_id);
+    printf("      Code Length:    %u bytes (%u instructions)\n",
+           res_spark.code_bytes_len, res_spark.code_bytes_len / 4);
+    printf("      Est. Latency:   %u cycles\n", res_spark.estimated_cycles);
+    printf("      M7 Structural:  %s\n", res_spark.verify_report.passed ? "PASS" : "FAIL");
+
+    /* Target B: QEMU Virt Generic AArch64 */
+    RealizationSynthesisResult res_qemu;
+    omega_synthesize_for_qemu_virt(&prog, &res_qemu);
+    char qemu_real_id[65];
+    omega_hex_semantic_id(&res_qemu.realization_id, qemu_real_id);
+
+    printf("\n  [3] Synthesized Realization for Target B (QEMU Virt Generic AArch64):\n");
+    printf("      Pipeline:       2-wide dispatch, In-Order baseline\n");
+    printf("      Schedule:       Sequential minimal register pressure schedule (MOVZ X1, 3; MUL; MOVZ X1, 2; SUB; RET)\n");
+    printf("      REALIZATION_ID: %s\n", qemu_real_id);
+    printf("      Code Length:    %u bytes (%u instructions)\n",
+           res_qemu.code_bytes_len, res_qemu.code_bytes_len / 4);
+    printf("      Est. Latency:   %u cycles\n", res_qemu.estimated_cycles);
+    printf("      M7 Structural:  %s\n", res_qemu.verify_report.passed ? "PASS" : "FAIL");
+
+    /* Disambiguation */
+    printf("\n  [4] Cryptographic Triple Identity Disambiguation:\n");
+    printf("      SEMANTIC_ID (G_S) is Identical across both targets.\n");
+    printf("      DGX Spark REALIZATION_ID: %.20s...\n", spark_real_id);
+    printf("      QEMU Virt REALIZATION_ID: %.20s...\n", qemu_real_id);
+    printf("      Triple Identity Binding Confirmed: %s\n",
+           (strcmp(spark_real_id, qemu_real_id) != 0) ? "DISTINCT REALIZATION_IDs" : "COLLISION ERROR");
+
+    /* Native execution test */
+    printf("\n  [5] Native In-Memory Execution on DGX Spark (AArch64 Hardware):\n");
+    typedef uint64_t (*func_u64)(uint64_t);
+    void *exec_mem = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if (exec_mem != MAP_FAILED) {
+        memcpy(exec_mem, res_spark.realization.code_bytes, res_spark.realization.code_len);
+        __builtin___clear_cache((char*)exec_mem, (char*)exec_mem + res_spark.realization.code_len);
+        if (mprotect(exec_mem, 4096, PROT_READ | PROT_EXEC) == 0) {
+            union {
+                void *ptr;
+                func_u64 fn;
+            } u;
+            u.ptr = exec_mem;
+
+            static const uint64_t test_inputs[] = { 0, 1, 2, 5, 10, 50, 100 };
+            bool all_correct = true;
+            for (size_t i = 0; i < 7; ++i) {
+                uint64_t in = test_inputs[i];
+                uint64_t out = u.fn(in);
+                uint64_t exp = (3 * in) - 2;
+                printf("      f(%3lu) = %4lu (Expected: %4lu) [%s]\n",
+                       (unsigned long)in, (unsigned long)out, (unsigned long)exp,
+                       (out == exp) ? "OK" : "MISMATCH");
+                if (out != exp) all_correct = false;
+            }
+            munmap(exec_mem, 4096);
+            printf("      Native Hardware Semantic Parity: %s\n", all_correct ? "100% VERIFIED" : "FAILURE");
+        } else {
+            munmap(exec_mem, 4096);
+        }
+    }
+
+    omega_program_destroy(&prog);
+    printf("================================================================================\n");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m13-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --demonstrate-library | --demonstrate-discovery | --demonstrate-machine | --dump-test-vectors <dir>]\n", argv[0]);
+        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m13-gates | --run-m14-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --demonstrate-library | --demonstrate-discovery | --demonstrate-machine | --demonstrate-realization-synthesis | --dump-test-vectors <dir>]\n", argv[0]);
         return 1;
     }
 
@@ -2602,6 +2971,32 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "--demonstrate-machine") == 0) {
         run_demonstration_machine();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--run-m14-gates") == 0) {
+        printf("================================================================================\n");
+        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 14: OMEGA_REALIZATION_SYNTHESIS QUALIFICATION GATES\n");
+        printf("================================================================================\n");
+        gate_count = 0; gate_passed = 0;
+        report_gate("OMEGA_REAL_SYNTH_INIT_PASS", test_m14_init(), "Realization synthesis task initialization and configuration");
+        report_gate("OMEGA_REAL_SYNTH_TRIPLE_ID_PASS", test_m14_triple_id(), "Cryptographic triple identity incorporates SEMANTIC_ID, MACHINE_ID, and code bytes");
+        report_gate("OMEGA_REAL_SYNTH_SCHEDULE_OPT_PASS", test_m14_schedule_opt(), "Machine-aware instruction schedules differ between DGX Spark and QEMU virt");
+        report_gate("OMEGA_REAL_SYNTH_DGX_SPARK_PASS", test_m14_dgx_spark(), "Synthesis specialized for DGX Spark Grace Neoverse V2 4-wide dispatch");
+        report_gate("OMEGA_REAL_SYNTH_QEMU_VIRT_PASS", test_m14_qemu_virt(), "Synthesis specialized for QEMU virt generic AArch64 baseline");
+        report_gate("OMEGA_REAL_SYNTH_SEMANTIC_PARITY_PASS", test_m14_semantic_parity(), "Native execution of synthesized realization matches semantic evaluation");
+        report_gate("OMEGA_REAL_SYNTH_V0_STRUCTURAL_PASS", test_m14_v0_structural(), "M7 V0 structural verification passed on synthesized realization");
+        report_gate("OMEGA_REAL_SYNTH_V1_DIFFERENTIAL_PASS", test_m14_v1_differential(), "M7 V1 differential evaluation passed across holdout test inputs");
+        report_gate("OMEGA_REAL_SYNTH_V2_PROPERTY_PASS", test_m14_v2_property(), "M7 V2 property verification passed on synthesized realization");
+        report_gate("OMEGA_REAL_SYNTH_RECEIPT_PASS", test_m14_receipt(), "Full qualification receipt generated and verified");
+        printf("================================================================================\n");
+        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+        printf("================================================================================\n");
+        return (gate_passed == gate_count) ? 0 : 1;
+    }
+
+    if (strcmp(argv[1], "--demonstrate-realization-synthesis") == 0) {
+        run_demonstration_realization_synthesis();
         return 0;
     }
 

@@ -9,6 +9,8 @@ typedef struct {
     SemanticId realization_id;
     bool has_id;
     SemanticId semantic_id;
+    SemanticId machine_id;
+    bool has_machine_id;
     uint8_t target_profile;
     uint32_t entry_offset;
     size_t code_len;
@@ -16,6 +18,10 @@ typedef struct {
 } RealizationObject;
 
 int omega_compute_realization_id(RealizationObject *real);
+int omega_realize_compute_triple_id(const SemanticId *semantic_id,
+                                    const SemanticId *machine_id,
+                                    const RealizationObject *real,
+                                    SemanticId *out_id);
 int omega_realize_pure_binary(const OmegaGraph *g, const SemanticId *op_id, RealizationObject *out_real);
 int omega_realize_f_add_sub(const OmegaGraph *g, const SemanticId *root_apply_id, RealizationObject *out_real);
 int omega_build_f_add_sub_graph(OmegaGraph *g, SemanticId *out_semantic_id);

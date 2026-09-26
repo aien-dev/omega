@@ -78,8 +78,21 @@ int omega_verify_v0_structural(const OmegaGraph *graph, const RealizationObject 
         }
 
         RealizationObject check_id = *real;
-        if (omega_compute_realization_id(&check_id) != 0 ||
-            memcmp(check_id.realization_id.bytes, real->realization_id.bytes, OMEGA_ID_BYTES) != 0) {
+        bool id_matches = false;
+        if (real->has_machine_id) {
+            SemanticId triple_id;
+            if (omega_realize_compute_triple_id(&real->semantic_id, &real->machine_id, real, &triple_id) == 0 &&
+                memcmp(triple_id.bytes, real->realization_id.bytes, OMEGA_ID_BYTES) == 0) {
+                id_matches = true;
+            }
+        } else {
+            if (omega_compute_realization_id(&check_id) == 0 &&
+                memcmp(check_id.realization_id.bytes, real->realization_id.bytes, OMEGA_ID_BYTES) == 0) {
+                id_matches = true;
+            }
+        }
+
+        if (!id_matches) {
             report->passed = false;
             report->fail_count++;
             snprintf(report->error_detail, sizeof(report->error_detail),
