@@ -171,7 +171,7 @@ int omega_validate_object(const OmegaGraph *graph, const OmegaObject *obj, char 
         case KIND_OPERATION: {
             if (obj->payload_len >= sizeof(OperationPayload)) {
                 const OperationPayload *op = (const OperationPayload*)obj->payload;
-                if (op->opcode == OP_INVALID || op->opcode > OP_SLICE) {
+                if (op->opcode == OP_INVALID || op->opcode > OP_COMPILE) {
                     snprintf(err_msg, err_msg_len, "Invalid opcode 0x%02x", op->opcode);
                     return -1;
                 }

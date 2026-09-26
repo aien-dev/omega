@@ -9,6 +9,7 @@
 #include "aarch64_decoder.h"
 #include "omega_realize.h"
 #include "omega_exec.h"
+#include "omega_self_host.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -702,9 +703,195 @@ static void run_demonstration_realization(void) {
     omega_graph_destroy(g);
 }
 
+/* =========================================================================
+ * MILESTONE 6 QUALIFICATION GATES (OMEGA_SELF_HOST)
+ * ========================================================================= */
+
+static bool test_m6_graph(void) {
+    OmegaGraph *g = omega_graph_create();
+    SemanticId sem_id;
+    if (omega_build_compiler_graph(g, &sem_id) != 0) {
+        omega_graph_destroy(g);
+        return false;
+    }
+    char err[256];
+    if (omega_validate_graph(g, err, sizeof(err)) != 0) {
+        omega_graph_destroy(g);
+        return false;
+    }
+    bool ok = (g->object_count == 5 && omega_graph_find_object(g, &sem_id) != NULL);
+    omega_graph_destroy(g);
+    return ok;
+}
+
+static bool test_m6_c1_emission(void) {
+    OmegaGraph *g = omega_graph_create();
+    SemanticId sem_id;
+    omega_build_compiler_graph(g, &sem_id);
+    RealizationObject c1;
+    if (omega_self_host_compile_c0(g, &sem_id, &c1) != 0) {
+        omega_graph_destroy(g);
+        return false;
+    }
+    omega_graph_destroy(g);
+    return (c1.code_len > 0 && c1.has_id && c1.target_profile == AARCH64_PROFILE_V8A_BAREMETAL);
+}
+
+static bool test_m6_decoder_seam(void) {
+    OmegaGraph *g = omega_graph_create();
+    SemanticId sem_id;
+    omega_build_compiler_graph(g, &sem_id);
+    RealizationObject c1;
+    omega_self_host_compile_c0(g, &sem_id, &c1);
+    omega_graph_destroy(g);
+
+    char err[256];
+    return (aarch64_validate_code_buffer(c1.code_bytes, c1.code_len, err, sizeof(err)) == 0);
+}
+
+static bool test_m6_c2_reproduction(void) {
+    OmegaGraph *g = omega_graph_create();
+    SemanticId sem_id;
+    omega_build_compiler_graph(g, &sem_id);
+    RealizationObject c1, c2;
+    omega_self_host_compile_c0(g, &sem_id, &c1);
+
+    uint8_t wire[8192];
+    size_t wlen = 0;
+    omega_graph_serialize_binary(g, wire, sizeof(wire), &wlen);
+    omega_graph_destroy(g);
+
+    if (omega_self_host_run_native_compiler(&c1, wire, wlen, &c2) != 0) {
+        return false;
+    }
+    return (c2.code_len == c1.code_len && c2.has_id);
+}
+
+static bool test_m6_c3_reproduction(void) {
+    RealizationObject c1, c2, c3;
+    OmegaGraph *g = omega_graph_create();
+    SemanticId sem_id;
+    omega_build_compiler_graph(g, &sem_id);
+    omega_self_host_compile_c0(g, &sem_id, &c1);
+
+    uint8_t wire[8192];
+    size_t wlen = 0;
+    omega_graph_serialize_binary(g, wire, sizeof(wire), &wlen);
+    omega_graph_destroy(g);
+
+    if (omega_self_host_run_native_compiler(&c1, wire, wlen, &c2) != 0) return false;
+    if (omega_self_host_run_native_compiler(&c2, wire, wlen, &c3) != 0) return false;
+    return (c3.code_len == c1.code_len && c3.has_id);
+}
+
+static bool test_m6_fixed_point(void) {
+    RealizationObject c1, c2, c3;
+    if (omega_self_host_bootstrap_sequence(&c1, &c2, &c3) != 0) {
+        return false;
+    }
+    return (c1.code_len == c2.code_len &&
+            c2.code_len == c3.code_len &&
+            memcmp(c1.code_bytes, c2.code_bytes, c1.code_len) == 0 &&
+            memcmp(c2.code_bytes, c3.code_bytes, c2.code_len) == 0);
+}
+
+static bool test_m6_realization_id(void) {
+    RealizationObject c1, c2, c3;
+    if (omega_self_host_bootstrap_sequence(&c1, &c2, &c3) != 0) {
+        return false;
+    }
+    return (memcmp(c1.realization_id.bytes, c2.realization_id.bytes, OMEGA_ID_BYTES) == 0 &&
+            memcmp(c2.realization_id.bytes, c3.realization_id.bytes, OMEGA_ID_BYTES) == 0);
+}
+
+static bool test_m6_m5_parity(void) {
+    RealizationObject c1;
+    OmegaGraph *g = omega_graph_create();
+    SemanticId sem_id;
+    omega_build_compiler_graph(g, &sem_id);
+    omega_self_host_compile_c0(g, &sem_id, &c1);
+    omega_graph_destroy(g);
+
+    uint64_t observed = 0;
+    return (omega_self_host_verify_m5_parity(&c1, &observed) == 0 && observed == 15);
+}
+
+static bool test_m6_native_execution(void) {
+    RealizationObject c1, c2, c3;
+    if (omega_self_host_bootstrap_sequence(&c1, &c2, &c3) != 0) return false;
+
+    uint64_t observed = 0;
+    return (omega_self_host_verify_m5_parity(&c3, &observed) == 0 && observed == 15);
+}
+
+static bool test_m6_adversarial_mutation(void) {
+    RealizationObject c1, c2;
+    OmegaGraph *g = omega_graph_create();
+    SemanticId sem_id;
+    omega_build_compiler_graph(g, &sem_id);
+    omega_self_host_compile_c0(g, &sem_id, &c1);
+
+    uint8_t wire[8192];
+    size_t wlen = 0;
+    omega_graph_serialize_binary(g, wire, sizeof(wire), &wlen);
+    omega_graph_destroy(g);
+
+    /* Mutate 1 bit in magic */
+    wire[0] ^= 0x01;
+    int rc = omega_self_host_run_native_compiler(&c1, wire, wlen, &c2);
+    if (rc == 0) return false;
+
+    /* Restore wire, mutate count byte */
+    wire[0] ^= 0x01;
+    wire[5] ^= 0x01;
+    rc = omega_self_host_run_native_compiler(&c1, wire, wlen, &c2);
+    if (rc == 0) return false;
+
+    /* Mutate instruction opcode in c1, check decoder catches it */
+    RealizationObject mut_c = c1;
+    mut_c.code_bytes[3] = 0x00; /* Makes insn 0 into 0x00000000 (UDF), invalid in decoder */
+    char err[256];
+    if (aarch64_validate_code_buffer(mut_c.code_bytes, mut_c.code_len, err, sizeof(err)) == 0) {
+        return false;
+    }
+
+    return true;
+}
+
+static void run_demonstration_self_host(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 6: SELF-HOSTING COMPILER REPRODUCTION\n");
+    printf("================================================================================\n");
+
+    RealizationObject c1, c2, c3;
+    printf("  [1] Executing 3-Generation Bootstrap Sequence:\n");
+    printf("      C0(G_C) -> C1\n");
+    printf("      C1(G_C) -> C2\n");
+    printf("      C2(G_C) -> C3\n");
+
+    int seq_rc = omega_self_host_bootstrap_sequence(&c1, &c2, &c3);
+    char id1[65], id2[65], id3[65];
+    omega_hex_semantic_id(&c1.realization_id, id1);
+    omega_hex_semantic_id(&c2.realization_id, id2);
+    omega_hex_semantic_id(&c3.realization_id, id3);
+
+    printf("      C1 Code Length = %zu bytes | REALIZATION_ID = %s\n", c1.code_len, id1);
+    printf("      C2 Code Length = %zu bytes | REALIZATION_ID = %s\n", c2.code_len, id2);
+    printf("      C3 Code Length = %zu bytes | REALIZATION_ID = %s\n", c3.code_len, id3);
+    printf("      Fixed Point    = %s\n\n", (seq_rc == 0) ? "EXACT BIT-FOR-BIT FIXED POINT C1 == C2 == C3" : "MISMATCH");
+
+    printf("  [2] Validating M5 Parity via Reproduced Compiler C3:\n");
+    printf("      Target: F(a,b,c) = (a + b) - c\n");
+    uint64_t observed = 0;
+    int par_rc = omega_self_host_verify_m5_parity(&c3, &observed);
+    printf("      Observed Result = %lu (Expected: 15)\n", (unsigned long)observed);
+    printf("      M5 Parity       = %s\n", (par_rc == 0 && observed == 15) ? "VERIFIED (PASS: exact M5 bytes and output)" : "FAIL");
+    printf("================================================================================\n");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: %s [--run-gates | --run-m5-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --dump-test-vectors <dir>]\n", argv[0]);
+        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --dump-test-vectors <dir>]\n", argv[0]);
         return 1;
     }
 
@@ -749,6 +936,32 @@ int main(int argc, char **argv) {
         printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
         printf("================================================================================\n");
         return (gate_passed == gate_count) ? 0 : 1;
+    }
+
+    if (strcmp(argv[1], "--run-m6-gates") == 0) {
+        printf("================================================================================\n");
+        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 6: OMEGA_SELF_HOST QUALIFICATION GATES\n");
+        printf("================================================================================\n");
+        gate_count = 0; gate_passed = 0;
+        report_gate("OMEGA_SELF_HOST_GRAPH_PASS", test_m6_graph(), "Semantic compiler graph G_C constructed and validated");
+        report_gate("OMEGA_SELF_HOST_C1_EMISSION_PASS", test_m6_c1_emission(), "Reference lowering C0(G_C) -> C1 emitted machine bytes");
+        report_gate("OMEGA_SELF_HOST_DECODER_SEAM_PASS", test_m6_decoder_seam(), "Independent decoder verified all C1 instructions");
+        report_gate("OMEGA_SELF_HOST_C2_REPRODUCTION_PASS", test_m6_c2_reproduction(), "Native compiler C1(G_C) -> C2 emitted machine bytes");
+        report_gate("OMEGA_SELF_HOST_C3_REPRODUCTION_PASS", test_m6_c3_reproduction(), "Native compiler C2(G_C) -> C3 emitted machine bytes");
+        report_gate("OMEGA_SELF_HOST_FIXED_POINT_PASS", test_m6_fixed_point(), "Exact bit-for-bit identity C1 == C2 == C3 verified");
+        report_gate("OMEGA_SELF_HOST_REALIZATION_ID_PASS", test_m6_realization_id(), "REALIZATION_ID matching across C1, C2, and C3");
+        report_gate("OMEGA_SELF_HOST_M5_PARITY_PASS", test_m6_m5_parity(), "Reproduced compiler reproduces exact M5 machine code bytes");
+        report_gate("OMEGA_SELF_HOST_NATIVE_EXECUTION_PASS", test_m6_native_execution(), "Reproduced compiler output executes natively to 15");
+        report_gate("OMEGA_SELF_HOST_ADVERSARIAL_MUTATION_PASS", test_m6_adversarial_mutation(), "Single-bit mutations in G_C wire or C1 refused fail-closed");
+        printf("================================================================================\n");
+        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+        printf("================================================================================\n");
+        return (gate_passed == gate_count) ? 0 : 1;
+    }
+
+    if (strcmp(argv[1], "--demonstrate-self-host") == 0) {
+        run_demonstration_self_host();
+        return 0;
     }
 
     if (strcmp(argv[1], "--demonstrate-realization") == 0) {

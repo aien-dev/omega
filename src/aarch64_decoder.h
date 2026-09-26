@@ -17,7 +17,14 @@ typedef enum {
     DECODED_B,
     DECODED_B_COND,
     DECODED_CBZ,
-    DECODED_CBNZ
+    DECODED_CBNZ,
+    DECODED_MOVK,
+    DECODED_ADR,
+    DECODED_LDR,
+    DECODED_STR,
+    DECODED_LDRB,
+    DECODED_STRB,
+    DECODED_SUBS
 } DecodedOp;
 
 typedef struct {

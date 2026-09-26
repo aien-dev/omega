@@ -109,6 +109,85 @@ int aarch64_decode_instruction(uint32_t insn, DecodedInsn *out_dec) {
         return 0;
     }
 
+    /* 10. MOVK */
+    if ((insn & 0x7F800000) == 0x72800000) {
+        out_dec->op = DECODED_MOVK;
+        out_dec->sf = (insn >> 31) & 1;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        out_dec->imm16 = (uint16_t)((insn >> 5) & 0xFFFF);
+        return 0;
+    }
+
+    /* 11. ADR */
+    if ((insn & 0x9F000000) == 0x10000000) {
+        out_dec->op = DECODED_ADR;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        return 0;
+    }
+
+    /* 12. LDR / STR (unsigned offset) */
+    if ((insn & 0xBF400000) == 0xB9400000) {
+        out_dec->op = DECODED_LDR;
+        out_dec->sf = (insn >> 30) & 1;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
+        return 0;
+    }
+    if ((insn & 0xBF400000) == 0xB9000000) {
+        out_dec->op = DECODED_STR;
+        out_dec->sf = (insn >> 30) & 1;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
+        return 0;
+    }
+
+    /* 13. LDR / STR (post-indexed 32-bit) */
+    if ((insn & 0xFFE00400) == 0xB8400400) {
+        out_dec->op = DECODED_LDR;
+        out_dec->sf = false;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
+        return 0;
+    }
+    if ((insn & 0xFFE00400) == 0xB8000400) {
+        out_dec->op = DECODED_STR;
+        out_dec->sf = false;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
+        return 0;
+    }
+
+    /* 14. LDRB / STRB */
+    if ((insn & 0xFFC00000) == 0x39400000) {
+        out_dec->op = DECODED_LDRB;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
+        return 0;
+    }
+    if ((insn & 0xFFC00000) == 0x39000000) {
+        out_dec->op = DECODED_STRB;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
+        return 0;
+    }
+
+    /* 15. SUBS (immediate & reg) */
+    if ((insn & 0x7F800000) == 0x71000000) {
+        out_dec->op = DECODED_SUBS;
+        out_dec->sf = (insn >> 31) & 1;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
+        return 0;
+    }
+    if ((insn & 0x7F200000) == 0x6B000000) {
+        out_dec->op = DECODED_SUBS;
+        out_dec->sf = (insn >> 31) & 1;
+        out_dec->rd = (uint8_t)(insn & 0x1F);
+        out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
+        out_dec->rm = (uint8_t)((insn >> 16) & 0x1F);
+        return 0;
+    }
+
     out_dec->op = DECODED_INVALID;
     return -1;
 }

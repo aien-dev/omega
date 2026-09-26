@@ -2,7 +2,7 @@ CC ?= gcc
 CFLAGS ?= -std=c99 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -O2 -Isrc
 OUT_DIR ?= build
 
-SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_exec.c tools/omegatool.c
+SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_exec.c src/omega_self_host.c tools/omegatool.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 TARGET = $(OUT_DIR)/omegatool
 
@@ -30,6 +30,10 @@ test: $(TARGET)
 test-m5: $(TARGET)
 	./$(TARGET) --run-m5-gates
 	./$(TARGET) --demonstrate-realization
+
+test-m6: $(TARGET)
+	./$(TARGET) --run-m6-gates
+	./$(TARGET) --demonstrate-self-host
 
 clean:
 	rm -rf $(OUT_DIR)

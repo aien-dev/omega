@@ -1,0 +1,59 @@
+{
+  "milestone": "MILESTONE 6 — OMEGA_SELF_HOST",
+  "status": "QUALIFIED / PASS",
+  "contract_id": "CONTRACT-OMEGA-SELF-HOST-M6",
+  "generated_at": "2026-09-26T08:20:32Z",
+  "git_commit": "34dbe93c3a3e0260e8ca381e6212c648384f8738",
+  "host": {
+    "os": "Linux",
+    "arch": "aarch64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "artifacts": {
+    "src/omega_self_host.c": { "sha256": "c1090ec33c102e0a655ae11e57bdf0d6f8596c45e96195a21f77f072f01df028" },
+    "src/aarch64_encoder.c": { "sha256": "adc110ae80aabb94290337c549f3e038cc1b6f2375043700cb5327641f357c3f" },
+    "src/aarch64_decoder.c": { "sha256": "ac543a0582ba165b7795502f45a0542aef3900cf0485f31b873a85ec00ade37f" },
+    "build/omegatool": { "sha256": "c000315b91a489d33e5c180e426a0263e24ae575549bb478ab62a47c4d214b93" }
+  },
+  "self_hosting_closure": {
+    "bootstrap_sequence": "C0(G_C) -> C1, C1(G_C) -> C2, C2(G_C) -> C3",
+    "compiler_realization_id": "7109e9e21285aca2829c2fa43c35c1885779d59eb2cb1699e2db227c408e78a4",
+    "compiler_code_len_bytes": 220,
+    "instruction_count": 55,
+    "fixed_point_verified": true,
+    "bit_for_bit_identity": "C1 == C2 == C3",
+    "foreign_compiler_dependency": false
+  },
+  "m5_parity_verification": {
+    "target_computation": "F(a, b, c) = (a + b) - c",
+    "reproduced_by": "C3",
+    "m5_realization_id": "6348eb04e1bab3b88e48d3c725a15c01565e3d5f34a6b31dffb3084c97bcf118",
+    "native_execution_input": { "a": 7, "b": 11, "c": 3 },
+    "observed_result": 15,
+    "parity_verified": true
+  },
+  "qualification_gates": {
+    "total": 10,
+    "passed": 10,
+    "gates": {
+      "OMEGA_SELF_HOST_GRAPH_PASS": "PASS",
+      "OMEGA_SELF_HOST_C1_EMISSION_PASS": "PASS",
+      "OMEGA_SELF_HOST_DECODER_SEAM_PASS": "PASS",
+      "OMEGA_SELF_HOST_C2_REPRODUCTION_PASS": "PASS",
+      "OMEGA_SELF_HOST_C3_REPRODUCTION_PASS": "PASS",
+      "OMEGA_SELF_HOST_FIXED_POINT_PASS": "PASS",
+      "OMEGA_SELF_HOST_REALIZATION_ID_PASS": "PASS",
+      "OMEGA_SELF_HOST_M5_PARITY_PASS": "PASS",
+      "OMEGA_SELF_HOST_NATIVE_EXECUTION_PASS": "PASS",
+      "OMEGA_SELF_HOST_ADVERSARIAL_MUTATION_PASS": "PASS"
+    }
+  },
+  "sovereignty_accounting": {
+    "llvm_dependency": false,
+    "gnu_as_dependency": false,
+    "gcc_asm_dependency": false,
+    "jit_compiler_dependency": false,
+    "python_dependency": false,
+    "realizer_lineage": "Closed-loop reproduction: OMEGA reproduces its minimal compiler through its own semantic graph G_C"
+  }
+}
