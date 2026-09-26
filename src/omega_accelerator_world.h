@@ -14,6 +14,7 @@
 #define OMEGA_WORLD_MAX_CODE_ENTRIES    64
 #define OMEGA_WORLD_SCRATCH_SIZE       0x200000 /* 2 MiB persistent scratch */
 #define OMEGA_WORLD_MAX_PB_WORDS       4096
+#define OMEGA_WORLD_MAX_IN_FLIGHT      256
 
 /* Object Types */
 #define OMEGA_OBJ_NONE                 0x00000000
@@ -87,6 +88,34 @@ typedef struct {
     uint32_t last_payload;
 } OmegaCompletionTracker;
 
+/* Semantic descriptor for one queued dispatch. Captured at submission time and
+ * folded into the rolling digest only after completion is observed, so digest
+ * provenance is bound to real code/realization/input/result identities. */
+typedef struct {
+    uint32_t semantic_words[5];
+    uint32_t code_object_id;
+    uint32_t code_generation;
+    uint32_t code_permissions;
+    uint32_t a_object_id;
+    uint32_t a_generation;
+    uint32_t a_permissions;
+    uint32_t b_object_id;
+    uint32_t b_generation;
+    uint32_t b_permissions;
+    uint32_t c_object_id;
+    uint32_t c_generation;
+    uint32_t c_permissions;
+    uint32_t a_bytes;
+    uint32_t b_bytes;
+    uint32_t c_bytes;
+    uint32_t completion_val;
+    /* GPFIFO put count immediately after this submission was enqueued.
+     * This is queue accounting used for retirement and is deliberately
+     * distinct from completion_val (hardware-completion identity). The
+     * world fills it in omega_world_submit; callers must leave it zero. */
+    uint32_t gp_seq;
+} OmegaWorldSubmission;
+
 /* Omega Accelerator World Context */
 typedef struct {
     uint32_t current_epoch;
@@ -112,6 +141,10 @@ typedef struct {
     /* Persistent scratch arena & completion */
     OmegaScratchArena scratch;
     OmegaCompletionTracker completion;
+
+    /* Batched submissions awaiting observed completion */
+    OmegaWorldSubmission in_flight[OMEGA_WORLD_MAX_IN_FLIGHT];
+    uint32_t in_flight_count;
 
     /* Pushbuffer allocation */
     NvrmMem pb_mem;
@@ -193,6 +226,27 @@ int  omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
                                  const OmegaHandle *h_b,
                                  const OmegaHandle *h_c,
                                  uint32_t *out_completion_code);
+
+/* Batched persistent submission. Enqueues a prebuilt pushbuffer whose terminal
+ * semaphore release carries submission->completion_val. The world owns the
+ * authoritative sequence/dispatch accounting: counters and the rolling digest
+ * advance only when completion is observed, never at enqueue time. */
+int  omega_world_submit(OmegaAcceleratorWorld *world,
+                        const NvrmMem *pb_mem,
+                        uint32_t off_bytes,
+                        uint32_t nwords,
+                        const OmegaWorldSubmission *submission);
+
+/* Ring the doorbell after a run of submissions. */
+int  omega_world_ring(OmegaAcceleratorWorld *world);
+
+/* Block until the completion marker reaches upto_payload, retire the GPFIFO
+ * entries, and commit every in-flight dispatch whose completion_val <=
+ * upto_payload by advancing total_dispatches and folding the dispatch into the
+ * rolling digest. Returns the number committed, or a negative error code. */
+int  omega_world_drain(OmegaAcceleratorWorld *world,
+                       uint32_t upto_payload,
+                       int timeout_ms);
 
 /* Channel Fault Injection and Recovery */
 int  omega_world_recover_channel_fault(OmegaAcceleratorWorld *world);
