@@ -32,6 +32,9 @@ typedef enum {
     BW_IR_IADD3,        /* IADD3 Rd, PT, PT, Ra, Rb, Rc */
     BW_IR_HMMA_F16,     /* HMMA.16816.F32 Rd, Ra, Rb, Rc (FP16 input, FP32 accumulator) */
     BW_IR_HMMA_BF16,    /* HMMA.16816.F32.BF16 Rd, Ra, Rb, Rc (BF16 input, FP32 accumulator) */
+    BW_IR_SHF_R,        /* SHF.R.U32.HI Rd, RZ, imm, Ra */
+    BW_IR_LOP3_AND,     /* LOP3.LUT Rd, Ra, imm, RZ, 0xc0, !PT (Bitwise AND) */
+    BW_IR_LDG_E_U16,    /* LDG.E.U16 Rd, desc[URd][Ra.64] */
     BW_IR_EXIT,         /* EXIT */
     BW_IR_BRA           /* BRA target */
 } BlackwellIROpcode;
@@ -56,6 +59,10 @@ typedef struct {
     uint32_t control;   /* Bundle control word */
     bool is_uniform;    /* True if targets/uses uniform registers */
     bool predicate_p0;  /* True if predicated on @P0 */
+    uint8_t dst_subreg; /* Subregister offset (0..3) within register bundle */
+    uint8_t src1_subreg;
+    uint8_t src2_subreg;
+    uint8_t src3_subreg;
 } BlackwellIRInsn;
 
 /* Live Interval for Bounded Linear Register Allocation */
@@ -118,6 +125,10 @@ int omega_bw_encode_program(const BlackwellIRProgram *prog, uint8_t *code_buf, s
 
 /* Top-level dynamic code generator for integer matrix multiplication */
 int omega_blackwell_codegen_matmul_i32(const OmegaMatMulSpec *spec, OmegaBlackwellKernel *kernel);
+
+/* Dynamic sm_121 Tensor Core code generator (FP16 & BF16 via HMMA.16816) */
+int omega_blackwell_codegen_matmul_tensor_prog(const OmegaMatMulSpec *spec, BlackwellIRProgram *prog);
+int omega_blackwell_codegen_matmul_tensor(const OmegaMatMulSpec *spec, OmegaBlackwellKernel *kernel);
 
 /* Unit test for instruction encoding bitfield fixtures (Gate 3) */
 int omega_blackwell_verify_codegen_fixtures(void);
