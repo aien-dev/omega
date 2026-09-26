@@ -42,6 +42,62 @@ static bool test_m19_gate1_world_lifecycle(void) {
     return true;
 }
 
+/* Qualify the two distinct reuse requirements in the architecture spec. */
+static bool test_m19_context_and_channel_reuse(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+
+    const uint32_t root = world.m16.rm.root;
+    const uint32_t device = world.m16.rm.device;
+    const uint32_t vaspace = world.m16.rm.vaspace;
+    const uint32_t gpfifo = world.m16.rm.gpfifo;
+    const uint32_t chgroup = world.m16.rm.chgroup;
+    volatile uint32_t *const doorbell = world.m16.rm.doorbell;
+    if (!root || !device || !vaspace || !gpfifo || !chgroup || !doorbell) {
+        omega_world_destroy(&world);
+        return false;
+    }
+
+    uint8_t code_buf[1024];
+    size_t code_len = 0;
+    OmegaHandle code, a, b, c;
+    bool ok = omega_blackwell_encode_vecadd(code_buf, sizeof(code_buf), &code_len) == 0 &&
+              omega_world_register_code(&world, code_buf, code_len, NULL, &code) == OMEGA_WORLD_OK &&
+              omega_world_register_buffer(&world, 256, OMEGA_PERM_READ, &a) == OMEGA_WORLD_OK &&
+              omega_world_register_buffer(&world, 256, OMEGA_PERM_READ, &b) == OMEGA_WORLD_OK &&
+              omega_world_register_buffer(&world, 256, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &c) == OMEGA_WORLD_OK;
+    if (!ok) {
+        omega_world_destroy(&world);
+        return false;
+    }
+    uint32_t *pa = NULL, *pb = NULL, *pc = NULL;
+    uint64_t va;
+    ok = omega_world_resolve_buffer(&world, &a, OMEGA_PERM_READ, 0, 256, (void **)&pa, &va) == OMEGA_WORLD_OK &&
+         omega_world_resolve_buffer(&world, &b, OMEGA_PERM_READ, 0, 256, (void **)&pb, &va) == OMEGA_WORLD_OK &&
+         omega_world_resolve_buffer(&world, &c, OMEGA_PERM_READ, 0, 256, (void **)&pc, &va) == OMEGA_WORLD_OK;
+    if (!ok) {
+        omega_world_destroy(&world);
+        return false;
+    }
+    uint32_t completion = 0;
+    for (uint32_t step = 0; step < 2 && ok; step++) {
+        for (uint32_t i = 0; i < 64; i++) {
+            pa[i] = step + i;
+            pb[i] = 10 + step;
+            pc[i] = 0;
+        }
+        ok = omega_world_dispatch_vector(&world, &code, &a, &b, &c, 64, &completion) == OMEGA_WORLD_OK &&
+             pc[0] == 10 + 2 * step && pc[63] == 73 + 2 * step &&
+             world.m16.rm.root == root && world.m16.rm.device == device &&
+             world.m16.rm.vaspace == vaspace && world.m16.rm.gpfifo == gpfifo &&
+             world.m16.rm.chgroup == chgroup && world.m16.rm.doorbell == doorbell &&
+             world.channel_generation == 1 && world.channel_reconstructions == 0 &&
+             world.total_dispatches == step + 1;
+    }
+    omega_world_destroy(&world);
+    return ok;
+}
+
 static bool test_m19_gate2_registry_aba_validation(void) {
     OmegaAcceleratorWorld world;
     if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
@@ -285,6 +341,10 @@ static bool test_m19_gate7_ring_capacity_and_multi_wrap(void) {
 
     uint32_t last_completion = 0;
     for (uint32_t i = 0; i < stress_count; i++) {
+        if (i % 256 == 0) {
+            fprintf(stderr, "M19 queue wrap: dispatch=%u/%u put=%u retired=%u\n",
+                    i, stress_count, world.m16.rm.put, world.m16.rm.retired);
+        }
         for (uint32_t j = 0; j < n; j++) {
             a_cpu[j] = i + j;
             c_cpu[j] = 0xdeadbeef;
@@ -732,12 +792,17 @@ static bool test_m19_gate15_clean_clone(void) {
     if (getenv("OMEGA_IN_CLEAN_CLONE") != NULL) {
         return true;
     }
-    int rc = system("rm -rf /tmp/omega_clean_m19 && "
-                    "cp -r /home/drakestapleton/workspace/omega /tmp/omega_clean_m19 && "
-                    "cd /tmp/omega_clean_m19 && "
-                    "make clean >/dev/null 2>&1 && "
-                    "make -j >/dev/null 2>&1 && "
-                    "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m19-gates >/tmp/clean_clone_m19.log 2>&1");
+    char clone_template[] = "/tmp/omega_clean_m19_XXXXXX";
+    char *clone = mkdtemp(clone_template);
+    if (!clone) return false;
+    char command[2048];
+    int len = snprintf(command, sizeof(command),
+                       "cp -a . '%s/' && cd '%s' && "
+                       "make clean >/dev/null 2>&1 && make -j >/dev/null 2>&1 && "
+                       "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m19-gates >'%s/qualification.log' 2>&1",
+                       clone, clone, clone);
+    if (len < 0 || (size_t)len >= sizeof(command)) return false;
+    int rc = system(command);
     return (rc == 0);
 }
 
@@ -765,6 +830,8 @@ static bool compute_file_sha256(const char *path, uint8_t digest[32], char hex[6
 }
 
 static bool test_m19_gate17_receipt(void) {
+    /* A receipt cannot certify a failed or incomplete gate campaign. */
+    if (m19_gate_count != 17 || m19_gate_passed != 17) return false;
     const char *manifest_files[] = {
         "src/omega_accelerator_world.h",
         "src/omega_accelerator_world.c",
@@ -865,9 +932,9 @@ static bool test_m19_gate17_receipt(void) {
     fprintf(f, "  \"zero_libcuda_linkage\": true,\n");
     fprintf(f, "  \"zero_cuda_symbols\": true,\n");
     fprintf(f, "  \"zero_libcuda_runtime\": true,\n");
-    fprintf(f, "  \"m19_gates_passed\": 17,\n");
+    fprintf(f, "  \"m19_gates_passed\": 18,\n");
     fprintf(f, "  \"cumulative_regression_passed\": 157,\n");
-    fprintf(f, "  \"total_gates_evaluated\": 174,\n");
+    fprintf(f, "  \"total_gates_evaluated\": 175,\n");
     fprintf(f, "  \"qualification_timestamp\": \"%s\"\n", time_str);
     fprintf(f, "}\n");
     fclose(f);
@@ -882,6 +949,7 @@ int run_m19_gates(void) {
     m19_gate_passed = 0;
 
     report_m19_gate("OMEGA_WORLD_LIFECYCLE_PASS", test_m19_gate1_world_lifecycle(), "World lifecycle and epoch validation");
+    report_m19_gate("OMEGA_WORLD_CONTEXT_CHANNEL_REUSE_PASS", test_m19_context_and_channel_reuse(), "RM client, device, VAS and channel reused across dispatches");
     report_m19_gate("OMEGA_WORLD_REGISTRY_ABA_PASS", test_m19_gate2_registry_aba_validation(), "Object registry abstraction & two-level ABA handle validation");
     report_m19_gate("OMEGA_WORLD_ADDRESS_ISOLATION_PASS", test_m19_gate3_address_isolation(), "Capability address isolation & internal registry authority");
     report_m19_gate("OMEGA_WORLD_CODE_REGISTRY_PASS", test_m19_gate4_code_registry(), "Dynamic code registry & machine code publication");
@@ -901,7 +969,7 @@ int run_m19_gates(void) {
 
     printf("================================================================================\n");
     printf("  STAGE 1 / PERSISTENT WORLD QUALIFICATION: %d / %d M19 GATES PASSED\n", m19_gate_passed, m19_gate_count);
-    printf("  TOTAL GATES EVALUATED: %d (17 M19 Gates + 157 Prior Regression Gates)\n", m19_gate_passed + 157);
+    printf("  TOTAL GATES EVALUATED: %d (18 M19 Gates + 157 Prior Regression Gates)\n", m19_gate_passed + 157);
     printf("================================================================================\n");
 
     return (m19_gate_passed == m19_gate_count) ? 0 : 1;
