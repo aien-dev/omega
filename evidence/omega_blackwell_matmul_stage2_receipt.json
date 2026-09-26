@@ -5,8 +5,11 @@
   "stage_title": "Blackwell Tensor Core MMA Dynamic Execution & Silicon Qualification",
   "target_hardware": "NVIDIA DGX Spark (Grace Blackwell GB10, sm_121)",
   "substrate": "M16 Native Libcuda-Free Channel",
-  "implementation_commit": "942173708c70a0251f777444b3e694e8a04b4fb7",
-  "canonical_merge_commit": "8da637bd352cdad039d1e88edd92c1ba30cf4173",
+  "stage1_checkpoint_commit": "8da637bd352cdad039d1e88edd92c1ba30cf4173",
+  "stage2_implementation_commit": "942173708c70a0251f777444b3e694e8a04b4fb7",
+  "final_evidence_commit": "87349c01b6de3555f621b2c30141381863c09486",
+  "architecture_ratification_commit": "9f1f13380f1ab39caa45438830c06bde7c2a0c11",
+  "architecture_canonical_head": "f4d86c8587ef87f5fba9088daf638c4d563d0c0a",
   "m16_authority_commit": "b64753d95bacb1114ba48decde48239f0c542e12",
   "fp16_spec_id": "c14660d2ee60590a8102c31f0a15ad0f6943b6cec93301edfffbfc1055138a0e",
   "fp16_code_sha256": "78b37ba7f7a2a3229bd3bcf50a1371d9147a20b7c181a031932d2fe9ec108273",
@@ -14,8 +17,8 @@
   "bf16_spec_id": "e16219066feb4ecb1d8cf9d732490069e5d56b656084e5e34056c68a3d42761e",
   "bf16_code_sha256": "e9fecf395244b0ef5b26241cd9a498d4f7493653902b4abf622602dccb96e048",
   "bf16_realization_id": "145e2bdbccffb28c05c1332d9a5d680139598bd06a9a461a4434beb9dd64813f",
-  "binary_sha256": "678df0d4ed6d908dc267a5cb7e05c00bd70a0e361e26dbcb6c14c0fb41c1190f",
-  "evidence_manifest_sha256": "8fd987f3799557a2714965e6554d6a3cfb59c9af17c7afd22152847748774e23",
+  "binary_sha256": "1f75d63b385ab8ef7941845380d37800eaa052e7a6e0acf5da209d722aeaaf4b",
+  "evidence_manifest_sha256": "958af174b76564d71002b7638ec1507930edd5dd14c8b9c860dfd964024c7974",
   "tested_configurations": [
     {"shape": "16x16x16", "precision": "FP16", "elements": 256, "max_abs_err": 0.0, "max_rel_err": 0.0, "parity": "100% exact"},
     {"shape": "16x16x16", "precision": "BF16", "elements": 256, "max_abs_err": 0.0, "max_rel_err": 0.0, "parity": "100% exact"},
@@ -35,5 +38,5 @@
   "total_gates_evaluated": 157,
   "cumulative_regression_passed": 139,
   "m18_gates_passed": 18,
-  "qualification_timestamp": "2026-09-26T16:48:29Z"
+  "qualification_timestamp": "2026-09-26T17:09:12Z"
 }

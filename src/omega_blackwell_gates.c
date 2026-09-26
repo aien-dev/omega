@@ -1083,8 +1083,11 @@ static bool test_m18_gate18_receipt(void) {
     fprintf(f, "  \"stage_title\": \"Blackwell Tensor Core MMA Dynamic Execution & Silicon Qualification\",\n");
     fprintf(f, "  \"target_hardware\": \"NVIDIA DGX Spark (Grace Blackwell GB10, sm_121)\",\n");
     fprintf(f, "  \"substrate\": \"M16 Native Libcuda-Free Channel\",\n");
-    fprintf(f, "  \"implementation_commit\": \"%s\",\n", impl_commit);
-    fprintf(f, "  \"canonical_merge_commit\": \"%s\",\n", "8da637bd352cdad039d1e88edd92c1ba30cf4173");
+    fprintf(f, "  \"stage1_checkpoint_commit\": \"%s\",\n", "8da637bd352cdad039d1e88edd92c1ba30cf4173");
+    fprintf(f, "  \"stage2_implementation_commit\": \"%s\",\n", "942173708c70a0251f777444b3e694e8a04b4fb7");
+    fprintf(f, "  \"final_evidence_commit\": \"%s\",\n", "87349c01b6de3555f621b2c30141381863c09486");
+    fprintf(f, "  \"architecture_ratification_commit\": \"%s\",\n", "9f1f13380f1ab39caa45438830c06bde7c2a0c11");
+    fprintf(f, "  \"architecture_canonical_head\": \"%s\",\n", "f4d86c8587ef87f5fba9088daf638c4d563d0c0a");
     fprintf(f, "  \"m16_authority_commit\": \"%s\",\n", m16_commit);
     fprintf(f, "  \"fp16_spec_id\": \"%s\",\n", f16_spec_hex);
     fprintf(f, "  \"fp16_code_sha256\": \"%s\",\n", f16_code_hex);
