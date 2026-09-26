@@ -109,6 +109,11 @@ typedef struct {
     uint32_t b_bytes;
     uint32_t c_bytes;
     uint32_t completion_val;
+    /* GPFIFO put count immediately after this submission was enqueued.
+     * This is queue accounting used for retirement and is deliberately
+     * distinct from completion_val (hardware-completion identity). The
+     * world fills it in omega_world_submit; callers must leave it zero. */
+    uint32_t gp_seq;
 } OmegaWorldSubmission;
 
 /* Omega Accelerator World Context */

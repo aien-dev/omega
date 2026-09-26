@@ -1241,6 +1241,81 @@ static bool test_m19_gate8_1000_op(void) {
     return true;
 }
 
+/* Silicon test, not a canonical M19 gate: completion payloads deliberately
+ * differ from the GPFIFO put sequence, proving retirement follows queue
+ * accounting (gp_seq) rather than completion identity. */
+static bool test_m19_drain_decoupling(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+
+    uint8_t code_buf[1024];
+    size_t code_len = 0;
+    if (omega_blackwell_encode_vecadd(code_buf, sizeof(code_buf), &code_len) != 0) {
+        omega_world_destroy(&world);
+        return false;
+    }
+    OmegaHandle code, a, b, c;
+    if (omega_world_register_code(&world, code_buf, code_len, NULL, &code) != OMEGA_WORLD_OK ||
+        omega_world_register_buffer(&world, 256, OMEGA_PERM_READ, &a) != OMEGA_WORLD_OK ||
+        omega_world_register_buffer(&world, 256, OMEGA_PERM_READ, &b) != OMEGA_WORLD_OK ||
+        omega_world_register_buffer(&world, 256, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &c) != OMEGA_WORLD_OK) {
+        omega_world_destroy(&world);
+        return false;
+    }
+    uint32_t *pa = NULL, *pb = NULL;
+    uint64_t va;
+    if (omega_world_resolve_buffer(&world, &a, OMEGA_PERM_READ, 0, 256, (void **)&pa, &va) != OMEGA_WORLD_OK ||
+        omega_world_resolve_buffer(&world, &b, OMEGA_PERM_READ, 0, 256, (void **)&pb, &va) != OMEGA_WORLD_OK) {
+        omega_world_destroy(&world);
+        return false;
+    }
+    for (int i = 0; i < 64; i++) { pa[i] = (uint32_t)i; pb[i] = 1; }
+
+    /* Minimal pushbuffer: channel setup + completion release only. This
+     * exercises submission/completion accounting, not kernel execution. */
+    uint32_t tpb[32];
+    size_t tpb_len = 0;
+    memcpy(&tpb[tpb_len], WORLD_SETUP_WORDS, sizeof(WORLD_SETUP_WORDS));
+    tpb_len += sizeof(WORLD_SETUP_WORDS) / 4;
+    size_t trel = tpb_len;
+    tpb[tpb_len++] = nvrm_mthd(0, 0x005c, 5);
+    tpb[tpb_len++] = (uint32_t)world.completion.gpu_va;
+    tpb[tpb_len++] = (uint32_t)(world.completion.gpu_va >> 32);
+    tpb[tpb_len++] = 0;
+    tpb[tpb_len++] = 0;
+    tpb[tpb_len++] = 0x1 | (1u << 20);
+
+    const uint32_t words[5] = {7, 0, 0, 0, 0};
+    const uint32_t base = 500;
+    uint32_t put0 = world.m16.rm.put;
+    for (uint32_t i = 0; i < 3; i++) {
+        uint32_t payload = base + 1 + i;
+        tpb[trel + 3] = payload;
+        OmegaWorldSubmission sub;
+        m19_make_submission(&sub, words, &code, &a, &b, &c, 256, 256, 256, payload);
+        if (!m19_submit_op(&world, &world.m16.pb_mem, tpb, tpb_len, i, &sub)) {
+            omega_world_destroy(&world);
+            return false;
+        }
+    }
+    if (omega_world_ring(&world) != OMEGA_WORLD_OK) { omega_world_destroy(&world); return false; }
+    int committed = omega_world_drain(&world, base + 3, 10000);
+    bool ok = (committed == 3 &&
+               world.total_dispatches == 3 &&
+               world.sequence_number == 3 &&
+               world.m16.rm.put == put0 + 3 &&
+               world.m16.rm.retired == put0 + 3 &&
+               *world.completion.cpu_marker == base + 3);
+    omega_world_destroy(&world);
+    return ok;
+}
+
+int run_m19_drain_decoupling(void) {
+    bool pass = test_m19_drain_decoupling();
+    printf("M19 drain decoupling (payloads 501-503, put 1-3): %s\n", pass ? "PASS" : "FAIL");
+    return pass ? 0 : 1;
+}
+
 /* Gate 9: OMEGA_ACCEL_RESIDENT_GENERATION_PASS */
 static bool test_m19_gate9_generation(void) {
     OmegaAcceleratorWorld world;

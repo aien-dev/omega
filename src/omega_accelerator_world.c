@@ -494,7 +494,9 @@ int omega_world_submit(OmegaAcceleratorWorld *world,
     if (nvrm_enqueue(&world->m16.rm, pb_mem, off_bytes, nwords) != 0) {
         return OMEGA_WORLD_ERR_HARDWARE;
     }
-    world->in_flight[world->in_flight_count++] = *submission;
+    world->in_flight[world->in_flight_count] = *submission;
+    world->in_flight[world->in_flight_count].gp_seq = world->m16.rm.put;
+    world->in_flight_count++;
     return OMEGA_WORLD_OK;
 }
 
@@ -516,10 +518,10 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
                                (uint64_t)timeout_ms) != 0) {
         return OMEGA_WORLD_ERR_HARDWARE;
     }
-    nvrm_retire(&world->m16.rm, upto_payload);
 
     int committed = 0;
     uint32_t keep = 0;
+    uint32_t retire_to = world->m16.rm.retired;
     for (uint32_t i = 0; i < world->in_flight_count; i++) {
         const OmegaWorldSubmission *s = &world->in_flight[i];
         if (s->completion_val > upto_payload) {
@@ -530,6 +532,7 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
             s->a_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
             s->b_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
             s->c_object_id >= OMEGA_WORLD_MAX_BUFFERS) {
+            nvrm_retire(&world->m16.rm, retire_to);
             return OMEGA_WORLD_ERR_INVALID_ARG;
         }
 
@@ -541,6 +544,7 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
             !bb->active || bb->generation != s->b_generation ||
             !cb->active || cb->generation != s->c_generation ||
             !ce->active || ce->generation != s->code_generation) {
+            nvrm_retire(&world->m16.rm, retire_to);
             return OMEGA_WORLD_ERR_STALE_GEN;
         }
 
@@ -578,11 +582,15 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
                                       bb->cpu_addr, s->b_bytes,
                                       cb->cpu_addr, s->c_bytes,
                                       s->completion_val) != OMEGA_WORLD_OK) {
+            nvrm_retire(&world->m16.rm, retire_to);
             return OMEGA_WORLD_ERR_FAULT;
         }
         world->total_dispatches++;
         committed++;
+        if (s->gp_seq > retire_to) retire_to = s->gp_seq;
     }
+    /* Retire by GPFIFO queue sequence, never by completion payload. */
+    nvrm_retire(&world->m16.rm, retire_to);
     world->in_flight_count = keep;
     return committed;
 }
