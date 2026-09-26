@@ -3784,6 +3784,15 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    if (strcmp(argv[1], "--run-m18-gates") == 0) {
+        return run_m18_gates();
+    }
+
+    if (strcmp(argv[1], "--demonstrate-blackwell-matmul") == 0) {
+        run_demonstration_blackwell_matmul();
+        return 0;
+    }
+
     if (strcmp(argv[1], "--run-m17-gates") == 0) {
         return run_m17_gates();
     }
