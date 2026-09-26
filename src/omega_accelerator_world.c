@@ -676,6 +676,9 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
         .threads_y = threads_y,
         .grid_x = grid_x,
         .grid_y = grid_y,
+        .threads_per_block = (spec->precision == OMEGA_MATMUL_PRECISION_INT32) ? (threads_x * threads_y) : 32,
+        .grid_width = grid_x * grid_y,
+        .num_elements = spec->m * spec->n,
         .gpr_count = (spec->precision == OMEGA_MATMUL_PRECISION_INT32) ? 32 : 64
     };
 
