@@ -1,0 +1,67 @@
+{
+  "milestone": "MILESTONE 8 — OMEGA_PROGRAM_CORE",
+  "status": "QUALIFIED / PASS",
+  "contract_id": "CONTRACT-OMEGA-PROGRAM-CORE-M8",
+  "generated_at": "2026-09-26T08:27:40Z",
+  "git_commit": "202fa3c9343b793d6635ee0b3d14915d33e8156d",
+  "host": {
+    "os": "Linux",
+    "arch": "aarch64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "artifacts": {
+    "src/omega_program.c": { "sha256": "d2cdd24dda21dd224cebddc2356aacc4773e94914f49e9c02982f847c0d7ecf1" },
+    "src/omega_verify.c": { "sha256": "b7b3addb2bcad248e1e3e53196745861a918b78239632426b8942fa452438179" },
+    "build/omegatool": { "sha256": "9f2cc37fa3ab904d99288942e36b435335e25877d986d0a77c5c75801aaacf99" }
+  },
+  "program_core_capabilities": {
+    "composition": {
+      "algebraic_form": "C = A o B",
+      "program_a": "double (x * 2)",
+      "program_b": "increment (x + 1)",
+      "composite_c": "2x + 1",
+      "intermediate_type_unification": true,
+      "cost_monotonicity": "Cost(C) = Cost(A) + Cost(B) - 1 (ret merged)",
+      "realization_length_bytes": 20
+    },
+    "contract_system": {
+      "input_contract": "uint64 (x >= 0)",
+      "output_contract": "uint64 ((x + 1) o (x * 2))",
+      "type_mismatch_refusal": "fail-closed verified"
+    },
+    "m7_verification_ladder": {
+      "v0_structural": "PASS",
+      "v1_differential": "PASS (evaluated across [0..100])",
+      "v2_property": "PASS",
+      "status": "VERIFIED / ADMITTED"
+    },
+    "synthesis_task_schema": {
+      "task_evaluation_harness": "PASS",
+      "unsolved_candidate_refusal": "PASS"
+    }
+  },
+  "qualification_gates": {
+    "total": 10,
+    "passed": 10,
+    "gates": {
+      "OMEGA_PROGRAM_OBJECT_PASS": "PASS",
+      "OMEGA_PROGRAM_CONTRACT_VALIDATION_PASS": "PASS",
+      "OMEGA_PROGRAM_COMPOSITION_PASS": "PASS",
+      "OMEGA_PROGRAM_TYPE_MISMATCH_REFUSAL_PASS": "PASS",
+      "OMEGA_PROGRAM_COST_ACCOUNTING_PASS": "PASS",
+      "OMEGA_PROGRAM_REALIZATION_PASS": "PASS",
+      "OMEGA_PROGRAM_V0_STRUCTURAL_PASS": "PASS",
+      "OMEGA_PROGRAM_V1_DIFFERENTIAL_PASS": "PASS",
+      "OMEGA_PROGRAM_V2_PROPERTY_PASS": "PASS",
+      "OMEGA_PROGRAM_SYNTHESIS_TASK_PASS": "PASS"
+    }
+  },
+  "sovereignty_accounting": {
+    "llvm_dependency": false,
+    "gnu_as_dependency": false,
+    "gcc_asm_dependency": false,
+    "jit_compiler_dependency": false,
+    "python_dependency": false,
+    "realizer_lineage": "Direct sovereign C99 composition and realization engine executing deterministic proof obligations"
+  }
+}

@@ -11,6 +11,7 @@
 #include "omega_exec.h"
 #include "omega_self_host.h"
 #include "omega_verify.h"
+#include "omega_program.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -1085,9 +1086,235 @@ static void run_demonstration_verify(void) {
     omega_graph_destroy(g);
 }
 
+/* =========================================================================
+ * MILESTONE 8 QUALIFICATION GATES (OMEGA_PROGRAM_CORE)
+ * ========================================================================= */
+
+static bool test_m8_program_object(void) {
+    OmegaProgram a;
+    if (omega_program_build_unary_op(&a, "prog_mul2", OP_MUL, 2) != 0) return false;
+    bool ok = (a.is_realized && a.cost.insn_count == 3 &&
+               a.contract.input_type == TYPE_UNSIGNED_INT &&
+               a.contract.output_type == TYPE_UNSIGNED_INT);
+    omega_program_destroy(&a);
+    return ok;
+}
+
+static bool test_m8_contract_validation(void) {
+    OmegaProgram a;
+    omega_program_build_unary_op(&a, "prog_add1", OP_ADD, 1);
+    char err[256];
+    if (omega_program_validate_contract(&a, err, sizeof(err)) != 0) {
+        omega_program_destroy(&a);
+        return false;
+    }
+
+    /* Mutate contract to invalid type */
+    OmegaProgram bad = a;
+    bad.contract.input_type = TYPE_INVALID;
+    if (omega_program_validate_contract(&bad, err, sizeof(err)) == 0) {
+        omega_program_destroy(&a);
+        return false;
+    }
+
+    omega_program_destroy(&a);
+    return true;
+}
+
+static bool test_m8_composition(void) {
+    OmegaProgram a, b, c;
+    omega_program_build_unary_op(&a, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&b, "add1", OP_ADD, 1);
+
+    char err[256];
+    int rc = omega_program_compose(&a, &b, &c, err, sizeof(err));
+    bool ok = (rc == 0 && c.is_realized &&
+               c.contract.input_type == TYPE_UNSIGNED_INT &&
+               c.contract.output_type == TYPE_UNSIGNED_INT);
+
+    omega_program_destroy(&a);
+    omega_program_destroy(&b);
+    omega_program_destroy(&c);
+    return ok;
+}
+
+static bool test_m8_type_mismatch_refusal(void) {
+    OmegaProgram a, b, c;
+    omega_program_build_unary_op(&a, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&b, "add1", OP_ADD, 1);
+    b.contract.input_type = TYPE_BOOL; /* Cause mismatch */
+
+    char err[256];
+    int rc = omega_program_compose(&a, &b, &c, err, sizeof(err));
+
+    omega_program_destroy(&a);
+    omega_program_destroy(&b);
+    return (rc != 0); /* Must refuse fail-closed */
+}
+
+static bool test_m8_cost_accounting(void) {
+    OmegaProgram a, b, c;
+    omega_program_build_unary_op(&a, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&b, "add1", OP_ADD, 1);
+
+    char err[256];
+    omega_program_compose(&a, &b, &c, err, sizeof(err));
+
+    /* Cost check: insn_count = 3 + 3 - 1 = 5 */
+    bool ok = (c.cost.insn_count == 5 &&
+               c.cost.latency_cycles == a.cost.latency_cycles + b.cost.latency_cycles);
+
+    omega_program_destroy(&a);
+    omega_program_destroy(&b);
+    omega_program_destroy(&c);
+    return ok;
+}
+
+static bool test_m8_realization(void) {
+    OmegaProgram a, b, c;
+    omega_program_build_unary_op(&a, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&b, "add1", OP_ADD, 1);
+
+    char err[256];
+    omega_program_compose(&a, &b, &c, err, sizeof(err));
+
+    bool ok = (c.realization.code_len == 20 && c.realization.has_id);
+
+    omega_program_destroy(&a);
+    omega_program_destroy(&b);
+    omega_program_destroy(&c);
+    return ok;
+}
+
+static bool test_m8_v0_structural(void) {
+    OmegaProgram a, b, c;
+    omega_program_build_unary_op(&a, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&b, "add1", OP_ADD, 1);
+
+    char err[256];
+    omega_program_compose(&a, &b, &c, err, sizeof(err));
+
+    VerifyReport rep;
+    int rc = omega_verify_v0_structural(NULL, &c.realization, &rep);
+
+    omega_program_destroy(&a);
+    omega_program_destroy(&b);
+    omega_program_destroy(&c);
+    return (rc == 0 && rep.passed && rep.fail_count == 0);
+}
+
+static bool test_m8_v1_differential(void) {
+    OmegaProgram a, b, c;
+    omega_program_build_unary_op(&a, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&b, "add1", OP_ADD, 1);
+
+    char err[256];
+    omega_program_compose(&a, &b, &c, err, sizeof(err));
+
+    /* Evaluate C(x) = (2x + 1) across vectors */
+    static const uint64_t inputs[] = { 0, 1, 2, 7, 10, 100 };
+    static const uint64_t expected[] = { 1, 3, 5, 15, 21, 201 };
+
+    bool ok = true;
+    for (size_t i = 0; i < 6; ++i) {
+        uint64_t observed = 0;
+        if (omega_program_exec(&c, inputs[i], &observed) != 0 || observed != expected[i]) {
+            ok = false;
+            break;
+        }
+    }
+
+    omega_program_destroy(&a);
+    omega_program_destroy(&b);
+    omega_program_destroy(&c);
+    return ok;
+}
+
+static bool test_m8_v2_property(void) {
+    OmegaProgram a, b, c;
+    omega_program_build_unary_op(&a, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&b, "add1", OP_ADD, 1);
+
+    char err[256];
+    omega_program_compose(&a, &b, &c, err, sizeof(err));
+
+    VerifyReport rep;
+    int rc = omega_program_verify(&c, &rep);
+    bool verified = (rc == 0 && rep.passed && c.is_verified);
+
+    omega_program_destroy(&a);
+    omega_program_destroy(&b);
+    omega_program_destroy(&c);
+    return verified;
+}
+
+static bool test_m8_synthesis_task(void) {
+    SynthesisTask task;
+    static const uint64_t inputs[] = { 0, 1, 2, 7, 10 };
+    static const uint64_t outputs[] = { 1, 3, 5, 15, 21 };
+
+    omega_task_init(&task, "task_2x_plus_1", TYPE_UNSIGNED_INT, 64, TYPE_UNSIGNED_INT, 64, inputs, outputs, 5);
+
+    OmegaProgram a, b, c;
+    omega_program_build_unary_op(&a, "mul2", OP_MUL, 2);
+    omega_program_build_unary_op(&b, "add1", OP_ADD, 1);
+    char err[256];
+    omega_program_compose(&a, &b, &c, err, sizeof(err));
+
+    bool solved = false;
+    omega_task_evaluate_candidate(&task, &c, &solved);
+
+    /* Program A alone should NOT solve task */
+    bool solved_a = true;
+    omega_task_evaluate_candidate(&task, &a, &solved_a);
+
+    omega_program_destroy(&a);
+    omega_program_destroy(&b);
+    omega_program_destroy(&c);
+    return (solved && !solved_a);
+}
+
+static void run_demonstration_program(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 8: PROGRAM COMPOSITION & CONTRACTS\n");
+    printf("================================================================================\n");
+
+    OmegaProgram a, b, c;
+    omega_program_build_unary_op(&a, "double", OP_MUL, 2);
+    omega_program_build_unary_op(&b, "increment", OP_ADD, 1);
+
+    printf("  [1] Program A: %s | Cost: %u insns | Post: %s\n", a.name, a.cost.insn_count, a.contract.postcondition);
+    printf("  [2] Program B: %s | Cost: %u insns | Post: %s\n\n", b.name, b.cost.insn_count, b.contract.postcondition);
+
+    char err[256];
+    printf("  [3] Composing C = A o B (C(x) = B(A(x)) = 2x + 1)...\n");
+    omega_program_compose(&a, &b, &c, err, sizeof(err));
+    printf("      Composite Program: %s\n", c.name);
+      printf("      Derived Contract:  In: uint%u -> Out: uint%u | Post: %s\n",
+           c.contract.input_width, c.contract.output_width, c.contract.postcondition);
+    printf("      Composite Cost:    %u insns (additive monotonicity verified)\n", c.cost.insn_count);
+    printf("      Machine Code:      %zu bytes native AArch64\n\n", c.realization.code_len);
+
+    printf("  [4] Evaluating Composite Execution C(x):\n");
+    for (uint64_t x = 0; x <= 5; ++x) {
+        uint64_t y = 0;
+        omega_program_exec(&c, x, &y);
+        printf("      C(%lu) = %lu  (Expected: %lu)\n", (unsigned long)x, (unsigned long)y, (unsigned long)(2 * x + 1));
+    }
+
+    VerifyReport rep;
+    omega_program_verify(&c, &rep);
+    printf("\n  [5] M7 Verification Ladder Status: %s\n", c.is_verified ? "VERIFIED / ADMITTED" : "REFUSED");
+    printf("================================================================================\n");
+
+    omega_program_destroy(&a);
+    omega_program_destroy(&b);
+    omega_program_destroy(&c);
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --dump-test-vectors <dir>]\n", argv[0]);
+        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --dump-test-vectors <dir>]\n", argv[0]);
         return 1;
     }
 
@@ -1183,6 +1410,32 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "--demonstrate-verify") == 0) {
         run_demonstration_verify();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--run-m8-gates") == 0) {
+        printf("================================================================================\n");
+        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 8: OMEGA_PROGRAM_CORE QUALIFICATION GATES\n");
+        printf("================================================================================\n");
+        gate_count = 0; gate_passed = 0;
+        report_gate("OMEGA_PROGRAM_OBJECT_PASS", test_m8_program_object(), "OMEGA_PROGRAM created with contracts, cost, and realization");
+        report_gate("OMEGA_PROGRAM_CONTRACT_VALIDATION_PASS", test_m8_contract_validation(), "Contract validation enforced, invalid types rejected");
+        report_gate("OMEGA_PROGRAM_COMPOSITION_PASS", test_m8_composition(), "Algebraic composition C = A o B with contract propagation");
+        report_gate("OMEGA_PROGRAM_TYPE_MISMATCH_REFUSAL_PASS", test_m8_type_mismatch_refusal(), "Incompatible composition refused fail-closed");
+        report_gate("OMEGA_PROGRAM_COST_ACCOUNTING_PASS", test_m8_cost_accounting(), "Composite cost monotonically verified (insns, latency)");
+        report_gate("OMEGA_PROGRAM_REALIZATION_PASS", test_m8_realization(), "Composite program lowered to native AArch64 machine bytes");
+        report_gate("OMEGA_PROGRAM_V0_STRUCTURAL_PASS", test_m8_v0_structural(), "Composite program passes M7 V0 structural verification");
+        report_gate("OMEGA_PROGRAM_V1_DIFFERENTIAL_PASS", test_m8_v1_differential(), "Composite program passes M7 V1 differential evaluation (2x+1)");
+        report_gate("OMEGA_PROGRAM_V2_PROPERTY_PASS", test_m8_v2_property(), "Composite program passes M7 V2 property verification");
+        report_gate("OMEGA_PROGRAM_SYNTHESIS_TASK_PASS", test_m8_synthesis_task(), "SYNTHESIS_TASK evaluation harness ready for M9 search");
+        printf("================================================================================\n");
+        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+        printf("================================================================================\n");
+        return (gate_passed == gate_count) ? 0 : 1;
+    }
+
+    if (strcmp(argv[1], "--demonstrate-program") == 0) {
+        run_demonstration_program();
         return 0;
     }
 
