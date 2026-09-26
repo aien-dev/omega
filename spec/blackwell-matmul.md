@@ -39,7 +39,7 @@ Where `code_digest` is computed over the dynamically generated machine code.
 3. Bounded deterministic register allocator.
 4. Dynamic scalar integer instruction encoder.
 5. Physical INT32 matrix multiplication pass on GB10.
-6. Dynamic codegen variation proof (`M18_CODEGEN_VARIATION_PASS`).
+6. Stage-1 Dynamic codegen variation proof (`M18_CODEGEN_VARIATION_PASS`).
 7. FP16/BF16 semantic matrix contract with FP32 accumulation.
 8. Empirical determination of minimum sm_121 tensor MMA instruction forms using allowed research oracles.
 9. Integration of tensor MMA instruction forms into OMEGA dynamic encoder.
@@ -47,7 +47,7 @@ Where `code_digest` is computed over the dynamically generated machine code.
 11. Dynamic tensor-core kernel generation.
 12. Physical GB10 tensor execution.
 13. FP32-accumulation numerical parity verification.
-14. Hardware evidence proof of tensor-core utilization.
+14. Hardware evidence proof of tensor-core utilization (9-point evidence bundle).
 15. Clean-clone isolated reproduction, zero-libcuda proof, and durable qualification receipt.
 
 ## 6. Milestone 18 Qualification Gates
@@ -57,12 +57,12 @@ Where `code_digest` is computed over the dynamically generated machine code.
 - Gate 4: `OMEGA_BW_MATMUL_BOUNDED_REGALLOC_PASS`
 - Gate 5: `OMEGA_BW_MATMUL_INSTRUCTION_SEQUENCING_PASS`
 - Gate 6: `OMEGA_BW_MATMUL_CODE_TRUTH_PASS`
-- Gate 7: `OMEGA_BW_MATMUL_CODEGEN_VARIATION_PASS`
+- Gate 7: `OMEGA_BW_MATMUL_CODEGEN_VARIATION_PASS` (Stage-1: 16x16x16 INT32 vs 32x16x64 INT32 distinct allocation, code bytes, digests)
 - Gate 8: `OMEGA_BW_MATMUL_REALIZATION_ID_PASS`
 - Gate 9: `OMEGA_BW_MATMUL_QMD_2D_PASS`
 - Gate 10: `OMEGA_BW_MATMUL_NATIVE_SUBMIT_PASS`
 - Gate 11: `OMEGA_BW_MATMUL_INT32_INTERMEDIATE_PASS`
-- Gate 12: `OMEGA_BW_MATMUL_TENSOR_CORE_EXECUTION_PASS` (Mandatory completion gate)
+- Gate 12: `OMEGA_BW_MATMUL_TENSOR_CORE_EXECUTION_PASS` (Mandatory completion gate with 9-point evidence bundle & FP16 != BF16 variation)
 - Gate 13: `OMEGA_BW_MATMUL_NUMERICAL_BOUND_PASS`
 - Gate 14: `OMEGA_BW_MATMUL_BOUNDARY_ANNIHILATION_PASS`
 - Gate 15: `OMEGA_BW_MATMUL_ZERO_LIBCUDA_PASS`
