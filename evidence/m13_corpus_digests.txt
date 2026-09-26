@@ -1,0 +1,3 @@
+1a64e448237a42a05c82ed8e0c8910f4c5b2dbb5010cb522f683aaceba7f17b7  /home/drakestapleton/workspace/omega/src/omega_machine.c
+ad091205bfbd5f5fa9044602cfbb346f2362534ce7ba5b75d195661c29ac5b10  /home/drakestapleton/workspace/omega/src/omega_machine.h
+28df863127c8a353bcae8b2721f177d7d40091eacdc4886f65541d3dfe0795ca  /home/drakestapleton/workspace/omega/build/omegatool

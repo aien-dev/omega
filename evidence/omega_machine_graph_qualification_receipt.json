@@ -1,0 +1,51 @@
+{
+  "milestone": "MILESTONE 13 — OMEGA_MACHINE_GRAPH",
+  "status": "QUALIFIED / PASS",
+  "contract_id": "CONTRACT-OMEGA-MACHINE-GRAPH-M13",
+  "generated_at": "2026-09-26T08:55:13Z",
+  "source_parent_commit": "8e0a50a7c4493ebf49298457636e05bfba9c1e7a",
+  "qualified_implementation_commit": "9413558ae113b02484548d1b6cd0d71bf61981b6",
+  "receipt_commit": "pending-receipt-commit",
+  "git_commit": "9413558ae113b02484548d1b6cd0d71bf61981b6",
+  "host": {
+    "os": "Linux",
+    "arch": "aarch64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "artifacts": {
+    "src/omega_machine.c": { "sha256": "1a64e448237a42a05c82ed8e0c8910f4c5b2dbb5010cb522f683aaceba7f17b7" },
+    "src/omega_machine.h": { "sha256": "ad091205bfbd5f5fa9044602cfbb346f2362534ce7ba5b75d195661c29ac5b10" },
+    "build/omegatool": { "sha256": "28df863127c8a353bcae8b2721f177d7d40091eacdc4886f65541d3dfe0795ca" }
+  },
+  "machine_graph_properties": {
+    "hardware_profiles": "NVIDIA DGX Spark Grace V2 and QEMU virt AArch64 modeled",
+    "canonical_identity": "OMG0 wire serialization with SHA-256 MACHINE_ID determinism",
+    "physics_authority": "Ingests verified physical machine descriptors signed by Physics authority",
+    "topological_conformance": "Enforces strict cache level monotonicity, power-of-two line sizes, and valid register file bounds",
+    "realization_foundation": "Provides grounded cycle latency cost functions for M14 G_S x G_M -> G_R synthesis"
+  },
+  "qualification_gates": {
+    "total": 10,
+    "passed": 10,
+    "gates": {
+      "OMEGA_MACHINE_INIT_PASS": "PASS",
+      "OMEGA_MACHINE_PIPELINE_PASS": "PASS",
+      "OMEGA_MACHINE_REGISTER_FILE_PASS": "PASS",
+      "OMEGA_MACHINE_MEMORY_HIERARCHY_PASS": "PASS",
+      "OMEGA_MACHINE_PHYSICS_INGRESS_PASS": "PASS",
+      "OMEGA_MACHINE_CANONICAL_ID_PASS": "PASS",
+      "OMEGA_MACHINE_TOPOLOGY_DIFFERENCE_PASS": "PASS",
+      "OMEGA_MACHINE_CYCLE_PREVENTION_PASS": "PASS",
+      "OMEGA_MACHINE_COST_EVALUATION_PASS": "PASS",
+      "OMEGA_MACHINE_RECEIPT_PASS": "PASS"
+    }
+  },
+  "sovereignty_accounting": {
+    "llvm_dependency": false,
+    "gnu_as_dependency": false,
+    "gcc_asm_dependency": false,
+    "jit_compiler_dependency": false,
+    "python_dependency": false,
+    "realizer_lineage": "Direct sovereign C99 formal machine hardware graph and microarchitecture topology modeling engine"
+  }
+}
