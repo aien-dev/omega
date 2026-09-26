@@ -3789,9 +3789,6 @@ int main(int argc, char **argv) {
         return run_m19_gates();
     }
 
-    if (strcmp(argv[1], "--run-m19-receipt-only") == 0) {
-        return run_m19_receipt_only();
-    }
 
     if (strcmp(argv[1], "--demonstrate-accelerator-world") == 0) {
         run_demonstration_accelerator_world();

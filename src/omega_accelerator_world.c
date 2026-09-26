@@ -436,6 +436,42 @@ int omega_world_update_digest(OmegaAcceleratorWorld *world,
     return OMEGA_WORLD_OK;
 }
 
+/* Commit a successful physical dispatch to the world trace. The semantic
+ * words and handle generations are fixed-width; host addresses and time are
+ * deliberately absent from the serialized state. */
+static int record_completed_dispatch(OmegaAcceleratorWorld *world,
+                                     const uint32_t semantic_words[5],
+                                     const OmegaHandle *code,
+                                     const OmegaHandle *a,
+                                     const OmegaHandle *b,
+                                     const OmegaHandle *c,
+                                     const void *a_cpu, size_t a_bytes,
+                                     const void *b_cpu, size_t b_bytes,
+                                     const void *c_cpu, size_t c_bytes,
+                                     uint32_t completion) {
+    uint8_t semantic_id[32], a_digest[32], b_digest[32];
+    uint8_t bindings[64], bindings_digest[32], result_digest[32];
+    uint32_t pairs[8] = {
+        code->object_id, code->object_generation,
+        a->object_id, a->object_generation,
+        b->object_id, b->object_generation,
+        c->object_id, c->object_generation
+    };
+    const OmegaCodeEntry *entry = &world->code_entries[code->object_id];
+    sha256_hash((const uint8_t *)semantic_words, 5 * sizeof(uint32_t), semantic_id);
+    sha256_hash((const uint8_t *)a_cpu, a_bytes, a_digest);
+    sha256_hash((const uint8_t *)b_cpu, b_bytes, b_digest);
+    memcpy(bindings, a_digest, 32);
+    memcpy(bindings + 32, b_digest, 32);
+    sha256_hash(bindings, sizeof(bindings), bindings_digest);
+    sha256_hash((const uint8_t *)c_cpu, c_bytes, result_digest);
+    return omega_world_update_digest(world, semantic_id, entry->realization_id,
+                                     entry->code_digest, bindings_digest,
+                                     pairs, 4, code->permissions | a->permissions |
+                                     b->permissions | c->permissions,
+                                     completion, result_digest, 0);
+}
+
 int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
                                  const OmegaHandle *code_handle,
                                  const OmegaHandle *h_a,
@@ -446,6 +482,7 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || !code_handle || !h_a || !h_b || !h_c || n == 0) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
 
     /* Resolve code and buffers with internal bounds and permission authority */
     uint64_t code_va = 0;
@@ -593,6 +630,15 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
 
     nvrm_retire(&world->m16.rm, world->m16.rm.put);
 
+    const uint32_t semantic_words[5] = {1, n, 0, 0, 0};
+    if (record_completed_dispatch(world, semantic_words, code_handle,
+                                  h_a, h_b, h_c, a_cpu, req_bytes,
+                                  b_cpu, req_bytes, c_cpu, req_bytes,
+                                  payload) != OMEGA_WORLD_OK) {
+        omega_world_scratch_reset(world);
+        return OMEGA_WORLD_ERR_FAULT;
+    }
+
     if (out_completion_code) {
         *out_completion_code = payload;
     }
@@ -613,6 +659,7 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || !spec || !code_handle || !h_a || !h_b || !h_c) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
 
     uint64_t code_va = 0;
     size_t code_size = 0;
@@ -640,20 +687,33 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
         return OMEGA_WORLD_ERR_PERM_DENIED;
     }
 
-    void *cbank_cpu = NULL, *qmd0_cpu = NULL, *qmd1_cpu = NULL, *sem_cpu = NULL;
-    uint64_t cbank_va = 0, qmd0_va = 0, qmd1_va = 0, sem_va = 0;
+    void *cbank_cpu = NULL, *qmd0_cpu = NULL, *qmd1_cpu = NULL, *sem_cpu = NULL, *kernel_scratch_cpu = NULL;
+    uint64_t cbank_va = 0, qmd0_va = 0, qmd1_va = 0, sem_va = 0, kernel_scratch_va = 0;
     size_t dummy_off = 0;
 
     if (omega_world_scratch_acquire(world, 0x1000, &cbank_cpu, &cbank_va, &dummy_off) != 0) return OMEGA_WORLD_ERR_NO_MEM;
     if (omega_world_scratch_acquire(world, 0x1000, &qmd0_cpu, &qmd0_va, &dummy_off) != 0) return OMEGA_WORLD_ERR_NO_MEM;
     if (omega_world_scratch_acquire(world, 0x1000, &qmd1_cpu, &qmd1_va, &dummy_off) != 0) return OMEGA_WORLD_ERR_NO_MEM;
     if (omega_world_scratch_acquire(world, 0x1000, &sem_cpu, &sem_va, &dummy_off) != 0) return OMEGA_WORLD_ERR_NO_MEM;
+    if (omega_world_scratch_acquire(world, 0x4000, &kernel_scratch_cpu, &kernel_scratch_va, &dummy_off) != 0) return OMEGA_WORLD_ERR_NO_MEM;
 
     uint32_t cbank_data[OMEGA_BW_CBANK_DRIVER_WORDS];
-    uint32_t threads_x = (spec->precision == OMEGA_MATMUL_PRECISION_INT32) ? 16 : 32;
-    uint32_t threads_y = (spec->precision == OMEGA_MATMUL_PRECISION_INT32) ? 16 : 1;
-    uint32_t grid_x = (spec->n + threads_x - 1) / threads_x;
-    uint32_t grid_y = (spec->m + threads_y - 1) / threads_y;
+    uint32_t threads_x, threads_y, grid_x, grid_y, threads_per_block, gpr_count;
+    if (spec->precision == OMEGA_MATMUL_PRECISION_INT32) {
+        threads_x = 16;
+        threads_y = 16;
+        grid_x = (spec->n + threads_x - 1) / threads_x;
+        grid_y = (spec->m + threads_y - 1) / threads_y;
+        threads_per_block = threads_x * threads_y;
+        gpr_count = 32;
+    } else {
+        threads_x = 32;
+        threads_y = 1;
+        grid_x = spec->n / 8;
+        grid_y = spec->m / 16;
+        threads_per_block = 32;
+        gpr_count = 64;
+    }
     if (grid_x == 0) grid_x = 1;
     if (grid_y == 0) grid_y = 1;
 
@@ -668,7 +728,7 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     OmegaBlackwellQmdConfig qmd_cfg = {
         .code_va = code_va,
         .cbank_va = cbank_va,
-        .scratch_va = cbank_va + 0x2000,
+        .scratch_va = kernel_scratch_va,
         .sem_va = sem_va,
         .qmd0_va = qmd0_va,
         .qmd1_va = qmd1_va,
@@ -676,10 +736,10 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
         .threads_y = threads_y,
         .grid_x = grid_x,
         .grid_y = grid_y,
-        .threads_per_block = (spec->precision == OMEGA_MATMUL_PRECISION_INT32) ? (threads_x * threads_y) : 32,
+        .threads_per_block = threads_per_block,
         .grid_width = grid_x * grid_y,
         .num_elements = spec->m * spec->n,
-        .gpr_count = (spec->precision == OMEGA_MATMUL_PRECISION_INT32) ? 32 : 64
+        .gpr_count = gpr_count
     };
 
     uint32_t qmd0_words[OMEGA_BW_QMD_WORDS];
@@ -774,6 +834,16 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     }
 
     nvrm_retire(&world->m16.rm, world->m16.rm.put);
+
+    const uint32_t semantic_words[5] = {2, spec->m, spec->k, spec->n,
+                                        (uint32_t)spec->precision};
+    if (record_completed_dispatch(world, semantic_words, code_handle,
+                                  h_a, h_b, h_c, a_cpu, req_a,
+                                  b_cpu, req_b, c_cpu, req_c,
+                                  payload) != OMEGA_WORLD_OK) {
+        omega_world_scratch_reset(world);
+        return OMEGA_WORLD_ERR_FAULT;
+    }
 
     if (out_completion_code) {
         *out_completion_code = payload;

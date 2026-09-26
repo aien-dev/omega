@@ -144,20 +144,22 @@ The 1,000-operation sustained qualification workload executes 250 repetitions of
 Total dispatches: 250 * 4 = 1,000 operations on a single persistent channel and VAS.
 
 ## 8. Milestone 19 Gate Definitions
-- Gate 1: World lifecycle and epoch validation (initialization, epoch increment, teardown).
-- Gate 2: Object registry abstraction and two-level ABA handle validation.
-- Gate 3: Capability address isolation (handle VA forgery rejection).
-- Gate 4: Code registry and machine code dynamic publication.
-- Gate 5: Buffer registry allocation, access control, and generational revocation.
-- Gate 6: Scratch arena bounded slice allocation and recycling.
-- Gate 7: GPFIFO live capacity discovery and multi-wrap stress (>= 3x capacity).
-- Gate 8: Sustained 1,000-operation heterogeneous execution on a single persistent channel.
-- Gate 9: Deterministic four-workload cycle verification (VecAdd, INT32, FP16, BF16).
-- Gate 10: Stale-handle rejection across slot reallocations and epoch transitions.
-- Gate 11: Memory stability and resident memory leakage audit.
-- Gate 12: Bounded channel fault injection, channel generation advance, and recovery.
-- Gate 13: Rolling state digest determinism and hash chain verification.
-- Gate 14: Zero foreign userspace runtime verification (zero libcuda).
-- Gate 15: Clean-clone isolated reproduction on DGX Spark.
-- Gate 16: Cumulative regression parity across all 157 prior milestone gates.
-- Gate 17: Milestone 19 qualification receipt and cryptographic manifest.
+- Gate 1: `OMEGA_ACCEL_RESIDENT_WORLD_CREATE_PASS`: Creation and deterministic initialization of persistent `OmegaAcceleratorWorld` substrate in coherent memory.
+- Gate 2: `OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS`: Successful dispatch of successive distinct compute tasks reusing the same persistent RM client, GPU device, and VAS aperture without re-initialization.
+- Gate 3: `OMEGA_ACCEL_RESIDENT_CHANNEL_REUSE_PASS`: Successful reuse of GPFIFO channel, USERD, and doorbell mapping across successive pushbuffer submissions.
+- Gate 4: `OMEGA_ACCEL_RESIDENT_CODE_REGISTRY_PASS`: Resident code registry registration, lookup, deduplication, and execution of distinct sm_121 kernels (VecAdd, MatMul INT32, MatMul FP16, MatMul BF16).
+- Gate 5: `OMEGA_ACCEL_RESIDENT_BUFFER_REGISTRY_PASS`: Resident buffer registry managing persistent coherent memory buffers with handle tracking and bounds checking.
+- Gate 6: `OMEGA_ACCEL_RESIDENT_MIXED_WORKLOAD_PASS`: Alternating execution of mixed workloads (Vector Add, INT32 MatMul, FP16 MatMul, BF16 MatMul) on the shared resident channel.
+- Gate 7: `OMEGA_ACCEL_RESIDENT_QUEUE_WRAP_PASS`: GPFIFO pushbuffer ring buffer wraparound verified under continuous dispatch without channel stalls or pushbuffer corruption.
+- Gate 8: `OMEGA_ACCEL_RESIDENT_1000_OP_PASS`: Sustained continuous execution of >= 1,000 heterogeneous operations on physical GB10 silicon without context teardown or re-initialization.
+- Gate 9: `OMEGA_ACCEL_RESIDENT_GENERATION_PASS`: Monotonic generation counters on resident objects correctly incrementing upon lifecycle transitions and updates.
+- Gate 10: `OMEGA_ACCEL_RESIDENT_STALE_HANDLE_REFUSAL_PASS`: Fail-closed refusal and error reporting when attempting dispatch with expired or stale capability handles from prior generations.
+- Gate 11: `OMEGA_ACCEL_RESIDENT_REVOCATION_PASS`: Deterministic capability revocation immediately invalidating registered buffers or code handles, with subsequent access rejected.
+- Gate 12: `OMEGA_ACCEL_RESIDENT_FAULT_RECOVERY_PASS`: Isolated channel reset and deterministic recovery upon fault injection without leaking system resources or corrupting device state.
+- Gate 13: `OMEGA_ACCEL_RESIDENT_MEMORY_BOUND_PASS`: Flat, bounded resident memory consumption with zero heap or coherent memory leaks measured across 1,000 operations.
+- Gate 14: `OMEGA_ACCEL_RESIDENT_STATE_DIGEST_PASS`: Deterministic rolling SHA-256 state digest verifying cumulative execution integrity across all completed operations.
+- Gate 15: `OMEGA_ACCEL_RESIDENT_ZERO_LIBCUDA_PASS`: Zero foreign userspace runtime verification (ldd, nm -u, /proc/self/maps) throughout resident substrate lifecycle.
+- Gate 16: `OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS`: Clean-clone isolated reproduction on DGX Spark silicon from scratch.
+- Gate 17: `OMEGA_ACCEL_RESIDENT_REGRESSION_PASS`: Cumulative regression parity: 157 / 157 prior milestone gates passing (M4 through M18).
+- Gate 18: `OMEGA_ACCEL_RESIDENT_RECEIPT_PASS`: Milestone 19 cryptographic qualification receipt generation with hardware trace evidence.
+
