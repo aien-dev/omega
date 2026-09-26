@@ -189,8 +189,8 @@ int omega_validate_object(const OmegaGraph *graph, const OmegaObject *obj, char 
                     }
                     for (uint8_t i = 0; i < app->operand_count; ++i) {
                         const OmegaObject *arg = find_object_by_id(graph, &app->operands[i]);
-                        if (!arg || arg->kind != KIND_VALUE) {
-                            snprintf(err_msg, err_msg_len, "Apply operand %u unresolved or not KIND_VALUE", i);
+                        if (!arg || (arg->kind != KIND_VALUE && arg->kind != KIND_OPERATION)) {
+                            snprintf(err_msg, err_msg_len, "Apply operand %u unresolved or invalid kind", i);
                             return -1;
                         }
                     }

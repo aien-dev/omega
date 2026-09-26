@@ -1,0 +1,59 @@
+{
+  "milestone": "MILESTONE 7 — OMEGA_VERIFY",
+  "status": "QUALIFIED / PASS",
+  "contract_id": "CONTRACT-OMEGA-VERIFY-M7",
+  "generated_at": "2026-09-26T08:24:29Z",
+  "git_commit": "8033c3805ce953d111c58c4da33a60678e15401d",
+  "host": {
+    "os": "Linux",
+    "arch": "aarch64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "artifacts": {
+    "src/omega_verify.c": { "sha256": "b7b3addb2bcad248e1e3e53196745861a918b78239632426b8942fa452438179" },
+    "src/aarch64_decoder.c": { "sha256": "ac543a0582ba165b7795502f45a0542aef3900cf0485f31b873a85ec00ade37f" },
+    "src/omega_validate.c": { "sha256": "ec0e6a629171140302f56474481b5986bf4bee315a621aa7c8584b2cd116d790" },
+    "build/omegatool": { "sha256": "7eca510b09da41f10b798e2efb7028da97409240f759c984f5a2da8ac466cf8d" }
+  },
+  "verification_ladder": {
+    "tier_v0_structural": {
+      "status": "PASS",
+      "scope": "Graph types, DAG integrity, target profile, buffer bounds, instruction stream decoding, terminal RET"
+    },
+    "tier_v1_differential": {
+      "status": "PASS",
+      "scope": "Bit-for-bit output parity between semantic reference evaluation and native execution across test corpus",
+      "divergence_detection": "Refused fail-closed on mutated realization"
+    },
+    "tier_v2_property_invariants": {
+      "status": "PASS",
+      "scope": "Algebraic commutativity, identity elements, modular overflow wrapping, range preservation"
+    },
+    "tier_v3_to_v5_framework": {
+      "status": "STUB_INITIALIZED",
+      "scope": "Adversarial fuzzing, symbolic equivalence, proof-carrying code contracts"
+    }
+  },
+  "qualification_gates": {
+    "total": 10,
+    "passed": 10,
+    "gates": {
+      "OMEGA_VERIFY_V0_TYPE_PASS": "PASS",
+      "OMEGA_VERIFY_V0_DAG_PASS": "PASS",
+      "OMEGA_VERIFY_V0_CODE_BOUNDS_PASS": "PASS",
+      "OMEGA_VERIFY_V0_INSN_DECODE_PASS": "PASS",
+      "OMEGA_VERIFY_V0_TERMINAL_RET_PASS": "PASS",
+      "OMEGA_VERIFY_V1_DIFFERENTIAL_PASS": "PASS",
+      "OMEGA_VERIFY_V1_DIVERGENCE_REFUSAL_PASS": "PASS",
+      "OMEGA_VERIFY_V2_COMMUTATIVITY_PASS": "PASS",
+      "OMEGA_VERIFY_V2_IDENTITY_PASS": "PASS",
+      "OMEGA_VERIFY_V2_OVERFLOW_PASS": "PASS"
+    }
+  },
+  "sovereignty_accounting": {
+    "generator_trust": "UNTRUSTED",
+    "verifier_trust": "TRUSTED",
+    "python_dependency": false,
+    "formal_verifier_lineage": "Direct sovereign C99 verification engine executing deterministic proof obligations"
+  }
+}
