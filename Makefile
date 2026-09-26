@@ -2,11 +2,11 @@ CC ?= gcc
 CFLAGS ?= -std=c99 -Wall -Wextra -Werror -pedantic -D_GNU_SOURCE -O2 -Isrc
 OUT_DIR ?= build
 
-SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_exec.c src/omega_self_host.c src/omega_verify.c src/omega_program.c src/omega_synthesis.c src/omega_library.c tools/omegatool.c
+SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_exec.c src/omega_self_host.c src/omega_verify.c src/omega_program.c src/omega_synthesis.c src/omega_library.c src/omega_discovery.c tools/omegatool.c
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 TARGET = $(OUT_DIR)/omegatool
 
-.PHONY: all clean test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10
+.PHONY: all clean test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11
 
 all: $(TARGET)
 
@@ -50,6 +50,10 @@ test-m9: $(TARGET)
 test-m10: $(TARGET)
 	./$(TARGET) --run-m10-gates
 	./$(TARGET) --demonstrate-library
+
+test-m11: $(TARGET)
+	./$(TARGET) --run-m11-gates
+	./$(TARGET) --demonstrate-discovery
 
 clean:
 	rm -rf $(OUT_DIR)
