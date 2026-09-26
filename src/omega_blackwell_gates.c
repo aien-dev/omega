@@ -771,6 +771,7 @@ static bool test_m18_gate18_receipt(void) {
     fprintf(f, "  \"target_hardware\": \"NVIDIA DGX Spark (Grace Blackwell GB10, sm_121)\",\n");
     fprintf(f, "  \"substrate\": \"M16 Native Libcuda-Free Channel\",\n");
     fprintf(f, "  \"implementation_commit\": \"%s\",\n", impl_commit);
+    fprintf(f, "  \"canonical_merge_commit\": \"%s\",\n", "8da637bd352cdad039d1e88edd92c1ba30cf4173");
     fprintf(f, "  \"m16_authority_commit\": \"%s\",\n", m16_commit);
     fprintf(f, "  \"config_1_spec_id\": \"%s\",\n", c1_spec_hex);
     fprintf(f, "  \"config_1_code_sha256\": \"%s\",\n", c1_code_hex);
