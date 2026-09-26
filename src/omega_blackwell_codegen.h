@@ -30,7 +30,8 @@ typedef enum {
     BW_IR_LDG_E,        /* LDG.E Rd, desc[URd][Ra.64] */
     BW_IR_STG_E,        /* STG.E desc[URd][Ra.64], Rb */
     BW_IR_IADD3,        /* IADD3 Rd, PT, PT, Ra, Rb, Rc */
-    BW_IR_MMA,          /* sm_121 Tensor Core MMA instruction */
+    BW_IR_HMMA_F16,     /* HMMA.16816.F32 Rd, Ra, Rb, Rc (FP16 input, FP32 accumulator) */
+    BW_IR_HMMA_BF16,    /* HMMA.16816.F32.BF16 Rd, Ra, Rb, Rc (BF16 input, FP32 accumulator) */
     BW_IR_EXIT,         /* EXIT */
     BW_IR_BRA           /* BRA target */
 } BlackwellIROpcode;
@@ -63,7 +64,9 @@ typedef struct {
     int first_def;
     int last_use;
     int phys_reg;
+    uint32_t bundle_size; /* 1: scalar (32-bit), 2: pair (64-bit), 4: quad (128-bit) */
     bool is_pair;       /* True if 64-bit register pair (requires even-aligned R_2k) */
+    bool is_quad;       /* True if 128-bit register quad (requires 4-aligned R_4k) */
     bool active;
 } OmegaLiveInterval;
 
@@ -95,8 +98,11 @@ int omega_bw_ir_append(BlackwellIRProgram *prog, const BlackwellIRInsn *insn);
 /* Allocates a new 32-bit virtual general-purpose register */
 int omega_bw_ir_alloc_vreg(BlackwellIRProgram *prog);
 
-/* Allocates a new 64-bit aligned virtual register pair (for 64-bit memory addresses) */
+/* Allocates a new 64-bit aligned virtual register pair (for 64-bit memory addresses or HMMA B matrix) */
 int omega_bw_ir_alloc_vreg64(BlackwellIRProgram *prog);
+
+/* Allocates a new 128-bit aligned virtual register quad (for HMMA accumulator and A matrix) */
+int omega_bw_ir_alloc_vreg128(BlackwellIRProgram *prog);
 
 /* Allocates a new 32-bit virtual uniform register */
 int omega_bw_ir_alloc_uvreg(BlackwellIRProgram *prog);

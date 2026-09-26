@@ -4,7 +4,7 @@
   "stage_title": "Dynamic INT32 MatMul Codegen & Physical Silicon Execution",
   "target_hardware": "NVIDIA DGX Spark (Grace Blackwell GB10, sm_121)",
   "substrate": "M16 Native Libcuda-Free Channel",
-  "implementation_commit": "2870e3c94e9304ddbbc4ab8a0f8cd440f8078eee",
+  "implementation_commit": "645c13f25b36bdd99de6db767ca8521a21edf92c",
   "canonical_merge_commit": "8da637bd352cdad039d1e88edd92c1ba30cf4173",
   "m16_authority_commit": "b64753d95bacb1114ba48decde48239f0c542e12",
   "config_1_spec_id": "dbbdbda6e207dbc896360900a8a6d36f87448a8827e6bffcbfd7503e9a04cd64",
@@ -13,8 +13,8 @@
   "config_2_spec_id": "f03d86c6ec34126d2cfe23eb6bc9c58d270cd18544ebe6f0a3208f78b8304e07",
   "config_2_code_sha256": "895ce738ce4eada171b642dbe0b26337b92a153496359b08cc6a6517ebeb1d59",
   "config_2_realization_id": "9e842539ad3be21838ac1ca869e4d6e753a0d4e60e8cd2ff748ef8c10d8097e5",
-  "binary_sha256": "429932ecbecccd5cfce2e3b96d6a566fb0eb5312cbf34bd17c3c474db93072f0",
-  "evidence_manifest_sha256": "1e43821d084fd6c918512dc99e7ee0c12ee02cc7263652ba9748a06c61ef874c",
+  "binary_sha256": "0325c6efc693fb4123f057f90b08f4e3ce676f75e2688c27d7e240b689ec6604",
+  "evidence_manifest_sha256": "fd59a51300cda3de19e0641ad3cf544f5d5ba28d7d91164800cb715f083baf67",
   "tested_configurations": [
     {"shape": "16x16x16", "precision": "INT32", "elements": 256, "parity": "100% exact"},
     {"shape": "32x16x64", "precision": "INT32", "elements": 2048, "parity": "100% exact"}
@@ -26,5 +26,5 @@
   "zero_libcuda_runtime": true,
   "stage1_gates_passed": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 15, 17, 18],
   "stage2_gates_pending": [12, 13, 14, 16],
-  "qualification_timestamp": "2026-09-26T16:03:56Z"
+  "qualification_timestamp": "2026-09-26T16:08:28Z"
 }

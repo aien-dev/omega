@@ -17,7 +17,9 @@ int omega_bw_ir_alloc_vreg(BlackwellIRProgram *prog) {
     prog->regalloc.intervals[v].first_def = -1;
     prog->regalloc.intervals[v].last_use = -1;
     prog->regalloc.intervals[v].phys_reg = -1;
+    prog->regalloc.intervals[v].bundle_size = 1;
     prog->regalloc.intervals[v].is_pair = false;
+    prog->regalloc.intervals[v].is_quad = false;
     prog->regalloc.intervals[v].active = false;
     prog->regalloc.vreg_to_phys[v] = -1;
     return v;
@@ -30,7 +32,24 @@ int omega_bw_ir_alloc_vreg64(BlackwellIRProgram *prog) {
     prog->regalloc.intervals[v].first_def = -1;
     prog->regalloc.intervals[v].last_use = -1;
     prog->regalloc.intervals[v].phys_reg = -1;
+    prog->regalloc.intervals[v].bundle_size = 2;
     prog->regalloc.intervals[v].is_pair = true;
+    prog->regalloc.intervals[v].is_quad = false;
+    prog->regalloc.intervals[v].active = false;
+    prog->regalloc.vreg_to_phys[v] = -1;
+    return v;
+}
+
+int omega_bw_ir_alloc_vreg128(BlackwellIRProgram *prog) {
+    if (!prog || prog->regalloc.num_vregs >= BW_MAX_VREGS) return -1;
+    int v = prog->regalloc.num_vregs++;
+    prog->regalloc.intervals[v].vreg = v;
+    prog->regalloc.intervals[v].first_def = -1;
+    prog->regalloc.intervals[v].last_use = -1;
+    prog->regalloc.intervals[v].phys_reg = -1;
+    prog->regalloc.intervals[v].bundle_size = 4;
+    prog->regalloc.intervals[v].is_pair = false;
+    prog->regalloc.intervals[v].is_quad = true;
     prog->regalloc.intervals[v].active = false;
     prog->regalloc.vreg_to_phys[v] = -1;
     return v;
@@ -134,9 +153,9 @@ int omega_bw_regalloc_solve(BlackwellIRProgram *prog) {
             if (ra->intervals[p].active && ra->intervals[p].last_use < iv->first_def) {
                 int freed = ra->intervals[p].phys_reg;
                 if (freed >= 0 && freed < BW_PHYS_GPR_MAX) {
-                    gpr_busy[freed] = false;
-                    if (ra->intervals[p].is_pair && freed + 1 < BW_PHYS_GPR_MAX) {
-                        gpr_busy[freed + 1] = false;
+                    uint32_t bsize = ra->intervals[p].bundle_size ? ra->intervals[p].bundle_size : (ra->intervals[p].is_pair ? 2 : (ra->intervals[p].is_quad ? 4 : 1));
+                    for (uint32_t k = 0; k < bsize && (freed + (int)k) < BW_PHYS_GPR_MAX; k++) {
+                        gpr_busy[freed + k] = false;
                     }
                 }
                 ra->intervals[p].active = false;
@@ -145,10 +164,21 @@ int omega_bw_regalloc_solve(BlackwellIRProgram *prog) {
 
         /* Find lowest available physical register */
         int assigned = -1;
-        if (iv->is_pair) {
+        uint32_t bsize = iv->bundle_size ? iv->bundle_size : (iv->is_pair ? 2 : (iv->is_quad ? 4 : 1));
+        if (bsize == 4) {
+            /* 128-bit quad requires 4-alignment and 4 contiguous free registers */
+            int start = (BW_PHYS_GPR_START + 3) & ~3;
+            for (int p = start; p <= BW_PHYS_GPR_MAX - 4; p += 4) {
+                if (!gpr_busy[p] && !gpr_busy[p + 1] && !gpr_busy[p + 2] && !gpr_busy[p + 3]) {
+                    assigned = p;
+                    for (int k = 0; k < 4; k++) gpr_busy[p + k] = true;
+                    break;
+                }
+            }
+        } else if (bsize == 2) {
             /* 64-bit pair requires even alignment and contiguous free registers */
             int start = (BW_PHYS_GPR_START + 1) & ~1;
-            for (int p = start; p < BW_PHYS_GPR_MAX - 1; p += 2) {
+            for (int p = start; p <= BW_PHYS_GPR_MAX - 2; p += 2) {
                 if (!gpr_busy[p] && !gpr_busy[p + 1]) {
                     assigned = p;
                     gpr_busy[p] = true;
@@ -175,7 +205,7 @@ int omega_bw_regalloc_solve(BlackwellIRProgram *prog) {
         iv->active = true;
         ra->vreg_to_phys[v] = assigned;
 
-        int top = iv->is_pair ? (assigned + 1) : assigned;
+        int top = assigned + (int)bsize - 1;
         if (top > max_phys_used) {
             max_phys_used = top;
         }
@@ -347,6 +377,17 @@ static int encode_single_insn(const BlackwellIRInsn *insn, const OmegaRegAlloc *
             w[2] = 0x07ffe0ff;
             w[3] = 0x010fca00;
             break;
+
+        case BW_IR_HMMA_F16:
+        case BW_IR_HMMA_BF16: {
+            /* HMMA.16816.F32[.BF16] Rd, Ra, Rb, Rc */
+            w[0] = 0x723c | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(src2 & 0xff);
+            uint32_t prec_bit = (insn->op == BW_IR_HMMA_BF16) ? 0x00040000 : 0x00000000;
+            w[2] = (uint32_t)(src3 & 0xff) | (0x18 << 8) | prec_bit;
+            w[3] = insn->control ? insn->control : 0x000fe200;
+            break;
+        }
 
         case BW_IR_EXIT:
             w[0] = insn->predicate_p0 ? 0x0000094d : 0x0000794d;
@@ -664,6 +705,21 @@ int omega_blackwell_verify_codegen_fixtures(void) {
     if (encode_single_insn(&insn_s2r, &ra, w) != 0) return -19;
     if (w[0] != (0x7919 | (2 << 16)) || w[2] != (BW_SR_CTAID_X << 8)) return -20;
 
+    /* 11. HMMA.16816.F32 R4, R4, R2, RZ */
+    BlackwellIRInsn insn_hmma_f16 = { .op = BW_IR_HMMA_F16, .dst_vreg = 1, .src1_vreg = 1, .src2_vreg = 0, .src3_vreg = -1 };
+    if (encode_single_insn(&insn_hmma_f16, &ra, w) != 0) return -21;
+    if (w[0] != 0x0404723c || w[1] != 0x00000002 || w[2] != 0x000018ff || w[3] != 0x000fe200) return -22;
+
+    /* 12. HMMA.16816.F32.BF16 R4, R4, R2, RZ */
+    BlackwellIRInsn insn_hmma_bf16 = { .op = BW_IR_HMMA_BF16, .dst_vreg = 1, .src1_vreg = 1, .src2_vreg = 0, .src3_vreg = -1 };
+    uint32_t w_bf16[4];
+    if (encode_single_insn(&insn_hmma_bf16, &ra, w_bf16) != 0) return -23;
+    if (w_bf16[0] != 0x0404723c || w_bf16[1] != 0x00000002 || w_bf16[2] != 0x000418ff || w_bf16[3] != 0x000fe200) return -24;
+
+    /* 13. Differential Invariant: w[2] bit 18 toggles strictly between FP16 and BF16 */
+    if ((w[2] ^ w_bf16[2]) != 0x00040000) return -25;
+    if (w[0] != w_bf16[0] || w[1] != w_bf16[1] || w[3] != w_bf16[3]) return -26;
+
     return 0;
 }
 
@@ -674,6 +730,7 @@ int omega_blackwell_test_regalloc_bounds(void) {
     int v0 = omega_bw_ir_alloc_vreg64(&prog);
     int v1 = omega_bw_ir_alloc_vreg(&prog);
     int v2 = omega_bw_ir_alloc_vreg64(&prog);
+    int v3 = omega_bw_ir_alloc_vreg128(&prog); /* Test 128-bit quad allocation */
 
     BlackwellIRInsn i0 = { .op = BW_IR_LDC64, .dst_vreg = v0, .imm = 0x380 };
     omega_bw_ir_append(&prog, &i0);
@@ -681,17 +738,30 @@ int omega_blackwell_test_regalloc_bounds(void) {
     omega_bw_ir_append(&prog, &i1);
     BlackwellIRInsn i2 = { .op = BW_IR_LDC64, .dst_vreg = v2, .imm = 0x388 };
     omega_bw_ir_append(&prog, &i2);
+    BlackwellIRInsn i3 = { .op = BW_IR_HMMA_F16, .dst_vreg = v3, .src1_vreg = v3, .src2_vreg = v0, .src3_vreg = -1 };
+    omega_bw_ir_append(&prog, &i3);
+    /* i4 uses v1, v2, v3 simultaneously so all intervals are concurrently active */
+    int v_sink = omega_bw_ir_alloc_vreg(&prog);
+    BlackwellIRInsn i4 = { .op = BW_IR_IADD3, .dst_vreg = v_sink, .src1_vreg = v1, .src2_vreg = v2, .src3_vreg = v3 };
+    omega_bw_ir_append(&prog, &i4);
 
     if (omega_bw_regalloc_solve(&prog) != 0) return -1;
 
     int phys_v0 = prog.regalloc.vreg_to_phys[v0];
     int phys_v1 = prog.regalloc.vreg_to_phys[v1];
     int phys_v2 = prog.regalloc.vreg_to_phys[v2];
+    int phys_v3 = prog.regalloc.vreg_to_phys[v3];
 
     if (phys_v0 % 2 != 0) return -2;
     if (phys_v2 % 2 != 0) return -3;
-    if (phys_v1 == phys_v0 || phys_v1 == phys_v0 + 1) return -4;
-    if (phys_v2 == phys_v0 || phys_v2 == phys_v0 + 1) return -5;
+    if (phys_v3 % 4 != 0) return -4; /* 4-alignment for 128-bit quad */
+    if (phys_v1 == phys_v0 || phys_v1 == phys_v0 + 1) return -5;
+    if (phys_v2 == phys_v0 || phys_v2 == phys_v0 + 1) return -6;
+    for (int k = 0; k < 4; k++) {
+        if (phys_v3 + k == phys_v0 || phys_v3 + k == phys_v0 + 1) return -7;
+        if (phys_v3 + k == phys_v2 || phys_v3 + k == phys_v2 + 1) return -8;
+        if (phys_v3 + k == phys_v1) return -9;
+    }
 
     /* Test bounds refusal: intentionally attempt to allocate more registers than hardware capacity */
     BlackwellIRProgram overflow_prog;
