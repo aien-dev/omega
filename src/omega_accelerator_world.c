@@ -246,7 +246,14 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
     if (realization_id) {
         memcpy(entry->realization_id, realization_id, 32);
     } else {
-        memset(entry->realization_id, 0, 32);
+        /* Derive a real realization identity from the realized machine code when
+         * the registrant does not supply one, so digest provenance never falls
+         * back to a placeholder. */
+        static const uint8_t REALIZATION_DOMAIN[32] = "OMEGA_CODE_REALIZATION_V1";
+        uint8_t rbuf[64];
+        memcpy(rbuf, REALIZATION_DOMAIN, 32);
+        memcpy(rbuf + 32, entry->code_digest, 32);
+        sha256_hash(rbuf, sizeof(rbuf), entry->realization_id);
     }
     entry->active = true;
 
@@ -470,6 +477,114 @@ static int record_completed_dispatch(OmegaAcceleratorWorld *world,
                                      pairs, 4, code->permissions | a->permissions |
                                      b->permissions | c->permissions,
                                      completion, result_digest, 0);
+}
+
+int omega_world_submit(OmegaAcceleratorWorld *world,
+                       const NvrmMem *pb_mem,
+                       uint32_t off_bytes,
+                       uint32_t nwords,
+                       const OmegaWorldSubmission *submission) {
+    if (!world || !world->initialized || !pb_mem || !submission) {
+        return OMEGA_WORLD_ERR_INVALID_ARG;
+    }
+    if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
+    if (world->in_flight_count >= OMEGA_WORLD_MAX_IN_FLIGHT) {
+        return OMEGA_WORLD_ERR_NO_MEM;
+    }
+    if (nvrm_enqueue(&world->m16.rm, pb_mem, off_bytes, nwords) != 0) {
+        return OMEGA_WORLD_ERR_HARDWARE;
+    }
+    world->in_flight[world->in_flight_count++] = *submission;
+    return OMEGA_WORLD_OK;
+}
+
+int omega_world_ring(OmegaAcceleratorWorld *world) {
+    if (!world || !world->initialized) return OMEGA_WORLD_ERR_INVALID_ARG;
+    if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
+    nvrm_ring(&world->m16.rm);
+    return OMEGA_WORLD_OK;
+}
+
+int omega_world_drain(OmegaAcceleratorWorld *world,
+                      uint32_t upto_payload,
+                      int timeout_ms) {
+    if (!world || !world->initialized) return OMEGA_WORLD_ERR_INVALID_ARG;
+    if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
+    if (timeout_ms < 0) return OMEGA_WORLD_ERR_INVALID_ARG;
+
+    if (m16_native_wait_marker(world->completion.cpu_marker, upto_payload,
+                               (uint64_t)timeout_ms) != 0) {
+        return OMEGA_WORLD_ERR_HARDWARE;
+    }
+    nvrm_retire(&world->m16.rm, upto_payload);
+
+    int committed = 0;
+    uint32_t keep = 0;
+    for (uint32_t i = 0; i < world->in_flight_count; i++) {
+        const OmegaWorldSubmission *s = &world->in_flight[i];
+        if (s->completion_val > upto_payload) {
+            world->in_flight[keep++] = *s;
+            continue;
+        }
+        if (s->code_object_id >= OMEGA_WORLD_MAX_CODE_ENTRIES ||
+            s->a_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
+            s->b_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
+            s->c_object_id >= OMEGA_WORLD_MAX_BUFFERS) {
+            return OMEGA_WORLD_ERR_INVALID_ARG;
+        }
+
+        const OmegaBufferEntry *ab = &world->buffers[s->a_object_id];
+        const OmegaBufferEntry *bb = &world->buffers[s->b_object_id];
+        const OmegaBufferEntry *cb = &world->buffers[s->c_object_id];
+        const OmegaCodeEntry *ce = &world->code_entries[s->code_object_id];
+        if (!ab->active || ab->generation != s->a_generation ||
+            !bb->active || bb->generation != s->b_generation ||
+            !cb->active || cb->generation != s->c_generation ||
+            !ce->active || ce->generation != s->code_generation) {
+            return OMEGA_WORLD_ERR_STALE_GEN;
+        }
+
+        OmegaHandle ch = {
+            .world_epoch = world->current_epoch,
+            .object_id = s->code_object_id,
+            .object_generation = s->code_generation,
+            .object_type = OMEGA_OBJ_CODE,
+            .permissions = s->code_permissions & OMEGA_PERM_EXECUTE
+        };
+        OmegaHandle ah = {
+            .world_epoch = world->current_epoch,
+            .object_id = s->a_object_id,
+            .object_generation = s->a_generation,
+            .object_type = OMEGA_OBJ_BUFFER,
+            .permissions = s->a_permissions
+        };
+        OmegaHandle bh = {
+            .world_epoch = world->current_epoch,
+            .object_id = s->b_object_id,
+            .object_generation = s->b_generation,
+            .object_type = OMEGA_OBJ_BUFFER,
+            .permissions = s->b_permissions
+        };
+        OmegaHandle cwh = {
+            .world_epoch = world->current_epoch,
+            .object_id = s->c_object_id,
+            .object_generation = s->c_generation,
+            .object_type = OMEGA_OBJ_BUFFER,
+            .permissions = s->c_permissions
+        };
+
+        if (record_completed_dispatch(world, s->semantic_words, &ch, &ah, &bh, &cwh,
+                                      ab->cpu_addr, s->a_bytes,
+                                      bb->cpu_addr, s->b_bytes,
+                                      cb->cpu_addr, s->c_bytes,
+                                      s->completion_val) != OMEGA_WORLD_OK) {
+            return OMEGA_WORLD_ERR_FAULT;
+        }
+        world->total_dispatches++;
+        committed++;
+    }
+    world->in_flight_count = keep;
+    return committed;
 }
 
 int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,

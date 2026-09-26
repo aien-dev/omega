@@ -22,6 +22,22 @@ static uint32_t m19_wrap_dispatches = 0;
 static uint32_t m19_sustained_dispatches = 0;
 static long m19_sustained_rss_delta = -1;
 static uint8_t m19_sustained_digest[32];
+static char m19_candidate_commit[41] = {0};
+
+/* Resolve the full 40-hex revision of a working tree via git. */
+static bool m19_git_head(const char *repo_dir, char out[41]) {
+    char cmd[512];
+    int n = snprintf(cmd, sizeof(cmd), "git -C %s rev-parse HEAD 2>/dev/null", repo_dir);
+    if (n < 0 || (size_t)n >= sizeof(cmd)) return false;
+    FILE *p = popen(cmd, "r");
+    if (!p) return false;
+    char *got = fgets(out, 41, p);
+    pclose(p);
+    if (!got) return false;
+    size_t len = strlen(out);
+    while (len > 0 && (out[len - 1] == '\n' || out[len - 1] == '\r')) out[--len] = '\0';
+    return (len == 40);
+}
 
 static const uint32_t WORLD_SETUP_WORDS[18] = {
     0x20012061, 0x0000cec0, 0x20012092, 0x00000001, 0x200120a8, 0x0000000f, 0x2001255d, 0x00000003,
@@ -620,21 +636,32 @@ static bool test_m19_gate7_queue_wrap(void) {
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20);
 
-    uint32_t batch_size = 768;
-    uint32_t num_batches = stress_count / batch_size;
+    /* The pushbuffer pool holds exactly PB_SLOTS 4 KiB slots (0x10000 bytes).
+     * A slot must not be rewritten until every GPFIFO entry that references it
+     * has retired; otherwise the GPU can observe a later dispatch's bytes under
+     * an earlier entry, and a terminal completion value can be reached without
+     * proving per-dispatch execution identity. Submit at most one pool's worth
+     * of entries per doorbell, then wait for those entries to complete before
+     * any slot is reused. */
+    const uint32_t pb_slots = 0x10000 / 0x1000;
     uint32_t dispatch_id = 0;
+    uint32_t submitted = 0;
 
-    for (uint32_t b = 0; b < num_batches; b++) {
-        for (uint32_t k = 0; k < batch_size; k++) {
+    while (submitted < stress_count) {
+        uint32_t batch = stress_count - submitted;
+        if (batch > pb_slots) batch = pb_slots;
+
+        for (uint32_t k = 0; k < batch; k++) {
             dispatch_id++;
             pb[release_idx + 3] = dispatch_id;
-            uint32_t off = (k % 16) * 0x1000;
+            uint32_t off = (submitted % pb_slots) * 0x1000;
             memcpy((uint8_t *)world.m16.pb_mem.cpu + off, pb, pb_len * 4);
             __asm__ volatile("dsb sy" ::: "memory");
             if (nvrm_enqueue(&world.m16.rm, &world.m16.pb_mem, off, (uint32_t)pb_len) != 0) {
                 omega_world_destroy(&world);
                 return false;
             }
+            submitted++;
         }
         *world.m16.rm.doorbell = world.m16.rm.token;
         __asm__ volatile("dsb sy" ::: "memory");
@@ -649,6 +676,7 @@ static bool test_m19_gate7_queue_wrap(void) {
                 return false;
             }
         }
+        /* Only now are this batch's pushbuffer slots safe to reuse. */
         nvrm_retire(&world.m16.rm, dispatch_id);
     }
 
@@ -669,6 +697,47 @@ static bool test_m19_gate7_queue_wrap(void) {
     m19_wrap_dispatches = stress_count;
     omega_world_destroy(&world);
     return true;
+}
+
+/* Capture the identity and semantic content of one queued dispatch. */
+static void m19_make_submission(OmegaWorldSubmission *s,
+                                const uint32_t semantic_words[5],
+                                const OmegaHandle *code,
+                                const OmegaHandle *a,
+                                const OmegaHandle *b,
+                                const OmegaHandle *c,
+                                uint32_t a_bytes, uint32_t b_bytes, uint32_t c_bytes,
+                                uint32_t completion_val) {
+    memset(s, 0, sizeof(*s));
+    memcpy(s->semantic_words, semantic_words, sizeof(s->semantic_words));
+    s->code_object_id = code->object_id;
+    s->code_generation = code->object_generation;
+    s->code_permissions = code->permissions;
+    s->a_object_id = a->object_id;
+    s->a_generation = a->object_generation;
+    s->a_permissions = a->permissions;
+    s->b_object_id = b->object_id;
+    s->b_generation = b->object_generation;
+    s->b_permissions = b->permissions;
+    s->c_object_id = c->object_id;
+    s->c_generation = c->object_generation;
+    s->c_permissions = c->permissions;
+    s->a_bytes = a_bytes;
+    s->b_bytes = b_bytes;
+    s->c_bytes = c_bytes;
+    s->completion_val = completion_val;
+}
+
+/* Write a pushbuffer into a pool slot and enqueue it through the world. The
+ * slot is not reused by the caller until omega_world_drain observes retirement. */
+static bool m19_submit_op(OmegaAcceleratorWorld *world, NvrmMem *pool,
+                          const uint32_t *pb, size_t pb_len,
+                          uint32_t slot, const OmegaWorldSubmission *s) {
+    if (pb_len * 4 > 0x1000) return false;
+    uint32_t off = slot * 0x1000;
+    memcpy((uint8_t *)pool->cpu + off, pb, pb_len * 4);
+    __asm__ volatile("dsb sy" ::: "memory");
+    return omega_world_submit(world, pool, off, (uint32_t)pb_len, s) == OMEGA_WORLD_OK;
 }
 
 /* Gate 8: OMEGA_ACCEL_RESIDENT_1000_OP_PASS */
@@ -1035,82 +1104,92 @@ static bool test_m19_gate8_1000_op(void) {
     pb_b[pb_b_len++] = 0; pb_b[pb_b_len++] = 0;
     pb_b[pb_b_len++] = 0x1 | (1u << 20);
 
-    /* Setup semantic descriptors for rolling digest */
-    uint8_t sem_v_id[32], sem_i_id[32], sem_f_id[32], sem_b_id[32];
-    uint32_t v_words[5] = {1, vec_n, 0, 0, 0};
-    uint32_t i_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_INT32};
-    uint32_t f_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_FP16};
-    uint32_t b_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_BF16};
-    sha256_hash((const uint8_t *)v_words, sizeof(v_words), sem_v_id);
-    sha256_hash((const uint8_t *)i_words, sizeof(i_words), sem_i_id);
-    sha256_hash((const uint8_t *)f_words, sizeof(f_words), sem_f_id);
-    sha256_hash((const uint8_t *)b_words, sizeof(b_words), sem_b_id);
+    /* Semantic descriptors are retained per dispatch and folded into the
+     * rolling digest by the world only after completion is observed. */
+    const uint32_t v_words[5] = {1, vec_n, 0, 0, 0};
+    const uint32_t i_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_INT32};
+    const uint32_t f_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_FP16};
+    const uint32_t b_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_BF16};
 
-    uint8_t dummy_id[32] = {0x01};
-    uint32_t pairs[8] = {0, 1, 1, 1, 2, 1, 3, 1};
-
-    uint32_t batch_cycles = 50;
-    uint32_t num_batches = 250 / batch_cycles;
+    /* pb_pool is 0x40000 bytes = 64 slots of 0x1000. A slot must not be
+     * rewritten until every GPFIFO entry that references it has retired. The
+     * world API enqueues each dispatch and owns authoritative accounting; this
+     * gate only observes world.total_dispatches and world.sequence_number. */
+    const uint32_t pb_slots = 0x40000 / 0x1000;
     uint32_t dispatch_id = 0;
+    uint32_t in_flight = 0;
+    OmegaWorldSubmission sub;
 
     long rss_before = get_resident_pages();
 
-    for (uint32_t b = 0; b < num_batches; b++) {
-        for (uint32_t c = 0; c < batch_cycles; c++) {
-            /* 1. VecAdd */
-            dispatch_id++;
-            pb_v[rel_v + 3] = dispatch_id;
-            uint32_t off = ((dispatch_id - 1) % 64) * 0x1000;
-            memcpy((uint8_t *)pb_pool.cpu + off, pb_v, pb_v_len * 4);
-            __asm__ volatile("dsb sy" ::: "memory");
-            nvrm_enqueue(&world.m16.rm, &pb_pool, off, (uint32_t)pb_v_len);
-            omega_world_update_digest(&world, sem_v_id, dummy_id, dummy_id, dummy_id,
-                                     pairs, 4, 0x1f, dispatch_id, dummy_id, 0);
-
-            /* 2. INT32 MatMul */
-            dispatch_id++;
-            pb_i[rel_i + 3] = dispatch_id;
-            off = ((dispatch_id - 1) % 64) * 0x1000;
-            memcpy((uint8_t *)pb_pool.cpu + off, pb_i, pb_i_len * 4);
-            __asm__ volatile("dsb sy" ::: "memory");
-            nvrm_enqueue(&world.m16.rm, &pb_pool, off, (uint32_t)pb_i_len);
-            omega_world_update_digest(&world, sem_i_id, dummy_id, dummy_id, dummy_id,
-                                     pairs, 4, 0x1f, dispatch_id, dummy_id, 0);
-
-            /* 3. FP16 MatMul */
-            dispatch_id++;
-            pb_f[rel_f + 3] = dispatch_id;
-            off = ((dispatch_id - 1) % 64) * 0x1000;
-            memcpy((uint8_t *)pb_pool.cpu + off, pb_f, pb_f_len * 4);
-            __asm__ volatile("dsb sy" ::: "memory");
-            nvrm_enqueue(&world.m16.rm, &pb_pool, off, (uint32_t)pb_f_len);
-            omega_world_update_digest(&world, sem_f_id, dummy_id, dummy_id, dummy_id,
-                                     pairs, 4, 0x1f, dispatch_id, dummy_id, 0);
-
-            /* 4. BF16 MatMul */
-            dispatch_id++;
-            pb_b[rel_b + 3] = dispatch_id;
-            off = ((dispatch_id - 1) % 64) * 0x1000;
-            memcpy((uint8_t *)pb_pool.cpu + off, pb_b, pb_b_len * 4);
-            __asm__ volatile("dsb sy" ::: "memory");
-            nvrm_enqueue(&world.m16.rm, &pb_pool, off, (uint32_t)pb_b_len);
-            omega_world_update_digest(&world, sem_b_id, dummy_id, dummy_id, dummy_id,
-                                     pairs, 4, 0x1f, dispatch_id, dummy_id, 0);
+    for (uint32_t cycle = 0; cycle < 250; cycle++) {
+        /* 1. VecAdd */
+        dispatch_id++;
+        pb_v[rel_v + 3] = dispatch_id;
+        m19_make_submission(&sub, v_words, &code_vecadd, &v_a, &v_b, &v_c,
+                            (uint32_t)vec_bytes, (uint32_t)vec_bytes, (uint32_t)vec_bytes,
+                            dispatch_id);
+        if (!m19_submit_op(&world, &pb_pool, pb_v, pb_v_len,
+                           (dispatch_id - 1) % pb_slots, &sub)) {
+            omega_world_destroy(&world);
+            return false;
         }
-        *world.m16.rm.doorbell = world.m16.rm.token;
-        __asm__ volatile("dsb sy" ::: "memory");
+        in_flight++;
 
-        struct timespec start_ts, cur_ts;
-        clock_gettime(CLOCK_MONOTONIC, &start_ts);
-        while (*world.completion.cpu_marker < dispatch_id) {
-            __asm__ volatile("yield");
-            clock_gettime(CLOCK_MONOTONIC, &cur_ts);
-            if ((cur_ts.tv_sec - start_ts.tv_sec) > 10) {
+        /* 2. INT32 MatMul */
+        dispatch_id++;
+        pb_i[rel_i + 3] = dispatch_id;
+        m19_make_submission(&sub, i_words, &code_i32, &m_a_i32, &m_b_i32, &m_c_i32,
+                            (uint32_t)mat_bytes_i32, (uint32_t)mat_bytes_i32, (uint32_t)mat_bytes_out,
+                            dispatch_id);
+        if (!m19_submit_op(&world, &pb_pool, pb_i, pb_i_len,
+                           (dispatch_id - 1) % pb_slots, &sub)) {
+            omega_world_destroy(&world);
+            return false;
+        }
+        in_flight++;
+
+        /* 3. FP16 MatMul */
+        dispatch_id++;
+        pb_f[rel_f + 3] = dispatch_id;
+        m19_make_submission(&sub, f_words, &code_f16, &m_a_tensor, &m_b_tensor, &m_c_tensor,
+                            (uint32_t)mat_bytes_f16, (uint32_t)mat_bytes_f16, (uint32_t)mat_bytes_out,
+                            dispatch_id);
+        if (!m19_submit_op(&world, &pb_pool, pb_f, pb_f_len,
+                           (dispatch_id - 1) % pb_slots, &sub)) {
+            omega_world_destroy(&world);
+            return false;
+        }
+        in_flight++;
+
+        /* 4. BF16 MatMul */
+        dispatch_id++;
+        pb_b[rel_b + 3] = dispatch_id;
+        m19_make_submission(&sub, b_words, &code_bf16, &m_a_tensor, &m_b_tensor, &m_c_tensor,
+                            (uint32_t)mat_bytes_f16, (uint32_t)mat_bytes_f16, (uint32_t)mat_bytes_out,
+                            dispatch_id);
+        if (!m19_submit_op(&world, &pb_pool, pb_b, pb_b_len,
+                           (dispatch_id - 1) % pb_slots, &sub)) {
+            omega_world_destroy(&world);
+            return false;
+        }
+        in_flight++;
+
+        if (in_flight >= pb_slots) {
+            if (omega_world_ring(&world) != OMEGA_WORLD_OK ||
+                omega_world_drain(&world, dispatch_id, 10000) < 0) {
                 omega_world_destroy(&world);
                 return false;
             }
+            in_flight = 0;
         }
-        nvrm_retire(&world.m16.rm, dispatch_id);
+    }
+    if (in_flight > 0) {
+        if (omega_world_ring(&world) != OMEGA_WORLD_OK ||
+            omega_world_drain(&world, dispatch_id, 10000) < 0) {
+            omega_world_destroy(&world);
+            return false;
+        }
     }
 
     if (world.channel_generation != 1 || world.channel_reconstructions != 0) {
@@ -1121,12 +1200,15 @@ static bool test_m19_gate8_1000_op(void) {
         omega_world_destroy(&world);
         return false;
     }
+    /* Authoritative accounting: advanced only on observed completion. */
+    if (world.total_dispatches != 1000 || world.sequence_number != 1000) {
+        omega_world_destroy(&world);
+        return false;
+    }
 
     long rss_after = get_resident_pages();
-    world.total_dispatches = dispatch_id;
-    world.sequence_number = dispatch_id;
 
-    m19_sustained_dispatches = dispatch_id;
+    m19_sustained_dispatches = (uint32_t)world.total_dispatches;
     m19_sustained_rss_delta = (rss_before >= 0 && rss_after >= 0) ? (rss_after - rss_before) : 0;
     memcpy(m19_sustained_digest, world.rolling_state_digest, 32);
 
@@ -1447,7 +1529,13 @@ static bool test_m19_gate15_zero_libcuda(void) {
 
 /* Gate 16: OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS */
 static bool test_m19_gate16_clean_clone(void) {
+    /* Revision the receipt will name as the candidate. */
+    char src_sha[41] = {0};
+    if (!m19_git_head(".", src_sha)) return false;
+
     if (getenv("OMEGA_IN_CLEAN_CLONE") != NULL) {
+        /* Nested run: record the revision this clone was built from. */
+        memcpy(m19_candidate_commit, src_sha, sizeof(m19_candidate_commit));
         return true;
     }
     if (system("git diff --quiet -- src spec tools && git diff --cached --quiet -- src spec tools") != 0) {
@@ -1456,15 +1544,25 @@ static bool test_m19_gate16_clean_clone(void) {
     char clone_template[] = "/tmp/omega_clean_m19_XXXXXX";
     char *clone = mkdtemp(clone_template);
     if (!clone) return false;
+    char checkout[512];
+    int cl = snprintf(checkout, sizeof(checkout), "%s/checkout", clone);
+    if (cl < 0 || (size_t)cl >= sizeof(checkout)) return false;
     char command[2048];
     int len = snprintf(command, sizeof(command),
-                       "git clone --quiet --no-hardlinks . %s/checkout && cd %s/checkout && "
+                       "git clone --quiet --no-hardlinks . %s && cd %s && "
                        "make clean >/dev/null 2>&1 && make -j >/dev/null 2>&1 && "
                        "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m19-gates >%s/qualification.log 2>&1",
-                       clone, clone, clone);
+                       checkout, checkout, clone);
     if (len < 0 || (size_t)len >= sizeof(command)) return false;
-    int rc = system(command);
-    return (rc == 0);
+    if (system(command) != 0) return false;
+
+    /* The built checkout must be exactly the named candidate revision. */
+    char clone_sha[41] = {0};
+    if (!m19_git_head(checkout, clone_sha)) return false;
+    if (strcmp(clone_sha, src_sha) != 0) return false;
+
+    memcpy(m19_candidate_commit, src_sha, sizeof(m19_candidate_commit));
+    return true;
 }
 
 /* Gate 17: OMEGA_ACCEL_RESIDENT_REGRESSION_PASS */
@@ -1475,6 +1573,13 @@ static bool test_m19_gate17_regression(void) {
 /* Gate 18: OMEGA_ACCEL_RESIDENT_RECEIPT_PASS */
 static bool test_m19_gate18_receipt(void) {
     if (m19_gate_count != 17 || m19_gate_passed != 17) return false;
+
+    /* The receipt must name the exact revision that was built and qualified. */
+    char head_sha[41] = {0};
+    if (!m19_git_head(".", head_sha)) return false;
+    if (m19_candidate_commit[0] == '\0' || strcmp(head_sha, m19_candidate_commit) != 0) {
+        return false;
+    }
 
     const char *manifest_files[] = {
         "src/omega_accelerator_world.h",
@@ -1529,6 +1634,7 @@ static bool test_m19_gate18_receipt(void) {
     fprintf(f, "  \"target_hardware\": \"NVIDIA DGX Spark (Grace Blackwell GB10, sm_121, 128 GiB unified LPDDR5x RAM)\",\n");
     fprintf(f, "  \"substrate\": \"M16 Native Libcuda-Free Channel\",\n");
     fprintf(f, "  \"status\": \"SILICON_QUALIFIED\",\n");
+    fprintf(f, "  \"candidate_git_commit\": \"%s\",\n", m19_candidate_commit);
     fprintf(f, "  \"binary_sha256\": \"%s\",\n", bin_hex);
     fprintf(f, "  \"manifest_sha256\": \"%s\",\n", manifest_hex);
     fprintf(f, "  \"rolling_state_digest\": \"%s\",\n", rolling_digest_hex);
