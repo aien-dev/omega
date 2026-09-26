@@ -3,7 +3,7 @@
   "status": "QUALIFIED / PASS",
   "contract_id": "CONTRACT-OMEGA-AARCH64-M5",
   "generated_at": "2026-09-26T08:01:51Z",
-  "git_commit": "a9755731178b6e7dc8fb7113add9248964e3b567",
+  "git_commit": "2dd41024345d207d57f59d4c7940176b6697b099",
   "host": {
     "os": "Linux",
     "arch": "aarch64",
