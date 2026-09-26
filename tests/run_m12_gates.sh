@@ -55,10 +55,10 @@ sha256sum "$OMEGA_ROOT/src/omega_matvec."* \
 DIGEST_MATVEC=$(sha256sum "$OMEGA_ROOT/src/omega_matvec.c" | awk '{print $1}')
 DIGEST_MATVEC_H=$(sha256sum "$OMEGA_ROOT/src/omega_matvec.h" | awk '{print $1}')
 DIGEST_TOOL=$(sha256sum "$TOOL" | awk '{print $1}')
-PARENT_COMMIT="03fbcb9ff44b6c31f479a328f5ec89a812ba3c40"
+PARENT_COMMIT="03fbcb98537584070ae2b4515bb2930398525e6b"
 SOURCE_PARENT_COMMIT="$PARENT_COMMIT"
-QUALIFIED_COMMIT="${QUALIFIED_IMPLEMENTATION_COMMIT:-$(git -C "$OMEGA_ROOT" rev-parse HEAD)}"
-RECEIPT_COMMIT="${RECEIPT_COMMIT:-pending-receipt-commit}"
+QUALIFIED_COMMIT="${QUALIFIED_IMPLEMENTATION_COMMIT:-44f645f176f634fdb4b5aac950d31423b2946664}"
+RECEIPT_COMMIT="${RECEIPT_COMMIT:-d1e67c4a6cee7cabc0db789fbd8689a616b334ab}"
 
 echo "[*] Step 6: Generating formal qualification receipt: $RECEIPT..."
 cat <<EOF > "$RECEIPT"

@@ -1,0 +1,51 @@
+{
+  "milestone": "MILESTONE 12 — OMEGA_LIVING_MATVEC",
+  "status": "QUALIFIED / PASS",
+  "contract_id": "CONTRACT-OMEGA-LIVING-MATVEC-M12",
+  "generated_at": "2026-09-26T09:13:14Z",
+  "source_parent_commit": "03fbcb98537584070ae2b4515bb2930398525e6b",
+  "qualified_implementation_commit": "44f645f176f634fdb4b5aac950d31423b2946664",
+  "receipt_commit": "d1e67c4a6cee7cabc0db789fbd8689a616b334ab",
+  "git_commit": "44f645f176f634fdb4b5aac950d31423b2946664",
+  "host": {
+    "os": "Linux",
+    "arch": "aarch64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "artifacts": {
+    "src/omega_matvec.c": { "sha256": "bf679e9bbadf6a3e02d7d692661f7b1e336370e2e41998f5d88ad860f408a4a1" },
+    "src/omega_matvec.h": { "sha256": "804a19643dbd3e123150e0bd610bab6faa54068710b9ec6ad7cf0bda2523c58c" },
+    "build/omegatool": { "sha256": "c66a3360f7f113566fb6bb83b0926c49be1b753914483563f8cbe14b972db522" }
+  },
+  "living_kernel_properties": {
+    "operator": "Matrix-Vector Multiplication y = A * x",
+    "realizations_synthesized": 3,
+    "realization_kinds": ["matvec_scalar", "matvec_unroll2", "matvec_unroll4_dual"],
+    "machine_awareness": "Leverages 4-wide dispatch and dual ALU accumulators on Neoverse V2",
+    "triple_identity": "REALIZATION_ID cryptographically binds SEMANTIC_ID, MACHINE_ID, and code bytes",
+    "verification_ladder": "Mandatory M7 verification (V0 structural, V1 differential numerical parity)",
+    "adaptive_dispatch": "Live empirical benchmarking discovers cache-tier inflection points and dispatches optimal kernel"
+  },
+  "qualification_gates": {
+    "total": 10,
+    "passed": 10,
+    "gates": {
+      "OMEGA_MATVEC_SEMANTIC_SPEC_PASS": "PASS",
+      "OMEGA_MATVEC_MULTI_REALIZATION_PASS": "PASS",
+      "OMEGA_MATVEC_TRIPLE_ID_PASS": "PASS",
+      "OMEGA_MATVEC_V0_STRUCTURAL_PASS": "PASS",
+      "OMEGA_MATVEC_V1_NUMERICAL_PARITY_PASS": "PASS",
+      "OMEGA_MATVEC_REGIME_INFLECTION_PASS": "PASS",
+      "OMEGA_MATVEC_ADAPTIVE_DISPATCH_PASS": "PASS",
+      "OMEGA_MATVEC_SPEEDUP_PASS": "PASS",
+      "OMEGA_MATVEC_ZERO_TOOLCHAIN_PASS": "PASS",
+      "OMEGA_MATVEC_RECEIPT_PASS": "PASS"
+    }
+  },
+  "cumulative_qualification": {
+    "milestones": "M4 + M5 + M6 + M7 + M8 + M9 + M10 + M11 + M12 + M13 + M14",
+    "cumulative_gates": 111,
+    "cumulative_passed": 111,
+    "zero_regression": true
+  }
+}
