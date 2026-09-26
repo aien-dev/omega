@@ -2,9 +2,9 @@
  * omega_shared_world_worker.h -- persistent GB10 qualification worker + the CPU
  * campaign harness for M20 Stage 1 (OMEGA_SHARED_WORLD).
  *
- * VERIFICATION STATUS (2026-09-26): IMPLEMENTED, NOT YET COMPILED, NOT SILICON-
- * OBSERVED. The GB10 GPU was contended and build/test execution was unavailable
- * during authoring (see evidence/omega_shared_world_stage1_status.md). The
+ * VERIFICATION STATUS (2026-09-26): SCAFFOLD, HOST-COMPILED, NOT SILICON-
+ * OBSERVED. The host build and protocol suite pass; the GB10 silicon campaign
+ * remains pending (see evidence/omega_shared_world_stage1_status.md). The
  * worker's SASS scheduling/scoreboard control words (BlackwellIRInsn.control)
  * are marked for on-silicon calibration; do not treat this file as qualified
  * until the campaign in omega_sw_run_campaign() passes on real GB10.
@@ -49,8 +49,10 @@ typedef struct {
 } OmegaSwWorkerParams;
 
 /* Build the resident worker as a native Blackwell IR program (uses the M20
- * STRONG.SYS / MEMBAR ordering opcodes). Returns 0 on success. The caller then
- * runs register allocation + encoding via the existing codegen pipeline. */
+ * STRONG.SYS / MEMBAR ordering opcodes). This is still a non-executable sketch:
+ * it returns OMEGA_SW_ERR_WORKER_INCOMPLETE, and callers must not encode or
+ * launch the partial program. */
+#define OMEGA_SW_ERR_WORKER_INCOMPLETE (-2)
 int omega_sw_worker_build_ir(const OmegaSwWorkerParams *params,
                              BlackwellIRProgram *prog);
 

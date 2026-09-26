@@ -51,8 +51,8 @@ discipline, the claim is withheld rather than weakened. See "Silicon gap" below.
   publish, overwrite-unconsumed, duplicate, replay, index/sequence wrap,
   malformed descriptor, and out-of-bounds logical references; fail-closed with a
   fault mailbox; forward progress after a rejected entry.
-- `host-tested`: `physics/shared_world/test_shared_world_host.c` — **51/51 checks
-  PASS**, including a **3,000,000-message** two-thread SPSC exchange with zero
+- `host-tested`: `physics/shared_world/test_shared_world_host.c` — **58/58 checks
+  PASS**, including a **2,300,000-message** two-thread SPSC exchange with zero
   duplicates, zero missing/reordered, zero torn payloads, zero faults; plus
   empty/single/full, 8+ full wraps, replay/malformed injection (bad magic,
   version, epoch, msg-type, checksum), and object-table OOB/stale-gen/revoked/
@@ -77,26 +77,30 @@ discipline, the claim is withheld rather than weakened. See "Silicon gap" below.
 
 ## Silicon gap (why the Stage 1 claim is withheld)
 
-1. During this session the GB10 GPU was continuously occupied by two wedged
-   `omegatool --run-m19-gates` processes (one orphaned ~1h17m, one a ~21m
-   clean-clone) holding channels at 0% utilization. Testing the M20 worker
-   against a contended/likely-wedged GPU would not produce trustworthy results,
-   and the established rule is to test only on an idle GPU and not disturb other
-   runs without direction.
-2. After a request to kill those stuck processes was declined by the environment
-   ("Interfere With Workloads"), the environment further declined to run build
-   and test commands, so the persistent-worker bring-up and the 1,000,000-
-   exchange campaign could not be executed or measured this session.
+1. The GB10 is reserved for M19 qualification. No M20 GPU run was attempted
+   while that campaign is active.
+2. The persistent-worker generator still lacks ring addressing, validation,
+   looping, bounded exit, and calibrated scheduling. It now returns an explicit
+   incomplete error and clears the partial IR, so it cannot be launched as if
+   it were a complete worker. The million-message campaign remains unimplemented.
 
 Consequently the persistent resident worker (`omega/src/omega_shared_world_worker.*`)
-is `implemented` but **not compiled and not silicon-observed**, and gates G7–G11
+is a host-compiled scaffold that explicitly returns `OMEGA_SW_ERR_WORKER_INCOMPLETE`;
+it is **not executable and not silicon-observed**. Gates G7–G11
 (persistent worker, 1M exchanges, integrity ledger, CPU-authority boundary on
 silicon, zero-libcuda at runtime) are **not-yet-claimed**.
 
 ## To close Stage 1 (requires an idle GB10 + build/test permission)
 
-1. Ensure the GPU is idle (no wedged channels).
-2. Build physics + omega; run the host protocol test (expect 51/51) and the
+With the PHYSICS M20 worktree checked out, the host build and protocol test are:
+
+```sh
+make PHYSICS_DIR=/path/to/physics-m20-worktree -j4
+make PHYSICS_DIR=/path/to/physics-m20-worktree test-m20-host
+```
+
+1. Ensure the GPU is idle.
+2. Build physics + omega; run the host protocol test (expect 58/58) and the
    codegen fixtures (expect 0).
 3. Launch the persistent worker once; run the 1,000,000-exchange campaign with
    variable delays, bursts, generation changes, and full-wrap boundaries.

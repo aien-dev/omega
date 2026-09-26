@@ -1,7 +1,7 @@
 /*
  * omega_shared_world_worker.c -- resident GB10 qualification worker IR generator.
  *
- * VERIFICATION STATUS (2026-09-26): IMPLEMENTED, NOT COMPILED, NOT SILICON-
+ * VERIFICATION STATUS (2026-09-26): SCAFFOLD, HOST-COMPILED, NOT SILICON-
  * OBSERVED. See the header and evidence/omega_shared_world_stage1_status.md.
  * The instruction *sequence* below is the intended persistent polling loop using
  * the M20 STRONG.SYS/MEMBAR ordering opcodes. The per-instruction scheduling
@@ -101,7 +101,7 @@ int omega_sw_worker_build_ir(const OmegaSwWorkerParams *params,
     BlackwellIRInsn ld_acq = { .op = BW_IR_LDG_STRONG_SYS, .dst_vreg = v_tail,
                                .src1_vreg = v_base, .ureg = uv_desc }; /* + off_c2g+tail (TODO addr) */
     BlackwellIRInsn membar = { .op = BW_IR_MEMBAR_ALL_SYS };
-    int v_out = omega_bw_ir_alloc_vreg();
+    int v_out = omega_bw_ir_alloc_vreg(prog);
     BlackwellIRInsn st_rel = { .op = BW_IR_STG_STRONG_SYS, .src1_vreg = v_base,
                                .src2_vreg = v_out, .ureg = uv_desc }; /* g2c tail (TODO addr) */
     BlackwellIRInsn ex     = { .op = BW_IR_EXIT };
@@ -112,7 +112,10 @@ int omega_sw_worker_build_ir(const OmegaSwWorkerParams *params,
     if (omega_bw_ir_append(prog, &ex)     != 0) return -1;
 
     (void)params; /* epoch/xform/offsets/giveup consumed by the full loop (TODO) */
-    return 0;
+    /* The emitted IR is an ordering sketch, not an executable worker. Clear it
+     * so even a caller that mishandles this error cannot encode the sketch. */
+    omega_bw_ir_init(prog);
+    return OMEGA_SW_ERR_WORKER_INCOMPLETE;
 }
 
 /*
@@ -143,7 +146,7 @@ int omega_sw_run_campaign(uint64_t count, unsigned stress_mask,
         out->silicon_observed = 0; /* set to 1 only by a real GB10 run */
     }
     (void)stress_mask;
-    /* Not executed during authoring: GB10 contended and build/test unavailable.
-     * Returns -1 (campaign not run) rather than fabricating a result. */
+    /* No GB10 campaign has run; the resident worker is still incomplete.
+     * Return failure rather than fabricating a result. */
     return -1;
 }
