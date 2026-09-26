@@ -430,6 +430,69 @@ static int encode_single_insn(const BlackwellIRInsn *insn, const OmegaRegAlloc *
             w[3] = insn->control ? insn->control : 0x000f2200;
             break;
 
+        case BW_IR_LDG_STRONG_SYS:
+            /* LDG.E.STRONG.SYS Rd, desc[URd][Ra.64] -- acquire load, system
+             * scope. Identical to LDG.E except w[2] carries the STRONG.SYS
+             * strong/scope bits (0x0c1e1900 -> 0x0c1f5900). Oracle-validated. */
+            w[0] = 0x7981 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(ureg & 0xff);
+            w[2] = 0x0c1f5900;
+            w[3] = insn->control ? insn->control : 0x000f2200;
+            break;
+
+        case BW_IR_STG_STRONG_SYS:
+            /* STG.E.STRONG.SYS desc[URd][Ra.64], Rb -- release store, system
+             * scope. Identical to STG.E except w[2] strong/scope bits
+             * (0x0c101900 -> 0x0c115900). Must be preceded by MEMBAR.ALL.SYS to
+             * complete release ordering. Oracle-validated. */
+            w[0] = 0x7986 | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(src2 & 0xff);
+            w[2] = 0x0c115900 | (uint32_t)(ureg & 0xff);
+            w[3] = insn->control ? insn->control : 0x000fe200;
+            break;
+
+        case BW_IR_MEMBAR_ALL_SYS:
+            /* MEMBAR.ALL.SYS -- full system-scope memory barrier. */
+            w[0] = 0x00007992;
+            w[1] = 0x00000000;
+            w[2] = 0x0000b000;
+            w[3] = insn->control ? insn->control : 0x000fec00;
+            break;
+
+        case BW_IR_MEMBAR_SC_SYS:
+            /* MEMBAR.SC.SYS -- sequential-consistency system-scope barrier. */
+            w[0] = 0x00007992;
+            w[1] = 0x00000000;
+            w[2] = 0x00003000;
+            w[3] = insn->control ? insn->control : 0x000fec00;
+            break;
+
+        case BW_IR_CCTL_IVALL:
+            /* CCTL.IVALL -- invalidate all L1 lines so a subsequent STRONG.SYS
+             * load re-fetches from the coherent point rather than a stale line. */
+            w[0] = 0xff00798f;
+            w[1] = 0x00000000;
+            w[2] = 0x02000000;
+            w[3] = insn->control ? insn->control : 0x000fe800;
+            break;
+
+        case BW_IR_ATOMG_ADD_STRONG_SYS:
+            /* ATOMG.E.ADD.STRONG.SYS Rd, desc[URd][Ra.64], Rb. Oracle-validated
+             * opcode/scope words; operands mirror the LDG/STG desc[] form. */
+            w[0] = 0x79a8 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(src2 & 0xff) | 0x80000000u;
+            w[2] = 0x081f5100 | (uint32_t)(ureg & 0xff);
+            w[3] = insn->control ? insn->control : 0x00321e00;
+            break;
+
+        case BW_IR_ATOMG_EXCH_STRONG_SYS:
+            /* ATOMG.E.EXCH.STRONG.SYS Rd, desc[URd][Ra.64], Rb. */
+            w[0] = 0x79a8 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(src2 & 0xff) | 0x80000000u;
+            w[2] = 0x0c1f5100 | (uint32_t)(ureg & 0xff);
+            w[3] = insn->control ? insn->control : 0x00321e00;
+            break;
+
         case BW_IR_EXIT:
             w[0] = insn->predicate_p0 ? 0x0000094d : 0x0000794d;
             w[1] = 0x00000000;
@@ -1071,6 +1134,51 @@ int omega_blackwell_verify_codegen_fixtures(void) {
     BlackwellIRInsn insn_ldg16 = { .op = BW_IR_LDG_E_U16, .dst_vreg = 0, .src1_vreg = 1, .ureg = 0 };
     if (encode_single_insn(&insn_ldg16, &ra, w) != 0) return -31;
     if (w[0] != 0x04027981 || w[1] != 4 || w[2] != 0x0c1e1500 || w[3] != 0x000f2200) return -32;
+
+    /* --- M20 cross-processor ordering opcodes (sm_121 SASS oracle) --------- */
+
+    /* 17. LDG.E.STRONG.SYS: differs from LDG.E only in w[2] (0x0c1f5900). */
+    BlackwellIRInsn insn_ldg_ss = { .op = BW_IR_LDG_STRONG_SYS, .dst_vreg = 0, .src1_vreg = 1, .ureg = 0 };
+    if (encode_single_insn(&insn_ldg_ss, &ra, w) != 0) return -40;
+    if (w[0] != (0x7981 | (2 << 16) | (4 << 24)) || w[1] != 4 || w[2] != 0x0c1f5900) return -41;
+
+    /* 18. STG.E.STRONG.SYS: differs from STG.E only in w[2] (0x0c115900|ureg). */
+    BlackwellIRInsn insn_stg_ss = { .op = BW_IR_STG_STRONG_SYS, .src1_vreg = 1, .src2_vreg = 3, .ureg = 0 };
+    if (encode_single_insn(&insn_stg_ss, &ra, w) != 0) return -42;
+    if (w[0] != (0x7986 | (4 << 24)) || w[1] != 7 || w[2] != (0x0c115900 | 4)) return -43;
+
+    /* 19. Differential: STRONG.SYS strong/scope delta identical (0x00014000),
+     *     confined to w[2], for both load and store families. */
+    {
+        BlackwellIRInsn ld = { .op = BW_IR_LDG_E, .dst_vreg = 0, .src1_vreg = 1, .ureg = 0 };
+        uint32_t a[4], b[4];
+        encode_single_insn(&ld, &ra, a);
+        encode_single_insn(&insn_ldg_ss, &ra, b);
+        if ((a[2] ^ b[2]) != 0x00014000 || a[0] != b[0] || a[1] != b[1]) return -44;
+    }
+
+    /* 20. MEMBAR.ALL.SYS and 21. MEMBAR.SC.SYS. */
+    BlackwellIRInsn insn_membar_all = { .op = BW_IR_MEMBAR_ALL_SYS };
+    if (encode_single_insn(&insn_membar_all, &ra, w) != 0) return -45;
+    if (w[0] != 0x00007992 || w[1] != 0 || w[2] != 0x0000b000) return -46;
+
+    BlackwellIRInsn insn_membar_sc = { .op = BW_IR_MEMBAR_SC_SYS };
+    if (encode_single_insn(&insn_membar_sc, &ra, w) != 0) return -47;
+    if (w[0] != 0x00007992 || w[1] != 0 || w[2] != 0x00003000) return -48;
+
+    /* 22. CCTL.IVALL. */
+    BlackwellIRInsn insn_cctl = { .op = BW_IR_CCTL_IVALL };
+    if (encode_single_insn(&insn_cctl, &ra, w) != 0) return -49;
+    if (w[0] != 0xff00798f || w[1] != 0 || w[2] != 0x02000000) return -50;
+
+    /* 23. ATOMG.E.ADD.STRONG.SYS and 24. ATOMG.E.EXCH.STRONG.SYS. */
+    BlackwellIRInsn insn_atom_add = { .op = BW_IR_ATOMG_ADD_STRONG_SYS, .dst_vreg = 0, .src1_vreg = 1, .src2_vreg = 3, .ureg = 0 };
+    if (encode_single_insn(&insn_atom_add, &ra, w) != 0) return -51;
+    if ((w[0] & 0xffff) != 0x79a8 || (w[1] & 0x80000000u) != 0x80000000u || w[2] != (0x081f5100 | 4)) return -52;
+
+    BlackwellIRInsn insn_atom_exch = { .op = BW_IR_ATOMG_EXCH_STRONG_SYS, .dst_vreg = 0, .src1_vreg = 1, .src2_vreg = 3, .ureg = 0 };
+    if (encode_single_insn(&insn_atom_exch, &ra, w) != 0) return -53;
+    if ((w[0] & 0xffff) != 0x79a8 || w[2] != (0x0c1f5100 | 4)) return -54;
 
     return 0;
 }

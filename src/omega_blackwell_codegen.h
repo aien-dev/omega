@@ -35,6 +35,18 @@ typedef enum {
     BW_IR_SHF_R,        /* SHF.R.U32.HI Rd, RZ, imm, Ra */
     BW_IR_LOP3_AND,     /* LOP3.LUT Rd, Ra, imm, RZ, 0xc0, !PT (Bitwise AND) */
     BW_IR_LDG_E_U16,    /* LDG.E.U16 Rd, desc[URd][Ra.64] */
+    /* M20 cross-processor memory-ordering opcodes (system scope). These realize
+     * the CPU-side ldar/stlr semantics on the GPU: a STRONG.SYS load is the
+     * acquire load, a STRONG.SYS store preceded by MEMBAR is the release store,
+     * MEMBAR.SC.SYS is sequential consistency. Encodings validated against the
+     * NVIDIA sm_121 SASS oracle (nvdisasm) as a read-only reference. */
+    BW_IR_LDG_STRONG_SYS,   /* LDG.E.STRONG.SYS Rd, desc[URd][Ra.64] (acquire)  */
+    BW_IR_STG_STRONG_SYS,   /* STG.E.STRONG.SYS desc[URd][Ra.64], Rb (release)  */
+    BW_IR_MEMBAR_ALL_SYS,   /* MEMBAR.ALL.SYS (release/acq_rel fence)           */
+    BW_IR_MEMBAR_SC_SYS,    /* MEMBAR.SC.SYS  (sequential-consistency fence)    */
+    BW_IR_CCTL_IVALL,       /* CCTL.IVALL (invalidate L1 -> forces re-fetch)    */
+    BW_IR_ATOMG_ADD_STRONG_SYS, /* ATOMG.E.ADD.STRONG.SYS Rd, [Ra.64], Rb       */
+    BW_IR_ATOMG_EXCH_STRONG_SYS,/* ATOMG.E.EXCH.STRONG.SYS Rd, [Ra.64], Rb      */
     BW_IR_EXIT,         /* EXIT */
     BW_IR_BRA           /* BRA target */
 } BlackwellIROpcode;
