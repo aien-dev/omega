@@ -145,6 +145,16 @@ int aarch64_emit_str_post(uint8_t *buf, size_t *pos, size_t max_len, uint8_t rt,
     return emit_u32_le(buf, pos, max_len, insn);
 }
 
+int aarch64_emit_ldr_x_post(uint8_t *buf, size_t *pos, size_t max_len, uint8_t rt, uint8_t rn, int16_t simm9) {
+    uint32_t insn = 0xF8400400 | (((uint32_t)simm9 & 0x1FF) << 12) | ((uint32_t)(rn & 0x1F) << 5) | (rt & 0x1F);
+    return emit_u32_le(buf, pos, max_len, insn);
+}
+
+int aarch64_emit_str_x_post(uint8_t *buf, size_t *pos, size_t max_len, uint8_t rt, uint8_t rn, int16_t simm9) {
+    uint32_t insn = 0xF8000400 | (((uint32_t)simm9 & 0x1FF) << 12) | ((uint32_t)(rn & 0x1F) << 5) | (rt & 0x1F);
+    return emit_u32_le(buf, pos, max_len, insn);
+}
+
 int aarch64_emit_subs_imm(uint8_t *buf, size_t *pos, size_t max_len, bool sf, uint8_t rd, uint8_t rn, uint16_t imm12) {
     uint32_t base = sf ? 0xF1000000 : 0x71000000;
     uint32_t insn = base | (((uint32_t)imm12 & 0xFFF) << 10) | ((uint32_t)(rn & 0x1F) << 5) | (rd & 0x1F);

@@ -141,17 +141,17 @@ int aarch64_decode_instruction(uint32_t insn, DecodedInsn *out_dec) {
         return 0;
     }
 
-    /* 13. LDR / STR (post-indexed 32-bit) */
-    if ((insn & 0xFFE00400) == 0xB8400400) {
+    /* 13. LDR / STR (post-indexed 32-bit and 64-bit) */
+    if ((insn & 0xBFE00400) == 0xB8400400) {
         out_dec->op = DECODED_LDR;
-        out_dec->sf = false;
+        out_dec->sf = ((insn >> 30) & 1) != 0;
         out_dec->rd = (uint8_t)(insn & 0x1F);
         out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
         return 0;
     }
-    if ((insn & 0xFFE00400) == 0xB8000400) {
+    if ((insn & 0xBFE00400) == 0xB8000400) {
         out_dec->op = DECODED_STR;
-        out_dec->sf = false;
+        out_dec->sf = ((insn >> 30) & 1) != 0;
         out_dec->rd = (uint8_t)(insn & 0x1F);
         out_dec->rn = (uint8_t)((insn >> 5) & 0x1F);
         return 0;
