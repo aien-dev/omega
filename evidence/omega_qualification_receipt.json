@@ -1,0 +1,61 @@
+{
+  "milestone": "MILESTONE 4 — OMEGA_SEMANTICS",
+  "status": "QUALIFIED / PASS",
+  "contract_id": "CONTRACT-OMEGA-SEMANTICS-M4",
+  "generated_at": "2026-09-26T07:46:42Z",
+  "git_commit": "HEAD
+uncommitted-bootstrap",
+  "host": {
+    "os": "Linux",
+    "arch": "aarch64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "artifacts": {
+    "spec/semantic-object.md": { "sha256": "c9bc90206508082de365a2244a5f41e2e37c3e7fc7e23754c78e710058303067" },
+    "spec/canonical-encoding.md": { "sha256": "a5ca176ee1aa60db2df607d6ba5f20be37137922bfab43e5f4a11653d63795e1" },
+    "spec/type-system.md": { "sha256": "8bed4af3a71278e7ef8d0ccf8964ca157376fc3305d4efee146f8db270306d3c" },
+    "build/omegatool": { "sha256": "0bd205b5e475ca3af0eca4583bae11da411c23ed5c972f0a5807cf771629beb3" }
+  },
+  "canonical_semantic_identities": {
+    "u32_add_7_11_result_18": {
+      "semantic_id": "674c6d710c35de930e49454618b3bbc63d5d1d0ed0506fc0181365bd050e9870",
+      "canonical_rule": "OMG0 big-endian serialization of ADD<U32>(7, 11)",
+      "representation_equivalence": ["builder_a", "builder_b", "binary_wire_codec", "human_text_parser"]
+    },
+    "u32_sub_7_11_mutation": {
+      "semantic_id": "54e676c014745193a2ec7ec3672c57b584a0653ea8bfb44710e6cbc718eccf23",
+      "semantic_divergence_verified": true
+    },
+    "physics_m3_authority_law": {
+      "semantic_id": "e9b290e4505c41cbe09d25a6f4406c81a9a2d932996bb176a89e2c37ec6a403e",
+      "law": "child.bounds <= parent.bounds && child.rights <= parent.rights",
+      "construction_equivalence": ["bounds_then_rights", "rights_then_bounds"]
+    }
+  },
+  "qualification_gates": {
+    "total": 12,
+    "passed": 12,
+    "gates": {
+      "OMEGA_OBJECT_MODEL_PASS": "PASS",
+      "OMEGA_TYPE_SYSTEM_PASS": "PASS",
+      "OMEGA_GRAPH_VALIDATION_PASS": "PASS",
+      "OMEGA_CANONICAL_ENCODING_PASS": "PASS",
+      "OMEGA_SEMANTIC_ID_DETERMINISM_PASS": "PASS",
+      "OMEGA_REPRESENTATION_INDEPENDENCE_PASS": "PASS",
+      "OMEGA_SEMANTIC_DIFFERENCE_PASS": "PASS",
+      "OMEGA_RELATION_PASS": "PASS",
+      "OMEGA_CONSTRAINT_PASS": "PASS",
+      "OMEGA_PURE_EFFECT_SEPARATION_PASS": "PASS",
+      "OMEGA_MALFORMED_OBJECT_REFUSAL_PASS": "PASS",
+      "OMEGA_CROSS_BUILD_DETERMINISM_PASS": "PASS"
+    }
+  },
+  "sovereignty_accounting": {
+    "foreign_dependencies": [],
+    "python_dependency": false,
+    "cargo_rust_dependency": false,
+    "llvm_dependency": false,
+    "posix_c99_scaffolding": true,
+    "scaffolding_declaration": "BOOTSTRAP REPRESENTATION - NOT PERMANENT SEMANTIC DEFINITION"
+  }
+}
