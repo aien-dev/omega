@@ -1,0 +1,49 @@
+{
+  "milestone": "MILESTONE 15 — PHYSICS_ACCELERATOR_LINK",
+  "status": "QUALIFIED / PASS",
+  "contract_id": "CONTRACT-OMEGA-ACCELERATOR-LINK-M15",
+  "generated_at": "2026-09-26T09:28:30Z",
+  "source_parent_commit": "5a22e60458c0545f6facbd6063b1209a4fc85b52",
+  "qualified_implementation_commit": "b06eb3b21a32811021ea526f72d90f4bff5408c9",
+  "host": {
+    "os": "Linux",
+    "arch": "aarch64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "artifacts": {
+    "src/omega_accelerator.c": { "sha256": "e860cfffaaa37d58fe42efa188c85adfcc0fd3bb080db0ab275f8bff35caf6e1" },
+    "src/omega_accelerator.h": { "sha256": "070785675806c5907cb0730c5750d957d0cc742ab6ea55d6d5d195eb0336a33e" },
+    "build/omegatool": { "sha256": "93aa4e994a5d005f63c3fa0d01aa4baf6039a8415ebfd27d6b62543b30d61b27" }
+  },
+  "accelerator_link_properties": {
+    "target_platform": "NVIDIA DGX Spark Grace Blackwell",
+    "sovereign_client_port": "OmegaAccelPort mediated capability client",
+    "dma_sandboxing": "SMMUv3 Stage 1 IOVA window bounds verification",
+    "intent_generation": "Deterministic 64-byte EffectIntent formulation",
+    "receipt_verification": "192-byte EffectReceipt validation and rolling SHA-256 seal chain maintenance",
+    "machine_graph_integration": "Dynamic UNIT_ACCELERATOR_PORT injection and MACHINE_ID recalculation",
+    "authority_doctrine": "Omega asks; Physics authorizes"
+  },
+  "qualification_gates": {
+    "total": 10,
+    "passed": 10,
+    "gates": {
+      "PHYSICS_ACCEL_MEM_BOUNDS_PASS": "PASS",
+      "PHYSICS_ACCEL_SMMU_TRANSLATION_PASS": "PASS",
+      "PHYSICS_ACCEL_DMA_SANDBOX_PASS": "PASS",
+      "PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS": "PASS",
+      "PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS": "PASS",
+      "PHYSICS_ACCEL_RESET_RECOVERY_PASS": "PASS",
+      "PHYSICS_ACCEL_RECEIPT_CHAIN_PASS": "PASS",
+      "PHYSICS_ACCEL_OMEGA_INGRESS_PASS": "PASS",
+      "PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS": "PASS",
+      "PHYSICS_ACCEL_RECEIPT_PASS": "PASS"
+    }
+  },
+  "cumulative_qualification": {
+    "milestones": "M4 + M5 + M6 + M7 + M8 + M9 + M10 + M11 + M12 + M13 + M14 + M15",
+    "cumulative_gates": 121,
+    "cumulative_passed": 121,
+    "zero_regression": true
+  }
+}
