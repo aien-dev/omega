@@ -17,8 +17,8 @@
   "bf16_spec_id": "e16219066feb4ecb1d8cf9d732490069e5d56b656084e5e34056c68a3d42761e",
   "bf16_code_sha256": "e9fecf395244b0ef5b26241cd9a498d4f7493653902b4abf622602dccb96e048",
   "bf16_realization_id": "145e2bdbccffb28c05c1332d9a5d680139598bd06a9a461a4434beb9dd64813f",
-  "binary_sha256": "1f75d63b385ab8ef7941845380d37800eaa052e7a6e0acf5da209d722aeaaf4b",
-  "evidence_manifest_sha256": "958af174b76564d71002b7638ec1507930edd5dd14c8b9c860dfd964024c7974",
+  "binary_sha256": "fbbcb7aff29c5a6da6541092aa34540f1664e55ff0a9c8443e7619aee6e3a4aa",
+  "evidence_manifest_sha256": "611b2263e25823da454cfeacf2c247b4dacb4febce86aa6a2094da7185f6c8eb",
   "tested_configurations": [
     {"shape": "16x16x16", "precision": "FP16", "elements": 256, "max_abs_err": 0.0, "max_rel_err": 0.0, "parity": "100% exact"},
     {"shape": "16x16x16", "precision": "BF16", "elements": 256, "max_abs_err": 0.0, "max_rel_err": 0.0, "parity": "100% exact"},
@@ -38,5 +38,5 @@
   "total_gates_evaluated": 157,
   "cumulative_regression_passed": 139,
   "m18_gates_passed": 18,
-  "qualification_timestamp": "2026-09-26T17:09:12Z"
+  "qualification_timestamp": "2026-09-26T23:03:24Z"
 }
