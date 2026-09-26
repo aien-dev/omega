@@ -5,7 +5,7 @@
   "stage_title": "Blackwell Tensor Core MMA Dynamic Execution & Silicon Qualification",
   "target_hardware": "NVIDIA DGX Spark (Grace Blackwell GB10, sm_121)",
   "substrate": "M16 Native Libcuda-Free Channel",
-  "implementation_commit": "0a831f0c56e7647a205f47a2a2e7bfa64d898549",
+  "implementation_commit": "942173708c70a0251f777444b3e694e8a04b4fb7",
   "canonical_merge_commit": "8da637bd352cdad039d1e88edd92c1ba30cf4173",
   "m16_authority_commit": "b64753d95bacb1114ba48decde48239f0c542e12",
   "fp16_spec_id": "c14660d2ee60590a8102c31f0a15ad0f6943b6cec93301edfffbfc1055138a0e",
@@ -35,5 +35,5 @@
   "total_gates_evaluated": 157,
   "cumulative_regression_passed": 139,
   "m18_gates_passed": 18,
-  "qualification_timestamp": "2026-09-26T16:46:23Z"
+  "qualification_timestamp": "2026-09-26T16:48:29Z"
 }
