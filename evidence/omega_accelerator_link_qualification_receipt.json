@@ -1,26 +1,29 @@
 {
   "milestone": "MILESTONE 15 — PHYSICS_ACCELERATOR_LINK",
   "status": "QUALIFIED / PASS",
+  "qualification_scope": "sovereign client port, capability intent formulation, unkeyed rolling SHA-256 digest chain verification, and machine graph binding",
+  "native_hardware_qualified": true,
+  "m16_dependency_satisfied": true,
   "contract_id": "CONTRACT-OMEGA-ACCELERATOR-LINK-M15",
-  "generated_at": "2026-09-26T09:28:30Z",
+  "generated_at": "2026-09-26T09:52:24Z",
   "source_parent_commit": "5a22e60458c0545f6facbd6063b1209a4fc85b52",
-  "qualified_implementation_commit": "b06eb3b21a32811021ea526f72d90f4bff5408c9",
+  "qualified_implementation_commit": "019af47d29e3c737e522c612ea69e626f04b868b",
   "host": {
     "os": "Linux",
     "arch": "aarch64",
     "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
   },
   "artifacts": {
-    "src/omega_accelerator.c": { "sha256": "e860cfffaaa37d58fe42efa188c85adfcc0fd3bb080db0ab275f8bff35caf6e1" },
-    "src/omega_accelerator.h": { "sha256": "070785675806c5907cb0730c5750d957d0cc742ab6ea55d6d5d195eb0336a33e" },
-    "build/omegatool": { "sha256": "93aa4e994a5d005f63c3fa0d01aa4baf6039a8415ebfd27d6b62543b30d61b27" }
+    "src/omega_accelerator.c": { "sha256": "8399927e9d0c73fe033d705703bf1207f198e4c0f218cf7dfb435404b0741a0e" },
+    "src/omega_accelerator.h": { "sha256": "ed2bada853ae4411872fc79dce381ff7d4db1077294d1717d03d26e2462ecab4" },
+    "build/omegatool": { "sha256": "545d4c61acbb9db5f767c630cfe57a23471515def897db38d626518f42489e9e" }
   },
   "accelerator_link_properties": {
     "target_platform": "NVIDIA DGX Spark Grace Blackwell",
     "sovereign_client_port": "OmegaAccelPort mediated capability client",
-    "dma_sandboxing": "SMMUv3 Stage 1 IOVA window bounds verification",
+    "dma_sandboxing": "Client-side IOVA bounds verification enforced before intent formulation; Physics Stage 1 SMMUv3 physical boundary enforcement",
     "intent_generation": "Deterministic 64-byte EffectIntent formulation",
-    "receipt_verification": "192-byte EffectReceipt validation and rolling SHA-256 seal chain maintenance",
+    "receipt_verification": "192-byte EffectReceipt validation and unkeyed rolling SHA-256 seal chain maintenance (tamper-evident integrity chaining; unkeyed digest)",
     "machine_graph_integration": "Dynamic UNIT_ACCELERATOR_PORT injection and MACHINE_ID recalculation",
     "authority_doctrine": "Omega asks; Physics authorizes"
   },

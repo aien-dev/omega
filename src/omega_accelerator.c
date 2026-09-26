@@ -91,7 +91,7 @@ int omega_accel_port_verify_receipt(OmegaAccelPort *port,
         return -4; /* Seal chain discontinuity */
     }
 
-    /* Verify receipt signature over bytes 0..127 + previous_receipt_digest */
+    /* Verify unkeyed receipt digest over bytes 0..127 + previous_receipt_digest */
     uint8_t hash_input[160];
     memcpy(hash_input, receipt, 128);
     memcpy(hash_input + 128, receipt->previous_receipt_digest, 32);
@@ -100,7 +100,7 @@ int omega_accel_port_verify_receipt(OmegaAccelPort *port,
     sha256_hash(hash_input, 160, expected_receipt_digest);
 
     if (memcmp(expected_receipt_digest, receipt->receipt_digest, 32) != 0) {
-        return -5; /* Cryptographic seal forgery or tampering */
+        return -5; /* Digest mismatch (does not authenticate the producer) */
     }
 
     /* Update rolling expected seal and advance counter */

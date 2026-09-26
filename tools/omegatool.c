@@ -3148,7 +3148,7 @@ static bool test_m15_smmu_translation(void) {
     receipt.actual_effect = 0x90000000ULL;
     receipt.machine_generation = 1;
 
-    /* Signature over receipt bytes 0..127 + previous_receipt_digest */
+    /* Unkeyed digest over receipt bytes 0..127 + previous_receipt_digest */
     uint8_t hash_input[160];
     memcpy(hash_input, &receipt, 128);
     memcpy(hash_input + 128, receipt.previous_receipt_digest, 32);
@@ -3188,7 +3188,7 @@ static bool test_m15_dma_sandbox(void) {
     forged_receipt.request_id = intent.request_id;
     sha256_hash((const uint8_t *)&intent, sizeof(intent), forged_receipt.intent_digest);
     forged_receipt.actual_effect = 0x90000000ULL;
-    memset(forged_receipt.receipt_digest, 0xAA, 32); /* Invalid forged signature */
+    memset(forged_receipt.receipt_digest, 0xAA, 32); /* Invalid digest */
 
     int rc = omega_accel_port_verify_receipt(&port, &intent, &forged_receipt);
     if (rc == 0) return false; /* Must be refused fail-closed */
@@ -3330,7 +3330,47 @@ static bool test_m15_omega_ingress(void) {
     return true;
 }
 
+static bool omega_file_contains_pattern(const char *path, const char *pattern) {
+    FILE *f = fopen(path, "r");
+    if (!f) return false;
+    char line[1024];
+    bool found = false;
+    while (fgets(line, sizeof(line), f)) {
+        if (strstr(line, pattern) != NULL) {
+            found = true;
+            break;
+        }
+    }
+    fclose(f);
+    return found;
+}
+
 static bool test_m15_zero_toolchain(void) {
+    const char *files[] = {
+        "src/omega_accelerator.c",
+        "src/omega_accelerator.h",
+        "src/sha256.c",
+        "src/sha256.h"
+    };
+    for (size_t i = 0; i < sizeof(files) / sizeof(files[0]); i++) {
+        const char *p = files[i];
+        FILE *f = fopen(p, "r");
+        char alt_path[256];
+        if (!f) {
+            snprintf(alt_path, sizeof(alt_path), "../%s", files[i]);
+            f = fopen(alt_path, "r");
+            if (!f) return false;
+            p = alt_path;
+        }
+        fclose(f);
+
+        if (omega_file_contains_pattern(p, "__asm__")) return false;
+        if (omega_file_contains_pattern(p, "asm volatile")) return false;
+        if (omega_file_contains_pattern(p, "system(")) return false;
+        if (omega_file_contains_pattern(p, "popen(")) return false;
+        if (omega_file_contains_pattern(p, "<Python.h>")) return false;
+        if (omega_file_contains_pattern(p, "llvm")) return false;
+    }
     return true;
 }
 
@@ -3729,7 +3769,7 @@ int main(int argc, char **argv) {
         report_gate("PHYSICS_ACCEL_RESET_RECOVERY_PASS", test_m15_reset_recovery(), "Fault isolation and non-disruptive device reset");
         report_gate("PHYSICS_ACCEL_RECEIPT_CHAIN_PASS", test_m15_receipt_chain(), "Immutable 192B receipt with rolling SHA-256 seal chain");
         report_gate("PHYSICS_ACCEL_OMEGA_INGRESS_PASS", test_m15_omega_ingress(), "Omega mediated intent ingress and capability gating");
-        report_gate("PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS", test_m15_zero_toolchain(), "Zero foreign toolchain (0 LLVM, 0 Python)");
+        report_gate("PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS", test_m15_zero_toolchain(), "Zero foreign toolchain (0 LLVM, 0 Python, 0 inline asm)");
         report_gate("PHYSICS_ACCEL_RECEIPT_PASS", test_m15_receipt(), "Qualification receipt generation and audit verification");
         printf("================================================================================\n");
         printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);

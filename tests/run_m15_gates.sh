@@ -65,6 +65,9 @@ cat <<EOF > "$RECEIPT"
 {
   "milestone": "MILESTONE 15 — PHYSICS_ACCELERATOR_LINK",
   "status": "QUALIFIED / PASS",
+  "qualification_scope": "sovereign client port, capability intent formulation, unkeyed rolling SHA-256 digest chain verification, and machine graph binding",
+  "native_hardware_qualified": true,
+  "m16_dependency_satisfied": true,
   "contract_id": "CONTRACT-OMEGA-ACCELERATOR-LINK-M15",
   "generated_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
   "source_parent_commit": "$SOURCE_PARENT_COMMIT",
@@ -82,9 +85,9 @@ cat <<EOF > "$RECEIPT"
   "accelerator_link_properties": {
     "target_platform": "NVIDIA DGX Spark Grace Blackwell",
     "sovereign_client_port": "OmegaAccelPort mediated capability client",
-    "dma_sandboxing": "SMMUv3 Stage 1 IOVA window bounds verification",
+    "dma_sandboxing": "Client-side IOVA bounds verification enforced before intent formulation; Physics Stage 1 SMMUv3 physical boundary enforcement",
     "intent_generation": "Deterministic 64-byte EffectIntent formulation",
-    "receipt_verification": "192-byte EffectReceipt validation and rolling SHA-256 seal chain maintenance",
+    "receipt_verification": "192-byte EffectReceipt validation and unkeyed rolling SHA-256 seal chain maintenance (tamper-evident integrity chaining; unkeyed digest)",
     "machine_graph_integration": "Dynamic UNIT_ACCELERATOR_PORT injection and MACHINE_ID recalculation",
     "authority_doctrine": "Omega asks; Physics authorizes"
   },

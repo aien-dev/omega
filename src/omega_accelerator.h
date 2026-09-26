@@ -124,7 +124,7 @@ int omega_accel_port_build_submit_intent(const OmegaAccelPort *port,
                                         uint64_t cmd_len,
                                         OmegaEffectIntent *out_intent);
 
-/* Validate a Physics-signed EffectReceipt and update rolling seal state */
+/* Validate a unkeyed EffectReceipt digest (no signature/MAC) and update rolling seal state */
 int omega_accel_port_verify_receipt(OmegaAccelPort *port,
                                    const OmegaEffectIntent *intent,
                                    const OmegaEffectReceipt *receipt);
