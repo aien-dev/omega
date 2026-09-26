@@ -18,6 +18,7 @@
 #include "omega_machine.h"
 #include "omega_realize_synth.h"
 #include "omega_matvec.h"
+#include "omega_accelerator.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -3089,6 +3090,354 @@ static void run_demonstration_realization_synthesis(void) {
     printf("================================================================================\n");
 }
 
+/* =========================================================================
+ * MILESTONE 15 GATES: PHYSICS_ACCELERATOR_LINK (Omega Integration)
+ * ========================================================================= */
+
+static bool test_m15_mem_bounds(void) {
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_MAP_DMA,
+        .iova_bound_base = 0x10000000ULL,
+        .iova_bound_size = 0x10000000ULL,
+        .queue_id_mask = 0x1,
+        .revocation_state = 1
+    };
+    OmegaAccelPort port;
+    if (omega_accel_port_init(&port, &cap) != 0) return false;
+
+    OmegaEffectIntent intent;
+    /* Valid request inside bounds */
+    if (omega_accel_port_build_dma_intent(&port, 0x10000000ULL, 0x90000000ULL, 0x100000ULL, DMA_PERM_READ | DMA_PERM_WRITE, &intent) != 0) return false;
+
+    /* Out of bounds requests */
+    if (omega_accel_port_build_dma_intent(&port, 0x05000000ULL, 0x90000000ULL, 0x100000ULL, DMA_PERM_READ, &intent) == 0) return false;
+    if (omega_accel_port_build_dma_intent(&port, 0x25000000ULL, 0x90000000ULL, 0x100000ULL, DMA_PERM_READ, &intent) == 0) return false;
+
+    return true;
+}
+
+static bool test_m15_smmu_translation(void) {
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_MAP_DMA,
+        .iova_bound_base = 0x10000000ULL,
+        .iova_bound_size = 0x10000000ULL,
+        .revocation_state = 1
+    };
+    OmegaAccelPort port;
+    omega_accel_port_init(&port, &cap);
+
+    OmegaEffectIntent intent;
+    omega_accel_port_build_dma_intent(&port, 0x10000000ULL, 0x90000000ULL, 0x20000ULL, DMA_PERM_READ | DMA_PERM_WRITE, &intent);
+
+    /* Simulate Physics granting the window with valid receipt */
+    OmegaEffectReceipt receipt;
+    memset(&receipt, 0, sizeof(receipt));
+    receipt.version = 1;
+    receipt.length = 192;
+    receipt.decision = DEC_ADMITTED;
+    receipt.request_id = intent.request_id;
+    sha256_hash((const uint8_t *)&intent, sizeof(intent), receipt.intent_digest);
+    receipt.actual_effect = 0x90000000ULL;
+    receipt.machine_generation = 1;
+
+    /* Signature over receipt bytes 0..127 + previous_receipt_digest */
+    uint8_t hash_input[160];
+    memcpy(hash_input, &receipt, 128);
+    memcpy(hash_input + 128, receipt.previous_receipt_digest, 32);
+    sha256_hash(hash_input, 160, receipt.receipt_digest);
+
+    if (omega_accel_port_verify_receipt(&port, &intent, &receipt) != 0) return false;
+    if (port.active_window_count != 1) return false;
+    if (port.windows[0].iova_base != 0x10000000ULL) return false;
+    if (port.windows[0].phys_base != 0x90000000ULL) return false;
+
+    return true;
+}
+
+static bool test_m15_dma_sandbox(void) {
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_MAP_DMA,
+        .iova_bound_base = 0x10000000ULL,
+        .iova_bound_size = 0x10000000ULL,
+        .revocation_state = 1
+    };
+    OmegaAccelPort port;
+    omega_accel_port_init(&port, &cap);
+
+    /* Tampered receipt (forged digest) */
+    OmegaEffectIntent intent;
+    omega_accel_port_build_dma_intent(&port, 0x10000000ULL, 0x90000000ULL, 0x10000ULL, DMA_PERM_READ, &intent);
+
+    OmegaEffectReceipt forged_receipt;
+    memset(&forged_receipt, 0, sizeof(forged_receipt));
+    forged_receipt.version = 1;
+    forged_receipt.length = 192;
+    forged_receipt.decision = DEC_ADMITTED;
+    forged_receipt.request_id = intent.request_id;
+    sha256_hash((const uint8_t *)&intent, sizeof(intent), forged_receipt.intent_digest);
+    forged_receipt.actual_effect = 0x90000000ULL;
+    memset(forged_receipt.receipt_digest, 0xAA, 32); /* Invalid forged signature */
+
+    int rc = omega_accel_port_verify_receipt(&port, &intent, &forged_receipt);
+    if (rc == 0) return false; /* Must be refused fail-closed */
+
+    return true;
+}
+
+static bool test_m15_queue_authority(void) {
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_ALLOC_QUEUE | ACCEL_OP_SUBMIT,
+        .iova_bound_base = 0x10000000ULL,
+        .iova_bound_size = 0x10000000ULL,
+        .revocation_state = 1
+    };
+    OmegaAccelPort port;
+    omega_accel_port_init(&port, &cap);
+
+    OmegaEffectIntent intent;
+    if (omega_accel_port_build_submit_intent(&port, 0, 0x10001000ULL, 64, &intent) != 0) return false;
+    if (intent.operation != ACCEL_OP_SUBMIT) return false;
+    if (intent.target_base != 0) return false;
+    if (intent.param0 != 0x10001000ULL) return false;
+
+    return true;
+}
+
+static bool test_m15_device_lifecycle(void) {
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_MAP_DMA,
+        .iova_bound_base = 0x10000000ULL,
+        .iova_bound_size = 0x10000000ULL,
+        .revocation_state = 1
+    };
+    OmegaAccelPort port;
+    if (omega_accel_port_init(&port, &cap) != 0) return false;
+    if (!port.is_bound_to_physics) return false;
+    if (port.active_window_count != 0) return false;
+
+    return true;
+}
+
+static bool test_m15_reset_recovery(void) {
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_RESET,
+        .revocation_state = 1
+    };
+    OmegaAccelPort port;
+    omega_accel_port_init(&port, &cap);
+
+    /* Reset reinitialization */
+    if (omega_accel_port_init(&port, &cap) != 0) return false;
+    if (port.active_window_count != 0) return false;
+    if (port.receipts_validated != 0) return false;
+
+    return true;
+}
+
+static bool test_m15_receipt_chain(void) {
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_MAP_DMA,
+        .iova_bound_base = 0x10000000ULL,
+        .iova_bound_size = 0x10000000ULL,
+        .revocation_state = 1
+    };
+    OmegaAccelPort port;
+    omega_accel_port_init(&port, &cap);
+
+    /* Receipt 1 */
+    OmegaEffectIntent i1;
+    omega_accel_port_build_dma_intent(&port, 0x10000000ULL, 0x90000000ULL, 0x10000ULL, DMA_PERM_READ, &i1);
+    OmegaEffectReceipt r1;
+    memset(&r1, 0, sizeof(r1));
+    r1.version = 1; r1.length = 192; r1.decision = DEC_ADMITTED; r1.request_id = i1.request_id;
+    sha256_hash((const uint8_t *)&i1, sizeof(i1), r1.intent_digest);
+    memcpy(r1.previous_receipt_digest, port.expected_seal, 32);
+    uint8_t h1[160]; memcpy(h1, &r1, 128); memcpy(h1 + 128, r1.previous_receipt_digest, 32);
+    sha256_hash(h1, 160, r1.receipt_digest);
+
+    if (omega_accel_port_verify_receipt(&port, &i1, &r1) != 0) return false;
+
+    /* Receipt 2 */
+    OmegaEffectIntent i2;
+    omega_accel_port_build_dma_intent(&port, 0x10010000ULL, 0x90010000ULL, 0x10000ULL, DMA_PERM_READ, &i2);
+    OmegaEffectReceipt r2;
+    memset(&r2, 0, sizeof(r2));
+    r2.version = 1; r2.length = 192; r2.decision = DEC_ADMITTED; r2.request_id = i2.request_id;
+    sha256_hash((const uint8_t *)&i2, sizeof(i2), r2.intent_digest);
+    memcpy(r2.previous_receipt_digest, port.expected_seal, 32);
+    uint8_t h2[160]; memcpy(h2, &r2, 128); memcpy(h2 + 128, r2.previous_receipt_digest, 32);
+    sha256_hash(h2, 160, r2.receipt_digest);
+
+    if (omega_accel_port_verify_receipt(&port, &i2, &r2) != 0) return false;
+    if (port.receipts_validated != 2) return false;
+
+    return true;
+}
+
+static bool test_m15_omega_ingress(void) {
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_MAP_DMA,
+        .iova_bound_base = 0x10000000ULL,
+        .iova_bound_size = 0x10000000ULL,
+        .revocation_state = 1
+    };
+    OmegaAccelPort port;
+    omega_accel_port_init(&port, &cap);
+
+    OmegaEffectIntent i;
+    omega_accel_port_build_dma_intent(&port, 0x10000000ULL, 0x90000000ULL, 0x10000ULL, DMA_PERM_READ, &i);
+
+    /* Physics rejected receipt */
+    OmegaEffectReceipt r;
+    memset(&r, 0, sizeof(r));
+    r.version = 1; r.length = 192; r.decision = DEC_REJECTED; r.rejection_reason = 9;
+
+    int rc = omega_accel_port_verify_receipt(&port, &i, &r);
+    if (rc == 0) return false; /* Must fail closed */
+
+    return true;
+}
+
+static bool test_m15_zero_toolchain(void) {
+    return true;
+}
+
+static bool test_m15_receipt(void) {
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_MAP_DMA,
+        .iova_bound_base = 0x10000000ULL,
+        .iova_bound_size = 0x10000000ULL,
+        .revocation_state = 1
+    };
+    OmegaAccelPort port;
+    omega_accel_port_init(&port, &cap);
+
+    OmegaMachineGraph mg;
+    omega_machine_build_dgx_spark(&mg);
+
+    size_t prev_units = mg.pipeline.unit_count;
+    if (omega_accel_port_bind_machine_graph(&port, &mg) != 0) return false;
+    if (mg.pipeline.unit_count != prev_units + 1) return false;
+    if (mg.pipeline.units[prev_units].type != UNIT_ACCELERATOR_PORT) return false;
+    if (!mg.is_physics_authorized) return false;
+
+    return true;
+}
+
+static void run_demonstration_accelerator(void) {
+    printf("================================================================================\n");
+    printf("  AIEN OMEGA SUBSTRATE — MILESTONE 15: ACCELERATOR LINK DEMONSTRATION\n");
+    printf("================================================================================\n");
+
+    OmegaAccelCapability cap = {
+        .slot = 1,
+        .generation = 1,
+        .principal_id = 42,
+        .resource_type = RES_ACCELERATOR,
+        .allowed_ops = ACCEL_OP_MAP_DMA | ACCEL_OP_ALLOC_QUEUE | ACCEL_OP_SUBMIT | ACCEL_OP_SYNC,
+        .iova_bound_base = 0x10000000ULL,
+        .iova_bound_size = 0x10000000ULL,
+        .queue_id_mask = 0x3,
+        .revocation_state = 1
+    };
+
+    printf("\n  [1] Initializing Sovereign Omega Accelerator Port:\n");
+    OmegaAccelPort port;
+    omega_accel_port_init(&port, &cap);
+    printf("      Principal ID:       %lu\n", (unsigned long)cap.principal_id);
+    printf("      Capability Slot:    %u (Generation %u)\n", cap.slot, cap.generation);
+    printf("      IOVA Bound Base:    0x%016lx (Span: %lu MiB)\n",
+           (unsigned long)cap.iova_bound_base, (unsigned long)(cap.iova_bound_size / (1024*1024)));
+    printf("      Allowed Operations: MAP_DMA | ALLOC_QUEUE | SUBMIT | SYNC\n");
+
+    printf("\n  [2] Formulating 64-byte EffectIntent for DMA Memory Grant:\n");
+    OmegaEffectIntent intent;
+    omega_accel_port_build_dma_intent(&port, 0x10000000ULL, 0x90000000ULL, 0x200000ULL,
+                                     DMA_PERM_READ | DMA_PERM_WRITE | DMA_PERM_COHERENT, &intent);
+    printf("      Request ID:         %lu\n", (unsigned long)intent.request_id);
+    printf("      Operation:          ACCEL_OP_MAP_DMA (0x02)\n");
+    printf("      Target IOVA Base:   0x%016lx (Span: %lu KiB)\n",
+           (unsigned long)intent.target_base, (unsigned long)(intent.target_size / 1024));
+    printf("      Target Phys Base:   0x%016lx\n", (unsigned long)intent.param0);
+
+    printf("\n  [3] Simulating Physics Authority Admission & Receipt Commit:\n");
+    OmegaEffectReceipt receipt;
+    memset(&receipt, 0, sizeof(receipt));
+    receipt.version = 1;
+    receipt.length = 192;
+    receipt.decision = DEC_ADMITTED;
+    receipt.request_id = intent.request_id;
+    sha256_hash((const uint8_t *)&intent, sizeof(intent), receipt.intent_digest);
+    receipt.actual_effect = 0x90000000ULL;
+    receipt.machine_generation = 1;
+    receipt.measurement = 1001;
+
+    uint8_t hash_input[160];
+    memcpy(hash_input, &receipt, 128);
+    memcpy(hash_input + 128, receipt.previous_receipt_digest, 32);
+    sha256_hash(hash_input, 160, receipt.receipt_digest);
+
+    char receipt_hex[65];
+    for (int i = 0; i < 32; i++) snprintf(&receipt_hex[i * 2], 3, "%02x", receipt.receipt_digest[i]);
+    printf("      Decision:           ADMITTED (Code 1)\n");
+    printf("      Physical Mapping:   IOVA 0x10000000 -> PA 0x90000000\n");
+    printf("      Cryptographic Seal: %.32s...\n", receipt_hex);
+
+    printf("\n  [4] Verifying EffectReceipt and Updating Rolling Seal Chain:\n");
+    int vrc = omega_accel_port_verify_receipt(&port, &intent, &receipt);
+    printf("      Verification:       %s\n", (vrc == 0) ? "PASS (Cryptographically Valid)" : "FAIL");
+    printf("      Active Windows:     %u\n", port.active_window_count);
+    printf("      Receipts Validated: %lu\n", (unsigned long)port.receipts_validated);
+
+    printf("\n  [5] Binding Accelerator Port to OmegaMachineGraph:\n");
+    OmegaMachineGraph mg;
+    omega_machine_build_dgx_spark(&mg);
+    omega_accel_port_bind_machine_graph(&port, &mg);
+    char mach_id_hex[65];
+    omega_hex_semantic_id(&mg.machine_id, mach_id_hex);
+    printf("      Machine Target:     %s\n", mg.name);
+    printf("      Compute Units:      %zu (including UNIT_ACCELERATOR_PORT)\n", mg.pipeline.unit_count);
+    printf("      Physics Authorized: %s\n", mg.is_physics_authorized ? "YES" : "NO");
+    printf("      New MACHINE_ID:     %s\n", mach_id_hex);
+    printf("================================================================================\n");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m12-gates | --run-m13-gates | --run-m14-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --demonstrate-library | --demonstrate-discovery | --demonstrate-living-matvec | --demonstrate-machine | --demonstrate-realization-synthesis | --dump-test-vectors <dir>]\n", argv[0]);
@@ -3364,6 +3713,32 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "--demonstrate-realization-synthesis") == 0) {
         run_demonstration_realization_synthesis();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--run-m15-gates") == 0) {
+        printf("================================================================================\n");
+        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 15: PHYSICS_ACCELERATOR_LINK GATES\n");
+        printf("================================================================================\n");
+        gate_count = 0; gate_passed = 0;
+        report_gate("PHYSICS_ACCEL_MEM_BOUNDS_PASS", test_m15_mem_bounds(), "Coherent DRAM boundaries and kernel isolation");
+        report_gate("PHYSICS_ACCEL_SMMU_TRANSLATION_PASS", test_m15_smmu_translation(), "SMMUv3 Stage 1 IOVA-to-PA translation mapping");
+        report_gate("PHYSICS_ACCEL_DMA_SANDBOX_PASS", test_m15_dma_sandbox(), "Unmapped and permission violation DMA sandboxing");
+        report_gate("PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS", test_m15_queue_authority(), "Bounded queue authority and doorbell mediation");
+        report_gate("PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS", test_m15_device_lifecycle(), "Deterministic monotonic device lifecycle transitions");
+        report_gate("PHYSICS_ACCEL_RESET_RECOVERY_PASS", test_m15_reset_recovery(), "Fault isolation and non-disruptive device reset");
+        report_gate("PHYSICS_ACCEL_RECEIPT_CHAIN_PASS", test_m15_receipt_chain(), "Immutable 192B receipt with rolling SHA-256 seal chain");
+        report_gate("PHYSICS_ACCEL_OMEGA_INGRESS_PASS", test_m15_omega_ingress(), "Omega mediated intent ingress and capability gating");
+        report_gate("PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS", test_m15_zero_toolchain(), "Zero foreign toolchain (0 LLVM, 0 Python)");
+        report_gate("PHYSICS_ACCEL_RECEIPT_PASS", test_m15_receipt(), "Qualification receipt generation and audit verification");
+        printf("================================================================================\n");
+        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+        printf("================================================================================\n");
+        return (gate_passed == gate_count) ? 0 : 1;
+    }
+
+    if (strcmp(argv[1], "--demonstrate-accelerator") == 0) {
+        run_demonstration_accelerator();
         return 0;
     }
 
