@@ -1,0 +1,82 @@
+{
+  "milestone": "MILESTONE 9 — OMEGA_SYNTHESIS_V0",
+  "status": "QUALIFIED / PASS",
+  "contract_id": "CONTRACT-OMEGA-SYNTHESIS-V0-M9",
+  "generated_at": "2026-09-26T08:33:13Z",
+  "git_commit": "d25349e4bf4a820dbcff0dd6a593d1db7b454a0b",
+  "host": {
+    "os": "Linux",
+    "arch": "aarch64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "artifacts": {
+    "src/omega_synthesis.c": { "sha256": "e02992fad763b8814c7c174fa8601d6881548f5afae5d6c5fab3b3415f222311" },
+    "src/omega_program.c": { "sha256": "d2cdd24dda21dd224cebddc2356aacc4773e94914f49e9c02982f847c0d7ecf1" },
+    "build/omegatool": { "sha256": "c07995c31ff30b279795d67c8bc16e0b12ff4a4278688e2db67565ef8ec68d38" }
+  },
+  "synthesis_demonstrations": {
+    "target_affine": {
+      "target_function": "f(x) = 2x + 1",
+      "synthesis_status": "DISCOVERED AND VERIFIED",
+      "discovered_program": "(add_1)o(mul_2)",
+      "derived_contract": "In: uint64 -> Out: uint64 | Post: (x + 1)o(x * 2)",
+      "solution_cost": {
+        "insn_count": 5,
+        "latency_cycles": 5
+      },
+      "verification_ladder": {
+        "v0_structural": "PASS",
+        "v1_differential": "PASS (holdout tests: x in [4, 8, 25, 50, 100] correct)",
+        "v2_property": "PASS (monotonic bounds, overflow wrapping)",
+        "status": "VERIFIED / ADMITTED"
+      }
+    },
+    "target_composed": {
+      "target_function": "f(x) = 3x - 2",
+      "synthesis_status": "DISCOVERED AND VERIFIED",
+      "discovered_program": "(sub_2)o(mul_3)",
+      "derived_contract": "In: uint64 -> Out: uint64 | Post: (x - 2)o(x * 3)",
+      "solution_cost": {
+        "insn_count": 5,
+        "latency_cycles": 5
+      },
+      "verification_ladder": {
+        "v0_structural": "PASS",
+        "v1_differential": "PASS (holdout tests: x in [5, 8, 20, 50, 100] correct)",
+        "v2_property": "PASS",
+        "status": "VERIFIED / ADMITTED"
+      }
+    }
+  },
+  "search_engine_properties": {
+    "search_strategy": "Bottom-up enumerative search bounded by depth and cost",
+    "monotonic_cost_ordering": true,
+    "intermediate_type_pruning": "Fail-closed typed composition filtering",
+    "observational_equivalence_pruning": "SHA-256 behavioral probe signatures",
+    "untrusted_proposals": "Untrusted generator, trusted M7 verification engine filter"
+  },
+  "qualification_gates": {
+    "total": 10,
+    "passed": 10,
+    "gates": {
+      "OMEGA_SYNTHESIS_PRIMITIVES_PASS": "PASS",
+      "OMEGA_SYNTHESIS_SEARCH_ORDERING_PASS": "PASS",
+      "OMEGA_SYNTHESIS_TYPE_PRUNING_PASS": "PASS",
+      "OMEGA_SYNTHESIS_EQUIV_PRUNING_PASS": "PASS",
+      "OMEGA_SYNTHESIS_V0_STRUCTURAL_PASS": "PASS",
+      "OMEGA_SYNTHESIS_V1_IO_FILTERING_PASS": "PASS",
+      "OMEGA_SYNTHESIS_V2_PROPERTY_PASS": "PASS",
+      "OMEGA_SYNTHESIS_TARGET_AFFINE_PASS": "PASS",
+      "OMEGA_SYNTHESIS_TARGET_COMPOSED_PASS": "PASS",
+      "OMEGA_SYNTHESIS_RECEIPT_PASS": "PASS"
+    }
+  },
+  "sovereignty_accounting": {
+    "llvm_dependency": false,
+    "gnu_as_dependency": false,
+    "gcc_asm_dependency": false,
+    "jit_compiler_dependency": false,
+    "python_dependency": false,
+    "realizer_lineage": "Direct sovereign C99 synthesis, composition, and realization engine executing deterministic proof obligations"
+  }
+}

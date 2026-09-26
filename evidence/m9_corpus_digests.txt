@@ -1,0 +1,5 @@
+e02992fad763b8814c7c174fa8601d6881548f5afae5d6c5fab3b3415f222311  /home/drakestapleton/workspace/omega/src/omega_synthesis.c
+aac313f7a96f3028bfe68882fdf4572f92250621be61e611c7795b3f1c4baaac  /home/drakestapleton/workspace/omega/src/omega_synthesis.h
+d2cdd24dda21dd224cebddc2356aacc4773e94914f49e9c02982f847c0d7ecf1  /home/drakestapleton/workspace/omega/src/omega_program.c
+c01416a2c59d9072a0fa4a6b791604912baf7c7d0d3b72efc637c46dcd47bda7  /home/drakestapleton/workspace/omega/src/omega_program.h
+c07995c31ff30b279795d67c8bc16e0b12ff4a4278688e2db67565ef8ec68d38  /home/drakestapleton/workspace/omega/build/omegatool
