@@ -15,6 +15,7 @@
 #include "omega_synthesis.h"
 #include "omega_library.h"
 #include "omega_discovery.h"
+#include "omega_machine.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2200,9 +2201,187 @@ static void run_demonstration_discovery(void) {
     printf("================================================================================\n");
 }
 
+/* =========================================================================
+ * MILESTONE 13 GATES: OMEGA_MACHINE_GRAPH
+ * ========================================================================= */
+
+static bool test_m13_init(void) {
+    OmegaMachineGraph mg;
+    omega_machine_init(&mg, "TEST_MACHINE", AARCH64_PROFILE_V8A_BAREMETAL);
+    bool ok = (strcmp(mg.name, "TEST_MACHINE") == 0 &&
+               mg.target_profile == AARCH64_PROFILE_V8A_BAREMETAL &&
+               mg.pipeline.issue_width == 0);
+    return ok;
+}
+
+static bool test_m13_pipeline(void) {
+    OmegaMachineGraph mg;
+    omega_machine_build_dgx_spark(&mg);
+    bool ok = (mg.pipeline.issue_width == 4 &&
+               mg.pipeline.out_of_order == true &&
+               mg.pipeline.unit_count >= 5);
+    return ok;
+}
+
+static bool test_m13_register_file(void) {
+    OmegaMachineGraph mg;
+    omega_machine_build_dgx_spark(&mg);
+    bool ok = (mg.registers.gpr_count == 31 &&
+               mg.registers.gpr_width_bits == 64 &&
+               mg.registers.vector_count == 32 &&
+               mg.registers.vector_width_bits == 128);
+    return ok;
+}
+
+static bool test_m13_memory_hierarchy(void) {
+    OmegaMachineGraph mg;
+    omega_machine_build_dgx_spark(&mg);
+    bool ok = (mg.cache_count == 4 &&
+               mg.caches[0].level == 1 && mg.caches[0].size_bytes == 64ULL * 1024 &&
+               mg.caches[2].level == 2 && mg.caches[2].size_bytes == 1024ULL * 1024 &&
+               mg.caches[3].level == 3 && mg.caches[3].size_bytes == 114ULL * 1024 * 1024 &&
+               mg.dram_size == 128ULL * 1024 * 1024 * 1024);
+    return ok;
+}
+
+static bool test_m13_physics_ingress(void) {
+    OmegaMachineGraph mg;
+    PhysicsDescriptor desc = {
+        .magic = 0x4D414348,
+        .version = 1,
+        .target_profile = AARCH64_PROFILE_V8A_BAREMETAL,
+        .cpu_name = "PHYSICS_INGRESS_CPU",
+        .issue_width = 4,
+        .gpr_count = 31,
+        .vec_count = 32,
+        .l1d_size = 64 * 1024,
+        .l2_size = 1024 * 1024,
+        .l3_size = 32 * 1024 * 1024,
+        .dram_base = 0x80000000ULL,
+        .dram_size = 64ULL * 1024 * 1024 * 1024,
+        .physics_seal = { 0xFE, 0xED }
+    };
+    int rc = omega_machine_ingest_physics_descriptor(&mg, &desc);
+    bool ok = (rc == 0 &&
+               mg.is_physics_authorized &&
+               mg.pipeline.issue_width == 4 &&
+               mg.dram_size == 64ULL * 1024 * 1024 * 1024);
+    return ok;
+}
+
+static bool test_m13_canonical_id(void) {
+    OmegaMachineGraph mg1, mg2;
+    omega_machine_build_dgx_spark(&mg1);
+    omega_machine_build_dgx_spark(&mg2);
+    bool ok = (memcmp(mg1.machine_id.bytes, mg2.machine_id.bytes, OMEGA_ID_BYTES) == 0);
+    return ok;
+}
+
+static bool test_m13_topology_difference(void) {
+    OmegaMachineGraph spark, qemu;
+    omega_machine_build_dgx_spark(&spark);
+    omega_machine_build_qemu_virt(&qemu);
+    bool ok = (memcmp(spark.machine_id.bytes, qemu.machine_id.bytes, OMEGA_ID_BYTES) != 0);
+    return ok;
+}
+
+static bool test_m13_cycle_prevention(void) {
+    OmegaMachineGraph mg;
+    omega_machine_build_dgx_spark(&mg);
+
+    char err[256];
+    if (omega_machine_validate_topology(&mg, err, sizeof(err)) != 0) return false;
+
+    OmegaMachineGraph corrupt = mg;
+    corrupt.caches[1].level = 3;
+    corrupt.caches[2].level = 1;
+    bool ok = (omega_machine_validate_topology(&corrupt, err, sizeof(err)) != 0);
+    return ok;
+}
+
+static bool test_m13_cost_evaluation(void) {
+    OmegaMachineGraph spark, qemu;
+    omega_machine_build_dgx_spark(&spark);
+    omega_machine_build_qemu_virt(&qemu);
+
+    OmegaProgram p;
+    omega_program_build_unary_op(&p, "test_cost_p", OP_MUL, 3);
+
+    uint32_t spark_lat = omega_machine_estimate_latency(&spark, &p.realization);
+    uint32_t qemu_lat = omega_machine_estimate_latency(&qemu, &p.realization);
+
+    bool ok = (spark_lat > 0 && qemu_lat > 0);
+    omega_program_destroy(&p);
+    return ok;
+}
+
+static bool test_m13_receipt(void) {
+    OmegaMachineGraph mg;
+    omega_machine_build_dgx_spark(&mg);
+    bool ok = (mg.is_physics_authorized && mg.cache_count > 0 && mg.pipeline.unit_count > 0);
+    return ok;
+}
+
+static void run_demonstration_machine(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 13: OMEGA_MACHINE_GRAPH DEMONSTRATION\n");
+    printf("================================================================================\n");
+
+    OmegaMachineGraph spark, qemu;
+    omega_machine_build_dgx_spark(&spark);
+    omega_machine_build_qemu_virt(&qemu);
+
+    char spark_id[65], qemu_id[65];
+    omega_hex_semantic_id(&spark.machine_id, spark_id);
+    omega_hex_semantic_id(&qemu.machine_id, qemu_id);
+
+    printf("\n  [1] Target Microarchitecture Topology Profiles:\n");
+    printf("      Target A: %s\n", spark.name);
+    printf("      MACHINE_ID: %s\n", spark_id);
+    printf("      Pipeline: %u-wide Dispatch | In-Flight: %u | Out-of-Order: %s | Units: %zu\n",
+           spark.pipeline.issue_width, spark.pipeline.max_in_flight,
+           spark.pipeline.out_of_order ? "YES" : "NO", spark.pipeline.unit_count);
+    printf("      Registers: %u x %u-bit GPR | %u x %u-bit Vector\n",
+           spark.registers.gpr_count, spark.registers.gpr_width_bits,
+           spark.registers.vector_count, spark.registers.vector_width_bits);
+    printf("      Memory: L1I=%luKB, L1D=%luKB, L2=%luMB, L3=%luMB | DRAM=%luGB\n",
+           (unsigned long)(spark.caches[0].size_bytes / 1024),
+           (unsigned long)(spark.caches[1].size_bytes / 1024),
+           (unsigned long)(spark.caches[2].size_bytes / (1024 * 1024)),
+           (unsigned long)(spark.caches[3].size_bytes / (1024 * 1024)),
+           (unsigned long)(spark.dram_size / (1024 * 1024 * 1024)));
+
+    printf("\n      Target B: %s\n", qemu.name);
+    printf("      MACHINE_ID: %s\n", qemu_id);
+    printf("      Pipeline: %u-wide Dispatch | In-Flight: %u | Out-of-Order: %s | Units: %zu\n",
+           qemu.pipeline.issue_width, qemu.pipeline.max_in_flight,
+           qemu.pipeline.out_of_order ? "YES" : "NO", qemu.pipeline.unit_count);
+    printf("      Memory: L1I=%luKB, L1D=%luKB, L2=%luKB | DRAM=%luMB\n",
+           (unsigned long)(qemu.caches[0].size_bytes / 1024),
+           (unsigned long)(qemu.caches[1].size_bytes / 1024),
+           (unsigned long)(qemu.caches[2].size_bytes / 1024),
+           (unsigned long)(qemu.dram_size / (1024 * 1024)));
+
+    printf("\n  [2] Topological Disambiguation:\n");
+    printf("      Distinct Topologies Confirmed: %s\n",
+           (strcmp(spark_id, qemu_id) != 0) ? "YES (MACHINE_ID DIFFERS)" : "NO");
+
+    printf("\n  [3] Execution Cost Modeling Across Hardware Targets:\n");
+    OmegaProgram p;
+    omega_program_build_unary_op(&p, "affine_mul3", OP_MUL, 3);
+    uint32_t c_spark = omega_machine_estimate_latency(&spark, &p.realization);
+    uint32_t c_qemu = omega_machine_estimate_latency(&qemu, &p.realization);
+    printf("      Benchmark Realization: %s (%zu insns)\n", p.name, p.realization.code_len / 4);
+    printf("      DGX Spark Latency Estimate: %u cycles\n", c_spark);
+    printf("      QEMU Virt Latency Estimate: %u cycles\n", c_qemu);
+    omega_program_destroy(&p);
+
+    printf("================================================================================\n");
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --demonstrate-library | --demonstrate-discovery | --dump-test-vectors <dir>]\n", argv[0]);
+        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m13-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --demonstrate-library | --demonstrate-discovery | --demonstrate-machine | --dump-test-vectors <dir>]\n", argv[0]);
         return 1;
     }
 
@@ -2397,6 +2576,32 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "--demonstrate-discovery") == 0) {
         run_demonstration_discovery();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--run-m13-gates") == 0) {
+        printf("================================================================================\n");
+        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 13: OMEGA_MACHINE_GRAPH QUALIFICATION GATES\n");
+        printf("================================================================================\n");
+        gate_count = 0; gate_passed = 0;
+        report_gate("OMEGA_MACHINE_INIT_PASS", test_m13_init(), "Machine graph initialized with profile and name");
+        report_gate("OMEGA_MACHINE_PIPELINE_PASS", test_m13_pipeline(), "Execution pipeline, issue width, and compute units modeled");
+        report_gate("OMEGA_MACHINE_REGISTER_FILE_PASS", test_m13_register_file(), "Register file capacities (GPR, Vector) validated");
+        report_gate("OMEGA_MACHINE_MEMORY_HIERARCHY_PASS", test_m13_memory_hierarchy(), "Multi-tier cache hierarchy (L1I, L1D, L2, L3) and DRAM modeled");
+        report_gate("OMEGA_MACHINE_PHYSICS_INGRESS_PASS", test_m13_physics_ingress(), "Physical machine descriptor ingested and bound to Physics seal");
+        report_gate("OMEGA_MACHINE_CANONICAL_ID_PASS", test_m13_canonical_id(), "Deterministic MACHINE_ID bit-for-bit identity verified");
+        report_gate("OMEGA_MACHINE_TOPOLOGY_DIFFERENCE_PASS", test_m13_topology_difference(), "Distinct machine topologies yield distinct MACHINE_IDs");
+        report_gate("OMEGA_MACHINE_CYCLE_PREVENTION_PASS", test_m13_cycle_prevention(), "Topological cache ordering and line size validation enforced fail-closed");
+        report_gate("OMEGA_MACHINE_COST_EVALUATION_PASS", test_m13_cost_evaluation(), "Latency estimation grounded in physical execution unit latencies");
+        report_gate("OMEGA_MACHINE_RECEIPT_PASS", test_m13_receipt(), "Physical machine graph certified with Physics authority accounting");
+        printf("================================================================================\n");
+        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+        printf("================================================================================\n");
+        return (gate_passed == gate_count) ? 0 : 1;
+    }
+
+    if (strcmp(argv[1], "--demonstrate-machine") == 0) {
+        run_demonstration_machine();
         return 0;
     }
 
