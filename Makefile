@@ -102,3 +102,29 @@ clean:
 
 test-m19: $(TARGET)
 	./$(TARGET) --run-m19-gates
+
+# ---------------------------------------------------------------------------
+# Ternary semantics experiment (spec/ternary-semantics.md). Additive only:
+# separate objects, separate tool; the canonical omegatool build is unchanged.
+# ---------------------------------------------------------------------------
+TERNARY_SRCS = src/omega_ternary.c src/omega_ternary_a64.c src/omega_ternary_measure.c \
+	src/omega_ternary_verify.c src/omega_ternary_synth.c src/omega_ternary_sass.c
+TERNARY_OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(TERNARY_SRCS)))
+TERNARY_TOOL = $(OUT_DIR)/omega_ternary
+TERNARY_BASE_OBJS = $(filter-out $(OUT_DIR)/omegatool.o,$(OBJS))
+
+.PHONY: ternary test-ternary measure-ternary
+
+ternary: $(TERNARY_TOOL)
+
+$(OUT_DIR)/omega_ternary_tool.o: tools/omega_ternary_tool.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(TERNARY_TOOL): $(TERNARY_BASE_OBJS) $(TERNARY_OBJS) $(OUT_DIR)/omega_ternary_tool.o
+	$(CC) $(CFLAGS) -o $@ $^
+
+test-ternary: $(TERNARY_TOOL)
+	./tests/run_ternary_gates.sh
+
+measure-ternary: $(TERNARY_TOOL)
+	./$(TERNARY_TOOL) --measure evidence/ternary/ternary_measurements.json
