@@ -18,9 +18,14 @@ typedef struct {
     uint16_t input_width;
     TypeTag output_type;
     uint16_t output_width;
+    SemanticId precondition_id;
+    SemanticId postcondition_id;
     char precondition[64];
     char postcondition[64];
 } OmegaContract;
+
+/* Construct canonical constraint SemanticId from ConstraintKind and annotation */
+int omega_build_constraint_id(ConstraintKind kind, const char *annotation, SemanticId *out_id);
 
 typedef struct {
     SemanticId program_id;

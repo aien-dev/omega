@@ -26,6 +26,18 @@ void omega_program_destroy(OmegaProgram *prog) {
     memset(prog, 0, sizeof(OmegaProgram));
 }
 
+int omega_build_constraint_id(ConstraintKind kind, const char *annotation, SemanticId *out_id) {
+    if (!out_id) return -1;
+    OmegaObject obj;
+    memset(&obj, 0, sizeof(OmegaObject));
+    obj.kind = KIND_CONSTRAINT;
+    uint16_t len = annotation ? (uint16_t)strlen(annotation) : 0;
+    omega_object_add_constraint(&obj, kind, (const uint8_t*)annotation, len);
+    if (omega_compute_semantic_id(&obj) != 0) return -1;
+    *out_id = obj.id;
+    return 0;
+}
+
 int omega_program_compute_id(OmegaProgram *prog) {
     if (!prog) return -1;
     uint8_t buf[256];
@@ -43,6 +55,12 @@ int omega_program_compute_id(OmegaProgram *prog) {
     buf[pos++] = (uint8_t)prog->contract.output_type;
     buf[pos++] = (uint8_t)(prog->contract.output_width & 0xFF);
 
+    /* Authoritative Constraint SemanticIds */
+    memcpy(&buf[pos], prog->contract.precondition_id.bytes, OMEGA_ID_BYTES);
+    pos += OMEGA_ID_BYTES;
+    memcpy(&buf[pos], prog->contract.postcondition_id.bytes, OMEGA_ID_BYTES);
+    pos += OMEGA_ID_BYTES;
+
     buf[pos++] = (uint8_t)(prog->cost.insn_count & 0xFF);
     buf[pos++] = (uint8_t)(prog->cost.latency_cycles & 0xFF);
 
@@ -53,15 +71,24 @@ int omega_program_compute_id(OmegaProgram *prog) {
 int omega_program_validate_contract(const OmegaProgram *prog, char *err_msg, size_t err_msg_len) {
     if (!prog) return -1;
     if (prog->contract.input_type == TYPE_INVALID) {
-        snprintf(err_msg, err_msg_len, "Program contract has invalid input type");
+        if (err_msg) snprintf(err_msg, err_msg_len, "Program contract has invalid input type");
         return -1;
     }
     if (prog->contract.output_type == TYPE_INVALID) {
-        snprintf(err_msg, err_msg_len, "Program contract has invalid output type");
+        if (err_msg) snprintf(err_msg, err_msg_len, "Program contract has invalid output type");
         return -1;
     }
     if (prog->contract.input_width == 0 || prog->contract.output_width == 0) {
-        snprintf(err_msg, err_msg_len, "Program contract has 0-width type");
+        if (err_msg) snprintf(err_msg, err_msg_len, "Program contract has 0-width type");
+        return -1;
+    }
+    bool non_zero_pre = false, non_zero_post = false;
+    for (int i = 0; i < OMEGA_ID_BYTES; ++i) {
+        if (prog->contract.precondition_id.bytes[i]) non_zero_pre = true;
+        if (prog->contract.postcondition_id.bytes[i]) non_zero_post = true;
+    }
+    if (!non_zero_pre || !non_zero_post) {
+        if (err_msg) snprintf(err_msg, err_msg_len, "Program contract has uninitialized constraint SemanticId");
         return -1;
     }
     return 0;
@@ -76,6 +103,7 @@ int omega_program_build_unary_op(OmegaProgram *prog, const char *name, OpCode op
     prog->contract.output_type = TYPE_UNSIGNED_INT;
     prog->contract.output_width = 64;
     snprintf(prog->contract.precondition, sizeof(prog->contract.precondition), "x >= 0");
+    omega_build_constraint_id(CONST_PRECONDITION, prog->contract.precondition, &prog->contract.precondition_id);
 
     size_t pos = 0;
     uint8_t *code = prog->realization.code_bytes;
@@ -112,6 +140,7 @@ int omega_program_build_unary_op(OmegaProgram *prog, const char *name, OpCode op
         default:
             return -1;
     }
+    omega_build_constraint_id(CONST_POSTCONDITION, prog->contract.postcondition, &prog->contract.postcondition_id);
 
     /* 3. RET */
     aarch64_emit_ret(code, &pos, max_len);
@@ -157,9 +186,11 @@ int omega_program_compose(const OmegaProgram *a, const OmegaProgram *b, OmegaPro
     out_c->contract.input_width = a->contract.input_width;
     out_c->contract.output_type = b->contract.output_type;
     out_c->contract.output_width = b->contract.output_width;
+    out_c->contract.precondition_id = a->contract.precondition_id;
     snprintf(out_c->contract.precondition, sizeof(out_c->contract.precondition), "%.60s", a->contract.precondition);
     snprintf(out_c->contract.postcondition, sizeof(out_c->contract.postcondition),
              "(%.25s)o(%.25s)", b->contract.postcondition, a->contract.postcondition);
+    omega_build_constraint_id(CONST_POSTCONDITION, out_c->contract.postcondition, &out_c->contract.postcondition_id);
 
     /* 3. Cost Derivation: Monotonic cost accumulation */
     out_c->cost.insn_count = a->cost.insn_count + b->cost.insn_count - 1; /* Ret eliminated */
@@ -225,6 +256,11 @@ int omega_task_init(SynthesisTask *task, const char *desc,
     task->target_contract.input_width = in_width;
     task->target_contract.output_type = out_type;
     task->target_contract.output_width = out_width;
+
+    snprintf(task->target_contract.precondition, sizeof(task->target_contract.precondition), "x >= 0");
+    omega_build_constraint_id(CONST_PRECONDITION, task->target_contract.precondition, &task->target_contract.precondition_id);
+    snprintf(task->target_contract.postcondition, sizeof(task->target_contract.postcondition), "%.60s", desc ? desc : "task_target");
+    omega_build_constraint_id(CONST_POSTCONDITION, task->target_contract.postcondition, &task->target_contract.postcondition_id);
 
     task->cost_budget.insn_count = 10;
     task->cost_budget.reg_pressure = 4;

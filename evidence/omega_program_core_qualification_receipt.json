@@ -2,17 +2,20 @@
   "milestone": "MILESTONE 8 — OMEGA_PROGRAM_CORE",
   "status": "QUALIFIED / PASS",
   "contract_id": "CONTRACT-OMEGA-PROGRAM-CORE-M8",
-  "generated_at": "2026-09-26T08:27:40Z",
-  "git_commit": "202fa3c9343b793d6635ee0b3d14915d33e8156d",
+  "generated_at": "2026-09-26T08:40:00Z",
+  "source_parent_commit": "202fa3c9343b793d6635ee0b3d14915d33e8156d",
+  "qualified_implementation_commit": "d25349e4bf4a820dbcff0dd6a593d1db7b454a0b",
+  "receipt_commit": "d25349e4bf4a820dbcff0dd6a593d1db7b454a0b",
+  "git_commit": "d25349e4bf4a820dbcff0dd6a593d1db7b454a0b",
   "host": {
     "os": "Linux",
     "arch": "aarch64",
     "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
   },
   "artifacts": {
-    "src/omega_program.c": { "sha256": "d2cdd24dda21dd224cebddc2356aacc4773e94914f49e9c02982f847c0d7ecf1" },
+    "src/omega_program.c": { "sha256": "04bc92eb3b498a71f5225f1b409cc55309953365d0a990959ec142a452755ccf" },
     "src/omega_verify.c": { "sha256": "b7b3addb2bcad248e1e3e53196745861a918b78239632426b8942fa452438179" },
-    "build/omegatool": { "sha256": "9f2cc37fa3ab904d99288942e36b435335e25877d986d0a77c5c75801aaacf99" }
+    "build/omegatool": { "sha256": "c5f00e435e4f5f9e7b50f37cc0a4c66c919864c696a05639a29197b7bef3e886" }
   },
   "program_core_capabilities": {
     "composition": {

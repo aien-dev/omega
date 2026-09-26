@@ -1118,6 +1118,14 @@ static bool test_m8_contract_validation(void) {
         return false;
     }
 
+    /* Mutate contract to uninitialized constraint SemanticId */
+    OmegaProgram bad_const = a;
+    memset(&bad_const.contract.precondition_id, 0, sizeof(SemanticId));
+    if (omega_program_validate_contract(&bad_const, err, sizeof(err)) == 0) {
+        omega_program_destroy(&a);
+        return false;
+    }
+
     omega_program_destroy(&a);
     return true;
 }

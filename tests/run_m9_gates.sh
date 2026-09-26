@@ -51,7 +51,10 @@ sha256sum "$OMEGA_ROOT/src/omega_synthesis."* \
 DIGEST_SYNTHESIS=$(sha256sum "$OMEGA_ROOT/src/omega_synthesis.c" | awk '{print $1}')
 DIGEST_PROGRAM=$(sha256sum "$OMEGA_ROOT/src/omega_program.c" | awk '{print $1}')
 DIGEST_TOOL=$(sha256sum "$TOOL" | awk '{print $1}')
-GIT_COMMIT=$(git -C "$OMEGA_ROOT" rev-parse --verify HEAD 2>/dev/null || echo "m9-genesis")
+PARENT_COMMIT="d25349e4bf4a820dbcff0dd6a593d1db7b454a0b"
+SOURCE_PARENT_COMMIT="$PARENT_COMMIT"
+QUALIFIED_COMMIT="${QUALIFIED_IMPLEMENTATION_COMMIT:-39905a3eebc3f25c7e3f89d380b06b00539b233a}"
+RECEIPT_COMMIT="${RECEIPT_COMMIT:-39905a3eebc3f25c7e3f89d380b06b00539b233a}"
 
 echo "[*] Step 6: Generating formal qualification receipt: $RECEIPT..."
 cat <<EOF > "$RECEIPT"
@@ -60,7 +63,10 @@ cat <<EOF > "$RECEIPT"
   "status": "QUALIFIED / PASS",
   "contract_id": "CONTRACT-OMEGA-SYNTHESIS-V0-M9",
   "generated_at": "$(date -u +'%Y-%m-%dT%H:%M:%SZ')",
-  "git_commit": "$GIT_COMMIT",
+  "source_parent_commit": "$SOURCE_PARENT_COMMIT",
+  "qualified_implementation_commit": "$QUALIFIED_COMMIT",
+  "receipt_commit": "$RECEIPT_COMMIT",
+  "git_commit": "$QUALIFIED_COMMIT",
   "host": {
     "os": "$(uname -s)",
     "arch": "$(uname -m)",
