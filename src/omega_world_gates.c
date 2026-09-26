@@ -787,10 +787,19 @@ static bool test_m19_gate8_1000_op(void) {
     omega_world_register_buffer(&world, mat_bytes_i32, OMEGA_PERM_READ, &m_b_i32);
     omega_world_register_buffer(&world, mat_bytes_out, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &m_c_i32);
 
-    OmegaHandle m_a_tensor, m_b_tensor, m_c_tensor;
-    omega_world_register_buffer(&world, mat_bytes_f16, OMEGA_PERM_READ, &m_a_tensor);
-    omega_world_register_buffer(&world, mat_bytes_f16, OMEGA_PERM_READ, &m_b_tensor);
-    omega_world_register_buffer(&world, mat_bytes_out, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &m_c_tensor);
+    OmegaHandle m_a_f16, m_b_f16, m_c_f16;
+    omega_world_register_buffer(&world, mat_bytes_f16, OMEGA_PERM_READ, &m_a_f16);
+    omega_world_register_buffer(&world, mat_bytes_f16, OMEGA_PERM_READ, &m_b_f16);
+    omega_world_register_buffer(&world, mat_bytes_out, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &m_c_f16);
+
+    /* BF16 gets its own inputs: FP16 and BF16 encode 1.0 differently (0x3c00 vs
+     * 0x3f80). Sharing one buffer across the two kernels made the BF16 op read
+     * FP16 bytes. Distinct buffers also keep the inputs stable while several
+     * dispatches are in flight under batched submission. */
+    OmegaHandle m_a_bf16, m_b_bf16, m_c_bf16;
+    omega_world_register_buffer(&world, mat_bytes_f16, OMEGA_PERM_READ, &m_a_bf16);
+    omega_world_register_buffer(&world, mat_bytes_f16, OMEGA_PERM_READ, &m_b_bf16);
+    omega_world_register_buffer(&world, mat_bytes_out, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &m_c_bf16);
 
     NvrmMem pb_pool;
     if (nvrm_alloc(&world.m16.rm, 0x40000, &pb_pool) != 0) {
@@ -954,13 +963,13 @@ static bool test_m19_gate8_1000_op(void) {
     pb_i[pb_i_len++] = 0; pb_i[pb_i_len++] = 0;
     pb_i[pb_i_len++] = 0x1 | (1u << 20);
 
-    uint16_t *mat_cpu, *mbt_cpu; float *mct_cpu;
-    uint64_t mat_va, mbt_va, mct_va, f16_code_va;
+    uint16_t *fa_cpu, *fb_cpu; float *fc_cpu;
+    uint64_t fa_va, fb_va, fc_va, f16_code_va;
     omega_world_resolve_code(&world, &code_f16, NULL, &f16_code_va, &code_sz);
-    omega_world_resolve_buffer(&world, &m_a_tensor, OMEGA_PERM_READ, 0, mat_bytes_f16, (void **)&mat_cpu, &mat_va);
-    omega_world_resolve_buffer(&world, &m_b_tensor, OMEGA_PERM_READ, 0, mat_bytes_f16, (void **)&mbt_cpu, &mbt_va);
-    omega_world_resolve_buffer(&world, &m_c_tensor, OMEGA_PERM_WRITE, 0, mat_bytes_out, (void **)&mct_cpu, &mct_va);
-    for (int i = 0; i < 256; i++) { mat_cpu[i] = 0x3c00; mbt_cpu[i] = (i % 16 == i / 16) ? 0x3c00 : 0; mct_cpu[i] = 0.0f; }
+    omega_world_resolve_buffer(&world, &m_a_f16, OMEGA_PERM_READ, 0, mat_bytes_f16, (void **)&fa_cpu, &fa_va);
+    omega_world_resolve_buffer(&world, &m_b_f16, OMEGA_PERM_READ, 0, mat_bytes_f16, (void **)&fb_cpu, &fb_va);
+    omega_world_resolve_buffer(&world, &m_c_f16, OMEGA_PERM_WRITE, 0, mat_bytes_out, (void **)&fc_cpu, &fc_va);
+    for (int i = 0; i < 256; i++) { fa_cpu[i] = 0x3c00; fb_cpu[i] = (i % 16 == i / 16) ? 0x3c00 : 0; fc_cpu[i] = 0.0f; }
 
     void *cbank_f, *qmd0_f, *qmd1_f, *sem_f, *ks_f;
     uint64_t cbank_f_va, qmd0_f_va, qmd1_f_va, sem_f_va, ks_f_va;
@@ -973,7 +982,7 @@ static bool test_m19_gate8_1000_op(void) {
     uint32_t cbank_f_data[OMEGA_BW_CBANK_DRIVER_WORDS];
     omega_blackwell_build_cbank_driver_2d(cbank_f_data, cbank_f_va, 32, 1, 2, 1);
     uint32_t cbank_f_args[OMEGA_BW_CBANK_MATMUL_ARGS_WORDS];
-    omega_blackwell_build_cbank_args_matmul(cbank_f_args, mat_va, mbt_va, mct_va, 16, 16, 16);
+    omega_blackwell_build_cbank_args_matmul(cbank_f_args, fa_va, fb_va, fc_va, 16, 16, 16);
     memcpy(cbank_f, cbank_f_data, sizeof(cbank_f_data));
     memcpy((uint8_t *)cbank_f + 0x380, cbank_f_args, sizeof(cbank_f_args));
 
@@ -1034,6 +1043,12 @@ static bool test_m19_gate8_1000_op(void) {
 
     uint64_t bf16_code_va;
     omega_world_resolve_code(&world, &code_bf16, NULL, &bf16_code_va, &code_sz);
+    uint16_t *ba_cpu, *bb_cpu; float *bc_cpu;
+    uint64_t ba_va, bb_va, bc_va;
+    omega_world_resolve_buffer(&world, &m_a_bf16, OMEGA_PERM_READ, 0, mat_bytes_f16, (void **)&ba_cpu, &ba_va);
+    omega_world_resolve_buffer(&world, &m_b_bf16, OMEGA_PERM_READ, 0, mat_bytes_f16, (void **)&bb_cpu, &bb_va);
+    omega_world_resolve_buffer(&world, &m_c_bf16, OMEGA_PERM_WRITE, 0, mat_bytes_out, (void **)&bc_cpu, &bc_va);
+    for (int i = 0; i < 256; i++) { ba_cpu[i] = 0x3f80; bb_cpu[i] = (i % 16 == i / 16) ? 0x3f80 : 0; bc_cpu[i] = 0.0f; }
     void *cbank_b, *qmd0_b, *qmd1_b, *sem_b, *ks_b;
     uint64_t cbank_b_va, qmd0_b_va, qmd1_b_va, sem_b_va, ks_b_va;
     omega_world_scratch_acquire(&world, 0x1000, &cbank_b, &cbank_b_va, &dummy);
@@ -1045,7 +1060,7 @@ static bool test_m19_gate8_1000_op(void) {
     uint32_t cbank_b_data[OMEGA_BW_CBANK_DRIVER_WORDS];
     omega_blackwell_build_cbank_driver_2d(cbank_b_data, cbank_b_va, 32, 1, 2, 1);
     uint32_t cbank_b_args[OMEGA_BW_CBANK_MATMUL_ARGS_WORDS];
-    omega_blackwell_build_cbank_args_matmul(cbank_b_args, mat_va, mbt_va, mct_va, 16, 16, 16);
+    omega_blackwell_build_cbank_args_matmul(cbank_b_args, ba_va, bb_va, bc_va, 16, 16, 16);
     memcpy(cbank_b, cbank_b_data, sizeof(cbank_b_data));
     memcpy((uint8_t *)cbank_b + 0x380, cbank_b_args, sizeof(cbank_b_args));
 
@@ -1152,7 +1167,7 @@ static bool test_m19_gate8_1000_op(void) {
         /* 3. FP16 MatMul */
         dispatch_id++;
         pb_f[rel_f + 3] = dispatch_id;
-        m19_make_submission(&sub, f_words, &code_f16, &m_a_tensor, &m_b_tensor, &m_c_tensor,
+        m19_make_submission(&sub, f_words, &code_f16, &m_a_f16, &m_b_f16, &m_c_f16,
                             (uint32_t)mat_bytes_f16, (uint32_t)mat_bytes_f16, (uint32_t)mat_bytes_out,
                             dispatch_id);
         if (!m19_submit_op(&world, &pb_pool, pb_f, pb_f_len,
@@ -1165,7 +1180,7 @@ static bool test_m19_gate8_1000_op(void) {
         /* 4. BF16 MatMul */
         dispatch_id++;
         pb_b[rel_b + 3] = dispatch_id;
-        m19_make_submission(&sub, b_words, &code_bf16, &m_a_tensor, &m_b_tensor, &m_c_tensor,
+        m19_make_submission(&sub, b_words, &code_bf16, &m_a_bf16, &m_b_bf16, &m_c_bf16,
                             (uint32_t)mat_bytes_f16, (uint32_t)mat_bytes_f16, (uint32_t)mat_bytes_out,
                             dispatch_id);
         if (!m19_submit_op(&world, &pb_pool, pb_b, pb_b_len,
@@ -1196,9 +1211,16 @@ static bool test_m19_gate8_1000_op(void) {
         omega_world_destroy(&world);
         return false;
     }
-    if (vc_cpu[0] != 1 || mci_cpu[0] != 1 || fabsf(mct_cpu[0] - 1.0f) > 1e-4f) {
-        omega_world_destroy(&world);
-        return false;
+    for (uint32_t i = 0; i < vec_n; i++) {
+        if (vc_cpu[i] != i + 1) { omega_world_destroy(&world); return false; }
+    }
+    for (uint32_t i = 0; i < 256; i++) {
+        if (mci_cpu[i] != 1 ||
+            fabsf(fc_cpu[i] - 1.0f) > 1e-4f ||
+            fabsf(bc_cpu[i] - 1.0f) > 1e-4f) {
+            omega_world_destroy(&world);
+            return false;
+        }
     }
     /* Authoritative accounting: advanced only on observed completion. */
     if (world.total_dispatches != 1000 || world.sequence_number != 1000) {
