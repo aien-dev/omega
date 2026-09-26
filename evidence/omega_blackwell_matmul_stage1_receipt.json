@@ -4,7 +4,7 @@
   "stage_title": "Dynamic INT32 MatMul Codegen & Physical Silicon Execution",
   "target_hardware": "NVIDIA DGX Spark (Grace Blackwell GB10, sm_121)",
   "substrate": "M16 Native Libcuda-Free Channel",
-  "implementation_commit": "fdf60e5a21669e8d2142ad90d146adf5ed5b73ec",
+  "implementation_commit": "4fbfd06944ee53aa509338bc5165e9095b0a1278",
   "m16_authority_commit": "b64753d95bacb1114ba48decde48239f0c542e12",
   "config_1_spec_id": "dbbdbda6e207dbc896360900a8a6d36f87448a8827e6bffcbfd7503e9a04cd64",
   "config_1_code_sha256": "836e0a5039fa05034f9df1d189f03cdc85f49416adf76d29bf4f5ad6fdb4cb45",
@@ -25,5 +25,5 @@
   "zero_libcuda_runtime": true,
   "stage1_gates_passed": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 15, 17, 18],
   "stage2_gates_pending": [12, 13, 14, 16],
-  "qualification_timestamp": "2026-09-26T15:52:10Z"
+  "qualification_timestamp": "2026-09-26T15:52:53Z"
 }
