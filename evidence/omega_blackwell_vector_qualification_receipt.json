@@ -1,0 +1,75 @@
+{
+  "milestone": "MILESTONE 17: OMEGA_BLACKWELL_VECTOR",
+  "status": "QUALIFIED / PASS",
+  "qualification_scope": "machine-independent vector addition specification, sovereign Blackwell sm_121 instruction encoding, QMD v5.0 launch descriptor construction, qualified M16 native submission path, physical GB10 silicon execution, and OMEGA bit-for-bit exact result verification",
+  "native_hardware_qualified": true,
+  "m16_dependency_satisfied": true,
+  "m16_authority_commit": "b64753d95bacb1114ba48decde48239f0c542e12",
+  "contract_id": "CONTRACT-OMEGA-BLACKWELL-VECTOR-M17",
+  "generated_at": "2026-09-26T14:14:39Z",
+  "qualified_implementation_commit": "f1253a20fb6162df5b93e708f9a833e9ff1a868d",
+  "host": {
+    "os": "Linux",
+    "arch": "aarch64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "silicon": "NVIDIA DGX Spark Grace Blackwell GB10",
+    "gpu_architecture": "sm_121",
+    "unified_memory": "128 GiB LPDDR5x"
+  },
+  "semantic_contract": {
+    "operation": "C[i] = (A[i] + B[i]) mod 2^32",
+    "element_type": "uint32_t",
+    "overflow_policy": "OVERFLOW_WRAP",
+    "code_sha256": "39f3dfdfc529a75a8274a27900acf4e7382b7f280a211e0412c51609f44b62a1",
+    "instruction_count": 32,
+    "code_bytes": 512,
+    "launch_descriptor": "QMD Version 05_00 (384 bytes, local memory size 0)",
+    "tested_vector_lengths": [1, 15, 63, 64, 65, 127, 128, 256, 1024],
+    "zero_libcuda_linkage": true,
+    "zero_cuda_symbols": true,
+    "zero_libcuda_runtime": true
+  },
+  "artifacts": {
+    "src/omega_vector.c": { "sha256": "9e4f4622080494b1cf701f0d1c220979785c630cf8317ce44d68bdf58b5b47b5" },
+    "src/omega_vector.h": { "sha256": "7526e6849f33dcffc3c6420f0cdc2c86022a094117f57062d8f4f92886496698" },
+    "src/omega_blackwell_encoder.c": { "sha256": "07246381b752ca92cc2d027302a01cdf5eee7c12d5754ee368b42185f49bd784" },
+    "src/omega_blackwell_encoder.h": { "sha256": "c1117f24d3a146ffb9ed9ece80ec6a5d248da64ca5a2f1aaed73b84133372f40" },
+    "src/omega_blackwell_qmd.c": { "sha256": "853005916a1a76c82601d2ab19e30bfe9c6a6ac7b5cacd4a157abb83316d9e57" },
+    "src/omega_blackwell_qmd.h": { "sha256": "4e4d8413d960c102a2f9310e0b8602622e3fe278a946a8bcd878baecc1b02c68" },
+    "src/omega_blackwell_realize.c": { "sha256": "9a5949d2a53b2623c592a116df6d9102a8f5e66dbe058d58d07283b5bec57cef" },
+    "src/omega_blackwell_realize.h": { "sha256": "54723c3473f8dfd4b0f565cbcf2239822a1b3a75e5760ffac921bd3bbd28c71f" },
+    "src/omega_blackwell_submit.c": { "sha256": "42173cb81eeb3cc97dbdd22215ed6c17a43bd04cc68e5b70717d67ee17dc9991" },
+    "src/omega_blackwell_submit.h": { "sha256": "605149c9ef0b90d553f38852e1458aac4e30c892c74ad21532728268ab200fac" },
+    "build/omegatool": { "sha256": "cbc0bda516b0375c4332a081ed742e3bb593dc167e5e030a06f608d0683fa697" }
+  },
+  "qualification_gates": {
+    "total": 18,
+    "passed": 18,
+    "gates": {
+      "OMEGA_BW_VECTOR_SEMANTIC_PASS": "PASS",
+      "OMEGA_BW_VECTOR_MACHINE_BINDING_PASS": "PASS",
+      "OMEGA_BW_VECTOR_REALIZATION_PASS": "PASS",
+      "OMEGA_BW_VECTOR_ENCODER_FIXTURE_PASS": "PASS",
+      "OMEGA_BW_VECTOR_NATIVE_ENCODING_PASS": "PASS",
+      "OMEGA_BW_VECTOR_QMD_PASS": "PASS",
+      "OMEGA_BW_VECTOR_PHYSICS_AUTHORITY_PASS": "PASS",
+      "OMEGA_BW_VECTOR_NATIVE_SUBMIT_PASS": "PASS",
+      "OMEGA_BW_VECTOR_DEVICE_OUTPUT_PASS": "PASS",
+      "OMEGA_BW_VECTOR_COMPLETION_PASS": "PASS",
+      "OMEGA_BW_VECTOR_V1_PARITY_PASS": "PASS",
+      "OMEGA_BW_VECTOR_BOUNDARY_PASS": "PASS",
+      "OMEGA_BW_VECTOR_MUTATION_REFUSAL_PASS": "PASS",
+      "OMEGA_BW_VECTOR_ZERO_LIBCUDA_LINK_PASS": "PASS",
+      "OMEGA_BW_VECTOR_ZERO_CUDA_SYMBOL_PASS": "PASS",
+      "OMEGA_BW_VECTOR_ZERO_LIBCUDA_RUNTIME_PASS": "PASS",
+      "OMEGA_BW_VECTOR_EVIDENCE_DURABILITY_PASS": "PASS",
+      "OMEGA_BW_VECTOR_RECEIPT_PASS": "PASS"
+    }
+  },
+  "cumulative_qualification": {
+    "milestones": "M4 + M5 + M6 + M7 + M8 + M9 + M10 + M11 + M12 + M13 + M14 + M15 + M17",
+    "cumulative_gates": 139,
+    "cumulative_passed": 139,
+    "zero_regression": true
+  }
+}

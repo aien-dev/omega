@@ -19,6 +19,7 @@
 #include "omega_realize_synth.h"
 #include "omega_matvec.h"
 #include "omega_accelerator.h"
+#include "omega_blackwell_gates.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -3779,6 +3780,15 @@ int main(int argc, char **argv) {
 
     if (strcmp(argv[1], "--demonstrate-accelerator") == 0) {
         run_demonstration_accelerator();
+        return 0;
+    }
+
+    if (strcmp(argv[1], "--run-m17-gates") == 0) {
+        return run_m17_gates();
+    }
+
+    if (strcmp(argv[1], "--demonstrate-blackwell-vector") == 0) {
+        run_demonstration_blackwell_vector();
         return 0;
     }
 
