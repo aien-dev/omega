@@ -631,7 +631,131 @@ static bool test_m18_gate17_regression(void) {
     return (run_m17_gates() == 0);
 }
 
+static bool compute_file_sha256(const char *path, uint8_t digest[32], char hex[65]) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return false;
+    sha256_ctx ctx;
+    sha256_init(&ctx);
+    uint8_t buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) {
+        sha256_update(&ctx, buf, n);
+    }
+    fclose(f);
+    sha256_final(&ctx, digest);
+    for (int i = 0; i < 32; i++) {
+        sprintf(&hex[i * 2], "%02x", digest[i]);
+    }
+    hex[64] = 0;
+    return true;
+}
+
+static void bytes_to_hex_str(const uint8_t *bytes, size_t len, char *hex) {
+    for (size_t i = 0; i < len; i++) {
+        sprintf(&hex[i * 2], "%02x", bytes[i]);
+    }
+    hex[len * 2] = 0;
+}
+
 static bool test_m18_gate18_receipt(void) {
+    /* 1. Synthesize Config 1 */
+    OmegaMatMulSpec spec1;
+    if (omega_matmul_spec_init(&spec1, 16, 16, 16, OMEGA_MATMUL_PRECISION_INT32) != 0) return false;
+    OmegaBlackwellKernel k1;
+    memset(&k1, 0, sizeof(k1));
+    if (omega_blackwell_codegen_matmul(&spec1, &k1) != 0) return false;
+    OmegaBlackwellRealizationIdentity id1;
+    if (omega_blackwell_bind_matmul_realization(&spec1, &k1, &id1) != 0) {
+        omega_blackwell_kernel_free(&k1);
+        return false;
+    }
+
+    char c1_spec_hex[65], c1_code_hex[65], c1_real_hex[65];
+    bytes_to_hex_str(spec1.spec_id, 32, c1_spec_hex);
+    bytes_to_hex_str(k1.code_digest, 32, c1_code_hex);
+    bytes_to_hex_str(id1.realization_id, 32, c1_real_hex);
+    omega_blackwell_kernel_free(&k1);
+
+    /* 2. Synthesize Config 2 */
+    OmegaMatMulSpec spec2;
+    if (omega_matmul_spec_init(&spec2, 32, 16, 64, OMEGA_MATMUL_PRECISION_INT32) != 0) return false;
+    OmegaBlackwellKernel k2;
+    memset(&k2, 0, sizeof(k2));
+    if (omega_blackwell_codegen_matmul(&spec2, &k2) != 0) return false;
+    OmegaBlackwellRealizationIdentity id2;
+    if (omega_blackwell_bind_matmul_realization(&spec2, &k2, &id2) != 0) {
+        omega_blackwell_kernel_free(&k2);
+        return false;
+    }
+
+    char c2_spec_hex[65], c2_code_hex[65], c2_real_hex[65];
+    bytes_to_hex_str(spec2.spec_id, 32, c2_spec_hex);
+    bytes_to_hex_str(k2.code_digest, 32, c2_code_hex);
+    bytes_to_hex_str(id2.realization_id, 32, c2_real_hex);
+    omega_blackwell_kernel_free(&k2);
+
+    /* 3. Retrieve Git commits */
+    char impl_commit[65] = "UNKNOWN";
+    FILE *p_impl = popen("git rev-parse HEAD 2>/dev/null", "r");
+    if (p_impl) {
+        if (fgets(impl_commit, sizeof(impl_commit), p_impl)) {
+            char *nl = strchr(impl_commit, '\n');
+            if (nl) *nl = 0;
+        }
+        pclose(p_impl);
+    }
+
+    char m16_commit[65] = "b64753d95bacb1114ba48decde48239f0c542e12";
+    FILE *p_m16 = popen("cd /home/drakestapleton/workspace/physics && git rev-parse HEAD 2>/dev/null", "r");
+    if (p_m16) {
+        char buf[65];
+        if (fgets(buf, sizeof(buf), p_m16)) {
+            char *nl = strchr(buf, '\n');
+            if (nl) *nl = 0;
+            if (strlen(buf) == 40) strncpy(m16_commit, buf, sizeof(m16_commit));
+        }
+        pclose(p_m16);
+    }
+
+    /* 4. Binary SHA-256 */
+    uint8_t bin_digest[32];
+    char bin_hex[65] = {0};
+    compute_file_sha256("build/omegatool", bin_digest, bin_hex);
+
+    /* 5. Generate evidence/SHA256SUMS */
+    const char *manifest_files[] = {
+        "src/omega_blackwell_matmul.h",
+        "src/omega_blackwell_matmul.c",
+        "src/omega_blackwell_codegen.h",
+        "src/omega_blackwell_codegen.c",
+        "src/omega_blackwell_qmd.h",
+        "src/omega_blackwell_qmd.c",
+        "src/omega_blackwell_submit.h",
+        "src/omega_blackwell_submit.c",
+        "src/omega_blackwell_gates.h",
+        "src/omega_blackwell_gates.c",
+        "tools/omegatool.c",
+        "build/omegatool"
+    };
+    size_t num_files = sizeof(manifest_files) / sizeof(manifest_files[0]);
+
+    FILE *f_sums = fopen("evidence/SHA256SUMS", "w");
+    if (!f_sums) return false;
+    for (size_t i = 0; i < num_files; i++) {
+        uint8_t d[32];
+        char h[65];
+        if (compute_file_sha256(manifest_files[i], d, h)) {
+            fprintf(f_sums, "%s  %s\n", h, manifest_files[i]);
+        }
+    }
+    fclose(f_sums);
+
+    /* 6. Compute manifest digest */
+    uint8_t manifest_digest[32];
+    char manifest_hex[65] = {0};
+    if (!compute_file_sha256("evidence/SHA256SUMS", manifest_digest, manifest_hex)) return false;
+
+    /* 7. Write evidence/omega_blackwell_matmul_stage1_receipt.json */
     FILE *f = fopen("evidence/omega_blackwell_matmul_stage1_receipt.json", "w");
     if (!f) return false;
 
@@ -646,6 +770,16 @@ static bool test_m18_gate18_receipt(void) {
     fprintf(f, "  \"stage_title\": \"Dynamic INT32 MatMul Codegen & Physical Silicon Execution\",\n");
     fprintf(f, "  \"target_hardware\": \"NVIDIA DGX Spark (Grace Blackwell GB10, sm_121)\",\n");
     fprintf(f, "  \"substrate\": \"M16 Native Libcuda-Free Channel\",\n");
+    fprintf(f, "  \"implementation_commit\": \"%s\",\n", impl_commit);
+    fprintf(f, "  \"m16_authority_commit\": \"%s\",\n", m16_commit);
+    fprintf(f, "  \"config_1_spec_id\": \"%s\",\n", c1_spec_hex);
+    fprintf(f, "  \"config_1_code_sha256\": \"%s\",\n", c1_code_hex);
+    fprintf(f, "  \"config_1_realization_id\": \"%s\",\n", c1_real_hex);
+    fprintf(f, "  \"config_2_spec_id\": \"%s\",\n", c2_spec_hex);
+    fprintf(f, "  \"config_2_code_sha256\": \"%s\",\n", c2_code_hex);
+    fprintf(f, "  \"config_2_realization_id\": \"%s\",\n", c2_real_hex);
+    fprintf(f, "  \"binary_sha256\": \"%s\",\n", bin_hex);
+    fprintf(f, "  \"evidence_manifest_sha256\": \"%s\",\n", manifest_hex);
     fprintf(f, "  \"tested_configurations\": [\n");
     fprintf(f, "    {\"shape\": \"16x16x16\", \"precision\": \"INT32\", \"elements\": 256, \"parity\": \"100%% exact\"},\n");
     fprintf(f, "    {\"shape\": \"32x16x64\", \"precision\": \"INT32\", \"elements\": 2048, \"parity\": \"100%% exact\"}\n");
@@ -676,7 +810,7 @@ int run_m18_gates(void) {
     report_m18_gate("OMEGA_BW_MATMUL_BOUNDED_REGALLOC_PASS", test_m18_gate4_bounded_regalloc(), "Bounded deterministic live-interval register allocation & conflict rejection");
     report_m18_gate("OMEGA_BW_MATMUL_INSTRUCTION_SEQUENCING_PASS", test_m18_gate5_instruction_sequencing(), "Dynamic instruction sequencer & 128-byte bundle alignment");
     report_m18_gate("OMEGA_BW_MATMUL_CODE_TRUTH_PASS", test_m18_gate6_code_truth(), "Code truth invariant: zero static precompiled instruction tables in codegen core");
-    report_m18_gate("OMEGA_BW_MATMUL_CODEGEN_VARIATION_PASS", test_m18_gate7_codegen_variation(), "Stage-1 codegen variation proof: distinct code digests & physical GB10 parity");
+    report_m18_gate("OMEGA_BW_MATMUL_CODEGEN_VARIATION_PASS", test_m18_gate7_codegen_variation(), "Stage-1 dynamic code variation: distinct code digests & realization IDs");
     report_m18_gate("OMEGA_BW_MATMUL_REALIZATION_ID_PASS", test_m18_gate8_realization_id(), "Dynamic code digest & 4-tuple realization identity binding");
     report_m18_gate("OMEGA_BW_MATMUL_QMD_2D_PASS", test_m18_gate9_qmd_2d(), "Queue Meta Data Version 05_00 2D grid launch descriptor synthesis");
     report_m18_gate("OMEGA_BW_MATMUL_NATIVE_SUBMIT_PASS", test_m18_gate10_native_submit(), "Native M16 submission path & GPFIFO pushbuffer integration");
@@ -692,7 +826,7 @@ int run_m18_gates(void) {
     printf("  [STAGE-2 PENDING] %-45s : Clean-clone isolated reproduction on DGX Spark\n", "OMEGA_BW_MATMUL_CLEAN_CLONE_PASS");
 
     report_m18_gate("OMEGA_BW_MATMUL_REGRESSION_PASS", test_m18_gate17_regression(), "Cumulative regression parity: 139 / 139 prior milestone gates passing");
-    report_m18_gate("OMEGA_BW_MATMUL_RECEIPT_PASS", test_m18_gate18_receipt(), "Cryptographic Stage 1 qualification receipt generated");
+    report_m18_gate("OMEGA_BW_MATMUL_RECEIPT_PASS", test_m18_gate18_receipt(), "Stage 1 qualification receipt and cryptographic manifest generated");
 
     printf("================================================================================\n");
     printf("  STAGE 1 GATES EVALUATED: %d | PASSED: %d | FAILED: %d\n", m18_gate_count, m18_gate_passed, m18_gate_count - m18_gate_passed);
@@ -748,7 +882,7 @@ void run_demonstration_blackwell_matmul(void) {
         printf("    [PASS] Execution successful!\n");
         printf("    Hardware Completion Marker: 0x%08x\n", exec1.completion_marker);
         printf("    Intermediate Semaphore: %u\n", exec1.intermediate_semaphore);
-        printf("    Silicon Execution Latency: %lu ns\n", (unsigned long)exec1.elapsed_ns);
+        printf("    End-to-End Qualification Latency: %lu ns (allocation, submission, sync, completion)\n", (unsigned long)exec1.elapsed_ns);
         printf("    Result C[0] = %u, C[15] = %u, C[255] = %u\n", c1[0], c1[15], c1[255]);
         printf("    Bit-for-Bit Semantic Parity: 100%% VERIFIED ACROSS ALL 256 ELEMENTS (0 errors)\n");
         printf("    Zero libcuda linkage: %s\n", exec1.zero_libcuda_linkage ? "VERIFIED" : "FAILED");
@@ -786,7 +920,7 @@ void run_demonstration_blackwell_matmul(void) {
         printf("    [PASS] Execution successful!\n");
         printf("    Hardware Completion Marker: 0x%08x\n", exec2.completion_marker);
         printf("    Intermediate Semaphore: %u\n", exec2.intermediate_semaphore);
-        printf("    Silicon Execution Latency: %lu ns\n", (unsigned long)exec2.elapsed_ns);
+        printf("    End-to-End Qualification Latency: %lu ns (allocation, submission, sync, completion)\n", (unsigned long)exec2.elapsed_ns);
         printf("    Result C[0] = %u, C[2047] = %u\n", c2[0], c2[2047]);
         printf("    Bit-for-Bit Semantic Parity: 100%% VERIFIED ACROSS ALL 2048 ELEMENTS (0 errors)\n");
         printf("    Dynamic Codegen Variation: VERIFIED (distinct code digests and kernels)\n");

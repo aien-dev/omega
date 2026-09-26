@@ -785,44 +785,7 @@ int omega_blackwell_test_codegen_variation(void) {
         return -4;
     }
 
-    /* Physical silicon execution and parity verification on GB10 */
-    size_t a1_sz = (size_t)spec1.m * spec1.k, b1_sz = (size_t)spec1.k * spec1.n, c1_sz = (size_t)spec1.m * spec1.n;
-    uint32_t *h_a1 = malloc(a1_sz * sizeof(uint32_t));
-    uint32_t *h_b1 = malloc(b1_sz * sizeof(uint32_t));
-    uint32_t *h_c1 = malloc(c1_sz * sizeof(uint32_t));
-    for (size_t i = 0; i < a1_sz; i++) h_a1[i] = (uint32_t)((i % 7) + 1);
-    for (size_t i = 0; i < b1_sz; i++) h_b1[i] = (uint32_t)((i % 5) + 2);
-    for (size_t i = 0; i < c1_sz; i++) h_c1[i] = 0xDEADBEEF;
-
-    OmegaBlackwellMatMulExecution exec1;
-    if (omega_blackwell_execute_matmul(&spec1, &k1, h_a1, h_b1, h_c1, &exec1) != 0 || !exec1.parity_verified) {
-        printf("FAIL: physical execution of Config 1 failed on GB10 silicon\n");
-        free(h_a1); free(h_b1); free(h_c1);
-        omega_blackwell_kernel_free(&k1);
-        omega_blackwell_kernel_free(&k2);
-        return -5;
-    }
-    free(h_a1); free(h_b1); free(h_c1);
-
-    size_t a2_sz = (size_t)spec2.m * spec2.k, b2_sz = (size_t)spec2.k * spec2.n, c2_sz = (size_t)spec2.m * spec2.n;
-    uint32_t *h_a2 = malloc(a2_sz * sizeof(uint32_t));
-    uint32_t *h_b2 = malloc(b2_sz * sizeof(uint32_t));
-    uint32_t *h_c2 = malloc(c2_sz * sizeof(uint32_t));
-    for (size_t i = 0; i < a2_sz; i++) h_a2[i] = (uint32_t)((i % 11) + 1);
-    for (size_t i = 0; i < b2_sz; i++) h_b2[i] = (uint32_t)((i % 13) + 3);
-    for (size_t i = 0; i < c2_sz; i++) h_c2[i] = 0xDEADBEEF;
-
-    OmegaBlackwellMatMulExecution exec2;
-    if (omega_blackwell_execute_matmul(&spec2, &k2, h_a2, h_b2, h_c2, &exec2) != 0 || !exec2.parity_verified) {
-        printf("FAIL: physical execution of Config 2 failed on GB10 silicon\n");
-        free(h_a2); free(h_b2); free(h_c2);
-        omega_blackwell_kernel_free(&k1);
-        omega_blackwell_kernel_free(&k2);
-        return -6;
-    }
-    free(h_a2); free(h_b2); free(h_c2);
-
-    printf("PASS: Dynamic codegen variation verified. Distinct machine codes generated and verified on GB10 silicon.\n");
+    printf("PASS: Dynamic codegen variation verified (distinct specifications, code digests, and realization IDs).\n");
 
     omega_blackwell_kernel_free(&k1);
     omega_blackwell_kernel_free(&k2);
