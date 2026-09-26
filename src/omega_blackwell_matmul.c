@@ -86,3 +86,13 @@ int omega_blackwell_bind_matmul_realization(const OmegaMatMulSpec *spec, const O
     sha256_hash(bound, sizeof(bound), id->realization_id);
     return 0;
 }
+
+#include "omega_blackwell_codegen.h"
+
+int omega_blackwell_codegen_matmul(const OmegaMatMulSpec *spec, OmegaBlackwellKernel *kernel) {
+    if (!spec || !kernel) return -1;
+    if (spec->precision == OMEGA_MATMUL_PRECISION_INT32) {
+        return omega_blackwell_codegen_matmul_i32(spec, kernel);
+    }
+    return -1;
+}
