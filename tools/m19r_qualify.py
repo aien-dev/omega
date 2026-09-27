@@ -137,6 +137,7 @@ def main():
         with open("/tmp/aien-gb10.lock", "w") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             command(["make", "clean"], OMEGA)
+            run_dir.mkdir(parents=True, exist_ok=True)
             command(["make", "-j4", f"PHYSICS_DIR={physics}"], OMEGA,
                     run_dir / "build.log", environment)
             binary = OMEGA / "build/omegatool"
@@ -232,6 +233,7 @@ def main():
         print(f"M19R qualification failed: {exc}", file=sys.stderr)
         return 1
     finally:
+        run_dir.mkdir(parents=True, exist_ok=True)
         (run_dir / "run.json").write_text(json.dumps(results, sort_keys=True, indent=2) + "\n")
         print(f"M19R run evidence: {run_dir / 'run.json'}")
 
