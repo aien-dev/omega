@@ -23,6 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Checkout pinned Physics headers
         uses: actions/checkout@v4
@@ -32,6 +33,6 @@ jobs:
           path: physics-src
       - name: Build and run resident reaction host qualification
         env:
-          OMEGA_CANDIDATE_COMMIT: ${{ github.sha }}
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
         run: make test-r3
