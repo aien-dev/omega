@@ -9,13 +9,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
-#include <sys/ioctl.h>
-#include "nvos.h"
-#include "nv-ioctl.h"
-#include "nv-ioctl-numbers.h"
-
-#define NV_ESC_RM_FREE 0x29
-#define NV_IOWR(nr, sz) _IOC(_IOC_READ | _IOC_WRITE, NV_IOCTL_MAGIC, (nr), (sz))
+#include <sys/mman.h>
 
 
 static const uint32_t WORLD_SETUP_WORDS[18] = {
@@ -23,16 +17,6 @@ static const uint32_t WORLD_SETUP_WORDS[18] = {
     0x2001255e, 0x20000000, 0x2001255f, 0x000fffff, 0x20012557, 0x00000003, 0x20012558, 0x22000000,
     0x20012559, 0x00000000,
 };
-
-static void rm_free_obj(Nvrm *rm, uint32_t parent, uint32_t obj) {
-    if (!rm->root || !parent || !obj) return;
-    NVOS00_PARAMETERS p;
-    memset(&p, 0, sizeof(p));
-    p.hRoot = rm->root;
-    p.hObjectParent = parent;
-    p.hObjectOld = obj;
-    ioctl(rm->fd_ctl, NV_IOWR(NV_ESC_RM_FREE, sizeof(p)), &p);
-}
 
 /* A submission counts as complete once the hardware marker has reached or
  * passed its payload (serial-number arithmetic, correct across 2^32 wrap). */
@@ -144,8 +128,8 @@ int omega_world_init(OmegaAcceleratorWorld *world) {
     return OMEGA_WORLD_OK;
 }
 
-void omega_world_destroy(OmegaAcceleratorWorld *world) {
-    if (!world || !world->initialized) return;
+int omega_world_destroy(OmegaAcceleratorWorld *world) {
+    if (!world || !world->initialized) return OMEGA_WORLD_ERR_INVALID_ARG;
 
     for (uint32_t i = 0; i < OMEGA_WORLD_MAX_BUFFERS; i++) {
         world->buffers[i].active = false;
@@ -156,15 +140,25 @@ void omega_world_destroy(OmegaAcceleratorWorld *world) {
         world->code_entries[i].generation++;
     }
 
-    m16_native_close(&world->m16);
+    int close_rc = m16_native_close(&world->m16);
+    if (world->m16.rm.faulted) world->faulted = true;
+    world->buffer_count = 0;
+    world->code_count = 0;
+    world->in_flight_count = 0;
+    world->scratch.allocated_bytes = 0;
+    world->completion.cpu_marker = NULL;
+    world->completion.gpu_va = 0;
+    memset(&world->pb_mem, 0, sizeof world->pb_mem);
     world->channel_active = false;
     world->initialized = false;
+    return close_rc == 0 ? OMEGA_WORLD_OK : OMEGA_WORLD_ERR_HARDWARE;
 }
 
 int omega_world_rebuild(OmegaAcceleratorWorld *world) {
-    if (!world) return OMEGA_WORLD_ERR_INVALID_ARG;
+    if (!world || !world->initialized) return OMEGA_WORLD_ERR_INVALID_ARG;
     uint32_t next_epoch = world->current_epoch + 1;
-    omega_world_destroy(world);
+    if (world->initialized && omega_world_destroy(world) != OMEGA_WORLD_OK)
+        return OMEGA_WORLD_ERR_HARDWARE;
 
     int rc = omega_world_init(world);
     if (rc == OMEGA_WORLD_OK) {
@@ -191,6 +185,7 @@ int omega_world_register_buffer(OmegaAcceleratorWorld *world,
     if (free_slot < 0) return OMEGA_WORLD_ERR_NO_MEM;
 
     OmegaBufferEntry *entry = &world->buffers[free_slot];
+    if (size_bytes > SIZE_MAX - 0xfffULL) return OMEGA_WORLD_ERR_BOUNDS;
     size_t alloc_bytes = (size_bytes + 0xfffULL) & ~0xfffULL;
     if (alloc_bytes < 0x1000) alloc_bytes = 0x1000;
 
@@ -259,8 +254,12 @@ int omega_world_resolve_buffer(OmegaAcceleratorWorld *world,
 
     if ((entry->permissions & required_perms) != required_perms) return OMEGA_WORLD_ERR_PERM_DENIED;
     if ((handle->permissions & required_perms) != required_perms) return OMEGA_WORLD_ERR_PERM_DENIED;
+    if ((required_perms & OMEGA_PERM_WRITE) &&
+        buffer_referenced_in_flight(world, handle->object_id))
+        return OMEGA_WORLD_ERR_FAULT;
 
-    if (req_offset + req_size > entry->size_bytes) return OMEGA_WORLD_ERR_BOUNDS;
+    if (req_offset > entry->size_bytes || req_size > entry->size_bytes - req_offset ||
+        entry->gpu_va > UINT64_MAX - req_offset) return OMEGA_WORLD_ERR_BOUNDS;
 
     if (out_cpu) {
         *out_cpu = (uint8_t *)entry->cpu_addr + req_offset;
@@ -290,6 +289,7 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
     if (free_slot < 0) return OMEGA_WORLD_ERR_NO_MEM;
 
     OmegaCodeEntry *entry = &world->code_entries[free_slot];
+    if (code_size > SIZE_MAX - 0xfffULL) return OMEGA_WORLD_ERR_BOUNDS;
     size_t alloc_bytes = (code_size + 0xfffULL) & ~0xfffULL;
     if (alloc_bytes < 0x1000) alloc_bytes = 0x1000;
 
@@ -409,8 +409,10 @@ int omega_world_scratch_acquire(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || size_bytes == 0 || !out_cpu || !out_gpu_va) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (size_bytes > SIZE_MAX - 255ULL) return OMEGA_WORLD_ERR_BOUNDS;
     size_t aligned = (size_bytes + 255ULL) & ~255ULL;
-    if (world->scratch.allocated_bytes + aligned > world->scratch.capacity_bytes) {
+    if (world->scratch.allocated_bytes > world->scratch.capacity_bytes ||
+        aligned > world->scratch.capacity_bytes - world->scratch.allocated_bytes) {
         return OMEGA_WORLD_ERR_NO_MEM;
     }
 
@@ -441,12 +443,14 @@ int omega_world_recover_channel_fault(OmegaAcceleratorWorld *world) {
 
     Nvrm *rm = &world->m16.rm;
     /* Reconstruct channel within existing VAS and device root */
-    rm_free_obj(rm, rm->gpfifo, rm->compute_obj);
-    rm_free_obj(rm, rm->chgroup, rm->gpfifo);
-    rm_free_obj(rm, rm->chgroup, rm->ctxshare);
-    rm_free_obj(rm, rm->device, rm->chgroup);
+    if (nvrm_channel_destroy(rm) != 0) {
+        world->faulted = true;
+        world->channel_active = false;
+        return OMEGA_WORLD_ERR_HARDWARE;
+    }
 
     if (nvrm_channel(rm) != 0) {
+        world->faulted = true;
         world->channel_active = false;
         return OMEGA_WORLD_ERR_HARDWARE;
     }
@@ -457,9 +461,20 @@ int omega_world_recover_channel_fault(OmegaAcceleratorWorld *world) {
 
     /* Submissions queued on the torn-down channel will never complete and
      * are never committed. */
-    world->abandoned_dispatches += world->in_flight_count;
+    for (uint32_t i = 0; i < world->in_flight_count; i++) {
+        OmegaWorldSubmission *s = &world->in_flight[i];
+        if (!s->committed) world->abandoned_dispatches++;
+        if (s->output_cpu_protected && s->c_object_id < OMEGA_WORLD_MAX_BUFFERS) {
+            OmegaBufferEntry *c = &world->buffers[s->c_object_id];
+            if (c->mem.handle && mprotect(c->cpu_addr, c->mem.size, PROT_READ | PROT_WRITE) != 0) {
+                world->faulted = true;
+                return OMEGA_WORLD_ERR_FAULT;
+            }
+        }
+    }
     world->in_flight_count = 0;
     release_unreferenced_retiring(world);
+    if (world->faulted && rm->faulted) return OMEGA_WORLD_ERR_FAULT;
     world->faulted = false;
     return OMEGA_WORLD_OK;
 }
@@ -531,7 +546,9 @@ static int record_completed_dispatch(OmegaAcceleratorWorld *world,
                                      const void *a_cpu, size_t a_bytes,
                                      const void *b_cpu, size_t b_bytes,
                                      const void *c_cpu, size_t c_bytes,
-                                     uint32_t completion) {
+                                     uint32_t completion,
+                                     const uint8_t *submitted_semantic_id,
+                                     const uint8_t *submitted_input_digest) {
     uint8_t semantic_id[32], a_digest[32], b_digest[32];
     uint8_t bindings[64], bindings_digest[32], result_digest[32];
     uint32_t pairs[8] = {
@@ -541,12 +558,16 @@ static int record_completed_dispatch(OmegaAcceleratorWorld *world,
         c->object_id, c->object_generation
     };
     const OmegaCodeEntry *entry = &world->code_entries[code->object_id];
-    sha256_hash((const uint8_t *)semantic_words, 5 * sizeof(uint32_t), semantic_id);
-    sha256_hash((const uint8_t *)a_cpu, a_bytes, a_digest);
-    sha256_hash((const uint8_t *)b_cpu, b_bytes, b_digest);
-    memcpy(bindings, a_digest, 32);
-    memcpy(bindings + 32, b_digest, 32);
-    sha256_hash(bindings, sizeof(bindings), bindings_digest);
+    if (submitted_semantic_id) memcpy(semantic_id, submitted_semantic_id, 32);
+    else sha256_hash((const uint8_t *)semantic_words, 5 * sizeof(uint32_t), semantic_id);
+    if (submitted_input_digest) memcpy(bindings_digest, submitted_input_digest, 32);
+    else {
+        sha256_hash((const uint8_t *)a_cpu, a_bytes, a_digest);
+        sha256_hash((const uint8_t *)b_cpu, b_bytes, b_digest);
+        memcpy(bindings, a_digest, 32);
+        memcpy(bindings + 32, b_digest, 32);
+        sha256_hash(bindings, sizeof(bindings), bindings_digest);
+    }
     sha256_hash((const uint8_t *)c_cpu, c_bytes, result_digest);
     return omega_world_update_digest(world, semantic_id, entry->realization_id,
                                      entry->code_digest, bindings_digest,
@@ -568,6 +589,28 @@ int omega_world_submit(OmegaAcceleratorWorld *world,
     if (world->in_flight_count >= OMEGA_WORLD_MAX_IN_FLIGHT) {
         return OMEGA_WORLD_ERR_NO_MEM;
     }
+    if (submission->c_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
+        submission->a_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
+        submission->b_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
+        submission->code_object_id >= OMEGA_WORLD_MAX_CODE_ENTRIES)
+        return OMEGA_WORLD_ERR_INVALID_ARG;
+    const OmegaBufferEntry *a = &world->buffers[submission->a_object_id];
+    const OmegaBufferEntry *b = &world->buffers[submission->b_object_id];
+    const OmegaBufferEntry *c = &world->buffers[submission->c_object_id];
+    const OmegaCodeEntry *code = &world->code_entries[submission->code_object_id];
+    if (!a->active || !b->active || !c->active || !code->active ||
+        a->generation != submission->a_generation ||
+        b->generation != submission->b_generation ||
+        c->generation != submission->c_generation ||
+        code->generation != submission->code_generation ||
+        submission->a_bytes > a->size_bytes || submission->b_bytes > b->size_bytes ||
+        submission->c_bytes > c->size_bytes || !(c->permissions & OMEGA_PERM_WRITE))
+        return OMEGA_WORLD_ERR_INVALID_ARG;
+    /* A writable result has one owner until its completion is committed. */
+    for (uint32_t i = 0; i < world->in_flight_count; i++)
+        if (submission->c_bytes && world->in_flight[i].c_bytes &&
+            world->in_flight[i].c_object_id == submission->c_object_id)
+            return OMEGA_WORLD_ERR_FAULT;
     /* One payload sequence for the whole world: the pushbuffer's terminal
      * release (built by the caller) must carry a payload strictly after every
      * payload already issued, synchronous or batched. */
@@ -575,12 +618,31 @@ int omega_world_submit(OmegaAcceleratorWorld *world,
           !payload_reached(submission->completion_val, world->completion.last_payload))) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (submission->c_bytes && mprotect(c->cpu_addr, c->mem.size, PROT_READ) != 0) {
+        world->faulted = true;
+        return OMEGA_WORLD_ERR_FAULT;
+    }
     if (nvrm_enqueue(&world->m16.rm, pb_mem, off_bytes, nwords) != 0) {
+        if (submission->c_bytes && mprotect(c->cpu_addr, c->mem.size, PROT_READ | PROT_WRITE) != 0)
+            world->faulted = true;
         return OMEGA_WORLD_ERR_HARDWARE;
     }
     world->completion.last_payload = submission->completion_val;
     world->in_flight[world->in_flight_count] = *submission;
     world->in_flight[world->in_flight_count].gp_seq = world->m16.rm.put;
+    world->in_flight[world->in_flight_count].channel_generation = world->channel_generation;
+    world->in_flight[world->in_flight_count].output_cpu_protected = submission->c_bytes != 0;
+    world->in_flight[world->in_flight_count].committed = false;
+    sha256_hash((const uint8_t *)submission->semantic_words,
+                sizeof submission->semantic_words,
+                world->in_flight[world->in_flight_count].semantic_id);
+    uint8_t a_digest[32], b_digest[32], bindings[64];
+    sha256_hash(a->cpu_addr, submission->a_bytes, a_digest);
+    sha256_hash(b->cpu_addr, submission->b_bytes, b_digest);
+    memcpy(bindings, a_digest, 32);
+    memcpy(bindings + 32, b_digest, 32);
+    sha256_hash(bindings, sizeof bindings,
+                world->in_flight[world->in_flight_count].input_bindings_digest);
     world->in_flight_count++;
     return OMEGA_WORLD_OK;
 }
@@ -612,6 +674,10 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
     for (uint32_t i = 0; i < world->in_flight_count; i++) {
         const OmegaWorldSubmission *s = &world->in_flight[i];
         if (!payload_reached(s->completion_val, upto_payload)) continue;
+        if (s->channel_generation != world->channel_generation) {
+            world->faulted = true;
+            return OMEGA_WORLD_ERR_FAULT;
+        }
         if (s->code_object_id >= OMEGA_WORLD_MAX_CODE_ENTRIES ||
             s->a_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
             s->b_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
@@ -644,6 +710,11 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
             !cb->active || cb->generation != s.c_generation ||
             !ce->active || ce->generation != s.code_generation) {
             world->abandoned_dispatches++;
+            if (s.output_cpu_protected && cb->active &&
+                mprotect(cb->cpu_addr, cb->mem.size, PROT_READ | PROT_WRITE) != 0) {
+                world->faulted = true;
+                return OMEGA_WORLD_ERR_FAULT;
+            }
             continue;
         }
 
@@ -680,7 +751,8 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
                                       ab->cpu_addr, s.a_bytes,
                                       bb->cpu_addr, s.b_bytes,
                                       cb->cpu_addr, s.c_bytes,
-                                      s.completion_val) != OMEGA_WORLD_OK) {
+                                      s.completion_val, s.semantic_id,
+                                      s.input_bindings_digest) != OMEGA_WORLD_OK) {
             /* Keep this and every later submission uncommitted; drop only
              * those already committed above. */
             for (uint32_t j = i; j < world->in_flight_count; j++) {
@@ -690,7 +762,13 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
             world->faulted = true;
             return OMEGA_WORLD_ERR_FAULT;
         }
+        world->in_flight[i].committed = true;
         world->total_dispatches++;
+        if (s.output_cpu_protected &&
+            mprotect(cb->cpu_addr, cb->mem.size, PROT_READ | PROT_WRITE) != 0) {
+            world->faulted = true;
+            return OMEGA_WORLD_ERR_FAULT;
+        }
         committed++;
     }
     nvrm_retire(&world->m16.rm, retire_to);
@@ -719,7 +797,10 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
         return OMEGA_WORLD_ERR_FAULT;
     }
 
-    size_t req_bytes = (size_t)n * sizeof(uint32_t);
+    size_t req_bytes;
+    if (n > UINT32_MAX - 63 ||
+        __builtin_mul_overflow((size_t)n, sizeof(uint32_t), &req_bytes))
+        return OMEGA_WORLD_ERR_BOUNDS;
     void *a_cpu = NULL, *b_cpu = NULL, *c_cpu = NULL;
     uint64_t a_va = 0, b_va = 0, c_va = 0;
 
@@ -864,7 +945,7 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
     if (record_completed_dispatch(world, semantic_words, code_handle,
                                   h_a, h_b, h_c, a_cpu, req_bytes,
                                   b_cpu, req_bytes, c_cpu, req_bytes,
-                                  payload) != OMEGA_WORLD_OK) {
+                                  payload, NULL, NULL) != OMEGA_WORLD_OK) {
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_FAULT;
     }
@@ -901,9 +982,17 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     size_t elem_size = (spec->precision == OMEGA_MATMUL_PRECISION_INT32) ? 4 : 2;
     size_t out_elem_size = (spec->precision == OMEGA_MATMUL_PRECISION_INT32) ? 4 : 4; /* FP32 accum */
 
-    size_t req_a = (size_t)spec->m * spec->k * elem_size;
-    size_t req_b = (size_t)spec->k * spec->n * elem_size;
-    size_t req_c = (size_t)spec->m * spec->n * out_elem_size;
+    size_t req_a, req_b, req_c;
+    if (__builtin_mul_overflow((size_t)spec->m, (size_t)spec->k, &req_a) ||
+        __builtin_mul_overflow(req_a, elem_size, &req_a) ||
+        __builtin_mul_overflow((size_t)spec->k, (size_t)spec->n, &req_b) ||
+        __builtin_mul_overflow(req_b, elem_size, &req_b) ||
+        __builtin_mul_overflow((size_t)spec->m, (size_t)spec->n, &req_c) ||
+        __builtin_mul_overflow(req_c, out_elem_size, &req_c))
+        return OMEGA_WORLD_ERR_BOUNDS;
+    if (spec->precision == OMEGA_MATMUL_PRECISION_INT32 &&
+        (spec->n > UINT32_MAX - 15 || spec->m > UINT32_MAX - 15))
+        return OMEGA_WORLD_ERR_BOUNDS;
 
     void *a_cpu = NULL, *b_cpu = NULL, *c_cpu = NULL;
     uint64_t a_va = 0, b_va = 0, c_va = 0;
@@ -947,6 +1036,10 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     }
     if (grid_x == 0) grid_x = 1;
     if (grid_y == 0) grid_y = 1;
+    if (grid_y > UINT32_MAX / grid_x) {
+        omega_world_scratch_reset(world);
+        return OMEGA_WORLD_ERR_BOUNDS;
+    }
 
     omega_blackwell_build_cbank_driver_2d(cbank_data, cbank_va, threads_x, threads_y, grid_x, grid_y);
 
@@ -1073,7 +1166,7 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     if (record_completed_dispatch(world, semantic_words, code_handle,
                                   h_a, h_b, h_c, a_cpu, req_a,
                                   b_cpu, req_b, c_cpu, req_c,
-                                  payload) != OMEGA_WORLD_OK) {
+                                  payload, NULL, NULL) != OMEGA_WORLD_OK) {
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_FAULT;
     }

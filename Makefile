@@ -1,9 +1,10 @@
 CC ?= gcc
+.DEFAULT_GOAL := all
 PHYSICS_DIR ?= ../physics
 OUT_DIR ?= build
 PHYSICS_LOCK_CHECK ?= 1
 
-CFLAGS ?= -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc \
+CFLAGS ?= -std=gnu11 -Wall -Wextra -Werror -MMD -MP -D_GNU_SOURCE -O2 -Isrc \
 	-I$(PHYSICS_DIR)/m16 -I$(PHYSICS_DIR)/nvrm \
 	-I$(PHYSICS_DIR)/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc \
 	-I$(PHYSICS_DIR)/third_party/nvidia-open-580.173.02/kernel-open/common/inc \
@@ -23,6 +24,8 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 	tools/omegatool.c
 
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
+DEPS = $(OBJS:.o=.d)
+-include $(DEPS)
 TARGET = $(OUT_DIR)/omegatool
 
 .PHONY: all clean check-physics-lock test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17

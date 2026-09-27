@@ -32,9 +32,9 @@
  * directories needed to write it.
  *
  *  - Default: "build/qual-runs/<run_id>/<relpath>".
- *  - If the environment variable OMEGA_QUAL_RECORD=1: "evidence/runs/<run_id>/<relpath>".
- *    In this mode, if a file already exists at that path, the call is
- *    refused (returns -1) rather than overwriting it.
+ *  - Even when OMEGA_QUAL_RECORD=1, intermediate gate output remains under
+ *    build/qual-runs. Only tools/m19r_qualify.py writes permanent evidence,
+ *    after all gates finish, using an exclusive content-addressed file.
  *  - This function never returns a legacy "evidence/<relpath>" path
  *    (i.e. never a path that collides with a previously committed,
  *    reviewed evidence file).
@@ -55,7 +55,7 @@ const char *omega_evidence_run_id(void);
 /* HEAD sha of the working tree the current process is running from. */
 bool omega_evidence_run_commit(char out[41]);
 
-/* True if `git status --porcelain -- src spec tools Makefile` is non-empty. */
+/* True if the full relevant git tree (including untracked files) is dirty. */
 bool omega_evidence_tree_dirty(void);
 
 /* Reads physics.lock at the repo root; trims whitespace/newline. Returns
