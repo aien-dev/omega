@@ -21,10 +21,14 @@
  * the root's table, so a forged, stale, revoked, expired, wrong-subject,
  * wrong-resource or amplified reference fails.
  *
- * Scope: this is the Linux-hosted development root. On AIENOS the kernel
- * capability authority is the root (ADR 0014); authenticating WHICH principal
- * may ask for a fresh mint (AEGIS policy identity) is R7/R8 work.
+ * Scope: this is the Linux-hosted development root. It is not the permanent
+ * root and it is not R7. On AIENOS the kernel capability authority is the root
+ * (ADR 0014). This host root only refuses to treat the control socket as
+ * authority: mint, revoke, reclaim, epoch and clock each require a capability
+ * that this mint process itself handed out, carrying the matching right.
+ * Privileged rights cannot be delegated. Counter wrap fails closed.
  */
+
 #ifndef RX_CAPROOT_H
 #define RX_CAPROOT_H
 
@@ -42,6 +46,20 @@
 #define RX_RIGHT_WRITE        0x2u
 #define RX_RIGHT_EFFECT       0x4u
 #define RX_RIGHT_DELEGATE     0x8u
+/* Privileged rights. Never delegable. A root-issued cap may carry a subset of
+ * the presented authority's privileged rights, and never DELEGATE as well. */
+#define RX_RIGHT_MINT         0x10u
+#define RX_RIGHT_REVOKE       0x20u
+#define RX_RIGHT_RECLAIM      0x40u
+#define RX_RIGHT_EPOCH        0x80u
+#define RX_RIGHT_CLOCK        0x100u
+#define RX_RIGHT_PRIVILEGED   (RX_RIGHT_MINT | RX_RIGHT_REVOKE | RX_RIGHT_RECLAIM | \
+                               RX_RIGHT_EPOCH | RX_RIGHT_CLOCK)
+#define RX_RIGHT_KNOWN        (RX_RIGHT_READ | RX_RIGHT_WRITE | RX_RIGHT_EFFECT | \
+                               RX_RIGHT_DELEGATE | RX_RIGHT_PRIVILEGED)
+
+/* Resource id of the bootstrap authority office. Not a world object. */
+#define RX_CAP_RES_AUTHORITY  0ull
 
 /* Slot state */
 #define RX_CAP_FREE           0u
@@ -64,6 +82,9 @@
 #define RX_CAP_ERR_FULL           -12
 #define RX_CAP_ERR_IO             -13
 #define RX_CAP_ERR_STATE          -14
+#define RX_CAP_ERR_UNAUTHORIZED   -15
+#define RX_CAP_ERR_OVERFLOW       -16
+#define RX_CAP_ERR_EXHAUSTED      -17
 
 typedef struct {
     uint32_t cap_id;
@@ -101,11 +122,14 @@ typedef struct {
     int ro_fd;                  /* sealed memfd, kept for attack tests */
     pid_t root_pid;
     bool running;
+    RxCapRef office;            /* delivered once, at start; not in the table as a right */
 } RxCapRoot;
 
-/* Mint request. parent.cap_id == UINT32_MAX means a root-issued capability
- * (AEGIS policy decision); otherwise it is a delegation that may only
- * attenuate rights and must keep the parent's resource. */
+/* Mint request. parent.cap_id == UINT32_MAX means a root-issued capability.
+ * authority must be a capability this mint handed to this socket:
+ *   root-issued: authority carries MINT
+ *   delegation:  authority is the parent itself
+ * The socket is transport. Holding it does not mint anything. */
 typedef struct {
     uint32_t issuer;
     uint32_t subject;
@@ -113,18 +137,40 @@ typedef struct {
     uint32_t rights;
     uint64_t lease_ticks;       /* 0 = no lease */
     RxCapRef parent;
+    RxCapRef authority;
 } RxCapMint;
+
+/* Fail closed. A sum that would wrap is refused and *out is left unchanged. */
+static inline int rx_cap_add_u64(uint64_t a, uint64_t b, uint64_t *out) {
+    if (b > UINT64_MAX - a) return RX_CAP_ERR_OVERFLOW;
+    if (out) *out = a + b;
+    return RX_CAP_OK;
+}
+
+/* Match AIENOS: a slot whose generation is already UINT32_MAX is retired.
+ * The old handle is not revived by wrapping. */
+static inline int rx_cap_generation_advance(uint32_t generation, uint32_t *out) {
+    if (generation == UINT32_MAX) return RX_CAP_ERR_EXHAUSTED;
+    if (out) *out = generation + 1u;
+    return RX_CAP_OK;
+}
 
 int  rx_caproot_start(RxCapRoot *root);
 void rx_caproot_stop(RxCapRoot *root);
+RxCapRef rx_caproot_office(const RxCapRoot *root);
 
 int  rx_caproot_mint(RxCapRoot *root, const RxCapMint *req, RxCapRef *out);
-int  rx_caproot_revoke(RxCapRoot *root, RxCapRef ref);
+int  rx_caproot_revoke(RxCapRoot *root, RxCapRef authority, RxCapRef ref);
 /* Return a revoked slot to the free pool; its generation advances, so every
- * outstanding reference to the old occupant becomes stale. */
-int  rx_caproot_reclaim(RxCapRoot *root, uint32_t cap_id);
-int  rx_caproot_advance_clock(RxCapRoot *root, uint64_t ticks);
-int  rx_caproot_bump_epoch(RxCapRoot *root);
+ * outstanding reference to the old occupant becomes stale. Generation
+ * UINT32_MAX refuses and leaves the slot revoked. */
+int  rx_caproot_reclaim(RxCapRoot *root, RxCapRef authority, uint32_t cap_id);
+int  rx_caproot_advance_clock(RxCapRoot *root, RxCapRef authority, uint64_t ticks);
+int  rx_caproot_bump_epoch(RxCapRoot *root, RxCapRef authority);
+
+/* Copy one table entry if the reference generation matches. Does not grant
+ * rights. Used to record who issued a capability into a causal crumb. */
+int  rx_caproot_inspect(const RxCapRoot *root, RxCapRef ref, RxCapEntry *out);
 
 /* Validate a reference for (subject, resource, rights). Reads the root table
  * with a seqlock and walks the delegation chain; any revoked ancestor fails.

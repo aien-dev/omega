@@ -38,7 +38,7 @@
 
 /* ---- tiny check framework ----------------------------------------------- */
 
-#define MAX_TESTS 32
+#define MAX_TESTS 48
 typedef struct {
     const char *name;
     const char *invariants;
@@ -102,12 +102,25 @@ static int env_start(Env *e, uint32_t workers) {
     return 0;
 }
 
+static RxCapRef office_of(const RxCapRoot *root) { return rx_caproot_office(root); }
+
 static RxCapRef mint(Env *e, uint32_t subject, uint64_t resource, uint32_t rights) {
-    RxCapMint m = { ISSUER_AEGIS_POLICY, subject, resource, rights, 0, { UINT32_MAX, 0 } };
+    RxCapMint m;
+    memset(&m, 0, sizeof(m));
+    m.issuer = ISSUER_AEGIS_POLICY;
+    m.subject = subject;
+    m.resource = resource;
+    m.rights = rights;
+    m.parent = (RxCapRef){ UINT32_MAX, 0 };
+    m.authority = office_of(&e->root);
     RxCapRef r = { UINT32_MAX, 0 };
     int rc = rx_caproot_mint(&e->root, &m, &r);
     if (rc != RX_CAP_OK) fprintf(stderr, "mint failed: %s\n", rx_cap_strerror(rc));
     return r;
+}
+
+static int revoke_cap(RxCapRoot *root, RxCapRef ref) {
+    return rx_caproot_revoke(root, office_of(root), ref);
 }
 
 static RxObjRef mkobj(Env *e, uint64_t resource, uint64_t v0) {
@@ -779,20 +792,28 @@ static void t_capability_attacks(void) {
     cases[nc++] = (typeof(cases[0])){ "wrong_resource", mint(&e, SUBJ_AIEN, RES_PLAN, RX_RIGHT_WRITE), SUBJ_AIEN, RX_CAP_ERR_RESOURCE };
     cases[nc++] = (typeof(cases[0])){ "insufficient_rights", mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_READ), SUBJ_AIEN, RX_CAP_ERR_RIGHTS };
     RxCapRef rev = mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_WRITE);
-    rx_caproot_revoke(&e.root, rev);
+    revoke_cap(&e.root, rev);
     cases[nc++] = (typeof(cases[0])){ "revoked", rev, SUBJ_AIEN, RX_CAP_ERR_REVOKED };
     /* Generation replay: revoke, reclaim, the slot is re-minted to someone else. */
     RxCapRef old = mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_WRITE);
-    rx_caproot_revoke(&e.root, old);
-    rx_caproot_reclaim(&e.root, old.cap_id);
+    revoke_cap(&e.root, old);
+    rx_caproot_reclaim(&e.root, office_of(&e.root), old.cap_id);
     RxCapRef reused = mint(&e, SUBJ_OTHER, RES_BELIEF, RX_RIGHT_WRITE);
     CHECK(reused.cap_id == old.cap_id && reused.generation == old.generation + 1,
           "reclaimed slot was not reused with a new generation");
     cases[nc++] = (typeof(cases[0])){ "generation_replay", old, SUBJ_AIEN, RX_CAP_ERR_STALE_GEN };
-    RxCapMint lm = { ISSUER_AEGIS_POLICY, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_WRITE, 5, { UINT32_MAX, 0 } };
+    RxCapMint lm;
+    memset(&lm, 0, sizeof(lm));
+    lm.issuer = ISSUER_AEGIS_POLICY;
+    lm.subject = SUBJ_AIEN;
+    lm.resource = RES_BELIEF;
+    lm.rights = RX_RIGHT_WRITE;
+    lm.lease_ticks = 5;
+    lm.parent = (RxCapRef){ UINT32_MAX, 0 };
+    lm.authority = office_of(&e.root);
     RxCapRef leased;
     rx_caproot_mint(&e.root, &lm, &leased);
-    rx_caproot_advance_clock(&e.root, 10);
+    rx_caproot_advance_clock(&e.root, office_of(&e.root), 10);
     cases[nc++] = (typeof(cases[0])){ "expired_lease", leased, SUBJ_AIEN, RX_CAP_ERR_EXPIRED };
 
     for (int i = 0; i < nc; i++) {
@@ -807,18 +828,32 @@ static void t_capability_attacks(void) {
 
     /* Delegation may only attenuate. */
     RxCapRef parent = mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_DELEGATE);
-    RxCapMint amp = { SUBJ_AIEN, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_WRITE, 0, parent };
+    RxCapMint amp;
+    memset(&amp, 0, sizeof(amp));
+    amp.issuer = SUBJ_AIEN;
+    amp.subject = SUBJ_OMEGA;
+    amp.resource = RES_BELIEF;
+    amp.rights = RX_RIGHT_READ | RX_RIGHT_WRITE;
+    amp.parent = parent;
+    amp.authority = parent;
     CHECK(rx_caproot_mint(&e.root, &amp, NULL) == RX_CAP_ERR_AMPLIFY, "rights amplification accepted");
-    RxCapMint other = { SUBJ_AIEN, SUBJ_OMEGA, RES_PLAN, RX_RIGHT_READ, 0, parent };
+    RxCapMint other = amp;
+    other.resource = RES_PLAN;
+    other.rights = RX_RIGHT_READ;
     CHECK(rx_caproot_mint(&e.root, &other, NULL) == RX_CAP_ERR_RESOURCE, "resource widening accepted");
-    RxCapMint nd = { SUBJ_AIEN, SUBJ_OMEGA, RES_SENSOR, RX_RIGHT_READ, 0, rs };
+    RxCapMint nd = amp;
+    nd.resource = RES_SENSOR;
+    nd.rights = RX_RIGHT_READ;
+    nd.parent = rs;
+    nd.authority = rs;
     CHECK(rx_caproot_mint(&e.root, &nd, NULL) == RX_CAP_ERR_NOT_DELEGABLE, "non-delegable parent delegated");
-    RxCapMint ok = { SUBJ_AIEN, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, 0, parent };
+    RxCapMint ok = amp;
+    ok.rights = RX_RIGHT_READ;
     RxCapRef child;
     CHECK(rx_caproot_mint(&e.root, &ok, &child) == RX_CAP_OK, "valid attenuation refused");
     CHECK(rx_caproot_validate(&e.root, child, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, NULL) == RX_CAP_OK,
           "delegated child invalid");
-    rx_caproot_revoke(&e.root, parent);
+    revoke_cap(&e.root, parent);
     CHECK(rx_caproot_validate(&e.root, child, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, NULL) == RX_CAP_ERR_CHAIN,
           "child survived parent revocation");
 
@@ -826,7 +861,7 @@ static void t_capability_attacks(void) {
     CHECK(stimulus(&e, rs, sensor, F_TEMP, 77) == RX_ERR_AUTHORITY, "external write with wrong cap accepted");
 
     /* Epoch change invalidates everything minted before it. */
-    rx_caproot_bump_epoch(&e.root);
+    rx_caproot_bump_epoch(&e.root, office_of(&e.root));
     CHECK(rx_caproot_validate(&e.root, rs, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ, NULL) == RX_CAP_ERR_EPOCH,
           "pre-epoch capability still valid");
     audit_and_close(&e);
@@ -860,7 +895,7 @@ static void t_revoke_during_run(void) {
     CHECK(rx_world_add_reaction(&e.w, &d, &id) == RX_OK, "add");
     stimulus(&e, ext, a.x, 0, 41);
     sleep_ms(20);
-    CHECK(rx_caproot_revoke(&e.root, w) == RX_CAP_OK, "revoke");
+    CHECK(revoke_cap(&e.root, w) == RX_CAP_OK, "revoke");
     rx_world_wait_quiescent(&e.w, 5000);
     CHECK(field(&e, a.y, 0) == 0, "revoked authority executed");
     CHECK(e.w.stats.rejected == 1, "publication not rejected");
@@ -929,6 +964,10 @@ static void t_crumb_tamper_detected(void) {
     CHECK(rx_world_verify_crumbs(&e->w, NULL) != 0, "rewritten authority went undetected");
     k->caps[0].cap_id ^= 1;
     CHECK(rx_world_verify_crumbs(&e->w, NULL) == 0, "restored record fails verification");
+    k->cap_issuer[0] ^= 1;              /* rewrite who issued that authority */
+    CHECK(rx_world_verify_crumbs(&e->w, NULL) != 0, "rewritten issuer went undetected");
+    k->cap_issuer[0] ^= 1;
+    CHECK(rx_world_verify_crumbs(&e->w, NULL) == 0, "restored issuer fails verification");
     audit_and_close(e);
 }
 
@@ -957,6 +996,540 @@ static void t_schedule_independence(void) {
         }
     CHECK(differ == 0, "%d of %d runs committed a different world", differ, runs);
     printf("    %d runs across 1..8 workers, identical committed world\n", runs);
+}
+
+/* ---- authority hardening (host). Not R7. -------------------------------- */
+
+static RxCapMint delegated(RxCapRef parent, uint32_t subject, uint64_t resource, uint32_t rights) {
+    RxCapMint m;
+    memset(&m, 0, sizeof(m));
+    m.issuer = ISSUER_AEGIS_POLICY;
+    m.subject = subject;
+    m.resource = resource;
+    m.rights = rights;
+    m.parent = parent;
+    m.authority = parent;
+    return m;
+}
+
+static void t_authority_office(void) {
+    begin("authority_office_required", "I3");
+    RxCapRoot root;
+    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "root");
+    RxCapRef office = office_of(&root);
+    CHECK(office.cap_id != UINT32_MAX, "office was not delivered");
+
+    RxCapMint bare;
+    memset(&bare, 0, sizeof(bare));
+    bare.issuer = ISSUER_AEGIS_POLICY;
+    bare.subject = SUBJ_AIEN;
+    bare.resource = RES_SENSOR;
+    bare.rights = RX_RIGHT_READ;
+    bare.parent = (RxCapRef){ UINT32_MAX, 0 };
+    bare.authority = (RxCapRef){ UINT32_MAX, 0 };
+    CHECK(rx_caproot_mint(&root, &bare, NULL) == RX_CAP_ERR_UNAUTHORIZED,
+          "socket holder minted without a delivered authority");
+
+    RxCapMint ok = bare;
+    ok.authority = office;
+    RxCapRef world;
+    CHECK(rx_caproot_mint(&root, &ok, &world) == RX_CAP_OK, "office mint refused");
+    CHECK(rx_caproot_revoke(&root, world, world) == RX_CAP_ERR_UNAUTHORIZED,
+          "ordinary capability revoked");
+    CHECK(rx_caproot_advance_clock(&root, world, 1) == RX_CAP_ERR_UNAUTHORIZED,
+          "ordinary capability advanced the clock");
+    CHECK(rx_caproot_bump_epoch(&root, world) == RX_CAP_ERR_UNAUTHORIZED,
+          "ordinary capability changed the epoch");
+    CHECK(rx_caproot_reclaim(&root, world, world.cap_id) == RX_CAP_ERR_UNAUTHORIZED,
+          "ordinary capability reclaimed a slot");
+
+    RxCapMint both = ok;
+    both.rights = RX_RIGHT_REVOKE | RX_RIGHT_DELEGATE;
+    CHECK(rx_caproot_mint(&root, &both, NULL) == RX_CAP_ERR_NOT_DELEGABLE,
+          "privileged right combined with delegate");
+    RxCapMint revoker = ok;
+    revoker.rights = RX_RIGHT_REVOKE;
+    revoker.resource = RX_CAP_RES_AUTHORITY;
+    RxCapRef revcap;
+    CHECK(rx_caproot_mint(&root, &revoker, &revcap) == RX_CAP_OK, "limited revoker refused");
+    RxCapMint pass = delegated(revcap, SUBJ_OMEGA, RX_CAP_RES_AUTHORITY, RX_RIGHT_REVOKE);
+    CHECK(rx_caproot_mint(&root, &pass, NULL) == RX_CAP_ERR_NOT_DELEGABLE,
+          "privileged right was delegated");
+    CHECK(rx_caproot_revoke(&root, revcap, world) == RX_CAP_OK, "limited revoker could not revoke");
+
+    /* Office MINT must not attenuate an unrelated capability. */
+    RxCapRef parent = office;
+    (void)parent;
+    RxCapMint sneak = bare;
+    sneak.authority = office;
+    sneak.parent = world; /* revoked, and not the office */
+    sneak.rights = RX_RIGHT_READ;
+    CHECK(rx_caproot_mint(&root, &sneak, NULL) != RX_CAP_OK,
+          "office minted a delegation of a capability it does not hold");
+
+    RxCapRef cur;
+    RxCapMint base = ok;
+    base.rights = RX_RIGHT_READ | RX_RIGHT_DELEGATE;
+    base.resource = RES_BELIEF;
+    CHECK(rx_caproot_mint(&root, &base, &cur) == RX_CAP_OK, "delegable parent refused");
+    int depth_ok = 0;
+    for (int i = 0; i < 8; i++) {
+        RxCapMint step = delegated(cur, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_DELEGATE);
+        RxCapRef child;
+        if (rx_caproot_mint(&root, &step, &child) != RX_CAP_OK) break;
+        cur = child;
+        depth_ok++;
+    }
+    CHECK(depth_ok == 8, "delegation depth stopped early (%d)", depth_ok);
+    RxCapMint too_deep = delegated(cur, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_DELEGATE);
+    CHECK(rx_caproot_mint(&root, &too_deep, NULL) == RX_CAP_ERR_CHAIN,
+          "delegation deeper than the limit was accepted");
+    rx_caproot_stop(&root);
+}
+
+static void t_counter_fail_closed(void) {
+    begin("counters_fail_closed", "I3");
+    uint32_t gen = 0;
+    CHECK(rx_cap_generation_advance(UINT32_MAX, &gen) == RX_CAP_ERR_EXHAUSTED,
+          "generation wrap was accepted");
+    CHECK(gen == 0, "exhausted generation was written");
+    CHECK(rx_cap_generation_advance(UINT32_MAX - 1, &gen) == RX_CAP_OK, "last generation refused");
+    CHECK(gen == UINT32_MAX, "last generation value");
+    uint64_t sum = 1;
+    CHECK(rx_cap_add_u64(UINT64_MAX, 1, &sum) == RX_CAP_ERR_OVERFLOW, "u64 wrap was accepted");
+    CHECK(sum == 1, "overflow wrote a sum");
+    CHECK(rx_cap_add_u64(UINT64_MAX - 5, 5, &sum) == RX_CAP_OK, "exact top of range refused");
+    CHECK(sum == UINT64_MAX, "exact sum");
+    CHECK(rx_cap_add_u64(UINT64_MAX - 5, 6, &sum) == RX_CAP_ERR_OVERFLOW, "one past the top was accepted");
+
+    RxCapRoot root;
+    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "root");
+    RxCapRef office = office_of(&root);
+    RxCapMint huge;
+    memset(&huge, 0, sizeof(huge));
+    huge.issuer = ISSUER_AEGIS_POLICY;
+    huge.subject = SUBJ_AIEN;
+    huge.resource = RES_SCRATCH;
+    huge.rights = RX_RIGHT_READ;
+    huge.parent = (RxCapRef){ UINT32_MAX, 0 };
+    huge.authority = office;
+    int filled = 0;
+    for (uint32_t i = 0; i < RX_CAP_MAX + 2; i++) {
+        int rc = rx_caproot_mint(&root, &huge, NULL);
+        if (rc == RX_CAP_OK) filled++;
+        else {
+            CHECK(rc == RX_CAP_ERR_FULL, "table exhaustion returned %s", rx_cap_strerror(rc));
+            break;
+        }
+    }
+    CHECK(filled == (int)RX_CAP_MAX - 1, "filled %d slots, want %u", filled, RX_CAP_MAX - 1);
+    rx_caproot_stop(&root);
+
+    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "clock root");
+    office = office_of(&root);
+    huge.authority = office;
+    CHECK(rx_caproot_advance_clock(&root, office, UINT64_MAX - 8) == RX_CAP_OK, "clock near the top");
+    CHECK(rx_caproot_advance_clock(&root, office, 100) == RX_CAP_ERR_OVERFLOW, "clock wrap was accepted");
+    huge.lease_ticks = 100;
+    huge.resource = RES_SENSOR;
+    CHECK(rx_caproot_mint(&root, &huge, NULL) == RX_CAP_ERR_OVERFLOW, "lease wrap was accepted");
+    huge.lease_ticks = 1;
+    RxCapRef leased;
+    CHECK(rx_caproot_mint(&root, &huge, &leased) == RX_CAP_OK, "in-range lease refused");
+    CHECK(rx_caproot_bump_epoch(&root, office) == RX_CAP_OK, "epoch step refused");
+    CHECK(rx_caproot_validate(&root, leased, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ, NULL) == RX_CAP_ERR_EPOCH,
+          "pre-epoch lease survived");
+    CHECK(rx_caproot_bump_epoch(&root, office) == RX_CAP_ERR_EPOCH,
+          "stale office advanced the epoch again");
+    rx_caproot_stop(&root);
+}
+
+static void t_root_death_restart(void) {
+    begin("root_death_and_restart", "I3");
+    RxCapRoot root;
+    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "root");
+    RxCapRef old_office = office_of(&root);
+    RxCapMint m;
+    memset(&m, 0, sizeof(m));
+    m.issuer = ISSUER_AEGIS_POLICY;
+    m.subject = SUBJ_AIEN;
+    m.resource = RES_SENSOR;
+    m.rights = RX_RIGHT_READ;
+    m.parent = (RxCapRef){ UINT32_MAX, 0 };
+    m.authority = old_office;
+    RxCapRef old;
+    CHECK(rx_caproot_mint(&root, &m, &old) == RX_CAP_OK, "mint");
+    pid_t pid = root.root_pid;
+    CHECK(kill(pid, SIGKILL) == 0, "could not stop the mint process");
+    int st = 0;
+    waitpid(pid, &st, 0);
+    CHECK(rx_caproot_mint(&root, &m, NULL) == RX_CAP_ERR_IO, "dead root still minted");
+    rx_caproot_stop(&root);
+    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "restart");
+    CHECK(rx_caproot_validate(&root, old, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ, NULL) == RX_CAP_ERR_STALE_GEN,
+          "capability from the dead root validated on the new one");
+    CHECK(rx_caproot_validate(&root, old_office, 0, RX_CAP_RES_AUTHORITY, RX_RIGHT_MINT, NULL) != RX_CAP_OK,
+          "old office still authorizes the new root");
+    void *writable = mmap(NULL, sizeof(RxCapTable), PROT_READ | PROT_WRITE, MAP_SHARED, root.ro_fd, 0);
+    CHECK(writable == MAP_FAILED, "restarted root handed out a writable table");
+    if (writable != MAP_FAILED) munmap(writable, sizeof(RxCapTable));
+    rx_caproot_stop(&root);
+}
+
+/* ---- R5 resource admission (host) --------------------------------------- */
+
+static volatile int g_hold = 0;
+
+static int fn_hold(RxCtx *c) {
+    (void)c;
+    while (g_hold) sleep_ms(1);
+    return 0;
+}
+
+static int fn_noop(RxCtx *c) {
+    (void)c;
+    return 0;
+}
+
+static void t_resource_admission(void) {
+    begin("resource_admission_1000", "R5");
+    Env *e = calloc(1, sizeof(*e));
+    CHECK(e != NULL, "allocation");
+    if (!e) return;
+    CHECK(env_start(e, 2) == 0, "setup");
+    RxResourceBudget b;
+    memset(&b, 0, sizeof(b));
+    b.slots = 4;
+    b.memory_bytes = 40;
+    b.offered_accel = 0x1u;
+    rx_world_set_resources(&e->w, &b);
+
+    RxObjRef sensor = mkobj(e, RES_SENSOR, 0);
+    RxCapRef ext = mint(e, SUBJ_EXTERNAL, RES_SENSOR, RX_RIGHT_WRITE);
+    RxCapRef rd = mint(e, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ);
+    g_hold = 1;
+    for (int i = 0; i < 4; i++) {
+        RxReactionDesc d;
+        desc_init(&d, "hold.bg", RX_FACULTY_AIEN, SUBJ_AIEN, fn_hold, NULL);
+        d.priority = RX_PRIO_BACKGROUND;
+        add_trigger(&d, sensor, RX_FIELD(0));
+        add_cap(&d, rd, RES_SENSOR, RX_RIGHT_READ);
+        CHECK(rx_world_add_reaction(&e->w, &d, NULL) == RX_OK, "bg hold");
+    }
+    for (int i = 0; i < 4; i++) {
+        RxReactionDesc d;
+        desc_init(&d, "hold.crit", RX_FACULTY_AIEN, SUBJ_AIEN, fn_hold, NULL);
+        d.priority = RX_PRIO_CRITICAL;
+        add_trigger(&d, sensor, RX_FIELD(0));
+        add_cap(&d, rd, RES_SENSOR, RX_RIGHT_READ);
+        CHECK(rx_world_add_reaction(&e->w, &d, NULL) == RX_OK, "crit hold");
+    }
+    stimulus(e, ext, sensor, 0, 1);
+    int saw = 0;
+    for (int n = 0; n < 200; n++) {
+        int crit = 0, bg = 0;
+        for (uint32_t i = 0; i < e->w.n_reactions; i++) {
+            RxState s = e->w.reactions[i].state;
+            if (e->w.reactions[i].desc.priority == RX_PRIO_CRITICAL &&
+                (s == RX_RUNNING || s == RX_READY || s == RX_PUBLISHING))
+                crit++;
+            if (e->w.reactions[i].desc.priority == RX_PRIO_BACKGROUND &&
+                s == RX_BLOCKED_RESOURCE)
+                bg++;
+        }
+        if (crit == 4 && bg == 4) { saw = 1; break; }
+        sleep_ms(5);
+    }
+    g_hold = 0;
+    CHECK(saw, "critical work did not take the scarce slots ahead of background");
+    CHECK(rx_world_wait_quiescent(&e->w, 5000) == RX_OK, "holders did not finish");
+
+    uint32_t base = e->w.n_reactions;
+    for (uint32_t i = 0; i < 1000; i++) {
+        RxReactionDesc d;
+        desc_init(&d, "crowd", RX_FACULTY_AIEN, SUBJ_AIEN, fn_noop, NULL);
+        d.priority = i % RX_PRIORITY_CLASSES;
+        d.need.memory_bytes = 10;
+        add_trigger(&d, sensor, RX_FIELD(0));
+        add_cap(&d, rd, RES_SENSOR, RX_RIGHT_READ);
+        CHECK(rx_world_add_reaction(&e->w, &d, NULL) == RX_OK, "crowd %u", i);
+    }
+    RxReactionDesc bad;
+    desc_init(&bad, "impossible", RX_FACULTY_AIEN, SUBJ_AIEN, fn_noop, NULL);
+    bad.priority = RX_PRIO_CRITICAL;
+    bad.need.memory_bytes = 10;
+    bad.need.accelerator_features = 0x80000000u;
+    add_trigger(&bad, sensor, RX_FIELD(0));
+    add_cap(&bad, rd, RES_SENSOR, RX_RIGHT_READ);
+    CHECK(rx_world_add_reaction(&e->w, &bad, NULL) == RX_OK, "impossible");
+    e->w.peak_slots = 0;
+    e->w.peak_blocked = 0;
+    stimulus(e, ext, sensor, 0, 2);
+    CHECK(rx_world_wait_quiescent(&e->w, 10000) == RX_OK, "crowd did not finish");
+    CHECK(e->w.peak_slots <= 4, "admitted %u reactions into 4 slots", e->w.peak_slots);
+    CHECK(e->w.peak_blocked >= 996, "only %u waited for resources", e->w.peak_blocked);
+    uint32_t ran = 0;
+    for (uint32_t i = base; i < base + 1000; i++) {
+        CHECK(e->w.reactions[i].activations == 1, "crowd reaction %u ran %llu",
+              i, (unsigned long long)e->w.reactions[i].activations);
+        ran += (uint32_t)e->w.reactions[i].activations;
+    }
+    CHECK(ran == 1000, "ran %u of 1000", ran);
+    CHECK(e->w.reactions[base + 1000].activations == 0, "unsupported accelerator ran");
+    CHECK(e->w.reactions[base + 1000].state == RX_BLOCKED_RESOURCE, "impossible reaction was not blocked");
+    g_illegal_transitions += e->w.stats.illegal_transitions;
+    rx_world_destroy(&e->w);
+    rx_caproot_stop(&e->root);
+    free(e);
+}
+
+typedef struct { RxObjRef obj; int left; uint32_t prio; } Spin;
+
+static uint32_t g_log[64];
+static uint32_t g_nlog;
+
+static int fn_spin(RxCtx *c) {
+    Spin *s = c->user;
+    if (g_nlog < 64) g_log[g_nlog++] = s->prio;
+    if (s->left > 0) {
+        s->left--;
+        uint64_t cur = in_of(c, s->obj)->field[0];
+        c->out[c->n_out++] = (RxMutation){ s->obj, 0, cur + 1 };
+    }
+    return 0;
+}
+
+static int first_log(uint32_t prio) {
+    for (uint32_t i = 0; i < g_nlog; i++)
+        if (g_log[i] == prio) return (int)i;
+    return -1;
+}
+
+static void t_background_not_starved(void) {
+    begin("background_not_starved", "R5");
+    Env e;
+    CHECK(env_start(&e, 1) == 0, "setup");
+    RxResourceBudget b;
+    memset(&b, 0, sizeof(b));
+    b.slots = 1;
+    b.starvation_bound = 4;
+    rx_world_set_resources(&e.w, &b);
+    static Spin crit, bg;
+    crit.obj = mkobj(&e, RES_TICK, 0);
+    bg.obj = crit.obj;
+    crit.left = 12;
+    bg.left = 0;
+    crit.prio = RX_PRIO_CRITICAL;
+    bg.prio = RX_PRIO_BACKGROUND;
+    RxCapRef ext = mint(&e, SUBJ_EXTERNAL, RES_TICK, RX_RIGHT_WRITE);
+    RxCapRef rd = mint(&e, SUBJ_AIEN, RES_TICK, RX_RIGHT_READ);
+    RxCapRef wr = mint(&e, SUBJ_AIEN, RES_TICK, RX_RIGHT_WRITE);
+    RxReactionDesc d;
+    desc_init(&d, "spin.bg", RX_FACULTY_AIEN, SUBJ_AIEN, fn_spin, &bg);
+    d.priority = RX_PRIO_BACKGROUND;
+    add_trigger(&d, crit.obj, RX_FIELD(0));
+    add_cap(&d, rd, RES_TICK, RX_RIGHT_READ);
+    add_cap(&d, wr, RES_TICK, RX_RIGHT_WRITE);
+    CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_OK, "bg");
+    desc_init(&d, "spin.crit", RX_FACULTY_AIEN, SUBJ_AIEN, fn_spin, &crit);
+    d.priority = RX_PRIO_CRITICAL;
+    add_trigger(&d, crit.obj, RX_FIELD(0));
+    add_write(&d, crit.obj, RX_FIELD(0));
+    add_cap(&d, rd, RES_TICK, RX_RIGHT_READ);
+    add_cap(&d, wr, RES_TICK, RX_RIGHT_WRITE);
+    CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_OK, "crit");
+    g_nlog = 0;
+    stimulus(&e, ext, crit.obj, 0, 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "spin did not finish");
+    int at = first_log(RX_PRIO_BACKGROUND);
+    CHECK(at >= 0, "background never ran");
+    CHECK(at <= 5, "background waited %d higher admissions (bound 4)", at);
+    CHECK(at > 0, "background jumped the critical work");
+    audit_and_close(&e);
+}
+
+/* ---- R6 stability (host) ------------------------------------------------ */
+
+static int fn_flip(RxCtx *c) {
+    RxObjRef *o = c->user;
+    uint64_t v = in_of(c, *o)->field[0];
+    c->out[c->n_out++] = (RxMutation){ *o, 0, v ^ 1ull };
+    return 0;
+}
+
+static int fn_down(RxCtx *c) {
+    RxObjRef *o = c->user;
+    uint64_t v = in_of(c, *o)->field[0];
+    if (v > 0) c->out[c->n_out++] = (RxMutation){ *o, 0, v - 1 };
+    return 0;
+}
+
+static int fn_up_to(RxCtx *c) {
+    RxObjRef *o = c->user;
+    uint64_t v = in_of(c, *o)->field[0];
+    if (v < 5) c->out[c->n_out++] = (RxMutation){ *o, 0, v + 1 };
+    return 0;
+}
+
+static int fn_const(RxCtx *c) {
+    RxObjRef *o = c->user;
+    c->out[c->n_out++] = (RxMutation){ *o, 0, 1 };
+    return 0;
+}
+
+static void t_stability(void) {
+    begin("stability_containment", "R6");
+    Env e;
+    CHECK(env_start(&e, 1) == 0, "setup");
+    RxStabilityBudget s;
+    memset(&s, 0, sizeof(s));
+    s.fanout_limit = 5;
+    s.oscillation_limit = 4;
+    s.livelock_limit = 3;
+    rx_world_set_stability(&e.w, &s);
+
+    RxObjRef fan = mkobj(&e, RES_FAN_SRC, 0);
+    RxCapRef ext = mint(&e, SUBJ_EXTERNAL, RES_FAN_SRC, RX_RIGHT_WRITE);
+    RxCapRef rd = mint(&e, SUBJ_AIEN, RES_FAN_SRC, RX_RIGHT_READ);
+    uint32_t fan_ids[40];
+    for (int i = 0; i < 40; i++) {
+        RxReactionDesc d;
+        desc_init(&d, "fan.bomb", RX_FACULTY_AIEN, SUBJ_AIEN, fn_noop, NULL);
+        d.priority = (uint32_t)(i % RX_PRIORITY_CLASSES);
+        add_trigger(&d, fan, RX_FIELD(0));
+        add_cap(&d, rd, RES_FAN_SRC, RX_RIGHT_READ);
+        CHECK(rx_world_add_reaction(&e.w, &d, &fan_ids[i]) == RX_OK, "fan");
+    }
+    stimulus(&e, ext, fan, 0, 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "fanout did not settle");
+    uint32_t fan_ran = 0, fan_crit = 0;
+    for (int i = 0; i < 40; i++) {
+        fan_ran += (uint32_t)e.w.reactions[fan_ids[i]].activations;
+        if (e.w.reactions[fan_ids[i]].desc.priority == RX_PRIO_CRITICAL)
+            fan_crit += (uint32_t)e.w.reactions[fan_ids[i]].activations;
+    }
+    CHECK(fan_ran == 5, "fanout ran %u (want 5)", fan_ran);
+    CHECK(fan_crit == 5, "fanout did not keep the highest class (%u)", fan_crit);
+    CHECK(e.w.stats.suppressed_wakes >= 35, "fanout suppression %llu",
+          (unsigned long long)e.w.stats.suppressed_wakes);
+
+    RxObjRef flip = mkobj(&e, RES_PAIR, 0);
+    RxCapRef ext_f = mint(&e, SUBJ_EXTERNAL, RES_PAIR, RX_RIGHT_WRITE);
+    RxCapRef rd_f = mint(&e, SUBJ_AIEN, RES_PAIR, RX_RIGHT_READ);
+    RxCapRef wr_f = mint(&e, SUBJ_AIEN, RES_PAIR, RX_RIGHT_WRITE);
+    static RxObjRef flip_o, down_o, up_o;
+    flip_o = flip;
+    RxReactionDesc d;
+    desc_init(&d, "osc.flip", RX_FACULTY_AIEN, SUBJ_AIEN, fn_flip, &flip_o);
+    add_trigger(&d, flip, RX_FIELD(0));
+    add_write(&d, flip, RX_FIELD(0));
+    add_cap(&d, rd_f, RES_PAIR, RX_RIGHT_READ);
+    add_cap(&d, wr_f, RES_PAIR, RX_RIGHT_WRITE);
+    uint32_t flip_id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &flip_id) == RX_OK, "flip");
+    stimulus(&e, ext_f, flip, 0, 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "oscillation did not settle");
+    uint64_t flip_acts = e.w.reactions[flip_id].activations;
+    CHECK(e.w.reactions[flip_id].quarantined, "oscillation was not quarantined");
+    CHECK(flip_acts > 0 && flip_acts < 30, "oscillation ran %llu times",
+          (unsigned long long)flip_acts);
+    stimulus(&e, ext_f, flip, 0, field(&e, flip, 0) ^ 1ull);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "lift did not settle");
+    CHECK(e.w.reactions[flip_id].activations > flip_acts, "external cause did not resume the reaction");
+
+    down_o = mkobj(&e, RES_CHECK, 0);
+    RxCapRef ext_d = mint(&e, SUBJ_EXTERNAL, RES_CHECK, RX_RIGHT_WRITE);
+    RxCapRef rd_d = mint(&e, SUBJ_AIEN, RES_CHECK, RX_RIGHT_READ);
+    RxCapRef wr_d = mint(&e, SUBJ_AIEN, RES_CHECK, RX_RIGHT_WRITE);
+    desc_init(&d, "converge", RX_FACULTY_AIEN, SUBJ_AIEN, fn_down, &down_o);
+    add_trigger(&d, down_o, RX_FIELD(0));
+    add_write(&d, down_o, RX_FIELD(0));
+    add_cap(&d, rd_d, RES_CHECK, RX_RIGHT_READ);
+    add_cap(&d, wr_d, RES_CHECK, RX_RIGHT_WRITE);
+    uint32_t down_id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &down_id) == RX_OK, "down");
+    stimulus(&e, ext_d, down_o, 0, 8);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "convergent loop did not settle");
+    CHECK(field(&e, down_o, 0) == 0, "convergent loop did not reach the fixed point");
+    CHECK(!e.w.reactions[down_id].quarantined, "convergent loop was quarantined");
+
+    up_o = mkobj(&e, RES_SCRATCH, 0);
+    RxCapRef ext_u = mint(&e, SUBJ_EXTERNAL, RES_SCRATCH, RX_RIGHT_WRITE);
+    RxCapRef rd_u = mint(&e, SUBJ_AIEN, RES_SCRATCH, RX_RIGHT_READ);
+    RxCapRef wr_u = mint(&e, SUBJ_AIEN, RES_SCRATCH, RX_RIGHT_WRITE);
+    desc_init(&d, "periodic", RX_FACULTY_AIEN, SUBJ_AIEN, fn_up_to, &up_o);
+    add_trigger(&d, up_o, RX_FIELD(0));
+    add_write(&d, up_o, RX_FIELD(0));
+    add_cap(&d, rd_u, RES_SCRATCH, RX_RIGHT_READ);
+    add_cap(&d, wr_u, RES_SCRATCH, RX_RIGHT_WRITE);
+    uint32_t up_id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &up_id) == RX_OK, "up");
+    /* activation budget is 6; counting to 5 must still finish */
+    stimulus(&e, ext_u, up_o, 0, 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "periodic loop did not settle");
+    CHECK(field(&e, up_o, 0) == 5, "periodic loop stopped early at %llu",
+          (unsigned long long)field(&e, up_o, 0));
+    CHECK(!e.w.reactions[up_id].quarantined, "periodic loop was quarantined");
+
+    RxObjRef bell = mkobj(&e, RES_RISK, 0);
+    RxObjRef sink = mkobj(&e, RES_PLAN, 0);
+    RxCapRef ext_b = mint(&e, SUBJ_EXTERNAL, RES_RISK, RX_RIGHT_WRITE);
+    RxCapRef rd_b = mint(&e, SUBJ_AIEN, RES_RISK, RX_RIGHT_READ);
+    RxCapRef wr_b = mint(&e, SUBJ_AIEN, RES_RISK, RX_RIGHT_WRITE);
+    RxCapRef rd_p = mint(&e, SUBJ_AIEN, RES_PLAN, RX_RIGHT_READ);
+    RxCapRef wr_p = mint(&e, SUBJ_AIEN, RES_PLAN, RX_RIGHT_WRITE);
+    static RxObjRef sink_o;
+    sink_o = sink;
+    desc_init(&d, "livelock.spin", RX_FACULTY_AIEN, SUBJ_AIEN, fn_const, &sink_o);
+    add_trigger(&d, bell, RX_FIELD(0));
+    add_write(&d, sink, RX_FIELD(0));
+    add_cap(&d, rd_b, RES_RISK, RX_RIGHT_READ);
+    add_cap(&d, wr_p, RES_PLAN, RX_RIGHT_WRITE);
+    uint32_t spin_id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &spin_id) == RX_OK, "spin");
+    static Spin metro;
+    metro.obj = bell;
+    metro.left = 10;
+    metro.prio = RX_PRIO_FOREGROUND;
+    desc_init(&d, "livelock.metro", RX_FACULTY_OMEGA, SUBJ_AIEN, fn_spin, &metro);
+    d.priority = RX_PRIO_FOREGROUND;
+    add_trigger(&d, bell, RX_FIELD(0));
+    add_write(&d, bell, RX_FIELD(0));
+    add_cap(&d, rd_b, RES_RISK, RX_RIGHT_READ);
+    add_cap(&d, wr_b, RES_RISK, RX_RIGHT_WRITE);
+    CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_OK, "metro");
+    (void)rd_p;
+    stimulus(&e, ext_b, bell, 0, 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "livelock did not settle");
+    CHECK(e.w.reactions[spin_id].quarantined, "noop loop was not quarantined");
+    uint64_t spin_acts = e.w.reactions[spin_id].activations;
+    CHECK(spin_acts > 0 && spin_acts <= 4, "noop loop ran %llu times",
+          (unsigned long long)spin_acts);
+    CHECK(e.w.stats.livelock_trips >= 1, "livelock was not counted");
+    CHECK(e.w.stats.useful_commits > 0, "useful work was not counted separately from churn");
+
+    s.activation_budget = 4;
+    rx_world_set_stability(&e.w, &s);
+    static Spin bounded;
+    bounded.obj = mkobj(&e, RES_SENSOR, 0);
+    bounded.left = 30;
+    bounded.prio = RX_PRIO_FOREGROUND;
+    RxCapRef ext_s = mint(&e, SUBJ_EXTERNAL, RES_SENSOR, RX_RIGHT_WRITE);
+    RxCapRef rd_s = mint(&e, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ);
+    RxCapRef wr_s = mint(&e, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_WRITE);
+    desc_init(&d, "budget", RX_FACULTY_AIEN, SUBJ_AIEN, fn_spin, &bounded);
+    add_trigger(&d, bounded.obj, RX_FIELD(0));
+    add_write(&d, bounded.obj, RX_FIELD(0));
+    add_cap(&d, rd_s, RES_SENSOR, RX_RIGHT_READ);
+    add_cap(&d, wr_s, RES_SENSOR, RX_RIGHT_WRITE);
+    uint32_t budget_id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &budget_id) == RX_OK, "budget");
+    stimulus(&e, ext_s, bounded.obj, 0, 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "budgeted reaction did not settle");
+    CHECK(e.w.reactions[budget_id].activations == 4, "activation budget ran %llu",
+          (unsigned long long)e.w.reactions[budget_id].activations);
+    CHECK(e.w.reactions[budget_id].quarantined, "activation budget did not quarantine");
+    audit_and_close(&e);
 }
 
 /* ---- receipt -------------------------------------------------------------- */
@@ -993,9 +1566,24 @@ static void write_receipt(int total_checks, int total_fail, const char *binary_d
             u.sysname, u.release, u.machine);
     fprintf(f, "  \"hardware_scope\": \"host CPU only; no accelerator involved\",\n");
     fprintf(f, "  \"gates\": {\n");
+    int r5_ok = all;
+    int r6_ok = all;
+    for (int i = 0; i < g_ntests; i++) {
+        if (strcmp(g_tests[i].name, "resource_admission_1000") == 0 ||
+            strcmp(g_tests[i].name, "background_not_starved") == 0)
+            if (g_tests[i].failures) r5_ok = 0;
+        if (strcmp(g_tests[i].name, "stability_containment") == 0 && g_tests[i].failures)
+            r6_ok = 0;
+    }
     fprintf(f, "    \"R3_REACTION_CORE\": \"%s\",\n", all ? "PASS (host reference)" : "FAIL");
     fprintf(f, "    \"R4_CAUSAL_TRACE\": \"%s\",\n", all ? "PASS (host reference; every reaction crumb in every test audited)" : "FAIL");
-    fprintf(f, "    \"not_claimed\": [\"R1 canonical shared pool (unify with OMEGA_SHARED_WORLD_V1)\", \"R2\", \"R5\", \"R6\", \"R7 native capability root\", \"R8\", \"R9\", \"R10-R16\"]\n  },\n");
+    fprintf(f, "    \"R5_RESOURCE_ARBITRATION\": \"%s\",\n",
+            r5_ok ? "PASS (host reference; not silicon)" : "FAIL");
+    fprintf(f, "    \"R6_REACTION_STABILITY\": \"%s\",\n",
+            r6_ok ? "PASS (host reference; not silicon)" : "FAIL");
+    fprintf(f, "    \"authority_host_reference\": \"%s\",\n",
+            all ? "hardened; R7 native root NOT claimed" : "FAIL");
+    fprintf(f, "    \"not_claimed\": [\"R1 canonical shared pool (unify with OMEGA_SHARED_WORLD_V1)\", \"R2\", \"R7 native capability root\", \"R8\", \"R9\", \"R10-R16\", \"R12 silicon\"]\n  },\n");
     fprintf(f, "  \"tests\": [\n");
     for (int i = 0; i < g_ntests; i++)
         fprintf(f, "    {\"name\": \"%s\", \"invariants\": \"%s\", \"checks\": %d, \"failures\": %d}%s\n",
@@ -1058,6 +1646,12 @@ int main(int argc, char **argv) {
     t_root_table_unwritable();
     t_crumb_tamper_detected();
     t_schedule_independence();
+    t_authority_office();
+    t_counter_fail_closed();
+    t_root_death_restart();
+    t_resource_admission();
+    t_background_not_starved();
+    t_stability();
 
     int checks = 0, fails = 0;
     for (int i = 0; i < g_ntests; i++) {
@@ -1072,7 +1666,10 @@ int main(int argc, char **argv) {
            g_ntests, checks, fails, (unsigned long long)g_crumbs_verified,
            (unsigned long long)g_crumbs_audited, (unsigned long long)g_illegal_transitions);
     write_receipt(checks, fails, dg);
-    printf("%s\n", fails == 0 ? "R3_REACTION_CORE: PASS (host)  R4_CAUSAL_TRACE: PASS (host)"
-                              : "R3/R4: FAIL");
+    printf("%s\n", fails == 0
+                       ? "R3_REACTION_CORE: PASS (host)  R4_CAUSAL_TRACE: PASS (host)  "
+                         "R5_RESOURCE_ARBITRATION: PASS (host)  R6_REACTION_STABILITY: PASS (host)  "
+                         "R7: NOT CLAIMED"
+                       : "R3/R4/R5/R6: FAIL");
     return fails == 0 ? 0 : 1;
 }

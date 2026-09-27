@@ -14,9 +14,11 @@
  *
  * Covered here: R1 subset (logical ids, generations, versions, persistence
  * class, atomic publication, stale-reference rejection), R3 (reaction core),
- * R4 subset (causal crumbs + ancestry). Not covered: R2 GPU ABI, R5 modulation
- * beyond priority classes, R6 storm control beyond wake coalescing, R7 native
- * root, R9 generation barrier.
+ * R4 subset (causal crumbs + ancestry), R5 host admission (real
+ * BLOCKED_RESOURCE, priority, bounded starvation), R6 host stability
+ * (fanout, oscillation, livelock, quarantine). Not covered: R2 GPU ABI, R7
+ * native capability root, R9 generation barrier. Faculty labels in tests are
+ * not the real AIEN, Omega, or AEGIS.
  */
 #ifndef RX_WORLD_H
 #define RX_WORLD_H
@@ -29,12 +31,12 @@
 
 #define RX_MAX_OBJECTS      256u
 #define RX_MAX_FIELDS       8u
-#define RX_MAX_REACTIONS    256u
+#define RX_MAX_REACTIONS    1024u
 #define RX_MAX_DEPS         8u
 #define RX_MAX_WRITES       8u
 #define RX_MAX_CAPS         8u
 #define RX_MAX_MUTATIONS    16u
-#define RX_MAX_SUBS         512u   /* subscriptions per object */
+#define RX_MAX_SUBS         1024u  /* subscriptions per object */
 #define RX_MAX_WORKERS      16u
 #define RX_MAX_PARENTS      (RX_MAX_DEPS * RX_MAX_FIELDS + 1u)
 #define RX_PRIORITY_CLASSES 7u
@@ -136,11 +138,48 @@ typedef struct RxCtx {
  * Return 0 to publish (possibly nothing), negative to fail. */
 typedef int (*RxFn)(RxCtx *ctx);
 
+/* What a reaction costs to be admitted. Zero means "none of this kind".
+ * Priority stays on the descriptor; this does not choose meaning, only fit. */
+typedef struct {
+    uint32_t compute_class;         /* 0 = any; else bit (class & 31) must be offered */
+    uint32_t locality;              /* 0 = anywhere; else required bits */
+    uint32_t accelerator_features;  /* 0 = none; else required bits */
+    uint32_t latency_class;         /* recorded; admission uses priority */
+    uint64_t memory_bytes;
+    uint64_t deadline;              /* 0 = none, compared with the world tick */
+    uint64_t energy_cost;           /* 0 = free */
+} RxResourceNeed;
+
+/* Physical budget. A zero slots/memory/energy/mask is filled in as "plenty"
+ * so existing reactions keep running. starvation_bound 0 disables the
+ * anti-starvation slot (strict priority). A positive bound is the most
+ * higher-class admissions in a row before one lower class must be served. */
+typedef struct {
+    uint32_t slots;
+    uint32_t starvation_bound;
+    uint32_t offered_locality;
+    uint32_t offered_accel;
+    uint32_t compute_mask;
+    uint64_t memory_bytes;
+    uint64_t energy_budget;
+    uint64_t logical_tick;
+} RxResourceBudget;
+
+/* Stability limits. Zero disables that limit. */
+typedef struct {
+    uint32_t activation_budget;     /* per reaction */
+    uint32_t fanout_limit;          /* wakes from one publication */
+    uint32_t oscillation_limit;     /* A-B-A flips before quarantine */
+    uint32_t livelock_limit;        /* consecutive no-progress runs */
+    uint32_t conflict_limit;        /* consecutive invalidations/rejections */
+} RxStabilityBudget;
+
 typedef struct {
     const char *name;
     uint32_t faculty;
     uint32_t subject;           /* principal the capabilities must be bound to */
     uint32_t priority;
+    RxResourceNeed need;
     uint32_t n_triggers;
     RxDep triggers[RX_MAX_DEPS];
     uint32_t n_reads;           /* triggers are read implicitly */
@@ -181,6 +220,7 @@ typedef struct {
     struct { RxObjRef obj; uint64_t version; uint64_t mask; } inputs[RX_MAX_DEPS];
     uint32_t n_caps;
     RxCapRef caps[RX_MAX_CAPS];
+    uint32_t cap_issuer[RX_MAX_CAPS]; /* authority provenance; 0 if unknown */
     uint32_t n_outputs;
     struct { RxObjRef obj; uint64_t version; uint64_t mask; } outputs[RX_MAX_WRITES];
     uint32_t n_parents;
@@ -195,10 +235,24 @@ typedef struct {
     RxReactionDesc desc;
     RxState state;
     bool rearm;                 /* woken while running: go READY again after */
+    bool quarantined;
+    bool holding;               /* currently charged against the physical budget */
     uint64_t wake_cause;
     uint64_t coalesced;
     uint64_t activations;
     uint64_t commits;
+    uint64_t suppressed;
+    uint64_t wait_seq;
+    uint64_t service;
+    uint64_t memory_held;
+    uint64_t energy_held;
+    uint32_t noop_streak;
+    uint32_t osc_streak;
+    uint32_t conflict_streak;
+    uint64_t last_out;
+    uint64_t prev_out;
+    bool have_last;
+    bool have_two;
 } RxReaction;
 
 typedef struct {
@@ -210,10 +264,18 @@ typedef struct {
     uint64_t commits;
     uint64_t invalidations;
     uint64_t blocked_authority;
+    uint64_t blocked_resource;
     uint64_t rejected;
     uint64_t failed;
     uint64_t noops;
     uint64_t crumb_overflow;
+    uint64_t suppressed_wakes;
+    uint64_t quarantines;
+    uint64_t oscillation_trips;
+    uint64_t livelock_trips;
+    uint64_t useful_commits;
+    uint64_t churn;
+    uint64_t deadline_overdue;
 } RxStats;
 
 typedef struct RxWorld {
@@ -237,6 +299,17 @@ typedef struct RxWorld {
     uint32_t ready_len[RX_PRIORITY_CLASSES];
     uint32_t in_flight;         /* READY + RUNNING + PUBLISHING */
 
+    RxResourceBudget budget;
+    RxStabilityBudget stability;
+    uint32_t used_slots;
+    uint64_t used_memory;
+    uint64_t used_energy;
+    uint32_t since_lower_admit;
+    uint32_t since_lower_run;
+    uint64_t admit_seq;
+    uint32_t peak_slots;
+    uint32_t peak_blocked;
+
     RxCrumb *crumbs;
     uint64_t n_crumbs;
     uint64_t crumb_cap;
@@ -250,6 +323,8 @@ typedef struct RxWorld {
 
 int  rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crumb_cap);
 void rx_world_destroy(RxWorld *w);
+void rx_world_set_resources(RxWorld *w, const RxResourceBudget *budget);
+void rx_world_set_stability(RxWorld *w, const RxStabilityBudget *stability);
 
 /* Object lifecycle. Creation writes a CREATE crumb. Retiring bumps the slot
  * generation, so every outstanding RxObjRef to it becomes stale. */

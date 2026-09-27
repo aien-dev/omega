@@ -1,5 +1,11 @@
 /*
  * rx_caproot.c -- host reference capability root. See rx_caproot.h.
+ *
+ * The writable table stays in a separate non-dumpable process. The control
+ * socket is not authority. Every privileged operation must present a
+ * capability this process previously handed out (the delivered set lives only
+ * here, not in the readable table). R7 is not claimed: AIENOS is not this
+ * process, and this Linux mint is not the permanent root.
  */
 #include "rx_caproot.h"
 
@@ -32,6 +38,7 @@ typedef struct {
     uint32_t pad;
     RxCapMint mint;
     RxCapRef ref;
+    RxCapRef authority;
     uint64_t arg;
 } RxCapRequest;
 
@@ -40,6 +47,18 @@ typedef struct {
     uint32_t pad;
     RxCapRef ref;
 } RxCapReply;
+
+typedef struct {
+    uint32_t ready;
+    uint32_t office_id;
+    uint32_t office_generation;
+    int32_t status;
+} RxCapHello;
+
+/* Next table's starting generation. The first root in a process starts at 1,
+ * which is what existing references expect. A later root starts higher, so a
+ * reference from a dead root cannot validate against the new table. */
+static uint32_t g_next_boot_gen = 1;
 
 /* ---- root process (the only writer) ------------------------------------ */
 
@@ -53,7 +72,6 @@ static void root_end(RxCapTable *t) {
     atomic_fetch_add_explicit(&t->seq, 1, memory_order_acq_rel);
 }
 
-/* Chain validation used by both sides; `t` must be a stable view. */
 static int chain_ok(const RxCapTable *t, const RxCapEntry *e) {
     uint32_t depth = 0;
     while (e->parent_id != UINT32_MAX) {
@@ -67,28 +85,88 @@ static int chain_ok(const RxCapTable *t, const RxCapEntry *e) {
     return RX_CAP_OK;
 }
 
-static int root_mint(RxCapTable *t, const RxCapMint *m, RxCapRef *out) {
+static uint32_t ancestor_hops(const RxCapTable *t, const RxCapEntry *e) {
+    uint32_t hops = 0;
+    while (e->parent_id != UINT32_MAX && hops <= RX_CAP_MAX_DEPTH) {
+        if (e->parent_id >= t->capacity) return RX_CAP_MAX_DEPTH + 1;
+        hops++;
+        e = &t->entries[e->parent_id];
+    }
+    return hops;
+}
+
+/* Possession is the delivered bit, not a copy of an id read from the table. */
+static int auth_use(RxCapTable *t, const uint8_t *delivered, RxCapRef a,
+                    uint32_t need, const RxCapEntry **out) {
+    if (a.cap_id >= t->capacity) return RX_CAP_ERR_UNAUTHORIZED;
+    if (!delivered[a.cap_id]) return RX_CAP_ERR_UNAUTHORIZED;
+    const RxCapEntry *e = &t->entries[a.cap_id];
+    if (e->generation != a.generation) return RX_CAP_ERR_STALE_GEN;
+    if (e->state != RX_CAP_LIVE) return RX_CAP_ERR_REVOKED;
     uint64_t epoch = atomic_load_explicit(&t->epoch, memory_order_relaxed);
     uint64_t clock = atomic_load_explicit(&t->clock, memory_order_relaxed);
-    if (m->rights == 0) return RX_CAP_ERR_RIGHTS;
-    if (m->parent.cap_id != UINT32_MAX) {
+    if (e->epoch != epoch) return RX_CAP_ERR_EPOCH;
+    if (e->lease_expiry && clock >= e->lease_expiry) return RX_CAP_ERR_EXPIRED;
+    if (chain_ok(t, e) != RX_CAP_OK) return RX_CAP_ERR_CHAIN;
+    if ((e->rights & need) != need) return RX_CAP_ERR_UNAUTHORIZED;
+    if (out) *out = e;
+    return RX_CAP_OK;
+}
+
+static int lease_expiry(uint64_t clock, uint64_t ticks, uint64_t *out) {
+    if (ticks == 0) {
+        *out = 0;
+        return RX_CAP_OK;
+    }
+    return rx_cap_add_u64(clock, ticks, out);
+}
+
+static int root_mint(RxCapTable *t, const uint8_t *delivered, uint8_t *delivered_mut,
+                     const RxCapMint *m, RxCapRef *out) {
+    uint64_t epoch = atomic_load_explicit(&t->epoch, memory_order_relaxed);
+    uint64_t clock = atomic_load_explicit(&t->clock, memory_order_relaxed);
+    if (m->rights == 0 || (m->rights & ~RX_RIGHT_KNOWN) != 0) return RX_CAP_ERR_RIGHTS;
+    if ((m->rights & RX_RIGHT_PRIVILEGED) && (m->rights & RX_RIGHT_DELEGATE))
+        return RX_CAP_ERR_NOT_DELEGABLE;
+
+    const RxCapEntry *auth = NULL;
+    if (m->parent.cap_id == UINT32_MAX) {
+        int arc = auth_use(t, delivered, m->authority, RX_RIGHT_MINT, &auth);
+        if (arc != RX_CAP_OK) return arc;
+        if ((m->rights & RX_RIGHT_PRIVILEGED) & ~auth->rights)
+            return RX_CAP_ERR_UNAUTHORIZED;
+    } else {
+        /* Delegation presents the parent. The office's MINT right does not
+         * reach into someone else's capability. */
+        if (m->authority.cap_id != m->parent.cap_id ||
+            m->authority.generation != m->parent.generation)
+            return RX_CAP_ERR_UNAUTHORIZED;
+        int arc = auth_use(t, delivered, m->authority, 0, &auth);
+        if (arc != RX_CAP_OK) return arc;
+        if (!(auth->rights & RX_RIGHT_DELEGATE)) return RX_CAP_ERR_NOT_DELEGABLE;
         if (m->parent.cap_id >= t->capacity) return RX_CAP_ERR_BOUNDS;
         const RxCapEntry *p = &t->entries[m->parent.cap_id];
-        if (p->generation != m->parent.generation) return RX_CAP_ERR_STALE_GEN;
-        if (p->state != RX_CAP_LIVE) return RX_CAP_ERR_REVOKED;
-        if (p->epoch != epoch) return RX_CAP_ERR_EPOCH;
-        if (p->lease_expiry && clock >= p->lease_expiry) return RX_CAP_ERR_EXPIRED;
-        if (chain_ok(t, p) != RX_CAP_OK) return RX_CAP_ERR_CHAIN;
-        if (!(p->rights & RX_RIGHT_DELEGATE)) return RX_CAP_ERR_NOT_DELEGABLE;
+        if (p != auth) return RX_CAP_ERR_UNAUTHORIZED;
         if (p->resource != m->resource) return RX_CAP_ERR_RESOURCE;
         if ((m->rights & ~p->rights) != 0) return RX_CAP_ERR_AMPLIFY;
-        if (p->lease_expiry &&
-            (m->lease_ticks == 0 || clock + m->lease_ticks > p->lease_expiry))
-            return RX_CAP_ERR_AMPLIFY; /* a child may not outlive its parent */
+        if (m->rights & RX_RIGHT_PRIVILEGED) return RX_CAP_ERR_NOT_DELEGABLE;
+        if (ancestor_hops(t, p) >= RX_CAP_MAX_DEPTH) return RX_CAP_ERR_CHAIN;
+        if (p->lease_expiry) {
+            uint64_t child = 0;
+            int lrc = lease_expiry(clock, m->lease_ticks, &child);
+            if (lrc != RX_CAP_OK) return lrc;
+            if (child == 0 || child > p->lease_expiry) return RX_CAP_ERR_AMPLIFY;
+        }
     }
+
+    uint64_t expiry = 0;
+    int lrc = lease_expiry(clock, m->lease_ticks, &expiry);
+    if (lrc != RX_CAP_OK) return lrc;
+
     for (uint32_t i = 0; i < t->capacity; i++) {
         RxCapEntry *e = &t->entries[i];
         if (e->state != RX_CAP_FREE) continue;
+        if (e->generation == UINT32_MAX) continue;
         root_begin(t);
         e->state = RX_CAP_LIVE;
         e->issuer = m->issuer;
@@ -96,9 +174,10 @@ static int root_mint(RxCapTable *t, const RxCapMint *m, RxCapRef *out) {
         e->resource = m->resource;
         e->rights = m->rights;
         e->epoch = epoch;
-        e->lease_expiry = m->lease_ticks ? clock + m->lease_ticks : 0;
+        e->lease_expiry = expiry;
         e->parent_id = m->parent.cap_id;
         e->parent_generation = m->parent.cap_id == UINT32_MAX ? 0 : m->parent.generation;
+        delivered_mut[i] = 1;
         root_end(t);
         out->cap_id = e->cap_id;
         out->generation = e->generation;
@@ -107,7 +186,9 @@ static int root_mint(RxCapTable *t, const RxCapMint *m, RxCapRef *out) {
     return RX_CAP_ERR_FULL;
 }
 
-static int root_revoke(RxCapTable *t, RxCapRef r) {
+static int root_revoke(RxCapTable *t, const uint8_t *delivered, RxCapRef authority, RxCapRef r) {
+    int arc = auth_use(t, delivered, authority, RX_RIGHT_REVOKE, NULL);
+    if (arc != RX_CAP_OK) return arc;
     if (r.cap_id >= t->capacity) return RX_CAP_ERR_BOUNDS;
     RxCapEntry *e = &t->entries[r.cap_id];
     if (e->generation != r.generation) return RX_CAP_ERR_STALE_GEN;
@@ -118,13 +199,50 @@ static int root_revoke(RxCapTable *t, RxCapRef r) {
     return RX_CAP_OK;
 }
 
-static int root_reclaim(RxCapTable *t, uint32_t id) {
+static int root_reclaim(RxCapTable *t, const uint8_t *delivered, uint8_t *delivered_mut,
+                        RxCapRef authority, uint32_t id) {
+    int arc = auth_use(t, delivered, authority, RX_RIGHT_RECLAIM, NULL);
+    if (arc != RX_CAP_OK) return arc;
     if (id >= t->capacity) return RX_CAP_ERR_BOUNDS;
     RxCapEntry *e = &t->entries[id];
     if (e->state != RX_CAP_REVOKED) return RX_CAP_ERR_STATE;
+    uint32_t next = 0;
+    int grc = rx_cap_generation_advance(e->generation, &next);
+    if (grc != RX_CAP_OK) return grc;
     root_begin(t);
-    e->generation++;
+    e->generation = next;
     e->state = RX_CAP_FREE;
+    e->rights = 0;
+    e->lease_expiry = 0;
+    e->parent_id = UINT32_MAX;
+    e->parent_generation = 0;
+    delivered_mut[id] = 0;
+    root_end(t);
+    return RX_CAP_OK;
+}
+
+static int root_clock(RxCapTable *t, const uint8_t *delivered, RxCapRef authority, uint64_t ticks) {
+    int arc = auth_use(t, delivered, authority, RX_RIGHT_CLOCK, NULL);
+    if (arc != RX_CAP_OK) return arc;
+    uint64_t now = atomic_load_explicit(&t->clock, memory_order_relaxed);
+    uint64_t next = 0;
+    int rc = rx_cap_add_u64(now, ticks, &next);
+    if (rc != RX_CAP_OK) return rc;
+    root_begin(t);
+    atomic_store_explicit(&t->clock, next, memory_order_relaxed);
+    root_end(t);
+    return RX_CAP_OK;
+}
+
+static int root_epoch(RxCapTable *t, const uint8_t *delivered, RxCapRef authority) {
+    int arc = auth_use(t, delivered, authority, RX_RIGHT_EPOCH, NULL);
+    if (arc != RX_CAP_OK) return arc;
+    uint64_t now = atomic_load_explicit(&t->epoch, memory_order_relaxed);
+    uint64_t next = 0;
+    int rc = rx_cap_add_u64(now, 1, &next);
+    if (rc != RX_CAP_OK) return rc;
+    root_begin(t);
+    atomic_store_explicit(&t->epoch, next, memory_order_relaxed);
     root_end(t);
     return RX_CAP_OK;
 }
@@ -154,10 +272,12 @@ static int write_full(int fd, const void *buf, size_t n) {
 }
 
 static void root_main(int memfd, int sock) {
-    /* Non-dumpable: the parent (same uid) may not ptrace this process or open
-     * its /proc fds, so the writable mapping stays private to the root. */
     prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
     prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0);
+    uint32_t boot_gen = 0;
+    if (read_full(sock, &boot_gen, sizeof(boot_gen)) != 0) _exit(2);
+    if (boot_gen == 0 || boot_gen == UINT32_MAX) _exit(2);
+
     RxCapTable *t = mmap(NULL, sizeof(RxCapTable), PROT_READ | PROT_WRITE,
                          MAP_SHARED, memfd, 0);
     close(memfd);
@@ -168,35 +288,61 @@ static void root_main(int memfd, int sock) {
     atomic_store(&t->epoch, 1);
     for (uint32_t i = 0; i < RX_CAP_MAX; i++) {
         t->entries[i].cap_id = i;
-        t->entries[i].generation = 1;
+        t->entries[i].generation = boot_gen;
         t->entries[i].state = RX_CAP_FREE;
         t->entries[i].parent_id = UINT32_MAX;
     }
-    uint8_t ready = 1;
-    if (write_full(sock, &ready, 1) != 0) _exit(3);
+
+    /* Bootstrap office. Not requested over the socket. Privileged rights only,
+     * no DELEGATE, so they cannot be handed on by attenuation. */
+    uint8_t delivered[RX_CAP_MAX];
+    memset(delivered, 0, sizeof(delivered));
+    RxCapEntry *office = &t->entries[0];
+    office->state = RX_CAP_LIVE;
+    office->issuer = 0;
+    office->subject = 0;
+    office->resource = RX_CAP_RES_AUTHORITY;
+    office->rights = RX_RIGHT_PRIVILEGED;
+    office->epoch = 1;
+    office->parent_id = UINT32_MAX;
+    delivered[0] = 1;
+
+    RxCapHello hello;
+    memset(&hello, 0, sizeof(hello));
+    hello.ready = 1;
+    hello.office_id = office->cap_id;
+    hello.office_generation = office->generation;
+    hello.status = RX_CAP_OK;
+    if (write_full(sock, &hello, sizeof(hello)) != 0) _exit(3);
 
     RxCapRequest q;
     while (read_full(sock, &q, sizeof(q)) == 0) {
         RxCapReply r;
         memset(&r, 0, sizeof(r));
         switch (q.op) {
-        case RX_OP_MINT:    r.status = root_mint(t, &q.mint, &r.ref); break;
-        case RX_OP_REVOKE:  r.status = root_revoke(t, q.ref); break;
-        case RX_OP_RECLAIM: r.status = root_reclaim(t, q.ref.cap_id); break;
+        case RX_OP_MINT:
+            r.status = root_mint(t, delivered, delivered, &q.mint, &r.ref);
+            break;
+        case RX_OP_REVOKE:
+            r.status = root_revoke(t, delivered, q.authority, q.ref);
+            break;
+        case RX_OP_RECLAIM:
+            r.status = root_reclaim(t, delivered, delivered, q.authority, q.ref.cap_id);
+            break;
         case RX_OP_CLOCK:
-            root_begin(t);
-            atomic_fetch_add(&t->clock, q.arg);
-            root_end(t);
+            r.status = root_clock(t, delivered, q.authority, q.arg);
             break;
         case RX_OP_EPOCH:
-            root_begin(t);
-            atomic_fetch_add(&t->epoch, 1);
-            root_end(t);
+            r.status = root_epoch(t, delivered, q.authority);
             break;
         case RX_OP_SHUTDOWN:
-            write_full(sock, &r, sizeof(r));
-            _exit(0);
-        default: r.status = RX_CAP_ERR_STATE; break;
+            r.status = auth_use(t, delivered, q.authority, RX_RIGHT_MINT, NULL);
+            if (write_full(sock, &r, sizeof(r)) != 0) _exit(4);
+            if (r.status == RX_CAP_OK) _exit(0);
+            continue;
+        default:
+            r.status = RX_CAP_ERR_STATE;
+            break;
         }
         if (write_full(sock, &r, sizeof(r)) != 0) break;
     }
@@ -208,6 +354,8 @@ static void root_main(int memfd, int sock) {
 int rx_caproot_start(RxCapRoot *root) {
     memset(root, 0, sizeof(*root));
     root->ctl_fd = root->ro_fd = -1;
+    root->office.cap_id = UINT32_MAX;
+    if (g_next_boot_gen == 0 || g_next_boot_gen == UINT32_MAX) return RX_CAP_ERR_EXHAUSTED;
     int memfd = memfd_create("aien-capability-root", MFD_ALLOW_SEALING | MFD_CLOEXEC);
     if (memfd < 0) return RX_CAP_ERR_IO;
     if (ftruncate(memfd, sizeof(RxCapTable)) != 0) { close(memfd); return RX_CAP_ERR_IO; }
@@ -223,10 +371,13 @@ int rx_caproot_start(RxCapRoot *root) {
         root_main(memfd, sv[1]);
     }
     close(sv[1]);
-    uint8_t ready = 0;
-    if (read_full(sv[0], &ready, 1) != 0 || ready != 1) goto fail;
-    /* The root holds the only writable mapping. Seal the inode so nothing else
-     * can ever obtain one, then map it read-only for this process. */
+    uint32_t boot = g_next_boot_gen;
+    if (write_full(sv[0], &boot, sizeof(boot)) != 0) goto fail;
+    RxCapHello hello;
+    memset(&hello, 0, sizeof(hello));
+    if (read_full(sv[0], &hello, sizeof(hello)) != 0 || hello.ready != 1 ||
+        hello.status != RX_CAP_OK)
+        goto fail;
     if (fcntl(memfd, F_ADD_SEALS,
               F_SEAL_SHRINK | F_SEAL_GROW | F_SEAL_FUTURE_WRITE | F_SEAL_SEAL) != 0)
         goto fail;
@@ -238,6 +389,11 @@ int rx_caproot_start(RxCapRoot *root) {
     root->ro_fd = memfd;
     root->root_pid = pid;
     root->running = true;
+    root->office.cap_id = hello.office_id;
+    root->office.generation = hello.office_generation;
+    uint32_t next = 0;
+    if (rx_cap_generation_advance(boot, &next) == RX_CAP_OK) g_next_boot_gen = next;
+    else g_next_boot_gen = UINT32_MAX;
     return RX_CAP_OK;
 fail:
     kill(pid, SIGKILL);
@@ -256,14 +412,23 @@ static int request(RxCapRoot *root, RxCapRequest *q, RxCapReply *r) {
 
 void rx_caproot_stop(RxCapRoot *root) {
     if (!root->running) return;
-    RxCapRequest q = { .op = RX_OP_SHUTDOWN };
+    RxCapRequest q;
+    memset(&q, 0, sizeof(q));
+    q.op = RX_OP_SHUTDOWN;
+    q.authority = root->office;
     RxCapReply r;
-    request(root, &q, &r);
+    if (request(root, &q, &r) != RX_CAP_OK) kill(root->root_pid, SIGKILL);
     waitpid(root->root_pid, NULL, 0);
-    munmap((void *)root->table, sizeof(RxCapTable));
-    close(root->ctl_fd);
-    close(root->ro_fd);
+    if (root->table) munmap((void *)root->table, sizeof(RxCapTable));
+    if (root->ctl_fd >= 0) close(root->ctl_fd);
+    if (root->ro_fd >= 0) close(root->ro_fd);
+    root->table = NULL;
+    root->ctl_fd = root->ro_fd = -1;
     root->running = false;
+}
+
+RxCapRef rx_caproot_office(const RxCapRoot *root) {
+    return root->office;
 }
 
 int rx_caproot_mint(RxCapRoot *root, const RxCapMint *req, RxCapRef *out) {
@@ -277,39 +442,60 @@ int rx_caproot_mint(RxCapRoot *root, const RxCapMint *req, RxCapRef *out) {
     return rc;
 }
 
-int rx_caproot_revoke(RxCapRoot *root, RxCapRef ref) {
+int rx_caproot_revoke(RxCapRoot *root, RxCapRef authority, RxCapRef ref) {
     RxCapRequest q;
     memset(&q, 0, sizeof(q));
     q.op = RX_OP_REVOKE;
+    q.authority = authority;
     q.ref = ref;
     RxCapReply r;
     return request(root, &q, &r);
 }
 
-int rx_caproot_reclaim(RxCapRoot *root, uint32_t cap_id) {
+int rx_caproot_reclaim(RxCapRoot *root, RxCapRef authority, uint32_t cap_id) {
     RxCapRequest q;
     memset(&q, 0, sizeof(q));
     q.op = RX_OP_RECLAIM;
+    q.authority = authority;
     q.ref.cap_id = cap_id;
     RxCapReply r;
     return request(root, &q, &r);
 }
 
-int rx_caproot_advance_clock(RxCapRoot *root, uint64_t ticks) {
+int rx_caproot_advance_clock(RxCapRoot *root, RxCapRef authority, uint64_t ticks) {
     RxCapRequest q;
     memset(&q, 0, sizeof(q));
     q.op = RX_OP_CLOCK;
+    q.authority = authority;
     q.arg = ticks;
     RxCapReply r;
     return request(root, &q, &r);
 }
 
-int rx_caproot_bump_epoch(RxCapRoot *root) {
+int rx_caproot_bump_epoch(RxCapRoot *root, RxCapRef authority) {
     RxCapRequest q;
     memset(&q, 0, sizeof(q));
     q.op = RX_OP_EPOCH;
+    q.authority = authority;
     RxCapReply r;
     return request(root, &q, &r);
+}
+
+int rx_caproot_inspect(const RxCapRoot *root, RxCapRef ref, RxCapEntry *out) {
+    const RxCapTable *t = root->table;
+    if (!t || ref.cap_id >= RX_CAP_MAX) return RX_CAP_ERR_BOUNDS;
+    for (;;) {
+        uint64_t s0 = atomic_load_explicit(&t->seq, memory_order_acquire);
+        if (s0 & 1u) continue;
+        RxCapEntry e;
+        memcpy(&e, (const void *)&t->entries[ref.cap_id], sizeof(e));
+        atomic_thread_fence(memory_order_acquire);
+        if (atomic_load_explicit(&t->seq, memory_order_relaxed) != s0) continue;
+        if (e.generation != ref.generation) return RX_CAP_ERR_STALE_GEN;
+        if (e.state == RX_CAP_FREE) return RX_CAP_ERR_STATE;
+        if (out) *out = e;
+        return RX_CAP_OK;
+    }
 }
 
 int rx_caproot_validate(const RxCapRoot *root, RxCapRef ref,
@@ -320,7 +506,6 @@ int rx_caproot_validate(const RxCapRoot *root, RxCapRef ref,
     for (;;) {
         uint64_t s0 = atomic_load_explicit(&t->seq, memory_order_acquire);
         if (s0 & 1u) continue;
-        /* Copy the chain we need into a private view, then check the seqlock. */
         RxCapEntry chain[RX_CAP_MAX_DEPTH + 1];
         uint32_t n = 0;
         uint32_t id = ref.cap_id;
@@ -373,6 +558,9 @@ const char *rx_cap_strerror(int code) {
     case RX_CAP_ERR_FULL: return "table-full";
     case RX_CAP_ERR_IO: return "root-io";
     case RX_CAP_ERR_STATE: return "bad-state";
+    case RX_CAP_ERR_UNAUTHORIZED: return "unauthorized";
+    case RX_CAP_ERR_OVERFLOW: return "overflow";
+    case RX_CAP_ERR_EXHAUSTED: return "generation-exhausted";
     default: return "unknown";
     }
 }
