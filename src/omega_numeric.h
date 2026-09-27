@@ -43,6 +43,40 @@ static inline float omega_bits_to_float(uint32_t u) {
 }
 
 /*
+ * Bit-level IEEE-754 classification and manipulation (Zero Libm)
+ */
+#define OMEGA_INF_POS   0x7f800000U
+#define OMEGA_INF_NEG   0xff800000U
+#define OMEGA_QNAN_BITS 0x7fc00000U
+
+static inline float omega_fabs(float x) {
+    return omega_bits_to_float(omega_float_to_bits(x) & 0x7fffffffU);
+}
+
+static inline bool omega_isnan(float x) {
+    uint32_t u = omega_float_to_bits(x);
+    return ((u & 0x7f800000U) == 0x7f800000U) && ((u & 0x007fffffU) != 0);
+}
+
+static inline bool omega_isinf(float x) {
+    uint32_t u = omega_float_to_bits(x);
+    return (u & 0x7fffffffU) == 0x7f800000U;
+}
+
+static inline bool omega_signbit(float x) {
+    return (omega_float_to_bits(x) & 0x80000000U) != 0;
+}
+
+static inline bool omega_issubnormal(float x) {
+    uint32_t u = omega_float_to_bits(x);
+    return ((u & 0x7f800000U) == 0) && ((u & 0x007fffffU) != 0);
+}
+
+static inline bool omega_iszero(float x) {
+    return (omega_float_to_bits(x) & 0x7fffffffU) == 0;
+}
+
+/*
  * Semantic Reference Tier:
  * Exact IEEE 754-2008 single-precision specification.
  * Subnormals are preserved bit-exactly (Flush-To-Zero is strictly rejected).

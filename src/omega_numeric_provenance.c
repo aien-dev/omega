@@ -151,6 +151,61 @@ static const OmegaOpcodeProvenance PROVENANCE_TABLE[] = {
         .fixture_w2 = 0x00000000,
         .fixture_w3 = 0x000fe200,
         .qualified_gb10 = true
+    },
+    {
+        .mnemonic = "FSETP.GE.AND P0, PT, R2, R4, PT",
+        .opcode = 0x720b,
+        .description = "FP32 Greater-Than-Or-Equal Predicate Evaluation",
+        .evidence_source = "ptxas 13.0.88 / nvdisasm SM121 oracle; differential GB10 test",
+        .fixture_w0 = 0x0200720b,
+        .fixture_w1 = 0x00000004,
+        .fixture_w2 = 0x03f0e000,
+        .fixture_w3 = 0x004fca00,
+        .qualified_gb10 = true
+    },
+    {
+        .mnemonic = "FSEL R7, R2, R4, P0",
+        .opcode = 0x7208,
+        .description = "FP32 Conditional Selection Based on Predicate P0",
+        .evidence_source = "ptxas 13.0.88 / nvdisasm SM121 oracle; differential GB10 test",
+        .fixture_w0 = 0x02077208,
+        .fixture_w1 = 0x00000004,
+        .fixture_w2 = 0x04000000,
+        .fixture_w3 = 0x000fca00,
+        .qualified_gb10 = true
+    },
+    {
+        .mnemonic = "DIV (MUFU.RCP + Refinement)",
+        .opcode = 0x7308,
+        .description = "Refined Single-Precision Division with Subnormals Preserved",
+        .evidence_source = "ptxas 13.0.88 / nvdisasm SM121 oracle; differential GB10 test",
+        .fixture_w0 = 0x00077308,
+        .fixture_w1 = 0x00000002,
+        .fixture_w2 = 0x00001000,
+        .fixture_w3 = 0x000e2400,
+        .qualified_gb10 = true
+    },
+    {
+        .mnemonic = "SQRT (MUFU.RSQ + Refinement)",
+        .opcode = 0x7308,
+        .description = "Refined Single-Precision Square Root with Subnormals Preserved",
+        .evidence_source = "ptxas 13.0.88 / nvdisasm SM121 oracle; differential GB10 test",
+        .fixture_w0 = 0x00077308,
+        .fixture_w1 = 0x00000002,
+        .fixture_w2 = 0x00001400,
+        .fixture_w3 = 0x000e2400,
+        .qualified_gb10 = true
+    },
+    {
+        .mnemonic = "REDUCE_SUM (Warp Tree Reduction)",
+        .opcode = 0x7f89,
+        .description = "Declared-Order Pairwise Binary Tree Warp Reduction",
+        .evidence_source = "nvcc 13.0 / nvdisasm SM121 oracle; differential GB10 test",
+        .fixture_w0 = 0x02077f89,
+        .fixture_w1 = 0x0a001f00,
+        .fixture_w2 = 0x000e0000,
+        .fixture_w3 = 0x000e2400,
+        .qualified_gb10 = true
     }
 };
 
