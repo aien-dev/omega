@@ -637,11 +637,16 @@ int omega_world_submit(OmegaAcceleratorWorld *world,
         submission->a_bytes > a->size_bytes || submission->b_bytes > b->size_bytes ||
         submission->c_bytes > c->size_bytes || !(c->permissions & OMEGA_PERM_WRITE))
         return OMEGA_WORLD_ERR_INVALID_ARG;
-    /* A writable result has one owner until its completion is committed. */
-    for (uint32_t i = 0; i < world->in_flight_count; i++)
-        if (submission->c_bytes && world->in_flight[i].c_bytes &&
-            world->in_flight[i].c_object_id == submission->c_object_id)
+    /* A later submission cannot claim an input digest for an earlier output
+     * that the GPU may not have written yet, nor reuse that output as a writer. */
+    for (uint32_t i = 0; i < world->in_flight_count; i++) {
+        const OmegaWorldSubmission *prior = &world->in_flight[i];
+        if (prior->c_bytes &&
+            ((submission->c_bytes && prior->c_object_id == submission->c_object_id) ||
+             (submission->a_bytes && prior->c_object_id == submission->a_object_id) ||
+             (submission->b_bytes && prior->c_object_id == submission->b_object_id)))
             return OMEGA_WORLD_ERR_FAULT;
+    }
     /* One payload sequence for the whole world: the pushbuffer's terminal
      * release (built by the caller) must carry a payload strictly after every
      * payload already issued, synchronous or batched. */

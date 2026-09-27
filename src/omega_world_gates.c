@@ -2010,8 +2010,9 @@ static bool test_lc_wait_reached_or_passed(void) {
 static bool test_lc_output_alias_refusal(void) {
     OmegaAcceleratorWorld world;
     if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
-    OmegaHandle code, a, b, c;
-    bool ok = lc_setup(&world, &code, &a, &b, &c);
+    OmegaHandle code, a, b, c, d;
+    bool ok = lc_setup(&world, &code, &a, &b, &c) &&
+              omega_world_register_buffer(&world, 256, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &d) == OMEGA_WORLD_OK;
     uint32_t words[32], len = 0;
     memcpy(words, WORLD_SETUP_WORDS, sizeof WORLD_SETUP_WORDS);
     len += (uint32_t)(sizeof WORLD_SETUP_WORDS / sizeof(uint32_t));
@@ -2030,6 +2031,13 @@ static bool test_lc_output_alias_refusal(void) {
     ok = ok && omega_world_resolve_buffer(&world, &c, OMEGA_PERM_WRITE,
                  0, 1, &cpu, NULL) == OMEGA_WORLD_ERR_FAULT;
     sub.completion_val = 2;
+    ok = ok && omega_world_submit(&world, &world.m16.pb_mem, 0, len, &sub) == OMEGA_WORLD_ERR_FAULT;
+    sub.c_object_id = d.object_id;
+    sub.c_generation = d.object_generation;
+    sub.c_permissions = d.permissions;
+    sub.a_object_id = c.object_id;
+    sub.a_generation = c.object_generation;
+    sub.a_permissions = c.permissions;
     ok = ok && omega_world_submit(&world, &world.m16.pb_mem, 0, len, &sub) == OMEGA_WORLD_ERR_FAULT;
     ok = ok && omega_world_ring(&world) == OMEGA_WORLD_OK &&
          omega_world_drain(&world, 1, 5000) == 1 && world.total_dispatches == 1 &&
