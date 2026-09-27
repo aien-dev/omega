@@ -36,12 +36,38 @@ jobs:
       - name: Build and run resident reaction host qualification
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_COMMIT: 29bf6ea84ba19eb2b8612843ec9dd868a647f9bc
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
         run: make test-r3
       - name: Emit qualification receipt
+        env:
+          PHYSICS_COMMIT: 29bf6ea84ba19eb2b8612843ec9dd868a647f9bc
         run: |
           receipt="$(find build/qual-runs -name rx_heartbeat_receipt.json -type f | head -n 1)"
           test -n "$receipt"
-          echo "RECEIPT_PATH=$receipt"
-          sha256sum "$receipt"
+          echo "candidate commit: ${OMEGA_CANDIDATE_COMMIT}"
+          echo "physics commit: ${PHYSICS_COMMIT}"
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "tree cleanliness: clean"
+          else
+            echo "tree cleanliness: dirty"
+          fi
+          python3 - "$receipt" <<'PY'
+          import hashlib, json, sys
+          path = sys.argv[1]
+          raw = open(path, "rb").read()
+          doc = json.loads(raw)
+          print("test totals: tests=%s passed=%s checks=%s failures=%s" % (
+              doc["totals"]["tests"], doc["totals"]["tests_passed"],
+              doc["totals"]["checks"], doc["totals"]["failures"]))
+          print("receipt: %s" % path)
+          print("receipt hash: %s" % hashlib.sha256(raw).hexdigest())
+          gates = doc["gates"]
+          for name in ("R1_CANONICAL_SHARED_WORLD_PASS", "R2_CROSS_ENGINE_ABI_PASS",
+                       "R3_REACTION_CORE", "R4_CAUSAL_TRACE",
+                       "R5_RESOURCE_ARBITRATION", "R6_REACTION_STABILITY"):
+              print("gate %s: %s" % (name, gates.get(name, "missing")))
+          print("not-claimed gates: %s" % ", ".join(gates.get("not_claimed", [])))
+          print("hardware scope: %s" % doc.get("hardware_scope"))
+          PY
           cat "$receipt"

@@ -106,6 +106,8 @@ typedef enum {
 #define RX_ERR_REPLAY      -21
 #define RX_ERR_TORN        -22
 #define RX_ERR_BAD_DESC    -23
+#define RX_ERR_UNPLACED    -24
+#define RX_ERR_EXISTS      -25
 
 /* Reaction notices carried in the frozen 128-byte descriptor.
  * The older transform request/result values stay in the frozen layout and
@@ -118,6 +120,7 @@ enum {
     RX_RING_PUBLISH    = 0x0012u,
     RX_RING_COMPLETE   = 0x0013u,
     RX_RING_FAULT      = 0x0014u,
+    RX_RING_KEEPALIVE  = 0x0003u, /* frozen NOP: ordering only, not a call */
     RX_RING_SHUTDOWN   = 0x0015u
 };
 
@@ -127,12 +130,16 @@ enum {
 #define RX_FAULT_TORN_PUB  0x0103u
 #define RX_FAULT_OVERLAP   0x0104u
 #define RX_FAULT_DIVERGED  0x0105u
+#define RX_FAULT_UNPLACED  0x0106u
 
-/* Physical aspect. These name where the bytes sit. They are not the object's name. */
+/* Physical aspect. These name where the bytes sit. They are not the object's name.
+ * A live object may have no placement. One spare window exists so a placed
+ * object can move without borrowing another object's bytes. */
 #define RX_PLACE_COHERENT    1u
 #define RX_LOCALITY_MACHINE  1u
 #define RX_COHERENCY_HOST    1u   /* CPU image of the shared layout; no graphics processor claimed */
 #define RX_OBJECT_WINDOW     64u  /* eight field values, little-endian */
+#define RX_PHYS_WINDOWS      (RX_MAX_OBJECTS + 1u)
 
 typedef struct { uint32_t id; uint32_t generation; } RxObjRef;
 
@@ -246,7 +253,10 @@ typedef struct {
     uint8_t digest[32];         /* content identity of (type, fields) */
     /* Capability reference. Holding this pair is not permission; the root still checks it. */
     RxCapRef cap;
-    /* Physical aspect of this same object. Not a second object and not a second generation. */
+    /* Physical aspect of this same object. Absent until attached.
+     * Not a second object and not a second generation. */
+    bool placed;
+    uint32_t window;
     uint64_t region_offset;
     uint64_t size_bytes;
     uint32_t placement;
@@ -426,8 +436,23 @@ void rx_world_digest(RxWorld *w, uint8_t out[32]);
 /* Record which capability reference speaks for this object. Does not grant rights. */
 int  rx_world_bind_capability(RxWorld *w, RxObjRef ref, RxCapRef cap);
 
-/* Copy the 32-byte physical projection. Generation is the canonical one. */
+/* Copy the 32-byte physical projection. Generation is the canonical one.
+ * RX_ERR_UNPLACED means this generation has no realization. */
 int  rx_world_physical(RxWorld *w, RxObjRef ref, OmegaSharedWorldObject *out);
+
+/* Bind or drop the coherent window for this generation. Neither call
+ * allocates an id or advances the generation. A second attach is refused.
+ * A reference whose generation is not current is refused and changes nothing. */
+int  rx_world_attach_physical(RxWorld *w, RxObjRef ref);
+int  rx_world_detach_physical(RxWorld *w, RxObjRef ref);
+
+/* Move the bytes of an attached object onto another free window.
+ * The id, generation, version, and content digest stay put. */
+int  rx_world_relocate_physical(RxWorld *w, RxObjRef ref);
+
+/* Place the object at an exact region offset. Used to refuse a window that
+ * does not fit. A refused call leaves the object where it was. */
+int  rx_world_place_physical(RxWorld *w, RxObjRef ref, uint64_t offset, uint64_t length);
 
 /* Hostile-writer seam: store bytes into the physical projection only.
  * Does not change the canonical object, its generation, or its capability. */
