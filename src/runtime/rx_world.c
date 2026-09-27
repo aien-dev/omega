@@ -1046,6 +1046,13 @@ int rx_world_create(RxWorld *w, uint32_t type, RxPersist persist, uint64_t resou
         o->type = type;
         o->persist = persist;
         o->resource = resource;
+        o->placed = false;
+        o->window = 0;
+        o->region_offset = 0;
+        o->size_bytes = 0;
+        o->placement = 0;
+        o->locality = 0;
+        o->coherency = 0;
         o->cap = (RxCapRef){ 0, 0 };
         o->version = 1;
         for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) {

@@ -1,8 +1,9 @@
 # R1 merge: one resident object world
 
-Status: the host CPU join is implemented. See `docs/rx-r1-world-unification.md`.
+Status: the host CPU join is implemented. A semantic object may have no
+physical window. See `docs/rx-r1-world-unification.md`.
 The qualification receipt is what claims R1 and R2. No graphics-chip run is claimed.
-The native capability root is not claimed. See `docs/rx-r7-captable-map.md`.
+The native capability root is not claimed. See `spec/r7-aienos-authority-mapping.md`.
 
 The two layouts below are the ones in the tree today. They are not two
 permanent worlds. The later edit merges them. It does not land on the

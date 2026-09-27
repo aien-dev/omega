@@ -1,5 +1,8 @@
 # R7 design: host capability checks onto the AIENOS table
 
+The mapping itself is `spec/r7-aienos-authority-mapping.md`. This note is the
+short version. R7 is not claimed.
+
 Status: design only. The native capability root is not claimed. The Linux
 mint process remains the oracle the reaction world checks. This note does not
 connect AIEN, and it does not give the reaction world an administrative handle.

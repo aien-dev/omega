@@ -8,9 +8,9 @@
  * as authority. The graphics-processor worker is not started here.
  *
  * The frozen header's object table holds 64 records. This image holds one
- * record per host object (RX_MAX_OBJECTS) so a reaction object cannot exist
- * only on the host. The 32-byte record and the 128-byte descriptor are unchanged.
- * The physics m20 sources are not edited.
+ * 32-byte slot per host object. That slot is a projection, not an identity.
+ * A live object may have no window. The 32-byte record and the 128-byte
+ * descriptor are unchanged. The physics m20 sources are not edited.
  */
 #include "rx_world.h"
 
@@ -51,7 +51,11 @@ static uint64_t off_payload(void) {
     return ALIGN_UP(off_objtbl() + sizeof(RxProjectedTable), OMEGA_SW_CACHELINE);
 }
 static uint64_t image_bytes(void) {
-    return off_payload() + (uint64_t)RX_MAX_OBJECTS * RX_OBJECT_WINDOW;
+    return off_payload() + (uint64_t)RX_PHYS_WINDOWS * RX_OBJECT_WINDOW;
+}
+
+static uint64_t window_offset(uint32_t win) {
+    return off_payload() + (uint64_t)win * RX_OBJECT_WINDOW;
 }
 
 uint64_t rx_world_physical_table_offset(void) {
@@ -140,11 +144,13 @@ static uint32_t get_u32(const uint8_t *p) {
 
 static int ring_msg(uint16_t t) {
     return t == RX_RING_WAKE || t == RX_RING_CLAIM || t == RX_RING_PUBLISH ||
-           t == RX_RING_COMPLETE || t == RX_RING_FAULT || t == RX_RING_SHUTDOWN;
+           t == RX_RING_COMPLETE || t == RX_RING_FAULT || t == RX_RING_KEEPALIVE ||
+           t == RX_RING_SHUTDOWN;
 }
 
 static uint32_t msg_rights(uint16_t t) {
-    if (t == RX_RING_WAKE || t == RX_RING_COMPLETE || t == RX_RING_FAULT)
+    if (t == RX_RING_WAKE || t == RX_RING_COMPLETE || t == RX_RING_FAULT ||
+        t == RX_RING_KEEPALIVE)
         return RX_RIGHT_READ;
     return RX_RIGHT_WRITE;
 }
@@ -169,6 +175,7 @@ static int fault_err(uint32_t fault) {
     case RX_FAULT_OVERLAP: return RX_ERR_BOUNDS;
     case RX_FAULT_CAP: return RX_ERR_AUTHORITY;
     case RX_FAULT_DIVERGED: return RX_ERR_STALE_GEN;
+    case RX_FAULT_UNPLACED: return RX_ERR_UNPLACED;
     default: return RX_ERR_BAD_DESC;
     }
 }
@@ -199,11 +206,13 @@ int rx_coherent_format(RxWorld *w) {
     for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++) {
         w->objects[i].id = i;
         w->objects[i].generation = 1;
-        w->objects[i].region_offset = off_payload() + (uint64_t)i * RX_OBJECT_WINDOW;
-        w->objects[i].size_bytes = RX_OBJECT_WINDOW;
-        w->objects[i].placement = RX_PLACE_COHERENT;
-        w->objects[i].locality = RX_LOCALITY_MACHINE;
-        w->objects[i].coherency = RX_COHERENCY_HOST;
+        w->objects[i].placed = false;
+        w->objects[i].window = 0;
+        w->objects[i].region_offset = 0;
+        w->objects[i].size_bytes = 0;
+        w->objects[i].placement = 0;
+        w->objects[i].locality = 0;
+        w->objects[i].coherency = 0;
         rx_coherent_project(w, i);
     }
 
@@ -235,10 +244,19 @@ void rx_coherent_project(RxWorld *w, uint32_t id) {
     OmegaSharedWorldObject *p = &table_of(w)->objects[id];
     p->object_id = o->id;
     p->generation = o->generation;
-    p->state = o->live ? OMEGA_SW_OBJ_ACTIVE : OMEGA_SW_OBJ_REVOKED;
     p->permissions = 0;
+    if (!o->placed) {
+        p->state = OMEGA_SW_OBJ_REVOKED;
+        p->region_offset = 0;
+        p->size_bytes = 0;
+        return;
+    }
+    p->state = o->live ? OMEGA_SW_OBJ_ACTIVE : OMEGA_SW_OBJ_REVOKED;
     p->region_offset = o->region_offset;
     p->size_bytes = o->size_bytes;
+    if (o->region_offset < off_payload() || o->region_offset > w->coherent_bytes ||
+        o->size_bytes > w->coherent_bytes - o->region_offset)
+        return;
     uint8_t *win = w->coherent + o->region_offset;
     for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) put_u64(win + f * 8u, o->field[f]);
 }
@@ -271,16 +289,22 @@ static int check_locked(RxWorld *w, const OmegaSharedWorldDesc *desc,
         else {
             const RxObject *o = &w->objects[desc->object_id];
             const OmegaSharedWorldObject *p = &table_of(w)->objects[desc->object_id];
-            if (p->generation != o->generation || p->object_id != o->id ||
-                p->region_offset != o->region_offset || p->size_bytes != o->size_bytes)
-                fault = RX_FAULT_DIVERGED;
-            else if (desc->object_generation != o->generation)
+            if (desc->object_generation == 0 || desc->object_generation != o->generation)
                 fault = OMEGA_SW_FAULT_STALE_GEN;
+            else if (p->object_id != o->id || p->generation != o->generation)
+                fault = RX_FAULT_DIVERGED;
+            else if (!o->placed) {
+                fault = (p->state == OMEGA_SW_OBJ_ACTIVE || p->size_bytes != 0)
+                            ? RX_FAULT_DIVERGED
+                            : RX_FAULT_UNPLACED;
+            } else if (p->region_offset != o->region_offset || p->size_bytes != o->size_bytes ||
+                       (o->live ? p->state != OMEGA_SW_OBJ_ACTIVE : p->state != OMEGA_SW_OBJ_REVOKED))
+                fault = RX_FAULT_DIVERGED;
             else if (!o->live && desc->msg_type != RX_RING_FAULT)
                 fault = OMEGA_SW_FAULT_OOB_OBJECT;
             else if (desc->object_length == 0 ||
                      (uint64_t)desc->object_offset > o->size_bytes ||
-                     (uint64_t)desc->object_length > o->size_bytes - desc->object_offset)
+                     (uint64_t)desc->object_length > o->size_bytes - (uint64_t)desc->object_offset)
                 fault = RX_FAULT_BOUNDS;
             else if (o->region_offset < off_payload() ||
                      o->region_offset > w->coherent_bytes ||
@@ -366,6 +390,7 @@ int rx_world_check_descriptor(RxWorld *w, const OmegaSharedWorldDesc *desc,
 void rx_coherent_publish(RxWorld *w, uint32_t id, uint64_t crumb_id) {
     if (!w->coherent || id >= RX_MAX_OBJECTS) return;
     RxObject *o = &w->objects[id];
+    if (!o->placed) return;
     if (o->cap.cap_id == 0 && o->cap.generation == 0) return;
     rx_coherent_project(w, id);
     OmegaSharedWorldRing *ring = pub_ring(w);
@@ -472,6 +497,8 @@ int rx_world_physical(RxWorld *w, RxObjRef ref, OmegaSharedWorldObject *out) {
     int rc = RX_OK;
     if (ref.id >= RX_MAX_OBJECTS || w->objects[ref.id].generation != ref.generation) {
         rc = RX_ERR_STALE_GEN;
+    } else if (!w->objects[ref.id].placed) {
+        rc = RX_ERR_UNPLACED;
     } else {
         *out = table_of(w)->objects[ref.id];
     }
@@ -485,4 +512,165 @@ int rx_world_overwrite_physical(RxWorld *w, uint32_t id, const OmegaSharedWorldO
     table_of(w)->objects[id] = *src;
     pthread_mutex_unlock(&w->mu);
     return RX_OK;
+}
+
+static int window_busy(const RxWorld *w, uint32_t win, uint32_t except) {
+    for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++) {
+        if (i == except || !w->objects[i].placed) continue;
+        if (w->objects[i].window == win) return 1;
+    }
+    return 0;
+}
+
+static int window_for_offset(uint64_t offset, uint64_t length, uint32_t *out_win) {
+    if (length != RX_OBJECT_WINDOW) return RX_ERR_BOUNDS;
+    if (offset > UINT64_MAX - length) return RX_ERR_BOUNDS;
+    uint64_t payload = off_payload();
+    uint64_t limit = payload + (uint64_t)RX_PHYS_WINDOWS * RX_OBJECT_WINDOW;
+    if (offset < payload || offset + length > limit) return RX_ERR_BOUNDS;
+    uint64_t rel = offset - payload;
+    if (rel % RX_OBJECT_WINDOW != 0) return RX_ERR_BOUNDS;
+    *out_win = (uint32_t)(rel / RX_OBJECT_WINDOW);
+    return RX_OK;
+}
+
+static void adopt_window(RxWorld *w, RxObject *o, uint32_t win) {
+    o->placed = true;
+    o->window = win;
+    o->region_offset = window_offset(win);
+    o->size_bytes = RX_OBJECT_WINDOW;
+    o->placement = RX_PLACE_COHERENT;
+    o->locality = RX_LOCALITY_MACHINE;
+    o->coherency = RX_COHERENCY_HOST;
+    rx_coherent_project(w, o->id);
+}
+
+static int current_object(RxWorld *w, RxObjRef ref, RxObject **out) {
+    if (ref.id >= RX_MAX_OBJECTS || w->objects[ref.id].generation != ref.generation ||
+        !w->objects[ref.id].live)
+        return RX_ERR_STALE_GEN;
+    *out = &w->objects[ref.id];
+    return RX_OK;
+}
+
+int rx_world_attach_physical(RxWorld *w, RxObjRef ref) {
+    if (!w || !w->coherent) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    RxObject *o = NULL;
+    int rc = current_object(w, ref, &o);
+    if (rc != RX_OK) goto out;
+    if (o->placed) {
+        rc = RX_ERR_EXISTS;
+        goto out;
+    }
+    uint32_t win = 0;
+    int found = 0;
+    for (uint32_t i = 0; i < RX_PHYS_WINDOWS; i++) {
+        if (!window_busy(w, i, o->id)) {
+            win = i;
+            found = 1;
+            break;
+        }
+    }
+    if (!found) {
+        rc = RX_ERR_FULL;
+        goto out;
+    }
+    adopt_window(w, o, win);
+    rc = RX_OK;
+out:
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_detach_physical(RxWorld *w, RxObjRef ref) {
+    if (!w || !w->coherent) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    RxObject *o = NULL;
+    int rc = current_object(w, ref, &o);
+    if (rc != RX_OK) goto out;
+    if (!o->placed) {
+        rc = RX_ERR_UNPLACED;
+        goto out;
+    }
+    o->placed = false;
+    o->window = 0;
+    o->region_offset = 0;
+    o->size_bytes = 0;
+    o->placement = 0;
+    o->locality = 0;
+    o->coherency = 0;
+    rx_coherent_project(w, o->id);
+    rc = RX_OK;
+out:
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_place_physical(RxWorld *w, RxObjRef ref, uint64_t offset, uint64_t length) {
+    if (!w || !w->coherent) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    RxObject *o = NULL;
+    int rc = current_object(w, ref, &o);
+    if (rc != RX_OK) goto out;
+    uint32_t win = 0;
+    rc = window_for_offset(offset, length, &win);
+    if (rc != RX_OK) goto out;
+    if (window_busy(w, win, o->id)) {
+        rc = RX_ERR_EXISTS;
+        goto out;
+    }
+    if (o->placed && o->window != win) {
+        uint8_t saved[RX_OBJECT_WINDOW];
+        memcpy(saved, w->coherent + o->region_offset, RX_OBJECT_WINDOW);
+        adopt_window(w, o, win);
+        memcpy(w->coherent + o->region_offset, saved, RX_OBJECT_WINDOW);
+    } else {
+        adopt_window(w, o, win);
+    }
+    rc = RX_OK;
+out:
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_relocate_physical(RxWorld *w, RxObjRef ref) {
+    if (!w || !w->coherent) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    RxObject *o = NULL;
+    int rc = current_object(w, ref, &o);
+    if (rc != RX_OK) goto out;
+    if (!o->placed) {
+        rc = RX_ERR_UNPLACED;
+        goto out;
+    }
+    uint32_t win = 0;
+    int found = 0;
+    for (uint32_t i = 0; i < RX_PHYS_WINDOWS; i++) {
+        if (i == o->window || window_busy(w, i, o->id)) continue;
+        win = i;
+        found = 1;
+        break;
+    }
+    if (!found) {
+        rc = RX_ERR_FULL;
+        goto out;
+    }
+    uint8_t saved[RX_OBJECT_WINDOW];
+    uint8_t digest[32];
+    uint32_t generation = o->generation;
+    uint64_t version = o->version;
+    memcpy(saved, w->coherent + o->region_offset, RX_OBJECT_WINDOW);
+    memcpy(digest, o->digest, 32);
+    adopt_window(w, o, win);
+    memcpy(w->coherent + o->region_offset, saved, RX_OBJECT_WINDOW);
+    if (o->generation != generation || o->version != version ||
+        memcmp(o->digest, digest, 32) != 0) {
+        rc = RX_ERR_BAD_DESC;
+        goto out;
+    }
+    rc = RX_OK;
+out:
+    pthread_mutex_unlock(&w->mu);
+    return rc;
 }

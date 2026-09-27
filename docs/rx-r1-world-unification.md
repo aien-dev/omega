@@ -15,8 +15,12 @@ There are still two records, and they are two aspects of one object:
 
 No third world type was added. The physics `m20-shared-world` tree was not
 edited. Its object table holds 64 records; the host image holds one 32-byte
-record per host object so a live reaction object cannot exist only in host
-memory. The 32-byte record and the 128-byte descriptor are the frozen layout.
+slot per host object. That slot starts empty. A live object does not need a
+window. Attaching a window does not allocate an id and does not advance the
+generation. A second attach is refused. Detaching the window leaves the id
+and the generation in place. Moving the bytes to another offset leaves the
+content digest in place. The 32-byte record and the 128-byte descriptor are
+the frozen layout.
 The frozen header's transform request and result are rejected on this path.
 A ring slot here is a wake, a claim, a publication, a completion, a fault, or
 a shutdown.
@@ -27,8 +31,10 @@ Semantic aspect, on `RxObject`: type, field values, per-field versions, the
 writer of each field, persistence class, publication version, content digest,
 and a capability reference `{cap_id, generation}`.
 
-Physical aspect, on that same `RxObject`, and copied into the 32-byte record:
-region offset, byte length, placement, machine locality, and coherency.
+Physical aspect, on that same `RxObject`, and copied into the 32-byte record
+only while a window is attached: region offset, byte length, placement,
+machine locality, and coherency. With no window, the 32-byte slot is revoked,
+zero-length, and carries the same generation. It is not a second object.
 Locality and coherency do not fit the 32-byte record. The coherent record
 carries offset, length, and active or revoked. The CPU image's coherency value
 means "host image of the shared layout." It does not mean a graphics processor
