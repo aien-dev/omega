@@ -1,13 +1,15 @@
 CC ?= gcc
-PHYSICS_DIR ?= /home/drakestapleton/workspace/physics
+PHYSICS_DIR ?= ../physics
 OUT_DIR ?= build
+PHYSICS_LOCK_CHECK ?= 1
 
 CFLAGS ?= -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc \
 	-I$(PHYSICS_DIR)/m16 -I$(PHYSICS_DIR)/nvrm \
 	-I$(PHYSICS_DIR)/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc \
 	-I$(PHYSICS_DIR)/third_party/nvidia-open-580.173.02/kernel-open/common/inc \
 	-I$(PHYSICS_DIR)/third_party/nvidia-open-580.173.02/kernel-open/nvidia-uvm \
-	-I$(PHYSICS_DIR)/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include
+	-I$(PHYSICS_DIR)/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include \
+	-DOMEGA_PHYSICS_DIR=\"$(PHYSICS_DIR)\"
 
 SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
 	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_exec.c \
@@ -16,15 +18,34 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 	src/omega_matvec.c src/omega_accelerator.c src/omega_accelerator_world.c \
 	src/omega_vector.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
 	src/omega_blackwell_realize.c src/omega_blackwell_submit.c src/omega_blackwell_gates.c src/omega_blackwell_matmul.c src/omega_blackwell_codegen.c src/omega_world_gates.c \
+	src/omega_evidence.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
 	tools/omegatool.c
 
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 TARGET = $(OUT_DIR)/omegatool
 
-.PHONY: all clean test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17
+.PHONY: all clean check-physics-lock test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17
 
 all: $(TARGET)
+
+check-physics-lock:
+	@if [ "$(PHYSICS_LOCK_CHECK)" != "0" ]; then \
+		if [ ! -f physics.lock ]; then \
+			echo "error: physics.lock not found at repo root" >&2; exit 1; \
+		fi; \
+		locked=$$(tr -d '[:space:]' < physics.lock); \
+		actual=$$(git -C $(PHYSICS_DIR) rev-parse HEAD 2>/dev/null); \
+		if [ -z "$$actual" ]; then \
+			echo "error: could not read HEAD of PHYSICS_DIR=$(PHYSICS_DIR) (git -C $(PHYSICS_DIR) rev-parse HEAD failed)" >&2; \
+			exit 1; \
+		fi; \
+		if [ "$$actual" != "$$locked" ]; then \
+			echo "error: PHYSICS_DIR=$(PHYSICS_DIR) is at commit $$actual but physics.lock pins $$locked." >&2; \
+			echo "       Checkout the pinned physics commit, or override with PHYSICS_LOCK_CHECK=0." >&2; \
+			exit 1; \
+		fi; \
+	fi
 
 $(OUT_DIR):
 	mkdir -p $(OUT_DIR)
@@ -41,7 +62,7 @@ $(OUT_DIR)/nvrm.o: $(PHYSICS_DIR)/nvrm/nvrm.c | $(OUT_DIR)
 $(OUT_DIR)/omegatool.o: tools/omegatool.c | $(OUT_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(TARGET): $(OBJS)
+$(TARGET): check-physics-lock $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS)
 
 test: $(TARGET)

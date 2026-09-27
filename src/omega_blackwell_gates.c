@@ -8,7 +8,9 @@
 #include "omega_blackwell_qmd.h"
 #include "omega_blackwell_realize.h"
 #include "omega_blackwell_submit.h"
+#include "omega_accelerator_world.h"
 #include "sha256.h"
+#include "omega_evidence.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +19,11 @@
 
 static int m17_gate_count = 0;
 static int m17_gate_passed = 0;
+
+void omega_get_m17_gate_snapshot(int *count, int *passed) {
+    if (count) *count = m17_gate_count;
+    if (passed) *passed = m17_gate_passed;
+}
 
 static void report_m17_gate(const char *gate_name, bool pass, const char *detail) {
     m17_gate_count++;
@@ -294,10 +301,11 @@ static bool test_m17_zero_libcuda_runtime(void) {
 }
 
 static bool test_m17_evidence_durability(void) {
-    int ret = system("mkdir -p evidence/m17_blackwell_vector");
-    (void)ret;
+    char insn_path[1024], qmd_path[1024];
+    if (omega_evidence_path("m17_blackwell_vector/vecadd_instructions.txt", insn_path, sizeof(insn_path)) != 0) return false;
+    if (omega_evidence_path("m17_blackwell_vector/qmd1_hexdump.txt", qmd_path, sizeof(qmd_path)) != 0) return false;
 
-    FILE *f_insn = fopen("evidence/m17_blackwell_vector/vecadd_instructions.txt", "w");
+    FILE *f_insn = fopen(insn_path, "w");
     if (!f_insn) return false;
     fprintf(f_insn, "=== OMEGA BLACKWELL SM_121 VECTOR ADD INSTRUCTION SEQUENCE ===\n");
     fprintf(f_insn, "Total instructions: %d (512 bytes)\n", OMEGA_BW_VECADD_INSN_COUNT);
@@ -320,7 +328,7 @@ static bool test_m17_evidence_durability(void) {
     };
     uint32_t qmd1[OMEGA_BW_QMD_WORDS];
     omega_blackwell_build_qmd1(qmd1, &cfg);
-    FILE *f_qmd = fopen("evidence/m17_blackwell_vector/qmd1_hexdump.txt", "w");
+    FILE *f_qmd = fopen(qmd_path, "w");
     if (!f_qmd) return false;
     fprintf(f_qmd, "=== OMEGA BLACKWELL QMD V5.0 HEX DUMP ===\n");
     for (size_t i = 0; i < OMEGA_BW_QMD_WORDS; i++) {
@@ -435,6 +443,11 @@ void run_demonstration_blackwell_vector(void) {
 
 static int m18_gate_count = 0;
 static int m18_gate_passed = 0;
+
+void omega_get_m18_gate_snapshot(int *count, int *passed) {
+    if (count) *count = m18_gate_count;
+    if (passed) *passed = m18_gate_passed;
+}
 
 static void report_m18_gate(const char *gate_name, bool pass, const char *detail) {
     m18_gate_count++;
@@ -1004,37 +1017,32 @@ static bool test_m18_gate18_receipt(void) {
     omega_blackwell_kernel_free(&k_f16);
     omega_blackwell_kernel_free(&k_bf16);
 
-    /* 2. Read git commits */
-    char impl_commit[65] = "UNKNOWN";
-    FILE *p_impl = popen("git rev-parse HEAD 2>/dev/null", "r");
-    if (p_impl) {
-        char buf[65];
-        if (fgets(buf, sizeof(buf), p_impl)) {
-            char *nl = strchr(buf, '\n');
-            if (nl) *nl = 0;
-            if (strlen(buf) == 40) strncpy(impl_commit, buf, sizeof(impl_commit));
+    /* 2. Commit / physics identity: observed, not asserted. */
+    char run_commit[41] = "UNKNOWN";
+    if (!omega_evidence_run_commit(run_commit)) strcpy(run_commit, "UNKNOWN");
+    bool tree_dirty = omega_evidence_tree_dirty();
+
+    char physics_commit[65] = "UNKNOWN";
+    if (!omega_evidence_physics_commit(physics_commit, sizeof(physics_commit))) strcpy(physics_commit, "UNKNOWN");
+
+    /* 3. Observed hardware identity (live Nvrm fields, not a hard-coded sm_121). */
+    OmegaEvidenceHardware hw;
+    memset(&hw, 0, sizeof(hw));
+    hw.alias = "sm_121";
+    {
+        OmegaAcceleratorWorld hw_world;
+        if (omega_world_init(&hw_world) == OMEGA_WORLD_OK) {
+            omega_evidence_hardware_from_nvrm(&hw_world.m16.rm, &hw);
+            omega_world_destroy(&hw_world);
         }
-        pclose(p_impl);
     }
 
-    char m16_commit[65] = "UNKNOWN";
-    FILE *p_m16 = popen("cd /home/drakestapleton/workspace/physics && git rev-parse HEAD 2>/dev/null", "r");
-    if (p_m16) {
-        char buf[65];
-        if (fgets(buf, sizeof(buf), p_m16)) {
-            char *nl = strchr(buf, '\n');
-            if (nl) *nl = 0;
-            if (strlen(buf) == 40) strncpy(m16_commit, buf, sizeof(m16_commit));
-        }
-        pclose(p_m16);
-    }
-
-    /* 3. Binary SHA-256 */
+    /* 4. Binary SHA-256 */
     uint8_t bin_digest[32];
     char bin_hex[65] = {0};
     compute_file_sha256("build/omegatool", bin_digest, bin_hex);
 
-    /* 4. Generate evidence/SHA256SUMS */
+    /* 5. Generate the SHA256SUMS manifest under the run-scoped evidence area. */
     const char *manifest_files[] = {
         "src/omega_blackwell_matmul.h",
         "src/omega_blackwell_matmul.c",
@@ -1051,7 +1059,10 @@ static bool test_m18_gate18_receipt(void) {
     };
     size_t num_files = sizeof(manifest_files) / sizeof(manifest_files[0]);
 
-    FILE *f_sums = fopen("evidence/SHA256SUMS", "w");
+    char sums_path[1024];
+    if (omega_evidence_path("SHA256SUMS", sums_path, sizeof(sums_path)) != 0) return false;
+
+    FILE *f_sums = fopen(sums_path, "w");
     if (!f_sums) return false;
     for (size_t i = 0; i < num_files; i++) {
         uint8_t d[32];
@@ -1062,13 +1073,25 @@ static bool test_m18_gate18_receipt(void) {
     }
     fclose(f_sums);
 
-    /* 5. Compute manifest digest */
+    /* 6. Compute manifest digest */
     uint8_t manifest_digest[32];
     char manifest_hex[65] = {0};
-    if (!compute_file_sha256("evidence/SHA256SUMS", manifest_digest, manifest_hex)) return false;
+    if (!compute_file_sha256(sums_path, manifest_digest, manifest_hex)) return false;
 
-    /* 6. Write evidence/omega_blackwell_matmul_stage2_receipt.json */
-    FILE *f = fopen("evidence/omega_blackwell_matmul_stage2_receipt.json", "w");
+    /* 7. Derived (observed, not asserted) regression counts. Gate 17 of this
+     * suite (test_m18_gate17_regression) ran run_m17_gates() immediately
+     * before this gate executes; read back what it actually ran. */
+    int m17_count = 0, m17_passed = 0;
+    omega_get_m17_gate_snapshot(&m17_count, &m17_passed);
+    int m18_count_so_far = 0, m18_passed_so_far = 0;
+    omega_get_m18_gate_snapshot(&m18_count_so_far, &m18_passed_so_far);
+    int total_gates_evaluated = m18_count_so_far + m17_count;
+    int cumulative_regression_passed = m17_passed;
+
+    /* 8. Write the M18 receipt to the run-scoped evidence area. */
+    char receipt_path[1024];
+    if (omega_evidence_path("omega_blackwell_matmul_stage2_receipt.json", receipt_path, sizeof(receipt_path)) != 0) return false;
+    FILE *f = fopen(receipt_path, "w");
     if (!f) return false;
 
     time_t now = time(NULL);
@@ -1088,7 +1111,23 @@ static bool test_m18_gate18_receipt(void) {
     fprintf(f, "  \"final_evidence_commit\": \"%s\",\n", "87349c01b6de3555f621b2c30141381863c09486");
     fprintf(f, "  \"architecture_ratification_commit\": \"%s\",\n", "9f1f13380f1ab39caa45438830c06bde7c2a0c11");
     fprintf(f, "  \"architecture_canonical_head\": \"%s\",\n", "f4d86c8587ef87f5fba9088daf638c4d563d0c0a");
-    fprintf(f, "  \"m16_authority_commit\": \"%s\",\n", m16_commit);
+    fprintf(f, "  \"m16_authority_commit\": \"%s\",\n", physics_commit);
+    fprintf(f, "  \"physics_commit\": \"%s\",\n", physics_commit);
+    fprintf(f, "  \"run_commit\": \"%s\",\n", run_commit);
+    fprintf(f, "  \"tree_dirty\": %s,\n", tree_dirty ? "true" : "false");
+    {
+        const char *qual_record = getenv("OMEGA_QUAL_RECORD");
+        bool recording = (qual_record != NULL && strcmp(qual_record, "1") == 0);
+        if (recording && !tree_dirty) {
+            fprintf(f, "  \"candidate_git_commit\": \"%s\",\n", run_commit);
+        }
+    }
+    fprintf(f, "  \"hardware\": {\n");
+    fprintf(f, "    \"compute_class\": \"0x%x\",\n", hw.compute_class);
+    fprintf(f, "    \"rm_sm_version\": \"0x%x\",\n", hw.rm_sm_version);
+    fprintf(f, "    \"gpu_uuid\": \"%s\",\n", hw.gpu_uuid_hex);
+    fprintf(f, "    \"alias\": \"%s\"\n", hw.alias);
+    fprintf(f, "  },\n");
     fprintf(f, "  \"fp16_spec_id\": \"%s\",\n", f16_spec_hex);
     fprintf(f, "  \"fp16_code_sha256\": \"%s\",\n", f16_code_hex);
     fprintf(f, "  \"fp16_realization_id\": \"%s\",\n", f16_real_hex);
@@ -1112,10 +1151,11 @@ static bool test_m18_gate18_receipt(void) {
     fprintf(f, "  \"zero_libcuda_linkage\": true,\n");
     fprintf(f, "  \"zero_cuda_symbols\": true,\n");
     fprintf(f, "  \"zero_libcuda_runtime\": true,\n");
-    fprintf(f, "  \"all_18_gates_passed\": true,\n");
-    fprintf(f, "  \"total_gates_evaluated\": 157,\n");
-    fprintf(f, "  \"cumulative_regression_passed\": 139,\n");
-    fprintf(f, "  \"m18_gates_passed\": 18,\n");
+    fprintf(f, "  \"all_18_gates_passed\": %s,\n", (m18_passed_so_far == m18_count_so_far) ? "true" : "false");
+    fprintf(f, "  \"total_gates_evaluated\": %d,\n", total_gates_evaluated);
+    fprintf(f, "  \"cumulative_regression_passed\": %d,\n", cumulative_regression_passed);
+    fprintf(f, "  \"m18_gates_passed\": %d,\n", m18_passed_so_far);
+    fprintf(f, "  \"tests_executed\": [\"OMEGA_BW_MATMUL_REGRESSION_PASS(run_m17_gates)\"],\n");
     fprintf(f, "  \"qualification_timestamp\": \"%s\"\n", time_str);
     fprintf(f, "}\n");
     fclose(f);
@@ -1144,12 +1184,23 @@ int run_m18_gates(void) {
     report_m18_gate("OMEGA_BW_MATMUL_BOUNDARY_ANNIHILATION_PASS", test_m18_gate14_boundary_annihilation(), "Boundary and annihilation matrix tests (zero, identity, dynamic range, cancellation)");
     report_m18_gate("OMEGA_BW_MATMUL_ZERO_LIBCUDA_PASS", test_m18_gate15_zero_libcuda(), "Zero foreign userspace runtime verification (linkage, symbols, maps)");
     report_m18_gate("OMEGA_BW_MATMUL_CLEAN_CLONE_PASS", test_m18_gate16_clean_clone(), "Clean-clone isolated reproduction on DGX Spark");
-    report_m18_gate("OMEGA_BW_MATMUL_REGRESSION_PASS", test_m18_gate17_regression(), "Cumulative regression parity: 139 / 139 prior milestone gates passing");
+    {
+        bool regression_ok = test_m18_gate17_regression();
+        int m17_count = 0, m17_passed = 0;
+        omega_get_m17_gate_snapshot(&m17_count, &m17_passed);
+        char detail[96];
+        snprintf(detail, sizeof(detail), "Cumulative regression parity: %d / %d prior milestone gates passing", m17_passed, m17_count);
+        report_m18_gate("OMEGA_BW_MATMUL_REGRESSION_PASS", regression_ok, detail);
+    }
     report_m18_gate("OMEGA_BW_MATMUL_RECEIPT_PASS", test_m18_gate18_receipt(), "Milestone 18 qualification receipt and cryptographic manifest generated");
 
     printf("================================================================================\n");
     printf("  STAGE 2 / FULL QUALIFICATION: %d / %d M18 GATES PASSED\n", m18_gate_passed, m18_gate_count);
-    printf("  TOTAL GATES EVALUATED: 157 (18 M18 Gates + 139 Prior Regression Gates)\n");
+    {
+        int m17_count = 0, m17_passed = 0;
+        omega_get_m17_gate_snapshot(&m17_count, &m17_passed);
+        printf("  TOTAL GATES EVALUATED: %d (%d M18 Gates + %d Prior Regression Gates)\n", m18_gate_count + m17_count, m18_gate_count, m17_count);
+    }
     printf("================================================================================\n");
     return (m18_gate_passed == m18_gate_count) ? 0 : 1;
 }

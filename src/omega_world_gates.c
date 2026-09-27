@@ -9,6 +9,7 @@
 #include "omega_blackwell_submit.h"
 #include "omega_vector.h"
 #include "sha256.h"
+#include "omega_evidence.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +24,14 @@ static uint32_t m19_sustained_dispatches = 0;
 static long m19_sustained_rss_delta = -1;
 static uint8_t m19_sustained_digest[32];
 static char m19_candidate_commit[41] = {0};
+
+/* Measured (not asserted) fault-recovery observations from gate 12; each
+ * stays false until the gate that measures it actually runs and observes
+ * the condition. */
+static bool m19_fault_channel_scoped_handled = false;
+static bool m19_fault_channel_generation_advanced = false;
+static bool m19_fault_vas_preserved = false;
+static bool m19_fault_zero_device_reset = false;
 
 /* Resolve the full 40-hex revision of a working tree via git. */
 static bool m19_git_head(const char *repo_dir, char out[41]) {
@@ -71,6 +80,11 @@ static bool compute_file_sha256(const char *path, uint8_t digest[32], char hex[6
     }
     hex[64] = 0;
     return true;
+}
+
+void omega_get_m19_gate_snapshot(int *count, int *passed) {
+    if (count) *count = m19_gate_count;
+    if (passed) *passed = m19_gate_passed;
 }
 
 static void report_m19_gate(const char *gate_name, bool pass, const char *detail) {
@@ -1546,6 +1560,13 @@ static bool test_m19_gate12_fault_recovery(void) {
         return false;
     }
 
+    /* Every condition below was already checked above; record what was
+     * actually observed for the receipt instead of asserting it there. */
+    m19_fault_channel_scoped_handled = true;
+    m19_fault_channel_generation_advanced = (world.channel_generation == orig_gen + 1);
+    m19_fault_vas_preserved = (world.m16.rm.root == root && world.m16.rm.device == device && world.m16.rm.vaspace == vaspace);
+    m19_fault_zero_device_reset = true; /* no device-reset path was invoked on this route */
+
     omega_world_destroy(&world);
     return true;
 }
@@ -1644,12 +1665,29 @@ static bool test_m19_gate16_clean_clone(void) {
     char checkout[512];
     int cl = snprintf(checkout, sizeof(checkout), "%s/checkout", clone);
     if (cl < 0 || (size_t)cl >= sizeof(checkout)) return false;
-    char command[2048];
+
+    /* Resolve the PHYSICS_DIR this process was built/run with, as an
+     * absolute path, so the nested build (running from a different cwd)
+     * finds the same pinned physics checkout instead of silently falling
+     * back to the Makefile's default. */
+    char physics_dir_resolved[4096];
+    {
+        const char *pd = getenv("PHYSICS_DIR");
+#ifdef OMEGA_PHYSICS_DIR
+        if (!pd || pd[0] == '\0') pd = OMEGA_PHYSICS_DIR;
+#endif
+        if (!pd || pd[0] == '\0') pd = "../physics";
+        if (!realpath(pd, physics_dir_resolved)) {
+            snprintf(physics_dir_resolved, sizeof(physics_dir_resolved), "%s", pd);
+        }
+    }
+
+    char command[4608];
     int len = snprintf(command, sizeof(command),
                        "git clone --quiet --no-hardlinks . %s && cd %s && "
-                       "make clean >/dev/null 2>&1 && make -j >/dev/null 2>&1 && "
+                       "make clean >/dev/null 2>&1 && make -j PHYSICS_DIR=%s >/dev/null 2>&1 && "
                        "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m19-gates >%s/qualification.log 2>&1",
-                       checkout, checkout, clone);
+                       checkout, checkout, physics_dir_resolved, clone);
     if (len < 0 || (size_t)len >= sizeof(command)) return false;
     if (system(command) != 0) return false;
 
@@ -1662,9 +1700,38 @@ static bool test_m19_gate16_clean_clone(void) {
     return true;
 }
 
-/* Gate 17: OMEGA_ACCEL_RESIDENT_REGRESSION_PASS */
+/* Gate 17: OMEGA_ACCEL_RESIDENT_REGRESSION_PASS
+ *
+ * Previously this only called run_m18_gates(), which itself only chains
+ * run_m17_gates() as ITS regression gate -- so a receipt claiming "157
+ * prior gates passing" was only ever backed by 36 gates actually
+ * executing (18 M17 + 18 M18). Actually execute every prior suite (M4,
+ * M5..M15, M17, M18) and sum what really ran. */
+static int m19_regression_total = 0;
+static int m19_regression_passed = 0;
+
 static bool test_m19_gate17_regression(void) {
-    return (run_m18_gates() == 0);
+    int total = 0, passed = 0, c = 0, p = 0;
+
+    (void)omega_run_m4_gates();  omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m5_gates();  omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m6_gates();  omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m7_gates();  omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m8_gates();  omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m9_gates();  omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m10_gates(); omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m11_gates(); omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m12_gates(); omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m13_gates(); omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m14_gates(); omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)omega_run_m15_gates(); omega_get_gate_snapshot(&c, &p);  total += c; passed += p;
+    (void)run_m17_gates(); omega_get_m17_gate_snapshot(&c, &p); total += c; passed += p;
+    (void)run_m18_gates(); omega_get_m18_gate_snapshot(&c, &p); total += c; passed += p;
+
+    m19_regression_total = total;
+    m19_regression_passed = passed;
+
+    return (passed == total);
 }
 
 /* Gate 18: OMEGA_ACCEL_RESIDENT_RECEIPT_PASS */
@@ -1689,7 +1756,10 @@ static bool test_m19_gate18_receipt(void) {
     };
     size_t num_files = sizeof(manifest_files) / sizeof(manifest_files[0]);
 
-    FILE *mf = fopen("evidence/m19_corpus_digests.txt", "w");
+    char digests_path[1024];
+    if (omega_evidence_path("m19_corpus_digests.txt", digests_path, sizeof(digests_path)) != 0) return false;
+
+    FILE *mf = fopen(digests_path, "w");
     if (!mf) return false;
 
     for (size_t i = 0; i < num_files; i++) {
@@ -1705,7 +1775,7 @@ static bool test_m19_gate18_receipt(void) {
 
     uint8_t manifest_digest[32];
     char manifest_hex[65] = {0};
-    if (!compute_file_sha256("evidence/m19_corpus_digests.txt", manifest_digest, manifest_hex)) return false;
+    if (!compute_file_sha256(digests_path, manifest_digest, manifest_hex)) return false;
 
     uint8_t bin_digest[32];
     char bin_hex[65] = {0};
@@ -1716,7 +1786,29 @@ static bool test_m19_gate18_receipt(void) {
         sprintf(&rolling_digest_hex[i * 2], "%02x", m19_sustained_digest[i]);
     }
 
-    FILE *f = fopen("evidence/omega_accelerator_world_qualification_receipt.json", "w");
+    /* Commit / physics identity: observed, not asserted. */
+    char run_commit[41] = "UNKNOWN";
+    if (!omega_evidence_run_commit(run_commit)) strcpy(run_commit, "UNKNOWN");
+    bool tree_dirty = omega_evidence_tree_dirty();
+
+    char physics_commit[65] = "UNKNOWN";
+    if (!omega_evidence_physics_commit(physics_commit, sizeof(physics_commit))) strcpy(physics_commit, "UNKNOWN");
+
+    /* Observed hardware identity (live Nvrm fields, not a hard-coded sm_121). */
+    OmegaEvidenceHardware hw;
+    memset(&hw, 0, sizeof(hw));
+    hw.alias = "sm_121";
+    {
+        OmegaAcceleratorWorld hw_world;
+        if (omega_world_init(&hw_world) == OMEGA_WORLD_OK) {
+            omega_evidence_hardware_from_nvrm(&hw_world.m16.rm, &hw);
+            omega_world_destroy(&hw_world);
+        }
+    }
+
+    char receipt_path[1024];
+    if (omega_evidence_path("omega_accelerator_world_qualification_receipt.json", receipt_path, sizeof(receipt_path)) != 0) return false;
+    FILE *f = fopen(receipt_path, "w");
     if (!f) return false;
 
     time_t now = time(NULL);
@@ -1731,7 +1823,22 @@ static bool test_m19_gate18_receipt(void) {
     fprintf(f, "  \"target_hardware\": \"NVIDIA DGX Spark (Grace Blackwell GB10, sm_121, 128 GiB unified LPDDR5x RAM)\",\n");
     fprintf(f, "  \"substrate\": \"M16 Native Libcuda-Free Channel\",\n");
     fprintf(f, "  \"status\": \"SILICON_QUALIFIED\",\n");
-    fprintf(f, "  \"candidate_git_commit\": \"%s\",\n", m19_candidate_commit);
+    fprintf(f, "  \"run_commit\": \"%s\",\n", run_commit);
+    fprintf(f, "  \"tree_dirty\": %s,\n", tree_dirty ? "true" : "false");
+    fprintf(f, "  \"physics_commit\": \"%s\",\n", physics_commit);
+    {
+        const char *qual_record = getenv("OMEGA_QUAL_RECORD");
+        bool recording = (qual_record != NULL && strcmp(qual_record, "1") == 0);
+        if (recording && !tree_dirty) {
+            fprintf(f, "  \"candidate_git_commit\": \"%s\",\n", run_commit);
+        }
+    }
+    fprintf(f, "  \"hardware\": {\n");
+    fprintf(f, "    \"compute_class\": \"0x%x\",\n", hw.compute_class);
+    fprintf(f, "    \"rm_sm_version\": \"0x%x\",\n", hw.rm_sm_version);
+    fprintf(f, "    \"gpu_uuid\": \"%s\",\n", hw.gpu_uuid_hex);
+    fprintf(f, "    \"alias\": \"%s\"\n", hw.alias);
+    fprintf(f, "  },\n");
     fprintf(f, "  \"binary_sha256\": \"%s\",\n", bin_hex);
     fprintf(f, "  \"manifest_sha256\": \"%s\",\n", manifest_hex);
     fprintf(f, "  \"rolling_state_digest\": \"%s\",\n", rolling_digest_hex);
@@ -1747,31 +1854,32 @@ static bool test_m19_gate18_receipt(void) {
     fprintf(f, "    \"registry_address_authority\": true\n");
     fprintf(f, "  },\n");
     fprintf(f, "  \"queue_topology\": {\n");
-    fprintf(f, "    \"discovered_ring_capacity\": %u,\n", m19_ring_capacity ? m19_ring_capacity : 1024);
-    fprintf(f, "    \"stress_multi_wrap_dispatches\": %u,\n", m19_wrap_dispatches ? m19_wrap_dispatches : 3072);
-    fprintf(f, "    \"ring_wrap_factor\": 3.0,\n");
+    fprintf(f, "    \"discovered_ring_capacity\": %u,\n", m19_ring_capacity);
+    fprintf(f, "    \"stress_multi_wrap_dispatches\": %u,\n", m19_wrap_dispatches);
+    fprintf(f, "    \"ring_wrap_factor\": %.6f,\n", m19_ring_capacity ? ((double)m19_wrap_dispatches / (double)m19_ring_capacity) : 0.0);
     fprintf(f, "    \"gpfifo_flow_control_verified\": true,\n");
     fprintf(f, "    \"monotonic_sequence_numbers\": true\n");
     fprintf(f, "  },\n");
     fprintf(f, "  \"sustained_workload\": {\n");
-    fprintf(f, "    \"sustained_dispatches\": %u,\n", m19_sustained_dispatches ? m19_sustained_dispatches : 1000);
-    fprintf(f, "    \"cycles\": 250,\n");
+    fprintf(f, "    \"sustained_dispatches\": %u,\n", m19_sustained_dispatches);
+    fprintf(f, "    \"cycles\": %u,\n", m19_sustained_dispatches / 4);
     fprintf(f, "    \"classes\": [\"VecAdd\", \"INT32_MatMul\", \"FP16_Tensor_MMA\", \"BF16_Tensor_MMA\"],\n");
     fprintf(f, "    \"oracle_parity_verified\": true,\n");
     fprintf(f, "    \"parity_error_count\": 0\n");
     fprintf(f, "  },\n");
     fprintf(f, "  \"fault_recovery\": {\n");
-    fprintf(f, "    \"channel_scoped_fault_handled\": true,\n");
-    fprintf(f, "    \"channel_generation_advanced\": true,\n");
-    fprintf(f, "    \"persistent_vas_preserved\": true,\n");
-    fprintf(f, "    \"zero_device_reset\": true\n");
+    fprintf(f, "    \"channel_scoped_fault_handled\": %s,\n", m19_fault_channel_scoped_handled ? "true" : "false");
+    fprintf(f, "    \"channel_generation_advanced\": %s,\n", m19_fault_channel_generation_advanced ? "true" : "false");
+    fprintf(f, "    \"persistent_vas_preserved\": %s,\n", m19_fault_vas_preserved ? "true" : "false");
+    fprintf(f, "    \"zero_device_reset\": %s\n", m19_fault_zero_device_reset ? "true" : "false");
     fprintf(f, "  },\n");
     fprintf(f, "  \"zero_libcuda_linkage\": true,\n");
     fprintf(f, "  \"zero_cuda_symbols\": true,\n");
     fprintf(f, "  \"zero_libcuda_runtime\": true,\n");
-    fprintf(f, "  \"m19_gates_passed\": 18,\n");
-    fprintf(f, "  \"cumulative_regression_passed\": 157,\n");
-    fprintf(f, "  \"total_gates_evaluated\": 175,\n");
+    fprintf(f, "  \"m19_gates_passed\": %d,\n", m19_gate_passed);
+    fprintf(f, "  \"cumulative_regression_passed\": %d,\n", m19_regression_passed);
+    fprintf(f, "  \"total_gates_evaluated\": %d,\n", m19_gate_count + m19_regression_total);
+    fprintf(f, "  \"tests_executed\": [\"M4\", \"M5\", \"M6\", \"M7\", \"M8\", \"M9\", \"M10\", \"M11\", \"M12\", \"M13\", \"M14\", \"M15\", \"M17\", \"M18\", \"M19\"],\n");
     fprintf(f, "  \"canonical_gates\": [\n");
     fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_WORLD_CREATE_PASS\",\n");
     fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS\",\n");
@@ -1821,12 +1929,17 @@ int run_m19_gates(void) {
     report_m19_gate("OMEGA_ACCEL_RESIDENT_STATE_DIGEST_PASS", test_m19_gate14_state_digest(), "Deterministic rolling SHA-256 state digest verifying execution integrity");
     report_m19_gate("OMEGA_ACCEL_RESIDENT_ZERO_LIBCUDA_PASS", test_m19_gate15_zero_libcuda(), "Zero foreign userspace runtime verification (linkage, symbols, maps)");
     report_m19_gate("OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS", test_m19_gate16_clean_clone(), "Clean-clone isolated reproduction on DGX Spark silicon from scratch");
-    report_m19_gate("OMEGA_ACCEL_RESIDENT_REGRESSION_PASS", test_m19_gate17_regression(), "Cumulative regression parity: 157 / 157 prior milestone gates passing");
+    {
+        bool regression_ok = test_m19_gate17_regression();
+        char detail[96];
+        snprintf(detail, sizeof(detail), "Cumulative regression parity: %d / %d prior milestone gates passing", m19_regression_passed, m19_regression_total);
+        report_m19_gate("OMEGA_ACCEL_RESIDENT_REGRESSION_PASS", regression_ok, detail);
+    }
     report_m19_gate("OMEGA_ACCEL_RESIDENT_RECEIPT_PASS", test_m19_gate18_receipt(), "Milestone 19 qualification receipt & cryptographic manifest generation");
 
     printf("================================================================================\n");
     printf("  STAGE 1 / PERSISTENT WORLD QUALIFICATION: %d / %d M19 GATES PASSED\n", m19_gate_passed, m19_gate_count);
-    printf("  TOTAL GATES EVALUATED: %d (18 M19 Gates + 157 Prior Regression Gates)\n", m19_gate_passed + 157);
+    printf("  TOTAL GATES EVALUATED: %d (%d M19 Gates + %d Prior Regression Gates)\n", m19_gate_passed + m19_regression_total, m19_gate_count, m19_regression_total);
     printf("================================================================================\n");
 
     return (m19_gate_passed == m19_gate_count) ? 0 : 1;
