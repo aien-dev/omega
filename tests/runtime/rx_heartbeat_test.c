@@ -793,11 +793,11 @@ static void t_capability_attacks(void) {
     cases[nc++] = (typeof(cases[0])){ "wrong_resource", mint(&e, SUBJ_AIEN, RES_PLAN, RX_RIGHT_WRITE), SUBJ_AIEN, RX_CAP_ERR_RESOURCE };
     cases[nc++] = (typeof(cases[0])){ "insufficient_rights", mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_READ), SUBJ_AIEN, RX_CAP_ERR_RIGHTS };
     RxCapRef rev = mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_WRITE);
-    revoke_cap(&e.admin), rev);
+    revoke_cap(&e.admin, rev);
     cases[nc++] = (typeof(cases[0])){ "revoked", rev, SUBJ_AIEN, RX_CAP_ERR_REVOKED };
     /* Generation replay: revoke, reclaim, the slot is re-minted to someone else. */
     RxCapRef old = mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_WRITE);
-    revoke_cap(&e.admin), old);
+    revoke_cap(&e.admin, old);
     rx_capadmin_reclaim(&e.admin, office_of(&e.admin), old.cap_id);
     RxCapRef reused = mint(&e, SUBJ_OTHER, RES_BELIEF, RX_RIGHT_WRITE);
     CHECK(reused.cap_id == old.cap_id && reused.generation == old.generation + 1,
@@ -854,7 +854,7 @@ static void t_capability_attacks(void) {
     CHECK(rx_capadmin_mint(&e.admin, &ok, &child) == RX_CAP_OK, "valid attenuation refused");
     CHECK(rx_caproot_validate(&e.root, child, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, NULL) == RX_CAP_OK,
           "delegated child invalid");
-    revoke_cap(&e.admin), parent);
+    revoke_cap(&e.admin, parent);
     int child_after = rx_caproot_validate(&e.root, child, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, NULL);
     CHECK(child_after == RX_CAP_ERR_REVOKED || child_after == RX_CAP_ERR_CHAIN,
           "child survived parent revocation (%s)", rx_cap_strerror(child_after));
@@ -897,7 +897,7 @@ static void t_revoke_during_run(void) {
     CHECK(rx_world_add_reaction(&e.w, &d, &id) == RX_OK, "add");
     stimulus(&e, ext, a.x, 0, 41);
     sleep_ms(20);
-    CHECK(revoke_cap(&e.admin), w) == RX_CAP_OK, "revoke");
+    CHECK(revoke_cap(&e.admin, w) == RX_CAP_OK, "revoke");
     rx_world_wait_quiescent(&e.w, 5000);
     CHECK(field(&e, a.y, 0) == 0, "revoked authority executed");
     CHECK(e.w.stats.rejected == 1, "publication not rejected");
