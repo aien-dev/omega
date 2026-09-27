@@ -33,19 +33,39 @@ jobs:
           path: physics-src
       - name: Keep Physics checkout out of Omega tree status
         run: echo 'physics-src/' >> .git/info/exclude
+      - name: Read pinned AIENOS authority
+        id: aienos
+        run: |
+          sha=$(awk 'NF && $1 !~ /^#/ {print $1; exit}' aienos.lock)
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned AIENOS authority
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/aienos
+          ref: ${{ steps.aienos.outputs.sha }}
+          path: aienos-src
+      - name: Keep AIENOS checkout out of Omega tree status
+        run: echo 'aienos-src/' >> .git/info/exclude
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
       - name: Build and run resident reaction host qualification
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           PHYSICS_COMMIT: 29bf6ea84ba19eb2b8612843ec9dd868a647f9bc
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
-        run: make test-r3
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-r3 test-r7
       - name: Emit qualification receipt
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           PHYSICS_COMMIT: 29bf6ea84ba19eb2b8612843ec9dd868a647f9bc
         run: |
           receipt="$(find build/qual-runs -name rx_heartbeat_receipt.json -type f | head -n 1)"
+          native="$(find build/qual-runs -name rx_native_authority_receipt.json -type f | head -n 1)"
           test -n "$receipt"
+          test -n "$native"
           echo "candidate commit: ${OMEGA_CANDIDATE_COMMIT}"
           echo "physics commit: ${PHYSICS_COMMIT}"
           if git diff --quiet && git diff --cached --quiet; then
@@ -71,4 +91,27 @@ jobs:
           print("not-claimed gates: %s" % ", ".join(gates.get("not_claimed", [])))
           print("hardware scope: %s" % doc.get("hardware_scope"))
           PY
+          python3 - "$native" "$OMEGA_CANDIDATE_COMMIT" <<'PY'
+          import hashlib, json, sys
+          path, candidate = sys.argv[1], sys.argv[2]
+          raw = open(path, "rb").read()
+          doc = json.loads(raw)
+          print("native receipt: %s" % path)
+          print("native receipt hash: %s" % hashlib.sha256(raw).hexdigest())
+          print("native candidate: %s" % doc.get("candidate_commit"))
+          print("native candidate bound: %s" % doc.get("candidate_bound"))
+          print("native tree dirty: %s" % doc.get("tree_dirty"))
+          print("native aienos: %s" % doc.get("aienos_commit"))
+          print("native gate: %s" % doc["gates"].get("R7_NATIVE_AUTHORITY"))
+          diffs = doc.get("differential", [])
+          print("native differential rows: %s" % len(diffs))
+          mismatched = [row for row in diffs if row.get("linux") != row.get("native")]
+          if doc.get("candidate_commit") != candidate or doc.get("candidate_bound") is not True:
+              raise SystemExit("native receipt is not bound to this candidate")
+          if doc.get("tree_dirty") is not False:
+              raise SystemExit("native receipt was produced from a dirty tree")
+          if mismatched or not diffs:
+              raise SystemExit("native differential is empty or mismatched")
+          PY
           cat "$receipt"
+          cat "$native"

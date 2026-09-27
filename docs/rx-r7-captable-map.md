@@ -1,11 +1,13 @@
 # R7 design: host capability checks onto the AIENOS table
 
 The mapping itself is `spec/r7-aienos-authority-mapping.md`. This note is the
-short version. R7 is not claimed.
+short version.
 
-Status: design only. The native capability root is not claimed. The Linux
-mint process remains the oracle the reaction world checks. This note does not
-connect AIEN, and it does not give the reaction world an administrative handle.
+Status: the native authority now has the pieces this note said were missing,
+and the host attack list matches the Linux mint. The Linux mint remains the
+oracle and is still in the tree. The reaction world can be pointed at the
+native view; that view cannot mint. This note does not connect real AIEN,
+and it does not give the reaction world an administrative handle.
 
 Grounded in:
 
@@ -25,24 +27,21 @@ Grounded in:
 | Revoking a parent revokes the children | `revoke` walks parent links across the tables the caller supplies, children first. A capability that has been derived from becomes a tombstone so the chain still reaches the children. |
 | Copying the reference is not permission | `lookup` checks rights on the live slot. The host checks the root table. The object stores the reference and still asks the root. |
 
-## What the host oracle has that the table does not
+## What the native authority now carries
 
-These have to be true in the native root before R7 can be claimed. They are
-not true of `CapTable` today.
+The older task table is unchanged. The native authority beside it now has
+the pieces the host oracle was checking:
 
-- Subject. The host refuses a capability presented by the wrong principal.
-  The table has a resource id and rights, and no subject.
-- Epoch and lease. The host refuses a stale epoch and an expired lease.
-  The table has neither a clock nor an epoch.
+- Subject. A capability presented by the wrong principal is refused.
+- Epoch and lease. A stale epoch and an expired lease are refused.
 - Privileged rights stay at the office. Mint, revoke-any, reclaim, epoch, and
-  clock cannot be delegated. The table's rights are read, write, map, grant,
-  derive, and revoke. That is the right shape for attenuation. It is not yet
-  the office split.
-- Resource width. The host resource is 64 bits. The table resource is 32.
-- The mint socket and the office token. They exist so a process that can read
-  the table still cannot mint. The native table is in the kernel. The reaction
-  world must receive a validation view, the way it receives `RxCapRoot` today,
-  and must not receive insert, derive, or revoke.
+  clock cannot be delegated. The task table's rights stay read, write, map,
+  grant, derive, and revoke.
+- Resource width. The native resource is 64 bits. Narrowing drops nothing:
+  a value that does not fit in 32 bits is refused.
+- The reaction world can receive the validation view. It does not receive
+  the office token or the mint path. The Linux mint process remains beside
+  it as the oracle.
 
 ## What must not move across
 
@@ -57,8 +56,9 @@ not true of `CapTable` today.
 
 ## Order
 
-1. Keep the Linux mint process as the oracle. (This is the current code.)
-2. Add subject, epoch, and lease to the native table, or an equivalent the
-   host checks already depend on, without giving the reaction world a way to mint.
-3. Only then switch `rx_caproot_validate` to that table and retire the mint process.
-4. That switch is the R7 claim. This document is not that switch.
+1. The Linux mint process is still the oracle.
+2. Subject, epoch, and lease are on the native authority, and the reaction
+   view cannot mint.
+3. The reaction world can check that authority. The Linux mint stays.
+4. Host parity on the attack list is the R7 evidence. Retiring the Linux
+   oracle would be a later decision.
