@@ -39,7 +39,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3
 
 all: $(TARGET)
 
@@ -152,3 +152,15 @@ clean:
 
 test-m19: $(TARGET)
 	./$(TARGET) --run-m19-gates
+
+# Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
+# CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
+RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/sha256.c src/omega_evidence.c \
+	tests/runtime/rx_heartbeat_test.c
+RX_TEST = $(OUT_DIR)/rx_heartbeat_test
+
+$(RX_TEST): $(RX_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_SRCS)
+
+test-r3: $(RX_TEST)
+	./$(RX_TEST)
