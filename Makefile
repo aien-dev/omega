@@ -25,7 +25,18 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 OBJS = $(patsubst %.c,$(OUT_DIR)/%.o,$(notdir $(SRCS)))
 TARGET = $(OUT_DIR)/omegatool
 
-.PHONY: all clean check-physics-lock test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17
+# Crumbline learner: a separate executable linked ONLY from learner-side code
+# (visible reader, Omega program/realize/verify stack, synthesis vocabulary,
+# OmegaLibrary, Crumbline search). It links no physics, no gate suites and no
+# sealed-side code; the sealed side lives in the crumbs crate.
+CL_SRCS = src/crumbline/cl_common.c src/crumbline/cl_crumb.c src/crumbline/cl_program.c src/crumbline/cl_search.c
+LEARNER_CORE = sha256 omega_canonical omega_validate omega_core omega_codec aarch64_encoder aarch64_decoder \
+	omega_realize omega_realize_synth omega_machine omega_exec omega_verify omega_program omega_synthesis omega_library
+LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
+	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
+LEARNER = $(OUT_DIR)/crumbline-learner
+
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17
 
 all: $(TARGET)
 
@@ -58,6 +69,21 @@ $(OUT_DIR)/m16_native.o: $(PHYSICS_DIR)/m16/m16_native.c | $(OUT_DIR)
 
 $(OUT_DIR)/nvrm.o: $(PHYSICS_DIR)/nvrm/nvrm.c | $(OUT_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OUT_DIR)/crumbline/%.o: src/crumbline/%.c | $(OUT_DIR)
+	mkdir -p $(OUT_DIR)/crumbline
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OUT_DIR)/crumbline_learner.o: tools/crumbline_learner.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+crumbline-learner: $(LEARNER)
+
+test-crumbline: $(LEARNER)
+	./tests/crumbline/run_conformance.sh $(LEARNER) tests/crumbline/vectors
+
+$(LEARNER): $(LEARNER_OBJS)
+	$(CC) $(CFLAGS) -o $@ $(LEARNER_OBJS)
 
 $(OUT_DIR)/omegatool.o: tools/omegatool.c | $(OUT_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
