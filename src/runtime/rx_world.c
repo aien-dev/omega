@@ -615,6 +615,7 @@ static void commit_writes(RxWorld *w, PendingWrite *pw, uint32_t n_pw, RxCrumb *
             o->field_version[f] = o->version;
         }
         object_digest(o);
+        rx_coherent_project(w, pw[j].obj.id);
         k->outputs[k->n_outputs].obj = pw[j].obj;
         k->outputs[k->n_outputs].version = o->version;
         k->outputs[k->n_outputs].mask = pw[j].changed;
@@ -630,8 +631,11 @@ static void finish_writes(RxWorld *w, PendingWrite *pw, uint32_t n_pw, uint64_t 
         for (uint32_t f = 0; f < RX_MAX_FIELDS; f++)
             if (pw[j].changed & RX_FIELD(f)) o->field_writer[f] = cid;
     }
-    for (uint32_t j = 0; j < n_pw; j++)
-        if (pw[j].changed) propagate(w, pw[j].obj.id, pw[j].changed, cid);
+    for (uint32_t j = 0; j < n_pw; j++) {
+        if (!pw[j].changed) continue;
+        rx_coherent_publish(w, pw[j].obj.id, cid);
+        propagate(w, pw[j].obj.id, pw[j].changed, cid);
+    }
 }
 
 /* ---- worker ------------------------------------------------------------- */
@@ -975,16 +979,19 @@ int rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crum
     }
     w->deferred_cap = RX_DEFERRED_INITIAL;
     w->crumb_cap = crumb_cap;
+    if (rx_coherent_format(w) != RX_OK) {
+        free(w->deferred);
+        free(w->crumbs);
+        w->deferred = NULL;
+        w->crumbs = NULL;
+        return RX_ERR_FULL;
+    }
     w->budget.slots = RX_MAX_REACTIONS;
     w->budget.memory_bytes = UINT64_MAX;
     w->budget.energy_budget = UINT64_MAX;
     w->budget.offered_locality = UINT32_MAX;
     w->budget.offered_accel = UINT32_MAX;
     w->budget.compute_mask = UINT32_MAX;
-    for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++) {
-        w->objects[i].id = i;
-        w->objects[i].generation = 1;
-    }
     pthread_mutex_init(&w->mu, NULL);
     pthread_cond_init(&w->work_cv, NULL);
     pthread_cond_init(&w->idle_cv, NULL);
@@ -1021,6 +1028,7 @@ void rx_world_destroy(RxWorld *w) {
     pthread_mutex_unlock(&w->mu);
     for (uint32_t i = 0; i < w->n_workers; i++) pthread_join(w->workers[i], NULL);
     for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++) free(w->subs[i]);
+    rx_coherent_free(w);
     free(w->deferred);
     free(w->crumbs);
     pthread_cond_destroy(&w->work_cv);
@@ -1038,6 +1046,7 @@ int rx_world_create(RxWorld *w, uint32_t type, RxPersist persist, uint64_t resou
         o->type = type;
         o->persist = persist;
         o->resource = resource;
+        o->cap = (RxCapRef){ 0, 0 };
         o->version = 1;
         for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) {
             o->field[f] = init ? init[f] : 0;
@@ -1056,6 +1065,7 @@ int rx_world_create(RxWorld *w, uint32_t type, RxPersist persist, uint64_t resou
         k.t_start_ns = k.t_end_ns = now_ns();
         uint64_t cid = crumb_append(w, &k);
         for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) o->field_writer[f] = cid;
+        rx_coherent_project(w, i);
         out->id = i;
         out->generation = o->generation;
         pthread_mutex_unlock(&w->mu);
@@ -1079,6 +1089,8 @@ int rx_world_retire(RxWorld *w, RxObjRef ref) {
     }
     o->live = false;
     o->generation = next_gen;
+    o->cap = (RxCapRef){ 0, 0 };
+    rx_coherent_project(w, ref.id);
     RxCrumb k;
     memset(&k, 0, sizeof(k));
     k.kind = RX_CRUMB_RETIRE;

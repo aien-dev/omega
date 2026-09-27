@@ -12,18 +12,18 @@
  * This is the simple human reference (ADR 0016 §56 step 2): one world mutex,
  * bounded fixed-size tables. It is deliberately not optimized.
  *
- * Covered here: R1 subset (logical ids, generations, versions, persistence
- * class, atomic publication, stale-reference rejection), R3 (reaction core),
- * R4 subset (causal crumbs + ancestry), R5 host admission (real
- * BLOCKED_RESOURCE, priority, bounded starvation), R6 host stability
- * (fanout, oscillation, livelock, quarantine). Not covered: R2 GPU ABI, R7
- * native capability root, R9 generation barrier. Faculty labels in tests are
- * not the real AIEN, Omega, or AEGIS.
+ * Covered here: one canonical object (semantic record and physical placement
+ * are two aspects of that same object), CPU checks of the pointer-free
+ * cross-engine descriptor, R3 reaction core, R4 causal crumbs, R5 host
+ * admission, R6 host stability. The receipt is what claims a gate. This file
+ * does not claim a graphics-processor run or a native capability root.
+ * Faculty labels in tests are not the real AIEN, Omega, or AEGIS.
  */
 #ifndef RX_WORLD_H
 #define RX_WORLD_H
 
 #include "rx_caproot.h"
+#include "omega_shared_world_abi.h"
 
 #include <pthread.h>
 #include <stdbool.h>
@@ -102,6 +102,37 @@ typedef enum {
 #define RX_ERR_WRITE_SET   -5
 #define RX_ERR_NOT_FOUND   -6
 #define RX_ERR_TIMEOUT     -7
+#define RX_ERR_BOUNDS      -20
+#define RX_ERR_REPLAY      -21
+#define RX_ERR_TORN        -22
+#define RX_ERR_BAD_DESC    -23
+
+/* Reaction notices carried in the frozen 128-byte descriptor.
+ * The older transform request/result values stay in the frozen layout and
+ * are rejected here: a ring slot is a wake, a claim, a publication, a
+ * completion, a fault, or a shutdown. It is not a call to another subsystem.
+ */
+enum {
+    RX_RING_WAKE       = 0x0010u,
+    RX_RING_CLAIM      = 0x0011u,
+    RX_RING_PUBLISH    = 0x0012u,
+    RX_RING_COMPLETE   = 0x0013u,
+    RX_RING_FAULT      = 0x0014u,
+    RX_RING_SHUTDOWN   = 0x0015u
+};
+
+/* Host-side descriptor faults. They do not change the frozen mailbox enum. */
+#define RX_FAULT_BOUNDS    0x0101u
+#define RX_FAULT_CAP       0x0102u
+#define RX_FAULT_TORN_PUB  0x0103u
+#define RX_FAULT_OVERLAP   0x0104u
+#define RX_FAULT_DIVERGED  0x0105u
+
+/* Physical aspect. These name where the bytes sit. They are not the object's name. */
+#define RX_PLACE_COHERENT    1u
+#define RX_LOCALITY_MACHINE  1u
+#define RX_COHERENCY_HOST    1u   /* CPU image of the shared layout; no graphics processor claimed */
+#define RX_OBJECT_WINDOW     64u  /* eight field values, little-endian */
 
 typedef struct { uint32_t id; uint32_t generation; } RxObjRef;
 
@@ -213,6 +244,14 @@ typedef struct {
     uint64_t field_version[RX_MAX_FIELDS];
     uint64_t field_writer[RX_MAX_FIELDS];
     uint8_t digest[32];         /* content identity of (type, fields) */
+    /* Capability reference. Holding this pair is not permission; the root still checks it. */
+    RxCapRef cap;
+    /* Physical aspect of this same object. Not a second object and not a second generation. */
+    uint64_t region_offset;
+    uint64_t size_bytes;
+    uint32_t placement;
+    uint32_t locality;
+    uint32_t coherency;
 } RxObject;
 
 typedef struct { uint32_t reaction; uint32_t generation; uint64_t mask; } RxSub;
@@ -292,6 +331,8 @@ typedef struct {
     uint64_t useful_commits;
     uint64_t churn;
     uint64_t deadline_overdue;
+    uint64_t desc_published;
+    uint64_t desc_rejected;
 } RxStats;
 
 typedef struct RxWorld {
@@ -340,6 +381,12 @@ typedef struct RxWorld {
     uint32_t n_workers;
     bool stopping;
 
+    /* CPU image of OMEGA_SHARED_WORLD_V1. The 32-byte records are a projection
+     * of objects[], not an allocator of their own. */
+    uint8_t *coherent;
+    uint64_t coherent_bytes;
+    uint32_t world_epoch;
+
     RxStats stats;
 } RxWorld;
 
@@ -373,8 +420,47 @@ const RxCrumb *rx_world_crumb(const RxWorld *w, uint64_t id);
 uint64_t rx_world_explain(RxWorld *w, RxObjRef ref, uint32_t field);
 /* Recompute every crumb digest and check parent links; 0 on success. */
 int  rx_world_verify_crumbs(RxWorld *w, uint64_t *out_checked);
-/* SHA-256 over all live objects' (id, generation, type, fields). */
+/* SHA-256 over all live objects' (id, generation, content digest). */
 void rx_world_digest(RxWorld *w, uint8_t out[32]);
+
+/* Record which capability reference speaks for this object. Does not grant rights. */
+int  rx_world_bind_capability(RxWorld *w, RxObjRef ref, RxCapRef cap);
+
+/* Copy the 32-byte physical projection. Generation is the canonical one. */
+int  rx_world_physical(RxWorld *w, RxObjRef ref, OmegaSharedWorldObject *out);
+
+/* Hostile-writer seam: store bytes into the physical projection only.
+ * Does not change the canonical object, its generation, or its capability. */
+int  rx_world_overwrite_physical(RxWorld *w, uint32_t id, const OmegaSharedWorldObject *src);
+
+/* Validate one descriptor against the canonical object and the capability root.
+ * expected_sequence is the next ring sequence this descriptor must carry.
+ * *out_fault receives a mailbox or RX_FAULT_* code. */
+int  rx_world_check_descriptor(RxWorld *w, const OmegaSharedWorldDesc *desc,
+                               uint64_t expected_sequence, uint32_t *out_fault);
+
+/* Copy the next publication-ring slot and validate it. A hostile slot is
+ * consumed and rejected so the ring still moves forward. */
+int  rx_world_take_publication(RxWorld *w, OmegaSharedWorldDesc *out, uint32_t *out_fault);
+
+/* Place a raw descriptor on the publication ring without correcting it.
+ * The next take decides whether it is acceptable. */
+int  rx_world_inject_descriptor(RxWorld *w, const OmegaSharedWorldDesc *desc);
+
+/* Next publication sequence a producer would stamp. */
+uint64_t rx_world_publication_tail(RxWorld *w);
+
+/* Byte offset of physical record 0 inside the coherent image. */
+uint64_t rx_world_physical_table_offset(void);
+
+/* Fill checksum and the frozen magic/version. Does not invent an identity. */
+void rx_world_seal_descriptor(OmegaSharedWorldDesc *desc);
+
+/* Caller holds the world lock. Projection and publication of the same object. */
+int  rx_coherent_format(RxWorld *w);
+void rx_coherent_free(RxWorld *w);
+void rx_coherent_project(RxWorld *w, uint32_t id);
+void rx_coherent_publish(RxWorld *w, uint32_t id, uint64_t crumb_id);
 
 bool rx_state_transition_legal(RxState from, RxState to);
 const char *rx_state_name(RxState s);

@@ -1788,6 +1788,232 @@ static void t_periodic_and_backoff(void) {
     audit_and_close(&e);
 }
 
+/* ---- one identity, then the CPU cross-engine descriptor ------------------- */
+
+static uint32_t ld32(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+static uint64_t ld64(const uint8_t *p) {
+    uint64_t v = 0;
+    for (int i = 0; i < 8; i++) v |= (uint64_t)p[i] << (8 * i);
+    return v;
+}
+static void st32(uint8_t *p, uint32_t v) {
+    p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8);
+    p[2] = (uint8_t)(v >> 16); p[3] = (uint8_t)(v >> 24);
+}
+static void st64(uint8_t *p, uint64_t v) {
+    for (int i = 0; i < 8; i++) p[i] = (uint8_t)(v >> (8 * i));
+}
+
+static RxObjRef g_note_out;
+
+static int fn_note(RxCtx *c) {
+    c->out[c->n_out++] = (RxMutation){ g_note_out, 0, c->in[0].field[0] + 1 };
+    return 0;
+}
+
+static OmegaSharedWorldDesc make_pub(RxWorld *w, const RxObject *o, RxCapRef cap, uint64_t crumb) {
+    OmegaSharedWorldDesc d;
+    memset(&d, 0, sizeof(d));
+    d.msg_type = RX_RING_PUBLISH;
+    d.sequence = rx_world_publication_tail(w);
+    d.world_epoch = 1;
+    d.object_id = o->id;
+    d.object_generation = o->generation;
+    d.object_offset = 0;
+    d.object_length = (uint32_t)o->size_bytes;
+    d.payload_len = 24;
+    st32(d.payload, cap.cap_id);
+    st32(d.payload + 4, cap.generation);
+    st64(d.payload + 8, o->version);
+    st64(d.payload + 16, crumb);
+    rx_world_seal_descriptor(&d);
+    return d;
+}
+
+static int inject_take(RxWorld *w, const OmegaSharedWorldDesc *d, uint32_t *fault) {
+    if (rx_world_inject_descriptor(w, d) != RX_OK) return RX_ERR_FULL;
+    return rx_world_take_publication(w, NULL, fault);
+}
+
+static void t_one_identity(void) {
+    begin("canonical_object_one_identity", "one id, one generation, one lineage");
+    Env e;
+    CHECK(env_start(&e, 2) == 0, "setup");
+    CHECK(sizeof(OmegaSharedWorldObject) == 32, "physical record changed size");
+    CHECK(sizeof(OmegaSharedWorldDesc) == 128, "descriptor changed size");
+    RxObjRef obj = mkobj(&e, RES_SENSOR, 0);
+    g_note_out = mkobj(&e, RES_BELIEF, 0);
+    RxObject sem;
+    CHECK(rx_world_read(&e.w, obj, &sem) == RX_OK, "read");
+    OmegaSharedWorldObject phys;
+    CHECK(rx_world_physical(&e.w, obj, &phys) == RX_OK, "physical");
+    CHECK(phys.object_id == sem.id && phys.object_id == obj.id, "two ids for one object");
+    CHECK(phys.generation == sem.generation && sem.generation == 1, "create opened a second generation");
+    CHECK(phys.permissions == 0, "shared record carried a permission bit");
+    CHECK(phys.region_offset == sem.region_offset && phys.size_bytes == sem.size_bytes, "placement diverged");
+    CHECK(sem.size_bytes == RX_OBJECT_WINDOW, "window length");
+    CHECK(sem.region_offset > sem.id && sem.region_offset < e.w.coherent_bytes, "placement is not inside the shared image");
+    CHECK(sem.placement == RX_PLACE_COHERENT && sem.locality == RX_LOCALITY_MACHINE, "locality");
+    CHECK(sem.coherency == RX_COHERENCY_HOST, "coherency");
+    CHECK(sem.cap.cap_id == 0 && sem.cap.generation == 0, "unbound object named a capability");
+
+    RxCapRef cap = mint(&e, SUBJ_EXTERNAL, RES_SENSOR, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    RxCapRef rd = mint(&e, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ);
+    RxCapRef wr = mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_WRITE);
+    CHECK(rx_world_bind_capability(&e.w, obj, cap) == RX_OK, "bind");
+    RxReactionDesc d;
+    desc_init(&d, "note", RX_FACULTY_AIEN, SUBJ_AIEN, fn_note, NULL);
+    add_trigger(&d, obj, RX_FIELD(0));
+    add_write(&d, g_note_out, RX_FIELD(0));
+    add_cap(&d, rd, RES_SENSOR, RX_RIGHT_READ);
+    add_cap(&d, wr, RES_BELIEF, RX_RIGHT_WRITE);
+    uint32_t rid = 0;
+    CHECK(rx_world_add_reaction(&e.w, &d, &rid) == RX_OK, "add note");
+
+    int64_t cid = stimulus(&e, cap, obj, 0, 5);
+    CHECK(cid > 0, "stimulus");
+    CHECK(rx_world_wait_quiescent(&e.w, 3000) == RX_OK, "quiet");
+    CHECK(field(&e, g_note_out, 0) == 6, "host reaction did not wake");
+    CHECK(e.w.reactions[rid].commits == 1, "host reaction did not publish");
+
+    OmegaSharedWorldDesc got;
+    uint32_t fault = 99;
+    CHECK(rx_world_take_publication(&e.w, &got, &fault) == RX_OK, "publication was not accepted");
+    CHECK(fault == 0, "fresh publication raised a fault");
+    CHECK(got.msg_type == RX_RING_PUBLISH, "ring was not a publication");
+    CHECK(got.object_id == obj.id && got.object_generation == obj.generation, "descriptor named a different object");
+    RxObject after;
+    CHECK(rx_world_read(&e.w, obj, &after) == RX_OK, "reread");
+    CHECK(after.generation == obj.generation, "publication bumped the generation");
+    CHECK(after.version > sem.version, "publication did not advance the canonical version");
+    CHECK(ld64(got.payload + 8) == after.version, "descriptor version differs from the object");
+    CHECK(ld64(got.payload + 16) == (uint64_t)cid, "descriptor lost the causal record");
+    CHECK(ld32(got.payload) == cap.cap_id && ld32(got.payload + 4) == cap.generation, "capability reference differs");
+    CHECK(rx_world_explain(&e.w, obj, 0) == (uint64_t)cid, "field history points elsewhere");
+    const RxCrumb *k = rx_world_crumb(&e.w, (uint64_t)cid);
+    CHECK(k && k->kind == RX_CRUMB_EXTERNAL, "stimulus crumb");
+    CHECK(k->n_outputs == 1 && k->outputs[0].obj.id == got.object_id &&
+          k->outputs[0].obj.generation == got.object_generation, "lineage broke");
+    CHECK(rx_world_take_publication(&e.w, NULL, &fault) == RX_ERR_NOT_FOUND, "a second object was published");
+
+    uint32_t old_gen = obj.generation;
+    CHECK(rx_world_retire(&e.w, obj) == RX_OK, "retire");
+    RxObjRef neu = { obj.id, e.w.objects[obj.id].generation };
+    CHECK(neu.generation == old_gen + 1, "one generation counter did not advance");
+    OmegaSharedWorldObject retired;
+    CHECK(rx_world_physical(&e.w, neu, &retired) == RX_OK, "retired projection missing");
+    CHECK(retired.generation == neu.generation && retired.object_id == obj.id, "projection has its own generation");
+    CHECK(retired.state == OMEGA_SW_OBJ_REVOKED && retired.permissions == 0, "retired record");
+    OmegaSharedWorldDesc stale = got;
+    stale.sequence = rx_world_publication_tail(&e.w);
+    stale.object_generation = old_gen;
+    rx_world_seal_descriptor(&stale);
+    CHECK(inject_take(&e.w, &stale, &fault) == RX_ERR_STALE_GEN, "stale generation was accepted");
+    audit_and_close(&e);
+}
+
+static void t_identity_closed(void) {
+    begin("identity_space_is_closed", "every live object has one physical record");
+    Env e;
+    CHECK(env_start(&e, 1) == 0, "setup");
+    RxObjRef refs[RX_MAX_OBJECTS];
+    uint32_t n = 0;
+    for (; n < RX_MAX_OBJECTS; n++) {
+        refs[n] = mkobj(&e, RES_SCRATCH, n);
+        if (refs[n].id == UINT32_MAX) break;
+    }
+    CHECK(n == RX_MAX_OBJECTS, "identity space is smaller than the host world");
+    RxObjRef extra = mkobj(&e, RES_SCRATCH, 0);
+    CHECK(extra.id == UINT32_MAX, "an object was created with nowhere to stand");
+    uint32_t bad = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        RxObject sem;
+        OmegaSharedWorldObject phys;
+        if (rx_world_read(&e.w, refs[i], &sem) != RX_OK ||
+            rx_world_physical(&e.w, refs[i], &phys) != RX_OK ||
+            phys.object_id != sem.id || phys.generation != sem.generation ||
+            phys.permissions != 0 || phys.region_offset != sem.region_offset ||
+            phys.size_bytes != sem.size_bytes)
+            bad++;
+    }
+    CHECK(bad == 0, "a live object disagreed with its physical record");
+    audit_and_close(&e);
+}
+
+static void t_cross_engine(void) {
+    begin("cross_engine_descriptor_cpu", "pointer-free descriptor, hostile input rejected");
+    Env e;
+    CHECK(env_start(&e, 1) == 0, "setup");
+    RxObjRef obj = mkobj(&e, RES_SENSOR, 1);
+    RxCapRef cap = mint(&e, SUBJ_EXTERNAL, RES_SENSOR, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    RxCapRef other = mint(&e, SUBJ_EXTERNAL, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    CHECK(rx_world_bind_capability(&e.w, obj, cap) == RX_OK, "bind");
+    int64_t cid = stimulus(&e, cap, obj, 0, 9);
+    CHECK(cid > 0, "stimulus");
+    CHECK(rx_world_wait_quiescent(&e.w, 2000) == RX_OK, "quiet");
+    OmegaSharedWorldDesc good;
+    uint32_t fault = 99;
+    CHECK(rx_world_take_publication(&e.w, &good, &fault) == RX_OK, "good descriptor rejected");
+    CHECK(good.msg_type == RX_RING_PUBLISH, "message kind");
+    CHECK(good.object_offset == 0 && good.object_length == RX_OBJECT_WINDOW, "window");
+    CHECK((good.flags & OMEGA_SW_FLAG_CHECKSUM) != 0, "checksum missing");
+
+    RxObject sem;
+    CHECK(rx_world_read(&e.w, obj, &sem) == RX_OK, "read");
+    OmegaSharedWorldObject poked;
+    CHECK(rx_world_physical(&e.w, obj, &poked) == RX_OK, "physical");
+    poked.permissions = OMEGA_SW_PERM_READ | OMEGA_SW_PERM_WRITE;
+    CHECK(rx_world_overwrite_physical(&e.w, obj.id, &poked) == RX_OK, "poke permissions");
+    OmegaSharedWorldDesc again = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    CHECK(inject_take(&e.w, &again, &fault) == RX_OK, "permission bits were treated as authority");
+
+    poked.generation = sem.generation + 9;
+    CHECK(rx_world_overwrite_physical(&e.w, obj.id, &poked) == RX_OK, "poke generation");
+    OmegaSharedWorldDesc lied = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    CHECK(inject_take(&e.w, &lied, &fault) == RX_ERR_STALE_GEN, "edited generation became a second object");
+    poked.generation = sem.generation;
+    poked.permissions = 0;
+    CHECK(rx_world_overwrite_physical(&e.w, obj.id, &poked) == RX_OK, "restore");
+
+    OmegaSharedWorldDesc torn = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    torn.payload[30] ^= 0x5a;
+    CHECK(inject_take(&e.w, &torn, &fault) == RX_ERR_TORN, "torn descriptor accepted");
+    OmegaSharedWorldDesc oldver = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    st64(oldver.payload + 8, 0);
+    rx_world_seal_descriptor(&oldver);
+    CHECK(inject_take(&e.w, &oldver, &fault) == RX_ERR_TORN, "stale publication version accepted");
+
+    OmegaSharedWorldDesc replay = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    replay.sequence = rx_world_publication_tail(&e.w) - 1;
+    rx_world_seal_descriptor(&replay);
+    CHECK(inject_take(&e.w, &replay, &fault) == RX_ERR_REPLAY, "replayed sequence accepted");
+    OmegaSharedWorldDesc skip = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    skip.sequence += 3;
+    rx_world_seal_descriptor(&skip);
+    CHECK(inject_take(&e.w, &skip, &fault) == RX_ERR_REPLAY, "skipped sequence accepted");
+
+    OmegaSharedWorldDesc wide = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    wide.object_length = (uint32_t)sem.size_bytes + 1u;
+    rx_world_seal_descriptor(&wide);
+    CHECK(inject_take(&e.w, &wide, &fault) == RX_ERR_BOUNDS, "length past the object accepted");
+    OmegaSharedWorldDesc call = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    call.msg_type = OMEGA_SW_MSG_XFORM_REQ;
+    rx_world_seal_descriptor(&call);
+    CHECK(inject_take(&e.w, &call, &fault) == RX_ERR_BAD_DESC, "transform call accepted on the reaction ring");
+    OmegaSharedWorldDesc magic = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    magic.magic = 0;
+    CHECK(inject_take(&e.w, &magic, &fault) == RX_ERR_BAD_DESC, "bad magic accepted");
+
+    OmegaSharedWorldDesc wrong = make_pub(&e.w, &sem, other, (uint64_t)cid);
+    CHECK(inject_take(&e.w, &wrong, &fault) == RX_ERR_AUTHORITY, "a different capability was accepted");
+    CHECK(revoke_cap(&e.admin, cap) == RX_CAP_OK, "revoke");
+    OmegaSharedWorldDesc dead = make_pub(&e.w, &sem, cap, (uint64_t)cid);
+    CHECK(inject_take(&e.w, &dead, &fault) == RX_ERR_AUTHORITY, "revoked capability was accepted");
+    audit_and_close(&e);
+}
+
 /* ---- receipt -------------------------------------------------------------- */
 
 static void write_receipt(int total_checks, int total_fail, const char *binary_digest) {
@@ -1840,9 +2066,21 @@ static void write_receipt(int total_checks, int total_fail, const char *binary_d
             r5_ok ? "PASS (host reference; not silicon)" : "FAIL");
     fprintf(f, "    \"R6_REACTION_STABILITY\": \"%s\",\n",
             r6_ok ? "PASS (host reference; not silicon)" : "FAIL");
+    int r1_ok = all, r2_ok = all;
+    for (int i = 0; i < g_ntests; i++) {
+        if ((strcmp(g_tests[i].name, "canonical_object_one_identity") == 0 ||
+             strcmp(g_tests[i].name, "identity_space_is_closed") == 0) && g_tests[i].failures)
+            r1_ok = 0;
+        if (strcmp(g_tests[i].name, "cross_engine_descriptor_cpu") == 0 && g_tests[i].failures)
+            r2_ok = 0;
+    }
+    fprintf(f, "    \"R1_CANONICAL_WORLD\": \"%s\",\n",
+            r1_ok ? "PASS (host CPU; one identity; not silicon)" : "FAIL");
+    fprintf(f, "    \"R2_CROSS_ENGINE_ABI\": \"%s\",\n",
+            r2_ok ? "PASS (host CPU; pointer-free descriptor; not silicon)" : "FAIL");
     fprintf(f, "    \"authority_host_reference\": \"%s\",\n",
             all ? "hardened; R7 native root NOT claimed" : "FAIL");
-    fprintf(f, "    \"not_claimed\": [\"R1 canonical shared pool (unify with OMEGA_SHARED_WORLD_V1)\", \"R2\", \"R7 native capability root\", \"R8\", \"R9\", \"R10-R16\", \"R12 silicon\"]\n  },\n");
+    fprintf(f, "    \"not_claimed\": [\"R7 native capability root\", \"R8\", \"R9\", \"R10-R16\", \"R12 silicon\"]\n  },\n");
     fprintf(f, "  \"tests\": [\n");
     for (int i = 0; i < g_ntests; i++)
         fprintf(f, "    {\"name\": \"%s\", \"invariants\": \"%s\", \"checks\": %d, \"failures\": %d}%s\n",
@@ -1914,6 +2152,9 @@ int main(int argc, char **argv) {
     t_priority_ladder();
     t_stability();
     t_periodic_and_backoff();
+    t_one_identity();
+    t_identity_closed();
+    t_cross_engine();
 
     int checks = 0, fails = 0;
     for (int i = 0; i < g_ntests; i++) {
@@ -1929,9 +2170,11 @@ int main(int argc, char **argv) {
            (unsigned long long)g_crumbs_audited, (unsigned long long)g_illegal_transitions);
     write_receipt(checks, fails, dg);
     printf("%s\n", fails == 0
-                       ? "R3_REACTION_CORE: PASS (host)  R4_CAUSAL_TRACE: PASS (host)  "
+                       ? "R1_CANONICAL_WORLD: PASS (host CPU, not silicon)  "
+                         "R2_CROSS_ENGINE_ABI: PASS (host CPU, not silicon)  "
+                         "R3_REACTION_CORE: PASS (host)  R4_CAUSAL_TRACE: PASS (host)  "
                          "R5_RESOURCE_ARBITRATION: PASS (host)  R6_REACTION_STABILITY: PASS (host)  "
                          "R7: NOT CLAIMED"
-                       : "R3/R4/R5/R6: FAIL");
+                       : "R1/R2/R3/R4/R5/R6: FAIL");
     return fails == 0 ? 0 : 1;
 }
