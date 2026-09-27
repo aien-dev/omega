@@ -41,7 +41,7 @@ static void object_digest(RxObject *o) {
 bool rx_state_transition_legal(RxState from, RxState to) {
     switch (from) {
     case RX_DORMANT:
-        return to == RX_READY;
+        return to == RX_READY || to == RX_BLOCKED_RESOURCE;
     case RX_READY:
         return to == RX_RUNNING || to == RX_BLOCKED_AUTHORITY ||
                to == RX_BLOCKED_RESOURCE || to == RX_INVALIDATED;
@@ -53,8 +53,10 @@ bool rx_state_transition_legal(RxState from, RxState to) {
          * explicit exit is PUBLISHING -> INVALIDATED. */
         return to == RX_COMMITTED || to == RX_CONFLICT || to == RX_REJECTED ||
                to == RX_INVALIDATED;
+    case RX_BLOCKED_RESOURCE:
+        return to == RX_DORMANT || to == RX_READY;
     case RX_COMMITTED: case RX_INVALIDATED: case RX_FAILED: case RX_CANCELLED:
-    case RX_CONFLICT: case RX_REJECTED: case RX_BLOCKED_AUTHORITY: case RX_BLOCKED_RESOURCE:
+    case RX_CONFLICT: case RX_REJECTED: case RX_BLOCKED_AUTHORITY:
         return to == RX_DORMANT;
     default:
         return false;
@@ -114,6 +116,7 @@ static void crumb_hash(const RxWorld *w, const RxCrumb *k, uint8_t out[32]) {
     for (uint32_t i = 0; i < k->n_caps; i++) {
         put32(&c, k->caps[i].cap_id);
         put32(&c, k->caps[i].generation);
+        put32(&c, k->cap_issuer[i]);
     }
     put32(&c, k->n_outputs);
     for (uint32_t i = 0; i < k->n_outputs; i++) {
@@ -189,8 +192,33 @@ int rx_world_verify_crumbs(RxWorld *w, uint64_t *out_checked) {
 
 /* ---- wakeups and admission ---------------------------------------------- */
 
+static bool cause_is_external(const RxWorld *w, uint64_t cause) {
+    if (cause == 0 || cause > w->n_crumbs) return false;
+    return w->crumbs[cause - 1].kind == RX_CRUMB_EXTERNAL;
+}
+
+static bool res_fits(const RxWorld *w, const RxReaction *r) {
+    const RxResourceNeed *n = &r->desc.need;
+    if (w->used_slots >= w->budget.slots) return false;
+    if (n->memory_bytes > w->budget.memory_bytes - w->used_memory) return false;
+    if (n->energy_cost > w->budget.energy_budget - w->used_energy) return false;
+    if (n->locality && (n->locality & w->budget.offered_locality) != n->locality) return false;
+    if (n->accelerator_features &&
+        (n->accelerator_features & w->budget.offered_accel) != n->accelerator_features)
+        return false;
+    if (n->compute_class &&
+        (w->budget.compute_mask & (1u << (n->compute_class & 31u))) == 0)
+        return false;
+    return true;
+}
+
 static void enqueue(RxWorld *w, uint32_t rid) {
     uint32_t p = w->reactions[rid].desc.priority;
+    if (p >= RX_PRIORITY_CLASSES) p = RX_PRIO_BACKGROUND;
+    if (w->ready_len[p] >= RX_MAX_REACTIONS) {
+        w->stats.suppressed_wakes++;
+        return;
+    }
     uint32_t tail = (w->ready_head[p] + w->ready_len[p]) % RX_MAX_REACTIONS;
     w->ready_q[p][tail] = rid;
     w->ready_len[p]++;
@@ -198,24 +226,136 @@ static void enqueue(RxWorld *w, uint32_t rid) {
     pthread_cond_signal(&w->work_cv);
 }
 
-static void wake(RxWorld *w, uint32_t rid, uint64_t cause) {
+static void gauge_blocked(RxWorld *w) {
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < w->n_reactions; i++)
+        if (w->reactions[i].state == RX_BLOCKED_RESOURCE) n++;
+    if (n > w->peak_blocked) w->peak_blocked = n;
+}
+
+static int better_admit(const RxReaction *a, const RxReaction *b) {
+    if (a->desc.priority != b->desc.priority) return a->desc.priority < b->desc.priority;
+    if (a->wait_seq != b->wait_seq) return a->wait_seq < b->wait_seq;
+    return a->service < b->service;
+}
+
+static void charge(RxWorld *w, RxReaction *r) {
+    r->holding = true;
+    r->memory_held = r->desc.need.memory_bytes;
+    r->energy_held = r->desc.need.energy_cost;
+    w->used_slots++;
+    w->used_memory += r->memory_held;
+    w->used_energy += r->energy_held;
+    r->service++;
+    if (w->used_slots > w->peak_slots) w->peak_slots = w->used_slots;
+    if (r->desc.need.deadline && w->budget.logical_tick > r->desc.need.deadline)
+        w->stats.deadline_overdue++;
+}
+
+static void uncharge(RxWorld *w, RxReaction *r) {
+    if (!r->holding) return;
+    if (w->used_slots) w->used_slots--;
+    if (w->used_memory >= r->memory_held) w->used_memory -= r->memory_held;
+    else w->used_memory = 0;
+    if (w->used_energy >= r->energy_held) w->used_energy -= r->energy_held;
+    else w->used_energy = 0;
+    r->holding = false;
+    r->memory_held = 0;
+    r->energy_held = 0;
+}
+
+static void admit_one(RxWorld *w, uint32_t rid) {
+    RxReaction *r = &w->reactions[rid];
+    if (r->state != RX_BLOCKED_RESOURCE || !res_fits(w, r)) return;
+    set_state(w, r, RX_READY);
+    charge(w, r);
+    enqueue(w, rid);
+}
+
+/* Pick who may leave BLOCKED_RESOURCE. Higher class wins, except that after
+ * starvation_bound higher-class admissions a fitting lower class is served.
+ * Adapted from the AIENOS run queue's bounded background interval. */
+static int pick_admit(RxWorld *w) {
+    int best = -1;
+    int worst = -1;
+    for (uint32_t i = 0; i < w->n_reactions; i++) {
+        RxReaction *r = &w->reactions[i];
+        if (r->state != RX_BLOCKED_RESOURCE || r->quarantined) continue;
+        if (!res_fits(w, r)) continue;
+        if (best < 0 || better_admit(r, &w->reactions[best])) best = (int)i;
+        if (worst < 0 || r->desc.priority > w->reactions[worst].desc.priority ||
+            (r->desc.priority == w->reactions[worst].desc.priority &&
+             r->wait_seq < w->reactions[worst].wait_seq))
+            worst = (int)i;
+    }
+    if (best < 0) return -1;
+    bool lower = w->reactions[worst].desc.priority > w->reactions[best].desc.priority;
+    uint32_t bound = w->budget.starvation_bound;
+    if (lower && bound && w->since_lower_admit >= bound) {
+        w->since_lower_admit = 0;
+        return worst;
+    }
+    if (lower) {
+        if (w->since_lower_admit < UINT32_MAX) w->since_lower_admit++;
+    } else {
+        w->since_lower_admit = 0;
+    }
+    return best;
+}
+
+static void try_admit(RxWorld *w) {
+    for (;;) {
+        int id = pick_admit(w);
+        if (id < 0) break;
+        admit_one(w, (uint32_t)id);
+    }
+    gauge_blocked(w);
+}
+
+static void demand(RxWorld *w, uint32_t rid, uint64_t cause) {
     RxReaction *r = &w->reactions[rid];
     w->stats.wakes++;
+    if (r->quarantined && !cause_is_external(w, cause)) {
+        r->suppressed++;
+        w->stats.suppressed_wakes++;
+        return;
+    }
+    if (cause_is_external(w, cause)) {
+        r->quarantined = false;
+        r->osc_streak = 0;
+        r->noop_streak = 0;
+        r->conflict_streak = 0;
+    }
+    if (w->stability.activation_budget &&
+        r->activations >= w->stability.activation_budget) {
+        if (!r->quarantined) {
+            r->quarantined = true;
+            w->stats.quarantines++;
+        }
+        r->suppressed++;
+        w->stats.suppressed_wakes++;
+        return;
+    }
     switch (r->state) {
     case RX_DORMANT:
-        set_state(w, r, RX_READY);
+        set_state(w, r, RX_BLOCKED_RESOURCE);
         r->wake_cause = cause;
         r->coalesced = 0;
-        enqueue(w, rid);
+        r->wait_seq = ++w->admit_seq;
+        w->stats.blocked_resource++;
+        try_admit(w);
+        break;
+    case RX_BLOCKED_RESOURCE:
+        r->wake_cause = cause;
+        r->coalesced++;
+        w->stats.coalesced_wakes++;
         break;
     case RX_READY:
-        /* Already admitted-pending: fold this wake into the same activation. */
         r->wake_cause = cause;
         r->coalesced++;
         w->stats.coalesced_wakes++;
         break;
     default:
-        /* Running or publishing: its snapshot may be stale. Run again after. */
         r->wake_cause = cause;
         r->rearm = true;
         w->stats.coalesced_wakes++;
@@ -223,26 +363,69 @@ static void wake(RxWorld *w, uint32_t rid, uint64_t cause) {
     }
 }
 
-/* Only the subscribers of this object, filtered by field mask. */
+static int prio_less(const RxWorld *w, uint32_t a, uint32_t b) {
+    uint32_t pa = w->reactions[a].desc.priority;
+    uint32_t pb = w->reactions[b].desc.priority;
+    if (pa != pb) return pa < pb;
+    return a < b;
+}
+
+/* Only the subscribers of this object, filtered by field mask and generation.
+ * Fanout above the configured limit is suppressed, highest priority first. */
 static void propagate(RxWorld *w, uint32_t obj, uint64_t changed, uint64_t cause) {
+    if (!w->objects[obj].live) return;
     uint32_t gen = w->objects[obj].generation;
+    uint32_t hits[RX_MAX_REACTIONS];
+    uint32_t nh = 0;
     for (uint32_t i = 0; i < w->n_subs[obj]; i++) {
         const RxSub *s = &w->subs[obj][i];
         w->stats.subscriptions_checked++;
         if (s->generation != gen) continue;
-        if (s->mask & changed) wake(w, s->reaction, cause);
+        if (!(s->mask & changed)) continue;
+        if (nh < RX_MAX_REACTIONS) hits[nh++] = s->reaction;
+    }
+    for (uint32_t i = 1; i < nh; i++) {
+        uint32_t v = hits[i];
+        uint32_t j = i;
+        while (j > 0 && prio_less(w, v, hits[j - 1])) {
+            hits[j] = hits[j - 1];
+            j--;
+        }
+        hits[j] = v;
+    }
+    uint32_t allow = nh;
+    if (w->stability.fanout_limit && allow > w->stability.fanout_limit)
+        allow = w->stability.fanout_limit;
+    for (uint32_t i = 0; i < allow; i++) demand(w, hits[i], cause);
+    for (uint32_t i = allow; i < nh; i++) {
+        w->reactions[hits[i]].suppressed++;
+        w->stats.suppressed_wakes++;
     }
 }
 
 static bool pop_ready(RxWorld *w, uint32_t *rid) {
+    int high = -1;
+    int low = -1;
     for (uint32_t p = 0; p < RX_PRIORITY_CLASSES; p++) {
         if (w->ready_len[p] == 0) continue;
-        *rid = w->ready_q[p][w->ready_head[p]];
-        w->ready_head[p] = (w->ready_head[p] + 1) % RX_MAX_REACTIONS;
-        w->ready_len[p]--;
-        return true;
+        if (high < 0) high = (int)p;
+        low = (int)p;
     }
-    return false;
+    if (high < 0) return false;
+    uint32_t p = (uint32_t)high;
+    uint32_t bound = w->budget.starvation_bound;
+    if (low > high && bound && w->since_lower_run >= bound) {
+        p = (uint32_t)low;
+        w->since_lower_run = 0;
+    } else if (low > high) {
+        if (w->since_lower_run < UINT32_MAX) w->since_lower_run++;
+    } else {
+        w->since_lower_run = 0;
+    }
+    *rid = w->ready_q[p][w->ready_head[p]];
+    w->ready_head[p] = (w->ready_head[p] + 1) % RX_MAX_REACTIONS;
+    w->ready_len[p]--;
+    return true;
 }
 
 /* ---- validation --------------------------------------------------------- */
@@ -370,17 +553,74 @@ static void finish_writes(RxWorld *w, PendingWrite *pw, uint32_t n_pw, uint64_t 
 
 /* ---- worker ------------------------------------------------------------- */
 
+static void note_conflict(RxWorld *w, RxReaction *r) {
+    r->conflict_streak++;
+    w->stats.churn++;
+    if (w->stability.conflict_limit && r->conflict_streak >= w->stability.conflict_limit &&
+        !r->quarantined) {
+        r->quarantined = true;
+        w->stats.quarantines++;
+    }
+}
+
+static void note_value(RxWorld *w, RxReaction *r, int progressed, uint64_t value) {
+    if (!progressed) {
+        r->noop_streak++;
+        w->stats.churn++;
+        if (w->stability.livelock_limit && r->noop_streak >= w->stability.livelock_limit &&
+            !r->quarantined) {
+            r->quarantined = true;
+            w->stats.quarantines++;
+            w->stats.livelock_trips++;
+        }
+        return;
+    }
+    r->noop_streak = 0;
+    r->conflict_streak = 0;
+    int flipped = r->have_two && value == r->prev_out && value != r->last_out;
+    if (flipped) {
+        r->osc_streak++;
+        w->stats.churn++;
+    } else {
+        r->osc_streak = 0;
+        w->stats.useful_commits++;
+    }
+    if (r->have_last) {
+        r->prev_out = r->last_out;
+        r->have_two = true;
+    }
+    r->last_out = value;
+    r->have_last = true;
+    if (w->stability.oscillation_limit && r->osc_streak >= w->stability.oscillation_limit &&
+        !r->quarantined) {
+        r->quarantined = true;
+        w->stats.quarantines++;
+        w->stats.oscillation_trips++;
+    }
+}
+
 static void end_activation(RxWorld *w, uint32_t rid) {
     RxReaction *r = &w->reactions[rid];
+    uncharge(w, r);
+    if (r->quarantined) r->rearm = false;
     set_state(w, r, RX_DORMANT);
-    w->in_flight--;
+    if (w->in_flight) w->in_flight--;
     if (r->rearm) {
+        uint64_t cause = r->wake_cause;
         r->rearm = false;
-        set_state(w, r, RX_READY);
-        r->coalesced = 0;
-        enqueue(w, rid);
+        demand(w, rid, cause);
+    } else {
+        try_admit(w);
     }
     if (w->in_flight == 0) pthread_cond_broadcast(&w->idle_cv);
+}
+
+static void stamp_cap(RxWorld *w, RxCrumb *k, uint32_t i, RxCapRef ref) {
+    k->caps[i] = ref;
+    k->cap_issuer[i] = 0;
+    RxCapEntry e;
+    if (w->root && rx_caproot_inspect(w->root, ref, &e) == RX_CAP_OK)
+        k->cap_issuer[i] = e.issuer;
 }
 
 static void fill_inputs(RxCrumb *k, const RxCtx *ctx, const RxDep *deps, uint32_t n) {
@@ -404,7 +644,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
     k.coalesced_wakes = r->coalesced;
     k.t_start_ns = now_ns();
     k.n_caps = d->n_caps;
-    for (uint32_t i = 0; i < d->n_caps; i++) k.caps[i] = d->caps[i].ref;
+    for (uint32_t i = 0; i < d->n_caps; i++) stamp_cap(w, &k, i, d->caps[i].ref);
     add_parent(&k, r->wake_cause);
     r->activations++;
 
@@ -421,6 +661,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
             k.t_end_ns = now_ns();
             crumb_append(w, &k);
             w->stats.invalidations++;
+            note_conflict(w, r);
             end_activation(w, rid);
             return;
         }
@@ -496,6 +737,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         k.t_end_ns = now_ns();
         crumb_append(w, &k);
         w->stats.invalidations++;
+        note_conflict(w, r);
         /* The change that made this stale has already re-armed it. */
         end_activation(w, rid);
         return;
@@ -508,6 +750,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         k.t_end_ns = now_ns();
         crumb_append(w, &k);
         w->stats.rejected++;
+        note_conflict(w, r);
         end_activation(w, rid);
         return;
     }
@@ -522,12 +765,23 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         k.t_end_ns = now_ns();
         crumb_append(w, &k);
         w->stats.rejected++;
+        note_conflict(w, r);
         end_activation(w, rid);
         return;
     }
     /* 4. Atomic publish. */
     commit_writes(w, pw, n_pw, &k);
     k.kind = k.n_outputs ? RX_CRUMB_COMMIT : RX_CRUMB_NOOP;
+    if (k.n_outputs) {
+        uint64_t sample = 0;
+        uint64_t mask = k.outputs[0].mask;
+        const RxObject *o = &w->objects[k.outputs[0].obj.id];
+        for (uint32_t f = 0; f < RX_MAX_FIELDS; f++)
+            if (mask & RX_FIELD(f)) { sample = o->field[f]; break; }
+        note_value(w, r, 1, sample);
+    } else {
+        note_value(w, r, 0, 0);
+    }
     k.t_end_ns = now_ns();
     uint64_t cid = crumb_append(w, &k);
     set_state(w, r, RX_COMMITTED);
@@ -568,6 +822,12 @@ int rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crum
     w->crumbs = calloc(crumb_cap, sizeof(RxCrumb));
     if (!w->crumbs) return RX_ERR_FULL;
     w->crumb_cap = crumb_cap;
+    w->budget.slots = RX_MAX_REACTIONS;
+    w->budget.memory_bytes = UINT64_MAX;
+    w->budget.energy_budget = UINT64_MAX;
+    w->budget.offered_locality = UINT32_MAX;
+    w->budget.offered_accel = UINT32_MAX;
+    w->budget.compute_mask = UINT32_MAX;
     for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++) {
         w->objects[i].id = i;
         w->objects[i].generation = 1;
@@ -581,6 +841,32 @@ int rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crum
         pthread_create(&w->workers[i], NULL, worker_main, w);
     pthread_mutex_unlock(&w->mu);
     return RX_OK;
+}
+
+static void fill_budget(RxResourceBudget *b) {
+    if (b->slots == 0) b->slots = RX_MAX_REACTIONS;
+    if (b->memory_bytes == 0) b->memory_bytes = UINT64_MAX;
+    if (b->energy_budget == 0) b->energy_budget = UINT64_MAX;
+    if (b->offered_locality == 0) b->offered_locality = UINT32_MAX;
+    if (b->offered_accel == 0) b->offered_accel = UINT32_MAX;
+    if (b->compute_mask == 0) b->compute_mask = UINT32_MAX;
+}
+
+void rx_world_set_resources(RxWorld *w, const RxResourceBudget *budget) {
+    if (!w || !budget) return;
+    pthread_mutex_lock(&w->mu);
+    w->budget = *budget;
+    fill_budget(&w->budget);
+    try_admit(w);
+    if (w->in_flight == 0) pthread_cond_broadcast(&w->idle_cv);
+    pthread_mutex_unlock(&w->mu);
+}
+
+void rx_world_set_stability(RxWorld *w, const RxStabilityBudget *stability) {
+    if (!w || !stability) return;
+    pthread_mutex_lock(&w->mu);
+    w->stability = *stability;
+    pthread_mutex_unlock(&w->mu);
 }
 
 void rx_world_destroy(RxWorld *w) {
@@ -722,7 +1008,7 @@ int64_t rx_world_publish_external(RxWorld *w, RxCapRef cap, const RxMutation *mu
     k.reaction = UINT32_MAX;
     k.faculty = RX_FACULTY_EXTERNAL;
     k.n_caps = 1;
-    k.caps[0] = cap;
+    stamp_cap(w, &k, 0, cap);
     k.t_start_ns = now_ns();
     commit_writes(w, pw, n_pw, &k);
     k.t_end_ns = now_ns();
