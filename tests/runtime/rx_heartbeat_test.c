@@ -854,8 +854,9 @@ static void t_capability_attacks(void) {
     CHECK(rx_caproot_validate(&e.root, child, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, NULL) == RX_CAP_OK,
           "delegated child invalid");
     revoke_cap(&e.root, parent);
-    CHECK(rx_caproot_validate(&e.root, child, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, NULL) == RX_CAP_ERR_CHAIN,
-          "child survived parent revocation");
+    int child_after = rx_caproot_validate(&e.root, child, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, NULL);
+    CHECK(child_after == RX_CAP_ERR_REVOKED || child_after == RX_CAP_ERR_CHAIN,
+          "child survived parent revocation (%s)", rx_cap_strerror(child_after));
 
     /* External stimulus with a capability for the wrong subject. */
     CHECK(stimulus(&e, rs, sensor, F_TEMP, 77) == RX_ERR_AUTHORITY, "external write with wrong cap accepted");
@@ -1084,6 +1085,47 @@ static void t_authority_office(void) {
     RxCapMint too_deep = delegated(cur, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_DELEGATE);
     CHECK(rx_caproot_mint(&root, &too_deep, NULL) == RX_CAP_ERR_CHAIN,
           "delegation deeper than the limit was accepted");
+
+    /* A narrower revoker cannot strike the office, and revocation cascades. */
+    RxCapMint chain = ok;
+    chain.rights = RX_RIGHT_READ | RX_RIGHT_DELEGATE;
+    chain.resource = RES_SENSOR;
+    RxCapRef link;
+    CHECK(rx_caproot_mint(&root, &chain, &link) == RX_CAP_OK, "chain parent");
+    RxCapMint step1 = delegated(link, SUBJ_OMEGA, RES_SENSOR, RX_RIGHT_READ | RX_RIGHT_DELEGATE);
+    RxCapRef mid;
+    CHECK(rx_caproot_mint(&root, &step1, &mid) == RX_CAP_OK, "chain child");
+    RxCapMint step2 = delegated(mid, SUBJ_OMEGA, RES_SENSOR, RX_RIGHT_READ);
+    RxCapRef grand;
+    CHECK(rx_caproot_mint(&root, &step2, &grand) == RX_CAP_OK, "chain grandchild");
+    CHECK(rx_caproot_revoke(&root, revcap, office) == RX_CAP_ERR_UNAUTHORIZED,
+          "narrow revoker struck the office");
+    CHECK(rx_caproot_validate(&root, office, 0, RX_CAP_RES_AUTHORITY, RX_RIGHT_MINT, NULL) == RX_CAP_OK,
+          "office died after a refused revoke");
+    CHECK(rx_caproot_revoke(&root, office, link) == RX_CAP_OK, "parent revoke");
+    RxCapEntry seen;
+    CHECK(rx_caproot_inspect(&root, grand, &seen) == RX_CAP_OK, "grandchild disappeared");
+    CHECK(seen.state == RX_CAP_REVOKED, "grandchild stayed live after its ancestor was revoked");
+    CHECK(rx_caproot_validate(&root, grand, SUBJ_OMEGA, RES_SENSOR, RX_RIGHT_READ, NULL) != RX_CAP_OK,
+          "grandchild of a revoked capability still validated");
+    CHECK(seen.minted_by_id == mid.cap_id, "grandchild did not record who minted it");
+
+    /* The office id is visible in the readable table. Without the token the
+     * socket must still refuse. */
+    RxCapRequest forged;
+    memset(&forged, 0, sizeof(forged));
+    forged.op = RX_OP_MINT;
+    forged.mint = bare;
+    forged.mint.authority = office;
+    forged.authority = office;
+    CHECK(write(root.ctl_fd, &forged, sizeof(forged)) == (ssize_t)sizeof(forged),
+          "could not send a forged mint");
+    struct { int32_t status; uint32_t pad; RxCapRef ref; } reply;
+    memset(&reply, 0, sizeof(reply));
+    CHECK(read(root.ctl_fd, &reply, sizeof(reply)) == (ssize_t)sizeof(reply),
+          "mint did not answer the forged request");
+    CHECK(reply.status == RX_CAP_ERR_UNAUTHORIZED,
+          "table-visible office minted without the office token (%d)", reply.status);
     rx_caproot_stop(&root);
 }
 
@@ -1163,6 +1205,11 @@ static void t_root_death_restart(void) {
     CHECK(kill(pid, SIGKILL) == 0, "could not stop the mint process");
     int st = 0;
     waitpid(pid, &st, 0);
+    alarm(3);
+    int still = rx_caproot_validate(&root, old, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ, NULL);
+    alarm(0);
+    CHECK(still == RX_CAP_OK || still == RX_CAP_ERR_IO || still == RX_CAP_ERR_STALE_GEN,
+          "dead root validate returned %s", rx_cap_strerror(still));
     CHECK(rx_caproot_mint(&root, &m, NULL) == RX_CAP_ERR_IO, "dead root still minted");
     rx_caproot_stop(&root);
     CHECK(rx_caproot_start(&root) == RX_CAP_OK, "restart");
@@ -1346,6 +1393,66 @@ static void t_background_not_starved(void) {
     CHECK(at <= 5, "background waited %d higher admissions (bound 4)", at);
     CHECK(at > 0, "background jumped the critical work");
     audit_and_close(&e);
+}
+
+static void t_priority_ladder(void) {
+    begin("priority_ladder", "R5");
+    Env e;
+    CHECK(env_start(&e, 1) == 0, "setup");
+    RxResourceBudget b;
+    memset(&b, 0, sizeof(b));
+    b.slots = 1;
+    b.starvation_bound = 3;
+    rx_world_set_resources(&e.w, &b);
+    g_hold = 1;
+    RxObjRef gate = mkobj(&e, RES_SCRATCH, 0);
+    RxObjRef tick = mkobj(&e, RES_TICK, 0);
+    RxCapRef ext_g = mint(&e, SUBJ_EXTERNAL, RES_SCRATCH, RX_RIGHT_WRITE);
+    RxCapRef rd_g = mint(&e, SUBJ_AIEN, RES_SCRATCH, RX_RIGHT_READ);
+    RxCapRef ext = mint(&e, SUBJ_EXTERNAL, RES_TICK, RX_RIGHT_WRITE);
+    RxCapRef rd = mint(&e, SUBJ_AIEN, RES_TICK, RX_RIGHT_READ);
+    RxCapRef wr = mint(&e, SUBJ_AIEN, RES_TICK, RX_RIGHT_WRITE);
+    RxReactionDesc d;
+    desc_init(&d, "ladder.hold", RX_FACULTY_AIEN, SUBJ_AIEN, fn_hold, NULL);
+    d.priority = RX_PRIO_CRITICAL;
+    add_trigger(&d, gate, RX_FIELD(0));
+    add_cap(&d, rd_g, RES_SCRATCH, RX_RIGHT_READ);
+    CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_OK, "hold");
+    static Spin spins[RX_PRIORITY_CLASSES];
+    for (uint32_t p = 0; p < RX_PRIORITY_CLASSES; p++) {
+        spins[p].obj = tick;
+        spins[p].left = (p == RX_PRIO_CRITICAL) ? 8 : 0;
+        spins[p].prio = p;
+        desc_init(&d, "ladder", RX_FACULTY_AIEN, SUBJ_AIEN, fn_spin, &spins[p]);
+        d.priority = p;
+        add_trigger(&d, tick, RX_FIELD(0));
+        add_cap(&d, rd, RES_TICK, RX_RIGHT_READ);
+        if (p == RX_PRIO_CRITICAL) {
+            add_write(&d, tick, RX_FIELD(0));
+            add_cap(&d, wr, RES_TICK, RX_RIGHT_WRITE);
+        }
+        CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_OK, "class %u", p);
+    }
+    g_nlog = 0;
+    stimulus(&e, ext_g, gate, 0, 1);
+    sleep_ms(20);
+    stimulus(&e, ext, tick, 0, 1);
+    sleep_ms(20);
+    g_hold = 0;
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "ladder did not finish");
+    int prev = -1;
+    for (uint32_t p = 0; p < RX_PRIORITY_CLASSES; p++) {
+        int at = first_log(p);
+        CHECK(at >= 0, "class %u never ran", p);
+        if (at >= 0 && prev >= 0)
+            CHECK(at > prev, "class %u ran before a more urgent class (%d <= %d)", p, at, prev);
+        if (at >= 0) prev = at;
+    }
+    CHECK(first_log(RX_PRIO_BACKGROUND) <= 12, "background waited %d admissions",
+          first_log(RX_PRIO_BACKGROUND));
+    g_illegal_transitions += e.w.stats.illegal_transitions;
+    rx_world_destroy(&e.w);
+    rx_caproot_stop(&e.root);
 }
 
 /* ---- R6 stability (host) ------------------------------------------------ */
@@ -1532,6 +1639,106 @@ static void t_stability(void) {
     audit_and_close(&e);
 }
 
+typedef struct { RxObjRef obj; int left; } FlipN;
+
+static int fn_flip_n(RxCtx *c) {
+    FlipN *s = c->user;
+    if (s->left <= 0) return 0;
+    s->left--;
+    uint64_t v = in_of(c, s->obj)->field[0];
+    c->out[c->n_out++] = (RxMutation){ s->obj, 0, v ^ 1ull };
+    return 0;
+}
+
+static void t_periodic_and_backoff(void) {
+    begin("periodic_versus_oscillation", "R6");
+    Env e;
+    CHECK(env_start(&e, 1) == 0, "setup");
+    RxStabilityBudget s;
+    memset(&s, 0, sizeof(s));
+    s.oscillation_limit = 4;
+    s.livelock_limit = 6;
+    rx_world_set_stability(&e.w, &s);
+    static FlipN period;
+    period.obj = mkobj(&e, RES_TICK, 0);
+    period.left = 12;
+    RxCapRef ext = mint(&e, SUBJ_EXTERNAL, RES_TICK, RX_RIGHT_WRITE);
+    RxCapRef rd = mint(&e, SUBJ_AIEN, RES_TICK, RX_RIGHT_READ);
+    RxCapRef wr = mint(&e, SUBJ_AIEN, RES_TICK, RX_RIGHT_WRITE);
+    RxReactionDesc d;
+    desc_init(&d, "periodic.heartbeat", RX_FACULTY_AIEN, SUBJ_AIEN, fn_flip_n, &period);
+    d.loop_kind = RX_LOOP_PERIODIC;
+    add_trigger(&d, period.obj, RX_FIELD(0));
+    add_write(&d, period.obj, RX_FIELD(0));
+    add_cap(&d, rd, RES_TICK, RX_RIGHT_READ);
+    add_cap(&d, wr, RES_TICK, RX_RIGHT_WRITE);
+    uint32_t id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &id) == RX_OK, "periodic");
+    stimulus(&e, ext, period.obj, 0, 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "periodic loop did not settle");
+    CHECK(!e.w.reactions[id].quarantined, "a declared periodic loop was quarantined");
+    CHECK(e.w.reactions[id].activations > 4, "periodic loop ran %llu times",
+          (unsigned long long)e.w.reactions[id].activations);
+    CHECK(e.w.stats.periodic_commits >= 4, "periodic commits %llu",
+          (unsigned long long)e.w.stats.periodic_commits);
+    CHECK(e.w.stats.oscillation_trips == 0, "periodic loop was counted as oscillation");
+
+    RxResourceBudget b;
+    memset(&b, 0, sizeof(b));
+    b.slots = 1;
+    b.starvation_bound = 1;
+    rx_world_set_resources(&e.w, &b);
+    s.oscillation_limit = 0;
+    rx_world_set_stability(&e.w, &s);
+    g_hold = 1;
+    RxObjRef gate = mkobj(&e, RES_SCRATCH, 0);
+    RxCapRef ext_g = mint(&e, SUBJ_EXTERNAL, RES_SCRATCH, RX_RIGHT_WRITE);
+    RxCapRef rd_g = mint(&e, SUBJ_AIEN, RES_SCRATCH, RX_RIGHT_READ);
+    desc_init(&d, "backoff.hold", RX_FACULTY_AIEN, SUBJ_AIEN, fn_hold, NULL);
+    d.priority = RX_PRIO_CRITICAL;
+    add_trigger(&d, gate, RX_FIELD(0));
+    add_cap(&d, rd_g, RES_SCRATCH, RX_RIGHT_READ);
+    CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_OK, "hold");
+    static FlipN hot;
+    static Spin cool;
+    hot.obj = mkobj(&e, RES_RISK, 0);
+    hot.left = 6;
+    cool.obj = mkobj(&e, RES_PLAN, 0);
+    cool.left = 4;
+    cool.prio = RX_PRIO_BACKGROUND;
+    RxCapRef ext_h = mint(&e, SUBJ_EXTERNAL, RES_RISK, RX_RIGHT_WRITE);
+    RxCapRef rd_h = mint(&e, SUBJ_AIEN, RES_RISK, RX_RIGHT_READ);
+    RxCapRef wr_h = mint(&e, SUBJ_AIEN, RES_RISK, RX_RIGHT_WRITE);
+    RxCapRef ext_c = mint(&e, SUBJ_EXTERNAL, RES_PLAN, RX_RIGHT_WRITE);
+    RxCapRef rd_c = mint(&e, SUBJ_AIEN, RES_PLAN, RX_RIGHT_READ);
+    RxCapRef wr_c = mint(&e, SUBJ_AIEN, RES_PLAN, RX_RIGHT_WRITE);
+    desc_init(&d, "backoff.hot", RX_FACULTY_AIEN, SUBJ_AIEN, fn_flip_n, &hot);
+    d.priority = RX_PRIO_CRITICAL;
+    add_trigger(&d, hot.obj, RX_FIELD(0));
+    add_write(&d, hot.obj, RX_FIELD(0));
+    add_cap(&d, rd_h, RES_RISK, RX_RIGHT_READ);
+    add_cap(&d, wr_h, RES_RISK, RX_RIGHT_WRITE);
+    uint32_t hot_id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &hot_id) == RX_OK, "hot");
+    desc_init(&d, "backoff.cool", RX_FACULTY_OMEGA, SUBJ_AIEN, fn_spin, &cool);
+    d.priority = RX_PRIO_BACKGROUND;
+    add_trigger(&d, cool.obj, RX_FIELD(0));
+    add_write(&d, cool.obj, RX_FIELD(0));
+    add_cap(&d, rd_c, RES_PLAN, RX_RIGHT_READ);
+    add_cap(&d, wr_c, RES_PLAN, RX_RIGHT_WRITE);
+    CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_OK, "cool");
+    stimulus(&e, ext_g, gate, 0, 1);
+    sleep_ms(20);
+    stimulus(&e, ext_h, hot.obj, 0, 1);
+    stimulus(&e, ext_c, cool.obj, 0, 1);
+    g_hold = 0;
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "backoff case did not settle");
+    CHECK(field(&e, cool.obj, 0) == 5, "background work did not finish while the hot loop yielded");
+    CHECK(e.w.reactions[hot_id].activations > 0, "hot loop never ran");
+    CHECK(e.w.stats.backoffs > 0, "hot loop never yielded");
+    audit_and_close(&e);
+}
+
 /* ---- receipt -------------------------------------------------------------- */
 
 static void write_receipt(int total_checks, int total_fail, const char *binary_digest) {
@@ -1570,9 +1777,11 @@ static void write_receipt(int total_checks, int total_fail, const char *binary_d
     int r6_ok = all;
     for (int i = 0; i < g_ntests; i++) {
         if (strcmp(g_tests[i].name, "resource_admission_1000") == 0 ||
-            strcmp(g_tests[i].name, "background_not_starved") == 0)
+            strcmp(g_tests[i].name, "background_not_starved") == 0 ||
+            strcmp(g_tests[i].name, "priority_ladder") == 0)
             if (g_tests[i].failures) r5_ok = 0;
-        if (strcmp(g_tests[i].name, "stability_containment") == 0 && g_tests[i].failures)
+        if ((strcmp(g_tests[i].name, "stability_containment") == 0 ||
+             strcmp(g_tests[i].name, "periodic_versus_oscillation") == 0) && g_tests[i].failures)
             r6_ok = 0;
     }
     fprintf(f, "    \"R3_REACTION_CORE\": \"%s\",\n", all ? "PASS (host reference)" : "FAIL");
@@ -1651,7 +1860,9 @@ int main(int argc, char **argv) {
     t_root_death_restart();
     t_resource_admission();
     t_background_not_starved();
+    t_priority_ladder();
     t_stability();
+    t_periodic_and_backoff();
 
     int checks = 0, fails = 0;
     for (int i = 0; i < g_ntests; i++) {

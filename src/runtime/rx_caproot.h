@@ -24,9 +24,18 @@
  * Scope: this is the Linux-hosted development root. It is not the permanent
  * root and it is not R7. On AIENOS the kernel capability authority is the root
  * (ADR 0014). This host root only refuses to treat the control socket as
- * authority: mint, revoke, reclaim, epoch and clock each require a capability
- * that this mint process itself handed out, carrying the matching right.
- * Privileged rights cannot be delegated. Counter wrap fails closed.
+ * authority:
+ *   - mint, revoke, reclaim, epoch, clock and shutdown each require a
+ *     capability this mint previously handed to this socket, carrying the
+ *     matching right;
+ *   - every such request must also present the office token delivered once at
+ *     start. That token is not stored in the readable table, so reading the
+ *     table and speaking on the socket is not enough;
+ *   - revoke reaches a target only when the target's privileged rights are
+ *     already held by the presented authority, and it marks descendants
+ *     revoked (AIENOS-style cascade);
+ *   - privileged rights cannot be delegated;
+ *   - counter wrap and a slot whose generation is exhausted fail closed.
  */
 
 #ifndef RX_CAPROOT_H
@@ -39,7 +48,18 @@
 
 #define RX_CAP_MAX            256u
 #define RX_CAP_MAX_DEPTH      8u
+#define RX_CAP_TOKEN_LEN      32u
 #define RX_CAP_TABLE_MAGIC    0x50414358u /* 'XCAP' LE */
+
+/* Control operations. The socket carries these; it does not authorize them. */
+enum {
+    RX_OP_MINT = 1,
+    RX_OP_REVOKE,
+    RX_OP_RECLAIM,
+    RX_OP_CLOCK,
+    RX_OP_EPOCH,
+    RX_OP_SHUTDOWN
+};
 
 /* Rights */
 #define RX_RIGHT_READ         0x1u
@@ -103,6 +123,8 @@ typedef struct {
     uint64_t lease_expiry;      /* logical clock tick; 0 = no lease */
     uint32_t parent_id;         /* UINT32_MAX = root-issued */
     uint32_t parent_generation;
+    uint32_t minted_by_id;      /* capability that was allowed to create this one */
+    uint32_t minted_by_generation;
 } RxCapEntry;
 
 /* Shared table. Written only by the root process under a seqlock. */
@@ -123,6 +145,7 @@ typedef struct {
     pid_t root_pid;
     bool running;
     RxCapRef office;            /* delivered once, at start; not in the table as a right */
+    uint8_t token[RX_CAP_TOKEN_LEN]; /* not in the shared table */
 } RxCapRoot;
 
 /* Mint request. parent.cap_id == UINT32_MAX means a root-issued capability.
@@ -139,6 +162,18 @@ typedef struct {
     RxCapRef parent;
     RxCapRef authority;
 } RxCapMint;
+
+/* Wire request. Tests may forge one. The library fills `token` from the
+ * secret delivered at start; a caller who only read the table cannot. */
+typedef struct {
+    uint32_t op;
+    uint32_t pad;
+    RxCapMint mint;
+    RxCapRef ref;
+    RxCapRef authority;
+    uint64_t arg;
+    uint8_t token[RX_CAP_TOKEN_LEN];
+} RxCapRequest;
 
 /* Fail closed. A sum that would wrap is refused and *out is left unchanged. */
 static inline int rx_cap_add_u64(uint64_t a, uint64_t b, uint64_t *out) {

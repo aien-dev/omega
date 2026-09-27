@@ -16,6 +16,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
+#include <sys/random.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -23,24 +24,6 @@
 #ifndef F_SEAL_FUTURE_WRITE
 #define F_SEAL_FUTURE_WRITE 0x0010
 #endif
-
-enum {
-    RX_OP_MINT = 1,
-    RX_OP_REVOKE,
-    RX_OP_RECLAIM,
-    RX_OP_CLOCK,
-    RX_OP_EPOCH,
-    RX_OP_SHUTDOWN,
-};
-
-typedef struct {
-    uint32_t op;
-    uint32_t pad;
-    RxCapMint mint;
-    RxCapRef ref;
-    RxCapRef authority;
-    uint64_t arg;
-} RxCapRequest;
 
 typedef struct {
     int32_t status;
@@ -53,12 +36,43 @@ typedef struct {
     uint32_t office_id;
     uint32_t office_generation;
     int32_t status;
+    uint8_t token[RX_CAP_TOKEN_LEN];
 } RxCapHello;
 
-/* Next table's starting generation. The first root in a process starts at 1,
- * which is what existing references expect. A later root starts higher, so a
+/* Next table's starting generation. Taken atomically so two roots in one
+ * process cannot share a generation. A later root starts higher, so a
  * reference from a dead root cannot validate against the new table. */
-static uint32_t g_next_boot_gen = 1;
+static _Atomic uint32_t g_next_boot_gen = 1;
+
+static int take_boot_gen(uint32_t *out) {
+    uint32_t cur = atomic_load_explicit(&g_next_boot_gen, memory_order_relaxed);
+    for (;;) {
+        if (cur == 0 || cur >= UINT32_MAX) return RX_CAP_ERR_EXHAUSTED;
+        if (atomic_compare_exchange_weak_explicit(
+                &g_next_boot_gen, &cur, cur + 1u,
+                memory_order_acq_rel, memory_order_relaxed)) {
+            *out = cur;
+            return RX_CAP_OK;
+        }
+    }
+}
+
+static int fill_token(uint8_t token[RX_CAP_TOKEN_LEN]) {
+    size_t n = 0;
+    while (n < RX_CAP_TOKEN_LEN) {
+        ssize_t r = getrandom(token + n, RX_CAP_TOKEN_LEN - n, 0);
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) return -1;
+        n += (size_t)r;
+    }
+    return 0;
+}
+
+static int token_ok(const uint8_t *a, const uint8_t *b) {
+    uint8_t diff = 0;
+    for (uint32_t i = 0; i < RX_CAP_TOKEN_LEN; i++) diff |= (uint8_t)(a[i] ^ b[i]);
+    return diff == 0;
+}
 
 /* ---- root process (the only writer) ------------------------------------ */
 
@@ -163,10 +177,11 @@ static int root_mint(RxCapTable *t, const uint8_t *delivered, uint8_t *delivered
     int lrc = lease_expiry(clock, m->lease_ticks, &expiry);
     if (lrc != RX_CAP_OK) return lrc;
 
+    int saw_exhausted = 0;
     for (uint32_t i = 0; i < t->capacity; i++) {
         RxCapEntry *e = &t->entries[i];
         if (e->state != RX_CAP_FREE) continue;
-        if (e->generation == UINT32_MAX) continue;
+        if (e->generation == UINT32_MAX) { saw_exhausted = 1; continue; }
         root_begin(t);
         e->state = RX_CAP_LIVE;
         e->issuer = m->issuer;
@@ -177,24 +192,52 @@ static int root_mint(RxCapTable *t, const uint8_t *delivered, uint8_t *delivered
         e->lease_expiry = expiry;
         e->parent_id = m->parent.cap_id;
         e->parent_generation = m->parent.cap_id == UINT32_MAX ? 0 : m->parent.generation;
+        e->minted_by_id = auth->cap_id;
+        e->minted_by_generation = auth->generation;
         delivered_mut[i] = 1;
         root_end(t);
         out->cap_id = e->cap_id;
         out->generation = e->generation;
         return RX_CAP_OK;
     }
-    return RX_CAP_ERR_FULL;
+    return saw_exhausted ? RX_CAP_ERR_EXHAUSTED : RX_CAP_ERR_FULL;
+}
+
+/* A revoked parent makes every descendant unusable. Mark them revoked too,
+ * the way AIENOS walks a derivation tree, so inspection does not still show
+ * a live child of a dead parent. */
+static void cascade_revoke(RxCapTable *t) {
+    int guard = 0;
+    int changed = 1;
+    while (changed && guard++ < (int)RX_CAP_MAX) {
+        changed = 0;
+        for (uint32_t i = 0; i < t->capacity; i++) {
+            RxCapEntry *e = &t->entries[i];
+            if (e->state != RX_CAP_LIVE || e->parent_id == UINT32_MAX) continue;
+            if (e->parent_id >= t->capacity) continue;
+            const RxCapEntry *p = &t->entries[e->parent_id];
+            if (p->generation == e->parent_generation && p->state == RX_CAP_REVOKED) {
+                e->state = RX_CAP_REVOKED;
+                changed = 1;
+            }
+        }
+    }
 }
 
 static int root_revoke(RxCapTable *t, const uint8_t *delivered, RxCapRef authority, RxCapRef r) {
-    int arc = auth_use(t, delivered, authority, RX_RIGHT_REVOKE, NULL);
+    const RxCapEntry *auth = NULL;
+    int arc = auth_use(t, delivered, authority, RX_RIGHT_REVOKE, &auth);
     if (arc != RX_CAP_OK) return arc;
     if (r.cap_id >= t->capacity) return RX_CAP_ERR_BOUNDS;
     RxCapEntry *e = &t->entries[r.cap_id];
     if (e->generation != r.generation) return RX_CAP_ERR_STALE_GEN;
     if (e->state != RX_CAP_LIVE) return RX_CAP_ERR_STATE;
+    /* A narrower revoker cannot strike a capability that carries privileged
+     * rights the revoker does not itself hold. The office stays put. */
+    if ((e->rights & RX_RIGHT_PRIVILEGED) & ~auth->rights) return RX_CAP_ERR_UNAUTHORIZED;
     root_begin(t);
     e->state = RX_CAP_REVOKED;
+    cascade_revoke(t);
     root_end(t);
     return RX_CAP_OK;
 }
@@ -313,12 +356,20 @@ static void root_main(int memfd, int sock) {
     hello.office_id = office->cap_id;
     hello.office_generation = office->generation;
     hello.status = RX_CAP_OK;
+    if (fill_token(hello.token) != 0) _exit(2);
     if (write_full(sock, &hello, sizeof(hello)) != 0) _exit(3);
+    uint8_t token[RX_CAP_TOKEN_LEN];
+    memcpy(token, hello.token, sizeof(token));
 
     RxCapRequest q;
     while (read_full(sock, &q, sizeof(q)) == 0) {
         RxCapReply r;
         memset(&r, 0, sizeof(r));
+        if (!token_ok(q.token, token)) {
+            r.status = RX_CAP_ERR_UNAUTHORIZED;
+            if (write_full(sock, &r, sizeof(r)) != 0) break;
+            continue;
+        }
         switch (q.op) {
         case RX_OP_MINT:
             r.status = root_mint(t, delivered, delivered, &q.mint, &r.ref);
@@ -355,7 +406,9 @@ int rx_caproot_start(RxCapRoot *root) {
     memset(root, 0, sizeof(*root));
     root->ctl_fd = root->ro_fd = -1;
     root->office.cap_id = UINT32_MAX;
-    if (g_next_boot_gen == 0 || g_next_boot_gen == UINT32_MAX) return RX_CAP_ERR_EXHAUSTED;
+    uint32_t boot = 0;
+    int brc = take_boot_gen(&boot);
+    if (brc != RX_CAP_OK) return brc;
     int memfd = memfd_create("aien-capability-root", MFD_ALLOW_SEALING | MFD_CLOEXEC);
     if (memfd < 0) return RX_CAP_ERR_IO;
     if (ftruncate(memfd, sizeof(RxCapTable)) != 0) { close(memfd); return RX_CAP_ERR_IO; }
@@ -371,7 +424,6 @@ int rx_caproot_start(RxCapRoot *root) {
         root_main(memfd, sv[1]);
     }
     close(sv[1]);
-    uint32_t boot = g_next_boot_gen;
     if (write_full(sv[0], &boot, sizeof(boot)) != 0) goto fail;
     RxCapHello hello;
     memset(&hello, 0, sizeof(hello));
@@ -391,9 +443,7 @@ int rx_caproot_start(RxCapRoot *root) {
     root->running = true;
     root->office.cap_id = hello.office_id;
     root->office.generation = hello.office_generation;
-    uint32_t next = 0;
-    if (rx_cap_generation_advance(boot, &next) == RX_CAP_OK) g_next_boot_gen = next;
-    else g_next_boot_gen = UINT32_MAX;
+    memcpy(root->token, hello.token, RX_CAP_TOKEN_LEN);
     return RX_CAP_OK;
 fail:
     kill(pid, SIGKILL);
@@ -405,6 +455,7 @@ fail:
 
 static int request(RxCapRoot *root, RxCapRequest *q, RxCapReply *r) {
     if (!root->running) return RX_CAP_ERR_IO;
+    memcpy(q->token, root->token, RX_CAP_TOKEN_LEN);
     if (write_full(root->ctl_fd, q, sizeof(*q)) != 0) return RX_CAP_ERR_IO;
     if (read_full(root->ctl_fd, r, sizeof(*r)) != 0) return RX_CAP_ERR_IO;
     return r->status;
@@ -481,12 +532,21 @@ int rx_caproot_bump_epoch(RxCapRoot *root, RxCapRef authority) {
     return request(root, &q, &r);
 }
 
+static int writer_dead(const RxCapRoot *root) {
+    if (!root->running || root->root_pid <= 0) return 1;
+    if (kill(root->root_pid, 0) == 0) return 0;
+    return errno == ESRCH;
+}
+
 int rx_caproot_inspect(const RxCapRoot *root, RxCapRef ref, RxCapEntry *out) {
     const RxCapTable *t = root->table;
     if (!t || ref.cap_id >= RX_CAP_MAX) return RX_CAP_ERR_BOUNDS;
     for (;;) {
         uint64_t s0 = atomic_load_explicit(&t->seq, memory_order_acquire);
-        if (s0 & 1u) continue;
+        if (s0 & 1u) {
+            if (writer_dead(root)) return RX_CAP_ERR_IO;
+            continue;
+        }
         RxCapEntry e;
         memcpy(&e, (const void *)&t->entries[ref.cap_id], sizeof(e));
         atomic_thread_fence(memory_order_acquire);
@@ -505,7 +565,10 @@ int rx_caproot_validate(const RxCapRoot *root, RxCapRef ref,
     if (!t || ref.cap_id >= RX_CAP_MAX) return RX_CAP_ERR_BOUNDS;
     for (;;) {
         uint64_t s0 = atomic_load_explicit(&t->seq, memory_order_acquire);
-        if (s0 & 1u) continue;
+        if (s0 & 1u) {
+            if (writer_dead(root)) return RX_CAP_ERR_IO;
+            continue;
+        }
         RxCapEntry chain[RX_CAP_MAX_DEPTH + 1];
         uint32_t n = 0;
         uint32_t id = ref.cap_id;
