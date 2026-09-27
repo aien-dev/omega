@@ -1,8 +1,8 @@
 # R1 merge: one resident object world
 
-Status: specification only. This document does not change the physical layout.
-`R1_SHARED_WORLD_PASS` and `R2_CROSS_ENGINE_ABI_PASS` are not claimed.
-No graphics-chip run is claimed.
+Status: the host CPU join is implemented. See `docs/rx-r1-world-unification.md`.
+The qualification receipt is what claims R1 and R2. No graphics-chip run is claimed.
+The native capability root is not claimed. See `docs/rx-r7-captable-map.md`.
 
 The two layouts below are the ones in the tree today. They are not two
 permanent worlds. The later edit merges them. It does not land on the
@@ -49,7 +49,7 @@ world has a real requirement:
 | id, generation | both | This is the only identity. A raw pointer or a GPU address is never an id. |
 | type, version, per-field version and last writer | host | Semantic change metadata. |
 | persistence class | host | Ephemeral reaction traffic is not durable belief. |
-| capability reference | host root | `{cap_id, generation}` only. The shared record does not contain an editable allow/deny bit. The coherent object's permission bits are removed in the merge. |
+| capability reference | host root | `{cap_id, generation}` only. The shared record's permission word stays in the frozen 32 bytes, is written as zero, and is not the authority check. |
 | publication | host | The visible bytes change together with the version and the causal id, or not at all. |
 | dependency | host side index | Kept beside the object, addressed by id, generation, and field mask. Not a scan of every reaction. |
 | region offset and length | coherent world | Realization only. Both processors turn that offset into their own mapping. The offset is not the object's name. |
@@ -88,7 +88,7 @@ object out and back is the thing this merge removes, not the pattern to grow.
 
 ## Order
 
-1. Agree this record. (This file.)
-2. Later, change the coherent object table to carry the semantic fields and drop in-object permission bits.
-3. Point the host reaction runtime at that table. Retire the separate host-only object array only when the same id and generation are visible to both processors.
-4. Only then finish the resident worker against the merged record, and only count a GB10 run.
+1. Agree this record. (This file, originally.)
+2. Host CPU: one `RxObject`, projected into the 32-byte record. Done in the reaction runtime. The permission word is ignored. The graphics-processor branch was not edited.
+3. Finish the resident worker against that same identity, and only count a real graphics-processor run.
+4. Native capability root is a separate step. It is not this one.

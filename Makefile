@@ -155,11 +155,12 @@ test-m19: $(TARGET)
 
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
-RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/sha256.c src/omega_evidence.c \
-	tests/runtime/rx_heartbeat_test.c
+RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/sha256.c src/omega_evidence.c tests/runtime/rx_heartbeat_test.c
 RX_TEST = $(OUT_DIR)/rx_heartbeat_test
 
-$(RX_TEST): $(RX_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h | $(OUT_DIR)
+$(RX_TEST): $(RX_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
+	src/runtime/omega_shared_world_abi.h | $(OUT_DIR)
 	$(CC) $(CFLAGS) -pthread -o $@ $(RX_SRCS)
 
 test-r3: $(RX_TEST)

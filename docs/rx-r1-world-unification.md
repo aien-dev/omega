@@ -1,129 +1,61 @@
-# R1 merge specification: one resident object world
+# One resident object
 
-Status: design only. This note does not change the physical layout.
-It is grounded in the code that exists now, not in a new design.
+Status: host CPU implementation. The qualification receipt is what claims the
+gate. This is not a graphics-processor result, and it is not the native
+capability root.
 
-Host evidence below is the reaction runtime on omega `main` (`src/runtime/rx_world.h`).
-Physical evidence below is the frozen layout in physics branch `m20-shared-world`
-(`shared_world/omega_shared_world_abi.h`, `OMEGA_SHARED_WORLD_V1`).
-Neither one is the finished shared world. They must become one world.
-This change does not edit that frozen layout.
+There are still two records, and they are two aspects of one object:
 
-## What each side actually is today
+- `RxObject` in `src/runtime/rx_world.h` is the canonical object. It holds the
+  only id and the only generation.
+- The 32-byte `OmegaSharedWorldObject` from `OMEGA_SHARED_WORLD_V1` is the
+  physical projection of that same object: id, generation, active or revoked,
+  a byte offset, and a length. The permission word in that record is written
+  as zero and is never read as authority.
 
-The host reaction world (`RxObject`, `RxWorld`) is the semantic world the
-reactions already use:
+No third world type was added. The physics `m20-shared-world` tree was not
+edited. Its object table holds 64 records; the host image holds one 32-byte
+record per host object so a live reaction object cannot exist only in host
+memory. The 32-byte record and the 128-byte descriptor are the frozen layout.
+The frozen header's transform request and result are rejected on this path.
+A ring slot here is a wake, a claim, a publication, a completion, a fault, or
+a shutdown.
 
-- logical id plus generation
-- type, eight versioned fields, content digest
-- persistence class: ephemeral, resident, durable
-- a resource id that capabilities are checked against
-- publication is atomic under the world lock
-- a stale generation is refused
-- reactions subscribe to an object and a field mask
-- capability references are `{cap_id, generation}` and are checked in the mint,
-  not by a permission bit stored beside the object
+## What one object holds
 
-The physics world (`OmegaSharedWorldObject`) is a coherent memory record the
-CPU and the GPU can both read:
+Semantic aspect, on `RxObject`: type, field values, per-field versions, the
+writer of each field, persistence class, publication version, content digest,
+and a capability reference `{cap_id, generation}`.
 
-- logical id plus generation
-- active or revoked
-- a read/write permission bit
-- `region_offset` and `size_bytes`: where the bytes live inside the coherent
-  region
+Physical aspect, on that same `RxObject`, and copied into the 32-byte record:
+region offset, byte length, placement, machine locality, and coherency.
+Locality and coherency do not fit the 32-byte record. The coherent record
+carries offset, length, and active or revoked. The CPU image's coherency value
+means "host image of the shared layout." It does not mean a graphics processor
+has mapped it.
 
-`region_offset` is a byte offset from the region base. It is not a CPU pointer
-and it is not a GPU address. That part is already right. It is still a
-physical placement fact. It must not become the object's name.
+Identity is the id plus the generation. It is not the offset, not a CPU
+pointer, not a graphics address, and not a ring slot.
 
-The rings (`OmegaSharedWorldDesc`) carry a logical `{object_id, object_generation,
-object_offset, object_length}` plus a sequence number. They are a transport
-for a request, a result, a keepalive, or a shutdown. They are not a second
-copy of the object. They must stay that way: wake, claim, and publication
-transport. They must not turn into a general call mechanism where one side
-asks the other to run a subsystem.
+The projection does not allocate. Creating an object uses the generation
+already on that slot. Retiring advances that same generation and copies it
+into the projection. A write to the projection's generation or offset is
+rejected as a lie. A write to its permission word changes nothing.
 
-## The split that has to disappear
+## Descriptor
 
-These are two id spaces today:
+Publication of an object that has a capability reference places one 128-byte
+descriptor on the publication ring. The descriptor names the same id and
+generation, the canonical publication version, and the causal record of the
+write. The CPU checker refuses a bad magic or version, a sequence that is not
+the next one, a torn checksum, a stale generation, a length outside the
+object, a capability reference the root does not accept, and a transform call.
 
-- `RxObject.id` lives only in the host process.
-- `OmegaSharedWorldObject.object_id` lives only in the coherent region, and
-  the table holds 64 objects while the host world holds 256.
+Rings are transport. They are not a second copy of the object.
 
-A reaction cannot name a GPU-visible object, and a GPU worker cannot name a
-reaction object. Unification means one id and one generation for one object,
-visible to both, with one rule for "this reference is stale."
+## Not claimed
 
-## Canonical record
-
-One resident object has one logical identity. The record that both sides
-agree on has to be able to hold:
-
-| Fact | Already in the host reaction object | Already in the physics object | Where it belongs after the merge |
-| --- | --- | --- | --- |
-| Logical id | yes | yes (table index) | the identity. Never a pointer, never a GPU address, never `region_offset` |
-| Generation | yes | yes | the identity's epoch. Stale generation is refused on both sides |
-| Type | yes | no | semantic record |
-| Field values and per-field versions | yes | no | semantic record. This is what reactions subscribe to |
-| Content digest | yes | no | semantic record |
-| Persistence class | yes | no | semantic record. Ephemeral work must not become durable by being published |
-| Authority reference | resource id, capability checked in the mint | a permission bit on the object | a `{cap_id, generation}` reference. The bit on the physics object is not authority |
-| Publication / liveness | `live` | active / revoked | one publication state |
-| Who wakes on a change | subscription index beside the object | no | dependency record, beside the object, not a scan of every reaction |
-| Where the bytes are | no | `region_offset`, `size_bytes` | physical realization only. Private to the machine that maps the region |
-
-The permission bits on `OmegaSharedWorldObject` (`OMEGA_SW_PERM_READ` /
-`OMEGA_SW_PERM_WRITE`) are editable facts in shared memory. They must not
-survive as the authority check. Authority stays in the capability root.
-The object may name the capability that must be held. It must not carry a
-boolean that a writer can flip.
-
-## What is explicitly not merged by editing the frozen header
-
-`OmegaSharedWorldObject` is 32 bytes and the header is treated as frozen by
-the physics side. Do not widen that struct in place to hold fields, digests,
-and capability references. That would break the coherent layout and pretend
-the GPU path is done.
-
-The later implementation step, not this one, adds a semantic record next to
-the existing physical record, keyed by the same `{object_id, generation}`:
-
-- the physical record keeps `region_offset` and `size_bytes` and stays the
-  only place that says where bytes sit
-- the semantic record holds type, fields, versions, persistence, publication
-  state, and the capability reference
-- both records are rejected together when the generation does not match
-- raw addresses never appear in either record
-
-Until that step lands, the host `RxWorld` remains the reference the reaction
-tests run against. The physics world remains the coherent-memory experiment.
-No gate here claims they are already one world.
-
-## Invariants the merge has to keep
-
-- A reference is `{id, generation}`. A pointer or a GPU address is never an id.
-- A stale generation is refused and produces no write.
-- A torn publication is refused. The host side does this with one lock and a
-  version check. The physics side does this with the ring sequence and checksum.
-  The merged world needs both: one publication of the semantic fields, and the
-  existing ring handshake when a CPU or a GPU is the publisher.
-- An authority reference is checked in the capability root. Copying the
-  reference is not permission.
-- Offsets and lengths are bounded by the object's `size_bytes`.
-- A replayed ring sequence is refused. That check already exists on the ring
-  and stays on the transport, not on the object identity.
-- Dependency wake-up names the object and the fields that changed. It does
-  not scan every object.
-- Ephemeral reaction traffic does not, by itself, change durable state.
-
-## Not in this step
-
-- No edit to `omega_shared_world_abi.h`.
-- No claim that the GPU worker is qualified. The resident GPU worker still
-  returns failure rather than a silicon result.
-- No second runtime and no global event queue.
-- R1, R2, and R12 stay unclaimed until the records share one identity and a
-  physical GB10 run shows a CPU publish waking a resident GPU worker through
-  that identity.
+- The graphics-processor worker was not run.
+- The Linux mint process is still the authority oracle.
+- Real AIEN and real Omega synthesis are not connected.
+- AEGIS was not rewritten.
