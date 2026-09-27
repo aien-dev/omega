@@ -41,6 +41,7 @@ jobs:
         run: make test-r3
       - name: Emit qualification receipt
         env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           PHYSICS_COMMIT: 29bf6ea84ba19eb2b8612843ec9dd868a647f9bc
         run: |
           receipt="$(find build/qual-runs -name rx_heartbeat_receipt.json -type f | head -n 1)"
