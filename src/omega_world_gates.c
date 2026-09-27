@@ -1140,10 +1140,9 @@ static bool test_m19_gate8_1000_op(void) {
     const uint32_t f_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_FP16};
     const uint32_t b_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_BF16};
 
-    /* pb_pool is 0x40000 bytes = 64 slots of 0x1000. A slot must not be
-     * rewritten until every GPFIFO entry that references it has retired. The
-     * world API enqueues each dispatch and owns authoritative accounting; this
-     * gate only observes world.total_dispatches and world.sequence_number. */
+    /* pb_pool is 0x40000 bytes = 64 slots of 0x1000. A slot and a writable
+     * result buffer must not be reused until the earlier dispatch retires and
+     * its result digest is committed. Each group has four distinct outputs. */
     const uint32_t pb_slots = 0x40000 / 0x1000;
     uint32_t dispatch_id = 0;
     uint32_t in_flight = 0;
@@ -1204,7 +1203,7 @@ static bool test_m19_gate8_1000_op(void) {
         }
         in_flight++;
 
-        if (in_flight >= pb_slots) {
+        if (in_flight >= 4) {
             if (omega_world_ring(&world) != OMEGA_WORLD_OK ||
                 omega_world_drain(&world, dispatch_id, 10000) < 0) {
                 omega_world_destroy(&world);
