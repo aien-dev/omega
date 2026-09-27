@@ -8,6 +8,10 @@ int run_m19_gates(void);
  * deliberately decoupled from the GPFIFO put sequence. Returns 0 on pass. */
 int run_m19_drain_decoupling(void);
 
+/* M19R world lifecycle gates (memory release, quarantine, fault latch,
+ * monotonic completion). Returns 0 if all pass. */
+int run_world_lifecycle_gates(void);
+
 /* Runs persistent accelerator world physical silicon demonstration */
 void run_demonstration_accelerator_world(void);
 

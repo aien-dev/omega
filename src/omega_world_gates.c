@@ -1949,3 +1949,207 @@ void run_demonstration_accelerator_world(void) {
     printf("Executing OMEGA Accelerator World physical silicon demonstration...\n");
     run_m19_gates();
 }
+
+/* ===========================================================================
+ * M19R world lifecycle gates: revoked memory is released, a job still in
+ * flight keeps its memory until drain, faults latch without double commits,
+ * and completion waits are monotonic ("reached or passed").
+ * =========================================================================== */
+
+static int lc_gate_count = 0;
+static int lc_gate_passed = 0;
+
+static void report_lc_gate(const char *name, bool ok) {
+    lc_gate_count++;
+    if (ok) lc_gate_passed++;
+    printf("  [%s] %s\n", ok ? "PASS" : "FAIL", name);
+}
+
+/* Code + three 256-byte buffers, as in the drain-decoupling test. */
+static bool lc_setup(OmegaAcceleratorWorld *world, OmegaHandle *code,
+                     OmegaHandle *a, OmegaHandle *b, OmegaHandle *c) {
+    uint8_t code_buf[1024];
+    size_t code_len = 0;
+    if (omega_blackwell_encode_vecadd(code_buf, sizeof(code_buf), &code_len) != 0) return false;
+    return omega_world_register_code(world, code_buf, code_len, NULL, code) == OMEGA_WORLD_OK &&
+           omega_world_register_buffer(world, 256, OMEGA_PERM_READ, a) == OMEGA_WORLD_OK &&
+           omega_world_register_buffer(world, 256, OMEGA_PERM_READ, b) == OMEGA_WORLD_OK &&
+           omega_world_register_buffer(world, 256, OMEGA_PERM_READ | OMEGA_PERM_WRITE, c) == OMEGA_WORLD_OK;
+}
+
+/* Queue one release-only pushbuffer (no kernel) carrying `payload`. */
+static int lc_submit_release(OmegaAcceleratorWorld *world, uint32_t slot, uint32_t payload,
+                             const OmegaHandle *code, const OmegaHandle *a,
+                             const OmegaHandle *b, const OmegaHandle *c) {
+    uint32_t tpb[32];
+    size_t len = 0;
+    memcpy(&tpb[len], WORLD_SETUP_WORDS, sizeof(WORLD_SETUP_WORDS));
+    len += sizeof(WORLD_SETUP_WORDS) / 4;
+    tpb[len++] = nvrm_mthd(0, 0x005c, 5);
+    tpb[len++] = (uint32_t)world->completion.gpu_va;
+    tpb[len++] = (uint32_t)(world->completion.gpu_va >> 32);
+    tpb[len++] = payload;
+    tpb[len++] = 0;
+    tpb[len++] = 0x1 | (1u << 20);
+    const uint32_t words[5] = {7, 0, 0, 0, 0};
+    OmegaWorldSubmission sub;
+    m19_make_submission(&sub, words, code, a, b, c, 256, 256, 256, payload);
+    uint32_t off = slot * 0x1000;
+    memcpy((uint8_t *)world->m16.pb_mem.cpu + off, tpb, len * 4);
+    __asm__ volatile("dsb sy" ::: "memory");
+    return omega_world_submit(world, &world->m16.pb_mem, off, (uint32_t)len, &sub);
+}
+
+static bool lc_vecadd_ok(OmegaAcceleratorWorld *world, const OmegaHandle *code) {
+    OmegaHandle a, b, c;
+    if (omega_world_register_buffer(world, 4096, OMEGA_PERM_READ, &a) != OMEGA_WORLD_OK ||
+        omega_world_register_buffer(world, 4096, OMEGA_PERM_READ, &b) != OMEGA_WORLD_OK ||
+        omega_world_register_buffer(world, 4096, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &c) != OMEGA_WORLD_OK) {
+        return false;
+    }
+    uint32_t *pa, *pb, *pc;
+    uint64_t va;
+    omega_world_resolve_buffer(world, &a, OMEGA_PERM_READ, 0, 256, (void **)&pa, &va);
+    omega_world_resolve_buffer(world, &b, OMEGA_PERM_READ, 0, 256, (void **)&pb, &va);
+    omega_world_resolve_buffer(world, &c, OMEGA_PERM_WRITE, 0, 256, (void **)&pc, &va);
+    for (uint32_t i = 0; i < 64; i++) { pa[i] = i * 3u; pb[i] = 7u; pc[i] = 0xdeadbeefu; }
+    uint32_t done = 0;
+    if (omega_world_dispatch_vector(world, code, &a, &b, &c, 64, &done) != OMEGA_WORLD_OK) return false;
+    for (uint32_t i = 0; i < 64; i++) if (pc[i] != i * 3u + 7u) return false;
+    return omega_world_revoke_buffer(world, &a) == OMEGA_WORLD_OK &&
+           omega_world_revoke_buffer(world, &b) == OMEGA_WORLD_OK &&
+           omega_world_revoke_buffer(world, &c) == OMEGA_WORLD_OK;
+}
+
+/* 5,000 x 64 MiB register/revoke cycles = 312.5 GiB, more than twice the
+ * machine's memory: only possible if revoke really returns memory. */
+static bool test_lc_revoke_releases_memory(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    uint8_t code_buf[1024];
+    size_t code_len = 0;
+    OmegaHandle code;
+    if (omega_blackwell_encode_vecadd(code_buf, sizeof(code_buf), &code_len) != 0 ||
+        omega_world_register_code(&world, code_buf, code_len, NULL, &code) != OMEGA_WORLD_OK) {
+        omega_world_destroy(&world);
+        return false;
+    }
+    const size_t sz = 64u << 20;
+    bool ok = true;
+    for (int i = 0; i < 5000 && ok; i++) {
+        OmegaHandle h;
+        uint8_t *p = NULL;
+        uint64_t va;
+        ok = omega_world_register_buffer(&world, sz, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &h) == OMEGA_WORLD_OK &&
+             omega_world_resolve_buffer(&world, &h, OMEGA_PERM_WRITE, 0, sz, (void **)&p, &va) == OMEGA_WORLD_OK;
+        if (ok) {
+            p[0] = (uint8_t)i;
+            p[sz - 1] = (uint8_t)~i;
+            ok = (p[0] == (uint8_t)i && p[sz - 1] == (uint8_t)~i) &&
+                 omega_world_revoke_buffer(&world, &h) == OMEGA_WORLD_OK &&
+                 !world.buffers[h.object_id].retiring && world.buffers[h.object_id].mem.handle == 0;
+        }
+        if (!ok) printf("    churn failed at cycle %d\n", i);
+    }
+    ok = ok && world.buffer_count == 0 && !world.faulted && lc_vecadd_ok(&world, &code);
+    omega_world_destroy(&world);
+    return ok;
+}
+
+/* Revoking a buffer bound by a queued job refuses the handle at once but
+ * keeps its memory until drain; the job is abandoned, not committed. */
+static bool test_lc_revoke_waits_for_queued_job(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    OmegaHandle code, a, b, c;
+    bool ok = lc_setup(&world, &code, &a, &b, &c) &&
+              lc_submit_release(&world, 0, 1, &code, &a, &b, &c) == OMEGA_WORLD_OK &&
+              omega_world_revoke_buffer(&world, &c) == OMEGA_WORLD_OK;
+    ok = ok && world.buffers[c.object_id].retiring && world.buffers[c.object_id].mem.handle != 0;
+    void *p = NULL;
+    uint64_t va;
+    ok = ok && omega_world_resolve_buffer(&world, &c, OMEGA_PERM_READ, 0, 256, &p, &va) == OMEGA_WORLD_ERR_NOT_FOUND;
+    OmegaHandle other;
+    ok = ok && omega_world_register_buffer(&world, 256, OMEGA_PERM_READ, &other) == OMEGA_WORLD_OK &&
+         other.object_id != c.object_id;
+    ok = ok && omega_world_ring(&world) == OMEGA_WORLD_OK &&
+         omega_world_drain(&world, 1, 5000) == 0 &&
+         world.abandoned_dispatches == 1 && world.total_dispatches == 0 &&
+         !world.buffers[c.object_id].retiring && world.buffers[c.object_id].mem.handle == 0 &&
+         !world.faulted;
+    /* The released slot is reusable. */
+    OmegaHandle reuse;
+    ok = ok && omega_world_revoke_buffer(&world, &other) == OMEGA_WORLD_OK;
+    for (int i = 0; ok && i < OMEGA_WORLD_MAX_BUFFERS; i++) {
+        if (omega_world_register_buffer(&world, 256, OMEGA_PERM_READ, &reuse) != OMEGA_WORLD_OK) { ok = false; break; }
+        if (reuse.object_id == c.object_id) break;
+    }
+    ok = ok && reuse.object_id == c.object_id && reuse.object_generation == c.object_generation + 1;
+    omega_world_destroy(&world);
+    return ok;
+}
+
+/* A drain failure latches the world; nothing already committed is committed
+ * again, and recovery clears the latch. */
+static bool test_lc_error_latch_counts_once(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    OmegaHandle code, a, b, c;
+    bool ok = lc_setup(&world, &code, &a, &b, &c);
+    for (uint32_t i = 0; ok && i < 3; i++) ok = lc_submit_release(&world, i, i + 1, &code, &a, &b, &c) == OMEGA_WORLD_OK;
+    ok = ok && omega_world_ring(&world) == OMEGA_WORLD_OK &&
+         omega_world_drain(&world, 3, 5000) == 3 && world.total_dispatches == 3;
+    uint64_t seq_before = world.sequence_number;
+    /* Payload 4 completes, but the drain waits for payload 100: timeout. */
+    ok = ok && lc_submit_release(&world, 3, 4, &code, &a, &b, &c) == OMEGA_WORLD_OK &&
+         omega_world_ring(&world) == OMEGA_WORLD_OK &&
+         omega_world_drain(&world, 100, 200) == OMEGA_WORLD_ERR_HARDWARE && world.faulted;
+    ok = ok && lc_submit_release(&world, 4, 5, &code, &a, &b, &c) == OMEGA_WORLD_ERR_FAULTED &&
+         omega_world_drain(&world, 4, 100) == OMEGA_WORLD_ERR_FAULTED &&
+         omega_world_ring(&world) == OMEGA_WORLD_ERR_FAULTED;
+    ok = ok && world.total_dispatches == 3 && world.sequence_number == seq_before;
+    ok = ok && omega_world_recover_channel_fault(&world) == OMEGA_WORLD_OK && !world.faulted &&
+         world.in_flight_count == 0 && world.abandoned_dispatches == 1 &&
+         omega_world_drain(&world, 4, 100) == 0 && world.total_dispatches == 3;
+    ok = ok && lc_vecadd_ok(&world, &code) && world.total_dispatches == 4;
+    omega_world_destroy(&world);
+    return ok;
+}
+
+/* Draining an older payload succeeds after newer ones finished, payloads
+ * must strictly increase, and the marker never moves backwards. */
+static bool test_lc_wait_reached_or_passed(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    OmegaHandle code, a, b, c;
+    bool ok = lc_setup(&world, &code, &a, &b, &c);
+    for (uint32_t i = 0; ok && i < 3; i++) ok = lc_submit_release(&world, i, i + 1, &code, &a, &b, &c) == OMEGA_WORLD_OK;
+    ok = ok && omega_world_ring(&world) == OMEGA_WORLD_OK &&
+         m16_native_wait_marker_ge(world.completion.cpu_marker, 3, 5000) == 0;
+    /* Marker is already 3: an equality wait on 1 would time out. */
+    ok = ok && omega_world_drain(&world, 1, 1000) == 1 && omega_world_drain(&world, 3, 1000) == 2 &&
+         world.total_dispatches == 3;
+    /* A payload that does not advance the sequence is refused. */
+    ok = ok && lc_submit_release(&world, 3, 2, &code, &a, &b, &c) == OMEGA_WORLD_ERR_INVALID_ARG &&
+         world.in_flight_count == 0;
+    uint32_t m0 = *world.completion.cpu_marker;
+    ok = ok && lc_vecadd_ok(&world, &code);
+    uint32_t m1 = *world.completion.cpu_marker;
+    ok = ok && (int32_t)(m1 - m0) > 0 && m1 == world.completion.last_payload;
+    omega_world_destroy(&world);
+    return ok;
+}
+
+int run_world_lifecycle_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA M19R: WORLD LIFECYCLE GATES\n");
+    printf("================================================================================\n");
+    lc_gate_count = 0;
+    lc_gate_passed = 0;
+    report_lc_gate("WORLD_REVOKE_RELEASES_MEMORY", test_lc_revoke_releases_memory());
+    report_lc_gate("WORLD_REVOKE_WAITS_FOR_QUEUED_JOB", test_lc_revoke_waits_for_queued_job());
+    report_lc_gate("WORLD_ERROR_LATCH_COUNTS_ONCE", test_lc_error_latch_counts_once());
+    report_lc_gate("WORLD_WAIT_REACHED_OR_PASSED", test_lc_wait_reached_or_passed());
+    printf("  TOTAL: %d | PASSED: %d | FAILED: %d\n", lc_gate_count, lc_gate_passed, lc_gate_count - lc_gate_passed);
+    return (lc_gate_passed == lc_gate_count) ? 0 : 1;
+}
