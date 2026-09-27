@@ -47,6 +47,17 @@ typedef struct {
     size_t count;
 } EquivTable;
 
+/* The default primitive vocabulary as (name, op, imm) rows. omega_synth_bank_init
+ * builds its bank from exactly these rows; other searches (Crumbline) start from
+ * the same vocabulary instead of copying it. */
+typedef struct {
+    const char *name;
+    OpCode op;
+    uint64_t imm;
+} OmegaSynthPrimDef;
+
+size_t omega_synth_base_prim_defs(const OmegaSynthPrimDef **out);
+
 /* Initialize default primitive bank (add, sub, mul, and, or with diverse imm) */
 int omega_synth_bank_init(SynthPrimitiveBank *bank);
 

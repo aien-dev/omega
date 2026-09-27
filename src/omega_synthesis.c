@@ -8,32 +8,35 @@
 
 static const uint64_t PROBE_INPUTS[SYNTH_PROBE_COUNT] = { 0, 1, 3, 7, 13, 42 };
 
+static const OmegaSynthPrimDef BASE_PRIM_DEFS[] = {
+    { "add_1",  OP_ADD, 1 },
+    { "add_2",  OP_ADD, 2 },
+    { "add_3",  OP_ADD, 3 },
+    { "add_5",  OP_ADD, 5 },
+    { "sub_1",  OP_SUB, 1 },
+    { "sub_2",  OP_SUB, 2 },
+    { "sub_3",  OP_SUB, 3 },
+    { "sub_5",  OP_SUB, 5 },
+    { "mul_2",  OP_MUL, 2 },
+    { "mul_3",  OP_MUL, 3 },
+    { "mul_4",  OP_MUL, 4 },
+    { "and_ff", OP_AND, 0xFF },
+    { "and_0f", OP_AND, 0x0F },
+    { "or_1",   OP_OR,  1 },
+    { "or_2",   OP_OR,  2 }
+};
+
+size_t omega_synth_base_prim_defs(const OmegaSynthPrimDef **out) {
+    if (out) *out = BASE_PRIM_DEFS;
+    return sizeof(BASE_PRIM_DEFS) / sizeof(BASE_PRIM_DEFS[0]);
+}
+
 int omega_synth_bank_init(SynthPrimitiveBank *bank) {
     if (!bank) return -1;
     memset(bank, 0, sizeof(SynthPrimitiveBank));
 
-    struct {
-        const char *name;
-        OpCode op;
-        uint64_t imm;
-    } prim_defs[] = {
-        { "add_1",  OP_ADD, 1 },
-        { "add_2",  OP_ADD, 2 },
-        { "add_3",  OP_ADD, 3 },
-        { "add_5",  OP_ADD, 5 },
-        { "sub_1",  OP_SUB, 1 },
-        { "sub_2",  OP_SUB, 2 },
-        { "sub_3",  OP_SUB, 3 },
-        { "sub_5",  OP_SUB, 5 },
-        { "mul_2",  OP_MUL, 2 },
-        { "mul_3",  OP_MUL, 3 },
-        { "mul_4",  OP_MUL, 4 },
-        { "and_ff", OP_AND, 0xFF },
-        { "and_0f", OP_AND, 0x0F },
-        { "or_1",   OP_OR,  1 },
-        { "or_2",   OP_OR,  2 }
-    };
-    size_t num_defs = sizeof(prim_defs) / sizeof(prim_defs[0]);
+    const OmegaSynthPrimDef *prim_defs = NULL;
+    size_t num_defs = omega_synth_base_prim_defs(&prim_defs);
 
     for (size_t i = 0; i < num_defs && i < SYNTH_MAX_PRIMITIVES; ++i) {
         if (omega_program_build_unary_op(&bank->programs[i], prim_defs[i].name,
