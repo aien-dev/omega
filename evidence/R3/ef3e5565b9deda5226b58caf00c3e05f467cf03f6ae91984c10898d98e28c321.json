@@ -1,0 +1,52 @@
+{
+  "schema": "AIEN_RX_HEARTBEAT_RECEIPT_V1",
+  "adr": "aien-architecture ADR 0016",
+  "run_id": "20260927T172541Z-9dd959455910",
+  "timestamp_utc": "2026-09-27T17:25:41Z",
+  "candidate_commit": "9dd959455910dbf5b86434a433461c091be39119",
+  "candidate_bound": true,
+  "run_commit": "9dd959455910dbf5b86434a433461c091be39119",
+  "tree_dirty": false,
+  "test_binary_sha256": "a8361352231f606f220d951c5e4053557cb286a5d477abaefb576f27b5e63f89",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64"},
+  "hardware_scope": "host CPU only; no accelerator involved",
+  "gates": {
+    "R3_REACTION_CORE": "PASS (host reference)",
+    "R4_CAUSAL_TRACE": "PASS (host reference; every reaction crumb in every test audited)",
+    "not_claimed": ["R1 canonical shared pool (unify with OMEGA_SHARED_WORLD_V1)", "R2", "R5", "R6", "R7 native capability root", "R8", "R9", "R10-R16"]
+  },
+  "tests": [
+    {"name": "heartbeat_chain", "invariants": "I3,I4,I6,I7", "checks": 37, "failures": 0},
+    {"name": "single_dependency_field_granularity", "invariants": "I7", "checks": 33, "failures": 0},
+    {"name": "multiple_dependency_fan_in_two_triggers", "invariants": "I6,I7", "checks": 31, "failures": 0},
+    {"name": "fan_out_64", "invariants": "I6,I7", "checks": 396, "failures": 0},
+    {"name": "fan_in_8", "invariants": "I6,I7", "checks": 23, "failures": 0},
+    {"name": "invalidation_stale_snapshot", "invariants": "I2,I6,I7", "checks": 26, "failures": 0},
+    {"name": "concurrent_publication_no_torn_no_lost", "invariants": "I6,I7", "checks": 2685, "failures": 0},
+    {"name": "stale_generation_rejected", "invariants": "I2,I7", "checks": 29, "failures": 0},
+    {"name": "write_outside_declared_set_rejected", "invariants": "I6,I9", "checks": 27, "failures": 0},
+    {"name": "duplicate_wake_coalesced", "invariants": "I7,I13", "checks": 29, "failures": 0},
+    {"name": "capability_attacks_all_fail", "invariants": "I3,I4,I9", "checks": 143, "failures": 0},
+    {"name": "revocation_during_run_rejected", "invariants": "I4,I7", "checks": 19, "failures": 0},
+    {"name": "capability_table_unforgeable_by_runtime", "invariants": "I3", "checks": 8, "failures": 0},
+    {"name": "causal_record_tamper_detected", "invariants": "I7,I15", "checks": 27, "failures": 0},
+    {"name": "schedule_independent_result", "invariants": "I16", "checks": 5435, "failures": 0}
+  ],
+  "totals": {"tests": 15, "tests_passed": 15, "checks": 8948, "failures": 0},
+  "causal": {"crumbs_digest_verified": 7016, "reaction_crumbs_audited": 1727},
+  "lifecycle": {"illegal_transitions": 0, "observed": [
+    {"from": "DORMANT", "to": "READY", "count": 1727},
+    {"from": "READY", "to": "BLOCKED_AUTHORITY", "count": 28},
+    {"from": "READY", "to": "RUNNING", "count": 1698},
+    {"from": "READY", "to": "INVALIDATED", "count": 1},
+    {"from": "BLOCKED_AUTHORITY", "to": "DORMANT", "count": 28},
+    {"from": "RUNNING", "to": "PUBLISHING", "count": 1698},
+    {"from": "PUBLISHING", "to": "COMMITTED", "count": 1361},
+    {"from": "PUBLISHING", "to": "INVALIDATED", "count": 333},
+    {"from": "PUBLISHING", "to": "REJECTED", "count": 4},
+    {"from": "COMMITTED", "to": "DORMANT", "count": 1361},
+    {"from": "INVALIDATED", "to": "DORMANT", "count": 334},
+    {"from": "REJECTED", "to": "DORMANT", "count": 4}
+  ]},
+  "heartbeat_trace": [{"crumb":5,"kind":"EXTERNAL","digest16":"db40ec1202f938c7"},{"crumb":6,"kind":"COMMIT","reaction":"aien.hypothesis","wake_cause":5,"digest16":"92d990c9f03e803d"},{"crumb":8,"kind":"COMMIT","reaction":"omega.realize","wake_cause":6,"digest16":"c59e4e82398a05f4"}]
+}
