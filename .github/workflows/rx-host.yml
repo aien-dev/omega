@@ -1,0 +1,30 @@
+name: Resident Reaction Host
+
+on:
+  pull_request:
+    paths:
+      - 'src/runtime/**'
+      - 'tests/runtime/**'
+      - 'Makefile'
+      - '.github/workflows/rx-host.yml'
+  push:
+    branches:
+      - 'feat/rx-*'
+    paths:
+      - 'src/runtime/**'
+      - 'tests/runtime/**'
+      - 'Makefile'
+      - '.github/workflows/rx-host.yml'
+
+jobs:
+  host-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build and run resident reaction host qualification
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.sha }}
+        run: make test-r3
