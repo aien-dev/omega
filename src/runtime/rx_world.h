@@ -157,10 +157,11 @@ typedef struct {
     uint64_t energy_cost;           /* 0 = free */
 } RxResourceNeed;
 
-/* Physical budget. A zero slots/memory/energy/mask is filled in as "plenty"
- * so existing reactions keep running. starvation_bound 0 disables the
- * anti-starvation slot (strict priority). A positive bound is the most
- * higher-class admissions in a row before one lower class must be served. */
+/* Physical budget. The setter is exact: zero means that resource is
+ * unavailable. rx_world_init installs permissive defaults for callers that
+ * never set a budget. starvation_bound 0 disables bounded fairness (strict
+ * priority); a positive value bounds how long a waiting lower class may be
+ * skipped by more urgent work. */
 typedef struct {
     uint32_t slots;
     uint32_t starvation_bound;
