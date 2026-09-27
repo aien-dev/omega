@@ -418,14 +418,23 @@ static int defer_wake(RxWorld *w, uint32_t rid, uint64_t cause) {
 }
 
 static void drain_deferred(RxWorld *w, uint32_t quota) {
-    while (quota && w->deferred_len) {
-        uint32_t rid = w->deferred[w->deferred_head].reaction;
-        uint64_t cause = w->deferred[w->deferred_head].cause;
-        w->deferred_head++;
-        w->deferred_len--;
-        if (w->deferred_len == 0) w->deferred_head = 0;
-        demand(w, rid, cause);
-        quota--;
+    if (quota == 0) return;
+    for (;;) {
+        uint32_t left = quota;
+        while (left && w->deferred_len) {
+            uint32_t rid = w->deferred[w->deferred_head].reaction;
+            uint64_t cause = w->deferred[w->deferred_head].cause;
+            w->deferred_head++;
+            w->deferred_len--;
+            if (w->deferred_len == 0) w->deferred_head = 0;
+            demand(w, rid, cause);
+            left--;
+        }
+        /* If a wave produced runnable work, let that work make progress before
+         * releasing another wave. If every wake was suppressed or merely
+         * parked on an unavailable resource, nothing else can drain the queue,
+         * so continue here until the queue is empty. */
+        if (w->in_flight != 0 || w->deferred_len == 0) break;
     }
 }
 
