@@ -11,6 +11,7 @@ int run_m19_drain_decoupling(void);
 /* M19R world lifecycle gates (memory release, quarantine, fault latch,
  * monotonic completion). Returns 0 if all pass. */
 int run_world_lifecycle_gates(void);
+int run_m19r_soak(void);
 
 /* Runs persistent accelerator world physical silicon demonstration */
 void run_demonstration_accelerator_world(void);

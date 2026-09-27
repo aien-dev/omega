@@ -121,11 +121,17 @@ typedef struct {
      * distinct from completion_val (hardware-completion identity). The
      * world fills it in omega_world_submit; callers must leave it zero. */
     uint32_t gp_seq;
+    uint32_t channel_generation;
+    uint8_t semantic_id[32];
+    uint8_t input_bindings_digest[32];
+    bool output_cpu_protected;
+    bool committed;
 } OmegaWorldSubmission;
 
 /* Omega Accelerator World Context */
 typedef struct {
     uint32_t current_epoch;
+    uint32_t handle_epoch; /* unique across destroy/init, never reused */
     uint32_t channel_generation;
     bool initialized;
     /* Latched on an unresolved hardware/accounting failure; cleared only by
@@ -174,7 +180,7 @@ typedef struct {
 
 /* World Lifecycle */
 int  omega_world_init(OmegaAcceleratorWorld *world);
-void omega_world_destroy(OmegaAcceleratorWorld *world);
+int  omega_world_destroy(OmegaAcceleratorWorld *world);
 int  omega_world_rebuild(OmegaAcceleratorWorld *world);
 
 /* Buffer Registry Operations */
