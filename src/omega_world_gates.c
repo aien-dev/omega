@@ -2282,7 +2282,7 @@ int run_m19r_soak(void) {
             ok = ok && test_lc_revoke_waits_for_queued_job() &&
                  test_lc_error_latch_counts_once();
         if ((cycles + 1) % 20000 == 0 && cycles + 1 < cycles_target) {
-            omega_world_destroy(&world);
+            ok = ok && omega_world_destroy(&world) == OMEGA_WORLD_OK;
             ok = ok && omega_world_init(&world) == OMEGA_WORLD_OK &&
                  m19r_soak_code(&world, &code);
             rebuilds++;
@@ -2315,9 +2315,10 @@ int run_m19r_soak(void) {
         start.rm_balance == end.rm_balance &&
         start.live_allocations == end.live_allocations &&
         start.va_high_water == end.va_high_water &&
+        start.free_ranges == end.free_ranges && start.free_bytes == end.free_bytes &&
         start.map_count == end.map_count && start.map_bytes == end.map_bytes &&
         start.buffers == end.buffers && start.code == end.code && !world.faulted;
-    omega_world_destroy(&world);
+    stable = omega_world_destroy(&world) == OMEGA_WORLD_OK && stable;
     M19RSoakSample post = m19r_sample(&world);
     m19r_print_sample("post_destroy", &post);
     stable = stable && post.rm_balance == 0 && post.live_allocations == 0 &&
