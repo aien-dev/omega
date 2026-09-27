@@ -1340,7 +1340,7 @@ static bool test_m19_gate9_generation(void) {
         omega_world_destroy(&world);
         return false;
     }
-    if (h1.world_epoch != 1 || h1.object_id != 0 || h1.object_generation != 1) {
+    if (h1.world_epoch != world.handle_epoch || h1.object_id != 0 || h1.object_generation != 1) {
         omega_world_destroy(&world);
         return false;
     }
@@ -2143,6 +2143,20 @@ static bool test_lc_batched_result_identity(void) {
            memcmp(a, b, sizeof a) == 0;
 }
 
+static bool test_lc_stale_handle_after_world_restart(void) {
+    OmegaAcceleratorWorld world;
+    OmegaHandle old, fresh;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    bool ok = omega_world_register_buffer(&world, 4096, OMEGA_PERM_READ, &old) == OMEGA_WORLD_OK;
+    if (omega_world_destroy(&world) != OMEGA_WORLD_OK) return false;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    ok = ok && omega_world_register_buffer(&world, 4096, OMEGA_PERM_READ, &fresh) == OMEGA_WORLD_OK;
+    ok = ok && old.object_id == fresh.object_id && old.object_generation == fresh.object_generation &&
+         old.world_epoch != fresh.world_epoch &&
+         omega_world_validate_handle(&world, &old, OMEGA_OBJ_BUFFER, OMEGA_PERM_READ) == OMEGA_WORLD_ERR_STALE_EPOCH;
+    return omega_world_destroy(&world) == OMEGA_WORLD_OK && ok;
+}
+
 int run_world_lifecycle_gates(void) {
     printf("================================================================================\n");
     printf("    AIEN OMEGA M19R: WORLD LIFECYCLE GATES\n");
@@ -2158,6 +2172,7 @@ int run_world_lifecycle_gates(void) {
     report_lc_gate("WORLD_TIMEOUT_COMPLETION_RACE", test_lc_timeout_completion_race());
     report_lc_gate("WORLD_STALE_GENERATION_MARKER_REFUSED", test_lc_stale_generation_marker());
     report_lc_gate("WORLD_BATCHED_RESULT_IDENTITY", test_lc_batched_result_identity());
+    report_lc_gate("WORLD_STALE_HANDLE_AFTER_RESTART", test_lc_stale_handle_after_world_restart());
     printf("  TOTAL: %d | PASSED: %d | FAILED: %d\n", lc_gate_count, lc_gate_passed, lc_gate_count - lc_gate_passed);
     return (lc_gate_passed == lc_gate_count) ? 0 : 1;
 }

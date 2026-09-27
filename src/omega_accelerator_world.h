@@ -131,6 +131,7 @@ typedef struct {
 /* Omega Accelerator World Context */
 typedef struct {
     uint32_t current_epoch;
+    uint32_t handle_epoch; /* unique across destroy/init, never reused */
     uint32_t channel_generation;
     bool initialized;
     /* Latched on an unresolved hardware/accounting failure; cleared only by

@@ -10,6 +10,21 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <stdatomic.h>
+
+/* Capability epochs are process unique; the local epoch remains available for
+ * deterministic rolling provenance across independent world instances. */
+static _Atomic uint32_t next_handle_epoch = 1;
+
+static uint32_t allocate_handle_epoch(void) {
+    uint32_t old = atomic_load_explicit(&next_handle_epoch, memory_order_relaxed);
+    for (;;) {
+        if (old == UINT32_MAX) return 0;
+        if (atomic_compare_exchange_weak_explicit(&next_handle_epoch, &old, old + 1,
+                                                  memory_order_relaxed, memory_order_relaxed))
+            return old;
+    }
+}
 
 
 static const uint32_t WORLD_SETUP_WORDS[18] = {
@@ -82,6 +97,8 @@ int omega_world_init(OmegaAcceleratorWorld *world) {
     memset(world, 0, sizeof(*world));
 
     world->current_epoch = 1;
+    world->handle_epoch = allocate_handle_epoch();
+    if (!world->handle_epoch) return OMEGA_WORLD_ERR_FAULT;
     world->channel_generation = 1;
 
     if (m16_native_open(&world->m16) != 0) {
@@ -133,11 +150,9 @@ int omega_world_destroy(OmegaAcceleratorWorld *world) {
 
     for (uint32_t i = 0; i < OMEGA_WORLD_MAX_BUFFERS; i++) {
         world->buffers[i].active = false;
-        world->buffers[i].generation++;
     }
     for (uint32_t i = 0; i < OMEGA_WORLD_MAX_CODE_ENTRIES; i++) {
         world->code_entries[i].active = false;
-        world->code_entries[i].generation++;
     }
 
     int close_rc = m16_native_close(&world->m16);
@@ -156,6 +171,7 @@ int omega_world_destroy(OmegaAcceleratorWorld *world) {
 
 int omega_world_rebuild(OmegaAcceleratorWorld *world) {
     if (!world || !world->initialized) return OMEGA_WORLD_ERR_INVALID_ARG;
+    if (world->current_epoch == UINT32_MAX) return OMEGA_WORLD_ERR_FAULT;
     uint32_t next_epoch = world->current_epoch + 1;
     if (world->initialized && omega_world_destroy(world) != OMEGA_WORLD_OK)
         return OMEGA_WORLD_ERR_HARDWARE;
@@ -177,7 +193,8 @@ int omega_world_register_buffer(OmegaAcceleratorWorld *world,
 
     int free_slot = -1;
     for (uint32_t i = 0; i < OMEGA_WORLD_MAX_BUFFERS; i++) {
-        if (!world->buffers[i].active && !world->buffers[i].retiring) {
+        if (!world->buffers[i].active && !world->buffers[i].retiring &&
+            world->buffers[i].generation != UINT32_MAX) {
             free_slot = (int)i;
             break;
         }
@@ -203,7 +220,7 @@ int omega_world_register_buffer(OmegaAcceleratorWorld *world,
     entry->gpu_va = entry->mem.va;
     entry->active = true;
 
-    out_handle->world_epoch = world->current_epoch;
+    out_handle->world_epoch = world->handle_epoch;
     out_handle->object_id = (uint32_t)free_slot;
     out_handle->object_generation = entry->generation;
     out_handle->object_type = OMEGA_OBJ_BUFFER;
@@ -216,7 +233,7 @@ int omega_world_register_buffer(OmegaAcceleratorWorld *world,
 int omega_world_revoke_buffer(OmegaAcceleratorWorld *world,
                                const OmegaHandle *handle) {
     if (!world || !world->initialized || !handle) return OMEGA_WORLD_ERR_INVALID_ARG;
-    if (handle->world_epoch != world->current_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
+    if (handle->world_epoch != world->handle_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
     if (handle->object_id >= OMEGA_WORLD_MAX_BUFFERS) return OMEGA_WORLD_ERR_INVALID_ARG;
 
     OmegaBufferEntry *entry = &world->buffers[handle->object_id];
@@ -227,7 +244,7 @@ int omega_world_revoke_buffer(OmegaAcceleratorWorld *world,
     /* The handle is refused from this instant; the memory is returned now,
      * or after drain if an in-flight submission still binds it. */
     entry->active = false;
-    entry->generation++;
+    if (entry->generation != UINT32_MAX) entry->generation++;
     if (world->buffer_count > 0) world->buffer_count--;
     if (buffer_referenced_in_flight(world, handle->object_id)) {
         entry->retiring = true;
@@ -244,7 +261,7 @@ int omega_world_resolve_buffer(OmegaAcceleratorWorld *world,
                                 void **out_cpu,
                                 uint64_t *out_gpu_va) {
     if (!world || !world->initialized || !handle) return OMEGA_WORLD_ERR_INVALID_ARG;
-    if (handle->world_epoch != world->current_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
+    if (handle->world_epoch != world->handle_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
     if (handle->object_id >= OMEGA_WORLD_MAX_BUFFERS) return OMEGA_WORLD_ERR_INVALID_ARG;
 
     OmegaBufferEntry *entry = &world->buffers[handle->object_id];
@@ -281,7 +298,8 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
 
     int free_slot = -1;
     for (uint32_t i = 0; i < OMEGA_WORLD_MAX_CODE_ENTRIES; i++) {
-        if (!world->code_entries[i].active && !world->code_entries[i].retiring) {
+        if (!world->code_entries[i].active && !world->code_entries[i].retiring &&
+            world->code_entries[i].generation != UINT32_MAX) {
             free_slot = (int)i;
             break;
         }
@@ -322,7 +340,7 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
     }
     entry->active = true;
 
-    out_handle->world_epoch = world->current_epoch;
+    out_handle->world_epoch = world->handle_epoch;
     out_handle->object_id = (uint32_t)free_slot;
     out_handle->object_generation = entry->generation;
     out_handle->object_type = OMEGA_OBJ_CODE;
@@ -335,7 +353,7 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
 int omega_world_revoke_code(OmegaAcceleratorWorld *world,
                              const OmegaHandle *handle) {
     if (!world || !world->initialized || !handle) return OMEGA_WORLD_ERR_INVALID_ARG;
-    if (handle->world_epoch != world->current_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
+    if (handle->world_epoch != world->handle_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
     if (handle->object_id >= OMEGA_WORLD_MAX_CODE_ENTRIES) return OMEGA_WORLD_ERR_INVALID_ARG;
 
     OmegaCodeEntry *entry = &world->code_entries[handle->object_id];
@@ -344,7 +362,7 @@ int omega_world_revoke_code(OmegaAcceleratorWorld *world,
     if (handle->object_type != OMEGA_OBJ_CODE) return OMEGA_WORLD_ERR_INVALID_ARG;
 
     entry->active = false;
-    entry->generation++;
+    if (entry->generation != UINT32_MAX) entry->generation++;
     if (world->code_count > 0) world->code_count--;
     if (code_referenced_in_flight(world, handle->object_id)) {
         entry->retiring = true;
@@ -359,7 +377,7 @@ int omega_world_resolve_code(OmegaAcceleratorWorld *world,
                               uint64_t *out_gpu_va,
                               size_t *out_size) {
     if (!world || !world->initialized || !handle) return OMEGA_WORLD_ERR_INVALID_ARG;
-    if (handle->world_epoch != world->current_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
+    if (handle->world_epoch != world->handle_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
     if (handle->object_id >= OMEGA_WORLD_MAX_CODE_ENTRIES) return OMEGA_WORLD_ERR_INVALID_ARG;
 
     OmegaCodeEntry *entry = &world->code_entries[handle->object_id];
@@ -379,7 +397,7 @@ int omega_world_validate_handle(const OmegaAcceleratorWorld *world,
                                  uint32_t expected_type,
                                  uint32_t required_perms) {
     if (!world || !world->initialized || !handle) return OMEGA_WORLD_ERR_INVALID_ARG;
-    if (handle->world_epoch != world->current_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
+    if (handle->world_epoch != world->handle_epoch) return OMEGA_WORLD_ERR_STALE_EPOCH;
     if (handle->object_type != expected_type) return OMEGA_WORLD_ERR_INVALID_ARG;
 
     if (expected_type == OMEGA_OBJ_BUFFER) {
@@ -455,6 +473,11 @@ int omega_world_recover_channel_fault(OmegaAcceleratorWorld *world) {
         return OMEGA_WORLD_ERR_HARDWARE;
     }
 
+    if (world->channel_generation == UINT32_MAX || world->channel_reconstructions == UINT64_MAX) {
+        world->faulted = true;
+        world->channel_active = false;
+        return OMEGA_WORLD_ERR_FAULT;
+    }
     world->channel_generation++;
     world->channel_reconstructions++;
     world->channel_active = true;
@@ -463,7 +486,13 @@ int omega_world_recover_channel_fault(OmegaAcceleratorWorld *world) {
      * are never committed. */
     for (uint32_t i = 0; i < world->in_flight_count; i++) {
         OmegaWorldSubmission *s = &world->in_flight[i];
-        if (!s->committed) world->abandoned_dispatches++;
+        if (!s->committed) {
+            if (world->abandoned_dispatches == UINT64_MAX) {
+                world->faulted = true;
+                return OMEGA_WORLD_ERR_FAULT;
+            }
+            world->abandoned_dispatches++;
+        }
         if (s->output_cpu_protected && s->c_object_id < OMEGA_WORLD_MAX_BUFFERS) {
             OmegaBufferEntry *c = &world->buffers[s->c_object_id];
             if (c->mem.handle && mprotect(c->cpu_addr, c->mem.size, PROT_READ | PROT_WRITE) != 0) {
@@ -503,6 +532,7 @@ int omega_world_update_digest(OmegaAcceleratorWorld *world,
     uint32_t epoch = world->current_epoch;
     memcpy(&buf[off], &epoch, 4); off += 4;
 
+    if (world->sequence_number == UINT64_MAX) return OMEGA_WORLD_ERR_FAULT;
     uint64_t seq = world->sequence_number + 1;
     memcpy(&buf[off], &seq, 8); off += 8;
 
@@ -549,6 +579,7 @@ static int record_completed_dispatch(OmegaAcceleratorWorld *world,
                                      uint32_t completion,
                                      const uint8_t *submitted_semantic_id,
                                      const uint8_t *submitted_input_digest) {
+    if (world->total_dispatches == UINT64_MAX) return OMEGA_WORLD_ERR_FAULT;
     uint8_t semantic_id[32], a_digest[32], b_digest[32];
     uint8_t bindings[64], bindings_digest[32], result_digest[32];
     uint32_t pairs[8] = {
@@ -709,6 +740,10 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
             !bb->active || bb->generation != s.b_generation ||
             !cb->active || cb->generation != s.c_generation ||
             !ce->active || ce->generation != s.code_generation) {
+            if (world->abandoned_dispatches == UINT64_MAX) {
+                world->faulted = true;
+                return OMEGA_WORLD_ERR_FAULT;
+            }
             world->abandoned_dispatches++;
             if (s.output_cpu_protected && cb->active &&
                 mprotect(cb->cpu_addr, cb->mem.size, PROT_READ | PROT_WRITE) != 0) {
@@ -719,28 +754,28 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
         }
 
         OmegaHandle ch = {
-            .world_epoch = world->current_epoch,
+            .world_epoch = world->handle_epoch,
             .object_id = s.code_object_id,
             .object_generation = s.code_generation,
             .object_type = OMEGA_OBJ_CODE,
             .permissions = s.code_permissions & OMEGA_PERM_EXECUTE
         };
         OmegaHandle ah = {
-            .world_epoch = world->current_epoch,
+            .world_epoch = world->handle_epoch,
             .object_id = s.a_object_id,
             .object_generation = s.a_generation,
             .object_type = OMEGA_OBJ_BUFFER,
             .permissions = s.a_permissions
         };
         OmegaHandle bh = {
-            .world_epoch = world->current_epoch,
+            .world_epoch = world->handle_epoch,
             .object_id = s.b_object_id,
             .object_generation = s.b_generation,
             .object_type = OMEGA_OBJ_BUFFER,
             .permissions = s.b_permissions
         };
         OmegaHandle cwh = {
-            .world_epoch = world->current_epoch,
+            .world_epoch = world->handle_epoch,
             .object_id = s.c_object_id,
             .object_generation = s.c_generation,
             .object_type = OMEGA_OBJ_BUFFER,
