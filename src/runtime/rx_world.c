@@ -349,10 +349,11 @@ static void demand(RxWorld *w, uint32_t rid, uint64_t cause) {
         r->osc_streak = 0;
         r->noop_streak = 0;
         r->conflict_streak = 0;
+        r->episode_activations = 0;
     }
     r->parked = false;
     if (w->stability.activation_budget &&
-        r->activations >= w->stability.activation_budget) {
+        r->episode_activations >= w->stability.activation_budget) {
         if (!r->quarantined) {
             r->quarantined = true;
             w->stats.quarantines++;
@@ -388,6 +389,46 @@ static void demand(RxWorld *w, uint32_t rid, uint64_t cause) {
     }
 }
 
+/* Fan-out limits bound one propagation wave, not semantic delivery. Excess
+ * dependents are queued and released in later waves. Allocation failure falls
+ * back to immediate demand so a valid dependency change is never dropped. */
+static int defer_wake(RxWorld *w, uint32_t rid, uint64_t cause) {
+    if (w->deferred_head + w->deferred_len >= w->deferred_cap) {
+        if (w->deferred_head && w->deferred_len) {
+            memmove(w->deferred, w->deferred + w->deferred_head,
+                    w->deferred_len * sizeof(*w->deferred));
+            w->deferred_head = 0;
+        }
+        if (w->deferred_len >= w->deferred_cap) {
+            uint32_t next = w->deferred_cap ? w->deferred_cap * 2u : RX_DEFERRED_INITIAL;
+            if (next < w->deferred_cap) return -1;
+            void *p = realloc(w->deferred, (size_t)next * sizeof(*w->deferred));
+            if (!p) return -1;
+            w->deferred = p;
+            w->deferred_cap = next;
+        }
+    }
+    uint32_t at = w->deferred_head + w->deferred_len++;
+    w->deferred[at].reaction = rid;
+    w->deferred[at].cause = cause;
+    w->stats.deferred_wakes++;
+    if (w->deferred_len > w->stats.deferred_peak)
+        w->stats.deferred_peak = w->deferred_len;
+    return 0;
+}
+
+static void drain_deferred(RxWorld *w, uint32_t quota) {
+    while (quota && w->deferred_len) {
+        uint32_t rid = w->deferred[w->deferred_head].reaction;
+        uint64_t cause = w->deferred[w->deferred_head].cause;
+        w->deferred_head++;
+        w->deferred_len--;
+        if (w->deferred_len == 0) w->deferred_head = 0;
+        demand(w, rid, cause);
+        quota--;
+    }
+}
+
 static int prio_less(const RxWorld *w, uint32_t a, uint32_t b) {
     uint32_t pa = w->reactions[a].desc.priority;
     uint32_t pb = w->reactions[b].desc.priority;
@@ -396,7 +437,8 @@ static int prio_less(const RxWorld *w, uint32_t a, uint32_t b) {
 }
 
 /* Only the subscribers of this object, filtered by field mask and generation.
- * Fanout above the configured limit is suppressed, highest priority first. */
+ * Fanout above the configured limit is deferred, highest priority first.
+ * Limiting wake concurrency must never make a valid dependent miss a change. */
 static void propagate(RxWorld *w, uint32_t obj, uint64_t changed, uint64_t cause) {
     if (!w->objects[obj].live) return;
     uint32_t gen = w->objects[obj].generation;
@@ -423,8 +465,12 @@ static void propagate(RxWorld *w, uint32_t obj, uint64_t changed, uint64_t cause
         allow = w->stability.fanout_limit;
     for (uint32_t i = 0; i < allow; i++) demand(w, hits[i], cause);
     for (uint32_t i = allow; i < nh; i++) {
-        w->reactions[hits[i]].suppressed++;
-        w->stats.suppressed_wakes++;
+        if (defer_wake(w, hits[i], cause) != 0)
+            demand(w, hits[i], cause);
+    }
+    if (w->in_flight == 0 && w->deferred_len) {
+        uint32_t quota = w->stability.fanout_limit ? w->stability.fanout_limit : w->deferred_len;
+        drain_deferred(w, quota);
     }
 }
 
@@ -694,9 +740,14 @@ static void end_activation(RxWorld *w, uint32_t rid) {
     } else {
         try_admit(w);
     }
+    if (w->deferred_len) {
+        uint32_t quota = w->stability.fanout_limit ? w->stability.fanout_limit : w->deferred_len;
+        drain_deferred(w, quota);
+    }
     if (w->in_flight == 0) {
         release_parked(w);
-        if (w->in_flight == 0) pthread_cond_broadcast(&w->idle_cv);
+        if (w->in_flight == 0 && w->deferred_len == 0)
+            pthread_cond_broadcast(&w->idle_cv);
     }
 }
 
@@ -732,6 +783,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
     for (uint32_t i = 0; i < d->n_caps; i++) stamp_cap(w, &k, i, d->caps[i].ref);
     add_parent(&k, r->wake_cause);
     r->activations++;
+    r->episode_activations++;
 
     RxDep deps[RX_MAX_DEPS];
     uint32_t n_deps = gather_deps(d, deps);
@@ -906,6 +958,13 @@ int rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crum
     w->root = root;
     w->crumbs = calloc(crumb_cap, sizeof(RxCrumb));
     if (!w->crumbs) return RX_ERR_FULL;
+    w->deferred = calloc(RX_DEFERRED_INITIAL, sizeof(*w->deferred));
+    if (!w->deferred) {
+        free(w->crumbs);
+        w->crumbs = NULL;
+        return RX_ERR_FULL;
+    }
+    w->deferred_cap = RX_DEFERRED_INITIAL;
     w->crumb_cap = crumb_cap;
     w->budget.slots = RX_MAX_REACTIONS;
     w->budget.memory_bytes = UINT64_MAX;
@@ -928,20 +987,12 @@ int rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crum
     return RX_OK;
 }
 
-static void fill_budget(RxResourceBudget *b) {
-    if (b->slots == 0) b->slots = RX_MAX_REACTIONS;
-    if (b->memory_bytes == 0) b->memory_bytes = UINT64_MAX;
-    if (b->energy_budget == 0) b->energy_budget = UINT64_MAX;
-    if (b->offered_locality == 0) b->offered_locality = UINT32_MAX;
-    if (b->offered_accel == 0) b->offered_accel = UINT32_MAX;
-    if (b->compute_mask == 0) b->compute_mask = UINT32_MAX;
-}
-
 void rx_world_set_resources(RxWorld *w, const RxResourceBudget *budget) {
     if (!w || !budget) return;
     pthread_mutex_lock(&w->mu);
+    /* The setter is exact. Zero is a real zero-resource condition, not
+     * shorthand for unlimited. rx_world_init installs the permissive default. */
     w->budget = *budget;
-    fill_budget(&w->budget);
     try_admit(w);
     if (w->in_flight == 0) pthread_cond_broadcast(&w->idle_cv);
     pthread_mutex_unlock(&w->mu);
@@ -961,6 +1012,7 @@ void rx_world_destroy(RxWorld *w) {
     pthread_mutex_unlock(&w->mu);
     for (uint32_t i = 0; i < w->n_workers; i++) pthread_join(w->workers[i], NULL);
     for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++) free(w->subs[i]);
+    free(w->deferred);
     free(w->crumbs);
     pthread_cond_destroy(&w->work_cv);
     pthread_cond_destroy(&w->idle_cv);
@@ -1116,7 +1168,7 @@ int rx_world_wait_quiescent(RxWorld *w, int timeout_ms) {
     if (dl.tv_nsec >= 1000000000L) { dl.tv_sec++; dl.tv_nsec -= 1000000000L; }
     pthread_mutex_lock(&w->mu);
     int rc = RX_OK;
-    while (w->in_flight != 0) {
+    while (w->in_flight != 0 || w->deferred_len != 0) {
         if (pthread_cond_timedwait(&w->idle_cv, &w->mu, &dl) == ETIMEDOUT) {
             rc = RX_ERR_TIMEOUT;
             break;
