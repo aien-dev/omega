@@ -1490,7 +1490,7 @@ static void t_priority_ladder(void) {
           first_log(RX_PRIO_BACKGROUND));
     g_illegal_transitions += e.w.stats.illegal_transitions;
     rx_world_destroy(&e.w);
-    rx_caproot_stop(&e.root);
+    rx_caproot_stop(&e.root, &e.admin);
 }
 
 /* ---- R6 stability (host) ------------------------------------------------ */
