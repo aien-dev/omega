@@ -3839,6 +3839,9 @@ int main(int argc, char **argv) {
         return 0;
     }
 
+    if (strcmp(argv[1], "--run-world-lifecycle-gates") == 0) {
+        return run_world_lifecycle_gates();
+    }
     if (strcmp(argv[1], "--run-m19-gates") == 0) {
         return run_m19_gates();
     }

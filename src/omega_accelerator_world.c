@@ -34,6 +34,65 @@ static void rm_free_obj(Nvrm *rm, uint32_t parent, uint32_t obj) {
     ioctl(rm->fd_ctl, NV_IOWR(NV_ESC_RM_FREE, sizeof(p)), &p);
 }
 
+/* A submission counts as complete once the hardware marker has reached or
+ * passed its payload (serial-number arithmetic, correct across 2^32 wrap). */
+static bool payload_reached(uint32_t payload, uint32_t upto) {
+    return (int32_t)(payload - upto) <= 0;
+}
+
+static bool buffer_referenced_in_flight(const OmegaAcceleratorWorld *world, uint32_t id) {
+    for (uint32_t i = 0; i < world->in_flight_count; i++) {
+        const OmegaWorldSubmission *s = &world->in_flight[i];
+        if (s->a_object_id == id || s->b_object_id == id || s->c_object_id == id) return true;
+    }
+    return false;
+}
+
+static bool code_referenced_in_flight(const OmegaAcceleratorWorld *world, uint32_t id) {
+    for (uint32_t i = 0; i < world->in_flight_count; i++) {
+        if (world->in_flight[i].code_object_id == id) return true;
+    }
+    return false;
+}
+
+/* Return a revoked slot's memory to PHYSICS. The slot becomes reusable only
+ * after this succeeds; a PHYSICS refusal is an accounting failure. */
+static int release_buffer_memory(OmegaAcceleratorWorld *world, OmegaBufferEntry *entry) {
+    if (nvrm_free(&world->m16.rm, &entry->mem) != 0) {
+        world->faulted = true;
+        return OMEGA_WORLD_ERR_FAULT;
+    }
+    entry->retiring = false;
+    entry->cpu_addr = NULL;
+    entry->gpu_va = 0;
+    entry->size_bytes = 0;
+    return OMEGA_WORLD_OK;
+}
+
+static int release_code_memory(OmegaAcceleratorWorld *world, OmegaCodeEntry *entry) {
+    if (nvrm_free(&world->m16.rm, &entry->mem) != 0) {
+        world->faulted = true;
+        return OMEGA_WORLD_ERR_FAULT;
+    }
+    entry->retiring = false;
+    entry->cpu_addr = NULL;
+    entry->gpu_va = 0;
+    entry->size_bytes = 0;
+    return OMEGA_WORLD_OK;
+}
+
+/* Release every retiring slot that no remaining in-flight submission binds. */
+static void release_unreferenced_retiring(OmegaAcceleratorWorld *world) {
+    for (uint32_t i = 0; i < OMEGA_WORLD_MAX_BUFFERS; i++) {
+        OmegaBufferEntry *e = &world->buffers[i];
+        if (e->retiring && !buffer_referenced_in_flight(world, i)) (void)release_buffer_memory(world, e);
+    }
+    for (uint32_t i = 0; i < OMEGA_WORLD_MAX_CODE_ENTRIES; i++) {
+        OmegaCodeEntry *e = &world->code_entries[i];
+        if (e->retiring && !code_referenced_in_flight(world, i)) (void)release_code_memory(world, e);
+    }
+}
+
 int omega_world_init(OmegaAcceleratorWorld *world) {
     if (!world) return OMEGA_WORLD_ERR_INVALID_ARG;
     memset(world, 0, sizeof(*world));
@@ -124,7 +183,7 @@ int omega_world_register_buffer(OmegaAcceleratorWorld *world,
 
     int free_slot = -1;
     for (uint32_t i = 0; i < OMEGA_WORLD_MAX_BUFFERS; i++) {
-        if (!world->buffers[i].active) {
+        if (!world->buffers[i].active && !world->buffers[i].retiring) {
             free_slot = (int)i;
             break;
         }
@@ -170,10 +229,16 @@ int omega_world_revoke_buffer(OmegaAcceleratorWorld *world,
     if (handle->object_generation != entry->generation) return OMEGA_WORLD_ERR_STALE_GEN;
     if (handle->object_type != OMEGA_OBJ_BUFFER) return OMEGA_WORLD_ERR_INVALID_ARG;
 
+    /* The handle is refused from this instant; the memory is returned now,
+     * or after drain if an in-flight submission still binds it. */
     entry->active = false;
     entry->generation++;
     if (world->buffer_count > 0) world->buffer_count--;
-    return OMEGA_WORLD_OK;
+    if (buffer_referenced_in_flight(world, handle->object_id)) {
+        entry->retiring = true;
+        return OMEGA_WORLD_OK;
+    }
+    return release_buffer_memory(world, entry);
 }
 
 int omega_world_resolve_buffer(OmegaAcceleratorWorld *world,
@@ -217,7 +282,7 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
 
     int free_slot = -1;
     for (uint32_t i = 0; i < OMEGA_WORLD_MAX_CODE_ENTRIES; i++) {
-        if (!world->code_entries[i].active) {
+        if (!world->code_entries[i].active && !world->code_entries[i].retiring) {
             free_slot = (int)i;
             break;
         }
@@ -281,7 +346,11 @@ int omega_world_revoke_code(OmegaAcceleratorWorld *world,
     entry->active = false;
     entry->generation++;
     if (world->code_count > 0) world->code_count--;
-    return OMEGA_WORLD_OK;
+    if (code_referenced_in_flight(world, handle->object_id)) {
+        entry->retiring = true;
+        return OMEGA_WORLD_OK;
+    }
+    return release_code_memory(world, entry);
 }
 
 int omega_world_resolve_code(OmegaAcceleratorWorld *world,
@@ -385,6 +454,13 @@ int omega_world_recover_channel_fault(OmegaAcceleratorWorld *world) {
     world->channel_generation++;
     world->channel_reconstructions++;
     world->channel_active = true;
+
+    /* Submissions queued on the torn-down channel will never complete and
+     * are never committed. */
+    world->abandoned_dispatches += world->in_flight_count;
+    world->in_flight_count = 0;
+    release_unreferenced_retiring(world);
+    world->faulted = false;
     return OMEGA_WORLD_OK;
 }
 
@@ -487,13 +563,22 @@ int omega_world_submit(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || !pb_mem || !submission) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (world->faulted) return OMEGA_WORLD_ERR_FAULTED;
     if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
     if (world->in_flight_count >= OMEGA_WORLD_MAX_IN_FLIGHT) {
         return OMEGA_WORLD_ERR_NO_MEM;
     }
+    /* One payload sequence for the whole world: the pushbuffer's terminal
+     * release (built by the caller) must carry a payload strictly after every
+     * payload already issued, synchronous or batched. */
+    if (!(submission->completion_val != world->completion.last_payload &&
+          !payload_reached(submission->completion_val, world->completion.last_payload))) {
+        return OMEGA_WORLD_ERR_INVALID_ARG;
+    }
     if (nvrm_enqueue(&world->m16.rm, pb_mem, off_bytes, nwords) != 0) {
         return OMEGA_WORLD_ERR_HARDWARE;
     }
+    world->completion.last_payload = submission->completion_val;
     world->in_flight[world->in_flight_count] = *submission;
     world->in_flight[world->in_flight_count].gp_seq = world->m16.rm.put;
     world->in_flight_count++;
@@ -502,6 +587,7 @@ int omega_world_submit(OmegaAcceleratorWorld *world,
 
 int omega_world_ring(OmegaAcceleratorWorld *world) {
     if (!world || !world->initialized) return OMEGA_WORLD_ERR_INVALID_ARG;
+    if (world->faulted) return OMEGA_WORLD_ERR_FAULTED;
     if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
     nvrm_ring(&world->m16.rm);
     return OMEGA_WORLD_OK;
@@ -511,87 +597,105 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
                       uint32_t upto_payload,
                       int timeout_ms) {
     if (!world || !world->initialized) return OMEGA_WORLD_ERR_INVALID_ARG;
+    if (world->faulted) return OMEGA_WORLD_ERR_FAULTED;
     if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
     if (timeout_ms < 0) return OMEGA_WORLD_ERR_INVALID_ARG;
 
-    if (m16_native_wait_marker(world->completion.cpu_marker, upto_payload,
-                               (uint64_t)timeout_ms) != 0) {
+    if (m16_native_wait_marker_ge(world->completion.cpu_marker, upto_payload,
+                                  (uint64_t)timeout_ms) != 0) {
+        world->faulted = true;
         return OMEGA_WORLD_ERR_HARDWARE;
     }
 
-    int committed = 0;
-    uint32_t keep = 0;
-    uint32_t retire_to = world->m16.rm.retired;
+    /* Pass 1: validate every completed submission before any side effect, so
+     * a failure never leaves a partially committed queue behind. */
     for (uint32_t i = 0; i < world->in_flight_count; i++) {
         const OmegaWorldSubmission *s = &world->in_flight[i];
-        if (s->completion_val > upto_payload) {
-            world->in_flight[keep++] = *s;
-            continue;
-        }
+        if (!payload_reached(s->completion_val, upto_payload)) continue;
         if (s->code_object_id >= OMEGA_WORLD_MAX_CODE_ENTRIES ||
             s->a_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
             s->b_object_id >= OMEGA_WORLD_MAX_BUFFERS ||
             s->c_object_id >= OMEGA_WORLD_MAX_BUFFERS) {
-            nvrm_retire(&world->m16.rm, retire_to);
+            world->faulted = true;
             return OMEGA_WORLD_ERR_INVALID_ARG;
         }
+    }
 
-        const OmegaBufferEntry *ab = &world->buffers[s->a_object_id];
-        const OmegaBufferEntry *bb = &world->buffers[s->b_object_id];
-        const OmegaBufferEntry *cb = &world->buffers[s->c_object_id];
-        const OmegaCodeEntry *ce = &world->code_entries[s->code_object_id];
-        if (!ab->active || ab->generation != s->a_generation ||
-            !bb->active || bb->generation != s->b_generation ||
-            !cb->active || cb->generation != s->c_generation ||
-            !ce->active || ce->generation != s->code_generation) {
-            nvrm_retire(&world->m16.rm, retire_to);
-            return OMEGA_WORLD_ERR_STALE_GEN;
+    /* Pass 2: each completed submission is committed exactly once, or
+     * abandoned if an object it bound was revoked while it was in flight. */
+    int committed = 0;
+    uint32_t keep = 0;
+    uint32_t retire_to = world->m16.rm.retired;
+    for (uint32_t i = 0; i < world->in_flight_count; i++) {
+        const OmegaWorldSubmission s = world->in_flight[i];
+        if (!payload_reached(s.completion_val, upto_payload)) {
+            world->in_flight[keep++] = s;
+            continue;
+        }
+        /* Retire by GPFIFO queue sequence, never by completion payload. */
+        if ((int32_t)(s.gp_seq - retire_to) > 0) retire_to = s.gp_seq;
+
+        const OmegaBufferEntry *ab = &world->buffers[s.a_object_id];
+        const OmegaBufferEntry *bb = &world->buffers[s.b_object_id];
+        const OmegaBufferEntry *cb = &world->buffers[s.c_object_id];
+        const OmegaCodeEntry *ce = &world->code_entries[s.code_object_id];
+        if (!ab->active || ab->generation != s.a_generation ||
+            !bb->active || bb->generation != s.b_generation ||
+            !cb->active || cb->generation != s.c_generation ||
+            !ce->active || ce->generation != s.code_generation) {
+            world->abandoned_dispatches++;
+            continue;
         }
 
         OmegaHandle ch = {
             .world_epoch = world->current_epoch,
-            .object_id = s->code_object_id,
-            .object_generation = s->code_generation,
+            .object_id = s.code_object_id,
+            .object_generation = s.code_generation,
             .object_type = OMEGA_OBJ_CODE,
-            .permissions = s->code_permissions & OMEGA_PERM_EXECUTE
+            .permissions = s.code_permissions & OMEGA_PERM_EXECUTE
         };
         OmegaHandle ah = {
             .world_epoch = world->current_epoch,
-            .object_id = s->a_object_id,
-            .object_generation = s->a_generation,
+            .object_id = s.a_object_id,
+            .object_generation = s.a_generation,
             .object_type = OMEGA_OBJ_BUFFER,
-            .permissions = s->a_permissions
+            .permissions = s.a_permissions
         };
         OmegaHandle bh = {
             .world_epoch = world->current_epoch,
-            .object_id = s->b_object_id,
-            .object_generation = s->b_generation,
+            .object_id = s.b_object_id,
+            .object_generation = s.b_generation,
             .object_type = OMEGA_OBJ_BUFFER,
-            .permissions = s->b_permissions
+            .permissions = s.b_permissions
         };
         OmegaHandle cwh = {
             .world_epoch = world->current_epoch,
-            .object_id = s->c_object_id,
-            .object_generation = s->c_generation,
+            .object_id = s.c_object_id,
+            .object_generation = s.c_generation,
             .object_type = OMEGA_OBJ_BUFFER,
-            .permissions = s->c_permissions
+            .permissions = s.c_permissions
         };
 
-        if (record_completed_dispatch(world, s->semantic_words, &ch, &ah, &bh, &cwh,
-                                      ab->cpu_addr, s->a_bytes,
-                                      bb->cpu_addr, s->b_bytes,
-                                      cb->cpu_addr, s->c_bytes,
-                                      s->completion_val) != OMEGA_WORLD_OK) {
-            nvrm_retire(&world->m16.rm, retire_to);
+        if (record_completed_dispatch(world, s.semantic_words, &ch, &ah, &bh, &cwh,
+                                      ab->cpu_addr, s.a_bytes,
+                                      bb->cpu_addr, s.b_bytes,
+                                      cb->cpu_addr, s.c_bytes,
+                                      s.completion_val) != OMEGA_WORLD_OK) {
+            /* Keep this and every later submission uncommitted; drop only
+             * those already committed above. */
+            for (uint32_t j = i; j < world->in_flight_count; j++) {
+                world->in_flight[keep++] = world->in_flight[j];
+            }
+            world->in_flight_count = keep;
+            world->faulted = true;
             return OMEGA_WORLD_ERR_FAULT;
         }
         world->total_dispatches++;
         committed++;
-        if (s->gp_seq > retire_to) retire_to = s->gp_seq;
     }
-    /* Retire by GPFIFO queue sequence, never by completion payload. */
     nvrm_retire(&world->m16.rm, retire_to);
     world->in_flight_count = keep;
+    release_unreferenced_retiring(world);
     return committed;
 }
 
@@ -605,6 +709,7 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || !code_handle || !h_a || !h_b || !h_c || n == 0) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (world->faulted) return OMEGA_WORLD_ERR_FAULTED;
     if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
 
     /* Resolve code and buffers with internal bounds and permission authority */
@@ -670,7 +775,8 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
 
     volatile uint32_t *hsem = (volatile uint32_t *)sem_cpu;
     *hsem = 0;
-    *world->completion.cpu_marker = 0;
+    /* The completion marker is monotonic and never written by the CPU after
+     * init; this dispatch takes the next payload in the world's sequence. */
     uint32_t payload = ++world->completion.last_payload;
 
     /* Assemble pushbuffer */
@@ -746,7 +852,8 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
         return OMEGA_WORLD_ERR_HARDWARE;
     }
 
-    if (m16_native_wait_marker(world->completion.cpu_marker, payload, 5000) != 0) {
+    if (m16_native_wait_marker_ge(world->completion.cpu_marker, payload, 5000) != 0) {
+        world->faulted = true;
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_HARDWARE;
     }
@@ -782,6 +889,7 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || !spec || !code_handle || !h_a || !h_b || !h_c) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (world->faulted) return OMEGA_WORLD_ERR_FAULTED;
     if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
 
     uint64_t code_va = 0;
@@ -875,7 +983,8 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
 
     volatile uint32_t *hsem = (volatile uint32_t *)sem_cpu;
     *hsem = 0;
-    *world->completion.cpu_marker = 0;
+    /* The completion marker is monotonic and never written by the CPU after
+     * init; this dispatch takes the next payload in the world's sequence. */
     uint32_t payload = ++world->completion.last_payload;
 
     /* Assemble pushbuffer */
@@ -951,7 +1060,8 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
         return OMEGA_WORLD_ERR_HARDWARE;
     }
 
-    if (m16_native_wait_marker(world->completion.cpu_marker, payload, 5000) != 0) {
+    if (m16_native_wait_marker_ge(world->completion.cpu_marker, payload, 5000) != 0) {
+        world->faulted = true;
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_HARDWARE;
     }

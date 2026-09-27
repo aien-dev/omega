@@ -37,6 +37,9 @@
 #define OMEGA_WORLD_ERR_NOT_FOUND      -7
 #define OMEGA_WORLD_ERR_HARDWARE       -8
 #define OMEGA_WORLD_ERR_FAULT          -9
+/* The world observed a hardware or accounting failure it could not resolve.
+ * Every submission path refuses until recover_channel_fault or rebuild. */
+#define OMEGA_WORLD_ERR_FAULTED       -10
 
 /* External Capability Handle */
 typedef struct {
@@ -53,6 +56,9 @@ typedef struct {
     uint32_t generation;
     uint32_t permissions;
     bool active;
+    /* Revoked while an in-flight submission still referenced it: the handle
+     * is already refused, but the memory is released only after drain. */
+    bool retiring;
     size_t size_bytes;
     void *cpu_addr;
     uint64_t gpu_va;
@@ -64,6 +70,7 @@ typedef struct {
     uint32_t object_id;
     uint32_t generation;
     bool active;
+    bool retiring;
     size_t size_bytes;
     void *cpu_addr;
     uint64_t gpu_va;
@@ -121,6 +128,9 @@ typedef struct {
     uint32_t current_epoch;
     uint32_t channel_generation;
     bool initialized;
+    /* Latched on an unresolved hardware/accounting failure; cleared only by
+     * omega_world_recover_channel_fault or omega_world_rebuild. */
+    bool faulted;
 
     /* Persistent hardware context */
     M16NativeContext m16;
@@ -156,6 +166,10 @@ typedef struct {
     /* Statistics */
     uint64_t total_dispatches;
     uint64_t channel_reconstructions;
+    /* Completed submissions that were not committed because an object they
+     * bound was revoked while they were in flight, or lost to a channel
+     * recovery. Never folded into total_dispatches or the digest. */
+    uint64_t abandoned_dispatches;
 } OmegaAcceleratorWorld;
 
 /* World Lifecycle */
