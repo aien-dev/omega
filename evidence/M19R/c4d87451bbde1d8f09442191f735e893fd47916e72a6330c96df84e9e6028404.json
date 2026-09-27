@@ -1,0 +1,1522 @@
+{
+  "candidate_binary_sha256": "0b65a9a582625d8211e0a1f7d99caff3f937524c737e0cf5d1ce7bbbda52882f",
+  "candidate_git_commit": "e5159fa3aab850f5599db74195a49c843bc46b36",
+  "candidate_trees_clean": {
+    "omega": true,
+    "physics": true
+  },
+  "driver_handle_count_limitation": "No authoritative live-handle query is exposed by the current RM interface; driver-acknowledged RM alloc/free balance and process mappings are the strongest available observables.",
+  "hardware_probe": {
+    "driver_proc_version": "NVRM version: NVIDIA UNIX Open Kernel Module for aarch64  580.173.02  Release Build  (dvs-builder@U22-A24-5-4)  Tue Jun 23 08:34:19 UTC 2026\nGCC version:  gcc version 13.3.0 (Ubuntu 13.3.0-6ubuntu2~24.04.1)",
+    "nvidia_smi_raw": "0000000F:01:00.0, 0x2E1210DE, 580.173.02, NVIDIA GB10, GPU-fb8e53f0-3207-e89b-d02f-acdfe2695b59"
+  },
+  "hardware_probe_sha256": "82fe776ad93e6a6ab1a6f773375d7d6ad243fa878af2037a833b16271bc01fb0",
+  "historical_evidence_sha256": {
+    "evidence/SHA256SUMS": "611b2263e25823da454cfeacf2c247b4dacb4febce86aa6a2094da7185f6c8eb",
+    "evidence/corpus_digests.txt": "a3437bb30105726a0a23293e651ef868a3abaf8301596597eea5277941f50a28",
+    "evidence/m10_corpus_digests.txt": "8386ed531aea943299578f3180f6e743ad79b367cbd958d9010d746650e6302b",
+    "evidence/m11_corpus_digests.txt": "4b395f5cc4ed4bba36a993233696787d0c01986597c42abc519522f14721ab0b",
+    "evidence/m12_corpus_digests.txt": "15a3131b401ff99869ac051d6cfab7d736b119276c530115fdab7b650d502e5c",
+    "evidence/m13_corpus_digests.txt": "41a83ca2069545312bf18431b121c8f7abf043669ae8525dfbb8b10c189db99b",
+    "evidence/m14_corpus_digests.txt": "0e1ed16bf61d12c920887750a2f55faaf5f5f42d4cf74330cbde662d69573745",
+    "evidence/m15_corpus_digests.txt": "53ef8cb29a17da2e8ac66c593f22be620053bf97a38c36124fc7b05cf784500b",
+    "evidence/m17_blackwell_vector/qmd1_hexdump.txt": "7455e1eb042ef3079640dc7f1ebae16e7ec007c6a3a825909a7df19e21f96517",
+    "evidence/m17_blackwell_vector/vecadd_instructions.txt": "973bc4fe126140c709a38ddfe4d73aa92d59c97ab88b7727b8198d51deefbd1d",
+    "evidence/m17_corpus_digests.txt": "ce10d14b8be743641bb52a091d40e195d0869613fa55e26b064cc7ce8d62436f",
+    "evidence/m19_corpus_digests.txt": "a1b5cc0307cd6b6a93b92f948d7db0ab8196c8afc899e196182f7d7b0e790452",
+    "evidence/m19_m18_stage2_regression.json": "d10b11b87228f4f34191a6544d7e68befe8dab58ec5c09275095430b3fe670a9",
+    "evidence/m5_corpus_digests.txt": "490434f02b02077ec041d3bb4ae3346c7ab8ea4a5b189ed41208cc95c724a500",
+    "evidence/m6_corpus_digests.txt": "1adff8b165b9908e42b9c36e9ff548a99962ebe1ed0cf8231be80040707c1465",
+    "evidence/m7_corpus_digests.txt": "f1e8136f0fb4aa288f7cca7cb9aeb33c435d39e07814a4c9b46bcfa324ed7d56",
+    "evidence/m8_corpus_digests.txt": "6f080d32496dc50d67eeed5e7720d342713d0c4a3e7be91f9215af4855fc777d",
+    "evidence/m9_corpus_digests.txt": "55722ceb864c7299f760809aaa8250155a55460ba6b576d58fd660baf3d61bf6",
+    "evidence/omega_aarch64_qualification_receipt.json": "c095f34c74585e604a91b1f73ebb5199010c49260344e3cfcad94871571a4ad1",
+    "evidence/omega_accelerator_link_qualification_receipt.json": "6d18480c4eb6c3f571acd10939bf7f5a99639dccdd17ee1794a7653039dccd2f",
+    "evidence/omega_accelerator_world_qualification_receipt.json": "4fdfb62c70fa94cf91cb42aeb873f656963efd780efab91417b4eb627dcf9ec0",
+    "evidence/omega_blackwell_matmul_stage1_receipt.json": "4edcbb2c974181ab04d1a973314aaf247435f8d6159d4019147de519834f8e73",
+    "evidence/omega_blackwell_matmul_stage2_receipt.json": "11f36763288fc1ffa18295696fe21a881677f0b2b575010e70ef08fdd5be8e31",
+    "evidence/omega_blackwell_vector_qualification_receipt.json": "b22542bbdbba349b878e9e177cf6053959706df7d3effccf7ad5a7002bc994a5",
+    "evidence/omega_library_discovery_qualification_receipt.json": "193bfce34119a66d7b8b739347a9ddd910b91348359ef59f61d3f2cad579638d",
+    "evidence/omega_library_v1_qualification_receipt.json": "ed145343ccf7537195cc2596b2e89bdb222daa9e38c2657329bde145427a3c61",
+    "evidence/omega_living_matvec_qualification_receipt.json": "227536387d6bb49683773308c390008b7deed79953fdf0d731aa405fa1916e5b",
+    "evidence/omega_machine_graph_qualification_receipt.json": "d5f154cc31283ea50b1e6e907ffa47e52ef7b45548e306667e4a4d5276e17a10",
+    "evidence/omega_program_core_qualification_receipt.json": "2e5febd99ec0bf572f1feb7e0e3a3ce30e3dea3393ec0af944cfd3a7b285e6bd",
+    "evidence/omega_qualification_receipt.json": "1ababfd5c80f6604a3d1a4704a614e906e0666ad3cb3be27e8208485c66f03ab",
+    "evidence/omega_realization_synthesis_qualification_receipt.json": "9074be81976d39fc43e12c2854cae7ac3f59291c295c5f7c4f1ccd9732529d43",
+    "evidence/omega_self_host_qualification_receipt.json": "f637f81568cc8b19c6ca8c45a77cb62c6fe666b26ba1a41659bdbe5e99d057f7",
+    "evidence/omega_synthesis_v0_qualification_receipt.json": "efa154f1967df640157bff9047e28f3fc1504570a0d5cdd2e0243f6350bd51b0",
+    "evidence/omega_verify_qualification_receipt.json": "5665637e1df96309d457aa464dbf6475b97a298e67e1709dc02800a350b65ff2",
+    "evidence/test_vectors/physics_m3_law.bin": "d9fb789585376322a50eaf55109d826af5b02a300862d4447fcac0150b42881e",
+    "evidence/test_vectors/u32_add_graph.bin": "ce64c27a1403f4fd44f502f397ace8a49470f0bee8a8b399c5f85b5d64770806",
+    "evidence/test_vectors/u32_add_graph.omg": "255326e55cf1a5da152beff085d55808f7820f60e8f931cf9febc849dbf7fd89"
+  },
+  "lineage": "M19_REPAIR_BASELINE",
+  "m19_observations": {
+    "channel_generation_advanced": true,
+    "m19_gates_completed": 18,
+    "m19_gates_passed": 18,
+    "regression_gates_completed": 157,
+    "regression_gates_passed": 157,
+    "ring_capacity": 1024,
+    "rolling_state_digest": "6872f1c30184a66036bd78f61e12c15e22d3dc968daa4b55f6e646c7db55bd17",
+    "sustained_dispatches": 1000,
+    "vas_preserved": true,
+    "wrap_dispatches": 3072
+  },
+  "observed_fail_count": 0,
+  "observed_gate_results_count": 229,
+  "observed_pass_count": 229,
+  "physics_candidate_git_commit": "29bf6ea84ba19eb2b8612843ec9dd868a647f9bc",
+  "predecessor_qualification_sha256": "4fdfb62c70fa94cf91cb42aeb873f656963efd780efab91417b4eb627dcf9ec0",
+  "receipt_digest": "c4d87451bbde1d8f09442191f735e893fd47916e72a6330c96df84e9e6028404",
+  "resource_samples": [
+    {
+      "driver_acknowledged_rm_balance": 17,
+      "driver_handle_count_available": false,
+      "free_bytes": 4194304,
+      "free_ranges": 1,
+      "internal_live_allocations": 7,
+      "nvidia_process_mapping_bytes": 3354624,
+      "nvidia_process_mapping_count": 8,
+      "phase": "start",
+      "process_resident_pages": 1339,
+      "process_virtual_pages": 1513,
+      "va_high_water": 68794068992,
+      "world_buffers": 0,
+      "world_code": 1
+    },
+    {
+      "driver_acknowledged_rm_balance": 17,
+      "driver_handle_count_available": false,
+      "free_bytes": 4194304,
+      "free_ranges": 1,
+      "internal_live_allocations": 7,
+      "nvidia_process_mapping_bytes": 3354624,
+      "nvidia_process_mapping_count": 8,
+      "phase": "end",
+      "process_resident_pages": 1411,
+      "process_virtual_pages": 1584,
+      "va_high_water": 68794068992,
+      "world_buffers": 0,
+      "world_code": 1
+    },
+    {
+      "driver_acknowledged_rm_balance": 0,
+      "driver_handle_count_available": false,
+      "free_bytes": 74592256,
+      "free_ranges": 1,
+      "internal_live_allocations": 0,
+      "nvidia_process_mapping_bytes": 0,
+      "nvidia_process_mapping_count": 0,
+      "phase": "post_destroy",
+      "process_resident_pages": 608,
+      "process_virtual_pages": 765,
+      "va_high_water": 68794068992,
+      "world_buffers": 0,
+      "world_code": 0
+    }
+  ],
+  "run_id": "20260927T160150Z-c4caa757cbb8",
+  "schema": "AIEN_M19R_QUALIFICATION_V1",
+  "soak": {
+    "bytes_churned": 419430400000,
+    "channel_recoveries": 10,
+    "cycles": 100000,
+    "duration_seconds": 84.826,
+    "passed": true,
+    "physical_memory_bytes": 130660888576,
+    "world_rebuilds": 4
+  },
+  "test_manifest": {
+    "commands": [
+      "nvrm/lifecycle_gates",
+      "m16/m16_requalify",
+      "m16/m16_concurrent",
+      "omega/m15",
+      "omega/world_lifecycle",
+      "omega/m19",
+      "omega/m19r_soak"
+    ],
+    "observed_test_ids": [
+      "nvrm_lifecycle:M16_WAIT_GE_SERIAL",
+      "nvrm_lifecycle:NVRM_FREE_CHURN",
+      "nvrm_lifecycle:NVRM_FREE_UNMAPS",
+      "nvrm_lifecycle:NVRM_FREE_IDEMPOTENT_AND_STALE",
+      "nvrm_lifecycle:NVRM_ALLOC_AFTER_FREE_REUSES_VA",
+      "nvrm_lifecycle:NVRM_ALLOCATION_OVERFLOW_REFUSED",
+      "nvrm_lifecycle:GPU_SUBMIT_AFTER_CHURN",
+      "nvrm_lifecycle:UVM_FREE_FAILURE_QUARANTINES",
+      "nvrm_lifecycle:RM_FREE_FAILURE_QUARANTINES",
+      "nvrm_lifecycle:CORRUPT_TABLE_REFUSED",
+      "m16_requalify:NEGATIVE_CONTROL_PASS",
+      "m16_requalify:POSITIVE_CONTROL_PASS",
+      "m16_requalify:NO_LIBCUDA_PASS",
+      "m16_requalify:CAUSALITY_VERIFICATION_PASS",
+      "m16_requalify:M16_REQUALIFICATION_PASS",
+      "m16_concurrent:CONCURRENT_CHANNEL_PASS",
+      "m15:PHYSICS_ACCEL_MEM_BOUNDS_PASS",
+      "m15:PHYSICS_ACCEL_SMMU_TRANSLATION_PASS",
+      "m15:PHYSICS_ACCEL_DMA_SANDBOX_PASS",
+      "m15:PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS",
+      "m15:PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS",
+      "m15:PHYSICS_ACCEL_RESET_RECOVERY_PASS",
+      "m15:PHYSICS_ACCEL_RECEIPT_CHAIN_PASS",
+      "m15:PHYSICS_ACCEL_OMEGA_INGRESS_PASS",
+      "m15:PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS",
+      "m15:PHYSICS_ACCEL_RECEIPT_PASS",
+      "world_lifecycle:WORLD_REVOKE_RELEASES_MEMORY",
+      "world_lifecycle:WORLD_REVOKE_WAITS_FOR_QUEUED_JOB",
+      "world_lifecycle:WORLD_ERROR_LATCH_COUNTS_ONCE",
+      "world_lifecycle:WORLD_WAIT_REACHED_OR_PASSED",
+      "world_lifecycle:WORLD_OUTPUT_IN_FLIGHT_ALIAS_REFUSED",
+      "world_lifecycle:WORLD_BOUNDS_OVERFLOW_REFUSED",
+      "world_lifecycle:WORLD_TIMEOUT_COMPLETION_RACE",
+      "world_lifecycle:WORLD_STALE_GENERATION_MARKER_REFUSED",
+      "world_lifecycle:WORLD_BATCHED_RESULT_IDENTITY",
+      "world_lifecycle:WORLD_STALE_HANDLE_AFTER_RESTART",
+      "m19:OMEGA_ACCEL_RESIDENT_WORLD_CREATE_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_CHANNEL_REUSE_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_CODE_REGISTRY_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_BUFFER_REGISTRY_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_MIXED_WORKLOAD_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_QUEUE_WRAP_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_1000_OP_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_GENERATION_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_STALE_HANDLE_REFUSAL_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_REVOCATION_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_FAULT_RECOVERY_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_MEMORY_BOUND_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_STATE_DIGEST_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_ZERO_LIBCUDA_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS",
+      "m19:OMEGA_OBJECT_MODEL_PASS",
+      "m19:OMEGA_TYPE_SYSTEM_PASS",
+      "m19:OMEGA_GRAPH_VALIDATION_PASS",
+      "m19:OMEGA_CANONICAL_ENCODING_PASS",
+      "m19:OMEGA_SEMANTIC_ID_DETERMINISM_PASS",
+      "m19:OMEGA_REPRESENTATION_INDEPENDENCE_PASS",
+      "m19:OMEGA_SEMANTIC_DIFFERENCE_PASS",
+      "m19:OMEGA_RELATION_PASS",
+      "m19:OMEGA_CONSTRAINT_PASS",
+      "m19:OMEGA_PURE_EFFECT_SEPARATION_PASS",
+      "m19:OMEGA_MALFORMED_OBJECT_REFUSAL_PASS",
+      "m19:OMEGA_CROSS_BUILD_DETERMINISM_PASS",
+      "m19:OMEGA_AARCH64_PROFILE_PASS",
+      "m19:OMEGA_AARCH64_ENCODER_PASS",
+      "m19:OMEGA_AARCH64_DECODER_SEAM_PASS",
+      "m19:OMEGA_AARCH64_LOWERING_PASS",
+      "m19:OMEGA_AARCH64_REALIZATION_ID_PASS",
+      "m19:OMEGA_AARCH64_NATIVE_EXECUTION_PASS",
+      "m19:OMEGA_AARCH64_QEMU_EXECUTION_PASS",
+      "m19:OMEGA_AARCH64_ADVERSARIAL_MUTATION_PASS",
+      "m19:OMEGA_AARCH64_CROSS_BUILD_DETERMINISM_PASS",
+      "m19:OMEGA_SELF_HOST_GRAPH_PASS",
+      "m19:OMEGA_SELF_HOST_C1_EMISSION_PASS",
+      "m19:OMEGA_SELF_HOST_DECODER_SEAM_PASS",
+      "m19:OMEGA_SELF_HOST_C2_REPRODUCTION_PASS",
+      "m19:OMEGA_SELF_HOST_C3_REPRODUCTION_PASS",
+      "m19:OMEGA_SELF_HOST_FIXED_POINT_PASS",
+      "m19:OMEGA_SELF_HOST_REALIZATION_ID_PASS",
+      "m19:OMEGA_SELF_HOST_M5_PARITY_PASS",
+      "m19:OMEGA_SELF_HOST_NATIVE_EXECUTION_PASS",
+      "m19:OMEGA_SELF_HOST_ADVERSARIAL_MUTATION_PASS",
+      "m19:OMEGA_VERIFY_V0_TYPE_PASS",
+      "m19:OMEGA_VERIFY_V0_DAG_PASS",
+      "m19:OMEGA_VERIFY_V0_CODE_BOUNDS_PASS",
+      "m19:OMEGA_VERIFY_V0_INSN_DECODE_PASS",
+      "m19:OMEGA_VERIFY_V0_TERMINAL_RET_PASS",
+      "m19:OMEGA_VERIFY_V1_DIFFERENTIAL_PASS",
+      "m19:OMEGA_VERIFY_V1_DIVERGENCE_REFUSAL_PASS",
+      "m19:OMEGA_VERIFY_V2_COMMUTATIVITY_PASS",
+      "m19:OMEGA_VERIFY_V2_IDENTITY_PASS",
+      "m19:OMEGA_VERIFY_V2_OVERFLOW_PASS",
+      "m19:OMEGA_PROGRAM_OBJECT_PASS",
+      "m19:OMEGA_PROGRAM_CONTRACT_VALIDATION_PASS",
+      "m19:OMEGA_PROGRAM_COMPOSITION_PASS",
+      "m19:OMEGA_PROGRAM_TYPE_MISMATCH_REFUSAL_PASS",
+      "m19:OMEGA_PROGRAM_COST_ACCOUNTING_PASS",
+      "m19:OMEGA_PROGRAM_REALIZATION_PASS",
+      "m19:OMEGA_PROGRAM_V0_STRUCTURAL_PASS",
+      "m19:OMEGA_PROGRAM_V1_DIFFERENTIAL_PASS",
+      "m19:OMEGA_PROGRAM_V2_PROPERTY_PASS",
+      "m19:OMEGA_PROGRAM_SYNTHESIS_TASK_PASS",
+      "m19:OMEGA_SYNTHESIS_PRIMITIVES_PASS",
+      "m19:OMEGA_SYNTHESIS_SEARCH_ORDERING_PASS",
+      "m19:OMEGA_SYNTHESIS_TYPE_PRUNING_PASS",
+      "m19:OMEGA_SYNTHESIS_EQUIV_PRUNING_PASS",
+      "m19:OMEGA_SYNTHESIS_V0_STRUCTURAL_PASS",
+      "m19:OMEGA_SYNTHESIS_V1_IO_FILTERING_PASS",
+      "m19:OMEGA_SYNTHESIS_V2_PROPERTY_PASS",
+      "m19:OMEGA_SYNTHESIS_TARGET_AFFINE_PASS",
+      "m19:OMEGA_SYNTHESIS_TARGET_COMPOSED_PASS",
+      "m19:OMEGA_SYNTHESIS_RECEIPT_PASS",
+      "m19:OMEGA_LIBRARY_INIT_PASS",
+      "m19:OMEGA_LIBRARY_INSERT_PASS",
+      "m19:OMEGA_LIBRARY_INDEXING_PASS",
+      "m19:OMEGA_LIBRARY_QUERY_PASS",
+      "m19:OMEGA_LIBRARY_DEP_DAG_PASS",
+      "m19:OMEGA_LIBRARY_IMMUTABILITY_PASS",
+      "m19:OMEGA_LIBRARY_UNVERIFIED_REFUSAL_PASS",
+      "m19:OMEGA_LIBRARY_DUPLICATE_REFUSAL_PASS",
+      "m19:OMEGA_LIBRARY_SYNTHESIS_REUSE_PASS",
+      "m19:OMEGA_LIBRARY_RECEIPT_PASS",
+      "m19:OMEGA_DISCOVERY_CORPUS_MINING_PASS",
+      "m19:OMEGA_DISCOVERY_NONTRIVIAL_PASS",
+      "m19:OMEGA_DISCOVERY_COMPRESSION_PASS",
+      "m19:OMEGA_DISCOVERY_SEMANTIC_PRESERVATION_PASS",
+      "m19:OMEGA_DISCOVERY_V0_STRUCTURAL_PASS",
+      "m19:OMEGA_DISCOVERY_V1_DIFFERENTIAL_PASS",
+      "m19:OMEGA_DISCOVERY_V2_PROPERTY_PASS",
+      "m19:OMEGA_DISCOVERY_LIBRARY_ADMISSION_PASS",
+      "m19:OMEGA_DISCOVERY_SEARCH_ACCELERATION_PASS",
+      "m19:OMEGA_DISCOVERY_RECEIPT_PASS",
+      "m19:OMEGA_MATVEC_SEMANTIC_SPEC_PASS",
+      "m19:OMEGA_MATVEC_MULTI_REALIZATION_PASS",
+      "m19:OMEGA_MATVEC_TRIPLE_ID_PASS",
+      "m19:OMEGA_MATVEC_V0_STRUCTURAL_PASS",
+      "m19:OMEGA_MATVEC_V1_NUMERICAL_PARITY_PASS",
+      "m19:OMEGA_MATVEC_REGIME_INFLECTION_PASS",
+      "m19:OMEGA_MATVEC_ADAPTIVE_DISPATCH_PASS",
+      "m19:OMEGA_MATVEC_SPEEDUP_PASS",
+      "m19:OMEGA_MATVEC_ZERO_TOOLCHAIN_PASS",
+      "m19:OMEGA_MATVEC_RECEIPT_PASS",
+      "m19:OMEGA_MACHINE_INIT_PASS",
+      "m19:OMEGA_MACHINE_PIPELINE_PASS",
+      "m19:OMEGA_MACHINE_REGISTER_FILE_PASS",
+      "m19:OMEGA_MACHINE_MEMORY_HIERARCHY_PASS",
+      "m19:OMEGA_MACHINE_PHYSICS_INGRESS_PASS",
+      "m19:OMEGA_MACHINE_CANONICAL_ID_PASS",
+      "m19:OMEGA_MACHINE_TOPOLOGY_DIFFERENCE_PASS",
+      "m19:OMEGA_MACHINE_CYCLE_PREVENTION_PASS",
+      "m19:OMEGA_MACHINE_COST_EVALUATION_PASS",
+      "m19:OMEGA_MACHINE_RECEIPT_PASS",
+      "m19:OMEGA_REAL_SYNTH_INIT_PASS",
+      "m19:OMEGA_REAL_SYNTH_TRIPLE_ID_PASS",
+      "m19:OMEGA_REAL_SYNTH_SCHEDULE_OPT_PASS",
+      "m19:OMEGA_REAL_SYNTH_DGX_SPARK_PASS",
+      "m19:OMEGA_REAL_SYNTH_QEMU_VIRT_PASS",
+      "m19:OMEGA_REAL_SYNTH_SEMANTIC_PARITY_PASS",
+      "m19:OMEGA_REAL_SYNTH_V0_STRUCTURAL_PASS",
+      "m19:OMEGA_REAL_SYNTH_V1_DIFFERENTIAL_PASS",
+      "m19:OMEGA_REAL_SYNTH_V2_PROPERTY_PASS",
+      "m19:OMEGA_REAL_SYNTH_RECEIPT_PASS",
+      "m19:PHYSICS_ACCEL_MEM_BOUNDS_PASS",
+      "m19:PHYSICS_ACCEL_SMMU_TRANSLATION_PASS",
+      "m19:PHYSICS_ACCEL_DMA_SANDBOX_PASS",
+      "m19:PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS",
+      "m19:PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS",
+      "m19:PHYSICS_ACCEL_RESET_RECOVERY_PASS",
+      "m19:PHYSICS_ACCEL_RECEIPT_CHAIN_PASS",
+      "m19:PHYSICS_ACCEL_OMEGA_INGRESS_PASS",
+      "m19:PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS",
+      "m19:PHYSICS_ACCEL_RECEIPT_PASS",
+      "m19:OMEGA_BW_VECTOR_SEMANTIC_PASS",
+      "m19:OMEGA_BW_VECTOR_MACHINE_BINDING_PASS",
+      "m19:OMEGA_BW_VECTOR_REALIZATION_PASS",
+      "m19:OMEGA_BW_VECTOR_ENCODER_FIXTURE_PASS",
+      "m19:OMEGA_BW_VECTOR_NATIVE_ENCODING_PASS",
+      "m19:OMEGA_BW_VECTOR_QMD_PASS",
+      "m19:OMEGA_BW_VECTOR_PHYSICS_AUTHORITY_PASS",
+      "m19:OMEGA_BW_VECTOR_NATIVE_SUBMIT_PASS",
+      "m19:OMEGA_BW_VECTOR_DEVICE_OUTPUT_PASS",
+      "m19:OMEGA_BW_VECTOR_COMPLETION_PASS",
+      "m19:OMEGA_BW_VECTOR_V1_PARITY_PASS",
+      "m19:OMEGA_BW_VECTOR_BOUNDARY_PASS",
+      "m19:OMEGA_BW_VECTOR_MUTATION_REFUSAL_PASS",
+      "m19:OMEGA_BW_VECTOR_ZERO_LIBCUDA_LINK_PASS",
+      "m19:OMEGA_BW_VECTOR_ZERO_CUDA_SYMBOL_PASS",
+      "m19:OMEGA_BW_VECTOR_ZERO_LIBCUDA_RUNTIME_PASS",
+      "m19:OMEGA_BW_VECTOR_EVIDENCE_DURABILITY_PASS",
+      "m19:OMEGA_BW_VECTOR_RECEIPT_PASS",
+      "m19:OMEGA_BW_MATMUL_SEMANTIC_CONTRACT_PASS",
+      "m19:OMEGA_BW_MATMUL_MACHINE_GRAPH_PASS",
+      "m19:OMEGA_BW_MATMUL_ENCODER_UNIT_PASS",
+      "m19:OMEGA_BW_MATMUL_BOUNDED_REGALLOC_PASS",
+      "m19:OMEGA_BW_MATMUL_INSTRUCTION_SEQUENCING_PASS",
+      "m19:OMEGA_BW_MATMUL_CODE_TRUTH_PASS",
+      "m19:OMEGA_BW_MATMUL_CODEGEN_VARIATION_PASS",
+      "m19:OMEGA_BW_MATMUL_REALIZATION_ID_PASS",
+      "m19:OMEGA_BW_MATMUL_QMD_2D_PASS",
+      "m19:OMEGA_BW_MATMUL_NATIVE_SUBMIT_PASS",
+      "m19:OMEGA_BW_MATMUL_INT32_INTERMEDIATE_PASS",
+      "m19:OMEGA_BW_MATMUL_TENSOR_CORE_EXECUTION_PASS",
+      "m19:OMEGA_BW_MATMUL_NUMERICAL_BOUND_PASS",
+      "m19:OMEGA_BW_MATMUL_BOUNDARY_ANNIHILATION_PASS",
+      "m19:OMEGA_BW_MATMUL_ZERO_LIBCUDA_PASS",
+      "m19:OMEGA_BW_MATMUL_CLEAN_CLONE_PASS",
+      "m19:OMEGA_BW_VECTOR_SEMANTIC_PASS",
+      "m19:OMEGA_BW_VECTOR_MACHINE_BINDING_PASS",
+      "m19:OMEGA_BW_VECTOR_REALIZATION_PASS",
+      "m19:OMEGA_BW_VECTOR_ENCODER_FIXTURE_PASS",
+      "m19:OMEGA_BW_VECTOR_NATIVE_ENCODING_PASS",
+      "m19:OMEGA_BW_VECTOR_QMD_PASS",
+      "m19:OMEGA_BW_VECTOR_PHYSICS_AUTHORITY_PASS",
+      "m19:OMEGA_BW_VECTOR_NATIVE_SUBMIT_PASS",
+      "m19:OMEGA_BW_VECTOR_DEVICE_OUTPUT_PASS",
+      "m19:OMEGA_BW_VECTOR_COMPLETION_PASS",
+      "m19:OMEGA_BW_VECTOR_V1_PARITY_PASS",
+      "m19:OMEGA_BW_VECTOR_BOUNDARY_PASS",
+      "m19:OMEGA_BW_VECTOR_MUTATION_REFUSAL_PASS",
+      "m19:OMEGA_BW_VECTOR_ZERO_LIBCUDA_LINK_PASS",
+      "m19:OMEGA_BW_VECTOR_ZERO_CUDA_SYMBOL_PASS",
+      "m19:OMEGA_BW_VECTOR_ZERO_LIBCUDA_RUNTIME_PASS",
+      "m19:OMEGA_BW_VECTOR_EVIDENCE_DURABILITY_PASS",
+      "m19:OMEGA_BW_VECTOR_RECEIPT_PASS",
+      "m19:OMEGA_BW_MATMUL_REGRESSION_PASS",
+      "m19:OMEGA_BW_MATMUL_RECEIPT_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_REGRESSION_PASS",
+      "m19:OMEGA_ACCEL_RESIDENT_RECEIPT_PASS"
+    ]
+  },
+  "test_manifest_sha256": "46f76ef67283ec7ccf652a370f1b9a73175fc9bb920b6eda688624aa8c4aaf90",
+  "test_results": [
+    {
+      "id": "M16_WAIT_GE_SERIAL",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "NVRM_FREE_CHURN",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "NVRM_FREE_UNMAPS",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "NVRM_FREE_IDEMPOTENT_AND_STALE",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "NVRM_ALLOC_AFTER_FREE_REUSES_VA",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "NVRM_ALLOCATION_OVERFLOW_REFUSED",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "GPU_SUBMIT_AFTER_CHURN",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "UVM_FREE_FAILURE_QUARANTINES",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "RM_FREE_FAILURE_QUARANTINES",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "CORRUPT_TABLE_REFUSED",
+      "status": "PASS",
+      "suite": "nvrm_lifecycle"
+    },
+    {
+      "id": "NEGATIVE_CONTROL_PASS",
+      "status": "PASS",
+      "suite": "m16_requalify"
+    },
+    {
+      "id": "POSITIVE_CONTROL_PASS",
+      "status": "PASS",
+      "suite": "m16_requalify"
+    },
+    {
+      "id": "NO_LIBCUDA_PASS",
+      "status": "PASS",
+      "suite": "m16_requalify"
+    },
+    {
+      "id": "CAUSALITY_VERIFICATION_PASS",
+      "status": "PASS",
+      "suite": "m16_requalify"
+    },
+    {
+      "id": "M16_REQUALIFICATION_PASS",
+      "status": "PASS",
+      "suite": "m16_requalify"
+    },
+    {
+      "id": "CONCURRENT_CHANNEL_PASS",
+      "status": "PASS",
+      "suite": "m16_concurrent"
+    },
+    {
+      "id": "PHYSICS_ACCEL_MEM_BOUNDS_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "PHYSICS_ACCEL_SMMU_TRANSLATION_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "PHYSICS_ACCEL_DMA_SANDBOX_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "PHYSICS_ACCEL_RESET_RECOVERY_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "PHYSICS_ACCEL_RECEIPT_CHAIN_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "PHYSICS_ACCEL_OMEGA_INGRESS_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "PHYSICS_ACCEL_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m15"
+    },
+    {
+      "id": "WORLD_REVOKE_RELEASES_MEMORY",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "WORLD_REVOKE_WAITS_FOR_QUEUED_JOB",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "WORLD_ERROR_LATCH_COUNTS_ONCE",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "WORLD_WAIT_REACHED_OR_PASSED",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "WORLD_OUTPUT_IN_FLIGHT_ALIAS_REFUSED",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "WORLD_BOUNDS_OVERFLOW_REFUSED",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "WORLD_TIMEOUT_COMPLETION_RACE",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "WORLD_STALE_GENERATION_MARKER_REFUSED",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "WORLD_BATCHED_RESULT_IDENTITY",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "WORLD_STALE_HANDLE_AFTER_RESTART",
+      "status": "PASS",
+      "suite": "world_lifecycle"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_WORLD_CREATE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_CHANNEL_REUSE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_CODE_REGISTRY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_BUFFER_REGISTRY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_MIXED_WORKLOAD_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_QUEUE_WRAP_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_1000_OP_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_GENERATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_STALE_HANDLE_REFUSAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_REVOCATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_FAULT_RECOVERY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_MEMORY_BOUND_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_STATE_DIGEST_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_ZERO_LIBCUDA_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_OBJECT_MODEL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_TYPE_SYSTEM_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_GRAPH_VALIDATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_CANONICAL_ENCODING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SEMANTIC_ID_DETERMINISM_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REPRESENTATION_INDEPENDENCE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SEMANTIC_DIFFERENCE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_RELATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_CONSTRAINT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PURE_EFFECT_SEPARATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MALFORMED_OBJECT_REFUSAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_CROSS_BUILD_DETERMINISM_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_AARCH64_PROFILE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_AARCH64_ENCODER_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_AARCH64_DECODER_SEAM_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_AARCH64_LOWERING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_AARCH64_REALIZATION_ID_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_AARCH64_NATIVE_EXECUTION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_AARCH64_QEMU_EXECUTION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_AARCH64_ADVERSARIAL_MUTATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_AARCH64_CROSS_BUILD_DETERMINISM_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_GRAPH_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_C1_EMISSION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_DECODER_SEAM_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_C2_REPRODUCTION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_C3_REPRODUCTION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_FIXED_POINT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_REALIZATION_ID_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_M5_PARITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_NATIVE_EXECUTION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SELF_HOST_ADVERSARIAL_MUTATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V0_TYPE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V0_DAG_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V0_CODE_BOUNDS_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V0_INSN_DECODE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V0_TERMINAL_RET_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V1_DIFFERENTIAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V1_DIVERGENCE_REFUSAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V2_COMMUTATIVITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V2_IDENTITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_VERIFY_V2_OVERFLOW_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_OBJECT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_CONTRACT_VALIDATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_COMPOSITION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_TYPE_MISMATCH_REFUSAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_COST_ACCOUNTING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_REALIZATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_V0_STRUCTURAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_V1_DIFFERENTIAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_V2_PROPERTY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_PROGRAM_SYNTHESIS_TASK_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_PRIMITIVES_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_SEARCH_ORDERING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_TYPE_PRUNING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_EQUIV_PRUNING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_V0_STRUCTURAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_V1_IO_FILTERING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_V2_PROPERTY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_TARGET_AFFINE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_TARGET_COMPOSED_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_SYNTHESIS_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_INIT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_INSERT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_INDEXING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_QUERY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_DEP_DAG_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_IMMUTABILITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_UNVERIFIED_REFUSAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_DUPLICATE_REFUSAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_SYNTHESIS_REUSE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_LIBRARY_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_CORPUS_MINING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_NONTRIVIAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_COMPRESSION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_SEMANTIC_PRESERVATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_V0_STRUCTURAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_V1_DIFFERENTIAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_V2_PROPERTY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_LIBRARY_ADMISSION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_SEARCH_ACCELERATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_DISCOVERY_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_SEMANTIC_SPEC_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_MULTI_REALIZATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_TRIPLE_ID_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_V0_STRUCTURAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_V1_NUMERICAL_PARITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_REGIME_INFLECTION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_ADAPTIVE_DISPATCH_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_SPEEDUP_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_ZERO_TOOLCHAIN_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MATVEC_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_INIT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_PIPELINE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_REGISTER_FILE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_MEMORY_HIERARCHY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_PHYSICS_INGRESS_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_CANONICAL_ID_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_TOPOLOGY_DIFFERENCE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_CYCLE_PREVENTION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_COST_EVALUATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_MACHINE_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_INIT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_TRIPLE_ID_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_SCHEDULE_OPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_DGX_SPARK_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_QEMU_VIRT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_SEMANTIC_PARITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_V0_STRUCTURAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_V1_DIFFERENTIAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_V2_PROPERTY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_REAL_SYNTH_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_MEM_BOUNDS_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_SMMU_TRANSLATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_DMA_SANDBOX_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_RESET_RECOVERY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_RECEIPT_CHAIN_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_OMEGA_INGRESS_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "PHYSICS_ACCEL_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_SEMANTIC_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_MACHINE_BINDING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_REALIZATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_ENCODER_FIXTURE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_NATIVE_ENCODING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_QMD_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_PHYSICS_AUTHORITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_NATIVE_SUBMIT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_DEVICE_OUTPUT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_COMPLETION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_V1_PARITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_BOUNDARY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_MUTATION_REFUSAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_ZERO_LIBCUDA_LINK_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_ZERO_CUDA_SYMBOL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_ZERO_LIBCUDA_RUNTIME_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_EVIDENCE_DURABILITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_SEMANTIC_CONTRACT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_MACHINE_GRAPH_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_ENCODER_UNIT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_BOUNDED_REGALLOC_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_INSTRUCTION_SEQUENCING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_CODE_TRUTH_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_CODEGEN_VARIATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_REALIZATION_ID_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_QMD_2D_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_NATIVE_SUBMIT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_INT32_INTERMEDIATE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_TENSOR_CORE_EXECUTION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_NUMERICAL_BOUND_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_BOUNDARY_ANNIHILATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_ZERO_LIBCUDA_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_CLEAN_CLONE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_SEMANTIC_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_MACHINE_BINDING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_REALIZATION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_ENCODER_FIXTURE_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_NATIVE_ENCODING_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_QMD_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_PHYSICS_AUTHORITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_NATIVE_SUBMIT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_DEVICE_OUTPUT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_COMPLETION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_V1_PARITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_BOUNDARY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_MUTATION_REFUSAL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_ZERO_LIBCUDA_LINK_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_ZERO_CUDA_SYMBOL_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_ZERO_LIBCUDA_RUNTIME_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_EVIDENCE_DURABILITY_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_VECTOR_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_REGRESSION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_BW_MATMUL_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_REGRESSION_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    },
+    {
+      "id": "OMEGA_ACCEL_RESIDENT_RECEIPT_PASS",
+      "status": "PASS",
+      "suite": "m19"
+    }
+  ],
+  "timestamp_utc": "2026-09-27T16:30:55.254391+00:00",
+  "zero_libcuda_linkage": true
+}

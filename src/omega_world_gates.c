@@ -1140,10 +1140,9 @@ static bool test_m19_gate8_1000_op(void) {
     const uint32_t f_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_FP16};
     const uint32_t b_words[5] = {2, 16, 16, 16, OMEGA_MATMUL_PRECISION_BF16};
 
-    /* pb_pool is 0x40000 bytes = 64 slots of 0x1000. A slot must not be
-     * rewritten until every GPFIFO entry that references it has retired. The
-     * world API enqueues each dispatch and owns authoritative accounting; this
-     * gate only observes world.total_dispatches and world.sequence_number. */
+    /* pb_pool is 0x40000 bytes = 64 slots of 0x1000. A slot and a writable
+     * result buffer must not be reused until the earlier dispatch retires and
+     * its result digest is committed. Each group has four distinct outputs. */
     const uint32_t pb_slots = 0x40000 / 0x1000;
     uint32_t dispatch_id = 0;
     uint32_t in_flight = 0;
@@ -1204,7 +1203,7 @@ static bool test_m19_gate8_1000_op(void) {
         }
         in_flight++;
 
-        if (in_flight >= pb_slots) {
+        if (in_flight >= 4) {
             if (omega_world_ring(&world) != OMEGA_WORLD_OK ||
                 omega_world_drain(&world, dispatch_id, 10000) < 0) {
                 omega_world_destroy(&world);
@@ -1340,7 +1339,7 @@ static bool test_m19_gate9_generation(void) {
         omega_world_destroy(&world);
         return false;
     }
-    if (h1.world_epoch != 1 || h1.object_id != 0 || h1.object_generation != 1) {
+    if (h1.world_epoch != world.handle_epoch || h1.object_id != 0 || h1.object_generation != 1) {
         omega_world_destroy(&world);
         return false;
     }
@@ -1647,16 +1646,22 @@ static bool test_m19_gate15_zero_libcuda(void) {
 
 /* Gate 16: OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS */
 static bool test_m19_gate16_clean_clone(void) {
-    /* Revision the receipt will name as the candidate. */
     char src_sha[41] = {0};
     if (!m19_git_head(".", src_sha)) return false;
+    const char *record = getenv("OMEGA_QUAL_RECORD");
+    const char *candidate = getenv("OMEGA_M19R_CANDIDATE");
+    if ((record && strcmp(record, "1") == 0) || candidate) {
+        if (!candidate || strlen(candidate) != 40 ||
+            strspn(candidate, "0123456789abcdefABCDEF") != 40 ||
+            strcmp(candidate, src_sha) != 0 || omega_evidence_tree_dirty()) return false;
+    }
 
     if (getenv("OMEGA_IN_CLEAN_CLONE") != NULL) {
         /* Nested run: record the revision this clone was built from. */
         memcpy(m19_candidate_commit, src_sha, sizeof(m19_candidate_commit));
         return true;
     }
-    if (system("git diff --quiet -- src spec tools && git diff --cached --quiet -- src spec tools") != 0) {
+    if (omega_evidence_tree_dirty()) {
         return false;
     }
     char clone_template[] = "/tmp/omega_clean_m19_XXXXXX";
@@ -1684,10 +1689,10 @@ static bool test_m19_gate16_clean_clone(void) {
 
     char command[4608];
     int len = snprintf(command, sizeof(command),
-                       "git clone --quiet --no-hardlinks . %s && cd %s && "
+                       "git clone --quiet --no-hardlinks . %s && cd %s && git checkout --quiet %s && "
                        "make clean >/dev/null 2>&1 && make -j PHYSICS_DIR=%s >/dev/null 2>&1 && "
                        "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m19-gates >%s/qualification.log 2>&1",
-                       checkout, checkout, physics_dir_resolved, clone);
+                       checkout, checkout, src_sha, physics_dir_resolved, clone);
     if (len < 0 || (size_t)len >= sizeof(command)) return false;
     if (system(command) != 0) return false;
 
@@ -1734,176 +1739,25 @@ static bool test_m19_gate17_regression(void) {
     return (passed == total);
 }
 
-/* Gate 18: OMEGA_ACCEL_RESIDENT_RECEIPT_PASS */
+/* Gate 18 validates receipt prerequisites. The outer harness owns emission
+ * after all gate results, including this one, have been collected. */
 static bool test_m19_gate18_receipt(void) {
-    if (m19_gate_count != 17 || m19_gate_passed != 17) return false;
-
-    /* The receipt must name the exact revision that was built and qualified. */
-    char head_sha[41] = {0};
-    if (!m19_git_head(".", head_sha)) return false;
-    if (m19_candidate_commit[0] == '\0' || strcmp(head_sha, m19_candidate_commit) != 0) {
+    if (m19_gate_count != 17 || m19_gate_passed != 17 ||
+        m19_regression_total == 0 || m19_regression_passed != m19_regression_total)
         return false;
+    char head_sha[41] = {0};
+    if (!m19_git_head(".", head_sha) ||
+        m19_candidate_commit[0] == '\0' ||
+        strcmp(head_sha, m19_candidate_commit) != 0) return false;
+    const char *record = getenv("OMEGA_QUAL_RECORD");
+    if ((record && strcmp(record, "1") == 0) || getenv("OMEGA_M19R_CANDIDATE")) {
+        const char *candidate = getenv("OMEGA_M19R_CANDIDATE");
+        if (!candidate || strcmp(candidate, head_sha) != 0 ||
+            omega_evidence_tree_dirty()) return false;
     }
-
-    const char *manifest_files[] = {
-        "src/omega_accelerator_world.h",
-        "src/omega_accelerator_world.c",
-        "src/omega_world_gates.h",
-        "src/omega_world_gates.c",
-        "spec/accelerator-world.md",
-        "README.md",
-        "Makefile"
-    };
-    size_t num_files = sizeof(manifest_files) / sizeof(manifest_files[0]);
-
-    char digests_path[1024];
-    if (omega_evidence_path("m19_corpus_digests.txt", digests_path, sizeof(digests_path)) != 0) return false;
-
-    FILE *mf = fopen(digests_path, "w");
-    if (!mf) return false;
-
-    for (size_t i = 0; i < num_files; i++) {
-        uint8_t d[32];
-        char h[65] = {0};
-        if (!compute_file_sha256(manifest_files[i], d, h)) {
-            fclose(mf);
-            return false;
-        }
-        fprintf(mf, "%s  %s\n", h, manifest_files[i]);
-    }
-    fclose(mf);
-
-    uint8_t manifest_digest[32];
-    char manifest_hex[65] = {0};
-    if (!compute_file_sha256(digests_path, manifest_digest, manifest_hex)) return false;
-
-    uint8_t bin_digest[32];
-    char bin_hex[65] = {0};
-    compute_file_sha256("build/omegatool", bin_digest, bin_hex);
-
-    char rolling_digest_hex[65] = {0};
-    for (int i = 0; i < 32; i++) {
-        sprintf(&rolling_digest_hex[i * 2], "%02x", m19_sustained_digest[i]);
-    }
-
-    /* Commit / physics identity: observed, not asserted. */
-    char run_commit[41] = "UNKNOWN";
-    if (!omega_evidence_run_commit(run_commit)) strcpy(run_commit, "UNKNOWN");
-    bool tree_dirty = omega_evidence_tree_dirty();
-
-    char physics_commit[65] = "UNKNOWN";
-    if (!omega_evidence_physics_commit(physics_commit, sizeof(physics_commit))) strcpy(physics_commit, "UNKNOWN");
-
-    /* Observed hardware identity (live Nvrm fields, not a hard-coded sm_121). */
-    OmegaEvidenceHardware hw;
-    memset(&hw, 0, sizeof(hw));
-    hw.alias = "sm_121";
-    {
-        OmegaAcceleratorWorld hw_world;
-        if (omega_world_init(&hw_world) == OMEGA_WORLD_OK) {
-            omega_evidence_hardware_from_nvrm(&hw_world.m16.rm, &hw);
-            omega_world_destroy(&hw_world);
-        }
-    }
-
-    char receipt_path[1024];
-    if (omega_evidence_path("omega_accelerator_world_qualification_receipt.json", receipt_path, sizeof(receipt_path)) != 0) return false;
-    FILE *f = fopen(receipt_path, "w");
-    if (!f) return false;
-
-    time_t now = time(NULL);
-    char time_str[64];
-    struct tm *tm_info = gmtime(&now);
-    strftime(time_str, sizeof(time_str), "%Y-%m-%dT%H:%M:%SZ", tm_info);
-
-    fprintf(f, "{\n");
-    fprintf(f, "  \"milestone\": \"OMEGA_ACCELERATOR_WORLD\",\n");
-    fprintf(f, "  \"milestone_id\": \"M19\",\n");
-    fprintf(f, "  \"title\": \"OMEGA Milestone 19: Persistent Accelerator World (OmegaAcceleratorWorld)\",\n");
-    fprintf(f, "  \"target_hardware\": \"NVIDIA DGX Spark (Grace Blackwell GB10, sm_121, 128 GiB unified LPDDR5x RAM)\",\n");
-    fprintf(f, "  \"substrate\": \"M16 Native Libcuda-Free Channel\",\n");
-    fprintf(f, "  \"status\": \"SILICON_QUALIFIED\",\n");
-    fprintf(f, "  \"run_commit\": \"%s\",\n", run_commit);
-    fprintf(f, "  \"tree_dirty\": %s,\n", tree_dirty ? "true" : "false");
-    fprintf(f, "  \"physics_commit\": \"%s\",\n", physics_commit);
-    {
-        const char *qual_record = getenv("OMEGA_QUAL_RECORD");
-        bool recording = (qual_record != NULL && strcmp(qual_record, "1") == 0);
-        if (recording && !tree_dirty) {
-            fprintf(f, "  \"candidate_git_commit\": \"%s\",\n", run_commit);
-        }
-    }
-    fprintf(f, "  \"hardware\": {\n");
-    fprintf(f, "    \"compute_class\": \"0x%x\",\n", hw.compute_class);
-    fprintf(f, "    \"rm_sm_version\": \"0x%x\",\n", hw.rm_sm_version);
-    fprintf(f, "    \"gpu_uuid\": \"%s\",\n", hw.gpu_uuid_hex);
-    fprintf(f, "    \"alias\": \"%s\"\n", hw.alias);
-    fprintf(f, "  },\n");
-    fprintf(f, "  \"binary_sha256\": \"%s\",\n", bin_hex);
-    fprintf(f, "  \"manifest_sha256\": \"%s\",\n", manifest_hex);
-    fprintf(f, "  \"rolling_state_digest\": \"%s\",\n", rolling_digest_hex);
-    fprintf(f, "  \"persistent_residency\": {\n");
-    fprintf(f, "    \"single_rm_client\": true,\n");
-    fprintf(f, "    \"single_vas\": true,\n");
-    fprintf(f, "    \"single_channel_construction_sustained\": true,\n");
-    fprintf(f, "    \"resident_not_immortal\": true\n");
-    fprintf(f, "  },\n");
-    fprintf(f, "  \"two_level_epoch_model\": {\n");
-    fprintf(f, "    \"world_epoch_isolation\": true,\n");
-    fprintf(f, "    \"object_generation_aba_protection\": true,\n");
-    fprintf(f, "    \"registry_address_authority\": true\n");
-    fprintf(f, "  },\n");
-    fprintf(f, "  \"queue_topology\": {\n");
-    fprintf(f, "    \"discovered_ring_capacity\": %u,\n", m19_ring_capacity);
-    fprintf(f, "    \"stress_multi_wrap_dispatches\": %u,\n", m19_wrap_dispatches);
-    fprintf(f, "    \"ring_wrap_factor\": %.6f,\n", m19_ring_capacity ? ((double)m19_wrap_dispatches / (double)m19_ring_capacity) : 0.0);
-    fprintf(f, "    \"gpfifo_flow_control_verified\": true,\n");
-    fprintf(f, "    \"monotonic_sequence_numbers\": true\n");
-    fprintf(f, "  },\n");
-    fprintf(f, "  \"sustained_workload\": {\n");
-    fprintf(f, "    \"sustained_dispatches\": %u,\n", m19_sustained_dispatches);
-    fprintf(f, "    \"cycles\": %u,\n", m19_sustained_dispatches / 4);
-    fprintf(f, "    \"classes\": [\"VecAdd\", \"INT32_MatMul\", \"FP16_Tensor_MMA\", \"BF16_Tensor_MMA\"],\n");
-    fprintf(f, "    \"oracle_parity_verified\": true,\n");
-    fprintf(f, "    \"parity_error_count\": 0\n");
-    fprintf(f, "  },\n");
-    fprintf(f, "  \"fault_recovery\": {\n");
-    fprintf(f, "    \"channel_scoped_fault_handled\": %s,\n", m19_fault_channel_scoped_handled ? "true" : "false");
-    fprintf(f, "    \"channel_generation_advanced\": %s,\n", m19_fault_channel_generation_advanced ? "true" : "false");
-    fprintf(f, "    \"persistent_vas_preserved\": %s,\n", m19_fault_vas_preserved ? "true" : "false");
-    fprintf(f, "    \"zero_device_reset\": %s\n", m19_fault_zero_device_reset ? "true" : "false");
-    fprintf(f, "  },\n");
-    fprintf(f, "  \"zero_libcuda_linkage\": true,\n");
-    fprintf(f, "  \"zero_cuda_symbols\": true,\n");
-    fprintf(f, "  \"zero_libcuda_runtime\": true,\n");
-    fprintf(f, "  \"m19_gates_passed\": %d,\n", m19_gate_passed);
-    fprintf(f, "  \"cumulative_regression_passed\": %d,\n", m19_regression_passed);
-    fprintf(f, "  \"total_gates_evaluated\": %d,\n", m19_gate_count + m19_regression_total);
-    fprintf(f, "  \"tests_executed\": [\"M4\", \"M5\", \"M6\", \"M7\", \"M8\", \"M9\", \"M10\", \"M11\", \"M12\", \"M13\", \"M14\", \"M15\", \"M17\", \"M18\", \"M19\"],\n");
-    fprintf(f, "  \"canonical_gates\": [\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_WORLD_CREATE_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_CHANNEL_REUSE_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_CODE_REGISTRY_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_BUFFER_REGISTRY_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_MIXED_WORKLOAD_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_QUEUE_WRAP_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_1000_OP_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_GENERATION_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_STALE_HANDLE_REFUSAL_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_REVOCATION_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_FAULT_RECOVERY_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_MEMORY_BOUND_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_STATE_DIGEST_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_ZERO_LIBCUDA_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_REGRESSION_PASS\",\n");
-    fprintf(f, "    \"OMEGA_ACCEL_RESIDENT_RECEIPT_PASS\"\n");
-    fprintf(f, "  ],\n");
-    fprintf(f, "  \"qualification_timestamp\": \"%s\"\n", time_str);
-    fprintf(f, "}\n");
-    fclose(f);
-    return true;
+    uint8_t digest[32];
+    char hex[65];
+    return compute_file_sha256("build/omegatool", digest, hex);
 }
 
 int run_m19_gates(void) {
@@ -1935,7 +1789,20 @@ int run_m19_gates(void) {
         snprintf(detail, sizeof(detail), "Cumulative regression parity: %d / %d prior milestone gates passing", m19_regression_passed, m19_regression_total);
         report_m19_gate("OMEGA_ACCEL_RESIDENT_REGRESSION_PASS", regression_ok, detail);
     }
-    report_m19_gate("OMEGA_ACCEL_RESIDENT_RECEIPT_PASS", test_m19_gate18_receipt(), "Milestone 19 qualification receipt & cryptographic manifest generation");
+    report_m19_gate("OMEGA_ACCEL_RESIDENT_RECEIPT_PASS", test_m19_gate18_receipt(), "Receipt prerequisites complete; outer harness emits after all results");
+    char observed_digest[65];
+    for (int i = 0; i < 32; i++) sprintf(&observed_digest[i * 2], "%02x", m19_sustained_digest[i]);
+    observed_digest[64] = '\0';
+    printf("M19_OBSERVED_JSON:{\"m19_gates_completed\":%d,\"m19_gates_passed\":%d,"
+           "\"regression_gates_completed\":%d,\"regression_gates_passed\":%d,"
+           "\"sustained_dispatches\":%u,\"ring_capacity\":%u,"
+           "\"wrap_dispatches\":%u,\"rolling_state_digest\":\"%s\","
+           "\"channel_generation_advanced\":%s,\"vas_preserved\":%s}\n",
+           m19_gate_count, m19_gate_passed, m19_regression_total,
+           m19_regression_passed, m19_sustained_dispatches, m19_ring_capacity,
+           m19_wrap_dispatches, observed_digest,
+           m19_fault_channel_generation_advanced ? "true" : "false",
+           m19_fault_vas_preserved ? "true" : "false");
 
     printf("================================================================================\n");
     printf("  STAGE 1 / PERSISTENT WORLD QUALIFICATION: %d / %d M19 GATES PASSED\n", m19_gate_passed, m19_gate_count);
@@ -1993,7 +1860,7 @@ static int lc_submit_release(OmegaAcceleratorWorld *world, uint32_t slot, uint32
     tpb[len++] = 0x1 | (1u << 20);
     const uint32_t words[5] = {7, 0, 0, 0, 0};
     OmegaWorldSubmission sub;
-    m19_make_submission(&sub, words, code, a, b, c, 256, 256, 256, payload);
+    m19_make_submission(&sub, words, code, a, b, c, 256, 256, 0, payload);
     uint32_t off = slot * 0x1000;
     memcpy((uint8_t *)world->m16.pb_mem.cpu + off, tpb, len * 4);
     __asm__ volatile("dsb sy" ::: "memory");
@@ -2140,6 +2007,163 @@ static bool test_lc_wait_reached_or_passed(void) {
     return ok;
 }
 
+static bool test_lc_output_alias_refusal(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    OmegaHandle code, a, b, c, d;
+    bool ok = lc_setup(&world, &code, &a, &b, &c) &&
+              omega_world_register_buffer(&world, 256, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &d) == OMEGA_WORLD_OK;
+    uint32_t words[32], len = 0;
+    memcpy(words, WORLD_SETUP_WORDS, sizeof WORLD_SETUP_WORDS);
+    len += (uint32_t)(sizeof WORLD_SETUP_WORDS / sizeof(uint32_t));
+    words[len++] = nvrm_mthd(0, 0x005c, 5);
+    words[len++] = (uint32_t)world.completion.gpu_va;
+    words[len++] = (uint32_t)(world.completion.gpu_va >> 32);
+    words[len++] = 1;
+    words[len++] = 0;
+    words[len++] = 0x1 | (1u << 20);
+    memcpy(world.m16.pb_mem.cpu, words, len * sizeof(uint32_t));
+    OmegaWorldSubmission sub;
+    const uint32_t semantic[5] = {7, 0, 0, 0, 0};
+    m19_make_submission(&sub, semantic, &code, &a, &b, &c, 256, 256, 256, 1);
+    ok = ok && omega_world_submit(&world, &world.m16.pb_mem, 0, len, &sub) == OMEGA_WORLD_OK;
+    void *cpu = NULL;
+    ok = ok && omega_world_resolve_buffer(&world, &c, OMEGA_PERM_WRITE,
+                 0, 1, &cpu, NULL) == OMEGA_WORLD_ERR_FAULT;
+    sub.completion_val = 2;
+    ok = ok && omega_world_submit(&world, &world.m16.pb_mem, 0, len, &sub) == OMEGA_WORLD_ERR_FAULT;
+    sub.c_object_id = d.object_id;
+    sub.c_generation = d.object_generation;
+    sub.c_permissions = d.permissions;
+    sub.a_object_id = c.object_id;
+    sub.a_generation = c.object_generation;
+    sub.a_permissions = c.permissions;
+    ok = ok && omega_world_submit(&world, &world.m16.pb_mem, 0, len, &sub) == OMEGA_WORLD_ERR_FAULT;
+    ok = ok && omega_world_ring(&world) == OMEGA_WORLD_OK &&
+         omega_world_drain(&world, 1, 5000) == 1 && world.total_dispatches == 1 &&
+         omega_world_drain(&world, 1, 0) == 0 && world.total_dispatches == 1;
+    ok = ok && omega_world_resolve_buffer(&world, &c, OMEGA_PERM_WRITE,
+                 0, 1, &cpu, NULL) == OMEGA_WORLD_OK;
+    omega_world_destroy(&world);
+    return ok;
+}
+
+static bool test_lc_bounds_overflow(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    OmegaHandle h;
+    bool ok = omega_world_register_buffer(&world, 256, OMEGA_PERM_READ, &h) == OMEGA_WORLD_OK &&
+              omega_world_resolve_buffer(&world, &h, OMEGA_PERM_READ,
+                  SIZE_MAX - 4, 16, NULL, NULL) == OMEGA_WORLD_ERR_BOUNDS &&
+              omega_world_register_buffer(&world, SIZE_MAX, OMEGA_PERM_READ, &h) == OMEGA_WORLD_ERR_BOUNDS &&
+              omega_world_revoke_buffer(&world, &h) == OMEGA_WORLD_OK;
+    omega_world_destroy(&world);
+    return ok;
+}
+
+static bool test_lc_timeout_completion_race(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    OmegaHandle code, a, b, c;
+    bool ok = lc_setup(&world, &code, &a, &b, &c) &&
+              lc_submit_release(&world, 0, 1, &code, &a, &b, &c) == OMEGA_WORLD_OK &&
+              omega_world_ring(&world) == OMEGA_WORLD_OK;
+    int drained = ok ? omega_world_drain(&world, 1, 0) : OMEGA_WORLD_ERR_FAULT;
+    if (drained == 1) {
+        ok = ok && world.total_dispatches == 1 &&
+             omega_world_drain(&world, 1, 0) == 0 && world.total_dispatches == 1;
+    } else {
+        ok = ok && drained == OMEGA_WORLD_ERR_HARDWARE && world.faulted &&
+             world.total_dispatches == 0 &&
+             m16_native_wait_marker_ge(world.completion.cpu_marker, 1, 5000) == 0 &&
+             omega_world_recover_channel_fault(&world) == OMEGA_WORLD_OK &&
+             world.abandoned_dispatches == 1 && world.total_dispatches == 0;
+    }
+    ok = ok && lc_vecadd_ok(&world, &code);
+    omega_world_destroy(&world);
+    return ok;
+}
+
+static bool test_lc_stale_generation_marker(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    OmegaHandle code, a, b, c;
+    bool ok = lc_setup(&world, &code, &a, &b, &c) &&
+              lc_submit_release(&world, 0, 1, &code, &a, &b, &c) == OMEGA_WORLD_OK &&
+              omega_world_ring(&world) == OMEGA_WORLD_OK &&
+              omega_world_drain(&world, 1, 5000) == 1 &&
+              omega_world_recover_channel_fault(&world) == OMEGA_WORLD_OK &&
+              *world.completion.cpu_marker == 1;
+    /* The old marker value must not commit a new generation's queued job. */
+    ok = ok && lc_submit_release(&world, 0, 2, &code, &a, &b, &c) == OMEGA_WORLD_OK &&
+         omega_world_drain(&world, 2, 0) == OMEGA_WORLD_ERR_HARDWARE &&
+         world.total_dispatches == 1 && world.faulted &&
+         omega_world_recover_channel_fault(&world) == OMEGA_WORLD_OK &&
+         world.abandoned_dispatches == 1 && lc_vecadd_ok(&world, &code);
+    omega_world_destroy(&world);
+    return ok;
+}
+
+static bool lc_provenance_run(uint8_t mutation, uint8_t digest[32]) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    OmegaHandle code, a, b, c1, c2;
+    bool ok = lc_setup(&world, &code, &a, &b, &c1) &&
+              omega_world_register_buffer(&world, 256,
+                  OMEGA_PERM_READ | OMEGA_PERM_WRITE, &c2) == OMEGA_WORLD_OK;
+    void *p1 = NULL, *p2 = NULL;
+    ok = ok && omega_world_resolve_buffer(&world, &c1, OMEGA_PERM_WRITE,
+                  0, 256, &p1, NULL) == OMEGA_WORLD_OK &&
+              omega_world_resolve_buffer(&world, &c2, OMEGA_PERM_WRITE,
+                  0, 256, &p2, NULL) == OMEGA_WORLD_OK;
+    if (ok) { memset(p1, 0x11, 256); memset(p2, 0x22, 256); }
+    const uint32_t semantic[5] = {7, 0, 0, 0, 0};
+    for (uint32_t i = 0; ok && i < 2; i++) {
+        uint32_t words[32], len = 0;
+        memcpy(words, WORLD_SETUP_WORDS, sizeof WORLD_SETUP_WORDS);
+        len += (uint32_t)(sizeof WORLD_SETUP_WORDS / sizeof(uint32_t));
+        words[len++] = nvrm_mthd(0, 0x005c, 5);
+        words[len++] = (uint32_t)world.completion.gpu_va;
+        words[len++] = (uint32_t)(world.completion.gpu_va >> 32);
+        words[len++] = i + 1;
+        words[len++] = 0;
+        words[len++] = 0x1 | (1u << 20);
+        uint32_t off = i * 0x1000;
+        memcpy((uint8_t *)world.m16.pb_mem.cpu + off, words, len * sizeof(uint32_t));
+        OmegaWorldSubmission sub;
+        m19_make_submission(&sub, semantic, &code, &a, &b, i ? &c2 : &c1,
+                            256, 256, 256, i + 1);
+        ok = omega_world_submit(&world, &world.m16.pb_mem, off, len, &sub) == OMEGA_WORLD_OK;
+    }
+    ok = ok && omega_world_ring(&world) == OMEGA_WORLD_OK &&
+         omega_world_drain(&world, 1, 5000) == 1;
+    if (ok) memset(p1, mutation, 256);
+    ok = ok && omega_world_drain(&world, 2, 5000) == 1 && world.total_dispatches == 2;
+    if (ok) memcpy(digest, world.rolling_state_digest, 32);
+    omega_world_destroy(&world);
+    return ok;
+}
+
+static bool test_lc_batched_result_identity(void) {
+    uint8_t a[32], b[32];
+    return lc_provenance_run(0x33, a) && lc_provenance_run(0x44, b) &&
+           memcmp(a, b, sizeof a) == 0;
+}
+
+static bool test_lc_stale_handle_after_world_restart(void) {
+    OmegaAcceleratorWorld world;
+    OmegaHandle old, fresh;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    bool ok = omega_world_register_buffer(&world, 4096, OMEGA_PERM_READ, &old) == OMEGA_WORLD_OK;
+    if (omega_world_destroy(&world) != OMEGA_WORLD_OK) return false;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    ok = ok && omega_world_register_buffer(&world, 4096, OMEGA_PERM_READ, &fresh) == OMEGA_WORLD_OK;
+    ok = ok && old.object_id == fresh.object_id && old.object_generation == fresh.object_generation &&
+         old.world_epoch != fresh.world_epoch &&
+         omega_world_validate_handle(&world, &old, OMEGA_OBJ_BUFFER, OMEGA_PERM_READ) == OMEGA_WORLD_ERR_STALE_EPOCH;
+    return omega_world_destroy(&world) == OMEGA_WORLD_OK && ok;
+}
+
 int run_world_lifecycle_gates(void) {
     printf("================================================================================\n");
     printf("    AIEN OMEGA M19R: WORLD LIFECYCLE GATES\n");
@@ -2150,6 +2174,168 @@ int run_world_lifecycle_gates(void) {
     report_lc_gate("WORLD_REVOKE_WAITS_FOR_QUEUED_JOB", test_lc_revoke_waits_for_queued_job());
     report_lc_gate("WORLD_ERROR_LATCH_COUNTS_ONCE", test_lc_error_latch_counts_once());
     report_lc_gate("WORLD_WAIT_REACHED_OR_PASSED", test_lc_wait_reached_or_passed());
+    report_lc_gate("WORLD_OUTPUT_IN_FLIGHT_ALIAS_REFUSED", test_lc_output_alias_refusal());
+    report_lc_gate("WORLD_BOUNDS_OVERFLOW_REFUSED", test_lc_bounds_overflow());
+    report_lc_gate("WORLD_TIMEOUT_COMPLETION_RACE", test_lc_timeout_completion_race());
+    report_lc_gate("WORLD_STALE_GENERATION_MARKER_REFUSED", test_lc_stale_generation_marker());
+    report_lc_gate("WORLD_BATCHED_RESULT_IDENTITY", test_lc_batched_result_identity());
+    report_lc_gate("WORLD_STALE_HANDLE_AFTER_RESTART", test_lc_stale_handle_after_world_restart());
     printf("  TOTAL: %d | PASSED: %d | FAILED: %d\n", lc_gate_count, lc_gate_passed, lc_gate_count - lc_gate_passed);
     return (lc_gate_passed == lc_gate_count) ? 0 : 1;
+}
+
+typedef struct {
+    uint64_t rm_balance, va_high_water, free_bytes, map_bytes;
+    uint64_t vm_pages, rss_pages;
+    uint32_t live_allocations, free_ranges, map_count, buffers, code;
+} M19RSoakSample;
+
+static M19RSoakSample m19r_sample(const OmegaAcceleratorWorld *world) {
+    M19RSoakSample s = {0};
+    const Nvrm *rm = &world->m16.rm;
+    s.rm_balance = rm->rm_alloc_accepted - rm->rm_free_accepted;
+    s.va_high_water = rm->va_next;
+    s.live_allocations = rm->live_count;
+    s.free_ranges = rm->free_count;
+    s.buffers = world->buffer_count;
+    s.code = world->code_count;
+    for (uint32_t i = 0; i < rm->free_count; i++) s.free_bytes += rm->free_list[i].size;
+    FILE *f = fopen("/proc/self/maps", "r");
+    if (f) {
+        char line[1024];
+        while (fgets(line, sizeof line, f)) {
+            unsigned long lo, hi;
+            if (strstr(line, "nvidia") && sscanf(line, "%lx-%lx", &lo, &hi) == 2 && hi >= lo) {
+                s.map_count++;
+                s.map_bytes += hi - lo;
+            }
+        }
+        fclose(f);
+    }
+    f = fopen("/proc/self/statm", "r");
+    if (f) {
+        unsigned long long vm = 0, rss = 0;
+        if (fscanf(f, "%llu %llu", &vm, &rss) == 2) {
+            s.vm_pages = vm;
+            s.rss_pages = rss;
+        }
+        fclose(f);
+    }
+    return s;
+}
+
+static void m19r_print_sample(const char *name, const M19RSoakSample *s) {
+    printf("M19R_RESOURCE_JSON:{\"phase\":\"%s\",\"driver_handle_count_available\":false,"
+           "\"driver_acknowledged_rm_balance\":%llu,\"internal_live_allocations\":%u,"
+           "\"va_high_water\":%llu,\"free_ranges\":%u,\"free_bytes\":%llu,"
+           "\"nvidia_process_mapping_count\":%u,\"nvidia_process_mapping_bytes\":%llu,"
+           "\"process_virtual_pages\":%llu,\"process_resident_pages\":%llu,"
+           "\"world_buffers\":%u,\"world_code\":%u}\n",
+           name, (unsigned long long)s->rm_balance, s->live_allocations,
+           (unsigned long long)s->va_high_water, s->free_ranges,
+           (unsigned long long)s->free_bytes, s->map_count,
+           (unsigned long long)s->map_bytes, (unsigned long long)s->vm_pages,
+           (unsigned long long)s->rss_pages, s->buffers, s->code);
+    fflush(stdout);
+}
+
+static bool m19r_soak_code(OmegaAcceleratorWorld *world, OmegaHandle *code) {
+    uint8_t bytes[1024];
+    size_t size = 0;
+    return omega_blackwell_encode_vecadd(bytes, sizeof bytes, &size) == 0 &&
+           omega_world_register_code(world, bytes, size, NULL, code) == OMEGA_WORLD_OK;
+}
+
+int run_m19r_soak(void) {
+    const uint64_t cycles_target = 100000;
+    const size_t allocation_bytes = 4u << 20;
+    OmegaAcceleratorWorld world;
+    OmegaHandle code, buffer;
+    bool ok = omega_world_init(&world) == OMEGA_WORLD_OK && m19r_soak_code(&world, &code);
+    if (!ok) { omega_world_destroy(&world); return 1; }
+    /* Warm the allocator to the peak allocation size before measuring VA. */
+    ok = omega_world_register_buffer(&world, allocation_bytes, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &buffer) == OMEGA_WORLD_OK &&
+         omega_world_revoke_buffer(&world, &buffer) == OMEGA_WORLD_OK;
+    ok = ok && lc_vecadd_ok(&world, &code);
+    if (!ok) { omega_world_destroy(&world); return 1; }
+    M19RSoakSample start = m19r_sample(&world);
+    m19r_print_sample("start", &start);
+    struct timespec ts_start, ts_end;
+    clock_gettime(CLOCK_MONOTONIC, &ts_start);
+    uint64_t cycles = 0, churn_bytes = 0, recoveries = 0, rebuilds = 0;
+    for (; cycles < cycles_target && ok; cycles++) {
+        void *cpu = NULL;
+        uint64_t gpu_va = 0;
+        ok = omega_world_register_buffer(&world, allocation_bytes,
+                 OMEGA_PERM_READ | OMEGA_PERM_WRITE, &buffer) == OMEGA_WORLD_OK &&
+             omega_world_resolve_buffer(&world, &buffer, OMEGA_PERM_WRITE,
+                 0, allocation_bytes, &cpu, &gpu_va) == OMEGA_WORLD_OK;
+        if (!ok) break;
+        volatile uint8_t *p = cpu;
+        p[0] = (uint8_t)cycles;
+        p[allocation_bytes - 1] = (uint8_t)(cycles >> 8);
+        ok = p[0] == (uint8_t)cycles && p[allocation_bytes - 1] == (uint8_t)(cycles >> 8) &&
+             gpu_va != 0 && omega_world_revoke_buffer(&world, &buffer) == OMEGA_WORLD_OK &&
+             omega_world_resolve_buffer(&world, &buffer, OMEGA_PERM_READ,
+                 0, 1, NULL, NULL) != OMEGA_WORLD_OK;
+        if (!ok) break;
+        churn_bytes += allocation_bytes;
+        if ((cycles + 1) % 10000 == 0) {
+            ok = lc_vecadd_ok(&world, &code) &&
+                 omega_world_recover_channel_fault(&world) == OMEGA_WORLD_OK &&
+                 lc_vecadd_ok(&world, &code);
+            recoveries++;
+        }
+        if ((cycles + 1) % 25000 == 0)
+            ok = ok && test_lc_revoke_waits_for_queued_job() &&
+                 test_lc_error_latch_counts_once();
+        if ((cycles + 1) % 20000 == 0 && cycles + 1 < cycles_target) {
+            ok = ok && omega_world_destroy(&world) == OMEGA_WORLD_OK;
+            ok = ok && omega_world_init(&world) == OMEGA_WORLD_OK &&
+                 m19r_soak_code(&world, &code);
+            rebuilds++;
+            if (ok) {
+                ok = omega_world_register_buffer(&world, allocation_bytes,
+                     OMEGA_PERM_READ | OMEGA_PERM_WRITE, &buffer) == OMEGA_WORLD_OK &&
+                     omega_world_revoke_buffer(&world, &buffer) == OMEGA_WORLD_OK;
+            }
+        }
+        if ((cycles + 1) % 10000 == 0) {
+            fprintf(stderr, "M19R soak: %llu cycles, %llu bytes\n",
+                    (unsigned long long)(cycles + 1), (unsigned long long)churn_bytes);
+        }
+    }
+    clock_gettime(CLOCK_MONOTONIC, &ts_end);
+    M19RSoakSample end = m19r_sample(&world);
+    m19r_print_sample("end", &end);
+    double duration = (double)(ts_end.tv_sec - ts_start.tv_sec) +
+                      (double)(ts_end.tv_nsec - ts_start.tv_nsec) / 1e9;
+    FILE *mf = fopen("/proc/meminfo", "r");
+    unsigned long long memory_kb = 0;
+    if (mf) {
+        char line[256];
+        while (fgets(line, sizeof line, mf))
+            if (sscanf(line, "MemTotal: %llu kB", &memory_kb) == 1) break;
+        fclose(mf);
+    }
+    bool stable = ok && cycles == cycles_target && memory_kb &&
+        churn_bytes > 2ull * memory_kb * 1024ull &&
+        start.rm_balance == end.rm_balance &&
+        start.live_allocations == end.live_allocations &&
+        start.va_high_water == end.va_high_water &&
+        start.free_ranges == end.free_ranges && start.free_bytes == end.free_bytes &&
+        start.map_count == end.map_count && start.map_bytes == end.map_bytes &&
+        start.buffers == end.buffers && start.code == end.code && !world.faulted;
+    stable = omega_world_destroy(&world) == OMEGA_WORLD_OK && stable;
+    M19RSoakSample post = m19r_sample(&world);
+    m19r_print_sample("post_destroy", &post);
+    stable = stable && post.rm_balance == 0 && post.live_allocations == 0 &&
+             post.map_count == 0 && post.buffers == 0 && post.code == 0;
+    printf("M19R_SOAK_JSON:{\"passed\":%s,\"duration_seconds\":%.3f,"
+           "\"cycles\":%llu,\"bytes_churned\":%llu,\"physical_memory_bytes\":%llu,"
+           "\"channel_recoveries\":%llu,\"world_rebuilds\":%llu}\n",
+           stable ? "true" : "false", duration, (unsigned long long)cycles,
+           (unsigned long long)churn_bytes, memory_kb * 1024ull,
+           (unsigned long long)recoveries, (unsigned long long)rebuilds);
+    return stable ? 0 : 1;
 }

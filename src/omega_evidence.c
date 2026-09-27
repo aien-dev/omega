@@ -63,31 +63,14 @@ static void mkdir_p_for_file(const char *filepath) {
     }
 }
 
-static bool path_exists(const char *p) {
-    struct stat st;
-    return stat(p, &st) == 0;
-}
-
 int omega_evidence_path(const char *relpath, char *out, size_t n) {
     if (!relpath || !out || n == 0) return -1;
 
     const char *run_id = omega_evidence_run_id();
     char candidate[1024];
 
-    const char *record = getenv("OMEGA_QUAL_RECORD");
-    bool recording = (record != NULL && strcmp(record, "1") == 0);
-
-    if (recording) {
-        int len = snprintf(candidate, sizeof(candidate), "evidence/runs/%s/%s", run_id, relpath);
-        if (len < 0 || (size_t)len >= sizeof(candidate)) return -1;
-        if (path_exists(candidate)) {
-            fprintf(stderr, "omega_evidence_path: refusing to overwrite existing recorded evidence: %s\n", candidate);
-            return -1;
-        }
-    } else {
-        int len = snprintf(candidate, sizeof(candidate), "build/qual-runs/%s/%s", run_id, relpath);
-        if (len < 0 || (size_t)len >= sizeof(candidate)) return -1;
-    }
+    int len = snprintf(candidate, sizeof(candidate), "build/qual-runs/%s/%s", run_id, relpath);
+    if (len < 0 || (size_t)len >= sizeof(candidate)) return -1;
 
     mkdir_p_for_file(candidate);
 
@@ -107,7 +90,7 @@ bool omega_evidence_run_commit(char out[41]) {
 }
 
 bool omega_evidence_tree_dirty(void) {
-    FILE *p = popen("git status --porcelain -- src spec tools Makefile 2>/dev/null", "r");
+    FILE *p = popen("git status --porcelain --untracked-files=normal 2>/dev/null", "r");
     if (!p) return true; /* fail safe: unknown treated as dirty */
     char buf[256];
     bool any = (fgets(buf, sizeof(buf), p) != NULL);
