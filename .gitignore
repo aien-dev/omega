@@ -2,5 +2,5 @@ build/
 build/qual-runs/
 *.o
 .claude/
-.claude/
 /omega
+tests/test_omega_numeric
