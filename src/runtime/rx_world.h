@@ -40,6 +40,7 @@
 #define RX_MAX_WORKERS      16u
 #define RX_MAX_PARENTS      (RX_MAX_DEPS * RX_MAX_FIELDS + 1u)
 #define RX_PRIORITY_CLASSES 7u
+#define RX_DEFERRED_INITIAL 64u
 
 #define RX_ALL_FIELDS       ((uint64_t)((1u << RX_MAX_FIELDS) - 1u))
 #define RX_FIELD(i)         ((uint64_t)1u << (i))
@@ -156,10 +157,11 @@ typedef struct {
     uint64_t energy_cost;           /* 0 = free */
 } RxResourceNeed;
 
-/* Physical budget. A zero slots/memory/energy/mask is filled in as "plenty"
- * so existing reactions keep running. starvation_bound 0 disables the
- * anti-starvation slot (strict priority). A positive bound is the most
- * higher-class admissions in a row before one lower class must be served. */
+/* Physical budget. The setter is exact: zero means that resource is
+ * unavailable. rx_world_init installs permissive defaults for callers that
+ * never set a budget. starvation_bound 0 disables bounded fairness (strict
+ * priority); a positive value bounds how long a waiting lower class may be
+ * skipped by more urgent work. */
 typedef struct {
     uint32_t slots;
     uint32_t starvation_bound;
@@ -247,7 +249,8 @@ typedef struct {
     bool holding;               /* currently charged against the physical budget */
     uint64_t wake_cause;
     uint64_t coalesced;
-    uint64_t activations;
+    uint64_t activations;          /* lifetime observability */
+    uint64_t episode_activations;  /* reset by a fresh external causal episode */
     uint64_t commits;
     uint64_t suppressed;
     uint64_t wait_seq;
@@ -279,6 +282,8 @@ typedef struct {
     uint64_t noops;
     uint64_t crumb_overflow;
     uint64_t suppressed_wakes;
+    uint64_t deferred_wakes;
+    uint64_t deferred_peak;
     uint64_t quarantines;
     uint64_t oscillation_trips;
     uint64_t livelock_trips;
@@ -320,6 +325,12 @@ typedef struct RxWorld {
     uint64_t admit_seq;
     uint32_t peak_slots;
     uint32_t peak_blocked;
+
+    /* Fan-out limiting delays excess valid wakes; it never drops semantic work. */
+    struct { uint32_t reaction; uint64_t cause; } *deferred;
+    uint32_t deferred_head;
+    uint32_t deferred_len;
+    uint32_t deferred_cap;
 
     RxCrumb *crumbs;
     uint64_t n_crumbs;

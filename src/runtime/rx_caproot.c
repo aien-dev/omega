@@ -402,10 +402,13 @@ static void root_main(int memfd, int sock) {
 
 /* ---- runtime side ------------------------------------------------------- */
 
-int rx_caproot_start(RxCapRoot *root) {
+int rx_caproot_start(RxCapRoot *root, RxCapAdmin *admin) {
+    if (!root || !admin) return RX_CAP_ERR_STATE;
     memset(root, 0, sizeof(*root));
-    root->ctl_fd = root->ro_fd = -1;
-    root->office.cap_id = UINT32_MAX;
+    memset(admin, 0, sizeof(*admin));
+    root->ro_fd = -1;
+    admin->ctl_fd = -1;
+    admin->office.cap_id = UINT32_MAX;
     uint32_t boot = 0;
     int brc = take_boot_gen(&boot);
     if (brc != RX_CAP_OK) return brc;
@@ -437,13 +440,15 @@ int rx_caproot_start(RxCapRoot *root) {
     if (t == MAP_FAILED) goto fail;
     if (t->magic != RX_CAP_TABLE_MAGIC) { munmap((void *)t, sizeof(RxCapTable)); goto fail; }
     root->table = t;
-    root->ctl_fd = sv[0];
     root->ro_fd = memfd;
     root->root_pid = pid;
     root->running = true;
-    root->office.cap_id = hello.office_id;
-    root->office.generation = hello.office_generation;
-    memcpy(root->token, hello.token, RX_CAP_TOKEN_LEN);
+    admin->ctl_fd = sv[0];
+    admin->root_pid = pid;
+    admin->running = true;
+    admin->office.cap_id = hello.office_id;
+    admin->office.generation = hello.office_generation;
+    memcpy(admin->token, hello.token, RX_CAP_TOKEN_LEN);
     return RX_CAP_OK;
 fail:
     kill(pid, SIGKILL);
@@ -453,83 +458,89 @@ fail:
     return RX_CAP_ERR_IO;
 }
 
-static int request(RxCapRoot *root, RxCapRequest *q, RxCapReply *r) {
-    if (!root->running) return RX_CAP_ERR_IO;
-    memcpy(q->token, root->token, RX_CAP_TOKEN_LEN);
-    if (write_full(root->ctl_fd, q, sizeof(*q)) != 0) return RX_CAP_ERR_IO;
-    if (read_full(root->ctl_fd, r, sizeof(*r)) != 0) return RX_CAP_ERR_IO;
+static int request(RxCapAdmin *admin, RxCapRequest *q, RxCapReply *r) {
+    if (!admin || !admin->running) return RX_CAP_ERR_IO;
+    memcpy(q->token, admin->token, RX_CAP_TOKEN_LEN);
+    if (write_full(admin->ctl_fd, q, sizeof(*q)) != 0) return RX_CAP_ERR_IO;
+    if (read_full(admin->ctl_fd, r, sizeof(*r)) != 0) return RX_CAP_ERR_IO;
     return r->status;
 }
 
-void rx_caproot_stop(RxCapRoot *root) {
-    if (!root->running) return;
-    RxCapRequest q;
-    memset(&q, 0, sizeof(q));
-    q.op = RX_OP_SHUTDOWN;
-    q.authority = root->office;
-    RxCapReply r;
-    if (request(root, &q, &r) != RX_CAP_OK) kill(root->root_pid, SIGKILL);
-    waitpid(root->root_pid, NULL, 0);
+void rx_caproot_stop(RxCapRoot *root, RxCapAdmin *admin) {
+    if (!root || !admin) return;
+    if (admin->running) {
+        RxCapRequest q;
+        memset(&q, 0, sizeof(q));
+        q.op = RX_OP_SHUTDOWN;
+        q.authority = admin->office;
+        RxCapReply r;
+        if (request(admin, &q, &r) != RX_CAP_OK && admin->root_pid > 0)
+            kill(admin->root_pid, SIGKILL);
+    }
+    if (admin->root_pid > 0) waitpid(admin->root_pid, NULL, 0);
     if (root->table) munmap((void *)root->table, sizeof(RxCapTable));
-    if (root->ctl_fd >= 0) close(root->ctl_fd);
+    if (admin->ctl_fd >= 0) close(admin->ctl_fd);
     if (root->ro_fd >= 0) close(root->ro_fd);
+    memset(admin->token, 0, sizeof(admin->token));
     root->table = NULL;
-    root->ctl_fd = root->ro_fd = -1;
+    root->ro_fd = -1;
     root->running = false;
+    admin->ctl_fd = -1;
+    admin->running = false;
 }
 
-RxCapRef rx_caproot_office(const RxCapRoot *root) {
-    return root->office;
+RxCapRef rx_capadmin_office(const RxCapAdmin *admin) {
+    return admin ? admin->office : (RxCapRef){ UINT32_MAX, 0 };
 }
 
-int rx_caproot_mint(RxCapRoot *root, const RxCapMint *req, RxCapRef *out) {
+int rx_capadmin_mint(RxCapAdmin *admin, const RxCapMint *req, RxCapRef *out) {
     RxCapRequest q;
     memset(&q, 0, sizeof(q));
     q.op = RX_OP_MINT;
     q.mint = *req;
     RxCapReply r;
-    int rc = request(root, &q, &r);
+    int rc = request(admin, &q, &r);
     if (rc == RX_CAP_OK && out) *out = r.ref;
     return rc;
 }
 
-int rx_caproot_revoke(RxCapRoot *root, RxCapRef authority, RxCapRef ref) {
+int rx_capadmin_revoke(RxCapAdmin *admin, RxCapRef authority, RxCapRef ref) {
     RxCapRequest q;
     memset(&q, 0, sizeof(q));
     q.op = RX_OP_REVOKE;
     q.authority = authority;
     q.ref = ref;
     RxCapReply r;
-    return request(root, &q, &r);
+    return request(admin, &q, &r);
 }
 
-int rx_caproot_reclaim(RxCapRoot *root, RxCapRef authority, uint32_t cap_id) {
+int rx_capadmin_reclaim(RxCapAdmin *admin, RxCapRef authority, uint32_t cap_id) {
     RxCapRequest q;
     memset(&q, 0, sizeof(q));
     q.op = RX_OP_RECLAIM;
     q.authority = authority;
     q.ref.cap_id = cap_id;
     RxCapReply r;
-    return request(root, &q, &r);
+    return request(admin, &q, &r);
 }
 
-int rx_caproot_advance_clock(RxCapRoot *root, RxCapRef authority, uint64_t ticks) {
+int rx_capadmin_advance_clock(RxCapAdmin *admin, RxCapRef authority, uint64_t ticks) {
     RxCapRequest q;
     memset(&q, 0, sizeof(q));
     q.op = RX_OP_CLOCK;
     q.authority = authority;
     q.arg = ticks;
     RxCapReply r;
-    return request(root, &q, &r);
+    return request(admin, &q, &r);
 }
 
-int rx_caproot_bump_epoch(RxCapRoot *root, RxCapRef authority) {
+int rx_capadmin_bump_epoch(RxCapAdmin *admin, RxCapRef authority) {
     RxCapRequest q;
     memset(&q, 0, sizeof(q));
     q.op = RX_OP_EPOCH;
     q.authority = authority;
     RxCapReply r;
-    return request(root, &q, &r);
+    return request(admin, &q, &r);
 }
 
 static int writer_dead(const RxCapRoot *root) {

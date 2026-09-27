@@ -89,20 +89,21 @@ enum { F_TEMP = 0, F_HUMIDITY = 1 };
 
 typedef struct {
     RxCapRoot root;
+    RxCapAdmin admin;
     RxWorld w;
 } Env;
 
 static int env_start(Env *e, uint32_t workers) {
-    if (rx_caproot_start(&e->root) != RX_CAP_OK) return -1;
+    if (rx_caproot_start(&e->root, &e->admin) != RX_CAP_OK) return -1;
     if (rx_world_init(&e->w, &e->root, workers, 1u << 18) != RX_OK) {
-        rx_caproot_stop(&e->root);
+        rx_caproot_stop(&e->root, &e->admin);
         return -1;
     }
     e->w.external_subject = SUBJ_EXTERNAL;
     return 0;
 }
 
-static RxCapRef office_of(const RxCapRoot *root) { return rx_caproot_office(root); }
+static RxCapRef office_of(const RxCapAdmin *admin) { return rx_capadmin_office(admin); }
 
 static RxCapRef mint(Env *e, uint32_t subject, uint64_t resource, uint32_t rights) {
     RxCapMint m;
@@ -112,15 +113,15 @@ static RxCapRef mint(Env *e, uint32_t subject, uint64_t resource, uint32_t right
     m.resource = resource;
     m.rights = rights;
     m.parent = (RxCapRef){ UINT32_MAX, 0 };
-    m.authority = office_of(&e->root);
+    m.authority = office_of(&e->admin);
     RxCapRef r = { UINT32_MAX, 0 };
-    int rc = rx_caproot_mint(&e->root, &m, &r);
+    int rc = rx_capadmin_mint(&e->admin, &m, &r);
     if (rc != RX_CAP_OK) fprintf(stderr, "mint failed: %s\n", rx_cap_strerror(rc));
     return r;
 }
 
-static int revoke_cap(RxCapRoot *root, RxCapRef ref) {
-    return rx_caproot_revoke(root, office_of(root), ref);
+static int revoke_cap(RxCapAdmin *admin, RxCapRef ref) {
+    return rx_capadmin_revoke(admin, office_of(admin), ref);
 }
 
 static RxObjRef mkobj(Env *e, uint64_t resource, uint64_t v0) {
@@ -221,7 +222,7 @@ static void audit_and_close(Env *e) {
         }
     CHECK(w->stats.illegal_transitions == 0, "illegal lifecycle transitions observed");
     rx_world_destroy(w);
-    rx_caproot_stop(&e->root);
+    rx_caproot_stop(&e->root, &e->admin);
 }
 
 /* ---- heartbeat reactions -------------------------------------------------- */
@@ -792,12 +793,12 @@ static void t_capability_attacks(void) {
     cases[nc++] = (typeof(cases[0])){ "wrong_resource", mint(&e, SUBJ_AIEN, RES_PLAN, RX_RIGHT_WRITE), SUBJ_AIEN, RX_CAP_ERR_RESOURCE };
     cases[nc++] = (typeof(cases[0])){ "insufficient_rights", mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_READ), SUBJ_AIEN, RX_CAP_ERR_RIGHTS };
     RxCapRef rev = mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_WRITE);
-    revoke_cap(&e.root, rev);
+    revoke_cap(&e.admin, rev);
     cases[nc++] = (typeof(cases[0])){ "revoked", rev, SUBJ_AIEN, RX_CAP_ERR_REVOKED };
     /* Generation replay: revoke, reclaim, the slot is re-minted to someone else. */
     RxCapRef old = mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_WRITE);
-    revoke_cap(&e.root, old);
-    rx_caproot_reclaim(&e.root, office_of(&e.root), old.cap_id);
+    revoke_cap(&e.admin, old);
+    rx_capadmin_reclaim(&e.admin, office_of(&e.admin), old.cap_id);
     RxCapRef reused = mint(&e, SUBJ_OTHER, RES_BELIEF, RX_RIGHT_WRITE);
     CHECK(reused.cap_id == old.cap_id && reused.generation == old.generation + 1,
           "reclaimed slot was not reused with a new generation");
@@ -810,10 +811,10 @@ static void t_capability_attacks(void) {
     lm.rights = RX_RIGHT_WRITE;
     lm.lease_ticks = 5;
     lm.parent = (RxCapRef){ UINT32_MAX, 0 };
-    lm.authority = office_of(&e.root);
+    lm.authority = office_of(&e.admin);
     RxCapRef leased;
-    rx_caproot_mint(&e.root, &lm, &leased);
-    rx_caproot_advance_clock(&e.root, office_of(&e.root), 10);
+    rx_capadmin_mint(&e.admin, &lm, &leased);
+    rx_capadmin_advance_clock(&e.admin, office_of(&e.admin), 10);
     cases[nc++] = (typeof(cases[0])){ "expired_lease", leased, SUBJ_AIEN, RX_CAP_ERR_EXPIRED };
 
     for (int i = 0; i < nc; i++) {
@@ -836,24 +837,24 @@ static void t_capability_attacks(void) {
     amp.rights = RX_RIGHT_READ | RX_RIGHT_WRITE;
     amp.parent = parent;
     amp.authority = parent;
-    CHECK(rx_caproot_mint(&e.root, &amp, NULL) == RX_CAP_ERR_AMPLIFY, "rights amplification accepted");
+    CHECK(rx_capadmin_mint(&e.admin, &amp, NULL) == RX_CAP_ERR_AMPLIFY, "rights amplification accepted");
     RxCapMint other = amp;
     other.resource = RES_PLAN;
     other.rights = RX_RIGHT_READ;
-    CHECK(rx_caproot_mint(&e.root, &other, NULL) == RX_CAP_ERR_RESOURCE, "resource widening accepted");
+    CHECK(rx_capadmin_mint(&e.admin, &other, NULL) == RX_CAP_ERR_RESOURCE, "resource widening accepted");
     RxCapMint nd = amp;
     nd.resource = RES_SENSOR;
     nd.rights = RX_RIGHT_READ;
     nd.parent = rs;
     nd.authority = rs;
-    CHECK(rx_caproot_mint(&e.root, &nd, NULL) == RX_CAP_ERR_NOT_DELEGABLE, "non-delegable parent delegated");
+    CHECK(rx_capadmin_mint(&e.admin, &nd, NULL) == RX_CAP_ERR_NOT_DELEGABLE, "non-delegable parent delegated");
     RxCapMint ok = amp;
     ok.rights = RX_RIGHT_READ;
     RxCapRef child;
-    CHECK(rx_caproot_mint(&e.root, &ok, &child) == RX_CAP_OK, "valid attenuation refused");
+    CHECK(rx_capadmin_mint(&e.admin, &ok, &child) == RX_CAP_OK, "valid attenuation refused");
     CHECK(rx_caproot_validate(&e.root, child, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, NULL) == RX_CAP_OK,
           "delegated child invalid");
-    revoke_cap(&e.root, parent);
+    revoke_cap(&e.admin, parent);
     int child_after = rx_caproot_validate(&e.root, child, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ, NULL);
     CHECK(child_after == RX_CAP_ERR_REVOKED || child_after == RX_CAP_ERR_CHAIN,
           "child survived parent revocation (%s)", rx_cap_strerror(child_after));
@@ -862,7 +863,7 @@ static void t_capability_attacks(void) {
     CHECK(stimulus(&e, rs, sensor, F_TEMP, 77) == RX_ERR_AUTHORITY, "external write with wrong cap accepted");
 
     /* Epoch change invalidates everything minted before it. */
-    rx_caproot_bump_epoch(&e.root, office_of(&e.root));
+    rx_capadmin_bump_epoch(&e.admin, office_of(&e.admin));
     CHECK(rx_caproot_validate(&e.root, rs, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ, NULL) == RX_CAP_ERR_EPOCH,
           "pre-epoch capability still valid");
     audit_and_close(&e);
@@ -896,7 +897,7 @@ static void t_revoke_during_run(void) {
     CHECK(rx_world_add_reaction(&e.w, &d, &id) == RX_OK, "add");
     stimulus(&e, ext, a.x, 0, 41);
     sleep_ms(20);
-    CHECK(revoke_cap(&e.root, w) == RX_CAP_OK, "revoke");
+    CHECK(revoke_cap(&e.admin, w) == RX_CAP_OK, "revoke");
     rx_world_wait_quiescent(&e.w, 5000);
     CHECK(field(&e, a.y, 0) == 0, "revoked authority executed");
     CHECK(e.w.stats.rejected == 1, "publication not rejected");
@@ -912,7 +913,8 @@ static void t_revoke_during_run(void) {
 static void t_root_table_unwritable(void) {
     begin("capability_table_unforgeable_by_runtime", "I3");
     RxCapRoot root;
-    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "root");
+    RxCapAdmin admin;
+    CHECK(rx_caproot_start(&root, &admin) == RX_CAP_OK, "root");
     void *page = (void *)root.table;
     errno = 0;
     CHECK(mprotect(page, sizeof(RxCapTable), PROT_READ | PROT_WRITE) != 0,
@@ -949,7 +951,7 @@ static void t_root_table_unwritable(void) {
     waitpid(pid, &st, 0);
     CHECK(WIFSIGNALED(st) && (WTERMSIG(st) == SIGSEGV || WTERMSIG(st) == SIGBUS),
           "direct store into the capability table did not fault");
-    rx_caproot_stop(&root);
+    rx_caproot_stop(&root, &admin);
 }
 
 static void t_crumb_tamper_detected(void) {
@@ -1016,8 +1018,9 @@ static RxCapMint delegated(RxCapRef parent, uint32_t subject, uint64_t resource,
 static void t_authority_office(void) {
     begin("authority_office_required", "I3");
     RxCapRoot root;
-    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "root");
-    RxCapRef office = office_of(&root);
+    RxCapAdmin admin;
+    CHECK(rx_caproot_start(&root, &admin) == RX_CAP_OK, "root");
+    RxCapRef office = office_of(&admin);
     CHECK(office.cap_id != UINT32_MAX, "office was not delivered");
 
     RxCapMint bare;
@@ -1028,35 +1031,35 @@ static void t_authority_office(void) {
     bare.rights = RX_RIGHT_READ;
     bare.parent = (RxCapRef){ UINT32_MAX, 0 };
     bare.authority = (RxCapRef){ UINT32_MAX, 0 };
-    CHECK(rx_caproot_mint(&root, &bare, NULL) == RX_CAP_ERR_UNAUTHORIZED,
+    CHECK(rx_capadmin_mint(&admin, &bare, NULL) == RX_CAP_ERR_UNAUTHORIZED,
           "socket holder minted without a delivered authority");
 
     RxCapMint ok = bare;
     ok.authority = office;
     RxCapRef world;
-    CHECK(rx_caproot_mint(&root, &ok, &world) == RX_CAP_OK, "office mint refused");
-    CHECK(rx_caproot_revoke(&root, world, world) == RX_CAP_ERR_UNAUTHORIZED,
+    CHECK(rx_capadmin_mint(&admin, &ok, &world) == RX_CAP_OK, "office mint refused");
+    CHECK(rx_capadmin_revoke(&admin, world, world) == RX_CAP_ERR_UNAUTHORIZED,
           "ordinary capability revoked");
-    CHECK(rx_caproot_advance_clock(&root, world, 1) == RX_CAP_ERR_UNAUTHORIZED,
+    CHECK(rx_capadmin_advance_clock(&admin, world, 1) == RX_CAP_ERR_UNAUTHORIZED,
           "ordinary capability advanced the clock");
-    CHECK(rx_caproot_bump_epoch(&root, world) == RX_CAP_ERR_UNAUTHORIZED,
+    CHECK(rx_capadmin_bump_epoch(&admin, world) == RX_CAP_ERR_UNAUTHORIZED,
           "ordinary capability changed the epoch");
-    CHECK(rx_caproot_reclaim(&root, world, world.cap_id) == RX_CAP_ERR_UNAUTHORIZED,
+    CHECK(rx_capadmin_reclaim(&admin, world, world.cap_id) == RX_CAP_ERR_UNAUTHORIZED,
           "ordinary capability reclaimed a slot");
 
     RxCapMint both = ok;
     both.rights = RX_RIGHT_REVOKE | RX_RIGHT_DELEGATE;
-    CHECK(rx_caproot_mint(&root, &both, NULL) == RX_CAP_ERR_NOT_DELEGABLE,
+    CHECK(rx_capadmin_mint(&admin, &both, NULL) == RX_CAP_ERR_NOT_DELEGABLE,
           "privileged right combined with delegate");
     RxCapMint revoker = ok;
     revoker.rights = RX_RIGHT_REVOKE;
     revoker.resource = RX_CAP_RES_AUTHORITY;
     RxCapRef revcap;
-    CHECK(rx_caproot_mint(&root, &revoker, &revcap) == RX_CAP_OK, "limited revoker refused");
+    CHECK(rx_capadmin_mint(&admin, &revoker, &revcap) == RX_CAP_OK, "limited revoker refused");
     RxCapMint pass = delegated(revcap, SUBJ_OMEGA, RX_CAP_RES_AUTHORITY, RX_RIGHT_REVOKE);
-    CHECK(rx_caproot_mint(&root, &pass, NULL) == RX_CAP_ERR_NOT_DELEGABLE,
+    CHECK(rx_capadmin_mint(&admin, &pass, NULL) == RX_CAP_ERR_NOT_DELEGABLE,
           "privileged right was delegated");
-    CHECK(rx_caproot_revoke(&root, revcap, world) == RX_CAP_OK, "limited revoker could not revoke");
+    CHECK(rx_capadmin_revoke(&admin, revcap, world) == RX_CAP_OK, "limited revoker could not revoke");
 
     /* Office MINT must not attenuate an unrelated capability. */
     RxCapRef parent = office;
@@ -1065,25 +1068,25 @@ static void t_authority_office(void) {
     sneak.authority = office;
     sneak.parent = world; /* revoked, and not the office */
     sneak.rights = RX_RIGHT_READ;
-    CHECK(rx_caproot_mint(&root, &sneak, NULL) != RX_CAP_OK,
+    CHECK(rx_capadmin_mint(&admin, &sneak, NULL) != RX_CAP_OK,
           "office minted a delegation of a capability it does not hold");
 
     RxCapRef cur;
     RxCapMint base = ok;
     base.rights = RX_RIGHT_READ | RX_RIGHT_DELEGATE;
     base.resource = RES_BELIEF;
-    CHECK(rx_caproot_mint(&root, &base, &cur) == RX_CAP_OK, "delegable parent refused");
+    CHECK(rx_capadmin_mint(&admin, &base, &cur) == RX_CAP_OK, "delegable parent refused");
     int depth_ok = 0;
     for (int i = 0; i < 8; i++) {
         RxCapMint step = delegated(cur, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_DELEGATE);
         RxCapRef child;
-        if (rx_caproot_mint(&root, &step, &child) != RX_CAP_OK) break;
+        if (rx_capadmin_mint(&admin, &step, &child) != RX_CAP_OK) break;
         cur = child;
         depth_ok++;
     }
     CHECK(depth_ok == 8, "delegation depth stopped early (%d)", depth_ok);
     RxCapMint too_deep = delegated(cur, SUBJ_OMEGA, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_DELEGATE);
-    CHECK(rx_caproot_mint(&root, &too_deep, NULL) == RX_CAP_ERR_CHAIN,
+    CHECK(rx_capadmin_mint(&admin, &too_deep, NULL) == RX_CAP_ERR_CHAIN,
           "delegation deeper than the limit was accepted");
 
     /* A narrower revoker cannot strike the office, and revocation cascades. */
@@ -1091,18 +1094,18 @@ static void t_authority_office(void) {
     chain.rights = RX_RIGHT_READ | RX_RIGHT_DELEGATE;
     chain.resource = RES_SENSOR;
     RxCapRef link;
-    CHECK(rx_caproot_mint(&root, &chain, &link) == RX_CAP_OK, "chain parent");
+    CHECK(rx_capadmin_mint(&admin, &chain, &link) == RX_CAP_OK, "chain parent");
     RxCapMint step1 = delegated(link, SUBJ_OMEGA, RES_SENSOR, RX_RIGHT_READ | RX_RIGHT_DELEGATE);
     RxCapRef mid;
-    CHECK(rx_caproot_mint(&root, &step1, &mid) == RX_CAP_OK, "chain child");
+    CHECK(rx_capadmin_mint(&admin, &step1, &mid) == RX_CAP_OK, "chain child");
     RxCapMint step2 = delegated(mid, SUBJ_OMEGA, RES_SENSOR, RX_RIGHT_READ);
     RxCapRef grand;
-    CHECK(rx_caproot_mint(&root, &step2, &grand) == RX_CAP_OK, "chain grandchild");
-    CHECK(rx_caproot_revoke(&root, revcap, office) == RX_CAP_ERR_UNAUTHORIZED,
+    CHECK(rx_capadmin_mint(&admin, &step2, &grand) == RX_CAP_OK, "chain grandchild");
+    CHECK(rx_capadmin_revoke(&admin, revcap, office) == RX_CAP_ERR_UNAUTHORIZED,
           "narrow revoker struck the office");
     CHECK(rx_caproot_validate(&root, office, 0, RX_CAP_RES_AUTHORITY, RX_RIGHT_MINT, NULL) == RX_CAP_OK,
           "office died after a refused revoke");
-    CHECK(rx_caproot_revoke(&root, office, link) == RX_CAP_OK, "parent revoke");
+    CHECK(rx_capadmin_revoke(&admin, office, link) == RX_CAP_OK, "parent revoke");
     RxCapEntry seen;
     CHECK(rx_caproot_inspect(&root, grand, &seen) == RX_CAP_OK, "grandchild disappeared");
     CHECK(seen.state == RX_CAP_REVOKED, "grandchild stayed live after its ancestor was revoked");
@@ -1118,15 +1121,15 @@ static void t_authority_office(void) {
     forged.mint = bare;
     forged.mint.authority = office;
     forged.authority = office;
-    CHECK(write(root.ctl_fd, &forged, sizeof(forged)) == (ssize_t)sizeof(forged),
+    CHECK(write(admin.ctl_fd, &forged, sizeof(forged)) == (ssize_t)sizeof(forged),
           "could not send a forged mint");
     struct { int32_t status; uint32_t pad; RxCapRef ref; } reply;
     memset(&reply, 0, sizeof(reply));
-    CHECK(read(root.ctl_fd, &reply, sizeof(reply)) == (ssize_t)sizeof(reply),
+    CHECK(read(admin.ctl_fd, &reply, sizeof(reply)) == (ssize_t)sizeof(reply),
           "mint did not answer the forged request");
     CHECK(reply.status == RX_CAP_ERR_UNAUTHORIZED,
           "table-visible office minted without the office token (%d)", reply.status);
-    rx_caproot_stop(&root);
+    rx_caproot_stop(&root, &admin);
 }
 
 static void t_counter_fail_closed(void) {
@@ -1145,8 +1148,9 @@ static void t_counter_fail_closed(void) {
     CHECK(rx_cap_add_u64(UINT64_MAX - 5, 6, &sum) == RX_CAP_ERR_OVERFLOW, "one past the top was accepted");
 
     RxCapRoot root;
-    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "root");
-    RxCapRef office = office_of(&root);
+    RxCapAdmin admin;
+    CHECK(rx_caproot_start(&root, &admin) == RX_CAP_OK, "root");
+    RxCapRef office = office_of(&admin);
     RxCapMint huge;
     memset(&huge, 0, sizeof(huge));
     huge.issuer = ISSUER_AEGIS_POLICY;
@@ -1157,7 +1161,7 @@ static void t_counter_fail_closed(void) {
     huge.authority = office;
     int filled = 0;
     for (uint32_t i = 0; i < RX_CAP_MAX + 2; i++) {
-        int rc = rx_caproot_mint(&root, &huge, NULL);
+        int rc = rx_capadmin_mint(&admin, &huge, NULL);
         if (rc == RX_CAP_OK) filled++;
         else {
             CHECK(rc == RX_CAP_ERR_FULL, "table exhaustion returned %s", rx_cap_strerror(rc));
@@ -1165,32 +1169,33 @@ static void t_counter_fail_closed(void) {
         }
     }
     CHECK(filled == (int)RX_CAP_MAX - 1, "filled %d slots, want %u", filled, RX_CAP_MAX - 1);
-    rx_caproot_stop(&root);
+    rx_caproot_stop(&root, &admin);
 
-    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "clock root");
-    office = office_of(&root);
+    CHECK(rx_caproot_start(&root, &admin) == RX_CAP_OK, "clock root");
+    office = office_of(&admin);
     huge.authority = office;
-    CHECK(rx_caproot_advance_clock(&root, office, UINT64_MAX - 8) == RX_CAP_OK, "clock near the top");
-    CHECK(rx_caproot_advance_clock(&root, office, 100) == RX_CAP_ERR_OVERFLOW, "clock wrap was accepted");
+    CHECK(rx_capadmin_advance_clock(&admin, office, UINT64_MAX - 8) == RX_CAP_OK, "clock near the top");
+    CHECK(rx_capadmin_advance_clock(&admin, office, 100) == RX_CAP_ERR_OVERFLOW, "clock wrap was accepted");
     huge.lease_ticks = 100;
     huge.resource = RES_SENSOR;
-    CHECK(rx_caproot_mint(&root, &huge, NULL) == RX_CAP_ERR_OVERFLOW, "lease wrap was accepted");
+    CHECK(rx_capadmin_mint(&admin, &huge, NULL) == RX_CAP_ERR_OVERFLOW, "lease wrap was accepted");
     huge.lease_ticks = 1;
     RxCapRef leased;
-    CHECK(rx_caproot_mint(&root, &huge, &leased) == RX_CAP_OK, "in-range lease refused");
-    CHECK(rx_caproot_bump_epoch(&root, office) == RX_CAP_OK, "epoch step refused");
+    CHECK(rx_capadmin_mint(&admin, &huge, &leased) == RX_CAP_OK, "in-range lease refused");
+    CHECK(rx_capadmin_bump_epoch(&admin, office) == RX_CAP_OK, "epoch step refused");
     CHECK(rx_caproot_validate(&root, leased, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ, NULL) == RX_CAP_ERR_EPOCH,
           "pre-epoch lease survived");
-    CHECK(rx_caproot_bump_epoch(&root, office) == RX_CAP_ERR_EPOCH,
+    CHECK(rx_capadmin_bump_epoch(&admin, office) == RX_CAP_ERR_EPOCH,
           "stale office advanced the epoch again");
-    rx_caproot_stop(&root);
+    rx_caproot_stop(&root, &admin);
 }
 
 static void t_root_death_restart(void) {
     begin("root_death_and_restart", "I3");
     RxCapRoot root;
-    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "root");
-    RxCapRef old_office = office_of(&root);
+    RxCapAdmin admin;
+    CHECK(rx_caproot_start(&root, &admin) == RX_CAP_OK, "root");
+    RxCapRef old_office = office_of(&admin);
     RxCapMint m;
     memset(&m, 0, sizeof(m));
     m.issuer = ISSUER_AEGIS_POLICY;
@@ -1200,7 +1205,7 @@ static void t_root_death_restart(void) {
     m.parent = (RxCapRef){ UINT32_MAX, 0 };
     m.authority = old_office;
     RxCapRef old;
-    CHECK(rx_caproot_mint(&root, &m, &old) == RX_CAP_OK, "mint");
+    CHECK(rx_capadmin_mint(&admin, &m, &old) == RX_CAP_OK, "mint");
     pid_t pid = root.root_pid;
     CHECK(kill(pid, SIGKILL) == 0, "could not stop the mint process");
     int st = 0;
@@ -1210,9 +1215,9 @@ static void t_root_death_restart(void) {
     alarm(0);
     CHECK(still == RX_CAP_OK || still == RX_CAP_ERR_IO || still == RX_CAP_ERR_STALE_GEN,
           "dead root validate returned %s", rx_cap_strerror(still));
-    CHECK(rx_caproot_mint(&root, &m, NULL) == RX_CAP_ERR_IO, "dead root still minted");
-    rx_caproot_stop(&root);
-    CHECK(rx_caproot_start(&root) == RX_CAP_OK, "restart");
+    CHECK(rx_capadmin_mint(&admin, &m, NULL) == RX_CAP_ERR_IO, "dead root still minted");
+    rx_caproot_stop(&root, &admin);
+    CHECK(rx_caproot_start(&root, &admin) == RX_CAP_OK, "restart");
     CHECK(rx_caproot_validate(&root, old, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ, NULL) == RX_CAP_ERR_STALE_GEN,
           "capability from the dead root validated on the new one");
     CHECK(rx_caproot_validate(&root, old_office, 0, RX_CAP_RES_AUTHORITY, RX_RIGHT_MINT, NULL) != RX_CAP_OK,
@@ -1220,7 +1225,7 @@ static void t_root_death_restart(void) {
     void *writable = mmap(NULL, sizeof(RxCapTable), PROT_READ | PROT_WRITE, MAP_SHARED, root.ro_fd, 0);
     CHECK(writable == MAP_FAILED, "restarted root handed out a writable table");
     if (writable != MAP_FAILED) munmap(writable, sizeof(RxCapTable));
-    rx_caproot_stop(&root);
+    rx_caproot_stop(&root, &admin);
 }
 
 /* ---- R5 resource admission (host) --------------------------------------- */
@@ -1326,7 +1331,7 @@ static void t_resource_admission(void) {
     CHECK(e->w.reactions[base + 1000].state == RX_BLOCKED_RESOURCE, "impossible reaction was not blocked");
     g_illegal_transitions += e->w.stats.illegal_transitions;
     rx_world_destroy(&e->w);
-    rx_caproot_stop(&e->root);
+    rx_caproot_stop(&e->root, &e->admin);
     free(e);
 }
 
@@ -1350,6 +1355,39 @@ static int first_log(uint32_t prio) {
     for (uint32_t i = 0; i < g_nlog; i++)
         if (g_log[i] == prio) return (int)i;
     return -1;
+}
+
+static void t_zero_resource_budget(void) {
+    begin("zero_resource_budget_is_zero", "R5");
+    Env e;
+    CHECK(env_start(&e, 1) == 0, "setup");
+    RxObjRef sensor = mkobj(&e, RES_SENSOR, 0);
+    RxCapRef ext = mint(&e, SUBJ_EXTERNAL, RES_SENSOR, RX_RIGHT_WRITE);
+    RxCapRef rd = mint(&e, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ);
+
+    RxReactionDesc d;
+    desc_init(&d, "zero.budget", RX_FACULTY_AIEN, SUBJ_AIEN, fn_noop, NULL);
+    d.need.memory_bytes = 1;
+    add_trigger(&d, sensor, RX_FIELD(0));
+    add_cap(&d, rd, RES_SENSOR, RX_RIGHT_READ);
+    uint32_t id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &id) == RX_OK, "reaction");
+
+    RxResourceBudget b;
+    memset(&b, 0, sizeof(b));
+    rx_world_set_resources(&e.w, &b);
+    stimulus(&e, ext, sensor, 0, 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 100) == RX_OK, "zero-budget world did not settle");
+    CHECK(e.w.reactions[id].activations == 0, "zero slots/memory admitted work");
+    CHECK(e.w.reactions[id].state == RX_BLOCKED_RESOURCE, "reaction not blocked at zero budget");
+
+    b.slots = 1;
+    b.memory_bytes = 1;
+    rx_world_set_resources(&e.w, &b);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "restored budget did not run work");
+    CHECK(e.w.reactions[id].activations == 1, "restored budget ran %llu activations",
+          (unsigned long long)e.w.reactions[id].activations);
+    audit_and_close(&e);
 }
 
 static void t_background_not_starved(void) {
@@ -1452,7 +1490,7 @@ static void t_priority_ladder(void) {
           first_log(RX_PRIO_BACKGROUND));
     g_illegal_transitions += e.w.stats.illegal_transitions;
     rx_world_destroy(&e.w);
-    rx_caproot_stop(&e.root);
+    rx_caproot_stop(&e.root, &e.admin);
 }
 
 /* ---- R6 stability (host) ------------------------------------------------ */
@@ -1515,10 +1553,12 @@ static void t_stability(void) {
         if (e.w.reactions[fan_ids[i]].desc.priority == RX_PRIO_CRITICAL)
             fan_crit += (uint32_t)e.w.reactions[fan_ids[i]].activations;
     }
-    CHECK(fan_ran == 5, "fanout ran %u (want 5)", fan_ran);
-    CHECK(fan_crit == 5, "fanout did not keep the highest class (%u)", fan_crit);
-    CHECK(e.w.stats.suppressed_wakes >= 35, "fanout suppression %llu",
-          (unsigned long long)e.w.stats.suppressed_wakes);
+    CHECK(fan_ran == 40, "fanout delivered only %u of 40 dependent reactions", fan_ran);
+    CHECK(fan_crit >= 5, "critical dependents did not execute (%u)", fan_crit);
+    CHECK(e.w.stats.deferred_wakes >= 35, "fanout deferred only %llu wakes",
+          (unsigned long long)e.w.stats.deferred_wakes);
+    CHECK(e.w.stats.deferred_peak >= 35, "deferred peak %llu",
+          (unsigned long long)e.w.stats.deferred_peak);
 
     RxObjRef flip = mkobj(&e, RES_PAIR, 0);
     RxCapRef ext_f = mint(&e, SUBJ_EXTERNAL, RES_PAIR, RX_RIGHT_WRITE);
@@ -1636,6 +1676,15 @@ static void t_stability(void) {
     CHECK(e.w.reactions[budget_id].activations == 4, "activation budget ran %llu",
           (unsigned long long)e.w.reactions[budget_id].activations);
     CHECK(e.w.reactions[budget_id].quarantined, "activation budget did not quarantine");
+    uint64_t before_episode = e.w.reactions[budget_id].activations;
+    stimulus(&e, ext_s, bounded.obj, 0, field(&e, bounded.obj, 0) + 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "fresh causal episode did not settle");
+    CHECK(e.w.reactions[budget_id].activations == before_episode + 4,
+          "fresh external episode did not receive a fresh activation budget (%llu -> %llu)",
+          (unsigned long long)before_episode,
+          (unsigned long long)e.w.reactions[budget_id].activations);
+    CHECK(e.w.reactions[budget_id].quarantined,
+          "second activation episode did not enforce its own bound");
     audit_and_close(&e);
 }
 
@@ -1777,6 +1826,7 @@ static void write_receipt(int total_checks, int total_fail, const char *binary_d
     int r6_ok = all;
     for (int i = 0; i < g_ntests; i++) {
         if (strcmp(g_tests[i].name, "resource_admission_1000") == 0 ||
+            strcmp(g_tests[i].name, "zero_resource_budget_is_zero") == 0 ||
             strcmp(g_tests[i].name, "background_not_starved") == 0 ||
             strcmp(g_tests[i].name, "priority_ladder") == 0)
             if (g_tests[i].failures) r5_ok = 0;
@@ -1859,6 +1909,7 @@ int main(int argc, char **argv) {
     t_counter_fail_closed();
     t_root_death_restart();
     t_resource_admission();
+    t_zero_resource_budget();
     t_background_not_starved();
     t_priority_ladder();
     t_stability();
