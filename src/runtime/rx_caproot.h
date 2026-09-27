@@ -137,16 +137,26 @@ typedef struct {
     RxCapEntry entries[RX_CAP_MAX];
 } RxCapTable;
 
-/* Handle held by the runtime process. */
+/* Runtime validation handle. It intentionally contains no mint token, office
+ * capability, or control socket. Passing this to RxWorld cannot confer
+ * administrative authority. */
 typedef struct {
     const RxCapTable *table;    /* read-only mapping */
-    int ctl_fd;                 /* request socket to the root */
     int ro_fd;                  /* sealed memfd, kept for attack tests */
     pid_t root_pid;
     bool running;
-    RxCapRef office;            /* delivered once, at start; not in the table as a right */
-    uint8_t token[RX_CAP_TOKEN_LEN]; /* not in the shared table */
 } RxCapRoot;
+
+/* Privileged host-reference administration handle. Policy/setup code may hold
+ * this; the resident reaction world must not. This split is the host analogue
+ * of keeping intelligence separate from the authority root. */
+typedef struct {
+    int ctl_fd;
+    pid_t root_pid;
+    bool running;
+    RxCapRef office;
+    uint8_t token[RX_CAP_TOKEN_LEN];
+} RxCapAdmin;
 
 /* Mint request. parent.cap_id == UINT32_MAX means a root-issued capability.
  * authority must be a capability this mint handed to this socket:
@@ -190,18 +200,18 @@ static inline int rx_cap_generation_advance(uint32_t generation, uint32_t *out) 
     return RX_CAP_OK;
 }
 
-int  rx_caproot_start(RxCapRoot *root);
-void rx_caproot_stop(RxCapRoot *root);
-RxCapRef rx_caproot_office(const RxCapRoot *root);
+int  rx_caproot_start(RxCapRoot *root, RxCapAdmin *admin);
+void rx_caproot_stop(RxCapRoot *root, RxCapAdmin *admin);
+RxCapRef rx_capadmin_office(const RxCapAdmin *admin);
 
-int  rx_caproot_mint(RxCapRoot *root, const RxCapMint *req, RxCapRef *out);
-int  rx_caproot_revoke(RxCapRoot *root, RxCapRef authority, RxCapRef ref);
+int  rx_capadmin_mint(RxCapAdmin *admin, const RxCapMint *req, RxCapRef *out);
+int  rx_capadmin_revoke(RxCapAdmin *admin, RxCapRef authority, RxCapRef ref);
 /* Return a revoked slot to the free pool; its generation advances, so every
  * outstanding reference to the old occupant becomes stale. Generation
  * UINT32_MAX refuses and leaves the slot revoked. */
-int  rx_caproot_reclaim(RxCapRoot *root, RxCapRef authority, uint32_t cap_id);
-int  rx_caproot_advance_clock(RxCapRoot *root, RxCapRef authority, uint64_t ticks);
-int  rx_caproot_bump_epoch(RxCapRoot *root, RxCapRef authority);
+int  rx_capadmin_reclaim(RxCapAdmin *admin, RxCapRef authority, uint32_t cap_id);
+int  rx_capadmin_advance_clock(RxCapAdmin *admin, RxCapRef authority, uint64_t ticks);
+int  rx_capadmin_bump_epoch(RxCapAdmin *admin, RxCapRef authority);
 
 /* Copy one table entry if the reference generation matches. Does not grant
  * rights. Used to record who issued a capability into a causal crumb. */
