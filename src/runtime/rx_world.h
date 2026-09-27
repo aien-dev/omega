@@ -53,6 +53,12 @@ enum {
     RX_PRIO_MAINTENANCE, RX_PRIO_SPECULATIVE, RX_PRIO_BACKGROUND
 };
 
+/* How a self-fed cycle should be read. Ordinary alternating output is an
+ * unstable oscillation. A declared periodic loop may alternate and still be
+ * useful control. A run that stops changing is convergent. A run that keeps
+ * spending work without a new value is livelock. */
+enum { RX_LOOP_ORDINARY = 0, RX_LOOP_PERIODIC = 1 };
+
 /* Persistence class (ADR 0016 §19; ADR 0015 §2 mapping in ADR 0016 Part I). */
 typedef enum { RX_PERSIST_EPHEMERAL = 0, RX_PERSIST_RESIDENT, RX_PERSIST_DURABLE } RxPersist;
 
@@ -188,6 +194,7 @@ typedef struct {
     RxDep writes[RX_MAX_WRITES];
     uint32_t n_caps;
     RxCapNeed caps[RX_MAX_CAPS];
+    uint32_t loop_kind;         /* RX_LOOP_ORDINARY or RX_LOOP_PERIODIC */
     RxFn fn;
     void *user;
 } RxReactionDesc;
@@ -236,6 +243,7 @@ typedef struct {
     RxState state;
     bool rearm;                 /* woken while running: go READY again after */
     bool quarantined;
+    bool parked;                /* yielded so other admitted work can run */
     bool holding;               /* currently charged against the physical budget */
     uint64_t wake_cause;
     uint64_t coalesced;
@@ -249,6 +257,7 @@ typedef struct {
     uint32_t noop_streak;
     uint32_t osc_streak;
     uint32_t conflict_streak;
+    uint32_t yield_left;        /* self-wakes to skip while other work is waiting */
     uint64_t last_out;
     uint64_t prev_out;
     bool have_last;
@@ -273,6 +282,8 @@ typedef struct {
     uint64_t quarantines;
     uint64_t oscillation_trips;
     uint64_t livelock_trips;
+    uint64_t backoffs;
+    uint64_t periodic_commits;
     uint64_t useful_commits;
     uint64_t churn;
     uint64_t deadline_overdue;
@@ -304,8 +315,8 @@ typedef struct RxWorld {
     uint32_t used_slots;
     uint64_t used_memory;
     uint64_t used_energy;
-    uint32_t since_lower_admit;
-    uint32_t since_lower_run;
+    uint32_t admit_debt[RX_PRIORITY_CLASSES];
+    uint32_t run_debt[RX_PRIORITY_CLASSES];
     uint64_t admit_seq;
     uint32_t peak_slots;
     uint32_t peak_blocked;

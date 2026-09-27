@@ -200,6 +200,8 @@ static bool cause_is_external(const RxWorld *w, uint64_t cause) {
 static bool res_fits(const RxWorld *w, const RxReaction *r) {
     const RxResourceNeed *n = &r->desc.need;
     if (w->used_slots >= w->budget.slots) return false;
+    if (w->used_memory > w->budget.memory_bytes) return false;
+    if (w->used_energy > w->budget.energy_budget) return false;
     if (n->memory_bytes > w->budget.memory_bytes - w->used_memory) return false;
     if (n->energy_cost > w->budget.energy_budget - w->used_energy) return false;
     if (n->locality && (n->locality & w->budget.offered_locality) != n->locality) return false;
@@ -272,35 +274,55 @@ static void admit_one(RxWorld *w, uint32_t rid) {
     enqueue(w, rid);
 }
 
-/* Pick who may leave BLOCKED_RESOURCE. Higher class wins, except that after
- * starvation_bound higher-class admissions a fitting lower class is served.
- * Adapted from the AIENOS run queue's bounded background interval. */
-static int pick_admit(RxWorld *w) {
-    int best = -1;
-    int worst = -1;
+static bool waiting_fit(const RxReaction *r, const RxWorld *w) {
+    return r->state == RX_BLOCKED_RESOURCE && !r->quarantined && !r->parked && res_fits(w, r);
+}
+
+static bool class_blocked(const RxWorld *w, uint32_t prio) {
     for (uint32_t i = 0; i < w->n_reactions; i++) {
-        RxReaction *r = &w->reactions[i];
-        if (r->state != RX_BLOCKED_RESOURCE || r->quarantined) continue;
-        if (!res_fits(w, r)) continue;
+        const RxReaction *r = &w->reactions[i];
+        if (r->desc.priority != prio || r->quarantined || r->parked) continue;
+        if (r->state == RX_BLOCKED_RESOURCE) return true;
+    }
+    return false;
+}
+
+static int best_waiting(const RxWorld *w, int only_class) {
+    int best = -1;
+    for (uint32_t i = 0; i < w->n_reactions; i++) {
+        const RxReaction *r = &w->reactions[i];
+        if (only_class >= 0 && r->desc.priority != (uint32_t)only_class) continue;
+        if (!waiting_fit(r, w)) continue;
         if (best < 0 || better_admit(r, &w->reactions[best])) best = (int)i;
-        if (worst < 0 || r->desc.priority > w->reactions[worst].desc.priority ||
-            (r->desc.priority == w->reactions[worst].desc.priority &&
-             r->wait_seq < w->reactions[worst].wait_seq))
-            worst = (int)i;
-    }
-    if (best < 0) return -1;
-    bool lower = w->reactions[worst].desc.priority > w->reactions[best].desc.priority;
-    uint32_t bound = w->budget.starvation_bound;
-    if (lower && bound && w->since_lower_admit >= bound) {
-        w->since_lower_admit = 0;
-        return worst;
-    }
-    if (lower) {
-        if (w->since_lower_admit < UINT32_MAX) w->since_lower_admit++;
-    } else {
-        w->since_lower_admit = 0;
     }
     return best;
+}
+
+/* Higher class wins. After starvation_bound admissions of something more
+ * urgent, the highest class that has been waiting that long is served once.
+ * Every class is protected, not only the lowest one. Adapted from the AIENOS
+ * run queue's bounded background interval. */
+static int pick_admit(RxWorld *w) {
+    uint32_t bound = w->budget.starvation_bound;
+    int chosen = -1;
+    if (bound) {
+        for (uint32_t p = 0; p < RX_PRIORITY_CLASSES; p++) {
+            if (!class_blocked(w, p) || w->admit_debt[p] < bound) continue;
+            chosen = best_waiting(w, (int)p);
+            if (chosen >= 0) break;
+        }
+    }
+    if (chosen < 0) chosen = best_waiting(w, -1);
+    if (chosen < 0) return -1;
+    uint32_t served = w->reactions[chosen].desc.priority;
+    w->admit_debt[served] = 0;
+    if (bound) {
+        for (uint32_t p = served + 1; p < RX_PRIORITY_CLASSES; p++) {
+            if (!class_blocked(w, p)) w->admit_debt[p] = 0;
+            else if (w->admit_debt[p] < UINT32_MAX) w->admit_debt[p]++;
+        }
+    }
+    return chosen;
 }
 
 static void try_admit(RxWorld *w) {
@@ -322,10 +344,13 @@ static void demand(RxWorld *w, uint32_t rid, uint64_t cause) {
     }
     if (cause_is_external(w, cause)) {
         r->quarantined = false;
+        r->parked = false;
+        r->yield_left = 0;
         r->osc_streak = 0;
         r->noop_streak = 0;
         r->conflict_streak = 0;
     }
+    r->parked = false;
     if (w->stability.activation_budget &&
         r->activations >= w->stability.activation_budget) {
         if (!r->quarantined) {
@@ -405,26 +430,29 @@ static void propagate(RxWorld *w, uint32_t obj, uint64_t changed, uint64_t cause
 
 static bool pop_ready(RxWorld *w, uint32_t *rid) {
     int high = -1;
-    int low = -1;
     for (uint32_t p = 0; p < RX_PRIORITY_CLASSES; p++) {
-        if (w->ready_len[p] == 0) continue;
-        if (high < 0) high = (int)p;
-        low = (int)p;
+        if (w->ready_len[p] == 0) w->run_debt[p] = 0;
+        else if (high < 0) high = (int)p;
     }
     if (high < 0) return false;
-    uint32_t p = (uint32_t)high;
+    uint32_t chosen = (uint32_t)high;
     uint32_t bound = w->budget.starvation_bound;
-    if (low > high && bound && w->since_lower_run >= bound) {
-        p = (uint32_t)low;
-        w->since_lower_run = 0;
-    } else if (low > high) {
-        if (w->since_lower_run < UINT32_MAX) w->since_lower_run++;
-    } else {
-        w->since_lower_run = 0;
+    if (bound) {
+        for (uint32_t p = chosen + 1; p < RX_PRIORITY_CLASSES; p++) {
+            if (w->ready_len[p] && w->run_debt[p] >= bound) {
+                chosen = p;
+                break;
+            }
+        }
     }
-    *rid = w->ready_q[p][w->ready_head[p]];
-    w->ready_head[p] = (w->ready_head[p] + 1) % RX_MAX_REACTIONS;
-    w->ready_len[p]--;
+    *rid = w->ready_q[chosen][w->ready_head[chosen]];
+    w->ready_head[chosen] = (w->ready_head[chosen] + 1) % RX_MAX_REACTIONS;
+    w->ready_len[chosen]--;
+    w->run_debt[chosen] = 0;
+    if (bound) {
+        for (uint32_t p = chosen + 1; p < RX_PRIORITY_CLASSES; p++)
+            if (w->ready_len[p] && w->run_debt[p] < UINT32_MAX) w->run_debt[p]++;
+    }
     return true;
 }
 
@@ -553,9 +581,16 @@ static void finish_writes(RxWorld *w, PendingWrite *pw, uint32_t n_pw, uint64_t 
 
 /* ---- worker ------------------------------------------------------------- */
 
+static void arm_backoff(RxReaction *r) {
+    uint32_t n = r->yield_left ? r->yield_left * 2u : 1u;
+    if (n < r->yield_left || n > 8u) n = 8u;
+    r->yield_left = n;
+}
+
 static void note_conflict(RxWorld *w, RxReaction *r) {
     r->conflict_streak++;
     w->stats.churn++;
+    arm_backoff(r);
     if (w->stability.conflict_limit && r->conflict_streak >= w->stability.conflict_limit &&
         !r->quarantined) {
         r->quarantined = true;
@@ -567,6 +602,7 @@ static void note_value(RxWorld *w, RxReaction *r, int progressed, uint64_t value
     if (!progressed) {
         r->noop_streak++;
         w->stats.churn++;
+        arm_backoff(r);
         if (w->stability.livelock_limit && r->noop_streak >= w->stability.livelock_limit &&
             !r->quarantined) {
             r->quarantined = true;
@@ -578,11 +614,18 @@ static void note_value(RxWorld *w, RxReaction *r, int progressed, uint64_t value
     r->noop_streak = 0;
     r->conflict_streak = 0;
     int flipped = r->have_two && value == r->prev_out && value != r->last_out;
-    if (flipped) {
+    if (flipped && r->desc.loop_kind == RX_LOOP_PERIODIC) {
+        r->osc_streak = 0;
+        r->yield_left = 0;
+        w->stats.periodic_commits++;
+        w->stats.useful_commits++;
+    } else if (flipped) {
         r->osc_streak++;
         w->stats.churn++;
+        arm_backoff(r);
     } else {
         r->osc_streak = 0;
+        r->yield_left = 0;
         w->stats.useful_commits++;
     }
     if (r->have_last) {
@@ -599,20 +642,62 @@ static void note_value(RxWorld *w, RxReaction *r, int progressed, uint64_t value
     }
 }
 
+static bool others_busy(const RxWorld *w, uint32_t self) {
+    for (uint32_t i = 0; i < w->n_reactions; i++) {
+        if (i == self) continue;
+        RxState s = w->reactions[i].state;
+        if (s == RX_BLOCKED_RESOURCE || s == RX_READY || s == RX_RUNNING || s == RX_PUBLISHING)
+            return true;
+    }
+    return false;
+}
+
+static void release_parked(RxWorld *w) {
+    for (uint32_t i = 0; i < w->n_reactions; i++) {
+        RxReaction *r = &w->reactions[i];
+        if (!r->parked) continue;
+        bool busy = others_busy(w, i);
+        if (r->yield_left && busy) continue;
+        r->parked = false;
+        r->yield_left = 0;
+        uint64_t cause = r->wake_cause;
+        demand(w, i, cause);
+    }
+}
+
+static void tick_parked(RxWorld *w) {
+    for (uint32_t i = 0; i < w->n_reactions; i++) {
+        RxReaction *r = &w->reactions[i];
+        if (!r->parked || r->yield_left == 0) continue;
+        r->yield_left--;
+    }
+    release_parked(w);
+}
+
 static void end_activation(RxWorld *w, uint32_t rid) {
     RxReaction *r = &w->reactions[rid];
+    tick_parked(w);
     uncharge(w, r);
     if (r->quarantined) r->rearm = false;
     set_state(w, r, RX_DORMANT);
     if (w->in_flight) w->in_flight--;
-    if (r->rearm) {
+    if (r->rearm && r->yield_left && others_busy(w, rid)) {
+        r->yield_left--;
+        r->parked = true;
+        r->rearm = false;
+        w->stats.backoffs++;
+        try_admit(w);
+    } else if (r->rearm) {
         uint64_t cause = r->wake_cause;
         r->rearm = false;
         demand(w, rid, cause);
     } else {
         try_admit(w);
     }
-    if (w->in_flight == 0) pthread_cond_broadcast(&w->idle_cv);
+    if (w->in_flight == 0) {
+        release_parked(w);
+        if (w->in_flight == 0) pthread_cond_broadcast(&w->idle_cv);
+    }
 }
 
 static void stamp_cap(RxWorld *w, RxCrumb *k, uint32_t i, RxCapRef ref) {
@@ -620,7 +705,7 @@ static void stamp_cap(RxWorld *w, RxCrumb *k, uint32_t i, RxCapRef ref) {
     k->cap_issuer[i] = 0;
     RxCapEntry e;
     if (w->root && rx_caproot_inspect(w->root, ref, &e) == RX_CAP_OK)
-        k->cap_issuer[i] = e.issuer;
+        k->cap_issuer[i] = e.minted_by_id ? e.minted_by_id : e.issuer;
 }
 
 static void fill_inputs(RxCrumb *k, const RxCtx *ctx, const RxDep *deps, uint32_t n) {
@@ -926,8 +1011,13 @@ int rx_world_retire(RxWorld *w, RxObjRef ref) {
         return RX_ERR_STALE_GEN;
     }
     RxObject *o = &w->objects[ref.id];
+    uint32_t next_gen = 0;
+    if (rx_cap_generation_advance(o->generation, &next_gen) != RX_CAP_OK) {
+        pthread_mutex_unlock(&w->mu);
+        return RX_ERR_FULL;
+    }
     o->live = false;
-    o->generation++;
+    o->generation = next_gen;
     RxCrumb k;
     memset(&k, 0, sizeof(k));
     k.kind = RX_CRUMB_RETIRE;
