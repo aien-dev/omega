@@ -20,8 +20,7 @@ CFLAGS="-O2 -Wall -Wextra -Werror \
   -I$PHYSICS_DIR/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc \
   -I$PHYSICS_DIR/third_party/nvidia-open-580.173.02/kernel-open/common/inc \
   -I$PHYSICS_DIR/third_party/nvidia-open-580.173.02/kernel-open/nvidia-uvm \
-  -I$PHYSICS_DIR/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include \
-  -lm"
+  -I$PHYSICS_DIR/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include"
 
 SRCS="src/omega_blackwell_codegen.c \
       src/omega_blackwell_encoder.c \
@@ -38,8 +37,14 @@ SRCS="src/omega_blackwell_codegen.c \
       $PHYSICS_DIR/nvrm/nvrm.c \
       $PHYSICS_DIR/m16/m16_native.c"
 
-echo -e "\n[*] Compiling test_omega_numeric..."
+echo -e "\n[*] Compiling test_omega_numeric (without libm)..."
 gcc $CFLAGS $SRCS tests/test_omega_numeric.c -o tests/test_omega_numeric
+
+echo -e "\n[*] Auditing zero-libm compliance..."
+nm -u tests/test_omega_numeric | grep -E "sqrt|sin|cos|exp|log|pow|round|fabs|fma" && {
+    echo "[-] FAILED: libm mathematical symbols detected in sovereign binary!"
+    exit 1
+} || echo "[+] ZERO LIBM CONFIRMED: No libm symbols found in sovereign binary."
 
 echo -e "\n[*] Running Gate 5: OMEGA-NUMERIC-0 under GPU lock ($LOCK_FILE)..."
 flock "$LOCK_FILE" ./tests/test_omega_numeric

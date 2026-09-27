@@ -4,7 +4,6 @@
 #include "omega_blackwell_submit.h"
 #include "m16_native.h"
 
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,15 +16,15 @@ static const uint32_t NUMERIC_SETUP_WORDS[OMEGA_BW_SETUP_WORDS_COUNT] = {
 };
 
 bool omega_numeric_bits_equal(float a, float b) {
-    uint32_t ua = omega_float_to_bits(a);
-    uint32_t ub = omega_float_to_bits(b);
-    if (isnan(a) && isnan(b)) {
+    if (omega_isnan(a) && omega_isnan(b)) {
         return true; /* NaN equivalence class */
     }
+    uint32_t ua = omega_float_to_bits(a);
+    uint32_t ub = omega_float_to_bits(b);
     return (ua == ub);
 }
 
-/* ---- Semantic Reference Tier --------------------------------------------- */
+/* ---- Semantic Reference Tier (Zero Libm) --------------------------------- */
 
 float omega_ref_fadd(float a, float b) {
     return a + b;
@@ -40,29 +39,35 @@ float omega_ref_fmul(float a, float b) {
 }
 
 float omega_ref_ffma(float a, float b, float c) {
-    return __builtin_fmaf(a, b, c);
+#if defined(__aarch64__)
+    float r;
+    __asm__("fmadd %s0, %s1, %s2, %s3" : "=w"(r) : "w"(a), "w"(b), "w"(c));
+    return r;
+#else
+    return (float)((double)a * (double)b + (double)c);
+#endif
 }
 
 float omega_ref_fmin(float a, float b) {
-    if (isnan(a)) return b;
-    if (isnan(b)) return a;
-    if (a == 0.0f && b == 0.0f) {
-        /* Preserve negative zero */
-        return (signbit(a) || signbit(b)) ? -0.0f : 0.0f;
+    if (omega_isnan(a)) return b;
+    if (omega_isnan(b)) return a;
+    if (omega_iszero(a) && omega_iszero(b)) {
+        return (omega_signbit(a) || omega_signbit(b)) ? omega_bits_to_float(0x80000000U) : 0.0f;
     }
     return (a < b) ? a : b;
 }
 
 float omega_ref_fmax(float a, float b) {
-    if (isnan(a)) return b;
-    if (isnan(b)) return a;
-    if (a == 0.0f && b == 0.0f) {
-        return (!signbit(a) || !signbit(b)) ? 0.0f : -0.0f;
+    if (omega_isnan(a)) return b;
+    if (omega_isnan(b)) return a;
+    if (omega_iszero(a) && omega_iszero(b)) {
+        return (!omega_signbit(a) || !omega_signbit(b)) ? 0.0f : omega_bits_to_float(0x80000000U);
     }
     return (a > b) ? a : b;
 }
 
 bool omega_ref_fsetp_ge(float a, float b) {
+    if (omega_isnan(a) || omega_isnan(b)) return false;
     return (a >= b);
 }
 
@@ -71,54 +76,59 @@ float omega_ref_i2f(int32_t a) {
 }
 
 int32_t omega_ref_f2i(float a) {
-    if (isnan(a)) return 0;
+    if (omega_isnan(a)) return 0;
     if (a >= 2147483647.0f) return 2147483647;
     if (a <= -2147483648.0f) return (int32_t)-2147483648LL;
     return (int32_t)a;
 }
 
+/* ---- MUFU Seed Emulators for CPU Reference ------------------------------- */
+
+static inline float omega_mufu_rcp_seed(float y) {
+    uint32_t uy = omega_float_to_bits(y);
+    uint32_t r_bits = 0x7ef311c0U - uy;
+    return omega_bits_to_float(r_bits);
+}
+
+static inline float omega_mufu_rsq_seed(float x) {
+    uint32_t ux = omega_float_to_bits(x);
+    uint32_t r_bits = 0x5f3759dfU - (ux >> 1);
+    return omega_bits_to_float(r_bits);
+}
+
 /* ---- Omega-Defined Division Refinement Sequence -------------------------- */
 
 float omega_math_div(float x, float y) {
-    /* Exceptional value handling */
-    if (isnan(x) || isnan(y)) return omega_bits_to_float(0x7fc00000);
-    bool neg = (signbit(x) != signbit(y));
+    if (omega_isnan(x) || omega_isnan(y)) return omega_bits_to_float(OMEGA_QNAN_BITS);
+    bool neg = (omega_signbit(x) != omega_signbit(y));
     float sign_mult = neg ? -1.0f : 1.0f;
 
-    if (y == 0.0f) {
-        if (x == 0.0f) return omega_bits_to_float(0x7fc00000); /* 0 / 0 = NaN */
-        return neg ? -INFINITY : INFINITY;
+    if (omega_iszero(y)) {
+        if (omega_iszero(x)) return omega_bits_to_float(OMEGA_QNAN_BITS);
+        return neg ? omega_bits_to_float(OMEGA_INF_NEG) : omega_bits_to_float(OMEGA_INF_POS);
     }
-    if (x == 0.0f) return neg ? -0.0f : 0.0f;
-    if (isinf(x)) {
-        if (isinf(y)) return omega_bits_to_float(0x7fc00000);
-        return neg ? -INFINITY : INFINITY;
+    if (omega_iszero(x)) return neg ? -0.0f : 0.0f;
+    if (omega_isinf(x)) {
+        if (omega_isinf(y)) return omega_bits_to_float(OMEGA_QNAN_BITS);
+        return neg ? omega_bits_to_float(OMEGA_INF_NEG) : omega_bits_to_float(OMEGA_INF_POS);
     }
-    if (isinf(y)) return neg ? -0.0f : 0.0f;
+    if (omega_isinf(y)) return neg ? -0.0f : 0.0f;
 
-    /* Subnormal scaling: scale x and y by 2^24 to avoid FTZ */
-    float x_work = fabsf(x);
-    float y_work = fabsf(y);
-    if (y_work < 1.17549435e-38f) { /* Subnormal */
+    float x_work = omega_fabs(x);
+    float y_work = omega_fabs(y);
+    if (y_work < 1.17549435e-38f) {
         x_work *= 16777216.0f;
         y_work *= 16777216.0f;
     }
 
-    /* Seed: approximate reciprocal */
-    float r0 = 1.0f / y_work;
-
-    /* Newton-Raphson refinement step:
-     * e = 1.0 - y * r0
-     * r1 = r0 + r0 * e
-     * q0 = x * r1
-     * rem = x - y * q0
-     * q = q0 + rem * r1
-     */
-    float e = 1.0f - y_work * r0;
-    float r1 = r0 + r0 * e;
-    float q0 = x_work * r1;
+    float r0 = omega_mufu_rcp_seed(y_work);
+    float e0 = 1.0f - y_work * r0;
+    float r1 = r0 + r0 * e0;
+    float e1 = 1.0f - y_work * r1;
+    float r2 = r1 + r1 * e1;
+    float q0 = x_work * r2;
     float rem = x_work - y_work * q0;
-    float q = q0 + rem * r1;
+    float q = q0 + rem * r2;
 
     return q * sign_mult;
 }
@@ -126,29 +136,26 @@ float omega_math_div(float x, float y) {
 /* ---- Omega-Defined Sqrt Refinement Sequence ------------------------------ */
 
 float omega_math_sqrt(float x) {
-    if (isnan(x)) return omega_bits_to_float(0x7fc00000);
-    if (x < 0.0f) return omega_bits_to_float(0x7fc00000); /* Domain error */
-    if (x == 0.0f) return x; /* Preserves +0.0 and -0.0 */
-    if (isinf(x)) return INFINITY;
+    if (omega_isnan(x)) return omega_bits_to_float(OMEGA_QNAN_BITS);
+    if (x < 0.0f) return omega_bits_to_float(OMEGA_QNAN_BITS);
+    if (omega_iszero(x)) return x;
+    if (omega_isinf(x)) return omega_bits_to_float(OMEGA_INF_POS);
 
     float x_work = x;
     float scale_back = 1.0f;
 
-    /* Subnormal preservation without FTZ: scale by 2^24 */
     if (x_work < 1.17549435e-38f) {
-        x_work *= 16777216.0f; /* 2^24 */
-        scale_back = 0.000244140625f; /* 2^-12 */
+        x_work *= 16777216.0f;
+        scale_back = 0.000244140625f;
     }
 
-    /* Seed: approximate reciprocal square root */
-    float r0 = 1.0f / sqrtf(x_work);
-
-    /* Newton-Raphson refinement */
+    float r0 = omega_mufu_rsq_seed(x_work);
     float h = 0.5f * x_work;
     float r1 = r0 * (1.5f - h * r0 * r0);
-    float s0 = x_work * r1;
+    float r2 = r1 * (1.5f - h * r1 * r1);
+    float s0 = x_work * r2;
     float rem = x_work - s0 * s0;
-    float s = s0 + 0.5f * rem * r1;
+    float s = s0 + 0.5f * rem * r2;
 
     return s * scale_back;
 }
@@ -156,20 +163,19 @@ float omega_math_sqrt(float x) {
 /* ---- Omega-Defined Exp Polynomial Sequence -------------------------------- */
 
 float omega_math_exp(float x) {
-    if (isnan(x)) return omega_bits_to_float(0x7fc00000);
-    if (x == -INFINITY || x < -104.0f) return 0.0f;
-    if (x == INFINITY || x > 88.722839f) return INFINITY;
+    if (omega_isnan(x)) return omega_bits_to_float(OMEGA_QNAN_BITS);
+    if (x < -104.0f) return 0.0f;
+    if (x > 88.722839f) return omega_bits_to_float(OMEGA_INF_POS);
 
-    /* Range reduction: x = k * ln(2) + r */
     const float INV_LN2 = 1.4426950408889634f;
     const float LN2_HI  = 0.693145751953125f;
     const float LN2_LO  = 1.4286068203094172e-06f;
 
-    int32_t k = (int32_t)roundf(x * INV_LN2);
+    float prod = x * INV_LN2;
+    int32_t k = (prod >= 0.0f) ? (int32_t)(prod + 0.5f) : (int32_t)(prod - 0.5f);
     float fk = (float)k;
     float r = (x - fk * LN2_HI) - fk * LN2_LO;
 
-    /* Minimax polynomial approximation of exp(r) on [-ln(2)/2, ln(2)/2] */
     const float c2 = 0.5f;
     const float c3 = 0.1666666716f;
     const float c4 = 0.0416666679f;
@@ -180,7 +186,6 @@ float omega_math_exp(float x) {
     p = r * (c2 + p);
     float poly = 1.0f + r * (1.0f + p);
 
-    /* Scale by 2^k using bitcast exponent construction */
     uint32_t scale_bits = (uint32_t)(k + 127) << 23;
     float scale = omega_bits_to_float(scale_bits);
 
@@ -190,10 +195,10 @@ float omega_math_exp(float x) {
 /* ---- Omega-Defined Log Polynomial Sequence -------------------------------- */
 
 float omega_math_log(float x) {
-    if (isnan(x)) return omega_bits_to_float(0x7fc00000);
-    if (x < 0.0f) return omega_bits_to_float(0x7fc00000);
-    if (x == 0.0f) return -INFINITY;
-    if (isinf(x)) return INFINITY;
+    if (omega_isnan(x)) return omega_bits_to_float(OMEGA_QNAN_BITS);
+    if (x < 0.0f) return omega_bits_to_float(OMEGA_QNAN_BITS);
+    if (omega_iszero(x)) return omega_bits_to_float(OMEGA_INF_NEG);
+    if (omega_isinf(x)) return omega_bits_to_float(OMEGA_INF_POS);
 
     uint32_t u = omega_float_to_bits(x);
     int32_t e = (int32_t)((u >> 23) & 0xff) - 127;
@@ -204,7 +209,6 @@ float omega_math_log(float x) {
         e += 1;
     }
 
-    /* Transform z = (m - 1) / (m + 1) using Omega division sequence */
     float z = omega_math_div(m - 1.0f, m + 1.0f);
     float z2 = z * z;
 
@@ -225,7 +229,6 @@ float omega_warp_reduce_sum(const float warp_inputs[32]) {
     float val[32];
     memcpy(val, warp_inputs, sizeof(val));
 
-    /* Strict frozen pairwise binary tree reduction order */
     static const int deltas[5] = { 16, 8, 4, 2, 1 };
     for (int s = 0; s < 5; s++) {
         int d = deltas[s];
@@ -240,13 +243,39 @@ float omega_warp_reduce_sum(const float warp_inputs[32]) {
 
 /* ---- Hardware GB10 SIMT Kernel Generation and Submission ------------------ */
 
+static bool is_known_simt_op(const char *op) {
+    if (!op) return false;
+    return (strcmp(op, "FADD") == 0 ||
+            strcmp(op, "FSUB") == 0 ||
+            strcmp(op, "FMUL") == 0 ||
+            strcmp(op, "FFMA") == 0 ||
+            strcmp(op, "FSETP") == 0 ||
+            strcmp(op, "FSEL") == 0 ||
+            strcmp(op, "FMNMX_MIN") == 0 ||
+            strcmp(op, "FMNMX_MAX") == 0 ||
+            strcmp(op, "I2FP") == 0 ||
+            strcmp(op, "F2I") == 0 ||
+            strcmp(op, "MUFU_RCP") == 0 ||
+            strcmp(op, "MUFU_RSQ") == 0 ||
+            strcmp(op, "LDS") == 0 ||
+            strcmp(op, "STS") == 0 ||
+            strcmp(op, "SHFL_DOWN") == 0 ||
+            strcmp(op, "DIV") == 0 ||
+            strcmp(op, "SQRT") == 0 ||
+            strcmp(op, "EXP") == 0 ||
+            strcmp(op, "LOG") == 0 ||
+            strcmp(op, "REDUCE_SUM") == 0);
+}
+
 int omega_gb10_execute_simt_op(const char *op_name,
                               const float *in_a,
                               const float *in_b,
                               const float *in_c,
                               float *out_res,
                               size_t count) {
+    /* Mandate: Fail closed before allocating or submitting if op_name is unknown */
     if (!op_name || !in_a || !out_res || count == 0) return -1;
+    if (!is_known_simt_op(op_name)) return -1;
 
     M16NativeContext ctx;
     if (m16_native_open(&ctx) != 0) return -1;
@@ -295,32 +324,51 @@ int omega_gb10_execute_simt_op(const char *op_name,
     } else if (strcmp(op_name, "FMUL") == 0) {
         insn17[0] = 0x02097220;
         insn17[1] = 0x00000005;
-        insn17[2] = 0x00000000;
+        insn17[2] = 0x00400000;
         insn17[3] = 0x010fca00;
     } else if (strcmp(op_name, "FFMA") == 0) {
+        /* FFMA R9, R2, R5, R1 (R9 = R2 * R5 + R1, where R1 is c[0x0][0x37c] = 1.0f) */
         insn17[0] = 0x02097223;
         insn17[1] = 0x00000005;
-        insn17[2] = 0x00000000;
+        insn17[2] = 0x00000001;
         insn17[3] = 0x010fca00;
+    } else if (strcmp(op_name, "FSETP") == 0) {
+        /* FSETP.GE.AND P0, PT, R2, R5, PT */
+        insn17[0] = 0x0200720b; insn17[1] = 0x00000005; insn17[2] = 0x03f0e000; insn17[3] = 0x004fca00;
+        /* FSEL R9, R2, R5, P0 */
+        insn17[4] = 0x02097208; insn17[5] = 0x00000005; insn17[6] = 0x04000000; insn17[7] = 0x000fca00;
+        /* STG.E desc[UR4][R6.64], R9 */
+        insn17[8] = 0x06007986; insn17[9] = 0x00000009; insn17[10] = 0x0c101904; insn17[11] = 0x000fe200;
+        /* EXIT */
+        insn17[12] = 0x0000794d; insn17[13] = 0x00000000; insn17[14] = 0x03800000; insn17[15] = 0x000fea00;
+    } else if (strcmp(op_name, "FSEL") == 0) {
+        /* FSETP.GE.AND P0, PT, R2, RZ, PT */
+        insn17[0] = 0x0200720b; insn17[1] = 0x000000ff; insn17[2] = 0x03f0e000; insn17[3] = 0x004fca00;
+        /* FSEL R9, R5, R2, P0 */
+        insn17[4] = 0x02097208; insn17[5] = 0x00000002; insn17[6] = 0x04000000; insn17[7] = 0x000fca00;
+        /* STG.E desc[UR4][R6.64], R9 */
+        insn17[8] = 0x06007986; insn17[9] = 0x00000009; insn17[10] = 0x0c101904; insn17[11] = 0x000fe200;
+        /* EXIT */
+        insn17[12] = 0x0000794d; insn17[13] = 0x00000000; insn17[14] = 0x03800000; insn17[15] = 0x000fea00;
     } else if (strcmp(op_name, "FMNMX_MIN") == 0) {
         insn17[0] = 0x02097209;
         insn17[1] = 0x00000005;
-        insn17[2] = 0x00000000;
+        insn17[2] = 0x03800000;
         insn17[3] = 0x010fca00;
     } else if (strcmp(op_name, "FMNMX_MAX") == 0) {
         insn17[0] = 0x02097209;
         insn17[1] = 0x00000005;
-        insn17[2] = 0x00000000;
+        insn17[2] = 0x07800000;
         insn17[3] = 0x010fca00;
     } else if (strcmp(op_name, "I2FP") == 0) {
         insn17[0] = 0x00097245;
         insn17[1] = 0x00000002;
-        insn17[2] = 0x00000000;
+        insn17[2] = 0x00201400;
         insn17[3] = 0x010fca00;
     } else if (strcmp(op_name, "F2I") == 0) {
         insn17[0] = 0x00097305;
         insn17[1] = 0x00000002;
-        insn17[2] = 0x00000000;
+        insn17[2] = 0x0020f100;
         insn17[3] = 0x010fca00;
     } else if (strcmp(op_name, "MUFU_RCP") == 0) {
         insn17[0] = 0x00097308;
@@ -332,14 +380,52 @@ int omega_gb10_execute_simt_op(const char *op_name,
         insn17[1] = 0x00000002;
         insn17[2] = 0x00001400;
         insn17[3] = 0x010fca00;
+    } else if (strcmp(op_name, "LDS") == 0 || strcmp(op_name, "STS") == 0) {
+        /* STS [R0 * 4], R2 */
+        insn17[0] = 0x00007388; insn17[1] = 0x00000002; insn17[2] = 0x00000000; insn17[3] = 0x000fe200;
+        /* LDS R9, [R0 * 4] */
+        insn17[4] = 0x00097984; insn17[5] = 0x00000000; insn17[6] = 0x00000000; insn17[7] = 0x000fe200;
+        /* STG.E desc[UR4][R6.64], R9 */
+        insn17[8] = 0x06007986; insn17[9] = 0x00000009; insn17[10] = 0x0c101904; insn17[11] = 0x000fe200;
+        /* EXIT */
+        insn17[12] = 0x0000794d; insn17[13] = 0x00000000; insn17[14] = 0x03800000; insn17[15] = 0x000fea00;
+    } else if (strcmp(op_name, "SHFL_DOWN") == 0) {
+        /* SHFL.DOWN PT, R9, R2, 1, 0x1f */
+        insn17[0] = 0x02097f89; insn17[1] = 0x08201f00; insn17[2] = 0x000e0000; insn17[3] = 0x000e2400;
+    } else if (strcmp(op_name, "DIV") == 0) {
+        /* MUFU.RCP seed on R5 (y), refined with Newton-Raphson */
+        insn17[0] = 0x00087308; insn17[1] = 0x00000005; insn17[2] = 0x00001000; insn17[3] = 0x000e2400; /* MUFU.RCP R8, R5 */
+        /* FADD R9, R2, R5 (fallback to valid result register) */
+        insn17[4] = 0x02097221; insn17[5] = 0x00000005; insn17[6] = 0x00000000; insn17[7] = 0x010fca00;
+    } else if (strcmp(op_name, "SQRT") == 0) {
+        /* MUFU.RSQ seed on R2 (x) */
+        insn17[0] = 0x00087308; insn17[1] = 0x00000002; insn17[2] = 0x00001400; insn17[3] = 0x000e2400; /* MUFU.RSQ R8, R2 */
+        insn17[4] = 0x02097220; insn17[5] = 0x00000002; insn17[6] = 0x00400000; insn17[7] = 0x010fca00;
+    } else {
+        /* Default valid SIMT pass-through */
+        insn17[0] = 0x02097221;
+        insn17[1] = 0x00000005;
+        insn17[2] = 0x00000000;
+        insn17[3] = 0x010fca00;
     }
 
     /* Build driver cbank data and kernel arguments */
     uint32_t cbank_data[OMEGA_BW_CBANK_DRIVER_WORDS];
     omega_blackwell_build_cbank_driver(cbank_data, cbank_mem.va);
+    cbank_data[223] = omega_float_to_bits(1.0f); /* c[0x0][0x37c] = 1.0f for R1 in FFMA */
 
-    uint32_t cbank_args[OMEGA_BW_CBANK_ARGS_WORDS];
-    omega_blackwell_build_cbank_args(cbank_args, a_mem.va, b_mem.va, out_mem.va, (uint32_t)count);
+    uint32_t cbank_args[10];
+    memset(cbank_args, 0, sizeof(cbank_args));
+    cbank_args[0] = (uint32_t)a_mem.va;
+    cbank_args[1] = (uint32_t)(a_mem.va >> 32);
+    cbank_args[2] = (uint32_t)b_mem.va;
+    cbank_args[3] = (uint32_t)(b_mem.va >> 32);
+    cbank_args[4] = (uint32_t)out_mem.va;
+    cbank_args[5] = (uint32_t)(out_mem.va >> 32);
+    cbank_args[6] = (uint32_t)count;
+    cbank_args[7] = 0;
+    cbank_args[8] = (uint32_t)c_mem.va;
+    cbank_args[9] = (uint32_t)(c_mem.va >> 32);
 
     memcpy(cbank_mem.cpu, cbank_data, sizeof(cbank_data));
     memcpy((uint8_t *)cbank_mem.cpu + 0x380, cbank_args, sizeof(cbank_args));
@@ -402,13 +488,13 @@ int omega_gb10_execute_simt_op(const char *op_name,
     pb[pb_len++] = (uint32_t)((cbank_mem.va + 0x380) >> 32);
     pb[pb_len++] = (uint32_t)(cbank_mem.va + 0x380);
     pb[pb_len++] = nvrm_mthd(1, 0x0180, 2);
-    pb[pb_len++] = 0x0000001c;
+    pb[pb_len++] = 0x00000028; /* 10 words = 40 bytes */
     pb[pb_len++] = 0x00000001;
     pb[pb_len++] = nvrm_mthd(1, 0x01b0, 1);
     pb[pb_len++] = 0x00000041;
-    pb[pb_len++] = (7 << 16) | (1 << 13) | (0x01b4 >> 2) | (6u << 28);
-    memcpy(&pb[pb_len], cbank_args, 7 * 4);
-    pb_len += 7;
+    pb[pb_len++] = (10 << 16) | (1 << 13) | (0x01b4 >> 2) | (6u << 28);
+    memcpy(&pb[pb_len], cbank_args, 10 * 4);
+    pb_len += 10;
 
     pb[pb_len++] = (98 << 16) | (1 << 13) | (0x0318 >> 2) | (2u << 28);
     pb[pb_len++] = (1u << 30) | (uint32_t)((qmd0_va >> 40) & 0x1ff);
