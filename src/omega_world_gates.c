@@ -2249,6 +2249,7 @@ int run_m19r_soak(void) {
     /* Warm the allocator to the peak allocation size before measuring VA. */
     ok = omega_world_register_buffer(&world, allocation_bytes, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &buffer) == OMEGA_WORLD_OK &&
          omega_world_revoke_buffer(&world, &buffer) == OMEGA_WORLD_OK;
+    ok = ok && lc_vecadd_ok(&world, &code);
     if (!ok) { omega_world_destroy(&world); return 1; }
     M19RSoakSample start = m19r_sample(&world);
     m19r_print_sample("start", &start);
