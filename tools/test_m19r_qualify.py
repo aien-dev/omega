@@ -47,6 +47,10 @@ class QualificationTests(unittest.TestCase):
             require_passed(seen)
         self.assertEqual(observed_counts(seen[:1])["completed"], 1)
         require_passed(seen[:1])
+        named = events("SILICON_PASS: FAIL\nOTHER_PASS: measured true\n", "named")
+        self.assertEqual([event["status"] for event in named], ["FAIL", "PASS"])
+        with self.assertRaises(RuntimeError):
+            require_passed(named)
 
 
 if __name__ == "__main__":

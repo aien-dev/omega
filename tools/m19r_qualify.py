@@ -15,7 +15,7 @@ import uuid
 OMEGA = Path(__file__).resolve().parents[1]
 SHA = re.compile(r"[0-9a-fA-F]{40}\Z")
 GATE = re.compile(r"^\s*\[(PASS|FAIL)\]\s+([A-Za-z0-9_:-]+)", re.M)
-NAMED_PASS = re.compile(r"^([A-Z][A-Z0-9_]+_PASS):", re.M)
+NAMED_PASS = re.compile(r"^([A-Z][A-Z0-9_]+_PASS):[^\n]*$", re.M)
 CUDA = re.compile(r"libcuda(?:rt)?\.so|\b(?:cuInit|cuCtx|cuMem|cuStream|cudaMalloc)\b", re.I)
 
 
@@ -68,8 +68,10 @@ def observed_counts(events_seen):
 def events(output, suite):
     found = [{"suite": suite, "id": name, "status": status}
              for status, name in GATE.findall(output)]
-    found += [{"suite": suite, "id": name, "status": "PASS"}
-              for name in NAMED_PASS.findall(output)]
+    for match in NAMED_PASS.finditer(output):
+        line = match.group(0)
+        found.append({"suite": suite, "id": match.group(1),
+                      "status": "FAIL" if re.search(r"\bFAIL\b", line) else "PASS"})
     return found
 
 
@@ -180,6 +182,10 @@ def main():
                     "observed_test_ids": [f"{item['suite']}:{item['id']}" for item in all_events]}
         manifest_digest = digest(canonical(manifest))
         m19 = tagged_json(dict(suites)["m19"], "M19_OBSERVED_JSON")[-1]
+        m19_events = [event for event in events(dict(suites)["m19"], "m19")
+                      if event["id"].startswith("OMEGA_ACCEL_RESIDENT_")]
+        if len(m19_events) != 18 or any(event["status"] != "PASS" for event in m19_events):
+            raise RuntimeError("M19 printed gate results do not contain exactly 18 passing gates")
         if m19["m19_gates_completed"] != 18 or m19["m19_gates_passed"] != m19["m19_gates_completed"] or \
            m19["regression_gates_passed"] != m19["regression_gates_completed"]:
             raise RuntimeError("M19 did not complete all 18 gates and regressions")
@@ -194,6 +200,8 @@ def main():
             raise RuntimeError("long soak criterion failed")
         if [s["phase"] for s in samples] != ["start", "end", "post_destroy"]:
             raise RuntimeError("soak resource snapshots are incomplete")
+        must_candidate(OMEGA, args.omega_candidate)
+        must_candidate(physics, args.physics_candidate)
         predecessor = OMEGA / "evidence/omega_accelerator_world_qualification_receipt.json"
         counts = observed_counts(all_events)
         body = {
