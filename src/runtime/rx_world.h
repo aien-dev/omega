@@ -16,8 +16,9 @@
  * are two aspects of that same object), CPU checks of the pointer-free
  * cross-engine descriptor, R3 reaction core, R4 causal crumbs, R5 host
  * admission, R6 host stability. The receipt is what claims a gate. This file
- * does not claim a graphics-processor run or a native capability root.
- * Faculty labels in tests are not the real AIEN, Omega, or AEGIS.
+ * does not claim a graphics-processor run. A native authority view can be
+ * installed beside the Linux oracle; installing it is not, by itself, the
+ * R7 claim. Faculty labels in tests are not the real AIEN, Omega, or AEGIS.
  */
 #ifndef RX_WORLD_H
 #define RX_WORLD_H
@@ -345,12 +346,21 @@ typedef struct {
     uint64_t desc_rejected;
 } RxStats;
 
+typedef int (*RxAuthValidateFn)(const void *ctx, RxCapRef ref, uint32_t subject,
+                                 uint64_t resource, uint32_t rights, RxCapEntry *out);
+typedef int (*RxAuthInspectFn)(const void *ctx, RxCapRef ref, RxCapEntry *out);
+
 typedef struct RxWorld {
     pthread_mutex_t mu;
     pthread_cond_t work_cv;
     pthread_cond_t idle_cv;
 
     RxCapRoot *root;
+    /* When set, validation reads this view instead of the Linux oracle.
+     * The view cannot mint. The Linux oracle stays available for comparison. */
+    const void *auth_ctx;
+    RxAuthValidateFn auth_validate;
+    RxAuthInspectFn auth_inspect;
     uint32_t external_subject;
 
     RxObject objects[RX_MAX_OBJECTS];
@@ -401,6 +411,17 @@ typedef struct RxWorld {
 } RxWorld;
 
 int  rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crumb_cap);
+/* `root` may be null when `validate` is set. The Linux oracle is unchanged
+ * when `validate` is null. */
+int  rx_world_init_with_auth(RxWorld *w, RxCapRoot *root, const void *auth_ctx,
+                             RxAuthValidateFn validate, RxAuthInspectFn inspect,
+                             uint32_t n_workers, uint64_t crumb_cap);
+int  rx_world_validate_cap(const RxWorld *w, RxCapRef ref, uint32_t subject,
+                           uint64_t resource, uint32_t rights, RxCapEntry *out);
+int  rx_world_inspect_cap(const RxWorld *w, RxCapRef ref, RxCapEntry *out);
+struct AienosCapView;
+int  rx_world_init_native(RxWorld *w, const struct AienosCapView *view,
+                          uint32_t n_workers, uint64_t crumb_cap);
 void rx_world_destroy(RxWorld *w);
 void rx_world_set_resources(RxWorld *w, const RxResourceBudget *budget);
 void rx_world_set_stability(RxWorld *w, const RxStabilityBudget *stability);

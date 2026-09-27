@@ -518,10 +518,25 @@ static bool ref_live(const RxWorld *w, RxObjRef ref) {
            w->objects[ref.id].generation == ref.generation;
 }
 
+int rx_world_validate_cap(const RxWorld *w, RxCapRef ref, uint32_t subject,
+                          uint64_t resource, uint32_t rights, RxCapEntry *out) {
+    if (!w) return RX_CAP_ERR_STATE;
+    if (w->auth_validate) return w->auth_validate(w->auth_ctx, ref, subject, resource, rights, out);
+    if (!w->root) return RX_CAP_ERR_STATE;
+    return rx_caproot_validate(w->root, ref, subject, resource, rights, out);
+}
+
+int rx_world_inspect_cap(const RxWorld *w, RxCapRef ref, RxCapEntry *out) {
+    if (!w) return RX_CAP_ERR_STATE;
+    if (w->auth_inspect) return w->auth_inspect(w->auth_ctx, ref, out);
+    if (!w->root) return RX_CAP_ERR_STATE;
+    return rx_caproot_inspect(w->root, ref, out);
+}
+
 static int validate_caps(const RxWorld *w, const RxReactionDesc *d, int *first_err) {
     for (uint32_t i = 0; i < d->n_caps; i++) {
-        int rc = rx_caproot_validate(w->root, d->caps[i].ref, d->subject,
-                                     d->caps[i].resource, d->caps[i].rights, NULL);
+        int rc = rx_world_validate_cap(w, d->caps[i].ref, d->subject,
+                                       d->caps[i].resource, d->caps[i].rights, NULL);
         if (rc != RX_CAP_OK) {
             if (first_err) *first_err = rc;
             return -1;
@@ -768,7 +783,7 @@ static void stamp_cap(RxWorld *w, RxCrumb *k, uint32_t i, RxCapRef ref) {
     k->caps[i] = ref;
     k->cap_issuer[i] = 0;
     RxCapEntry e;
-    if (w->root && rx_caproot_inspect(w->root, ref, &e) == RX_CAP_OK)
+    if (rx_world_inspect_cap(w, ref, &e) == RX_CAP_OK)
         k->cap_issuer[i] = e.minted_by_id ? e.minted_by_id : e.issuer;
 }
 
@@ -965,10 +980,21 @@ static void *worker_main(void *arg) {
 /* ---- public API ---------------------------------------------------------- */
 
 int rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crumb_cap) {
-    if (!w || !root || n_workers == 0 || n_workers > RX_MAX_WORKERS || crumb_cap == 0)
+    if (!root) return RX_ERR_ARG;
+    return rx_world_init_with_auth(w, root, NULL, NULL, NULL, n_workers, crumb_cap);
+}
+
+int rx_world_init_with_auth(RxWorld *w, RxCapRoot *root, const void *auth_ctx,
+                            RxAuthValidateFn validate, RxAuthInspectFn inspect,
+                            uint32_t n_workers, uint64_t crumb_cap) {
+    if (!w || n_workers == 0 || n_workers > RX_MAX_WORKERS || crumb_cap == 0)
         return RX_ERR_ARG;
+    if (!root && !validate) return RX_ERR_ARG;
     memset(w, 0, sizeof(*w));
     w->root = root;
+    w->auth_ctx = auth_ctx;
+    w->auth_validate = validate;
+    w->auth_inspect = inspect;
     w->crumbs = calloc(crumb_cap, sizeof(RxCrumb));
     if (!w->crumbs) return RX_ERR_FULL;
     w->deferred = calloc(RX_DEFERRED_INITIAL, sizeof(*w->deferred));
@@ -1164,8 +1190,8 @@ int64_t rx_world_publish_external(RxWorld *w, RxCapRef cap, const RxMutation *mu
     pthread_mutex_lock(&w->mu);
     for (uint32_t i = 0; i < n; i++) {
         if (!ref_live(w, muts[i].obj)) { pthread_mutex_unlock(&w->mu); return RX_ERR_STALE_GEN; }
-        int rc = rx_caproot_validate(w->root, cap, w->external_subject,
-                                     w->objects[muts[i].obj.id].resource, RX_RIGHT_WRITE, NULL);
+        int rc = rx_world_validate_cap(w, cap, w->external_subject,
+                                       w->objects[muts[i].obj.id].resource, RX_RIGHT_WRITE, NULL);
         if (rc != RX_CAP_OK) { pthread_mutex_unlock(&w->mu); return RX_ERR_AUTHORITY; }
     }
     PendingWrite pw[RX_MAX_WRITES];

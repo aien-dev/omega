@@ -1,12 +1,17 @@
 # R7 design: host authority onto the AIENOS capability table
 
-Status: design only. R7 is not claimed. Nothing in this note is a native
-capability root, and nothing here connects AIEN, Omega synthesis, or AEGIS.
+Status: host parity is proven. The native authority lives in AIENOS
+(`aienos-capability`). The same attack list was run against that authority
+and the Linux mint, and the outcomes matched. The reaction world can check
+references through the native view. The Linux mint is still built and is
+still the oracle. It has not been removed.
 
-The Linux process that mints capabilities remains the development stand-in.
-The reaction world keeps a read-only validation view (`RxCapRoot`). It does
-not hold the admin handle (`RxCapAdmin`), the office token, or the socket
-that changes the table.
+This does not connect real AIEN cognition, Omega synthesis, or AEGIS. It
+does not start the graphics processor. A world-wide generation barrier is
+still later work.
+
+The reaction world, when pointed at the native authority, receives the
+read-only view. It does not receive the admin handle or the office token.
 
 Grounded in aienos `main` at `07bdb86de0ac30016ead43b321e0a39253b4cc8f`:
 
@@ -53,12 +58,18 @@ the stand-in until that native root exists.
 
 ## Order
 
-1. Keep the Linux mint process as the oracle. This is the current code.
-2. Add subject, epoch, and lease to the native table, or an equivalent the
-   host checks already depend on, without giving the reaction world a way to mint.
-3. Decide the resource width and the rights that do not line up (effect, map, grant, privileged office rights).
-4. Only then switch `rx_caproot_validate` to that table and retire the mint process.
-5. That switch is the R7 claim. This document is not that switch.
+1. The Linux mint process stays as the oracle. It is still in the tree.
+2. Subject, epoch, lease, a 64-bit resource, and office rights that cannot be
+   delegated are on the native authority. The reaction view cannot mint.
+3. Resource width is 64 bits on the native authority. A value that does not
+   fit in 32 bits is refused if something tries to narrow it. The older task
+   table's rights word is unchanged. Effect and the office rights live on the
+   native authority. Map and grant stay on the task table.
+4. The reaction world checks the native view when it is started that way.
+   The existing heartbeat still checks the Linux oracle. The mint process is
+   not retired.
+5. The host attack list matching both sides is the R7 evidence. It is not a
+   graphics-processor claim and it is not the later generation barrier.
 
 ## Generation barriers, noted only
 

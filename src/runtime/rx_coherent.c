@@ -347,10 +347,10 @@ static int check_locked(RxWorld *w, const OmegaSharedWorldDesc *desc,
                         fault = RX_FAULT_CAP;
                     else {
                         RxCapEntry ent;
-                        int irc = rx_caproot_inspect(w->root, cap, &ent);
+                        int irc = rx_world_inspect_cap(w, cap, &ent);
                         int vrc = irc == RX_CAP_OK
-                                      ? rx_caproot_validate(w->root, cap, ent.subject, o->resource,
-                                                            msg_rights(desc->msg_type), NULL)
+                                      ? rx_world_validate_cap(w, cap, ent.subject, o->resource,
+                                                              msg_rights(desc->msg_type), NULL)
                                       : irc;
                         if (vrc != RX_CAP_OK) fault = RX_FAULT_CAP;
                         else if (desc->msg_type == RX_RING_PUBLISH) {
@@ -479,9 +479,9 @@ int rx_world_bind_capability(RxWorld *w, RxObjRef ref, RxCapRef cap) {
         goto out;
     }
     RxCapEntry ent;
-    if (rx_caproot_inspect(w->root, cap, &ent) != RX_CAP_OK ||
-        rx_caproot_validate(w->root, cap, ent.subject, w->objects[ref.id].resource,
-                            RX_RIGHT_READ, NULL) != RX_CAP_OK) {
+    if (rx_world_inspect_cap(w, cap, &ent) != RX_CAP_OK ||
+        rx_world_validate_cap(w, cap, ent.subject, w->objects[ref.id].resource,
+                              RX_RIGHT_READ, NULL) != RX_CAP_OK) {
         rc = RX_ERR_AUTHORITY;
         goto out;
     }
