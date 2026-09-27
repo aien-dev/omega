@@ -22,6 +22,7 @@
 #include "omega_blackwell_gates.h"
 #include "omega_world_gates.h"
 #include "omega_blackwell_codegen.h"
+#include "omega_evidence.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,6 +30,11 @@
 
 static int gate_count = 0;
 static int gate_passed = 0;
+
+void omega_get_gate_snapshot(int *count, int *passed) {
+    if (count) *count = gate_count;
+    if (passed) *passed = gate_passed;
+}
 
 static void report_gate(const char *gate_name, bool pass, const char *detail) {
     gate_count++;
@@ -3481,6 +3487,259 @@ static void run_demonstration_accelerator(void) {
     printf("================================================================================\n");
 }
 
+int omega_run_m4_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 4: OMEGA_SEMANTICS QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_OBJECT_MODEL_PASS", test_object_model(), "11 first-class categories instantiated and typed");
+    report_gate("OMEGA_TYPE_SYSTEM_PASS", test_type_system(), "Bounded widths enforced, invalid widths refused");
+    report_gate("OMEGA_GRAPH_VALIDATION_PASS", test_graph_validation(), "DAG validation and dangling reference refusal");
+    report_gate("OMEGA_CANONICAL_ENCODING_PASS", test_canonical_encoding(), "OMG0 wire header and lexicographical attribute sorting");
+    report_gate("OMEGA_SEMANTIC_ID_DETERMINISM_PASS", test_semantic_id_determinism(), "Cross-allocation bit-for-bit SHA-256 identity");
+    report_gate("OMEGA_REPRESENTATION_INDEPENDENCE_PASS", test_representation_independence(NULL), "4 independent representations collapse to identical ID");
+    report_gate("OMEGA_SEMANTIC_DIFFERENCE_PASS", test_semantic_difference(), "ADD -> SUB produces distinct SEMANTIC_ID");
+    report_gate("OMEGA_RELATION_PASS", test_relation_canonicalization(), "Relation ordering independence confirmed");
+    report_gate("OMEGA_CONSTRAINT_PASS", test_constraint_canonicalization(), "Constraint ordering independence confirmed");
+    report_gate("OMEGA_PURE_EFFECT_SEPARATION_PASS", test_pure_effect_separation(), "Pure computation decoupled from physical effect tokens");
+    report_gate("OMEGA_MALFORMED_OBJECT_REFUSAL_PASS", test_malformed_refusal(), "Structural cycles and corrupt wire packets rejected");
+    report_gate("OMEGA_CROSS_BUILD_DETERMINISM_PASS", test_cross_build_determinism(), "Known-answer test evaluation matches specification");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m5_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 5: OMEGA_AARCH64 QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_AARCH64_PROFILE_PASS", test_m5_profile(), "AArch64 bare-metal target profile and registers valid");
+    report_gate("OMEGA_AARCH64_ENCODER_PASS", test_m5_encoder(), "Direct instruction encoder synthesized expected machine words");
+    report_gate("OMEGA_AARCH64_DECODER_SEAM_PASS", test_m5_decoder_seam(), "Independent decoder Seam 1 validated instructions and refused corrupt opcode");
+    report_gate("OMEGA_AARCH64_LOWERING_PASS", test_m5_lowering(), "G_S pure operations lowered to AArch64 code buffer");
+    report_gate("OMEGA_AARCH64_REALIZATION_ID_PASS", test_m5_realization_id(), "REALIZATION_ID deterministically binds machine code to SEMANTIC_ID");
+    report_gate("OMEGA_AARCH64_NATIVE_EXECUTION_PASS", test_m5_native_execution(), "Native in-memory execution observed result 15 matches semantic evaluation");
+    report_gate("OMEGA_AARCH64_QEMU_EXECUTION_PASS", test_m5_qemu_execution(), "Bare-metal QEMU execution observed result 15 on PL011 UART");
+    report_gate("OMEGA_AARCH64_ADVERSARIAL_MUTATION_PASS", test_m5_adversarial_mutation(), "Single-bit machine code mutation detected and refused fail-closed");
+    report_gate("OMEGA_AARCH64_CROSS_BUILD_DETERMINISM_PASS", test_m5_cross_build_determinism(), "Byte-for-byte deterministic realization across runs");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m6_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 6: OMEGA_SELF_HOST QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_SELF_HOST_GRAPH_PASS", test_m6_graph(), "Semantic compiler graph G_C constructed and validated");
+    report_gate("OMEGA_SELF_HOST_C1_EMISSION_PASS", test_m6_c1_emission(), "Reference lowering C0(G_C) -> C1 emitted machine bytes");
+    report_gate("OMEGA_SELF_HOST_DECODER_SEAM_PASS", test_m6_decoder_seam(), "Independent decoder verified all C1 instructions");
+    report_gate("OMEGA_SELF_HOST_C2_REPRODUCTION_PASS", test_m6_c2_reproduction(), "Native compiler C1(G_C) -> C2 emitted machine bytes");
+    report_gate("OMEGA_SELF_HOST_C3_REPRODUCTION_PASS", test_m6_c3_reproduction(), "Native compiler C2(G_C) -> C3 emitted machine bytes");
+    report_gate("OMEGA_SELF_HOST_FIXED_POINT_PASS", test_m6_fixed_point(), "Exact bit-for-bit identity C1 == C2 == C3 verified");
+    report_gate("OMEGA_SELF_HOST_REALIZATION_ID_PASS", test_m6_realization_id(), "REALIZATION_ID matching across C1, C2, and C3");
+    report_gate("OMEGA_SELF_HOST_M5_PARITY_PASS", test_m6_m5_parity(), "Reproduced compiler reproduces exact M5 machine code bytes");
+    report_gate("OMEGA_SELF_HOST_NATIVE_EXECUTION_PASS", test_m6_native_execution(), "Reproduced compiler output executes natively to 15");
+    report_gate("OMEGA_SELF_HOST_ADVERSARIAL_MUTATION_PASS", test_m6_adversarial_mutation(), "Single-bit mutations in G_C wire or C1 refused fail-closed");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m7_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 7: OMEGA_VERIFY QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_VERIFY_V0_TYPE_PASS", test_m7_v0_type(), "V0 accepted well-typed graph and rejected ill-typed graph");
+    report_gate("OMEGA_VERIFY_V0_DAG_PASS", test_m7_v0_dag(), "V0 rejected graph with dangling reference");
+    report_gate("OMEGA_VERIFY_V0_CODE_BOUNDS_PASS", test_m7_v0_code_bounds(), "V0 enforced 4-byte alignment and buffer length bounds");
+    report_gate("OMEGA_VERIFY_V0_INSN_DECODE_PASS", test_m7_v0_insn_decode(), "V0 validated instruction opcodes and refused illegal instruction");
+    report_gate("OMEGA_VERIFY_V0_TERMINAL_RET_PASS", test_m7_v0_terminal_ret(), "V0 rejected non-terminating / non-RET execution buffer");
+    report_gate("OMEGA_VERIFY_V1_DIFFERENTIAL_PASS", test_m7_v1_differential(), "V1 confirmed exact bit-for-bit parity across test corpus");
+    report_gate("OMEGA_VERIFY_V1_DIVERGENCE_REFUSAL_PASS", test_m7_v1_divergence_refusal(), "V1 detected and refused mutated realization divergence");
+    report_gate("OMEGA_VERIFY_V2_COMMUTATIVITY_PASS", test_m7_v2_commutativity(), "V2 proved commutativity on declared commutative ops");
+    report_gate("OMEGA_VERIFY_V2_IDENTITY_PASS", test_m7_v2_identity(), "V2 proved identity elements on ADD, MUL, AND, OR");
+    report_gate("OMEGA_VERIFY_V2_OVERFLOW_PASS", test_m7_v2_overflow(), "V2 validated modular overflow wrapping semantics");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m8_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 8: OMEGA_PROGRAM_CORE QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_PROGRAM_OBJECT_PASS", test_m8_program_object(), "OMEGA_PROGRAM created with contracts, cost, and realization");
+    report_gate("OMEGA_PROGRAM_CONTRACT_VALIDATION_PASS", test_m8_contract_validation(), "Contract validation enforced, invalid types rejected");
+    report_gate("OMEGA_PROGRAM_COMPOSITION_PASS", test_m8_composition(), "Algebraic composition C = A o B with contract propagation");
+    report_gate("OMEGA_PROGRAM_TYPE_MISMATCH_REFUSAL_PASS", test_m8_type_mismatch_refusal(), "Incompatible composition refused fail-closed");
+    report_gate("OMEGA_PROGRAM_COST_ACCOUNTING_PASS", test_m8_cost_accounting(), "Composite cost monotonically verified (insns, latency)");
+    report_gate("OMEGA_PROGRAM_REALIZATION_PASS", test_m8_realization(), "Composite program lowered to native AArch64 machine bytes");
+    report_gate("OMEGA_PROGRAM_V0_STRUCTURAL_PASS", test_m8_v0_structural(), "Composite program passes M7 V0 structural verification");
+    report_gate("OMEGA_PROGRAM_V1_DIFFERENTIAL_PASS", test_m8_v1_differential(), "Composite program passes M7 V1 differential evaluation (2x+1)");
+    report_gate("OMEGA_PROGRAM_V2_PROPERTY_PASS", test_m8_v2_property(), "Composite program passes M7 V2 property verification");
+    report_gate("OMEGA_PROGRAM_SYNTHESIS_TASK_PASS", test_m8_synthesis_task(), "SYNTHESIS_TASK evaluation harness ready for M9 search");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m9_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 9: OMEGA_SYNTHESIS_V0 QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_SYNTHESIS_PRIMITIVES_PASS", test_m9_primitives(), "Base primitive program bank constructed and verified");
+    report_gate("OMEGA_SYNTHESIS_SEARCH_ORDERING_PASS", test_m9_search_ordering(), "Deterministic search generates multi-level candidates");
+    report_gate("OMEGA_SYNTHESIS_TYPE_PRUNING_PASS", test_m9_type_pruning(), "Incompatible typed candidates pruned fail-closed");
+    report_gate("OMEGA_SYNTHESIS_EQUIV_PRUNING_PASS", test_m9_equiv_pruning(), "Observational equivalence table detects duplicate functions");
+    report_gate("OMEGA_SYNTHESIS_V0_STRUCTURAL_PASS", test_m9_v0_structural(), "Synthesized candidate passes M7 V0 structural verification");
+    report_gate("OMEGA_SYNTHESIS_V1_IO_FILTERING_PASS", test_m9_v1_io_filtering(), "Non-conforming candidate rejected by test suite filter");
+    report_gate("OMEGA_SYNTHESIS_V2_PROPERTY_PASS", test_m9_v2_property(), "Synthesized candidate passes M7 V2 property verification");
+    report_gate("OMEGA_SYNTHESIS_TARGET_AFFINE_PASS", test_m9_target_affine(), "Synthesized 2x + 1 passes holdout tests on native hardware");
+    report_gate("OMEGA_SYNTHESIS_TARGET_COMPOSED_PASS", test_m9_target_composed(), "Synthesized 3x - 2 passes holdout tests on native hardware");
+    report_gate("OMEGA_SYNTHESIS_RECEIPT_PASS", test_m9_receipt(), "Cryptographic identity binding Task, Program, and Realization");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m10_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 10: OMEGA_LIBRARY_V1 QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_LIBRARY_INIT_PASS", test_m10_init(), "Catalog initialization and capacity management");
+    report_gate("OMEGA_LIBRARY_INSERT_PASS", test_m10_insert(), "Content-addressed program insertion and state digest update");
+    report_gate("OMEGA_LIBRARY_INDEXING_PASS", test_m10_lookup_id(), "Retrieval by SEMANTIC_ID, REALIZATION_ID, and name");
+    report_gate("OMEGA_LIBRARY_QUERY_PASS", test_m10_lookup_type(), "Semantic type query filtering (U64 -> U64)");
+    report_gate("OMEGA_LIBRARY_DEP_DAG_PASS", test_m10_dependency_dag(), "Direct and transitive dependency DAG tracking");
+    report_gate("OMEGA_LIBRARY_IMMUTABILITY_PASS", test_m10_immutability(), "Version advancement and cryptographic digest evolution");
+    report_gate("OMEGA_LIBRARY_UNVERIFIED_REFUSAL_PASS", test_m10_unverified_refusal(), "Unverified program insertion rejected fail-closed");
+    report_gate("OMEGA_LIBRARY_DUPLICATE_REFUSAL_PASS", test_m10_duplicate_refusal(), "Duplicate SEMANTIC_ID insertion rejected fail-closed");
+    report_gate("OMEGA_LIBRARY_SYNTHESIS_REUSE_PASS", test_m10_synthesis_reuse(), "Synthesis engine discovering composite by reusing verified library component");
+    report_gate("OMEGA_LIBRARY_RECEIPT_PASS", test_m10_receipt(), "Cryptographic state digest and provenance accounting");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m11_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 11: OMEGA_LIBRARY_DISCOVERY QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_DISCOVERY_CORPUS_MINING_PASS", test_m11_corpus_mining(), "Common sub-expression slices mined across corpus");
+    report_gate("OMEGA_DISCOVERY_NONTRIVIAL_PASS", test_m11_nontrivial(), "Candidate abstraction is non-trivial and composite");
+    report_gate("OMEGA_DISCOVERY_COMPRESSION_PASS", test_m11_compression(), "Positive description length reduction and instruction savings across corpus");
+    report_gate("OMEGA_DISCOVERY_SEMANTIC_PRESERVATION_PASS", test_m11_semantic_preservation(), "Behavioral equivalence strictly preserved after program refactoring");
+    report_gate("OMEGA_DISCOVERY_V0_STRUCTURAL_PASS", test_m11_v0_structural(), "M7 V0 structural verification passed on discovered abstraction");
+    report_gate("OMEGA_DISCOVERY_V1_DIFFERENTIAL_PASS", test_m11_v1_differential(), "M7 V1 differential evaluation passed on native hardware");
+    report_gate("OMEGA_DISCOVERY_V2_PROPERTY_PASS", test_m11_v2_property(), "M7 V2 property verification passed on discovered abstraction");
+    report_gate("OMEGA_DISCOVERY_LIBRARY_ADMISSION_PASS", test_m11_library_admission(), "Discovered abstraction admitted into OmegaLibrary catalog");
+    report_gate("OMEGA_DISCOVERY_SEARCH_ACCELERATION_PASS", test_m11_search_acceleration(), "Held-out synthesis task solved with reduced search candidates");
+    report_gate("OMEGA_DISCOVERY_RECEIPT_PASS", test_m11_receipt(), "Full cryptographic evidence receipt accounting for discovery and acceleration");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m12_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 12: OMEGA_LIVING_MATVEC QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_MATVEC_SEMANTIC_SPEC_PASS", test_m12_semantic_spec(), "Pure mathematical MatVec specification instantiated with canonical SemanticId");
+    report_gate("OMEGA_MATVEC_MULTI_REALIZATION_PASS", test_m12_multi_realization(), "Synthesis engine generates 3 distinct machine-code realizations");
+    report_gate("OMEGA_MATVEC_TRIPLE_ID_PASS", test_m12_triple_id(), "Cryptographic triple identity binding SEMANTIC_ID, MACHINE_ID, and code bytes");
+    report_gate("OMEGA_MATVEC_V0_STRUCTURAL_PASS", test_m12_v0_structural(), "M7 V0 structural verification passed on all realizations with mutation refusal");
+    report_gate("OMEGA_MATVEC_V1_NUMERICAL_PARITY_PASS", test_m12_v1_numerical_parity(), "Exact bit-for-bit numerical parity against mathematical Oracle across dimensions");
+    report_gate("OMEGA_MATVEC_REGIME_INFLECTION_PASS", test_m12_regime_inflection(), "Empirical benchmark measures execution latency across small and medium regimes");
+    report_gate("OMEGA_MATVEC_ADAPTIVE_DISPATCH_PASS", test_m12_adaptive_dispatch(), "Living kernel dynamically adapts and dispatches optimal realization");
+    report_gate("OMEGA_MATVEC_SPEEDUP_PASS", test_m12_speedup(), "Multi-accumulator unrolled schedule achieves measured hardware speedup");
+    report_gate("OMEGA_MATVEC_ZERO_TOOLCHAIN_PASS", test_m12_zero_toolchain(), "All realizations emitted via direct AArch64 machine byte encoders without foreign toolchain");
+    report_gate("OMEGA_MATVEC_RECEIPT_PASS", test_m12_receipt(), "Full qualification receipt generated and verified");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m13_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 13: OMEGA_MACHINE_GRAPH QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_MACHINE_INIT_PASS", test_m13_init(), "Machine graph initialized with profile and name");
+    report_gate("OMEGA_MACHINE_PIPELINE_PASS", test_m13_pipeline(), "Execution pipeline, issue width, and compute units modeled");
+    report_gate("OMEGA_MACHINE_REGISTER_FILE_PASS", test_m13_register_file(), "Register file capacities (GPR, Vector) validated");
+    report_gate("OMEGA_MACHINE_MEMORY_HIERARCHY_PASS", test_m13_memory_hierarchy(), "Multi-tier cache hierarchy (L1I, L1D, L2, L3) and DRAM modeled");
+    report_gate("OMEGA_MACHINE_PHYSICS_INGRESS_PASS", test_m13_physics_ingress(), "Physical machine descriptor ingested and bound to Physics seal");
+    report_gate("OMEGA_MACHINE_CANONICAL_ID_PASS", test_m13_canonical_id(), "Deterministic MACHINE_ID bit-for-bit identity verified");
+    report_gate("OMEGA_MACHINE_TOPOLOGY_DIFFERENCE_PASS", test_m13_topology_difference(), "Distinct machine topologies yield distinct MACHINE_IDs");
+    report_gate("OMEGA_MACHINE_CYCLE_PREVENTION_PASS", test_m13_cycle_prevention(), "Topological cache ordering and line size validation enforced fail-closed");
+    report_gate("OMEGA_MACHINE_COST_EVALUATION_PASS", test_m13_cost_evaluation(), "Latency estimation grounded in physical execution unit latencies");
+    report_gate("OMEGA_MACHINE_RECEIPT_PASS", test_m13_receipt(), "Physical machine graph certified with Physics authority accounting");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m14_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 14: OMEGA_REALIZATION_SYNTHESIS QUALIFICATION GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("OMEGA_REAL_SYNTH_INIT_PASS", test_m14_init(), "Realization synthesis task initialization and configuration");
+    report_gate("OMEGA_REAL_SYNTH_TRIPLE_ID_PASS", test_m14_triple_id(), "Cryptographic triple identity incorporates SEMANTIC_ID, MACHINE_ID, and code bytes");
+    report_gate("OMEGA_REAL_SYNTH_SCHEDULE_OPT_PASS", test_m14_schedule_opt(), "Machine-aware instruction schedules differ between DGX Spark and QEMU virt");
+    report_gate("OMEGA_REAL_SYNTH_DGX_SPARK_PASS", test_m14_dgx_spark(), "Synthesis specialized for DGX Spark Grace Neoverse V2 4-wide dispatch");
+    report_gate("OMEGA_REAL_SYNTH_QEMU_VIRT_PASS", test_m14_qemu_virt(), "Synthesis specialized for QEMU virt generic AArch64 baseline");
+    report_gate("OMEGA_REAL_SYNTH_SEMANTIC_PARITY_PASS", test_m14_semantic_parity(), "Native execution of synthesized realization matches semantic evaluation");
+    report_gate("OMEGA_REAL_SYNTH_V0_STRUCTURAL_PASS", test_m14_v0_structural(), "M7 V0 structural verification passed on synthesized realization");
+    report_gate("OMEGA_REAL_SYNTH_V1_DIFFERENTIAL_PASS", test_m14_v1_differential(), "M7 V1 differential evaluation passed across holdout test inputs");
+    report_gate("OMEGA_REAL_SYNTH_V2_PROPERTY_PASS", test_m14_v2_property(), "M7 V2 property verification passed on synthesized realization");
+    report_gate("OMEGA_REAL_SYNTH_RECEIPT_PASS", test_m14_receipt(), "Full qualification receipt generated and verified");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
+int omega_run_m15_gates(void) {
+    printf("================================================================================\n");
+    printf("    AIEN OMEGA SUBSTRATE — MILESTONE 15: PHYSICS_ACCELERATOR_LINK GATES\n");
+    printf("================================================================================\n");
+    gate_count = 0; gate_passed = 0;
+    report_gate("PHYSICS_ACCEL_MEM_BOUNDS_PASS", test_m15_mem_bounds(), "Coherent DRAM boundaries and kernel isolation");
+    report_gate("PHYSICS_ACCEL_SMMU_TRANSLATION_PASS", test_m15_smmu_translation(), "SMMUv3 Stage 1 IOVA-to-PA translation mapping");
+    report_gate("PHYSICS_ACCEL_DMA_SANDBOX_PASS", test_m15_dma_sandbox(), "Unmapped and permission violation DMA sandboxing");
+    report_gate("PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS", test_m15_queue_authority(), "Bounded queue authority and doorbell mediation");
+    report_gate("PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS", test_m15_device_lifecycle(), "Deterministic monotonic device lifecycle transitions");
+    report_gate("PHYSICS_ACCEL_RESET_RECOVERY_PASS", test_m15_reset_recovery(), "Fault isolation and non-disruptive device reset");
+    report_gate("PHYSICS_ACCEL_RECEIPT_CHAIN_PASS", test_m15_receipt_chain(), "Immutable 192B receipt with rolling SHA-256 seal chain");
+    report_gate("PHYSICS_ACCEL_OMEGA_INGRESS_PASS", test_m15_omega_ingress(), "Omega mediated intent ingress and capability gating");
+    report_gate("PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS", test_m15_zero_toolchain(), "Zero foreign toolchain (0 LLVM, 0 Python, 0 inline asm)");
+    report_gate("PHYSICS_ACCEL_RECEIPT_PASS", test_m15_receipt(), "Qualification receipt generation and audit verification");
+    printf("================================================================================\n");
+    printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
+    printf("================================================================================\n");
+    return (gate_passed == gate_count) ? 0 : 1;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m12-gates | --run-m13-gates | --run-m14-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --demonstrate-library | --demonstrate-discovery | --demonstrate-living-matvec | --demonstrate-machine | --demonstrate-realization-synthesis | --dump-test-vectors <dir>]\n", argv[0]);
@@ -3488,67 +3747,15 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--run-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 4: OMEGA_SEMANTICS QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_OBJECT_MODEL_PASS", test_object_model(), "11 first-class categories instantiated and typed");
-        report_gate("OMEGA_TYPE_SYSTEM_PASS", test_type_system(), "Bounded widths enforced, invalid widths refused");
-        report_gate("OMEGA_GRAPH_VALIDATION_PASS", test_graph_validation(), "DAG validation and dangling reference refusal");
-        report_gate("OMEGA_CANONICAL_ENCODING_PASS", test_canonical_encoding(), "OMG0 wire header and lexicographical attribute sorting");
-        report_gate("OMEGA_SEMANTIC_ID_DETERMINISM_PASS", test_semantic_id_determinism(), "Cross-allocation bit-for-bit SHA-256 identity");
-        report_gate("OMEGA_REPRESENTATION_INDEPENDENCE_PASS", test_representation_independence(NULL), "4 independent representations collapse to identical ID");
-        report_gate("OMEGA_SEMANTIC_DIFFERENCE_PASS", test_semantic_difference(), "ADD -> SUB produces distinct SEMANTIC_ID");
-        report_gate("OMEGA_RELATION_PASS", test_relation_canonicalization(), "Relation ordering independence confirmed");
-        report_gate("OMEGA_CONSTRAINT_PASS", test_constraint_canonicalization(), "Constraint ordering independence confirmed");
-        report_gate("OMEGA_PURE_EFFECT_SEPARATION_PASS", test_pure_effect_separation(), "Pure computation decoupled from physical effect tokens");
-        report_gate("OMEGA_MALFORMED_OBJECT_REFUSAL_PASS", test_malformed_refusal(), "Structural cycles and corrupt wire packets rejected");
-        report_gate("OMEGA_CROSS_BUILD_DETERMINISM_PASS", test_cross_build_determinism(), "Known-answer test evaluation matches specification");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m4_gates();
     }
 
     if (strcmp(argv[1], "--run-m5-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 5: OMEGA_AARCH64 QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_AARCH64_PROFILE_PASS", test_m5_profile(), "AArch64 bare-metal target profile and registers valid");
-        report_gate("OMEGA_AARCH64_ENCODER_PASS", test_m5_encoder(), "Direct instruction encoder synthesized expected machine words");
-        report_gate("OMEGA_AARCH64_DECODER_SEAM_PASS", test_m5_decoder_seam(), "Independent decoder Seam 1 validated instructions and refused corrupt opcode");
-        report_gate("OMEGA_AARCH64_LOWERING_PASS", test_m5_lowering(), "G_S pure operations lowered to AArch64 code buffer");
-        report_gate("OMEGA_AARCH64_REALIZATION_ID_PASS", test_m5_realization_id(), "REALIZATION_ID deterministically binds machine code to SEMANTIC_ID");
-        report_gate("OMEGA_AARCH64_NATIVE_EXECUTION_PASS", test_m5_native_execution(), "Native in-memory execution observed result 15 matches semantic evaluation");
-        report_gate("OMEGA_AARCH64_QEMU_EXECUTION_PASS", test_m5_qemu_execution(), "Bare-metal QEMU execution observed result 15 on PL011 UART");
-        report_gate("OMEGA_AARCH64_ADVERSARIAL_MUTATION_PASS", test_m5_adversarial_mutation(), "Single-bit machine code mutation detected and refused fail-closed");
-        report_gate("OMEGA_AARCH64_CROSS_BUILD_DETERMINISM_PASS", test_m5_cross_build_determinism(), "Byte-for-byte deterministic realization across runs");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m5_gates();
     }
 
     if (strcmp(argv[1], "--run-m6-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 6: OMEGA_SELF_HOST QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_SELF_HOST_GRAPH_PASS", test_m6_graph(), "Semantic compiler graph G_C constructed and validated");
-        report_gate("OMEGA_SELF_HOST_C1_EMISSION_PASS", test_m6_c1_emission(), "Reference lowering C0(G_C) -> C1 emitted machine bytes");
-        report_gate("OMEGA_SELF_HOST_DECODER_SEAM_PASS", test_m6_decoder_seam(), "Independent decoder verified all C1 instructions");
-        report_gate("OMEGA_SELF_HOST_C2_REPRODUCTION_PASS", test_m6_c2_reproduction(), "Native compiler C1(G_C) -> C2 emitted machine bytes");
-        report_gate("OMEGA_SELF_HOST_C3_REPRODUCTION_PASS", test_m6_c3_reproduction(), "Native compiler C2(G_C) -> C3 emitted machine bytes");
-        report_gate("OMEGA_SELF_HOST_FIXED_POINT_PASS", test_m6_fixed_point(), "Exact bit-for-bit identity C1 == C2 == C3 verified");
-        report_gate("OMEGA_SELF_HOST_REALIZATION_ID_PASS", test_m6_realization_id(), "REALIZATION_ID matching across C1, C2, and C3");
-        report_gate("OMEGA_SELF_HOST_M5_PARITY_PASS", test_m6_m5_parity(), "Reproduced compiler reproduces exact M5 machine code bytes");
-        report_gate("OMEGA_SELF_HOST_NATIVE_EXECUTION_PASS", test_m6_native_execution(), "Reproduced compiler output executes natively to 15");
-        report_gate("OMEGA_SELF_HOST_ADVERSARIAL_MUTATION_PASS", test_m6_adversarial_mutation(), "Single-bit mutations in G_C wire or C1 refused fail-closed");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m6_gates();
     }
 
     if (strcmp(argv[1], "--demonstrate-self-host") == 0) {
@@ -3557,24 +3764,7 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--run-m7-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 7: OMEGA_VERIFY QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_VERIFY_V0_TYPE_PASS", test_m7_v0_type(), "V0 accepted well-typed graph and rejected ill-typed graph");
-        report_gate("OMEGA_VERIFY_V0_DAG_PASS", test_m7_v0_dag(), "V0 rejected graph with dangling reference");
-        report_gate("OMEGA_VERIFY_V0_CODE_BOUNDS_PASS", test_m7_v0_code_bounds(), "V0 enforced 4-byte alignment and buffer length bounds");
-        report_gate("OMEGA_VERIFY_V0_INSN_DECODE_PASS", test_m7_v0_insn_decode(), "V0 validated instruction opcodes and refused illegal instruction");
-        report_gate("OMEGA_VERIFY_V0_TERMINAL_RET_PASS", test_m7_v0_terminal_ret(), "V0 rejected non-terminating / non-RET execution buffer");
-        report_gate("OMEGA_VERIFY_V1_DIFFERENTIAL_PASS", test_m7_v1_differential(), "V1 confirmed exact bit-for-bit parity across test corpus");
-        report_gate("OMEGA_VERIFY_V1_DIVERGENCE_REFUSAL_PASS", test_m7_v1_divergence_refusal(), "V1 detected and refused mutated realization divergence");
-        report_gate("OMEGA_VERIFY_V2_COMMUTATIVITY_PASS", test_m7_v2_commutativity(), "V2 proved commutativity on declared commutative ops");
-        report_gate("OMEGA_VERIFY_V2_IDENTITY_PASS", test_m7_v2_identity(), "V2 proved identity elements on ADD, MUL, AND, OR");
-        report_gate("OMEGA_VERIFY_V2_OVERFLOW_PASS", test_m7_v2_overflow(), "V2 validated modular overflow wrapping semantics");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m7_gates();
     }
 
     if (strcmp(argv[1], "--demonstrate-verify") == 0) {
@@ -3583,24 +3773,7 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--run-m8-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 8: OMEGA_PROGRAM_CORE QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_PROGRAM_OBJECT_PASS", test_m8_program_object(), "OMEGA_PROGRAM created with contracts, cost, and realization");
-        report_gate("OMEGA_PROGRAM_CONTRACT_VALIDATION_PASS", test_m8_contract_validation(), "Contract validation enforced, invalid types rejected");
-        report_gate("OMEGA_PROGRAM_COMPOSITION_PASS", test_m8_composition(), "Algebraic composition C = A o B with contract propagation");
-        report_gate("OMEGA_PROGRAM_TYPE_MISMATCH_REFUSAL_PASS", test_m8_type_mismatch_refusal(), "Incompatible composition refused fail-closed");
-        report_gate("OMEGA_PROGRAM_COST_ACCOUNTING_PASS", test_m8_cost_accounting(), "Composite cost monotonically verified (insns, latency)");
-        report_gate("OMEGA_PROGRAM_REALIZATION_PASS", test_m8_realization(), "Composite program lowered to native AArch64 machine bytes");
-        report_gate("OMEGA_PROGRAM_V0_STRUCTURAL_PASS", test_m8_v0_structural(), "Composite program passes M7 V0 structural verification");
-        report_gate("OMEGA_PROGRAM_V1_DIFFERENTIAL_PASS", test_m8_v1_differential(), "Composite program passes M7 V1 differential evaluation (2x+1)");
-        report_gate("OMEGA_PROGRAM_V2_PROPERTY_PASS", test_m8_v2_property(), "Composite program passes M7 V2 property verification");
-        report_gate("OMEGA_PROGRAM_SYNTHESIS_TASK_PASS", test_m8_synthesis_task(), "SYNTHESIS_TASK evaluation harness ready for M9 search");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m8_gates();
     }
 
     if (strcmp(argv[1], "--demonstrate-program") == 0) {
@@ -3609,45 +3782,11 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--run-m9-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 9: OMEGA_SYNTHESIS_V0 QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_SYNTHESIS_PRIMITIVES_PASS", test_m9_primitives(), "Base primitive program bank constructed and verified");
-        report_gate("OMEGA_SYNTHESIS_SEARCH_ORDERING_PASS", test_m9_search_ordering(), "Deterministic search generates multi-level candidates");
-        report_gate("OMEGA_SYNTHESIS_TYPE_PRUNING_PASS", test_m9_type_pruning(), "Incompatible typed candidates pruned fail-closed");
-        report_gate("OMEGA_SYNTHESIS_EQUIV_PRUNING_PASS", test_m9_equiv_pruning(), "Observational equivalence table detects duplicate functions");
-        report_gate("OMEGA_SYNTHESIS_V0_STRUCTURAL_PASS", test_m9_v0_structural(), "Synthesized candidate passes M7 V0 structural verification");
-        report_gate("OMEGA_SYNTHESIS_V1_IO_FILTERING_PASS", test_m9_v1_io_filtering(), "Non-conforming candidate rejected by test suite filter");
-        report_gate("OMEGA_SYNTHESIS_V2_PROPERTY_PASS", test_m9_v2_property(), "Synthesized candidate passes M7 V2 property verification");
-        report_gate("OMEGA_SYNTHESIS_TARGET_AFFINE_PASS", test_m9_target_affine(), "Synthesized 2x + 1 passes holdout tests on native hardware");
-        report_gate("OMEGA_SYNTHESIS_TARGET_COMPOSED_PASS", test_m9_target_composed(), "Synthesized 3x - 2 passes holdout tests on native hardware");
-        report_gate("OMEGA_SYNTHESIS_RECEIPT_PASS", test_m9_receipt(), "Cryptographic identity binding Task, Program, and Realization");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m9_gates();
     }
 
     if (strcmp(argv[1], "--run-m10-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 10: OMEGA_LIBRARY_V1 QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_LIBRARY_INIT_PASS", test_m10_init(), "Catalog initialization and capacity management");
-        report_gate("OMEGA_LIBRARY_INSERT_PASS", test_m10_insert(), "Content-addressed program insertion and state digest update");
-        report_gate("OMEGA_LIBRARY_INDEXING_PASS", test_m10_lookup_id(), "Retrieval by SEMANTIC_ID, REALIZATION_ID, and name");
-        report_gate("OMEGA_LIBRARY_QUERY_PASS", test_m10_lookup_type(), "Semantic type query filtering (U64 -> U64)");
-        report_gate("OMEGA_LIBRARY_DEP_DAG_PASS", test_m10_dependency_dag(), "Direct and transitive dependency DAG tracking");
-        report_gate("OMEGA_LIBRARY_IMMUTABILITY_PASS", test_m10_immutability(), "Version advancement and cryptographic digest evolution");
-        report_gate("OMEGA_LIBRARY_UNVERIFIED_REFUSAL_PASS", test_m10_unverified_refusal(), "Unverified program insertion rejected fail-closed");
-        report_gate("OMEGA_LIBRARY_DUPLICATE_REFUSAL_PASS", test_m10_duplicate_refusal(), "Duplicate SEMANTIC_ID insertion rejected fail-closed");
-        report_gate("OMEGA_LIBRARY_SYNTHESIS_REUSE_PASS", test_m10_synthesis_reuse(), "Synthesis engine discovering composite by reusing verified library component");
-        report_gate("OMEGA_LIBRARY_RECEIPT_PASS", test_m10_receipt(), "Cryptographic state digest and provenance accounting");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m10_gates();
     }
 
     if (strcmp(argv[1], "--demonstrate-library") == 0) {
@@ -3656,24 +3795,7 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--run-m11-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 11: OMEGA_LIBRARY_DISCOVERY QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_DISCOVERY_CORPUS_MINING_PASS", test_m11_corpus_mining(), "Common sub-expression slices mined across corpus");
-        report_gate("OMEGA_DISCOVERY_NONTRIVIAL_PASS", test_m11_nontrivial(), "Candidate abstraction is non-trivial and composite");
-        report_gate("OMEGA_DISCOVERY_COMPRESSION_PASS", test_m11_compression(), "Positive description length reduction and instruction savings across corpus");
-        report_gate("OMEGA_DISCOVERY_SEMANTIC_PRESERVATION_PASS", test_m11_semantic_preservation(), "Behavioral equivalence strictly preserved after program refactoring");
-        report_gate("OMEGA_DISCOVERY_V0_STRUCTURAL_PASS", test_m11_v0_structural(), "M7 V0 structural verification passed on discovered abstraction");
-        report_gate("OMEGA_DISCOVERY_V1_DIFFERENTIAL_PASS", test_m11_v1_differential(), "M7 V1 differential evaluation passed on native hardware");
-        report_gate("OMEGA_DISCOVERY_V2_PROPERTY_PASS", test_m11_v2_property(), "M7 V2 property verification passed on discovered abstraction");
-        report_gate("OMEGA_DISCOVERY_LIBRARY_ADMISSION_PASS", test_m11_library_admission(), "Discovered abstraction admitted into OmegaLibrary catalog");
-        report_gate("OMEGA_DISCOVERY_SEARCH_ACCELERATION_PASS", test_m11_search_acceleration(), "Held-out synthesis task solved with reduced search candidates");
-        report_gate("OMEGA_DISCOVERY_RECEIPT_PASS", test_m11_receipt(), "Full cryptographic evidence receipt accounting for discovery and acceleration");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m11_gates();
     }
 
     if (strcmp(argv[1], "--demonstrate-discovery") == 0) {
@@ -3682,24 +3804,7 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--run-m12-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 12: OMEGA_LIVING_MATVEC QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_MATVEC_SEMANTIC_SPEC_PASS", test_m12_semantic_spec(), "Pure mathematical MatVec specification instantiated with canonical SemanticId");
-        report_gate("OMEGA_MATVEC_MULTI_REALIZATION_PASS", test_m12_multi_realization(), "Synthesis engine generates 3 distinct machine-code realizations");
-        report_gate("OMEGA_MATVEC_TRIPLE_ID_PASS", test_m12_triple_id(), "Cryptographic triple identity binding SEMANTIC_ID, MACHINE_ID, and code bytes");
-        report_gate("OMEGA_MATVEC_V0_STRUCTURAL_PASS", test_m12_v0_structural(), "M7 V0 structural verification passed on all realizations with mutation refusal");
-        report_gate("OMEGA_MATVEC_V1_NUMERICAL_PARITY_PASS", test_m12_v1_numerical_parity(), "Exact bit-for-bit numerical parity against mathematical Oracle across dimensions");
-        report_gate("OMEGA_MATVEC_REGIME_INFLECTION_PASS", test_m12_regime_inflection(), "Empirical benchmark measures execution latency across small and medium regimes");
-        report_gate("OMEGA_MATVEC_ADAPTIVE_DISPATCH_PASS", test_m12_adaptive_dispatch(), "Living kernel dynamically adapts and dispatches optimal realization");
-        report_gate("OMEGA_MATVEC_SPEEDUP_PASS", test_m12_speedup(), "Multi-accumulator unrolled schedule achieves measured hardware speedup");
-        report_gate("OMEGA_MATVEC_ZERO_TOOLCHAIN_PASS", test_m12_zero_toolchain(), "All realizations emitted via direct AArch64 machine byte encoders without foreign toolchain");
-        report_gate("OMEGA_MATVEC_RECEIPT_PASS", test_m12_receipt(), "Full qualification receipt generated and verified");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m12_gates();
     }
 
     if (strcmp(argv[1], "--demonstrate-living-matvec") == 0) {
@@ -3708,24 +3813,7 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--run-m13-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 13: OMEGA_MACHINE_GRAPH QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_MACHINE_INIT_PASS", test_m13_init(), "Machine graph initialized with profile and name");
-        report_gate("OMEGA_MACHINE_PIPELINE_PASS", test_m13_pipeline(), "Execution pipeline, issue width, and compute units modeled");
-        report_gate("OMEGA_MACHINE_REGISTER_FILE_PASS", test_m13_register_file(), "Register file capacities (GPR, Vector) validated");
-        report_gate("OMEGA_MACHINE_MEMORY_HIERARCHY_PASS", test_m13_memory_hierarchy(), "Multi-tier cache hierarchy (L1I, L1D, L2, L3) and DRAM modeled");
-        report_gate("OMEGA_MACHINE_PHYSICS_INGRESS_PASS", test_m13_physics_ingress(), "Physical machine descriptor ingested and bound to Physics seal");
-        report_gate("OMEGA_MACHINE_CANONICAL_ID_PASS", test_m13_canonical_id(), "Deterministic MACHINE_ID bit-for-bit identity verified");
-        report_gate("OMEGA_MACHINE_TOPOLOGY_DIFFERENCE_PASS", test_m13_topology_difference(), "Distinct machine topologies yield distinct MACHINE_IDs");
-        report_gate("OMEGA_MACHINE_CYCLE_PREVENTION_PASS", test_m13_cycle_prevention(), "Topological cache ordering and line size validation enforced fail-closed");
-        report_gate("OMEGA_MACHINE_COST_EVALUATION_PASS", test_m13_cost_evaluation(), "Latency estimation grounded in physical execution unit latencies");
-        report_gate("OMEGA_MACHINE_RECEIPT_PASS", test_m13_receipt(), "Physical machine graph certified with Physics authority accounting");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m13_gates();
     }
 
     if (strcmp(argv[1], "--demonstrate-machine") == 0) {
@@ -3734,24 +3822,7 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--run-m14-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 14: OMEGA_REALIZATION_SYNTHESIS QUALIFICATION GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("OMEGA_REAL_SYNTH_INIT_PASS", test_m14_init(), "Realization synthesis task initialization and configuration");
-        report_gate("OMEGA_REAL_SYNTH_TRIPLE_ID_PASS", test_m14_triple_id(), "Cryptographic triple identity incorporates SEMANTIC_ID, MACHINE_ID, and code bytes");
-        report_gate("OMEGA_REAL_SYNTH_SCHEDULE_OPT_PASS", test_m14_schedule_opt(), "Machine-aware instruction schedules differ between DGX Spark and QEMU virt");
-        report_gate("OMEGA_REAL_SYNTH_DGX_SPARK_PASS", test_m14_dgx_spark(), "Synthesis specialized for DGX Spark Grace Neoverse V2 4-wide dispatch");
-        report_gate("OMEGA_REAL_SYNTH_QEMU_VIRT_PASS", test_m14_qemu_virt(), "Synthesis specialized for QEMU virt generic AArch64 baseline");
-        report_gate("OMEGA_REAL_SYNTH_SEMANTIC_PARITY_PASS", test_m14_semantic_parity(), "Native execution of synthesized realization matches semantic evaluation");
-        report_gate("OMEGA_REAL_SYNTH_V0_STRUCTURAL_PASS", test_m14_v0_structural(), "M7 V0 structural verification passed on synthesized realization");
-        report_gate("OMEGA_REAL_SYNTH_V1_DIFFERENTIAL_PASS", test_m14_v1_differential(), "M7 V1 differential evaluation passed across holdout test inputs");
-        report_gate("OMEGA_REAL_SYNTH_V2_PROPERTY_PASS", test_m14_v2_property(), "M7 V2 property verification passed on synthesized realization");
-        report_gate("OMEGA_REAL_SYNTH_RECEIPT_PASS", test_m14_receipt(), "Full qualification receipt generated and verified");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m14_gates();
     }
 
     if (strcmp(argv[1], "--demonstrate-realization-synthesis") == 0) {
@@ -3760,24 +3831,7 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--run-m15-gates") == 0) {
-        printf("================================================================================\n");
-        printf("    AIEN OMEGA SUBSTRATE — MILESTONE 15: PHYSICS_ACCELERATOR_LINK GATES\n");
-        printf("================================================================================\n");
-        gate_count = 0; gate_passed = 0;
-        report_gate("PHYSICS_ACCEL_MEM_BOUNDS_PASS", test_m15_mem_bounds(), "Coherent DRAM boundaries and kernel isolation");
-        report_gate("PHYSICS_ACCEL_SMMU_TRANSLATION_PASS", test_m15_smmu_translation(), "SMMUv3 Stage 1 IOVA-to-PA translation mapping");
-        report_gate("PHYSICS_ACCEL_DMA_SANDBOX_PASS", test_m15_dma_sandbox(), "Unmapped and permission violation DMA sandboxing");
-        report_gate("PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS", test_m15_queue_authority(), "Bounded queue authority and doorbell mediation");
-        report_gate("PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS", test_m15_device_lifecycle(), "Deterministic monotonic device lifecycle transitions");
-        report_gate("PHYSICS_ACCEL_RESET_RECOVERY_PASS", test_m15_reset_recovery(), "Fault isolation and non-disruptive device reset");
-        report_gate("PHYSICS_ACCEL_RECEIPT_CHAIN_PASS", test_m15_receipt_chain(), "Immutable 192B receipt with rolling SHA-256 seal chain");
-        report_gate("PHYSICS_ACCEL_OMEGA_INGRESS_PASS", test_m15_omega_ingress(), "Omega mediated intent ingress and capability gating");
-        report_gate("PHYSICS_ACCEL_ZERO_TOOLCHAIN_PASS", test_m15_zero_toolchain(), "Zero foreign toolchain (0 LLVM, 0 Python, 0 inline asm)");
-        report_gate("PHYSICS_ACCEL_RECEIPT_PASS", test_m15_receipt(), "Qualification receipt generation and audit verification");
-        printf("================================================================================\n");
-        printf("  TOTAL GATES: %d | PASSED: %d | FAILED: %d\n", gate_count, gate_passed, gate_count - gate_passed);
-        printf("================================================================================\n");
-        return (gate_passed == gate_count) ? 0 : 1;
+        return omega_run_m15_gates();
     }
 
     if (strcmp(argv[1], "--demonstrate-accelerator") == 0) {
@@ -3842,8 +3896,22 @@ int main(int argc, char **argv) {
     }
 
     if (strcmp(argv[1], "--dump-test-vectors") == 0) {
-        const char *dir = (argc >= 3) ? argv[2] : "evidence/test_vectors";
-        char path[512];
+        char default_dir[512];
+        const char *dir;
+        if (argc >= 3) {
+            dir = argv[2];
+        } else {
+            /* No explicit output dir requested: never default into the
+             * committed evidence/ tree, use the run-scoped evidence area. */
+            if (omega_evidence_path("test_vectors/.keep", default_dir, sizeof(default_dir)) != 0) {
+                fprintf(stderr, "--dump-test-vectors: failed to resolve default output directory\n");
+                return 1;
+            }
+            char *slash = strrchr(default_dir, '/');
+            if (slash) *slash = '\0';
+            dir = default_dir;
+        }
+        char path[1024];
 
         /* Vector 1: Arithmetic U32 ADD(7, 11) canonical binary */
         OmegaGraph *ga = omega_graph_create();
