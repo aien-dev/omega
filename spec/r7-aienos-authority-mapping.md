@@ -7,8 +7,9 @@ references through the native view. The Linux mint is still built and is
 still the oracle. It has not been removed.
 
 This does not connect real AIEN cognition, Omega synthesis, or AEGIS. It
-does not start the graphics processor. A world-wide generation barrier is
-still later work.
+does not start the graphics processor. Continuity across a generation
+change is specified separately and does not stop the live organism while
+the next generation is being prepared.
 
 The reaction world, when pointed at the native authority, receives the
 read-only view. It does not receive the admin handle or the office token.
@@ -69,12 +70,15 @@ the stand-in until that native root exists.
    The existing heartbeat still checks the Linux oracle. The mint process is
    not retired.
 5. The host attack list matching both sides is the R7 evidence. It is not a
-   graphics-processor claim and it is not the later generation barrier.
+   graphics-processor claim. Continuity of the organism across time is the
+   separate generation barrier.
 
-## Generation barriers, noted only
+## Generation barrier
 
-Object retirement already advances one generation and refuses the old pair
-on both the host read and the cross-engine descriptor. A native handle needs
-the same "old generation is dead" rule, which `CapTable` already has for
-capabilities. A world-wide generation barrier, in the sense of draining every
-engine before a generation is reused, is not designed here. That is later work.
+Object retirement already advances one object's generation and refuses the
+old pair. That is not a lineage transition for the whole organism. The
+generation barrier keeps one active generation while the next is prepared,
+and it becomes strict only when that next generation is promoted. It does
+not drain the live organism in order to prepare the candidate. The promotion
+right added beside the other privileged rights is what authorizes that
+transition. The candidate does not authorize itself.
