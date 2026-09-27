@@ -1352,6 +1352,39 @@ static int first_log(uint32_t prio) {
     return -1;
 }
 
+static void t_zero_resource_budget(void) {
+    begin("zero_resource_budget_is_zero", "R5");
+    Env e;
+    CHECK(env_start(&e, 1) == 0, "setup");
+    RxObjRef sensor = mkobj(&e, RES_SENSOR, 0);
+    RxCapRef ext = mint(&e, SUBJ_EXTERNAL, RES_SENSOR, RX_RIGHT_WRITE);
+    RxCapRef rd = mint(&e, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ);
+
+    RxReactionDesc d;
+    desc_init(&d, "zero.budget", RX_FACULTY_AIEN, SUBJ_AIEN, fn_noop, NULL);
+    d.need.memory_bytes = 1;
+    add_trigger(&d, sensor, RX_FIELD(0));
+    add_cap(&d, rd, RES_SENSOR, RX_RIGHT_READ);
+    uint32_t id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &id) == RX_OK, "reaction");
+
+    RxResourceBudget b;
+    memset(&b, 0, sizeof(b));
+    rx_world_set_resources(&e.w, &b);
+    stimulus(&e, ext, sensor, 0, 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 100) == RX_OK, "zero-budget world did not settle");
+    CHECK(e.w.reactions[id].activations == 0, "zero slots/memory admitted work");
+    CHECK(e.w.reactions[id].state == RX_BLOCKED_RESOURCE, "reaction not blocked at zero budget");
+
+    b.slots = 1;
+    b.memory_bytes = 1;
+    rx_world_set_resources(&e.w, &b);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "restored budget did not run work");
+    CHECK(e.w.reactions[id].activations == 1, "restored budget ran %llu activations",
+          (unsigned long long)e.w.reactions[id].activations);
+    audit_and_close(&e);
+}
+
 static void t_background_not_starved(void) {
     begin("background_not_starved", "R5");
     Env e;
@@ -1515,10 +1548,12 @@ static void t_stability(void) {
         if (e.w.reactions[fan_ids[i]].desc.priority == RX_PRIO_CRITICAL)
             fan_crit += (uint32_t)e.w.reactions[fan_ids[i]].activations;
     }
-    CHECK(fan_ran == 5, "fanout ran %u (want 5)", fan_ran);
-    CHECK(fan_crit == 5, "fanout did not keep the highest class (%u)", fan_crit);
-    CHECK(e.w.stats.suppressed_wakes >= 35, "fanout suppression %llu",
-          (unsigned long long)e.w.stats.suppressed_wakes);
+    CHECK(fan_ran == 40, "fanout delivered only %u of 40 dependent reactions", fan_ran);
+    CHECK(fan_crit >= 5, "critical dependents did not execute (%u)", fan_crit);
+    CHECK(e.w.stats.deferred_wakes >= 35, "fanout deferred only %llu wakes",
+          (unsigned long long)e.w.stats.deferred_wakes);
+    CHECK(e.w.stats.deferred_peak >= 35, "deferred peak %llu",
+          (unsigned long long)e.w.stats.deferred_peak);
 
     RxObjRef flip = mkobj(&e, RES_PAIR, 0);
     RxCapRef ext_f = mint(&e, SUBJ_EXTERNAL, RES_PAIR, RX_RIGHT_WRITE);
@@ -1636,6 +1671,15 @@ static void t_stability(void) {
     CHECK(e.w.reactions[budget_id].activations == 4, "activation budget ran %llu",
           (unsigned long long)e.w.reactions[budget_id].activations);
     CHECK(e.w.reactions[budget_id].quarantined, "activation budget did not quarantine");
+    uint64_t before_episode = e.w.reactions[budget_id].activations;
+    stimulus(&e, ext_s, bounded.obj, 0, field(&e, bounded.obj, 0) + 1);
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "fresh causal episode did not settle");
+    CHECK(e.w.reactions[budget_id].activations == before_episode + 4,
+          "fresh external episode did not receive a fresh activation budget (%llu -> %llu)",
+          (unsigned long long)before_episode,
+          (unsigned long long)e.w.reactions[budget_id].activations);
+    CHECK(e.w.reactions[budget_id].quarantined,
+          "second activation episode did not enforce its own bound");
     audit_and_close(&e);
 }
 
@@ -1777,6 +1821,7 @@ static void write_receipt(int total_checks, int total_fail, const char *binary_d
     int r6_ok = all;
     for (int i = 0; i < g_ntests; i++) {
         if (strcmp(g_tests[i].name, "resource_admission_1000") == 0 ||
+            strcmp(g_tests[i].name, "zero_resource_budget_is_zero") == 0 ||
             strcmp(g_tests[i].name, "background_not_starved") == 0 ||
             strcmp(g_tests[i].name, "priority_ladder") == 0)
             if (g_tests[i].failures) r5_ok = 0;
@@ -1859,6 +1904,7 @@ int main(int argc, char **argv) {
     t_counter_fail_closed();
     t_root_death_restart();
     t_resource_admission();
+    t_zero_resource_budget();
     t_background_not_starved();
     t_priority_ladder();
     t_stability();
