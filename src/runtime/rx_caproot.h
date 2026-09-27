@@ -73,8 +73,11 @@ enum {
 #define RX_RIGHT_RECLAIM      0x40u
 #define RX_RIGHT_EPOCH        0x80u
 #define RX_RIGHT_CLOCK        0x100u
+/* Lineage transition. The proposer of a candidate does not hold this.
+ * It cannot be combined with DELEGATE or passed on to a child. */
+#define RX_RIGHT_PROMOTE      0x200u
 #define RX_RIGHT_PRIVILEGED   (RX_RIGHT_MINT | RX_RIGHT_REVOKE | RX_RIGHT_RECLAIM | \
-                               RX_RIGHT_EPOCH | RX_RIGHT_CLOCK)
+                               RX_RIGHT_EPOCH | RX_RIGHT_CLOCK | RX_RIGHT_PROMOTE)
 #define RX_RIGHT_KNOWN        (RX_RIGHT_READ | RX_RIGHT_WRITE | RX_RIGHT_EFFECT | \
                                RX_RIGHT_DELEGATE | RX_RIGHT_PRIVILEGED)
 

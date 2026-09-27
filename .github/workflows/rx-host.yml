@@ -56,7 +56,7 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
-        run: make test-r3 test-r7
+        run: make test-r3 test-r7 test-r9
       - name: Emit qualification receipt
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -64,8 +64,10 @@ jobs:
         run: |
           receipt="$(find build/qual-runs -name rx_heartbeat_receipt.json -type f | head -n 1)"
           native="$(find build/qual-runs -name rx_native_authority_receipt.json -type f | head -n 1)"
+          generation="$(find build/qual-runs -name rx_generation_barrier_receipt.json -type f | head -n 1)"
           test -n "$receipt"
           test -n "$native"
+          test -n "$generation"
           echo "candidate commit: ${OMEGA_CANDIDATE_COMMIT}"
           echo "physics commit: ${PHYSICS_COMMIT}"
           if git diff --quiet && git diff --cached --quiet; then
@@ -113,5 +115,30 @@ jobs:
           if mismatched or not diffs:
               raise SystemExit("native differential is empty or mismatched")
           PY
+          python3 - "$generation" "$OMEGA_CANDIDATE_COMMIT" <<'PY'
+          import json, sys
+          path, candidate = sys.argv[1], sys.argv[2]
+          doc = json.loads(open(path, "rb").read())
+          print("generation receipt: %s" % path)
+          print("generation candidate bound: %s" % doc.get("candidate_bound"))
+          print("generation gate: %s" % doc["gates"].get("R9_GENERATION_BARRIER"))
+          crashes = doc.get("crashes", [])
+          print("generation crash rows: %s" % len(crashes))
+          lineages = sorted({row.get("lineage") for row in crashes})
+          if doc.get("candidate_commit") != candidate or doc.get("candidate_bound") is not True:
+              raise SystemExit("generation receipt is not bound to this candidate")
+          if doc.get("tree_dirty") is not False or doc.get("failures") != 0:
+              raise SystemExit("generation receipt was not a clean passing run")
+          diffs = doc.get("differential", [])
+          if not diffs or any(row.get("linux") != row.get("native") for row in diffs):
+              raise SystemExit("generation differential is empty or mismatched")
+          if len(crashes) < 8 or lineages != [1, 2]:
+              raise SystemExit("generation crash recoveries did not cover both generations")
+          if any(not row.get("coherent") for row in crashes):
+              raise SystemExit("a crash recovery was not coherent")
+          if any(row.get("evidence") not in ("GENESIS", "CANDIDATE") for row in crashes):
+              raise SystemExit("a crash recovery mixed generations")
+          PY
           cat "$receipt"
           cat "$native"
+          cat "$generation"
