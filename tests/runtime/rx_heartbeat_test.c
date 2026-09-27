@@ -12,9 +12,10 @@
  * external stimuli, and (c) waits for quiescence and inspects. It never calls a
  * reaction. Ordering comes from the dependency index.
  *
- * Receipt: build/qual-runs/<run>/R3/rx_heartbeat_receipt.json (or
- * evidence/runs/<run>/... with OMEGA_QUAL_RECORD=1). Counts are observed, never
- * literal. The candidate commit is an input (OMEGA_CANDIDATE_COMMIT), not HEAD.
+ * Receipt: build/qual-runs/<run>/R3/rx_heartbeat_receipt.json. A recorded
+ * receipt is committed separately as evidence/R3/<sha256-of-receipt>.json in an
+ * evidence-only commit. Counts are observed, never literal. The candidate
+ * commit is an input (OMEGA_CANDIDATE_COMMIT), not HEAD.
  */
 #include "runtime/rx_caproot.h"
 #include "runtime/rx_world.h"
