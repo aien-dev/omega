@@ -175,6 +175,8 @@ typedef struct {
     double crumbs_before, crumbs_after;             /* per run */
     double commits_before, commits_after;           /* reactions that computed, per run */
     uint64_t median_ns_before, median_ns_after;
+    uint32_t spread_permille_before;                /* (p75 - p25) / median of the original leg */
+    uint32_t tolerance_permille;                    /* what acceptance used (set by accept) */
     uint64_t cpu_ns_before, cpu_ns_after;           /* process CPU time per run */
     int energy_available;
     double energy_uj_before, energy_uj_after;       /* per run, idle subtracted */
@@ -264,8 +266,9 @@ int rx_fusion_trial(const AgGraph *g, RxWorld *w, const AgMetaSkill *m, const Ag
                     AgSkillTable *trial, AgGraph *out, uint32_t *applied);
 
 /* Accept a measurement: fewer reactions computing per run, latency within
- * `tolerance_permille` of the original, and the same success and failure
- * counts. Sets MEASURED or SLOWER. Returns 0 when accepted. */
+ * the original's own spread (never less than `tolerance_permille`) of the
+ * original, and the same success and failure counts. Sets MEASURED or
+ * SLOWER. Returns 0 when accepted. */
 int rx_fusion_accept_measure(AgMetaSkill *m, const AgFusionMeasure *ms, uint32_t tolerance_permille);
 
 /* One canary run: `diverged` when the shadow result differed from

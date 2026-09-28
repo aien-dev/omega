@@ -1065,6 +1065,8 @@ static void measure(AgMetaSkill *m, uint32_t goal, AgFusionMeasure *ms, int with
     qsort(ns_f, RUNS, sizeof ns_f[0], cmp_u64);
     ms->runs = RUNS;
     ms->median_ns_before = ns_o[RUNS / 2];
+    ms->spread_permille_before = (uint32_t)((ns_o[(3 * RUNS) / 4] - ns_o[RUNS / 4]) * 1000u /
+                                            (ns_o[RUNS / 2] ? ns_o[RUNS / 2] : 1));
     ms->median_ns_after = ns_f[RUNS / 2];
     ms->cpu_ns_before = cpu_o / RUNS;
     ms->cpu_ns_after = cpu_f / RUNS;
@@ -1096,8 +1098,10 @@ static void t_measure(void) {
     measure(&MC, GOAL_EFFECT, &R.m_compiled, 1, "compiled");
     CHECK(rx_fusion_accept_measure(&MC, &R.m_compiled, 50) == 0 && MC.state == AG_MS_MEASURED,
           "compiled accepted: fewer reactions, not slower, same outcomes");
+    R.m_compiled = MC.measure;
     measure(&MH, GOAL_EFFECT, &R.m_hybrid, 0, "hybrid");
     rx_fusion_accept_measure(&MH, &R.m_hybrid, 50);
+    R.m_hybrid = MH.measure;
     R.hybrid_state = MH.state;
     CHECK(MH.state == AG_MS_MEASURED, "hybrid accepted");
     measure(&MP, GOAL_PARALLEL, &R.m_parallel, 0, "parallel");
@@ -1105,6 +1109,7 @@ static void t_measure(void) {
           "parallel fragment refused: fusing it serializes independent work (%.0f -> %.0f us)",
           R.m_parallel.median_ns_before / 1e3, R.m_parallel.median_ns_after / 1e3);
     R.parallel_state = MP.state;
+    R.m_parallel = MP.measure;
     CHECK(rx_fusion_canary(&MP, 0, 1) == AG_FUSION_E_STATE, "a slower MetaSkill cannot enter canary");
     unpublished_refused(&MC, "measured");
 }
@@ -1469,13 +1474,15 @@ static void measure_json(FILE *fp, const char *name, const AgFusionMeasure *m, i
             "      \"cognitive_operations_avoided_per_run\": %.2f, \"crumbs_per_run_before\": %.2f, "
             "\"crumbs_per_run_after\": %.2f,\n"
             "      \"median_run_ns_before\": %llu, \"median_run_ns_after\": %llu, "
+            "\"original_spread_permille\": %u, \"latency_tolerance_permille\": %u, "
             "\"cpu_ns_per_run_before\": %llu, \"cpu_ns_per_run_after\": %llu,\n"
             "      \"reactions_registered_before\": %u, \"reactions_registered_after\": %u, "
             "\"world_objects_before\": %u, \"world_objects_after\": %u,\n"
             "      \"success_before\": %u, \"failure_before\": %u, \"success_after\": %u, \"failure_after\": %u",
             name, m->runs, m->commits_before, m->commits_after, m->commits_before - m->commits_after,
             m->crumbs_before, m->crumbs_after, (unsigned long long)m->median_ns_before,
-            (unsigned long long)m->median_ns_after, (unsigned long long)m->cpu_ns_before,
+            (unsigned long long)m->median_ns_after, m->spread_permille_before, m->tolerance_permille,
+            (unsigned long long)m->cpu_ns_before,
             (unsigned long long)m->cpu_ns_after, m->reactions_before, m->reactions_after,
             m->objects_before, m->objects_after, m->ok_before, m->failed_before, m->ok_after,
             m->failed_after);

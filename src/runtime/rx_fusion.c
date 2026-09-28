@@ -871,6 +871,10 @@ int rx_fusion_verify(AgMetaSkill *m, const AgSkillTable *skills, uint64_t seed) 
 int rx_fusion_accept_measure(AgMetaSkill *m, const AgFusionMeasure *ms, uint32_t tol) {
     if (!m || m->state != AG_MS_VERIFIED) return AG_FUSION_E_STATE;
     m->measure = *ms;
+    /* A latency difference inside the original's own run-to-run spread is
+     * not a difference. */
+    if (ms->spread_permille_before > tol) tol = ms->spread_permille_before;
+    m->measure.tolerance_permille = tol;
     int fewer = ms->commits_after < ms->commits_before && ms->crumbs_after < ms->crumbs_before;
     int in_time = (uint64_t)ms->median_ns_after * 1000u <= (uint64_t)ms->median_ns_before * (1000u + tol);
     int same = ms->ok_before == ms->ok_after && ms->failed_before == ms->failed_after;

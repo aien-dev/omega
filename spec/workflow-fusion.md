@@ -163,8 +163,10 @@ Original and fused graphs run side by side in two worlds with the same inputs,
   the spread is reported as not resolved. On a machine without the meter the
   receipt says `unavailable`.
 
-Accepted when fewer reactions compute per run, the median is within 5 % of
-the original, and success and failure counts are equal. A fragment of two
+Accepted when fewer reactions compute per run, the median is within the
+original leg's own spread ((p75 − p25) / median, never less than 5 %) of the
+original, and success and failure counts are equal. The receipt records the
+spread and the tolerance used. A fragment of two
 independent heavy steps is refused (SLOWER): fused, they no longer run side
 by side.
 
