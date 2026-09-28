@@ -1,7 +1,8 @@
 # R12 resident seat
 
-Status: first physical chain qualified on GB10. The receipt under `evidence/R12/`
-names the exact candidate commit. R8, R10, R11 and R13 are not claimed.
+Status: qualified on GB10, including seat loss and channel reset under load.
+Each receipt under `evidence/R12/` names its exact candidate commit. R8, R10,
+R11 and R13 are not claimed.
 
 ## What is proved
 
@@ -40,10 +41,49 @@ or authority of its own. The chip finishing is not the commit; publication is.
 | Output capability revoked after the claim, before publication | refused, B's window restored |
 | A's generation moves while the chip holds the claim | invalidated, recorded |
 | A claim naming a retired generation sent straight to the chip | the chip answers with a fault and does not touch B |
+| Seat killed while it holds a claim (B's window already written, no result) | claim fails once as seat-lost, B's window restored, charge released once, work retried on a new seat and published once |
+| The dead seat's claim posted again to the new seat | the chip answers with a fault; the processor refuses the old seat generation |
+| Channel destroyed and rebuilt 8 times under continuous load | every reset caught a claim in flight; each lost claim retried and published at most once; B and C end on the last change |
 
-Not exercised yet: the seat killed mid-claim, and a graphics channel reset
-under load. Both need a way to stop a running channel without unmapping memory
-a waiting thread still reads.
+## Seat loss
+
+A seat can go away without leaving: killed, or its channel reset. The world
+keeps a **seat generation**. Every claim carries it (the descriptor's
+`producer_generation`), the seat is launched with it, and the seat refuses any
+claim of another generation. The processor refuses any result of another
+generation.
+
+`rx_resident_seat_lost` is called once the chip no longer writes the image:
+
+1. Claims the old seat never took and results nobody accepted are discarded.
+2. The seat generation moves. Object generations do not.
+3. Every claim the seat still held ends `FAILED` with `RX_ERR_SEAT_LOST`. The
+   output window is restored from the canonical object, the resource charge
+   is released through the normal end of activation, and a crumb records the
+   loss with the claim's cause as parent.
+4. With retry, that activation is made ready again, caused by the loss crumb.
+   Its new claim carries the new generation. Without retry the loss is final
+   for that activation; the next change runs normally.
+
+Every claim ends exactly once: `stats.resident_claims` equals
+`stats.resident_closed` whenever the world is quiet.
+
+On the chip, `rx_gpu_seat_kill` destroys the running channel group; the image
+and launch memory stay mapped. `rx_gpu_seat_relaunch` builds a new channel on
+the same device and memory and launches the seat again on the same image.
+The heartbeat block carries a pass counter (`RX_SEAT_HB_LIVE`) so a test can
+see the chip has stopped, and a hold word (`RX_SEAT_HB_HOLD`) that makes the
+seat keep the claim it has just computed, for fault injection.
+
+On GB10 with driver 580.173.02 a channel teardown under a running seat takes
+about four seconds: the driver's polite stop times out (`STOP_CHANNEL`,
+`NV_ERR_TIMEOUT` in the kernel log), then the channel is removed. No Xid was
+raised. The seat keeps running during those seconds, which is why the load
+scenario keeps changing A throughout.
+
+Not exercised: recovery from a fault the chip raises itself (an MMU fault or
+Xid), as opposed to a teardown the host starts; and a seat lost before its
+first heartbeat.
 
 ## What made the chip see the world
 

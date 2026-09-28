@@ -109,6 +109,7 @@ typedef enum {
 #define RX_ERR_BAD_DESC    -23
 #define RX_ERR_UNPLACED    -24
 #define RX_ERR_EXISTS      -25
+#define RX_ERR_SEAT_LOST   -26   /* the graphics seat died holding the claim */
 
 /* Reaction notices carried in the frozen 128-byte descriptor.
  * The older transform request/result values stay in the frozen layout and
@@ -353,6 +354,9 @@ typedef struct {
     uint64_t deadline_overdue;
     uint64_t desc_published;
     uint64_t desc_rejected;
+    uint64_t resident_claims;   /* claims posted to a resident seat */
+    uint64_t resident_closed;   /* claims ended: committed, refused, or lost */
+    uint64_t seat_losses;       /* times a seat was declared lost */
 } RxStats;
 
 typedef int (*RxAuthValidateFn)(const void *ctx, RxCapRef ref, uint32_t subject,
@@ -418,6 +422,11 @@ typedef struct RxWorld {
     bool resident_enabled;      /* a resident seat may take claims on this image */
     bool coherent_borrowed;     /* image memory is not freed with the world */
     bool resident_stopped;
+    /* Incarnation of the resident seat. Every claim carries it. A seat takes
+     * only claims of its own incarnation, and the processor accepts only
+     * results of the current one. It moves when a seat is lost; object
+     * generations do not. */
+    uint32_t seat_generation;
 
     RxStats stats;
 } RxWorld;
@@ -542,6 +551,16 @@ int  rx_resident_accept(RxWorld *w);
 
 /* Ask the seat to leave. The object world stays. */
 int  rx_resident_shutdown(RxWorld *w);
+
+/* The seat is gone without leaving: killed, or its channel reset. The caller
+ * guarantees the chip no longer writes the image. Claims the old seat never
+ * took and results nobody accepted are discarded, and the seat generation
+ * moves. Every claim the seat still held ends FAILED with RX_ERR_SEAT_LOST:
+ * the output window is restored from the canonical object, the resource
+ * charge is released, and a crumb records the loss. With retry, each of those
+ * activations is made ready again, caused by its failure crumb, and its new
+ * claim carries the new seat generation. Returns the number of claims lost. */
+int  rx_resident_seat_lost(RxWorld *w, int retry);
 /* Caller holds the world lock. Copies one graphics-to-processor result and
  * moves that ring forward. */
 int  rx_resident_take_result(RxWorld *w, OmegaSharedWorldDesc *out);

@@ -24,7 +24,7 @@
 
 typedef struct __attribute__((packed)) {
     uint64_t region;
-    uint32_t reserved;
+    uint32_t seat_gen;      /* the only claim generation this seat takes */
     uint32_t epoch;
     uint32_t off_c2g;
     uint32_t off_g2c;
@@ -40,6 +40,8 @@ struct RxGpuSeat {
     pthread_t thread;
     int thread_live;
     int opened;
+    int killed;             /* channel destroyed under the running seat */
+    volatile int abort;     /* stop waiting for the launch marker */
     volatile int marker_ok;
     volatile int sem_ok;
     char err[160];
@@ -73,7 +75,7 @@ typedef struct {
     int crc, poly, word, byte, nbit, wi;
     int fifteen, thirtytwo, off_c2g, off_g2c, off_hb, off_tbl, epoch;
     int off, slot_off, dst_off;
-    int win_b, lim;
+    int win_b, lim, sgen;
     int uv;
 } Regs;
 
@@ -280,9 +282,9 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     A32(seq); A32(f0); A32(f1); A32(crc); A32(poly); A32(word); A32(byte);
     A32(nbit); A32(wi); A32(fifteen); A32(thirtytwo);
     A32(off_c2g); A32(off_g2c); A32(off_hb); A32(off_tbl);
-    A32(off); A32(slot_off); A32(dst_off); A32(win_b); A32(lim);
+    A32(off); A32(slot_off); A32(dst_off); A32(win_b); A32(lim); A32(sgen);
 #undef A32
-    if (r.lim < 0 || r.uv < 0) return -1;
+    if (r.sgen < 0 || r.uv < 0) return -1;
 
     BlackwellIRInsn s2 = op(BW_IR_S2R);
     s2.dst_vreg = r.tid;
@@ -306,6 +308,7 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     pb.imm = 0x380;
     em(prog, pb);
 #define LDC32(reg, off) do { BlackwellIRInsn n = op(BW_IR_LDC); n.dst_vreg = (reg); n.imm = (off); em(prog, n); } while (0)
+    LDC32(r.sgen, 0x388);
     LDC32(r.off_c2g, 0x390);
     LDC32(r.off_g2c, 0x394);
     LDC32(r.off_hb, 0x398);
@@ -339,6 +342,10 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     add32(prog, r.tmp, r.tail, r.one);
     st_ef(prog, r.hb_ptr, r.tmp, r.uv);
     add32(prog, r.give, r.give, r.ones);
+    /* A count that moves on every pass: the processor can see the seat is
+     * alive, and that it has stopped. */
+    at_off(prog, &r, r.addr, r.off_hb, RX_SEAT_HB_LIVE);
+    st(prog, r.addr, r.give, r.uv);
     ge_rr(prog, r.give, r.one);
     int give_exit = bra(prog, 1, 1);
 
@@ -376,8 +383,14 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     ld(prog, r.obj, r.addr, r.uv);
     at_off(prog, &r, r.addr, r.slot_off, 0x1cu);
     ld(prog, r.gen, r.addr, r.uv);
-    int stale[6];
+    int stale[8];
     int ns = 0;
+    /* A claim from another seat generation: posted before a seat was lost. */
+    at_off(prog, &r, r.addr, r.slot_off, 0x14u);
+    ld(prog, r.f0, r.addr, r.uv);
+    xor_rr(prog, r.tmp2, r.f0, r.sgen);
+    ge_rr(prog, r.tmp2, r.one);
+    stale[ns++] = bra(prog, 1, 0);
     ge_rr(prog, r.obj, r.lim);                   /* id outside the table */
     stale[ns++] = bra(prog, 1, 0);
     shl_n(prog, r.tmp, r.obj, 5);
@@ -438,6 +451,24 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     for (int i = 0; i < ns; i++) fix(prog, stale[i], (int)prog->count);
     movi(prog, r.msg, 1u | (RX_RING_FAULT << 16));
     fix(prog, skip_fault_msg, (int)prog->count);
+
+    /* Fault-injection hold. The seat marks which claim it holds, then waits
+     * while the processor keeps the hold word set: B's window may already
+     * hold the sum and no result is posted. The safety stop still counts. */
+    add32(prog, r.tmp, r.head, r.one);
+    at_off(prog, &r, r.addr, r.off_hb, RX_SEAT_HB_HELD);
+    st(prog, r.addr, r.tmp, r.uv);
+    int hold = (int)prog->count;
+    em(prog, op(BW_IR_CCTL_IVALL));
+    add32(prog, r.give, r.give, r.ones);
+    at_off(prog, &r, r.addr, r.off_hb, RX_SEAT_HB_LIVE);
+    st(prog, r.addr, r.give, r.uv);
+    ge_rr(prog, r.give, r.one);
+    int hold_exit = bra(prog, 1, 1);
+    at_off(prog, &r, r.addr, r.off_hb, RX_SEAT_HB_HOLD);
+    ld(prog, r.tmp, r.addr, r.uv);
+    ge_rr(prog, r.tmp, r.one);
+    fix(prog, bra(prog, 1, 0), hold);
 
     at_off(prog, &r, r.g2c, r.off_g2c, 0u);
     ld(prog, r.tail, r.g2c, r.uv);
@@ -510,6 +541,7 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
 
     int leave = (int)prog->count;
     fix(prog, give_exit, leave);
+    fix(prog, hold_exit, leave);
     fix(prog, shutdown_exit, leave);
     em(prog, op(BW_IR_EXIT));
     em(prog, op(BW_IR_BRA));
@@ -589,28 +621,42 @@ struct LaunchJob {
     uint32_t gpr;
     SeatArgs args;
     int submit_rc;
+    /* Launch memory, kept across a channel rebuild. */
+    int have_mem;
+    NvrmMem code_mem, cbank_mem, qmd_mem, marker_mem, large_pb;
 };
+
+/* The launch marker lands only when the seat leaves. A kill stops the wait. */
+static int wait_marker_or_abort(RxGpuSeat *s, volatile uint32_t *marker, uint32_t want,
+                                int timeout_ms) {
+    for (int i = 0; i < timeout_ms * 20; i++) {
+        __asm__ volatile("dsb sy" ::: "memory");
+        if (*marker == want) return 0;
+        if (s->abort) return -1;
+        usleep(50);
+    }
+    return *marker == want ? 0 : -1;
+}
 
 static void *launch_main(void *arg) {
     LaunchJob *job = arg;
     RxGpuSeat *s = job->seat;
     M16NativeContext *ctx = &s->ctx;
-    NvrmMem code_mem, cbank_mem, qmd_mem, marker_mem, large_pb;
-    memset(&code_mem, 0, sizeof(code_mem));
-    memset(&cbank_mem, 0, sizeof(cbank_mem));
-    memset(&qmd_mem, 0, sizeof(qmd_mem));
-    memset(&marker_mem, 0, sizeof(marker_mem));
-    memset(&large_pb, 0, sizeof(large_pb));
-    if (nvrm_alloc(&ctx->rm, 0x4000, &code_mem) != 0 ||
-        nvrm_alloc(&ctx->rm, 0x1000, &cbank_mem) != 0 ||
-        nvrm_alloc(&ctx->rm, 0x10000, &qmd_mem) != 0 ||
-        nvrm_alloc(&ctx->rm, 0x1000, &marker_mem) != 0 ||
-        nvrm_alloc(&ctx->rm, 0x10000, &large_pb) != 0) {
-        snprintf(s->err, sizeof s->err, "graphics memory was not allocated");
-        job->submit_rc = -1;
-        return NULL;
+    if (!job->have_mem) {
+        if (nvrm_alloc(&ctx->rm, 0x4000, &job->code_mem) != 0 ||
+            nvrm_alloc(&ctx->rm, 0x1000, &job->cbank_mem) != 0 ||
+            nvrm_alloc(&ctx->rm, 0x10000, &job->qmd_mem) != 0 ||
+            nvrm_alloc(&ctx->rm, 0x1000, &job->marker_mem) != 0 ||
+            nvrm_alloc(&ctx->rm, 0x10000, &job->large_pb) != 0) {
+            snprintf(s->err, sizeof s->err, "graphics memory was not allocated");
+            job->submit_rc = -1;
+            return NULL;
+        }
+        job->have_mem = 1;
     }
-    ctx->pb_mem = large_pb;
+    NvrmMem code_mem = job->code_mem, cbank_mem = job->cbank_mem, qmd_mem = job->qmd_mem;
+    NvrmMem marker_mem = job->marker_mem;
+    ctx->pb_mem = job->large_pb;
     memcpy(code_mem.cpu, job->code, job->code_bytes);
 
     uint32_t cbank_data[OMEGA_BW_CBANK_DRIVER_WORDS];
@@ -723,11 +769,70 @@ static void *launch_main(void *arg) {
         snprintf(s->err, sizeof s->err, "the graphics seat was not submitted");
         return NULL;
     }
-    int wait = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 8000);
+    int wait = wait_marker_or_abort(s, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 60000);
     s->marker_ok = wait == 0 && *hmarker == OMEGA_BW_MARKER_COMPLETION_PAYLOAD;
     s->sem_ok = *hsem == OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE;
-    if (!s->marker_ok) snprintf(s->err, sizeof s->err, "the graphics seat did not finish");
+    if (!s->marker_ok && !s->abort)
+        snprintf(s->err, sizeof s->err, "the graphics seat did not finish");
     return NULL;
+}
+
+/* Wait for the seat's first heartbeat in the image. */
+static int wait_heartbeat(RxGpuSeat *s) {
+    RxWorld *w = s->world;
+    volatile uint32_t *hb = (volatile uint32_t *)(w->coherent + rx_world_off_heartbeat());
+    s->hb_watch = hb;
+    for (int i = 0; i < 2000; i++) {
+        __asm__ volatile("dsb sy" ::: "memory");
+        if (*hb != 0) return 0;
+        if (s->job->submit_rc != 0 && s->err[0]) break;
+        usleep(1000);
+    }
+    if (!s->err[0]) snprintf(s->err, sizeof s->err, "the graphics seat did not show a heartbeat");
+    fprintf(stderr, "seat: %s\n", s->err);
+    return -1;
+}
+
+static uint32_t current_seat_gen(RxWorld *w) {
+    pthread_mutex_lock(&w->mu);
+    uint32_t g = w->seat_generation;
+    pthread_mutex_unlock(&w->mu);
+    return g;
+}
+
+int rx_gpu_seat_kill(RxGpuSeat *s) {
+    if (!s || !s->opened || s->killed) return -1;
+    /* Freeing the channel group preempts and tears down the running seat.
+     * The image and launch memory stay allocated and mapped. */
+    int rc = nvrm_channel_destroy(&s->ctx.rm);
+    s->abort = 1;
+    if (s->thread_live) {
+        pthread_join(s->thread, NULL);
+        s->thread_live = 0;
+    }
+    s->killed = 1;
+    if (rc != 0) snprintf(s->err, sizeof s->err, "the graphics channel was not destroyed");
+    return rc == 0 ? 0 : -1;
+}
+
+int rx_gpu_seat_relaunch(RxGpuSeat *s) {
+    if (!s || !s->killed || !s->image_bound || !s->job) return -1;
+    if (nvrm_channel(&s->ctx.rm) != 0) {
+        snprintf(s->err, sizeof s->err, "the graphics channel was not rebuilt");
+        return -1;
+    }
+    s->killed = 0;
+    s->abort = 0;
+    s->marker_ok = 0;
+    s->sem_ok = 0;
+    s->err[0] = 0;
+    s->job->submit_rc = 0;
+    s->job->args.seat_gen = current_seat_gen(s->world);
+    memset(s->world->coherent + rx_world_off_heartbeat(), 0, 64);
+    __asm__ volatile("dsb sy" ::: "memory");
+    if (pthread_create(&s->thread, NULL, launch_main, s->job) != 0) return -1;
+    s->thread_live = 1;
+    return wait_heartbeat(s);
 }
 
 int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
@@ -805,6 +910,7 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
     job->code_bytes = emitted;
     job->gpr = gpr;
     job->args.region = image.va;
+    job->args.seat_gen = current_seat_gen(w);
     job->args.epoch = w->world_epoch;
     job->args.off_c2g = (uint32_t)rx_world_off_c2g();
     job->args.off_g2c = (uint32_t)rx_world_off_g2c();
@@ -822,22 +928,8 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
     s->job = job;
     s->thread_live = 1;
     if (out) *out = s;
-
-    volatile uint32_t *hb = (volatile uint32_t *)(w->coherent + rx_world_off_heartbeat());
-    s->hb_watch = hb;
-    int saw = 0;
-    for (int i = 0; i < 2000; i++) {
-        __asm__ volatile("dsb sy" ::: "memory");
-        if (*hb != 0) { saw = 1; break; }
-        if (job->submit_rc != 0 && s->err[0]) break;
-        usleep(1000);
-    }
-    if (!saw) {
-        if (!s->err[0]) snprintf(s->err, sizeof s->err, "the graphics seat did not show a heartbeat");
-        fprintf(stderr, "seat: %s\n", s->err);
-        return -1;
-    }
-    fprintf(stderr, "seat heartbeat %u instructions %d gpr %u\n", *hb, insns, gpr);
+    if (wait_heartbeat(s) != 0) return -1;
+    fprintf(stderr, "seat heartbeat %u instructions %d gpr %u\n", *s->hb_watch, insns, gpr);
     return 0;
 }
 
@@ -847,7 +939,9 @@ int rx_gpu_seat_finish(RxGpuSeat *seat) {
         pthread_join(seat->thread, NULL);
         seat->thread_live = 0;
     }
-    int ok = seat->marker_ok && seat->sem_ok;
+    /* A killed seat never reaches its marker; leaving is then only the image
+     * going back to the world and the device closing. */
+    int ok = seat->killed || (seat->marker_ok && seat->sem_ok);
     if (!ok && seat->err[0]) fprintf(stderr, "seat finish: %s\n", seat->err);
     if (seat_return_image(seat) != 0) ok = 0;
     if (seat->opened) m16_native_close(&seat->ctx);

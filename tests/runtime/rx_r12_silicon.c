@@ -18,6 +18,7 @@
 #include "omega_evidence.h"
 #include "sha256.h"
 
+#include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -253,6 +254,165 @@ static uint64_t last_crumb_of(RxWorld *w, uint32_t reaction, RxCrumbKind kind) {
     return found;
 }
 
+/* ---- seat loss and channel reset ----------------------------------------- */
+
+static volatile uint32_t *hb_word(RxWorld *w, uint32_t off) {
+    return (volatile uint32_t *)(w->coherent + rx_world_off_heartbeat() + off);
+}
+
+/* The chip's pass counter stops moving once its channel is gone. */
+static int chip_still(RxWorld *w, int ms) {
+    barrier();
+    uint32_t a = *hb_word(w, RX_SEAT_HB_LIVE);
+    sleep_ms(ms);
+    barrier();
+    return *hb_word(w, RX_SEAT_HB_LIVE) == a;
+}
+
+static uint64_t crumbs_of(RxWorld *w, uint32_t reaction, RxCrumbKind kind, int reason,
+                          uint64_t *last) {
+    uint64_t n = 0;
+    for (uint64_t id = 1; id <= w->n_crumbs; id++) {
+        const RxCrumb *k = rx_world_crumb(w, id);
+        if (!k || k->reaction != reaction || k->kind != kind) continue;
+        if (reason && k->reason != reason) continue;
+        n++;
+        if (last) *last = id;
+    }
+    return n;
+}
+
+static int seats_holding(RxWorld *w) {
+    int n = 0;
+    for (uint32_t i = 0; i < w->n_reactions; i++)
+        if (w->reactions[i].resident_seat) n++;
+    return n;
+}
+
+/* A fresh A -> seat -> B -> processor -> C chain for the loss scenarios. */
+typedef struct {
+    RxObjRef a, b, c;
+    RxCapRef in, out, ext;
+    uint32_t seat, dep;
+    Chain ch;
+} Rig;
+
+static Rig g_rig;
+
+static int rig_up(RxWorld *w, Rig *g, uint64_t res) {
+    uint64_t zero[RX_MAX_FIELDS] = { 0 };
+    if (rx_world_create(w, 1, RX_PERSIST_RESIDENT, res, zero, &g->a) != RX_OK ||
+        rx_world_create(w, 1, RX_PERSIST_RESIDENT, res + 1, zero, &g->b) != RX_OK ||
+        rx_world_create(w, 1, RX_PERSIST_RESIDENT, res + 2, zero, &g->c) != RX_OK ||
+        rx_world_attach_physical(w, g->a) != RX_OK || rx_world_attach_physical(w, g->b) != RX_OK)
+        return -1;
+    g->in = mint(SUBJ_SEAT, res, RX_RIGHT_READ);
+    g->out = mint(SUBJ_SEAT, res + 1, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    g->ext = mint(SUBJ_EXTERNAL, res, RX_RIGHT_WRITE);
+    RxCapRef dr = mint(SUBJ_DEPEND, res + 1, RX_RIGHT_READ);
+    RxCapRef dw = mint(SUBJ_DEPEND, res + 2, RX_RIGHT_WRITE);
+    if (rx_world_bind_capability(w, g->a, g->in) != RX_OK ||
+        rx_world_bind_capability(w, g->b, g->out) != RX_OK)
+        return -1;
+    RxReactionDesc d;
+    desc_init(&d, "resident.seat.add", SUBJ_SEAT, fn_poison, NULL);
+    d.need.accelerator_features = RX_ACCEL_BLACKWELL;
+    d.n_triggers = 1;
+    d.triggers[0] = (RxDep){ g->a, RX_FIELD(0) | RX_FIELD(1) };
+    d.n_writes = 1;
+    d.writes[0] = (RxDep){ g->b, RX_FIELD(0) };
+    d.n_caps = 2;
+    d.caps[0] = (RxCapNeed){ g->in, res, RX_RIGHT_READ };
+    d.caps[1] = (RxCapNeed){ g->out, res + 1, RX_RIGHT_WRITE };
+    if (rx_world_add_reaction(w, &d, &g->seat) != RX_OK) return -1;
+    g->ch = (Chain){ g->b, g->c };
+    desc_init(&d, "cpu.dependent", SUBJ_DEPEND, fn_depend, &g->ch);
+    d.n_triggers = 1;
+    d.triggers[0] = (RxDep){ g->b, RX_FIELD(0) };
+    d.n_reads = 1;
+    d.reads[0] = (RxDep){ g->b, RX_FIELD(0) };
+    d.n_writes = 1;
+    d.writes[0] = (RxDep){ g->c, RX_FIELD(0) };
+    d.n_caps = 2;
+    d.caps[0] = (RxCapNeed){ dr, res + 1, RX_RIGHT_READ };
+    d.caps[1] = (RxCapNeed){ dw, res + 2, RX_RIGHT_WRITE };
+    return rx_world_add_reaction(w, &d, &g->dep) == RX_OK ? 0 : -1;
+}
+
+/* Every claim ever posted has ended exactly once and nothing is held. */
+static void check_settled(RxWorld *w, const char *when) {
+    CHECK(w->stats.resident_claims == w->stats.resident_closed,
+          "%s: claims %llu ended %llu", when, (unsigned long long)w->stats.resident_claims,
+          (unsigned long long)w->stats.resident_closed);
+    CHECK(seats_holding(w) == 0, "%s: a claim is still held", when);
+    CHECK(w->used_slots == 0 && w->used_memory == 0 && w->used_energy == 0,
+          "%s: a resource charge was not released (%u slots)", when, w->used_slots);
+}
+
+/* Takes every result as it lands. A result computed from an A that has
+ * since moved is refused as torn; the rearmed activation runs again. */
+typedef struct {
+    RxWorld *w;
+    atomic_int stop;
+    uint64_t ok, stale, input_moved, other;
+    int other_rc;
+} Acceptor;
+
+static void *acceptor_main(void *arg) {
+    Acceptor *a = arg;
+    while (!atomic_load(&a->stop)) {
+        int rc = rx_resident_accept(a->w);
+        if (rc == RX_OK) a->ok++;
+        else if (rc == RX_ERR_STALE_GEN) a->stale++;
+        else if (rc == RX_ERR_TORN) a->input_moved++;
+        else if (rc == RX_ERR_NOT_FOUND) {
+            struct timespec ts = { 0, 100000L };
+            nanosleep(&ts, NULL);
+        } else {
+            a->other++;
+            a->other_rc = rc;
+        }
+    }
+    return NULL;
+}
+
+/* Keeps changing A for the whole scenario, including while a channel is
+ * being torn down, so resets land on work in flight. */
+typedef struct {
+    RxWorld *w;
+    RxCapRef ext;
+    RxObjRef a;
+    atomic_int stop;
+    atomic_ullong want;
+    uint64_t sent;
+} Loader;
+
+static void *loader_main(void *arg) {
+    Loader *l = arg;
+    for (uint64_t n = 0; !atomic_load(&l->stop); n++) {
+        uint64_t x = 1000u + n, y = n % 7u;
+        RxMutation m[2] = { { l->a, 0, x }, { l->a, 1, y } };
+        if (rx_world_publish_external(l->w, l->ext, m, 2) > 0) {
+            atomic_store(&l->want, (uint64_t)(uint32_t)(x + y));
+            l->sent++;
+        }
+        /* Paced so the causal record holds the whole scenario. */
+        struct timespec ts = { 0, 4000000L };
+        nanosleep(&ts, NULL);
+    }
+    return NULL;
+}
+
+static uint64_t g_resets, g_resets_in_flight, g_claims_lost, g_kill_lost, g_kill_ms_max;
+
+static uint32_t xs32(uint32_t *s) {
+    uint32_t x = *s;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    return *s = x;
+}
+
 static void binary_digest(char out[65]) {
     strcpy(out, "unavailable");
     FILE *f = fopen("/proc/self/exe", "rb");
@@ -289,7 +449,7 @@ static void write_receipt(void) {
     uname(&u);
     fprintf(f,
             "{\n"
-            "  \"schema\": \"AIEN_RX_R12_RESIDENT_SILICON_V2\",\n"
+            "  \"schema\": \"AIEN_RX_R12_RESIDENT_SILICON_V3\",\n"
             "  \"run_id\": \"%s\",\n"
             "  \"candidate_commit\": %s%s%s,\n"
             "  \"candidate_bound\": %s,\n"
@@ -317,8 +477,17 @@ static void write_receipt(void) {
                 g_sc[i].passed ? "PASS" : "FAIL", i + 1 < g_nsc ? "," : "");
     fprintf(f,
             "  ],\n"
-            "  \"not_exercised\": [\"seat killed mid-claim\", \"graphics channel reset under load\"],\n"
-            "  \"gates\": {\n"
+            "  \"seat_loss\": {\"killed_holding_claims_lost\": %llu, \"channel_resets\": %llu, "
+            "\"resets_with_work_in_flight\": %llu, \"claims_lost_and_retried\": %llu, "
+            "\"longest_channel_teardown_ms\": %llu, "
+            "\"kill_method\": \"host destroys the running channel group; not a chip-raised fault\"},\n"
+            "  \"not_exercised\": [\"recovery from a chip-raised fault (MMU fault, Xid) rather than a "
+            "host-initiated channel teardown\", \"seat lost before its first heartbeat\"],\n"
+            "  \"gates\": {\n",
+            (unsigned long long)g_kill_lost, (unsigned long long)g_resets,
+            (unsigned long long)g_resets_in_flight, (unsigned long long)g_claims_lost,
+            (unsigned long long)g_kill_ms_max);
+    fprintf(f,
             "    \"R12_RESIDENT_SEAT\": \"%s\",\n"
             "    \"not_claimed\": [\"R8\", \"R10\", \"R11\", \"R13\"%s]\n"
             "  }\n"
@@ -582,6 +751,8 @@ int main(void) {
         stale.object_generation = A.generation;   /* the retired one */
         stale.object_length = 64;
         stale.payload_len = 40;
+        /* The current seat generation: only the object generation is stale. */
+        stale.producer_generation = w.seat_generation;
         for (int i = 0; i < 4; i++) {
             stale.payload[24 + i] = (uint8_t)(B.id >> (8 * i));
             stale.payload[28 + i] = (uint8_t)(w.objects[B.id].generation >> (8 * i));
@@ -602,6 +773,200 @@ int main(void) {
         barrier();
         g->head = g->tail;   /* drain the fault notice; there is no reaction for it */
         barrier();
+    }
+    end();
+
+    /* 9. The seat is killed while it holds a claim. */
+    begin("seat killed holding a claim: recorded, restored, released once, retried");
+    {
+        Rig *g = &g_rig;
+        CHECK(rig_up(&w, g, 0x40) == 0, "the second chain was not built");
+        if (g_fail) goto done;
+        uint32_t gen0 = w.seat_generation;
+        uint32_t ga = g->a.generation, gb = g->b.generation, gc = g->c.generation;
+        *hb_word(&w, RX_SEAT_HB_HOLD) = 1;
+        barrier();
+        uint64_t before = g2c_tail(&w);
+        int64_t cause = stimulate(&w, g->ext, g->a, 30, 12);
+        CHECK(cause > 0, "stimulus");
+        CHECK(wait_claimed(&w, g->seat) == 0, "no claim");
+        uint64_t seq = w.reactions[g->seat].resident_seq;
+        int held = 0;
+        for (int i = 0; i < 3000 && !held; i++) {
+            barrier();
+            if (*hb_word(&w, RX_SEAT_HB_HELD) == (uint32_t)(seq + 1)) held = 1;
+            else sleep_ms(1);
+        }
+        CHECK(held, "the chip did not reach the hold with this claim");
+        CHECK(load_u64(window(&w, g->b)) == 42, "the chip did not write B's window before the hold");
+        CHECK(g2c_tail(&w) == before, "the chip posted a result while holding");
+        CHECK(!chip_still(&w, 20), "the holding seat is not alive");
+        OmegaSharedWorldRing *c2g = ring_at(&w, rx_world_off_c2g());
+        OmegaSharedWorldDesc old = c2g->slots[seq & c2g->mask];
+        uint64_t fails0 = w.stats.transitions[RX_RUNNING][RX_FAILED];
+
+        CHECK(rx_gpu_seat_kill(seat) == 0, "the channel was not destroyed");
+        CHECK(chip_still(&w, 50), "the chip still runs after its channel was destroyed");
+        int lost = rx_resident_seat_lost(&w, 1);
+        g_kill_lost = lost > 0 ? (uint64_t)lost : 0;
+        CHECK(lost == 1, "the held claim was not declared lost (%d)", lost);
+        CHECK(w.seat_generation == gen0 + 1, "the seat generation did not move");
+        CHECK(w.stats.transitions[RX_RUNNING][RX_FAILED] == fails0 + 1, "a claim failed twice");
+        CHECK(load_u64(window(&w, g->b)) == 0, "B's window still holds the dead seat's sum");
+        CHECK(field_of(&w, g->b, 0) == 0 && field_of(&w, g->c, 0) == 0, "B or C moved");
+        uint64_t fail_id = 0;
+        CHECK(crumbs_of(&w, g->seat, RX_CRUMB_FAILED, RX_ERR_SEAT_LOST, &fail_id) == 1,
+              "no single seat-lost crumb");
+        if (fail_id) {
+            const RxCrumb *k = rx_world_crumb(&w, fail_id);
+            CHECK(k->wake_cause == (uint64_t)cause && k->worker == RX_SEAT_BLACKWELL,
+                  "the loss does not name the stimulus and the chip");
+        }
+        int finished = rx_gpu_seat_finish(seat);
+        seat = NULL;
+        CHECK(finished == 0, "the killed seat did not return the image");
+
+        began = rx_gpu_seat_begin(&w, &seat);
+        CHECK(began == 0 && seat, "a new seat did not start after the loss");
+        if (began != 0 || !seat) goto done;
+        CHECK(wait_claimed(&w, g->seat) == 0, "the lost work was not retried");
+        CHECK(w.reactions[g->seat].resident_parent == fail_id, "the retry is not caused by the loss");
+        int acc = poll_accept(&w);
+        CHECK(acc == RX_OK, "the retried result was refused (%d)", acc);
+        CHECK(rx_world_wait_quiescent(&w, 3000) == RX_OK, "world did not settle");
+        CHECK(field_of(&w, g->b, 0) == 42 && field_of(&w, g->c, 0) == 43,
+              "the retried work did not reach B and C");
+        uint64_t commit_id = 0;
+        CHECK(crumbs_of(&w, g->seat, RX_CRUMB_COMMIT, 0, &commit_id) == 1 &&
+                  w.reactions[g->seat].commits == 1,
+              "the work was not published exactly once");
+        if (commit_id)
+            CHECK(rx_world_crumb(&w, commit_id)->wake_cause == fail_id,
+                  "the publication is not caused by the loss");
+        CHECK(rx_world_validate_cap(&w, g->in, SUBJ_SEAT, 0x40, RX_RIGHT_READ, NULL) == RX_CAP_OK &&
+                  rx_world_validate_cap(&w, g->out, SUBJ_SEAT, 0x41, RX_RIGHT_WRITE, NULL) ==
+                      RX_CAP_OK,
+              "the authority lost a grant across the loss");
+        CHECK(w.objects[g->a.id].generation == ga && w.objects[g->b.id].generation == gb &&
+                  w.objects[g->c.id].generation == gc,
+              "an object generation moved");
+
+        /* The dead seat's claim, posted again: the new seat refuses it. */
+        uint64_t before2 = g2c_tail(&w);
+        CHECK(rx_world_inject_descriptor(&w, &old) == RX_OK, "the old claim was not posted");
+        CHECK(wait_chip(&w, before2) == 0, "the new seat did not answer the old claim");
+        OmegaSharedWorldRing *g2 = ring_at(&w, rx_world_off_g2c());
+        CHECK(g2->slots[before2 & g2->mask].msg_type == RX_RING_FAULT,
+              "the new seat took the old claim");
+        CHECK(load_u64(window(&w, g->b)) == 42, "the old claim changed B's window");
+        CHECK(poll_accept(&w) == RX_ERR_STALE_GEN, "the old seat's generation was accepted");
+        CHECK(w.reactions[g->seat].commits == 1 && field_of(&w, g->c, 0) == 43,
+              "the old claim published");
+        check_settled(&w, "after the kill");
+        uint64_t checked = 0;
+        CHECK(rx_world_verify_crumbs(&w, &checked) == 0, "history did not verify across the kill");
+    }
+    end();
+
+    /* 10. The channel is destroyed and rebuilt again and again while claims
+     * flow. The image stays in place; the seat is launched again on it. */
+    begin("channel reset under load");
+    {
+        Rig *g = &g_rig;
+        uint32_t gen0 = w.seat_generation;
+        uint32_t ga = g->a.generation, gb = g->b.generation, gc = g->c.generation;
+        uint64_t commits0 = w.reactions[g->seat].commits;
+        Acceptor ac;
+        memset(&ac, 0, sizeof ac);
+        ac.w = &w;
+        Loader ld;
+        memset(&ld, 0, sizeof ld);
+        ld.w = &w;
+        ld.ext = g->ext;
+        ld.a = g->a;
+        pthread_t at, lt;
+        CHECK(pthread_create(&at, NULL, acceptor_main, &ac) == 0, "acceptor did not start");
+        CHECK(pthread_create(&lt, NULL, loader_main, &ld) == 0, "load did not start");
+        uint32_t rng = 0x5eed1234u;
+        const int rounds = 8;
+        uint64_t held_rounds = 0, held_in_flight = 0;
+        for (int i = 0; i < rounds && !g_fail; i++) {
+            struct timespec d = { 0, (long)(20 + xs32(&rng) % 180u) * 1000000L };
+            nanosleep(&d, NULL);
+            /* Even rounds: the chip holds whatever claim it takes next, so
+             * the reset lands on it. Odd rounds: nothing is arranged. */
+            int held = (i % 2) == 0;
+            if (held) {
+                *hb_word(&w, RX_SEAT_HB_HOLD) = 1;
+                barrier();
+                held_rounds++;
+                sleep_ms(20);
+            }
+            struct timespec k0, k1;
+            clock_gettime(CLOCK_MONOTONIC, &k0);
+            CHECK(rx_gpu_seat_kill(seat) == 0, "round %d: the channel was not destroyed", i);
+            clock_gettime(CLOCK_MONOTONIC, &k1);
+            uint64_t ms = (uint64_t)(k1.tv_sec - k0.tv_sec) * 1000u +
+                          (uint64_t)((k1.tv_nsec - k0.tv_nsec) / 1000000L);
+            if (ms > g_kill_ms_max) g_kill_ms_max = ms;
+            CHECK(chip_still(&w, 5), "round %d: the chip still runs after the reset", i);
+            int lost = rx_resident_seat_lost(&w, 1);
+            CHECK(lost >= 0, "round %d: recovery failed", i);
+            g_resets++;
+            if (lost > 0) {
+                g_resets_in_flight++;
+                g_claims_lost += (uint64_t)lost;
+                if (held) held_in_flight++;
+            }
+            CHECK(rx_gpu_seat_relaunch(seat) == 0, "round %d: the seat did not come back", i);
+        }
+        atomic_store(&ld.stop, 1);
+        pthread_join(lt, NULL);
+        CHECK(rx_world_wait_quiescent(&w, 5000) == RX_OK, "world did not settle after the load");
+        atomic_store(&ac.stop, 1);
+        pthread_join(at, NULL);
+        uint64_t want = atomic_load(&ld.want);
+        printf("    resets %llu (held %llu), with work in flight %llu, claims lost and retried %llu,\n"
+               "    changes %llu, published %llu, refused as input moved %llu, stale refused %llu,\n"
+               "    longest channel teardown %llu ms\n",
+               (unsigned long long)g_resets, (unsigned long long)held_rounds,
+               (unsigned long long)g_resets_in_flight, (unsigned long long)g_claims_lost,
+               (unsigned long long)ld.sent, (unsigned long long)ac.ok,
+               (unsigned long long)ac.input_moved, (unsigned long long)ac.stale,
+               (unsigned long long)g_kill_ms_max);
+        CHECK(g_resets == (uint64_t)rounds, "not every round reset the channel");
+        CHECK(held_in_flight == held_rounds, "a held round found no claim in flight");
+        CHECK(ac.other == 0, "the acceptor saw %llu unexpected refusals (last %d)",
+              (unsigned long long)ac.other, ac.other_rc);
+        CHECK(field_of(&w, g->b, 0) == want && field_of(&w, g->c, 0) == want + 1,
+              "after the load B=%llu C=%llu want %llu", (unsigned long long)field_of(&w, g->b, 0),
+              (unsigned long long)field_of(&w, g->c, 0), (unsigned long long)want);
+        check_settled(&w, "after the resets");
+        CHECK(w.seat_generation == gen0 + (uint32_t)rounds,
+              "the seat generation did not follow the resets");
+        CHECK(w.objects[g->a.id].generation == ga && w.objects[g->b.id].generation == gb &&
+                  w.objects[g->c.id].generation == gc,
+              "an object generation moved under resets");
+        /* Each loss is published at most once. */
+        for (uint64_t id = 1; id <= w.n_crumbs; id++) {
+            const RxCrumb *k = rx_world_crumb(&w, id);
+            if (!k || k->reaction != g->seat || k->kind != RX_CRUMB_FAILED ||
+                k->reason != RX_ERR_SEAT_LOST)
+                continue;
+            uint64_t n = 0;
+            for (uint64_t j = id + 1; j <= w.n_crumbs; j++) {
+                const RxCrumb *c = rx_world_crumb(&w, j);
+                if (c && c->reaction == g->seat && c->kind == RX_CRUMB_COMMIT && c->wake_cause == id)
+                    n++;
+            }
+            CHECK(n <= 1, "a lost claim was published %llu times", (unsigned long long)n);
+        }
+        CHECK(w.reactions[g->seat].commits - commits0 == ac.ok,
+              "commits and accepted results differ");
+        CHECK(w.stats.crumb_overflow == 0, "the causal record overflowed");
+        CHECK(rx_world_explain(&w, g->c, 0) == last_commit_of(&w, g->dep), "C's writer");
+        uint64_t checked = 0;
+        CHECK(rx_world_verify_crumbs(&w, &checked) == 0, "history did not verify under resets");
     }
     end();
 
