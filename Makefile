@@ -39,7 +39,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-sem-incremental
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-semantic-comm test-sem-incremental
 
 all: $(TARGET)
 
@@ -443,3 +443,26 @@ $(RX_CAPQ_TEST): $(RX_CAPQ_SRCS) $(RX_CAPQ_OBJ) $(RX_GRAPH_OBJ) src/runtime/rx_c
 
 test-capability-query: $(RX_CAPQ_TEST)
 	./$(RX_CAPQ_TEST)
+# OMEGA_SEMANTIC_COMMUNICATION: branches and workers receive the semantic
+# projection their InformationNeed selects, then only deltas, not full state.
+# rx_semcomm.o is built alone first. It enforces capability boundaries, so it
+# must not reference any authority admin operation, and it only reads the
+# World, so it must not reference a World write either.
+RX_SEMCOMM_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
+	src/omega_core.c src/omega_canonical.c tests/runtime/rx_semantic_comm.c
+RX_SEMCOMM_TEST = $(OUT_DIR)/rx_semantic_comm_test
+RX_SEMCOMM_OBJ = $(OUT_DIR)/rx_semcomm.o
+
+$(RX_SEMCOMM_OBJ): src/runtime/rx_semcomm.c src/runtime/rx_semcomm.h src/runtime/rx_world.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_semcomm.c
+	@if nm -u $@ | grep -E 'aienos_cap_|rx_caproot_mint|rx_caproot_revoke|rx_world_publish|rx_world_create|rx_world_retire|rx_world_add_reaction' ; then \
+		echo "rx_semcomm.o references an authority admin operation or a World write; projection must only read"; \
+		rm -f $@; exit 1; fi
+
+$(RX_SEMCOMM_TEST): $(RX_SEMCOMM_SRCS) $(RX_SEMCOMM_OBJ) src/runtime/rx_caproot.h \
+	src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_SEMCOMM_SRCS) $(RX_SEMCOMM_OBJ) $(AIENOS_CAP_LIB) -lm
+
+test-semantic-comm: $(RX_SEMCOMM_TEST)
+	./$(RX_SEMCOMM_TEST)
