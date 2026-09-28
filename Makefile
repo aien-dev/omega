@@ -39,7 +39,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-golden-path-control
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph
 
 all: $(TARGET)
 
@@ -387,5 +387,6 @@ $(RX_GOLDEN_TEST): $(RX_GOLDEN_SRCS) $(RX_GRAPH_OBJ) src/runtime/rx_graph.h \
 	src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -pthread -o $@ $(RX_GOLDEN_SRCS) $(RX_GRAPH_OBJ) $(AIENOS_CAP_LIB) -lm
 
+.PHONY: test-golden-path-control
 test-golden-path-control: $(RX_GOLDEN_TEST)
 	./$(RX_GOLDEN_TEST)
