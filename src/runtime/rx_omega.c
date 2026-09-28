@@ -188,7 +188,7 @@ static MatVecFn verified_fn(RxOmegaFaculty *f, const SemanticId *id) {
 static int fn_serve(RxCtx *c) {
     RxOmegaFaculty *f = c->user;
     const RxSnapshotDep *req = in_of(c, f->o.request);
-    const RxSnapshotDep *sel = in_of(c, f->o.selection);
+    const RxSnapshotDep *sel = in_of(c, f->serve_from_record ? f->serve_record : f->o.selection);
     const RxSnapshotDep *dem = in_of(c, f->o.demand);
     if (!req || !sel || !dem) return -1;
     uint64_t seq = req->field[0], M = req->field[1], N = req->field[2];
@@ -659,6 +659,10 @@ static int fn_select(RxCtx *c) {
     if (!s || !sel) return -1;
     uint64_t epoch = s->field[0];
     if (epoch == 0 || sel->field[0] == epoch) return 0;
+    if (f->require_experiment_evidence && epoch > 1) {
+        const RxSnapshotDep *e = in_of(c, f->experiment_evidence);
+        if (!e || e->field[0] != epoch || e->field[2] != 1) return 0;
+    }
     const RxSnapshotDep *best = NULL;
     uint64_t ref_ps = 0;
     for (uint32_t k = 0; k < f->cfg.n_slots; k++) {
@@ -810,7 +814,13 @@ int rx_omega_register(RxOmegaFaculty *f, const RxOmegaCaps *caps) {
     begin(&b, "workload.matvec.serve", RX_FACULTY_EXTERNAL, RX_OMEGA_SUBJ_SERVE,
           RX_PRIO_INTERACTIVE, fn_serve, f, caps->serve);
     trig(&b, w, f->o.request, RX_ALL_FIELDS);
-    rd(&b, w, f->o.selection);
+    if (f->serve_from_record) {
+        b.d.reads[b.d.n_reads++] = (RxDep){ f->serve_record, RX_ALL_FIELDS };
+        b.d.caps[b.d.n_caps++] = (RxCapNeed){ f->serve_record_cap,
+            w->objects[f->serve_record.id].resource, RX_RIGHT_READ };
+    } else {
+        rd(&b, w, f->o.selection);
+    }
     rd(&b, w, f->o.demand);
     wr(&b, w, f->o.demand);
     wr(&b, w, f->o.result);
@@ -855,10 +865,26 @@ int rx_omega_register(RxOmegaFaculty *f, const RxOmegaCaps *caps) {
     begin(&b, "omega.select", RX_FACULTY_OMEGA, RX_OMEGA_SUBJ_OMEGA, RX_PRIO_LEARNING,
           fn_select, f, caps->omega);
     for (uint32_t k = 0; k < f->cfg.n_slots; k++) trig(&b, w, f->o.measure[k], RX_ALL_FIELDS);
+    if (f->require_experiment_evidence) {
+        b.d.triggers[b.d.n_triggers++] = (RxDep){ f->experiment_evidence, RX_FIELD(0) };
+        b.d.caps[b.d.n_caps++] = (RxCapNeed){ f->experiment_evidence_cap,
+            w->objects[f->experiment_evidence.id].resource, RX_RIGHT_READ };
+    }
     rd(&b, w, f->o.search);
     rd(&b, w, f->o.selection);
     wr(&b, w, f->o.selection);
     if ((rc = rx_world_add_reaction(w, &b.d, &f->r_select)) != RX_OK) return rc;
+    return RX_OK;
+}
+
+int rx_omega_require_evidence(RxOmegaFaculty *f, RxObjRef evidence, RxCapRef read_cap) {
+    if (!f || !f->w || evidence.id >= RX_MAX_OBJECTS ||
+        !f->w->objects[evidence.id].live ||
+        f->w->objects[evidence.id].generation != evidence.generation ||
+        read_cap.cap_id == UINT32_MAX) return RX_ERR_ARG;
+    f->experiment_evidence = evidence;
+    f->experiment_evidence_cap = read_cap;
+    f->require_experiment_evidence = 1;
     return RX_OK;
 }
 
@@ -894,4 +920,22 @@ void rx_omega_destroy(RxOmegaFaculty *f) {
         if (f->store[i].page) munmap(f->store[i].page, PAGE);
     f->n_store = 0;
     pthread_mutex_destroy(&f->mu);
+}
+
+int rx_omega_serve_from(RxOmegaFaculty *f, RxObjRef record, RxCapRef read_cap) {
+    if (!f || !f->w || record.id >= RX_MAX_OBJECTS || !f->w->objects[record.id].live ||
+        f->w->objects[record.id].generation != record.generation ||
+        read_cap.cap_id == UINT32_MAX) return RX_ERR_ARG;
+    f->serve_record = record;
+    f->serve_record_cap = read_cap;
+    f->serve_from_record = 1;
+    return RX_OK;
+}
+
+int rx_omega_identity_of(const RxOmegaFaculty *f, const uint8_t *code, size_t len,
+                         SemanticId *out) {
+    if (!f || !code || !out || len == 0 || len > AARCH64_MAX_CODE_BYTES) return -1;
+    RealizationObject r;
+    real_object(f, code, len, &r);
+    return omega_realize_compute_triple_id(&f->spec.spec_id, &f->machine.machine_id, &r, out);
 }

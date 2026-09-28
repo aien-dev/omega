@@ -147,6 +147,19 @@ typedef struct RxOmegaFaculty {
 
     uint32_t r_serve, r_watch, r_select, r_reconsider;
     RxObjRef inquiry;           /* R11: a plan object Omega may react to */
+    /* Optional belief barrier for later searches. The first selection
+     * establishes the incumbent. A later selection must observe AIEN's
+     * belief about physical experiment evidence for its own search epoch. */
+    RxObjRef experiment_evidence;
+    RxCapRef experiment_evidence_cap;
+    int require_experiment_evidence;
+    /* R13. When set, production runs the realization this record names,
+     * not the selection. The record has the selection layout. Omega's
+     * selection is then only eligible; what is in force is decided by
+     * whoever writes this record (in R13: the promotion authority). */
+    RxObjRef serve_record;
+    RxCapRef serve_record_cap;
+    int serve_from_record;
     uint32_t r_synth[RX_OMEGA_SLOTS], r_verify[RX_OMEGA_SLOTS], r_measure[RX_OMEGA_SLOTS];
     struct { struct RxOmegaFaculty *f; uint32_t k; } slot[RX_OMEGA_SLOTS];
 
@@ -162,6 +175,22 @@ int rx_omega_create_objects(RxOmegaFaculty *f, RxWorld *w, const RxOmegaConfig *
 
 /* Register the reactions with capabilities the caller minted. */
 int rx_omega_register(RxOmegaFaculty *f, const RxOmegaCaps *caps);
+
+/* Call after create_objects and before register. Belief field 0 is the
+ * search epoch accepted from the resident physical experiment; field 2 is
+ * the validity bit set by AIEN's evidence reaction. */
+int rx_omega_require_evidence(RxOmegaFaculty *f, RxObjRef evidence, RxCapRef read_cap);
+
+/* R13. Call after create_objects and before register. Production reads the
+ * realization in force from `record` (fields 0 epoch, 1..4 realization id,
+ * 6 regime) with `read_cap`, held by the serve subject. R10 and R11 never
+ * call this; production then follows the selection as before. */
+int rx_omega_serve_from(RxOmegaFaculty *f, RxObjRef record, RxCapRef read_cap);
+
+/* Identity of these bytes as an Omega matvec realization on this machine,
+ * computed the way the synthesizer names them. 0 on success. */
+int rx_omega_identity_of(const RxOmegaFaculty *f, const uint8_t *code, size_t len,
+                         SemanticId *out);
 
 void rx_omega_destroy(RxOmegaFaculty *f);
 

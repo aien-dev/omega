@@ -40,7 +40,8 @@
 /* Object types (RxObject.type). */
 enum {
     RX_OT_PLACEMENT = 0x5311u, RX_OT_GOAL, RX_OT_BELIEF, RX_OT_PREDICTION,
-    RX_OT_HYPOTHESIS, RX_OT_PLAN, RX_OT_ASSESSMENT, RX_OT_MEMORY
+    RX_OT_HYPOTHESIS, RX_OT_PLAN, RX_OT_ASSESSMENT, RX_OT_MEMORY,
+    RX_OT_EXPERIMENT_BELIEF
 };
 
 /* placement:  0 seq, 1 core class (MIDR part number, 0 = unknown), 2 cpus    (external)
@@ -83,6 +84,9 @@ enum { RX_AIEN_GOAL_UNKNOWN = 1,     /* no confirmed prediction for the regime y
        RX_AIEN_GOAL_UNMET,           /* and the condition is unexplored: plan wakes */
        RX_AIEN_GOAL_UNMET_EXPLORED };/* already explored here; nothing to try */
 
+enum { RX_AIEN_EXP_SUPPORTED = 1,   /* every replicate matched its expected value */
+       RX_AIEN_EXP_REFUTED };        /* at least one did not */
+
 #define RX_AIEN_MEMORY_SLOTS 7u
 
 typedef struct {
@@ -101,6 +105,7 @@ typedef struct {
 typedef struct {
     RxObjRef placement, goal;                      /* written from outside */
     RxObjRef belief, prediction, hypothesis, plan, assessment, memory;
+    RxObjRef experiment_belief; /* R13: physical consequence accepted by AIEN */
 } RxAienObjects;
 
 /* Resources: RX_AIEN_RES_BASE + index; the caller mints against them. */
@@ -108,6 +113,7 @@ typedef struct {
 enum {
     RX_AIEN_RES_PLACEMENT = 0, RX_AIEN_RES_GOAL, RX_AIEN_RES_BELIEF, RX_AIEN_RES_PREDICTION,
     RX_AIEN_RES_HYPOTHESIS, RX_AIEN_RES_PLAN, RX_AIEN_RES_ASSESSMENT, RX_AIEN_RES_MEMORY,
+    RX_AIEN_RES_EXPERIMENT_BELIEF,
     RX_AIEN_RES_COUNT
 };
 
@@ -119,6 +125,7 @@ enum { RX_AIEN_SUBJ = 31 };
 typedef struct {
     RxCapRef own[RX_AIEN_RES_COUNT];
     RxCapRef demand, selection;
+    RxCapRef experiment_evidence;
 } RxAienCaps;
 
 typedef struct {
@@ -127,6 +134,8 @@ typedef struct {
     RxAienInputs in;
     RxAienObjects o;
     uint32_t r_observe, r_predict, r_explain, r_assess, r_plan;
+    uint32_t r_experiment;
+    RxObjRef experiment_evidence;
 } RxAienFaculty;
 
 void rx_aien_default_config(RxAienConfig *cfg);
@@ -135,6 +144,14 @@ int rx_aien_create_objects(RxAienFaculty *f, RxWorld *w, const RxAienConfig *cfg
                            const RxAienInputs *in);
 
 int rx_aien_register(RxAienFaculty *f, const RxAienCaps *caps);
+
+/* R13. Optional reaction on physical experiment evidence (an object another
+ * faculty publishes). Evidence fields: 0 search epoch (set when the
+ * experiment ends), 1 expected, 2 observed, 3 all replicates matched (1),
+ * 4 replicates matched. Experiment belief: 0 epoch, 1 last observed,
+ * 2 RX_AIEN_EXP_SUPPORTED or RX_AIEN_EXP_REFUTED, 3 replicates. */
+int rx_aien_register_experiment(RxAienFaculty *f, RxObjRef evidence,
+                                RxCapRef evidence_read, RxCapRef belief_write);
 
 static inline uint64_t rx_aien_regime(uint64_t M, uint64_t N) { return (M << 32) | N; }
 
