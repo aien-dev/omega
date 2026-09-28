@@ -408,11 +408,20 @@ int r15_start(R15Rig *r, R15Config config) {
         {r->intent, 0, 1}, {r->intent, 1, RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT},
         {r->intent, 2, RW}, {r->intent, 3, 0}, {r->intent, 4, 0},
         {r->intent, 5, RX_AEGIS_OP_ACQUIRE}};
-    if (rx_world_publish_external(&r->w, r->ext_intent, request, 6) <= 0 ||
-        rx_world_wait_quiescent(&r->w, 10000) != RX_OK) return -1;
+    if (rx_world_publish_external(&r->w, r->ext_intent, request, 6) <= 0) {
+        r->stage_why = "R8 acquire: intent publication refused";
+        return -1;
+    }
+    if (rx_world_wait_quiescent(&r->w, 10000) != RX_OK) {
+        r->stage_why = "R8 acquire: body did not quiesce";
+        return -1;
+    }
     r->seat_output = (RxCapRef){field(r, lc.output_slot, 0), field(r, lc.output_slot, 1)};
     r->seat_input = lc.input_seat_read;
-    if (field(r, lc.output_slot, 2) != RX_AEGIS_SLOT_LIVE) return -1;
+    if (field(r, lc.output_slot, 2) != RX_AEGIS_SLOT_LIVE) {
+        r->stage_why = "R8 acquire: slot not live after quiescence";
+        return -1;
+    }
     r->stage = 6;
     if (rx_world_bind_capability(&r->w, r->living.o.input, r->seat_input) != RX_OK ||
         rx_world_bind_capability(&r->w, r->living.o.output, r->seat_output) != RX_OK)

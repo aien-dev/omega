@@ -89,7 +89,8 @@ static int run_side(R15Config c, uint64_t target, R15Outcome *o, char *first, si
     R15Rig *r = calloc(1, sizeof *r);
     if (!r) return -1;
     int rc = r15_start(r, c);
-    if (rc != 0) snprintf(o->why, sizeof o->why, "setup failed at stage %d", r->stage);
+    if (rc != 0) snprintf(o->why, sizeof o->why, "setup failed at stage %d%s%s", r->stage,
+                          r->stage_why ? ": " : "", r->stage_why ? r->stage_why : "");
     else rc = r15_episode(r, target, o);
     if (rc == 0 && o->lost_triggers) r15_lost_triggers(r, first, n);
     r15_stop(r);
@@ -119,8 +120,8 @@ static void detector_control(R15Config c) {
     char first[200] = "";
     if (r15_start(r, c) != 0) {
         g_fail++;
-        fprintf(stderr, "  FAIL detector control %s: setup stage %d\n", r15_config_name(c),
-                r->stage);
+        fprintf(stderr, "  FAIL detector control %s: setup stage %d %s\n", r15_config_name(c),
+                r->stage, r->stage_why ? r->stage_why : "");
         r15_stop(r);
         free(r);
         return;

@@ -356,11 +356,11 @@ test-r14-silicon: $(RX_R14_SILICON)
 # is checked against a case whose true value is known in advance.
 RX_R15_INSTR_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_generation.c src/sha256.c src/omega_evidence.c \
-	tests/runtime/rx_r15_instr.c
+	src/runtime/rx_seq_reference.c tests/runtime/rx_r15_instr.c
 RX_R15_INSTR = $(OUT_DIR)/rx_r15_instr_test
 
 $(RX_R15_INSTR): $(RX_R15_INSTR_SRCS) src/runtime/rx_world.h src/runtime/rx_generation.h \
-	src/runtime/rx_caproot.h | $(OUT_DIR)
+	src/runtime/rx_caproot.h src/runtime/rx_seq_reference.h | $(OUT_DIR)
 	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_INSTR_SRCS)
 
 test-r15-instr: $(RX_R15_INSTR)

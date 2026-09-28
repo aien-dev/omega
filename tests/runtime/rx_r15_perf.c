@@ -549,6 +549,7 @@ static int run_trial(R15Config cfg) {
         r15_rec_begin(&g_out, "error");
         rec_str("what", "build");
         rec_i("stage", r->stage);
+        rec_str("stage_why", r->stage_why ? r->stage_why : "");
         r15_rec_end(&g_out);
         observers_stop(t_proc);
         return 2;

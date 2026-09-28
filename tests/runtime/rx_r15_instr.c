@@ -9,12 +9,15 @@
  *   scheduler     wall and thread-CPU time are both recorded, separately;
  *   timing        a buffer that overflows says so;
  *   bytes         each ring path counts one 128-byte descriptor per copy;
- *   R9 I/O        a store counts only its own writes and syncs.
+ *   R9 I/O        a store counts only its own writes and syncs;
+ *   SEQ idle      a pulse over a plan that misses a registered reaction
+ *                 never declares the world quiescent.
  *
  * Exit status is the number of failed checks (0 = pass).
  */
 #include "runtime/rx_caproot.h"
 #include "runtime/rx_generation.h"
+#include "runtime/rx_seq_reference.h"
 #include "runtime/rx_world.h"
 
 #include <stdio.h>
@@ -314,6 +317,59 @@ static void t_store_io_scoped(void) {
     if (system(cmd) != 0) fprintf(stderr, "note: could not remove %s\n", a_dir);
 }
 
+/* ---- SEQ: a stale plan cannot declare the world quiescent ----------------
+ * The SEQ orchestrator rebuilds its plan when n_reactions changes, but it
+ * checks that outside the pulse. A reaction registered and stimulated in
+ * between is not in the plan the next pulse walks; that pulse found nothing
+ * ready and used to declare the world idle, so rx_world_wait_quiescent
+ * returned before the new reaction ever ran (the R15 SEQ setup failure at
+ * stage 5, where living.experiment.ask is added and then awaited). */
+static int seq_validate(const void *ctx, RxCapRef ref, uint32_t subject, uint64_t resource,
+                        uint32_t rights, RxCapEntry *out) {
+    return rx_caproot_validate(ctx, ref, subject, resource, rights, out);
+}
+
+static int seq_inspect(const void *ctx, RxCapRef ref, RxCapEntry *out) {
+    return rx_caproot_inspect(ctx, ref, out);
+}
+
+static void t_seq_stale_plan(void) {
+    Env e;
+    memset(&e, 0, sizeof e);
+    CHECK(rx_caproot_start(&e.root, &e.admin) == RX_CAP_OK, "authority");
+    CHECK(rx_world_init_sequential_reference(&e.w, &e.root, seq_validate, seq_inspect,
+                                             1u << 16) == RX_OK, "sequential world");
+    e.w.external_subject = SUBJ_EXTERNAL;
+    RxObjRef a_src = mkobj(&e, RES_SRC), b_src = mkobj(&e, RES_SRC);
+    RxCapRef ext = mint(&e, SUBJ_EXTERNAL, RES_SRC, RX_RIGHT_WRITE);
+    RxCapRef rd = mint(&e, SUBJ_WORK, RES_SRC, RX_RIGHT_READ);
+    uint32_t a = add_listener(&e, a_src, RX_FIELD(0), rd);
+    uint32_t order[2] = { a, UINT32_MAX };
+    RxSeqPlan plan = { order, 1, NULL, NULL, 0 };
+    uint32_t ran = 99;
+    CHECK(rx_seq_pulse(&e.w, &plan, &ran) == RX_OK && ran == 0, "first pulse ran %u", ran);
+    CHECK(e.w.seq_idle_start == e.w.seq_pulse_started, "a full plan with nothing ready is idle");
+
+    /* Registered and stimulated after the plan was built. */
+    uint32_t b = add_listener(&e, b_src, RX_FIELD(0), rd);
+    RxMutation m = { b_src, 0, 7 };
+    CHECK(rx_world_publish_external(&e.w, ext, &m, 1) > 0, "stimulus");
+    CHECK(rx_seq_pulse(&e.w, &plan, &ran) == RX_OK && ran == 0, "stale pulse ran %u", ran);
+    CHECK(e.w.seq_idle_start != e.w.seq_pulse_started,
+          "a pulse that missed reaction %u declared the world quiescent", b);
+
+    order[1] = b;
+    plan.n = 2;
+    uint64_t before = e.w.reactions[b].activations;
+    CHECK(rx_seq_pulse(&e.w, &plan, &ran) == RX_OK && ran == 1, "fresh pulse ran %u", ran);
+    CHECK(e.w.reactions[b].activations == before + 1, "the late reaction did not run");
+    CHECK(rx_seq_pulse(&e.w, &plan, &ran) == RX_OK && ran == 0 &&
+          e.w.seq_idle_start == e.w.seq_pulse_started, "the full plan is idle again");
+    CHECK(rx_world_wait_quiescent(&e.w, 100) == RX_ERR_TIMEOUT,
+          "quiescence still needs a pulse that began after the wait");
+    env_stop(&e);
+}
+
 int main(void) {
     static const uint32_t fanouts[] = { 1, 2, 4, 8, 16, 32, 64, 128, 256 };
     for (size_t i = 0; i < sizeof fanouts / sizeof fanouts[0]; i++)
@@ -323,6 +379,7 @@ int main(void) {
     t_ring_bytes();
     t_store_io_scoped();
     t_long_log();
+    t_seq_stale_plan();
     printf("R15 instrumentation: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

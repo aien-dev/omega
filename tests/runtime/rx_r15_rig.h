@@ -69,6 +69,7 @@ typedef struct {
     /* lost-trigger baseline, taken when the body is built */
     uint64_t baseline[RX_MAX_REACTIONS][RX_MAX_DEPS];
     int stage;                  /* setup stage reached, for diagnostics */
+    const char *stage_why;      /* which step of that stage failed, if known */
     /* R15 harness: optional measurement points inside r15_episode (all NULL
      * for the parity gate, which then runs exactly as before). */
     const struct R15Hooks *hooks;

@@ -85,7 +85,11 @@ int rx_seq_pulse(RxWorld *w, const RxSeqPlan *plan, uint32_t *ran) {
             if (now_ns() > limit) { rc = RX_ERR_TIMEOUT; break; }
         }
     }
-    if (n_ran == 0 && rc == RX_OK) {
+    /* Idle only if this pulse polled every registered reaction. A plan built
+     * before a reaction was added misses it, so finding nothing ready proves
+     * nothing: the late reaction may have pending input (R15 SEQ setup race,
+     * spec §2.1). The caller rebuilds its plan and pulses again. */
+    if (n_ran == 0 && rc == RX_OK && plan->n >= w->n_reactions) {
         w->seq_idle_start = pulse;
         pthread_cond_broadcast(&w->idle_cv);
     }

@@ -46,7 +46,10 @@ int rx_world_init_native_sequential_reference(RxWorld *w, const struct AienosCap
                                               uint64_t crumb_cap);
 
 /* One pulse over the plan. *ran receives the number of stages run.
- * Returns RX_OK, or RX_ERR_TIMEOUT if a graphics claim never completed. */
+ * Returns RX_OK, or RX_ERR_TIMEOUT if a graphics claim never completed.
+ * A pulse that runs nothing marks the world quiescent only when the plan
+ * covers every registered reaction (plan->n >= w->n_reactions); a stale
+ * plan must be rebuilt before the world can be called idle. */
 int rx_seq_pulse(RxWorld *w, const RxSeqPlan *plan, uint32_t *ran);
 
 /* The legacy loop shape: pulse until a pulse runs nothing or max_pulses. */
