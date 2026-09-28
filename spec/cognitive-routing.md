@@ -2,7 +2,8 @@
 
 Code: `src/runtime/rx_route.{c,h}`. Test: `tests/runtime/rx_cognitive_routing.c`
 with stand-in engines in `tests/runtime/rx_cog_engines.{c,h}`,
-`make test-cognitive-routing`. Receipt: `evidence/COGNITIVE_ROUTING/`.
+`make test-cognitive-routing`. Receipt: `evidence/COGNITIVE_ROUTING/6731c0d0….json`
+(candidate 8ed2d9f).
 
 ## Purpose
 
