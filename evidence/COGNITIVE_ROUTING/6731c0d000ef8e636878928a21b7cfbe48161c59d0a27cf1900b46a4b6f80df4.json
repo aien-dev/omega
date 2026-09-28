@@ -1,0 +1,48 @@
+{
+  "schema": "OMEGA_COGNITIVE_ROUTING_V1",
+  "run_id": "20260928T213546Z-8ed2d9f8aecd",
+  "candidate_commit": "8ed2d9f8aecd97bc5567769274f27cf852dbf156",
+  "candidate_bound": true,
+  "run_commit": "8ed2d9f8aecd97bc5567769274f27cf852dbf156",
+  "tree_dirty": false,
+  "aienos_commit": "c8ab65e3ba2fddbe99245f747fdfdb99f6042fd3",
+  "checks": 8625,
+  "failures": 0,
+  "test_binary_sha256": "86f67ca3ef94866d75add06d1b3c12e3d1b750db4d80903523278519bcd4df8b",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64", "cpus": "cpu19 (Cortex-X925)"},
+  "scope": "host processor; stand-in engines (not AIEN); native AIENOS authority library",
+  "energy_meter": "aien_spbm cpu_p+cpu_e, pkg",
+  "engines_train_seconds": 15.64,
+  "generations": {"before_evidence": 1, "calibrated": 2, "after_damage": 3, "model_sha256": "f1b5982430252c3b9d81a031b5f54fb8b6b3399ef52a007708b7cf9f02fa47a2"},
+  "realizations": [
+    {"id": 11, "class": 2, "op": 0, "generation": 2, "accuracy": 0.8286, "failures": 0, "calibration_error": 0.0149, "mean_ns": 19, "p99_ns": 3904, "nj_per_call": 183, "energy_measured": true},
+    {"id": 12, "class": 3, "op": 0, "generation": 2, "accuracy": 0.9365, "failures": 0, "calibration_error": 0.0330, "mean_ns": 226, "p99_ns": 3920, "nj_per_call": 2356, "energy_measured": true},
+    {"id": 13, "class": 4, "op": 0, "generation": 2, "accuracy": 0.9600, "failures": 0, "calibration_error": 0.0320, "mean_ns": 9073, "p99_ns": 32384, "nj_per_call": 87180, "energy_measured": true},
+    {"id": 14, "class": 5, "op": 0, "generation": 2, "accuracy": 0.9668, "failures": 0, "calibration_error": 0.0433, "mean_ns": 17689, "p99_ns": 61936, "nj_per_call": 164794, "energy_measured": true},
+    {"id": 21, "class": 1, "op": 1, "generation": 2, "accuracy": 0.4502, "failures": 0, "calibration_error": 0.0312, "mean_ns": 8292, "p99_ns": 54528, "nj_per_call": 82682, "energy_measured": true},
+    {"id": 22, "class": 1, "op": 1, "generation": 2, "accuracy": 0.6997, "failures": 0, "calibration_error": 0.0312, "mean_ns": 28846, "p99_ns": 239216, "nj_per_call": 302368, "energy_measured": true},
+    {"id": 23, "class": 6, "op": 1, "generation": 2, "accuracy": 1.0000, "failures": 0, "calibration_error": 0.0312, "mean_ns": 38036, "p99_ns": 189856, "nj_per_call": 405110, "energy_measured": true}
+  ],
+  "ladders": {
+    "recognize_no_evidence": {"engines": [13], "accept_from_bin": [0], "expected_quality": 0.0000, "quality_lower_95": 0.0000, "expected_ns": 0, "expected_nj": 0, "reason": "no_evidence_reference"},
+    "plan_no_evidence": {"engines": [23], "accept_from_bin": [0], "expected_quality": 0.0000, "quality_lower_95": 0.0000, "expected_ns": 0, "expected_nj": 0, "reason": "no_evidence_reference"},
+    "recognize": {"engines": [12, 13, 14], "accept_from_bin": [14, 14, 12], "expected_quality": 0.9658, "quality_lower_95": 0.9570, "expected_ns": 3458, "expected_nj": 33042, "reason": "evidence"},
+    "plan_bound_100": {"engines": [21, 23], "accept_from_bin": [15, 15], "expected_quality": 1.0000, "quality_lower_95": 0.9981, "expected_ns": 29204, "expected_nj": 305413, "reason": "evidence"},
+    "recognize_after_damage": {"engines": [13, 14], "accept_from_bin": [14, 12], "expected_quality": 0.9609, "quality_lower_95": 0.9516, "expected_ns": 10764, "expected_nj": 105278, "reason": "evidence"}
+  },
+  "gate_workload": {"recognize": 20000, "plan": 2000, "passes": 9, "most_expensive": {"recognize": 14, "plan": 23},
+    "requirement": {"recognize_min_quality": 0.9500, "plan_min_quality": 0.9980},
+    "routed": {"recognize_quality": 0.9595, "plan_quality": 1.0000, "median_cpu_ns": 125438304, "median_wall_ns": 249672156, "median_cpu_energy_uj": 1466000, "median_pkg_energy_uj": 5946000, "escalated": 5356, "exhausted": 1235, "refused": 0, "max_escalations": 2, "escalation_bound_violations": 0},
+    "most_expensive_always": {"recognize_quality": 0.9603, "plan_quality": 1.0000, "median_cpu_ns": 426831792, "median_wall_ns": 854388315, "median_cpu_energy_uj": 4073000, "median_pkg_energy_uj": 15913000},
+    "compute_ratio": 0.2939, "cpu_energy_ratio": 0.3599, "pkg_energy_ratio": 0.3737
+  },
+  "pairs": {"load_average_before": 4.71, "load_average_after": 5.02, "compute_wins": 9, "energy_wins": 9, "of": 9,
+    "cpu_ns": [[128651632, 439609152], [122349296, 419411168], [127765696, 426831792], [127353392, 427611760], [125674832, 456219936], [121625792, 445903248], [125438304, 421318416], [120448000, 411751648], [121000416, 422836288]],
+    "cpu_energy_uj": [[1486000, 3913000], [1014000, 4490000], [1471000, 4013000], [989000, 4566000], [1466000, 4393000], [1004000, 4524000], [1492000, 3962000], [1523000, 4010000], [1035000, 4073000]]},
+  "learning": {"damaged_engine": 12, "quality_under_old_generation": 0.8707, "quality_after_promotion": 0.9597, "most_expensive_quality_same_inputs": 0.9591, "cpu_ns_after_promotion": 187938784, "most_expensive_cpu_ns": 325548896, "cpu_energy_uj_after_promotion": 2108000, "most_expensive_cpu_energy_uj": 3116000},
+  "promotion": {"bypass_attempts": 3, "bypass_refused": 3, "router_links_promote": false, "router_links_authority_admin": false},
+  "gates": {
+    "OMEGA_COGNITIVE_ROUTING_PASS": "PASS",
+    "not_claimed": ["AIEN cognition (engines are stand-ins)", "graphics-processor realizations", "energy below idle (the meter is whole-cluster and includes idle draw)", "routing across concurrent requests", "online learning without labelled trials"]
+  }
+}
