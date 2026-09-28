@@ -6,6 +6,7 @@ on:
       - 'src/runtime/**'
       - 'tests/runtime/**'
       - 'Makefile'
+      - 'src/omega_matvec_quad.*'
       - '.github/workflows/rx-host.yml'
   push:
     branches:
@@ -14,6 +15,7 @@ on:
       - 'src/runtime/**'
       - 'tests/runtime/**'
       - 'Makefile'
+      - 'src/omega_matvec_quad.*'
       - '.github/workflows/rx-host.yml'
 
 jobs:
@@ -140,3 +142,52 @@ jobs:
           cat "$receipt"
           cat "$native"
           cat "$generation"
+
+  omega-faculty-arm:
+    # R10 runs Omega's native AArch64 realizations, so it needs an AArch64 host.
+    # The hosted runner is not the DGX Spark: whether an Omega realization beats
+    # the reference there is recorded, not required. The chain itself is required.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Checkout pinned Physics headers
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/physics
+          ref: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          path: physics-src
+      - name: Read pinned AIENOS authority
+        id: aienos
+        run: |
+          sha=$(awk 'NF && $1 !~ /^#/ {print $1; exit}' aienos.lock)
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned AIENOS authority
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/aienos
+          ref: ${{ steps.aienos.outputs.sha }}
+          path: aienos-src
+      - name: Keep dependency checkouts out of Omega tree status
+        run: printf 'physics-src/\naienos-src/\n' >> .git/info/exclude
+      - name: Omega as a resident realization faculty (R10)
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+          R10_ALLOW_NO_WIN: '1'
+        run: make test-r10
+      - name: Show R10 receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_omega_faculty_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"tree_dirty": false,' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"

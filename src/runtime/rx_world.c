@@ -939,7 +939,11 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         crumb_append(w, &k);
         w->stats.invalidations++;
         note_conflict(w, r);
-        /* The change that made this stale has already re-armed it. */
+        /* The wake this activation answered is still unanswered. A change to a
+         * trigger has already re-armed it; a change to a read-only input has
+         * not, and would otherwise drop the stimulus. Run again on a fresh
+         * snapshot under the same cause. Conflict limits still apply. */
+        r->rearm = true;
         end_activation(w, rid);
         return;
     }

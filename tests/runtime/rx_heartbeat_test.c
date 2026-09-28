@@ -506,6 +506,58 @@ static void t_invalidation(void) {
     audit_and_close(&e);
 }
 
+/* A read-only input changes while the reaction computes. The candidate is
+ * stale and must not commit, but the trigger that woke it is still owed an
+ * answer: the reaction runs again and answers it. (Found by R10: a new Omega
+ * selection landed while the production path was serving a request, and the
+ * request was dropped.) */
+typedef struct { RxObjRef x, r, y; int delay_ms; } ReadArg;
+
+static int fn_slow_read(RxCtx *c) {
+    ReadArg *a = c->user;
+    uint64_t v = in_of(c, a->x)->field[0];
+    uint64_t k = in_of(c, a->r)->field[0];
+    sleep_ms(a->delay_ms);
+    c->out[c->n_out++] = (RxMutation){ a->y, 0, v * 10 + k };
+    return 0;
+}
+
+static void t_read_only_invalidation(void) {
+    begin("invalidation_by_read_only_input_reruns", "I2,I6,I7");
+    Env e;
+    CHECK(env_start(&e, 2) == 0, "setup");
+    static ReadArg a;
+    a.x = mkobj(&e, RES_SENSOR, 0);
+    a.r = mkobj(&e, RES_PLAN, 0);
+    a.y = mkobj(&e, RES_BELIEF, 0);
+    a.delay_ms = 80;
+    RxCapRef ext_x = mint(&e, SUBJ_EXTERNAL, RES_SENSOR, RX_RIGHT_WRITE);
+    RxCapRef ext_r = mint(&e, SUBJ_EXTERNAL, RES_PLAN, RX_RIGHT_WRITE);
+    RxReactionDesc d;
+    desc_init(&d, "slow.read", RX_FACULTY_AIEN, SUBJ_AIEN, fn_slow_read, &a);
+    add_trigger(&d, a.x, RX_FIELD(0));
+    d.reads[d.n_reads++] = (RxDep){ a.r, RX_FIELD(0) };
+    add_write(&d, a.y, RX_FIELD(0));
+    add_cap(&d, mint(&e, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ), RES_SENSOR, RX_RIGHT_READ);
+    add_cap(&d, mint(&e, SUBJ_AIEN, RES_PLAN, RX_RIGHT_READ), RES_PLAN, RX_RIGHT_READ);
+    add_cap(&d, mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_WRITE), RES_BELIEF, RX_RIGHT_WRITE);
+    uint32_t id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &id) == RX_OK, "add");
+    stimulus(&e, ext_x, a.x, 0, 1);
+    sleep_ms(20);                       /* computing on r = 0 */
+    stimulus(&e, ext_r, a.r, 0, 5);     /* not a trigger: wakes nobody */
+    rx_world_wait_quiescent(&e.w, 5000);
+    CHECK(field(&e, a.y, 0) == 15, "y=%llu; the stimulus was dropped or answered stale",
+          (unsigned long long)field(&e, a.y, 0));
+    CHECK(e.w.stats.invalidations == 1, "invalidations=%llu",
+          (unsigned long long)e.w.stats.invalidations);
+    CHECK(e.w.reactions[id].commits == 1, "commits=%llu",
+          (unsigned long long)e.w.reactions[id].commits);
+    CHECK(e.w.reactions[id].activations == 2, "activations=%llu",
+          (unsigned long long)e.w.reactions[id].activations);
+    audit_and_close(&e);
+}
+
 /* Concurrent publication: 8 incrementers on one PAIR object, driven by 4
  * publisher threads. a and b must always move together, and no increment may
  * be lost: a == b == number of increment commits. */
@@ -2382,6 +2434,7 @@ int main(int argc, char **argv) {
     t_fan_out();
     t_fan_in();
     t_invalidation();
+    t_read_only_invalidation();
     t_concurrent_publication();
     t_stale_input();
     t_write_set_enforced();
