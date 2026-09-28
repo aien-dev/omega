@@ -91,11 +91,13 @@ costs so much. AIEN checks that claim against what production pays.
 A control world makes the same move without AIEN. Its search epoch stays 1,
 and it stays on the reference.
 
-Eight consecutive local runs (candidate not yet bound), ns per call:
+Eight consecutive local runs before the candidate was bound, ns per call. The
+bound receipt is `evidence/R11/6aa6b3b3…json` (candidate 381828f): 6597 →
+4913 → 2802 ns (1.75×); control 5044 ns, search epoch 1.
 
 | | A725, reference | X925, old record | X925, after AIEN's plan | Control X925 |
 |---|---|---|---|---|
-| range over 8 runs | 6617–6812 | 4872–4948 | 2778–2859 | ~4900–5100 |
+| range over 8 runs | 6617–6812 | 4872–4948 | 2778–2859 | 4927–5105 (3 runs) |
 | speedup from AIEN's plan | | | 1.70–1.77× | none |
 
 The receipt checks the causal chain crumb by crumb: selection 2 ←
