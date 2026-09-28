@@ -1,0 +1,47 @@
+{
+  "schema": "AIEN_OMEGA_INCREMENTAL_SEMANTICS_V1",
+  "run_id": "20260928T212632Z-b53ac53fc925",
+  "candidate_commit": "b53ac53fc925333d17f428136e56c8b5762fd5eb",
+  "run_commit": "b53ac53fc925333d17f428136e56c8b5762fd5eb",
+  "candidate_bound": true,
+  "tree_dirty": false,
+  "test_binary_sha256": "9d779b0ce6346fdb519871f68a7dd313b7b372770a5980921c3169ba487489e8",
+  "machine_identity": {"node": "spark-b87b", "system": "Linux", "release": "7.0.0-1019-nvidia", "architecture": "aarch64"},
+  "gate": {"OMEGA_INCREMENTAL_SEMANTICS_PASS": "PASS"},
+  "prove": {
+    "dependency_tracking": {"result": "PASS", "checks": 17},
+    "correct_invalidation": {"result": "PASS", "checks": 20},
+    "no_stale_reuse": {"result": "PASS", "checks": 9},
+    "generation_isolation": {"result": "PASS", "checks": 17},
+    "branch_isolation": {"result": "PASS", "checks": 15},
+    "cross_branch_valid_reuse": {"result": "PASS", "checks": 10},
+    "causal_provenance": {"result": "PASS", "checks": 14},
+    "details": {"temperature_change_dirtied": 2, "unrelated_nodes_kept_clean": 4, "unrelated_world_writes_invalidations": 0, "unrelated_world_writes_runs": 0, "differential_ops": 200000, "differential_gets": 105999, "differential_hits": 93971, "differential_mismatches": 0, "differential_audits": 164619, "differential_false_hits": 0, "differential_forks": 3424, "differential_cross_branch_hits": 38560, "retired_object_same_bytes_recomputed": true, "promoted_fn_generation_recomputed": true, "jspace_candidates": 16, "jspace_derivation_runs": 8, "jspace_cache_hits": 24, "provenance_entries_verified": 5, "provenance_events_verified": 6, "provenance_memos_verified": 11, "world_crumbs_verified": 15, "tampered_entry_detected": true, "tampered_event_detected": true}
+  },
+  "workload": {"ticks": 600, "noise_objects": 8, "jspace_every": 20, "jspace_width": 6, "work": {"thermal_rounds": 3000, "repo_sha256_chain": 6000, "memory_vectors": 12000, "caps_rows": 20000, "plan_rounds": 3000}, "note": "stand-in derivations with real CPU cost; not the AIEN model"},
+  "modes": {
+    "FULL": {"queries": 780, "derivation_runs": 3900, "derivation_ns": 0, "query_ns": 2277646421, "wall_ns": 2291342159, "p50_query_ns": 2845146, "p99_query_ns": 3881502, "resolutions": 3900, "memo_hits": 0, "cutoffs": 0, "cache_hits": 0, "hit_rate": 0.0000, "invalidations": 0, "unnecessary_invalidations": 0, "unnecessary_invalidation_rate": 0.0000, "answers_differing_from_full": 0},
+    "OBJECT": {"queries": 780, "derivation_runs": 647, "derivation_ns": 44289967, "query_ns": 53814319, "wall_ns": 2412137206, "p50_query_ns": 11408, "p99_query_ns": 2801082, "resolutions": 3900, "memo_hits": 2302, "cutoffs": 951, "cache_hits": 0, "hit_rate": 0.8341, "invalidations": 1593, "unnecessary_invalidations": 951, "unnecessary_invalidation_rate": 0.5970, "answers_differing_from_full": 0},
+    "FIELD": {"queries": 780, "derivation_runs": 647, "derivation_ns": 45832934, "query_ns": 53189818, "wall_ns": 2546254140, "p50_query_ns": 11504, "p99_query_ns": 3171883, "resolutions": 2352, "memo_hits": 1542, "cutoffs": 163, "cache_hits": 0, "hit_rate": 0.7249, "invalidations": 805, "unnecessary_invalidations": 163, "unnecessary_invalidation_rate": 0.2025, "answers_differing_from_full": 0},
+    "ENGINE": {"queries": 780, "derivation_runs": 401, "derivation_ns": 47791982, "query_ns": 56891839, "wall_ns": 3127665274, "p50_query_ns": 10736, "p99_query_ns": 3619965, "resolutions": 2352, "memo_hits": 1542, "cutoffs": 163, "cache_hits": 246, "hit_rate": 0.8295, "invalidations": 805, "unnecessary_invalidations": 163, "unnecessary_invalidation_rate": 0.2025, "answers_differing_from_full": 0}
+  },
+  "measure": {"recomputation_avoided": 3499, "recomputation_avoided_fraction": 0.8972, "compute_saved_ns": 2220754582, "compute_saved_ns_by_producer_timing": 1410540257, "latency_saved_ns": 2220754582, "latency_speedup": 40.03, "p50_latency_ns": {"FULL": 2845146, "ENGINE": 10736}, "p99_latency_ns": {"FULL": 3881502, "ENGINE": 3619965}, "cache_hit_rate": 0.8295, "cache_hits": 1951, "resolutions": 2352, "false_hits": 0, "audited_hits": 3499, "false_hit_rate": 0.000000, "unnecessary_invalidation_rate": {"OBJECT": 0.5970, "FIELD": 0.2025, "ENGINE": 0.2025}, "invalidations": {"OBJECT": 1593, "FIELD": 805, "ENGINE": 805}, "answers_identical_across_modes": true,
+    "energy": {"source": "hwmon aien_spbm energy1-3 (package, cpu_e, cpu_p), microjoules; overflow indicators checked before and after each read", "method": "paired equal-length windows: FULL replay, and ENGINE replay followed by idle to the same length; saved = FULL window - ENGINE window; order alternated", "valid": true, "repetitions": 5, "loadavg_1min_at_start": 6.22, "channels": {"package": {"full_window_uj": [47750000, 55886000, 53747000, 57832000, 83846000], "engine_window_uj": [47747000, 45736000, 53881000, 53793000, 83415000], "saved_j": [0.0072, 3.4259, -0.1307, 0.5111, 0.4359], "saved_j_median": 0.4359, "saved_j_min": -0.1307, "saved_j_max": 3.4259}, "cpu_e": {"full_window_uj": [1328000, 1600000, 1333000, 2162000, 849000], "engine_window_uj": [1103000, 990000, 2453000, 2054000, 1948000], "saved_j": [0.2251, 0.4645, -1.1198, -0.0267, -1.0989], "saved_j_median": -0.0267, "saved_j_min": -1.1198, "saved_j_max": 0.4645}, "cpu_p": {"full_window_uj": [9695000, 11211000, 11282000, 11343000, 13114000], "engine_window_uj": [9983000, 9488000, 10284000, 10520000, 18082000], "saved_j": [-0.2871, 0.3281, 0.9986, 0.1331, -4.9669], "saved_j_median": 0.1331, "saved_j_min": -4.9669, "saved_j_max": 0.9986}}, "window_ns": [2386813392, 2738129359, 2733150111, 2912477822, 4223667177], "engine_busy_ns": [74296973, 78186108, 84368387, 86776411, 71507204], "limits": "on-device counters, not a wall-outlet meter; other machine activity falls in both windows; not an R15 quiet-machine qualification"}
+  },
+  "definitions": {
+    "recomputation_avoided": "derivation runs FULL minus ENGINE on the same trace",
+    "compute_saved_ns": "time inside queries, FULL minus ENGINE",
+    "compute_saved_ns_by_producer_timing": "sum over every hit of the producing run's measured time",
+    "cache_hit_rate": "(memo + cutoff + cache hits) / all node resolutions, nested ones included",
+    "false_hit_rate": "hits whose audit recomputation differed / hits audited (every hit, audited replay)",
+    "unnecessary_invalidation_rate": "invalidated memos whose inputs came back unchanged (cut off) / invalidations"
+  },
+  "limits": [
+    "functions must be pure over declared inputs; the engine cannot see an undeclared read (the audit replay is how that would show)",
+    "a fork copies the branch tables (simple reference, not copy-on-write)",
+    "the cache is bounded and never evicts; when 7/8 full, new results are not filed (counted)",
+    "single engine mutex; one process; the cache does not survive a restart",
+    "cache reuse is not gated by capabilities: a reader must present the inputs to form a key, but a key's result is visible to any branch in the engine"
+  ],
+  "not_claimed": ["the AIEN model or neural cognition", "GPU realization", "R15 performance qualification", "durable or cross-process cache", "AIENOS kernel integration"]
+}
