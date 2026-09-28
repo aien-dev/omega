@@ -240,7 +240,7 @@ static uint32_t domain_of(Env *e, RxObjRef ref) {
 }
 
 /* The World moves. The same sequence for every swarm size. */
-static void mutate(Env *e, uint32_t round) {
+static void mutate(Env *e, uint32_t round, int verify) {
     Rng r = { 0xC0FFEEull + round * 0x1000193ull };
     for (uint32_t k = 0; k < 12; k++) {
         RxObjRef ref = e->live[rnd(&r) % e->n_live];
@@ -249,7 +249,8 @@ static void mutate(Env *e, uint32_t round) {
         for (uint32_t j = 0; j < nf; j++)
             m[j] = (RxMutation){ ref, (uint32_t)(rnd(&r) % RX_MAX_FIELDS), rnd(&r) % 1000000u };
         int64_t rc = rx_world_publish_external(&e->w, e->ext[domain_of(e, ref)], m, nf);
-        CHECK(rc > 0, "outside publication accepted (%lld)", (long long)rc);
+        if (verify) CHECK(rc > 0, "outside publication accepted (%lld)", (long long)rc);
+        else if (rc <= 0) { fprintf(stderr, "  FAIL outside publication refused in a measurement run\n"); g_fail++; }
     }
     if (round % 4 == 3) {
         uint32_t idx = (uint32_t)(rnd(&r) % e->n_live);
@@ -583,7 +584,7 @@ static void run_scale(uint32_t n_agents, uint32_t mode_mask, int verify, ScaleM 
                     held_revoked[i] |= v->present[id] && v->resource[id] == revoked_res;
             }
         }
-        mutate(e, round);
+        mutate(e, round, verify);
         seq++;
         if (verify) snapshot_truth(e);
         for (uint32_t m = 0; m < M_COUNT; m++) {
@@ -655,16 +656,15 @@ static void run_scale(uint32_t n_agents, uint32_t mode_mask, int verify, ScaleM 
             for (uint32_t i = 0; i < n_agents; i++) {
                 Agent *a = &ag[i];
                 uint64_t scratch = 0;
-                Agent answer = *a;   /* keep the worker's answer; evaluate() below is the judge */
-                evaluate(e, g_truth, a, g_eval, &scratch);
+                evaluate(e, g_truth, a, g_eval, &scratch);   /* the judge; leaves the worker's answer alone */
                 uint32_t miss = missing_in(&a->v[m], g_eval, a->need.evidence_requirement, m != M_B);
                 bool derived_ok = true;
-                if (m != M_B && a->need.operation.kind != SC_OP_INSPECT) derived_ok = answer_ok(&answer, g_eval);
+                if (m != M_B && a->need.operation.kind != SC_OP_INSPECT) derived_ok = answer_ok(a, g_eval);
                 if (!derived_ok) miss++;
                 M->missing += miss;
                 M->leaks += leaks_in(e, &a->v[m], a);
                 M->task_total++;
-                if (miss == 0 && answer_ok(&answer, g_eval)) M->task_ok++;
+                if (miss == 0 && answer_ok(a, g_eval)) M->task_ok++;
             }
         }
         if (!verify) continue;
@@ -741,7 +741,7 @@ static void run_scale(uint32_t n_agents, uint32_t mode_mask, int verify, ScaleM 
 static void t_control(void) {
     Env *e = calloc(1, sizeof *e);
     CHECK(e && env_start(e) == 0, "control environment");
-    mutate(e, 0);
+    mutate(e, 0, 1);
     snapshot_truth(e);
     RxSemView *v = calloc(1, sizeof *v);
     RxSemBuf b = { 0 };
