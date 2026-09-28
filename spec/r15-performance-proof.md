@@ -285,26 +285,42 @@ Physical telemetry only. Sources inspected on this machine (2026-09-28):
   the package (`SPBM_PKG_ENERGY_VALUE_ACCUMULATE`, +0x344), CPU P-cores
   (+0x35c), CPU E-cores (+0x350), GPC (+0x368) and GPM (+0x374), and
   instantaneous telemetry for total system power (+0x300) and SoC package
-  (+0x304). With Secure Boot on, kernel lockdown (integrity) forbids
-  `/dev/mem`; no in-tree driver binds `NVDA8800`; no machine-owner key is
-  enrolled. It is therefore not readable today without an owner decision.
+  (+0x304). Secure Boot and kernel lockdown remain enabled. On 2026-09-28
+  Drake enrolled an owner key and authorized a signed read-only reader.
+  `research/m15/spbm/aien_spbm_readonly.c` checks this machine's ACPI
+  resource and register contract before mapping and exclusively reserving
+  the telemetry page. It exposes measurements and overflow flags only.
 
 Method (binding): energy per semantic result = Δ(package energy accumulator)
 over the window / production operations in the window (and / episodes for
 W-EPISODE), sampled at the window boundaries and at 10 Hz within it (to
-detect overflow and to report power). Idle baseline: 5 s of package energy
+detect overflow and to report power). Any overflow flag, backward counter,
+insufficient counter headroom, or missing observation invalidates the energy
+window; no assumed rollover correction is permitted. Idle baseline: 5 s of package energy
 with the process started and quiescent immediately before BEFORE; reported
 gross and net (gross − idle power × window). CPU P/E and GPU domain energies
 reported alongside. GPU-domain energy from NVML is recorded as a second,
 independent source. Uncertainty: accumulator resolution and sampling jitter at
 window edges (±1 sample period of power) are reported per window.
 
+Prequalification sensor validation is retained under `research/m15/spbm/runs`.
+Collection 03 has nine 10-second windows and independently timed CPU sensor
+and NVML observations. The package accumulator rate differs from integrated
+package power by up to 0.52 W in these observations. This is an observed
+discrepancy, not a proven upper bound on sensor error; report it with the
+energy result without silently correcting it. The firmware has no verified
+absolute accuracy specification, and no external meter calibration is
+claimed. The physical rollover behavior has not been observed; the reader
+and reducer reject it. GPC remains zero and unverified; GPM and NVML are
+reported as graphics measurements with potentially different domain coverage.
+The recorded 1 mJ counter step establishes resolution, not absolute accuracy.
+
 **If package energy cannot be read by a physical hardware source at
 qualification time, metric 17 is incomplete and R15 cannot PASS.** GPU-domain
-energy alone is not accepted as energy per semantic result. How the package
-accumulators become readable (owner-key signed read-only telemetry reader, or
-an external logging meter) is an owner decision; the chosen method will be
-recorded in a new commit to this section before qualification.
+energy alone is not accepted as energy per semantic result. The chosen
+signed-reader method and its preliminary checks are documented in
+`research/m15/spbm/README.md`. This clarification does not alter G1-G16 and is
+committed before performance qualification data is collected.
 
 ## 8. Fairness controls
 

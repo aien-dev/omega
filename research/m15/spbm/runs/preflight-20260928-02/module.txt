@@ -1,0 +1,25 @@
+filename:       /home/drakestapleton/workspace/omega-r15/research/m15/spbm/aien_spbm_readonly.ko
+license:        GPL
+description:    Read-only, firmware-checked GB10 SPBM telemetry for R15
+srcversion:     D7345BB5C0CCFCB7B177335
+alias:          acpi*:NVDA8800:*
+depends:        
+name:           aien_spbm_readonly
+vermagic:       7.0.0-1019-nvidia SMP preempt mod_unload modversions aarch64
+sig_id:         PKCS#7
+signer:         AIEN Spark owner key (telemetry)
+sig_key:        33:07:29:D3:A2:7E:76:1A:5F:90:A3:DD:D8:2D:5E:04:D4:29:7F:56
+sig_hashalgo:   sha256
+signature:      97:A8:1D:37:1D:92:2D:04:EE:C3:45:2A:41:22:30:E5:42:85:1F:2B:
+		41:61:A2:F5:56:73:9B:96:6D:A1:6F:64:43:BB:C0:51:EF:67:CE:3A:
+		14:E6:4E:50:3F:FD:F4:F7:7A:5E:0D:4F:84:63:82:A5:2D:F7:6D:48:
+		E7:02:AA:74:24:D9:5A:23:8D:8A:A8:97:6B:91:B9:A8:DB:92:33:FB:
+		1C:02:6B:2B:E0:64:0A:CF:AF:AF:E3:D3:35:D8:B1:8B:E2:84:7F:AD:
+		CF:B6:9C:F4:A3:96:2E:24:21:D5:A5:27:67:7D:6A:CD:5F:58:C2:A6:
+		5C:26:06:CF:90:96:76:5D:95:52:2C:B0:A6:57:0D:0A:B6:25:CC:D9:
+		FE:09:FF:95:3D:21:CA:F2:F9:43:C1:81:9E:00:5E:DE:56:B9:20:42:
+		63:97:FE:F1:83:8C:2A:02:39:A7:04:BC:BC:F2:30:FD:76:F4:B7:99:
+		96:75:B2:D3:3A:BE:5C:C8:D9:B3:DD:9C:33:96:9D:2B:FF:E2:E9:B1:
+		21:D3:E8:8A:A2:4D:8C:F7:B5:73:74:51:A5:1D:8E:C9:89:05:4C:91:
+		2C:62:88:5B:95:82:4E:ED:91:60:21:B0:D7:95:75:7D:23:34:8F:98:
+		16:F8:92:36:26:8B:25:E1:E9:33:DB:15:0D:33:FF:97
