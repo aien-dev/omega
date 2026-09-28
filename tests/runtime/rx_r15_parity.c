@@ -204,8 +204,12 @@ int main(void) {
                U(res_first ? res.target_ns : seq.target_ns));
         if (rc_a != 0 || rc_b != 0) {
             g_fail++;
+            /* The second side runs only if the first completed; say so, or a
+             * blank reason reads as a pass. */
+            const char *skipped = "not run: the first side failed";
             fprintf(stderr, "  FAIL pair %d: episode did not complete: RES-1 [%s] SEQ [%s]\n", p,
-                    rc_a ? res.why : "ok", rc_b ? seq.why : "ok");
+                    rc_a ? (res.why[0] ? res.why : skipped) : "ok",
+                    rc_b ? (seq.why[0] ? seq.why : skipped) : "ok");
             continue;
         }
         print_side("RES-1", &res);
