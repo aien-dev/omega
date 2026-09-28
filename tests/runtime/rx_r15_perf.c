@@ -126,14 +126,21 @@ static void thermal_wait(void) {
 
 /* ---- GPU residency and R5 slot sampler (1 ms; §6.10, §6.11) ------------- */
 
+/* One accumulator per open window (windows may overlap), plus whole-process
+ * residency totals that are never reset. */
+typedef struct { uint64_t samples, live, slot_sum, slot_max, inflight_sum, inflight_max, claims_max; } SampSnap;
+#define SAMP_ACC 4
+
 typedef struct {
     pthread_t t;
     volatile int stop, armed;
     RxWorld *volatile w;
     volatile int silicon;
     pthread_mutex_t mu;
-    uint64_t samples, live, last;
-    uint64_t slot_sum, slot_max, inflight_sum, inflight_max, claims_max;
+    uint64_t last, have_last;
+    SampSnap acc[SAMP_ACC];
+    int active[SAMP_ACC];
+    SampSnap total;
 } Sampler;
 static Sampler g_samp;
 
@@ -144,47 +151,72 @@ static void *sampler_main(void *arg) {
         nanosleep(&ts, NULL);
         if (!s->armed || !s->w) continue;
         RxWorld *w = s->w;
-        uint32_t slots = __atomic_load_n(&w->used_slots, __ATOMIC_RELAXED);
-        uint32_t infl = __atomic_load_n(&w->in_flight, __ATOMIC_RELAXED);
+        uint64_t slots = __atomic_load_n(&w->used_slots, __ATOMIC_RELAXED);
+        uint64_t infl = __atomic_load_n(&w->in_flight, __ATOMIC_RELAXED);
         uint64_t open = __atomic_load_n(&w->stats.resident_claims, __ATOMIC_RELAXED) -
                         __atomic_load_n(&w->stats.resident_closed, __ATOMIC_RELAXED);
         uint64_t hb = 0;
         if (s->silicon && w->coherent)
             hb = __atomic_load_n((uint32_t *)(w->coherent + rx_world_off_heartbeat() + RX_SEAT_HB_LIVE),
                                  __ATOMIC_ACQUIRE);
-        pthread_mutex_lock(&s->mu);
-        s->samples++;
-        if (s->silicon && s->samples > 1 && hb != s->last) s->live++;
+        /* live = the seat's counter moved since the previous 1 ms sample */
+        int live = s->silicon && s->have_last && hb != s->last;
+        int counted = s->have_last;
         s->last = hb;
-        s->slot_sum += slots;
-        if (slots > s->slot_max) s->slot_max = slots;
-        s->inflight_sum += infl;
-        if (infl > s->inflight_max) s->inflight_max = infl;
-        if (open > s->claims_max) s->claims_max = open;
+        s->have_last = 1;
+        if (!counted) continue;
+        pthread_mutex_lock(&s->mu);
+        for (int i = 0; i <= SAMP_ACC; i++) {
+            SampSnap *a = i == SAMP_ACC ? &s->total : &s->acc[i];
+            if (i < SAMP_ACC && !s->active[i]) continue;
+            a->samples++;
+            a->live += (uint64_t)live;
+            a->slot_sum += slots;
+            if (slots > a->slot_max) a->slot_max = slots;
+            a->inflight_sum += infl;
+            if (infl > a->inflight_max) a->inflight_max = infl;
+            if (open > a->claims_max) a->claims_max = open;
+        }
         pthread_mutex_unlock(&s->mu);
     }
     return NULL;
 }
 
-typedef struct { uint64_t samples, live, slot_sum, slot_max, inflight_sum, inflight_max, claims_max; } SampSnap;
-
-static SampSnap samp_take_reset(void) {
-    SampSnap x;
+static int samp_open(void) {
     pthread_mutex_lock(&g_samp.mu);
-    x = (SampSnap){g_samp.samples > 0 ? g_samp.samples - 1 : 0, g_samp.live, g_samp.slot_sum,
-                   g_samp.slot_max, g_samp.inflight_sum, g_samp.inflight_max, g_samp.claims_max};
-    g_samp.samples = g_samp.live = g_samp.slot_sum = g_samp.slot_max = 0;
-    g_samp.inflight_sum = g_samp.inflight_max = g_samp.claims_max = 0;
+    int k = -1;
+    for (int i = 0; i < SAMP_ACC && k < 0; i++)
+        if (!g_samp.active[i]) { k = i; memset(&g_samp.acc[i], 0, sizeof g_samp.acc[i]); g_samp.active[i] = 1; }
+    pthread_mutex_unlock(&g_samp.mu);
+    return k;
+}
+
+static SampSnap samp_close(int k) {
+    SampSnap x;
+    memset(&x, 0, sizeof x);
+    if (k < 0) return x;
+    pthread_mutex_lock(&g_samp.mu);
+    x = g_samp.acc[k];
+    g_samp.active[k] = 0;
     pthread_mutex_unlock(&g_samp.mu);
     return x;
 }
 
-static void rec_samp(const SampSnap *x) {
-    fprintf(g_out.f, ",\"sampler\":{\"silicon\":%d,\"intervals\":%" PRIu64 ",\"seat_live\":%" PRIu64
+static void rec_samp(const char *key, const SampSnap *x) {
+    fprintf(g_out.f, ",\"%s\":{\"silicon\":%d,\"intervals\":%" PRIu64 ",\"seat_live\":%" PRIu64
                      ",\"slot_sum\":%" PRIu64 ",\"slot_max\":%" PRIu64 ",\"inflight_sum\":%" PRIu64
                      ",\"inflight_max\":%" PRIu64 ",\"claims_max\":%" PRIu64 "}",
-            g_samp.silicon, x->samples, x->live, x->slot_sum, x->slot_max, x->inflight_sum,
+            key, g_samp.silicon, x->samples, x->live, x->slot_sum, x->slot_max, x->inflight_sum,
             x->inflight_max, x->claims_max);
+}
+
+static void rec_residency(void) {
+    pthread_mutex_lock(&g_samp.mu);
+    SampSnap t = g_samp.total;
+    pthread_mutex_unlock(&g_samp.mu);
+    r15_rec_begin(&g_out, "residency");
+    rec_samp("total", &t);
+    r15_rec_end(&g_out);
 }
 
 /* Observers are created before the PMU is opened, so their own work is not
@@ -252,6 +284,8 @@ typedef struct {
     int pmu_used;
     uint64_t gio_b0, gio_s0, gio_b1, gio_s1, pio_b0, pio_s0, pio_b1, pio_s1;
     char threads0[4096], threads1[4096];
+    int acc;
+    SampSnap samp;
 } Win;
 
 static RxStats stats_of(RxWorld *w) {
@@ -296,7 +330,7 @@ static void win_begin(Win *x, RxWorld *w, R15Rig *r, int pmu) {
     x->served0 = r ? __atomic_load_n(&r->served, __ATOMIC_RELAXED) : 0;
     x->s0 = stats_of(w);
     getrusage(RUSAGE_SELF, &x->ru0);
-    (void)samp_take_reset();
+    x->acc = samp_open();
     r15_energy_read(&g_energy, &x->e0);
     x->pmu_used = pmu && g_pmu_ok;
     x->t0 = r15_now_ns();
@@ -306,6 +340,7 @@ static void win_begin(Win *x, RxWorld *w, R15Rig *r, int pmu) {
 static void win_end(Win *x, RxWorld *w, R15Rig *r) {
     if (x->pmu_used) r15_pmu_stop(&g_pmu, &x->pmu);
     x->t1 = r15_now_ns();
+    x->samp = samp_close(x->acc);
     r15_energy_read(&g_energy, &x->e1);
     getrusage(RUSAGE_SELF, &x->ru1);
     x->s1 = stats_of(w);
@@ -318,7 +353,6 @@ static void win_end(Win *x, RxWorld *w, R15Rig *r) {
 static uint64_t tv_ns(struct timeval t) { return (uint64_t)t.tv_sec * 1000000000ull + (uint64_t)t.tv_usec * 1000ull; }
 
 static void rec_window(const char *name, const Win *x) {
-    SampSnap sn = samp_take_reset();
     r15_rec_begin(&g_out, "window");
     rec_str("window", name);
     rec_u("t0", x->t0);
@@ -342,7 +376,7 @@ static void rec_window(const char *name, const Win *x) {
     rec_u("gen_process_syncs", x->pio_s1 - x->pio_s0);
     rec_str("threads0", x->threads0);
     rec_str("threads1", x->threads1);
-    rec_samp(&sn);
+    rec_samp("sampler", &x->samp);
     r15_rec_end(&g_out);
 }
 
@@ -419,7 +453,7 @@ static void rec_cwin(const char *name, const CWin *c) {
 
 /* ---- trial (§4) ----------------------------------------------------------- */
 
-typedef struct { Win idle, before, span, after; int idle_ok, before_ok, after_ok; } TrialWins;
+typedef struct { Win idle, before, span, after; int idle_ok, before_ok, after_ok; uint64_t t_met; } TrialWins;
 
 static int hook_idle(R15Hooks *h, R15Rig *r) {
     TrialWins *t = h->ctx;
@@ -444,6 +478,7 @@ static int hook_before(R15Hooks *h, R15Rig *r) {
 
 static int hook_after(R15Hooks *h, R15Rig *r) {
     TrialWins *t = h->ctx;
+    t->t_met = r15_now_ns();   /* goal MET observed on the in-force record */
     sleep_ns(WARM_NS);
     win_begin(&t->after, &r->w, r, 1);
     sleep_ns(WINDOW_NS);
@@ -569,6 +604,7 @@ static int run_trial(R15Config cfg) {
     rec_u("candidate_t", cand ? cand->t_end_ns : 0);
     rec_u("promotion_t", promo ? promo->t_end_ns : 0);
     rec_u("inforce_t", inforce ? inforce->t_end_ns : 0);
+    rec_u("met_t", tw.t_met);
     RxGenPhases ph;
     memset(&ph, 0, sizeof ph);
     rx_gen_last_phases(r->gen, &ph);
@@ -623,6 +659,7 @@ static int run_trial(R15Config cfg) {
     }
     free(ep);
     g_samp.armed = 0;
+    rec_residency();
     r15_stop(r);
     observers_stop(t_proc);
     rec_machine("after");
@@ -1192,7 +1229,6 @@ static int run_l2(R15Config cfg) {
     RxWorld *w = &r->w;
     int ok = 1;
     const uint32_t CLAIMS = 256;
-    (void)samp_take_reset();
     Win x;
     win_begin(&x, w, r, 0);
     for (uint32_t i = 0; i < CLAIMS && ok; i++) {
@@ -1235,6 +1271,7 @@ static int run_l2(R15Config cfg) {
     win_end(&x, w, r);
     rec_window("L2", &x);
     g_samp.armed = 0;
+    rec_residency();
     r15_stop(r);
     observers_stop(t_proc);
     rec_machine("after");

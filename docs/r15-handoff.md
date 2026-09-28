@@ -250,3 +250,40 @@ G1 (goal MET in every trial) until TARGET_PCT / the goal margin is settled as
 an owner decision committed before qualification. It does **not** block
 building the harness, reducer and qualification runner; per the owner's
 direction, no further environment analysis is done before those exist.
+
+## Harness, reducer and qualification runner (built 2026-09-28 afternoon)
+
+Built on the shared rig, as the rework plan required; no further environment
+analysis was done first.
+
+- `tests/runtime/rx_r15_perf.c` (+ `r15_measure.{c,h}`): one observation per
+  process, raw JSON Lines only.
+  - `trial <RES4|RES1|SEQ>`: the §4 episode with measurement hooks in the rig
+    (`R15Hooks`: IDLE 5 s quiescent, BEFORE 2+5 s on A725, AFTER 2+5 s on X925
+    at goal MET). ADAPT (goal crumb -> promotion crumb) and the L3 intervals
+    (plan, selection, first seat claim, evidence, candidate, in force) come
+    from crumbs. Live windows record served ops, rusage, RxStats deltas, SPBM
+    + NVML energy, PMU (both CPU PMUs, inherited, raw sums), R9 store vs
+    process I/O, per-thread CPU, R5 slots and seat residency (1 ms sampler).
+    G1 uses the goal status at MET; the status after the AFTER window is
+    reported as `goal_status_final` (AIEN keeps re-assessing while production
+    continues; on the host it was seen falling back to UNKNOWN).
+  - `l1 <A|B|C|D|E|G|W0|W1> <RES1|SEQ>`: X925 cpu 7 driver / cpu 8 worker for
+    A-E; G (30 R9 barriers under production) and W0/W1 (timing off/on) use the
+    rig on X925.
+  - `l2 <RES1|SEQ>`: 256 closed-loop claims through `living.blackwell.add`;
+    chip `%globaltimer` pick/done from the heartbeat block.
+  - Four binaries: `make r15-perf-host` / `make r15-perf-silicon` (production
+    and `_nodigest`) plus `build/r15_reduce`.
+- `tools/r15_reduce.c`: verifies every file against SHA256SUMS, recomputes
+  metrics 1-17 and G1-G16, writes `summary.json`. Seed 0x15, 10,000
+  resamples, percentile CI; missing data = FAIL.
+- `tools/r15_qualify.sh [--detach] <host|silicon> [rounds] [l1] [l2]`: balanced
+  Latin square, L1, L2, machine.json, paranoid 4 -> 1 -> 4, SHA256SUMS, reducer.
+  `--detach` = setsid nohup; progress in plain words in `progress.log`.
+  Set `AIENOS_R7_DIR`/`PHYSICS_DIR` so the recorded commits are right, and
+  `R15_OUT_BASE` for dry runs outside `evidence/`.
+
+Still blocking a real qualification: (1) the goal-margin decision above (R14
+silicon and G1); (2) §9: LM Studio and Ollama were resident at 13:45 and must
+be stopped for the run; (3) a clean, committed candidate.
