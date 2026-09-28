@@ -39,7 +39,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing test-sem-incremental
 
 all: $(TARGET)
 
@@ -165,6 +165,20 @@ $(RX_TEST): $(RX_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 
 test-r3: $(RX_TEST)
 	./$(RX_TEST)
+
+# Omega semantic variables and incremental recomputation
+# (gate OMEGA_INCREMENTAL_SEMANTICS_PASS). CPU only, same links as R3.
+RX_SEM_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_semantic.c src/sha256.c src/omega_evidence.c \
+	tests/runtime/rx_sem_incremental.c
+RX_SEM_TEST = $(OUT_DIR)/rx_sem_incremental_test
+
+$(RX_SEM_TEST): $(RX_SEM_SRCS) src/runtime/rx_semantic.h src/runtime/rx_caproot.h \
+	src/runtime/rx_world.h src/runtime/omega_shared_world_abi.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_SEM_SRCS)
+
+test-sem-incremental: $(RX_SEM_TEST)
+	./$(RX_SEM_TEST)
 
 # R7: native AIENOS authority versus the Linux oracle, then the world view.
 AIENOS_R7_DIR ?= ../aienos-r9
