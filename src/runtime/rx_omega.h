@@ -52,7 +52,8 @@ enum {
  * result:    0 seq, 1 digest, 2 realization used (0 = reference), 3 ns
  * demand:    0 regime calls, 1 regime ns, 2 window seq, 3 window mean ns,
  *            4 M, 5 N, 6 realization in use (id word 0), 7 calls all regimes
- * search:    0 epoch, 1 M, 2 N, 3 window mean ns, 4 regime calls, 5 regime ns
+ * search:    0 epoch, 1 M, 2 N, 3 window mean ns, 4 regime calls, 5 regime ns,
+ *            6 last inquiry sequence taken up (R11)
  * candidate: 0 epoch, 1 kind, 2..5 realization id, 6 code bytes, 7 state
  * verdict:   0 epoch, 1 state, 2 checks, 3 failures, 4 id word 0, 5 reason
  * measure:   0 epoch, 1 state, 2 candidate ps/call, 3 reference ps/call,
@@ -144,7 +145,8 @@ typedef struct RxOmegaFaculty {
     RxOmegaRealization store[RX_OMEGA_STORE];
     uint32_t n_store;
 
-    uint32_t r_serve, r_watch, r_select;
+    uint32_t r_serve, r_watch, r_select, r_reconsider;
+    RxObjRef inquiry;           /* R11: a plan object Omega may react to */
     uint32_t r_synth[RX_OMEGA_SLOTS], r_verify[RX_OMEGA_SLOTS], r_measure[RX_OMEGA_SLOTS];
     struct { struct RxOmegaFaculty *f; uint32_t k; } slot[RX_OMEGA_SLOTS];
 
@@ -168,6 +170,16 @@ void rx_omega_fill(uint64_t seed, uint64_t *A, uint64_t *x, uint32_t M, uint32_t
 uint64_t rx_omega_digest(const uint64_t *y, uint32_t M);
 
 static inline uint64_t rx_omega_regime(uint64_t M, uint64_t N) { return (M << 32) | N; }
+
+/* R11. Let Omega react to a plan another faculty publishes. Omega needs only
+ * this layout: field 0 sequence, 1 action (RX_OMEGA_INQ_RESEARCH: search this
+ * regime again, on whatever cores Omega runs now), 2 regime. Omega reads the
+ * plan with `read_cap` and cannot write it. A plan that arrives while a
+ * search is in flight waits for that search's selection. Search field 6
+ * records the last plan Omega took up. R10 alone never registers this. */
+enum { RX_OMEGA_INQ_RESEARCH = 1 };
+int rx_omega_register_reconsider(RxOmegaFaculty *f, RxObjRef plan, RxCapRef read_cap,
+                                 RxCapRef search_cap, RxCapRef selection_cap);
 
 /* Read-only store lookup for tests. Returns a copy; 0 if found. */
 int rx_omega_store_find(RxOmegaFaculty *f, uint64_t id_word0, RxOmegaRealization *out);
