@@ -223,3 +223,30 @@ the incumbent within 60 s while production filled the 2^18 crumb log) or
 the SPBM reader loaded, LM Studio and the NVIDIA Personal AI Router
 resident. Cause not yet found. §14 requires R14 silicon on the candidate, so
 this must be resolved before qualification.
+
+### R14 question settled against the exact candidate `6b38173` (2026-09-28 13:09-13:22)
+
+The R14 silicon test binary was built from `6b38173` itself (clean worktree,
+no R15 change) and run 5 times back to back on a quiet machine, sampling the
+machine once a second (`research/r14-failure-modes/exact-20260928-130858/`).
+
+- Result: **5 of 5 runs FAIL** (`R14_LIVING_RECOVERY=FAIL`). F failed in all
+  5; A in 4; C and D once each. B and E passed every time.
+- Dominant failure: the organism adapts but the goal is never MET (`adapt -11`)
+  or AIEN never confirms within 60 s (`adapt -4`); the crumb-log overflow and
+  "production did not resume" lines follow from that long wait (the lazily
+  backed log, `80f102a`, removes the overflow but not the goal miss).
+- The machine was quiet (top process the test itself; temperatures 31-34 C;
+  A725 2.808 GHz, X925 3.9 GHz). The `performance` governor is set at every
+  boot by NVIDIA's stock `nv-cpu-governor` service, before this morning's pass
+  too, so it is not the change.
+
+**Conclusion:** the R14 silicon failure is not caused by any R15 change. The
+same code that passed at 08:45 fails today; R14's pass depended on the
+episode's goal margin (quad4 on X925 reaching <= 55% of the A725 incumbent
+cost), which is marginal on this machine now. This is the same property as
+the W-EPISODE miss-rate finding above. It blocks the §14 R14-silicon rerun and
+G1 (goal MET in every trial) until TARGET_PCT / the goal margin is settled as
+an owner decision committed before qualification. It does **not** block
+building the harness, reducer and qualification runner; per the owner's
+direction, no further environment analysis is done before those exist.
