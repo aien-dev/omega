@@ -56,7 +56,7 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
-        run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph test-state-projection test-capability-query
+        run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph test-state-projection test-capability-query test-semantic-comm
       - name: Show state projection receipt
         run: |
           receipt="$(find build/qual-runs -name omega_state_projection_receipt.json -type f | head -n 1)"
@@ -82,6 +82,15 @@ jobs:
           grep -q '"failures": 0,' "$receipt"
           grep -q '"candidate_bound": true,' "$receipt"
           grep -q '"OMEGA_CAPABILITY_QUERY_PASS": "PASS"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"
+      - name: Show semantic communication receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_semantic_comm_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"OMEGA_SEMANTIC_COMMUNICATION_PASS": "PASS"' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
       - name: Show R8 receipt
