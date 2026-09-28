@@ -91,6 +91,7 @@ struct RxGenStore {
     RxGenDiskHook disk_hook;
     void *disk_ctx;
     RxGenPhases phases;
+    uint64_t io_bytes, io_syncs;   /* this store's writes and syncs (R15) */
 };
 
 static uint64_t monotonic_ns(void) {
@@ -138,7 +139,16 @@ void rx_gen_io_counters(uint64_t *bytes, uint64_t *syncs) {
     if (syncs) *syncs = __atomic_load_n(&g_io_syncs, __ATOMIC_RELAXED);
 }
 
-static int write_full(int fd, const uint8_t *p, size_t n) {
+int rx_gen_store_io(const RxGenStore *store, uint64_t *bytes, uint64_t *syncs) {
+    if (!store) return RX_GEN_ERR_ARG;
+    if (bytes) *bytes = __atomic_load_n(&store->io_bytes, __ATOMIC_RELAXED);
+    if (syncs) *syncs = __atomic_load_n(&store->io_syncs, __ATOMIC_RELAXED);
+    return RX_GEN_OK;
+}
+
+/* Every write and sync is charged to the store that issued it and to the
+ * process total. */
+static int write_full(RxGenStore *store, int fd, const uint8_t *p, size_t n) {
     size_t off = 0;
     while (off < n) {
         ssize_t w = write(fd, p + off, n - off);
@@ -149,6 +159,7 @@ static int write_full(int fd, const uint8_t *p, size_t n) {
         if (w == 0) return -1;
         off += (size_t)w;
         __atomic_add_fetch(&g_io_bytes, (uint64_t)w, __ATOMIC_RELAXED);
+        __atomic_add_fetch(&store->io_bytes, (uint64_t)w, __ATOMIC_RELAXED);
     }
     return 0;
 }
@@ -174,15 +185,16 @@ static int read_full(const char *path, uint8_t *buf, size_t n) {
     return 0;
 }
 
-static int fsync_fd(int fd) {
+static int fsync_fd(RxGenStore *store, int fd) {
     __atomic_add_fetch(&g_io_syncs, 1, __ATOMIC_RELAXED);
+    __atomic_add_fetch(&store->io_syncs, 1, __ATOMIC_RELAXED);
     return fsync(fd) == 0 ? 0 : -1;
 }
 
-static int fsync_path(const char *path) {
+static int fsync_path(RxGenStore *store, const char *path) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) return -1;
-    int rc = fsync_fd(fd);
+    int rc = fsync_fd(store, fd);
     close(fd);
     return rc;
 }
@@ -331,15 +343,15 @@ static int commit_file(RxGenStore *store, const char *final_path, const uint8_t 
         size_t half = n / 2;
         if (half == 0) half = 1;
         if (half > n) half = n;
-        if (write_full(fd, buf, half) != 0) {
+        if (write_full(store, fd, buf, half) != 0) {
             close(fd);
             return RX_GEN_ERR_IO;
         }
-        fsync_fd(fd);
+        fsync_fd(store, fd);
         close(fd);
         crash_now();
     }
-    if (write_full(fd, buf, n) != 0 || fsync_fd(fd) != 0) {
+    if (write_full(store, fd, buf, n) != 0 || fsync_fd(store, fd) != 0) {
         close(fd);
         return RX_GEN_ERR_IO;
     }
@@ -350,7 +362,7 @@ static int commit_file(RxGenStore *store, const char *final_path, const uint8_t 
     char *slash = strrchr(parent, '/');
     if (!slash) return RX_GEN_ERR_IO;
     *slash = 0;
-    if (fsync_path(parent) != 0) return RX_GEN_ERR_IO;
+    if (fsync_path(store, parent) != 0) return RX_GEN_ERR_IO;
     return RX_GEN_OK;
 }
 
@@ -452,12 +464,12 @@ static int append_event(RxGenStore *store, uint64_t id, uint64_t lineage) {
     char line[64];
     int n = snprintf(line, sizeof line, "%llu %llu\n", (unsigned long long)id,
                      (unsigned long long)lineage);
-    if (n < 0 || write_full(fd, (const uint8_t *)line, (size_t)n) != 0 || fsync_fd(fd) != 0) {
+    if (n < 0 || write_full(store, fd, (const uint8_t *)line, (size_t)n) != 0 || fsync_fd(store, fd) != 0) {
         close(fd);
         return RX_GEN_ERR_IO;
     }
     close(fd);
-    return fsync_path(store->dir) == 0 ? RX_GEN_OK : RX_GEN_ERR_IO;
+    return fsync_path(store, store->dir) == 0 ? RX_GEN_OK : RX_GEN_ERR_IO;
 }
 
 static void fill_record(const RootView *view, int receipt, int event, RxRecoveryRecord *out) {
@@ -559,8 +571,8 @@ static int take_lock(RxGenStore *store) {
     if (fd < 0) return RX_GEN_ERR_BUSY;
     char pid[32];
     int n = snprintf(pid, sizeof pid, "%ld\n", (long)getpid());
-    if (n > 0) write_full(fd, (const uint8_t *)pid, (size_t)n);
-    fsync_fd(fd);
+    if (n > 0) write_full(store, fd, (const uint8_t *)pid, (size_t)n);
+    fsync_fd(store, fd);
     store->lock_fd = fd;
     return RX_GEN_OK;
 }

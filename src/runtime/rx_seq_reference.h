@@ -36,6 +36,11 @@ int rx_world_init_sequential_reference(RxWorld *w, const void *auth_ctx,
                                        RxAuthValidateFn validate, RxAuthInspectFn inspect,
                                        uint64_t crumb_cap);
 int rx_world_seq_activate_locked(RxWorld *w, uint32_t rid, uint64_t cause);
+/* The same, carrying the readiness poll that found the stage ready (its
+ * wall start, wall and thread-CPU duration) into the activation's timing. */
+int rx_world_seq_activate_timed_locked(RxWorld *w, uint32_t rid, uint64_t cause,
+                                       uint64_t poll_start, uint64_t poll_wall,
+                                       uint64_t poll_cpu);
 struct AienosCapView;
 int rx_world_init_native_sequential_reference(RxWorld *w, const struct AienosCapView *view,
                                               uint64_t crumb_cap);

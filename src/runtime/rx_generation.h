@@ -138,8 +138,13 @@ typedef struct {
 
 int rx_gen_open(const char *dir, RxGenStore **out);
 void rx_gen_close(RxGenStore *store);
-/* R15: process-wide bytes written and fsync calls made by the stores. */
+/* R15: process-wide bytes written and fsync calls made by every store.
+ * Cumulative; a cross-check only, never a benchmark's own figure. */
 void rx_gen_io_counters(uint64_t *bytes, uint64_t *syncs);
+/* R15: bytes passed to write() and fsync calls issued by this store since
+ * rx_gen_open (spec §6.7, L1-G). Directory creation, rename and unlink are
+ * metadata operations and are not counted as bytes. */
+int rx_gen_store_io(const RxGenStore *store, uint64_t *bytes, uint64_t *syncs);
 int rx_gen_last_phases(const RxGenStore *store, RxGenPhases *out);
 int rx_gen_active(const RxGenStore *store, uint64_t *id, uint64_t *lineage);
 

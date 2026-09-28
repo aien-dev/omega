@@ -352,7 +352,7 @@ typedef struct {
     bool have_two;
     bool resident_seat;         /* handed to the graphics seat; fn is not called */
     /* R15 timing (only with a timing buffer). */
-    uint64_t t_demand, t_ready, t_run, t_fn_end, sched_ns;
+    uint64_t t_demand, t_ready, t_run, t_fn_end, sched_ns, sched_cpu_ns;
     /* Sequential reference only (rx_seq_reference.c): the newest version of
      * each trigger this stage has seen, and a re-run it still owes. */
     uint64_t seq_seen[RX_MAX_DEPS];
@@ -394,10 +394,35 @@ typedef struct {
     /* R15 instrumentation. Counted, never inferred. */
     uint64_t activations;       /* run_one entries (every activation, any outcome) */
     uint64_t externals;         /* outside publications */
-    uint64_t snapshot_bytes;    /* bytes copied into RxCtx snapshots */
-    uint64_t crumb_bytes;       /* bytes appended to the causal log */
-    uint64_t proj_bytes;        /* bytes written into the coherent projection */
-    uint64_t ring_bytes;        /* descriptor bytes posted or taken on the rings */
+    /* Propagation (spec §6.3). `subscriptions_checked` counts subscriptions
+     * inspected and `wakes` counts wake attempts (demand calls, including
+     * the sequential reference's own admission). */
+    uint64_t subscriptions_matched; /* inspected, generation and mask matched */
+    uint64_t wakes_accepted;    /* wake attempt took a DORMANT reaction to waiting */
+    uint64_t ready_inserts;     /* reactions placed on a ready ring */
+    /* Copied bytes: bytes processor code writes into a destination as a copy
+     * or serialization of data that exists elsewhere. Every path is its own
+     * counter; none is inferred from architecture. The graphics chip's own
+     * ring and window accesses are not processor copies and are not here. */
+    uint64_t snapshot_bytes;    /* RxSnapshotDep entries filled into RxCtx */
+    uint64_t stage_bytes;       /* current fields copied into the publication
+                                   staging buffer, per object written */
+    uint64_t crumb_bytes;       /* RxCrumb records appended to the causal log */
+    uint64_t proj_bytes;        /* coherent object table entries + field windows */
+    uint64_t c2g_write_bytes;   /* descriptors written to the processor->seat ring
+                                   (publications, claims, shutdown, injected) */
+    uint64_t c2g_read_bytes;    /* descriptors copied out of that ring (publication
+                                   consumer, processor stand-in seat) */
+    uint64_t g2c_write_bytes;   /* result descriptors written by the stand-in seat */
+    uint64_t g2c_read_bytes;    /* result descriptors copied out of the seat ring */
+    uint64_t window_move_bytes; /* object windows saved and restored on relocation */
+    uint64_t setup_copy_bytes;  /* whole-region copy when binding coherent memory */
+    /* Scheduling time, only while a timing buffer is installed: wake,
+     * admission and ready-ring code (RES), readiness polling and admission
+     * (SEQ). Wall is CLOCK_MONOTONIC; CPU is the calling thread's
+     * CLOCK_THREAD_CPUTIME_ID. Each interval is read on one thread. */
+    uint64_t sched_wall_ns;
+    uint64_t sched_cpu_ns;
     uint64_t gpu_results_taken; /* completion notices taken from the chip ring */
     uint64_t gpu_polls_empty;   /* completion-ring polls that found nothing */
     uint64_t gpu_host_waits;    /* times a caller blocked for a GPU completion */
@@ -417,8 +442,16 @@ typedef struct {
     uint64_t t_run;             /* run_one entered */
     uint64_t t_fn_end;          /* reaction function returned */
     uint64_t t_visible;         /* publication committed and dependents woken */
-    uint64_t sched_ns;          /* time inside wake/admission/queue code for it */
+    uint64_t sched_ns;          /* wall time inside wake/admission/queue code for it */
+    uint64_t sched_cpu_ns;      /* thread CPU time inside the same code */
 } RxTiming;
+
+/* The most recent propagation wave (only while a timing buffer is installed). */
+typedef struct {
+    uint64_t wall_ns, cpu_ns;
+    uint64_t inspected, matched, wake_attempts, wakes_accepted;
+    uint64_t ready_inserts, coalesced, deferred, suppressed;
+} RxPropWave;
 
 typedef int (*RxAuthValidateFn)(const void *ctx, RxCapRef ref, uint32_t subject,
                                  uint64_t resource, uint32_t rights, RxCapEntry *out);
@@ -496,8 +529,9 @@ typedef struct RxWorld {
 
     /* R15 timing buffer (off when null). */
     RxTiming *timing;
-    uint64_t timing_cap, n_timing;
-    uint64_t last_prop_ns, last_prop_hits;   /* most recent propagate() */
+    uint64_t timing_cap, n_timing;   /* n_timing counts attempts, even past cap */
+    RxPropWave last_prop;            /* most recent propagate() */
+    uint32_t sched_nest;             /* timed scheduling sections open (count once) */
 
     /* Sequential reference (never production): no workers, no dependency
      * wakes; rx_seq_pulse decides what runs. */
@@ -521,6 +555,10 @@ void rx_world_destroy(RxWorld *w);
 /* R15: record an RxTiming per activation into `buf` (cap entries; later ones
  * are dropped and counted in n_timing beyond cap). Null turns it off. */
 void rx_world_set_timing(RxWorld *w, RxTiming *buf, uint64_t cap);
+/* Samples stored and samples attempted since rx_world_set_timing. Returns
+ * RX_ERR_FULL when attempted > stored: statistics from that buffer are
+ * truncated and must not be reduced. */
+int rx_world_timing_status(RxWorld *w, uint64_t *stored, uint64_t *attempted);
 /* 1 in production builds; 0 only in the R15 measurement build that skips
  * causal digests (-DRX_MEASURE_NO_CAUSAL_DIGEST). */
 extern const int rx_world_causal_digest_enabled;

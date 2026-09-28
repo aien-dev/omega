@@ -17,6 +17,13 @@ static uint64_t now_ns(void) {
     return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
 }
 
+/* CPU time consumed by the calling thread (R15 scheduler CPU, spec §6.4). */
+static uint64_t thread_cpu_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
 static void put32(sha256_ctx *c, uint32_t v) {
     uint8_t b[4] = { (uint8_t)v, (uint8_t)(v >> 8), (uint8_t)(v >> 16), (uint8_t)(v >> 24) };
     sha256_update(c, b, 4);
@@ -281,6 +288,7 @@ static void enqueue(RxWorld *w, uint32_t rid) {
     uint32_t tail = (w->ready_head[p] + w->ready_len[p]) % RX_MAX_REACTIONS;
     w->ready_q[p][tail] = rid;
     w->ready_len[p]++;
+    w->stats.ready_inserts++;
     if (w->timing) w->reactions[rid].t_ready = now_ns();
     w->in_flight++;
     pthread_cond_signal(&w->work_cv);
@@ -397,15 +405,25 @@ static void demand_inner(RxWorld *w, uint32_t rid, uint64_t cause);
 static void demand(RxWorld *w, uint32_t rid, uint64_t cause) {
     if (!w->timing) { demand_inner(w, rid, cause); return; }
     RxReaction *r = &w->reactions[rid];
+    uint64_t c0 = thread_cpu_ns();
     uint64_t t0 = now_ns();
     RxState before = r->state;
+    bool outer = w->sched_nest++ == 0;
     demand_inner(w, rid, cause);
+    w->sched_nest--;
     uint64_t t1 = now_ns();
+    uint64_t c1 = thread_cpu_ns();
+    if (outer) {
+        w->stats.sched_wall_ns += t1 - t0;
+        w->stats.sched_cpu_ns += c1 - c0;
+    }
     if (before == RX_DORMANT && r->state != RX_DORMANT) {
         r->t_demand = t0;
         r->sched_ns = t1 - t0;
+        r->sched_cpu_ns = c1 - c0;
     } else {
         r->sched_ns += t1 - t0;
+        r->sched_cpu_ns += c1 - c0;
     }
 }
 
@@ -454,6 +472,7 @@ static void demand_inner(RxWorld *w, uint32_t rid, uint64_t cause) {
     }
     switch (r->state) {
     case RX_DORMANT:
+        w->stats.wakes_accepted++;
         set_state(w, r, RX_BLOCKED_RESOURCE);
         r->wake_cause = cause;
         r->coalesced = 0;
@@ -544,13 +563,24 @@ static void propagate(RxWorld *w, uint32_t obj, uint64_t changed, uint64_t cause
     /* The sequential reference polls readiness instead of being told. */
     if (w->sequential) return;
     if (!w->timing) { propagate_inner(w, obj, changed, cause); return; }
-    uint64_t checked = w->stats.subscriptions_checked;
-    uint64_t wakes = w->stats.wakes;
+    RxStats s0 = w->stats;
+    uint64_t c0 = thread_cpu_ns();
     uint64_t t0 = now_ns();
     propagate_inner(w, obj, changed, cause);
-    w->last_prop_ns = now_ns() - t0;
-    w->last_prop_hits = w->stats.wakes - wakes;
-    (void)checked;
+    uint64_t t1 = now_ns();
+    uint64_t c1 = thread_cpu_ns();
+    const RxStats *s1 = &w->stats;
+    RxPropWave *p = &w->last_prop;
+    p->wall_ns = t1 - t0;
+    p->cpu_ns = c1 - c0;
+    p->inspected = s1->subscriptions_checked - s0.subscriptions_checked;
+    p->matched = s1->subscriptions_matched - s0.subscriptions_matched;
+    p->wake_attempts = s1->wakes - s0.wakes;
+    p->wakes_accepted = s1->wakes_accepted - s0.wakes_accepted;
+    p->ready_inserts = s1->ready_inserts - s0.ready_inserts;
+    p->coalesced = s1->coalesced_wakes - s0.coalesced_wakes;
+    p->deferred = s1->deferred_wakes - s0.deferred_wakes;
+    p->suppressed = s1->suppressed_wakes - s0.suppressed_wakes;
 }
 
 static void propagate_inner(RxWorld *w, uint32_t obj, uint64_t changed, uint64_t cause) {
@@ -563,6 +593,7 @@ static void propagate_inner(RxWorld *w, uint32_t obj, uint64_t changed, uint64_t
         w->stats.subscriptions_checked++;
         if (s->generation != gen) continue;
         if (!(s->mask & changed)) continue;
+        w->stats.subscriptions_matched++;
         if (nh < RX_MAX_REACTIONS) hits[nh++] = s->reaction;
     }
     for (uint32_t i = 1; i < nh; i++) {
@@ -724,6 +755,7 @@ static int stage_mutations(RxWorld *w, const RxMutation *m, uint32_t n,
             pw[j].changed = 0;
             pw[j].proposed = 0;
             memcpy(pw[j].value, w->objects[m[i].obj.id].field, sizeof(pw[j].value));
+            w->stats.stage_bytes += sizeof(pw[j].value);
             (*n_pw)++;
         }
         pw[j].value[m[i].field] = m[i].value;
@@ -889,12 +921,31 @@ static void record_timing(RxWorld *w, RxReaction *r, uint32_t rid) {
     t->t_fn_end = r->t_fn_end;
     t->t_visible = now_ns();
     t->sched_ns = r->sched_ns;
-    r->t_demand = r->t_ready = r->t_run = r->t_fn_end = r->sched_ns = 0;
+    t->sched_cpu_ns = r->sched_cpu_ns;
+    r->t_demand = r->t_ready = r->t_run = r->t_fn_end = r->sched_ns = r->sched_cpu_ns = 0;
 }
 
+static void end_activation_inner(RxWorld *w, uint32_t rid);
+
+/* Everything after the timing record is scheduling work for other reactions
+ * (release, admission, deferred and parked wakes): it counts toward the
+ * world's scheduler totals, once, however deeply it nests. */
 static void end_activation(RxWorld *w, uint32_t rid) {
+    if (!w->timing) { end_activation_inner(w, rid); return; }
+    record_timing(w, &w->reactions[rid], rid);
+    uint64_t c0 = thread_cpu_ns();
+    uint64_t t0 = now_ns();
+    bool outer = w->sched_nest++ == 0;
+    end_activation_inner(w, rid);
+    w->sched_nest--;
+    if (outer) {
+        w->stats.sched_wall_ns += now_ns() - t0;
+        w->stats.sched_cpu_ns += thread_cpu_ns() - c0;
+    }
+}
+
+static void end_activation_inner(RxWorld *w, uint32_t rid) {
     RxReaction *r = &w->reactions[rid];
-    if (w->timing) record_timing(w, r, rid);
     /* A limit engaged during this activation: recorded after its crumb. */
     if (r->contain_pending) {
         contain(w, rid, r->contain_pending, r->last_crumb);
@@ -1174,12 +1225,22 @@ static void *worker_main(void *arg) {
     for (;;) {
         uint32_t rid;
         uint64_t t0 = w->timing ? now_ns() : 0;
+        uint64_t c0 = w->timing ? thread_cpu_ns() : 0;
         while (!w->stopping && !pop_ready(w, &rid)) {
             pthread_cond_wait(&w->work_cv, &w->mu);
             t0 = w->timing ? now_ns() : 0;
+            c0 = w->timing ? thread_cpu_ns() : 0;
         }
         if (w->stopping) break;
-        if (w->timing) w->reactions[rid].sched_ns += now_ns() - t0;
+        if (w->timing) {
+            uint64_t c1 = thread_cpu_ns();
+            uint64_t t1 = now_ns();
+            RxReaction *r = &w->reactions[rid];
+            r->sched_ns += t1 - t0;
+            r->sched_cpu_ns += c1 - c0;
+            w->stats.sched_wall_ns += t1 - t0;
+            w->stats.sched_cpu_ns += c1 - c0;
+        }
         run_one(w, rid, me);
     }
     pthread_mutex_unlock(&w->mu);
@@ -1218,6 +1279,16 @@ void rx_world_set_timing(RxWorld *w, RxTiming *buf, uint64_t cap) {
     w->timing_cap = buf ? cap : 0;
     w->n_timing = 0;
     pthread_mutex_unlock(&w->mu);
+}
+
+int rx_world_timing_status(RxWorld *w, uint64_t *stored, uint64_t *attempted) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    uint64_t n = w->n_timing, cap = w->timing_cap;
+    pthread_mutex_unlock(&w->mu);
+    if (stored) *stored = n < cap ? n : cap;
+    if (attempted) *attempted = n;
+    return n > cap ? RX_ERR_FULL : RX_OK;
 }
 
 static int init_common(RxWorld *w, RxCapRoot *root, const void *auth_ctx,
@@ -1736,7 +1807,19 @@ int rx_resident_wait_outstanding(RxWorld *w, int timeout_ms) {
  * worker would. Refused unless the world is the sequential reference.
  * Returns 1 if it ran (a graphics claim may still be outstanding), 0 if the
  * wake was suppressed or does not fit the budget now, negative on error. */
+int rx_world_seq_activate_timed_locked(RxWorld *w, uint32_t rid, uint64_t cause,
+                                       uint64_t poll_start, uint64_t poll_wall,
+                                       uint64_t poll_cpu);
 int rx_world_seq_activate_locked(RxWorld *w, uint32_t rid, uint64_t cause) {
+    return rx_world_seq_activate_timed_locked(w, rid, cause, 0, 0, 0);
+}
+
+/* As above, with the orchestrator's readiness poll for this stage (wall
+ * start, wall and thread-CPU duration) carried into the activation's
+ * scheduler time, so SEQ's polling is priced as RES's wake path is. */
+int rx_world_seq_activate_timed_locked(RxWorld *w, uint32_t rid, uint64_t cause,
+                                       uint64_t poll_start, uint64_t poll_wall,
+                                       uint64_t poll_cpu) {
     if (!w || !w->sequential || rid >= w->n_reactions) return RX_ERR_ARG;
     RxReaction *r = &w->reactions[rid];
     if (r->state != RX_DORMANT) return RX_ERR_ARG;
@@ -1744,7 +1827,17 @@ int rx_world_seq_activate_locked(RxWorld *w, uint32_t rid, uint64_t cause) {
     demand(w, rid, cause);          /* R6 budgets and quarantine, unchanged */
     if (!r->seq_pending) return 0;
     if (r->quarantined || !res_fits(w, r)) return 0;
+    uint64_t c0 = w->timing ? thread_cpu_ns() : 0;
+    uint64_t t0 = w->timing ? now_ns() : 0;
+    if (w->timing) {
+        /* The poll that found it ready is SEQ's wake: world totals already
+         * hold every poll (rx_seq_pulse); this attributes this one. */
+        r->t_demand = poll_start;
+        r->sched_ns += poll_wall;
+        r->sched_cpu_ns += poll_cpu;
+    }
     r->seq_pending = false;
+    w->stats.wakes_accepted++;
     set_state(w, r, RX_BLOCKED_RESOURCE);
     r->wake_cause = cause;
     r->coalesced = 0;
@@ -1753,7 +1846,16 @@ int rx_world_seq_activate_locked(RxWorld *w, uint32_t rid, uint64_t cause) {
     set_state(w, r, RX_READY);
     charge(w, r);
     w->in_flight++;
-    if (w->timing) r->t_ready = now_ns();
+    if (w->timing) {
+        /* Admission is scheduling work, as it is for a worker. */
+        uint64_t t1 = now_ns();
+        uint64_t c1 = thread_cpu_ns();
+        r->t_ready = t1;
+        r->sched_ns += t1 - t0;
+        r->sched_cpu_ns += c1 - c0;
+        w->stats.sched_wall_ns += t1 - t0;
+        w->stats.sched_cpu_ns += c1 - c0;
+    }
     run_one(w, rid, RX_SEQ_WORKER);
     return 1;
 }

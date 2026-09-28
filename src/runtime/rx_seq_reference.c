@@ -11,6 +11,12 @@ static uint64_t now_ns(void) {
     return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
 }
 
+static uint64_t thread_cpu_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
 /* Poll one stage: has any field it declares as a trigger moved past what it
  * last saw? The cause is the writer of the newest such field. Caller holds
  * the world lock. */
@@ -47,11 +53,22 @@ int rx_seq_pulse(RxWorld *w, const RxSeqPlan *plan, uint32_t *ran) {
         uint32_t rid = plan->order[i];
         if (rid >= w->n_reactions) continue;
         RxReaction *r = &w->reactions[rid];
+        /* The readiness poll is SEQ's scheduling work (spec §6.4). */
+        uint64_t c0 = w->timing ? thread_cpu_ns() : 0;
+        uint64_t t0 = w->timing ? now_ns() : 0;
         w->stats.seq_polls++;
-        if (r->state != RX_DORMANT) continue;
         uint64_t cause = 0;
-        if (!poll_ready(w, r, &cause)) continue;
-        if (rx_world_seq_activate_locked(w, rid, cause) != 1) continue;
+        int ready = r->state == RX_DORMANT && poll_ready(w, r, &cause);
+        uint64_t poll_wall = 0, poll_cpu = 0;
+        if (w->timing) {
+            poll_wall = now_ns() - t0;
+            poll_cpu = thread_cpu_ns() - c0;
+            w->stats.sched_wall_ns += poll_wall;
+            w->stats.sched_cpu_ns += poll_cpu;
+        }
+        if (!ready) continue;
+        if (rx_world_seq_activate_timed_locked(w, rid, cause, t0, poll_wall, poll_cpu) != 1)
+            continue;
         n_ran++;
         w->stats.seq_runs++;
         if (!(r->resident_seat && r->state == RX_RUNNING)) continue;

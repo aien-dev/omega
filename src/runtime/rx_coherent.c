@@ -255,7 +255,9 @@ void rx_coherent_project(RxWorld *w, uint32_t id) {
     if (!w->coherent || id >= RX_MAX_OBJECTS) return;
     RxObject *o = &w->objects[id];
     OmegaSharedWorldObject *p = &table_of(w)->objects[id];
-    w->stats.proj_bytes += sizeof(*p);
+    /* Exactly the entry members written here, not the whole entry. */
+    w->stats.proj_bytes += sizeof p->object_id + sizeof p->generation + sizeof p->permissions +
+                           sizeof p->state + sizeof p->region_offset + sizeof p->size_bytes;
     p->object_id = o->id;
     p->generation = o->generation;
     p->permissions = 0;
@@ -432,6 +434,7 @@ void rx_coherent_publish(RxWorld *w, uint32_t id, uint64_t crumb_id) {
     rx_world_seal_descriptor(&d);
     memcpy(&ring->slots[t & ring->mask], &d, sizeof(d));
     store_release_u64(&ring->tail, t + 1);
+    w->stats.c2g_write_bytes += sizeof(d);
     w->stats.desc_published++;
 }
 
@@ -447,6 +450,7 @@ int rx_world_take_publication(RxWorld *w, OmegaSharedWorldDesc *out, uint32_t *o
     }
     OmegaSharedWorldDesc d;
     memcpy(&d, &ring->slots[h & ring->mask], sizeof(d));
+    w->stats.c2g_read_bytes += sizeof(d);
     uint32_t fault = OMEGA_SW_FAULT_NONE;
     int rc = check_locked(w, &d, h, &fault);
     store_release_u64(&ring->head, h + 1);
@@ -472,6 +476,7 @@ int rx_world_inject_descriptor(RxWorld *w, const OmegaSharedWorldDesc *desc) {
     }
     memcpy(&ring->slots[t & ring->mask], desc, sizeof(*desc));
     store_release_u64(&ring->tail, t + 1);
+    w->stats.c2g_write_bytes += sizeof(*desc);
     pthread_mutex_unlock(&w->mu);
     return RX_OK;
 }
@@ -640,6 +645,7 @@ int rx_world_place_physical(RxWorld *w, RxObjRef ref, uint64_t offset, uint64_t 
         memcpy(saved, w->coherent + o->region_offset, RX_OBJECT_WINDOW);
         adopt_window(w, o, win);
         memcpy(w->coherent + o->region_offset, saved, RX_OBJECT_WINDOW);
+        w->stats.window_move_bytes += 2u * RX_OBJECT_WINDOW;
     } else {
         adopt_window(w, o, win);
     }
@@ -679,6 +685,7 @@ int rx_world_relocate_physical(RxWorld *w, RxObjRef ref) {
     memcpy(digest, o->digest, 32);
     adopt_window(w, o, win);
     memcpy(w->coherent + o->region_offset, saved, RX_OBJECT_WINDOW);
+    w->stats.window_move_bytes += 2u * RX_OBJECT_WINDOW;
     if (o->generation != generation || o->version != version ||
         memcmp(o->digest, digest, 32) != 0) {
         rc = RX_ERR_BAD_DESC;
@@ -718,7 +725,8 @@ static int post_on(RxWorld *w, OmegaSharedWorldRing *ring, OmegaSharedWorldDesc 
     memcpy(&ring->slots[t & ring->mask], d, sizeof(*d));
     atomic_thread_fence(memory_order_release);
     store_release_u64(&ring->tail, t + 1);
-    w->stats.ring_bytes += sizeof(*d);
+    if (ring == g2c_ring(w)) w->stats.g2c_write_bytes += sizeof(*d);
+    else w->stats.c2g_write_bytes += sizeof(*d);
     return RX_OK;
 }
 
@@ -825,6 +833,7 @@ int rx_resident_seat_step(RxWorld *w) {
         if (h >= t) break;
         OmegaSharedWorldDesc d;
         memcpy(&d, &ring->slots[h & ring->mask], sizeof(d));
+        w->stats.c2g_read_bytes += sizeof(d);
         if (d.msg_type == RX_RING_SHUTDOWN && notice_intact(&d, w->world_epoch) == RX_OK) {
             store_release_u64(&ring->head, h + 1);
             w->resident_stopped = true;
@@ -876,7 +885,7 @@ int rx_resident_take_result(RxWorld *w, OmegaSharedWorldDesc *out) {
     if (h >= t) { w->stats.gpu_polls_empty++; return RX_ERR_NOT_FOUND; }
     memcpy(out, &ring->slots[h & ring->mask], sizeof(*out));
     store_release_u64(&ring->head, h + 1);
-    w->stats.ring_bytes += sizeof(*out);
+    w->stats.g2c_read_bytes += sizeof(*out);
     w->stats.gpu_results_taken++;
     return notice_intact(out, w->world_epoch);
 }
@@ -908,6 +917,7 @@ int rx_world_bind_coherent(RxWorld *w, void *mem, uint64_t bytes, int borrowed) 
     if (!w || !mem || !w->coherent || bytes != w->coherent_bytes) return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
     memcpy(mem, w->coherent, (size_t)bytes);
+    w->stats.setup_copy_bytes += bytes;
     if (!w->coherent_borrowed) free(w->coherent);
     w->coherent = mem;
     w->coherent_borrowed = borrowed ? true : false;
