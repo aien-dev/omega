@@ -565,3 +565,42 @@ is not adopted. Its telemetry reader and preflight data are kept under
     qualification data is collected before C2 is committed. If C2 cannot
     make the method defensible, metric 17 is incomplete and R15 does not
     PASS (§7).
+
+## 17. Clarification C2 (2026-09-28, before any qualification data)
+
+Settles the energy method promised in §16 item 10. G1–G16 and §7's binding
+method are unchanged; this names the physical source and its limits.
+
+- **Source.** Package energy for metric 17 is the SPBM package accumulator
+  (`SPBM_PKG_ENERGY_VALUE_ACCUMULATE`, +0x344) read through the owner-key
+  signed read-only reader `research/m15/spbm/aien_spbm_readonly.c` as hwmon
+  `energy1_input` (label `pkg`). Secure Boot and integrity lockdown stay on.
+  The loaded module's srcversion and `.ko` hash are recorded per run and
+  must match the source hashes in `research/m15/spbm/runs/*/source-binary.sha256`.
+- **Width, scale, reset.** 32-bit register read, 1 mJ per count (exposed as
+  µJ). On 2026-09-28 the package counter read 196,494 J after 10,514 s of
+  uptime (18.7 W mean), matching measured 16–21 W: it counts from zero at
+  boot and did not wrap. It wraps at 2^32 mJ ≈ 4.29 MJ (~54 h of uptime at
+  22 W). Rollover and the overflow register's behaviour were never observed;
+  they are not unwrapped. A window is refused if any overflow flag is set,
+  any counter decreases, or headroom is below the window length at a
+  600 W bound (`sample.c`).
+- **Validation** (`research/m15/spbm/runs/c2-20260928-01`, 3 rounds × idle,
+  CPU = 4 X925 cores, GPU = resident seat claims, both; 101 samples per
+  10 s window, all monotonic, no overflow): package accumulator rate minus
+  integrated SoC-package power = +0.1…+0.5 W in all 12 windows (16.0–21.4 W),
+  so the 1 mJ scale agrees with the firmware's power telemetry to ~2–3%.
+  CPU load raised CPU-P by ~4.7 W; GPU load raised GPM by ~2.5 W and NVML
+  energy by ~1.5 W; combined load was not additive (the two loads shared
+  cores; seat claim rate halved) and is reported as observed.
+- **GPU domain.** GPC reads 0 in every window and is not used. GPM and NVML
+  both respond to GPU load but differ by ~1 W under it; they are reported
+  side by side as different measurement boundaries, never substituted.
+- **Uncertainty stated with every energy result:** 1 mJ resolution; ±1
+  sample period (100 ms) of power at each window edge; the observed
+  accumulator-versus-power discrepancy of up to 0.5 W; no external meter
+  calibration, so absolute accuracy is not claimed. Metric 17's primary use
+  is the paired RES-1/SEQ ratio (G9) on the same sensor.
+- **Machine noise.** LM Studio and the NVIDIA Personal AI Router were
+  resident during this validation; §9's "nothing else heavy runs" applies
+  to qualification, and the qualification script records the process list.

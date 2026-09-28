@@ -58,10 +58,14 @@ static void reduce(const char *file,const char *phase,int round,int comma)
 }
 int main(int argc,char **argv)
 {
-	const char *phase[]={"idle","p","e"};char path[1024];int n=0;
-	if(argc!=2) { fprintf(stderr,"usage: reduce run-directory\n"); return 2; }
+	/* Phases default to collections 01-03 (idle, p, e); later collections
+	 * name theirs after the directory: reduce DIR [phase...]. */
+	const char *def[]={"idle","p","e"};const char **phase=def;int np=3;
+	char path[1024];int n=0;
+	if(argc<2) { fprintf(stderr,"usage: reduce run-directory [phase...]\n"); return 2; }
+	if(argc>2) { phase=(const char **)(argv+2); np=argc-2; }
 	fputs("{\"schema\":\"AIEN_SPBM_CALIBRATION_OBSERVATIONS_V2\",\"qualified\":false,\"R15_PASS\":false,\"energy_order\":[\"pkg\",\"cpu_e\",\"cpu_p\",\"gpc_unverified\",\"gpm\"],\"power_order\":[\"sys_total\",\"soc_pkg\",\"cpu_e\",\"cpu_p\",\"gpu\"],\"windows\":[\n",stdout);
-	for(int round=1;round<=3;round++) for(int i=0;i<3;i++) {
+	for(int round=1;round<=3;round++) for(int i=0;i<np;i++) {
 		if(snprintf(path,sizeof(path),"%s/%s-%d.jsonl",argv[1],phase[i],round)>=(int)sizeof(path)) fail("path too long");
 		reduce(path,phase[i],round,n++);
 	}

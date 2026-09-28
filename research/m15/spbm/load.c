@@ -48,11 +48,14 @@ int main(int argc,char **argv)
 {
 	pthread_t threads[10]; struct worker w[10]={0};
 	char *end; unsigned long seconds;
-	int p,failed=0;
-	if(argc!=3 || (strcmp(argv[1],"p") && strcmp(argv[1],"e"))) return 2;
+	int p,failed=0,n=10;
+	/* Optional third argument: worker count 1..10 (default 10, as in
+	 * collections 01-03). */
+	if((argc!=3 && argc!=4) || (strcmp(argv[1],"p") && strcmp(argv[1],"e"))) return 2;
+	if(argc==4) { n=atoi(argv[3]); if(n<1 || n>10) return 2; }
 	seconds=strtoul(argv[2],&end,10); if(*end || seconds<1 || seconds>120) return 2;
 	p=!strcmp(argv[1],"p");
-	for(int i=0;i<10;i++) {
+	for(int i=0;i<n;i++) {
 		char path[160]; unsigned long long midr; FILE *f;
 		w[i].cpu=i<5?i+(p?5:0):i+5+(p?5:0);
 		snprintf(path,sizeof(path),"/sys/devices/system/cpu/cpu%d/regs/identification/midr_el1",w[i].cpu);
@@ -61,7 +64,7 @@ int main(int argc,char **argv)
 		if(pthread_create(&threads[i],NULL,run,&w[i])) exit(1);
 	}
 	sleep(seconds); atomic_store(&stop,1);
-	for(int i=0;i<10;i++) {
+	for(int i=0;i<n;i++) {
 		pthread_join(threads[i],NULL);
 		printf("{\"cpu\":%d,\"cpu_ns\":%llu,\"iterations\":%llu,\"result\":%.6f,\"affinity_error\":%d}\n",w[i].cpu,(unsigned long long)w[i].cpu_ns,(unsigned long long)w[i].iterations,w[i].result,w[i].error);
 		if(w[i].error || w[i].cpu_ns<seconds*UINT64_C(700000000)) failed=1;

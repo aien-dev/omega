@@ -391,5 +391,18 @@ $(RX_R15_PARITY_SILICON): $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_parity.c $(RX_
 test-r15-parity-host: $(RX_R15_PARITY_HOST)
 	./$(RX_R15_PARITY_HOST)
 
+# R15 C2 sensor validation: bounded GB10 load through the resident seat.
+R15_GPU_LOAD = $(OUT_DIR)/r15_gpu_load
+R15_GPU_LOAD_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
+	tests/runtime/r15_gpu_load.c
+
+$(R15_GPU_LOAD): $(R15_GPU_LOAD_SRCS) $(RX_R15_GPU_SRCS) src/runtime/rx_world.h \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(R15_GPU_LOAD_SRCS) $(RX_R15_GPU_SRCS) \
+		$(AIENOS_CAP_LIB) -ldl -lm
+
+r15-gpu-load: $(R15_GPU_LOAD)
+
 test-r15-parity-silicon: $(RX_R15_PARITY_SILICON)
 	./$(RX_R15_PARITY_SILICON)
