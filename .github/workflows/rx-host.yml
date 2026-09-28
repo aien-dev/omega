@@ -106,6 +106,21 @@ jobs:
           grep -q '"failures": 0,' "$receipt"
           grep -q '"candidate_bound": true,' "$receipt"
           grep -q '"OMEGA_COGNITIVE_ROUTING_PASS": "PASS"' "$receipt"
+      - name: Build and run workflow fusion qualification
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-workflow-fusion
+      - name: Show workflow fusion receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_workflow_fusion_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"OMEGA_WORKFLOW_FUSION_PASS": "PASS"' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
       - name: Build and run typed result constraints

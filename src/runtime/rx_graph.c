@@ -35,6 +35,13 @@ static uint64_t low64(const uint8_t d[32]) {
     return v;
 }
 
+/* Eight bytes at d, most significant first. */
+static uint64_t word64(const uint8_t *d) {
+    uint64_t v = 0;
+    for (int i = 0; i < 8; i++) v = (v << 8) | d[i];
+    return v;
+}
+
 static uint64_t mono_ns(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -53,7 +60,7 @@ const char *rx_graph_kind_name(AgKind k) {
     static const char *n[AG_KIND_COUNT] = {
         "?", "ag.const", "ag.pure", "ag.world_read", "ag.world_publish", "ag.recall",
         "ag.cap_resolve", "ag.physical", "ag.skill", "ag.effect_propose", "ag.effect_perform",
-        "ag.verify", "ag.branch", "ag.join", "ag.retry"
+        "ag.verify", "ag.branch", "ag.join", "ag.retry", "ag.meta"
     };
     return (unsigned)k < AG_KIND_COUNT ? n[k] : "?";
 }
@@ -63,6 +70,26 @@ static int reads_world(AgKind k) {
     return k == AG_WORLD_READ || k == AG_RECALL || k == AG_EFFECT_PERFORM;
 }
 static int has_target(AgKind k) { return reads_world(k) || k == AG_WORLD_PUBLISH; }
+
+/* World objects a node touches: its target, or a META node's object slots. */
+static uint32_t node_objs(const AgNode *x, RxObjRef out[AG_META_MAX_OBJ]) {
+    if (x->kind == AG_META) {
+        uint32_t k = x->n_mobj < AG_META_MAX_OBJ ? x->n_mobj : AG_META_MAX_OBJ;
+        for (uint32_t i = 0; i < k; i++) out[i] = x->mobj[i];
+        return k;
+    }
+    if (!has_target(x->kind)) return 0;
+    out[0] = x->obj;
+    return 1;
+}
+
+static int touches(const AgNode *x, uint32_t obj_id) {
+    RxObjRef o[AG_META_MAX_OBJ];
+    uint32_t k = node_objs(x, o);
+    for (uint32_t i = 0; i < k; i++)
+        if (o[i].id == obj_id) return 1;
+    return 0;
+}
 
 uint64_t rx_graph_chain(uint64_t chain, uint64_t run, uint64_t value) {
     sha256_ctx c;
@@ -194,6 +221,10 @@ static int pinned(const AgGraph *g, uint32_t n) {
 
 /* Deterministic topological order over live nodes (smallest index first).
  * Returns the count, or AG_E_CYCLE. */
+static int topo(const AgGraph *g, uint16_t order[AG_MAX_NODES]);
+
+int rx_graph_topo(const AgGraph *g, uint16_t order[AG_MAX_NODES]) { return topo(g, order); }
+
 static int topo(const AgGraph *g, uint16_t order[AG_MAX_NODES]) {
     uint32_t indeg[AG_MAX_NODES] = { 0 };
     uint32_t live = 0;
@@ -297,6 +328,14 @@ static int type_ok(const AgGraph *g, uint32_t n) {
         for (uint32_t i = 0; i < k; i++)
             if (g->data[e[i]].type != x->out_type || g->data[e[i]].mode != AG_EDGE_DATA) return 0;
         return 1;
+    case AG_META:
+        /* Inputs match the realization's input contract, port by port. */
+        if (k > AG_MAX_IN || x->n_mobj > AG_META_MAX_OBJ) return 0;
+        for (uint32_t i = 0; i < k; i++)
+            if (x->in_type[i] == AG_T_NONE || g->data[e[i]].type != x->in_type[i]) return 0;
+        for (uint32_t i = k; i < AG_MAX_IN; i++)
+            if (x->in_type[i] != AG_T_NONE) return 0;
+        return x->out_type != AG_T_NONE;
     default:
         return 0;
     }
@@ -359,6 +398,11 @@ static uint32_t dep_budget(const AgGraph *g, uint32_t n) {
         if (g->deps[e].to == n) srcs |= 1ull << g->deps[e].from;
     uint32_t k = (uint32_t)__builtin_popcountll(srcs);
     k += 2;                                         /* run token + own cell */
+    if (g->nodes[n].kind == AG_META) {
+        k += g->nodes[n].n_mobj;                    /* the World objects its steps read */
+        if (g->nodes[n].n_mobj) k++;                /* room for an authority slot wake */
+        return k;
+    }
     if (reads_world(g->nodes[n].kind)) k++;         /* the World object */
     if (has_target(g->nodes[n].kind)) k++;          /* room for an authority slot wake */
     return k;
@@ -369,6 +413,14 @@ static void derive_requirements(AgGraph *g, const RxWorld *w) {
         AgNode *x = &g->nodes[n];
         if (!x->alive) continue;
         if (x->kind == AG_VERIFY || is_boundary(x->kind)) rx_graph_evidence(g, n);
+        if (x->kind == AG_META) {
+            /* A fused node always owes its step evidence, and reads its objects. */
+            rx_graph_evidence(g, n);
+            for (uint32_t i = 0; w && i < x->n_mobj && i < AG_META_MAX_OBJ; i++)
+                if (x->mobj[i].id < RX_MAX_OBJECTS)
+                    rx_graph_need_authority(g, n, w->objects[x->mobj[i].id].resource, RX_RIGHT_READ);
+            continue;
+        }
         if (!w || !has_target(x->kind) || x->obj.id >= RX_MAX_OBJECTS) continue;
         uint64_t res = w->objects[x->obj.id].resource;
         uint32_t rights = RX_RIGHT_READ;
@@ -417,8 +469,7 @@ int rx_graph_validate(AgGraph *g, const RxWorld *w) {
     for (uint32_t i = 0; i < g->n_effects; i++) {
         uint32_t b = g->effects[i];
         for (uint32_t n = 0; n < g->n_nodes; n++) {
-            if (n == b || !g->nodes[n].alive || !has_target(g->nodes[n].kind) ||
-                g->nodes[n].obj.id != g->nodes[b].obj.id)
+            if (n == b || !g->nodes[n].alive || !touches(&g->nodes[n], g->nodes[b].obj.id))
                 continue;
             if (!(rx_graph_ancestors(g, n) & (1ull << b)) && !(rx_graph_ancestors(g, b) & (1ull << n)))
                 return AG_E_EFFECT_ORDER;
@@ -471,6 +522,14 @@ void rx_graph_identify(AgGraph *g) {
             put32(&c, x->fused[i].op);
             put64(&c, x->fused[i].imm);
         }
+        if (x->kind == AG_META) {
+            put32(&c, x->n_mobj);
+            for (uint32_t i = 0; i < x->n_mobj && i < AG_META_MAX_OBJ; i++) {
+                put32(&c, x->mobj[i].id);
+                put32(&c, x->mobj[i].generation);
+            }
+            for (uint32_t i = 0; i < AG_MAX_IN; i++) put32(&c, x->in_type[i]);
+        }
         uint32_t e[AG_MAX_IN];
         uint32_t k = inputs_by_port(g, n, e);
         put32(&c, k);
@@ -499,12 +558,12 @@ void rx_graph_identify(AgGraph *g) {
         }
         /* A World read is the same read only between the same publications
          * of that object: fold in every ancestor publication to it. */
-        if (x->kind == AG_WORLD_READ || x->kind == AG_RECALL) {
+        if (x->kind == AG_WORLD_READ || x->kind == AG_RECALL || x->kind == AG_META) {
             uint64_t anc = rx_graph_ancestors(g, n);
             for (int u = 0; u < cnt; u++) {
                 uint32_t p = ord[u];
                 if ((anc & (1ull << p)) && g->nodes[p].kind == AG_WORLD_PUBLISH &&
-                    g->nodes[p].obj.id == x->obj.id)
+                    touches(x, g->nodes[p].obj.id))
                     sha256_update(&c, g->nodes[p].id, 32);
             }
         }
@@ -573,6 +632,7 @@ typedef struct {
     int has_order;
     uint8_t order_s;
     uint64_t world[RX_MAX_FIELDS];
+    uint64_t mworld[AG_META_MAX_OBJ][RX_MAX_FIELDS];    /* META: its object slots */
 } AgIn;
 
 typedef struct {
@@ -580,7 +640,11 @@ typedef struct {
     uint64_t value;
     uint32_t attempts;
     int write;          /* a boundary that performs its write */
+    uint64_t steps;     /* META: step evidence */
+    uint64_t busy_us;   /* META: work of the steps that ran */
 } AgOut;
+
+static void meta_semantics(const AgNode *x, const AgSkillTable *sk, const AgIn *in, AgOut *o);
 
 static const AgSkill *find_skill(const AgSkillTable *t, uint32_t id) {
     for (uint32_t i = 0; t && i < t->n; i++)
@@ -604,6 +668,10 @@ static void semantics(const AgNode *x, const AgSkillTable *sk, const AgIn *in, A
         }
     }
     if (in->has_order && in->order_s == AG_FAILED) { o->status = AG_FAILED; return; }
+
+    /* A fused node sees its inputs' statuses as they are: its steps apply
+     * the skip and failure rules themselves, each with its own edge mode. */
+    if (x->kind == AG_META) { meta_semantics(x, sk, in, o); return; }
 
     if (x->kind == AG_JOIN) {
         int ok = -1, oks = 0, failed = 0;
@@ -793,7 +861,8 @@ static void may_flags(const AgGraph *g, const uint16_t *ord, uint32_t cnt,
         AgKind k = g->nodes[n].kind;
         uint8_t sk = 0, fl = 0;
         fl = k == AG_VERIFY || k == AG_RECALL || k == AG_RETRY || k == AG_SKILL ||
-             k == AG_JOIN || is_boundary(k) || k == AG_PURE;   /* PURE: division by zero */
+             k == AG_JOIN || is_boundary(k) || k == AG_PURE ||  /* PURE: division by zero */
+             k == AG_META;
         for (uint32_t e = 0; e < g->n_data; e++) {
             if (g->data[e].to != n) continue;
             if (g->data[e].mode == AG_EDGE_ON_FAIL) sk = 1;
@@ -1111,20 +1180,27 @@ int rx_graph_compile(const AgGoal *goal, RxWorld *w, const AgCapTable *caps,
         if ((rc = rx_graph_validate(out, w)) != 0) return rep->verdict = rc;
         if (rx_graph_check_preserved(&before, out) != 0) return rep->verdict = AG_E_CONSTRAINT;
     }
+    return rep->verdict = rx_graph_report_needs(out, w, caps, cons, rep);
+}
+
+int rx_graph_report_needs(const AgGraph *out, RxWorld *w, const AgCapTable *caps,
+                          const AgConstraints *cons, AgReport *rep) {
     rep->nodes_after = out->n_nodes;
     rx_graph_costs(out, &rep->critical_path_us, &rep->total_work_us);
     if (cons->critical_path_us && rep->critical_path_us > cons->critical_path_us)
-        return rep->verdict = AG_E_CONSTRAINT;
+        return AG_E_CONSTRAINT;
 
     /* Authority: found, or reported missing. Never created here. */
+    rep->n_missing = 0;
     for (uint32_t i = 0; i < out->n_auth; i++)
         if (!cap_lookup(w, caps, caps->subject, out->auth[i].resource, out->auth[i].rights, NULL))
             rep->missing[rep->n_missing++] = out->auth[i];
     /* Resources: what the body offers now. */
+    rep->n_resource_blocked = 0;
     for (uint32_t i = 0; i < out->n_res; i++)
         if (!fits(&out->res[i].need, &cons->budget))
             rep->resource_blocked[rep->n_resource_blocked++] = out->res[i].node;
-    return rep->verdict = AG_OK_READY;
+    return AG_OK_READY;
 }
 
 /* ---- lowering ---- */
@@ -1184,15 +1260,23 @@ static int node_fn(RxCtx *c) {
         if (!wo) return -1;
         memcpy(in.world, wo->field, sizeof in.world);
     }
+    if (x->kind == AG_META)
+        for (uint32_t i = 0; i < x->n_mobj && i < AG_META_MAX_OBJ; i++) {
+            const RxSnapshotDep *s = snap(c, x->mobj[i]);
+            if (!s) return -1;
+            memcpy(in.mworld[i], s->field, sizeof in.mworld[i]);
+        }
     AgOut o;
     semantics(x, L->skills, &in, &o);
-    if (o.status == AG_OK) busy_us(x->cost_us);
+    if (x->kind == AG_META) busy_us((uint32_t)o.busy_us);
+    else if (o.status == AG_OK) busy_us(x->cost_us);
     uint64_t ev = rx_graph_evidence_word(x, r, o.status, o.value, in.v, in.n_in);
     c->out[c->n_out++] = (RxMutation){ L->cell[n], 0, r };
     c->out[c->n_out++] = (RxMutation){ L->cell[n], 1, o.status };
     c->out[c->n_out++] = (RxMutation){ L->cell[n], 2, o.value };
     c->out[c->n_out++] = (RxMutation){ L->cell[n], 3, ev };
     c->out[c->n_out++] = (RxMutation){ L->cell[n], 4, o.attempts };
+    if (x->kind == AG_META) c->out[c->n_out++] = (RxMutation){ L->cell[n], 5, o.steps };
     if (o.status == AG_OK && o.write) {
         if (x->kind == AG_WORLD_PUBLISH) {
             c->out[c->n_out++] = (RxMutation){ x->obj, x->field, o.value };
@@ -1284,7 +1368,10 @@ int rx_graph_lower(AgLowered *L, RxWorld *w, const AgGraph *g, const AgSkillTabl
         else add_read(&d, L->run, RX_FIELD(0));
         add_read(&d, L->cell[n], RX_FIELD(0));
         if (reads_world(x->kind)) add_read(&d, x->obj, RX_ALL_FIELDS);
-        d.writes[d.n_writes++] = (RxDep){ L->cell[n], CELL_MASK };
+        if (x->kind == AG_META)
+            for (uint32_t i = 0; i < x->n_mobj && i < AG_META_MAX_OBJ; i++)
+                add_read(&d, x->mobj[i], RX_ALL_FIELDS);
+        d.writes[d.n_writes++] = (RxDep){ L->cell[n], CELL_MASK | (x->kind == AG_META ? RX_FIELD(5) : 0) };
         if (x->kind == AG_WORLD_PUBLISH) d.writes[d.n_writes++] = (RxDep){ x->obj, RX_FIELD(x->field) };
         if (x->kind == AG_EFFECT_PERFORM)
             d.writes[d.n_writes++] = (RxDep){ x->obj, RX_FIELD(0) | RX_FIELD(1) | RX_FIELD(2) | RX_FIELD(3) };
@@ -1362,6 +1449,7 @@ int rx_graph_collect(AgLowered *L, uint64_t run, AgResult *out) {
         out->value[n] = o.field[2];
         out->evidence[n] = o.field[3];
         out->attempts[n] = (uint32_t)o.field[4];
+        out->steps[n] = o.field[5];
     }
     out->outcome = outcome(L->g, out->status);
     return 0;
@@ -1369,26 +1457,54 @@ int rx_graph_collect(AgLowered *L, uint64_t run, AgResult *out) {
 
 /* ---- reference ---- */
 
-int rx_graph_reference(const AgGraph *g, RxWorld *w, const AgSkillTable *skills,
-                       const AgCapTable *caps, uint64_t run, AgReference *ref) {
-    memset(ref, 0, sizeof *ref);
+/* Shadow of the World objects a graph touches, one entry per reference
+ * (id, generation). A write goes to every entry of that object id. */
+typedef struct {
+    uint32_t n;
+    struct { RxObjRef ref; uint8_t live; RxObject o; } e[AG_MAX_NODES * AG_META_MAX_OBJ];
+} Shadow;
+
+static int shadow_at(const Shadow *sh, RxObjRef r) {
+    for (uint32_t i = 0; i < sh->n; i++)
+        if (sh->e[i].ref.id == r.id && sh->e[i].ref.generation == r.generation) return (int)i;
+    return -1;
+}
+
+static void shadow_add(Shadow *sh, RxObjRef r, int live, const RxObject *o) {
+    if (shadow_at(sh, r) >= 0 || sh->n >= AG_MAX_NODES * AG_META_MAX_OBJ) return;
+    sh->e[sh->n].ref = r;
+    sh->e[sh->n].live = (uint8_t)(live != 0);
+    if (o) sh->e[sh->n].o = *o;
+    else memset(&sh->e[sh->n].o, 0, sizeof sh->e[sh->n].o);
+    sh->n++;
+}
+
+static void shadow_write(Shadow *sh, uint32_t id, const RxObject *o) {
+    for (uint32_t i = 0; i < sh->n; i++)
+        if (sh->e[i].ref.id == id) sh->e[i].o = *o;
+}
+
+static int reference_core(const AgGraph *g, const AgSkillTable *skills, Shadow *sh, RxWorld *w,
+                          const AgCapTable *caps, uint64_t run, AgReference *ref) {
     ref->r.run = run;
     uint16_t ord[AG_MAX_NODES];
     int cnt = topo(g, ord);
     if (cnt < 0) return cnt;
-    /* Shadow of the World objects the graph touches. */
-    RxObject shadow[AG_MAX_NODES];
-    uint8_t live[AG_MAX_NODES] = { 0 };
-    for (uint32_t n = 0; n < g->n_nodes; n++)
-        if (has_target(g->nodes[n].kind)) live[n] = rx_world_read(w, g->nodes[n].obj, &shadow[n]) == RX_OK;
     uint8_t resolved[AG_MAX_NODES] = { 0 };
     uint32_t eff = 0;
     for (int t = 0; t < cnt; t++) {
         uint32_t n = ord[t];
         const AgNode *x = &g->nodes[n];
-        if (has_target(x->kind) && !live[n]) continue;          /* stale: never runs */
+        RxObjRef objs[AG_META_MAX_OBJ];
+        uint32_t no = node_objs(x, objs);
+        int slot[AG_META_MAX_OBJ], live = 1;
+        for (uint32_t i = 0; i < no; i++) {
+            slot[i] = shadow_at(sh, objs[i]);
+            if (slot[i] < 0 || !sh->e[slot[i]].live) live = 0;
+        }
+        if (!live) continue;                                    /* stale: never runs */
         int allowed = 1;
-        for (uint32_t i = 0; i < g->n_auth; i++)
+        for (uint32_t i = 0; caps && i < g->n_auth; i++)
             if (g->auth[i].node == n &&
                 !cap_lookup(w, caps, g->subject, g->auth[i].resource, g->auth[i].rights, NULL))
                 allowed = 0;
@@ -1422,39 +1538,409 @@ int rx_graph_reference(const AgGraph *g, RxWorld *w, const AgSkillTable *skills,
             if (ref->r.status[s] == AG_FAILED) in.order_s = AG_FAILED;
         }
         if (!ready) continue;
-        /* The latest shadow of this object: the last boundary that wrote it. */
-        if (reads_world(x->kind))
-            for (uint32_t m = 0; m < g->n_nodes; m++)
-                if (has_target(g->nodes[m].kind) && g->nodes[m].obj.id == x->obj.id && live[m])
-                    memcpy(in.world, shadow[m].field, sizeof in.world);
+        /* The latest shadow of each object: the last boundary that wrote it. */
+        if (reads_world(x->kind)) {
+            memcpy(in.world, sh->e[slot[0]].o.field, sizeof in.world);
+            memcpy(ref->world_seen[n][0], in.world, sizeof in.world);
+        }
+        if (x->kind == AG_META)
+            for (uint32_t i = 0; i < no; i++) {
+                memcpy(in.mworld[i], sh->e[slot[i]].o.field, sizeof in.mworld[i]);
+                memcpy(ref->world_seen[n][i], in.mworld[i], sizeof in.mworld[i]);
+            }
         AgOut o;
         semantics(x, skills, &in, &o);
         resolved[n] = 1;
         ref->r.status[n] = o.status;
         ref->r.value[n] = o.value;
         ref->r.attempts[n] = o.attempts;
+        ref->r.steps[n] = o.steps;
         ref->r.evidence[n] = rx_graph_evidence_word(x, run, o.status, o.value, in.v, in.n_in);
         if (is_boundary(x->kind)) {
+            RxObject so = sh->e[slot[0]].o;
             if (o.status == AG_OK && o.write) {
-                RxObject *so = &shadow[n];
                 if (x->kind == AG_WORLD_PUBLISH) {
-                    so->field[x->field] = o.value;
+                    so.field[x->field] = o.value;
                     ref->published[eff] = o.value;
                 } else {
-                    so->field[2] = rx_graph_chain(so->field[2], run, in.v[0]);
-                    so->field[0] += 1;
-                    so->field[1] = in.v[0];
-                    so->field[3] = run;
+                    so.field[2] = rx_graph_chain(so.field[2], run, in.v[0]);
+                    so.field[0] += 1;
+                    so.field[1] = in.v[0];
+                    so.field[3] = run;
                     ref->effect_count++;
                 }
-                for (uint32_t m = 0; m < g->n_nodes; m++)
-                    if (m != n && has_target(g->nodes[m].kind) && g->nodes[m].obj.id == x->obj.id)
-                        shadow[m] = *so;
+                shadow_write(sh, x->obj.id, &so);
             }
-            ref->effect_chain[eff] = shadow[n].field[2];
+            ref->effect_chain[eff] = so.field[2];
             eff++;
         }
     }
     ref->r.outcome = outcome(g, ref->r.status);
     return 0;
+}
+
+int rx_graph_reference(const AgGraph *g, RxWorld *w, const AgSkillTable *skills,
+                       const AgCapTable *caps, uint64_t run, AgReference *ref) {
+    memset(ref, 0, sizeof *ref);
+    static __thread Shadow sh;
+    sh.n = 0;
+    for (uint32_t n = 0; n < g->n_nodes; n++) {
+        RxObjRef objs[AG_META_MAX_OBJ];
+        uint32_t no = node_objs(&g->nodes[n], objs);
+        for (uint32_t i = 0; i < no; i++) {
+            RxObject o;
+            int live = rx_world_read(w, objs[i], &o) == RX_OK;
+            shadow_add(&sh, objs[i], live, live ? &o : NULL);
+        }
+    }
+    return reference_core(g, skills, &sh, w, caps, run, ref);
+}
+
+int rx_graph_reference_on(const AgGraph *g, const AgSkillTable *skills, const AgObjContents *objs,
+                          uint32_t n_objs, uint64_t run, AgReference *ref) {
+    memset(ref, 0, sizeof *ref);
+    static __thread Shadow sh;
+    sh.n = 0;
+    for (uint32_t i = 0; i < n_objs; i++) {
+        RxObject o;
+        memset(&o, 0, sizeof o);
+        o.id = objs[i].obj.id;
+        o.generation = objs[i].obj.generation;
+        memcpy(o.field, objs[i].field, sizeof o.field);
+        shadow_add(&sh, objs[i].obj, 1, &o);
+    }
+    for (uint32_t n = 0; n < g->n_nodes; n++) {
+        RxObjRef r[AG_META_MAX_OBJ];
+        uint32_t no = node_objs(&g->nodes[n], r);
+        for (uint32_t i = 0; i < no; i++) shadow_add(&sh, r[i], 0, NULL);
+    }
+    return reference_core(g, skills, &sh, NULL, NULL, run, ref);
+}
+
+/* ---- MetaSkill: step programs, realizations, fusion ---- */
+
+uint64_t rx_graph_step_record(uint64_t acc, const uint8_t local_id[32], uint32_t status,
+                              uint64_t value, const uint64_t *in, uint32_t n_in) {
+    sha256_ctx c;
+    uint8_t d[32];
+    sha256_init(&c);
+    sha256_update(&c, (const uint8_t *)"OMEGA_META_STEP_RECORD_V1", 25);
+    put64(&c, acc);
+    sha256_update(&c, local_id, 32);
+    put32(&c, status);
+    put64(&c, value);
+    put32(&c, n_in);
+    for (uint32_t i = 0; i < n_in; i++) put64(&c, in[i]);
+    sha256_final(&c, d);
+    return low64(d) | 1u;
+}
+
+void rx_graph_meta_seal(AgMetaProgram *p) {
+    for (uint32_t j = 0; j < p->n_steps && j < AG_META_MAX_STEPS; j++) {
+        AgMetaStep *q = &p->step[j];
+        const AgNode *x = &q->node;
+        sha256_ctx c;
+        sha256_init(&c);
+        sha256_update(&c, (const uint8_t *)"OMEGA_META_STEP_V1", 18);
+        put32(&c, x->kind);
+        put32(&c, x->out_type);
+        put32(&c, x->op);
+        put64(&c, x->imm);
+        put64(&c, x->imm2);
+        put32(&c, x->field);
+        put32(&c, x->cost_us);
+        put32(&c, x->n_fused);
+        for (uint32_t i = 0; i < x->n_fused && i < AG_MAX_FUSED; i++) {
+            put32(&c, x->fused[i].op);
+            put64(&c, x->fused[i].imm);
+        }
+        put32(&c, (uint32_t)q->obj);
+        put32(&c, q->obj >= 0 && (uint32_t)q->obj < AG_META_MAX_OBJ ? p->obj_rights[q->obj] : 0);
+        put32(&c, q->n_in);
+        for (uint32_t i = 0; i < q->n_in && i < AG_MAX_IN; i++) {
+            put8(&c, q->in[i].step);
+            put8(&c, q->in[i].mode);
+            if (q->in[i].step && q->in[i].index < j) {
+                sha256_update(&c, p->step[q->in[i].index].local_id, 32);
+            } else {
+                put32(&c, q->in[i].index);
+                put32(&c, q->in[i].index < AG_MAX_IN ? p->in_type[q->in[i].index] : 0);
+            }
+        }
+        sha256_final(&c, q->local_id);
+    }
+    sha256_ctx c;
+    sha256_init(&c);
+    sha256_update(&c, (const uint8_t *)"OMEGA_META_SIGNATURE_V1", 23);
+    put32(&c, p->n_steps);
+    for (uint32_t j = 0; j < p->n_steps && j < AG_META_MAX_STEPS; j++)
+        sha256_update(&c, p->step[j].local_id, 32);
+    put32(&c, p->n_in);
+    for (uint32_t i = 0; i < AG_MAX_IN; i++) {
+        put32(&c, p->in_type[i]);
+        put8(&c, p->in_mode[i]);
+    }
+    put32(&c, p->n_obj);
+    for (uint32_t i = 0; i < AG_META_MAX_OBJ; i++) put32(&c, p->obj_rights[i]);
+    put32(&c, p->need.compute_class);
+    put32(&c, p->need.locality);
+    put32(&c, p->need.accelerator_features);
+    put32(&c, p->need.latency_class);
+    put64(&c, p->need.memory_bytes);
+    put64(&c, p->need.deadline);
+    put64(&c, p->need.energy_cost);
+    put32(&c, p->out_type);
+    sha256_final(&c, p->signature);
+}
+
+static uint64_t world_key(const AgMetaProgram *p,
+                          const uint64_t world[AG_META_MAX_OBJ][RX_MAX_FIELDS]) {
+    sha256_ctx c;
+    uint8_t d[32];
+    sha256_init(&c);
+    put32(&c, p->n_obj);
+    for (uint32_t i = 0; i < p->n_obj && i < AG_META_MAX_OBJ; i++)
+        for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) put64(&c, world[i][f]);
+    sha256_final(&c, d);
+    return low64(d);
+}
+
+uint64_t rx_graph_meta_world_key(const AgMetaProgram *p,
+                                 const uint64_t world[AG_META_MAX_OBJ][RX_MAX_FIELDS]) {
+    return world_key(p, world);
+}
+
+int rx_graph_meta_run(const AgRealization *r, const AgSkillTable *sk, const uint8_t *s,
+                      const uint64_t *v, uint32_t n_in,
+                      const uint64_t world[AG_META_MAX_OBJ][RX_MAX_FIELDS], AgMetaOut *out) {
+    memset(out, 0, sizeof *out);
+    out->status = AG_FAILED;
+    if (!r) return -1;
+    const AgMetaProgram *p = &r->prog;
+    if (n_in != p->n_in || n_in > AG_MAX_IN || p->n_steps == 0 || p->n_steps > AG_META_MAX_STEPS ||
+        p->n_obj > AG_META_MAX_OBJ)
+        return -1;
+    if (r->kind == AG_REAL_LEARNED || r->kind == AG_REAL_HYBRID) {
+        uint64_t wk = world_key(p, world);
+        for (uint32_t t = 0; t < r->n_table && t < AG_META_TABLE; t++) {
+            const AgMetaEntry *q = &r->table[t];
+            int match = q->world == wk;
+            for (uint32_t i = 0; i < n_in && match; i++)
+                match = q->s[i] == s[i] && q->v[i] == v[i];
+            if (!match) continue;
+            out->status = q->status;
+            out->value = q->value;
+            out->steps = q->steps;
+            out->attempts = q->attempts;
+            out->table_hit = 1;
+            return 0;
+        }
+        if (r->kind == AG_REAL_LEARNED) return -1;      /* outside what it learned */
+    } else if (r->kind != AG_REAL_COMPILED) {
+        return -1;                                      /* no host realization */
+    }
+    uint8_t st[AG_META_MAX_STEPS];
+    uint64_t val[AG_META_MAX_STEPS];
+    uint64_t acc = 0;
+    for (uint32_t j = 0; j < p->n_steps; j++) {
+        const AgMetaStep *q = &p->step[j];
+        if (q->node.kind == AG_META || q->n_in > AG_MAX_IN) return -1;
+        AgIn in;
+        memset(&in, 0, sizeof in);
+        in.n_in = q->n_in;
+        for (uint32_t i = 0; i < q->n_in; i++) {
+            uint32_t k = q->in[i].index;
+            if (q->in[i].step) {
+                if (k >= j) return -1;
+                in.s[i] = st[k];
+                in.v[i] = val[k];
+                in.mode[i] = AG_EDGE_DATA;
+            } else {
+                if (k >= n_in) return -1;
+                in.s[i] = s[k];
+                in.v[i] = v[k];
+                in.mode[i] = q->in[i].mode;
+            }
+        }
+        if (q->obj >= 0) {
+            if ((uint32_t)q->obj >= p->n_obj) return -1;
+            memcpy(in.world, world[q->obj], sizeof in.world);
+        }
+        AgOut o;
+        semantics(&q->node, sk, &in, &o);
+        st[j] = o.status;
+        val[j] = o.value;
+        acc = rx_graph_step_record(acc, q->local_id, o.status, o.value, in.v, in.n_in);
+        if (o.status == AG_OK) out->busy_us += q->node.cost_us;
+        if (j + 1 == p->n_steps) {
+            out->status = o.status;
+            out->value = o.value;
+            out->attempts = o.attempts;
+        }
+    }
+    out->steps = acc;
+    return 0;
+}
+
+static void meta_semantics(const AgNode *x, const AgSkillTable *sk, const AgIn *in, AgOut *o) {
+    const AgRealization *r = NULL;
+    for (uint32_t i = 0; sk && i < sk->n_meta && i < AG_MAX_SKILLS; i++)
+        if (sk->meta[i].id == x->op) r = sk->meta[i].r;
+    o->status = AG_FAILED;
+    /* Only the realization this node was built for may run in it. */
+    if (!r || word64(r->identity) != x->imm || word64(r->identity + 8) != x->imm2) return;
+    AgMetaOut mo;
+    rx_graph_meta_run(r, sk, in->s, in->v, in->n_in, in->mworld, &mo);
+    o->status = mo.status;
+    o->value = mo.value;
+    o->attempts = mo.attempts;
+    o->steps = mo.steps;
+    o->busy_us = mo.busy_us;
+}
+
+/* Canonical bytes of a realization: the steps as they will run (not only
+ * the identities they claim) and the learned table. */
+typedef struct { uint8_t *buf; size_t cap, len; } Enc;
+
+static void e8(Enc *e, uint8_t v) {
+    if (e->buf && e->len < e->cap) e->buf[e->len] = v;
+    e->len++;
+}
+static void e32(Enc *e, uint32_t v) { for (int i = 3; i >= 0; i--) e8(e, (uint8_t)(v >> (8 * i))); }
+static void e64(Enc *e, uint64_t v) { e32(e, (uint32_t)(v >> 32)); e32(e, (uint32_t)v); }
+static void ebytes(Enc *e, const uint8_t *d, size_t n) { for (size_t i = 0; i < n; i++) e8(e, d[i]); }
+
+size_t rx_graph_realization_encode(const AgRealization *r, uint8_t *buf, size_t cap) {
+    Enc e = { buf, cap, 0 };
+    const AgMetaProgram *p = &r->prog;
+    e32(&e, r->kind);
+    ebytes(&e, p->signature, 32);
+    e32(&e, p->n_in);
+    for (uint32_t i = 0; i < AG_MAX_IN; i++) {
+        e32(&e, p->in_type[i]);
+        e8(&e, p->in_mode[i]);
+    }
+    e32(&e, p->n_obj);
+    for (uint32_t i = 0; i < AG_META_MAX_OBJ; i++) e32(&e, p->obj_rights[i]);
+    e32(&e, p->out_type);
+    e32(&e, p->n_steps);
+    for (uint32_t j = 0; j < p->n_steps && j < AG_META_MAX_STEPS; j++) {
+        const AgMetaStep *q = &p->step[j];
+        ebytes(&e, q->local_id, 32);
+        e32(&e, q->node.kind);
+        e32(&e, q->node.out_type);
+        e32(&e, q->node.op);
+        e64(&e, q->node.imm);
+        e64(&e, q->node.imm2);
+        e32(&e, q->node.field);
+        e32(&e, q->node.cost_us);
+        e32(&e, q->node.n_fused);
+        for (uint32_t i = 0; i < q->node.n_fused && i < AG_MAX_FUSED; i++) {
+            e32(&e, q->node.fused[i].op);
+            e64(&e, q->node.fused[i].imm);
+        }
+        e32(&e, (uint32_t)q->obj);
+        e32(&e, q->n_in);
+        for (uint32_t i = 0; i < q->n_in && i < AG_MAX_IN; i++) {
+            e8(&e, q->in[i].step);
+            e8(&e, q->in[i].index);
+            e8(&e, q->in[i].mode);
+        }
+    }
+    e32(&e, r->n_table);
+    for (uint32_t t = 0; t < r->n_table && t < AG_META_TABLE; t++) {
+        const AgMetaEntry *q = &r->table[t];
+        for (uint32_t i = 0; i < AG_MAX_IN; i++) {
+            e8(&e, q->s[i]);
+            e64(&e, q->v[i]);
+        }
+        e64(&e, q->world);
+        e8(&e, q->status);
+        e64(&e, q->value);
+        e64(&e, q->steps);
+        e32(&e, q->attempts);
+    }
+    return e.len;
+}
+
+void rx_graph_realization_identity(AgRealization *r) {
+    static __thread uint8_t buf[AG_REALIZATION_MAX_BYTES];
+    size_t n = rx_graph_realization_encode(r, buf, sizeof buf);
+    sha256_ctx c;
+    sha256_init(&c);
+    sha256_update(&c, (const uint8_t *)"OMEGA_REALIZATION_V1", 20);
+    sha256_update(&c, buf, n < sizeof buf ? n : sizeof buf);
+    put64(&c, n);
+    sha256_final(&c, r->identity);
+}
+
+int rx_graph_fuse(AgGraph *g, uint64_t members, uint32_t exit, uint32_t skill_id,
+                  const AgRealization *r, const uint16_t *ext, uint32_t n_ext,
+                  const RxObjRef *objs, uint32_t n_objs) {
+    if (!g || !r || exit >= g->n_nodes || !((members >> exit) & 1u) || n_ext > AG_MAX_IN ||
+        n_objs > AG_META_MAX_OBJ || n_ext != r->prog.n_in || n_objs != r->prog.n_obj)
+        return AG_E_ARG;
+    for (uint32_t i = 0; i < n_ext; i++)
+        if (ext[i] >= g->n_nodes || ((members >> ext[i]) & 1u) || !g->nodes[ext[i]].alive)
+            return AG_E_ARG;
+    for (uint32_t n = 0; n < g->n_nodes; n++)
+        if (((members >> n) & 1u) && (!g->nodes[n].alive || is_boundary(g->nodes[n].kind)))
+            return AG_E_ARG;
+    int mi = rx_graph_node(g, AG_META, g->nodes[exit].out_type);
+    if (mi < 0) return mi;
+    uint32_t m = (uint32_t)mi;
+    AgNode *x = &g->nodes[m];
+    x->op = skill_id;
+    x->imm = word64(r->identity);
+    x->imm2 = word64(r->identity + 8);
+    x->n_mobj = n_objs;
+    for (uint32_t i = 0; i < n_objs; i++) x->mobj[i] = objs[i];
+    for (uint32_t i = 0; i < n_ext; i++) x->in_type[i] = r->prog.in_type[i];
+    x->origin = g->nodes[exit].origin;
+    for (uint32_t n = 0; n < g->n_nodes; n++)
+        if ((members >> n) & 1u) x->cost_us += g->nodes[n].cost_us;
+    for (uint32_t i = 0; i < n_ext; i++)
+        if (rx_graph_data(g, ext[i], m, i, r->prog.in_mode[i]) != 0) return AG_E_FULL;
+    /* What the exit fed now comes from the fused node. */
+    for (uint32_t e = 0; e < g->n_data; e++)
+        if (g->data[e].from == exit && !((members >> g->data[e].to) & 1u)) g->data[e].from = (uint16_t)m;
+    for (uint32_t e = 0; e < g->n_deps; e++)
+        if (g->deps[e].from == exit && !((members >> g->deps[e].to) & 1u)) g->deps[e].from = (uint16_t)m;
+    /* Authority, resources, conditions and evidence of the members. */
+    uint32_t n_auth = g->n_auth;
+    for (uint32_t i = 0; i < n_auth; i++)
+        if ((members >> g->auth[i].node) & 1u)
+            if (rx_graph_need_authority(g, m, g->auth[i].resource, g->auth[i].rights) != 0) return AG_E_FULL;
+    RxResourceNeed need;
+    memset(&need, 0, sizeof need);
+    int any = 0;
+    for (uint32_t i = 0; i < g->n_res; i++) {
+        if (!((members >> g->res[i].node) & 1u)) continue;
+        const RxResourceNeed *q = &g->res[i].need;
+        if (q->compute_class && need.compute_class && q->compute_class != need.compute_class)
+            return AG_E_ARG;
+        if (q->compute_class) need.compute_class = q->compute_class;
+        need.locality |= q->locality;
+        need.accelerator_features |= q->accelerator_features;
+        if (q->latency_class > need.latency_class) need.latency_class = q->latency_class;
+        if (q->memory_bytes > need.memory_bytes) need.memory_bytes = q->memory_bytes;
+        if (q->deadline && (!need.deadline || q->deadline < need.deadline)) need.deadline = q->deadline;
+        need.energy_cost += q->energy_cost;
+        any = 1;
+    }
+    if (any && rx_graph_need_resource(g, m, &need) != 0) return AG_E_FULL;
+    for (uint32_t i = 0; i < g->n_success; i++)
+        if (g->success[i].node == exit) g->success[i].node = (uint16_t)m;
+    for (uint32_t i = 0; i < g->n_failure; i++)
+        if (g->failure[i].node == exit) g->failure[i].node = (uint16_t)m;
+    int owed = 0;
+    for (uint32_t i = 0; i < g->n_evidence; i++) owed |= (int)((members >> g->evidence[i]) & 1u);
+    if (owed) rx_graph_evidence(g, m);
+    for (uint32_t n = 0; n < g->n_nodes; n++)
+        if ((members >> n) & 1u) {
+            drop_edges_of(g, n);
+            g->nodes[n].alive = 0;
+        }
+    compact(g);
+    return (int)(g->n_nodes - 1);
 }

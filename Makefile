@@ -533,6 +533,32 @@ $(RX_ROUTE_TEST): $(RX_ROUTE_SRCS) $(RX_ROUTE_OBJ) tests/runtime/rx_cog_engines.
 test-cognitive-routing: $(RX_ROUTE_TEST)
 	./$(RX_ROUTE_TEST)
 
+# OMEGA_WORKFLOW_FUSION: repeated verified action-graph fragments become
+# MetaSkills; only a verified, measured, canaried, promoted (R9 barrier) and
+# published one replaces the steps. rx_fusion.o, like rx_graph.o, must not
+# reference any AIENOS admin operation.
+.PHONY: test-workflow-fusion
+RX_FUSION_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/runtime/rx_generation.c src/sha256.c \
+	src/omega_evidence.c src/omega_core.c src/omega_canonical.c tests/runtime/rx_workflow_fusion.c
+RX_FUSION_TEST = $(OUT_DIR)/rx_workflow_fusion_test
+RX_FUSION_OBJ = $(OUT_DIR)/rx_fusion.o
+
+$(RX_FUSION_OBJ): src/runtime/rx_fusion.c src/runtime/rx_fusion.h src/runtime/rx_graph.h \
+	src/runtime/rx_generation.h src/runtime/rx_world.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_fusion.c
+	@if nm -u $@ | grep -E 'aienos_cap_|rx_caproot_mint|rx_caproot_revoke' ; then \
+		echo "rx_fusion.o references an authority admin operation; fusion must not mint"; \
+		rm -f $@; exit 1; fi
+
+$(RX_FUSION_TEST): $(RX_FUSION_SRCS) $(RX_FUSION_OBJ) $(RX_GRAPH_OBJ) src/runtime/rx_caproot.h \
+	src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_FUSION_SRCS) $(RX_FUSION_OBJ) $(RX_GRAPH_OBJ) \
+		$(AIENOS_CAP_LIB) -lm
+
+test-workflow-fusion: $(RX_FUSION_TEST)
+	./$(RX_FUSION_TEST)
+
 # OMEGA_TYPED_RESULT_CONSTRAINTS: structured results of cognition are checked
 # against typed contracts; the publish gate is the only writer of what is
 # published. rx_contract.o is built alone first and must not reference any
