@@ -1,0 +1,41 @@
+{
+  "schema": "OMEGA_TYPED_RESULT_CONSTRAINTS_V1",
+  "run_id": "20260928T220614Z-d8da3114289a",
+  "candidate_commit": "d8da3114289ae94897507a23588855728f250836",
+  "candidate_bound": true,
+  "run_commit": "d8da3114289ae94897507a23588855728f250836",
+  "tree_dirty": false,
+  "aienos_commit": "c8ab65e3ba2fddbe99245f747fdfdb99f6042fd3",
+  "checks": 47062,
+  "failures": 0,
+  "test_binary_sha256": "b98e784f62699423fa6c6cc773bd381bb03a5829f690871408385e79bfd6e46b",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64", "cpus": "5,6,7,8,9,15,16,17,18,19"},
+  "scope": "host processor; native AIENOS authority library; resident reaction world; synthetic cognitive backend with a fixed mistake catalogue",
+  "backend_model": {"mistake_rate_pct": 35, "second_mistake_pct": 25, "max_retries": 3, "masked_fallback": "intended value if allowed, else nearest allowed"},
+  "contracts": {"kinds": 9, "constraint_types_used": 9, "rules_compiled_into_generation": 84, "rules_checked_after": 2},
+  "measures": {
+    "constrained": {"requests": 3600, "candidates": 3646, "invalid_candidates": 46, "invalid_candidate_rate": 0.0126, "repairs": 0, "repair_rate": 0.0000, "retries": 129, "retries_per_request": 0.0358, "dead_ends": 83, "draws": 27842, "checks": 3646, "published": 3600, "rejected_after_retries": 0, "unsatisfiable": 0, "semantic_failures": 197, "semantic_failure_rate": 0.0547, "invalid_published": 0, "generate_ns": 27185326, "check_ns": 10259242, "produce_mean_ns": 10401, "end_to_end_p50_ns": 28640, "end_to_end_p99_ns": 548259},
+    "free": {"requests": 3600, "candidates": 5105, "invalid_candidates": 1637, "invalid_candidate_rate": 0.3207, "repairs": 105, "repair_rate": 0.0294, "retries": 1505, "retries_per_request": 0.4181, "dead_ends": 0, "draws": 38526, "checks": 5238, "published": 3573, "rejected_after_retries": 27, "unsatisfiable": 0, "semantic_failures": 184, "semantic_failure_rate": 0.0515, "invalid_published": 0, "generate_ns": 633171, "check_ns": 12773476, "produce_mean_ns": 3724, "end_to_end_p50_ns": 20544, "end_to_end_p99_ns": 449282},
+    "compute_avoided": {"draws_fraction": 0.2773, "candidates_fraction": 0.2858, "checks_fraction": 0.3039, "exhausted_budget_draws_free": 28, "exhausted_budget_draws_constrained": 0},
+    "per_kind": {
+      "plan": {"constrained_invalid_rate": 0.0000, "free_invalid_rate": 0.3234, "constrained_repair_rate": 0.0000, "free_repair_rate": 0.0302, "constrained_retries": 0, "free_retries": 169, "constrained_draws": 3200, "free_draws": 4552, "constrained_semantic_failure_rate": 0.0250, "free_semantic_failure_rate": 0.0227, "invalid_published": 0},
+      "hypothesis": {"constrained_invalid_rate": 0.0000, "free_invalid_rate": 0.3173, "constrained_repair_rate": 0.0000, "free_repair_rate": 0.0353, "constrained_retries": 25, "free_retries": 161, "constrained_draws": 3300, "free_draws": 4488, "constrained_semantic_failure_rate": 0.0950, "free_semantic_failure_rate": 0.0680, "invalid_published": 0},
+      "capability_need": {"constrained_invalid_rate": 0.0000, "free_invalid_rate": 0.3432, "constrained_repair_rate": 0.0000, "free_repair_rate": 0.1078, "constrained_retries": 0, "free_retries": 142, "constrained_draws": 3200, "free_draws": 4336, "constrained_semantic_failure_rate": 0.0500, "free_semantic_failure_rate": 0.0526, "invalid_published": 0},
+      "action_graph": {"constrained_invalid_rate": 0.1031, "free_invalid_rate": 0.3073, "constrained_repair_rate": 0.0000, "free_repair_rate": 0.0403, "constrained_retries": 46, "free_retries": 150, "constrained_draws": 3568, "free_draws": 4400, "constrained_semantic_failure_rate": 0.0600, "free_semantic_failure_rate": 0.0730, "invalid_published": 0},
+      "skill_invocation": {"constrained_invalid_rate": 0.0000, "free_invalid_rate": 0.2803, "constrained_repair_rate": 0.0000, "free_repair_rate": 0.0000, "constrained_retries": 0, "free_retries": 153, "constrained_draws": 2800, "free_draws": 3871, "constrained_semantic_failure_rate": 0.0525, "free_semantic_failure_rate": 0.0427, "invalid_published": 0},
+      "world_mutation": {"constrained_invalid_rate": 0.0000, "free_invalid_rate": 0.3616, "constrained_repair_rate": 0.0000, "free_repair_rate": 0.0505, "constrained_retries": 58, "free_retries": 189, "constrained_draws": 2574, "free_draws": 3534, "constrained_semantic_failure_rate": 0.0425, "free_semantic_failure_rate": 0.0404, "invalid_published": 0},
+      "effect_proposal": {"constrained_invalid_rate": 0.0000, "free_invalid_rate": 0.3225, "constrained_repair_rate": 0.0000, "free_repair_rate": 0.0000, "constrained_retries": 0, "free_retries": 183, "constrained_draws": 2800, "free_draws": 4081, "constrained_semantic_failure_rate": 0.0425, "free_semantic_failure_rate": 0.0557, "invalid_published": 0},
+      "generation_candidate": {"constrained_invalid_rate": 0.0000, "free_invalid_rate": 0.3248, "constrained_repair_rate": 0.0000, "free_repair_rate": 0.0000, "constrained_retries": 0, "free_retries": 188, "constrained_draws": 3200, "free_draws": 4704, "constrained_semantic_failure_rate": 0.0575, "free_semantic_failure_rate": 0.0605, "invalid_published": 0},
+      "evidence": {"constrained_invalid_rate": 0.0000, "free_invalid_rate": 0.3035, "constrained_repair_rate": 0.0000, "free_repair_rate": 0.0000, "constrained_retries": 0, "free_retries": 170, "constrained_draws": 3200, "free_draws": 4560, "constrained_semantic_failure_rate": 0.0675, "free_semantic_failure_rate": 0.0479, "invalid_published": 0}
+    }
+  },
+  "differential": {"candidates": 7200, "contract_vs_reference_mismatches": 0, "single_mistakes": 2348, "reported_under_another_type": 0},
+  "caught_by_constraint_type": {"type": 580, "range": 908, "enum": 437, "structural": 569, "cross_field": 537, "authority": 756, "generation": 272, "referential": 738, "required_evidence": 226, "effect": 300},
+  "compiled_domains": {"samples": 2898, "compiled_rule_violations": 0, "intent_fields_checked": 27200, "valid_values_masked_away": 0},
+  "gate": {"hostile_drafts": 70, "rejected": 64, "repaired": 6, "published_invalid": 0, "bypass_attempts": 10, "bypass_blocked": 10, "fields_not_written_by_gate": 0, "stale_between_generation_and_publication_caught": 1},
+  "serialization": {"round_trips": 1800, "identity_mismatches": 0, "malformed_texts": 12, "malformed_refused": 12, "faulty_json_candidates": 1262, "faulty_json_caught": 1262},
+  "gates": {
+    "OMEGA_TYPED_RESULT_CONSTRAINTS_PASS": "PASS",
+    "not_claimed": ["a neural or LLM backend (the backend is synthetic, with a fixed mistake catalogue)", "AIEN's live R11 reactions routed through the gate", "valid-but-wrong answers (no contract can see them; they are measured as semantic failures)", "lookahead: a compiled domain can lead to a dead end that costs a retry", "graphics-processor execution", "AIENOS kernel (the authority runs as a host library)"]
+  }
+}

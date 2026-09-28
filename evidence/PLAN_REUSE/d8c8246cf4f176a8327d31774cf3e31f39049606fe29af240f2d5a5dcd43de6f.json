@@ -1,0 +1,67 @@
+{
+  "schema": "OMEGA_PLAN_REUSE_V1",
+  "run_id": "20260928T213300Z-7d562020abba",
+  "candidate_commit": "7d562020abba34185ae180aa3db1ad5a7676c4b8",
+  "candidate_bound": true,
+  "run_commit": "7d562020abba34185ae180aa3db1ad5a7676c4b8",
+  "tree_dirty": false,
+  "aienos_commit": "c8ab65e3ba2fddbe99245f747fdfdb99f6042fd3",
+  "checks": 1306,
+  "failures": 0,
+  "test_binary_sha256": "e2701adb6aa9151b188c2e33fa496d4d8c617ad063bc0bdd006e9f3fe31a7693",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64", "cpus": "5,6,7,8,9,15,16,17,18,19", "core_class_midr_part": "0xd85"},
+  "scope": "host processor; native AIENOS authority library; resident reaction world; one planning domain (arrangement); planner is explicit A* search, not neural",
+  "cognitive_ops_definition": "first use: states expanded + successors generated + heuristic evaluations + goal-shape steps; reuse: goal-shape steps + candidates retrieved + predicates evaluated + binding attempts",
+  "workloads": {
+    "reverse_tower_6": {
+      "instances": 40, "plan_steps": 6, "graph_nodes": 34, "evidence_words": 12,
+      "first_use": {"n": 40, "median_cognitive_ops": 62, "median_cognition_cpu_ns": 98560, "median_cognition_wall_ns": 99072, "median_instructions": 0, "median_execution_ns": 3929150, "median_end_to_end_ns": 4113375, "median_compile_ns": 3283668, "median_graph_run_ns": 420193, "median_verify_ns": 195145},
+      "reuse": {"n": 39, "median_cognitive_ops": 53, "median_cognition_cpu_ns": 4624, "median_cognition_wall_ns": 5264, "median_instructions": 0, "median_execution_ns": 3880014, "median_end_to_end_ns": 3907118, "median_compile_ns": 3263852, "median_graph_run_ns": 425826, "median_verify_ns": 196657},
+      "ratios": {"cognitive_ops": 1.2, "cognition_cpu": 21.3, "cognition_cpu_excluding_identity_hash": 2.5, "end_to_end": 1.05},
+      "first_use_median_identity_hash_cpu_ns": 86904,
+      "criteria": {"G1": "FAIL", "G2": "PASS", "G3": "PASS", "G6": "PASS"},
+      "reuse_accepted": 39, "reuse_succeeded": 39, "outcome_equal_to_first_use": 40, "evidence_equal_to_first_use": 40, "one_semantic_id": true, "realizations_distinct": true
+    },
+    "merge_two_towers_3_3": {
+      "instances": 40, "plan_steps": 9, "graph_nodes": 39, "evidence_words": 15,
+      "first_use": {"n": 40, "median_cognitive_ops": 1806, "median_cognition_cpu_ns": 189128, "median_cognition_wall_ns": 189720, "median_instructions": 0, "median_execution_ns": 5064779, "median_end_to_end_ns": 5383012, "median_compile_ns": 4209719, "median_graph_run_ns": 562882, "median_verify_ns": 216992},
+      "reuse": {"n": 39, "median_cognitive_ops": 68, "median_cognition_cpu_ns": 4864, "median_cognition_wall_ns": 5648, "median_instructions": 0, "median_execution_ns": 5015730, "median_end_to_end_ns": 5037586, "median_compile_ns": 4236911, "median_graph_run_ns": 545986, "median_verify_ns": 226545},
+      "ratios": {"cognitive_ops": 26.6, "cognition_cpu": 38.9, "cognition_cpu_excluding_identity_hash": 15.7, "end_to_end": 1.07},
+      "first_use_median_identity_hash_cpu_ns": 113936,
+      "criteria": {"G1": "PASS", "G2": "PASS", "G3": "PASS", "G6": "PASS"},
+      "reuse_accepted": 39, "reuse_succeeded": 39, "outcome_equal_to_first_use": 40, "evidence_equal_to_first_use": 40, "one_semantic_id": true, "realizations_distinct": true
+    }
+  },
+  "lifecycle": {"candidate_reference_runs": 2, "promotions_to_verified": 2, "templates_stored": 3, "rederivations_deduplicated": 1},
+  "applicability": {"accepted_reuses": 88, "false_applicable": 0, "false_applicability_rate": 0.0000,
+    "adversarial": 100, "refused": 100, "refused_on_expected_axis": 100, "refusals_recorded_in_world": 100,
+    "by_axis": {
+      "shape": {"cases": 10, "refused": 10, "blind_replays": 0, "blind_reached_goal": 0, "blind_violated": 0},
+      "binding": {"cases": 10, "refused": 10, "blind_replays": 10, "blind_reached_goal": 0, "blind_violated": 10},
+      "goal_constraints": {"cases": 10, "refused": 10, "blind_replays": 10, "blind_reached_goal": 10, "blind_violated": 10},
+      "world_generation": {"cases": 10, "refused": 10, "blind_replays": 10, "blind_reached_goal": 10, "blind_violated": 10},
+      "cognitive_generation": {"cases": 10, "refused": 10, "blind_replays": 10, "blind_reached_goal": 10, "blind_violated": 10},
+      "environment": {"cases": 10, "refused": 10, "blind_replays": 10, "blind_reached_goal": 10, "blind_violated": 10},
+      "required_state": {"cases": 20, "refused": 20, "blind_replays": 20, "blind_reached_goal": 10, "blind_violated": 10},
+      "authority": {"cases": 10, "refused": 10, "blind_replays": 10, "blind_reached_goal": 0, "blind_violated": 10},
+      "resources": {"cases": 10, "refused": 10, "blind_replays": 10, "blind_reached_goal": 0, "blind_violated": 10}
+    }},
+  "identity": {"canonical_round_trip": true, "predicate_order_invariant": true, "semantic_mutations": 10, "changed_id": 10, "nonsemantic_mutations": 4, "kept_id": 4, "rederived_same_id": true, "rederived_then_reused": true},
+  "adaptation": {"adapted": 1, "succeeded": 1, "cognitive_ops": 54, "full_search_cognitive_ops": 69, "cognition_cpu_ns": 101248, "full_search_cognition_cpu_ns": 107808, "steps": 7, "full_search_steps": 7, "later_goals_reused_adapted": 9},
+  "energy": {"source": "aien_spbm hwmon (on-device package counter, 1 mJ steps; machine not quiet; idle baseline subtracted)", "idle_package_w": 19.231, "loop_ns": 4000000000,
+    "first_use_loops": 49981, "first_use_package_mj": 0.06437, "first_use_cpu_p_mj": 0.01394,
+    "reuse_loops": 2399543, "reuse_package_mj": 0.0011920, "reuse_cpu_p_mj": 0.0000393},
+  "instructions_counter": false,
+  "gates": {
+    "G1_cognitive_ops_20x": "FAIL",
+    "G2_cognition_cpu_10x": "PASS",
+    "G3_outcome_and_evidence": "PASS",
+    "G4_false_applicability_zero": "PASS",
+    "G5_identity": "PASS",
+    "G6_end_to_end_faster": "PASS",
+    "OMEGA_PLAN_REUSE_PASS": "FAIL",
+    "verdict_basis": "spec/plan-reuse.md section 7 as pre-registered: G1, G2, G3 and G6 hold for every workload",
+    "task_wording": {"text": "at least one repeated workload where verified plan reuse substantially reduces cognitive computation while preserving outcome/evidence", "met": true, "workloads_meeting_G1_G2_G3_G6": ["merge_two_towers_3_3"], "note": "reported beside the pre-registered verdict, not in its place"},
+    "not_claimed": ["a neural or learned planner", "more than one planning domain", "durable template storage (R9)", "graphics-processor execution", "cognition reading the World through capabilities (the cache reads a host projection; execution is capability-checked)", "templates above 8 slots or 64 graph nodes"]
+  }
+}

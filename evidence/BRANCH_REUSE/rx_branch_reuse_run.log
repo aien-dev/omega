@@ -1,0 +1,84 @@
+./build/rx_branch_reuse
+OMEGA branch-state reuse: 128 branches, 512-unit common prefix, 16 private units + 2 edits each, 65536-byte units (prefix 32 MiB)
+energy counters: /sys/class/hwmon/hwmon3
+
+[latent_checkpoint]
+  measured costs: derive 58.2 us/unit, copy 0.011 ns/B, compress 0.102 ns/B (delta ratio 1.000), spill w/r 6.927/0.033 ns/B, retain 0.218 ns/B
+                            independent         shared     ratio
+  memory held (MiB)              4232.0          140.1     30.2x
+  RSS growth (MiB)               4232.6          141.0     30.0x
+  derive calls                    67712           2049     33.0x
+  CPU time (ms)                  4229.7          162.3     26.1x
+  all branches ready (ms)         4230.3          162.4     26.0x
+  first branch ready (ms)           32.2           43.8
+  per-branch ready (ms)          33.049          0.939     35.2x
+  branch create med (ms)           32.2         0.0015
+  branch create p99 (ms)           38.8         0.0041
+  energy pkg (J)                  93.72           3.39     27.6x
+  energy cpu_p (J)                27.21           0.79
+  energy constructions                1             13
+  actions: reuse=576 copy=192 reference=65664 recompute=2056 move=280 compress=0 spill=104 evict=1577
+  policy under 35.0 MiB budget: considered 1961, kept 0, move 280, compress 0, spill 104, evict 1577; resident after 35.0 MiB, spilled 6.5 MiB
+  correctness: bytes ok, ancestor ok, frozen ok, copy-on-write ok, reuse ok, pressure ok, placement cycle ok
+
+[activation_checkpoint]
+  measured costs: derive 683.0 us/unit, copy 0.010 ns/B, compress 0.098 ns/B (delta ratio 1.000), spill w/r 6.760/0.037 ns/B, retain 0.209 ns/B
+                            independent         shared     ratio
+  memory held (MiB)              4232.0          140.1     30.2x
+  RSS growth (MiB)               4232.6          141.0     30.0x
+  derive calls                    67712           2049     33.0x
+  CPU time (ms)                 48357.4         1455.4     33.2x
+  all branches ready (ms)        50045.8         1455.6     34.4x
+  first branch ready (ms)          442.4          370.3
+  per-branch ready (ms)         390.983          8.568     45.6x
+  branch create med (ms)          351.3         0.0017
+  branch create p99 (ms)         1353.2         0.0049
+  energy pkg (J)                 990.55          23.99     41.3x
+  energy cpu_p (J)               212.15           5.57
+  energy constructions                1              3
+  actions: reuse=576 copy=192 reference=65664 recompute=256 move=280 compress=0 spill=1489 evict=192
+  policy under 35.0 MiB budget: considered 1961, kept 0, move 280, compress 0, spill 1489, evict 192; resident after 35.0 MiB, spilled 93.1 MiB
+  correctness: bytes ok, ancestor ok, frozen ok, copy-on-write ok, reuse ok, pressure ok, placement cycle ok
+
+[kv_state]
+  measured costs: derive 1.2 us/unit, copy 0.011 ns/B, compress 0.099 ns/B (delta ratio 1.000), spill w/r 6.581/0.029 ns/B, retain 0.218 ns/B
+                            independent         shared     ratio
+  memory held (MiB)              4232.0          140.1     30.2x
+  RSS growth (MiB)               4232.6          141.0     30.0x
+  derive calls                    67712           2049     33.0x
+  CPU time (ms)                   861.0           61.5     14.0x
+  all branches ready (ms)          861.3           61.6     14.0x
+  first branch ready (ms)            8.7           13.7
+  per-branch ready (ms)           6.729          0.378     17.8x
+  branch create med (ms)            6.6         0.0017
+  branch create p99 (ms)            8.7         0.0048
+  energy pkg (J)                  22.68           0.61     37.4x
+  energy cpu_p (J)                 4.45           0.13
+  energy constructions                3             66
+  actions: reuse=576 copy=192 reference=65664 recompute=2210 move=280 compress=0 spill=0 evict=1681
+  policy under 35.0 MiB budget: considered 1961, kept 0, move 280, compress 0, spill 0, evict 1681; resident after 35.0 MiB, spilled 0.0 MiB
+  correctness: bytes ok, ancestor ok, frozen ok, copy-on-write ok, reuse ok, pressure ok, placement cycle ok
+
+[world_projection]
+  measured costs: derive 155.0 us/unit, copy 0.009 ns/B, compress 0.066 ns/B (delta ratio 0.056), spill w/r 6.782/0.029 ns/B, retain 0.207 ns/B
+                            independent         shared     ratio
+  memory held (MiB)              4232.0          140.1     30.2x
+  RSS growth (MiB)               4232.6          141.0     30.0x
+  derive calls                    67712           2049     33.0x
+  CPU time (ms)                 10472.6          330.4     31.7x
+  all branches ready (ms)        10474.1          330.4     31.7x
+  first branch ready (ms)           84.3           82.0
+  per-branch ready (ms)          81.829          1.961     41.7x
+  branch create med (ms)           84.4         0.0015
+  branch create p99 (ms)          107.9         0.0045
+  energy pkg (J)                 209.24           5.46     38.3x
+  energy cpu_p (J)                48.37           1.21
+  energy constructions                1              8
+  actions: reuse=576 copy=192 reference=65664 recompute=256 move=181 compress=1588 spill=0 evict=192
+  policy under 35.0 MiB budget: considered 1961, kept 0, move 181, compress 1588, spill 0, evict 192; resident after 35.0 MiB, spilled 0.0 MiB
+  correctness: bytes ok, ancestor ok, frozen ok, copy-on-write ok, reuse ok, pressure ok, placement cycle ok
+
+representation-independent identity: yes; all eight actions exercised: yes
+OMEGA_BRANCH_STATE_REUSE_PASS
+gate: OMEGA_BRANCH_STATE_REUSE=PASS
+receipt: build/qual-runs/20260928T215834Z-c0546a272eab/BRANCH_REUSE/rx_branch_reuse_receipt.json
