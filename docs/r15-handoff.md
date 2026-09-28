@@ -209,3 +209,17 @@ data. TARGET_PCT and G1 are unchanged; any correction is an owner decision
 and must be committed as a methodology clarification before qualification.
 The harness must size the crumb log for the longest allowed window and fail
 a trial on overflow (§16 C1 item 4 applies equally to crumbs).
+
+### Blocker found: R14 silicon F is intermittent (2026-09-28 afternoon)
+
+`test-r14-silicon` failed F_checkpoint_crash (and once B) on the rework
+branch AND on the pre-change head `0ab53fb`, so the R15 instrumentation did
+not cause it. Rerun of `rx_r14_recovery_silicon BF` on a quiet machine
+(all cores < 3% busy, governor performance, max clocks): B passed, F adapted
+after 3 crash points and failed at ~5 with `adapt -4` (AIEN never confirmed
+the incumbent within 60 s while production filled the 2^18 crumb log) or
+`adapt -11` (goal not MET). Host R14 passes. R14 last passed on silicon at
+08:45 today (evidence 2c647c6); since then: two reboots (MOK enrollment),
+the SPBM reader loaded, LM Studio and the NVIDIA Personal AI Router
+resident. Cause not yet found. §14 requires R14 silicon on the candidate, so
+this must be resolved before qualification.
