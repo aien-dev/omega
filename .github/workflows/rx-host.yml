@@ -123,6 +123,23 @@ jobs:
           grep -q '"OMEGA_WORKFLOW_FUSION_PASS": "PASS"' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
+      - name: Build and run typed result constraints
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-typed-results
+      - name: Show typed result constraints receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_typed_results_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"OMEGA_TYPED_RESULT_CONSTRAINTS_PASS": "PASS"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"
       - name: Show R8 receipt
         run: |
           receipt="$(find build/qual-runs -name rx_aegis_resident_receipt.json -type f | head -n 1)"
@@ -292,3 +309,20 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make build/rx_r14_recovery_host
+      - name: Plan IR and verified plan cache (OMEGA_PLAN_REUSE; timing criteria are judged on the Spark receipt)
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+          PLAN_REUSE_NO_ENERGY: '1'
+        run: |
+          make test-plan-reuse
+          receipt="$(find build/qual-runs -name rx_plan_reuse_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"G3_outcome_and_evidence": "PASS"' "$receipt"
+          grep -q '"G4_false_applicability_zero": "PASS"' "$receipt"
+          grep -q '"G5_identity": "PASS"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"
