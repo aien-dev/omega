@@ -160,3 +160,5 @@ read-only telemetry driver.
 - No systemd, including for loading the module (see memory no-systemd).
 
 - 2026-09-28: the enrollment request is QUEUED (Drake confirmed with `sudo mokutil --list-new`; the one-time password is known to Drake). Next: Drake reboots and approves at the blue screen. Afterwards, verify with `mokutil --list-enrolled | grep AIEN`.
+
+- 2026-09-28 10:02: KEY ENROLLED. `mokutil --list-enrolled` shows CN=AIEN Spark owner key (telemetry). Secure Boot stays on. Modules signed with /var/lib/aien-mok/MOK.priv will now load. Next: write, sign and load the read-only SPBM telemetry driver, then calibrate it.
