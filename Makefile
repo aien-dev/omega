@@ -212,6 +212,24 @@ $(RX_R12_TEST): $(RX_R12_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 test-r12: $(RX_R12_TEST)
 	./$(RX_R12_TEST)
 
+# R10: Omega as a resident realization faculty. Omega's native AArch64 matvec
+# realizations become ready from cost evidence, are verified in a sandbox,
+# measured, and recorded; production picks the record up. AArch64 hosts only.
+RX_R10_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_omega.c src/sha256.c src/omega_evidence.c \
+	src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
+	tests/runtime/rx_r10_omega.c
+RX_R10_TEST = $(OUT_DIR)/rx_r10_omega_test
+
+$(RX_R10_TEST): $(RX_R10_SRCS) src/runtime/rx_omega.h src/runtime/rx_caproot.h \
+	src/runtime/rx_world.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R10_SRCS) $(AIENOS_CAP_LIB) -lm
+
+test-r10: $(RX_R10_TEST)
+	./$(RX_R10_TEST)
+
 # Physical graphics seat against the native AIENOS authority. Not part of
 # GitHub checks. A pass on this machine is the only run that may set
 # silicon_observed.
