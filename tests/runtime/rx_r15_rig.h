@@ -114,6 +114,10 @@ typedef struct {
     /* measured (reported only) */
     uint64_t incumbent_ns, selected_ps, reference_ps, inforce_ps, final_expected_ns;
     uint64_t plan_seq, served, crumbs;
+    /* per Omega slot, last search epoch (reported only): verdict state,
+     * measure state, candidate ps, reference ps measured in the same rounds */
+    uint64_t slot_verdict[RX_OMEGA_SLOTS], slot_measure[RX_OMEGA_SLOTS];
+    uint64_t slot_cps[RX_OMEGA_SLOTS], slot_rps[RX_OMEGA_SLOTS];
 } R15Outcome;
 
 int  r15_start(R15Rig *r, R15Config config);

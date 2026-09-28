@@ -528,6 +528,10 @@ static void rec_outcome(const R15Outcome *o, int rc) {
     rec_arr("inforce_id", o->inforce_id, 4);
     rec_arr("evidence", o->evidence, 5);
     rec_arr("belief", o->belief, 4);
+    rec_arr("slot_verdict", o->slot_verdict, RX_OMEGA_SLOTS);
+    rec_arr("slot_measure", o->slot_measure, RX_OMEGA_SLOTS);
+    rec_arr("slot_cps", o->slot_cps, RX_OMEGA_SLOTS);
+    rec_arr("slot_rps", o->slot_rps, RX_OMEGA_SLOTS);
     r15_rec_end(&g_out);
 }
 

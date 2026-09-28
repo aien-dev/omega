@@ -570,11 +570,26 @@ static int orchestration_error(R15Rig *r) {
 
 #define EFAIL(...) do { snprintf(out->why, sizeof out->why, __VA_ARGS__); return -1; } while (0)
 
+static void slot_snapshot(R15Rig *r, R15Outcome *out) {
+    for (uint32_t k = 0; k < r->omega.cfg.n_slots && k < RX_OMEGA_SLOTS; k++) {
+        out->slot_verdict[k] = field(r, r->omega.o.verdict[k], 1);
+        out->slot_measure[k] = field(r, r->omega.o.measure[k], 1);
+        out->slot_cps[k] = field(r, r->omega.o.measure[k], 2);
+        out->slot_rps[k] = field(r, r->omega.o.measure[k], 3);
+    }
+}
+
 /* How far a failed adaptation got (reported only; the episode still fails). */
 static void progress_snapshot(R15Rig *r, R15Outcome *out) {
+    slot_snapshot(r, out);
     out->goal_status = field(r, r->aien.o.assessment, 4);
     out->plan_action = field(r, r->aien.o.plan, 1);
     out->plan_seq = field(r, r->aien.o.plan, 0);
+    out->plan_regime = field(r, r->aien.o.plan, 2);
+    out->plan_condition = field(r, r->aien.o.plan, 3);
+    out->plan_reason = field(r, r->aien.o.plan, 5);
+    out->plan_goal = field(r, r->aien.o.plan, 6);
+    out->selection_regime = field(r, r->omega.o.selection, 6);
     out->search_epoch = field(r, r->omega.o.search, 0);
     out->selection_epoch = field(r, r->omega.o.selection, 0);
     out->candidate_id = field(r, r->living.o.candidate, 0);
@@ -711,6 +726,7 @@ int r15_episode(R15Rig *r, uint64_t target_ns, R15Outcome *out) {
     out->plan_seq = field(r, r->aien.o.plan, 0);
     out->served = r->served;
     out->crumbs = r->w.n_crumbs;
+    slot_snapshot(r, out);
     out->ok = out->goal_status == RX_AIEN_GOAL_MET;
     if (!out->ok) EFAIL("goal not MET (status %llu)", (unsigned long long)out->goal_status);
     return 0;

@@ -24,6 +24,17 @@ static int within(uint64_t x, uint64_t mean, uint32_t tol_pct) {
     return x * 100u <= mean * (100u + tol_pct) && x * 100u >= mean * (100u - tol_pct);
 }
 
+/* A failed prediction is settled when explain has dealt with it and nothing
+ * is left to try: its own hypothesis was exhausted, or it refuted the
+ * hypothesis it was testing. An open or testing hypothesis is not settled:
+ * its test is the next record's prediction. */
+static int failure_settled(const RxSnapshotDep *p, const RxSnapshotDep *h) {
+    if (p->field[6] != RX_AIEN_PRED_FAILED) return 0;
+    if (h->field[7] == RX_AIEN_HYP_EXHAUSTED) return h->field[2] == p->field[0];
+    if (h->field[7] == RX_AIEN_HYP_UNSUPPORTED) return h->field[2] < p->field[0];
+    return 0;
+}
+
 static int explored(const RxSnapshotDep *mem, uint64_t key) {
     uint64_t n = mem->field[0] < RX_AIEN_MEMORY_SLOTS ? mem->field[0] : RX_AIEN_MEMORY_SLOTS;
     for (uint64_t i = 0; i < n; i++)
@@ -51,6 +62,23 @@ static int fn_observe(RxCtx *c) {
     if (b->field[0] != epoch || b->field[1] != real || calls < b->field[2]) {
         put(c, f->o.belief, 0, epoch);
         put(c, f->o.belief, 1, real);
+        put(c, f->o.belief, 2, calls);
+        put(c, f->o.belief, 3, spent);
+        put(c, f->o.belief, 4, 0);
+        put(c, f->o.belief, 5, 0);
+        put(c, f->o.belief, 6, 0);
+        put(c, f->o.belief, 7, 0);
+        return 0;
+    }
+    /* A prediction about this record failed on this belief and the failure
+     * is settled (explained, nothing left to try). The belief has served its
+     * purpose: relearn what this record costs from fresh intervals. Without
+     * this a failed belief stays failed until a new record exists, and a
+     * later, real change (a core move) could never be noticed. */
+    const RxSnapshotDep *p = in_of(c, f->o.prediction);
+    const RxSnapshotDep *h = in_of(c, f->o.hypothesis);
+    if (!p || !h) return -1;
+    if (p->field[1] == epoch && b->field[7] >= f->cfg.misses_to_fail && failure_settled(p, h)) {
         put(c, f->o.belief, 2, calls);
         put(c, f->o.belief, 3, spent);
         put(c, f->o.belief, 4, 0);
@@ -106,7 +134,25 @@ static int fn_predict(RxCtx *c) {
         put(c, f->o.prediction, 7, 0);
         return 0;
     }
-    if (p->field[6] == RX_AIEN_PRED_FAILED) return 0;
+    if (p->field[6] == RX_AIEN_PRED_FAILED) {
+        /* Settled, and observe has relearned the same record from fresh
+         * intervals (its misses were cleared): that belief becomes a fresh
+         * prediction, so the next real change is noticed. */
+        const RxSnapshotDep *h = in_of(c, f->o.hypothesis);
+        if (!h) return -1;
+        if (failure_settled(p, h) && b->field[0] == p->field[1] &&
+            b->field[7] < f->cfg.misses_to_fail) {
+            put(c, f->o.prediction, 0, p->field[0] + 1);
+            put(c, f->o.prediction, 1, b->field[0]);
+            put(c, f->o.prediction, 2, sel->field[6]);
+            put(c, f->o.prediction, 3, 0);
+            put(c, f->o.prediction, 4, pl->field[1]);
+            put(c, f->o.prediction, 5, b->field[4]);
+            put(c, f->o.prediction, 6, RX_AIEN_PRED_HOLDING);
+            put(c, f->o.prediction, 7, 0);
+        }
+        return 0;
+    }
     if (b->field[7] >= f->cfg.misses_to_fail) {
         put(c, f->o.prediction, 6, RX_AIEN_PRED_FAILED);
         put(c, f->o.prediction, 7, b->field[6]);
@@ -385,6 +431,8 @@ int rx_aien_register(RxAienFaculty *f, const RxAienCaps *caps) {
     trig(&b, f->in.demand, RX_FIELD(2));
     trig(&b, f->in.selection, RX_FIELD(0));
     rd(&b, f->o.belief);
+    rd(&b, f->o.prediction);
+    rd(&b, f->o.hypothesis);
     wr(&b, f->o.belief);
     if ((rc = rx_world_add_reaction(w, &b.d, &f->r_observe)) != RX_OK) return rc;
 
@@ -393,6 +441,7 @@ int rx_aien_register(RxAienFaculty *f, const RxAienCaps *caps) {
     rd(&b, f->o.prediction);
     rd(&b, f->o.placement);
     rd(&b, f->in.selection);
+    rd(&b, f->o.hypothesis);
     wr(&b, f->o.prediction);
     if ((rc = rx_world_add_reaction(w, &b.d, &f->r_predict)) != RX_OK) return rc;
 
