@@ -230,6 +230,32 @@ $(RX_R10_TEST): $(RX_R10_SRCS) src/runtime/rx_omega.h src/runtime/rx_caproot.h \
 test-r10: $(RX_R10_TEST)
 	./$(RX_R10_TEST)
 
+# R11: AIEN as a resident cognitive faculty. Part A drives AIEN alone on any
+# host; part B is the living run with Omega, on hosts that have both Cortex-X925
+# and Cortex-A725 cores. rx_aien.o is built alone first and must not reference
+# any Omega symbol: AIEN reaches Omega only through world objects.
+RX_R11_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_omega.c src/sha256.c src/omega_evidence.c \
+	src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
+	tests/runtime/rx_r11_aien.c
+RX_R11_TEST = $(OUT_DIR)/rx_r11_aien_test
+RX_AIEN_OBJ = $(OUT_DIR)/rx_aien.o
+
+$(RX_AIEN_OBJ): src/runtime/rx_aien.c src/runtime/rx_aien.h src/runtime/rx_world.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_aien.c
+	@if nm -u $@ | grep -Ei 'omega' ; then \
+		echo "rx_aien.o references Omega directly; AIEN must reach it only through the world"; \
+		rm -f $@; exit 1; fi
+
+$(RX_R11_TEST): $(RX_R11_SRCS) $(RX_AIEN_OBJ) src/runtime/rx_omega.h src/runtime/rx_caproot.h \
+	src/runtime/rx_world.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R11_SRCS) $(RX_AIEN_OBJ) $(AIENOS_CAP_LIB) -lm
+
+test-r11: $(RX_R11_TEST)
+	./$(RX_R11_TEST)
+
 # Physical graphics seat against the native AIENOS authority. Not part of
 # GitHub checks. A pass on this machine is the only run that may set
 # silicon_observed.

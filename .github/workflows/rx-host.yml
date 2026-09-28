@@ -191,3 +191,19 @@ jobs:
           grep -q '"tree_dirty": false,' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
+      - name: AIEN as a resident cognitive faculty (R11)
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-r11
+      - name: Show R11 receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_aien_faculty_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"tree_dirty": false,' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"

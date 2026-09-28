@@ -679,6 +679,33 @@ static int fn_select(RxCtx *c) {
     return 0;
 }
 
+/* ---- omega.reconsider: a published plan reopens a regime (R11) ----
+ *
+ * Omega is not asked. It observes a plan object and decides for itself:
+ * a regime it can realize, no search already in flight. The new epoch runs
+ * the ordinary synthesize -> verify -> measure -> select chain, measured on
+ * the cores the world runs on now. */
+static int fn_reconsider(RxCtx *c) {
+    RxOmegaFaculty *f = c->user;
+    const RxSnapshotDep *p = in_of(c, f->inquiry);
+    const RxSnapshotDep *s = in_of(c, f->o.search);
+    const RxSnapshotDep *sel = in_of(c, f->o.selection);
+    if (!p || !s || !sel) return -1;
+    uint64_t seq = p->field[0];
+    if (seq == 0 || seq == s->field[6]) return 0;
+    if (s->field[0] != sel->field[0]) return 0;    /* a search is in flight; its selection re-wakes us */
+    uint64_t M = p->field[2] >> 32, N = p->field[2] & 0xffffffffu;
+    if (p->field[1] != RX_OMEGA_INQ_RESEARCH || !shape_ok(M, N)) {
+        put(c, f->o.search, 6, seq);               /* declined, and recorded as seen */
+        return 0;
+    }
+    put(c, f->o.search, 0, s->field[0] + 1);
+    put(c, f->o.search, 1, M);
+    put(c, f->o.search, 2, N);
+    put(c, f->o.search, 6, seq);
+    return 0;
+}
+
 /* ---- setup ---- */
 
 void rx_omega_default_config(RxOmegaConfig *cfg) {
@@ -833,6 +860,33 @@ int rx_omega_register(RxOmegaFaculty *f, const RxOmegaCaps *caps) {
     wr(&b, w, f->o.selection);
     if ((rc = rx_world_add_reaction(w, &b.d, &f->r_select)) != RX_OK) return rc;
     return RX_OK;
+}
+
+int rx_omega_register_reconsider(RxOmegaFaculty *f, RxObjRef plan, RxCapRef read_cap,
+                                 RxCapRef search_cap, RxCapRef selection_cap) {
+    RxWorld *w = f->w;
+    f->inquiry = plan;
+    RxReactionDesc d;
+    memset(&d, 0, sizeof(d));
+    d.name = "omega.reconsider";
+    d.faculty = RX_FACULTY_OMEGA;
+    d.subject = RX_OMEGA_SUBJ_OMEGA;
+    d.priority = RX_PRIO_LEARNING;
+    d.fn = fn_reconsider;
+    d.user = f;
+    d.n_triggers = 2;
+    d.triggers[0] = (RxDep){ plan, RX_FIELD(0) };
+    d.triggers[1] = (RxDep){ f->o.selection, RX_FIELD(0) };
+    d.n_reads = 1;
+    d.reads[0] = (RxDep){ f->o.search, RX_ALL_FIELDS };
+    d.n_writes = 1;
+    d.writes[0] = (RxDep){ f->o.search, RX_ALL_FIELDS };
+    d.n_caps = 3;
+    d.caps[0] = (RxCapNeed){ read_cap, w->objects[plan.id].resource, RX_RIGHT_READ };
+    d.caps[1] = (RxCapNeed){ search_cap, w->objects[f->o.search.id].resource,
+                             RX_RIGHT_READ | RX_RIGHT_WRITE };
+    d.caps[2] = (RxCapNeed){ selection_cap, w->objects[f->o.selection.id].resource, RX_RIGHT_READ };
+    return rx_world_add_reaction(w, &d, &f->r_reconsider);
 }
 
 void rx_omega_destroy(RxOmegaFaculty *f) {
