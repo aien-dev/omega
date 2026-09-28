@@ -762,6 +762,82 @@ static void write_receipt(void) {
     printf("candidate bound: %s\n", bound ? "yes" : "no");
 }
 
+/* Regression (R14). A living body promotes again and again. The store has
+ * four draft slots; before the fix they were never freed, so the fifth
+ * proposal in one process was refused (RX_GEN_ERR_BUSY) forever. A finished
+ * draft (promoted, or stale because its parent is gone) frees its slot and
+ * can never be promoted again. */
+static void drafts_are_released(void) {
+    Auth a;
+    CHECK(auth_start(&a) == 0, "authority did not start");
+    RxCapRef linux_cap = {0, 0};
+    AienosCapRef cap = {0, 0};
+    CHECK(mint_both(&a, SUBJ_AUTHORITY, RX_RIGHT_PROMOTE, &linux_cap, &cap) == RX_CAP_OK,
+          "promote right");
+    char dir[64];
+    CHECK(fresh_dir(dir, sizeof dir) == 0, "temp directory");
+    RxGenStore *store = NULL;
+    CHECK(rx_gen_open(dir, &store) == RX_GEN_OK, "open");
+    if (!store) { auth_stop(&a); return; }
+    const uint8_t evidence[] = "AGAIN";
+    RxGenDraft draft;
+    draft_init(&draft, evidence, sizeof evidence - 1);
+    uint64_t id = 0, active = 0, lineage = 0;
+    for (int i = 0; i < 6; i++) {
+        int prc = rx_gen_propose(store, SUBJ_PROPOSER, &draft, &id);
+        CHECK(prc == RX_GEN_OK, "proposal %d refused (%d)", i + 1, prc);
+        if (prc != RX_GEN_OK) break;
+        CHECK(promote_ok(&a, store, id, cap, NULL, NULL, NULL) == RX_GEN_OK,
+              "promotion %d refused", i + 1);
+    }
+    rx_gen_active(store, &active, &lineage);
+    CHECK(lineage == 7 && active == id, "six promotions reached lineage %llu",
+          (unsigned long long)lineage);
+    CHECK(promote_ok(&a, store, id, cap, NULL, NULL, NULL) == RX_GEN_ERR_ARG,
+          "a promoted draft was offered for promotion again");
+    uint64_t x = 0, y = 0;
+    CHECK(rx_gen_propose(store, SUBJ_PROPOSER, &draft, &x) == RX_GEN_OK &&
+              rx_gen_propose(store, SUBJ_PROPOSER, &draft, &y) == RX_GEN_OK, "two drafts");
+    CHECK(promote_ok(&a, store, x, cap, NULL, NULL, NULL) == RX_GEN_OK, "first of two");
+    CHECK(promote_ok(&a, store, y, cap, NULL, NULL, NULL) == RX_GEN_ERR_STALE, "stale second");
+    CHECK(promote_ok(&a, store, y, cap, NULL, NULL, NULL) == RX_GEN_ERR_ARG,
+          "a stale draft stayed promotable");
+    RxRecoveryRecord rec;
+    CHECK(rx_gen_recover(dir, &rec) == RX_GEN_OK && rec.coherent && rec.active_id == x &&
+              rec.lineage == 8, "recovery after the drafts");
+    rx_gen_close(store);
+    rm_tree(dir);
+    auth_stop(&a);
+}
+
+/* A committed generation's blob is read through its root: the right bytes,
+ * and a refusal when the file no longer matches (R14 restart path). */
+static void read_blob_checked(void) {
+    char dir[256];
+    CHECK(fresh_dir(dir, sizeof dir) == 0, "temp directory");
+    RxGenStore *s = NULL;
+    CHECK(rx_gen_open(dir, &s) == RX_GEN_OK && s, "open");
+    if (!s) return;
+    uint8_t buf[64];
+    size_t n = 0;
+    CHECK(rx_gen_read_blob(s, 1, "evidence", buf, sizeof buf, &n) == RX_GEN_OK && n == 7 &&
+              memcmp(buf, "GENESIS", 7) == 0, "genesis evidence was not read back");
+    CHECK(rx_gen_read_blob(s, 1, "nonsense", buf, sizeof buf, &n) == RX_GEN_ERR_ARG,
+          "an unknown blob name was accepted");
+    CHECK(rx_gen_read_blob(s, 1, "evidence", buf, 3, &n) == RX_GEN_ERR_ARG,
+          "a blob larger than the buffer was accepted");
+    CHECK(rx_gen_read_blob(s, 9, "evidence", buf, sizeof buf, &n) == RX_GEN_ERR_MISSING,
+          "a generation that does not exist was read");
+    char path[512];
+    snprintf(path, sizeof path, "%s/g/1/evidence", dir);
+    FILE *f = fopen(path, "wb");
+    if (f) { fwrite("GENESIX", 1, 7, f); fclose(f); }
+    CHECK(rx_gen_read_blob(s, 1, "evidence", buf, sizeof buf, &n) == RX_GEN_ERR_TORN,
+          "a changed blob was read as the committed one");
+    rx_gen_close(s);
+    rm_tree(dir);
+}
+
 int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     if (argc >= 4 && strcmp(argv[1], "--crash") == 0) return child_crash(argv[2], atoi(argv[3]));
@@ -785,6 +861,8 @@ int main(int argc, char **argv) {
     for (int i = 0; i < 8; i++)
         check_crash(exe, steps[i], want[i], text[i], receipt_already[i]);
     negative_and_live();
+    read_blob_checked();
+    drafts_are_released();
     if (g_fail) {
         fprintf(stderr, "%d generation-barrier failures\n", g_fail);
         return 1;

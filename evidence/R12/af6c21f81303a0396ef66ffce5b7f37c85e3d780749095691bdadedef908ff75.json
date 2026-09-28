@@ -1,0 +1,39 @@
+{
+  "schema": "AIEN_RX_R12_RESIDENT_SILICON_V3",
+  "run_id": "20260928T134534Z-6b38173cd5be",
+  "candidate_commit": "6b38173cd5bee75cbdb0b132d535ec0f0df38d4c",
+  "candidate_bound": true,
+  "run_commit": "6b38173cd5bee75cbdb0b132d535ec0f0df38d4c",
+  "tree_dirty": false,
+  "aienos_commit": "c8ab65e3ba2fddbe99245f747fdfdb99f6042fd3",
+  "physics_commit": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9",
+  "authority": "native AIENOS capability authority (C); Linux stand-in not started",
+  "seat_body": "qualified 32-bit integer add (IADD3), A.field0 + A.field1 -> B.field0",
+  "checks": 209,
+  "failures": 0,
+  "silicon_observed": true,
+  "claimed": true,
+  "test_binary_sha256": "17e4f9a4531da3496fa137de86da6692f9b25c4e66f8cf73d9deb9041886d522",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64"},
+  "hardware_scope": "one persistent graphics seat on the machine's own chip, same image as the processor",
+  "scenarios": [
+    {"name": "chain A -> chip add -> B -> processor -> C", "result": "PASS"},
+    {"name": "duplicate completion is not published twice", "result": "PASS"},
+    {"name": "torn result notice is refused and B is restored", "result": "PASS"},
+    {"name": "seat restart keeps identity and history", "result": "PASS"},
+    {"name": "detached window refuses the publication", "result": "PASS"},
+    {"name": "capability revoked after the claim is refused at publication", "result": "PASS"},
+    {"name": "generation moved in flight invalidates the chip's work", "result": "PASS"},
+    {"name": "stale generation claim is refused on the chip", "result": "PASS"},
+    {"name": "seat killed holding a claim: recorded, restored, released once, retried", "result": "PASS"},
+    {"name": "channel reset under load", "result": "PASS"},
+    {"name": "objects past id 64 are claimed on the chip", "result": "PASS"},
+    {"name": "seat leaves on request", "result": "PASS"}
+  ],
+  "seat_loss": {"killed_holding_claims_lost": 1, "channel_resets": 8, "resets_with_work_in_flight": 8, "claims_lost_and_retried": 8, "longest_channel_teardown_ms": 4036, "kill_method": "host destroys the running channel group; not a chip-raised fault"},
+  "not_exercised": ["recovery from a chip-raised fault (MMU fault, Xid) rather than a host-initiated channel teardown", "seat lost before its first heartbeat"],
+  "gates": {
+    "R12_RESIDENT_SEAT": "PASS",
+    "not_claimed": ["R8", "R10", "R11", "R13"]
+  }
+}

@@ -501,3 +501,93 @@ int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
     d.caps[2] = cap(promoter->inforce_write, RX_LIVING_RES_INFORCE, RW);
     return rx_world_add_reaction(w, &d, &promoter->reaction);
 }
+
+/* ---- generation.restore (R14) ----
+ * The body started. The in-force record is world state, so a restarted
+ * process has none; the durable generation R9 recovered says what was in
+ * force. The promotion subject reads it back through R9, Omega verifies the
+ * bytes again with its own verifier, and only then is the record written.
+ * It never promotes and never touches R9's pointer. */
+static int restore_refuse(RxCtx *c, RxLiving *l, uint64_t why) {
+    put(c, l->o.restore, 2, RX_LIVING_RESTORE_REFUSED);
+    put(c, l->o.restore, 5, why);
+    return 0;
+}
+
+static int fn_restore(RxCtx *c) {
+    RxLiving *l = c->user;
+    const RxSnapshotDep *rs = input(c, l->o.restore);
+    if (!rs) return -1;
+    uint64_t boot = rs->field[0];
+    if (!boot || rs->field[1] == boot) return 0;
+    uint64_t active = 0, lineage = 0;
+    rx_gen_active(l->store, &active, &lineage);
+    put(c, l->o.restore, 1, boot);
+    put(c, l->o.restore, 3, active);
+    put(c, l->o.restore, 6, lineage);
+    put(c, l->o.restore, 4, 0);
+    put(c, l->o.restore, 5, 0);
+
+    uint8_t code[AARCH64_MAX_CODE_BYTES];
+    RxLivingConfig cfg;
+    RxLivingEvidence ev;
+    size_t n = 0, cn = 0, en = 0;
+    int rc = rx_gen_read_blob(l->store, active, "realization", code, sizeof code, &n);
+    if (rc != RX_GEN_OK) return restore_refuse(c, l, (uint64_t)(int64_t)rc);
+    if (n == 0) {                       /* genesis: nothing was ever put in force */
+        put(c, l->o.restore, 2, RX_LIVING_RESTORE_REFERENCE);
+        return 0;
+    }
+    rc = rx_gen_read_blob(l->store, active, "config", (uint8_t *)&cfg, sizeof cfg, &cn);
+    if (rc == RX_GEN_OK)
+        rc = rx_gen_read_blob(l->store, active, "evidence", (uint8_t *)&ev, sizeof ev, &en);
+    if (rc != RX_GEN_OK) return restore_refuse(c, l, (uint64_t)(int64_t)rc);
+    if (cn != sizeof cfg || en != sizeof ev || memcmp(cfg.magic, "R13CONF1", 8) != 0 ||
+        memcmp(ev.magic, "R13EVID1", 8) != 0 || cfg.code_len != n)
+        return restore_refuse(c, l, RX_LIVING_RESTORE_WHY_CONFIG);
+
+    SemanticId id;
+    uint32_t why = 0;
+    int ok = rx_omega_readmit(l->omega, code, n, (uint32_t)cfg.kind, cfg.regime, &id, &why);
+    if (ok < 0) return -1;
+    if (ok != 0) return restore_refuse(c, l, why);
+    if (memcmp(id.bytes, cfg.identity, 32) != 0)
+        return restore_refuse(c, l, RX_LIVING_RESTORE_WHY_IDENTITY);
+
+    uint64_t word[4] = {0, 0, 0, 0};
+    for (uint32_t k = 0; k < 4; k++)
+        for (uint32_t j = 0; j < 8; j++) word[k] |= (uint64_t)id.bytes[k*8+j] << (8*j);
+    put(c, l->o.inforce, 0, ev.epoch);
+    for (uint32_t k = 0; k < 4; k++) put(c, l->o.inforce, 1 + k, word[k]);
+    put(c, l->o.inforce, 5, ev.selected_ps);
+    put(c, l->o.inforce, 6, cfg.regime);
+    put(c, l->o.inforce, 7, active);
+    put(c, l->o.restore, 2, RX_LIVING_RESTORE_RESTORED);
+    put(c, l->o.restore, 4, word[0]);
+    return 0;
+}
+
+int rx_living_register_restore(RxLiving *l, RxLivingPromoter *promoter, RxCapRef restore_write) {
+    RxWorld *w = l->world;
+    if (!promoter || promoter->world != w || promoter->store != l->store ||
+        promoter->inforce.id != l->o.inforce.id) return RX_ERR_ARG;
+    uint64_t z[RX_MAX_FIELDS] = {0};
+    int rc = rx_world_create(w, RX_OT_LIVING_RESTORE, RX_PERSIST_RESIDENT,
+                             RX_LIVING_RES_BASE + RX_LIVING_RES_RESTORE, z, &l->o.restore);
+    if (rc != RX_OK) return rc;
+    const uint32_t RW = RX_RIGHT_READ | RX_RIGHT_WRITE;
+    RxReactionDesc d;
+    base(&d, "generation.restore", RX_FACULTY_ROOT, RX_LIVING_PROMOTE_SUBJ, fn_restore, l);
+    d.priority = RX_PRIO_MAINTENANCE;
+    d.n_triggers = 1;
+    d.triggers[0] = (RxDep){l->o.restore, RX_FIELD(0)};
+    d.n_reads = 1;
+    d.reads[0] = (RxDep){l->o.restore, RX_ALL_FIELDS};
+    d.n_writes = 2;
+    d.writes[0] = (RxDep){l->o.restore, RX_ALL_FIELDS & ~RX_FIELD(0)};
+    d.writes[1] = (RxDep){l->o.inforce, RX_ALL_FIELDS};
+    d.n_caps = 2;
+    d.caps[0] = cap(restore_write, RX_LIVING_RES_RESTORE, RW);
+    d.caps[1] = cap(promoter->inforce_write, RX_LIVING_RES_INFORCE, RW);
+    return rx_world_add_reaction(w, &d, &l->r_restore);
+}

@@ -129,6 +129,13 @@ int rx_gen_open(const char *dir, RxGenStore **out);
 void rx_gen_close(RxGenStore *store);
 int rx_gen_active(const RxGenStore *store, uint64_t *id, uint64_t *lineage);
 
+/* One blob of committed generation `id` ("evidence", "model", "realization",
+ * "config", "provenance" or "objects"), checked against that generation's
+ * root: length and SHA-256. A missing root is RX_GEN_ERR_MISSING; a blob that
+ * does not match is RX_GEN_ERR_TORN. */
+int rx_gen_read_blob(const RxGenStore *store, uint64_t id, const char *name, uint8_t *buf,
+                     size_t cap, size_t *out_len);
+
 int rx_gen_propose(RxGenStore *store, uint32_t proposer, const RxGenDraft *draft,
                    uint64_t *out_id);
 int rx_gen_mutate_object(RxGenStore *store, uint64_t candidate, uint32_t index,

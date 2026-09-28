@@ -677,6 +677,74 @@ static void write_receipt(void) {
     printf("receipt: %s\n", path);
 }
 
+/* Regression (R14). The seat reads its output WRITE from an R8 slot. An R8
+ * renewal writes a new reference into the slot and revokes the old one. The
+ * next claim must present the new reference; before the fix it presented the
+ * reference bound at start, and every later publication was refused. */
+#define RES_SLOT 0x40u
+static void t_slot_renewal(void) {
+    printf("[*] R8 slot renewed: the next claim presents the new grant\n");
+    Env e;
+    CHECK(env_start(&e) == 0, "setup");
+    RxObjRef a = mkobj(&e, RES_A), b = mkobj(&e, RES_B), slot = mkobj(&e, RES_SLOT);
+    CHECK(rx_world_attach_physical(&e.w, a) == RX_OK &&
+              rx_world_attach_physical(&e.w, b) == RX_OK, "placement");
+    RxCapRef in = mint(&e, SUBJ_SEAT, RES_A, RX_RIGHT_READ);
+    RxCapRef old = mint(&e, SUBJ_SEAT, RES_B, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    RxCapRef slot_read = mint(&e, SUBJ_SEAT, RES_SLOT, RX_RIGHT_READ);
+    RxCapRef ext_a = mint(&e, SUBJ_EXTERNAL, RES_A, RX_RIGHT_WRITE);
+    RxCapRef installer = mint(&e, SUBJ_EXTERNAL, RES_SLOT, RX_RIGHT_WRITE);
+    RxMutation s[2] = { { slot, 0, old.cap_id }, { slot, 1, old.generation } };
+    CHECK(rx_world_publish_external(&e.w, installer, s, 2) > 0, "slot install");
+    CHECK(rx_world_bind_capability(&e.w, a, in) == RX_OK &&
+              rx_world_bind_capability(&e.w, b, old) == RX_OK, "bind");
+    CHECK(rx_world_enable_resident(&e.w) == RX_OK, "resident");
+    offer(&e.w, RX_ACCEL_BLACKWELL);
+    RxReactionDesc d;
+    uint32_t seat;
+    seat_desc(&d, a, b, in, (RxCapRef){ UINT32_MAX, 0 });
+    d.n_triggers = 2;
+    d.triggers[1] = (RxDep){ slot, RX_FIELD(0) | RX_FIELD(1) | RX_FIELD(2) };
+    d.n_caps = 3;
+    d.caps[2] = (RxCapNeed){ slot_read, RES_SLOT, RX_RIGHT_READ };
+    d.cap_slotted[1] = true;
+    d.cap_slot[1] = slot;
+    CHECK(rx_world_add_reaction(&e.w, &d, &seat) == RX_OK, "seat");
+    for (uint64_t round = 1; round <= 2; round++) {
+        if (round == 2) {
+            RxCapRef renewed = mint(&e, SUBJ_SEAT, RES_B, RX_RIGHT_READ | RX_RIGHT_WRITE);
+            RxMutation n[2] = { { slot, 0, renewed.cap_id }, { slot, 1, renewed.generation } };
+            CHECK(rx_world_publish_external(&e.w, installer, n, 2) > 0, "renewal");
+            CHECK(revoke_cap(&e, old) == 0, "revoke the replaced grant");
+            /* The slot is the seat's authority wake: it claims again at once,
+             * and that claim must publish under the renewed grant. */
+            CHECK(wait_seat(&e.w, seat) == 0, "renewal: no claim");
+            CHECK(rx_resident_seat_step(&e.w) == 1, "renewal: stand-in");
+            int racc = rx_resident_accept(&e.w);
+            CHECK(racc == RX_OK, "renewal: publication refused (%d)", racc);
+            CHECK(rx_world_wait_quiescent(&e.w, 1000) == RX_OK, "renewal settle");
+        }
+        RxMutation m[2] = { { a, 0, 100 * round }, { a, 1, round } };
+        CHECK(rx_world_publish_external(&e.w, ext_a, m, 2) > 0, "stimulus %llu",
+              (unsigned long long)round);
+        CHECK(wait_seat(&e.w, seat) == 0, "round %llu: no claim", (unsigned long long)round);
+        CHECK(rx_resident_seat_step(&e.w) == 1, "round %llu: stand-in", (unsigned long long)round);
+        int acc = rx_resident_accept(&e.w);
+        CHECK(acc == RX_OK, "round %llu: publication refused (%d)", (unsigned long long)round, acc);
+        CHECK(rx_world_wait_quiescent(&e.w, 1000) == RX_OK, "settle");
+        CHECK(field_of(&e.w, b, 0) == 100 * round + round, "round %llu: B=%llu",
+              (unsigned long long)round, (unsigned long long)field_of(&e.w, b, 0));
+    }
+    CHECK(e.w.reactions[seat].commits == 3, "commits %llu",
+          (unsigned long long)e.w.reactions[seat].commits);
+    /* The replaced grant itself is dead: it authorizes nothing. */
+    CHECK(rx_world_validate_cap(&e.w, old, SUBJ_SEAT, RES_B, RX_RIGHT_WRITE, NULL) != RX_CAP_OK,
+          "the replaced grant still validates");
+    uint64_t checked = 0;
+    CHECK(rx_world_verify_crumbs(&e.w, &checked) == 0, "crumb chain");
+    env_stop(&e);
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     t_shape();
@@ -691,6 +759,7 @@ int main(void) {
     t_forged_publish();
     t_seat_lost_retry();
     t_seat_lost_final();
+    t_slot_renewal();
     printf("checks %d failures %d\n", g_checks, g_fail);
     write_receipt();
     return g_fail ? 1 : 0;

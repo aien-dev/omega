@@ -16,6 +16,8 @@
  *   generation.promote         candidate object -> rx_gen_promote under a
  *                              separate subject; on success the in-force
  *                              record production reads
+ *   generation.restore         (R14) body started -> the active R9 generation's
+ *                              bytes, verified again by Omega -> in-force record
  *
  * AIEN's belief about the evidence (rx_aien_register_experiment) and Omega's
  * wait for that belief (rx_omega_require_evidence) live in those faculties.
@@ -51,15 +53,25 @@
 #define RX_LIVING_TRIALS 16u
 #define RX_LIVING_RES_BASE 0x6130000ull
 enum { RX_LIVING_RES_INPUT, RX_LIVING_RES_OUTPUT, RX_LIVING_RES_EVIDENCE,
-       RX_LIVING_RES_CANDIDATE, RX_LIVING_RES_PROMOTION, RX_LIVING_RES_INFORCE };
+       RX_LIVING_RES_CANDIDATE, RX_LIVING_RES_PROMOTION, RX_LIVING_RES_INFORCE,
+       RX_LIVING_RES_RESTORE };
 enum { RX_LIVING_SUBJ = 61, RX_LIVING_SEAT_SUBJ = 62,
        RX_LIVING_PREPARE_SUBJ = 63, RX_LIVING_PROMOTE_SUBJ = 64 };
 enum { RX_OT_LIVING_INPUT = 0x6130, RX_OT_LIVING_OUTPUT,
        RX_OT_LIVING_EVIDENCE, RX_OT_LIVING_CANDIDATE, RX_OT_LIVING_PROMOTION,
-       RX_OT_LIVING_INFORCE };
+       RX_OT_LIVING_INFORCE, RX_OT_LIVING_RESTORE };
+
+/* restore (R14): 0 boot sequence (outside: this body started), 1 boot taken
+ * up, 2 outcome, 3 active generation read, 4 realization id word 0 restored,
+ * 5 refusal reason, 6 lineage                                     (restore) */
+enum { RX_LIVING_RESTORE_REFERENCE = 1, RX_LIVING_RESTORE_RESTORED,
+       RX_LIVING_RESTORE_REFUSED };
+/* Refusal reasons in restore field 5 besides an R9 or Omega code. */
+enum { RX_LIVING_RESTORE_WHY_CONFIG = 1, RX_LIVING_RESTORE_WHY_IDENTITY };
 
 typedef struct {
     RxObjRef input, output, evidence, candidate, promotion, inforce;
+    RxObjRef restore;           /* only after rx_living_register_restore */
 } RxLivingObjects;
 
 /* Durable provenance written into the R9 candidate. Each link is the causal
@@ -126,7 +138,7 @@ typedef struct {
     const struct AienosCapView *authority;
     RxLivingObjects o;
     RxLivingCaps caps;
-    uint32_t r_prepare, r_seat, r_evidence, r_candidate;
+    uint32_t r_prepare, r_seat, r_evidence, r_candidate, r_restore;
     /* An R9 proposal is an effect outside the world. If the reaction that
      * made it is invalidated and runs again for the same epoch, it reuses
      * the proposal instead of making a second one. */
@@ -145,6 +157,17 @@ int rx_living_create(RxLiving *l, RxWorld *w, RxAienFaculty *aien,
                      const struct AienosCapView *authority);
 int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
                        RxLivingPromoter *promoter);
+
+/* R14. generation.restore: the promotion subject rebuilds the in-force record
+ * from R9 when the body starts. Woken by an outside publication of a new boot
+ * sequence into restore field 0 (the body starting is an outside event). It
+ * reads the active generation's realization, config and evidence through
+ * rx_gen_read_blob, has Omega verify the bytes again (rx_omega_readmit), and
+ * only then names them in force. Genesis leaves production on the reference;
+ * anything that does not check out is refused and also leaves the reference.
+ * `restore_write` is RW on RX_LIVING_RES_RESTORE for RX_LIVING_PROMOTE_SUBJ.
+ * Creates the restore object. Call after rx_living_register. */
+int rx_living_register_restore(RxLiving *l, RxLivingPromoter *promoter, RxCapRef restore_write);
 
 /* Same content digest the world gives an object: SHA-256 over
  * "AIEN_RX_OBJECT_V1", type and the eight fields. */

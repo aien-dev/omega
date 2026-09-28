@@ -324,3 +324,30 @@ test-r13-host: $(RX_R13_HOST)
 
 test-r13-silicon: $(RX_R13_SILICON)
 	./$(RX_R13_SILICON)
+
+# R14: the R13 organism attacked while alive. Host uses the R12 processor
+# stand-in and cannot claim the gate; silicon runs D and E on the GB10 seat.
+RX_R14_SRCS = $(filter-out tests/runtime/rx_r13_living.c,$(RX_R13_SRCS)) \
+	tests/runtime/rx_r14_recovery.c
+RX_R14_HOST = $(OUT_DIR)/rx_r14_recovery_host
+RX_R14_SILICON = $(OUT_DIR)/rx_r14_recovery_silicon
+
+$(RX_R14_HOST): $(RX_R14_SRCS) src/runtime/rx_living.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R14_SRCS) $(AIENOS_CAP_LIB) -lm
+
+$(RX_R14_SILICON): $(RX_R14_SRCS) src/runtime/rx_resident_gpu.c \
+	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c \
+	src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c \
+	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DR14_SILICON -pthread -o $@ $(RX_R14_SRCS) \
+		src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
+		src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+		src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c \
+		$(PHYSICS_DIR)/nvrm/nvrm.c $(AIENOS_CAP_LIB) -ldl -lm
+
+test-r14-host: $(RX_R14_HOST)
+	./$(RX_R14_HOST)
+
+test-r14-silicon: $(RX_R14_SILICON)
+	./$(RX_R14_SILICON)
