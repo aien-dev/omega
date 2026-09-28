@@ -183,6 +183,12 @@ notes.
   - an ENGINE replay followed by idle time until its window is as long as the
     FULL one.
 - Saved energy is the FULL window minus the ENGINE window.
+- The gate judges the CPU clusters (CPU-E + CPU-P), pair by pair. The median
+  saving must be above zero, and at least 4 of the 5 pairs must show a saving.
+- The package counter is reported but not gated. It also carries memory,
+  graphics and every other process on the machine. On a shared machine, its
+  swing between windows (a few joules) is larger than this saving (about
+  0.25 J of CPU energy per replay of the trace).
 - There are 5 repetitions, the order alternates, and the median is reported.
 - Overflow indicators are checked before and after every read. A backwards
   counter invalidates the window.
