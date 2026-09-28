@@ -660,11 +660,19 @@ int r15_episode(R15Rig *r, uint64_t target_ns, R15Outcome *out) {
     }
     uint64_t epoch = field(r, r->living.o.inforce, 0);
     limit = now_ns() + 60000000000ull;
+    /* Wait for AIEN's decided assessment of the confirmed X925 prediction.
+     * Confirming a prediction does not change its sequence (field 0), so an
+     * assessment made just before the confirmation also matches field 6 and
+     * legitimately reads UNKNOWN; AIEN re-assesses when the confirmation
+     * lands. Clarification C4: the decisive status is the first decided one
+     * (MET or UNMET*). Still failing: UNMET*, and UNKNOWN when the limit
+     * expires. */
     while (now_ns() < limit && !atomic_load(&r->producer_error) &&
            !(field(r, r->aien.o.prediction, 1) == epoch &&
              field(r, r->aien.o.prediction, 6) == RX_AIEN_PRED_CONFIRMED &&
              field(r, r->aien.o.prediction, 4) == R15_CLASS_X925 &&
-             field(r, r->aien.o.assessment, 6) == field(r, r->aien.o.prediction, 0)))
+             field(r, r->aien.o.assessment, 6) == field(r, r->aien.o.prediction, 0) &&
+             field(r, r->aien.o.assessment, 4) != RX_AIEN_GOAL_UNKNOWN))
         pause_us(100);
     /* The goal status that decides the episode is the one at goal MET; the
      * AFTER window keeps production running and AIEN keeps re-assessing, so

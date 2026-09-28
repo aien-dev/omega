@@ -604,3 +604,77 @@ method are unchanged; this names the physical source and its limits.
 - **Machine noise.** LM Studio and the NVIDIA Personal AI Router were
   resident during this validation; §9's "nothing else heavy runs" applies
   to qualification, and the qualification script records the process list.
+
+## 18. Clarification C3 (2026-09-28, before any qualification data)
+
+Adds recording of the machine's physical state. G1–G16, TARGET_PCT 55, the
+workloads, the statistics and every acceptance threshold are unchanged. This
+is observability, not a performance exemption.
+
+- **Why.** On 2026-09-28, before a full power-off, the X925 cores could not
+  sustain their clock: under sustained load they fell from ~3.89 GHz to
+  ~3.0–3.5 GHz while package power stayed around 19.5–21.5 W. The A725 was
+  unaffected. A full power-off removed it: the X925 then held 3.891 GHz for
+  2 minutes and package power rose to 29–32 W when required. In that state
+  the R13 workload's optimized/incumbent ratio is ~0.38 against 0.55. The
+  cause of the power-limited state is not established. Diagnostic evidence:
+  branch `research/r15-hwchar`, `research/r15-hwchar/RESULT-postboot.md`. It
+  is not qualification evidence.
+- **Why cycle counters.** The kernel's reported frequency did not show the
+  cut (`scaling_cur_freq` stayed at 3.9 GHz). The effective clock is each
+  core's cycle counter, read system-wide from outside the measured processes
+  (`perf stat -a -A -e cycles -I 1000`), over the core's busy time from
+  `/proc/stat`.
+- **Recorded every run** (`tools/r15_machine_state.sh`, from
+  `tools/r15_qualify.sh`): per-core cycles each second (`machine-perf.csv`);
+  each second the per-core busy time, SPBM package energy, thermal zones and
+  load average, and every 5 s the GPU SM clock, power, utilization,
+  temperature and clock-event reasons (`machine-state.ndjson`); the governor
+  and max frequency of every core at start; a mark at the start and end of
+  every trial process (`machine-state-marks.txt`); an informative summary.
+  The sampler runs pinned to cpu 0 (`R15_STATE_CPU`). All of these files are
+  listed in SHA256SUMS. The reducer does not read them.
+- **Preflight (silicon only).** Before the first trial, one X925 core runs
+  20 s of sustained load while its cycles are counted. If the median
+  effective clock over seconds 13–20 is below 3.75 GHz, the run stops before
+  any trial and reports a machine-state failure (`preflight.txt`, `done` =
+  `machine-state-failure`). Normal is ~3.89 GHz; the power-limited state read
+  3.0–3.6 GHz.
+- **During the run nothing is stopped, dropped or rerun** because of machine
+  state. A recurrence during qualification is visible in the raw evidence and
+  is reported with the result. The machine is not power-cycled between or
+  during trials to obtain better results.
+
+## 19. Clarification C4 (2026-09-28, before any qualification data)
+
+Corrects a rig defect in how the W-EPISODE decisive goal status is sampled.
+G1–G16, TARGET_PCT 55 and every threshold are unchanged. No trial result is
+reinterpreted; there are no qualification data yet.
+
+- **Defect.** After promotion, `r15_episode` (tests/runtime/rx_r15_rig.c)
+  waited until AIEN's prediction was confirmed for the new epoch on X925 and
+  the assessment named that prediction (assessment field 6 = prediction
+  field 0), then took the assessment status as decisive. Confirming a
+  prediction does not change its sequence (field 0), so an assessment AIEN
+  made just before the confirmation also matches. That assessment correctly
+  reads UNKNOWN ("no confirmed prediction for the regime yet", `fn_assess` in
+  src/runtime/rx_aien.c). AIEN then re-assesses and reads MET, but the rig had
+  already recorded UNKNOWN as the decisive status. AIEN behaved correctly;
+  the rig sampled an intermediate result.
+- **Evidence (pre-qualification practice, not qualification data).**
+  Host dry run of the integrated candidate (2026-09-28 18:12 local): RES-4
+  and RES-1 round 1 both `goal not MET (status 1)` with goal_status_final
+  = 2 (MET), optimized/incumbent ≈ 0.405, episode end ~0.2 s after
+  promotion (passing episodes run the ~8 s AFTER window). A 6-trial RES-1
+  probe: 1 of 6 with the same signature (status 1, final 2, ratio 0.415,
+  0.4 s). Every failing case had AIEN reaching MET moments later.
+- **Scope.** Seen in RES-4 and RES-1. SEQ also runs AIEN outside the rig's
+  thread, so it is not structurally immune; the window is narrower. The
+  defect predates the 2026-09-28 main integration and the power-limited
+  machine state. The afternoon practice misses (29 of 48) came partly from
+  that machine state and partly from this defect; they cannot now be
+  separated and no claim is made about the split.
+- **Correction.** The wait additionally requires a decided assessment
+  (status ≠ UNKNOWN). Still failing: UNMET or UNMET_EXPLORED, and UNKNOWN when
+  the unchanged 60 s limit expires. `met_status`, the AFTER window and the
+  limits are unchanged.

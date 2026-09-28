@@ -54,7 +54,9 @@ done
 
 # ---- kernel.perf_event_paranoid 4 -> 1 -> 4 (C1 item 7) ---------------------
 PARANOID_BEFORE=$(cat /proc/sys/kernel/perf_event_paranoid)
+STATE=$HERE/tools/r15_machine_state.sh
 restore() {
+    "$STATE" stop "$OUT" 2>/dev/null
     sudo -n sysctl -q kernel.perf_event_paranoid=4 >/dev/null 2>&1
     PARANOID_RESTORED=$(cat /proc/sys/kernel/perf_event_paranoid)
     echo "$PARANOID_RESTORED" > "$OUT/paranoid-restored.txt"
@@ -107,14 +109,31 @@ ps -eo pid,pcpu,rss,comm --sort=-pcpu > "$OUT/processes-before.txt"
 [ -n "$servers" ] && say "WARNING: a model server looks resident: $servers (spec §9 says nothing heavy may run)"
 [ "$DIRTY" = true ] && say "NOTE: the working tree has uncommitted changes, so this run is not candidate-bound"
 
+# ---- machine physical state (§18 C3, observability only) --------------------
+# The preflight stops the run before any trial if the X925 does not sustain
+# its clock (the power-limited state seen on 2026-09-28). After that nothing
+# stops, drops or reruns a trial; the state is only recorded.
+if [ "$MODE" = silicon ]; then
+    say "machine-state preflight: 20 s sustained on one X925 core"
+    if ! "$STATE" preflight "$OUT"; then
+        say "MACHINE-STATE FAILURE: the X925 did not sustain its clock (preflight.txt); stopped before any trial"
+        echo machine-state-failure > "$OUT/done"
+        exit 3
+    fi
+    say "machine-state preflight ok: $(grep median "$OUT/preflight.txt")"
+fi
+"$STATE" start "$OUT"
+
 say "R15 $MODE run $RUN_ID started: $ROUNDS rounds, $L1RUNS Level-1 runs, $L2RUNS Level-2 runs"
 FAILED=0
 one() {   # <label> <file> <binary> <args...>
     local label=$1 file=$2 bin=$3
     shift 3
     local t0=$SECONDS
+    "$STATE" mark "$OUT" "begin $file"
     "$bin" "$@" "$OUT/$file" >> "$OUT/stderr.log" 2>&1
     local rc=$?
+    "$STATE" mark "$OUT" "end $file exit $rc"
     echo "$file exit $rc seconds $((SECONDS - t0))" >> "$OUT/runs.txt"
     if [ $rc -ne 0 ]; then FAILED=$((FAILED + 1)); say "$label FAILED (exit $rc); recorded, not rerun"; else say "$label ok ($((SECONDS - t0)) s)"; fi
 }
@@ -153,7 +172,7 @@ done
 ps -eo pid,pcpu,rss,comm --sort=-pcpu > "$OUT/processes-after.txt"
 restore
 trap - EXIT
-(cd "$OUT" && sha256sum ./*.jsonl machine.json | sed 's| \./| |' > SHA256SUMS)
+(cd "$OUT" && sha256sum ./*.jsonl machine.json machine-state.ndjson machine-perf.csv machine-state-marks.txt $([ -f preflight.txt ] && echo preflight.txt) 2>/dev/null | sed 's| \./| |' > SHA256SUMS)
 "$RED" "$OUT" "$OUT/summary.json" > "$OUT/reduce.log" 2>&1
 say "finished: $FAILED process(es) failed; $(grep -c PASS "$OUT/reduce.log") of 16 gates pass (see summary.json)"
 tail -1 "$OUT/reduce.log" >> "$LOG"
