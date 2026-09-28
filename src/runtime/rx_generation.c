@@ -117,6 +117,13 @@ static void checksum(const uint8_t *p, size_t n, uint8_t out[32]) {
     sha256_hash(p, n, out);
 }
 
+/* R15: bytes written and sync calls issued by every store in the process. */
+static uint64_t g_io_bytes, g_io_syncs;
+void rx_gen_io_counters(uint64_t *bytes, uint64_t *syncs) {
+    if (bytes) *bytes = __atomic_load_n(&g_io_bytes, __ATOMIC_RELAXED);
+    if (syncs) *syncs = __atomic_load_n(&g_io_syncs, __ATOMIC_RELAXED);
+}
+
 static int write_full(int fd, const uint8_t *p, size_t n) {
     size_t off = 0;
     while (off < n) {
@@ -127,6 +134,7 @@ static int write_full(int fd, const uint8_t *p, size_t n) {
         }
         if (w == 0) return -1;
         off += (size_t)w;
+        __atomic_add_fetch(&g_io_bytes, (uint64_t)w, __ATOMIC_RELAXED);
     }
     return 0;
 }
@@ -153,6 +161,7 @@ static int read_full(const char *path, uint8_t *buf, size_t n) {
 }
 
 static int fsync_fd(int fd) {
+    __atomic_add_fetch(&g_io_syncs, 1, __ATOMIC_RELAXED);
     return fsync(fd) == 0 ? 0 : -1;
 }
 

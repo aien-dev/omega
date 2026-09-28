@@ -255,6 +255,7 @@ void rx_coherent_project(RxWorld *w, uint32_t id) {
     if (!w->coherent || id >= RX_MAX_OBJECTS) return;
     RxObject *o = &w->objects[id];
     OmegaSharedWorldObject *p = &table_of(w)->objects[id];
+    w->stats.proj_bytes += sizeof(*p);
     p->object_id = o->id;
     p->generation = o->generation;
     p->permissions = 0;
@@ -272,6 +273,7 @@ void rx_coherent_project(RxWorld *w, uint32_t id) {
         return;
     uint8_t *win = w->coherent + o->region_offset;
     for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) put_u64(win + f * 8u, o->field[f]);
+    w->stats.proj_bytes += RX_MAX_FIELDS * 8u;
 }
 
 static bool overlap(uint64_t a, uint64_t asz, uint64_t b, uint64_t bsz) {
@@ -716,6 +718,7 @@ static int post_on(RxWorld *w, OmegaSharedWorldRing *ring, OmegaSharedWorldDesc 
     memcpy(&ring->slots[t & ring->mask], d, sizeof(*d));
     atomic_thread_fence(memory_order_release);
     store_release_u64(&ring->tail, t + 1);
+    w->stats.ring_bytes += sizeof(*d);
     return RX_OK;
 }
 
@@ -870,9 +873,11 @@ int rx_resident_take_result(RxWorld *w, OmegaSharedWorldDesc *out) {
     OmegaSharedWorldRing *ring = g2c_ring(w);
     uint64_t h = load_relaxed_u64(&ring->head);
     uint64_t t = load_acquire_u64(&ring->tail);
-    if (h >= t) return RX_ERR_NOT_FOUND;
+    if (h >= t) { w->stats.gpu_polls_empty++; return RX_ERR_NOT_FOUND; }
     memcpy(out, &ring->slots[h & ring->mask], sizeof(*out));
     store_release_u64(&ring->head, h + 1);
+    w->stats.ring_bytes += sizeof(*out);
+    w->stats.gpu_results_taken++;
     return notice_intact(out, w->world_epoch);
 }
 

@@ -75,7 +75,7 @@ typedef struct {
     int crc, poly, word, byte, nbit, wi;
     int fifteen, thirtytwo, off_c2g, off_g2c, off_hb, off_tbl, epoch;
     int off, slot_off, dst_off;
-    int win_b, lim, sgen;
+    int win_b, lim, sgen, clk;
     int uv;
 } Regs;
 
@@ -116,6 +116,10 @@ static BlackwellIRInsn op(BlackwellIROpcode code) {
     n.dst_vreg = n.src1_vreg = n.src2_vreg = n.src3_vreg = n.ureg = -1;
     return n;
 }
+
+/* S2R special register %globaltimer, low 32 bits (ns). Kept here so the
+ * hash-pinned codegen header stays untouched. */
+#define RX_SR_GLOBALTIMER_LO 0x52
 
 static int emit_overflow;
 
@@ -282,7 +286,7 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     A32(seq); A32(f0); A32(f1); A32(crc); A32(poly); A32(word); A32(byte);
     A32(nbit); A32(wi); A32(fifteen); A32(thirtytwo);
     A32(off_c2g); A32(off_g2c); A32(off_hb); A32(off_tbl);
-    A32(off); A32(slot_off); A32(dst_off); A32(win_b); A32(lim); A32(sgen);
+    A32(off); A32(slot_off); A32(dst_off); A32(win_b); A32(lim); A32(sgen); A32(clk);
 #undef A32
     if (r.sgen < 0 || r.uv < 0) return -1;
 
@@ -380,6 +384,18 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     xor_rr(prog, r.tmp, r.msg, r.tmp2);
     ge_rr(prog, r.tmp, r.one);
     int not_claim = bra(prog, 1, 0);
+
+    /* R15: the chip's own clock at pickup, with the claim it belongs to. */
+    at_off(prog, &r, r.addr, r.off_hb, RX_SEAT_HB_CLAIM);
+    st(prog, r.addr, r.head, r.uv);
+    {
+        BlackwellIRInsn t = op(BW_IR_S2R);
+        t.dst_vreg = r.clk;
+        t.imm = RX_SR_GLOBALTIMER_LO;
+        em(prog, t);
+    }
+    at_off(prog, &r, r.addr, r.off_hb, RX_SEAT_HB_T_PICK);
+    st(prog, r.addr, r.clk, r.uv);
 
     /* Input object A: id and generation from the notice header. */
     at_off(prog, &r, r.addr, r.slot_off, 0x18u);
@@ -529,6 +545,16 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     xor_rr(prog, r.crc, r.crc, r.ones);
     at_off(prog, &r, r.addr, r.dst_off, 0x3cu);
     st(prog, r.addr, r.crc, r.uv);
+    /* R15: the chip's clock when the result and its notice are written,
+     * before the release that makes them visible. */
+    {
+        BlackwellIRInsn t = op(BW_IR_S2R);
+        t.dst_vreg = r.clk;
+        t.imm = RX_SR_GLOBALTIMER_LO;
+        em(prog, t);
+    }
+    at_off(prog, &r, r.addr, r.off_hb, RX_SEAT_HB_T_DONE);
+    st(prog, r.addr, r.clk, r.uv);
     add32(prog, r.tail, r.tail, r.one);
     /* Release: the output window and the whole notice reach memory before
      * the processor can see the new tail. */

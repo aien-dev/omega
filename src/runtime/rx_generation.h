@@ -127,6 +127,8 @@ typedef void (*RxGenDiskHook)(const char *generation_dir, void *ctx);
 
 int rx_gen_open(const char *dir, RxGenStore **out);
 void rx_gen_close(RxGenStore *store);
+/* R15: process-wide bytes written and fsync calls made by the stores. */
+void rx_gen_io_counters(uint64_t *bytes, uint64_t *syncs);
 int rx_gen_active(const RxGenStore *store, uint64_t *id, uint64_t *lineage);
 
 /* One blob of committed generation `id` ("evidence", "model", "realization",
