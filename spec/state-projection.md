@@ -141,7 +141,9 @@ Both runs are scored against the planted answer, not against each other.
 | what-if on a branch | branch-local changes; recent telemetry COMPRESSIBLE; the goal LIVE |
 | assess a goal with uncertainty | window = current generation; telemetry DERIVED into one feature with second moments; goal LIVE |
 
-Measured in development run `20260928T211144Z`, as medians over 24 tasks.
+Measured in a development run, as medians over 24 tasks. The committed receipt
+is from candidate run `20260928T211355Z`, which has the same deterministic
+columns.
 Correctness, bytes and items touched are deterministic for the fixed seeds.
 Latencies vary from run to run. The committed evidence receipt is the
 authority.
