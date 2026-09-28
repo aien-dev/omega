@@ -215,6 +215,31 @@ not required.
 
 ## Findings
 
+### Qualifying run
+
+Candidate ff0109b, receipt
+`evidence/EMPIRICAL/7aab6079fab855675c89698e62dfb347af7a7c948ffa5fdd4d85aa0564a008a3.json`
+(bound, clean tree, AIENOS c8ab65e, load average 2.1 to 3.8). 44 checks, 0
+failures; 20,212 runs checked against the reference, 0 mismatches; planted arm
+refused, 0 parent runs; 0 budget violations. Model blob 28,112 bytes.
+
+Cost as a fraction of the fixed rule's (table terms; online includes probes):
+
+| Core | Distribution | frozen | online | frozen / best single arm | replay wall |
+|---|---|---|---|---|---|
+| X925 | H1 unseen shapes | 0.584 | 0.641 | 1.000 (quad4) | 0.615 |
+| X925 | H2 thin-heavy | 0.778 | 0.785 | 0.788 | 0.767 |
+| X925 | H3 pressure | 0.583 | 0.733 | 1.000 | — |
+| A725 | H1 unseen shapes | 0.557 | 0.562 | 0.955 (reference) | 0.557 |
+| A725 | H2 thin-heavy | 0.694 | 0.710 | 0.979 | 0.695 |
+| A725 | H3 pressure | 0.704 | 0.833 | 1.011 | — |
+
+Validation: 0.610 of the fixed rule; 80% intervals covered 0.859. Held-out
+80% coverage: H1 0.83 / 0.88, H2 0.74 / 0.79 (X925 / A725); H3, not gated,
+0.97 / 0.65. The best single arm differs by core class (quad4 on X925, the
+reference on A725): no single fixed arm is right for the machine, and on X925
+thin-heavy work the learned choice is 21% under quad4-everywhere.
+
 ### Development runs on the Spark (before the qualifying run)
 
 Each was a full `test-empirical` run on the shared Spark (load average 2–7,
