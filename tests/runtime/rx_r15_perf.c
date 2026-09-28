@@ -396,10 +396,10 @@ static int writes_obj(const RxCrumb *k, uint32_t id) {
 
 /* Crumbs whose activation started in [t0, t1]. cause_has_commit[e] = 1 when
  * some reaction commit belongs to causal episode e. */
-static void cwin_scan(RxWorld *w, uint32_t r_serve, const uint8_t *ep_commit, CWin *c) {
+static void cwin_scan(RxWorld *w, uint32_t r_serve, const uint8_t *ep_commit, uint64_t n, CWin *c) {
     static uint64_t last_inv[RX_MAX_REACTIONS];
     memset(last_inv, 0, sizeof last_inv);
-    uint64_t n = w->n_crumbs;
+    /* n: the crumb count ep_commit was sized for */
     for (uint64_t id = 1; id <= n; id++) {
         const RxCrumb *k = rx_world_crumb(w, id);
         if (!k) continue;
@@ -556,6 +556,10 @@ static int run_trial(R15Config cfg) {
     uint64_t t_ep = r15_now_ns();
     int rc = r15_episode(r, 0, &out);
     uint64_t t_done = r15_now_ns();
+    /* A failed episode returns with production still running: stop it and let
+     * the body go quiet so the crumb log no longer grows under the analysis. */
+    r15_producer_stop(r);
+    rx_world_wait_quiescent(&r->w, 10000);
     rec_outcome(&out, rc);
     if (tw.idle_ok) rec_window("IDLE", &tw.idle);
     if (tw.before_ok) rec_window("BEFORE", &tw.before);
@@ -564,11 +568,12 @@ static int run_trial(R15Config cfg) {
     /* crumb-derived ADAPT (goal crumb .. promotion crumb) and L3 intervals */
     RxWorld *w = &r->w;
     uint32_t r_serve = r->omega.r_serve;
-    uint8_t *ep = calloc(w->n_crumbs + 2, 1);
-    for (uint64_t id = 1; ep && id <= w->n_crumbs; id++) {
+    const uint64_t n_crumbs = w->n_crumbs;   /* one snapshot bounds every scan below */
+    uint8_t *ep = calloc(n_crumbs + 2, 1);
+    for (uint64_t id = 1; ep && id <= n_crumbs; id++) {
         const RxCrumb *k = rx_world_crumb(w, id);
         if (k && k->kind == RX_CRUMB_COMMIT && k->reaction != UINT32_MAX && k->episode &&
-            k->episode <= w->n_crumbs)
+            k->episode <= n_crumbs)
             ep[k->episode] = 1;
     }
     const RxCrumb *goal = r->goal_crumb > 0 ? rx_world_crumb(w, (uint64_t)r->goal_crumb) : NULL;
@@ -630,31 +635,31 @@ static int run_trial(R15Config cfg) {
         memset(&adapt, 0, sizeof adapt);
         adapt.t0 = goal->t_end_ns;
         adapt.t1 = promo->t_end_ns;
-        cwin_scan(w, r_serve, ep, &adapt);
+        cwin_scan(w, r_serve, ep, n_crumbs, &adapt);
         rec_cwin("ADAPT", &adapt);
         static CWin cost;                       /* goal .. in-force (§5 L3) */
         memset(&cost, 0, sizeof cost);
         cost.t0 = goal->t_end_ns;
         cost.t1 = inforce->t_end_ns;
-        cwin_scan(w, r_serve, ep, &cost);
+        cwin_scan(w, r_serve, ep, n_crumbs, &cost);
         rec_cwin("ADAPT_COST", &cost);
     }
     if (tw.before_ok && ep) {
         static CWin b;
         memset(&b, 0, sizeof b);
         b.t0 = tw.before.t0; b.t1 = tw.before.t1;
-        cwin_scan(w, r_serve, ep, &b);
+        cwin_scan(w, r_serve, ep, n_crumbs, &b);
         rec_cwin("BEFORE", &b);
     }
     if (tw.after_ok && ep) {
         static CWin a, s;
         memset(&a, 0, sizeof a);
         a.t0 = tw.after.t0; a.t1 = tw.after.t1;
-        cwin_scan(w, r_serve, ep, &a);
+        cwin_scan(w, r_serve, ep, n_crumbs, &a);
         rec_cwin("AFTER", &a);
         memset(&s, 0, sizeof s);
         s.t0 = tw.span.t0; s.t1 = tw.span.t1;
-        cwin_scan(w, r_serve, ep, &s);
+        cwin_scan(w, r_serve, ep, n_crumbs, &s);
         rec_cwin("ADAPT_AFTER", &s);
     }
     free(ep);

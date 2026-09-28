@@ -570,6 +570,24 @@ static int orchestration_error(R15Rig *r) {
 
 #define EFAIL(...) do { snprintf(out->why, sizeof out->why, __VA_ARGS__); return -1; } while (0)
 
+/* How far a failed adaptation got (reported only; the episode still fails). */
+static void progress_snapshot(R15Rig *r, R15Outcome *out) {
+    out->goal_status = field(r, r->aien.o.assessment, 4);
+    out->plan_action = field(r, r->aien.o.plan, 1);
+    out->plan_seq = field(r, r->aien.o.plan, 0);
+    out->search_epoch = field(r, r->omega.o.search, 0);
+    out->selection_epoch = field(r, r->omega.o.selection, 0);
+    out->candidate_id = field(r, r->living.o.candidate, 0);
+    out->gpu_claims = r->w.stats.resident_claims;
+    out->seat_commits = r->w.reactions[r->living.r_seat].commits;
+    for (uint32_t i = 0; i < 5; i++) out->evidence[i] = field(r, r->living.o.evidence, i);
+    for (uint32_t i = 0; i < 4; i++) out->belief[i] = field(r, r->aien.o.experiment_belief, i);
+    out->selected_ps = field(r, r->omega.o.selection, 5);
+    out->reference_ps = field(r, r->omega.o.selection, 7);
+    out->served = r->served;
+    out->crumbs = r->w.n_crumbs;
+}
+
 int r15_episode(R15Rig *r, uint64_t target_ns, R15Outcome *out) {
     memset(out, 0, sizeof *out);
     cpu_set_t a, x;
@@ -599,16 +617,23 @@ int r15_episode(R15Rig *r, uint64_t target_ns, R15Outcome *out) {
     if (atomic_load(&r->producer_error)) EFAIL("serve in BEFORE: %s", r->serve_why);
     if (move_threads(&x) <= 0 || publish_placement(r, R15_CLASS_X925) != 0 ||
         publish_goal(r, out->target_ns) != 0) EFAIL("goal");
-    limit = now_ns() + 90000000000ull;
+    /* 90 s (spec-era R13 value); R15_PROMOTION_TIMEOUT_MS shortens it only to
+     * exercise the failure path in tests. */
+    uint64_t wait_ms = 90000;
+    const char *env = getenv("R15_PROMOTION_TIMEOUT_MS");
+    if (env && *env) wait_ms = strtoull(env, NULL, 10);
+    limit = now_ns() + wait_ms * 1000000ull;
     while (now_ns() < limit && field(r, r->living.o.promotion, 0) == 0) {
         pause_us(20);
         if (atomic_load(&r->producer_error)) EFAIL("serve during adaptation: %s", r->serve_why);
         if (orchestration_error(r)) EFAIL("orchestration error %d/%d",
             atomic_load(&r->orch_error), atomic_load(&r->transport_error));
     }
-    if (field(r, r->living.o.promotion, 0) == 0 || r->promoter.result != RX_GEN_OK)
+    if (field(r, r->living.o.promotion, 0) == 0 || r->promoter.result != RX_GEN_OK) {
+        progress_snapshot(r, out);
         EFAIL("no promotion: result %d, prepare refusal %d", r->promoter.result,
               r->living.last_refusal);
+    }
     uint64_t epoch = field(r, r->living.o.inforce, 0);
     limit = now_ns() + 60000000000ull;
     while (now_ns() < limit && !atomic_load(&r->producer_error) &&
