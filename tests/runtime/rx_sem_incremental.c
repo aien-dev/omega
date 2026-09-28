@@ -1157,6 +1157,11 @@ static void sleep_ns(uint64_t ns) {
  * idle. Two windows of equal length differ only by the work done in them
  * (plus whatever else the machine did), so their difference is the marginal
  * energy of that work. */
+/* Replays per window. One replay saves a few joules of CPU work, which is
+ * inside the window-to-window noise of a shared machine; several replays
+ * per window raise the signal without changing what is compared. */
+#define E_REPLAYS_PER_WINDOW 8
+
 static EWin window_run(int mode, uint64_t window_ns) {
     EWin w;
     memset(&w, 0, sizeof w);
@@ -1164,7 +1169,7 @@ static EWin window_run(int mode, uint64_t window_ns) {
     RunStats tmp;
     bool ok = g_meter.present && meter_read(a);
     uint64_t t0 = now_ns();
-    replay(mode, false, false, &tmp);
+    for (int k = 0; k < E_REPLAYS_PER_WINDOW; k++) replay(mode, false, false, &tmp);
     w.busy_ns = now_ns() - t0;
     if (window_ns > w.busy_ns) sleep_ns(window_ns - w.busy_ns);
     w.ns = now_ns() - t0;
@@ -1415,8 +1420,9 @@ static int receipt(int prove_ok, int measure_ok) {
             "overflow indicators checked before and after each read\", "
             "\"method\": \"paired equal-length windows: FULL replay, and ENGINE replay followed by idle "
             "to the same length; saved = FULL window - ENGINE window; order alternated\", "
+            "\"replays_per_window\": %d, "
             "\"valid\": %s, \"repetitions\": %d, \"loadavg_1min_at_start\": %.2f, \"channels\": {",
-            g_m.energy_valid ? "true" : "false", E_REPS, g_m.loadavg1);
+            E_REPLAYS_PER_WINDOW, g_m.energy_valid ? "true" : "false", E_REPS, g_m.loadavg1);
         for (int c = 0; c < E_CH; c++) {
             fprintf(f, "%s\"%s\": {\"full_window_uj\": [", c ? ", " : "", g_ch_name[c]);
             for (int r = 0; r < E_REPS; r++) fprintf(f, "%s%llu", r ? ", " : "", U(g_m.full[r].uj[c]));

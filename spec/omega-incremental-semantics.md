@@ -177,7 +177,8 @@ The receipt reports:
 **Energy method.** The measurement uses the on-device counters for package,
 CPU-E and CPU-P from hwmon `aien_spbm`, as described in the R15 research
 notes.
-- Each pair is two windows of equal length:
+- Each pair is two windows of equal length, each running the trace 8 times
+  (one replay saves only a few joules, inside the noise of a shared machine):
   - a FULL replay;
   - an ENGINE replay followed by idle time until its window is as long as the
     FULL one.
