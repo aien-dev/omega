@@ -475,10 +475,12 @@ $(RX_ROUTE_TEST): $(RX_ROUTE_SRCS) $(RX_ROUTE_OBJ) tests/runtime/rx_cog_engines.
 
 test-cognitive-routing: $(RX_ROUTE_TEST)
 	./$(RX_ROUTE_TEST)
+
 # OMEGA_EMPIRICAL_OPTIMIZER: realization choice from a learned, calibrated cost
 # model. rx_costmodel.o is built alone first and must not reference the
 # generation store, any authority operation, or anything that maps or runs
 # code: the model is a calculator; durability comes only through promotion.
+.PHONY: test-costmodel test-empirical
 RX_CM_OBJ = $(OUT_DIR)/rx_costmodel.o
 
 $(RX_CM_OBJ): src/runtime/rx_costmodel.c src/runtime/rx_costmodel.h | $(OUT_DIR)
