@@ -56,7 +56,16 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
-        run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph
+        run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing test-sem-incremental
+      - name: Show state projection receipt
+        run: |
+          receipt="$(find build/qual-runs -name omega_state_projection_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"OMEGA_STATE_PROJECTION_PASS": "PASS"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"
       - name: Show action graph receipt
         run: |
           receipt="$(find build/qual-runs -name rx_action_graph_receipt.json -type f | head -n 1)"
@@ -64,6 +73,71 @@ jobs:
           grep -q '"failures": 0,' "$receipt"
           grep -q '"candidate_bound": true,' "$receipt"
           grep -q '"OMEGA_ACTION_GRAPH_IR_PASS": "PASS"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"
+      - name: Check incremental semantics receipt
+        run: |
+          receipt="$(find build/qual-runs -name omega_incremental_semantics_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"OMEGA_INCREMENTAL_SEMANTICS_PASS": "HOST_PASS_ENERGY_UNMEASURED"' "$receipt"
+          grep -q '"false_hits": 0,' "$receipt"
+      - name: Show capability query receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_capability_query_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"OMEGA_CAPABILITY_QUERY_PASS": "PASS"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"
+      - name: Show semantic communication receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_semantic_comm_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"OMEGA_SEMANTIC_COMMUNICATION_PASS": "PASS"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"
+      - name: Show cognitive routing receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_cognitive_routing_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"OMEGA_COGNITIVE_ROUTING_PASS": "PASS"' "$receipt"
+      - name: Build and run workflow fusion qualification
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-workflow-fusion
+      - name: Show workflow fusion receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_workflow_fusion_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"OMEGA_WORKFLOW_FUSION_PASS": "PASS"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"
+      - name: Build and run typed result constraints
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+        run: make test-typed-results
+      - name: Show typed result constraints receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_typed_results_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"OMEGA_TYPED_RESULT_CONSTRAINTS_PASS": "PASS"' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
       - name: Show R8 receipt
@@ -235,3 +309,20 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make build/rx_r14_recovery_host
+      - name: Plan IR and verified plan cache (OMEGA_PLAN_REUSE; timing criteria are judged on the Spark receipt)
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+          PLAN_REUSE_NO_ENERGY: '1'
+        run: |
+          make test-plan-reuse
+          receipt="$(find build/qual-runs -name rx_plan_reuse_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"G3_outcome_and_evidence": "PASS"' "$receipt"
+          grep -q '"G4_false_applicability_zero": "PASS"' "$receipt"
+          grep -q '"G5_identity": "PASS"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"

@@ -1,0 +1,47 @@
+{
+  "schema": "AIEN_OMEGA_INCREMENTAL_SEMANTICS_V1",
+  "run_id": "20260928T215513Z-3cd07da2d403",
+  "candidate_commit": "3cd07da2d4036661e8e788477842fa92c36f6f56",
+  "run_commit": "3cd07da2d4036661e8e788477842fa92c36f6f56",
+  "candidate_bound": true,
+  "tree_dirty": false,
+  "test_binary_sha256": "8c83bec981b250903490da9293c9d89508086b094ca905fbcd4daeb062ce1e11",
+  "machine_identity": {"node": "spark-b87b", "system": "Linux", "release": "7.0.0-1019-nvidia", "architecture": "aarch64"},
+  "gate": {"OMEGA_INCREMENTAL_SEMANTICS_PASS": "PASS"},
+  "prove": {
+    "dependency_tracking": {"result": "PASS", "checks": 17},
+    "correct_invalidation": {"result": "PASS", "checks": 20},
+    "no_stale_reuse": {"result": "PASS", "checks": 9},
+    "generation_isolation": {"result": "PASS", "checks": 17},
+    "branch_isolation": {"result": "PASS", "checks": 15},
+    "cross_branch_valid_reuse": {"result": "PASS", "checks": 10},
+    "causal_provenance": {"result": "PASS", "checks": 14},
+    "details": {"temperature_change_dirtied": 2, "unrelated_nodes_kept_clean": 4, "unrelated_world_writes_invalidations": 0, "unrelated_world_writes_runs": 0, "differential_ops": 200000, "differential_gets": 105999, "differential_hits": 93971, "differential_mismatches": 0, "differential_audits": 164619, "differential_false_hits": 0, "differential_forks": 3424, "differential_cross_branch_hits": 38560, "retired_object_same_bytes_recomputed": true, "promoted_fn_generation_recomputed": true, "jspace_candidates": 16, "jspace_derivation_runs": 8, "jspace_cache_hits": 24, "provenance_entries_verified": 5, "provenance_events_verified": 6, "provenance_memos_verified": 11, "world_crumbs_verified": 15, "tampered_entry_detected": true, "tampered_event_detected": true}
+  },
+  "workload": {"ticks": 600, "noise_objects": 8, "jspace_every": 20, "jspace_width": 6, "work": {"thermal_rounds": 3000, "repo_sha256_chain": 6000, "memory_vectors": 12000, "caps_rows": 20000, "plan_rounds": 3000}, "note": "stand-in derivations with real CPU cost; not the AIEN model"},
+  "modes": {
+    "FULL": {"queries": 780, "derivation_runs": 3900, "derivation_ns": 0, "query_ns": 1805614103, "wall_ns": 1816529993, "p50_query_ns": 2287136, "p99_query_ns": 2833411, "resolutions": 3900, "memo_hits": 0, "cutoffs": 0, "cache_hits": 0, "hit_rate": 0.0000, "invalidations": 0, "unnecessary_invalidations": 0, "unnecessary_invalidation_rate": 0.0000, "answers_differing_from_full": 0},
+    "OBJECT": {"queries": 780, "derivation_runs": 647, "derivation_ns": 31914141, "query_ns": 39163473, "wall_ns": 1853208902, "p50_query_ns": 8721, "p99_query_ns": 2247088, "resolutions": 3900, "memo_hits": 2302, "cutoffs": 951, "cache_hits": 0, "hit_rate": 0.8341, "invalidations": 1593, "unnecessary_invalidations": 951, "unnecessary_invalidation_rate": 0.5970, "answers_differing_from_full": 0},
+    "FIELD": {"queries": 780, "derivation_runs": 647, "derivation_ns": 32487009, "query_ns": 37948646, "wall_ns": 1893031752, "p50_query_ns": 8512, "p99_query_ns": 2240432, "resolutions": 2352, "memo_hits": 1542, "cutoffs": 163, "cache_hits": 0, "hit_rate": 0.7249, "invalidations": 805, "unnecessary_invalidations": 163, "unnecessary_invalidation_rate": 0.2025, "answers_differing_from_full": 0},
+    "ENGINE": {"queries": 780, "derivation_runs": 401, "derivation_ns": 32344415, "query_ns": 38326038, "wall_ns": 2008116291, "p50_query_ns": 7632, "p99_query_ns": 2332528, "resolutions": 2352, "memo_hits": 1542, "cutoffs": 163, "cache_hits": 246, "hit_rate": 0.8295, "invalidations": 805, "unnecessary_invalidations": 163, "unnecessary_invalidation_rate": 0.2025, "answers_differing_from_full": 0}
+  },
+  "measure": {"recomputation_avoided": 3499, "recomputation_avoided_fraction": 0.8972, "compute_saved_ns": 1767288065, "compute_saved_ns_by_producer_timing": 959677277, "latency_saved_ns": 1767288065, "latency_speedup": 47.11, "p50_latency_ns": {"FULL": 2287136, "ENGINE": 7632}, "p99_latency_ns": {"FULL": 2833411, "ENGINE": 2332528}, "cache_hit_rate": 0.8295, "cache_hits": 1951, "resolutions": 2352, "false_hits": 0, "audited_hits": 3499, "false_hit_rate": 0.000000, "unnecessary_invalidation_rate": {"OBJECT": 0.5970, "FIELD": 0.2025, "ENGINE": 0.2025}, "invalidations": {"OBJECT": 1593, "FIELD": 805, "ENGINE": 805}, "answers_identical_across_modes": true,
+    "energy": {"source": "hwmon aien_spbm energy1-3 (package, cpu_e, cpu_p), microjoules; overflow indicators checked before and after each read", "method": "paired equal-length windows: FULL replay, and ENGINE replay followed by idle to the same length; saved = FULL window - ENGINE window; order alternated", "replays_per_window": 8, "valid": true, "repetitions": 5, "loadavg_1min_at_start": 3.25, "channels": {"package": {"full_window_uj": [299610000, 299735000, 304042000, 298827000, 291213000], "engine_window_uj": [264584000, 267153000, 264061000, 266085000, 247895000], "saved_j": [35.0271, 48.1621, 39.9858, 52.2136, 43.3207], "saved_j_median": 43.3207, "saved_j_min": 35.0271, "saved_j_max": 52.2136}, "cpu_e": {"full_window_uj": [6921000, 6573000, 6669000, 5833000, 5879000], "engine_window_uj": [5305000, 5420000, 4920000, 5041000, 4833000], "saved_j": [1.6160, 1.4691, 1.7491, 1.1609, 1.0461], "saved_j_median": 1.4691, "saved_j_min": 1.0461, "saved_j_max": 1.7491}, "cpu_p": {"full_window_uj": [67718000, 81772000, 69761000, 80841000, 71421000], "engine_window_uj": [34827000, 38954000, 33725000, 34663000, 31480000], "saved_j": [32.8911, 45.0898, 36.0366, 48.7146, 39.9413], "saved_j_median": 39.9413, "saved_j_min": 32.8911, "saved_j_max": 48.7146}}, "cpu_clusters_saved_j": [34.5072, 46.5589, 37.7857, 49.8755, 40.9874], "cpu_clusters_saved_j_median": 40.9874, "cpu_clusters_pairs_positive": 5, "gated_on": "cpu_e + cpu_p per pair: median > 0 and at least 4 of 5 pairs positive; package is reported, not gated (its swing from other machine activity exceeds this saving)", "window_ns": [15161727178, 14277687209, 15382727851, 14257106030, 14642204491], "engine_busy_ns": [494911685, 468362685, 494213411, 468038810, 487537214], "limits": "on-device counters, not a wall-outlet meter; other machine activity falls in both windows; not an R15 quiet-machine qualification"}
+  },
+  "definitions": {
+    "recomputation_avoided": "derivation runs FULL minus ENGINE on the same trace",
+    "compute_saved_ns": "time inside queries, FULL minus ENGINE",
+    "compute_saved_ns_by_producer_timing": "sum over every hit of the producing run's measured time",
+    "cache_hit_rate": "(memo + cutoff + cache hits) / all node resolutions, nested ones included",
+    "false_hit_rate": "hits whose audit recomputation differed / hits audited (every hit, audited replay)",
+    "unnecessary_invalidation_rate": "invalidated memos whose inputs came back unchanged (cut off) / invalidations"
+  },
+  "limits": [
+    "functions must be pure over declared inputs; the engine cannot see an undeclared read (the audit replay is how that would show)",
+    "a fork copies the branch tables (simple reference, not copy-on-write)",
+    "the cache is bounded and never evicts; when 7/8 full, new results are not filed (counted)",
+    "single engine mutex; one process; the cache does not survive a restart",
+    "cache reuse is not gated by capabilities: a reader must present the inputs to form a key, but a key's result is visible to any branch in the engine"
+  ],
+  "not_claimed": ["the AIEN model or neural cognition", "GPU realization", "R15 performance qualification", "durable or cross-process cache", "AIENOS kernel integration"]
+}
