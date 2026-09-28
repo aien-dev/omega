@@ -406,3 +406,38 @@ r15-gpu-load: $(R15_GPU_LOAD)
 
 test-r15-parity-silicon: $(RX_R15_PARITY_SILICON)
 	./$(RX_R15_PARITY_SILICON)
+
+# R15 harness (spec §4, §5, §12). Four binaries from the same sources and
+# flags: production and the RES-1-NODIGEST measurement build (§3), host
+# stand-in seat and GB10 silicon. tools/r15_qualify.sh drives them and
+# tools/r15_reduce.c reduces their raw output.
+RX_R15_PERF_SRCS = $(RX_R15_RIG_SRCS) tests/runtime/r15_measure.c tests/runtime/rx_r15_perf.c
+RX_R15_PERF_HDRS = $(RX_R15_RIG_HDRS) tests/runtime/r15_measure.h
+RX_R15_PERF_HOST = $(OUT_DIR)/rx_r15_perf_host
+RX_R15_PERF_HOST_ND = $(OUT_DIR)/rx_r15_perf_host_nodigest
+RX_R15_PERF_SILICON = $(OUT_DIR)/rx_r15_perf_silicon
+RX_R15_PERF_SILICON_ND = $(OUT_DIR)/rx_r15_perf_silicon_nodigest
+R15_REDUCE = $(OUT_DIR)/r15_reduce
+
+$(RX_R15_PERF_HOST): $(RX_R15_PERF_SRCS) $(RX_R15_PERF_HDRS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_PERF_SRCS) $(AIENOS_CAP_LIB) -ldl -lm
+
+$(RX_R15_PERF_HOST_ND): $(RX_R15_PERF_SRCS) $(RX_R15_PERF_HDRS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DRX_MEASURE_NO_CAUSAL_DIGEST -pthread -o $@ $(RX_R15_PERF_SRCS) \
+		$(AIENOS_CAP_LIB) -ldl -lm
+
+$(RX_R15_PERF_SILICON): $(RX_R15_PERF_SRCS) $(RX_R15_PERF_HDRS) $(RX_R15_GPU_SRCS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DR15_SILICON -pthread -o $@ $(RX_R15_PERF_SRCS) $(RX_R15_GPU_SRCS) \
+		$(AIENOS_CAP_LIB) -ldl -lm
+
+$(RX_R15_PERF_SILICON_ND): $(RX_R15_PERF_SRCS) $(RX_R15_PERF_HDRS) $(RX_R15_GPU_SRCS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DR15_SILICON -DRX_MEASURE_NO_CAUSAL_DIGEST -pthread -o $@ \
+		$(RX_R15_PERF_SRCS) $(RX_R15_GPU_SRCS) $(AIENOS_CAP_LIB) -ldl -lm
+
+$(R15_REDUCE): tools/r15_reduce.c src/sha256.c src/sha256.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -o $@ tools/r15_reduce.c src/sha256.c -lm
+
+r15-perf-host: $(RX_R15_PERF_HOST) $(RX_R15_PERF_HOST_ND) $(R15_REDUCE)
+r15-perf-silicon: $(RX_R15_PERF_SILICON) $(RX_R15_PERF_SILICON_ND) $(R15_REDUCE)

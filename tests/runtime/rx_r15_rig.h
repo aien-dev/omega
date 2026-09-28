@@ -69,7 +69,23 @@ typedef struct {
     /* lost-trigger baseline, taken when the body is built */
     uint64_t baseline[RX_MAX_REACTIONS][RX_MAX_DEPS];
     int stage;                  /* setup stage reached, for diagnostics */
+    /* R15 harness: optional measurement points inside r15_episode (all NULL
+     * for the parity gate, which then runs exactly as before). */
+    const struct R15Hooks *hooks;
+    int64_t goal_crumb;         /* crumb of the goal publication */
 } R15Rig;
+
+/* Called on the episode's thread; a nonzero return fails the episode.
+ *   idle:   A725, confirmed, producer not yet running (idle baseline);
+ *   before: A725, producer running (BEFORE window);
+ *   after:  X925, goal MET on the in-force record, producer still running
+ *           (AFTER window). */
+typedef struct R15Hooks {
+    int (*idle)(struct R15Hooks *h, R15Rig *r);
+    int (*before)(struct R15Hooks *h, R15Rig *r);
+    int (*after)(struct R15Hooks *h, R15Rig *r);
+    void *ctx;
+} R15Hooks;
 
 /* Semantic outcome of one W-EPISODE. Exact fields must agree between
  * configurations; `measured` fields are timing and are only reported. */
@@ -79,6 +95,7 @@ typedef struct {
     uint64_t target_ns;
     /* exact */
     uint64_t goal_seq, goal_regime, goal_status, goal_class;
+    uint64_t goal_status_final;  /* after the AFTER window (hooks only); reported */
     uint64_t plan_action, plan_regime, plan_condition, plan_reason, plan_goal;
     uint64_t search_epoch, selection_epoch, selection_id[4], selection_regime;
     uint64_t selected_verdict;  /* verdict state of the slot that produced it */
@@ -108,6 +125,14 @@ int  r15_start(R15Rig *r, R15Config config);
  * otherwise it is used as given (the parity gate gives both sides one). */
 int  r15_episode(R15Rig *r, uint64_t target_ns, R15Outcome *out);
 void r15_stop(R15Rig *r);
+/* Mint a grant from the rig's authority (harness stimuli only). */
+RxCapRef r15_mint(R15Rig *r, uint32_t subject, uint64_t resource, uint32_t rights);
+/* The closed-loop production client, outside an episode (L1/L2 only). */
+int r15_producer_start(R15Rig *r);
+int r15_producer_stop(R15Rig *r);       /* -1 if a request failed */
+int r15_placement(R15Rig *r, uint32_t cls);
+/* Confine every thread of the process to one core class. */
+int r15_move_class(uint32_t cls);
 const char *r15_config_name(R15Config c);
 
 /* Reactions whose last activation read an older version of a trigger field

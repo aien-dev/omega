@@ -531,7 +531,35 @@ static int publish_placement(R15Rig *r, uint64_t cls) {
 static int publish_goal(R15Rig *r, uint64_t target) {
     RxMutation m[3] = {{r->aien.o.goal, 0, 1}, {r->aien.o.goal, 1, rx_omega_regime(R15_M, R15_N)},
                        {r->aien.o.goal, 2, target}};
-    return rx_world_publish_external(&r->w, r->ext_goal, m, 3) > 0 ? 0 : -1;
+    r->goal_crumb = rx_world_publish_external(&r->w, r->ext_goal, m, 3);
+    return r->goal_crumb > 0 ? 0 : -1;
+}
+
+int r15_producer_start(R15Rig *r) {
+    if (r->producer_live) return 0;
+    atomic_store(&r->producer_stop, 0);
+    if (pthread_create(&r->producer, NULL, producer_main, r) != 0) return -1;
+    r->producer_live = 1;
+    return 0;
+}
+
+int r15_producer_stop(R15Rig *r) {
+    stop_producer(r);
+    return atomic_load(&r->producer_error) ? -1 : 0;
+}
+
+int r15_placement(R15Rig *r, uint32_t cls) {
+    return publish_placement(r, cls);
+}
+
+RxCapRef r15_mint(R15Rig *r, uint32_t subject, uint64_t resource, uint32_t rights) {
+    return mint(r, subject, resource, rights);
+}
+
+int r15_move_class(uint32_t cls) {
+    cpu_set_t a, x;
+    if (core_sets(&a, &x) != 0) return -1;
+    return move_threads(cls == R15_CLASS_A725 ? &a : &x) > 0 ? 0 : -1;
 }
 
 static int orchestration_error(R15Rig *r) {
@@ -561,9 +589,14 @@ int r15_episode(R15Rig *r, uint64_t target_ns, R15Outcome *out) {
     uint64_t before_decide = r->w.reactions[r->aegis.r_decide[0]].activations;
     uint64_t before_install = r->w.reactions[r->aegis.r_install[0]].activations;
 
+    if (r->hooks && r->hooks->idle &&
+        r->hooks->idle((R15Hooks *)r->hooks, r) != 0) EFAIL("idle window");
     atomic_store(&r->producer_stop, 0);
     if (pthread_create(&r->producer, NULL, producer_main, r) != 0) EFAIL("producer");
     r->producer_live = 1;
+    if (r->hooks && r->hooks->before &&
+        r->hooks->before((R15Hooks *)r->hooks, r) != 0) EFAIL("BEFORE window");
+    if (atomic_load(&r->producer_error)) EFAIL("serve in BEFORE: %s", r->serve_why);
     if (move_threads(&x) <= 0 || publish_placement(r, R15_CLASS_X925) != 0 ||
         publish_goal(r, out->target_ns) != 0) EFAIL("goal");
     limit = now_ns() + 90000000000ull;
@@ -584,6 +617,16 @@ int r15_episode(R15Rig *r, uint64_t target_ns, R15Outcome *out) {
              field(r, r->aien.o.prediction, 4) == R15_CLASS_X925 &&
              field(r, r->aien.o.assessment, 6) == field(r, r->aien.o.prediction, 0)))
         pause_us(100);
+    /* The goal status that decides the episode is the one at goal MET; the
+     * AFTER window keeps production running and AIEN keeps re-assessing, so
+     * the status after it is only reported (goal_status_final). */
+    uint64_t met_status = field(r, r->aien.o.assessment, 4);
+    if (r->hooks && r->hooks->after && !atomic_load(&r->producer_error) &&
+        met_status == RX_AIEN_GOAL_MET &&
+        r->hooks->after((R15Hooks *)r->hooks, r) != 0) {
+        stop_producer(r);
+        EFAIL("AFTER window");
+    }
     stop_producer(r);
     if (atomic_load(&r->producer_error)) EFAIL("serve after promotion: %s", r->serve_why);
     if (rx_world_wait_quiescent(&r->w, 10000) != RX_OK) EFAIL("did not quiesce");
@@ -592,7 +635,8 @@ int r15_episode(R15Rig *r, uint64_t target_ns, R15Outcome *out) {
     /* exact semantic results */
     out->goal_seq = field(r, r->aien.o.assessment, 0);
     out->goal_regime = field(r, r->aien.o.assessment, 1);
-    out->goal_status = field(r, r->aien.o.assessment, 4);
+    out->goal_status_final = field(r, r->aien.o.assessment, 4);
+    out->goal_status = r->hooks ? met_status : out->goal_status_final;
     out->goal_class = field(r, r->aien.o.assessment, 5);
     out->plan_action = field(r, r->aien.o.plan, 1);
     out->plan_regime = field(r, r->aien.o.plan, 2);
