@@ -210,6 +210,14 @@ enum { RX_OMEGA_INQ_RESEARCH = 1 };
 int rx_omega_register_reconsider(RxOmegaFaculty *f, RxObjRef plan, RxCapRef read_cap,
                                  RxCapRef search_cap, RxCapRef selection_cap);
 
+/* R14. Admit durable bytes after a restart: store them under the identity
+ * they hash to, then run the same verifier omega.verify.k runs (identity, V0
+ * structure, sandboxed differential on the regime's shape). 0 when verified;
+ * production may then execute them. 1 with *out_why when refused; -1 when the
+ * check could not run. It does not select or put anything in force. */
+int rx_omega_readmit(RxOmegaFaculty *f, const uint8_t *code, size_t len, uint32_t kind,
+                     uint64_t regime, SemanticId *out_id, uint32_t *out_why);
+
 /* Read-only store lookup for tests. Returns a copy; 0 if found. */
 int rx_omega_store_find(RxOmegaFaculty *f, uint64_t id_word0, RxOmegaRealization *out);
 

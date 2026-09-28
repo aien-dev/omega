@@ -221,3 +221,8 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make build/rx_r13_living_host
+      - name: R14 living recovery builds (its run needs the R13 body, both GB10 core classes and, for the gate, the resident seat)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make build/rx_r14_recovery_host

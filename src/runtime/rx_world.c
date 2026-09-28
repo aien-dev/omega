@@ -83,6 +83,7 @@ const char *rx_crumb_kind_name(RxCrumbKind k) {
     case RX_CRUMB_FAILED: return "FAILED";
     case RX_CRUMB_NOOP: return "NOOP";
     case RX_CRUMB_RETIRE: return "RETIRE";
+    case RX_CRUMB_QUARANTINE: return "QUARANTINE";
     default: return "?";
     }
 }
@@ -161,8 +162,31 @@ static uint64_t crumb_append(RxWorld *w, RxCrumb *k) {
         k->parents[j] = v;
     }
     crumb_hash(w, k, k->digest);
+    if (k->kind == RX_CRUMB_EXTERNAL) k->episode = k->id;
+    else if (k->wake_cause >= 1 && k->wake_cause < k->id)
+        k->episode = w->crumbs[k->wake_cause - 1].episode;
+    else k->episode = 0;
     w->crumbs[w->n_crumbs++] = *k;
+    if (k->reaction < w->n_reactions) w->reactions[k->reaction].last_crumb = k->id;
     return k->id;
+}
+
+/* R6 containment engaged. The crumb names the reaction, the limit and the
+ * crumb that caused it (so its episode). Wakes the quarantine suppresses
+ * later leave nothing, so the log stays bounded. Caller holds mu. */
+static void contain(RxWorld *w, uint32_t rid, uint32_t why, uint64_t cause) {
+    RxReaction *r = &w->reactions[rid];
+    RxCrumb k;
+    memset(&k, 0, sizeof(k));
+    k.kind = RX_CRUMB_QUARANTINE;
+    k.reaction = rid;
+    k.faculty = r->desc.faculty;
+    k.worker = UINT32_MAX;
+    k.wake_cause = cause;
+    add_parent(&k, cause);
+    k.reason = (int32_t)why;
+    k.t_start_ns = k.t_end_ns = now_ns();
+    crumb_append(w, &k);
 }
 
 const RxCrumb *rx_world_crumb(const RxWorld *w, uint64_t id) {
@@ -201,6 +225,10 @@ int rx_world_verify_crumbs(RxWorld *w, uint64_t *out_checked) {
         if (rc) break;
         crumb_hash(w, k, d);
         if (memcmp(d, k->digest, 32) != 0) { rc = -3; break; }
+        uint64_t ep = k->kind == RX_CRUMB_EXTERNAL ? k->id
+                    : k->wake_cause >= 1 && k->wake_cause < k->id
+                        ? w->crumbs[k->wake_cause - 1].episode : 0;
+        if (k->episode != ep) { rc = -4; break; }
         n++;
     }
     pthread_mutex_unlock(&w->mu);
@@ -369,12 +397,20 @@ static void demand(RxWorld *w, uint32_t rid, uint64_t cause) {
         r->conflict_streak = 0;
         r->episode_activations = 0;
     }
+    /* The budget is per causal episode: everything one outside publication
+     * set off, however far down the chain this reaction sits. */
+    uint64_t ep = cause >= 1 && cause <= w->n_crumbs ? w->crumbs[cause - 1].episode : 0;
+    if (ep && ep != r->episode) {
+        r->episode = ep;
+        r->episode_activations = 0;
+    }
     r->parked = false;
     if (w->stability.activation_budget &&
         r->episode_activations >= w->stability.activation_budget) {
         if (!r->quarantined) {
             r->quarantined = true;
             w->stats.quarantines++;
+            contain(w, rid, RX_CONTAIN_BUDGET, cause);
         }
         r->suppressed++;
         w->stats.suppressed_wakes++;
@@ -706,6 +742,7 @@ static void note_conflict(RxWorld *w, RxReaction *r) {
         !r->quarantined) {
         r->quarantined = true;
         w->stats.quarantines++;
+        r->contain_pending = RX_CONTAIN_CONFLICT;
     }
 }
 
@@ -719,6 +756,7 @@ static void note_value(RxWorld *w, RxReaction *r, int progressed, uint64_t value
             r->quarantined = true;
             w->stats.quarantines++;
             w->stats.livelock_trips++;
+            r->contain_pending = RX_CONTAIN_LIVELOCK;
         }
         return;
     }
@@ -750,6 +788,7 @@ static void note_value(RxWorld *w, RxReaction *r, int progressed, uint64_t value
         r->quarantined = true;
         w->stats.quarantines++;
         w->stats.oscillation_trips++;
+        r->contain_pending = RX_CONTAIN_OSCILLATION;
     }
 }
 
@@ -787,6 +826,11 @@ static void tick_parked(RxWorld *w) {
 
 static void end_activation(RxWorld *w, uint32_t rid) {
     RxReaction *r = &w->reactions[rid];
+    /* A limit engaged during this activation: recorded after its crumb. */
+    if (r->contain_pending) {
+        contain(w, rid, r->contain_pending, r->last_crumb);
+        r->contain_pending = 0;
+    }
     tick_parked(w);
     uncharge(w, r);
     if (r->quarantined) r->rearm = false;
@@ -900,6 +944,16 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
             w->stats.invalidations++;
             end_activation(w, rid);
             return;
+        }
+        /* R8: an object whose authority this reaction reads from a slot is
+         * claimed under what the slot holds now, which validate_caps just
+         * accepted. A renewal revokes the reference bound earlier. */
+        for (uint32_t i = 0; i < d->n_caps; i++) {
+            if (!d->cap_slotted[i]) continue;
+            if (d->caps[i].resource == w->objects[in].resource)
+                w->objects[in].cap = need_ref(w, d, i);
+            if (d->caps[i].resource == w->objects[id].resource)
+                w->objects[id].cap = need_ref(w, d, i);
         }
         uint64_t seq = 0;
         int pr = rx_resident_post_claim(w, in, id, r->wake_cause, &seq);

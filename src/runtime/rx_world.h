@@ -92,8 +92,13 @@ typedef enum {
     RX_CRUMB_REJECTED,
     RX_CRUMB_FAILED,
     RX_CRUMB_NOOP,             /* ran, proposed no change: fixed point */
-    RX_CRUMB_RETIRE
+    RX_CRUMB_RETIRE,
+    RX_CRUMB_QUARANTINE        /* an R6 limit stopped this reaction; reason names it */
 } RxCrumbKind;
+
+/* Which R6 limit engaged (reason of a QUARANTINE crumb). */
+enum { RX_CONTAIN_BUDGET = 1, RX_CONTAIN_OSCILLATION, RX_CONTAIN_LIVELOCK,
+       RX_CONTAIN_CONFLICT };
 
 /* Publication errors. */
 #define RX_OK               0
@@ -309,6 +314,11 @@ typedef struct {
     uint64_t t_end_ns;
     int32_t reason;
     uint8_t digest[32];         /* SHA-256 over canonical crumb bytes + parent digests */
+    /* Root of the causal episode: the outside publication this crumb's wake
+     * chain starts from (its own id for one), 0 when the chain starts at no
+     * outside publication. Derived from wake_cause, so not hashed; checked by
+     * rx_world_verify_crumbs. */
+    uint64_t episode;
 } RxCrumb;
 
 typedef struct {
@@ -321,7 +331,10 @@ typedef struct {
     uint64_t wake_cause;
     uint64_t coalesced;
     uint64_t activations;          /* lifetime observability */
-    uint64_t episode_activations;  /* reset by a fresh external causal episode */
+    uint64_t episode_activations;  /* reset when a wake belongs to another causal episode */
+    uint64_t episode;              /* episode root episode_activations counts for */
+    uint64_t last_crumb;           /* this reaction's latest crumb */
+    uint32_t contain_pending;      /* RX_CONTAIN_* engaged in this activation, not yet recorded */
     uint64_t commits;
     uint64_t suppressed;
     uint64_t wait_seq;

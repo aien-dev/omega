@@ -672,6 +672,35 @@ int rx_gen_active(const RxGenStore *store, uint64_t *id, uint64_t *lineage) {
     return RX_GEN_OK;
 }
 
+int rx_gen_read_blob(const RxGenStore *store, uint64_t id, const char *name, uint8_t *buf,
+                     size_t cap, size_t *out_len) {
+    if (!store || !name || !out_len || (!buf && cap)) return RX_GEN_ERR_ARG;
+    int which = -1;
+    for (int i = 0; i < DIG_COUNT; i++)
+        if (strcmp(name, BLOB_NAME[i]) == 0) which = i;
+    if (which < 0) return RX_GEN_ERR_ARG;
+    RootView view;
+    uint8_t root_digest[32];
+    int rc = load_root_file(store->dir, id, &view, root_digest);
+    if (rc != RX_GEN_OK) return rc;
+    if (view.id != id) return RX_GEN_ERR_TORN;
+    if (view.lengths[which] > cap) return RX_GEN_ERR_ARG;
+    char folder[512], path[512];
+    if (gen_dir(store->dir, id, folder, sizeof folder) != 0 ||
+        path_join(path, sizeof path, folder, name) != 0) return RX_GEN_ERR_IO;
+    rc = file_matches(path, view.digest[which], view.lengths[which]);
+    if (rc != RX_GEN_OK) return rc;
+    if (view.lengths[which] && read_full(path, buf, (size_t)view.lengths[which]) != 0)
+        return RX_GEN_ERR_IO;
+    /* The bytes read must be the bytes the root names, not whatever the file
+     * became after the check above. */
+    uint8_t got[32];
+    hash_buf(buf, (size_t)view.lengths[which], got);
+    if (memcmp(got, view.digest[which], 32) != 0) return RX_GEN_ERR_TORN;
+    *out_len = (size_t)view.lengths[which];
+    return RX_GEN_OK;
+}
+
 int rx_gen_propose(RxGenStore *store, uint32_t proposer, const RxGenDraft *draft,
                    uint64_t *out_id) {
     if (!store || !draft || !out_id) return RX_GEN_ERR_ARG;
@@ -854,6 +883,11 @@ static int classify(RxGenStore *store, Candidate *c, RxGenDrainFn drain, void *d
     return RX_GEN_OK;
 }
 
+static void release_candidate(Candidate *c) {
+    for (int b = 0; b < DIG_COUNT; b++) free(c->blob[b]);
+    memset(c, 0, sizeof(*c));
+}
+
 int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAuthFn auth,
                    void *auth_ctx, RxGenDrainFn drain, void *drain_ctx, RxGenLiveFn live,
                    void *live_ctx) {
@@ -985,6 +1019,10 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     rc = write_journal(store, PHASE_RECEIPT, c->parent_id, c->id, view.lineage - 1, root_digest);
 
 done:
+    /* The draft is finished: it is the active generation now, or it can never
+     * be promoted (its parent is gone or an object it observed moved). Its
+     * slot is free for the next proposal; the committed bytes live on disk. */
+    if (store->active_id == c->id || rc == RX_GEN_ERR_STALE) release_candidate(c);
     if (locked_here) release_lock(store);
     return rc;
 }

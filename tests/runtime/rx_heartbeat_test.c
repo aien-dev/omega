@@ -194,6 +194,19 @@ static void audit_and_close(Env *e) {
         if (k->reaction == UINT32_MAX) continue;
         g_crumbs_audited++;
         const RxReactionDesc *d = &w->reactions[k->reaction].desc;
+        /* A containment record is not an activation: it names the limit and
+         * the crumb that tripped it, which is this reaction's own activation
+         * or the wake it refused. */
+        if (k->kind == RX_CRUMB_QUARANTINE) {
+            const RxCrumb *by = rx_world_crumb(w, k->wake_cause);
+            CHECK(by && by->id < k->id && k->n_parents == 1 && k->parents[0] == by->id,
+                  "crumb %llu: containment without its cause", (unsigned long long)id);
+            CHECK(k->reason >= RX_CONTAIN_BUDGET && k->reason <= RX_CONTAIN_CONFLICT,
+                  "crumb %llu: containment names no limit", (unsigned long long)id);
+            CHECK(reaches_root(w, id, 0), "crumb %llu: containment does not reach a stimulus",
+                  (unsigned long long)id);
+            continue;
+        }
         /* trigger explainable: woken by an earlier crumb that wrote a trigger */
         const RxCrumb *cause = rx_world_crumb(w, k->wake_cause);
         bool trig = false;
@@ -1740,6 +1753,116 @@ static void t_stability(void) {
     audit_and_close(&e);
 }
 
+/* relay: copies the stimulus into a second object. watch: counts it. */
+typedef struct { RxObjRef from, to; } Relay;
+static int fn_relay(RxCtx *c) {
+    Relay *r = c->user;
+    c->out[c->n_out++] = (RxMutation){ r->to, 0, in_of(c, r->from)->field[0] };
+    return 0;
+}
+static int fn_bump(RxCtx *c) {
+    Relay *r = c->user;
+    c->out[c->n_out++] = (RxMutation){ r->to, 0, in_of(c, r->from)->field[0] + 1 };
+    return 0;
+}
+static int fn_count(RxCtx *c) {
+    RxObjRef *o = c->user;
+    c->out[c->n_out++] = (RxMutation){ *o, 1, in_of(c, *o)->field[1] + 1 };
+    return 0;
+}
+
+/* Regression (R14). The activation budget belongs to a causal episode: the
+ * work one outside publication sets off. A reaction woken one step down the
+ * chain gets a fresh budget with every new episode; before this fix only a
+ * direct outside wake reset it, so in the R13 body omega.watch and
+ * aien.observe were quarantined after 256 activations. A two-node cycle
+ * inside one episode is still stopped, and the stop leaves a crumb. */
+static void t_episode_budget(void) {
+    begin("episode_activation_budget", "R6");
+    Env e;
+    CHECK(env_start(&e, 2) == 0, "setup");
+    RxStabilityBudget s;
+    memset(&s, 0, sizeof(s));
+    s.activation_budget = 4;
+    rx_world_set_stability(&e.w, &s);
+
+    static Relay relay;
+    static RxObjRef mid_o;
+    relay.from = mkobj(&e, RES_SENSOR, 0);
+    relay.to = mid_o = mkobj(&e, RES_BELIEF, 0);
+    RxCapRef ext = mint(&e, SUBJ_EXTERNAL, RES_SENSOR, RX_RIGHT_WRITE);
+    RxCapRef rs = mint(&e, SUBJ_AIEN, RES_SENSOR, RX_RIGHT_READ);
+    RxCapRef rwb = mint(&e, SUBJ_AIEN, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    RxReactionDesc d;
+    desc_init(&d, "relay", RX_FACULTY_AIEN, SUBJ_AIEN, fn_relay, &relay);
+    add_trigger(&d, relay.from, RX_FIELD(0));
+    add_write(&d, relay.to, RX_FIELD(0));
+    add_cap(&d, rs, RES_SENSOR, RX_RIGHT_READ);
+    add_cap(&d, rwb, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    uint32_t relay_id, watch_id;
+    CHECK(rx_world_add_reaction(&e.w, &d, &relay_id) == RX_OK, "relay");
+    desc_init(&d, "watch", RX_FACULTY_OMEGA, SUBJ_AIEN, fn_count, &mid_o);
+    add_trigger(&d, mid_o, RX_FIELD(0));
+    add_write(&d, mid_o, RX_FIELD(1));
+    add_cap(&d, rwb, RES_BELIEF, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    CHECK(rx_world_add_reaction(&e.w, &d, &watch_id) == RX_OK, "watch");
+    for (uint64_t i = 1; i <= 20; i++) {
+        CHECK(stimulus(&e, ext, relay.from, 0, i) > 0, "stimulus %llu", (unsigned long long)i);
+        CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "episode %llu", (unsigned long long)i);
+    }
+    CHECK(e.w.reactions[watch_id].activations == 20 && field(&e, mid_o, 1) == 20,
+          "a reaction one step from the outside ran %llu of 20 episodes",
+          (unsigned long long)e.w.reactions[watch_id].activations);
+    CHECK(!e.w.reactions[watch_id].quarantined && !e.w.reactions[relay_id].quarantined,
+          "an ordinary chain was quarantined across episodes");
+
+    /* ping writes pong + 1, pong writes ping + 1: never converges. */
+    static Relay ping, pong;
+    RxObjRef a = mkobj(&e, RES_PAIR, 0), b = mkobj(&e, RES_TICK, 0);
+    ping = (Relay){ a, b };
+    pong = (Relay){ b, a };
+    RxCapRef ext_a = mint(&e, SUBJ_EXTERNAL, RES_PAIR, RX_RIGHT_WRITE);
+    RxCapRef rwa = mint(&e, SUBJ_AIEN, RES_PAIR, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    RxCapRef rwt = mint(&e, SUBJ_AIEN, RES_TICK, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    uint32_t ping_id, pong_id;
+    desc_init(&d, "cycle.ping", RX_FACULTY_AIEN, SUBJ_AIEN, fn_bump, &ping);
+    add_trigger(&d, a, RX_FIELD(0));
+    add_write(&d, b, RX_FIELD(0));
+    add_cap(&d, rwa, RES_PAIR, RX_RIGHT_READ);
+    add_cap(&d, rwt, RES_TICK, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    CHECK(rx_world_add_reaction(&e.w, &d, &ping_id) == RX_OK, "ping");
+    desc_init(&d, "cycle.pong", RX_FACULTY_AIEN, SUBJ_AIEN, fn_bump, &pong);
+    add_trigger(&d, b, RX_FIELD(0));
+    add_write(&d, a, RX_FIELD(0));
+    add_cap(&d, rwt, RES_TICK, RX_RIGHT_READ);
+    add_cap(&d, rwa, RES_PAIR, RX_RIGHT_READ | RX_RIGHT_WRITE);
+    CHECK(rx_world_add_reaction(&e.w, &d, &pong_id) == RX_OK, "pong");
+    int64_t root = stimulus(&e, ext_a, a, 0, 1);
+    CHECK(root > 0, "cycle stimulus");
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "cycle did not settle");
+    CHECK(e.w.reactions[ping_id].quarantined || e.w.reactions[pong_id].quarantined,
+          "a cycle inside one episode was not stopped");
+    CHECK(e.w.reactions[ping_id].activations <= 5 && e.w.reactions[pong_id].activations <= 5,
+          "cycle ran %llu/%llu", (unsigned long long)e.w.reactions[ping_id].activations,
+          (unsigned long long)e.w.reactions[pong_id].activations);
+    uint64_t contained = 0;
+    for (uint64_t id = 1; id <= e.w.n_crumbs; id++) {
+        const RxCrumb *k = rx_world_crumb(&e.w, id);
+        if (k->kind != RX_CRUMB_QUARANTINE) continue;
+        contained++;
+        CHECK(k->reason == RX_CONTAIN_BUDGET && (k->reaction == ping_id || k->reaction == pong_id) &&
+                  k->episode == (uint64_t)root,
+              "containment crumb %llu names reaction %u reason %d episode %llu",
+              (unsigned long long)id, k->reaction, k->reason, (unsigned long long)k->episode);
+    }
+    CHECK(contained >= 1 && contained <= 2, "%llu containment crumbs", (unsigned long long)contained);
+    /* The quarantined cycle does not stop the chain that is not part of it. */
+    CHECK(stimulus(&e, ext, relay.from, 0, 21) > 0, "stimulus after the cycle");
+    CHECK(rx_world_wait_quiescent(&e.w, 5000) == RX_OK, "after the cycle");
+    CHECK(field(&e, mid_o, 1) == 21, "the chain stopped with the cycle");
+    audit_and_close(&e);
+}
+
 typedef struct { RxObjRef obj; int left; } FlipN;
 
 static int fn_flip_n(RxCtx *c) {
@@ -2351,7 +2474,8 @@ static void write_receipt(int total_checks, int total_fail, const char *binary_d
             strcmp(g_tests[i].name, "priority_ladder") == 0)
             if (g_tests[i].failures) r5_ok = 0;
         if ((strcmp(g_tests[i].name, "stability_containment") == 0 ||
-             strcmp(g_tests[i].name, "periodic_versus_oscillation") == 0) && g_tests[i].failures)
+             strcmp(g_tests[i].name, "periodic_versus_oscillation") == 0 ||
+             strcmp(g_tests[i].name, "episode_activation_budget") == 0) && g_tests[i].failures)
             r6_ok = 0;
     }
     fprintf(f, "    \"R3_REACTION_CORE\": \"%s\",\n", all ? "PASS (host reference)" : "FAIL");
@@ -2453,6 +2577,7 @@ int main(int argc, char **argv) {
     t_priority_ladder();
     t_stability();
     t_periodic_and_backoff();
+    t_episode_budget();
     t_semantic_without_transport();
     t_one_identity();
     t_identity_closed();

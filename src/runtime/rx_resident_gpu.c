@@ -321,7 +321,10 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     movi(prog, r.poly, CRC_POLY);
     movi(prog, r.fifteen, 15u);
     movi(prog, r.thirtytwo, 32u);
-    movi(prog, r.lim, OMEGA_SW_MAX_OBJECTS);
+    /* The seat indexes the world's projected table (RxProjectedTable), which
+     * holds RX_MAX_OBJECTS records, not the frozen ABI's 64. With 64 here the
+     * chip refused every object id past 63 while the stand-in accepted it. */
+    movi(prog, r.lim, RX_MAX_OBJECTS);
     /* The wide multiply-add drops a small offset (256 landed on the header).
      * Copy the region base, then add 256 onto the low half with a plain add. */
     {

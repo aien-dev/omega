@@ -507,23 +507,16 @@ static int sandbox_run(RxOmegaFaculty *f, void *page, uint64_t M, uint64_t N, ui
     return 0;
 }
 
-static int fn_verify(RxCtx *c) {
-    struct { RxOmegaFaculty *f; uint32_t k; } *sl = c->user;
-    RxOmegaFaculty *f = sl->f;
-    uint32_t k = sl->k;
-    const RxSnapshotDep *cand = in_of(c, f->o.candidate[k]);
-    const RxSnapshotDep *v = in_of(c, f->o.verdict[k]);
-    const RxSnapshotDep *s = in_of(c, f->o.search);
-    if (!cand || !v || !s) return -1;
-    uint64_t epoch = cand->field[0];
-    if (cand->field[7] != RX_OMEGA_SYNTHESIZED || epoch == 0 || v->field[0] == epoch) return 0;
-
-    SemanticId id;
-    id_from_words(&id, &cand->field[2]);
+/* Identity, V0 structure, then the sandboxed differential on shape M x N.
+ * On a pass the store entry is marked verified for exactly the bytes that
+ * were checked. Returns the reason (RX_OMEGA_WHY_NONE on a pass), or -1 when
+ * the check itself could not run. */
+static int verify_stored(RxOmegaFaculty *f, const SemanticId *id, uint64_t M, uint64_t N,
+                         uint32_t *out_checks, uint32_t *out_fails) {
     RxOmegaRealization e;
     int have = 0;
     pthread_mutex_lock(&f->mu);
-    RxOmegaRealization *p = store_find_locked(f, &id);
+    RxOmegaRealization *p = store_find_locked(f, id);
     if (p) { e = *p; have = 1; }
     pthread_mutex_unlock(&f->mu);
 
@@ -537,7 +530,7 @@ static int fn_verify(RxCtx *c) {
         real_object(f, e.code, e.code_len, &r);
         checks++;
         if (omega_realize_compute_triple_id(&f->spec.spec_id, &f->machine.machine_id, &r,
-                                            &again) != 0 || !ids_equal(&again, &id)) {
+                                            &again) != 0 || !ids_equal(&again, id)) {
             fails++;
             why = RX_OMEGA_WHY_IDENTITY;
         }
@@ -545,7 +538,7 @@ static int fn_verify(RxCtx *c) {
     if (why == RX_OMEGA_WHY_NONE) {
         VerifyReport rep;
         memset(&rep, 0, sizeof(rep));
-        r.realization_id = id;
+        r.realization_id = *id;
         r.has_id = true;
         int v0 = omega_verify_v0_structural(NULL, &r, &rep);
         checks += rep.check_count;
@@ -554,7 +547,7 @@ static int fn_verify(RxCtx *c) {
     }
     if (why == RX_OMEGA_WHY_NONE) {
         SandboxReport sb;
-        int rc = sandbox_run(f, e.page, s->field[1], s->field[2], id_word(&id, 0), &sb, &why);
+        int rc = sandbox_run(f, e.page, M, N, id_word(id, 0), &sb, &why);
         if (rc < 0) return -1;
         checks += sb.checks;
         fails += sb.fails;
@@ -562,19 +555,40 @@ static int fn_verify(RxCtx *c) {
     }
     if (why == RX_OMEGA_WHY_NONE) {
         pthread_mutex_lock(&f->mu);
-        RxOmegaRealization *q = store_find_locked(f, &id);
+        RxOmegaRealization *q = store_find_locked(f, id);
         if (q && q->code_len == e.code_len && memcmp(q->code, e.code, e.code_len) == 0)
             q->verified = 1;
         else why = RX_OMEGA_WHY_IDENTITY;
         pthread_mutex_unlock(&f->mu);
     }
+    *out_checks = checks;
+    *out_fails = fails;
+    return (int)why;
+}
+
+static int fn_verify(RxCtx *c) {
+    struct { RxOmegaFaculty *f; uint32_t k; } *sl = c->user;
+    RxOmegaFaculty *f = sl->f;
+    uint32_t k = sl->k;
+    const RxSnapshotDep *cand = in_of(c, f->o.candidate[k]);
+    const RxSnapshotDep *v = in_of(c, f->o.verdict[k]);
+    const RxSnapshotDep *s = in_of(c, f->o.search);
+    if (!cand || !v || !s) return -1;
+    uint64_t epoch = cand->field[0];
+    if (cand->field[7] != RX_OMEGA_SYNTHESIZED || epoch == 0 || v->field[0] == epoch) return 0;
+
+    SemanticId id;
+    id_from_words(&id, &cand->field[2]);
+    uint32_t checks = 0, fails = 0;
+    int why = verify_stored(f, &id, s->field[1], s->field[2], &checks, &fails);
+    if (why < 0) return -1;
 
     put(c, f->o.verdict[k], 0, epoch);
     put(c, f->o.verdict[k], 1, why == RX_OMEGA_WHY_NONE ? RX_OMEGA_PASSED : RX_OMEGA_REFUSED);
     put(c, f->o.verdict[k], 2, checks);
     put(c, f->o.verdict[k], 3, fails);
     put(c, f->o.verdict[k], 4, id_word(&id, 0));
-    put(c, f->o.verdict[k], 5, why);
+    put(c, f->o.verdict[k], 5, (uint64_t)why);
     return 0;
 }
 
@@ -938,4 +952,22 @@ int rx_omega_identity_of(const RxOmegaFaculty *f, const uint8_t *code, size_t le
     RealizationObject r;
     real_object(f, code, len, &r);
     return omega_realize_compute_triple_id(&f->spec.spec_id, &f->machine.machine_id, &r, out);
+}
+
+int rx_omega_readmit(RxOmegaFaculty *f, const uint8_t *code, size_t len, uint32_t kind,
+                     uint64_t regime, SemanticId *out_id, uint32_t *out_why) {
+    if (!f || !code || !out_id || !out_why || kind >= f->cfg.n_slots) return -1;
+    uint64_t M = regime >> 32, N = regime & 0xffffffffu;
+    if (!shape_ok(M, N) || rx_omega_identity_of(f, code, len, out_id) != 0) return -1;
+    /* The store holds one set of bytes per identity. Bytes that hash to
+     * this identity can only be these bytes. */
+    if (store_put(f, out_id, kind, code, len) != 0) {
+        *out_why = RX_OMEGA_WHY_IDENTITY;
+        return 1;
+    }
+    uint32_t checks = 0, fails = 0;
+    int why = verify_stored(f, out_id, M, N, &checks, &fails);
+    if (why < 0) return -1;
+    *out_why = (uint32_t)why;
+    return why == RX_OMEGA_WHY_NONE ? 0 : 1;
 }

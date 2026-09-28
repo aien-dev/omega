@@ -970,6 +970,42 @@ int main(void) {
     }
     end();
 
+    /* Regression (R14). The seat reads the world's projected table, which has
+     * RX_MAX_OBJECTS entries. It refused every claim on an object id of 64 or
+     * more (the frozen ABI's OMEGA_SW_MAX_OBJECTS), while the processor
+     * stand-in accepted them; R14's GPU lanes found it. */
+    begin("objects past id 64 are claimed on the chip");
+    {
+        static Rig hi;
+        uint64_t zero[RX_MAX_FIELDS] = { 0 };
+        RxObjRef filler;
+        uint32_t made = 0;
+        while (w.n_reactions && made < RX_MAX_OBJECTS &&
+               rx_world_create(&w, 1, RX_PERSIST_RESIDENT, 0x70, zero, &filler) == RX_OK &&
+               filler.id < 200)
+            made++;
+        CHECK(rig_up(&w, &hi, 0x80) == 0, "the high chain was not built");
+        CHECK(hi.a.id >= 64 && hi.b.id >= 64, "the high chain has ids %u and %u", hi.a.id, hi.b.id);
+        if (g_fail) goto done;
+        int64_t cause = stimulate(&w, hi.ext, hi.a, 1000, 24);
+        CHECK(cause > 0, "stimulus");
+        uint64_t before = g2c_tail(&w);
+        CHECK(wait_claimed(&w, hi.seat) == 0, "no claim on the high chain");
+        CHECK(wait_chip(&w, before) == 0, "the chip did not answer");
+        OmegaSharedWorldRing *g = ring_at(&w, rx_world_off_g2c());
+        CHECK(g->slots[before & g->mask].msg_type == RX_RING_PUBLISH,
+              "the chip refused a claim on object %u (answer 0x%x)", hi.a.id,
+              g->slots[before & g->mask].msg_type);
+        int acc = poll_accept(&w);
+        CHECK(acc == RX_OK, "the high publication was refused (%d)", acc);
+        CHECK(rx_world_wait_quiescent(&w, 3000) == RX_OK, "settle");
+        CHECK(field_of(&w, hi.b, 0) == 1024 && field_of(&w, hi.c, 0) == 1025,
+              "B=%llu C=%llu", (unsigned long long)field_of(&w, hi.b, 0),
+              (unsigned long long)field_of(&w, hi.c, 0));
+        check_settled(&w, "after the high chain");
+    }
+    end();
+
     begin("seat leaves on request");
     {
         CHECK(rx_resident_shutdown(&w) == RX_OK, "shutdown was not posted");
