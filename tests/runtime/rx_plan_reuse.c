@@ -19,6 +19,7 @@
 #include "omega_evidence.h"
 #include "sha256.h"
 
+#include <dirent.h>
 #include <linux/perf_event.h>
 #include <sched.h>
 #include <signal.h>
@@ -956,12 +957,28 @@ static int energy_uj(const char *dir, int ch, uint64_t *v) {
     return ok ? 0 : -1;
 }
 
+/* An R15 timed measurement is running: its quiet flag exists, or an R15
+ * program is alive (matched on the program name, not on command lines). */
 static int other_load(void) {
-    FILE *f = popen("pgrep -f 'rx_r15|r15_qualify|r15_gpu_load' >/dev/null 2>&1 && echo busy", "r");
-    if (!f) return 0;
-    char b[16] = { 0 };
-    int busy = fgets(b, sizeof b, f) != NULL;
-    pclose(f);
+    const char *home = getenv("HOME");
+    char flag[512];
+    snprintf(flag, sizeof flag, "%s/workspace/.spark-quiet", home ? home : "");
+    if (access(flag, F_OK) == 0) return 1;
+    DIR *d = opendir("/proc");
+    if (!d) return 0;
+    struct dirent *de;
+    int busy = 0;
+    while (!busy && (de = readdir(d)) != NULL) {
+        if (de->d_name[0] < '0' || de->d_name[0] > '9') continue;
+        char p[300], comm[64] = { 0 };
+        snprintf(p, sizeof p, "/proc/%s/comm", de->d_name);
+        FILE *f = fopen(p, "r");
+        if (!f) continue;
+        if (fgets(comm, sizeof comm, f))
+            busy = strncmp(comm, "rx_r15", 6) == 0 || strncmp(comm, "r15_", 4) == 0;
+        fclose(f);
+    }
+    closedir(d);
     return busy;
 }
 
