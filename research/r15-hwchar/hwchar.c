@@ -54,11 +54,12 @@ static int pin(int cpu) {
 
 /* ---- the core's own PMU ------------------------------------------------- */
 
-enum { EV_CYCLES, EV_INST, EV_L2_REFILL, EV_LL_MISS, EV_MEM, EV_MIGR, EV_N };
+enum { EV_CYCLES, EV_INST, EV_L2_REFILL, EV_LL_MISS, EV_MEM, EV_MIGR, EV_TASK, EV_N };
 static const char *const ev_name[EV_N] = {
-    "cycles", "instructions", "l2d_refill", "ll_miss_rd", "mem_access", "migrations" };
+    "cycles", "instructions", "l2d_refill", "ll_miss_rd", "mem_access", "migrations",
+    "task_ns" };
 static const uint64_t ev_code[EV_MIGR] = { 0x11, 0x08, 0x17, 0x37, 0x13 };
-static int ev_fd[EV_N] = { -1, -1, -1, -1, -1, -1 };
+static int ev_fd[EV_N] = { -1, -1, -1, -1, -1, -1, -1 };
 
 static int midr_part(int cpu) {
     char p[160];
@@ -111,6 +112,10 @@ static void pmu_open(int cpu) {
     int type = pmu_type_for(cpu);
     for (int e = 0; e < EV_MIGR; e++) ev_fd[e] = type >= 0 ? perf_open((uint32_t)type, ev_code[e]) : -1;
     ev_fd[EV_MIGR] = perf_open(PERF_TYPE_SOFTWARE, PERF_COUNT_SW_CPU_MIGRATIONS);
+    /* Time this thread actually ran: separates a slower clock (on-CPU time
+     * stays at wall time, cycles fall) from sharing the core (on-CPU time
+     * falls). */
+    ev_fd[EV_TASK] = perf_open(PERF_TYPE_SOFTWARE, PERF_COUNT_SW_TASK_CLOCK);
 }
 
 static void pmu_read(uint64_t v[EV_N]) {
@@ -131,6 +136,10 @@ static void print_pmu(const uint64_t a[EV_N], const uint64_t b[EV_N], uint64_t c
         if (a[EV_INST] != UINT64_MAX && cyc > 0)
             printf(",\"ipc\":%.4f", (double)(b[EV_INST] - a[EV_INST]) / cyc);
         if (calls) printf(",\"cycles_per_call\":%.1f", cyc / (double)calls);
+        if (a[EV_TASK] != UINT64_MAX && b[EV_TASK] != UINT64_MAX && b[EV_TASK] > a[EV_TASK]) {
+            double on = (double)(b[EV_TASK] - a[EV_TASK]);
+            printf(",\"on_cpu_frac\":%.4f,\"on_cpu_ghz\":%.4f", on / (double)ns, cyc / on);
+        }
     }
 }
 
@@ -159,7 +168,13 @@ static void find_spbm(void) {
     }
 }
 
-static uint64_t spbm_uj(void) { return g_spbm[0] ? read_u64(g_spbm) : UINT64_MAX; }
+/* HWCHAR_NO_SPBM=1: never touch the telemetry reader (tests whether reading it
+ * perturbs the clock). */
+static uint64_t spbm_uj(void) {
+    static int off = -1;
+    if (off < 0) off = getenv("HWCHAR_NO_SPBM") != NULL;
+    return g_spbm[0] && !off ? read_u64(g_spbm) : UINT64_MAX;
+}
 
 static int64_t max_temp_mc(void) {
     int64_t best = -1;
