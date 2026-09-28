@@ -39,7 +39,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-golden-path-control
 
 all: $(TARGET)
 
@@ -375,3 +375,17 @@ $(RX_GRAPH_TEST): $(RX_GRAPH_SRCS) $(RX_GRAPH_OBJ) src/runtime/rx_caproot.h \
 
 test-action-graph: $(RX_GRAPH_TEST)
 	./$(RX_GRAPH_TEST)
+
+# OMEGA_EFFICIENCY_GOLDEN_PATH (spec/efficiency-golden-path.md). Only the
+# control leg exists until the ten prerequisite gates merge; it claims no gate.
+RX_GOLDEN_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
+	src/omega_core.c src/omega_canonical.c tests/runtime/rx_golden_path.c
+RX_GOLDEN_TEST = $(OUT_DIR)/rx_golden_path_control
+
+$(RX_GOLDEN_TEST): $(RX_GOLDEN_SRCS) $(RX_GRAPH_OBJ) src/runtime/rx_graph.h \
+	src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_GOLDEN_SRCS) $(RX_GRAPH_OBJ) $(AIENOS_CAP_LIB) -lm
+
+test-golden-path-control: $(RX_GOLDEN_TEST)
+	./$(RX_GOLDEN_TEST)
