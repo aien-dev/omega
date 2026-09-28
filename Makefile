@@ -168,18 +168,18 @@ test-r3: $(RX_TEST)
 
 # R7: native AIENOS authority versus the Linux oracle, then the world view.
 AIENOS_R7_DIR ?= ../aienos-r9
-AIENOS_CAP_LIB ?= $(AIENOS_R7_DIR)/target/debug/libaienos_capability_ffi.a
+AIENOS_CAP_LIB ?= $(AIENOS_R7_DIR)/native/capability/out/libaienos_capability.a
 RX_R7_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
 	tests/runtime/rx_r7_native.c
 RX_R7_TEST = $(OUT_DIR)/rx_r7_native_test
 
 $(AIENOS_CAP_LIB):
-	cargo build -p aienos-capability-ffi --manifest-path $(AIENOS_R7_DIR)/Cargo.toml
+	$(MAKE) -C $(AIENOS_R7_DIR)/native/capability
 
 $(RX_R7_TEST): $(RX_R7_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 	src/runtime/aienos_cap.h src/runtime/omega_shared_world_abi.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
-	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R7_SRCS) $(AIENOS_CAP_LIB) -ldl -lm
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R7_SRCS) $(AIENOS_CAP_LIB) -lm
 
 test-r7: $(RX_R7_TEST)
 	./$(RX_R7_TEST)
@@ -193,7 +193,7 @@ RX_R9_TEST = $(OUT_DIR)/rx_r9_barrier_test
 
 $(RX_R9_TEST): $(RX_R9_SRCS) src/runtime/rx_generation.h src/runtime/rx_caproot.h \
 	src/runtime/rx_world.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
-	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R9_SRCS) $(AIENOS_CAP_LIB) -ldl -lm
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R9_SRCS) $(AIENOS_CAP_LIB) -lm
 
 test-r9: $(RX_R9_TEST)
 	./$(RX_R9_TEST)
