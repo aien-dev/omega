@@ -39,7 +39,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3
+.PHONY: test-branch-reuse all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3
 
 all: $(TARGET)
 
@@ -324,6 +324,18 @@ test-r13-host: $(RX_R13_HOST)
 
 test-r13-silicon: $(RX_R13_SILICON)
 	./$(RX_R13_SILICON)
+
+# OMEGA_BRANCH_STATE_REUSE: J-Space branches sharing one semantic prefix,
+# shared-state realization versus independent recomputation, FORGE placement.
+RX_BRANCH_REUSE_SRCS = src/runtime/rx_jspace.c src/sha256.c src/omega_evidence.c \
+	tests/runtime/rx_branch_reuse.c
+RX_BRANCH_REUSE_TEST = $(OUT_DIR)/rx_branch_reuse
+
+$(RX_BRANCH_REUSE_TEST): $(RX_BRANCH_REUSE_SRCS) src/runtime/rx_jspace.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -o $@ $(RX_BRANCH_REUSE_SRCS) -lm
+
+test-branch-reuse: $(RX_BRANCH_REUSE_TEST)
+	./$(RX_BRANCH_REUSE_TEST)
 
 # R14: the R13 organism attacked while alive. Host uses the R12 processor
 # stand-in and cannot claim the gate; silicon runs D and E on the GB10 seat.
