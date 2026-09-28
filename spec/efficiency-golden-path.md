@@ -186,3 +186,19 @@ OMEGA_EFFICIENCY_GOLDEN_PATH_PASS requires all of:
 ## 10. Interface reconciliation log
 
 (Filled in when the prerequisite gates merge, before the qualifying run.)
+
+- 2026-09-28, before any optimized-leg measurement. **OMEGA_PLAN_REUSE.**
+  Its receipt (`evidence/PLAN_REUSE/d8c8246c….json`) records the
+  pre-registered verdict `OMEGA_PLAN_REUSE_PASS: FAIL` (G1: the
+  reverse-tower workload measured 1.2x fewer cognitive operations, not 20x)
+  and, beside it, that the task wording is met (merge-two-towers, 26.6x).
+  The owner chose to judge that gate by the task wording and merge
+  (`spec/plan-reuse.md` §9). For §8.1 this gate counts that prerequisite as
+  **accepted by owner decision**, not as passed. The receipt carries both
+  verdicts. Plan reuse is not taken on trust here: §6 P2 < P1 and §8.3 N1
+  test it independently inside this scenario, and the golden path fails if
+  either misses.
+- **Rule 7 (owner, 2026-09-28).** The GB10 seat is not used: physical
+  computation runs on host CPU cores only, N4 kills a host worker and never
+  the seat, and no test that launches the seat is ever cut short. The
+  receipt records `gpu_seat: not used (rule 7)`.
