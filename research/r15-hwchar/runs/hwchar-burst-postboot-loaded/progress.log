@@ -1,0 +1,11 @@
+17:50:07 quiet marker up; waiting for load < 1.0
+17:50:17 load at start: 0.95 1.08 0.82 1/1830 49530
+17:50:18 A: X925 ref 20 s, SPBM read each second
+17:50:38 rest 20 s
+17:50:58 B: X925 ref 20 s, SPBM never read
+17:51:18 rest 20 s
+17:51:38 C: X925 quad4 20 s on another X925 core (cpu 16)
+17:51:58 D: A725 ref 20 s (control)
+17:52:18 load at end: 1.63 1.22 0.90 2/1824 51280
+paranoid restored: 4
+17:52:18 quiet marker removed; done

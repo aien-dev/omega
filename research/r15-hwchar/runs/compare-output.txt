@@ -1,0 +1,43 @@
+== AFTERNOON sustain-30
+   cpu 2 ref   secs= 30 GHz first10=2.792 after15=2.795 min=2.759  drop_at_s=None  W first10=19.0 after15=19.1  maxT=38.8C
+   cpu 7 quad4 secs= 30 GHz first10=3.002 after15=2.772 min=2.620  drop_at_s=0  W first10=19.8 after15=19.8  maxT=39.6C
+   cpu 7 ref   secs= 30 GHz first10=3.657 after15=3.434 min=3.021  drop_at_s=5  W first10=20.9 after15=19.9  maxT=40.4C
+== AFTERNOON sustain-120
+   cpu 2 ref   secs=120 GHz first10=2.777 after15=2.796 min=2.695  drop_at_s=None  W first10=19.0 after15=18.2  maxT=38.8C
+   cpu 7 quad4 secs=120 GHz first10=3.275 after15=3.321 min=2.993  drop_at_s=0  W first10=19.9 after15=19.8  maxT=40.3C
+   cpu 7 ref   secs=120 GHz first10=3.793 after15=3.514 min=3.168  drop_at_s=2  W first10=21.4 after15=19.8  maxT=40.6C
+== POST-POWER-OFF sustain-30
+   cpu 2 ref   secs= 30 GHz first10=2.797 after15=2.797 min=2.796  drop_at_s=None  W first10=0.0 after15=0.0  maxT=41.4C
+   cpu 7 quad4 secs= 30 GHz first10=3.891 after15=3.891 min=3.889  drop_at_s=None  W first10=0.0 after15=0.0  maxT=48.7C
+   cpu 7 ref   secs= 30 GHz first10=3.890 after15=3.890 min=3.889  drop_at_s=None  W first10=0.0 after15=0.0  maxT=44.7C
+== POST-POWER-OFF sustain-120
+   cpu 2 ref   secs=120 GHz first10=2.798 after15=2.798 min=2.797  drop_at_s=None  W first10=0.0 after15=0.0  maxT=42.4C
+   cpu 7 quad4 secs=120 GHz first10=3.891 after15=3.892 min=3.889  drop_at_s=None  W first10=0.0 after15=0.0  maxT=50.0C
+   cpu 7 ref   secs=120 GHz first10=3.891 after15=3.891 min=3.889  drop_at_s=None  W first10=0.0 after15=0.0  maxT=45.2C
+== AFTERNOON burst
+   a-spbm.jsonl
+   cpu 7 ref   secs= 20 GHz first10=3.763 after15=3.312 min=2.961  drop_at_s=2  W first10=21.4 after15=19.3  maxT=40.5C
+   b-nospbm.jsonl
+   cpu 7 ref   secs= 20 GHz first10=3.764 after15=3.425 min=3.174  drop_at_s=2  W first10=0.0 after15=0.0  maxT=39.9C
+   c-cpu16.jsonl
+   cpu16 quad4 secs= 20 GHz first10=3.517 after15=3.120 min=2.874  drop_at_s=0  W first10=21.1 after15=19.7  maxT=42.5C
+   d-a725.jsonl
+   cpu 2 ref   secs= 20 GHz first10=2.797 after15=2.798 min=2.796  drop_at_s=None  W first10=17.8 after15=17.5  maxT=38.0C
+== POST burst unloaded
+   a-spbm.jsonl
+   cpu 7 ref   secs= 20 GHz first10=3.890 after15=3.891 min=3.890  drop_at_s=None  W first10=0.0 after15=0.0  maxT=44.9C
+   b-nospbm.jsonl
+   cpu 7 ref   secs= 20 GHz first10=3.891 after15=3.890 min=3.889  drop_at_s=None  W first10=0.0 after15=0.0  maxT=45.0C
+   c-cpu16.jsonl
+   cpu16 quad4 secs= 20 GHz first10=3.891 after15=3.891 min=3.889  drop_at_s=None  W first10=0.0 after15=0.0  maxT=51.1C
+   d-a725.jsonl
+   cpu 2 ref   secs= 20 GHz first10=2.799 after15=2.799 min=2.798  drop_at_s=None  W first10=0.0 after15=0.0  maxT=42.5C
+== POST burst loaded
+   a-spbm.jsonl
+   cpu 7 ref   secs= 20 GHz first10=3.891 after15=3.891 min=3.889  drop_at_s=None  W first10=29.0 after15=29.4  maxT=44.3C
+   b-nospbm.jsonl
+   cpu 7 ref   secs= 20 GHz first10=3.891 after15=3.891 min=3.890  drop_at_s=None  W first10=0.0 after15=0.0  maxT=44.5C
+   c-cpu16.jsonl
+   cpu16 quad4 secs= 20 GHz first10=3.891 after15=3.891 min=3.890  drop_at_s=None  W first10=31.4 after15=31.9  maxT=51.2C
+   d-a725.jsonl
+   cpu 2 ref   secs= 20 GHz first10=2.799 after15=2.798 min=2.797  drop_at_s=None  W first10=25.8 after15=26.2  maxT=41.7C

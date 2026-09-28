@@ -1,0 +1,15 @@
+%CPU     ELAPSED COMMAND
+17.0       00:01 (sd-mkdcreds)
+13.9       04:20 /home/drakestapleton/max-env/bin/python -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=64, pipe_handle=68) --multiprocessing-fork
+ 7.9       04:13 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/5a05fbec.claim.sock
+ 5.8       03:37 /home/atlas/atlas-max/.pixi/envs/default/bin/python -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=37, pipe_handle=41) --multiprocessing-fork
+ 4.6       04:14 /home/drakestapleton/max-env/bin/python -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=38, pipe_handle=42) --multiprocessing-fork
+ 2.8       04:44 [kworker/16:1-events]
+ 2.6       04:36 [kworker/15:4+tpm_dev_wq]
+ 1.8       03:41 /home/atlas/atlas-max/.pixi/envs/default/bin/python -c import sys; from max._entrypoints.pipelines import main; sys.exit(main()) serve --model unsloth/Llama-3.2-1B-Instruct --weight-path /home/atlas/atlas-runtime-setup-20260905/private-data/model-candidates/Llama-3.2-1B-Instruct-Q4_K_M.gguf --quantization-encoding q4_k --devices cpu --port 18082 --max-length 4096
+ 1.8       04:28 grafana server --homepath=/usr/share/grafana --config=/etc/grafana/grafana.ini --packaging=docker cfg:default.log.mode=console cfg:default.paths.data=/var/lib/grafana cfg:default.paths.logs=/var/log/grafana cfg:default.paths.plugins=/var/lib/grafana/plugins cfg:default.paths.provisioning=/etc/grafana/provisioning
+ 1.8       04:39 [kworker/18:3-mm_percpu_wq]
+ 1.7       04:18 /home/drakestapleton/max-env/bin/python /home/drakestapleton/max-env/bin/max serve --model unsloth/Llama-3.2-1B-Instruct --weight-path /home/drakestapleton/models/aien-mail/Llama-3.2-1B-Instruct-Q4_K_M.gguf --quantization-encoding q4_k --devices cpu --port 18094 --max-length 4096
+ 1.5       04:24 /home/drakestapleton/max-env/bin/python /home/drakestapleton/max-env/bin/max serve --model black-forest-labs/FLUX.2-klein-4B --port 8002 --device-memory-utilization 0.20 --no-device-graph-capture
+ 1.4       04:45 [kworker/17:1-events]
+ 1.4       04:14 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/c6c2c30d.claim.sock

@@ -1,0 +1,15 @@
+17:39:19 quiet marker up; waiting for load < 1.0
+17:39:19 load at start: 0.37 0.76 0.40 5/1844 39645
+17:39:19 paranoid now 2
+17:39:19 per-core effective clock (before)
+17:39:26 cold/warm x5 done
+17:39:26 sustained 30 s: cpu 2 ref
+17:39:56 sustained 30 s: cpu 7 ref
+17:40:26 sustained 30 s: cpu 7 quad4
+17:40:56 sustained 120 s: cpu 2 ref
+17:42:56 sustained 120 s: cpu 7 ref
+17:44:56 sustained 120 s: cpu 7 quad4
+17:46:56 per-core effective clock (after)
+17:47:02 load at end: 1.64 1.26 0.80 1/1831 46470
+paranoid restored: 4
+17:47:02 quiet marker removed; done

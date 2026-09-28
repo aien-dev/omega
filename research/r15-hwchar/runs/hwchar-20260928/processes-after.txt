@@ -1,0 +1,15 @@
+%CPU     ELAPSED COMMAND
+ 5.0       44:55 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/0c28f74c.claim.sock
+ 4.9       44:14 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/826a5956.claim.sock
+ 4.6       44:47 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/490ad883.claim.sock
+ 4.5       35:46 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/6c15fa61.claim.sock
+ 4.4       44:30 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/d1006b81.claim.sock
+ 4.2       52:57 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/b3c91e36.claim.sock
+ 4.0       53:52 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/dfa58cb1.claim.sock
+ 3.9       44:37 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/9fa5d7b8.claim.sock
+ 3.2       52:48 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/4ac7ac34.claim.sock
+ 3.1       52:39 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/19a3eabd.claim.sock
+ 3.0       43:41 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/476da34d.claim.sock
+ 2.8       01:36 [kworker/15:2-mm_percpu_wq]
+ 2.6       43:50 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/fe041edf.claim.sock
+ 2.5       06:41 [kworker/16:2-mm_percpu_wq]

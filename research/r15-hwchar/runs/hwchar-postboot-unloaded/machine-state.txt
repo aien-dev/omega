@@ -1,0 +1,202 @@
+== uname
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+== cmdline
+BOOT_IMAGE=/boot/vmlinuz-7.0.0-1019-nvidia root=UUID=d27bfd26-ff30-400e-9eca-9cdf73de9406 ro init_on_alloc=0 iommu.passthrough=0 console=tty0 plymouth.ignore-serial-consoles plymouth.use-simpledrm earlycon=uart,mmio32,0x16A00000 console=tty0 console=ttyS0,921600 crashkernel=1G-:0M quiet splash initcall_blacklist=tegra234_cbb_init pci=pcie_bus_safe vt.handoff=7
+== dmi
+bios_vendor: American Megatrends International, LLC.
+bios_version: 5.36_0ACUM018
+bios_date: 08/06/2025
+board_name: P4242
+product_name: NVIDIA_DGX_Spark
+== cpufreq
+cpu0 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu1 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu2 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu3 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu4 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu5 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+cpu6 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+cpu7 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+cpu8 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+cpu9 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+cpu10 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu11 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu12 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu13 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu14 performance cur=2808000 min=338000 max=2808000 hwmax=2808000
+cpu15 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+cpu16 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+cpu17 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+cpu18 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+cpu19 performance cur=3900000 min=1378000 max=3900000 hwmax=3900000
+== thermal
+acpitz 37800
+acpitz 35100
+acpitz 35100
+acpitz 36700
+acpitz 36500
+acpitz 37800
+acpitz 36800
+== nvidia-smi
+
+==============NVSMI LOG==============
+
+Timestamp                                              : Mon Sep 28 17:39:19 2026
+Driver Version                                         : 580.173.02
+CUDA Version                                           : 13.0
+
+Attached GPUs                                          : 1
+GPU 0000000F:01:00.0
+    Performance State                                  : P0
+    Clocks Event Reasons
+        Idle                                           : Not Active
+        Applications Clocks Setting                    : Not Active
+        SW Power Cap                                   : Not Active
+        HW Slowdown                                    : Not Active
+            HW Thermal Slowdown                        : Not Active
+            HW Power Brake Slowdown                    : Not Active
+        Sync Boost                                     : Not Active
+        SW Thermal Slowdown                            : Not Active
+        Display Clock Setting                          : Not Active
+    Clocks Event Reasons Counters
+        SW Power Capping                               : 0 us
+        Sync Boost                                     : 0 us
+        SW Thermal Slowdown                            : 0 us
+        HW Thermal Slowdown                            : 0 us
+        HW Power Braking                               : 0 us
+    Sparse Operation Mode                              : N/A
+    Utilization
+        GPU                                            : 0 %
+        Memory                                         : 0 %
+        Encoder                                        : 0 %
+        Decoder                                        : 0 %
+        JPEG                                           : 0 %
+        OFA                                            : 0 %
+    GPU Utilization Samples
+        Duration                                       : 14.00 sec
+        Number of Samples                              : 71
+        Max                                            : 0 %
+        Min                                            : 0 %
+        Avg                                            : 0 %
+    Memory Utilization Samples
+        Duration                                       : 14.00 sec
+        Number of Samples                              : 71
+        Max                                            : 0 %
+        Min                                            : 0 %
+        Avg                                            : 0 %
+    ENC Utilization Samples
+        Duration                                       : 14.00 sec
+        Number of Samples                              : 71
+        Max                                            : 0 %
+        Min                                            : 0 %
+        Avg                                            : 0 %
+    DEC Utilization Samples
+        Duration                                       : 14.00 sec
+        Number of Samples                              : 71
+        Max                                            : 0 %
+        Min                                            : 0 %
+        Avg                                            : 0 %
+    JPG Utilization Samples
+        Duration                                       : 14.00 sec
+        Number of Samples                              : 71
+        Max                                            : 0 %
+        Min                                            : 0 %
+        Avg                                            : 0 %
+    OFA Utilization Samples
+        Duration                                       : 14.00 sec
+        Number of Samples                              : 71
+        Max                                            : 0 %
+        Min                                            : 0 %
+        Avg                                            : 0 %
+    Temperature
+        GPU Current Temp                               : 36 C
+        GPU T.Limit Temp                               : 61 C
+        GPU Shutdown T.Limit Temp                      : N/A
+        GPU Slowdown T.Limit Temp                      : N/A
+        GPU Max Operating T.Limit Temp                 : 0 C
+        GPU Target Temperature                         : N/A
+        Memory Current Temp                            : N/A
+        Memory Max Operating T.Limit Temp              : N/A
+    GPU Power Readings
+        Average Power Draw                             : 10.43 W
+        Instantaneous Power Draw                       : 12.53 W
+        Current Power Limit                            : N/A
+        Requested Power Limit                          : N/A
+        Default Power Limit                            : N/A
+        Min Power Limit                                : N/A
+        Max Power Limit                                : N/A
+    Power Samples
+        Duration                                       : Not Found
+        Number of Samples                              : Not Found
+        Max                                            : Not Found
+        Min                                            : Not Found
+        Avg                                            : Not Found
+    GPU Memory Power Readings 
+        Average Power Draw                             : N/A
+        Instantaneous Power Draw                       : N/A
+    Module Power Readings
+        Average Power Draw                             : N/A
+        Instantaneous Power Draw                       : N/A
+        Current Power Limit                            : N/A
+        Requested Power Limit                          : N/A
+        Default Power Limit                            : N/A
+        Min Power Limit                                : N/A
+        Max Power Limit                                : N/A
+    Clocks
+        Graphics                                       : 2411 MHz
+        SM                                             : 2411 MHz
+        Memory                                         : N/A
+        Video                                          : 2067 MHz
+    Applications Clocks
+        Graphics                                       : 2418 MHz
+        Memory                                         : N/A
+    Default Applications Clocks
+        Graphics                                       : 2418 MHz
+        Memory                                         : N/A
+    Deferred Clocks
+        Memory                                         : N/A
+    Max Clocks
+        Graphics                                       : 3003 MHz
+        SM                                             : 3003 MHz
+        Memory                                         : N/A
+        Video                                          : 3003 MHz
+    Max Customer Boost Clocks
+        Graphics                                       : N/A
+    SM Clock Samples
+        Duration                                       : N/A
+        Number of Samples                              : N/A
+        Max                                            : N/A
+        Min                                            : N/A
+        Avg                                            : N/A
+    Memory Clock Samples
+        Duration                                       : N/A
+        Number of Samples                              : N/A
+        Max                                            : N/A
+        Min                                            : N/A
+        Avg                                            : N/A
+    Clock Policy
+        Auto Boost                                     : N/A
+        Auto Boost Default                             : N/A
+
+== firmware
+├─DGX Spark Platform Key:
+│     Current version:    2025
+├─Embedded Controller:
+│     Current version:    0x03000508
+├─MZALC4T0HBL1-00B07:
+│     Current version:    NXHB202Q
+├─SBAT:
+│     Current version:    1.5.4
+├─TPM:
+│     Current version:    0x07020401
+├─UEFI Device Firmware:
+│     Current version:    0x02009b0b
+├─UEFI Device Firmware:
+│     Current version:    0x00000516
+├─UEFI Key Exchange Key:
+│       Current version:  2023
+├─UEFI Signature Database:
+│ │     Current version:  2023
+│       Current version:  2023
+└─UEFI dbx:
+      Current version:    20230501

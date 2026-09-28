@@ -1,0 +1,12 @@
+== boot
+ -2 cf45720b5541416b9e15f080691e8087 Mon 2026-09-28 09:59:39 CDT Mon 2026-09-28 17:32:27 CDT
+ -1 bccec4b4b4f945eb8a4217ccf389857e Mon 2026-09-28 17:33:25 CDT Mon 2026-09-28 17:33:57 CDT
+  0 a7fde82a38624ffca97fca5aeb70719f Mon 2026-09-28 17:34:39 CDT Mon 2026-09-28 17:37:13 CDT
+== rtc
+Sep 28 17:34:39 spark-b87b kernel: rtc-efi rtc-efi.0: registered as rtc0
+Sep 28 17:34:39 spark-b87b kernel: rtc-efi rtc-efi.0: setting system clock to 2026-09-28T22:34:33 UTC (1790634873)
+== spbm module at start
+not loaded
+== NV_ERR_TIMEOUT since boot: 0
+== uptime
+ 17:37:14 up 2 min,  5 users,  load average: 1.36, 1.03, 0.43
