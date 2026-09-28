@@ -1,8 +1,27 @@
-# R15 hardware characterization: reboot-and-repeat result (2026-09-28)
+# R15 hardware characterization: reboot-and-repeat (2026-09-28)
 
-**Answer: the machine changed, and a full power-off changed it back.**
-The X925 sustained clock cut was boot state from the 09:59 boot, not normal
-GB10 behavior and not damage.
+Status: PRE-QUALIFICATION DIAGNOSTIC EVIDENCE. None of this data is R15
+qualification evidence.
+
+## Observed
+
+- Before the full power-off, a sustained X925 clock cut existed: under
+  sustained load the X925 fell from ~3.89 GHz to ~3.0-3.5 GHz.
+- Package power fell with the clock and stayed around 19.5-21.5 W.
+- The A725 stayed stable (~2.797 GHz).
+- The measuring process had essentially full CPU residency (on_cpu_frac ~1).
+- SPBM reads were not responsible (with and without the reader: same cut).
+- After a complete power-off (boot 17:34:39), the X925 held ~3.891 GHz for
+  the full 2-minute test on both tested cores; package power rose to
+  29-32 W when required.
+- Historical short-burst performance is back (table below).
+- The sustained optimized/A725 ratio is now comfortably below 0.55 (~0.38).
+
+## Unknown
+
+- What originally caused the power-limited state. The MOK owner-key
+  enrollment boot sequence and the RTC anomaly on the 09:59 boot are
+  hypotheses only, not established causes.
 
 | | afternoon (boot of 09:59) | after full power-off (boot 17:34) |
 |---|---|---|
@@ -22,12 +41,12 @@ auto-loaded and loaded fine by hand (insmod ok, srcversion D7345BB5C0CCFCB7B1773
 0 NV_ERR_TIMEOUT since boot. Background AI servers (atlas-max-flux,
 atlas-spark-max-judge, max-env) were idle and loaded, as in the afternoon.
 
-Meaning for R15: with the cut gone, quad4 holds ~38% of the A725 cost under
-sustained load, well inside the preregistered TARGET_PCT 55. The earlier goal
-misses match the ~20 W boot-state cap. Not yet known: what set that cap at
-09:59 (MOK-enrollment firmware path and the RTC reset are candidates), so
-qualification should record clocks and package power every trial, and a
-future cap shows up as a flat line that falls.
+Meaning for R15 (Drake's decision, 2026-09-28): TARGET_PCT stays 55 and G1
+is unchanged. The earlier goal misses occurred while the machine was in the
+power-limited state above. Qualification will record machine physical state
+every trial (observability only, not an exemption). If the power-limited
+state returns before or during qualification, qualification stops and reports
+a machine-state failure. There are no selective power cycles.
 
 The first post-boot attempt (runs/hwchar-postboot-aborted-173714) ended after
 12 s because the session driving it exited. The orchestrator reran postboot.sh
