@@ -50,9 +50,19 @@ static uint64_t off_objtbl(void) {
 static uint64_t off_payload(void) {
     return ALIGN_UP(off_objtbl() + sizeof(RxProjectedTable), OMEGA_SW_CACHELINE);
 }
-static uint64_t image_bytes(void) {
-    return off_payload() + (uint64_t)RX_PHYS_WINDOWS * RX_OBJECT_WINDOW;
+static uint64_t off_heartbeat(void) {
+    return ALIGN_UP(off_payload() + (uint64_t)RX_PHYS_WINDOWS * RX_OBJECT_WINDOW,
+                    OMEGA_SW_CACHELINE);
 }
+static uint64_t image_bytes(void) {
+    return off_heartbeat() + OMEGA_SW_CACHELINE;
+}
+
+uint64_t rx_world_off_c2g(void) { return off_c2g(); }
+uint64_t rx_world_off_g2c(void) { return off_g2c(); }
+uint64_t rx_world_off_fault(void) { return off_fault(); }
+uint64_t rx_world_off_object_table(void) { return off_objtbl(); }
+uint64_t rx_world_off_heartbeat(void) { return off_heartbeat(); }
 
 static uint64_t window_offset(uint32_t win) {
     return off_payload() + (uint64_t)win * RX_OBJECT_WINDOW;
@@ -148,9 +158,11 @@ static int ring_msg(uint16_t t) {
            t == RX_RING_SHUTDOWN;
 }
 
+/* A claim names the object the seat reads; the object it writes is named in
+ * the payload and its write right is checked at publication. */
 static uint32_t msg_rights(uint16_t t) {
     if (t == RX_RING_WAKE || t == RX_RING_COMPLETE || t == RX_RING_FAULT ||
-        t == RX_RING_KEEPALIVE)
+        t == RX_RING_KEEPALIVE || t == RX_RING_CLAIM)
         return RX_RIGHT_READ;
     return RX_RIGHT_WRITE;
 }
@@ -234,8 +246,9 @@ int rx_coherent_format(RxWorld *w) {
 }
 
 void rx_coherent_free(RxWorld *w) {
-    free(w->coherent);
+    if (!w->coherent_borrowed) free(w->coherent);
     w->coherent = NULL;
+    w->coherent_borrowed = false;
 }
 
 void rx_coherent_project(RxWorld *w, uint32_t id) {
@@ -673,4 +686,219 @@ int rx_world_relocate_physical(RxWorld *w, RxObjRef ref) {
 out:
     pthread_mutex_unlock(&w->mu);
     return rc;
+}
+
+/* ---- resident seat ------------------------------------------------------ */
+
+static OmegaSharedWorldRing *g2c_ring(RxWorld *w) {
+    return (OmegaSharedWorldRing *)(w->coherent + off_g2c());
+}
+
+static int notice_intact(const OmegaSharedWorldDesc *d, uint32_t epoch) {
+    if (!d || d->magic != OMEGA_SW_MAGIC || d->abi_version != OMEGA_SW_ABI_VERSION)
+        return RX_ERR_BAD_DESC;
+    if (d->world_epoch != epoch) return RX_ERR_STALE_GEN;
+    if ((d->flags & OMEGA_SW_FLAG_CHECKSUM) == 0) return RX_ERR_TORN;
+    OmegaSharedWorldDesc tmp = *d;
+    uint32_t got = tmp.checksum;
+    tmp.checksum = 0;
+    if (desc_checksum(&tmp) != got) return RX_ERR_TORN;
+    return RX_OK;
+}
+
+static int post_on(RxWorld *w, OmegaSharedWorldRing *ring, OmegaSharedWorldDesc *d) {
+    uint64_t t = load_relaxed_u64(&ring->tail);
+    uint64_t h = load_acquire_u64(&ring->head);
+    if (t - h >= ring->capacity) return RX_ERR_FULL;
+    d->sequence = t;
+    d->world_epoch = w->world_epoch;
+    rx_world_seal_descriptor(d);
+    memcpy(&ring->slots[t & ring->mask], d, sizeof(*d));
+    atomic_thread_fence(memory_order_release);
+    store_release_u64(&ring->tail, t + 1);
+    return RX_OK;
+}
+
+int rx_world_enable_resident(RxWorld *w) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    w->resident_enabled = true;
+    pthread_mutex_unlock(&w->mu);
+    return RX_OK;
+}
+
+/* Claim payload, little-endian:
+ *   0  in capability id      4  in capability generation
+ *   8  in object version    16  parent crumb
+ *  24  out object id        28  out object generation
+ *  32  out capability id    36  out capability generation */
+#define CLAIM_PAYLOAD 40u
+
+int rx_resident_post_claim(RxWorld *w, uint32_t in, uint32_t out, uint64_t parent,
+                           uint64_t *seq_out) {
+    if (!w || !w->coherent || in >= RX_MAX_OBJECTS || out >= RX_MAX_OBJECTS || in == out)
+        return RX_ERR_ARG;
+    RxObject *a = &w->objects[in];
+    RxObject *b = &w->objects[out];
+    if (!a->live || !a->placed || !b->live || !b->placed) return RX_ERR_UNPLACED;
+    OmegaSharedWorldRing *ring = pub_ring(w);
+    uint64_t t = load_relaxed_u64(&ring->tail);
+    OmegaSharedWorldDesc d;
+    memset(&d, 0, sizeof(d));
+    d.msg_type = RX_RING_CLAIM;
+    d.object_id = a->id;
+    d.object_generation = a->generation;
+    d.object_offset = 0;
+    d.object_length = (uint32_t)a->size_bytes;
+    d.payload_len = CLAIM_PAYLOAD;
+    d.arg_b = (uint32_t)t;
+    put_u32(d.payload, a->cap.cap_id);
+    put_u32(d.payload + 4, a->cap.generation);
+    put_u64(d.payload + 8, a->version);
+    put_u64(d.payload + 16, parent);
+    put_u32(d.payload + 24, b->id);
+    put_u32(d.payload + 28, b->generation);
+    put_u32(d.payload + 32, b->cap.cap_id);
+    put_u32(d.payload + 36, b->cap.generation);
+    int rc = post_on(w, ring, &d);
+    if (rc == RX_OK && seq_out) *seq_out = t;
+    return rc;
+}
+
+/* The seat's one operation, as the stand-in performs it: the qualified
+ * 32-bit integer add of the input's field 0 and field 1, into the output's
+ * field 0. The high word is written as zero, as the chip writes it. */
+static void apply_add(RxWorld *w, const RxObject *a, const RxObject *b) {
+    const uint8_t *in = w->coherent + a->region_offset;
+    uint8_t *outw = w->coherent + b->region_offset;
+    uint32_t sum = (uint32_t)get_u64(in) + (uint32_t)get_u64(in + 8);
+    put_u64(outw, (uint64_t)sum);
+}
+
+/* Stand-in check of the output named in a claim. */
+static int claim_out_ok(RxWorld *w, const OmegaSharedWorldDesc *d, uint32_t *out_id) {
+    if (d->payload_len < CLAIM_PAYLOAD) return 0;
+    uint32_t id = get_u32(d->payload + 24);
+    uint32_t gen = get_u32(d->payload + 28);
+    if (id >= RX_MAX_OBJECTS || id == d->object_id) return 0;
+    const RxObject *b = &w->objects[id];
+    const OmegaSharedWorldObject *p = &table_of(w)->objects[id];
+    if (!b->live || !b->placed || gen == 0 || gen != b->generation) return 0;
+    if (p->generation != gen || p->state != OMEGA_SW_OBJ_ACTIVE ||
+        p->region_offset != b->region_offset)
+        return 0;
+    *out_id = id;
+    return 1;
+}
+
+static int post_result(RxWorld *w, uint16_t msg, const OmegaSharedWorldDesc *claim) {
+    OmegaSharedWorldDesc d;
+    memset(&d, 0, sizeof(d));
+    d.msg_type = msg;
+    d.object_id = claim->object_id;
+    d.object_generation = claim->object_generation;
+    d.object_offset = 0;
+    d.object_length = claim->object_length ? claim->object_length : RX_OBJECT_WINDOW;
+    d.payload_len = claim->payload_len;
+    d.arg_b = (uint32_t)claim->sequence;
+    memcpy(d.payload, claim->payload, sizeof d.payload);
+    return post_on(w, g2c_ring(w), &d);
+}
+
+int rx_resident_seat_step(RxWorld *w) {
+    if (!w || !w->coherent) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    int rc = 0;
+    OmegaSharedWorldRing *ring = pub_ring(w);
+    for (;;) {
+        uint64_t h = load_relaxed_u64(&ring->head);
+        uint64_t t = load_acquire_u64(&ring->tail);
+        if (h >= t) break;
+        OmegaSharedWorldDesc d;
+        memcpy(&d, &ring->slots[h & ring->mask], sizeof(d));
+        if (d.msg_type == RX_RING_SHUTDOWN && notice_intact(&d, w->world_epoch) == RX_OK) {
+            store_release_u64(&ring->head, h + 1);
+            w->resident_stopped = true;
+            rc = 2;
+            break;
+        }
+        if (d.msg_type != RX_RING_CLAIM) {
+            store_release_u64(&ring->head, h + 1);
+            continue;
+        }
+        uint32_t fault = OMEGA_SW_FAULT_NONE;
+        int chk = check_locked(w, &d, h, &fault);
+        if (chk != RX_OK) {
+            raise_fault(w, fault, h, d.msg_type, d.object_id);
+            post_result(w, RX_RING_FAULT, &d);
+            store_release_u64(&ring->head, h + 1);
+            w->stats.desc_rejected++;
+            rc = chk;
+            break;
+        }
+        uint32_t out_id = 0;
+        if (!claim_out_ok(w, &d, &out_id)) {
+            raise_fault(w, OMEGA_SW_FAULT_STALE_GEN, h, d.msg_type, d.object_id);
+            post_result(w, RX_RING_FAULT, &d);
+            store_release_u64(&ring->head, h + 1);
+            w->stats.desc_rejected++;
+            rc = RX_ERR_STALE_GEN;
+            break;
+        }
+        apply_add(w, &w->objects[d.object_id], &w->objects[out_id]);
+        if (post_result(w, RX_RING_PUBLISH, &d) != RX_OK) {
+            rc = RX_ERR_FULL;
+            break;
+        }
+        store_release_u64(&ring->head, h + 1);
+        rc = 1;
+        break;
+    }
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_resident_take_result(RxWorld *w, OmegaSharedWorldDesc *out) {
+    if (!w || !w->coherent || !out) return RX_ERR_ARG;
+    OmegaSharedWorldRing *ring = g2c_ring(w);
+    uint64_t h = load_relaxed_u64(&ring->head);
+    uint64_t t = load_acquire_u64(&ring->tail);
+    if (h >= t) return RX_ERR_NOT_FOUND;
+    memcpy(out, &ring->slots[h & ring->mask], sizeof(*out));
+    store_release_u64(&ring->head, h + 1);
+    return notice_intact(out, w->world_epoch);
+}
+
+int rx_resident_reset(RxWorld *w) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    w->resident_stopped = false;
+    pthread_mutex_unlock(&w->mu);
+    return RX_OK;
+}
+
+int rx_resident_shutdown(RxWorld *w) {
+    if (!w || !w->coherent) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    OmegaSharedWorldDesc d;
+    memset(&d, 0, sizeof(d));
+    d.msg_type = RX_RING_SHUTDOWN;
+    d.object_id = 0;
+    d.object_generation = w->objects[0].generation ? w->objects[0].generation : 1;
+    d.object_length = RX_OBJECT_WINDOW;
+    d.payload_len = 8;
+    int rc = post_on(w, pub_ring(w), &d);
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_bind_coherent(RxWorld *w, void *mem, uint64_t bytes, int borrowed) {
+    if (!w || !mem || !w->coherent || bytes != w->coherent_bytes) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    memcpy(mem, w->coherent, (size_t)bytes);
+    if (!w->coherent_borrowed) free(w->coherent);
+    w->coherent = mem;
+    w->coherent_borrowed = borrowed ? true : false;
+    pthread_mutex_unlock(&w->mu);
+    return RX_OK;
 }
