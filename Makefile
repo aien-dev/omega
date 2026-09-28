@@ -230,6 +230,20 @@ $(RX_R10_TEST): $(RX_R10_SRCS) src/runtime/rx_omega.h src/runtime/rx_caproot.h \
 test-r10: $(RX_R10_TEST)
 	./$(RX_R10_TEST)
 
+# R8: AEGIS resident authority. Capability slots in the world; AEGIS decides,
+# only root.install mints, through the native AIENOS authority.
+RX_R8_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
+	tests/runtime/rx_r8_aegis.c
+RX_R8_TEST = $(OUT_DIR)/rx_r8_aegis_test
+
+$(RX_R8_TEST): $(RX_R8_SRCS) src/runtime/rx_aegis.h src/runtime/rx_caproot.h \
+	src/runtime/rx_world.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R8_SRCS) $(AIENOS_CAP_LIB) -lm
+
+test-r8: $(RX_R8_TEST)
+	./$(RX_R8_TEST)
+
 # R11: AIEN as a resident cognitive faculty. Part A drives AIEN alone on any
 # host; part B is the living run with Omega, on hosts that have both Cortex-X925
 # and Cortex-A725 cores. rx_aien.o is built alone first and must not reference

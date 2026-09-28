@@ -170,6 +170,24 @@ const RxCrumb *rx_world_crumb(const RxWorld *w, uint64_t id) {
     return &w->crumbs[id - 1];
 }
 
+int rx_world_crumb_origin(RxWorld *w, uint64_t id, uint32_t *reaction, uint32_t *subject,
+                          uint32_t *faculty) {
+    pthread_mutex_lock(&w->mu);
+    int rc = RX_ERR_NOT_FOUND;
+    if (id != 0 && id <= w->n_crumbs) {
+        const RxCrumb *c = &w->crumbs[id - 1];
+        *reaction = c->reaction;
+        *faculty = c->faculty;
+        *subject = c->reaction < w->n_reactions ? w->reactions[c->reaction].desc.subject
+                                                : w->external_subject;
+        rc = c->kind == RX_CRUMB_COMMIT || c->kind == RX_CRUMB_EXTERNAL ? RX_OK
+           : c->kind == RX_CRUMB_CREATE                                  ? 1
+                                                                         : RX_ERR_ARG;
+    }
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
 int rx_world_verify_crumbs(RxWorld *w, uint64_t *out_checked) {
     pthread_mutex_lock(&w->mu);
     int rc = 0;
@@ -533,9 +551,20 @@ int rx_world_inspect_cap(const RxWorld *w, RxCapRef ref, RxCapEntry *out) {
     return rx_caproot_inspect(w->root, ref, out);
 }
 
+/* The reference a reaction presents for caps[i]. Caller holds the world lock. */
+static RxCapRef need_ref(const RxWorld *w, const RxReactionDesc *d, uint32_t i) {
+    if (!d->cap_slotted[i]) return d->caps[i].ref;
+    RxObjRef s = d->cap_slot[i];
+    if (s.id >= RX_MAX_OBJECTS) return (RxCapRef){ UINT32_MAX, 0 };
+    const RxObject *o = &w->objects[s.id];
+    if (!o->live || o->generation != s.generation) return (RxCapRef){ UINT32_MAX, 0 };
+    if (o->field[0] > UINT32_MAX || o->field[1] > UINT32_MAX) return (RxCapRef){ UINT32_MAX, 0 };
+    return (RxCapRef){ (uint32_t)o->field[0], (uint32_t)o->field[1] };
+}
+
 static int validate_caps(const RxWorld *w, const RxReactionDesc *d, int *first_err) {
     for (uint32_t i = 0; i < d->n_caps; i++) {
-        int rc = rx_world_validate_cap(w, d->caps[i].ref, d->subject,
+        int rc = rx_world_validate_cap(w, need_ref(w, d, i), d->subject,
                                        d->caps[i].resource, d->caps[i].rights, NULL);
         if (rc != RX_CAP_OK) {
             if (first_err) *first_err = rc;
@@ -578,6 +607,7 @@ static uint32_t gather_deps(const RxReactionDesc *d, RxDep out[RX_MAX_DEPS]) {
 typedef struct {
     RxObjRef obj;
     uint64_t changed;
+    uint64_t proposed;          /* every field the publication named */
     uint64_t value[RX_MAX_FIELDS];
 } PendingWrite;
 
@@ -605,10 +635,12 @@ static int stage_mutations(RxWorld *w, const RxMutation *m, uint32_t n,
             if (*n_pw >= RX_MAX_WRITES) return RX_ERR_FULL;
             pw[j].obj = m[i].obj;
             pw[j].changed = 0;
+            pw[j].proposed = 0;
             memcpy(pw[j].value, w->objects[m[i].obj.id].field, sizeof(pw[j].value));
             (*n_pw)++;
         }
         pw[j].value[m[i].field] = m[i].value;
+        pw[j].proposed |= RX_FIELD(m[i].field);
     }
     for (uint32_t j = 0; j < *n_pw; j++) {
         const RxObject *o = &w->objects[pw[j].obj.id];
@@ -638,13 +670,18 @@ static void commit_writes(RxWorld *w, PendingWrite *pw, uint32_t n_pw, RxCrumb *
     }
 }
 
-/* After the crumb id is known: stamp writers, then wake subscribers. */
-static void finish_writes(RxWorld *w, PendingWrite *pw, uint32_t n_pw, uint64_t cid) {
+/* After the crumb id is known: stamp writers, then wake subscribers.
+ * With stamp_proposed, a field the publication named but did not change is
+ * stamped too (on an object it did change), so the whole record is this
+ * commit's. Only changed fields wake anyone. */
+static void finish_writes(RxWorld *w, PendingWrite *pw, uint32_t n_pw, uint64_t cid,
+                          bool stamp_proposed) {
     for (uint32_t j = 0; j < n_pw; j++) {
         if (!pw[j].changed) continue;
         RxObject *o = &w->objects[pw[j].obj.id];
+        uint64_t mask = stamp_proposed ? pw[j].changed | pw[j].proposed : pw[j].changed;
         for (uint32_t f = 0; f < RX_MAX_FIELDS; f++)
-            if (pw[j].changed & RX_FIELD(f)) o->field_writer[f] = cid;
+            if (mask & RX_FIELD(f)) o->field_writer[f] = cid;
     }
     for (uint32_t j = 0; j < n_pw; j++) {
         if (!pw[j].changed) continue;
@@ -808,7 +845,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
     k.coalesced_wakes = r->coalesced;
     k.t_start_ns = now_ns();
     k.n_caps = d->n_caps;
-    for (uint32_t i = 0; i < d->n_caps; i++) stamp_cap(w, &k, i, d->caps[i].ref);
+    for (uint32_t i = 0; i < d->n_caps; i++) stamp_cap(w, &k, i, need_ref(w, d, i));
     add_parent(&k, r->wake_cause);
     r->activations++;
     r->episode_activations++;
@@ -996,7 +1033,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
     } else {
         w->stats.noops++;
     }
-    finish_writes(w, pw, n_pw, cid);
+    finish_writes(w, pw, n_pw, cid, d->stamp_proposed);
     end_activation(w, rid);
 }
 
@@ -1256,7 +1293,7 @@ int64_t rx_world_publish_external(RxWorld *w, RxCapRef cap, const RxMutation *mu
     commit_writes(w, pw, n_pw, &k);
     k.t_end_ns = now_ns();
     uint64_t cid = crumb_append(w, &k);
-    finish_writes(w, pw, n_pw, cid);
+    finish_writes(w, pw, n_pw, cid, false);
     pthread_mutex_unlock(&w->mu);
     return (int64_t)cid;
 }
@@ -1330,7 +1367,7 @@ int rx_resident_accept(RxWorld *w) {
     k.wake_cause = r->resident_parent;
     k.t_start_ns = now_ns();
     k.n_caps = desc->n_caps;
-    for (uint32_t i = 0; i < desc->n_caps; i++) stamp_cap(w, &k, i, desc->caps[i].ref);
+    for (uint32_t i = 0; i < desc->n_caps; i++) stamp_cap(w, &k, i, need_ref(w, desc, i));
     add_parent(&k, r->resident_parent);
     uint32_t in = desc->triggers[0].obj.id;
     uint32_t id = desc->writes[0].obj.id;
@@ -1425,7 +1462,7 @@ int rx_resident_accept(RxWorld *w) {
     r->commits++;
     r->resident_seat = false;
     w->stats.resident_closed++;
-    finish_writes(w, pw, n_pw, cid);
+    finish_writes(w, pw, n_pw, cid, false);
     end_activation(w, (uint32_t)rid);
     pthread_mutex_unlock(&w->mu);
     return RX_OK;
@@ -1462,7 +1499,7 @@ int rx_resident_seat_lost(RxWorld *w, int retry) {
         k.wake_cause = r->resident_parent;
         k.t_start_ns = now_ns();
         k.n_caps = desc->n_caps;
-        for (uint32_t i = 0; i < desc->n_caps; i++) stamp_cap(w, &k, i, desc->caps[i].ref);
+        for (uint32_t i = 0; i < desc->n_caps; i++) stamp_cap(w, &k, i, need_ref(w, desc, i));
         add_parent(&k, r->resident_parent);
         k.n_inputs = 1;
         k.inputs[0].obj = desc->triggers[0].obj;
