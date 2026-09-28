@@ -56,7 +56,7 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
-        run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing
+        run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing test-sem-incremental
       - name: Show state projection receipt
         run: |
           receipt="$(find build/qual-runs -name omega_state_projection_receipt.json -type f | head -n 1)"
@@ -75,6 +75,12 @@ jobs:
           grep -q '"OMEGA_ACTION_GRAPH_IR_PASS": "PASS"' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
+      - name: Check incremental semantics receipt
+        run: |
+          receipt="$(find build/qual-runs -name omega_incremental_semantics_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"OMEGA_INCREMENTAL_SEMANTICS_PASS": "HOST_PASS_ENERGY_UNMEASURED"' "$receipt"
+          grep -q '"false_hits": 0,' "$receipt"
       - name: Show capability query receipt
         run: |
           receipt="$(find build/qual-runs -name rx_capability_query_receipt.json -type f | head -n 1)"
