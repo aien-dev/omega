@@ -1,0 +1,34 @@
+[*] placed on 10 Cortex-X925 cores: 5,6,7,8,9,15,16,17,18,19
+[*] repeated workload: reverse a tower, 40 instances
+    (instruction counter unavailable: perf_event_paranoid restricts it)
+    first use: median 62 cognitive ops, 98.6 us cpu, 0 instructions; e2e 4113.4 us
+    reuse:     median 53 cognitive ops, 4.6 us cpu, 0 instructions; e2e 3907.1 us
+    plan 6 moves, 34 graph nodes after optimisation, 12 evidence words; accepted 39, succeeded 39
+[*] repeated workload: merge two towers, 40 instances
+    (instruction counter unavailable: perf_event_paranoid restricts it)
+    first use: median 1806 cognitive ops, 189.1 us cpu, 0 instructions; e2e 5383.0 us
+    reuse:     median 68 cognitive ops, 4.9 us cpu, 0 instructions; e2e 5037.6 us
+    plan 9 moves, 39 graph nodes after optimisation, 15 evidence words; accepted 39, succeeded 39
+[*] identity
+[*] adversarial goals of stored shapes: every applicability axis
+    100 adversarial goals, 100 refused (100 on the expected axis), 100 refusals recorded as World decisions
+      shape                  10 refused of 10; blind replay reached the goal 0 of 0, violated 0
+      binding                10 refused of 10; blind replay reached the goal 0 of 10, violated 10
+      goal_constraints       10 refused of 10; blind replay reached the goal 10 of 10, violated 10
+      world_generation       10 refused of 10; blind replay reached the goal 10 of 10, violated 10
+      cognitive_generation   10 refused of 10; blind replay reached the goal 10 of 10, violated 10
+      environment            10 refused of 10; blind replay reached the goal 10 of 10, violated 10
+      required_state         20 refused of 20; blind replay reached the goal 10 of 20, violated 10
+      authority              10 refused of 10; blind replay reached the goal 0 of 10, violated 10
+      resources              10 refused of 10; blind replay reached the goal 0 of 10, violated 10
+[*] new World generation: refuse, re-derive, same semantic id, reuse again
+[*] adaptation: an outsider sits on the tower
+    adapted: 54 ops, 101.2 us cpu, 7 steps; full search: 69 ops, 107.8 us cpu, 7 steps; then reused 9 of 9
+[*] energy per cognition (package telemetry; reported, not gated)
+    idle package 19.23 W; first-use cognition 0.0644 mJ (package) / 0.0139 mJ (P cores) over 49981 loops; reuse cognition 0.001192 mJ / 0.000039 mJ over 2399543 loops
+checks 1306 failures 0
+receipt: build/qual-runs/20260928T213300Z-7d562020abba/PLAN_REUSE/rx_plan_reuse_receipt.json
+OMEGA_PLAN_REUSE_PASS: FAIL (G1 FAIL, G2 PASS, G3 PASS, G4 PASS, G5 PASS, G6 PASS)
+  reverse_tower_6: ops 1.2x (G1 FAIL), cpu 21.3x (2.5x without the identity hash; G2 PASS), outcome/evidence G3 PASS, end to end 1.05x (G6 PASS)
+  merge_two_towers_3_3: ops 26.6x (G1 PASS), cpu 38.9x (15.7x without the identity hash; G2 PASS), outcome/evidence G3 PASS, end to end 1.07x (G6 PASS)
+task wording (at least one repeated workload): MET
