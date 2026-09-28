@@ -464,6 +464,143 @@ static void t_forged_publish(void) {
     env_stop(&e);
 }
 
+static uint64_t crumb_count(RxWorld *w, uint32_t reaction, RxCrumbKind kind, int reason,
+                            uint64_t *last) {
+    uint64_t n = 0;
+    for (uint64_t id = 1; id <= w->n_crumbs; id++) {
+        const RxCrumb *k = rx_world_crumb(w, id);
+        if (!k || k->reaction != reaction || k->kind != kind) continue;
+        if (reason && k->reason != reason) continue;
+        n++;
+        if (last) *last = id;
+    }
+    return n;
+}
+
+static OmegaSharedWorldRing *ring(RxWorld *w, uint64_t off) {
+    return (OmegaSharedWorldRing *)(w->coherent + off);
+}
+
+static void put_window(RxWorld *w, uint32_t id, uint64_t v) {
+    uint8_t *p = w->coherent + w->objects[id].region_offset;
+    for (int i = 0; i < 8; i++) p[i] = (uint8_t)(v >> (8 * i));
+}
+
+/* The seat dies holding a claim, after writing B's window and before its
+ * result. The claim fails once with a recorded cause, B's window returns to
+ * the canonical object, the charge is released once, and the retried claim
+ * runs under the next seat generation. Nothing from the old seat publishes. */
+static void t_seat_lost_retry(void) {
+    printf("[*] seat lost holding a claim: recorded, restored, released once, retried\n");
+    Rig r;
+    CHECK(rig_start(&r, 1) == 0, "setup");
+    RxWorld *w = &r.e.w;
+    offer(w, RX_ACCEL_BLACKWELL);
+    uint32_t gen0 = w->seat_generation;
+    uint32_t ga = w->objects[r.ch.a.id].generation, gb = w->objects[r.ch.b.id].generation;
+    int64_t cause = poke(&r, X, Y);
+    CHECK(cause > 0, "stimulus");
+    CHECK(wait_seat(w, r.seat) == 0, "no claim");
+    OmegaSharedWorldRing *c2g = ring(w, rx_world_off_c2g());
+    OmegaSharedWorldDesc old = c2g->slots[w->reactions[r.seat].resident_seq & c2g->mask];
+    CHECK(old.producer_generation == gen0, "the claim does not carry the seat generation");
+    put_window(w, r.ch.b.id, X + Y);   /* the dead seat got this far */
+    CHECK(w->used_slots == 1, "the claim is not charged");
+    uint64_t lost_before = w->stats.transitions[RX_RUNNING][RX_FAILED];
+
+    CHECK(rx_resident_seat_lost(w, 1) == 1, "the held claim was not declared lost");
+    CHECK(w->seat_generation == gen0 + 1, "the seat generation did not move");
+    CHECK(w->stats.transitions[RX_RUNNING][RX_FAILED] == lost_before + 1, "lost more than once");
+    CHECK(window_field(w, r.ch.b.id, 0) == 0, "B's window was not restored");
+    CHECK(field_of(w, r.ch.b, 0) == 0, "canonical B changed");
+    uint64_t fail_id = 0;
+    CHECK(crumb_count(w, r.seat, RX_CRUMB_FAILED, RX_ERR_SEAT_LOST, &fail_id) == 1,
+          "no single seat-lost crumb");
+    if (fail_id)
+        CHECK(rx_world_crumb(w, fail_id)->wake_cause == (uint64_t)cause,
+              "the loss does not name the stimulus");
+
+    CHECK(wait_seat(w, r.seat) == 0, "the lost work was not retried");
+    uint64_t seq = w->reactions[r.seat].resident_seq;
+    OmegaSharedWorldDesc fresh = c2g->slots[seq & c2g->mask];
+    CHECK(fresh.producer_generation == gen0 + 1, "the retry carries the old generation");
+    CHECK(w->reactions[r.seat].resident_parent == fail_id, "the retry is not caused by the loss");
+    CHECK(w->used_slots == 1, "the retry is charged %u times", w->used_slots);
+
+    /* A result under the old generation that names the retried claim, with
+     * the right sum in B's window. It must not publish. */
+    OmegaSharedWorldDesc forged = fresh;
+    forged.msg_type = RX_RING_PUBLISH;
+    forged.producer_generation = gen0;
+    rx_world_seal_descriptor(&forged);
+    OmegaSharedWorldRing *g2c = ring(w, rx_world_off_g2c());
+    uint64_t t = g2c->tail;
+    g2c->slots[t & g2c->mask] = forged;
+    __atomic_store_n(&g2c->tail, t + 1, __ATOMIC_RELEASE);
+    put_window(w, r.ch.b.id, X + Y);
+    CHECK(rx_resident_accept(w) == RX_ERR_STALE_GEN, "an old-generation result was accepted");
+    CHECK(field_of(w, r.ch.b, 0) == 0 && w->reactions[r.seat].commits == 0,
+          "an old-generation result published");
+    put_window(w, r.ch.b.id, 0);
+
+    /* The old claim, posted again: the seat refuses it. */
+    CHECK(rx_world_inject_descriptor(w, &old) == RX_OK, "replay not posted");
+    CHECK(rx_resident_seat_step(w) == 1, "the retried claim did not run");
+    CHECK(rx_resident_accept(w) == RX_OK, "the retried result was refused");
+    CHECK(rx_resident_seat_step(w) < 0, "the replayed claim was taken");
+    CHECK(rx_resident_accept(w) == RX_ERR_STALE_GEN, "the replay's fault notice was accepted");
+    CHECK(rx_world_wait_quiescent(w, 3000) == RX_OK, "world did not settle");
+
+    CHECK(field_of(w, r.ch.b, 0) == X + Y && field_of(w, r.ch.c, 0) == X + Y + 1,
+          "the retried work did not reach B and C");
+    CHECK(w->reactions[r.seat].commits == 1, "seat commits %llu",
+          (unsigned long long)w->reactions[r.seat].commits);
+    uint64_t commit_id = 0;
+    CHECK(crumb_count(w, r.seat, RX_CRUMB_COMMIT, 0, &commit_id) == 1, "not exactly one commit");
+    if (commit_id)
+        CHECK(rx_world_crumb(w, commit_id)->wake_cause == fail_id,
+              "the commit is not caused by the loss");
+    CHECK(w->used_slots == 0 && w->in_flight == 0, "a charge was not released");
+    CHECK(w->stats.resident_claims == w->stats.resident_closed, "claims %llu closed %llu",
+          (unsigned long long)w->stats.resident_claims,
+          (unsigned long long)w->stats.resident_closed);
+    CHECK(w->objects[r.ch.a.id].generation == ga && w->objects[r.ch.b.id].generation == gb,
+          "an object generation moved");
+    CHECK(rx_resident_seat_lost(w, 1) == 0, "an idle seat lost a claim");
+    CHECK(w->used_slots == 0 && w->reactions[r.seat].commits == 1, "a second loss changed state");
+    uint64_t checked = 0;
+    CHECK(rx_world_verify_crumbs(w, &checked) == 0, "crumb chain");
+    CHECK(w->stats.illegal_transitions == 0, "illegal lifecycle");
+    env_stop(&r.e);
+}
+
+/* Without retry the loss is final for that activation. The next change of A
+ * runs normally under the new generation. */
+static void t_seat_lost_final(void) {
+    printf("[*] seat lost without retry: the activation fails, the next one runs\n");
+    Rig r;
+    CHECK(rig_start(&r, 1) == 0, "setup");
+    RxWorld *w = &r.e.w;
+    offer(w, RX_ACCEL_BLACKWELL);
+    CHECK(poke(&r, X, Y) > 0, "stimulus");
+    CHECK(wait_seat(w, r.seat) == 0, "no claim");
+    CHECK(rx_resident_seat_lost(w, 0) == 1, "the held claim was not declared lost");
+    CHECK(rx_world_wait_quiescent(w, 3000) == RX_OK, "world did not settle");
+    CHECK(w->reactions[r.seat].state == RX_DORMANT, "the lost activation ran again");
+    CHECK(rx_resident_seat_step(w) == 0, "a discarded claim was still on the ring");
+    CHECK(w->used_slots == 0, "the charge was not released");
+    CHECK(field_of(w, r.ch.b, 0) == 0 && field_of(w, r.ch.c, 0) == 0, "B or C moved");
+    CHECK(poke(&r, 5, 6) > 0, "stimulus");
+    CHECK(wait_seat(w, r.seat) == 0, "no claim after the loss");
+    CHECK(rx_resident_seat_step(w) == 1, "stand-in step");
+    CHECK(rx_resident_accept(w) == RX_OK, "accept");
+    CHECK(rx_world_wait_quiescent(w, 3000) == RX_OK, "world did not settle");
+    CHECK(field_of(w, r.ch.b, 0) == 11 && field_of(w, r.ch.c, 0) == 12, "the next run");
+    CHECK(w->stats.resident_claims == w->stats.resident_closed, "a claim did not end once");
+    CHECK(w->stats.illegal_transitions == 0, "illegal lifecycle");
+    env_stop(&r.e);
+}
+
 static void binary_digest(char out[65]) {
     strcpy(out, "unavailable");
     FILE *f = fopen("/proc/self/exe", "rb");
@@ -535,6 +672,8 @@ int main(void) {
     t_forged_result();
     t_unplaced();
     t_forged_publish();
+    t_seat_lost_retry();
+    t_seat_lost_final();
     printf("checks %d failures %d\n", g_checks, g_fail);
     write_receipt();
     return g_fail ? 1 : 0;

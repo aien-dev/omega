@@ -723,6 +723,7 @@ int rx_world_enable_resident(RxWorld *w) {
     if (!w) return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
     w->resident_enabled = true;
+    if (w->seat_generation == 0) w->seat_generation = 1;
     pthread_mutex_unlock(&w->mu);
     return RX_OK;
 }
@@ -752,6 +753,7 @@ int rx_resident_post_claim(RxWorld *w, uint32_t in, uint32_t out, uint64_t paren
     d.object_length = (uint32_t)a->size_bytes;
     d.payload_len = CLAIM_PAYLOAD;
     d.arg_b = (uint32_t)t;
+    d.producer_generation = w->seat_generation;
     put_u32(d.payload, a->cap.cap_id);
     put_u32(d.payload + 4, a->cap.generation);
     put_u64(d.payload + 8, a->version);
@@ -761,7 +763,10 @@ int rx_resident_post_claim(RxWorld *w, uint32_t in, uint32_t out, uint64_t paren
     put_u32(d.payload + 32, b->cap.cap_id);
     put_u32(d.payload + 36, b->cap.generation);
     int rc = post_on(w, ring, &d);
-    if (rc == RX_OK && seq_out) *seq_out = t;
+    if (rc == RX_OK) {
+        w->stats.resident_claims++;
+        if (seq_out) *seq_out = t;
+    }
     return rc;
 }
 
@@ -801,6 +806,7 @@ static int post_result(RxWorld *w, uint16_t msg, const OmegaSharedWorldDesc *cla
     d.object_length = claim->object_length ? claim->object_length : RX_OBJECT_WINDOW;
     d.payload_len = claim->payload_len;
     d.arg_b = (uint32_t)claim->sequence;
+    d.producer_generation = claim->producer_generation;   /* echoed, as the chip does */
     memcpy(d.payload, claim->payload, sizeof d.payload);
     return post_on(w, g2c_ring(w), &d);
 }
@@ -837,7 +843,8 @@ int rx_resident_seat_step(RxWorld *w) {
             break;
         }
         uint32_t out_id = 0;
-        if (!claim_out_ok(w, &d, &out_id)) {
+        /* A claim from an earlier seat generation is refused, as on the chip. */
+        if (d.producer_generation != w->seat_generation || !claim_out_ok(w, &d, &out_id)) {
             raise_fault(w, OMEGA_SW_FAULT_STALE_GEN, h, d.msg_type, d.object_id);
             post_result(w, RX_RING_FAULT, &d);
             store_release_u64(&ring->head, h + 1);

@@ -1288,6 +1288,7 @@ static void seat_fail(RxWorld *w, uint32_t rid, RxCrumb *k, RxCrumbKind kind, in
     k->t_end_ns = now_ns();
     crumb_append(w, k);
     r->resident_seat = false;
+    w->stats.resident_closed++;
     if (kind == RX_CRUMB_INVALIDATED) w->stats.invalidations++;
     else if (kind == RX_CRUMB_REJECTED) w->stats.rejected++;
     else w->stats.failed++;
@@ -1302,6 +1303,13 @@ int rx_resident_accept(RxWorld *w) {
     if (tr == RX_ERR_NOT_FOUND || tr == RX_ERR_ARG) {
         pthread_mutex_unlock(&w->mu);
         return tr;
+    }
+    /* A result from a seat that was declared lost. Its claims already ended;
+     * nothing it wrote may publish. */
+    if (d.producer_generation != w->seat_generation) {
+        w->stats.desc_rejected++;
+        pthread_mutex_unlock(&w->mu);
+        return RX_ERR_STALE_GEN;
     }
     int rid = find_seat(w, d.arg_b);
     if (rid < 0) {
@@ -1412,10 +1420,70 @@ int rx_resident_accept(RxWorld *w) {
     w->stats.commits++;
     r->commits++;
     r->resident_seat = false;
+    w->stats.resident_closed++;
     finish_writes(w, pw, n_pw, cid);
     end_activation(w, (uint32_t)rid);
     pthread_mutex_unlock(&w->mu);
     return RX_OK;
+}
+
+static void ring_discard(RxWorld *w, uint64_t off) {
+    OmegaSharedWorldRing *ring = (OmegaSharedWorldRing *)(w->coherent + off);
+    uint64_t t = __atomic_load_n(&ring->tail, __ATOMIC_ACQUIRE);
+    __atomic_store_n(&ring->head, t, __ATOMIC_RELEASE);
+}
+
+int rx_resident_seat_lost(RxWorld *w, int retry) {
+    if (!w || !w->coherent) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    /* The old seat's notices go with it. Nothing it left unread is taken by
+     * the next seat, and nothing it wrote is accepted. */
+    ring_discard(w, rx_world_off_c2g());
+    ring_discard(w, rx_world_off_g2c());
+    w->seat_generation++;
+    w->stats.seat_losses++;
+
+    int lost = 0;
+    for (uint32_t rid = 0; rid < w->n_reactions; rid++) {
+        RxReaction *r = &w->reactions[rid];
+        if (!r->resident_seat || r->state != RX_RUNNING) continue;
+        const RxReactionDesc *desc = &r->desc;
+        uint32_t in = desc->triggers[0].obj.id;
+        uint32_t out = desc->writes[0].obj.id;
+        RxCrumb k;
+        memset(&k, 0, sizeof(k));
+        k.reaction = rid;
+        k.faculty = desc->faculty;
+        k.worker = RX_SEAT_BLACKWELL;
+        k.wake_cause = r->resident_parent;
+        k.t_start_ns = now_ns();
+        k.n_caps = desc->n_caps;
+        for (uint32_t i = 0; i < desc->n_caps; i++) stamp_cap(w, &k, i, desc->caps[i].ref);
+        add_parent(&k, r->resident_parent);
+        k.n_inputs = 1;
+        k.inputs[0].obj = desc->triggers[0].obj;
+        k.inputs[0].version = w->objects[in].version;
+        k.inputs[0].mask = RX_FIELD(0) | RX_FIELD(1);
+        /* Whatever the chip left in the output window is not the object. */
+        if (w->objects[out].placed) rx_coherent_project(w, out);
+        set_state(w, r, RX_FAILED);
+        k.kind = RX_CRUMB_FAILED;
+        k.reason = RX_ERR_SEAT_LOST;
+        k.t_end_ns = now_ns();
+        uint64_t fid = crumb_append(w, &k);
+        r->resident_seat = false;
+        w->stats.resident_closed++;
+        w->stats.failed++;
+        /* A newer wake already asks for another run; keep its cause. */
+        if (retry && !r->rearm) {
+            r->rearm = true;
+            r->wake_cause = fid;
+        }
+        end_activation(w, rid);
+        lost++;
+    }
+    pthread_mutex_unlock(&w->mu);
+    return lost;
 }
 
 int rx_world_wait_quiescent(RxWorld *w, int timeout_ms) {

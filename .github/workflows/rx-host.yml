@@ -29,7 +29,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: aien-dev/physics
-          ref: 29bf6ea84ba19eb2b8612843ec9dd868a647f9bc
+          ref: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
           path: physics-src
       - name: Keep Physics checkout out of Omega tree status
         run: echo 'physics-src/' >> .git/info/exclude
@@ -50,7 +50,7 @@ jobs:
       - name: Build and run resident reaction host qualification
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-          PHYSICS_COMMIT: 29bf6ea84ba19eb2b8612843ec9dd868a647f9bc
+          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
@@ -58,7 +58,7 @@ jobs:
       - name: Emit qualification receipt
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-          PHYSICS_COMMIT: 29bf6ea84ba19eb2b8612843ec9dd868a647f9bc
+          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
         run: |
           receipt="$(find build/qual-runs -name rx_heartbeat_receipt.json -type f | head -n 1)"
           native="$(find build/qual-runs -name rx_native_authority_receipt.json -type f | head -n 1)"
