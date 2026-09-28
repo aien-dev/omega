@@ -1,0 +1,32 @@
+{
+  "schema": "OMEGA_ACTION_GRAPH_IR_V1",
+  "run_id": "20260928T205959Z-fff56a777db9",
+  "candidate_commit": "fff56a777db901c8eaa59dff771e8f3f58f39894",
+  "candidate_bound": true,
+  "run_commit": "fff56a777db901c8eaa59dff771e8f3f58f39894",
+  "tree_dirty": false,
+  "aienos_commit": "c8ab65e3ba2fddbe99245f747fdfdb99f6042fd3",
+  "checks": 685,
+  "failures": 0,
+  "test_binary_sha256": "6c0554d11ece52dd46b9f3f6b848f5cdbcb4b3b942e9530d874197a9c0397408",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64", "cpus": "5,6,7,8,9,15,16,17,18,19"},
+  "scope": "host processor; native AIENOS authority library; resident reaction world",
+  "equivalence": {"runs_compared_with_sequential_reference": 79, "node_results_compared": 652},
+  "evidence": {"required_checked": 157, "missing": 0},
+  "causal_ancestry": {"nodes_checked": 412, "mismatches": 0},
+  "determinism": {"runs": 32, "worker_counts": [1, 2, 4, 8], "mismatches": 0},
+  "parallel": {"median_run_ns_1_worker": 12239630, "median_run_ns_4_workers": 3695390,
+               "speedup": 3.312, "critical_path_us": 3000, "total_work_us": 12000},
+  "optimization": {"nodes_before": 16, "nodes_after": 8, "constant_folded": 1,
+                   "cse": 1, "world_reads_removed": 1, "fused": 2, "dead": 4,
+                   "order_edges_dropped": 2, "crumbs_per_run_before": 22,
+                   "crumbs_per_run_after": 12, "best_run_ns_before": 242305,
+                   "best_run_ns_after": 136816},
+  "authority": {"bypasses": 0, "blocked_authority_crumbs": 7,
+                "mints_during_compile": 0, "mints_after_human_approval": 1,
+                "compile_has_admin_handle": false},
+  "gates": {
+    "OMEGA_ACTION_GRAPH_IR_PASS": "PASS",
+    "not_claimed": ["graphics-processor nodes", "AIENOS kernel (the authority runs as a host library)", "a learned planner (procedures are fixed templates)", "more than one AEGIS request per graph", "retry that re-enters the world between attempts", "graphs above 64 nodes"]
+  }
+}
