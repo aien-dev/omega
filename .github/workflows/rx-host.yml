@@ -47,8 +47,6 @@ jobs:
           path: aienos-src
       - name: Keep AIENOS checkout out of Omega tree status
         run: echo 'aienos-src/' >> .git/info/exclude
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
       - name: Build and run resident reaction host qualification
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
