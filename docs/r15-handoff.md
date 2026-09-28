@@ -162,3 +162,50 @@ read-only telemetry driver.
 - 2026-09-28: the enrollment request is QUEUED (Drake confirmed with `sudo mokutil --list-new`; the one-time password is known to Drake). Next: Drake reboots and approves at the blue screen. Afterwards, verify with `mokutil --list-enrolled | grep AIEN`.
 
 - 2026-09-28 10:02: KEY ENROLLED. `mokutil --list-enrolled` shows CN=AIEN Spark owner key (telemetry). Secure Boot stays on. Modules signed with /var/lib/aien-mok/MOK.priv will now load. Next: write, sign and load the read-only SPBM telemetry driver, then calibrate it.
+
+## Recovery audit and rework (Claude, 2026-09-28 afternoon)
+
+- Forensic audit before any change; snapshot of the pre-audit local state
+  (unpushed `f714c08`, uncommitted Makefile, untracked draft
+  `rx_r15_perf.c` / `r15_reduce.c`) is in
+  `~/workspace/forensics/r15-2026-09-28/` (patches + git bundle). The old
+  `~/workspace/omega-r15` worktree is left untouched as evidence.
+- Machine: Secure Boot on, owner key enrolled and matching the loaded
+  module's signature, `MOK.priv` root 0600. The read-only SPBM module is
+  loaded (owner approved keeping it loaded). `kernel.perf_event_paranoid`
+  had been left at 0 by an unlogged session; restored to 4 (boot default).
+- Rework branch: `r15-rework`, pushed to `feat/r15-performance-proof`.
+  - SPBM reader and preflight runs kept under `research/m15/spbm/`; its
+    in-place §7 spec rewrite not adopted.
+  - Instrumentation fixes (CPU vs wall scheduler time, propagation counters,
+    per-path copied bytes, per-store R9 I/O, timing overflow status) with
+    `make test-r15-instr`.
+  - Spec §16 clarification C1 (paranoid 4→1→4; PMU per-task inherited on
+    both PMUs, raw sums, never scaled; byte definitions; parity gate).
+  - Shared rig `tests/runtime/rx_r15_rig.{c,h}` and SEQ parity gate
+    `make test-r15-parity-host` / `test-r15-parity-silicon`.
+- The draft `rx_r15_perf.c` / `r15_reduce.c` predate these fixes and are not
+  carried forward; the harness is to be rebuilt on `rx_r15_rig`.
+- Still to do, in order: energy clarification C2 (needs load tests: give
+  Drake a heads-up first; a power surge was reported during the earlier CPU
+  load collection), harness, reducer, qualify script, dry run, full run.
+
+### Finding: W-EPISODE goal miss rate (pre-qualification, host stand-in)
+
+A 100-episode soak of each of SEQ and RES-1 (`R15_PARITY_REPEAT`) failed 7 of
+100 in both, with identical failure types: 6 × goal UNMET_EXPLORED (AIEN's
+post-promotion cost on X925 above the TARGET_PCT 55 goal) and 1 × the post-
+promotion wait for AIEN's confirmed prediction running long enough that
+continuous production filled the 2^18-crumb log (publication refused). A
+later 40-episode RES-1 run had 0 failures, cost after/before 0.40-0.54
+(target 0.55). The misses clustered in time, which points at machine
+interference. Not orchestration-specific; no lost trigger or semantic
+mismatch was found in any completed episode.
+
+Consequence for R15: G1 requires goal MET in every one of 48 trials. At a
+~6% per-trial miss rate the chance all 48 pass is ~5%. This is a property of
+the R13 workload's target margin, recorded here BEFORE any qualification
+data. TARGET_PCT and G1 are unchanged; any correction is an owner decision
+and must be committed as a methodology clarification before qualification.
+The harness must size the crumb log for the longest allowed window and fail
+a trial on overflow (§16 C1 item 4 applies equally to crumbs).

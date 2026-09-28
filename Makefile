@@ -365,3 +365,31 @@ $(RX_R15_INSTR): $(RX_R15_INSTR_SRCS) src/runtime/rx_world.h src/runtime/rx_gene
 
 test-r15-instr: $(RX_R15_INSTR)
 	./$(RX_R15_INSTR)
+
+# R15: SEQ semantic parity gate (spec §16 C1 item 9). The R13 body is built
+# by tests/runtime/rx_r15_rig.c for RES-1 and for the sequential reference.
+RX_R15_RIG_SRCS = $(filter-out tests/runtime/rx_r13_living.c,$(RX_R13_SRCS)) \
+	src/runtime/rx_seq_reference.c tests/runtime/rx_r15_rig.c
+RX_R15_RIG_HDRS = src/runtime/rx_living.h src/runtime/rx_seq_reference.h \
+	src/runtime/rx_world.h tests/runtime/rx_r15_rig.h
+RX_R15_GPU_SRCS = src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
+	src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+	src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c
+RX_R15_PARITY_HOST = $(OUT_DIR)/rx_r15_parity_host
+RX_R15_PARITY_SILICON = $(OUT_DIR)/rx_r15_parity_silicon
+
+$(RX_R15_PARITY_HOST): $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_parity.c $(RX_R15_RIG_HDRS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_parity.c \
+		$(AIENOS_CAP_LIB) -lm
+
+$(RX_R15_PARITY_SILICON): $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_parity.c $(RX_R15_RIG_HDRS) \
+	$(RX_R15_GPU_SRCS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DR15_SILICON -pthread -o $@ $(RX_R15_RIG_SRCS) \
+		tests/runtime/rx_r15_parity.c $(RX_R15_GPU_SRCS) $(AIENOS_CAP_LIB) -ldl -lm
+
+test-r15-parity-host: $(RX_R15_PARITY_HOST)
+	./$(RX_R15_PARITY_HOST)
+
+test-r15-parity-silicon: $(RX_R15_PARITY_SILICON)
+	./$(RX_R15_PARITY_SILICON)
