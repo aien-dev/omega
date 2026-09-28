@@ -100,6 +100,7 @@ typedef struct {
     uint64_t ops[N_REPEAT], cpu[N_REPEAT], wall[N_REPEAT], ins[N_REPEAT], e2e[N_REPEAT];
     uint64_t exec[N_REPEAT];
     uint64_t compile[N_REPEAT], run[N_REPEAT], verify[N_REPEAT];
+    uint64_t ident[N_REPEAT];      /* first use: CPU spent on the template identity hash */
 } Series;
 
 static struct {
@@ -353,6 +354,7 @@ typedef struct {
     uint64_t cog_ns, cog_cpu, cog_ins, e2e_ns;
     int plan_rc, gen_rc, executed;
     uint32_t prefix_moves;
+    uint64_t identify_cpu;
     Refusals rf;
     PlExecResult ex;
     uint32_t status_before, moves;
@@ -511,6 +513,13 @@ static int solve(Env *e, PlCache *c, int mode, Trial *t) {
     }
     cog_end(t, w0, c0, i0);
     if (mode != MODE_COLD) t->decision_crumb = record(e, g.seq, rf, use);
+    if (run == &g_tmp) {
+        /* What the identity hash alone costs (a cache-free system would not compute it). */
+        g_tmp2 = g_tmp;
+        uint64_t k0 = cpu_ns();
+        rx_plan_identify(&g_tmp2);
+        t->identify_cpu = cpu_ns() - k0;
+    }
     e->x.reference_first = use && use->status == PL_STATUS_CANDIDATE;
     rx_plan_execute(run, &e->w, &e->env, t->slots, &e->caps, &e->x, 1, &e->rs, pla_legal, &t->ex);
     t->executed = 1;
@@ -557,6 +566,7 @@ static void add_series(Series *s, const Trial *t) {
     s->compile[i] = t->ex.compile_ns;
     s->run[i] = t->ex.run_ns;
     s->verify[i] = t->ex.verify_ns;
+    s->ident[i] = t->identify_cpu;
 }
 
 static int goal_holds(Env *e) {
@@ -1074,7 +1084,12 @@ static void binary_digest(char out[65]) {
     for (int i = 0; i < 32; i++) sprintf(out + i * 2, "%02x", d[i]);
 }
 
-typedef struct { int pass; double ops_ratio[2], cpu_ratio[2], e2e_ratio[2]; } Gates;
+typedef struct {
+    int pass, task_gate;
+    int w_g1[2], w_g2[2], w_g3[2], w_g6[2];
+    double ops_ratio[2], cpu_ratio[2], e2e_ratio[2], cpu_ratio_no_ident[2];
+    uint64_t ident_med[2];
+} Gates;
 
 static int g1, g2, g3, g4, g5, g6;
 
@@ -1090,14 +1105,24 @@ static Gates gates(void) {
         G.ops_ratio[s] = uo ? (double)fo / (double)uo : 0;
         G.cpu_ratio[s] = uc ? (double)fc / (double)uc : 0;
         G.e2e_ratio[s] = ue ? (double)fe / (double)ue : 0;
-        g1 &= u->n > 0 && uo * 20 <= fo;
-        g2 &= u->n > 0 && uc * 10 <= fc;
-        g6 &= u->n > 0 && ue < fe;
+        uint64_t d[N_REPEAT];
+        for (uint32_t i = 0; i < f->n; i++) d[i] = f->cpu[i] > f->ident[i] ? f->cpu[i] - f->ident[i] : 0;
+        G.ident_med[s] = median(f->ident, f->n);
+        G.cpu_ratio_no_ident[s] = uc ? (double)median(d, f->n) / (double)uc : 0;
+        G.w_g1[s] = u->n > 0 && uo * 20 <= fo;
+        G.w_g2[s] = u->n > 0 && uc * 10 <= fc;
+        G.w_g6[s] = u->n > 0 && ue < fe;
+        g1 &= G.w_g1[s];
+        g2 &= G.w_g2[s];
+        g6 &= G.w_g6[s];
     }
     g3 = 1;
     for (int s = 0; s < 2; s++)
-        g3 &= R.reuse_accepted[s] == N_REPEAT - 1 && R.reuse_success[s] == R.reuse_accepted[s] &&
+    {
+        G.w_g3[s] = R.reuse_accepted[s] == N_REPEAT - 1 && R.reuse_success[s] == R.reuse_accepted[s] &&
               R.outcome_equal[s] == N_REPEAT && R.evidence_equal[s] == N_REPEAT;
+        g3 &= G.w_g3[s];
+    }
     uint32_t per_axis_ok = 1;
     for (uint32_t a = PL_AX_SHAPE; a <= PL_AX_RESOURCES; a++)
         per_axis_ok &= R.adv_by_axis[a] >= 8 && R.adv_refused_by_axis[a] == R.adv_by_axis[a];
@@ -1107,6 +1132,11 @@ static Gates gates(void) {
          R.id_nonsemantic_same == R.id_nonsemantic && R.semantic_ids_equal[0] && R.semantic_ids_equal[1] &&
          R.realizations_distinct[0] && R.realizations_distinct[1] && R.rederived_same_id;
     G.pass = g1 && g2 && g3 && g4 && g5 && g6 && g_fail == 0;
+    /* The task's own wording: at least one repeated workload. Reported beside
+     * the pre-registered verdict, never in its place. */
+    for (int s = 0; s < 2; s++)
+        G.task_gate |= G.w_g1[s] && G.w_g2[s] && G.w_g3[s] && G.w_g6[s];
+    G.task_gate = G.task_gate && g4 && g5 && g_fail == 0;
     return G;
 }
 
@@ -1162,10 +1192,15 @@ static void write_receipt(void) {
         json_series(fp, "first_use", &R.first[s]);
         fprintf(fp, ",\n");
         json_series(fp, "reuse", &R.reuse[s]);
-        fprintf(fp, ",\n      \"ratios\": {\"cognitive_ops\": %.1f, \"cognition_cpu\": %.1f, \"end_to_end\": %.2f},\n"
+        fprintf(fp, ",\n      \"ratios\": {\"cognitive_ops\": %.1f, \"cognition_cpu\": %.1f, "
+                    "\"cognition_cpu_excluding_identity_hash\": %.1f, \"end_to_end\": %.2f},\n"
+                    "      \"first_use_median_identity_hash_cpu_ns\": %llu,\n"
+                    "      \"criteria\": {\"G1\": \"%s\", \"G2\": \"%s\", \"G3\": \"%s\", \"G6\": \"%s\"},\n"
                     "      \"reuse_accepted\": %u, \"reuse_succeeded\": %u, \"outcome_equal_to_first_use\": %u, "
                     "\"evidence_equal_to_first_use\": %u, \"one_semantic_id\": %s, \"realizations_distinct\": %s\n    }%s\n",
-                G.ops_ratio[s], G.cpu_ratio[s], G.e2e_ratio[s], R.reuse_accepted[s], R.reuse_success[s],
+                G.ops_ratio[s], G.cpu_ratio[s], G.cpu_ratio_no_ident[s], G.e2e_ratio[s],
+                (unsigned long long)G.ident_med[s], G.w_g1[s] ? "PASS" : "FAIL", G.w_g2[s] ? "PASS" : "FAIL",
+                G.w_g3[s] ? "PASS" : "FAIL", G.w_g6[s] ? "PASS" : "FAIL", R.reuse_accepted[s], R.reuse_success[s],
                 R.outcome_equal[s], R.evidence_equal[s], R.semantic_ids_equal[s] ? "true" : "false",
                 R.realizations_distinct[s] ? "true" : "false", s == 0 ? "," : "");
     }
@@ -1214,9 +1249,18 @@ static void write_receipt(void) {
     fprintf(fp, "  \"gates\": {\n    \"G1_cognitive_ops_20x\": \"%s\",\n    \"G2_cognition_cpu_10x\": \"%s\",\n"
                 "    \"G3_outcome_and_evidence\": \"%s\",\n    \"G4_false_applicability_zero\": \"%s\",\n"
                 "    \"G5_identity\": \"%s\",\n    \"G6_end_to_end_faster\": \"%s\",\n"
-                "    \"OMEGA_PLAN_REUSE_PASS\": \"%s\",\n",
+                "    \"OMEGA_PLAN_REUSE_PASS\": \"%s\",\n"
+                "    \"verdict_basis\": \"spec/plan-reuse.md section 7 as pre-registered: G1, G2, G3 and G6 hold for every workload\",\n"
+                "    \"task_wording\": {\"text\": \"at least one repeated workload where verified plan reuse substantially "
+                "reduces cognitive computation while preserving outcome/evidence\", "
+                "\"met\": %s, \"workloads_meeting_G1_G2_G3_G6\": [%s%s%s], "
+                "\"note\": \"reported beside the pre-registered verdict, not in its place\"},\n",
             g1 ? "PASS" : "FAIL", g2 ? "PASS" : "FAIL", g3 ? "PASS" : "FAIL", g4 ? "PASS" : "FAIL",
-            g5 ? "PASS" : "FAIL", g6 ? "PASS" : "FAIL", G.pass ? "PASS" : "FAIL");
+            g5 ? "PASS" : "FAIL", g6 ? "PASS" : "FAIL", G.pass ? "PASS" : "FAIL",
+            G.task_gate ? "true" : "false",
+            G.w_g1[0] && G.w_g2[0] && G.w_g3[0] && G.w_g6[0] ? "\"reverse_tower_6\"" : "",
+            G.w_g1[0] && G.w_g2[0] && G.w_g3[0] && G.w_g6[0] && G.w_g1[1] && G.w_g2[1] && G.w_g3[1] && G.w_g6[1] ? ", " : "",
+            G.w_g1[1] && G.w_g2[1] && G.w_g3[1] && G.w_g6[1] ? "\"merge_two_towers_3_3\"" : "");
     fprintf(fp, "    \"not_claimed\": [\"a neural or learned planner\", \"more than one planning domain\", "
                 "\"durable template storage (R9)\", \"graphics-processor execution\", "
                 "\"cognition reading the World through capabilities (the cache reads a host projection; "
@@ -1226,6 +1270,12 @@ static void write_receipt(void) {
     printf("OMEGA_PLAN_REUSE_PASS: %s (G1 %s, G2 %s, G3 %s, G4 %s, G5 %s, G6 %s)\n", G.pass ? "PASS" : "FAIL",
            g1 ? "PASS" : "FAIL", g2 ? "PASS" : "FAIL", g3 ? "PASS" : "FAIL", g4 ? "PASS" : "FAIL",
            g5 ? "PASS" : "FAIL", g6 ? "PASS" : "FAIL");
+    for (int s = 0; s < 2; s++)
+        printf("  %s: ops %.1fx (G1 %s), cpu %.1fx (%.1fx without the identity hash; G2 %s), outcome/evidence G3 %s, "
+               "end to end %.2fx (G6 %s)\n", s ? "merge_two_towers_3_3" : "reverse_tower_6", G.ops_ratio[s],
+               G.w_g1[s] ? "PASS" : "FAIL", G.cpu_ratio[s], G.cpu_ratio_no_ident[s], G.w_g2[s] ? "PASS" : "FAIL",
+               G.w_g3[s] ? "PASS" : "FAIL", G.e2e_ratio[s], G.w_g6[s] ? "PASS" : "FAIL");
+    printf("task wording (at least one repeated workload): %s\n", G.task_gate ? "MET" : "NOT MET");
 }
 
 int main(int argc, char **argv) {

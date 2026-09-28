@@ -180,3 +180,12 @@ check) does on each adversarial axis, lifecycle transitions.
   are World objects. Durability through R9 is not claimed.
 - A template's graph must fit the action graph's 64 nodes.
 - Host processor only; no graphics processor run is claimed.
+- Cognition (goal shape, retrieval, applicability, AIEN's search) reads a
+  consistent host projection of the World taken under the world lock, not
+  through capabilities. Execution is capability-checked by the engine.
+- First-use cognition includes hashing the new template's identity, which a
+  system without a cache would not do. The receipt also reports the CPU
+  ratio with that hash excluded.
+- Two workloads can share one goal shape (both build one six-unit tower);
+  their templates differ in required state. Every candidate of the shape
+  is checked and each refusal is recorded.
