@@ -1,0 +1,37 @@
+{
+  "schema": "AIEN_RX_R11_AIEN_FACULTY_V1",
+  "run_id": "20260928T015749Z-381828f9ca00",
+  "candidate_commit": "381828f9ca0005c553a68d8b61265e9f7e46f73f",
+  "candidate_bound": true,
+  "run_commit": "381828f9ca0005c553a68d8b61265e9f7e46f73f",
+  "tree_dirty": false,
+  "aienos_commit": "c8ab65e3ba2fddbe99245f747fdfdb99f6042fd3",
+  "checks": 355,
+  "failures": 0,
+  "test_binary_sha256": "3b2a353cda3146808baf922569d8d6521cb958664947473fe28214e00e461c9b",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64"},
+  "cpus": {"cortex_x925": "5,6,7,8,9,15,16,17,18,19", "cortex_a725": "0,1,2,3,4,10,11,12,13,14"},
+  "hardware_scope": "host processor only; no graphics processor is used",
+  "cognition_model": "explicit statistical belief model (interval means, tolerance bands, streaks); not a neural model",
+  "living_run": {
+    "exercised": true,
+    "skip_reason": "",
+    "operation": "omega_matvec (M12), regime 64x256",
+    "a725_record_realization_word0": "0x0",
+    "a725_predicted_ns_per_call": 6597,
+    "x925_observed_ns_under_old_record": 4913,
+    "x925_record_realization_word0": "0x3f6db775476a4f99",
+    "x925_predicted_ns_under_new_record": 2802,
+    "improvement_x100": 175,
+    "requests_after_move_until_supported": 176,
+    "production_commits_between_plan_and_new_selection": 4,
+    "hypothesis_kind": 1, "hypothesis_state": 3,
+    "plans": 1, "search_epochs": 2, "predictions": 2,
+    "control_without_aien": {"a725_ns": 6728, "x925_ns": 5044, "search_epochs": 1}
+  },
+  "gates": {
+    "R11_CONTINUOUS_COGNITION": "PASS",
+    "aien_caused_improvement": true,
+    "not_claimed": ["R8", "R13", "neural cognition", "durable beliefs (R9)", "new memory as a trigger"]
+  }
+}
