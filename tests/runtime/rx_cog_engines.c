@@ -455,7 +455,7 @@ int plan_truth(const PlanInput *in) {
 
 int plan_correct(const PlanInput *in, const PlanOutput *out, int truth_len) {
     if (out->status == 1) return path_valid(in, out);
-    if (out->status == 0) return truth_len < 0 || truth_len > in->bound;
+    if (out->status == 0) return truth_len == -1 || truth_len > in->bound; /* -2: truth unknown */
     return 0;
 }
 
