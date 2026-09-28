@@ -38,6 +38,9 @@
 #define RX_MAX_CAPS         8u
 #define RX_MAX_MUTATIONS    16u
 #define RX_MAX_SUBS         1024u  /* subscriptions per object */
+/* Causal-log capacity for long living-body episodes: 2^25 records (about
+ * 38 GB of reserved address space at 1128 B each), backed only as written. */
+#define RX_CRUMBS_LONG_EPISODE (1ull << 25)
 #define RX_MAX_WORKERS      16u
 #define RX_MAX_PARENTS      (RX_MAX_DEPS * RX_MAX_FIELDS + 1u)
 #define RX_PRIORITY_CLASSES 7u

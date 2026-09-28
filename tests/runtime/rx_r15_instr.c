@@ -231,6 +231,57 @@ static void t_ring_bytes(void) {
     env_stop(&e);
 }
 
+/* A long episode must not die of a full causal log: the long-episode
+ * capacity takes more records than the old 2^18 R14 log, records never
+ * move, and they verify. A deliberately small log still refuses a
+ * publication it cannot record (no action without evidence). */
+static void t_long_log(void) {
+    RxCapRoot root;
+    RxCapAdmin admin;
+    static RxWorld w;
+    CHECK(rx_caproot_start(&root, &admin) == RX_CAP_OK, "authority");
+    CHECK(rx_world_init(&w, &root, 1, RX_CRUMBS_LONG_EPISODE) == RX_OK, "long-episode world");
+    w.external_subject = SUBJ_EXTERNAL;
+    uint64_t init[RX_MAX_FIELDS] = {0};
+    RxObjRef src = {UINT32_MAX, 0};
+    rx_world_create(&w, 1, RX_PERSIST_RESIDENT, RES_SRC, init, &src);
+    RxCapMint mm;
+    memset(&mm, 0, sizeof mm);
+    mm.issuer = ISSUER; mm.subject = SUBJ_EXTERNAL; mm.resource = RES_SRC;
+    mm.rights = RX_RIGHT_WRITE; mm.parent = (RxCapRef){UINT32_MAX, 0};
+    mm.authority = rx_capadmin_office(&admin);
+    RxCapRef ext = {UINT32_MAX, 0};
+    rx_capadmin_mint(&admin, &mm, &ext);
+    RxMutation m = {src, 0, 1};
+    CHECK(rx_world_publish_external(&w, ext, &m, 1) > 0, "first record");
+    const RxCrumb *first = rx_world_crumb(&w, 1);
+    const uint64_t n = 600000;
+    int refused = 0;
+    for (uint64_t i = 2; i <= n; i++) {
+        m.value = i;
+        if (rx_world_publish_external(&w, ext, &m, 1) <= 0) { refused = 1; break; }
+    }
+    CHECK(!refused && w.stats.crumb_overflow == 0 && w.n_crumbs >= n,
+          "long log refused after %llu records", (unsigned long long)w.n_crumbs);
+    CHECK(rx_world_crumb(&w, 1) == first, "a record moved while the log grew");
+    uint64_t checked = 0;
+    CHECK(rx_world_verify_crumbs(&w, &checked) == 0 && checked == w.n_crumbs,
+          "long log does not verify");
+    rx_world_destroy(&w);
+
+    static RxWorld small;
+    CHECK(rx_world_init(&small, &root, 1, 16) == RX_OK, "small world");
+    small.external_subject = SUBJ_EXTERNAL;
+    RxObjRef s2 = {UINT32_MAX, 0};
+    rx_world_create(&small, 1, RX_PERSIST_RESIDENT, RES_SRC, init, &s2);
+    RxMutation m2 = {s2, 0, 1};
+    int64_t last = 1;
+    for (int i = 0; i < 40 && last > 0; i++) { m2.value = (uint64_t)i + 2; last = rx_world_publish_external(&small, ext, &m2, 1); }
+    CHECK(last <= 0 && small.stats.crumb_overflow > 0, "a full log did not refuse the publication");
+    rx_world_destroy(&small);
+    rx_caproot_stop(&root, &admin);
+}
+
 static int mkstore(char *dir, size_t n, const char *tag) {
     snprintf(dir, n, "/tmp/rx_r15_instr_%ld_%s", (long)getpid(), tag);
     return mkdir(dir, 0700);
@@ -271,6 +322,7 @@ int main(void) {
     t_timing_overflow();
     t_ring_bytes();
     t_store_io_scoped();
+    t_long_log();
     printf("R15 instrumentation: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures ? 1 : 0;
 }

@@ -7,9 +7,27 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <time.h>
 
 /* ---- helpers ------------------------------------------------------------ */
+
+/* The causal log is one address range reserved for crumb_cap records and
+ * backed only as records are written (MAP_NORESERVE; zero pages until
+ * touched). Records never move, so a crumb pointer stays valid for the life
+ * of the world, and a large capacity costs nothing until an episode uses it.
+ * The log is still bounded: a full log refuses the publication (no action
+ * without evidence) and counts crumb_overflow. */
+static RxCrumb *crumb_log_map(uint64_t cap) {
+    if (cap > UINT64_MAX / sizeof(RxCrumb)) return NULL;
+    void *p = mmap(NULL, (size_t)cap * sizeof(RxCrumb), PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
+    return p == MAP_FAILED ? NULL : (RxCrumb *)p;
+}
+
+static void crumb_log_unmap(RxCrumb *log, uint64_t cap) {
+    if (log) munmap(log, (size_t)cap * sizeof(RxCrumb));
+}
 
 static uint64_t now_ns(void) {
     struct timespec ts;
@@ -1303,11 +1321,11 @@ static int init_common(RxWorld *w, RxCapRoot *root, const void *auth_ctx,
     w->auth_ctx = auth_ctx;
     w->auth_validate = validate;
     w->auth_inspect = inspect;
-    w->crumbs = calloc(crumb_cap, sizeof(RxCrumb));
+    w->crumbs = crumb_log_map(crumb_cap);
     if (!w->crumbs) return RX_ERR_FULL;
     w->deferred = calloc(RX_DEFERRED_INITIAL, sizeof(*w->deferred));
     if (!w->deferred) {
-        free(w->crumbs);
+        crumb_log_unmap(w->crumbs, crumb_cap);
         w->crumbs = NULL;
         return RX_ERR_FULL;
     }
@@ -1315,7 +1333,7 @@ static int init_common(RxWorld *w, RxCapRoot *root, const void *auth_ctx,
     w->crumb_cap = crumb_cap;
     if (rx_coherent_format(w) != RX_OK) {
         free(w->deferred);
-        free(w->crumbs);
+        crumb_log_unmap(w->crumbs, crumb_cap);
         w->deferred = NULL;
         w->crumbs = NULL;
         return RX_ERR_FULL;
@@ -1365,7 +1383,8 @@ void rx_world_destroy(RxWorld *w) {
     for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++) free(w->subs[i]);
     rx_coherent_free(w);
     free(w->deferred);
-    free(w->crumbs);
+    crumb_log_unmap(w->crumbs, w->crumb_cap);
+    w->crumbs = NULL;
     pthread_cond_destroy(&w->work_cv);
     pthread_cond_destroy(&w->idle_cv);
     pthread_cond_destroy(&w->claim_cv);

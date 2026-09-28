@@ -247,8 +247,9 @@ int r15_start(R15Rig *r, R15Config config) {
     r->stage = 1;
     if (aienos_cap_start(&r->admin, &r->view) != 0) return -1;
     int wrc = config == R15_SEQ
-        ? rx_world_init_native_sequential_reference(&r->w, r->view, 1u << 18)
-        : rx_world_init_native(&r->w, r->view, config == R15_RES4 ? 4 : 1, 1u << 18);
+        ? rx_world_init_native_sequential_reference(&r->w, r->view, RX_CRUMBS_LONG_EPISODE)
+        : rx_world_init_native(&r->w, r->view, config == R15_RES4 ? 4 : 1,
+                               RX_CRUMBS_LONG_EPISODE);
     if (wrc != RX_OK) return -1;
     r->w.external_subject = EXTERNAL;
     if (config == R15_SEQ) {
