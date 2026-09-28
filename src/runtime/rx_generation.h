@@ -125,10 +125,22 @@ typedef int (*RxGenDrainFn)(uint64_t work_id, void *ctx);
 typedef void (*RxGenLiveFn)(void *ctx);
 typedef void (*RxGenDiskHook)(const char *generation_dir, void *ctx);
 
+/* Monotonic timestamps for the most recent promotion attempt. A zero phase
+ * means the attempt stopped before reaching it. Read after promotion returns. */
+typedef struct {
+    uint64_t candidate_id;
+    uint64_t enter_ns;
+    uint64_t barrier_ns;
+    uint64_t flip_ns;
+    uint64_t receipt_ns;
+    int result;
+} RxGenPhases;
+
 int rx_gen_open(const char *dir, RxGenStore **out);
 void rx_gen_close(RxGenStore *store);
 /* R15: process-wide bytes written and fsync calls made by the stores. */
 void rx_gen_io_counters(uint64_t *bytes, uint64_t *syncs);
+int rx_gen_last_phases(const RxGenStore *store, RxGenPhases *out);
 int rx_gen_active(const RxGenStore *store, uint64_t *id, uint64_t *lineage);
 
 /* One blob of committed generation `id` ("evidence", "model", "realization",

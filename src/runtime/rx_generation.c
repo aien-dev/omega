@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define ROOT_BYTES 512
@@ -89,7 +90,20 @@ struct RxGenStore {
     Candidate cand[MAX_CAND];
     RxGenDiskHook disk_hook;
     void *disk_ctx;
+    RxGenPhases phases;
 };
+
+static uint64_t monotonic_ns(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return 0;
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+int rx_gen_last_phases(const RxGenStore *store, RxGenPhases *out) {
+    if (!store || !out) return RX_GEN_ERR_ARG;
+    *out = store->phases;
+    return store->phases.enter_ns ? RX_GEN_OK : RX_GEN_ERR_MISSING;
+}
 
 static void put_u32(uint8_t *p, uint32_t v) {
     p[0] = (uint8_t)v;
@@ -911,6 +925,9 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     } else {
         return RX_GEN_ERR_BUSY;
     }
+    memset(&store->phases, 0, sizeof store->phases);
+    store->phases.candidate_id = request->candidate_id;
+    store->phases.enter_ns = monotonic_ns();
     int rc = RX_GEN_OK;
     uint64_t disk_id = 0, disk_lineage = 0;
     uint8_t disk_digest[32];
@@ -937,6 +954,7 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     }
     c->closing = 1;
     if (live) live(live_ctx);
+    store->phases.barrier_ns = monotonic_ns();
     uint64_t external[RX_GEN_MAX_EXTERNAL];
     uint64_t excluded[RX_GEN_MAX_EXCLUDED];
     uint32_t n_external = 0, n_excluded = 0;
@@ -1013,6 +1031,7 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     }
     rc = commit_file(store, active_path, pointer, sizeof pointer, RX_CRASH_DURING_ROOT_FLIP);
     if (rc != RX_GEN_OK) goto done;
+    store->phases.flip_ns = monotonic_ns();
     store->active_id = view.id;
     store->active_lineage = view.lineage;
     if (store->crash_step == RX_CRASH_AFTER_ROOT_FLIP) crash_now();
@@ -1026,8 +1045,10 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     if (rc != RX_GEN_OK) goto done;
     if (store->crash_step == RX_CRASH_AFTER_RECEIPT) crash_now();
     rc = write_journal(store, PHASE_RECEIPT, c->parent_id, c->id, view.lineage - 1, root_digest);
+    if (rc == RX_GEN_OK) store->phases.receipt_ns = monotonic_ns();
 
 done:
+    store->phases.result = rc;
     /* The draft is finished: it is the active generation now, or it can never
      * be promoted (its parent is gone or an object it observed moved). Its
      * slot is free for the next proposal; the committed bytes live on disk. */

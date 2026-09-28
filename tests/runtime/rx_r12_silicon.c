@@ -574,6 +574,13 @@ int main(void) {
         uint64_t before = g2c_tail(&w);
         CHECK(wait_claimed(&w, seat_id) == 0, "the admitted seat did not post a claim");
         CHECK(wait_chip(&w, before) == 0, "the chip did not answer");
+        barrier();
+        uint32_t pick = *hb_word(&w, RX_SEAT_HB_T_PICK);
+        uint32_t done_ns = *hb_word(&w, RX_SEAT_HB_T_DONE);
+        uint32_t chip_ns = done_ns - pick; /* low 32-bit timer wraps naturally */
+        CHECK(pick != 0 && chip_ns > 0 && chip_ns < 1000000000u,
+              "chip timing stamps are invalid (pickup %u, duration %u ns)",
+              pick, chip_ns);
         CHECK(g_poison == 0, "the seat was called as a function");
         CHECK(load_u64(window(&w, B)) == 42, "the chip did not write the sum into B's window");
         CHECK(field_of(&w, B, 0) == 0, "B changed before publication");

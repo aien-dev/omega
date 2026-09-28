@@ -158,3 +158,5 @@ read-only telemetry driver.
     against a known load, and cross-check GPC against NVML GPU energy.
   - Record the method in spec §7 in a new commit before qualification.
 - No systemd, including for loading the module (see memory no-systemd).
+
+- 2026-09-28: the enrollment request is QUEUED (Drake confirmed with `sudo mokutil --list-new`; the one-time password is known to Drake). Next: Drake reboots and approves at the blue screen. Afterwards, verify with `mokutil --list-enrolled | grep AIEN`.
