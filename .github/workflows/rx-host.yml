@@ -216,3 +216,8 @@ jobs:
           grep -q '"tree_dirty": false,' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
+      - name: R13 living system builds (its run needs both GB10 core classes and the resident seat)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make build/rx_r13_living_host

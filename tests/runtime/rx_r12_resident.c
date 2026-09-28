@@ -210,6 +210,23 @@ static void t_shape(void) {
 
     seat_desc(&d, a, b, in, out);
     CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_OK, "seat registration");
+
+    /* Regression: an R8 capability slot is an authority wake, not a second
+     * GPU operand. The data operand must remain trigger zero. */
+    RxObjRef slot = mkobj(&e, RES_C);
+    RxCapRef slot_read = mint(&e, SUBJ_SEAT, RES_C, RX_RIGHT_READ);
+    seat_desc(&d, a, b, in, out);
+    d.n_triggers = 2;
+    d.triggers[1] = (RxDep){slot, RX_FIELD(0) | RX_FIELD(1) | RX_FIELD(2)};
+    d.n_caps = 3;
+    d.caps[2] = (RxCapNeed){slot_read, RES_C, RX_RIGHT_READ};
+    d.cap_slotted[1] = true;
+    d.cap_slot[1] = slot;
+    CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_OK,
+          "seat with an R8 capability-slot wake was refused");
+    d.cap_slotted[1] = false;
+    CHECK(rx_world_add_reaction(&e.w, &d, NULL) == RX_ERR_ARG,
+          "unrelated second seat trigger was accepted");
     env_stop(&e);
 }
 

@@ -169,6 +169,12 @@ static int fn_assess(RxCtx *c) {
         if (expected <= g->field[2]) status = RX_AIEN_GOAL_MET;
         else if (explored(m, rx_aien_key(pl->field[1], g->field[1]))) status = RX_AIEN_GOAL_UNMET_EXPLORED;
         else status = RX_AIEN_GOAL_UNMET;
+    } else if (p->field[0] != 0 && p->field[2] == g->field[1] &&
+               p->field[6] == RX_AIEN_PRED_CONFIRMED) {
+        /* A known cost on another core is evidence that the old regime did
+         * not meet the goal. The new core remains unknown, which itself can
+         * justify one bounded research plan. */
+        expected = p->field[5];
     }
     put(c, f->o.assessment, 0, g->field[0]);
     put(c, f->o.assessment, 1, g->field[1]);
@@ -208,6 +214,20 @@ static int fn_plan(RxCtx *c) {
     const RxSnapshotDep *pn = in_of(c, f->o.plan);
     if (!h || !a || !m || !p || !pn) return -1;
 
+    if (a->field[0] != 0 &&
+        (a->field[4] == RX_AIEN_GOAL_UNMET ||
+         (a->field[4] == RX_AIEN_GOAL_UNKNOWN &&
+          a->field[3] > a->field[2])) &&
+        pn->field[6] != a->field[0]) {
+        uint64_t key = rx_aien_key(a->field[5], a->field[1]);
+        if (!explored(m, key)) {
+            publish_plan(c, f, pn, a->field[1], a->field[5], 0,
+                         RX_AIEN_WHY_GOAL, a->field[0]);
+            remember(c, f, m, key);
+            return 0;
+        }
+    }
+
     if (h->field[7] == RX_AIEN_HYP_OPEN) {
         if (p->field[0] != h->field[2]) return 0;  /* prediction moved on; wait for it */
         uint64_t regime = p->field[2], cls = h->field[4];
@@ -222,12 +242,6 @@ static int fn_plan(RxCtx *c) {
         remember(c, f, m, key);
         put(c, f->o.hypothesis, 7, RX_AIEN_HYP_TESTING);
         return 0;
-    }
-    if (a->field[4] == RX_AIEN_GOAL_UNMET && pn->field[6] != a->field[0]) {
-        uint64_t key = rx_aien_key(a->field[5], a->field[1]);
-        if (explored(m, key)) return 0;
-        publish_plan(c, f, pn, a->field[1], a->field[5], 0, RX_AIEN_WHY_GOAL, a->field[0]);
-        remember(c, f, m, key);
     }
     return 0;
 }
@@ -265,6 +279,7 @@ int rx_aien_create_objects(RxAienFaculty *f, RxWorld *w, const RxAienConfig *cfg
     MK(f->o.plan, RX_OT_PLAN, RX_AIEN_RES_PLAN);
     MK(f->o.assessment, RX_OT_ASSESSMENT, RX_AIEN_RES_ASSESSMENT);
     MK(f->o.memory, RX_OT_MEMORY, RX_AIEN_RES_MEMORY);
+    MK(f->o.experiment_belief, RX_OT_EXPERIMENT_BELIEF, RX_AIEN_RES_EXPERIMENT_BELIEF);
 #undef MK
     return RX_OK;
 }
@@ -280,6 +295,50 @@ static RxCapRef cap_for(const Builder *b, RxObjRef o) {
     if (o.id == b->f->in.selection.id) return b->caps->selection;
     uint64_t res = b->f->w->objects[o.id].resource;
     return b->caps->own[res - RX_AIEN_RES_BASE];
+}
+
+/* This optional reaction is deliberately separate from the cost prediction:
+ * a GB10 add witnesses an experiment but does not measure matvec cost. */
+static int fn_experiment(RxCtx *c) {
+    RxAienFaculty *f = c->user;
+    const RxSnapshotDep *e = in_of(c, f->experiment_evidence);
+    const RxSnapshotDep *b = in_of(c, f->o.experiment_belief);
+    if (!e || !b) return -1;
+    if (e->field[0] == 0 || e->field[0] <= b->field[0]) return 0;
+    /* Supported only when every replicate matched; one mismatch refutes. */
+    int held = e->field[3] == 1 && e->field[1] == e->field[2] && e->field[4] != 0;
+    put(c, f->o.experiment_belief, 0, e->field[0]);
+    put(c, f->o.experiment_belief, 1, e->field[2]);
+    put(c, f->o.experiment_belief, 2, held ? RX_AIEN_EXP_SUPPORTED : RX_AIEN_EXP_REFUTED);
+    put(c, f->o.experiment_belief, 3, e->field[4]);
+    return 0;
+}
+
+int rx_aien_register_experiment(RxAienFaculty *f, RxObjRef evidence,
+                                RxCapRef evidence_read, RxCapRef belief_write) {
+    if (!f || !f->w || evidence.id >= RX_MAX_OBJECTS ||
+        !f->w->objects[evidence.id].live ||
+        f->w->objects[evidence.id].generation != evidence.generation) return RX_ERR_ARG;
+    f->experiment_evidence = evidence;
+    RxReactionDesc d;
+    memset(&d, 0, sizeof d);
+    d.name = "aien.experiment.observe";
+    d.faculty = RX_FACULTY_AIEN;
+    d.subject = RX_AIEN_SUBJ;
+    d.priority = RX_PRIO_LEARNING;
+    d.fn = fn_experiment;
+    d.user = f;
+    d.n_triggers = 1;
+    d.triggers[0] = (RxDep){ evidence, RX_FIELD(0) };
+    d.n_reads = 1;
+    d.reads[0] = (RxDep){ f->o.experiment_belief, RX_ALL_FIELDS };
+    d.n_writes = 1;
+    d.writes[0] = (RxDep){ f->o.experiment_belief, RX_ALL_FIELDS };
+    d.n_caps = 2;
+    d.caps[0] = (RxCapNeed){ evidence_read, f->w->objects[evidence.id].resource, RX_RIGHT_READ };
+    d.caps[1] = (RxCapNeed){ belief_write,
+        RX_AIEN_RES_BASE + RX_AIEN_RES_EXPERIMENT_BELIEF, RX_RIGHT_READ | RX_RIGHT_WRITE };
+    return rx_world_add_reaction(f->w, &d, &f->r_experiment);
 }
 
 static void need(Builder *b, RxObjRef o, uint32_t rights) {

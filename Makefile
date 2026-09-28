@@ -289,3 +289,38 @@ $(RX_R12_SILICON): $(RX_R12_SILICON_SRCS) src/runtime/rx_world.h \
 
 test-r12-silicon: $(RX_R12_SILICON)
 	./$(RX_R12_SILICON)
+
+# R13 host uses the R12 processor stand-in and cannot claim the silicon gate.
+# R13 silicon runs the same world against the physical resident GB10 seat.
+RX_R13_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
+	src/runtime/rx_coherent.c src/runtime/rx_native_bind.c \
+	src/runtime/rx_aegis.c src/runtime/rx_aien.c src/runtime/rx_omega.c \
+	src/runtime/rx_generation.c src/runtime/rx_living.c \
+	src/sha256.c src/omega_evidence.c src/omega_canonical.c \
+	src/omega_validate.c src/omega_core.c src/omega_codec.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c \
+	src/omega_realize_synth.c src/omega_machine.c src/omega_exec.c \
+	src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
+	tests/runtime/rx_r13_living.c
+RX_R13_HOST = $(OUT_DIR)/rx_r13_living_host
+RX_R13_SILICON = $(OUT_DIR)/rx_r13_living_silicon
+
+$(RX_R13_HOST): $(RX_R13_SRCS) src/runtime/rx_living.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R13_SRCS) $(AIENOS_CAP_LIB) -lm
+
+$(RX_R13_SILICON): $(RX_R13_SRCS) src/runtime/rx_resident_gpu.c \
+	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c \
+	src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c \
+	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DR13_SILICON -pthread -o $@ $(RX_R13_SRCS) \
+		src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
+		src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+		src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c \
+		$(PHYSICS_DIR)/nvrm/nvrm.c $(AIENOS_CAP_LIB) -ldl -lm
+
+test-r13-host: $(RX_R13_HOST)
+	./$(RX_R13_HOST)
+
+test-r13-silicon: $(RX_R13_SILICON)
+	./$(RX_R13_SILICON)

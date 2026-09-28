@@ -1222,8 +1222,23 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
         d->n_writes > RX_MAX_WRITES || d->n_caps > RX_MAX_CAPS)
         return RX_ERR_ARG;
     /* The seat reads one object and writes field 0 of a different one. */
+    /* A seat still has one data input. R8 may add one capability-slot wake
+     * so a blocked seat can resume when a real grant appears. That wake is
+     * authority state, never a second GPU operand. */
+    int seat_slot_wake = seat && d->n_triggers == 2 &&
+        d->triggers[1].mask == (RX_FIELD(0) | RX_FIELD(1) | RX_FIELD(2)) &&
+        d->triggers[1].obj.id != d->triggers[0].obj.id &&
+        d->triggers[1].obj.id != d->writes[0].obj.id;
+    int slot_matches = 0;
+    if (seat_slot_wake)
+        for (uint32_t i = 0; i < d->n_caps; i++)
+            if (d->cap_slotted[i] &&
+                d->cap_slot[i].id == d->triggers[1].obj.id &&
+                d->cap_slot[i].generation == d->triggers[1].obj.generation)
+                slot_matches = 1;
     if (seat && (d->n_writes != 1 || d->writes[0].mask != RX_FIELD(0) ||
-                 d->n_triggers != 1 || d->triggers[0].obj.id == d->writes[0].obj.id ||
+                 (d->n_triggers != 1 && (!seat_slot_wake || !slot_matches)) ||
+                 d->triggers[0].obj.id == d->writes[0].obj.id ||
                  (d->triggers[0].mask & ~(RX_FIELD(0) | RX_FIELD(1))) != 0 ||
                  d->triggers[0].mask == 0))
         return RX_ERR_ARG;
