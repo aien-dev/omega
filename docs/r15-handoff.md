@@ -131,3 +131,30 @@ Drake is not a programmer, so talk to him in plain English (see ~/AGENTS.md).
   - (2) An external logging wall/USB-C power meter.
   - (3) Accept that R15 cannot PASS yet.
 - Do NOT disable Secure Boot or bypass lockdown without Drake.
+
+## Energy decision (Drake, 2026-09-28): OPTION 1
+
+Drake chose option 1: enroll a machine-owner key and load a small signed,
+read-only telemetry driver.
+
+- Key made by Claude: `/var/lib/aien-mok/MOK.der` (public) and `MOK.priv`
+  (root-only, mode 600). CN "AIEN Spark owner key (telemetry)", SHA-256
+  fingerprint `19:0C:18:68:...:DF:D7:AE`.
+- Enrollment is **pending Drake**. He runs
+  `sudo mokutil --import /var/lib/aien-mok/MOK.der`, picks a one-time
+  password, reboots, and at the blue MOK Manager screen chooses Enroll MOK →
+  Continue → Yes → types the password → Reboot. Check it with
+  `mokutil --list-enrolled | grep AIEN`.
+- Codex still has to:
+  - Write the driver: an out-of-tree, read-only platform driver bound to
+    ACPI `NVDA8800` that ioremaps `0x1c238000`/0x1000 only. It exposes hwmon
+    `energy*_input` for PKG/CPU_P/CPU_E/GPC/GPM and `power*_input` for
+    SYS_TOTAL/SOC_PKG. It never writes. Put it in a repo (C, no Rust).
+  - Build it against `/lib/modules/$(uname -r)/build` and sign it with
+    `/usr/src/linux-headers-$(uname -r)/scripts/sign-file sha256
+    /var/lib/aien-mok/MOK.priv /var/lib/aien-mok/MOK.der <mod>.ko`.
+  - After Drake's enrollment, `insmod` it.
+  - Calibrate the units: find the raw units and the overflow behaviour
+    against a known load, and cross-check GPC against NVML GPU energy.
+  - Record the method in spec §7 in a new commit before qualification.
+- No systemd, including for loading the module (see memory no-systemd).
