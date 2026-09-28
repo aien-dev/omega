@@ -189,3 +189,13 @@ check) does on each adversarial axis, lifecycle transitions.
 - Two workloads can share one goal shape (both build one six-unit tower);
   their templates differ in required state. Every candidate of the shape
   is checked and each refusal is recorded.
+
+## 9. Owner decision (2026-09-28, after the qualification run)
+
+The pre-registered verdict is FAIL: G1 required 20x fewer cognitive
+operations for every workload, and the reverse-tower workload measured 1.2x
+(its goal is too easy for the planner to leave reasoning to save). The
+task's own gate asks for at least one repeated workload; merge-two-towers
+meets it (26.6x fewer operations, outcome and evidence equal to first use,
+0 false applicability). The owner chose to judge the gate by the task's
+wording and merge. The receipt keeps both verdicts; neither is relabelled.
