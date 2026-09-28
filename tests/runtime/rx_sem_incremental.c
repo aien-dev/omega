@@ -479,6 +479,9 @@ static void t_dependency(void) {
     uint64_t bogus[1] = { ((uint64_t)RX_SEM_KIND_DERIVED << 56) | 12345u };
     CHECK(rx_sem_add_node(&x.e, x.f_fan, bogus, 1, &other) == RX_SEM_ERR_NOT_FOUND,
           "inputs must exist first (acyclic by construction)");
+    uint64_t twice[2] = { x.s_temp, x.s_temp };
+    CHECK(rx_sem_add_node(&x.e, x.f_fan, twice, 2, &other) == RX_SEM_ERR_ARG,
+          "an input listed twice is refused");
     /* The value carries its dependencies and derivation. */
     RxSemValue v;
     CHECK(rx_sem_get(&x.e, x.root_branch, x.n_plan, &v, NULL) == RX_SEM_OK, "get plan");
@@ -1074,7 +1077,8 @@ static int replay(int mode, bool audit, bool check, RunStats *rs) {
         rs->false_hits = x.e.stats.false_hits;
         rs->audits = x.e.stats.audits;
         rs->saved_ns = x.e.stats.saved_ns;
-        if (rx_sem_verify(&x.e, NULL, NULL, NULL) != RX_SEM_OK) rs->mismatches++;
+        /* Verification is a check, not service: kept out of the energy windows. */
+        if (check && rx_sem_verify(&x.e, NULL, NULL, NULL) != RX_SEM_OK) rs->mismatches++;
     }
     fx_stop(&x);
     return 0;

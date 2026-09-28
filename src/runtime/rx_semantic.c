@@ -201,6 +201,11 @@ int rx_sem_add_node(RxSemEngine *e, uint32_t fn, const uint64_t *inputs, uint32_
         goto out;
     }
     if (e->n_nodes >= RX_SEM_MAX_NODES) { rc = RX_SEM_ERR_FULL; goto out; }
+    /* An input listed twice is refused: one reader entry per input, and the
+     * reverse lists (at most RX_SEM_MAX_NODES each) cannot overrun. */
+    for (uint32_t i = 0; i < n; i++)
+        for (uint32_t j = i + 1; j < n; j++)
+            if (inputs[i] == inputs[j]) { rc = RX_SEM_ERR_ARG; goto out; }
     uint32_t idx = e->n_nodes++;
     RxSemNode *nd = &e->nodes[idx];
     memset(nd, 0, sizeof *nd);
