@@ -439,3 +439,129 @@ receipt.
 R16; whole-project performance beyond the measured workloads; LLM decode or
 agent-loop performance (the legacy loops, §2); general cognition; open-ended
 synthesis; energy of anything outside the measured windows.
+
+## 16. Clarification C1 (2026-09-28, before any qualification data)
+
+Committed after a recovery audit of the branch and the machine and before
+any R15 qualification data exists. It corrects measurement definitions that
+were ambiguous or internally contradictory. It does not change G1–G16, their
+thresholds, the configurations, the workloads or the statistics (§3–§11).
+Sections 1–15 above are unchanged and remain as pre-registered at `a4c6123`.
+An unpushed local commit (`f714c08`) had rewritten §7 in place; that rewrite
+is not adopted. Its telemetry reader and preflight data are kept under
+`research/m15/spbm/`; the energy method is settled only by C2 (item 10).
+
+1. **Scheduler CPU and wall time (§5 L1-B, L1-C; §6.3, §6.4).** Wall time is
+   `CLOCK_MONOTONIC`. CPU time is `CLOCK_THREAD_CPUTIME_ID` read on the thread
+   that runs the measured code, both ends of an interval on one thread. They
+   are recorded side by side and never substituted for one another. §5 L1-B
+   says "CPU ns … measured with `CLOCK_MONOTONIC`"; that is wall time, so
+   L1-B reports both per wave. Scheduling code is: wake (`demand`),
+   admission and ready-ring insertion, a worker's ready-ring pop, and the
+   post-activation release/admission/deferred/parked wakes (RES); readiness
+   polling of every stage and admission (SEQ). Per-activation values are in
+   `RxTiming.sched_ns` / `sched_cpu_ns`; process totals in
+   `RxStats.sched_wall_ns` / `sched_cpu_ns`, counted once however deeply the
+   code nests. Metric 4 per activation = total / activations.
+2. **Dependency propagation (§6.3, L1-B).** A wave's counters
+   (`RxPropWave`): subscriptions inspected, subscriptions matched
+   (generation and field mask), wake attempts, wakes accepted (a DORMANT
+   reaction made waiting), **new ready insertions**, coalesced, deferred and
+   suppressed wakes, and wall and CPU time. "Dependents inserted into the
+   ready ring" is `ready_inserts`; cost per dependent = wave time /
+   `ready_inserts`. An L1-B sample in which `ready_inserts` differs from the
+   fanout is a failed sample, not a data point. Metric 15's RES wake
+   attempts remain `wakes` (every `demand` call), as §6.15 defines.
+3. **Serialization bytes (§6.7).** "Bytes" means **copied bytes**: bytes
+   processor code writes into a destination as a copy or serialization of
+   data that exists elsewhere. Counted per path, each its own counter:
+   snapshot entries filled into `RxCtx`; current fields copied into the
+   publication staging buffer; crumb records appended; coherent table entry
+   members and field windows written; descriptors written to and copied out
+   of the processor→seat ring (publications, claims, shutdown) and the
+   seat→processor ring; window relocations; the coherent-bind copy; R9 bytes
+   passed to `write()` (item 5). Not counted as copies, and reported as
+   such: the reaction bodies' own data structures (identical in every
+   configuration); one-time seat launch images (made before any window);
+   the graphics chip's own reads and writes of descriptors and windows,
+   which are not processor copies. Chip-side traffic is reported separately
+   as **transferred bytes, derived**: claims posted × 128 B descriptor read
+   + results taken × 128 B descriptor written + per-claim window and
+   heartbeat bytes loaded and stored, where the per-claim byte counts are
+   enumerated from the seat program's load and store instructions
+   (`rx_resident_gpu.c`) and listed in the receipt beside the derivation. No path is assumed zero-copy because of the architecture.
+4. **Timing buffers.** `rx_world_timing_status` returns `RX_ERR_FULL` when any
+   sample was dropped. A measure whose buffer dropped a sample fails; its
+   statistics are not reduced.
+5. **R9 I/O (L1-G, §6.7).** Option A: each store counts the bytes it passes
+   to `write()` and the `fsync` calls it makes (`rx_gen_store_io`). Each
+   window records before/after snapshots of the trial's own store, and of
+   the process total; if the process-total delta differs from the sum of
+   the trial's stores' deltas, the window fails (unrelated store activity).
+   Directory creation, `rename` and `unlink` are metadata operations, counted
+   by the sync that follows them, not as bytes.
+6. **Instrumentation parity (§8).** Configurations that are compared run
+   the same instrumentation. Counters in `RxStats` are always on in every
+   build. The per-activation timing buffer is off in every W-EPISODE trial
+   of every configuration (activation latency in trials comes from crumb
+   timestamps, §6.2) and on in both RES-1 and SEQ for L1-A, L1-B and L1-C.
+   Instrumentation overhead is measured, not assumed: an L1 W-PROD run of
+   RES-1 and of SEQ with the timing buffer on and off (5 runs each,
+   interleaved), reported as a throughput ratio, not gated.
+   `RX_MEASURE_NO_CAUSAL_DIGEST` is used only for RES-1-NODIGEST (metric 16).
+7. **`perf_event_paranoid`.** The spec (§6.9) says 1; the Codex handoff said
+   0. 1 is correct for the PMU model in item 8 (per-task counting of the
+   process's own threads including kernel mode needs ≤ 1; 0 would only be
+   needed for per-CPU counting, which is not used). Values: **original 4**
+   (Ubuntu boot default, `CONFIG_SECURITY_PERF_EVENTS_RESTRICT=y`;
+   this machine was found at 0 on 2026-09-28 after an unlogged change and
+   restored to 4 at the audit), **qualification 1**, **restored 4**. The
+   qualification script records all three in `machine.json` and fails the
+   run if the restore does not read back 4.
+8. **PMU model (§6.9).** GB10 has two CPU PMUs: `armv8_pmuv3_0` (type 10,
+   Cortex-A725, MIDR part 0xd87, cpus 0-4,10-14) and `armv8_pmuv3_1` (type
+   11, Cortex-X925, part 0xd85, cpus 5-9,15-19); types and cpu lists are
+   read from sysfs at run time and recorded. Events (raw config, identical
+   on both): `cpu_cycles` 0x11, `inst_retired` 0x08, `bus_access` 0x19,
+   `ll_cache_miss_rd` 0x37, `l2d_cache_refill` 0x17, `mem_access` 0x13.
+   - Source and scope: per task (`pid = 0`, `cpu = -1`), opened by the
+     trial process's main thread before any other thread is created, with
+     `inherit = 1`, so every thread of the process is counted and nothing
+     else is. One event per (event, PMU) pair, 12 descriptors, no groups
+     (group reads are not relied on with `inherit`). `exclude_hv = 1`; user
+     and kernel mode are both counted.
+   - Boundaries: opened `disabled`; each window does `RESET` + `ENABLE` at its
+     start timestamp and `DISABLE` at its end timestamp, then reads.
+   - Read format `TOTAL_TIME_ENABLED | TOTAL_TIME_RUNNING`. The event count
+     is the **raw sum over the two PMUs**. It is **never scaled** by
+     enabled/running: on a heterogeneous machine a task's event on one PMU is
+     not running while the task is on the other class, so running < enabled
+     does not mean multiplexing. Multiplexing test: for every event,
+     running(A725) + running(X925) must equal enabled within 0.1%; a window
+     that fails it reports its PMU values as multiplexed, unscaled, with the
+     ratio, and metric 9 does not use it.
+   - Attribution after migration was checked on this machine before this
+     commit: one thread ran a fixed loop on cpu 1 (A725) then on cpu 6
+     (X925); `inst_retired` counted 802.2M on the A725 PMU and 801.6M on the
+     X925 PMU (sum 1.604G for 2 × 800M), running fractions 0.5827 + 0.4173
+     = 1.0000, and all six events fitted without multiplexing.
+   - Not counted: kernel threads acting for the process (for example
+     writeback) and other processes. Metric 9 is stated as the process's
+     own traffic.
+9. **SEQ parity before SEQ is a baseline.** SEQ is used as a baseline only
+   after a semantic parity gate passes on the candidate: RES-1 and SEQ from
+   the same initial state and stimulus reach equivalent goal, plan, search
+   epoch, verified selected realization, GPU experiment evidence, AIEN
+   belief, generation identity, in-force realization and authority outcome,
+   both crumb graphs verify, and no trigger is lost; repeated runs. The gate
+   and its runs are recorded in the receipt with the correctness reruns
+   (§14).
+10. **Energy.** §7 stands as written. The owner enrolled a machine-owner key
+    on 2026-09-28 and a signed read-only SPBM reader exists
+    (`research/m15/spbm/`). Before it may supply metric 17, a further
+    clarification **C2** will record: accumulator width, scale and rollover
+    behaviour; monotonicity; idle, CPU, GPU and combined-load comparisons;
+    the GPU-domain comparison with NVML; and the stated uncertainty. No R15
+    qualification data is collected before C2 is committed. If C2 cannot
+    make the method defensible, metric 17 is incomplete and R15 does not
+    PASS (§7).
