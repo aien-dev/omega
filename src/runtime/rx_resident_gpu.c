@@ -45,7 +45,26 @@ struct RxGpuSeat {
     char err[160];
     LaunchJob *job;
     volatile uint32_t *hb_watch;
+    RxWorld *world;
+    int image_bound;
 };
+
+/* The chip is leaving. The world keeps its objects: copy the image into
+ * memory the world owns before the chip memory goes away. A chip reset or
+ * exit must not take canonical identity with it. */
+static int seat_return_image(RxGpuSeat *s) {
+    if (!s->image_bound) return 0;
+    RxWorld *w = s->world;
+    uint64_t bytes = w->coherent_bytes;
+    void *own = malloc((size_t)bytes);
+    if (!own) return -1;
+    if (rx_world_bind_coherent(w, own, bytes, 0) != RX_OK) {
+        free(own);
+        return -1;
+    }
+    s->image_bound = 0;
+    return 0;
+}
 
 typedef struct {
     int base, addr, hb_ptr, c2g, g2c, slot, dst, win;
@@ -198,8 +217,10 @@ static void ring_slot(BlackwellIRProgram *p, Regs *r, int dest_off, int index, i
     add32(p, dest_off, r->tmp, ring_off);
 }
 
+/* System-scope strong load: it goes past the chip's own cache, so a value
+ * the processor wrote is seen on the next poll. */
 static void ld(BlackwellIRProgram *p, int dst, int addr, int uv) {
-    BlackwellIRInsn n = op(BW_IR_LDG_MMIO);
+    BlackwellIRInsn n = op(BW_IR_LDG_STRONG_SYS);
     n.dst_vreg = dst;
     n.src1_vreg = addr;
     n.ureg = uv;
@@ -312,10 +333,13 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
 
     addk(prog, r.hb_ptr, r.base, r.off_hb, 1u);
     int loop = (int)prog->count;
+    em(prog, op(BW_IR_CCTL_IVALL));   /* drop any stale private copy before the check */
     ld(prog, r.tail, r.c2g, r.uv);
     add32(prog, r.tmp, r.tail, r.one);
     st_ef(prog, r.hb_ptr, r.tmp, r.uv);
     add32(prog, r.give, r.give, r.ones);
+    at_off(prog, &r, r.addr, r.off_hb, 8u);   /* DIAG: loop pass counter */
+    st(prog, r.addr, r.give, r.uv);
     ge_rr(prog, r.give, r.one);
     int give_exit = bra(prog, 1, 1);
 
@@ -463,29 +487,57 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     return (int)prog->count;
 }
 
+/* Instruction classes by the low opcode bits of word 0. */
+#define OPC(w0) ((w0) & 0xfffu)
+#define OPC_S2R  0x919u
+#define OPC_LDC  0xb82u
+#define OPC_LDCU 0x7acu
+#define OPC_LDG  0x981u
+#define OPC_STG  0x986u
+#define OPC_ISETP_I 0x80cu
+#define OPC_ISETP_R 0x20cu
+#define OPC_BRA  0x947u
+
+/* Control field in word 3: stall 9..12, yield 13, write barrier 14..16,
+ * read barrier 17..19, wait mask 20..25, reuse 26..29. */
+#define CTL_STALL(n) ((uint32_t)(n) << 9)
+#define CTL_YIELD    (1u << 13)
+#define CTL_WB(b)    ((uint32_t)(b) << 14)
+#define CTL_RB(b)    ((uint32_t)(b) << 17)
+#define CTL_WAIT(m)  ((uint32_t)(m) << 20)
+#define CTL_MASK     0x3ffffe00u
+
+/* The seat runs one thread and polls. Speed does not matter here; a value
+ * used before its load lands does. Every variable-latency read (constant
+ * bank, global memory, special register) sets barrier 0. Every store holds
+ * barrier 1 until its operands are read. Every instruction waits on both, and
+ * fixed-latency work stalls long enough for the next instruction to read it. */
+static void seat_scoreboard(uint8_t *code, size_t bytes) {
+    for (size_t at = 0; at + 16 <= bytes; at += 16) {
+        uint32_t w[4];
+        memcpy(w, code + at, 16);
+        uint32_t opc = OPC(w[0]);
+        uint32_t ctl;
+        if (opc == OPC_S2R || opc == OPC_LDC || opc == OPC_LDCU || opc == OPC_LDG)
+            ctl = CTL_STALL(2) | CTL_WB(0) | CTL_RB(7) | CTL_WAIT(0x3);
+        else if (opc == OPC_STG)
+            ctl = CTL_STALL(2) | CTL_WB(7) | CTL_RB(1) | CTL_WAIT(0x3);
+        else
+            ctl = CTL_STALL(13) | CTL_WB(7) | CTL_RB(7) | CTL_WAIT(0x3);
+        w[3] = (w[3] & ~CTL_MASK) | ctl;
+        memcpy(code + at, w, 16);
+    }
+}
+
+/* The seat must open with the lane check: only thread 0 continues. */
 static int first_is_lane_check(const uint8_t *code, size_t n) {
-    FILE *f = fopen("/tmp/r12-seat.bin", "wb");
-    if (!f) return 0;
-    if (fwrite(code, 1, n, f) != n) {
-        fclose(f);
-        return 0;
-    }
-    fclose(f);
-    FILE *p = popen("/usr/local/cuda/bin/nvdisasm -b SM121 /tmp/r12-seat.bin 2>&1", "r");
-    if (!p) return 0;
-    char line[256];
-    int seen = 0;
-    int ok = 0;
-    while (fgets(line, sizeof line, p)) {
-        if (!strchr(line, '/')) continue;
-        if (seen == 0) ok = strstr(line, "S2R") != NULL;
-        if (seen == 1) ok = ok && strstr(line, "ISETP") != NULL;
-        if (seen == 2) ok = ok && strstr(line, "BRA") != NULL;
-        if (seen < 3) fprintf(stderr, "seat insn %d: %s", seen, line);
-        if (++seen == 3) break;
-    }
-    pclose(p);
-    if (!ok) fprintf(stderr, "seat: lane check failed after %d instructions\n", seen);
+    if (n < 48) return 0;
+    uint32_t w0[3];
+    for (int i = 0; i < 3; i++) memcpy(&w0[i], code + 16 * i, 4);
+    int ok = OPC(w0[0]) == OPC_S2R &&
+             (OPC(w0[1]) == OPC_ISETP_I || OPC(w0[1]) == OPC_ISETP_R) &&
+             OPC(w0[2]) == OPC_BRA;
+    if (!ok) fprintf(stderr, "seat: the program does not open with the lane check\n");
     return ok;
 }
 
@@ -659,8 +711,12 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
     uint8_t *code = calloc(1, bytes);
     if (!code) return -1;
     size_t emitted = 0;
-    if (omega_bw_encode_program(&prog, code, bytes, &emitted) != 0 ||
-        !first_is_lane_check(code, emitted)) {
+    if (omega_bw_encode_program(&prog, code, bytes, &emitted) != 0) {
+        free(code);
+        return -1;
+    }
+    seat_scoreboard(code, emitted);
+    if (!first_is_lane_check(code, emitted)) {
         free(code);
         return -1;
     }
@@ -675,12 +731,13 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
         return -1;
     }
     s->opened = 1;
+    s->world = w;
     NvrmMem image;
     memset(&image, 0, sizeof(image));
     uint64_t bytes_img = w->coherent_bytes;
     uint64_t alloc = (bytes_img + 0xfffu) & ~0xfffu;
     if (alloc < 0x100000) alloc = 0x100000;
-    if (nvrm_alloc(&s->ctx.rm, alloc, &image) != 0) {
+    if (nvrm_alloc_gpu_uncached(&s->ctx.rm, alloc, &image) != 0) {
         snprintf(s->err, sizeof s->err, "the shared image was not allocated");
         m16_native_close(&s->ctx);
         free(code);
@@ -694,10 +751,12 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
         free(s);
         return -1;
     }
+    s->image_bound = 1;
     memset(w->coherent + rx_world_off_heartbeat(), 0, 64);
 
     LaunchJob *job = calloc(1, sizeof(*job));
     if (!job) {
+        seat_return_image(s);
         m16_native_close(&s->ctx);
         free(code);
         free(s);
@@ -718,6 +777,7 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
     if (pthread_create(&s->thread, NULL, launch_main, job) != 0) {
         free(job);
         free(code);
+        seat_return_image(s);
         m16_native_close(&s->ctx);
         free(s);
         return -1;
@@ -758,6 +818,7 @@ int rx_gpu_seat_finish(RxGpuSeat *seat) {
                 seat->marker_ok, seat->sem_ok);
     }
     if (!ok && seat->err[0]) fprintf(stderr, "seat finish: %s\n", seat->err);
+    if (seat_return_image(seat) != 0) ok = 0;
     if (seat->opened) m16_native_close(&seat->ctx);
     if (seat->job) {
         free(seat->job->code);
