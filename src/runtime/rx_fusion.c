@@ -820,7 +820,7 @@ int rx_fusion_verify(AgMetaSkill *m, const AgSkillTable *skills, uint64_t seed) 
     for (uint32_t i = 0; i < n_in; i++) combos *= 3;
     vd->status_combos = combos;
     uint64_t rs = seed ? seed : 0x9E3779B97F4A7C15ull;
-    const uint32_t sets = 6 + nb;
+    const uint32_t sets = 6 + nb + 24;   /* then 24 sets over the full range */
     for (uint32_t c = 0; c < combos; c++) {
         uint8_t s[AG_MAX_IN] = { 0 };
         uint32_t cc = c;
@@ -835,14 +835,14 @@ int rx_fusion_verify(AgMetaSkill *m, const AgSkillTable *skills, uint64_t seed) 
             for (uint32_t i = 0; i < n_in; i++) {
                 v[i] = k == 0 ? 0 : k == 1 ? 1 : k == 2 ? UINT64_MAX
                      : k < 6 ? rng(&rs) % (k == 3 ? 1000u : k == 4 ? 1000000u : UINT32_MAX)
-                     : bounds[k - 6];
+                     : k < 6 + nb ? bounds[k - 6] : rng(&rs);
                 if (s[i] != AG_OK) v[i] = 0;
             }
             for (uint32_t o = 0; o < ref->n_obj; o++)
                 for (uint32_t f = 0; f < RX_MAX_FIELDS; f++)
                     world[o][f] = k == 0 ? 0 : k == 1 ? 1 : k == 2 ? UINT64_MAX
                                 : k < 6 ? rng(&rs) % (k == 3 ? 1000u : k == 4 ? 1000000u : UINT32_MAX)
-                                : bounds[k - 6];
+                                : k < 6 + nb ? bounds[k - 6] : rng(&rs);
             /* Recall keys the steps look for, present in half the sets. */
             for (uint32_t j = 0; j < ref->n_steps; j++) {
                 const AgMetaStep *q = &ref->step[j];
