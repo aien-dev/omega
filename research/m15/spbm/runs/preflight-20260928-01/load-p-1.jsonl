@@ -1,0 +1,10 @@
+{"cpu":5,"cpu_ns":13999914416,"iterations":6618578944,"affinity_error":0}
+{"cpu":6,"cpu_ns":14000273344,"iterations":6618304512,"affinity_error":0}
+{"cpu":7,"cpu_ns":14000290608,"iterations":6621999104,"affinity_error":0}
+{"cpu":8,"cpu_ns":13999493504,"iterations":6620020736,"affinity_error":0}
+{"cpu":9,"cpu_ns":14000142016,"iterations":6621024256,"affinity_error":0}
+{"cpu":15,"cpu_ns":13999959040,"iterations":6623547392,"affinity_error":0}
+{"cpu":16,"cpu_ns":13999709136,"iterations":6619533312,"affinity_error":0}
+{"cpu":17,"cpu_ns":13999929792,"iterations":6617382912,"affinity_error":0}
+{"cpu":18,"cpu_ns":13999837600,"iterations":6624092160,"affinity_error":0}
+{"cpu":19,"cpu_ns":13999579104,"iterations":6623309824,"affinity_error":0}
