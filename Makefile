@@ -501,3 +501,31 @@ $(RX_ROUTE_TEST): $(RX_ROUTE_SRCS) $(RX_ROUTE_OBJ) tests/runtime/rx_cog_engines.
 
 test-cognitive-routing: $(RX_ROUTE_TEST)
 	./$(RX_ROUTE_TEST)
+
+# OMEGA_TYPED_RESULT_CONSTRAINTS: structured results of cognition are checked
+# against typed contracts; the publish gate is the only writer of what is
+# published. rx_contract.o is built alone first and must not reference any
+# AIENOS admin operation: a contract can find that authority is missing, never
+# create it.
+RX_TYPED_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
+	src/omega_core.c src/omega_canonical.c tests/runtime/rx_typed_results.c
+RX_TYPED_TEST = $(OUT_DIR)/rx_typed_results_test
+RX_CONTRACT_OBJ = $(OUT_DIR)/rx_contract.o
+TYPED_RESULTS_N ?= 400
+
+$(RX_CONTRACT_OBJ): src/runtime/rx_contract.c src/runtime/rx_contract.h src/runtime/rx_graph.h \
+	src/runtime/rx_world.h src/runtime/rx_aien.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_contract.c
+	@if nm -u $@ | grep -E 'aienos_cap_|rx_caproot_mint|rx_caproot_revoke' ; then \
+		echo "rx_contract.o references an authority admin operation; a contract must not mint"; \
+		rm -f $@; exit 1; fi
+
+$(RX_TYPED_TEST): $(RX_TYPED_SRCS) $(RX_CONTRACT_OBJ) $(RX_GRAPH_OBJ) src/runtime/rx_caproot.h \
+	src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_TYPED_SRCS) $(RX_CONTRACT_OBJ) $(RX_GRAPH_OBJ) \
+		$(AIENOS_CAP_LIB) -lm
+
+.PHONY: test-typed-results
+test-typed-results: $(RX_TYPED_TEST)
+	./$(RX_TYPED_TEST) $(TYPED_RESULTS_N)
