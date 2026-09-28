@@ -19,7 +19,7 @@
 static int g_fail;
 
 typedef struct {
-    const char *name;
+    char name[48];   /* copied: some names are built on the caller's stack */
     int code;
 } DiffResult;
 
@@ -34,7 +34,7 @@ static void expect_eq(const char *name, int linux_rc, int native_rc) {
         return;
     }
     if (g_ndiff < (int)(sizeof g_diff / sizeof g_diff[0])) {
-        g_diff[g_ndiff].name = name;
+        snprintf(g_diff[g_ndiff].name, sizeof g_diff[g_ndiff].name, "%s", name);
         g_diff[g_ndiff].code = linux_rc;
         g_ndiff++;
     }
