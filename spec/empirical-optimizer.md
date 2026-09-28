@@ -234,7 +234,7 @@ other Omega sessions testing at the same time).
 qualifying candidate, before the rebase onto main). Run 2 was paused
 partway through by the R15 quiet-machine marker (SIGSTOP until the marker
 was removed) and still passed. Frozen ratios to the fixed rule ranged
-0.56–0.82; online 0.61–0.82; replay 0.56–0.86. H3 coverage, reported but
+0.56–0.82; online 0.58–0.82; replay 0.56–0.86. H3 coverage, reported but
 not gated, ranged 0.53–1.00.
 
 The frozen model was 0.50–0.86 of the fixed rule on every core class and
