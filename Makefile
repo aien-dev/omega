@@ -39,7 +39,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-semantic-comm
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-semantic-comm
 
 all: $(TARGET)
 
@@ -270,6 +270,34 @@ $(RX_R11_TEST): $(RX_R11_SRCS) $(RX_AIEN_OBJ) src/runtime/rx_omega.h src/runtime
 test-r11: $(RX_R11_TEST)
 	./$(RX_R11_TEST)
 
+# OMEGA_STATE_PROJECTION: cognition gets a compiled state projection from
+# Cortex, not everything Cortex knows. Part B drives the real R11 AIEN faculty
+# under the native AIENOS authority. The projection objects are built alone
+# first and may reference nothing but Cortex and SHA-256: no world, no faculty,
+# no Omega realization code.
+RX_SP_OBJS = $(OUT_DIR)/rx_cortex.o $(OUT_DIR)/rx_projection.o
+RX_SP_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
+	tests/runtime/rx_sp_workloads.c tests/runtime/rx_state_projection.c
+RX_SP_TEST = $(OUT_DIR)/rx_state_projection_test
+
+$(OUT_DIR)/rx_cortex.o: src/runtime/rx_cortex.c src/runtime/rx_cortex.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_cortex.c
+
+$(OUT_DIR)/rx_projection.o: src/runtime/rx_projection.c src/runtime/rx_projection.h \
+	src/runtime/rx_cortex.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_projection.c
+	@if nm -u $@ $(OUT_DIR)/rx_cortex.o | grep -E ' (rx_world|rx_aien|rx_omega|omega_)' ; then \
+		echo "the projection references the world, a faculty or Omega realization code"; \
+		rm -f $@; exit 1; fi
+
+$(RX_SP_TEST): $(RX_SP_SRCS) $(RX_SP_OBJS) $(RX_AIEN_OBJ) tests/runtime/rx_sp_workloads.h \
+	src/runtime/rx_world.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_SP_SRCS) $(RX_SP_OBJS) $(RX_AIEN_OBJ) $(AIENOS_CAP_LIB) -lm
+
+test-state-projection: $(RX_SP_TEST)
+	./$(RX_SP_TEST)
+
 # Physical graphics seat against the native AIENOS authority. Not part of
 # GitHub checks. A pass on this machine is the only run that may set
 # silicon_observed.
@@ -376,6 +404,31 @@ $(RX_GRAPH_TEST): $(RX_GRAPH_SRCS) $(RX_GRAPH_OBJ) src/runtime/rx_caproot.h \
 test-action-graph: $(RX_GRAPH_TEST)
 	./$(RX_GRAPH_TEST)
 
+# OMEGA_CAPABILITY_QUERY: AIEN states a CapabilityNeed; Omega compiles it into
+# probes of the capability sources and returns a bounded list of candidates
+# ranked on explicit dimensions. rx_capq.o is built alone first and must not
+# reference any AIENOS admin operation: a query can learn that authority is
+# held or missing, never create it.
+RX_CAPQ_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
+	src/omega_core.c src/omega_canonical.c tests/runtime/rx_capability_query.c
+RX_CAPQ_TEST = $(OUT_DIR)/rx_capability_query_test
+RX_CAPQ_OBJ = $(OUT_DIR)/rx_capq.o
+
+$(RX_CAPQ_OBJ): src/runtime/rx_capq.c src/runtime/rx_capq.h src/runtime/rx_graph.h \
+	src/runtime/rx_world.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_capq.c
+	@if nm -u $@ | grep -E 'aienos_cap_|rx_caproot_mint|rx_caproot_revoke' ; then \
+		echo "rx_capq.o references an authority admin operation; a query must not mint"; \
+		rm -f $@; exit 1; fi
+
+$(RX_CAPQ_TEST): $(RX_CAPQ_SRCS) $(RX_CAPQ_OBJ) $(RX_GRAPH_OBJ) src/runtime/rx_caproot.h \
+	src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_CAPQ_SRCS) $(RX_CAPQ_OBJ) $(RX_GRAPH_OBJ) \
+		$(AIENOS_CAP_LIB) -lm
+
+test-capability-query: $(RX_CAPQ_TEST)
+	./$(RX_CAPQ_TEST)
 # OMEGA_SEMANTIC_COMMUNICATION: branches and workers receive the semantic
 # projection their InformationNeed selects, then only deltas, not full state.
 # rx_semcomm.o is built alone first. It enforces capability boundaries, so it
