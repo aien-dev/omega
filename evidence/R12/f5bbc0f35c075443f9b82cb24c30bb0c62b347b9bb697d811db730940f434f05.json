@@ -1,0 +1,35 @@
+{
+  "schema": "AIEN_RX_R12_RESIDENT_SILICON_V2",
+  "run_id": "20260928T003959Z-552f76c24025",
+  "candidate_commit": "552f76c2402546a1aedcd361250c4d9fac3f9f8e",
+  "candidate_bound": true,
+  "run_commit": "552f76c2402546a1aedcd361250c4d9fac3f9f8e",
+  "tree_dirty": false,
+  "aienos_commit": "c8ab65e3ba2fddbe99245f747fdfdb99f6042fd3",
+  "physics_commit": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9",
+  "authority": "native AIENOS capability authority (C); Linux stand-in not started",
+  "seat_body": "qualified 32-bit integer add (IADD3), A.field0 + A.field1 -> B.field0",
+  "checks": 103,
+  "failures": 0,
+  "silicon_observed": true,
+  "claimed": true,
+  "test_binary_sha256": "28ad3596c118e773f8fce6f41824a1bbbc33b01bb8736327b034384e960da1f4",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64"},
+  "hardware_scope": "one persistent graphics seat on the machine's own chip, same image as the processor",
+  "scenarios": [
+    {"name": "chain A -> chip add -> B -> processor -> C", "result": "PASS"},
+    {"name": "duplicate completion is not published twice", "result": "PASS"},
+    {"name": "torn result notice is refused and B is restored", "result": "PASS"},
+    {"name": "seat restart keeps identity and history", "result": "PASS"},
+    {"name": "detached window refuses the publication", "result": "PASS"},
+    {"name": "capability revoked after the claim is refused at publication", "result": "PASS"},
+    {"name": "generation moved in flight invalidates the chip's work", "result": "PASS"},
+    {"name": "stale generation claim is refused on the chip", "result": "PASS"},
+    {"name": "seat leaves on request", "result": "PASS"}
+  ],
+  "not_exercised": ["seat killed mid-claim", "graphics channel reset under load"],
+  "gates": {
+    "R12_RESIDENT_SEAT": "PASS",
+    "not_claimed": ["R8", "R10", "R11", "R13"]
+  }
+}
