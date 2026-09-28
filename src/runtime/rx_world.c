@@ -847,14 +847,17 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
 
     set_state(w, r, RX_RUNNING);
     if (d->need.accelerator_features & RX_ACCEL_BLACKWELL) {
+        uint32_t in = d->triggers[0].obj.id;
         uint32_t id = d->writes[0].obj.id;
+        const RxObject *a = &w->objects[in];
         const RxObject *o = &w->objects[id];
-        if (!w->resident_rule_set || !o->placed || !o->live ||
+        if (!w->resident_enabled || !a->placed || !a->live || !o->placed || !o->live ||
+            a->generation != d->triggers[0].obj.generation ||
             o->generation != d->writes[0].obj.generation) {
             set_state(w, r, RX_INVALIDATED);
             fill_inputs(&k, NULL, deps, n_deps);
             k.kind = RX_CRUMB_INVALIDATED;
-            k.reason = w->resident_rule_set ? RX_ERR_UNPLACED : RX_ERR_ARG;
+            k.reason = w->resident_enabled ? RX_ERR_UNPLACED : RX_ERR_ARG;
             k.t_end_ns = now_ns();
             crumb_append(w, &k);
             w->stats.invalidations++;
@@ -862,7 +865,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
             return;
         }
         uint64_t seq = 0;
-        int pr = rx_resident_post_claim(w, id, r->wake_cause, &seq);
+        int pr = rx_resident_post_claim(w, in, id, r->wake_cause, &seq);
         if (pr != RX_OK) {
             set_state(w, r, RX_FAILED);
             fill_inputs(&k, NULL, deps, n_deps);
@@ -1177,9 +1180,11 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
         d->n_triggers > RX_MAX_DEPS || d->n_reads > RX_MAX_DEPS ||
         d->n_writes > RX_MAX_WRITES || d->n_caps > RX_MAX_CAPS)
         return RX_ERR_ARG;
-    if (seat && (d->n_writes != 1 || d->writes[0].mask != RX_FIELD(1) ||
-                 d->n_triggers != 1 || d->triggers[0].obj.id != d->writes[0].obj.id ||
-                 d->triggers[0].mask != RX_FIELD(0)))
+    /* The seat reads one object and writes field 0 of a different one. */
+    if (seat && (d->n_writes != 1 || d->writes[0].mask != RX_FIELD(0) ||
+                 d->n_triggers != 1 || d->triggers[0].obj.id == d->writes[0].obj.id ||
+                 (d->triggers[0].mask & ~(RX_FIELD(0) | RX_FIELD(1))) != 0 ||
+                 d->triggers[0].mask == 0))
         return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
     int rc = RX_OK;
@@ -1258,6 +1263,11 @@ static uint64_t read_u64(const uint8_t *p) {
     return v;
 }
 
+static uint32_t read_u32(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
+           ((uint32_t)p[3] << 24);
+}
+
 static int find_seat(const RxWorld *w, uint32_t seq) {
     for (uint32_t i = 0; i < w->n_reactions; i++) {
         const RxReaction *r = &w->reactions[i];
@@ -1310,13 +1320,18 @@ int rx_resident_accept(RxWorld *w) {
     k.n_caps = desc->n_caps;
     for (uint32_t i = 0; i < desc->n_caps; i++) stamp_cap(w, &k, i, desc->caps[i].ref);
     add_parent(&k, r->resident_parent);
+    uint32_t in = desc->triggers[0].obj.id;
     uint32_t id = desc->writes[0].obj.id;
+    RxObject *a = &w->objects[in];
     RxObject *o = &w->objects[id];
     k.n_inputs = 1;
-    k.inputs[0].obj = desc->writes[0].obj;
-    k.inputs[0].version = o->version;
-    k.inputs[0].mask = RX_FIELD(0);
-    if (o->live) add_parent(&k, o->field_writer[0]);
+    k.inputs[0].obj = desc->triggers[0].obj;
+    k.inputs[0].version = a->version;
+    k.inputs[0].mask = RX_FIELD(0) | RX_FIELD(1);
+    if (a->live) {
+        add_parent(&k, a->field_writer[0]);
+        add_parent(&k, a->field_writer[1]);
+    }
 
     if (tr != RX_OK) {
         if (o->placed) rx_coherent_project(w, id);
@@ -1324,37 +1339,51 @@ int rx_resident_accept(RxWorld *w) {
         pthread_mutex_unlock(&w->mu);
         return tr;
     }
-    if (d.msg_type == RX_RING_FAULT || d.object_id != id ||
-        !o->live || d.object_generation != o->generation) {
+    uint32_t out_id = UINT32_MAX, out_gen = 0;
+    if (d.payload_len >= 40) {
+        out_id = read_u32(d.payload + 24);
+        out_gen = read_u32(d.payload + 28);
+    }
+    /* A fault notice, or any object that moved since the claim, is stale. */
+    if (d.msg_type == RX_RING_FAULT || d.object_id != in || out_id != id ||
+        !a->live || !o->live || !a->placed || !o->placed ||
+        d.object_generation != a->generation || out_gen != o->generation ||
+        a->generation != desc->triggers[0].obj.generation ||
+        o->generation != desc->writes[0].obj.generation) {
         if (o->placed) rx_coherent_project(w, id);
         seat_fail(w, (uint32_t)rid, &k, RX_CRUMB_INVALIDATED, RX_ERR_STALE_GEN);
         pthread_mutex_unlock(&w->mu);
         return RX_ERR_STALE_GEN;
     }
+    /* Authority is checked again at publication. The notice must echo the
+     * capabilities bound at claim time, and both must still validate. */
     int cap_err = 0;
-    RxCapRef echoed = { 0, 0 };
-    (void)cap_err;
-    if (d.payload_len >= 8) {
-        echoed.cap_id = (uint32_t)d.payload[0] | ((uint32_t)d.payload[1] << 8) |
-                        ((uint32_t)d.payload[2] << 16) | ((uint32_t)d.payload[3] << 24);
-        echoed.generation = (uint32_t)d.payload[4] | ((uint32_t)d.payload[5] << 8) |
-                            ((uint32_t)d.payload[6] << 16) | ((uint32_t)d.payload[7] << 24);
-    }
-    if (echoed.cap_id != o->cap.cap_id || echoed.generation != o->cap.generation ||
+    RxCapRef in_cap = { read_u32(d.payload), read_u32(d.payload + 4) };
+    RxCapRef out_cap = { read_u32(d.payload + 32), read_u32(d.payload + 36) };
+    if (in_cap.cap_id != a->cap.cap_id || in_cap.generation != a->cap.generation ||
+        out_cap.cap_id != o->cap.cap_id || out_cap.generation != o->cap.generation ||
         validate_caps(w, desc, &cap_err) != 0 ||
-        rx_world_validate_cap(w, echoed, desc->subject, o->resource, RX_RIGHT_WRITE, NULL) != RX_CAP_OK) {
+        rx_world_validate_cap(w, in_cap, desc->subject, a->resource, RX_RIGHT_READ, NULL) !=
+            RX_CAP_OK ||
+        rx_world_validate_cap(w, out_cap, desc->subject, o->resource, RX_RIGHT_WRITE, NULL) !=
+            RX_CAP_OK) {
         rx_coherent_project(w, id);
         seat_fail(w, (uint32_t)rid, &k, RX_CRUMB_REJECTED, RX_ERR_AUTHORITY);
         pthread_mutex_unlock(&w->mu);
         return RX_ERR_AUTHORITY;
     }
+    /* The chip finishing is not the commit. The input window must still
+     * match the canonical input, and the output window must hold exactly the
+     * sum in field 0 and the canonical values everywhere else. */
     uint64_t parent = read_u64(d.payload + 16);
+    const uint8_t *ain = w->coherent + a->region_offset;
     const uint8_t *win = w->coherent + o->region_offset;
-    uint64_t f0 = read_u64(win);
-    uint64_t f1 = read_u64(win + 8);
-    int torn = parent != r->resident_parent || f0 != o->field[0] ||
-               f1 != (o->field[0] ^ (uint64_t)w->resident_k);
-    for (uint32_t f = 2; f < RX_MAX_FIELDS && !torn; f++)
+    uint64_t f1 = (uint64_t)((uint32_t)a->field[0] + (uint32_t)a->field[1]);
+    int torn = parent != r->resident_parent || read_u64(d.payload + 8) != a->version ||
+               read_u64(win) != f1;
+    for (uint32_t f = 0; f < RX_MAX_FIELDS && !torn; f++)
+        if (read_u64(ain + f * 8u) != a->field[f]) torn = 1;
+    for (uint32_t f = 1; f < RX_MAX_FIELDS && !torn; f++)
         if (read_u64(win + f * 8u) != o->field[f]) torn = 1;
     if (torn) {
         rx_coherent_project(w, id);
@@ -1362,7 +1391,7 @@ int rx_resident_accept(RxWorld *w) {
         pthread_mutex_unlock(&w->mu);
         return RX_ERR_TORN;
     }
-    RxMutation mut = { desc->writes[0].obj, 1, f1 };
+    RxMutation mut = { desc->writes[0].obj, 0, f1 };
     PendingWrite pw[RX_MAX_WRITES];
     uint32_t n_pw = 0;
     int src = stage_mutations(w, &mut, 1, desc->writes, desc->n_writes, pw, &n_pw);

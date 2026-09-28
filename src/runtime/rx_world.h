@@ -415,8 +415,7 @@ typedef struct RxWorld {
     uint8_t *coherent;
     uint64_t coherent_bytes;
     uint32_t world_epoch;
-    uint32_t resident_k;        /* fixed seat rule: field 1 = field 0 xor this */
-    bool resident_rule_set;
+    bool resident_enabled;      /* a resident seat may take claims on this image */
     bool coherent_borrowed;     /* image memory is not freed with the world */
     bool resident_stopped;
 
@@ -515,9 +514,11 @@ uint64_t rx_world_physical_table_offset(void);
 /* Fill checksum and the frozen magic/version. Does not invent an identity. */
 void rx_world_seal_descriptor(OmegaSharedWorldDesc *desc);
 
-/* Fixed in-place rule for the resident graphics seat. The notice does not
- * carry the operation. The seat was launched with this constant. */
-int  rx_world_set_resident_rule(RxWorld *w, uint32_t rule_k);
+/* Allow a resident seat on this image. The seat's one operation is fixed:
+ * it adds field 0 and field 1 of the object it reads (low 32 bits, the same
+ * integer add the qualified vector add uses) and writes the sum into field 0
+ * of a second object. The notice names both objects. It does not carry code. */
+int  rx_world_enable_resident(RxWorld *w);
 
 /* Stand-in for the graphics seat, on the same image. One call consumes
  * notices until it has handled one claim, a shutdown, or the ring is empty.
@@ -526,9 +527,11 @@ int  rx_world_set_resident_rule(RxWorld *w, uint32_t rule_k);
  * still published). */
 int  rx_resident_seat_step(RxWorld *w);
 
-/* Caller already holds the world lock. Posts one claim for a placed object.
- * The notice names the object and its capability. It does not carry the rule. */
-int  rx_resident_post_claim(RxWorld *w, uint32_t id, uint64_t parent, uint64_t *seq_out);
+/* Caller already holds the world lock. Posts one claim: read placed object
+ * `in`, write placed object `out`. The notice names both objects, their
+ * generations, and their bound capabilities. It does not carry code. */
+int  rx_resident_post_claim(RxWorld *w, uint32_t in, uint32_t out, uint64_t parent,
+                            uint64_t *seq_out);
 
 /* Clear the seat's stopped flag. Does not move either ring. */
 int  rx_resident_reset(RxWorld *w);

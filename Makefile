@@ -198,24 +198,25 @@ $(RX_R9_TEST): $(RX_R9_SRCS) src/runtime/rx_generation.h src/runtime/rx_caproot.
 test-r9: $(RX_R9_TEST)
 	./$(RX_R9_TEST)
 
-# R12 host rules. The graphics processor is not started. A pass here does not
-# claim the resident-seat gate.
+# R12 host rules against the native AIENOS authority. The graphics processor is
+# not started. A pass here does not claim the resident-seat gate.
 RX_R12_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-	src/sha256.c src/omega_evidence.c \
+	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
 	tests/runtime/rx_r12_resident.c
 RX_R12_TEST = $(OUT_DIR)/rx_r12_resident_test
 
 $(RX_R12_TEST): $(RX_R12_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
-	src/runtime/omega_shared_world_abi.h | $(OUT_DIR)
-	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R12_SRCS)
+	src/runtime/aienos_cap.h src/runtime/omega_shared_world_abi.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R12_SRCS) $(AIENOS_CAP_LIB) -lm
 
 test-r12: $(RX_R12_TEST)
 	./$(RX_R12_TEST)
 
-# Physical graphics seat. Not part of GitHub checks. A pass on this machine
-# is the only run that may set silicon_observed.
+# Physical graphics seat against the native AIENOS authority. Not part of
+# GitHub checks. A pass on this machine is the only run that may set
+# silicon_observed.
 RX_R12_SILICON_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
-	src/runtime/rx_coherent.c \
+	src/runtime/rx_coherent.c src/runtime/rx_native_bind.c \
 	src/runtime/rx_resident_gpu.c src/sha256.c src/omega_evidence.c \
 	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c \
 	src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c \
@@ -224,9 +225,9 @@ RX_R12_SILICON_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
 RX_R12_SILICON = $(OUT_DIR)/rx_r12_silicon_test
 
 $(RX_R12_SILICON): $(RX_R12_SILICON_SRCS) src/runtime/rx_world.h \
-	src/runtime/rx_resident_gpu.h src/runtime/rx_caproot.h \
-	src/omega_blackwell_codegen.h | $(OUT_DIR)
-	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R12_SILICON_SRCS) -ldl -lm
+	src/runtime/rx_resident_gpu.h src/runtime/rx_caproot.h src/runtime/aienos_cap.h \
+	src/omega_blackwell_codegen.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R12_SILICON_SRCS) $(AIENOS_CAP_LIB) -ldl -lm
 
 test-r12-silicon: $(RX_R12_SILICON)
 	./$(RX_R12_SILICON)

@@ -1,42 +1,75 @@
 # R12 resident seat
 
-Status: not claimed. The graphics chip has not yet run this chain.
-This note does not claim the gate.
+Status: first physical chain qualified on GB10. The receipt under `evidence/R12/`
+names the exact candidate commit. R8, R10, R11 and R13 are not claimed.
 
-The first proof is one physical chain on this machine, not a general graphics
-integration. The processor changes object A. That wakes a graphics reaction.
-Admission must allow it. The project's own authority must allow it. A resident
-graphics worker then claims the reaction, reads A under the same object name
-and generation, and runs the already-qualified add. It writes object B. The
-chip finishing is not the commit. B is published with the same rules as
-processor work. The causal record includes that graphics step. A processor
-reaction waiting on B then wakes on its own and writes object C.
+## What is proved
 
-A, B, and C stay in one world. The graphics worker does not keep a second set
-of names or a second generation counter. It cannot skip authority or run work
-that admission did not allow. A generation change kills a stale claim. A fault
-is recorded and the resource is released. Resetting the chip does not destroy
-the objects' names. The rings carry claims and publications, not calls into a
-separate service.
+One persistent graphics seat on the machine's own chip takes part in the same
+world as the processor:
 
-The physical body is the add this project already qualified. The chain is what
-is being proved. The add is not a new calculation invented for this gate.
+```text
+processor changes A
+  -> the seat reaction becomes ready (field-granular dependency on A)
+  -> R5 admission grants the Blackwell budget
+  -> R7 native AIENOS authority validates the seat's capabilities
+  -> the reaction posts a claim naming {A id, generation} and {B id, generation}
+  -> the resident seat (launched once, polling) claims it
+  -> the seat checks both identities against the shared object table
+  -> the qualified 32-bit integer add (IADD3, the M17 vector-add body):
+       B.field0 = A.field0 + A.field1
+  -> the seat writes B's window and posts a checksummed result notice
+  -> the processor accepts: authority again, generations again, the input
+     window still canonical, the output window exactly the sum
+  -> B is published with the same rules as processor work (R4 crumb,
+     worker = RX_SEAT_BLACKWELL)
+  -> the processor reaction waiting on B wakes and writes C
+```
 
-The in-process stand-in can check the rules without the chip. It is not the
-proof. The proof is the same chain on the machine's own graphics chip, with
-the failures below also closing cleanly: a stale generation, a permission
-taken back after the claim but before publication, a generation moving while
-the work is in flight, the worker dying before it finishes, the worker dying
-after the add but before publication, a repeated completion, a torn notice,
-the physical window being detached, the resource permission being taken back,
-and the graphics channel being reset.
+A, B and C keep one identity space. The seat has no names, generation counter,
+or authority of its own. The chip finishing is not the commit; publication is.
 
-This work does not connect the real model, connect the real Omega, replace the
-resident body, or start the later gates. Those later steps sit down inside
-this world after the chain is real. They are not integrations bolted on beside
-it.
+## Failure cases run on the chip
 
-A claim is refused when the capability is no longer valid, the generation has
-moved, the object has no window, or the window does not match the canonical
-object. A refused claim does not publish. Stopping the worker clears a flag.
-It does not rewind the rings or replay a claim that already finished.
+| Case | Outcome |
+|---|---|
+| Same completion delivered twice | consumed, not committed again |
+| Torn result notice | refused, B's window restored, rejection recorded |
+| Seat leaves and a new seat starts | objects, generations and history intact; chain runs again |
+| B's physical window detached while the chip holds the claim | refused; canonical B unchanged |
+| Output capability revoked after the claim, before publication | refused, B's window restored |
+| A's generation moves while the chip holds the claim | invalidated, recorded |
+| A claim naming a retired generation sent straight to the chip | the chip answers with a fault and does not touch B |
+
+Not exercised yet: the seat killed mid-claim, and a graphics channel reset
+under load. Both need a way to stop a running channel without unmapping memory
+a waiting thread still reads.
+
+## What made the chip see the world
+
+Four bring-up findings, each observed on GB10:
+
+1. **Scoreboards.** Variable-latency reads (constant bank, global memory,
+   special registers) finish later than the next instruction issues. The seat
+   rewrites every control word: reads set barrier 0, stores hold barrier 1, and
+   everything waits on both. Without this the seat used ring addresses and
+   counters before they had loaded.
+2. **The chip's L2.** The image was GPU-cacheable, and the chip kept polling its
+   own L2 copy of the ring tail. It is now allocated with
+   `nvrm_alloc_gpu_uncached` (PHYSICS).
+3. **Register allowance.** The chip keeps the top two registers of a thread's
+   allocation. A value in R46 of a 48-register launch read back wrong, which
+   silently zeroed the result checksum. Launches now request two registers more
+   than the program uses.
+4. **Release order.** `MEMBAR.SC.SYS` before the result tail store, so the output
+   window and the whole notice are in memory before the processor can see them.
+
+The NVIDIA disassembler is no longer called. The seat checks its own opening
+instructions by opcode.
+
+## Host rules
+
+`make test-r12` runs the same rules with an in-process stand-in in place of the
+chip, against the native authority. GitHub runs it. It does not claim R12.
+`make test-r12-silicon` runs on the machine and is the only run that may set
+`silicon_observed`.

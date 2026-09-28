@@ -24,7 +24,7 @@
 
 typedef struct __attribute__((packed)) {
     uint64_t region;
-    uint32_t rule_k;
+    uint32_t reserved;
     uint32_t epoch;
     uint32_t off_c2g;
     uint32_t off_g2c;
@@ -68,11 +68,12 @@ static int seat_return_image(RxGpuSeat *s) {
 
 typedef struct {
     int base, addr, hb_ptr, c2g, g2c, slot, dst, win;
-    int tid, one, zero, ones, k, give, hb, head, tail;
+    int tid, one, zero, ones, give, hb, head, tail;
     int tmp, tmp2, msg, obj, gen, seq, f0, f1;
     int crc, poly, word, byte, nbit, wi;
     int fifteen, thirtytwo, off_c2g, off_g2c, off_hb, off_tbl, epoch;
     int off, slot_off, dst_off;
+    int win_b, lim;
     int uv;
 } Regs;
 
@@ -274,14 +275,14 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     r.dst = omega_bw_ir_alloc_vreg64(prog);
     r.uv = omega_bw_ir_alloc_uvreg64(prog);
 #define A32(field) r.field = omega_bw_ir_alloc_vreg(prog)
-    A32(tid); A32(one); A32(zero); A32(ones); A32(k); A32(give); A32(hb);
+    A32(tid); A32(one); A32(zero); A32(ones); A32(give); A32(hb);
     A32(head); A32(tail); A32(tmp); A32(tmp2); A32(msg); A32(obj); A32(gen);
     A32(seq); A32(f0); A32(f1); A32(crc); A32(poly); A32(word); A32(byte);
     A32(nbit); A32(wi); A32(fifteen); A32(thirtytwo);
     A32(off_c2g); A32(off_g2c); A32(off_hb); A32(off_tbl);
-    A32(off); A32(slot_off); A32(dst_off);
+    A32(off); A32(slot_off); A32(dst_off); A32(win_b); A32(lim);
 #undef A32
-    if (r.dst_off < 0 || r.uv < 0) return -1;
+    if (r.lim < 0 || r.uv < 0) return -1;
 
     BlackwellIRInsn s2 = op(BW_IR_S2R);
     s2.dst_vreg = r.tid;
@@ -305,7 +306,6 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     pb.imm = 0x380;
     em(prog, pb);
 #define LDC32(reg, off) do { BlackwellIRInsn n = op(BW_IR_LDC); n.dst_vreg = (reg); n.imm = (off); em(prog, n); } while (0)
-    LDC32(r.k, 0x388);
     LDC32(r.off_c2g, 0x390);
     LDC32(r.off_g2c, 0x394);
     LDC32(r.off_hb, 0x398);
@@ -318,6 +318,7 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     movi(prog, r.poly, CRC_POLY);
     movi(prog, r.fifteen, 15u);
     movi(prog, r.thirtytwo, 32u);
+    movi(prog, r.lim, OMEGA_SW_MAX_OBJECTS);
     /* The wide multiply-add drops a small offset (256 landed on the header).
      * Copy the region base, then add 256 onto the low half with a plain add. */
     {
@@ -338,8 +339,6 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     add32(prog, r.tmp, r.tail, r.one);
     st_ef(prog, r.hb_ptr, r.tmp, r.uv);
     add32(prog, r.give, r.give, r.ones);
-    at_off(prog, &r, r.addr, r.off_hb, 8u);   /* DIAG: loop pass counter */
-    st(prog, r.addr, r.give, r.uv);
     ge_rr(prog, r.give, r.one);
     int give_exit = bra(prog, 1, 1);
 
@@ -372,32 +371,71 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     ge_rr(prog, r.tmp, r.one);
     int not_claim = bra(prog, 1, 0);
 
+    /* Input object A: id and generation from the notice header. */
     at_off(prog, &r, r.addr, r.slot_off, 0x18u);
     ld(prog, r.obj, r.addr, r.uv);
     at_off(prog, &r, r.addr, r.slot_off, 0x1cu);
     ld(prog, r.gen, r.addr, r.uv);
+    int stale[6];
+    int ns = 0;
+    ge_rr(prog, r.obj, r.lim);                   /* id outside the table */
+    stale[ns++] = bra(prog, 1, 0);
     shl_n(prog, r.tmp, r.obj, 5);
     add32(prog, r.tmp, r.tmp, r.off_tbl);
     movi(prog, r.tmp2, 64u);
-    add32(prog, r.seq, r.tmp, r.tmp2);
+    add32(prog, r.seq, r.tmp, r.tmp2);           /* seq = A's table entry */
     at_off(prog, &r, r.addr, r.seq, 4u);
     ld(prog, r.f0, r.addr, r.uv);
     xor_rr(prog, r.tmp2, r.f0, r.gen);
-    ge_rr(prog, r.tmp2, r.one);
-    int stale = bra(prog, 1, 0);
+    ge_rr(prog, r.tmp2, r.one);                  /* generation moved */
+    stale[ns++] = bra(prog, 1, 0);
+    at_off(prog, &r, r.addr, r.seq, 8u);
+    ld(prog, r.f0, r.addr, r.uv);
+    xor_rr(prog, r.tmp2, r.f0, r.one);
+    ge_rr(prog, r.tmp2, r.one);                  /* not active */
+    stale[ns++] = bra(prog, 1, 0);
     at_off(prog, &r, r.addr, r.seq, 16u);
     ld(prog, r.f0, r.addr, r.uv);
-    add32(prog, r.seq, r.f0, r.zero);
+    add32(prog, r.seq, r.f0, r.zero);            /* seq = A's window */
+
+    /* Output object B: id and generation from the notice payload. */
+    at_off(prog, &r, r.addr, r.slot_off, 0x58u);
+    ld(prog, r.obj, r.addr, r.uv);
+    at_off(prog, &r, r.addr, r.slot_off, 0x5cu);
+    ld(prog, r.gen, r.addr, r.uv);
+    ge_rr(prog, r.obj, r.lim);
+    stale[ns++] = bra(prog, 1, 0);
+    shl_n(prog, r.tmp, r.obj, 5);
+    add32(prog, r.tmp, r.tmp, r.off_tbl);
+    movi(prog, r.tmp2, 64u);
+    add32(prog, r.win_b, r.tmp, r.tmp2);         /* win_b = B's table entry */
+    at_off(prog, &r, r.addr, r.win_b, 4u);
+    ld(prog, r.f0, r.addr, r.uv);
+    xor_rr(prog, r.tmp2, r.f0, r.gen);
+    ge_rr(prog, r.tmp2, r.one);
+    stale[ns++] = bra(prog, 1, 0);
+    at_off(prog, &r, r.addr, r.win_b, 8u);
+    ld(prog, r.f0, r.addr, r.uv);
+    xor_rr(prog, r.tmp2, r.f0, r.one);
+    ge_rr(prog, r.tmp2, r.one);
+    stale[ns++] = bra(prog, 1, 0);
+    at_off(prog, &r, r.addr, r.win_b, 16u);
+    ld(prog, r.f0, r.addr, r.uv);
+    add32(prog, r.win_b, r.f0, r.zero);          /* win_b = B's window */
+
+    /* The body: the qualified 32-bit integer add, A.field0 + A.field1. */
     at_off(prog, &r, r.addr, r.seq, 0u);
     ld(prog, r.f0, r.addr, r.uv);
-    xor_rr(prog, r.f1, r.f0, r.k);
     at_off(prog, &r, r.addr, r.seq, 8u);
+    ld(prog, r.f1, r.addr, r.uv);
+    add32(prog, r.f1, r.f0, r.f1);
+    at_off(prog, &r, r.addr, r.win_b, 0u);
     st(prog, r.addr, r.f1, r.uv);
-    at_off(prog, &r, r.addr, r.seq, 12u);
+    at_off(prog, &r, r.addr, r.win_b, 4u);
     st(prog, r.addr, r.zero, r.uv);
     movi(prog, r.msg, 1u | (RX_RING_PUBLISH << 16));
     int skip_fault_msg = bra(prog, 0, 0);
-    fix(prog, stale, (int)prog->count);
+    for (int i = 0; i < ns; i++) fix(prog, stale[i], (int)prog->count);
     movi(prog, r.msg, 1u | (RX_RING_FAULT << 16));
     fix(prog, skip_fault_msg, (int)prog->count);
 
@@ -458,6 +496,9 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     at_off(prog, &r, r.addr, r.dst_off, 0x3cu);
     st(prog, r.addr, r.crc, r.uv);
     add32(prog, r.tail, r.tail, r.one);
+    /* Release: the output window and the whole notice reach memory before
+     * the processor can see the new tail. */
+    em(prog, op(BW_IR_MEMBAR_SC_SYS));
     at_off(prog, &r, r.g2c, r.off_g2c, 0u);
     st(prog, r.g2c, r.tail, r.uv);
 
@@ -576,19 +617,16 @@ static void *launch_main(void *arg) {
     omega_blackwell_build_cbank_driver(cbank_data, cbank_mem.va);
     memcpy(cbank_mem.cpu, cbank_data, sizeof(cbank_data));
     memcpy((uint8_t *)cbank_mem.cpu + 0x380, &job->args, sizeof(job->args));
-    fprintf(stderr, "seat args k %u give %u c2g %u hb %u bytes %zu\n",
-            job->args.rule_k, job->args.giveup, job->args.off_c2g, job->args.off_hb,
-            sizeof(job->args));
-    const uint32_t *cw = (const uint32_t *)((const uint8_t *)cbank_mem.cpu + 0x380);
-    fprintf(stderr, "seat cbank");
-    for (int i = 0; i < 10; i++) fprintf(stderr, " %08x", cw[i]);
-    fprintf(stderr, "\n");
 
     uint64_t qmd0_va = qmd_mem.va;
     uint64_t qmd1_va = qmd_mem.va + 0x1000;
     uint64_t sem_va = qmd_mem.va + 0x2000;
     uint64_t scratch_va = qmd_mem.va + 0x4000;
-    uint32_t gpr = job->gpr > 16u ? (job->gpr + 15u) & ~15u : 32u;
+    /* The chip keeps the top two registers of a thread's allocation for
+     * itself. On GB10 a value placed in R46 of a 48-register launch read back
+     * wrong. Ask for two more than the program uses, then round up. */
+    uint32_t gpr = (job->gpr + 2u + 15u) & ~15u;
+    if (gpr < 32u) gpr = 32u;
     OmegaBlackwellQmdConfig cfg = {
         .code_va = code_mem.va,
         .cbank_va = cbank_mem.va,
@@ -694,7 +732,7 @@ static void *launch_main(void *arg) {
 
 int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
     if (out) *out = NULL;
-    if (!w || !w->coherent || !w->resident_rule_set) return -1;
+    if (!w || !w->coherent || !w->resident_enabled) return -1;
     if (!crc_matches_sealer()) return -1;
 
     BlackwellIRProgram prog;
@@ -767,7 +805,6 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
     job->code_bytes = emitted;
     job->gpr = gpr;
     job->args.region = image.va;
-    job->args.rule_k = w->resident_k;
     job->args.epoch = w->world_epoch;
     job->args.off_c2g = (uint32_t)rx_world_off_c2g();
     job->args.off_g2c = (uint32_t)rx_world_off_g2c();
@@ -811,12 +848,6 @@ int rx_gpu_seat_finish(RxGpuSeat *seat) {
         seat->thread_live = 0;
     }
     int ok = seat->marker_ok && seat->sem_ok;
-    if (seat->hb_watch) {
-        __asm__ volatile("dsb sy" ::: "memory");
-        fprintf(stderr, "[DEBUG-r12b] heartbeat %u give %u mark %u marker %d sem %d\n",
-                seat->hb_watch[0], seat->hb_watch[1], seat->hb_watch[2],
-                seat->marker_ok, seat->sem_ok);
-    }
     if (!ok && seat->err[0]) fprintf(stderr, "seat finish: %s\n", seat->err);
     if (seat_return_image(seat) != 0) ok = 0;
     if (seat->opened) m16_native_close(&seat->ctx);

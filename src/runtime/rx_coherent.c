@@ -158,9 +158,11 @@ static int ring_msg(uint16_t t) {
            t == RX_RING_SHUTDOWN;
 }
 
+/* A claim names the object the seat reads; the object it writes is named in
+ * the payload and its write right is checked at publication. */
 static uint32_t msg_rights(uint16_t t) {
     if (t == RX_RING_WAKE || t == RX_RING_COMPLETE || t == RX_RING_FAULT ||
-        t == RX_RING_KEEPALIVE)
+        t == RX_RING_KEEPALIVE || t == RX_RING_CLAIM)
         return RX_RIGHT_READ;
     return RX_RIGHT_WRITE;
 }
@@ -717,43 +719,76 @@ static int post_on(RxWorld *w, OmegaSharedWorldRing *ring, OmegaSharedWorldDesc 
     return RX_OK;
 }
 
-int rx_world_set_resident_rule(RxWorld *w, uint32_t rule_k) {
+int rx_world_enable_resident(RxWorld *w) {
     if (!w) return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
-    w->resident_k = rule_k;
-    w->resident_rule_set = true;
+    w->resident_enabled = true;
     pthread_mutex_unlock(&w->mu);
     return RX_OK;
 }
 
-int rx_resident_post_claim(RxWorld *w, uint32_t id, uint64_t parent, uint64_t *seq_out) {
-    if (!w || !w->coherent || id >= RX_MAX_OBJECTS) return RX_ERR_ARG;
-    RxObject *o = &w->objects[id];
-    if (!o->live || !o->placed) return RX_ERR_UNPLACED;
+/* Claim payload, little-endian:
+ *   0  in capability id      4  in capability generation
+ *   8  in object version    16  parent crumb
+ *  24  out object id        28  out object generation
+ *  32  out capability id    36  out capability generation */
+#define CLAIM_PAYLOAD 40u
+
+int rx_resident_post_claim(RxWorld *w, uint32_t in, uint32_t out, uint64_t parent,
+                           uint64_t *seq_out) {
+    if (!w || !w->coherent || in >= RX_MAX_OBJECTS || out >= RX_MAX_OBJECTS || in == out)
+        return RX_ERR_ARG;
+    RxObject *a = &w->objects[in];
+    RxObject *b = &w->objects[out];
+    if (!a->live || !a->placed || !b->live || !b->placed) return RX_ERR_UNPLACED;
     OmegaSharedWorldRing *ring = pub_ring(w);
     uint64_t t = load_relaxed_u64(&ring->tail);
     OmegaSharedWorldDesc d;
     memset(&d, 0, sizeof(d));
     d.msg_type = RX_RING_CLAIM;
-    d.object_id = o->id;
-    d.object_generation = o->generation;
+    d.object_id = a->id;
+    d.object_generation = a->generation;
     d.object_offset = 0;
-    d.object_length = (uint32_t)o->size_bytes;
-    d.payload_len = 24;
+    d.object_length = (uint32_t)a->size_bytes;
+    d.payload_len = CLAIM_PAYLOAD;
     d.arg_b = (uint32_t)t;
-    put_u32(d.payload, o->cap.cap_id);
-    put_u32(d.payload + 4, o->cap.generation);
-    put_u64(d.payload + 8, o->version);
+    put_u32(d.payload, a->cap.cap_id);
+    put_u32(d.payload + 4, a->cap.generation);
+    put_u64(d.payload + 8, a->version);
     put_u64(d.payload + 16, parent);
+    put_u32(d.payload + 24, b->id);
+    put_u32(d.payload + 28, b->generation);
+    put_u32(d.payload + 32, b->cap.cap_id);
+    put_u32(d.payload + 36, b->cap.generation);
     int rc = post_on(w, ring, &d);
     if (rc == RX_OK && seq_out) *seq_out = t;
     return rc;
 }
 
-static void apply_rule(RxWorld *w, const RxObject *o) {
-    uint8_t *win = w->coherent + o->region_offset;
-    uint64_t in = get_u64(win);
-    put_u64(win + 8, in ^ (uint64_t)w->resident_k);
+/* The seat's one operation, as the stand-in performs it: the qualified
+ * 32-bit integer add of the input's field 0 and field 1, into the output's
+ * field 0. The high word is written as zero, as the chip writes it. */
+static void apply_add(RxWorld *w, const RxObject *a, const RxObject *b) {
+    const uint8_t *in = w->coherent + a->region_offset;
+    uint8_t *outw = w->coherent + b->region_offset;
+    uint32_t sum = (uint32_t)get_u64(in) + (uint32_t)get_u64(in + 8);
+    put_u64(outw, (uint64_t)sum);
+}
+
+/* Stand-in check of the output named in a claim. */
+static int claim_out_ok(RxWorld *w, const OmegaSharedWorldDesc *d, uint32_t *out_id) {
+    if (d->payload_len < CLAIM_PAYLOAD) return 0;
+    uint32_t id = get_u32(d->payload + 24);
+    uint32_t gen = get_u32(d->payload + 28);
+    if (id >= RX_MAX_OBJECTS || id == d->object_id) return 0;
+    const RxObject *b = &w->objects[id];
+    const OmegaSharedWorldObject *p = &table_of(w)->objects[id];
+    if (!b->live || !b->placed || gen == 0 || gen != b->generation) return 0;
+    if (p->generation != gen || p->state != OMEGA_SW_OBJ_ACTIVE ||
+        p->region_offset != b->region_offset)
+        return 0;
+    *out_id = id;
+    return 1;
 }
 
 static int post_result(RxWorld *w, uint16_t msg, const OmegaSharedWorldDesc *claim) {
@@ -764,9 +799,9 @@ static int post_result(RxWorld *w, uint16_t msg, const OmegaSharedWorldDesc *cla
     d.object_generation = claim->object_generation;
     d.object_offset = 0;
     d.object_length = claim->object_length ? claim->object_length : RX_OBJECT_WINDOW;
-    d.payload_len = 24;
+    d.payload_len = claim->payload_len;
     d.arg_b = (uint32_t)claim->sequence;
-    memcpy(d.payload, claim->payload, 24);
+    memcpy(d.payload, claim->payload, sizeof d.payload);
     return post_on(w, g2c_ring(w), &d);
 }
 
@@ -801,7 +836,16 @@ int rx_resident_seat_step(RxWorld *w) {
             rc = chk;
             break;
         }
-        apply_rule(w, &w->objects[d.object_id]);
+        uint32_t out_id = 0;
+        if (!claim_out_ok(w, &d, &out_id)) {
+            raise_fault(w, OMEGA_SW_FAULT_STALE_GEN, h, d.msg_type, d.object_id);
+            post_result(w, RX_RING_FAULT, &d);
+            store_release_u64(&ring->head, h + 1);
+            w->stats.desc_rejected++;
+            rc = RX_ERR_STALE_GEN;
+            break;
+        }
+        apply_add(w, &w->objects[d.object_id], &w->objects[out_id]);
         if (post_result(w, RX_RING_PUBLISH, &d) != RX_OK) {
             rc = RX_ERR_FULL;
             break;
