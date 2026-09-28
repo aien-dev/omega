@@ -11,6 +11,7 @@
 #include "m16_native.h"
 
 #include <pthread.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +22,14 @@
 /* Safety stop if shutdown is never posted. A real shutdown leaves sooner.
  * The launch wait is 15 seconds, so this only matters when shutdown is missed. */
 #define GIVEUP 200000000u
+/* Keep-alive: the processor bumps the lease every LEASE_TICK_US; a seat that
+ * sees no new lease for about LEASE_WINDOW_MS leaves by itself. The window is
+ * set in seat passes from the pass rate measured at launch. A faster chip
+ * later only shortens it, and even 20x faster stays far above the tick. */
+#define LEASE_TICK_US 5000u
+#define LEASE_WINDOW_MS 2000u
+#define LEASE_SAMPLE_MS 50u
+#define LEASE_MIN_BUDGET 20000u
 
 typedef struct __attribute__((packed)) {
     uint64_t region;
@@ -49,6 +58,10 @@ struct RxGpuSeat {
     volatile uint32_t *hb_watch;
     RxWorld *world;
     int image_bound;
+    pthread_t lease_thread;
+    int lease_live;
+    volatile int lease_run;
+    uint32_t budget;        /* seat passes in LEASE_WINDOW_MS, measured once */
 };
 
 /* The chip is leaving. The world keeps its objects: copy the image into
@@ -75,7 +88,7 @@ typedef struct {
     int crc, poly, word, byte, nbit, wi;
     int fifteen, thirtytwo, off_c2g, off_g2c, off_hb, off_tbl, epoch;
     int off, slot_off, dst_off;
-    int win_b, lim, sgen, clk;
+    int win_b, lim, sgen, clk, lseen;
     int uv;
 } Regs;
 
@@ -268,6 +281,34 @@ static void emit_byte(BlackwellIRProgram *p, const Regs *r) {
     shr(p, r->word, r->word, 8u);
 }
 
+/* Keep-alive check, once per pass. The processor bumps the lease word while
+ * its process lives. A new value refills the countdown from the budget word;
+ * a still lease lets the countdown run out, so a seat whose process died
+ * leaves by itself instead of spinning until the driver gives up on it. The
+ * lease value RX_SEAT_LEASE_QUIT asks the seat to leave now. Branches that
+ * leave are recorded in quit[] and fixed to the exit by the caller. */
+static void lease_check(BlackwellIRProgram *p, Regs *r, int *quit, int *nq) {
+    at_off(p, r, r->addr, r->off_hb, RX_SEAT_HB_LEASE);
+    ld(p, r->tmp, r->addr, r->uv);
+    xor_rr(p, r->tmp2, r->tmp, r->lseen);
+    ge_rr(p, r->tmp2, r->one);
+    int same = bra(p, 1, 1);
+    add32(p, r->lseen, r->tmp, r->zero);
+    xor_rr(p, r->tmp2, r->tmp, r->ones);
+    ge_rr(p, r->tmp2, r->one);
+    quit[(*nq)++] = bra(p, 1, 1);
+    at_off(p, r, r->addr, r->off_hb, RX_SEAT_HB_BUDGET);
+    ld(p, r->give, r->addr, r->uv);
+    ge_rr(p, r->give, r->one);
+    int have_budget = bra(p, 1, 0);
+    BlackwellIRInsn n = op(BW_IR_LDC);
+    n.dst_vreg = r->give;
+    n.imm = 0x3a0;
+    em(p, n);
+    fix(p, have_budget, (int)p->count);
+    fix(p, same, (int)p->count);
+}
+
 static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     emit_overflow = 0;
     omega_bw_ir_init(prog);
@@ -287,6 +328,7 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     A32(nbit); A32(wi); A32(fifteen); A32(thirtytwo);
     A32(off_c2g); A32(off_g2c); A32(off_hb); A32(off_tbl);
     A32(off); A32(slot_off); A32(dst_off); A32(win_b); A32(lim); A32(sgen); A32(clk);
+    A32(lseen);
 #undef A32
     if (r.sgen < 0 || r.uv < 0) return -1;
 
@@ -322,6 +364,7 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     movi(prog, r.one, 1u);
     movi(prog, r.zero, 0u);
     movi(prog, r.ones, 0xffffffffu);
+    movi(prog, r.lseen, 0u);
     movi(prog, r.poly, CRC_POLY);
     movi(prog, r.fifteen, 15u);
     movi(prog, r.thirtytwo, 32u);
@@ -355,6 +398,9 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     st(prog, r.addr, r.give, r.uv);
     ge_rr(prog, r.give, r.one);
     int give_exit = bra(prog, 1, 1);
+    int quit[2];
+    int nq = 0;
+    lease_check(prog, &r, quit, &nq);
 
     at_off(prog, &r, r.addr, r.off_c2g, 64u);
     ld(prog, r.head, r.addr, r.uv);
@@ -484,6 +530,7 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     st(prog, r.addr, r.give, r.uv);
     ge_rr(prog, r.give, r.one);
     int hold_exit = bra(prog, 1, 1);
+    lease_check(prog, &r, quit, &nq);
     at_off(prog, &r, r.addr, r.off_hb, RX_SEAT_HB_HOLD);
     ld(prog, r.tmp, r.addr, r.uv);
     ge_rr(prog, r.tmp, r.one);
@@ -572,6 +619,7 @@ static int build_program(BlackwellIRProgram *prog, uint32_t *gpr_out) {
     fix(prog, give_exit, leave);
     fix(prog, hold_exit, leave);
     fix(prog, shutdown_exit, leave);
+    for (int i = 0; i < nq; i++) fix(prog, quit[i], leave);
     em(prog, op(BW_IR_EXIT));
     em(prog, op(BW_IR_BRA));
 
@@ -829,10 +877,85 @@ static uint32_t current_seat_gen(RxWorld *w) {
     return g;
 }
 
+static volatile uint32_t *hb_word_at(RxGpuSeat *s, uint32_t off) {
+    return (volatile uint32_t *)(s->world->coherent + rx_world_off_heartbeat() + off);
+}
+
+/* The lease thread is named "rx-seat-lease" so it can be found and counted.
+ * RX_SEAT_LEASE_CPU=<n> pins it to one processor, keeping its wake-ups off
+ * measured cores. */
+static void *lease_main(void *arg) {
+    RxGpuSeat *s = arg;
+    pthread_setname_np(pthread_self(), "rx-seat-lease");
+    const char *pin = getenv("RX_SEAT_LEASE_CPU");
+    if (pin && *pin) {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CPU_SET(atoi(pin), &set);
+        if (pthread_setaffinity_np(pthread_self(), sizeof set, &set) != 0)
+            fprintf(stderr, "seat lease: could not pin to cpu %s\n", pin);
+    }
+    uint32_t v = 0;
+    while (s->lease_run) {
+        if (++v == 0 || v == RX_SEAT_LEASE_QUIT) v = 1;
+        *hb_word_at(s, RX_SEAT_HB_LEASE) = v;
+        __asm__ volatile("dsb sy" ::: "memory");
+        usleep(LEASE_TICK_US);
+    }
+    return NULL;
+}
+
+/* After the first heartbeat: measure how many passes the seat makes while it
+ * still counts down from GIVEUP, set the budget for the window, then start
+ * the lease. The pass count is the countdown the seat writes to LIVE. */
+static int lease_start(RxGpuSeat *s) {
+    if (!s->budget) {
+        __asm__ volatile("dsb sy" ::: "memory");
+        uint32_t a = *hb_word_at(s, RX_SEAT_HB_LIVE);
+        usleep(LEASE_SAMPLE_MS * 1000u);
+        __asm__ volatile("dsb sy" ::: "memory");
+        uint32_t b = *hb_word_at(s, RX_SEAT_HB_LIVE);
+        uint64_t passes = a > b ? (uint64_t)(a - b) : 0;
+        uint64_t budget = passes * (LEASE_WINDOW_MS / LEASE_SAMPLE_MS);
+        if (budget < LEASE_MIN_BUDGET) budget = LEASE_MIN_BUDGET;
+        if (budget > GIVEUP) budget = GIVEUP;
+        s->budget = (uint32_t)budget;
+        fprintf(stderr, "seat lease: %llu passes in %u ms, budget %u (%u ms window)\n",
+                (unsigned long long)passes, LEASE_SAMPLE_MS, s->budget, LEASE_WINDOW_MS);
+    }
+    *hb_word_at(s, RX_SEAT_HB_BUDGET) = s->budget;
+    __asm__ volatile("dsb sy" ::: "memory");
+    s->lease_run = 1;
+    if (pthread_create(&s->lease_thread, NULL, lease_main, s) != 0) {
+        s->lease_run = 0;
+        return -1;
+    }
+    s->lease_live = 1;
+    return 0;
+}
+
+static void lease_stop(RxGpuSeat *s, int quit) {
+    if (s->lease_live) {
+        s->lease_run = 0;
+        pthread_join(s->lease_thread, NULL);
+        s->lease_live = 0;
+    }
+    if (quit && s->image_bound) {
+        *hb_word_at(s, RX_SEAT_HB_LEASE) = RX_SEAT_LEASE_QUIT;
+        __asm__ volatile("dsb sy" ::: "memory");
+    }
+}
+
 int rx_gpu_seat_kill(RxGpuSeat *s) {
     if (!s || !s->opened || s->killed) return -1;
-    /* Freeing the channel group preempts and tears down the running seat.
-     * The image and launch memory stay allocated and mapped. */
+    /* Ask the seat to leave first, then free the channel group once it has.
+     * Destroying the channel under a spinning seat makes the driver's stop
+     * request time out (NV_ERR_TIMEOUT on STOP_CHANNEL) until the seat's own
+     * countdown ends, so a kill is a quit followed by the teardown a fault
+     * would cause. The image and launch memory stay allocated and mapped. */
+    lease_stop(s, 1);
+    for (int i = 0; i < 2000 && !s->marker_ok; i++) usleep(1000);
+    if (!s->marker_ok) fprintf(stderr, "seat kill: the seat did not leave on quit\n");
     int rc = nvrm_channel_destroy(&s->ctx.rm);
     s->abort = 1;
     if (s->thread_live) {
@@ -861,7 +984,8 @@ int rx_gpu_seat_relaunch(RxGpuSeat *s) {
     __asm__ volatile("dsb sy" ::: "memory");
     if (pthread_create(&s->thread, NULL, launch_main, s->job) != 0) return -1;
     s->thread_live = 1;
-    return wait_heartbeat(s);
+    if (wait_heartbeat(s) != 0) return -1;
+    return lease_start(s);
 }
 
 int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
@@ -959,11 +1083,14 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
     if (out) *out = s;
     if (wait_heartbeat(s) != 0) return -1;
     fprintf(stderr, "seat heartbeat %u instructions %d gpr %u\n", *s->hb_watch, insns, gpr);
-    return 0;
+    return lease_start(s);
 }
 
 int rx_gpu_seat_finish(RxGpuSeat *seat) {
     if (!seat) return -1;
+    /* The shutdown notice was posted before this; stopping the lease only
+     * bounds how long a seat that missed it keeps running. */
+    lease_stop(seat, 0);
     if (seat->thread_live) {
         pthread_join(seat->thread, NULL);
         seat->thread_live = 0;
