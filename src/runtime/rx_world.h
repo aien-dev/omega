@@ -47,7 +47,8 @@
 #define RX_FIELD(i)         ((uint64_t)1u << (i))
 
 /* Faculties (logical write domains, not memory owners). */
-enum { RX_FACULTY_EXTERNAL = 0, RX_FACULTY_AIEN, RX_FACULTY_OMEGA, RX_FACULTY_AEGIS };
+enum { RX_FACULTY_EXTERNAL = 0, RX_FACULTY_AIEN, RX_FACULTY_OMEGA, RX_FACULTY_AEGIS,
+       RX_FACULTY_ROOT };   /* the capability root installing what it minted (R8) */
 
 /* Priority classes (ADR 0016 §9), highest first. */
 enum {
@@ -242,7 +243,20 @@ typedef struct {
     RxDep writes[RX_MAX_WRITES];
     uint32_t n_caps;
     RxCapNeed caps[RX_MAX_CAPS];
-    uint32_t loop_kind;         /* RX_LOOP_ORDINARY or RX_LOOP_PERIODIC */
+    /* R8. When cap_slotted[i] is set, the reference for caps[i] is read at
+     * every check from fields 0 (cap id) and 1 (generation) of the slot
+     * object, not from caps[i].ref. Holding a slot is still not permission:
+     * the authority validates whatever reference it holds. A slot that is
+     * retired or of another generation yields no reference. */
+    bool cap_slotted[RX_MAX_CAPS];
+    RxObjRef cap_slot[RX_MAX_CAPS];
+    /* R8. Every field this reaction proposes is stamped as written by its
+     * commit, even when the value did not change (only changed fields wake
+     * anyone). For records whose authorship is checked field by field: a
+     * value left over from an earlier writer would otherwise keep that
+     * writer's name. */
+    bool stamp_proposed;
+    uint32_t loop_kind;        /* RX_LOOP_ORDINARY or RX_LOOP_PERIODIC */
     RxFn fn;
     void *user;
 } RxReactionDesc;
@@ -468,6 +482,13 @@ int  rx_world_wait_quiescent(RxWorld *w, int timeout_ms);
 /* Read-only inspection (takes the world lock). */
 int  rx_world_read(RxWorld *w, RxObjRef ref, RxObject *out);
 const RxCrumb *rx_world_crumb(const RxWorld *w, uint64_t id);
+/* Who published crumb `id`: its reaction (UINT32_MAX for outside), that
+ * reaction's subject (the external subject for outside) and faculty. RX_OK
+ * for a commit or an outside publication, 1 for the object's creation (the
+ * field still holds its initial value), negative otherwise. Takes the world
+ * lock. */
+int  rx_world_crumb_origin(RxWorld *w, uint64_t id, uint32_t *reaction, uint32_t *subject,
+                           uint32_t *faculty);
 /* Causal id of the publication that last wrote obj.field. */
 uint64_t rx_world_explain(RxWorld *w, RxObjRef ref, uint32_t field);
 /* Recompute every crumb digest and check parent links; 0 on success. */
