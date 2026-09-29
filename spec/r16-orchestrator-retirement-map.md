@@ -215,7 +215,7 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | OM-100 | omega | `tools/omegatool.c` | 3797 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m11-gates") == 0) {` |
 | OM-101 | omega | `tools/omegatool.c` | 3801 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point. G5 still needs an explicit legacy name (W5) | `if (strcmp(argv[1], "--demonstrate-discovery") == 0) {` |
 | OM-102 | omega | `tools/omegatool.c` | 3806 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m12-gates") == 0) {` |
-| OM-103 | omega | `tools/omegatool.c` | 3810 | `main` | hand-sequenced living matvec demonstration (spec -> machine -> kernel -> benchmark -> select) | retire: replace with a stimulus-seeding launcher or move behind a legacy_oracle name (W5) | A | false | spec 3.1 / 4: omegatool --demonstrate-living-matvec is the omega hand-sequenced tool path replaced by the R13 living system; migration map 'Oracle until R16' | `if (strcmp(argv[1], "--demonstrate-living-matvec") == 0) {` |
+| OM-103 | omega | `tools/omegatool.c` | 3745 | `legacy_oracle_demonstrate_living_matvec` | hand-sequenced living matvec demonstration (spec -> machine -> kernel -> benchmark -> select) | retire: moved behind legacy_oracle name (W5) | A | false | spec 3.1 / 4: omegatool --demonstrate-living-matvec is the omega hand-sequenced tool path replaced by the R13 living system; retired behind legacy_oracle (W5) | `if (strcmp(argv[1], "--demonstrate-living-matvec") == 0) {` |
 | OM-104 | omega | `tools/omegatool.c` | 3815 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m13-gates") == 0) {` |
 | OM-105 | omega | `tools/omegatool.c` | 3819 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point. G5 still needs an explicit legacy name (W5) | `if (strcmp(argv[1], "--demonstrate-machine") == 0) {` |
 | OM-106 | omega | `tools/omegatool.c` | 3824 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m14-gates") == 0) {` |
@@ -396,7 +396,7 @@ exists in the file (symbol not verified) and applies the same class rules.
 |---|---|---|---|---|---|---|---|---|---|---|
 | AO-M01 | aienos | `crates/aienos-boot/src/handoff.rs` | manual (1621) | `main` | fixed boot stage sequence, then halt | boot / awakening sequence; deterministic maintenance and recovery path | C | true | migration map `handoff.rs:1621`: keep, "must never be removed (§49)"; spec §4 starting verdict C | `fn main() -> Status {` |
 | SC-M01 | aien-sovereign-core | `crates/aien-cli/src/commands.rs` | manual (1536) | `-` | CLI shells out to `spark-aegis` | legacy service glue, kept (Q2 = A) | A | false | spec §3.3 item 3: service glue used only by the retired aegis-runtime sequencing; not removed under Q2 = A, retired by non-use; omega never execs `spark-aegis` (G3 checks). LEGACY / NOT-IN-CHARGE | `let status = std::process::Command::new("spark-aegis")` |
-| OM-M01 | omega | `tools/omegatool.c` | manual (2642) | `-` | body of the hand-sequenced living-matvec demonstration | retire with `--demonstrate-living-matvec` (W5) | A | false | the function the class-A dispatcher row calls; must move behind a `legacy_oracle` / `reference` name or be removed | `static void run_demonstration_living_matvec(void) {` |
+| OM-M01 | omega | `tools/omegatool.c` | manual (2642) | `legacy_oracle_run_demonstration_living_matvec` | body of the hand-sequenced living-matvec demonstration | retire with `--demonstrate-living-matvec` (W5) | A | false | the function the class-A dispatcher row calls; moved behind a `legacy_oracle` name (W5) | `static void legacy_oracle_run_demonstration_living_matvec(void) {` |
 <!-- /r16-inventory:rows -->
 
 ## 5. Structural findings (non-greppable §4 terms)
@@ -453,16 +453,15 @@ Manual rows: omega OM-M01 = A, sovereign-core SC-M01 = A, aienos AO-M01 = C.
 Total: 271 pattern sites + 3 manual rows; 0 unclassified; 0 questions remaining;
 30 class N data/control-flow idiom sites.
 
-## 8. Gate result on this map (R16-G2 tool, after reclassifying 44 rows)
+## 8. Gate result on this map (R16-G2 tool, after W5 retirement)
 
-`make r16-inventory` -> exit 1, FAIL:
+`make r16-inventory` -> exit 0, PASS:
 
-`sites=271 unclassified=0 question=0 bad_class=0 a_reachable=2 stale=0 map_errors=0 skipped=0 -> FAIL`
+`sites=271 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
 
 1. `question=0`: all 44 question rows are resolved and reclassified (§6).
-2. `a_reachable=2`: omegatool `--demonstrate-living-matvec` (OM-103 dispatcher line and
-   OM-M01 function, class A) is still reachable under a production name. W5 retires
-   these two rows behind a `legacy_oracle` symbol name to satisfy R16-G2.
+2. `a_reachable=0`: omegatool `--demonstrate-living-matvec` (OM-103 dispatcher line and
+   OM-M01 function, class A) retired behind `legacy_oracle` symbol names (W5).
 
 The tool prints `WARN omega: scanned HEAD ... differs from map SHA`, because the
 R16 branch builds on top of omega main. Expected.
