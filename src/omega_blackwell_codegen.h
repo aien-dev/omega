@@ -49,7 +49,16 @@ typedef enum {
     BW_IR_ISETP_GE_U32, /* ISETP.GE.U32.AND P0, PT, Ra, Rb, PT */
     BW_IR_LOP3_XOR,     /* LOP3.LUT Rd, Ra, Rb, RZ, 0x3c, !PT */
     BW_IR_EXIT,         /* EXIT */
-    BW_IR_BRA           /* BRA. imm = signed instruction delta; predicate_p0 / predicate_not select @P0 or @!P0 */
+    BW_IR_BRA,          /* BRA. imm = signed instruction delta; predicate_p0 / predicate_not select @P0 or @!P0 */
+    /* MA-6 additions (spec/mixed-algebra-ma6-gpu.md). Appended so every
+     * earlier opcode keeps its value and its bytes. Field layouts follow the
+     * existing verified forms (LOP3_XOR, IADD3, LDG_E); POPC is new. All four
+     * are checked on GB10 silicon by the MA-6 self-test before use.
+     * insn->control is honoured when non-zero. */
+    BW_IR_LOP3_LUT,     /* LOP3.LUT Rd, Ra, Rb, Rc, imm[7:0], !PT (src3 -1 = RZ) */
+    BW_IR_POPC,         /* POPC Rd, Ra (source goes in the Rb slot) */
+    BW_IR_IADD3_R3,     /* IADD3 Rd, PT, PT, Ra, Rb, Rc (src3 -1 = RZ) */
+    BW_IR_LDG_E_OFF     /* LDG.E Rd, desc[URd][Ra.64 + imm], imm signed 24 bit */
 } BlackwellIROpcode;
 
 /* Special Register Identifiers */

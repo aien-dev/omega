@@ -968,6 +968,24 @@ bench-mixed-algebra: $(OMA_RZ_BENCH) $(OMA_RZ_SELECT)
 		$(MA2_EVIDENCE)/ma2_bench_run1.json $(MA2_EVIDENCE)/ma2_bench_run2.json
 
 # ---------------------------------------------------------------------------
+# OMEGA MIXED ALGEBRA MA-6 (spec/mixed-algebra-ma6-gpu.md): GPU (GB10 sm_121)
+# realizations of Omega-X on Omega's own encoder + QMD + M16 native channel.
+# No CUDA toolkit. Separate from the CPU oma_rz registry (test-turing expects
+# exactly the 10 CPU realizations).
+# test-bw-encoder-ma6: host checks of the 4 encoder ops added for MA-6.
+.PHONY: test-bw-encoder-ma6
+MA6_ENC_TEST = $(OUT_DIR)/tests-algebra/test_bw_encoder_ma6
+
+$(MA6_ENC_TEST): tests/algebra/test_bw_encoder_ma6.c src/omega_blackwell_codegen.c src/omega_blackwell_codegen.h \
+		src/omega_blackwell_matmul.c src/sha256.c
+	@mkdir -p $(dir $@)
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -O2 -Isrc -o $@ tests/algebra/test_bw_encoder_ma6.c \
+		src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/sha256.c
+
+test-bw-encoder-ma6: $(MA6_ENC_TEST)
+	./$(MA6_ENC_TEST)
+
+# ---------------------------------------------------------------------------
 # TURING Wave 1 (docs/turing/TURING_W0_PROPOSAL.md): Field v1 records (K.7) +
 # control-arm selector, post hoc over evidence/MIXED_ALGEBRA receipts.
 # Reads src/algebra (registry) without modifying it; no runtime, no timed runs.

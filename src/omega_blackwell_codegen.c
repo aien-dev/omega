@@ -547,6 +547,43 @@ static int encode_single_insn(const BlackwellIRInsn *insn, const OmegaRegAlloc *
             break;
         }
 
+        case BW_IR_LOP3_LUT:
+            /* LOP3_XOR's words with the LUT byte (w[2] bits 8-15) and the Rc
+             * byte (w[2] bits 0-7) taken from the instruction. */
+            w[0] = 0x7212 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(src2 & 0xff);
+            w[2] = 0x078e0000u | ((insn->imm & 0xffu) << 8) | (uint32_t)(src3 & 0xff);
+            w[3] = insn->control ? insn->control : 0x001fca00;
+            break;
+
+        case BW_IR_POPC:
+            /* POPC Rd, Rb: opcode 0x309 register form, source in bits 32-39.
+             * Variable latency: callers set a write scoreboard in control. */
+            w[0] = 0x7309u | ((uint32_t)(dst & 0xff) << 16);
+            w[1] = (uint32_t)(src1 & 0xff);
+            w[2] = 0x00000000;
+            w[3] = insn->control ? insn->control : 0x000e2200;
+            break;
+
+        case BW_IR_IADD3_R3:
+            /* IADD3's words with Rc in w[2] bits 0-7 (0xff = RZ). */
+            w[0] = 0x7210 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(src2 & 0xff);
+            w[2] = 0x07ffe000u | (uint32_t)(src3 & 0xff);
+            w[3] = insn->control ? insn->control : 0x001fca00;
+            break;
+
+        case BW_IR_LDG_E_OFF: {
+            /* LDG_E's words with a signed 24-bit byte offset in bits 40-63. */
+            int32_t off = (int32_t)insn->imm;
+            if (off < -(1 << 23) || off >= (1 << 23)) return -1;
+            w[0] = 0x7981 | ((uint32_t)(dst & 0xff) << 16) | ((uint32_t)(src1 & 0xff) << 24);
+            w[1] = (uint32_t)(ureg & 0xff) | (((uint32_t)off & 0xffffffu) << 8);
+            w[2] = 0x0c1e1900;
+            w[3] = insn->control ? insn->control : 0x000f2200;
+            break;
+        }
+
         default:
             return -1;
     }
