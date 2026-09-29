@@ -2,6 +2,7 @@
  * rx_world.c -- resident reaction runtime, simple human reference. See rx_world.h.
  */
 #include "rx_world.h"
+#include "rx_argus.h"
 #include "sha256.h"
 
 #include <errno.h>
@@ -1295,6 +1296,7 @@ static void *worker_main(void *arg) {
         uint64_t t0 = w->timing ? now_ns() : 0;
         uint64_t c0 = w->timing ? thread_cpu_ns() : 0;
         while (!w->stopping && !pop_ready(w, &rid)) {
+            RX_ARGUS_EMIT(rx_argus_idle());   /* ARGUS: flush this worker's use table, publish idle */
             pthread_cond_wait(&w->work_cv, &w->mu);
             t0 = w->timing ? now_ns() : 0;
             c0 = w->timing ? thread_cpu_ns() : 0;

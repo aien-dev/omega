@@ -99,7 +99,7 @@ static int fn_decide(RxCtx *c) {
     /* ARGUS: a policy refusal. GRANT and REVOKE become real at root.install;
      * ESCALATE has no ABI v1 kind. A repeated (invalidated) run re-emits. */
     if (verdict == RX_AEGIS_DENY)
-        RX_ARGUS_EMIT(rx_argus_emit_cap_denied(aegis_view(f), f->client[k].subject, 0, 0, res,
+        RX_ARGUS_EMIT(rx_argus_emit_cap_denied(aegis_view(f), f->client[k].subject, ARGUS_CAP_NONE, 0, res,
                                                (uint32_t)req->field[2], (int)why));
     put(c, o->decision, 0, seq);
     put(c, o->decision, 1, verdict);
@@ -131,7 +131,8 @@ static void refuse(RxCtx *c, RxObjRef slot, uint64_t seq, uint64_t why) {
 #if RX_ARGUS
     /* ARGUS: every root refusal is a denial of the client. */
     struct { RxAegisFaculty *f; uint32_t k; } *x = c->user;
-    rx_argus_emit_cap_denied(aegis_view(x->f), x->f->client[x->k].subject, 0, 0, 0, 0, (int)why);
+    rx_argus_emit_cap_denied(aegis_view(x->f), x->f->client[x->k].subject, ARGUS_CAP_NONE, 0, 0, 0,
+                             (int)why);
 #endif
     put(c, slot, 5, seq);
     put(c, slot, 7, why);

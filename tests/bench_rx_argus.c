@@ -12,9 +12,10 @@
  *   throughput  N ops, one clock read around the whole loop -> ops/s
  *   latency     S ops, each timed with CLOCK_MONOTONIC -> p50/p99 (includes
  *               the clock read overhead, reported separately)
- *   emit        RX_ARGUS>=1: rx_argus_emit_cap_used alone, each call timed;
- *               with the native view (tick = aienos_cap_clock, a mutex) and
- *               without (tick 0)
+ *   use update  RX_ARGUS>=1: the hot-path ARGUS cost alone (use_begin +
+ *               use_end of a successful validate), batches of 256 timed
+ *               (the clock quantizes at 16 ns; op p50/p99 cannot resolve
+ *               sub-16 ns differences, ops/s is the discriminating metric)
  *
  *   bench_rx_argus [N] [S]
  */
@@ -119,37 +120,40 @@ int main(int argc, char **argv) {
 #if RX_ARGUS
     RxArgusStats before;
     rx_argus_stats(&before);
-    /* emit alone, with and without the authority clock read */
-    uint64_t e50[2], e99[2];
-    for (int v = 0; v < 2; v++) {
-        for (size_t i = 0; i < n_lat; i++) {
-            uint64_t a = now_ns();
-            rx_argus_emit_cap_used(v == 0 ? view : NULL, SUBJ, cap.cap_id, (uint64_t)cap.generation,
-                                   RES, BENCH_RIGHTS, 0);
-            lat[i] = now_ns() - a;
+    /* The hot-path ARGUS cost alone: use_begin + use_end for a successful
+     * validate (use-table update, flush every ARGUS_USE_FLUSH_OPS included).
+     * The clock quantizes at 16 ns, so each sample times a batch of 256
+     * calls and reports the per-call mean of the batch. */
+    enum { UB = 256 };
+    size_t n_ub = n_lat / UB ? n_lat / UB : 1;
+    for (size_t i = 0; i < n_ub; i++) {
+        uint64_t a = now_ns();
+        for (unsigned j = 0; j < UB; j++) {
+            uint64_t k = rx_argus_use_begin();
+            rx_argus_use_end(k, view, SUBJ, cap.cap_id, (uint64_t)cap.generation, RES, 0);
         }
-        e50[v] = pct(lat, n_lat, 0.50);
-        e99[v] = pct(lat, n_lat, 0.99);
+        lat[i] = now_ns() - a;
     }
+    double ub50 = (double)pct(lat, n_ub, 0.50) / UB, ub99 = (double)pct(lat, n_ub, 0.99) / UB;
     RxArgusStats s;
     rx_argus_stats(&s);
-    printf(", \"emit_p50_ns\": %llu, \"emit_p99_ns\": %llu, \"emit_noclock_p50_ns\": %llu, "
-           "\"emit_noclock_p99_ns\": %llu, \"bytes_per_event\": %u",
-           (unsigned long long)e50[0], (unsigned long long)e99[0], (unsigned long long)e50[1],
-           (unsigned long long)e99[1], ARGUS_EVENT_SIZE);
-    /* ops-phase ring outcome (before the emit phase) and overall */
+    printf(", \"use_update_p50_ns\": %.2f, \"use_update_p99_ns\": %.2f, \"bytes_per_event\": %u",
+           ub50, ub99, ARGUS_EVENT_SIZE);
     printf(", \"consumer_mode\": %d, \"ops_phase_emitted\": %llu, \"ops_phase_pushed\": %llu, "
-           "\"ops_phase_refused\": %llu, \"lock_dropped\": %llu, \"total_emitted\": %llu, "
-           "\"total_refused\": %llu",
+           "\"ops_phase_refused\": %llu, \"ops_phase_malformed\": %llu, \"total_emitted\": %llu, "
+           "\"total_refused\": %llu, \"summaries\": %llu, \"summary_refused\": %llu",
            s.consumer_mode, (unsigned long long)before.emitted, (unsigned long long)before.pushed,
-           (unsigned long long)before.ring_refused, (unsigned long long)s.lock_dropped,
-           (unsigned long long)s.emitted, (unsigned long long)s.ring_refused);
+           (unsigned long long)before.ring_refused, (unsigned long long)before.ring_malformed,
+           (unsigned long long)s.emitted, (unsigned long long)s.ring_refused,
+           (unsigned long long)s.summaries_emitted, (unsigned long long)s.summary_refused);
     rx_argus_shutdown();
     rx_argus_stats(&s);
-    printf(", \"received\": %llu, \"lag_max\": %u, \"findings\": %llu, \"ring_bytes\": %zu, "
-           "\"core_bytes\": %zu, \"findings_bytes\": %zu",
-           (unsigned long long)s.received, s.lag_max, (unsigned long long)s.findings_total,
-           s.ring_bytes, s.core_bytes, s.findings_bytes);
+    printf(", \"received\": %llu, \"uses_counted\": %llu, \"lag_max\": %u, \"late\": %llu, "
+           "\"stall_breaks\": %llu, \"findings\": %llu, \"producers\": %u, \"producer_slot_bytes\": %zu, "
+           "\"core_bytes\": %zu",
+           (unsigned long long)s.received, (unsigned long long)s.uses_counted, s.lag_max,
+           (unsigned long long)s.late_events, (unsigned long long)s.stall_breaks,
+           (unsigned long long)s.findings_total, s.producers_claimed, s.producer_bytes, s.core_bytes);
 #endif
     printf(", \"sink\": %llu }\n", (unsigned long long)(sink & 1));
     rx_world_destroy(&g_world);
