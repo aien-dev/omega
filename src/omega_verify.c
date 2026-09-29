@@ -295,5 +295,18 @@ int omega_verify_pipeline(const OmegaGraph *graph, const RealizationObject *real
         }
     }
 
+    /* V3 needs an execution envelope, World generation and attack corpus.
+     * This legacy pure-verification entry point has none of those inputs and
+     * must never report a placeholder V3 pass. Call omega_v3_reduce only after
+     * running the declared adversarial suite. */
+    if (max_tier >= VERIFY_TIER_V3) {
+        report->tier = VERIFY_TIER_V3;
+        report->passed = false;
+        report->fail_count++;
+        snprintf(report->error_detail, sizeof(report->error_detail),
+                 "V3 requires adversarial qualification context; legacy pipeline cannot qualify");
+        return -1;
+    }
+
     return 0;
 }

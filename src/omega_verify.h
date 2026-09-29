@@ -9,7 +9,7 @@ typedef enum {
     VERIFY_TIER_V0 = 0, /* Structural */
     VERIFY_TIER_V1 = 1, /* Differential */
     VERIFY_TIER_V2 = 2, /* Property / Invariant */
-    VERIFY_TIER_V3 = 3, /* Adversarial (stub) */
+    VERIFY_TIER_V3 = 3, /* Adversarial qualification; see omega_v3.h */
     VERIFY_TIER_V4 = 4, /* Symbolic (stub) */
     VERIFY_TIER_V5 = 5  /* Proof-Carrying (stub) */
 } VerifyTier;

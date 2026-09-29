@@ -1,0 +1,41 @@
+{
+  "attack_suite_digest": "1a912e81c17b40231d39211c40cc913234770fa05e520a0b8ae52641d06f220c",
+  "attacks": {
+    "contained": 0,
+    "executed": 0,
+    "failed": 0,
+    "required": 6,
+    "required_skips": 6
+  },
+  "authority_abi_version": "AIENOS cap ABI pinned by aienos.lock; capability generation uint64",
+  "candidate_commit": "c6cac17d1870b64eca7b2968d624e31f21f83dd0",
+  "dependency_commits": {
+    "aienos": "d39dd5bc3deb1a24e26a5059477a1342c110c71b",
+    "argus": "b375dcaa2887d53cda407d773c2e4e489a0b1365",
+    "physics": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9"
+  },
+  "evidence_root": null,
+  "execution_envelope_schema": "SECURITY-1 RxExecutionEnvelope (no independent wire schema; source revision c6cac17)",
+  "machine_identity": "6cba51505d5b6bc2103104d446364c29e25ab37294c646d5bde0cba9b07dbe97",
+  "performance": {
+    "V3_qualification_ms": "not measured; interface-only unit test completed",
+    "containment_reaction_ns": "not implemented",
+    "effect_replay_check_ns": "not implemented",
+    "normal_runtime_security_fast_path_ns": "151265 envelope-validation ns/call from existing SECURITY-1 gate; not representative of all runtime checks",
+    "v3_qualification_ms": "interface test only; not qualification",
+    "vulnerability_reachability_ns": "not implemented"
+  },
+  "receipt_digest_sha256": "9d601db27b58ed008988282088fa73d4d593641549dc863fb097e586052150bb",
+  "required_skips": [
+    "authority suite not integrated with V3 runner",
+    "World mutation/replay suite not integrated",
+    "effect executor/replay closure absent",
+    "synthetic vulnerability reachability absent",
+    "secret broker boundary absent",
+    "kernel foreign-runtime containment absent"
+  ],
+  "schema": "omega.v3-qualification-receipt.v1",
+  "status": "FAIL_INCOMPLETE",
+  "test_corpus_digest": "421654f8b3c03daa782455a137ae360957481186f01c08840a2070541b5819c7",
+  "world_generation_identity": "not instantiated by interface gate; no V3 target World"
+}

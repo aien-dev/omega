@@ -186,6 +186,15 @@ $(RX_ENV_TEST): $(RX_ENV_SRCS) $(RX_ENV_OBJS) $(RX_FOREIGN_CHILD) | $(OUT_DIR)
 test-execution-envelope: $(RX_ENV_TEST)
 	./$(RX_ENV_TEST)
 
+# SECURITY-2 V3 result reducer and canonical effect identity tests.
+OMEGA_V3_TEST = $(OUT_DIR)/omega_v3_test
+$(OMEGA_V3_TEST): tests/runtime/omega_v3_test.c src/omega_v3.c \
+		src/runtime/rx_effect_identity.c src/sha256.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -Isrc -pthread -o $@ $^
+.PHONY: test-omega-v3-interface
+test-omega-v3-interface: $(OMEGA_V3_TEST)
+	./$(OMEGA_V3_TEST)
+
 # Omega semantic variables and incremental recomputation
 # (gate OMEGA_INCREMENTAL_SEMANTICS_PASS). CPU only, same links as R3.
 RX_SEM_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
