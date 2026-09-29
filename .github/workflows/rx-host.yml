@@ -20,6 +20,11 @@ on:
       - 'src/language/**'
       - 'tests/program/**'
       - 'mk/program-id.mk'
+      - 'src/omega_realize_synth.*'
+      - 'src/aarch64_decoder.*'
+      - 'src/visor/visor_realization.*'
+      - 'tests/realize/**'
+      - 'mk/program-realize.mk'
       - '.github/workflows/rx-host.yml'
       - 'aienos.lock'
       - 'argus.lock'
@@ -44,6 +49,11 @@ on:
       - 'src/language/**'
       - 'tests/program/**'
       - 'mk/program-id.mk'
+      - 'src/omega_realize_synth.*'
+      - 'src/aarch64_decoder.*'
+      - 'src/visor/visor_realization.*'
+      - 'tests/realize/**'
+      - 'mk/program-realize.mk'
       - '.github/workflows/rx-host.yml'
       - 'aienos.lock'
       - 'argus.lock'
@@ -308,6 +318,9 @@ jobs:
         # AArch64 job: the Visor objects this test links only build on AArch64 hosts
         # (visor_realization.c k_diff_inputs is aarch64-only, pre-existing).
         run: make OUT_DIR=build/pid PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-program-id
+      - name: Realization compiles the actual Omega program (OMEGA_PROGRAM_REALIZE)
+        # AArch64 job: the test executes the generated AArch64 code natively.
+        run: make OUT_DIR=build/prz PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-program-realize
       - name: Omega as a resident realization faculty (R10)
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}

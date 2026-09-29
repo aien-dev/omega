@@ -89,13 +89,41 @@ int omega_program_compute_id(OmegaProgram *prog);
 /* The canonical body root id alone (the SemanticId of the body's root object). */
 int omega_program_body_root_id(const OmegaProgram *prog, SemanticId *out_root);
 
+/* ---- V0 realization compiler (spec/program-realization.md) ----------------
+ * Pipeline: canonical body -> realize_check (verified semantic op sequence) ->
+ * schedule (machine-aware choice, never meaning) -> AArch64 bytes via the one encoder
+ * (aarch64_encoder.c) -> verification -> RealizationId. */
+typedef enum {
+    OMEGA_SCHED_SEQUENTIAL = 0,   /* one scratch register X1, load then op, per step */
+    OMEGA_SCHED_PRELOAD = 1       /* blocks of constants preloaded into X1..X15, then ops */
+} OmegaRealizeSchedule;
+#define OMEGA_PRELOAD_REGS 15      /* X1..X15: caller-saved scratch only (never X16-X30) */
+
+/* Fail-closed V0 gate: body present, unsigned in==out type, width 8/16/32/64, every step
+ * ADD SUB MUL AND OR with a constant that fits the width, program_id == v2 id of body +
+ * contract. 0 ok (width in *out_width), -1 refused with a reason in why. */
+int omega_program_realize_check(const OmegaProgram *prog, uint16_t *out_width, char *why, size_t why_len);
+
+/* Emit a schedule for body at width (width < 64 appends one AND with the width mask).
+ * Constants: MOVZ chunk0 then MOVK for each nonzero higher 16-bit chunk (full 64 bits). */
+int omega_program_emit_schedule(const OmegaProgramBody *body, uint16_t width, OmegaRealizeSchedule sched,
+                                uint8_t *code, size_t *code_len, size_t max_len);
+
+/* Independent semantic evaluator: lowers the body to the canonical objects the program
+ * id binds and evaluates them with omega_eval_pure_binary_uint (no code involved).
+ * Every xs[i] must lie in the declared input domain [0, 2^w). 0 ok, -1 refused. */
+int omega_program_eval(const OmegaProgram *prog, const uint64_t *xs, size_t n, uint64_t *ys);
+
+/* omega_program_realize with a reason: 0 ok, -2 refused by the V0 gate (why set), -1 error. */
+int omega_program_realize_ex(OmegaProgram *prog, char *why, size_t why_len);
+
 /* Lift a realization in the builder's rigid unary template
- *   (movz x1, lo16 [; movk x1, hi16, lsl 16] ; op x0, x0, x1)* ; ret
+ *   (movz x1, c0 [; movk x1, ck, lsl 16k for each nonzero chunk k] ; op x0, x0, x1)* ; ret
  * back to a body. Confirmed by re-emitting the steps and requiring byte equality.
  * Returns 0 and fills out_body on success, -1 if the code is not in the template. */
 int omega_program_lift_body(const uint8_t *code, size_t code_len, OmegaProgramBody *out_body);
 
-/* Emit the canonical realization of a body (the template above, ending in RET). */
+/* Emit the canonical realization of a u64 body (the template above = the SEQUENTIAL schedule). */
 int omega_program_emit_body(const OmegaProgramBody *body, uint8_t *code, size_t *code_len, size_t max_len);
 
 /* Canonical sequence postcondition id over an ordered leaf list (n >= 1): n == 1 is the
@@ -113,7 +141,10 @@ int omega_program_validate_contract(const OmegaProgram *prog, char *err_msg, siz
  */
 int omega_program_compose(const OmegaProgram *a, const OmegaProgram *b, OmegaProgram *out_c, char *err_msg, size_t err_msg_len);
 
-/* Direct AArch64 machine realization of program */
+/* Canonical machine-independent AArch64 realization compiled from the program body:
+ * V0 gate, SEQUENTIAL schedule, realization.semantic_id = program_id, OMG_R0 id, V0
+ * structural check. Sets is_realized (not is_verified). 0 ok, nonzero refused. The
+ * machine-bound (triple id) path is omega_synthesize_realization. */
 int omega_program_realize(OmegaProgram *prog);
 
 /* Verify program using M7 verification engine (V0, V1, V2) */

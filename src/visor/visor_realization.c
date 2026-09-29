@@ -433,9 +433,17 @@ int visor_realize_program(const OmegaProgram *p, const OmegaMachineGraph *mg,
                           VisorRealizationEntry *out_entry, VisorRealizationView *out_view) {
     if (!p || !out_entry || !out_view) return -1;
     memset(out_entry, 0, sizeof(*out_entry));
-    if (!p->is_realized || p->realization.code_len == 0)
-        return fail_view(out_view, "program carries no realization (omega_program_realize is declared but not implemented in core)");
-    out_entry->real = p->realization;
+    /* Always compile from the canonical body (omega_program_realize); never trust code the
+     * program happens to carry. The V0 gate's reason is shown when it refuses. */
+    OmegaProgram c = *p;
+    c.graph = NULL;
+    char why[192];
+    if (omega_program_realize_ex(&c, why, sizeof why) != 0) {
+        char msg[240];
+        snprintf(msg, sizeof msg, "omega_program_realize refused: %s", why[0] ? why : "unknown");
+        return fail_view(out_view, msg);
+    }
+    out_entry->real = c.realization;
     out_entry->subject_id = p->program_id;
     out_entry->subject_is_program = true;
     out_entry->program_index = -1;
@@ -464,17 +472,21 @@ static void synth_alt(const OmegaProgram *p, const OmegaMachineGraph *m, const c
     e->program_index = -1;
     snprintf(e->target_name, sizeof(e->target_name), "%s", tname);
 #if defined(__aarch64__)
+    /* The real compiler for machine m: program body -> schedule chosen from m -> bytes ->
+     * triple id -> verification (native == semantic evaluator). */
     RealizationSynthesisTask task;
     RealizationSynthesisResult res;
     omega_realize_task_init(&task, p, m);
     task.optimize_latency = true;
     int rc = omega_synthesize_realization(&task, &res);
     if (res.realization.code_len == 0) {
-        set_verdict(e, false, "omega_synthesize_realization produced no code");
+        char r[sizeof(e->incompatible_reason)];
+        snprintf(r, sizeof(r), "compiler refused (rc=%d): %.100s", rc, res.why);
+        set_verdict(e, false, r);
         visor_realization_view(e, m, v);
         v->compatible = false;
         v->runnable = false;
-        snprintf(v->why, sizeof(v->why), "omega_synthesize_realization produced no code (rc=%d)", rc);
+        snprintf(v->why, sizeof(v->why), "omega_synthesize_realization refused (rc=%d): %.160s", rc, res.why);
         return;
     }
     e->real = res.realization;
@@ -482,16 +494,18 @@ static void synth_alt(const OmegaProgram *p, const OmegaMachineGraph *m, const c
     e->has_machine_id = true;
     e->estimated_cycles = res.estimated_cycles;
     e->has_estimate = true;
-    /* differential check vs the program's own realization */
+    /* cross-check vs the canonical (direct) realization of the same program */
     char diff[160];
-    bool match = p->is_realized && p->realization.code_len > 0;
+    OmegaProgram c = *p;
+    c.graph = NULL;
+    bool match = omega_program_realize(&c) == 0;
     snprintf(diff, sizeof(diff), "program has no direct realization to compare");
     if (match) {
         snprintf(diff, sizeof(diff), "matches direct on %zu inputs",
                  sizeof(k_diff_inputs) / sizeof(k_diff_inputs[0]));
         for (size_t i = 0; i < sizeof(k_diff_inputs) / sizeof(k_diff_inputs[0]); ++i) {
             uint64_t yd = 0, ys = 0, x = k_diff_inputs[i];
-            if (omega_exec_native_f3(&p->realization, x, 0, 0, &yd) != 0 ||
+            if (omega_exec_native_f3(&c.realization, x, 0, 0, &yd) != 0 ||
                 omega_exec_native_f3(&e->real, x, 0, 0, &ys) != 0 || yd != ys) {
                 match = false;
                 snprintf(diff, sizeof(diff), "MISMATCH x=%" PRIu64 ": direct=%" PRIu64 " synth=%" PRIu64, x, yd, ys);
@@ -504,14 +518,15 @@ static void synth_alt(const OmegaProgram *p, const OmegaMachineGraph *m, const c
         set_verdict(e, true, "");
     } else {
         char r[sizeof(e->incompatible_reason)];
-        snprintf(r, sizeof(r), "synth rc=%d solved=%d; %.96s", rc, res.solved ? 1 : 0, diff);
+        snprintf(r, sizeof(r), "synth rc=%d solved=%d; %.40s; %.60s", rc, res.solved ? 1 : 0, diff, res.why);
         set_verdict(e, false, r);
     }
     visor_realization_view(e, m, v);
     v->compatible = v->compatible && match;
     v->runnable = v->runnable && match;
     snprintf(v->why, sizeof(v->why),
-             "core synth emits fixed f(x)=3x-2 schedule, not derived from program; %s; synth rc=%d", diff, rc);
+             "compiled from the program body, %s schedule for this machine; native == semantic evaluator on %u inputs; %.60s; synth rc=%d",
+             res.schedule == OMEGA_SCHED_PRELOAD ? "preload" : "sequential", res.inputs_checked, diff, rc);
 #else
     set_verdict(e, false, "synthesis not attempted: host is not aarch64");
     visor_realization_view(e, m, v);

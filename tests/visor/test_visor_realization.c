@@ -111,19 +111,26 @@ int main(void) {
     CHECK(strcmp(alt1[0].label, "direct@dgx-spark") == 0 && strcmp(alt1[1].label, "direct@qemu-virt") == 0 &&
           strcmp(alt1[2].label, "synth@dgx-spark") == 0 && strcmp(alt1[3].label, "synth@qemu-virt") == 0, "labels/order");
     CHECK(alt1[0].compatible && alt1[1].compatible, "direct alternatives compatible");
-    CHECK(!alt1[2].compatible && !alt1[2].runnable && strstr(alt1[2].why, "MISMATCH"), "synth for add5 flagged mismatch");
-    /* the stored entry carries the verdict: re-viewing it later stays incompatible, run refused */
+    /* synth = the real compiler (program body -> machine schedule -> verified bytes) */
+    CHECK(alt1[2].compatible && alt1[2].runnable && strstr(alt1[2].why, "matches direct") &&
+          strstr(alt1[2].why, "compiled from the program body"), "synth for add5 compiled from the program and agrees");
+    CHECK(alt1[3].compatible && alt1[3].runnable, "synth for add5 on qemu-virt compatible");
     size_t ne = 0;
     CHECK(visor_realization_alternatives_ex(&p, &spark, alte, altv, 4, &ne) == 0 && ne == 4, "alternatives_ex count");
     CHECK(alte[0].verdict_known && alte[0].compatible && alte[1].verdict_known && alte[1].compatible,
           "direct alternative entries compatible");
-    CHECK(alte[2].verdict_known && !alte[2].compatible && alte[2].incompatible_reason[0], "synth entry carries incompatible verdict");
-    VisorRealizationView rv;
-    CHECK(visor_realization_view(&alte[2], &spark, &rv) == 0 && !rv.compatible && !rv.runnable &&
-          strstr(rv.why, "INCOMPATIBLE") && strstr(rv.why, alte[2].incompatible_reason),
-          "re-viewed incompatible entry: not compatible, not runnable, reason in why");
+    CHECK(alte[2].verdict_known && alte[2].compatible && alte[2].has_machine_id, "synth entry compatible, machine-bound");
     args[0] = 10;
-    CHECK(visor_realization_run_pure(&alte[2], args, 1, &r) == -3, "incompatible synth entry run refused");
+    CHECK(visor_realization_run_pure(&alte[2], args, 1, &r) == 0 && r == 15, "synth entry runs 10+5==15");
+    /* the stored entry carries a verdict: an entry marked incompatible stays so, run refused */
+    VisorRealizationEntry bad = alte[2];
+    bad.verdict_known = true; bad.compatible = false;
+    snprintf(bad.incompatible_reason, sizeof(bad.incompatible_reason), "marked incompatible by test");
+    VisorRealizationView rv;
+    CHECK(visor_realization_view(&bad, &spark, &rv) == 0 && !rv.compatible && !rv.runnable &&
+          strstr(rv.why, "INCOMPATIBLE") && strstr(rv.why, bad.incompatible_reason),
+          "re-viewed incompatible entry: not compatible, not runnable, reason in why");
+    CHECK(visor_realization_run_pure(&bad, args, 1, &r) == -3, "incompatible entry run refused");
     CHECK(visor_realization_view(&alte[0], &spark, &rv) == 0 && rv.compatible && !strstr(rv.why, "INCOMPATIBLE"),
           "re-viewed direct entry unchanged");
     CHECK(visor_realization_run_pure(&alte[0], args, 1, &r) == 0 && r == 15, "direct alternative entry runs 10+5==15");

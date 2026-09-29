@@ -34,6 +34,7 @@ typedef struct {
     uint8_t rn;
     uint8_t rm;
     uint16_t imm16;
+    uint8_t hw;        /* MOVZ/MOVK: 16-bit chunk index (shift = hw * 16) */
     int32_t branch_imm;
     Aarch64Cond cond;
 } DecodedInsn;

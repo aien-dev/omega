@@ -52,6 +52,7 @@ int aarch64_decode_instruction(uint32_t insn, DecodedInsn *out_dec) {
         out_dec->sf = (insn >> 31) & 1;
         out_dec->rd = (uint8_t)(insn & 0x1F);
         out_dec->imm16 = (uint16_t)((insn >> 5) & 0xFFFF);
+        out_dec->hw = (uint8_t)((insn >> 21) & 3);
         return 0;
     }
 
@@ -115,6 +116,7 @@ int aarch64_decode_instruction(uint32_t insn, DecodedInsn *out_dec) {
         out_dec->sf = (insn >> 31) & 1;
         out_dec->rd = (uint8_t)(insn & 0x1F);
         out_dec->imm16 = (uint16_t)((insn >> 5) & 0xFFFF);
+        out_dec->hw = (uint8_t)((insn >> 21) & 3);
         return 0;
     }
 
