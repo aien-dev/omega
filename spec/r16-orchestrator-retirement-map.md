@@ -67,20 +67,22 @@ Notes:
 
 Word hits in code (comments and strings removed; identifier words split at `_` and
 case changes). These are mentions, not loops; every loop they sit in is a row below.
+Counted by the tool on the R16 branch tree (omega main `193a7e7` plus spec, map and
+tool) and the four other repos at the SHAs above.
 
 | term (spec §4) | pattern word(s) | omega | sovereign-core | aegis-runtime | aienos | physics |
 |---|---|---|---|---|---|---|
 | run_until_complete | run_until_complete | 2 | 7 | 0 | 0 | 0 |
 | max_steps | max_steps (substring count; gated only as a whole identifier) | 35 | 7 | 3 | 0 | 0 |
 | max_turns | max_turns | 0 | 0 | 13 | 0 | 0 |
-| for/while semantic step loops | step, steps (counted, not a gate word: names plan steps and data arrays everywhere; step loops are caught as unbounded, by max_steps, or by a wait word) | 596 | 389 | 70 | 90 | 0 |
+| for/while semantic step loops | step, steps (counted, not a gate word: names plan steps and data arrays everywhere; step loops are caught as unbounded, by max_steps, or by a wait word) | 609 | 389 | 70 | 90 | 0 |
 | polling for semantic readiness | poll | 34 | 0 | 0 | 13 | 0 |
 | (waiting) | sleep, usleep, nanosleep, msleep | 69 | 27 | 0 | 0 | 3 |
-| (waiting) | wait (counted, not a gate word: too common in condvar code) | 209 | 18 | 0 | 29 | 13 |
+| (waiting) | wait (counted, not a gate word: too common in condvar code) | 210 | 18 | 0 | 29 | 13 |
 | heartbeat task dispatch | heartbeat | 24 | 15 | 71 | 0 | 0 |
-| heartbeat task dispatch | tick | 58 | 4 | 26 | 32 | 0 |
+| heartbeat task dispatch | tick | 61 | 4 | 26 | 32 | 0 |
 | heartbeat task dispatch | pulse | 17 | 30 | 27 | 0 | 0 |
-| central dispatch / manual faculty invocation | dispatch | 50 | 51 | 16 | 25 | 0 |
+| central dispatch / manual faculty invocation | dispatch | 52 | 51 | 16 | 25 | 0 |
 | duplicate schedulers | schedule, scheduler, sched | 95 | 173 | 0 | 110 | 2 |
 | orchestration | orchestrate, orchestrator, orchestration | 10 | 0 | 8 | 0 | 0 |
 | turn loops | turn, turns | 0 | 60 | 69 | 0 | 0 |
@@ -400,13 +402,13 @@ exists in the file (symbol not verified) and applies the same class rules.
 
 | §4 term | finding | authoritative side | class / status |
 |---|---|---|---|
-| synchronous AIEN → Omega calls | omega's AIEN faculty (`src/runtime/rx_aien.c`) reaches Omega only through world publications; R11 spec: `rx_aien.o` must not have an undefined omega symbol. sovereign-core has no call into omega (no omega symbol, socket or exec found). | omega reaction world | no central call on the production path; G3 re-checks from the link map |
+| synchronous AIEN → Omega calls | omega's AIEN faculty (`src/runtime/rx_aien.c`) reaches Omega only through world publications; R11 spec: `rx_aien.o` must not have an undefined omega symbol. sovereign-core links no omega symbol; its only omega contact is the `crumbs` curriculum gates (`crates/crumbs/src/gates.rs`, `protocol.rs`), which start omega's `crumbline-learner` as a child process and talk to it over a framed stdin/stdout protocol (F rows SC `protocol.rs:311` and OM `crumbline_learner.c:188`); that is a curriculum/test harness, not the living-system path (word search `omega` over sovereign-core `*.rs`/`*.toml`: 4 hits, all in `crates/crumbs`). | omega reaction world | no central call on the production path; G3 re-checks from the link map |
 | synchronous Omega → AEGIS calls | omega calls the native AIENOS capability library (`AIENOS_CAP_LIB`, `native/capability/libaienos_capability.a`) for authority; it never execs or links aegis-runtime or `spark-aegis` (grep of omega `src/`, `tools/`, Makefile: zero hits). | native AIENOS capability authority | aegis-runtime path: class A by non-use (AR rows) |
 | duplicate schedulers | (1) omega `rx_world.c` reaction scheduler (E, authoritative); (2) sovereign-core `aien-scheduler` token batching for LLM serving (E, spec §3.1, not on the reaction path); (3) aienos kernel CPU scheduler `scheduler.rs` / `thread.rs` (E, physical); (4) aegis-runtime heartbeat task polling (A, retired by non-use). Only (1) orders faculty work. | omega `rx_world.c` | no duplicate semantic scheduler after R16 within scope |
 | duplicate world ownership | omega has the reaction world (`rx_world.c`, authoritative) and the M19 accelerator world (`omega_accelerator_world.c`), which the spec keeps as the known-good fallback (C). | reaction world; M19 world = fallback | C row OM for `omega_world_drain`; fallback status proved in G6 |
 | duplicate authority ownership | (1) aienos `native/capability/aienos_capability.c` (C, "native AIENOS capability authority"); (2) aienos `crates/aienos-capability` (Rust twin of the same design); (3) omega `rx_caproot.c`, self-described "host reference capability root … R7 is not claimed"; (4) physics `m3/capability.s` historical assembly oracle. | (1) | ? — see question AUTH below |
 | duplicate semantic task queues | aegis-runtime SQLite pending-task queue (A, non-use); sovereign-core cortex writer queue is a disk-write batcher (E), not a task queue. | omega reaction world | none remaining in scope |
-| duplicate generation model | omega `rx_generation.c` is the generation mechanism (protected, §49). No other generation promotion was found in the other four repos by `generation` + `promot` word search. | omega `rx_generation.c` | protected; G6 |
+| duplicate generation model | omega `rx_generation.c` is the generation mechanism (protected, §49). Other "promotion" code (word search `promot` over the four other repos, vendor/third_party excluded): sovereign-core `cortex-rs/src/promotion.rs` promotes memory candidates, `crumbs/src/promotion.rs` promotes curriculum operations; aienos `crates/aienos-aegis/src/world.rs` has a Rust J-Space sandbox world with a `Promoted` state (`mark_promoted` used only in that file), `aienos-cortex/src/store.rs` and the capability library use the word for other things; aegis-runtime and physics have none. None of them promotes a reaction-world generation; none is linked by omega (G3 checks). | omega `rx_generation.c` | protected; G6 |
 | duplicate resource pool | omega `rx_world.c` admission budgets; aien-proof test-board CPU/memory slots are test infrastructure (E, non-authoritative). | omega `rx_world.c` | none in scope |
 | duplicate causal state | not assessed by grep; the R4 causal-trace target is still to be named (spec §2 precondition 4). | — | open, belongs to spec §2 item 4 |
 | service/RPC boundaries replaced by reactions | aegis-runtime HTTP/websocket gateway (A rows, non-use); sovereign-core runtime IPC socket (F, serves the LLM loop that stays per §3.1). | — | as rows |
