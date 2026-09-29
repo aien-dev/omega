@@ -1,0 +1,11 @@
+# BRN-P TY-2 verify log 2026-09-29T17:00:05-05:00
+omega origin/main: f7f60ddcb8a1c7079b49601196449a8fc2c0b2a9
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+CMD: make turing-yield && build/tests-turing-yield/turing-yield verify evidence/TURING_YIELD/trace_manifest_rep10_control.sha256 /home/drakestapleton/aien-data/crumbline evidence/TURING_YIELD/ty2_heldout_receipt.txt
+make: Nothing to be done for 'turing-yield'.
+VERIFY OK: receipt re-derived from the manifest files; T = 2559679.825 bits, verdict PASS
+EXIT=0
+# BRN-P CI half: omega#86 merged 2026-09-29 (main 071a1e1); workflow "Turing yield boundaries" (turing-yield.yml, push:main) run 36638327359 on 071a1e1: success.
+# CI log: test_ty_math: 106 passed, 0 failed; ty_energy: 54 checks, 0 failures; ty_energy fixtures: nine valid/refusal cases passed.
+# BRN-P verdict: PASS (a) CI-enforced on main, (b) TY-2 receipt re-verified on reference host (above).
