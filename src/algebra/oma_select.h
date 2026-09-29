@@ -1,7 +1,15 @@
-/* MA-2 stand-in selector for Omega-X realizations.
+/* MA-2 selector for Omega-X realizations: RETIRED for new decisions.
  * spec/mixed-algebra-ma2.md
  *
- * STAND-IN: this selector is not wired to rx_costmodel (src/runtime). It reads
+ * RETIRED (TURING docs/turing/TURING_W0_PROPOSAL.md K.6/K.7; ADR 0019 section
+ * 9.1 amendment proposed): the incumbent > reference > cheapest tie rule below
+ * failed the pre-registered TURING Wave 1 kill test. This selector is kept
+ * unchanged only to reproduce evidence/MIXED_ALGEBRA/ma2_select_receipt.json
+ * and as the regression subject of test-realize. Do not add new callers. New
+ * selections use src/turing turing_rank_min_cost (lowest measured cost wins)
+ * and are recorded as turing.decision.v1 records via turing-field.
+ *
+ * Historical note: this selector is not wired to rx_costmodel (src/runtime). It reads
  * the measured cost table from MA-2 benchmark receipts (never hard-coded
  * costs), filters candidates by the exact contract, and picks the cheapest
  * (subject to the tie rule below).

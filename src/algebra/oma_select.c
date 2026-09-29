@@ -1,4 +1,6 @@
-/* MA-2 stand-in selector (not wired to rx_costmodel). See oma_select.h. */
+/* MA-2 selector, RETIRED for new decisions (TURING K.6/K.7); kept only to
+ * reproduce ma2_select_receipt.json. New selections: src/turing
+ * turing_rank_min_cost / turing.decision.v1. See oma_select.h. */
 #include "algebra/oma_select.h"
 
 #include "algebra/realize_common.h"
