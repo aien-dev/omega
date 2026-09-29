@@ -506,6 +506,17 @@ $(R15_REDUCE): tools/r15_reduce.c src/sha256.c src/sha256.h | $(OUT_DIR)
 r15-perf-host: $(RX_R15_PERF_HOST) $(RX_R15_PERF_HOST_ND) $(R15_REDUCE)
 r15-perf-silicon: $(RX_R15_PERF_SILICON) $(RX_R15_PERF_SILICON_ND) $(R15_REDUCE)
 
+# R15 receipt writer (spec §12/§13/§14): tools/r15_receipt.sh turns one run
+# directory (summary.json + machine.json + SHA256SUMS) into
+# evidence/R15/<sha256>.json. The host test runs it on attempt 1 (a FAIL).
+r15-receipt:
+	@test -n "$(RUN)" || { echo "usage: make r15-receipt RUN=evidence/R15/raw/<run-id> [CANDIDATE=<commit>] [RERUNS=<file>]"; exit 2; }
+	tools/r15_receipt.sh $(RUN) evidence/R15 $(CANDIDATE) $(RERUNS)
+
+.PHONY: r15-receipt test-r15-receipt
+test-r15-receipt:
+	tests/r15_receipt_test.sh
+
 
 # OMEGA_ACTION_GRAPH_IR: goals compile to typed action graphs that run as
 # resident reactions by readiness alone. rx_graph.o is built alone first and
