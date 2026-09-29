@@ -56,7 +56,7 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
-        run: make test-r3 test-r7 test-r9
+        run: make test-r3 test-r7 test-r9 test-r12
       - name: Emit qualification receipt
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}

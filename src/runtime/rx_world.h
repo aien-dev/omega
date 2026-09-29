@@ -139,6 +139,12 @@ enum {
 #define RX_PLACE_COHERENT    1u
 #define RX_LOCALITY_MACHINE  1u
 #define RX_COHERENCY_HOST    1u   /* CPU image of the shared layout; no graphics processor claimed */
+#define RX_COHERENCY_SEAT    2u   /* same window, graphics seat participated */
+/* Bit in RxResourceNeed.accelerator_features. Admission already requires the
+ * budget to offer every bit a reaction asks for. This bit selects the resident
+ * graphics seat. It is not a call from the processor to a graphics function. */
+#define RX_ACCEL_BLACKWELL   0x2u
+#define RX_SEAT_BLACKWELL    0x100u
 #define RX_OBJECT_WINDOW     64u  /* eight field values, little-endian */
 #define RX_PHYS_WINDOWS      (RX_MAX_OBJECTS + 1u)
 
@@ -315,6 +321,9 @@ typedef struct {
     uint64_t prev_out;
     bool have_last;
     bool have_two;
+    bool resident_seat;         /* handed to the graphics seat; fn is not called */
+    uint64_t resident_seq;      /* ring sequence of the claim notice */
+    uint64_t resident_parent;   /* crumb that made this activation ready */
 } RxReaction;
 
 typedef struct {
@@ -406,6 +415,10 @@ typedef struct RxWorld {
     uint8_t *coherent;
     uint64_t coherent_bytes;
     uint32_t world_epoch;
+    uint32_t resident_k;        /* fixed seat rule: field 1 = field 0 xor this */
+    bool resident_rule_set;
+    bool coherent_borrowed;     /* image memory is not freed with the world */
+    bool resident_stopped;
 
     RxStats stats;
 } RxWorld;
@@ -501,6 +514,44 @@ uint64_t rx_world_physical_table_offset(void);
 
 /* Fill checksum and the frozen magic/version. Does not invent an identity. */
 void rx_world_seal_descriptor(OmegaSharedWorldDesc *desc);
+
+/* Fixed in-place rule for the resident graphics seat. The notice does not
+ * carry the operation. The seat was launched with this constant. */
+int  rx_world_set_resident_rule(RxWorld *w, uint32_t rule_k);
+
+/* Stand-in for the graphics seat, on the same image. One call consumes
+ * notices until it has handled one claim, a shutdown, or the ring is empty.
+ * Returns 1 if it wrote a result notice, 0 if there was nothing to do,
+ * 2 if it saw shutdown, negative on a refused claim (a fault notice was
+ * still published). */
+int  rx_resident_seat_step(RxWorld *w);
+
+/* Caller already holds the world lock. Posts one claim for a placed object.
+ * The notice names the object and its capability. It does not carry the rule. */
+int  rx_resident_post_claim(RxWorld *w, uint32_t id, uint64_t parent, uint64_t *seq_out);
+
+/* Clear the seat's stopped flag. Does not move either ring. */
+int  rx_resident_reset(RxWorld *w);
+
+/* Take one result notice and, when it is valid, publish it into the canonical
+ * object. A dependent reaction wakes from that publication. */
+int  rx_resident_accept(RxWorld *w);
+
+/* Ask the seat to leave. The object world stays. */
+int  rx_resident_shutdown(RxWorld *w);
+/* Caller holds the world lock. Copies one graphics-to-processor result and
+ * moves that ring forward. */
+int  rx_resident_take_result(RxWorld *w, OmegaSharedWorldDesc *out);
+
+/* Point the one image at caller memory of the same size. borrowed means the
+ * world will not free it. */
+int  rx_world_bind_coherent(RxWorld *w, void *mem, uint64_t bytes, int borrowed);
+
+uint64_t rx_world_off_c2g(void);
+uint64_t rx_world_off_g2c(void);
+uint64_t rx_world_off_fault(void);
+uint64_t rx_world_off_object_table(void);
+uint64_t rx_world_off_heartbeat(void);
 
 /* Caller holds the world lock. Projection and publication of the same object. */
 int  rx_coherent_format(RxWorld *w);
