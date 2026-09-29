@@ -247,38 +247,31 @@ def main():
 
 UX_FINDINGS = [
     "`true`/`false` echo as 1/0 although `type _` says bool; a user reads 1 as an integer.",
-    "`help` shows the source form as `let x = <expr>`, but V0 requires `let x: u64 = <expr>` (the error message does explain).",
-    "`help` lists `graph [x]` (argument optional) but `graph` with no argument is an error: 'give a name, _ or id'.",
-    "`alternatives <value>` prints a doubled prefix: `error: alternatives: alternatives: only programs have alternative realizations in V1`.",
-    "`effects <non-effect>` prints `'x' is not an EFFECT object` without the `error:` prefix in text mode (JSON correctly says status error; exit code is 1).",
     "`why <x>` is described as 'explain where x came from' but only explains realizations; on a value it says `use realize x first`, and `realize x` then refuses a value, a dead end.",
-    "`authorize x`, `execute _` and `delete x` give parser jargon ('unexpected x after the end of the statement') instead of 'unknown command'; only `mint`/`grant`/... are reserved words, `authorize`/`submit`/`execute` are not.",
-    "Errors raised before parsing are labelled with the command name `unknown` (`error: unknown: invalid UTF-8 at byte 4`, `error: unknown: line too long`).",
+    "Errors raised before parsing, and unknown commands, are labelled `unknown` (`error: unknown: invalid UTF-8 at byte 4`, `error: unknown: unknown command or invalid source line: 'authorize'`).",
     "`id` prints the same hash three times (id, canonical_sha256) plus canonical_len; the relation is not explained.",
     "After `realize _`, `_` silently becomes the realization, so `inspect _`/`type _` now refer to a different object than one line earlier.",
     "Every u64 ADD has the same realization id (`realized` = the ADD operation, not the apply), so `x + y` and `x + 1` share one realization id; correct per spec but surprising in `bindings`/`compare`.",
-    "`run _ a b` on a binary-apply realization runs the operation on the given numbers, not on the object's operands; nothing in the output says the object was not what ran.",
+    "`run _ a b` (exactly all operands) on a binary-apply realization runs the operation on the given numbers, not on the object's operands (7+11 -> `run _ 1 2` prints 3); allowed by design after the D2 fix, but the output does not say the object's own operands were replaced.",
     "Machine/realization output uses hex profile codes (`profile 0x01 vs machine 0x01`), `physics flag=set seal=builder-constant placeholder`, and C function names (`omega_machine_estimate_latency(...)`, `omega_exec_native_f3`) as explanations; not readable without the C source.",
     "`verify` row INVARIANTS reports 399 generic checks that are 'not object-specific'; a user may read the PASS as evidence about their object.",
-    "`evidence <name>` for a session object always says `no evidence`: receipts are repository files, not linked to session objects; the question 'what evidence supports this object' cannot be answered in V1.",
+    "`evidence <name>` for a session object always says `no evidence`: receipts are repository files, not linked to session objects; 'what evidence supports this object' cannot be answered in V1.",
     "Blank lines produce no JSON object while comment-only lines produce one (`kind: none`); a script driver counting lines must know this.",
     "Commands after `quit` in --command/--script mode are silently dropped (exit 0).",
+    "`--script /dev/null` (a character device, not a regular file) is accepted as an empty script (exit 0), although the round-2 note says non-regular files exit 2; harmless, but the claim and behaviour differ.",
 ]
 
 DEFECTS = [
-    {"id": "D1", "severity": "high (fixed in ec2ec0b, found at 4fab549)",
-     "what": "The ./omega shipped at commit 4fab549 (sha256 543d874d...d4d3) crashes on every realize/run path: "
-             "`./omega --command 'let x: u64 = 7' --command 'let y: u64 = 11' --command 'x + y' --command 'realize _'` -> exit 139 (SIGSEGV in om_realization_show); "
-             "`realize b` on a bool -> '*** stack smashing detected ***', exit 134. Campaign on that binary: 37 failures, 6 hostile crashes. "
-             "Cause: tools/omega.c's object was not rebuilt when src/visor/visor.h changed (omega_main.d missing from VISOR_DEPS), so the binary mixed two struct layouts. "
-             "The in-process console test (146/146) could not see it. ec2ec0b adds omega_main.d; a clean-checkout build of 4fab549 was not tested."},
-    {"id": "D2", "severity": "medium (wrong output, exit 0)",
-     "what": "`run` does not check arity. `fn f(x: u64) -> u64 { x * 2 + 1 }` then `run f` prints 1 (f(0), x silently 0); `run f 5 6` prints 11 (6 ignored). "
-             "On `x + y` (7, 11) after `realize _`: `run _ 1` prints 12 (first operand replaced, second kept), `run _ 1 2 3` prints 3 (third ignored). All status ok, exit 0."},
-    {"id": "D3", "severity": "low",
-     "what": "`./omega --script /` (a directory) exits 0 with no output instead of refusing the script (exit 2 like a missing file)."},
-    {"id": "D4", "severity": "low (cosmetic)",
-     "what": "`alternatives x` on a value: 'error: alternatives: alternatives: only programs ...' (prefix doubled); `effects x` text-mode error lacks 'error:'; `help` says `graph [x]` but `graph` alone is an error."},
+    {"id": "D1", "severity": "high; FIXED in ec2ec0b (found at 4fab549)",
+     "what": "The ./omega shipped at commit 4fab549 (sha256 543d874d...d4d3) crashed on every realize/run path (exit 139 SIGSEGV in om_realization_show; 'stack smashing detected', exit 134). "
+             "Cause: omega_main.d missing from VISOR_DEPS, so tools/omega.c was not rebuilt when src/visor/visor.h changed. ec2ec0b adds it; a clean-checkout build of 4fab549 was not tested."},
+    {"id": "D2", "severity": "medium; FIXED in d7e8a4c (open in receipt #1)",
+     "what": "`run` did not check arity: `run f` -> 1, `run f 5 6` -> 11, `run _ 1` -> 12, `run _ 1 2 3` -> 3, all exit 0. "
+             "At d7e8a4c: 'program f takes 1 input; give it on the command line', 'program f takes 1 input; got 2', '_ takes 2 operands; got 1 (give none, or all 2)', '... got 3 ...'; exit 1."},
+    {"id": "D3", "severity": "low; FIXED in d7e8a4c",
+     "what": "`./omega --script /` exited 0; at d7e8a4c it prints 'error: --script: / is a directory' and exits 2."},
+    {"id": "D4", "severity": "cosmetic; FIXED in d7e8a4c",
+     "what": "Doubled 'alternatives:' prefix, `effects x` error without 'error:', help `graph [x]` and `let x = <expr>`, parser jargon for `authorize x`/`execute _`: all corrected (hostile.expected and usability.expected regenerated; the only other changed line is the `run <type-id>` message, now '... is not an APPLY; only pure binary u64 applies run in V1', still exit 1)."},
 ]
 
 NON_CLAIMS = [
@@ -293,6 +286,13 @@ NON_CLAIMS = [
     "The e2e session golden (tests/visor/sessions/e2e.expected) is compared host-independently only after ec2ec0b; the lane-8 goldens mask the machine block, machine name/id and estimated cycles.",
     "Determinism is shown across fresh processes on this host only, not across hosts, compilers or ABIs (golden bytes are pinned to LP64/aarch64).",
     "Visor V1 is not claimed safe against a hostile local user with write access to the binary or the evidence directory.",
+]
+
+
+HISTORY = [
+    ("1", "evidence/VISOR/12785aab7bb22bc1fd1d4e71143c15f98f1e4bc94885e9b2a725487b023b7c93.json", "ec2ec0b",
+     "OMEGA_VISOR_V1_FAIL",
+     "first run: REALIZE failed on run arity (D2), AUTHORITY_ISOLATION failed on `--script /` exit 0 (D3); zero authority-path failures"),
 ]
 
 
@@ -321,6 +321,12 @@ def write_md(path, r, receipt_path):
     d = r["determinism"] or {}
     L.append("Repeatability: %s runs, identical: %s.  Memory-checker build: %s.\n" % (
         d.get("runs"), d.get("identical"), json.dumps(r["sanitizer_pass"])))
+    L.append("## Receipt history\n")
+    L.append("| # | Receipt | Commit | Verdict | What changed |\n|---|---|---|---|---|")
+    for h in HISTORY:
+        L.append("| %s | `%s` | `%s` | %s | %s |" % h)
+    L.append("| %d | `%s` | `%s` | %s | this run |" % (len(HISTORY) + 1, receipt_path, r["candidate_commit"][:7], r["verdict"]))
+    L.append("")
     L.append("## Why the verdict is what it is\n")
     for x in r["verdict_reasons"] or ["All five gates passed."]:
         L.append("- " + x)

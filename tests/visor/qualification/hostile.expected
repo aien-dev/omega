@@ -37,19 +37,19 @@ error: compare: expected 2 arguments, got 1
 Ω> realize b
 error: realize: not an APPLY or OPERATION object; only pure binary u64 applies realize in V1
 Ω> run sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822
-error: run: not an APPLY or OPERATION object; only pure binary u64 applies realize in V1
+error: run: sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822 is not an APPLY; only pure binary u64 applies run in V1
 Ω> authorize x
-error: source: column 11: unexpected 'x' after the end of the statement
+error: unknown: unknown command or invalid source line: 'authorize'
 Ω> submit
 error: source: column 1: unknown name 'submit' (define it first, e.g. let submit: u64 = 7)
 Ω> execute _
-error: source: column 9: unexpected '_' after the end of the statement
+error: unknown: unknown command or invalid source line: 'execute'
 Ω> mint cap
-error: source: column 1: 'mint' is reserved: effects, authority, control flow and type names are not values in Omega V0
+error: unknown: unknown command or invalid source line: 'mint'
 Ω> grant x
-error: source: column 1: 'grant' is reserved: effects, authority, control flow and type names are not values in Omega V0
+error: unknown: unknown command or invalid source line: 'grant'
 Ω> effects x
-'x' is not an EFFECT object
+error: effects: 'x' is not an EFFECT object
 Ω> 1 + 2
 error: source: column 3: ambiguous width: no operand has a type; write e.g. `(1: u64) + 2`
 Ω> (1: u32) + (1: u64)

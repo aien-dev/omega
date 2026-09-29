@@ -1,9 +1,9 @@
 # Omega Visor V1 qualification (lane 8)
 
-Verdict: **OMEGA_VISOR_V1_FAIL**  
-Receipt: `evidence/VISOR/12785aab7bb22bc1fd1d4e71143c15f98f1e4bc94885e9b2a725487b023b7c93.json`  
-Commit: `ec2ec0ba34e241e6bae87ba57eb2a952853cad0f` (tree dirty: True, only lane-8 files (untracked, not yet committed))  
-Run: 20260929T043338Z on aarch64 7.0.0-1019-nvidia (NVIDIA_DGX_Spark)
+Verdict: **OMEGA_VISOR_V1_PASS**  
+Receipt: `evidence/VISOR/4de74cf3a01f7b362819183af5eb22a99f8af71638b2ecb026062acdf93bafb9.json`  
+Commit: `d7e8a4c0d31aab7631e19fc78cb1de97faa4e17b` (tree dirty: True, only lane-8 files (untracked, not yet committed))  
+Run: 20260929T044056Z on aarch64 7.0.0-1019-nvidia (NVIDIA_DGX_Spark)
 
 Scope: host-only: no GPU/silicon claim; no QEMU claim by the Visor (the pre-existing test-m5 gate runs its own QEMU check)
 
@@ -13,31 +13,30 @@ Scope: host-only: no GPU/silicon claim; no QEMU claim by the Visor (the pre-exis
 |---|---|---|---|---|
 | OMEGA_VISOR_SEMANTIC_PASS | Same meaning gets the same fingerprint (7, 07, 0x07, 0b111; spacing; comments); different widths differ; repeat runs match byte for byte | PASS | 541 | 0 |
 | OMEGA_VISOR_VERIFY_PASS | The checker and the evidence viewer report what is really there, and a new user can find it from `help` | PASS | 151 | 0 |
-| OMEGA_VISOR_REALIZE_PASS | Machine code built for an expression gives the same answer as the language; cost is labelled estimate, never measured; scripting behaves | FAIL | 419 | 4 |
-| OMEGA_VISOR_AUTHORITY_ISOLATION_PASS | The console can ask but never grant; bad or hostile input is refused cleanly and never crashes it | FAIL | 177 | 1 |
+| OMEGA_VISOR_REALIZE_PASS | Machine code built for an expression gives the same answer as the language; cost is labelled estimate, never measured; scripting behaves | PASS | 441 | 0 |
+| OMEGA_VISOR_AUTHORITY_ISOLATION_PASS | The console can ask but never grant; bad or hostile input is refused cleanly and never crashes it | PASS | 177 | 0 |
 | OMEGA_VISOR_REGRESSION_PASS | The older CPU milestone gates still pass and the tool still builds without the physics checkout | PASS | 92 | 0 |
 
-Hostile inputs: 69 tried, 59 refused cleanly, 0 crashed, 4 harmless blank/comment lines.
+Hostile inputs: 69 tried, 60 refused cleanly, 0 crashed, 4 harmless blank/comment lines.
 Repeatability: 3 runs, identical: True.  Memory-checker build: {"status": "RUN", "sanitizer_reports": "none", "crashed": 0, "same_case_failures_as_release": true}.
+
+## Receipt history
+
+| # | Receipt | Commit | Verdict | What changed |
+|---|---|---|---|---|
+| 1 | `evidence/VISOR/12785aab7bb22bc1fd1d4e71143c15f98f1e4bc94885e9b2a725487b023b7c93.json` | `ec2ec0b` | OMEGA_VISOR_V1_FAIL | first run: REALIZE failed on run arity (D2), AUTHORITY_ISOLATION failed on `--script /` exit 0 (D3); zero authority-path failures |
+| 2 | `evidence/VISOR/4de74cf3a01f7b362819183af5eb22a99f8af71638b2ecb026062acdf93bafb9.json` | `d7e8a4c` | OMEGA_VISOR_V1_PASS | this run |
 
 ## Why the verdict is what it is
 
-Note: the AUTHORITY_ISOLATION gate has **zero authority-path failures** (81/81 C hostile suite, link check, 16 escalation words refused, AUTHORITY row NONE, `effects` refuses non-effects, World holds no authority). Its single failure is a hostile command-line case: `--script /` (a directory) exits 0 (defect D3). test-visor-console counts 284 = 134 (lane build) + 150 (full build with the e2e script): two separate test programs.
-
-- OMEGA_VISOR_REALIZE_PASS FAIL (4/419 failed)
-- OMEGA_VISOR_AUTHORITY_ISOLATION_PASS FAIL (1/177 failed)
-- runner realize: run-arity[unary fn, 0 args refused] FAIL {"command":"run","status":"ok","class":"pure-execution","result":{"result":"1","realization":"sha256:dfc4cb844da0044a4fe
-- runner realize: run-arity[unary fn, 2 args refused] FAIL {"command":"run","status":"ok","class":"pure-execution","result":{"result":"11","realization":"sha256:dfc4cb844da0044a4f
-- runner realize: run-arity[binary apply realization, 1 arg refused] FAIL {"command":"run","status":"ok","class":"pure-execution","result":{"result":"12","realization":"sha256:ffe7656dc91cf25a4a
-- runner realize: run-arity[binary apply realization, 3 args refused] FAIL {"command":"run","status":"ok","class":"pure-execution","result":{"result":"3","realization":"sha256:ffe7656dc91cf25a4aa
-- runner hostile: script-is-directory FAIL rc=0 (a directory given as a script must not succeed)
+- All five gates passed.
 
 ## Defects found
 
-- **D1** (high (fixed in ec2ec0b, found at 4fab549)): The ./omega shipped at commit 4fab549 (sha256 543d874d...d4d3) crashes on every realize/run path: `./omega --command 'let x: u64 = 7' --command 'let y: u64 = 11' --command 'x + y' --command 'realize _'` -> exit 139 (SIGSEGV in om_realization_show); `realize b` on a bool -> '*** stack smashing detected ***', exit 134. Campaign on that binary: 37 failures, 6 hostile crashes. Cause: tools/omega.c's object was not rebuilt when src/visor/visor.h changed (omega_main.d missing from VISOR_DEPS), so the binary mixed two struct layouts. The in-process console test (146/146) could not see it. ec2ec0b adds omega_main.d; a clean-checkout build of 4fab549 was not tested.
-- **D2** (medium (wrong output, exit 0)): `run` does not check arity. `fn f(x: u64) -> u64 { x * 2 + 1 }` then `run f` prints 1 (f(0), x silently 0); `run f 5 6` prints 11 (6 ignored). On `x + y` (7, 11) after `realize _`: `run _ 1` prints 12 (first operand replaced, second kept), `run _ 1 2 3` prints 3 (third ignored). All status ok, exit 0.
-- **D3** (low): `./omega --script /` (a directory) exits 0 with no output instead of refusing the script (exit 2 like a missing file).
-- **D4** (low (cosmetic)): `alternatives x` on a value: 'error: alternatives: alternatives: only programs ...' (prefix doubled); `effects x` text-mode error lacks 'error:'; `help` says `graph [x]` but `graph` alone is an error.
+- **D1** (high; FIXED in ec2ec0b (found at 4fab549)): The ./omega shipped at commit 4fab549 (sha256 543d874d...d4d3) crashed on every realize/run path (exit 139 SIGSEGV in om_realization_show; 'stack smashing detected', exit 134). Cause: omega_main.d missing from VISOR_DEPS, so tools/omega.c was not rebuilt when src/visor/visor.h changed. ec2ec0b adds it; a clean-checkout build of 4fab549 was not tested.
+- **D2** (medium; FIXED in d7e8a4c (open in receipt #1)): `run` did not check arity: `run f` -> 1, `run f 5 6` -> 11, `run _ 1` -> 12, `run _ 1 2 3` -> 3, all exit 0. At d7e8a4c: 'program f takes 1 input; give it on the command line', 'program f takes 1 input; got 2', '_ takes 2 operands; got 1 (give none, or all 2)', '... got 3 ...'; exit 1.
+- **D3** (low; FIXED in d7e8a4c): `./omega --script /` exited 0; at d7e8a4c it prints 'error: --script: / is a directory' and exits 2.
+- **D4** (cosmetic; FIXED in d7e8a4c): Doubled 'alternatives:' prefix, `effects x` error without 'error:', help `graph [x]` and `let x = <expr>`, parser jargon for `authorize x`/`execute _`: all corrected (hostile.expected and usability.expected regenerated; the only other changed line is the `run <type-id>` message, now '... is not an APPLY; only pure binary u64 applies run in V1', still exit 1).
 
 ## Test suites
 
@@ -49,7 +48,7 @@ Note: the AUTHORITY_ISOLATION gate has **zero authority-path failures** (81/81 C
 | test-visor-evidence | PASS | 39 | 0 |  |
 | test-visor-machine | PASS | 36 | 0 |  |
 | test-visor-realization | PASS | 63 | 0 |  |
-| test-visor-console | PASS | 284 | 0 |  |
+| test-visor-console | PASS | 306 | 0 |  |
 | visor-authority-check | PASS | 1 | 0 |  |
 | visor-physics-free-check | PASS | 1 | 0 |  |
 | test-visor-world | PASS | 47 | 0 |  |
@@ -73,22 +72,18 @@ Note: the AUTHORITY_ISOLATION gate has **zero authority-path failures** (81/81 C
 ## Usability findings (not failures unless listed as defects)
 
 - `true`/`false` echo as 1/0 although `type _` says bool; a user reads 1 as an integer.
-- `help` shows the source form as `let x = <expr>`, but V0 requires `let x: u64 = <expr>` (the error message does explain).
-- `help` lists `graph [x]` (argument optional) but `graph` with no argument is an error: 'give a name, _ or id'.
-- `alternatives <value>` prints a doubled prefix: `error: alternatives: alternatives: only programs have alternative realizations in V1`.
-- `effects <non-effect>` prints `'x' is not an EFFECT object` without the `error:` prefix in text mode (JSON correctly says status error; exit code is 1).
 - `why <x>` is described as 'explain where x came from' but only explains realizations; on a value it says `use realize x first`, and `realize x` then refuses a value, a dead end.
-- `authorize x`, `execute _` and `delete x` give parser jargon ('unexpected x after the end of the statement') instead of 'unknown command'; only `mint`/`grant`/... are reserved words, `authorize`/`submit`/`execute` are not.
-- Errors raised before parsing are labelled with the command name `unknown` (`error: unknown: invalid UTF-8 at byte 4`, `error: unknown: line too long`).
+- Errors raised before parsing, and unknown commands, are labelled `unknown` (`error: unknown: invalid UTF-8 at byte 4`, `error: unknown: unknown command or invalid source line: 'authorize'`).
 - `id` prints the same hash three times (id, canonical_sha256) plus canonical_len; the relation is not explained.
 - After `realize _`, `_` silently becomes the realization, so `inspect _`/`type _` now refer to a different object than one line earlier.
 - Every u64 ADD has the same realization id (`realized` = the ADD operation, not the apply), so `x + y` and `x + 1` share one realization id; correct per spec but surprising in `bindings`/`compare`.
-- `run _ a b` on a binary-apply realization runs the operation on the given numbers, not on the object's operands; nothing in the output says the object was not what ran.
+- `run _ a b` (exactly all operands) on a binary-apply realization runs the operation on the given numbers, not on the object's operands (7+11 -> `run _ 1 2` prints 3); allowed by design after the D2 fix, but the output does not say the object's own operands were replaced.
 - Machine/realization output uses hex profile codes (`profile 0x01 vs machine 0x01`), `physics flag=set seal=builder-constant placeholder`, and C function names (`omega_machine_estimate_latency(...)`, `omega_exec_native_f3`) as explanations; not readable without the C source.
 - `verify` row INVARIANTS reports 399 generic checks that are 'not object-specific'; a user may read the PASS as evidence about their object.
-- `evidence <name>` for a session object always says `no evidence`: receipts are repository files, not linked to session objects; the question 'what evidence supports this object' cannot be answered in V1.
+- `evidence <name>` for a session object always says `no evidence`: receipts are repository files, not linked to session objects; 'what evidence supports this object' cannot be answered in V1.
 - Blank lines produce no JSON object while comment-only lines produce one (`kind: none`); a script driver counting lines must know this.
 - Commands after `quit` in --command/--script mode are silently dropped (exit 0).
+- `--script /dev/null` (a character device, not a regular file) is accepted as an empty script (exit 0), although the round-2 note says non-regular files exit 2; harmless, but the claim and behaviour differ.
 
 ## What this does NOT claim
 

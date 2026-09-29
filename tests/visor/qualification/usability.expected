@@ -6,7 +6,7 @@ Omega Visor commands (classes: inspection, pure-execution, simulation, effect-re
   inspect <x>                          inspection      show the object a name or id refers to
   type <x>                             inspection      show the type of an object
   id <x>                               inspection      show the semantic id of a name, _ or hex id
-  graph [x]                            inspection      show the semantic graph (or the part under x)
+  graph <x>                            inspection      show the semantic graph reachable from x
   verify <x>                           pure-execution  run the verification pipeline on x
   machine                              inspection      show the current machine model
   realize <x> [for current.machine]    pure-execution  build machine code for x (does not run it)
@@ -20,7 +20,7 @@ Omega Visor commands (classes: inspection, pure-execution, simulation, effect-re
   alternatives <x>                     simulation      list other ways to realize x
   compare <a> <b>                      simulation      compare two objects or realizations
   why <x>                              inspection      explain where x came from
-  let x = <expr> | fn ... | <expr>     pure-execution  Omega source line, evaluated by the language
+  let x: u64 = <expr> | fn .. | <expr> pure-execution  Omega source line, evaluated by the language
 Names: a session name, _ (last result), or a semantic id (64 hex, optional sha256: prefix).
 Ω> help inspect
   inspect <x>                          inspection      show the object a name or id refers to
