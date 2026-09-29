@@ -15,6 +15,13 @@
 
 static int m19_gate_count = 0;
 static int m19_gate_passed = 0;
+static uint32_t m19_ring_capacity = 0;
+static uint32_t m19_wrap_dispatches = 0;
+static uint32_t m19_sustained_dispatches = 0;
+static long m19_sustained_rss_delta = -1;
+static uint8_t m19_sustained_digest[32];
+
+static long get_resident_pages(void);
 
 static void report_m19_gate(const char *gate_name, bool pass, const char *detail) {
     m19_gate_count++;
@@ -381,6 +388,8 @@ static bool test_m19_gate7_ring_capacity_and_multi_wrap(void) {
         return false;
     }
 
+    m19_ring_capacity = ring_cap;
+    m19_wrap_dispatches = stress_count;
     omega_world_destroy(&world);
     return true;
 }
@@ -466,11 +475,11 @@ static bool test_m19_gate8_sustained_1000_op_run(void) {
     for (uint32_t i = 0; i < 256; i++) {
         mai_cpu[i] = 1;
         mbi_cpu[i] = (i % 16 == i / 16) ? 1 : 0; /* Identity matrix */
-        mat_cpu[i] = 0x3c00; /* FP16 1.0 */
-        mbt_cpu[i] = (i % 16 == i / 16) ? 0x3c00 : 0x0000; /* FP16 Identity */
     }
 
     uint32_t compl = 0;
+    long rss_before = get_resident_pages();
+    if (rss_before < 0) { omega_world_destroy(&world); return false; }
     /* Execute 250 cycles of 4 workloads = 1,000 operations */
     for (int cycle = 0; cycle < 250; cycle++) {
         /* 1. VecAdd */
@@ -478,23 +487,43 @@ static bool test_m19_gate8_sustained_1000_op_run(void) {
             omega_world_destroy(&world);
             return false;
         }
+        for (uint32_t i = 0; i < vec_n; i++) {
+            if (vc_cpu[i] != va_cpu[i] + vb_cpu[i]) { omega_world_destroy(&world); return false; }
+        }
 
         /* 2. INT32 MatMul */
         if (omega_world_dispatch_matmul(&world, &spec_i32, &code_i32, &m_a_i32, &m_b_i32, &m_c_i32, &compl) != OMEGA_WORLD_OK) {
             omega_world_destroy(&world);
             return false;
         }
+        for (uint32_t i = 0; i < 256; i++) {
+            if (mci_cpu[i] != 1) { omega_world_destroy(&world); return false; }
+        }
 
         /* 3. FP16 MatMul */
+        for (uint32_t i = 0; i < 256; i++) {
+            mat_cpu[i] = 0x3c00; /* FP16 1.0 */
+            mbt_cpu[i] = (i % 16 == i / 16) ? 0x3c00 : 0; /* FP16 identity */
+        }
         if (omega_world_dispatch_matmul(&world, &spec_f16, &code_f16, &m_a_tensor, &m_b_tensor, &m_c_tensor, &compl) != OMEGA_WORLD_OK) {
             omega_world_destroy(&world);
             return false;
         }
+        for (uint32_t i = 0; i < 256; i++) {
+            if (fabsf(mct_cpu[i] - 1.0f) > 1e-4f) { omega_world_destroy(&world); return false; }
+        }
 
         /* 4. BF16 MatMul */
+        for (uint32_t i = 0; i < 256; i++) {
+            mat_cpu[i] = 0x3f80; /* BF16 1.0 */
+            mbt_cpu[i] = (i % 16 == i / 16) ? 0x3f80 : 0; /* BF16 identity */
+        }
         if (omega_world_dispatch_matmul(&world, &spec_bf16, &code_bf16, &m_a_tensor, &m_b_tensor, &m_c_tensor, &compl) != OMEGA_WORLD_OK) {
             omega_world_destroy(&world);
             return false;
+        }
+        for (uint32_t i = 0; i < 256; i++) {
+            if (fabsf(mct_cpu[i] - 1.0f) > 1e-4f) { omega_world_destroy(&world); return false; }
         }
     }
 
@@ -507,6 +536,15 @@ static bool test_m19_gate8_sustained_1000_op_run(void) {
         omega_world_destroy(&world);
         return false;
     }
+    if (world.sequence_number != world.total_dispatches) {
+        omega_world_destroy(&world);
+        return false;
+    }
+    long rss_after = get_resident_pages();
+    if (rss_after < 0) { omega_world_destroy(&world); return false; }
+    m19_sustained_dispatches = world.total_dispatches;
+    m19_sustained_rss_delta = rss_after - rss_before;
+    memcpy(m19_sustained_digest, world.rolling_state_digest, 32);
 
     omega_blackwell_kernel_free(&k_i32);
     omega_blackwell_kernel_free(&k_f16);
@@ -677,6 +715,9 @@ static long get_resident_pages(void) {
 }
 
 static bool test_m19_gate11_memory_stability_audit(void) {
+    /* The sustained campaign already measured RSS across all 1,000 dispatches. */
+    if (m19_sustained_dispatches < 1000 || m19_sustained_rss_delta < 0 ||
+        m19_sustained_rss_delta > 1) return false;
     OmegaAcceleratorWorld world;
     if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
 
@@ -736,12 +777,24 @@ static bool test_m19_gate12_bounded_channel_fault_recovery(void) {
     if (c_cpu[0] != 75) return false;
 
     uint32_t orig_gen = world.channel_generation;
-    /* Channel fault injection and recovery */
+    uint32_t root = world.m16.rm.root;
+    uint32_t device = world.m16.rm.device;
+    uint32_t vaspace = world.m16.rm.vaspace;
+    uint32_t put_before = world.m16.rm.put;
+    uint64_t completed_before = world.total_dispatches;
+    /* Tier 1 injection: make the channel unavailable to the host dispatch
+     * path. This is a bounded software-visible fault, not a malformed GPU
+     * command or proof of recovery from a spontaneous hardware fault. */
+    world.channel_active = false;
+    if (omega_world_dispatch_vector(&world, &code_h, &h_a, &h_b, &h_c, 64, &compl) != OMEGA_WORLD_ERR_HARDWARE ||
+        world.m16.rm.put != put_before || world.total_dispatches != completed_before) return false;
     if (omega_world_recover_channel_fault(&world) != OMEGA_WORLD_OK) return false;
 
     if (world.channel_generation != orig_gen + 1) return false;
     if (world.channel_reconstructions != 1) return false;
     if (!world.channel_active) return false;
+    if (world.m16.rm.root != root || world.m16.rm.device != device ||
+        world.m16.rm.vaspace != vaspace) return false;
 
     /* Execute post-recovery dispatch with pre-allocated resident buffers */
     a_cpu[0] = 100; b_cpu[0] = 200; c_cpu[0] = 0;
@@ -754,6 +807,12 @@ static bool test_m19_gate12_bounded_channel_fault_recovery(void) {
 
 static bool test_m19_gate13_rolling_digest_determinism(void) {
     uint8_t digest1[32], digest2[32];
+
+    /* The sustained hardware run must have advanced the same chain once per
+     * completed dispatch; this sample is taken from its final world state. */
+    const uint8_t zero[32] = {0};
+    if (m19_sustained_dispatches != 1000 ||
+        memcmp(m19_sustained_digest, zero, sizeof(zero)) == 0) return false;
 
     for (int run = 0; run < 2; run++) {
         OmegaAcceleratorWorld world;
@@ -792,12 +851,16 @@ static bool test_m19_gate15_clean_clone(void) {
     if (getenv("OMEGA_IN_CLEAN_CLONE") != NULL) {
         return true;
     }
+    /* A copied working tree can contain uncommitted code absent from the
+     * revision named by the receipt. Reproduce only committed source. */
+    if (system("git diff --quiet -- src spec tools && git diff --cached --quiet -- src spec tools") != 0)
+        return false;
     char clone_template[] = "/tmp/omega_clean_m19_XXXXXX";
     char *clone = mkdtemp(clone_template);
     if (!clone) return false;
     char command[2048];
     int len = snprintf(command, sizeof(command),
-                       "cp -a . '%s/' && cd '%s' && "
+                       "git clone --quiet --no-hardlinks . '%s/checkout' && cd '%s/checkout' && "
                        "make clean >/dev/null 2>&1 && make -j >/dev/null 2>&1 && "
                        "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m19-gates >'%s/qualification.log' 2>&1",
                        clone, clone, clone);

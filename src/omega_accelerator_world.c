@@ -436,6 +436,42 @@ int omega_world_update_digest(OmegaAcceleratorWorld *world,
     return OMEGA_WORLD_OK;
 }
 
+/* Commit a successful physical dispatch to the world trace. The semantic
+ * words and handle generations are fixed-width; host addresses and time are
+ * deliberately absent from the serialized state. */
+static int record_completed_dispatch(OmegaAcceleratorWorld *world,
+                                     const uint32_t semantic_words[5],
+                                     const OmegaHandle *code,
+                                     const OmegaHandle *a,
+                                     const OmegaHandle *b,
+                                     const OmegaHandle *c,
+                                     const void *a_cpu, size_t a_bytes,
+                                     const void *b_cpu, size_t b_bytes,
+                                     const void *c_cpu, size_t c_bytes,
+                                     uint32_t completion) {
+    uint8_t semantic_id[32], a_digest[32], b_digest[32];
+    uint8_t bindings[64], bindings_digest[32], result_digest[32];
+    uint32_t pairs[8] = {
+        code->object_id, code->object_generation,
+        a->object_id, a->object_generation,
+        b->object_id, b->object_generation,
+        c->object_id, c->object_generation
+    };
+    const OmegaCodeEntry *entry = &world->code_entries[code->object_id];
+    sha256_hash((const uint8_t *)semantic_words, 5 * sizeof(uint32_t), semantic_id);
+    sha256_hash((const uint8_t *)a_cpu, a_bytes, a_digest);
+    sha256_hash((const uint8_t *)b_cpu, b_bytes, b_digest);
+    memcpy(bindings, a_digest, 32);
+    memcpy(bindings + 32, b_digest, 32);
+    sha256_hash(bindings, sizeof(bindings), bindings_digest);
+    sha256_hash((const uint8_t *)c_cpu, c_bytes, result_digest);
+    return omega_world_update_digest(world, semantic_id, entry->realization_id,
+                                     entry->code_digest, bindings_digest,
+                                     pairs, 4, code->permissions | a->permissions |
+                                     b->permissions | c->permissions,
+                                     completion, result_digest, 0);
+}
+
 int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
                                  const OmegaHandle *code_handle,
                                  const OmegaHandle *h_a,
@@ -446,6 +482,7 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || !code_handle || !h_a || !h_b || !h_c || n == 0) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
 
     /* Resolve code and buffers with internal bounds and permission authority */
     uint64_t code_va = 0;
@@ -593,6 +630,15 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
 
     nvrm_retire(&world->m16.rm, world->m16.rm.put);
 
+    const uint32_t semantic_words[5] = {1, n, 0, 0, 0};
+    if (record_completed_dispatch(world, semantic_words, code_handle,
+                                  h_a, h_b, h_c, a_cpu, req_bytes,
+                                  b_cpu, req_bytes, c_cpu, req_bytes,
+                                  payload) != OMEGA_WORLD_OK) {
+        omega_world_scratch_reset(world);
+        return OMEGA_WORLD_ERR_FAULT;
+    }
+
     if (out_completion_code) {
         *out_completion_code = payload;
     }
@@ -613,6 +659,7 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || !spec || !code_handle || !h_a || !h_b || !h_c) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
 
     uint64_t code_va = 0;
     size_t code_size = 0;
@@ -774,6 +821,16 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     }
 
     nvrm_retire(&world->m16.rm, world->m16.rm.put);
+
+    const uint32_t semantic_words[5] = {2, spec->m, spec->k, spec->n,
+                                        (uint32_t)spec->precision};
+    if (record_completed_dispatch(world, semantic_words, code_handle,
+                                  h_a, h_b, h_c, a_cpu, req_a,
+                                  b_cpu, req_b, c_cpu, req_c,
+                                  payload) != OMEGA_WORLD_OK) {
+        omega_world_scratch_reset(world);
+        return OMEGA_WORLD_ERR_FAULT;
+    }
 
     if (out_completion_code) {
         *out_completion_code = payload;
