@@ -1,4 +1,4 @@
-/* test_program_realize.c -- the realization compiles the actual Omega program
+/* test_program_realize.c -- realization is driven by the actual Omega program
  * (spec/program-realization.md).
  *
  * Gates (each prints "GATE <name> PASS|FAIL <passed>/<total>"):

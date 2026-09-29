@@ -89,7 +89,7 @@ int omega_program_compute_id(OmegaProgram *prog);
 /* The canonical body root id alone (the SemanticId of the body's root object). */
 int omega_program_body_root_id(const OmegaProgram *prog, SemanticId *out_root);
 
-/* ---- V0 realization compiler (spec/program-realization.md) ----------------
+/* ---- V0 program realization (spec/program-realization.md) ----------------
  * Pipeline: canonical body -> realize_check (verified semantic op sequence) ->
  * schedule (machine-aware choice, never meaning) -> AArch64 bytes via the one encoder
  * (aarch64_encoder.c) -> verification -> RealizationId. */

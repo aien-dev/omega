@@ -472,7 +472,7 @@ static void synth_alt(const OmegaProgram *p, const OmegaMachineGraph *m, const c
     e->program_index = -1;
     snprintf(e->target_name, sizeof(e->target_name), "%s", tname);
 #if defined(__aarch64__)
-    /* The real compiler for machine m: program body -> schedule chosen from m -> bytes ->
+    /* Program-driven realization for machine m: program body -> schedule chosen from m -> bytes ->
      * triple id -> verification (native == semantic evaluator). */
     RealizationSynthesisTask task;
     RealizationSynthesisResult res;
@@ -481,7 +481,7 @@ static void synth_alt(const OmegaProgram *p, const OmegaMachineGraph *m, const c
     int rc = omega_synthesize_realization(&task, &res);
     if (res.realization.code_len == 0) {
         char r[sizeof(e->incompatible_reason)];
-        snprintf(r, sizeof(r), "compiler refused (rc=%d): %.100s", rc, res.why);
+        snprintf(r, sizeof(r), "realization refused (rc=%d): %.96s", rc, res.why);
         set_verdict(e, false, r);
         visor_realization_view(e, m, v);
         v->compatible = false;

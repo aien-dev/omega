@@ -123,7 +123,7 @@ int omega_program_compute_id(OmegaProgram *prog) {
     return 0;
 }
 
-/* ---- V0 realization compiler core (spec/program-realization.md) ---------- */
+/* ---- V0 program realization core (spec/program-realization.md) ---------- */
 
 static void set_why(char *why, size_t n, const char *fmt, const char *a) {
     if (why && n) snprintf(why, n, fmt, a ? a : "");
@@ -595,7 +595,7 @@ int omega_program_compose(const OmegaProgram *a, const OmegaProgram *b, OmegaPro
     /* 4. Realization: compiled from the composite body (omega_program_realize), never
      * spliced from the parts' code. For template parts this is byte-identical to the old
      * RET-strip-and-concatenate fusion. A body-less composite has no meaning and no
-     * realization. A body the V0 compiler refuses leaves the composite unrealized. */
+     * realization. A body V0 realization refuses leaves the composite unrealized. */
     omega_program_compute_id(out_c);
     if (out_c->body.has_body) (void)omega_program_realize(out_c);
     return 0;

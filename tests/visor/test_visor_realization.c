@@ -111,7 +111,7 @@ int main(void) {
     CHECK(strcmp(alt1[0].label, "direct@dgx-spark") == 0 && strcmp(alt1[1].label, "direct@qemu-virt") == 0 &&
           strcmp(alt1[2].label, "synth@dgx-spark") == 0 && strcmp(alt1[3].label, "synth@qemu-virt") == 0, "labels/order");
     CHECK(alt1[0].compatible && alt1[1].compatible, "direct alternatives compatible");
-    /* synth = the real compiler (program body -> machine schedule -> verified bytes) */
+    /* synth = program-driven realization (program body -> machine schedule -> verified bytes) */
     CHECK(alt1[2].compatible && alt1[2].runnable && strstr(alt1[2].why, "matches direct") &&
           strstr(alt1[2].why, "compiled from the program body"), "synth for add5 compiled from the program and agrees");
     CHECK(alt1[3].compatible && alt1[3].runnable, "synth for add5 on qemu-virt compatible");

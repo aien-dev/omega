@@ -127,7 +127,7 @@ Evidence scope is reported exactly as the receipt states it (`host`, `qemu`,
 - FIXED by program realization V0: `omega_synthesize_realization` ignored its program and
   always emitted the fixed `f(x) = 3x - 2` schedule. It now compiles the program for the
   machine and verifies native execution against the semantic evaluator; the `synth@`
-  alternatives are that compiler, still cross-checked against the direct realization.
+  alternatives are that machine-aware realization, still cross-checked against the direct realization.
 - FIXED by program identity v2 (`spec/program-identity.md`): `omega_program_compute_id`
   did not hash the program body (same name and contract with a different body gave the
   same `program_id`, and the language refused the redefinition as an "identity collision").

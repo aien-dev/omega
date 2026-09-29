@@ -1,6 +1,6 @@
 #!/bin/bash
 # program_realize_receipt.sh -- qualification receipt for program realization V0
-# (spec/program-realization.md): the realization compiles the actual Omega program.
+# (spec/program-realization.md): realization is driven by the actual Omega program.
 #
 #   tools/program_realize_receipt.sh [out-dir]      (default: evidence/REALIZE)
 #
@@ -160,7 +160,7 @@ test_gate() {   # test_gate <gate> <sources>
     add_gate "$1" "$st" "$t" "$((t - p))" "$2"
 }
 test_gate OMEGA_PROGRAM_REALIZE_PASS \
-    "make test-program-realize (gate PROGRAM_REALIZE: omega_program_realize compiles + binds + executes named programs; builder/compose use it; 11 unsupported semantics fail closed with reasons)"
+    "make test-program-realize (gate PROGRAM_REALIZE: omega_program_realize realizes + binds + executes named programs; builder/compose use it; 11 unsupported semantics fail closed with reasons)"
 test_gate OMEGA_REALIZATION_PROGRAM_DRIVEN_PASS \
     "make test-program-realize (gate PROGRAM_DRIVEN: 600 programs pairwise distinct code + RealizationIds per and across machines, lift(sequential code) == body, schedule from machine, determinism, M14 3x-2 bytes preserved, legacy fixed-3x-2 synth rejected)"
 test_gate OMEGA_REALIZATION_DIFFERENTIAL_PASS \

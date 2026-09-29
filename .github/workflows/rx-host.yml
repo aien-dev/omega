@@ -322,7 +322,7 @@ jobs:
         # AArch64 job: the Visor objects this test links only build on AArch64 hosts
         # (visor_realization.c k_diff_inputs is aarch64-only, pre-existing).
         run: make OUT_DIR=build/pid PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-program-id
-      - name: Realization compiles the actual Omega program (OMEGA_PROGRAM_REALIZE)
+      - name: Realization is driven by the actual Omega program (OMEGA_PROGRAM_REALIZE)
         # AArch64 job: the test executes the generated AArch64 code natively.
         run: make OUT_DIR=build/prz PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-program-realize
       - name: Omega as a resident realization faculty (R10)

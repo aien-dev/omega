@@ -1,4 +1,4 @@
-# Program realization compiler (spec/program-realization.md). Physics-free; links the
+# Program realization V0 (spec/program-realization.md). Physics-free; links the
 # Visor core object set. Executes generated code natively: run on an AArch64 host.
 PROGRAM_REALIZE_TEST = $(OUT_DIR)/tests-realize/test_program_realize
 

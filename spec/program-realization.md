@@ -1,4 +1,4 @@
-# Program realization V0: the realization compiles the actual Omega program
+# Program realization V0: realization is driven by the actual Omega program
 
 Status: implemented (`OMEGA_PROGRAM_REALIZE_*`). Supersedes the fixed-schedule behaviour of
 `omega_synthesize_realization` described in `spec/realize_synth.md` (M14), whose gates still
@@ -23,7 +23,7 @@ OmegaProgram (canonical body + contract, program id v2)
   -> omega_realization_verify_program bindings + V0 structural + native == semantic evaluator
 ```
 
-Nothing reads Visor source text: the compiler reads only `OmegaProgram.body` and `.contract`.
+Nothing reads Visor source text: realization reads only `OmegaProgram.body` and `.contract`.
 
 ### 2.1 Semantic gate (`omega_program_realize_check`)
 
@@ -48,7 +48,7 @@ a constant that fits the width; `program_id` equal to the v2 id recomputed from 
 
 Builder limits are unchanged: `omega_program_build_unary_op` and Language V0 still refuse
 constants above `0xFFFFFFFF` (spec/program-identity.md section 4). Wide constants reach the
-compiler only through bodies built directly.
+realization only through bodies built directly.
 
 ### 2.2 Machine-aware planning (what the MachineGraph may affect)
 

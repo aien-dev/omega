@@ -129,7 +129,7 @@ while `a;b` and `b;a` differ whenever the bodies differ (different body, differe
 - `omega_program_build_unary_op` records one step. It now refuses a constant above
   `0xFFFFFFFF` (fail closed): it loads immediates with MOVZ + one MOVK, so a wider
   constant used to be silently truncated in the code while the body claimed the full value.
-  (The V0 compiler, spec/program-realization.md, now loads full 64-bit constants; the builder
+  (V0 realization, spec/program-realization.md, now loads full 64-bit constants; the builder
   and Language V0 keep the 32-bit limit, which the identity gates lock.)
 - `omega_program_compose(a, b)` concatenates `a`'s steps then `b`'s (capacity 64 steps;
   refuses beyond). Composition therefore gives the same body as the equivalent directly
