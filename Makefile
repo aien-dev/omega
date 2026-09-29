@@ -985,6 +985,58 @@ $(MA6_ENC_TEST): tests/algebra/test_bw_encoder_ma6.c src/omega_blackwell_codegen
 test-bw-encoder-ma6: $(MA6_ENC_TEST)
 	./$(MA6_ENC_TEST)
 
+# test-ma6-gpu-host: pack + CPU model of every kernel's index arithmetic vs
+#   oma_rz_oracle on the whole pre-registered grid, every kernel builds.
+# ma6-gpu-selftest / ma6-gpu-edges / ma6-gpu-bench touch the GB10 (one at a
+#   time, never killed; they refuse to start while ~/workspace/.spark-quiet
+#   exists). ma6-gpu-bench writes content-addressed receipts
+#   evidence/MIXED_ALGEBRA/ma6_gpu_<label>.<sha256>.json (+ the machine-state
+#   samples, same naming) and never overwrites an existing file.
+.PHONY: test-ma6-gpu-host ma6-gpu-selftest ma6-gpu-edges ma6-gpu-bench
+MA6_SRCS = src/algebra/gpu/oma_gpu.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c \
+	src/omega_blackwell_qmd.c src/sha256.c $(OMA_RZ_SRCS) \
+	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c
+MA6_HDRS = src/algebra/gpu/oma_gpu.h src/omega_blackwell_codegen.h $(OMA_RZ_HDRS)
+MA6_CFLAGS = $(filter-out -MMD -MP,$(CFLAGS)) $(OMA_RZ_ARCH)
+MA6_HOST = $(OUT_DIR)/tests-algebra/test_ma6_gpu_host
+MA6_BIN = $(OUT_DIR)/tests-algebra/ma6_gpu
+MA6_LABEL ?= run1
+MA6_SEED ?= 20260929
+MA6_REPS ?= 21
+
+$(MA6_HOST): tests/algebra/test_ma6_gpu_host.c $(MA6_SRCS) $(MA6_HDRS) | check-physics-lock
+	@mkdir -p $(dir $@)
+	$(CC) $(MA6_CFLAGS) -o $@ tests/algebra/test_ma6_gpu_host.c $(MA6_SRCS) -lm
+
+$(MA6_BIN): tests/algebra/ma6_gpu.c $(MA6_SRCS) $(MA6_HDRS) | check-physics-lock
+	@mkdir -p $(dir $@)
+	$(CC) $(MA6_CFLAGS) -o $@ tests/algebra/ma6_gpu.c $(MA6_SRCS) -lm
+
+test-ma6-gpu-host: $(MA6_HOST) $(MA6_ENC_TEST)
+	./$(MA6_ENC_TEST)
+	./$(MA6_HOST)
+
+ma6-gpu-selftest: $(MA6_BIN)
+	@test ! -e $$HOME/workspace/.spark-quiet || { echo "ma6: ~/workspace/.spark-quiet is up, not starting"; exit 3; }
+	./$(MA6_BIN) --selftest
+
+ma6-gpu-edges: $(MA6_BIN)
+	@test ! -e $$HOME/workspace/.spark-quiet || { echo "ma6: ~/workspace/.spark-quiet is up, not starting"; exit 3; }
+	./$(MA6_BIN) --edges
+
+ma6-gpu-bench: $(MA6_BIN)
+	@test ! -e $$HOME/workspace/.spark-quiet || { echo "ma6: ~/workspace/.spark-quiet is up, not starting"; exit 3; }
+	@mkdir -p $(MA2_EVIDENCE) $(OUT_DIR)/ma6-state-$(MA6_LABEL)
+	tools/r15_machine_state.sh start $(OUT_DIR)/ma6-state-$(MA6_LABEL); \
+	MA6_COMMIT=$$(git rev-parse HEAD) MA6_DIRTY=$$(git status --porcelain -- src tests Makefile | grep -c .) \
+		MA6_BIN_SHA=$$(sha256sum $(MA6_BIN) | cut -c1-64) \
+		./$(MA6_BIN) --bench $(MA2_EVIDENCE) $(MA6_LABEL) $(MA6_SEED) $(MA6_REPS); rc=$$?; \
+	tools/r15_machine_state.sh stop $(OUT_DIR)/ma6-state-$(MA6_LABEL); \
+	s=$(OUT_DIR)/ma6-state-$(MA6_LABEL)/machine-state.ndjson; \
+	if [ -s $$s ]; then h=$$(sha256sum $$s | cut -c1-64); d=$(MA2_EVIDENCE)/ma6_gpu_$(MA6_LABEL)_machine_state.$$h.ndjson; \
+		test -e $$d || cp $$s $$d; echo $$d; fi; \
+	exit $$rc
+
 # ---------------------------------------------------------------------------
 # TURING Wave 1 (docs/turing/TURING_W0_PROPOSAL.md): Field v1 records (K.7) +
 # control-arm selector, post hoc over evidence/MIXED_ALGEBRA receipts.
