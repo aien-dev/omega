@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 /* ---------------- shared scratch storage (single-threaded; views are large) ---------------- */
@@ -357,39 +358,77 @@ static int om_parse_u64(const char *t, uint64_t *v) {
     return 0;
 }
 
+/* `run <x> [args]`. Argument count is checked BEFORE anything is realized or run,
+ * fail closed: an apply with N operands takes 0 args (use the graph operands) or
+ * exactly N (full override, never partial); a program (u64 -> u64) takes exactly 1. */
 static int om_run(const VisorViewCall *call, FILE *out, char *err, size_t errn) {
     VisorSession *s = call->session;
-    VisorRealizationEntry *e = om_realization_for(s, call->subject, true, err, errn);
-    if (!e) return 1;
+    const VisorBinding *b = call->subject;
+    const char *tok = call->cmd->args[0];
+    size_t k = call->cmd->argc > 0 ? call->cmd->argc - 1 : 0;
+
+    /* What is being run: a program, or an apply (by id). */
+    const OmegaProgram *prog = NULL;
+    const SemanticId *apply_id = NULL;
+    VisorRealizationEntry *have = om_entry(s, b);
+    if (b->kind == VISOR_BIND_PROGRAM) {
+        prog = om_program(s, b);
+        if (!prog) { snprintf(err, errn, "program binding has no program"); return 1; }
+    } else if (have) {
+        if (have->subject_is_program) {
+            if (have->program_index < 0 || (size_t)have->program_index >= s->program_count) {
+                snprintf(err, errn, "realization's program is not in this session");
+                return 1;
+            }
+            prog = &s->programs[have->program_index];
+        } else {
+            apply_id = &have->subject_id;
+        }
+    } else if (b->kind == VISOR_BIND_OBJECT) {
+        apply_id = &b->id;
+    } else {
+        snprintf(err, errn, "not a realization, object or program");
+        return 1;
+    }
+
     uint64_t args[3] = {0, 0, 0};
-    bool known[3] = {false, false, false};
     size_t argc = 0;
-    if (!e->subject_is_program) {
+    if (prog) {
+        if (k == 0) { snprintf(err, errn, "program %s takes 1 input; give it on the command line", prog->name); return 1; }
+        if (k != 1) { snprintf(err, errn, "program %s takes 1 input; got %zu", prog->name, k); return 1; }
+        argc = 1;
+    } else {
         SemanticId op, operands[4];
         size_t n = 0;
-        if (visor_semantic_apply_parts(s->graph, &e->subject_id, &op, operands, &n) == 0) {
-            if (n > 3) { snprintf(err, errn, "apply has %zu operands; run takes at most 3", n); return 1; }
-            for (size_t i = 0; i < n; i++) {
-                if (visor_semantic_value_u64(s->graph, &operands[i], &args[i]) == 0 ||
-                    visor_semantic_eval_u64(s->graph, &operands[i], &args[i]) == 0)
-                    known[i] = true;
-            }
-            argc = n;
+        if (visor_semantic_apply_parts(s->graph, apply_id, &op, operands, &n) != 0) {
+            snprintf(err, errn, "%s is not an APPLY; only pure binary u64 applies run in V1", tok);
+            return 1;
         }
+        if (n > 3) { snprintf(err, errn, "%s has %zu operands; run takes at most 3", tok, n); return 1; }
+        if (k != 0 && k != n) {
+            snprintf(err, errn, "%s takes %zu operands; got %zu (give none, or all %zu)", tok, n, k, n);
+            return 1;
+        }
+        if (k == 0) {
+            for (size_t i = 0; i < n; i++) {
+                if (visor_semantic_value_u64(s->graph, &operands[i], &args[i]) != 0 &&
+                    visor_semantic_eval_u64(s->graph, &operands[i], &args[i]) != 0) {
+                    snprintf(err, errn, "operand %zu of %s has no known value; give all %zu on the command line", i + 1, tok, n);
+                    return 1;
+                }
+            }
+        }
+        argc = n;
     }
-    size_t extra = call->cmd->argc > 0 ? call->cmd->argc - 1 : 0;
-    if (extra > 3) { snprintf(err, errn, "at most 3 arguments"); return 1; }
-    for (size_t i = 0; i < extra; i++) {
+    for (size_t i = 0; i < k; i++) {
         if (om_parse_u64(call->cmd->args[i + 1], &args[i]) != 0) {
             snprintf(err, errn, "argument %zu '%s' is not a u64", i + 1, call->cmd->args[i + 1]);
             return 1;
         }
-        known[i] = true;
     }
-    if (extra > argc) argc = extra;
-    for (size_t i = 0; i < argc; i++) {
-        if (!known[i]) { snprintf(err, errn, "operand %zu has no known value; pass it on the command line", i + 1); return 1; }
-    }
+
+    VisorRealizationEntry *e = om_realization_for(s, b, true, err, errn);
+    if (!e) return 1;
     uint64_t result = 0;
     int rc = visor_realization_run_pure(e, args, argc, &result);
     if (rc != 0) {
@@ -406,6 +445,7 @@ static int om_run(const VisorViewCall *call, FILE *out, char *err, size_t errn) 
     return 0;
 }
 
+
 static int om_alternatives(const VisorViewCall *call, FILE *out, char *err, size_t errn) {
     VisorSession *s = call->session;
     const VisorBinding *b = call->subject;
@@ -414,7 +454,7 @@ static int om_alternatives(const VisorViewCall *call, FILE *out, char *err, size
     VisorRealizationEntry *re = om_entry(s, b);
     if (re && re->subject_is_program) pidx = re->program_index;
     if (pidx < 0 || (size_t)pidx >= s->program_count) {
-        snprintf(err, errn, "alternatives: only programs have alternative realizations in V1");
+        snprintf(err, errn, "only programs have alternative realizations in V1");
         return 1;
     }
     size_t count = 0;
@@ -644,6 +684,33 @@ int omega_tool_session_init(VisorSession *s) {
     return 0;
 }
 
+/* Open a --script path ("-" = stdin). Refuses directories and anything that is
+ * not a regular file or pipe/tty. Returns 0 ok, -1 with `err` set. */
+int omega_tool_open_script(const char *path, FILE **out, char *err, size_t errn) {
+    *out = NULL;
+    if (strcmp(path, "-") == 0) { *out = stdin; return 0; }
+    FILE *f = fopen(path, "r");
+    if (!f) { snprintf(err, errn, "error: --script: cannot open %s: %s", path, strerror(errno)); return -1; }
+    struct stat st;
+    if (fstat(fileno(f), &st) != 0) {
+        snprintf(err, errn, "error: --script: cannot stat %s: %s", path, strerror(errno));
+        fclose(f);
+        return -1;
+    }
+    if (S_ISDIR(st.st_mode)) {
+        snprintf(err, errn, "error: --script: %s is a directory", path);
+        fclose(f);
+        return -1;
+    }
+    if (!S_ISREG(st.st_mode) && !S_ISFIFO(st.st_mode) && !S_ISCHR(st.st_mode)) {
+        snprintf(err, errn, "error: --script: %s is not a regular file", path);
+        fclose(f);
+        return -1;
+    }
+    *out = f;
+    return 0;
+}
+
 #ifndef OMEGA_TOOL_NO_MAIN
 static void om_usage(FILE *f) {
     fprintf(f, "usage: omega [--json] [--command \"<line>\"]... [--script <file>|-] [--evidence-root <dir>]\n");
@@ -683,9 +750,9 @@ int main(int argc, char **argv) {
 
     FILE *script_f = NULL;
     if (script) {
-        if (strcmp(script, "-") == 0) script_f = stdin;
-        else if (!(script_f = fopen(script, "r"))) {
-            fprintf(stderr, "omega: cannot open script '%s'\n", script);
+        char serr[512];
+        if (omega_tool_open_script(script, &script_f, serr, sizeof(serr)) != 0) {
+            fprintf(stderr, "%s\n", serr);
             free(commands);
             return 2;
         }

@@ -17,7 +17,7 @@ static const ParseEntry k_words[] = {
     { "inspect",      VISOR_CMD_INSPECT,      1, 1 },
     { "type",         VISOR_CMD_TYPE,         1, 1 },
     { "id",           VISOR_CMD_ID,           1, 1 },
-    { "graph",        VISOR_CMD_GRAPH,        0, 1 },
+    { "graph",        VISOR_CMD_GRAPH,        1, 1 },
     { "verify",       VISOR_CMD_VERIFY,       1, 1 },
     { "machine",      VISOR_CMD_MACHINE,      0, 0 },
     { "realize",      VISOR_CMD_REALIZE,      1, 1 },

@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 
 #define VISOR_PROMPT "\xCE\xA9> "
@@ -25,7 +26,7 @@ static const HelpEntry k_help[] = {
     { VISOR_CMD_INSPECT,      "inspect <x>",                     VISOR_CLASS_INSPECTION,     "show the object a name or id refers to" },
     { VISOR_CMD_TYPE,         "type <x>",                        VISOR_CLASS_INSPECTION,     "show the type of an object" },
     { VISOR_CMD_ID,           "id <x>",                          VISOR_CLASS_INSPECTION,     "show the semantic id of a name, _ or hex id" },
-    { VISOR_CMD_GRAPH,        "graph [x]",                       VISOR_CLASS_INSPECTION,     "show the semantic graph (or the part under x)" },
+    { VISOR_CMD_GRAPH,        "graph <x>",                       VISOR_CLASS_INSPECTION,     "show the semantic graph reachable from x" },
     { VISOR_CMD_VERIFY,       "verify <x>",                      VISOR_CLASS_PURE_EXECUTION, "run the verification pipeline on x" },
     { VISOR_CMD_MACHINE,      "machine",                         VISOR_CLASS_INSPECTION,     "show the current machine model" },
     { VISOR_CMD_REALIZE,      "realize <x> [for current.machine]", VISOR_CLASS_PURE_EXECUTION, "build machine code for x (does not run it)" },
@@ -39,7 +40,7 @@ static const HelpEntry k_help[] = {
     { VISOR_CMD_ALTERNATIVES, "alternatives <x>",                VISOR_CLASS_SIMULATION,     "list other ways to realize x" },
     { VISOR_CMD_COMPARE,      "compare <a> <b>",                 VISOR_CLASS_SIMULATION,     "compare two objects or realizations" },
     { VISOR_CMD_WHY,          "why <x>",                         VISOR_CLASS_INSPECTION,     "explain where x came from" },
-    { VISOR_CMD_SOURCE,       "let x = <expr> | fn ... | <expr>", VISOR_CLASS_PURE_EXECUTION, "Omega source line, evaluated by the language" },
+    { VISOR_CMD_SOURCE,       "let x: u64 = <expr> | fn .. | <expr>", VISOR_CLASS_PURE_EXECUTION, "Omega source line, evaluated by the language" },
 };
 #define K_HELP_N (sizeof(k_help) / sizeof(k_help[0]))
 
@@ -132,7 +133,7 @@ static int emit_err_body(VisorConsole *c, const char *name, VisorClass cls, cons
                 has_body ? body : "null");
         visor_json_string(c->out, msg);
         fputs("}\n", c->out);
-    } else if (cls == VISOR_CLASS_EFFECT_REQUEST) {
+    } else if (strncmp(msg, "EFFECT REQUEST", 14) == 0) {
         fprintf(c->err, "%s\n", msg);
     } else {
         fprintf(c->err, "error: %s: %s\n", name, msg);
@@ -319,6 +320,22 @@ static int cmd_run(VisorConsole *c, const VisorCommand *cmd) {
     return call_view(c, name, VISOR_CLASS_PURE_EXECUTION, c->ops.run_pure, cmd, &a, NULL);
 }
 
+/* A failed source line whose shape is "<word> <word-or-_>..." (e.g. `authorize x`,
+ * `execute _`) was most likely meant as a command: report it as unknown.
+ * `let`/`fn` lines and expressions keep the language's own error. */
+static bool looks_like_command(const char *line, char *word, size_t n) {
+    size_t i = 0;
+    if (!(isalpha((unsigned char)line[0]) || line[0] == '_')) return false;
+    while (isalnum((unsigned char)line[i]) || line[i] == '_') i++;
+    if (line[i] != ' ' && line[i] != '\t') return false;
+    if ((i == 3 && strncmp(line, "let", 3) == 0) || (i == 2 && strncmp(line, "fn", 2) == 0)) return false;
+    size_t j = i;
+    while (line[j] == ' ' || line[j] == '\t') j++;
+    if (!(isalnum((unsigned char)line[j]) || line[j] == '_')) return false;
+    snprintf(word, n, "%.*s", (int)i, line);
+    return true;
+}
+
 static int cmd_source(VisorConsole *c, const VisorCommand *cmd) {
     const char *name = "source";
     VisorClass cls = VISOR_CLASS_PURE_EXECUTION;
@@ -328,8 +345,15 @@ static int cmd_source(VisorConsole *c, const VisorCommand *cmd) {
     b.kind = VISOR_BIND_NONE;
     b.index = -1;
     char value[1024] = {0}, err[512] = {0};
-    if (c->ops.eval_line(c->session, cmd->line, &b, value, sizeof(value), err, sizeof(err)) != 0)
+    if (c->ops.eval_line(c->session, cmd->line, &b, value, sizeof(value), err, sizeof(err)) != 0) {
+        char word[VISOR_TOKEN_MAX];
+        if (looks_like_command(cmd->line, word, sizeof(word))) {
+            char msg[VISOR_TOKEN_MAX + 64];
+            snprintf(msg, sizeof(msg), "unknown command or invalid source line: '%s'", word);
+            return emit_err(c, "unknown", cls, msg);
+        }
         return emit_err(c, name, cls, err);
+    }
     value[sizeof(value) - 1] = '\0';
     bool has = b.kind != VISOR_BIND_NONE;
     if (has) visor_set_last(c->session, &b);

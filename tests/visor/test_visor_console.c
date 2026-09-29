@@ -37,7 +37,7 @@ static void test_parser(void) {
         { "  inspect   x  ", 0, VISOR_CMD_INSPECT, 1, "x", NULL, false },
         { "type _", 0, VISOR_CMD_TYPE, 1, "_", NULL, false },
         { "id _", 0, VISOR_CMD_ID, 1, "_", NULL, false },
-        { "graph", 0, VISOR_CMD_GRAPH, 0, NULL, NULL, false },
+        { "graph", -1, VISOR_CMD_GRAPH, 0, NULL, NULL, false },
         { "graph y", 0, VISOR_CMD_GRAPH, 1, "y", NULL, false },
         { "verify f", 0, VISOR_CMD_VERIFY, 1, "f", NULL, false },
         { "machine", 0, VISOR_CMD_MACHINE, 0, NULL, NULL, false },
@@ -650,6 +650,46 @@ static void test_e2e(void) {
     CHECK(rc == 0 && strstr(a, "\"command\":\"world\""), "world unattached view");
     free(a);
     h_close(&h);
+
+    /* D2: run argument counts, fail closed (human mode, exact lines). */
+    e2e_open(&h, false);
+    expect(&h, "fn f(x: u64) -> u64 { x * 2 + 1 }", 0, "fn f: u64 -> u64\n", "d2 fn f");
+    expect(&h, "run f", 1, "error: run: program f takes 1 input; give it on the command line\n", "d2 run f (0 args)");
+    expect(&h, "run f 5 6", 1, "error: run: program f takes 1 input; got 2\n", "d2 run f 5 6");
+    expect(&h, "run f 5", 0, "[pure-execution]\n11\n", "d2 run f 5");
+    expect(&h, "let x: u64 = 7", 0, "7\n", "d2 let x");
+    expect(&h, "let y: u64 = 11", 0, "11\n", "d2 let y");
+    expect(&h, "x + y", 0, "18\n", "d2 x + y");
+    a = h_exec(&h, "realize _", &rc);
+    CHECK(rc == 0, "d2 realize _");
+    free(a);
+    expect(&h, "run _ 1", 1, "error: run: _ takes 2 operands; got 1 (give none, or all 2)\n", "d2 run _ 1");
+    expect(&h, "run _ 1 2 3", 1, "error: run: _ takes 2 operands; got 3 (give none, or all 2)\n", "d2 run _ 1 2 3");
+    expect(&h, "run _", 0, "[pure-execution]\n18\n", "d2 run _");
+    expect(&h, "run _ 1 2", 0, "[pure-execution]\n3\n", "d2 run _ 1 2");
+    expect(&h, "run _ 1 x", 1, "error: run: argument 2 'x' is not a u64\n", "d2 non-numeric arg");
+
+    /* D4: message shapes. */
+    expect(&h, "alternatives x", 1, "error: alternatives: only programs have alternative realizations in V1\n",
+           "d4 alternatives single prefix");
+    expect(&h, "effects x", 1, "error: effects: 'x' is not an EFFECT object\n", "d4 effects error prefix");
+    expect(&h, "authorize x", 1, "error: unknown: unknown command or invalid source line: 'authorize'\n", "d4 authorize");
+    expect(&h, "execute _", 1, "error: unknown: unknown command or invalid source line: 'execute'\n", "d4 execute");
+    expect(&h, "graph", 1, "error: graph: expected 1 argument, got 0\n", "d4 graph needs x");
+    h_close(&h);
+
+    /* D3: --script refuses directories. */
+    FILE *sf = NULL;
+    char serr[256];
+    CHECK(omega_tool_open_script("/", &sf, serr, sizeof(serr)) == -1 && sf == NULL &&
+          strcmp(serr, "error: --script: / is a directory") == 0, "d3 script / refused");
+    CHECK(omega_tool_open_script("tests/visor/sessions", &sf, serr, sizeof(serr)) == -1 &&
+          strstr(serr, "is a directory"), "d3 script dir refused");
+    CHECK(omega_tool_open_script("tests/visor/sessions/nope.omega-session", &sf, serr, sizeof(serr)) == -1 &&
+          strstr(serr, "cannot open"), "d3 missing script refused");
+    CHECK(omega_tool_open_script("tests/visor/sessions/e2e.omega-session", &sf, serr, sizeof(serr)) == 0 && sf,
+          "d3 regular script accepted");
+    if (sf) fclose(sf);
 }
 #endif
 
