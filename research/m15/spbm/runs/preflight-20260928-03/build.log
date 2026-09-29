@@ -1,0 +1,3 @@
+make: Nothing to be done for 'tools'.
+./contract_test
+SPBM contract: valid map accepted; duplicate/moved/unaligned/out-of-range rejected; control key ignored
