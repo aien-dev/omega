@@ -73,14 +73,33 @@ it has finished.
    the pins, or if `sealed/<commit>/` already exists. Details in section 3.
 5. **Sealed data released to the Evaluator.** The Evaluator reads
    `sealed/<commit>/` through `evaluator_env.sh --sealed` only.
-6. **Overlap audit** (Auditor):
+6. **Overlap audit** (Auditor). First the orchestrator prepares the frozen tree in
+   an ordinary shell, because the jail binds it read-only and nothing can be built
+   inside it:
 
    ```
-   calibration/scripts/evaluator_env.sh --frozen <export of freeze commit> \
-       --sealed ~/aien-data/turing-cal/sealed/<commit> --ro ~/aien-data/crumbline \
-       --out <audit dir> -- calibration/scripts/verify_holdout_separation.sh \
-       --sealed-dir ~/aien-data/turing-cal/sealed/<commit> --out <audit dir>/overlap_audit.json
+   F=~/aien-data/turing-cal/frozen/<commit>
+   mkdir -p $F && git -C ~/workspace/omega archive <commit> | tar -x -C $F
+   make -C $F turing-cal-overlap        # plus the coders, verifier and scorer builds
    ```
+
+   Then the audit runs in the jail. `--repo` points at the git directory, which is
+   bound read-only, so the script can read the freeze commit's time:
+
+   ```
+   $F/calibration/scripts/evaluator_env.sh --frozen $F \
+       --sealed ~/aien-data/turing-cal/sealed/<commit> \
+       --ro ~/aien-data/crumbline --ro ~/workspace/omega/.git \
+       --out ~/aien-data/turing-cal/eval/<commit>/audit -- \
+       $F/calibration/scripts/verify_holdout_separation.sh \
+       --sealed-dir ~/aien-data/turing-cal/sealed/<commit> \
+       --out ~/aien-data/turing-cal/eval/<commit>/audit/overlap_audit.json \
+       --repo ~/workspace/omega/.git
+   ```
+
+   This exact command was run on 2026-09-29 against a throwaway freeze commit and
+   the full default development set (54 trace files, 86 million records). It
+   returned PASS in 3 min 44 s.
 
    The result is copied to `calibration/experiments/EXP-001/overlap_audit.json`.
    A FAIL stops the experiment. The failure is reported (FAILURE_REPORTING.md);
@@ -180,7 +199,7 @@ It writes `overlap_audit.json`. PASS requires every gate:
 | crumb_digest | no ledger `crumb_digest` appears in both development and sealed data |
 | sealed_digest | no ledger `sealed_digest` (hidden held-out set) appears in both |
 | trace_stream | no ledger `trace_stream_digest` appears in both, except degenerate stream digests: a digest repeated across different crumbs inside one ledger file belongs to a content-empty stream. The audit lists these; it does not hide them. |
-| crumb_block | no crumb's CTR1 record-body block (SHA-256 over bytes 0..214 of each of its records; bytes 215..246 are the position-dependent chain digest) appears in both (`tools/turing_cal_overlap.c`) |
+| crumb_block | no crumb's CTR1 record-body block (SHA-256 over bytes 0..214 of each of its records; bytes 215..246 are the position-dependent chain digest) appears in both (`tools/turing_cal_overlap.c`). The tool checks only CTR1 framing (magic, version 1, event index rising within a crumb), so learning traces with a different origin field are read too; a malformed file stops the audit with exit 2. |
 
 Reported but not gated, with their counts:
 * `first_state_overlap`: different crumbs of small families can start from the same
@@ -195,7 +214,7 @@ conditions and all runs, plus each one's sibling `ledger.jsonl`.
 Self-checks, run 2026-09-29 on a throwaway freeze commit with N = 1: PASS against
 development seeds 1-7. The same sealed set also got a planted overlap: one sealed
 trace was added to the development list. That run FAILED on crumb_digest (188),
-sealed_digest (188), trace_stream (186) and crumb_block (186), as it should.
+sealed_digest (188), trace_stream (186) and crumb_block (186), as it should. A second run used the full default development set (54 trace files, 86 million records) and the jailed Auditor command of section 2 step 6: PASS in about 4 minutes.
 
 ## 5. What the machine enforces, and its limit
 
@@ -242,7 +261,7 @@ Generation and evaluation would then run as that user, through
 `sudo -u turing-sealed calibration/scripts/generate_sealed_data.sh ...` and
 `sudo -u turing-sealed calibration/scripts/evaluator_env.sh ...`. Every process
 belonging to `drakestapleton`, agents included, would get "permission denied" on
-the sealed root. The scripts work unchanged under either arrangement. EXP-001 does
+the sealed root. This should work but has not been tested. The `turing-sealed` user also needs read and execute access to the frozen export, the omega git directory under `~/workspace` and the pinned `crumbs` binary under `~/workspace/hive-worktrees`, so those parent directories must let it through. EXP-001 does
 not depend on this upgrade; the profile records which arrangement was used.
 
 ## 6. Files
