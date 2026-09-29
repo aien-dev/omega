@@ -7,7 +7,8 @@
  *  - crumb (R2c_crumb): two's complement 00=0, 01=+1, 11=-1; 10 = ⊥.
  * ⊥ is never a value: library ops return an error and leave outputs
  * untouched; realizations refuse any int8 weight outside {-1,0,+1}; no
- * realization's packed form may contain its own ⊥ pattern.
+ * realization's packed form may contain its own ⊥ pattern (R2_bitplane
+ * and R2b_lut use H1 per lane; R2c_crumb uses the crumb code).
  *
  * Reads realization-private packed layouts (as test_realize.c does for
  * R5_dense5); no library or realization source is modified. */
@@ -180,6 +181,40 @@ static void check_crumb(const int8_t *w, size_t m, size_t n) {
     oma_rz_free(&p);
 }
 
+/* R2b_lut (realize_bitplane.c pack_lut): 16-row blocks x 16-column
+ * super-groups, 64 bytes each at (b*sg + G)*64; byte (r/4)*16 + (r%4)*4 + j
+ * holds row b*16+r, columns G*16+4j+q (q = 0..3): pos nibble bit q (low) and
+ * neg nibble bit 4+q (high). H1 per lane: a lane with both bits set is ⊥. */
+static void check_lut(const int8_t *w, size_t m, size_t n) {
+    const oma_rz_impl *im = oma_rz_find("R2b_lut");
+    oma_rz_plan p;
+    memset(&p, 0, sizeof p);
+    CHECK(im && im->pack(&p, w, m, n) == OMA_RZ_OK, "R2b_lut pack m=%zu n=%zu", m, n);
+    if (!im || !p.mem) return;
+    const uint8_t *b = p.mem;
+    size_t sg = (n + 15) / 16, mb = (m + 15) / 16;
+    CHECK(p.weight_bytes == mb * sg * 64, "R2b_lut m=%zu n=%zu: weight_bytes %zu", m, n, (size_t)p.weight_bytes);
+    size_t both = 0, wrong = 0;
+    for (size_t bl = 0; bl < mb; bl++)
+        for (size_t G = 0; G < sg; G++) {
+            const uint8_t *blk = b + (bl * sg + G) * 64;
+            for (unsigned r = 0; r < 16; r++)
+                for (unsigned j = 0; j < 4; j++) {
+                    unsigned byte = blk[(r / 4) * 16 + (r % 4) * 4 + j];
+                    if ((byte & 0xFu) & (byte >> 4)) both++;
+                    for (unsigned q = 0; q < 4; q++) {
+                        size_t row = bl * 16 + r, col = G * 16 + 4u * j + q;
+                        int v = (int)((byte >> q) & 1u) - (int)((byte >> (4 + q)) & 1u);
+                        int want = (row < m && col < n) ? w[row * n + col] : 0;
+                        if (v != want) wrong++;
+                    }
+                }
+        }
+    CHECK(both == 0, "R2b_lut m=%zu n=%zu: %zu bytes set the same bit in pos and neg nibble (⊥)", m, n, both);
+    CHECK(wrong == 0, "R2b_lut m=%zu n=%zu: %zu lanes decode wrong", m, n, wrong);
+    oma_rz_free(&p);
+}
+
 static void test_packed_no_bottom(void) {
     unsigned long long c0 = g_checks, f0 = g_fail;
     static const size_t ns[] = {1, 15, 16, 17, 63, 64, 65, 127, 128, 129, 255, 256, 257, 1000, 4099};
@@ -193,6 +228,7 @@ static void test_packed_no_bottom(void) {
                 fill_w(w, m * n, kind);
                 check_bitplane(w, m, n);
                 check_crumb(w, m, n);
+                check_lut(w, m, n);
                 free(w);
             }
     for (int it = 0; it < 200; it++) {
@@ -202,6 +238,7 @@ static void test_packed_no_bottom(void) {
         fill_w(w, m * n, W_RANDOM);
         check_bitplane(w, m, n);
         check_crumb(w, m, n);
+        check_lut(w, m, n);
         free(w);
     }
     /* large: bench-size row */
@@ -212,9 +249,10 @@ static void test_packed_no_bottom(void) {
         fill_w(w, m * n, W_RANDOM);
         check_bitplane(w, m, n);
         check_crumb(w, m, n);
+        check_lut(w, m, n);
         free(w);
     }
-    printf("%s packed H1 planes / crumbs hold no ⊥         %8llu checks, %llu failures\n",
+    printf("%s packed H1 planes/LUT nibbles/crumbs no ⊥  %8llu checks, %llu failures\n",
            g_fail == f0 ? "PASS" : "FAIL", g_checks - c0, g_fail - f0);
 }
 

@@ -8,7 +8,9 @@
 #
 # Environment: DV1_GATE, DV1_GATE_ASAN (driver binaries, set by make);
 #   MA_DV1_REUSE_RUN=<run id> reuses evidence/MIXED_ALGEBRA/runs/<id>/
-#   instead of running the bench (mode "reuse").
+#   instead of running the bench (mode "reuse"); optional
+#   MA_DV1_REUSE_SHA256="<run1 sha256> <run2 sha256>" pins those receipts to
+#   externally recorded digests (e.g. from a published wrapper receipt).
 # Exit: 0 PASS, 3 FAIL (receipt written), 4 refused (quiet flag present),
 #   other = error.
 set -u
@@ -80,6 +82,25 @@ fi
 R1=$EV/runs/$RUN_ID/ma2_bench_run1.json
 R2=$EV/runs/$RUN_ID/ma2_bench_run2.json
 [ -f "$R1" ] && [ -f "$R2" ] || { echo "gate: missing receipts in $EV/runs/$RUN_ID"; exit 2; }
+
+# Pin the receipt bytes now (right after the bench wrote them, or when a reuse
+# run is chosen). The driver re-hashes against these before ingest and before
+# writing the wrapper; any change in between is an error (exit 2), not a
+# verdict. Reuse mode may pin externally recorded digests instead with
+# MA_DV1_REUSE_SHA256="<run1 sha256> <run2 sha256>".
+if [ "$MODE" = reuse ] && [ -n "${MA_DV1_REUSE_SHA256:-}" ]; then
+    set -- $MA_DV1_REUSE_SHA256
+    [ $# -eq 2 ] || { echo "gate: MA_DV1_REUSE_SHA256 needs two digests"; exit 2; }
+    S1=$1; S2=$2
+else
+    S1=$(sha256sum "$R1" | cut -c1-64)
+    S2=$(sha256sum "$R2" | cut -c1-64)
+fi
+S3=$(sha256sum "$CONT1" | cut -c1-64)
+S4=$(sha256sum "$CONT2" | cut -c1-64)
+DV1_EXPECT_SHA256="$R1=$S1 $R2=$S2 $CONT1=$S3 $CONT2=$S4"
+export DV1_EXPECT_SHA256
+echo "gate: pinned receipts $R1=$S1 $R2=$S2"
 
 DIRTY1=$(dirty_now)
 DIRTY=0

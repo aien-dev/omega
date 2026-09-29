@@ -240,3 +240,77 @@ No energy result; no claim that ternary beats int8 in general (earlier
 MA-2/MA-3 results: ternary wins only when DRAM-bound); Q5/Q6 timings are the
 nearest footprint's; the selector's rule is the control arm's minimum-mean
 rule (TURING K.7), not a novel selector.
+
+## Post-run addenda (2026-09-29, after independent review)
+
+Added after the PASS receipt
+`evidence/MIXED_ALGEBRA/digital_v1/04f0f9ab01fc55fcc94391fe5032b18f3ca8c039e00b9f4be66cfb05ec28ddc1.json`
+(run commit d51a893, bench run `20260929T213551Z`). Sections 1 to 8 above are
+unchanged; nothing here alters a PASS/FAIL criterion or the recorded result.
+
+### A1. What the PASS shows, and what it does not
+
+- The PASS shows a verified, reproducible selection: every decision digest
+  re-derives bit-identically from the stored receipts, every cited receipt
+  re-hashes, and every rejection is named. It does not show stable winners.
+- Q2, Q4, Q5 and Q6 have margins inside the selector's noise band
+  (Q2 1.58% vs band 7.02%, Q4 0.17% vs 5.16%, Q5 1.81% vs 3.54%, Q6 1.54% vs
+  4.80%). Their winners are ties within noise. The Q4 winner (R1_plain)
+  disagrees with the continuity MA-3 receipts, which pick R1_sdot; this is
+  the expected behaviour of a within-noise tie, not a contradiction.
+- Only two winners are clear: Q1 R1_smmla (margin 5.30% vs band 1.63%) and
+  Q3 R2c_crumb (margin 18.85% vs band 2.42%, the DRAM-bound packed-ternary
+  win).
+- Energy is not part of any decision; bench energy rows are not ingested
+  (pending omega#86).
+
+### A2. Receipt tamper checks (review follow-up)
+
+- `make check-mixed-algebra-digital-v1-evidence`
+  (`tests/algebra/ma_digital_v1_check_evidence.sh`): every
+  `digital_v1/<name>.json` must hash (sha256 of its bytes) to `<name>`, and
+  every receipt it cites must exist and re-hash to the digest recorded in the
+  wrapper. Unlike `check-mixed-algebra-evidence` (a diff against git HEAD),
+  this also catches an edited receipt that was committed.
+- The gate script now pins the two fresh receipts (and the two continuity
+  receipts) by sha256 immediately after the bench writes them, or when a
+  reuse run is chosen, and passes the pins to the driver as
+  `DV1_EXPECT_SHA256`. The driver re-hashes every pinned file before ingest
+  and again just before writing the wrapper. A mismatch stops the gate with
+  exit 2 and writes no receipt. This is an input-integrity error, not an
+  added section 7 criterion; the PASS/FAIL criteria are unchanged. In reuse
+  mode, `MA_DV1_REUSE_SHA256="<run1 sha256> <run2 sha256>"` pins the reused
+  receipts to externally recorded digests (for example, the ones in a
+  published wrapper).
+- `test_ma_digital_bottom.c` now also checks R2b_lut's packed form (H1 per
+  lane: pos nibble low, neg nibble high): no lane sets the same bit in both
+  nibbles, and every lane decodes back to W (padding lanes to 0), over the
+  same shape set as R2_bitplane and R2c_crumb. The bottom check count rises
+  from 6255 (in the PASS receipt) to 8259.
+
+### A3. Reproducing the PASS
+
+The gate requires every fresh receipt's `run_commit` to equal HEAD, so it
+must be reproduced at the run commit, reusing the stored bench output:
+
+1. `git worktree add --detach /tmp/ma-repro d51a893`
+2. Copy `evidence/MIXED_ALGEBRA/runs/20260929T213551Z/` (all three files)
+   from this branch into the same path in that worktree.
+3. In the worktree root:
+   `MA_DV1_REUSE_RUN=20260929T213551Z make gate-mixed-algebra-digital-v1`
+
+Result (done 2026-09-29 in a throwaway worktree, exactly as above): every
+correctness command PASS (test-algebra plain and ASan 25672462 checks,
+test-realize 179746, test-turing 85, bottom 6255, all 0 failures), verdict
+`MIXED_ALGEBRA_DIGITAL_V1 PASS`, 0 failed checks. All six decision digests
+are bit-identical to the ones in the published receipt 04f0f9ab..., with the
+same winners (Q1 R1_smmla, Q2 R1_sdot, Q3 R2c_crumb, Q4 R1_plain,
+Q5 R1_sdot_il, Q6 R1_sdot). The reproduced wrapper hashes to d102c8d5...,
+not 04f0f9ab...: it records `"mode": "reuse"` and a different untracked
+list, so its bytes differ by design. Compare decision digests, not wrapper
+hashes. The reproduced wrapper stays in the throwaway worktree and is never
+copied into this repository's evidence/. Run at d51a893, the gate predates
+the A2 pinning; at a later commit `MA_DV1_REUSE_SHA256` can pin the reused
+receipts to the digests in 04f0f9ab..., but `run_commit` = HEAD then fails
+criterion 2 by design, so a later-commit reuse run is a check of the
+selection, not a re-issue of the PASS.

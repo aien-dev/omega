@@ -13,7 +13,8 @@
  *       (fresh|reuse), DV1_RUN_ID, DV1_CORRECTNESS (file of summary lines,
  *       one "PASS|FAIL <label>: <line>" per command), DV1_REPRO_FILES
  *       (space-separated digest files from separate processes, "label=path"),
- *       DV1_UNTRACKED (file listing untracked paths at run time).
+ *       DV1_UNTRACKED (file listing untracked paths at run time);
+ *       optional DV1_EXPECT_SHA256 ("path=hex ..."), see check_expected.
  *   Exit: 0 verdict PASS, 3 verdict FAIL (receipt still written), 2 error.
  */
 #include "algebra/realize_common.h"
@@ -196,6 +197,39 @@ static void fail(const char *fmt, const char *a, const char *b) {
     g_nfail++;
 }
 
+/* Optional receipt pinning (post-run addendum 2026-09-29). DV1_EXPECT_SHA256
+ * = space-separated "path=<sha256 hex>" pairs, recorded by the gate script
+ * when the bench receipts are written (fresh) or chosen (reuse). Every listed
+ * file must still hash to its recorded digest, and when the variable is set
+ * both fresh receipts must be listed. Checked before ingest and again just
+ * before the wrapper is written. A mismatch is an error (exit 2, no receipt),
+ * not a gate criterion: it means the inputs changed under the gate. */
+static int check_expected(const char *when, const char *f1, const char *f2) {
+    const char *env = getenv("DV1_EXPECT_SHA256");
+    if (!env || !*env) return 0;
+    char list[2048];
+    if (strlen(env) >= sizeof list) { fprintf(stderr, "DV1_EXPECT_SHA256 too long\n"); return -1; }
+    strcpy(list, env);
+    int seen1 = 0, seen2 = 0;
+    for (char *tok = strtok(list, " "); tok; tok = strtok(NULL, " ")) {
+        char *eq = strchr(tok, '=');
+        if (!eq || strlen(eq + 1) != 64) { fprintf(stderr, "DV1_EXPECT_SHA256: bad entry '%s'\n", tok); return -1; }
+        *eq = 0;
+        turing_digest d;
+        char h[65];
+        if (turing_file_digest(tok, &d) != 0) { fprintf(stderr, "%s: cannot hash %s\n", when, tok); return -1; }
+        turing_hex(&d, h);
+        if (strcmp(h, eq + 1)) {
+            fprintf(stderr, "%s: receipt %s changed since it was recorded (sha256 %s, expected %s)\n", when, tok, h, eq + 1);
+            return -1;
+        }
+        seen1 |= !strcmp(tok, f1);
+        seen2 |= !strcmp(tok, f2);
+    }
+    if (!seen1 || !seen2) { fprintf(stderr, "DV1_EXPECT_SHA256 must list both fresh receipts\n"); return -1; }
+    return 0;
+}
+
 static int do_receipt(const char *out, const char *f1, const char *f2, const char *c1, const char *c2) {
     const char *commit = getenv("DV1_COMMIT"), *dirty = getenv("DV1_TREE_DIRTY"), *mode = getenv("DV1_MODE"),
                *run_id = getenv("DV1_RUN_ID"), *corr = getenv("DV1_CORRECTNESS"), *repro = getenv("DV1_REPRO_FILES"),
@@ -204,6 +238,7 @@ static int do_receipt(const char *out, const char *f1, const char *f2, const cha
         fprintf(stderr, "missing DV1_* environment\n");
         return 2;
     }
+    if (check_expected("before ingest", f1, f2)) return 2;
     int tree_dirty = strcmp(dirty, "0") != 0;
     turing_store *st = turing_store_new(), *st2 = turing_store_new(), *stc = turing_store_new();
     if (!st || !st2 || !stc) return 2;
@@ -322,6 +357,7 @@ static int do_receipt(const char *out, const char *f1, const char *f2, const cha
         if (nfiles < 2) { repro_all = 0; fail("fewer than 2 separate-process reproductions%s%s", "", ""); }
     }
 
+    if (check_expected("before wrapper write", f1, f2)) return 2;
     int pass = g_nfail == 0;
     FILE *o = fopen(out, "wx");
     if (!o) { perror(out); return 2; }

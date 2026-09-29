@@ -1129,3 +1129,10 @@ test-ma-digital-bottom: $(DV1_BOTTOM) $(DV1_BOTTOM_ASAN)
 gate-mixed-algebra-digital-v1: $(DV1_GATE_BIN) $(DV1_GATE_BIN_ASAN) $(DV1_BOTTOM) $(DV1_BOTTOM_ASAN)
 	DV1_GATE=./$(DV1_GATE_BIN) DV1_GATE_ASAN=./$(DV1_GATE_BIN_ASAN) MAKE="$(MAKE)" \
 		sh tests/algebra/ma_digital_v1_gate.sh
+
+# Content check (post-run addenda 2026-09-29): every digital_v1 wrapper
+# re-hashes to its file name and every receipt it cites re-hashes to the
+# digest recorded in the wrapper. Catches edits that were committed.
+.PHONY: check-mixed-algebra-digital-v1-evidence
+check-mixed-algebra-digital-v1-evidence:
+	sh tests/algebra/ma_digital_v1_check_evidence.sh
