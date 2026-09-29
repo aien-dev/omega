@@ -10,6 +10,7 @@
 #include "sha256.h"
 
 #include <pthread.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -74,6 +75,8 @@ static struct {
     /* consumer */
     pthread_t thread;
     int thread_started;
+    char consumer_cpu[64];                 /* consumer placement as applied (see consumer_place) */
+    int consumer_pin_rc;                   /* pthread_setaffinity_np result (0 = ok) */
     _Atomic int stop;
     uint64_t consumer_seq, last_key;
     uint64_t received, synthesized, batches, stream_records, ingest_errors, late, stall_breaks;
@@ -517,6 +520,86 @@ static void *consumer_main(void *arg) {
 
 /* ---- lifecycle ------------------------------------------------------------------------ */
 
+#if RX_ARGUS_HAS_CONSUMER
+/* Consumer placement (speed2 fix a). R8 measured the consumer's cost as core sharing:
+ * unpinned it rides the workload's cores (+5% wall), pinned off them +3%.
+ *   RX_ARGUS_CONSUMER_CPU unset/"auto" (default): if the process affinity mask at start
+ *       leaves some online CPUs out, pin the consumer to those CPUs (a core the workload
+ *       does not use); if the process may use every CPU, leave the consumer unpinned.
+ *   RX_ARGUS_CONSUMER_CPU="none": never pin.
+ *   RX_ARGUS_CONSUMER_CPU="N" or "N-M,K": pin to exactly those CPUs (may lie outside the
+ *       process mask; that is the point).
+ * Deployment requirement: give the consumer a core the workload does not use (a taskset
+ * workload gets that automatically). A bad list or a failed pin leaves the consumer
+ * unpinned and is reported (stderr + summary consumer_pin_rc), never fatal. */
+static int consumer_auto_set(cpu_set_t *out) {
+    cpu_set_t mask;
+    CPU_ZERO(out);
+    if (sched_getaffinity(0, sizeof mask, &mask) != 0) return 0;
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    int any = 0;
+    for (long c = 0; c < n && c < CPU_SETSIZE; c++)
+        if (!CPU_ISSET((int)c, &mask)) { CPU_SET((int)c, out); any = 1; }
+    return any;
+}
+
+static int consumer_pin(pthread_t th, const char *spec) {
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    const char *p = spec;
+    int any = 0;
+    while (*p) {
+        char *e;
+        long a = strtol(p, &e, 10), b;
+        if (e == p || a < 0 || a >= CPU_SETSIZE) return -1;
+        b = a;
+        if (*e == '-') {
+            p = e + 1;
+            b = strtol(p, &e, 10);
+            if (e == p || b < a || b >= CPU_SETSIZE) return -1;
+        }
+        for (long c = a; c <= b; c++) CPU_SET((int)c, &set);
+        any = 1;
+        if (*e == ',') e++;
+        else if (*e) return -1;
+        p = e;
+    }
+    if (!any) return -1;
+    return pthread_setaffinity_np(th, sizeof set, &set);
+}
+
+static void consumer_place(pthread_t th) {
+    const char *cpu = getenv("RX_ARGUS_CONSUMER_CPU");
+    if (cpu && strcmp(cpu, "none") == 0) {
+        snprintf(g.consumer_cpu, sizeof g.consumer_cpu, "none");
+        return;
+    }
+    if (!cpu || !*cpu || strcmp(cpu, "auto") == 0) {
+        cpu_set_t set;
+        if (!consumer_auto_set(&set)) {
+            snprintf(g.consumer_cpu, sizeof g.consumer_cpu, "auto:unpinned");
+            return;
+        }
+        size_t o = (size_t)snprintf(g.consumer_cpu, sizeof g.consumer_cpu, "auto:");
+        for (int c = 0; c < CPU_SETSIZE && o < sizeof g.consumer_cpu - 8; c++) {
+            if (!CPU_ISSET(c, &set)) continue;
+            int e = c;
+            while (e + 1 < CPU_SETSIZE && CPU_ISSET(e + 1, &set)) e++;
+            o += (size_t)snprintf(g.consumer_cpu + o, sizeof g.consumer_cpu - o,
+                                  e > c ? "%s%d-%d" : "%s%d", o > 5 ? "," : "", c, e);
+            c = e;
+        }
+        g.consumer_pin_rc = pthread_setaffinity_np(th, sizeof set, &set);
+    } else {
+        snprintf(g.consumer_cpu, sizeof g.consumer_cpu, "%s", cpu);
+        g.consumer_pin_rc = consumer_pin(th, cpu);
+    }
+    if (g.consumer_pin_rc != 0)
+        fprintf(stderr, "rx_argus: consumer placement %s not applied (%d); consumer unpinned\n",
+                g.consumer_cpu, g.consumer_pin_rc);
+}
+#endif
+
 static int rx_argus_start(const char *run_id, int consumer_mode, const char *stream_path) {
     if (g.active) return ARGUS_ERR_STATE;
     if (argus_ring_footprint(RX_ARGUS_RING_CAPACITY) > RING_MEM_MAX) return ARGUS_ERR_ARG;
@@ -565,6 +648,7 @@ static int rx_argus_start(const char *run_id, int consumer_mode, const char *str
             return ARGUS_ERR_STATE;
         }
         g.thread_started = 1;
+        consumer_place(g.thread);
     }
 #endif
     return ARGUS_OK;
@@ -677,6 +761,7 @@ int rx_argus_write_summary(const char *path, const char *suite) {
 #endif
     fprintf(f, "{\n  \"suite\": \"%s\",\n  \"rx_argus\": %d,\n  \"consumer_mode\": %d,\n"
                "  \"grant_source\": \"%s\",\n", suite ? suite : "", RX_ARGUS, s.consumer_mode, auth);
+    fprintf(f, "  \"consumer_cpu\": \"%s\",\n  \"consumer_pin_rc\": %d,\n", g.consumer_cpu, g.consumer_pin_rc);
     fprintf(f, "  \"machine_id\": \"");
     for (unsigned i = 0; i < ARGUS_MACHINE_ID_LEN; i++) fprintf(f, "%02x", g.machine_id[i]);
     fprintf(f, "\",\n  \"producers_claimed\": %u,\n  \"producers_max_live\": %u,\n",
@@ -743,7 +828,9 @@ int rx_argus_write_summary(const char *path, const char *suite) {
  *   RX_ARGUS_STREAM    path for the raw 128-byte record stream (ingest order)
  *   RX_ARGUS_SUMMARY   path for the JSON summary written at exit
  *   RX_ARGUS_SUITE     label in the summary
- *   RX_ARGUS_RUN_ID    run id for the machine id (default: pid-based) */
+ *   RX_ARGUS_RUN_ID    run id for the machine id (default: pid-based)
+ *   RX_ARGUS_CONSUMER_CPU  consumer placement: auto (default: the CPUs outside the
+ *                      process mask, if any) | none | a CPU list such as "3" or "0-2,4" */
 __attribute__((constructor)) static void rx_argus_auto_start(void) {
     const char *a = getenv("RX_ARGUS_AUTO");
     if (a && strcmp(a, "0") == 0) return;
