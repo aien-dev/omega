@@ -149,15 +149,23 @@ Evidence scope is reported exactly as the receipt states it (`host`, `qemu`,
 
 ## 7. Qualification
 
-`tests/visor/qualification/` + `tools/qualify_visor.py` (glue only; every
-assertion lives in C tests and `.omega-session` scripts). Receipts live in
-`evidence/VISOR/` as content-addressed JSON, never overwritten:
+`tests/visor/qualification/` + `tools/qualify_visor.sh` (shell glue only; every
+assertion lives in C tests and `.omega-session` scripts). Run it on a committed
+tree: `tools/qualify_visor.sh [--skip-regression] [--no-asan] [out-dir]`. It
+rebuilds the AIENOS capability library from the commit in `aienos.lock` (as CI
+and `tools/effect_cap64_receipt.sh` do) and records its identity (commit, source
+tree, lib sha256) in the receipt. Receipts live in `evidence/VISOR/` as
+content-addressed JSON, never overwritten; the tool writes only a new receipt and
+never edits tracked files (`evidence/VISOR/VISOR_V1_QUALIFICATION.md` is the frozen
+summary written by the retired Python glue up to receipt #5):
 
 | receipt | commit | verdict | note |
 |---|---|---|---|
 | `12785aab…json` | ec2ec0b | OMEGA_VISOR_V1_FAIL | found `run` arg-count and `--script` directory defects |
 | `4de74cf3…json` | d7e8a4c | OMEGA_VISOR_V1_PASS | after the fixes; 69 hostile cases, 0 crashes |
 | `98a63b2e…json` | 23feaad | OMEGA_VISOR_V1_PASS | clean tree (`tree_dirty=false`), same counts as receipt #2 |
+| `15d6703c…json` | 6627da2 | OMEGA_VISOR_V1_FAIL | pre-fix merge of 64-bit effect generations |
+| `632ba16d…json` | 8a7d95e | OMEGA_VISOR_V1_PASS | merged tree, authority test adapted to 64-bit generations |
 
 Scope of every receipt: host-only, this DGX Spark, no GPU/silicon claim, GPU gate
 suites (m12/m15/m17–m19) not run because the Visor does not touch them. Gates:
