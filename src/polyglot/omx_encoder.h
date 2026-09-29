@@ -41,4 +41,11 @@ int omx_encoder_build(int k, uint64_t base, omx_enc_insn *out, size_t cap, size_
  * pointer is the entry of int fn(const oma_rz_plan *, const int8_t *, int32_t *). */
 const void *omx_encoder_code(int k, size_t *code_bytes);
 
+/* Time one complete, fresh emission of kernel k (object-form sizing build,
+ * mmap, final-form build, write, mprotect RX, cache flush) in ns, then unmap
+ * it; the cached kernel used by run is not touched. This is the
+ * realization's build time, which the bench reports instead of a compiler
+ * time. 0 on success, -1 on failure. */
+int omx_encoder_emit_ns(int k, double *ns, size_t *code_bytes);
+
 #endif /* OMX_ENCODER_H */

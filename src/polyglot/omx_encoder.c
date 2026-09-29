@@ -22,8 +22,8 @@
  * Executable memory (W^X): the kernel is written into an anonymous mapping
  * that is PROT_READ|PROT_WRITE only, then mprotect'ed to PROT_READ|PROT_EXEC
  * (never writable and executable at the same time), then the instruction
- * cache is synchronised with __builtin___clear_cache. Built once per process
- * (pthread_once), never written again.
+ * cache is synchronised with __builtin___clear_cache. Built once per process,
+ * by the first pack (pthread_once), never written again; run makes no syscall.
  *
  * Pack: B1's pack functions are static in omx_asm.c, so the minimal pack logic
  * (identical packed forms: int8 row-major; 2-bit crumbs in 64-weight chunks
@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <time.h>
 #include <unistd.h>
 
 _Static_assert(offsetof(oma_rz_plan, m) == 0, "kernel ABI: plan.m at 0");
@@ -617,23 +618,23 @@ int omx_encoder_build(int k, uint64_t base, omx_enc_insn *out, size_t cap, size_
 
 /* ---- executable copies (W^X) ---- */
 
-static struct { pthread_once_t once; const void *code; size_t bytes; } g_jit[OMX_ENC_KERNELS] = {
-    {PTHREAD_ONCE_INIT, NULL, 0}, {PTHREAD_ONCE_INIT, NULL, 0}};
-
-static void jit_build(int k) {
+/* One complete emission of kernel k into a fresh mapping: size with an
+ * object-form build, mmap RW, final-form build at the mapping's address,
+ * write the words and the data, mprotect RX (write dropped before execute is
+ * added), synchronise the instruction cache. 0 on success. */
+static int jit_emit(int k, void **map_out, size_t *map_len, size_t *code_bytes) {
     omx_enc_insn ins[512];
     size_t n = 0, doff = 0, dlen = 0;
     const uint8_t *data = NULL;
     size_t pg = (size_t)sysconf(_SC_PAGESIZE);
-    /* size with an object-form build first */
-    if (omx_encoder_build(k, 0, ins, 512, &n, &doff, &data, &dlen)) return;
+    if (omx_encoder_build(k, 0, ins, 512, &n, &doff, &data, &dlen)) return -1;
     size_t total = (doff + dlen + pg - 1) / pg * pg;
     void *m = mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    if (m == MAP_FAILED) return;
+    if (m == MAP_FAILED) return -1;
     uint8_t *mem = m;
     if (omx_encoder_build(k, (uint64_t)(uintptr_t)mem, ins, 512, &n, &doff, &data, &dlen)) {
         munmap(m, total);
-        return;
+        return -1;
     }
     for (size_t i = 0; i < n; i++) {
         mem[4 * i + 0] = (uint8_t)ins[i].word;
@@ -642,14 +643,26 @@ static void jit_build(int k) {
         mem[4 * i + 3] = (uint8_t)(ins[i].word >> 24);
     }
     if (dlen) memcpy(mem + doff, data, dlen);
-    /* W -> X: drop write before adding execute */
     if (mprotect(m, total, PROT_READ | PROT_EXEC)) {
         munmap(m, total);
-        return;
+        return -1;
     }
     __builtin___clear_cache((char *)mem, (char *)mem + 4 * n);
+    *map_out = m;
+    *map_len = total;
+    *code_bytes = 4 * n;
+    return 0;
+}
+
+static struct { pthread_once_t once; const void *code; size_t bytes; } g_jit[OMX_ENC_KERNELS] = {
+    {PTHREAD_ONCE_INIT, NULL, 0}, {PTHREAD_ONCE_INIT, NULL, 0}};
+
+static void jit_build(int k) {
+    void *m;
+    size_t len, bytes;
+    if (jit_emit(k, &m, &len, &bytes)) return;
     g_jit[k].code = m;
-    g_jit[k].bytes = 4 * n;
+    g_jit[k].bytes = bytes;
 }
 static void jit_sdot(void) { jit_build(OMX_ENC_SDOT); }
 static void jit_crumb(void) { jit_build(OMX_ENC_CRUMB); }
@@ -662,15 +675,33 @@ const void *omx_encoder_code(int k, size_t *code_bytes) {
     return g_jit[k].code;
 }
 
+int omx_encoder_emit_ns(int k, double *ns, size_t *code_bytes) {
+    if (k != OMX_ENC_SDOT && k != OMX_ENC_CRUMB) return -1;
+    struct timespec t0, t1;
+    void *m;
+    size_t len, bytes;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &t0);
+    int rc = jit_emit(k, &m, &len, &bytes);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &t1);
+    if (rc) return -1;
+    munmap(m, len);
+    if (ns) *ns = (double)(t1.tv_sec - t0.tv_sec) * 1e9 + (double)(t1.tv_nsec - t0.tv_nsec);
+    if (code_bytes) *code_bytes = bytes;
+    return 0;
+}
+
 /* ------------------------------------------------------------------ */
 /* oma_rz_impl candidates                                              */
 /* ------------------------------------------------------------------ */
 
 typedef int (*run_fn)(const oma_rz_plan *, const int8_t *, int32_t *);
 
+/* The kernel is emitted by pack (below), so run makes no syscall and touches
+ * no global state beyond reading the code pointer. A plan that did not come
+ * from this pack (kernel never emitted) is refused with E_ARG. */
 static int run_k(int k, const oma_rz_plan *p, const int8_t *x, int32_t *y) {
-    const void *c = omx_encoder_code(k, NULL);
-    if (!c) return OMA_RZ_E_NOMEM;
+    const void *c = g_jit[k].code;
+    if (!c) return OMA_RZ_E_ARG;
     run_fn f;
     memcpy(&f, &c, sizeof f); /* object -> function pointer without a pedantic cast */
     return f(p, x, y);
@@ -678,18 +709,23 @@ static int run_k(int k, const oma_rz_plan *p, const int8_t *x, int32_t *y) {
 static int enc_sdot_run(const oma_rz_plan *p, const int8_t *x, int32_t *y) { return run_k(OMX_ENC_SDOT, p, x, y); }
 static int enc_crumb_run(const oma_rz_plan *p, const int8_t *x, int32_t *y) { return run_k(OMX_ENC_CRUMB, p, x, y); }
 
-/* pack: same packed forms as B1 (duplicated; B1's are static) */
-static int pack_begin(oma_rz_plan *p, const int8_t *w, size_t m, size_t n) {
+/* pack: same packed forms as B1 (duplicated; B1's are static). Pack also
+ * makes sure the kernel for k has been emitted (once per process); if the
+ * executable mapping cannot be made, pack fails with E_NOMEM (allowed for
+ * pack by spec section 1) and no plan is kept. */
+static int pack_begin(int k, oma_rz_plan *p, const int8_t *w, size_t m, size_t n) {
     if (!p) return OMA_RZ_E_ARG;
     memset(p, 0, sizeof *p);
     int rc = oma_rz_check_shape(m, n, OMA_RZ_MAX_N);
     if (rc) return rc;
     if (!w) return OMA_RZ_E_ARG;
-    return oma_rz_validate(w, m, n);
+    rc = oma_rz_validate(w, m, n);
+    if (rc) return rc;
+    return omx_encoder_code(k, NULL) ? OMA_RZ_OK : OMA_RZ_E_NOMEM;
 }
 
 static int pack_sdot(oma_rz_plan *p, const int8_t *w, size_t m, size_t n) {
-    int rc = pack_begin(p, w, m, n);
+    int rc = pack_begin(OMX_ENC_SDOT, p, w, m, n);
     if (rc) return rc;
     int8_t *buf = oma_rz_alloc(m * n);
     if (!buf) return OMA_RZ_E_NOMEM;
@@ -706,7 +742,7 @@ static int pack_sdot(oma_rz_plan *p, const int8_t *w, size_t m, size_t n) {
 }
 
 static int pack_crumb(oma_rz_plan *p, const int8_t *w, size_t m, size_t n) {
-    int rc = pack_begin(p, w, m, n);
+    int rc = pack_begin(OMX_ENC_CRUMB, p, w, m, n);
     if (rc) return rc;
     size_t chunks = (n + 63u) / 64u, row_bytes = chunks * 16u;
     if (row_bytes != 0 && m > SIZE_MAX / row_bytes) return OMA_RZ_E_OVERFLOW;
