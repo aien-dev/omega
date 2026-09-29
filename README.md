@@ -16,7 +16,7 @@ Milestone 4 establishes the first executable semantic substrate of OMEGA:
 
 > **OMEGA DEFINES WHAT COMPUTATION MEANS WITHOUT COMMITTING THAT MEANING TO A PARTICULAR MACHINE REPRESENTATION.**
 
-OMEGA is not a programming language, compiler, optimizer, model runtime, tensor engine, or AI system. It is the smallest sovereign semantic system capable of representing computation independently of the physical machine that will eventually realize it.
+OMEGA is the reaction runtime and the compiler for Omega Systems Core. It is the smallest sovereign semantic system capable of representing computation independently of the physical machine that will eventually realize it, and it compiles Omega Systems Core programs into that machine. (Decided by Drake, 2026-09-29, in [OMEGA-SYSTEMS-CORE-0000](docs/adr/OMEGA-SYSTEMS-CORE-0000.md); this retires the earlier "not a programming language or compiler" doctrine. The Milestone 6 "self-host" result was a fixed-output self-copy check, not compilation.)
 
 ### The Sovereign Axioms
 - **`SMART ≠ TRUSTED`**: Trust is not earned through cognitive capability, model scale, or heuristic brilliance. Trust is binary and verified through auditable invariant enforcement.

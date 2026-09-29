@@ -178,6 +178,10 @@ jobs:
           grep -q '"OMEGA_TYPED_RESULT_CONSTRAINTS_PASS": "PASS"' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
+      - name: Empirical cost model on synthetic measurements (OMEGA_EMPIRICAL_OPTIMIZER, any host)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: make test-costmodel
       - name: Show R8 receipt
         run: |
           receipt="$(find build/qual-runs -name rx_aegis_resident_receipt.json -type f | head -n 1)"
@@ -290,6 +294,25 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make build/rx_r14_recovery_host
+      - name: Empirical optimizer (OMEGA_EMPIRICAL_OPTIMIZER; the gate is claimed only on the DGX Spark)
+        env:
+          OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
+          EMPIRICAL_ALLOW_NO_WIN: '1'
+        run: make test-empirical
+      - name: Show empirical optimizer receipt
+        run: |
+          receipt="$(find build/qual-runs -name rx_empirical_optimizer_receipt.json -type f | head -n 1)"
+          test -n "$receipt"
+          grep -q '"failures": 0,' "$receipt"
+          grep -q '"candidate_bound": true,' "$receipt"
+          grep -q '"tree_dirty": false,' "$receipt"
+          grep -q '"mismatches": 0,' "$receipt"
+          grep -Eq '"OMEGA_EMPIRICAL_OPTIMIZER_PASS": "(PASS|CHAIN_PASS_NO_WIN)"' "$receipt"
+          sha256sum "$receipt"
+          cat "$receipt"
       - name: Plan IR and verified plan cache (OMEGA_PLAN_REUSE; timing criteria are judged on the Spark receipt)
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
