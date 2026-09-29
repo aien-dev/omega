@@ -52,3 +52,14 @@ Offset  Length  Field                  Type / Description
 ## 3. Reference Resolution & Acyclicity
 
 In Milestone 4, expression graphs are directed acyclic graphs (DAGs). References point backward or horizontally to existing canonical objects by `SemanticId`. A graph containing an unresolved reference or a circular reference cycle fails validation and is rejected prior to canonical identity derivation.
+
+---
+
+## 4. Amendment: per-kind object encoding version (SPEC-OMEGA-EFFECT-CAP64)
+
+The `version` byte at +0x04 is the object encoding version of the object's
+kind. `KIND_EFFECT` objects are version `0x02` and carry the explicit
+178-byte big-endian effect payload with a 64-bit capability generation; every
+other kind is version `0x01`, unchanged. A decoder accepts only that pair:
+a version `0x01` effect (legacy, truncated authority) and a version `0x02`
+non-effect are refused. See `spec/effect-cap64-migration.md`.

@@ -1036,6 +1036,43 @@ static void t_crumb_tamper_detected(void) {
     CHECK(rx_world_verify_crumbs(&e->w, NULL) != 0, "rewritten issuer went undetected");
     k->cap_issuer[0] ^= 1;
     CHECK(rx_world_verify_crumbs(&e->w, NULL) == 0, "restored issuer fails verification");
+    k->caps[0].generation ^= 1ull << 32; /* rewrite only the high half of the generation */
+    CHECK(rx_world_verify_crumbs(&e->w, NULL) != 0, "rewritten generation high half went undetected");
+    k->caps[0].generation ^= 1ull << 32;
+    CHECK(rx_world_verify_crumbs(&e->w, NULL) == 0, "restored generation fails verification");
+    audit_and_close(e);
+}
+
+/* Hostile: two crumbs identical except for the capability generation must not
+ * share a digest, even when the generations agree in their low 32 bits. */
+static void t_crumb_cap_generation_64(void) {
+    begin("causal_record_binds_64bit_cap_generation", "I15");
+    HBEnv x;
+    CHECK(hb_setup(&x, 1) == 0, "setup");
+    Env *e = &x.e;
+    static const uint64_t pairs[][2] = {
+        { 0x5ull, 0x100000005ull },                          /* high half only */
+        { (uint64_t)UINT32_MAX, (uint64_t)UINT32_MAX + 1u }, /* the 32-bit boundary */
+        { (uint64_t)UINT32_MAX, 0x1ffffffffull },            /* boundary, same low half */
+        { 0x0ull, 0x8000000000000000ull },                   /* top bit only */
+    };
+    for (size_t i = 0; i < sizeof pairs / sizeof pairs[0]; i++) {
+        RxCrumb a, b;
+        memset(&a, 0, sizeof a);
+        a.id = 1;
+        a.kind = RX_CRUMB_COMMIT;
+        a.n_caps = 1;
+        a.caps[0] = (RxCapRef){ 7, pairs[i][0] };
+        a.cap_issuer[0] = 3;
+        b = a;
+        b.caps[0].generation = pairs[i][1];
+        uint8_t da[32], db[32], da2[32];
+        rx_world_crumb_digest(&e->w, &a, da);
+        rx_world_crumb_digest(&e->w, &b, db);
+        rx_world_crumb_digest(&e->w, &a, da2);
+        CHECK(memcmp(da, da2, 32) == 0, "crumb digest is not deterministic");
+        CHECK(memcmp(da, db, 32) != 0, "crumbs differing only in cap generation share a digest");
+    }
     audit_and_close(e);
 }
 
@@ -2573,6 +2610,7 @@ int main(int argc, char **argv) {
     t_revoke_during_run();
     t_root_table_unwritable();
     t_crumb_tamper_detected();
+    t_crumb_cap_generation_64();
     t_schedule_independence();
     t_authority_office();
     t_counter_fail_closed();

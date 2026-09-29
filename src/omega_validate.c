@@ -1,4 +1,5 @@
 #include "omega_validate.h"
+#include "omega_core.h"
 #include "omega_canonical.h"
 #include <string.h>
 #include <stdio.h>
@@ -199,13 +200,14 @@ int omega_validate_object(const OmegaGraph *graph, const OmegaObject *obj, char 
             break;
         }
         case KIND_EFFECT: {
-            if (obj->payload_len < sizeof(EffectPayload)) {
-                snprintf(err_msg, err_msg_len, "Effect payload length too short (%u bytes)", obj->payload_len);
-                return -1;
-            }
-            const EffectPayload *eff = (const EffectPayload*)obj->payload;
-            if (eff->resource_class == 0) {
-                snprintf(err_msg, err_msg_len, "Effect resource class is 0 (invalid resource)");
+            /* Strict v2 decode (spec/effect-cap64-migration.md): exact 178-byte
+             * big-endian layout, 64-bit generation, resource != 0, param_len <= 128,
+             * zero padding. A 176-byte v1 host-struct payload is refused. */
+            EffectPayload eff;
+            int erc = omega_effect_read(obj, &eff);
+            if (erc != OMEGA_EFFECT_OK) {
+                snprintf(err_msg, err_msg_len, "Effect payload refused: %s (%u bytes)",
+                         omega_effect_strerror(erc), obj->payload_len);
                 return -1;
             }
             break;

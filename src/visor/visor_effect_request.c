@@ -10,6 +10,7 @@
  */
 #include "visor_effect_request.h"
 
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -34,13 +35,13 @@ int visor_effect_request_build(const OmegaGraph *g, const SemanticId *effect_obj
     const OmegaObject *obj = omega_graph_find_object_const(g, effect_object_id);
     if (!obj || !obj->has_id || obj->kind != KIND_EFFECT) return -1;
 
-    /* Existing structural validation first (payload too short, resource 0). */
+    /* Existing structural validation first (strict v2 effect decode). */
     char err[160];
     if (omega_validate_object(g, obj, err, sizeof err) != 0) return -1;
-    if (obj->payload_len != sizeof(EffectPayload)) return -1;
+    if (obj->payload_len != OMEGA_EFFECT_PAYLOAD_LEN) return -1;
 
     EffectPayload eff;
-    memcpy(&eff, obj->payload, sizeof eff);
+    if (omega_effect_read(obj, &eff) != OMEGA_EFFECT_OK) return -1;
     if (eff.param_len > VISOR_EFFECT_PARAM_MAX) return -1;
 
     /* Digest = sha256(canonical encoding). Computed into a local buffer so the
@@ -141,13 +142,11 @@ static void push_payload_refs(Walk *w, const OmegaObject *o) {
             for (uint8_t i = 0; i < n; i++) push_ref(w, &ap.operands[i]);
         }
         break;
-    case KIND_EFFECT:
-        if (o->payload_len >= sizeof(EffectPayload)) {
-            EffectPayload ep;
-            memcpy(&ep, o->payload, sizeof ep);
-            push_ref(w, &ep.capability_ref);
-        }
+    case KIND_EFFECT: {
+        EffectPayload ep;
+        if (omega_effect_read(o, &ep) == OMEGA_EFFECT_OK) push_ref(w, &ep.capability_ref);
         break;
+    }
     default:
         break;
     }
@@ -218,13 +217,13 @@ int visor_effect_request_format_text(const VisorEffectRequest *r, char *out, siz
                      "  effect:     sha256:%s\n"
                      "  resource:   class %u\n"
                      "  operation:  code %u\n"
-                     "  capability: slot %u generation %u ref sha256:%s (not validated by the Visor)\n"
+                     "  capability: slot %u generation %" PRIu64 " ref sha256:%s (not validated by the Visor)\n"
                      "  params:     %u bytes %s\n"
                      "  digest:     sha256:%s\n"
                      "  authorized: false\n"
                      "  route:      %s\n",
                      h.effect, (unsigned)r->resource_class, (unsigned)r->operation_code,
-                     (unsigned)r->capability_slot, (unsigned)r->capability_generation, h.cap,
+                     (unsigned)r->capability_slot, r->capability_generation, h.cap,
                      (unsigned)r->param_len, h.params, h.digest, VISOR_EFFECT_ROUTE);
     if (k < 0 || (size_t)k >= n) return -1;
     return 0;
@@ -236,12 +235,12 @@ int visor_effect_request_format_json(const VisorEffectRequest *r, char *out, siz
     if (make_hexes(r, &h)) return -1;
     int k = snprintf(out, n,
                      "{\"effect_id\":\"sha256:%s\",\"resource_class\":%u,\"operation_code\":%u,"
-                     "\"capability_slot\":%u,\"capability_generation\":%u,"
+                     "\"capability_slot\":%u,\"capability_generation\":%" PRIu64 ","
                      "\"capability_ref\":\"sha256:%s\",\"param_len\":%u,\"param_bytes\":\"%s\","
                      "\"request_digest\":\"sha256:%s\",\"authorized\":false,"
                      "\"status\":\"%s\",\"route\":\"%s\"}",
                      h.effect, (unsigned)r->resource_class, (unsigned)r->operation_code,
-                     (unsigned)r->capability_slot, (unsigned)r->capability_generation, h.cap,
+                     (unsigned)r->capability_slot, r->capability_generation, h.cap,
                      (unsigned)r->param_len, h.params, h.digest,
                      VISOR_EFFECT_STATUS_UNAUTHORIZED, VISOR_EFFECT_ROUTE);
     if (k < 0 || (size_t)k >= n) return -1;

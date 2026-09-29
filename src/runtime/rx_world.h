@@ -624,6 +624,9 @@ int  rx_world_crumb_origin(RxWorld *w, uint64_t id, uint32_t *reaction, uint32_t
 uint64_t rx_world_explain(RxWorld *w, RxObjRef ref, uint32_t field);
 /* Recompute every crumb digest and check parent links; 0 on success. */
 int  rx_world_verify_crumbs(RxWorld *w, uint64_t *out_checked);
+/* Digest a crumb exactly as the log does (parents are read from w). Binds
+ * every capability reference in full, including all 64 generation bits. */
+void rx_world_crumb_digest(const RxWorld *w, const RxCrumb *k, uint8_t out[32]);
 /* SHA-256 over all live objects' (id, generation, content digest). */
 void rx_world_digest(RxWorld *w, uint8_t out[32]);
 
