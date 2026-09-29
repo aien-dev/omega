@@ -750,7 +750,7 @@ int main(void) {
         stale.object_id = A.id;
         stale.object_generation = A.generation;   /* the retired one */
         stale.object_length = 64;
-        stale.payload_len = 40;
+        stale.payload_len = RX_CAP_PAYLOAD;
         /* The current seat generation: only the object generation is stale. */
         stale.producer_generation = w.seat_generation;
         for (int i = 0; i < 4; i++) {

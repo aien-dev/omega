@@ -140,6 +140,16 @@ enum {
 #define RX_FAULT_DIVERGED  0x0105u
 #define RX_FAULT_UNPLACED  0x0106u
 
+/* Capability references in publication and claim payloads. Bytes 0-3 are
+ * the input object's cap id and 4-7 the low half of its 64-bit generation;
+ * a claim also carries the output object's id (24), object generation (28),
+ * cap id (32) and cap generation low half (36). The high halves of the two
+ * cap generations sit at 40 and 44, past every field the seat reads; the
+ * seat copies the whole descriptor into its notice, so they come back. */
+#define RX_CAP_GEN_HI_A    40u
+#define RX_CAP_GEN_HI_B    44u
+#define RX_CAP_PAYLOAD     48u
+
 /* Physical aspect. These name where the bytes sit. They are not the object's name.
  * A live object may have no placement. One spare window exists so a placed
  * object can move without borrowing another object's bytes. */
