@@ -89,23 +89,67 @@ separate slots in `VisorCostView`; V1 never fills `measured` or `qualified`.
 Evidence scope is reported exactly as the receipt states it (`host`, `qemu`,
 `silicon`, `simulated`, or `unknown`); the Visor never upgrades scope.
 
+## 5a. Behaviour rules worth knowing
+
+- `run` argument count fails closed: an apply with N operands takes either no
+  explicit arguments (operands come from the graph) or exactly N (full override);
+  a program takes exactly one input. Anything else is an error and nothing runs.
+- After `realize <x>`, the `_` binding becomes the new realization (so `cost _`,
+  `run _`, `evidence _` refer to it). This is intended; `bindings` shows it.
+- Only pure binary u64 applies (ADD/SUB/MUL/AND/OR, wrap overflow) and `fn`
+  programs realize and run in V1. Everything else is refused with a reason.
+- `--script` refuses directories and other non-regular files with exit 2; a
+  character device such as `/dev/null` reads as an empty script (exit 0).
+- Blank script lines produce no JSON object; comment lines do.
+
 ## 6. Known gaps in V1 (non-claims)
 
 - The `omega` binary does not link the resident runtime, so `world` reports
   "no resident World attached". The snapshot API (`visor_world_snapshot`) is built
-  and tested separately against a real `RxWorld` with the physics include path.
-- Blackwell: listed as a declared target only if its objects link physics-free
-  (see lane 5 report); `run` on it is refused in V1.
+  and tested separately against a real `RxWorld`. Lane 6 found the runtime's
+  world/caproot/coherent sources are themselves physics-free, so a later version
+  can attach a live World without a physics checkout.
+- Blackwell: `omega_vector`, `omega_blackwell_qmd/encoder/realize` link
+  physics-free and are in the `omega` binary, so the machine view lists the
+  GB10 target as declared and linked; `run` on it is always refused
+  ("requires GPU submit authority; not linked in Visor V1").
 - Language V0 covers explicit-width integers, bool, `let`, pure `+ - * / & |`,
   and `fn` bodies of the shape `((x op imm) op imm ...)`. Everything else fails closed.
 - No measured or qualified cost is produced by the Visor itself.
 - Hardware identity is an assumed canonical profile unless a Physics descriptor was
   ingested (never in V1); the machine view says so in `provenance`.
 
+## 6a. Findings in existing code (found by the Visor lanes; not fixed here)
+
+- `omega_program_realize` is declared in `omega_program.h` but defined nowhere;
+  linking it fails. `omega_program_build_unary_op` already emits the realization.
+- `omega_synthesize_realization` ignores its program and always emits the fixed
+  `f(x) = 3x - 2` schedule; the realization lab checks synthesized alternatives
+  against the direct realization on sample inputs and marks mismatches incompatible.
+- `omega_program_compute_id` does not hash the program body: same name and
+  contract with a different body gives the same `program_id`. The language
+  refuses that collision inside a session; the console prints the realization id
+  next to the program id.
+- `evidence/M19R/c4d87451….json` is hash-named but its name does not match the
+  SHA-256 of its bytes (observed only, not judged).
+- Both canonical machine builders set `is_physics_authorized=true` with a
+  constant placeholder seal; the machine view labels it as such.
+- Host CPU part numbers (0xd85/0xd87) are not Neoverse-V2; the DGX Spark profile
+  is chosen from DMI and labelled assumed, never observed.
+
 ## 7. Qualification
 
 `tests/visor/qualification/` + `tools/qualify_visor.py` (glue only; every
-assertion lives in C tests and `.omega-session` scripts). Gates:
+assertion lives in C tests and `.omega-session` scripts). Receipts live in
+`evidence/VISOR/` as content-addressed JSON, never overwritten:
+
+| receipt | commit | verdict | note |
+|---|---|---|---|
+| `12785aab…json` | ec2ec0b | OMEGA_VISOR_V1_FAIL | found `run` arg-count and `--script` directory defects |
+| `4de74cf3…json` | d7e8a4c | OMEGA_VISOR_V1_PASS | after the fixes; 69 hostile cases, 0 crashes |
+
+Scope of every receipt: host-only, this DGX Spark, no GPU/silicon claim, GPU gate
+suites (m12/m15/m17–m19) not run because the Visor does not touch them. Gates:
 
 ```text
 OMEGA_VISOR_SEMANTIC_PASS            language golden vectors + semantic inspection tests
