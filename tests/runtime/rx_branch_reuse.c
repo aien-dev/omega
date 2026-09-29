@@ -749,8 +749,13 @@ int main(int argc, char **argv) {
     int dirty = omega_evidence_tree_dirty();
     const char *gate = !pass ? "FAIL" : dirty ? "PASS_UNBOUND_DIRTY_TREE" : "PASS";
 
-    if (omega_evidence_path("BRANCH_REUSE/rx_branch_reuse_receipt.json", path, sizeof path) == 0) {
-        FILE *f = fopen(path, "w");
+    strcpy(path, "(not written)");
+    {
+        /* Built in memory, then stored under its content address, so a later
+         * run can never overwrite this receipt. */
+        char *rbuf = NULL;
+        size_t rlen = 0;
+        FILE *f = open_memstream(&rbuf, &rlen);
         if (f) {
             fprintf(f, "{\n  \"gate\": \"OMEGA_BRANCH_STATE_REUSE\",\n  \"result\": \"%s\",\n"
                        "  \"run_id\": \"%s\",\n  \"commit\": \"%s\",\n  \"tree_dirty\": %s,\n"
@@ -817,8 +822,12 @@ int main(int argc, char **argv) {
                         S->placement_after[JS_PLACE_EVICTED], t + 1 < N_REAL ? "," : "");
             }
             fprintf(f, "  ],\n  \"failures\": %d\n}\n", g_fail);
-            fclose(f);
+            if (fclose(f) != 0 ||
+                omega_evidence_write_digest("BRANCH_REUSE/rx_branch_reuse_receipt", "json", rbuf,
+                                            rlen, path, sizeof path) < 0)
+                strcpy(path, "(not written)");
         }
+        free(rbuf);
     }
     printf("\nrepresentation-independent identity: %s; all eight actions exercised: %s\n",
            rep_indep ? "yes" : "NO", all_actions ? "yes" : "NO");

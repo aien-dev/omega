@@ -1,10 +1,15 @@
 #include "omega_evidence.h"
+#include "sha256.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 static bool trim_line(char *buf) {
     size_t len = strlen(buf);
@@ -76,6 +81,39 @@ int omega_evidence_path(const char *relpath, char *out, size_t n) {
 
     if (strlen(candidate) >= n) return -1;
     strcpy(out, candidate);
+    return 0;
+}
+
+int omega_evidence_write_digest(const char *relstem, const char *ext, const void *buf,
+                                size_t len, char *out, size_t n) {
+    if (!relstem || !ext || (!buf && len) || !out || n == 0) return -1;
+    uint8_t d[SHA256_DIGEST_SIZE];
+    sha256_hash((const uint8_t *)buf, len, d);
+    char hex[2 * SHA256_DIGEST_SIZE + 1];
+    for (int i = 0; i < SHA256_DIGEST_SIZE; i++) snprintf(hex + 2 * i, 3, "%02x", d[i]);
+    char rel[768];
+    int k = snprintf(rel, sizeof rel, "%s.%s.%s", relstem, hex, ext);
+    if (k < 0 || (size_t)k >= sizeof rel) return -1;
+    if (omega_evidence_path(rel, out, n) != 0) return -1;
+    int fd = open(out, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0444);
+    if (fd < 0) return errno == EEXIST ? 1 : -1;
+    const uint8_t *p = buf;
+    size_t left = len;
+    while (left) {
+        ssize_t w = write(fd, p, left);
+        if (w < 0 && errno == EINTR) continue;
+        if (w <= 0) {
+            close(fd);
+            unlink(out);
+            return -1;
+        }
+        p += w;
+        left -= (size_t)w;
+    }
+    if (close(fd) != 0) {
+        unlink(out);
+        return -1;
+    }
     return 0;
 }
 
