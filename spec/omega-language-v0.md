@@ -109,7 +109,7 @@ single line starting `column N:` and leaves the session unchanged (graph, bindin
 | `fn` body constant > 0xFFFFFFFF | -2 | the builder loads immediates with MOVZ + one MOVK (32 bits); a wider constant would be silently truncated in the code while the contract text carried the full value |
 | recursion (`f` in `f`'s body) | -2 | not supported |
 | `result` in `requires`, other names in clauses, clause > 63 chars | -2 | the contract text field is 64 bytes; no silent truncation |
-| a different `fn` whose program id equals an existing program's | -2 | see identity laws: the program id does not cover the body |
+| a `fn` whose program id equals an existing program's but whose realization differs | -2 | internal builder-invariant violation (cannot happen from source since program identity v2; see identity laws) |
 | nesting > 32, > 256 tokens, > 128 nodes, graph full (256 objects), binding table full (64), program table full (16), > 32 fn steps | -3 | capacity |
 
 ## Identity laws (locked by tests + golden vectors)
@@ -122,13 +122,12 @@ single line starting `column N:` and leaves the session unchanged (graph, bindin
    VALUE id, and the second adds no object.
 4. Width is identity: `7: u32` and `7: u64` differ.
 5. Determinism: the same line lowered into two fresh graphs gives the same id.
-6. Programs: the parameter name, contract spacing/comments, literal spelling, and the side of a
-   commutative constant do not change the program id. The **fn name does** (the existing
-   `omega_program_compute_id` hashes the name, the contract type tags/widths, the two contract
-   constraint ids and the low bytes of `insn_count` and `latency_cycles`). It does **not** hash
-   the code: `x * 2 + 1` and `x * 3 + 1` under the same name and contract get the same id.
-   `omega_language_eval_line` therefore refuses a second, different program with an id already
-   present in the session; an identical program is reused (dedupe).
+6. Programs (program identity v2, `spec/program-identity.md`): the program id binds the canonical
+   semantic body and the contract. The parameter name, the **fn name**, contract spacing/comments,
+   literal spelling, and the side of a commutative constant do not change it; a different body
+   (`x + 1` vs `x + 2`) or a different contract always does. Redefining a name with a different
+   body adds a new program and rebinds the name; an identical program (under any name) is reused
+   (dedupe). Cost and realization code are not part of the id.
 
 Golden vectors (`tests/language/golden/v0.txt`): `kind<TAB>source<TAB>encoding_hex<TAB>id_hex`.
 `E` rows are the canonical encoding (`omega_canonical_encode`) of the root object in a fresh

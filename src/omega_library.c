@@ -173,6 +173,12 @@ int omega_library_insert(OmegaLibrary *lib, const OmegaProgram *prog,
         return -1;
     }
 
+    /* No identity (no semantic body): refuse (spec/program-identity.md 2.3) */
+    {
+        static const uint8_t zero[OMEGA_ID_BYTES];
+        if (memcmp(prog->program_id.bytes, zero, OMEGA_ID_BYTES) == 0) return -1;
+    }
+
     /* Duplicate check */
     if (omega_library_find_by_id(lib, &prog->program_id) != NULL) {
         return -1;

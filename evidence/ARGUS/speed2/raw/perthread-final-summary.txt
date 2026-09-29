@@ -1,0 +1,10 @@
+cfg	class	X925_Mcyc	A725_Mcyc	task-clock(main: ms, else ns)	ctxsw	migr
+0	main	57.58	22.36	15.62	881	1.5
+0	consumer	0.00	0.00	0.00	0	0.0
+0	workers	18.94	0.00	6785126.40	1880	12.5
+2i	main	60.05	30.57	16.40	913	1.8
+2i	consumer	0.02	13.34	5100597.87	224	1.1
+2i	workers	22.92	0.61	8221520.00	2175	13.5
+2in	main	60.43	29.05	16.47	831	2.3
+2in	consumer	7.82	0.00	2234140.80	220	15.2
+2in	workers	30.33	0.00	10625681.07	4044	20.2

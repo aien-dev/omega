@@ -436,18 +436,22 @@ static void test_programs(void) {
         CHECK(eval(&s, same[i], &r2, err) == 0, "'%s': %s", same[i], err);
         CHECK(ids_equal(&r.id, &r2.id), "'%s' has transform's program id", same[i]);
     }
+    /* Identity v2 (spec/program-identity.md): the fn name is metadata, not identity. */
     CHECK(eval(&s, "fn other(x: u64) -> u64 requires true ensures result >= 1 { x * 2 + 1 }", &r2, err) == 0 &&
-          !ids_equal(&r.id, &r2.id), "different fn name -> different program id (existing model hashes name)");
+          ids_equal(&r.id, &r2.id) && r2.program_index == r.program_index,
+          "different fn name, same body + contract -> same program id, table entry reused");
     CHECK(eval(&s, "fn transform(x: u64) -> u64 requires true ensures result >= 2 { x * 2 + 1 }", &r2, err) == 0 &&
           !ids_equal(&r.id, &r2.id), "different ensures -> different program id");
-    CHECK(s.program_count == 3, "identical fns reuse one table entry (%zu entries)", s.program_count);
-    /* The existing program_id does not hash the code: a different body with the same
-     * name + contract + cost would reuse the id. Lowering refuses that collision. */
+    CHECK(s.program_count == 2, "identical fns reuse one table entry (%zu entries)", s.program_count);
+    /* The program id binds the body: redefining a name with a different body gives a
+     * distinct id, adds the program and rebinds the name (no collision any more). */
     {
         size_t np = s.program_count;
         int rc = eval(&s, "fn transform(x: u64) -> u64 requires true ensures result >= 1 { x * 3 + 1 }", &r2, err);
-        CHECK(rc == -2 && strstr(err, "collision") && s.program_count == np,
-              "different body under the same program id is refused: %d %s", rc, err);
+        const VisorBinding *tb = visor_binding_get(&s, "transform");
+        CHECK(rc == 0 && !ids_equal(&r.id, &r2.id) && s.program_count == np + 1 &&
+              tb && ids_equal(&tb->id, &r2.id),
+              "different body under the same name and contract -> distinct id, name rebound: %d %s", rc, err);
     }
     CHECK(eval(&s, "fn m(x: u64) -> u64 { x & 0xff }", &r2, err) == 0, "fn without contract: %s", err);
     CHECK(strcmp(s.programs[r2.program_index].contract.precondition, "true") == 0 &&
@@ -500,7 +504,7 @@ static void test_programs(void) {
     CHECK(s.program_count == VISOR_MAX_PROGRAMS, "program table filled");
     CHECK(eval(&s, "fn fill0(x: u64) -> u64 { x + 0 }", &r2, err) == 0 && r2.program_index >= 0,
           "re-entering an existing program still works when the table is full: %s", err);
-    CHECK(eval(&s, "fn more(x: u64) -> u64 { x + 1 }", &r2, err) == -3, "program table full -> -3: %s", err);
+    CHECK(eval(&s, "fn more(x: u64) -> u64 { x + 1000 }", &r2, err) == -3, "program table full -> -3: %s", err);
     visor_session_destroy(&s);
 }
 

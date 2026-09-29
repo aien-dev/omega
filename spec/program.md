@@ -19,3 +19,8 @@ Milestone 8 introduces the first-class `OMEGA_PROGRAM` and `SYNTHESIS_TASK` obje
 - Intermediate types are unified: $\text{Type}(A_{\text{out}}) == \text{Type}(B_{\text{in}})$.
 - Costs compose monotonically: $\text{Cost}(C) = \text{Cost}(A) + \text{Cost}(B)$.
 - Lowering produces verified native AArch64 code verified through M7 tiers ($V_0, V_1, V_2$).
+
+---
+
+**Amendment (program identity v2):** `program_id` binds the canonical semantic body and the
+contract, not the name or cost. See `spec/program-identity.md`.

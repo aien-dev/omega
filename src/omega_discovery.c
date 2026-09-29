@@ -189,11 +189,19 @@ int omega_discover_abstractions(const OmegaCorpus *corpus, OmegaDiscoveryResult 
                     cand->abstraction.is_realized = true;
 
                     omega_compute_realization_id(&cand->abstraction.realization);
-                    omega_program_compute_id(&cand->abstraction);
+
+                    /* Identity binds the semantic body, not the code (spec/program-identity.md):
+                     * lift the slice back to a body. A slice that does not lift is not a
+                     * whole unary program: it gets no identity and is not verified. */
+                    bool lifted = omega_program_lift_body(cand->abstraction.realization.code_bytes,
+                                                          cand->abstraction.realization.code_len,
+                                                          &cand->abstraction.body) == 0;
+                    int idrc = omega_program_compute_id(&cand->abstraction);
 
                     /* Verify abstraction using M7 verification engine */
                     int vrc = omega_program_verify(&cand->abstraction, &cand->verify_report);
-                    cand->is_verified = (vrc == 0);
+                    cand->is_verified = (vrc == 0 && lifted && idrc == 0);
+                    if (!cand->is_verified) cand->abstraction.is_verified = false;
 
                     /* Compression Score Calculation:
                      * In each occurrence, L instructions are replaced with 1 sub-program reference (saving L - 1 insns).
@@ -238,6 +246,8 @@ int omega_refactor_program(const OmegaProgram *orig, const OmegaProgram *abstrac
     omega_program_init(out_refactored, ref_name);
 
     out_refactored->contract = orig->contract;
+    /* Meaning is preserved, so the body (and therefore the identity) is the original's. */
+    out_refactored->body = orig->body;
 
     /* Build refactored code:
      * In this implementation, the refactored program executes the abstraction followed by remainder.

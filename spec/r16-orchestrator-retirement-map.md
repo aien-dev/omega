@@ -237,6 +237,18 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | OM-122 | omega | `tools/omegatool.c` | 3899 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point. G5 still needs an explicit legacy name (W5) | `if (strcmp(argv[1], "--demonstrate-physics") == 0) {` |
 | OM-123 | omega | `tools/r15_reduce.c` | 82,102 | `jparse` | JSON parse in R15 reducer | R15 evidence reducer | D | false | evidence reduction tool, not on the production path | `for (;;) {` |
 | OM-124 | omega | `tools/r15_reduce.c` | 325 | `read_file` | file read in R15 reducer | R15 evidence reducer | D | false | evidence reduction tool, not on the production path | `while (1) {` |
+| OM-125 | omega | `src/runtime/rx_argus.c` | 435 | `merge` | ARGUS event stream merge | - | N | false | N: merge: event stream merge pass across producer rings without wait or hand-off | `for (;;) {` |
+| OM-126 | omega | `src/runtime/rx_argus.c` | 498 | `consumer_main` | ARGUS telemetry consumer thread | resident telemetry consumer | E | true | background consumer thread merges and drains telemetry event rings; physical telemetry worker, decides no faculty order | `while (!atomic_load_explicit(&g.stop, memory_order_acquire)) {` |
+| OM-127 | omega | `tests/runtime/rx_empirical_optimizer.c` | 264 | `cpu_busy` | test/benchmark loop (for:body:nanosleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (int s = 0; s < 2; s++) {` |
+| OM-128 | omega | `tests/runtime/rx_empirical_optimizer.c` | 874 | `judge` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (uint32_t k = 0; k < RX_CM_CORES; k++)` |
+| OM-129 | omega | `tests/runtime/rx_empirical_optimizer.c` | 875 | `judge` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (uint32_t i = 0; i < g_val.n[k]; i++) {` |
+| OM-130 | omega | `tests/runtime/rx_empirical_optimizer.c` | 1143 | `heldout` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (uint32_t i = 0; i < n; i++) {` |
+| OM-131 | omega | `tests/runtime/rx_empirical_optimizer.c` | 1282 | `judge_gate` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (uint32_t k = 0; k < RX_CM_CORES; k++) {` |
+| OM-132 | omega | `tests/runtime/rx_empirical_optimizer.c` | 1284 | `judge_gate` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (uint32_t d = 0; d < N_DIST; d++) {` |
+| OM-133 | omega | `tests/runtime/rx_empirical_optimizer.c` | 1401 | `write_receipt` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (uint32_t k = 0; k < RX_CM_CORES; k++) {` |
+| OM-134 | omega | `tests/runtime/rx_empirical_optimizer.c` | 1405 | `write_receipt` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (uint32_t d = 0; d < N_DIST; d++) {` |
+| OM-135 | omega | `tests/runtime/rx_empirical_optimizer.c` | 1520 | `main` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (uint32_t k = 0; k < RX_CM_CORES; k++) {` |
+| OM-136 | omega | `tests/runtime/rx_empirical_optimizer.c` | 1538 | `main` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (uint32_t d = 0; d < N_DIST; d++) {` |
 | SC-001 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/engine_max.rs` | 55 | `start` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < timeout {` |
 | SC-002 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 96 | `start` | test/benchmark loop (while:body:tick) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while !stop_clone.load(Ordering::Relaxed) {` |
 | SC-003 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 168 | `enforce_thermal_cooldown` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < max_wait {` |
@@ -443,21 +455,21 @@ Filled from the tool's JSON output on this map (§8).
 
 | repo | A | B | C | D | E | F | N | ? | loop/named/cli sites | manual rows |
 |---|---|---|---|---|---|---|---|---|---|---|
-| omega | 1 | 18 | 2 | 74 | 12 | 2 | 15 | 0 | 124 | 1 |
+| omega | 1 | 18 | 2 | 84 | 13 | 2 | 16 | 0 | 136 | 1 |
 | aien-sovereign-core | 14 | 5 | 0 | 40 | 11 | 18 | 2 | 0 | 90 | 1 |
 | aegis-runtime | 18 | 0 | 0 | 1 | 0 | 0 | 1 | 0 | 20 | 0 |
 | aienos | 0 | 0 | 0 | 12 | 8 | 1 | 11 | 0 | 32 | 1 |
 | physics | 0 | 1 | 0 | 2 | 1 | 0 | 1 | 0 | 5 | 0 |
 
 Manual rows: omega OM-M01 = A, sovereign-core SC-M01 = A, aienos AO-M01 = C.
-Total: 271 pattern sites + 3 manual rows; 0 unclassified; 0 questions remaining;
-30 class N data/control-flow idiom sites.
+Total: 283 pattern sites + 3 manual rows; 0 unclassified; 0 questions remaining;
+31 class N data/control-flow idiom sites.
 
 ## 8. Gate result on this map (R16-G2 tool, after W5 retirement)
 
 `make r16-inventory` -> exit 0, PASS:
 
-`sites=271 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
+`sites=283 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
 
 1. `question=0`: all 44 question rows are resolved and reclassified (§6).
 2. `a_reachable=0`: omegatool `--demonstrate-living-matvec` (OM-103 dispatcher line and

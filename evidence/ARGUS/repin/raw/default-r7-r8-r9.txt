@@ -1,0 +1,3 @@
+native authority matched the linux oracle, and the world checks the native view
+checks 116 failures 0
+generation barrier kept a single coherent generation through every injected stop
