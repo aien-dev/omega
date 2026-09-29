@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "turing.cal.void_receipt.v1",
+  "title": "Turing-profile-v1.0 void receipt",
+  "description": "Written by turing-cal-eval when any check refuses (the run is VOID, no verdict). File <out>/void_receipt_<n>.json, n = first free number, exclusive create, never overwritten. Refusal codes: calibration/docs/EVALUATOR.md section 3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "experiment", "kind", "dry_run", "created_utc", "step", "code", "reason"],
+  "properties": {
+    "schema": {"const": "turing.cal.void_receipt.v1"},
+    "experiment": {"const": "EXP-001"},
+    "kind": {"const": "void"},
+    "dry_run": {"type": "boolean"},
+    "created_utc": {"type": "string"},
+    "step": {"type": "string"},
+    "code": {"type": "string"},
+    "reason": {"type": "string"}
+  }
+}

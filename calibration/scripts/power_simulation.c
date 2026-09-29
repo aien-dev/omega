@@ -229,6 +229,16 @@ int main(int argc, char **argv) {
     static double tv[NFRAC][PS_BOOT], tvs[NFRAC][PS_BOOT], tvi[NFRAC][PS_BOOT], tmem[PS_BOOT], tms1[PS_BOOT];
     int pw_shift[NFRAC][PS_NMAX + 1], pw_infl[NFRAC][PS_NMAX + 1], pw_scale[NFRAC][PS_NMAX + 1], pos_shift[NFRAC][PS_NMAX + 1];
     int memok[PS_NMAX + 1], ms1ok[PS_NMAX + 1];
+    /* Protocol outputs (lab protocol, power simulation): false-positive rate at true T = 0, false-negative and
+     * INCONCLUSIVE rates and mean 95% interval width at the declared f_min. Computed from the same draws, so the
+     * numbers above are unchanged. */
+    static double tv0[PS_BOOT];
+    int fp0[PS_NMAX + 1], fn_min[PS_NMAX + 1], inc_min[PS_NMAX + 1];
+    double width_min[PS_NMAX + 1], f0n[PS_NMAX + 1];
+    memset(fp0, 0, sizeof fp0);
+    memset(fn_min, 0, sizeof fn_min);
+    memset(inc_min, 0, sizeof inc_min);
+    memset(width_min, 0, sizeof width_min);
     memset(pw_shift, 0, sizeof pw_shift);
     memset(pw_scale, 0, sizeof pw_scale);
     memset(pw_infl, 0, sizeof pw_infl);
@@ -239,6 +249,7 @@ int main(int argc, char **argv) {
     if (!world) return 2;
     for (int ns = 1; ns <= PS_NMAX; ++ns) {
         size_t W = (size_t)PS_CRUMBS_PER_SEED * (size_t)ns;
+        f0n[ns] = dl_mc / (gbar * (sum_n / (double)nc) * (double)W); /* effect fraction with expected T = 0 */
         for (int w = 0; w < PS_WORLDS; ++w) {
             for (size_t k = 0; k < W; ++k) world[k] = sm_index(nc);
             for (int b = 0; b < PS_BOOT; ++b) {
@@ -255,12 +266,15 @@ int main(int argc, char **argv) {
                     tvs[f][b] = FRAC[f] * g - dl_mc;
                     tvi[f][b] = FRAC[f] * gbar * n + PS_INFL * (g - gbar * n) - dl_mc;
                 }
+                tv0[b] = g - (1.0 - f0n[ns]) * gbar * n - dl_mc;
                 tmem[b] = gm - dl_mem;
                 tms1[b] = gs - dl_ms1;
             }
             qsort(tmem, PS_BOOT, sizeof(double), cmp_d);
             qsort(tms1, PS_BOOT, sizeof(double), cmp_d);
             int mem_below = tmem[hi] < 0, ms1_below = tms1[hi] < 0;
+            qsort(tv0, PS_BOOT, sizeof(double), cmp_d);
+            fp0[ns] += tv0[lo] > 0;
             memok[ns] += mem_below;
             ms1ok[ns] += ms1_below;
             for (size_t f = 0; f < NFRAC; ++f) {
@@ -271,6 +285,11 @@ int main(int argc, char **argv) {
                 pos_shift[f][ns] += tv[f][lo] > 0;
                 pw_shift[f][ns] += (tv[f][lo] > 0) && mem_below && ms1_below;
                 pw_scale[f][ns] += (tvs[f][lo] > 0) && mem_below && ms1_below;
+                if (f == F_MIN_IDX) {
+                    fn_min[ns] += tv[f][hi] < 0;
+                    inc_min[ns] += tv[f][lo] <= 0 && tv[f][hi] >= 0;
+                    width_min[ns] += tv[f][hi] - tv[f][lo];
+                }
             }
         }
     }
@@ -304,6 +323,12 @@ int main(int argc, char **argv) {
         for (int ns = 1; ns <= PS_NMAX; ++ns) printf("\t%.3f", (double)pw_infl[f][ns] / PS_WORLDS);
         printf("\n");
     }
+    printf("# S6 alone, shift model, by n: false-positive rate at true T = 0 (effect fraction f0 below); at f_min: FAIL rate (hi < 0), INCONCLUSIVE rate (interval contains 0), mean 95%% interval width in bits\n");
+    printf("n\tf0\tfalse_positive\tfail_at_fmin\tinconclusive_at_fmin\tmean_width_bits_at_fmin\n");
+    for (int ns = 1; ns <= PS_NMAX; ++ns)
+        printf("%d\t%.4f\t%.3f\t%.3f\t%.3f\t%.1f\n", ns, f0n[ns], (double)fp0[ns] / PS_WORLDS, (double)fn_min[ns] / PS_WORLDS,
+               (double)inc_min[ns] / PS_WORLDS, width_min[ns] / PS_WORLDS);
+    printf("simulation_code: calibration/scripts/power_simulation.c; its SHA-256 is pinned in candidate_manifest.json shared_background_sha256\n");
     for (int ns = 1; ns <= PS_NMAX; ++ns)
         if (chosen < 0 && pw_shift[F_MIN_IDX][ns] * 100 >= 95 * PS_WORLDS) chosen = ns;
     printf("declared_min_effect_f=%.3f declared_min_gain_per_event=%.6f bits\n", FRAC[F_MIN_IDX], FRAC[F_MIN_IDX] * gbar);

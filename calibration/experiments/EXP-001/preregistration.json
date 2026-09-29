@@ -116,11 +116,21 @@
     "S2": "freeze commit and frozen candidate manifest precede sealed data; overlap audit passes",
     "S3": "identical symbol stream digest for every candidate and coder",
     "S4": "per coder, every sealed file and crumb: |overhead_ub - 448000000| <= 64000000 + 1000 x N",
-    "S5": "no unexplained material reversal",
+    "S5": "no unexplained material reversal (FAILURE_REPORTING.md section 5): DL ordering reversal ideal vs coder explained iff |ideal DL gap| <= 2 x band(g); material T sign reversal ideal vs coder explained iff |T_ideal - T_coded| <= 2 x band(g); material T sign reversal group 1 vs group 2 never explained; band(g) = sum over files of (64000000 + 1000 x N_f) ub",
     "S6": "group 1: lower bound of T(M_candidate) > 0, ideal and both coders",
     "S7": "group 1: upper bound of T(M_mem) < 0 and of T(M_mem_seed1) < 0, ideal and both coders",
     "S8": "independent scorer reproduces every number exactly",
     "S9": "group 2: S6 and S7 hold"
+  },
+  "verdict_rule": {
+    "two_valued": ["S1", "S2", "S3", "S4", "S5", "S8"],
+    "three_valued": ["S6", "S7", "S9"],
+    "inconclusive_trigger": "S6: PASS if every lower bound > 0, FAIL if any upper bound < 0, else INCONCLUSIVE. S7: PASS if every upper bound (both memorizers) < 0, FAIL if any lower bound > 0, else INCONCLUSIVE. S9: worse of the S6 and S7 rules on group 2. Intervals: 95% percentile bootstrap of T vs B2, ideal and both coders.",
+    "not_reached": "a criterion that cannot be evaluated is NOT_REACHED and counts as FAIL",
+    "verdict": "FAIL if any criterion FAIL or NOT_REACHED; else INCONCLUSIVE if any INCONCLUSIVE; else PASS; a refused check makes the run VOID",
+    "dry_run_label": "DRY_RUN_NOT_EVIDENCE",
+    "inconclusive_is_final": true,
+    "document": "calibration/docs/FAILURE_REPORTING.md section 2"
   },
   "design": {
     "sealed_groups": 2,

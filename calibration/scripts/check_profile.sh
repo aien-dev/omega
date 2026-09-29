@@ -128,6 +128,16 @@ for k in coder_spec_path coder_tool coder_header_bits coder_overhead_definition 
     candidate_large_artifacts; do
     grep -q "^$k = " "$toml" || bad "integration field $k missing"
 done
+# 5c. calibration protocol field names (docs/turing/protocols calibration protocol lines 155-277), plus the verdict rule
+T="$dir/docs/turing/protocols/turing-instrument-calibration-validation-protocol-v1-0.tex"
+if [ -f "$T" ]; then
+    for k in $(awk 'NR>=155 && NR<=277' "$T" | grep -E '^[a-zA-Z_]+$'); do
+        grep -q "^$k = " "$toml" || bad "protocol field $k missing"
+    done
+else
+    bad "calibration protocol $T missing"
+fi
+grep -q "^verdict_inconclusive_trigger = " "$toml" || bad "verdict_inconclusive_trigger missing"
 spec="$dir/$(val coder_spec_path)"
 if [ -f "$spec" ]; then
     [ "$(val coder_spec_sha256)" = "$(sha256sum "$spec" | cut -c1-64)" ] || bad "coder_spec_sha256 != SHA-256 of $spec"

@@ -2,12 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "turing.cal.measurement_receipt.v1",
   "title": "Turing-profile-v1.0 measurement receipt",
-  "description": "One receipt per scored run (final, void or independent scorer). Integers are exact: ub = micro-bits (1 bit = 1000000 ub). No sealed data bytes appear in a receipt.",
+  "description": "One receipt per scored run: final (sealed), dry_run (development data, never evidence) or independent (lane D). A refused run writes a void receipt instead (void_receipt.schema.json). Written by turing-cal-eval (calibration/docs/EVALUATOR.md). Integers are exact: ub = micro-bits (1 bit = 1000000 ub). No sealed data bytes appear in a receipt.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "experiment", "kind", "verdict", "created_utc", "profile", "freeze", "runtime_sha256", "sealed", "groups", "criteria", "refusals", "deviations"],
+  "required": ["schema", "experiment", "kind", "EXP_001_COMPRESSION_BRIDGE", "verdict", "run_id", "created_utc", "started_utc", "scored_utc", "profile", "freeze", "roots", "runtime_sha256", "sealed", "groups", "criteria", "refusals", "deviations", "signed_by"],
   "definitions": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sha256_or_none": {"type": "string", "pattern": "^([0-9a-f]{64}|NONE)$"},
     "ub": {"type": "integer"},
     "interval": {
       "type": "object", "additionalProperties": false,
@@ -46,8 +47,13 @@
   "properties": {
     "schema": {"const": "turing.cal.measurement_receipt.v1"},
     "experiment": {"type": "string"},
-    "kind": {"enum": ["final", "void", "independent"]},
-    "verdict": {"enum": ["PASS", "FAIL", "VOID"]},
+    "kind": {"enum": ["final", "dry_run", "independent"]},
+    "EXP_001_COMPRESSION_BRIDGE": {"enum": ["PASS", "FAIL", "INCONCLUSIVE", "DRY_RUN_NOT_EVIDENCE"], "description": "The verdict for kind final; DRY_RUN_NOT_EVIDENCE for kind dry_run whatever the criteria say."},
+    "verdict": {"enum": ["PASS", "FAIL", "INCONCLUSIVE"], "description": "The verdict rule (FAILURE_REPORTING.md section 2) applied to the criteria; for a dry run it is informational only."},
+    "run_id": {"type": "string"},
+    "started_utc": {"type": "string"},
+    "scored_utc": {"type": "string"},
+    "signed_by": {"type": "string"},
     "created_utc": {"type": "string"},
     "profile": {
       "type": "object", "additionalProperties": false,
@@ -56,20 +62,36 @@
     },
     "freeze": {
       "type": "object", "additionalProperties": false,
-      "required": ["commit", "tree", "candidate_manifest_sha256", "preregistration_sha256"],
+      "required": ["commit", "status", "frozen_at", "candidate_manifest_sha256", "preregistration_sha256"],
       "properties": {
         "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-        "tree": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "status": {"enum": ["frozen", "draft"], "description": "draft only in a dry run"},
+        "frozen_at": {"type": "string", "description": "UTC from freeze_candidate.sh --freeze; NONE only in a dry run"},
         "candidate_manifest_sha256": {"$ref": "#/definitions/sha256"},
         "preregistration_sha256": {"$ref": "#/definitions/sha256"}
+      }
+    },
+    "roots": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidate_root", "dataset_root", "probability_root", "coding_root", "analysis_root"],
+      "properties": {
+        "candidate_root": {"$ref": "#/definitions/sha256"},
+        "dataset_root": {"$ref": "#/definitions/sha256"},
+        "probability_root": {"$ref": "#/definitions/sha256"},
+        "coding_root": {"$ref": "#/definitions/sha256"},
+        "analysis_root": {"$ref": "#/definitions/sha256"}
       }
     },
     "runtime_sha256": {"type": "object", "additionalProperties": {"$ref": "#/definitions/sha256"}},
     "sealed": {
       "type": "object", "additionalProperties": false,
-      "required": ["manifest_sha256", "complete_utc", "overlap_audit_pass"],
+      "required": ["dataset_id", "split", "dataset_manifest_sha256", "seed_commitment_sha256", "manifest_sha256", "complete_utc", "overlap_audit_pass"],
       "properties": {
-        "manifest_sha256": {"$ref": "#/definitions/sha256"},
+        "dataset_id": {"type": "string"},
+        "split": {"enum": ["sealed_test", "development"]},
+        "dataset_manifest_sha256": {"$ref": "#/definitions/sha256"},
+        "seed_commitment_sha256": {"$ref": "#/definitions/sha256_or_none"},
+        "manifest_sha256": {"$ref": "#/definitions/sha256_or_none"},
         "complete_utc": {"type": "string"},
         "overlap_audit_pass": {"type": "boolean"}
       }
@@ -94,7 +116,8 @@
     "criteria": {
       "type": "object", "additionalProperties": false,
       "required": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9"],
-      "patternProperties": {"^S[1-9]$": {"enum": ["PASS", "FAIL", "NOT_REACHED"]}}
+      "patternProperties": {"^S[1-9]$": {"enum": ["PASS", "FAIL", "INCONCLUSIVE", "NOT_REACHED", "NOT_CHECKED"]}},
+      "description": "INCONCLUSIVE only for S6, S7, S9; NOT_CHECKED only for S2 in a dry run; NOT_REACHED counts as FAIL"
     },
     "refusals": {"type": "array", "items": {"type": "object", "required": ["step", "code", "reason"], "properties": {"step": {"type": "string"}, "code": {"type": "string"}, "reason": {"type": "string"}}}},
     "deviations": {"type": "array", "items": {"type": "string"}},

@@ -3,13 +3,14 @@
 #
 #   sh calibration/scripts/runtime_digest.sh [--lines]
 #
-# The evaluator runtime is exactly these five binaries, built from the freeze commit (the crumbs binary is
+# The evaluator runtime is exactly these six binaries, built from the freeze commit (the crumbs binary is
 # prebuilt and pinned, never rebuilt):
 #   crumbline-learner       build/crumbline-learner                          (make crumbline-learner)
 #   crumbs                  ~/workspace/hive-worktrees/crumbs-v1/target/release/crumbs (or $TC_CRUMBS)
 #   turing-cal-candidates   build/turing-exp001-a/turing-cal-candidates      (make turing-exp001-a-build)
 #   turing-cal-overlap      build/turing-cal/turing-cal-overlap              (make turing-cal-overlap)
 #   turing-coder            build/tests-turing-exp001-b/turing-coder         (make turing-coder)
+#   turing-cal-eval         build/turing-exp001-eval/turing-cal-eval         (make turing-cal-eval)
 # Listing = one line per binary, '<sha256 of the file, 64 lowercase hex>  <name>' + LF, sorted by name
 # (byte order), exactly as above. runtime_digest = SHA-256 of the listing bytes, 64 lowercase hex.
 # --lines prints the listing instead of the digest. Refuses if any binary is missing, or if crumbs or the
@@ -27,7 +28,8 @@ list=$(
     for pair in "crumbline-learner:$out/crumbline-learner" "crumbs:$crumbs" \
         "turing-cal-candidates:$out/turing-exp001-a/turing-cal-candidates" \
         "turing-cal-overlap:$out/turing-cal/turing-cal-overlap" \
-        "turing-coder:$out/tests-turing-exp001-b/turing-coder"; do
+        "turing-coder:$out/tests-turing-exp001-b/turing-coder" \
+        "turing-cal-eval:$out/turing-exp001-eval/turing-cal-eval"; do
         n=${pair%%:*}; p=${pair#*:}
         [ -f "$p" ] || die "$n missing at $p"
         printf '%s  %s\n' "$(sha "$p")" "$n"

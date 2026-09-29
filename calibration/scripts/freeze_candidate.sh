@@ -57,6 +57,7 @@ sidec=""
     printf '{\n  "schema": "turing.cal.candidate_manifest.v1",\n'
     printf '  "experiment": "EXP-001",\n'
     printf '  "status": "%s",\n' "$([ "$freeze" = 1 ] && echo frozen || echo draft)"
+    [ "$freeze" = 1 ] && printf '  "frozen_at": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf '  "git_head": "%s",\n' "$head"
     printf '  "profile_path": "calibration/profiles/Turing-profile-v1.0.toml",\n'
     printf '  "profile_sha256": "%s",\n' "$psha"
@@ -94,7 +95,9 @@ sidec=""
         src/turing/ty_math.c src/turing/ty_math.h calibration/docs/MODEL_DESCRIPTION_ENCODING.md \
         calibration/docs/CODER_SPEC.md calibration/docs/UNCERTAINTY_PROTOCOL.md calibration/docs/FAILURE_REPORTING.md \
         calibration/docs/BLINDING_PROTOCOL.md calibration/preregistration/EXP-001.md \
-        calibration/experiments/EXP-001/preregistration.json calibration/profiles/Turing-profile-v1.0.toml; do
+        calibration/experiments/EXP-001/preregistration.json calibration/profiles/Turing-profile-v1.0.toml \
+        calibration/scripts/power_simulation.c calibration/experiments/EXP-001/power_simulation_output.txt \
+        calibration/docs/EVALUATOR.md tools/turing_cal_eval.c; do
         if [ -f "$dir/$p" ]; then h=$(sha256sum "$dir/$p" | cut -c1-64); else h="MISSING"; fi
         [ "$first" = 1 ] || printf ',\n'
         first=0
@@ -106,7 +109,7 @@ sidec=""
         printf '%s\n' "$rl" | sed 's/^\([0-9a-f]*\)  \(.*\)$/    "\2": "\1",/'
         printf '    "runtime_digest": "%s"' "$(printf '%s\n' "$rl" | sha256sum | cut -c1-64)"
     else
-        printf '    "runtime_digest": "not computed (build all five runtime binaries; see runtime_digest.sh)"'
+        printf '    "runtime_digest": "not computed (build all six runtime binaries; see runtime_digest.sh)"'
     fi
     printf '\n  }\n}\n'
 } > "$out.tmp"

@@ -64,6 +64,10 @@ are therefore paired.
 Sort the B values T_0..T_{B-1} ascending as int64. With lo = floor(B x 25 / 1000) = 250 and hi = B - 1 - lo = 9749
 (0-based), the 95% percentile interval is [T_(250), T_(9749)]. The point estimate is T on the unresampled pool.
 Reported bits values are ub / 1,000,000, printed with 6 decimals; the decision always uses the int64 ub values.
+How the interval decides S6, S7 and S9 (PASS, FAIL or INCONCLUSIVE) is fixed in FAILURE_REPORTING.md section 2 and
+prereg section 5a. Also reported, not used in any decision: the number of the B replicates with T_b > 0 for T_ideal
+against B2 (uncertainty.json `bootstrap_replicates_T_ideal_vs_B2_gt0`, out of 10000), the protocol's "probability
+that delta T > 0 under the bootstrap distribution".
 
 ## 7. Coded intervals
 
