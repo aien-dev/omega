@@ -606,7 +606,7 @@ static void test_e2e(void) {
               strstr(h.buf, "\xCE\xA9> run _\n[pure-execution]\n18\n") &&
               strstr(h.buf, "\xCE\xA9> run _ 5\n[pure-execution]\n11\n"), "e2e key values 18/u64/18/11");
         CHECK(strstr(h.buf, "  id           sha256:ffe7656dc91cf25a4aacfc005ffb643fa79f3fd8ce55d11420fd4982e9d0ff76\n") &&
-              strstr(h.buf, "  id           sha256:dfc4cb844da0044a4fe0c58c5ecd0b77d1ad04df3f3037609f8ed8581b058bff\n"),
+              strstr(h.buf, "  id           sha256:87c6fbd6d54c90525d018c65138314eb404cba4efa8d66d42dab17441e609ba6\n"),
               "e2e realization ids exact");
         CHECK(strstr(h.buf, "STRUCTURAL      PASS") && strstr(h.buf, "REALIZATION     PASS") &&
               strstr(h.buf, "AUTHORITY       PASS") && strstr(h.buf, "MACHINE         PASS") &&

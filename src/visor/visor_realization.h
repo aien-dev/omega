@@ -1,8 +1,8 @@
 /*
  * visor_realization.h -- Omega Visor V1, lane 5: realization lab.
  *
- * Wraps the EXISTING realizers (omega_realize_pure_binary, the realization a
- * program already carries, omega_synthesize_realization) and the machine
+ * Wraps the EXISTING realizers (omega_realize_pure_binary, omega_program_realize
+ * compiling the program body, omega_synthesize_realization) and the machine
  * estimate. Costs live in four separate slots and are never merged:
  * predicted (static), estimated (machine model), measured and qualified
  * (both ALWAYS absent in V1: no receipts are ingested).
@@ -72,7 +72,9 @@ int visor_realization_view(const VisorRealizationEntry *e, const OmegaMachineGra
 int visor_realization_cost(const VisorRealizationEntry *e, const OmegaMachineGraph *mg,
                            VisorCostView *out);
 /* Deterministic order: [0] direct@<mg>, [1] direct@<other canonical profile>,
- * [2] synth@<mg>, [3] synth@<other>. Synth entries are differentially checked
+ * [2] synth@<mg>, [3] synth@<other>. direct = omega_program_realize (canonical);
+ * synth = omega_synthesize_realization for that machine (verified against the
+ * semantic evaluator), additionally differentially checked
  * against the direct realization; mismatch => compatible=false, runnable=false. */
 int visor_realization_alternatives(const OmegaProgram *p, const OmegaMachineGraph *mg,
                                    VisorRealizationView *out, size_t max, size_t *count);

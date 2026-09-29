@@ -275,7 +275,7 @@ test-r12: $(RX_R12_TEST)
 RX_R10_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/runtime/rx_omega.c src/sha256.c src/omega_evidence.c \
 	src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
-	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c src/omega_program.c \
 	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	tests/runtime/rx_r10_omega.c
 RX_R10_TEST = $(OUT_DIR)/rx_r10_omega_test
@@ -308,7 +308,7 @@ test-r8: $(RX_R8_TEST)
 RX_R11_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/runtime/rx_omega.c src/sha256.c src/omega_evidence.c \
 	src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
-	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c src/omega_program.c \
 	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	tests/runtime/rx_r11_aien.c
 RX_R11_TEST = $(OUT_DIR)/rx_r11_aien_test
@@ -384,7 +384,7 @@ RX_R13_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
 	src/sha256.c src/omega_evidence.c src/omega_canonical.c \
 	src/omega_validate.c src/omega_core.c src/omega_codec.c \
 	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c \
-	src/omega_realize_synth.c src/omega_machine.c src/omega_exec.c \
+	src/omega_realize_synth.c src/omega_program.c src/omega_machine.c src/omega_exec.c \
 	src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	tests/runtime/rx_r13_living.c
 RX_R13_HOST = $(OUT_DIR)/rx_r13_living_host
@@ -731,7 +731,7 @@ test-costmodel: $(RX_CM_UNIT)
 # R9 barrier on the native authority, held-out workloads.
 RX_EMP_SRCS = src/runtime/rx_generation.c src/sha256.c src/omega_evidence.c \
 	src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
-	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c src/omega_program.c \
 	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	tests/runtime/rx_empirical_optimizer.c
 RX_EMP_TEST = $(OUT_DIR)/rx_empirical_optimizer_test

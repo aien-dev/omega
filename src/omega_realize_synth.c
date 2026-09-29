@@ -6,7 +6,8 @@
 #include "aarch64_decoder.h"
 #include <string.h>
 #include <stdio.h>
-#include <sys/mman.h>
+#include "omega_exec.h"
+#include "omega_canonical.h"
 
 void omega_realize_task_init(RealizationSynthesisTask *task,
                              const OmegaProgram *prog,
@@ -67,6 +68,108 @@ int omega_realize_compute_triple_id(const SemanticId *semantic_id,
     return 0;
 }
 
+/* ---- verification of a machine-bound realization against its program ------ */
+
+/* Deterministic xorshift64* seeded from the program id: same program, same inputs. */
+static uint64_t rng_next(uint64_t *s) {
+    uint64_t x = *s;
+    x ^= x >> 12; x ^= x << 25; x ^= x >> 27;
+    *s = x;
+    return x * 0x2545F4914F6CDD1Dull;
+}
+
+size_t omega_realize_differential_inputs(const OmegaProgram *prog, uint64_t *xs, size_t max) {
+    if (!prog || !xs || max < OMEGA_REALIZE_DIFF_INPUTS) return 0;
+    uint16_t w = prog->contract.input_width;
+    uint64_t mask = (w >= 64 || w == 0) ? ~0ull : ((1ull << w) - 1ull);
+    uint64_t top = (w >= 64 || w == 0) ? (1ull << 63) : (1ull << (w - 1));
+    const uint64_t fixed[] = { 0, 1, 2, 3, 5, 7, 10, 100, mask, mask - 1, mask - 2, top, top - 1, top + 1,
+                               0x5555555555555555ull & mask, 0xAAAAAAAAAAAAAAAAull & mask,
+                               0xFFFFull & mask, 0x10000ull & mask, 0xFFFFFFFFull & mask, 0x100000000ull & mask };
+    size_t n = 0;
+    for (size_t i = 0; i < sizeof fixed / sizeof fixed[0]; ++i) xs[n++] = fixed[i] & mask;
+    uint64_t s = 0x9E3779B97F4A7C15ull;
+    for (size_t i = 0; i < 8; ++i) s ^= (uint64_t)prog->program_id.bytes[i] << (8 * i);
+    if (!s) s = 1;
+    while (n < OMEGA_REALIZE_DIFF_INPUTS) xs[n++] = rng_next(&s) & mask;
+    return n;
+}
+
+int omega_realization_verify_program(const OmegaProgram *prog, const OmegaMachineGraph *mg,
+                                     const RealizationObject *real, uint32_t *out_checked,
+                                     char *why, size_t why_len) {
+    char tmp[256];
+    if (out_checked) *out_checked = 0;
+    if (!prog || !mg || !real) { if (why && why_len) snprintf(why, why_len, "bad arguments"); return -1; }
+    /* 1. semantic side: the program itself passes the V0 gate (id recomputed from the body) */
+    if (omega_program_realize_check(prog, NULL, tmp, sizeof tmp) != 0) {
+        if (why && why_len) snprintf(why, why_len, "program refused: %s", tmp);
+        return -1;
+    }
+    if (omega_compare_semantic_id(&real->semantic_id, &prog->program_id) != 0) {
+        if (why && why_len) snprintf(why, why_len, "SEMANTIC_ID of realization is not this program's id");
+        return -1;
+    }
+    /* 2. machine side: machine graph id is its own canonical id; realization bound to it */
+    OmegaMachineGraph mcopy = *mg;
+    if (omega_machine_compute_id(&mcopy) != 0 || omega_compare_semantic_id(&mcopy.machine_id, &mg->machine_id) != 0) {
+        if (why && why_len) snprintf(why, why_len, "machine graph id does not match its content");
+        return -1;
+    }
+    if (!real->has_machine_id || omega_compare_semantic_id(&real->machine_id, &mg->machine_id) != 0) {
+        if (why && why_len) snprintf(why, why_len, "MACHINE_ID of realization is not this machine's id");
+        return -1;
+    }
+    if (real->target_profile != mg->target_profile) {
+        if (why && why_len) snprintf(why, why_len, "realization profile differs from machine profile");
+        return -1;
+    }
+    /* 3. triple binding + structure (V0 recomputes the triple id over the code bytes) */
+    VerifyReport rep;
+    memset(&rep, 0, sizeof rep);
+    if (omega_verify_v0_structural(NULL, real, &rep) != 0 || !rep.passed) {
+        if (why && why_len) snprintf(why, why_len, "%.200s", rep.error_detail);
+        return -1;
+    }
+    /* 4. differential: native execution of the bytes == independent semantic evaluator */
+    uint64_t xs[OMEGA_REALIZE_DIFF_INPUTS], ys[OMEGA_REALIZE_DIFF_INPUTS];
+    size_t n = omega_realize_differential_inputs(prog, xs, OMEGA_REALIZE_DIFF_INPUTS);
+    if (n == 0 || omega_program_eval(prog, xs, n, ys) != 0) {
+        if (why && why_len) snprintf(why, why_len, "semantic evaluator refused the program");
+        return -1;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        uint64_t got = 0;
+        int rc = omega_exec_native_f3(real, xs[i], 0, 0, &got);
+        if (rc == -2) {
+            if (why && why_len) snprintf(why, why_len, "not verifiable here: native differential needs an AArch64 host");
+            return -3;
+        }
+        if (rc != 0) {
+            if (why && why_len) snprintf(why, why_len, "native execution failed");
+            return -1;
+        }
+        if (got != ys[i]) {
+            if (why && why_len)
+                snprintf(why, why_len, "differential MISMATCH x=0x%llx: semantic=0x%llx native=0x%llx",
+                         (unsigned long long)xs[i], (unsigned long long)ys[i], (unsigned long long)got);
+            return -1;
+        }
+        if (out_checked) (*out_checked)++;
+    }
+    if (why && why_len) why[0] = '\0';
+    return 0;
+}
+
+/* ---- G_S x G_M -> G_R: compile the actual program for the machine --------- */
+
+OmegaRealizeSchedule omega_realize_choose_schedule(const OmegaMachineGraph *mg) {
+    /* MachineGraph chooses the schedule only; both schedules compute the same function
+     * (checked by the differential). Wide issue + enough registers: preload constants. */
+    if (mg && mg->pipeline.issue_width >= 4 && mg->registers.gpr_count >= 16) return OMEGA_SCHED_PRELOAD;
+    return OMEGA_SCHED_SEQUENTIAL;
+}
+
 int omega_synthesize_realization(const RealizationSynthesisTask *task,
                                  RealizationSynthesisResult *result) {
     if (!task || !task->program || !task->machine || !result) return -1;
@@ -75,107 +178,49 @@ int omega_synthesize_realization(const RealizationSynthesisTask *task,
     const OmegaProgram *prog = task->program;
     const OmegaMachineGraph *mg = task->machine;
 
-    result->realization.semantic_id = prog->program_id;
-    result->realization.machine_id = mg->machine_id;
-    result->realization.has_machine_id = true;
-    result->realization.target_profile = mg->target_profile;
-    result->realization.entry_offset = 0;
-
-    uint8_t *code = result->realization.code_bytes;
-    size_t pos = 0;
-    size_t max_len = sizeof(result->realization.code_bytes);
-
-    /* Machine-Aware Scheduling Strategy:
-     * If target machine has issue_width >= 4 and multiple ALU units (e.g. DGX Spark Neoverse V2):
-     * Synthesize multi-issue schedule with pre-loaded independent register operands to eliminate pipeline bubbles.
-     * If target machine has issue_width < 4 (e.g. QEMU generic):
-     * Synthesize minimal register-pressure sequential schedule.
-     */
-    if (mg->pipeline.issue_width >= 4) {
-        /* DGX Spark 4-wide dispatch schedule for canonical affine: f(x) = 3x - 2
-         * Dual-issue pre-load:
-         * 1. MOVZ X1, 3  (port 0 ALU)
-         * 2. MOVZ X2, 2  (port 1 ALU)
-         * 3. MUL X0, X0, X1 (multiplier)
-         * 4. SUB X0, X0, X2 (subtraction on pre-loaded X2 without anti-dependency)
-         * 5. RET
-         */
-        aarch64_emit_movz(code, &pos, max_len, true, REG_X1, 3, 0);
-        aarch64_emit_movz(code, &pos, max_len, true, REG_X2, 2, 0);
-        aarch64_emit_mul_reg(code, &pos, max_len, true, REG_X0, REG_X0, REG_X1);
-        aarch64_emit_sub_reg(code, &pos, max_len, true, REG_X0, REG_X0, REG_X2);
-        aarch64_emit_ret(code, &pos, max_len);
-    } else {
-        /* QEMU 2-wide sequential schedule:
-         * 1. MOVZ X1, 3
-         * 2. MUL X0, X0, X1
-         * 3. MOVZ X1, 2
-         * 4. SUB X0, X0, X1
-         * 5. RET
-         */
-        aarch64_emit_movz(code, &pos, max_len, true, REG_X1, 3, 0);
-        aarch64_emit_mul_reg(code, &pos, max_len, true, REG_X0, REG_X0, REG_X1);
-        aarch64_emit_movz(code, &pos, max_len, true, REG_X1, 2, 0);
-        aarch64_emit_sub_reg(code, &pos, max_len, true, REG_X0, REG_X0, REG_X1);
-        aarch64_emit_ret(code, &pos, max_len);
+    /* 1. canonical program -> verified semantic operation sequence (fail closed) */
+    uint16_t width = 0;
+    if (omega_program_realize_check(prog, &width, result->why, sizeof result->why) != 0) return -2;
+    if (mg->target_profile != AARCH64_PROFILE_V8A_BAREMETAL) {
+        snprintf(result->why, sizeof result->why, "machine profile 0x%02x is not the V0 AArch64 target",
+                 (unsigned)mg->target_profile);
+        return -2;
     }
 
-    result->realization.code_len = pos;
-    result->code_bytes_len = (uint32_t)pos;
+    /* 2. machine-aware planning (schedule choice only) */
+    result->schedule = omega_realize_choose_schedule(mg);
 
-    /* Compute Triple Binding Identity */
-    omega_realize_compute_triple_id(&prog->program_id, &mg->machine_id,
-                                    &result->realization, &result->realization_id);
-    result->realization.realization_id = result->realization_id;
-    result->realization.has_id = true;
-
-    /* Estimate cycle latency on target machine hardware */
-    result->estimated_cycles = omega_machine_estimate_latency(mg, &result->realization);
-
-    /* Mandatory M7 Verification Ladder */
-    VerifyReport rep;
-    memset(&rep, 0, sizeof(rep));
-    omega_verify_v0_structural(NULL, &result->realization, &rep);
-    if (!rep.passed) {
-        result->verify_report = rep;
-        return -1;
+    /* 3. target realization (AArch64 V0) through the one encoder */
+    RealizationObject *r = &result->realization;
+    size_t len = 0;
+    if (omega_program_emit_schedule(&prog->body, width, result->schedule, r->code_bytes, &len,
+                                    sizeof r->code_bytes) != 0) {
+        snprintf(result->why, sizeof result->why, "emitter refused the body (code buffer or encoding)");
+        return -2;
     }
+    r->code_len = len;
+    r->semantic_id = prog->program_id;
+    r->machine_id = mg->machine_id;
+    r->has_machine_id = true;
+    r->target_profile = mg->target_profile;
+    r->entry_offset = 0;
+    result->code_bytes_len = (uint32_t)len;
 
-    /* V1: Differential verification against semantic evaluation */
-    static const uint64_t test_inputs[] = { 0, 1, 2, 5, 10, 50, 100 };
-    for (size_t i = 0; i < 7; ++i) {
-        uint64_t x = test_inputs[i];
-        uint64_t y_expected = (3 * x) - 2;
+    /* 4. RealizationId = triple(SEMANTIC_ID, MACHINE_ID, code) */
+    omega_realize_compute_triple_id(&prog->program_id, &mg->machine_id, r, &result->realization_id);
+    r->realization_id = result->realization_id;
+    r->has_id = true;
+    result->estimated_cycles = omega_machine_estimate_latency(mg, r);
 
-        /* Native execution */
-        typedef uint64_t (*func_u64)(uint64_t);
-        void *exec_mem = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
-                              MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-        if (exec_mem != MAP_FAILED) {
-            memcpy(exec_mem, result->realization.code_bytes, result->realization.code_len);
-            __builtin___clear_cache((char*)exec_mem, (char*)exec_mem + result->realization.code_len);
-            if (mprotect(exec_mem, 4096, PROT_READ | PROT_EXEC) == 0) {
-                union {
-                    void *ptr;
-                    func_u64 fn;
-                } u;
-                u.ptr = exec_mem;
-                uint64_t y_observed = u.fn(x);
-                munmap(exec_mem, 4096);
-
-                if (y_observed != y_expected) {
-                    result->verify_report.passed = false;
-                    return -1;
-                }
-            } else {
-                munmap(exec_mem, 4096);
-            }
-        }
+    /* 5. verification: bindings + structure + differential vs the semantic evaluator */
+    int vrc = omega_realization_verify_program(prog, mg, r, &result->inputs_checked, result->why, sizeof result->why);
+    memset(&result->verify_report, 0, sizeof result->verify_report);
+    if (vrc != 0) {
+        result->verify_report.passed = false;
+        snprintf(result->verify_report.error_detail, sizeof result->verify_report.error_detail, "%.200s", result->why);
+        return vrc == -3 ? -3 : -1;
     }
-
-    /* V2: Properties */
-    omega_verify_v2_properties(NULL, &result->realization, &result->verify_report);
-
+    omega_verify_v2_properties(NULL, r, &result->verify_report);
     result->solved = result->verify_report.passed;
     return result->solved ? 0 : -1;
 }

@@ -67,9 +67,9 @@ fn transform: u64 -> u64
 Ω> realize transform
 [pure-execution]
 realization
-  id           sha256:dfc4cb844da0044a4fe0c58c5ecd0b77d1ad04df3f3037609f8ed8581b058bff
+  id           sha256:87c6fbd6d54c90525d018c65138314eb404cba4efa8d66d42dab17441e609ba6
   subject      sha256:83bd39597742d3bb83e5140c662532c0a2ecb59e5f868e38be16276981644543
-  realized     none
+  realized     sha256:83bd39597742d3bb83e5140c662532c0a2ecb59e5f868e38be16276981644543
 <host machine line: host-dependent, masked>
   bound        none
   target       aarch64-v8a profile=0x01
@@ -94,4 +94,4 @@ cost (four separate classes; never merged)
 x  object  sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
 y  object  sha256:745f463215c5d2c0a03509b2ce1f7c3f2f393c6cd00d3add00fe79c4720669c2
 transform  program  sha256:83bd39597742d3bb83e5140c662532c0a2ecb59e5f868e38be16276981644543
-_  realization  sha256:dfc4cb844da0044a4fe0c58c5ecd0b77d1ad04df3f3037609f8ed8581b058bff
+_  realization  sha256:87c6fbd6d54c90525d018c65138314eb404cba4efa8d66d42dab17441e609ba6
