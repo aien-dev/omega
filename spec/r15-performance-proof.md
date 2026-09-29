@@ -195,10 +195,13 @@ starts. Reported separately: host enqueue/claim time, GPU execution time,
 publication time, dependent wake time, end to end.
 
 **CPU↔GPU synchronization** is counted by instrumentation: claim notices
-written (doorbell/ring store), completion notices taken, host polls that found
-nothing (channel waits), host blocking waits (SEQ), fences (the seat's
-`MEMBAR.SC.SYS` per result, counted per completion), explicit barriers
-(`rx_world_wait_quiescent`, seat hold). Per GPU result.
+written (doorbell/ring store), completion notices taken, host blocking waits
+(SEQ), fences (the seat's `MEMBAR.SC.SYS` per result, counted per
+completion), explicit barriers (`rx_world_wait_quiescent`, seat hold). Per
+GPU result. Host polls that found nothing (channel waits) are NOT
+synchronization events; they are reported separately as **host spin cost**
+(empty polls per GPU result, both configurations, not gated). See amendment
+A1 (§21).
 
 Also: serialization/copy bytes on the rings (descriptor bytes) and the
 coherent projection; claim-ring occupancy (max and mean in-flight); GPU
@@ -243,7 +246,9 @@ amplification, wasted reactions, invalidation and conflict rates.
 7. **Serialization bytes**: instrumented, never inferred: snapshot bytes
    copied into `RxCtx`, crumb bytes appended, coherent-projection bytes
    written, ring descriptor bytes, R9 bytes written. Per operation.
-8. **CPU↔GPU synchronization count**: L2 definition, per GPU result.
+8. **CPU↔GPU synchronization count**: L2 definition (synchronization
+   events, amendment A1), per GPU result; host spin cost (empty polls per
+   GPU result) reported alongside, not gated.
 9. **Memory traffic**: ARM PMU per-thread counters inherited by all threads
    of the process, over each window: `ll_cache_miss_rd` (last-level read
    misses; × 64 B = DRAM read bytes, derivation stated), `bus_access`
@@ -362,6 +367,16 @@ recorded in a new commit to this section before qualification.
 
 ## 11. Acceptance criteria (gated)
 
+> **Amendment A1 (2026-09-28, after qualification attempt 1, decided by
+> Drake): G10 changed.** G10 now counts CPU↔GPU synchronization EVENTS per
+> GPU result (claim notices, completion notices, fences, explicit barriers,
+> host blocking waits); empty completion polls are excluded from the gate
+> and reported, not gated, as "host spin cost: empty polls per GPU result"
+> for both configurations. Why, what the data showed, and the limit (a
+> multi-claim-in-flight phase, Option B, is deferred to a later gate) are in
+> §21. Attempt 1 (run 20260929T020536Z-ad8e1f2ea4e4-silicon) stays FAIL as
+> recorded; the whole qualification is rerun under this amendment.
+
 Budgets are justified by the production goal (a steady matvec service that
 must keep serving while the organism adapts), by the measured legacy dispatch
 units already in evidence (R8: legacy `spark-aegis` process-spawn floor
@@ -379,7 +394,7 @@ the ADR requirement that evidence and authority stay on.
 | G7 | Generation barrier (L1-G and per-trial promotion) | production commits during the barrier in ≥ 90% of barriers; barrier latency p99 ≤ 500 ms | promotion must not be a global stop; durable flip at human scale |
 | G8 | Causal evidence overhead, AFTER throughput RES-1 / RES-1-NODIGEST | median ≥ 0.50 | evidence may not cost more than the work it witnesses |
 | G9 | Energy per production operation, AFTER window, RES-1 / SEQ (package, net) | median paired ratio ≤ 1.15 and 95% CI upper bound ≤ 1.25 | mechanism cost must be visible in energy and bounded like G2 |
-| G10 | CPU↔GPU synchronizations per GPU result (L2), RES-1 vs SEQ | RES-1 ≤ SEQ | dependency-driven completion must not need more synchronization than a central wait |
+| G10 | CPU↔GPU synchronization EVENTS per GPU result (L2), RES-1 vs SEQ: claim notices, completion notices, fences, explicit barriers, host blocking waits; empty polls excluded (amendment A1, §21) | RES-1 ≤ SEQ | dependency-driven completion must not need more synchronization than a central wait |
 | G11 | Adaptation amortizes (L3, RES-4) | median crossover ≤ 10,000,000 production operations | an adaptation that does not repay its cost within the order of minutes of production at the measured rate is not accepted |
 | G12 | Wake amplification, ADAPT+AFTER, RES-4 vs SEQ | RES-4 wake attempts per consequential stimulus ≤ SEQ readiness polls per consequential stimulus | the dependency index must do less wake work than polling |
 | G13 | Wasted reactions per consequential stimulus, RES-1 vs SEQ | median ratio ≤ 1.10 | reactions may not waste more activations than the same stages driven centrally |
@@ -389,7 +404,8 @@ the ADR requirement that evidence and authority stay on.
 
 Reported, not gated (must be present): propagation cost by fanout, scheduler
 CPU/wall split, publication cost, serialization bytes, memory traffic,
-resource utilization, invalidation rate, BEFORE-window comparisons, RES-4 vs
+resource utilization, invalidation rate, host spin cost (L2 empty polls per
+GPU result, RES-1 and SEQ, amendment A1), BEFORE-window comparisons, RES-4 vs
 RES-1, GPU-domain energy, episodes per hour, crossover in seconds.
 
 The architecture need not win every microbenchmark. Any metric where the
@@ -753,3 +769,54 @@ result is reinterpreted; practice runs are not qualification data.
   executor, no deferral and still pauses production for the whole barrier.
   With the executor disabled the RES-1 checks fail (0 commits in the
   barrier).
+
+## 21. Amendment A1: G10 counts synchronization events (2026-09-28, after attempt 1)
+
+This is a change to a gated criterion, made after qualification data
+existed, so per the status line at the top it is recorded here and the
+whole qualification is rerun.
+
+**What changed.** G10 was "CPU↔GPU synchronizations per GPU result, RES-1
+≤ SEQ", where the count included host completion polls that found nothing.
+G10 is now "CPU↔GPU synchronization EVENTS per GPU result (claim notices,
+completion notices, fences, explicit barriers, host blocking waits; empty
+polls excluded), RES-1 ≤ SEQ". A new reported, not gated, metric "host spin
+cost: empty polls per GPU result" is produced for both RES-1 and SEQ
+(`host_spin_empty_polls_per_gpu_result_median` in `m8_cpu_gpu`), so the
+spinning stays visible. `tools/r15_reduce.c` implements both.
+
+**Why (attempt-1 data, run 20260929T020536Z-ad8e1f2ea4e4-silicon).** G10
+failed, RES-1 80.8 vs SEQ 61.6 per result. Claims and results were fixed at
+256 on both sides; all of the difference was `gpu_polls_empty` (RES-1
+8.2k–24.8k, SEQ 12.7k–29.4k over 5 runs; the ranges overlap; practice-2 on
+the same commit gave 40 vs 104, the other way round). The spin rate varied
+about 6× (193–1242 empty polls per ms of GPU wait) with identical clocks
+(2.808 / 3.9 GHz), temperatures and flat GPU execution time (73–75 µs on
+the chip clock). Profiling showed both configurations spin: RES-1 polls
+once per ring scan, SEQ counts one host wait per result and then spin-polls
+the same progress routine; it does not block. L2 keeps exactly one claim in
+flight, so results per wake = 1 on both sides by construction. The old
+count therefore measured how long the host waited times how fast it spun,
+not how many times CPU and GPU had to synchronize. Counted as events, the
+structure is RES-1 3.0 (claim + completion + fence) vs SEQ 4.0 (the same
+plus one host blocking wait) per result. Re-reducing attempt 1 with this
+reducer gives G10 3.0 vs 4.0 and host spin 77.8 vs 57.6 empty polls per
+result; attempt 1 is not relabelled and stays FAIL (it also had a blank
+aienos commit).
+
+**Explicit barriers.** The L2 rig calls `rx_world_wait_quiescent` once per
+claim in both configurations to pace the benchmark; it is identical on both
+sides (one per result) and is not an engine synchronization, so the
+counters do not include it. Counting it would add 1.0 to both sides and
+not change the comparison.
+
+**Decided by** Drake (owner), 2026-09-28 22:40 CDT, Option A of three (A:
+this amendment; B: A plus a new multi-claim phase; C: keep G10 unchanged,
+for which no legitimate code fix exists: slowing the poll loop would be
+gaming).
+
+**Stated limit.** With one claim in flight, G10 cannot show the resident
+path's intended advantage (one scan covering many completions). A
+multi-claim-in-flight L2 phase (N > 1, e.g. 16, Option B) is deferred to a
+later gate and is listed in the receipt's limits. Empty-poll spin cost is
+a known host-side cost of both paths and is not claimed to be small.

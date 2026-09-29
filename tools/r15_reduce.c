@@ -977,11 +977,11 @@ int main(int argc, char **argv) {
     o_str("chip_transferred_bytes", "derived: claims x 128 B descriptor read + results x 128 B written + per-claim window/heartbeat bytes (see receipt)");
     o_close('}');
     /* L2 */
-    double sync_med[2] = {NAN, NAN};
+    double sync_med[2] = {NAN, NAN}, spin_med[2] = {NAN, NAN};
     o_open("m8_cpu_gpu", '{');
     for (int c = 0; c < 2; c++) {
         const char *cfg = cfgs[c + 1];
-        Vd syn = {0};
+        Vd syn = {0}, spin = {0};
         Vu e2e = {0}, gpu = {0}, enq = {0}, pub = {0}, dep = {0};
         int runs = 0, failed = 0;
         for (int i = 0; i < g_nl2; i++) {
@@ -991,8 +991,11 @@ int main(int argc, char **argv) {
             if (l->exit_code != 0) failed++;
             const J *w = l->window;
             double res = stat(w, "gpu_results_taken");
-            double s = stat(w, "resident_claims") + 2 * res + stat(w, "gpu_polls_empty") + stat(w, "gpu_host_waits");
+            /* Amendment A1 (G10, Drake 2026-09-28): synchronization EVENTS only. Empty
+             * completion polls are host spin cost, reported below, not gated. */
+            double s = stat(w, "resident_claims") + 2 * res + stat(w, "gpu_host_waits");
             if (res > 0) vd_push(&syn, s / res);
+            if (res > 0) vd_push(&spin, stat(w, "gpu_polls_empty") / res);
             for (size_t j = 0; j < l->e2e.n; j++) vu_push(&e2e, l->e2e.v[j]);
             for (size_t j = 0; j < l->gpu.n; j++) vu_push(&gpu, l->gpu.v[j]);
             for (size_t j = 0; j < l->enq.n; j++) vu_push(&enq, l->enq.v[j]);
@@ -1000,11 +1003,14 @@ int main(int argc, char **argv) {
             for (size_t j = 0; j < l->dep.n; j++) vu_push(&dep, l->dep.v[j]);
         }
         sync_med[c] = median_d(syn.v, syn.n);
+        spin_med[c] = median_d(spin.v, spin.n);
         o_open(cfg, '{');
         o_num("runs", runs);
         o_num("runs_failed", failed);
         o_num("syncs_per_gpu_result_median", sync_med[c]);
-        o_str("sync_definition", "claim notices + completion notices taken + seat fences (1 per result) + empty completion polls + host blocking waits, per result");
+        o_str("sync_definition", "synchronization events per result (spec amendment A1): claim notices + completion notices taken + seat fences (1 per result) + host blocking waits; empty completion polls excluded");
+        o_num("host_spin_empty_polls_per_gpu_result_median", spin_med[c]);
+        o_str("host_spin_definition", "reported, not gated (amendment A1): host completion polls that found nothing, per GPU result");
         o_pct("enqueue_ns", pct_of(&enq));
         o_pct("gpu_exec_ns_chip_clock", pct_of(&gpu));
         o_pct("completion_publication_ns", pct_of(&pub));
@@ -1012,7 +1018,7 @@ int main(int argc, char **argv) {
         o_pct("end_to_end_ns", pct_of(&e2e));
         o_close('}');
         if (syn.n) have[8] = 1;
-        free(syn.v); free(e2e.v); free(gpu.v); free(enq.v); free(pub.v); free(dep.v);
+        free(syn.v); free(spin.v); free(e2e.v); free(gpu.v); free(enq.v); free(pub.v); free(dep.v);
     }
     o_close('}');
     /* m9 memory traffic, AFTER per op */
@@ -1219,8 +1225,8 @@ int main(int argc, char **argv) {
     snprintf(note, sizeof note, "%zu valid pairs", c_energy.n);
     gate(8, "G9", "energy per op AFTER RES-1/SEQ (package, net)", "median <= 1.15 and CI hi <= 1.25",
          c_energy.med, c_energy.n >= 10 && c_energy.med <= 1.15 && c_energy.hi <= 1.25, note);
-    snprintf(note, sizeof note, "RES-1 %.3f, SEQ %.3f per result", sync_med[0], sync_med[1]);
-    gate(9, "G10", "CPU-GPU syncs per GPU result", "RES-1 <= SEQ", sync_med[0],
+    snprintf(note, sizeof note, "RES-1 %.3f, SEQ %.3f sync events per result (host spin, not gated: RES-1 %.1f, SEQ %.1f empty polls per result)", sync_med[0], sync_med[1], spin_med[0], spin_med[1]);
+    gate(9, "G10", "CPU-GPU synchronization events per GPU result (amendment A1)", "RES-1 <= SEQ", sync_med[0],
          !isnan(sync_med[0]) && !isnan(sync_med[1]) && sync_med[0] <= sync_med[1], note);
     size_t nco;
     double co = med_of("RES-4", crossover_ops, &nco);
