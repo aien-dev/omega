@@ -3,6 +3,7 @@
 # Counters are counted, not sampled (period 1e12), plus one 2 ms cpu-clock sampler so
 # perf report has samples. Per-thread totals via `perf record -s` + `perf report -T`,
 # classified by r8_perthread.awk. pmu1 = X925 PMU, pmu0 = A725 PMU on the GB10.
+# CFGS (env): configs, default "0 2d 2i"; 2in = ingest with the consumer unpinned.
 # Usage: r8_perthread.sh BUILD_DIR CPUS ROUNDS WORKDIR > out.jsonl   (under the bench flock)
 set -u
 D=$(realpath "${1:-build}"); CPUS=${2:-5-9,15-19}; ROUNDS=${3:-20}; W=${4:-.}
@@ -15,6 +16,7 @@ for r in $(seq 1 "$ROUNDS"); do
       0) b=$D/argus0/rx_r8_aegis_test; env=();;
       2d) b=$D/argus2/rx_r8_aegis_test; env=(RX_ARGUS_CONSUMER=discard);;
       2i) b=$D/argus2/rx_r8_aegis_test; env=(RX_ARGUS_CONSUMER=ingest);;
+      2in) b=$D/argus2/rx_r8_aegis_test; env=(RX_ARGUS_CONSUMER=ingest RX_ARGUS_CONSUMER_CPU=none);;
     esac
     t0=$(date +%s%N)
     env "${env[@]}" perf record -q -s -c 1000000000000 -e "$EV" -o pt.data -- taskset -c "$CPUS" "$b" >pt.log 2>&1
