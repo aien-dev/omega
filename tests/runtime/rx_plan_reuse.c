@@ -1171,8 +1171,11 @@ static void json_series(FILE *fp, const char *key, const Series *s) {
 static void write_receipt(void) {
     Gates G = gates();
     char path[512];
-    if (omega_evidence_path("PLAN_REUSE/rx_plan_reuse_receipt.json", path, sizeof path) != 0) return;
-    FILE *fp = fopen(path, "w");
+    /* Built in memory, then stored under its content address, so a later
+     * run can never overwrite this receipt. */
+    char *rbuf = NULL;
+    size_t rlen = 0;
+    FILE *fp = open_memstream(&rbuf, &rlen);
     if (!fp) return;
     char commit[41];
     memset(commit, 0, sizeof commit);
@@ -1282,8 +1285,15 @@ static void write_receipt(void) {
                 "\"durable template storage (R9)\", \"graphics-processor execution\", "
                 "\"cognition reading the World through capabilities (the cache reads a host projection; "
                 "execution is capability-checked)\", \"templates above 8 slots or 64 graph nodes\"]\n  }\n}\n");
-    fclose(fp);
-    printf("receipt: %s\n", path);
+    int wrc = fclose(fp) == 0 ? omega_evidence_write_digest("PLAN_REUSE/rx_plan_reuse_receipt",
+                                                            "json", rbuf, rlen, path, sizeof path)
+                              : -1;
+    free(rbuf);
+    if (wrc < 0) {
+        printf("receipt: not written\n");
+        return;
+    }
+    printf("receipt: %s%s\n", path, wrc == 1 ? " (identical receipt already recorded)" : "");
     printf("OMEGA_PLAN_REUSE_PASS: %s (G1 %s, G2 %s, G3 %s, G4 %s, G5 %s, G6 %s)\n", G.pass ? "PASS" : "FAIL",
            g1 ? "PASS" : "FAIL", g2 ? "PASS" : "FAIL", g3 ? "PASS" : "FAIL", g4 ? "PASS" : "FAIL",
            g5 ? "PASS" : "FAIL", g6 ? "PASS" : "FAIL");

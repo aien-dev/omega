@@ -8,14 +8,17 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define ROOT_BYTES 512
 #define ROOT_SUM   480
+#define ROOT_AUTH_GEN_HI 432   /* after the excluded ids, before the sum */
 #define PTR_BYTES  128
 #define PTR_SUM    96
 #define JRN_BYTES  128
@@ -49,7 +52,7 @@ typedef struct {
     uint32_t state;
     uint32_t n_objects;
     uint64_t authority_epoch;
-    uint32_t authority_generation;
+    uint64_t authority_generation;
     uint32_t n_external;
     uint32_t n_excluded;
     uint32_t flags;
@@ -68,7 +71,7 @@ typedef struct {
     int draining;
     int proofs_ok;
     uint64_t authority_epoch;
-    uint32_t authority_generation;
+    uint64_t authority_generation;
     RxGenObject objects[RX_GEN_MAX_OBJECTS];
     uint32_t n_objects;
     int observed_set[RX_GEN_MAX_OBJECTS];
@@ -89,7 +92,32 @@ struct RxGenStore {
     Candidate cand[MAX_CAND];
     RxGenDiskHook disk_hook;
     void *disk_ctx;
+    RxGenPhases phases;
+    uint64_t io_bytes, io_syncs;   /* this store's writes and syncs (R15) */
+    /* Guards active_id/active_lineage, which the durable executor moves while
+     * a reaction may read them. Held only for the copy. */
+    pthread_mutex_t active_mu;
+    struct RxGenExec *exec;
 };
+
+static void set_active(RxGenStore *store, uint64_t id, uint64_t lineage) {
+    pthread_mutex_lock(&store->active_mu);
+    store->active_id = id;
+    store->active_lineage = lineage;
+    pthread_mutex_unlock(&store->active_mu);
+}
+
+static uint64_t monotonic_ns(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) return 0;
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+int rx_gen_last_phases(const RxGenStore *store, RxGenPhases *out) {
+    if (!store || !out) return RX_GEN_ERR_ARG;
+    *out = store->phases;
+    return store->phases.enter_ns ? RX_GEN_OK : RX_GEN_ERR_MISSING;
+}
 
 static void put_u32(uint8_t *p, uint32_t v) {
     p[0] = (uint8_t)v;
@@ -117,7 +145,23 @@ static void checksum(const uint8_t *p, size_t n, uint8_t out[32]) {
     sha256_hash(p, n, out);
 }
 
-static int write_full(int fd, const uint8_t *p, size_t n) {
+/* R15: bytes written and sync calls issued by every store in the process. */
+static uint64_t g_io_bytes, g_io_syncs;
+void rx_gen_io_counters(uint64_t *bytes, uint64_t *syncs) {
+    if (bytes) *bytes = __atomic_load_n(&g_io_bytes, __ATOMIC_RELAXED);
+    if (syncs) *syncs = __atomic_load_n(&g_io_syncs, __ATOMIC_RELAXED);
+}
+
+int rx_gen_store_io(const RxGenStore *store, uint64_t *bytes, uint64_t *syncs) {
+    if (!store) return RX_GEN_ERR_ARG;
+    if (bytes) *bytes = __atomic_load_n(&store->io_bytes, __ATOMIC_RELAXED);
+    if (syncs) *syncs = __atomic_load_n(&store->io_syncs, __ATOMIC_RELAXED);
+    return RX_GEN_OK;
+}
+
+/* Every write and sync is charged to the store that issued it and to the
+ * process total. */
+static int write_full(RxGenStore *store, int fd, const uint8_t *p, size_t n) {
     size_t off = 0;
     while (off < n) {
         ssize_t w = write(fd, p + off, n - off);
@@ -127,6 +171,8 @@ static int write_full(int fd, const uint8_t *p, size_t n) {
         }
         if (w == 0) return -1;
         off += (size_t)w;
+        __atomic_add_fetch(&g_io_bytes, (uint64_t)w, __ATOMIC_RELAXED);
+        __atomic_add_fetch(&store->io_bytes, (uint64_t)w, __ATOMIC_RELAXED);
     }
     return 0;
 }
@@ -152,14 +198,16 @@ static int read_full(const char *path, uint8_t *buf, size_t n) {
     return 0;
 }
 
-static int fsync_fd(int fd) {
+static int fsync_fd(RxGenStore *store, int fd) {
+    __atomic_add_fetch(&g_io_syncs, 1, __ATOMIC_RELAXED);
+    __atomic_add_fetch(&store->io_syncs, 1, __ATOMIC_RELAXED);
     return fsync(fd) == 0 ? 0 : -1;
 }
 
-static int fsync_path(const char *path) {
+static int fsync_path(RxGenStore *store, const char *path) {
     int fd = open(path, O_RDONLY);
     if (fd < 0) return -1;
-    int rc = fsync_fd(fd);
+    int rc = fsync_fd(store, fd);
     close(fd);
     return rc;
 }
@@ -199,14 +247,14 @@ static int copy_blob(uint8_t **dst, size_t *dst_n, const uint8_t *src, size_t n)
 
 static void encode_root(const RootView *v, uint8_t out[ROOT_BYTES]) {
     memset(out, 0, ROOT_BYTES);
-    memcpy(out, "R9ROOT1", 7);
+    memcpy(out, "R9ROOT2", 7);
     put_u64(out + 8, v->id);
     put_u64(out + 16, v->parent);
     put_u64(out + 24, v->lineage);
     put_u32(out + 32, v->state);
     put_u32(out + 36, v->n_objects);
     put_u64(out + 40, v->authority_epoch);
-    put_u32(out + 48, v->authority_generation);
+    put_u32(out + 48, (uint32_t)v->authority_generation);
     put_u32(out + 52, v->n_external);
     put_u32(out + 56, v->n_excluded);
     put_u32(out + 60, v->flags);
@@ -217,11 +265,15 @@ static void encode_root(const RootView *v, uint8_t out[ROOT_BYTES]) {
         put_u64(out + 304 + (size_t)i * 8, v->external_ids[i]);
     for (uint32_t i = 0; i < v->n_excluded && i < RX_GEN_MAX_EXCLUDED; i++)
         put_u64(out + 368 + (size_t)i * 8, v->excluded_ids[i]);
+    put_u32(out + ROOT_AUTH_GEN_HI, (uint32_t)(v->authority_generation >> 32));
     checksum(out, ROOT_SUM, out + ROOT_SUM);
 }
 
 static int decode_root(const uint8_t in[ROOT_BYTES], RootView *v) {
-    if (memcmp(in, "R9ROOT1", 7) != 0) return RX_GEN_ERR_TORN;
+    /* Version 2 keeps the high half of the 64-bit authority generation at
+     * ROOT_AUTH_GEN_HI. Version 1 had none; its high half reads as zero. */
+    int v2 = memcmp(in, "R9ROOT2", 7) == 0;
+    if (!v2 && memcmp(in, "R9ROOT1", 7) != 0) return RX_GEN_ERR_TORN;
     uint8_t sum[32];
     checksum(in, ROOT_SUM, sum);
     if (memcmp(sum, in + ROOT_SUM, 32) != 0) return RX_GEN_ERR_TORN;
@@ -233,6 +285,7 @@ static int decode_root(const uint8_t in[ROOT_BYTES], RootView *v) {
     v->n_objects = get_u32(in + 36);
     v->authority_epoch = get_u64(in + 40);
     v->authority_generation = get_u32(in + 48);
+    if (v2) v->authority_generation |= (uint64_t)get_u32(in + ROOT_AUTH_GEN_HI) << 32;
     v->n_external = get_u32(in + 52);
     v->n_excluded = get_u32(in + 56);
     v->flags = get_u32(in + 60);
@@ -308,15 +361,15 @@ static int commit_file(RxGenStore *store, const char *final_path, const uint8_t 
         size_t half = n / 2;
         if (half == 0) half = 1;
         if (half > n) half = n;
-        if (write_full(fd, buf, half) != 0) {
+        if (write_full(store, fd, buf, half) != 0) {
             close(fd);
             return RX_GEN_ERR_IO;
         }
-        fsync_fd(fd);
+        fsync_fd(store, fd);
         close(fd);
         crash_now();
     }
-    if (write_full(fd, buf, n) != 0 || fsync_fd(fd) != 0) {
+    if (write_full(store, fd, buf, n) != 0 || fsync_fd(store, fd) != 0) {
         close(fd);
         return RX_GEN_ERR_IO;
     }
@@ -327,7 +380,7 @@ static int commit_file(RxGenStore *store, const char *final_path, const uint8_t 
     char *slash = strrchr(parent, '/');
     if (!slash) return RX_GEN_ERR_IO;
     *slash = 0;
-    if (fsync_path(parent) != 0) return RX_GEN_ERR_IO;
+    if (fsync_path(store, parent) != 0) return RX_GEN_ERR_IO;
     return RX_GEN_OK;
 }
 
@@ -429,12 +482,12 @@ static int append_event(RxGenStore *store, uint64_t id, uint64_t lineage) {
     char line[64];
     int n = snprintf(line, sizeof line, "%llu %llu\n", (unsigned long long)id,
                      (unsigned long long)lineage);
-    if (n < 0 || write_full(fd, (const uint8_t *)line, (size_t)n) != 0 || fsync_fd(fd) != 0) {
+    if (n < 0 || write_full(store, fd, (const uint8_t *)line, (size_t)n) != 0 || fsync_fd(store, fd) != 0) {
         close(fd);
         return RX_GEN_ERR_IO;
     }
     close(fd);
-    return fsync_path(store->dir) == 0 ? RX_GEN_OK : RX_GEN_ERR_IO;
+    return fsync_path(store, store->dir) == 0 ? RX_GEN_OK : RX_GEN_ERR_IO;
 }
 
 static void fill_record(const RootView *view, int receipt, int event, RxRecoveryRecord *out) {
@@ -459,10 +512,10 @@ static int receipt_exists(const char *dir, uint64_t id) {
 }
 
 static int write_receipt_file(RxGenStore *store, const RootView *view, uint32_t subject,
-                              uint32_t cap_id, uint32_t cap_gen) {
+                              uint32_t cap_id, uint64_t cap_gen) {
     uint8_t raw[RCT_BYTES];
     memset(raw, 0, sizeof raw);
-    memcpy(raw, "R9RCT01", 7);
+    memcpy(raw, "R9RCT02", 7);
     put_u64(raw + 8, view->id);
     put_u64(raw + 16, view->lineage);
     put_u64(raw + 24, view->parent);
@@ -476,7 +529,8 @@ static int write_receipt_file(RxGenStore *store, const RootView *view, uint32_t 
     memcpy(raw + 32, root_digest, 32);
     put_u32(raw + 64, subject);
     put_u32(raw + 68, cap_id);
-    put_u32(raw + 72, cap_gen);
+    put_u32(raw + 72, (uint32_t)cap_gen);
+    put_u32(raw + 76, (uint32_t)(cap_gen >> 32));
     checksum(raw, RCT_SUM, raw + RCT_SUM);
     if (path_join(path, sizeof path, folder, "receipt") != 0) return RX_GEN_ERR_IO;
     return commit_file(store, path, raw, sizeof raw, RX_CRASH_NONE);
@@ -536,8 +590,8 @@ static int take_lock(RxGenStore *store) {
     if (fd < 0) return RX_GEN_ERR_BUSY;
     char pid[32];
     int n = snprintf(pid, sizeof pid, "%ld\n", (long)getpid());
-    if (n > 0) write_full(fd, (const uint8_t *)pid, (size_t)n);
-    fsync_fd(fd);
+    if (n > 0) write_full(store, fd, (const uint8_t *)pid, (size_t)n);
+    fsync_fd(store, fd);
     store->lock_fd = fd;
     return RX_GEN_OK;
 }
@@ -611,6 +665,7 @@ int rx_gen_open(const char *dir, RxGenStore **out) {
     if (!dir || !out) return RX_GEN_ERR_ARG;
     RxGenStore *store = calloc(1, sizeof(*store));
     if (!store) return RX_GEN_ERR_IO;
+    pthread_mutex_init(&store->active_mu, NULL);
     if (snprintf(store->dir, sizeof store->dir, "%s", dir) >= (int)sizeof store->dir) {
         free(store);
         return RX_GEN_ERR_ARG;
@@ -656,19 +711,26 @@ int rx_gen_open(const char *dir, RxGenStore **out) {
     return RX_GEN_OK;
 }
 
+static void exec_stop(RxGenStore *store);
+
 void rx_gen_close(RxGenStore *store) {
     if (!store) return;
+    exec_stop(store);
     for (int i = 0; i < MAX_CAND; i++) {
         for (int b = 0; b < DIG_COUNT; b++) free(store->cand[i].blob[b]);
     }
     if (store->lock_fd >= 0) close(store->lock_fd);
+    pthread_mutex_destroy(&store->active_mu);
     free(store);
 }
 
 int rx_gen_active(const RxGenStore *store, uint64_t *id, uint64_t *lineage) {
     if (!store || !id || !lineage) return RX_GEN_ERR_ARG;
-    *id = store->active_id;
-    *lineage = store->active_lineage;
+    RxGenStore *s = (RxGenStore *)store;
+    pthread_mutex_lock(&s->active_mu);
+    *id = s->active_id;
+    *lineage = s->active_lineage;
+    pthread_mutex_unlock(&s->active_mu);
     return RX_GEN_OK;
 }
 
@@ -902,13 +964,15 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     } else {
         return RX_GEN_ERR_BUSY;
     }
+    memset(&store->phases, 0, sizeof store->phases);
+    store->phases.candidate_id = request->candidate_id;
+    store->phases.enter_ns = monotonic_ns();
     int rc = RX_GEN_OK;
     uint64_t disk_id = 0, disk_lineage = 0;
     uint8_t disk_digest[32];
     rc = read_pointer(store->dir, &disk_id, &disk_lineage, disk_digest);
     if (rc != RX_GEN_OK) goto done;
-    store->active_id = disk_id;
-    store->active_lineage = disk_lineage;
+    set_active(store, disk_id, disk_lineage);
     if (c->parent_id != store->active_id) {
         rc = RX_GEN_ERR_STALE;
         goto done;
@@ -928,6 +992,7 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     }
     c->closing = 1;
     if (live) live(live_ctx);
+    store->phases.barrier_ns = monotonic_ns();
     uint64_t external[RX_GEN_MAX_EXTERNAL];
     uint64_t excluded[RX_GEN_MAX_EXCLUDED];
     uint32_t n_external = 0, n_excluded = 0;
@@ -943,6 +1008,7 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
         rc = RX_GEN_ERR_VERIFY;
         goto done;
     }
+    store->phases.verified_ns = monotonic_ns();
     if (store->crash_step == RX_CRASH_BEFORE_CANDIDATE_WRITE) crash_now();
 
     char folder[512];
@@ -975,6 +1041,7 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
         view.lengths[i] = c->blob_len[i];
         hash_buf(c->blob[i], c->blob_len[i], view.digest[i]);
     }
+    store->phases.blobs_ns = monotonic_ns();
     uint8_t root[ROOT_BYTES];
     encode_root(&view, root);
     char root_path[512];
@@ -990,9 +1057,11 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
                        root_digest);
     if (rc != RX_GEN_OK) goto done;
     if (store->crash_step == RX_CRASH_AFTER_CANDIDATE_WRITE) crash_now();
+    store->phases.candidate_ns = monotonic_ns();
     if (store->disk_hook) store->disk_hook(folder, store->disk_ctx);
     rc = root_reachable(store->dir, &view);
     if (rc != RX_GEN_OK) goto done;
+    store->phases.reachable_ns = monotonic_ns();
     if (store->crash_step == RX_CRASH_BEFORE_ROOT_FLIP) crash_now();
 
     uint8_t pointer[PTR_BYTES];
@@ -1004,21 +1073,26 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     }
     rc = commit_file(store, active_path, pointer, sizeof pointer, RX_CRASH_DURING_ROOT_FLIP);
     if (rc != RX_GEN_OK) goto done;
-    store->active_id = view.id;
-    store->active_lineage = view.lineage;
+    store->phases.flip_ns = monotonic_ns();
+    set_active(store, view.id, view.lineage);
     if (store->crash_step == RX_CRASH_AFTER_ROOT_FLIP) crash_now();
     rc = write_journal(store, PHASE_FLIPPED, c->parent_id, c->id, view.lineage - 1, root_digest);
     if (rc != RX_GEN_OK) goto done;
+    store->phases.flipped_ns = monotonic_ns();
     if (store->crash_step == RX_CRASH_BEFORE_RECEIPT) crash_now();
     rc = write_receipt_file(store, &view, request->subject, request->cap_id,
                             request->cap_generation);
     if (rc != RX_GEN_OK) goto done;
+    store->phases.receipt_file_ns = monotonic_ns();
     rc = append_event(store, view.id, view.lineage);
     if (rc != RX_GEN_OK) goto done;
+    store->phases.event_ns = monotonic_ns();
     if (store->crash_step == RX_CRASH_AFTER_RECEIPT) crash_now();
     rc = write_journal(store, PHASE_RECEIPT, c->parent_id, c->id, view.lineage - 1, root_digest);
+    if (rc == RX_GEN_OK) store->phases.receipt_ns = monotonic_ns();
 
 done:
+    store->phases.result = rc;
     /* The draft is finished: it is the active generation now, or it can never
      * be promoted (its parent is gone or an object it observed moved). Its
      * slot is free for the next proposal; the committed bytes live on disk. */
@@ -1107,4 +1181,228 @@ int rx_gen_reject_replay(const char *dir, uint64_t effect_id) {
     for (uint32_t i = 0; i < rec.n_external; i++)
         if (rec.external_ids[i] == effect_id) return RX_GEN_ERR_REPLAY;
     return RX_GEN_OK;
+}
+
+/* ---- durable executor --------------------------------------------------- */
+
+typedef struct {
+    int state;
+    uint64_t seq;               /* post order; the lower pending seq runs first */
+    uint64_t key;
+    RxGenDoneFn done;
+    void *done_ctx;
+    RxGenJobResult result;
+    /* proposal: an owned copy of the draft */
+    uint32_t proposer;
+    RxGenDraft draft;
+    RxGenObject *objects;
+    uint8_t *bytes;
+    /* promotion */
+    RxPromotionRequest request;
+    RxGenAuthFn auth;
+    void *auth_ctx;
+} Job;
+
+struct RxGenExec {
+    RxGenStore *store;
+    pthread_t thread;
+    pthread_mutex_t mu;
+    pthread_cond_t cv;
+    int stop;
+    uint64_t seq;
+    Job job[RX_GEN_JOB_KINDS];
+};
+
+static void job_free(Job *j) {
+    free(j->objects);
+    free(j->bytes);
+    j->objects = NULL;
+    j->bytes = NULL;
+}
+
+static void *exec_main(void *arg) {
+    struct RxGenExec *x = arg;
+    pthread_mutex_lock(&x->mu);
+    for (;;) {
+        Job *next = NULL;
+        for (int k = 0; k < RX_GEN_JOB_KINDS; k++)
+            if (x->job[k].state == RX_GEN_JOB_PENDING && (!next || x->job[k].seq < next->seq))
+                next = &x->job[k];
+        if (!next) {
+            if (x->stop) break;
+            pthread_cond_wait(&x->cv, &x->mu);
+            continue;
+        }
+        pthread_mutex_unlock(&x->mu);
+        RxGenJobResult r;
+        memset(&r, 0, sizeof r);
+        r.key = next->key;
+        uint64_t t0 = monotonic_ns();
+        if (next == &x->job[RX_GEN_JOB_PROPOSE])
+            r.rc = rx_gen_propose(x->store, next->proposer, &next->draft, &r.id);
+        else
+            r.rc = rx_gen_promote(x->store, &next->request, next->auth, next->auth_ctx,
+                                  NULL, NULL, NULL, NULL);
+        r.ns = monotonic_ns() - t0;
+        rx_gen_active(x->store, &r.active, &r.lineage);
+        job_free(next);
+        pthread_mutex_lock(&x->mu);
+        next->result = r;
+        next->state = RX_GEN_JOB_DONE;
+        RxGenDoneFn done = next->done;
+        void *ctx = next->done_ctx;
+        pthread_mutex_unlock(&x->mu);
+        if (done) done(ctx);
+        pthread_mutex_lock(&x->mu);
+    }
+    pthread_mutex_unlock(&x->mu);
+    return NULL;
+}
+
+int rx_gen_exec_start(RxGenStore *store) {
+    if (!store) return RX_GEN_ERR_ARG;
+    if (store->exec) return RX_GEN_OK;
+    struct RxGenExec *x = calloc(1, sizeof *x);
+    if (!x) return RX_GEN_ERR_IO;
+    x->store = store;
+    pthread_mutex_init(&x->mu, NULL);
+    pthread_cond_init(&x->cv, NULL);
+    if (pthread_create(&x->thread, NULL, exec_main, x) != 0) {
+        pthread_cond_destroy(&x->cv);
+        pthread_mutex_destroy(&x->mu);
+        free(x);
+        return RX_GEN_ERR_IO;
+    }
+    store->exec = x;
+    return RX_GEN_OK;
+}
+
+int rx_gen_exec_running(const RxGenStore *store) {
+    return store && store->exec != NULL;
+}
+
+/* Runs every job already posted, then stops. A posted job is a promise the
+ * caller is waiting on; it is never dropped. */
+static void exec_stop(RxGenStore *store) {
+    struct RxGenExec *x = store->exec;
+    if (!x) return;
+    pthread_mutex_lock(&x->mu);
+    x->stop = 1;
+    pthread_cond_signal(&x->cv);
+    pthread_mutex_unlock(&x->mu);
+    pthread_join(x->thread, NULL);
+    for (int k = 0; k < RX_GEN_JOB_KINDS; k++) job_free(&x->job[k]);
+    pthread_cond_destroy(&x->cv);
+    pthread_mutex_destroy(&x->mu);
+    free(x);
+    store->exec = NULL;
+}
+
+static Job *claim_slot(struct RxGenExec *x, int kind) {
+    Job *j = &x->job[kind];
+    if (x->stop || j->state != RX_GEN_JOB_IDLE) return NULL;
+    return j;
+}
+
+static void post_locked(struct RxGenExec *x, Job *j, uint64_t key, RxGenDoneFn done,
+                        void *done_ctx) {
+    j->key = key;
+    j->done = done;
+    j->done_ctx = done_ctx;
+    j->seq = ++x->seq;
+    memset(&j->result, 0, sizeof j->result);
+    j->state = RX_GEN_JOB_PENDING;
+    pthread_cond_signal(&x->cv);
+}
+
+int rx_gen_post_propose(RxGenStore *store, uint64_t key, uint32_t proposer,
+                        const RxGenDraft *draft, RxGenDoneFn done, void *done_ctx) {
+    if (!store || !store->exec || !draft) return RX_GEN_ERR_ARG;
+    if (draft->n_objects > RX_GEN_MAX_OBJECTS || (draft->n_objects && !draft->objects))
+        return RX_GEN_ERR_ARG;
+    const uint8_t *src[5] = {draft->evidence, draft->model, draft->realization,
+                             draft->config, draft->provenance};
+    size_t len[5] = {draft->evidence_len, draft->model_len, draft->realization_len,
+                     draft->config_len, draft->provenance_len};
+    size_t total = 0;
+    for (int i = 0; i < 5; i++) {
+        if (len[i] && !src[i]) return RX_GEN_ERR_ARG;
+        total += len[i];
+    }
+    RxGenObject *objs = NULL;
+    uint8_t *bytes = NULL;
+    if (draft->n_objects) {
+        objs = malloc(draft->n_objects * sizeof *objs);
+        if (!objs) return RX_GEN_ERR_IO;
+        memcpy(objs, draft->objects, draft->n_objects * sizeof *objs);
+    }
+    if (total) {
+        bytes = malloc(total);
+        if (!bytes) {
+            free(objs);
+            return RX_GEN_ERR_IO;
+        }
+    }
+    RxGenDraft copy = *draft;
+    copy.objects = objs;
+    const uint8_t **dst[5] = {&copy.evidence, &copy.model, &copy.realization, &copy.config,
+                              &copy.provenance};
+    size_t at = 0;
+    for (int i = 0; i < 5; i++) {
+        *dst[i] = len[i] ? bytes + at : NULL;
+        if (len[i]) memcpy(bytes + at, src[i], len[i]);
+        at += len[i];
+    }
+    struct RxGenExec *x = store->exec;
+    pthread_mutex_lock(&x->mu);
+    Job *j = claim_slot(x, RX_GEN_JOB_PROPOSE);
+    if (!j) {
+        pthread_mutex_unlock(&x->mu);
+        free(objs);
+        free(bytes);
+        return RX_GEN_ERR_BUSY;
+    }
+    j->proposer = proposer;
+    j->draft = copy;
+    j->objects = objs;
+    j->bytes = bytes;
+    post_locked(x, j, key, done, done_ctx);
+    pthread_mutex_unlock(&x->mu);
+    return RX_GEN_OK;
+}
+
+int rx_gen_post_promote(RxGenStore *store, uint64_t key, const RxPromotionRequest *request,
+                        RxGenAuthFn auth, void *auth_ctx, RxGenDoneFn done, void *done_ctx) {
+    if (!store || !store->exec || !request || !auth) return RX_GEN_ERR_ARG;
+    struct RxGenExec *x = store->exec;
+    pthread_mutex_lock(&x->mu);
+    Job *j = claim_slot(x, RX_GEN_JOB_PROMOTE);
+    if (!j) {
+        pthread_mutex_unlock(&x->mu);
+        return RX_GEN_ERR_BUSY;
+    }
+    j->request = *request;
+    j->auth = auth;
+    j->auth_ctx = auth_ctx;
+    post_locked(x, j, key, done, done_ctx);
+    pthread_mutex_unlock(&x->mu);
+    return RX_GEN_OK;
+}
+
+int rx_gen_job_state(RxGenStore *store, int kind, RxGenJobResult *out) {
+    if (!store || !store->exec || kind < 0 || kind >= RX_GEN_JOB_KINDS) return RX_GEN_ERR_ARG;
+    struct RxGenExec *x = store->exec;
+    pthread_mutex_lock(&x->mu);
+    int st = x->job[kind].state;
+    if (st == RX_GEN_JOB_DONE && out) *out = x->job[kind].result;
+    pthread_mutex_unlock(&x->mu);
+    return st;
+}
+
+void rx_gen_job_take(RxGenStore *store, int kind) {
+    if (!store || !store->exec || kind < 0 || kind >= RX_GEN_JOB_KINDS) return;
+    struct RxGenExec *x = store->exec;
+    pthread_mutex_lock(&x->mu);
+    if (x->job[kind].state == RX_GEN_JOB_DONE) x->job[kind].state = RX_GEN_JOB_IDLE;
+    pthread_mutex_unlock(&x->mu);
 }

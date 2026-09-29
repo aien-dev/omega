@@ -407,6 +407,118 @@ test-r14-host: $(RX_R14_HOST)
 test-r14-silicon: $(RX_R14_SILICON)
 	./$(RX_R14_SILICON)
 
+# R15: instrumentation checks (host). Every counter the R15 harness reduces
+# is checked against a case whose true value is known in advance.
+RX_R15_INSTR_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_generation.c src/sha256.c src/omega_evidence.c \
+	src/runtime/rx_seq_reference.c tests/runtime/rx_r15_instr.c
+RX_R15_INSTR = $(OUT_DIR)/rx_r15_instr_test
+
+$(RX_R15_INSTR): $(RX_R15_INSTR_SRCS) src/runtime/rx_world.h src/runtime/rx_generation.h \
+	src/runtime/rx_caproot.h src/runtime/rx_seq_reference.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_INSTR_SRCS)
+
+test-r15-instr: $(RX_R15_INSTR)
+	./$(RX_R15_INSTR)
+
+# R15: SEQ semantic parity gate (spec §16 C1 item 9). The R13 body is built
+# by tests/runtime/rx_r15_rig.c for RES-1 and for the sequential reference.
+RX_R15_RIG_SRCS = $(filter-out tests/runtime/rx_r13_living.c,$(RX_R13_SRCS)) \
+	src/runtime/rx_seq_reference.c tests/runtime/rx_r15_rig.c
+RX_R15_RIG_HDRS = src/runtime/rx_living.h src/runtime/rx_seq_reference.h \
+	src/runtime/rx_world.h tests/runtime/rx_r15_rig.h
+RX_R15_GPU_SRCS = src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
+	src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+	src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c
+RX_R15_PARITY_HOST = $(OUT_DIR)/rx_r15_parity_host
+RX_R15_PARITY_SILICON = $(OUT_DIR)/rx_r15_parity_silicon
+
+$(RX_R15_PARITY_HOST): $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_parity.c $(RX_R15_RIG_HDRS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_parity.c \
+		$(AIENOS_CAP_LIB) -lm
+
+$(RX_R15_PARITY_SILICON): $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_parity.c $(RX_R15_RIG_HDRS) \
+	$(RX_R15_GPU_SRCS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DR15_SILICON -pthread -o $@ $(RX_R15_RIG_SRCS) \
+		tests/runtime/rx_r15_parity.c $(RX_R15_GPU_SRCS) $(AIENOS_CAP_LIB) -ldl -lm
+
+test-r15-parity-host: $(RX_R15_PARITY_HOST)
+	./$(RX_R15_PARITY_HOST)
+
+# R15 G7: production keeps its worker through a generation promotion; the R9
+# store's physical work runs on the store's durable executor (host seat).
+RX_R15_G7_HOST = $(OUT_DIR)/rx_r15_g7_host
+$(RX_R15_G7_HOST): $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_g7.c $(RX_R15_RIG_HDRS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_g7.c \
+		$(AIENOS_CAP_LIB) -lm
+test-r15-g7-host: $(RX_R15_G7_HOST)
+	./$(RX_R15_G7_HOST)
+
+# R15 C2 sensor validation: bounded GB10 load through the resident seat.
+R15_GPU_LOAD = $(OUT_DIR)/r15_gpu_load
+R15_GPU_LOAD_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
+	tests/runtime/r15_gpu_load.c
+
+$(R15_GPU_LOAD): $(R15_GPU_LOAD_SRCS) $(RX_R15_GPU_SRCS) src/runtime/rx_world.h \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(R15_GPU_LOAD_SRCS) $(RX_R15_GPU_SRCS) \
+		$(AIENOS_CAP_LIB) -ldl -lm
+
+r15-gpu-load: $(R15_GPU_LOAD)
+
+test-r15-parity-silicon: $(RX_R15_PARITY_SILICON)
+	./$(RX_R15_PARITY_SILICON)
+
+# R15 harness (spec §4, §5, §12). Four binaries from the same sources and
+# flags: production and the RES-1-NODIGEST measurement build (§3), host
+# stand-in seat and GB10 silicon. tools/r15_qualify.sh drives them and
+# tools/r15_reduce.c reduces their raw output.
+RX_R15_PERF_SRCS = $(RX_R15_RIG_SRCS) tests/runtime/r15_measure.c tests/runtime/rx_r15_perf.c
+RX_R15_PERF_HDRS = $(RX_R15_RIG_HDRS) tests/runtime/r15_measure.h
+RX_R15_PERF_HOST = $(OUT_DIR)/rx_r15_perf_host
+RX_R15_PERF_HOST_ND = $(OUT_DIR)/rx_r15_perf_host_nodigest
+RX_R15_PERF_SILICON = $(OUT_DIR)/rx_r15_perf_silicon
+RX_R15_PERF_SILICON_ND = $(OUT_DIR)/rx_r15_perf_silicon_nodigest
+R15_REDUCE = $(OUT_DIR)/r15_reduce
+
+$(RX_R15_PERF_HOST): $(RX_R15_PERF_SRCS) $(RX_R15_PERF_HDRS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_PERF_SRCS) $(AIENOS_CAP_LIB) -ldl -lm
+
+$(RX_R15_PERF_HOST_ND): $(RX_R15_PERF_SRCS) $(RX_R15_PERF_HDRS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DRX_MEASURE_NO_CAUSAL_DIGEST -pthread -o $@ $(RX_R15_PERF_SRCS) \
+		$(AIENOS_CAP_LIB) -ldl -lm
+
+$(RX_R15_PERF_SILICON): $(RX_R15_PERF_SRCS) $(RX_R15_PERF_HDRS) $(RX_R15_GPU_SRCS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DR15_SILICON -pthread -o $@ $(RX_R15_PERF_SRCS) $(RX_R15_GPU_SRCS) \
+		$(AIENOS_CAP_LIB) -ldl -lm
+
+$(RX_R15_PERF_SILICON_ND): $(RX_R15_PERF_SRCS) $(RX_R15_PERF_HDRS) $(RX_R15_GPU_SRCS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DR15_SILICON -DRX_MEASURE_NO_CAUSAL_DIGEST -pthread -o $@ \
+		$(RX_R15_PERF_SRCS) $(RX_R15_GPU_SRCS) $(AIENOS_CAP_LIB) -ldl -lm
+
+$(R15_REDUCE): tools/r15_reduce.c src/sha256.c src/sha256.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -o $@ tools/r15_reduce.c src/sha256.c -lm
+
+r15-perf-host: $(RX_R15_PERF_HOST) $(RX_R15_PERF_HOST_ND) $(R15_REDUCE)
+r15-perf-silicon: $(RX_R15_PERF_SILICON) $(RX_R15_PERF_SILICON_ND) $(R15_REDUCE)
+
+# R15 receipt writer (spec §12/§13/§14): tools/r15_receipt.sh turns one run
+# directory (summary.json + machine.json + SHA256SUMS) into
+# evidence/R15/<sha256>.json. The host test runs it on attempt 1 (a FAIL).
+r15-receipt:
+	@test -n "$(RUN)" || { echo "usage: make r15-receipt RUN=evidence/R15/raw/<run-id> [CANDIDATE=<commit>] [RERUNS=<file>] [NOTES=<file>]"; exit 2; }
+	tools/r15_receipt.sh $(RUN) evidence/R15 "$(CANDIDATE)" "$(RERUNS)" "$(NOTES)"
+
+.PHONY: r15-receipt test-r15-receipt
+test-r15-receipt:
+	tests/r15_receipt_test.sh
+
+
 # OMEGA_ACTION_GRAPH_IR: goals compile to typed action graphs that run as
 # resident reactions by readiness alone. rx_graph.o is built alone first and
 # must not reference any AIENOS admin operation: compilation can find that

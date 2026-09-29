@@ -1,0 +1,77 @@
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 F BEFORE_CANDIDATE_WRITE: first process exit 86; recovered OLD generation 1; restore REFERENCE; 201 served after restart, adapted again
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 F DURING_CANDIDATE_WRITE: first process exit 86; recovered OLD generation 1; restore REFERENCE; 200 served after restart, adapted again
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 F AFTER_CANDIDATE_WRITE: first process exit 86; recovered OLD generation 1; restore REFERENCE; 200 served after restart, adapted again
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+  FAIL tests/runtime/rx_r14_recovery.c:1019 production did not resume (0 of 100)
+  FAIL tests/runtime/rx_r14_recovery.c:1024 the crumb log overflowed
+  FAIL tests/runtime/rx_r14_recovery.c:2338 F BEFORE_ROOT_FLIP: the restarted process ended with 8
+  FAIL tests/runtime/rx_r14_recovery.c:2363 F BEFORE_ROOT_FLIP: in force 0, realized 0, adapted again 0 to 3 (lineage 2): adapt -11 plan 1 search 2 selection 2 evidence 2 candidate 3 promotion 3 refusal 0 result 0 crumbs 262144
+R14 F BEFORE_ROOT_FLIP: first process exit 86; recovered OLD generation 1; restore REFERENCE; 201 served after restart, NOT adapted
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+  FAIL tests/runtime/rx_r14_recovery.c:1019 production did not resume (0 of 100)
+  FAIL tests/runtime/rx_r14_recovery.c:1024 the crumb log overflowed
+  FAIL tests/runtime/rx_r14_recovery.c:2338 F DURING_ROOT_FLIP: the restarted process ended with 8
+  FAIL tests/runtime/rx_r14_recovery.c:2363 F DURING_ROOT_FLIP: in force 0, realized 0, adapted again 0 to 3 (lineage 2): adapt -11 plan 1 search 2 selection 2 evidence 2 candidate 3 promotion 3 refusal 0 result 0 crumbs 262144
+R14 F DURING_ROOT_FLIP: first process exit 86; recovered OLD generation 1; restore REFERENCE; 201 served after restart, NOT adapted
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 F AFTER_ROOT_FLIP: first process exit 86; recovered NEW generation 2; restore RESTORED; 200 served after restart
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 F BEFORE_RECEIPT: first process exit 86; recovered NEW generation 2; restore RESTORED; 201 served after restart
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 F AFTER_RECEIPT: first process exit 86; recovered NEW generation 2; restore RESTORED; 201 served after restart
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+  FAIL tests/runtime/rx_r14_recovery.c:1072 A tamper: the organism did not adapt (-11, refusal 0, promotion 0)
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 A semantic: verdict REFUSED reason 4; generation 1 -> 2 holds verified quad4; 1134 served during, 102 after
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 A crash: verdict REFUSED reason 5; generation 1 -> 2 holds verified quad4; 12104 served during, 102 after
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 B: forged/borrowed/revoked/stale/GPU refused, slot stuffing contained, forged decisions minted nothing, promotion forgery refused; renewed grant, lanes 101 published, production 3513 during, 101 after
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+  FAIL tests/runtime/rx_r14_recovery.c:1613 C: the organism did not adapt with R6 on (-4)
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 D: 3200 lane requests, at most 4 claims at once (cap 4), up to 12 waiting; 3200 published once, 0 lost, 0 duplicated; production 9633 during, 102 after
+seat build insns 312 gpr 48
+seat heartbeat 1 instructions 312 gpr 48
+R14 E: seat killed holding lane claim 238; lost once, seat generation 1 -> 2, retry published once, stale claim refused; production 27890 during, 103 after
+R14 A_corrupt_candidate    FAIL
+R14 B_forged_capability    PASS
+R14 C_reaction_cycle       NOT RUN
+R14 D_gpu_saturation       PASS
+R14 E_gpu_seat_kill        PASS
+R14 F_checkpoint_crash     FAIL
+R14 gate: R14_LIVING_RECOVERY=FAIL
+R14 receipt: build/qual-runs/20260928T181120Z-6b38173cd5be/R14/rx_recovery_receipt.json

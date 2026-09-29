@@ -35,7 +35,9 @@
  *     already held by the presented authority, and it marks descendants
  *     revoked (AIENOS-style cascade);
  *   - privileged rights cannot be delegated;
- *   - counter wrap and a slot whose generation is exhausted fail closed.
+ *   - counter wrap and a slot whose generation is exhausted fail closed;
+ *   - a new root starts above every generation an earlier root in this
+ *     process could have reached (see take_boot_gen).
  */
 
 #ifndef RX_CAPROOT_H
@@ -111,12 +113,12 @@ enum {
 
 typedef struct {
     uint32_t cap_id;
-    uint32_t generation;
+    uint64_t generation;
 } RxCapRef;
 
 typedef struct {
     uint32_t cap_id;
-    uint32_t generation;
+    uint64_t generation;
     uint32_t state;
     uint32_t issuer;
     uint32_t subject;
@@ -125,9 +127,9 @@ typedef struct {
     uint64_t epoch;
     uint64_t lease_expiry;      /* logical clock tick; 0 = no lease */
     uint32_t parent_id;         /* UINT32_MAX = root-issued */
-    uint32_t parent_generation;
+    uint64_t parent_generation;
     uint32_t minted_by_id;      /* capability that was allowed to create this one */
-    uint32_t minted_by_generation;
+    uint64_t minted_by_generation;
 } RxCapEntry;
 
 /* Shared table. Written only by the root process under a seqlock. */
@@ -195,10 +197,10 @@ static inline int rx_cap_add_u64(uint64_t a, uint64_t b, uint64_t *out) {
     return RX_CAP_OK;
 }
 
-/* Match AIENOS: a slot whose generation is already UINT32_MAX is retired.
- * The old handle is not revived by wrapping. */
-static inline int rx_cap_generation_advance(uint32_t generation, uint32_t *out) {
-    if (generation == UINT32_MAX) return RX_CAP_ERR_EXHAUSTED;
+/* Match AIENOS: generations are 64 bits and a slot whose generation is
+ * already UINT64_MAX is retired. The old handle is not revived by wrapping. */
+static inline int rx_cap_generation_advance(uint64_t generation, uint64_t *out) {
+    if (generation == UINT64_MAX) return RX_CAP_ERR_EXHAUSTED;
     if (out) *out = generation + 1u;
     return RX_CAP_OK;
 }

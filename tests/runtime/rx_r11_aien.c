@@ -87,6 +87,10 @@ typedef struct {
     RxOmegaCaps ocaps;
     RxCapRef ext_request;
     uint64_t seq, served, wrong;
+    /* Not correctness failures: the request never got a result. Under load
+     * a publish can be refused (the crumb log is full) or the answer can miss
+     * the 5 s deadline. Counted apart so they are not reported as wrong. */
+    uint64_t timed_out, refused;
     RxCapRef ext_placement, ext_goal;
 } Env;
 
@@ -151,7 +155,7 @@ static int mint_aien(Env *e) {
 
 static int world_start(Env *e) {
     if (aienos_cap_start(&e->admin, &e->view) != 0) return -1;
-    if (rx_world_init_native(&e->w, e->view, 4, 1u << 18) != RX_OK) {
+    if (rx_world_init_native(&e->w, e->view, 4, 1u << 20) != RX_OK) {
         aienos_cap_stop(e->admin, e->view);
         return -1;
     }
@@ -407,6 +411,60 @@ static void t_drift(void) {
     env_stop(&e);
 }
 
+/* Seen on GB10 in R15 (2026-09-28): production jitter on A725 failed the
+ * prediction twice with nothing changed; the drift research found nothing and
+ * the failure was settled. The prediction then stayed FAILED, so the later
+ * move to X925 was never noticed and no plan followed. A settled failure must
+ * give way to a fresh prediction learned from fresh intervals. */
+static void t_settled_failure_relearns(void) {
+    printf("[*] a settled failure is relearned, so a later core move is still noticed\n");
+    Env e;
+    CHECK(envA_start(&e) == 0, "setup");
+    RxAienFaculty *a = &e.a;
+    uint64_t R = rx_aien_regime(REG_M, REG_N);
+    place(&e, P1);
+    window(&e, 5000, 0);          /* production runs before any record exists */
+    record(&e, 1, 0xAA);
+    confirm_at(&e, 5000, 0xAA);
+    windows(&e, 2, 9000, 0xAA);   /* jitter: drift hypothesis, drift plan */
+    CHECK(fld(&e, a->o.plan, 0) == 1 && fld(&e, a->o.plan, 5) == RX_AIEN_WHY_DRIFT, "drift plan");
+    record(&e, 2, 0xAA);          /* the research kept the same realization */
+    windows(&e, 1 + a->cfg.baseline_intervals, 9000, 0xAA);
+    windows(&e, 2, 15000, 0xAA);  /* fails again: the drift hypothesis is refuted */
+    CHECK(settle(&e) == RX_OK, "settle");
+    uint64_t failed_seq = fld(&e, a->o.prediction, 0);
+    CHECK(fld(&e, a->o.prediction, 6) == RX_AIEN_PRED_FAILED, "second failure");
+    CHECK(fld(&e, a->o.hypothesis, 7) == RX_AIEN_HYP_UNSUPPORTED ||
+          fld(&e, a->o.hypothesis, 7) == RX_AIEN_HYP_EXHAUSTED, "failure not settled: hypothesis state %llu",
+          (unsigned long long)fld(&e, a->o.hypothesis, 7));
+
+    /* Nothing is left to try here: AIEN relearns the record where it runs. */
+    windows(&e, 2 + a->cfg.baseline_intervals + a->cfg.confirm_intervals, 15000, 0xAA);
+    CHECK(fld(&e, a->o.prediction, 0) == failed_seq + 1 &&
+          fld(&e, a->o.prediction, 6) == RX_AIEN_PRED_CONFIRMED &&
+          fld(&e, a->o.prediction, 5) == 15000 && fld(&e, a->o.prediction, 4) == P1,
+          "no fresh prediction after a settled failure: seq %llu (failed %llu) state %llu cost %llu",
+          (unsigned long long)fld(&e, a->o.prediction, 0), (unsigned long long)failed_seq,
+          (unsigned long long)fld(&e, a->o.prediction, 6), (unsigned long long)fld(&e, a->o.prediction, 5));
+    CHECK(fld(&e, a->o.plan, 0) == 1, "relearning planned");
+
+    /* The real change: the work moves. It is noticed, explained, planned. */
+    uint64_t hyps = fld(&e, a->o.hypothesis, 0);
+    place(&e, P2);
+    windows(&e, 2, 4000, 0xAA);
+    CHECK(fld(&e, a->o.prediction, 6) == RX_AIEN_PRED_FAILED, "the move was not noticed");
+    CHECK(fld(&e, a->o.hypothesis, 0) == hyps + 1 &&
+          fld(&e, a->o.hypothesis, 1) == RX_AIEN_HYP_CORE_CLASS &&
+          fld(&e, a->o.hypothesis, 3) == P1 && fld(&e, a->o.hypothesis, 4) == P2 &&
+          fld(&e, a->o.hypothesis, 7) == RX_AIEN_HYP_TESTING,
+          "core-class hypothesis: seq %llu kind %llu state %llu", (unsigned long long)fld(&e, a->o.hypothesis, 0),
+          (unsigned long long)fld(&e, a->o.hypothesis, 1), (unsigned long long)fld(&e, a->o.hypothesis, 7));
+    CHECK(fld(&e, a->o.plan, 0) == 2 && fld(&e, a->o.plan, 2) == R && fld(&e, a->o.plan, 3) == P2 &&
+          fld(&e, a->o.plan, 5) == RX_AIEN_WHY_CORE_CLASS, "no plan for the move");
+    check_only_reactive(&e);
+    env_stop(&e);
+}
+
 static void t_goal(void) {
     printf("[*] a human goal: unknown, met, unmet -> one plan, then unmet and explored\n");
     Env e;
@@ -590,6 +648,52 @@ static int envB_start(Env *e, int with_aien) {
                                         e->ocaps.omega[RX_OMEGA_RES_SELECTION]) == RX_OK ? 0 : -1;
 }
 
+
+/* A timed phase measures this host. When an R15 timed measurement is
+ * running (its quiet flag exists or an R15 program is alive) or the machine
+ * is already loaded, the numbers would describe the other work, so the
+ * living run is not started. Same test as rx_plan_reuse.c. */
+static int other_load(char *why, size_t n) {
+    const char *home = getenv("HOME");
+    char flag[512];
+    snprintf(flag, sizeof flag, "%s/workspace/.spark-quiet", home ? home : "");
+    if (access(flag, F_OK) == 0) {
+        snprintf(why, n, "an R15 timed measurement holds ~/workspace/.spark-quiet");
+        return 1;
+    }
+    DIR *d = opendir("/proc");
+    if (d) {
+        struct dirent *de;
+        int busy = 0;
+        while (!busy && (de = readdir(d)) != NULL) {
+            if (de->d_name[0] < '0' || de->d_name[0] > '9') continue;
+            char p[300], comm[64] = { 0 };
+            snprintf(p, sizeof p, "/proc/%s/comm", de->d_name);
+            FILE *f = fopen(p, "r");
+            if (!f) continue;
+            if (fgets(comm, sizeof comm, f))
+                busy = strncmp(comm, "rx_r15", 6) == 0 || strncmp(comm, "r15_", 4) == 0;
+            fclose(f);
+        }
+        closedir(d);
+        if (busy) {
+            snprintf(why, n, "an R15 program is running");
+            return 1;
+        }
+    }
+    double load = 0;
+    FILE *f = fopen("/proc/loadavg", "r");
+    if (f) {
+        if (fscanf(f, "%lf", &load) != 1) load = 0;
+        fclose(f);
+    }
+    if (load > 2.0) {
+        snprintf(why, n, "1-minute load average %.2f is above 2", load);
+        return 1;
+    }
+    return 0;
+}
+
 static uint64_t expected_digest(uint64_t seed, uint32_t M, uint32_t N) {
     uint64_t *A = malloc((size_t)M * N * sizeof(uint64_t));
     uint64_t *x = malloc((size_t)N * sizeof(uint64_t));
@@ -608,10 +712,10 @@ static uint64_t request(Env *e) {
     RxMutation m[4] = {
         { e->f.o.request, 0, seq }, { e->f.o.request, 1, REG_M },
         { e->f.o.request, 2, REG_N }, { e->f.o.request, 3, seed } };
-    if (rx_world_publish_external(&e->w, e->ext_request, m, 4) <= 0) { e->wrong++; return UINT64_MAX; }
+    if (rx_world_publish_external(&e->w, e->ext_request, m, 4) <= 0) { e->refused++; return UINT64_MAX; }
     uint64_t t0 = now_ns();
     while (fld(e, e->f.o.result, 0) != seq) {
-        if (now_ns() - t0 > 5000000000ull) { e->wrong++; return UINT64_MAX; }
+        if (now_ns() - t0 > 5000000000ull) { e->timed_out++; return UINT64_MAX; }
         sleep_us(20);
     }
     RxObject r;
@@ -650,6 +754,7 @@ static int u_supported(Env *e) {
 /* Receipt data. */
 static int g_b_run;
 static const char *g_b_skip = "";
+static char g_b_skip_buf[160];
 static uint64_t g_sel1_real, g_a725_ns, g_x925_old_ns, g_x925_new_ns, g_sel2_real;
 static uint64_t g_ctrl_a725_ns, g_ctrl_x925_ns, g_ctrl_search, g_after_move, g_during;
 static uint64_t g_hyp_kind, g_hyp_state, g_plan_seq, g_search_epoch, g_pred_seq;
@@ -733,7 +838,16 @@ static void t_living(void) {
     }
     CHECK(g_during > 0, "production stopped while AIEN and Omega worked");
     CHECK(e.w.reactions[f->r_watch].commits == 1, "omega.watch searched again on its own");
+    printf("    requests: served %llu, wrong %llu, timed out %llu, refused %llu, crumb overflow %llu\n",
+           (unsigned long long)e.served, (unsigned long long)e.wrong,
+           (unsigned long long)e.timed_out, (unsigned long long)e.refused,
+           (unsigned long long)e.w.stats.crumb_overflow);
     CHECK(e.wrong == 0, "%llu wrong results", (unsigned long long)e.wrong);
+    CHECK(e.timed_out == 0 && e.refused == 0 && e.w.stats.crumb_overflow == 0,
+          "harness/load: %llu timed out, %llu refused, %llu crumb overflow (not wrong results; "
+          "rerun on a quiet machine)",
+          (unsigned long long)e.timed_out, (unsigned long long)e.refused,
+          (unsigned long long)e.w.stats.crumb_overflow);
     CHECK(e.served > served_at_move, "served");
     check_only_reactive(&e);
 
@@ -765,7 +879,12 @@ static void t_living(void) {
     CHECK(g_ctrl_search == 1 && fld(&c, c.f.o.selection, 0) == 1,
           "control re-searched without AIEN (search %llu)", (unsigned long long)g_ctrl_search);
     CHECK(fld(&c, c.f.o.selection, 1) == g_sel1_real, "control changed its record");
-    CHECK(c.wrong == 0, "control wrong results");
+    CHECK(c.wrong == 0, "control: %llu wrong results", (unsigned long long)c.wrong);
+    CHECK(c.timed_out == 0 && c.refused == 0 && c.w.stats.crumb_overflow == 0,
+          "control harness/load: %llu timed out, %llu refused, %llu crumb overflow (not wrong "
+          "results; rerun on a quiet machine)",
+          (unsigned long long)c.timed_out, (unsigned long long)c.refused,
+          (unsigned long long)c.w.stats.crumb_overflow);
     printf("    control: A725 %llu ns, X925 after %llu more requests %llu ns\n",
            (unsigned long long)g_ctrl_a725_ns, (unsigned long long)g_after_move,
            (unsigned long long)g_ctrl_x925_ns);
@@ -872,11 +991,17 @@ int main(void) {
     t_steady_and_outlier();
     t_core_class();
     t_drift();
+    t_settled_failure_relearns();
     t_goal();
     t_authority();
 #if defined(__aarch64__)
     find_core_classes();
-    if (g_nx > 0 && g_na > 0) t_living();
+    char why[128];
+    if (g_nx > 0 && g_na > 0 && other_load(why, sizeof why)) {
+        snprintf(g_b_skip_buf, sizeof g_b_skip_buf, "SKIPPED-LOADED: %s", why);
+        g_b_skip = g_b_skip_buf;
+        printf("[-] SKIPPED-LOADED: living run not started: %s\n", why);
+    } else if (g_nx > 0 && g_na > 0) t_living();
     else g_b_skip = "this host does not have both Cortex-X925 and Cortex-A725 cores";
 #else
     g_b_skip = "Omega's realizations are AArch64";

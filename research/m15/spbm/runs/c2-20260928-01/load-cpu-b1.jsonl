@@ -1,0 +1,4 @@
+{"cpu":5,"cpu_ns":14000096576,"iterations":1263132672,"result":32.147076,"affinity_error":0}
+{"cpu":6,"cpu_ns":14000120992,"iterations":1264852992,"result":32.147076,"affinity_error":0}
+{"cpu":7,"cpu_ns":13999989760,"iterations":1263046656,"result":32.147076,"affinity_error":0}
+{"cpu":8,"cpu_ns":13997499056,"iterations":1263845376,"result":32.147076,"affinity_error":0}
