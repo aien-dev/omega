@@ -144,7 +144,7 @@ static void crumb_hash(const RxWorld *w, const RxCrumb *k, uint8_t out[32]) {
     put32(&c, k->n_caps);
     for (uint32_t i = 0; i < k->n_caps; i++) {
         put32(&c, k->caps[i].cap_id);
-        put32(&c, k->caps[i].generation);
+        put64(&c, k->caps[i].generation);   /* full 64-bit AIENOS generation */
         put32(&c, k->cap_issuer[i]);
     }
     put32(&c, k->n_outputs);
@@ -249,6 +249,10 @@ int rx_world_crumb_origin(RxWorld *w, uint64_t id, uint32_t *reaction, uint32_t 
     }
     pthread_mutex_unlock(&w->mu);
     return rc;
+}
+
+void rx_world_crumb_digest(const RxWorld *w, const RxCrumb *k, uint8_t out[32]) {
+    crumb_hash(w, k, out);
 }
 
 int rx_world_verify_crumbs(RxWorld *w, uint64_t *out_checked) {
