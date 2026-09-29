@@ -197,6 +197,16 @@ typedef struct RxCtx {
     uint32_t worker;
 } RxCtx;
 
+/* A reaction function may return RX_FN_DEFER when it has handed a physical
+ * effect it decided (an R9 store write) to a durable executor and has
+ * nothing to publish yet. The activation keeps its admission and its place
+ * (READY/RUNNING is not left, quiescence waits for it) but frees the worker.
+ * When the executor calls rx_world_resume the same activation runs again on a
+ * fresh snapshot, on an ordinary worker, and publishes through the usual
+ * checks. No crumb is written for the deferring run. Never returned in a
+ * sequential reference world (it is treated as a failure there). */
+#define RX_FN_DEFER 0x44454652
+
 /* Pure transformation: read ctx->in, append proposals to ctx->out.
  * Return 0 to publish (possibly nothing), negative to fail. */
 typedef int (*RxFn)(RxCtx *ctx);
@@ -354,6 +364,8 @@ typedef struct {
     bool have_last;
     bool have_two;
     bool resident_seat;         /* handed to the graphics seat; fn is not called */
+    bool deferred;              /* fn returned RX_FN_DEFER; waits for rx_world_resume */
+    bool resume_pending;        /* resumed before the deferring run returned */
     /* R15 timing (only with a timing buffer). */
     uint64_t t_demand, t_ready, t_run, t_fn_end, sched_ns, sched_cpu_ns;
     /* Sequential reference only (rx_seq_reference.c): the newest version of
@@ -393,6 +405,7 @@ typedef struct {
     uint64_t desc_rejected;
     uint64_t resident_claims;   /* claims posted to a resident seat */
     uint64_t resident_closed;   /* claims ended: committed, refused, or lost */
+    uint64_t deferrals;         /* activations that handed an effect to a durable executor */
     uint64_t seat_losses;       /* times a seat was declared lost */
     /* R15 instrumentation. Counted, never inferred. */
     uint64_t activations;       /* run_one entries (every activation, any outcome) */
@@ -526,6 +539,7 @@ typedef struct RxWorld {
     uint32_t seat_generation;
 
     RxStats stats;
+    uint32_t n_deferred;        /* activations waiting for rx_world_resume */
     /* Signalled when a claim is posted to the resident seat, so a completion
      * transport can sleep while no graphics work is outstanding. */
     pthread_cond_t claim_cv;
@@ -672,6 +686,11 @@ int  rx_resident_post_claim(RxWorld *w, uint32_t in, uint32_t out, uint64_t pare
 
 /* Clear the seat's stopped flag. Does not move either ring. */
 int  rx_resident_reset(RxWorld *w);
+
+/* The durable executor finished the effect reaction `reaction` deferred on
+ * (RX_FN_DEFER): run that activation again. Safe from any thread. Decides
+ * nothing; the reaction re-reads the world and the executor's result. */
+int  rx_world_resume(RxWorld *w, uint32_t reaction);
 
 /* Take one result notice and, when it is valid, publish it into the canonical
  * object. A dependent reaction wakes from that publication. */

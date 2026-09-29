@@ -71,8 +71,11 @@ bool rx_state_transition_legal(RxState from, RxState to) {
         return to == RX_RUNNING || to == RX_BLOCKED_AUTHORITY ||
                to == RX_BLOCKED_RESOURCE || to == RX_INVALIDATED;
     case RX_RUNNING:
+        /* RUNNING -> READY only when a deferred effect is resumed
+         * (RX_FN_DEFER, rx_world_resume): the same admitted activation runs
+         * again. */
         return to == RX_PUBLISHING || to == RX_FAILED || to == RX_CANCELLED ||
-               to == RX_INVALIDATED;
+               to == RX_INVALIDATED || to == RX_READY;
     case RX_PUBLISHING:
         /* Stale input is detected while validating the publication, so the
          * explicit exit is PUBLISHING -> INVALIDATED. */
@@ -1015,6 +1018,8 @@ static void fill_inputs(RxCrumb *k, const RxCtx *ctx, const RxDep *deps, uint32_
     }
 }
 
+static void resume_locked(RxWorld *w, uint32_t rid);
+
 static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
     RxReaction *r = &w->reactions[rid];
     const RxReactionDesc *d = &r->desc;
@@ -1135,6 +1140,19 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
     int frc = d->fn(&ctx);
     pthread_mutex_lock(&w->mu);
     if (w->timing) r->t_fn_end = now_ns();
+    if (frc == RX_FN_DEFER) {
+        if (w->sequential) {
+            frc = RX_ERR_ARG;
+        } else {
+            /* The effect is on the durable executor. Keep the admission, free
+             * the worker; rx_world_resume runs this activation again. */
+            r->deferred = true;
+            w->n_deferred++;
+            w->stats.deferrals++;
+            if (r->resume_pending) resume_locked(w, rid);
+            return;
+        }
+    }
 
     fill_inputs(&k, &ctx, deps, n_deps);
     /* Data ancestry: whoever last wrote each field this reaction read. */
@@ -1232,6 +1250,38 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
     }
     finish_writes(w, pw, n_pw, cid, d->stamp_proposed);
     end_activation(w, rid);
+}
+
+/* Caller holds mu. The activation is still admitted (slot charged, counted in
+ * in_flight): put it back on its ready ring without admitting it again. */
+static void resume_locked(RxWorld *w, uint32_t rid) {
+    RxReaction *r = &w->reactions[rid];
+    r->resume_pending = false;
+    r->deferred = false;
+    if (w->n_deferred) w->n_deferred--;
+    uint32_t p = r->desc.priority;
+    if (p >= RX_PRIORITY_CLASSES) p = RX_PRIO_BACKGROUND;
+    uint32_t tail = (w->ready_head[p] + w->ready_len[p]) % RX_MAX_REACTIONS;
+    w->ready_q[p][tail] = rid;
+    w->ready_len[p]++;
+    set_state(w, r, RX_READY);
+    if (w->timing) r->t_ready = now_ns();
+    pthread_cond_signal(&w->work_cv);
+    if (w->n_deferred == 0) pthread_cond_broadcast(&w->idle_cv);
+}
+
+int rx_world_resume(RxWorld *w, uint32_t reaction) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    if (reaction >= w->n_reactions) {
+        pthread_mutex_unlock(&w->mu);
+        return RX_ERR_ARG;
+    }
+    RxReaction *r = &w->reactions[reaction];
+    if (r->deferred) resume_locked(w, reaction);
+    else r->resume_pending = true;
+    pthread_mutex_unlock(&w->mu);
+    return RX_OK;
 }
 
 static void *worker_main(void *arg) {
@@ -1376,6 +1426,9 @@ void rx_world_set_stability(RxWorld *w, const RxStabilityBudget *stability) {
 
 void rx_world_destroy(RxWorld *w) {
     pthread_mutex_lock(&w->mu);
+    /* A deferred activation's executor will still call rx_world_resume: let
+     * it land before the world goes away. */
+    while (w->n_deferred) pthread_cond_wait(&w->idle_cv, &w->mu);
     w->stopping = true;
     pthread_cond_broadcast(&w->work_cv);
     pthread_mutex_unlock(&w->mu);

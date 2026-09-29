@@ -445,6 +445,16 @@ $(RX_R15_PARITY_SILICON): $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_parity.c $(RX_
 test-r15-parity-host: $(RX_R15_PARITY_HOST)
 	./$(RX_R15_PARITY_HOST)
 
+# R15 G7: production keeps its worker through a generation promotion; the R9
+# store's physical work runs on the store's durable executor (host seat).
+RX_R15_G7_HOST = $(OUT_DIR)/rx_r15_g7_host
+$(RX_R15_G7_HOST): $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_g7.c $(RX_R15_RIG_HDRS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_RIG_SRCS) tests/runtime/rx_r15_g7.c \
+		$(AIENOS_CAP_LIB) -lm
+test-r15-g7-host: $(RX_R15_G7_HOST)
+	./$(RX_R15_G7_HOST)
+
 # R15 C2 sensor validation: bounded GB10 load through the resident seat.
 R15_GPU_LOAD = $(OUT_DIR)/r15_gpu_load
 R15_GPU_LOAD_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \

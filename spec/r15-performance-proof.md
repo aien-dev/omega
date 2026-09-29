@@ -678,3 +678,78 @@ reinterpreted; there are no qualification data yet.
   (status ≠ UNKNOWN). Still failing: UNMET or UNMET_EXPLORED, and UNKNOWN when
   the unchanged 60 s limit expires. `met_status`, the AFTER window and the
   limits are unchanged.
+
+## 20. Clarification C5 (2026-09-28, after practice, before qualification)
+
+Records a change to the resident runtime made because practice showed a real
+weakness, and declares the host threads the resident configurations now run.
+G1–G16, TARGET_PCT 55, the G7 threshold (≥ 90% of barriers with a production
+commit), the G7 denominator (every L1-G and per-trial barrier) and the
+definition of a qualifying barrier (a production commit whose end lies in
+[barrier begin, receipt]) are unchanged. SEQ is unchanged. No practice
+result is reinterpreted; practice runs are not qualification data.
+
+- **Finding (practice 20260928T233124Z-6723fa0579a8, 4 rounds).** Per-trial
+  barriers: RES-4 had production commits in every barrier (≈1,100 each);
+  RES-1 and RES-1-NODIGEST had none in any (0 of 8); SEQ none, as designed.
+  A high-resolution host trace of one RES-1 transition (`R15_BARRIER_TRACE`,
+  below) showed why: `generation.promote` ran `rx_gen_promote` on the only
+  worker for ~84 ms while one production request waited READY. Inside the
+  barrier: checks < 0.1 ms; six blobs written and synced 37 ms; root and
+  CANDIDATE journal 13 ms; root re-read 0.02 ms; **pointer flip 6.7 ms**;
+  FLIPPED journal, receipt file, event log and RECEIPT journal 23.5 ms.
+  `generation.prepare` also held the worker ~15–18 ms before the barrier
+  (provenance plus the proposal's `nextid` sync). Only the pointer flip (on
+  disk) and the in-force publication (in the world) must be observed as one
+  step; nothing else in the barrier needs the semantic worker.
+- **Change (production runtime, not the harness).**
+  - `rx_generation`: a *durable executor*, one thread per store
+    (`rx_gen_exec_start`). It runs `rx_gen_propose` or `rx_gen_promote`
+    exactly as a caller would, with the caller's request and the caller's
+    native-authority callback, one job at a time in post order, then calls
+    the poster back. It holds no capability, reads no world object, chooses
+    nothing and runs no reaction. Every fsync, the crash points, the lock
+    file and the OLD/NEW recovery rules are unchanged.
+  - `rx_world`: a reaction function may return `RX_FN_DEFER` after handing
+    such an effect to the executor. The activation keeps its admission (its
+    slot stays charged, `in_flight` counts it, quiescence waits for it) but
+    frees the worker; no crumb is written for the deferring run. The
+    executor's completion calls `rx_world_resume`, which puts the same
+    activation back on its ready ring (a new lifecycle edge RUNNING → READY,
+    used only here). It then runs on an ordinary worker on a fresh snapshot
+    and publishes through the usual stale-read check, capability
+    re-validation and write-set check. A sequential reference world treats
+    `RX_FN_DEFER` as a failure and never starts an executor.
+  - `rx_living`: in a resident world `generation.prepare` and
+    `generation.promote` decide on the worker, post the store work, defer,
+    and publish the executor's result when resumed. The candidate and
+    in-force records are still written only by these reactions under their
+    own authority; in-force is still published only after R9 returns OK
+    (after flip and receipt). SEQ keeps the in-line path unchanged.
+- **Threads.** RES-4 / RES-1 / RES-1-NODIGEST: the world's workers (4 / 1
+  / 1, the only threads that run reaction functions), the seat completion
+  transport, the seat keep-alive lease thread of 03d2820 (`rx-seat-lease`,
+  5 ms tick; it moves no semantic state), the R9 durable executor (asleep
+  except during a proposal or promotion) and the harness's producer and
+  observers. SEQ: its one orchestrator thread (which runs every stage,
+  including the store work, to completion), the lease thread and the
+  harness threads. All of them are confined to the trial's core class and
+  counted by process-wide CPU time, `getrusage(RUSAGE_SELF)` and the
+  inherited PMU counters, so the executor's CPU is never hidden.
+- **Diagnostic only.** `R15_BARRIER_TRACE=<file>` makes a trial append its
+  barrier phases and every crumb around the barrier to that file. It is not
+  part of the raw evidence and is never set by `tools/r15_qualify.sh`.
+  `RxGenPhases` gains stamps for the inner phases (verified, blobs,
+  candidate, reachable, flipped, receipt file, event); the four existing
+  stamps and the G7 reduction are unchanged.
+- **Regression.** `make test-r15-g7-host` (tests/runtime/rx_r15_g7.c):
+  RES-1 has a production request READY and committing while the promotion's
+  disk work is under way; production commits inside the barrier and before
+  the flip; in-force is published once, by `generation.promote`, after the
+  receipt, and names the generation on disk; stops before / during / after
+  the flip recover OLD / OLD-or-NEW / NEW, never TORN; only
+  `generation.promote` writes the promotion and in-force records; every
+  crumb comes from a world worker or the seat; RES-4 unchanged; SEQ has no
+  executor, no deferral and still pauses production for the whole barrier.
+  With the executor disabled the RES-1 checks fail (0 commits in the
+  barrier).

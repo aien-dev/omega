@@ -535,6 +535,33 @@ static void rec_outcome(const R15Outcome *o, int rc) {
     r15_rec_end(&g_out);
 }
 
+/* Diagnostic only (never part of the raw evidence): with R15_BARRIER_TRACE
+ * set to a file name, write every crumb around the trial's generation barrier
+ * and the barrier's inner phases, one line each. */
+static void barrier_trace(RxWorld *w, const RxGenPhases *ph) {
+    const char *path = getenv("R15_BARRIER_TRACE");
+    if (!path || !ph->enter_ns) return;
+    FILE *f = fopen(path, "a");
+    if (!f) return;
+    uint64_t lo = ph->enter_ns - 20000000ull;
+    uint64_t hi = (ph->receipt_ns ? ph->receipt_ns : ph->enter_ns) + 20000000ull;
+    fprintf(f, "phase enter %" PRIu64 " barrier %" PRIu64 " verified %" PRIu64 " blobs %" PRIu64
+            " candidate %" PRIu64 " reachable %" PRIu64 " flip %" PRIu64 " flipped %" PRIu64
+            " receipt_file %" PRIu64 " event %" PRIu64 " receipt %" PRIu64 " result %d\n",
+            ph->enter_ns, ph->barrier_ns, ph->verified_ns, ph->blobs_ns, ph->candidate_ns,
+            ph->reachable_ns, ph->flip_ns, ph->flipped_ns, ph->receipt_file_ns, ph->event_ns,
+            ph->receipt_ns, ph->result);
+    for (uint64_t id = 1; id <= w->n_crumbs; id++) {
+        const RxCrumb *k = rx_world_crumb(w, id);
+        if (!k || k->t_end_ns < lo || k->t_start_ns > hi) continue;
+        const char *name = k->reaction < w->n_reactions ? w->reactions[k->reaction].desc.name
+                                                        : "(outside)";
+        fprintf(f, "crumb %" PRIu64 " kind %d worker %u start %" PRIu64 " end %" PRIu64 " %s\n",
+                k->id, (int)k->kind, k->worker, k->t_start_ns, k->t_end_ns, name);
+    }
+    fclose(f);
+}
+
 static int run_trial(R15Config cfg) {
     thermal_wait();
     rec_machine("before");
@@ -632,6 +659,7 @@ static int run_trial(R15Config cfg) {
                 during++;
         }
     rec_u("barrier_production_commits", during);
+    barrier_trace(w, &ph);
     rec_u("selected_ps", out.selected_ps);
     rec_u("reference_ps", out.reference_ps);
     r15_rec_end(&g_out);
