@@ -181,7 +181,14 @@ test-sem-incremental: $(RX_SEM_TEST)
 	./$(RX_SEM_TEST)
 
 # R7: native AIENOS authority versus the Linux oracle, then the world view.
-AIENOS_R7_DIR ?= ../aienos-r9
+# Default: the authority pinned by aienos.lock, extracted with `git archive` from
+# AIENOS_LOCK_REPO (a clone that has the commit) into $(OUT_DIR). An override must point
+# at a tree with native/capability; the build stops if it does not (the old default
+# ../aienos-r9 silently had none on the Spark).
+AIENOS_LOCK_REPO ?= ../aienos-argus-cap
+AIENOS_LOCK = $(shell head -n 1 aienos.lock)
+AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(shell echo $(AIENOS_LOCK) | cut -c1-7)
+AIENOS_R7_DIR ?= $(AIENOS_R7_DEFAULT)
 AIENOS_CAP_LIB ?= $(AIENOS_R7_DIR)/native/capability/out/libaienos_capability.a
 RX_R7_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
@@ -189,6 +196,14 @@ RX_R7_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_cohe
 RX_R7_TEST = $(OUT_DIR)/rx_r7_native_test
 
 $(AIENOS_CAP_LIB):
+	@if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ] && [ ! -d "$(AIENOS_R7_DIR)/native/capability" ]; then \
+		test -n "$(AIENOS_LOCK)" || { echo "aienos.lock is empty"; exit 1; }; \
+		mkdir -p "$(AIENOS_R7_DIR)" && \
+		git -C $(AIENOS_LOCK_REPO) archive $(AIENOS_LOCK) native/capability | tar -x -C "$(AIENOS_R7_DIR)"; \
+	fi
+	@test -f "$(AIENOS_R7_DIR)/native/capability/Makefile" || { \
+		echo "AIENOS_R7_DIR=$(AIENOS_R7_DIR) has no native/capability:"; \
+		echo "  set AIENOS_R7_DIR to an aienos tree at aienos.lock, or AIENOS_LOCK_REPO to a clone with it"; exit 1; }
 	$(MAKE) -C $(AIENOS_R7_DIR)/native/capability
 
 $(RX_R7_TEST): $(RX_R7_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
