@@ -154,6 +154,12 @@ clean:
 test-m19: $(TARGET)
 	./$(TARGET) --run-m19-gates
 
+# Host-only tests of the M19R qualifier (tools/m19r_qualify.sh) and its
+# canonical-JSON helper (tools/json_canon.c). No GPU.
+.PHONY: test-m19r-qualify
+test-m19r-qualify:
+	tools/test_m19r_qualify.sh
+
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
 RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
@@ -913,14 +919,19 @@ test-algebra-asan: $(OMA_TEST_ASAN)
 # ---------------------------------------------------------------------------
 # OMEGA MIXED ALGEBRA MA-2 (spec/mixed-algebra-ma2.md): one exact operation
 # (ternary W x int8 x -> int32 y) with several verified realizations on the
-# Grace CPU, a measured cost table and a stand-in selector.
+# Grace CPU, a measured cost table and the MA-2 selector. The selector
+# (oma_select) is RETIRED for new decisions (TURING K.6/K.7): it is kept only
+# to reproduce ma2_select_receipt.json; new selections use src/turing
+# turing_rank_min_cost and are recorded as turing.decision.v1.
 # test-realize: bit-exact gate vs the naive oracle (plain and ASan+UBSan).
 # bench-mixed-algebra: two benchmark runs on one pinned Cortex-X925 core,
-# then the selector with its reproducibility check. Receipts go to
-# evidence/MIXED_ALGEBRA/ (ma2_bench_run{1,2}.json; the committed
-# ma3_bench_run{1,2}.json are the historical runs made under the earlier
-# MA-3 label, and ma2_select_receipt.json is regenerated from them).
-.PHONY: test-realize bench-mixed-algebra
+# then the selector with its reproducibility check. Every run writes NEW
+# files under evidence/MIXED_ALGEBRA/runs/$(MA2_RUN_ID)/ (default: UTC
+# timestamp; an existing run directory is refused). Committed evidence
+# (ma3_bench_run{1,2}.json, ma2_select_receipt.json) is never rewritten:
+# check-mixed-algebra-evidence fails if a committed evidence/MIXED_ALGEBRA
+# file is modified or deleted, and runs before and after the bench.
+.PHONY: test-realize bench-mixed-algebra check-mixed-algebra-evidence
 OMA_RZ_ARCH = -march=armv8.6-a+dotprod+i8mm+sve
 OMA_RZ_CFLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 $(OMA_RZ_ARCH) -Isrc
 OMA_RZ_SRCS = src/algebra/realize_common.c src/algebra/realize_binary.c \
@@ -934,6 +945,9 @@ OMA_RZ_TEST_ASAN = $(OUT_DIR)/tests-algebra/test_realize_asan
 OMA_RZ_BENCH = $(OUT_DIR)/tests-algebra/bench_mixed_algebra
 OMA_RZ_SELECT = $(OUT_DIR)/tests-algebra/bench_select
 MA2_EVIDENCE = evidence/MIXED_ALGEBRA
+MA2_RUN_ID ?= $(shell date -u +%Y%m%dT%H%M%SZ)
+MA2_RUN_ID := $(MA2_RUN_ID)
+MA2_RUN_DIR = $(MA2_EVIDENCE)/runs/$(MA2_RUN_ID)
 
 $(OMA_RZ_TEST): tests/algebra/test_realize.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) src/algebra/oma_select.c $(OMA_SEL_HDRS) $(OMA_SRCS) $(OMA_HDRS)
 	@mkdir -p $(dir $@)
@@ -956,16 +970,30 @@ test-realize: $(OMA_RZ_TEST) $(OMA_RZ_TEST_ASAN)
 	./$(OMA_RZ_TEST)
 	./$(OMA_RZ_TEST_ASAN)
 
+# Fails if any committed evidence/MIXED_ALGEBRA file is modified or deleted
+# (staged or not). New, untracked files are allowed.
+check-mixed-algebra-evidence:
+	@changed="$$(git diff --name-status HEAD -- $(MA2_EVIDENCE))"; \
+	if [ -n "$$changed" ]; then \
+		echo "FAIL: committed mixed-algebra evidence would be modified:"; \
+		echo "$$changed"; exit 1; \
+	fi; \
+	echo "check-mixed-algebra-evidence: PASS (committed evidence unchanged)"
+
 bench-mixed-algebra: $(OMA_RZ_BENCH) $(OMA_RZ_SELECT)
-	@mkdir -p $(MA2_EVIDENCE)
+	@$(MAKE) --no-print-directory check-mixed-algebra-evidence
+	@if [ -e $(MA2_RUN_DIR) ]; then echo "FAIL: $(MA2_RUN_DIR) exists; choose a new MA2_RUN_ID"; exit 1; fi
+	@mkdir -p $(MA2_RUN_DIR)
 	OMA_BENCH_COMMIT=$$(git rev-parse HEAD) OMA_BENCH_DIRTY=$$(git status --porcelain -- src tests Makefile | grep -c .) \
 		OMA_BENCH_BIN_SHA=$$(sha256sum $(OMA_RZ_BENCH) | cut -c1-64) \
-		./$(OMA_RZ_BENCH) $(MA2_EVIDENCE)/ma2_bench_run1.json
+		./$(OMA_RZ_BENCH) $(MA2_RUN_DIR)/ma2_bench_run1.json
 	OMA_BENCH_COMMIT=$$(git rev-parse HEAD) OMA_BENCH_DIRTY=$$(git status --porcelain -- src tests Makefile | grep -c .) \
 		OMA_BENCH_BIN_SHA=$$(sha256sum $(OMA_RZ_BENCH) | cut -c1-64) \
-		./$(OMA_RZ_BENCH) $(MA2_EVIDENCE)/ma2_bench_run2.json
-	./$(OMA_RZ_SELECT) $(MA2_EVIDENCE)/ma2_select_receipt.json \
-		$(MA2_EVIDENCE)/ma2_bench_run1.json $(MA2_EVIDENCE)/ma2_bench_run2.json
+		./$(OMA_RZ_BENCH) $(MA2_RUN_DIR)/ma2_bench_run2.json
+	./$(OMA_RZ_SELECT) $(MA2_RUN_DIR)/ma2_select_receipt.json \
+		$(MA2_RUN_DIR)/ma2_bench_run1.json $(MA2_RUN_DIR)/ma2_bench_run2.json
+	@$(MAKE) --no-print-directory check-mixed-algebra-evidence
+	@echo "bench-mixed-algebra: new receipts in $(MA2_RUN_DIR)"
 
 # ---------------------------------------------------------------------------
 # TURING Wave 1 (docs/turing/TURING_W0_PROPOSAL.md): Field v1 records (K.7) +
