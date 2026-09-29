@@ -748,7 +748,7 @@ static int authority_sweep(Rig *r, uint64_t *swept, uint64_t *holders, uint64_t 
     if (aienos_cap_office(r->admin, &office) != 0) return -4;
     *swept = 0; *holders = 0; *unexpected = 0;
     for (uint32_t id = 1; id < 2048; id++)
-        for (uint32_t gen = office.generation; gen < office.generation + 8; gen++) {
+        for (uint64_t gen = office.generation; gen < office.generation + 8; gen++) {
             AienosCapEntry e;
             if (aienos_cap_inspect(r->view, (AienosCapRef){id, gen}, &e) != 0) continue;
             if (e.state != 1u) continue;          /* AIENOS_CAP_STATE_LIVE */
@@ -1272,7 +1272,7 @@ static int crumb_has_cap(const RxCrumb *k, RxCapRef c) {
     return 0;
 }
 
-static int b_native_promotion(void *ctx, uint32_t cap_id, uint32_t generation, uint32_t subject,
+static int b_native_promotion(void *ctx, uint32_t cap_id, uint64_t generation, uint32_t subject,
                               uint64_t resource, uint32_t rights) {
     AienosCapEntry entry;
     return aienos_cap_validate(ctx, (AienosCapRef){cap_id, generation}, subject, resource, rights,
