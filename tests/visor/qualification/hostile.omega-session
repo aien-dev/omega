@@ -1,0 +1,33 @@
+// Lane 8 hostile session: every line below except the lets and `x + y` must fail closed; the process stays alive.
+let x: u64 = 7
+let y: u64 = 11
+
+
+// comment only
+frobnicate
+id aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+id bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+id 000000000000000000000000000000000000000000000000000000000000000g
+inspect sha256:junk
+inspect 0000000000000000000000000000000000000000000000000000000000000000
+(x + y
+18446744073709551616: u64
+36893488147419103232: u64
+256: u8
+((((((((((((((((((((((((((((((((((((((((7: u64))))))))))))))))))))))))))))))))))))))))
+x + y
+run _ 1 2 3 4 5 6
+compare x
+let b: bool = true
+realize b
+run sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822
+authorize x
+submit
+execute _
+mint cap
+grant x
+effects x
+1 + 2
+(1: u32) + (1: u64)
+x == y
+let alive: u64 = 42

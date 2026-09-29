@@ -1,0 +1,5 @@
+RX_ARGUS undefined, gcc -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2, objdump -d --no-show-raw-insn, main bba3bd3 vs 265b1c5 (plus the full-Makefile default build: make test-r7/test-r8 pass):
+rx_aegis.o identical (1245 lines)
+rx_native_bind.o identical (35 lines)
+rx_generation.o identical (4755 lines)
+rx_world.o identical (7290 lines)

@@ -1,0 +1,63 @@
+# Omega Visor V1, lane 7: authority-mutating symbols the Visor must never
+# reference (undefined) or define (a local reimplementation).
+# One symbol per line; '#' starts a comment. Checked by check_authority_link.sh.
+# In addition to this list the script refuses ANY undefined reference matching
+# ^rx_ | ^aienos_cap_ | ^rc_ (the omega binary links no runtime at all).
+#
+# capability root administration (mint / revoke / reclaim / clock / epoch)
+rx_caproot_start
+rx_caproot_stop
+rx_capadmin_office
+rx_capadmin_mint
+rx_capadmin_revoke
+rx_capadmin_reclaim
+rx_capadmin_advance_clock
+rx_capadmin_bump_epoch
+rx_cap_generation_advance
+# generation barrier (propose / mutate / promote)
+rx_gen_open
+rx_gen_propose
+rx_gen_mutate_object
+rx_gen_set_evidence
+rx_gen_observe_object
+rx_gen_add_work
+rx_gen_finish_work
+rx_gen_hold_barrier
+rx_gen_release_barrier
+rx_gen_promote
+# world mutation / publication
+rx_world_init
+rx_world_init_with_auth
+rx_world_init_native
+rx_world_create
+rx_world_retire
+rx_world_add_reaction
+rx_world_publish_external
+rx_world_bind_capability
+rx_world_enable_resident
+rx_world_inject_descriptor
+rx_world_overwrite_physical
+rx_world_attach_physical
+rx_world_detach_physical
+rx_world_relocate_physical
+rx_world_place_physical
+rx_world_bind_coherent
+rx_coherent_publish
+rx_resident_accept
+rx_resident_post_claim
+rx_resident_reset
+rx_resident_shutdown
+# AEGIS faculty (registration; root.install is the only minter)
+rx_aegis_create
+rx_aegis_register
+rx_aegis_use_slot
+# native AIENOS authority
+aienos_cap_start
+aienos_cap_stop
+aienos_cap_office
+aienos_cap_mint
+aienos_cap_revoke
+# typed-result publish gate
+rc_gate_register
+rc_produce
+rc_repair

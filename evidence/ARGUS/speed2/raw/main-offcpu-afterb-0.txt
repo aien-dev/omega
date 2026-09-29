@@ -1,0 +1,26 @@
+0	7062.8	50.0	main <- call_init
+0	4310.2	509.9	rx_world_publish_external <- t_slow_then_fast
+0	2216.7	50.7	call_init
+0	1018.7	35.9	rx_world_wait_quiescent <- t_slow_then_fast
+0	953.0	92.3	try_admit <- propagate_inner.part.0
+0	937.7	2.0	popen_read_line.constprop.0 <- omega_evidence_run_id.part.0
+0	881.6	2.1	popen_read_line.constprop.0 <- omega_evidence_run_commit
+0	877.5	2.0	omega_evidence_tree_dirty <- main
+0	482.1	14.0	rx_world_wait_quiescent <- intent
+0	189.7	6.6	rx_world_destroy <- env_stop
+0	104.0	6.3	rx_world_wait_quiescent <- input.isra.0
+0	47.1	2.0	rx_world_wait_quiescent <- approve
+0	43.7	3.2	rx_world_wait_quiescent <- t_attacks
+0	14.1	0.1	aienos_cap_validate <- t_slow_then_fast
+0	6.3	0.1	rx_world_add_reaction <- rx_aegis_register
+0	2.2	0.5	rx_world_create <- rx_aegis_create
+0	2.1	0.4	rx_world_create <- env_start
+0	1.5	0.5	rx_world_read <- t_slow_then_fast
+0	1.1	0.1	rx_world_add_reaction <- env_start
+0	1.0	0.1	env_start <- t_slow_then_fast
+0	0.3	0.1	rx_world_read <- t_attacks
+0	0.2	0.1	rx_world_publish_external <- intent
+0	0.1	0.1	rx_world_add_reaction <- t_attacks
+0	0.1	0.1	rx_world_explain <- t_slow_then_fast
+0	0.1	0.1	rx_world_read <- t_lease
+0	0.1	0.1	rx_world_wait_quiescent <- env_stop

@@ -32,7 +32,7 @@ The OMEGA type system enforces:
 | `0x08` | `TUPLE` | `element_types: List<SemanticId>` | Ordered heterogeneous elements ($N \le 255$) |
 | `0x09` | `ADDRESS` | `width: u16` | Memory or register address index ($w \in [16, 64]$) |
 | `0x0A` | `RESOURCE` | `resource_class: u16` | Abstract resource identifier class |
-| `0x0B` | `CAPABILITY_REFERENCE` | `slot: u32, generation: u32` | OMEGA reference to an M3 capability token |
+| `0x0B` | `CAPABILITY_REFERENCE` | `slot: u32, generation: u64` | OMEGA reference to an M3 capability token (64-bit generation: see `spec/effect-cap64-migration.md`) |
 | `0x0C` | `EFFECT_INTENT_REFERENCE`| `intent_digest: [u8; 32]` | Reference to an intended physical effect |
 | `0x0D` | `EFFECT_RECEIPT_REFERENCE`| `receipt_digest: [u8; 32]` | Reference to an authoritative execution receipt |
 

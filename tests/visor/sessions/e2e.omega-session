@@ -1,0 +1,17 @@
+let x: u64 = 7
+let y: u64 = 11
+x + y
+type _
+id _
+graph _
+machine
+realize _
+cost _
+run _
+verify _
+evidence _
+effects
+fn transform(x: u64) -> u64 requires true ensures result >= 1 { x * 2 + 1 }
+realize transform
+run _ 5
+bindings

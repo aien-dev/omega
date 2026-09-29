@@ -1,0 +1,2 @@
+X925 seconds with >= 1 G cycles: 2601; p10 1.250, median 2.030, max 4.167 GHz
+package energy 63066.0 J over 2053 s, mean 30.72 W

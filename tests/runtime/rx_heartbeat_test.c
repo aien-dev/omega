@@ -1036,6 +1036,43 @@ static void t_crumb_tamper_detected(void) {
     CHECK(rx_world_verify_crumbs(&e->w, NULL) != 0, "rewritten issuer went undetected");
     k->cap_issuer[0] ^= 1;
     CHECK(rx_world_verify_crumbs(&e->w, NULL) == 0, "restored issuer fails verification");
+    k->caps[0].generation ^= 1ull << 32; /* rewrite only the high half of the generation */
+    CHECK(rx_world_verify_crumbs(&e->w, NULL) != 0, "rewritten generation high half went undetected");
+    k->caps[0].generation ^= 1ull << 32;
+    CHECK(rx_world_verify_crumbs(&e->w, NULL) == 0, "restored generation fails verification");
+    audit_and_close(e);
+}
+
+/* Hostile: two crumbs identical except for the capability generation must not
+ * share a digest, even when the generations agree in their low 32 bits. */
+static void t_crumb_cap_generation_64(void) {
+    begin("causal_record_binds_64bit_cap_generation", "I15");
+    HBEnv x;
+    CHECK(hb_setup(&x, 1) == 0, "setup");
+    Env *e = &x.e;
+    static const uint64_t pairs[][2] = {
+        { 0x5ull, 0x100000005ull },                          /* high half only */
+        { (uint64_t)UINT32_MAX, (uint64_t)UINT32_MAX + 1u }, /* the 32-bit boundary */
+        { (uint64_t)UINT32_MAX, 0x1ffffffffull },            /* boundary, same low half */
+        { 0x0ull, 0x8000000000000000ull },                   /* top bit only */
+    };
+    for (size_t i = 0; i < sizeof pairs / sizeof pairs[0]; i++) {
+        RxCrumb a, b;
+        memset(&a, 0, sizeof a);
+        a.id = 1;
+        a.kind = RX_CRUMB_COMMIT;
+        a.n_caps = 1;
+        a.caps[0] = (RxCapRef){ 7, pairs[i][0] };
+        a.cap_issuer[0] = 3;
+        b = a;
+        b.caps[0].generation = pairs[i][1];
+        uint8_t da[32], db[32], da2[32];
+        rx_world_crumb_digest(&e->w, &a, da);
+        rx_world_crumb_digest(&e->w, &b, db);
+        rx_world_crumb_digest(&e->w, &a, da2);
+        CHECK(memcmp(da, da2, 32) == 0, "crumb digest is not deterministic");
+        CHECK(memcmp(da, db, 32) != 0, "crumbs differing only in cap generation share a digest");
+    }
     audit_and_close(e);
 }
 
@@ -1199,12 +1236,14 @@ static void t_authority_office(void) {
 
 static void t_counter_fail_closed(void) {
     begin("counters_fail_closed", "I3");
-    uint32_t gen = 0;
-    CHECK(rx_cap_generation_advance(UINT32_MAX, &gen) == RX_CAP_ERR_EXHAUSTED,
+    uint64_t gen = 0;
+    CHECK(rx_cap_generation_advance(UINT64_MAX, &gen) == RX_CAP_ERR_EXHAUSTED,
           "generation wrap was accepted");
     CHECK(gen == 0, "exhausted generation was written");
-    CHECK(rx_cap_generation_advance(UINT32_MAX - 1, &gen) == RX_CAP_OK, "last generation refused");
-    CHECK(gen == UINT32_MAX, "last generation value");
+    CHECK(rx_cap_generation_advance(UINT64_MAX - 1, &gen) == RX_CAP_OK, "last generation refused");
+    CHECK(gen == UINT64_MAX, "last generation value");
+    CHECK(rx_cap_generation_advance(UINT32_MAX, &gen) == RX_CAP_OK && gen == (uint64_t)UINT32_MAX + 1,
+          "generation stopped at 32 bits");
     uint64_t sum = 1;
     CHECK(rx_cap_add_u64(UINT64_MAX, 1, &sum) == RX_CAP_ERR_OVERFLOW, "u64 wrap was accepted");
     CHECK(sum == 1, "overflow wrote a sum");
@@ -1998,9 +2037,10 @@ static OmegaSharedWorldDesc make_pub(RxWorld *w, const RxObject *o, RxCapRef cap
     d.object_generation = o->generation;
     d.object_offset = 0;
     d.object_length = (uint32_t)o->size_bytes;
-    d.payload_len = 24;
+    d.payload_len = RX_CAP_PAYLOAD;
     st32(d.payload, cap.cap_id);
-    st32(d.payload + 4, cap.generation);
+    st32(d.payload + 4, (uint32_t)cap.generation);
+    st32(d.payload + RX_CAP_GEN_HI_A, (uint32_t)(cap.generation >> 32));
     st64(d.payload + 8, o->version);
     st64(d.payload + 16, crumb);
     rx_world_seal_descriptor(&d);
@@ -2070,7 +2110,10 @@ static void t_one_identity(void) {
     CHECK(after.version > sem.version, "publication did not advance the canonical version");
     CHECK(ld64(got.payload + 8) == after.version, "descriptor version differs from the object");
     CHECK(ld64(got.payload + 16) == (uint64_t)cid, "descriptor lost the causal record");
-    CHECK(ld32(got.payload) == cap.cap_id && ld32(got.payload + 4) == cap.generation, "capability reference differs");
+    CHECK(ld32(got.payload) == cap.cap_id &&
+              (ld32(got.payload + 4) | (uint64_t)ld32(got.payload + RX_CAP_GEN_HI_A) << 32) ==
+                  cap.generation,
+          "capability reference differs");
     CHECK(rx_world_explain(&e.w, obj, 0) == (uint64_t)cid, "field history points elsewhere");
     const RxCrumb *k = rx_world_crumb(&e.w, (uint64_t)cid);
     CHECK(k && k->kind == RX_CRUMB_EXTERNAL, "stimulus crumb");
@@ -2567,6 +2610,7 @@ int main(int argc, char **argv) {
     t_revoke_during_run();
     t_root_table_unwritable();
     t_crumb_tamper_detected();
+    t_crumb_cap_generation_64();
     t_schedule_independence();
     t_authority_office();
     t_counter_fail_closed();

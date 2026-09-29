@@ -1,0 +1,97 @@
+Ω> let x: u64 = 7
+7
+Ω> let y: u64 = 11
+11
+Ω> x + y
+18
+Ω> type _
+u64
+Ω> id _
+sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+  canonical_len: 177
+  canonical_sha256: c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+Ω> graph _
+OPERATION sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7 apply ADD(fef7efa7112d,745f463215c5) : u64
+  OPERATION sha256:6ff7d47206c867ccadb5c2ea8839b59d49ca9e62c6f95070ad7cd3d8f09c73b1 op ADD WRAP arity=2 -> u64
+    TYPE sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822 type u64
+  VALUE sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db value 7 : u64
+  VALUE sha256:745f463215c5d2c0a03509b2ce1f7c3f2f393c6cd00d3add00fe79c4720669c2 value 11 : u64
+<machine block: host-dependent, masked>
+Ω> realize _
+[pure-execution]
+realization
+  id           sha256:ffe7656dc91cf25a4aacfc005ffb643fa79f3fd8ce55d11420fd4982e9d0ff76
+  subject      sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+  realized     sha256:6ff7d47206c867ccadb5c2ea8839b59d49ca9e62c6f95070ad7cd3d8f09c73b1
+<host machine line: host-dependent, masked>
+  bound        none
+  target       aarch64-v8a profile=0x01
+  code         8 bytes, 2 instructions
+    8b010000  add x0, x0, x1
+    d65f03c0  ret
+  compatible   yes
+  runnable     yes
+  why          profile 0x01 vs machine 0x01 match; realizer bound no machine; run allowed
+cost (four separate classes; never merged)
+  predicted cycles=2 insns=2 bytes=8  [static: code_len/4 = 2 instructions x 1 cycle; no machine model]
+<host machine line: host-dependent, masked>
+  measured  ABSENT  [absent: Visor V1 ingests no execution receipts]
+  qualified ABSENT  [absent: no qualified gate result for this realization in V1]
+Ω> cost _
+[simulation]
+cost (four separate classes; never merged)
+  predicted cycles=2 insns=2 bytes=8  [static: code_len/4 = 2 instructions x 1 cycle; no machine model]
+<host machine line: host-dependent, masked>
+  measured  ABSENT  [absent: Visor V1 ingests no execution receipts]
+  qualified ABSENT  [absent: no qualified gate result for this realization in V1]
+Ω> run _
+[pure-execution]
+18
+Ω> verify _
+[pure-execution]
+STRUCTURAL      PASS     V0 graph typing + DAG integrity (5 object(s))
+TYPE            PASS     OPERATION(apply) object validates
+INVARIANTS      PASS     V2 reference-evaluator algebra (commutativity, identity, wrap, range); not object-specific
+REALIZATION     PASS     V1 differential, OP_ADD with c=0 (17 check(s), incl. V0 realization id)
+AUTHORITY       PASS     NONE: no effect or capability ref reachable (5 object(s) walked)
+<host machine line: host-dependent, masked>
+VERDICT         PASS
+Ω> evidence _
+evidence: 0 shown, 0 matched, 1 scanned, 0 unparsed
+no evidence
+Ω> effects
+[effect-request]
+no effect objects in session
+Ω> fn transform(x: u64) -> u64 requires true ensures result >= 1 { x * 2 + 1 }
+fn transform: u64 -> u64
+Ω> realize transform
+[pure-execution]
+realization
+  id           sha256:dfc4cb844da0044a4fe0c58c5ecd0b77d1ad04df3f3037609f8ed8581b058bff
+  subject      sha256:beedf7f6fc3853c0aed82e0b35e165b14878a82b0ebac64aa5bd9430800a8c4f
+  realized     none
+<host machine line: host-dependent, masked>
+  bound        none
+  target       aarch64-v8a profile=0x01
+  code         20 bytes, 5 instructions
+    d2800041  movz x1, #0x2
+    9b017c00  mul x0, x0, x1
+    d2800021  movz x1, #0x1
+    8b010000  add x0, x0, x1
+    d65f03c0  ret
+  compatible   yes
+  runnable     yes
+  why          profile 0x01 vs machine 0x01 match; realizer bound no machine; run allowed
+cost (four separate classes; never merged)
+  predicted cycles=5 insns=5 bytes=20  [static: code_len/4 = 5 instructions x 1 cycle; no machine model]
+<host machine line: host-dependent, masked>
+  measured  ABSENT  [absent: Visor V1 ingests no execution receipts]
+  qualified ABSENT  [absent: no qualified gate result for this realization in V1]
+Ω> run _ 5
+[pure-execution]
+11
+Ω> bindings
+x  object  sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+y  object  sha256:745f463215c5d2c0a03509b2ce1f7c3f2f393c6cd00d3add00fe79c4720669c2
+transform  program  sha256:beedf7f6fc3853c0aed82e0b35e165b14878a82b0ebac64aa5bd9430800a8c4f
+_  realization  sha256:dfc4cb844da0044a4fe0c58c5ecd0b77d1ad04df3f3037609f8ed8581b058bff

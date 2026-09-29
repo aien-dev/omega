@@ -1,0 +1,15 @@
+# basic Omega Visor session (phase A: only built-in commands are wired)
+help id
+bindings
+
+id _
+id sha256:0000000000000000000000000000000000000000000000000000000000000000
+let x = 3 * 6
+inspect x
+run x
+realize x for current.machine
+compare a
+clear
+bindings
+quit
+bindings

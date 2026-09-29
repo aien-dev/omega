@@ -1,0 +1,21 @@
+2026-09-29T02:57:55Z
+cpu0 performance max=2808000
+cpu1 performance max=2808000
+cpu10 performance max=2808000
+cpu11 performance max=2808000
+cpu12 performance max=2808000
+cpu13 performance max=2808000
+cpu14 performance max=2808000
+cpu15 performance max=3900000
+cpu16 performance max=3900000
+cpu17 performance max=3900000
+cpu18 performance max=3900000
+cpu19 performance max=3900000
+cpu2 performance max=2808000
+cpu3 performance max=2808000
+cpu4 performance max=2808000
+cpu5 performance max=3900000
+cpu6 performance max=3900000
+cpu7 performance max=3900000
+cpu8 performance max=3900000
+cpu9 performance max=3900000

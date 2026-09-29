@@ -1,0 +1,117 @@
+{
+  "schema": "omega-visor-v1-qualification/1",
+  "tool": "tools/qualify_visor.sh",
+  "run_id": "20260929T121057Z",
+  "candidate_commit": "100d9dab5c8a96a1b6c14c8f823ad7ddbb79e6a9",
+  "candidate_tree": "748b1c5b1b7b92e52d1d6c907ac8dd46544d12b6",
+  "tree_dirty": false,
+  "tree_dirty_detail": "see dirty_files",
+  "dirty_files": [],
+  "tree_stable_during_run": true,
+  "physics_commit": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9",
+  "physics": {"lock": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9", "checkout": "/home/drakestapleton/workspace/physics-r13", "checkout_head": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9"},
+  "aienos": {"lock": "d39dd5bc3deb1a24e26a5059477a1342c110c71b", "source": "git archive d39dd5bc3deb1a24e26a5059477a1342c110c71b native/capability (tree 95a37fc83951af3042634b052d171bff9cd48bd0)", "header_sha256": "70a9b3952cd5f5d24fbe3c56627feb3b8b1999ce7500775a61e5cd8948fb84b0", "lib_sha256": "e16b4ac10d2ee62c81c8556817c8d2efd0c376b9ede692c177b35d270c5a1118", "lib_built": true,
+    "used_by": "test-visor-authority (VISOR_AUTH_CAP_LIB) and every make run (AIENOS_R7_DIR)"},
+  "host": {"uname_m": "aarch64", "uname_r": "7.0.0-1019-nvidia", "product_name": "NVIDIA_DGX_Spark"},
+  "hardware_scope": "host-only: no GPU/silicon claim; no QEMU claim by the Visor (the pre-existing test-m5 gate runs its own QEMU check)",
+  "omega_binary": {"path": "build/q8r/omega", "built": true, "sha256": "2f6f83dd80cb5177071971f9ee3242b61e541bf625fb9b95061b45de683dfd82",
+    "build": "make OUT_DIR=build/q8r PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 build/q8r/omega"},
+  "gates": {
+    "OMEGA_VISOR_SEMANTIC_PASS": {"status": "PASS", "tests_run": 541, "tests_failed": 0, "sources": ["make test-visor-semantic", "make test-language", "run_qualification.sh:semantic", "run_qualification.sh:determinism"]},
+    "OMEGA_VISOR_VERIFY_PASS": {"status": "PASS", "tests_run": 151, "tests_failed": 0, "sources": ["make test-visor-verify", "make test-visor-evidence", "make test-visor-world", "run_qualification.sh:usability"]},
+    "OMEGA_VISOR_REALIZE_PASS": {"status": "PASS", "tests_run": 441, "tests_failed": 0, "sources": ["make test-visor-machine", "make test-visor-realization", "make test-visor-console", "run_qualification.sh:realize", "run_qualification.sh:scriptability"]},
+    "OMEGA_VISOR_AUTHORITY_ISOLATION_PASS": {"status": "PASS", "tests_run": 200, "tests_failed": 0, "sources": ["make visor-authority-check", "make test-visor-authority", "run_qualification.sh:hostile", "run_qualification.sh:authority"]},
+    "OMEGA_VISOR_REGRESSION_PASS": {"status": "PASS", "tests_run": 92, "tests_failed": 0, "sources": ["make test", "make test-m5", "make test-m6", "make test-m7", "make test-m8", "make test-m9", "make test-m10", "make test-m13", "make test-m14", "make visor-physics-free-check"]}
+  },
+  "suites": [
+    {"target": "test-visor-semantic", "rc": 0, "tests_run": 95, "tests_failed": 0, "status": "PASS", "log_sha256": "1aad2c522b6d61c292f639164b75bdb46b4d8a3870f64513a6a0261703ceda49"},
+    {"target": "test-language", "rc": 0, "tests_run": 407, "tests_failed": 0, "status": "PASS", "log_sha256": "952d5964989fe34e315a87adbe8837698d87a132cd8a50a56ab8ce43145e6ac8"},
+    {"target": "test-visor-verify", "rc": 0, "tests_run": 47, "tests_failed": 0, "status": "PASS", "log_sha256": "2ddc8f67309208c25e001f3b2ad7c937198d18dddae41602400b83555268acfb"},
+    {"target": "test-visor-evidence", "rc": 0, "tests_run": 39, "tests_failed": 0, "status": "PASS", "log_sha256": "1fe3238561f0fb658b2a88c695237b91e7639e80ca92032a7a26bbcc7b2b5324"},
+    {"target": "test-visor-machine", "rc": 0, "tests_run": 36, "tests_failed": 0, "status": "PASS", "log_sha256": "e503267c84a69af6dfe4da9c99d83fc8d5feb2a57eeab3a6d2e1edadb272909b"},
+    {"target": "test-visor-realization", "rc": 0, "tests_run": 63, "tests_failed": 0, "status": "PASS", "log_sha256": "d82d78d8dc19f8eeb76504e6b788bf5164423722d663c40fc2d2f8ed87dd30f8"},
+    {"target": "test-visor-console", "rc": 0, "tests_run": 306, "tests_failed": 0, "status": "PASS", "log_sha256": "a6578a5bb4799e43c5833cd156f212376876b1e3c18ff9adf5d680c75af068e4"},
+    {"target": "visor-authority-check", "rc": 0, "tests_run": 1, "tests_failed": 0, "status": "PASS", "log_sha256": "f6900d6ebda156f2f8704c6a72d94219e3b76547e15e879165c73fb191a04cd5"},
+    {"target": "visor-physics-free-check", "rc": 0, "tests_run": 1, "tests_failed": 0, "status": "PASS", "log_sha256": "33dcba747e2c30e5181336c0ce93bbb59a061e8f81f6e4b6d7a1cd205e25adc1"},
+    {"target": "test-visor-world", "rc": 0, "tests_run": 47, "tests_failed": 0, "status": "PASS", "log_sha256": "6d59f43a4a5d53878b714eecd3bce8ad66e28e64c07020a8eeaf534721f905d3"},
+    {"target": "test-visor-authority", "rc": 0, "tests_run": 104, "tests_failed": 0, "status": "PASS", "log_sha256": "3e41013eabad5bd2f6924e062c6ebb1afad5a8b88aeadc55ad8597be86560621"},
+    {"target": "test", "rc": 0, "tests_run": 12, "tests_failed": 0, "status": "PASS", "log_sha256": "ad5aebfe0c48e0561df2d3bf020e428ada1797c67dcf0abb606cc45931e469a4"},
+    {"target": "test-m5", "rc": 0, "tests_run": 9, "tests_failed": 0, "status": "PASS", "log_sha256": "aba8a50a0161d0fe159d412e51a5135f74999d6bd62338411ce61149e5efd35a"},
+    {"target": "test-m6", "rc": 0, "tests_run": 10, "tests_failed": 0, "status": "PASS", "log_sha256": "56a8f4b184417fa282638ce7b19dc3a268f96aa973d74f5826348bca455170e6"},
+    {"target": "test-m7", "rc": 0, "tests_run": 10, "tests_failed": 0, "status": "PASS", "log_sha256": "27354db2f744e82b2fbfe88abda5cb46070bebb11cadf13b99d5a2d2877b943d"},
+    {"target": "test-m8", "rc": 0, "tests_run": 10, "tests_failed": 0, "status": "PASS", "log_sha256": "256390885e472d265eeda432a9f9640f364036f0a2165c4a95866a60871e4a4c"},
+    {"target": "test-m9", "rc": 0, "tests_run": 10, "tests_failed": 0, "status": "PASS", "log_sha256": "57f5bf9e647b8b370a4851d6468eeb7cd6e5f6bde68a683de6238e796e98cb8e"},
+    {"target": "test-m10", "rc": 0, "tests_run": 10, "tests_failed": 0, "status": "PASS", "log_sha256": "508775748546e0f9ad90467edf31e27296d6a1d3c7d2fb90e45e72a749a6ca29"},
+    {"target": "test-m13", "rc": 0, "tests_run": 10, "tests_failed": 0, "status": "PASS", "log_sha256": "4525fee110affbb12b244152cceb729a88bd3a2f1bb6ceaf79165b7c8c19501e"},
+    {"target": "test-m14", "rc": 0, "tests_run": 10, "tests_failed": 0, "status": "PASS", "log_sha256": "dc2949e9b1ed23ae12a539d8e912433bbe772f4fbc3aeb39a2bf140116dd4c9b"},
+    {"target": "test-m12", "status": "NOT_RUN", "reason": "GPU/silicon target excluded by lane-8 brief: GPU (living matvec)"},
+    {"target": "test-m15", "status": "NOT_RUN", "reason": "GPU/silicon target excluded by lane-8 brief: accelerator/GPU"},
+    {"target": "test-m17", "status": "NOT_RUN", "reason": "GPU/silicon target excluded by lane-8 brief: Blackwell GPU"},
+    {"target": "test-m18", "status": "NOT_RUN", "reason": "GPU/silicon target excluded by lane-8 brief: GPU"},
+    {"target": "test-m19", "status": "NOT_RUN", "reason": "GPU/silicon target excluded by lane-8 brief: GPU"},
+    {"target": "test-m11", "status": "NOT_RUN", "reason": "not in the lane-8 regression list"}
+  ],
+  "runner_rc": 0,
+  "runner_log_sha256": "1749c9979f7d8beb674101b7095094c64abf872ed6cc7625189e6546f6f17cb9",
+  "runner_sections": {"semantic": {"run": 33, "failed": 0}, "determinism": {"run": 6, "failed": 0}, "realize": {"run": 22, "failed": 0}, "hostile": {"run": 72, "failed": 0}, "authority": {"run": 23, "failed": 0}, "scriptability": {"run": 14, "failed": 0}, "usability": {"run": 18, "failed": 0}},
+  "runner_failed_cases": [
+  ],
+  "hostile_cases": {"run": 69, "failed_closed": 60, "crashed": 0, "benign_noop": 4,
+    "note": "benign_noop = blank/whitespace/comment lines, a spec'd no-op (exit 0); the rest must exit 1 with an error line"},
+  "sanitizer_pass": {"status": "RUN", "sanitizer_reports": "none", "crashed": 0, "same_case_failures_as_release": true},
+  "determinism": {"runs": 3, "identical": true, "scope": "same host, fresh processes; text, --json and realization ids"},
+  "scriptability": {"section": {"run": 14, "failed": 0},
+    "contract": "exit 0 = every line ok; 1 = at least one line errored; 2 = usage error or unopenable script; --json = one object per non-blank line with keys command/status/class/result/error; no prompt when stdin is not a tty; --script - reads stdin"},
+  "ux_findings": [
+    "`true`/`false` echo as 1/0 although `type _` says bool; a user reads 1 as an integer.",
+    "`why <x>` is described as 'explain where x came from' but only explains realizations; on a value it says `use realize x first`, and `realize x` then refuses a value, a dead end.",
+    "Errors raised before parsing, and unknown commands, are labelled `unknown` (`error: unknown: invalid UTF-8 at byte 4`, `error: unknown: unknown command or invalid source line: 'authorize'`).",
+    "`id` prints the same hash three times (id, canonical_sha256) plus canonical_len; the relation is not explained.",
+    "After `realize _`, `_` silently becomes the realization, so `inspect _`/`type _` now refer to a different object than one line earlier.",
+    "Every u64 ADD has the same realization id (`realized` = the ADD operation, not the apply), so `x + y` and `x + 1` share one realization id; correct per spec but surprising in `bindings`/`compare`.",
+    "`run _ a b` (exactly all operands) on a binary-apply realization runs the operation on the given numbers, not on the object's operands (7+11 -> `run _ 1 2` prints 3); allowed by design after the D2 fix, but the output does not say the object's own operands were replaced.",
+    "Machine/realization output uses hex profile codes (`profile 0x01 vs machine 0x01`), `physics flag=set seal=builder-constant placeholder`, and C function names (`omega_machine_estimate_latency(...)`, `omega_exec_native_f3`) as explanations; not readable without the C source.",
+    "`verify` row INVARIANTS reports 399 generic checks that are 'not object-specific'; a user may read the PASS as evidence about their object.",
+    "`evidence <name>` for a session object always says `no evidence`: receipts are repository files, not linked to session objects; 'what evidence supports this object' cannot be answered in V1.",
+    "Blank lines produce no JSON object while comment-only lines produce one (`kind: none`); a script driver counting lines must know this.",
+    "Commands after `quit` in --command/--script mode are silently dropped (exit 0).",
+    "`--script /dev/null` (a character device, not a regular file) is accepted as an empty script (exit 0), although the round-2 note says non-regular files exit 2; harmless, but the claim and behaviour differ."
+  ],
+  "defects": [
+    {
+      "id": "D1",
+      "severity": "high; FIXED in ec2ec0b (found at 4fab549)",
+      "what": "The ./omega shipped at commit 4fab549 (sha256 543d874d...d4d3) crashed on every realize/run path (exit 139 SIGSEGV in om_realization_show; 'stack smashing detected', exit 134). Cause: omega_main.d missing from VISOR_DEPS, so tools/omega.c was not rebuilt when src/visor/visor.h changed. ec2ec0b adds it; a clean-checkout build of 4fab549 was not tested."
+    },
+    {
+      "id": "D2",
+      "severity": "medium; FIXED in d7e8a4c (open in receipt #1)",
+      "what": "`run` did not check arity: `run f` -> 1, `run f 5 6` -> 11, `run _ 1` -> 12, `run _ 1 2 3` -> 3, all exit 0. At d7e8a4c: 'program f takes 1 input; give it on the command line', 'program f takes 1 input; got 2', '_ takes 2 operands; got 1 (give none, or all 2)', '... got 3 ...'; exit 1."
+    },
+    {
+      "id": "D3",
+      "severity": "low; FIXED in d7e8a4c",
+      "what": "`./omega --script /` exited 0; at d7e8a4c it prints 'error: --script: / is a directory' and exits 2."
+    },
+    {
+      "id": "D4",
+      "severity": "cosmetic; FIXED in d7e8a4c",
+      "what": "Doubled 'alternatives:' prefix, `effects x` error without 'error:', help `graph [x]` and `let x = <expr>`, parser jargon for `authorize x`/`execute _`: all corrected (hostile.expected and usability.expected regenerated; the only other changed line is the `run <type-id>` message, now '... is not an APPLY; only pure binary u64 applies run in V1', still exit 1)."
+    }
+  ],
+  "non_claims": [
+    "Host-only qualification on one DGX Spark (aarch64); no GPU, no silicon, no QEMU claim by the Visor.",
+    "No measured or qualified cost: the Visor fills only predicted (static) and estimated (assumed machine model) cost; measured/qualified are ABSENT by design.",
+    "Machine identity is the assumed canonical profile chosen from DMI, not an observed descriptor; the physics seal is a builder placeholder.",
+    "World is unattached in the omega binary: `world` observes nothing; the snapshot API is covered only by the runtime-linked test-visor-world.",
+    "Language V0 scope only: explicit-width unsigned integers, bool, let, + - * / & |, fn chains (x op c)...; realize/run cover u64 binary ADD/SUB/MUL/AND/OR only.",
+    "Effects: the language cannot build an EFFECT object, so `run` on an effect is not reachable from the console; effect-request refusal is covered only by the C hostile suite (test-visor-authority) and the link check.",
+    "GPU targets test-m12, test-m15, test-m17, test-m18, test-m19 and all Blackwell paths were not run (lane-8 brief); test-m11 was not in the list.",
+    "The pre-existing test-m5 gate launches QEMU and writes build/qemu_omega_runner.bin under the shared build/ directory (hard-coded path in omegatool).",
+    "The e2e session golden (tests/visor/sessions/e2e.expected) is compared host-independently only after ec2ec0b; the lane-8 goldens mask the machine block, machine name/id and estimated cycles.",
+    "Determinism is shown across fresh processes on this host only, not across hosts, compilers or ABIs (golden bytes are pinned to LP64/aarch64).",
+    "Visor V1 is not claimed safe against a hostile local user with write access to the binary or the evidence directory."
+  ],
+  "verdict": "OMEGA_VISOR_V1_PASS",
+  "verdict_reasons": []
+}

@@ -45,6 +45,7 @@
 #include "rx_world.h"
 #include "rx_aegis.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define AG_MAX_NODES     64u
@@ -57,6 +58,9 @@
 #define AG_MAX_SKILLS    16u
 #define AG_MAX_CAPS      16u
 #define AG_MAX_PROCS     8u
+#define AG_META_MAX_STEPS 8u    /* steps one fused node (MetaSkill) runs */
+#define AG_META_MAX_OBJ   2u    /* World objects a fused node reads */
+#define AG_META_TABLE     64u   /* entries of a learned realization */
 
 /* Value types carried on data edges. */
 typedef enum {
@@ -83,6 +87,7 @@ typedef enum {
     AG_BRANCH,          /* bool decision other nodes are guarded by */
     AG_JOIN,            /* the one input that is OK */
     AG_RETRY,           /* bounded retry of a skill */
+    AG_META,            /* a published MetaSkill: several verified steps in one node (rx_fusion.h) */
     AG_KIND_COUNT
 } AgKind;
 
@@ -134,6 +139,11 @@ typedef struct {
     uint8_t id[32];             /* semantic identity (rx_graph_identify) */
     uint32_t origin;            /* index in the graph it was first built in */
     uint8_t alive;
+    /* META only. op = skill id; imm, imm2 = the first 128 bits of the
+     * realization identity the node was built for. */
+    uint32_t n_mobj;
+    RxObjRef mobj[AG_META_MAX_OBJ];     /* World objects its steps read, by slot */
+    AgType in_type[AG_MAX_IN];          /* input contract, by port */
 } AgNode;
 
 typedef struct { uint16_t from, to; uint8_t port, mode; AgType type; } AgDataEdge;
@@ -192,6 +202,62 @@ void rx_graph_identify(AgGraph *g);
 
 /* A reusable procedure (Skill Net). Deterministic function of its inputs. */
 typedef uint64_t (*AgSkillFn)(const uint64_t *in, uint32_t n, uint32_t attempt, int *failed);
+
+/* ---- MetaSkill realizations (what an AG_META node runs) ----
+ *
+ * A step program is a fused fragment: its steps in a canonical order (the
+ * exit last), each step an ordinary node whose inputs are either an external
+ * port of the fused node or an earlier step. Every step runs through the same
+ * node semantics as the graph it came from. */
+typedef struct {
+    AgNode node;                /* kind, out type, op, imm, imm2, field, cost, fused steps */
+    uint32_t n_in;
+    struct { uint8_t step; uint8_t index; uint8_t mode; } in[AG_MAX_IN];
+                                /* step 1: earlier step `index`; 0: external port `index` */
+    int32_t obj;                /* object slot it reads, or -1 */
+    uint8_t local_id[32];       /* identity inside the fragment (not the graph around it) */
+} AgMetaStep;
+
+typedef struct {
+    uint32_t n_steps;
+    AgMetaStep step[AG_META_MAX_STEPS];
+    uint32_t n_in;
+    AgType in_type[AG_MAX_IN];
+    uint8_t in_mode[AG_MAX_IN];         /* AG_EDGE_DATA or AG_EDGE_ON_FAIL, per port */
+    uint32_t n_obj;
+    uint32_t obj_rights[AG_META_MAX_OBJ];
+    RxResourceNeed need;                /* merged resource need of the steps */
+    AgType out_type;
+    uint8_t signature[32];              /* steps, internal dependencies, authority pattern, contracts */
+} AgMetaProgram;
+
+typedef enum {
+    AG_REAL_COMPILED = 1,       /* deterministic: the step program, register-resolved, one reaction */
+    AG_REAL_LEARNED,            /* a table learned from verified observations; nothing else */
+    AG_REAL_HYBRID,             /* the learned table, and the step program on a miss */
+    AG_REAL_HARDWARE            /* a hardware realization; none exists on this host */
+} AgRealKind;
+
+/* A learned entry: inputs (status and value by port) and the World fields
+ * read, to the result and the step evidence the reference produced. */
+typedef struct {
+    uint8_t s[AG_MAX_IN];
+    uint64_t v[AG_MAX_IN];
+    uint64_t world;             /* digest of the fields of every object slot */
+    uint8_t status;
+    uint64_t value;
+    uint64_t steps;
+    uint32_t attempts;
+} AgMetaEntry;
+
+typedef struct {
+    AgRealKind kind;
+    AgMetaProgram prog;         /* COMPILED, HYBRID: what runs; others: the contract it serves */
+    uint32_t n_table;
+    AgMetaEntry table[AG_META_TABLE];
+    uint8_t identity[32];       /* rx_graph_realization_identity */
+} AgRealization;
+
 typedef struct {
     uint32_t id;
     AgSkillFn fn;
@@ -201,6 +267,10 @@ typedef struct {
 typedef struct {
     uint32_t n;
     AgSkill skill[AG_MAX_SKILLS];
+    /* Published MetaSkills: what an AG_META node with this skill id runs.
+     * Only rx_fusion_publish adds here, after the generation barrier. */
+    uint32_t n_meta;
+    struct { uint32_t id; const AgRealization *r; } meta[AG_MAX_SKILLS];
 } AgSkillTable;
 
 /* A procedure: a graph template whose World objects are parameters. */
@@ -257,6 +327,12 @@ typedef struct {
 int rx_graph_compile(const AgGoal *goal, RxWorld *w, const AgCapTable *caps,
                      const AgConstraints *cons, const AgLibrary *lib, int optimize,
                      AgGraph *out, AgReport *rep);
+
+/* The tail of compile: costs and the critical-path constraint, missing
+ * authority, resource-blocked nodes. Also used after a graph is rewritten
+ * (rx_fusion_apply). Returns AG_OK_READY or AG_E_CONSTRAINT. */
+int rx_graph_report_needs(const AgGraph *g, RxWorld *w, const AgCapTable *caps,
+                          const AgConstraints *cons, AgReport *rep);
 
 /* Semantic-preserving passes, in order: constant propagation, common
  * subexpression elimination (identity-equal pure nodes and World reads with
@@ -327,6 +403,7 @@ typedef struct {
     uint64_t value[AG_MAX_NODES];
     uint64_t evidence[AG_MAX_NODES];
     uint32_t attempts[AG_MAX_NODES];
+    uint64_t steps[AG_MAX_NODES];       /* META: step evidence (rx_graph_step_record chain) */
     int outcome;
 } AgResult;
 
@@ -344,10 +421,79 @@ typedef struct {
     uint64_t effect_count;
     uint64_t effect_chain[AG_MAX_NODES];
     uint64_t published[AG_MAX_NODES];
+    /* The World fields each node saw when it ran, by object slot (slot 0
+     * for READ/RECALL/PERFORM; META by its own slots). */
+    uint64_t world_seen[AG_MAX_NODES][AG_META_MAX_OBJ][RX_MAX_FIELDS];
 } AgReference;
 
 int rx_graph_reference(const AgGraph *g, RxWorld *w, const AgSkillTable *skills,
                        const AgCapTable *caps, uint64_t run, AgReference *out);
+
+/* The reference against given object contents instead of a World: every
+ * object named here is live with these fields, every other is stale, and
+ * authority is not consulted. Used to test a fragment on inputs no World
+ * holds. */
+typedef struct {
+    RxObjRef obj;
+    uint64_t field[RX_MAX_FIELDS];
+} AgObjContents;
+
+int rx_graph_reference_on(const AgGraph *g, const AgSkillTable *skills, const AgObjContents *objs,
+                          uint32_t n_objs, uint64_t run, AgReference *out);
+
+/* ---- MetaSkill support ---- */
+
+/* Deterministic topological order of the live nodes (index order breaks
+ * ties). Count, or AG_E_CYCLE. */
+int rx_graph_topo(const AgGraph *g, uint16_t order[AG_MAX_NODES]);
+
+/* One link of a fused node's step evidence: the step's identity inside its
+ * fragment, its status and value, and the input values it saw. */
+uint64_t rx_graph_step_record(uint64_t acc, const uint8_t local_id[32], uint32_t status,
+                              uint64_t value, const uint64_t *in, uint32_t n_in);
+
+/* Run a realization on inputs (status and value by port) and the fields of
+ * each object slot. Fills status, value, attempts, the step evidence and the
+ * busy time the steps that ran would have taken. Returns 0, or -1 when the
+ * realization cannot run here (HARDWARE, a LEARNED miss). */
+typedef struct {
+    uint8_t status;
+    uint64_t value;
+    uint32_t attempts;
+    uint64_t steps;
+    uint64_t busy_us;
+    int table_hit;
+} AgMetaOut;
+
+int rx_graph_meta_run(const AgRealization *r, const AgSkillTable *skills, const uint8_t *s,
+                      const uint64_t *v, uint32_t n_in,
+                      const uint64_t world[AG_META_MAX_OBJ][RX_MAX_FIELDS], AgMetaOut *out);
+
+/* Canonical bytes of a realization: its program as it will run and its
+ * learned table. Returns the length (the bytes written are at most cap). */
+#define AG_REALIZATION_MAX_BYTES 16384u
+size_t rx_graph_realization_encode(const AgRealization *r, uint8_t *buf, size_t cap);
+
+/* Content identity: SHA-256 over the canonical bytes. */
+void rx_graph_realization_identity(AgRealization *r);
+
+/* Fill every step's local identity and the program signature from the
+ * steps themselves. */
+void rx_graph_meta_seal(AgMetaProgram *p);
+
+/* The learned-table key of the World fields a program reads. */
+uint64_t rx_graph_meta_world_key(const AgMetaProgram *p,
+                                 const uint64_t world[AG_META_MAX_OBJ][RX_MAX_FIELDS]);
+
+/* Replace the live nodes in `members` (one of them `exit`, the only one whose
+ * result leaves the set) with one AG_META node. ext[i] is the node feeding
+ * port i; objs[j] the World object of slot j. Authority and resource
+ * requirements of the members move to the new node, as do the exit's
+ * conditions and the members' evidence obligations. The graph is compacted;
+ * the caller validates it. Returns the new node's index or AG_E_*. */
+int rx_graph_fuse(AgGraph *g, uint64_t members, uint32_t exit, uint32_t skill_id,
+                  const AgRealization *r, const uint16_t *ext, uint32_t n_ext,
+                  const RxObjRef *objs, uint32_t n_objs);
 
 /* Order chain step used by effect objects (and the reference). */
 uint64_t rx_graph_chain(uint64_t chain, uint64_t run, uint64_t value);

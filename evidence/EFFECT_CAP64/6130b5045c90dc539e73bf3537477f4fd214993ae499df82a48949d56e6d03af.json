@@ -1,0 +1,51 @@
+{
+  "schema": "omega-effect-cap64-qualification/1",
+  "spec": "spec/effect-cap64-migration.md",
+  "run_id": "20260929T114547Z",
+  "candidate_commit": "c819b3762dc7d0ae2f0b1066144056f9e06d4773",
+  "candidate_tree": "014a02185ae809de629e4d14c02993ee594b7be6",
+  "tree_dirty": false,
+  "tree_stable_during_run": true,
+  "host": {"uname_m": "aarch64", "uname_r": "7.0.0-1019-nvidia", "product_name": "NVIDIA_DGX_Spark"},
+  "hardware_scope": "host-only (CPU); no GPU, no silicon, no energy measurement",
+  "aienos": {"lock": "4c213863c840f77264e6851f5f6f393e80cfdb95", "source": "git archive 4c213863c840f77264e6851f5f6f393e80cfdb95 native/capability (tree 4f4f3ed89f12a5a564f9e435341dc812872b6a2c)", "header_sha256": "24bbbb792364bbaa8dca436caa599204e8db42892826fdd23ebbc7a09d57aacc", "lib_sha256": "d0d4695e562dc2c8343fb630c30c56bac6cffbcd37c8c90dc7ee35d7438a63a7", "lib_built": true},
+  "physics": {"lock": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9", "checkout_head": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9"},
+  "gates": {
+    "OMEGA_EFFECT_CAP64_ROUNDTRIP_PASS": {"status": "PASS", "tests_run": 132, "tests_failed": 0, "sources": "make test-effect-cap64 + truncation grep"},
+    "OMEGA_EFFECT_CAP64_IDENTITY_PASS": {"status": "PASS", "tests_run": 60, "tests_failed": 0, "sources": "make test-effect-cap64"},
+    "OMEGA_EFFECT_CAP64_STALE_REJECT_PASS": {"status": "PASS", "tests_run": 45, "tests_failed": 0, "sources": "make test-effect-cap64"},
+    "OMEGA_EFFECT_CAP64_AUTHORITY_PASS": {"status": "PASS", "tests_run": 173, "tests_failed": 0, "sources": "make test-effect-cap64 (authority, real AIENOS lib) + make test-visor-authority + visor-authority-check (in test-visor-core)"},
+    "OMEGA_EFFECT_CAP64_REGRESSION_PASS": {"status": "PASS", "tests_run": 62286, "tests_failed": 0, "sources": "make test-visor-core test-visor-world test test-r3 test-r7 test-r8 test-r9 test-r10 test-r11 test-r12 test-action-graph test-state-projection test-capability-query test-typed-results (tests_run = PASS n/m lines, omegatool TOTAL GATES, or the suite's own receipt checks/failures; exit status always required)"}
+  },
+  "suites": [
+    {"target": "test-effect-cap64", "rc": 0, "tests_run": 304, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "29a0af10136a10571ed014ed12ed4000c53259718dcf194ff978e987f3a8a27b"},
+    {"target": "test-visor-core", "rc": 0, "tests_run": 993, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "ff9a23fccaf878c152a50a019598d2cf721a202207395afbb92d3fa7b0b2bdb9"},
+    {"target": "test-visor-world", "rc": 0, "tests_run": 47, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "20ce6a800b29986472f255f911b292f9f46a5d45cd5d863d07fb5aebdab892db"},
+    {"target": "test-visor-authority", "rc": 0, "tests_run": 104, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "41327608d93cbe3e00b8cd78eaa54d03153e445a8a22511d1feaa4f0c8309a51"},
+    {"target": "test", "rc": 0, "tests_run": 12, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "d314a63d04f744a5608d4af63ce93724c162b8c3fb3ad55a3894240054bb67cc"},
+    {"target": "test-r3", "rc": 0, "tests_run": 10287, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114627Z-c819b3762dc7/R3/rx_heartbeat_receipt.json", "status": "PASS", "log_sha256": "c68a704f968fe1e2957909f9ce3110b7560fbb55b9a4819ea5ea3f4fe215aeb7"},
+    {"target": "test-r7", "rc": 0, "tests_run": 0, "tests_failed": 0, "count_source": "exit-status-only", "status": "PASS", "log_sha256": "5afb1c24b8883ebb29461f7932e1f407c57c26060b9f046ecc939263aa34545a"},
+    {"target": "test-r8", "rc": 0, "tests_run": 116, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114702Z-c819b3762dc7/R8/rx_aegis_resident_receipt.json", "status": "PASS", "log_sha256": "29621d5e18dd914ffa543d39dc647560dfec97612b4e6367b8313d60a3cfd7a4"},
+    {"target": "test-r9", "rc": 0, "tests_run": 210, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114706Z-c819b3762dc7/R9/rx_generation_barrier_receipt.json", "status": "PASS", "log_sha256": "a27de77bc9e24f91cd97ae90f4465f972192942ba30b1f72ac4bdd88bc50172b"},
+    {"target": "test-r10", "rc": 0, "tests_run": 198, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114709Z-c819b3762dc7/R10/rx_omega_faculty_receipt.json", "status": "PASS", "log_sha256": "148c92b06eb8406bb54f8eb073e5e37ef5076edb1a898d4ee628118596ffff55"},
+    {"target": "test-r11", "rc": 0, "tests_run": 400, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114711Z-c819b3762dc7/R11/rx_aien_faculty_receipt.json", "status": "PASS", "log_sha256": "b9cf937f436c1c02e1b26747eb880fd2b6716fee925b765b6e8076210aa36389"},
+    {"target": "test-r12", "rc": 0, "tests_run": 193, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114713Z-c819b3762dc7/R12/rx_resident_host_receipt.json", "status": "PASS", "log_sha256": "7fb2fd75bd089bcd689dfef9153e9d143ad756a69c5f9cd7e01d79d1337de102"},
+    {"target": "test-action-graph", "rc": 0, "tests_run": 685, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114715Z-c819b3762dc7/ACTION_GRAPH/rx_action_graph_receipt.json", "status": "PASS", "log_sha256": "d0ef42289a069f0f12db0e15d297812a4573b3e9523a13b2de808581dfa041af"},
+    {"target": "test-state-projection", "rc": 0, "tests_run": 1132, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114753Z-c819b3762dc7/STATE_PROJECTION/omega_state_projection_receipt.json", "status": "PASS", "log_sha256": "180c0ecfacfcadd9eee984b74ecfb8dff5b484897acb08c30ceb423e9f202346"},
+    {"target": "test-capability-query", "rc": 0, "tests_run": 951, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114755Z-c819b3762dc7/CAPABILITY_QUERY/rx_capability_query_receipt.json", "status": "PASS", "log_sha256": "3e8234f9d1432eef9978c48564a95be20241459c71f3347a6cc388c112f1f07f"},
+    {"target": "test-typed-results", "rc": 0, "tests_run": 47062, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T114758Z-c819b3762dc7/TYPED_RESULTS/rx_typed_results_receipt.json", "status": "PASS", "log_sha256": "afc0d9ea6c25e352fcf9ce7c8edc41a5a03acc1ae99f9530da97eb7759ac7075"}
+  ],
+  "truncation_grep": {"hits": 0, "detail": ""},
+  "not_run": [
+    "GPU / silicon targets (test-m12, test-m15, test-m17, test-m18, test-m19, r12 silicon seat, r13/r14 living runs, R15)",
+    "suites CI runs that read the package energy counter (test-semantic-comm, test-cognitive-routing, test-sem-incremental, test-workflow-fusion, test-plan-reuse): not run here (no energy measurements); CI runs them"
+  ],
+  "non_claims": [
+    "The accelerator OmegaEffectIntent / OmegaEffectReceipt (src/omega_accelerator.h) still carry a 32-bit capability_generation; they belong to the physics accelerator port model, not AIENOS, and are unchanged.",
+    "Visor JSON prints the generation as an exact decimal integer; consumers parsing JSON numbers as doubles lose precision above 2^53.",
+    "No effect is executed; operation_code/resource_class -> AIENOS rights/resource is still a test convention.",
+    "Old (version 0x01) effect objects are refused, not migrated; none exist in this repository."
+  ],
+  "verdict": "OMEGA_EFFECT_CAP64_PASS",
+  "verdict_reasons": []
+}

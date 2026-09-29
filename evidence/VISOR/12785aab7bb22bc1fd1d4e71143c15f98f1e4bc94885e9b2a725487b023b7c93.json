@@ -1,0 +1,415 @@
+{
+  "schema": "omega-visor-v1-qualification/1",
+  "run_id": "20260929T043338Z",
+  "candidate_commit": "ec2ec0ba34e241e6bae87ba57eb2a952853cad0f",
+  "tree_dirty": true,
+  "tree_dirty_detail": "only lane-8 files (untracked, not yet committed)",
+  "dirty_files": [
+    {
+      "status": "??",
+      "path": "tests/visor/qualification/",
+      "sha256": null
+    },
+    {
+      "status": "??",
+      "path": "tools/qualify_visor.py",
+      "sha256": "91fec30ac1b0dab0f326c3ff5fb1c9c162f2f98fb7a8f916aa0bfa9da8dfff36"
+    }
+  ],
+  "tree_stable_during_run": true,
+  "physics_commit": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9",
+  "host": {
+    "uname_m": "aarch64",
+    "uname_r": "7.0.0-1019-nvidia",
+    "product_name": "NVIDIA_DGX_Spark"
+  },
+  "hardware_scope": "host-only: no GPU/silicon claim; no QEMU claim by the Visor (the pre-existing test-m5 gate runs its own QEMU check)",
+  "omega_binary": {
+    "path": "build/q8r/omega",
+    "built": true,
+    "sha256": "735a0fb3424885b2312ad41a372c2b5ddba73520f38b8636af9b703bfb21aa38",
+    "build": "make OUT_DIR=build/q8r PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 build/q8r/omega"
+  },
+  "gates": {
+    "OMEGA_VISOR_SEMANTIC_PASS": {
+      "status": "PASS",
+      "tests_run": 541,
+      "tests_failed": 0,
+      "sources": [
+        "make test-visor-semantic",
+        "make test-language",
+        "run_qualification.sh:semantic",
+        "run_qualification.sh:determinism"
+      ]
+    },
+    "OMEGA_VISOR_VERIFY_PASS": {
+      "status": "PASS",
+      "tests_run": 151,
+      "tests_failed": 0,
+      "sources": [
+        "make test-visor-verify",
+        "make test-visor-evidence",
+        "make test-visor-world",
+        "run_qualification.sh:usability"
+      ]
+    },
+    "OMEGA_VISOR_REALIZE_PASS": {
+      "status": "FAIL",
+      "tests_run": 419,
+      "tests_failed": 4,
+      "sources": [
+        "make test-visor-machine",
+        "make test-visor-realization",
+        "make test-visor-console",
+        "run_qualification.sh:realize",
+        "run_qualification.sh:scriptability"
+      ]
+    },
+    "OMEGA_VISOR_AUTHORITY_ISOLATION_PASS": {
+      "status": "FAIL",
+      "tests_run": 177,
+      "tests_failed": 1,
+      "sources": [
+        "make visor-authority-check",
+        "make test-visor-authority",
+        "run_qualification.sh:hostile",
+        "run_qualification.sh:authority"
+      ]
+    },
+    "OMEGA_VISOR_REGRESSION_PASS": {
+      "status": "PASS",
+      "tests_run": 92,
+      "tests_failed": 0,
+      "sources": [
+        "make test",
+        "make test-m5",
+        "make test-m6",
+        "make test-m7",
+        "make test-m8",
+        "make test-m9",
+        "make test-m10",
+        "make test-m13",
+        "make test-m14",
+        "make visor-physics-free-check"
+      ]
+    }
+  },
+  "suites": [
+    {
+      "target": "test-visor-semantic",
+      "rc": 0,
+      "tests_run": 95,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-language",
+      "rc": 0,
+      "tests_run": 407,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-visor-verify",
+      "rc": 0,
+      "tests_run": 47,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-visor-evidence",
+      "rc": 0,
+      "tests_run": 39,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-visor-machine",
+      "rc": 0,
+      "tests_run": 36,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-visor-realization",
+      "rc": 0,
+      "tests_run": 63,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-visor-console",
+      "rc": 0,
+      "tests_run": 284,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "visor-authority-check",
+      "rc": 0,
+      "tests_run": 1,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "visor-physics-free-check",
+      "rc": 0,
+      "tests_run": 1,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-visor-world",
+      "rc": 0,
+      "tests_run": 47,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-visor-authority",
+      "rc": 0,
+      "tests_run": 81,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test",
+      "rc": 0,
+      "tests_run": 12,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-m5",
+      "rc": 0,
+      "tests_run": 9,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-m6",
+      "rc": 0,
+      "tests_run": 10,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-m7",
+      "rc": 0,
+      "tests_run": 10,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-m8",
+      "rc": 0,
+      "tests_run": 10,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-m9",
+      "rc": 0,
+      "tests_run": 10,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-m10",
+      "rc": 0,
+      "tests_run": 10,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-m13",
+      "rc": 0,
+      "tests_run": 10,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-m14",
+      "rc": 0,
+      "tests_run": 10,
+      "tests_failed": 0,
+      "status": "PASS"
+    },
+    {
+      "target": "test-m12",
+      "status": "NOT_RUN",
+      "reason": "GPU/silicon target excluded by lane-8 brief: GPU (living matvec)"
+    },
+    {
+      "target": "test-m15",
+      "status": "NOT_RUN",
+      "reason": "GPU/silicon target excluded by lane-8 brief: accelerator/GPU"
+    },
+    {
+      "target": "test-m17",
+      "status": "NOT_RUN",
+      "reason": "GPU/silicon target excluded by lane-8 brief: Blackwell GPU"
+    },
+    {
+      "target": "test-m18",
+      "status": "NOT_RUN",
+      "reason": "GPU/silicon target excluded by lane-8 brief: GPU"
+    },
+    {
+      "target": "test-m19",
+      "status": "NOT_RUN",
+      "reason": "GPU/silicon target excluded by lane-8 brief: GPU"
+    },
+    {
+      "target": "test-m11",
+      "status": "NOT_RUN",
+      "reason": "not in the lane-8 regression list"
+    }
+  ],
+  "runner_sections": {
+    "semantic": {
+      "run": 33,
+      "failed": 0
+    },
+    "determinism": {
+      "run": 6,
+      "failed": 0
+    },
+    "realize": {
+      "run": 22,
+      "failed": 4
+    },
+    "hostile": {
+      "run": 72,
+      "failed": 1
+    },
+    "authority": {
+      "run": 23,
+      "failed": 0
+    },
+    "scriptability": {
+      "run": 14,
+      "failed": 0
+    },
+    "usability": {
+      "run": 18,
+      "failed": 0
+    }
+  },
+  "runner_failed_cases": [
+    {
+      "section": "realize",
+      "case": "run-arity[unary fn, 0 args refused]",
+      "detail": "{\"command\":\"run\",\"status\":\"ok\",\"class\":\"pure-execution\",\"result\":{\"result\":\"1\",\"realization\":\"sha256:dfc4cb844da0044a4fe"
+    },
+    {
+      "section": "realize",
+      "case": "run-arity[unary fn, 2 args refused]",
+      "detail": "{\"command\":\"run\",\"status\":\"ok\",\"class\":\"pure-execution\",\"result\":{\"result\":\"11\",\"realization\":\"sha256:dfc4cb844da0044a4f"
+    },
+    {
+      "section": "realize",
+      "case": "run-arity[binary apply realization, 1 arg refused]",
+      "detail": "{\"command\":\"run\",\"status\":\"ok\",\"class\":\"pure-execution\",\"result\":{\"result\":\"12\",\"realization\":\"sha256:ffe7656dc91cf25a4a"
+    },
+    {
+      "section": "realize",
+      "case": "run-arity[binary apply realization, 3 args refused]",
+      "detail": "{\"command\":\"run\",\"status\":\"ok\",\"class\":\"pure-execution\",\"result\":{\"result\":\"3\",\"realization\":\"sha256:ffe7656dc91cf25a4aa"
+    },
+    {
+      "section": "hostile",
+      "case": "script-is-directory",
+      "detail": "rc=0 (a directory given as a script must not succeed)"
+    }
+  ],
+  "hostile_cases": {
+    "run": 69,
+    "failed_closed": 59,
+    "crashed": 0,
+    "benign_noop": 4,
+    "note": "benign_noop = blank/whitespace/comment lines, a spec'd no-op (exit 0); the rest must exit 1 with an error line"
+  },
+  "sanitizer_pass": {
+    "status": "RUN",
+    "sanitizer_reports": "none",
+    "crashed": 0,
+    "same_case_failures_as_release": true
+  },
+  "determinism": {
+    "runs": 3,
+    "identical": true,
+    "scope": "same host, fresh processes; text, --json and realization ids"
+  },
+  "scriptability": {
+    "section": {
+      "run": 14,
+      "failed": 0
+    },
+    "contract": "exit 0 = every line ok; 1 = at least one line errored; 2 = usage error or unopenable script; --json = one object per non-blank line with keys command/status/class/result/error; no prompt when stdin is not a tty; --script - reads stdin"
+  },
+  "ux_findings": [
+    "`true`/`false` echo as 1/0 although `type _` says bool; a user reads 1 as an integer.",
+    "`help` shows the source form as `let x = <expr>`, but V0 requires `let x: u64 = <expr>` (the error message does explain).",
+    "`help` lists `graph [x]` (argument optional) but `graph` with no argument is an error: 'give a name, _ or id'.",
+    "`alternatives <value>` prints a doubled prefix: `error: alternatives: alternatives: only programs have alternative realizations in V1`.",
+    "`effects <non-effect>` prints `'x' is not an EFFECT object` without the `error:` prefix in text mode (JSON correctly says status error; exit code is 1).",
+    "`why <x>` is described as 'explain where x came from' but only explains realizations; on a value it says `use realize x first`, and `realize x` then refuses a value, a dead end.",
+    "`authorize x`, `execute _` and `delete x` give parser jargon ('unexpected x after the end of the statement') instead of 'unknown command'; only `mint`/`grant`/... are reserved words, `authorize`/`submit`/`execute` are not.",
+    "Errors raised before parsing are labelled with the command name `unknown` (`error: unknown: invalid UTF-8 at byte 4`, `error: unknown: line too long`).",
+    "`id` prints the same hash three times (id, canonical_sha256) plus canonical_len; the relation is not explained.",
+    "After `realize _`, `_` silently becomes the realization, so `inspect _`/`type _` now refer to a different object than one line earlier.",
+    "Every u64 ADD has the same realization id (`realized` = the ADD operation, not the apply), so `x + y` and `x + 1` share one realization id; correct per spec but surprising in `bindings`/`compare`.",
+    "`run _ a b` on a binary-apply realization runs the operation on the given numbers, not on the object's operands; nothing in the output says the object was not what ran.",
+    "Machine/realization output uses hex profile codes (`profile 0x01 vs machine 0x01`), `physics flag=set seal=builder-constant placeholder`, and C function names (`omega_machine_estimate_latency(...)`, `omega_exec_native_f3`) as explanations; not readable without the C source.",
+    "`verify` row INVARIANTS reports 399 generic checks that are 'not object-specific'; a user may read the PASS as evidence about their object.",
+    "`evidence <name>` for a session object always says `no evidence`: receipts are repository files, not linked to session objects; the question 'what evidence supports this object' cannot be answered in V1.",
+    "Blank lines produce no JSON object while comment-only lines produce one (`kind: none`); a script driver counting lines must know this.",
+    "Commands after `quit` in --command/--script mode are silently dropped (exit 0)."
+  ],
+  "defects": [
+    {
+      "id": "D1",
+      "severity": "high (fixed in ec2ec0b, found at 4fab549)",
+      "what": "The ./omega shipped at commit 4fab549 (sha256 543d874d...d4d3) crashes on every realize/run path: `./omega --command 'let x: u64 = 7' --command 'let y: u64 = 11' --command 'x + y' --command 'realize _'` -> exit 139 (SIGSEGV in om_realization_show); `realize b` on a bool -> '*** stack smashing detected ***', exit 134. Campaign on that binary: 37 failures, 6 hostile crashes. Cause: tools/omega.c's object was not rebuilt when src/visor/visor.h changed (omega_main.d missing from VISOR_DEPS), so the binary mixed two struct layouts. The in-process console test (146/146) could not see it. ec2ec0b adds omega_main.d; a clean-checkout build of 4fab549 was not tested."
+    },
+    {
+      "id": "D2",
+      "severity": "medium (wrong output, exit 0)",
+      "what": "`run` does not check arity. `fn f(x: u64) -> u64 { x * 2 + 1 }` then `run f` prints 1 (f(0), x silently 0); `run f 5 6` prints 11 (6 ignored). On `x + y` (7, 11) after `realize _`: `run _ 1` prints 12 (first operand replaced, second kept), `run _ 1 2 3` prints 3 (third ignored). All status ok, exit 0."
+    },
+    {
+      "id": "D3",
+      "severity": "low",
+      "what": "`./omega --script /` (a directory) exits 0 with no output instead of refusing the script (exit 2 like a missing file)."
+    },
+    {
+      "id": "D4",
+      "severity": "low (cosmetic)",
+      "what": "`alternatives x` on a value: 'error: alternatives: alternatives: only programs ...' (prefix doubled); `effects x` text-mode error lacks 'error:'; `help` says `graph [x]` but `graph` alone is an error."
+    }
+  ],
+  "non_claims": [
+    "Host-only qualification on one DGX Spark (aarch64); no GPU, no silicon, no QEMU claim by the Visor.",
+    "No measured or qualified cost: the Visor fills only predicted (static) and estimated (assumed machine model) cost; measured/qualified are ABSENT by design.",
+    "Machine identity is the assumed canonical profile chosen from DMI, not an observed descriptor; the physics seal is a builder placeholder.",
+    "World is unattached in the omega binary: `world` observes nothing; the snapshot API is covered only by the runtime-linked test-visor-world.",
+    "Language V0 scope only: explicit-width unsigned integers, bool, let, + - * / & |, fn chains (x op c)...; realize/run cover u64 binary ADD/SUB/MUL/AND/OR only.",
+    "Effects: the language cannot build an EFFECT object, so `run` on an effect is not reachable from the console; effect-request refusal is covered only by the C hostile suite (test-visor-authority) and the link check.",
+    "GPU targets test-m12, test-m15, test-m17, test-m18, test-m19 and all Blackwell paths were not run (lane-8 brief); test-m11 was not in the list.",
+    "The pre-existing test-m5 gate launches QEMU and writes build/qemu_omega_runner.bin under the shared build/ directory (hard-coded path in omegatool).",
+    "The e2e session golden (tests/visor/sessions/e2e.expected) is compared host-independently only after ec2ec0b; the lane-8 goldens mask the machine block, machine name/id and estimated cycles.",
+    "Determinism is shown across fresh processes on this host only, not across hosts, compilers or ABIs (golden bytes are pinned to LP64/aarch64).",
+    "Visor V1 is not claimed safe against a hostile local user with write access to the binary or the evidence directory."
+  ],
+  "verdict": "OMEGA_VISOR_V1_FAIL",
+  "verdict_reasons": [
+    "OMEGA_VISOR_REALIZE_PASS FAIL (4/419 failed)",
+    "OMEGA_VISOR_AUTHORITY_ISOLATION_PASS FAIL (1/177 failed)",
+    "runner realize: run-arity[unary fn, 0 args refused] FAIL {\"command\":\"run\",\"status\":\"ok\",\"class\":\"pure-execution\",\"result\":{\"result\":\"1\",\"realization\":\"sha256:dfc4cb844da0044a4fe",
+    "runner realize: run-arity[unary fn, 2 args refused] FAIL {\"command\":\"run\",\"status\":\"ok\",\"class\":\"pure-execution\",\"result\":{\"result\":\"11\",\"realization\":\"sha256:dfc4cb844da0044a4f",
+    "runner realize: run-arity[binary apply realization, 1 arg refused] FAIL {\"command\":\"run\",\"status\":\"ok\",\"class\":\"pure-execution\",\"result\":{\"result\":\"12\",\"realization\":\"sha256:ffe7656dc91cf25a4a",
+    "runner realize: run-arity[binary apply realization, 3 args refused] FAIL {\"command\":\"run\",\"status\":\"ok\",\"class\":\"pure-execution\",\"result\":{\"result\":\"3\",\"realization\":\"sha256:ffe7656dc91cf25a4aa",
+    "runner hostile: script-is-directory FAIL rc=0 (a directory given as a script must not succeed)"
+  ]
+}

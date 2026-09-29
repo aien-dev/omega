@@ -1,0 +1,2 @@
+fixture non-JSON evidence file; counted UNPARSED
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  subject

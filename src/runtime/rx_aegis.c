@@ -7,8 +7,14 @@
  * a run that is invalidated and repeated never mints twice.
  */
 #include "rx_aegis.h"
+#include "rx_argus.h"
 
 #include <string.h>
+
+/* ARGUS tick source: the native view when the world is bound to it. */
+static inline const AienosCapView *aegis_view(const RxAegisFaculty *f) {
+    return f->w && f->w->auth_validate ? (const AienosCapView *)f->w->auth_ctx : NULL;
+}
 
 static const RxSnapshotDep *in_of(const RxCtx *c, RxObjRef r) {
     for (uint32_t i = 0; i < c->n_in; i++)
@@ -90,6 +96,11 @@ static int fn_decide(RxCtx *c) {
         }
         if (verdict != RX_AEGIS_GRANT && verdict != RX_AEGIS_ESCALATE) { rights = 0; lease = 0; }
     }
+    /* ARGUS: a policy refusal. GRANT and REVOKE become real at root.install;
+     * ESCALATE has no ABI v1 kind. A repeated (invalidated) run re-emits. */
+    if (verdict == RX_AEGIS_DENY)
+        RX_ARGUS_EMIT(rx_argus_emit_cap_denied(aegis_view(f), f->client[k].subject, ARGUS_CAP_NONE, 0, res,
+                                               (uint32_t)req->field[2], (int)why));
     put(c, o->decision, 0, seq);
     put(c, o->decision, 1, verdict);
     put(c, o->decision, 2, res);
@@ -117,6 +128,12 @@ static int written_by(RxAegisFaculty *f, const RxSnapshotDep *d, uint32_t n_fiel
 }
 
 static void refuse(RxCtx *c, RxObjRef slot, uint64_t seq, uint64_t why) {
+#if RX_ARGUS
+    /* ARGUS: every root refusal is a denial of the client. */
+    struct { RxAegisFaculty *f; uint32_t k; } *x = c->user;
+    rx_argus_emit_cap_denied(aegis_view(x->f), x->f->client[x->k].subject, ARGUS_CAP_NONE, 0, 0, 0,
+                             (int)why);
+#endif
     put(c, slot, 5, seq);
     put(c, slot, 7, why);
 }
@@ -127,8 +144,10 @@ static void refuse(RxCtx *c, RxObjRef slot, uint64_t seq, uint64_t why) {
 static void revoke_minted(RxAegisFaculty *f, uint32_t k, uint64_t j, AienosCapRef office) {
     RxCapRef r = f->minted[k][j].ref;
     if (r.cap_id == UINT32_MAX) return;
-    if (aienos_cap_revoke(f->admin, office, (AienosCapRef){ r.cap_id, r.generation }) == 0)
-        f->revokes++;
+    int rc = aienos_cap_revoke(f->admin, office, (AienosCapRef){ r.cap_id, r.generation });
+    if (rc == 0) f->revokes++;
+    RX_ARGUS_EMIT_AUTH(rx_argus_emit_cap_revoked(aegis_view(f), f->client[k].subject, r.cap_id,
+                                            (uint64_t)r.generation, rc));
     f->minted[k][j].ref = (RxCapRef){ UINT32_MAX, 0 };
 }
 
@@ -201,6 +220,8 @@ static int fn_install(RxCtx *c) {
             ref = (RxCapRef){ got.cap_id, got.generation };
             f->minted[k][j] = (RxAegisMinted){ seq, ref };
             f->mints++;
+            RX_ARGUS_EMIT_AUTH(rx_argus_emit_cap_granted(aegis_view(f), cl->subject, got.cap_id,
+                                                    (uint64_t)got.generation, res, rights, 0));
         } else {
             ok = 0;
             ref = (RxCapRef){ UINT32_MAX, 0 };
