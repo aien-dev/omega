@@ -48,12 +48,14 @@ static void fill(size_t i, double m, double s, double z)
     bb[i] = (int64_t)floor((m + z * s) * 1048576.0);
 }
 
-static void run(const char *name, size_t n, double qtol)
+static double worst_excess = -1e300;
+static void run(const char *name, size_t n)
 {
     size_t bad = 0;
-    double mx = 0, mq = 0;
-    int rc = brw_tps_check_stream(mu, sd, bb, n, qtol, &bad, &mx, &mq);
-    printf("%-28s n=%zu rc=%d max|steps-exact|=%.3g max|steps-qint|=%.3g\n", name, n, rc, mx, mq);
+    double mx = 0, mq = 0, me = 0;
+    int rc = brw_tps_check_stream(mu, sd, bb, n, &bad, &mx, &mq, &me);
+    if (me > worst_excess) worst_excess = me;
+    printf("%-28s n=%zu rc=%d max|steps-exact|=%.3g max|steps-qint|=%.3g max(dev-bound)=%.3g\n", name, n, rc, mx, mq, me);
     CHECK(rc == 0);
 }
 
@@ -67,7 +69,7 @@ int main(void)
         double s = 0.05 * exp(6.0 * runif());          /* ~0.05 .. ~20 */
         fill(i, 200.0 * (runif() - 0.5), s, rnorm());
     }
-    run("A mixed scales", 40000, 1e-9);
+    run("A mixed scales", 40000);
 
     /* B: centre bin and small offsets, both signs, including boundaries. */
     for (size_t i = 0; i < 20000; i++) {
@@ -78,7 +80,7 @@ int main(void)
         int64_t c = (int64_t)floor(m * 1048576.0);
         bb[i] = c + (int64_t)(rnext() % 9) - 4;
     }
-    run("B centre and small offsets", 20000, 1e-9);
+    run("B centre and small offsets", 20000);
 
     /* C: far tails, 20..40 sd either side. */
     for (size_t i = 0; i < 10000; i++) {
@@ -86,7 +88,7 @@ int main(void)
         fill(i, 10.0 * (runif() - 0.5), 0.1 + 3.0 * runif(), z);
     }
     mu[0] = 0.0; sd[0] = 1.0; bb[0] = (int64_t)(40.0 * 1048576.0);
-    run("C far tails", 10000, 1e-9);
+    run("C far tails", 10000);
 
     /* D: sd at and near sd_min. qint.v1 is unnormalised here; gate on exact
      * mass, and bound the qint gap. */
@@ -94,10 +96,10 @@ int main(void)
         double s = (i % 3 == 0) ? TYQ_SD_MIN : (i % 3 == 1) ? TYQ_SD_MIN * 0.25 : TYQ_SD_MIN * (1.0 + runif());
         fill(i, 4.0 * (runif() - 0.5), s, 6.0 * rnorm() / 3.0);
     }
-    run("D sd at sd_min", 10000, 2e-7);
-    { size_t bad; double mx, mq;
-      brw_tps_check_stream(mu, sd, bb, 10000, -1.0, &bad, &mx, &mq);
-      CHECK(mq > 1e-9);   /* the documented gap really is there at sd_min */
+    run("D sd at sd_min", 10000);
+    { size_t bad; double mx, mq, me;
+      CHECK(brw_tps_check_stream(mu, sd, bb, 10000, &bad, &mx, &mq, &me) == 0);
+      CHECK(mq > 1e-9);   /* the qint gap is real at sd_min, and inside its bound */
     }
 
     /* E: huge sd. */
@@ -109,7 +111,7 @@ int main(void)
         if (bb[i] > lim) bb[i] = lim;
         if (bb[i] < -lim) bb[i] = -lim;
     }
-    run("E huge sd", 10000, 1e-9);
+    run("E huge sd", 10000);
 
     /* F: mu at non-integer bin boundaries, fractions of a bin. */
     for (size_t i = 0; i < 10000; i++) {
@@ -119,7 +121,7 @@ int main(void)
         mu[i] = m; sd[i] = s;
         bb[i] = (int64_t)floor(m * 1048576.0) + (int64_t)(rnorm() * s * 1048576.0);
     }
-    run("F fractional bin position", 10000, 1e-9);
+    run("F fractional bin position", 10000);
 
     /* Frequency rows. */
     { uint16_t f[2];
@@ -148,16 +150,13 @@ int main(void)
       CHECK(brw_tps_binarise(0.0, 1.0, 5000, 2, st, &ns, NULL, NULL) < 0);   /* cap too small */
       CHECK(brw_tps_binarise(0.0, 1.0, 0, 4, NULL, &ns, NULL, NULL) < 0);
       double m1[1] = { NAN }, s1[1] = { 1.0 }; int64_t b1[1] = { 0 };
-      size_t bad; double x, y;
-      CHECK(brw_tps_check_stream(m1, s1, b1, 1, -1.0, &bad, &x, &y) < 0);
-      CHECK(brw_tps_check_stream(NULL, s1, b1, 1, -1.0, &bad, &x, &y) < 0);
+      size_t bad; double x, y, z;
+      CHECK(brw_tps_check_stream(m1, s1, b1, 1, &bad, &x, &y, &z) < 0);
+      CHECK(brw_tps_check_stream(NULL, s1, b1, 1, &bad, &x, &y, &z) < 0);
     }
 
-    /* The qint gate does fire when the tolerance is too tight for sd_min. */
-    { double m1[1] = { 0.0 }, s1[1] = { TYQ_SD_MIN }; int64_t b1[1] = { 0 };
-      size_t bad; double x, y;
-      CHECK(brw_tps_check_stream(m1, s1, b1, 1, 1e-12, &bad, &x, &y) == BRW_TPS_E_PROOF);
-    }
+    printf("worst max(|steps-qint| - bound) over all streams = %.3g\n", worst_excess);
+    CHECK(worst_excess <= 1e-9);
 
     printf(fails ? "test_brw_tps: FAIL (%d)\n" : "test_brw_tps: PASS\n", fails);
     return fails ? 1 : 0;

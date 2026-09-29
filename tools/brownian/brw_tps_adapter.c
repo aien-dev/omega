@@ -199,13 +199,14 @@ int brw_tps_check_steps(const brw_tps_step *steps, size_t n)
 }
 
 int brw_tps_check_stream(const double *mu, const double *sd, const int64_t *b,
-                         size_t n, double qint_tol, size_t *bad_index,
-                         double *max_dev_exact, double *max_dev_qint)
+                         size_t n, size_t *bad_index,
+                         double *max_dev_exact, double *max_dev_qint,
+                         double *max_qint_excess)
 {
-    if (!bad_index || !max_dev_exact || !max_dev_qint || (n && (!mu || !sd || !b)))
+    if (!bad_index || !max_dev_exact || !max_dev_qint || !max_qint_excess || (n && (!mu || !sd || !b)))
         return BRW_TPS_E_ARG;
     brw_tps_step st[BRW_TPS_MAX_STEPS];
-    double mx = 0.0, mq = 0.0;
+    double mx = 0.0, mq = 0.0, me = -1e300;
     for (size_t i = 0; i < n; i++) {
         size_t ns;
         double bs, be, bq;
@@ -221,13 +222,17 @@ int brw_tps_check_stream(const double *mu, const double *sd, const int64_t *b,
         double dx = fabs(bs - be), dq = fabs(bs - bq);
         if (!(dx <= BRW_TPS_EXACT_TOL))
             return BRW_TPS_E_PROOF;
-        if (qint_tol >= 0.0 && !(dq <= qint_tol))
+        double r = TYQ_DELTA / (sd[i] < TYQ_SD_MIN ? TYQ_SD_MIN : sd[i]);
+        double bound = log2(1.0 + r * r / 24.0);
+        if (!(dq <= bound + BRW_TPS_EXACT_TOL))
             return BRW_TPS_E_PROOF;
         if (dx > mx) mx = dx;
         if (dq > mq) mq = dq;
+        if (dq - bound > me) me = dq - bound;
     }
     *max_dev_exact = mx;
     *max_dev_qint = mq;
+    *max_qint_excess = me;
     return BRW_TPS_OK;
 }
 
