@@ -121,11 +121,13 @@ Evidence scope is reported exactly as the receipt states it (`host`, `qemu`,
 
 ## 6a. Findings in existing code (found by the Visor lanes; not fixed here)
 
-- `omega_program_realize` is declared in `omega_program.h` but defined nowhere;
-  linking it fails. `omega_program_build_unary_op` already emits the realization.
-- `omega_synthesize_realization` ignores its program and always emits the fixed
-  `f(x) = 3x - 2` schedule; the realization lab checks synthesized alternatives
-  against the direct realization on sample inputs and marks mismatches incompatible.
+- FIXED by program realization V0 (`spec/program-realization.md`): `omega_program_realize`
+  was declared in `omega_program.h` but defined nowhere. It now compiles the canonical body;
+  `realize` goes through it (never through code the program happens to carry).
+- FIXED by program realization V0: `omega_synthesize_realization` ignored its program and
+  always emitted the fixed `f(x) = 3x - 2` schedule. It now compiles the program for the
+  machine and verifies native execution against the semantic evaluator; the `synth@`
+  alternatives are that machine-aware realization, still cross-checked against the direct realization.
 - FIXED by program identity v2 (`spec/program-identity.md`): `omega_program_compute_id`
   did not hash the program body (same name and contract with a different body gave the
   same `program_id`, and the language refused the redefinition as an "identity collision").

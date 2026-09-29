@@ -140,12 +140,12 @@ golden bytes are pinned to this ABI (aarch64/x86-64 LP64, 4-byte enums).
 ## Non-claims
 
 - No evaluator: lowering never computes a value. `x * 2 + 1` is an object, not `7`.
-- `fn` lowering does not call `omega_program_realize` or `omega_program_verify`. The existing
-  `omega_program_build_unary_op`/`compose` fill `realization` and set `is_realized = true` as a
-  side effect; that code is the builder's, not a separate claim of this lane. `is_verified` stays
-  false.
+- `fn` lowering does not call `omega_program_verify`. `omega_program_build_unary_op`/`compose`
+  fill `realization` through `omega_program_realize` (spec/program-realization.md) and set
+  `is_realized = true`; that is the realization's claim, not this lane's. `is_verified` stays false.
 - u8/u16/u32 lower to correct canonical objects; whether they realize/execute correctly is the
-  realizer's claim, not this lane's (the existing realizer targets u64).
+  realizer's claim, not this lane's (V0 realization handles u8..u64 program bodies; Language V0
+  `fn` is u64 only).
 - Contract clauses are canonical **text**; nothing checks that the body satisfies them.
 - Comparisons, signed integers, bool operators, calls, recursion, containers, strings, effects
   and authority are not in V0. No capability is ever minted, published or promoted.

@@ -129,13 +129,16 @@ while `a;b` and `b;a` differ whenever the bodies differ (different body, differe
 - `omega_program_build_unary_op` records one step. It now refuses a constant above
   `0xFFFFFFFF` (fail closed): it loads immediates with MOVZ + one MOVK, so a wider
   constant used to be silently truncated in the code while the body claimed the full value.
+  (V0 realization, spec/program-realization.md, now loads full 64-bit constants; the builder
+  and Language V0 keep the 32-bit limit, which the identity gates lock.)
 - `omega_program_compose(a, b)` concatenates `a`'s steps then `b`'s (capacity 64 steps;
   refuses beyond). Composition therefore gives the same body as the equivalent directly
-  written chain.
+  written chain. Its realization is compiled from that body (`omega_program_realize`,
+  spec/program-realization.md), no longer spliced from the parts' code.
 - Visor Language V0 lowering (`omega_language_lower_program`) builds through the two above.
 - `omega_discover_abstractions` builds an abstraction from a machine-code slice. It now
   **lifts** the slice back to a body (`omega_program_lift_body`: decode the rigid
-  `movz x1[, movk x1 lsl 16]; op x0, x0, x1` template, then re-emit the steps and require
+  `movz x1[, movk x1 lsl 16|32|48 ...]; op x0, x0, x1` template, then re-emit the steps and require
   byte equality). A slice that does not lift has no body, no id, and is not verified, so it
   cannot be selected or admitted.
 - `omega_refactor_program` copies the original's body: a refactoring that preserves meaning

@@ -275,7 +275,7 @@ test-r12: $(RX_R12_TEST)
 RX_R10_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/runtime/rx_omega.c src/sha256.c src/omega_evidence.c \
 	src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
-	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c src/omega_program.c \
 	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	tests/runtime/rx_r10_omega.c
 RX_R10_TEST = $(OUT_DIR)/rx_r10_omega_test
@@ -308,7 +308,7 @@ test-r8: $(RX_R8_TEST)
 RX_R11_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/runtime/rx_omega.c src/sha256.c src/omega_evidence.c \
 	src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
-	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c src/omega_program.c \
 	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	tests/runtime/rx_r11_aien.c
 RX_R11_TEST = $(OUT_DIR)/rx_r11_aien_test
@@ -384,7 +384,7 @@ RX_R13_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
 	src/sha256.c src/omega_evidence.c src/omega_canonical.c \
 	src/omega_validate.c src/omega_core.c src/omega_codec.c \
 	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c \
-	src/omega_realize_synth.c src/omega_machine.c src/omega_exec.c \
+	src/omega_realize_synth.c src/omega_program.c src/omega_machine.c src/omega_exec.c \
 	src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	tests/runtime/rx_r13_living.c
 RX_R13_HOST = $(OUT_DIR)/rx_r13_living_host
@@ -731,7 +731,7 @@ test-costmodel: $(RX_CM_UNIT)
 # R9 barrier on the native authority, held-out workloads.
 RX_EMP_SRCS = src/runtime/rx_generation.c src/sha256.c src/omega_evidence.c \
 	src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
-	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c src/omega_program.c \
 	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	tests/runtime/rx_empirical_optimizer.c
 RX_EMP_TEST = $(OUT_DIR)/rx_empirical_optimizer_test
@@ -1090,3 +1090,49 @@ test-turing: $(TURING_TEST) $(TURING_TEST_ASAN) $(TURING_TOOL) $(TURING_TOOL_ASA
 	cmp $(OUT_DIR)/tests-turing/spec_ids_plain.txt $(OUT_DIR)/tests-turing/spec_ids_asan.txt
 	./$(TURING_TOOL_ASAN) > $(OUT_DIR)/tests-turing/turing_field_asan.txt
 	@echo "test-turing: spec ids identical across plain and ASan builds; turing-field runs clean under ASan/UBSan"
+
+# ---------------------------------------------------------------------------
+# MIXED_ALGEBRA_DIGITAL_V1 closure gate (spec/mixed-algebra-digital-v1.md,
+# pre-registered). test-ma-digital-bottom: realization-layer ⊥ coverage
+# (plain + ASan/UBSan). gate-mixed-algebra-digital-v1: correctness leg, one
+# bench-mixed-algebra run under ~/workspace/.spark-quiet (or reuse with
+# MA_DV1_REUSE_RUN=<run id>), TURING Field v1 selection for the
+# pre-registered queries, separate-process digest reproduction, and a
+# digest-named wrapper receipt in evidence/MIXED_ALGEBRA/digital_v1/.
+.PHONY: test-ma-digital-bottom gate-mixed-algebra-digital-v1
+DV1_BOTTOM = $(OUT_DIR)/tests-algebra/test_ma_digital_bottom
+DV1_BOTTOM_ASAN = $(OUT_DIR)/tests-algebra/test_ma_digital_bottom_asan
+DV1_GATE_BIN = $(OUT_DIR)/tests-algebra/ma_digital_v1_gate
+DV1_GATE_BIN_ASAN = $(OUT_DIR)/tests-algebra/ma_digital_v1_gate_asan
+
+$(DV1_BOTTOM): tests/algebra/test_ma_digital_bottom.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/algebra/test_ma_digital_bottom.c $(OMA_RZ_SRCS) $(OMA_SRCS) -lm
+
+$(DV1_BOTTOM_ASAN): tests/algebra/test_ma_digital_bottom.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		-o $@ tests/algebra/test_ma_digital_bottom.c $(OMA_RZ_SRCS) $(OMA_SRCS) -lm
+
+$(DV1_GATE_BIN): tests/algebra/ma_digital_v1_gate.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/algebra/ma_digital_v1_gate.c $(TURING_SRCS) -lm
+
+$(DV1_GATE_BIN_ASAN): tests/algebra/ma_digital_v1_gate.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) $(TURING_ASAN) -o $@ tests/algebra/ma_digital_v1_gate.c $(TURING_SRCS) -lm
+
+test-ma-digital-bottom: $(DV1_BOTTOM) $(DV1_BOTTOM_ASAN)
+	./$(DV1_BOTTOM)
+	./$(DV1_BOTTOM_ASAN)
+
+gate-mixed-algebra-digital-v1: $(DV1_GATE_BIN) $(DV1_GATE_BIN_ASAN) $(DV1_BOTTOM) $(DV1_BOTTOM_ASAN)
+	DV1_GATE=./$(DV1_GATE_BIN) DV1_GATE_ASAN=./$(DV1_GATE_BIN_ASAN) MAKE="$(MAKE)" \
+		sh tests/algebra/ma_digital_v1_gate.sh
+
+# Content check (post-run addenda 2026-09-29): every digital_v1 wrapper
+# re-hashes to its file name and every receipt it cites re-hashes to the
+# digest recorded in the wrapper. Catches edits that were committed.
+.PHONY: check-mixed-algebra-digital-v1-evidence
+check-mixed-algebra-digital-v1-evidence:
+	sh tests/algebra/ma_digital_v1_check_evidence.sh

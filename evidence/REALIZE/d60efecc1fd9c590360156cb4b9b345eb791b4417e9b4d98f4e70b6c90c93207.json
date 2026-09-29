@@ -1,0 +1,62 @@
+{
+  "schema": "omega-program-realize-qualification/1",
+  "spec": "spec/program-realization.md",
+  "pipeline": "canonical program body -> V0 semantic gate -> machine-aware schedule (MachineGraph chooses schedule only) -> AArch64 V0 bytes (aarch64_encoder) -> REALIZATION_ID = triple(SEMANTIC_ID, MACHINE_ID, code) -> verification (bindings, V0 structural, native == semantic evaluator)",
+  "run_id": "20260929T125939Z",
+  "candidate_commit": "af88aae25e968c0c581bdad9f055a6a053bc5290",
+  "candidate_tree": "628f1368e91cd534ca73a0ca0ed67c0c2160528f",
+  "tree_dirty": false,
+  "tree_stable_during_run": true,
+  "host": {"uname_m": "aarch64", "uname_r": "7.0.0-1019-nvidia", "product_name": "NVIDIA_DGX_Spark"},
+  "hardware_scope": "host CPU only (native AArch64 execution of generated code); no GPU, no silicon, no energy measurement",
+  "aienos": {"lock": "d39dd5bc3deb1a24e26a5059477a1342c110c71b", "source": "git archive d39dd5bc3deb1a24e26a5059477a1342c110c71b native/capability (tree 95a37fc83951af3042634b052d171bff9cd48bd0)", "lib_sha256": "e16b4ac10d2ee62c81c8556817c8d2efd0c376b9ede692c177b35d270c5a1118", "lib_built": true},
+  "physics": {"lock": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9", "checkout_head": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9"},
+  "gates": {
+    "OMEGA_PROGRAM_REALIZE_PASS": {"status": "PASS", "tests_run": 1720, "tests_failed": 0, "sources": "make test-program-realize (gate PROGRAM_REALIZE: omega_program_realize compiles + binds + executes named programs; builder/compose use it; 11 unsupported semantics fail closed with reasons)"},
+    "OMEGA_REALIZATION_PROGRAM_DRIVEN_PASS": {"status": "PASS", "tests_run": 360195, "tests_failed": 0, "sources": "make test-program-realize (gate PROGRAM_DRIVEN: 600 programs pairwise distinct code + RealizationIds per and across machines, lift(sequential code) == body, schedule from machine, determinism, M14 3x-2 bytes preserved, legacy fixed-3x-2 synth rejected)"},
+    "OMEGA_REALIZATION_DIFFERENTIAL_PASS": {"status": "PASS", "tests_run": 140404, "tests_failed": 0, "sources": "make test-program-realize (gate DIFFERENTIAL: native execution == independent semantic evaluator, 18 named + 582 seeded random pipelines, u8..u64, both canonical machines, boundary + random inputs)"},
+    "OMEGA_REALIZATION_TRIPLE_BIND_PASS": {"status": "PASS", "tests_run": 1061, "tests_failed": 0, "sources": "make test-program-realize (gate TRIPLE_BIND: SEMANTIC_ID + MACHINE_ID + code -> REALIZATION_ID; rebinding with consistent triple, altered code, altered machine id, forged machine graph all rejected)"},
+    "OMEGA_REALIZATION_REGRESSION_PASS": {"status": "FAIL", "tests_run": 4581898, "tests_failed": 2, "sources": "make test-program-id test-visor-core test-visor-world test-visor-authority visor-qualification test-m8 test-m9 test-m10 test-m11 test-m14 test-crumbline test-effect-cap64 test test-r3 test-r7 test-r8 test-r9 test-r10 test-r11 test-r12 test-action-graph test-state-projection test-capability-query test-typed-results (visor-qualification = run_qualification.sh)"}
+  },
+  "legacy_sanity_demo": "SANITY legacy_fixed_3x2_synth PROGRAM_DRIVEN FAIL (expected): identical code for 17/17 other programs, verification rejects 17/18",
+  "fail_closed": "FAIL_CLOSED no body                            program has no semantic body: meaning unknown, nothing to compile\nFAIL_CLOSED DIV step                           step 0: DIV fails closed: not in the V0 body op set, no UDIV emitter, and evaluator (x/0 = error) and UDIV (x/0 = 0) disagree\nFAIL_CLOSED NOT step                           step 0: opcode 0x0b (unknown) not in V0 body op set ADD SUB MUL AND OR\nFAIL_CLOSED signed i64                         type tags in=0x04 out=0x04: V0 realization compiles unsigned integers only (signed/bitvector result representation is not specified)\nFAIL_CLOSED bitvector                          type tags in=0x05 out=0x05: V0 realization compiles unsigned integers only (signed/bitvector result representation is not specified)\nFAIL_CLOSED width u12                          width 12 unsupported: V0 AArch64 realization supports u8 u16 u32 u64\nFAIL_CLOSED u64 -> u32                         input width 64 != output width 32: V0 never converts\nFAIL_CLOSED u8 constant 256                    step 0: constant 0x100 does not fit declared width u8\nFAIL_CLOSED stale program id                   program_id is not the v2 id of this body and contract (stale or forged)\nFAIL_CLOSED 65 steps                           body has more than 64 steps\nFAIL_CLOSED zero program id                    program_id is not the v2 id of this body and contract (stale or forged)",
+  "suites": [
+    {"target": "test-program-realize", "rc": 0, "tests_run": 503380, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "508e4782de1c8d6e2cbd0f245358b9f778add6bafa48f85eae9f95ed6481fca0"},
+    {"target": "test-program-id", "rc": 0, "tests_run": 4516979, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "6f1c012f6b6fc82320e938f8f9ead729c91b8c12a9f751ed38803b439bea3203"},
+    {"target": "test-visor-core", "rc": 0, "tests_run": 995, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "f787dab839b65bd3806cb8d14587230cf5d8a0b37824c84f2969cae310037424"},
+    {"target": "test-visor-world", "rc": 0, "tests_run": 47, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "502179cc98e392fbcf9608d5c4cba7dbc57b2bdbc81d69fd4831de3b4ed3e17e"},
+    {"target": "test-visor-authority", "rc": 0, "tests_run": 104, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "2a62b4e7d41be5cb98f56bb7f59c74493d1ca72da5d15e4d412b4c21fe773d31"},
+    {"target": "visor-qualification", "rc": 0, "tests_run": 189, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "29a24d32225c1036ad50e8b327367a008c927ab22e0a922894a7dd9e86aa2a9b"},
+    {"target": "test-m8", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "ecb0a69a6f42b5e121de0f46b40020de6d8cda01f4f3c35f294a14720453e7d2"},
+    {"target": "test-m9", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "b1e6bb1256332ead055712deac6b3181aca876e3fc60baed837fd279a021d571"},
+    {"target": "test-m10", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "d1b7f7ff39e3d94f65abea1476f4688c242be86825e3f0181855dfb6cb006e1f"},
+    {"target": "test-m11", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "0bb288126a62c52b409434db838a03e5a8f3663edf33bde53c8172d6161a921f"},
+    {"target": "test-m14", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "b19ed7792513eaebc2cf7bbbf9df47dab3d93e5cf2f12b6170de7dcf9f53c139"},
+    {"target": "test-crumbline", "rc": 0, "tests_run": 127, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "16808b61b25bc9a5d2437bcf7612591a219a9bf6fbe84c7f19fa845799708ad5"},
+    {"target": "test-effect-cap64", "rc": 0, "tests_run": 304, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "2f745e38d0461764092652c4e12c02fcd5dbb7b3550513e5ccbb16714dba3459"},
+    {"target": "test", "rc": 0, "tests_run": 12, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "04adfb4fc389d140e3a0001c00bd382c6a38508641c84d4fe069b9649dab213f"},
+    {"target": "test-r3", "rc": 0, "tests_run": 12742, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T130010Z-af88aae25e96/R3/rx_heartbeat_receipt.json", "status": "PASS", "log_sha256": "bec1873d9140b318e51597de12c407e11c187b3efe7c9a719f9b5865781a31db"},
+    {"target": "test-r7", "rc": 0, "tests_run": 0, "tests_failed": 0, "count_source": "exit-status-only", "status": "PASS", "log_sha256": "8ccb87cc472ab93716641ae29a9f452bada7fbbf551bb60150b16f957efc7568"},
+    {"target": "test-r8", "rc": 0, "tests_run": 116, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T130012Z-af88aae25e96/R8/rx_aegis_resident_receipt.json", "status": "PASS", "log_sha256": "35e0e65cd5979b7a85c5b1efdd1a9b0f6b2a4339000877f8765d38d21528ae6f"},
+    {"target": "test-r9", "rc": 0, "tests_run": 210, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T130016Z-af88aae25e96/R9/rx_generation_barrier_receipt.json", "status": "PASS", "log_sha256": "1570cd17a7c28e3e3fbaad0ff8401ccb4d5bbd6a0bc89a808563366f366c9484"},
+    {"target": "test-r10", "rc": 2, "tests_run": 0, "tests_failed": 0, "count_source": "exit-status-only", "status": "FAIL", "log_sha256": "c7d10d6a59d640947223eb26d7a3ff41033b24bc3929276d124afbe459c947c1"},
+    {"target": "test-r11", "rc": 2, "tests_run": 0, "tests_failed": 0, "count_source": "exit-status-only", "status": "FAIL", "log_sha256": "a4d7e05ed9dbb99594054024aad2a037d67f69017fd5903a00b57eb6de22c087"},
+    {"target": "test-r12", "rc": 0, "tests_run": 193, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T130022Z-af88aae25e96/R12/rx_resident_host_receipt.json", "status": "PASS", "log_sha256": "e25777d67135684f9a975c142b4e58b98a5c93c73ad1c727f0e985ea51567991"},
+    {"target": "test-action-graph", "rc": 0, "tests_run": 685, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T130024Z-af88aae25e96/ACTION_GRAPH/rx_action_graph_receipt.json", "status": "PASS", "log_sha256": "3adbde1876c3b4bbca16d4e409754a160e30d5dc60961bd8d03c8a1b5f3f2a31"},
+    {"target": "test-state-projection", "rc": 0, "tests_run": 1132, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T130047Z-af88aae25e96/STATE_PROJECTION/omega_state_projection_receipt.json", "status": "PASS", "log_sha256": "13bcbf958c3578ac88f6285449fb5d68db9ce53793337d8ae7864c64878ee8b9"},
+    {"target": "test-capability-query", "rc": 0, "tests_run": 951, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T130049Z-af88aae25e96/CAPABILITY_QUERY/rx_capability_query_receipt.json", "status": "PASS", "log_sha256": "a40cbea858079810d5c87c7bc26a3271a41c611a32c8b78a62e7306dbc4e7df9"},
+    {"target": "test-typed-results", "rc": 0, "tests_run": 47062, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T130052Z-af88aae25e96/TYPED_RESULTS/rx_typed_results_receipt.json", "status": "PASS", "log_sha256": "67d7c6c56586de5744e7fae0e7c378cee5e9ee0b12885e1e5a7d5088fc15e615"}
+  ],
+  "not_run": [
+    "GPU / silicon targets (test-m12, test-m15, test-m17, test-m18, test-m19, r12 silicon seat, r13/r14 living runs, R15)",
+    "suites CI runs that read the package energy counter (test-semantic-comm, test-cognitive-routing, test-sem-incremental, test-workflow-fusion, test-plan-reuse): not run here (no energy measurements); CI runs them"
+  ],
+  "non_claims": [
+    "V0 unary constant-step chains only (ADD SUB MUL AND OR, unsigned u8..u64, <= 64 steps). DIV, signed, bitvector, conversions, calls, control flow fail closed.",
+    "The differential samples 84-116 inputs per program; it is not an equivalence proof.",
+    "No optimisation or measured cost: the schedule is a policy chosen from the canonical MachineGraph profiles (assumed, not observed hardware).",
+    "Canonical program realization ids (OMG_R0) now bind the program id; historical receipts are not rewritten."
+  ],
+  "verdict": "OMEGA_PROGRAM_REALIZE_FAIL",
+  "verdict_reasons": ["test-r10 FAIL (rc=2, 0 of 0 failed)", "test-r11 FAIL (rc=2, 0 of 0 failed)", "OMEGA_REALIZATION_REGRESSION_PASS FAIL"]
+}

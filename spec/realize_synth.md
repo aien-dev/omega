@@ -72,3 +72,14 @@ int omega_synthesize_realization(const RealizationSynthesisTask *task,
 8. `OMEGA_REAL_SYNTH_V1_DIFFERENTIAL_PASS`: Synthesized realization passes M7 V1 differential evaluation.
 9. `OMEGA_REAL_SYNTH_V2_PROPERTY_PASS`: Synthesized realization passes M7 V2 property verification.
 10. `OMEGA_REAL_SYNTH_RECEIPT_PASS`: Master qualification receipt generated binding $G_S$, $G_M$, and $G_R$.
+
+---
+
+## 5. Amendment: program-driven realization
+
+Until `spec/program-realization.md`, `omega_synthesize_realization` emitted the fixed
+`f(x) = 3x - 2` schedule for every program and checked it against hard-coded `3x - 2` values.
+It now compiles the task's program body (schedule chosen from $G_M$, meaning never) and
+verifies native execution against the independent semantic evaluator. The ten gates above
+still pass; for the 3x-2 program the DGX Spark (preload) and QEMU virt (sequential) bytes are
+unchanged.
