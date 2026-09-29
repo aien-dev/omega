@@ -14,6 +14,12 @@ on:
       - 'src/omega_validate.*'
       - 'src/visor/visor_effect_request.*'
       - 'tests/effect/**'
+      - 'src/omega_program.*'
+      - 'src/omega_library.*'
+      - 'src/omega_discovery.*'
+      - 'src/language/**'
+      - 'tests/program/**'
+      - 'mk/program-id.mk'
       - '.github/workflows/rx-host.yml'
       - 'aienos.lock'
       - 'argus.lock'
@@ -32,6 +38,12 @@ on:
       - 'src/omega_validate.*'
       - 'src/visor/visor_effect_request.*'
       - 'tests/effect/**'
+      - 'src/omega_program.*'
+      - 'src/omega_library.*'
+      - 'src/omega_discovery.*'
+      - 'src/language/**'
+      - 'tests/program/**'
+      - 'mk/program-id.mk'
       - '.github/workflows/rx-host.yml'
       - 'aienos.lock'
       - 'argus.lock'
@@ -292,6 +304,10 @@ jobs:
           path: aienos-src
       - name: Keep dependency checkouts out of Omega tree status
         run: printf 'physics-src/\naienos-src/\n' >> .git/info/exclude
+      - name: Program identity binds the canonical semantic body (OMEGA_PROGRAM_ID)
+        # AArch64 job: the Visor objects this test links only build on AArch64 hosts
+        # (visor_realization.c k_diff_inputs is aarch64-only, pre-existing).
+        run: make OUT_DIR=build/pid PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-program-id
       - name: Omega as a resident realization faculty (R10)
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}

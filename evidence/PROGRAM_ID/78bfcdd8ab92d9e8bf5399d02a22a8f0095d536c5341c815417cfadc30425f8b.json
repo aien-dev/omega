@@ -1,0 +1,61 @@
+{
+  "schema": "omega-program-id-qualification/1",
+  "spec": "spec/program-identity.md",
+  "identity_law": "program_id = SHA256(\"omega.program.v2\" 0x00 || body_root_id || input_type_id || output_type_id || precondition_id || postcondition_id)",
+  "run_id": "20260929T123503Z",
+  "candidate_commit": "19c692bdadf8fa59c5b083ae9b65cf66a41d08e9",
+  "candidate_tree": "1790dd7dfab73943922260d0d4f1aae7bb58ab36",
+  "tree_dirty": false,
+  "tree_stable_during_run": true,
+  "host": {"uname_m": "aarch64", "uname_r": "7.0.0-1019-nvidia", "product_name": "NVIDIA_DGX_Spark"},
+  "hardware_scope": "host-only (CPU); no GPU, no silicon, no energy measurement",
+  "aienos": {"lock": "d39dd5bc3deb1a24e26a5059477a1342c110c71b", "source": "git archive d39dd5bc3deb1a24e26a5059477a1342c110c71b native/capability (tree 95a37fc83951af3042634b052d171bff9cd48bd0)", "lib_sha256": "e16b4ac10d2ee62c81c8556817c8d2efd0c376b9ede692c177b35d270c5a1118", "lib_built": true},
+  "physics": {"lock": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9", "checkout_head": "fecbedb1b9cea9e4de0fa3c88fe795934fb361f9"},
+  "gates": {
+    "OMEGA_PROGRAM_ID_BODY_BOUND_PASS": {"status": "PASS", "tests_run": 19, "tests_failed": 0, "sources": "make test-program-id (gate BODY_BOUND) + Visor qualification case program-id[body-bound: x+1 != x+2 after clear]"},
+    "OMEGA_PROGRAM_ID_REPRESENTATION_INVARIANT_PASS": {"status": "PASS", "tests_run": 2426, "tests_failed": 0, "sources": "make test-program-id (gate REPRESENTATION_INVARIANT, incl. seeded associativity: 400 chains x 4 bracketings == left fold, 400 a;b != b;a) + Visor qualification case program-id[param name + commutative side]"},
+    "OMEGA_PROGRAM_ID_MUTATION_SEPARATION_PASS": {"status": "PASS", "tests_run": 4514501, "tests_failed": 0, "sources": "make test-program-id (gate MUTATION_SEPARATION: 3000-program seeded differential, all pairs, hash-free oracle; 2000 x 8 single mutations)"},
+    "OMEGA_PROGRAM_ID_LIBRARY_REGRESSION_PASS": {"status": "PASS", "tests_run": 203, "tests_failed": 0, "sources": "make test-program-id (gate LIBRARY_REGRESSION) + make test-m8 test-m9 test-m10 test-m11 test-m14 test-crumbline + runtime program_id consumer grep"},
+    "OMEGA_PROGRAM_ID_VISOR_REGRESSION_PASS": {"status": "PASS", "tests_run": 1343, "tests_failed": 0, "sources": "make test-program-id (gate VISOR_REGRESSION) + make test-visor-core test-visor-world test-visor-authority + run_qualification.sh (all sections)"}
+  },
+  "host_regression": {"status": "PASS", "tests_run": 63748, "tests_failed": 0, "targets": "test-effect-cap64 test test-r3 test-r7 test-r8 test-r9 test-r10 test-r11 test-r12 test-action-graph test-state-projection test-capability-query test-typed-results"},
+  "suites": [
+    {"target": "test-program-id", "rc": 0, "tests_run": 4516979, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "1dfaff3e89442f89071bd58bcd1bec05307ae81799babc96407051765dfbe09e"},
+    {"target": "test-visor-core", "rc": 0, "tests_run": 993, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "ae481b482ab251bc4177e8209c7c2c59b55b4f438ea0f4d06cae8dc5be2578b0"},
+    {"target": "test-visor-world", "rc": 0, "tests_run": 47, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "5871f22361798420ecab55e3e3c86b5f7d0a049c6d3e857df42d535415d6ae6b"},
+    {"target": "test-visor-authority", "rc": 0, "tests_run": 104, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "1b85e67bf5b9c2d3aa80dfcbb2ad9f089ad37528b862d843d1cb35258d817210"},
+    {"target": "visor-qualification", "rc": 0, "tests_run": 189, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "7d76c90518932eda5200af43f8da4af6b2b47ce0def2084390a3c11bacf615e9"},
+    {"target": "test-m8", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "0c48782bb51438d45ddc69481f8efcd877057be31decdcd052b1ff2255e3bb52"},
+    {"target": "test-m9", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "d828b602ce749c2ebb371778d4111d76491d6a59bea17ae79e53c6a5c28f5c4c"},
+    {"target": "test-m10", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "3b1a97bfb1722287fd3e5db9e8b25b9d0acc6c8f679ecb98532308b2ddb6d0c3"},
+    {"target": "test-m11", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "ed44a6b0124aa1cd052d987876abe961c1a6a6e0985ab91be0f430e2d91b2a97"},
+    {"target": "test-m14", "rc": 0, "tests_run": 10, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "45ee88c3d9eac96e3c6bcd0b22537e41aa3ff29d8dbe80c7bd11c65e8a11fdca"},
+    {"target": "test-crumbline", "rc": 0, "tests_run": 127, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "36eec166b9b088c7d82bfa076a71918a7e6f175a4de8d0b71354aa7a35cd0018"},
+    {"target": "test-effect-cap64", "rc": 0, "tests_run": 304, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "ed2d68ef7df718cfabc1aff69b2c9161d8ccf3057967559cd81223552af5534e"},
+    {"target": "test", "rc": 0, "tests_run": 12, "tests_failed": 0, "count_source": "output", "status": "PASS", "log_sha256": "29a71d0699affd67211255ab30494689d40e185fb4859c6a0f486f114d74368d"},
+    {"target": "test-r3", "rc": 0, "tests_run": 12449, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123601Z-19c692bdadf8/R3/rx_heartbeat_receipt.json", "status": "PASS", "log_sha256": "e29c8efaf16ca42cda8f676c483f60e63fb2aadf1852195512e322860d8a68f2"},
+    {"target": "test-r7", "rc": 0, "tests_run": 0, "tests_failed": 0, "count_source": "exit-status-only", "status": "PASS", "log_sha256": "706351347547b3449e1224a99f215ce46dc7700e2e73e5f4a6c32e1d34f16840"},
+    {"target": "test-r8", "rc": 0, "tests_run": 116, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123603Z-19c692bdadf8/R8/rx_aegis_resident_receipt.json", "status": "PASS", "log_sha256": "732881efcc37bc78890eab0db0708fc1aad357b637213e4ba99fe12936d26a5d"},
+    {"target": "test-r9", "rc": 0, "tests_run": 210, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123607Z-19c692bdadf8/R9/rx_generation_barrier_receipt.json", "status": "PASS", "log_sha256": "c18a0756c3bea479726beb63c32f3956ff97863d0d5adc77c2d9ef16c020768c"},
+    {"target": "test-r10", "rc": 0, "tests_run": 198, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123728Z-19c692bdadf8/R10/rx_omega_faculty_receipt.json", "status": "PASS", "log_sha256": "65c01f59c01e588974b1bf91f4bd3ecb0ff6c68ee72dd98d0ac27354bdd61dde"},
+    {"target": "test-r11", "rc": 0, "tests_run": 436, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123731Z-19c692bdadf8/R11/rx_aien_faculty_receipt.json", "status": "PASS", "log_sha256": "1b085336229f9413a0cf5125b363d0a26554b97b843ca25bf26f5224393eec79"},
+    {"target": "test-r12", "rc": 0, "tests_run": 193, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123732Z-19c692bdadf8/R12/rx_resident_host_receipt.json", "status": "PASS", "log_sha256": "828dab617cf9deaa4720b2021681967b9a2e7a73c85d045882e66b24581cfe10"},
+    {"target": "test-action-graph", "rc": 0, "tests_run": 685, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123734Z-19c692bdadf8/ACTION_GRAPH/rx_action_graph_receipt.json", "status": "PASS", "log_sha256": "18d62031212f8d17e68f54de3113156616c7a8988d1db16504459c3fd32b3e0c"},
+    {"target": "test-state-projection", "rc": 0, "tests_run": 1132, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123756Z-19c692bdadf8/STATE_PROJECTION/omega_state_projection_receipt.json", "status": "PASS", "log_sha256": "6d8e0f0920a36f5ebac1c1cc1f93029eaa28fdf3b38047244615205fa9341bc8"},
+    {"target": "test-capability-query", "rc": 0, "tests_run": 951, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123759Z-19c692bdadf8/CAPABILITY_QUERY/rx_capability_query_receipt.json", "status": "PASS", "log_sha256": "bb1290b33ed08eb62d11840b94f341dd0921c1e9e83c3fe4ba039705010c755f"},
+    {"target": "test-typed-results", "rc": 0, "tests_run": 47062, "tests_failed": 0, "count_source": "receipt:build/qual-runs/20260929T123801Z-19c692bdadf8/TYPED_RESULTS/rx_typed_results_receipt.json", "status": "PASS", "log_sha256": "bcd771d7354732133f20218cf2ec8b7a09be0839964f918048bdff8899f04f60"}
+  ],
+  "runtime_program_id_consumers": {"hits": 0, "detail": ""},
+  "not_run": [
+    "GPU / silicon targets (test-m12, test-m15, test-m17, test-m18, test-m19, r12 silicon seat, r13/r14 living runs, R15)",
+    "suites CI runs that read the package energy counter (test-semantic-comm, test-cognitive-routing, test-sem-incremental, test-workflow-fusion, test-plan-reuse): not run here (no energy measurements); MetaSkill and plan-cache code does not consume program_id (grep above); CI runs them"
+  ],
+  "non_claims": [
+    "Identity is intensional (canonical body), not extensional: x+1+1 and x+2 compute the same function and have different ids.",
+    "Composition postconditions are the flattened ordered leaf list (spec 2.4): associative by construction; leaf clauses are still identified by canonical text, not logical meaning.",
+    "Historical receipts under evidence/ carry v1 program ids and are not rewritten.",
+    "The body model is the V0 unary step chain (five ops, one constant each, <= 64 steps)."
+  ],
+  "verdict": "OMEGA_PROGRAM_ID_PASS",
+  "verdict_reasons": []
+}

@@ -13,6 +13,8 @@ typedef struct {
     uint32_t latency_cycles;
 } OmegaCost;
 
+#define OMEGA_PROGRAM_MAX_STEPS 64
+
 typedef struct {
     TypeTag input_type;
     uint16_t input_width;
@@ -21,15 +23,38 @@ typedef struct {
     SemanticId precondition_id;
     SemanticId postcondition_id;
     char precondition[64];
-    char postcondition[64];
+    char postcondition[64];     /* display text; for a composition, derived and not canonical */
+    /* Composition (spec/program-identity.md 2.4): the flattened, ordered list of the
+     * component (leaf) postcondition ids, in application order. postcondition_id is then
+     * the canonical sequence constraint over this list, so composition is associative.
+     * post_leaf_count == 0 means the postcondition is a leaf. */
+    uint16_t post_leaf_count;
+    SemanticId post_leaves[OMEGA_PROGRAM_MAX_STEPS];
 } OmegaContract;
 
 /* Construct canonical constraint SemanticId from ConstraintKind and annotation */
 int omega_build_constraint_id(ConstraintKind kind, const char *annotation, SemanticId *out_id);
 
+/* Canonical semantic body (spec/program-identity.md 2.1): an ordered chain of
+ * unary steps, innermost first: f(x) = op_n(...op_1(x, imm_1)..., imm_n).
+ * Stored by value so OmegaProgram stays safe to copy. */
+#define OMEGA_PROGRAM_ID_DOMAIN "omega.program.v2"
+
+typedef struct {
+    uint8_t op;      /* OpCode: OP_ADD OP_SUB OP_MUL OP_AND OP_OR */
+    uint64_t imm;
+} OmegaProgramStep;
+
+typedef struct {
+    bool has_body;   /* false: meaning unknown; the program has no identity */
+    uint16_t step_count;
+    OmegaProgramStep steps[OMEGA_PROGRAM_MAX_STEPS];
+} OmegaProgramBody;
+
 typedef struct {
     SemanticId program_id;
-    char name[64];
+    char name[64];          /* metadata: not part of the identity */
+    OmegaProgramBody body;  /* semantic: part of the identity */
     OmegaContract contract;
     OmegaCost cost;
     OmegaGraph *graph;
@@ -54,8 +79,30 @@ void omega_program_init(OmegaProgram *prog, const char *name);
 /* Free resources owned by program */
 void omega_program_destroy(OmegaProgram *prog);
 
-/* Compute semantic ID of program based on contract, cost, and name */
+/* Program identity v2 (spec/program-identity.md):
+ *   SHA256("omega.program.v2" 0x00 || body_root_id || in_type_id || out_type_id || pre_id || post_id)
+ * body_root_id is the id of the root APPLY of the body lowered with the existing
+ * canonical builders. Name, cost and realization are metadata and not hashed.
+ * Returns -1 and zeroes program_id when the program has no body (no identity). */
 int omega_program_compute_id(OmegaProgram *prog);
+
+/* The canonical body root id alone (the SemanticId of the body's root object). */
+int omega_program_body_root_id(const OmegaProgram *prog, SemanticId *out_root);
+
+/* Lift a realization in the builder's rigid unary template
+ *   (movz x1, lo16 [; movk x1, hi16, lsl 16] ; op x0, x0, x1)* ; ret
+ * back to a body. Confirmed by re-emitting the steps and requiring byte equality.
+ * Returns 0 and fills out_body on success, -1 if the code is not in the template. */
+int omega_program_lift_body(const uint8_t *code, size_t code_len, OmegaProgramBody *out_body);
+
+/* Emit the canonical realization of a body (the template above, ending in RET). */
+int omega_program_emit_body(const OmegaProgramBody *body, uint8_t *code, size_t *code_len, size_t max_len);
+
+/* Canonical sequence postcondition id over an ordered leaf list (n >= 1): n == 1 is the
+ * leaf itself; otherwise the right fold Seq(l1, Seq(l2, ... ln)) of KIND_CONSTRAINT
+ * objects with attribute "omega.compose" = "seq" and a CONST_POSTCONDITION constraint
+ * whose payload is (head id || tail id). */
+int omega_contract_post_seq_id(const SemanticId *leaves, uint16_t n, SemanticId *out);
 
 /* Validate contract conformance */
 int omega_program_validate_contract(const OmegaProgram *prog, char *err_msg, size_t err_msg_len);

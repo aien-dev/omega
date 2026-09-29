@@ -386,6 +386,7 @@ int omega_language_lower_program(const OmegaAst *ast, OmegaProgram *out, char *e
     snprintf(acc.name, sizeof acc.name, "%s", ast->name);
     snprintf(acc.contract.precondition, sizeof acc.contract.precondition, "%s", ast->requires_text);
     snprintf(acc.contract.postcondition, sizeof acc.contract.postcondition, "%s", ast->ensures_text);
+    acc.contract.post_leaf_count = 0;   /* the fn's ensures clause is one leaf */
     if (omega_build_constraint_id(CONST_PRECONDITION, acc.contract.precondition, &acc.contract.precondition_id) ||
         omega_build_constraint_id(CONST_POSTCONDITION, acc.contract.postcondition, &acc.contract.postcondition_id) ||
         omega_program_compute_id(&acc))
@@ -444,10 +445,13 @@ int omega_language_eval_line(VisorSession *s, const char *line, OmegaLangResult 
         OmegaProgram prog;
         rc = omega_language_lower_program(&ast, &prog, err, err_len);
         if (rc) return rc;
-        /* The existing program_id hashes name, contract ids and cost, NOT the
-         * code. Two different bodies can therefore share an id; refuse that
-         * instead of letting one id name two programs. An identical program is
-         * reused (same rule as graph dedupe). */
+        /* The program id (v2, spec/program-identity.md) binds the canonical body
+         * and the contract, not the name: an equal id is the same program and
+         * is reused (same rule as graph dedupe), even under another name. A
+         * different body gets a different id, so redefining a name simply adds
+         * the new program and rebinds the name. Equal id with different code
+         * would mean the builder emitted two realizations for one body: an
+         * internal invariant violation, refused. */
         int pidx = -1;
         for (size_t i = 0; i < s->program_count; i++) {
             const OmegaProgram *q = &s->programs[i];
@@ -455,8 +459,8 @@ int omega_language_eval_line(VisorSession *s, const char *line, OmegaLangResult 
             if (q->realization.code_len != prog.realization.code_len ||
                 memcmp(q->realization.code_bytes, prog.realization.code_bytes, prog.realization.code_len) != 0)
                 return lfail(err, err_len, ast.stmt_col, -2,
-                             "identity collision: a different program with this name and contract already exists "
-                             "(the program id does not cover the body); rename it or change its contract");
+                             "internal: program id matches an existing program but its realization differs "
+                             "(builder invariant violated)");
             pidx = (int)i;
             break;
         }
