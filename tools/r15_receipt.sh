@@ -2,7 +2,7 @@
 # r15_receipt.sh -- write the R15 receipt (spec/r15-performance-proof.md §12,
 # §13, §14) from one qualification run directory.
 #
-#   tools/r15_receipt.sh <raw-dir> <out-dir> [candidate-commit] [reruns.json]
+#   tools/r15_receipt.sh <raw-dir> <out-dir> [candidate-commit] [reruns.json] [notes.tsv]
 #
 # Inputs, all read, none changed:
 #   <raw-dir>/summary.json   the reducer output (every metric, comparison, CI,
@@ -15,6 +15,13 @@
 #   reruns.json              the §14 correctness reruns (+ §16 item 9 SEQ parity)
 #                            as one JSON object, e.g. {"R3":"PASS",...}; absent =
 #                            not done
+#   notes.tsv                human-written, tab-separated lines (# = comment):
+#                              regression<TAB>metric<TAB>resident<TAB>SEQ<TAB>justification
+#                              limit<TAB>text
+#                            every metric where the resident path is worse
+#                            than SEQ (spec §11) and the receipt's stated
+#                            limits; values are copied from summary.json by
+#                            hand and cited, never used to decide the outcome
 #
 # Output: <out-dir>/<sha256>.json, schema AIEN_RX_R15_REACTION_PERFORMANCE_V1,
 # named by the SHA-256 of its own bytes. The path is printed on stdout.
@@ -34,6 +41,7 @@ RAW=${1:?raw run directory}
 OUTDIR=${2:?output directory}
 CANDIDATE=${3:-${OMEGA_CANDIDATE_COMMIT:-}}
 RERUNS=${4:-}
+NOTES=${5:-}
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 
 SUM=$RAW/summary.json
@@ -119,12 +127,48 @@ else
     fail "correctness reruns (§14) not recorded"
 fi
 
+# ---- RES-1-NODIGEST flag, checked from raw (every process records
+# causal_digest): the NODIGEST measurement build must have digests off
+# (0) and every other process (RES-4, RES-1, SEQ trials, L2) must have them on.
+ND_OK=true; ND_FILES=0; PROD_FILES=0
+for f in "$RAW"/trial-*.jsonl "$RAW"/l2-*.jsonl; do
+    [ -e "$f" ] || continue
+    vals=$(grep -o '"causal_digest":[0-9]*' "$f" | sort -u | sed 's/.*://' | paste -sd, -)
+    case $(basename "$f") in
+        trial-RES1ND-*) ND_FILES=$((ND_FILES + 1)); want=0 ;;
+        *)              PROD_FILES=$((PROD_FILES + 1)); want=1 ;;
+    esac
+    if [ "$vals" != "$want" ]; then
+        ND_OK=false
+        fail "$(basename "$f"): causal_digest values '$vals', expected $want"
+    fi
+done
+[ "$ND_FILES" -gt 0 ] || { ND_OK=false; fail "no RES-1-NODIGEST trial files found"; }
+
 OUTCOME=FAIL
 [ ${#REASONS[@]} -eq 0 ] && OUTCOME=PASS
 
 # ---- regressions: every failed gate, with its value and threshold
 REGR=$(printf '%s' "$GATES" | grep -o '{"id":"G[0-9]*"[^}]*"outcome":"FAIL"[^}]*}' \
     | sed 's/}$/,"justification":"none: a failed gate means no PASS (spec §11)"}/' | paste -sd, -)
+
+# ---- human-written regressions (spec §11) and stated limits
+NOTE_REGR=""; LIMITS=""
+if [ -n "$NOTES" ]; then
+    [ -s "$NOTES" ] || { echo "r15_receipt: notes file $NOTES missing or empty" >&2; exit 2; }
+    while IFS=$'\t' read -r kind a b c d; do
+        case $kind in
+            regression)
+                e="{\"metric\":$(jstr "$a"),\"resident\":$(jstr "$b"),\"seq\":$(jstr "$c"),\"justification\":$(jstr "$d")}"
+                NOTE_REGR=${NOTE_REGR:+$NOTE_REGR,}$e ;;
+            limit)
+                LIMITS=${LIMITS:+$LIMITS,}$(jstr "$a") ;;
+            ''|'#'*) ;;
+            *) echo "r15_receipt: bad notes line kind '$kind'" >&2; exit 2 ;;
+        esac
+    done < "$NOTES"
+fi
+[ -n "$NOTE_REGR" ] && REGR=${REGR:+$REGR,}$NOTE_REGR
 
 reasons_json() {
     local first=1 r
@@ -160,7 +204,8 @@ TMP=$(mktemp "$OUTDIR/.r15-receipt.XXXXXX") || exit 2
     printf '  "reducer_source_sha256": %s,\n' "$(jstr "$REDUCER_SRC")"
     printf '  "legacy_status": "NOT DIRECTLY COMPARABLE (spec §2): sovereign-core run_until_complete/step is LLM batched decode; aegis-runtime execute_task is an LLM tool-calling loop; the baseline is the sequential control SEQ",\n'
     printf '  "seq_selector_symbol": "rx_world_init_native_sequential_reference",\n'
-    printf '  "nodigest_macro": {"name": "RX_MEASURE_NO_CAUSAL_DIGEST", "defined_in_production_binaries": false, "used_by": "RES-1-NODIGEST measurement build only"},\n'
+    printf '  "nodigest_macro": {"name": "RX_MEASURE_NO_CAUSAL_DIGEST", "used_by": "RES-1-NODIGEST measurement build only", "checked_from_raw": %s, "nodigest_processes_digest_off": %s, "production_processes_digest_on": %s},\n' \
+        "$ND_OK" "$ND_FILES" "$PROD_FILES"
     printf '  "gates_present": %s,\n' "$NGATES"
     printf '  "all_gates_pass": %s,\n' "${ALL_PASS:-null}"
     printf '  "gates": %s,\n' "${GATES:-[]}"
@@ -168,6 +213,7 @@ TMP=$(mktemp "$OUTDIR/.r15-receipt.XXXXXX") || exit 2
         "[$(for k in $REQUIRED_RERUNS; do jstr "$k"; printf ','; done | sed 's/,$//')]"
     printf '  "correctness_reruns": %s,\n' "$RERUN_JSON"
     printf '  "regressions": [%s],\n' "$REGR"
+    printf '  "limits": [%s],\n' "$LIMITS"
     printf '  "not_claimed": ["R16", "whole-project performance beyond the measured workloads", "LLM decode or agent-loop performance (the legacy loops, spec §2)", "general cognition", "open-ended synthesis", "energy of anything outside the measured windows"],\n'
     printf '  "hardware_identity": '
     tr -d '\n' < "$MACH"

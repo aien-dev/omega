@@ -1,0 +1,7 @@
+# R15 receipt notes (tools/r15_receipt.sh 5th argument, make r15-receipt NOTES=...).
+# Human-written. Tab-separated. regression<TAB>metric<TAB>resident<TAB>SEQ<TAB>justification | limit<TAB>text
+# Values are copied by hand from the qualifying run's summary.json (updated for that run before the receipt is written).
+regression	L1-A activation latency p50 (RES-1 vs SEQ, ns)	7376	4688	the dependency-driven wake path adds a fixed hop (wake, ready queue, worker pickup) that the sequential control does not have; the gated budget G5 (p50 <= 50 us, p99 <= 221 us) is still met with large margin (attempt-1 numbers; replaced by the qualifying run)
+limit	G10 (amendment A1, spec section 21) counts synchronization events with exactly one GPU claim in flight, so results per wake = 1 on both sides by construction; it cannot show one completion scan covering many results. A multi-claim-in-flight L2 phase (N > 1, e.g. 16; Drake Option B) is deferred to a later gate.
+limit	Host spin cost (empty completion polls per GPU result) is reported, not gated; both RES-1 and SEQ spin while one claim is in flight, and the spin rate varied about 6x between runs with identical clocks (attempt 1), so it is not claimed to be small or stable.
+limit	Qualification attempt 1 (run 20260929T020536Z-ad8e1f2ea4e4-silicon) FAILED (G10 under the original definition; blank aienos commit) and stays FAIL; see evidence/R15/ATTEMPT-1-FAIL.md.

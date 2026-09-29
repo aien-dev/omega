@@ -510,8 +510,8 @@ r15-perf-silicon: $(RX_R15_PERF_SILICON) $(RX_R15_PERF_SILICON_ND) $(R15_REDUCE)
 # directory (summary.json + machine.json + SHA256SUMS) into
 # evidence/R15/<sha256>.json. The host test runs it on attempt 1 (a FAIL).
 r15-receipt:
-	@test -n "$(RUN)" || { echo "usage: make r15-receipt RUN=evidence/R15/raw/<run-id> [CANDIDATE=<commit>] [RERUNS=<file>]"; exit 2; }
-	tools/r15_receipt.sh $(RUN) evidence/R15 $(CANDIDATE) $(RERUNS)
+	@test -n "$(RUN)" || { echo "usage: make r15-receipt RUN=evidence/R15/raw/<run-id> [CANDIDATE=<commit>] [RERUNS=<file>] [NOTES=<file>]"; exit 2; }
+	tools/r15_receipt.sh $(RUN) evidence/R15 "$(CANDIDATE)" "$(RERUNS)" "$(NOTES)"
 
 .PHONY: r15-receipt test-r15-receipt
 test-r15-receipt:

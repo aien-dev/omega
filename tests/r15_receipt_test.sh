@@ -21,7 +21,7 @@ check "named by its own SHA-256" '[ "$(basename "$R" .json)" = "$(sha256sum "$R"
 for k in schema run_id outcome outcome_reasons candidate_commit run_commit candidate_bound \
     tree_dirty silicon_observed aienos_commit physics_commit benchmark_binaries_sha256 \
     raw_digest_sha256 reducer_source_sha256 legacy_status seq_selector_symbol nodigest_macro \
-    gates correctness_reruns regressions not_claimed hardware_identity summary \
+    gates correctness_reruns regressions limits not_claimed hardware_identity summary \
     hostname machine_id_sha256 kernel midr governor_freq mem_kb gpu secure_boot lockdown \
     perf_event_paranoid thermal_mc compiler binaries metrics comparisons all_gates_pass; do
     check "field $k present" 'grep -q "\"$k\":" "$R"'
@@ -63,6 +63,22 @@ P=$("$HERE/tools/r15_receipt.sh" "$SYN" "$OUT/syn-out" ad8e1f2ea4e4906ed810c6bd6
 check "all gates PASS + reruns PASS -> PASS" '[ $? = 0 ] && grep -q "\"outcome\": \"PASS\"" "$P"'
 "$HERE/tools/r15_receipt.sh" "$SYN" "$OUT/syn-out" 0000000000000000000000000000000000000000 "$OUT/reruns.json" >/dev/null
 check "wrong candidate -> FAIL" '[ $? = 1 ]'
+check "nodigest flag checked from raw" 'grep -q "\"checked_from_raw\": true, \"nodigest_processes_digest_off\": 12, \"production_processes_digest_on\": 46" "$R"'
+
+# human-written notes: a regression and a limit are copied into the receipt
+printf '# test notes\nregression\tL1-A p50 ns\t7376\t4688\ttest justification\nlimit\ttest limit text\n' > "$OUT/notes.tsv"
+N=$("$HERE/tools/r15_receipt.sh" "$SYN" "$OUT/syn-notes" ad8e1f2ea4e4906ed810c6bd696cc905b801d69a "$OUT/reruns.json" "$OUT/notes.tsv")
+check "notes: still PASS" '[ $? = 0 ]'
+check "notes: regression listed" 'grep -q "\"metric\":\"L1-A p50 ns\",\"resident\":\"7376\",\"seq\":\"4688\",\"justification\":\"test justification\"" "$N"'
+check "notes: limit listed" 'grep -q "\"limits\": \[\"test limit text\"\]" "$N"'
+
+# a NODIGEST process that kept digests on must fail the receipt (re-sealed)
+ND=$OUT/nd; mkdir -p "$ND"; cp "$SYN"/* "$ND"/
+f=$(ls "$ND"/trial-RES1ND-*.jsonl | head -1); sed -i 's/"causal_digest":0/"causal_digest":1/' "$f"
+sed -i "s/^[0-9a-f]*  $(basename "$f")\$/$(sha256sum "$f" | cut -d' ' -f1)  $(basename "$f")/" "$ND/SHA256SUMS"
+sed -i "s/\"raw_digest_sha256_of_SHA256SUMS\":\"[0-9a-f]*\"/\"raw_digest_sha256_of_SHA256SUMS\":\"$(sha256sum "$ND/SHA256SUMS" | cut -d' ' -f1)\"/" "$ND/summary.json"
+Q=$("$HERE/tools/r15_receipt.sh" "$ND" "$OUT/nd-out" ad8e1f2ea4e4906ed810c6bd696cc905b801d69a "$OUT/reruns.json")
+check "NODIGEST process with digests on -> FAIL" '[ $? = 1 ] && grep -q "causal_digest values .1., expected 0" "$Q" && grep -q "\"raw_files_verified\": true" "$Q"'
 
 echo "r15 receipt test: $FAILS failure(s)"
 [ $FAILS = 0 ]
