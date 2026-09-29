@@ -132,6 +132,12 @@ Evidence scope is reported exactly as the receipt states it (`host`, `qemu`,
   next to the program id.
 - `evidence/M19R/c4d87451….json` is hash-named but its name does not match the
   SHA-256 of its bytes (observed only, not judged).
+- Since main widened capability generations to 64 bits (PR "cap-generation-64",
+  merged after this work started), `EffectPayload.capability_generation` in
+  `omega_types.h` is still 32-bit, so an Omega EFFECT object cannot carry a live
+  capability reference: the runtime root sees every such reference as stale. This
+  is fail-closed but means the honest effect path is unrepresentable until the
+  canonical effect format is widened (an identity-changing core change, separate PR).
 - Both canonical machine builders set `is_physics_authorized=true` with a
   constant placeholder seal; the machine view labels it as such.
 - Host CPU part numbers (0xd85/0xd87) are not Neoverse-V2; the DGX Spark profile

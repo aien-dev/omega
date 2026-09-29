@@ -69,6 +69,24 @@ static void non_claim(const char *text) {
     printf("NON-CLAIM: %s\n", text);
 }
 
+/* Omega's EffectPayload (and so VisorEffectRequest) carries a 32-bit
+ * capability generation. Since main f5b6ff1 runtime generations are 64-bit,
+ * and since 7622d3c every root seeds them from CLOCK_BOOTTIME ns << 8, i.e.
+ * above 2^32. The runtime has no seed hook, so an honest reference usually
+ * cannot be carried through the Visor format. A check that needs an honest,
+ * representable reference runs only when the generation fits; otherwise it
+ * prints a NON-CLAIM and is not counted (never a fake pass). */
+#define GEN_FITS(ref) (((ref).generation >> 32) == 0)
+#define CHECK_IF_REPR(repr, cond, desc)                                         \
+    do {                                                                        \
+        if (repr) CHECK(cond, "%s", desc);                                      \
+        else {                                                                  \
+            g_nonclaims++;                                                      \
+            printf("NON-CLAIM: not exercised via the Visor format (honest 64-bit "   \
+                   "generation unrepresentable in EffectPayload): %s\n", desc);    \
+        }                                                                       \
+    } while (0)
+
 /* ---- conventions ---- */
 
 static uint32_t rights_for_op(uint16_t op) {
@@ -113,17 +131,26 @@ static RxCapRef mint(Env *e, uint32_t subject, uint64_t resource, uint32_t right
     return r;
 }
 
+/* The root / World on a full 64-bit reference (runtime only, no Visor format). */
+static int root_ref(Env *e, RxCapRef ref, uint16_t cls, uint16_t op) {
+    return rx_caproot_validate(&e->root, ref, SUBJ_CLIENT, resource_for(cls), rights_for_op(op),
+                               NULL);
+}
+
+static int world_ref(Env *e, RxCapRef ref, uint16_t cls, uint16_t op) {
+    return rx_world_validate_cap(&e->w, ref, SUBJ_CLIENT, resource_for(cls), rights_for_op(op),
+                                 NULL);
+}
+
 /* What the capability root says about the reference the request carries. */
 static int root_check(Env *e, const VisorEffectRequest *r) {
     RxCapRef ref = { r->capability_slot, r->capability_generation };
-    return rx_caproot_validate(&e->root, ref, SUBJ_CLIENT, resource_for(r->resource_class),
-                               rights_for_op(r->operation_code), NULL);
+    return root_ref(e, ref, r->resource_class, r->operation_code);
 }
 
 static int world_check(Env *e, const VisorEffectRequest *r) {
     RxCapRef ref = { r->capability_slot, r->capability_generation };
-    return rx_world_validate_cap(&e->w, ref, SUBJ_CLIENT, resource_for(r->resource_class),
-                                 rights_for_op(r->operation_code), NULL);
+    return world_ref(e, ref, r->resource_class, r->operation_code);
 }
 
 static uint32_t aegis_check(Env *e, const VisorEffectRequest *r, uint32_t *why) {
@@ -159,7 +186,7 @@ static void set_payload(OmegaObject *o, const EffectPayload *eff) {
 typedef struct { Env *e; } GenAuth;
 
 /* Linux-oracle promotion check: the capability root validates the promoter. */
-static int gen_auth(void *ctx, uint32_t cap_id, uint32_t cap_generation, uint32_t subject,
+static int gen_auth(void *ctx, uint32_t cap_id, uint64_t cap_generation, uint32_t subject,
                     uint64_t resource, uint32_t rights) {
     GenAuth *a = ctx;
     return rx_caproot_validate(&a->e->root, (RxCapRef){ cap_id, cap_generation }, subject,
@@ -254,6 +281,7 @@ int main(void) {
     /* The honest grant the outside authority made for class 1 WRITE. */
     RxCapRef cap = mint(e, SUBJ_CLIENT, resource_for(1), RX_RIGHT_READ | RX_RIGHT_WRITE);
     RxCapRef other = mint(e, SUBJ_OTHER, resource_for(2), RX_RIGHT_WRITE);
+    const bool repr = GEN_FITS(cap) && GEN_FITS(other);
 
     OmegaObject *honest_obj = add_effect(g, 1, OPC_WRITE, cap, "set=42");
     SemanticId honest_id = honest_obj->id;
@@ -269,8 +297,12 @@ int main(void) {
     CHECK(strcmp(honest.route, VISOR_EFFECT_ROUTE) == 0, "route");
     CHECK(memcmp(honest.request_digest, honest_id.bytes, 32) == 0,
           "digest equals the canonical SemanticId");
-    CHECK(root_check(e, &honest) == RX_CAP_OK, "control: root accepts the honest reference");
-    CHECK(world_check(e, &honest) == RX_CAP_OK, "control: world accepts the honest reference");
+    CHECK(root_ref(e, cap, 1, OPC_WRITE) == RX_CAP_OK,
+          "control (64-bit ref, runtime only): root accepts the minted reference");
+    CHECK(world_ref(e, cap, 1, OPC_WRITE) == RX_CAP_OK,
+          "control (64-bit ref, runtime only): world accepts the minted reference");
+    CHECK_IF_REPR(repr, root_check(e, &honest) == RX_CAP_OK, "control: root accepts the honest reference");
+    CHECK_IF_REPR(repr, world_check(e, &honest) == RX_CAP_OK, "control: world accepts the honest reference");
     uint32_t why = 0;
     CHECK(aegis_check(e, &honest, &why) == RX_AEGIS_GRANT, "control: AEGIS policy grants");
     char text[1024], json[1024];
@@ -323,6 +355,24 @@ int main(void) {
               "non-effect object refused");
     }
 
+    /* ================= 12. 64-bit generation through the 32-bit format ==== */
+    case_header("12 honest 64-bit generation carried through the 32-bit effect format");
+    CHECK(honest.capability_slot == cap.cap_id &&
+          honest.capability_generation == (uint32_t)cap.generation,
+          "format carries the slot and only the low 32 bits of the generation");
+    if (!repr) {
+        CHECK(root_check(e, &honest) == RX_CAP_ERR_STALE_GEN,
+              "truncated honest reference fails closed at the root (STALE_GEN)");
+        CHECK(world_check(e, &honest) == RX_CAP_ERR_STALE_GEN,
+              "truncated honest reference fails closed at the world (STALE_GEN)");
+        printf("FINDING: EffectPayload.capability_generation is 32-bit; runtime generations are "
+               "64-bit since main f5b6ff1 (boot-seeded above 2^32 since 7622d3c); honest 64-bit "
+               "references are unrepresentable\n");
+    } else {
+        non_claim("the minted generations fit in 32 bits on this run; the unrepresentable-"
+                  "generation case was not exercised.");
+    }
+
     /* ================= 1. forged capability ============================== */
     case_header("1 forged capability (random bytes / wrong slot)");
     {
@@ -338,12 +388,19 @@ int main(void) {
               strstr(json, "\"authorized\":false"), "flipped flag still renders unauthorized");
         f = honest;
         f.capability_generation ^= 0x5A5A5A5Au;
-        CHECK(root_check(e, &f) == RX_CAP_ERR_STALE_GEN, "random generation: root");
+        CHECK_IF_REPR(repr, root_check(e, &f) == RX_CAP_ERR_STALE_GEN, "random generation: root");
+        CHECK(root_ref(e, (RxCapRef){ cap.cap_id, cap.generation ^ 0x5A5A5A5Aull }, 1, OPC_WRITE) ==
+                  RX_CAP_ERR_STALE_GEN,
+              "random generation (64-bit ref, runtime only): root STALE_GEN");
         f = honest;
         f.capability_slot = other.cap_id;             /* someone else's live cap */
-        f.capability_generation = other.generation;
-        CHECK(root_check(e, &f) == RX_CAP_ERR_SUBJECT, "wrong slot: root %d", root_check(e, &f));
-        CHECK(world_check(e, &f) == RX_CAP_ERR_SUBJECT, "wrong slot: world");
+        f.capability_generation = (uint32_t)other.generation;
+        CHECK_IF_REPR(repr, root_check(e, &f) == RX_CAP_ERR_SUBJECT, "wrong slot: root");
+        CHECK_IF_REPR(repr, world_check(e, &f) == RX_CAP_ERR_SUBJECT, "wrong slot: world");
+        CHECK(root_ref(e, other, 2, OPC_WRITE) == RX_CAP_ERR_SUBJECT,
+              "wrong slot (64-bit ref, runtime only): root SUBJECT");
+        CHECK(world_ref(e, other, 2, OPC_WRITE) == RX_CAP_ERR_SUBJECT,
+              "wrong slot (64-bit ref, runtime only): world SUBJECT");
     }
 
     /* ================= 5. malformed request ============================== */
@@ -383,7 +440,9 @@ int main(void) {
         SemanticId xid = x->id;
         VisorEffectRequest r;
         CHECK(visor_effect_request_build(g, &xid, &r) == 0, "build (a question is allowed)");
-        CHECK(root_check(e, &r) == RX_CAP_ERR_RIGHTS, "root: EFFECT not in grant");
+        CHECK_IF_REPR(repr, root_check(e, &r) == RX_CAP_ERR_RIGHTS, "root: EFFECT not in grant");
+        CHECK(root_ref(e, cap, 1, OPC_EFFECT) == RX_CAP_ERR_RIGHTS,
+              "root (64-bit ref, runtime only): EFFECT not in grant");
         CHECK(aegis_check(e, &r, &why) == RX_AEGIS_DENY && why == RX_AEGIS_WHY_NO_RULE,
               "AEGIS: no rule covers EFFECT (why=%u)", why);
         OmegaObject *y = add_effect(g, 1, OPC_WRITE, cap, "set=42");
@@ -408,7 +467,9 @@ int main(void) {
         CHECK(!r.authorized, "still unauthorized");
         CHECK(aegis_check(e, &r, &why) == RX_AEGIS_DENY && why == RX_AEGIS_WHY_PRIVILEGED,
               "AEGIS: privileged right refused (why=%u)", why);
-        CHECK(root_check(e, &r) == RX_CAP_ERR_RIGHTS, "root: client cap has no MINT");
+        CHECK_IF_REPR(repr, root_check(e, &r) == RX_CAP_ERR_RIGHTS, "root: client cap has no MINT");
+        CHECK(root_ref(e, cap, 1, OPC_MINT) == RX_CAP_ERR_RIGHTS,
+              "root (64-bit ref, runtime only): client cap has no MINT");
         /* The UI holds only its own reference. Presenting it as mint authority: */
         RxCapMint m;
         memset(&m, 0, sizeof m);
@@ -455,8 +516,12 @@ int main(void) {
         CHECK(visor_effect_request_build(g, &nid, &r) == 0, "re-identified object builds");
         CHECK(memcmp(r.request_digest, honest.request_digest, 32) != 0,
               "digest mismatch with the authorized request");
-        CHECK(root_check(e, &r) == RX_CAP_ERR_RESOURCE, "root: cap is bound to the old resource");
-        CHECK(world_check(e, &r) == RX_CAP_ERR_RESOURCE, "world: same");
+        CHECK_IF_REPR(repr, root_check(e, &r) == RX_CAP_ERR_RESOURCE, "root: cap is bound to the old resource");
+        CHECK_IF_REPR(repr, world_check(e, &r) == RX_CAP_ERR_RESOURCE, "world: same");
+        CHECK(root_ref(e, cap, 2, OPC_WRITE) == RX_CAP_ERR_RESOURCE,
+              "root (64-bit ref, runtime only): cap is bound to the old resource");
+        CHECK(world_ref(e, cap, 2, OPC_WRITE) == RX_CAP_ERR_RESOURCE,
+              "world (64-bit ref, runtime only): same");
         set_payload(o, &saved);
         omega_compute_semantic_id(o);
         CHECK(omega_compare_semantic_id(&o->id, &honest_id) == 0, "restored");
@@ -477,7 +542,7 @@ int main(void) {
         CHECK(visor_effect_request_build(g, &nid, &r) == 0 &&
               memcmp(r.request_digest, honest.request_digest, 32) != 0,
               "re-identified params: digest mismatch with the authorized request");
-        CHECK(root_check(e, &r) == RX_CAP_OK,
+        CHECK_IF_REPR(repr, root_check(e, &r) == RX_CAP_OK,
               "observed: params-only change still validates at the root (basis of the non-claim)");
         non_claim("the capability root binds (subject, resource, rights, generation), not effect "
                   "parameters: a params-only change still validates at rx_caproot_validate; only the "
@@ -487,8 +552,8 @@ int main(void) {
         set_payload(o, &eff);
         omega_compute_semantic_id(o);
         nid = o->id;
-        CHECK(visor_effect_request_build(g, &nid, &r) == 0 && root_check(e, &r) == RX_CAP_ERR_RIGHTS,
-              "operation changed: root refuses rights");
+        CHECK(visor_effect_request_build(g, &nid, &r) == 0, "operation changed: builds");
+        CHECK_IF_REPR(repr, root_check(e, &r) == RX_CAP_ERR_RIGHTS, "operation changed: root refuses rights");
         set_payload(o, &saved);
         omega_compute_semantic_id(o);
     }
@@ -517,24 +582,37 @@ int main(void) {
     {
         RxCapRef office = rx_capadmin_office(&e->admin);
         CHECK(rx_capadmin_revoke(&e->admin, office, cap) == RX_CAP_OK, "harness revokes");
-        CHECK(root_check(e, &honest) == RX_CAP_ERR_REVOKED, "revoked: root");
+        CHECK_IF_REPR(repr, root_check(e, &honest) == RX_CAP_ERR_REVOKED, "revoked: root");
+        CHECK(root_ref(e, cap, 1, OPC_WRITE) == RX_CAP_ERR_REVOKED,
+              "revoked (64-bit ref, runtime only): root");
         CHECK(rx_capadmin_reclaim(&e->admin, office, cap.cap_id) == RX_CAP_OK, "harness reclaims (generation advances)");
-        CHECK(root_check(e, &honest) == RX_CAP_ERR_STALE_GEN, "stale generation: root %d", root_check(e, &honest));
-        CHECK(world_check(e, &honest) == RX_CAP_ERR_STALE_GEN, "stale generation: world");
+        /* Without a representable reference these would pass because of
+         * truncation, not because of the reclaim: not counted then. */
+        CHECK_IF_REPR(repr, root_check(e, &honest) == RX_CAP_ERR_STALE_GEN, "stale generation: root");
+        CHECK_IF_REPR(repr, world_check(e, &honest) == RX_CAP_ERR_STALE_GEN, "stale generation: world");
+        CHECK(root_ref(e, cap, 1, OPC_WRITE) == RX_CAP_ERR_STALE_GEN,
+              "stale generation (64-bit ref, runtime only): root");
+        CHECK(world_ref(e, cap, 1, OPC_WRITE) == RX_CAP_ERR_STALE_GEN,
+              "stale generation (64-bit ref, runtime only): world");
     }
     case_header("3 replayed authorization after generation advance");
     {
         /* The authority grants again; the slot may be reused at a newer generation. */
         RxCapRef again = mint(e, SUBJ_CLIENT, resource_for(1), RX_RIGHT_READ | RX_RIGHT_WRITE);
         CHECK(again.cap_id != UINT32_MAX, "harness re-grants");
-        CHECK(root_check(e, &honest) == RX_CAP_ERR_STALE_GEN,
+        const bool repr_again = repr && GEN_FITS(again);
+        CHECK_IF_REPR(repr_again, root_check(e, &honest) == RX_CAP_ERR_STALE_GEN,
               "old request replayed against the new grant: root refuses");
+        CHECK(root_ref(e, cap, 1, OPC_WRITE) == RX_CAP_ERR_STALE_GEN &&
+                  root_ref(e, again, 1, OPC_WRITE) == RX_CAP_OK,
+              "old 64-bit ref replayed (runtime only): root STALE_GEN while the new grant validates");
         CHECK(rx_gen_reject_replay(dir, effect_work_id(&honest)) == RX_GEN_ERR_REPLAY,
               "old request replayed: generation record refuses");
         OmegaObject *n = add_effect(g, 1, OPC_WRITE, again, "set=42");
         SemanticId nid = n->id;
         VisorEffectRequest r;
-        CHECK(visor_effect_request_build(g, &nid, &r) == 0 && root_check(e, &r) == RX_CAP_OK,
+        CHECK(visor_effect_request_build(g, &nid, &r) == 0, "request naming the new grant builds");
+        CHECK_IF_REPR(repr_again, root_check(e, &r) == RX_CAP_OK,
               "control: a request naming the new grant validates");
     }
 
@@ -548,6 +626,8 @@ int main(void) {
         RxMutation mu = { obj, 0, 42 };
         RxCapRef forged = { honest.capability_slot, honest.capability_generation };  /* stale */
         CHECK(rx_world_publish_external(&e->w, forged, &mu, 1) == RX_ERR_AUTHORITY, "stale ref: refused");
+        CHECK(rx_world_publish_external(&e->w, cap, &mu, 1) == RX_ERR_AUTHORITY,
+              "stale 64-bit ref (reclaimed grant): refused");
         RxCapRef junk = { 0x7FFFFFFFu, 1 };
         CHECK(rx_world_publish_external(&e->w, junk, &mu, 1) == RX_ERR_AUTHORITY, "junk ref: refused");
         RxCapRef ro = mint(e, SUBJ_CLIENT, resource_for(1), RX_RIGHT_READ);

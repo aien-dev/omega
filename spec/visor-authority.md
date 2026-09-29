@@ -87,8 +87,10 @@ first 8 bytes (little endian) of `request_digest`.
 | 11 | Bypass AEGIS: present a slot nobody granted | `rx_caproot_validate`, `rx_world_validate_cap`; `rx_aegis_evaluate` with no policy -> `DENY` | refused |
 | 0 | Contract | build/classify never mutate; `authorized` false; formats deterministic; truncation -1; classify fails closed on missing refs | |
 
-Result on the DGX Spark host (2026-09-28): `PASS 81/81`,
+Result on the DGX Spark host (2026-09-28, start commit ceb68d6): `PASS 81/81`,
 `OMEGA_VISOR_AUTHORITY_HOSTILE_PASS`, 4 non-claims printed.
+After merging main (2026-09-29, 64-bit capability generations): `PASS 84/84`
+real checks, 20 non-claims (see §5 item 7), `OMEGA_VISOR_AUTHORITY_HOSTILE_PASS`.
 
 ## 4. Link check (`tests/visor/check_authority_link.sh`, `make visor-authority-check`)
 
@@ -131,3 +133,27 @@ design point is that nothing trusts it.
    test conventions. Omega's `EffectPayload` has no canonical mapping to
    runtime rights yet.
 6. No effect is executed and no receipt is produced by anything in the Visor.
+7. **Finding (main f5b6ff1 / 7622d3c): honest 64-bit generations are
+   unrepresentable in the effect format.** Runtime capability generations are
+   64-bit (f5b6ff1) and every root seeds them from `CLOCK_BOOTTIME` ns << 8
+   (7622d3c, `take_boot_gen`), so they exceed 2^32. Omega's
+   `EffectPayload.capability_generation` (canonical encoding, so part of every
+   effect object's identity) and `VisorEffectRequest.capability_generation`
+   are 32-bit, so a reference carried through the Visor is truncated and the
+   root refuses it as `STALE_GEN`. That is fail-closed and is asserted (case
+   12, which prints the `FINDING:` line), but it means an honest request can
+   never validate. The runtime has no seed hook, so the test cannot keep
+   generations small. Widening the core format is a separate core change.
+   On main, while generations do not fit in 32 bits, these Visor-path checks
+   print a NON-CLAIM instead of being counted: the root/world positive
+   controls (case 0), random generation and wrong slot (1), `RIGHTS` for
+   EFFECT (6) and MINT (4), `RESOURCE` root/world (7), params-only validates
+   and changed-operation `RIGHTS` (8), `REVOKED` and `STALE_GEN` root/world
+   (2), replay against the new grant and the new-grant control (3). Each has a
+   counted twin that presents the full 64-bit reference straight to
+   `rx_caproot_validate` / `rx_world_validate_cap` (runtime only, not the
+   Visor format), and the stale/replay twins are refused for the intended
+   reason (revoke, reclaim, newer grant), not truncation. Case 10 also presents
+   the reclaimed 64-bit reference to `rx_world_publish_external`. Result on
+   the merged tree (2026-09-29): `PASS 84/84`, 20 non-claims,
+   `OMEGA_VISOR_AUTHORITY_HOSTILE_PASS`.

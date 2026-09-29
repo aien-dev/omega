@@ -1,9 +1,9 @@
 # Omega Visor V1 qualification (lane 8)
 
-Verdict: **OMEGA_VISOR_V1_PASS**  
-Receipt: `evidence/VISOR/98a63b2e17af68c97cf021612b43387497a57c82bbeb9d206a9b32f6bb21e7e6.json`  
-Commit: `23feaad305c07977ef0115e59474295a679cfd0b` (tree dirty: False, see dirty_files)  
-Run: 20260929T045019Z on aarch64 7.0.0-1019-nvidia (NVIDIA_DGX_Spark)
+Verdict: **OMEGA_VISOR_V1_FAIL**  
+Receipt: `evidence/VISOR/15d6703cbffe8006696d9571f591696659a01c8dce872bf9b0aa8f95445c36ea.json`  
+Commit: `6627da2f84ace3763aa5847f7a2b9b25eab319d8` (tree dirty: False, see dirty_files)  
+Run: 20260929T045517Z on aarch64 7.0.0-1019-nvidia (NVIDIA_DGX_Spark)
 
 Scope: host-only: no GPU/silicon claim; no QEMU claim by the Visor (the pre-existing test-m5 gate runs its own QEMU check)
 
@@ -14,7 +14,7 @@ Scope: host-only: no GPU/silicon claim; no QEMU claim by the Visor (the pre-exis
 | OMEGA_VISOR_SEMANTIC_PASS | Same meaning gets the same fingerprint (7, 07, 0x07, 0b111; spacing; comments); different widths differ; repeat runs match byte for byte | PASS | 541 | 0 |
 | OMEGA_VISOR_VERIFY_PASS | The checker and the evidence viewer report what is really there, and a new user can find it from `help` | PASS | 151 | 0 |
 | OMEGA_VISOR_REALIZE_PASS | Machine code built for an expression gives the same answer as the language; cost is labelled estimate, never measured; scripting behaves | PASS | 441 | 0 |
-| OMEGA_VISOR_AUTHORITY_ISOLATION_PASS | The console can ask but never grant; bad or hostile input is refused cleanly and never crashes it | PASS | 177 | 0 |
+| OMEGA_VISOR_AUTHORITY_ISOLATION_PASS | The console can ask but never grant; bad or hostile input is refused cleanly and never crashes it | FAIL | 96 | 1 |
 | OMEGA_VISOR_REGRESSION_PASS | The older CPU milestone gates still pass and the tool still builds without the physics checkout | PASS | 92 | 0 |
 
 Hostile inputs: 69 tried, 60 refused cleanly, 0 crashed, 4 harmless blank/comment lines.
@@ -25,11 +25,11 @@ Repeatability: 3 runs, identical: True.  Memory-checker build: {"status": "RUN",
 | # | Receipt | Commit | Verdict | What changed |
 |---|---|---|---|---|
 | 1 | `evidence/VISOR/12785aab7bb22bc1fd1d4e71143c15f98f1e4bc94885e9b2a725487b023b7c93.json` | `ec2ec0b` | OMEGA_VISOR_V1_FAIL | first run: REALIZE failed on run arity (D2), AUTHORITY_ISOLATION failed on `--script /` exit 0 (D3); zero authority-path failures |
-| 2 | `evidence/VISOR/98a63b2e17af68c97cf021612b43387497a57c82bbeb9d206a9b32f6bb21e7e6.json` | `23feaad` | OMEGA_VISOR_V1_PASS | this run |
+| 2 | `evidence/VISOR/15d6703cbffe8006696d9571f591696659a01c8dce872bf9b0aa8f95445c36ea.json` | `6627da2` | OMEGA_VISOR_V1_FAIL | this run |
 
 ## Why the verdict is what it is
 
-- All five gates passed.
+- OMEGA_VISOR_AUTHORITY_ISOLATION_PASS FAIL (1/96 failed)
 
 ## Defects found
 
@@ -52,7 +52,7 @@ Repeatability: 3 runs, identical: True.  Memory-checker build: {"status": "RUN",
 | visor-authority-check | PASS | 1 | 0 |  |
 | visor-physics-free-check | PASS | 1 | 0 |  |
 | test-visor-world | PASS | 47 | 0 |  |
-| test-visor-authority | PASS | 81 | 0 |  |
+| test-visor-authority | FAIL | 0 | 0 |  |
 | test | PASS | 12 | 0 |  |
 | test-m5 | PASS | 9 | 0 |  |
 | test-m6 | PASS | 10 | 0 |  |
