@@ -320,7 +320,7 @@ static int fn_candidate(RxCtx *c) {
     return 0;
 }
 
-static int native_promotion(void *ctx, uint32_t cap_id, uint32_t generation,
+static int native_promotion(void *ctx, uint32_t cap_id, uint64_t generation,
                             uint32_t subject, uint64_t resource, uint32_t rights) {
     AienosCapEntry entry;
     return aienos_cap_validate(ctx, (AienosCapRef){cap_id, generation},
