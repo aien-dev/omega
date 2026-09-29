@@ -33,7 +33,7 @@
  *
  *  - Default: "build/qual-runs/<run_id>/<relpath>".
  *  - Even when OMEGA_QUAL_RECORD=1, intermediate gate output remains under
- *    build/qual-runs. Only tools/m19r_qualify.py writes permanent evidence,
+ *    build/qual-runs. Only tools/m19r_qualify.sh writes permanent evidence,
  *    after all gates finish, using an exclusive content-addressed file.
  *  - This function never returns a legacy "evidence/<relpath>" path
  *    (i.e. never a path that collides with a previously committed,
