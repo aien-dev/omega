@@ -1,7 +1,7 @@
 # POLYGLOT agent ownership
 
 Lead orchestrator: session ff5a6f (Opus 5.5). Branch `feat/polyglot-0` in `~/workspace/omega-polyglot`, based on
-mixed-algebra 9207ce3. All workers run on Opus 5.5 unless marked (Sonnet 5.5 = supervised trial). Fable reviews
+mixed-algebra eb7a788. All workers run on Opus 5.5 unless marked (Sonnet 5.5 = supervised trial). Fable reviews
 the plan and the final result once each; it does not implement. No agent certifies its own work.
 
 Shared interfaces (lead only): `spec/polyglot-0.md`, `src/polyglot/omx_lang.h`, the one `-include` line in
