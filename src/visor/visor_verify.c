@@ -136,9 +136,10 @@ static void authority_walk(const OmegaGraph *g, int root, uint32_t *walked,
         size_t nn = 0;
         if (o->kind == KIND_EFFECT) {
             (*effects)++;
-            if (o->payload_len >= sizeof(EffectPayload)) {
-                const EffectPayload *ep = (const EffectPayload *)o->payload;
-                if (!id_zero(&ep->capability_ref)) { (*caprefs)++; next[nn++] = ep->capability_ref; }
+            EffectPayload ep;
+            if (omega_effect_read(o, &ep) == OMEGA_EFFECT_OK && !id_zero(&ep.capability_ref)) {
+                (*caprefs)++;
+                next[nn++] = ep.capability_ref;
             }
         } else if (o->kind == KIND_TYPE && o->payload_len >= sizeof(TypePayload)) {
             const TypePayload *tp = (const TypePayload *)o->payload;

@@ -138,6 +138,8 @@ Evidence scope is reported exactly as the receipt states it (`host`, `qemu`,
   capability reference: the runtime root sees every such reference as stale. This
   is fail-closed but means the honest effect path is unrepresentable until the
   canonical effect format is widened (an identity-changing core change, separate PR).
+  Resolved by `spec/effect-cap64-migration.md` (effect object version 0x02,
+  64-bit generation).
 - Both canonical machine builders set `is_physics_authorized=true` with a
   constant placeholder seal; the machine view labels it as such.
 - Host CPU part numbers (0xd85/0xd87) are not Neoverse-V2; the DGX Spark profile
