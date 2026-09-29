@@ -857,10 +857,7 @@ __attribute__((destructor)) static void rx_argus_auto_stop(void) {
 
 /* ---- authority-sourced GRANTED/REVOKED (RX_ARGUS_AUTHORITY_OBSERVER) -----------------
  * The authority announces its own transitions (aienos_cap_set_observer,
- * aienos feat/capability-observer 12add16, backported onto the pinned
- * c8ab65e authority by tools/argus/aienos-cap-observer-c8ab65e.patch).
- * Omega's src/runtime/aienos_cap.h mirrors c8ab65e and lacks the three
- * observer declarations, so they are declared here.
+ * aienos 12add16, native in the authority pinned by aienos.lock, d39dd5b).
  *
  * The observer is installed on every authority the process starts: a link
  * wrap of aienos_cap_start (the admin handle is only known there). The wrap
@@ -873,15 +870,6 @@ __attribute__((destructor)) static void rx_argus_auto_stop(void) {
  *   RESTART ok    -> REVOKED for every live cap, then GRANTED for the new office
  *   RECLAIM/CLOCK/KILL, refused admin ops -> counted only (no v1.1 kind). */
 #if defined(RX_ARGUS_AUTHORITY_OBSERVER)
-#define AIENOS_CAP_OBS_MINT 1u
-#define AIENOS_CAP_OBS_REVOKE 2u
-#define AIENOS_CAP_OBS_RECLAIM 3u
-#define AIENOS_CAP_OBS_EPOCH 4u
-#define AIENOS_CAP_OBS_CLOCK 5u
-#define AIENOS_CAP_OBS_KILL 6u
-#define AIENOS_CAP_OBS_RESTART 7u
-typedef void (*AienosCapObserver)(void *ctx, uint32_t op, const AienosCapEntry *entry, int result);
-int aienos_cap_set_observer(AienosCapAdmin *admin, AienosCapObserver fn, void *ctx);
 
 int __real_aienos_cap_start(AienosCapAdmin **admin, AienosCapView **view);
 int __wrap_aienos_cap_start(AienosCapAdmin **admin, AienosCapView **view);
