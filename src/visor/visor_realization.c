@@ -225,6 +225,7 @@ static int run_check(const VisorRealizationEntry *e, char *why, size_t n) {
 int visor_realization_run_pure(const VisorRealizationEntry *e, const uint64_t *args, size_t argc, uint64_t *out) {
     if (!e || !out || (argc > 0 && !args)) return -1;
     if (argc > 3) return -3;
+    if (e->verdict_known && !e->compatible) return -3;
     char why[160];
     if (run_check(e, why, sizeof(why)) != 0) return -3;
     uint64_t a = argc > 0 ? args[0] : 0, b = argc > 1 ? args[1] : 0, c = argc > 2 ? args[2] : 0;
@@ -315,16 +316,20 @@ int visor_realization_view(const VisorRealizationEntry *e, const OmegaMachineGra
         bind = bind_ok ? "bound machine == model" : "bound machine != model";
     }
     bool not_bw = strcmp(e->target_name, VISOR_TARGET_BLACKWELL) != 0;
-    out->compatible = profile_ok && bind_ok && not_bw;
+    bool verdict_ok = !e->verdict_known || e->compatible;
+    out->compatible = profile_ok && bind_ok && not_bw && verdict_ok;
     char runwhy[160];
-    out->runnable = run_check(e, runwhy, sizeof(runwhy)) == 0;
+    out->runnable = verdict_ok && run_check(e, runwhy, sizeof(runwhy)) == 0;
+    char vw[192] = "";
+    if (!verdict_ok)
+        snprintf(vw, sizeof(vw), "; realizer verdict INCOMPATIBLE: %.127s", e->incompatible_reason);
     if (mg)
-        snprintf(out->why, sizeof(out->why), "profile 0x%02x vs machine 0x%02x %s; %s; run %s",
+        snprintf(out->why, sizeof(out->why), "profile 0x%02x vs machine 0x%02x %s; %s; run %s%s",
                  e->real.target_profile, mg->target_profile, profile_ok ? "match" : "MISMATCH",
-                 bind, out->runnable ? "allowed" : "refused");
+                 bind, out->runnable ? "allowed" : "refused", vw);
     else
-        snprintf(out->why, sizeof(out->why), "profile 0x%02x; no machine model (not compatible); %s; run %s",
-                 e->real.target_profile, bind, out->runnable ? "allowed" : "refused");
+        snprintf(out->why, sizeof(out->why), "profile 0x%02x; no machine model (not compatible); %s; run %s%s",
+                 e->real.target_profile, bind, out->runnable ? "allowed" : "refused", vw);
     return visor_realization_cost(e, mg, &out->cost);
 }
 
@@ -418,6 +423,8 @@ int visor_realize_apply(const OmegaGraph *g, const SemanticId *apply_id, const O
     out_entry->subject_is_program = false;
     out_entry->program_index = -1;
     snprintf(out_entry->target_name, sizeof(out_entry->target_name), "%s", VISOR_TARGET_AARCH64);
+    out_entry->verdict_known = true;
+    out_entry->compatible = true;
     entry_base(out_entry, mg);
     return visor_realization_view(out_entry, mg, out_view);
 }
@@ -433,6 +440,8 @@ int visor_realize_program(const OmegaProgram *p, const OmegaMachineGraph *mg,
     out_entry->subject_is_program = true;
     out_entry->program_index = -1;
     snprintf(out_entry->target_name, sizeof(out_entry->target_name), "%s", VISOR_TARGET_AARCH64);
+    out_entry->verdict_known = true;
+    out_entry->compatible = true;
     entry_base(out_entry, mg);
     return visor_realization_view(out_entry, mg, out_view);
 }
@@ -440,6 +449,12 @@ int visor_realize_program(const OmegaProgram *p, const OmegaMachineGraph *mg,
 /* ---- alternatives -------------------------------------------------------- */
 
 static const uint64_t k_diff_inputs[] = { 0, 1, 2, 5, 10, 50, 100, 0xFFFFFFFFULL };
+
+static void set_verdict(VisorRealizationEntry *e, bool compatible, const char *reason) {
+    e->verdict_known = true;
+    e->compatible = compatible;
+    snprintf(e->incompatible_reason, sizeof(e->incompatible_reason), "%s", compatible ? "" : reason);
+}
 
 static void synth_alt(const OmegaProgram *p, const OmegaMachineGraph *m, const char *tname,
                       VisorRealizationEntry *e, VisorRealizationView *v) {
@@ -455,6 +470,7 @@ static void synth_alt(const OmegaProgram *p, const OmegaMachineGraph *m, const c
     task.optimize_latency = true;
     int rc = omega_synthesize_realization(&task, &res);
     if (res.realization.code_len == 0) {
+        set_verdict(e, false, "omega_synthesize_realization produced no code");
         visor_realization_view(e, m, v);
         v->compatible = false;
         v->runnable = false;
@@ -466,7 +482,6 @@ static void synth_alt(const OmegaProgram *p, const OmegaMachineGraph *m, const c
     e->has_machine_id = true;
     e->estimated_cycles = res.estimated_cycles;
     e->has_estimate = true;
-    visor_realization_view(e, m, v);
     /* differential check vs the program's own realization */
     char diff[160];
     bool match = p->is_realized && p->realization.code_len > 0;
@@ -485,11 +500,20 @@ static void synth_alt(const OmegaProgram *p, const OmegaMachineGraph *m, const c
         }
     }
     if (rc != 0 || !res.solved) match = false;
+    if (match) {
+        set_verdict(e, true, "");
+    } else {
+        char r[sizeof(e->incompatible_reason)];
+        snprintf(r, sizeof(r), "synth rc=%d solved=%d; %.96s", rc, res.solved ? 1 : 0, diff);
+        set_verdict(e, false, r);
+    }
+    visor_realization_view(e, m, v);
     v->compatible = v->compatible && match;
     v->runnable = v->runnable && match;
     snprintf(v->why, sizeof(v->why),
              "core synth emits fixed f(x)=3x-2 schedule, not derived from program; %s; synth rc=%d", diff, rc);
 #else
+    set_verdict(e, false, "synthesis not attempted: host is not aarch64");
     visor_realization_view(e, m, v);
     v->compatible = false;
     v->runnable = false;
@@ -523,6 +547,7 @@ int visor_realization_alternatives_ex(const OmegaProgram *p, const OmegaMachineG
         const char *t = tn[k % 2];
         if (k < 2) {
             if (visor_realize_program(p, m, e, v) != 0) {
+                set_verdict(e, false, "direct realization failed");
                 v->compatible = false;
                 v->runnable = false;
             }

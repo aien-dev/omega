@@ -482,6 +482,87 @@ static void test_script(void) {
 #define OMEGA_TOOL_NO_MAIN
 #include "../../tools/omega.c"
 
+/* Host-dependent output in the e2e session: the whole `machine` command (its
+ * echo up to the next echo) and any other line naming the host machine
+ * profile (realization "machine" lines, estimated-cost sources, the verify
+ * MACHINE row). Both are replaced by fixed markers before comparing. */
+#define E2E_PROMPT "\xCE\xA9> "
+#define E2E_MACHINE_MARK "<machine block: host-dependent, masked>\n"
+#define E2E_LINE_MARK "<host machine line: host-dependent, masked>\n"
+
+/* Finds the `machine` block in actual output; checks it is non-empty and
+ * carries the fixed `provenance` key; returns the machine name it prints. */
+static bool e2e_machine_block(const char *buf, size_t n, char *name, size_t nn) {
+    static const char echo[] = E2E_PROMPT "machine\n";
+    char *copy = malloc(n + 1);
+    if (!copy) return false;
+    memcpy(copy, buf, n);
+    copy[n] = '\0';
+    bool ok = false;
+    char *b = strstr(copy, echo);
+    if (b) {
+        b += sizeof(echo) - 1;
+        char *end = strstr(b, E2E_PROMPT);
+        if (end) *end = '\0';
+        if (b[0] && strstr(b, "\n  provenance  ") && strncmp(b, "machine ", 8) == 0) {
+            size_t len = strcspn(b + 8, "\n");
+            if (len > 0 && len < nn) {
+                memcpy(name, b + 8, len);
+                name[len] = '\0';
+                ok = true;
+            }
+        }
+    }
+    free(copy);
+    return ok;
+}
+
+static bool e2e_put(char **out, size_t *o, size_t *cap, const char *src, size_t sl) {
+    if (*o + sl + 1 > *cap) {
+        size_t nc = (*o + sl + 1) * 2;
+        char *t = realloc(*out, nc);
+        if (!t) return false;
+        *out = t;
+        *cap = nc;
+    }
+    memcpy(*out + *o, src, sl);
+    *o += sl;
+    return true;
+}
+
+static char *e2e_mask(const char *buf, size_t n, const char *host, size_t *outlen) {
+    size_t cap = n + 1;
+    char *out = malloc(cap);
+    if (!out) return NULL;
+    size_t o = 0, i = 0;
+    size_t pl = sizeof(E2E_PROMPT) - 1;
+    bool in_machine = false;
+    while (i < n) {
+        size_t e = i;
+        while (e < n && buf[e] != '\n') e++;
+        size_t ll = e - i + (e < n ? 1 : 0);
+        const char *line = buf + i;
+        bool is_echo = ll >= pl && memcmp(line, E2E_PROMPT, pl) == 0;
+        if (is_echo) in_machine = ll == pl + 8 && memcmp(line + pl, "machine\n", 8) == 0;
+        if (in_machine) {
+            if (is_echo && !e2e_put(&out, &o, &cap, E2E_MACHINE_MARK, sizeof(E2E_MACHINE_MARK) - 1)) { free(out); return NULL; }
+        } else {
+            bool host_line = false;
+            size_t hl = strlen(host);
+            if (!is_echo && hl > 0)
+                for (size_t k = 0; k + hl <= ll; k++)
+                    if (memcmp(line + k, host, hl) == 0) { host_line = true; break; }
+            const char *src = host_line ? E2E_LINE_MARK : line;
+            size_t sl = host_line ? sizeof(E2E_LINE_MARK) - 1 : ll;
+            if (!e2e_put(&out, &o, &cap, src, sl)) { free(out); return NULL; }
+        }
+        i += ll;
+    }
+    out[o] = '\0';
+    *outlen = o;
+    return out;
+}
+
 static void e2e_open(Harness *h, bool json) {
     memset(h, 0, sizeof(*h));
     if (omega_tool_session_init(&h->s) != 0) { fprintf(stderr, "session init failed\n"); exit(1); }
@@ -509,13 +590,31 @@ static void test_e2e(void) {
         e2e_open(&h, false);
         int rc = visor_console_run_script(&h.c, script);
         fflush(h.f);
-        bool same = h.len == en && memcmp(h.buf, expected, en) == 0;
-        if (!same) fprintf(stderr, "--- e2e got:\n%.*s--- expected:\n%s", (int)h.len, h.buf, expected);
-        CHECK(same, "e2e.omega-session matches e2e.expected exactly");
+        /* Host-dependent parts are checked separately, then masked on both sides. */
+        char host[128] = "";
+        bool block_ok = e2e_machine_block(h.buf, h.len, host, sizeof(host));
+        CHECK(block_ok && host[0], "e2e machine block present, non-empty, has provenance + machine name");
+        size_t al = 0, el = 0;
+        char *am = e2e_mask(h.buf, h.len, host, &al);
+        char *em = e2e_mask(expected, en, host, &el);
+        bool same = am && em && al == el && memcmp(am, em, al) == 0;
+        if (!same) fprintf(stderr, "--- e2e got (masked):\n%.*s--- expected (masked):\n%.*s", (int)al, am ? am : "",
+                           (int)el, em ? em : "");
+        CHECK(same, "e2e.omega-session matches e2e.expected exactly (host-dependent lines masked)");
         CHECK(rc == 0, "e2e script all ok");
         CHECK(strstr(h.buf, "\xCE\xA9> x + y\n18\n") && strstr(h.buf, "\xCE\xA9> type _\nu64\n") &&
               strstr(h.buf, "\xCE\xA9> run _\n[pure-execution]\n18\n") &&
               strstr(h.buf, "\xCE\xA9> run _ 5\n[pure-execution]\n11\n"), "e2e key values 18/u64/18/11");
+        CHECK(strstr(h.buf, "  id           sha256:ffe7656dc91cf25a4aacfc005ffb643fa79f3fd8ce55d11420fd4982e9d0ff76\n") &&
+              strstr(h.buf, "  id           sha256:dfc4cb844da0044a4fe0c58c5ecd0b77d1ad04df3f3037609f8ed8581b058bff\n"),
+              "e2e realization ids exact");
+        CHECK(strstr(h.buf, "STRUCTURAL      PASS") && strstr(h.buf, "REALIZATION     PASS") &&
+              strstr(h.buf, "AUTHORITY       PASS") && strstr(h.buf, "MACHINE         PASS") &&
+              strstr(h.buf, "VERDICT         PASS"), "e2e verify rows");
+        CHECK(strstr(h.buf, "\nno evidence\n") && strstr(h.buf, "\nno effect objects in session\n"),
+              "e2e no evidence / no effect objects");
+        free(am);
+        free(em);
         h_close(&h);
     }
     if (script) fclose(script);

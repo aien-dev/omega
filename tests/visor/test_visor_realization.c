@@ -13,7 +13,8 @@ static int g_pass, g_total;
 #define CHECK(cond, msg) do { g_total++; if (cond) g_pass++; else fprintf(stderr, "FAIL: %s (%s:%d)\n", msg, __FILE__, __LINE__); } while (0)
 
 static char b1[16384], b2[16384];
-static VisorRealizationView alt1[4], alt2[4];
+static VisorRealizationView alt1[4], alt2[4], altv[4];
+static VisorRealizationEntry alte[4];
 
 static SemanticId make_apply(OmegaGraph *g, OpCode op, OverflowPolicy ov, uint16_t width, SemanticId *op_out) {
     OmegaObject *t = omega_build_type_uint(g, width);
@@ -38,6 +39,7 @@ int main(void) {
     VisorRealizationEntry e;
     VisorRealizationView v;
     CHECK(visor_realize_apply(g, &add_ap, &spark, &e, &v) == 0, "realize 7+11 apply");
+    CHECK(e.verdict_known && e.compatible, "direct apply entry verdict compatible");
     CHECK(memcmp(&e.subject_id, &add_ap, sizeof(SemanticId)) == 0, "subject = apply id");
     CHECK(memcmp(&e.real.semantic_id, &add_op, sizeof(SemanticId)) == 0, "realized = op id");
     CHECK(strcmp(v.subject_id, v.realized_id) != 0, "subject and realized both shown, distinct");
@@ -88,6 +90,7 @@ int main(void) {
     VisorRealizationEntry ep;
     VisorRealizationView vp;
     CHECK(visor_realize_program(&p, &spark, &ep, &vp) == 0 && ep.subject_is_program, "realize program");
+    CHECK(ep.verdict_known && ep.compatible && ep.incompatible_reason[0] == '\0', "direct program entry verdict compatible");
     args[0] = 10;
     CHECK(visor_realization_run_pure(&ep, args, 1, &r) == 0 && r == 15, "program run 10+5==15");
     OmegaProgram unreal;
@@ -109,6 +112,24 @@ int main(void) {
           strcmp(alt1[2].label, "synth@dgx-spark") == 0 && strcmp(alt1[3].label, "synth@qemu-virt") == 0, "labels/order");
     CHECK(alt1[0].compatible && alt1[1].compatible, "direct alternatives compatible");
     CHECK(!alt1[2].compatible && !alt1[2].runnable && strstr(alt1[2].why, "MISMATCH"), "synth for add5 flagged mismatch");
+    /* the stored entry carries the verdict: re-viewing it later stays incompatible, run refused */
+    size_t ne = 0;
+    CHECK(visor_realization_alternatives_ex(&p, &spark, alte, altv, 4, &ne) == 0 && ne == 4, "alternatives_ex count");
+    CHECK(alte[0].verdict_known && alte[0].compatible && alte[1].verdict_known && alte[1].compatible,
+          "direct alternative entries compatible");
+    CHECK(alte[2].verdict_known && !alte[2].compatible && alte[2].incompatible_reason[0], "synth entry carries incompatible verdict");
+    VisorRealizationView rv;
+    CHECK(visor_realization_view(&alte[2], &spark, &rv) == 0 && !rv.compatible && !rv.runnable &&
+          strstr(rv.why, "INCOMPATIBLE") && strstr(rv.why, alte[2].incompatible_reason),
+          "re-viewed incompatible entry: not compatible, not runnable, reason in why");
+    args[0] = 10;
+    CHECK(visor_realization_run_pure(&alte[2], args, 1, &r) == -3, "incompatible synth entry run refused");
+    CHECK(visor_realization_view(&alte[0], &spark, &rv) == 0 && rv.compatible && !strstr(rv.why, "INCOMPATIBLE"),
+          "re-viewed direct entry unchanged");
+    CHECK(visor_realization_run_pure(&alte[0], args, 1, &r) == 0 && r == 15, "direct alternative entry runs 10+5==15");
+    VisorRealizationEntry unk = alte[0];
+    unk.verdict_known = false; unk.compatible = false;
+    CHECK(visor_realization_run_pure(&unk, args, 1, &r) == 0 && r == 15, "verdict not evaluated treated as compatible");
     /* 3x-2 program: synth agrees */
     OmegaProgram m3, s2, aff;
     omega_program_build_unary_op(&m3, "mul3", OP_MUL, 3);

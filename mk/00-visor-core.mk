@@ -10,7 +10,7 @@ VISOR_SRCS = $(wildcard src/visor/*.c)
 LANG_SRCS = $(wildcard src/language/*.c)
 VISOR_OBJS = $(patsubst src/visor/%.c,$(OUT_DIR)/visor/%.o,$(VISOR_SRCS))
 LANG_OBJS = $(patsubst src/language/%.c,$(OUT_DIR)/language/%.o,$(LANG_SRCS))
-VISOR_DEPS = $(VISOR_OBJS:.o=.d) $(LANG_OBJS:.o=.d)
+VISOR_DEPS = $(VISOR_OBJS:.o=.d) $(LANG_OBJS:.o=.d) $(OUT_DIR)/omega_main.d
 -include $(VISOR_DEPS)
 OMEGA_BIN = $(OUT_DIR)/omega
 

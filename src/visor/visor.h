@@ -63,6 +63,13 @@ typedef struct {
     char target_name[32];       /* e.g. "aarch64-v8a", "qemu-virt", "dgx-spark" */
     uint32_t estimated_cycles;  /* from synthesis/machine estimate; 0 = none */
     bool has_estimate;
+    /* Realizer's own compatibility verdict, carried with the entry so a later
+     * view/run sees it. verdict_known=false means "not evaluated" (treated as
+     * compatible). Direct realizations set known+compatible; synthesized
+     * alternatives set compatible per their differential check. */
+    bool verdict_known;
+    bool compatible;
+    char incompatible_reason[128];
 } VisorRealizationEntry;
 
 typedef struct {
