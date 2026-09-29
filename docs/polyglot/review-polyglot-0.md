@@ -262,3 +262,55 @@ cs_call:                        // x0 fn, x1 p, x2 x, x3 y, x4 out
 
 Result on 17d2854: `cs_check: 18 candidates, 126 calls, 0 problems (x19-x28, d8-d15)`. With mutant C linked in place of
 `omx_sdot.S.o`: 7 problems, all `asm_sdot reg#10` (d8).
+
+## Fix verification
+
+Fixes on `feat/polyglot-0` after this review (commits dd1ba22, 0d46b87, f6f34ea, 8f8babe, 3ef4f69).
+No timed benchmark was run for this section (no `make bench-polyglot`, no smoke bench); the bench changes are
+checked by `bench_polyglot --selftest`, which does no timing and is now part of `make test-polyglot`.
+
+| finding | fix |
+|---|---|
+| G-B1 | Calibration doubles the call count until one whole sample (same loop as the timed one) lasts >= 1.25 ms. A timed sample under 1 ms is re-taken with twice the calls (kept only after 20 retakes). Receipt cells record `short_samples_retaken`, `short_samples_kept`, `shortest_sample_ns`. |
+| G-B2 | `omx_candidate.code` lets a lane name its code parts. Mojo: C adapter run + pack plus `omx_mj_*_run` / `omx_mj_*_pack` (symbol sizes). Encoder: C thunk + the bytes Omega's encoder emitted + C pack. Receipts carry `code_parts`; `code_size_bytes` is null if any part is unknown, never a partial sum. Encoder `compile_time_s_min_of_5` is now min of 5 in-process emissions (`omx_encoder_emit_ns`), not gcc of `omx_encoder.c`. Self-test code sizes: MJ1_sdot 2036 B, MJ2c_crumb 1716 B, enc_sdot 1160 B, enc_crumb 1276 B (asm_sdot 1112 B). |
+| G-S1 | The verifier copies each plan's packed weights into a read-only guarded mapping for two of the five runs per case: flush against the trailing guard page, then right after the leading one. Plans with an `aux` allocation (only MA-3's C R3_sparse) stay in place; ASan covers them. |
+| G-S2 | 16 large random-data cases: the four bench shapes (up to 4096 x 4096), n in {65537, 131073, 1000003} with m in {1, 5}, and six cases with m in 1000..4100. |
+| G-S3 | E_TRIT with one bad weight (2, -2, -128, 127, 3) at the first, last and a random position on 1x17, 5x16, 4x65, 7x129, 3x1000, 2x4099, 33x257, flush against a guard page. |
+| G-S4 | `tests/polyglot/cs_call.S` (the appendix trampoline, distinct 64-bit sentinels) wraps the first run of every verifier case, all candidates, plain and ASan builds: x19-x28 and d8-d15 are compared after the call. |
+| G-S5 | Verifier: runs 4 and 5 use one x pointer whose bytes at n-1 and n/2 change in place between them. Bench: before every timed call one byte of that call's x is flipped in place (x ^= 1) at a column with non-zero column sum; the checksum prediction follows every flip. The self-test proves the prediction for every candidate and that a memoising control candidate is caught. |
+| G-S6 | Explainer: eligible also requires not smoke, the current run (`--run`, or the only non-smoke run; several runs and no `--run` select nothing), `gate_eligible`, `tree_dirty_files == 0`, 0 < min <= median, no kept sample under 1 ms. Tamper test repeated: the ghost receipt (run `...-OLDRUN`, median 1.0) makes "current run: none" without `--run`, and is rejected as "not from the current run" with `--run`; a receipt with min > median is rejected; smoke receipts select nothing. Output still byte-identical over two runs. |
+| G-S7 | Band = max(3 x max relative MAD, 5%). The 5% floor comes from the 360 paired medians of `evidence/MIXED_ALGEBRA/ma3_bench_run1.json` / `_run2.json`: run-to-run shift p50 0.27%, p95 3.6%, p99 10.4%; 22/360 exceed 3 x within-run noise; 5% is the smallest whole percent that leaves at most 2.5% (8/360) outside max(3 x noise, floor). The S1 asm_sdot vs R1_sdot@O3 gap (3.2%) is now TIE. |
+| G-S8 | The encoder kernel is emitted by `pack` (once per process); pack returns E_NOMEM if the W^X mapping fails. `run` only reads the code pointer (no syscall, no global write); a plan that never went through pack gets E_ARG. |
+| G-S9 | The bench restores its original CPU affinity before timing compile commands; `compile_note` records it. |
+
+Also found while running the mutant lane: `omx_candidate_get` subscripted the one-element weak lane tables,
+which UBSan flags for index >= 2 in the sanitizer build. Fixed (3ef4f69).
+
+### Mutants re-run against the fixed suite
+
+Each mutant was applied to the working tree (or linked as a scratch lane), built into a scratch output
+directory, run, and removed; none is committed. A and C: `perl` edit of the `.S` file, `make OUT_DIR=build-mut/<id>`
+of both verifiers, `git checkout` of the file afterwards. M1-M5: the review's `mut_lane.c` (strong
+`omx_lane_mojo[]` with the five mutants) linked in place of the Mojo lane, plain and ASan+UBSan builds.
+
+| id | defect | before (review) | after: verify plain | after: verify ASan+UBSan | caught by |
+|---|---|---|---|---|---|
+| A | `asm_crumb` `ldr q5,[x5]` at `.Lcr_ok` (16 B past the packed weights) | missed | FAIL, rc 139 | FAIL, rc 139 | packed-weight guard page: "guard-page fault (signal) in candidate asm_crumb" |
+| C | `asm_sdot` zeroes v8 and v15 at entry | missed | FAIL, 45,190 failures | FAIL, 45,190 failures | callee-saved check: "callee-saved d8 not preserved" (and d15), every case |
+| M1 | `-1 * x` as int8 negation | caught | FAIL, 54,597 failures | FAIL, 54,597 failures | oracle compare (unchanged) |
+| M2 | column offset kept in 16 bits | missed | FAIL, 30 failures | FAIL, 30 failures | large random cases, first at m=1 n=65537 |
+| M3 | rows >= 301 off by one | missed | FAIL, 35 failures | FAIL, 35 failures | large cases, first at m=4096 n=4096 |
+| M4 | memoises last two results by (plan, x pointer, m, n, first 16 B of x) | missed | FAIL, 17,337 failures | FAIL, 17,337 failures | in-place x change behind one pointer (run 5); the bench self-test's memoising control is caught by the checksum too |
+| M5 | validator checks only the (m*n) % 16 tail | missed | FAIL, 150 failures | FAIL, 150 failures | error contract on larger shapes, first "1x17 weight 2 at 0: rc 0, want E_TRIT" |
+
+Test results on the fixed tree (18 candidates):
+
+- `make test-polyglot`: verify plain PASS and verify ASan+UBSan PASS, each 12,612,555 checks, 0 failures
+  (2,579 MA-3 grid + 16 large + 20,000 random cases; harness 903,808/903,808); `bench_polyglot --selftest`
+  PASS, 103 checks, 0 failures.
+- `make test-polyglot-asm`: PASS, 331,856 checks, 0 failures (plain and ASan).
+- `make test-polyglot-encoder`: PASS, 337,522 checks, 0 failures, byte compare 356/356 identical (plain and ASan).
+- `make test-polyglot-mojo`: PASS, 371,539 checks, 0 failures (plain and ASan).
+
+Not done here: a new timed run. Existing receipts (none committed for POLYGLOT-0 yet) predate the new fields and
+would be refused by the explainer ("no sample-length record").
