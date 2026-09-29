@@ -1,9 +1,9 @@
 # Omega Visor V1 qualification (lane 8)
 
 Verdict: **OMEGA_VISOR_V1_PASS**  
-Receipt: `evidence/VISOR/4de74cf3a01f7b362819183af5eb22a99f8af71638b2ecb026062acdf93bafb9.json`  
-Commit: `d7e8a4c0d31aab7631e19fc78cb1de97faa4e17b` (tree dirty: True, only lane-8 files (untracked, not yet committed))  
-Run: 20260929T044056Z on aarch64 7.0.0-1019-nvidia (NVIDIA_DGX_Spark)
+Receipt: `evidence/VISOR/98a63b2e17af68c97cf021612b43387497a57c82bbeb9d206a9b32f6bb21e7e6.json`  
+Commit: `23feaad305c07977ef0115e59474295a679cfd0b` (tree dirty: False, see dirty_files)  
+Run: 20260929T045019Z on aarch64 7.0.0-1019-nvidia (NVIDIA_DGX_Spark)
 
 Scope: host-only: no GPU/silicon claim; no QEMU claim by the Visor (the pre-existing test-m5 gate runs its own QEMU check)
 
@@ -25,7 +25,7 @@ Repeatability: 3 runs, identical: True.  Memory-checker build: {"status": "RUN",
 | # | Receipt | Commit | Verdict | What changed |
 |---|---|---|---|---|
 | 1 | `evidence/VISOR/12785aab7bb22bc1fd1d4e71143c15f98f1e4bc94885e9b2a725487b023b7c93.json` | `ec2ec0b` | OMEGA_VISOR_V1_FAIL | first run: REALIZE failed on run arity (D2), AUTHORITY_ISOLATION failed on `--script /` exit 0 (D3); zero authority-path failures |
-| 2 | `evidence/VISOR/4de74cf3a01f7b362819183af5eb22a99f8af71638b2ecb026062acdf93bafb9.json` | `d7e8a4c` | OMEGA_VISOR_V1_PASS | this run |
+| 2 | `evidence/VISOR/98a63b2e17af68c97cf021612b43387497a57c82bbeb9d206a9b32f6bb21e7e6.json` | `23feaad` | OMEGA_VISOR_V1_PASS | this run |
 
 ## Why the verdict is what it is
 

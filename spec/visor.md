@@ -147,6 +147,7 @@ assertion lives in C tests and `.omega-session` scripts). Receipts live in
 |---|---|---|---|
 | `12785aab…json` | ec2ec0b | OMEGA_VISOR_V1_FAIL | found `run` arg-count and `--script` directory defects |
 | `4de74cf3…json` | d7e8a4c | OMEGA_VISOR_V1_PASS | after the fixes; 69 hostile cases, 0 crashes |
+| `98a63b2e…json` | 23feaad | OMEGA_VISOR_V1_PASS | clean tree (`tree_dirty=false`), same counts as receipt #2 |
 
 Scope of every receipt: host-only, this DGX Spark, no GPU/silicon claim, GPU gate
 suites (m12/m15/m17–m19) not run because the Visor does not touch them. Gates:
