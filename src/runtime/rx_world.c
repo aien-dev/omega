@@ -1246,11 +1246,13 @@ int rx_world_retire(RxWorld *w, RxObjRef ref) {
         return RX_ERR_STALE_GEN;
     }
     RxObject *o = &w->objects[ref.id];
-    uint32_t next_gen = 0;
-    if (rx_cap_generation_advance(o->generation, &next_gen) != RX_CAP_OK) {
+    /* Object generations stay 32 bits: an exhausted one retires the slot
+     * rather than wrap, the same rule capability generations follow. */
+    if (o->generation == UINT32_MAX) {
         pthread_mutex_unlock(&w->mu);
         return RX_ERR_FULL;
     }
+    uint32_t next_gen = o->generation + 1u;
     o->live = false;
     o->generation = next_gen;
     o->cap = (RxCapRef){ 0, 0 };
