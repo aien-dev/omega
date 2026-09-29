@@ -31,6 +31,42 @@ if [ ! -x "$OMEGA" ]; then
     exit 1
 fi
 
+# Strict JSON line checker (tools/json_canon.c: Python json.loads rules, strict
+# UTF-8) for the --json scriptability checks; C + jq, no Python.
+JSONC=$WORK/json_canon
+if ! ${CC:-gcc} -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -o "$JSONC" tools/json_canon.c src/sha256.c -lm; then
+    echo "QUAL setup json_canon FAIL build"
+    exit 1
+fi
+# json_envelope_check FILE: every line is one JSON object with exactly the keys
+# command/status/class/result/error, status ok|error, and error non-null
+# exactly when status is error. Prints one reason per problem; rc 1 if any.
+json_envelope_check() {
+    local bad reasons
+    bad=$("$JSONC" --check-lines <"$1")
+    reasons=$(jq -nrR --arg bad "$bad" '
+        def py: if . == true then "True" elif . == false then "False"
+                elif . == null then "None" elif type == "string" then . else tojson end;
+        ($bad | split("\n") | map(select(length > 0) | tonumber)) as $badn
+        | [inputs] | to_entries[] | (.key + 1) as $n
+        | if ($badn | index($n)) != null then "line \($n) not JSON"
+          else (.value | try fromjson catch "\u0000") as $o
+          | if $o == "\u0000" then "line \($n) not JSON"
+            elif ($o | type) != "object" then "line \($n) not an object"
+            else
+              (if ($o | keys) != ["class", "command", "error", "result", "status"]
+               then "line \($n) envelope keys [\($o | keys | map("'"'"'\(.)'"'"'") | join(", "))]" else empty end),
+              (if ($o | has("status") and has("error")) | not then "line \($n) missing status or error"
+               else
+                 (if $o.status != "ok" and $o.status != "error" then "line \($n) status \($o.status | py)" else empty end),
+                 (if ($o.status == "error") != ($o.error != null) then "line \($n) status/error mismatch" else empty end)
+               end)
+            end
+          end' "$1") || return 1
+    [ -z "$reasons" ] || { printf '%s\n' "$reasons"; return 1; }
+    [ -z "$bad" ]
+}
+
 declare -A RUN FAILED
 SECTIONS="semantic determinism realize hostile authority scriptability usability"
 for s in $SECTIONS; do RUN[$s]=0; FAILED[$s]=0; done
@@ -365,30 +401,10 @@ check $S "quit-stops-processing" $?
 ncmd=$(grep -cv -e '^[[:space:]]*$' $Q/usability.omega-session)   # comment lines answer too; blank lines do not
 nl=$(wc -l <"$WORK/j.out")
 [ "$nl" = "$ncmd" ]; check $S "json-one-line-per-command" $? "lines=$nl commands=$ncmd"
-python3 -c '
-import json, sys
-ok = True
-for n, line in enumerate(open(sys.argv[1], encoding="utf-8"), 1):
-    try:
-        o = json.loads(line)
-    except Exception as e:
-        print("line", n, "not JSON:", e); ok = False; continue
-    if set(o) != {"command", "status", "class", "result", "error"}:
-        print("line", n, "envelope keys", sorted(o)); ok = False
-    if o["status"] not in ("ok", "error"):
-        print("line", n, "status", o["status"]); ok = False
-    if (o["status"] == "error") != (o["error"] is not None):
-        print("line", n, "status/error mismatch"); ok = False
-sys.exit(0 if ok else 1)' "$WORK/j.out"
+json_envelope_check "$WORK/j.out"
 check $S "json-every-line-parses-with-envelope" $?
 "$OMEGA" --evidence-root "$EVROOT" --json --script $Q/hostile.omega-session </dev/null >"$WORK/jh.out" 2>/dev/null
-python3 -c '
-import json, sys
-bad = 0
-for line in open(sys.argv[1], "rb"):
-    try: json.loads(line.decode("utf-8"))
-    except Exception: bad += 1
-sys.exit(1 if bad else 0)' "$WORK/jh.out"
+"$JSONC" --check-lines <"$WORK/jh.out" >/dev/null
 check $S "json-hostile-lines-still-valid-json" $?
 [ ! -s "$WORK/j.err" ]; check $S "json-mode-no-stderr-noise" $?
 # stderr/stdout: errors in text mode go to stdout together with the transcript (documented behaviour check)
