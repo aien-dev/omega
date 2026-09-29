@@ -1,0 +1,206 @@
+Ω> // Lane 8 usability trace: a new user, starting only from `help`.
+Ω> help
+Omega Visor commands (classes: inspection, pure-execution, simulation, effect-request):
+  help [command]                       inspection      list commands, or show one
+  quit                                 inspection      leave the console
+  inspect <x>                          inspection      show the object a name or id refers to
+  type <x>                             inspection      show the type of an object
+  id <x>                               inspection      show the semantic id of a name, _ or hex id
+  graph [x]                            inspection      show the semantic graph (or the part under x)
+  verify <x>                           pure-execution  run the verification pipeline on x
+  machine                              inspection      show the current machine model
+  realize <x> [for current.machine]    pure-execution  build machine code for x (does not run it)
+  cost <x>                             simulation      estimate the cost of x
+  run <x> [args...]                    pure-execution  run x if pure; effects become an effect request
+  evidence [name]                      inspection      show recorded evidence receipts
+  bindings                             inspection      list session names in the order they were made
+  clear                                inspection      forget all session names and objects
+  world [cap]                          inspection      show the runtime world state (read only)
+  effects [x]                          effect-request  show effect objects as requests (never executed)
+  alternatives <x>                     simulation      list other ways to realize x
+  compare <a> <b>                      simulation      compare two objects or realizations
+  why <x>                              inspection      explain where x came from
+  let x = <expr> | fn ... | <expr>     pure-execution  Omega source line, evaluated by the language
+Names: a session name, _ (last result), or a semantic id (64 hex, optional sha256: prefix).
+Ω> help inspect
+  inspect <x>                          inspection      show the object a name or id refers to
+Ω> let x: u64 = 7
+7
+Ω> let y: u64 = 11
+11
+Ω> x + y
+18
+Ω> inspect _
+id: sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+kind: OPERATION
+status: ok
+shape: APPLY
+type: u64
+type_id: sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822
+op: sha256:6ff7d47206c867ccadb5c2ea8839b59d49ca9e62c6f95070ad7cd3d8f09c73b1
+opcode: ADD
+overflow: WRAP
+operands: 2
+  [0] sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+  [1] sha256:745f463215c5d2c0a03509b2ce1f7c3f2f393c6cd00d3add00fe79c4720669c2
+attributes: 0
+relations: 0
+constraints: 0
+canonical_len: 177
+canonical_sha256: c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+canonical_id_matches: yes
+dependencies: 3 (dangling 0)
+  [0] op sha256:6ff7d47206c867ccadb5c2ea8839b59d49ca9e62c6f95070ad7cd3d8f09c73b1
+  [1] operand0 sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+  [2] operand1 sha256:745f463215c5d2c0a03509b2ce1f7c3f2f393c6cd00d3add00fe79c4720669c2
+Ω> type _
+u64
+Ω> why _
+error: why: no realization for _ in this session; use `realize _` first
+Ω> verify _
+[pure-execution]
+STRUCTURAL      PASS     V0 graph typing + DAG integrity (5 object(s))
+TYPE            PASS     OPERATION(apply) object validates
+INVARIANTS      PASS     V2 reference-evaluator algebra (commutativity, identity, wrap, range); not object-specific
+REALIZATION     NOT_RUN  no realization built
+AUTHORITY       PASS     NONE: no effect or capability ref reachable (5 object(s) walked)
+MACHINE         NOT_RUN  no realization built
+VERDICT         PASS
+Ω> machine
+<machine block masked>
+Ω> help realize
+  realize <x> [for current.machine]    pure-execution  build machine code for x (does not run it)
+Ω> realize _
+[pure-execution]
+realization
+  id           sha256:ffe7656dc91cf25a4aacfc005ffb643fa79f3fd8ce55d11420fd4982e9d0ff76
+  subject      sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+  realized     sha256:6ff7d47206c867ccadb5c2ea8839b59d49ca9e62c6f95070ad7cd3d8f09c73b1
+  machine      sha256:<HOST_MACHINE_ID> (<HOST_MACHINE>)
+  bound        none
+  target       aarch64-v8a profile=0x01
+  code         8 bytes, 2 instructions
+    8b010000  add x0, x0, x1
+    d65f03c0  ret
+  compatible   yes
+  runnable     yes
+  why          profile 0x01 vs machine 0x01 match; realizer bound no machine; run allowed
+cost (four separate classes; never merged)
+  predicted cycles=2 insns=2 bytes=8  [static: code_len/4 = 2 instructions x 1 cycle; no machine model]
+  estimated cycles=<N> insns=2 bytes=8  [omega_machine_estimate_latency(<HOST_MACHINE>) (assumed profile, not measured)]
+  measured  ABSENT  [absent: Visor V1 ingests no execution receipts]
+  qualified ABSENT  [absent: no qualified gate result for this realization in V1]
+Ω> cost _
+[simulation]
+cost (four separate classes; never merged)
+  predicted cycles=2 insns=2 bytes=8  [static: code_len/4 = 2 instructions x 1 cycle; no machine model]
+  estimated cycles=<N> insns=2 bytes=8  [omega_machine_estimate_latency(<HOST_MACHINE>) (assumed profile, not measured)]
+  measured  ABSENT  [absent: Visor V1 ingests no execution receipts]
+  qualified ABSENT  [absent: no qualified gate result for this realization in V1]
+Ω> run _
+[pure-execution]
+18
+Ω> why _
+why realization
+  compatibility: compatible
+    profile: realization 0x01, machine <HOST_MACHINE>; V1 realizers and both canonical profiles use 0x01, so a match is expected, not a hardware check
+    machine binding: realizer bound none; model sha256:<HOST_MACHINE_ID>
+    target: aarch64-v8a; run allowed (pure AArch64, native)
+  constraints: profile 0x01 vs machine 0x01 match; realizer bound no machine; run allowed
+  cost sources:
+    predicted present: static: code_len/4 = 2 instructions x 1 cycle; no machine model
+    estimated present: omega_machine_estimate_latency(<HOST_MACHINE>) (assumed profile, not measured)
+    measured  ABSENT: absent: Visor V1 ingests no execution receipts
+    qualified ABSENT: absent: no qualified gate result for this realization in V1
+Ω> evidence
+evidence: 6 shown, 6 matched, 8 scanned, 2 unparsed
+receipt      sha256:73d26b54634d017831a828cb5d83eb25948288be7b49270659cab38e274dd7d9 (name = content hash)
+  path       tests/visor/fixtures/evidence/CA/73d26b54634d017831a828cb5d83eb25948288be7b49270659cab38e274dd7d9.json
+  claim      FIXTURE_CONTENT_ADDRESSED_V1: FIXTURE_CA_PASS=PASS
+  scope      HOST (from scope)
+  gates      1/1 passed
+  commit     8888888888888888888888888888888888888888
+  physics    (none)
+  run        20260928T000003Z-fixtureca
+  machine    (none)
+  realization (none)
+  tree       clean
+receipt      sha256:9cb9c065707e63dc506bf45e37703ef2312499a410d850e1385be320e9ff6aea
+  path       tests/visor/fixtures/evidence/HOST/host_run_receipt.json
+  claim      FIXTURE_HOST_RUN_V1: FIXTURE_HOST_PASS=PASS
+  scope      HOST (from hardware_scope)
+  gates      2/3 passed
+  commit     1111111111111111111111111111111111111111
+  physics    (none)
+  run        20260928T000000Z-fixturehost
+  machine    os=Linux arch=aarch64 kernel=7.0.0-fixture
+  realization (none)
+  tree       clean
+receipt      sha256:6175fcb5f521860611e780fa232bf75188915d36f33c0230be51dde3167dcd67
+  path       tests/visor/fixtures/evidence/SILICON/silicon_run_receipt.json
+  claim      FIXTURE_SILICON_RUN_V1: FIXTURE_SILICON=PASS
+  scope      SILICON (from silicon_observed=true)
+  gates      1/1 passed
+  commit     4444444444444444444444444444444444444444
+  physics    5555555555555555555555555555555555555555
+  run        20260928T000001Z-fixturesilicon
+  machine    node=spark-fixture arch=aarch64 kernel=7.0.0-fixture
+  realization sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  tree       DIRTY
+receipt      sha256:13e75aa959b06e2d36b0ded9ab5e8c0e7c5ba05a31ef7c0d31dd07c65b2e308a
+  path       tests/visor/fixtures/evidence/SILICON/standin_no_upgrade_receipt.json
+  claim      FIXTURE_STANDIN_V1: FIXTURE_STANDIN_PASS=PASS
+  scope      HOST (from silicon_observed=false)
+  gates      1/1 passed
+  commit     6666666666666666666666666666666666666666
+  physics    (none)
+  run        20260928T000002Z-fixturestandin
+  machine    (none)
+  realization (none)
+  tree       clean
+receipt      sha256:59645471d31f95d9cf66847c6f098be16e7e0848d4751ff239f811aaa10fb374
+  path       tests/visor/fixtures/evidence/qemu_milestone_receipt.json
+  claim      FIXTURE MILESTONE - QEMU: QUALIFIED / PASS
+  scope      QEMU (from qemu_target)
+  gates      3/3 passed
+  commit     3333333333333333333333333333333333333333
+  physics    (none)
+  run        (none)
+  machine    os=Linux arch=aarch64
+  realization sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  tree       unknown
+receipt      sha256:ef700eb6791ef7db0cba8d2ce801e4959f2657acf5d1df6152719d6b6bfebbb9
+  path       tests/visor/fixtures/evidence/unknown_scope_receipt.json
+  claim      FIXTURE_UNKNOWN_SCOPE_V1
+  scope      UNKNOWN
+  gates      0/0 passed
+  commit     7777777777777777777777777777777777777777
+  physics    (none)
+  run        (none)
+  machine    os=Linux arch=aarch64
+  realization (none)
+  tree       unknown
+UNPARSED     tests/visor/fixtures/evidence/digests.txt
+UNPARSED     tests/visor/fixtures/evidence/malformed_receipt.json
+Ω> help evidence
+  evidence [name]                      inspection      show recorded evidence receipts
+Ω> effects
+[effect-request]
+no effect objects in session
+Ω> world
+world: unattached
+  state:              unattached
+  generation:         (not observable)
+  resident objects:   0 (shown 0)
+  reactions:          0
+  active work:        0
+  published results:  0 (not observable)
+  staged effects:     (not visible)
+  publication tail:   0
+  digest:             -
+  gap: no resident World attached in this session: the V1 omega binary does not link the runtime (src/runtime); nothing here is observed
+  note: view only; this view holds no authority over the World
+Ω> bindings
+x  object  sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+y  object  sha256:745f463215c5d2c0a03509b2ce1f7c3f2f393c6cd00d3add00fe79c4720669c2
+_  realization  sha256:ffe7656dc91cf25a4aacfc005ffb643fa79f3fd8ce55d11420fd4982e9d0ff76
