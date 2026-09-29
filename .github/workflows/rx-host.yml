@@ -8,6 +8,8 @@ on:
       - 'Makefile'
       - 'src/omega_matvec_quad.*'
       - '.github/workflows/rx-host.yml'
+      - 'aienos.lock'
+      - 'argus.lock'
   push:
     branches:
       - 'feat/rx-*'
@@ -17,6 +19,8 @@ on:
       - 'Makefile'
       - 'src/omega_matvec_quad.*'
       - '.github/workflows/rx-host.yml'
+      - 'aienos.lock'
+      - 'argus.lock'
 
 jobs:
   host-reference:
