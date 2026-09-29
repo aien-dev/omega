@@ -185,36 +185,67 @@ static void sel_decide(const char *incumbent, oma_sel_decision *d) {
     CHECK(oma_sel_decide(&g_st, &q, d) == OMA_SEL_OK, "selector rc");
 }
 
+/* chosen must always be a member of the tied set (ADR 0019 9.1) */
+static int chosen_in_tied_set(const oma_sel_decision *d) {
+    for (size_t i = 0; i < d->ntie; i++)
+        if (strcmp(d->tie_set[i], d->chosen) == 0) return 1;
+    return 0;
+}
+
+static void expect(const oma_sel_decision *d, int tie, const char *chosen, const char *res, const char *what) {
+    CHECK(d->tie == tie && strcmp(d->chosen, chosen) == 0 && strcmp(d->tie_resolution, res) == 0,
+          "%s: want %s/%s tie=%d, got %s/%s tie=%d", what, chosen, res, tie, d->chosen, d->tie_resolution, d->tie);
+    CHECK(chosen_in_tied_set(d), "%s: chosen %s outside the tied set", what, d->chosen);
+    CHECK(d->tie == (d->ntie > 1), "%s: tie iff tied set has >1 member", what);
+}
+
 static void test_selector_tie_rule(void) {
     oma_sel_decision d;
-    /* TIE: R1_sdot 100 vs R1_smmla 101, band 5%; R1_plain well outside the band */
+    /* TIE: R1_sdot 100 vs R1_smmla 101, band 5%; R1_plain (reference) at 300
+     * is outside the tied set and must never be chosen by tie resolution */
     oma_sel_init(&g_st);
     g_st.nruns = 1;
     sel_row(0, "R1_sdot", 100, 0.05);
     sel_row(0, "R1_smmla", 101, 0.05);
     sel_row(0, "R1_plain", 300, 0.05);
     sel_decide(NULL, &d);
-    CHECK(d.tie == 1, "tie expected");
     CHECK(strcmp(d.cheapest, "R1_sdot") == 0 && strcmp(d.runner_up, "R1_smmla") == 0, "cheapest/runner-up");
-    CHECK(strcmp(d.chosen, OMA_SEL_REFERENCE) == 0, "no incumbent: reference, got %s", d.chosen);
-    CHECK(strcmp(d.tie_resolution, "reference") == 0, "resolution %s", d.tie_resolution);
-    CHECK(d.chosen_cost_ns == 300, "chosen cost is the reference's");
-    CHECK(oma_sel_in_tie_set(&d, "R1_sdot") && oma_sel_in_tie_set(&d, "R1_smmla"), "tie set holds cheapest and runner-up");
+    expect(&d, 1, "R1_sdot", "cheapest", "reference outside tied set, no incumbent");
+    CHECK(d.ntie == 2 && oma_sel_in_tie_set(&d, "R1_sdot") && oma_sel_in_tie_set(&d, "R1_smmla") &&
+              !oma_sel_in_tie_set(&d, OMA_SEL_REFERENCE),
+          "tied set = {R1_sdot, R1_smmla}");
+    CHECK(d.chosen_cost_ns == 100, "chosen cost is the cheapest's");
     sel_decide("", &d);
-    CHECK(strcmp(d.chosen, OMA_SEL_REFERENCE) == 0 && strcmp(d.tie_resolution, "reference") == 0, "empty incumbent");
-    /* incumbent stands on TIE */
+    expect(&d, 1, "R1_sdot", "cheapest", "empty incumbent");
+    /* incumbent inside the tied set stands */
     sel_decide("R1_smmla", &d);
-    CHECK(strcmp(d.chosen, "R1_smmla") == 0 && strcmp(d.tie_resolution, "incumbent") == 0, "incumbent stands, got %s %s",
-          d.chosen, d.tie_resolution);
+    expect(&d, 1, "R1_smmla", "incumbent", "incumbent (runner-up) stands");
+    CHECK(d.chosen_cost_ns == 101, "chosen cost is the incumbent's");
     sel_decide("R1_sdot", &d);
-    CHECK(strcmp(d.chosen, "R1_sdot") == 0 && strcmp(d.tie_resolution, "incumbent") == 0, "incumbent = cheapest");
+    expect(&d, 1, "R1_sdot", "incumbent", "incumbent = cheapest");
+    /* incumbent outside the tied set (the reference here) is not chosen */
     sel_decide("R1_plain", &d);
-    CHECK(strcmp(d.chosen, "R1_plain") == 0 && strcmp(d.tie_resolution, "incumbent") == 0, "incumbent = reference");
-    /* ineligible or unknown incumbent: falls back to the reference */
+    expect(&d, 1, "R1_sdot", "cheapest", "incumbent outside tied set");
+    /* ineligible or unknown incumbent, reference outside: cheapest */
     sel_decide("R4_rns", &d);
-    CHECK(strcmp(d.chosen, OMA_SEL_REFERENCE) == 0 && strcmp(d.tie_resolution, "reference") == 0, "unmeasured incumbent");
+    expect(&d, 1, "R1_sdot", "cheapest", "unmeasured incumbent");
     sel_decide("no_such_rz", &d);
-    CHECK(strcmp(d.chosen, OMA_SEL_REFERENCE) == 0 && strcmp(d.tie_resolution, "reference") == 0, "unknown incumbent");
+    expect(&d, 1, "R1_sdot", "cheapest", "unknown incumbent");
+    /* reference inside the tied set: selected when there is no incumbent in it */
+    oma_sel_init(&g_st);
+    g_st.nruns = 1;
+    sel_row(0, "R1_sdot", 100, 0.05);
+    sel_row(0, "R1_smmla", 101, 0.05);
+    sel_row(0, "R1_plain", 103, 0.05);
+    sel_row(0, "R2c_crumb", 200, 0.05);
+    sel_decide(NULL, &d);
+    expect(&d, 1, OMA_SEL_REFERENCE, "reference", "reference inside tied set");
+    CHECK(d.ntie == 3 && !oma_sel_in_tie_set(&d, "R2c_crumb"), "tied set of 3, R2c_crumb outside");
+    CHECK(d.chosen_cost_ns == 103, "chosen cost is the reference's");
+    sel_decide("R1_smmla", &d);
+    expect(&d, 1, "R1_smmla", "incumbent", "incumbent beats reference inside tied set");
+    sel_decide("R2c_crumb", &d);
+    expect(&d, 1, OMA_SEL_REFERENCE, "reference", "incumbent outside, reference inside");
     /* no TIE: cheapest chosen, incumbent ignored */
     oma_sel_init(&g_st);
     g_st.nruns = 1;
@@ -222,8 +253,7 @@ static void test_selector_tie_rule(void) {
     sel_row(0, "R1_smmla", 150, 0.01);
     sel_row(0, "R1_plain", 300, 0.01);
     sel_decide("R1_plain", &d);
-    CHECK(d.tie == 0 && strcmp(d.chosen, "R1_sdot") == 0 && strcmp(d.tie_resolution, "none") == 0,
-          "no tie: cheapest, got %s %s", d.chosen, d.tie_resolution);
+    expect(&d, 0, "R1_sdot", "none", "no tie");
     CHECK(d.ntie == 1 && oma_sel_in_tie_set(&d, "R1_sdot") && !oma_sel_in_tie_set(&d, "R1_smmla"), "no-tie set");
     /* TIE with the reference not measured and no incumbent: cheapest stands */
     oma_sel_init(&g_st);
@@ -231,24 +261,23 @@ static void test_selector_tie_rule(void) {
     sel_row(0, "R1_sdot", 100, 0.05);
     sel_row(0, "R1_smmla", 101, 0.05);
     sel_decide(NULL, &d);
-    CHECK(d.tie == 1 && strcmp(d.chosen, "R1_sdot") == 0 &&
-              strcmp(d.tie_resolution, "cheapest_reference_ineligible") == 0,
-          "reference ineligible, got %s %s", d.chosen, d.tie_resolution);
-    /* reference verified in one run only: ineligible over all runs */
+    expect(&d, 1, "R1_sdot", "cheapest", "reference unmeasured");
+    /* reference verified in one run only: ineligible over all runs, even though
+     * its cost would put it inside the tied set */
     oma_sel_init(&g_st);
     g_st.nruns = 2;
     sel_row(0, "R1_sdot", 100, 0.05);
     sel_row(0, "R1_smmla", 101, 0.05);
-    sel_row(0, "R1_plain", 300, 0.05);
+    sel_row(0, "R1_plain", 102, 0.05);
     sel_row(1, "R1_sdot", 100, 0.05);
     sel_row(1, "R1_smmla", 101, 0.05);
-    sel_row(1, "R1_plain", 300, 0.05);
+    sel_row(1, "R1_plain", 102, 0.05);
     g_st.rows[g_st.nrows - 1].verified = 0;
     sel_decide(NULL, &d);
-    CHECK(d.tie == 1 && strcmp(d.chosen, "R1_sdot") == 0 &&
-              strcmp(d.tie_resolution, "cheapest_reference_ineligible") == 0,
-          "unverified reference, got %s %s", d.chosen, d.tie_resolution);
-    /* cross-run spread alone makes a TIE: 100/104 in run 1, 104/100 in run 2 */
+    expect(&d, 1, "R1_sdot", "cheapest", "unverified reference");
+    CHECK(!oma_sel_in_tie_set(&d, OMA_SEL_REFERENCE), "ineligible reference not in tied set");
+    /* cross-run spread alone makes a TIE: 100/104 in run 1, 104/100 in run 2;
+     * the reference at 300 stays outside */
     oma_sel_init(&g_st);
     g_st.nruns = 2;
     sel_row(0, "R1_sdot", 100, 0.001);
@@ -258,7 +287,9 @@ static void test_selector_tie_rule(void) {
     sel_row(1, "R1_smmla", 100, 0.001);
     sel_row(1, "R1_plain", 300, 0.001);
     sel_decide(NULL, &d);
-    CHECK(d.tie == 1 && strcmp(d.chosen, OMA_SEL_REFERENCE) == 0, "cross-run tie, got %s", d.chosen);
+    CHECK(d.tie == 1 && d.ntie == 2 && strcmp(d.chosen, OMA_SEL_REFERENCE) != 0 &&
+              strcmp(d.tie_resolution, "cheapest") == 0 && chosen_in_tied_set(&d),
+          "cross-run tie, got %s %s", d.chosen, d.tie_resolution);
 }
 
 int main(void) {

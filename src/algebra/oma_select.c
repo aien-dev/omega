@@ -207,39 +207,45 @@ int oma_sel_decide(const oma_sel_table *t, const oma_sel_query *q, oma_sel_decis
     if (W->cross_run_rel > band) band = W->cross_run_rel;
     if (U->cross_run_rel > band) band = U->cross_run_rel;
     d->noise_band_rel = band;
-    d->tie = d->margin_rel <= band;
-    /* tie set: every eligible candidate inside the band of the cheapest, cheapest first */
+    /* tied set: every eligible candidate whose cost is within the band of the
+     * cheapest, cheapest first */
     memcpy(d->tie_set[d->ntie++], W->rz, OMA_SEL_ID);
     for (size_t k = 0; k < d->ncand && d->ntie < OMA_SEL_MAX_CAND; k++) {
         const oma_sel_candidate *c = &d->cand[k];
         if (!c->eligible || (int)k == w) continue;
         if ((c->cost_ns - W->cost_ns) / W->cost_ns <= band) snprintf(d->tie_set[d->ntie++], OMA_SEL_ID, "%s", c->rz);
     }
+    /* TIE when the tied set has more than one member (the runner-up is in it
+     * exactly when margin <= band) */
+    d->tie = d->ntie > 1;
     if (!d->tie) {
         snprintf(d->reason, sizeof d->reason,
                  "chosen: cheapest exact verified realization, %.1f%% under %s (margin outside the measured noise band)",
                  100.0 * d->margin_rel, U->rz);
         return OMA_SEL_OK;
     }
-    /* ADR 0019 section 9.1: on TIE the incumbent stands; with no incumbent the
-     * digital reference realization is selected. */
+    /* ADR 0019 section 9.1: resolved only inside the tied set. The incumbent
+     * stands if it is in the tied set; else the digital reference if it is in
+     * the tied set; else the cheapest member. A realization outside the tied
+     * set is never selected. */
     const oma_sel_candidate *inc = NULL, *ref = NULL;
     for (size_t k = 0; k < d->ncand; k++) {
         const oma_sel_candidate *c = &d->cand[k];
-        if (!c->eligible) continue;
+        if (!c->eligible || !oma_sel_in_tie_set(d, c->rz)) continue;
         if (q->incumbent && q->incumbent[0] && strcmp(c->rz, q->incumbent) == 0) inc = c;
         if (strcmp(c->rz, OMA_SEL_REFERENCE) == 0) ref = c;
     }
     const oma_sel_candidate *pick = W;
     if (inc) { pick = inc; d->tie_resolution = "incumbent"; }
     else if (ref) { pick = ref; d->tie_resolution = "reference"; }
-    else d->tie_resolution = "cheapest_reference_ineligible";
+    else d->tie_resolution = "cheapest";
     memcpy(d->chosen, pick->rz, sizeof d->chosen); /* both OMA_SEL_ID, NUL-terminated */
     d->chosen_cost_ns = pick->cost_ns;
     snprintf(d->reason, sizeof d->reason,
-             "TIE: %s %.1f%% under %s, inside the measured noise band %.1f%%; %s %s selected (ADR 0019 9.1)",
+             "TIE: %s %.1f%% under %s, inside the measured noise band %.1f%%; %s %s selected from the tied set of %zu "
+             "(ADR 0019 9.1)",
              W->rz, 100.0 * d->margin_rel, U->rz, 100.0 * band,
-             inc ? "incumbent" : ref ? "digital reference" : "no eligible incumbent or reference, cheapest", pick->rz);
+             inc ? "incumbent" : ref ? "digital reference" : "cheapest", pick->rz, d->ntie);
     return OMA_SEL_OK;
 }
 
@@ -251,7 +257,7 @@ void oma_sel_decision_json(FILE *f, const oma_sel_decision *d, const char *ind) 
             d->cell_m, d->cell_sparsity, d->exact_cell ? "true" : "false");
     fprintf(f, "%s \"chosen\": \"%s\", \"chosen_ns\": %.1f, \"cheapest\": \"%s\", \"cheapest_ns\": %.1f, "
                "\"runner_up\": \"%s\", \"runner_up_ns\": %.1f, \"margin_rel\": %.4f, \"noise_band_rel\": %.4f, "
-               "\"verdict\": \"%s\", \"incumbent\": \"%s\", \"tie_resolution\": \"%s\", \"tie_set\": [",
+               "\"verdict\": \"%s\", \"incumbent\": \"%s\", \"tie_resolution\": \"%s\", \"tied_set\": [",
             ind, d->chosen, d->chosen_cost_ns, d->cheapest, d->cheapest_cost_ns, d->runner_up, d->runner_up_cost_ns,
             d->margin_rel, d->noise_band_rel, d->tie ? "TIE" : "CHOSEN",
             (d->q.incumbent && d->q.incumbent[0]) ? d->q.incumbent : "", d->tie_resolution ? d->tie_resolution : "none");

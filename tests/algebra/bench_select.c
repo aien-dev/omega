@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
     fprintf(o, "{\n  \"schema\": \"OMEGA_MIXED_ALGEBRA_MA2_SELECT_V1\",\n");
     fprintf(o, "  \"label\": \"stand-in selector, not wired to rx_costmodel\",\n");
     fprintf(o, "  \"operation\": \"Omega-X: y = W.x, W ternary m x n, x int8, y int32, exact\",\n");
-    fprintf(o, "  \"policy\": \"exact-contract filter (registry exact, verified in every run used, n <= max_n); cost = mean over runs of median ns per call (+ median pack ns when packing per call); noise band = max over winner and runner-up of within-run (q75-q25)/median and across-run (max-min)/mean; TIE when margin <= band; on TIE the incumbent stands, with no incumbent the digital reference realization (" OMA_SEL_REFERENCE ") is selected (ADR 0019 section 9.1); these decisions have no incumbent\",\n");
+    fprintf(o, "  \"policy\": \"exact-contract filter (registry exact, verified in every run used, n <= max_n); cost = mean over runs of median ns per call (+ median pack ns when packing per call); noise band = max over winner and runner-up of within-run (q75-q25)/median and across-run (max-min)/mean; tied set = every eligible candidate within the band of the cheapest; TIE when the tied set has more than one member; a TIE is resolved only inside the tied set: incumbent if in it, else the digital reference realization (" OMA_SEL_REFERENCE ") if in it, else the cheapest member (ADR 0019 section 9.1, amended); these decisions have no incumbent\",\n");
     fprintf(o, "  \"sources\": [");
     for (int r = 0; r < g_t.nruns; r++) {
         char hex[65];
@@ -102,6 +102,7 @@ int main(int argc, char **argv) {
             tie_ok, disagree);
 
     unsigned ties_total = 0, ties_per_call = 0, ties_once = 0, ndec = 0, ref_picks = 0;
+    unsigned res_inc = 0, res_ref = 0, res_cheap = 0, outside = 0;
     /* decisions over all runs + win/lose table */
     fprintf(o, "  \"decisions\": [\n");
     first = 1;
@@ -117,6 +118,15 @@ int main(int argc, char **argv) {
             ndec++;
             if (d[mode].tie) { ties_total++; if (mode) ties_per_call++; else ties_once++; }
             if (strcmp(d[mode].chosen, OMA_SEL_REFERENCE) == 0) ref_picks++;
+            if (d[mode].tie) {
+                const char *tr = d[mode].tie_resolution;
+                if (strcmp(tr, "incumbent") == 0) res_inc++;
+                else if (strcmp(tr, "reference") == 0) res_ref++;
+                else if (strcmp(tr, "cheapest") == 0) res_cheap++;
+            }
+            int in = 0;
+            for (size_t i = 0; i < d[mode].ntie; i++) in |= strcmp(d[mode].tie_set[i], d[mode].chosen) == 0;
+            if (!in) outside++;
             fprintf(o, "%s", first ? "" : ",\n");
             oma_sel_decision_json(o, &d[mode], "    ");
             first = 0;
@@ -148,8 +158,9 @@ int main(int argc, char **argv) {
                bb ? bb->pct_floor : 0, ratio, verdict, tb ? tb->rz : "-");
     }
     fprintf(o, "\n  ],\n  \"decision_summary\": {\"decisions\": %u, \"ties\": %u, \"ties_per_call\": %u, "
-               "\"ties_once_amortized\": %u, \"chosen_reference\": %u},\n",
-            ndec, ties_total, ties_per_call, ties_once, ref_picks);
+               "\"ties_once_amortized\": %u, \"chosen_reference\": %u, \"tie_resolution\": {\"incumbent\": %u, "
+               "\"reference\": %u, \"cheapest\": %u}, \"chosen_outside_tied_set\": %u},\n",
+            ndec, ties_total, ties_per_call, ties_once, ref_picks, res_inc, res_ref, res_cheap, outside);
     fprintf(o, "  \"binary_vs_ternary\": [\n");
     for (size_t k = 0; k < nc; k++) fprintf(o, "    %s%s\n", winlose[k], k + 1 < nc ? "," : "");
     fprintf(o, "  ],\n");
@@ -165,12 +176,14 @@ int main(int argc, char **argv) {
         fprintf(o, "%s\n", i + 1 < sizeof extra / sizeof extra[0] ? "," : "");
     }
     fprintf(o, "  ],\n");
-    const char *gate = g_t.nruns < 2 ? "NOT_RUN" : disagree == 0 ? "PASS" : "FAIL";
-    fprintf(o, "  \"gates\": {\"MA2_SELECTOR_REPRO\": \"%s\", \"criteria\": \"for every measured cell and both pack modes, the choices from run 1 alone and run 2 alone are equal, or one run records a TIE whose tie set contains the other run's choice\"},\n", gate);
+    const char *gate = g_t.nruns < 2 ? "NOT_RUN" : (disagree == 0 && outside == 0) ? "PASS" : "FAIL";
+    fprintf(o, "  \"gates\": {\"MA2_SELECTOR_REPRO\": \"%s\", \"criteria\": \"for every measured cell and both pack modes, the choices from run 1 alone and run 2 alone are equal, or one run records a TIE whose tied set contains the other run's choice; and every decision's chosen realization is a member of its tied set\"},\n", gate);
     fprintf(o, "  \"not_claimed\": [\"integration with rx_costmodel or the resident omega.select reaction\", \"shapes between grid points beyond nearest-cell lookup\", \"multi-core or GPU realizations\", \"energy-based selection\"]\n}\n");
     fclose(o);
     printf("decisions over all runs: %u, TIE %u (per_call %u, once_amortized %u), %s chosen %u\n", ndec, ties_total,
            ties_per_call, ties_once, OMA_SEL_REFERENCE, ref_picks);
+    printf("tie resolution: incumbent %u, reference %u, cheapest %u; chosen outside tied set: %u\n", res_inc, res_ref,
+           res_cheap, outside);
     printf("reproducibility: %u decisions, %u agree, %u recorded ties, %u disagree -> MA2_SELECTOR_REPRO %s\n", total,
            agree, tie_ok, disagree, gate);
     return 0;

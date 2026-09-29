@@ -18,7 +18,7 @@ Receipts and labels: the two benchmark runs, `ma3_bench_run1.json` and
 `ma3_bench_run2.json` (schema `OMEGA_MIXED_ALGEBRA_MA3_BENCH_V1`), are the
 historical measurement records produced under the earlier "MA-3" label; they
 are kept unchanged. `ma2_select_receipt.json` was regenerated from them
-(without rerunning the benchmark) with the ADR 9.1 tie rule:
+(without rerunning the benchmark) with the amended ADR 9.1 tie rule:
 `build/tests-algebra/bench_select evidence/MIXED_ALGEBRA/ma2_select_receipt.json
 evidence/MIXED_ALGEBRA/ma3_bench_run1.json evidence/MIXED_ALGEBRA/ma3_bench_run2.json`.
 Future `make bench-mixed-algebra` runs write `ma2_bench_run{1,2}.json`
@@ -87,7 +87,7 @@ realizations`**, and the same line under `-fsanitize=address,undefined
   (`oma_pack_bitplane` + `oma_dot_tw_i8`); R5 bytes are checked with
   `oma_dense_byte_decode` (all < 243, right trit in the right place).
 - mutation check: swapping one SMMLA result lane makes 500 checks fail.
-- the same binary also runs 28 selector tie-rule checks (see Selector); the
+- the same binary also runs 62 selector tie-rule checks (see Selector); the
   realization checks alone are 179,684, unchanged.
 
 The benchmark re-verifies every realization bit-exact against the oracle on
@@ -196,8 +196,8 @@ bandwidth-bound. The win is independent of sparsity (dense 2-bit code).
 - **Pack per call:** every realization's pack reads and validates the whole
   int8 source, so no packed form can beat a copy. In per-call mode the cheapest
   is always an int8-form realization (R1_*, R4_rns or R1_plain, whose packs
-  are all a validated copy and mostly tie inside the noise band, so the tie
-  rule selects R1_plain there); the ternary packs
+  are all a validated copy and mostly tie inside the noise band, with R1_plain
+  inside the tied set, so the tie rule selects R1_plain there); the ternary packs
   are scalar loops costing 1.1x (crumb) to 3-4x (bitplane, LUT) the int8 copy.
   Ternary pays off only when weights are packed once and reused.
 
@@ -233,47 +233,54 @@ per call), mean over runs. Off-grid queries use the nearest measured cell
 chosen realization, the cheapest, the runner-up, every candidate with its
 measured cost, within-run and across-run spread and % of floor (or the reason
 it was excluded), the margin (runner-up vs cheapest), the noise band, a
-verdict CHOSEN or TIE, the tie set (every eligible candidate inside the band
-of the cheapest, the cheapest included), the incumbent given with the query
-and `tie_resolution`.
+verdict CHOSEN or TIE, the tied set (`tied_set`: every eligible candidate
+whose cost is within the band of the cheapest, the cheapest included), the
+incumbent given with the query and `tie_resolution`.
 
 Noise band = max over cheapest and runner-up of (a) the within-run spread
 (q75 - q25) / median of the timed blocks (pack spread weighted in when packing
 per call) and (b) the across-run spread (max - min) / mean of the cell's costs
-over every run in the table. TIE when margin <= band.
+over every run in the table. TIE when the tied set has more than one member
+(equivalently, margin <= band).
 
-**Tie rule (ADR 0019 section 9.1).** Without a TIE the cheapest is chosen
-(`tie_resolution: "none"`). On a TIE the incumbent selection stands when the
-query names an eligible incumbent (`"incumbent"`); with no incumbent the
-digital reference realization, `R1_plain` (`OMA_SEL_REFERENCE`), is selected
-(`"reference"`). The reference is selected whether or not it is inside the
-band, as the ADR states the rule; only when the reference is not eligible for
-the query does the cheapest stand (`"cheapest_reference_ineligible"`). The
-receipt's decisions carry no incumbent (there is no prior selection), so
-every TIE selects `R1_plain`. `test-realize` checks every branch of the rule
-(reference, incumbent, unknown or unmeasured incumbent, no TIE, reference
-unmeasured, reference unverified in one run, TIE from across-run spread alone).
+**Tie rule (ADR 0019 section 9.1, as amended).** Without a TIE the cheapest
+is chosen (`tie_resolution: "none"`). A TIE is resolved only inside the tied
+set: the incumbent selection stands if it is in the tied set (`"incumbent"`);
+otherwise the digital reference realization, `R1_plain`
+(`OMA_SEL_REFERENCE`), if it is in the tied set (`"reference"`); otherwise the
+cheapest member (`"cheapest"`). A realization outside the tied set, the
+reference or an incumbent included, is never selected by tie resolution.
+The receipt's decisions carry no incumbent (there is no prior selection).
+`test-realize` checks every branch: reference outside the tied set not chosen
+(cheapest instead), reference inside the tied set chosen, incumbent inside
+the tied set stands (also over a reference inside it), incumbent outside the
+tied set not chosen, unknown or unmeasured incumbent, no TIE, reference
+unmeasured, reference unverified in one run, TIE from across-run spread
+alone; every case also checks that the choice is a member of the tied set.
 
 Effect on the receipt (72 decisions over both runs): **38 TIE, 32 per-call
-and 6 pack-once**, and all 38 now select `R1_plain`. Before the tie rule
-1 decision chose `R1_plain`; in the 38 tied decisions the cheapest stood
-(R1_sdot 26, R4_rns 5, R1_smmla 3, R1_sdot_il 3, R1_plain 1). The 6 pack-once
-ties are 1024 x 64 at sparsity 0 and 0.6 (R1_smmla vs R1_sdot_il) and
-all four 16384 x 64 cells (R1_smmla vs R1_sdot_il within about 1%); there
-`R1_plain` is outside the tie set and costs 2.05x to 2.78x the cheapest
-(for example 1119 ns vs 403 ns at 1024 x 64). In all 32 per-call ties
-`R1_plain` is inside the tie set and costs 1.00x to 1.26x the cheapest. The
-34 non-TIE decisions are unchanged (R1_sdot 16, R1_smmla 6, R2c_crumb
-12). This is the ADR's conservative rule applied as written; a rule that
-takes the reference only from inside the tie set would be an ADR amendment,
-not a selector choice.
+and 6 pack-once. Resolution: 32 `reference`, 6 `cheapest`, 0 `incumbent`.**
+In all 32 per-call ties `R1_plain` is inside the tied set (1.00x to 1.26x
+the cheapest) and is selected. The 6 pack-once ties are 1024 x 64 at
+sparsity 0 and 0.6 and all four 16384 x 64 cells, each a tied set of
+{R1_smmla, R1_sdot_il} within about 1%; `R1_plain` is outside it (2.05x to
+2.78x the cheapest, for example 1119 ns vs 403 ns at 1024 x 64), so the
+cheapest member is selected (R1_smmla 3, R1_sdot_il 3). The earlier reading
+of the rule selected `R1_plain` in those 6 cells; the amendment removes that.
+No decision in the receipt (72 grid plus 4 off-grid) selects a realization
+outside its tied set (`decision_summary.chosen_outside_tied_set: 0` for the 72). The 34
+non-TIE decisions are unchanged (R1_sdot 16, R1_smmla 6, R2c_crumb 12).
 
 **Reproducibility check** (`MA2_SELECTOR_REPRO`): each of the 36 cells x 2
 pack modes is decided from run 1 alone and from run 2 alone.
-**72 decisions: 64 agree, 8 recorded ties, 0 disagree -> PASS**, with the
-tie rule applied. "Recorded ties" counts only the cells where the two
-single-run choices differ and one run's TIE set contains the other run's
-choice; it is not the number of ties. Total TIE verdicts in the decisions
+**72 decisions: 56 agree, 16 recorded ties, 0 disagree -> PASS**, with the
+amended tie rule applied, and every chosen realization is a member of its
+tied set (also part of the gate). "Recorded ties" counts only the cells where
+the two single-run choices differ and one run's tied set contains the other
+run's choice; it is not the number of ties. Recorded ties rose from 8 to 16
+because single-run pack-once ties now keep the cheapest member of each run
+(R1_smmla in run 1, R1_sdot_il in run 2 at 16384 x 64) and per-call ties with
+a single-run tied set that does not reach R1_plain pick R1_sdot or R4_rns. Total TIE verdicts in the decisions
 over both runs: **38 of 72 (32 per-call, 6 pack-once)**, listed in
 `decision_summary`.
 

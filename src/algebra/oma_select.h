@@ -20,14 +20,15 @@
  * With pack per call the within-run spread weights run and pack spreads by
  * their share of the cost.
  * margin = (cost runner-up - cost winner) / cost winner.
- * TIE when margin <= noise band; the record then lists every candidate
- * inside the band of the cheapest, the cheapest included (tie set).
- * Tie rule (ADR 0019 section 9.1): on TIE the incumbent selection stands
- * (query.incumbent, when it names an eligible realization); with no
- * incumbent the digital reference realization OMA_SEL_REFERENCE is selected,
- * whether or not it is inside the band. Only if the reference is not
- * eligible for the query does the cheapest stand. The decision records which
- * rule applied in tie_resolution. Without a TIE the cheapest is chosen. */
+ * Tied set: every eligible candidate whose cost is within the band of the
+ * cheapest, the cheapest included (recorded as tie_set / "tied_set"). TIE
+ * when the tied set has more than one member (equivalently margin <= band).
+ * Tie rule (ADR 0019 section 9.1, amended): a TIE is resolved only inside the
+ * tied set. The incumbent selection (query.incumbent) stands if it is in the
+ * tied set; otherwise the digital reference realization OMA_SEL_REFERENCE if
+ * it is in the tied set; otherwise the cheapest member. A realization outside
+ * the tied set is never selected by tie resolution. The decision records
+ * which rule applied in tie_resolution. Without a TIE the cheapest is chosen. */
 #ifndef OMA_SELECT_H
 #define OMA_SELECT_H
 
@@ -91,8 +92,8 @@ typedef struct {
     double chosen_cost_ns, cheapest_cost_ns, runner_up_cost_ns;
     double margin_rel, noise_band_rel;
     int tie;
-    /* "none" (no TIE: cheapest), "incumbent", "reference", or
-     * "cheapest_reference_ineligible" (TIE, no eligible incumbent or reference) */
+    /* "none" (no TIE: cheapest), or on TIE "incumbent", "reference" or
+     * "cheapest" (the rule of ADR 0019 9.1 that applied inside the tied set) */
     const char *tie_resolution;
     char tie_set[OMA_SEL_MAX_CAND][OMA_SEL_ID];
     size_t ntie;
