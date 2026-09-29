@@ -1,0 +1,12 @@
+r7-1.bin pass a: findings 0 state digest e09a922e74dceca3fb7202fc09a34376c2abb0c2a5e4dc012476edb2335922b2 
+r7-1.bin pass b: findings 0 state digest e09a922e74dceca3fb7202fc09a34376c2abb0c2a5e4dc012476edb2335922b2 
+r8-1.bin pass a: findings 0 state digest b8923f344bd5f8c3093c99f09fbc9e30cc80c0ac3eab942d442fd4243b3c03c2 
+r8-1.bin pass b: findings 0 state digest b8923f344bd5f8c3093c99f09fbc9e30cc80c0ac3eab942d442fd4243b3c03c2 
+r9-1.bin pass a: findings 0 state digest 196bc1a408656e2ca02b5cd637763507ad1601b605615324b6e6c7d76e39a98a 
+r9-1.bin pass b: findings 0 state digest 196bc1a408656e2ca02b5cd637763507ad1601b605615324b6e6c7d76e39a98a 
+r7-2.bin pass a: findings 0 state digest 93a495a9e3627940a5576fdcc9f4367c13b6fb8da6ae49f79b9e23691b7713a5 
+r7-2.bin pass b: findings 0 state digest 93a495a9e3627940a5576fdcc9f4367c13b6fb8da6ae49f79b9e23691b7713a5 
+r8-2.bin pass a: findings 0 state digest d0c914fe2e3d19789a7212d634a831cf0a74910e943481cb2f6b18c9154868ed 
+r8-2.bin pass b: findings 0 state digest d0c914fe2e3d19789a7212d634a831cf0a74910e943481cb2f6b18c9154868ed 
+r9-2.bin pass a: findings 0 state digest 391b42493d7153ee0c2d8d061938b6fac05d99b9d801d047356ba3345b2bfa8d 
+r9-2.bin pass b: findings 0 state digest 391b42493d7153ee0c2d8d061938b6fac05d99b9d801d047356ba3345b2bfa8d 
