@@ -1090,3 +1090,49 @@ test-turing: $(TURING_TEST) $(TURING_TEST_ASAN) $(TURING_TOOL) $(TURING_TOOL_ASA
 	cmp $(OUT_DIR)/tests-turing/spec_ids_plain.txt $(OUT_DIR)/tests-turing/spec_ids_asan.txt
 	./$(TURING_TOOL_ASAN) > $(OUT_DIR)/tests-turing/turing_field_asan.txt
 	@echo "test-turing: spec ids identical across plain and ASan builds; turing-field runs clean under ASan/UBSan"
+
+# ---------------------------------------------------------------------------
+# MIXED_ALGEBRA_DIGITAL_V1 closure gate (spec/mixed-algebra-digital-v1.md,
+# pre-registered). test-ma-digital-bottom: realization-layer ⊥ coverage
+# (plain + ASan/UBSan). gate-mixed-algebra-digital-v1: correctness leg, one
+# bench-mixed-algebra run under ~/workspace/.spark-quiet (or reuse with
+# MA_DV1_REUSE_RUN=<run id>), TURING Field v1 selection for the
+# pre-registered queries, separate-process digest reproduction, and a
+# digest-named wrapper receipt in evidence/MIXED_ALGEBRA/digital_v1/.
+.PHONY: test-ma-digital-bottom gate-mixed-algebra-digital-v1
+DV1_BOTTOM = $(OUT_DIR)/tests-algebra/test_ma_digital_bottom
+DV1_BOTTOM_ASAN = $(OUT_DIR)/tests-algebra/test_ma_digital_bottom_asan
+DV1_GATE_BIN = $(OUT_DIR)/tests-algebra/ma_digital_v1_gate
+DV1_GATE_BIN_ASAN = $(OUT_DIR)/tests-algebra/ma_digital_v1_gate_asan
+
+$(DV1_BOTTOM): tests/algebra/test_ma_digital_bottom.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/algebra/test_ma_digital_bottom.c $(OMA_RZ_SRCS) $(OMA_SRCS) -lm
+
+$(DV1_BOTTOM_ASAN): tests/algebra/test_ma_digital_bottom.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		-o $@ tests/algebra/test_ma_digital_bottom.c $(OMA_RZ_SRCS) $(OMA_SRCS) -lm
+
+$(DV1_GATE_BIN): tests/algebra/ma_digital_v1_gate.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/algebra/ma_digital_v1_gate.c $(TURING_SRCS) -lm
+
+$(DV1_GATE_BIN_ASAN): tests/algebra/ma_digital_v1_gate.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) $(TURING_ASAN) -o $@ tests/algebra/ma_digital_v1_gate.c $(TURING_SRCS) -lm
+
+test-ma-digital-bottom: $(DV1_BOTTOM) $(DV1_BOTTOM_ASAN)
+	./$(DV1_BOTTOM)
+	./$(DV1_BOTTOM_ASAN)
+
+gate-mixed-algebra-digital-v1: $(DV1_GATE_BIN) $(DV1_GATE_BIN_ASAN) $(DV1_BOTTOM) $(DV1_BOTTOM_ASAN)
+	DV1_GATE=./$(DV1_GATE_BIN) DV1_GATE_ASAN=./$(DV1_GATE_BIN_ASAN) MAKE="$(MAKE)" \
+		sh tests/algebra/ma_digital_v1_gate.sh
+
+# Content check (post-run addenda 2026-09-29): every digital_v1 wrapper
+# re-hashes to its file name and every receipt it cites re-hashes to the
+# digest recorded in the wrapper. Catches edits that were committed.
+.PHONY: check-mixed-algebra-digital-v1-evidence
+check-mixed-algebra-digital-v1-evidence:
+	sh tests/algebra/ma_digital_v1_check_evidence.sh
