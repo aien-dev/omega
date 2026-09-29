@@ -127,3 +127,15 @@ consumer is "auto:unpinned") and speed2-pinned (taskset 5-9,15-19: "auto:0-4,10-
 - flush_all scans all 256 use slots on every park and on every wake (use_begin_slow). A touched-bitmap or an
   ops-since-flush check would skip empty scans.
 - Out-of-process consumer: ADR boundary, not a speed fix.
+
+## Decisions and caveats to review
+- Policy: the default `auto` places the consumer thread OUTSIDE the affinity mask the operator gave the process.
+  That is what makes R8 pass. An operator who confined the process for isolation now has one thread outside that
+  confinement. `RX_ARGUS_CONSUMER_CPU=none` restores the old behaviour. Open for veto.
+- auto (all of 0-4,10-14: +3.87% pooled) and the single-CPU pin (CPU 2: +3.10%, earlier session) were never run
+  head to head. A single-core pin may be ~0.8% better; this was not tested, to avoid tuning to the numbers. Commit ec87160's
+  message quotes the +3.1% experiment; this file and PR #70 carry the shipped default's number.
+- consumer_auto_set bounds the scan by _SC_NPROCESSORS_ONLN and assumes CPUs are numbered 0..n-1 without gaps
+  (true on the Spark). With an offline CPU in the middle, the top CPU would be skipped.
+- The raw/main-* profile tables are aggregations of `perf script` output (tools/argus/r8_leaf.awk, r8_offcpu.awk),
+  not literal `perf report --stdio` text.
