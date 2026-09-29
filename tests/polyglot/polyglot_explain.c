@@ -7,18 +7,25 @@
  * every other candidate with the reason it was not selected.
  *
  * Selection policy (printed in the output):
+ *   current run = --run RUN_ID, or the only non-smoke run in the directory
+ *              (several non-smoke runs and no --run: nothing is selected);
  *   eligible = receipt contract digest equals the digest of the contract file
- *              AND the cell was measured AND correctness checks > 0 with 0
- *              failures AND not toolchain_only (spec section 4) AND not a
- *              labelled weak baseline;
+ *              AND not a smoke receipt AND from the current run AND
+ *              gate_eligible (N >= 20) AND tree_dirty_files == 0 AND the cell
+ *              was measured AND correctness checks > 0 with 0 failures AND
+ *              0 < min <= median AND no kept sample under 1 ms AND not
+ *              toolchain_only (spec section 4) AND not a labelled weak
+ *              baseline;
  *   selected = lowest median ns per call (pack once, amortized); ties on the
  *              exact median are broken by id (byte order);
  *   verdict  = CHOSEN if (runner-up median / selected median - 1) exceeds the
- *              noise band 3 * max(MAD/median) of the two, else TIE.
+ *              noise band max(3 * max(MAD/median) of the two, RUN_FLOOR),
+ *              else TIE. RUN_FLOOR (5%) is derived below from measured
+ *              run-to-run spread.
  * Deterministic: receipts are read in byte order of file name, numbers are
  * printed with fixed precision, nothing depends on time or environment.
  *
- * Usage: polyglot_explain --spec spec/polyglot-0.md --receipts evidence/POLYGLOT
+ * Usage: polyglot_explain --spec spec/polyglot-0.md --receipts evidence/POLYGLOT [--run RUN_ID]
  */
 #define _GNU_SOURCE
 #include "polyglot/omx_bench.h"
@@ -30,6 +37,22 @@
 #include <string.h>
 
 #define SCHEMA "OMEGA_POLYGLOT0_RECEIPT_V1"
+
+/* Run-to-run floor of the noise band (review G-S7). Within-run MAD does not
+ * see run-to-run, core-to-core or boot-state spread, so the band is never
+ * narrower than RUN_FLOOR. Derivation (measured, not assumed): the two MA-3
+ * bench runs evidence/MIXED_ALGEBRA/ma3_bench_run1.json and _run2.json (same
+ * code, same X925 core, one minute apart) give 360 paired medians. Their
+ * run-to-run shift |ln(median2 / median1)| has p50 0.27%, p90 2.3%, p95
+ * 3.6%, p99 10.4%, max 18.8%; 22 of 360 (6.1%) exceed 3 x the within-run
+ * noise, i.e. a within-run band alone misjudges about one comparison in 16.
+ * Rule: RUN_FLOOR is the smallest whole percent at which at most 2.5% of the
+ * 360 shifts exceed max(3 x within-run noise, floor): 4% leaves 10 (2.8%),
+ * 5% leaves 8 (2.2%). A CHOSEN therefore needs a margin that one run-to-run
+ * shift explains in at most about 1 case in 40; smaller margins are TIE.
+ * Re-derive when more paired runs exist (two full runs on different X925
+ * cores would replace this estimate). */
+#define RUN_FLOOR 0.05
 
 /* ---- minimal JSON reader ---- */
 enum { J_NULL, J_BOOL, J_NUM, J_STR, J_ARR, J_OBJ };
@@ -167,10 +190,11 @@ typedef struct {
     char file[256];
     char id[64], language[32], toolchain[160], family[32], run_id[96], contract[65], wid[8], regime[96];
     int weak, derived, tonly, smoke, gate_ok;
+    double dirty; /* tree_dirty_files, -1 when null or missing */
     size_t m, n;
     int ncells;
     struct {
-        double sp, med, mad, min, pack_med, pack_pw;
+        double sp, med, mad, min, pack_med, pack_pw, short_kept;
         int measured;
         double checks, failures;
         char skip[160];
@@ -223,6 +247,7 @@ static int load_receipt(const char *dir, const char *name, rec *r) {
     cpy(r->run_id, sizeof r->run_id, jstr(run, "run_id"));
     r->smoke = jtrue(run, "smoke");
     r->gate_ok = jtrue(run, "gate_eligible");
+    r->dirty = jnum(run, "tree_dirty_files", -1);
     cpy(r->contract, sizeof r->contract, jstr(ct, "sha256"));
     cpy(r->wid, sizeof r->wid, jstr(w, "id"));
     cpy(r->regime, sizeof r->regime, jstr(w, "regime"));
@@ -240,6 +265,7 @@ static int load_receipt(const char *dir, const char *name, rec *r) {
         r->cell[k].med = jnum(lat, "median", NAN);
         r->cell[k].mad = jnum(lat, "mad", NAN);
         r->cell[k].min = jnum(lat, "min", NAN);
+        r->cell[k].short_kept = jnum(ce, "short_samples_kept", -1);
         r->cell[k].pack_med = jnum(pk, "ns_median", NAN);
         r->cell[k].pack_pw = jnum(pk, "ns_per_weight", NAN);
         cpy(r->cell[k].skip, sizeof r->cell[k].skip, jstr(ce, "skip_reason"));
@@ -271,13 +297,14 @@ static double relmad(const entry *e) {
 }
 
 int main(int argc, char **argv) {
-    const char *spec = NULL, *dir = NULL;
+    const char *spec = NULL, *dir = NULL, *want_run = NULL;
     for (int i = 1; i + 1 < argc; i += 2) {
         if (!strcmp(argv[i], "--spec")) spec = argv[i + 1];
         else if (!strcmp(argv[i], "--receipts")) dir = argv[i + 1];
+        else if (!strcmp(argv[i], "--run")) want_run = argv[i + 1];
     }
     if (!spec || !dir) {
-        fprintf(stderr, "usage: %s --spec spec/polyglot-0.md --receipts DIR\n", argv[0]);
+        fprintf(stderr, "usage: %s --spec spec/polyglot-0.md --receipts DIR [--run RUN_ID]\n", argv[0]);
         return 2;
     }
     char contract[65];
@@ -311,8 +338,8 @@ int main(int argc, char **argv) {
     }
 
     size_t stale = 0, smoke = 0, notgate = 0;
-    char runs[8][96];
-    size_t nruns = 0;
+    char runs[64][96];
+    size_t nruns = 0, nfull = 0;
     for (size_t i = 0; i < g_nrec; i++) {
         stale += strcmp(g_rec[i].contract, contract) != 0;
         smoke += g_rec[i].smoke;
@@ -320,19 +347,41 @@ int main(int argc, char **argv) {
         size_t j = 0;
         for (; j < nruns; j++)
             if (!strcmp(runs[j], g_rec[i].run_id)) break;
-        if (j == nruns && nruns < 8) cpy(runs[nruns++], sizeof runs[0], g_rec[i].run_id);
+        if (j == nruns && nruns < 64) cpy(runs[nruns++], sizeof runs[0], g_rec[i].run_id);
     }
     qsort(runs, nruns, sizeof runs[0], cmp_arr);
+    /* Current run (review G-S6): --run, or the only non-smoke run present.
+     * With several non-smoke runs and no --run, nothing is selected. */
+    const char *cur = want_run;
+    for (size_t j = 0; j < nruns; j++) {
+        int full = 0;
+        for (size_t i = 0; i < g_nrec; i++)
+            if (!strcmp(g_rec[i].run_id, runs[j]) && !g_rec[i].smoke) full = 1;
+        if (full) {
+            nfull++;
+            if (!want_run && nfull == 1) cur = runs[j];
+        }
+    }
+    if (!want_run && nfull > 1) cur = NULL;
 
     printf("POLYGLOT-0 explanation (spec/polyglot-0.md section 9)\n");
     printf("contract section 1 sha256: %s\n", contract);
     printf("receipts: %zu read, %zu ignored (not %s), %zu with a stale contract digest, %zu smoke, %zu not "
            "gate-eligible\n", g_nrec, ignored, SCHEMA, stale, smoke, notgate);
     for (size_t j = 0; j < nruns; j++) printf("run: %s\n", runs[j]);
-    printf("policy: eligible = contract digest matches, measured, checks > 0 and 0 failures, not toolchain-only,\n"
-           "        not a weak baseline; select lowest median ns/call (pack once, amortized); CHOSEN if the\n"
-           "        runner-up is slower by more than 3 x max(MAD/median) of the two, else TIE.\n");
-    if (smoke || notgate) printf("NOTE: smoke or N<20 receipts present: this output is not gate evidence.\n");
+    printf("current run: %s\n", cur ? cur : "none");
+    printf("policy: eligible = contract digest matches, not smoke, from the current run, gate-eligible (N >= 20),\n"
+           "        built from a clean tree, measured, checks > 0 and 0 failures, 0 < min <= median, no kept\n"
+           "        sample under 1 ms, not toolchain-only, not a weak baseline; select lowest median ns/call\n"
+           "        (pack once, amortized); CHOSEN if the runner-up is slower by more than the band\n"
+           "        max(3 x max(MAD/median) of the two, %.0f%% run-to-run floor), else TIE.\n",
+           RUN_FLOOR * 100.0);
+    if (smoke || notgate) printf("NOTE: smoke or N<20 receipts present: they are never selected.\n");
+    if (!cur && nfull > 1)
+        printf("NOTE: %zu non-smoke runs present and no --run given: nothing is selected (pass --run RUN_ID).\n",
+               nfull);
+    else if (!cur)
+        printf("NOTE: no non-smoke run present: nothing is selected.\n");
 
     /* workloads in byte order of id */
     char wids[16][8];
@@ -374,13 +423,28 @@ int main(int argc, char **argv) {
                     e->r = r;
                     e->k = k;
                     e->eligible = 0;
+                    const double cmin = r->cell[k].min, cmed = r->cell[k].med;
                     if (strcmp(r->contract, contract))
                         snprintf(e->why, sizeof e->why, "stale receipt: contract digest %.12s differs", r->contract);
+                    else if (r->smoke)
+                        snprintf(e->why, sizeof e->why, "smoke receipt (never gate evidence)");
+                    else if (!cur || strcmp(r->run_id, cur))
+                        snprintf(e->why, sizeof e->why, "not from the current run (run %.60s)", r->run_id);
+                    else if (!r->gate_ok)
+                        snprintf(e->why, sizeof e->why, "not gate-eligible (N < 20 samples)");
+                    else if (r->dirty != 0)
+                        snprintf(e->why, sizeof e->why, "built from a dirty tree (tree_dirty_files %.0f)", r->dirty);
                     else if (!r->cell[k].measured)
                         snprintf(e->why, sizeof e->why, "not measured: %s", r->cell[k].skip);
                     else if (r->cell[k].checks <= 0 || r->cell[k].failures > 0)
                         snprintf(e->why, sizeof e->why, "not bit-exact: %.0f of %.0f checks failed",
                                  r->cell[k].failures, r->cell[k].checks);
+                    else if (!(isfinite(cmin) && isfinite(cmed) && cmin > 0 && cmin <= cmed))
+                        snprintf(e->why, sizeof e->why, "inconsistent latency (min %.1f, median %.1f)", cmin, cmed);
+                    else if (r->cell[k].short_kept != 0)
+                        snprintf(e->why, sizeof e->why, "%s",
+                                 r->cell[k].short_kept < 0 ? "no sample-length record (receipt predates it)"
+                                                           : "kept samples shorter than 1 ms");
                     else if (r->tonly)
                         snprintf(e->why, sizeof e->why, "toolchain-only (own-encoder rule, spec section 4)");
                     else if (r->weak)
@@ -402,7 +466,7 @@ int main(int argc, char **argv) {
                 if (ne > 1 && es[1].eligible) {
                     const entry *u = &es[1];
                     double margin = u->r->cell[u->k].med / r->cell[s->k].med - 1.0;
-                    double band = 3.0 * fmax(relmad(s), relmad(u));
+                    double band = fmax(3.0 * fmax(relmad(s), relmad(u)), RUN_FLOOR);
                     printf("    runner-up %-16s %-12s %-9s median %12.1f ns/call  margin %+.1f%%  band %.1f%%  -> %s\n",
                            u->r->id, u->r->language, u->r->family, u->r->cell[u->k].med, margin * 100.0,
                            band * 100.0, margin > band ? "CHOSEN" : "TIE (within noise)");

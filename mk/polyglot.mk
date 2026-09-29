@@ -38,6 +38,7 @@
 #   bench-polyglot-smoke  N=3, sparsity 0, receipts to $(OUT_DIR)/polyglot/smoke
 #                       (never committed)
 #   polyglot-explain    explainer over $(POLYGLOT_RECEIPTS), run twice and cmp'd
+#                       (POLYGLOT_RUN=<run_id> picks the run when several are present)
 # ---------------------------------------------------------------------------
 ifndef POLYGLOT_MK_LOADED
 POLYGLOT_MK_LOADED := 1
@@ -52,6 +53,7 @@ PG_OUT := $(OUT_DIR)/polyglot
 POLYGLOT_EVIDENCE ?= evidence/POLYGLOT
 POLYGLOT_RECEIPTS ?= $(POLYGLOT_EVIDENCE)
 POLYGLOT_BENCH_ARGS ?=
+POLYGLOT_RUN ?=
 PG_GCC_VER := $(shell $(CC) -dumpfullversion 2>/dev/null)
 
 PG_ARCH := -march=armv8.6-a+dotprod+i8mm+sve
@@ -176,8 +178,8 @@ bench-polyglot-smoke: $(PG_BENCH) $(PG_MANIFEST)
 		--out $(PG_OUT)/smoke --smoke --samples 3 --sparsity 0 $(POLYGLOT_BENCH_ARGS)
 
 polyglot-explain: $(PG_EXPLAIN)
-	./$(PG_EXPLAIN) --spec spec/polyglot-0.md --receipts $(POLYGLOT_RECEIPTS) > $(PG_OUT)/polyglot_explain.1.txt
-	./$(PG_EXPLAIN) --spec spec/polyglot-0.md --receipts $(POLYGLOT_RECEIPTS) > $(PG_OUT)/polyglot_explain.2.txt
+	./$(PG_EXPLAIN) --spec spec/polyglot-0.md --receipts $(POLYGLOT_RECEIPTS) $(if $(POLYGLOT_RUN),--run $(POLYGLOT_RUN)) > $(PG_OUT)/polyglot_explain.1.txt
+	./$(PG_EXPLAIN) --spec spec/polyglot-0.md --receipts $(POLYGLOT_RECEIPTS) $(if $(POLYGLOT_RUN),--run $(POLYGLOT_RUN)) > $(PG_OUT)/polyglot_explain.2.txt
 	cmp $(PG_OUT)/polyglot_explain.1.txt $(PG_OUT)/polyglot_explain.2.txt
 	@cat $(PG_OUT)/polyglot_explain.1.txt
 	@echo "polyglot-explain: two runs byte-identical ($(PG_OUT)/polyglot_explain.1.txt)"
