@@ -725,14 +725,13 @@ test-typed-results: $(RX_TYPED_TEST)
 #
 # Grant source (ARGUS_AUTH):
 #   observer (default) the authority announces its own mints/revokes
-#            (aienos_cap_set_observer, feat/capability-observer 12add16,
-#            backported onto the aienos.lock authority by
-#            tools/argus/aienos-cap-observer-c8ab65e.patch, extracted from
-#            ARGUS_CAP_REPO); the observer is installed by a link wrap of
-#            aienos_cap_start, which also announces the office (cap 0).
+#            (aienos_cap_set_observer, aienos 12add16, native in the authority
+#            pinned by aienos.lock, d39dd5b); the observer is installed by a link
+#            wrap of aienos_cap_start, which also announces the office (cap 0).
 #   aegis    GRANTED/REVOKED only where rx_aegis mints/revokes (harness mints
 #            are unseen and show up as FORGED).
-# Every ARGUS target links the patched authority (with no observer set it
+# Every ARGUS target links the aienos.lock authority, $(AIENOS_CAP_LIB), the
+# same library as the default targets (with no observer set it
 # costs one NULL check per admin operation), RX_ARGUS=0 included.
 ARGUS_REPO ?= ../aienos-argus
 ARGUS_COMMIT ?= $(shell head -n 1 argus.lock)
@@ -742,11 +741,7 @@ ARGUS_STAMP = $(OUT_DIR)/argus-src/$(ARGUS_SHORT)/.extracted
 ARGUS_LIB_SRCS = $(addprefix $(ARGUS_SRC)/,argus_event.c argus_ring.c argus_core.c argus_detect.c)
 RX_ARGUS ?= 2
 ARGUS_AUTH ?= observer
-ARGUS_CAP_REPO ?= ../aienos-argus-cap
-ARGUS_CAP_BASE ?= $(shell head -n 1 aienos.lock)
-ARGUS_CAP_PATCH = tools/argus/aienos-cap-observer-c8ab65e.patch
-ARGUS_CAP_DIR = $(OUT_DIR)/argus-authority/$(shell echo $(ARGUS_CAP_BASE) | cut -c1-7)-obs
-ARGUS_CAP_LIB = $(ARGUS_CAP_DIR)/native/capability/out/libaienos_capability.a
+ARGUS_CAP_LIB = $(AIENOS_CAP_LIB)
 comma := ,
 ARGUS_AUTH_FLAGS = $(if $(filter observer,$(ARGUS_AUTH)),-DRX_ARGUS_AUTHORITY_OBSERVER -Wl$(comma)--wrap=aienos_cap_start,)
 ARGUS_VARIANT = $(if $(filter observer,$(ARGUS_AUTH)),,-$(ARGUS_AUTH))
@@ -762,12 +757,6 @@ $(ARGUS_STAMP):
 	touch $@
 
 $(ARGUS_LIB_SRCS): $(ARGUS_STAMP)
-
-$(ARGUS_CAP_LIB): $(ARGUS_CAP_PATCH)
-	rm -rf $(ARGUS_CAP_DIR) && mkdir -p $(ARGUS_CAP_DIR)
-	git -C $(ARGUS_CAP_REPO) archive $(ARGUS_CAP_BASE) native/capability | tar -x -C $(ARGUS_CAP_DIR)
-	patch -s -d $(ARGUS_CAP_DIR) -p1 < $(ARGUS_CAP_PATCH)
-	$(MAKE) -C $(ARGUS_CAP_DIR)/native/capability
 
 # RX_ARGUS=0 links no ARGUS code at all.
 ARGUS_RX = $(if $(filter 0,$(RX_ARGUS)),,src/runtime/rx_argus.c $(ARGUS_LIB_SRCS))
