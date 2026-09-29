@@ -18,6 +18,7 @@
 
 #define ROOT_BYTES 512
 #define ROOT_SUM   480
+#define ROOT_AUTH_GEN_HI 432   /* after the excluded ids, before the sum */
 #define PTR_BYTES  128
 #define PTR_SUM    96
 #define JRN_BYTES  128
@@ -51,7 +52,7 @@ typedef struct {
     uint32_t state;
     uint32_t n_objects;
     uint64_t authority_epoch;
-    uint32_t authority_generation;
+    uint64_t authority_generation;
     uint32_t n_external;
     uint32_t n_excluded;
     uint32_t flags;
@@ -70,7 +71,7 @@ typedef struct {
     int draining;
     int proofs_ok;
     uint64_t authority_epoch;
-    uint32_t authority_generation;
+    uint64_t authority_generation;
     RxGenObject objects[RX_GEN_MAX_OBJECTS];
     uint32_t n_objects;
     int observed_set[RX_GEN_MAX_OBJECTS];
@@ -246,14 +247,14 @@ static int copy_blob(uint8_t **dst, size_t *dst_n, const uint8_t *src, size_t n)
 
 static void encode_root(const RootView *v, uint8_t out[ROOT_BYTES]) {
     memset(out, 0, ROOT_BYTES);
-    memcpy(out, "R9ROOT1", 7);
+    memcpy(out, "R9ROOT2", 7);
     put_u64(out + 8, v->id);
     put_u64(out + 16, v->parent);
     put_u64(out + 24, v->lineage);
     put_u32(out + 32, v->state);
     put_u32(out + 36, v->n_objects);
     put_u64(out + 40, v->authority_epoch);
-    put_u32(out + 48, v->authority_generation);
+    put_u32(out + 48, (uint32_t)v->authority_generation);
     put_u32(out + 52, v->n_external);
     put_u32(out + 56, v->n_excluded);
     put_u32(out + 60, v->flags);
@@ -264,11 +265,15 @@ static void encode_root(const RootView *v, uint8_t out[ROOT_BYTES]) {
         put_u64(out + 304 + (size_t)i * 8, v->external_ids[i]);
     for (uint32_t i = 0; i < v->n_excluded && i < RX_GEN_MAX_EXCLUDED; i++)
         put_u64(out + 368 + (size_t)i * 8, v->excluded_ids[i]);
+    put_u32(out + ROOT_AUTH_GEN_HI, (uint32_t)(v->authority_generation >> 32));
     checksum(out, ROOT_SUM, out + ROOT_SUM);
 }
 
 static int decode_root(const uint8_t in[ROOT_BYTES], RootView *v) {
-    if (memcmp(in, "R9ROOT1", 7) != 0) return RX_GEN_ERR_TORN;
+    /* Version 2 keeps the high half of the 64-bit authority generation at
+     * ROOT_AUTH_GEN_HI. Version 1 had none; its high half reads as zero. */
+    int v2 = memcmp(in, "R9ROOT2", 7) == 0;
+    if (!v2 && memcmp(in, "R9ROOT1", 7) != 0) return RX_GEN_ERR_TORN;
     uint8_t sum[32];
     checksum(in, ROOT_SUM, sum);
     if (memcmp(sum, in + ROOT_SUM, 32) != 0) return RX_GEN_ERR_TORN;
@@ -280,6 +285,7 @@ static int decode_root(const uint8_t in[ROOT_BYTES], RootView *v) {
     v->n_objects = get_u32(in + 36);
     v->authority_epoch = get_u64(in + 40);
     v->authority_generation = get_u32(in + 48);
+    if (v2) v->authority_generation |= (uint64_t)get_u32(in + ROOT_AUTH_GEN_HI) << 32;
     v->n_external = get_u32(in + 52);
     v->n_excluded = get_u32(in + 56);
     v->flags = get_u32(in + 60);
@@ -506,10 +512,10 @@ static int receipt_exists(const char *dir, uint64_t id) {
 }
 
 static int write_receipt_file(RxGenStore *store, const RootView *view, uint32_t subject,
-                              uint32_t cap_id, uint32_t cap_gen) {
+                              uint32_t cap_id, uint64_t cap_gen) {
     uint8_t raw[RCT_BYTES];
     memset(raw, 0, sizeof raw);
-    memcpy(raw, "R9RCT01", 7);
+    memcpy(raw, "R9RCT02", 7);
     put_u64(raw + 8, view->id);
     put_u64(raw + 16, view->lineage);
     put_u64(raw + 24, view->parent);
@@ -523,7 +529,8 @@ static int write_receipt_file(RxGenStore *store, const RootView *view, uint32_t 
     memcpy(raw + 32, root_digest, 32);
     put_u32(raw + 64, subject);
     put_u32(raw + 68, cap_id);
-    put_u32(raw + 72, cap_gen);
+    put_u32(raw + 72, (uint32_t)cap_gen);
+    put_u32(raw + 76, (uint32_t)(cap_gen >> 32));
     checksum(raw, RCT_SUM, raw + RCT_SUM);
     if (path_join(path, sizeof path, folder, "receipt") != 0) return RX_GEN_ERR_IO;
     return commit_file(store, path, raw, sizeof raw, RX_CRASH_NONE);

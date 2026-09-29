@@ -697,8 +697,8 @@ static RxCapRef need_ref(const RxWorld *w, const RxReactionDesc *d, uint32_t i) 
     if (s.id >= RX_MAX_OBJECTS) return (RxCapRef){ UINT32_MAX, 0 };
     const RxObject *o = &w->objects[s.id];
     if (!o->live || o->generation != s.generation) return (RxCapRef){ UINT32_MAX, 0 };
-    if (o->field[0] > UINT32_MAX || o->field[1] > UINT32_MAX) return (RxCapRef){ UINT32_MAX, 0 };
-    return (RxCapRef){ (uint32_t)o->field[0], (uint32_t)o->field[1] };
+    if (o->field[0] > UINT32_MAX) return (RxCapRef){ UINT32_MAX, 0 };
+    return (RxCapRef){ (uint32_t)o->field[0], o->field[1] };
 }
 
 static int validate_caps(const RxWorld *w, const RxReactionDesc *d, int *first_err) {
@@ -1497,11 +1497,13 @@ int rx_world_retire(RxWorld *w, RxObjRef ref) {
         return RX_ERR_STALE_GEN;
     }
     RxObject *o = &w->objects[ref.id];
-    uint32_t next_gen = 0;
-    if (rx_cap_generation_advance(o->generation, &next_gen) != RX_CAP_OK) {
+    /* Object generations stay 32 bits: an exhausted one retires the slot
+     * rather than wrap, the same rule capability generations follow. */
+    if (o->generation == UINT32_MAX) {
         pthread_mutex_unlock(&w->mu);
         return RX_ERR_FULL;
     }
+    uint32_t next_gen = o->generation + 1u;
     o->live = false;
     o->generation = next_gen;
     o->cap = (RxCapRef){ 0, 0 };
@@ -1735,8 +1737,15 @@ int rx_resident_accept(RxWorld *w) {
     /* Authority is checked again at publication. The notice must echo the
      * capabilities bound at claim time, and both must still validate. */
     int cap_err = 0;
-    RxCapRef in_cap = { read_u32(d.payload), read_u32(d.payload + 4) };
-    RxCapRef out_cap = { read_u32(d.payload + 32), read_u32(d.payload + 36) };
+    RxCapRef in_cap = { UINT32_MAX, 0 }, out_cap = { UINT32_MAX, 0 };
+    if (d.payload_len >= RX_CAP_PAYLOAD) {
+        in_cap = (RxCapRef){ read_u32(d.payload),
+                             read_u32(d.payload + 4) |
+                                 (uint64_t)read_u32(d.payload + RX_CAP_GEN_HI_A) << 32 };
+        out_cap = (RxCapRef){ read_u32(d.payload + 32),
+                              read_u32(d.payload + 36) |
+                                  (uint64_t)read_u32(d.payload + RX_CAP_GEN_HI_B) << 32 };
+    }
     if (in_cap.cap_id != a->cap.cap_id || in_cap.generation != a->cap.generation ||
         out_cap.cap_id != o->cap.cap_id || out_cap.generation != o->cap.generation ||
         validate_caps(w, desc, &cap_err) != 0 ||

@@ -292,7 +292,7 @@ static int fn_candidate(RxCtx *c) {
     AienosCapEntry grant;
     if (rx_world_read(w, l->caps.output_slot, &slot) != RX_OK ||
         aienos_cap_inspect(l->authority,
-            (AienosCapRef){(uint32_t)slot.field[0], (uint32_t)slot.field[1]}, &grant) != 0)
+            (AienosCapRef){(uint32_t)slot.field[0], slot.field[1]}, &grant) != 0)
         return decline(l, RX_LIVING_WHY_GRANT);
 
     uint64_t id = 0;
@@ -358,7 +358,7 @@ static int fn_candidate(RxCtx *c) {
     return 0;
 }
 
-static int native_promotion(void *ctx, uint32_t cap_id, uint32_t generation,
+static int native_promotion(void *ctx, uint32_t cap_id, uint64_t generation,
                             uint32_t subject, uint64_t resource, uint32_t rights) {
     AienosCapEntry entry;
     return aienos_cap_validate(ctx, (AienosCapRef){cap_id, generation},

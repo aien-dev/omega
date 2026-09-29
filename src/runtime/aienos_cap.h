@@ -4,6 +4,8 @@
  * The view can check a reference. The admin can change the table. The
  * reaction world is given the view. Cognition has no path to the admin.
  * The Linux mint process is a separate oracle and is not started here.
+ * Layout matches aienos native/capability/aienos_capability.h: generations
+ * are 64 bits.
  */
 #ifndef AIENOS_CAP_H
 #define AIENOS_CAP_H
@@ -15,12 +17,12 @@ typedef struct AienosCapView AienosCapView;
 
 typedef struct {
     uint32_t cap_id;
-    uint32_t generation;
+    uint64_t generation;
 } AienosCapRef;
 
 typedef struct {
     uint32_t cap_id;
-    uint32_t generation;
+    uint64_t generation;
     uint32_t state;
     uint32_t issuer;
     uint32_t subject;
@@ -29,9 +31,9 @@ typedef struct {
     uint64_t epoch;
     uint64_t lease_expiry;
     uint32_t parent_id;
-    uint32_t parent_generation;
+    uint64_t parent_generation;
     uint32_t minted_by_id;
-    uint32_t minted_by_generation;
+    uint64_t minted_by_generation;
 } AienosCapEntry;
 
 typedef struct {
@@ -62,7 +64,7 @@ int aienos_cap_cognition_mint(const AienosCapView *view, const AienosCapMint *re
                              const uint8_t *token);
 int aienos_cap_cognition_admin(const AienosCapView *view, uint32_t op, AienosCapRef authority,
                               AienosCapRef target);
-int aienos_cap_force_generation(AienosCapAdmin *admin, uint32_t cap_id, uint32_t generation);
-int aienos_cap_generation_advance(uint32_t generation, uint32_t *out);
+int aienos_cap_force_generation(AienosCapAdmin *admin, uint32_t cap_id, uint64_t generation);
+int aienos_cap_generation_advance(uint64_t generation, uint64_t *out);
 
 #endif
