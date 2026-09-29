@@ -140,12 +140,19 @@ static bool test_m17_qmd(void) {
     return true;
 }
 
+/* The physics checkout this binary was built against (Makefile passes
+ * -DOMEGA_PHYSICS_DIR); fall back to the Makefile default if CFLAGS was
+ * overridden without it. */
+#ifndef OMEGA_PHYSICS_DIR
+#define OMEGA_PHYSICS_DIR "../physics"
+#endif
+
 static bool test_m17_physics_authority(void) {
-    FILE *f = fopen("/home/drakestapleton/workspace/physics/m16/m16_native.h", "r");
+    FILE *f = fopen(OMEGA_PHYSICS_DIR "/m16/m16_native.h", "r");
     if (!f) return false;
     fclose(f);
 
-    FILE *p = popen("cd /home/drakestapleton/workspace/physics && git status --porcelain 2>/dev/null", "r");
+    FILE *p = popen("cd '" OMEGA_PHYSICS_DIR "' && git status --porcelain 2>/dev/null", "r");
     if (!p) return false;
     char buf[128];
     size_t lines = 0;
@@ -449,8 +456,34 @@ void omega_get_m18_gate_snapshot(int *count, int *passed) {
     if (passed) *passed = m18_gate_passed;
 }
 
+/* Per-gate results of the current run, indexed by gate number (1..18), so
+ * the receipt derives its feature booleans from what actually passed. */
+static bool m18_gate_results[19];
+
+/* Measured parity of each Gate 13 configuration, printed verbatim in the
+ * receipt's tested_configurations (no literal error values). */
+#define M18_PARITY_CONFIGS 6
+typedef struct {
+    uint32_t m, k, n;
+    OmegaMatMulPrecision precision;
+    bool executed;          /* execute_matmul_tensor returned 0 */
+    bool parity_verified;   /* exec.parity_verified from the oracle compare */
+    float max_abs_err;
+    float max_rel_err;
+} M18ParityRecord;
+static M18ParityRecord m18_parity[M18_PARITY_CONFIGS];
+static size_t m18_parity_count = 0;
+
+/* Gate 15 components, recorded separately for the receipt. */
+static bool m18_zero_libcuda_linkage = false;
+static bool m18_zero_cuda_symbols = false;
+static bool m18_zero_libcuda_runtime = false;
+
 static void report_m18_gate(const char *gate_name, bool pass, const char *detail) {
     m18_gate_count++;
+    if (m18_gate_count < (int)(sizeof(m18_gate_results) / sizeof(m18_gate_results[0]))) {
+        m18_gate_results[m18_gate_count] = pass;
+    }
     if (pass) {
         m18_gate_passed++;
         printf("  [PASS] %-45s : %s\n", gate_name, detail);
@@ -848,6 +881,18 @@ static bool test_m18_gate13_numerical_bound(void) {
             int rc = omega_blackwell_execute_matmul_tensor(&spec, &kernel, h_a, h_b, h_c,
                                                           &exec, &max_abs, &max_rel);
 
+            if (m18_parity_count < M18_PARITY_CONFIGS) {
+                M18ParityRecord *rec = &m18_parity[m18_parity_count++];
+                rec->m = m;
+                rec->k = k;
+                rec->n = n;
+                rec->precision = prec;
+                rec->executed = (rc == 0);
+                rec->parity_verified = (rc == 0 && exec.parity_verified);
+                rec->max_abs_err = max_abs;
+                rec->max_rel_err = max_rel;
+            }
+
             free(h_a);
             free(h_b);
             free(h_c);
@@ -953,10 +998,10 @@ static bool test_m18_gate16_clean_clone(void) {
 
 
 static bool test_m18_gate15_zero_libcuda(void) {
-    if (omega_blackwell_verify_zero_libcuda_linkage(NULL) != 0) return false;
-    if (omega_blackwell_verify_zero_cuda_symbols(NULL) != 0) return false;
-    if (omega_blackwell_verify_zero_libcuda_runtime() != 0) return false;
-    return true;
+    m18_zero_libcuda_linkage = (omega_blackwell_verify_zero_libcuda_linkage(NULL) == 0);
+    m18_zero_cuda_symbols = (omega_blackwell_verify_zero_cuda_symbols(NULL) == 0);
+    m18_zero_libcuda_runtime = (omega_blackwell_verify_zero_libcuda_runtime() == 0);
+    return m18_zero_libcuda_linkage && m18_zero_cuda_symbols && m18_zero_libcuda_runtime;
 }
 
 static bool test_m18_gate17_regression(void) {
@@ -987,6 +1032,40 @@ static void bytes_to_hex_str(const uint8_t *bytes, size_t len, char *hex) {
         sprintf(&hex[i * 2], "%02x", bytes[i]);
     }
     hex[len * 2] = 0;
+}
+
+/* Receipt opened by Gate 18 and completed by m18_receipt_finish(). */
+static FILE *m18_receipt_file = NULL;
+
+static void m18_print_err(FILE *f, bool executed, float v) {
+    if (executed && isfinite(v)) {
+        fprintf(f, "%.9g", (double)v);
+    } else {
+        fprintf(f, "null");
+    }
+}
+
+/* One tested_configurations entry, from the values Gate 13 measured. */
+static void m18_print_parity_record(FILE *f, const M18ParityRecord *r, bool more) {
+    const char *prec = (r->precision == OMEGA_MATMUL_PRECISION_FP16) ? "FP16" :
+                       (r->precision == OMEGA_MATMUL_PRECISION_BF16) ? "BF16" : "OTHER";
+    const char *parity;
+    if (!r->executed) {
+        parity = "not executed";
+    } else if (!r->parity_verified || !isfinite(r->max_abs_err) || !isfinite(r->max_rel_err) ||
+               r->max_abs_err > 1e-4f || r->max_rel_err > 1e-4f) {
+        parity = "FAILED";
+    } else if (r->max_abs_err == 0.0f && r->max_rel_err == 0.0f) {
+        parity = "exact";
+    } else {
+        parity = "within 1e-4";
+    }
+    fprintf(f, "    {\"shape\": \"%ux%ux%u\", \"precision\": \"%s\", \"elements\": %llu, \"max_abs_err\": ",
+            r->m, r->k, r->n, prec, (unsigned long long)r->m * r->n);
+    m18_print_err(f, r->executed, r->max_abs_err);
+    fprintf(f, ", \"max_rel_err\": ");
+    m18_print_err(f, r->executed, r->max_rel_err);
+    fprintf(f, ", \"parity\": \"%s\"}%s\n", parity, more ? "," : "");
 }
 
 static bool test_m18_gate18_receipt(void) {
@@ -1029,12 +1108,25 @@ static bool test_m18_gate18_receipt(void) {
     OmegaEvidenceHardware hw;
     memset(&hw, 0, sizeof(hw));
     hw.alias = "sm_121";
+    bool hw_observed = false;
     {
         OmegaAcceleratorWorld hw_world;
         if (omega_world_init(&hw_world) == OMEGA_WORLD_OK) {
             omega_evidence_hardware_from_nvrm(&hw_world.m16.rm, &hw);
             omega_world_destroy(&hw_world);
+            hw_observed = true;
         }
+    }
+    /* target_hardware is built from the observed Nvrm fields only. hw.alias
+     * is a fixed label set by omega_evidence_hardware_from_nvrm, not an
+     * observation, so it is not used here. */
+    char target_hardware[128];
+    if (hw_observed) {
+        snprintf(target_hardware, sizeof(target_hardware),
+                 "observed: compute_class 0x%x, rm_sm_version 0x%x",
+                 hw.compute_class, hw.rm_sm_version);
+    } else {
+        snprintf(target_hardware, sizeof(target_hardware), "UNOBSERVED (world init failed)");
     }
 
     /* 4. Binary SHA-256 */
@@ -1078,33 +1170,22 @@ static bool test_m18_gate18_receipt(void) {
     char manifest_hex[65] = {0};
     if (!compute_file_sha256(sums_path, manifest_digest, manifest_hex)) return false;
 
-    /* 7. Derived (observed, not asserted) regression counts. Gate 17 of this
-     * suite (test_m18_gate17_regression) ran run_m17_gates() immediately
-     * before this gate executes; read back what it actually ran. */
-    int m17_count = 0, m17_passed = 0;
-    omega_get_m17_gate_snapshot(&m17_count, &m17_passed);
-    int m18_count_so_far = 0, m18_passed_so_far = 0;
-    omega_get_m18_gate_snapshot(&m18_count_so_far, &m18_passed_so_far);
-    int total_gates_evaluated = m18_count_so_far + m17_count;
-    int cumulative_regression_passed = m17_passed;
-
-    /* 8. Write the M18 receipt to the run-scoped evidence area. */
+    /* 7. Write the M18 receipt to the run-scoped evidence area. This gate
+     * writes every field that is known before it is reported; the gate
+     * counters are only final after Gate 18 itself is counted, so
+     * m18_receipt_finish() appends them from the suite counters once
+     * run_m18_gates() has reported the last gate. */
     char receipt_path[1024];
     if (omega_evidence_path("omega_blackwell_matmul_stage2_receipt.json", receipt_path, sizeof(receipt_path)) != 0) return false;
     FILE *f = fopen(receipt_path, "w");
     if (!f) return false;
-
-    time_t now = time(NULL);
-    char time_str[64];
-    struct tm *tm_info = gmtime(&now);
-    strftime(time_str, sizeof(time_str), "%Y-%m-%dT%H:%M:%SZ", tm_info);
 
     fprintf(f, "{\n");
     fprintf(f, "  \"milestone\": \"OMEGA_BLACKWELL_MATMUL\",\n");
     fprintf(f, "  \"milestone_id\": \"M18\",\n");
     fprintf(f, "  \"stage\": 2,\n");
     fprintf(f, "  \"stage_title\": \"Blackwell Tensor Core MMA Dynamic Execution & Silicon Qualification\",\n");
-    fprintf(f, "  \"target_hardware\": \"NVIDIA DGX Spark (Grace Blackwell GB10, sm_121)\",\n");
+    fprintf(f, "  \"target_hardware\": \"%s\",\n", target_hardware);
     fprintf(f, "  \"substrate\": \"M16 Native Libcuda-Free Channel\",\n");
     fprintf(f, "  \"stage1_checkpoint_commit\": \"%s\",\n", "8da637bd352cdad039d1e88edd92c1ba30cf4173");
     fprintf(f, "  \"stage2_implementation_commit\": \"%s\",\n", "942173708c70a0251f777444b3e694e8a04b4fb7");
@@ -1137,36 +1218,78 @@ static bool test_m18_gate18_receipt(void) {
     fprintf(f, "  \"binary_sha256\": \"%s\",\n", bin_hex);
     fprintf(f, "  \"evidence_manifest_sha256\": \"%s\",\n", manifest_hex);
     fprintf(f, "  \"tested_configurations\": [\n");
-    fprintf(f, "    {\"shape\": \"16x16x16\", \"precision\": \"FP16\", \"elements\": 256, \"max_abs_err\": 0.0, \"max_rel_err\": 0.0, \"parity\": \"100%% exact\"},\n");
-    fprintf(f, "    {\"shape\": \"16x16x16\", \"precision\": \"BF16\", \"elements\": 256, \"max_abs_err\": 0.0, \"max_rel_err\": 0.0, \"parity\": \"100%% exact\"},\n");
-    fprintf(f, "    {\"shape\": \"32x16x32\", \"precision\": \"FP16\", \"elements\": 1024, \"max_abs_err\": 0.0, \"max_rel_err\": 0.0, \"parity\": \"100%% exact\"},\n");
-    fprintf(f, "    {\"shape\": \"32x16x32\", \"precision\": \"BF16\", \"elements\": 1024, \"max_abs_err\": 0.0, \"max_rel_err\": 0.0, \"parity\": \"100%% exact\"},\n");
-    fprintf(f, "    {\"shape\": \"16x16x64\", \"precision\": \"FP16\", \"elements\": 1024, \"max_abs_err\": 0.0, \"max_rel_err\": 0.0, \"parity\": \"100%% exact\"},\n");
-    fprintf(f, "    {\"shape\": \"16x16x64\", \"precision\": \"BF16\", \"elements\": 1024, \"max_abs_err\": 0.0, \"max_rel_err\": 0.0, \"parity\": \"100%% exact\"}\n");
+    for (size_t i = 0; i < m18_parity_count; i++) {
+        m18_print_parity_record(f, &m18_parity[i], i + 1 < m18_parity_count);
+    }
     fprintf(f, "  ],\n");
-    fprintf(f, "  \"dynamic_codegen\": true,\n");
-    fprintf(f, "  \"tensor_core_mma\": true,\n");
-    fprintf(f, "  \"fp32_accumulation\": true,\n");
-    fprintf(f, "  \"zero_static_instruction_tables\": true,\n");
-    fprintf(f, "  \"zero_libcuda_linkage\": true,\n");
-    fprintf(f, "  \"zero_cuda_symbols\": true,\n");
-    fprintf(f, "  \"zero_libcuda_runtime\": true,\n");
-    fprintf(f, "  \"all_18_gates_passed\": %s,\n", (m18_passed_so_far == m18_count_so_far) ? "true" : "false");
+    /* Feature booleans are derived from this run's gate results (gate
+     * numbers as reported by run_m18_gates), not asserted. */
+    fprintf(f, "  \"dynamic_codegen\": %s,\n", m18_gate_results[7] ? "true" : "false");
+    fprintf(f, "  \"tensor_core_mma\": %s,\n", m18_gate_results[12] ? "true" : "false");
+    /* FP32 accumulation: tensor-core execution passed and every FP16/BF16
+     * configuration matched the FP32 CPU oracle within 1e-4 (Gates 12, 13). */
+    fprintf(f, "  \"fp32_accumulation\": %s,\n", (m18_gate_results[12] && m18_gate_results[13]) ? "true" : "false");
+    fprintf(f, "  \"zero_static_instruction_tables\": %s,\n", m18_gate_results[6] ? "true" : "false");
+    fprintf(f, "  \"zero_libcuda_linkage\": %s,\n", m18_zero_libcuda_linkage ? "true" : "false");
+    fprintf(f, "  \"zero_cuda_symbols\": %s,\n", m18_zero_cuda_symbols ? "true" : "false");
+    fprintf(f, "  \"zero_libcuda_runtime\": %s,\n", m18_zero_libcuda_runtime ? "true" : "false");
+    if (ferror(f)) {
+        fclose(f);
+        return false;
+    }
+    m18_receipt_file = f;
+    return true;
+}
+
+/* Appends the counter-derived fields and closes the receipt opened by Gate
+ * 18. Called by run_m18_gates() after the last gate has been reported, so
+ * the counts are the suite's final counters. Returns false if there is no
+ * open receipt or the write fails. */
+static bool m18_receipt_finish(void) {
+    FILE *f = m18_receipt_file;
+    m18_receipt_file = NULL;
+    if (!f) return false;
+
+    /* Gate 17 ran run_m17_gates(); read back what it actually ran. */
+    int m17_count = 0, m17_passed = 0;
+    omega_get_m17_gate_snapshot(&m17_count, &m17_passed);
+    int total_gates_evaluated = m18_gate_count + m17_count;
+    int cumulative_regression_passed = m17_passed;
+
+    time_t now = time(NULL);
+    char time_str[64];
+    struct tm *tm_info = gmtime(&now);
+    strftime(time_str, sizeof(time_str), "%Y-%m-%dT%H:%M:%SZ", tm_info);
+
+    fprintf(f, "  \"all_18_gates_passed\": %s,\n",
+            (m18_gate_count == 18 && m18_gate_passed == m18_gate_count) ? "true" : "false");
     fprintf(f, "  \"total_gates_evaluated\": %d,\n", total_gates_evaluated);
     fprintf(f, "  \"cumulative_regression_passed\": %d,\n", cumulative_regression_passed);
-    fprintf(f, "  \"m18_gates_passed\": %d,\n", m18_passed_so_far);
+    fprintf(f, "  \"m18_gates_passed\": %d,\n", m18_gate_passed);
     fprintf(f, "  \"tests_executed\": [\"OMEGA_BW_MATMUL_REGRESSION_PASS(run_m17_gates)\"],\n");
     fprintf(f, "  \"qualification_timestamp\": \"%s\"\n", time_str);
     fprintf(f, "}\n");
-    fclose(f);
-    return true;
+    bool write_ok = !ferror(f);
+    if (fclose(f) != 0) write_ok = false;
+    return write_ok;
 }
+
 int run_m18_gates(void) {
     printf("================================================================================\n");
     printf("    AIEN OMEGA SUBSTRATE: MILESTONE 18: OMEGA_BLACKWELL_MATMUL QUALIFICATION GATES\n");
     printf("================================================================================\n");
     m18_gate_count = 0;
     m18_gate_passed = 0;
+    memset(m18_gate_results, 0, sizeof(m18_gate_results));
+    memset(m18_parity, 0, sizeof(m18_parity));
+    m18_parity_count = 0;
+    m18_zero_libcuda_linkage = false;
+    m18_zero_cuda_symbols = false;
+    m18_zero_libcuda_runtime = false;
+    if (m18_receipt_file) {
+        fclose(m18_receipt_file);
+        m18_receipt_file = NULL;
+    }
 
     report_m18_gate("OMEGA_BW_MATMUL_SEMANTIC_CONTRACT_PASS", test_m18_gate1_semantic_contract(), "Formal mathematical contract & CPU oracle parity");
     report_m18_gate("OMEGA_BW_MATMUL_MACHINE_GRAPH_PASS", test_m18_gate2_machine_graph(), "Grace Blackwell GB10 sm_121 machine target binding");
@@ -1193,6 +1316,12 @@ int run_m18_gates(void) {
         report_m18_gate("OMEGA_BW_MATMUL_REGRESSION_PASS", regression_ok, detail);
     }
     report_m18_gate("OMEGA_BW_MATMUL_RECEIPT_PASS", test_m18_gate18_receipt(), "Milestone 18 qualification receipt and cryptographic manifest generated");
+    /* Counters are final now; complete the receipt Gate 18 opened. A failed
+     * finish means the receipt is incomplete, so the suite must not pass. */
+    bool receipt_finished = m18_receipt_finish();
+    if (!receipt_finished) {
+        printf("  [FAIL] %-45s : %s\n", "M18 receipt finalize", "Could not append final gate counters to the receipt");
+    }
 
     printf("================================================================================\n");
     printf("  STAGE 2 / FULL QUALIFICATION: %d / %d M18 GATES PASSED\n", m18_gate_passed, m18_gate_count);
@@ -1202,7 +1331,7 @@ int run_m18_gates(void) {
         printf("  TOTAL GATES EVALUATED: %d (%d M18 Gates + %d Prior Regression Gates)\n", m18_gate_count + m17_count, m18_gate_count, m17_count);
     }
     printf("================================================================================\n");
-    return (m18_gate_passed == m18_gate_count) ? 0 : 1;
+    return (receipt_finished && m18_gate_passed == m18_gate_count) ? 0 : 1;
 }
 void run_demonstration_blackwell_matmul(void) {
     printf("================================================================================\n");
