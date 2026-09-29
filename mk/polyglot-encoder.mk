@@ -43,6 +43,10 @@ $(PGE_TEST_ASAN): tests/polyglot/test_encoder.c $(PGE_SRCS) $(PGE_HDRS)
 	$(CC) $(PGE_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
 		-o $@ tests/polyglot/test_encoder.c $(PGE_SRCS) -lm
 
+# Hook into the shared verifier and bench (mk/polyglot.mk lane contract).
+POLYGLOT_LANE_SRCS += src/polyglot/omx_encoder.c src/polyglot/omx_encoder_ext.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c
+
 .PHONY: test-polyglot-encoder
 test-polyglot-encoder: $(PGE_TEST) $(PGE_TEST_ASAN) $(PGE_BINS)
 	./$(PGE_TEST) $(PGE_BINS)
