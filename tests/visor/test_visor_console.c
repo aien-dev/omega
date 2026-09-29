@@ -299,6 +299,18 @@ static int stub_cost(const VisorViewCall *call, FILE *out, char *err, size_t err
     return 1;
 }
 
+static int stub_effects(const VisorViewCall *call, FILE *out, char *err, size_t errn) {
+    (void)err; (void)errn;
+    fputs(call->json ? "[]" : "no effects\n", out);
+    return 0;
+}
+
+static int stub_verify(const VisorViewCall *call, FILE *out, char *err, size_t errn) {
+    fputs(call->json ? "{\"passed\":false}" : "V0 FAIL\n", out);
+    snprintf(err, errn, "verification failed: V0");
+    return VISOR_VIEW_ERROR_WITH_OUTPUT;
+}
+
 static void install_stubs(Harness *h) {
     VisorConsoleOps ops;
     memset(&ops, 0, sizeof(ops));
@@ -306,6 +318,8 @@ static void install_stubs(Harness *h) {
     ops.effects_classify = stub_classify;
     ops.run_pure = stub_run;
     ops.cost = stub_cost;
+    ops.effects = stub_effects;
+    ops.verify = stub_verify;
     visor_console_set_ops(&h->c, &ops);
 }
 
@@ -337,7 +351,8 @@ static void test_console_stubs(void) {
     CHECK(g_run_calls == 1, "effect request never executed");
     expect(&h, "run nope", 1, "error: run: unknown name or id 'nope'\n", "run unresolved");
     CHECK(g_run_calls == 1, "unresolved never executed");
-    expect(&h, "effects w", 0, "effect-request: writes a file\n", "effects view");
+    expect(&h, "effects", 0, "[effect-request]\nno effects\n", "effects view");
+    expect(&h, "verify x", 1, "V0 FAIL\nerror: verify: verification failed: V0\n", "error with output (human)");
     expect(&h, "cost x", 1, "error: cost: no \"estimate\"\n", "hook error");
     h_close(&h);
 
@@ -394,6 +409,11 @@ static void test_console_json(void) {
     expect(&h, "cost x", 1,
            "{\"command\":\"cost\",\"status\":\"error\",\"class\":\"simulation\",\"result\":null,\"error\":\"no \\\"estimate\\\"\"}\n",
            "json escaping");
+    expect(&h, "verify x", 1,
+           "{\"command\":\"verify\",\"status\":\"error\",\"class\":\"pure-execution\",\"result\":{\"passed\":false},\"error\":\"verification failed: V0\"}\n",
+           "json error with output");
+    expect(&h, "effects", 0,
+           "{\"command\":\"effects\",\"status\":\"ok\",\"class\":\"effect-request\",\"result\":[],\"error\":null}\n", "json effects");
     expect(&h, "quit", 0, "{\"command\":\"quit\",\"status\":\"ok\",\"class\":\"inspection\",\"result\":\"bye\",\"error\":null}\n", "json quit");
     h_close(&h);
 }
@@ -457,12 +477,92 @@ static void test_script(void) {
     free(expected);
 }
 
+/* ---------------- end-to-end through the real wiring (tools/omega.c) ---------------- */
+#ifndef VISOR_CONSOLE_LANE_ONLY
+#define OMEGA_TOOL_NO_MAIN
+#include "../../tools/omega.c"
+
+static void e2e_open(Harness *h, bool json) {
+    memset(h, 0, sizeof(*h));
+    if (omega_tool_session_init(&h->s) != 0) { fprintf(stderr, "session init failed\n"); exit(1); }
+    h->f = open_memstream(&h->buf, &h->len);
+    visor_console_init(&h->c, &h->s, h->f, h->f, json);
+    VisorConsoleOps ops;
+    visor_console_default_ops(&ops);
+    visor_console_set_ops(&h->c, &ops);
+    h->c.evidence_root = "tests/visor/sessions/evidence-root";
+}
+
+static void test_e2e(void) {
+    VisorConsoleOps ops;
+    visor_console_default_ops(&ops);
+    CHECK(ops.inspect && ops.type_of && ops.id_of && ops.graph_text && ops.eval_line && ops.verify && ops.machine &&
+          ops.realize && ops.cost && ops.run_pure && ops.evidence && ops.world && ops.effects_classify && ops.effects &&
+          ops.alternatives && ops.compare && ops.why, "every hook wired");
+
+    size_t en = 0;
+    char *expected = slurp("tests/visor/sessions/e2e.expected", &en);
+    FILE *script = fopen("tests/visor/sessions/e2e.omega-session", "r");
+    CHECK(expected && script, "e2e session files present");
+    if (expected && script) {
+        Harness h;
+        e2e_open(&h, false);
+        int rc = visor_console_run_script(&h.c, script);
+        fflush(h.f);
+        bool same = h.len == en && memcmp(h.buf, expected, en) == 0;
+        if (!same) fprintf(stderr, "--- e2e got:\n%.*s--- expected:\n%s", (int)h.len, h.buf, expected);
+        CHECK(same, "e2e.omega-session matches e2e.expected exactly");
+        CHECK(rc == 0, "e2e script all ok");
+        CHECK(strstr(h.buf, "\xCE\xA9> x + y\n18\n") && strstr(h.buf, "\xCE\xA9> type _\nu64\n") &&
+              strstr(h.buf, "\xCE\xA9> run _\n[pure-execution]\n18\n") &&
+              strstr(h.buf, "\xCE\xA9> run _ 5\n[pure-execution]\n11\n"), "e2e key values 18/u64/18/11");
+        h_close(&h);
+    }
+    if (script) fclose(script);
+    free(expected);
+
+    /* JSON: let x = 7; x + x; run _ -> three objects, result 14. */
+    Harness h;
+    e2e_open(&h, true);
+    int rc;
+    char *a = h_exec(&h, "let x: u64 = 7", &rc);
+    CHECK(rc == 0 && strstr(a, "\"value\":\"7\""), "json let");
+    free(a);
+    a = h_exec(&h, "x + x", &rc);
+    CHECK(rc == 0 && strstr(a, "\"value\":\"14\""), "json x + x");
+    free(a);
+    a = h_exec(&h, "run _", &rc);
+    static const char run_prefix[] = "{\"command\":\"run\",\"status\":\"ok\",\"class\":\"pure-execution\",\"result\":{\"result\":\"14\",\"realization\":\"sha256:";
+    CHECK(rc == 0 && strncmp(a, run_prefix, sizeof(run_prefix) - 1) == 0,
+          "json run _ = 14");
+    free(a);
+    size_t lines = 0;
+    for (size_t i = 0; i < h.len; i++) if (h.buf[i] == '\n') lines++;
+    CHECK(lines == 3, "json: 3 lines for 3 commands");
+
+    /* Fail-closed paths through real wiring. */
+    a = h_exec(&h, "alternatives x", &rc);
+    CHECK(rc == 1 && strstr(a, "only programs have alternative realizations in V1"), "alternatives on object refused");
+    free(a);
+    a = h_exec(&h, "effects x", &rc);
+    CHECK(rc == 1 && strstr(a, "is not an EFFECT object"), "effects on non-effect refused");
+    free(a);
+    a = h_exec(&h, "world", &rc);
+    CHECK(rc == 0 && strstr(a, "\"command\":\"world\""), "world unattached view");
+    free(a);
+    h_close(&h);
+}
+#endif
+
 int main(void) {
     test_parser();
     test_console_human();
     test_console_stubs();
     test_console_json();
     test_script();
+#ifndef VISOR_CONSOLE_LANE_ONLY
+    test_e2e();
+#endif
     printf("%s %d/%d\n", g_pass == g_total ? "PASS" : "FAIL", g_pass, g_total);
     return g_pass == g_total ? 0 : 1;
 }

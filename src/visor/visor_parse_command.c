@@ -27,7 +27,7 @@ static const ParseEntry k_words[] = {
     { "bindings",     VISOR_CMD_BINDINGS,     0, 0 },
     { "clear",        VISOR_CMD_CLEAR,        0, 0 },
     { "world",        VISOR_CMD_WORLD,        0, 1 },
-    { "effects",      VISOR_CMD_EFFECTS,      1, 1 },
+    { "effects",      VISOR_CMD_EFFECTS,      0, 1 },
     { "alternatives", VISOR_CMD_ALTERNATIVES, 1, 1 },
     { "compare",      VISOR_CMD_COMPARE,      2, 2 },
     { "why",          VISOR_CMD_WHY,          1, 1 },

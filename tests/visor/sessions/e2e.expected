@@ -1,0 +1,121 @@
+Ω> let x: u64 = 7
+7
+Ω> let y: u64 = 11
+11
+Ω> x + y
+18
+Ω> type _
+u64
+Ω> id _
+sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+  canonical_len: 177
+  canonical_sha256: c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+Ω> graph _
+OPERATION sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7 apply ADD(fef7efa7112d,745f463215c5) : u64
+  OPERATION sha256:6ff7d47206c867ccadb5c2ea8839b59d49ca9e62c6f95070ad7cd3d8f09c73b1 op ADD WRAP arity=2 -> u64
+    TYPE sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822 type u64
+  VALUE sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db value 7 : u64
+  VALUE sha256:745f463215c5d2c0a03509b2ce1f7c3f2f393c6cd00d3add00fe79c4720669c2 value 11 : u64
+Ω> machine
+machine NVIDIA_DGX_SPARK_GRACE_V2
+  id          sha256:b2ad77d3401cfc5d0ffedb0a71c51410416b588966ef22fa074f3b0338abb81b
+  profile     0x01
+  observed    no (assumed canonical profile)
+  provenance  assumed: machine graph as given; no physics descriptor ingested (V1)
+  pipeline    issue=4 in_flight=256 out-of-order
+    unit ALU              count=4 latency=1 throughput=4
+    unit BRANCH           count=2 latency=1 throughput=2
+    unit MULTIPLIER       count=2 latency=3 throughput=2
+    unit DIVIDER          count=1 latency=12 throughput=1
+    unit LOAD_STORE       count=2 latency=3 throughput=2
+    unit VECTOR           count=4 latency=2 throughput=4
+  registers   gpr=31x64 vec=32x128
+    cache L1I size=65536 line=64 assoc=4 latency=3
+    cache L1D size=65536 line=64 assoc=8 latency=4
+    cache L2  size=1048576 line=64 assoc=8 latency=10
+    cache L3  size=119537664 line=64 assoc=16 latency=35
+  dram        base=0x80000000 size=137438953472
+  physics     flag=set seal=builder-constant placeholder (not a receipt)
+  topology    valid
+  target aarch64-v8a            linked=yes runnable=yes id=sha256:b2ad77d3401cfc5d0ffedb0a71c51410416b588966ef22fa074f3b0338abb81b
+    note: pure AArch64 realizations run natively on this host via omega_exec_native_f3
+  target blackwell-gb10-sm121   linked=yes runnable=no id=sha256:99e9e7b2a04a784130f398b57e15497f7367f606b60e62bfae065fe9a1795e7b
+    note: declared target (omega_blackwell_get_machine_id); run refused: requires GPU submit authority; not linked in Visor V1
+Ω> realize _
+[pure-execution]
+realization
+  id           sha256:ffe7656dc91cf25a4aacfc005ffb643fa79f3fd8ce55d11420fd4982e9d0ff76
+  subject      sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+  realized     sha256:6ff7d47206c867ccadb5c2ea8839b59d49ca9e62c6f95070ad7cd3d8f09c73b1
+  machine      sha256:b2ad77d3401cfc5d0ffedb0a71c51410416b588966ef22fa074f3b0338abb81b (NVIDIA_DGX_SPARK_GRACE_V2)
+  bound        none
+  target       aarch64-v8a profile=0x01
+  code         8 bytes, 2 instructions
+    8b010000  add x0, x0, x1
+    d65f03c0  ret
+  compatible   yes
+  runnable     yes
+  why          profile 0x01 vs machine 0x01 match; realizer bound no machine; run allowed
+cost (four separate classes; never merged)
+  predicted cycles=2 insns=2 bytes=8  [static: code_len/4 = 2 instructions x 1 cycle; no machine model]
+  estimated cycles=2 insns=2 bytes=8  [omega_machine_estimate_latency(NVIDIA_DGX_SPARK_GRACE_V2) (assumed profile, not measured)]
+  measured  ABSENT  [absent: Visor V1 ingests no execution receipts]
+  qualified ABSENT  [absent: no qualified gate result for this realization in V1]
+Ω> cost _
+[simulation]
+cost (four separate classes; never merged)
+  predicted cycles=2 insns=2 bytes=8  [static: code_len/4 = 2 instructions x 1 cycle; no machine model]
+  estimated cycles=2 insns=2 bytes=8  [omega_machine_estimate_latency(NVIDIA_DGX_SPARK_GRACE_V2) (assumed profile, not measured)]
+  measured  ABSENT  [absent: Visor V1 ingests no execution receipts]
+  qualified ABSENT  [absent: no qualified gate result for this realization in V1]
+Ω> run _
+[pure-execution]
+18
+Ω> verify _
+[pure-execution]
+STRUCTURAL      PASS     V0 graph typing + DAG integrity (5 object(s))
+TYPE            PASS     OPERATION(apply) object validates
+INVARIANTS      PASS     V2 reference-evaluator algebra (commutativity, identity, wrap, range); not object-specific
+REALIZATION     PASS     V1 differential, OP_ADD with c=0 (17 check(s), incl. V0 realization id)
+AUTHORITY       PASS     NONE: no effect or capability ref reachable (5 object(s) walked)
+MACHINE         PASS     profile 0x01 matches NVIDIA_DGX_SPARK_GRACE_V2; realization not bound to a machine id
+VERDICT         PASS
+Ω> evidence _
+evidence: 0 shown, 0 matched, 1 scanned, 0 unparsed
+no evidence
+Ω> effects
+[effect-request]
+no effect objects in session
+Ω> fn transform(x: u64) -> u64 requires true ensures result >= 1 { x * 2 + 1 }
+fn transform: u64 -> u64
+Ω> realize transform
+[pure-execution]
+realization
+  id           sha256:dfc4cb844da0044a4fe0c58c5ecd0b77d1ad04df3f3037609f8ed8581b058bff
+  subject      sha256:beedf7f6fc3853c0aed82e0b35e165b14878a82b0ebac64aa5bd9430800a8c4f
+  realized     none
+  machine      sha256:b2ad77d3401cfc5d0ffedb0a71c51410416b588966ef22fa074f3b0338abb81b (NVIDIA_DGX_SPARK_GRACE_V2)
+  bound        none
+  target       aarch64-v8a profile=0x01
+  code         20 bytes, 5 instructions
+    d2800041  movz x1, #0x2
+    9b017c00  mul x0, x0, x1
+    d2800021  movz x1, #0x1
+    8b010000  add x0, x0, x1
+    d65f03c0  ret
+  compatible   yes
+  runnable     yes
+  why          profile 0x01 vs machine 0x01 match; realizer bound no machine; run allowed
+cost (four separate classes; never merged)
+  predicted cycles=5 insns=5 bytes=20  [static: code_len/4 = 5 instructions x 1 cycle; no machine model]
+  estimated cycles=7 insns=5 bytes=20  [omega_machine_estimate_latency(NVIDIA_DGX_SPARK_GRACE_V2) (assumed profile, not measured)]
+  measured  ABSENT  [absent: Visor V1 ingests no execution receipts]
+  qualified ABSENT  [absent: no qualified gate result for this realization in V1]
+Ω> run _ 5
+[pure-execution]
+11
+Ω> bindings
+x  object  sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+y  object  sha256:745f463215c5d2c0a03509b2ce1f7c3f2f393c6cd00d3add00fe79c4720669c2
+transform  program  sha256:beedf7f6fc3853c0aed82e0b35e165b14878a82b0ebac64aa5bd9430800a8c4f
+_  realization  sha256:dfc4cb844da0044a4fe0c58c5ecd0b77d1ad04df3f3037609f8ed8581b058bff

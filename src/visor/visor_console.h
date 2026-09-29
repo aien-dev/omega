@@ -58,7 +58,10 @@ typedef struct {
 } VisorViewCall;
 
 /* View hook: write the result to `out` (JSON value in json mode, text otherwise).
- * Return 0 on success; nonzero on error with a message in err (out is discarded). */
+ * Return 0 on success; VISOR_VIEW_ERROR_WITH_OUTPUT (2) = error but still show
+ * what was written (e.g. a failed verify report); any other nonzero = error
+ * with a message in err (out is discarded). */
+#define VISOR_VIEW_ERROR_WITH_OUTPUT 2
 typedef int (*VisorViewFn)(const VisorViewCall *call, FILE *out, char *err, size_t errn);
 
 /* Source-line hook (`let ...`, `fn ...`, bare expressions). On success fill
@@ -69,7 +72,7 @@ typedef int (*VisorViewFn)(const VisorViewCall *call, FILE *out, char *err, size
 typedef int (*VisorEvalLineFn)(VisorSession *s, const char *line, VisorBinding *out,
                                char *value_text, size_t n, char *err, size_t errn);
 
-/* Effect classifier used by `run` and `effects`. Set *cls to
+/* Effect classifier used by `run` before anything executes. Set *cls to
  * VISOR_CLASS_PURE_EXECUTION or VISOR_CLASS_EFFECT_REQUEST and a one-line reason. */
 typedef int (*VisorClassifyFn)(const VisorViewCall *call, VisorClass *cls,
                                char *reason, size_t reasonn, char *err, size_t errn);
@@ -77,7 +80,7 @@ typedef int (*VisorClassifyFn)(const VisorViewCall *call, VisorClass *cls,
 typedef struct {
     VisorViewFn inspect;          /* inspect <x>            inspection */
     VisorViewFn type_of;          /* type <x>               inspection */
-    VisorViewFn id_of;            /* (unused: `id` is built in; reserved) */
+    VisorViewFn id_of;            /* id <x>; NULL = built-in id printer   inspection */
     VisorViewFn graph_text;       /* graph [x]              inspection */
     VisorEvalLineFn eval_line;    /* source lines           pure-execution */
     VisorViewFn verify;           /* verify <x>             pure-execution */
@@ -87,7 +90,8 @@ typedef struct {
     VisorViewFn run_pure;         /* run <x> [args..] after classify says pure   pure-execution */
     VisorViewFn evidence;         /* evidence [name]        inspection */
     VisorViewFn world;            /* world [cap]            inspection */
-    VisorClassifyFn effects_classify; /* effects <x>; gate for `run`   inspection */
+    VisorClassifyFn effects_classify; /* gate for `run` (not a command itself) */
+    VisorViewFn effects;          /* effects [x]            effect-request (listing, never executed) */
     VisorViewFn alternatives;     /* alternatives <x>       simulation */
     VisorViewFn compare;          /* compare <a> <b>        simulation */
     VisorViewFn why;              /* why <x>                inspection */

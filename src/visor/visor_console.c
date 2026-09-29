@@ -35,7 +35,7 @@ static const HelpEntry k_help[] = {
     { VISOR_CMD_BINDINGS,     "bindings",                        VISOR_CLASS_INSPECTION,     "list session names in the order they were made" },
     { VISOR_CMD_CLEAR,        "clear",                           VISOR_CLASS_INSPECTION,     "forget all session names and objects" },
     { VISOR_CMD_WORLD,        "world [cap]",                     VISOR_CLASS_INSPECTION,     "show the runtime world state (read only)" },
-    { VISOR_CMD_EFFECTS,      "effects <x>",                     VISOR_CLASS_INSPECTION,     "say whether x is pure or needs authority" },
+    { VISOR_CMD_EFFECTS,      "effects [x]",                     VISOR_CLASS_EFFECT_REQUEST, "show effect objects as requests (never executed)" },
     { VISOR_CMD_ALTERNATIVES, "alternatives <x>",                VISOR_CLASS_SIMULATION,     "list other ways to realize x" },
     { VISOR_CMD_COMPARE,      "compare <a> <b>",                 VISOR_CLASS_SIMULATION,     "compare two objects or realizations" },
     { VISOR_CMD_WHY,          "why <x>",                         VISOR_CLASS_INSPECTION,     "explain where x came from" },
@@ -115,13 +115,21 @@ static int emit_ok(VisorConsole *c, const char *name, VisorClass cls, const char
     return emit_ok_tag(c, name, cls, body, true);
 }
 
-static int emit_err(VisorConsole *c, const char *name, VisorClass cls, const char *msg) {
+/* Error; `body` (may be NULL) is a report printed despite the error
+ * (human: on out before the error line; JSON: as `result`). */
+static int emit_err_body(VisorConsole *c, const char *name, VisorClass cls, const char *msg, const char *body) {
     if (!msg || !*msg) msg = "failed";
+    bool has_body = body && *body;
+    if (!c->json && has_body) {
+        fputs(body, c->out);
+        if (body[strlen(body) - 1] != '\n') fputc('\n', c->out);
+    }
     fflush(c->out); /* keep out/err ordered when both reach the same terminal or file */
     if (c->json) {
         fprintf(c->out, "{\"command\":");
         visor_json_string(c->out, name);
-        fprintf(c->out, ",\"status\":\"error\",\"class\":\"%s\",\"result\":null,\"error\":", visor_class_name(cls));
+        fprintf(c->out, ",\"status\":\"error\",\"class\":\"%s\",\"result\":%s,\"error\":", visor_class_name(cls),
+                has_body ? body : "null");
         visor_json_string(c->out, msg);
         fputs("}\n", c->out);
     } else if (cls == VISOR_CLASS_EFFECT_REQUEST) {
@@ -132,6 +140,10 @@ static int emit_err(VisorConsole *c, const char *name, VisorClass cls, const cha
     c->last_status = 1;
     c->error_count++;
     return 1;
+}
+
+static int emit_err(VisorConsole *c, const char *name, VisorClass cls, const char *msg) {
+    return emit_err_body(c, name, cls, msg, NULL);
 }
 
 /* A growable text buffer backed by open_memstream. */
@@ -258,7 +270,9 @@ static int call_view(VisorConsole *c, const char *name, VisorClass cls, VisorVie
     char err[512] = {0};
     int rc = fn(&call, m.f, err, sizeof(err));
     mem_close(&m);
-    rc = (rc == 0) ? emit_ok(c, name, cls, m.buf) : emit_err(c, name, cls, err);
+    if (rc == 0) rc = emit_ok(c, name, cls, m.buf);
+    else if (rc == VISOR_VIEW_ERROR_WITH_OUTPUT) rc = emit_err_body(c, name, cls, err, m.buf);
+    else rc = emit_err(c, name, cls, err);
     mem_free(&m);
     return rc;
 }
@@ -282,31 +296,6 @@ static int cmd_subject_view(VisorConsole *c, const VisorCommand *cmd, VisorViewF
         return unresolved(c, name, cls, cmd->args[1]);
     if (cmd->cmd != VISOR_CMD_COMPARE) hb = false;
     return call_view(c, name, cls, fn, cmd, ha ? &a : NULL, hb ? &b : NULL);
-}
-
-static int cmd_effects(VisorConsole *c, const VisorCommand *cmd) {
-    const char *name = "effects";
-    if (!c->ops.effects_classify) return emit_err(c, name, VISOR_CLASS_INSPECTION, VISOR_NOT_WIRED_MSG);
-    VisorBinding a; bool ha;
-    if (resolve_arg(c, cmd, 0, &a, &ha) != 0) return unresolved(c, name, VISOR_CLASS_INSPECTION, cmd->args[0]);
-    VisorViewCall call = { c->session, cmd, &a, NULL, c->json, c->evidence_root, c->ops.ctx };
-    VisorClass k = VISOR_CLASS_EFFECT_REQUEST;
-    char reason[256] = {0}, err[512] = {0};
-    if (c->ops.effects_classify(&call, &k, reason, sizeof(reason), err, sizeof(err)) != 0)
-        return emit_err(c, name, VISOR_CLASS_INSPECTION, err);
-    MemOut m;
-    if (!mem_open(&m)) return emit_err(c, name, VISOR_CLASS_INSPECTION, "out of memory");
-    if (c->json) {
-        fprintf(m.f, "{\"class\":\"%s\",\"reason\":", visor_class_name(k));
-        visor_json_string(m.f, reason);
-        fputc('}', m.f);
-    } else {
-        fprintf(m.f, "%s: %s\n", visor_class_name(k), reason);
-    }
-    mem_close(&m);
-    int rc = emit_ok(c, name, VISOR_CLASS_INSPECTION, m.buf);
-    mem_free(&m);
-    return rc;
 }
 
 /* `run`: classify FIRST; anything that is not provably pure is an effect request
@@ -408,7 +397,7 @@ static int dispatch(VisorConsole *c, const VisorCommand *cmd) {
             return call_view(c, "evidence", VISOR_CLASS_INSPECTION, o->evidence, cmd, NULL, NULL);
         case VISOR_CMD_WORLD: /* raw cap name, not resolved */
             return call_view(c, "world", VISOR_CLASS_INSPECTION, o->world, cmd, NULL, NULL);
-        case VISOR_CMD_EFFECTS: return cmd_effects(c, cmd);
+        case VISOR_CMD_EFFECTS: return cmd_subject_view(c, cmd, o->effects);
         case VISOR_CMD_RUN: return cmd_run(c, cmd);
         case VISOR_CMD_SOURCE: return cmd_source(c, cmd);
         default: return emit_err(c, "unknown", VISOR_CLASS_INSPECTION, "unknown command");
