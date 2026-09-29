@@ -682,6 +682,43 @@ $(RX_ROUTE_TEST): $(RX_ROUTE_SRCS) $(RX_ROUTE_OBJ) tests/runtime/rx_cog_engines.
 test-cognitive-routing: $(RX_ROUTE_TEST)
 	./$(RX_ROUTE_TEST)
 
+# OMEGA_EMPIRICAL_OPTIMIZER: realization choice from a learned, calibrated cost
+# model. rx_costmodel.o is built alone first and must not reference the
+# generation store, any authority operation, or anything that maps or runs
+# code: the model is a calculator; durability comes only through promotion.
+.PHONY: test-costmodel test-empirical
+RX_CM_OBJ = $(OUT_DIR)/rx_costmodel.o
+
+$(RX_CM_OBJ): src/runtime/rx_costmodel.c src/runtime/rx_costmodel.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_costmodel.c
+	@if nm -u $@ | grep -E 'rx_gen_|aienos_cap_|rx_caproot_|rx_capadmin_|rx_world_|mmap|mprotect|fork|exec|dlopen|system' ; then \
+		echo "rx_costmodel.o references an operation a cost model must not have"; \
+		rm -f $@; exit 1; fi
+
+# Any host: synthetic measurements; fit, calibration, decisions, blob.
+RX_CM_UNIT = $(OUT_DIR)/rx_costmodel_unit
+$(RX_CM_UNIT): tests/runtime/rx_costmodel_unit.c $(RX_CM_OBJ) src/sha256.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -o $@ tests/runtime/rx_costmodel_unit.c $(RX_CM_OBJ) src/sha256.c -lm
+
+test-costmodel: $(RX_CM_UNIT)
+	./$(RX_CM_UNIT)
+
+# AArch64 hosts: the gate. Real realizations, training, promotion through the
+# R9 barrier on the native authority, held-out workloads.
+RX_EMP_SRCS = src/runtime/rx_generation.c src/sha256.c src/omega_evidence.c \
+	src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
+	tests/runtime/rx_empirical_optimizer.c
+RX_EMP_TEST = $(OUT_DIR)/rx_empirical_optimizer_test
+
+$(RX_EMP_TEST): $(RX_EMP_SRCS) $(RX_CM_OBJ) src/runtime/rx_generation.h src/runtime/aienos_cap.h \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_EMP_SRCS) $(RX_CM_OBJ) $(AIENOS_CAP_LIB) -lm
+
+test-empirical: $(RX_EMP_TEST)
+	./$(RX_EMP_TEST)
+
 # OMEGA_WORKFLOW_FUSION: repeated verified action-graph fragments become
 # MetaSkills; only a verified, measured, canaried, promoted (R9 barrier) and
 # published one replaces the steps. rx_fusion.o, like rx_graph.o, must not
