@@ -1,0 +1,36 @@
+// Lane 8 semantic identity session: pure, host-independent (no machine/realize output).
+7: u64
+id _
+07: u64
+id _
+0x07: u64
+id _
+0b111: u64
+id _
+7: u32
+id _
+let x: u64 = 7
+let y: u64 = 11
+x + y
+id _
+x+y
+id _
+x + /* comment */ y // trailing
+id _
+let a: u64 = 7
+let b: u64 = 7
+id a
+id b
+true
+type _
+false
+type _
+(7: u32) + (1: u32)
+type _
+let m: u64 = 18446744073709551615
+m + (1: u64)
+(0: u64) - (1: u64)
+(255: u8) + (1: u8)
+inspect x
+graph x
+bindings

@@ -1,0 +1,10 @@
+{
+  "schema": "FIXTURE_STANDIN_V1",
+  "run_id": "20260928T000002Z-fixturestandin",
+  "candidate_commit": "6666666666666666666666666666666666666666",
+  "tree_dirty": false,
+  "silicon_observed": false,
+  "gpu_uuid": "GPU-00000000-fixture-claims-silicon",
+  "hardware_scope": "graphics seat is an in-process stand-in",
+  "gates": {"FIXTURE_STANDIN_PASS": "PASS"}
+}
