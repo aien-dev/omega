@@ -1,7 +1,7 @@
 # POLYGLOT-0: one meaning, several languages (Omega-X)
 
 Status: CONTRACT (lead-owned). Implementation in progress. Nothing here is qualified until `POLYGLOT_0_PASS`.
-Base: mixed-algebra MA-3 commit eb7a788 (branch feat/mixed-algebra). If `oma_rz_oracle`, `oma_rz_impl` or
+Base: omega main 4b217aa (mixed-algebra PR #78 merged; MA-3 was renamed MA-2 there). If `oma_rz_oracle`, `oma_rz_impl` or
 `oma_rz_plan` change upstream, every polyglot result is re-run before landing.
 
 ## 1. Semantic operation
