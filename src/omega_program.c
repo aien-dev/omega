@@ -38,33 +38,166 @@ int omega_build_constraint_id(ConstraintKind kind, const char *annotation, Seman
     return 0;
 }
 
+/* ---- program identity v2 (spec/program-identity.md) ---------------------- */
+
+static bool step_op_valid(uint8_t op) {
+    return op == OP_ADD || op == OP_SUB || op == OP_MUL || op == OP_AND || op == OP_OR;
+}
+
+static OmegaObject *build_type_for(OmegaGraph *g, TypeTag tag, uint16_t width) {
+    switch (tag) {
+        case TYPE_UNSIGNED_INT: return omega_build_type_uint(g, width);
+        case TYPE_SIGNED_INT:   return omega_build_type_signed_int(g, width);
+        case TYPE_BITVECTOR:    return omega_build_type_bitvector(g, width);
+        default:                return NULL;
+    }
+}
+
+/* Lower the body into g with the existing builders; returns the root object. */
+static const OmegaObject *lower_body(OmegaGraph *g, const OmegaProgram *prog) {
+    const OmegaProgramBody *b = &prog->body;
+    if (!b->has_body || b->step_count > OMEGA_PROGRAM_MAX_STEPS) return NULL;
+    uint16_t w = prog->contract.input_width;
+    OmegaObject *t = build_type_for(g, prog->contract.input_type, w);
+    if (!t || !t->has_id) return NULL;
+    SemanticId tid = t->id;
+    OmegaObject *cur = omega_build_param(g, &tid, 0);
+    if (!cur || !cur->has_id) return NULL;
+    SemanticId cur_id = cur->id;
+    for (uint16_t i = 0; i < b->step_count; ++i) {
+        if (!step_op_valid(b->steps[i].op)) return NULL;
+        OmegaObject *c = omega_build_val_uint(g, &tid, w, b->steps[i].imm);
+        if (!c || !c->has_id) return NULL;
+        SemanticId cid = c->id;
+        OmegaObject *op = omega_build_op_binary(g, (OpCode)b->steps[i].op, OVERFLOW_WRAP, &tid);
+        if (!op || !op->has_id) return NULL;
+        SemanticId opid = op->id;
+        cur = omega_build_apply(g, &opid, &cur_id, &cid);
+        if (!cur || !cur->has_id) return NULL;
+        cur_id = cur->id;
+    }
+    return cur;
+}
+
+int omega_program_body_root_id(const OmegaProgram *prog, SemanticId *out_root) {
+    if (!prog || !out_root) return -1;
+    OmegaGraph *g = omega_graph_create();
+    if (!g) return -1;
+    const OmegaObject *root = lower_body(g, prog);
+    int rc = -1;
+    if (root) { *out_root = root->id; rc = 0; }
+    omega_graph_destroy(g);
+    return rc;
+}
+
+static int type_id_for(TypeTag tag, uint16_t width, SemanticId *out) {
+    OmegaGraph *g = omega_graph_create();
+    if (!g) return -1;
+    OmegaObject *t = build_type_for(g, tag, width);
+    int rc = -1;
+    if (t && t->has_id) { *out = t->id; rc = 0; }
+    omega_graph_destroy(g);
+    return rc;
+}
+
 int omega_program_compute_id(OmegaProgram *prog) {
     if (!prog) return -1;
-    uint8_t buf[256];
+    memset(prog->program_id.bytes, 0, OMEGA_ID_BYTES);
+    SemanticId root, tin, tout;
+    if (omega_program_body_root_id(prog, &root) != 0 ||
+        type_id_for(prog->contract.input_type, prog->contract.input_width, &tin) != 0 ||
+        type_id_for(prog->contract.output_type, prog->contract.output_width, &tout) != 0)
+        return -1;
+
+    static const char domain[] = OMEGA_PROGRAM_ID_DOMAIN;
+    uint8_t buf[sizeof(domain) + 5 * OMEGA_ID_BYTES];
     size_t pos = 0;
-
-    /* Magic "OMG_PROG" */
-    buf[pos++] = 'P'; buf[pos++] = 'R'; buf[pos++] = 'O'; buf[pos++] = 'G';
-    size_t nlen = strlen(prog->name);
-    if (nlen > 60) nlen = 60;
-    buf[pos++] = (uint8_t)nlen;
-    memcpy(&buf[pos], prog->name, nlen); pos += nlen;
-
-    buf[pos++] = (uint8_t)prog->contract.input_type;
-    buf[pos++] = (uint8_t)(prog->contract.input_width & 0xFF);
-    buf[pos++] = (uint8_t)prog->contract.output_type;
-    buf[pos++] = (uint8_t)(prog->contract.output_width & 0xFF);
-
-    /* Authoritative Constraint SemanticIds */
-    memcpy(&buf[pos], prog->contract.precondition_id.bytes, OMEGA_ID_BYTES);
-    pos += OMEGA_ID_BYTES;
-    memcpy(&buf[pos], prog->contract.postcondition_id.bytes, OMEGA_ID_BYTES);
-    pos += OMEGA_ID_BYTES;
-
-    buf[pos++] = (uint8_t)(prog->cost.insn_count & 0xFF);
-    buf[pos++] = (uint8_t)(prog->cost.latency_cycles & 0xFF);
-
+    memcpy(buf, domain, sizeof(domain));   /* includes the terminating 0x00 */
+    pos += sizeof(domain);
+    memcpy(&buf[pos], root.bytes, OMEGA_ID_BYTES); pos += OMEGA_ID_BYTES;
+    memcpy(&buf[pos], tin.bytes, OMEGA_ID_BYTES); pos += OMEGA_ID_BYTES;
+    memcpy(&buf[pos], tout.bytes, OMEGA_ID_BYTES); pos += OMEGA_ID_BYTES;
+    memcpy(&buf[pos], prog->contract.precondition_id.bytes, OMEGA_ID_BYTES); pos += OMEGA_ID_BYTES;
+    memcpy(&buf[pos], prog->contract.postcondition_id.bytes, OMEGA_ID_BYTES); pos += OMEGA_ID_BYTES;
     sha256_hash(buf, pos, prog->program_id.bytes);
+    return 0;
+}
+
+static int emit_step(uint8_t *code, size_t *pos, size_t max_len, uint8_t op, uint64_t imm) {
+    if (!step_op_valid(op) || imm > 0xFFFFFFFFull) return -1;
+    size_t start = *pos;
+    aarch64_emit_movz(code, pos, max_len, true, REG_X1, (uint16_t)(imm & 0xFFFF), 0);
+    if ((imm >> 16) != 0)
+        aarch64_emit_movk(code, pos, max_len, true, REG_X1, (uint16_t)((imm >> 16) & 0xFFFF), 16);
+    switch (op) {
+        case OP_ADD: aarch64_emit_add_reg(code, pos, max_len, true, REG_X0, REG_X0, REG_X1); break;
+        case OP_SUB: aarch64_emit_sub_reg(code, pos, max_len, true, REG_X0, REG_X0, REG_X1); break;
+        case OP_MUL: aarch64_emit_mul_reg(code, pos, max_len, true, REG_X0, REG_X0, REG_X1); break;
+        case OP_AND: aarch64_emit_and_reg(code, pos, max_len, true, REG_X0, REG_X0, REG_X1); break;
+        case OP_OR:  aarch64_emit_orr_reg(code, pos, max_len, true, REG_X0, REG_X0, REG_X1); break;
+        default: return -1;
+    }
+    size_t want = ((imm >> 16) != 0) ? 12 : 8;
+    return (*pos - start == want) ? 0 : -1;
+}
+
+int omega_program_emit_body(const OmegaProgramBody *body, uint8_t *code, size_t *code_len, size_t max_len) {
+    if (!body || !code || !code_len || !body->has_body || body->step_count > OMEGA_PROGRAM_MAX_STEPS) return -1;
+    size_t pos = 0;
+    for (uint16_t i = 0; i < body->step_count; ++i)
+        if (emit_step(code, &pos, max_len, body->steps[i].op, body->steps[i].imm) != 0) return -1;
+    size_t before = pos;
+    aarch64_emit_ret(code, &pos, max_len);
+    if (pos != before + 4) return -1;
+    *code_len = pos;
+    return 0;
+}
+
+static uint32_t read_insn(const uint8_t *p) {
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+int omega_program_lift_body(const uint8_t *code, size_t code_len, OmegaProgramBody *out_body) {
+    if (!code || !out_body || code_len < 4 || code_len % 4 != 0 || code_len > AARCH64_MAX_CODE_BYTES) return -1;
+    OmegaProgramBody b;
+    memset(&b, 0, sizeof b);
+    b.has_body = true;
+    size_t n = code_len / 4, i = 0;
+    while (i + 1 < n) {
+        DecodedInsn d;
+        if (aarch64_decode_instruction(read_insn(&code[i * 4]), &d) != 0 || d.op != DECODED_MOVZ || d.rd != REG_X1)
+            return -1;
+        uint64_t imm = d.imm16;
+        i++;
+        if (i < n && aarch64_decode_instruction(read_insn(&code[i * 4]), &d) == 0 && d.op == DECODED_MOVK) {
+            if (d.rd != REG_X1) return -1;
+            imm |= (uint64_t)d.imm16 << 16;
+            i++;
+        }
+        if (i >= n || aarch64_decode_instruction(read_insn(&code[i * 4]), &d) != 0) return -1;
+        uint8_t op;
+        switch (d.op) {
+            case DECODED_ADD: op = OP_ADD; break;
+            case DECODED_SUB: op = OP_SUB; break;
+            case DECODED_MUL: op = OP_MUL; break;
+            case DECODED_AND: op = OP_AND; break;
+            case DECODED_ORR: op = OP_OR; break;
+            default: return -1;
+        }
+        i++;
+        if (b.step_count >= OMEGA_PROGRAM_MAX_STEPS) return -1;
+        b.steps[b.step_count].op = op;
+        b.steps[b.step_count].imm = imm;
+        b.step_count++;
+    }
+    /* Confirm: the re-emitted template must be byte-identical (covers registers,
+     * shifts, sf, and the terminal RET that the loose decode above does not check). */
+    uint8_t re[AARCH64_MAX_CODE_BYTES];
+    size_t re_len = 0;
+    if (omega_program_emit_body(&b, re, &re_len, sizeof re) != 0 || re_len != code_len ||
+        memcmp(re, code, code_len) != 0)
+        return -1;
+    *out_body = b;
     return 0;
 }
 
@@ -97,6 +230,11 @@ int omega_program_validate_contract(const OmegaProgram *prog, char *err_msg, siz
 int omega_program_build_unary_op(OmegaProgram *prog, const char *name, OpCode op, uint64_t imm) {
     if (!prog) return -1;
     omega_program_init(prog, name);
+    if (!step_op_valid((uint8_t)op)) return -1;
+    /* The realization loads the constant with MOVZ + one MOVK (32 bits). A wider
+     * constant would be truncated in the code while the body kept the full value:
+     * refuse it (spec/program-identity.md section 4). */
+    if (imm > 0xFFFFFFFFull) return -1;
 
     prog->contract.input_type = TYPE_UNSIGNED_INT;
     prog->contract.input_width = 64;
@@ -105,45 +243,28 @@ int omega_program_build_unary_op(OmegaProgram *prog, const char *name, OpCode op
     snprintf(prog->contract.precondition, sizeof(prog->contract.precondition), "x >= 0");
     omega_build_constraint_id(CONST_PRECONDITION, prog->contract.precondition, &prog->contract.precondition_id);
 
-    size_t pos = 0;
-    uint8_t *code = prog->realization.code_bytes;
-    size_t max_len = sizeof(prog->realization.code_bytes);
-
-    /* 1. MOVZ X1, imm */
-    aarch64_emit_movz(code, &pos, max_len, true, REG_X1, (uint16_t)(imm & 0xFFFF), 0);
-    if ((imm >> 16) != 0) {
-        aarch64_emit_movk(code, &pos, max_len, true, REG_X1, (uint16_t)((imm >> 16) & 0xFFFF), 16);
-    }
-
-    /* 2. Compute op */
+    const char *sym = "?";
     switch (op) {
-        case OP_ADD:
-            aarch64_emit_add_reg(code, &pos, max_len, true, REG_X0, REG_X0, REG_X1);
-            snprintf(prog->contract.postcondition, sizeof(prog->contract.postcondition), "x + %lu", (unsigned long)imm);
-            break;
-        case OP_SUB:
-            aarch64_emit_sub_reg(code, &pos, max_len, true, REG_X0, REG_X0, REG_X1);
-            snprintf(prog->contract.postcondition, sizeof(prog->contract.postcondition), "x - %lu", (unsigned long)imm);
-            break;
-        case OP_MUL:
-            aarch64_emit_mul_reg(code, &pos, max_len, true, REG_X0, REG_X0, REG_X1);
-            snprintf(prog->contract.postcondition, sizeof(prog->contract.postcondition), "x * %lu", (unsigned long)imm);
-            break;
-        case OP_AND:
-            aarch64_emit_and_reg(code, &pos, max_len, true, REG_X0, REG_X0, REG_X1);
-            snprintf(prog->contract.postcondition, sizeof(prog->contract.postcondition), "x & %lu", (unsigned long)imm);
-            break;
-        case OP_OR:
-            aarch64_emit_orr_reg(code, &pos, max_len, true, REG_X0, REG_X0, REG_X1);
-            snprintf(prog->contract.postcondition, sizeof(prog->contract.postcondition), "x | %lu", (unsigned long)imm);
-            break;
-        default:
-            return -1;
+        case OP_ADD: sym = "+"; break;
+        case OP_SUB: sym = "-"; break;
+        case OP_MUL: sym = "*"; break;
+        case OP_AND: sym = "&"; break;
+        case OP_OR:  sym = "|"; break;
+        default: return -1;
     }
+    snprintf(prog->contract.postcondition, sizeof(prog->contract.postcondition), "x %s %lu", sym, (unsigned long)imm);
     omega_build_constraint_id(CONST_POSTCONDITION, prog->contract.postcondition, &prog->contract.postcondition_id);
 
-    /* 3. RET */
-    aarch64_emit_ret(code, &pos, max_len);
+    /* Semantic body: one step. The realization is emitted from it. */
+    prog->body.has_body = true;
+    prog->body.step_count = 1;
+    prog->body.steps[0].op = (uint8_t)op;
+    prog->body.steps[0].imm = imm;
+
+    size_t pos = 0;
+    if (omega_program_emit_body(&prog->body, prog->realization.code_bytes, &pos,
+                                sizeof(prog->realization.code_bytes)) != 0)
+        return -1;
 
     prog->realization.code_len = pos;
     prog->realization.target_profile = AARCH64_PROFILE_V8A_BAREMETAL;
@@ -155,7 +276,7 @@ int omega_program_build_unary_op(OmegaProgram *prog, const char *name, OpCode op
     prog->cost.latency_cycles = (op == OP_MUL) ? 3 : 2;
 
     omega_compute_realization_id(&prog->realization);
-    omega_program_compute_id(prog);
+    if (omega_program_compute_id(prog) != 0) return -1;
     prog->is_realized = true;
 
     return 0;
@@ -191,6 +312,19 @@ int omega_program_compose(const OmegaProgram *a, const OmegaProgram *b, OmegaPro
     snprintf(out_c->contract.postcondition, sizeof(out_c->contract.postcondition),
              "(%.25s)o(%.25s)", b->contract.postcondition, a->contract.postcondition);
     omega_build_constraint_id(CONST_POSTCONDITION, out_c->contract.postcondition, &out_c->contract.postcondition_id);
+
+    /* 2b. Body: A's steps then B's (innermost first). Without both bodies the
+     * composite's meaning is unknown and it has no identity. */
+    if (a->body.has_body && b->body.has_body) {
+        if ((size_t)a->body.step_count + b->body.step_count > OMEGA_PROGRAM_MAX_STEPS) {
+            if (err_msg) snprintf(err_msg, err_msg_len, "Composite body overflow (more than %d steps)", OMEGA_PROGRAM_MAX_STEPS);
+            return -1;
+        }
+        out_c->body.has_body = true;
+        out_c->body.step_count = (uint16_t)(a->body.step_count + b->body.step_count);
+        memcpy(out_c->body.steps, a->body.steps, a->body.step_count * sizeof(OmegaProgramStep));
+        memcpy(out_c->body.steps + a->body.step_count, b->body.steps, b->body.step_count * sizeof(OmegaProgramStep));
+    }
 
     /* 3. Cost Derivation: Monotonic cost accumulation */
     out_c->cost.insn_count = a->cost.insn_count + b->cost.insn_count - 1; /* Ret eliminated */

@@ -125,8 +125,12 @@ val() { jfield value "$@"; }
 [ "$(val "$P1" 'x / (2: u64)')" = 3 ]; check $S "value[7/2=3]" $?
 p1=$(jfield program_id 'fn f(x: u64) -> u64 { x * 2 + 1 }' 'id f'); p2=$(jfield program_id 'fn f(n: u64) -> u64 { 1 + 2 * n }' 'id f')
 [ -n "$p1" ] && [ "$p1" = "$p2" ]; check $S "program-id[param name + commutative side]" $?
+# program identity v2 (spec/program-identity.md): the id binds the canonical body, so
+# redefining a name with a different body gives a distinct id and rebinds the name.
+p1=$(jfield program_id 'fn t(x: u64) -> u64 { x + 1 }' 'id t'); p2=$(jfield program_id 'fn t(x: u64) -> u64 { x + 1 }' 'clear' 'fn t(x: u64) -> u64 { x + 2 }' 'id t')
+[ -n "$p1" ] && [ -n "$p2" ] && [ "$p1" != "$p2" ]; check $S "program-id[body-bound: x+1 != x+2 after clear]" $?
 rc=$(om "$WORK/coll.out" --command 'fn f(x: u64) -> u64 { x * 2 + 1 }' --command 'fn f(x: u64) -> u64 { x * 3 + 1 }')
-[ "$rc" = 1 ] && grep -q 'identity collision' "$WORK/coll.out"; check $S "program-id-collision-refused" $?
+[ "$rc" = 0 ] && ! grep -q 'collision' "$WORK/coll.out"; check $S "program-id-redefine-distinct" $?
 # golden transcript: exact text of a pure, host-independent semantic session
 rc=$(om "$WORK/semantic.out" --script $Q/semantic.omega-session)
 cmp -s "$WORK/semantic.out" $Q/semantic.expected; check $S "golden[semantic.omega-session]" $? "rc=$rc"

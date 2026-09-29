@@ -126,10 +126,12 @@ Evidence scope is reported exactly as the receipt states it (`host`, `qemu`,
 - `omega_synthesize_realization` ignores its program and always emits the fixed
   `f(x) = 3x - 2` schedule; the realization lab checks synthesized alternatives
   against the direct realization on sample inputs and marks mismatches incompatible.
-- `omega_program_compute_id` does not hash the program body: same name and
-  contract with a different body gives the same `program_id`. The language
-  refuses that collision inside a session; the console prints the realization id
-  next to the program id.
+- FIXED by program identity v2 (`spec/program-identity.md`): `omega_program_compute_id`
+  did not hash the program body (same name and contract with a different body gave the
+  same `program_id`, and the language refused the redefinition as an "identity collision").
+  The id now binds the canonical semantic body and the contract (not the name); redefining
+  `fn t` with a different body yields a distinct id and rebinds `t`. The console still
+  prints the realization id next to the program id.
 - `evidence/M19R/c4d87451….json` is hash-named but its name does not match the
   SHA-256 of its bytes (observed only, not judged).
 - Since main widened capability generations to 64 bits (PR "cap-generation-64",
