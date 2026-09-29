@@ -1295,8 +1295,26 @@ static void *worker_main(void *arg) {
         uint32_t rid;
         uint64_t t0 = w->timing ? now_ns() : 0;
         uint64_t c0 = w->timing ? thread_cpu_ns() : 0;
+#if RX_ARGUS
+        int argus_parked = 0;
+#endif
         while (!w->stopping && !pop_ready(w, &rid)) {
-            RX_ARGUS_EMIT(rx_argus_idle());   /* ARGUS: flush this worker's use table, publish idle */
+#if RX_ARGUS
+            /* ARGUS: before the first wait of a park, flush this worker's use table
+             * and publish idle. The flush touches only this thread's own ARGUS slot,
+             * so it runs outside w->mu (speed2: under the lock it lengthened every
+             * hold that submitters wait on). Only when a flush is due, once per park;
+             * after relocking, re-check stopping/work before waiting. */
+            if (!argus_parked) {
+                argus_parked = 1;
+                if (rx_argus_idle_pending()) {
+                    pthread_mutex_unlock(&w->mu);
+                    rx_argus_idle();
+                    pthread_mutex_lock(&w->mu);
+                    continue;
+                }
+            }
+#endif
             pthread_cond_wait(&w->work_cv, &w->mu);
             t0 = w->timing ? now_ns() : 0;
             c0 = w->timing ? thread_cpu_ns() : 0;

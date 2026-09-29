@@ -177,6 +177,10 @@ void rx_argus_emit_world_committed(uint32_t store_id, uint32_t subject, uint32_t
                                    const uint8_t digest[32], int code);
 /* The worker is about to park: flush, publish idle. */
 void rx_argus_idle(void);
+/* Non-zero when rx_argus_idle() has work on this thread (pending uses, a refused
+ * leftover, or a published bound to clear). A caller parking under its own lock
+ * drops that lock only when this says a flush is due (rx_world.c worker_main). */
+int  rx_argus_idle_pending(void);
 /* Stable u32 identity for a store directory (never 0). */
 uint32_t rx_argus_store_id(const char *dir);
 

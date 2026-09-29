@@ -292,6 +292,11 @@ void rx_argus_use_slow(uint64_t key, const AienosCapView *view, uint32_t subject
     transition(&ev, view);
 }
 
+int rx_argus_idle_pending(void) {
+    RxArgusProducer *t = rx_argus_tls;
+    return t && g.active && (t->epoch != 0 || slot_of(t)->leftover_key != 0);
+}
+
 void rx_argus_idle(void) {
     RxArgusProducer *t = rx_argus_tls;
     if (!t || !g.active) return;
