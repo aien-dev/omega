@@ -1,0 +1,1 @@
+# Fixed evidence root for e2e.omega-session: holds no receipts, so `evidence _` is deterministic.

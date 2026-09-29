@@ -7,6 +7,13 @@ on:
       - 'tests/runtime/**'
       - 'Makefile'
       - 'src/omega_matvec_quad.*'
+      - 'src/omega_types.h'
+      - 'src/omega_core.*'
+      - 'src/omega_canonical.*'
+      - 'src/omega_codec.*'
+      - 'src/omega_validate.*'
+      - 'src/visor/visor_effect_request.*'
+      - 'tests/effect/**'
       - '.github/workflows/rx-host.yml'
       - 'aienos.lock'
       - 'argus.lock'
@@ -18,6 +25,13 @@ on:
       - 'tests/runtime/**'
       - 'Makefile'
       - 'src/omega_matvec_quad.*'
+      - 'src/omega_types.h'
+      - 'src/omega_core.*'
+      - 'src/omega_canonical.*'
+      - 'src/omega_codec.*'
+      - 'src/omega_validate.*'
+      - 'src/visor/visor_effect_request.*'
+      - 'tests/effect/**'
       - '.github/workflows/rx-host.yml'
       - 'aienos.lock'
       - 'argus.lock'
@@ -61,6 +75,14 @@ jobs:
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
         run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing test-sem-incremental
+      - name: Effect capability generations are 64-bit end to end (OMEGA_EFFECT_CAP64)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: |
+          mkdir -p build
+          make test-effect-cap64 | tee build/effect-cap64.log
+          grep -q '^OMEGA_EFFECT_CAP64_PASS$' build/effect-cap64.log
       - name: Show state projection receipt
         run: |
           receipt="$(find build/qual-runs -name omega_state_projection_receipt.json -type f | head -n 1)"
@@ -322,7 +344,7 @@ jobs:
           PLAN_REUSE_NO_ENERGY: '1'
         run: |
           make test-plan-reuse
-          receipt="$(find build/qual-runs -name rx_plan_reuse_receipt.json -type f | head -n 1)"
+          receipt="$(find build/qual-runs -name 'rx_plan_reuse_receipt.*.json' -type f | head -n 1)"
           test -n "$receipt"
           grep -q '"failures": 0,' "$receipt"
           grep -q '"G3_outcome_and_evidence": "PASS"' "$receipt"

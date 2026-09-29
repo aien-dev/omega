@@ -1,0 +1,4 @@
+{
+  "schema": "FIXTURE_MALFORMED_V1",
+  "semantic_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "gates": {"X_PASS": "PASS",}
