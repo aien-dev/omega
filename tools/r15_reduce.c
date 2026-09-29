@@ -924,6 +924,33 @@ int main(int argc, char **argv) {
     o_u("barriers", bar_n);
     o_u("barriers_failed", bar_fail);
     o_num("fraction_with_production_commits", bar_n ? (double)bar_live / (double)bar_n : NAN);
+    /* Reported only (C5): the same barriers split by configuration and by
+     * source (per-trial promotion vs L1-G). G7 is gated on the totals above. */
+    o_open("by_configuration", '{');
+    for (int src = 0; src < 2; src++) {
+        o_open(src ? "trial" : "l1_g", '{');
+        for (int c = 0; c < 4; c++) {
+            Vu lat = {0};
+            size_t n = 0, live = 0;
+            for (size_t i = 0; i < g_nbar; i++) {
+                const Barrier *b = &g_bar[i];
+                if (b->trial != src || strcmp(b->config, cfgs[c]) || b->rc != 0 || !b->receipt)
+                    continue;
+                vu_push(&lat, b->receipt - b->enter);
+                n++;
+                if (b->commits > 0) live++;
+            }
+            if (!n) continue;
+            o_open(cfgs[c], '{');
+            o_u("barriers", n);
+            o_u("with_production_commits", live);
+            o_num("fraction", (double)live / (double)n);
+            o_pct("latency_ns", pct_of(&lat));
+            o_close('}');
+        }
+        o_close('}');
+    }
+    o_close('}');
     o_close('}');
     have[6] = bar_n > 0;
     o_open("m7_copied_bytes_per_op_after", '{');
