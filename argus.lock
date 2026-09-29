@@ -1,3 +1,4 @@
-398cfb942d016f0b287f2fe1cbfc5c0b785790bd
-# aien-dev/aienos native/argus (ARGUS-0, ABI v1.1), branch feat/argus-0-abi11. Not on origin yet:
-# build from a local clone that has the commit (ARGUS_REPO, default ../aienos-argus).
+b375dcaa2887d53cda407d773c2e4e489a0b1365
+# aien-dev/aienos native/argus (ARGUS-0, ABI v1.1), branch feat/argus-0 (integrator round 3 head).
+# argus_abi.h is byte-identical at 398cfb9, 03b9f06, be2814d and b375dca (sha256 5ff168ea...).
+# Not on origin yet: build from a local clone that has the commit (ARGUS_REPO, default ../aienos-argus).
