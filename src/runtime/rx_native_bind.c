@@ -4,6 +4,7 @@
  */
 #include "rx_world.h"
 #include "aienos_cap.h"
+#include "rx_argus.h"
 
 #include <stddef.h>
 
@@ -18,7 +19,11 @@ _Static_assert(offsetof(AienosCapEntry, minted_by_generation) ==
 static int native_validate(const void *ctx, RxCapRef ref, uint32_t subject, uint64_t resource,
                            uint32_t rights, RxCapEntry *out) {
     AienosCapRef cap = { ref.cap_id, ref.generation };
-    return aienos_cap_validate(ctx, cap, subject, resource, rights, (AienosCapEntry *)out);
+    int rc = aienos_cap_validate(ctx, cap, subject, resource, rights, (AienosCapEntry *)out);
+    /* ARGUS: every authority validate on the reaction path (generation widened u32 -> u64). */
+    RX_ARGUS_EMIT(rx_argus_emit_cap_used(ctx, subject, ref.cap_id, (uint64_t)ref.generation,
+                                         resource, rights, rc));
+    return rc;
 }
 
 static int native_inspect(const void *ctx, RxCapRef ref, RxCapEntry *out) {

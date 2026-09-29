@@ -698,3 +698,83 @@ $(RX_TYPED_TEST): $(RX_TYPED_SRCS) $(RX_CONTRACT_OBJ) $(RX_GRAPH_OBJ) src/runtim
 .PHONY: test-typed-results
 test-typed-results: $(RX_TYPED_TEST)
 	./$(RX_TYPED_TEST) $(TYPED_RESULTS_N)
+
+# ---- ARGUS producer (feat/argus-producer, lane H of ARGUS-0) -------------
+# The runtime emits ARGUS events (src/runtime/rx_argus.{c,h}) at every AEGIS
+# decision, native validate, revoke and generation promotion. Default builds
+# are unchanged (RX_ARGUS undefined = 0: the hooks compile to nothing). This
+# block builds the AEGIS/promotion suites with RX_ARGUS=$(RX_ARGUS) against
+# ARGUS pinned by argus.lock, extracted with `git archive` from ARGUS_REPO
+# (never built in place). ARGUS's sha256.c is Omega's src/sha256.c copied
+# unchanged; Omega's is linked, not both.
+ARGUS_REPO ?= ../aienos-argus
+ARGUS_COMMIT ?= $(shell head -n 1 argus.lock)
+ARGUS_SHORT = $(shell echo $(ARGUS_COMMIT) | cut -c1-7)
+ARGUS_SRC = $(OUT_DIR)/argus-src/$(ARGUS_SHORT)/native/argus
+ARGUS_STAMP = $(OUT_DIR)/argus-src/$(ARGUS_SHORT)/.extracted
+ARGUS_LIB_SRCS = $(addprefix $(ARGUS_SRC)/,argus_event.c argus_ring.c argus_core.c argus_detect.c)
+RX_ARGUS ?= 2
+# ARGUS_WRAP=1 (test-only): also emit at the authority boundary (ld --wrap of
+# aienos_cap_mint/revoke), so harness mints are visible; streams get "-wrap".
+ARGUS_WRAP ?= 0
+ARGUS_VARIANT = $(if $(filter 1,$(ARGUS_WRAP)),-wrap,)
+ARGUS_OUT = $(OUT_DIR)/argus$(RX_ARGUS)$(ARGUS_VARIANT)
+ARGUS_CFLAGS = $(CFLAGS) -DRX_ARGUS=$(RX_ARGUS) -I$(ARGUS_SRC) \
+	$(if $(filter 1,$(ARGUS_WRAP)),-DRX_ARGUS_AUTHORITY_WRAP -Wl$(comma)--wrap=aienos_cap_mint$(comma)--wrap=aienos_cap_revoke,)
+comma := ,
+ARGUS_STREAMS ?= $(HOME)/workspace/argus-runtime-streams
+ARGUS_RUN_ID = $(shell git rev-parse --short HEAD 2>/dev/null)-argus$(ARGUS_SHORT)
+
+$(ARGUS_STAMP):
+	@test -n "$(ARGUS_COMMIT)" || { echo "argus.lock is empty"; exit 1; }
+	mkdir -p $(OUT_DIR)/argus-src/$(ARGUS_SHORT)
+	git -C $(ARGUS_REPO) archive $(ARGUS_COMMIT) native/argus | tar -x -C $(OUT_DIR)/argus-src/$(ARGUS_SHORT)
+	touch $@
+
+$(ARGUS_LIB_SRCS): $(ARGUS_STAMP)
+
+ARGUS_RX = src/runtime/rx_argus.c $(ARGUS_LIB_SRCS)
+ARGUS_R7 = $(ARGUS_OUT)/rx_r7_native_test
+ARGUS_R8 = $(ARGUS_OUT)/rx_r8_aegis_test
+ARGUS_R9 = $(ARGUS_OUT)/rx_r9_barrier_test
+ARGUS_BENCH = $(ARGUS_OUT)/bench_rx_argus
+ARGUS_BENCH_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c tests/bench_rx_argus.c
+
+$(ARGUS_OUT):
+	mkdir -p $@
+
+$(ARGUS_R7): $(RX_R7_SRCS) src/runtime/rx_argus.h $(ARGUS_RX) $(AIENOS_CAP_LIB) | $(ARGUS_OUT)
+	$(CC) $(ARGUS_CFLAGS) -pthread -o $@ $(RX_R7_SRCS) $(ARGUS_RX) $(AIENOS_CAP_LIB) -lm
+$(ARGUS_R8): $(RX_R8_SRCS) src/runtime/rx_argus.h $(ARGUS_RX) $(AIENOS_CAP_LIB) | $(ARGUS_OUT)
+	$(CC) $(ARGUS_CFLAGS) -pthread -o $@ $(RX_R8_SRCS) $(ARGUS_RX) $(AIENOS_CAP_LIB) -lm
+$(ARGUS_R9): $(RX_R9_SRCS) src/runtime/rx_argus.h $(ARGUS_RX) $(AIENOS_CAP_LIB) | $(ARGUS_OUT)
+	$(CC) $(ARGUS_CFLAGS) -pthread -o $@ $(RX_R9_SRCS) $(ARGUS_RX) $(AIENOS_CAP_LIB) -lm
+# The bench is built in every mode, including RX_ARGUS=0 (no ARGUS code at all).
+$(ARGUS_BENCH): $(ARGUS_BENCH_SRCS) src/runtime/rx_argus.h $(ARGUS_RX) $(AIENOS_CAP_LIB) | $(ARGUS_OUT)
+	$(CC) $(ARGUS_CFLAGS) -pthread -o $@ $(ARGUS_BENCH_SRCS) \
+		$(if $(filter 0,$(RX_ARGUS)),,$(ARGUS_RX)) $(AIENOS_CAP_LIB) -lm
+
+# ARGUS_RUNTIME_INTEGRATION: run each suite with the consumer ingesting into
+# the real argus_core; keep the raw 128-byte stream and a JSON summary.
+.PHONY: test-argus-runtime bench-rx-argus
+test-argus-runtime: $(ARGUS_R7) $(ARGUS_R8) $(ARGUS_R9)
+	mkdir -p $(ARGUS_STREAMS)
+	@set -e; for s in r7:$(ARGUS_R7) r8:$(ARGUS_R8) r9:$(ARGUS_R9); do \
+		n=$${s%%:*}; b=$${s#*:}; \
+		echo "== ARGUS runtime integration $$n"; \
+		RX_ARGUS_CONSUMER=ingest RX_ARGUS_RUN_ID=$(ARGUS_RUN_ID)-$$n RX_ARGUS_SUITE=$$n \
+		RX_ARGUS_STREAM=$(ARGUS_STREAMS)/$(ARGUS_SHORT)-$$n$(ARGUS_VARIANT).bin \
+		RX_ARGUS_SUMMARY=$(ARGUS_STREAMS)/$(ARGUS_SHORT)-$$n$(ARGUS_VARIANT).json ./$$b > $(ARGUS_OUT)/$$n.log 2>&1 \
+		|| { tail -20 $(ARGUS_OUT)/$$n.log; exit 1; }; \
+		tail -2 $(ARGUS_OUT)/$$n.log; \
+	done
+
+bench-rx-argus: $(ARGUS_BENCH)
+	./$(ARGUS_BENCH)
+
+ARGUS_REPLAY = $(OUT_DIR)/argus_replay
+$(ARGUS_REPLAY): tools/argus_replay.c src/sha256.c $(ARGUS_LIB_SRCS) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -I$(ARGUS_SRC) -o $@ tools/argus_replay.c src/sha256.c $(ARGUS_LIB_SRCS)
+.PHONY: argus-replay
+argus-replay: $(ARGUS_REPLAY)

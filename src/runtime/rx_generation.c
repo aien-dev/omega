@@ -4,6 +4,7 @@
  * and a complete root, or it refuses. It does not splice the two.
  */
 #include "runtime/rx_generation.h"
+#include "runtime/rx_argus.h"
 #include "sha256.h"
 
 #include <errno.h>
@@ -978,8 +979,13 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
         rc = RX_GEN_ERR_AUTHORITY;
         goto done;
     }
-    if (auth(auth_ctx, request->cap_id, request->cap_generation, request->subject,
-             request->resource, request->rights) != 0) {
+    int auth_rc = auth(auth_ctx, request->cap_id, request->cap_generation, request->subject,
+                       request->resource, request->rights);
+    /* ARGUS: the promotion authority check (tick unknown here: the view is opaque). */
+    RX_ARGUS_EMIT(rx_argus_emit_cap_used(NULL, request->subject, request->cap_id,
+                                         (uint64_t)request->cap_generation, request->resource,
+                                         request->rights, auth_rc));
+    if (auth_rc != 0) {
         rc = RX_GEN_ERR_AUTHORITY;
         goto done;
     }
@@ -1068,6 +1074,11 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     if (rc != RX_GEN_OK) goto done;
     store->phases.flip_ns = monotonic_ns();
     set_active(store, view.id, view.lineage);
+    /* ARGUS: the World is committed at the flip. world_generation = lineage (exactly
+     * parent+1 within a store); the candidate id, which skips, travels in resource. */
+    RX_ARGUS_EMIT(rx_argus_emit_world_committed(request->subject, request->cap_id,
+                                                (uint64_t)request->cap_generation, view.lineage,
+                                                view.id, root_digest, 0));
     if (store->crash_step == RX_CRASH_AFTER_ROOT_FLIP) crash_now();
     rc = write_journal(store, PHASE_FLIPPED, c->parent_id, c->id, view.lineage - 1, root_digest);
     if (rc != RX_GEN_OK) goto done;
