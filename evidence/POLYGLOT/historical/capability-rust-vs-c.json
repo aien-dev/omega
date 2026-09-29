@@ -1,0 +1,15 @@
+{
+  "task_family": "capability authority (ownership-heavy systems state)",
+  "repo": "aien-dev/aienos", "commit": "603c91d8ec2e6b1d7e2db25591275662eb5c92f0",
+  "c": {"build_s_runs": [0.12,0.12,0.13], "build_s_min": 0.12, "text_bytes": 9145, "archive_bytes": 17616,
+        "impl_lines": 676, "header_lines": 188, "pointer_casts": 0, "pointer_arith_sites": 0, "calloc_sites": 3,
+        "tests": {"capability_checks": 571, "failures": 0}, "deps": "hosted libc + pthreads"},
+  "rust": {"build_s_runs": [0.30,0.27,0.24], "build_s_min": 0.24, "text_bytes_two_crates": 13353, "staticlib_bytes": 23637394,
+        "core_lines_total": 1001, "core_lines_pre_tests": 689, "ffi_lines": 469, "unsafe_core": 0, "unsafe_ffi": 37,
+        "tests": {"core_unit": 7, "failures": 0, "ffi_unit": 0}, "deps": 0, "builds_offline": true},
+  "runtime": "not measured; no existing benchmark exercises both",
+  "defects": [
+    {"commit": "b270dad", "kind": "packaging", "note": "aarch64 build output committed in #156"},
+    {"commit": "b1fa747", "kind": "logic", "note": "reclaimed reference could validate again after restart; C only fix"}],
+  "differential": {"reported": "200 seeds x 5000 ops identical (PR #156 text)", "harness_in_repo": false, "rerun": false}
+}
