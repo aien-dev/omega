@@ -94,5 +94,20 @@ setup
 sed 's/| FX-07 \(.*\) | F | false |/| FX-07 \1 | G | false |/' "$HERE/fixture/map.md" > "$SCR/w/map.md"
 expect bad-class-fails 1 "BAD-CLASS FX-07"
 
+# 11. class N with valid idiom passes
+setup
+sed 's/| FX-10 \(.*\) | E | true | fixture |/| FX-10 \1 | N | false | N: walk: halt loop walk |/' "$HERE/fixture/map.md" > "$SCR/w/map.md"
+expect class-n-passes 0 "PASS"
+
+# 12. class N without idiom in reason fails
+setup
+sed 's/| FX-10 \(.*\) | E | true | fixture |/| FX-10 \1 | N | false | some non idiom reason |/' "$HERE/fixture/map.md" > "$SCR/w/map.md"
+expect class-n-no-idiom-fails 1 "N-NO-IDIOM FX-10"
+
+# 13. class N on a loop with wait word in body fails
+setup
+sed 's/| FX-03 \(.*\) | E | true | fixture |/| FX-03 \1 | N | false | N: walk: wait loop |/' "$HERE/fixture/map.md" > "$SCR/w/map.md"
+expect class-n-wait-word-fails 1 "N-WAIT-WORD FX-03"
+
 if [ "$FAILS" -ne 0 ]; then echo "R16 inventory self-test: $FAILS FAILED"; exit 1; fi
 echo "R16 inventory self-test: PASS"

@@ -773,7 +773,51 @@ static void load_map(const char *mp) {
             }
 }
 
-static int class_ok(const char *c) { return strlen(c) == 1 && c[0] >= 'A' && c[0] <= 'F'; }
+static int class_ok(const char *c) {
+    return strlen(c) == 1 && ((c[0] >= 'A' && c[0] <= 'F') || c[0] == 'N');
+}
+
+#define NCLASS 8
+static const char CLASS_CHARS[NCLASS] = {'A', 'B', 'C', 'D', 'E', 'F', 'N', '?'};
+
+static int class_idx(const char *cls) {
+    if (!cls || strlen(cls) != 1) return 7;
+    char c = cls[0];
+    if (c >= 'A' && c <= 'F') return c - 'A';
+    if (c == 'N') return 6;
+    return 7;
+}
+
+static int check_n_reason(const char *reason) {
+    static const char *idioms[] = {
+        "cas", "seqlock", "probe", "parse", "walk", "read",
+        "arithmetic", "sift", "sample", "merge", "retry",
+        "format", "bpe", "utf8", "token", "decode", "scan",
+        NULL
+    };
+    if (!reason) return 0;
+    char lower[2048];
+    size_t len = strlen(reason);
+    if (len >= sizeof(lower)) len = sizeof(lower) - 1;
+    for (size_t i = 0; i < len; i++)
+        lower[i] = (char)tolower((unsigned char)reason[i]);
+    lower[len] = '\0';
+    for (int i = 0; idioms[i]; i++) {
+        if (strstr(lower, idioms[i])) return 1;
+    }
+    return 0;
+}
+
+static int trigger_has_wait(const char *trig) {
+    static const char *wait_words[] = {
+        "sleep", "usleep", "nanosleep", "msleep", "poll", "wait", NULL
+    };
+    if (!trig) return 0;
+    for (int i = 0; wait_words[i]; i++) {
+        if (strstr(trig, wait_words[i])) return 1;
+    }
+    return 0;
+}
 
 /* Manual rows (line cell starts with "manual"): non-loop sequencers the
    patterns cannot see. Present if the whitespace-collapsed evidence line
@@ -839,6 +883,7 @@ static void print_patterns(FILE *o) {
     fprintf(o, "\njoin key: repo + path + enclosing symbol + whitespace-collapsed source line\n");
     fprintf(o, "class-A reachability (omega only, naming proxy; G3 checks the link map):"
                " path or symbol must contain legacy_oracle or reference\n");
+    fprintf(o, "class N (not a central loop): data/control-flow idiom; reason must name allowed idiom; body must not contain wait words\n");
 }
 
 int main(int argc, char **argv) {
@@ -943,6 +988,15 @@ int main(int argc, char **argv) {
         } else if (!class_ok(w->cls)) {
             badclass++;
             fprintf(stderr, "BAD-CLASS %s '%s'\n", w->id, w->cls);
+        } else if (w->cls[0] == 'N') {
+            if (!check_n_reason(w->reason)) {
+                badclass++;
+                fprintf(stderr, "N-NO-IDIOM %s: reason lacks required idiom word\n", w->id);
+            }
+            if (trigger_has_wait(st->trigger)) {
+                badclass++;
+                fprintf(stderr, "N-WAIT-WORD %s [%s] contains wait word in body\n", w->id, st->trigger);
+            }
         } else if (st->repo == 0 && w->cls[0] == 'A' && !strstr(st->path, "legacy_oracle") &&
                    !strstr(st->symbol, "legacy_oracle") && !strstr(st->path, "reference") &&
                    !strstr(st->symbol, "reference")) {
@@ -960,6 +1014,11 @@ int main(int argc, char **argv) {
         } else if (!class_ok(w->cls)) {
             badclass++;
             fprintf(stderr, "BAD-CLASS %s '%s'\n", w->id, w->cls);
+        } else if (w->cls[0] == 'N') {
+            if (!check_n_reason(w->reason)) {
+                badclass++;
+                fprintf(stderr, "N-NO-IDIOM %s (manual): reason lacks required idiom word\n", w->id);
+            }
         } else if (w->repo_idx == 0 && w->cls[0] == 'A' && !strstr(w->path, "legacy_oracle") &&
                    !strstr(w->symbol, "legacy_oracle") && !strstr(w->path, "reference") &&
                    !strstr(w->symbol, "reference")) {
@@ -980,11 +1039,15 @@ int main(int argc, char **argv) {
             }
         }
     int fail = unclassified || qrows || badclass || areach || stale || map_errors || skipped;
-    int percls[NREPO][7];
+    int percls[NREPO][NCLASS];
     memset(percls, 0, sizeof percls);
+    int cnt_n = 0;
     for (int i = 0; i < nsites; i++) {
-        int c = 6;
-        if (sites[i].row >= 0 && class_ok(rows[sites[i].row].cls)) c = rows[sites[i].row].cls[0] - 'A';
+        int c = 7;
+        if (sites[i].row >= 0 && class_ok(rows[sites[i].row].cls)) {
+            c = class_idx(rows[sites[i].row].cls);
+            if (rows[sites[i].row].cls[0] == 'N') cnt_n++;
+        }
         percls[sites[i].repo][c]++;
     }
     FILE *o = stdout;
@@ -1003,7 +1066,7 @@ int main(int argc, char **argv) {
         fprintf(o, ", \"map_sha\": ");
         jstr(o, map_sha[r]);
         fprintf(o, ", \"status\": \"%s\", \"sites_by_class\": {", repo_skipped[r] ? "SKIPPED" : "SCANNED");
-        for (int c = 0; c < 7; c++) fprintf(o, "%s\"%c\": %d", c ? ", " : "", c < 6 ? 'A' + c : '?', percls[r][c]);
+        for (int c = 0; c < NCLASS; c++) fprintf(o, "%s\"%c\": %d", c ? ", " : "", CLASS_CHARS[c], percls[r][c]);
         fprintf(o, "}, \"term_hits\": {");
         for (int t = 0; TERM_WORDS[t]; t++) fprintf(o, "%s\"%s\": %lu", t ? ", " : "", TERM_WORDS[t], term_hits[r][t]);
         for (int t = 0; NAMED_SHOW[t]; t++) fprintf(o, ", \"%s\": %lu", NAMED_SHOW[t], named_hits[r][t]);
@@ -1032,8 +1095,8 @@ int main(int argc, char **argv) {
     fprintf(o,
             "  ],\n  \"manual_rows\": %d,\n  \"sites_total\": %d,\n  \"unclassified\": %d,\n  \"question_rows\": %d,\n"
             "  \"bad_class\": %d,\n  \"a_reachable\": %d,\n  \"stale_rows\": %d,\n  \"map_errors\": %d,\n"
-            "  \"skipped_repos\": %d,\n  \"result\": \"%s\"\n}\n",
-            manual_rows, nsites, unclassified, qrows, badclass, areach, stale, map_errors, skipped, fail ? "FAIL" : "PASS");
+            "  \"skipped_repos\": %d,\n  \"class_n_sites\": %d,\n  \"result\": \"%s\"\n}\n",
+            manual_rows, nsites, unclassified, qrows, badclass, areach, stale, map_errors, skipped, cnt_n, fail ? "FAIL" : "PASS");
     if (jsonp) fclose(o);
     fprintf(stderr,
             "R16 loop inventory: sites=%d unclassified=%d question=%d bad_class=%d a_reachable=%d stale=%d "

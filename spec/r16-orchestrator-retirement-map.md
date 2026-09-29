@@ -43,6 +43,7 @@ manual rows (line cell starts with "manual"): evidence line must still exist in 
   (symbol not verified); same class rules apply
 join key: repo + path + enclosing symbol + whitespace-collapsed source line
 class-A reachability (omega only, naming proxy; G3 checks the link map): path or symbol must contain legacy_oracle or reference
+class N (not a central loop): data/control-flow idiom; reason must name allowed idiom; body must not contain wait words
 ```
 
 Notes:
@@ -54,7 +55,7 @@ Notes:
   the tool's own planted-loop fixtures.
 - "Unbounded" loops are included on purpose: a planted `while (1)` must fail the gate
   even if its body has no wait word. This also pulls in data idioms (CAS retries, hash
-  probes, parsers, list walks); those rows carry `?` pending question N (§5).
+  probes, parsers, list walks); those rows are classified as class N under clarification C1.
 - A plain bounded data loop (`for (i = 0; i < n; i++)` with no wait or hand-off word)
   is not a site. A bounded loop that polls, sleeps, receives, dispatches, schedules or
   takes turns is.
@@ -114,11 +115,11 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 |---|---|---|---|---|---|---|---|---|---|---|
 | OM-001 | omega | `research/m15/spbm/sample.c` | 79 | `main` | M15 PMU research sampler | research measurement tool | D | false | research sampling loop; not built into any production binary | `for (unsigned int seq=0;seq<=seconds*10;seq++) {` |
 | OM-002 | omega | `research/m15/spbm/sample.c` | 85 | `main` | M15 PMU research sampler | research measurement tool | D | false | EINTR retry of clock_nanosleep inside the research sampler | `do { rc=clock_nanosleep(CLOCK_MONOTONIC,TIMER_ABSTIME,&when,NULL); } while(rc==EINTR);` |
-| OM-003 | omega | `src/crumbline/cl_search.c` | 97 | `equiv_seen` | hash-set probe | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
-| OM-004 | omega | `src/language/omega_lex.c` | 120 | `omega_language_lex` | lexer token loop | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `while (1) {` |
-| OM-005 | omega | `src/language/omega_lower.c` | 320 | `omega_language_lower_program` | lowering walk | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `while (1) {` |
-| OM-006 | omega | `src/language/omega_parse.c` | 263 | `parse_clause` | clause parse loop | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `while (1) {` |
-| OM-007 | omega | `src/omega_accelerator_world.c` | 21 | `allocate_handle_epoch` | handle-epoch CAS retry | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
+| OM-003 | omega | `src/crumbline/cl_search.c` | 97 | `equiv_seen` | hash-set probe | - | N | false | N: probe: hash-set probe walk without wait or hand-off | `for (;;) {` |
+| OM-004 | omega | `src/language/omega_lex.c` | 120 | `omega_language_lex` | lexer token loop | - | N | false | N: parse: lexer token loop without wait or hand-off | `while (1) {` |
+| OM-005 | omega | `src/language/omega_lower.c` | 320 | `omega_language_lower_program` | lowering walk | - | N | false | N: walk: AST lowering walk without wait or hand-off | `while (1) {` |
+| OM-006 | omega | `src/language/omega_parse.c` | 263 | `parse_clause` | clause parse loop | - | N | false | N: parse: clause parse loop without wait or hand-off | `while (1) {` |
+| OM-007 | omega | `src/omega_accelerator_world.c` | 21 | `allocate_handle_epoch` | handle-epoch CAS retry | - | N | false | N: CAS retry: atomic handle-epoch allocation retry without wait or hand-off | `for (;;) {` |
 | OM-008 | omega | `src/omega_accelerator_world.c` | 733 | `omega_world_drain` | M19 world drain of in-flight submissions | known-good fallback (M19 world) | C | true | M19 accelerator world is the protected known-good fallback (spec §4 starting verdict C); retires GPFIFO entries, decides no faculty order | `for (uint32_t i = 0; i < world->in_flight_count; i++) {` |
 | OM-009 | omega | `src/omega_world_gates.c` | 234 | `test_m19_gate3_channel_reuse` | M19 gate 3 body | M19 qualification gate (regression oracle) | D | false | gate test body run by --run-m19-gates; migration map: regression oracle | `for (uint32_t step = 0; step < 4 && ok; step++) {` |
 | OM-010 | omega | `src/omega_world_gates.c` | 664 | `test_m19_gate7_queue_wrap` | M19 gate 7 body | M19 qualification gate (regression oracle) | D | false | gate test body run by --run-m19-gates | `while (submitted < stress_count) {` |
@@ -127,18 +128,18 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | OM-013 | omega | `src/omega_world_gates.c` | 1153 | `test_m19_gate8_1000_op` | M19 gate 8 body | M19 qualification gate (regression oracle) | D | false | gate test body run by --run-m19-gates | `for (uint32_t cycle = 0; cycle < 250; cycle++) {` |
 | OM-014 | omega | `src/omega_world_gates.c` | 1593 | `test_m19_gate13_memory_bound` | M19 gate 13 body | M19 qualification gate (regression oracle) | D | false | gate test body run by --run-m19-gates | `for (int i = 0; i < 10; i++) {` |
 | OM-015 | omega | `src/omega_world_gates.c` | 1597 | `test_m19_gate13_memory_bound` | M19 gate 13 body | M19 qualification gate (regression oracle) | D | false | gate test body run by --run-m19-gates | `for (int i = 0; i < 200; i++) {` |
-| OM-016 | omega | `src/runtime/rx_caproot.c` | 63 | `take_boot_gen` | boot-generation CAS retry | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
-| OM-017 | omega | `src/runtime/rx_caproot.c` | 572 | `rx_caproot_inspect` | seqlock read retry | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
-| OM-018 | omega | `src/runtime/rx_caproot.c` | 594 | `rx_caproot_validate` | seqlock read retry | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
+| OM-016 | omega | `src/runtime/rx_caproot.c` | 63 | `take_boot_gen` | boot-generation CAS retry | - | N | false | N: CAS retry: boot generation allocation retry without wait or hand-off | `for (;;) {` |
+| OM-017 | omega | `src/runtime/rx_caproot.c` | 572 | `rx_caproot_inspect` | seqlock read retry | - | N | false | N: seqlock retry: seqlock read retry without wait or hand-off | `for (;;) {` |
+| OM-018 | omega | `src/runtime/rx_caproot.c` | 594 | `rx_caproot_validate` | seqlock read retry | - | N | false | N: seqlock retry: seqlock validation retry without wait or hand-off | `for (;;) {` |
 | OM-019 | omega | `src/runtime/rx_coherent.c` | 835 | `rx_resident_seat_step` | resident seat drains CPU-to-GPU ring | resident seat ring consumer | E | true | moves descriptors off a hardware-shared ring until empty; schedules GPU work, not faculty order | `for (;;) {` |
-| OM-020 | omega | `src/runtime/rx_contract.c` | 1200 | `rc_from_json` | JSON object parse | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
-| OM-021 | omega | `src/runtime/rx_generation.c` | 412 | `file_matches` | file read loop | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
+| OM-020 | omega | `src/runtime/rx_contract.c` | 1200 | `rc_from_json` | JSON object parse | - | N | false | N: parse: JSON object parser without wait or hand-off | `for (;;) {` |
+| OM-021 | omega | `src/runtime/rx_generation.c` | 412 | `file_matches` | file read loop | - | N | false | N: read: file content read loop without wait or hand-off | `for (;;) {` |
 | OM-022 | omega | `src/runtime/rx_generation.c` | 1226 | `exec_main` | generation job worker | generation mechanism job worker (protected) | E | true | condvar worker runs pending generation jobs in sequence order; physical job execution for the protected generation mechanism, picks no faculty | `for (;;) {` |
-| OM-023 | omega | `src/runtime/rx_graph.c` | 919 | `rx_graph_optimize` | optimizer fixpoint | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
+| OM-023 | omega | `src/runtime/rx_graph.c` | 919 | `rx_graph_optimize` | optimizer fixpoint | - | N | false | N: arithmetic: graph optimization fixpoint rewrite without wait or hand-off | `for (;;) {` |
 | OM-024 | omega | `src/runtime/rx_omega.c` | 478 | `sandbox_run` | sandbox report read | sandboxed realization pipe protocol | F | true | poll()-with-deadline read of a sandboxed child's report; I/O mechanics, decides no faculty order | `while (got < sizeof(*rep)) {` |
 | OM-025 | omega | `src/runtime/rx_plan_arrange.c` | 45 | `pla_goal_read` | goal max_steps field read | plan-length resource bound inside one reaction | E | true | max_steps is a plan-length bound read from the goal (spec §4: listed, D or E); bounds search work inside the plan-arrange reaction, no step loop | `g->max_steps = gf[2];` |
-| OM-026 | omega | `src/runtime/rx_plan_arrange.c` | 240 | `heur` | heuristic path walk | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
-| OM-027 | omega | `src/runtime/rx_plan_arrange.c` | 277 | `heap_pop` | heap sift-down | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
+| OM-026 | omega | `src/runtime/rx_plan_arrange.c` | 240 | `heur` | heuristic path walk | - | N | false | N: walk: heuristic path search walk without wait or hand-off | `for (;;) {` |
+| OM-027 | omega | `src/runtime/rx_plan_arrange.c` | 277 | `heap_pop` | heap sift-down | - | N | false | N: sift: binary heap sift-down without wait or hand-off | `for (;;) {` |
 | OM-028 | omega | `src/runtime/rx_plan_arrange.h` | 41 | `-` | goal max_steps field | plan-length resource bound | E | true | struct field for the plan-length bound (spec §4: D or E); no loop | `uint64_t seq, kind, max_steps, energy;` |
 | OM-029 | omega | `src/runtime/rx_resident_gpu.c` | 709 | `wait_marker_or_abort` | wait for GPU marker or abort | GPU seat completion wait | E | true | bounded usleep poll on a GPU completion marker; hardware scheduling | `for (int i = 0; i < timeout_ms * 20; i++) {` |
 | OM-030 | omega | `src/runtime/rx_resident_gpu.c` | 862 | `wait_heartbeat` | wait for seat heartbeat | GPU seat liveness wait | E | true | bounded usleep poll on the resident seat heartbeat word; hardware liveness, not task dispatch | `for (int i = 0; i < 2000; i++) {` |
@@ -155,8 +156,8 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | OM-041 | omega | `src/runtime/rx_world.c` | 923 | `tick_parked` | tick parked reactions | reaction world yield handling | E | true | decrements yield budgets of parked reactions; worker scheduling | `for (uint32_t i = 0; i < w->n_reactions; i++) {` |
 | OM-042 | omega | `src/runtime/rx_world.c` | 1293 | `worker_main` | reaction worker thread | reaction world worker | E | true | worker thread pops ready reactions and runs them; the production scheduler that replaced central sequencing | `for (;;) {` |
 | OM-043 | omega | `src/visor/visor_console.c` | 462 | `run_loop` | Visor REPL / script line loop | operator console (Omega Visor V1) | B | false | reads one operator line, runs that one command, waits for the next; the operator decides every step, the loop decides no faculty order (merged #69 after the spec; see §5) | `for (;;) {` |
-| OM-044 | omega | `src/visor/visor_evidence.c` | 127 | `j_value` | JSON value parse | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
-| OM-045 | omega | `src/visor/visor_parse_command.c` | 135 | `visor_parse_command` | command tokenizer | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
+| OM-044 | omega | `src/visor/visor_evidence.c` | 127 | `j_value` | JSON value parse | - | N | false | N: parse: JSON value recursive parser without wait or hand-off | `for (;;) {` |
+| OM-045 | omega | `src/visor/visor_parse_command.c` | 135 | `visor_parse_command` | command tokenizer | - | N | false | N: token: command tokenizer without wait or hand-off | `for (;;) {` |
 | OM-046 | omega | `tests/runtime/r15_gpu_load.c` | 105 | `main` | test/benchmark loop (while:body:nanosleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while (now_ns() < end) {` |
 | OM-047 | omega | `tests/runtime/r15_gpu_load.c` | 115 | `main` | test/benchmark loop (for:unbounded) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for (;;) {` |
 | OM-048 | omega | `tests/runtime/r15_measure.c` | 239 | `sampler_main` | test/benchmark loop (while:body:nanosleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while (!__atomic_load_n(&e->stop, __ATOMIC_ACQUIRE)) {` |
@@ -240,20 +241,20 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | SC-002 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 96 | `start` | test/benchmark loop (while:body:tick) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while !stop_clone.load(Ordering::Relaxed) {` |
 | SC-003 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 168 | `enforce_thermal_cooldown` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < max_wait {` |
 | SC-004 | aien-sovereign-core | `crates/aien-cli/src/commands.rs` | 1216 | `handle_start_command` | start command waits for runtime socket | operator start command | B | false | operator 'start' waits up to 60 s for the runtime daemon socket; process readiness, not semantic readiness. LEGACY / NOT-IN-CHARGE (Q2=A) | `for _ in 0..60 {` |
-| SC-005 | aien-sovereign-core | `crates/aien-cli/src/hooks.rs` | 43 | `run_pre_turn` | pre-turn hooks | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `for h in &self.hooks {` |
-| SC-006 | aien-sovereign-core | `crates/aien-cli/src/hooks.rs` | 50 | `run_post_turn` | post-turn hooks | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `for h in &self.hooks {` |
+| SC-005 | aien-sovereign-core | `crates/aien-cli/src/hooks.rs` | 43 | `run_pre_turn` | pre-turn hooks | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `for h in &self.hooks {` |
+| SC-006 | aien-sovereign-core | `crates/aien-cli/src/hooks.rs` | 50 | `run_post_turn` | post-turn hooks | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `for h in &self.hooks {` |
 | SC-007 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 278 | `main` | interactive REPL input loop | terminal I/O loop | F | false | reads operator lines and hands them on; terminal protocol mechanics (the tool-turn loops inside it are separate rows). LEGACY / NOT-IN-CHARGE | `loop {` |
-| SC-008 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 306 | `main` | LLM tool-turn loop | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `while max_tool_steps > 0 {` |
-| SC-009 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 332 | `main` | tool-call dispatch | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `for (tool_name, tool_args) in tool_calls {` |
-| SC-010 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 401 | `run_single_prompt` | LLM tool-turn loop (single prompt) | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `while max_tool_steps > 0 {` |
-| SC-011 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 416 | `run_single_prompt` | tool-call dispatch | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `for (tool_name, tool_args) in tool_calls {` |
-| SC-012 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 476 | `run_autonomous_goal` | autonomous goal milestone loop | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `for m in &goal.milestones {` |
-| SC-013 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 520 | `run_autonomous_goal` | LLM tool-turn loop (autonomous goal) | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `while max_tool_steps > 0 {` |
-| SC-014 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 539 | `run_autonomous_goal` | tool-call dispatch | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `for (tool_name, tool_args) in tool_calls {` |
-| SC-015 | aien-sovereign-core | `crates/aien-cli/src/subagents.rs` | 148 | `execute_subagent` | subagent max_steps | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `let mut max_steps = 10;` |
-| SC-016 | aien-sovereign-core | `crates/aien-cli/src/subagents.rs` | 152 | `execute_subagent` | subagent tool-turn loop | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `while max_steps > 0 {` |
-| SC-017 | aien-sovereign-core | `crates/aien-cli/src/subagents.rs` | 153 | `execute_subagent` | subagent max_steps decrement | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `max_steps -= 1;` |
-| SC-018 | aien-sovereign-core | `crates/aien-cli/src/subagents.rs` | 176 | `execute_subagent` | subagent tool-call dispatch | - | ? | ? | QUESTION CLI: aien-cli LLM tool-calling loop (model picks tool, dispatch, feed result back, bounded by max_tool_steps / max_steps): central semantic orchestration of the same shape as aegis-runtime agent.rs:130 (spec class A by non-use), but not named in spec 3.1; reactions have not replaced it and it is still the operator-facing CLI. Class A (retired by non-use, LEGACY / NOT-IN-CHARGE) or 'still in use, not replaced' like the spine (needs a spec clarification, E does not fit a semantic loop)? Proposed: A by non-use. | `for (tool_name, tool_args) in &tool_calls {` |
+| SC-008 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 306 | `main` | LLM tool-turn loop | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `while max_tool_steps > 0 {` |
+| SC-009 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 332 | `main` | tool-call dispatch | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `for (tool_name, tool_args) in tool_calls {` |
+| SC-010 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 401 | `run_single_prompt` | LLM tool-turn loop (single prompt) | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `while max_tool_steps > 0 {` |
+| SC-011 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 416 | `run_single_prompt` | tool-call dispatch | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `for (tool_name, tool_args) in tool_calls {` |
+| SC-012 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 476 | `run_autonomous_goal` | autonomous goal milestone loop | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `for m in &goal.milestones {` |
+| SC-013 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 520 | `run_autonomous_goal` | LLM tool-turn loop (autonomous goal) | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `while max_tool_steps > 0 {` |
+| SC-014 | aien-sovereign-core | `crates/aien-cli/src/main.rs` | 539 | `run_autonomous_goal` | tool-call dispatch | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `for (tool_name, tool_args) in tool_calls {` |
+| SC-015 | aien-sovereign-core | `crates/aien-cli/src/subagents.rs` | 148 | `execute_subagent` | subagent max_steps | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `let mut max_steps = 10;` |
+| SC-016 | aien-sovereign-core | `crates/aien-cli/src/subagents.rs` | 152 | `execute_subagent` | subagent tool-turn loop | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `while max_steps > 0 {` |
+| SC-017 | aien-sovereign-core | `crates/aien-cli/src/subagents.rs` | 153 | `execute_subagent` | subagent max_steps decrement | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `max_steps -= 1;` |
+| SC-018 | aien-sovereign-core | `crates/aien-cli/src/subagents.rs` | 176 | `execute_subagent` | subagent tool-call dispatch | - | A | false | retired by non-use: legacy terminal operator CLI, superseded by orchestrator interface | `for (tool_name, tool_args) in &tool_calls {` |
 | SC-019 | aien-sovereign-core | `crates/aien-cli/tests/test_cli_runtime_ipc.rs` | 40 | `test_cli_runtime_ipc_lifecycle` | test/benchmark loop (for:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for _ in 0..50 {` |
 | SC-020 | aien-sovereign-core | `crates/aien-inference-runtime/tests/runtime_tests.rs` | 18 | `test_embedded_inference_service_reference_weights` | test/benchmark loop (while:body:recv) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while let Some(evt) = rx.recv().await {` |
 | SC-021 | aien-sovereign-core | `crates/aien-proof/src/board.rs` | 163 | `tee` | test-board log tee | aien-proof test board tooling | D | false | copies a child's output to the board log; test infrastructure only | `loop {` |
@@ -302,8 +303,8 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | SC-064 | aien-sovereign-core | `crates/cortex-rs/src/db.rs` | 2944 | `test_episodic_concurrency_and_writer_throughput` | test/benchmark loop (for:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for _ in 0..4 {` |
 | SC-065 | aien-sovereign-core | `crates/cortex-rs/src/db.rs` | 2947 | `test_episodic_concurrency_and_writer_throughput` | test/benchmark loop (for:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for _ in 0..25 {` |
 | SC-066 | aien-sovereign-core | `crates/crumbs/src/bin/crumbs-probe-learner.rs` | 29 | `main` | probe learner frame relay | Crumbline probe protocol | F | false | reads frames and records them; protocol mechanics | `loop {` |
-| SC-067 | aien-sovereign-core | `crates/crumbs/src/gen/mechanisms.rs` | 768 | `nibble_permute` | permutation rejection sampling | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
-| SC-068 | aien-sovereign-core | `crates/crumbs/src/gen/rng.rs` | 50 | `below` | rejection sampling | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
+| SC-067 | aien-sovereign-core | `crates/crumbs/src/gen/mechanisms.rs` | 768 | `nibble_permute` | permutation rejection sampling | - | N | false | N: sample: permutation rejection sampling without wait or hand-off | `loop {` |
+| SC-068 | aien-sovereign-core | `crates/crumbs/src/gen/rng.rs` | 50 | `below` | rejection sampling | - | N | false | N: sample: bounded RNG rejection sampling without wait or hand-off | `loop {` |
 | SC-069 | aien-sovereign-core | `crates/crumbs/src/program.rs` | 19 | `-` | crumb program MAX_STEPS | program-length resource bound | E | false | length limit of a crumb program (same kind as rx_plan_arrange max_steps, spec §4 D or E); no loop | `pub const MAX_STEPS: usize = 64;` |
 | SC-070 | aien-sovereign-core | `crates/crumbs/src/program.rs` | 140 | `decode` | decode length check | program-length resource bound | E | false | decoder rejects programs longer than MAX_STEPS; no loop | `if n > MAX_STEPS {` |
 | SC-071 | aien-sovereign-core | `crates/crumbs/src/protocol.rs` | 311 | `run_crumb` | crumb learner frame protocol | Crumbline learner protocol | F | false | reads framed replies from the learner process; protocol mechanics | `loop {` |
@@ -321,7 +322,7 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | SC-083 | aien-sovereign-core | `crates/spark-discord-hub/src/gateway.rs` | 42,111 | `run` | Discord gateway reconnect loop | Discord gateway protocol | F | false | websocket session loop; external protocol | `loop {` |
 | SC-084 | aien-sovereign-core | `crates/spark-discord-hub/src/gateway.rs` | 53 | `run` | Discord outbound sender | Discord gateway protocol | F | false | forwards queued messages to the socket; external protocol | `while let Some(msg) = outbound_rx.recv().await {` |
 | SC-085 | aien-sovereign-core | `crates/spark-discord-hub/src/gateway.rs` | 64 | `run` | Discord inbound reader | Discord gateway protocol | F | false | reads gateway events incl. protocol heartbeats; external protocol | `while let Some(msg_result) = read.next().await {` |
-| SC-086 | aien-sovereign-core | `crates/spark-dream/src/main.rs` | 91 | `main` | idle-time dream cycle timer | - | ? | ? | QUESTION DREAM: spark-dream timer loop starts an idle-time learning/consolidation cycle when GPU and operator are idle (legacy AI service, off since 2026-09-28). A (heartbeat-style faculty dispatch, retired by non-use) or B (maintenance job)? Proposed: A by non-use. | `loop {` |
+| SC-086 | aien-sovereign-core | `crates/spark-dream/src/main.rs` | 91 | `main` | idle-time dream cycle timer | - | A | false | retired by non-use: legacy idle-time consolidation service, disabled since 2026-09-28 | `loop {` |
 | SC-087 | aien-sovereign-core | `crates/spark-mail-rs/src/smtp_server.rs` | 19 | `run_smtp_server` | SMTP accept loop | SMTP server | F | false | TCP accept loop; external protocol | `loop {` |
 | SC-088 | aien-sovereign-core | `crates/spark-mail-rs/src/smtp_server.rs` | 56,85 | `handle_smtp_session` | SMTP session loop | SMTP server | F | false | SMTP command loop; external protocol | `loop {` |
 | SC-089 | aien-sovereign-core | `crates/spark-supervisor/src/supervisor.rs` | 80 | `run_daemon` | supervisor signal wait | maintenance: service supervisor | B | false | waits for termination signal and stops managed services; operator control. LEGACY / NOT-IN-CHARGE | `loop {` |
@@ -344,24 +345,24 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | AR-016 | aegis-runtime | `src/main.rs` | 311 | `main` | CLI calls execute_task | retired by non-use | A | false | CLI entry into the agent loop. LEGACY / NOT-IN-CHARGE | `match agent.execute_task(&prompt, None, max_turns).await {` |
 | AR-017 | aegis-runtime | `src/orchestration/budget.rs` | 5 | `-` | orchestration RunBudget.max_steps | retired by non-use | A | false | step budget of the legacy orchestration module; retired by non-use with aegis-runtime. LEGACY / NOT-IN-CHARGE | `pub max_steps: u32,` |
 | AR-018 | aegis-runtime | `src/orchestration/budget.rs` | 14 | `default` | RunBudget default max_steps 25 | retired by non-use | A | false | step budget of the legacy orchestration module. LEGACY / NOT-IN-CHARGE | `max_steps: 25,` |
-| AR-019 | aegis-runtime | `src/persistence/legacy.rs` | 135 | `list_recent_turns` | DB rows to turn records | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for r in rows {` |
+| AR-019 | aegis-runtime | `src/persistence/legacy.rs` | 135 | `list_recent_turns` | DB rows to turn records | - | N | false | N: read: database row iterator read without wait or hand-off | `for r in rows {` |
 | AR-020 | aegis-runtime | `tests/stage2_primitives_tests.rs` | 103 | `test_orchestration_run_and_budget` | test/benchmark loop (named:max_steps) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `max_steps: 10,` |
-| AO-001 | aienos | `crates/aienos-boot/src/handoff.rs` | 128 | `alloc` | bump-allocator CAS retry | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
+| AO-001 | aienos | `crates/aienos-boot/src/handoff.rs` | 128 | `alloc` | bump-allocator CAS retry | - | N | false | N: CAS retry: bump allocator atomic CAS retry without wait or hand-off | `loop {` |
 | AO-002 | aienos | `crates/aienos-boot/src/rollback_mock.rs` | 295 | `run_candidate` | mock candidate hang spin | rollback test mock | D | false | deliberate hang in the rollback mock candidate (timeout mode) used to test rollback; test path | `loop {` |
 | AO-003 | aienos | `crates/aienos-boot/src/usb_keyboard.rs` | 393 | `run` | USB keyboard poll until deadline | boot keyboard hardware poll | E | true | polls the xHCI keyboard for operator input until a deadline; hardware polling | `while !exit && counter_ticks().wrapping_sub(start) < deadline && !keyboard.is_halted() {` |
-| AO-004 | aienos | `crates/aienos-capability/src/lib.rs` | 106 | `take_boot_gen` | boot-generation CAS retry | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
-| AO-005 | aienos | `crates/aienos-capability/src/lib.rs` | 336 | `chain_ok` | capability chain walk | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
-| AO-006 | aienos | `crates/aienos-capability/src/lib.rs` | 358 | `ancestor_hops` | ancestor hop count walk | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
-| AO-007 | aienos | `crates/aienos-capability/src/lib.rs` | 501 | `cascade_revoke` | cascade revoke worklist | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
-| AO-008 | aienos | `crates/aienos-evidence/src/capture.rs` | 126 | `file_sha256` | file hash read loop | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
+| AO-004 | aienos | `crates/aienos-capability/src/lib.rs` | 106 | `take_boot_gen` | boot-generation CAS retry | - | N | false | N: CAS retry: boot generation allocation retry without wait or hand-off | `loop {` |
+| AO-005 | aienos | `crates/aienos-capability/src/lib.rs` | 336 | `chain_ok` | capability chain walk | - | N | false | N: walk: capability delegation chain walk without wait or hand-off | `loop {` |
+| AO-006 | aienos | `crates/aienos-capability/src/lib.rs` | 358 | `ancestor_hops` | ancestor hop count walk | - | N | false | N: walk: ancestor hop count traversal walk without wait or hand-off | `loop {` |
+| AO-007 | aienos | `crates/aienos-capability/src/lib.rs` | 501 | `cascade_revoke` | cascade revoke worklist | - | N | false | N: walk: capability revocation tree walk without wait or hand-off | `loop {` |
+| AO-008 | aienos | `crates/aienos-evidence/src/capture.rs` | 126 | `file_sha256` | file hash read loop | - | N | false | N: read: file chunk read loop for hashing without wait or hand-off | `loop {` |
 | AO-009 | aienos | `crates/aienos-evidence/src/http.rs` | 124 | `send` | HTTP header reader | evidence upload HTTP client | F | true | reads HTTP response headers; external protocol | `loop {` |
 | AO-010 | aienos | `crates/aienos-kernel/src/arch/aarch64.rs` | 409 | `halt` | CPU halt loop | kernel halt | E | true | final wfe/wfi halt of the CPU; physical | `loop {` |
-| AO-011 | aienos | `crates/aienos-kernel/src/arch/aarch64.rs` | 494 | `write_u64` | decimal digit conversion | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
+| AO-011 | aienos | `crates/aienos-kernel/src/arch/aarch64.rs` | 494 | `write_u64` | decimal digit conversion | - | N | false | N: arithmetic: decimal digit conversion without wait or hand-off | `loop {` |
 | AO-012 | aienos | `crates/aienos-kernel/src/arch/aarch64.rs` | 519 | `read_byte` | UART blocking read | UART hardware poll | E | true | polls the UART until a byte arrives; hardware polling | `loop {` |
 | AO-013 | aienos | `crates/aienos-kernel/src/artifact_loader_tests.rs` | 605 | `sealed_address_space_is_wx_with_read_only_code_alias` | test/benchmark loop (for:body:scheduler) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for map in MAPS {` |
 | AO-014 | aienos | `crates/aienos-kernel/src/artifact_loader_tests.rs` | 952 | `full_scheduler_fails_closed_at_admission` | test/benchmark loop (for:body:scheduler) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for id in 0..LOADED_TASK_SLOTS as u32 {` |
 | AO-015 | aienos | `crates/aienos-kernel/src/gic.rs` | 83 | `wake` | GIC wake poll | interrupt controller poll | E | true | bounded poll of the GIC redistributor wake bit; hardware | `for _ in 0..poll_limit {` |
-| AO-016 | aienos | `crates/aienos-kernel/src/infer/tokenizer.rs` | 151 | `encode_bytes` | BPE merge loop | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `loop {` |
+| AO-016 | aienos | `crates/aienos-kernel/src/infer/tokenizer.rs` | 151 | `encode_bytes` | BPE merge loop | - | N | false | N: merge: BPE merge loop without wait or hand-off | `loop {` |
 | AO-017 | aienos | `crates/aienos-kernel/src/scheduler.rs` | 287 | `equal_priority_tasks_share_n_ticks_fairly` | test/benchmark loop (for:body:tick) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for _ in 0..20 {` |
 | AO-018 | aienos | `crates/aienos-kernel/src/scheduler.rs` | 310 | `background_runs_within_configured_interval_under_latency_load` | test/benchmark loop (for:body:tick) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for _ in 0..INTERVAL {` |
 | AO-019 | aienos | `crates/aienos-kernel/src/scheduler.rs` | 324 | `latency_keeps_large_majority_of_ticks_with_background_budget` | test/benchmark loop (for:body:tick) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for _ in 0..TICKS {` |
@@ -375,14 +376,14 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | AO-027 | aienos | `crates/aienos-kernel/src/usb/xhci/controller.rs` | 583 | `wait_event` | xHCI event wait | USB controller event poll | E | true | polls the xHCI event ring; hardware | `loop {` |
 | AO-028 | aienos | `crates/aienos-kernel/src/usb/xhci/ring.rs` | 201 | `take` | xHCI ring consume | USB ring consumer | E | true | consumes TRBs by cycle bit; hardware ring mechanics | `loop {` |
 | AO-029 | aienos | `crates/aienos-kernel/tests/nvme_completion.rs` | 606 | `completion_queue_phase_flips_at_depth_eight` | test/benchmark loop (for:body:poll) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `for _ in 0..8 {` |
-| AO-030 | aienos | `native/capability/aienos_capability.c` | 65 | `take_boot_gen` | boot-generation CAS retry | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
-| AO-031 | aienos | `native/capability/aienos_capability.c` | 174 | `chain_ok` | capability chain walk | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
-| AO-032 | aienos | `native/capability/aienos_capability.c` | 190 | `ancestor_hops` | ancestor hop count walk | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
+| AO-030 | aienos | `native/capability/aienos_capability.c` | 65 | `take_boot_gen` | boot-generation CAS retry | - | N | false | N: CAS retry: boot generation atomic CAS retry without wait or hand-off | `for (;;) {` |
+| AO-031 | aienos | `native/capability/aienos_capability.c` | 174 | `chain_ok` | capability chain walk | - | N | false | N: walk: capability delegation chain walk without wait or hand-off | `for (;;) {` |
+| AO-032 | aienos | `native/capability/aienos_capability.c` | 190 | `ancestor_hops` | ancestor hop count walk | - | N | false | N: walk: ancestor hop count traversal walk without wait or hand-off | `for (;;) {` |
 | PH-001 | physics | `m15/tools/m15tool.c` | 638 | `main` | --demonstrate-accelerator | M15 demonstration (oracle) | D | false | historical M15 demonstration mode of the physics tool; not a production entry point | `if (argc >= 2 && strcmp(argv[1], "--demonstrate-accelerator") == 0) {` |
 | PH-002 | physics | `m15/tools/m15tool.c` | 647 | `main` | --run-m15-gates | maintenance: M15 gate runner | B | false | deterministic gate runner (spec §4: --run-*-gates B) | `bool run_all = (argc >= 2 && strcmp(argv[1], "--run-m15-gates") == 0);` |
 | PH-003 | physics | `m16/m16_native.c` | 102 | `m16_native_wait_marker_ge` | wait for GPU marker | GPU completion wait | E | true | bounded usleep poll on a GPU completion marker; hardware | `while (now_ns() < end) {` |
 | PH-004 | physics | `m3/tools/m3tool.c` | 50 | `read_file` | file read in M3 tool | M3 qualification tooling | D | false | tool helper, not a production path | `for (;;) {` |
-| PH-005 | physics | `nvrm/nvrm.c` | 194 | `acquire_va_slot` | VA-slot CAS retry | - | ? | ? | QUESTION N: no class in A-F describes a non-orchestration loop. Proposed spec C1: add class N = NOT A CENTRAL LOOP (pattern match on a data/control-flow idiom: CAS retry, probe, parse, walk, read; no faculty sequencing, no wait, no hand-off). Row flips to N if C1 is adopted. | `for (;;) {` |
+| PH-005 | physics | `nvrm/nvrm.c` | 194 | `acquire_va_slot` | VA-slot CAS retry | - | N | false | N: CAS retry: virtual address slot allocation CAS retry without wait or hand-off | `for (;;) {` |
 <!-- /r16-inventory:rows -->
 
 ### 4.1 Manual rows (straight-line sequencers and glue)
@@ -406,7 +407,7 @@ exists in the file (symbol not verified) and applies the same class rules.
 | synchronous Omega → AEGIS calls | omega calls the native AIENOS capability library (`AIENOS_CAP_LIB`, `native/capability/libaienos_capability.a`) for authority; it never execs or links aegis-runtime or `spark-aegis` (grep of omega `src/`, `tools/`, Makefile: zero hits). | native AIENOS capability authority | aegis-runtime path: class A by non-use (AR rows) |
 | duplicate schedulers | (1) omega `rx_world.c` reaction scheduler (E, authoritative); (2) sovereign-core `aien-scheduler` token batching for LLM serving (E, spec §3.1, not on the reaction path); (3) aienos kernel CPU scheduler `scheduler.rs` / `thread.rs` (E, physical); (4) aegis-runtime heartbeat task polling (A, retired by non-use). Only (1) orders faculty work. | omega `rx_world.c` | no duplicate semantic scheduler after R16 within scope |
 | duplicate world ownership | omega has the reaction world (`rx_world.c`, authoritative) and the M19 accelerator world (`omega_accelerator_world.c`), which the spec keeps as the known-good fallback (C). | reaction world; M19 world = fallback | C row OM for `omega_world_drain`; fallback status proved in G6 |
-| duplicate authority ownership | (1) aienos `native/capability/aienos_capability.c` (C, "native AIENOS capability authority"); (2) aienos `crates/aienos-capability` (Rust twin of the same design); (3) omega `rx_caproot.c`, self-described "host reference capability root … R7 is not claimed"; (4) physics `m3/capability.s` historical assembly oracle. | (1) | ? — see question AUTH below |
+| duplicate authority ownership | (1) aienos `native/capability/aienos_capability.c` (C, "native AIENOS capability authority"); (2) aienos `crates/aienos-capability` (Rust twin of the same design); (3) omega `rx_caproot.c`, self-described "host reference capability root … R7 is not claimed"; (4) physics `m3/capability.s` historical assembly oracle. | (1) | C3: native C library is authoritative; Rust crate is legacy; omega rx_caproot.c is a host reference root |
 | duplicate semantic task queues | aegis-runtime SQLite pending-task queue (A, non-use); sovereign-core cortex writer queue is a disk-write batcher (E), not a task queue. | omega reaction world | none remaining in scope |
 | duplicate generation model | omega `rx_generation.c` is the generation mechanism (protected, §49). Other "promotion" code (word search `promot` over the four other repos, vendor/third_party excluded): sovereign-core `cortex-rs/src/promotion.rs` promotes memory candidates, `crumbs/src/promotion.rs` promotes curriculum operations; aienos `crates/aienos-aegis/src/world.rs` has a Rust J-Space sandbox world with a `Promoted` state (`mark_promoted` used only in that file), `aienos-cortex/src/store.rs` and the capability library use the word for other things; aegis-runtime and physics have none. None of them promotes a reaction-world generation; none is linked by omega (G3 checks). | omega `rx_generation.c` | protected; G6 |
 | duplicate resource pool | omega `rx_world.c` admission budgets; aien-proof test-board CPU/memory slots are test infrastructure (E, non-authoritative). | omega `rx_world.c` | none in scope |
@@ -414,75 +415,54 @@ exists in the file (symbol not verified) and applies the same class rules.
 | service/RPC boundaries replaced by reactions | aegis-runtime HTTP/websocket gateway (A rows, non-use); sovereign-core runtime IPC socket (F, serves the LLM loop that stays per §3.1). | — | as rows |
 | operator consoles (Omega Visor V1, merged #69 after the spec) | `src/visor/` REPL runs one operator command per line; commands call Omega functions directly on operator request, never on their own. `tools/qualify_visor.py` is Python and outside the gate's file types. | operator | B row for `run_loop`; W5 / G5 should state that Visor is an operator console, not the production entry point |
 
-## 6. Questions for the orchestrator (rows with class `?`)
+## 6. Questions for the orchestrator (resolved 2026-09-29)
 
-**Question N — no class for non-orchestration loops (30 rows).** The "unbounded loop"
-pattern must stay (so a planted `while (1)` fails), and it matches data idioms that
-sequence nothing: CAS retries, seqlock retries, hash probes, heap sift-down, JSON
-parse, file-read, list walks, digit conversion, BPE merge, rejection sampling. None of
-A–F describes them; forcing E or D would be a guess. Proposed spec clarification C1,
-ready to paste:
+All 44 pending questions have been decided by Drake Stapleton (2026-09-29) and
+resolved in the map:
 
-> C1 (2026-09-29, before any retirement code; the map existed, no test or
-> qualification data). §4 gains class **N NOT A CENTRAL LOOP**: a site the inventory
-> patterns flag that is a data or control-flow idiom (CAS or seqlock retry, probe,
-> parse, walk, read, arithmetic) with no faculty sequencing, no wait on another
-> component and no hand-off. `authoritative` is not applicable. Every N row must name
-> the idiom in its reason. A reviewer who finds a wait, dispatch or faculty call in an
-> N loop must reclassify it.
-
-If adopted, these rows flip `?` → N and the tool accepts N. Alternative: narrow the
-unbounded rule to require a wait word too. That drops these rows but also drops real
-run-forever loops that currently gate (reaction worker, accept loops, kernel halt), and
-lets a planted bare `while (1)` pass, so it is not recommended.
-
-**Question CLI — aien-cli tool-calling loops (13 rows).** sovereign-core
-`crates/aien-cli` has its own LLM tool loops (`main.rs` 306/401/520 bounded by
-`max_tool_steps`, `subagents.rs` 152 by `max_steps`, milestone loop 476, and their
-dispatch and hook loops). They are central semantic orchestration of the same shape as
-aegis-runtime `agent.rs:130` (spec class A by non-use), but spec §3.1 does not name
-them, reactions have not replaced them, and they are the operator-facing CLI. A by
-non-use (LEGACY / NOT-IN-CHARGE), or "still in use, not replaced" like the spine, which
-needs a spec clarification because E does not fit a semantic loop? Proposed: A by
-non-use, with the same §7 "not claimed" note as the spine.
-
-**Question DREAM — spark-dream (1 row).** A timer loop that starts an idle-time
-learning/consolidation cycle when GPU and operator are idle (legacy AI service, off
-since 2026-09-28). A (heartbeat-style faculty dispatch, retired by non-use) or B
-(maintenance job)? Proposed: A.
-
-**Question AUTH (structural, §5, not a row).** Three capability roots exist besides
-the historical assembly oracle. The native C library is authoritative. Is the Rust
-`aienos-capability` crate now legacy (the no-Rust port, aienos #156), and should
-omega's `rx_caproot.c` host reference root appear in R16-G6 as "reference", not as the
-trusted capability root? Proposed: yes to both. This affects G4/G6 wording, not G2.
+- **Question N (30 rows)**: Adopted class N (NOT A CENTRAL LOOP) via spec
+  clarification C1 for data and control-flow idioms (CAS retry, seqlock retry,
+  probe, parse, walk, read, arithmetic, sift, sample, merge). All 30 rows
+  reclassified as class N, authoritative = false, with reason starting with
+  `N: <idiom>: <description>`.
+- **Question CLI (13 rows)**: Reclassified as class A (retired by non-use),
+  authoritative = false. Reason: "retired by non-use: legacy terminal operator
+  CLI, superseded by orchestrator interface". Added to spec §7 not-claimed list
+  via clarification C2.
+- **Question DREAM (1 row)**: Reclassified as class A (retired by non-use),
+  authoritative = false. Reason: "retired by non-use: legacy idle-time
+  consolidation service, disabled since 2026-09-28". Added to spec §7 not-claimed
+  list via clarification C2.
+- **Question AUTH (structural, §5)**: Resolved via clarification C3. The native
+  C library is authoritative; the Rust capability crate is legacy under the
+  no-Rust port; omega rx_caproot.c is a host reference root.
 
 ## 7. Counts
 
 Filled from the tool's JSON output on this map (§8).
 
-| repo | A | B | C | D | E | F | ? | loop/named/cli sites | manual rows |
-|---|---|---|---|---|---|---|---|---|---|
-| omega | 1 | 18 | 2 | 74 | 12 | 2 | 15 | 124 | 1 |
-| aien-sovereign-core | 0 | 5 | 0 | 40 | 11 | 18 | 16 | 90 | 1 |
-| aegis-runtime | 18 | 0 | 0 | 1 | 0 | 0 | 1 | 20 | 0 |
-| aienos | 0 | 0 | 0 | 12 | 8 | 1 | 11 | 32 | 1 |
-| physics | 0 | 1 | 0 | 2 | 1 | 0 | 1 | 5 | 0 |
+| repo | A | B | C | D | E | F | N | ? | loop/named/cli sites | manual rows |
+|---|---|---|---|---|---|---|---|---|---|---|
+| omega | 1 | 18 | 2 | 74 | 12 | 2 | 15 | 0 | 124 | 1 |
+| aien-sovereign-core | 14 | 5 | 0 | 40 | 11 | 18 | 2 | 0 | 90 | 1 |
+| aegis-runtime | 18 | 0 | 0 | 1 | 0 | 0 | 1 | 0 | 20 | 0 |
+| aienos | 0 | 0 | 0 | 12 | 8 | 1 | 11 | 0 | 32 | 1 |
+| physics | 0 | 1 | 0 | 2 | 1 | 0 | 1 | 0 | 5 | 0 |
 
 Manual rows: omega OM-M01 = A, sovereign-core SC-M01 = A, aienos AO-M01 = C.
-Total: 271 pattern sites + 3 manual rows; 0 unclassified; 44 rows `?` (30 question N,
-13 question CLI, 1 question DREAM).
+Total: 271 pattern sites + 3 manual rows; 0 unclassified; 0 questions remaining;
+30 class N data/control-flow idiom sites.
 
-## 8. Gate result on this map (R16-G2 tool, at the commit that adds it)
+## 8. Gate result on this map (R16-G2 tool, after reclassifying 44 rows)
 
-`make r16-inventory` → exit 1, FAIL, for two separate and expected reasons:
+`make r16-inventory` -> exit 1, FAIL:
 
-1. `question=44`: the `?` rows above wait for the orchestrator's answers (§6). No
-   site is unclassified (`unclassified=0`).
-2. `a_reachable=2`: omegatool `--demonstrate-living-matvec` (dispatcher line and
-   function, OM class-A rows) is still under a production name. W5 retires it; the
-   tool then reports the row as RETIRED-GONE or accepts a `legacy_oracle` /
-   `reference` name.
+`sites=271 unclassified=0 question=0 bad_class=0 a_reachable=2 stale=0 map_errors=0 skipped=0 -> FAIL`
 
-The tool also prints `WARN omega: scanned HEAD … differs from map SHA`, because the
-R16 branch adds the spec, this map and the tool on top of omega main. Expected.
+1. `question=0`: all 44 question rows are resolved and reclassified (§6).
+2. `a_reachable=2`: omegatool `--demonstrate-living-matvec` (OM-103 dispatcher line and
+   OM-M01 function, class A) is still reachable under a production name. W5 retires
+   these two rows behind a `legacy_oracle` symbol name to satisfy R16-G2.
+
+The tool prints `WARN omega: scanned HEAD ... differs from map SHA`, because the
+R16 branch builds on top of omega main. Expected.

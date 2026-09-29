@@ -171,6 +171,7 @@ exactly one class:
 | D KEEP — REFERENCE ORACLE | non-authoritative comparison or test path (e.g. `rx_seq_reference`) |
 | E KEEP — PHYSICAL SCHEDULER | schedules physical resources or work, not faculty semantics |
 | F KEEP — EXTERNAL PROTOCOL LOOP | network/socket/event-loop mechanics that do not decide faculty order |
+| N NOT A CENTRAL LOOP | data/control-flow idiom; no sequencing, wait, or hand-off; authoritative N/A |
 
 A class-A row in omega is retired by code change (moved behind an explicit
 `legacy_oracle`/`reference` name out of the production build, or removed). A
@@ -234,6 +235,9 @@ and the report says so.
 - Retirement of the aien-sovereign-core LLM request loop (§3.1, Q1).
 - Removal of any Rust code (§3.1, Q2); the Rust loops still run if started
   by hand outside the AIEN production path.
+- Retirement or code removal of the aien-sovereign-core aien-cli operator tool
+  loops (13 rows) and spark-dream idle-time cycle loop (1 row); classified as
+  class A (retired by non-use), their code is not removed under §3.1 Q2.
 - From the brief's DO NOT OVERCLAIM: R16 PASS means ADR 0016 Resident
   Reaction Architecture migration complete (within §3.1 scope). It does not
   mean the AIEN 42-phase master plan is complete, nor full Skill Network,
@@ -245,5 +249,32 @@ and the report says so.
 ## 8. Clarifications
 
 Later changes to this file are appended here as numbered clarifications
-(C1, C2, …), each dated and stating whether any data existed when it was
+(C1, C2, ...), each dated and stating whether any data existed when it was
 made, following the R15 convention.
+
+### C1 (2026-09-29)
+
+Class N (NOT A CENTRAL LOOP) is adopted. Inventory patterns flag data or
+control-flow idioms (CAS retry, seqlock retry, probe, parse, walk, read,
+arithmetic, sift, sample, merge, retry, format, bpe, utf8, token, decode,
+scan) that contain no faculty sequencing, no wait on another component,
+and no hand-off. Class N rows have authoritative = false. The reason
+field for every class N row must name the specific idiom from the fixed
+idiom vocabulary. Any loop containing a wait word or faculty dispatch
+cannot be class N.
+
+### C2 (2026-09-29)
+
+The 13 aien-cli tool-calling loops and the spark-dream idle-time cycle
+loop are classified as class A (retired by non-use) with authoritative = false.
+Under §3.1 Q2, Rust code is not modified; the production path does not invoke
+or link them. They are recorded in §7 as not claimed for code removal.
+
+### C3 (2026-09-29)
+
+Capability root authority clarification: the native C library
+(aienos native/capability/aienos_capability.c) is authoritative. The Rust
+aienos-capability crate is legacy under the no-Rust port (aienos #156).
+Omega's rx_caproot.c is a host reference root, not the trusted capability
+root. This affects G4/G6 wording only; the native C capability root remains
+the sole authoritative capability root.
