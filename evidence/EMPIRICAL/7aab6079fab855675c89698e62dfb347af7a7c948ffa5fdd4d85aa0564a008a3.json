@@ -1,0 +1,68 @@
+{
+  "schema": "OMEGA_EMPIRICAL_OPTIMIZER_V1",
+  "run_id": "20260928T215916Z-ff0109b3e630",
+  "candidate_commit": "ff0109b3e6302eb77eddf13d127e77e021d215a8",
+  "candidate_bound": true,
+  "run_commit": "ff0109b3e6302eb77eddf13d127e77e021d215a8",
+  "tree_dirty": false,
+  "aienos_commit": "c8ab65e3ba2fddbe99245f747fdfdb99f6042fd3",
+  "checks": 44,
+  "failures": 0,
+  "test_binary_sha256": "da8ee39eeeea55117d3017b72c8d41904753ee1cc9c46a1e45dc5a421f3a7b93",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64", "cpus": "Cortex-X925 x10 timed on cpu19; Cortex-A725 x10 timed on cpu14", "timed_cpus_by_phase": "5,14,5,14,5,5,5,5,5,14,14,14,14,14", "loadavg_start": "2.14 1.96 2.34", "loadavg_end": "3.77 2.53 2.51", "thermal_c_start": 36, "thermal_c_end": 37, "shared_machine": "other sessions ran tests during this run; costs are floors (best of 5, fastest chunk, fastest replay block)"},
+  "arms": [
+    {"name": "reference", "verified": true, "code_bytes": 0, "synth_ns": 0, "verify_ns": 1351735, "parent_runs": 74861389},
+    {"name": "scalar", "verified": true, "code_bytes": 72, "synth_ns": 4672, "verify_ns": 1546809, "parent_runs": 3440643},
+    {"name": "unroll2", "verified": true, "code_bytes": 124, "synth_ns": 3680, "verify_ns": 1167526, "parent_runs": 26473882},
+    {"name": "unroll4_dual", "verified": true, "code_bytes": 176, "synth_ns": 4496, "verify_ns": 1492648, "parent_runs": 13834523},
+    {"name": "quad4", "verified": true, "code_bytes": 204, "synth_ns": 4705, "verify_ns": 1315272, "parent_runs": 32421083},
+    {"name": "planted_wrong", "verified": false, "code_bytes": 0, "synth_ns": 0, "verify_ns": 939365, "parent_runs": 0}
+  ],
+  "correctness": {"runs_checked_against_reference": 20212, "mismatches": 0, "refused_runs_of_unverified_arms": 0, "ineligible_arm_chosen_or_measured": 0},
+  "power_mw_above_idle": {"Cortex-X925": {"idle_cluster_mw": 4769, "reference": 1, "scalar": 184, "unroll2": 46, "unroll4_dual": 152, "quad4": 1}, "Cortex-A725": {"idle_cluster_mw": 326, "reference": 712, "scalar": 584, "unroll2": 638, "unroll4_dual": 566, "quad4": 838}},
+  "training": {"Cortex-X925": {"jobs": 154, "jobs_measured_twice": 56, "best_static_arm": "quad4"}, "Cortex-A725": {"jobs": 154, "jobs_measured_twice": 58, "best_static_arm": "reference"}},
+  "validation": {"jobs": 34, "learned_ps": 5161109055, "fixed_rule_ps": 8457484813, "always_reference_ps": 6270009979, "poisoned_model_ps": 7239849626, "coverage80": 0.859, "calibration_sd_scale": 1.000, "proofs_ok": true},
+  "promotion": {"model_bytes": 28112, "model_sha256": "351fb690c2638a4f2863309cc184d80f1da64506a43aaee24e29731a7629c65b", "active_generation": 3, "learner_promote_rc": -42, "learner_with_promoter_cap_rc": -42, "poisoned_judged_better": false, "poisoned_promote_rc": -48, "promote_rc": 0, "recovery_selects_promoted": true, "durable_equals_judged": true, "torn_blob_rc": -44, "torn_falls_back_to_reference": true, "online_updates_not_durable": true},
+  "exploration": {"online_explore_frac": 0.05, "budget_violations": 0},
+  "heldout": {
+    "Cortex-X925": {
+      "H1_unseen_shapes": {"jobs": 60, "cost_ps": {"fixed_dispatch_rule": 14669985722, "always_reference": 14025878429, "best_static_from_training": 8565056610, "learned_frozen": 8565056610, "learned_online": 9397988610, "oracle": 8565056610},
+        "frozen_vs_fixed_rule": 0.584, "online_vs_fixed_rule": 0.641, "frozen_vs_best_static": 1.000, "frozen_vs_oracle": 1.000,
+        "online_measure_jobs": 2, "online_explore_ps": 832932000, "coverage80": 0.830, "coverage95": 0.947,
+        "replay": {"wall_ns": {"fixed_rule": 685224603, "reference": 661394504, "best_static": 421066195, "learned_frozen": 421701960}, "cluster_energy_uj": {"fixed_rule": 3461000, "reference": 3461000, "best_static": 1984000, "learned_frozen": 1936000}, "waited_for_core_ns": {"fixed_rule": 13440, "reference": 27744, "best_static": 7392, "learned_frozen": 0}, "only_contended_blocks": false}},
+      "H2_thin_heavy_mix": {"jobs": 60, "cost_ps": {"fixed_dispatch_rule": 13251576769, "always_reference": 12134505612, "best_static_from_training": 13077823838, "learned_frozen": 10309487187, "learned_online": 10401167674, "oracle": 10309487187},
+        "frozen_vs_fixed_rule": 0.778, "online_vs_fixed_rule": 0.785, "frozen_vs_best_static": 0.788, "frozen_vs_oracle": 1.000,
+        "online_measure_jobs": 1, "online_explore_ps": 91680487, "coverage80": 0.740, "coverage95": 0.863,
+        "replay": {"wall_ns": {"fixed_rule": 622446717, "reference": 548790212, "best_static": 595724243, "learned_frozen": 477168542}, "cluster_energy_uj": {"fixed_rule": 3000000, "reference": 2504000, "best_static": 2989000, "learned_frozen": 2458000}, "waited_for_core_ns": {"fixed_rule": 11248, "reference": 18880, "best_static": 32384, "learned_frozen": 7728}, "only_contended_blocks": false}},
+      "H3_memory_pressure": {"jobs": 60, "cost_ps": {"fixed_dispatch_rule": 31276262961, "always_reference": 29756846807, "best_static_from_training": 18248046480, "learned_frozen": 18248046480, "learned_online": 22910697403, "oracle": 18248046480},
+        "frozen_vs_fixed_rule": 0.583, "online_vs_fixed_rule": 0.733, "frozen_vs_best_static": 1.000, "frozen_vs_oracle": 1.000,
+        "online_measure_jobs": 5, "online_explore_ps": 2076508039, "coverage80": 0.973, "coverage95": 1.000, "contention_median": 2.154}
+    },
+    "Cortex-A725": {
+      "H1_unseen_shapes": {"jobs": 60, "cost_ps": {"fixed_dispatch_rule": 23752023177, "always_reference": 13862993756, "best_static_from_training": 13862993756, "learned_frozen": 13237209948, "learned_online": 13359939715, "oracle": 13149800308},
+        "frozen_vs_fixed_rule": 0.557, "online_vs_fixed_rule": 0.562, "frozen_vs_best_static": 0.955, "frozen_vs_oracle": 1.007,
+        "online_measure_jobs": 1, "online_explore_ps": 53366785, "coverage80": 0.877, "coverage95": 0.980,
+        "replay": {"wall_ns": {"fixed_rule": 619837746, "reference": 365715075, "best_static": 365687682, "learned_frozen": 345327335}, "cluster_energy_uj": {"fixed_rule": 514000, "reference": 406000, "best_static": 438000, "learned_frozen": 326000}, "waited_for_core_ns": {"fixed_rule": 39392, "reference": 20288, "best_static": 17280, "learned_frozen": 30240}, "only_contended_blocks": false}},
+      "H2_thin_heavy_mix": {"jobs": 60, "cost_ps": {"fixed_dispatch_rule": 24749388497, "always_reference": 17534659253, "best_static_from_training": 17534659253, "learned_frozen": 17165373232, "learned_online": 17580330681, "oracle": 17157646182},
+        "frozen_vs_fixed_rule": 0.694, "online_vs_fixed_rule": 0.710, "frozen_vs_best_static": 0.979, "frozen_vs_oracle": 1.000,
+        "online_measure_jobs": 2, "online_explore_ps": 251499340, "coverage80": 0.793, "coverage95": 0.923,
+        "replay": {"wall_ns": {"fixed_rule": 623503587, "reference": 443024165, "best_static": 443258493, "learned_frozen": 433099255}, "cluster_energy_uj": {"fixed_rule": 648000, "reference": 381000, "best_static": 378000, "learned_frozen": 394000}, "waited_for_core_ns": {"fixed_rule": 28416, "reference": 21344, "best_static": 23520, "learned_frozen": 27216}, "only_contended_blocks": false}},
+      "H3_memory_pressure": {"jobs": 60, "cost_ps": {"fixed_dispatch_rule": 68991771349, "always_reference": 48037159541, "best_static_from_training": 48037159541, "learned_frozen": 48573145678, "learned_online": 57468728112, "oracle": 45959838828},
+        "frozen_vs_fixed_rule": 0.704, "online_vs_fixed_rule": 0.833, "frozen_vs_best_static": 1.011, "frozen_vs_oracle": 1.057,
+        "online_measure_jobs": 9, "online_explore_ps": 4646148511, "coverage80": 0.653, "coverage95": 0.847, "contention_median": 1.999}
+    }
+  },
+  "measurability": {
+    "features_used_in_fit": ["input shape (M, N)", "state size / memory locality (working set over the core's L2)", "hardware state (core class)", "resource pressure (co-runner bucket)"],
+    "features_recorded_not_fit": ["thermal state (acpitz, degrees C)", "current realization", "evidence requirement (always: verified arms only)", "latency budget", "energy budget"],
+    "features_constant_here": ["semantic operation class (matvec only)", "branch count (0)", "cognitive requirement (none for matvec)"],
+    "targets_measured": ["latency (ps/call)", "energy (cluster meter, per arm power and per replay block)", "memory (code bytes + working set)", "throughput (derived: elements / latency)", "failure probability (verification refusals and wrong results)", "verification cost (ns)", "recompute cost (synthesis + verification ns)", "contention (H3 / H1 latency, same shape and arm)", "quality (exact: digest equal to the reference)"],
+    "targets_not_measured": ["transfer cost (one shared-memory CPU; no device transfer in this operation)"]
+  },
+  "gates": {
+    "OMEGA_EMPIRICAL_OPTIMIZER_PASS": "PASS",
+    "win_reason": "all held-out criteria met",
+    "criteria": "per core class and held-out distribution: learned (frozen and online, online including its exploration) at least 5% under the fixed rule; frozen within 3% of the best static arm and under it over all held-out work; replay wall time under the fixed rule; 80% intervals cover at least 60% on H1 and H2 (H3 is a condition absent from training: reported, not gated); zero mismatches; planted arm never run",
+    "not_claimed": ["integration into the resident omega.select reaction (the R10 faculty still selects by its own measurement)", "operations other than integer matvec", "graphics-processor realizations", "thermal or cognitive features varied in a controlled way", "energy per call (the meter updates every ~0.1 s; energy is per arm window and per replay block)", "transfer cost", "AIENOS kernel (the authority runs as a host library)"]
+  }
+}
