@@ -115,7 +115,7 @@ static int mint_both(Auth *a, uint32_t subject, uint32_t rights, RxCapRef *linux
     return lrc;
 }
 
-static int native_auth(void *ctx, uint32_t cap_id, uint32_t cap_generation, uint32_t subject,
+static int native_auth(void *ctx, uint32_t cap_id, uint64_t cap_generation, uint32_t subject,
                        uint64_t resource, uint32_t rights) {
     Auth *a = ctx;
     AienosCapRef ref = {cap_id, cap_generation};
@@ -564,6 +564,13 @@ static void negative_and_live(void) {
     CHECK(pthread_create(&thread, NULL, live_thread, NULL) == 0, "live thread");
     DrainCtx drain = {store, first};
     int prc = promote_ok(&a, store, first, cap, on_drain, &drain, on_live);
+    RxGenPhases phases;
+    CHECK(rx_gen_last_phases(store, &phases) == RX_GEN_OK,
+          "promotion timing was recorded");
+    CHECK(phases.candidate_id == first && phases.result == prc &&
+          phases.enter_ns > 0 && phases.enter_ns <= phases.barrier_ns &&
+          phases.barrier_ns <= phases.flip_ns && phases.flip_ns <= phases.receipt_ns,
+          "promotion phases follow the durable order");
     g_stop = 1;
     pthread_join(thread, NULL);
     CHECK(prc == RX_GEN_OK, "promotion failed %d", prc);

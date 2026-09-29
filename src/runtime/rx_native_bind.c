@@ -32,3 +32,14 @@ int rx_world_init_native(RxWorld *w, const AienosCapView *view, uint32_t n_worke
     return rx_world_init_with_auth(w, NULL, view, native_validate, native_inspect, n_workers,
                                    crumb_cap);
 }
+
+/* R15 sequential reference on the same native authority (rx_seq_reference.h). */
+int rx_world_init_sequential_reference(RxWorld *w, const void *auth_ctx,
+                                       RxAuthValidateFn validate, RxAuthInspectFn inspect,
+                                       uint64_t crumb_cap);
+int rx_world_init_native_sequential_reference(RxWorld *w, const AienosCapView *view,
+                                              uint64_t crumb_cap) {
+    if (!view) return RX_ERR_ARG;
+    return rx_world_init_sequential_reference(w, view, native_validate, native_inspect,
+                                              crumb_cap);
+}

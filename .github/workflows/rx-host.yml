@@ -318,7 +318,7 @@ jobs:
           PLAN_REUSE_NO_ENERGY: '1'
         run: |
           make test-plan-reuse
-          receipt="$(find build/qual-runs -name rx_plan_reuse_receipt.json -type f | head -n 1)"
+          receipt="$(find build/qual-runs -name 'rx_plan_reuse_receipt.*.json' -type f | head -n 1)"
           test -n "$receipt"
           grep -q '"failures": 0,' "$receipt"
           grep -q '"G3_outcome_and_evidence": "PASS"' "$receipt"

@@ -351,7 +351,7 @@ static int start(Rig *r, const Opts *opt) {
     r->opt = *opt;
     g_stage = 1;
     if (aienos_cap_start(&r->admin, &r->view) != 0) return -1;
-    if (rx_world_init_native(&r->w, r->view, 4, 1u << 18) != RX_OK) return -1;
+    if (rx_world_init_native(&r->w, r->view, 4, RX_CRUMBS_LONG_EPISODE) != RX_OK) return -1;
     r->w.external_subject = EXTERNAL;
     if (opt->gen_dir) {
         snprintf(r->generation_dir, sizeof r->generation_dir, "%s", opt->gen_dir);
@@ -748,7 +748,7 @@ static int authority_sweep(Rig *r, uint64_t *swept, uint64_t *holders, uint64_t 
     if (aienos_cap_office(r->admin, &office) != 0) return -4;
     *swept = 0; *holders = 0; *unexpected = 0;
     for (uint32_t id = 1; id < 2048; id++)
-        for (uint32_t gen = office.generation; gen < office.generation + 8; gen++) {
+        for (uint64_t gen = office.generation; gen < office.generation + 8; gen++) {
             AienosCapEntry e;
             if (aienos_cap_inspect(r->view, (AienosCapRef){id, gen}, &e) != 0) continue;
             if (e.state != 1u) continue;          /* AIENOS_CAP_STATE_LIVE */
@@ -809,9 +809,25 @@ static void account(Rig *r, Accounting *a) {
 static uint8_t *g_seen;
 static uint64_t *g_stack;
 #define CRUMBS (1u << 18)
+/* The visited set and stack grow with the causal log. */
+static uint64_t g_seen_cap;
+static int seen_fit(uint64_t n) {
+    if (n + 1 <= g_seen_cap) return 0;
+    uint64_t cap = g_seen_cap ? g_seen_cap : 1024;
+    while (cap < n + 1) cap *= 2;
+    uint8_t *s = realloc(g_seen, (size_t)cap);
+    if (!s) return -1;
+    g_seen = s;
+    uint64_t *k = realloc(g_stack, sizeof(uint64_t) * (size_t)cap);
+    if (!k) return -1;
+    g_stack = k;
+    g_seen_cap = cap;
+    return 0;
+}
 static int ancestor(RxWorld *w, uint64_t node, uint64_t wanted) {
     if (!node || !wanted || wanted > node || node > w->n_crumbs) return 0;
     if (node == wanted) return 1;
+    if (seen_fit(w->n_crumbs) != 0) return 0;
     memset(g_seen, 0, (size_t)w->n_crumbs + 1);
     uint64_t sp = 0;
     g_stack[sp++] = node;
@@ -1256,7 +1272,7 @@ static int crumb_has_cap(const RxCrumb *k, RxCapRef c) {
     return 0;
 }
 
-static int b_native_promotion(void *ctx, uint32_t cap_id, uint32_t generation, uint32_t subject,
+static int b_native_promotion(void *ctx, uint32_t cap_id, uint64_t generation, uint32_t subject,
                               uint64_t resource, uint32_t rights) {
     AienosCapEntry entry;
     return aienos_cap_validate(ctx, (AienosCapRef){cap_id, generation}, subject, resource, rights,
@@ -1379,7 +1395,7 @@ static void scenario_b(void) {
     /* B4: an outside writer wrongly holding WRITE on the lanes' slot stuffs it
      * with another subject's valid grant. */
     RxObjRef lslot = r->aegis.o[1].slot[0];
-    RxCapRef slot0 = {(uint32_t)field(r, lslot, 0), (uint32_t)field(r, lslot, 1)};
+    RxCapRef slot0 = {(uint32_t)field(r, lslot, 0), field(r, lslot, 1)};
     RxCapRef stuffer = hostile(r, EXTERNAL, rx_aegis_res(1, RX_AEGIS_RES_SLOT0), RX_RIGHT_WRITE);
     RxCapRef other = hostile(r, ROGUE_SUBJ, RES_LANE_OUT, RX_RIGHT_READ | RX_RIGHT_WRITE);
     uint64_t mark4 = r->w.n_crumbs, claims4 = r->w.stats.resident_claims;
@@ -1506,7 +1522,7 @@ static void scenario_b(void) {
            !(field(r, lslot, 2) == RX_AEGIS_SLOT_LIVE && field(r, lslot, 0) != other.cap_id &&
              field(r, lslot, 5) == field(r, r->aegis.o[1].request, 0)))
         pause_us(500);
-    RxCapRef slot1 = {(uint32_t)field(r, lslot, 0), (uint32_t)field(r, lslot, 1)};
+    RxCapRef slot1 = {(uint32_t)field(r, lslot, 0), field(r, lslot, 1)};
     int renewed = field(r, lslot, 2) == RX_AEGIS_SLOT_LIVE &&
                   (slot1.cap_id != slot0.cap_id || slot1.generation != slot0.generation) &&
                   r->aegis.mints == mints0 + 1 &&
@@ -2577,9 +2593,7 @@ static int receipt(int tests_ok) {
 int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     setvbuf(stdout, NULL, _IONBF, 0);
-    g_seen = malloc(CRUMBS + 1);
-    g_stack = malloc(sizeof(uint64_t) * (CRUMBS + 1));
-    if (!g_seen || !g_stack) return 1;
+    if (seen_fit(CRUMBS) != 0) return 1;
     const char *only = argc > 1 ? argv[1] : NULL;
     /* F first: its processes are forked before this one ever opens the GPU. */
     if (!only || strchr(only, 'F')) scenario_f();

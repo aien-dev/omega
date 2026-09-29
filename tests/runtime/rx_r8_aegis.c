@@ -336,7 +336,7 @@ static void t_slow_then_fast(void) {
 
     /* The minted reference is the worker's, from AEGIS, bounded as decided. */
     RxCapEntry ce;
-    RxCapRef ref = { (uint32_t)fld(&e, slot(&e, 0), 0), (uint32_t)fld(&e, slot(&e, 0), 1) };
+    RxCapRef ref = { (uint32_t)fld(&e, slot(&e, 0), 0), fld(&e, slot(&e, 0), 1) };
     CHECK(rx_world_inspect_cap(&e.w, ref, &ce) == RX_CAP_OK && ce.subject == SUBJ_WORKER &&
           ce.resource == RES_WORK && ce.rights == (RX_RIGHT_READ | RX_RIGHT_WRITE) &&
           ce.issuer == RX_AEGIS_SUBJ, "minted entry");
@@ -442,7 +442,7 @@ static void t_lease(void) {
     CHECK(fld(&e, a->o[0].decision, 4) == 100, "policy did not cap the lease: %llu",
           (unsigned long long)fld(&e, a->o[0].decision, 4));
     CHECK(fld(&e, slot(&e, 2), 2) == RX_AEGIS_SLOT_LIVE && fld(&e, slot(&e, 2), 6) != 0, "leased slot");
-    RxCapRef old = { (uint32_t)fld(&e, slot(&e, 2), 0), (uint32_t)fld(&e, slot(&e, 2), 1) };
+    RxCapRef old = { (uint32_t)fld(&e, slot(&e, 2), 0), fld(&e, slot(&e, 2), 1) };
     input(&e);
     CHECK(fld(&e, e.lease_log, 0) == e.inputs, "leased reader did not run inside its lease");
 
@@ -459,7 +459,7 @@ static void t_lease(void) {
     intent(&e, RES_LEASED, RX_RIGHT_READ, 0, 2, RX_AEGIS_OP_ACQUIRE);
     input(&e);
     CHECK(fld(&e, e.lease_log, 0) == e.inputs, "leased reader did not resume after renewal");
-    RxCapRef neu = { (uint32_t)fld(&e, slot(&e, 2), 0), (uint32_t)fld(&e, slot(&e, 2), 1) };
+    RxCapRef neu = { (uint32_t)fld(&e, slot(&e, 2), 0), fld(&e, slot(&e, 2), 1) };
     CHECK(neu.cap_id != old.cap_id || neu.generation != old.generation, "renewal reused the old grant");
     CHECK(rx_world_validate_cap(&e.w, neu, SUBJ_WORKER, RES_LEASED, RX_RIGHT_READ, NULL) == RX_CAP_OK,
           "renewed grant invalid");

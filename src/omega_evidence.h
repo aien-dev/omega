@@ -47,6 +47,17 @@
  */
 int omega_evidence_path(const char *relpath, char *out, size_t n);
 
+/*
+ * Write a finished receipt under its content address:
+ * "build/qual-runs/<run_id>/<relstem>.<sha256 of buf>.<ext>". The file is
+ * created with O_EXCL and mode 0444, so it is never rewritten; the same
+ * bytes always get the same name, other bytes always get another name.
+ * Returns 0 when written, 1 when that exact content is already recorded
+ * (left untouched), -1 on failure. `out` gets the path in both first cases.
+ */
+int omega_evidence_write_digest(const char *relstem, const char *ext, const void *buf,
+                                size_t len, char *out, size_t n);
+
 /* The run_id used by omega_evidence_path(), computed lazily on first use. */
 const char *omega_evidence_run_id(void);
 
