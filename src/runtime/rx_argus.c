@@ -498,11 +498,11 @@ static void *consumer_main(void *arg) {
         }
         if (n) { idle = 0; continue; }
         if (++idle < 64) { cpu_relax(); continue; }
-        /* idle back-off: 20 us doubling to 1 ms (summaries are already
+        /* idle back-off: 20 us doubling to 160 us (summaries are already
          * flush-bounded at RX_ARGUS_FLUSH_NS; a busy poll only burns a core) */
-        unsigned shift = idle - 64 < 6 ? idle - 64 : 6;
+        unsigned shift = idle - 64 < 3 ? idle - 64 : 3;
         long ns = 20000L << shift;
-        struct timespec ts = { 0, ns > 1000000L ? 1000000L : ns };
+        struct timespec ts = { 0, ns };
         nanosleep(&ts, NULL);
     }
     while (merge(1)) {}

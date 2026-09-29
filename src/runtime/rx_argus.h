@@ -24,7 +24,12 @@
  *     goes idle, at thread exit and at shutdown. A refused flush keeps the
  *     counts (the next summary carries the total).
  *   - Full events only for GRANTED/DENIED/REVOKED/WORLD_COMMITTED/JOINED and
- *     failed validates; the authority tick is read only for those.
+ *     failed validates. The authority tick is read only for the transitions;
+ *     a failed validate is a full USED/DENIED keyed like a use (tick 0, no
+ *     stamp), so denials never force other threads to flush.
+ *   - A thread flushes its whole table before any transition it emits
+ *     (398cfb9: flush before GRANTED/REVOKED); for transitions announced on
+ *     another thread the consumer's ordered merge gives the same order.
  *
  * Cross-ring order. One ring per thread loses the global push order that the
  * old push lock gave. The consumer restores a causal order with one shared
