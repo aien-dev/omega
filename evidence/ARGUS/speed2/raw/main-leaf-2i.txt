@@ -1,0 +1,640 @@
+2i	cycles	62.195	TOTAL
+2i	cycles	16.210	sha256_transform <- sha256_update
+2i	cycles	6.077	__aarch64_swp4_rel <- lll_mutex_unlock_optimized
+2i	cycles	5.638	__aarch64_cas4_acq <- lll_mutex_lock_optimized
+2i	cycles	4.543	[k] __lll_lock_wake <- lll_mutex_unlock_optimized
+2i	cycles	2.600	[k] __clone3 <- __spawnix
+2i	cycles	2.455	aienos_cap_validate <- native_validate
+2i	cycles	2.225	[k] __memcpy_sve <- crumb_append
+2i	cycles	1.940	[k] futex_wake <- ___pthread_cond_signal
+2i	cycles	1.448	native_validate <- t_slow_then_fast
+2i	cycles	1.127	[k] futex_wait <- __lll_lock_wait
+2i	cycles	0.953	[k] __clone3 <- __clone3_internal
+2i	cycles	0.907	___pthread_mutex_lock <- aienos_cap_validate
+2i	cycles	0.850	t_slow_then_fast <- main
+2i	cycles	0.787	[k] __memset_zva64 <- env_start
+2i	cycles	0.762	[k] __munmap <- rx_world_destroy
+2i	cycles	0.720	__pthread_mutex_unlock_usercnt <- aienos_cap_validate
+2i	cycles	0.705	rx_aegis_evaluate <- t_slow_then_fast
+2i	cycles	0.615	[k] __munmap <- __spawnix
+2i	cycles	0.525	[k] __mmap64 <- __mmap64
+2i	cycles	0.505	[unknown] <- __kernel_clock_gettime
+2i	cycles	0.425	[k] __wait4 <- main
+2i	cycles	0.352	[k] __memset_zva64 <- rx_coherent_format
+2i	cycles	0.315	__aarch64_swp4_acq <- __lll_lock_wait
+2i	cycles	0.302	sha256_update <- crumb_hash
+2i	cycles	0.295	[k] __execve <- ?
+2i	cycles	0.292	__pthread_mutex_unlock_usercnt <- rx_world_publish_external
+2i	cycles	0.268	[k] __libc_open64 <- _IO_file_open
+2i	cycles	0.245	__memcpy_sve <- crumb_append
+2i	cycles	0.237	[k] __libc_read <- __libc_read
+2i	cycles	0.237	__lll_lock_wake <- lll_mutex_unlock_optimized
+2i	cycles	0.228	[k] futex_wait <- futex_wait_simple
+2i	cycles	0.203	[k] __execve <- __execvpe_common
+2i	cycles	0.203	lll_mutex_unlock_optimized <- __pthread_mutex_unlock_usercnt
+2i	cycles	0.198	[k] __futex_abstimed_wait_common64 <- __futex_abstimed_wait_common
+2i	cycles	0.190	sha256_update <- object_digest
+2i	cycles	0.185	lll_mutex_lock_optimized <- ___pthread_mutex_lock
+2i	cycles	0.175	charge <- try_admit
+2i	cycles	0.172	[k] [unknown] <- ?
+2i	cycles	0.163	__memcpy_sve <- crumb_hash
+2i	cycles	0.163	rx_world_validate_cap <- t_slow_then_fast
+2i	cycles	0.155	__memset_zva64 <- env_start
+2i	cycles	0.152	__memcpy_sve <- object_digest
+2i	cycles	0.142	[k] __close_nocancel <- _IO_new_file_close_it
+2i	cycles	0.133	propagate_inner.part.0 <- finish_writes
+2i	cycles	0.125	___pthread_mutex_unlock <- aienos_cap_validate
+2i	cycles	0.122	__memset_zva64 <- init_common
+2i	cycles	0.115	demand_inner <- propagate_inner.part.0
+2i	cycles	0.115	[k] __spawnix <- __libc_start_call_main
+2i	cycles	0.110	__aarch64_cas4_acq <- __condvar_acquire_lock
+2i	cycles	0.107	___pthread_mutex_lock <- rx_world_publish_external
+2i	cycles	0.102	[k] __munmap <- __libc_free
+2i	cycles	0.102	[k] t_slow_then_fast <- main
+2i	cycles	0.102	rx_coherent_publish <- finish_writes
+2i	cycles	0.087	__aarch64_ldclr4_rel <- __condvar_release_lock
+2i	cycles	0.087	futex_wait <- __lll_lock_wait
+2i	cycles	0.080	futex_wake <- ___pthread_cond_signal
+2i	cycles	0.075	[k] __memset_generic <- rx_world_add_reaction
+2i	cycles	0.072	sha256_final <- object_digest
+2i	cycles	0.070	pthread_mutex_lock@plt <- aienos_cap_validate
+2i	cycles	0.068	__memcpy_sve <- sha256_update
+2i	cycles	0.065	sha256_final <- crumb_hash
+2i	cycles	0.060	do_lookup_x <- _dl_lookup_symbol_x
+2i	cycles	0.060	stage_mutations.constprop.0 <- rx_world_publish_external
+2i	cycles	0.058	pthread_mutex_unlock@plt <- aienos_cap_validate
+2i	cycles	0.055	[k] __libc_write <- __libc_write
+2i	cycles	0.055	[k] _start <- ?
+2i	cycles	0.052	[k] __memset_zva64 <- argus_core_init
+2i	cycles	0.052	[k] __mprotect <- _dl_protect_relro
+2i	cycles	0.050	aienos_cap_inspect <- stamp_cap
+2i	cycles	0.050	[k] elf_machine_rela_relative <- elf_dynamic_do_Rela
+2i	cycles	0.048	crumb_hash <- crumb_append
+2i	cycles	0.048	[k] allocate_stack <- __pthread_create_2_1
+2i	cycles	0.048	[k] __mkdir <- omega_evidence_path
+2i	cycles	0.048	[k] __sched_setaffinity_new <- [unknown]
+2i	cycles	0.048	__memset_zva64 <- rx_world_publish_external
+2i	cycles	0.048	rx_world_publish_external <- t_slow_then_fast
+2i	cycles	0.045	crumb_append <- rx_world_publish_external
+2i	cycles	0.045	[k] _nl_intern_locale_data <- _nl_load_locale_from_archive
+2i	cycles	0.043	aienos_cap_validate <- t_slow_then_fast
+2i	cycles	0.043	[k] __munmap <- _dl_unload_cache
+2i	cycles	0.043	__memset_zva64 <- rx_coherent_format
+2i	cycles	0.043	sha256_update <- sha256_final
+2i	cycles	0.037	_dl_new_hash <- _dl_lookup_symbol_x
+2i	cycles	0.037	finish_writes <- rx_world_publish_external
+2i	cycles	0.037	[k] sha256_transform <- sha256_update
+2i	cycles	0.037	__spawnix <- __libc_start_call_main
+2i	cycles	0.035	__condvar_quiesce_and_switch_g1 <- ___pthread_cond_signal
+2i	cycles	0.035	[k] __mprotect <- _dl_map_segments
+2i	cycles	0.035	[k] __mprotect <- setup_stack_prot
+2i	cycles	0.035	[k] __open64_nocancel <- _IO_file_open
+2i	cycles	0.033	__aarch64_ldset4_rel <- __condvar_quiesce_and_switch_g1
+2i	cycles	0.033	[k] __close_nocancel <- _IO_new_proc_close
+2i	cycles	0.033	[k] __open64_nocancel <- _dl_sysdep_read_whole_file
+2i	cycles	0.030	[k] __brk <- __sbrk
+2i	cycles	0.030	[k] __fstat64 <- _IO_file_doallocate
+2i	cycles	0.030	strcmp <- check_match
+2i	cycles	0.028	__aarch64_ldadd4_rel <- __condvar_dec_grefs
+2i	cycles	0.028	check_match <- do_lookup_x
+2i	cycles	0.028	[k] elf_get_dynamic_info <- _dl_start
+2i	cycles	0.028	[k] __pipe2 <- _IO_new_proc_open
+2i	cycles	0.028	__memcpy_sve <- sha256_final
+2i	cycles	0.025	[k] _exit <- __run_exit_handlers
+2i	cycles	0.025	[k] __open64_nocancel <- _nl_load_locale_from_archive
+2i	cycles	0.025	[k] __wait4 <- _IO_new_proc_close
+2i	cycles	0.025	rx_coherent_project <- commit_writes
+2i	cycles	0.025	try_admit <- propagate_inner.part.0
+2i	cycles	0.022	__aarch64_ldeor8_rel <- __condvar_fetch_xor_wseq_release
+2i	cycles	0.022	elf_dynamic_do_Rela <- _dl_relocate_object
+2i	cycles	0.022	[k] __munmap <- __nptl_free_stacks
+2i	cycles	0.022	__lll_lock_wait <- lll_mutex_lock_optimized
+2i	cycles	0.022	__memset_generic <- rx_world_add_reaction
+2i	cycles	0.022	___pthread_mutex_unlock <- native_validate
+2i	cycles	0.020	best_waiting <- try_admit
+2i	cycles	0.020	demand <- propagate_inner.part.0
+2i	cycles	0.020	[k] _dl_load_cache_lookup <- _dl_map_object
+2i	cycles	0.020	[k] _dl_start <- _start
+2i	cycles	0.020	[k] elf_get_dynamic_info <- dl_main
+2i	cycles	0.020	[k] elf_get_dynamic_info <- _dl_map_object_from_fd
+2i	cycles	0.020	[k] _int_malloc <- __libc_calloc
+2i	cycles	0.020	rx_coherent_publish <- rx_world_publish_external
+2i	cycles	0.018	flush_all <- native_validate
+2i	cycles	0.018	futex_wait <- futex_wait_simple
+2i	cycles	0.018	[k] argus_ring_push <- push
+2i	cycles	0.018	[k] calculate_head_size <- _nl_load_locale_from_archive
+2i	cycles	0.018	native_validate <- rx_world_publish_external
+2i	cycles	0.018	___pthread_mutex_lock <- aienos_cap_inspect
+2i	cycles	0.015	__aarch64_ldadd8_acq <- __atomic_wide_counter_fetch_add_acquire
+2i	cycles	0.015	__aarch64_ldset4_relax <- __condvar_quiesce_and_switch_g1
+2i	cycles	0.015	__futex_abstimed_wait_common64 <- __futex_abstimed_wait_common
+2i	cycles	0.015	[k] __libc_early_init <- dl_main
+2i	cycles	0.015	[k] rtld_setup_main_map <- dl_main
+2i	cycles	0.015	[k] sysmalloc_mmap <- sysmalloc
+2i	cycles	0.015	memcpy@plt <- crumb_hash
+2i	cycles	0.015	resolve_map <- elf_machine_rela
+2i	cycles	0.015	__wait4 <- main
+2i	cycles	0.013	__aarch64_cas4_acq <- __pthread_cond_wait_common
+2i	cycles	0.013	__aarch64_ldadd4_relax <- ___pthread_cond_signal
+2i	cycles	0.013	__aarch64_ldadd8_acq_rel <- transition.part.0
+2i	cycles	0.013	[k] __aarch64_cas4_acq <- __internal_atexit
+2i	cycles	0.013	[k] aienos_cap_revoke <- t_attacks
+2i	cycles	0.013	[k] aienos_cap_validate <- native_validate
+2i	cycles	0.013	[k] _dl_map_object_from_fd <- _dl_map_object
+2i	cycles	0.013	[k] futex_wake <- ___pthread_cond_broadcast
+2i	cycles	0.013	[k] getenv <- rx_argus_auto_start
+2i	cycles	0.013	[k] __memset_generic <- aienos_cap_start
+2i	cycles	0.013	[k] __memset_zva64 <- __wrap_aienos_cap_start
+2i	cycles	0.013	[k] __open64_nocancel <- open_verify
+2i	cycles	0.013	[k] __pthread_create_2_1 <- init_common
+2i	cycles	0.013	[k] strcmp <- setlocale
+2i	cycles	0.013	[k] sysmalloc <- _int_malloc
+2i	cycles	0.013	[k] __wrap_aienos_cap_start <- env_start
+2i	cycles	0.013	memcpy@plt <- object_digest
+2i	cycles	0.013	__munmap <- __spawnix
+2i	cycles	0.010	__aarch64_swp4_acq <- __pthread_mutex_cond_lock
+2i	cycles	0.010	__aarch64_swp4_rel <- _int_free
+2i	cycles	0.010	bootstrap <- aienos_cap_start
+2i	cycles	0.010	_int_malloc <- __libc_calloc
+2i	cycles	0.010	[k] __ctype_init <- __libc_early_init
+2i	cycles	0.010	[k] _dl_init_paths <- dl_main
+2i	cycles	0.010	[k] init_have_lse_atomics <- call_init
+2i	cycles	0.010	__mmap64 <- __mmap64
+2i	cycles	0.010	__nptl_deallocate_stack <- __pthread_clockjoin_ex
+2i	cycles	0.010	__printf_buffer <- __vsprintf_internal
+2i	cycles	0.010	__pthread_mutex_unlock_usercnt <- native_validate
+2i	cycles	0.010	rtld_setup_main_map <- dl_main
+2i	cycles	0.010	rx_world_verify_crumbs <- t_attacks
+2i	cycles	0.010	__tunables_init <- _dl_sysdep_start
+2i	cycles	0.007	__aarch64_swp4_rel <- __libc_calloc
+2i	cycles	0.007	argus_ring_push <- push
+2i	cycles	0.007	__clone3 <- __spawnix
+2i	cycles	0.007	commit_writes <- rx_world_publish_external
+2i	cycles	0.007	crumb_hash <- rx_world_verify_crumbs
+2i	cycles	0.007	_dl_name_match_p <- _dl_map_object
+2i	cycles	0.007	_int_malloc <- __libc_malloc
+2i	cycles	0.007	[k] __aarch64_cas4_acq <- lll_mutex_lock_optimized
+2i	cycles	0.007	[k] __aarch64_cas4_acq_rel <- claim
+2i	cycles	0.007	[k] __access <- dl_main
+2i	cycles	0.007	[k] __getrlimit64 <- __getdtablesize
+2i	cycles	0.007	[k] __libc_sigaction <- __sigaddset
+2i	cycles	0.007	[k] memset <- _dl_map_segments
+2i	cycles	0.007	[k] memset <- ___pthread_mutex_init
+2i	cycles	0.007	[k] __read_nocancel <- _IO_new_file_underflow
+2i	cycles	0.007	[k] strcmp <- _dl_map_object_from_fd
+2i	cycles	0.007	___pthread_cond_signal <- try_admit
+2i	cycles	0.007	__pthread_mutex_unlock_usercnt <- aienos_cap_inspect
+2i	cycles	0.007	__pthread_mutex_unlock_usercnt <- rx_world_create
+2i	cycles	0.007	rx_world_create <- rx_aegis_create
+2i	cycles	0.007	sha256_update <- binary_digest
+2i	cycles	0.007	stamp_cap <- rx_world_publish_external
+2i	cycles	0.005	__aarch64_cas4_acq <- __pthread_enable_asynccancel
+2i	cycles	0.005	__aarch64_cas8_rel <- _int_free
+2i	cycles	0.005	aienos_cap_mint <- mint
+2i	cycles	0.005	allocate_stack <- __pthread_create_2_1
+2i	cycles	0.005	__atomic_wide_counter_load_relaxed <- __condvar_load_wseq_relaxed
+2i	cycles	0.005	call_init <- _dl_init
+2i	cycles	0.005	claim <- transition.part.0
+2i	cycles	0.005	__clock_gettime <- rx_world_publish_external
+2i	cycles	0.005	_dl_call_fini <- _dl_fini
+2i	cycles	0.005	_dl_check_map_versions <- _dl_check_all_versions
+2i	cycles	0.005	_dl_find_object_from_map <- _dlfo_process_initial
+2i	cycles	0.005	_dl_next_ld_env_entry <- process_envvars_default
+2i	cycles	0.005	_dl_relocate_object <- dl_main
+2i	cycles	0.005	elf_get_dynamic_info <- _dl_map_object_from_fd
+2i	cycles	0.005	elf_machine_rela <- elf_dynamic_do_Rela
+2i	cycles	0.005	elf_machine_rela_relative <- elf_dynamic_do_Rela
+2i	cycles	0.005	flush_all <- transition.part.0
+2i	cycles	0.005	__fstat64 <- __tzfile_read
+2i	cycles	0.005	get_cached_stack <- allocate_stack
+2i	cycles	0.005	_IO_new_do_write <- _IO_new_file_xsputn
+2i	cycles	0.005	[k] __aarch64_swp4_rel <- lll_mutex_unlock_optimized
+2i	cycles	0.005	[k] claim <- transition.part.0
+2i	cycles	0.005	[k] __fcntl64_nocancel_adjusted <- __libc_fcntl64
+2i	cycles	0.005	[k] __fstat64 <- _dl_get_file_id
+2i	cycles	0.005	[k] __getrlimit64 <- __pthread_early_init
+2i	cycles	0.005	[k] _int_malloc <- __libc_malloc
+2i	cycles	0.005	[k] _int_malloc <- tag_new_usable
+2i	cycles	0.005	[k] match_symbol <- _dl_check_map_versions
+2i	cycles	0.005	[k] __munmap <- _dl_map_segment
+2i	cycles	0.005	[k] __pthread_early_init <- __libc_early_init
+2i	cycles	0.005	[k] setup_vdso <- dl_main
+2i	cycles	0.005	[k] __spawnix <- _IO_new_popen
+2i	cycles	0.005	[k] syscall <- [unknown]
+2i	cycles	0.005	[k] __tcgetattr <- __isatty
+2i	cycles	0.005	[k] __tls_init_tp <- init_tls
+2i	cycles	0.005	__libc_free <- _IO_setb
+2i	cycles	0.005	__memcpy_sve <- rx_world_read
+2i	cycles	0.005	object_digest <- commit_writes
+2i	cycles	0.005	__offtime <- __tz_convert
+2i	cycles	0.005	propagate_inner.part.0 <- rx_world_publish_external
+2i	cycles	0.005	__pthread_attr_copy <- ___pthread_getattr_default_np
+2i	cycles	0.005	__pthread_create_2_1 <- init_common
+2i	cycles	0.005	__pthread_disable_asynccancel <- __libc_read
+2i	cycles	0.005	res_fits.part.0 <- best_waiting
+2i	cycles	0.005	rx_coherent_format <- init_common
+2i	cycles	0.005	rx_world_add_reaction <- rx_aegis_register
+2i	cycles	0.005	rx_world_publish_external <- intent
+2i	cycles	0.005	rx_world_read <- t_escalate_deny
+2i	cycles	0.005	__strchrnul <- __find_specmb
+2i	cycles	0.005	__strftime_internal <- __strftime_l
+2i	cycles	0.005	__strlen_generic <- __printf_buffer
+2i	cycles	0.003	__aarch64_cas4_acq <- _int_free
+2i	cycles	0.003	__aarch64_cas4_acq <- _IO_link_in
+2i	cycles	0.003	__aarch64_cas4_acq_rel <- aienos_cap_start
+2i	cycles	0.003	__aarch64_cas8_acq <- __pthread_clockjoin_ex
+2i	cycles	0.003	__aarch64_ldadd4_relax <- __pthread_create_2_1
+2i	cycles	0.003	__aarch64_ldadd8_relax <- sysmalloc_mmap
+2i	cycles	0.003	__aarch64_swp4_relax <- __condvar_set_orig_size
+2i	cycles	0.003	__aarch64_swp4_rel <- get_cached_stack
+2i	cycles	0.003	__access <- dl_main
+2i	cycles	0.003	aienos_cap_office <- __wrap_aienos_cap_start
+2i	cycles	0.003	aienos_cap_revoke <- t_attacks
+2i	cycles	0.003	__atomic_wide_counter_load_relaxed <- __condvar_load_g1_start_relaxed
+2i	cycles	0.003	authority_observer <- aienos_cap_mint
+2i	cycles	0.003	authority_observer <- aienos_cap_revoke
+2i	cycles	0.003	cache_rpath <- _dl_map_object
+2i	cycles	0.003	check_match <- _dl_lookup_direct
+2i	cycles	0.003	clock_gettime@plt <- rx_world_publish_external
+2i	cycles	0.003	__clock_gettime <- rx_world_create
+2i	cycles	0.003	__clone3 <- __clone3_internal
+2i	cycles	0.003	__condvar_acquire_lock <- ___pthread_cond_signal
+2i	cycles	0.003	create_thread <- __pthread_create_2_1
+2i	cycles	0.003	__ctype_init <- __libc_early_init
+2i	cycles	0.003	_dl_add_to_slotinfo <- dl_main
+2i	cycles	0.003	_dl_add_to_slotinfo <- _dl_sysdep_start
+2i	cycles	0.003	_dl_check_all_versions <- version_check_doit
+2i	cycles	0.003	_dl_load_cache_lookup <- _dl_map_object
+2i	cycles	0.003	_dl_lookup_symbol_x <- resolve_map
+2i	cycles	0.003	_dl_map_object_deps <- dl_main
+2i	cycles	0.003	_dl_name_match_p <- find_needed
+2i	cycles	0.003	_dl_new_object <- _dl_map_object_from_fd
+2i	cycles	0.003	_dl_start <- _start
+2i	cycles	0.003	do_lookup_x <- resolve_map
+2i	cycles	0.003	elf_get_dynamic_info <- _dl_start
+2i	cycles	0.003	elf_get_dynamic_info <- setup_vdso
+2i	cycles	0.003	env_stop <- t_escalate_deny
+2i	cycles	0.003	flush_all <- rx_argus_shutdown
+2i	cycles	0.003	fopen@plt <- fill_token
+2i	cycles	0.003	___fprintf_chk <- write_receipt
+2i	cycles	0.003	free@plt <- get_cached_stack
+2i	cycles	0.003	free@plt <- rx_world_destroy
+2i	cycles	0.003	fseek <- __tzfile_read
+2i	cycles	0.003	__ftello <- __tzfile_read
+2i	cycles	0.003	__futex_abstimed_wait_common <- __futex_abstimed_wait_cancelable64
+2i	cycles	0.003	futex_wake <- ___pthread_cond_broadcast
+2i	cycles	0.003	getenv <- _nl_find_locale
+2i	cycles	0.003	get_next_env <- __tunables_init
+2i	cycles	0.003	__getrlimit64 <- __getdtablesize
+2i	cycles	0.003	__gmtime_r <- omega_evidence_run_id.part.0
+2i	cycles	0.003	init_common <- env_start
+2i	cycles	0.003	init_have_lse_atomics <- call_init
+2i	cycles	0.003	intent <- t_escalate_deny
+2i	cycles	0.003	_int_free <- __libc_free
+2i	cycles	0.003	_int_malloc <- _int_memalign
+2i	cycles	0.003	_int_malloc <- tcache_init
+2i	cycles	0.003	_IO_new_fclose <- popen_read_line.constprop.0
+2i	cycles	0.003	_IO_new_file_close_it <- _IO_acquire_lock_fct
+2i	cycles	0.003	_IO_new_file_finish <- _IO_new_fclose
+2i	cycles	0.003	_IO_new_file_underflow <- _IO_file_xsgetn
+2i	cycles	0.003	_IO_new_fopen <- fill_token
+2i	cycles	0.003	_IO_new_popen <- omega_evidence_tree_dirty
+2i	cycles	0.003	_IO_new_popen <- popen_read_line.constprop.0
+2i	cycles	0.003	_IO_unsave_markers <- _IO_new_file_close_it
+2i	cycles	0.003	IO_validate_vtable <- _IO_sgetn
+2i	cycles	0.003	_itoa_word <- __printf_buffer
+2i	cycles	0.003	[k] argus_core_init <- rx_argus_auto_start
+2i	cycles	0.003	[k] __brk <- dl_platform_init
+2i	cycles	0.003	[k] __close_nocancel <- _nl_load_locale_from_archive
+2i	cycles	0.003	[k] __close_nocancel <- spawn_process
+2i	cycles	0.003	[k] demand <- propagate_inner.part.0
+2i	cycles	0.003	[k] _dl_cache_libcmp <- search_cache
+2i	cycles	0.003	[k] _dl_new_object <- _dl_map_object_from_fd
+2i	cycles	0.003	[k] _dl_sysdep_parse_arguments <- _dl_sysdep_start
+2i	cycles	0.003	[k] elf_get_dynamic_info <- setup_vdso
+2i	cycles	0.003	__kernel_clock_gettime <- [unknown]
+2i	cycles	0.003	[k] __fstat64 <- _dl_sysdep_read_whole_file
+2i	cycles	0.003	[k] __fstat64 <- _nl_load_locale_from_archive
+2i	cycles	0.003	[k] __getpid <- rx_argus_auto_start
+2i	cycles	0.003	[k] __getrandom_nocancel_nostatus <- tcache_key_initialize
+2i	cycles	0.003	[k] init_cpu_features <- dl_platform_init
+2i	cycles	0.003	[k] _IO_file_doallocate <- _IO_doallocbuf
+2i	cycles	0.003	[k] _IO_file_stat <- _IO_file_doallocate
+2i	cycles	0.003	[k] __isoc23_strtoul <- [unknown]
+2i	cycles	0.003	[k] __libc_sigaction <- __bsd_signal
+2i	cycles	0.003	[k] lll_mutex_lock_optimized <- ___pthread_mutex_lock
+2i	cycles	0.003	[k] __memchr_ifunc <- elf_ifunc_invoke
+2i	cycles	0.003	[k] __memcpy_chk <- _nl_load_locale_from_archive
+2i	cycles	0.003	[k] memcpy <- _dl_new_object
+2i	cycles	0.003	[k] __memcpy_sve <- object_digest
+2i	cycles	0.003	[k] memset <- _dl_allocate_tls_storage
+2i	cycles	0.003	[k] propagate_inner.part.0 <- finish_writes
+2i	cycles	0.003	[k] __pthread_create_2_1 <- rx_argus_auto_start
+2i	cycles	0.003	[k] ___pthread_mutex_lock <- aienos_cap_revoke
+2i	cycles	0.003	[k] ___pthread_mutex_lock <- aienos_cap_validate
+2i	cycles	0.003	[k] ___pthread_mutex_lock <- rx_world_publish_external
+2i	cycles	0.003	[k] __pthread_mutex_unlock_usercnt <- aienos_cap_validate
+2i	cycles	0.003	[k] __pthread_tunables_init <- __pthread_early_init
+2i	cycles	0.003	[k] __read_nocancel <- open_verify
+2i	cycles	0.003	[k] rseq_register_current_thread <- __tls_init_tp
+2i	cycles	0.003	[k] tunable_is_name <- __tunables_init
+2i	cycles	0.003	[k] __vfprintf_internal <- ___fprintf_chk
+2i	cycles	0.003	__libc_alloc_buffer_alloc_array <- __tzfile_read
+2i	cycles	0.003	__libc_calloc <- allocate_dtv
+2i	cycles	0.003	__libc_calloc <- rx_world_add_reaction
+2i	cycles	0.003	__libc_early_init <- dl_main
+2i	cycles	0.003	__libc_malloc <- __tzstring_len
+2i	cycles	0.003	__libc_read <- __libc_read
+2i	cycles	0.003	list_add <- __nptl_stack_list_add
+2i	cycles	0.003	list_del <- __nptl_stack_list_del
+2i	cycles	0.003	malloc_consolidate <- _int_malloc
+2i	cycles	0.003	malloc_init_state <- ptmalloc_init
+2i	cycles	0.003	memcpy <- _dl_load_cache_lookup
+2i	cycles	0.003	__memcpy_generic <- _IO_default_xsputn
+2i	cycles	0.003	memcpy@plt <- rx_aegis_create
+2i	cycles	0.003	memcpy@plt <- sha256_final
+2i	cycles	0.003	memcpy@plt <- sha256_update
+2i	cycles	0.003	__memcpy_sve <- rx_world_add_reaction
+2i	cycles	0.003	memset@plt <- rx_world_publish_external
+2i	cycles	0.003	__memset_zva64 <- argus_core_init
+2i	cycles	0.003	__memset_zva64 <- bootstrap
+2i	cycles	0.003	mint <- env_start
+2i	cycles	0.003	__mmap64 <- __spawnix
+2i	cycles	0.003	__mprotect <- _dl_map_segments
+2i	cycles	0.003	__mprotect <- _dl_protect_relro
+2i	cycles	0.003	__mprotect <- setup_stack_prot
+2i	cycles	0.003	native_validate <- main
+2i	cycles	0.003	__new_pclose <- popen_read_line.constprop.0
+2i	cycles	0.003	_nl_intern_locale_data <- _nl_load_locale_from_archive
+2i	cycles	0.003	__nptl_stack_list_del <- get_cached_stack
+2i	cycles	0.003	object_digest <- rx_world_publish_external
+2i	cycles	0.003	__open64_nocancel <- _dl_sysdep_read_whole_file
+2i	cycles	0.003	pclose@plt <- popen_read_line.constprop.0
+2i	cycles	0.003	popen_read_line.constprop.0 <- omega_evidence_run_commit
+2i	cycles	0.003	__posix_spawn_file_actions_destroy <- _IO_new_proc_open
+2i	cycles	0.003	posix_sysconf <- linux_sysconf
+2i	cycles	0.003	__printf_buffer_pad <- __printf_buffer
+2i	cycles	0.003	__printf_buffer <- __vfprintf_internal
+2i	cycles	0.003	__pthread_clockjoin_ex <- rx_world_destroy
+2i	cycles	0.003	___pthread_cond_timedwait64 <- rx_world_wait_quiescent
+2i	cycles	0.003	__pthread_disable_asynccancel <- __futex_abstimed_wait_common64
+2i	cycles	0.003	__pthread_disable_asynccancel <- __pthread_disable_asynccancel
+2i	cycles	0.003	__pthread_enable_asynccancel <- __futex_abstimed_wait_common64
+2i	cycles	0.003	__pthread_enable_asynccancel <- __wait4
+2i	cycles	0.003	___pthread_mutex_init <- rx_aegis_create
+2i	cycles	0.003	___pthread_mutex_lock <- aienos_cap_clock
+2i	cycles	0.003	___pthread_mutex_lock <- aienos_cap_mint
+2i	cycles	0.003	___pthread_mutex_lock <- native_validate
+2i	cycles	0.003	pthread_mutex_lock@plt <- aienos_cap_inspect
+2i	cycles	0.003	___pthread_mutex_lock <- rx_world_create
+2i	cycles	0.003	___pthread_mutex_lock <- rx_world_wait_quiescent
+2i	cycles	0.003	___pthread_mutex_unlock <- aienos_cap_clock
+2i	cycles	0.003	___pthread_mutex_unlock <- aienos_cap_office
+2i	cycles	0.003	___pthread_mutex_unlock <- stamp_cap
+2i	cycles	0.003	__pthread_mutex_unlock_usercnt <- aienos_cap_office
+2i	cycles	0.003	__rtld_malloc_init_real <- dl_main
+2i	cycles	0.003	__run_exit_handlers <- [unknown]
+2i	cycles	0.003	rx_aegis_register <- env_start
+2i	cycles	0.003	rx_argus_shutdown <- rx_argus_auto_stop
+2i	cycles	0.003	rx_world_read <- t_slow_then_fast
+2i	cycles	0.003	rx_world_wait_quiescent <- approve
+2i	cycles	0.003	rx_world_wait_quiescent <- env_stop
+2i	cycles	0.003	__sbrk <- _dl_sysdep_start
+2i	cycles	0.003	__sbrk <- __glibc_morecore
+2i	cycles	0.003	security_init <- dl_main
+2i	cycles	0.003	select_memmove_ifunc <- __libc_memmove_ifunc
+2i	cycles	0.003	___snprintf_chk <- rx_argus_auto_start
+2i	cycles	0.003	__spawnix <- _IO_new_popen
+2i	cycles	0.003	___sprintf_chk <- binary_digest
+2i	cycles	0.003	_start <- ?
+2i	cycles	0.003	strchr <- _dl_dst_count
+2i	cycles	0.003	strchr <- strstr
+2i	cycles	0.003	strcmp <- dl_main
+2i	cycles	0.003	strcmp <- match_symbol
+2i	cycles	0.003	strcmp <- set_binding_values
+2i	cycles	0.003	strcmp <- setlocale
+2i	cycles	0.003	__strftime_l <- omega_evidence_run_id.part.0
+2i	cycles	0.003	__strlen_generic <- getenv
+2i	cycles	0.003	strncmp <- getenv
+2i	cycles	0.003	strstr <- _IO_new_file_fopen
+2i	cycles	0.003	tcache_init <- tcache_init
+2i	cycles	0.003	__tcgetattr <- __isatty
+2i	cycles	0.003	__tunable_get_val <- ptmalloc_init
+2i	cycles	0.003	tunable_is_name <- __tunables_init
+2i	cycles	0.003	__underflow <- _IO_file_xsgetn
+2i	cycles	0.003	[unknown] <- __libc_start_call_main
+2i	cycles	0.003	[unknown] <- [unknown]
+2i	cycles	0.003	unlink_chunk <- _int_malloc
+2i	cycles	0.003	__wrap_aienos_cap_start <- env_start
+2i	instr	78.522	TOTAL
+2i	instr	39.517	sha256_transform <- sha256_update
+2i	instr	9.037	__aarch64_swp4_rel <- lll_mutex_unlock_optimized
+2i	instr	7.412	__aarch64_cas4_acq <- lll_mutex_lock_optimized
+2i	instr	4.178	aienos_cap_validate <- native_validate
+2i	instr	2.505	native_validate <- t_slow_then_fast
+2i	instr	1.680	t_slow_then_fast <- main
+2i	instr	1.320	___pthread_mutex_lock <- aienos_cap_validate
+2i	instr	1.255	rx_aegis_evaluate <- t_slow_then_fast
+2i	instr	1.087	[unknown] <- __kernel_clock_gettime
+2i	instr	1.060	__pthread_mutex_unlock_usercnt <- aienos_cap_validate
+2i	instr	0.838	sha256_update <- crumb_hash
+2i	instr	0.585	sha256_update <- object_digest
+2i	instr	0.560	[k] __memcpy_sve <- crumb_append
+2i	instr	0.510	__pthread_mutex_unlock_usercnt <- rx_world_publish_external
+2i	instr	0.472	__memcpy_sve <- crumb_hash
+2i	instr	0.390	__memcpy_sve <- object_digest
+2i	instr	0.352	lll_mutex_lock_optimized <- ___pthread_mutex_lock
+2i	instr	0.340	__memcpy_sve <- crumb_append
+2i	instr	0.305	[k] __lll_lock_wake <- lll_mutex_unlock_optimized
+2i	instr	0.305	__memset_zva64 <- init_common
+2i	instr	0.253	rx_world_validate_cap <- t_slow_then_fast
+2i	instr	0.240	__memset_zva64 <- env_start
+2i	instr	0.233	lll_mutex_unlock_optimized <- __pthread_mutex_unlock_usercnt
+2i	instr	0.217	charge <- try_admit
+2i	instr	0.207	sha256_final <- crumb_hash
+2i	instr	0.185	propagate_inner.part.0 <- finish_writes
+2i	instr	0.177	sha256_final <- object_digest
+2i	instr	0.142	___pthread_mutex_unlock <- aienos_cap_validate
+2i	instr	0.120	do_lookup_x <- _dl_lookup_symbol_x
+2i	instr	0.117	sha256_update <- sha256_final
+2i	instr	0.113	rx_coherent_publish <- finish_writes
+2i	instr	0.105	demand_inner <- propagate_inner.part.0
+2i	instr	0.105	__memcpy_sve <- sha256_update
+2i	instr	0.102	__aarch64_cas4_acq <- __condvar_acquire_lock
+2i	instr	0.100	aienos_cap_validate <- t_slow_then_fast
+2i	instr	0.092	object_digest <- commit_writes
+2i	instr	0.090	finish_writes <- rx_world_publish_external
+2i	instr	0.083	crumb_hash <- crumb_append
+2i	instr	0.083	pthread_mutex_unlock@plt <- aienos_cap_validate
+2i	instr	0.077	__aarch64_ldclr4_rel <- __condvar_release_lock
+2i	instr	0.077	[k] futex_wake <- ___pthread_cond_signal
+2i	instr	0.075	[k] __memset_zva64 <- env_start
+2i	instr	0.075	rx_coherent_project <- commit_writes
+2i	instr	0.072	crumb_append <- rx_world_publish_external
+2i	instr	0.070	pthread_mutex_lock@plt <- aienos_cap_validate
+2i	instr	0.062	[k] __memset_zva64 <- rx_coherent_format
+2i	instr	0.055	aienos_cap_inspect <- stamp_cap
+2i	instr	0.052	memcpy@plt <- crumb_hash
+2i	instr	0.052	memcpy@plt <- object_digest
+2i	instr	0.045	rx_argus_use_begin_slow <- native_validate
+2i	instr	0.035	[k] futex_wait <- __lll_lock_wait
+2i	instr	0.033	flush_all <- transition.part.0
+2i	instr	0.033	__memcpy_sve <- sha256_final
+2i	instr	0.033	___pthread_mutex_unlock <- native_validate
+2i	instr	0.033	rx_coherent_publish <- rx_world_publish_external
+2i	instr	0.030	[k] __futex_abstimed_wait_common64 <- __futex_abstimed_wait_common
+2i	instr	0.030	[k] __memset_generic <- rx_world_add_reaction
+2i	instr	0.030	try_admit <- propagate_inner.part.0
+2i	instr	0.028	_dl_new_hash <- _dl_lookup_symbol_x
+2i	instr	0.028	__pthread_mutex_unlock_usercnt <- native_validate
+2i	instr	0.028	rx_world_add_reaction <- rx_aegis_register
+2i	instr	0.025	__aarch64_ldset4_rel <- __condvar_quiesce_and_switch_g1
+2i	instr	0.025	flush_all <- native_validate
+2i	instr	0.025	__memset_zva64 <- rx_coherent_format
+2i	instr	0.025	stage_mutations.constprop.0 <- rx_world_publish_external
+2i	instr	0.022	__aarch64_ldadd8_acq <- __atomic_wide_counter_fetch_add_acquire
+2i	instr	0.022	caused_by <- t_slow_then_fast
+2i	instr	0.022	check_match <- do_lookup_x
+2i	instr	0.022	list_add <- __nptl_stack_list_add
+2i	instr	0.022	__memset_generic <- rx_world_add_reaction
+2i	instr	0.022	rx_world_publish_external <- t_slow_then_fast
+2i	instr	0.022	strcmp <- check_match
+2i	instr	0.020	crumb_hash <- rx_world_verify_crumbs
+2i	instr	0.020	__memcpy_sve <- rx_world_add_reaction
+2i	instr	0.020	___pthread_mutex_lock <- rx_world_publish_external
+2i	instr	0.015	native_validate <- rx_world_publish_external
+2i	instr	0.015	__pthread_mutex_unlock_usercnt <- rx_world_create
+2i	instr	0.013	__aarch64_ldadd4_relax <- __pthread_cond_wait_common
+2i	instr	0.013	best_waiting <- try_admit
+2i	instr	0.013	demand <- propagate_inner.part.0
+2i	instr	0.013	__libc_free <- rx_world_destroy
+2i	instr	0.013	rx_world_verify_crumbs <- t_attacks
+2i	instr	0.010	__aarch64_ldadd4_relax <- ___pthread_cond_signal
+2i	instr	0.010	__aarch64_ldset4_relax <- __condvar_quiesce_and_switch_g1
+2i	instr	0.010	__clock_gettime <- rx_world_publish_external
+2i	instr	0.010	demand <- finish_writes
+2i	instr	0.010	flush_all <- rx_argus_use_begin_slow
+2i	instr	0.010	[k] futex_wait <- futex_wait_simple
+2i	instr	0.010	[k] __pthread_create_2_1 <- init_common
+2i	instr	0.010	memcpy@plt <- sha256_final
+2i	instr	0.010	mint <- env_start
+2i	instr	0.010	___pthread_mutex_lock <- aienos_cap_mint
+2i	instr	0.010	___pthread_mutex_lock <- native_validate
+2i	instr	0.010	resolve_map <- elf_machine_rela
+2i	instr	0.010	stamp_cap <- rx_world_publish_external
+2i	instr	0.010	strcmp <- _nl_load_locale_from_archive
+2i	instr	0.007	__aarch64_ldadd4_rel <- __condvar_dec_grefs
+2i	instr	0.007	__aarch64_ldadd8_acq_rel <- transition.part.0
+2i	instr	0.007	commit_writes <- rx_world_publish_external
+2i	instr	0.007	_dl_lookup_symbol_x <- resolve_map
+2i	instr	0.007	elf_dynamic_do_Rela <- _dl_relocate_object
+2i	instr	0.007	_int_malloc <- __libc_calloc
+2i	instr	0.007	[k] argus_ring_push <- push
+2i	instr	0.007	__memchr_generic <- valid_locale_name
+2i	instr	0.007	memset <- __memmem
+2i	instr	0.007	native_validate <- main
+2i	instr	0.007	__printf_buffer <- __vfprintf_internal
+2i	instr	0.007	__printf_buffer <- __vsprintf_internal
+2i	instr	0.007	___pthread_mutex_lock <- aienos_cap_inspect
+2i	instr	0.007	___pthread_mutex_lock <- aienos_cap_office
+2i	instr	0.007	rx_world_destroy <- env_stop
+2i	instr	0.007	sha256_update <- binary_digest
+2i	instr	0.005	__aarch64_swp4_acq <- __lll_lock_wait
+2i	instr	0.005	__aarch64_swp4_acq <- __pthread_mutex_cond_lock
+2i	instr	0.005	__aarch64_swp4_rel <- _int_free
+2i	instr	0.005	__aarch64_swp4_rel <- __libc_calloc
+2i	instr	0.005	aienos_cap_mint <- mint
+2i	instr	0.005	argus_ring_push <- push
+2i	instr	0.005	__condvar_quiesce_and_switch_g1 <- ___pthread_cond_signal
+2i	instr	0.005	crumb_hash <- rx_world_publish_external
+2i	instr	0.005	__getpagesize <- posix_sysconf
+2i	instr	0.005	[k] __mmap64 <- __mmap64
+2i	instr	0.005	[k] __wait4 <- main
+2i	instr	0.005	memcpy@plt <- rx_aegis_create
+2i	instr	0.005	__memmem <- __memmem
+2i	instr	0.005	__memmem <- valid_locale_name
+2i	instr	0.005	memset@plt <- rx_world_publish_external
+2i	instr	0.005	__memset_zva64 <- rx_world_publish_external
+2i	instr	0.005	_nl_load_locale_from_archive <- _nl_find_locale
+2i	instr	0.005	object_digest <- rx_world_publish_external
+2i	instr	0.005	___pthread_cond_signal <- try_admit
+2i	instr	0.005	___pthread_mutex_lock <- aienos_cap_clock
+2i	instr	0.005	___pthread_mutex_unlock <- aienos_cap_inspect
+2i	instr	0.005	pthread_mutex_unlock@plt <- aienos_cap_inspect
+2i	instr	0.005	res_fits.part.0 <- best_waiting
+2i	instr	0.005	rx_coherent_format <- init_common
+2i	instr	0.005	rx_coherent_project <- rx_coherent_format
+2i	instr	0.005	rx_world_add_reaction <- env_start
+2i	instr	0.005	__strchrnul <- __find_specmb
+2i	instr	0.005	__tzfile_read <- tzset_internal
+2i	instr	0.005	unlink_chunk <- _int_free_create_chunk
+2i	instr	0.005	valid_locale_name <- _nl_find_locale
+2i	instr	0.005	__vsprintf_internal <- ___sprintf_chk
+2i	instr	0.003	__aarch64_cas4_acq <- _int_free
+2i	instr	0.003	__aarch64_cas4_acq <- __libc_calloc
+2i	instr	0.003	__aarch64_cas4_acq <- __pthread_cond_wait_common
+2i	instr	0.003	__aarch64_cas4_acq <- __pthread_enable_asynccancel
+2i	instr	0.003	__aarch64_ldadd4_acq <- __pthread_cond_wait_common
+2i	instr	0.003	__aarch64_ldadd8_acq_rel <- authority_observer
+2i	instr	0.003	__aarch64_ldeor8_rel <- __condvar_fetch_xor_wseq_release
+2i	instr	0.003	aienos_cap_inspect <- __wrap_aienos_cap_start
+2i	instr	0.003	aienos_cap_office <- mint
+2i	instr	0.003	aienos_cap_revoke <- t_attacks
+2i	instr	0.003	aienos_cap_validate <- rx_world_publish_external
+2i	instr	0.003	__atomic_wide_counter_load_relaxed <- __condvar_load_g1_start_relaxed
+2i	instr	0.003	__atomic_wide_counter_load_relaxed <- __condvar_load_wseq_relaxed
+2i	instr	0.003	bootstrap <- aienos_cap_start
+2i	instr	0.003	calloc@plt <- rx_world_add_reaction
+2i	instr	0.003	clock_gettime@plt <- rx_world_create
+2i	instr	0.003	__condvar_acquire_lock <- ___pthread_cond_signal
+2i	instr	0.003	crumb_append <- rx_world_create
+2i	instr	0.003	_dl_lookup_symbol_x <- dl_vdso_vsym
+2i	instr	0.003	do_lookup_x <- resolve_map
+2i	instr	0.003	elf_machine_rela <- elf_dynamic_do_Rela
+2i	instr	0.003	__fileno <- __tzfile_read
+2i	instr	0.003	__find_specmb <- __printf_buffer
+2i	instr	0.003	finish_writes <- t_slow_then_fast
+2i	instr	0.003	flush_all <- rx_argus_shutdown
+2i	instr	0.003	free@plt <- rx_world_destroy
+2i	instr	0.003	__GI__dl_allocate_tls_init <- allocate_stack
+2i	instr	0.003	init_common <- env_start
+2i	instr	0.003	_int_free_maybe_consolidate <- _int_free
+2i	instr	0.003	_IO_new_file_close_it <- _IO_acquire_lock_fct
+2i	instr	0.003	[k] __clone3 <- __clone3_internal
+2i	instr	0.003	[k] __close_nocancel <- _IO_new_proc_close
+2i	instr	0.003	[k] __libc_read <- __libc_read
+2i	instr	0.003	[k] __memset_zva64 <- __wrap_aienos_cap_start
+2i	instr	0.003	[k] __spawnix <- __libc_start_call_main
+2i	instr	0.003	__libc_malloc <- caused_by
+2i	instr	0.003	__lll_lock_wait <- lll_mutex_lock_optimized
+2i	instr	0.003	__memcpy_generic <- memcpy
+2i	instr	0.003	memcpy@plt <- crumb_append
+2i	instr	0.003	memcpy@plt <- sha256_update
+2i	instr	0.003	__memset_generic <- aienos_cap_start
+2i	instr	0.003	__memset_zva64 <- rx_world_add_reaction
+2i	instr	0.003	object_digest <- rx_world_create
+2i	instr	0.003	__printf_buffer_done <- __vfprintf_internal
+2i	instr	0.003	___pthread_mutex_init <- rx_aegis_create
+2i	instr	0.003	___pthread_mutex_lock <- authority_observer
+2i	instr	0.003	___pthread_mutex_lock <- rx_world_create
+2i	instr	0.003	pthread_mutex_unlock@plt <- rx_world_add_reaction
+2i	instr	0.003	pthread_mutex_unlock@plt <- rx_world_publish_external
+2i	instr	0.003	__pthread_mutex_unlock_usercnt <- aienos_cap_clock
+2i	instr	0.003	__pthread_mutex_unlock_usercnt <- aienos_cap_inspect
+2i	instr	0.003	__pthread_mutex_unlock_usercnt <- t_slow_then_fast
+2i	instr	0.003	push <- transition.part.0
+2i	instr	0.003	rx_aegis_create <- env_start
+2i	instr	0.003	rx_aegis_register <- env_start
+2i	instr	0.003	rx_argus_shutdown <- rx_argus_auto_stop
+2i	instr	0.003	rx_argus_use_slow <- native_validate
+2i	instr	0.003	rx_world_create <- env_start
+2i	instr	0.003	rx_world_create <- rx_aegis_create
+2i	instr	0.003	rx_world_publish_external <- intent
+2i	instr	0.003	rx_world_publish_external <- t_attacks
+2i	instr	0.003	rx_world_read <- t_attacks
+2i	instr	0.003	sha256_transform <- object_digest
+2i	instr	0.003	sha256_update <- commit_writes
+2i	instr	0.003	sha256_update <- crumb_append
+2i	instr	0.003	sha256_update <- rx_world_create
+2i	instr	0.003	___sprintf_chk <- binary_digest
+2i	instr	0.003	try_admit <- finish_writes

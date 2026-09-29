@@ -1,0 +1,6 @@
+r7-1.bin: state digest d052720290ad8a98945d942a98bc11f0b4678d8290f080a138431c6433074d93 deterministic replay: yes 
+r7-2.bin: state digest d052720290ad8a98945d942a98bc11f0b4678d8290f080a138431c6433074d93 deterministic replay: yes 
+r8-1.bin: state digest f091939861074e5d679e4802bb75909cbfbd7ef20927ca9471bfd6caed177a2d deterministic replay: yes 
+r8-2.bin: state digest 4f39fc5ec7a1808c43817b1cac0c028ba23a1e9c54e34b10fca14b5ea4458af2 deterministic replay: yes 
+r9-1.bin: state digest 314fc1c5665c5ab86ee304a88c7eb39d6ca90f383f99616924aff13be4f817dc deterministic replay: yes 
+r9-2.bin: state digest 6b0b398880e62ae5af178f7c9208657c58d60b424190b185226723871c6c4fe5 deterministic replay: yes 

@@ -1,0 +1,5 @@
+b375dcaa2887d53cda407d773c2e4e489a0b1365
+# aien-dev/aienos native/argus (ARGUS-0, ABI v1.1), branch feat/argus-0 (integrator round 3 head).
+# argus_abi.h is byte-identical at 398cfb9, 03b9f06, be2814d and b375dca (sha256 5ff168ea...).
+# On origin (origin/feat/argus-0, origin/feat/argus-1-spec contain it). The branch head a64bc55
+# differs from b375dca in native/argus only by docs (ARGUS0_GATES.md, HOSTILE_REVIEW.md).

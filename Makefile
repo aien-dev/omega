@@ -182,7 +182,14 @@ test-sem-incremental: $(RX_SEM_TEST)
 	./$(RX_SEM_TEST)
 
 # R7: native AIENOS authority versus the Linux oracle, then the world view.
-AIENOS_R7_DIR ?= ../aienos-r9
+# Default: the authority pinned by aienos.lock, extracted with `git archive` from
+# AIENOS_LOCK_REPO (a clone that has the commit) into $(OUT_DIR). An override must point
+# at a tree with native/capability; the build stops if it does not (the old default
+# ../aienos-r9 silently had none on the Spark).
+AIENOS_LOCK_REPO ?= ../aienos-argus-cap
+AIENOS_LOCK = $(shell head -n 1 aienos.lock)
+AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(shell echo $(AIENOS_LOCK) | cut -c1-7)
+AIENOS_R7_DIR ?= $(AIENOS_R7_DEFAULT)
 AIENOS_CAP_LIB ?= $(AIENOS_R7_DIR)/native/capability/out/libaienos_capability.a
 RX_R7_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
@@ -190,6 +197,14 @@ RX_R7_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_cohe
 RX_R7_TEST = $(OUT_DIR)/rx_r7_native_test
 
 $(AIENOS_CAP_LIB):
+	@if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ] && [ ! -d "$(AIENOS_R7_DIR)/native/capability" ]; then \
+		test -n "$(AIENOS_LOCK)" || { echo "aienos.lock is empty"; exit 1; }; \
+		mkdir -p "$(AIENOS_R7_DIR)" && \
+		git -C $(AIENOS_LOCK_REPO) archive $(AIENOS_LOCK) native/capability | tar -x -C "$(AIENOS_R7_DIR)"; \
+	fi
+	@test -f "$(AIENOS_R7_DIR)/native/capability/Makefile" || { \
+		echo "AIENOS_R7_DIR=$(AIENOS_R7_DIR) has no native/capability:"; \
+		echo "  set AIENOS_R7_DIR to an aienos tree at aienos.lock, or AIENOS_LOCK_REPO to a clone with it"; exit 1; }
 	$(MAKE) -C $(AIENOS_R7_DIR)/native/capability
 
 # OMEGA_EFFECT_CAP64 (spec/effect-cap64-migration.md): effect objects carry the
@@ -720,3 +735,95 @@ $(RX_TYPED_TEST): $(RX_TYPED_SRCS) $(RX_CONTRACT_OBJ) $(RX_GRAPH_OBJ) src/runtim
 .PHONY: test-typed-results
 test-typed-results: $(RX_TYPED_TEST)
 	./$(RX_TYPED_TEST) $(TYPED_RESULTS_N)
+
+# ---- ARGUS producer (feat/argus-producer, lanes H/H2 of ARGUS-0) ---------
+# The runtime feeds ARGUS (src/runtime/rx_argus.{c,h}, ABI v1.1: per-thread
+# rings, use tables flushed as CAPABILITY_USE_SUMMARY, full events only on
+# transitions). Default builds are unchanged (RX_ARGUS undefined = 0: the
+# hooks compile to nothing). This block builds the AEGIS/promotion suites with
+# RX_ARGUS=$(RX_ARGUS) against ARGUS pinned by argus.lock, extracted with
+# `git archive` from ARGUS_REPO (never built in place). ARGUS's sha256.c is
+# Omega's src/sha256.c copied unchanged; Omega's is linked, not both.
+#
+# Grant source (ARGUS_AUTH):
+#   observer (default) the authority announces its own mints/revokes
+#            (aienos_cap_set_observer, aienos 12add16, native in the authority
+#            pinned by aienos.lock, d39dd5b); the observer is installed by a link
+#            wrap of aienos_cap_start, which also announces the office (cap 0).
+#   aegis    GRANTED/REVOKED only where rx_aegis mints/revokes (harness mints
+#            are unseen and show up as FORGED).
+# Every ARGUS target links the aienos.lock authority, $(AIENOS_CAP_LIB), the
+# same library as the default targets (with no observer set it
+# costs one NULL check per admin operation), RX_ARGUS=0 included.
+ARGUS_REPO ?= ../aienos-argus
+ARGUS_COMMIT ?= $(shell head -n 1 argus.lock)
+ARGUS_SHORT = $(shell echo $(ARGUS_COMMIT) | cut -c1-7)
+ARGUS_SRC = $(OUT_DIR)/argus-src/$(ARGUS_SHORT)/native/argus
+ARGUS_STAMP = $(OUT_DIR)/argus-src/$(ARGUS_SHORT)/.extracted
+ARGUS_LIB_SRCS = $(addprefix $(ARGUS_SRC)/,argus_event.c argus_ring.c argus_core.c argus_detect.c)
+RX_ARGUS ?= 2
+ARGUS_AUTH ?= observer
+ARGUS_CAP_LIB = $(AIENOS_CAP_LIB)
+comma := ,
+ARGUS_AUTH_FLAGS = $(if $(filter observer,$(ARGUS_AUTH)),-DRX_ARGUS_AUTHORITY_OBSERVER -Wl$(comma)--wrap=aienos_cap_start,)
+ARGUS_VARIANT = $(if $(filter observer,$(ARGUS_AUTH)),,-$(ARGUS_AUTH))
+ARGUS_OUT = $(OUT_DIR)/argus$(RX_ARGUS)$(ARGUS_VARIANT)
+ARGUS_CFLAGS = $(CFLAGS) -DRX_ARGUS=$(RX_ARGUS) -I$(ARGUS_SRC)
+ARGUS_STREAMS ?= $(HOME)/workspace/argus-runtime-streams
+ARGUS_RUN_ID = $(shell git rev-parse --short HEAD 2>/dev/null)-argus$(ARGUS_SHORT)
+
+$(ARGUS_STAMP):
+	@test -n "$(ARGUS_COMMIT)" || { echo "argus.lock is empty"; exit 1; }
+	mkdir -p $(OUT_DIR)/argus-src/$(ARGUS_SHORT)
+	git -C $(ARGUS_REPO) archive $(ARGUS_COMMIT) native/argus | tar -x -C $(OUT_DIR)/argus-src/$(ARGUS_SHORT)
+	touch $@
+
+$(ARGUS_LIB_SRCS): $(ARGUS_STAMP)
+
+# RX_ARGUS=0 links no ARGUS code at all.
+ARGUS_RX = $(if $(filter 0,$(RX_ARGUS)),,src/runtime/rx_argus.c $(ARGUS_LIB_SRCS))
+ARGUS_LINK_FLAGS = $(if $(filter 0,$(RX_ARGUS)),,$(ARGUS_AUTH_FLAGS))
+ARGUS_R7 = $(ARGUS_OUT)/rx_r7_native_test
+ARGUS_R8 = $(ARGUS_OUT)/rx_r8_aegis_test
+ARGUS_R9 = $(ARGUS_OUT)/rx_r9_barrier_test
+ARGUS_BENCH = $(ARGUS_OUT)/bench_rx_argus
+ARGUS_BENCH_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c tests/bench_rx_argus.c
+
+$(ARGUS_OUT):
+	mkdir -p $@
+
+$(ARGUS_R7): $(RX_R7_SRCS) src/runtime/rx_argus.h $(ARGUS_RX) $(ARGUS_STAMP) $(ARGUS_CAP_LIB) | $(ARGUS_OUT)
+	$(CC) $(ARGUS_CFLAGS) $(ARGUS_LINK_FLAGS) -pthread -o $@ $(RX_R7_SRCS) $(ARGUS_RX) $(ARGUS_CAP_LIB) -lm
+$(ARGUS_R8): $(RX_R8_SRCS) src/runtime/rx_argus.h $(ARGUS_RX) $(ARGUS_STAMP) $(ARGUS_CAP_LIB) | $(ARGUS_OUT)
+	$(CC) $(ARGUS_CFLAGS) $(ARGUS_LINK_FLAGS) -pthread -o $@ $(RX_R8_SRCS) $(ARGUS_RX) $(ARGUS_CAP_LIB) -lm
+$(ARGUS_R9): $(RX_R9_SRCS) src/runtime/rx_argus.h $(ARGUS_RX) $(ARGUS_STAMP) $(ARGUS_CAP_LIB) | $(ARGUS_OUT)
+	$(CC) $(ARGUS_CFLAGS) $(ARGUS_LINK_FLAGS) -pthread -o $@ $(RX_R9_SRCS) $(ARGUS_RX) $(ARGUS_CAP_LIB) -lm
+# The bench mints directly and announces its one grant itself: no observer wrap.
+$(ARGUS_BENCH): $(ARGUS_BENCH_SRCS) src/runtime/rx_argus.h $(ARGUS_RX) $(ARGUS_STAMP) $(ARGUS_CAP_LIB) | $(ARGUS_OUT)
+	$(CC) $(ARGUS_CFLAGS) -pthread -o $@ $(ARGUS_BENCH_SRCS) $(ARGUS_RX) $(ARGUS_CAP_LIB) -lm
+
+# ARGUS_RUNTIME_INTEGRATION: run each suite with the consumer ingesting into
+# the real argus_core; keep the raw 128-byte stream (consumer ingest order)
+# and a JSON summary: $(ARGUS_STREAMS)/<argus>-<suite>-v11.bin/.json
+.PHONY: test-argus-runtime bench-rx-argus
+test-argus-runtime: $(ARGUS_R7) $(ARGUS_R8) $(ARGUS_R9)
+	mkdir -p $(ARGUS_STREAMS)
+	@set -e; for s in r7:$(ARGUS_R7) r8:$(ARGUS_R8) r9:$(ARGUS_R9); do \
+		n=$${s%%:*}; b=$${s#*:}; \
+		echo "== ARGUS runtime integration $$n"; \
+		RX_ARGUS_CONSUMER=ingest RX_ARGUS_RUN_ID=$(ARGUS_RUN_ID)-$$n RX_ARGUS_SUITE=$$n \
+		RX_ARGUS_STREAM=$(ARGUS_STREAMS)/$(ARGUS_SHORT)-$$n$(ARGUS_VARIANT)-v11.bin \
+		RX_ARGUS_SUMMARY=$(ARGUS_STREAMS)/$(ARGUS_SHORT)-$$n$(ARGUS_VARIANT)-v11.json ./$$b > $(ARGUS_OUT)/$$n.log 2>&1 \
+		|| { tail -20 $(ARGUS_OUT)/$$n.log; exit 1; }; \
+		tail -2 $(ARGUS_OUT)/$$n.log; \
+	done
+
+bench-rx-argus: $(ARGUS_BENCH)
+	./$(ARGUS_BENCH)
+
+ARGUS_REPLAY = $(OUT_DIR)/argus_replay-$(ARGUS_SHORT)
+$(ARGUS_REPLAY): tools/argus_replay.c src/sha256.c $(ARGUS_STAMP) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -I$(ARGUS_SRC) -o $@ tools/argus_replay.c src/sha256.c $(ARGUS_LIB_SRCS)
+.PHONY: argus-replay
+argus-replay: $(ARGUS_REPLAY)
