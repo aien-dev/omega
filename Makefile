@@ -167,6 +167,25 @@ $(RX_TEST): $(RX_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 test-r3: $(RX_TEST)
 	./$(RX_TEST)
 
+# SECURITY-1 derived envelope reference view. The semantic core objects are
+# linked unchanged; the envelope adds no world object or authority store.
+RX_ENV_CORE = omega_canonical omega_validate omega_core omega_codec aarch64_encoder aarch64_decoder \
+	omega_realize omega_realize_synth omega_machine omega_exec omega_verify omega_program
+RX_ENV_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_execution_envelope.c src/runtime/rx_dependency_manifest.c \
+	src/sha256.c src/omega_evidence.c tests/runtime/rx_execution_envelope_test.c
+RX_ENV_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(RX_ENV_CORE)))
+RX_ENV_TEST = $(OUT_DIR)/rx_execution_envelope_test
+RX_FOREIGN_CHILD = $(OUT_DIR)/omega_foreign_child
+$(RX_FOREIGN_CHILD): tests/runtime/omega_foreign_child.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -o $@ $<
+$(RX_ENV_TEST): $(RX_ENV_SRCS) $(RX_ENV_OBJS) $(RX_FOREIGN_CHILD) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_ENV_SRCS) $(RX_ENV_OBJS)
+
+.PHONY: test-execution-envelope
+test-execution-envelope: $(RX_ENV_TEST)
+	./$(RX_ENV_TEST)
+
 # Omega semantic variables and incremental recomputation
 # (gate OMEGA_INCREMENTAL_SEMANTICS_PASS). CPU only, same links as R3.
 RX_SEM_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
