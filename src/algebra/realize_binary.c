@@ -1,4 +1,4 @@
-/* MA-3 R1: conventional binary realizations. W stored as int8 (8 bits per
+/* MA-2 R1: conventional binary realizations. W stored as int8 (8 bits per
  * weight), int8 x int8 -> int32 multiply-accumulate.
  *   R1_plain : plain C loop at -O2 (labelled weak baseline).
  *   R1_sdot  : hand NEON SDOT (vdotq_s32), 4 rows x 64 bytes per step,

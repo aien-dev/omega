@@ -1,4 +1,4 @@
-/* MA-3 R2: packed ternary bitplanes (2 bits per weight).
+/* MA-2 R2: packed ternary bitplanes (2 bits per weight).
  *
  * R2_bitplane: per row, chunks of 128 weights stored as two 16-byte planes
  *   P (pos) and N (neg). Bit k of byte j <-> weight (chunk + 16k + j), so the

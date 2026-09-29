@@ -1,4 +1,4 @@
-/* MA-3 R3: sparse ternary. Per row, a list of +1 column indices followed by a
+/* MA-2 R3: sparse ternary. Per row, a list of +1 column indices followed by a
  * list of -1 column indices (uint16, so n <= 65536); row offsets uint32.
  * y_i = sum x[pos idx] - sum x[neg idx], scalar gather with 4 accumulators
  * (NEON has no gather; SVE gather at VL=128 is 4 lanes and not faster than

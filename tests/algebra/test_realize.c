@@ -1,8 +1,9 @@
-/* MA-3 correctness gate: every realization of Omega-X (y = W.x, ternary W,
+/* MA-2 correctness gate: every realization of Omega-X (y = W.x, ternary W,
  * int8 x, int32 y) must be bit-identical to the naive oracle.
  * The oracle itself is cross-checked row by row against the reference
  * library (oma_pack_bitplane + oma_dot_tw_i8). Fixed seed; reproducible. */
 #include "algebra/oma_pack.h"
+#include "algebra/oma_select.h"
 #include "algebra/oma_trit.h"
 #include "algebra/realize_common.h"
 
@@ -161,6 +162,105 @@ static void test_rejections(void) {
     CHECK((int64_t)128 * (int64_t)(OMA_RZ_MAX_N + 1) > INT32_MAX, "bound tight");
 }
 
+
+/* ---- selector tie rule (ADR 0019 section 9.1), in-memory cost tables ---- */
+static oma_sel_table g_st;
+
+static void sel_row(int run, const char *rz, double median_ns, double noise_rel) {
+    oma_sel_row *r = &g_st.rows[g_st.nrows++];
+    memset(r, 0, sizeof *r);
+    r->run = run;
+    r->n = 1024;
+    r->m = 64;
+    r->sparsity = 0.3;
+    snprintf(r->rz, sizeof r->rz, "%s", rz);
+    r->eligible = r->verified = 1;
+    r->median_ns = r->min_ns = median_ns;
+    r->noise_rel = noise_rel;
+    r->pack_ns = 10;
+}
+
+static void sel_decide(const char *incumbent, oma_sel_decision *d) {
+    oma_sel_query q = {1024, 64, 0.3, 0, -1, incumbent};
+    CHECK(oma_sel_decide(&g_st, &q, d) == OMA_SEL_OK, "selector rc");
+}
+
+static void test_selector_tie_rule(void) {
+    oma_sel_decision d;
+    /* TIE: R1_sdot 100 vs R1_smmla 101, band 5%; R1_plain well outside the band */
+    oma_sel_init(&g_st);
+    g_st.nruns = 1;
+    sel_row(0, "R1_sdot", 100, 0.05);
+    sel_row(0, "R1_smmla", 101, 0.05);
+    sel_row(0, "R1_plain", 300, 0.05);
+    sel_decide(NULL, &d);
+    CHECK(d.tie == 1, "tie expected");
+    CHECK(strcmp(d.cheapest, "R1_sdot") == 0 && strcmp(d.runner_up, "R1_smmla") == 0, "cheapest/runner-up");
+    CHECK(strcmp(d.chosen, OMA_SEL_REFERENCE) == 0, "no incumbent: reference, got %s", d.chosen);
+    CHECK(strcmp(d.tie_resolution, "reference") == 0, "resolution %s", d.tie_resolution);
+    CHECK(d.chosen_cost_ns == 300, "chosen cost is the reference's");
+    CHECK(oma_sel_in_tie_set(&d, "R1_sdot") && oma_sel_in_tie_set(&d, "R1_smmla"), "tie set holds cheapest and runner-up");
+    sel_decide("", &d);
+    CHECK(strcmp(d.chosen, OMA_SEL_REFERENCE) == 0 && strcmp(d.tie_resolution, "reference") == 0, "empty incumbent");
+    /* incumbent stands on TIE */
+    sel_decide("R1_smmla", &d);
+    CHECK(strcmp(d.chosen, "R1_smmla") == 0 && strcmp(d.tie_resolution, "incumbent") == 0, "incumbent stands, got %s %s",
+          d.chosen, d.tie_resolution);
+    sel_decide("R1_sdot", &d);
+    CHECK(strcmp(d.chosen, "R1_sdot") == 0 && strcmp(d.tie_resolution, "incumbent") == 0, "incumbent = cheapest");
+    sel_decide("R1_plain", &d);
+    CHECK(strcmp(d.chosen, "R1_plain") == 0 && strcmp(d.tie_resolution, "incumbent") == 0, "incumbent = reference");
+    /* ineligible or unknown incumbent: falls back to the reference */
+    sel_decide("R4_rns", &d);
+    CHECK(strcmp(d.chosen, OMA_SEL_REFERENCE) == 0 && strcmp(d.tie_resolution, "reference") == 0, "unmeasured incumbent");
+    sel_decide("no_such_rz", &d);
+    CHECK(strcmp(d.chosen, OMA_SEL_REFERENCE) == 0 && strcmp(d.tie_resolution, "reference") == 0, "unknown incumbent");
+    /* no TIE: cheapest chosen, incumbent ignored */
+    oma_sel_init(&g_st);
+    g_st.nruns = 1;
+    sel_row(0, "R1_sdot", 100, 0.01);
+    sel_row(0, "R1_smmla", 150, 0.01);
+    sel_row(0, "R1_plain", 300, 0.01);
+    sel_decide("R1_plain", &d);
+    CHECK(d.tie == 0 && strcmp(d.chosen, "R1_sdot") == 0 && strcmp(d.tie_resolution, "none") == 0,
+          "no tie: cheapest, got %s %s", d.chosen, d.tie_resolution);
+    CHECK(d.ntie == 1 && oma_sel_in_tie_set(&d, "R1_sdot") && !oma_sel_in_tie_set(&d, "R1_smmla"), "no-tie set");
+    /* TIE with the reference not measured and no incumbent: cheapest stands */
+    oma_sel_init(&g_st);
+    g_st.nruns = 1;
+    sel_row(0, "R1_sdot", 100, 0.05);
+    sel_row(0, "R1_smmla", 101, 0.05);
+    sel_decide(NULL, &d);
+    CHECK(d.tie == 1 && strcmp(d.chosen, "R1_sdot") == 0 &&
+              strcmp(d.tie_resolution, "cheapest_reference_ineligible") == 0,
+          "reference ineligible, got %s %s", d.chosen, d.tie_resolution);
+    /* reference verified in one run only: ineligible over all runs */
+    oma_sel_init(&g_st);
+    g_st.nruns = 2;
+    sel_row(0, "R1_sdot", 100, 0.05);
+    sel_row(0, "R1_smmla", 101, 0.05);
+    sel_row(0, "R1_plain", 300, 0.05);
+    sel_row(1, "R1_sdot", 100, 0.05);
+    sel_row(1, "R1_smmla", 101, 0.05);
+    sel_row(1, "R1_plain", 300, 0.05);
+    g_st.rows[g_st.nrows - 1].verified = 0;
+    sel_decide(NULL, &d);
+    CHECK(d.tie == 1 && strcmp(d.chosen, "R1_sdot") == 0 &&
+              strcmp(d.tie_resolution, "cheapest_reference_ineligible") == 0,
+          "unverified reference, got %s %s", d.chosen, d.tie_resolution);
+    /* cross-run spread alone makes a TIE: 100/104 in run 1, 104/100 in run 2 */
+    oma_sel_init(&g_st);
+    g_st.nruns = 2;
+    sel_row(0, "R1_sdot", 100, 0.001);
+    sel_row(0, "R1_smmla", 104, 0.001);
+    sel_row(0, "R1_plain", 300, 0.001);
+    sel_row(1, "R1_sdot", 104, 0.001);
+    sel_row(1, "R1_smmla", 100, 0.001);
+    sel_row(1, "R1_plain", 300, 0.001);
+    sel_decide(NULL, &d);
+    CHECK(d.tie == 1 && strcmp(d.chosen, OMA_SEL_REFERENCE) == 0, "cross-run tie, got %s", d.chosen);
+}
+
 int main(void) {
     test_rejections();
 
@@ -195,8 +295,9 @@ int main(void) {
     run_case(2, 65537, WK_NEG, 0, XK_MIN, 0);   /* sparse must refuse */
     run_case(1, 100003, WK_NEG, 0, XK_MIN, 1);  /* y = 12,800,384 */
     run_case(17, 4099, WK_RANDOM, 0.97, XK_RANDOM, 1);
+    test_selector_tie_rule();
 
-    printf("MA3 test-realize %s: %llu checks, %llu failures, %zu realizations\n",
+    printf("MA2 test-realize %s: %llu checks, %llu failures, %zu realizations\n",
            g_fail ? "FAIL" : "PASS", g_checks, g_fail, oma_rz_count());
     return g_fail ? 1 : 0;
 }

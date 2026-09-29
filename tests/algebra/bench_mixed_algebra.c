@@ -1,5 +1,5 @@
-/* MA-3 benchmark: Omega-X (ternary W x int8 x -> int32 y) realizations on one
- * pinned Cortex-X925 core of the Grace CPU. spec/mixed-algebra-ma3.md
+/* MA-2 benchmark: Omega-X (ternary W x int8 x -> int32 y) realizations on one
+ * pinned Cortex-X925 core of the Grace CPU. spec/mixed-algebra-ma2.md
  *
  * Grid: n in {1024, 4096, 16384}, m in {1, 64, 4096}, weight sparsity
  * (fraction of zeros) in {0, 0.3, 0.6, 0.9}. For each cell and realization:
@@ -556,7 +556,7 @@ int main(int argc, char **argv) {
     uname(&un);
     FILE *o = fopen(argv[1], "w");
     if (!o) { perror(argv[1]); return 2; }
-    fprintf(o, "{\n  \"schema\": \"OMEGA_MIXED_ALGEBRA_MA3_BENCH_V1\",\n  \"run_id\": \"%s-%s\",\n", run_id,
+    fprintf(o, "{\n  \"schema\": \"OMEGA_MIXED_ALGEBRA_MA2_BENCH_V1\",\n  \"run_id\": \"%s-%s\",\n", run_id,
             commit ? commit : "unknown");
     fprintf(o, "  \"operation\": \"Omega-X: y = W.x, W in {-1,0,+1}^(m x n), x int8^n, y int32^m, exact\",\n");
     fprintf(o, "  \"run_commit\": \"%s\",\n  \"tree_dirty\": %s,\n  \"bench_binary_sha256\": \"%s\",\n",
@@ -582,6 +582,8 @@ int main(int argc, char **argv) {
     }
     fprintf(o, "  ],\n  \"correctness\": {\"runs_checked_against_oracle\": %llu, \"mismatches\": %llu},\n",
             g_runs_checked, g_mismatch_total);
+    /* top-level copies of the oracle counts (the MA-3-label runs carry them only in \"correctness\") */
+    fprintf(o, "  \"oracle_checks\": %llu,\n  \"oracle_mismatches\": %llu,\n", g_runs_checked, g_mismatch_total);
     fprintf(o, "  \"contention\": {\"blocks_retried\": %llu, \"blocks_forced_after_%d_retries\": %llu},\n",
             g_retries_total, MAX_RETRY, g_forced_total);
     fprintf(o, "  \"cost_table\": [\n");
@@ -601,7 +603,7 @@ int main(int argc, char **argv) {
     rewind(en);
     while ((k = fread(buf, 1, sizeof buf, en)) > 0) fwrite(buf, 1, k, o);
     fclose(en);
-    fprintf(o, "\n  ]},\n  \"label\": \"MA-3 cost table; consumed by the stand-in selector (oma_select), not wired to rx_costmodel\"\n}\n");
+    fprintf(o, "\n  ]},\n  \"label\": \"MA-2 cost table; consumed by the stand-in selector (oma_select), not wired to rx_costmodel\"\n}\n");
     fclose(o);
     fprintf(stderr, "wrote %s (grid %.1f s, total %.1f s, mismatches %llu, retried blocks %llu)\n", argv[1], grid_s,
             (now_ns() - wall0) / 1e9, g_mismatch_total, g_retries_total);

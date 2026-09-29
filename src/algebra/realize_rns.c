@@ -1,4 +1,4 @@
-/* MA-3 R4: residue number system (RNS).
+/* MA-2 R4: residue number system (RNS).
  * Moduli {256, 255, 253} (pairwise coprime), M = 16,515,840. Every centered
  * residue fits int8: x mod 256 is x itself, x mod 255 in [-127,127],
  * x mod 253 in [-126,126]; ternary weights are their own residues.

@@ -1,9 +1,10 @@
-/* MA-3 stand-in selector for Omega-X realizations.
- * spec/mixed-algebra-ma3.md
+/* MA-2 stand-in selector for Omega-X realizations.
+ * spec/mixed-algebra-ma2.md
  *
  * STAND-IN: this selector is not wired to rx_costmodel (src/runtime). It reads
- * the measured cost table from MA-3 benchmark receipts (never hard-coded
- * costs), filters candidates by the exact contract, and picks the cheapest.
+ * the measured cost table from MA-2 benchmark receipts (never hard-coded
+ * costs), filters candidates by the exact contract, and picks the cheapest
+ * (subject to the tie rule below).
  *
  * Exact-contract filter: a realization is a candidate only if the registry
  * marks it exact, the receipt marks it verified (bit-identical to the oracle)
@@ -20,7 +21,13 @@
  * their share of the cost.
  * margin = (cost runner-up - cost winner) / cost winner.
  * TIE when margin <= noise band; the record then lists every candidate
- * inside the band (tie set). The cheapest is still named as chosen. */
+ * inside the band of the cheapest, the cheapest included (tie set).
+ * Tie rule (ADR 0019 section 9.1): on TIE the incumbent selection stands
+ * (query.incumbent, when it names an eligible realization); with no
+ * incumbent the digital reference realization OMA_SEL_REFERENCE is selected,
+ * whether or not it is inside the band. Only if the reference is not
+ * eligible for the query does the cheapest stand. The decision records which
+ * rule applied in tie_resolution. Without a TIE the cheapest is chosen. */
 #ifndef OMA_SELECT_H
 #define OMA_SELECT_H
 
@@ -31,6 +38,8 @@
 #define OMA_SEL_MAX_RUNS 4
 #define OMA_SEL_MAX_CAND 16
 #define OMA_SEL_ID 32
+/* Digital reference realization (ADR 0019 section 9.1 tie rule). */
+#define OMA_SEL_REFERENCE "R1_plain"
 
 enum { OMA_SEL_OK = 0, OMA_SEL_E_IO = -1, OMA_SEL_E_FORMAT = -2, OMA_SEL_E_FULL = -3, OMA_SEL_E_EMPTY = -4 };
 
@@ -56,6 +65,7 @@ typedef struct {
     double sparsity;
     int pack_per_call;      /* 0: pack once, amortized; 1: pack every call */
     int run;                /* -1: all runs in the table; else that run only */
+    const char *incumbent;  /* NULL or "": no incumbent selection */
 } oma_sel_query;
 
 typedef struct {
@@ -76,10 +86,14 @@ typedef struct {
     double cell_sparsity;
     int exact_cell;               /* 1 if the query hit a measured cell */
     char chosen[OMA_SEL_ID];
-    char runner_up[OMA_SEL_ID];
-    double chosen_cost_ns, runner_up_cost_ns;
+    char cheapest[OMA_SEL_ID];    /* lowest measured cost */
+    char runner_up[OMA_SEL_ID];   /* second lowest; margin is runner-up vs cheapest */
+    double chosen_cost_ns, cheapest_cost_ns, runner_up_cost_ns;
     double margin_rel, noise_band_rel;
     int tie;
+    /* "none" (no TIE: cheapest), "incumbent", "reference", or
+     * "cheapest_reference_ineligible" (TIE, no eligible incumbent or reference) */
+    const char *tie_resolution;
     char tie_set[OMA_SEL_MAX_CAND][OMA_SEL_ID];
     size_t ntie;
     size_t ncand;
@@ -88,7 +102,7 @@ typedef struct {
 } oma_sel_decision;
 
 void oma_sel_init(oma_sel_table *t);
-/* Append one MA-3 bench receipt as a new run. */
+/* Append one MA-2 bench receipt as a new run. */
 int oma_sel_load(oma_sel_table *t, const char *receipt_path);
 int oma_sel_decide(const oma_sel_table *t, const oma_sel_query *q, oma_sel_decision *d);
 /* 1 if id is in the decision's tie set (or is the chosen one). */

@@ -911,13 +911,15 @@ test-algebra-asan: $(OMA_TEST_ASAN)
 	./$(OMA_TEST_ASAN)
 
 # ---------------------------------------------------------------------------
-# OMEGA MIXED ALGEBRA MA-3 (spec/mixed-algebra-ma3.md): one exact operation
+# OMEGA MIXED ALGEBRA MA-2 (spec/mixed-algebra-ma2.md): one exact operation
 # (ternary W x int8 x -> int32 y) with several verified realizations on the
 # Grace CPU, a measured cost table and a stand-in selector.
 # test-realize: bit-exact gate vs the naive oracle (plain and ASan+UBSan).
 # bench-mixed-algebra: two benchmark runs on one pinned Cortex-X925 core,
 # then the selector with its reproducibility check. Receipts go to
-# evidence/MIXED_ALGEBRA/.
+# evidence/MIXED_ALGEBRA/ (ma2_bench_run{1,2}.json; the committed
+# ma3_bench_run{1,2}.json are the historical runs made under the earlier
+# MA-3 label, and ma2_select_receipt.json is regenerated from them).
 .PHONY: test-realize bench-mixed-algebra
 OMA_RZ_ARCH = -march=armv8.6-a+dotprod+i8mm+sve
 OMA_RZ_CFLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 $(OMA_RZ_ARCH) -Isrc
@@ -931,16 +933,16 @@ OMA_RZ_TEST = $(OUT_DIR)/tests-algebra/test_realize
 OMA_RZ_TEST_ASAN = $(OUT_DIR)/tests-algebra/test_realize_asan
 OMA_RZ_BENCH = $(OUT_DIR)/tests-algebra/bench_mixed_algebra
 OMA_RZ_SELECT = $(OUT_DIR)/tests-algebra/bench_select
-MA3_EVIDENCE = evidence/MIXED_ALGEBRA
+MA2_EVIDENCE = evidence/MIXED_ALGEBRA
 
-$(OMA_RZ_TEST): tests/algebra/test_realize.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) $(OMA_SRCS) $(OMA_HDRS)
+$(OMA_RZ_TEST): tests/algebra/test_realize.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) src/algebra/oma_select.c $(OMA_SEL_HDRS) $(OMA_SRCS) $(OMA_HDRS)
 	@mkdir -p $(dir $@)
-	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/algebra/test_realize.c $(OMA_RZ_SRCS) $(OMA_SRCS) -lm
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/algebra/test_realize.c $(OMA_RZ_SRCS) src/algebra/oma_select.c $(OMA_SRCS) -lm
 
-$(OMA_RZ_TEST_ASAN): tests/algebra/test_realize.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) $(OMA_SRCS) $(OMA_HDRS)
+$(OMA_RZ_TEST_ASAN): tests/algebra/test_realize.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) src/algebra/oma_select.c $(OMA_SEL_HDRS) $(OMA_SRCS) $(OMA_HDRS)
 	@mkdir -p $(dir $@)
 	$(CC) $(OMA_RZ_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
-		-o $@ tests/algebra/test_realize.c $(OMA_RZ_SRCS) $(OMA_SRCS) -lm
+		-o $@ tests/algebra/test_realize.c $(OMA_RZ_SRCS) src/algebra/oma_select.c $(OMA_SRCS) -lm
 
 $(OMA_RZ_BENCH): tests/algebra/bench_mixed_algebra.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS)
 	@mkdir -p $(dir $@)
@@ -955,12 +957,12 @@ test-realize: $(OMA_RZ_TEST) $(OMA_RZ_TEST_ASAN)
 	./$(OMA_RZ_TEST_ASAN)
 
 bench-mixed-algebra: $(OMA_RZ_BENCH) $(OMA_RZ_SELECT)
-	@mkdir -p $(MA3_EVIDENCE)
+	@mkdir -p $(MA2_EVIDENCE)
 	OMA_BENCH_COMMIT=$$(git rev-parse HEAD) OMA_BENCH_DIRTY=$$(git status --porcelain -- src tests Makefile | grep -c .) \
 		OMA_BENCH_BIN_SHA=$$(sha256sum $(OMA_RZ_BENCH) | cut -c1-64) \
-		./$(OMA_RZ_BENCH) $(MA3_EVIDENCE)/ma3_bench_run1.json
+		./$(OMA_RZ_BENCH) $(MA2_EVIDENCE)/ma2_bench_run1.json
 	OMA_BENCH_COMMIT=$$(git rev-parse HEAD) OMA_BENCH_DIRTY=$$(git status --porcelain -- src tests Makefile | grep -c .) \
 		OMA_BENCH_BIN_SHA=$$(sha256sum $(OMA_RZ_BENCH) | cut -c1-64) \
-		./$(OMA_RZ_BENCH) $(MA3_EVIDENCE)/ma3_bench_run2.json
-	./$(OMA_RZ_SELECT) $(MA3_EVIDENCE)/ma3_select_receipt.json \
-		$(MA3_EVIDENCE)/ma3_bench_run1.json $(MA3_EVIDENCE)/ma3_bench_run2.json
+		./$(OMA_RZ_BENCH) $(MA2_EVIDENCE)/ma2_bench_run2.json
+	./$(OMA_RZ_SELECT) $(MA2_EVIDENCE)/ma2_select_receipt.json \
+		$(MA2_EVIDENCE)/ma2_bench_run1.json $(MA2_EVIDENCE)/ma2_bench_run2.json

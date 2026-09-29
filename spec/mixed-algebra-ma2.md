@@ -1,12 +1,28 @@
-# Omega mixed algebra MA-3: one exact operation, ten realizations, measured selection
+# Omega mixed algebra MA-2: one exact operation, ten realizations, measured selection
 
-Status: MA-3 delivered. Code: `src/algebra/realize_*.{h,c}` (realizations),
+Status: ADR 0019 gate MA-2 (several CPU realizations of one operation with
+tiered equivalence evidence and measured cost including conversion) and the
+ADR's first success gate (one Omega operation, at least three verified
+realizations, one selected with a recorded reason and margin, reproducible
+from receipts) delivered. It is not ADR gate MA-3 (contract and identity).
+This work was first labelled "MA-3"; it was renamed to match the ADR gate
+table. Code: `src/algebra/realize_*.{h,c}` (realizations),
 `src/algebra/oma_select.{h,c}` (stand-in selector), tests
 `tests/algebra/test_realize.c`, `tests/algebra/bench_mixed_algebra.c`,
 `tests/algebra/bench_select.c`. Receipts: `evidence/MIXED_ALGEBRA/`.
 Commands: `make test-realize` (plain + ASan/UBSan), `make bench-mixed-algebra`
 (two benchmark runs + selector, about 90 s wall). C11 with NEON/I8MM
 intrinsics, `-O2 -march=armv8.6-a+dotprod+i8mm+sve`, no outside dependencies.
+
+Receipts and labels: the two benchmark runs, `ma3_bench_run1.json` and
+`ma3_bench_run2.json` (schema `OMEGA_MIXED_ALGEBRA_MA3_BENCH_V1`), are the
+historical measurement records produced under the earlier "MA-3" label; they
+are kept unchanged. `ma2_select_receipt.json` was regenerated from them
+(without rerunning the benchmark) with the ADR 9.1 tie rule:
+`build/tests-algebra/bench_select evidence/MIXED_ALGEBRA/ma2_select_receipt.json
+evidence/MIXED_ALGEBRA/ma3_bench_run1.json evidence/MIXED_ALGEBRA/ma3_bench_run2.json`.
+Future `make bench-mixed-algebra` runs write `ma2_bench_run{1,2}.json`
+(schema `OMEGA_MIXED_ALGEBRA_MA2_BENCH_V1`); the selector reads both schemas.
 
 Outcome in one line: **on the Grace CPU, packed ternary (2 bits/weight) beats
 the best int8 realization 2.2x to 3.0x when the weight matrix no longer fits
@@ -52,7 +68,7 @@ bitplane code); conversion from int8 is part of its pack.
 
 ## Correctness evidence
 
-`make test-realize`: **`MA3 test-realize PASS: 179684 checks, 0 failures, 10
+`make test-realize`: **`MA2 test-realize PASS: 179712 checks, 0 failures, 10
 realizations`**, and the same line under `-fsanitize=address,undefined
 -fno-sanitize-recover=all`. Coverage:
 - every n in {1..5, 7, 15, 16, 17, 31..33, 63..65, 79..81, 127..129,
@@ -71,10 +87,37 @@ realizations`**, and the same line under `-fsanitize=address,undefined
   (`oma_pack_bitplane` + `oma_dot_tw_i8`); R5 bytes are checked with
   `oma_dense_byte_decode` (all < 243, right trit in the right place).
 - mutation check: swapping one SMMLA result lane makes 500 checks fail.
+- the same binary also runs 28 selector tie-rule checks (see Selector); the
+  realization checks alone are 179,684, unchanged.
 
 The benchmark re-verifies every realization bit-exact against the oracle on
 every grid cell before and after timing: 720 checks per run, 0 mismatches in
-both runs.
+both runs. The two historical run JSONs predate the top-level
+`oracle_checks` / `oracle_mismatches` fields that the benchmark now writes;
+for them the counts come from the run logs and from the nested
+`correctness` object each file already carries
+(`"runs_checked_against_oracle": 720, "mismatches": 0`).
+
+### Evidence tiers (ADR 0019 section 8)
+
+- The ten realizations (exact contract): **E2, differential with declared
+  coverage**. Reference = the naive integer oracle `oma_rz_oracle`; the
+  declared coverage is the list above (boundary and tail shapes, all-zero /
+  all +1 / all -1 weights, x extremes -128 and 127, sparsity 0 to 1, random
+  shapes, magnitude and `max_n` edges, repeated runs, every rejection path),
+  plus the benchmark's 720 bit-exact checks per run on the measured grid.
+  E2 is the tier ADR section 8 allows for a composed exact kernel.
+- The per-element reference core (MA-1, `spec/mixed-algebra-reference.md`):
+  **E3, exhaustive**, for per-trit ops (all 9 valid pairs), all 256 codes and
+  dense bytes, Z3 scalars (all 256 x 256 inputs), int16 <-> ternary (all
+  65,536 values) and every vector pair of length k <= 6 (3^k x 3^k). The
+  parts of that library tested on generated suites (int64 conversion,
+  multi-block dots, random packing) are E2. The absmean quantizer is an
+  approximate transform (ADR section 6.2), not an exact realization, and is
+  outside this gate.
+- The oracle itself is additionally cross-checked row by row against the E3
+  reference core (`oma_pack_bitplane` + `oma_dot_tw_i8`), so the E2 claim is
+  anchored to exhaustively checked elements.
 
 ## Measurement method
 
@@ -128,7 +171,7 @@ change with sparsity except where noted.
 Full per-realization rows (min, median, q25/q75, bytes read, footprint,
 floor level, pack cost, per-call total) are in `ma3_bench_run{1,2}.json`
 under `cost_table`; the selector's per-cell decisions and the table above are
-in `ma3_select_receipt.json` (`decisions`, `binary_vs_ternary`).
+in `ma2_select_receipt.json` (`decisions`, `binary_vs_ternary`).
 
 **R1 against its roofline:** 78-98% for m = 1 (L1-resident; 98% from n = 4096
 up), 86-123% for m = 64 (above 100% at L2 sizes, see method), 61-63% at
@@ -151,9 +194,10 @@ bandwidth-bound. The win is independent of sparsity (dense 2-bit code).
   decoding where SDOT spends one. Binary is 1.1x to 2.4x faster.
 - At 16384 x 64 (1 MiB of int8 weights, L2) the gap narrows to 7%, still binary.
 - **Pack per call:** every realization's pack reads and validates the whole
-  int8 source, so no packed form can beat a copy. In per-call mode the winner
+  int8 source, so no packed form can beat a copy. In per-call mode the cheapest
   is always an int8-form realization (R1_*, R4_rns or R1_plain, whose packs
-  are all a validated copy and tie inside the noise band); the ternary packs
+  are all a validated copy and mostly tie inside the noise band, so the tie
+  rule selects R1_plain there); the ternary packs
   are scalar loops costing 1.1x (crumb) to 3-4x (bitplane, LUT) the int8 copy.
   Ternary pays off only when weights are packed once and reused.
 
@@ -179,28 +223,59 @@ bandwidth-bound. The win is independent of sparsity (dense 2-bit code).
 
 ## Selector (stand-in, not wired to rx_costmodel)
 
-`oma_select` loads MA-3 receipts (costs are read from the JSON, never
-hard-coded), applies the exact-contract filter (registry `exact`, verified in
-every run used, query n <= `max_n`), and picks the cheapest by median cost
-(plus median pack cost when packing per call), mean over runs. Off-grid
-queries use the nearest measured cell (log2 distance in n and m, plus 4x the
-sparsity difference) and say so (`exact_cell: false`). Each decision record
-holds the query, the cell, the chosen realization, the runner-up, every
-candidate with its measured cost, within-run and across-run spread and % of
-floor (or the reason it was excluded), the margin, the noise band and a
-verdict CHOSEN or TIE with the tie set.
+`oma_select` loads MA-2 (and the historical MA-3-label) bench receipts (costs
+are read from the JSON, never hard-coded), applies the exact-contract filter
+(registry `exact`, verified in every run used, query n <= `max_n`), and ranks
+the eligible realizations by median cost (plus median pack cost when packing
+per call), mean over runs. Off-grid queries use the nearest measured cell
+(log2 distance in n and m, plus 4x the sparsity difference) and say so
+(`exact_cell: false`). Each decision record holds the query, the cell, the
+chosen realization, the cheapest, the runner-up, every candidate with its
+measured cost, within-run and across-run spread and % of floor (or the reason
+it was excluded), the margin (runner-up vs cheapest), the noise band, a
+verdict CHOSEN or TIE, the tie set (every eligible candidate inside the band
+of the cheapest, the cheapest included), the incumbent given with the query
+and `tie_resolution`.
 
-Noise band = max over winner and runner-up of (a) the within-run spread
+Noise band = max over cheapest and runner-up of (a) the within-run spread
 (q75 - q25) / median of the timed blocks (pack spread weighted in when packing
 per call) and (b) the across-run spread (max - min) / mean of the cell's costs
 over every run in the table. TIE when margin <= band.
 
-**Reproducibility check** (`MA3_SELECTOR_REPRO`): each of the 36 cells x 2
+**Tie rule (ADR 0019 section 9.1).** Without a TIE the cheapest is chosen
+(`tie_resolution: "none"`). On a TIE the incumbent selection stands when the
+query names an eligible incumbent (`"incumbent"`); with no incumbent the
+digital reference realization, `R1_plain` (`OMA_SEL_REFERENCE`), is selected
+(`"reference"`). The reference is selected whether or not it is inside the
+band, as the ADR states the rule; only when the reference is not eligible for
+the query does the cheapest stand (`"cheapest_reference_ineligible"`). The
+receipt's decisions carry no incumbent (there is no prior selection), so
+every TIE selects `R1_plain`. `test-realize` checks every branch of the rule
+(reference, incumbent, unknown or unmeasured incumbent, no TIE, reference
+unmeasured, reference unverified in one run, TIE from across-run spread alone).
+
+Effect on the receipt (72 decisions over both runs): **38 TIE, 32 per-call
+and 6 pack-once**, and all 38 now select `R1_plain`. Before the tie rule
+1 decision chose `R1_plain`; in the 38 tied decisions the cheapest stood
+(R1_sdot 26, R4_rns 5, R1_smmla 3, R1_sdot_il 3, R1_plain 1). The 6 pack-once
+ties are 1024 x 64 at sparsity 0 and 0.6 (R1_smmla vs R1_sdot_il) and
+all four 16384 x 64 cells (R1_smmla vs R1_sdot_il within about 1%); there
+`R1_plain` is outside the tie set and costs 2.05x to 2.78x the cheapest
+(for example 1119 ns vs 403 ns at 1024 x 64). In all 32 per-call ties
+`R1_plain` is inside the tie set and costs 1.00x to 1.26x the cheapest. The
+34 non-TIE decisions are unchanged (R1_sdot 16, R1_smmla 6, R2c_crumb
+12). This is the ADR's conservative rule applied as written; a rule that
+takes the reference only from inside the tie set would be an ADR amendment,
+not a selector choice.
+
+**Reproducibility check** (`MA2_SELECTOR_REPRO`): each of the 36 cells x 2
 pack modes is decided from run 1 alone and from run 2 alone.
-**72 decisions: 64 agree, 8 recorded ties, 0 disagree -> PASS.** The ties are
-four per-call cells where int8 copy-packs (R1_sdot, R1_plain, R4_rns) are
-within noise, and the four 16384 x 64 amortized cells where R1_smmla and
-R1_sdot_il are within about 1%.
+**72 decisions: 64 agree, 8 recorded ties, 0 disagree -> PASS**, with the
+tie rule applied. "Recorded ties" counts only the cells where the two
+single-run choices differ and one run's TIE set contains the other run's
+choice; it is not the number of ties. Total TIE verdicts in the decisions
+over both runs: **38 of 72 (32 per-call, 6 pack-once)**, listed in
+`decision_summary`.
 
 ## Energy (indicative)
 

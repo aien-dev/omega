@@ -1,4 +1,4 @@
-/* MA-3 R5: dense 5 trits per byte (1.6 bits per weight), decode then SDOT.
+/* MA-2 R5: dense 5 trits per byte (1.6 bits per weight), decode then SDOT.
  * Byte rule is the reference dense rule (oma_pack.h): byte = sum_{i<5}
  * (t_i + 1) * 3^i, valid bytes 0..242. Only the assignment of trits to bytes
  * differs ("strided dense"): per row, chunks of 80 weights in 16 bytes; byte j

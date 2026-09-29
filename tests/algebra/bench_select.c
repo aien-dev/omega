@@ -1,4 +1,4 @@
-/* MA-3 selector run: reads MA-3 bench receipts, decides every measured cell
+/* MA-2 selector run: reads MA-2 bench receipts, decides every measured cell
  * in both pack modes (per run and over all runs), checks that the per-run
  * choices agree or are recorded ties, and writes the decision receipt.
  * STAND-IN selector, not wired to rx_costmodel.
@@ -53,10 +53,10 @@ int main(int argc, char **argv) {
     }
     FILE *o = fopen(argv[1], "w");
     if (!o) { perror(argv[1]); return 2; }
-    fprintf(o, "{\n  \"schema\": \"OMEGA_MIXED_ALGEBRA_MA3_SELECT_V1\",\n");
+    fprintf(o, "{\n  \"schema\": \"OMEGA_MIXED_ALGEBRA_MA2_SELECT_V1\",\n");
     fprintf(o, "  \"label\": \"stand-in selector, not wired to rx_costmodel\",\n");
     fprintf(o, "  \"operation\": \"Omega-X: y = W.x, W ternary m x n, x int8, y int32, exact\",\n");
-    fprintf(o, "  \"policy\": \"exact-contract filter (registry exact, verified in every run used, n <= max_n); cost = mean over runs of median ns per call (+ median pack ns when packing per call); noise band = max over winner and runner-up of within-run (q75-q25)/median and across-run (max-min)/mean; TIE when margin <= band\",\n");
+    fprintf(o, "  \"policy\": \"exact-contract filter (registry exact, verified in every run used, n <= max_n); cost = mean over runs of median ns per call (+ median pack ns when packing per call); noise band = max over winner and runner-up of within-run (q75-q25)/median and across-run (max-min)/mean; TIE when margin <= band; on TIE the incumbent stands, with no incumbent the digital reference realization (" OMA_SEL_REFERENCE ") is selected (ADR 0019 section 9.1); these decisions have no incumbent\",\n");
     fprintf(o, "  \"sources\": [");
     for (int r = 0; r < g_t.nruns; r++) {
         char hex[65];
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
         for (size_t k = 0; k < nc; k++)
             for (int mode = 0; mode < 2; mode++) {
                 oma_sel_decision a, b;
-                oma_sel_query qa = {cells[k].n, cells[k].m, cells[k].sp, mode, 0};
+                oma_sel_query qa = {cells[k].n, cells[k].m, cells[k].sp, mode, 0, NULL};
                 oma_sel_query qb = qa;
                 qb.run = 1;
                 if (oma_sel_decide(&g_t, &qa, &a) || oma_sel_decide(&g_t, &qb, &b)) continue;
@@ -101,6 +101,7 @@ int main(int argc, char **argv) {
     fprintf(o, "\n  ], \"decisions\": %u, \"agree\": %u, \"recorded_ties\": %u, \"disagree\": %u},\n", total, agree,
             tie_ok, disagree);
 
+    unsigned ties_total = 0, ties_per_call = 0, ties_once = 0, ndec = 0, ref_picks = 0;
     /* decisions over all runs + win/lose table */
     fprintf(o, "  \"decisions\": [\n");
     first = 1;
@@ -111,8 +112,11 @@ int main(int argc, char **argv) {
     for (size_t k = 0; k < nc; k++) {
         oma_sel_decision d[2];
         for (int mode = 0; mode < 2; mode++) {
-            oma_sel_query q = {cells[k].n, cells[k].m, cells[k].sp, mode, -1};
+            oma_sel_query q = {cells[k].n, cells[k].m, cells[k].sp, mode, -1, NULL};
             if (oma_sel_decide(&g_t, &q, &d[mode])) continue;
+            ndec++;
+            if (d[mode].tie) { ties_total++; if (mode) ties_per_call++; else ties_once++; }
+            if (strcmp(d[mode].chosen, OMA_SEL_REFERENCE) == 0) ref_picks++;
             fprintf(o, "%s", first ? "" : ",\n");
             oma_sel_decision_json(o, &d[mode], "    ");
             first = 0;
@@ -143,13 +147,16 @@ int main(int argc, char **argv) {
                cells[k].sp, d[0].chosen, d[0].tie ? "TIE" : "", d[1].chosen, d[1].tie ? "TIE" : "", bb ? bb->rz : "-",
                bb ? bb->pct_floor : 0, ratio, verdict, tb ? tb->rz : "-");
     }
-    fprintf(o, "\n  ],\n  \"binary_vs_ternary\": [\n");
+    fprintf(o, "\n  ],\n  \"decision_summary\": {\"decisions\": %u, \"ties\": %u, \"ties_per_call\": %u, "
+               "\"ties_once_amortized\": %u, \"chosen_reference\": %u},\n",
+            ndec, ties_total, ties_per_call, ties_once, ref_picks);
+    fprintf(o, "  \"binary_vs_ternary\": [\n");
     for (size_t k = 0; k < nc; k++) fprintf(o, "    %s%s\n", winlose[k], k + 1 < nc ? "," : "");
     fprintf(o, "  ],\n");
 
     /* off-grid queries: nearest measured cell, contract filter by n */
     static const oma_sel_query extra[] = {
-        {2048, 256, 0.5, 0, -1}, {16384, 2048, 0.0, 1, -1}, {100000, 64, 0.0, 0, -1}, {1024, 1, 0.95, 0, -1}};
+        {2048, 256, 0.5, 0, -1, NULL}, {16384, 2048, 0.0, 1, -1, NULL}, {100000, 64, 0.0, 0, -1, NULL}, {1024, 1, 0.95, 0, -1, NULL}};
     fprintf(o, "  \"off_grid_queries\": [\n");
     for (size_t i = 0; i < sizeof extra / sizeof extra[0]; i++) {
         oma_sel_decision d;
@@ -159,10 +166,12 @@ int main(int argc, char **argv) {
     }
     fprintf(o, "  ],\n");
     const char *gate = g_t.nruns < 2 ? "NOT_RUN" : disagree == 0 ? "PASS" : "FAIL";
-    fprintf(o, "  \"gates\": {\"MA3_SELECTOR_REPRO\": \"%s\", \"criteria\": \"for every measured cell and both pack modes, the choices from run 1 alone and run 2 alone are equal, or one run records a TIE whose tie set contains the other run's choice\"},\n", gate);
+    fprintf(o, "  \"gates\": {\"MA2_SELECTOR_REPRO\": \"%s\", \"criteria\": \"for every measured cell and both pack modes, the choices from run 1 alone and run 2 alone are equal, or one run records a TIE whose tie set contains the other run's choice\"},\n", gate);
     fprintf(o, "  \"not_claimed\": [\"integration with rx_costmodel or the resident omega.select reaction\", \"shapes between grid points beyond nearest-cell lookup\", \"multi-core or GPU realizations\", \"energy-based selection\"]\n}\n");
     fclose(o);
-    printf("reproducibility: %u decisions, %u agree, %u recorded ties, %u disagree -> MA3_SELECTOR_REPRO %s\n", total,
+    printf("decisions over all runs: %u, TIE %u (per_call %u, once_amortized %u), %s chosen %u\n", ndec, ties_total,
+           ties_per_call, ties_once, OMA_SEL_REFERENCE, ref_picks);
+    printf("reproducibility: %u decisions, %u agree, %u recorded ties, %u disagree -> MA2_SELECTOR_REPRO %s\n", total,
            agree, tie_ok, disagree, gate);
     return 0;
 }

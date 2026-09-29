@@ -1,5 +1,5 @@
-/* Omega mixed algebra MA-3: realizations of one exact semantic operation.
- * spec/mixed-algebra-ma3.md
+/* Omega mixed algebra MA-2: realizations of one exact semantic operation.
+ * spec/mixed-algebra-ma2.md
  *
  * Operation Omega-X ("ternary GEMV"):
  *   y = W . x,  W in {-1,0,+1}^(m x n) (row-major int8),  x in int8^n,

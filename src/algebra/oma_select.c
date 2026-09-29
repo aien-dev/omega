@@ -1,4 +1,4 @@
-/* MA-3 stand-in selector (not wired to rx_costmodel). See oma_select.h. */
+/* MA-2 stand-in selector (not wired to rx_costmodel). See oma_select.h. */
 #include "algebra/oma_select.h"
 
 #include "algebra/realize_common.h"
@@ -57,7 +57,10 @@ int oma_sel_load(oma_sel_table *t, const char *path) {
     size_t added = 0;
     t->run_id[run][0] = 0;
     while (fgets(line, sizeof line, f)) {
-        if (strstr(line, "\"schema\": \"OMEGA_MIXED_ALGEBRA_MA3_BENCH_V1\"")) schema_ok = 1;
+        /* MA3_BENCH_V1: the historical runs recorded under the earlier MA-3 label */
+        if (strstr(line, "\"schema\": \"OMEGA_MIXED_ALGEBRA_MA2_BENCH_V1\"") ||
+            strstr(line, "\"schema\": \"OMEGA_MIXED_ALGEBRA_MA3_BENCH_V1\""))
+            schema_ok = 1;
         if (!in_table && strstr(line, "\"run_id\": ")) kv_str(line, "run_id", t->run_id[run], sizeof t->run_id[run]);
         if (strstr(line, "\"cost_table\": [")) { in_table = 1; continue; }
         if (!in_table) continue;
@@ -188,7 +191,9 @@ int oma_sel_decide(const oma_sel_table *t, const oma_sel_query *q, oma_sel_decis
     }
     const oma_sel_candidate *W = &d->cand[w];
     snprintf(d->chosen, sizeof d->chosen, "%s", W->rz);
-    d->chosen_cost_ns = W->cost_ns;
+    snprintf(d->cheapest, sizeof d->cheapest, "%s", W->rz);
+    d->chosen_cost_ns = d->cheapest_cost_ns = W->cost_ns;
+    d->tie_resolution = "none";
     if (u < 0) {
         snprintf(d->reason, sizeof d->reason, "only eligible realization");
         return OMA_SEL_OK;
@@ -203,14 +208,38 @@ int oma_sel_decide(const oma_sel_table *t, const oma_sel_query *q, oma_sel_decis
     if (U->cross_run_rel > band) band = U->cross_run_rel;
     d->noise_band_rel = band;
     d->tie = d->margin_rel <= band;
+    /* tie set: every eligible candidate inside the band of the cheapest, cheapest first */
+    memcpy(d->tie_set[d->ntie++], W->rz, OMA_SEL_ID);
     for (size_t k = 0; k < d->ncand && d->ntie < OMA_SEL_MAX_CAND; k++) {
         const oma_sel_candidate *c = &d->cand[k];
         if (!c->eligible || (int)k == w) continue;
         if ((c->cost_ns - W->cost_ns) / W->cost_ns <= band) snprintf(d->tie_set[d->ntie++], OMA_SEL_ID, "%s", c->rz);
     }
-    snprintf(d->reason, sizeof d->reason, "%s: cheapest exact verified realization, %.1f%% under %s%s",
-             d->tie ? "TIE" : "chosen", 100.0 * d->margin_rel, U->rz,
-             d->tie ? " (margin inside the measured noise band)" : " (margin outside the measured noise band)");
+    if (!d->tie) {
+        snprintf(d->reason, sizeof d->reason,
+                 "chosen: cheapest exact verified realization, %.1f%% under %s (margin outside the measured noise band)",
+                 100.0 * d->margin_rel, U->rz);
+        return OMA_SEL_OK;
+    }
+    /* ADR 0019 section 9.1: on TIE the incumbent stands; with no incumbent the
+     * digital reference realization is selected. */
+    const oma_sel_candidate *inc = NULL, *ref = NULL;
+    for (size_t k = 0; k < d->ncand; k++) {
+        const oma_sel_candidate *c = &d->cand[k];
+        if (!c->eligible) continue;
+        if (q->incumbent && q->incumbent[0] && strcmp(c->rz, q->incumbent) == 0) inc = c;
+        if (strcmp(c->rz, OMA_SEL_REFERENCE) == 0) ref = c;
+    }
+    const oma_sel_candidate *pick = W;
+    if (inc) { pick = inc; d->tie_resolution = "incumbent"; }
+    else if (ref) { pick = ref; d->tie_resolution = "reference"; }
+    else d->tie_resolution = "cheapest_reference_ineligible";
+    memcpy(d->chosen, pick->rz, sizeof d->chosen); /* both OMA_SEL_ID, NUL-terminated */
+    d->chosen_cost_ns = pick->cost_ns;
+    snprintf(d->reason, sizeof d->reason,
+             "TIE: %s %.1f%% under %s, inside the measured noise band %.1f%%; %s %s selected (ADR 0019 9.1)",
+             W->rz, 100.0 * d->margin_rel, U->rz, 100.0 * band,
+             inc ? "incumbent" : ref ? "digital reference" : "no eligible incumbent or reference, cheapest", pick->rz);
     return OMA_SEL_OK;
 }
 
@@ -220,10 +249,12 @@ void oma_sel_decision_json(FILE *f, const oma_sel_decision *d, const char *ind) 
             d->q.run < 0 ? "all" : (d->q.run == 0 ? "run1" : "run2"));
     fprintf(f, "%s \"cell\": {\"n\": %zu, \"m\": %zu, \"sparsity\": %.2f, \"exact_cell\": %s},\n", ind, d->cell_n,
             d->cell_m, d->cell_sparsity, d->exact_cell ? "true" : "false");
-    fprintf(f, "%s \"chosen\": \"%s\", \"runner_up\": \"%s\", \"chosen_ns\": %.1f, \"runner_up_ns\": %.1f, "
-               "\"margin_rel\": %.4f, \"noise_band_rel\": %.4f, \"verdict\": \"%s\", \"tie_set\": [",
-            ind, d->chosen, d->runner_up, d->chosen_cost_ns, d->runner_up_cost_ns, d->margin_rel, d->noise_band_rel,
-            d->tie ? "TIE" : "CHOSEN");
+    fprintf(f, "%s \"chosen\": \"%s\", \"chosen_ns\": %.1f, \"cheapest\": \"%s\", \"cheapest_ns\": %.1f, "
+               "\"runner_up\": \"%s\", \"runner_up_ns\": %.1f, \"margin_rel\": %.4f, \"noise_band_rel\": %.4f, "
+               "\"verdict\": \"%s\", \"incumbent\": \"%s\", \"tie_resolution\": \"%s\", \"tie_set\": [",
+            ind, d->chosen, d->chosen_cost_ns, d->cheapest, d->cheapest_cost_ns, d->runner_up, d->runner_up_cost_ns,
+            d->margin_rel, d->noise_band_rel, d->tie ? "TIE" : "CHOSEN",
+            (d->q.incumbent && d->q.incumbent[0]) ? d->q.incumbent : "", d->tie_resolution ? d->tie_resolution : "none");
     for (size_t i = 0; i < d->ntie; i++) fprintf(f, "%s\"%s\"", i ? ", " : "", d->tie_set[i]);
     fprintf(f, "],\n%s \"reason\": \"%s\",\n%s \"candidates\": [", ind, d->reason, ind);
     for (size_t k = 0; k < d->ncand; k++) {

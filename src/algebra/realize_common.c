@@ -1,4 +1,4 @@
-/* Omega mixed algebra MA-3: shared realization helpers and registry. */
+/* Omega mixed algebra MA-2: shared realization helpers and registry. */
 #include "algebra/realize_common.h"
 
 #include <stdlib.h>
