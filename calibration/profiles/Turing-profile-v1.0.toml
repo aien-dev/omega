@@ -1,0 +1,143 @@
+# Turing-profile-v1.0: the measurement profile for CAL-0 and EXP-001.
+#
+# Format: flat TOML, one `key = value` per line, no tables, no multi-line strings, so that
+# calibration/scripts/check_profile.sh can read it with sed. Values are strings unless they are plain integers.
+# The commitment is calibration/profiles/Turing-profile-v1.0.sha256 = SHA-256 over the exact bytes of this file.
+# Any byte change (including this comment) changes the digest. The sidecar is regenerated only at the freeze
+# commit, after every FILL_AT_FREEZE marker below is replaced with a value (check_profile.sh --freeze refuses
+# any marker). After freeze this file never changes; a change is a new profile id.
+
+profile_id = "Turing-profile-v1.0"
+profile_version = "1.0.0"
+profile_digest = "SIDECAR"
+profile_digest_rule = "The profile digest is NOT stored in this file (a file cannot contain its own hash). It is the SHA-256 over the exact bytes of this .toml file, written as '<64 lowercase hex>  Turing-profile-v1.0.toml' in calibration/profiles/Turing-profile-v1.0.sha256 (sha256sum -c format). Every EXP-001 receipt carries it as profile_digest and every tool refuses a mismatch."
+profile_status = "DRAFT until the freeze commit; FROZEN from the freeze commit on"
+predecessor_profile = "TY measurement profile V0, turing.yprofile.v0 digest f4292df9748e306165f30b250673a0062391054321ea6dbe68855ecaa0fa8be8 (docs/turing/TURING_YIELD_PROFILE_V0.md). v1.0 keeps the V0 task, symbol map, model code and fixed-point arithmetic unchanged and adds real coders, sealed data, bootstrap uncertainty and the candidate set."
+
+# ---------------------------------------------------------------- task
+task_definition = "Predict the outcome of every search event of the crumbline control learner. D = the sequence of outcome symbols x_t, one per CTR1 record of a control trace.ctr, in file order. Alphabet K = 9 (src/turing/ty_ctr1.h): 0 EXPAND pruned equivalent, 1 EXPAND pruned over cost, 2 EXPAND pruned frontier cap, 3 EXPAND pruned step cap, 4 EXPAND failed, 5 EXPAND partial, 6 EXPAND improved, 7 SUBMIT accepted, 8 SUBMIT rejected. Side information, not coded and open to every model identically: op feature (op_index 0..14 for EXPAND, 15 for SUBMIT), depth clipped at 7, crumb boundaries (event_index 0 opens a crumb), crumb ordinal within the file, event_index. Previous-outcome context restarts at every crumb start with the start value K. Record mapping, refusals and field classification are exactly TURING_YIELD_PROFILE_V0.md sections 2-3 and ty_ctr1_decode."
+alphabet_size_K = 9
+ctr1_record_bytes = 247
+depth_clip = 7
+op_submit_value = 15
+context_reset = "per crumb: previous-outcome features restart at event_index 0 with value K = 9"
+
+# ---------------------------------------------------------------- baseline
+baseline_family = "B2 = order-1 context table (feature mask 4 = previous outcome in the crumb), fit rule ty.fit.kt16.mdl.v0 on dev seeds 1-7: the frozen TY-2 baseline file evidence/TURING_YIELD/ty2_baseline.tym, bytes unchanged. T in EXP-001 is always T(M; B2, D). Why B2: it is the strongest simple baseline chosen on validation in V0 (section 7), it already captures the search's own run structure, so a candidate earns T only from structure order-1 does not know; B0 and B1 would let a candidate pass on that search artifact alone. B0 (uniform), B1 (order-0) and B3 (fixed heuristic) are scored and reported with T against B2 and against B1; they never decide the verdict."
+baseline_encoding = "TYM0 v0 model code (calibration/docs/MODEL_DESCRIPTION_ENCODING.md). B2: 145 bytes, L(B2) = 1156 bits, model digest (turing.ymodel.v0) 59ae9398da24e809d92ab39e7456382a0a4b7e93e203862be6d2ca55450dfd04. L(B2) is charged exactly like any candidate's L(M)."
+baseline_b2_model_digest = "59ae9398da24e809d92ab39e7456382a0a4b7e93e203862be6d2ca55450dfd04"
+baseline_b2_lm_bits = 1156
+baseline_b2_mask = 4
+
+# ---------------------------------------------------------------- model cost L(M)
+candidate_encoding_rules = "A candidate is admissible only as one TYM0 v0 model code: a finite table of 16-bit quantized rows over K = 9 symbols, one default row plus rows keyed by a context key built from the declared feature mask. L(M) = the exact bit length of that code as written by ty_model_encode (before byte padding). Table models only in v1.0: no program, neural net, continuous parameter or external predictor is admissible (a continuous L(M) is deferred to a later profile by owner decision). How a table was produced (counting, smoothing, pruning, hand setting) is free; only the encoded table is scored and only the encoded table is paid for. The model that is scored is always the model decoded from the code (ty_model_decode), never an in-memory object."
+lm_representation = "TYM0 v0 bitstream, MSB first: magic 'TYM0' 32 | version 8 | K 8 | feature mask 8 | qbits 8 | key bits 8 | row count 32 | default row (K-1) x 16 | per row with strictly increasing keys: key (key bits) | (K-1) x 16. K-th entry of each row implied (65536 minus the others)."
+lm_formula = "L(M) = 104 + 16(K-1) + rows x (keybits + 16(K-1)) bits; with K = 9: L(M) = 232 + rows x (keybits + 128)"
+model_header_bits = 104
+model_code_version = 0
+model_digest_domain = "turing.ymodel.v0"
+model_digest_rule = "SHA-256('turing.ymodel.v0' || 0x00 || code bytes) (ty_model_digest)"
+lm_free_background = "Free (not charged, identical for every model and pinned by digest): (1) the TYM0 v0 decoder specification calibration/docs/MODEL_DESCRIPTION_ENCODING.md and its reference implementation src/turing/ty_model.c; (2) the CTR1 reader and outcome symbol map (src/turing/ty_ctr1.c, ty_ctr1.h) including the mixed-radix context-key construction for each feature bit; (3) the fixed-point code-length arithmetic src/turing/ty_math.c; (4) the probability-stream format and both reference coder specifications in calibration/docs/CODER_SPEC.md; (5) this profile. All five are pinned by the freeze commit and by the digests in this file. Nothing else is free."
+lm_free_constants = "Free because they live in the free background: K = 9, qbits = 16, floor 1, the feature radices (op 16, depth 8, previous outcome K+1 = 10, position 2^36), the start-of-crumb value K, the implied K-th entry rule, the magic and version values."
+lm_charged_constants = "Charged: every number the model chooses. Feature mask (8 bits), key bits (8 bits), row count (32 bits), K and qbits fields (8 bits each, fixed values, still paid), every stored key, every stored probability entry. A model cannot pass information through a free constant because the free constants are fixed for all models."
+lm_learned_parameters = "Learned parameters are the stored rows: each row stores K-1 = 8 entries of 16 bits; the K-th entry is implied. Keys are stored at exactly keybits = ceil(log2(product of the mask's radices)) bits."
+lm_parameter_precision = "16-bit fixed point: P = q / 65536 with q in 1..65535 stored, implied entry in 1..65528. No other precision is admissible (qbits field must equal 16, decoder refuses otherwise)."
+lm_structural_metadata = "Structure is the feature mask, key bits and row count in the 104-bit header, all charged. The header is fixed width; a decoder refuses a code whose byte length differs from ceil(L(M)/8) or whose padding bits are nonzero, so no structural field can carry extra data."
+lm_dependencies = "None admissible. A model may depend only on the free background. Any other code, library, file or service a predictor needs makes it inadmissible in v1.0."
+lm_lookup_tables = "Every lookup table is a stored row and is charged at keybits + 128 bits per row (K = 9). A position-keyed table (mask 32) pays 36 + 128 = 164 bits per stored position."
+lm_embedded_datasets = "Admissible only as stored rows, charged as above. There is no other place in a TYM0 code to embed data: the header is fixed width, rows are fixed width, trailing bytes are refused."
+lm_generated_code = "Inadmissible. A TYM0 code is data, not code; no model-supplied program is ever executed."
+lm_external_artifacts = "Inadmissible. The scorer reads only the TYM0 code bytes of the model, the frozen probability-stream format, and the sealed data. A model that needs any other artifact is refused."
+lm_model_headers = "The 104-bit header is charged in full for every model (it is part of L(M))."
+lm_version_info = "The 8-bit version field is charged; its only admissible value is 0 (decoder refuses others)."
+lm_fit_time_procedures = "Free and unscored: counting, KT (add 1/2) smoothing, largest-remainder quantization, MDL pruning, hand setting of rows. They happen before the code exists; only the encoded table is scored, so they cannot carry information past the code."
+lm_no_redefinition = "L(M) is fixed by this profile before sealed data exist. No experiment may change the L(M) rule, the free background, or any charge after sealed outcomes are observed; a change is a new profile id and a new experiment."
+shared_background_definition = "See lm_free_background. Shared background digests are the git tree of the freeze commit for src/turing/ty_model.c, ty_model.h, ty_ctr1.c, ty_ctr1.h, ty_math.c, ty_math.h, calibration/docs/MODEL_DESCRIPTION_ENCODING.md, calibration/docs/CODER_SPEC.md, and this file; freeze_candidate.sh records the SHA-256 of each in candidate_manifest.json."
+model_description_language = "TYM0 v0 context-table model code (calibration/docs/MODEL_DESCRIPTION_ENCODING.md; reference encoder/decoder src/turing/ty_model.c)"
+model_serialization = "One binary .tym file per model: the TYM0 v0 code bytes, zero padded to a whole byte, nothing before or after. Identity = model digest (model_digest_rule)."
+model_cost_method = "L(M) = exact bit count of the TYM0 code returned by ty_model_decode (need = 104 + 16(K-1) + rows x (keybits + 16(K-1))). Byte padding (at most 7 bits) is not charged in L(M); it is charged in coded-file accounting because the .tym file is not a coded data file. Reported as an integer number of bits."
+
+# ---------------------------------------------------------------- data and splits
+dataset_generator = "crumbline control condition, crumbs experiment (prebuilt binary ~/workspace/hive-worktrees/crumbs-v1/target/release/crumbs, SHA-256 72e396b15532aa93afb1f215521e04dca8470f779f3de35c10b04b07bff96638, never rebuilt) with crumbline-learner built from the freeze commit (SHA-256 pinned in calibration/scripts/generate_sealed_data.sh). Same generator configuration as exp-20260927-rep10; only the seed changes. Full procedure: calibration/docs/BLINDING_PROTOCOL.md."
+dataset_generator_crumbs_sha256 = "72e396b15532aa93afb1f215521e04dca8470f779f3de35c10b04b07bff96638"
+dataset_generator_learner_sha256 = "FILL_AT_FREEZE (lane C: LEARNER_SHA256 of generate_sealed_data.sh, learner built from the freeze commit)"
+development_split = "exp-20260927-rep10 control trace.ctr seeds 1-7 (14,376,405 events, 1,298 nonempty crumbs), per-file SHA-256 in evidence/TURING_YIELD/trace_manifest_rep10_control.sha256 (file SHA-256 6efc04b525af60706bd0f3176013fe234d8e8a52e2554cff3add8a4e16171dca, entries 1-7). Every candidate is fit on these only. Seeds 8-10 of rep10 and every file of final-20260927 are burned: never development, calibration or sealed data."
+development_manifest_sha256 = "6efc04b525af60706bd0f3176013fe234d8e8a52e2554cff3add8a4e16171dca"
+calibration_split = "No separate calibration data. Validation stand-in for the power simulation only: fit on dev seeds 1-6, score dev seed 7 per crumb (calibration/scripts/power_simulation.c). Nothing from it enters the verdict."
+sealed_test_split = "2 replication groups x 3 fresh crumbline control seeds each, generated after the freeze by calibration/scripts/generate_sealed_data.sh. Group 1 = primary sealed test; group 2 = second-seed replication. Every nonempty crumb of every sealed control trace.ctr is scored; no file, crumb or event is dropped."
+sealed_groups = 2
+sealed_seeds_per_group = 3
+test_generation_seed_commitment = "Seeds are derived, not chosen: seed(g, j) = first 16 hex of SHA-256('turing.cal.sealed.v1|<freeze commit 40 hex>|<profile digest 64 hex>|g<g>|<j>') as big-endian u64 with the top bit cleared, g in {1,2}, j in 0..2 (rule turing.cal.sealed.v1, calibration/scripts/generate_sealed_data.sh). The freeze commit must be on origin/main and contain this profile and the candidate manifest; nobody can know the seeds before the freeze commit exists."
+holdout_commitment = "Sealed data are generated only after the freeze commit is pushed; generate_sealed_data.sh refuses otherwise. It writes seed_commitment.json and manifest.json (SHA-256 of every sealed file) and COMPLETE last. calibration/scripts/verify_holdout_separation.* checks, before any scoring, that the sealed files are disjoint from the dev files (file and crumb digests) and that every seed differs from the burned ones."
+blinding_method = "Physical non-access, not only a hash commitment: candidates are built in the Candidate Environment (dev data, public profile, public task) and frozen by hash; sealed data exist only after the freeze and are readable only inside the Evaluator Environment jail (frozen candidate artifacts, sealed observations, reference coders, verification code). The candidate cannot query the evaluator or read sealed observations. Procedure and enforcement: calibration/docs/BLINDING_PROTOCOL.md (lane C), candidate_env.sh / evaluator_env.sh."
+
+# ---------------------------------------------------------------- probabilities
+probability_representation = "Every predictor emits, per observation, a length-9 vector of unsigned integers q[0..8] with q[x] in 1..65528 and sum exactly 65536; P(x) = q[x] / 65536. For a TYM0 model the vector is the decoded row of the event's context key (or the default row when no row has that key). The vector is written into the canonical probability stream (calibration/docs/CODER_SPEC.md) before any coder runs; coders read only the stream and never call the model."
+probability_quantization = "16 bits (qbits = 16, total 65536). Rows are produced by ty_quantize_kt (largest remainder, ties to the lower symbol) or set by hand; either way the stored integers are the probabilities. No further quantization happens anywhere between model, stream, ideal length and coders."
+probability_qbits = 16
+probability_total = 65536
+probability_floor = 1
+zero_probability_policy = "Impossible by construction: every entry is >= 1 (P >= 2^-16, at most 16 bits per symbol). A stored entry of 0, or an implied last entry < 1, is refused by the decoder (TY_E_PROFILE); a stream vector with any 0 entry is refused by both coders and the scorer. No epsilon is ever added and nothing is clamped."
+normalization_policy = "Exact integer normalization: each vector sums to exactly 65536 (checked per observation and recorded in the stream's normalization receipt); a vector that does not is refused, never renormalized."
+ideal_codelength_method = "L_ideal(D|M) = sum over events of -log2(q_realized / 65536), in int64 micro-bits (1 bit = 1,000,000 ub) via ty_ubits_q16: integer-only log2 (ty_log2_q32, 32 fractional bits, truncated, error < 2^-31 bits) rounded to the nearest micro-bit once per q value; summed in file order with overflow-checked int64 addition. Per-symbol error vs the exact real value <= 0.501 ub (TY_QERR_MILLI_UB_PER_SYMBOL = 501 milli-ub), so a sum over N events is within 0.501 N ub and a T (two sums) within 1.002 N ub. DL(M, D) = L(M) x 1,000,000 + L_ideal(D|M) ub; T(M; B2, D) = DL(B2, D) - DL(M, D)."
+ub_per_bit = 1000000
+qerr_milli_ub_per_symbol = 501
+
+# ---------------------------------------------------------------- coders
+reference_coder_1 = "Range (arithmetic) coder over the probability stream with 16-bit frequencies (total 65536): src/turing/tc_range.c, spec calibration/docs/CODER_SPEC.md section 'range'. Lossless: decode(encode(D)) == D is checked on every coded file."
+reference_coder_2 = "rANS coder over the same probability stream with 16-bit frequencies (total 65536): src/turing/tc_rans.c, spec calibration/docs/CODER_SPEC.md section 'rans'. Lossless: decode(encode(D)) == D is checked on every coded file."
+coder_spec_path = "calibration/docs/CODER_SPEC.md"
+coder_spec_sha256 = "FILL_AT_FREEZE (lane B: SHA-256 of calibration/docs/CODER_SPEC.md at the freeze commit)"
+coder_termination_convention = "As specified in calibration/docs/CODER_SPEC.md (lane B): range coder flush and rANS final state write, exact byte counts. FILL_AT_FREEZE: section references and digest above."
+coder_header_accounting = "Every byte of each coded file counts: L_coded = 8 x (total bytes of the coded file), including magic, headers, length fields, stream digests, flush and final-state bytes, padding. No byte is excluded, discounted or moved to a side channel."
+coder_metadata_accounting = "Anything the decoder needs besides the probability stream (symbol count, stream digest, model digest, profile digest, lengths) is inside the coded file and counted, or is part of the free background fixed by this profile. A coder whose decoder needs an uncounted input fails the silent-metadata-omission adversarial test and invalidates the run."
+coder_overhead_definition = "overhead_X(M, file) = L_coded_X(M, file) - L_ideal(D_file|M) in bits (ideal rounded up to whole bits: ceil(ub / 1,000,000))."
+coder_envelope = "FILL_AT_FREEZE (lane B: measured on dev seeds 1-7 as overhead <= a + b x N per file, N = events, separately for each coder; the preregistered envelope is the measured a and b with the safety factor stated in CODER_SPEC.md)"
+coder_envelope_range_a_bits = "FILL_AT_FREEZE"
+coder_envelope_range_b_bits_per_event = "FILL_AT_FREEZE"
+coder_envelope_rans_a_bits = "FILL_AT_FREEZE"
+coder_envelope_rans_b_bits_per_event = "FILL_AT_FREEZE"
+coder_envelope_lower_bits = "FILL_AT_FREEZE (lane B: largest admissible negative overhead, if any)"
+
+# ---------------------------------------------------------------- uncertainty
+uncertainty_method = "Nonparametric percentile bootstrap over crumbs, per replication group (calibration/docs/UNCERTAINTY_PROTOCOL.md). Statistic: T(M; B2, D_group) = sum over crumbs of (L(D_c|B2) - L(D_c|M)) in ub minus (L(M) - L(B2)) x 1,000,000. Model costs are fixed, never resampled. 95% interval = sorted resampled values at indices 250 and 9749 (0-based) of 10000."
+correlation_handling = "The crumb is the unit of correlation: context resets at every crumb start, so per-crumb code lengths add exactly to the file code length, and events inside a crumb are never resampled separately. Crumbs are treated as independent across and within seeds (assumption A2). The dev check shows a single-seed crumb bootstrap spread of 0.00155 bits/event against a leave-one-seed-out spread of 0.00316 bits/event; the power simulation covers this with a x2.04 spread inflation sensitivity (n = 3 still has power 1.000 at the declared minimum effect)."
+block_resampling_policy = "Pool all nonempty crumbs of the group's 3 sealed control files, ordered by (sealed manifest seed order, crumb ordinal in file). Draw C crumbs with replacement (C = number of pooled crumbs) using splitmix64 seeded with 0x4558503030315543 + g (g = group 1 or 2); index = r mod C after rejecting r > 2^64 - 1 - (2^64 mod C). One index sequence per group, reused for every candidate (common random numbers). The coded T intervals are the ideal interval shifted by the deterministic coded-minus-ideal overhead difference of the two models."
+bootstrap_resamples = 10000
+bootstrap_ci_level = "0.95, percentile, indices 250 and 9749 of 10000 sorted int64 ub values"
+bootstrap_rng = "splitmix64: z = (s += 0x9E3779B97F4A7C15); z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9; z = (z ^ (z >> 27)) * 0x94D049BB133111EB; return z ^ (z >> 31)"
+bootstrap_seed_base = "0x4558503030315543"
+number_of_replicates = 2
+number_of_replicates_meaning = "2 independent sealed replication groups (group 1 primary, group 2 replication); bootstrap resamples are bootstrap_resamples"
+number_of_trajectories = "3 sealed control seeds (independent worlds) per group, 6 in total; each seed contributes all its nonempty crumbs (about 185 per seed on dev: 181-188), so about 555 crumbs per group. Chosen by the power simulation: smallest n with joint power >= 0.95 at the declared minimum effect (calibration/experiments/EXP-001/power_simulation_output.txt)."
+trajectory_length = "Not fixed by the profile: each crumb is scored whole, as long as the generator made it (dev: 14,376,405 events over 1,298 nonempty crumbs, about 11,000 events per crumb). No truncation, no event dropped. The position feature saturates event_index at 2^20 - 1."
+power_min_effect_bits_per_event = "0.047035 (f = 0.1 of the dev validation data gain 0.470348 bits/event of M_candidate over B2)"
+stopping_rule = "Fixed design, no optional stopping: exactly 2 groups x 3 seeds, generated once, each scored exactly once after verify_holdout_separation passes. No extra seeds are added, no seed is dropped or replaced because of its result. A seed whose generation fails (nonzero exit, missing COMPLETE) voids the whole sealed set; the set is regenerated from scratch with the same rule under a new freeze commit, and the failed attempt is kept and reported. The verdict is written once to calibration/experiments/EXP-001/final_receipt.json and never replaced."
+
+# ---------------------------------------------------------------- energy (declared; not measured in EXP-001)
+energy_instrumentation = "r15_measure (tests/runtime/r15_measure.{c,h}, unchanged) with the TY energy harness of docs/turing/TURING_YIELD_ENERGY_PROTOCOL_V0.md: SPBM package/CPU energy counters, 10 Hz sampler, per-process PMU. NOT measured in EXP-001: deferred to the T/J gate, which runs only after EXP-001 PASS."
+idle_baseline_method = "Per TURING_YIELD_ENERGY_PROTOCOL_V0.md: an IDLE window of the same length in every round, shuffled order, same settle; energy is idle-subtracted per round. Not measured in EXP-001 (deferred to the T/J gate)."
+energy_attribution_method = "Per TURING_YIELD_PROFILE_V0.md section 10: T/J = T / E_M with E_M = idle-subtracted energy of scoring the sealed split with the candidate alone in its own window; the marginal form E_M - E_B is not used. Not measured in EXP-001 (deferred to the T/J gate)."
+energy_measured_in_exp001 = "no"
+
+# ---------------------------------------------------------------- provenance
+software_versions = "omega at the freeze commit (tree hash recorded in every receipt); coders src/turing/tc_*.c and scorer as of that commit; crumbs generator and learner pinned by SHA-256 above; no Python, no network, no GPU."
+compiler_versions = "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, aarch64-linux-gnu; flags -std=c11 -O2 -Wall -Wextra -Werror -pedantic -D_POSIX_C_SOURCE=200809L (plus an ASan/UBSan build whose outputs must be byte-identical)"
+runtime_digest = "FILL_AT_FREEZE (SHA-256 of each evaluator binary built from the freeze commit: coders, scorer, turing-cal-candidates; recorded in candidate_manifest.json and in every receipt)"
+hardware_identity = "NVIDIA DGX Spark (GB10), CPUs Cortex-X925 + Cortex-A725, aarch64, Linux 7.0.0-1019-nvidia; CPU only. Code lengths are integer and hardware independent; hardware matters only for the deferred energy gate."
+independent_verification_requirements = "A second scorer written only from the published docs and the EXP-001 bundle (no import, include, link or invocation of production code; lane D) must reproduce L(M) and every coded byte count exactly, L_ideal and T exactly in micro-bits, and the bootstrap intervals exactly (integer statistic, specified RNG). Any difference fails the success criterion. Tolerance for reported floating-point ratios (bits/event): relative 1e-9."
+baseline_sensitivity_plan = "Report T of every candidate against B0, B1, B2 and B3 (ideal and both coders) with intervals. The verdict uses B2 only. The report states whether the qualitative conclusion (M_candidate positive, memorizers negative) also holds against B1; a difference is reported, not acted on."
+model_code_sensitivity_plan = "Report, without changing the verdict: T with L(M) charged at 8 x file bytes (byte-rounded); T with L(M) doubled; the data-only gain L(D|B2) - L(D|M). The report states whether the sign of T for M_candidate and for both memorizers changes under any of them."
+overlap_audit = "Before scoring, verify_holdout_separation (lane C) checks and writes calibration/experiments/EXP-001/overlap_audit.json: sealed seeds differ from dev and burned seeds; no sealed trace.ctr file digest equals a dev or burned file digest; no sealed crumb (trace stream digest) equals any dev crumb; candidate artifacts were hashed before the sealed data existed (freeze commit ancestry, file mtimes and the COMPLETE timestamp). Any overlap stops the run before scoring."
+failure_reporting_policy = "calibration/docs/FAILURE_REPORTING.md: every outcome (PASS, FAIL, void run, refused step, failed adversarial test) is committed with its receipt and kept; nothing is deleted, rerun to replace, or reinterpreted with a changed threshold. A FAIL is a valid result. Deviations from this profile are listed in REPORT.md and make the run FAIL unless the profile itself allows them."
+
+# ---------------------------------------------------------------- candidate set (EXP-001)
+candidate_set = "B0_uniform, B1_order0, B2_order1, B3_heuristic, M_candidate, M_mem, M_mem_seed1 (calibration/preregistration/EXP-001.md); digests in calibration/experiments/EXP-001/candidate_manifest.json"
+candidate_m_candidate_model_digest = "64a57ba9cf6f8b6e4558751ef2145ae2aa729c5214bfa29373eabfa220a57bc7"
+candidate_m_candidate_lm_bits = 180834
+candidate_m_candidate_mask = 93
+candidate_m_mem_mask = 32
+candidate_m_mem_lm_bits = 607838516
+candidate_m_mem_seed1_lm_bits = 356335496
+candidate_b3_mask = 1
+candidate_b3_lm_bits = 2344

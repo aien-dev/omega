@@ -1,0 +1,34 @@
+{
+  "schema": "turing.cal.candidate_manifest.v1",
+  "experiment": "EXP-001",
+  "status": "draft",
+  "git_head": "fe32be5b3876a5e5979d840207f4af6d12c12fee",
+  "profile_path": "calibration/profiles/Turing-profile-v1.0.toml",
+  "profile_sha256": "3a265ff2b7b495be5d13996a2ef22473e6ea0f1b40d08fdd19b4fe7b0a2cd90a",
+  "profile_sidecar_sha256": "3a265ff2b7b495be5d13996a2ef22473e6ea0f1b40d08fdd19b4fe7b0a2cd90a",
+  "profile_sidecar_matches": true,
+  "fit_data": "exp-20260927-rep10 control seeds 1-7, manifest sha256 6efc04b525af60706bd0f3176013fe234d8e8a52e2554cff3add8a4e16171dca",
+  "candidates": [
+    {"name": "B0_uniform", "file": "B0_uniform.tym", "bytes": 29, "file_sha256": "0d8109c204e90aa33d2992cec3ca40b79c3957ac1f85623e45e2360570b21742", "model_digest": "83c04bdfc10614febd634092355ef03997ed255fde5bdec9a80fe2d8964998ce", "K": 9, "key_bits": 0, "rows": 0, "lm_bits": 232, "location": "git:calibration/experiments/EXP-001/candidates/B0_uniform.tym"},
+    {"name": "B1_order0", "file": "B1_order0.tym", "bytes": 29, "file_sha256": "9ddcd6a4ff2dfab1a8d015a031bce87b52a4ffbc513974e764e9dcd4352e8227", "model_digest": "a0962e1d516a71eb07bdd385fea01af79a3cd587ae2d6ed0ac710e26996e356a", "K": 9, "key_bits": 0, "rows": 0, "lm_bits": 232, "location": "git:calibration/experiments/EXP-001/candidates/B1_order0.tym"},
+    {"name": "B2_order1", "file": "B2_order1.tym", "bytes": 145, "file_sha256": "27d470845551fd7e9bed8c478a6cbd611abe90fdf13b541a5209ef4a3c06375d", "model_digest": "59ae9398da24e809d92ab39e7456382a0a4b7e93e203862be6d2ca55450dfd04", "K": 9, "key_bits": 4, "rows": 7, "lm_bits": 1156, "location": "git:calibration/experiments/EXP-001/candidates/B2_order1.tym"},
+    {"name": "B3_heuristic", "file": "B3_heuristic.tym", "bytes": 293, "file_sha256": "5bba575a752636b8b5eb088aa2f72d9e075f40ff58d61dfe4a4ca79ce84b313b", "model_digest": "e729818b8289263e6819b21fc55f944f9d5113e7cfc4419d0badcc27f589f2ae", "K": 9, "key_bits": 4, "rows": 16, "lm_bits": 2344, "location": "git:calibration/experiments/EXP-001/candidates/B3_heuristic.tym"},
+    {"name": "M_candidate", "file": "M_candidate.tym", "bytes": 22605, "file_sha256": "42ad299da082caf31bc982df9778b630e62075a4e2ff85450bee959b815c0eb4", "model_digest": "64a57ba9cf6f8b6e4558751ef2145ae2aa729c5214bfa29373eabfa220a57bc7", "K": 9, "key_bits": 18, "rows": 1237, "lm_bits": 180834, "location": "git:calibration/experiments/EXP-001/candidates/M_candidate.tym"},
+    {"name": "M_mem", "file": "M_mem.tym", "bytes": 75979815, "file_sha256": "5a2ca3f457cc75b4f49fee99f054a0c32d15e3bfd442886c40e4a5f4945bab81", "model_digest": "cbd6944c6618f508e5377e4698b0d472042cdf3b4592cb80e5427767e232c140", "K": 9, "key_bits": 36, "rows": 3706331, "lm_bits": 607838516, "location": "regenerate:make turing-exp001-a-candidates (deterministic from dev seeds 1-7); verify file_sha256 before use"},
+    {"name": "M_mem_seed1", "file": "M_mem_seed1.tym", "bytes": 44541937, "file_sha256": "34df83a19756d1bd7e73f2b218576cefedad40ac2fc0e7a7a3da10a2a7fd206f", "model_digest": "5dfeff7b643178807b547fbd62388319b9a407109e345614679e4bf20ccfd652", "K": 9, "key_bits": 36, "rows": 2172776, "lm_bits": 356335496, "location": "regenerate:make turing-exp001-a-candidates (deterministic from dev seeds 1-7); verify file_sha256 before use"}
+  ],
+  "shared_background_sha256": {
+    "src/turing/ty_model.c": "654464bb85e852ee006fd65c33d272e86a980c7896d8f3f418f022379957f249",
+    "src/turing/ty_model.h": "d5a93eb746339cca4b09a8e0f032f36c5d277d982a9d5803e141b7a86e026bab",
+    "src/turing/ty_ctr1.c": "8b6f27bb092bbff6cf6f8878e0d538e6138780d9dc0dd9031ae99787e41d22bc",
+    "src/turing/ty_ctr1.h": "a269e6783c5e53b4fc9435ae1e4ff4cc1fa763d6c99d253fb4b21e6a7343b269",
+    "src/turing/ty_math.c": "a4617277f8f18aa183e512f09d738ea06ab904048526c8f7f4d40a7afc84415d",
+    "src/turing/ty_math.h": "4b378a47597a7a929232669da26bffe41803771ecd844c4921c60be901767893",
+    "calibration/docs/MODEL_DESCRIPTION_ENCODING.md": "0a60774018f16c74b4b3016be6f18793d2704c79d0db1e4400c755b2cc4883b6",
+    "calibration/docs/CODER_SPEC.md": "MISSING",
+    "calibration/profiles/Turing-profile-v1.0.toml": "3a265ff2b7b495be5d13996a2ef22473e6ea0f1b40d08fdd19b4fe7b0a2cd90a"
+  },
+  "runtime_sha256": {
+    "turing-cal-candidates": "73d1e072f7705fe5bc5924f55f23b3bc7f50da2e72c5988332f383c20ad92163"
+  }
+}
