@@ -1,0 +1,397 @@
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34769 passes in 50 ms, budget 1390760 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33278 passes in 50 ms, budget 1331120 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33483 passes in 50 ms, budget 1339320 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33685 passes in 50 ms, budget 1347400 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33893 passes in 50 ms, budget 1355720 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33886 passes in 50 ms, budget 1355440 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34248 passes in 50 ms, budget 1369920 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33835 passes in 50 ms, budget 1353400 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34623 passes in 50 ms, budget 1384920 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 31914 passes in 50 ms, budget 1276560 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34176 passes in 50 ms, budget 1367040 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34871 passes in 50 ms, budget 1394840 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33626 passes in 50 ms, budget 1345040 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35289 passes in 50 ms, budget 1411560 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33265 passes in 50 ms, budget 1330600 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34521 passes in 50 ms, budget 1380840 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33215 passes in 50 ms, budget 1328600 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34296 passes in 50 ms, budget 1371840 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34693 passes in 50 ms, budget 1387720 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33825 passes in 50 ms, budget 1353000 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34892 passes in 50 ms, budget 1395680 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 6: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33506 passes in 50 ms, budget 1340240 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 6: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32918 passes in 50 ms, budget 1316720 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 6: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34278 passes in 50 ms, budget 1371120 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 6: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33373 passes in 50 ms, budget 1334920 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 7: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33903 passes in 50 ms, budget 1356120 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 7: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35030 passes in 50 ms, budget 1401200 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 7: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33748 passes in 50 ms, budget 1349920 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 7: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34224 passes in 50 ms, budget 1368960 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 8: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34179 passes in 50 ms, budget 1367160 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 8: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33925 passes in 50 ms, budget 1357000 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 8: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34838 passes in 50 ms, budget 1393520 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 8: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34127 passes in 50 ms, budget 1365080 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 9: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34123 passes in 50 ms, budget 1364920 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 9: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35996 passes in 50 ms, budget 1439840 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 9: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34405 passes in 50 ms, budget 1376200 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 9: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 36308 passes in 50 ms, budget 1452320 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 10: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34308 passes in 50 ms, budget 1372320 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 10: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33674 passes in 50 ms, budget 1346960 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 10: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34455 passes in 50 ms, budget 1378200 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 10: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33156 passes in 50 ms, budget 1326240 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 11: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34524 passes in 50 ms, budget 1380960 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 11: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35309 passes in 50 ms, budget 1412360 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 11: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 31801 passes in 50 ms, budget 1272040 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 11: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35914 passes in 50 ms, budget 1436560 (2000 ms window)
+trial RES-1-NODIGEST 20260929T020536Z-ad8e1f2ea4e4-silicon round 12: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34112 passes in 50 ms, budget 1364480 (2000 ms window)
+trial RES-4 20260929T020536Z-ad8e1f2ea4e4-silicon round 12: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35268 passes in 50 ms, budget 1410720 (2000 ms window)
+trial SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 12: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33840 passes in 50 ms, budget 1353600 (2000 ms window)
+trial RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 12: ok
+l1-A RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+l1-A SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+l1-C RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+l1-C SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+l1-D RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+l1-D SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+l1-E RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+l1-E SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34962 passes in 50 ms, budget 1398480 (2000 ms window)
+l1-G RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33474 passes in 50 ms, budget 1338960 (2000 ms window)
+l1-G SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35696 passes in 50 ms, budget 1427840 (2000 ms window)
+l1-W0 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35199 passes in 50 ms, budget 1407960 (2000 ms window)
+l1-W0 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 40860 passes in 50 ms, budget 1634400 (2000 ms window)
+l1-W1 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34627 passes in 50 ms, budget 1385080 (2000 ms window)
+l1-W1 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+l1-B RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+l1-A SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+l1-A RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+l1-C SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+l1-C RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+l1-D SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+l1-D RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+l1-E SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+l1-E RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33549 passes in 50 ms, budget 1341960 (2000 ms window)
+l1-G SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35403 passes in 50 ms, budget 1416120 (2000 ms window)
+l1-G RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34455 passes in 50 ms, budget 1378200 (2000 ms window)
+l1-W0 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35939 passes in 50 ms, budget 1437560 (2000 ms window)
+l1-W0 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34554 passes in 50 ms, budget 1382160 (2000 ms window)
+l1-W1 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32853 passes in 50 ms, budget 1314120 (2000 ms window)
+l1-W1 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+l1-B RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+l1-A RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+l1-A SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+l1-C RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+l1-C SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+l1-D RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+l1-D SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+l1-E RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+l1-E SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35483 passes in 50 ms, budget 1419320 (2000 ms window)
+l1-G RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35134 passes in 50 ms, budget 1405360 (2000 ms window)
+l1-G SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35374 passes in 50 ms, budget 1414960 (2000 ms window)
+l1-W0 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34471 passes in 50 ms, budget 1378840 (2000 ms window)
+l1-W0 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35195 passes in 50 ms, budget 1407800 (2000 ms window)
+l1-W1 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 36203 passes in 50 ms, budget 1448120 (2000 ms window)
+l1-W1 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+l1-B RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+l1-A SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+l1-A RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+l1-C SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+l1-C RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+l1-D SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+l1-D RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+l1-E SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+l1-E RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35247 passes in 50 ms, budget 1409880 (2000 ms window)
+l1-G SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35313 passes in 50 ms, budget 1412520 (2000 ms window)
+l1-G RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34638 passes in 50 ms, budget 1385520 (2000 ms window)
+l1-W0 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35067 passes in 50 ms, budget 1402680 (2000 ms window)
+l1-W0 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34174 passes in 50 ms, budget 1366960 (2000 ms window)
+l1-W1 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35576 passes in 50 ms, budget 1423040 (2000 ms window)
+l1-W1 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+l1-B RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+l1-A RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+l1-A SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+l1-C RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+l1-C SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+l1-D RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+l1-D SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+l1-E RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+l1-E SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35605 passes in 50 ms, budget 1424200 (2000 ms window)
+l1-G RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34610 passes in 50 ms, budget 1384400 (2000 ms window)
+l1-G SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35921 passes in 50 ms, budget 1436840 (2000 ms window)
+l1-W0 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32366 passes in 50 ms, budget 1294640 (2000 ms window)
+l1-W0 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34553 passes in 50 ms, budget 1382120 (2000 ms window)
+l1-W1 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34368 passes in 50 ms, budget 1374720 (2000 ms window)
+l1-W1 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+l1-B RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33622 passes in 50 ms, budget 1344880 (2000 ms window)
+l2 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34333 passes in 50 ms, budget 1373320 (2000 ms window)
+l2 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 1: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34312 passes in 50 ms, budget 1372480 (2000 ms window)
+l2 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34610 passes in 50 ms, budget 1384400 (2000 ms window)
+l2 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 2: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33628 passes in 50 ms, budget 1345120 (2000 ms window)
+l2 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34125 passes in 50 ms, budget 1365000 (2000 ms window)
+l2 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 3: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34845 passes in 50 ms, budget 1393800 (2000 ms window)
+l2 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32893 passes in 50 ms, budget 1315720 (2000 ms window)
+l2 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 4: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34103 passes in 50 ms, budget 1364120 (2000 ms window)
+l2 RES-1 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32104 passes in 50 ms, budget 1284160 (2000 ms window)
+l2 SEQ 20260929T020536Z-ad8e1f2ea4e4-silicon round 5: ok

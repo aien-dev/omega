@@ -168,6 +168,17 @@ static int decline(RxLiving *l, int why) {
  * supported. Checks who wrote every input it relies on, walks the causal
  * crumbs back to the measurement, verdict and synthesis of the selected
  * realization, and proposes an R9 draft. It proposes; it cannot promote. */
+/* Durable executor completions: run the deciding activation again. */
+static void resume_candidate(void *ctx) {
+    RxLiving *l = ctx;
+    rx_world_resume(l->world, l->r_candidate);
+}
+
+static void resume_promoter(void *ctx) {
+    RxLivingPromoter *p = ctx;
+    rx_world_resume(p->world, p->reaction);
+}
+
 static int fn_candidate(RxCtx *c) {
     RxLiving *l = c->user;
     RxWorld *w = l->world;
@@ -281,10 +292,25 @@ static int fn_candidate(RxCtx *c) {
     AienosCapEntry grant;
     if (rx_world_read(w, l->caps.output_slot, &slot) != RX_OK ||
         aienos_cap_inspect(l->authority,
-            (AienosCapRef){(uint32_t)slot.field[0], (uint32_t)slot.field[1]}, &grant) != 0)
+            (AienosCapRef){(uint32_t)slot.field[0], slot.field[1]}, &grant) != 0)
         return decline(l, RX_LIVING_WHY_GRANT);
 
     uint64_t id = 0;
+    const int durable = rx_gen_exec_running(l->store);
+    if (durable && l->proposed_epoch != epoch) {
+        /* A proposal the durable executor finished since the last run. */
+        RxGenJobResult jr;
+        if (rx_gen_job_state(l->store, RX_GEN_JOB_PROPOSE, &jr) == RX_GEN_JOB_DONE) {
+            rx_gen_job_take(l->store, RX_GEN_JOB_PROPOSE);
+            if (jr.rc == RX_GEN_OK) {
+                l->proposed_epoch = jr.key;
+                l->candidate_id = jr.id;
+            } else if (jr.key == epoch) {
+                decline(l, RX_LIVING_WHY_PROPOSE);
+                return -1;
+            }
+        }
+    }
     if (l->proposed_epoch == epoch) {
         id = l->candidate_id;
     } else {
@@ -305,6 +331,18 @@ static int fn_candidate(RxCtx *c) {
         draft.config_len = sizeof cfg;
         draft.provenance = (const uint8_t *)&pv;
         draft.provenance_len = sizeof pv;
+        if (durable) {
+            /* The store's fsyncs run on the durable executor, not on this
+             * worker. A proposal still in flight (this epoch's or an older
+             * one's) resumes this activation when it lands. */
+            if (rx_gen_job_state(l->store, RX_GEN_JOB_PROPOSE, NULL) == RX_GEN_JOB_IDLE &&
+                rx_gen_post_propose(l->store, epoch, RX_LIVING_PREPARE_SUBJ, &draft,
+                                    resume_candidate, l) != RX_GEN_OK) {
+                decline(l, RX_LIVING_WHY_PROPOSE);
+                return -1;
+            }
+            return RX_FN_DEFER;
+        }
         if (rx_gen_propose(l->store, RX_LIVING_PREPARE_SUBJ, &draft, &id) != RX_GEN_OK) {
             decline(l, RX_LIVING_WHY_PROPOSE);
             return -1;
@@ -320,7 +358,7 @@ static int fn_candidate(RxCtx *c) {
     return 0;
 }
 
-static int native_promotion(void *ctx, uint32_t cap_id, uint32_t generation,
+static int native_promotion(void *ctx, uint32_t cap_id, uint64_t generation,
                             uint32_t subject, uint64_t resource, uint32_t rights) {
     AienosCapEntry entry;
     return aienos_cap_validate(ctx, (AienosCapRef){cap_id, generation},
@@ -332,6 +370,61 @@ static int native_promotion(void *ctx, uint32_t cap_id, uint32_t generation,
  * RX_GEN_RES_PROMOTION; R9 validates that against the native authority and
  * refuses a promoter that is also the proposer. Only after R9 commits does
  * the in-force record, which production reads, name the new realization. */
+/* The promotion's durable work (blobs, root, journal, flip, receipt, event,
+ * all fsynced) runs on the store's executor; this worker only decides it and,
+ * once it is done, publishes it, so production keeps the worker meanwhile.
+ * R9 still validates the promotion right and refuses a self-promotion inside
+ * rx_gen_promote. Returns 1 while the promotion is in flight. */
+static int promote_durable(RxLivingPromoter *p, uint64_t id, int *rc, uint64_t *active,
+                           uint64_t *ns) {
+    RxGenJobResult jr;
+    uint64_t lineage = 0;
+    int st = rx_gen_job_state(p->store, RX_GEN_JOB_PROMOTE, &jr);
+    if (st == RX_GEN_JOB_DONE && jr.key != id) {
+        /* An earlier candidate's outcome: it is on disk; the record now
+         * describes a newer candidate. */
+        rx_gen_job_take(p->store, RX_GEN_JOB_PROMOTE);
+        st = RX_GEN_JOB_IDLE;
+    }
+    if (st == RX_GEN_JOB_DONE) {
+        rx_gen_job_take(p->store, RX_GEN_JOB_PROMOTE);
+        *rc = jr.rc;
+        *ns = jr.ns;
+        *active = jr.active;
+        return 0;
+    }
+    rx_gen_active(p->store, active, &lineage);
+    if (*active == id) {
+        *rc = RX_GEN_OK;             /* a re-run after an invalidated publication */
+        return 0;
+    }
+    if (st == RX_GEN_JOB_PENDING) return 1;
+    RxPromotionRequest req = {id, RX_LIVING_PROMOTE_SUBJ,
+        p->promotion_authority.cap_id, p->promotion_authority.generation,
+        RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE};
+    *rc = rx_gen_post_promote(p->store, id, &req, native_promotion, (void *)p->authority,
+                              resume_promoter, p);
+    return *rc == RX_GEN_OK;
+}
+
+/* Without an executor (the sequential reference) the stage runs to completion. */
+static void promote_inline(RxLivingPromoter *p, uint64_t id, int *rc, uint64_t *active,
+                           uint64_t *ns) {
+    uint64_t lineage = 0, t0 = now_ns();
+    rx_gen_active(p->store, active, &lineage);
+    if (*active == id) {
+        *rc = RX_GEN_OK;             /* a re-run after an invalidated publication */
+        return;
+    }
+    RxPromotionRequest req = {id, RX_LIVING_PROMOTE_SUBJ,
+        p->promotion_authority.cap_id, p->promotion_authority.generation,
+        RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE};
+    *rc = rx_gen_promote(p->store, &req, native_promotion, (void *)p->authority,
+                         NULL, NULL, NULL, NULL);
+    *ns = now_ns() - t0;
+    rx_gen_active(p->store, active, &lineage);
+}
+
 static int fn_promote(RxCtx *c) {
     RxLivingPromoter *p = c->user;
     const RxSnapshotDep *cand = input(c, p->candidate);
@@ -340,19 +433,12 @@ static int fn_promote(RxCtx *c) {
     uint64_t id = cand->field[0];
     if (!id || done->field[0] == id) return 0;
 
-    uint64_t active = 0, lineage = 0, t0 = now_ns(), ns = 0;
-    int rc;
-    rx_gen_active(p->store, &active, &lineage);
-    if (active == id) {
-        rc = RX_GEN_OK;              /* a re-run after an invalidated publication */
+    uint64_t active = 0, ns = 0;
+    int rc = RX_GEN_OK;
+    if (rx_gen_exec_running(p->store)) {
+        if (promote_durable(p, id, &rc, &active, &ns)) return RX_FN_DEFER;
     } else {
-        RxPromotionRequest req = {id, RX_LIVING_PROMOTE_SUBJ,
-            p->promotion_authority.cap_id, p->promotion_authority.generation,
-            RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE};
-        rc = rx_gen_promote(p->store, &req, native_promotion, (void *)p->authority,
-                            NULL, NULL, NULL, NULL);
-        ns = now_ns() - t0;
-        rx_gen_active(p->store, &active, &lineage);
+        promote_inline(p, id, &rc, &active, &ns);
     }
     p->result = rc;
     put(c, p->promotion, 0, id);
@@ -410,6 +496,10 @@ int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
     l->caps = *caps;
     int rc;
     RxReactionDesc d;
+    /* A resident world puts the store's physical work on its own executor so
+     * a promotion never occupies a semantic worker. The sequential reference
+     * runs every stage to completion on its one thread, as designed. */
+    if (!w->sequential && rx_gen_exec_start(l->store) != RX_GEN_OK) return RX_ERR_FULL;
 
     base(&d, "living.experiment.prepare", RX_FACULTY_OMEGA, RX_LIVING_SUBJ, fn_prepare, l);
     d.n_triggers = 1;

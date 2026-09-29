@@ -407,6 +407,60 @@ static void t_drift(void) {
     env_stop(&e);
 }
 
+/* Seen on GB10 in R15 (2026-09-28): production jitter on A725 failed the
+ * prediction twice with nothing changed; the drift research found nothing and
+ * the failure was settled. The prediction then stayed FAILED, so the later
+ * move to X925 was never noticed and no plan followed. A settled failure must
+ * give way to a fresh prediction learned from fresh intervals. */
+static void t_settled_failure_relearns(void) {
+    printf("[*] a settled failure is relearned, so a later core move is still noticed\n");
+    Env e;
+    CHECK(envA_start(&e) == 0, "setup");
+    RxAienFaculty *a = &e.a;
+    uint64_t R = rx_aien_regime(REG_M, REG_N);
+    place(&e, P1);
+    window(&e, 5000, 0);          /* production runs before any record exists */
+    record(&e, 1, 0xAA);
+    confirm_at(&e, 5000, 0xAA);
+    windows(&e, 2, 9000, 0xAA);   /* jitter: drift hypothesis, drift plan */
+    CHECK(fld(&e, a->o.plan, 0) == 1 && fld(&e, a->o.plan, 5) == RX_AIEN_WHY_DRIFT, "drift plan");
+    record(&e, 2, 0xAA);          /* the research kept the same realization */
+    windows(&e, 1 + a->cfg.baseline_intervals, 9000, 0xAA);
+    windows(&e, 2, 15000, 0xAA);  /* fails again: the drift hypothesis is refuted */
+    CHECK(settle(&e) == RX_OK, "settle");
+    uint64_t failed_seq = fld(&e, a->o.prediction, 0);
+    CHECK(fld(&e, a->o.prediction, 6) == RX_AIEN_PRED_FAILED, "second failure");
+    CHECK(fld(&e, a->o.hypothesis, 7) == RX_AIEN_HYP_UNSUPPORTED ||
+          fld(&e, a->o.hypothesis, 7) == RX_AIEN_HYP_EXHAUSTED, "failure not settled: hypothesis state %llu",
+          (unsigned long long)fld(&e, a->o.hypothesis, 7));
+
+    /* Nothing is left to try here: AIEN relearns the record where it runs. */
+    windows(&e, 2 + a->cfg.baseline_intervals + a->cfg.confirm_intervals, 15000, 0xAA);
+    CHECK(fld(&e, a->o.prediction, 0) == failed_seq + 1 &&
+          fld(&e, a->o.prediction, 6) == RX_AIEN_PRED_CONFIRMED &&
+          fld(&e, a->o.prediction, 5) == 15000 && fld(&e, a->o.prediction, 4) == P1,
+          "no fresh prediction after a settled failure: seq %llu (failed %llu) state %llu cost %llu",
+          (unsigned long long)fld(&e, a->o.prediction, 0), (unsigned long long)failed_seq,
+          (unsigned long long)fld(&e, a->o.prediction, 6), (unsigned long long)fld(&e, a->o.prediction, 5));
+    CHECK(fld(&e, a->o.plan, 0) == 1, "relearning planned");
+
+    /* The real change: the work moves. It is noticed, explained, planned. */
+    uint64_t hyps = fld(&e, a->o.hypothesis, 0);
+    place(&e, P2);
+    windows(&e, 2, 4000, 0xAA);
+    CHECK(fld(&e, a->o.prediction, 6) == RX_AIEN_PRED_FAILED, "the move was not noticed");
+    CHECK(fld(&e, a->o.hypothesis, 0) == hyps + 1 &&
+          fld(&e, a->o.hypothesis, 1) == RX_AIEN_HYP_CORE_CLASS &&
+          fld(&e, a->o.hypothesis, 3) == P1 && fld(&e, a->o.hypothesis, 4) == P2 &&
+          fld(&e, a->o.hypothesis, 7) == RX_AIEN_HYP_TESTING,
+          "core-class hypothesis: seq %llu kind %llu state %llu", (unsigned long long)fld(&e, a->o.hypothesis, 0),
+          (unsigned long long)fld(&e, a->o.hypothesis, 1), (unsigned long long)fld(&e, a->o.hypothesis, 7));
+    CHECK(fld(&e, a->o.plan, 0) == 2 && fld(&e, a->o.plan, 2) == R && fld(&e, a->o.plan, 3) == P2 &&
+          fld(&e, a->o.plan, 5) == RX_AIEN_WHY_CORE_CLASS, "no plan for the move");
+    check_only_reactive(&e);
+    env_stop(&e);
+}
+
 static void t_goal(void) {
     printf("[*] a human goal: unknown, met, unmet -> one plan, then unmet and explored\n");
     Env e;
@@ -872,6 +926,7 @@ int main(void) {
     t_steady_and_outlier();
     t_core_class();
     t_drift();
+    t_settled_failure_relearns();
     t_goal();
     t_authority();
 #if defined(__aarch64__)
