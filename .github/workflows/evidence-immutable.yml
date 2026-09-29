@@ -1,0 +1,32 @@
+name: evidence-immutable
+
+# Reviewed evidence is never rewritten. A pull request may add new files
+# under evidence/, but may not modify, rename or delete one that already
+# exists on the base branch. New receipts are content-addressed
+# (<name>.<sha256>.json), so a rerun adds a file instead of replacing one.
+
+on:
+  pull_request:
+    paths:
+      - 'evidence/**'
+
+jobs:
+  evidence-immutable:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refuse changes to existing evidence files
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          changed="$(git diff --name-status --diff-filter=MDRT "$BASE_SHA...$HEAD_SHA" -- evidence/)"
+          if [ -n "$changed" ]; then
+            echo "These existing evidence files would be changed:"
+            echo "$changed"
+            echo "Add a new, content-addressed file instead of rewriting reviewed evidence."
+            exit 1
+          fi
+          echo "evidence/: additions only"
