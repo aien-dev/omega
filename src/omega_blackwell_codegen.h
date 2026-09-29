@@ -48,7 +48,7 @@ typedef enum {
     BW_IR_ATOMG_ADD_STRONG_SYS, /* ATOMG.E.ADD.STRONG.SYS Rd, [Ra.64], Rb       */
     BW_IR_ATOMG_EXCH_STRONG_SYS,/* ATOMG.E.EXCH.STRONG.SYS Rd, [Ra.64], Rb      */
     BW_IR_EXIT,         /* EXIT */
-    BW_IR_BRA           /* BRA target */
+    BW_IR_BRA           /* BRA. imm = signed instruction delta; predicate_p0 / predicate_not select @P0 or @!P0 */
 } BlackwellIROpcode;
 
 /* Special Register Identifiers */
@@ -67,10 +67,13 @@ typedef struct {
     int src2_vreg;      /* Virtual source 2 register (-1 if none / immediate mode) */
     int src3_vreg;      /* Virtual source 3 register (-1 if none / RZ) */
     int ureg;           /* Uniform register (-1 if none) */
-    uint32_t imm;       /* Immediate value / constant bank offset / SR code */
+    uint32_t imm;       /* Immediate value / constant bank offset / SR code.
+                         * For BW_IR_BRA: signed instruction delta (target minus
+                         * this instruction). 0 branches to itself. */
     uint32_t control;   /* Bundle control word */
     bool is_uniform;    /* True if targets/uses uniform registers */
-    bool predicate_p0;  /* True if predicated on @P0 */
+    bool predicate_p0;  /* True if predicated on P0 */
+    bool predicate_not; /* With predicate_p0, encode @!P0 */
     uint8_t dst_subreg; /* Subregister offset (0..3) within register bundle */
     uint8_t src1_subreg;
     uint8_t src2_subreg;

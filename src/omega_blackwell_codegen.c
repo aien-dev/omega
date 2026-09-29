@@ -500,12 +500,28 @@ static int encode_single_insn(const BlackwellIRInsn *insn, const OmegaRegAlloc *
             w[3] = 0x000fea00;
             break;
 
-        case BW_IR_BRA:
-            w[0] = 0x00fc7947;
-            w[1] = 0xfffffffc;
-            w[2] = 0x0383ffff;
-            w[3] = 0x000fc000;
+        case BW_IR_BRA: {
+            /* sm_121 BRA. Relative distance is (target_insn - this_insn) - 1,
+             * split as bits 0..5 at instruction bits 18..23 and bits 6.. at
+             * instruction bit 34. Predicate field at bits 12..15: 7 = always,
+             * 0 = @P0, 8 = @!P0. A zero delta with no predicate keeps the
+             * post-EXIT self-branch word already used by the matmul kernels. */
+            int32_t delta = (int32_t)insn->imm;
+            int32_t rel = delta - 1;
+            uint32_t pred_field = 0x7u;
+            if (insn->predicate_p0)
+                pred_field = insn->predicate_not ? 0x8u : 0x0u;
+            w[0] = 0x947u | (pred_field << 12) | (((uint32_t)rel & 0x3fu) << 18);
+            w[1] = (uint32_t)(rel >> 6) << 2;
+            w[2] = (rel < 0) ? 0x0383ffffu : 0x03800000u;
+            if (insn->control)
+                w[3] = insn->control;
+            else if (delta == 0 && !insn->predicate_p0)
+                w[3] = 0x000fc000u;
+            else
+                w[3] = 0x000fea00u;
             break;
+        }
 
         default:
             return -1;
