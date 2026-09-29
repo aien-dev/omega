@@ -187,7 +187,7 @@ The omegatool M4-M14 gate suites needed no change.
 
 ## 9. Qualification
 
-`make test-program-id` (tests/program/test_program_id.c, physics-free, runs in the CI host
+`make test-program-id` (tests/program/test_program_id.c, physics-free, runs in the CI AArch64
 job) prints five gates:
 
 | gate | what it proves |
