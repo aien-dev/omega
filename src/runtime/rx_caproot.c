@@ -19,6 +19,7 @@
 #include <sys/random.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #ifndef F_SEAL_FUTURE_WRITE
@@ -34,24 +35,40 @@ typedef struct {
 typedef struct {
     uint32_t ready;
     uint32_t office_id;
-    uint32_t office_generation;
+    uint32_t pad;
+    uint64_t office_generation;
     int32_t status;
     uint8_t token[RX_CAP_TOKEN_LEN];
 } RxCapHello;
 
 /* Next table's starting generation. Taken atomically so two roots in one
  * process cannot share a generation. A later root starts higher, so a
- * reference from a dead root cannot validate against the new table. */
-static _Atomic uint32_t g_next_boot_gen = 1;
+ * reference from a dead root cannot validate against the new table: the
+ * start is the larger of one past the last start and the time since boot in
+ * nanoseconds shifted left by 8. A slot of the dead root would need more
+ * than 256 reclaims per nanosecond to reach it. Same rule as AIENOS. */
+static _Atomic uint64_t g_last_boot_gen = 0;
 
-static int take_boot_gen(uint32_t *out) {
-    uint32_t cur = atomic_load_explicit(&g_next_boot_gen, memory_order_relaxed);
+static uint64_t boot_time_seed(void) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_BOOTTIME, &ts) != 0) return 0;
+    uint64_t ns = (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+    if (ns > (UINT64_MAX >> 9)) return 0;
+    return ns << 8;
+}
+
+static int take_boot_gen(uint64_t *out) {
+    uint64_t seed = boot_time_seed();
+    uint64_t cur = atomic_load_explicit(&g_last_boot_gen, memory_order_relaxed);
     for (;;) {
-        if (cur == 0 || cur >= UINT32_MAX) return RX_CAP_ERR_EXHAUSTED;
+        if (cur == UINT64_MAX) return RX_CAP_ERR_EXHAUSTED;
+        uint64_t next = cur + 1u;
+        if (seed > next) next = seed;
+        if (next == UINT64_MAX) return RX_CAP_ERR_EXHAUSTED;
         if (atomic_compare_exchange_weak_explicit(
-                &g_next_boot_gen, &cur, cur + 1u,
+                &g_last_boot_gen, &cur, next,
                 memory_order_acq_rel, memory_order_relaxed)) {
-            *out = cur;
+            *out = next;
             return RX_CAP_OK;
         }
     }
@@ -181,7 +198,7 @@ static int root_mint(RxCapTable *t, const uint8_t *delivered, uint8_t *delivered
     for (uint32_t i = 0; i < t->capacity; i++) {
         RxCapEntry *e = &t->entries[i];
         if (e->state != RX_CAP_FREE) continue;
-        if (e->generation == UINT32_MAX) { saw_exhausted = 1; continue; }
+        if (e->generation == UINT64_MAX) { saw_exhausted = 1; continue; }
         root_begin(t);
         e->state = RX_CAP_LIVE;
         e->issuer = m->issuer;
@@ -249,7 +266,7 @@ static int root_reclaim(RxCapTable *t, const uint8_t *delivered, uint8_t *delive
     if (id >= t->capacity) return RX_CAP_ERR_BOUNDS;
     RxCapEntry *e = &t->entries[id];
     if (e->state != RX_CAP_REVOKED) return RX_CAP_ERR_STATE;
-    uint32_t next = 0;
+    uint64_t next = 0;
     int grc = rx_cap_generation_advance(e->generation, &next);
     if (grc != RX_CAP_OK) return grc;
     root_begin(t);
@@ -317,9 +334,9 @@ static int write_full(int fd, const void *buf, size_t n) {
 static void root_main(int memfd, int sock) {
     prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
     prctl(PR_SET_PDEATHSIG, SIGKILL, 0, 0, 0);
-    uint32_t boot_gen = 0;
+    uint64_t boot_gen = 0;
     if (read_full(sock, &boot_gen, sizeof(boot_gen)) != 0) _exit(2);
-    if (boot_gen == 0 || boot_gen == UINT32_MAX) _exit(2);
+    if (boot_gen == 0 || boot_gen == UINT64_MAX) _exit(2);
 
     RxCapTable *t = mmap(NULL, sizeof(RxCapTable), PROT_READ | PROT_WRITE,
                          MAP_SHARED, memfd, 0);
@@ -409,7 +426,7 @@ int rx_caproot_start(RxCapRoot *root, RxCapAdmin *admin) {
     root->ro_fd = -1;
     admin->ctl_fd = -1;
     admin->office.cap_id = UINT32_MAX;
-    uint32_t boot = 0;
+    uint64_t boot = 0;
     int brc = take_boot_gen(&boot);
     if (brc != RX_CAP_OK) return brc;
     int memfd = memfd_create("aien-capability-root", MFD_ALLOW_SEALING | MFD_CLOEXEC);

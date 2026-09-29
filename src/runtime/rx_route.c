@@ -759,7 +759,7 @@ int rx_route_ledger_model(const RxCogLedger *l, uint8_t **out, size_t *out_len) 
 }
 
 int rx_route_propose(const RxCogLedger *l, RxGenStore *store, uint32_t proposer,
-                     uint64_t authority_epoch, uint32_t authority_generation, uint64_t *candidate) {
+                     uint64_t authority_epoch, uint64_t authority_generation, uint64_t *candidate) {
     if (!l || !store || !candidate) return RX_COG_ERR_ARG;
     uint8_t *model = NULL;
     size_t model_len = 0;

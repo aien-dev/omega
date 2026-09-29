@@ -74,7 +74,7 @@ typedef struct {
 
 typedef struct {
     uint64_t authority_epoch;
-    uint32_t authority_generation;
+    uint64_t authority_generation;
     int proofs_ok;
     const RxGenObject *objects;
     uint32_t n_objects;
@@ -101,7 +101,7 @@ typedef struct {
     uint64_t candidate_id;
     uint32_t subject;
     uint32_t cap_id;
-    uint32_t cap_generation;
+    uint64_t cap_generation;
     uint64_t resource;
     uint32_t rights;
 } RxPromotionRequest;
@@ -119,7 +119,7 @@ typedef struct {
     uint64_t excluded_ids[RX_GEN_MAX_EXCLUDED];
 } RxRecoveryRecord;
 
-typedef int (*RxGenAuthFn)(void *ctx, uint32_t cap_id, uint32_t cap_generation,
+typedef int (*RxGenAuthFn)(void *ctx, uint32_t cap_id, uint64_t cap_generation,
                            uint32_t subject, uint64_t resource, uint32_t rights);
 typedef int (*RxGenDrainFn)(uint64_t work_id, void *ctx);
 typedef void (*RxGenLiveFn)(void *ctx);

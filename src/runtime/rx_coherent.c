@@ -357,9 +357,11 @@ static int check_locked(RxWorld *w, const OmegaSharedWorldDesc *desc,
                 else if (get_u64(desc->payload + 8) != o->version) fault = RX_FAULT_TORN_PUB;
             }
             if (fault == OMEGA_SW_FAULT_NONE) {
-                if (desc->payload_len < 8) fault = RX_FAULT_CAP;
+                if (desc->payload_len < RX_CAP_PAYLOAD) fault = RX_FAULT_CAP;
                 else {
-                    RxCapRef cap = { get_u32(desc->payload), get_u32(desc->payload + 4) };
+                    RxCapRef cap = { get_u32(desc->payload),
+                                     get_u32(desc->payload + 4) |
+                                         (uint64_t)get_u32(desc->payload + RX_CAP_GEN_HI_A) << 32 };
                     if (cap.cap_id != o->cap.cap_id || cap.generation != o->cap.generation)
                         fault = RX_FAULT_CAP;
                     else {
@@ -426,9 +428,10 @@ void rx_coherent_publish(RxWorld *w, uint32_t id, uint64_t crumb_id) {
     d.object_generation = o->generation;
     d.object_offset = 0;
     d.object_length = (uint32_t)o->size_bytes;
-    d.payload_len = 24;
+    d.payload_len = RX_CAP_PAYLOAD;
     put_u32(d.payload, o->cap.cap_id);
-    put_u32(d.payload + 4, o->cap.generation);
+    put_u32(d.payload + 4, (uint32_t)o->cap.generation);
+    put_u32(d.payload + RX_CAP_GEN_HI_A, (uint32_t)(o->cap.generation >> 32));
     put_u64(d.payload + 8, o->version);
     put_u64(d.payload + 16, crumb_id);
     rx_world_seal_descriptor(&d);
@@ -744,7 +747,7 @@ int rx_world_enable_resident(RxWorld *w) {
  *   8  in object version    16  parent crumb
  *  24  out object id        28  out object generation
  *  32  out capability id    36  out capability generation */
-#define CLAIM_PAYLOAD 40u
+#define CLAIM_PAYLOAD RX_CAP_PAYLOAD
 
 int rx_resident_post_claim(RxWorld *w, uint32_t in, uint32_t out, uint64_t parent,
                            uint64_t *seq_out) {
@@ -766,13 +769,15 @@ int rx_resident_post_claim(RxWorld *w, uint32_t in, uint32_t out, uint64_t paren
     d.arg_b = (uint32_t)t;
     d.producer_generation = w->seat_generation;
     put_u32(d.payload, a->cap.cap_id);
-    put_u32(d.payload + 4, a->cap.generation);
+    put_u32(d.payload + 4, (uint32_t)a->cap.generation);
     put_u64(d.payload + 8, a->version);
     put_u64(d.payload + 16, parent);
     put_u32(d.payload + 24, b->id);
     put_u32(d.payload + 28, b->generation);
     put_u32(d.payload + 32, b->cap.cap_id);
-    put_u32(d.payload + 36, b->cap.generation);
+    put_u32(d.payload + 36, (uint32_t)b->cap.generation);
+    put_u32(d.payload + RX_CAP_GEN_HI_A, (uint32_t)(a->cap.generation >> 32));
+    put_u32(d.payload + RX_CAP_GEN_HI_B, (uint32_t)(b->cap.generation >> 32));
     int rc = post_on(w, ring, &d);
     if (rc == RX_OK) {
         w->stats.resident_claims++;

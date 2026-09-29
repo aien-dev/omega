@@ -1181,7 +1181,7 @@ static void t_canary(void) {
 
 typedef struct { AienosCapView *view; } AuthCtx;
 
-static int native_auth(void *ctx, uint32_t cap_id, uint32_t cap_generation, uint32_t subject,
+static int native_auth(void *ctx, uint32_t cap_id, uint64_t cap_generation, uint32_t subject,
                        uint64_t resource, uint32_t rights) {
     AuthCtx *a = ctx;
     AienosCapEntry entry;

@@ -575,7 +575,7 @@ static int authority_sweep(Rig *r, uint64_t *swept, uint64_t *holders) {
     /* Entry 0 is the AIENOS root office itself: the mint, not a holder. Every
      * other entry starts on the boot generation and moves only on reclaim. */
     for (uint32_t id = 1; id < 1024; id++)
-        for (uint32_t gen = office.generation; gen < office.generation + 8; gen++) {
+        for (uint64_t gen = office.generation; gen < office.generation + 8; gen++) {
             AienosCapEntry e;
             if (aienos_cap_inspect(r->view, (AienosCapRef){id, gen}, &e) != 0) continue;
             if (e.state != 1u) continue;          /* AIENOS_CAP_STATE_LIVE */
