@@ -1111,7 +1111,7 @@ static int l1_e(L1 *e) {
 }
 
 /* The same check the living promoter uses (rx_living.c native_promotion). */
-static int native_promotion(void *ctx, uint32_t cap_id, uint32_t generation, uint32_t subject,
+static int native_promotion(void *ctx, uint32_t cap_id, uint64_t generation, uint32_t subject,
                             uint64_t resource, uint32_t rights) {
     AienosCapEntry entry;
     return aienos_cap_validate(ctx, (AienosCapRef){cap_id, generation}, subject, resource, rights,
