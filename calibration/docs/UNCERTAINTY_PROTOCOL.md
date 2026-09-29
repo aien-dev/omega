@@ -77,7 +77,8 @@ o(M) = coded_bits(M) * 1000000 - sum_c L(D_c|M)     (ub; whole group, determinis
 The coded statistic is T_coded(M) = T(M) - (o(M) - o(B2)), and its interval is the ideal interval shifted by the
 same amount: [T_(250) - (o(M) - o(B2)), T_(9749) - (o(M) - o(B2))]. Coded streams are not resampled, because the
 overhead is a whole-stream quantity that does not split into crumbs. The coder envelope (profile
-`coder_envelope`, lane B) bounds |o(M)|; a coded run outside the envelope fails criterion S4.
+`coder_envelope`, CODER_SPEC.md section 9) is two-sided and applies per coder to every file and every crumb:
+|overhead_ub - 448,000,000| <= 64,000,000 + 1,000 x N. A unit outside it fails criterion S4.
 
 ## 8. Assumptions
 

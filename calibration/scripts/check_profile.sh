@@ -13,8 +13,13 @@
 #   4. L(M) fields equal 232 + rows x (keybits + 128) for B3 (16 rows, 4 key bits)
 #   5. optional cross-checks when the files exist: candidates printout (TXA_CANDIDATES) L(M) values,
 #      power simulation output (CHOSEN_SEEDS_PER_GROUP == sealed_seeds_per_group)
-#   6. profile_digest is the literal "SIDECAR"
-#   --freeze also: no FILL_AT_FREEZE marker anywhere, and the .sha256 sidecar matches the file bytes.
+#   5b. lanes B and C: coder_spec_sha256 = SHA-256 of CODER_SPEC.md; TPS1 profile digest at offset 28; envelope
+#      448 / 64 / 1.0e-3 two-sided as in CODER_SPEC section 9; TCR1 range and TCA1 rANS L = 2^23; 56-byte header;
+#      crumbs and learner SHA-256 equal the pins in generate_sealed_data.sh; LINEAGE NOTE in profile and prereg;
+#      blinding states the temporal layer and the same-uid limit; runtime_digest.sh exists
+#   6. profile_digest is the literal "SIDECAR"; outside comments, FILL_AT_FREEZE may appear only in runtime_digest
+#   --freeze also: no FILL_AT_FREEZE marker, the .sha256 sidecar matches the file bytes, and runtime_digest equals
+#      the output of runtime_digest.sh.
 # No Python. POSIX sh + sed + grep + sha256sum.
 set -eu
 dir=$(cd "$(dirname "$0")/../.." && pwd)
@@ -112,8 +117,56 @@ else
     echo "check_profile: note: $power absent, sample-size cross-check skipped"
 fi
 
+
+# 5b. lanes B and C, integration fields (EXP-001)
+for k in coder_spec_path coder_tool coder_header_bits coder_overhead_definition coder_envelope_center_bits \
+    coder_envelope_a_bits coder_envelope_b_ub_per_symbol coder_envelope_units coder_envelope_basis \
+    probability_stream_format probability_stream_profile_digest_offset probability_stream_model_digest_rule \
+    probability_stream_dataset_digest_rule dataset_generator_command dataset_generator_learner_sha256 \
+    dataset_generator_lineage_records_differing_seed1 dataset_generator_lineage_records_seed1 \
+    blinding_protocol_path blinding_separate_sealed_user runtime_digest_rule candidate_memorizer_decision \
+    candidate_large_artifacts; do
+    grep -q "^$k = " "$toml" || bad "integration field $k missing"
+done
+spec="$dir/$(val coder_spec_path)"
+if [ -f "$spec" ]; then
+    [ "$(val coder_spec_sha256)" = "$(sha256sum "$spec" | cut -c1-64)" ] || bad "coder_spec_sha256 != SHA-256 of $spec"
+    grep -q '^| 28 | 32 | profile_digest |' "$spec" || bad "CODER_SPEC TPS1 profile_digest not at offset 28"
+    [ "$(val probability_stream_profile_digest_offset)" = 28 ] || bad "probability_stream_profile_digest_offset != 28"
+    grep -q 'overhead - 448 | <= 64 + 1.0e-3 x N' "$spec" || bad "CODER_SPEC envelope differs from 448 / 64 / 1.0e-3"
+    grep -q 'Constants: L = 2^23' "$spec" || bad "CODER_SPEC rANS L is not 2^23"
+    grep -q 'header (56 bytes)' "$spec" || bad "CODER_SPEC coded header is not 56 bytes"
+else
+    bad "coder spec $spec missing"
+fi
+[ "$(val coder_header_bits)" = 448 ] || bad "coder_header_bits != 448 (56 bytes)"
+[ "$(val coder_envelope_center_bits)" = "$(val coder_header_bits)" ] || bad "envelope center != header bits"
+[ "$(val coder_envelope_a_bits)" = 64 ] || bad "coder_envelope_a_bits != 64"
+[ "$(val coder_envelope_b_ub_per_symbol)" = 1000 ] || bad "coder_envelope_b_ub_per_symbol != 1000 (1.0e-3 bits)"
+case "$(val coder_envelope)" in TWO-SIDED*) ;; *) bad "coder_envelope must be TWO-SIDED" ;; esac
+case "$(val reference_coder_1)" in "TCR1 v1 range"*) ;; *) bad "reference_coder_1 is not TCR1 v1 range" ;; esac
+case "$(val reference_coder_2)" in "TCA1 v1 rANS"*"L = 2^23"*) ;; *) bad "reference_coder_2 is not TCA1 v1 rANS, L = 2^23" ;; esac
+gen="$dir/calibration/scripts/generate_sealed_data.sh"
+pin() { grep "^$1=" "$gen" | head -1 | grep -o '[0-9a-f]\{64\}'; }
+if [ -f "$gen" ]; then
+    [ "$(val dataset_generator_crumbs_sha256)" = "$(pin CRUMBS_SHA256)" ] || bad "crumbs SHA-256 differs from generate_sealed_data.sh"
+    [ "$(val dataset_generator_learner_sha256)" = "$(pin LEARNER_SHA256)" ] || bad "learner SHA-256 differs from generate_sealed_data.sh"
+    grep -q 'sealed_seeds_per_group' "$gen" || bad "generate_sealed_data.sh does not read sealed_seeds_per_group"
+else
+    bad "$gen missing"
+fi
+[ "$(val dataset_generator_command)" = "crumbs experiment --learner L --seed S --out DIR" ] || bad "dataset_generator_command"
+case "$(val dataset_generator)" in *"LINEAGE NOTE"*) ;; *) bad "dataset_generator lacks the LINEAGE NOTE" ;; esac
+grep -q 'LINEAGE NOTE' "$dir/calibration/preregistration/EXP-001.md" || bad "prereg lacks the LINEAGE NOTE"
+[ -f "$dir/$(val blinding_protocol_path)" ] || bad "blinding protocol missing"
+[ "$(val blinding_separate_sealed_user)" = no ] || bad "blinding_separate_sealed_user must be no"
+case "$(val blinding_method)" in *"temporal"*"same user id"*) ;; *) bad "blinding_method must state the temporal layer and the same-uid limit" ;; esac
+[ -f "$dir/calibration/scripts/runtime_digest.sh" ] || bad "runtime_digest.sh missing"
+
 # 6. freeze mode
-nfill=$(grep -c 'FILL_AT_FREEZE' "$toml" || true)
+nfill=$(grep -v "^[[:space:]]*#" "$toml" | grep -c "FILL_AT_FREEZE" || true)
+other=$(grep -v "^[[:space:]]*#" "$toml" | grep "FILL_AT_FREEZE" | grep -v "^runtime_digest = " || true)
+[ -z "$other" ] || bad "FILL_AT_FREEZE outside runtime_digest: $(printf "%s" "$other" | cut -c1-60)"
 if [ "$freeze" = 1 ]; then
     [ "$nfill" = 0 ] || bad "$nfill FILL_AT_FREEZE markers remain"
     [ -f "$side" ] || bad "sidecar $side missing"
@@ -121,6 +174,8 @@ if [ "$freeze" = 1 ]; then
         want=$(cut -c1-64 "$side"); got=$(sha256sum "$toml" | cut -c1-64)
         [ "$want" = "$got" ] || bad "sidecar $want != sha256 of profile bytes $got"
     fi
+    rd=$(sh "$dir/calibration/scripts/runtime_digest.sh" 2>&1) || bad "runtime_digest.sh: $rd"
+    [ "$(val runtime_digest)" = "$rd" ] || bad "runtime_digest != runtime_digest.sh output $rd"
 fi
 
 if [ "$fails" -ne 0 ]; then

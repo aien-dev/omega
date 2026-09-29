@@ -9,56 +9,184 @@
   "fit_data": {
     "run": "exp-20260927-rep10",
     "arm": "control",
-    "seeds": [1, 2, 3, 4, 5, 6, 7],
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
     "manifest": "evidence/TURING_YIELD/trace_manifest_rep10_control.sha256",
     "manifest_sha256": "6efc04b525af60706bd0f3176013fe234d8e8a52e2554cff3add8a4e16171dca",
-    "burned_never_sealed": ["exp-20260927-rep10 seeds 8-10", "final-20260927"]
+    "burned_never_sealed": [
+      "exp-20260927-rep10 seeds 8-10",
+      "final-20260927"
+    ]
   },
   "baseline": "B2_order1",
   "candidate": "M_candidate",
-  "memorizer_controls": ["M_mem", "M_mem_seed1"],
-  "other_baselines": ["B0_uniform", "B1_order0", "B3_heuristic"],
+  "memorizer_controls": [
+    "M_mem",
+    "M_mem_seed1"
+  ],
+  "other_baselines": [
+    "B0_uniform",
+    "B1_order0",
+    "B3_heuristic"
+  ],
   "candidates": [
-    {"name": "B0_uniform", "mask": 0, "rows": 0, "lm_bits": 232, "model_digest": "83c04bdfc10614febd634092355ef03997ed255fde5bdec9a80fe2d8964998ce"},
-    {"name": "B1_order0", "mask": 0, "rows": 0, "lm_bits": 232, "model_digest": "a0962e1d516a71eb07bdd385fea01af79a3cd587ae2d6ed0ac710e26996e356a"},
-    {"name": "B2_order1", "mask": 4, "rows": 7, "lm_bits": 1156, "model_digest": "59ae9398da24e809d92ab39e7456382a0a4b7e93e203862be6d2ca55450dfd04"},
-    {"name": "B3_heuristic", "mask": 1, "rows": 16, "lm_bits": 2344, "model_digest": "e729818b8289263e6819b21fc55f944f9d5113e7cfc4419d0badcc27f589f2ae"},
-    {"name": "M_candidate", "mask": 93, "rows": 1237, "lm_bits": 180834, "model_digest": "64a57ba9cf6f8b6e4558751ef2145ae2aa729c5214bfa29373eabfa220a57bc7"},
-    {"name": "M_mem", "mask": 32, "rows": 3706331, "lm_bits": 607838516, "model_digest": "cbd6944c6618f508e5377e4698b0d472042cdf3b4592cb80e5427767e232c140"},
-    {"name": "M_mem_seed1", "mask": 32, "rows": 2172776, "lm_bits": 356335496, "model_digest": "5dfeff7b643178807b547fbd62388319b9a407109e345614679e4bf20ccfd652"}
+    {
+      "name": "B0_uniform",
+      "mask": 0,
+      "rows": 0,
+      "lm_bits": 232,
+      "model_digest": "83c04bdfc10614febd634092355ef03997ed255fde5bdec9a80fe2d8964998ce"
+    },
+    {
+      "name": "B1_order0",
+      "mask": 0,
+      "rows": 0,
+      "lm_bits": 232,
+      "model_digest": "a0962e1d516a71eb07bdd385fea01af79a3cd587ae2d6ed0ac710e26996e356a"
+    },
+    {
+      "name": "B2_order1",
+      "mask": 4,
+      "rows": 7,
+      "lm_bits": 1156,
+      "model_digest": "59ae9398da24e809d92ab39e7456382a0a4b7e93e203862be6d2ca55450dfd04"
+    },
+    {
+      "name": "B3_heuristic",
+      "mask": 1,
+      "rows": 16,
+      "lm_bits": 2344,
+      "model_digest": "e729818b8289263e6819b21fc55f944f9d5113e7cfc4419d0badcc27f589f2ae"
+    },
+    {
+      "name": "M_candidate",
+      "mask": 93,
+      "rows": 1237,
+      "lm_bits": 180834,
+      "model_digest": "64a57ba9cf6f8b6e4558751ef2145ae2aa729c5214bfa29373eabfa220a57bc7"
+    },
+    {
+      "name": "M_mem",
+      "mask": 32,
+      "rows": 3706331,
+      "lm_bits": 607838516,
+      "model_digest": "cbd6944c6618f508e5377e4698b0d472042cdf3b4592cb80e5427767e232c140"
+    },
+    {
+      "name": "M_mem_seed1",
+      "mask": 32,
+      "rows": 2172776,
+      "lm_bits": 356335496,
+      "model_digest": "5dfeff7b643178807b547fbd62388319b9a407109e345614679e4bf20ccfd652"
+    }
   ],
   "predictions": {
-    "P1_dl_order": ["M_candidate", "B2_order1", "B1_order0", "B3_heuristic", "B0_uniform", "M_mem_seed1", "M_mem"],
+    "P1_dl_order": [
+      "M_candidate",
+      "B2_order1",
+      "B1_order0",
+      "B3_heuristic",
+      "B0_uniform",
+      "M_mem_seed1",
+      "M_mem"
+    ],
     "P2": "M_mem does not beat B2 on dev data before L(M) (observed 1.309682 vs 1.278478 bits/event)",
     "P3": "M_mem_seed1 wins on dev seed 1 (0.000176 bits/event) and loses on every sealed seed",
     "P4_candidate_gain_bits_per_event": 0.470348
   },
   "statistic": "T(M) = sum_c (L(D_c|B2) - L(D_c|M)) ub - (L(M) - L(B2)) * 1000000 ub",
-  "interval": {"method": "crumb percentile bootstrap", "resamples": 10000, "lo_index": 250, "hi_index": 9749, "rng": "splitmix64", "seed": "0x4558503030315543 + g", "document": "calibration/docs/UNCERTAINTY_PROTOCOL.md"},
+  "interval": {
+    "method": "crumb percentile bootstrap",
+    "resamples": 10000,
+    "lo_index": 250,
+    "hi_index": 9749,
+    "rng": "splitmix64",
+    "seed": "0x4558503030315543 + g",
+    "document": "calibration/docs/UNCERTAINTY_PROTOCOL.md"
+  },
   "success_criteria": {
     "S1": "lossless decode of every coded stream",
     "S2": "freeze commit and frozen candidate manifest precede sealed data; overlap audit passes",
     "S3": "identical symbol stream digest for every candidate and coder",
-    "S4": "every coded length inside the lane B coder envelope",
+    "S4": "per coder, every sealed file and crumb: |overhead_ub - 448000000| <= 64000000 + 1000 x N",
     "S5": "no unexplained material reversal",
     "S6": "group 1: lower bound of T(M_candidate) > 0, ideal and both coders",
     "S7": "group 1: upper bound of T(M_mem) < 0 and of T(M_mem_seed1) < 0, ideal and both coders",
     "S8": "independent scorer reproduces every number exactly",
     "S9": "group 2: S6 and S7 hold"
   },
-  "design": {"sealed_groups": 2, "sealed_seeds_per_group": 3, "arm": "control"},
-  "min_effect": {"fraction_of_dev_gain": 0.1, "bits_per_event": 0.047035},
+  "design": {
+    "sealed_groups": 2,
+    "sealed_seeds_per_group": 3,
+    "arm": "control"
+  },
+  "min_effect": {
+    "fraction_of_dev_gain": 0.1,
+    "bits_per_event": 0.047035
+  },
   "power_simulation": {
     "program": "calibration/scripts/power_simulation.c",
     "output": "calibration/experiments/EXP-001/power_simulation_output.txt",
     "seed": "0x4558503030315053",
     "worlds": 500,
     "resamples": 1000,
-    "joint_power_at_min_effect": {"shift": [0.0, 0.062, 1.0], "scale": [0.0, 0.092, 1.0], "spread_x2.04": [0.0, 0.028, 1.0]},
+    "joint_power_at_min_effect": {
+      "shift": [
+        0.0,
+        0.062,
+        1.0
+      ],
+      "scale": [
+        0.0,
+        0.092,
+        1.0
+      ],
+      "spread_x2.04": [
+        0.0,
+        0.028,
+        1.0
+      ]
+    },
     "chosen_seeds_per_group": 3
   },
   "stopping_rule": "fixed design, no optional stopping; generation failure voids the whole sealed set",
   "failure_reporting": "calibration/docs/FAILURE_REPORTING.md",
   "energy_measured": false,
-  "open_at_freeze": ["CODER_SPEC.md sha256 (lane B)", "coder termination and envelope a, b, lower (lane B)", "learner sha256 and dataset config (lane C)", "runtime digests"]
+  "open_at_freeze": [
+    "runtime_digest (calibration/scripts/runtime_digest.sh at the freeze commit)",
+    "profile sidecar"
+  ],
+  "coders": {
+    "spec": "calibration/docs/CODER_SPEC.md",
+    "spec_sha256": "76389ba91a4dfadfeaaeb10968d8c1abb3c57a76b298b79b50db37e1af1fea57",
+    "reference_coder_1": "TCR1 v1 range",
+    "reference_coder_2": "TCA1 v1 rANS, L = 2^23",
+    "header_bytes": 56,
+    "coded_bits": "8 x file bytes",
+    "envelope": "two-sided, per coder, per file and per crumb: |overhead - 448| <= 64 + 1.0e-3 x N bits; slope measured on dev seeds 1-7, not proven; rANS codes below ideal on skewed low-index rows"
+  },
+  "generator": {
+    "command": "crumbs experiment --learner L --seed S --out DIR",
+    "crumbs_sha256": "72e396b15532aa93afb1f215521e04dca8470f779f3de35c10b04b07bff96638",
+    "learner_sha256": "8159bdff248efa67fa2cf75bb0b506bc359f4a2269139d03479753c0fc393416",
+    "condition": "control only",
+    "output_dirs": "fresh"
+  },
+  "lineage_note": "Pinned build reproduces final-20260927/rep10 byte-exactly but not dev data exp-20260927-rep10 (16 of 2,172,776 seed-1 records differ in result_class; learner rebuilt 12:00, rep10 ran 11:47). Candidates stay fit on exp-20260927-rep10; sealed data use the pinned build; declared known dev/sealed generator difference that can only hurt candidates.",
+  "blinding": {
+    "primary": "temporal: sealed seeds derived from the freeze commit",
+    "second_layer": "bubblewrap jails",
+    "limit": "all jails run as the same user id; separate sealed user not used"
+  },
+  "decisions": {
+    "memorizers": "keep both M_mem and M_mem_seed1; both predicted to lose on sealed data",
+    "large_artifacts": "M_mem and M_mem_seed1 .tym outside git, SHA-pinned, deterministic rebuild, copy at ~/aien-data/turing-cal/candidates/"
+  }
 }

@@ -9,8 +9,9 @@
 # model digest SHA-256('turing.ymodel.v0' || 0x00 || bytes), byte size, L(M) from the TYM0 header
 # (104 + 16(K-1) + rows x (keybits + 16(K-1))), and where the frozen bytes live. Small codes are copied into
 # calibration/experiments/EXP-001/candidates/ (committed); the two memorization controls (76 MB and 45 MB)
-# are not committed: their bytes are regenerated deterministically from dev seeds 1-7 by
-# `make turing-exp001-a-candidates` and must hash to the recorded SHA-256 before use.
+# are not committed: a copy goes to ~/aien-data/turing-cal/candidates/ ($TXA_BIG_STORE), their bytes are
+# regenerated deterministically from dev seeds 1-7 by `make turing-exp001-a-candidates`, and they must hash to
+# the recorded SHA-256 before use. runtime_sha256 lists runtime_digest.sh --lines when all binaries are built.
 # Also recorded: profile SHA-256, sidecar content, SHA-256 of every shared-background file, git HEAD.
 #
 # Default (draft) mode: writes the manifest with "status": "draft".
@@ -76,7 +77,11 @@ sidec=""
             cp "$f" "$store/$n.tym"
             loc="git:calibration/experiments/EXP-001/candidates/$n.tym"
         else
-            loc="regenerate:make turing-exp001-a-candidates (deterministic from dev seeds 1-7); verify file_sha256 before use"
+            big="${TXA_BIG_STORE:-$HOME/aien-data/turing-cal/candidates}"
+            mkdir -p "$big"
+            cp "$f" "$big/$n.tym.tmp" && mv "$big/$n.tym.tmp" "$big/$n.tym"
+            [ "$(sha256sum "$big/$n.tym" | cut -c1-64)" = "$fsha" ] || die "$n: copy in $big does not hash to $fsha"
+            loc="outside git: copy at ~/aien-data/turing-cal/candidates/$n.tym; regenerate with make turing-exp001-a-candidates (deterministic from dev seeds 1-7); verify file_sha256 before use"
         fi
         [ "$first" = 1 ] || printf ',\n'
         first=0
@@ -87,20 +92,22 @@ sidec=""
     first=1
     for p in src/turing/ty_model.c src/turing/ty_model.h src/turing/ty_ctr1.c src/turing/ty_ctr1.h \
         src/turing/ty_math.c src/turing/ty_math.h calibration/docs/MODEL_DESCRIPTION_ENCODING.md \
-        calibration/docs/CODER_SPEC.md calibration/profiles/Turing-profile-v1.0.toml; do
+        calibration/docs/CODER_SPEC.md calibration/docs/UNCERTAINTY_PROTOCOL.md calibration/docs/FAILURE_REPORTING.md \
+        calibration/docs/BLINDING_PROTOCOL.md calibration/preregistration/EXP-001.md \
+        calibration/experiments/EXP-001/preregistration.json calibration/profiles/Turing-profile-v1.0.toml; do
         if [ -f "$dir/$p" ]; then h=$(sha256sum "$dir/$p" | cut -c1-64); else h="MISSING"; fi
         [ "$first" = 1 ] || printf ',\n'
         first=0
         printf '    "%s": "%s"' "$p" "$h"
     done
     printf '\n  },\n  "runtime_sha256": {\n'
-    first=1
-    for b in ${TXA_RUNTIME_BINS:-$dir/build/turing-exp001-a/turing-cal-candidates}; do
-        [ -f "$b" ] || continue
-        [ "$first" = 1 ] || printf ',\n'
-        first=0
-        printf '    "%s": "%s"' "$(basename "$b")" "$(sha256sum "$b" | cut -c1-64)"
-    done
+    rl=$(sh "$dir/calibration/scripts/runtime_digest.sh" --lines 2>/dev/null || true)
+    if [ -n "$rl" ]; then
+        printf '%s\n' "$rl" | sed 's/^\([0-9a-f]*\)  \(.*\)$/    "\2": "\1",/'
+        printf '    "runtime_digest": "%s"' "$(printf '%s\n' "$rl" | sha256sum | cut -c1-64)"
+    else
+        printf '    "runtime_digest": "not computed (build all five runtime binaries; see runtime_digest.sh)"'
+    fi
     printf '\n  }\n}\n'
 } > "$out.tmp"
 mv "$out.tmp" "$out"
