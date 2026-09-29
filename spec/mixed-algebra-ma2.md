@@ -7,7 +7,7 @@ realizations, one selected with a recorded reason and margin, reproducible
 from receipts) delivered. It is not ADR gate MA-3 (contract and identity).
 This work was first labelled "MA-3"; it was renamed to match the ADR gate
 table. Code: `src/algebra/realize_*.{h,c}` (realizations),
-`src/algebra/oma_select.{h,c}` (stand-in selector), tests
+`src/algebra/oma_select.{h,c}` (MA-2 selector, retired for new decisions; see "Selector"), tests
 `tests/algebra/test_realize.c`, `tests/algebra/bench_mixed_algebra.c`,
 `tests/algebra/bench_select.c`. Receipts: `evidence/MIXED_ALGEBRA/`.
 Commands: `make test-realize` (plain + ASan/UBSan), `make bench-mixed-algebra`
@@ -21,8 +21,14 @@ are kept unchanged. `ma2_select_receipt.json` was regenerated from them
 (without rerunning the benchmark) with the amended ADR 9.1 tie rule:
 `build/tests-algebra/bench_select evidence/MIXED_ALGEBRA/ma2_select_receipt.json
 evidence/MIXED_ALGEBRA/ma3_bench_run1.json evidence/MIXED_ALGEBRA/ma3_bench_run2.json`.
-Future `make bench-mixed-algebra` runs write `ma2_bench_run{1,2}.json`
-(schema `OMEGA_MIXED_ALGEBRA_MA2_BENCH_V1`); the selector reads both schemas.
+Future `make bench-mixed-algebra` runs write new files only, under
+`evidence/MIXED_ALGEBRA/runs/<run-id>/` (`<run-id>` defaults to a UTC
+timestamp, `MA2_RUN_ID=...` to set it; an existing run directory is refused):
+`ma2_bench_run{1,2}.json` (schema `OMEGA_MIXED_ALGEBRA_MA2_BENCH_V1`) and a
+selector receipt `ma2_select_receipt.json` from those two runs. They never
+rewrite a committed evidence file; `make check-mixed-algebra-evidence` fails if
+a committed `evidence/MIXED_ALGEBRA/` file is modified or deleted, and the
+bench target runs it before and after. The selector reads both schemas.
 
 Outcome in one line: **on the Grace CPU, packed ternary (2 bits/weight) beats
 the best int8 realization 2.2x to 3.0x when the weight matrix no longer fits
@@ -221,7 +227,19 @@ bandwidth-bound. The win is independent of sparsity (dense 2-bit code).
   2x2 product is wasted); its advantage over row-major R1_sdot at m >= 64 came
   from the interleaved layout, which R1_sdot_il reproduces with SDOT.
 
-## Selector (stand-in, not wired to rx_costmodel)
+## Selector (RETIRED for new decisions; not wired to rx_costmodel)
+
+**Status (2026-09-29): retired for new decisions.** The tie rule below
+(incumbent, then digital reference, then cheapest inside the noise band) failed
+the pre-registered TURING Wave 1 kill test on the MA-3 receipts: see omega
+`docs/turing/TURING_W0_PROPOSAL.md` K.6 (regret numbers) and K.7 (verdict and
+reframe). `oma_select` is kept unchanged only to reproduce
+`ma2_select_receipt.json` and as a regression test of the retired rule in
+`make test-realize`. Do not add new callers. New selections use
+`turing_rank_min_cost` in `src/turing` (lowest measured cost wins; ties are
+recorded, never change the choice) and are recorded as `turing.decision.v1`
+records via `turing-field`. The matching ADR 0019 section 9.1 amendment is
+proposed in aien-architecture and awaits the operator.
 
 `oma_select` loads MA-2 (and the historical MA-3-label) bench receipts (costs
 are read from the JSON, never hard-coded), applies the exact-contract filter
@@ -307,7 +325,7 @@ gate-quality numbers; energy is not used by the selector.
   reference, not a proven hardware maximum (R1 exceeds them at L2 sizes).
 - Pack paths are plain scalar C; faster packers would narrow, not reverse, the
   per-call result (every pack must read the int8 source once).
-- The selector is a stand-in over a 36-cell table with nearest-cell lookup; it
+- The (retired) selector is a stand-in over a 36-cell table with nearest-cell lookup; it
   is not connected to `rx_costmodel` or the resident omega.select reaction.
 - Library audit note: no defect was found in `oma_trit`/`oma_z3`/`oma_pack`/
   `oma_quant` while using them here (`oma_dot_tw_i8`, `oma_pack_bitplane`,
