@@ -1,6 +1,8 @@
 name: Turing yield boundaries
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - 'src/turing/**'
