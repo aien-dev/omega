@@ -79,8 +79,13 @@ static double regret_of(const turing_store *st, const turing_query *q, int k, do
     return c < 0 ? 1e9 : c / oracle - 1.0;
 }
 
-int turing_compare(const turing_store *st, const turing_query *qs, size_t nq, int loo, uint64_t seed,
-                   turing_regret *out) {
+static int field_pick(const turing_store *st, turing_field_rule rule, const turing_query *q, turing_decision *d) {
+    return rule == TURING_FIELD_V0_RETIRED ? turing_field_select_v0_retired(st, q, NULL, NULL, d)
+                                           : turing_field_select(st, q, NULL, d);
+}
+
+int turing_compare(const turing_store *st, turing_field_rule rule, const turing_query *qs, size_t nq, int loo,
+                   uint64_t seed, turing_regret *out) {
     memset(out, 0, sizeof *out);
     turing_history *h = malloc(sizeof *h);
     turing_decision *fd = malloc(sizeof *fd), *hd = malloc(sizeof *hd);
@@ -99,7 +104,7 @@ int turing_compare(const turing_store *st, const turing_query *qs, size_t nq, in
             turing_history_init(h, seed);
             if (turing_history_load(h, st, &q) != 0) goto done;
         }
-        if (turing_field_select(st, &q, NULL, NULL, fd) != 0) goto done;
+        if (field_pick(st, rule, &q, fd) != 0) goto done;
         int hk = turing_history_select(h, st, &q, hd);
         int fk = spec_index(st, &fd->cand[fd->chosen]);
         acc(regret_of(st, &q, fk, oracle), &out->field_mean, &out->field_max);
@@ -122,8 +127,8 @@ done:
     return rc;
 }
 
-int turing_compare_online(const turing_store *st, const turing_query *qs, size_t nq, size_t rounds, uint64_t seed,
-                          turing_regret *out) {
+int turing_compare_online(const turing_store *st, turing_field_rule rule, const turing_query *qs, size_t nq,
+                          size_t rounds, uint64_t seed, turing_regret *out) {
     memset(out, 0, sizeof *out);
     if (nq == 0 || nq > 256 || st->nreceipt == 0) return -1;
     turing_history *h = malloc(sizeof *h);
@@ -148,7 +153,7 @@ int turing_compare_online(const turing_store *st, const turing_query *qs, size_t
             const turing_query *q = &qs[order[t]];
             double oracle;
             if (turing_oracle(st, q, &oracle) < 0) goto done;
-            if (turing_field_select(st, q, NULL, NULL, fd) != 0) goto done;
+            if (field_pick(st, rule, q, fd) != 0) goto done;
             int hk = turing_history_select(h, st, q, hd);
             if (hk < 0) goto done;
             /* Reveal one stored row for the control arm's pick, rotating receipts. */

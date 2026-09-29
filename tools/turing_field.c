@@ -122,22 +122,22 @@ int main(int argc, char **argv) {
         turing_query q = {shapes[s].n, shapes[s].m, 300, TURING_PACK_ONCE, 0};
         turing_decision d1, d2;
         turing_digest id1, id2;
-        if (turing_field_select(st1, &q, NULL, NULL, &d1) != 0 || turing_decision_digest(&d1, &id1) != 0) goto out;
-        if (turing_field_select(st, &q, NULL, &id1, &d2) != 0 || turing_decision_digest(&d2, &id2) != 0) goto out;
+        if (turing_field_select(st1, &q, NULL, &d1) != 0 || turing_decision_digest(&d1, &id1) != 0) goto out;
+        if (turing_field_select(st, &q, &id1, &d2) != 0 || turing_decision_digest(&d2, &id2) != 0) goto out;
         printf("-- %s %s\n", shapes[s].name, shapes[s].where);
         print_decision(st, &d2, &id2);
         print_decision(st1, &d1, &id1);
         printf("\n");
     }
 
-    printf("== Winners from stored evidence alone (Field selector, all receipts)\n");
+    printf("== Winners from stored evidence alone (Field selector v1, all receipts)\n");
     for (int pack = 0; pack < 2; ++pack)
         for (size_t s = 0; s < 4; ++s) {
             turing_query q = {shapes[s].n, shapes[s].m, 300, pack, 0};
             turing_decision d;
-            if (turing_field_select(st, &q, NULL, NULL, &d) != 0) goto out;
-            printf("  %s %-28s pack=%-8s -> %-11s %s (tie=%s)\n", shapes[s].name, shapes[s].where,
-                   pack ? "per_call" : "once", d.cand_rz[d.chosen], d.verdict, d.tie_resolution);
+            if (turing_field_select(st, &q, NULL, &d) != 0) goto out;
+            printf("  %s %-28s pack=%-8s -> %-11s margin %5.2f%% band %5.2f%%\n", shapes[s].name, shapes[s].where,
+                   pack ? "per_call" : "once", d.cand_rz[d.chosen], d.margin_ppm / 1e4, d.band_ppm / 1e4);
         }
 
     turing_query named[8], all[160];
@@ -152,28 +152,30 @@ int main(int argc, char **argv) {
             all[na++].pack = pack;
         }
     const uint64_t seed = 0x7475726967303031ull; /* "turig001" */
+    const turing_field_rule V0 = TURING_FIELD_V0_RETIRED, V1 = TURING_FIELD_V1;
     turing_regret r;
-    printf("\n== Selector comparison on stored data (regret vs oracle = cheapest mean cost of the exact cell)\n");
+    printf("\n== RECORDED FAIL (K.6): RETIRED Field v0 tie rule vs control arm, kept to reproduce the verdict\n");
+    printf("   regret vs oracle = cheapest mean cost of the exact cell\n");
     printf("   seed 0x%016" PRIx64 "; control arm = StarPU-style history per (spec, footprint n x m x pack)\n", seed);
-    if (turing_compare(st, named, nn, 0, seed, &r) != 0) goto out;
+    if (turing_compare(st, V0, named, nn, 0, seed, &r) != 0) goto out;
     print_regret("S1-S4 x 2 pack, in-sample (warm)", &r, 1);
     turing_regret prim = r;
-    if (turing_compare(st, named, nn, 1, seed, &r) != 0) goto out;
+    if (turing_compare(st, V0, named, nn, 1, seed, &r) != 0) goto out;
     print_regret("S1-S4 x 2 pack, leave-one-cell-out", &r, 1);
     turing_regret loo = r;
-    if (turing_compare(st, named, 4, 0, seed, &r) != 0) goto out;
+    if (turing_compare(st, V0, named, 4, 0, seed, &r) != 0) goto out;
     print_regret("  of which pack once (S1-S4), in-sample", &r, 1);
-    if (turing_compare(st, named + 4, 4, 0, seed, &r) != 0) goto out;
+    if (turing_compare(st, V0, named + 4, 4, 0, seed, &r) != 0) goto out;
     print_regret("  of which pack per call (S1-S4), in-sample", &r, 1);
-    if (turing_compare(st, all, na, 0, seed, &r) != 0) goto out;
+    if (turing_compare(st, V0, all, na, 0, seed, &r) != 0) goto out;
     print_regret("all cells x 2 pack, in-sample", &r, 1);
-    if (turing_compare(st, all, nc, 0, seed, &r) != 0) goto out;
+    if (turing_compare(st, V0, all, nc, 0, seed, &r) != 0) goto out;
     print_regret("  of which pack once (36 cells), in-sample", &r, 1);
-    if (turing_compare(st, all + nc, nc, 0, seed, &r) != 0) goto out;
+    if (turing_compare(st, V0, all + nc, nc, 0, seed, &r) != 0) goto out;
     print_regret("  of which per call (36 cells), in-sample", &r, 1);
-    if (turing_compare(st, all, na, 1, seed, &r) != 0) goto out;
+    if (turing_compare(st, V0, all, na, 1, seed, &r) != 0) goto out;
     print_regret("all cells x 2 pack, leave-one-cell-out", &r, 1);
-    if (turing_compare_online(st, all, na, 10, seed, &r) != 0) goto out;
+    if (turing_compare_online(st, V0, all, na, 10, seed, &r) != 0) goto out;
     print_regret("all cells x 2 pack, cold online x10", &r, 0);
 
     /* Pre-registered kill test (proposal K.4), dry run on stored data. */
@@ -182,13 +184,24 @@ int main(int argc, char **argv) {
     int q1l = loo.field_mean <= loo.hist_mean + eq && loo.field_max <= cap;
     int q2 = prim.field_cites_ok == prim.decisions && loo.field_cites_ok == loo.decisions;
     int better = prim.field_mean < prim.hist_mean - eq || loo.field_mean < loo.hist_mean - eq;
-    printf("\n== Kill test (pre-registered, dry run on stored data)\n");
+    printf("\n== Kill test (pre-registered, dry run on stored data; RETIRED v0 rule, verdict recorded 2026-09-29)\n");
     printf("  Q1 quality in-sample: Field mean <= control mean + 2%% and Field max <= 10%%: %s\n", q1 ? "PASS" : "FAIL");
     printf("  Q1 quality leave-one-out:                                             %s\n", q1l ? "PASS" : "FAIL");
     printf("  Q2 every Field decision's cited receipts verify:                      %s\n", q2 ? "PASS" : "FAIL");
     printf("  verdict: %s\n", !(q1 && q1l && q2) ? "FAIL (Turing selection is integration-only)"
                                   : better ? "BEAT on selection quality"
                                            : "SURVIVES on explainability at equal quality (not a quality win)");
+
+    /* Reframe (K.7): Field v1 ranks with the control arm's rule and adds the record. Not a kill-test verdict. */
+    printf("\n== Field v1 (record-keeping layer, K.7): same ranking rule as the control arm, plus decision records\n");
+    printf("   Not a new kill-test verdict: selection is the control rule and is not claimed as novel.\n");
+    struct { const turing_query *q; size_t n; int loo; const char *label; } v1rows[4] = {
+        {named, nn, 0, "S1-S4 x 2 pack, in-sample"}, {named, nn, 1, "S1-S4 x 2 pack, leave-one-cell-out"},
+        {all, na, 0, "all cells x 2 pack, in-sample"}, {all, na, 1, "all cells x 2 pack, leave-one-cell-out"}};
+    for (size_t i = 0; i < 4; ++i) {
+        if (turing_compare(st, V1, v1rows[i].q, v1rows[i].n, v1rows[i].loo, seed, &r) != 0) goto out;
+        print_regret(v1rows[i].label, &r, 1);
+    }
     rc = 0;
 out:
     turing_store_free(st);

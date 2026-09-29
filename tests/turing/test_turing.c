@@ -1,4 +1,5 @@
-/* test-turing: TURING Field V0 + control arm on stored receipts.
+/* test-turing: TURING Field v1 records (control-arm ranking), retired v0 FAIL
+ * reproduction, and control arm on stored receipts.
  * docs/turing/TURING_W0_PROPOSAL.md sections J and K. No timed runs. */
 #define _POSIX_C_SOURCE 200809L
 #include "turing/select.h"
@@ -7,6 +8,7 @@
 #include "sha256.h"
 
 #include <inttypes.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -198,26 +200,26 @@ static void test_decisions_verify(void) {
             turing_query q = cells[i];
             q.pack = pack;
             char why[200];
-            if (turing_field_select(st, &q, NULL, NULL, &d) != 0) continue;
+            if (turing_field_select(st, &q, NULL, &d) != 0) continue;
             ++total;
-            ok += turing_decision_verify(st, &d, why, sizeof why) == 0 && d.ncite == 20;
+            ok += turing_decision_verify(st, &d, why, sizeof why) == 0 && d.ncite == 80;
             exact += d.exact_cell;
             int all = 1;
             for (size_t c = 0; c < d.ncite; ++c) {
                 int k = turing_find_evidence(st, &d.cite[c]);
-                all &= k >= 0 && st->ev[k].n == q.n && st->ev[k].m == q.m && st->ev[k].sparsity_milli == q.sparsity_milli;
+                all &= k >= 0 && st->ev[k].n == q.n && st->ev[k].m == q.m;
             }
             cites_cell += all;
         }
-    CHECK(total == 72 && ok == 72, "72 Field decisions, each cites 20 rows whose receipts verify (%zu/%zu)", ok, total);
-    CHECK(exact == 72 && cites_cell == 72, "every decision on its exact cell cites only that cell");
+    CHECK(total == 72 && ok == 72, "72 Field v1 decisions, each cites 80 rows (10 specs x 4 sparsities x 2 runs) whose receipts verify (%zu/%zu)", ok, total);
+    CHECK(exact == 72 && cites_cell == 72, "every decision on its exact footprint cites only that footprint");
 
     /* Winner flip from stored evidence alone: L2-fit int8, DRAM-bound crumb. */
     turing_query s1 = {4096, 64, 300, TURING_PACK_ONCE, 0}, s4 = {16384, 4096, 300, TURING_PACK_ONCE, 0};
     turing_decision a, b;
-    CHECK(turing_field_select(st, &s1, NULL, NULL, &a) == 0 && !strncmp(a.cand_rz[a.chosen], "R1_", 3),
+    CHECK(turing_field_select(st, &s1, NULL, &a) == 0 && !strncmp(a.cand_rz[a.chosen], "R1_", 3),
           "S1 (L2-fit) -> binary int8 (%s)", a.cand_rz[a.chosen]);
-    CHECK(turing_field_select(st, &s4, NULL, NULL, &b) == 0 && !strcmp(b.cand_rz[b.chosen], "R2c_crumb"),
+    CHECK(turing_field_select(st, &s4, NULL, &b) == 0 && !strcmp(b.cand_rz[b.chosen], "R2c_crumb"),
           "S4 (DRAM-bound) -> R2c_crumb (%s)", b.cand_rz[b.chosen]);
 
     /* Decision digests: reproducible; supersedes changes the digest. */
@@ -225,29 +227,29 @@ static void test_decisions_verify(void) {
     CHECK(turing_decision_digest(&b, &i1) == 0 && turing_decision_digest(&b, &i2) == 0 && turing_digest_eq(&i1, &i2),
           "decision digest reproducible");
     turing_decision b2;
-    CHECK(turing_field_select(st, &s4, NULL, &i1, &b2) == 0 && b2.has_supersedes && turing_decision_digest(&b2, &i3) == 0 &&
+    CHECK(turing_field_select(st, &s4, &i1, &b2) == 0 && b2.has_supersedes && turing_decision_digest(&b2, &i3) == 0 &&
               !turing_digest_eq(&i1, &i3),
           "superseding decision has its own digest");
 
     /* Off-grid query: domain filter with reason codes, nearest cell. */
     turing_query big = {100000, 64, 300, TURING_PACK_ONCE, 0};
     turing_decision o;
-    CHECK(turing_field_select(st, &big, NULL, NULL, &o) == 0 && !o.exact_cell, "off-grid decision");
+    CHECK(turing_field_select(st, &big, NULL, &o) == 0 && !o.exact_cell, "off-grid decision");
     int r3 = turing_find_spec(st, "R3_sparse"), r4 = turing_find_spec(st, "R4_rns");
     CHECK(o.reason[r3] == TURING_R_MAX_N && o.reason[r4] == TURING_R_MAX_N, "R3/R4 filtered MAX_N");
     CHECK(o.cell_n == 16384 && o.cell_m == 64, "nearest cell 16384 x 64");
 
-    /* Incumbent inside a tied set stands (S1 per call is a TIE). */
+    /* RETIRED v0 tie rule (kept only to reproduce the K.6 FAIL): incumbent inside a tied set stands. */
     turing_query s1pc = {4096, 64, 300, TURING_PACK_PER_CALL, 0};
     turing_decision t0, t1;
-    CHECK(turing_field_select(st, &s1pc, NULL, NULL, &t0) == 0 && !strcmp(t0.verdict, "TIE"), "S1 per call TIE");
+    CHECK(turing_field_select_v0_retired(st, &s1pc, NULL, NULL, &t0) == 0 && !strcmp(t0.verdict, "TIE"), "RETIRED v0: S1 per call TIE");
     int other = -1;
     for (size_t k = 0; k < t0.ncand; ++k)
         if (t0.reason[k] == TURING_R_TIED) other = (int)k;
     if (other >= 0) {
-        CHECK(turing_field_select(st, &s1pc, t0.cand_rz[other], NULL, &t1) == 0 && t1.chosen == other &&
+        CHECK(turing_field_select_v0_retired(st, &s1pc, t0.cand_rz[other], NULL, &t1) == 0 && t1.chosen == other &&
                   !strcmp(t1.tie_resolution, "incumbent"),
-              "incumbent inside tied set stands");
+              "RETIRED v0: incumbent inside tied set stands");
     }
 
     /* In-memory tamper of a cited evidence record -> verify fails. */
@@ -276,18 +278,18 @@ static void test_receipt_tamper(void) {
     turing_query s4 = {16384, 4096, 300, TURING_PACK_ONCE, 0};
     turing_decision d, d2;
     char why[300];
-    CHECK(turing_field_select(st, &s4, NULL, NULL, &d) == 0 && turing_decision_verify(st, &d, why, sizeof why) == 0,
+    CHECK(turing_field_select(st, &s4, NULL, &d) == 0 && turing_decision_verify(st, &d, why, sizeof why) == 0,
           "decision on copies verifies");
     CHECK(flip_byte(a, 5000) == 0, "tamper one byte of run1 copy");
     int v = turing_decision_verify(st, &d, why, sizeof why);
     CHECK(v == -8, "tampered receipt -> decision verify fails (%d: %s)", v, why);
     /* A new decision stops using the tampered receipt. */
-    CHECK(turing_field_select(st, &s4, NULL, NULL, &d2) == 0 && d2.ncite == 10 &&
+    CHECK(turing_field_select(st, &s4, NULL, &d2) == 0 && d2.ncite == 40 &&
               turing_decision_verify(st, &d2, why, sizeof why) == 0,
           "fresh decision cites only the intact receipt (%zu cites)", d2.ncite);
     CHECK(flip_byte(b, 5000) == 0, "tamper run2 copy too");
     turing_decision d3;
-    CHECK(turing_field_select(st, &s4, NULL, NULL, &d3) == 1 && d3.chosen < 0 &&
+    CHECK(turing_field_select(st, &s4, NULL, &d3) == 1 && d3.chosen < 0 &&
               d3.reason[turing_find_spec(st, "R2c_crumb")] == TURING_R_RECEIPT_UNVERIFIED,
           "no verified receipt -> no choice, RECEIPT_UNVERIFIED");
     unlink(a);
@@ -343,10 +345,10 @@ static void test_compare(void) {
         for (int s = 0; s < 4; ++s) named[nn++] = (turing_query){shp[s][0], shp[s][1], 300, pack, 0};
     const uint64_t seed = 0x7475726967303031ull;
     turing_regret r;
-    const char *label[4] = {"S1-S4 x2 pack in-sample", "S1-S4 x2 pack leave-one-out", "72 cells in-sample",
+    const char *label[4] = {"RETIRED v0 S1-S4 x2 in-sample", "S1-S4 x2 pack leave-one-out", "72 cells in-sample",
                             "72 cells leave-one-out"};
     for (int i = 0; i < 4; ++i) {
-        int rc = turing_compare(st, i < 2 ? named : all, i < 2 ? nn : na, i & 1, seed, &r);
+        int rc = turing_compare(st, TURING_FIELD_V0_RETIRED, i < 2 ? named : all, i < 2 ? nn : na, i & 1, seed, &r);
         CHECK(rc == 0 && r.decisions == (i < 2 ? 8u : 72u), "compare %s", label[i]);
         CHECK(r.field_cites_ok == r.decisions && r.hist_cites_ok == 0, "cites: Field all verify, control none");
         CHECK(r.field_mean >= 0 && r.hist_mean >= 0, "regret non-negative");
@@ -354,15 +356,105 @@ static void test_compare(void) {
                label[i], 100 * r.field_mean, 100 * r.field_max, 100 * r.hist_mean, 100 * r.hist_max, r.agree,
                r.decisions);
     }
-    CHECK(turing_compare(st, named, 4, 0, seed, &r) == 0 && r.field_max == 0.0 && r.hist_max == 0.0,
+    CHECK(turing_compare(st, TURING_FIELD_V0_RETIRED, named, 4, 0, seed, &r) == 0 && r.field_max == 0.0 && r.hist_max == 0.0,
           "pack once S1-S4: both selectors pick the oracle");
     turing_regret on;
-    CHECK(turing_compare_online(st, all, na, 10, seed, &on) == 0 && on.decisions == 720, "online replay");
+    CHECK(turing_compare_online(st, TURING_FIELD_V0_RETIRED, all, na, 10, seed, &on) == 0 && on.decisions == 720, "online replay");
     printf("  regret %-28s Field mean %6.2f%% max %6.2f%% | control mean %6.2f%% max %6.2f%%\n", "72 cells cold online x10",
            100 * on.field_mean, 100 * on.field_max, 100 * on.hist_mean, 100 * on.hist_max);
     turing_regret on2;
-    CHECK(turing_compare_online(st, all, na, 10, seed, &on2) == 0 && on2.hist_mean == on.hist_mean,
+    CHECK(turing_compare_online(st, TURING_FIELD_V0_RETIRED, all, na, 10, seed, &on2) == 0 && on2.hist_mean == on.hist_mean,
           "online replay deterministic for a seed");
+    turing_store_free(st);
+}
+
+/* The recorded K.6 FAIL stays reproducible: RETIRED v0 tie rule vs control,
+ * pre-registered thresholds (0.02 mean gap, 0.10 max) unchanged. */
+static void test_recorded_fail(void) {
+    turing_store *st = load2(R1, R2);
+    if (!st) return;
+    const uint64_t shp[4][2] = {{4096, 64}, {16384, 64}, {4096, 4096}, {16384, 4096}};
+    turing_query named[8];
+    size_t nn = 0;
+    for (int pack = 0; pack < 2; ++pack)
+        for (int s = 0; s < 4; ++s) named[nn++] = (turing_query){shp[s][0], shp[s][1], 300, pack, 0};
+    const uint64_t seed = 0x7475726967303031ull;
+    turing_regret in, loo;
+    CHECK(turing_compare(st, TURING_FIELD_V0_RETIRED, named, nn, 0, seed, &in) == 0 &&
+              turing_compare(st, TURING_FIELD_V0_RETIRED, named, nn, 1, seed, &loo) == 0,
+          "RECORDED FAIL: retired v0 comparison runs");
+    CHECK(llround(in.field_mean * 1e4) == 358 && llround(in.field_max * 1e4) == 2551 &&
+              llround(in.hist_mean * 1e4) == 1 && llround(in.hist_max * 1e4) == 7,
+          "RECORDED FAIL reproduced: Field v0 %.2f%%/%.2f%% vs control %.2f%%/%.2f%%", 100 * in.field_mean,
+          100 * in.field_max, 100 * in.hist_mean, 100 * in.hist_max);
+    int q1 = in.field_mean <= in.hist_mean + 0.02 && in.field_max <= 0.10;
+    int q1l = loo.field_mean <= loo.hist_mean + 0.02 && loo.field_max <= 0.10;
+    int q2 = in.field_cites_ok == in.decisions && loo.field_cites_ok == loo.decisions;
+    CHECK(!q1 && !q1l && q2, "RECORDED FAIL: Q1 FAIL (in-sample and leave-one-out), Q2 PASS");
+    turing_store_free(st);
+}
+
+/* Reframe (K.7): Field v1 ranks with the control arm's rule. On every stored
+ * cell, both pack modes, in-sample and leave-one-cell-out, it picks exactly
+ * what the warm control arm picks, and every Field decision verifies. */
+static void test_v1_matches_control(void) {
+    turing_store *st = load2(R1, R2);
+    if (!st) return;
+    turing_query cells[80];
+    size_t nc = turing_cells(st, cells, 80);
+    const uint64_t seed = 0x7475726967303031ull;
+    turing_history *h = malloc(sizeof *h);
+    turing_decision *fd = malloc(sizeof *fd), *hd = malloc(sizeof *hd);
+    if (!h || !fd || !hd) {
+        CHECK(0, "alloc");
+        free(h), free(fd), free(hd), turing_store_free(st);
+        return;
+    }
+    size_t total = 0, same = 0, verify = 0, sel = 0;
+    for (int loo = 0; loo < 2; ++loo)
+        for (int pack = 0; pack < 2; ++pack)
+            for (size_t i = 0; i < nc; ++i) {
+                turing_query q = cells[i];
+                q.pack = pack;
+                q.exclude_exact_cell = loo;
+                turing_history_init(h, seed);
+                if (turing_history_load(h, st, loo ? &q : NULL) != 0) continue;
+                int hk = turing_history_select(h, st, &q, hd);
+                if (turing_field_select(st, &q, NULL, fd) != 0) continue;
+                ++total;
+                same += hk >= 0 && fd->chosen == hk && turing_digest_eq(&fd->cand[fd->chosen], &st->spec_id[hk]);
+                char why[200];
+                verify += turing_decision_verify(st, fd, why, sizeof why) == 0;
+                sel += !strcmp(fd->selector, TURING_FIELD_SELECTOR);
+            }
+    CHECK(total == 144, "Field v1 decided every stored cell x 2 pack x {in-sample, leave-one-out} (%zu/144)", total);
+    CHECK(same == total, "Field v1 and control pick identically on all stored cells (%zu/%zu)", same, total);
+    CHECK(verify == total, "every Field v1 decision verifies against its receipts (%zu/%zu)", verify, total);
+    CHECK(sel == total, "Field v1 decisions are labeled %s", TURING_FIELD_SELECTOR);
+
+    turing_query all[160];
+    size_t na = 0;
+    for (int pack = 0; pack < 2; ++pack)
+        for (size_t i = 0; i < nc; ++i) all[na] = cells[i], all[na++].pack = pack;
+    for (int loo = 0; loo < 2; ++loo) {
+        turing_regret r;
+        CHECK(turing_compare(st, TURING_FIELD_V1, all, na, loo, seed, &r) == 0 && r.agree == r.decisions &&
+                  r.field_mean == r.hist_mean && r.field_max == r.hist_max && r.field_cites_ok == r.decisions,
+              "Field v1 regret equals control %s (%.2f%%/%.2f%%), %zu/%zu receipts verify",
+              loo ? "leave-one-out" : "in-sample", 100 * r.field_mean, 100 * r.field_max, r.field_cites_ok,
+              r.decisions);
+    }
+
+    /* A Field v1 record changes digest if a single cite is dropped. */
+    turing_query s4 = {16384, 4096, 300, TURING_PACK_ONCE, 0};
+    turing_digest a, b;
+    if (turing_field_select(st, &s4, NULL, fd) == 0 && turing_decision_digest(fd, &a) == 0) {
+        fd->ncite -= 1;
+        CHECK(turing_decision_digest(fd, &b) == 0 && !turing_digest_eq(&a, &b), "decision digest commits to its cites");
+    }
+    free(h);
+    free(fd);
+    free(hd);
     turing_store_free(st);
 }
 
@@ -374,6 +466,8 @@ int main(void) {
     test_receipt_tamper();
     test_history();
     test_compare();
+    test_recorded_fail();
+    test_v1_matches_control();
     printf("test-turing: %d passed, %d failed\n", pass, fail);
     return fail ? 1 : 0;
 }

@@ -1,41 +1,39 @@
-/* TURING Field selector V0 (docs/turing/TURING_W0_PROPOSAL.md K.2).
+/* TURING Field selector v1: the record-keeping layer
+ * (docs/turing/TURING_W0_PROPOSAL.md K.2, K.7).
+ *
+ * Selection is NOT novel here: the choice is made by turing_rank_min_cost, the
+ * control arm's rule (history_selector.c). What the Field adds is the record.
  *
  * Rule, in order:
- *  1. Candidates = every spec in the store. Filters with reason codes:
- *     CONTRACT_MISMATCH (spec names another contract digest), NOT_EXACT,
- *     MAX_N (query n above the spec's max_n).
+ *  1. Candidates = every spec in the store. Recorded filters with reason
+ *     codes: CONTRACT_MISMATCH (spec names another contract digest),
+ *     NOT_EXACT, MAX_N (query n above the spec's max_n).
  *  2. Usable evidence = rows whose receipt file still hashes to the digest the
- *     row records (re-hashed at decision time).
- *  3. Cell = the measured (n, m, sparsity) nearest the query among cells with
- *     usable evidence for an eligible candidate: distance |log2 n ratio| +
- *     |log2 m ratio| + 4 |sparsity difference|; ties -> smallest (n, m, s).
- *  4. Per candidate at that cell: NO_EVIDENCE, UNVERIFIED_RUN (a row not
- *     oracle-verified), CONTENTION_FORCED (a forced block), TIER (tier text not
- *     E2/E3/E4), else cost = mean over rows of the per-call cost.
- *  5. Noise band = max over cheapest and runner-up of within-run spread and
- *     across-run spread; tied set = costs within the band of the cheapest;
- *     TIE when it has more than one member, resolved only inside it:
- *     incumbent, else the reference R1_plain, else the cheapest.
- *  6. The decision cites every evidence digest used in step 4.
+ *     row records (re-hashed at decision time), minus the exact query cell
+ *     under leave-one-cell-out.
+ *  3. Footprint = (n, m) as in the control arm (sparsity changes values, not
+ *     sizes). The query's own footprint when it has usable evidence for an
+ *     eligible candidate, else the nearest measured one by |log2 n ratio| +
+ *     |log2 m ratio|; ties -> smallest (n, m).
+ *  4. Per candidate over its rows in that footprint: NO_EVIDENCE,
+ *     UNVERIFIED_RUN (a row not oracle-verified), CONTENTION_FORCED (a forced
+ *     block), TIER (tier text not E2/E3/E4). Filters exclude; they never
+ *     reorder.
+ *  5. Ranking: the surviving rows, in store order, feed one ranking-core
+ *     bucket; turing_rank_min_cost picks. On the stored grid, with every
+ *     filter passing, this is bit-for-bit the control arm's warm choice.
+ *  6. Recorded, not used to choose: margin to the runner-up and the noise band
+ *     (largest within-run spread of the chosen and runner-up rows).
+ *  7. The decision cites every evidence row the ranking used.
  */
 #include "turing/select.h"
 
-#include <inttypes.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 
-static double cell_dist(const turing_query *q, uint64_t n, uint64_t m, uint32_t s) {
-    double dn = fabs(log2((double)n / (double)q->n));
-    double dm = fabs(log2((double)m / (double)q->m));
-    double ds = fabs((double)s - (double)q->sparsity_milli) / 1000.0;
-    return dn + dm + 4.0 * ds;
-}
-
-static int cell_less(uint64_t n1, uint64_t m1, uint32_t s1, uint64_t n2, uint64_t m2, uint32_t s2) {
-    if (n1 != n2) return n1 < n2;
-    if (m1 != m2) return m1 < m2;
-    return s1 < s2;
+static double foot_dist(const turing_query *q, uint64_t n, uint64_t m) {
+    return fabs(log2((double)n / (double)q->n)) + fabs(log2((double)m / (double)q->m));
 }
 
 static int is_excluded(const turing_query *q, const turing_evidence *e) {
@@ -44,13 +42,22 @@ static int is_excluded(const turing_query *q, const turing_evidence *e) {
 
 static int tier_ok(const char *t) { return !strcmp(t, "E2") || !strcmp(t, "E3") || !strcmp(t, "E4"); }
 
-int turing_field_select(const turing_store *st, const turing_query *q, const char *incumbent_rz,
-                        const turing_digest *supersedes, turing_decision *d) {
+/* Within-run relative spread of one row for a pack mode. */
+static double row_noise(const turing_evidence *e, int pack) {
+    double c = (double)turing_ev_cost(e, pack);
+    if (pack == TURING_PACK_PER_CALL && c > 0)
+        return (e->noise_ppm / 1e6 * (double)e->median_ps + e->pack_noise_ppm / 1e6 * (double)e->pack_ps) / c;
+    return e->noise_ppm / 1e6;
+}
+
+int turing_field_select(const turing_store *st, const turing_query *q, const turing_digest *supersedes,
+                        turing_decision *d) {
     if (!st || !q || !d || q->n == 0 || q->m == 0 || st->nspec > TURING_MAX_CAND) return -1;
     memset(d, 0, sizeof *d);
     d->contract_digest = st->contract_digest;
     snprintf(d->selector, sizeof d->selector, "%s", TURING_FIELD_SELECTOR);
-    snprintf(d->constraints, sizeof d->constraints, "exact contract; tier in {E2,E3,E4}; receipts verify");
+    snprintf(d->constraints, sizeof d->constraints,
+             "exact contract; tier in {E2,E3,E4}; receipts verify; rank = min mean cost per (n,m,pack)");
     d->n = q->n;
     d->m = q->m;
     d->sparsity_milli = q->sparsity_milli;
@@ -69,6 +76,7 @@ int turing_field_select(const turing_store *st, const turing_query *q, const cha
         receipt_ok[r] = turing_file_digest(st->receipt[r].path, &fd) == 0 && turing_digest_eq(&fd, &st->receipt[r].digest);
     }
 
+    /* 1. Recorded contract / exactness / domain filters. */
     int eligible[TURING_MAX_CAND] = {0};
     d->ncand = st->nspec;
     for (size_t k = 0; k < st->nspec; ++k) {
@@ -87,138 +95,107 @@ int turing_field_select(const turing_store *st, const turing_query *q, const cha
         }
     }
 
-    /* Usable evidence rows. */
+    /* 2. Usable evidence rows; spec index per row. */
     unsigned char usable[TURING_MAX_EVIDENCE];
+    int row_spec[TURING_MAX_EVIDENCE];
     int any_unusable_receipt[TURING_MAX_CAND] = {0};
     for (size_t i = 0; i < st->nev; ++i) {
         const turing_evidence *e = &st->ev[i];
         usable[i] = 0;
-        if (is_excluded(q, e)) continue;
+        row_spec[i] = -1;
+        for (size_t k = 0; k < st->nspec; ++k)
+            if (turing_digest_eq(&st->spec_id[k], &e->spec_id)) row_spec[i] = (int)k;
+        if (row_spec[i] < 0 || is_excluded(q, e)) continue;
         int ok = 0;
         for (size_t r = 0; r < st->nreceipt; ++r)
             if (turing_digest_eq(&st->receipt[r].digest, &e->receipt_digest)) ok = receipt_ok[r];
-        for (size_t k = 0; k < st->nspec; ++k)
-            if (turing_digest_eq(&st->spec_id[k], &e->spec_id)) {
-                if (!ok) any_unusable_receipt[k] = 1;
-                else if (eligible[k]) usable[i] = 1;
-            }
+        if (!ok) any_unusable_receipt[row_spec[i]] = 1;
+        else if (eligible[row_spec[i]]) usable[i] = 1;
     }
 
-    /* Nearest cell. */
+    /* 3. Footprint. */
     int have = 0;
     double best = 0;
     for (size_t i = 0; i < st->nev; ++i) {
         if (!usable[i]) continue;
         const turing_evidence *e = &st->ev[i];
-        double dd = cell_dist(q, e->n, e->m, e->sparsity_milli);
+        double dd = foot_dist(q, e->n, e->m);
         if (!have || dd < best - 1e-12 ||
-            (fabs(dd - best) <= 1e-12 &&
-             cell_less(e->n, e->m, e->sparsity_milli, d->cell_n, d->cell_m, d->cell_sparsity_milli))) {
+            (fabs(dd - best) <= 1e-12 && (e->n < d->cell_n || (e->n == d->cell_n && e->m < d->cell_m)))) {
             have = 1;
             best = dd;
             d->cell_n = e->n;
             d->cell_m = e->m;
-            d->cell_sparsity_milli = e->sparsity_milli;
         }
     }
+    d->cell_sparsity_milli = TURING_SPARSITY_ANY;
     if (!have) {
         for (size_t k = 0; k < st->nspec; ++k)
             if (eligible[k] && any_unusable_receipt[k]) d->reason[k] = TURING_R_RECEIPT_UNVERIFIED;
         snprintf(d->verdict, sizeof d->verdict, "NONE");
         return 1;
     }
-    d->exact_cell = d->cell_n == q->n && d->cell_m == q->m && d->cell_sparsity_milli == q->sparsity_milli;
+    d->exact_cell = d->cell_n == q->n && d->cell_m == q->m;
 
-    /* Per-candidate cost at the cell. */
-    double cost[TURING_MAX_CAND] = {0}, spread[TURING_MAX_CAND] = {0};
-    int measured[TURING_MAX_CAND] = {0};
+    /* 4. Per-candidate run / contention / tier filters over the footprint. */
+    int rows[TURING_MAX_CAND] = {0}, bad[TURING_MAX_CAND];
+    for (size_t k = 0; k < st->nspec; ++k) bad[k] = -1;
+    for (size_t i = 0; i < st->nev; ++i) {
+        const turing_evidence *e = &st->ev[i];
+        if (!usable[i] || e->n != d->cell_n || e->m != d->cell_m) continue;
+        int k = row_spec[i];
+        rows[k]++;
+        if (!e->verified) bad[k] = TURING_R_UNVERIFIED_RUN;
+        else if (e->forced) bad[k] = TURING_R_CONTENTION_FORCED;
+        else if (!tier_ok(e->tier)) bad[k] = TURING_R_TIER;
+    }
+    int ranked[TURING_MAX_CAND] = {0};
     for (size_t k = 0; k < st->nspec; ++k) {
         if (!eligible[k]) continue;
-        double sum = 0, lo = 0, hi = 0, within = 0;
-        size_t rows = 0;
-        int bad = -1;
-        size_t cite0 = d->ncite;
-        for (size_t i = 0; i < st->nev; ++i) {
-            const turing_evidence *e = &st->ev[i];
-            if (!usable[i] || !turing_digest_eq(&e->spec_id, &st->spec_id[k]) || e->n != d->cell_n ||
-                e->m != d->cell_m || e->sparsity_milli != d->cell_sparsity_milli)
-                continue;
-            if (!e->verified) bad = TURING_R_UNVERIFIED_RUN;
-            else if (e->forced) bad = TURING_R_CONTENTION_FORCED;
-            else if (!tier_ok(e->tier)) bad = TURING_R_TIER;
-            double c = (double)turing_ev_cost(e, q->pack);
-            double w = e->noise_ppm / 1e6;
-            if (q->pack == TURING_PACK_PER_CALL && c > 0)
-                w = (e->noise_ppm / 1e6 * (double)e->median_ps + e->pack_noise_ppm / 1e6 * (double)e->pack_ps) / c;
-            if (rows == 0 || c < lo) lo = c;
-            if (rows == 0 || c > hi) hi = c;
-            if (w > within) within = w;
-            sum += c;
-            ++rows;
-            if (d->ncite >= TURING_MAX_CITE) return -1;
-            d->cite[d->ncite++] = st->ev_id[i];
-        }
-        if (rows == 0) {
+        if (rows[k] == 0)
             d->reason[k] = any_unusable_receipt[k] ? TURING_R_RECEIPT_UNVERIFIED : TURING_R_NO_EVIDENCE;
-            continue;
-        }
-        if (bad >= 0) {
-            d->reason[k] = (turing_reason)bad;
-            d->ncite = cite0; /* only cite what the choice rests on */
-            continue;
-        }
-        cost[k] = sum / (double)rows;
-        double across = cost[k] > 0 ? (hi - lo) / cost[k] : 0;
-        spread[k] = within > across ? within : across;
-        measured[k] = 1;
-        d->reason[k] = TURING_R_RANKED;
-        d->cost_ps[k] = (uint64_t)llround(cost[k]);
+        else if (bad[k] >= 0)
+            d->reason[k] = (turing_reason)bad[k];
+        else
+            ranked[k] = 1, d->reason[k] = TURING_R_RANKED;
     }
 
-    int cheap = -1, runner = -1;
-    for (size_t k = 0; k < st->nspec; ++k) {
-        if (!measured[k]) continue;
-        if (cheap < 0 || cost[k] < cost[cheap]) {
-            runner = cheap;
-            cheap = (int)k;
-        } else if (runner < 0 || cost[k] < cost[runner]) {
-            runner = (int)k;
-        }
+    /* 5. Ranking core over the surviving rows, in store order; cite each. */
+    turing_hist_bucket b;
+    turing_bucket_reset(&b, d->cell_n, d->cell_m, q->pack);
+    for (size_t i = 0; i < st->nev; ++i) {
+        const turing_evidence *e = &st->ev[i];
+        if (!usable[i] || e->n != d->cell_n || e->m != d->cell_m || !ranked[row_spec[i]]) continue;
+        if (d->ncite >= TURING_MAX_CITE) return -1;
+        turing_bucket_observe(&b, (size_t)row_spec[i], turing_ev_cost(e, q->pack));
+        d->cite[d->ncite++] = st->ev_id[i];
     }
-    if (cheap < 0) {
+    int chosen = turing_rank_min_cost(&b, ranked, st->nspec);
+    if (chosen < 0) {
         snprintf(d->verdict, sizeof d->verdict, "NONE");
         d->ncite = 0;
         return 1;
     }
-    double band = spread[cheap];
-    if (runner >= 0 && spread[runner] > band) band = spread[runner];
-    d->band_ppm = (uint32_t)llround(band * 1e6);
-    d->margin_ppm = runner >= 0 ? (uint32_t)llround((cost[runner] / cost[cheap] - 1.0) * 1e6) : 0;
-
-    int tied[TURING_MAX_CAND] = {0}, ntied = 0;
     for (size_t k = 0; k < st->nspec; ++k)
-        if (measured[k] && cost[k] <= cost[cheap] * (1.0 + band)) tied[k] = 1, ++ntied;
+        if (ranked[k]) d->cost_ps[k] = (uint64_t)llround(b.mean_ps[k]);
 
-    int chosen = cheap;
-    if (ntied > 1) {
-        snprintf(d->verdict, sizeof d->verdict, "TIE");
-        int inc = incumbent_rz ? turing_find_spec(st, incumbent_rz) : -1;
-        int ref = turing_find_spec(st, TURING_REFERENCE_RZ);
-        if (inc >= 0 && tied[inc]) {
-            chosen = inc;
-            snprintf(d->tie_resolution, sizeof d->tie_resolution, "incumbent");
-        } else if (ref >= 0 && tied[ref]) {
-            chosen = ref;
-            snprintf(d->tie_resolution, sizeof d->tie_resolution, "reference");
-        } else {
-            snprintf(d->tie_resolution, sizeof d->tie_resolution, "cheapest");
-        }
-        for (size_t k = 0; k < st->nspec; ++k)
-            if (tied[k]) d->reason[k] = TURING_R_TIED;
-    } else {
-        snprintf(d->verdict, sizeof d->verdict, "CHOSEN");
+    /* 6. Recorded margin and noise band (not used to choose). */
+    int runner = -1;
+    for (size_t k = 0; k < st->nspec; ++k)
+        if (ranked[k] && (int)k != chosen && (runner < 0 || b.mean_ps[k] < b.mean_ps[runner])) runner = (int)k;
+    double band = 0;
+    for (size_t i = 0; i < st->nev; ++i) {
+        const turing_evidence *e = &st->ev[i];
+        if (!usable[i] || e->n != d->cell_n || e->m != d->cell_m) continue;
+        if (row_spec[i] != chosen && row_spec[i] != runner) continue;
+        double w = row_noise(e, q->pack);
+        if (w > band) band = w;
     }
+    d->band_ppm = (uint32_t)llround(band * 1e6);
+    d->margin_ppm = runner >= 0 ? (uint32_t)llround((b.mean_ps[runner] / b.mean_ps[chosen] - 1.0) * 1e6) : 0;
+
     d->chosen = chosen;
     d->reason[chosen] = TURING_R_CHOSEN;
+    snprintf(d->verdict, sizeof d->verdict, "CHOSEN");
     return 0;
 }

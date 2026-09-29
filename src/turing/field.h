@@ -28,12 +28,13 @@
 #define TURING_MAX_EVIDENCE 1024
 #define TURING_MAX_RECEIPTS 8
 #define TURING_MAX_CAND 16
-#define TURING_MAX_CITE 40
+#define TURING_MAX_CITE 128 /* v1 cites a whole footprint: specs x sparsities x receipts */
 
 #define TURING_DOMAIN_CONTRACT "turing.contract.v0.provisional"
 #define TURING_DOMAIN_SPEC "turing.spec.v0"
 #define TURING_DOMAIN_EVIDENCE "turing.evidence.v0"
-#define TURING_DOMAIN_DECISION "turing.decision.v0"
+#define TURING_DOMAIN_DECISION "turing.decision.v1" /* v1: cites committed as one cite-set digest */
+#define TURING_DOMAIN_CITESET "turing.citeset.v0"
 
 /* ADR 0019 tiers are PROPOSED: tier is stored as text with the revision it
  * came from, never as an enum bound to the schema. */
@@ -118,13 +119,13 @@ const char *turing_reason_name(turing_reason r);
 
 typedef struct {
     turing_digest contract_digest;
-    char selector[32];          /* "turing.field.v0" or "turing.history.v0" */
+    char selector[32];          /* "turing.field.v1", "turing.history.v0", or retired "turing.field.v0" */
     char constraints[TURING_TEXT];
     uint64_t n, m;
     uint32_t sparsity_milli;
     int pack;                   /* TURING_PACK_* */
-    uint64_t cell_n, cell_m;    /* the measured cell the costs came from */
-    uint32_t cell_sparsity_milli;
+    uint64_t cell_n, cell_m;    /* the measured cell (v0) or footprint (v1) the costs came from */
+    uint32_t cell_sparsity_milli; /* TURING_SPARSITY_ANY when the footprint spans every sparsity */
     int exact_cell;
     size_t ncand;
     turing_digest cand[TURING_MAX_CAND];

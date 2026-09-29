@@ -285,6 +285,23 @@ uint64_t turing_ev_cost(const turing_evidence *e, int pack) {
 
 /* --------------------------------------------------------------- decision */
 
+/* Cite-set digest: SHA-256(TURING_DOMAIN_CITESET 0x00 || sorted cited evidence
+ * digests). One DERIVED_FROM relation commits to the whole cite list, so a v1
+ * decision can cite a full footprint (up to TURING_MAX_CITE rows) within the
+ * OMG0 relation limit. */
+static int digest_cmp(const void *a, const void *b) { return memcmp(a, b, TURING_DIGEST_BYTES); }
+
+static void citeset_digest(const turing_decision *d, turing_digest *out) {
+    turing_digest sorted[TURING_MAX_CITE];
+    memcpy(sorted, d->cite, d->ncite * sizeof sorted[0]);
+    qsort(sorted, d->ncite, sizeof sorted[0], digest_cmp);
+    sha256_ctx c;
+    sha256_init(&c);
+    sha256_update(&c, (const uint8_t *)TURING_DOMAIN_CITESET, strlen(TURING_DOMAIN_CITESET) + 1);
+    for (size_t i = 0; i < d->ncite; ++i) sha256_update(&c, sorted[i].b, TURING_DIGEST_BYTES);
+    sha256_final(&c, out->b);
+}
+
 static int decision_obj(const turing_decision *d, obj_b *b) {
     if (d->ncand > TURING_MAX_CAND || d->ncite > TURING_MAX_CITE) return -1;
     if (!ob_new(b, KIND_EVIDENCE, "turing.decision")) return -1;
@@ -319,7 +336,12 @@ static int decision_obj(const turing_decision *d, obj_b *b) {
     else
         ob_text(b, "supersedes", "none");
     for (size_t i = 0; i < d->ncand; ++i) ob_rel(b, REL_DEPENDS_ON, &d->cand[i]);
-    for (size_t i = 0; i < d->ncite; ++i) ob_rel(b, REL_DERIVED_FROM, &d->cite[i]);
+    ob_u64(b, "cite_count", d->ncite);
+    if (d->ncite) {
+        turing_digest cs;
+        citeset_digest(d, &cs);
+        ob_rel(b, REL_DERIVED_FROM, &cs);
+    }
     return 0;
 }
 

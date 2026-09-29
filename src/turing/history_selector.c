@@ -1,15 +1,17 @@
-/* TURING control arm: StarPU-style history-based selector
- * (docs/turing/TURING_W0_PROPOSAL.md K.3, Fable item 7).
+/* TURING ranking core and control arm: StarPU-style history-based selector
+ * (docs/turing/TURING_W0_PROPOSAL.md K.3, K.7, Fable item 7).
  *
- * Model: per (spec_id, footprint bucket) running mean of the observed per-call
- * cost. The footprint is what StarPU's history model hashes: the data sizes,
- * here (n, m) plus the pack mode (packing per call is a different codelet
- * cost). Sparsity changes values, not sizes, so it is not in the footprint.
- * Choice: among specs that can execute the query (n <= max_n, StarPU's
+ * Ranking core (shared with the Field selector v1): per (spec_id, footprint
+ * bucket) running mean of the observed per-call cost; the minimum running
+ * mean wins, lowest spec index on an exact tie. The footprint is what
+ * StarPU's history model hashes: the data sizes, here (n, m) plus the pack
+ * mode (packing per call is a different codelet cost). Sparsity changes
+ * values, not sizes, so it is not in the footprint.
+ *
+ * Control arm: among specs that can execute the query (n <= max_n, StarPU's
  * can_execute), if any has no observation in the bucket, pick the next one in
- * a seeded round-robin order (cold start / calibration); otherwise the minimum
- * running mean (lowest spec index on an exact tie). No filters beyond
- * can_execute, no noise band, no tie rule, no receipts cited.
+ * a seeded round-robin order (cold start / calibration); otherwise the ranking
+ * core. No filters beyond can_execute, no noise band, no receipts cited.
  */
 #include "turing/select.h"
 
@@ -25,6 +27,30 @@ uint64_t turing_splitmix64(uint64_t *s) {
     return z ^ (z >> 31);
 }
 
+/* ------------------------------------------------------------ ranking core */
+
+void turing_bucket_reset(turing_hist_bucket *b, uint64_t n, uint64_t m, int pack) {
+    memset(b, 0, sizeof *b);
+    b->n = n;
+    b->m = m;
+    b->pack = pack;
+    for (uint32_t k = 0; k < TURING_MAX_SPECS; ++k) b->order[k] = k;
+}
+
+void turing_bucket_observe(turing_hist_bucket *b, size_t k, uint64_t cost_ps) {
+    b->count[k] += 1;
+    b->mean_ps[k] += ((double)cost_ps - b->mean_ps[k]) / (double)b->count[k];
+}
+
+int turing_rank_min_cost(const turing_hist_bucket *b, const int *allowed, size_t nspec) {
+    int best = -1;
+    for (size_t k = 0; k < nspec && k < TURING_MAX_SPECS; ++k)
+        if (allowed[k] && b->count[k] && (best < 0 || b->mean_ps[k] < b->mean_ps[best])) best = (int)k;
+    return best;
+}
+
+/* ------------------------------------------------------------- control arm */
+
 void turing_history_init(turing_history *h, uint64_t seed) {
     memset(h, 0, sizeof *h);
     h->seed = seed;
@@ -35,13 +61,9 @@ static turing_hist_bucket *bucket_get(turing_history *h, const turing_store *st,
         if (h->bucket[i].n == n && h->bucket[i].m == m && h->bucket[i].pack == pack) return &h->bucket[i];
     if (h->nbucket >= TURING_HIST_MAX_BUCKETS) return NULL;
     turing_hist_bucket *b = &h->bucket[h->nbucket++];
-    memset(b, 0, sizeof *b);
-    b->n = n;
-    b->m = m;
-    b->pack = pack;
+    turing_bucket_reset(b, n, m, pack);
     /* Seeded Fisher-Yates over spec indices, one stream per bucket. */
     uint64_t s = h->seed ^ (n * 0x100000001B3ull) ^ (m << 20) ^ (uint64_t)pack;
-    for (size_t k = 0; k < st->nspec; ++k) b->order[k] = (uint32_t)k;
     for (size_t k = st->nspec; k > 1; --k) {
         size_t j = (size_t)(turing_splitmix64(&s) % k);
         uint32_t t = b->order[k - 1];
@@ -56,11 +78,9 @@ int turing_history_observe(turing_history *h, const turing_store *st, size_t k, 
     if (!h || !st || k >= st->nspec) return -1;
     turing_hist_bucket *b = bucket_get(h, st, n, m, pack);
     if (!b) return -1;
-    b->count[k] += 1;
-    b->mean_ps[k] += ((double)cost_ps - b->mean_ps[k]) / (double)b->count[k];
+    turing_bucket_observe(b, k, cost_ps);
     return 0;
 }
-
 int turing_history_load(turing_history *h, const turing_store *st, const turing_query *skip) {
     for (size_t i = 0; i < st->nev; ++i) {
         const turing_evidence *e = &st->ev[i];
@@ -110,9 +130,7 @@ int turing_history_select(turing_history *h, const turing_store *st, const turin
             return (int)k;
         }
     }
-    int best = -1;
-    for (size_t k = 0; k < st->nspec; ++k)
-        if (can[k] && (best < 0 || b->mean_ps[k] < b->mean_ps[best])) best = (int)k;
+    int best = turing_rank_min_cost(b, can, st->nspec);
     if (best < 0) {
         snprintf(d->verdict, sizeof d->verdict, "NONE");
         return -1;

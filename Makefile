@@ -968,13 +968,13 @@ bench-mixed-algebra: $(OMA_RZ_BENCH) $(OMA_RZ_SELECT)
 		$(MA2_EVIDENCE)/ma2_bench_run1.json $(MA2_EVIDENCE)/ma2_bench_run2.json
 
 # ---------------------------------------------------------------------------
-# TURING Wave 1 (docs/turing/TURING_W0_PROPOSAL.md): Field V0 records +
+# TURING Wave 1 (docs/turing/TURING_W0_PROPOSAL.md): Field v1 records (K.7) +
 # control-arm selector, post hoc over evidence/MIXED_ALGEBRA receipts.
 # Reads src/algebra (registry) without modifying it; no runtime, no timed runs.
 # test-turing: plain + ASan/UBSan suites, then a rebuild check (spec ids from
 # two different builds must be byte-identical).
 .PHONY: test-turing turing-field
-TURING_SRCS = src/turing/field.c src/turing/field_select.c src/turing/history_selector.c \
+TURING_SRCS = src/turing/field.c src/turing/field_select.c src/turing/field_select_v0_retired.c src/turing/history_selector.c \
 	src/turing/replay.c src/omega_canonical.c src/sha256.c $(OMA_RZ_SRCS)
 TURING_HDRS = src/turing/field.h src/turing/select.h src/omega_canonical.h src/omega_types.h src/sha256.h $(OMA_RZ_HDRS)
 TURING_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all

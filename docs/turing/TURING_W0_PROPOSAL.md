@@ -1,4 +1,4 @@
-# TURING Wave 0: proposal (A-K), revision 2
+# TURING Wave 0: proposal (A-K), revision 2 (+ K.7 verdict and reframe, 2026-09-29)
 
 Inputs: TURING_CURRENT_STATE.md (live audit, omega 4b217aa, aienos 603c91d), TURING_PRIOR_ART_MATRIX.md (30 sources opened),
 polyglot review def197d (fixes in progress on feat/polyglot-0), Fable review of revision 1 (9 REQUIRED items, adopted in
@@ -40,7 +40,7 @@ deps; OSC-0B identity freeze (omega#76) open; src/runtime/ frozen until R16 clos
 | Proposed | Would duplicate | Decision |
 |---|---|---|
 | Observation plane | ARGUS + causal crumbs | New ARGUS event class, not a new plane. Name in code and docs: "observation levels on ARGUS" |
-| Field selector | rx_costmodel, oma_select, polyglot_explain | One decision-record format all three will write (after the runtime freeze lifts for rx_costmodel). Wave 1 adds a Field selector only as the kill-test arm; if it fails K.4 it is removed, not kept as a fourth selector |
+| Field selector | rx_costmodel, oma_select, polyglot_explain | One decision-record format all three will write (after the runtime freeze lifts for rx_costmodel). The Wave 1 kill-test arm (tie rule) FAILED K.4 and is retired (K.7); the Field keeps no ranking rule of its own, it records choices made by the control arm's rule |
 | Turing Fabric | rx_semcomm, rx_capq "Fabric", aienos Personal Fabric | Deferred to Wave 5; built as rx_semcomm dialects; code name "dialect", never "fabric" |
 | Content-addressed store | receipts, Cortex, plan cache, J-Space chains, Store v1 | None. Field records are digest-named, beside existing receipts |
 | Explanation | Visor why, polyglot_explain | Extend Visor to read decision records (Wave 8) |
@@ -53,9 +53,10 @@ Every individual mechanism exists: content addressing (Git, Unison), provenance 
 autotuning (PetaBricks, SPIRAL, StarPU, Ansor/MetaSchedule), accuracy-aware selection (ApproxHPVM), heterogeneous dispatch
 (HPVM, IREE, IRIS-ORNL, TVM), analog compilers (Arco, Legno, DIANA/HTVM), ternary kernels (BitNet, T-MAC), tracing (Dapper,
 LTTng, eBPF), sub-text model communication (CIPHER, Cache-to-Cache, LatentMAS).
-Survives only as candidate novelty: (1) every selection is an immutable decision record citing replayable receipts;
-(2) number system as a contract-verified axis next to language and hardware; (3) compact dialects gated by round-trip.
-Kill criterion: pre-registered in K.4.
+Selection itself is NOT novel: the Wave 1 kill test (K.4, K.6) FAILED on selection quality, and the Field now ranks
+with the control arm's rule (K.7). Survives only as candidate novelty: (1) every selection wrapped in an immutable
+decision record citing receipts that anyone can re-hash and replay; (2) number system as a contract-verified axis next to
+language and hardware; (3) compact dialects gated by round-trip (later). Kill criterion: pre-registered in K.4; verdict K.7.
 
 ## D. Responsibility boundaries
 Omega = meaning + contract. Field = records linking contract -> realization specs -> evidence -> decisions (data, not a
@@ -81,8 +82,9 @@ DRAM-bound), which `turing-field` must reproduce from stored evidence alone.
   tree_dirty, toolchain, cpu_freq_state, quiet_flag, thermal**. The MA-3 receipts did not capture cpu frequency or the
   quiet flag, so V0 writes "not recorded by this receipt"; H1 receipts must record both. The receipt path is where to find
   the bytes and is not part of the digest.
-- `turing_decision`: contract_digest, selector id, constraint set, query, cell used (exact or nearest), every candidate
-  spec_id with a reason code and its cost, chosen, verdict, tie resolution, margin, noise band, cited evidence digests,
+- `turing_decision`: contract_digest, selector id, constraint set, query, footprint used (exact or nearest), every
+  candidate spec_id with a reason code and its cost, chosen, verdict, tie resolution (always none since K.7), margin and
+  noise band (recorded, not used to choose), cited evidence digests,
   `supersedes` (digest of the decision it replaces, or none). decision_id = digest. Never mutated.
 - Adapters: oma_rz_impl registry (read-only) and MA-3 bench receipts (read-only, post hoc). omx_candidate adapter is a
   follow-up after feat/polyglot-0 merges.
@@ -137,6 +139,9 @@ it is replaced by whatever id OSC-0B assigns to Omega-X. All 10 oma_rz_impl entr
 contract in realize_common.h (each `exact = 1`); test-turing checks that all 10 spec records carry this digest.
 
 ### K.2 Field selection rule (Fable item 6)
+**Superseded 2026-09-29 by K.7.** This paragraph describes the retired v0 rule that the kill test failed; it is kept
+unchanged as the pre-registered text. The live rule is in K.7.
+
 The Field selector considers every spec in the store and records a reason code for each: CONTRACT_MISMATCH if the spec
 names another contract digest, NOT_EXACT, MAX_N if the query's n exceeds the spec's limit; it then keeps only evidence
 rows whose receipt file still hashes to the recorded digest (re-hashed at decision time; otherwise RECEIPT_UNVERIFIED),
@@ -184,14 +189,20 @@ L3/DRAM), S4 16384 x 4096 (64 MiB, DRAM-bound); both pack modes (once amortized,
 Every record (contract, spec, evidence, decision) is laid out as an OMG0 object by the existing
 `omega_canonical_encode` (src/omega_canonical.c: magic OMG0, version, kind, attributes sorted by key with u16 big-endian
 lengths, relations sorted by kind then target, constraints, payload). Values are text; integers in decimal; fractions as
-parts per million. Decision candidates are relations DEPENDS_ON(spec_id) and cited evidence is DERIVED_FROM(evidence
-digest). Digest = SHA-256(domain || 0x00 || OMG0 bytes) using the repo's own src/sha256.c; domains
-`turing.contract.v0.provisional`, `turing.spec.v0`, `turing.evidence.v0`, `turing.decision.v0`. The prefix separates
-Field digests from Omega semantic ids (plain SHA-256 of OMG0 bytes). Ordering: a decision names the one decision it
+parts per million. Decision candidates are relations DEPENDS_ON(spec_id). Cited evidence (since K.7): attribute
+`cite_count` plus one DERIVED_FROM relation to the cite-set digest = SHA-256("turing.citeset.v0" 0x00 || the cited
+evidence digests sorted bytewise), so a record can cite a whole footprint (80 rows on the stored grid) within the OMG0
+limit of 64 relations; decision domain `turing.decision.v1`. (Wave 1 v0 used one DERIVED_FROM per evidence digest.)
+Digest = SHA-256(domain || 0x00 || OMG0 bytes) using the repo's own src/sha256.c; domains
+`turing.contract.v0.provisional`, `turing.spec.v0`, `turing.evidence.v0`, `turing.decision.v1`, `turing.citeset.v0`.
+The prefix separates Field digests from Omega semantic ids (plain SHA-256 of OMG0 bytes). Ordering: a decision names the one decision it
 replaces in `supersedes`; the current decision for a (contract, query) is the one nothing supersedes. Two decisions
 superseding the same parent is a recorded fork, resolved only by a later decision that supersedes one of them.
 
 ### K.6 Wave 1 result on stored data (dry run of K.4; H1 is the binding run)
+Recorded FAIL, kept permanently. The retired v0 selector (src/turing/field_select_v0_retired.c) still reproduces every
+number below in `make test-turing` and `turing-field`. Verdict and decision: K.7.
+
 Built post hoc from evidence/MIXED_ALGEBRA/ma3_bench_run{1,2}.json (10 specs, 720 evidence rows, 36 cells).
 Winners from stored evidence alone (pack once): S1 R1_smmla, S2 R1_sdot_il (TIE, cheapest), S3 R2c_crumb, S4 R2c_crumb.
 The int8 to 2-bit flip between L2-fit and DRAM-bound shapes is reproduced.
@@ -212,3 +223,42 @@ rule picks the reference R1_plain inside it. With packing amortized the two
 selectors are identical in quality (35 of 36 cells same pick, both at the oracle). The cold online row compares
 different information (stored evidence vs learning from scratch) and is not part of the verdict. Before H1, either the
 rule stays and the kill test is expected to fail, or a rule change is registered here first; thresholds do not move.
+
+### K.7 Verdict and reframe (2026-09-29)
+**Verdict: FAIL, kept permanently.** The pre-registered kill test (K.4) failed on selection quality and passed on
+replayability. Q1: the Field v0 selector's regret was 3.58% mean and 25.51% max on S1-S4 x 2 pack modes (in-sample;
+3.65% / 25.51% leave-one-cell-out) against the control arm's 0.01% / 0.07%, far outside the pre-registered limits
+(mean within 2 points of control, max at most 10%). Q2: 72 of 72 Field decisions cited receipts that re-hash and verify.
+Thresholds are unchanged and the K.6 table stands. The v0 rule stays in the tree only as
+src/turing/field_select_v0_retired.c, and `make test-turing` asserts that it still reproduces these numbers and the FAIL.
+
+**Cause.** All of the v0 regret came from the per-call pack mode. There the packing cost is noisy, so the noise band was
+wide (1.0% to 27.5%; 32 of 36 per-call cells were TIEs), and the ADR 0019 section 9.1 tie rule then preferred the
+reference R1_plain inside that band even when a measurably cheaper candidate existed. With packing amortized, v0 and
+the control arm were equally good.
+
+**Decision (Option 1; Drake delegated the call to the orchestrator, 2026-09-29).** Turing is the record-keeping layer,
+not a new selector:
+- Selection uses the control arm's rule: minimum expected cost, i.e. the lowest running mean of per-call cost per
+  (spec, footprint n x m x pack), lowest spec index on an exact tie. The code is shared: `turing_rank_min_cost` in
+  src/turing/history_selector.c is the one ranking core, called by the control arm and by the Field selector.
+- The Field selector v1 (`turing.field.v1`, src/turing/field_select.c) wraps every choice in an immutable decision
+  record: every candidate with its reason code and cost, the footprint used, the recorded margin and noise band (not used
+  to choose), `supersedes`, and a citation of every evidence row the ranking used, whose receipt files are re-hashed at
+  decision time and again by `turing_decision_verify`.
+- Contract, exactness, max_n, receipt-integrity, verified-run, contention and tier checks stay as **recorded filters**
+  with reason codes. They exclude a candidate; they never reorder the survivors. On the stored MA-3 grid every filter
+  passes every candidate, so v1 and the control arm pick identically.
+- Footprint, as in the control arm, is (n, m) without sparsity; the v0 sparsity-aware nearest-cell metric is gone.
+  Off-grid queries use the nearest measured footprint (|log2 n ratio| + |log2 m ratio|).
+
+**Evidence for the reframe (test-turing).** On all 36 stored cells x 2 pack modes, in-sample and leave-one-cell-out
+(144 decisions), Field v1 and the control arm pick the same realization every time, Field v1 regret equals the control
+arm's exactly (0.03% mean / 1.04% max over the 72 cells), and every Field v1 decision verifies against its receipts.
+This is not a new kill-test verdict and not a quality claim: v1 cannot beat the control arm because it is the control
+arm's rule.
+
+**Claims after the reframe.** Selection is not novel. Candidate novelty is limited to: (1) receipt-cited, replayable,
+immutable decision records around an ordinary selector; (2) the number system as a contract-verified axis next to
+language and hardware; (3) compact round-trip dialects (later, Wave 5). H1 still runs, now to measure the control rule
+live and to check that every live decision record verifies; it does not re-score Q1 with the v1 rule.
