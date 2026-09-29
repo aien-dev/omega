@@ -1395,7 +1395,7 @@ static void scenario_b(void) {
     /* B4: an outside writer wrongly holding WRITE on the lanes' slot stuffs it
      * with another subject's valid grant. */
     RxObjRef lslot = r->aegis.o[1].slot[0];
-    RxCapRef slot0 = {(uint32_t)field(r, lslot, 0), (uint32_t)field(r, lslot, 1)};
+    RxCapRef slot0 = {(uint32_t)field(r, lslot, 0), field(r, lslot, 1)};
     RxCapRef stuffer = hostile(r, EXTERNAL, rx_aegis_res(1, RX_AEGIS_RES_SLOT0), RX_RIGHT_WRITE);
     RxCapRef other = hostile(r, ROGUE_SUBJ, RES_LANE_OUT, RX_RIGHT_READ | RX_RIGHT_WRITE);
     uint64_t mark4 = r->w.n_crumbs, claims4 = r->w.stats.resident_claims;
@@ -1522,7 +1522,7 @@ static void scenario_b(void) {
            !(field(r, lslot, 2) == RX_AEGIS_SLOT_LIVE && field(r, lslot, 0) != other.cap_id &&
              field(r, lslot, 5) == field(r, r->aegis.o[1].request, 0)))
         pause_us(500);
-    RxCapRef slot1 = {(uint32_t)field(r, lslot, 0), (uint32_t)field(r, lslot, 1)};
+    RxCapRef slot1 = {(uint32_t)field(r, lslot, 0), field(r, lslot, 1)};
     int renewed = field(r, lslot, 2) == RX_AEGIS_SLOT_LIVE &&
                   (slot1.cap_id != slot0.cap_id || slot1.generation != slot0.generation) &&
                   r->aegis.mints == mints0 + 1 &&
