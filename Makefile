@@ -154,6 +154,12 @@ clean:
 test-m19: $(TARGET)
 	./$(TARGET) --run-m19-gates
 
+# Host-only tests of the M19R qualifier (tools/m19r_qualify.sh) and its
+# canonical-JSON helper (tools/json_canon.c). No GPU.
+.PHONY: test-m19r-qualify
+test-m19r-qualify:
+	tools/test_m19r_qualify.sh
+
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
 RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
