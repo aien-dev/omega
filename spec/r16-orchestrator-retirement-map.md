@@ -38,6 +38,9 @@ unbounded: while(1) while(true) while(!0) for(;;) Rust loop{} Rust while true
 body words (identifier words, split at _ digits and case): sleep usleep nanosleep msleep poll recv heartbeat tick dispatch schedule scheduler orchestrate orchestrator turn turns pulse yield epoll
 flagged loop = unbounded OR a body word in condition or body
 named terms (any code line; case/underscore-insensitive; run_until_complete anywhere in an identifier, max_steps and max_turns only as the whole identifier; hit counts use substring): run_until_complete max_steps max_turns
+cli-mode (C): a code line testing argv[ against a "--demonstrate-..." or "--run-..." literal
+manual rows (line cell starts with "manual"): evidence line must still exist in the file
+  (symbol not verified); same class rules apply
 join key: repo + path + enclosing symbol + whitespace-collapsed source line
 class-A reachability (omega only, naming proxy; G3 checks the link map): path or symbol must contain legacy_oracle or reference
 ```
