@@ -942,12 +942,33 @@ static bool test_m18_gate16_clean_clone(void) {
     if (getenv("OMEGA_IN_CLEAN_CLONE") != NULL) {
         return true;
     }
-    int rc = system("rm -rf /tmp/omega_clean_m18 && "
-                    "cp -r /home/drakestapleton/workspace/omega /tmp/omega_clean_m18 && "
-                    "cd /tmp/omega_clean_m18 && "
-                    "make clean >/dev/null 2>&1 && "
-                    "make -j >/dev/null 2>&1 && "
-                    "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m18-gates >/tmp/clean_clone_m18.log 2>&1");
+    /* Copy the repo this omegatool runs from (the code under test), not a
+     * hardcoded checkout, and pass the PHYSICS_DIR this process was built
+     * with as an absolute path so the copy in /tmp does not fall back to
+     * the Makefile default ../physics (= /tmp/physics). Mirrors M19. */
+    char physics_dir_resolved[4096];
+    {
+        const char *pd = getenv("PHYSICS_DIR");
+#ifdef OMEGA_PHYSICS_DIR
+        if (!pd || pd[0] == '\0') pd = OMEGA_PHYSICS_DIR;
+#endif
+        if (!pd || pd[0] == '\0') pd = "../physics";
+        if (!realpath(pd, physics_dir_resolved)) {
+            snprintf(physics_dir_resolved, sizeof(physics_dir_resolved), "%s", pd);
+        }
+    }
+    char command[4608];
+    int len = snprintf(command, sizeof(command),
+                       "root=$(git rev-parse --show-toplevel) && "
+                       "rm -rf /tmp/omega_clean_m18 && "
+                       "cp -r \"$root\" /tmp/omega_clean_m18 && "
+                       "cd /tmp/omega_clean_m18 && "
+                       "make clean >/dev/null 2>&1 && "
+                       "make -j PHYSICS_DIR='%s' >/dev/null 2>&1 && "
+                       "OMEGA_IN_CLEAN_CLONE=1 ./build/omegatool --run-m18-gates >/tmp/clean_clone_m18.log 2>&1",
+                       physics_dir_resolved);
+    if (len < 0 || (size_t)len >= sizeof(command)) return false;
+    int rc = system(command);
     return (rc == 0);
 }
 
