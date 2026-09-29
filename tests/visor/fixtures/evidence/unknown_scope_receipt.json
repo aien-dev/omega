@@ -1,0 +1,7 @@
+{
+  "schema": "FIXTURE_UNKNOWN_SCOPE_V1",
+  "git_commit": "7777777777777777777777777777777777777777",
+  "host": {"os": "Linux", "arch": "aarch64"},
+  "gpu_architecture": "sm_121",
+  "notes": "mentions QEMU and silicon only in prose values, which never count"
+}
