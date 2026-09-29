@@ -104,15 +104,21 @@ size_t omx_candidate_count(void) {
     return g_nc + cnt(&omx_lane_asm_count) + cnt(&omx_lane_encoder_count) + cnt(&omx_lane_mojo_count);
 }
 
+/* The weak tables above are declared with one element in this file, so an
+ * index into a longer strong table must not be written as a subscript of
+ * the declared array (UBSan -fsanitize=bounds flags index >= 2). Launder the
+ * base through a volatile pointer and step with pointer arithmetic. */
+static const omx_candidate *tab(const omx_candidate *p) { return *(const omx_candidate *const volatile *)&p; }
+
 const omx_candidate *omx_candidate_get(size_t i) {
     init();
     if (i < g_nc) return &g_c[i];
     i -= g_nc;
     size_t a = cnt(&omx_lane_asm_count), e = cnt(&omx_lane_encoder_count), m = cnt(&omx_lane_mojo_count);
-    if (i < a) return &omx_lane_asm[i];
+    if (i < a) return tab(omx_lane_asm) + i;
     i -= a;
-    if (i < e) return &omx_lane_encoder[i];
+    if (i < e) return tab(omx_lane_encoder) + i;
     i -= e;
-    if (i < m) return &omx_lane_mojo[i];
+    if (i < m) return tab(omx_lane_mojo) + i;
     return NULL;
 }
