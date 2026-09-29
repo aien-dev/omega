@@ -1,0 +1,270 @@
+POLYGLOT-0 explanation (spec/polyglot-0.md section 9)
+contract section 1 sha256: 4b9034ae795cbcc1bca6739080fce8e83e346b9c4378ce2f320f5228b90d46b1
+receipts: 72 read, 0 ignored (not OMEGA_POLYGLOT0_RECEIPT_V1), 0 with a stale contract digest, 0 smoke, 0 not gate-eligible
+run: 20260929T190337Z-2e2238f74ba3
+current run: 20260929T190337Z-2e2238f74ba3
+policy: eligible = contract digest matches, not smoke, from the current run, gate-eligible (N >= 20),
+        built from a clean tree, measured, checks > 0 and 0 failures, 0 < min <= median, no kept
+        sample under 1 ms, not toolchain-only, not a weak baseline; select lowest median ns/call
+        (pack once, amortized); CHOSEN if the runner-up is slower by more than the band
+        max(3 x max(MAD/median) of the two, 5% run-to-run floor), else TIE.
+
+S1  m=1 n=4096  (call overhead)
+  sparsity 0.00:
+    SELECT    asm_sdot         asm-aarch64  binary    median         36.0 ns/call  MAD      0.0  min         35.9
+    runner-up R1_sdot@O3       c            binary    median         36.8 ns/call  margin +2.1%  band 5.0%  -> TIE (within noise)
+    pack      0.6367 ns/weight (2608 ns); cheapest to pack MJ1_sdot 0.0781 ns/weight; break-even 448 calls
+    by language: asm-aarch64=asm_sdot 36.0 ns; c=R1_sdot@O3 36.8 ns; mojo=MJ1_sdot 41.1 ns;
+    rejected  R1_sdot          c            slower: +3.3% median vs selected
+    rejected  MJ1_sdot         mojo         slower: +14.2% median vs selected
+    rejected  asm_crumb        asm-aarch64  slower: +52.7% median vs selected
+    rejected  R2c_crumb@O3     c            slower: +59.6% median vs selected
+    rejected  MJ2c_crumb       mojo         slower: +63.5% median vs selected
+    rejected  R1_smmla@O3      c            slower: +129.9% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +135.3% median vs selected
+    rejected  R2_bitplane      c            slower: +142.7% median vs selected
+    rejected  R1_sdot_il@O3    c            slower: +155.6% median vs selected
+    rejected  R1_sdot_il       c            slower: +157.2% median vs selected
+    rejected  R2c_crumb        c            slower: +170.3% median vs selected
+    rejected  R1_smmla         c            slower: +192.9% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +121.6% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +139.8% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +53.4% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +0.3% vs selected)
+  sparsity 0.33:
+    SELECT    asm_sdot         asm-aarch64  binary    median         35.9 ns/call  MAD      0.0  min         35.9
+    runner-up R1_sdot@O3       c            binary    median         36.7 ns/call  margin +2.3%  band 5.0%  -> TIE (within noise)
+    pack      0.6406 ns/weight (2624 ns); cheapest to pack MJ1_sdot 0.0781 ns/weight; break-even 459 calls
+    by language: asm-aarch64=asm_sdot 35.9 ns; c=R1_sdot@O3 36.7 ns; mojo=MJ1_sdot 40.9 ns;
+    rejected  R1_sdot          c            slower: +3.6% median vs selected
+    rejected  MJ1_sdot         mojo         slower: +14.0% median vs selected
+    rejected  asm_crumb        asm-aarch64  slower: +52.8% median vs selected
+    rejected  R2c_crumb@O3     c            slower: +57.2% median vs selected
+    rejected  MJ2c_crumb       mojo         slower: +63.7% median vs selected
+    rejected  R1_smmla@O3      c            slower: +129.9% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +135.6% median vs selected
+    rejected  R2_bitplane      c            slower: +143.0% median vs selected
+    rejected  R1_sdot_il       c            slower: +146.7% median vs selected
+    rejected  R1_sdot_il@O3    c            slower: +146.8% median vs selected
+    rejected  R2c_crumb        c            slower: +174.4% median vs selected
+    rejected  R1_smmla         c            slower: +193.3% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +122.1% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +140.3% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +53.5% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +0.3% vs selected)
+  sparsity 0.66:
+    SELECT    R1_sdot@O3       c            binary    median         36.8 ns/call  MAD      0.0  min         36.7
+    runner-up asm_sdot         asm-aarch64  binary    median         37.0 ns/call  margin +0.7%  band 5.0%  -> TIE (within noise)
+    pack      0.5977 ns/weight (2448 ns); cheapest to pack MJ1_sdot 0.0781 ns/weight; break-even 492 calls
+    by language: c=R1_sdot@O3 36.8 ns; asm-aarch64=asm_sdot 37.0 ns; mojo=MJ1_sdot 41.1 ns;
+    rejected  R1_sdot          c            slower: +1.1% median vs selected
+    rejected  MJ1_sdot         mojo         slower: +11.8% median vs selected
+    rejected  asm_crumb        asm-aarch64  slower: +49.2% median vs selected
+    rejected  R2c_crumb@O3     c            slower: +53.5% median vs selected
+    rejected  MJ2c_crumb       mojo         slower: +60.0% median vs selected
+    rejected  R1_smmla@O3      c            slower: +124.8% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +130.1% median vs selected
+    rejected  R2_bitplane      c            slower: +137.7% median vs selected
+    rejected  R1_sdot_il@O3    c            slower: +151.4% median vs selected
+    rejected  R1_sdot_il       c            slower: +151.8% median vs selected
+    rejected  R2c_crumb        c            slower: +160.6% median vs selected
+    rejected  R1_smmla         c            slower: +186.7% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +117.0% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +134.8% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +49.9% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median -1.9% vs selected)
+
+S2  m=256 n=1024  (cache-resident (256 KiB int8, L2))
+  sparsity 0.00:
+    SELECT    asm_sdot         asm-aarch64  binary    median       2187.2 ns/call  MAD      1.6  min       2184.9
+    runner-up R1_sdot_il@O3    c            binary    median       2191.2 ns/call  margin +0.2%  band 5.0%  -> TIE (within noise)
+    pack      0.6326 ns/weight (165824 ns); cheapest to pack MJ1_sdot 0.0666 ns/weight; break-even 3969 calls
+    by language: asm-aarch64=asm_sdot 2187.2 ns; c=R1_sdot_il@O3 2191.2 ns; mojo=MJ1_sdot 2224.6 ns;
+    rejected  R1_sdot_il       c            slower: +0.2% median vs selected
+    rejected  MJ1_sdot         mojo         slower: +1.7% median vs selected
+    rejected  R1_smmla@O3      c            slower: +2.9% median vs selected
+    rejected  R1_smmla         c            slower: +3.1% median vs selected
+    rejected  MJ2c_crumb       mojo         slower: +3.3% median vs selected
+    rejected  R1_sdot          c            slower: +4.1% median vs selected
+    rejected  R1_sdot@O3       c            slower: +4.3% median vs selected
+    rejected  asm_crumb        asm-aarch64  slower: +19.6% median vs selected
+    rejected  R2c_crumb        c            slower: +24.3% median vs selected
+    rejected  R2c_crumb@O3     c            slower: +25.4% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +62.4% median vs selected
+    rejected  R2_bitplane      c            slower: +64.0% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +104.6% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +105.0% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +19.5% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +0.2% vs selected)
+  sparsity 0.33:
+    SELECT    R1_sdot_il       c            binary    median       2191.2 ns/call  MAD      1.3  min       2187.8
+    runner-up R1_sdot_il@O3    c            binary    median       2191.8 ns/call  margin +0.0%  band 5.0%  -> TIE (within noise)
+    pack      0.7896 ns/weight (206976 ns); cheapest to pack MJ1_sdot 0.0667 ns/weight; break-even 4277 calls
+    by language: c=R1_sdot_il 2191.2 ns; asm-aarch64=asm_sdot 2194.6 ns; mojo=MJ1_sdot 2235.5 ns;
+    rejected  asm_sdot         asm-aarch64  slower: +0.2% median vs selected
+    rejected  MJ1_sdot         mojo         slower: +2.0% median vs selected
+    rejected  R1_smmla@O3      c            slower: +2.8% median vs selected
+    rejected  R1_smmla         c            slower: +2.8% median vs selected
+    rejected  MJ2c_crumb       mojo         slower: +3.4% median vs selected
+    rejected  R1_sdot@O3       c            slower: +3.8% median vs selected
+    rejected  R1_sdot          c            slower: +4.2% median vs selected
+    rejected  asm_crumb        asm-aarch64  slower: +19.4% median vs selected
+    rejected  R2c_crumb        c            slower: +24.1% median vs selected
+    rejected  R2c_crumb@O3     c            slower: +25.2% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +62.2% median vs selected
+    rejected  R2_bitplane      c            slower: +64.0% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +104.5% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +105.2% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +19.3% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +0.1% vs selected)
+  sparsity 0.66:
+    SELECT    R1_sdot_il       c            binary    median       2191.3 ns/call  MAD      1.0  min       2189.5
+    runner-up R1_sdot_il@O3    c            binary    median       2191.9 ns/call  margin +0.0%  band 5.0%  -> TIE (within noise)
+    pack      0.7864 ns/weight (206160 ns); cheapest to pack MJ1_sdot 0.0665 ns/weight; break-even 5110 calls
+    by language: c=R1_sdot_il 2191.3 ns; asm-aarch64=asm_sdot 2192.1 ns; mojo=MJ1_sdot 2228.2 ns;
+    rejected  asm_sdot         asm-aarch64  slower: +0.0% median vs selected
+    rejected  MJ1_sdot         mojo         slower: +1.7% median vs selected
+    rejected  R1_smmla@O3      c            slower: +2.8% median vs selected
+    rejected  R1_smmla         c            slower: +2.9% median vs selected
+    rejected  MJ2c_crumb       mojo         slower: +3.1% median vs selected
+    rejected  R1_sdot@O3       c            slower: +3.8% median vs selected
+    rejected  R1_sdot          c            slower: +4.2% median vs selected
+    rejected  asm_crumb        asm-aarch64  slower: +19.3% median vs selected
+    rejected  R2c_crumb        c            slower: +24.0% median vs selected
+    rejected  R2c_crumb@O3     c            slower: +25.2% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +61.8% median vs selected
+    rejected  R2_bitplane      c            slower: +63.8% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +104.5% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +105.7% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +19.2% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +0.1% vs selected)
+
+S3  m=4096 n=4096  (memory bandwidth)
+  sparsity 0.00:
+    SELECT    MJ2c_crumb       mojo         crumb2    median     139187.0 ns/call  MAD    127.0  min     138391.0
+    runner-up asm_crumb        asm-aarch64  crumb2    median     160802.0 ns/call  margin +15.5%  band 5.0%  -> CHOSEN
+    pack      0.5952 ns/weight (9985040 ns); cheapest to pack MJ1_sdot 0.0806 ns/weight; break-even 22 calls
+    by language: mojo=MJ2c_crumb 139187.0 ns; asm-aarch64=asm_crumb 160802.0 ns; c=R2c_crumb@O3 164564.0 ns;
+    rejected  R2c_crumb@O3     c            slower: +18.2% median vs selected
+    rejected  R2c_crumb        c            slower: +22.1% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +56.0% median vs selected
+    rejected  R2_bitplane      c            slower: +59.8% median vs selected
+    rejected  R1_sdot_il       c            slower: +228.5% median vs selected
+    rejected  R1_sdot_il@O3    c            slower: +228.5% median vs selected
+    rejected  R1_smmla         c            slower: +234.2% median vs selected
+    rejected  R1_smmla@O3      c            slower: +263.0% median vs selected
+    rejected  R1_sdot@O3       c            slower: +282.4% median vs selected
+    rejected  asm_sdot         asm-aarch64  slower: +282.7% median vs selected
+    rejected  R1_sdot          c            slower: +289.4% median vs selected
+    rejected  MJ1_sdot         mojo         slower: +289.9% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +272.9% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +273.0% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +15.9% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +311.0% vs selected)
+  sparsity 0.33:
+    SELECT    MJ2c_crumb       mojo         crumb2    median     138958.0 ns/call  MAD    202.0  min     138550.0
+    runner-up asm_crumb        asm-aarch64  crumb2    median     161368.0 ns/call  margin +16.1%  band 5.0%  -> CHOSEN
+    pack      0.5983 ns/weight (10038048 ns); cheapest to pack MJ1_sdot 0.0803 ns/weight; break-even 23 calls
+    by language: mojo=MJ2c_crumb 138958.0 ns; asm-aarch64=asm_crumb 161368.0 ns; c=R2c_crumb@O3 165828.0 ns;
+    rejected  R2c_crumb@O3     c            slower: +19.3% median vs selected
+    rejected  R2c_crumb        c            slower: +22.4% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +56.3% median vs selected
+    rejected  R2_bitplane      c            slower: +59.7% median vs selected
+    rejected  R1_sdot_il@O3    c            slower: +230.3% median vs selected
+    rejected  R1_smmla         c            slower: +233.1% median vs selected
+    rejected  R1_sdot_il       c            slower: +252.5% median vs selected
+    rejected  R1_smmla@O3      c            slower: +263.7% median vs selected
+    rejected  MJ1_sdot         mojo         slower: +280.9% median vs selected
+    rejected  asm_sdot         asm-aarch64  slower: +281.5% median vs selected
+    rejected  R1_sdot@O3       c            slower: +282.8% median vs selected
+    rejected  R1_sdot          c            slower: +288.4% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +274.4% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +274.5% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +16.8% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +277.9% vs selected)
+  sparsity 0.66:
+    SELECT    MJ2c_crumb       mojo         crumb2    median     139135.0 ns/call  MAD    146.0  min     138712.0
+    runner-up R2c_crumb@O3     c            crumb2    median     160978.0 ns/call  margin +15.7%  band 5.0%  -> CHOSEN
+    pack      0.5980 ns/weight (10032080 ns); cheapest to pack MJ1_sdot 0.0809 ns/weight; break-even 22 calls
+    by language: mojo=MJ2c_crumb 139135.0 ns; c=R2c_crumb@O3 160978.0 ns; asm-aarch64=asm_crumb 161732.0 ns;
+    rejected  asm_crumb        asm-aarch64  slower: +16.2% median vs selected
+    rejected  R2c_crumb        c            slower: +22.2% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +56.1% median vs selected
+    rejected  R2_bitplane      c            slower: +59.7% median vs selected
+    rejected  R1_sdot_il@O3    c            slower: +228.4% median vs selected
+    rejected  R1_sdot_il       c            slower: +228.5% median vs selected
+    rejected  R1_smmla         c            slower: +233.8% median vs selected
+    rejected  R1_smmla@O3      c            slower: +265.0% median vs selected
+    rejected  R1_sdot@O3       c            slower: +282.8% median vs selected
+    rejected  asm_sdot         asm-aarch64  slower: +283.3% median vs selected
+    rejected  R1_sdot          c            slower: +290.0% median vs selected
+    rejected  MJ1_sdot         mojo         slower: +296.6% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +273.6% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +273.5% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +15.7% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +279.6% vs selected)
+
+S4  m=64 n=1024  (compute-bound, 256 different x per packed W, cache-resident)
+  sparsity 0.00:
+    SELECT    asm_sdot         asm-aarch64  binary    median        414.8 ns/call  MAD      0.6  min        413.0
+    runner-up MJ1_sdot         mojo         binary    median        419.5 ns/call  margin +1.1%  band 5.0%  -> TIE (within noise)
+    pack      0.6150 ns/weight (40304 ns); cheapest to pack MJ1_sdot 0.0671 ns/weight; break-even 7725 calls
+    by language: asm-aarch64=asm_sdot 414.8 ns; mojo=MJ1_sdot 419.5 ns; c=R1_smmla 420.4 ns;
+    rejected  R1_smmla         c            slower: +1.4% median vs selected
+    rejected  R1_smmla@O3      c            slower: +1.5% median vs selected
+    rejected  R1_sdot_il@O3    c            slower: +2.7% median vs selected
+    rejected  R1_sdot_il       c            slower: +3.1% median vs selected
+    rejected  R1_sdot          c            slower: +29.6% median vs selected
+    rejected  R1_sdot@O3       c            slower: +29.6% median vs selected
+    rejected  MJ2c_crumb       mojo         slower: +35.6% median vs selected
+    rejected  asm_crumb        asm-aarch64  slower: +56.5% median vs selected
+    rejected  R2c_crumb        c            slower: +63.7% median vs selected
+    rejected  R2c_crumb@O3     c            slower: +65.3% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +112.4% median vs selected
+    rejected  R2_bitplane      c            slower: +114.9% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +173.3% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +170.9% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +56.3% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +0.2% vs selected)
+  sparsity 0.33:
+    SELECT    asm_sdot         asm-aarch64  binary    median        413.8 ns/call  MAD      0.5  min        411.7
+    runner-up MJ1_sdot         mojo         binary    median        418.8 ns/call  margin +1.2%  band 5.0%  -> TIE (within noise)
+    pack      0.6384 ns/weight (41840 ns); cheapest to pack MJ1_sdot 0.0671 ns/weight; break-even 7483 calls
+    by language: asm-aarch64=asm_sdot 413.8 ns; mojo=MJ1_sdot 418.8 ns; c=R1_smmla 420.4 ns;
+    rejected  R1_smmla         c            slower: +1.6% median vs selected
+    rejected  R1_smmla@O3      c            slower: +1.8% median vs selected
+    rejected  R1_sdot_il@O3    c            slower: +2.9% median vs selected
+    rejected  R1_sdot_il       c            slower: +2.9% median vs selected
+    rejected  R1_sdot          c            slower: +29.8% median vs selected
+    rejected  R1_sdot@O3       c            slower: +29.8% median vs selected
+    rejected  MJ2c_crumb       mojo         slower: +35.9% median vs selected
+    rejected  asm_crumb        asm-aarch64  slower: +56.8% median vs selected
+    rejected  R2c_crumb        c            slower: +64.1% median vs selected
+    rejected  R2c_crumb@O3     c            slower: +65.7% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +112.8% median vs selected
+    rejected  R2_bitplane      c            slower: +115.3% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +173.8% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +171.7% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +56.7% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +0.1% vs selected)
+  sparsity 0.66:
+    SELECT    asm_sdot         asm-aarch64  binary    median        415.7 ns/call  MAD      0.5  min        414.1
+    runner-up MJ1_sdot         mojo         binary    median        419.6 ns/call  margin +0.9%  band 5.0%  -> TIE (within noise)
+    pack      0.5847 ns/weight (38320 ns); cheapest to pack MJ1_sdot 0.0671 ns/weight; break-even 8862 calls
+    by language: asm-aarch64=asm_sdot 415.7 ns; mojo=MJ1_sdot 419.6 ns; c=R1_smmla 420.3 ns;
+    rejected  R1_smmla         c            slower: +1.1% median vs selected
+    rejected  R1_smmla@O3      c            slower: +1.3% median vs selected
+    rejected  R1_sdot_il@O3    c            slower: +2.6% median vs selected
+    rejected  R1_sdot_il       c            slower: +2.8% median vs selected
+    rejected  R1_sdot          c            slower: +29.2% median vs selected
+    rejected  R1_sdot@O3       c            slower: +29.2% median vs selected
+    rejected  MJ2c_crumb       mojo         slower: +35.3% median vs selected
+    rejected  asm_crumb        asm-aarch64  slower: +56.1% median vs selected
+    rejected  R2c_crumb        c            slower: +63.3% median vs selected
+    rejected  R2c_crumb@O3     c            slower: +65.0% median vs selected
+    rejected  R2_bitplane@O3   c            slower: +111.8% median vs selected
+    rejected  R2_bitplane      c            slower: +114.3% median vs selected
+    rejected  R1_plain         c            labelled weak baseline (reference only) (median +173.0% vs selected)
+    rejected  R1_plain@O3      c            labelled weak baseline (reference only) (median +170.4% vs selected)
+    rejected  enc_crumb        omega-encoder toolchain-only (own-encoder rule, spec section 4) (median +55.9% vs selected)
+    rejected  enc_sdot         omega-encoder toolchain-only (own-encoder rule, spec section 4) (median -0.3% vs selected)

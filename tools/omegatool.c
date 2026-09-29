@@ -2639,7 +2639,7 @@ static bool test_m12_receipt(void) {
     return ok;
 }
 
-static void run_demonstration_living_matvec(void) {
+static void legacy_oracle_run_demonstration_living_matvec(void) {
     printf("================================================================================\n");
     printf("    AIEN OMEGA SUBSTRATE — MILESTONE 12: OMEGA_LIVING_MATVEC DEMONSTRATION\n");
     printf("================================================================================\n");
@@ -3740,6 +3740,15 @@ int omega_run_m15_gates(void) {
     return (gate_passed == gate_count) ? 0 : 1;
 }
 
+static int legacy_oracle_demonstrate_living_matvec(int argc, char **argv) {
+    (void)argc;
+    if (strcmp(argv[1], "--demonstrate-living-matvec") == 0) {
+        legacy_oracle_run_demonstration_living_matvec();
+        return 0;
+    }
+    return -1;
+}
+
 int main(int argc, char **argv) {
     if (argc < 2) {
         printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m12-gates | --run-m13-gates | --run-m14-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --demonstrate-library | --demonstrate-discovery | --demonstrate-living-matvec | --demonstrate-machine | --demonstrate-realization-synthesis | --dump-test-vectors <dir>]\n", argv[0]);
@@ -3807,8 +3816,7 @@ int main(int argc, char **argv) {
         return omega_run_m12_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-living-matvec") == 0) {
-        run_demonstration_living_matvec();
+    if (legacy_oracle_demonstrate_living_matvec(argc, argv) == 0) {
         return 0;
     }
 

@@ -554,6 +554,24 @@ r15-receipt:
 test-r15-receipt:
 	tests/r15_receipt_test.sh
 
+# R16-G2 code-search gate (spec/r16-orchestrator-retirement.md). Host-only C tool,
+# seconds, no network. Scans the five repos (paths from R16_REPO_OMEGA,
+# R16_REPO_SOVEREIGN_CORE, R16_REPO_AEGIS_RUNTIME, R16_REPO_AIENOS,
+# R16_REPO_PHYSICS; defaults: this tree and ~/workspace/r16-survey/<repo>) and
+# joins every loop-shaped site with spec/r16-orchestrator-retirement-map.md.
+# Exit 0 only when every site is classified A-F, no omega class-A site is
+# still under a production name, and all five repos were scanned.
+R16_INVENTORY = $(OUT_DIR)/r16_loop_inventory
+$(R16_INVENTORY): tools/r16_loop_inventory.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -o $@ tools/r16_loop_inventory.c
+
+.PHONY: r16-inventory test-r16-inventory
+r16-inventory: $(R16_INVENTORY)
+	$(R16_INVENTORY) --map spec/r16-orchestrator-retirement-map.md --json $(OUT_DIR)/r16-inventory.json
+
+test-r16-inventory: $(R16_INVENTORY)
+	sh tests/r16_inventory/run.sh $(R16_INVENTORY)
+
 
 # OMEGA_ACTION_GRAPH_IR: goals compile to typed action graphs that run as
 # resident reactions by readiness alone. rx_graph.o is built alone first and
@@ -864,3 +882,131 @@ $(ARGUS_REPLAY): tools/argus_replay.c src/sha256.c $(ARGUS_STAMP) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -I$(ARGUS_SRC) -o $@ tools/argus_replay.c src/sha256.c $(ARGUS_LIB_SRCS)
 .PHONY: argus-replay
 argus-replay: $(ARGUS_REPLAY)
+
+# ---------------------------------------------------------------------------
+# OMEGA MIXED ALGEBRA (spec/mixed-algebra-reference.md): correctness-first CPU
+# reference ("parity oracle") for balanced trits, Z3, packing and absmean
+# quantization. Plain C11, no runtime or physics dependencies.
+# test-algebra-asan reruns the same suite under address+undefined sanitizers.
+.PHONY: test-algebra test-algebra-asan
+OMA_CFLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 -Isrc
+OMA_SRCS = src/algebra/oma_trit.c src/algebra/oma_z3.c src/algebra/oma_pack.c src/algebra/oma_quant.c
+OMA_HDRS = src/algebra/oma_trit.h src/algebra/oma_z3.h src/algebra/oma_pack.h src/algebra/oma_quant.h
+OMA_TEST = $(OUT_DIR)/tests-algebra/test_oma
+OMA_TEST_ASAN = $(OUT_DIR)/tests-algebra/test_oma_asan
+
+$(OMA_TEST): tests/algebra/test_oma.c $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_CFLAGS) -o $@ tests/algebra/test_oma.c $(OMA_SRCS) -lm
+
+$(OMA_TEST_ASAN): tests/algebra/test_oma.c $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		-o $@ tests/algebra/test_oma.c $(OMA_SRCS) -lm
+
+test-algebra: $(OMA_TEST)
+	./$(OMA_TEST)
+
+test-algebra-asan: $(OMA_TEST_ASAN)
+	./$(OMA_TEST_ASAN)
+
+# ---------------------------------------------------------------------------
+# OMEGA MIXED ALGEBRA MA-2 (spec/mixed-algebra-ma2.md): one exact operation
+# (ternary W x int8 x -> int32 y) with several verified realizations on the
+# Grace CPU, a measured cost table and a stand-in selector.
+# test-realize: bit-exact gate vs the naive oracle (plain and ASan+UBSan).
+# bench-mixed-algebra: two benchmark runs on one pinned Cortex-X925 core,
+# then the selector with its reproducibility check. Receipts go to
+# evidence/MIXED_ALGEBRA/ (ma2_bench_run{1,2}.json; the committed
+# ma3_bench_run{1,2}.json are the historical runs made under the earlier
+# MA-3 label, and ma2_select_receipt.json is regenerated from them).
+.PHONY: test-realize bench-mixed-algebra
+OMA_RZ_ARCH = -march=armv8.6-a+dotprod+i8mm+sve
+OMA_RZ_CFLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 $(OMA_RZ_ARCH) -Isrc
+OMA_RZ_SRCS = src/algebra/realize_common.c src/algebra/realize_binary.c \
+	src/algebra/realize_bitplane.c src/algebra/realize_sparse.c \
+	src/algebra/realize_rns.c src/algebra/realize_dense.c
+OMA_RZ_HDRS = src/algebra/realize_common.h
+OMA_SEL_SRCS = src/algebra/oma_select.c src/sha256.c
+OMA_SEL_HDRS = src/algebra/oma_select.h
+OMA_RZ_TEST = $(OUT_DIR)/tests-algebra/test_realize
+OMA_RZ_TEST_ASAN = $(OUT_DIR)/tests-algebra/test_realize_asan
+OMA_RZ_BENCH = $(OUT_DIR)/tests-algebra/bench_mixed_algebra
+OMA_RZ_SELECT = $(OUT_DIR)/tests-algebra/bench_select
+MA2_EVIDENCE = evidence/MIXED_ALGEBRA
+
+$(OMA_RZ_TEST): tests/algebra/test_realize.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) src/algebra/oma_select.c $(OMA_SEL_HDRS) $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/algebra/test_realize.c $(OMA_RZ_SRCS) src/algebra/oma_select.c $(OMA_SRCS) -lm
+
+$(OMA_RZ_TEST_ASAN): tests/algebra/test_realize.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS) src/algebra/oma_select.c $(OMA_SEL_HDRS) $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		-o $@ tests/algebra/test_realize.c $(OMA_RZ_SRCS) src/algebra/oma_select.c $(OMA_SRCS) -lm
+
+$(OMA_RZ_BENCH): tests/algebra/bench_mixed_algebra.c $(OMA_RZ_SRCS) $(OMA_RZ_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/algebra/bench_mixed_algebra.c $(OMA_RZ_SRCS) -lm
+
+$(OMA_RZ_SELECT): tests/algebra/bench_select.c $(OMA_SEL_SRCS) $(OMA_SEL_HDRS) $(OMA_RZ_SRCS) $(OMA_RZ_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/algebra/bench_select.c $(OMA_SEL_SRCS) $(OMA_RZ_SRCS) -lm
+
+test-realize: $(OMA_RZ_TEST) $(OMA_RZ_TEST_ASAN)
+	./$(OMA_RZ_TEST)
+	./$(OMA_RZ_TEST_ASAN)
+
+bench-mixed-algebra: $(OMA_RZ_BENCH) $(OMA_RZ_SELECT)
+	@mkdir -p $(MA2_EVIDENCE)
+	OMA_BENCH_COMMIT=$$(git rev-parse HEAD) OMA_BENCH_DIRTY=$$(git status --porcelain -- src tests Makefile | grep -c .) \
+		OMA_BENCH_BIN_SHA=$$(sha256sum $(OMA_RZ_BENCH) | cut -c1-64) \
+		./$(OMA_RZ_BENCH) $(MA2_EVIDENCE)/ma2_bench_run1.json
+	OMA_BENCH_COMMIT=$$(git rev-parse HEAD) OMA_BENCH_DIRTY=$$(git status --porcelain -- src tests Makefile | grep -c .) \
+		OMA_BENCH_BIN_SHA=$$(sha256sum $(OMA_RZ_BENCH) | cut -c1-64) \
+		./$(OMA_RZ_BENCH) $(MA2_EVIDENCE)/ma2_bench_run2.json
+	./$(OMA_RZ_SELECT) $(MA2_EVIDENCE)/ma2_select_receipt.json \
+		$(MA2_EVIDENCE)/ma2_bench_run1.json $(MA2_EVIDENCE)/ma2_bench_run2.json
+
+# ---------------------------------------------------------------------------
+# TURING Wave 1 (docs/turing/TURING_W0_PROPOSAL.md): Field v1 records (K.7) +
+# control-arm selector, post hoc over evidence/MIXED_ALGEBRA receipts.
+# Reads src/algebra (registry) without modifying it; no runtime, no timed runs.
+# test-turing: plain + ASan/UBSan suites, then a rebuild check (spec ids from
+# two different builds must be byte-identical).
+.PHONY: test-turing turing-field
+TURING_SRCS = src/turing/field.c src/turing/field_select.c src/turing/field_select_v0_retired.c src/turing/history_selector.c \
+	src/turing/replay.c src/omega_canonical.c src/sha256.c $(OMA_RZ_SRCS)
+TURING_HDRS = src/turing/field.h src/turing/select.h src/omega_canonical.h src/omega_types.h src/sha256.h $(OMA_RZ_HDRS)
+TURING_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
+TURING_TEST = $(OUT_DIR)/tests-turing/test_turing
+TURING_TEST_ASAN = $(OUT_DIR)/tests-turing/test_turing_asan
+TURING_TOOL = $(OUT_DIR)/tests-turing/turing-field
+TURING_TOOL_ASAN = $(OUT_DIR)/tests-turing/turing-field_asan
+
+$(TURING_TEST): tests/turing/test_turing.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/turing/test_turing.c $(TURING_SRCS) -lm
+
+$(TURING_TEST_ASAN): tests/turing/test_turing.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) $(TURING_ASAN) -o $@ tests/turing/test_turing.c $(TURING_SRCS) -lm
+
+$(TURING_TOOL): tools/turing_field.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tools/turing_field.c $(TURING_SRCS) -lm
+
+$(TURING_TOOL_ASAN): tools/turing_field.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) $(TURING_ASAN) -o $@ tools/turing_field.c $(TURING_SRCS) -lm
+
+turing-field: $(TURING_TOOL)
+	./$(TURING_TOOL)
+
+test-turing: $(TURING_TEST) $(TURING_TEST_ASAN) $(TURING_TOOL) $(TURING_TOOL_ASAN)
+	./$(TURING_TEST)
+	./$(TURING_TEST_ASAN)
+	./$(TURING_TOOL) --spec-ids > $(OUT_DIR)/tests-turing/spec_ids_plain.txt
+	./$(TURING_TOOL_ASAN) --spec-ids > $(OUT_DIR)/tests-turing/spec_ids_asan.txt
+	cmp $(OUT_DIR)/tests-turing/spec_ids_plain.txt $(OUT_DIR)/tests-turing/spec_ids_asan.txt
+	./$(TURING_TOOL_ASAN) > $(OUT_DIR)/tests-turing/turing_field_asan.txt
+	@echo "test-turing: spec ids identical across plain and ASan builds; turing-field runs clean under ASan/UBSan"
