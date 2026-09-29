@@ -3,8 +3,12 @@
  * usage: turing-cal-overlap DEV_LIST SEALED_LIST
  *   DEV_LIST / SEALED_LIST: text files, one CTR1 trace.ctr path per line.
  *
- * Every record is validated with ty_ctr1_decode (src/turing/ty_ctr1.h); a
- * malformed file fails closed (exit 2). Three comparisons, all over record
+ * Every record is checked for the CTR1 framing (magic "CTR1", version 1, and
+ * event_index rising inside a crumb; a crumb starts at event_index 0), and a
+ * malformed file fails closed (exit 2). The full value-set check of
+ * ty_ctr1_decode is NOT applied: development data includes learning-condition
+ * traces (library ops, op_origin 1) that the TY-2 control reader refuses, and
+ * the overlap audit must still compare against them. Three comparisons, all over record
  * bytes 0..214 (the record body; bytes 215..246 are the BLAKE3 chain digest,
  * which depends on file position and is excluded):
  *
@@ -25,7 +29,7 @@
  * 2 = usage / I/O / format error.
  */
 #include "sha256.h"
-#include "turing/ty_ctr1.h"
+#include "turing/ty_ctr1.h" /* TY_CTR1_BYTES only */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -91,7 +95,6 @@ static int read_file(const char *path, side *s) {
     int64_t prev = -1;
     int open_crumb = 0;
     sha256_ctx blk;
-    char why[160];
     size_t got;
     int rc = 0;
     while ((got = fread(buf, 1, sizeof buf, f)) > 0) {
@@ -103,14 +106,15 @@ static int read_file(const char *path, side *s) {
         }
         for (size_t off = 0; off < got; off += TY_CTR1_BYTES) {
             const uint8_t *r = buf + off;
-            ty_ev e;
-            if (ty_ctr1_decode(r, prev, &e, why, sizeof why) != 0) {
-                fprintf(stderr, "turing-cal-overlap: %s record %llu: %s\n", path,
-                        (unsigned long long)s->records, why);
+            uint32_t idx = (uint32_t)r[8] | (uint32_t)r[9] << 8 | (uint32_t)r[10] << 16 | (uint32_t)r[11] << 24;
+            int first = idx == 0;
+            if (memcmp(r, "CTR1", 4) != 0 || r[4] != 1 || r[5] != 0 || (!first && (int64_t)idx <= prev)) {
+                fprintf(stderr, "turing-cal-overlap: %s record %llu: bad CTR1 framing\n", path,
+                        (unsigned long long)s->records);
                 rc = -1;
                 goto done;
             }
-            if (e.first) {
+            if (first) {
                 if (open_crumb) {
                     uint8_t d[32];
                     sha256_final(&blk, d);
@@ -133,7 +137,7 @@ static int read_file(const char *path, side *s) {
                 for (int i = 0; i < 8; i++) fp = (fp << 8) | h[i];
                 if (upush(&s->fps, fp)) { rc = -1; goto done; }
             }
-            prev = e.idx;
+            prev = idx;
             s->records++;
         }
     }

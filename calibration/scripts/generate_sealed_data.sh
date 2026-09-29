@@ -153,7 +153,10 @@ if [ -n "$trial_seed" ]; then
     check_binaries "$learner"
     gdir="$TRIAL_ROOT/jail-trial"
     mkdir -p "$gdir"
-    read -r ns rc < <(run_seed "$learner" "$trial_seed" "$gdir")
+    [ -e "$gdir/seed-$trial_seed" ] && die "$gdir/seed-$trial_seed already exists"
+    ns="" rc=""
+    read -r ns rc < <(run_seed "$learner" "$trial_seed" "$gdir") || true
+    [ -n "$rc" ] || die "generation jail did not start"
     echo "trial seed $trial_seed rc=$rc wall_ms=$((ns / 1000000)) learner=$(sha "$learner")"
     echo "control/trace.ctr $(sha "$gdir/seed-$trial_seed/control/trace.ctr")"
     exit "$rc"
@@ -222,7 +225,10 @@ for row in "${seeds[@]}"; do
     read -r g j s <<<"$row"
     gdir="$dest/group-$g"
     mkdir -p "$gdir"
-    read -r ns rc < <(run_seed "$learner" "$s" "$gdir")
+    [ -e "$gdir/seed-$s" ] && die "$gdir/seed-$s already exists (the generator appends; refusing)"
+    ns="" rc=""
+    read -r ns rc < <(run_seed "$learner" "$s" "$gdir") || true
+    [ -n "$rc" ] || die "generation jail did not start for seed $s"
     echo "g$g j=$j seed=$s rc=$rc wall_ms=$((ns / 1000000))" >>"$log"
     [ "$rc" = 0 ] || die "generator failed for seed $s (rc $rc); $dest is incomplete and must not be used"
 done

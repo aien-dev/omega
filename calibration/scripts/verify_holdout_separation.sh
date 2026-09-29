@@ -11,8 +11,11 @@
 #                 trace.ctr under ~/aien-data/crumbline (all burned development data,
 #                 both conditions, all runs). Each trace.ctr's sibling ledger.jsonl
 #                 is used for the ledger checks.
-#   --repo        git repository holding the freeze commit (default: this one; the
-#                 overlap helper is always built from the repository holding this script)
+#   --repo        git repository (worktree or .git directory) holding the freeze
+#                 commit; default: the checkout holding this script. Needed inside
+#                 the Auditor jail, where the script runs from a git-archive export.
+# The overlap helper is build/turing-cal/turing-cal-overlap in the tree holding this
+# script (override: TC_OVERLAP_TOOL); in a read-only export it must be prebuilt.
 #
 # Gates (all must hold; exit 0 = PASS, 1 = FAIL, 2 = could not run):
 #   G1 complete        COMPLETE exists and equals SHA-256(seed_commitment.json)
@@ -30,8 +33,8 @@
 # Reported, not gated: first_state_overlap, record_body_overlap (see the C tool).
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo="$(git -C "$here" rev-parse --show-toplevel)"
-toolrepo="$repo"
+toolrepo="$(cd "$here/../.." && pwd)"
+repo="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || true)"
 sealed="" out="" devlist=""
 die() { echo "verify_holdout_separation: $*" >&2; exit 2; }
 while [ $# -gt 0 ]; do
@@ -48,8 +51,9 @@ sha() { sha256sum -- "$1" | cut -d' ' -f1; }
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-tool="$toolrepo/build/turing-cal/turing-cal-overlap"
-[ -x "$tool" ] || make -s -C "$toolrepo" turing-cal-overlap >/dev/null || die "cannot build turing-cal-overlap"
+tool="${TC_OVERLAP_TOOL:-$toolrepo/build/turing-cal/turing-cal-overlap}"
+[ -x "$tool" ] || make -s -C "$toolrepo" turing-cal-overlap >/dev/null 2>&1 || die "turing-cal-overlap not built at $tool (build it before binding a read-only tree)"
+[ -n "$repo" ] || die "--repo is required when this script is not inside a git checkout"
 
 sc="$sealed/seed_commitment.json"
 [ -f "$sc" ] && [ -f "$sealed/manifest.json" ] || die "seed_commitment.json / manifest.json missing"
