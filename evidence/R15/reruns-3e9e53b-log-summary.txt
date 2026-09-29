@@ -1,0 +1,16 @@
+commit 3e9e53be3358f6f2849a4f02044a1fd809240cbb dirty=0 start 2026-09-28T21:54:37-05:00
+R3 test-r3 rc=0 secs=4
+R7 test-r7 rc=0 secs=1
+R8 test-r8 rc=0 secs=1
+R9 test-r9 rc=0 secs=4
+R10 test-r10 rc=0 secs=3
+R11 test-r11 rc=0 secs=3
+R12_host test-r12 rc=0 secs=1
+R13_host test-r13-host rc=0 secs=16
+R14_host test-r14-host rc=0 secs=12
+R15_SEQ_parity_host test-r15-parity-host rc=0 secs=5
+R12_silicon test-r12-silicon rc=0 secs=17
+R13_silicon test-r13-silicon rc=0 secs=17
+R14_silicon test-r14-silicon rc=0 secs=51
+R15_SEQ_parity_silicon test-r15-parity-silicon rc=0 secs=24
+ALL-DONE 2026-09-28T21:57:16-05:00

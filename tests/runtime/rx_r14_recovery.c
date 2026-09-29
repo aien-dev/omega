@@ -351,7 +351,7 @@ static int start(Rig *r, const Opts *opt) {
     r->opt = *opt;
     g_stage = 1;
     if (aienos_cap_start(&r->admin, &r->view) != 0) return -1;
-    if (rx_world_init_native(&r->w, r->view, 4, 1u << 18) != RX_OK) return -1;
+    if (rx_world_init_native(&r->w, r->view, 4, RX_CRUMBS_LONG_EPISODE) != RX_OK) return -1;
     r->w.external_subject = EXTERNAL;
     if (opt->gen_dir) {
         snprintf(r->generation_dir, sizeof r->generation_dir, "%s", opt->gen_dir);
@@ -809,9 +809,25 @@ static void account(Rig *r, Accounting *a) {
 static uint8_t *g_seen;
 static uint64_t *g_stack;
 #define CRUMBS (1u << 18)
+/* The visited set and stack grow with the causal log. */
+static uint64_t g_seen_cap;
+static int seen_fit(uint64_t n) {
+    if (n + 1 <= g_seen_cap) return 0;
+    uint64_t cap = g_seen_cap ? g_seen_cap : 1024;
+    while (cap < n + 1) cap *= 2;
+    uint8_t *s = realloc(g_seen, (size_t)cap);
+    if (!s) return -1;
+    g_seen = s;
+    uint64_t *k = realloc(g_stack, sizeof(uint64_t) * (size_t)cap);
+    if (!k) return -1;
+    g_stack = k;
+    g_seen_cap = cap;
+    return 0;
+}
 static int ancestor(RxWorld *w, uint64_t node, uint64_t wanted) {
     if (!node || !wanted || wanted > node || node > w->n_crumbs) return 0;
     if (node == wanted) return 1;
+    if (seen_fit(w->n_crumbs) != 0) return 0;
     memset(g_seen, 0, (size_t)w->n_crumbs + 1);
     uint64_t sp = 0;
     g_stack[sp++] = node;
@@ -2577,9 +2593,7 @@ static int receipt(int tests_ok) {
 int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     setvbuf(stdout, NULL, _IONBF, 0);
-    g_seen = malloc(CRUMBS + 1);
-    g_stack = malloc(sizeof(uint64_t) * (CRUMBS + 1));
-    if (!g_seen || !g_stack) return 1;
+    if (seen_fit(CRUMBS) != 0) return 1;
     const char *only = argc > 1 ? argv[1] : NULL;
     /* F first: its processes are forked before this one ever opens the GPU. */
     if (!only || strchr(only, 'F')) scenario_f();

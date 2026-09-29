@@ -7,6 +7,14 @@
 #define RX_SEAT_HB_HOLD  8u    /* processor writes nonzero: seat holds its claim */
 #define RX_SEAT_HB_HELD  12u   /* seat writes claim sequence + 1 before the hold */
 #define RX_SEAT_HB_LIVE  16u   /* seat writes a moving count on every pass */
+/* R15 timing words, written by the seat for the claim it is serving. */
+#define RX_SEAT_HB_T_PICK 20u  /* chip %globaltimer (low 32 bits, ns) at pickup */
+#define RX_SEAT_HB_T_DONE 24u  /* chip %globaltimer when the result is written */
+#define RX_SEAT_HB_CLAIM  28u  /* ring index of the claim those stamps belong to */
+#define RX_SEAT_HB_LEASE  32u  /* processor bumps it while its process lives */
+#define RX_SEAT_HB_BUDGET 36u  /* passes the seat waits for a new lease */
+/* A lease value that asks the seat to leave at once. */
+#define RX_SEAT_LEASE_QUIT 0xffffffffu
 
 /* One persistent graphics seat on the world's existing image.
  * A null out and a nonzero return means the chip was not started.

@@ -1,0 +1,11 @@
+*.o
+*.ko
+*.mod
+*.mod.c
+.*.cmd
+Module.symvers
+modules.order
+contract_test
+sample
+load
+reduce
