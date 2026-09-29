@@ -882,3 +882,30 @@ $(ARGUS_REPLAY): tools/argus_replay.c src/sha256.c $(ARGUS_STAMP) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -I$(ARGUS_SRC) -o $@ tools/argus_replay.c src/sha256.c $(ARGUS_LIB_SRCS)
 .PHONY: argus-replay
 argus-replay: $(ARGUS_REPLAY)
+
+# ---------------------------------------------------------------------------
+# OMEGA MIXED ALGEBRA (spec/mixed-algebra-reference.md): correctness-first CPU
+# reference ("parity oracle") for balanced trits, Z3, packing and absmean
+# quantization. Plain C11, no runtime or physics dependencies.
+# test-algebra-asan reruns the same suite under address+undefined sanitizers.
+.PHONY: test-algebra test-algebra-asan
+OMA_CFLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 -Isrc
+OMA_SRCS = src/algebra/oma_trit.c src/algebra/oma_z3.c src/algebra/oma_pack.c src/algebra/oma_quant.c
+OMA_HDRS = src/algebra/oma_trit.h src/algebra/oma_z3.h src/algebra/oma_pack.h src/algebra/oma_quant.h
+OMA_TEST = $(OUT_DIR)/tests-algebra/test_oma
+OMA_TEST_ASAN = $(OUT_DIR)/tests-algebra/test_oma_asan
+
+$(OMA_TEST): tests/algebra/test_oma.c $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_CFLAGS) -o $@ tests/algebra/test_oma.c $(OMA_SRCS) -lm
+
+$(OMA_TEST_ASAN): tests/algebra/test_oma.c $(OMA_SRCS) $(OMA_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		-o $@ tests/algebra/test_oma.c $(OMA_SRCS) -lm
+
+test-algebra: $(OMA_TEST)
+	./$(OMA_TEST)
+
+test-algebra-asan: $(OMA_TEST_ASAN)
+	./$(OMA_TEST_ASAN)
