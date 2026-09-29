@@ -86,6 +86,28 @@ int omx_mojo_null_run(const oma_rz_plan *p, const int8_t *x, int32_t *y) {
     return (int)omx_mj_null(p->mem, (int64_t)p->m, (int64_t)p->n, x, y);
 }
 
+/* Code facts for the bench (review G-B2): the realization is the C adapter
+ * plus the Mojo kernels it calls (the kernels call nothing but memset). */
+#define OMX_FN(f) ((void (*)(void))(f))
+static void code_i8(omx_code_desc *d) {
+    memset(d, 0, sizeof *d);
+    d->part[0] = (omx_code_part){"run_i8 (C adapter)", OMX_FN(run_i8), 0};
+    d->part[1] = (omx_code_part){"omx_mj_i8_run (Mojo)", OMX_FN(omx_mj_i8_run), 0};
+    d->part[2] = (omx_code_part){"pack_i8 (C adapter)", OMX_FN(pack_i8), 0};
+    d->part[3] = (omx_code_part){"omx_mj_i8_pack (Mojo)", OMX_FN(omx_mj_i8_pack), 0};
+    d->nparts = 4;
+    d->rule = "C adapter run + pack and the Mojo kernels they call (symbol sizes)";
+}
+static void code_crumb(omx_code_desc *d) {
+    memset(d, 0, sizeof *d);
+    d->part[0] = (omx_code_part){"run_crumb (C adapter)", OMX_FN(run_crumb), 0};
+    d->part[1] = (omx_code_part){"omx_mj_crumb_run (Mojo)", OMX_FN(omx_mj_crumb_run), 0};
+    d->part[2] = (omx_code_part){"pack_crumb (C adapter)", OMX_FN(pack_crumb), 0};
+    d->part[3] = (omx_code_part){"omx_mj_crumb_pack (Mojo)", OMX_FN(omx_mj_crumb_pack), 0};
+    d->nparts = 4;
+    d->rule = "C adapter run + pack and the Mojo kernels they call (symbol sizes)";
+}
+
 static const oma_rz_impl omx_mojo_i8 = {
     "MJ1_sdot", "Mojo 1.0: int8 W row-major, SDOT 4 rows x 64 B, 8 accumulators", "binary", 1, 0,
     OMA_RZ_MAX_N, pack_i8, run_i8};
@@ -94,7 +116,7 @@ static const oma_rz_impl omx_mojo_crumb = {
     OMA_RZ_MAX_N, pack_crumb, run_crumb};
 
 const omx_candidate omx_lane_mojo[] = {
-    {&omx_mojo_i8, "mojo", "mojo 1.0.0", 0, 0, "polyglot/mojo/omx_mojo.mojo"},
-    {&omx_mojo_crumb, "mojo", "mojo 1.0.0", 0, 0, "polyglot/mojo/omx_mojo.mojo"},
+    {&omx_mojo_i8, "mojo", "mojo 1.0.0", 0, 0, "polyglot/mojo/omx_mojo.mojo", code_i8},
+    {&omx_mojo_crumb, "mojo", "mojo 1.0.0", 0, 0, "polyglot/mojo/omx_mojo.mojo", code_crumb},
 };
 const size_t omx_lane_mojo_count = sizeof omx_lane_mojo / sizeof omx_lane_mojo[0];

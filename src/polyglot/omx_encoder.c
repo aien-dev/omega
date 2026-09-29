@@ -773,6 +773,31 @@ static int pack_crumb(oma_rz_plan *p, const int8_t *w, size_t m, size_t n) {
     return OMA_RZ_OK;
 }
 
+/* Code facts for the bench (review G-B2): the run thunk, the instruction
+ * bytes Omega's encoder emitted (not in any symbol table), and the C pack.
+ * The sdot tail mask (32 data bytes after the code) is not counted, like
+ * B1's .rodata. Build time is one fresh emission, not a compiler run. */
+#define OMX_FN(f) ((void (*)(void))(f))
+static int emit_sdot_ns(double *ns) { return omx_encoder_emit_ns(OMX_ENC_SDOT, ns, NULL); }
+static int emit_crumb_ns(double *ns) { return omx_encoder_emit_ns(OMX_ENC_CRUMB, ns, NULL); }
+static void code_desc(omx_code_desc *d, int k) {
+    memset(d, 0, sizeof *d);
+    size_t bytes = 0;
+    omx_encoder_code(k, &bytes);
+    int s = k == OMX_ENC_SDOT;
+    d->part[0] = (omx_code_part){s ? "enc_sdot_run (C thunk)" : "enc_crumb_run (C thunk)",
+                                 s ? OMX_FN(enc_sdot_run) : OMX_FN(enc_crumb_run), 0};
+    d->part[1] = (omx_code_part){"emitted kernel instructions (W^X mapping)", NULL, bytes};
+    d->part[2] = (omx_code_part){s ? "pack_sdot (C)" : "pack_crumb (C)", s ? OMX_FN(pack_sdot) : OMX_FN(pack_crumb), 0};
+    d->nparts = 3;
+    d->rule = "C run thunk + bytes of the kernel emitted by Omega's encoder + C pack";
+    d->build_ns = s ? emit_sdot_ns : emit_crumb_ns;
+    d->build_what = "one fresh kernel emission by Omega's encoder: sizing build, mmap RW, final build, write, "
+                    "mprotect RX, cache flush";
+}
+static void code_sdot(omx_code_desc *d) { code_desc(d, OMX_ENC_SDOT); }
+static void code_crumb(omx_code_desc *d) { code_desc(d, OMX_ENC_CRUMB); }
+
 const oma_rz_impl omx_rz_enc_sdot = {
     "enc_sdot", "int8 W row-major, B1 SDOT kernel emitted by Omega's own AArch64 encoder", "binary", 1, 0,
     OMA_RZ_MAX_N, pack_sdot, enc_sdot_run};
@@ -782,8 +807,8 @@ const oma_rz_impl omx_rz_enc_crumb = {
 
 const omx_candidate omx_lane_encoder[] = {
     {&omx_rz_enc_sdot, "omega-encoder", "omega aarch64_encoder + omx_encoder_ext (W^X mmap)", 0, 1,
-     "src/polyglot/omx_encoder.c"},
+     "src/polyglot/omx_encoder.c", code_sdot},
     {&omx_rz_enc_crumb, "omega-encoder", "omega aarch64_encoder + omx_encoder_ext (W^X mmap)", 0, 1,
-     "src/polyglot/omx_encoder.c"},
+     "src/polyglot/omx_encoder.c", code_crumb},
 };
 const size_t omx_lane_encoder_count = sizeof omx_lane_encoder / sizeof omx_lane_encoder[0];

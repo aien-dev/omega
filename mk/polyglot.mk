@@ -30,7 +30,8 @@
 # Lists here are de-duplicated with $(sort), so a double += is harmless.
 #
 # Targets:
-#   test-polyglot       verifier, plain and ASan+UBSan builds (correctness only)
+#   test-polyglot       verifier, plain and ASan+UBSan builds (correctness only),
+#                       then bench_polyglot --selftest (harness checks, no timing)
 #   bench-polyglot      timed benchmark (lane F / lead only; refuses when
 #                       ~/workspace/.spark-quiet exists); receipts to
 #                       $(POLYGLOT_EVIDENCE). Args via POLYGLOT_BENCH_ARGS.
@@ -153,9 +154,10 @@ $(PG_MANIFEST): $$(PG_PLAIN_OBJS) $$(MAKEFILE_LIST)
 		'$(MOJO) build --emit object -o @OUT@.o $(OMX_MOJO_SRC)' >> $@)
 
 # ---- targets ----
-test-polyglot: $(PG_VERIFY) $(PG_VERIFY_ASAN)
+test-polyglot: $(PG_VERIFY) $(PG_VERIFY_ASAN) $(PG_BENCH)
 	./$(PG_VERIFY)
 	./$(PG_VERIFY_ASAN)
+	./$(PG_BENCH) --selftest
 
 PG_BENCH_ENV = POLYGLOT_COMMIT=$$(git rev-parse HEAD) \
 	POLYGLOT_DIRTY=$$(git status --porcelain -- src tests mk Makefile spec | grep -c .) \

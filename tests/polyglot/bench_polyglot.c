@@ -6,22 +6,35 @@
  *   - one pinned core (sched_setaffinity), cluster from MIDR (X925/A725);
  *   - candidates interleaved round-robin (A B C A B C), N samples per cell
  *     (N >= 20 unless --smoke);
- *   - a sample loops enough calls to last >= 1 ms (calibrated per candidate
- *     and cell) and sums every y into a checksum that is compared with the
- *     checksum predicted by the oracle, so no call can be hoisted or skipped;
+ *   - a sample loops enough calls to last >= 1 ms: calibrated per candidate
+ *     and cell by doubling the call count until one whole sample lasts
+ *     >= 1.25 ms; a timed sample shorter than 1 ms is re-taken with twice
+ *     the calls (kept only after 20 retakes, and counted); receipts record
+ *     short samples retaken/kept and the shortest kept sample;
+ *   - before every call one byte of that call's x is flipped in place at a
+ *     column with non-zero column sum, and every y is summed into a checksum
+ *     compared with the prediction that follows the flips, so no call can be
+ *     hoisted, skipped or answered from a result cache;
  *   - a sample whose /proc/thread-self/schedstat run delay grew is re-taken
  *     (up to 20 times; then kept and counted as contaminated);
  *   - min, median and MAD of ns per call;
  *   - pack cost (min/median of 5 packs) per weight and break-even calls
  *     against the cheapest-to-pack exact candidate of the cell;
- *   - after timing: compile time (min of 5 wall runs of the manifest command),
- *     object SHA-256 and text bytes, run+pack symbol bytes, peak RSS.
+ *   - after timing, with the original CPU affinity restored (compilers are
+ *     not pinned to the timing core): compile time (min of 5 wall runs of the
+ *     manifest command; for a candidate with an in-process build, e.g. the
+ *     own encoder, min of 5 in-process builds instead), object SHA-256 and
+ *     text bytes, code size (run + pack symbols, or the candidate's named
+ *     code parts: Mojo kernels behind the C adapter, encoder-emitted bytes),
+ *     peak RSS.
  * One JSON receipt per candidate x workload (the three sparsities are cells
  * inside it) under --out. Refuses to run if ~/workspace/.spark-quiet exists.
  *
  * Usage: bench_polyglot --spec spec/polyglot-0.md --manifest M --out DIR
  *        [--samples N] [--sparsity 0,0.33,0.66] [--workloads S1,S2,S3,S4]
  *        [--cpu C] [--smoke]
+ *        bench_polyglot --selftest   (harness self-test, no timing; part of
+ *        make test-polyglot)
  * Environment (set by mk/polyglot.mk): POLYGLOT_COMMIT, POLYGLOT_DIRTY,
  * POLYGLOT_BENCH_SHA, POLYGLOT_CFLAGS_O2, POLYGLOT_CFLAGS_O3, POLYGLOT_CFLAGS_LANE,
  * POLYGLOT_BENCH_CPU.
@@ -90,6 +103,8 @@ typedef struct {
     double *s;         /* ns per call, one per sample */
     int ns;
     unsigned retakes, contaminated;
+    unsigned short_retaken, short_kept; /* samples under MIN_SAMPLE_NS (review G-B1) */
+    double shortest_ns;                 /* shortest kept sample, ns */
     double lat_min, lat_med, lat_mad;
     size_t weight_bytes, footprint, scratch_bytes;
     uint64_t nnz;
@@ -104,6 +119,8 @@ static cell g_cell[MAXC][NW][NSP];
 static man_ent g_man[256];
 static size_t g_nman;
 static int g_cpu = -1, g_part = -1;
+static double g_build_s[MAXC];      /* in-process realization build time (s), -1: none */
+static char g_affinity_note[128];   /* CPU affinity the compile-time commands ran with */
 static volatile int64_t g_sink;
 
 static void die(const char *msg) {
@@ -173,28 +190,66 @@ static void make_inputs(const workload *w, double sp, int8_t *W, int8_t *X, char
     omx_hex(d, 32, hex);
 }
 
-/* One timed sample: reps calls cycling through the nx inputs, every y summed. */
-static double sample(const oma_rz_impl *im, const oma_rz_plan *p, const int8_t *X, size_t n, size_t nx,
-                     int32_t *y, size_t m, long reps, int64_t *sum, int *rc_out) {
+/* In-place x mutation (review G-S5). Before every call one byte of the x
+ * about to be used is flipped (x ^= 1, never overflows) at a column whose
+ * column sum over W is non-zero, so no two calls see the same x and a result
+ * cache keyed on anything short of the whole of x returns a y whose sum
+ * differs from the prediction. The prediction tracks sum_i y_i = dot(colsum, x)
+ * per x vector through every flip. State persists across samples and is
+ * shared by all candidates of a cell (they see the same x sequence). */
+typedef struct {
+    int8_t *X;              /* nx vectors of n bytes, mutated during timing */
+    size_t n, nx;
+    const int64_t *colsum;  /* sum_i W[i][j] */
+    const uint32_t *pos;    /* flip positions: columns with colsum != 0 */
+    size_t npos;
+    int64_t *dot;           /* per vector: current dot(colsum, x_k) = sum of its y */
+    uint64_t tick;          /* flips done so far */
+} xstate;
+
+/* Expected checksum of the next `reps` calls; advances dot, leaves X as is. */
+static int64_t x_predict(xstate *st, long reps) {
+    int64_t e = 0;
+    size_t xi = 0, pi = (size_t)(st->tick % st->npos);
+    for (long k = 0; k < reps; k++) {
+        int8_t *b = st->X + xi * st->n + st->pos[pi];
+        int8_t old = *b, nw = (int8_t)(old ^ 1);
+        *b = nw;
+        st->dot[xi] += st->colsum[st->pos[pi]] * (int64_t)(nw - old);
+        e += st->dot[xi];
+        if (++pi == st->npos) pi = 0;
+        if (++xi == st->nx) xi = 0;
+    }
+    for (long k = reps - 1; k >= 0; k--) /* undo, newest first */
+        st->X[(size_t)k % st->nx * st->n + st->pos[(size_t)((st->tick + (uint64_t)k) % st->npos)]] ^= 1;
+    return e;
+}
+
+/* One timed sample: reps calls cycling through the nx inputs, one flip of x
+ * before each call, every y summed. *ok = checksum matches the prediction
+ * and every rc was OMA_RZ_OK. */
+static double sample(const oma_rz_impl *im, const oma_rz_plan *p, xstate *st, int32_t *y, size_t m, long reps,
+                     int *ok) {
+    int64_t want = x_predict(st, reps);
     int64_t s = 0;
     int rc = 0;
-    size_t xi = 0;
+    size_t xi = 0, pi = (size_t)(st->tick % st->npos), n = st->n, nx = st->nx, npos = st->npos;
+    int8_t *X = st->X;
+    const uint32_t *pos = st->pos;
     double t0 = omx_now_ns();
     for (long k = 0; k < reps; k++) {
-        rc |= im->run(p, X + xi * n, y);
+        int8_t *xp = X + xi * n;
+        xp[pos[pi]] ^= 1;
+        if (++pi == npos) pi = 0;
+        rc |= im->run(p, xp, y);
         for (size_t i = 0; i < m; i++) s += y[i];
         if (++xi == nx) xi = 0;
     }
     double t1 = omx_now_ns();
-    *sum = s;
-    *rc_out = rc;
+    st->tick += (uint64_t)reps;
+    *ok = rc == 0 && s == want;
     g_sink += s;
     return t1 - t0;
-}
-
-static int64_t expected_sum(const int64_t *ysum_prefix, size_t nx, long reps) {
-    long full = reps / (long)nx, rem = reps % (long)nx;
-    return (int64_t)full * ysum_prefix[nx] + ysum_prefix[rem];
 }
 
 static int parse_list_d(const char *s, double *out, int cap) {
@@ -377,6 +432,9 @@ static int write_receipt(const char *dir, const omx_candidate *c, int wi, const 
     fprintf(f, "},\n  \"workload\": {\"id\": \"%s\", \"m\": %zu, \"n\": %zu, \"x_per_packed_w\": %zu, \"regime\": ",
             w->id, w->m, w->n, w->nx);
     omx_json_str(f, w->regime);
+    fprintf(f, ", \"x_mutation\": \"before every timed call one byte of that call's x is flipped in place (x ^= 1) at a "
+               "column with non-zero column sum; the checksum prediction follows every flip, so no call sees the "
+               "x of the call before it and cached results fail the checksum\"");
     fprintf(f, "},\n  \"machine\": {\"cpu_model\": ");
     omx_json_str(f, ri->model);
     fprintf(f, ", \"core\": %d, \"core_type\": \"%s\", \"cluster\": \"%s\", \"midr_part\": \"0x%03x\", "
@@ -392,6 +450,31 @@ static int write_receipt(const char *dir, const omx_candidate *c, int wi, const 
     fprintf(f, ", \"thermal_c_after\": ");
     print_thermal(f, ri->th1, ri->nth1);
     fprintf(f, ", \"loadavg_before\": \"%s\", \"loadavg_after\": \"%s\"},\n", ri->load0, ri->load1);
+    /* code size (review G-B2): a candidate that names its code parts (Mojo
+     * kernels behind a C adapter, encoder-emitted bytes behind a thunk) is
+     * counted by those parts; otherwise run + pack symbol sizes. A part whose
+     * size cannot be found makes code_size_bytes null, never a partial sum. */
+    size_t ci = 0;
+    for (; ci < g_nc; ci++)
+        if (omx_candidate_get(ci) == c) break;
+    omx_code_desc cd;
+    memset(&cd, 0, sizeof cd);
+    if (c->code) c->code(&cd);
+    size_t code_total = 0;
+    int code_known = 1;
+    size_t part_bytes[OMX_CODE_PARTS_MAX] = {0};
+    if (c->code) {
+        for (size_t k = 0; k < cd.nparts && k < OMX_CODE_PARTS_MAX; k++) {
+            part_bytes[k] = cd.part[k].fn ? omx_self_symbol_size((const void *)(uintptr_t)cd.part[k].fn, NULL, 0)
+                                          : cd.part[k].bytes;
+            if (part_bytes[k] == 0) code_known = 0;
+            code_total += part_bytes[k];
+        }
+        if (cd.nparts == 0) code_known = 0;
+    } else {
+        code_total = zr + zp;
+        code_known = zr && zp;
+    }
     fprintf(f, "  \"build\": {\"object\": ");
     omx_json_str(f, e ? e->obj : NULL);
     fprintf(f, ", \"object_sha256\": ");
@@ -400,23 +483,55 @@ static int write_receipt(const char *dir, const omx_candidate *c, int wi, const 
     omx_json_str(f, zr ? sym_run : NULL);
     fprintf(f, ", \"run_symbol_bytes\": %zu, \"pack_symbol\": ", zr);
     omx_json_str(f, zp ? sym_pack : NULL);
-    fprintf(f, ", \"pack_symbol_bytes\": %zu, \"code_size_bytes\": %zu, \"code_size_rule\": "
-               "\"run + pack function symbol sizes in the bench executable (callees not inlined are "
-               "not counted; object_text_bytes is the whole object)\", \"compile_time_s_min_of_5\": ",
-            zp, zr + zp);
-    if (e && e->ctime_min_s >= 0) json_num(f, e->ctime_min_s, 4);
+    fprintf(f, ", \"pack_symbol_bytes\": %zu, \"code_size_bytes\": ", zp);
+    if (code_known) fprintf(f, "%zu", code_total);
     else fputs("null", f);
-    fprintf(f, ", \"compile_command\": ");
-    omx_json_str(f, e ? e->cmd : NULL);
-    fprintf(f, ", \"compile_note\": ");
-    omx_json_str(f, !e ? "no manifest entry for this candidate's source" :
-                    e->ctime_min_s < 0 ? "not measured (no command, or command failed)" :
-                    "wall time, 5 runs, min; the object may hold several realizations");
+    fprintf(f, ", \"code_parts\": [");
+    if (c->code)
+        for (size_t k = 0; k < cd.nparts && k < OMX_CODE_PARTS_MAX; k++) {
+            fprintf(f, "%s{\"part\": ", k ? ", " : "");
+            omx_json_str(f, cd.part[k].name);
+            fprintf(f, ", \"bytes\": %zu}", part_bytes[k]);
+        }
+    else {
+        fprintf(f, "{\"part\": ");
+        omx_json_str(f, zr ? sym_run : "run");
+        fprintf(f, ", \"bytes\": %zu}, {\"part\": ", zr);
+        omx_json_str(f, zp ? sym_pack : "pack");
+        fprintf(f, ", \"bytes\": %zu}", zp);
+    }
+    fprintf(f, "], \"code_size_rule\": ");
+    omx_json_str(f, c->code ? cd.rule
+                            : "run + pack function symbol sizes in the bench executable (callees not inlined are "
+                              "not counted; object_text_bytes is the whole object)");
+    fprintf(f, ", \"compile_time_s_min_of_5\": ");
+    double bt = g_build_s[ci];
+    if (cd.build_ns) {
+        if (bt >= 0) json_num(f, bt, 6);
+        else fputs("null", f);
+        fprintf(f, ", \"compile_command\": ");
+        omx_json_str(f, "in-process (no compiler)");
+        fprintf(f, ", \"compile_note\": ");
+        char note[512];
+        snprintf(note, sizeof note, "%s; min of 5 in-process runs%s; the gcc compile of the C source is not this "
+                                    "realization's build",
+                 cd.build_what ? cd.build_what : "realization build", bt >= 0 ? "" : " (failed)");
+        omx_json_str(f, note);
+    } else {
+        if (e && e->ctime_min_s >= 0) json_num(f, e->ctime_min_s, 4);
+        else fputs("null", f);
+        fprintf(f, ", \"compile_command\": ");
+        omx_json_str(f, e ? e->cmd : NULL);
+        fprintf(f, ", \"compile_note\": ");
+        char note[512];
+        snprintf(note, sizeof note,
+                 "wall time, 5 runs, min; the object may hold several realizations; compiler run with %s",
+                 g_affinity_note);
+        omx_json_str(f, !e ? "no manifest entry for this candidate's source" :
+                        e->ctime_min_s < 0 ? "not measured (no command, or command failed)" : note);
+    }
     fprintf(f, "},\n  \"cells\": [\n");
     int first = 1;
-    size_t ci = 0;
-    for (; ci < g_nc; ci++)
-        if (omx_candidate_get(ci) == c) break;
     for (int si = 0; si < NSP; si++) {
         cell *ce = &g_cell[ci][wi][si];
         if (!ce->present) continue;
@@ -436,8 +551,10 @@ static int write_receipt(const char *dir, const omx_candidate *c, int wi, const 
         size_t bytes = ce->weight_bytes + w->n + 4 * w->m + ce->scratch_bytes;
         double cps = 1e9 / ce->lat_med;
         fprintf(f, "     \"calls_per_sample\": %ld, \"samples\": %d, \"retaken_samples\": %u, "
-                   "\"contaminated_samples\": %u, \"cur_khz_at_cell_start\": %ld,\n",
-                ce->reps, ce->ns, ce->retakes, ce->contaminated, ce->cur_khz);
+                   "\"contaminated_samples\": %u, \"short_samples_retaken\": %u, \"short_samples_kept\": %u, "
+                   "\"shortest_sample_ns\": %.0f, \"cur_khz_at_cell_start\": %ld,\n",
+                ce->reps, ce->ns, ce->retakes, ce->contaminated, ce->short_retaken, ce->short_kept, ce->shortest_ns,
+                ce->cur_khz);
         fprintf(f, "     \"latency_ns\": {\"min\": %.3f, \"median\": %.3f, \"mad\": %.3f},\n", ce->lat_min,
                 ce->lat_med, ce->lat_mad);
         fprintf(f, "     \"samples_ns_per_call\": [");
@@ -476,9 +593,135 @@ static int write_receipt(const char *dir, const omx_candidate *c, int wi, const 
     return 0;
 }
 
+/* ---- self-test (no timing; run by make test-polyglot) ----
+ * Checks the harness itself: the checksum prediction through the in-place x
+ * flips (every candidate, several shapes, nx = 1 and nx > 1), the x state
+ * after the flips against the oracle, a deliberately memoising candidate
+ * being caught by the checksum (review G-S5), and every candidate's code
+ * parts having a known non-zero size (review G-B2). */
+static const oma_rz_impl *g_memo_base;
+static struct { const int8_t *x; int8_t x16[16]; int32_t y[64]; size_t m; int valid; } g_memo;
+static int memo_run(const oma_rz_plan *p, const int8_t *x, int32_t *y) {
+    size_t k = p->n < 16 ? p->n : 16;
+    if (g_memo.valid && g_memo.x == x && g_memo.m == p->m && !memcmp(g_memo.x16, x, k)) {
+        memcpy(y, g_memo.y, p->m * sizeof *y);
+        return 0;
+    }
+    int rc = g_memo_base->run(p, x, y);
+    if (!rc && p->m <= 64) {
+        g_memo.x = x;
+        memcpy(g_memo.x16, x, k);
+        memcpy(g_memo.y, y, p->m * sizeof *y);
+        g_memo.m = p->m;
+        g_memo.valid = 1;
+    }
+    return rc;
+}
+
+static int selftest(void) {
+    static const size_t shp[][3] = {{3, 100, 1}, {5, 70, 4}, {1, 4096, 1}, {17, 129, 3}};
+    unsigned long long checks = 0, fails = 0;
+    omx_rng r = {SEED};
+    g_memo_base = &oma_rz_r1_sdot;
+    oma_rz_impl memo = oma_rz_r1_sdot;
+    memo.id = "selftest_memo";
+    memo.run = memo_run;
+    for (size_t s = 0; s < sizeof shp / sizeof shp[0]; s++) {
+        size_t m = shp[s][0], n = shp[s][1], nx = shp[s][2];
+        int8_t *W = malloc(m * n), *X = malloc(n * nx);
+        int32_t *y = malloc(m * sizeof *y), *yr = malloc(m * sizeof *yr);
+        int64_t *colsum = calloc(n, sizeof *colsum), *dot = calloc(nx, sizeof *dot);
+        uint32_t *pos = malloc(n * sizeof *pos);
+        if (!W || !X || !y || !yr || !colsum || !dot || !pos) die("out of memory");
+        for (size_t i = 0; i < m * n; i++) W[i] = omx_rng_01(&r) < 0.33 ? 0 : ((omx_rng_next(&r) & 1) ? 1 : -1);
+        for (size_t i = 0; i < n * nx; i++) X[i] = (int8_t)(uint8_t)omx_rng_next(&r);
+        for (size_t i = 0; i < m; i++)
+            for (size_t j = 0; j < n; j++) colsum[j] += W[i * n + j];
+        size_t npos = 0;
+        for (size_t j = 0; j < n; j++)
+            if (colsum[j]) pos[npos++] = (uint32_t)j;
+        if (npos == 0)
+            for (size_t j = 0; j < n; j++) pos[npos++] = (uint32_t)j;
+        for (size_t k = 0; k < nx; k++) {
+            if (oma_rz_oracle(W, m, n, X + k * n, yr)) die("oracle failed");
+            for (size_t i = 0; i < m; i++) dot[k] += yr[i];
+        }
+        xstate xs = {X, n, nx, colsum, pos, npos, dot, 0};
+        for (size_t ci = 0; ci <= g_nc; ci++) {
+            const omx_candidate *c = ci < g_nc ? omx_candidate_get(ci) : NULL;
+            const oma_rz_impl *im = c ? c->impl : &memo;
+            if (n > im->max_n) continue;
+            oma_rz_plan p;
+            memset(&p, 0, sizeof p);
+            if (im->pack(&p, W, m, n)) { fails++; checks++; continue; }
+            int all_ok = 1;
+            memset(&g_memo, 0, sizeof g_memo);
+            for (int rep = 0; rep < 4; rep++) {
+                int ok;
+                sample(im, &p, &xs, y, m, 1 + 17 * rep, &ok);
+                all_ok &= ok;
+            }
+            checks++;
+            if (c && !all_ok) {
+                fails++;
+                fprintf(stderr, "selftest FAIL: %s checksum mismatch at %zux%zu nx=%zu\n", im->id, m, n, nx);
+            }
+            if (!c && nx == 1 && all_ok) { /* one-entry cache: only same-pointer calls can hit */
+                fails++;
+                fprintf(stderr, "selftest FAIL: memoising candidate not caught at %zux%zu nx=%zu\n", m, n, nx);
+            }
+            if (c && s == 0) { /* code parts */
+                omx_code_desc cd;
+                memset(&cd, 0, sizeof cd);
+                size_t tot = 0;
+                int known = 1;
+                if (c->code) {
+                    c->code(&cd);
+                    known = cd.nparts > 0 && cd.nparts <= OMX_CODE_PARTS_MAX && cd.rule;
+                    for (size_t k = 0; k < cd.nparts && k < OMX_CODE_PARTS_MAX; k++) {
+                        size_t b = cd.part[k].fn ? omx_self_symbol_size((const void *)(uintptr_t)cd.part[k].fn, NULL, 0)
+                                                 : cd.part[k].bytes;
+                        known &= b > 0;
+                        tot += b;
+                    }
+                    double ns;
+                    if (cd.build_ns && (cd.build_ns(&ns) || !(ns > 0))) known = 0;
+                } else {
+                    size_t a = omx_self_symbol_size((const void *)(uintptr_t)im->run, NULL, 0);
+                    size_t b = omx_self_symbol_size((const void *)(uintptr_t)im->pack, NULL, 0);
+                    known = a && b;
+                    tot = a + b;
+                }
+                checks++;
+                if (!known) {
+                    fails++;
+                    fprintf(stderr, "selftest FAIL: %s code size not known\n", im->id);
+                }
+                printf("  selftest %-16s code_size_bytes %zu%s\n", im->id, tot, c->code ? " (named parts)" : "");
+            }
+            oma_rz_free(&p);
+        }
+        /* x state after all flips: dot must equal the oracle's sum of y */
+        for (size_t k = 0; k < nx; k++) {
+            if (oma_rz_oracle(W, m, n, X + k * n, yr)) die("oracle failed");
+            int64_t t = 0;
+            for (size_t i = 0; i < m; i++) t += yr[i];
+            checks++;
+            if (t != dot[k]) {
+                fails++;
+                fprintf(stderr, "selftest FAIL: x state drifted from prediction (%zux%zu vector %zu)\n", m, n, k);
+            }
+        }
+        free(W); free(X); free(y); free(yr); free(colsum); free(dot); free(pos);
+    }
+    printf("bench_polyglot selftest %s: %llu checks, %llu failures (%zu candidates + 1 memoising control, "
+           "no timing)\n", fails ? "FAIL" : "PASS", checks, fails, g_nc);
+    return fails ? 1 : 0;
+}
+
 int main(int argc, char **argv) {
     const char *spec = NULL, *manifest = NULL, *out = NULL;
-    int samples = 21, smoke = 0, cpu_arg = -1;
+    int samples = 21, smoke = 0, cpu_arg = -1, selftest_only = 0;
     double sps[NSP] = {0.0, 0.33, 0.66};
     int nsp = NSP;
     int wsel[NW] = {1, 1, 1, 1};
@@ -489,6 +732,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "--samples") && i + 1 < argc) samples = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--cpu") && i + 1 < argc) cpu_arg = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--smoke")) smoke = 1;
+        else if (!strcmp(argv[i], "--selftest")) selftest_only = 1;
         else if (!strcmp(argv[i], "--sparsity") && i + 1 < argc) {
             nsp = parse_list_d(argv[++i], sps, NSP);
             if (nsp <= 0) die("bad --sparsity");
@@ -500,6 +744,11 @@ int main(int argc, char **argv) {
                             "[--workloads S1,S2] [--cpu C] [--smoke]\n", argv[0]);
             return 2;
         }
+    }
+    if (selftest_only) {
+        g_nc = omx_candidate_count();
+        if (g_nc == 0 || g_nc > MAXC) die("candidate count out of range");
+        return selftest();
     }
     if (!spec || !manifest || !out) die("--spec, --manifest and --out are required");
     if (samples < 1 || samples > 1000) die("--samples out of range");
@@ -543,7 +792,9 @@ int main(int argc, char **argv) {
         if (g_cpu < 0) g_cpu = 0;
         snprintf(ri.cpu_why, sizeof ri.cpu_why, "most idle Cortex-X925 over 0.3 s (%.0f%% idle)", ri.idle_frac * 100);
     }
-    cpu_set_t set;
+    cpu_set_t set, orig_set;
+    CPU_ZERO(&orig_set);
+    if (sched_getaffinity(0, sizeof orig_set, &orig_set)) die("sched_getaffinity failed");
     CPU_ZERO(&set);
     CPU_SET(g_cpu, &set);
     if (sched_setaffinity(0, sizeof set, &set)) die("sched_setaffinity failed");
@@ -584,18 +835,28 @@ int main(int argc, char **argv) {
         size_t m = w->m, n = w->n, nx = w->nx;
         for (int si = 0; si < NSP; si++) {
             if (!spsel[si]) continue;
-            int8_t *W = malloc(m * n), *X = malloc(n * nx);
+            int8_t *W = malloc(m * n), *X = malloc(n * nx), *Xm = malloc(n * nx);
             int32_t *yref = malloc(m * nx * sizeof *yref), *y = malloc(m * sizeof *y);
-            int64_t *pref = calloc(nx + 1, sizeof *pref);
-            if (!W || !X || !yref || !y || !pref) die("out of memory");
+            int64_t *colsum = calloc(n, sizeof *colsum), *dot = calloc(nx, sizeof *dot);
+            uint32_t *pos = malloc(n * sizeof *pos);
+            if (!W || !X || !Xm || !yref || !y || !colsum || !dot || !pos) die("out of memory");
             char dig[65];
             make_inputs(w, k_sp[si], W, X, dig);
-            for (size_t k = 0; k < nx; k++) {
+            for (size_t k = 0; k < nx; k++)
                 if (oma_rz_oracle(W, m, n, X + k * n, yref + k * m)) die("oracle failed");
-                int64_t s = 0;
-                for (size_t i = 0; i < m; i++) s += yref[k * m + i];
-                pref[k + 1] = pref[k] + s;
-            }
+            /* x mutation state for the timed calls; X itself stays pristine
+             * for the correctness check of every candidate */
+            for (size_t i = 0; i < m; i++)
+                for (size_t j = 0; j < n; j++) colsum[j] += W[i * n + j];
+            size_t npos = 0;
+            for (size_t j = 0; j < n; j++)
+                if (colsum[j]) pos[npos++] = (uint32_t)j;
+            if (npos == 0)
+                for (size_t j = 0; j < n; j++) pos[npos++] = (uint32_t)j;
+            memcpy(Xm, X, n * nx);
+            for (size_t k = 0; k < nx; k++)
+                for (size_t i = 0; i < m; i++) dot[k] += yref[k * m + i];
+            xstate xs = {Xm, n, nx, colsum, pos, npos, dot, 0};
             long khz = omx_cpu_cur_khz(g_cpu);
             /* pack + verify + calibrate */
             for (size_t ci = 0; ci < g_nc; ci++) {
@@ -644,16 +905,20 @@ int main(int argc, char **argv) {
                              ce->failures, ce->checks);
                     continue;
                 }
-                /* calibrate: min of 3 single calls (after one warm call) */
-                int64_t s;
-                double one = 1e30;
-                sample(im, &ce->plan, X, n, nx, y, m, 1, &s, &rc);
-                for (int r = 0; r < 3; r++) {
-                    double t = sample(im, &ce->plan, X, n, nx, y, m, 1, &s, &rc);
-                    if (t < one) one = t;
+                /* calibrate (review G-B1): double the call count until one
+                 * whole sample lasts >= 1.25 x the minimum sample length, so
+                 * the clock reads are amortised over the same loop that is
+                 * timed later; every calibration sample is checksummed too. */
+                long reps = 1;
+                for (;;) {
+                    int ok;
+                    double t = sample(im, &ce->plan, &xs, y, m, reps, &ok);
+                    ce->checks++;
+                    if (!ok) ce->failures++;
+                    if (t >= MIN_SAMPLE_NS * 1.25 || reps >= (1L << 40)) break;
+                    reps *= 2;
                 }
-                ce->reps = (long)ceil(MIN_SAMPLE_NS * 1.25 / (one > 1 ? one : 1));
-                if (ce->reps < 1) ce->reps = 1;
+                ce->reps = reps;
                 ce->s = calloc((size_t)samples, sizeof *ce->s);
                 if (!ce->s) die("out of memory");
                 ce->measured = 1;
@@ -663,9 +928,10 @@ int main(int argc, char **argv) {
             for (size_t ci = 0; ci < g_nc; ci++) {
                 cell *ce = &g_cell[ci][wi][si];
                 if (!ce->measured) continue;
-                int64_t s;
-                int rc;
-                sample(omx_candidate_get(ci)->impl, &ce->plan, X, n, nx, y, m, ce->reps, &s, &rc);
+                int ok;
+                sample(omx_candidate_get(ci)->impl, &ce->plan, &xs, y, m, ce->reps, &ok);
+                ce->checks++;
+                if (!ok) ce->failures++;
             }
             for (int k = 0; k < samples; k++)
                 for (size_t ci = 0; ci < g_nc; ci++) {
@@ -673,19 +939,31 @@ int main(int argc, char **argv) {
                     if (!ce->measured) continue;
                     const oma_rz_impl *im = omx_candidate_get(ci)->impl;
                     double t = 0;
+                    long used = ce->reps;
                     for (int tries = 0;; tries++) {
-                        int64_t s;
-                        int rc;
+                        int ok;
+                        used = ce->reps;
                         uint64_t d0 = omx_run_delay_ns();
-                        t = sample(im, &ce->plan, X, n, nx, y, m, ce->reps, &s, &rc);
+                        t = sample(im, &ce->plan, &xs, y, m, used, &ok);
                         uint64_t d1 = omx_run_delay_ns();
                         ce->checks++;
-                        if (rc || s != expected_sum(pref, nx, ce->reps)) ce->failures++;
-                        if (d1 == d0) break;
-                        if (tries == MAX_RETAKE) { ce->contaminated++; break; }
-                        ce->retakes++;
+                        if (!ok) ce->failures++;
+                        /* a sample under the minimum length is never kept
+                         * while retakes remain: the call count is doubled
+                         * for it and every later sample (review G-B1) */
+                        int is_short = t < MIN_SAMPLE_NS;
+                        if (is_short) ce->reps *= 2;
+                        if (d1 == d0 && !is_short) break;
+                        if (tries == MAX_RETAKE) {
+                            if (d1 != d0) ce->contaminated++;
+                            if (is_short) ce->short_kept++;
+                            break;
+                        }
+                        if (is_short) ce->short_retaken++;
+                        else ce->retakes++;
                     }
-                    ce->s[ce->ns++] = t / (double)ce->reps;
+                    if (ce->ns == 0 || t < ce->shortest_ns) ce->shortest_ns = t;
+                    ce->s[ce->ns++] = t / (double)used;
                 }
             /* statistics, break-even; free plans */
             size_t cheapest = (size_t)-1;
@@ -729,7 +1007,7 @@ int main(int argc, char **argv) {
                            ce->skip);
             }
             fflush(stdout);
-            free(W); free(X); free(yref); free(y); free(pref);
+            free(W); free(X); free(Xm); free(yref); free(y); free(colsum); free(dot); free(pos);
         }
     }
     double t_end = omx_now_ns();
@@ -737,12 +1015,31 @@ int main(int argc, char **argv) {
     ri.khz1 = omx_cpu_cur_khz(g_cpu);
     omx_loadavg(ri.load1, sizeof ri.load1);
 
-    /* build facts, after timing */
+    /* build facts, after timing. The compile commands must not inherit the
+     * one-core timing pin (review G-S9: mojo build is multithreaded, gcc is
+     * not): the original affinity is restored first and recorded. */
+    if (sched_setaffinity(0, sizeof orig_set, &orig_set) == 0)
+        snprintf(g_affinity_note, sizeof g_affinity_note, "the bench's original CPU affinity (%d cpus), not the "
+                 "timing pin", CPU_COUNT(&orig_set));
+    else
+        snprintf(g_affinity_note, sizeof g_affinity_note, "the timing pin (cpu %d): restoring affinity failed", g_cpu);
     char tmpdir[] = "/tmp/polyglot-ctime-XXXXXX";
     if (!mkdtemp(tmpdir)) die("mkdtemp failed");
     for (size_t ci = 0; ci < g_nc; ci++) {
-        man_ent *e = man_for(omx_candidate_get(ci));
+        const omx_candidate *c = omx_candidate_get(ci);
+        man_ent *e = man_for(c);
         if (e) measure_build(e, tmpdir);
+        /* in-process realization build (own encoder: kernel emission) */
+        g_build_s[ci] = -1;
+        omx_code_desc cd;
+        memset(&cd, 0, sizeof cd);
+        if (c->code) c->code(&cd);
+        if (cd.build_ns)
+            for (int r = 0; r < COMPILE_REPS; r++) {
+                double ns;
+                if (cd.build_ns(&ns)) { g_build_s[ci] = -1; break; }
+                if (g_build_s[ci] < 0 || ns / 1e9 < g_build_s[ci]) g_build_s[ci] = ns / 1e9;
+            }
     }
     char rmo[600];
     snprintf(rmo, sizeof rmo, "%s/ctime.o", tmpdir);

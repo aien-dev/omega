@@ -93,7 +93,7 @@ const oma_rz_impl omx_rz_asm_crumb = {
     OMA_RZ_MAX_N, pack_crumb, omx_asm_crumb_run};
 
 const omx_candidate omx_lane_asm[] = {
-    {&omx_rz_asm_sdot, "asm-aarch64", "gnu-as 2.42", 0, 0, "src/polyglot/asm/omx_sdot.S"},
-    {&omx_rz_asm_crumb, "asm-aarch64", "gnu-as 2.42", 0, 0, "src/polyglot/asm/omx_crumb.S"},
+    {&omx_rz_asm_sdot, "asm-aarch64", "gnu-as 2.42", 0, 0, "src/polyglot/asm/omx_sdot.S", NULL},
+    {&omx_rz_asm_crumb, "asm-aarch64", "gnu-as 2.42", 0, 0, "src/polyglot/asm/omx_crumb.S", NULL},
 };
 const size_t omx_lane_asm_count = sizeof omx_lane_asm / sizeof omx_lane_asm[0];
