@@ -256,7 +256,9 @@ Where the overhead comes from:
 - a = 448 bits header (exact, counted) plus 64 bits constant margin
   (observed per-crumb constant part at most 43 bits).
 - b = 1.0e-3 bits per symbol, about 1.9x the largest observed magnitude
-  (5.4e-4).
+  (5.4e-4). Empirical for K = 9 and these models, not proven: adversarial
+  sequences can reach about 5.6e-3 (range, interval pinned near 2^24) and 2.8e-3
+  (rANS, f near M/2 with x near L) bits per symbol.
 - Every one of the 21 files and 3,894 crumbs fits. Closest per-crumb approach:
   32 bits inside the bound (N = 410). Closest per-file: 973 bits inside.
 - Observed maxima to record next to the bound: range file 1582 bits, rANS file
