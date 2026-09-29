@@ -21,6 +21,8 @@ on:
       - 'tests/program/**'
       - 'mk/program-id.mk'
       - '.github/workflows/rx-host.yml'
+      - 'aienos.lock'
+      - 'argus.lock'
   push:
     branches:
       - 'feat/rx-*'
@@ -43,6 +45,8 @@ on:
       - 'tests/program/**'
       - 'mk/program-id.mk'
       - '.github/workflows/rx-host.yml'
+      - 'aienos.lock'
+      - 'argus.lock'
 
 jobs:
   host-reference:

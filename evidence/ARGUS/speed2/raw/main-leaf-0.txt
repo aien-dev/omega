@@ -1,0 +1,578 @@
+0	cycles	58.675	TOTAL
+0	cycles	14.560	sha256_transform <- sha256_update
+0	cycles	6.447	__aarch64_swp4_rel <- lll_mutex_unlock_optimized
+0	cycles	4.605	[k] __lll_lock_wake <- lll_mutex_unlock_optimized
+0	cycles	4.567	__aarch64_cas4_acq <- lll_mutex_lock_optimized
+0	cycles	3.605	aienos_cap_validate <- t_slow_then_fast
+0	cycles	2.590	[k] __clone3 <- __spawnix
+0	cycles	2.163	[k] __memcpy_sve <- crumb_append
+0	cycles	1.740	[k] futex_wake <- ___pthread_cond_signal
+0	cycles	0.953	[k] futex_wait <- __lll_lock_wait
+0	cycles	0.897	___pthread_mutex_lock <- aienos_cap_validate
+0	cycles	0.877	t_slow_then_fast <- main
+0	cycles	0.873	[k] __clone3 <- __clone3_internal
+0	cycles	0.765	[k] __memset_zva64 <- env_start
+0	cycles	0.757	[k] __munmap <- rx_world_destroy
+0	cycles	0.682	rx_aegis_evaluate <- t_slow_then_fast
+0	cycles	0.645	__pthread_mutex_unlock_usercnt <- aienos_cap_validate
+0	cycles	0.590	[k] __munmap <- __spawnix
+0	cycles	0.557	[k] __mmap64 <- __mmap64
+0	cycles	0.458	[unknown] <- __kernel_clock_gettime
+0	cycles	0.383	[k] __wait4 <- main
+0	cycles	0.375	[k] __memset_zva64 <- rx_coherent_format
+0	cycles	0.318	__pthread_mutex_unlock_usercnt <- rx_world_publish_external
+0	cycles	0.310	sha256_update <- crumb_hash
+0	cycles	0.297	[k] __execve <- ?
+0	cycles	0.260	[k] __libc_open64 <- _IO_file_open
+0	cycles	0.247	__aarch64_swp4_acq <- __lll_lock_wait
+0	cycles	0.242	[k] __execve <- __execvpe_common
+0	cycles	0.242	__lll_lock_wake <- lll_mutex_unlock_optimized
+0	cycles	0.210	[k] futex_wait <- futex_wait_simple
+0	cycles	0.193	lll_mutex_lock_optimized <- ___pthread_mutex_lock
+0	cycles	0.188	[k] __libc_read <- __libc_read
+0	cycles	0.188	lll_mutex_unlock_optimized <- __pthread_mutex_unlock_usercnt
+0	cycles	0.188	sha256_update <- object_digest
+0	cycles	0.177	__memcpy_sve <- object_digest
+0	cycles	0.175	__memcpy_sve <- crumb_append
+0	cycles	0.172	[k] [unknown] <- ?
+0	cycles	0.168	[k] __close_nocancel <- _IO_new_file_close_it
+0	cycles	0.168	__memcpy_sve <- crumb_hash
+0	cycles	0.168	__memset_zva64 <- env_start
+0	cycles	0.163	propagate_inner.part.0 <- finish_writes
+0	cycles	0.138	__aarch64_cas4_acq <- __condvar_acquire_lock
+0	cycles	0.138	[k] __futex_abstimed_wait_common64 <- __futex_abstimed_wait_common
+0	cycles	0.128	charge <- try_admit
+0	cycles	0.125	__memcpy_sve <- sha256_final
+0	cycles	0.120	rx_world_validate_cap <- t_slow_then_fast
+0	cycles	0.117	___pthread_mutex_lock <- rx_world_publish_external
+0	cycles	0.107	[k] __munmap <- __libc_free
+0	cycles	0.107	___pthread_mutex_unlock <- aienos_cap_validate
+0	cycles	0.102	[k] __mprotect <- _dl_protect_relro
+0	cycles	0.098	[k] __spawnix <- __libc_start_call_main
+0	cycles	0.095	[k] t_slow_then_fast <- main
+0	cycles	0.095	__memset_zva64 <- init_common
+0	cycles	0.092	demand_inner <- propagate_inner.part.0
+0	cycles	0.090	futex_wake <- ___pthread_cond_signal
+0	cycles	0.090	sha256_final <- crumb_hash
+0	cycles	0.080	[k] __memset_generic <- rx_world_add_reaction
+0	cycles	0.075	futex_wait <- __lll_lock_wait
+0	cycles	0.072	aienos_cap_validate <- main
+0	cycles	0.072	[k] __wait4 <- _IO_new_proc_close
+0	cycles	0.072	rx_coherent_publish <- finish_writes
+0	cycles	0.068	sha256_final <- object_digest
+0	cycles	0.065	[k] elf_machine_rela_relative <- elf_dynamic_do_Rela
+0	cycles	0.065	[k] _start <- ?
+0	cycles	0.058	pthread_mutex_lock@plt <- aienos_cap_validate
+0	cycles	0.052	crumb_append <- rx_world_publish_external
+0	cycles	0.052	pthread_mutex_unlock@plt <- aienos_cap_validate
+0	cycles	0.050	[k] __libc_write <- __libc_write
+0	cycles	0.050	[k] __mkdir <- omega_evidence_path
+0	cycles	0.050	[k] __munmap <- _dl_unload_cache
+0	cycles	0.048	__aarch64_ldclr4_rel <- __condvar_release_lock
+0	cycles	0.048	__memcpy_sve <- sha256_update
+0	cycles	0.048	stage_mutations.constprop.0 <- rx_world_publish_external
+0	cycles	0.045	finish_writes <- rx_world_publish_external
+0	cycles	0.045	[k] __pipe2 <- _IO_new_proc_open
+0	cycles	0.045	[k] sha256_transform <- sha256_update
+0	cycles	0.045	__memset_zva64 <- rx_coherent_format
+0	cycles	0.043	__aarch64_ldset4_rel <- __condvar_quiesce_and_switch_g1
+0	cycles	0.043	[k] __mprotect <- setup_stack_prot
+0	cycles	0.043	__memset_zva64 <- rx_world_publish_external
+0	cycles	0.043	sha256_update <- sha256_final
+0	cycles	0.040	__condvar_quiesce_and_switch_g1 <- ___pthread_cond_signal
+0	cycles	0.040	[k] elf_get_dynamic_info <- _dl_start
+0	cycles	0.037	[k] _nl_intern_locale_data <- _nl_load_locale_from_archive
+0	cycles	0.037	[k] __pthread_create_2_1 <- init_common
+0	cycles	0.037	rx_world_publish_external <- t_slow_then_fast
+0	cycles	0.037	try_admit <- propagate_inner.part.0
+0	cycles	0.035	do_lookup_x <- _dl_lookup_symbol_x
+0	cycles	0.035	[k] __close_nocancel <- _IO_new_proc_close
+0	cycles	0.035	[k] elf_get_dynamic_info <- _dl_map_object_from_fd
+0	cycles	0.035	[k] __open64_nocancel <- _IO_file_open
+0	cycles	0.035	[k] rtld_setup_main_map <- dl_main
+0	cycles	0.033	crumb_hash <- crumb_append
+0	cycles	0.033	[k] __fstat64 <- _IO_file_doallocate
+0	cycles	0.033	[k] __mprotect <- _dl_map_segments
+0	cycles	0.033	native_validate <- t_slow_then_fast
+0	cycles	0.030	aienos_cap_validate <- rx_world_publish_external
+0	cycles	0.030	check_match <- do_lookup_x
+0	cycles	0.028	aienos_cap_inspect <- stamp_cap
+0	cycles	0.028	[k] _int_malloc <- __libc_calloc
+0	cycles	0.028	[k] __sched_setaffinity_new <- [unknown]
+0	cycles	0.025	[k] allocate_stack <- __pthread_create_2_1
+0	cycles	0.025	[k] __libc_read <- _IO_new_file_underflow
+0	cycles	0.025	rx_coherent_publish <- rx_world_publish_external
+0	cycles	0.022	best_waiting <- try_admit
+0	cycles	0.022	_dl_new_hash <- _dl_lookup_symbol_x
+0	cycles	0.022	[k] __brk <- __sbrk
+0	cycles	0.022	[k] _dl_map_object_from_fd <- _dl_map_object
+0	cycles	0.022	[k] futex_wake <- ___pthread_cond_broadcast
+0	cycles	0.022	___pthread_mutex_lock <- aienos_cap_inspect
+0	cycles	0.022	__pthread_mutex_unlock_usercnt <- t_slow_then_fast
+0	cycles	0.022	resolve_map <- elf_machine_rela
+0	cycles	0.022	__spawnix <- __libc_start_call_main
+0	cycles	0.020	__futex_abstimed_wait_common64 <- __futex_abstimed_wait_common
+0	cycles	0.020	[k] __open64_nocancel <- _dl_sysdep_read_whole_file
+0	cycles	0.020	[k] __open64_nocancel <- _nl_load_locale_from_archive
+0	cycles	0.020	[k] __read_nocancel <- open_verify
+0	cycles	0.020	object_digest <- commit_writes
+0	cycles	0.018	demand <- propagate_inner.part.0
+0	cycles	0.018	futex_wait <- futex_wait_simple
+0	cycles	0.018	[k] elf_get_dynamic_info <- dl_main
+0	cycles	0.018	[k] __getrandom_nocancel_nostatus <- tcache_key_initialize
+0	cycles	0.018	[k] sysmalloc <- _int_malloc
+0	cycles	0.018	__lll_lock_wait <- lll_mutex_lock_optimized
+0	cycles	0.018	___pthread_mutex_unlock <- t_slow_then_fast
+0	cycles	0.015	__aarch64_ldadd4_relax <- ___pthread_cond_signal
+0	cycles	0.015	__aarch64_ldadd4_rel <- __condvar_dec_grefs
+0	cycles	0.015	__aarch64_swp4_rel <- _int_free
+0	cycles	0.015	[k] __aarch64_cas4_acq <- __internal_atexit
+0	cycles	0.015	[k] aienos_cap_revoke <- t_attacks
+0	cycles	0.015	[k] _exit <- __run_exit_handlers
+0	cycles	0.015	[k] __spawnix <- _IO_new_popen
+0	cycles	0.015	[k] sysmalloc_mmap <- sysmalloc
+0	cycles	0.015	memcpy@plt <- crumb_hash
+0	cycles	0.015	memcpy@plt <- object_digest
+0	cycles	0.015	rx_coherent_project <- commit_writes
+0	cycles	0.015	stamp_cap <- rx_world_publish_external
+0	cycles	0.013	__aarch64_cas4_acq <- __pthread_cond_wait_common
+0	cycles	0.013	_IO_un_link <- _IO_new_fclose
+0	cycles	0.013	[k] __aarch64_swp4_rel <- lll_mutex_unlock_optimized
+0	cycles	0.013	[k] _dl_load_cache_lookup <- _dl_map_object
+0	cycles	0.013	[k] __fstat64 <- _dl_sysdep_read_whole_file
+0	cycles	0.013	[k] __libc_early_init <- dl_main
+0	cycles	0.013	[k] __memcpy_sve <- object_digest
+0	cycles	0.013	[k] __open64_nocancel <- open_verify
+0	cycles	0.013	list_del <- __nptl_stack_list_del
+0	cycles	0.013	__memset_generic <- rx_world_add_reaction
+0	cycles	0.013	___pthread_cond_signal <- try_admit
+0	cycles	0.010	__aarch64_cas4_acq <- __pthread_enable_asynccancel
+0	cycles	0.010	__aarch64_cas8_acq <- __pthread_clockjoin_ex
+0	cycles	0.010	__aarch64_ldadd8_acq <- __atomic_wide_counter_fetch_add_acquire
+0	cycles	0.010	__aarch64_ldeor8_rel <- __condvar_fetch_xor_wseq_release
+0	cycles	0.010	__aarch64_ldset4_relax <- __condvar_quiesce_and_switch_g1
+0	cycles	0.010	__clock_gettime <- rx_world_publish_external
+0	cycles	0.010	commit_writes <- rx_world_publish_external
+0	cycles	0.010	[k] calculate_head_size <- _nl_load_locale_from_archive
+0	cycles	0.010	[k] _int_malloc <- tag_new_usable
+0	cycles	0.010	[k] __memchr_ifunc <- elf_ifunc_invoke
+0	cycles	0.010	[k] __munmap <- _dl_map_segment
+0	cycles	0.010	[k] ___printf_chk <- main
+0	cycles	0.010	__libc_read <- __libc_read
+0	cycles	0.010	__pthread_create_2_1 <- init_common
+0	cycles	0.010	___pthread_mutex_lock <- t_slow_then_fast
+0	cycles	0.010	rx_world_verify_crumbs <- t_attacks
+0	cycles	0.010	strcmp <- check_match
+0	cycles	0.007	__aarch64_ldadd4_relax <- __pthread_cond_wait_common
+0	cycles	0.007	__aarch64_swp4_acq <- __pthread_mutex_cond_lock
+0	cycles	0.007	crumb_hash <- rx_world_verify_crumbs
+0	cycles	0.007	_dl_call_fini <- _dl_fini
+0	cycles	0.007	_dl_lookup_symbol_x <- resolve_map
+0	cycles	0.007	_dl_relocate_object <- dl_main
+0	cycles	0.007	elf_dynamic_do_Rela <- _dl_relocate_object
+0	cycles	0.007	_int_malloc <- __libc_calloc
+0	cycles	0.007	[k] __aarch64_cas4_acq <- lll_mutex_lock_optimized
+0	cycles	0.007	[k] __access <- dl_main
+0	cycles	0.007	[k] __clock_gettime <- rx_world_create
+0	cycles	0.007	[k] _dl_start <- _start
+0	cycles	0.007	[k] _IO_puts <- t_slow_then_fast
+0	cycles	0.007	[k] rseq_register_current_thread <- __tls_init_tp
+0	cycles	0.007	[k] strcmp <- _dl_map_object_from_fd
+0	cycles	0.007	[k] __uname <- write_receipt
+0	cycles	0.007	__printf_buffer <- __vsprintf_internal
+0	cycles	0.007	__strftime_internal <- __strftime_l
+0	cycles	0.005	__aarch64_cas4_acq_rel <- aienos_cap_start
+0	cycles	0.005	__aarch64_cas8_rel <- _int_free
+0	cycles	0.005	__aarch64_ldadd4_acq_rel <- aienos_cap_stop
+0	cycles	0.005	__aarch64_swp4_rel <- __libc_calloc
+0	cycles	0.005	aienos_cap_start <- env_start
+0	cycles	0.005	allocate_stack <- __pthread_create_2_1
+0	cycles	0.005	bootstrap <- aienos_cap_start
+0	cycles	0.005	_dl_map_object_from_fd <- _dl_map_object
+0	cycles	0.005	_dl_sysdep_read_whole_file <- _dl_load_cache_lookup
+0	cycles	0.005	elf_get_dynamic_info <- dl_main
+0	cycles	0.005	elf_machine_rela <- elf_dynamic_do_Rela
+0	cycles	0.005	fseek <- __tzfile_read
+0	cycles	0.005	get_next_env <- __tunables_init
+0	cycles	0.005	__GI__dl_allocate_tls_init <- allocate_stack
+0	cycles	0.005	_int_malloc <- __libc_malloc
+0	cycles	0.005	[k] __close_nocancel <- _dl_sysdep_read_whole_file
+0	cycles	0.005	[k] __close_nocancel <- spawn_process
+0	cycles	0.005	[k] _dl_cache_libcmp <- search_cache
+0	cycles	0.005	[k] _dl_init_paths <- dl_main
+0	cycles	0.005	[k] __fcntl64_nocancel_adjusted <- __libc_fcntl64
+0	cycles	0.005	[k] __getrlimit64 <- __pthread_early_init
+0	cycles	0.005	[k] _int_malloc <- __libc_malloc
+0	cycles	0.005	[k] _IO_file_doallocate <- _IO_doallocbuf
+0	cycles	0.005	[k] __libc_sigaction <- __bsd_signal
+0	cycles	0.005	[k] memset <- _dl_allocate_tls_storage
+0	cycles	0.005	[k] memset <- _dl_map_segments
+0	cycles	0.005	[k] __memset_generic <- aienos_cap_start
+0	cycles	0.005	[k] __pthread_early_init <- __libc_early_init
+0	cycles	0.005	[k] __read_nocancel <- _IO_new_file_underflow
+0	cycles	0.005	[k] setup_vdso <- dl_main
+0	cycles	0.005	[k] __tls_init_tp <- init_tls
+0	cycles	0.005	__memcpy_sve <- rx_world_read
+0	cycles	0.005	__minimal_malloc <- calloc
+0	cycles	0.005	__mmap64 <- __mmap64
+0	cycles	0.005	__munmap <- __spawnix
+0	cycles	0.005	_nl_intern_locale_data <- _nl_load_locale_from_archive
+0	cycles	0.005	__offtime <- __tz_convert
+0	cycles	0.005	__printf_buffer_write <- __printf_buffer
+0	cycles	0.005	__pthread_disable_asynccancel <- __futex_abstimed_wait_common64
+0	cycles	0.005	___pthread_mutex_unlock <- rx_world_publish_external
+0	cycles	0.005	rtld_setup_main_map <- dl_main
+0	cycles	0.005	rx_coherent_format <- init_common
+0	cycles	0.005	rx_coherent_project <- rx_coherent_format
+0	cycles	0.005	rx_world_add_reaction <- rx_aegis_register
+0	cycles	0.005	rx_world_destroy <- env_stop
+0	cycles	0.005	set_binding_values <- __bindtextdomain
+0	cycles	0.005	sha256_final <- commit_writes
+0	cycles	0.005	sha256_update <- crumb_append
+0	cycles	0.005	_start <- ?
+0	cycles	0.005	t_attacks <- main
+0	cycles	0.005	tcache_put <- _int_free
+0	cycles	0.005	__tunable_get_val <- ptmalloc_init
+0	cycles	0.005	[unknown] <- [unknown]
+0	cycles	0.005	__wait4 <- main
+0	cycles	0.003	__aarch64_cas4_acq <- __internal_atexit
+0	cycles	0.003	__aarch64_cas4_acq <- _IO_link_in
+0	cycles	0.003	__aarch64_cas4_acq <- _IO_un_link
+0	cycles	0.003	__aarch64_cas4_acq <- __libc_calloc
+0	cycles	0.003	__aarch64_cas4_acq <- __pthread_disable_asynccancel
+0	cycles	0.003	__aarch64_cas4_acq <- __pthread_setcancelstate
+0	cycles	0.003	__aarch64_ldadd4_acq <- __pthread_cond_wait_common
+0	cycles	0.003	__aarch64_swp4_relax <- __condvar_set_orig_size
+0	cycles	0.003	__aarch64_swp4_rel <- __run_exit_handlers
+0	cycles	0.003	__access <- dl_main
+0	cycles	0.003	aienos_cap_mint <- mint
+0	cycles	0.003	best_waiting <- propagate_inner.part.0
+0	cycles	0.003	__brk <- __sbrk
+0	cycles	0.003	calculate_head_size <- _nl_load_locale_from_archive
+0	cycles	0.003	caused_by <- t_slow_then_fast
+0	cycles	0.003	checked_request2size <- _int_malloc
+0	cycles	0.003	checked_request2size <- __libc_malloc
+0	cycles	0.003	__clock_gettime <- rx_world_create
+0	cycles	0.003	__clock_gettime <- t_slow_then_fast
+0	cycles	0.003	__close_nocancel <- _dl_map_object_from_fd
+0	cycles	0.003	__close_nocancel <- _dl_sysdep_read_whole_file
+0	cycles	0.003	__condvar_confirm_wakeup <- __pthread_cond_wait_common
+0	cycles	0.003	crumb_hash <- rx_world_publish_external
+0	cycles	0.003	__cxa_atexit <- __libc_start_main_impl
+0	cycles	0.003	demand <- finish_writes
+0	cycles	0.003	_dl_add_to_namespace_list <- setup_vdso
+0	cycles	0.003	_dl_audit_preinit <- __libc_start_main_impl
+0	cycles	0.003	_dl_bti_check <- dl_main
+0	cycles	0.003	_dl_cache_libcmp <- search_cache
+0	cycles	0.003	_dl_debug_initialize <- dl_main
+0	cycles	0.003	_dl_lookup_direct <- _dl_call_libc_early_init
+0	cycles	0.003	_dl_lookup_symbol_x <- dl_vdso_vsym
+0	cycles	0.003	_dl_map_object_deps <- dl_main
+0	cycles	0.003	_dl_map_object <- openaux
+0	cycles	0.003	_dl_start <- _start
+0	cycles	0.003	_dl_sysdep_parse_arguments <- _dl_sysdep_start
+0	cycles	0.003	_dl_unload_cache <- dl_main
+0	cycles	0.003	do_lookup_x <- resolve_map
+0	cycles	0.003	elf_machine_load_address <- _dl_start
+0	cycles	0.003	elf_machine_rela_relative <- elf_dynamic_do_Rela
+0	cycles	0.003	enter_unique_sym <- do_lookup_unique
+0	cycles	0.003	env_start <- t_slow_then_fast
+0	cycles	0.003	find_needed <- _dl_check_map_versions
+0	cycles	0.003	fread@plt <- binary_digest
+0	cycles	0.003	free@plt <- _IO_setb
+0	cycles	0.003	futex_wake <- __condvar_release_lock
+0	cycles	0.003	__getauxval2 <- __getauxval
+0	cycles	0.003	get_cached_stack <- allocate_stack
+0	cycles	0.003	getenv <- _nl_find_locale
+0	cycles	0.003	_getopt_internal_r <- _getopt_internal
+0	cycles	0.003	__getrlimit64 <- __getdtablesize
+0	cycles	0.003	init_common <- env_start
+0	cycles	0.003	input.isra.0 <- t_lease
+0	cycles	0.003	_int_free <- __libc_free
+0	cycles	0.003	_int_free_merge_chunk <- _int_memalign
+0	cycles	0.003	_int_malloc <- tag_new_usable
+0	cycles	0.003	_IO_doallocbuf <- _IO_new_file_overflow
+0	cycles	0.003	_IO_file_doallocate <- _IO_doallocbuf
+0	cycles	0.003	_IO_file_xsgetn <- _IO_acquire_lock_fct
+0	cycles	0.003	_IO_getline_info <- _IO_fgets
+0	cycles	0.003	_IO_new_file_fopen <- __fopen_internal
+0	cycles	0.003	_IO_new_fopen <- __tzfile_read
+0	cycles	0.003	_IO_setb <- _IO_new_file_close_it
+0	cycles	0.003	_IO_switch_to_get_mode <- _IO_new_file_underflow
+0	cycles	0.003	IO_validate_vtable <- _IO_sgetn
+0	cycles	0.003	__isoc23_strtoul <- [unknown]
+0	cycles	0.003	[k] __aarch64_swp4_acq <- __lll_lock_wait
+0	cycles	0.003	[k] aienos_cap_start <- env_start
+0	cycles	0.003	[k] aienos_cap_validate <- t_slow_then_fast
+0	cycles	0.003	[k] __brk <- dl_platform_init
+0	cycles	0.003	[k] check_match <- do_lookup_x
+0	cycles	0.003	[k] __ctype_init <- __libc_early_init
+0	cycles	0.003	[k] _dl_lookup_symbol_x <- dl_vdso_vsym
+0	cycles	0.003	[k] _dl_sysdep_parse_arguments <- _dl_sysdep_start
+0	cycles	0.003	[k] elf_get_dynamic_info <- setup_vdso
+0	cycles	0.003	[k] execvp <- [unknown]
+0	cycles	0.003	[k] __getrlimit64 <- __getdtablesize
+0	cycles	0.003	[k] _IO_file_stat <- _IO_file_doallocate
+0	cycles	0.003	[k] __isoc23_strtoul <- [unknown]
+0	cycles	0.003	[k] __lseek64 <- _IO_new_file_seekoff
+0	cycles	0.003	[k] propagate_inner.part.0 <- finish_writes
+0	cycles	0.003	[k] ___pthread_mutex_lock <- aienos_cap_revoke
+0	cycles	0.003	[k] __pthread_tunables_init <- __pthread_early_init
+0	cycles	0.003	[k] rx_coherent_publish <- finish_writes
+0	cycles	0.003	[k] sha256_init <- object_digest
+0	cycles	0.003	[k] strcmp <- setlocale
+0	cycles	0.003	[k] __strlen_generic <- getenv
+0	cycles	0.003	[k] __strlen_generic <- _IO_puts
+0	cycles	0.003	[k] strstr <- _IO_new_file_fopen
+0	cycles	0.003	[k] syscall <- [unknown]
+0	cycles	0.003	[k] __sysconf <- _nl_load_locale_from_archive
+0	cycles	0.003	[k] tunable_is_name <- __tunables_init
+0	cycles	0.003	[k] [unknown] <- __kernel_clock_gettime
+0	cycles	0.003	__libc_calloc <- init_common
+0	cycles	0.003	__libc_early_init <- dl_main
+0	cycles	0.003	__libc_malloc <- _IO_file_doallocate
+0	cycles	0.003	__libc_read <- _IO_new_file_underflow
+0	cycles	0.003	list_add <- __nptl_stack_list_add
+0	cycles	0.003	__lll_lock_wake <- rx_world_publish_external
+0	cycles	0.003	madvise_thp <- sysmalloc_mmap
+0	cycles	0.003	memcmp <- __tzstring_len
+0	cycles	0.003	__memcpy_chk <- _nl_load_locale_from_archive
+0	cycles	0.003	__memcpy_chk <- tzset_internal
+0	cycles	0.003	__memcpy_generic <- memcpy
+0	cycles	0.003	memcpy <- __GI__dl_allocate_tls_init
+0	cycles	0.003	memcpy@plt <- rx_world_read
+0	cycles	0.003	memcpy@plt <- sha256_final
+0	cycles	0.003	memcpy@plt <- sha256_update
+0	cycles	0.003	__memcpy_sve <- rx_world_add_reaction
+0	cycles	0.003	__memmem <- __memmem
+0	cycles	0.003	__memmem <- valid_locale_name
+0	cycles	0.003	__memset_generic <- __spawnix
+0	cycles	0.003	memset <- __libc_calloc
+0	cycles	0.003	memset@plt <- rx_world_publish_external
+0	cycles	0.003	__memset_zva64 <- rx_world_add_reaction
+0	cycles	0.003	_mid_memalign <- __posix_memalign
+0	cycles	0.003	mint <- t_attacks
+0	cycles	0.003	__mkdir <- omega_evidence_path
+0	cycles	0.003	__munmap <- rx_world_destroy
+0	cycles	0.003	_nl_load_locale_from_archive <- _nl_find_locale
+0	cycles	0.003	__nptl_deallocate_stack <- __pthread_clockjoin_ex
+0	cycles	0.003	omega_evidence_path <- write_receipt
+0	cycles	0.003	__open64_nocancel <- _dl_sysdep_read_whole_file
+0	cycles	0.003	__posix_spawn_file_actions_destroy <- _IO_new_proc_open
+0	cycles	0.003	__printf_buffer_done <- __vfprintf_internal
+0	cycles	0.003	__printf_buffer_to_file_switch <- __vfprintf_internal
+0	cycles	0.003	__printf_buffer <- __vfprintf_internal
+0	cycles	0.003	process_envvars_default <- process_envvars
+0	cycles	0.003	__pthread_clockjoin_ex <- rx_world_destroy
+0	cycles	0.003	___pthread_cond_broadcast <- rx_world_destroy
+0	cycles	0.003	__pthread_cond_init <- init_common
+0	cycles	0.003	___pthread_cond_timedwait64 <- rx_world_wait_quiescent
+0	cycles	0.003	__pthread_cond_wait_common <- ___pthread_cond_timedwait64
+0	cycles	0.003	__pthread_disable_asynccancel <- __pthread_disable_asynccancel
+0	cycles	0.003	__pthread_early_init <- __libc_early_init
+0	cycles	0.003	___pthread_mutex_destroy <- env_stop
+0	cycles	0.003	___pthread_mutex_init <- aienos_cap_start
+0	cycles	0.003	___pthread_mutex_lock <- aienos_cap_office
+0	cycles	0.003	___pthread_mutex_lock <- _dl_fini
+0	cycles	0.003	___pthread_mutex_lock <- rx_world_wait_quiescent
+0	cycles	0.003	pthread_mutex_unlock@plt <- rx_world_publish_external
+0	cycles	0.003	__pthread_mutex_unlock_usercnt <- aienos_cap_inspect
+0	cycles	0.003	__pthread_mutex_unlock_usercnt <- rx_world_create
+0	cycles	0.003	__pthread_mutex_unlock_usercnt <- rx_world_destroy
+0	cycles	0.003	res_fits.part.0 <- best_waiting
+0	cycles	0.003	__rtld_malloc_init_real <- dl_main
+0	cycles	0.003	rx_aegis_create <- env_start
+0	cycles	0.003	rx_world_add_reaction <- t_attacks
+0	cycles	0.003	rx_world_init_with_auth <- env_start
+0	cycles	0.003	rx_world_publish_external <- intent
+0	cycles	0.003	__sbrk <- __glibc_morecore
+0	cycles	0.003	search_cache <- _dl_load_cache_lookup
+0	cycles	0.003	setlocale <- [unknown]
+0	cycles	0.003	sha256_init <- object_digest
+0	cycles	0.003	__sigsetjmp <- __libc_start_call_main
+0	cycles	0.003	__strchrnul <- __find_specmb
+0	cycles	0.003	strcmp <- _dl_name_match_p
+0	cycles	0.003	strcmp <- _nl_find_locale
+0	cycles	0.003	__strlen <- _dl_load_cache_lookup
+0	cycles	0.003	__strlen <- __strdup
+0	cycles	0.003	__sysconf <- __spawn_valid_fd
+0	cycles	0.003	tcache_get_n <- tcache_get
+0	cycles	0.003	__tcgetattr <- __isatty
+0	cycles	0.003	try_admit <- finish_writes
+0	cycles	0.003	__tunable_get_val <- _dl_sort_maps_init
+0	cycles	0.003	__tunable_get_val <- __pthread_tunables_init
+0	cycles	0.003	__tzfile_read <- tzset_internal
+0	cycles	0.003	__vfprintf_internal <- ___printf_chk
+0	cycles	0.003	__waitpid <- main
+0	cycles	0.003	write_receipt <- main
+0	instr	74.355	TOTAL
+0	instr	38.055	sha256_transform <- sha256_update
+0	instr	9.250	__aarch64_swp4_rel <- lll_mutex_unlock_optimized
+0	instr	6.695	__aarch64_cas4_acq <- lll_mutex_lock_optimized
+0	instr	5.445	aienos_cap_validate <- t_slow_then_fast
+0	instr	1.370	t_slow_then_fast <- main
+0	instr	1.323	___pthread_mutex_lock <- aienos_cap_validate
+0	instr	1.125	[unknown] <- __kernel_clock_gettime
+0	instr	1.113	rx_aegis_evaluate <- t_slow_then_fast
+0	instr	0.875	__pthread_mutex_unlock_usercnt <- aienos_cap_validate
+0	instr	0.730	sha256_update <- crumb_hash
+0	instr	0.667	__pthread_mutex_unlock_usercnt <- rx_world_publish_external
+0	instr	0.495	[k] __memcpy_sve <- crumb_append
+0	instr	0.495	sha256_update <- object_digest
+0	instr	0.445	__memcpy_sve <- crumb_hash
+0	instr	0.378	__memcpy_sve <- crumb_append
+0	instr	0.372	__memcpy_sve <- object_digest
+0	instr	0.292	__memset_zva64 <- env_start
+0	instr	0.280	lll_mutex_lock_optimized <- ___pthread_mutex_lock
+0	instr	0.273	[k] __lll_lock_wake <- lll_mutex_unlock_optimized
+0	instr	0.250	lll_mutex_unlock_optimized <- __pthread_mutex_unlock_usercnt
+0	instr	0.230	__memset_zva64 <- init_common
+0	instr	0.205	propagate_inner.part.0 <- finish_writes
+0	instr	0.205	sha256_final <- crumb_hash
+0	instr	0.198	rx_world_validate_cap <- t_slow_then_fast
+0	instr	0.175	charge <- try_admit
+0	instr	0.168	sha256_final <- object_digest
+0	instr	0.163	___pthread_mutex_unlock <- aienos_cap_validate
+0	instr	0.160	sha256_update <- sha256_final
+0	instr	0.138	__aarch64_cas4_acq <- __condvar_acquire_lock
+0	instr	0.120	crumb_append <- rx_world_publish_external
+0	instr	0.107	aienos_cap_validate <- main
+0	instr	0.102	__memcpy_sve <- sha256_update
+0	instr	0.100	demand_inner <- propagate_inner.part.0
+0	instr	0.095	__memset_zva64 <- rx_coherent_format
+0	instr	0.090	finish_writes <- rx_world_publish_external
+0	instr	0.090	object_digest <- commit_writes
+0	instr	0.087	crumb_hash <- crumb_append
+0	instr	0.080	pthread_mutex_lock@plt <- aienos_cap_validate
+0	instr	0.077	do_lookup_x <- _dl_lookup_symbol_x
+0	instr	0.077	[k] __memset_zva64 <- env_start
+0	instr	0.077	__memcpy_sve <- sha256_final
+0	instr	0.075	__aarch64_ldclr4_rel <- __condvar_release_lock
+0	instr	0.075	[k] __memset_zva64 <- rx_coherent_format
+0	instr	0.075	pthread_mutex_unlock@plt <- aienos_cap_validate
+0	instr	0.068	check_match <- do_lookup_x
+0	instr	0.068	rx_coherent_project <- commit_writes
+0	instr	0.068	rx_coherent_publish <- finish_writes
+0	instr	0.060	[k] futex_wake <- ___pthread_cond_signal
+0	instr	0.045	aienos_cap_inspect <- stamp_cap
+0	instr	0.043	memcpy@plt <- crumb_hash
+0	instr	0.043	__memset_generic <- rx_world_add_reaction
+0	instr	0.043	native_validate <- t_slow_then_fast
+0	instr	0.040	memcpy@plt <- object_digest
+0	instr	0.035	__aarch64_ldset4_rel <- __condvar_quiesce_and_switch_g1
+0	instr	0.030	__pthread_mutex_unlock_usercnt <- t_slow_then_fast
+0	instr	0.030	rx_world_add_reaction <- rx_aegis_register
+0	instr	0.030	rx_world_verify_crumbs <- t_attacks
+0	instr	0.028	[k] __mmap64 <- __mmap64
+0	instr	0.025	__aarch64_swp4_rel <- __libc_calloc
+0	instr	0.025	demand <- propagate_inner.part.0
+0	instr	0.025	___pthread_mutex_lock <- aienos_cap_inspect
+0	instr	0.025	___pthread_mutex_unlock <- t_slow_then_fast
+0	instr	0.025	stage_mutations.constprop.0 <- rx_world_publish_external
+0	instr	0.025	try_admit <- propagate_inner.part.0
+0	instr	0.022	aienos_cap_validate <- rx_world_publish_external
+0	instr	0.022	best_waiting <- try_admit
+0	instr	0.022	___pthread_mutex_lock <- t_slow_then_fast
+0	instr	0.020	crumb_hash <- rx_world_verify_crumbs
+0	instr	0.018	__aarch64_cas4_acq <- __libc_calloc
+0	instr	0.018	_dl_new_hash <- _dl_lookup_symbol_x
+0	instr	0.018	getenv <- _nl_find_locale
+0	instr	0.018	rx_coherent_publish <- rx_world_publish_external
+0	instr	0.015	[k] futex_wait <- futex_wait_simple
+0	instr	0.015	[k] futex_wait <- __lll_lock_wait
+0	instr	0.015	__memset_zva64 <- rx_world_add_reaction
+0	instr	0.015	___pthread_mutex_init <- init_common
+0	instr	0.015	rx_world_publish_external <- t_slow_then_fast
+0	instr	0.015	strcmp <- check_match
+0	instr	0.013	_int_malloc <- __libc_calloc
+0	instr	0.013	[k] __futex_abstimed_wait_common64 <- __futex_abstimed_wait_common
+0	instr	0.013	__memcpy_sve <- rx_world_add_reaction
+0	instr	0.013	__memcpy_sve <- rx_world_read
+0	instr	0.013	___pthread_mutex_lock <- rx_world_publish_external
+0	instr	0.013	stamp_cap <- rx_world_publish_external
+0	instr	0.013	__strlen_generic <- getenv
+0	instr	0.010	aienos_cap_mint <- mint
+0	instr	0.010	elf_dynamic_do_Rela <- _dl_relocate_object
+0	instr	0.010	memcpy@plt <- sha256_final
+0	instr	0.010	__memset_zva64 <- rx_world_publish_external
+0	instr	0.010	___pthread_cond_signal <- try_admit
+0	instr	0.007	commit_writes <- rx_world_publish_external
+0	instr	0.007	_dl_lookup_symbol_x <- resolve_map
+0	instr	0.007	__lll_lock_wait <- lll_mutex_lock_optimized
+0	instr	0.007	__pthread_mutex_unlock_usercnt <- rx_world_create
+0	instr	0.007	rx_world_add_reaction <- env_start
+0	instr	0.007	rx_world_add_reaction <- t_attacks
+0	instr	0.007	sha256_transform <- sha256_final
+0	instr	0.005	__aarch64_cas4_acq <- __pthread_cond_wait_common
+0	instr	0.005	__aarch64_cas8_acq <- __pthread_clockjoin_ex
+0	instr	0.005	__aarch64_ldadd4_relax <- ___pthread_cond_signal
+0	instr	0.005	__aarch64_ldadd4_rel <- __condvar_dec_grefs
+0	instr	0.005	__aarch64_ldeor8_rel <- __condvar_fetch_xor_wseq_release
+0	instr	0.005	__aarch64_ldset4_relax <- __condvar_quiesce_and_switch_g1
+0	instr	0.005	demand <- finish_writes
+0	instr	0.005	finish_writes <- t_slow_then_fast
+0	instr	0.005	[k] __clone3 <- __spawnix
+0	instr	0.005	__kernel_clock_gettime <- __clock_gettime
+0	instr	0.005	[k] __libc_open64 <- _IO_file_open
+0	instr	0.005	[k] __munmap <- rx_world_destroy
+0	instr	0.005	[k] __wait4 <- main
+0	instr	0.005	__libc_calloc <- rx_world_add_reaction
+0	instr	0.005	__memcpy_generic <- memcpy
+0	instr	0.005	__memmem <- __memmem
+0	instr	0.005	object_digest <- rx_world_publish_external
+0	instr	0.005	pthread_cond_init@plt <- init_common
+0	instr	0.005	___pthread_mutex_lock <- aienos_cap_office
+0	instr	0.005	___pthread_mutex_unlock <- rx_world_publish_external
+0	instr	0.005	__pthread_mutex_unlock_usercnt <- aienos_cap_inspect
+0	instr	0.005	res_fits.part.0 <- best_waiting
+0	instr	0.005	resolve_map <- elf_machine_rela
+0	instr	0.005	rx_aegis_register <- env_start
+0	instr	0.003	__aarch64_ldadd8_acq <- __atomic_wide_counter_fetch_add_acquire
+0	instr	0.003	__aarch64_swp4_rel <- _int_free
+0	instr	0.003	__aarch64_swp4_rel <- _IO_link_in
+0	instr	0.003	__aarch64_swp4_rel <- __libc_malloc
+0	instr	0.003	auth_use <- aienos_cap_mint
+0	instr	0.003	__clock_gettime <- rx_world_publish_external
+0	instr	0.003	__clock_gettime <- t_slow_then_fast
+0	instr	0.003	__condvar_quiesce_and_switch_g1 <- ___pthread_cond_signal
+0	instr	0.003	fread@plt <- binary_digest
+0	instr	0.003	intent <- t_escalate_deny
+0	instr	0.003	_int_malloc <- __libc_malloc
+0	instr	0.003	[k] __close_nocancel <- _IO_new_file_close_it
+0	instr	0.003	__kernel_clock_gettime <- [unknown]
+0	instr	0.003	[k] __mkdir <- omega_evidence_path
+0	instr	0.003	__libc_free <- rx_coherent_free
+0	instr	0.003	list_del <- __nptl_stack_list_del
+0	instr	0.003	memcpy@plt <- crumb_append
+0	instr	0.003	__memmem <- valid_locale_name
+0	instr	0.003	__memset_generic <- memset
+0	instr	0.003	memset@plt <- rx_world_publish_external
+0	instr	0.003	mint <- env_start
+0	instr	0.003	_nl_find_locale <- setlocale
+0	instr	0.003	__nptl_deallocate_stack <- __pthread_clockjoin_ex
+0	instr	0.003	omega_evidence_run_commit <- write_receipt
+0	instr	0.003	posix_sysconf <- linux_sysconf
+0	instr	0.003	__printf_buffer_pad_1 <- __printf_buffer_pad
+0	instr	0.003	__printf_buffer <- __vsprintf_internal
+0	instr	0.003	propagate_inner.part.0 <- rx_world_publish_external
+0	instr	0.003	__pthread_cond_init <- init_common
+0	instr	0.003	pthread_cond_signal@plt <- try_admit
+0	instr	0.003	___pthread_mutex_unlock <- _dl_fini
+0	instr	0.003	pthread_mutex_unlock@plt <- rx_world_publish_external
+0	instr	0.003	__pthread_mutex_unlock_usercnt <- aienos_cap_mint
+0	instr	0.003	__pthread_mutex_unlock_usercnt <- aienos_cap_office
+0	instr	0.003	__pthread_mutex_unlock_usercnt <- rx_world_add_reaction
+0	instr	0.003	__pthread_mutex_unlock_usercnt <- stamp_cap
+0	instr	0.003	rx_coherent_format <- init_common
+0	instr	0.003	rx_world_destroy <- env_stop
+0	instr	0.003	rx_world_publish_external <- intent
+0	instr	0.003	sha256_final <- commit_writes
+0	instr	0.003	sha256_update <- binary_digest
+0	instr	0.003	sha256_update <- crumb_append
+0	instr	0.003	__snprintf_chk@plt <- omega_evidence_path
+0	instr	0.003	__strchrnul <- __find_specmb
+0	instr	0.003	__strlen_generic <- __printf_buffer
+0	instr	0.003	__strlen_generic <- valid_locale_name
+0	instr	0.003	strncmp <- getenv
+0	instr	0.003	__tzfile_read <- tzset_internal
+0	instr	0.003	valid_locale_name <- _nl_find_locale
