@@ -968,6 +968,58 @@ bench-mixed-algebra: $(OMA_RZ_BENCH) $(OMA_RZ_SELECT)
 		$(MA2_EVIDENCE)/ma2_bench_run1.json $(MA2_EVIDENCE)/ma2_bench_run2.json
 
 # ---------------------------------------------------------------------------
+# OMEGA MIXED ALGEBRA, ADR 0019 MA-8 step 0 (spec/mixed-algebra-phase-twin.md):
+# phase-domain Z3 digital twin. SIMULATED_DEVELOPMENT only: a software model
+# of Z3 addition carried as tone phase, checked against oma_z3. No runtime,
+# no selection, no digest. C11 + libm.
+# test-phase-twin: full run -> $(OUT_DIR) receipt (never into evidence/);
+#   quick run plain and under ASan+UBSan, receipts must be byte-identical;
+#   if a committed receipt exists, the full run must reproduce it (all fields
+#   except git_commit / tree_dirty / run_id / toolchain).
+# phase-twin-receipt: from a clean committed tree only, copies the full
+#   receipt to evidence/MIXED_ALGEBRA/phase_twin_receipt.<sha256>.json.
+.PHONY: test-phase-twin phase-twin-receipt
+PT_SRCS = src/algebra/phase_twin.c src/algebra/oma_z3.c src/algebra/oma_trit.c
+PT_HDRS = src/algebra/phase_twin.h src/algebra/oma_z3.h src/algebra/oma_trit.h
+PT_OUT = $(OUT_DIR)/tests-algebra
+PT_TEST = $(PT_OUT)/test_phase_twin
+PT_TEST_ASAN = $(PT_OUT)/test_phase_twin_asan
+PT_ENV = PT_COMMIT=$$(git rev-parse HEAD) \
+	PT_DIRTY=$$(git status --porcelain -- src tests Makefile spec evidence | grep -c .) \
+	PT_TOOLCHAIN="$$($(CC) --version | head -1)"
+PT_VOLATILE = '"(git_commit|tree_dirty|run_id|toolchain)"'
+
+$(PT_TEST): tests/algebra/test_phase_twin.c $(PT_SRCS) $(PT_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_CFLAGS) -o $@ tests/algebra/test_phase_twin.c $(PT_SRCS) -lm
+
+$(PT_TEST_ASAN): tests/algebra/test_phase_twin.c $(PT_SRCS) $(PT_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		-o $@ tests/algebra/test_phase_twin.c $(PT_SRCS) -lm
+
+test-phase-twin: $(PT_TEST) $(PT_TEST_ASAN)
+	$(PT_ENV) ./$(PT_TEST) $(PT_OUT)/phase_twin_receipt.json
+	./$(PT_TEST) --quick $(PT_OUT)/phase_twin_quick_plain.json
+	./$(PT_TEST_ASAN) --quick $(PT_OUT)/phase_twin_quick_asan.json
+	cmp $(PT_OUT)/phase_twin_quick_plain.json $(PT_OUT)/phase_twin_quick_asan.json
+	@echo "test-phase-twin: quick receipts byte-identical across plain and ASan/UBSan builds"
+	@ref=$$(ls evidence/MIXED_ALGEBRA/phase_twin_receipt.*.json 2>/dev/null | head -1); \
+	if [ -n "$$ref" ]; then \
+		grep -v -E $(PT_VOLATILE) "$$ref" > $(PT_OUT)/pt_ref.cmp; \
+		grep -v -E $(PT_VOLATILE) $(PT_OUT)/phase_twin_receipt.json > $(PT_OUT)/pt_new.cmp; \
+		cmp $(PT_OUT)/pt_ref.cmp $(PT_OUT)/pt_new.cmp && echo "test-phase-twin: reproduces $$ref"; \
+	else echo "test-phase-twin: no committed receipt to compare"; fi
+
+phase-twin-receipt: test-phase-twin
+	@test "$$(git status --porcelain -- src tests Makefile spec | grep -c .)" = 0 || \
+		{ echo "phase-twin-receipt: tree not clean, refusing"; exit 1; }
+	@mkdir -p evidence/MIXED_ALGEBRA
+	@h=$$(sha256sum $(PT_OUT)/phase_twin_receipt.json | cut -c1-64); \
+	cp $(PT_OUT)/phase_twin_receipt.json evidence/MIXED_ALGEBRA/phase_twin_receipt.$$h.json; \
+	echo "phase-twin-receipt: evidence/MIXED_ALGEBRA/phase_twin_receipt.$$h.json"
+
+# ---------------------------------------------------------------------------
 # TURING Wave 1 (docs/turing/TURING_W0_PROPOSAL.md): Field v1 records (K.7) +
 # control-arm selector, post hoc over evidence/MIXED_ALGEBRA receipts.
 # Reads src/algebra (registry) without modifying it; no runtime, no timed runs.
