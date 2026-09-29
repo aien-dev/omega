@@ -554,6 +554,24 @@ r15-receipt:
 test-r15-receipt:
 	tests/r15_receipt_test.sh
 
+# R16-G2 code-search gate (spec/r16-orchestrator-retirement.md). Host-only C tool,
+# seconds, no network. Scans the five repos (paths from R16_REPO_OMEGA,
+# R16_REPO_SOVEREIGN_CORE, R16_REPO_AEGIS_RUNTIME, R16_REPO_AIENOS,
+# R16_REPO_PHYSICS; defaults: this tree and ~/workspace/r16-survey/<repo>) and
+# joins every loop-shaped site with spec/r16-orchestrator-retirement-map.md.
+# Exit 0 only when every site is classified A-F, no omega class-A site is
+# still under a production name, and all five repos were scanned.
+R16_INVENTORY = $(OUT_DIR)/r16_loop_inventory
+$(R16_INVENTORY): tools/r16_loop_inventory.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -o $@ tools/r16_loop_inventory.c
+
+.PHONY: r16-inventory test-r16-inventory
+r16-inventory: $(R16_INVENTORY)
+	$(R16_INVENTORY) --map spec/r16-orchestrator-retirement-map.md --json $(OUT_DIR)/r16-inventory.json
+
+test-r16-inventory: $(R16_INVENTORY)
+	sh tests/r16_inventory/run.sh $(R16_INVENTORY)
+
 
 # OMEGA_ACTION_GRAPH_IR: goals compile to typed action graphs that run as
 # resident reactions by readiness alone. rx_graph.o is built alone first and
