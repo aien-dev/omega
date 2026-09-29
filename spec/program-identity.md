@@ -79,6 +79,32 @@ machine-code slice nothing could lift). Such a program has **no identity**:
 `omega_program_compute_id` returns -1 and sets `program_id` to all zero bytes, and
 `omega_library_insert` refuses an all-zero id. Two unknown programs never share an id.
 
+### 2.4 The composed postcondition (semantic rule: composition is associative)
+
+Composition is sequencing, and sequencing is associative, so the contract of a composition
+must not depend on how the chain was bracketed. `omega_program_compose(a, b)` therefore does
+**not** derive a postcondition text (the old `"(B)o(A)"` text was non-associative:
+`(a;b);c` and `a;(b;c)` got different postcondition ids and so different program ids).
+Instead:
+
+- Every contract has a **leaf list** (`OmegaContract.post_leaves`, `post_leaf_count`). A
+  program whose postcondition was stated directly (builder, Visor `ensures`, any explicit
+  replacement) is one leaf: its own `postcondition_id`.
+- `compose(a, b)` takes the flattened list `leaves(a) ++ leaves(b)` (application order; nested
+  compositions are flattened, never nested), at most 64 entries.
+- The composed `postcondition_id` is the canonical sequence constraint over that list,
+  `omega_contract_post_seq_id`: the right fold `Seq(l1, Seq(l2, ... ln))`, each `Seq` a
+  `KIND_CONSTRAINT` object with attribute `omega.compose = "seq"` and one
+  `CONST_POSTCONDITION` constraint whose payload is `head_id || tail_id`, id by
+  `omega_compute_semantic_id`. A `Seq` can never equal a text leaf (it carries the attribute).
+- The precondition of a composition is `a`'s (already associative).
+- A leaf list that no longer folds to the stored `postcondition_id` (the postcondition was
+  replaced without clearing it) is ignored and the contract counts as one leaf.
+- The postcondition **text** of a composition (`"A ; B"`, truncated) is display only.
+
+Hence `(a;b);c`, `a;(b;c)` and every other bracketing of one chain have one program id,
+while `a;b` and `b;a` differ whenever the bodies differ (different body, different leaf order).
+
 ## 3. Field classification
 
 | field | class | in the id? | reason |
@@ -90,6 +116,8 @@ machine-code slice nothing could lift). Such a program has **no identity**:
 | `name` | metadata | **no (removed in v2)** | a human label; renaming does not change meaning. Two names for one body now share one id (dedupe), exactly as `let a = 7` / `let b = 7` share one VALUE id |
 | `cost.insn_count`, `reg_pressure`, `memory_bytes` | metadata | **no (removed in v2)** | properties of one realization (the same body realized differently has a different count) |
 | `cost.latency_cycles` | metadata | **no (removed in v2)** | a model or measurement of one realization on one machine |
+| `contract.post_leaves` (compositions) | **semantic** | yes, through `postcondition_id` (section 2.4) | the ordered component postconditions |
+| `contract.postcondition` text of a composition | metadata | no | display only; the id comes from the leaf list |
 | `realization` (code bytes, realization id, target) | metadata | no | a realization of the meaning, identified separately by `realization_id` and the (program, machine, realization) triple id |
 | `graph` pointer | metadata | no | not used for identity; pointer values never enter an id |
 | `is_realized`, `is_verified` | state | no | lifecycle, not meaning |
@@ -165,16 +193,26 @@ rows (and every `E` row) are unchanged. Behaviour changes in tests:
 
 The omegatool M4-M14 gate suites needed no change.
 
+**Composition postcondition rule (section 2.4) changes every composed program's id** again
+(its postcondition id is now the sequence constraint over the flattened leaf list, not the
+hash of the `"(B)o(A)"` text). No pinned golden changes: Visor `fn` programs carry their own
+`ensures` leaf, so the language golden P rows and `e2e.expected` keep the v2 ids above.
+Examples (M11 benchmark corpus, `make test-m11` demo, first 16 hex; text-derived -> leaf-list):
+
+| program | before 2.4 | after 2.4 |
+|---|---|---|
+| mul2;add1;add5 | `bdca70b9e99a31cb` | `abdda5bc4c0d1300` |
+| mul2;add1;mul3 | `e678c0ba6f3e1236` | `db28207b80a5f6ed` |
+| mul2;add1;sub4 | `451f56e9b4c8564d` | `f9d39c98a66da1ec` |
+| mul2;add1;add10 | `c1a07f6c9dfa754c` | `b1ccbc58e3eb04c3` |
+
+The discovered abstraction (lifted, not composed) keeps `52b6059b...`.
+
 ## 8. Non-claims and deferred defects
 
 - Identity is **intensional**: it names the canonical body, not the mathematical function.
   `x + 1 + 1` and `x + 2` compute the same function and have different ids. Proving
   extensional equality is out of scope.
-- `omega_program_compose` derives the postcondition as the text `"(B)o(A)"`, so
-  `compose(compose(a,b),c)` and `compose(a,compose(b,c))` have the same body but different
-  postcondition ids, hence different program ids. The representation-invariance gate holds
-  the contract fixed to isolate the body; the non-associative derived contract text is a
-  deferred defect of M8 contract derivation, not of identity.
 - Contract clauses are identified by their canonical **text** (`omega_build_constraint_id`);
   two logically equivalent clauses with different text differ.
 - Historical receipts under `evidence/` carry v1 ids and are append-only; they are not
@@ -193,7 +231,7 @@ job) prints five gates:
 | gate | what it proves |
 |---|---|
 | `OMEGA_PROGRAM_ID_BODY_BOUND_PASS` | `x + 1` vs `x + 2` differ through `omega_program_build_unary_op`, through Visor lowering, and under an identical name + contract + cost (the v1 collision); composition order separates; a body-less program gets no id; a 33-bit constant is refused; the v2 id differs from the v1 recipe |
-| `OMEGA_PROGRAM_ID_REPRESENTATION_INVARIANT_PASS` | name, cost, realization bytes and pointer values do not move the id; six Visor spellings (whitespace, comments, parameter name, operand side, literal spelling, fn name) share one id; library composition equals Visor lowering and re-association is invariant when the contract is held fixed; a hand-built body graph in 8 scrambled allocation orders has the same root; lift(realization) == body |
+| `OMEGA_PROGRAM_ID_REPRESENTATION_INVARIANT_PASS` | name, cost, realization bytes and pointer values do not move the id; six Visor spellings (whitespace, comments, parameter name, operand side, literal spelling, fn name) share one id; library composition equals Visor lowering when both state the same contract; 400 seeded chains (3-8 parts, some with user-stated leaf postconditions) x 4 random bracketings all equal the left fold, with the leaf list flattened; a;b != b;a for 400 pairs with different bodies; a stale leaf list is ignored; a hand-built body graph in 8 scrambled allocation orders has the same root; lift(realization) == body |
 | `OMEGA_PROGRAM_ID_MUTATION_SEPARATION_PASS` | seeded differential over 3000 random programs (every pair, ~4.5M comparisons): id equal iff a hash-free structural oracle says body + contract equal; 2000 programs x 8 single mutations (op, constant, width, output width, pre, post, step added, step removed) always separate |
 | `OMEGA_PROGRAM_ID_LIBRARY_REGRESSION_PASS` | library duplicate / admission / no-body refusal / DAG, discovery lift to mul2;add1 and admission, refactor keeps identity, realization triple id follows the program id, 64-step capacity |
 | `OMEGA_PROGRAM_ID_VISOR_REGRESSION_PASS` | Visor session: distinct ids after `clear`, redefinition rebinds, aliases and respellings reuse the entry, stored realization == emit(body) |

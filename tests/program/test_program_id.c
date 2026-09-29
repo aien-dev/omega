@@ -71,8 +71,9 @@ static int id_zero(const SemanticId *a) {
     return memcmp(a->bytes, z, OMEGA_ID_BYTES) == 0;
 }
 
-/* Set an explicit contract text and recompute (holds the contract fixed). */
+/* Replace the contract with explicit leaf clauses and recompute. */
 static void set_contract(OmegaProgram *p, const char *pre, const char *post) {
+    p->contract.post_leaf_count = 0;
     snprintf(p->contract.precondition, sizeof p->contract.precondition, "%s", pre);
     snprintf(p->contract.postcondition, sizeof p->contract.postcondition, "%s", post);
     omega_build_constraint_id(CONST_PRECONDITION, pre, &p->contract.precondition_id);
@@ -222,6 +223,82 @@ out:
     return rc;
 }
 
+/* Compose parts[lo, hi) with a seeded random bracketing. */
+static uint64_t g_brng = 0x243F6A8885A308D3ull;
+static int compose_bracketed(const OmegaProgram *parts, int lo, int hi, OmegaProgram *out) {
+    if (hi - lo == 1) { *out = parts[lo]; return 0; }
+    g_brng ^= g_brng >> 12; g_brng ^= g_brng << 25; g_brng ^= g_brng >> 27;
+    int split = lo + 1 + (int)((g_brng * 0x2545F4914F6CDD1Dull) % (uint64_t)(hi - lo - 1));
+    OmegaProgram *l = malloc(sizeof *l), *r = malloc(sizeof *r);
+    char err[160];
+    int rc = (l && r && compose_bracketed(parts, lo, split, l) == 0 && compose_bracketed(parts, split, hi, r) == 0 &&
+              omega_program_compose(l, r, out, err, sizeof err) == 0) ? 0 : -1;
+    free(l); free(r);
+    return rc;
+}
+
+static void test_associativity(void) {
+    static const uint8_t AOPS[5] = { OP_ADD, OP_SUB, OP_MUL, OP_AND, OP_OR };
+    uint64_t rng = 0x5851F42D4C957F2Dull;
+    OmegaProgram *parts = malloc(8 * sizeof *parts);
+    OmegaProgram *left = malloc(sizeof *left), *tmp = malloc(sizeof *tmp), *br = malloc(sizeof *br);
+    long chains = 0, brackets = 0, swaps = 0;
+    char err[160];
+    for (int ch = 0; ch < 400; ch++) {
+        rng ^= rng >> 12; rng ^= rng << 25; rng ^= rng >> 27;
+        int n = 3 + (int)(rng % 6);
+        for (int i = 0; i < n; i++) {
+            rng ^= rng >> 12; rng ^= rng << 25; rng ^= rng >> 27;
+            uint64_t v = rng * 0x2545F4914F6CDD1Dull;
+            omega_program_build_unary_op(&parts[i], "p", (OpCode)AOPS[v % 5], (v >> 8) % 100);
+            if ((v >> 40) % 4 == 0) {   /* some parts carry a user-stated leaf postcondition */
+                char post[32];
+                snprintf(post, sizeof post, "result >= %u", (unsigned)((v >> 48) % 7));
+                set_contract(&parts[i], "x >= 0", post);
+            }
+        }
+        *left = parts[0];
+        for (int i = 1; i < n; i++) {
+            omega_program_compose(left, &parts[i], tmp, err, sizeof err);
+            *left = *tmp;
+        }
+        chains++;
+        CHECK(G_REPR, left->contract.post_leaf_count == n, "chain %d flattens to %d leaves (%u)", ch, n,
+              left->contract.post_leaf_count);
+        for (int b = 0; b < 4; b++) {
+            brackets++;
+            BULK(G_REPR, compose_bracketed(parts, 0, n, br) == 0 && ids_equal(&br->program_id, &left->program_id) &&
+                         br->contract.post_leaf_count == n,
+                 "chain %d bracketing %d: id differs from the left fold", ch, b);
+        }
+        /* a;b != b;a when the bodies differ */
+        if (parts[0].body.steps[0].op != parts[1].body.steps[0].op ||
+            parts[0].body.steps[0].imm != parts[1].body.steps[0].imm) {
+            OmegaProgram *ab = malloc(sizeof *ab), *ba = malloc(sizeof *ba);
+            swaps++;
+            BULK(G_REPR, omega_program_compose(&parts[0], &parts[1], ab, err, sizeof err) == 0 &&
+                         omega_program_compose(&parts[1], &parts[0], ba, err, sizeof err) == 0 &&
+                         !ids_equal(&ab->program_id, &ba->program_id), "chain %d: a;b == b;a", ch);
+            free(ab); free(ba);
+        }
+    }
+    /* a stale leaf list (postcondition replaced without clearing it) is treated as a leaf */
+    {
+        OmegaProgram *s = malloc(sizeof *s), *f = malloc(sizeof *f), *x1 = malloc(sizeof *x1), *x2 = malloc(sizeof *x2);
+        *s = *left;
+        omega_build_constraint_id(CONST_POSTCONDITION, "replaced", &s->contract.postcondition_id);  /* leaves kept */
+        *f = *left;
+        set_contract(f, "x >= 0", "replaced");
+        CHECK(G_REPR, omega_program_compose(s, &parts[0], x1, err, sizeof err) == 0 &&
+                      omega_program_compose(f, &parts[0], x2, err, sizeof err) == 0 &&
+                      ids_equal(&x1->contract.postcondition_id, &x2->contract.postcondition_id) &&
+                      x1->contract.post_leaf_count == 2, "stale leaf list is ignored");
+        free(s); free(f); free(x1); free(x2);
+    }
+    printf("associativity: %ld chains, %ld random bracketings, %ld a;b vs b;a pairs\n", chains, brackets, swaps);
+    free(parts); free(left); free(tmp); free(br);
+}
+
 static void test_representation(void) {
     OmegaProgram a, b, c;
     /* names are metadata */
@@ -261,28 +338,16 @@ static void test_representation(void) {
         CHECK(G_REPR, lower_fn(same[i], &q) == 0 && ids_equal(&q.program_id, &ref.program_id),
               "'%s' has the reference id", same[i]);
     }
-    /* Visor lowering == library composition when the contract is held fixed */
+    /* Visor lowering == library composition when the fn states the same contract the
+     * library program carries (the fn's ensures replaces the derived one). */
     uint8_t ops[2] = { OP_MUL, OP_ADD };
     uint64_t imms[2] = { 2, 1 };
     CHECK(G_REPR, build_chain(&c, "whatever", ops, imms, 2) == 0, "chain");
     set_contract(&c, "true", "result >= 1");
-    CHECK(G_REPR, ids_equal(&c.program_id, &ref.program_id), "compose(mul2, add1) == Visor x*2+1 (contract fixed)");
-    /* composition associativity (body only; contract fixed) */
-    {
-        OmegaProgram p1, p2, p3, l, r, t;
-        char err[160];
-        omega_program_build_unary_op(&p1, "a", OP_MUL, 3);
-        omega_program_build_unary_op(&p2, "b", OP_ADD, 4);
-        omega_program_build_unary_op(&p3, "c", OP_AND, 0xFF);
-        omega_program_compose(&p1, &p2, &t, err, sizeof err);
-        omega_program_compose(&t, &p3, &l, err, sizeof err);
-        omega_program_compose(&p2, &p3, &t, err, sizeof err);
-        omega_program_compose(&p1, &t, &r, err, sizeof err);
-        CHECK(G_REPR, l.body.step_count == 3 && r.body.step_count == 3, "3 steps");
-        set_contract(&l, "x >= 0", "k");
-        set_contract(&r, "x >= 0", "k");
-        CHECK(G_REPR, ids_equal(&l.program_id, &r.program_id), "(a;b);c == a;(b;c) with the contract fixed");
-    }
+    CHECK(G_REPR, ids_equal(&c.program_id, &ref.program_id), "compose(mul2, add1) with ensures 'result >= 1' == Visor fn");
+    /* composition associativity: the composed postcondition is the flattened leaf list,
+     * so every bracketing of one chain has one id (no contract is held fixed here). */
+    test_associativity();
     /* node allocation order: scrambled hand-built graph gives the same body root */
     for (uint32_t s = 0; s < 8; s++) {
         SemanticId canon, scr;

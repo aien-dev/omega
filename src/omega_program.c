@@ -282,6 +282,49 @@ int omega_program_build_unary_op(OmegaProgram *prog, const char *name, OpCode op
     return 0;
 }
 
+/* ---- canonical composed postcondition (spec/program-identity.md 2.4) ------ */
+
+int omega_contract_post_seq_id(const SemanticId *leaves, uint16_t n, SemanticId *out) {
+    if (!leaves || !out || n == 0 || n > OMEGA_PROGRAM_MAX_STEPS) return -1;
+    OmegaObject *obj = (OmegaObject *)malloc(sizeof(OmegaObject));
+    if (!obj) return -1;
+    SemanticId acc = leaves[n - 1];
+    int rc = 0;
+    for (int i = (int)n - 2; i >= 0 && rc == 0; --i) {
+        memset(obj, 0, sizeof(OmegaObject));
+        obj->kind = KIND_CONSTRAINT;
+        uint8_t pl[2 * OMEGA_ID_BYTES];
+        memcpy(pl, leaves[i].bytes, OMEGA_ID_BYTES);
+        memcpy(pl + OMEGA_ID_BYTES, acc.bytes, OMEGA_ID_BYTES);
+        if (omega_object_add_attribute(obj, "omega.compose", (const uint8_t *)"seq", 3) != 0 ||
+            omega_object_add_constraint(obj, CONST_POSTCONDITION, pl, sizeof pl) != 0 ||
+            omega_compute_semantic_id(obj) != 0)
+            rc = -1;
+        else
+            acc = obj->id;
+    }
+    free(obj);
+    if (rc == 0) *out = acc;
+    return rc;
+}
+
+/* The leaf list of a contract's postcondition. A contract whose stored leaves no longer
+ * fold to its postcondition_id (someone replaced the postcondition afterwards) is a leaf. */
+static int post_leaves_of(const OmegaContract *c, SemanticId *out, uint16_t *n) {
+    if (c->post_leaf_count >= 2 && c->post_leaf_count <= OMEGA_PROGRAM_MAX_STEPS) {
+        SemanticId f;
+        if (omega_contract_post_seq_id(c->post_leaves, c->post_leaf_count, &f) == 0 &&
+            omega_compare_semantic_id(&f, &c->postcondition_id) == 0) {
+            memcpy(out, c->post_leaves, c->post_leaf_count * sizeof(SemanticId));
+            *n = c->post_leaf_count;
+            return 0;
+        }
+    }
+    out[0] = c->postcondition_id;
+    *n = 1;
+    return 0;
+}
+
 int omega_program_compose(const OmegaProgram *a, const OmegaProgram *b, OmegaProgram *out_c,
                           char *err_msg, size_t err_msg_len) {
     if (!a || !b || !out_c) return -1;
@@ -309,9 +352,28 @@ int omega_program_compose(const OmegaProgram *a, const OmegaProgram *b, OmegaPro
     out_c->contract.output_width = b->contract.output_width;
     out_c->contract.precondition_id = a->contract.precondition_id;
     snprintf(out_c->contract.precondition, sizeof(out_c->contract.precondition), "%.60s", a->contract.precondition);
-    snprintf(out_c->contract.postcondition, sizeof(out_c->contract.postcondition),
-             "(%.25s)o(%.25s)", b->contract.postcondition, a->contract.postcondition);
-    omega_build_constraint_id(CONST_POSTCONDITION, out_c->contract.postcondition, &out_c->contract.postcondition_id);
+    /* Postcondition: the flattened ordered list of leaf postconditions (A's then B's), so
+     * (a;b);c and a;(b;c) get one canonical id. The text is display only. */
+    {
+        SemanticId la[OMEGA_PROGRAM_MAX_STEPS], lb[OMEGA_PROGRAM_MAX_STEPS];
+        uint16_t na = 0, nb = 0;
+        post_leaves_of(&a->contract, la, &na);
+        post_leaves_of(&b->contract, lb, &nb);
+        if ((size_t)na + nb > OMEGA_PROGRAM_MAX_STEPS) {
+            if (err_msg) snprintf(err_msg, err_msg_len, "Composite postcondition overflow (more than %d parts)", OMEGA_PROGRAM_MAX_STEPS);
+            return -1;
+        }
+        memcpy(out_c->contract.post_leaves, la, na * sizeof(SemanticId));
+        memcpy(out_c->contract.post_leaves + na, lb, nb * sizeof(SemanticId));
+        out_c->contract.post_leaf_count = (uint16_t)(na + nb);
+        if (omega_contract_post_seq_id(out_c->contract.post_leaves, out_c->contract.post_leaf_count,
+                                       &out_c->contract.postcondition_id) != 0) {
+            if (err_msg) snprintf(err_msg, err_msg_len, "Composite postcondition id failed");
+            return -1;
+        }
+        snprintf(out_c->contract.postcondition, sizeof(out_c->contract.postcondition),
+                 "%.29s ; %.29s", a->contract.postcondition, b->contract.postcondition);
+    }
 
     /* 2b. Body: A's steps then B's (innermost first). Without both bodies the
      * composite's meaning is unknown and it has no identity. */

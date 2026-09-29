@@ -13,6 +13,8 @@ typedef struct {
     uint32_t latency_cycles;
 } OmegaCost;
 
+#define OMEGA_PROGRAM_MAX_STEPS 64
+
 typedef struct {
     TypeTag input_type;
     uint16_t input_width;
@@ -21,7 +23,13 @@ typedef struct {
     SemanticId precondition_id;
     SemanticId postcondition_id;
     char precondition[64];
-    char postcondition[64];
+    char postcondition[64];     /* display text; for a composition, derived and not canonical */
+    /* Composition (spec/program-identity.md 2.4): the flattened, ordered list of the
+     * component (leaf) postcondition ids, in application order. postcondition_id is then
+     * the canonical sequence constraint over this list, so composition is associative.
+     * post_leaf_count == 0 means the postcondition is a leaf. */
+    uint16_t post_leaf_count;
+    SemanticId post_leaves[OMEGA_PROGRAM_MAX_STEPS];
 } OmegaContract;
 
 /* Construct canonical constraint SemanticId from ConstraintKind and annotation */
@@ -30,7 +38,6 @@ int omega_build_constraint_id(ConstraintKind kind, const char *annotation, Seman
 /* Canonical semantic body (spec/program-identity.md 2.1): an ordered chain of
  * unary steps, innermost first: f(x) = op_n(...op_1(x, imm_1)..., imm_n).
  * Stored by value so OmegaProgram stays safe to copy. */
-#define OMEGA_PROGRAM_MAX_STEPS 64
 #define OMEGA_PROGRAM_ID_DOMAIN "omega.program.v2"
 
 typedef struct {
@@ -90,6 +97,12 @@ int omega_program_lift_body(const uint8_t *code, size_t code_len, OmegaProgramBo
 
 /* Emit the canonical realization of a body (the template above, ending in RET). */
 int omega_program_emit_body(const OmegaProgramBody *body, uint8_t *code, size_t *code_len, size_t max_len);
+
+/* Canonical sequence postcondition id over an ordered leaf list (n >= 1): n == 1 is the
+ * leaf itself; otherwise the right fold Seq(l1, Seq(l2, ... ln)) of KIND_CONSTRAINT
+ * objects with attribute "omega.compose" = "seq" and a CONST_POSTCONDITION constraint
+ * whose payload is (head id || tail id). */
+int omega_contract_post_seq_id(const SemanticId *leaves, uint16_t n, SemanticId *out);
 
 /* Validate contract conformance */
 int omega_program_validate_contract(const OmegaProgram *prog, char *err_msg, size_t err_msg_len);

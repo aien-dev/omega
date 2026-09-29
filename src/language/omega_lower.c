@@ -386,6 +386,7 @@ int omega_language_lower_program(const OmegaAst *ast, OmegaProgram *out, char *e
     snprintf(acc.name, sizeof acc.name, "%s", ast->name);
     snprintf(acc.contract.precondition, sizeof acc.contract.precondition, "%s", ast->requires_text);
     snprintf(acc.contract.postcondition, sizeof acc.contract.postcondition, "%s", ast->ensures_text);
+    acc.contract.post_leaf_count = 0;   /* the fn's ensures clause is one leaf */
     if (omega_build_constraint_id(CONST_PRECONDITION, acc.contract.precondition, &acc.contract.precondition_id) ||
         omega_build_constraint_id(CONST_POSTCONDITION, acc.contract.postcondition, &acc.contract.postcondition_id) ||
         omega_program_compute_id(&acc))

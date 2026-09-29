@@ -185,7 +185,7 @@ read -r st r f < <(combine OMEGA_PROGRAM_ID_REPRESENTATION_INVARIANT_PASS)
 pn=$(qual_case 'program-id[param name + commutative side]')
 r=$((r + 1)); [ "$pn" -eq 1 ] || { st=FAIL; f=$((f + 1)); }
 add_gate OMEGA_PROGRAM_ID_REPRESENTATION_INVARIANT_PASS "$st" "$r" "$f" \
-    "make test-program-id (gate REPRESENTATION_INVARIANT) + Visor qualification case program-id[param name + commutative side]"
+    "make test-program-id (gate REPRESENTATION_INVARIANT, incl. seeded associativity: 400 chains x 4 bracketings == left fold, 400 a;b != b;a) + Visor qualification case program-id[param name + commutative side]"
 
 read -r st r f < <(combine OMEGA_PROGRAM_ID_MUTATION_SEPARATION_PASS)
 add_gate OMEGA_PROGRAM_ID_MUTATION_SEPARATION_PASS "$st" "$r" "$f" \
@@ -248,8 +248,7 @@ body=$(cat <<EOF
   ],
   "non_claims": [
     "Identity is intensional (canonical body), not extensional: x+1+1 and x+2 compute the same function and have different ids.",
-    "omega_program_compose derives its postcondition as text \"(B)o(A)\", so re-associated compositions differ in contract and therefore in id; the invariance gate holds the contract fixed. Deferred.",
-    "Contract clauses are identified by canonical text, not by logical meaning.",
+    "Composition postconditions are the flattened ordered leaf list (spec 2.4): associative by construction; leaf clauses are still identified by canonical text, not logical meaning.",
     "Historical receipts under evidence/ carry v1 program ids and are not rewritten.",
     "The body model is the V0 unary step chain (five ops, one constant each, <= 64 steps)."
   ],
