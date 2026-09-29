@@ -1,0 +1,19 @@
+name: Turing yield boundaries
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/turing/**'
+      - 'tests/turing/**'
+      - 'tools/ty_energy*'
+      - 'tools/turing_yield.c'
+      - 'tools/r15_reduce.c'
+      - 'mk/turing_yield*'
+      - '.github/workflows/turing-yield.yml'
+jobs:
+  portable-boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Math, attribution and hostile fixtures with sanitizers
+        run: make test-turing-yield test-turing-energy

@@ -206,4 +206,11 @@ document.
 
 ## Amendments
 
-(none)
+2026-09-29, before the first timed stage 1/2 run: Codex completed the interrupted
+harness in an isolated worktree. Energy symbols use the `ty_energy`/`TYE` namespace
+to coexist with TY-1. Hostile synthetic fixtures and sanitizer checks reject
+malformed records, arithmetic overflow, missing sensors, counter wrap and failed
+participants. The driver holds the existing `.argus-bench.lock` as well as its
+owned quiet flag. Workloads, seeds, stage selection, fitting and qualification
+thresholds above are unchanged. CI fixtures are synthetic and prove no hardware
+energy result. No timed data has been used to tune this amendment.
