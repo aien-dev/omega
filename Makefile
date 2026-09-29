@@ -966,3 +966,47 @@ bench-mixed-algebra: $(OMA_RZ_BENCH) $(OMA_RZ_SELECT)
 		./$(OMA_RZ_BENCH) $(MA2_EVIDENCE)/ma2_bench_run2.json
 	./$(OMA_RZ_SELECT) $(MA2_EVIDENCE)/ma2_select_receipt.json \
 		$(MA2_EVIDENCE)/ma2_bench_run1.json $(MA2_EVIDENCE)/ma2_bench_run2.json
+
+# ---------------------------------------------------------------------------
+# TURING Wave 1 (docs/turing/TURING_W0_PROPOSAL.md): Field v1 records (K.7) +
+# control-arm selector, post hoc over evidence/MIXED_ALGEBRA receipts.
+# Reads src/algebra (registry) without modifying it; no runtime, no timed runs.
+# test-turing: plain + ASan/UBSan suites, then a rebuild check (spec ids from
+# two different builds must be byte-identical).
+.PHONY: test-turing turing-field
+TURING_SRCS = src/turing/field.c src/turing/field_select.c src/turing/field_select_v0_retired.c src/turing/history_selector.c \
+	src/turing/replay.c src/omega_canonical.c src/sha256.c $(OMA_RZ_SRCS)
+TURING_HDRS = src/turing/field.h src/turing/select.h src/omega_canonical.h src/omega_types.h src/sha256.h $(OMA_RZ_HDRS)
+TURING_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
+TURING_TEST = $(OUT_DIR)/tests-turing/test_turing
+TURING_TEST_ASAN = $(OUT_DIR)/tests-turing/test_turing_asan
+TURING_TOOL = $(OUT_DIR)/tests-turing/turing-field
+TURING_TOOL_ASAN = $(OUT_DIR)/tests-turing/turing-field_asan
+
+$(TURING_TEST): tests/turing/test_turing.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tests/turing/test_turing.c $(TURING_SRCS) -lm
+
+$(TURING_TEST_ASAN): tests/turing/test_turing.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) $(TURING_ASAN) -o $@ tests/turing/test_turing.c $(TURING_SRCS) -lm
+
+$(TURING_TOOL): tools/turing_field.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) -o $@ tools/turing_field.c $(TURING_SRCS) -lm
+
+$(TURING_TOOL_ASAN): tools/turing_field.c $(TURING_SRCS) $(TURING_HDRS)
+	@mkdir -p $(dir $@)
+	$(CC) $(OMA_RZ_CFLAGS) $(TURING_ASAN) -o $@ tools/turing_field.c $(TURING_SRCS) -lm
+
+turing-field: $(TURING_TOOL)
+	./$(TURING_TOOL)
+
+test-turing: $(TURING_TEST) $(TURING_TEST_ASAN) $(TURING_TOOL) $(TURING_TOOL_ASAN)
+	./$(TURING_TEST)
+	./$(TURING_TEST_ASAN)
+	./$(TURING_TOOL) --spec-ids > $(OUT_DIR)/tests-turing/spec_ids_plain.txt
+	./$(TURING_TOOL_ASAN) --spec-ids > $(OUT_DIR)/tests-turing/spec_ids_asan.txt
+	cmp $(OUT_DIR)/tests-turing/spec_ids_plain.txt $(OUT_DIR)/tests-turing/spec_ids_asan.txt
+	./$(TURING_TOOL_ASAN) > $(OUT_DIR)/tests-turing/turing_field_asan.txt
+	@echo "test-turing: spec ids identical across plain and ASan builds; turing-field runs clean under ASan/UBSan"
