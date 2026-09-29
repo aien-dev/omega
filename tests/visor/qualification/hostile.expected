@@ -1,0 +1,60 @@
+Ω> // Lane 8 hostile session: every line below except the lets and `x + y` must fail closed; the process stays alive.
+Ω> let x: u64 = 7
+7
+Ω> let y: u64 = 11
+11
+Ω> // comment only
+Ω> frobnicate
+error: source: column 1: unknown name 'frobnicate' (define it first, e.g. let frobnicate: u64 = 7)
+Ω> id aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+error: id: unknown name or id 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+Ω> id bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+error: id: unknown name or id 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+Ω> id 000000000000000000000000000000000000000000000000000000000000000g
+error: id: unknown name or id '000000000000000000000000000000000000000000000000000000000000000g'
+Ω> inspect sha256:junk
+error: inspect: unknown name or id 'sha256:junk'
+Ω> inspect 0000000000000000000000000000000000000000000000000000000000000000
+error: inspect: unknown name or id '0000000000000000000000000000000000000000000000000000000000000000'
+Ω> (x + y
+error: source: column 7: expected ')' but found 'end of line'
+Ω> 18446744073709551616: u64
+error: source: column 1: integer literal does not fit in 64 bits
+Ω> 36893488147419103232: u64
+error: source: column 1: integer literal does not fit in 64 bits
+Ω> 256: u8
+error: source: column 1: literal 256 does not fit in u8
+Ω> ((((((((((((((((((((((((((((((((((((((((7: u64))))))))))))))))))))))))))))))))))))))))
+error: source: column 34: expression is nested too deeply for V0 (limit 32)
+Ω> x + y
+18
+Ω> run _ 1 2 3 4 5 6
+error: run: too many arguments (max 4)
+Ω> compare x
+error: compare: expected 2 arguments, got 1
+Ω> let b: bool = true
+1
+Ω> realize b
+error: realize: not an APPLY or OPERATION object; only pure binary u64 applies realize in V1
+Ω> run sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822
+error: run: sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822 is not an APPLY; only pure binary u64 applies run in V1
+Ω> authorize x
+error: unknown: unknown command or invalid source line: 'authorize'
+Ω> submit
+error: source: column 1: unknown name 'submit' (define it first, e.g. let submit: u64 = 7)
+Ω> execute _
+error: unknown: unknown command or invalid source line: 'execute'
+Ω> mint cap
+error: unknown: unknown command or invalid source line: 'mint'
+Ω> grant x
+error: unknown: unknown command or invalid source line: 'grant'
+Ω> effects x
+error: effects: 'x' is not an EFFECT object
+Ω> 1 + 2
+error: source: column 3: ambiguous width: no operand has a type; write e.g. `(1: u64) + 2`
+Ω> (1: u32) + (1: u64)
+error: source: column 14: this annotation is u64 but u32 is required here (V0 never converts between types)
+Ω> x == y
+error: source: column 3: comparisons are not supported in V0 expressions (the existing builder would type the result as the operand type, not bool)
+Ω> let alive: u64 = 42
+42

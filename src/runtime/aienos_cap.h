@@ -67,4 +67,30 @@ int aienos_cap_cognition_admin(const AienosCapView *view, uint32_t op, AienosCap
 int aienos_cap_force_generation(AienosCapAdmin *admin, uint32_t cap_id, uint64_t generation);
 int aienos_cap_generation_advance(uint64_t generation, uint64_t *out);
 
+/* Authority observer (aienos native/capability, 12add16, on aienos main from
+ * d39dd5b). Set on the admin handle; the view has no path to it and
+ * aienos_cap_validate never calls it. One call per state change, with a copy
+ * of the entry after the change, made after the table lock is released:
+ *   MINT new entry (refused: entry NULL + code); REVOKE target, then each
+ *   descendant, ancestors first; RECLAIM freed slot; EPOCH/CLOCK the acting
+ *   authority's entry; KILL entry NULL; RESTART the new office entry.
+ * VALIDATE_DENIED is reserved and never sent. With no observer set, each admin
+ * operation pays one NULL check. */
+#define AIENOS_CAP_OBS_MINT 1u
+#define AIENOS_CAP_OBS_REVOKE 2u
+#define AIENOS_CAP_OBS_RECLAIM 3u
+#define AIENOS_CAP_OBS_EPOCH 4u
+#define AIENOS_CAP_OBS_CLOCK 5u
+#define AIENOS_CAP_OBS_KILL 6u
+#define AIENOS_CAP_OBS_RESTART 7u
+#define AIENOS_CAP_OBS_VALIDATE_DENIED 8u
+
+typedef void (*AienosCapObserver)(void *ctx, uint32_t op, const AienosCapEntry *entry,
+                                  int result);
+
+int aienos_cap_set_observer(AienosCapAdmin *admin, AienosCapObserver fn, void *ctx);
+
+/* Office token check, constant time (not called by the library itself). */
+int aienos_cap_authorize(const AienosCapAdmin *admin, const uint8_t *presented);
+
 #endif

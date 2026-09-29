@@ -1,0 +1,24 @@
+Ω> help id
+  id <x>                               inspection      show the semantic id of a name, _ or hex id
+Ω> bindings
+(no bindings)
+Ω> id _
+error: id: unknown name or id '_'
+Ω> id sha256:0000000000000000000000000000000000000000000000000000000000000000
+error: id: unknown name or id 'sha256:0000000000000000000000000000000000000000000000000000000000000000'
+Ω> let x = 3 * 6
+error: source: not wired in this build
+Ω> inspect x
+error: inspect: not wired in this build
+Ω> run x
+error: run: not wired in this build
+Ω> realize x for current.machine
+error: realize: not wired in this build
+Ω> compare a
+error: compare: expected 2 arguments, got 1
+Ω> clear
+session cleared
+Ω> bindings
+(no bindings)
+Ω> quit
+bye

@@ -3,3 +3,4 @@ build/qual-runs/
 *.o
 .claude/
 .claude/
+/omega
