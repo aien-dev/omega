@@ -281,7 +281,7 @@ static int fn_candidate(RxCtx *c) {
     AienosCapEntry grant;
     if (rx_world_read(w, l->caps.output_slot, &slot) != RX_OK ||
         aienos_cap_inspect(l->authority,
-            (AienosCapRef){(uint32_t)slot.field[0], (uint32_t)slot.field[1]}, &grant) != 0)
+            (AienosCapRef){(uint32_t)slot.field[0], slot.field[1]}, &grant) != 0)
         return decline(l, RX_LIVING_WHY_GRANT);
 
     uint64_t id = 0;
