@@ -32,8 +32,21 @@ inputs are always valid (tested).
 `OMA_OK = 0`; errors are negative: `OMA_E_INVALID_TRIT` (int8 not in
 {-1,0,1}), `OMA_E_INVALID_CODE` (code 3 or > 3), `OMA_E_INVALID_PLANES`
 (block with `pos & neg != 0`), `OMA_E_OVERFLOW`, `OMA_E_INVALID_BYTE` (dense
-byte >= 243 or non-zero padding), `OMA_E_INVALID_Z3`, `OMA_E_ARG`.
-`oma_strerror(rc)` names them. On error, outputs are left untouched.
+byte >= 243 or non-zero padding), `OMA_E_INVALID_Z3`, `OMA_E_ARG`,
+`OMA_E_UNDERFLOW` (absmean of a non-zero input whose mean is below
+`FLT_MIN`). `oma_strerror(rc)` names them.
+
+**On error, outputs are left untouched.** Every function validates its whole
+input (all trits, all blocks, all bytes, padding, capacity, finiteness)
+before it writes any output, so a failed call never leaves a half-written
+buffer. The suite checks this on every error path by prefilling each output
+with a sentinel byte and comparing after the call.
+
+**Scalar inputs are `int`.** The per-trit, per-code and Z3 scalar functions
+(`oma_code_*`, `oma_trit_to_code`, `oma_trit_neg/add/mul`, `oma_z3_*`,
+`oma_trit_to_z3`, `oma_dense_byte_decode`) take `int`, so an out-of-range
+value such as 256 or -129 reaches the range check and is rejected; it is
+never silently wrapped to a valid 8-bit value at the call.
 
 ## API
 
@@ -77,7 +90,7 @@ Z3 add = balanced-add sum with carry dropped, Z3 mul = H2, Z3 neg = swap.
   last byte, so every trit string has exactly one encoding),
   `oma_dense_byte_decode`.
 
-`oma_quant.h`: `oma_quant_absmean`, `oma_quant_rel_l2`.
+`oma_quant.h`: `oma_quant_absmean`, `oma_quant_rel_l2` (see below).
 
 ## Exact vs approximate
 
@@ -85,16 +98,41 @@ Exact (bit-for-bit, integer-defined): all trit, block, dot, Z3, integer
 conversion and pack/unpack operations.
 
 **Approximate:** `oma_quant_absmean` (BitNet b1.58 style). It is a lossy
-transform, not a realization of the float values:
-scale = mean|w_i| (summed in double, stored as float);
-q_i = clamp(round(w_i / scale), -1, 1), round half away from zero. All-zero
-input gives scale 0 and q = 0; NaN/Inf input is rejected. No epsilon is added
-(BitNet adds a tiny eps; here the zero case is explicit). The loss is measured
-by `oma_quant_rel_l2` = ||w - q*scale||_2 / ||w||_2 (double). Properties that
-do hold exactly: q of already-ternary input equals the input (scale = fraction
-of non-zero entries); re-quantizing q*scale returns the same q.
+transform, not a realization of the float values.
 
-## Test coverage (one run: 25,709,261 checks, 0 failures)
+- mean = sum|w_i| / n, with the sum and the division in **double**;
+  scale = (float)mean.
+- q_i = clamp(round(w_i / scale), -1, 1), round half away from zero. The
+  reference computes w_i / scale in **double**. Because q_i only depends on
+  whether |w_i| >= scale/2, this is the same as the exact rule
+  "q_i = sign(w_i) if |w_i| >= scale/2, else 0". A correctly rounded float32
+  division gives the same q: w_i and scale are floats with scale >= FLT_MIN,
+  so an exact quotient below 1/2 sits more than 2^-26 below it and cannot
+  round up to 1/2 (checked on 200,000,000 near-tie pairs, 0 disagreements).
+  Fast paths that use an approximate reciprocal or flush-to-zero are not
+  covered by that argument and must be checked against this reference.
+- All-zero (or empty) input: `OMA_OK`, scale 0, q = 0.
+- Non-zero input whose double mean is below `FLT_MIN` (so scale would be
+  subnormal or 0): `OMA_E_UNDERFLOW`, outputs untouched. A successful call
+  therefore returns scale 0 (input all zero) or a normal float, never a
+  subnormal, and never quantizes non-zero input to all zero silently.
+- NaN/Inf input: `OMA_E_ARG`. No epsilon is added (BitNet adds a tiny eps;
+  here the zero case is explicit).
+
+The loss is measured by `oma_quant_rel_l2` = ||w - q*scale||_2 / ||w||_2,
+computed in double. It returns `OMA_E_ARG` for NaN/Inf w_i, for a NaN, Inf
+or negative scale, and when ||w|| = 0 but the reconstruction is not zero
+(relative error undefined); scale 0 is accepted. On `OMA_OK` the error is
+finite.
+
+Properties that hold exactly:
+- q of already-ternary input equals the input (scale = fraction of
+  non-zero entries).
+- Re-quantizing q*scale returns the same q, except that it returns
+  `OMA_E_UNDERFLOW` when k*scale/n < `FLT_MIN` (k = number of non-zero q).
+  Proof sketch: q_i*scale is exact; the new scale s2 = (float)(k*scale/n) <=
+  scale, so every non-zero lane has |q_i*scale| >= s2/2 and keeps its sign.
+## Test coverage (one run: 25,672,462 checks, 0 failures)
 
 | section | checks | what |
 |---|---:|---|
@@ -107,12 +145,14 @@ of non-zero entries); re-quantizing q*scale returns the same q.
 | random block properties | 6,298,255 | 1,000,000 random valid block pairs (varied density) vs lane oracle; 100,000 multi-block ternary x int8 dots, n in 0..512, stray-lane rejection |
 | pack/unpack random | 307,024 | 20,000 random lengths 0..1000, both forms + serialize round trip, bad-trit and capacity rejection |
 | Z3 | 866,314 | all 256x256 scalar inputs (valid vs mod-3 oracle and isomorphism, invalid rejected); 200,000 random Z3 blocks |
-| absmean quantization | 160,046 | two known vectors with exact scale/q/error; zero, NaN, Inf; 20,000 random vectors: ternary idempotence, scale = mean abs, q formula, requantization idempotence, finite error |
+| errors leave outputs | 6,254 | every error path of every function with outputs prefilled with a sentinel and checked unchanged: bad trit / (1,1) block / bad byte / bad padding at fixed and 6,000 random positions (pack/unpack bitplane and dense), short buffers, serialize, block and Z3 ops, dots (stray lane, n > max), integer conversion, quantization; 14 wide ints (INT_MIN, -129, 256, 258, INT_MAX, ...) through every scalar function |
+| absmean quantization | 116,993 | hand-computed vectors (exact ties, largest float below a tie, errors sqrt(1.5/6.5) and sqrt(3/11)); zero, NaN, Inf; denormal and FLT_MIN/FLT_MAX edges; rel_l2 argument rules; 20,000 ternary vectors (idempotence, scale); 20,000 dyadic vectors w_i = k_i*2^-e (half near FLT_MIN) against an exact integer oracle for scale rounding, the |w_i| >= scale/2 rule and the underflow rule; requantization (same q or the stated underflow) |
 
 Fixed seed (splitmix64); runs are reproducible. The same suite passes under
 `-fsanitize=address,undefined -fno-sanitize-recover=all`. A mutation check
 (dropping one term from the add or mul formula, or accepting byte 243) makes
-the suite fail.
+the suite fail, and so does restoring the old write-as-you-go unpack/pack
+functions or the old quantizer (silent zero scale, unchecked rel_l2).
 
 ## Relation to the parked branch `experiment/ternary-semantics` (ae1e2a3)
 

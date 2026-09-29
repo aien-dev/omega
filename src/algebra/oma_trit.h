@@ -15,12 +15,13 @@
 enum {
     OMA_OK = 0,
     OMA_E_INVALID_TRIT = -1,   /* int8 value outside {-1,0,1} */
-    OMA_E_INVALID_CODE = -2,   /* 2-bit code 0b11 (pos=1,neg=1) or > 3 */
+    OMA_E_INVALID_CODE = -2,   /* 2-bit code 0b11 (pos=1,neg=1), < 0 or > 3 */
     OMA_E_INVALID_PLANES = -3, /* block with pos & neg != 0 */
     OMA_E_OVERFLOW = -4,       /* result does not fit the requested width */
     OMA_E_INVALID_BYTE = -5,   /* dense byte >= 243 or non-zero padding */
     OMA_E_INVALID_Z3 = -6,     /* Z3 value outside {0,1,2} */
-    OMA_E_ARG = -7             /* NULL pointer, bad length, non-finite input */
+    OMA_E_ARG = -7,            /* NULL pointer, bad length, non-finite input */
+    OMA_E_UNDERFLOW = -8       /* quant: non-zero input whose mean |w| is below FLT_MIN */
 };
 
 const char *oma_strerror(int rc);
@@ -37,19 +38,21 @@ int oma_trit_make(int v, oma_trit *out);
 #define OMA_CODE_NEG 2u
 #define OMA_CODE_INVALID 3u
 
-int oma_trit_to_code(oma_trit t, uint8_t *code);
-int oma_code_to_trit(uint8_t code, oma_trit *out);
+/* Scalar inputs are taken as int so that out-of-range values (256, -129, ...)
+ * reach the range check instead of wrapping at the call. */
+int oma_trit_to_code(int t, uint8_t *code);
+int oma_code_to_trit(int code, oma_trit *out);
 
-/* Per-trit ops on codes. Any input code 0b11 (or > 3) -> OMA_E_INVALID_CODE. */
-int oma_code_neg(uint8_t a, uint8_t *out);
+/* Per-trit ops on codes. Any input code 0b11 (or < 0 or > 3) -> OMA_E_INVALID_CODE. */
+int oma_code_neg(int a, uint8_t *out);
 /* Balanced add: a + b = sum + 3*carry, sum and carry both trits. */
-int oma_code_add(uint8_t a, uint8_t b, uint8_t *sum, uint8_t *carry);
-int oma_code_mul(uint8_t a, uint8_t b, uint8_t *out);
+int oma_code_add(int a, int b, uint8_t *sum, uint8_t *carry);
+int oma_code_mul(int a, int b, uint8_t *out);
 
 /* Same ops on trit values (inputs checked, outputs are trits). */
-int oma_trit_neg(oma_trit a, oma_trit *out);
-int oma_trit_add(oma_trit a, oma_trit b, oma_trit *sum, oma_trit *carry);
-int oma_trit_mul(oma_trit a, oma_trit b, oma_trit *out);
+int oma_trit_neg(int a, oma_trit *out);
+int oma_trit_add(int a, int b, oma_trit *sum, oma_trit *carry);
+int oma_trit_mul(int a, int b, oma_trit *out);
 
 /* ---- 64-trit block: lane i is bit i of each plane ---- */
 #define OMA_BLOCK_TRITS 64

@@ -11,6 +11,7 @@ const char *oma_strerror(int rc) {
     case OMA_E_INVALID_BYTE: return "invalid dense byte";
     case OMA_E_INVALID_Z3: return "invalid Z3 value";
     case OMA_E_ARG: return "invalid argument";
+    case OMA_E_UNDERFLOW: return "quantization scale underflow";
     default: return "unknown error";
     }
 }
@@ -43,7 +44,7 @@ int oma_trit_make(int v, oma_trit *out) {
     return OMA_OK;
 }
 
-int oma_trit_to_code(oma_trit t, uint8_t *code) {
+int oma_trit_to_code(int t, uint8_t *code) {
     if (!code) return OMA_E_ARG;
     switch (t) {
     case 0: *code = OMA_CODE_ZERO; return OMA_OK;
@@ -53,25 +54,25 @@ int oma_trit_to_code(oma_trit t, uint8_t *code) {
     }
 }
 
-int oma_code_to_trit(uint8_t code, oma_trit *out) {
+int oma_code_to_trit(int code, oma_trit *out) {
     if (!out) return OMA_E_ARG;
-    if (code > 2u) return OMA_E_INVALID_CODE; /* 0b11 and anything wider */
-    *out = (oma_trit)((int)(code & 1u) - (int)((code >> 1) & 1u));
+    if (code < 0 || code > 2) return OMA_E_INVALID_CODE; /* 0b11 and anything wider */
+    *out = (oma_trit)((code & 1) - ((code >> 1) & 1));
     return OMA_OK;
 }
 
 /* Per-trit ops use the same plane formulas as the block ops, on 1-bit planes. */
-int oma_code_neg(uint8_t a, uint8_t *out) {
+int oma_code_neg(int a, uint8_t *out) {
     if (!out) return OMA_E_ARG;
-    if (a > 2u) return OMA_E_INVALID_CODE;
-    *out = (uint8_t)(((a & 1u) << 1) | ((a >> 1) & 1u));
+    if (a < 0 || a > 2) return OMA_E_INVALID_CODE;
+    *out = (uint8_t)(((a & 1) << 1) | ((a >> 1) & 1));
     return OMA_OK;
 }
 
-int oma_code_add(uint8_t a, uint8_t b, uint8_t *sum, uint8_t *carry) {
+int oma_code_add(int a, int b, uint8_t *sum, uint8_t *carry) {
     if (!sum || !carry) return OMA_E_ARG;
-    if (a > 2u || b > 2u) return OMA_E_INVALID_CODE;
-    oma_block A = {a & 1u, (a >> 1) & 1u}, B = {b & 1u, (b >> 1) & 1u}, S, C;
+    if (a < 0 || a > 2 || b < 0 || b > 2) return OMA_E_INVALID_CODE;
+    oma_block A = {(uint64_t)(a & 1), (uint64_t)((a >> 1) & 1)}, B = {(uint64_t)(b & 1), (uint64_t)((b >> 1) & 1)}, S, C;
     int rc = oma_block_add(&A, &B, &S, &C);
     if (rc) return rc;
     *sum = (uint8_t)((S.pos & 1u) | ((S.neg & 1u) << 1));
@@ -79,17 +80,17 @@ int oma_code_add(uint8_t a, uint8_t b, uint8_t *sum, uint8_t *carry) {
     return OMA_OK;
 }
 
-int oma_code_mul(uint8_t a, uint8_t b, uint8_t *out) {
+int oma_code_mul(int a, int b, uint8_t *out) {
     if (!out) return OMA_E_ARG;
-    if (a > 2u || b > 2u) return OMA_E_INVALID_CODE;
-    oma_block A = {a & 1u, (a >> 1) & 1u}, B = {b & 1u, (b >> 1) & 1u}, P;
+    if (a < 0 || a > 2 || b < 0 || b > 2) return OMA_E_INVALID_CODE;
+    oma_block A = {(uint64_t)(a & 1), (uint64_t)((a >> 1) & 1)}, B = {(uint64_t)(b & 1), (uint64_t)((b >> 1) & 1)}, P;
     int rc = oma_block_mul(&A, &B, &P);
     if (rc) return rc;
     *out = (uint8_t)((P.pos & 1u) | ((P.neg & 1u) << 1));
     return OMA_OK;
 }
 
-int oma_trit_neg(oma_trit a, oma_trit *out) {
+int oma_trit_neg(int a, oma_trit *out) {
     uint8_t ca, r;
     int rc;
     if (!out) return OMA_E_ARG;
@@ -98,7 +99,7 @@ int oma_trit_neg(oma_trit a, oma_trit *out) {
     return oma_code_to_trit(r, out);
 }
 
-int oma_trit_add(oma_trit a, oma_trit b, oma_trit *sum, oma_trit *carry) {
+int oma_trit_add(int a, int b, oma_trit *sum, oma_trit *carry) {
     uint8_t ca, cb, s, c;
     int rc;
     if (!sum || !carry) return OMA_E_ARG;
@@ -108,7 +109,7 @@ int oma_trit_add(oma_trit a, oma_trit b, oma_trit *sum, oma_trit *carry) {
     return oma_code_to_trit(c, carry);
 }
 
-int oma_trit_mul(oma_trit a, oma_trit b, oma_trit *out) {
+int oma_trit_mul(int a, int b, oma_trit *out) {
     uint8_t ca, cb, r;
     int rc;
     if (!out) return OMA_E_ARG;

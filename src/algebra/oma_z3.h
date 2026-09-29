@@ -8,12 +8,13 @@
 
 typedef uint8_t oma_z3; /* one of 0, 1, 2 */
 
+/* Scalar inputs are int: out-of-range values are rejected, never wrapped. */
 int oma_z3_make(int v, oma_z3 *out);
-int oma_z3_add(oma_z3 a, oma_z3 b, oma_z3 *out);
-int oma_z3_mul(oma_z3 a, oma_z3 b, oma_z3 *out);
-int oma_z3_neg(oma_z3 a, oma_z3 *out);
-int oma_z3_to_trit(oma_z3 a, oma_trit *out);
-int oma_trit_to_z3(oma_trit t, oma_z3 *out);
+int oma_z3_add(int a, int b, oma_z3 *out);
+int oma_z3_mul(int a, int b, oma_z3 *out);
+int oma_z3_neg(int a, oma_z3 *out);
+int oma_z3_to_trit(int a, oma_trit *out);
+int oma_trit_to_z3(int t, oma_z3 *out);
 
 /* Z3 block on bitplanes: {one, two}, lane i = bit i. Under the map above
  * it is bit-identical to an oma_block ({pos, neg}); (1,1) is invalid. */

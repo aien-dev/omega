@@ -6,7 +6,9 @@
 #include "algebra/oma_trit.h"
 #include "algebra/oma_z3.h"
 
+#include <float.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -533,22 +535,307 @@ static void test_z3(void) {
     section_end("Z3");
 }
 
+/* ---- error paths: every output untouched (spec: "On error, outputs are left
+ * untouched"). Outputs are prefilled with a sentinel and compared after. ---- */
+#define SENT 0x5A
+#define UNTOUCHED(buf) (untouched_((const unsigned char *)(buf), sizeof(buf)))
+static int untouched_(const unsigned char *p, size_t n) {
+    for (size_t i = 0; i < n; i++)
+        if (p[i] != SENT) return 0;
+    return 1;
+}
+#define FILL(buf) memset((buf), SENT, sizeof(buf))
+
+static void test_error_untouched(void) {
+    section_begin();
+    /* pack_bitplane: bad trit in block 2 (reviewer M1 reproducer), bad trit at
+     * random positions, short capacity. */
+    {
+        int8_t t[100] = {0};
+        oma_block out[2];
+        t[80] = 5;
+        FILL(out);
+        CHECK(oma_pack_bitplane(t, 100, out, 2) == OMA_E_INVALID_TRIT && UNTOUCHED(out), "pack_bitplane bad trit 80");
+        t[80] = 0;
+        FILL(out);
+        CHECK(oma_pack_bitplane(t, 100, out, 1) == OMA_E_OVERFLOW && UNTOUCHED(out), "pack_bitplane cap");
+    }
+    for (int it = 0; it < 2000; it++) {
+        int8_t t[600];
+        oma_block out[10];
+        size_t n = 1 + (size_t)(rnd() % 600u);
+        for (size_t i = 0; i < n; i++) t[i] = (int8_t)rnd_trit();
+        t[rnd() % n] = (int8_t)(rnd() & 1u ? 2 : -2);
+        FILL(out);
+        CHECK(oma_pack_bitplane(t, n, out, 10) == OMA_E_INVALID_TRIT && UNTOUCHED(out), "pack_bitplane random bad n=%zu", n);
+    }
+    /* unpack_bitplane: (1,1) in block 2 (M1 reproducer), stray tail lane,
+     * short input; invalid block at random index. */
+    {
+        oma_block in[2] = {{1, 0}, {1, 1}};
+        int8_t out[100];
+        FILL(out);
+        CHECK(oma_unpack_bitplane(in, 2, 100, out) == OMA_E_INVALID_PLANES && UNTOUCHED(out), "unpack_bitplane (1,1) blk2");
+        in[1].neg = 0;
+        in[1].pos = 1ull << 40; /* lane 104 >= n */
+        FILL(out);
+        CHECK(oma_unpack_bitplane(in, 2, 100, out) == OMA_E_ARG && UNTOUCHED(out), "unpack_bitplane tail");
+        FILL(out);
+        CHECK(oma_unpack_bitplane(in, 1, 100, out) == OMA_E_ARG && UNTOUCHED(out), "unpack_bitplane short");
+    }
+    for (int it = 0; it < 2000; it++) {
+        oma_block in[10];
+        int8_t out[640];
+        size_t n = 1 + (size_t)(rnd() % 640u), nb = oma_bitplane_blocks(n);
+        for (size_t k = 0; k < nb; k++) {
+            random_valid_block(&in[k]);
+            if (k == nb - 1 && n % 64) {
+                uint64_t live = (1ull << (n % 64)) - 1u;
+                in[k].pos &= live;
+                in[k].neg &= live;
+            }
+        }
+        size_t bad = (size_t)(rnd() % nb);
+        in[bad].pos |= 1u;
+        in[bad].neg |= 1u;
+        FILL(out);
+        CHECK(oma_unpack_bitplane(in, nb, n, out) == OMA_E_INVALID_PLANES && UNTOUCHED(out), "unpack_bitplane random n=%zu", n);
+    }
+    /* dense pack / unpack */
+    {
+        int8_t t[15] = {0};
+        uint8_t out[3];
+        size_t len = 777;
+        t[14] = 3;
+        FILL(out);
+        CHECK(oma_pack_dense(t, 15, out, 3, &len) == OMA_E_INVALID_TRIT && UNTOUCHED(out) && len == 777, "pack_dense bad");
+        t[14] = 0;
+        FILL(out);
+        CHECK(oma_pack_dense(t, 15, out, 2, &len) == OMA_E_OVERFLOW && UNTOUCHED(out) && len == 777, "pack_dense cap");
+    }
+    {
+        const uint8_t in1[3] = {121, 121, 250}, in2[2] = {121, 0};
+        int8_t out[15];
+        FILL(out);
+        CHECK(oma_unpack_dense(in1, 3, 15, out) == OMA_E_INVALID_BYTE && UNTOUCHED(out), "unpack_dense byte 250");
+        FILL(out);
+        CHECK(oma_unpack_dense(in2, 2, 6, out) == OMA_E_INVALID_BYTE && UNTOUCHED(out), "unpack_dense padding");
+        FILL(out);
+        CHECK(oma_unpack_dense(in1, 2, 15, out) == OMA_E_ARG && UNTOUCHED(out), "unpack_dense short");
+        int8_t d5[5];
+        FILL(d5);
+        CHECK(oma_dense_byte_decode(243, d5) == OMA_E_INVALID_BYTE && UNTOUCHED(d5), "byte_decode 243");
+    }
+    for (int it = 0; it < 2000; it++) {
+        uint8_t in[200];
+        int8_t out[1000];
+        size_t n = 1 + (size_t)(rnd() % 1000u), nb = oma_dense_bytes(n);
+        for (size_t k = 0; k < nb; k++) in[k] = (uint8_t)(rnd() % 243u);
+        if (n % 5) in[nb - 1] = 121; /* all-zero trits: canonical padding */
+        in[rnd() % nb] = (uint8_t)(243u + rnd() % 13u);
+        FILL(out);
+        CHECK(oma_unpack_dense(in, nb, n, out) == OMA_E_INVALID_BYTE && UNTOUCHED(out), "unpack_dense random n=%zu", n);
+    }
+    /* single blocks, serialization, dots */
+    {
+        oma_block bad = {1u << 7, 1u << 7}, ok = {1, 2}, ob[1];
+        int8_t lanes[64];
+        uint8_t ser[16];
+        int32_t d[1];
+        FILL(lanes);
+        CHECK(oma_block_decode(&bad, lanes) == OMA_E_INVALID_PLANES && UNTOUCHED(lanes), "block decode");
+        int8_t enc[64] = {0};
+        enc[63] = 2;
+        FILL(ob);
+        CHECK(oma_block_encode(enc, ob) == OMA_E_INVALID_TRIT && UNTOUCHED(ob), "block encode");
+        FILL(ob);
+        CHECK(oma_block_neg(&bad, ob) == OMA_E_INVALID_PLANES && UNTOUCHED(ob), "block neg");
+        FILL(ob);
+        CHECK(oma_block_mul(&ok, &bad, ob) == OMA_E_INVALID_PLANES && UNTOUCHED(ob), "block mul");
+        oma_block sm[1], cy[1];
+        FILL(sm);
+        FILL(cy);
+        CHECK(oma_block_add(&ok, &bad, sm, cy) == OMA_E_INVALID_PLANES && UNTOUCHED(sm) && UNTOUCHED(cy), "block add");
+        FILL(d);
+        CHECK(oma_block_dot(&ok, &bad, d) == OMA_E_INVALID_PLANES && UNTOUCHED(d), "block dot");
+        FILL(ser);
+        CHECK(oma_block_serialize(&bad, ser) == OMA_E_INVALID_PLANES && UNTOUCHED(ser), "serialize");
+        uint8_t raw[16] = {0};
+        raw[3] = 0x10;
+        raw[11] = 0x10;
+        FILL(ob);
+        CHECK(oma_block_deserialize(raw, ob) == OMA_E_INVALID_PLANES && UNTOUCHED(ob), "deserialize");
+        oma_block w[3] = {{1, 0}, {0, 1}, {0, 0}};
+        int8_t x[192] = {0};
+        w[2].pos = 1ull << 20; /* lane 148 >= n = 140 */
+        FILL(d);
+        CHECK(oma_dot_tw_i8(w, x, 140, d) == OMA_E_ARG && UNTOUCHED(d), "dot_tw stray lane blk3");
+        w[2].pos = 1u;
+        w[2].neg = 1u;
+        FILL(d);
+        CHECK(oma_dot_tw_i8(w, x, 140, d) == OMA_E_INVALID_PLANES && UNTOUCHED(d), "dot_tw (1,1) blk3");
+        FILL(d);
+        CHECK(oma_dot_tw_i8(w, x, OMA_DOT_I8_MAX_N + 1, d) == OMA_E_OVERFLOW && UNTOUCHED(d), "dot_tw n>max");
+    }
+    /* Z3 blocks */
+    {
+        oma_z3_block bad = {1u << 9, 1u << 9}, ok = {1, 2}, oz[1];
+        oma_block ot[1], tbad = {5, 4};
+        uint8_t zv[64];
+        FILL(zv);
+        CHECK(oma_z3_block_decode(&bad, zv) == OMA_E_INVALID_PLANES && UNTOUCHED(zv), "z3 decode");
+        uint8_t zin[64] = {0};
+        zin[63] = 3;
+        FILL(oz);
+        CHECK(oma_z3_block_encode(zin, oz) == OMA_E_INVALID_Z3 && UNTOUCHED(oz), "z3 encode");
+        FILL(oz);
+        CHECK(oma_z3_block_add(&ok, &bad, oz) == OMA_E_INVALID_PLANES && UNTOUCHED(oz), "z3 add");
+        FILL(oz);
+        CHECK(oma_z3_block_mul(&bad, &ok, oz) == OMA_E_INVALID_PLANES && UNTOUCHED(oz), "z3 mul");
+        FILL(oz);
+        CHECK(oma_z3_block_neg(&bad, oz) == OMA_E_INVALID_PLANES && UNTOUCHED(oz), "z3 neg");
+        FILL(oz);
+        CHECK(oma_z3_block_from_trits(&tbad, oz) == OMA_E_INVALID_PLANES && UNTOUCHED(oz), "z3 from trits");
+        FILL(ot);
+        CHECK(oma_z3_block_to_trits(&bad, ot) == OMA_E_INVALID_PLANES && UNTOUCHED(ot), "z3 to trits");
+    }
+    /* integer <-> balanced ternary */
+    {
+        int8_t dg[41];
+        size_t nd[1];
+        FILL(dg);
+        FILL(nd);
+        CHECK(oma_int_to_bt(INT64_MAX, dg, 40, nd) == OMA_E_OVERFLOW && UNTOUCHED(dg) && UNTOUCHED(nd), "int_to_bt cap");
+        FILL(dg);
+        CHECK(oma_int_to_bt_fixed(13, dg, 2) == OMA_E_OVERFLOW && UNTOUCHED(dg), "int_to_bt_fixed");
+        int64_t v[1];
+        int8_t digs[41] = {0};
+        digs[40] = 2;
+        FILL(v);
+        CHECK(oma_bt_to_int(digs, 41, v) == OMA_E_INVALID_TRIT && UNTOUCHED(v), "bt_to_int digit");
+        for (int i = 0; i < 41; i++) digs[i] = 1; /* (3^41-1)/2 > INT64_MAX */
+        FILL(v);
+        CHECK(oma_bt_to_int(digs, 41, v) == OMA_E_OVERFLOW && UNTOUCHED(v), "bt_to_int overflow");
+    }
+    /* quantization */
+    {
+        float w[8] = {1, 2, 3, 4, 5, 6, 7, NAN};
+        int8_t q[8];
+        float sc[1];
+        double er[1];
+        FILL(q);
+        FILL(sc);
+        CHECK(oma_quant_absmean(w, 8, q, sc) == OMA_E_ARG && UNTOUCHED(q) && UNTOUCHED(sc), "absmean nan last");
+        const float den[3] = {2 * FLT_TRUE_MIN, 0, 0};
+        FILL(q);
+        FILL(sc);
+        CHECK(oma_quant_absmean(den, 3, q, sc) == OMA_E_UNDERFLOW && UNTOUCHED(q) && UNTOUCHED(sc), "absmean underflow");
+        const int8_t q1[3] = {1, 0, 0};
+        FILL(er);
+        CHECK(oma_quant_rel_l2(w, q1, NAN, 3, er) == OMA_E_ARG && UNTOUCHED(er), "rel_l2 nan scale");
+        FILL(er);
+        CHECK(oma_quant_rel_l2(w, q1, -1.0f, 3, er) == OMA_E_ARG && UNTOUCHED(er), "rel_l2 neg scale");
+    }
+    /* scalar ops: out-of-range wide ints rejected, outputs untouched */
+    {
+        static const int wide[] = {INT_MIN, -65536, -257, -129, -2, 3, 4, 127, 255, 256, 257, 258, 65536, INT_MAX};
+        for (size_t i = 0; i < sizeof wide / sizeof wide[0]; i++) {
+            int v = wide[i];
+            uint8_t c[1], c2[1];
+            oma_trit t[1], t2[1];
+            oma_z3 z[1];
+            int8_t d5[5];
+            FILL(c); FILL(c2); FILL(t); FILL(t2); FILL(z); FILL(d5);
+            if (v < 0 || v > 3) {
+                CHECK(oma_code_to_trit(v, t) == OMA_E_INVALID_CODE, "code_to_trit(%d)", v);
+                CHECK(oma_code_neg(v, c) == OMA_E_INVALID_CODE, "code_neg(%d)", v);
+                CHECK(oma_code_add(v, 0, c, c2) == OMA_E_INVALID_CODE && oma_code_add(1, v, c, c2) == OMA_E_INVALID_CODE, "code_add(%d)", v);
+                CHECK(oma_code_mul(v, 1, c) == OMA_E_INVALID_CODE && oma_code_mul(2, v, c) == OMA_E_INVALID_CODE, "code_mul(%d)", v);
+            }
+            CHECK(oma_trit_to_code(v, c) == OMA_E_INVALID_TRIT, "trit_to_code(%d)", v);
+            CHECK(oma_trit_neg(v, t) == OMA_E_INVALID_TRIT, "trit_neg(%d)", v);
+            CHECK(oma_trit_add(v, 0, t, t2) == OMA_E_INVALID_TRIT && oma_trit_add(1, v, t, t2) == OMA_E_INVALID_TRIT, "trit_add(%d)", v);
+            CHECK(oma_trit_mul(v, 1, t) == OMA_E_INVALID_TRIT && oma_trit_mul(-1, v, t) == OMA_E_INVALID_TRIT, "trit_mul(%d)", v);
+            CHECK(oma_trit_to_z3(v, z) == OMA_E_INVALID_TRIT, "trit_to_z3(%d)", v);
+            CHECK(oma_z3_add(v, 0, z) == OMA_E_INVALID_Z3 && oma_z3_add(2, v, z) == OMA_E_INVALID_Z3, "z3_add(%d)", v);
+            CHECK(oma_z3_mul(v, 1, z) == OMA_E_INVALID_Z3 && oma_z3_mul(1, v, z) == OMA_E_INVALID_Z3, "z3_mul(%d)", v);
+            CHECK(oma_z3_neg(v, z) == OMA_E_INVALID_Z3, "z3_neg(%d)", v);
+            CHECK(oma_z3_to_trit(v, t) == OMA_E_INVALID_Z3, "z3_to_trit(%d)", v);
+            CHECK(oma_z3_make(v, z) == OMA_E_INVALID_Z3 && oma_trit_make(v, t) == OMA_E_INVALID_TRIT, "make(%d)", v);
+            if (v < 0 || v >= 243) CHECK(oma_dense_byte_decode(v, d5) == OMA_E_INVALID_BYTE, "byte_decode(%d)", v);
+            CHECK(UNTOUCHED(c) && UNTOUCHED(c2) && UNTOUCHED(t) && UNTOUCHED(t2) && UNTOUCHED(z) && UNTOUCHED(d5), "scalar outputs untouched (%d)", v);
+        }
+    }
+    section_end("errors leave outputs");
+}
+
+/* ---- absmean oracle: independent of the implementation's round/clamp.
+ * Inputs are dyadic, w_i = k_i * 2^-e with |k_i| < 2^21, so the exact mean is
+ * the rational S / (n * 2^e), S = sum |k_i| (exact int64). All comparisons
+ * below are exact in double (<= 35 significant bits). ---- */
+static int cmp_x_mean(double x, int64_t S, size_t n, int e) { /* sign(x - S/(n 2^e)) */
+    double l = ldexp(x * (double)n, e), r = (double)S;
+    return l < r ? -1 : (l > r ? 1 : 0);
+}
+/* rc/q/scale for dyadic input vs the exact rules:
+ *  S == 0          -> OK, scale 0, q 0
+ *  mean < FLT_MIN  -> OMA_E_UNDERFLOW
+ *  else scale = mean rounded to nearest float (checked via both half-ulp
+ *  midpoints) and q_i = sign(k_i) iff 2|k_i| >= scale * 2^e. */
+static int quant_oracle_ok(const int32_t *k, size_t n, int e, int rc, const int8_t *q, float s) {
+    int64_t S = 0;
+    for (size_t i = 0; i < n; i++) S += k[i] < 0 ? -(int64_t)k[i] : k[i];
+    if (S == 0) {
+        if (rc != OMA_OK || s != 0.0f) return 0;
+        for (size_t i = 0; i < n; i++)
+            if (q[i]) return 0;
+        return 1;
+    }
+    if (cmp_x_mean((double)FLT_MIN, S, n, e) > 0) return rc == OMA_E_UNDERFLOW;
+    if (rc != OMA_OK || !(s >= FLT_MIN) || !isfinite(s)) return 0;
+    double lo = ((double)s + (double)nextafterf(s, 0.0f)) / 2.0, hi = ((double)s + (double)nextafterf(s, INFINITY)) / 2.0;
+    if (cmp_x_mean(lo, S, n, e) > 0 || cmp_x_mean(hi, S, n, e) < 0) return 0;
+    for (size_t i = 0; i < n; i++) {
+        double ak = 2.0 * fabs((double)k[i]), th = ldexp((double)s, e);
+        int exp = ak >= th ? (k[i] > 0 ? 1 : -1) : 0;
+        if (q[i] != exp) return 0;
+    }
+    return 1;
+}
+
 static void test_quant(void) {
     section_begin();
     int8_t q[1024], q2[1024];
     float s, s2;
     double e;
+    /* hand-computed vectors */
     {
-        const float w[4] = {0.5f, -1.5f, 0.0f, 2.0f};
-        const int8_t exp[4] = {1, -1, 0, 1}; /* 0.5 rounds half away from zero */
+        const float w[4] = {0.5f, -1.5f, 0.0f, 2.0f}; /* sum 4, scale 1 */
+        const int8_t exp[4] = {1, -1, 0, 1};           /* 0.5 rounds half away from zero */
         CHECK(oma_quant_absmean(w, 4, q, &s) == OMA_OK && s == 1.0f && memcmp(q, exp, 4) == 0, "known vec 1");
-        CHECK(oma_quant_rel_l2(w, q, s, 4, &e) == OMA_OK && fabs(e - sqrt(1.5 / 6.5)) < 1e-12, "known err 1 %.17g", e);
+        /* diff {-0.5,-0.5,0,1}: num 1.5, den 6.5 */
+        CHECK(oma_quant_rel_l2(w, q, s, 4, &e) == OMA_OK && fabs(e - sqrt(1.5 / 6.5)) < 1e-15, "known err 1 %.17g", e);
+    }
+    {
+        const float w[4] = {0.25f, -0.25f, 1.0f, 0.5f}; /* sum 2, scale 0.5; +-0.25 are exact ties */
+        const int8_t exp[4] = {1, -1, 1, 1};
+        CHECK(oma_quant_absmean(w, 4, q, &s) == OMA_OK && s == 0.5f && memcmp(q, exp, 4) == 0, "known vec ties");
+        /* recon {.5,-.5,.5,.5}; num = 1/16+1/16+1/4 = 3/8, den = 1/16+1/16+1+1/4 = 11/8 */
+        CHECK(oma_quant_rel_l2(w, q, s, 4, &e) == OMA_OK && fabs(e - sqrt(3.0 / 11.0)) < 1e-15, "known err ties %.17g", e);
+    }
+    {
+        const float b = 0.5f - 0x1p-25f; /* largest float below the tie at scale 1 */
+        const float w[4] = {2.5f, -1.0f, b, 0x1p-25f}; /* sum exactly 4 -> scale 1 */
+        const int8_t exp[4] = {1, -1, 0, 0};
+        CHECK(oma_quant_absmean(w, 4, q, &s) == OMA_OK && s == 1.0f && memcmp(q, exp, 4) == 0, "just below tie");
+        const float wn[4] = {-2.5f, 1.0f, -b, -0x1p-25f};
+        const int8_t expn[4] = {-1, 1, 0, 0};
+        CHECK(oma_quant_absmean(wn, 4, q, &s) == OMA_OK && s == 1.0f && memcmp(q, expn, 4) == 0, "just below tie neg");
     }
     {
         const float w[4] = {0.1f, 0.2f, 0.3f, -0.4f};
-        const int8_t exp[4] = {0, 1, 1, -1};
-        double m = (fabs((double)0.1f) + fabs((double)0.2f) + fabs((double)0.3f) + fabs((double)-0.4f)) / 4.0;
-        CHECK(oma_quant_absmean(w, 4, q, &s) == OMA_OK && s == (float)m && memcmp(q, exp, 4) == 0, "known vec 2");
+        const int8_t exp[4] = {0, 1, 1, -1}; /* scale ~0.25: 0.1/0.25 = 0.4 -> 0, 0.2/0.25 = 0.8 -> 1 */
+        CHECK(oma_quant_absmean(w, 4, q, &s) == OMA_OK && fabsf(s - 0.25f) < 1e-7f && memcmp(q, exp, 4) == 0, "known vec 2");
     }
     {
         const float z[3] = {0, 0, 0};
@@ -561,7 +848,36 @@ static void test_quant(void) {
         int8_t badq[1] = {2};
         CHECK(oma_quant_rel_l2(z, badq, 1.0f, 1, &e) == OMA_E_INVALID_TRIT, "err rejects bad trit");
     }
+    /* denormal and extreme inputs */
+    {
+        const float d1[3] = {2 * FLT_TRUE_MIN, 0, 0}, d2[2] = {FLT_TRUE_MIN, 0};
+        CHECK(oma_quant_absmean(d1, 3, q, &s) == OMA_E_UNDERFLOW, "2*denorm_min underflow");
+        CHECK(oma_quant_absmean(d2, 2, q, &s) == OMA_E_UNDERFLOW, "denorm_min underflow");
+        const float m3[3] = {3 * FLT_MIN, 0, 0};
+        CHECK(oma_quant_absmean(m3, 3, q, &s) == OMA_OK && s == FLT_MIN && q[0] == 1 && !q[1] && !q[2], "3*FLT_MIN");
+        const float r3[3] = {FLT_MIN, 0, 0}; /* re-quantization of the above: mean FLT_MIN/3 */
+        CHECK(oma_quant_absmean(r3, 3, q2, &s2) == OMA_E_UNDERFLOW, "requant below FLT_MIN is explicit");
+        const float m2[2] = {FLT_MIN, -FLT_MIN};
+        CHECK(oma_quant_absmean(m2, 2, q, &s) == OMA_OK && s == FLT_MIN && q[0] == 1 && q[1] == -1, "FLT_MIN pair");
+        const float big[4] = {FLT_MAX, -FLT_MAX, FLT_MAX, 0};
+        CHECK(oma_quant_absmean(big, 4, q, &s) == OMA_OK && isfinite(s) && q[0] == 1 && q[1] == -1 && q[2] == 1 && !q[3], "FLT_MAX");
+        CHECK(oma_quant_rel_l2(big, q, s, 4, &e) == OMA_OK && isfinite(e), "FLT_MAX err");
+    }
+    /* rel_l2 argument checks */
+    {
+        const float one[1] = {1}, zero[1] = {0}, nw[1] = {NAN}, iw[1] = {INFINITY};
+        const int8_t q1[1] = {1}, q0[1] = {0};
+        CHECK(oma_quant_rel_l2(one, q1, NAN, 1, &e) == OMA_E_ARG, "scale nan");
+        CHECK(oma_quant_rel_l2(one, q1, INFINITY, 1, &e) == OMA_E_ARG, "scale inf");
+        CHECK(oma_quant_rel_l2(one, q1, -1.0f, 1, &e) == OMA_E_ARG, "scale negative");
+        CHECK(oma_quant_rel_l2(nw, q1, 1.0f, 1, &e) == OMA_E_ARG, "w nan");
+        CHECK(oma_quant_rel_l2(iw, q1, 1.0f, 1, &e) == OMA_E_ARG, "w inf");
+        CHECK(oma_quant_rel_l2(zero, q1, 1.0f, 1, &e) == OMA_E_ARG, "w=0, recon!=0 undefined");
+        CHECK(oma_quant_rel_l2(zero, q1, 0.0f, 1, &e) == OMA_OK && e == 0.0, "w=0, scale 0");
+        CHECK(oma_quant_rel_l2(one, q0, 0.0f, 1, &e) == OMA_OK && e == 1.0, "recon 0 -> err 1");
+    }
     static float w[1024], w2[1024];
+    static int32_t kk[1024];
     for (int it = 0; it < 20000; it++) {
         size_t n = 1 + (size_t)(rnd() % 1024u);
         /* (a) already-ternary input: q == input, scale == fraction non-zero */
@@ -577,24 +893,32 @@ static void test_quant(void) {
         CHECK(same, "idempotent on ternary it=%d", it);
         CHECK(s == (float)((double)nnz / (double)n), "ternary scale");
         if (nnz == n) CHECK(oma_quant_rel_l2(w, q, s, n, &e) == OMA_OK && e == 0.0, "exact when dense");
-        /* (b) random floats: scale == mean|w|; re-quantizing q*scale gives q */
-        float amp = (float)((rnd() % 1000u) + 1u) / 100.0f;
-        double sum = 0.0;
+        /* (b) dyadic floats vs the exact oracle. Half the runs sit near and
+         * below FLT_MIN (subnormal inputs, underflow branch). */
+        int e2 = (it & 1) ? 110 + (int)(rnd() % 40u) : (int)(rnd() % 40u);
+        int sparse = (int)(rnd() % 4u);
         for (size_t i = 0; i < n; i++) {
-            w[i] = amp * ((float)(int64_t)(rnd() >> 40) / (float)(1 << 23) - 1.0f);
-            sum += fabs((double)w[i]);
+            int32_t k = (int32_t)(rnd() % (1u << 21)) - (1 << 20);
+            if (sparse == 0 && rnd() % 8u) k = 0;
+            if (sparse == 1) k >>= (int)(rnd() % 21u); /* spread magnitudes */
+            kk[i] = k;
+            w[i] = ldexpf((float)k, -e2);
         }
-        CHECK(oma_quant_absmean(w, n, q, &s) == OMA_OK, "q2");
-        CHECK(s == (float)(sum / (double)n), "scale = mean|w|");
-        int ok = 1;
-        for (size_t i = 0; i < n && s > 0; i++) {
-            double r = round((double)w[i] / (double)s);
-            int eq = r > 1 ? 1 : (r < -1 ? -1 : (int)r);
-            ok &= q[i] == eq;
+        int rc = oma_quant_absmean(w, n, q, &s);
+        CHECK(quant_oracle_ok(kk, n, e2, rc, q, s), "oracle it=%d n=%zu e=%d rc=%d", it, n, e2, rc);
+        if (rc != OMA_OK) continue;
+        /* re-quantizing q*scale: same q, or OMA_E_UNDERFLOW exactly when
+         * nnz(q)*scale/n < FLT_MIN (spec). */
+        size_t kq = 0;
+        for (size_t i = 0; i < n; i++) {
+            w2[i] = (float)q[i] * s;
+            kq += q[i] != 0;
         }
-        CHECK(ok, "q formula");
-        for (size_t i = 0; i < n; i++) w2[i] = (float)q[i] * s;
-        CHECK(oma_quant_absmean(w2, n, q2, &s2) == OMA_OK && memcmp(q, q2, n) == 0, "requant idempotent");
+        int rc2 = oma_quant_absmean(w2, n, q2, &s2);
+        if (kq && (double)kq * (double)s < (double)FLT_MIN * (double)n)
+            CHECK(rc2 == OMA_E_UNDERFLOW, "requant underflow it=%d", it);
+        else
+            CHECK(rc2 == OMA_OK && memcmp(q, q2, n) == 0, "requant idempotent it=%d", it);
         CHECK(oma_quant_rel_l2(w, q, s, n, &e) == OMA_OK && isfinite(e) && e >= 0.0, "err finite");
     }
     section_end("absmean quantization");
@@ -610,6 +934,7 @@ int main(void) {
     test_random_blocks();
     test_pack_random();
     test_z3();
+    test_error_untouched();
     test_quant();
     printf("OMA ALGEBRA: %llu checks, %llu failures -> %s\n", g_checks, g_fail, g_fail ? "FAIL" : "PASS");
     return g_fail ? 1 : 0;

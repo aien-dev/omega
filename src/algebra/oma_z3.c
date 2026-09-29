@@ -7,35 +7,35 @@ int oma_z3_make(int v, oma_z3 *out) {
     return OMA_OK;
 }
 
-int oma_z3_add(oma_z3 a, oma_z3 b, oma_z3 *out) {
+int oma_z3_add(int a, int b, oma_z3 *out) {
     if (!out) return OMA_E_ARG;
-    if (a > 2 || b > 2) return OMA_E_INVALID_Z3;
+    if (a < 0 || a > 2 || b < 0 || b > 2) return OMA_E_INVALID_Z3;
     *out = (oma_z3)((a + b) % 3);
     return OMA_OK;
 }
 
-int oma_z3_mul(oma_z3 a, oma_z3 b, oma_z3 *out) {
+int oma_z3_mul(int a, int b, oma_z3 *out) {
     if (!out) return OMA_E_ARG;
-    if (a > 2 || b > 2) return OMA_E_INVALID_Z3;
+    if (a < 0 || a > 2 || b < 0 || b > 2) return OMA_E_INVALID_Z3;
     *out = (oma_z3)((a * b) % 3);
     return OMA_OK;
 }
 
-int oma_z3_neg(oma_z3 a, oma_z3 *out) {
+int oma_z3_neg(int a, oma_z3 *out) {
     if (!out) return OMA_E_ARG;
-    if (a > 2) return OMA_E_INVALID_Z3;
+    if (a < 0 || a > 2) return OMA_E_INVALID_Z3;
     *out = (oma_z3)((3 - a) % 3);
     return OMA_OK;
 }
 
-int oma_z3_to_trit(oma_z3 a, oma_trit *out) {
+int oma_z3_to_trit(int a, oma_trit *out) {
     if (!out) return OMA_E_ARG;
-    if (a > 2) return OMA_E_INVALID_Z3;
+    if (a < 0 || a > 2) return OMA_E_INVALID_Z3;
     *out = (oma_trit)(a == 2 ? -1 : (int)a);
     return OMA_OK;
 }
 
-int oma_trit_to_z3(oma_trit t, oma_z3 *out) {
+int oma_trit_to_z3(int t, oma_z3 *out) {
     if (!out) return OMA_E_ARG;
     if (t < -1 || t > 1) return OMA_E_INVALID_TRIT;
     *out = (oma_z3)(t < 0 ? 2 : t);
