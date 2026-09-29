@@ -3,8 +3,9 @@
 Status: PRE-REGISTERED 2026-09-29. This file, the TY-0 audit (TURING_YIELD_CURRENT_STATE.md) and the trace manifest
 (evidence/TURING_YIELD/trace_manifest_rep10_control.sha256) are committed and pushed before any scoring of the held-out
 seeds 8, 9 and 10. Tuning and the margin below used seeds 1-7 only. For seeds 8-10 nothing has been read except file
-size, the 4-byte magic and SHA-256 (for the manifest). The only code path that reads them is `turing-yield heldout`,
-which runs once and refuses to run again when its receipt exists.
+size, the 4-byte magic and SHA-256 (for the manifest). The only code path that scores them is `turing-yield heldout`,
+which runs once and refuses to run again when its receipt exists. `turing-yield manifest-check` only hashes them;
+`turing-yield verify` re-derives an existing held-out receipt and never replaces it.
 
 Digests (SHA-256 with domain prefix over OMG0 bytes, as in src/turing/field.c; record digests, never Omega semantic ids):
 
