@@ -183,7 +183,38 @@ Do not migrate first: rx_world, rx_coherent, rx_resident_gpu, the accelerator wo
 
 ## I.10 Performance baseline
 
-**PENDING.** It is being captured on host-only targets, with no GPU work, as a trial of the Sonnet 5.5 worker model. The orchestrator re-measures a sample before this section is filled.
+Host-only, CPU-side. Captured by a Sonnet 5.5 worker and sample-verified by the orchestrator. Full data and method: [baseline](docs/osc/audit/baseline.md).
+
+Setup:
+- gcc 13.3.0 at -O2 on aarch64, 20 cores.
+- The machine was not quiet (load average 1–2.5).
+- Build time is the median of 5 clean builds.
+- Allocations are summed over every process a test starts.
+
+| Binary | Build (s) | Size text+data+bss | Peak RSS (kB) | Allocs | Frees | Live at exit |
+|---|---|---|---|---|---|---|
+| omegatool | 1.20 | 367,386 | not run | | | |
+| rx_heartbeat_test (R3) | 1.85 | 198,215 | 5,568 | 396 | 386 | 13 |
+| rx_action_graph_test | 2.08 | ~504k | 4,212 | 445 | 435 | 13 |
+| rx_state_projection_test | 2.26 | 169,543 | 120,480 | 83,026 | 105,057* | 13 |
+| rx_plan_reuse_test (informational) | 2.06 | ~627k | 5,584 | 199,695 | 199,683 | 15 |
+| rx_capability_query_test | 2.13 | ~555k | 119,628 | 23,687 | 23,699* | 11 |
+| rx_typed_results_test | 2.16 | 3,453,513 | 21,284 | 19,932 | 19,922 | 13 |
+| crumbline decode | 0.36 | ~1.13M | 1,328 | 4 | 3 | 1 |
+
+\* Frees can exceed allocs because reallocations are counted separately.
+
+A floor of about 10–13 live blocks (~7 KB) at exit appears in almost every test and has not been attributed to a cause, so it is **not** evidence of leaks.
+
+**Not measured:**
+- the GPU/accelerator workloads (silicon, R12–R15, M17);
+- the R7–R11 targets, branch reuse, and the Visor targets;
+- the M5–M19 gates;
+- the crumbline conformance sweep;
+- fragmentation beyond mallinfo2 at exit;
+- throughput and latency (no host test prints them).
+
+These gaps must be filled on a quiet machine before any OSC-15 comparison.
 
 ---
 
@@ -604,7 +635,7 @@ Each negative test asserts the exact diagnostic fields from III.6.
 6. C ABI boundary: I.6, III.5
 7. pipeline: III.6
 8. migration order: III.7
-9. benchmark baseline: I.10 (**pending**)
+9. benchmark baseline: I.10 (host-only; GPU gaps listed)
 10. acceptance tests: III.8
 
 **OSC-0B items (Drake's 12):**
