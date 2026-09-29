@@ -1,0 +1,1336 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\geometry{margin=1in}
+
+\title{Turing Instrument Calibration and Validation Program\\
+Version 1.0: Experimental Protocol}
+\author{M. Drake Stapleton\\AIEN Project}
+\date{September 29, 2026}
+
+\begin{document}
+
+\maketitle
+
+\noindent\textit{Supplementary protocol to the preprint ``Computing Machinery and Understanding: From the Imitation Game to the Turing'' (v1.7). The preprint defines the Turing unit and its falsification criteria; this document specifies the ordered experimental program that determines whether the unit is a scientifically useful measure. This protocol is versioned independently of the paper.}
+
+\section{Purpose}
+
+This program is designed to determine whether the \textbf{Turing} is a scientifically useful, reproducible measure of generalized explanatory compression rather than merely a mathematically defined scoring function.
+
+The experimental program must answer, in order:
+
+\begin{enumerate}
+\item Does theoretical predictive description length correspond to actual lossless compression?
+\item Does the metric reward genuine stochastic structure while rejecting memorization and overfitting?
+\item Does additional model structure receive credit only when it earns its complexity?
+\item Can the metric distinguish qualitatively different generating mechanisms?
+\item Can it reward useful unification across multiple phenomena?
+\item Does an explanation remain useful under interventions and distributional changes?
+\item Can explanatory models help select better experiments?
+\item Are results reproducible under implementation replay and fresh stochastic worlds?
+\item Can the associated physical energy accounting be independently closed?
+\item Can equivalent explanations be distinguished by explanatory efficiency in Turings per joule?
+\item Are scientific conclusions stable under reasonable alternative measurement profiles?
+\item Can an independent laboratory reproduce the conclusions?
+\end{enumerate}
+
+The program is deliberately structured so that each major hypothesis can fail. Large positive Turing values are not sufficient evidence. The important question is whether the instrument makes correct preregistered discriminations in cases where it is possible for the metric to be wrong.
+
+\section{Core Experimental Principle}
+
+The experiments must be executed as sequential qualification gates. The canonical sequence is:
+
+\begin{verbatim}
+CAL-0
+Freeze measurement apparatus
+->
+EXP-001
+Connect theoretical description length
+to actual lossless compression
+->
+EXP-002A
+Reject false structure in pure randomness
+->
+EXP-002B
+Test when additional structure earns its cost
+->
+EXP-002C
+Distinguish qualitatively different mechanisms
+->
+EXP-002D
+Test explanatory unification
+->
+Interventional validation
+Test frozen laws outside the observational regime
+->
+EXP-003
+Select informative experiments
+->
+H3
+Reproducibility
+->
+H4
+Physical energy accounting
+->
+H5
+Turing yield
+->
+Sensitivity analysis
+->
+Independent laboratory replication
+\end{verbatim}
+
+A downstream success does not repair an upstream failure. If EXP-001 fails, later experiments may continue for debugging purposes, but they cannot support claims that depend upon a validated Turing measurement.
+
+\section{Measurement Quantity}
+
+For candidate model or program \(M\), baseline \(B\), and sealed held-out data \(D\), calculate:
+\[
+T(M;B,D)
+=
+[L(B)+L(D|B)]
+-
+[L(M)+L(D|M)].
+\]
+The measurement must account for both \(L(M)\), the description cost of the explanation itself, and \(L(D|M)\), the description length of observations conditional on that explanation.
+
+Predictive codelength is initially calculated as:
+\[
+L_{\text{ideal}}(D|M)
+=
+-\sum_t
+\log_2
+p_M(x_t|x_{<t}).
+\]
+EXP-001 then determines whether this idealized quantity corresponds closely enough to an actual losslessly encoded artifact to support physical compression claims.
+
+\section{CAL-0: Freeze the Measurement Apparatus}
+
+\subsection{Objective}
+
+Before evaluating any scientific claim, create and freeze a canonical measurement profile:
+\begin{verbatim}
+Turing-profile-v1.0
+\end{verbatim}
+The profile may not be modified during the first validation series. A change to the profile creates a new profile version. Results under different profiles must not be silently treated as numerically interchangeable.
+
+\subsection{Required Freeze Order}
+
+The required sequence is:
+\begin{verbatim}
+experiment designed
+->
+candidate families specified
+->
+statistical simulations performed
+->
+sample size selected
+->
+pass/fail rules preregistered
+->
+measurement profile frozen
+->
+candidate development completed
+->
+candidate artifact frozen and hashed
+->
+sealed evaluation data generated/released
+->
+evaluation performed
+->
+results retained whether successful or unsuccessful
+\end{verbatim}
+Candidate development must end before the evaluator obtains sealed test observations. A cryptographic commitment alone does not establish blinding if the candidate has already had access to the hidden data.
+
+\section{\texttt{Turing-profile-v1.0}}
+
+The frozen profile must contain at minimum the following fields.
+
+\subsection{Identity}
+\begin{verbatim}
+profile_name
+profile_version
+profile_digest
+creation_timestamp
+protocol_version
+\end{verbatim}
+
+\subsection{Experimental Definition}
+\begin{verbatim}
+task_definition
+hypothesis_definition
+primary_endpoint
+secondary_endpoints
+pass_fail_rule
+stopping_rule
+\end{verbatim}
+
+\subsection{Baseline}
+\begin{verbatim}
+baseline_family
+baseline_encoding
+baseline_parameterization
+baseline_description_cost
+\end{verbatim}
+
+\subsection{Candidate Encoding}
+\begin{verbatim}
+candidate_representation
+candidate_serialization
+shared_background
+model_code_method
+parameter_precision
+dependency_cost
+metadata_cost
+lookup_table_cost
+external_artifact_cost
+\end{verbatim}
+Particular attention must be paid to \(L(M)\). The experiment must define exactly what information is considered free shared background and what information must be charged to the candidate. No model may hide predictive information in metadata, filenames, headers, preloaded tables, dependencies, or uncharged support files.
+
+\subsection{Data}
+\begin{verbatim}
+data_generator
+development_split
+calibration_split
+sealed_test_split
+replication_split
+trajectory_count
+trajectory_length
+sampling_interval
+seed_commitment
+\end{verbatim}
+
+\subsection{Blinding}
+\begin{verbatim}
+holdout_commitment
+candidate_environment
+evaluator_environment
+access_control
+test_release_process
+candidate_freeze_process
+\end{verbatim}
+
+\subsection{Probabilities}
+\begin{verbatim}
+probability_representation
+quantizer
+normalization_rule
+zero_probability_policy
+numeric_precision
+\end{verbatim}
+
+\subsection{Coding}
+\begin{verbatim}
+ideal_codelength_method
+reference_coder_A
+reference_coder_B
+termination_convention
+header_accounting
+side_information_accounting
+\end{verbatim}
+
+\subsection{Statistics}
+\begin{verbatim}
+uncertainty_method
+confidence_level
+block_length
+bootstrap_method
+correlation_handling
+number_of_replicates
+\end{verbatim}
+
+\subsection{Physical Measurement}
+\begin{verbatim}
+energy_instrument
+sampling_frequency
+idle_baseline_method
+attribution_method
+sensor_uncertainty
+time_alignment_method
+\end{verbatim}
+
+\subsection{Reproducibility}
+\begin{verbatim}
+software_versions
+compiler_versions
+hardware_identity
+runtime_digest
+candidate_digest
+dataset_digest
+coder_digest
+scorer_digest
+\end{verbatim}
+
+\subsection{Sensitivity}
+\begin{verbatim}
+alternative_baselines
+alternative_model_codes
+alternative_quantization
+alternative_reference_coder
+alternative_uncertainty_model
+\end{verbatim}
+
+\section{Sample-Size Determination}
+
+The manuscript does not prescribe a fixed sample size. Therefore the experiment must not choose one arbitrarily. Before preregistration:
+
+\begin{enumerate}
+\item simulate the proposed hidden processes;
+\item simulate the expected range of candidate effect sizes;
+\item apply the proposed uncertainty procedure;
+\item determine how many independent worlds or trajectories are required to distinguish effects considered scientifically meaningful;
+\item freeze that sample size before final sealed-data generation.
+\end{enumerate}
+
+The simulation itself must be archived. The sample-size calculation must not be rerun with revised assumptions after sealed outcomes are known unless the original experiment is formally declared inconclusive and a new experiment is preregistered.
+
+\section{Experimental Roles}
+
+At minimum, separate the following roles.
+
+\subsection{Candidate Team}
+
+May access:
+\begin{verbatim}
+public protocol
+development observations
+development simulators where permitted
+public candidate APIs
+\end{verbatim}
+Must not access:
+\begin{verbatim}
+sealed seeds
+sealed trajectories
+hidden generator parameters
+evaluator secrets
+future intervention results
+\end{verbatim}
+
+\subsection{Evaluator}
+
+Controls:
+\begin{verbatim}
+sealed observations
+sealed parameters
+reference coding
+scoring
+experiment execution
+\end{verbatim}
+
+\subsection{Verification Team}
+
+Must independently reconstruct:
+\begin{verbatim}
+model cost
+ideal codelength
+actual coded length
+Turing value
+uncertainty
+\end{verbatim}
+without depending on the production scoring path.
+
+\subsection{Replication Team}
+
+Uses independent seeds and preferably independent implementations.
+
+\subsection{External Replication Team}
+
+Ultimately generates its own hidden data and implements the measurement protocol independently.
+
+\section{EXP-001: Compression Bridge}
+
+\subsection{Scientific Question}
+
+Does the theoretical predictive codelength used by the Turing correspond to actual physical lossless compression? The experiment must close:
+\begin{verbatim}
+probability prediction
+->
+-log2 probability
+->
+entropy coder
+->
+real encoded bitstream
+->
+real compressed size
+\end{verbatim}
+The current theoretical score alone is insufficient to establish this connection.
+
+\subsection{Candidate Predictors}
+
+Freeze at least:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+ID & Candidate & Purpose \\
+\midrule
+B0 & uniform & minimal reference \\
+B1 & empirical frequency & simple statistical baseline \\
+B2 & small Markov & short-range structural baseline \\
+B3 & fixed heuristic & domain-specific baseline \\
+M1 & explanatory candidate & primary model \\
+Mmem & memorizer & adversarial complexity control \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Probability Artifact}
+
+Every predictor must first produce an immutable probability stream. Each prediction record should include:
+\begin{verbatim}
+observation_index
+context_digest
+alphabet
+raw_probability_vector
+quantized_probability_vector
+normalization_receipt
+\end{verbatim}
+Freeze and hash the probability stream. Both coders must consume exactly this stream. They must not independently invoke the model. This separates model error from coder error.
+
+\section{Dual Reference Coders}
+
+Use two independently implemented coder families. Recommended:
+\begin{verbatim}
+Coder A:
+arithmetic or range coder
+
+Coder B:
+ANS or rANS
+\end{verbatim}
+For each candidate require:
+\[
+decode(encode(D)) = D.
+\]
+The decoded sequence must exactly equal the sealed sequence. The two coders need not produce identical binary streams. Their conclusions should agree within the preregistered coding-overhead envelope.
+
+\section{EXP-001 Measurements}
+
+For every candidate compute \(L(M_i)\), \(L_{\text{ideal}}(D|M_i)\), \(L_{\text{coded-A}}(D|M_i)\), and \(L_{\text{coded-B}}(D|M_i)\). Then calculate:
+\begin{verbatim}
+T_ideal
+T_coder_A
+T_coder_B
+\end{verbatim}
+and:
+\begin{verbatim}
+coder_A_overhead
+coder_B_overhead
+\end{verbatim}
+
+\section{EXP-001 Adversarial Controls}
+
+Deliberately test:
+\begin{verbatim}
+corrupted bitstream
+truncated bitstream
+incorrect profile digest
+incorrect model digest
+incorrect test-data digest
+invalid probability normalization
+zero-probability actual event
+hidden metadata
+candidate/test overlap
+unaccounted headers
+unaccounted side information
+memorized data disguised as program state
+\end{verbatim}
+Every invalid condition must fail closed.
+
+\section{EXP-001 Acceptance Criteria}
+
+Require:
+\begin{verbatim}
+both decoders reproduce the sealed data exactly
+
+candidate hashes predate sealed-data release
+
+both coders consume the same probability artifact
+
+actual coded lengths agree with ideal lengths
+within preregistered coder overhead
+
+scientifically relevant model ordering remains stable
+
+positive candidate T survives real coding
+if preregistered to do so
+
+memorizer does not receive unjustified positive generalized T
+
+independent scorer reproduces the published result
+
+new-seed replication preserves the qualitative conclusion
+\end{verbatim}
+Gate:
+\begin{verbatim}
+EXP_001_COMPRESSION_BRIDGE = PASS
+\end{verbatim}
+or:
+\begin{verbatim}
+EXP_001_COMPRESSION_BRIDGE = FAIL
+\end{verbatim}
+A failed result must be retained.
+
+\section{EXP-002A: Randomness Without Invented Structure}
+
+\subsection{Hidden Process}
+
+Generate:
+\[
+dX_t=\sqrt{2D}\,dW_t.
+\]
+The evaluator privately samples:
+\begin{verbatim}
+D
+initial condition
+trajectory
+seed
+\end{verbatim}
+The scientific question is whether the metric discovers centered stochastic diffusion without inventing deterministic patterns from random fluctuations.
+
+\section{Candidate Families}
+
+Compare:
+\begin{verbatim}
+weak baseline
+
+simple diffusion
+
+diffusion + drift
+
+mean-reverting model
+
+polynomial/curve fit
+
+high-capacity flexible predictor
+
+memorizer
+\end{verbatim}
+The correct structural family is deliberately simple. The experiment must provide attractive opportunities for overfitting.
+
+\section{EXP-002A False-Structure Challenge}
+
+Include development trajectories with accidental apparent:
+\begin{verbatim}
+trend
+curvature
+local periodicity
+reversal
+\end{verbatim}
+generated purely by noise. Do not remove these runs. They provide the most informative test. A polynomial or flexible predictor may achieve excellent development fit. Its held-out performance must determine whether that structure actually earns explanatory credit.
+
+\section{EXP-002A Measurements}
+
+For each candidate record:
+\begin{verbatim}
+L(M)
+development predictive bits
+sealed predictive bits
+actual coded bits
+T
+calibration error
+prediction interval coverage
+development-to-test degradation
+\end{verbatim}
+Repeat across hidden variation in:
+\begin{verbatim}
+D
+x0
+trajectory length
+sampling interval
+seed
+\end{verbatim}
+
+\section{EXP-002A Preregistered Prediction}
+
+Expected behavior:
+\begin{verbatim}
+diffusion:
+generalizes
+
+diffusion + drift:
+does not earn unnecessary drift parameter
+
+mean reversion:
+not systematically rewarded
+
+curve fit:
+may fit development trajectory
+but fails on fresh trajectories
+
+high-capacity predictor:
+wins only if predictive savings exceed complexity
+
+memorizer:
+fails generalized gain
+\end{verbatim}
+Gate:
+\begin{verbatim}
+EXP_002A_RANDOMNESS_DISCRIMINATION = PASS
+\end{verbatim}
+
+\section{EXP-002B: Occam Transition}
+
+\subsection{Hidden Process}
+
+Generate:
+\[
+dX_t=\mu\,dt+\sqrt{2D}\,dW_t.
+\]
+The question is not merely whether drift can be detected. The question is when its predictive value becomes large enough to pay for the additional parameter.
+
+\section{Drift Sweep}
+
+Preregister a sweep:
+\begin{verbatim}
+mu = 0
+very small
+small
+medium
+large
+\end{verbatim}
+Actual numeric values must be chosen through power simulation and frozen before final data generation. Where appropriate vary:
+\begin{verbatim}
+sign(mu)
+D
+x0
+trajectory duration
+\end{verbatim}
+
+\section{Primary Comparison}
+
+Compare:
+\begin{verbatim}
+M0:
+diffusion
+
+M1:
+diffusion + drift
+\end{verbatim}
+Calculate \(\Delta L(M)\), \(\Delta L(D|M)\), and \(\Delta T\). At sufficiently small drift:
+\[
+\Delta L(D|M)<\Delta L(M),
+\]
+so drift should not earn its cost. At sufficiently strong drift:
+\[
+\Delta L(D|M)>\Delta L(M),
+\]
+so the richer explanation should win.
+
+\section{Occam Curve}
+
+Report:
+\begin{verbatim}
+effect size
+delta model bits
+delta predictive bits
+delta T
+uncertainty interval
+probability richer model wins
+\end{verbatim}
+Estimate the region where the richer model crosses from unjustified to justified. The \(\mu=0\) condition is mandatory. Systematic preference for drift at \(\mu=0\) is a failure requiring investigation.
+
+Gate:
+\begin{verbatim}
+EXP_002B_OCCAM_TRANSITION = PASS
+\end{verbatim}
+
+\section{EXP-002C: Mechanism Discrimination}
+
+\subsection{Hidden Process}
+
+Generate:
+\[
+dX_t=-\theta X_t\,dt+\sigma\,dW_t.
+\]
+This experiment tests a qualitatively different mechanism: state-dependent restoring dynamics.
+
+\section{Candidate Families}
+
+Compare:
+\begin{verbatim}
+Brownian motion
+Brownian motion + constant drift
+Ornstein-Uhlenbeck / mean reversion
+flexible black-box predictor
+trajectory-fitting model
+\end{verbatim}
+
+\section{Observational Phase}
+
+Develop candidates on a standard observational distribution. Freeze all candidate artifacts before intervention conditions are revealed.
+
+\section{Intervention Phase}
+
+Evaluate from:
+\begin{verbatim}
+near-equilibrium initial state
+
+moderately displaced initial state
+
+far-displaced initial state
+\end{verbatim}
+A genuine mean-reverting explanation predicts that expected restoring behavior changes systematically with state. A trajectory-fitting predictor may fail.
+
+\section{Explanatory Evidence Rule}
+
+Do not call successful passive compression explanatory by itself. The stronger interpretation requires evidence such as:
+\begin{verbatim}
+invariance
+
+interventional prediction
+
+counterfactual success
+
+mechanistic structure
+\end{verbatim}
+A particularly strong result is:
+\begin{verbatim}
+model frozen
+->
+initial condition changed
+->
+new regime unseen during fitting
+->
+same compact law predicts outcomes
+->
+compression advantage survives
+\end{verbatim}
+Gate:
+\begin{verbatim}
+EXP_002C_MECHANISM_DISCRIMINATION = PASS
+\end{verbatim}
+
+\section{EXP-002D: Unification}
+
+Construct a family containing:
+\begin{verbatim}
+pure diffusion
+drifted diffusion
+mean reversion
+different D
+different mu
+different theta
+different time steps
+different initial states
+\end{verbatim}
+Compare two architectures.
+
+\subsection*{Specialists}
+
+Separate predictor for each environment. Charge every model independently.
+
+\subsection*{Unified Theory}
+
+One common framework plus small environment-specific parameters. Charge:
+\begin{verbatim}
+shared theory
+parameterization
+environment parameters
+selection metadata
+\end{verbatim}
+The source explicitly proposes testing whether an explanation can compress multiple hidden worlds and earn aggregate gain through genuine reuse.
+
+\section{Unification Scaling Curve}
+
+Evaluate:
+\begin{verbatim}
+1 environment
+2 environments
+4 environments
+8 environments
+...
+\end{verbatim}
+Observe whether the initial cost of a common abstraction eventually becomes cheaper than maintaining separate specialist theories. Also include a heterogeneous negative-control collection where forced unification should not win. Success requires both:
+\begin{verbatim}
+reward useful unification
+
+reject artificial unification
+\end{verbatim}
+Gate:
+\begin{verbatim}
+EXP_002D_UNIFICATION = PASS
+\end{verbatim}
+
+\section{EXP-003: Active Scientific Agency}
+
+This experiment asks whether learned explanations help determine what evidence should be collected next. It is potentially the most important step because it tests whether explanatory representations improve action rather than merely retrospective scoring.
+
+\section{Ambiguous Starting State}
+
+Construct observations compatible with at least two hypotheses. Example:
+\begin{verbatim}
+H0:
+free diffusion
+
+H1:
+mean reversion
+\end{verbatim}
+The initial evidence must not trivially distinguish them.
+
+\section{Permitted Experiments}
+
+Define a finite preregistered action space such as:
+\begin{verbatim}
+change initial displacement
+increase observation duration
+change sample frequency
+request another replicate
+\end{verbatim}
+Every permitted intervention receives an explicit cost.
+
+\section{Candidate Decision Loop}
+
+At every round:
+\begin{verbatim}
+current observations
+->
+competing hypotheses
+->
+predictive distribution under each possible intervention
+->
+expected information gain
+->
+rank interventions
+->
+commit chosen intervention
+->
+evaluator executes experiment
+->
+result revealed
+->
+hypotheses rescored
+\end{verbatim}
+All predictions and choices must be committed before the result is revealed.
+
+\section{Passive Baselines}
+
+Freeze:
+\begin{verbatim}
+fixed observation schedule
+random legal intervention
+regular non-adaptive schedule
+\end{verbatim}
+Use identical discrimination thresholds.
+
+\section{Primary EXP-003 Endpoint}
+
+Measure \(N_{\text{active}}\) against \(N_{\text{passive}}\), where \(N\) is the number of observations required to cross a preregistered discrimination threshold. Also record:
+\begin{verbatim}
+time-to-discrimination
+experimental operations
+T accumulated
+energy used
+\end{verbatim}
+Before H4 passes, energy results must be labeled provisional.
+
+Gate:
+\begin{verbatim}
+EXP_003_ACTIVE_EXPERIMENT_SELECTION = PASS
+\end{verbatim}
+only if the active strategy uses meaningfully fewer observations or lower preregistered experimental cost than passive baselines.
+
+\section{Counterfactual Experiment Audit}
+
+After each completed active run, use the hidden simulator offline to calculate what would have happened under the other permitted interventions. The live candidate never receives these counterfactual results. This allows evaluation of whether its selected experiment was actually informative relative to alternatives.
+
+\section{H3: Reproducibility}
+
+Reproducibility contains two separate requirements.
+
+\subsection{H3-A: Replay}
+
+Using identical:
+\begin{verbatim}
+candidate
+profile
+data
+seed
+\end{verbatim}
+an independent implementation must reconstruct the same result within numerical tolerance.
+
+\subsection{H3-B: Statistical Robustness}
+
+Using:
+\begin{verbatim}
+new seeds
+new trajectories
+\end{verbatim}
+the exact Turing value may change. The preregistered scientific conclusion should remain.
+
+Gate:
+\begin{verbatim}
+H3_REPLAY_REPRODUCIBILITY = PASS
+
+H3_STATISTICAL_ROBUSTNESS = PASS
+\end{verbatim}
+
+\section{H4: Energy Attribution}
+
+T/J is not validated until the physical energy-accounting system itself is validated. Measure \(E_0\) for idle/background operation, \(E_A\) for workload A, \(E_B\) for workload B, and \(E_{AB}\) for concurrent execution.
+
+\section{Interaction Energy}
+
+Calculate:
+\[
+I_{AB}
+=
+E_{AB}-E_A-E_B+E_0.
+\]
+Do not assume this value is zero. Concurrent workloads may exhibit:
+\begin{verbatim}
+contention
+shared efficiency
+thermal interaction
+memory interaction
+scheduler interaction
+\end{verbatim}
+
+\section{Energy Categories}
+
+Allow accounting to distinguish:
+\begin{verbatim}
+A-attributed
+B-attributed
+shared
+interaction
+unattributed
+measurement uncertainty
+\end{verbatim}
+Do not force every joule into one workload merely to make the accounting look clean.
+
+\section{H4 Test Matrix}
+
+Measure:
+\begin{verbatim}
+A alone
+B alone
+A+B
+
+CPU-heavy + CPU-heavy
+
+GPU-heavy + GPU-heavy
+
+CPU-heavy + GPU-heavy
+
+memory-bandwidth contention
+
+light/heavy combinations
+
+idle background
+\end{verbatim}
+Randomize run order where practical. Repeat across representative thermal and load states.
+
+\section{Conservation Requirement}
+
+For each test require:
+\begin{verbatim}
+measured energy
+~=
+attributed
++ shared
++ interaction
++ unattributed
+\end{verbatim}
+within preregistered sensor and integration uncertainty.
+
+Gate:
+\begin{verbatim}
+H4_ENERGY_ACCOUNTING_CLOSURE = PASS
+\end{verbatim}
+Until this passes, validated T/J claims are prohibited.
+
+\section{H5: Turing Yield}
+
+Once both T and energy are independently validated, compare semantically equivalent realizations. Example:
+\begin{verbatim}
+reference CPU
+optimized CPU
+accelerated realization
+\end{verbatim}
+The candidates must produce equivalent predictive distributions inside a preregistered tolerance. Require:
+\[
+T_A \approx T_B.
+\]
+Then measure:
+\[
+Y_A = \frac{T_A}{E_A},
+\qquad
+Y_B = \frac{T_B}{E_B}.
+\]
+
+\section{Separate Evaluation and Discovery Yield}
+
+Report:
+
+\subsection*{Evaluation Yield}
+\[
+T/J_{\text{evaluation}}
+\]
+Energy required to execute an already-discovered explanation.
+
+\subsection*{Discovery Yield}
+\[
+T/J_{\text{discovery}}
+\]
+Energy expended discovering that explanation. A system that requires enormous discovery energy but cheap inference must not be advertised solely by inference efficiency.
+
+Gate:
+\begin{verbatim}
+H5_TURING_YIELD = PASS
+\end{verbatim}
+requires at least one semantically equivalent pair whose T/J difference exceeds the combined uncertainty envelope.
+
+\section{Sensitivity Analysis}
+
+Every major successful result must be deliberately attacked. Vary reasonable preregistered alternatives for:
+\begin{verbatim}
+baseline
+model-code scheme
+parameter precision
+probability quantization
+reference coder
+trajectory length
+holdout regime
+seed
+uncertainty method
+block-resampling assumptions
+\end{verbatim}
+The numerical Turing value may change. The core question is whether scientific conclusions change.
+
+\section{Rank-Reversal Analysis}
+
+For every meaningful reversal classify the cause as:
+\begin{verbatim}
+decision-boundary effect
+sample-size insufficiency
+baseline sensitivity
+model-code sensitivity
+quantization sensitivity
+statistical instability
+implementation defect
+fundamental metric sensitivity
+\end{verbatim}
+Do not average reversals away.
+
+Gate:
+\begin{verbatim}
+TURING_PROFILE_SENSITIVITY = PASS
+\end{verbatim}
+only under a preregistered qualitative-stability criterion.
+
+\section{Independent Laboratory Replication}
+
+The framework should not be considered strongly validated until at least one external laboratory independently reproduces a subset of the program. The external laboratory should:
+\begin{verbatim}
+generate its own hidden observations
+
+control its own blinding
+
+implement the published measurement profile
+
+write its own scorer
+
+preferably write its own entropy coder
+
+run EXP-001
+
+run at least one full EXP-002 family
+
+test one reasonable alternative profile
+\end{verbatim}
+The central replication question is not:
+\begin{verbatim}
+Did both laboratories report exactly the same T?
+\end{verbatim}
+It is:
+\begin{verbatim}
+Did the same scientific candidates
+win and lose for the same reasons?
+\end{verbatim}
+
+\section{Experimental Artifact Standard}
+
+Each experiment should produce an immutable bundle. Recommended structure:
+\begin{verbatim}
+experiment/
+|-- preregistration.json
+|-- profile.json
+|-- profile.sha256
+|-- environment.json
+|-- candidate_manifest.json
+|-- candidates/
+|-- development_data/
+|-- sealed_data_commitment/
+|-- probability_streams/
+|-- coded_artifacts/
+|-- raw_measurements/
+|-- energy/
+|-- statistical_analysis/
+|-- independent_verification/
+|-- sensitivity/
+|-- replication/
+|-- final_receipt.json
+|-- REPORT.md
+\end{verbatim}
+The sealed observations themselves may remain private until the declared release condition.
+
+\section{Canonical Experiment Receipt}
+
+Every experiment should emit a receipt containing:
+\begin{verbatim}
+experiment_id
+experiment_version
+
+profile_digest
+
+candidate_digests
+baseline_digest
+
+development_dataset_digest
+sealed_dataset_digest
+
+coder_digests
+scorer_digests
+
+software_digest
+hardware_identity
+
+start_time
+end_time
+
+primary_endpoint
+result
+
+T
+uncertainty
+
+energy
+energy_uncertainty
+
+pass_fail
+
+preregistered_gate_digest
+
+artifact_root
+
+verifier_signature
+\end{verbatim}
+
+\section{Statistical Analysis Principles}
+
+\subsection*{Independence}
+Do not treat correlated observations within a trajectory as independent samples. Use trajectory-level replication or block resampling as defined by the profile.
+
+\subsection*{Multiple Comparisons}
+If many candidate families or parameters are evaluated, define the correction or hierarchical analysis before evaluation.
+
+\subsection*{Failed Runs}
+A failed computation may be excluded only under preregistered technical-failure criteria. Scientifically inconvenient outcomes may not be discarded.
+
+\subsection*{Stopping}
+No optional stopping unless explicitly modeled and preregistered.
+
+\subsection*{Seeds}
+Seeds must be committed before final evaluation.
+
+\subsection*{Uncertainty}
+Report uncertainty around:
+\begin{verbatim}
+T
+delta T
+model ordering
+crossover point
+T/J
+energy attribution
+active/passive efficiency
+\end{verbatim}
+rather than publishing only point estimates.
+
+\section{Failure Policy}
+
+A failed gate should produce:
+\begin{verbatim}
+FAIL receipt
+raw evidence
+diagnosis
+corrective hypothesis
+\end{verbatim}
+The next version becomes a new experiment. Example:
+\begin{verbatim}
+EXP-002B-v1
+FAIL
+
+EXP-002B-v2
+new preregistration
+new sealed worlds
+\end{verbatim}
+Do not silently rerun a failed experiment until success.
+
+\section{Claim Ladder}
+
+Scientific claims should be limited to the highest completed evidence level.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Level & Required Evidence & Permitted Interpretation \\
+\midrule
+0 & Definition only & mathematically specified statistic \\
+1 & EXP-001 & reproducibly connected to actual lossless compression in tested regime \\
+2 & EXP-002A/B/C & discriminates supported from unsupported stochastic structure \\
+3 & interventions + EXP-002D & evidence for invariant/unifying explanatory structure \\
+4 & EXP-003 & explanatory models improve experimental choice \\
+5 & H4 & physical energy attribution validated \\
+6 & H5 & explanatory efficiency measurable as T/J in tested regime \\
+7 & sensitivity & conclusion stable across reasonable profile choices \\
+8 & independent replication & independently reproducible metrology \\
+9 & multiple unrelated domains & evidence for broader applicability \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Final Qualification Matrix}
+
+At the conclusion of the initial calibration program publish:
+\begin{verbatim}
+TURING_PROFILE_V1_FROZEN
+PASS / FAIL
+
+EXP_001_COMPRESSION_BRIDGE
+PASS / FAIL
+
+EXP_002A_RANDOMNESS_DISCRIMINATION
+PASS / FAIL
+
+EXP_002B_OCCAM_TRANSITION
+PASS / FAIL
+
+EXP_002C_MECHANISM_DISCRIMINATION
+PASS / FAIL
+
+EXP_002D_UNIFICATION
+PASS / FAIL
+
+EXP_003_ACTIVE_EXPERIMENT_SELECTION
+PASS / FAIL
+
+H3_REPLAY_REPRODUCIBILITY
+PASS / FAIL
+
+H3_STATISTICAL_ROBUSTNESS
+PASS / FAIL
+
+H4_ENERGY_ACCOUNTING_CLOSURE
+PASS / FAIL
+
+H5_TURING_YIELD
+PASS / FAIL
+
+TURING_PROFILE_SENSITIVITY
+PASS / FAIL
+
+INDEPENDENT_REPLICATION
+PASS / FAIL
+\end{verbatim}
+
+\section{Recommended Execution Order}
+
+The engineering program should proceed in the following order:
+\begin{verbatim}
+1. Freeze model encoding and L(M)
+
+2. Build probability-stream artifact format
+
+3. Build independent arithmetic/range coder
+
+4. Build independent ANS/rANS coder
+
+5. Build independent Turing verifier
+
+6. Complete CAL-0
+
+7. Run EXP-001
+
+8. Repeat EXP-001 on independent seeds
+
+9. Run EXP-002A
+
+10. Run EXP-002B
+
+11. Run EXP-002C
+
+12. Run interventional EXP-002C
+
+13. Run EXP-002D
+
+14. Run H3 internal replication
+
+15. Run EXP-003
+
+16. Validate physical energy measurement with H4
+
+17. Run H5 Turing-yield experiments
+
+18. Execute profile-sensitivity matrix
+
+19. Freeze the complete calibration record
+
+20. Hand the protocol to an independent laboratory
+\end{verbatim}
+
+\section{Immediate Milestone}
+
+The first milestone is deliberately narrow:
+
+\begin{quote}
+Produce one fully reproducible EXP-001 bundle in which frozen predictors emit immutable probability streams, two independently implemented lossless coders produce physical compressed artifacts, a separate verifier reconstructs all Turing values, and the explanatory candidate and memorization control behave according to the preregistered prediction.
+\end{quote}
+
+Nothing later in the program is more important until that succeeds.
+
+\section{Final Scientific Standard}
+
+The validation program should not be judged by whether the experiments generate impressive Turing numbers. It should be judged by whether the instrument survives cases designed to falsify it.
+
+A persuasive calibration record would show that the metric:
+\begin{verbatim}
+rewards correct diffusion
+
+rejects invented drift when mu = 0
+
+rewards real drift only after it earns its description cost
+
+rejects deterministic fits to stochastic fluctuations
+
+recognizes mean reversion only when it exists
+
+continues to predict after intervention
+
+rewards useful theoretical unification
+
+rejects artificial unification
+
+helps choose discriminating experiments
+
+reproduces under new trajectories
+
+reproduces under independent implementation
+
+survives reasonable profile changes
+
+accounts physically for its energy use
+
+distinguishes equivalent explanations by T/J
+
+and reproduces in an independent laboratory
+\end{verbatim}
+
+If the program achieves those outcomes under frozen, blinded, preregistered conditions, the Turing would have moved from a defined theoretical instrument to an empirically calibrated measurement framework. If it fails any of them, that failure identifies exactly which scientific interpretation has not yet been earned.
+
+\end{document}

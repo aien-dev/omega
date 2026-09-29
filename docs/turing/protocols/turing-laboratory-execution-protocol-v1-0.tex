@@ -1,0 +1,2000 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\geometry{margin=1in}
+
+\title{Turing Laboratory Execution Protocol\\
+Version 1.0}
+\author{M. Drake Stapleton\\AIEN Project}
+\date{September 29, 2026}
+
+\begin{document}
+
+\maketitle
+
+\noindent\textit{Engineering companion to ``Turing Instrument Calibration and Validation Program'' (v1.0). The calibration program defines the experiment order and scientific gates: EXP-001 validates the compression bridge; EXP-002A/B/C test false structure, additional complexity, and mechanism discrimination; EXP-002D tests unification; and EXP-003 tests active experiment selection. This document specifies the repository organization, schemas, command names, and statistical implementation that make those experiments executable.}
+
+\section*{Scope}
+
+This document converts the Turing calibration plan into an executable laboratory program for:
+\begin{verbatim}
+CAL-0
+Measurement freeze
+
+EXP-001
+Actual compression bridge
+
+EXP-002A
+Pure diffusion / false-structure rejection
+
+EXP-002B
+Drift / Occam transition
+
+EXP-002C
+Mean-reversion / mechanism discrimination
+
+EXP-002D
+Unification
+
+EXP-003
+Active experiment selection
+
+H3
+Replay and statistical reproducibility
+\end{verbatim}
+H4 energy closure and H5 Turing yield should use the same artifact and receipt architecture but remain gated until the informational measurement has passed EXP-001 through EXP-003.
+
+The laboratory must behave as though a skeptical outside group will receive the complete artifact bundle and attempt to reproduce every conclusion without access to the original implementation.
+
+\part{Repository and Trust Structure}
+
+\section{Canonical repository layout}
+
+Recommended top-level repository:
+\begin{verbatim}
+turing-lab/
+|
+|-- Cargo.toml
+|-- README.md
+|-- LICENSE
+|-- rust-toolchain.toml
+|
+|-- profiles/
+|   |-- schema/
+|   |   `-- turing-profile.schema.json
+|   |
+|   |-- draft/
+|   |   `-- Turing-profile-v1.0.toml
+|   |
+|   `-- frozen/
+|       |-- Turing-profile-v1.0.toml
+|       |-- Turing-profile-v1.0.sha256
+|       `-- FREEZE_RECEIPT.json
+|
+|-- crates/
+|   |-- turing-core/
+|   |-- turing-artifact/
+|   |-- turing-profile/
+|   |-- turing-model-code/
+|   |-- turing-probability/
+|   |-- turing-score/
+|   |-- turing-score-independent/
+|   |-- turing-coder-range/
+|   |-- turing-coder-rans/
+|   |-- turing-generator/
+|   |-- turing-stats/
+|   |-- turing-blind/
+|   |-- turing-receipt/
+|   |-- turing-verify/
+|   `-- turing-cli/
+|
+|-- experiments/
+|   |-- EXP-001/
+|   |-- EXP-002A/
+|   |-- EXP-002B/
+|   |-- EXP-002C/
+|   |-- EXP-002D/
+|   `-- EXP-003/
+|
+|-- generators/
+|   |-- diffusion/
+|   |-- drift_diffusion/
+|   |-- ornstein_uhlenbeck/
+|   `-- experiment_selection/
+|
+|-- baselines/
+|   |-- uniform/
+|   |-- empirical/
+|   |-- markov/
+|   `-- fixed_heuristic/
+|
+|-- controls/
+|   |-- memorizer/
+|   |-- polynomial/
+|   `-- flexible_predictor/
+|
+|-- scripts/
+|   |-- power_simulation.py
+|   |-- verify_no_overlap.py
+|   |-- verify_candidate_freeze.py
+|   |-- seal_manifest.py
+|   `-- summarize_results.py
+|
+|-- schemas/
+|   |-- candidate.schema.json
+|   |-- dataset.schema.json
+|   |-- probability-stream.schema.json
+|   |-- code-result.schema.json
+|   |-- score-result.schema.json
+|   |-- experiment-receipt.schema.json
+|   |-- intervention.schema.json
+|   `-- replication.schema.json
+|
+|-- preregistration/
+|   |-- EXP-001.md
+|   |-- EXP-002A.md
+|   |-- EXP-002B.md
+|   |-- EXP-002C.md
+|   |-- EXP-002D.md
+|   `-- EXP-003.md
+|
+|-- sealed/
+|   `-- .gitignore
+|
+|-- published/
+|   `-- README.md
+|
+`-- docs/
+    |-- MODEL_CODE.md
+    |-- BLINDING.md
+    |-- STATISTICS.md
+    |-- CODING.md
+    |-- REPLICATION.md
+    |-- FAILURE_POLICY.md
+    `-- CLAIM_LADDER.md
+\end{verbatim}
+The \texttt{sealed/} directory must never be available to candidate-development processes. In production, it should ideally live on a different account, process boundary, or physical machine.
+
+\section{Process separation}
+
+Define four security principals.
+\begin{verbatim}
+candidate
+evaluator
+verifier
+replicator
+\end{verbatim}
+The candidate principal may read:
+\begin{verbatim}
+profile
+development data
+public generators where permitted
+candidate APIs
+\end{verbatim}
+The candidate principal may not read:
+\begin{verbatim}
+sealed data
+sealed seeds
+sealed parameters
+evaluator manifests
+future interventions
+counterfactual outcomes
+\end{verbatim}
+The evaluator principal owns hidden generation and scoring execution. The verifier receives frozen artifacts after evaluation. The replicator should be able to reproduce the experiment from published protocol without importing production scorer code.
+
+\section{Git discipline}
+
+Use immutable tags for every executed experiment. Example:
+\begin{verbatim}
+turing-profile-v1.0
+exp001-preregistered-v1
+exp001-candidate-freeze-v1
+exp001-evaluation-v1
+exp001-published-v1
+\end{verbatim}
+Never rewrite those tags. A failed run receives its own permanent tag. Example:
+\begin{verbatim}
+exp002b-evaluation-v1-FAIL
+\end{verbatim}
+A corrected run is:
+\begin{verbatim}
+exp002b-preregistered-v2
+\end{verbatim}
+not a force-push over v1.
+
+\part{Canonical Artifacts}
+
+\section{Digest rule}
+
+Every durable artifact receives:
+\begin{verbatim}
+sha256
+byte_length
+media_type
+schema_version
+created_by
+created_at
+\end{verbatim}
+Canonical serialization should be deterministic. For JSON artifacts:
+\begin{verbatim}
+UTF-8
+normalized numeric representation
+sorted map keys
+no insignificant whitespace
+newline termination defined by profile
+\end{verbatim}
+Prefer a canonical JSON encoding or canonical CBOR for signed objects. Do not hash pretty-printed documents whose serialization may vary.
+
+\section{Measurement profile schema}
+
+Conceptual schema:
+\begin{verbatim}
+{
+  "profile_id": "Turing-profile-v1.0",
+  "profile_version": 1,
+  "profile_digest": "sha256:...",
+
+  "model_code": {
+    "format": "turing-model-code-v1",
+    "parameter_quantization": "...",
+    "shared_background_digest": "sha256:...",
+    "dependency_accounting": "explicit"
+  },
+
+  "probability": {
+    "representation": "...",
+    "quantization_bits": 0,
+    "normalization": "...",
+    "zero_probability_policy": "..."
+  },
+
+  "coding": {
+    "coder_a": "range-v1",
+    "coder_b": "rans-v1",
+    "header_accounting": true,
+    "side_information_accounting": true
+  },
+
+  "statistics": {
+    "confidence_level": 0.95,
+    "resampling_unit": "trajectory",
+    "method": "...",
+    "stopping_rule": "fixed-n"
+  },
+
+  "blinding": {
+    "candidate_freeze_required": true,
+    "sealed_release_after_freeze": true
+  }
+}
+\end{verbatim}
+The literal values must come from the preregistered methodology rather than this illustrative schema.
+
+\section{Candidate manifest}
+
+Every candidate receives a manifest before test release.
+\begin{verbatim}
+{
+  "candidate_id": "M_diffusion_001",
+  "candidate_family": "diffusion",
+  "artifact_digest": "sha256:...",
+  "model_code_digest": "sha256:...",
+  "model_bits": 812,
+  "dependencies": [
+    {
+      "digest": "sha256:...",
+      "charged_bits": 0,
+      "reason": "declared shared background"
+    }
+  ],
+  "frozen_at": "2026-...",
+  "profile_digest": "sha256:..."
+}
+\end{verbatim}
+No mutable dependency may be referenced by branch name, URL, \texttt{latest}, or local path.
+
+\section{Dataset manifest}
+
+\begin{verbatim}
+{
+  "dataset_id": "EXP002A-test-001",
+  "experiment": "EXP-002A",
+  "split": "sealed_test",
+
+  "generator_digest": "sha256:...",
+  "parameter_commitment": "sha256:...",
+  "seed_commitment": "sha256:...",
+
+  "trajectory_count": 0,
+  "trajectory_length": 0,
+
+  "payload_digest": "sha256:...",
+  "profile_digest": "sha256:..."
+}
+\end{verbatim}
+During blinding, the parameter and seed values remain private. Their commitments are public. After the predetermined release condition, disclose them so anyone can verify the commitment.
+
+\section{Probability-stream format}
+
+The probability stream is one of the most important artifacts. The model produces it once. Coders consume it without invoking the model.
+
+Header:
+\begin{verbatim}
+{
+  "format": "turing-probability-stream-v1",
+  "candidate_digest": "sha256:...",
+  "dataset_digest": "sha256:...",
+  "profile_digest": "sha256:...",
+  "alphabet_digest": "sha256:...",
+  "record_count": 0
+}
+\end{verbatim}
+Record:
+\begin{verbatim}
+{
+  "index": 1281,
+  "context_digest": "sha256:...",
+  "observed_symbol": 17,
+
+  "probabilities": [
+    ["0", "0.0010"],
+    ["1", "0.0061"]
+  ],
+
+  "normalization_error": "0.0"
+}
+\end{verbatim}
+For a continuous process, define the predictive coding representation explicitly. Possible approaches include:
+\begin{verbatim}
+fixed quantization bins
+registered residual quantizer
+registered density discretization
+\end{verbatim}
+but exactly one method must be frozen in the profile before evaluation. Never discretize differently for different candidates.
+
+\section{Coder result}
+
+\begin{verbatim}
+{
+  "coder": "range-v1",
+  "probability_stream_digest": "sha256:...",
+  "source_dataset_digest": "sha256:...",
+
+  "payload_bits": 0,
+  "header_bits": 0,
+  "side_information_bits": 0,
+
+  "total_bits": 0,
+
+  "encoded_digest": "sha256:...",
+  "decoded_digest": "sha256:...",
+
+  "lossless_roundtrip": true
+}
+\end{verbatim}
+All headers and required side information must be counted.
+
+\section{Score record}
+
+\begin{verbatim}
+{
+  "candidate_id": "M1",
+  "baseline_id": "B0",
+
+  "L_baseline_model": 0,
+  "L_candidate_model": 0,
+
+  "L_baseline_data_ideal": 0,
+  "L_candidate_data_ideal": 0,
+
+  "L_baseline_data_coder_a": 0,
+  "L_candidate_data_coder_a": 0,
+
+  "T_ideal": 0,
+  "T_coder_a": 0,
+
+  "uncertainty": {
+    "lower": 0,
+    "upper": 0,
+    "method": "..."
+  }
+}
+\end{verbatim}
+
+\section{Final experiment receipt}
+
+\begin{verbatim}
+{
+  "experiment_id": "EXP-001",
+  "run_id": "EXP001-EVAL-0001",
+
+  "profile_digest": "sha256:...",
+  "preregistration_digest": "sha256:...",
+
+  "candidate_root": "sha256:...",
+  "dataset_root": "sha256:...",
+  "probability_root": "sha256:...",
+  "coding_root": "sha256:...",
+  "analysis_root": "sha256:...",
+
+  "primary_endpoint": "...",
+  "gate": "PASS",
+
+  "signed_by": "...",
+  "signature": "..."
+}
+\end{verbatim}
+
+\part{Common Command-Line Interface}
+
+\section{CLI design}
+
+Use a single control-plane CLI:
+\begin{verbatim}
+turing
+\end{verbatim}
+Suggested top-level commands:
+\begin{verbatim}
+turing profile
+turing prereg
+turing power
+turing data
+turing candidate
+turing predict
+turing code
+turing score
+turing verify
+turing stats
+turing experiment
+turing replicate
+turing publish
+\end{verbatim}
+
+\section{Profile commands}
+
+Draft validation:
+\begin{verbatim}
+turing profile validate \
+  profiles/draft/Turing-profile-v1.0.toml
+\end{verbatim}
+Freeze:
+\begin{verbatim}
+turing profile freeze \
+  profiles/draft/Turing-profile-v1.0.toml \
+  --out profiles/frozen/
+\end{verbatim}
+Verify:
+\begin{verbatim}
+turing profile verify \
+  profiles/frozen/Turing-profile-v1.0.toml
+\end{verbatim}
+After freeze, editing the profile requires a new version.
+
+\section{Power simulation}
+
+Example:
+\begin{verbatim}
+turing power run \
+  --experiment EXP-002B \
+  --config preregistration/EXP-002B.power.toml \
+  --replicates 10000 \
+  --out experiments/EXP-002B/power/
+\end{verbatim}
+Output must include:
+\begin{verbatim}
+assumed effect sizes
+sample size
+estimated interval width
+estimated false-positive rate
+estimated false-negative rate
+simulation seed
+simulation code digest
+\end{verbatim}
+The output becomes part of preregistration.
+
+\section{Candidate freeze}
+
+\begin{verbatim}
+turing candidate freeze \
+  --candidate build/candidates/M1 \
+  --profile profiles/frozen/Turing-profile-v1.0.toml \
+  --out experiments/EXP-001/frozen_candidates/M1/
+\end{verbatim}
+Then:
+\begin{verbatim}
+turing candidate verify-freeze \
+  experiments/EXP-001/frozen_candidates/M1/
+\end{verbatim}
+The evaluator must refuse any candidate whose freeze receipt is newer than the sealed-data release timestamp.
+
+\section{Hidden data generation}
+
+Evaluator-only command:
+\begin{verbatim}
+turing data generate \
+  --experiment EXP-002A \
+  --split sealed_test \
+  --profile profiles/frozen/Turing-profile-v1.0.toml \
+  --secret-config /secure/EXP002A-secret.toml \
+  --out /secure/sealed/EXP-002A/
+\end{verbatim}
+Publish only commitments:
+\begin{verbatim}
+turing data commit \
+  /secure/sealed/EXP-002A/ \
+  --publish experiments/EXP-002A/commitments/
+\end{verbatim}
+
+\section{Prediction}
+
+After candidate freeze:
+\begin{verbatim}
+turing predict \
+  --candidate experiments/EXP-001/frozen_candidates/M1/ \
+  --dataset /secure/sealed/EXP-001/test.bin \
+  --profile profiles/frozen/Turing-profile-v1.0.toml \
+  --out /secure/results/EXP-001/M1.prob
+\end{verbatim}
+Freeze the probability stream immediately.
+
+\section{Coding}
+
+Range coder:
+\begin{verbatim}
+turing code range \
+  --probabilities M1.prob \
+  --observations test.bin \
+  --out M1.range
+\end{verbatim}
+rANS:
+\begin{verbatim}
+turing code rans \
+  --probabilities M1.prob \
+  --observations test.bin \
+  --out M1.rans
+\end{verbatim}
+Verify:
+\begin{verbatim}
+turing code verify M1.range
+turing code verify M1.rans
+\end{verbatim}
+
+\section{Scoring}
+
+Primary scorer:
+\begin{verbatim}
+turing score primary \
+  --candidate M1 \
+  --baseline B0 \
+  --dataset test.bin \
+  --profile Turing-profile-v1.0.toml \
+  --out score-primary.json
+\end{verbatim}
+Independent scorer:
+\begin{verbatim}
+turing score independent \
+  --candidate-artifacts published/... \
+  --out score-independent.json
+\end{verbatim}
+The independent scorer must be a separate crate/package with no dependency on \texttt{turing-score}.
+
+\section{Gate execution}
+
+\begin{verbatim}
+turing experiment gate EXP-001 \
+  --prereg preregistration/EXP-001.md \
+  --artifacts experiments/EXP-001/run-0001/
+\end{verbatim}
+Output:
+\begin{verbatim}
+PASS
+FAIL
+INCONCLUSIVE
+\end{verbatim}
+\texttt{INCONCLUSIVE} must exist. Not every non-pass is proof of a false hypothesis.
+
+\part{Statistical Analysis}
+
+\section{Experimental unit}
+
+For stochastic-process experiments, the primary independent unit should normally be the independently generated trajectory or hidden world rather than each time step. Observations inside a trajectory are correlated. Do not calculate confidence intervals by pretending every time sample is an independent replicate. This follows the calibration program's instruction to use block resampling for correlated observations rather than treating them as independent.
+
+\section{Primary uncertainty procedure}
+
+Recommended default for the first calibration series:
+\begin{verbatim}
+trajectory-level paired bootstrap
+\end{verbatim}
+when comparing models evaluated on the same hidden trajectories. For candidates A and B, calculate per-world:
+\begin{verbatim}
+delta_T_i = T_A,i - T_B,i
+\end{verbatim}
+Resample entire worlds/trajectories with replacement. Estimate:
+\begin{verbatim}
+median or mean delta_T
+95% interval
+probability delta_T > 0 under bootstrap distribution
+\end{verbatim}
+The exact estimator must be frozen before evaluation.
+
+\section{Sequential dependence}
+
+If each trajectory contains time-series dependence, either:
+\begin{verbatim}
+treat the entire trajectory as one resampling unit
+\end{verbatim}
+or use a preregistered moving/stationary block bootstrap when within-trajectory inference is required. Do not choose the block size after inspecting candidate differences.
+
+\section{EXP-001 statistics}
+
+Primary quantities:
+\begin{verbatim}
+coder overhead:
+L_coded - L_ideal
+
+rank agreement:
+ideal ordering vs coder ordering
+
+T difference:
+T_coded - T_ideal
+\end{verbatim}
+Recommended tests:
+\begin{verbatim}
+Spearman rank correlation
+paired trajectory bootstrap for discrepancy
+predefined equivalence interval for coder overhead
+\end{verbatim}
+Do not use only a significance test. EXP-001 is fundamentally an equivalence/calibration problem. Define an acceptable discrepancy envelope first.
+
+\section{Memorizer control}
+
+Primary question:
+\begin{verbatim}
+Does M_mem achieve positive generalized T after L(M_mem)?
+\end{verbatim}
+Test across independent sealed worlds. Preregister expected sign. If the memorizer wins, investigate the accounting before claiming that memorization is scientifically rewarded.
+
+\section{EXP-002A statistics}
+
+For each candidate compare:
+\begin{verbatim}
+held-out T
+development-to-held-out degradation
+false-structure selection rate
+\end{verbatim}
+Primary contrasts:
+\begin{verbatim}
+diffusion vs drifted diffusion
+diffusion vs polynomial
+diffusion vs OU
+diffusion vs memorizer
+\end{verbatim}
+Preregister whether the experiment uses:
+\begin{verbatim}
+family-wise correction
+false-discovery-rate control
+or hierarchical testing
+\end{verbatim}
+Do not decide after seeing which comparison succeeds.
+
+\section{EXP-002A pass criterion}
+
+A recommended preregistered form is:
+\begin{verbatim}
+P(diffusion has greater held-out delta_T than
+each designated false-structure control)
+must exceed declared criterion,
+and the uncertainty interval on the relevant
+paired contrast must exclude the failure region.
+\end{verbatim}
+Insert actual numerical criteria only after power simulation. Do not copy arbitrary \texttt{p < .05} conventions without checking experimental power.
+
+\section{EXP-002B statistics}
+
+The main object is the Occam curve:
+\begin{verbatim}
+mu
+->
+delta_T(drift - diffusion)
+\end{verbatim}
+Fit or summarize this curve without assuming a convenient parametric shape unless preregistered. Estimate:
+\begin{verbatim}
+zero-effect behavior
+transition region
+strong-effect behavior
+\end{verbatim}
+The critical null-world test is:
+\begin{verbatim}
+mu = 0
+\end{verbatim}
+where the drift parameter should not systematically earn its cost.
+
+\section{EXP-002B crossing point}
+
+Define:
+\begin{verbatim}
+mu*
+\end{verbatim}
+as the effect magnitude at which expected incremental T crosses zero. Estimate uncertainty for \texttt{mu*}. Because the crossing may be broad, report an interval rather than false precision.
+
+\section{EXP-002C statistics}
+
+Primary contrast:
+\begin{verbatim}
+OU
+vs
+diffusion
+vs
+drift
+\end{verbatim}
+across intervention strata:
+\begin{verbatim}
+near equilibrium
+moderate displacement
+far displacement
+\end{verbatim}
+Use a paired design: all candidate models evaluate the same generated trajectories. Test for:
+\begin{verbatim}
+model x intervention-regime interaction
+\end{verbatim}
+because the central scientific claim is structural generalization under changed initial conditions.
+
+\section{EXP-002C explanatory criterion}
+
+A candidate earns stronger explanatory support only if:
+\begin{verbatim}
+candidate frozen before intervention
+
+predictive advantage survives intervention
+
+advantage behaves in the direction predicted by
+the proposed mechanism
+\end{verbatim}
+Passive compression alone does not establish causality or mechanism.
+
+\section{EXP-002D statistics}
+
+Compute cumulative net description length as environments are added. For specialists:
+\begin{verbatim}
+L_total_specialists(k)
+\end{verbatim}
+For unified model:
+\begin{verbatim}
+L_total_unified(k)
+\end{verbatim}
+Then:
+\begin{verbatim}
+delta_T_unification(k)
+\end{verbatim}
+Plot or tabulate this as a function of \texttt{k}. The desired pattern may legitimately be:
+\begin{verbatim}
+specialists better at small k
+
+unified theory better after amortization
+\end{verbatim}
+Include heterogeneous negative-control environments.
+
+\section{EXP-003 statistics}
+
+Primary outcome:
+\begin{verbatim}
+observations-to-discrimination
+\end{verbatim}
+Secondary outcomes:
+\begin{verbatim}
+experiment count
+elapsed experimental time
+eventual confidence
+T gained
+\end{verbatim}
+Compare active strategy against each frozen passive baseline on matched hidden worlds. Recommended analysis:
+\begin{verbatim}
+paired bootstrap of cost-to-threshold
+
+survival/time-to-threshold analysis
+if some runs never reach threshold
+
+failure fraction
+\end{verbatim}
+Do not delete runs that fail to discriminate. They are part of the result.
+
+\part{EXP-001 Runbook}
+
+\section{Phase 001-A: engineering qualification}
+
+Before sealed science:
+\begin{verbatim}
+range coder unit tests
+rANS unit tests
+round-trip tests
+probability normalization tests
+canonical serialization tests
+digest tests
+model-cost tests
+candidate-freeze tests
+dataset-overlap tests
+independent-scorer parity on synthetic fixtures
+\end{verbatim}
+Required development gate:
+\begin{verbatim}
+EXP001_INFRA_READY = PASS
+\end{verbatim}
+
+\section{Phase 001-B: synthetic known-answer tests}
+
+Create toy distributions where codelength is analytically known. Examples:
+\begin{verbatim}
+uniform binary source
+
+strongly biased Bernoulli source
+
+deterministic source with registered zero-probability handling
+
+small Markov source
+\end{verbatim}
+Verify:
+\begin{verbatim}
+ideal codelength
+~=
+actual coder length
+\end{verbatim}
+inside known implementation overhead. This is engineering validation, not scientific EXP-001 evidence.
+
+\section{Phase 001-C: candidate freeze}
+
+Freeze:
+\begin{verbatim}
+B0
+B1
+B2
+B3
+M_candidate
+M_mem
+\end{verbatim}
+Generate:
+\begin{verbatim}
+candidate_manifest.json
+artifact digest
+model-code artifact
+L(M) receipt
+freeze timestamp
+\end{verbatim}
+After this point, candidate code is immutable.
+
+\section{Phase 001-D: sealed evaluation}
+
+Evaluator:
+\begin{verbatim}
+loads candidate
+loads sealed observations
+produces probability artifact
+hashes probability artifact
+runs both coders
+verifies both decoders
+calculates primary scores
+\end{verbatim}
+No candidate optimization occurs.
+
+\section{Phase 001-E: independent verification}
+
+Verifier receives:
+\begin{verbatim}
+profile
+candidate manifest
+model-code artifacts
+probability streams
+observations
+coder artifacts
+\end{verbatim}
+Verifier does not receive the primary scorer source as a dependency. It independently reconstructs the result.
+
+\section{EXP-001 final report}
+
+Required sections:
+\begin{verbatim}
+Preregistration
+
+Blinding
+
+Candidate freeze
+
+Model-cost accounting
+
+Probability stream
+
+Ideal codelength
+
+Actual coder results
+
+Memorizer result
+
+Independent verification
+
+Uncertainty
+
+Failures/deviations
+
+Gate decision
+\end{verbatim}
+Required summary table:
+\begin{verbatim}
+candidate
+L(M)
+L_ideal
+L_range
+L_rANS
+T_ideal
+T_range
+T_rANS
+uncertainty
+gate
+\end{verbatim}
+
+\part{EXP-002 Runbook}
+
+\section{Hidden-world generation architecture}
+
+All stochastic generators should implement one common interface:
+\begin{verbatim}
+trait HiddenWorld {
+    type Parameters;
+    type State;
+    type Observation;
+
+    fn sample_parameters(secret_rng: &mut Rng) -> Self::Parameters;
+
+    fn initialize(
+        params: &Self::Parameters,
+        secret_rng: &mut Rng
+    ) -> Self::State;
+
+    fn step(
+        state: &mut Self::State,
+        params: &Self::Parameters,
+        secret_rng: &mut Rng
+    ) -> Self::Observation;
+}
+\end{verbatim}
+Candidate code must never receive \texttt{Parameters}. It receives only the observation stream and public metadata allowed by the profile.
+
+\section{EXP-002A generation}
+
+Private generator:
+\begin{verbatim}
+dX = sqrt(2D) dW
+\end{verbatim}
+Secret fields:
+\begin{verbatim}
+D
+x0
+seed
+\end{verbatim}
+Public fields may include:
+\begin{verbatim}
+dt
+observation units
+quantization definition
+\end{verbatim}
+if preregistered. Generate:
+\begin{verbatim}
+development worlds
+calibration worlds
+sealed worlds
+replication worlds
+\end{verbatim}
+from non-overlapping seed domains.
+
+\section{EXP-002B generation}
+
+Private generator:
+\begin{verbatim}
+dX = mu dt + sqrt(2D) dW
+\end{verbatim}
+Secret:
+\begin{verbatim}
+mu
+D
+x0
+seed
+\end{verbatim}
+Stratify hidden worlds across preregistered \texttt{mu} levels. Do not encode the stratum into filenames visible to candidates. Use opaque world IDs.
+
+\section{EXP-002C generation}
+
+Private generator:
+\begin{verbatim}
+dX = -theta X dt + sigma dW
+\end{verbatim}
+Secret:
+\begin{verbatim}
+theta
+sigma
+x0
+seed
+\end{verbatim}
+For intervention evaluation, evaluator chooses starting state according to the preregistered intervention stratum. Candidate cannot update parameters after intervention identities are disclosed unless the protocol explicitly defines online updating. For the first calibration series, prefer frozen candidates.
+
+\section{EXP-002D environment family}
+
+Represent environment families in a sealed manifest:
+\begin{verbatim}
+{
+  "family_id": "UFAM-001",
+  "worlds": [
+    "opaque-world-001",
+    "opaque-world-002",
+    "opaque-world-003"
+  ]
+}
+\end{verbatim}
+Do not expose which world belongs to which generator family before evaluation where that information would trivialize the task.
+
+\part{EXP-003 Runbook}
+
+\section{Experiment API}
+
+EXP-003 needs an explicit intervention API. Conceptual request:
+\begin{verbatim}
+{
+  "experiment_id": "INT-0041",
+
+  "action": {
+    "initial_displacement": "...",
+    "observation_horizon": "...",
+    "sampling_interval": "...",
+    "replicates": 4
+  },
+
+  "predictions": [
+    {
+      "hypothesis": "H0",
+      "distribution_digest": "sha256:..."
+    },
+    {
+      "hypothesis": "H1",
+      "distribution_digest": "sha256:..."
+    }
+  ],
+
+  "expected_information_gain": "...",
+
+  "committed_at": "...",
+  "commitment_digest": "sha256:..."
+}
+\end{verbatim}
+The evaluator must reject any intervention outside the legal action space.
+
+\section{Commit-before-reveal protocol}
+
+EXP-003 round:
+\begin{verbatim}
+candidate proposes intervention
+->
+candidate provides predicted distributions
+->
+candidate provides expected information gain
+->
+request artifact is hashed
+->
+evaluator verifies legality
+->
+experiment executes
+->
+result artifact is generated
+->
+result is revealed to candidate
+\end{verbatim}
+This prevents retrospective prediction.
+
+\section{Passive-baseline replay}
+
+The evaluator should precompute or execute:
+\begin{verbatim}
+fixed schedule
+random legal policy
+regular non-adaptive schedule
+\end{verbatim}
+over matched hidden worlds. Use the same discrimination rule for every strategy.
+
+\section{Discrimination rule}
+
+Freeze a criterion such as:
+\begin{verbatim}
+posterior odds
+likelihood ratio
+predefined model-evidence difference
+or Turing-based decision boundary
+\end{verbatim}
+before evaluation. The choice must not depend on which method performs best.
+
+\section{Counterfactual archive}
+
+For each active choice, evaluator may later compute:
+\begin{verbatim}
+what would each other legal experiment
+have revealed?
+\end{verbatim}
+Store this in:
+\begin{verbatim}
+counterfactual/
+\end{verbatim}
+but keep it hidden from the live candidate. Use it after the run to evaluate the quality of experiment selection.
+
+\part{Agent Assignments}
+
+\section{Agent 1: Metrology Lead}
+
+Owns:
+\begin{verbatim}
+Turing-profile-v1.0
+L(M)
+shared-background definition
+quantization rules
+gate definitions
+\end{verbatim}
+Must not write candidate models. Primary deliverables:
+\begin{verbatim}
+profile
+MODEL_CODE.md
+STATISTICS.md
+claim ladder
+\end{verbatim}
+
+\section{Agent 2: Blinding and Data Custodian}
+
+Owns:
+\begin{verbatim}
+sealed-data generator
+secret seeds
+parameter commitments
+candidate/test separation
+dataset manifests
+\end{verbatim}
+Must not work on candidate ranking logic. Primary deliverables:
+\begin{verbatim}
+generator
+sealed manifests
+commitments
+overlap audit
+\end{verbatim}
+
+\section{Agent 3: Range-Coder Lead}
+
+Owns only:
+\begin{verbatim}
+turing-coder-range
+\end{verbatim}
+Must not inspect the rANS implementation. Deliverables:
+\begin{verbatim}
+range coder
+decoder
+round-trip tests
+coder receipt
+\end{verbatim}
+
+\section{Agent 4: rANS Lead}
+
+Owns only:
+\begin{verbatim}
+turing-coder-rans
+\end{verbatim}
+Must not reuse the range coder implementation. Independent code paths are intentional.
+
+\section{Agent 5: Primary Scoring Lead}
+
+Owns:
+\begin{verbatim}
+turing-score
+\end{verbatim}
+Implements:
+\begin{verbatim}
+L(M)
+ideal codelength
+coded T
+uncertainty interface
+\end{verbatim}
+Does not own independent verification.
+
+\section{Agent 6: Independent Verification Lead}
+
+Owns:
+\begin{verbatim}
+turing-score-independent
+turing-verify
+\end{verbatim}
+May read the specification. Must not import primary scorer libraries. Its job is to disagree when there is a bug.
+
+\section{Agent 7: Statistics Lead}
+
+Owns:
+\begin{verbatim}
+power simulation
+bootstrap implementation
+equivalence tests
+multiple-comparison strategy
+Occam transition analysis
+EXP-003 cost-to-threshold analysis
+\end{verbatim}
+Must freeze analysis code before sealed outcome inspection where feasible.
+
+\section{Agent 8: EXP-001 Integrator}
+
+Owns no primitive scoring/coder implementation. Coordinates artifacts from Agents 1--7. Runs:
+\begin{verbatim}
+EXP-001 engineering qualification
+candidate freeze
+sealed run
+verification
+gate
+report
+\end{verbatim}
+
+\section{Agent 9: EXP-002A Lead}
+
+Owns:
+\begin{verbatim}
+pure-diffusion experiment
+false-structure controls
+development/sealed result assembly
+\end{verbatim}
+Uses common generator and scorer interfaces.
+
+\section{Agent 10: EXP-002B Lead}
+
+Owns:
+\begin{verbatim}
+drift sweep
+effect-size design
+Occam curve
+mu* estimation
+\end{verbatim}
+Coordinates with Statistics Lead before preregistration.
+
+\section{Agent 11: EXP-002C Lead}
+
+Owns:
+\begin{verbatim}
+OU worlds
+intervention regimes
+mechanism-generalization analysis
+\end{verbatim}
+
+\section{Agent 12: EXP-002D Lead}
+
+Owns:
+\begin{verbatim}
+specialist vs unified representation comparison
+environment scaling
+negative-control unification suite
+\end{verbatim}
+
+\section{Agent 13: EXP-003 Lead}
+
+Owns:
+\begin{verbatim}
+legal intervention API
+active experiment policy interface
+passive baselines
+decision threshold
+counterfactual analysis
+\end{verbatim}
+Must not have access to the evaluator's hidden generator identity.
+
+\section{Agent 14: Adversarial Reviewer}
+
+Has read access to everything except unreleased sealed secrets. Attempts to break:
+\begin{verbatim}
+blinding
+L(M)
+metadata accounting
+seed isolation
+coder overhead accounting
+statistical assumptions
+candidate/test separation
+intervention commitment
+\end{verbatim}
+Produces:
+\begin{verbatim}
+ADVERSARIAL_REVIEW.md
+\end{verbatim}
+before final gate signing.
+
+\section{Agent 15: Reproduction Lead}
+
+Starts from a clean checkout. Receives only what an external laboratory would receive. Must reproduce:
+\begin{verbatim}
+EXP-001
+one EXP-002 family
+\end{verbatim}
+without assistance from original implementation authors once the run begins.
+
+\part{Orchestration}
+
+\section{Parallelization map}
+
+The safe parallel work before CAL-0 freeze is:
+\begin{verbatim}
+Lane A
+Profile + model-code specification
+
+Lane B
+Range coder
+
+Lane C
+rANS coder
+
+Lane D
+Primary scorer
+
+Lane E
+Independent scorer
+
+Lane F
+Generator framework
+
+Lane G
+Statistics/power tooling
+
+Lane H
+Artifact schemas + receipts
+\end{verbatim}
+These lanes have intentionally separate file ownership. After CAL-0 freeze, the metrology rules stop changing. Then:
+\begin{verbatim}
+EXP-001 executes serially
+
+EXP-002A/B/C generator preparation
+may proceed in parallel
+
+but final evaluation occurs only after
+the necessary preceding qualification gate
+\end{verbatim}
+EXP-003 infrastructure may be developed early, but scientific execution should wait until the measurement/discrimination stack has demonstrated credibility.
+
+\section{Pull-request ownership rule}
+
+Every PR declares:
+\begin{verbatim}
+owned paths
+non-owned paths
+experiment dependency
+expected receipt
+\end{verbatim}
+Example:
+\begin{verbatim}
+Owned:
+crates/turing-coder-rans/**
+
+Do not modify:
+crates/turing-coder-range/**
+crates/turing-score/**
+profiles/frozen/**
+\end{verbatim}
+No agent may edit a frozen profile.
+
+\part{Full Command Sequence}
+
+\section{Clean qualification build}
+
+\begin{verbatim}
+git clone <repo> turing-lab-clean
+cd turing-lab-clean
+
+cargo test --workspace --locked
+\end{verbatim}
+Then:
+\begin{verbatim}
+turing profile validate \
+  profiles/draft/Turing-profile-v1.0.toml
+
+turing power run \
+  --all-preregistered
+
+turing profile freeze \
+  profiles/draft/Turing-profile-v1.0.toml
+\end{verbatim}
+Verify:
+\begin{verbatim}
+turing profile verify \
+  profiles/frozen/Turing-profile-v1.0.toml
+\end{verbatim}
+Expected gate:
+\begin{verbatim}
+TURING_PROFILE_V1_FROZEN = PASS
+\end{verbatim}
+
+\section{EXP-001 commands}
+
+Freeze candidates:
+\begin{verbatim}
+turing candidate freeze --all \
+  --experiment EXP-001
+\end{verbatim}
+Verify chronology:
+\begin{verbatim}
+turing blind verify \
+  --experiment EXP-001
+\end{verbatim}
+Generate/release sealed test to evaluator:
+\begin{verbatim}
+turing data evaluator-open \
+  --experiment EXP-001
+\end{verbatim}
+Predict:
+\begin{verbatim}
+turing predict all \
+  --experiment EXP-001
+\end{verbatim}
+Code:
+\begin{verbatim}
+turing code all \
+  --experiment EXP-001 \
+  --coders range,rans
+\end{verbatim}
+Score:
+\begin{verbatim}
+turing score primary \
+  --experiment EXP-001
+\end{verbatim}
+Independent verification:
+\begin{verbatim}
+turing score independent \
+  --experiment EXP-001
+\end{verbatim}
+Statistics:
+\begin{verbatim}
+turing stats run \
+  --experiment EXP-001
+\end{verbatim}
+Gate:
+\begin{verbatim}
+turing experiment gate EXP-001
+\end{verbatim}
+
+\section{EXP-002A commands}
+
+\begin{verbatim}
+turing experiment prepare EXP-002A
+
+turing candidate freeze --all \
+  --experiment EXP-002A
+
+turing data evaluator-open \
+  --experiment EXP-002A
+
+turing predict all \
+  --experiment EXP-002A
+
+turing code all \
+  --experiment EXP-002A
+
+turing score primary \
+  --experiment EXP-002A
+
+turing stats run \
+  --experiment EXP-002A
+
+turing experiment gate EXP-002A
+\end{verbatim}
+
+\section{EXP-002B commands}
+
+\begin{verbatim}
+turing power run \
+  --experiment EXP-002B
+
+turing prereg verify EXP-002B
+
+turing candidate freeze --all \
+  --experiment EXP-002B
+
+turing experiment run EXP-002B
+
+turing stats occam-curve \
+  --experiment EXP-002B
+
+turing experiment gate EXP-002B
+\end{verbatim}
+
+\section{EXP-002C commands}
+
+Observational run:
+\begin{verbatim}
+turing experiment run EXP-002C \
+  --phase observational
+\end{verbatim}
+Freeze again only if the preregistered protocol explicitly calls for an observational-fitting stage followed by candidate freeze. Then:
+\begin{verbatim}
+turing experiment run EXP-002C \
+  --phase intervention \
+  --candidate-mode frozen
+\end{verbatim}
+Analyze:
+\begin{verbatim}
+turing stats mechanism \
+  --experiment EXP-002C
+\end{verbatim}
+Gate:
+\begin{verbatim}
+turing experiment gate EXP-002C
+\end{verbatim}
+
+\section{EXP-002D commands}
+
+\begin{verbatim}
+turing experiment run EXP-002D \
+  --strategy specialists
+
+turing experiment run EXP-002D \
+  --strategy unified
+
+turing stats unification \
+  --experiment EXP-002D
+
+turing experiment gate EXP-002D
+\end{verbatim}
+
+\section{EXP-003 commands}
+
+Create initial ambiguous world:
+\begin{verbatim}
+turing experiment open EXP-003
+\end{verbatim}
+Candidate proposes:
+\begin{verbatim}
+turing experiment propose \
+  --experiment EXP-003 \
+  --candidate active-agent
+\end{verbatim}
+Commit:
+\begin{verbatim}
+turing experiment commit-intervention \
+  --request intervention.json
+\end{verbatim}
+Evaluator executes:
+\begin{verbatim}
+turing experiment execute-intervention \
+  --commitment <digest>
+\end{verbatim}
+Reveal:
+\begin{verbatim}
+turing experiment reveal-result \
+  --round <n>
+\end{verbatim}
+Repeat until the fixed threshold or stopping rule is reached. Run baselines:
+\begin{verbatim}
+turing experiment baseline \
+  EXP-003 \
+  --policy fixed
+
+turing experiment baseline \
+  EXP-003 \
+  --policy random
+
+turing experiment baseline \
+  EXP-003 \
+  --policy regular
+\end{verbatim}
+Analyze:
+\begin{verbatim}
+turing stats active-vs-passive \
+  --experiment EXP-003
+\end{verbatim}
+Counterfactual audit:
+\begin{verbatim}
+turing experiment counterfactual \
+  --experiment EXP-003
+\end{verbatim}
+Gate:
+\begin{verbatim}
+turing experiment gate EXP-003
+\end{verbatim}
+
+\part{Hard Acceptance Gates}
+
+\section{CAL-0}
+
+\begin{verbatim}
+profile complete
+model-code accounting complete
+power simulation complete
+sample size fixed
+analysis fixed
+blinding verified
+digest frozen
+\end{verbatim}
+Required:
+\begin{verbatim}
+TURING_PROFILE_V1_FROZEN = PASS
+\end{verbatim}
+
+\section{EXP-001}
+
+\begin{verbatim}
+both coders round-trip
+actual coding tracks ideal coding
+candidate result survives coder overhead
+memorizer behaves as preregistered
+independent scorer reproduces result
+fresh-seed result preserves conclusion
+\end{verbatim}
+Required:
+\begin{verbatim}
+EXP_001_COMPRESSION_BRIDGE = PASS
+\end{verbatim}
+The calibration program treats this as the first priority because the current result has not yet produced a correspondingly smaller real encoded file.
+
+\section{EXP-002A}
+
+\begin{verbatim}
+correct stochastic structure generalizes
+invented drift rejected
+invented mean reversion rejected
+curve-fitting decoy fails held-out test
+memorizer fails
+\end{verbatim}
+Required:
+\begin{verbatim}
+EXP_002A_RANDOMNESS_DISCRIMINATION = PASS
+\end{verbatim}
+
+\section{EXP-002B}
+
+\begin{verbatim}
+drift rejected at mu=0
+ambiguous region remains appropriately uncertain
+strong drift earns complexity
+Occam curve reproduces
+\end{verbatim}
+Required:
+\begin{verbatim}
+EXP_002B_OCCAM_TRANSITION = PASS
+\end{verbatim}
+
+\section{EXP-002C}
+
+\begin{verbatim}
+mean reversion distinguished
+wrong mechanisms rejected
+frozen law survives changed starting state
+intervention behavior agrees with mechanism
+\end{verbatim}
+Required:
+\begin{verbatim}
+EXP_002C_MECHANISM_DISCRIMINATION = PASS
+\end{verbatim}
+The calibration program makes this intervention step important because predictive compression alone does not justify calling a representation explanatory; stronger claims require invariance, counterfactual, causal, or mechanistic evidence.
+
+\section{EXP-002D}
+
+\begin{verbatim}
+real reuse earns its abstraction cost
+unified theory eventually amortizes when warranted
+forced unification loses on negative controls
+\end{verbatim}
+Required:
+\begin{verbatim}
+EXP_002D_UNIFICATION = PASS
+\end{verbatim}
+
+\section{EXP-003}
+
+\begin{verbatim}
+active selection uses same discrimination threshold
+predictions committed before outcomes
+interventions remain within legal space
+active policy reduces preregistered cost
+result repeats on fresh hidden worlds
+\end{verbatim}
+Required:
+\begin{verbatim}
+EXP_003_ACTIVE_EXPERIMENT_SELECTION = PASS
+\end{verbatim}
+The calibration program defines the core objective as beating a preregistered passive schedule in observations or energy needed to distinguish competing explanations.
+
+\part{Lab Notebook}
+
+\section{Every run gets a notebook record}
+
+Required fields:
+\begin{verbatim}
+run_id
+operator
+date/time
+host identity
+git commit
+dirty-tree status
+profile digest
+experiment digest
+candidate digests
+dataset commitment
+environment variables affecting behavior
+hardware state
+unexpected events
+result
+receipt digest
+\end{verbatim}
+No undocumented manual correction is permitted.
+
+\section{Deviations}
+
+A deviation record must contain:
+\begin{verbatim}
+what differed from preregistration
+when discovered
+whether outcome was already visible
+scientific impact
+decision:
+    continue
+    invalidate
+    rerun under new preregistration
+\end{verbatim}
+A deviation discovered after results are visible must never be silently corrected in place.
+
+\part{Publication Package}
+
+\section{EXP-001 publication}
+
+Release:
+\begin{verbatim}
+frozen profile
+preregistration
+candidate manifests
+model-code artifacts
+probability streams
+both compressed streams
+decoders
+decoded verification
+primary score
+independent score
+statistics
+gate receipt
+failure logs
+\end{verbatim}
+If secrecy is no longer needed, release sealed observations and seed preimages.
+
+\section{EXP-002 publication}
+
+Release:
+\begin{verbatim}
+all of EXP-001 reproducibility machinery
+hidden-world commitments
+eventual parameter/seed disclosure
+candidate predictions
+world-level results
+bootstrap inputs
+control results
+rank-reversal analysis
+\end{verbatim}
+
+\section{EXP-003 publication}
+
+Additionally release:
+\begin{verbatim}
+every intervention proposal
+predicted distributions
+information-gain estimates
+commitment timestamps
+observed results
+passive baseline trajectories
+counterfactual audit
+cost-to-discrimination analysis
+\end{verbatim}
+
+\part{First 30-Day Lab Target}
+
+The project should not try to execute everything at once. The first laboratory target should be:
+\begin{verbatim}
+WEEK 1
+Freeze measurement/profile design
+Finish model-code specification
+Finish artifact schemas
+
+WEEK 2
+Finish two independent coders
+Finish primary + independent scorer
+Complete synthetic known-answer tests
+
+WEEK 3
+Freeze EXP-001 candidates
+Run power/sample-size checks
+Perform blinded EXP-001
+
+WEEK 4
+Independent reconstruction
+Fresh-seed replication
+Publish EXP-001 calibration bundle
+\end{verbatim}
+Do not treat these calendar labels as scientific deadlines if qualification is incomplete. The gate matters more than the date.
+
+\part{First Implementation PRs}
+
+Recommended PR sequence:
+\begin{verbatim}
+PR 1
+Canonical artifact schemas
+
+PR 2
+Turing-profile loader + freezer
+
+PR 3
+Model-description accounting
+
+PR 4
+Canonical probability stream
+
+PR 5
+Range coder
+
+PR 6
+rANS coder
+
+PR 7
+Primary scorer
+
+PR 8
+Independent scorer
+
+PR 9
+Blinding + candidate freeze
+
+PR 10
+Power/statistics package
+
+PR 11
+EXP-001 orchestrator
+
+PR 12
+EXP-001 adversarial controls
+
+PR 13
+EXP-001 sealed evaluation artifacts
+
+PR 14
+EXP-001 independent replication
+
+PR 15
+EXP-002 generator framework
+
+PR 16
+EXP-002A
+
+PR 17
+EXP-002B
+
+PR 18
+EXP-002C
+
+PR 19
+EXP-002D
+
+PR 20
+EXP-003 intervention protocol
+\end{verbatim}
+Do not let PR 11 implement another coder or another scoring formula. Those primitives must remain independently reviewable.
+
+\part{Orchestrator Prompt}
+
+Use the following prompt for the lead engineering agent.
+\begin{verbatim}
+You are the lead orchestrator for the TURING calibration laboratory.
+
+Your responsibility is not to make the Turing succeed.
+
+Your responsibility is to execute the preregistered experiments faithfully enough that a failure is scientifically meaningful.
+
+Start by reading the frozen Turing measurement profile, experimental preregistrations, and current repository implementation.
+
+Do not change any frozen profile or preregistered gate after sealed outcomes become visible.
+
+Decompose implementation into non-overlapping lanes:
+
+1. artifact schemas;
+2. model-description accounting;
+3. range coder;
+4. rANS coder;
+5. primary scorer;
+6. independent scorer;
+7. blinding/sealed-data machinery;
+8. statistical/power analysis;
+9. experiment integration;
+10. adversarial review.
+
+Use separate agents for the two coders and two scorers.
+
+No implementation agent may silently reuse the supposedly independent implementation.
+
+For every lane require:
+- exact owned paths;
+- tests;
+- immutable commit;
+- evidence receipt;
+- independent review.
+
+Execute scientific experiments serially through the qualification ladder:
+
+CAL-0
+-> EXP-001
+-> EXP-002A
+-> EXP-002B
+-> EXP-002C
+-> EXP-002D
+-> EXP-003.
+
+Development of later infrastructure may occur in parallel, but no downstream scientific claim may bypass an upstream failed gate.
+
+Before each experiment:
+- verify clean repository state;
+- verify exact profile digest;
+- verify preregistration digest;
+- verify candidate freeze timestamps;
+- verify no candidate/sealed-data overlap;
+- verify sample size was fixed before sealed outcomes;
+- verify analysis code and primary endpoints.
+
+After each experiment:
+- preserve raw artifacts;
+- preserve failures;
+- run independent verification;
+- generate uncertainty analysis;
+- generate PASS / FAIL / INCONCLUSIVE receipt;
+- never weaken the gate after seeing the outcome.
+
+The final objective is not a large positive Turing score.
+
+The objective is a calibration record in which the instrument demonstrably:
+- corresponds to physical compression;
+- rejects memorization;
+- rejects false stochastic structure;
+- rewards additional structure only when it earns its cost;
+- distinguishes mechanisms;
+- survives intervention;
+- rewards justified unification;
+- and helps select informative experiments.
+
+Do not declare the Turing calibrated until the corresponding gates have actually passed.
+\end{verbatim}
+
+\part{Definition of Done}
+
+The first major laboratory milestone is complete only when an outside reviewer can:
+\begin{verbatim}
+clone the repository
+
+verify Turing-profile-v1.0
+
+inspect candidate freeze receipts
+
+inspect sealed-data commitments
+
+recompute L(M)
+
+recompute ideal predictive codelength
+
+decode both compressed streams
+
+verify exact observation recovery
+
+recompute coded T
+
+run the independent scorer
+
+rerun the statistical analysis
+
+inspect the memorizer control
+
+inspect all deviations
+
+verify the gate receipt
+\end{verbatim}
+without asking the original experiment team how the result was produced.
+
+That is the standard. A successful scientific result that cannot be reconstructed from its artifacts is not a successful calibration result.
+
+The central methodological point remains the same as in the calibration program: the strongest evidence comes from preregistered cases in which the metric can fail (rejecting false drift, deterministic fits to noise, and wrong mean-reversion models) rather than from maximizing \(T\). The final credibility step is independent implementation and replication, where the same scientific candidates should win and lose for the same reasons even if exact numerical Turings differ.
+
+\end{document}
