@@ -38,6 +38,9 @@
 #define RX_MAX_CAPS         8u
 #define RX_MAX_MUTATIONS    16u
 #define RX_MAX_SUBS         1024u  /* subscriptions per object */
+/* Causal-log capacity for long living-body episodes: 2^25 records (about
+ * 38 GB of reserved address space at 1128 B each), backed only as written. */
+#define RX_CRUMBS_LONG_EPISODE (1ull << 25)
 #define RX_MAX_WORKERS      16u
 #define RX_MAX_PARENTS      (RX_MAX_DEPS * RX_MAX_FIELDS + 1u)
 #define RX_PRIORITY_CLASSES 7u
@@ -162,6 +165,7 @@ enum {
  * graphics seat. It is not a call from the processor to a graphics function. */
 #define RX_ACCEL_BLACKWELL   0x2u
 #define RX_SEAT_BLACKWELL    0x100u
+#define RX_SEQ_WORKER        0x200u   /* crumb worker of the R15 sequential reference */
 #define RX_OBJECT_WINDOW     64u  /* eight field values, little-endian */
 #define RX_PHYS_WINDOWS      (RX_MAX_OBJECTS + 1u)
 
@@ -202,6 +206,16 @@ typedef struct RxCtx {
     void *user;
     uint32_t worker;
 } RxCtx;
+
+/* A reaction function may return RX_FN_DEFER when it has handed a physical
+ * effect it decided (an R9 store write) to a durable executor and has
+ * nothing to publish yet. The activation keeps its admission and its place
+ * (READY/RUNNING is not left, quiescence waits for it) but frees the worker.
+ * When the executor calls rx_world_resume the same activation runs again on a
+ * fresh snapshot, on an ordinary worker, and publishes through the usual
+ * checks. No crumb is written for the deferring run. Never returned in a
+ * sequential reference world (it is treated as a failure there). */
+#define RX_FN_DEFER 0x44454652
 
 /* Pure transformation: read ctx->in, append proposals to ctx->out.
  * Return 0 to publish (possibly nothing), negative to fail. */
@@ -360,6 +374,14 @@ typedef struct {
     bool have_last;
     bool have_two;
     bool resident_seat;         /* handed to the graphics seat; fn is not called */
+    bool deferred;              /* fn returned RX_FN_DEFER; waits for rx_world_resume */
+    bool resume_pending;        /* resumed before the deferring run returned */
+    /* R15 timing (only with a timing buffer). */
+    uint64_t t_demand, t_ready, t_run, t_fn_end, sched_ns, sched_cpu_ns;
+    /* Sequential reference only (rx_seq_reference.c): the newest version of
+     * each trigger this stage has seen, and a re-run it still owes. */
+    uint64_t seq_seen[RX_MAX_DEPS];
+    bool seq_pending;
     uint64_t resident_seq;      /* ring sequence of the claim notice */
     uint64_t resident_parent;   /* crumb that made this activation ready */
 } RxReaction;
@@ -393,8 +415,69 @@ typedef struct {
     uint64_t desc_rejected;
     uint64_t resident_claims;   /* claims posted to a resident seat */
     uint64_t resident_closed;   /* claims ended: committed, refused, or lost */
+    uint64_t deferrals;         /* activations that handed an effect to a durable executor */
     uint64_t seat_losses;       /* times a seat was declared lost */
+    /* R15 instrumentation. Counted, never inferred. */
+    uint64_t activations;       /* run_one entries (every activation, any outcome) */
+    uint64_t externals;         /* outside publications */
+    /* Propagation (spec §6.3). `subscriptions_checked` counts subscriptions
+     * inspected and `wakes` counts wake attempts (demand calls, including
+     * the sequential reference's own admission). */
+    uint64_t subscriptions_matched; /* inspected, generation and mask matched */
+    uint64_t wakes_accepted;    /* wake attempt took a DORMANT reaction to waiting */
+    uint64_t ready_inserts;     /* reactions placed on a ready ring */
+    /* Copied bytes: bytes processor code writes into a destination as a copy
+     * or serialization of data that exists elsewhere. Every path is its own
+     * counter; none is inferred from architecture. The graphics chip's own
+     * ring and window accesses are not processor copies and are not here. */
+    uint64_t snapshot_bytes;    /* RxSnapshotDep entries filled into RxCtx */
+    uint64_t stage_bytes;       /* current fields copied into the publication
+                                   staging buffer, per object written */
+    uint64_t crumb_bytes;       /* RxCrumb records appended to the causal log */
+    uint64_t proj_bytes;        /* coherent object table entries + field windows */
+    uint64_t c2g_write_bytes;   /* descriptors written to the processor->seat ring
+                                   (publications, claims, shutdown, injected) */
+    uint64_t c2g_read_bytes;    /* descriptors copied out of that ring (publication
+                                   consumer, processor stand-in seat) */
+    uint64_t g2c_write_bytes;   /* result descriptors written by the stand-in seat */
+    uint64_t g2c_read_bytes;    /* result descriptors copied out of the seat ring */
+    uint64_t window_move_bytes; /* object windows saved and restored on relocation */
+    uint64_t setup_copy_bytes;  /* whole-region copy when binding coherent memory */
+    /* Scheduling time, only while a timing buffer is installed: wake,
+     * admission and ready-ring code (RES), readiness polling and admission
+     * (SEQ). Wall is CLOCK_MONOTONIC; CPU is the calling thread's
+     * CLOCK_THREAD_CPUTIME_ID. Each interval is read on one thread. */
+    uint64_t sched_wall_ns;
+    uint64_t sched_cpu_ns;
+    uint64_t gpu_results_taken; /* completion notices taken from the chip ring */
+    uint64_t gpu_polls_empty;   /* completion-ring polls that found nothing */
+    uint64_t gpu_host_waits;    /* times a caller blocked for a GPU completion */
+    uint64_t seq_pulses;        /* sequential reference only: pulses run */
+    uint64_t seq_polls;         /* sequential reference only: readiness polls */
+    uint64_t seq_runs;          /* sequential reference only: stages run */
 } RxStats;
+
+/* R15 timing sample, recorded only when a timing buffer is installed
+ * (rx_world_set_timing). Wall-clock ns, CLOCK_MONOTONIC. */
+typedef struct {
+    uint32_t reaction;
+    uint32_t outcome;           /* RxCrumbKind of the activation */
+    uint64_t cause;             /* crumb that woke it */
+    uint64_t t_demand;          /* wake accepted (DORMANT -> waiting) */
+    uint64_t t_ready;           /* admitted: placed on a ready ring */
+    uint64_t t_run;             /* run_one entered */
+    uint64_t t_fn_end;          /* reaction function returned */
+    uint64_t t_visible;         /* publication committed and dependents woken */
+    uint64_t sched_ns;          /* wall time inside wake/admission/queue code for it */
+    uint64_t sched_cpu_ns;      /* thread CPU time inside the same code */
+} RxTiming;
+
+/* The most recent propagation wave (only while a timing buffer is installed). */
+typedef struct {
+    uint64_t wall_ns, cpu_ns;
+    uint64_t inspected, matched, wake_attempts, wakes_accepted;
+    uint64_t ready_inserts, coalesced, deferred, suppressed;
+} RxPropWave;
 
 typedef int (*RxAuthValidateFn)(const void *ctx, RxCapRef ref, uint32_t subject,
                                  uint64_t resource, uint32_t rights, RxCapEntry *out);
@@ -466,6 +549,21 @@ typedef struct RxWorld {
     uint32_t seat_generation;
 
     RxStats stats;
+    uint32_t n_deferred;        /* activations waiting for rx_world_resume */
+    /* Signalled when a claim is posted to the resident seat, so a completion
+     * transport can sleep while no graphics work is outstanding. */
+    pthread_cond_t claim_cv;
+
+    /* R15 timing buffer (off when null). */
+    RxTiming *timing;
+    uint64_t timing_cap, n_timing;   /* n_timing counts attempts, even past cap */
+    RxPropWave last_prop;            /* most recent propagate() */
+    uint32_t sched_nest;             /* timed scheduling sections open (count once) */
+
+    /* Sequential reference (never production): no workers, no dependency
+     * wakes; rx_seq_pulse decides what runs. */
+    bool sequential;
+    uint64_t seq_pulse_started, seq_idle_start;
 } RxWorld;
 
 int  rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crumb_cap);
@@ -481,6 +579,16 @@ struct AienosCapView;
 int  rx_world_init_native(RxWorld *w, const struct AienosCapView *view,
                           uint32_t n_workers, uint64_t crumb_cap);
 void rx_world_destroy(RxWorld *w);
+/* R15: record an RxTiming per activation into `buf` (cap entries; later ones
+ * are dropped and counted in n_timing beyond cap). Null turns it off. */
+void rx_world_set_timing(RxWorld *w, RxTiming *buf, uint64_t cap);
+/* Samples stored and samples attempted since rx_world_set_timing. Returns
+ * RX_ERR_FULL when attempted > stored: statistics from that buffer are
+ * truncated and must not be reduced. */
+int rx_world_timing_status(RxWorld *w, uint64_t *stored, uint64_t *attempted);
+/* 1 in production builds; 0 only in the R15 measurement build that skips
+ * causal digests (-DRX_MEASURE_NO_CAUSAL_DIGEST). */
+extern const int rx_world_causal_digest_enabled;
 void rx_world_set_resources(RxWorld *w, const RxResourceBudget *budget);
 void rx_world_set_stability(RxWorld *w, const RxStabilityBudget *stability);
 
@@ -589,9 +697,19 @@ int  rx_resident_post_claim(RxWorld *w, uint32_t in, uint32_t out, uint64_t pare
 /* Clear the seat's stopped flag. Does not move either ring. */
 int  rx_resident_reset(RxWorld *w);
 
+/* The durable executor finished the effect reaction `reaction` deferred on
+ * (RX_FN_DEFER): run that activation again. Safe from any thread. Decides
+ * nothing; the reaction re-reads the world and the executor's result. */
+int  rx_world_resume(RxWorld *w, uint32_t reaction);
+
 /* Take one result notice and, when it is valid, publish it into the canonical
  * object. A dependent reaction wakes from that publication. */
 int  rx_resident_accept(RxWorld *w);
+
+/* Block until at least one resident claim is outstanding (posted and not yet
+ * closed) or timeout_ms passes. Transport only: it decides nothing. Returns
+ * RX_OK when work is outstanding, RX_ERR_TIMEOUT otherwise. */
+int rx_resident_wait_outstanding(RxWorld *w, int timeout_ms);
 
 /* Ask the seat to leave. The object world stays. */
 int  rx_resident_shutdown(RxWorld *w);

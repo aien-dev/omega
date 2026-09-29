@@ -1,0 +1,6 @@
+ M ../../../Makefile
+ M load.c
+ M reduce.c
+?? collect-c2.sh
+?? runs/c2-20260928-01/
+?? ../../../tests/runtime/r15_gpu_load.c
