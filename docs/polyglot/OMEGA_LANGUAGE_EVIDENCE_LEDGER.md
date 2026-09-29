@@ -161,3 +161,21 @@ with every figure it cited checked against the receipts:
 - Energy: no energy or power was measured.
 - Stability across runs: this is one run. A second timed run is needed before the S3 margin is used for
   automatic selection.
+
+## Confirmation run (2026-09-29, run 20260929T191231Z-071bfdbd76c7)
+
+Grok asked for a second run before trusting the S3 margin. Same machine, same core, quiet flag up, 72 receipts, timed wall 14.8 s.
+Receipts are kept under `evidence/POLYGLOT/confirm-20260929T191231Z-071bfdbd76c7/` (the bench writes fixed file names, so the
+confirmation copy is filed separately and the primary run's receipts stay unchanged).
+
+S3 medians (ns), best four per sparsity:
+
+| sparsity | MJ2c_crumb | asm_crumb | enc_crumb | R2c_crumb@O3 |
+|---|---|---|---|---|
+| 0.00 | 139262 | 160404 | 167166 | 163588 |
+| 0.33 | 139479 | 158946 | 162982 | 163122 |
+| 0.66 | 139441 | 161312 | 161990 | 163292 |
+
+The S3 winner is unchanged: the Mojo 2-bit kernel beats hand assembly by 14.0 to 15.7% and the best C by 17.1 to 17.5%.
+The qualified statement stands for S3 on one X925 core at 3.90 GHz. Known gap: the bench overwrites receipts by file name;
+immutable run-named receipt files are a follow-up.
