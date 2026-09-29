@@ -1,0 +1,12 @@
+{
+  "schema": "FIXTURE_SILICON_RUN_V1",
+  "run_id": "20260928T000001Z-fixturesilicon",
+  "candidate_commit": "4444444444444444444444444444444444444444",
+  "tree_dirty": true,
+  "physics_forge_commit": "5555555555555555555555555555555555555555",
+  "machine_identity": {"node": "spark-fixture", "system": "Linux", "release": "7.0.0-fixture", "architecture": "aarch64"},
+  "silicon_observed": true,
+  "hardware_scope": "one persistent graphics seat on the machine's own chip",
+  "selected_realization_identity": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "gate": {"FIXTURE_SILICON": "PASS"}
+}

@@ -1,0 +1,12 @@
+{
+  "milestone": "FIXTURE MILESTONE - QEMU",
+  "status": "QUALIFIED / PASS",
+  "git_commit": "3333333333333333333333333333333333333333",
+  "host": {"os": "Linux", "arch": "aarch64", "compiler": "gcc fixture"},
+  "outputs": {
+    "semantic_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "realization_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "seams": {"seam_qemu_baremetal_virt": {"qemu_target": "virt cortex-a57", "observed_uart": "PASS"}},
+  "qualification_gates": {"total": 3, "passed": 3, "gates": {"A_PASS": "PASS", "B_PASS": "PASS", "C_PASS": "PASS"}}
+}

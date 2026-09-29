@@ -1,0 +1,21 @@
+// Lane 8 usability trace: a new user, starting only from `help`.
+help
+help inspect
+let x: u64 = 7
+let y: u64 = 11
+x + y
+inspect _
+type _
+why _
+verify _
+machine
+help realize
+realize _
+cost _
+run _
+why _
+evidence
+help evidence
+effects
+world
+bindings

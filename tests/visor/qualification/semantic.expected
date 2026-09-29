@@ -1,0 +1,112 @@
+Ω> // Lane 8 semantic identity session: pure, host-independent (no machine/realize output).
+Ω> 7: u64
+7
+Ω> id _
+sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+  canonical_len: 114
+  canonical_sha256: fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+Ω> 07: u64
+7
+Ω> id _
+sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+  canonical_len: 114
+  canonical_sha256: fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+Ω> 0x07: u64
+7
+Ω> id _
+sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+  canonical_len: 114
+  canonical_sha256: fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+Ω> 0b111: u64
+7
+Ω> id _
+sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+  canonical_len: 114
+  canonical_sha256: fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+Ω> 7: u32
+7
+Ω> id _
+sha256:c80191978c16ed775f4af522c0cbb1c33c2a09580e2b79a331ae851ad20c184c
+  canonical_len: 114
+  canonical_sha256: c80191978c16ed775f4af522c0cbb1c33c2a09580e2b79a331ae851ad20c184c
+Ω> let x: u64 = 7
+7
+Ω> let y: u64 = 11
+11
+Ω> x + y
+18
+Ω> id _
+sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+  canonical_len: 177
+  canonical_sha256: c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+Ω> x+y
+18
+Ω> id _
+sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+  canonical_len: 177
+  canonical_sha256: c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+Ω> x + /* comment */ y // trailing
+18
+Ω> id _
+sha256:c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+  canonical_len: 177
+  canonical_sha256: c794437c57e3aec88e7385c024e427fd9be18aa4cf91fd46778b9e5fd4a31fc7
+Ω> let a: u64 = 7
+7
+Ω> let b: u64 = 7
+7
+Ω> id a
+sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+  canonical_len: 114
+  canonical_sha256: fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+Ω> id b
+sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+  canonical_len: 114
+  canonical_sha256: fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+Ω> true
+1
+Ω> type _
+bool
+Ω> false
+0
+Ω> type _
+bool
+Ω> (7: u32) + (1: u32)
+8
+Ω> type _
+u32
+Ω> let m: u64 = 18446744073709551615
+18446744073709551615
+Ω> m + (1: u64)
+0
+Ω> (0: u64) - (1: u64)
+18446744073709551615
+Ω> (255: u8) + (1: u8)
+0
+Ω> inspect x
+id: sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+kind: VALUE
+status: ok
+shape: VALUE
+type: u64
+type_id: sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822
+value_bytes: 0000000000000007
+value: 7
+attributes: 0
+relations: 0
+constraints: 0
+canonical_len: 114
+canonical_sha256: fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+canonical_id_matches: yes
+dependencies: 1 (dangling 0)
+  [0] type sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822
+Ω> graph x
+VALUE sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db value 7 : u64
+  TYPE sha256:037a444b0f120fd4bbabd0c16ae143599b231d2469827fccbf9bc79c57bab822 type u64
+Ω> bindings
+x  object  sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+y  object  sha256:745f463215c5d2c0a03509b2ce1f7c3f2f393c6cd00d3add00fe79c4720669c2
+a  object  sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+b  object  sha256:fef7efa7112d1d8da5f8573bad1e4f882497407474c8798143330089c93c90db
+m  object  sha256:cfc927413c920f74265783ef96c5af561ac221c1321a2f42a15b920ffa512839
+_  object  sha256:18d0244f9bc23b7288d3c718cdeed62679560ec34af114536a1819b61ac6de8a
