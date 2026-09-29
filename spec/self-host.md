@@ -8,6 +8,8 @@ Target Substrate: Native AArch64 Machine Code Reproducing Compiler from Semantic
 Lineage:         SILICON -> ATLAS (M1) -> PHYSICS (M2/M3) -> OMEGA (M4/M5/M6) -> AIEN
 ```
 
+> **Note (2026-09-29, OMEGA-SYSTEMS-CORE-0000):** the M6 implementation is a fixed-output self-copy check, not compilation; it is not evidence of a compiler.
+
 ---
 
 ## 1. Executive Summary & Foundational Invariants

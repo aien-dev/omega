@@ -1,6 +1,6 @@
 # OMEGA-SYSTEMS-CORE-0000: Contract and machine semantics freeze (OSC-0 / OSC-0B)
 
-- Status: **Proposed, awaiting review.** Not frozen until accepted. The items marked "needs Drake" stay open until he decides.
+- Status: **Accepted 2026-09-29 (Drake). Frozen.** The four items that needed Drake are decided below ("Decisions 2026-09-29").
 - Date: 2026-09-29
 - Location: this ADR lives in Omega, next to the language it governs. The cross-repo doctrine ADRs stay in aien-architecture; this record points to them and does not duplicate them.
 - Full text and evidence: [OMEGA_SYSTEMS_CORE_CODE_AUDIT.md](../../OMEGA_SYSTEMS_CORE_CODE_AUDIT.md), with appendices in [docs/osc/audit/](../osc/audit/).
@@ -9,7 +9,7 @@
 
 Omega, PHYSICS, and AIENOS rely on about 98k lines of C and assembly whose safety depends on convention. Omega Systems Core is to replace them. The goal is C-class control without C's unsafe responsibility model. Drake set the sequence: audit, then a hard machine-semantics freeze, then the compiler slice, then the substrate and first migration.
 
-## Decision (proposed)
+## Decision
 
 1. **The replacement for the pointer is an object relationship.** Lifetime, authority, and placement are tracked independently (audit II.12).
 2. **The reference taxonomy is fixed.** `Handle<T>` (live) and `SemanticId<T>` / `PersistentRef<T>` (durable) are distinct types. Live handles are statically barred from canonical and durable encoders (II.6).
@@ -29,9 +29,22 @@ Omega, PHYSICS, and AIENOS rely on about 98k lines of C and assembly whose safet
 - **Follows:** native-frame-authority.md §6.4 (reclaim requires quiescence).
 - **Follows:** canonical-encoding.md (big-endian identity) and the shared-world ABI (little-endian Zero Serialization) as two different layouts.
 - **Records:** omega#71 (u64 effect generations, v2 encoder).
-- **Would amend (needs Drake):**
-  - AIENOS ADR 0013, u32 generations → u64;
-  - the README statement that Omega "is not a programming language/compiler".
+- **Amends (Drake, 2026-09-29):**
+  - AIENOS ADR 0013, u32 generations → u64 (decision 1; amendment note below);
+  - the README statement that Omega "is not a programming language/compiler" (decision 2; retired).
+
+## Decisions 2026-09-29
+
+Drake accepted the recommendations on 2026-09-29. These close audit items C1, C8, III.6, and II.6.
+
+1. **C1, capability generation width: u64 end to end.** A slot whose generation reaches the maximum is retired, never wrapped. This covers the Rust kernel remnants, the shared-world descriptor (:130/132), `src/omega_accelerator.h`, and PHYSICS M2/M3/M15, on top of the Omega effects already moved by omega#71.
+   - **Amendment note to AIENOS ADR 0013.** ADR 0013 specifies u32 capability generations. This decision amends it to u64 end to end, slot retired at max. The edit to the AIENOS repository is follow-up work **OSC-2**; AIENOS is not changed by this ADR.
+2. **C8, README doctrine: retired.** Omega is the reaction runtime **and** the compiler for Omega Systems Core. README.md now says so. The M6 "self-host" result was a fixed-output self-copy check, not compilation, and is never evidence of a compiler (II.9).
+3. **III.6, `requires` / `ensures`: text only in OSC-1.** They are parsed and recorded, not checked. Enforcement is OSC-2 and is **MANDATORY**. **Rule: no production C migrates into Omega Systems Core until contract enforcement is on.**
+4. **II.6, identity break: scheduled for OSC-2, right after the compiler slice.** It is a versioned transition: a new canonical version byte, and old records are refused, never reinterpreted (the omega#71 effect-cap64 pattern).
+   - **Constraint (TURING records).** TURING records (`src/turing`, domains `turing.contract.v0.provisional`, `turing.spec.v0`, `turing.evidence.v0`, `turing.decision.v1`, `turing.citeset.v0`) hash `omega_canonical_encode` OMG0 bytes. Therefore any OMG0 encoder change, including the C2 big-endian move, must ship together with a TURING record version bump and a verification path for existing golden digests: the `tests/turing` golden and rebuild tests must keep passing on old records. See TURING brief sections 9 and 49.
+
+**Additional rule (R16 ordering).** The OSC-1 compiler slice may not edit `src/runtime/` until the R16 gate is done. As of 2026-09-29, R16 is IN PROGRESS with only G1/G2 evidenced.
 
 ## Consequences
 

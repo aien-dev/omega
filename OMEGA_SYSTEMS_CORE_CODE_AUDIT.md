@@ -142,14 +142,14 @@ For each hazard: where it is, what goes wrong, and what replaces it in Omega Sys
 
 | # | Contradiction | Ruling |
 |---|---|---|
-| C1 | Capability generation width. The C authority and Omega runtime use u64 that never wraps. AIENOS ADR 0013, the Rust kernel, spec/type-system.md:35, EffectPayload, shared-world descriptor :130/132, and PHYSICS M2/M3/M15 use u32. rx_world.h:146-152 smuggles the high halves; rx_world.c:147 hashes only the low 32 bits. | **SETTLED for Omega effects after the pin:** omega#71 (main 8e7a445, spec/effect-cap64-migration.md, 5 OMEGA_EFFECT_CAP64 gates PASS) made `EffectPayload.capability_generation` u64 with an explicit 178-byte big-endian v2 encoder (canonical version byte 0x02 for EFFECT). v1 effect bytes are refused, never reinterpreted. The crumb_hash low-32 truncation and type-system.md:35 are being fixed on that session's branch fix/crumb-cap-gen64. **PROPOSED (needs Drake) for the rest: u64 end to end**, slot retired at max. This still requires an amendment to AIENOS ADR 0013 and covers the Rust kernel, the shared-world descriptor :130/132, src/omega_accelerator.h, and PHYSICS M2/M3/M15. Note that #71 still puts the live slot and generation inside the EFFECT canonical payload, so II.6 stays PROPOSED. |
+| C1 | Capability generation width. The C authority and Omega runtime use u64 that never wraps. AIENOS ADR 0013, the Rust kernel, spec/type-system.md:35, EffectPayload, shared-world descriptor :130/132, and PHYSICS M2/M3/M15 use u32. rx_world.h:146-152 smuggles the high halves; rx_world.c:147 hashes only the low 32 bits. | **SETTLED for Omega effects after the pin:** omega#71 (main 8e7a445, spec/effect-cap64-migration.md, 5 OMEGA_EFFECT_CAP64 gates PASS) made `EffectPayload.capability_generation` u64 with an explicit 178-byte big-endian v2 encoder (canonical version byte 0x02 for EFFECT). v1 effect bytes are refused, never reinterpreted. The crumb_hash low-32 truncation and type-system.md:35 are being fixed on that session's branch fix/crumb-cap-gen64. **DECIDED (Drake, 2026-09-29) for the rest: u64 end to end**, slot retired at max. This amends AIENOS ADR 0013 (amendment note in docs/adr/OMEGA-SYSTEMS-CORE-0000.md; the AIENOS-side edit is follow-up work OSC-2) and covers the Rust kernel, the shared-world descriptor :130/132, src/omega_accelerator.h, and PHYSICS M2/M3/M15. Note that #71 still puts the live slot and generation inside the EFFECT canonical payload, so II.6 stays PROPOSED. |
 | C2 | canonical-encoding.md says the payload is always big-endian; omega_core.c copies host little-endian structs. | Both SETTLED documents stand, but for different layers (II.3). Canonical SemanticId payloads must move to explicit big-endian encoders. This is a deliberate identity break with a version bump (OSC-2 follow-up). |
 | C3 | Two digest byte orders coexist (big-endian rx_graph and plan; little-endian crumb and generation store). | Not a contradiction once declared: they are different **WireLayouts**. The rule is that every wire format declares its byte order and is written by an encoder. |
 | C4 | Who owns authority: the PHYSICS README ("PHYSICS AUTHORIZES", SMMUv3) versus ADR 0014 (AIENOS owns interrupts, capabilities, and DMA confinement; FORGE/PHYSICS is realization only). | **SETTLED by ADR 0014.** The PHYSICS M3 ledger and effect broker are class F legacy evidence. The README claim is stale. |
 | C5 | Release requires DMA quiescence (native-frame-authority.md §6.4) versus release paths that do not wait. | SETTLED rule; the code violates it. PROPOSED II.1 encodes it in types. |
 | C6 | TRUST.md:260 "OOM panic, core" versus error-code OOM everywhere in the code. | Resolved by context (II.4). An OOM with no possible recovery (core init, trap or IRQ) traps; runtime allocation paths return a typed error. |
 | C7 | The shared-world ABI says 64 objects (omega_shared_world_abi.h:254); rx_coherent.c writes 256. The ABI header claims to live in PHYSICS but lives in Omega. | **OPEN** (ABI v2 question, not language semantics). |
-| C8 | README "OMEGA is not a programming language/compiler" versus spec/omega-language-v0.md and self-host.md. | **OPEN, for Drake.** Omega Systems Core makes Omega a compiler, so the README doctrine needs an ADR. The M6 "C1==C2==C3" result is a self-copy quine and is never evidence of compilation ([LC] §3). |
+| C8 | README "OMEGA is not a programming language/compiler" versus spec/omega-language-v0.md and self-host.md. | **DECIDED (Drake, 2026-09-29).** The README doctrine is retired: Omega is the reaction runtime and the compiler for Omega Systems Core (README.md updated; recorded in OMEGA-SYSTEMS-CORE-0000). The M6 "C1==C2==C3" result is a self-copy quine and is never evidence of compilation ([LC] §3). |
 | C9 | semantic-object.md:52 "fully relocatable" versus the pinned crumb log and the JsReal pointer graph. | The statement holds for **semantic** objects, not runtime realizations. II.7 makes the difference explicit. |
 | C10 | The ABI comments say head/tail are atomics, but they are declared `volatile uint64_t`. | PROPOSED II.2: a `device<atomic<u64>>` type replaces the declaration. |
 | C11 | Omega pins aienos 4c21386, but the default local build directory lacks the code. | FACT recorded. Enforcing the lock is a follow-up (I.8). |
@@ -380,9 +380,9 @@ Rules:
 - Non-durable types (handles, borrows, slices, pins, device references, addresses) are **statically rejected** by the canonical encoder and by every durable-store or receipt writer.
 - The only conversion is an explicit `persist(h) -> SemanticId/PersistentRef`, which resolves the live object.
 - A handle carries its world epoch, so a handle from an earlier boot fails closed (the existing epoch pattern).
-- Generation width: see C1 (u64, pending Drake).
+- Generation width: see C1 (u64 end to end, DECIDED 2026-09-29).
 
-**OPEN.** Migrating the existing on-disk R9 generation store, crumb digests, and EffectPayload is an identity break. It needs a version bump and a Drake-visible plan (OSC-2+).
+**DECIDED (Drake, 2026-09-29).** Migrating the existing on-disk R9 generation store, crumb digests, and EffectPayload is an identity break. It is scheduled for OSC-2, right after the compiler slice, as a versioned transition: a new canonical version byte, and old records are refused, never reinterpreted (the omega#71 effect-cap64 pattern). Constraint: TURING records hash omega_canonical_encode OMG0 bytes, so any OMG0 encoder change (including the C2 big-endian move) ships with a TURING record version bump and a verification path for existing golden digests. See OMEGA-SYSTEMS-CORE-0000, "Decisions 2026-09-29", item 4.
 
 ## II.7 Relocation, compaction, and pinning
 
@@ -584,7 +584,7 @@ The backend is **direct AArch64 through the in-repo encoder**, after hardening: 
 
 Diagnostics must name the object, lifetime, borrow, conflicting access, generation, capability, origin, and the attempted transition.
 
-**OPEN (Drake).** Whether `requires` / `ensures` are checked in OSC-1 or stay as text.
+**DECIDED (Drake, 2026-09-29).** In OSC-1, `requires` / `ensures` are text only: recorded, not checked. Enforcement is OSC-2 and is MANDATORY. No production C migrates into Omega Systems Core until enforcement is on.
 
 ## III.7 Migration order
 
@@ -652,8 +652,8 @@ Each negative test asserts the exact diagnostic fields from III.6.
 11. executable model: II.11
 12. lifetime, authority, and placement: II.12
 
-**Decisions that need Drake before freezing:**
-- C1: u64 generations, which supersedes ADR 0013.
-- C8: README doctrine; Omega becomes a compiler.
-- III.6: whether contracts are checked in OSC-1.
-- II.6: when to schedule the identity break.
+**Decisions taken by Drake, 2026-09-29 (freeze accepted; see OMEGA-SYSTEMS-CORE-0000):**
+- C1: DECIDED. u64 generations end to end, slot retired at max; amends AIENOS ADR 0013 (AIENOS edit is OSC-2).
+- C8: DECIDED. README non-compiler doctrine retired; Omega is the reaction runtime and the compiler for Omega Systems Core.
+- III.6: DECIDED. Contracts are text only in OSC-1; enforcement in OSC-2 is mandatory before any production C migrates.
+- II.6: DECIDED. Identity break in OSC-2 right after the compiler slice; versioned, old records refused; TURING version bump and golden-digest verification path required.
