@@ -120,14 +120,14 @@ $(PG_OUT)/asan/lane/%.o: % $(PG_HDRS) | $$(POLYGLOT_LANE_DEPS)
 	$(CC) $(PG_LANE_CFLAGS) $(PG_SAN) -c -o $@ $<
 
 # ---- binaries ----
-$(PG_VERIFY): tests/polyglot/verify_polyglot.c $(PG_COMMON_SRCS) $(PG_HDRS) $$(PG_PLAIN_OBJS)
+$(PG_VERIFY): tests/polyglot/verify_polyglot.c tests/polyglot/cs_call.S $(PG_COMMON_SRCS) $(PG_HDRS) $$(PG_PLAIN_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(PG_HCFLAGS) $(PG_TOOLCHAIN_DEFS) -DOMX_VERIFY_BUILD='"plain"' -o $@ \
-		tests/polyglot/verify_polyglot.c $(PG_COMMON_SRCS) $(PG_PLAIN_OBJS) $(PG_LDLIBS)
-$(PG_VERIFY_ASAN): tests/polyglot/verify_polyglot.c $(PG_COMMON_SRCS) $(PG_HDRS) $$(PG_ASAN_OBJS)
+		tests/polyglot/verify_polyglot.c tests/polyglot/cs_call.S $(PG_COMMON_SRCS) $(PG_PLAIN_OBJS) $(PG_LDLIBS)
+$(PG_VERIFY_ASAN): tests/polyglot/verify_polyglot.c tests/polyglot/cs_call.S $(PG_COMMON_SRCS) $(PG_HDRS) $$(PG_ASAN_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(PG_HCFLAGS) $(PG_SAN) $(PG_TOOLCHAIN_DEFS) -DOMX_VERIFY_BUILD='"asan+ubsan"' -o $@ \
-		tests/polyglot/verify_polyglot.c $(PG_COMMON_SRCS) $(PG_ASAN_OBJS) $(PG_LDLIBS)
+		tests/polyglot/verify_polyglot.c tests/polyglot/cs_call.S $(PG_COMMON_SRCS) $(PG_ASAN_OBJS) $(PG_LDLIBS)
 $(PG_BENCH): tests/polyglot/bench_polyglot.c $(PG_COMMON_SRCS) $(PG_HDRS) $$(PG_PLAIN_OBJS)
 	@mkdir -p $(dir $@)
 	$(CC) $(PG_HCFLAGS) $(PG_TOOLCHAIN_DEFS) -o $@ \

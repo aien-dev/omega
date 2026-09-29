@@ -7,14 +7,28 @@
  *     magnitude cases);
  *   - 20,000 random cases (random m, n, sparsity; x including -128/127 edges;
  *     m and n not multiples of any vector width; unaligned W, x and y);
+ *   - large shapes with random data: the four bench shapes (up to 4096 x
+ *     4096), n in {65537, 131073, 1000003} with m in {1, 5}, and six cases
+ *     with m in 1000..4100;
  *   - guard-page placement for every case: W, x and y each live in their own
  *     mapping with PROT_NONE pages on both sides, placed either flush against
  *     the trailing guard page or at a small offset after the leading one; W
  *     and x are made read-only before any candidate runs;
- *   - the error contract (E_TRIT, E_ARG, E_OVERFLOW, no partial plan kept,
- *     run on an empty plan).
- * y is written with a sentinel before every run, and run three times per
- * plan (x1, x2, x1) so per-call scratch cannot leak state.
+ *   - the candidate's packed weights (plan mem, weight_bytes) are moved into
+ *     a read-only guarded mapping for two of the runs: once flush against the
+ *     trailing guard page, once right after the leading one (plans with an
+ *     aux allocation stay in place);
+ *   - callee-saved registers: the first run of every case goes through a
+ *     trampoline (cs_call.S) that loads x19-x28 and d8-d15 with sentinels and
+ *     checks them after the call;
+ *   - the error contract (E_TRIT at first/last/random position on shapes up
+ *     to 33 x 257 and 2 x 4099, E_ARG, E_OVERFLOW, no partial plan kept, run
+ *     on an empty plan).
+ * y is written with a sentinel before every run, and run five times per
+ * plan: x1, x2, x1 (per-call scratch cannot leak state), then twice on a
+ * third buffer holding x1 whose bytes at n-1 and n/2 are changed in place
+ * between the two runs (a result cache keyed on the x pointer or a prefix of
+ * x returns a stale y).
  * Output: one PASS/FAIL line per candidate with counts, then a summary line.
  * Environment: OMX_VERIFY_RANDOM overrides the random case count (the gate
  * uses the default 20000). Fixed seed; reproducible.
@@ -160,15 +174,42 @@ static placement random_placement(void) {
     return p;
 }
 
+/* Callee-saved sentinel trampoline (tests/polyglot/cs_call.S). */
+typedef int (*run_fn)(const oma_rz_plan *, const int8_t *, int32_t *);
+int omx_cs_call(run_fn fn, const oma_rz_plan *p, const int8_t *x, int32_t *y, uint64_t out[18]);
+static uint64_t cs_sentinel(unsigned i) {
+    return ((uint64_t)(0x5a00u | i) << 48) | ((0x1111u * (i + 1u)) & 0xffffu);
+}
+static const char *cs_name(unsigned i) {
+    static const char *const nm[18] = {"x19", "x20", "x21", "x22", "x23", "x24", "x25", "x26", "x27",
+                                       "x28", "d8",  "d9",  "d10", "d11", "d12", "d13", "d14", "d15"};
+    return i < 18 ? nm[i] : "?";
+}
+
+/* Packed-weight guard (review G-S1): the plan's packed weights (p->mem,
+ * weight_bytes long) are copied into a mapping with PROT_NONE pages on both
+ * sides, read-only, placed flush against the trailing guard (at_end) or
+ * starting right after the leading guard, and the plan points at the copy for
+ * one run. Plans with a second allocation (aux: index lists, row offsets) do
+ * not state how weight_bytes splits between mem and aux, so they are left in
+ * place (only MA-3's C R3_sparse today; ASan covers it). */
+static int pw_guard(gbuf *g, const oma_rz_plan *p, int at_end) {
+    if (p->aux || !p->mem || p->weight_bytes == 0) return 0;
+    if (gb_alloc(g, p->weight_bytes, at_end, 0)) return -1;
+    memcpy(g->p, p->mem, p->weight_bytes);
+    gb_readonly(g);
+    return 1;
+}
+
 static void run_case(size_t m, size_t n, int wk, double sp, int xk, placement pl) {
-    gbuf W = {0}, X1 = {0}, X2 = {0}, Y = {0};
-    int32_t *yref1 = malloc(m * sizeof *yref1), *yref2 = malloc(m * sizeof *yref2);
-    int ok = yref1 && yref2 && gb_alloc(&W, m * n, pl.flush_w, pl.off_w) == 0 &&
+    gbuf W = {0}, X1 = {0}, X2 = {0}, X3 = {0}, Y = {0};
+    int32_t *yref1 = malloc(m * sizeof *yref1), *yref2 = malloc(m * sizeof *yref2), *yref3 = malloc(m * sizeof *yref3);
+    int ok = yref1 && yref2 && yref3 && gb_alloc(&W, m * n, pl.flush_w, pl.off_w) == 0 &&
              gb_alloc(&X1, n, pl.flush_x, pl.off_x) == 0 && gb_alloc(&X2, n, !pl.flush_x, pl.off_x ^ 17) == 0 &&
-             gb_alloc(&Y, m * sizeof(int32_t), pl.flush_y, pl.off_y) == 0;
+             gb_alloc(&X3, n, pl.flush_x, pl.off_x) == 0 && gb_alloc(&Y, m * sizeof(int32_t), pl.flush_y, pl.off_y) == 0;
     HCHECK(ok, "allocation m=%zu n=%zu", m, n);
     if (!ok) goto out;
-    int8_t *w = (int8_t *)W.p, *x1 = (int8_t *)X1.p, *x2 = (int8_t *)X2.p;
+    int8_t *w = (int8_t *)W.p, *x1 = (int8_t *)X1.p, *x2 = (int8_t *)X2.p, *x3 = (int8_t *)X3.p;
     int32_t *y = (int32_t *)(void *)Y.p;
     fill_w(w, m * n, wk, sp);
     fill_x(x1, n, xk);
@@ -176,8 +217,18 @@ static void run_case(size_t m, size_t n, int wk, double sp, int xk, placement pl
     gb_readonly(&W);
     gb_readonly(&X1);
     gb_readonly(&X2);
+    /* In-place change of x behind the same pointer (review G-S5, mutant M4):
+     * x3 starts equal to x1; after two runs on it, the bytes at n-1 and n/2
+     * are changed in place (outside the first 16 bytes when n >= 34), so a
+     * candidate that caches results by x pointer or by a prefix of x returns
+     * a stale y. */
+    size_t tj[2] = {n - 1, n / 2};
+    memcpy(x3, x1, n);
+    for (int t = 0; t < 2; t++) x3[tj[t]] = (int8_t)(x3[tj[t]] == 0 ? 1 : x3[tj[t]] == 1 ? -1 : -x3[tj[t]] / 2);
     HCHECK(oma_rz_oracle(w, m, n, x1, yref1) == OMA_RZ_OK, "oracle rc");
     HCHECK(oma_rz_oracle(w, m, n, x2, yref2) == OMA_RZ_OK, "oracle rc");
+    HCHECK(oma_rz_oracle(w, m, n, x3, yref3) == OMA_RZ_OK, "oracle rc");
+    int8_t x3mut[2] = {x3[tj[0]], x3[tj[1]]};
     for (size_t ci = 0; ci < g_nc; ci++) {
         const oma_rz_impl *im = omx_candidate_get(ci)->impl;
         g_cases[ci]++;
@@ -194,11 +245,35 @@ static void run_case(size_t m, size_t n, int wk, double sp, int xk, placement pl
         if (rc) { oma_rz_free(&p); continue; }
         CHECK(ci, p.weight_bytes > 0 && p.footprint_bytes >= p.weight_bytes, "byte accounting");
         CHECK(ci, p.m == m && p.n == n, "plan shape %zux%zu, want %zux%zu", p.m, p.n, m, n);
-        const int8_t *xs[3] = {x1, x2, x1};
-        const int32_t *refs[3] = {yref1, yref2, yref1};
-        for (int rep = 0; rep < 3; rep++) {
+        /* x1, x2, x1 (scratch must not leak), then x3 twice behind one
+         * pointer with an in-place change between the two runs. Rep 0 packed
+         * weights flush against a trailing guard page, rep 1 right after a
+         * leading one; rep 0 goes through the callee-saved sentinel trampoline. */
+        memcpy(x3, x1, n);
+        const int8_t *xs[5] = {x1, x2, x1, x3, x3};
+        const int32_t *refs[5] = {yref1, yref2, yref1, yref1, yref3};
+        void *own = p.mem;
+        for (int rep = 0; rep < 5; rep++) {
+            gbuf PW = {0};
+            int moved = 0;
+            if (rep < 2) {
+                moved = pw_guard(&PW, &p, rep == 0);
+                HCHECK(moved >= 0, "packed-weight guard mapping");
+                if (moved > 0) p.mem = PW.p;
+            }
+            if (rep == 4) { x3[tj[0]] = x3mut[0]; x3[tj[1]] = x3mut[1]; }
             for (size_t i = 0; i < m; i++) y[i] = (int32_t)0x5a5a5a5a;
-            rc = im->run(&p, xs[rep], y);
+            if (rep == 0) {
+                uint64_t regs[18];
+                rc = omx_cs_call(im->run, &p, xs[rep], y, regs);
+                for (unsigned r = 0; r < 18; r++)
+                    CHECK(ci, regs[r] == cs_sentinel(r), "m=%zu n=%zu callee-saved %s not preserved (0x%016llx)", m, n,
+                          cs_name(r), (unsigned long long)regs[r]);
+            } else {
+                rc = im->run(&p, xs[rep], y);
+            }
+            p.mem = own;
+            gb_free(&PW);
             CHECK(ci, rc == OMA_RZ_OK, "run rc %d", rc);
             size_t bad = 0, first = 0;
             for (size_t i = 0; i < m; i++)
@@ -212,8 +287,8 @@ static void run_case(size_t m, size_t n, int wk, double sp, int xk, placement pl
         oma_rz_free(&p);
     }
 out:
-    gb_free(&W); gb_free(&X1); gb_free(&X2); gb_free(&Y);
-    free(yref1); free(yref2);
+    gb_free(&W); gb_free(&X1); gb_free(&X2); gb_free(&X3); gb_free(&Y);
+    free(yref1); free(yref2); free(yref3);
 }
 
 static placement fixed_placement(size_t k) {
@@ -300,6 +375,41 @@ static void test_error_contract(void) {
     gb_free(&T);
 }
 
+
+/* Error contract on shapes whose weights reach every vector body width
+ * (review G-S3, mutant M5): one bad weight at the first, the last and a
+ * random position, the matrix flush against a trailing guard page. */
+static void test_error_contract_shapes(void) {
+    static const size_t shp[][2] = {{1, 17}, {5, 16}, {4, 65}, {7, 129}, {3, 1000}, {2, 4099}, {33, 257}};
+    static const int8_t bad[] = {2, -2, -128, 127, 3};
+    for (size_t s = 0; s < sizeof shp / sizeof shp[0]; s++) {
+        size_t m = shp[s][0], n = shp[s][1], t = m * n;
+        gbuf W = {0};
+        HCHECK(gb_alloc(&W, t, 1, 0) == 0, "alloc");
+        if (!W.p) continue;
+        int8_t *w = (int8_t *)W.p;
+        size_t pos[3] = {0, t - 1, 1 + (size_t)(rnd() % (t - 2))};
+        for (size_t ci = 0; ci < g_nc; ci++) {
+            const oma_rz_impl *im = omx_candidate_get(ci)->impl;
+            g_cur_id = im->id;
+            if (n > im->max_n) continue;
+            for (size_t b = 0; b < sizeof bad; b++)
+                for (int k = 0; k < 3; k++) {
+                    fill_w(w, t, WK_RANDOM, 0.3);
+                    w[pos[k]] = bad[b];
+                    oma_rz_plan p;
+                    memset(&p, 0, sizeof p);
+                    int rc = im->pack(&p, w, m, n);
+                    CHECK(ci, rc == OMA_RZ_E_TRIT, "%zux%zu weight %d at %zu: rc %d, want E_TRIT", m, n, bad[b],
+                          pos[k], rc);
+                    CHECK(ci, plan_empty(&p), "%zux%zu partial plan kept after E_TRIT", m, n);
+                    oma_rz_free(&p);
+                }
+        }
+        gb_free(&W);
+    }
+}
+
 int main(void) {
     g_pg = (size_t)sysconf(_SC_PAGESIZE);
     signal(SIGSEGV, on_fault);
@@ -314,6 +424,7 @@ int main(void) {
     if (env && *env) nrand = atol(env);
 
     test_error_contract();
+    test_error_contract_shapes();
 
     /* MA-3 structured grid (tests/algebra/test_realize.c), each case placed
      * with guard pages in one of 8 flush patterns and small offsets. */
@@ -349,8 +460,18 @@ int main(void) {
     run_case(17, 4099, WK_RANDOM, 0.97, XK_RANDOM, fixed_placement(5));
     size_t ma3_cases = grid_cases + 400 + 9;
 
-    /* 20,000 random cases: tails, unaligned pointers, x edges */
     static const double spc[] = {0.0, 0.33, 0.66, 1.0};
+    /* Large shapes with random data (review G-S2, mutants M2 and M3): the
+     * four bench shapes, n above 65536 (16-bit column wrap), m above 300. */
+    static const size_t big[][2] = {{1, 4096}, {256, 1024}, {4096, 4096}, {64, 1024}, {1, 65537}, {5, 65537},
+                                    {1, 131073}, {5, 131073}, {1, 1000003}, {5, 1000003}};
+    size_t big_cases = 0;
+    for (size_t b = 0; b < sizeof big / sizeof big[0]; b++, big_cases++)
+        run_case(big[b][0], big[b][1], WK_RANDOM, spc[b % 3], b & 1 ? XK_EDGEMIX : XK_RANDOM, random_placement());
+    for (int it = 0; it < 6; it++, big_cases++)
+        run_case(1000 + (size_t)(rnd() % 3101), 1 + (size_t)(rnd() % 300), WK_RANDOM, rnd01(), (int)(rnd() % XK_COUNT),
+                 random_placement());
+    /* 20,000 random cases: tails, unaligned pointers, x edges */
     for (long it = 0; it < nrand; it++) {
         uint64_t r = rnd() % 10;
         size_t n = r < 6 ? 1 + (size_t)(rnd() % 300) : r < 9 ? 1 + (size_t)(rnd() % 2100) : 1 + (size_t)(rnd() % 8200);
@@ -373,8 +494,9 @@ int main(void) {
     }
     int fail = bad_cands || g_hfail;
     printf("POLYGLOT verify-polyglot %s: %zu candidates (%zu failing), %llu checks, %llu failures, "
-           "%zu MA-3 grid cases + %ld random cases, guard pages on W/x/y, harness %llu/%llu (%s build)\n",
-           fail ? "FAIL" : "PASS", g_nc, bad_cands, tc, tf, ma3_cases, nrand, g_hchecks - g_hfail, g_hchecks,
+           "%zu MA-3 grid cases + %zu large cases + %ld random cases, guard pages on W/x/y and packed weights, "
+           "callee-saved x19-x28/d8-d15 checked, harness %llu/%llu (%s build)\n",
+           fail ? "FAIL" : "PASS", g_nc, bad_cands, tc, tf, ma3_cases, big_cases, nrand, g_hchecks - g_hfail, g_hchecks,
            OMX_VERIFY_BUILD);
     return fail ? 1 : 0;
 }
