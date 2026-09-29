@@ -27,7 +27,7 @@ The Visor owns only the first arrow.
 
 ```c
 typedef struct { SemanticId effect_id; uint16_t resource_class; uint16_t operation_code;
-  uint32_t capability_slot; uint32_t capability_generation; SemanticId capability_ref;
+  uint32_t capability_slot; uint64_t capability_generation; SemanticId capability_ref;
   uint16_t param_len; uint8_t param_bytes[128]; uint8_t request_digest[32];
   bool authorized; char status[64]; char route[128]; } VisorEffectRequest;
 int visor_effect_request_build(const OmegaGraph *g, const SemanticId *effect_object_id, VisorEffectRequest *out);
@@ -38,7 +38,8 @@ int visor_effect_request_format_json(const VisorEffectRequest *r, char *out, siz
 
 - **build** reads only an existing `KIND_EFFECT` object. Refuses (-1, output
   zeroed and unauthorized) when the object is missing or not an effect,
-  `omega_validate_object` rejects it, `payload_len != sizeof(EffectPayload)`,
+  `omega_validate_object` rejects it, the payload is not a strict 178-byte
+  v2 effect payload (`omega_effect_read`),
   `param_len > 128`, it has no id, or `sha256(omega_canonical_encode(obj))`
   differs from its stored SemanticId (it was edited after being named).
   It computes the digest into a local buffer and never writes the graph.
@@ -133,27 +134,15 @@ design point is that nothing trusts it.
    test conventions. Omega's `EffectPayload` has no canonical mapping to
    runtime rights yet.
 6. No effect is executed and no receipt is produced by anything in the Visor.
-7. **Finding (main f5b6ff1 / 7622d3c): honest 64-bit generations are
-   unrepresentable in the effect format.** Runtime capability generations are
-   64-bit (f5b6ff1) and every root seeds them from `CLOCK_BOOTTIME` ns << 8
-   (7622d3c, `take_boot_gen`), so they exceed 2^32. Omega's
-   `EffectPayload.capability_generation` (canonical encoding, so part of every
-   effect object's identity) and `VisorEffectRequest.capability_generation`
-   are 32-bit, so a reference carried through the Visor is truncated and the
-   root refuses it as `STALE_GEN`. That is fail-closed and is asserted (case
-   12, which prints the `FINDING:` line), but it means an honest request can
-   never validate. The runtime has no seed hook, so the test cannot keep
-   generations small. Widening the core format is a separate core change.
-   On main, while generations do not fit in 32 bits, these Visor-path checks
-   print a NON-CLAIM instead of being counted: the root/world positive
-   controls (case 0), random generation and wrong slot (1), `RIGHTS` for
-   EFFECT (6) and MINT (4), `RESOURCE` root/world (7), params-only validates
-   and changed-operation `RIGHTS` (8), `REVOKED` and `STALE_GEN` root/world
-   (2), replay against the new grant and the new-grant control (3). Each has a
-   counted twin that presents the full 64-bit reference straight to
-   `rx_caproot_validate` / `rx_world_validate_cap` (runtime only, not the
-   Visor format), and the stale/replay twins are refused for the intended
-   reason (revoke, reclaim, newer grant), not truncation. Case 10 also presents
-   the reclaimed 64-bit reference to `rx_world_publish_external`. Result on
-   the merged tree (2026-09-29): `PASS 84/84`, 20 non-claims,
-   `OMEGA_VISOR_AUTHORITY_HOSTILE_PASS`.
+7. **Resolved by spec/effect-cap64-migration.md (was: honest 64-bit
+   generations unrepresentable in the effect format).** Runtime capability
+   generations are 64-bit and seeded from `CLOCK_BOOTTIME` ns << 8, so they
+   exceed 2^32. Omega's `EffectPayload` / `VisorEffectRequest` used to carry a
+   32-bit generation, so every honest reference carried through the Visor was
+   truncated and refused as `STALE_GEN`, and the Visor-path checks printed a
+   NON-CLAIM instead of being counted (before the fix: `PASS 84/84`, 20
+   non-claims). Effect objects are now version 0x02 with a 178-byte
+   big-endian payload carrying the full 64-bit generation; the GEN_FITS gating
+   is removed, every Visor-path check is counted, and case 12 asserts the full
+   generation is carried and validates, and that the same reference cut to 32
+   bits is `STALE_GEN`.

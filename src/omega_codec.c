@@ -69,6 +69,7 @@ int omega_graph_deserialize_binary(const uint8_t *in_buf, size_t in_len, OmegaGr
     pos += 4;
     uint16_t count = read_u16_be(&in_buf[pos]);
     pos += 2;
+    if (count > OMEGA_MAX_GRAPH_OBJECTS) return -1;
 
     memset(out_graph, 0, sizeof(OmegaGraph));
 
@@ -82,7 +83,9 @@ int omega_graph_deserialize_binary(const uint8_t *in_buf, size_t in_len, OmegaGr
         if (cbuf[0] != 0x4F || cbuf[1] != 0x4D || cbuf[2] != 0x47 || cbuf[3] != 0x30) {
             return -1;
         }
-        if (cbuf[4] != OMEGA_VERSION) return -1;
+        /* Per-kind object version: a v1 effect (32-bit generation) is refused,
+         * never reinterpreted; a v2 non-effect is refused (spec/effect-cap64-migration.md). */
+        if (omega_canonical_check_header(cbuf[4], cbuf[5]) != OMEGA_CANON_OK) return -1;
 
         OmegaObject *obj = &out_graph->objects[out_graph->object_count++];
         obj->kind = (SemanticKind)cbuf[5];
@@ -92,15 +95,18 @@ int omega_graph_deserialize_binary(const uint8_t *in_buf, size_t in_len, OmegaGr
         if (cpos + 2 > clen) return -1;
         obj->attr_count = read_u16_be(&cbuf[cpos]);
         cpos += 2;
+        if (obj->attr_count > OMEGA_MAX_ATTRIBUTES) return -1;
         for (uint16_t a = 0; a < obj->attr_count; ++a) {
             if (cpos + 1 > clen) return -1;
             uint8_t klen = cbuf[cpos++];
+            if (klen >= OMEGA_MAX_KEY_LEN) return -1;
             if (cpos + klen + 2 > clen) return -1;
             memcpy(obj->attributes[a].key, &cbuf[cpos], klen);
             obj->attributes[a].key[klen] = '\0';
             cpos += klen;
             obj->attributes[a].val_len = read_u16_be(&cbuf[cpos]);
             cpos += 2;
+            if (obj->attributes[a].val_len > OMEGA_MAX_VAL_LEN) return -1;
             if (cpos + obj->attributes[a].val_len > clen) return -1;
             memcpy(obj->attributes[a].value, &cbuf[cpos], obj->attributes[a].val_len);
             cpos += obj->attributes[a].val_len;
@@ -110,6 +116,7 @@ int omega_graph_deserialize_binary(const uint8_t *in_buf, size_t in_len, OmegaGr
         if (cpos + 2 > clen) return -1;
         obj->rel_count = read_u16_be(&cbuf[cpos]);
         cpos += 2;
+        if (obj->rel_count > OMEGA_MAX_RELATIONS) return -1;
         for (uint16_t r = 0; r < obj->rel_count; ++r) {
             if (cpos + 2 + OMEGA_ID_BYTES > clen) return -1;
             obj->relations[r].kind = read_u16_be(&cbuf[cpos]);
@@ -122,12 +129,14 @@ int omega_graph_deserialize_binary(const uint8_t *in_buf, size_t in_len, OmegaGr
         if (cpos + 2 > clen) return -1;
         obj->const_count = read_u16_be(&cbuf[cpos]);
         cpos += 2;
+        if (obj->const_count > OMEGA_MAX_CONSTRAINTS) return -1;
         for (uint16_t c = 0; c < obj->const_count; ++c) {
             if (cpos + 4 > clen) return -1;
             obj->constraints[c].kind = read_u16_be(&cbuf[cpos]);
             cpos += 2;
             obj->constraints[c].payload_len = read_u16_be(&cbuf[cpos]);
             cpos += 2;
+            if (obj->constraints[c].payload_len > sizeof obj->constraints[c].payload) return -1;
             if (cpos + obj->constraints[c].payload_len > clen) return -1;
             memcpy(obj->constraints[c].payload, &cbuf[cpos], obj->constraints[c].payload_len);
             cpos += obj->constraints[c].payload_len;
@@ -137,9 +146,14 @@ int omega_graph_deserialize_binary(const uint8_t *in_buf, size_t in_len, OmegaGr
         if (cpos + 4 > clen) return -1;
         obj->payload_len = read_u32_be(&cbuf[cpos]);
         cpos += 4;
+        if (obj->payload_len > OMEGA_MAX_PAYLOAD_LEN) return -1;
         if (cpos + obj->payload_len > clen) return -1;
         memcpy(obj->payload, &cbuf[cpos], obj->payload_len);
         cpos += obj->payload_len;
+        if (obj->kind == KIND_EFFECT) {
+            EffectPayload eff;
+            if (omega_effect_read(obj, &eff) != OMEGA_EFFECT_OK) return -1;
+        }
 
         omega_compute_semantic_id(obj);
         pos += clen;

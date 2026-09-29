@@ -192,6 +192,27 @@ RX_R7_TEST = $(OUT_DIR)/rx_r7_native_test
 $(AIENOS_CAP_LIB):
 	$(MAKE) -C $(AIENOS_R7_DIR)/native/capability
 
+# OMEGA_EFFECT_CAP64 (spec/effect-cap64-migration.md): effect objects carry the
+# full 64-bit AIENOS capability generation. Physics-free: the Omega core, the
+# Visor effect-request adapter, and the pinned AIENOS header + library
+# (aienos.lock) used directly. Prints OMEGA_EFFECT_CAP64_{ROUNDTRIP,IDENTITY,
+# STALE_REJECT,AUTHORITY}_PASS gate lines.
+EFFECT_CAP64_CAP_LIB ?= $(AIENOS_CAP_LIB)
+EFFECT_CAP64_CAP_INC ?= $(patsubst %/,%,$(dir $(EFFECT_CAP64_CAP_LIB)))/..
+EFFECT_CAP64_TEST = $(OUT_DIR)/tests-effect/test_effect_cap64
+EFFECT_CAP64_OBJS = $(addprefix $(OUT_DIR)/,sha256.o omega_canonical.o omega_validate.o omega_core.o omega_codec.o)
+
+$(EFFECT_CAP64_TEST): tests/effect/test_effect_cap64.c $(EFFECT_CAP64_OBJS) \
+		$(OUT_DIR)/visor/visor_effect_request.o src/visor/visor_effect_request.h \
+		src/omega_core.h src/omega_canonical.h src/omega_types.h $(EFFECT_CAP64_CAP_LIB)
+	mkdir -p $(dir $@)
+	$(CC) $(VISOR_CFLAGS) -I$(EFFECT_CAP64_CAP_INC) -pthread -o $@ tests/effect/test_effect_cap64.c \
+		$(OUT_DIR)/visor/visor_effect_request.o $(EFFECT_CAP64_OBJS) $(EFFECT_CAP64_CAP_LIB) -lm
+
+.PHONY: test-effect-cap64
+test-effect-cap64: $(EFFECT_CAP64_TEST)
+	./$(EFFECT_CAP64_TEST)
+
 $(RX_R7_TEST): $(RX_R7_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 	src/runtime/aienos_cap.h src/runtime/omega_shared_world_abi.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R7_SRCS) $(AIENOS_CAP_LIB) -lm

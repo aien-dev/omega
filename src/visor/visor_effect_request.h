@@ -34,7 +34,7 @@
 
 #include "omega_types.h"
 
-#define VISOR_EFFECT_PARAM_MAX 128
+#define VISOR_EFFECT_PARAM_MAX OMEGA_EFFECT_PARAM_MAX
 #define VISOR_EFFECT_STATUS_UNAUTHORIZED "UNAUTHORIZED_REQUEST"
 #define VISOR_EFFECT_ROUTE \
     "Visor -> EffectIntent -> AEGIS/PHYSICS authority -> bounded execution -> receipt"
@@ -44,7 +44,7 @@ typedef struct {
     uint16_t resource_class;
     uint16_t operation_code;
     uint32_t capability_slot;          /* copied, never validated here */
-    uint32_t capability_generation;    /* copied, never validated here */
+    uint64_t capability_generation;    /* full 64-bit AIENOS generation; copied, never validated here */
     SemanticId capability_ref;         /* copied, never resolved here */
     uint16_t param_len;
     uint8_t param_bytes[VISOR_EFFECT_PARAM_MAX];
@@ -57,7 +57,8 @@ typedef struct {
 /* Build a request from an existing KIND_EFFECT object in `g`.
  * Returns 0 on success; -1 (and *out zeroed, authorized=false) when the id is
  * missing, the object is not KIND_EFFECT, omega_validate_object rejects it,
- * payload_len != sizeof(EffectPayload), param_len > 128, the object has no id,
+ * the payload is not a valid 178-byte v2 effect payload (omega_effect_read:
+ * wrong length, legacy v1, resource 0, param_len > 128, non-zero padding), the object has no id,
  * or the recomputed canonical digest differs from its stored SemanticId.
  * Never mutates `g`. */
 int visor_effect_request_build(const OmegaGraph *g, const SemanticId *effect_object_id,
