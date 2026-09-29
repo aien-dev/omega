@@ -190,6 +190,7 @@ int omega_world_register_buffer(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || size_bytes == 0 || !out_handle) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (world->faulted) return OMEGA_WORLD_ERR_FAULTED;
 
     int free_slot = -1;
     for (uint32_t i = 0; i < OMEGA_WORLD_MAX_BUFFERS; i++) {
@@ -295,6 +296,7 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
     if (!world || !world->initialized || !code_bytes || code_size == 0 || !out_handle) {
         return OMEGA_WORLD_ERR_INVALID_ARG;
     }
+    if (world->faulted) return OMEGA_WORLD_ERR_FAULTED;
 
     int free_slot = -1;
     for (uint32_t i = 0; i < OMEGA_WORLD_MAX_CODE_ENTRIES; i++) {

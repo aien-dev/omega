@@ -2164,6 +2164,46 @@ static bool test_lc_stale_handle_after_world_restart(void) {
     return omega_world_destroy(&world) == OMEGA_WORLD_OK && ok;
 }
 
+/* A faulted world refuses new registrations, like submit/drain/dispatch:
+ * no slot, count, or output handle changes until recovery clears the latch. */
+static OmegaBufferEntry lc_fault_buffers_before[OMEGA_WORLD_MAX_BUFFERS];
+static OmegaCodeEntry lc_fault_code_before[OMEGA_WORLD_MAX_CODE_ENTRIES];
+
+static bool test_lc_faulted_world_refuses_register(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    OmegaHandle code, a, b, c;
+    /* Payload 1 completes, but the drain waits for payload 100: timeout latches the fault. */
+    bool ok = lc_setup(&world, &code, &a, &b, &c) &&
+              lc_submit_release(&world, 0, 1, &code, &a, &b, &c) == OMEGA_WORLD_OK &&
+              omega_world_ring(&world) == OMEGA_WORLD_OK &&
+              omega_world_drain(&world, 100, 200) == OMEGA_WORLD_ERR_HARDWARE && world.faulted;
+    uint32_t buffers_before = world.buffer_count;
+    uint32_t code_before = world.code_count;
+    memcpy(lc_fault_buffers_before, world.buffers, sizeof world.buffers);
+    memcpy(lc_fault_code_before, world.code_entries, sizeof world.code_entries);
+    uint8_t code_buf[1024];
+    size_t code_len = 0;
+    ok = ok && omega_blackwell_encode_vecadd(code_buf, sizeof(code_buf), &code_len) == 0;
+    OmegaHandle hb, hc, sentinel;
+    memset(&sentinel, 0xa5, sizeof sentinel);
+    hb = sentinel;
+    hc = sentinel;
+    ok = ok && omega_world_register_buffer(&world, 256, OMEGA_PERM_READ, &hb) == OMEGA_WORLD_ERR_FAULTED &&
+         omega_world_register_code(&world, code_buf, code_len, NULL, &hc) == OMEGA_WORLD_ERR_FAULTED;
+    ok = ok && world.faulted && world.buffer_count == buffers_before && world.code_count == code_before &&
+         memcmp(lc_fault_buffers_before, world.buffers, sizeof world.buffers) == 0 &&
+         memcmp(lc_fault_code_before, world.code_entries, sizeof world.code_entries) == 0 &&
+         memcmp(&hb, &sentinel, sizeof sentinel) == 0 && memcmp(&hc, &sentinel, sizeof sentinel) == 0;
+    /* Recovery clears the latch and registration works again. */
+    ok = ok && omega_world_recover_channel_fault(&world) == OMEGA_WORLD_OK && !world.faulted &&
+         omega_world_register_buffer(&world, 256, OMEGA_PERM_READ, &hb) == OMEGA_WORLD_OK &&
+         omega_world_register_code(&world, code_buf, code_len, NULL, &hc) == OMEGA_WORLD_OK &&
+         world.buffer_count == buffers_before + 1 && world.code_count == code_before + 1;
+    omega_world_destroy(&world);
+    return ok;
+}
+
 int run_world_lifecycle_gates(void) {
     printf("================================================================================\n");
     printf("    AIEN OMEGA M19R: WORLD LIFECYCLE GATES\n");
@@ -2180,6 +2220,7 @@ int run_world_lifecycle_gates(void) {
     report_lc_gate("WORLD_STALE_GENERATION_MARKER_REFUSED", test_lc_stale_generation_marker());
     report_lc_gate("WORLD_BATCHED_RESULT_IDENTITY", test_lc_batched_result_identity());
     report_lc_gate("WORLD_STALE_HANDLE_AFTER_RESTART", test_lc_stale_handle_after_world_restart());
+    report_lc_gate("WORLD_FAULTED_REFUSES_REGISTER", test_lc_faulted_world_refuses_register());
     printf("  TOTAL: %d | PASSED: %d | FAILED: %d\n", lc_gate_count, lc_gate_passed, lc_gate_count - lc_gate_passed);
     return (lc_gate_passed == lc_gate_count) ? 0 : 1;
 }
