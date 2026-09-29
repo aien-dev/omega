@@ -11,7 +11,7 @@ Every claim carries one label:
 
 - **FACT**: what the current code does, with a file:line reference.
 - **SETTLED**: an architecture decision already made in a spec or ADR.
-- **DECISION**: the proposed OSC-0B ruling, which becomes frozen when this document is accepted.
+- **PROPOSED**: the proposed OSC-0B ruling, which becomes frozen when this document is accepted.
 - **OPEN**: a question that the code and the settled architecture cannot answer yet. An OPEN item must not be decided silently by whichever implementation lands first.
 
 Sequence (Drake, 2026-09-29):
@@ -142,16 +142,16 @@ For each hazard: where it is, what goes wrong, and what replaces it in Omega Sys
 
 | # | Contradiction | Ruling |
 |---|---|---|
-| C1 | Capability generation width. The C authority and Omega runtime use u64 that never wraps. AIENOS ADR 0013, the Rust kernel, spec/type-system.md:35, EffectPayload, shared-world descriptor :130/132, and PHYSICS M2/M3/M15 use u32. rx_world.h:146-152 smuggles the high halves; rx_world.c:147 hashes only the low 32 bits. | **SETTLED for Omega effects after the pin:** omega#71 (main 8e7a445, spec/effect-cap64-migration.md, 5 OMEGA_EFFECT_CAP64 gates PASS) made `EffectPayload.capability_generation` u64 with an explicit 178-byte big-endian v2 encoder (canonical version byte 0x02 for EFFECT). v1 effect bytes are refused, never reinterpreted. The crumb_hash low-32 truncation and type-system.md:35 are being fixed on that session's branch fix/crumb-cap-gen64. **DECISION (needs Drake) for the rest: u64 end to end**, slot retired at max. This still requires an amendment to AIENOS ADR 0013 and covers the Rust kernel, the shared-world descriptor :130/132, src/omega_accelerator.h, and PHYSICS M2/M3/M15. Note that #71 still puts the live slot and generation inside the EFFECT canonical payload, so II.6 stays PROPOSED. |
+| C1 | Capability generation width. The C authority and Omega runtime use u64 that never wraps. AIENOS ADR 0013, the Rust kernel, spec/type-system.md:35, EffectPayload, shared-world descriptor :130/132, and PHYSICS M2/M3/M15 use u32. rx_world.h:146-152 smuggles the high halves; rx_world.c:147 hashes only the low 32 bits. | **SETTLED for Omega effects after the pin:** omega#71 (main 8e7a445, spec/effect-cap64-migration.md, 5 OMEGA_EFFECT_CAP64 gates PASS) made `EffectPayload.capability_generation` u64 with an explicit 178-byte big-endian v2 encoder (canonical version byte 0x02 for EFFECT). v1 effect bytes are refused, never reinterpreted. The crumb_hash low-32 truncation and type-system.md:35 are being fixed on that session's branch fix/crumb-cap-gen64. **PROPOSED (needs Drake) for the rest: u64 end to end**, slot retired at max. This still requires an amendment to AIENOS ADR 0013 and covers the Rust kernel, the shared-world descriptor :130/132, src/omega_accelerator.h, and PHYSICS M2/M3/M15. Note that #71 still puts the live slot and generation inside the EFFECT canonical payload, so II.6 stays PROPOSED. |
 | C2 | canonical-encoding.md says the payload is always big-endian; omega_core.c copies host little-endian structs. | Both SETTLED documents stand, but for different layers (II.3). Canonical SemanticId payloads must move to explicit big-endian encoders. This is a deliberate identity break with a version bump (OSC-2 follow-up). |
 | C3 | Two digest byte orders coexist (big-endian rx_graph and plan; little-endian crumb and generation store). | Not a contradiction once declared: they are different **WireLayouts**. The rule is that every wire format declares its byte order and is written by an encoder. |
 | C4 | Who owns authority: the PHYSICS README ("PHYSICS AUTHORIZES", SMMUv3) versus ADR 0014 (AIENOS owns interrupts, capabilities, and DMA confinement; FORGE/PHYSICS is realization only). | **SETTLED by ADR 0014.** The PHYSICS M3 ledger and effect broker are class F legacy evidence. The README claim is stale. |
-| C5 | Release requires DMA quiescence (native-frame-authority.md §6.4) versus release paths that do not wait. | SETTLED rule; the code violates it. DECISION II.1 encodes it in types. |
+| C5 | Release requires DMA quiescence (native-frame-authority.md §6.4) versus release paths that do not wait. | SETTLED rule; the code violates it. PROPOSED II.1 encodes it in types. |
 | C6 | TRUST.md:260 "OOM panic, core" versus error-code OOM everywhere in the code. | Resolved by context (II.4). An OOM with no possible recovery (core init, trap or IRQ) traps; runtime allocation paths return a typed error. |
 | C7 | The shared-world ABI says 64 objects (omega_shared_world_abi.h:254); rx_coherent.c writes 256. The ABI header claims to live in PHYSICS but lives in Omega. | **OPEN** (ABI v2 question, not language semantics). |
 | C8 | README "OMEGA is not a programming language/compiler" versus spec/omega-language-v0.md and self-host.md. | **OPEN, for Drake.** Omega Systems Core makes Omega a compiler, so the README doctrine needs an ADR. The M6 "C1==C2==C3" result is a self-copy quine and is never evidence of compilation ([LC] §3). |
 | C9 | semantic-object.md:52 "fully relocatable" versus the pinned crumb log and the JsReal pointer graph. | The statement holds for **semantic** objects, not runtime realizations. II.7 makes the difference explicit. |
-| C10 | The ABI comments say head/tail are atomics, but they are declared `volatile uint64_t`. | DECISION II.2: a `device<atomic<u64>>` type replaces the declaration. |
+| C10 | The ABI comments say head/tail are atomics, but they are declared `volatile uint64_t`. | PROPOSED II.2: a `device<atomic<u64>>` type replaces the declaration. |
 | C11 | Omega pins aienos 4c21386, but the default local build directory lacks the code. | FACT recorded. Enforcing the lock is a follow-up (I.8). |
 
 The full lists are in [OR] §8, [AP] §8, and [LC] "Contradictions".
@@ -193,7 +193,7 @@ Setup:
 
 | Binary | Build (s) | Size text+data+bss | Peak RSS (kB) | Allocs | Frees | Live at exit |
 |---|---|---|---|---|---|---|
-| omegatool | 1.20 | 367,386 | not run | | | |
+| omegatool | 1.20 | 367,386 | not run | not run | not run | not run |
 | rx_heartbeat_test (R3) | 1.85 | 198,215 | 5,568 | 396 | 386 | 13 |
 | rx_action_graph_test | 2.08 | ~504k | 4,212 | 445 | 435 | 13 |
 | rx_state_projection_test | 2.26 | 169,543 | 120,480 | 83,026 | 105,057* | 13 |
@@ -243,7 +243,7 @@ C folds all three into one address. Item II.12 is the rule that keeps them apart
 - AIENOS owns interrupts (ADR 0014).
 - Cooperative "quit" instead of killing a channel (03d2820).
 
-**DECISION.**
+**PROPOSED.**
 1. **No data races in safe code, by construction.** A value is either shared and immutable, or held by exactly one mutable owner or borrow. Cross-participant sharing is only through types: `atomic<T>`, `mutex<T>`, `seqlock<T>` (values out, bounded retry, dead-writer check), `ring<T>` (SPSC), and `device<T>` cells. Two engines can never both hold mutable access through addresses.
 2. **Publication is a named pair.** A write becomes visible to another participant only through a *publish* (release semantics) matched by an *observe* (acquire semantics) on the same cell or ring. There is no other visibility guarantee, even on coherent memory.
 3. **Completion is a value.** Device completion produces `own<Fence>` only from an acquire observation of a marker or semaphore. Retiring ring entries, reusing pushbuffers, and reclaiming memory all consume a Fence. Polling without acquire is not expressible in safe code.
@@ -264,7 +264,7 @@ C folds all three into one address. Item II.12 is the rule that keeps them apart
 
 **FACT.** There are four coexisting idioms (I.4 #8). The authority uses a mutex plus acquire-release CAS; nvrm has no lock. `dsb sy` is stronger than needed but correct ([AP] §3b).
 
-**DECISION.** Omega owns its ordering vocabulary. Each operation is defined below, with its C11 equivalent and AArch64 lowering given for the bootstrap and for review. `volatile` is banned from safe code.
+**PROPOSED.** Omega owns its ordering vocabulary. Each operation is defined below, with its C11 equivalent and AArch64 lowering given for the bootstrap and for review. `volatile` is banned from safe code.
 
 | Omega operation | Guarantee | C11 equivalent | AArch64 lowering |
 |---|---|---|---|
@@ -298,7 +298,7 @@ The bootstrap may keep the stronger `dsb sy` inside these primitives until measu
 - AIENOS ADR 0013 and 0015 define explicit little-endian wire layouts.
 - The V0 AST is disposable; identity attaches to the lowered form, never to syntax.
 
-**DECISION.** Four layouts, never mixed:
+**PROPOSED.** Four layouts, never mixed:
 
 - **SemanticLayout.** Abstract meaning; never observable. Identity comes only from its canonical encoding.
 - **RuntimeLayout.** Chosen by the compiler; unobservable in safe code. No hashing, serialization, or foreign exposure of runtime-layout values.
@@ -321,7 +321,7 @@ Enums and tagged unions have an explicit tag width wherever they appear in wire 
 - Deterministic crash records (AIENOS ADR 0006).
 - TRUST.md: OOM in the core is catastrophic.
 
-**DECISION.** No stack-unwinding exceptions. Expected failures are typed `Result` errors that the caller must handle. Invariant violations are deterministic **traps**.
+**PROPOSED.** No stack-unwinding exceptions. Expected failures are typed `Result` errors that the caller must handle. Invariant violations are deterministic **traps**.
 
 | Failure | Ordinary code | `ctx(trap)` / `ctx(irq)` / core init |
 |---|---|---|
@@ -347,7 +347,7 @@ A **trap** is a deterministic fail-stop of the enclosing fault domain, recorded 
 
 **SETTLED.** The content-addressed graph model: relations by SemanticId (semantic-object.md).
 
-**DECISION.**
+**PROPOSED.**
 - **Ownership forms a forest.** No `own<T>` cycle is expressible.
 - Graph-shaped data is owned by a pool, arena, or graph store. Edges are `handle<T>`, `weak<T>`, or `SemanticId<T>`, never owning.
 - Reference counting exists only as an explicit `rc<T>` inside a region, with checked counters and an acyclicity rule. It is never the default.
@@ -364,7 +364,7 @@ A **trap** is a deterministic fail-stop of the enclosing fault domain, recorded 
 
 However, live handles *do* enter durable identity: in EffectPayload, in generation-store rows, and in crumb digests (I.4 #6). No CPU address or GPU virtual address was found in any durable record.
 
-**DECISION.** These are distinct, non-interchangeable types:
+**PROPOSED.** These are distinct, non-interchangeable types:
 
 | Type | Meaning | Durable? |
 |---|---|---|
@@ -391,7 +391,7 @@ Rules:
 - Pinned by design: the crumb log, RxWorld (embedded mutex), GPU memory at identity virtual addresses, JIT pages, and PHYSICS fixed regions.
 - Relocations that break interior pointers: arena realloc (rx_projection.c:526), JsBranch units, and bind_coherent.
 
-**DECISION.**
+**PROPOSED.**
 - **Movable by default.** Long-lived objects are reached through handles, so the runtime may compact pools by rebinding slot→placement without changing the handles.
 - **`pin<T>` is rare, and created only in `unsafe physical`.** It is required for:
   - memory shared with another engine;
@@ -416,7 +416,7 @@ Rules:
 - Reclaim requires SMMU unmap, TLBI, and SYNC (native-frame-authority.md §6.4).
 - On v1, the boot CPU alone owns the frame authority (§6.5).
 
-**DECISION.**
+**PROPOSED.**
 - **Physical code lives in `unsafe physical` blocks.** Every such block must declare:
   - `requires capability<...>`, alignment, and range;
   - `ensures ...`;
@@ -440,7 +440,7 @@ Rules:
 - Capability generations seeded from boot time flow into crumb digests (rx_caproot.c:52-73; rx_world.c:145-149).
 - M6 "C1==C2==C3" holds by self-copy, not by compilation (tests/run_m6_gates.sh:78-83).
 
-**DECISION.**
+**PROPOSED.**
 - Compiler output is a pure function of (source bytes, compiler identity digest, target profile, declared flags):
   - no timestamps, paths, or environment in the output;
   - no hash-iteration-order dependence (ordered containers only).
@@ -457,7 +457,7 @@ Rules:
 
 **FACT.** On the semantic path, Omega leans only on `memcpy memset memcmp strcmp strlen strstr snprintf calloc`. SHA-256 is in-house. printf, fopen, qsort, and malloc live in gates and tools ([LC] §7).
 
-**DECISION.** The v0 substrate (so that production code has no reason to fall back to C):
+**PROPOSED.** The v0 substrate (so that production code has no reason to fall back to C):
 
 - `Option`, `Result`;
 - checked, `wrap_`, `sat_`, and `overflowing_` integers;
@@ -477,7 +477,7 @@ It is built in C first as the bootstrap runtime, then ported.
 
 **FACT.** No fuzzer or property generator exists in the language or core ([LC] §5). V1 differential testing (native versus `omega_eval`) is the existing oracle pattern.
 
-**DECISION.** A small executable reference model, in C, is the **OSC-0B exit gate** (it is not compiler work). It is a state machine over objects, slots, generations, regions, borrows, and publication.
+**PROPOSED.** A small executable reference model, in C, is the **OSC-0B exit gate** (it is not compiler work). It is a state machine over objects, slots, generations, regions, borrows, and publication.
 
 Object states: `unallocated → owned → {borrowed_shared(n) | borrowed_mut} → moved | released`. A slot moves `free(g) → live(g) → free(g+1)`, and at the maximum generation it becomes `retired`. Regions go `open → destroyed`. Cells go `written → published(release) → observed(acquire)`.
 
@@ -503,7 +503,7 @@ A seeded, deterministic random-sequence generator drives the model; later, OSC-1
 
 **FACT.** Today the three are tangled: a raw pointer grants all three. The current per-object tables are in [OR] §7 and [AP] §7.
 
-**DECISION.** The compiler and runtime track them independently:
+**PROPOSED.** The compiler and runtime track them independently:
 
 - **Lifetime** is in the type: inline, `own<T>`, borrow, region, `Handle<T>` pool, static, device, or persistent.
 - **Authority** is in rights: `Handle<T>` rights and capabilities. Delegation narrows only (SETTLED, aienos_capability.c:240-254). Mutability is authority.
