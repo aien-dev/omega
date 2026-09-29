@@ -2,7 +2,7 @@
   "schema": "turing.cal.candidate_manifest.v1",
   "experiment": "EXP-001",
   "status": "draft",
-  "git_head": "fe32be5b3876a5e5979d840207f4af6d12c12fee",
+  "git_head": "4429cc4927d84030d511289d26820ee11fe0354f",
   "profile_path": "calibration/profiles/Turing-profile-v1.0.toml",
   "profile_sha256": "3a265ff2b7b495be5d13996a2ef22473e6ea0f1b40d08fdd19b4fe7b0a2cd90a",
   "profile_sidecar_sha256": "3a265ff2b7b495be5d13996a2ef22473e6ea0f1b40d08fdd19b4fe7b0a2cd90a",
@@ -24,7 +24,7 @@
     "src/turing/ty_ctr1.h": "a269e6783c5e53b4fc9435ae1e4ff4cc1fa763d6c99d253fb4b21e6a7343b269",
     "src/turing/ty_math.c": "a4617277f8f18aa183e512f09d738ea06ab904048526c8f7f4d40a7afc84415d",
     "src/turing/ty_math.h": "4b378a47597a7a929232669da26bffe41803771ecd844c4921c60be901767893",
-    "calibration/docs/MODEL_DESCRIPTION_ENCODING.md": "0a60774018f16c74b4b3016be6f18793d2704c79d0db1e4400c755b2cc4883b6",
+    "calibration/docs/MODEL_DESCRIPTION_ENCODING.md": "9353ae9106798b0a0581bcd44a12604ca08ecd878f7fbabe232527a8245cef18",
     "calibration/docs/CODER_SPEC.md": "MISSING",
     "calibration/profiles/Turing-profile-v1.0.toml": "3a265ff2b7b495be5d13996a2ef22473e6ea0f1b40d08fdd19b4fe7b0a2cd90a"
   },
