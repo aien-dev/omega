@@ -185,9 +185,13 @@ test-numeric-qualify: build/test_omega_numeric_cpu
 
 # Deletes each CHECK-marked pre-submission check in src/omega_numeric.c in a
 # scratch copy and proves a Gate 5 host test then fails. No GPU.
+# Then applies each arithmetic mutation in tools/numeric_oracle_mutations.sh
+# (broken EXP/LOG coefficients, wrong host instruction, wrong LDS index, an
+# undeclared SKIP) and proves the CPU-only run exits nonzero. No GPU.
 .PHONY: test-numeric-sweep
 test-numeric-sweep:
 	tools/numeric_check_sweep.sh
+	tools/numeric_oracle_mutations.sh
 
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).

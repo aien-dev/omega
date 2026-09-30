@@ -15,6 +15,8 @@
  *   OMEGA_NUMERIC_HWDESC_JSON:{...}
  *   OMEGA_NUMERIC_PARITY_JSON:{...}   one per op per tier
  *   OMEGA_NUMERIC_FINDING_JSON:{...}
+ *   OMEGA_NUMERIC_ORACLE_JSON:{...}    CPU tier against the independent oracle
+ *                                     in tests/numeric_oracle.h (host only)
  */
 #include "omega_numeric.h"
 #include "omega_numeric_provenance.h"
@@ -26,6 +28,7 @@
 #endif
 
 #include "sha256.h"
+#include "numeric_oracle.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -238,12 +241,19 @@ static TierResult cpu_tier(OmegaNumericOp op) {
                     t.mismatches++;
                 }
             }
-            print_parity_json(info->name, "cpu", "BIT_EXACT_IEEE_TARGET", 0, false, N, &t, NULL);
+            /* Reference and CPU tier both run the host fdiv/fsqrt here, so this line
+             * only shows they agree with each other. The independent check is
+             * the integer oracle (CPU_TIER_INDEPENDENT_ORACLE). */
+            print_parity_json(info->name, "cpu", "SELF_CONSISTENT_HOST_FDIV", 0, false, N, &t, NULL);
         } else {
             if (omega_numeric_parity(op, g_ref, g_cpu, N, &t) != 0) { tr.ok = false; continue; }
             ClassTrace ct;
             class_trace(op, g_a, g_ref, g_cpu, N, &ct);
-            print_parity_json(info->name, "cpu", omega_numeric_compare_name(info->compare),
+            /* EXP and LOG: reference and CPU tier call the same omega_math_* sequence,
+             * so agreement is self-consistency only. Accuracy is checked against the
+             * binary128 oracle with a stated ulp bound. */
+            bool self_only = op == OMEGA_NOP_EXP || op == OMEGA_NOP_LOG;
+            print_parity_json(info->name, "cpu", self_only ? "SELF_CONSISTENT" : omega_numeric_compare_name(info->compare),
                               op == OMEGA_NOP_FFMA ? FFMA_C[l] : 0, op == OMEGA_NOP_FFMA, N, &t, &ct);
         }
         if (t.mismatches) tr.ok = false;
@@ -356,6 +366,161 @@ static void print_run_line(void) {
 }
 
 /* ---- Main ----------------------------------------------------------------------- */
+
+/* ---- Independent oracle (tests/numeric_oracle.h) ---------------------------- */
+
+/* Ulp bounds for the Omega EXP and LOG polynomials against the binary128
+ * value rounded once to FP32. They are accuracy bounds, not bit-exactness:
+ * the degree-5 exp polynomial is not correctly rounded. Measured 2026-09-30
+ * on every 257th FP32 bit pattern (16.7 million inputs): EXP worst 39 ulp
+ * (normal results, near |r| = ln2/2) and 19 ulp (subnormal results, near
+ * x = -87.68); LOG worst 3 ulp. On the 4096-element Gate 5 corpus: EXP 37,
+ * LOG 1. The bounds below are those sweep maxima plus one. */
+#define NUM_ORACLE_EXP_ULP 40u
+#define NUM_ORACLE_LOG_ULP 4u
+
+static uint32_t oracle_value(OmegaNumericOp op, size_t i, const float *c) {
+    uint32_t a = U(g_a[i]), b = U(g_b[i]);
+    switch (op) {
+    case OMEGA_NOP_FADD: return or_add(a, b);
+    case OMEGA_NOP_FSUB: return or_sub(a, b);
+    case OMEGA_NOP_FMUL: return or_mul(a, b);
+    case OMEGA_NOP_FFMA: return or_fma(a, b, U(c[i]));
+    case OMEGA_NOP_I2FP: return or_i2f((int32_t)a);
+    case OMEGA_NOP_DIV: return or_div(a, b);
+    case OMEGA_NOP_SQRT: return or_sqrt(a);
+    case OMEGA_NOP_MUFU_RCP: return or_rcp(a);
+    case OMEGA_NOP_MUFU_RSQ: return or_rsq(a);
+    default: return OR_QNAN;
+    }
+}
+
+static void print_oracle_json(const char *op, const char *against, bool has_c, uint32_t c_bits,
+                              size_t n, size_t bad, long first, uint32_t want, uint32_t got) {
+    printf("OMEGA_NUMERIC_ORACLE_JSON:{\"op\":\"%s\",\"oracle\":\"integer_softfloat_rne\",\"against\":\"%s\",",
+           op, against);
+    if (has_c) printf("\"c_bits\":\"0x%08x\",", c_bits);
+    printf("\"n\":%zu,\"mismatches\":%zu,", n, bad);
+    if (first >= 0)
+        printf("\"first_mismatch\":{\"index\":%ld,\"oracle\":\"0x%08x\",\"got\":\"0x%08x\"}}\n", first, want, got);
+    else
+        printf("\"first_mismatch\":null}\n");
+}
+
+/* Bit-exact ops: the reference and the CPU realization must both equal the
+ * integer soft-float answer on every element. */
+static bool oracle_exact(OmegaNumericOp op) {
+    const OmegaNumericOpInfo *info = omega_numeric_op_at(op);
+    size_t launches = (op == OMEGA_NOP_FFMA) ? FFMA_C_COUNT : 1;
+    bool ok = true;
+    for (size_t l = 0; l < launches; l++) {
+        const float *c = NULL;
+        if (op == OMEGA_NOP_FFMA) { fill_c(g_c, FFMA_C[l]); c = g_c; }
+        if (omega_numeric_reference(op, g_a, g_b, c, g_ref, N) != 0 ||
+            omega_numeric_cpu_realize(op, g_a, g_b, c, g_cpu, N) != 0) {
+            printf("OMEGA_NUMERIC_ORACLE_JSON:{\"op\":\"%s\",\"error\":\"tier refused\"}\n", info->name);
+            ok = false;
+            continue;
+        }
+        const float *tier[2] = { g_ref, g_cpu };
+        static const char *const tname[2] = { "reference", "cpu" };
+        for (int t = 0; t < 2; t++) {
+            size_t bad = 0; long first = -1; uint32_t fw = 0, fg = 0;
+            for (size_t i = 0; i < N; i++) {
+                uint32_t want = oracle_value(op, i, c), got = U(tier[t][i]);
+                if (!or_same(want, got)) {
+                    if (!bad) { first = (long)i; fw = want; fg = got; }
+                    bad++;
+                }
+            }
+            print_oracle_json(info->name, tname[t], op == OMEGA_NOP_FFMA,
+                              op == OMEGA_NOP_FFMA ? FFMA_C[l] : 0, N, bad, first, fw, fg);
+            if (bad) ok = false;
+        }
+    }
+    return ok;
+}
+
+/* EXP / LOG: ulp distance from the binary128 answer rounded once. NaN
+ * results must match as a class; every other result must be within bound. */
+static bool oracle_ulp(OmegaNumericOp op, uint32_t bound) {
+    const OmegaNumericOpInfo *info = omega_numeric_op_at(op);
+    if (omega_numeric_reference(op, g_a, NULL, NULL, g_ref, N) != 0) {
+        printf("OMEGA_NUMERIC_ORACLE_JSON:{\"op\":\"%s\",\"error\":\"reference refused\"}\n", info->name);
+        return false;
+    }
+    uint32_t max_norm = 0, max_sub = 0;
+    size_t n_norm = 0, n_sub = 0, nan_bad = 0, over = 0;
+    long first = -1; uint32_t fw = 0, fg = 0;
+    for (size_t i = 0; i < N; i++) {
+        uint32_t x = U(g_a[i]);
+        uint32_t want = (op == OMEGA_NOP_EXP) ? or_exp(x) : or_log(x);
+        uint32_t got = U(g_ref[i]);
+        if (or_is_nan(want) || or_is_nan(got)) {
+            if (!(or_is_nan(want) && or_is_nan(got))) {
+                nan_bad++;
+                if (first < 0) { first = (long)i; fw = want; fg = got; }
+            }
+            continue;
+        }
+        uint32_t d = or_ulp_distance(want, got);
+        bool sub = (want & 0x7f800000u) == 0;   /* subnormal or zero result */
+        if (sub) { n_sub++; if (d > max_sub) max_sub = d; }
+        else     { n_norm++; if (d > max_norm) max_norm = d; }
+        if (d > bound) {
+            over++;
+            if (first < 0) { first = (long)i; fw = want; fg = got; }
+        }
+    }
+    printf("OMEGA_NUMERIC_ORACLE_JSON:{\"op\":\"%s\",\"oracle\":\"binary128_series_rounded_once\","
+           "\"against\":\"reference\",\"compare\":\"ULP_BOUND\",\"bound_ulp\":%u,\"n\":%u,"
+           "\"normal_or_inf_results\":%zu,\"max_ulp_normal_or_inf\":%u,"
+           "\"subnormal_or_zero_results\":%zu,\"max_ulp_subnormal_or_zero\":%u,"
+           "\"nan_class_mismatches\":%zu,\"over_bound\":%zu,",
+           info->name, bound, N, n_norm, max_norm, n_sub, max_sub, nan_bad, over);
+    if (first >= 0)
+        printf("\"first_violation\":{\"index\":%ld,\"input\":\"0x%08x\",\"oracle\":\"0x%08x\",\"got\":\"0x%08x\"}}\n",
+               first, U(g_a[first]), fw, fg);
+    else
+        printf("\"first_violation\":null}\n");
+    return nan_bad == 0 && over == 0 && n_norm > 0 && n_sub > 0;
+}
+
+/* LDS_STS: a host has no shared memory, so check the declared permutation
+ * itself on index-tagged data: out[i] carries tag (i ^ 63), and applying the
+ * op twice gives the input back. */
+static bool oracle_lds(void) {
+    static float tag[N], once[N], twice[N], cpu[N];
+    for (size_t i = 0; i < N; i++) tag[i] = F(0x3f800000u + (uint32_t)i);
+    if (omega_numeric_reference(OMEGA_NOP_LDS_STS, tag, NULL, NULL, once, N) != 0 ||
+        omega_numeric_reference(OMEGA_NOP_LDS_STS, once, NULL, NULL, twice, N) != 0 ||
+        omega_numeric_cpu_realize(OMEGA_NOP_LDS_STS, tag, NULL, NULL, cpu, N) != 0) return false;
+    size_t bad = 0, fixed = 0, not_inv = 0;
+    for (size_t i = 0; i < N; i++) {
+        size_t base = i & ~(size_t)63, want = base + (63 - (i & 63));
+        if (U(once[i]) != 0x3f800000u + (uint32_t)want || U(cpu[i]) != U(once[i])) bad++;
+        if (U(once[i]) == U(tag[i])) fixed++;
+        if (U(twice[i]) != U(tag[i])) not_inv++;
+    }
+    printf("OMEGA_NUMERIC_ORACLE_JSON:{\"op\":\"LDS_STS\",\"oracle\":\"index_tagged_mirror\",\"n\":%u,"
+           "\"wrong_source\":%zu,\"fixed_points\":%zu,\"not_involution\":%zu}\n", N, bad, fixed, not_inv);
+    return bad == 0 && fixed == 0 && not_inv == 0;
+}
+
+static bool oracle_tier(void) {
+    static const OmegaNumericOp EXACT[] = {
+        OMEGA_NOP_FADD, OMEGA_NOP_FSUB, OMEGA_NOP_FMUL, OMEGA_NOP_FFMA, OMEGA_NOP_I2FP,
+        OMEGA_NOP_DIV, OMEGA_NOP_SQRT, OMEGA_NOP_MUFU_RCP, OMEGA_NOP_MUFU_RSQ,
+    };
+    bool ok = true;
+    for (size_t k = 0; k < sizeof(EXACT) / sizeof(EXACT[0]); k++)
+        if (!oracle_exact(EXACT[k])) { ok = false; printf("    oracle mismatch: %s\n", omega_numeric_op_at(EXACT[k])->name); }
+    if (!oracle_ulp(OMEGA_NOP_EXP, NUM_ORACLE_EXP_ULP)) { ok = false; printf("    oracle bound: EXP\n"); }
+    if (!oracle_ulp(OMEGA_NOP_LOG, NUM_ORACLE_LOG_ULP)) { ok = false; printf("    oracle bound: LOG\n"); }
+    if (!oracle_lds()) { ok = false; printf("    oracle: LDS_STS permutation\n"); }
+    return ok;
+}
+
 
 int main(void) {
 #ifdef OMEGA_NUMERIC_CPU_ONLY
@@ -703,6 +868,8 @@ int main(void) {
     }
     report("CPU_TIER_EQUALS_REFERENCE", cpu_ok);
     report("CPU_TIER_SUBNORMALS_PRESERVED", cpu_ok && cpu_sub_ok);
+    printf("\n[*] Independent oracle: integer soft-float, binary128 EXP/LOG, tagged LDS_STS\n");
+    report("CPU_TIER_INDEPENDENT_ORACLE", oracle_tier());
 
     /* ---- GB10 tier ----------------------------------------------------------------- */
     if (!gb10) {

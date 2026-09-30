@@ -290,7 +290,7 @@ check "passing run makes a PASS preview" 'num_receipt "$omega" "$NUM_RUN_DIR/gat
 pv=$NUM_RUN_DIR/receipt-preview.json
 check "  status PASS, exit status 0, digests bound" '[ "$(jq -r "(.status == \"PASS\") and (.gate_stderr_sha256 == \"$NUM_STDERR_SHA\") and (.digest_meaning | startswith(\"integrity only, not authenticity\")) and (.gate_binary_exit_status == 0) and (.candidate_binary_sha256 == \"$NUM_BINARY_SHA\") and (.gate_log_sha256 == \"$NUM_LOG_SHA\") and (.run_id == \"$NUM_RUN_ID\")" "$pv")" = true ]'
 check "  clean flags from git status, commits from git" '[ "$(jq -r "(.candidate_trees_clean == {\"omega\":true,\"physics\":true}) and (.run_git_commit == \"$NUM_OMEGA_CAND\") and (.candidate_git_commit == .run_git_commit)" "$pv")" = true ]'
-check "  observed counts 22/22/0, historical untouched, predecessor recorded" '[ "$(jq -c "[.observed_test_count,.observed_pass_count,.observed_fail_count]" "$pv")" = "[22,22,0]" ] && [ "$(cat "$omega/evidence/m19r_gate5_omega_numeric_evidence.json")" = "{\"historical\":true}" ] && [ "$(jq -r ".predecessor_historical_gate5_sha256 | length" "$pv")" = 64 ]'
+check "  observed counts 23/23/0, historical untouched, predecessor recorded" '[ "$(jq -c "[.observed_test_count,.observed_pass_count,.observed_fail_count]" "$pv")" = "[23,23,0]" ] && [ "$(cat "$omega/evidence/m19r_gate5_omega_numeric_evidence.json")" = "{\"historical\":true}" ] && [ "$(jq -r ".predecessor_historical_gate5_sha256 | length" "$pv")" = 64 ]'
 check "  no permanent receipt without --record" '[ ! -e "$EVD" ] && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
 # Finding 4: nothing is taken on trust at receipt time.
 cp "$TMP/good.log" "$TMP/fabricated.log"
