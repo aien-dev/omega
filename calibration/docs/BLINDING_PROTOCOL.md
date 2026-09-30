@@ -85,7 +85,8 @@ it has finished.
    writes `calibration/experiments/EXP-001/freeze_receipt.json` with
    `TURING_PROFILE_V1_FROZEN = PASS` and C_f. That receipt is committed in a later
    commit (the first place C_f is written down); nothing the seeds or the evaluator
-   use changes in it.
+   use changes in it. It is pushed to `origin/main` before step 5: sealed generation refuses to
+   start until that receipt, naming C_f and its profile digest, is on `origin/main`.
 5. **Sealed data generated.** Orchestrator, ordinary shell (the script jails the
    generator itself):
 
@@ -95,12 +96,15 @@ it has finished.
    ```
 
    The seeds are derived from C_f (section 3). The script refuses unless all of these
-   hold: C_f is an ancestor of `origin/main` (it fetches first), the candidate
+   hold: C_f is an ancestor of `origin/main` (it fetches first); `origin/main` holds
+   `calibration/experiments/EXP-001/freeze_receipt.json` with `TURING_PROFILE_V1_FROZEN = PASS`, naming this C_f
+   and this profile digest (step 4 is committed before any sealed byte exists); the candidate
    manifest at C_f is `"status": "frozen"`, the profile at C_f has no
    `FILL_AT_FREEZE` and hashes to the given digest, which the sidecar also carries.
    It also refuses if the generator and learner hashes differ from the pins, or if
-   `sealed/<C_f>/` already exists. It records C_f's commit time. Failed attempts
-   follow section 3 ("If generation fails").
+   `sealed/<C_f>/` already exists, or if EXP-001 has already ended (three void receipts or a final receipt in
+   `~/aien-data/turing-cal/eval/<C_f>/run/bundle`). It records C_f's commit time. Failed attempts
+   follow section 3 ("If generation fails"); each is a void receipt in that one EXP-001 counter.
 6. **Sealed data released to the Evaluator.** The Evaluator reads `sealed/<C_f>/`
    through `evaluator_env.sh --sealed` only. The release time is the
    `started_utc` of `seed_commitment.json` (the start of generation, the earliest
@@ -116,9 +120,21 @@ it has finished.
    ```
    F=~/aien-data/turing-cal/frozen/<C_f>
    git clone -q https://github.com/aien-dev/omega $F && git -C $F checkout -q --detach <C_f>
-   make -C $F turing-cal-overlap turing-cal-eval turing-coder turing-verify-indep turing-cal-candidates
+   mkdir -p $F/build/no-physics
+   make -C $F PHYSICS_DIR=$F/build/no-physics crumbline-learner turing-exp001-a-build \
+       turing-cal-overlap turing-coder turing-cal-eval turing-verify-indep
    sh $F/calibration/scripts/runtime_digest.sh      # must print the frozen runtime_digest
    ```
+
+   These six make targets build every binary of the runtime listing except `crumbs` (runtime_digest.sh names the
+   file of each): `crumbline-learner` is built here from C_f exactly as generate_sealed_data.sh builds it (an
+   empty `PHYSICS_DIR`; the build is byte-reproducible, and runtime_digest.sh refuses unless it hashes to the
+   pinned `LEARNER_SHA256`); `crumbs` is never built here: it is the prebuilt, pinned binary at
+   `~/workspace/hive-worktrees/crumbs-v1/target/release/crumbs` (or `$TC_CRUMBS`), section 3, and
+   runtime_digest.sh refuses unless it hashes to `CRUMBS_SHA256`. `build/` is ignored by git, so the clone stays
+   clean. A failed build or test here, or a runtime_digest that differs, is a VOID of the stage "tests": record
+   it with `calibration/scripts/record_void.sh --commit <C_f> --step 7 --code <BUILD|TEST|RUNTIME_DIGEST>
+   --reason <text> --command <the exact command>` (FAILURE_REPORTING.md section 2).
 
    Then the audit runs in the jail:
 
@@ -142,7 +158,8 @@ it has finished.
    audit that runs to the end and finds an overlap or a freeze-order break is an
    **S2 FAIL, final**: it is reported with the verdict FAIL (FAILURE_REPORTING.md
    section 2); the set is never quietly replaced. An audit that cannot run (exit 2)
-   is an infrastructure failure and follows the void rule.
+   is an infrastructure failure and follows the void rule: record it with `record_void.sh --commit <C_f> --step 7
+   --code AUDIT ...` as above.
 8. **Evaluation.** Orchestrator, inside `evaluator_env.sh`, with run root
    `R=~/aien-data/turing-cal/eval/<C_f>/run` (layout: DATA_FORMAT.md section 4).
    First, in an ordinary shell (reads the sealed set only through the script's own
@@ -190,13 +207,22 @@ it has finished.
          --independent bundle/scorer_independent.json"
    ```
 
+   The bundle is `$R/bundle` = `~/aien-data/turing-cal/eval/<C_f>/run/bundle`, outside git. In sealed mode
+   the evaluator refuses any other bundle location (OUT_PATH), because this directory also holds the one EXP-001
+   void counter. The gate writes `final_receipt.json` there exactly once (exclusive create); nothing in the run
+   writes into the git tree.
+
    The independent scorer is frozen at C_f (its source hash is in the manifest). It
    may not be revised after the sealed release: a revision is a new scorer version,
    and for this experiment S8 = FAIL. Group 2 (second-seed replication) is scored in
    the same run. The dev dry run (`make turing-exp001-eval-dry`) runs exactly this
    sequence on development seeds 7 and 6.
 9. **Results published whether pass or fail**, together with every void receipt and
-   every failed generation attempt.
+   every failed generation attempt. A later publication commit copies, byte for byte, the files listed in
+   FAILURE_REPORTING.md section 6 from `$R` into `calibration/experiments/EXP-001/` (same relative paths) and
+   writes `calibration/experiments/EXP-001/published_manifest.sha256` over them
+   (format in FAILURE_REPORTING.md section 6). Files derived byte for byte from the
+   sealed data stay outside git.
 
 ## 3. Sealed data: seeds, generator, layout
 
@@ -271,12 +297,14 @@ holds the SHA-256 of `seed_commitment.json`. Files end mode 0400 and directories
 **If generation fails** part way (before any score exists, so it is an infrastructure
 failure), the script itself renames the partial directory to
 `sealed/<commit>.failed-<k>` (k = 1, 2, 3) with a `FAILED` note (reason, exact command,
-time) and stops. It is kept and published, never used. The retry must be the
-byte-identical command under the same C_f: the seeds are fixed by C_f, so a retry
-produces the same data and gives no room to pick a better sample. Nothing may change
-between attempts. After the third failed attempt the script writes
-`sealed/<commit>.INCONCLUSIVE_INFRA` and refuses further attempts: EXP-001 ends
-INCONCLUSIVE with reason INFRA (FAILURE_REPORTING.md section 2). A new freeze commit
+time), writes the next void receipt (stage "generation") into the one EXP-001 void counter
+`~/aien-data/turing-cal/eval/<commit>/run/bundle` (calibration/scripts/tc_void_lib.sh), and stops. It is kept
+and published, never used. The retry must be the byte-identical command under the same C_f: the seeds are fixed by
+C_f, so a retry produces the same data and gives no room to pick a better sample. Nothing may change between
+attempts. The limit is three voids for all of EXP-001, generation, frozen-tree tests and evaluation counted
+together: the void that is the third of the experiment writes `final_receipt.json` (INCONCLUSIVE, reason INFRA) in
+that counter, generation also writes `sealed/<commit>.INCONCLUSIVE_INFRA`, and every later start is refused:
+EXP-001 ends INCONCLUSIVE with reason INFRA (FAILURE_REPORTING.md section 2). A new freeze commit
 is never used to get around a failed generation.
 
 ## 4. Overlap audit (`verify_holdout_separation.sh`)

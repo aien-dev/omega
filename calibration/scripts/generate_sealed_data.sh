@@ -34,14 +34,21 @@
 # SHA-256 of the profile bytes at the commit differs from --profile-digest (or its
 # .sha256 sidecar); the crumbs or learner binary hash differs from the pin;
 # the candidate manifest at the commit is not "status": "frozen" or the profile there still holds FILL_AT_FREEZE;
+# origin/main does not hold calibration/experiments/EXP-001/freeze_receipt.json with
+# "TURING_PROFILE_V1_FROZEN": "PASS", "freeze_commit" = this commit and "profile_sha256" = --profile-digest (the
+# freeze receipt is committed after C_f and before generation, BLINDING_PROTOCOL.md step 4);
 # sealed/<commit>/ already exists; N is missing or disagrees with the profile; a retry differs from the first
-# attempt; three attempts already failed.
+# attempt; EXP-001 has already ended (final_receipt.json or three void receipts in the one VOID counter).
 #
 # FAILED ATTEMPTS (FAILURE_REPORTING.md section 2). A generation failure is an infrastructure failure: no score
-# exists yet. The partial directory is renamed sealed/<commit>.failed-<k> (k = 1, 2, 3) with a FAILED note
-# (reason, exact command, time); it is kept and published with the results, never used. A retry must be the
-# byte-identical command. After the third failed attempt the script writes sealed/<commit>.INCONCLUSIVE_INFRA and
-# refuses every further attempt: EXP-001 then ends INCONCLUSIVE with reason INFRA.
+# exists yet, so it is a VOID attempt. Everything from the learner build on counts (learner build, generator or
+# learner pin mismatch, a seed that fails or whose jail does not start). The partial directory is renamed
+# sealed/<commit>.failed-<k> (k = 1, 2, 3: the generation attempt) with a FAILED note (reason, exact command,
+# time), kept and published with the results, never used; and a void receipt (stage "generation") is written into
+# the ONE counter of EXP-001, /<commit>/run/bundle/void_receipt_<n>.json (tc_void_lib.sh), which the
+# frozen-tree tests (record_void.sh) and the evaluator also use. A retry must be the byte-identical command. The
+# third void of the experiment, of any stage, writes final_receipt.json there (INCONCLUSIVE, reason INFRA); when a
+# generation failure is that third void, sealed/<commit>.INCONCLUSIVE_INFRA is written too.
 #
 # OUTPUT ~/aien-data/turing-cal/sealed/<commit>/
 #   group-<g>/seed-<S>/control/{trace.ctr,samples.cts,evaluations.jsonl,ledger.jsonl,promotion.json}
@@ -57,6 +64,8 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=tc_jail_lib.sh
 . "$here/tc_jail_lib.sh"
+# shellcheck source=tc_void_lib.sh
+. "$here/tc_void_lib.sh"
 
 CRUMBS="${TC_CRUMBS:-$HOME/workspace/hive-worktrees/crumbs-v1/target/release/crumbs}"
 CRUMBS_SHA256=72e396b15532aa93afb1f215521e04dca8470f779f3de35c10b04b07bff96638
@@ -190,6 +199,13 @@ git -C "$repo" cat-file -e "$commit:$CANDIDATE_MANIFEST" 2>/dev/null || die "$CA
 git -C "$repo" cat-file -e "$commit:$PROFILE_PATH" 2>/dev/null || die "$PROFILE_PATH missing at $commit"
 pd="$(git -C "$repo" show "$commit:$PROFILE_PATH" | sha256sum | cut -d' ' -f1)"
 [ "$pd" = "$digest" ] || die "profile bytes at $commit hash to $pd, not --profile-digest $digest"
+# The freeze receipt (step 4) must already be on origin/main and name this commit (CAL-0 review 2 Q10).
+FR=calibration/experiments/EXP-001/freeze_receipt.json
+fr="$(git -C "$repo" show "origin/main:$FR" 2>/dev/null)" || die "no $FR on origin/main: commit the freeze receipt (BLINDING_PROTOCOL.md step 4) first"
+grep -q '^  "TURING_PROFILE_V1_FROZEN": "PASS",$' <<<"$fr" || die "freeze receipt on origin/main is not TURING_PROFILE_V1_FROZEN = PASS"
+grep -q "^  \"freeze_commit\": \"$commit\",\$" <<<"$fr" || die "freeze receipt on origin/main names another freeze commit"
+grep -q "^  \"profile_sha256\": \"$digest\",\$" <<<"$fr" || die "freeze receipt on origin/main names another profile digest"
+cm_sha="$(git -C "$repo" show "$commit:$CANDIDATE_MANIFEST" | sha256sum | cut -d' ' -f1)"
 git -C "$repo" show "$commit:$CANDIDATE_MANIFEST" | grep -q "^  \"status\": \"frozen\"," ||
     die "$CANDIDATE_MANIFEST at $commit is not frozen (the commit must be the freeze commit C_f)"
 git -C "$repo" show "$commit:$PROFILE_PATH" | grep -q FILL_AT_FREEZE && die "profile at $commit still holds FILL_AT_FREEZE"
@@ -207,13 +223,15 @@ n="${n:-$pn}"
 
 dest="$TC_SEALED_ROOT/$commit"
 [ -e "$dest.INCONCLUSIVE_INFRA" ] && die "three generation attempts already failed for $commit: EXP-001 is INCONCLUSIVE (INFRA)"
+vdir="$(tc_void_dir "$commit")"
+tc_void_ended "$vdir" && die "EXP-001 has ended: $vdir holds final_receipt.json or $TC_MAX_ATTEMPTS void receipts"
 attempt=1
 while [ -e "$dest.failed-$attempt" ]; do
     first_cmd="$(sed -n "s/^command: //p" "$dest.failed-1/FAILED")"
     [ "$first_cmd" = "$orig_cmd" ] || die "retry differs from attempt 1 ($first_cmd); a retry must be byte-identical"
     attempt=$((attempt + 1))
 done
-[ "$attempt" -le 3 ] || die "attempt $attempt: at most three attempts"
+[ "$attempt" -le "$TC_MAX_ATTEMPTS" ] || die "attempt $attempt: at most three attempts"
 [ -e "$dest" ] && die "$dest already exists (sealed data is generated exactly once per freeze commit)"
 tc_have_bwrap
 
@@ -232,24 +250,29 @@ done
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-learner="$(build_learner "$commit" "$work")"
-check_binaries "$learner"
+learner=""
 
-# A failed attempt: keep the partial set under a numbered name with a FAILED note, then stop.
+# A failed attempt: keep the partial set under a numbered name with a FAILED note, write the void receipt into the
+# one EXP-001 counter, then stop.
 fail_attempt() {
-    local k="$attempt" fd="$dest.failed-$attempt"
+    local k="$attempt" fd="$dest.failed-$attempt" n ls=NONE
+    [ -n "$learner" ] && [ -f "$learner" ] && ls="$(sha "$learner")"
     mv "$dest" "$fd"
     printf 'reason: %s\ncommand: %s\nattempt: %s\ntime_utc: %s\n' "$1" "$orig_cmd" "$k" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$fd/FAILED"
-    if [ "$k" -ge 3 ]; then
-        printf 'EXP-001 INCONCLUSIVE reason INFRA: three sealed generation attempts failed (%s.failed-1..3)\n' "$dest" >"$dest.INCONCLUSIVE_INFRA"
-        die "attempt $k failed ($1); three attempts failed: EXP-001 is INCONCLUSIVE (INFRA); publish all FAILED notes"
+    n="$(tc_void_write "$commit" generation generate GENERATION "$1 (kept as $fd)" "$orig_cmd" \
+        "crumbs $CRUMBS_SHA256 learner $ls profile $digest" "$digest" "$cm_sha")" || die "cannot write the void receipt in $vdir"
+    if [ "$n" -ge "$TC_MAX_ATTEMPTS" ]; then
+        printf 'EXP-001 INCONCLUSIVE reason INFRA: void attempt %s of EXP-001 was sealed generation attempt %s (%s)\n' "$n" "$k" "$vdir" >"$dest.INCONCLUSIVE_INFRA"
+        die "attempt $k failed ($1); void $n of EXP-001: EXP-001 is INCONCLUSIVE (INFRA); publish every FAILED note and void receipt"
     fi
-    die "attempt $k failed ($1); kept as $fd; retry with the byte-identical command (at most 3 attempts)"
+    die "attempt $k failed ($1); kept as $fd; void $n of EXP-001 recorded in $vdir; retry with the byte-identical command"
 }
 umask 077
 mkdir -p "$TC_SEALED_ROOT"
 chmod 0700 "$TC_SEALED_ROOT"
 mkdir "$dest"
+learner="$(build_learner "$commit" "$work")" || fail_attempt "learner build failed"
+( check_binaries "$learner" ) || fail_attempt "generator or learner binary differs from its pin"
 log="$dest/generation.log"
 started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "started $started commit $commit committed_utc $ctime_utc attempt $attempt profile_digest $digest n_per_group $n" >"$log"

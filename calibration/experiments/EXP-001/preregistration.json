@@ -119,7 +119,7 @@
     "S5": "no unexplained material reversal (FAILURE_REPORTING.md section 5): DL ordering reversal ideal vs coder explained iff |ideal DL gap| <= 2 x band(g); material T sign reversal ideal vs coder explained iff |T_ideal - T_coded| <= 2 x band(g); material T sign reversal group 1 vs group 2 never explained; no cause label is preregistered, so an unexplained reversal is FAIL whatever cause is found later; band(g) = sum over files of (64000000 + 1000 x N_f) ub",
     "S6": "group 1: lower bound of T(M_candidate) > 0, ideal and both coders",
     "S7": "group 1: upper bound of T(M_mem) < 0 and of T(M_mem_seed1) < 0, ideal and both coders",
-    "S8": "independent scorer reproduces every number exactly",
+    "S8": "independent scorer (lane D, EVALUATOR.md section 6) reproduces every number exactly and reports problems 0; its file missing, unreadable or reporting problems is S8 FAIL with no retry",
     "S9": "group 2: S6 and S7 hold"
   },
   "verdict_rule": {
@@ -127,7 +127,7 @@
     "three_valued": ["S6", "S7", "S9"],
     "inconclusive_trigger": "S6: PASS if every lower bound > 0, FAIL if any upper bound < 0, else INCONCLUSIVE. S7: PASS if every upper bound (both memorizers) < 0, FAIL if any lower bound > 0, else INCONCLUSIVE. S9: worse of the S6 and S7 rules on group 2. Intervals: 95% percentile bootstrap of T vs B2, ideal and both coders.",
     "not_reached": "a criterion that cannot be evaluated is NOT_REACHED and counts as FAIL",
-    "verdict": "FAIL if any criterion FAIL or NOT_REACHED; else INCONCLUSIVE if any INCONCLUSIVE; else PASS; a refused check makes the run VOID",
+    "verdict": "FAIL if any criterion FAIL or NOT_REACHED; else INCONCLUSIVE if any INCONCLUSIVE; else PASS; a refused check is classified by the refusal table in EVALUATOR.md section 3 (the one classification; FAILURE_REPORTING.md and this file restate it): VOID only for an infrastructure failure before any sealed score exists (a void row), a terminal FAIL of the named criterion otherwise (for example BINDING S3, freeze order S2, CRUMB_SUM S4, NO_CRUMBS S6 or S9, lane D missing or problems S8), and no receipt for an argument, location or ended-experiment refusal",
     "dry_run_label": "DRY_RUN_NOT_EVIDENCE",
     "inconclusive_is_final": true,
     "document": "calibration/docs/FAILURE_REPORTING.md section 2"
@@ -166,7 +166,7 @@
     },
     "chosen_seeds_per_group": 3
   },
-  "stopping_rule": "fixed design, no optional stopping; generation failure voids the whole sealed set",
+  "stopping_rule": "fixed design, no optional stopping (2 groups x 3 seeds, each scored once); a generation failure voids the attempt, not the experiment: it is retried with the same C_f, seeds, frozen tree and byte-identical command; generation, frozen-tree tests and evaluation share one void counter in $TC_EVAL_ROOT/<C_f>/run/bundle and the third void ends EXP-001 as INCONCLUSIVE (INFRA); generation requires the freeze receipt on origin/main (profile stopping_rule, BLINDING_PROTOCOL.md steps 4 to 8)",
   "failure_reporting": "calibration/docs/FAILURE_REPORTING.md",
   "energy_measured": false,
   "open_at_freeze": [
@@ -175,7 +175,7 @@
   ],
   "coders": {
     "spec": "calibration/docs/CODER_SPEC.md",
-    "spec_sha256": "76389ba91a4dfadfeaaeb10968d8c1abb3c57a76b298b79b50db37e1af1fea57",
+    "spec_sha256": "652ea51ca3ab11b4b25502131b8f904de1dee9987335228544d953c0317e07ea",
     "reference_coder_1": "TCR1 v1 range",
     "reference_coder_2": "TCA1 v1 rANS, L = 2^23",
     "header_bytes": 56,

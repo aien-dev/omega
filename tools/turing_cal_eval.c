@@ -65,6 +65,10 @@ static int g_scored;
 static char g_cmd[4096];     /* the command line, recorded in every void receipt (identical-retry check) */
 static char g_inputs[1024];  /* "<name> <sha256>" pairs of the input files, same purpose */
 #define MAX_ATTEMPTS 3
+/* Receipt binding (every void and terminal receipt carries these three; CAL-0 review 2 Q5). Filled by a pre-pass
+ * before any receipt can be written: run hashes the profile and candidate manifest it was given and reads
+ * freeze_commit from the dataset manifest ("DRY_RUN" in a dry run); gate copies them from the pending receipt. */
+static char g_rprof[65], g_rman[65], g_rfreeze[48];
 
 /* ---------- small helpers ---------- */
 
@@ -108,8 +112,9 @@ static int fail_final(const char *crit, const char *step, const char *code, cons
         fprintf(f, "%s\"%s\": \"%s\"", i > 1 ? ", " : "", nm, strcmp(nm, crit) ? "NOT_REACHED" : "FAIL");
     }
     fprintf(f, "},\n  \"failed_criterion\": \"%s\",\n  \"step\": \"%s\",\n  \"code\": \"%s\",\n  \"reason\": \"%s\",\n"
+               "  \"profile_digest\": \"%s\",\n  \"freeze_commit\": \"%s\",\n  \"candidate_manifest_sha256\": \"%s\",\n"
                "  \"EXP_001_COMPRESSION_BRIDGE\": \"%s\"\n}\n",
-            crit, step, code, m, g_dry ? "DRY_RUN_NOT_EVIDENCE" : "FAIL");
+            crit, step, code, m, g_rprof, g_rfreeze, g_rman, g_dry ? "DRY_RUN_NOT_EVIDENCE" : "FAIL");
     fclose(f);
     return 1;
 }
@@ -141,17 +146,21 @@ static int refuse_c(const char *crit, const char *step, const char *code, const 
             jclean(msg);
             fprintf(f,
                     "{\n  \"schema\": \"turing.cal.void_receipt.v1\",\n  \"experiment\": \"EXP-001\",\n"
-                    "  \"kind\": \"void\",\n  \"dry_run\": %s,\n  \"created_utc\": \"%s\",\n  \"attempt\": %d,\n  \"step\": \"%s\",\n"
-                    "  \"code\": \"%s\",\n  \"reason\": \"%s\",\n  \"command\": \"%s\",\n  \"inputs\": \"%s\"\n}\n",
-                    g_dry ? "true" : "false", t, n, step, code, msg, g_cmd, g_inputs);
+                    "  \"kind\": \"void\",\n  \"stage\": \"evaluation\",\n  \"dry_run\": %s,\n  \"created_utc\": \"%s\",\n"
+                    "  \"attempt\": %d,\n  \"step\": \"%s\",\n  \"code\": \"%s\",\n  \"reason\": \"%s\",\n  \"command\": \"%s\",\n"
+                    "  \"inputs\": \"%s\",\n  \"profile_digest\": \"%s\",\n  \"freeze_commit\": \"%s\",\n"
+                    "  \"candidate_manifest_sha256\": \"%s\"\n}\n",
+                    g_dry ? "true" : "false", t, n, step, code, msg, g_cmd, g_inputs, g_rprof, g_rfreeze, g_rman);
             fclose(f);
             if (!g_dry && n >= MAX_ATTEMPTS && (f = excl_open("final_receipt.json"))) {
                 fprintf(f,
                         "{\n  \"schema\": \"turing.cal.terminal_receipt.v1\",\n  \"experiment\": \"EXP-001\",\n"
                         "  \"kind\": \"inconclusive_infra\",\n  \"dry_run\": false,\n  \"created_utc\": \"%s\",\n"
                         "  \"verdict\": \"INCONCLUSIVE\",\n  \"reason\": \"INFRA\",\n  \"void_attempts\": %d,\n"
-                        "  \"last_step\": \"%s\",\n  \"last_code\": \"%s\",\n  \"EXP_001_COMPRESSION_BRIDGE\": \"INCONCLUSIVE\"\n}\n",
-                        t, n, step, code);
+                        "  \"last_step\": \"%s\",\n  \"last_code\": \"%s\",\n"
+                        "  \"profile_digest\": \"%s\",\n  \"freeze_commit\": \"%s\",\n  \"candidate_manifest_sha256\": \"%s\",\n"
+                        "  \"EXP_001_COMPRESSION_BRIDGE\": \"INCONCLUSIVE\"\n}\n",
+                        t, n, step, code, g_rprof, g_rfreeze, g_rman);
                 fclose(f);
                 fprintf(stderr, "attempt %d of %d was void: verdict INCONCLUSIVE (INFRA), final_receipt.json written\n", n,
                         MAX_ATTEMPTS);
@@ -543,7 +552,47 @@ static int cmd_run(int argc, char **argv) {
     if (!repo || !manifest || !dataset || !outp || !work || !ncd)
         return refuse("args", "ARG", "need --repo --manifest --cand-dir --dataset --out --work");
     if (only && !g_dry) return refuse("args", "ARG", "--only is allowed in a dry run only");
+    /* Receipt-binding pre-pass (no receipt yet: a failure here is not an attempt, like a bad argument). */
+    {
+        char pp[PATH_MAX];
+        snprintf(pp, sizeof pp, "%s/calibration/profiles/Turing-profile-v1.0.toml", repo);
+        if (sha_file_hex(pp, g_rprof)) return refuse("args", "IO", "cannot read %s", pp);
+        if (sha_file_hex(manifest, g_rman)) return refuse("args", "IO", "cannot read %s", manifest);
+        snprintf(g_rfreeze, sizeof g_rfreeze, "DRY_RUN");
+        if (!g_dry) {
+            char *d0 = slurp(dataset, NULL);
+            char fc[64] = "";
+            if (!d0) return refuse("args", "IO", "cannot read %s", dataset);
+            jtop(d0, "freeze_commit", fc, sizeof fc);
+            free(d0);
+            int ok = strlen(fc) == 40;
+            for (int i = 0; ok && i < 40; ++i) ok = (fc[i] >= '0' && fc[i] <= '9') || (fc[i] >= 'a' && fc[i] <= 'f');
+            if (!ok) return refuse("args", "FREEZE_COMMIT", "dataset freeze_commit '%s' is not a 40-hex commit", fc);
+            snprintf(g_rfreeze, sizeof g_rfreeze, "%s", fc);
+        }
+    }
     if (mkdir_p(outp) || mkdir_p(work)) return refuse("args", "IO", "cannot create out/work dirs");
+    /* One VOID counter for all of EXP-001 (FAILURE_REPORTING.md section 2): in sealed mode the bundle must be
+     * <eval root>/<C_f>/run/bundle, the directory where sealed generation and the frozen-tree tests also write their
+     * void receipts, so every void of the experiment lands in one numbered sequence. */
+    if (!g_dry) {
+        char rp[PATH_MAX], suf[128];
+        snprintf(suf, sizeof suf, "/%s/run/bundle", g_rfreeze);
+        size_t lr, ls = strlen(suf);
+        if (!realpath(outp, rp) || (lr = strlen(rp)) < ls || strcmp(rp + lr - ls, suf))
+            return refuse("args", "OUT_PATH", "--out must resolve to <eval root>/%s/run/bundle (one void counter per experiment)",
+                          g_rfreeze);
+        int nv = 0;
+        for (int k = 1; k < 1000; ++k) {
+            char p[PATH_MAX];
+            struct stat st;
+            snprintf(p, sizeof p, "%s/void_receipt_%d.json", outp, k);
+            if (stat(p, &st)) break;
+            ++nv;
+        }
+        if (nv >= MAX_ATTEMPTS)
+            return refuse("args", "ATTEMPTS", "%d void attempts already recorded: EXP-001 is INCONCLUSIVE (INFRA)", nv);
+    }
     if (g_dry && (under_forbidden(repo, outp) || under_forbidden(repo, work)))
         return refuse("dry run", "DRY_RUN_TARGET", "a dry run may not write under %s", DRY_FORBIDDEN);
     {
@@ -553,18 +602,27 @@ static int cmd_run(int argc, char **argv) {
         if (!stat(p, &st)) return refuse("write once", "EXISTS", "%s already exists; a verdict is never replaced", p);
     }
     g_out = outp;
-    /* A sealed retry after a void attempt must be the byte-identical command on byte-identical inputs. */
+    /* A sealed retry after a void evaluation attempt must be the byte-identical command on byte-identical inputs:
+     * it is compared with the first void receipt of stage "evaluation" (generation and test voids share the
+     * numbering but record other commands). */
     if (!g_dry) {
-        char p[PATH_MAX];
-        snprintf(p, sizeof p, "%s/void_receipt_1.json", g_out);
-        char *v1 = slurp(p, NULL);
-        if (v1) {
+        for (int k = 1; k < 1000; ++k) {
+            char p[PATH_MAX], stg[32] = "";
+            snprintf(p, sizeof p, "%s/void_receipt_%d.json", g_out, k);
+            char *v1 = slurp(p, NULL);
+            if (!v1) break;
+            jtop(v1, "stage", stg, sizeof stg);
+            if (strcmp(stg, "evaluation")) {
+                free(v1);
+                continue;
+            }
             char c1[sizeof g_cmd] = "", i1[sizeof g_inputs] = "";
             jtop(v1, "command", c1, sizeof c1);
             jtop(v1, "inputs", i1, sizeof i1);
             free(v1);
             if (strcmp(c1, g_cmd) || strcmp(i1, g_inputs))
-                return refuse("retry", "RETRY_DIFFERS", "a retry must repeat attempt 1 byte for byte (command and input digests)");
+                return refuse("retry", "RETRY_DIFFERS", "a retry must repeat the first void evaluation attempt byte for byte (command and input digests)");
+            break;
         }
     }
     /* Notebook record; a non-dry run refuses a dirty or unverifiable tree. */
@@ -1042,7 +1100,7 @@ static int cmd_run(int argc, char **argv) {
                 }
             }
         size_t Cn = pool_n[g];
-        if (Cn == 0) return refuse_c("S6", "bootstrap", "NO_CRUMBS", "group %d has no crumbs", g);
+        if (Cn == 0) return refuse_c(g == 2 ? "S9" : "S6", "bootstrap", "NO_CRUMBS", "group %d has no crumbs", g);
         /* Pool: (seed order, crumb ordinal); per candidate crumb ideal. */
         int64_t *pool[MAXC];
         for (int ci = 0; ci < nc; ++ci) {
@@ -1558,19 +1616,38 @@ static int cmd_gate(int argc, char **argv) {
     if (!rec || !rep) return refuse("gate", "IO", "pending receipt or report missing; run first");
     int rec_dry = strstr(rec, "\"kind\": \"dry_run\"") != NULL;
     if (rec_dry != g_dry) return refuse("gate", "MODE", "bundle dry-run flag and --dry-run disagree");
+    /* Receipt binding for a terminal receipt written by the gate: taken from the pending receipt of the run. */
+    {
+        char fc[48] = "";
+        if (jtop(rec, "sha256", g_rprof, sizeof g_rprof) || jtop(rec, "candidate_manifest_sha256", g_rman, sizeof g_rman) ||
+            jtop(rec, "commit", fc, sizeof fc) || strlen(g_rprof) != 64 || strlen(g_rman) != 64)
+            return refuse("gate", "FORMAT", "pending receipt lacks profile, freeze commit or candidate manifest digest");
+        snprintf(g_rfreeze, sizeof g_rfreeze, "%s", g_dry ? "DRY_RUN" : fc);
+    }
     char prim[PATH_MAX], ph[65], ih[65];
     snprintf(prim, sizeof prim, "%s/scorer_primary.json", bundle);
-    if (sha_file_hex(prim, ph) || sha_file_hex(indep, ih)) return refuse("gate", "IO", "scorer files");
-    int self_cmp = !strcmp(ph, ih);
+    if (sha_file_hex(prim, ph)) return refuse("gate", "IO", "scorer_primary.json");
+    int indep_ok = !sha_file_hex(indep, ih);
+    int self_cmp = indep_ok && !strcmp(ph, ih);
     if (self_cmp && !g_dry) return refuse("S8", "NOT_INDEPENDENT", "scorer_independent.json is byte-identical to scorer_primary.json");
-    /* The run already produced scores: from here on any failure is a final FAIL, never a void. */
+    /* The run already produced scores: from here on any failure is a final FAIL, never a void. A lane D crash, a
+     * missing, unreadable or unparsable scorer_independent.json, or one that reports problems of its own, is S8
+     * FAIL with no retry (EVALUATOR.md section 6). */
     g_out = bundle;
     g_scored = 1;
+    if (!indep_ok) return refuse_c("S8", "S8", "INDEP_MISSING", "independent scorer file %s is missing or unreadable", indep);
     /* S8: same key set, same int64 values. */
     kv_t *a, *b;
     int na, nb;
-    if (load_values(prim, &a, &na) || load_values(indep, &b, &nb)) return refuse("gate", "IO", "values");
+    if (load_values(prim, &a, &na)) return refuse("gate", "IO", "values of scorer_primary.json");
+    if (load_values(indep, &b, &nb)) return refuse_c("S8", "S8", "INDEP_FORMAT", "values of %s cannot be parsed", indep);
     int s8 = na > 0 && na == nb, mism = 0;
+    if (!self_cmp) { /* lane D records its own mismatches in "problems"; anything but 0 (or no field) fails S8 */
+        char *ti = slurp(indep, NULL);
+        int64_t pr = -1;
+        if (!ti || jint(ti, "problems", &pr) || pr != 0) ++mism;
+        free(ti);
+    }
     /* The independent file must name the same inputs and schema, and may not repeat a key. */
     {
         static const char *hk[] = {"schema", "profile_sha256", "candidate_manifest_sha256", "dataset_manifest_sha256"};

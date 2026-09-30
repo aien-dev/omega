@@ -59,7 +59,7 @@ the radices of present features; S > 2^62 is refused. keybits = 0 if S <= 1, els
 - "Previous outcome" digits are kept per file and all reset to K when an event opens a crumb (the CTR1 crumb-start record),
   before the key of that event is computed. After the event is scored the history shifts: prev5 <- prev4 <- ... <-
   prev1 <- x_t.
-- Crumb ordinal = index of the crumb that contains the event, counting crumbs in file order from 0 (the file's first record opens crumb 0), saturating at 65535.
+- Crumb ordinal = index of the crumb that contains the event, counting crumbs in file order from 0 (the file's first record opens crumb 0), saturating at 65535 (DATA_FORMAT.md G10; not reached at this design).
 - The outcome symbol x_t, op feature and depth come from each 247-byte CTR1 record exactly as in
   TURING_YIELD_PROFILE_V0.md sections 2-3 (reader `src/turing/ty_ctr1.c`, byte offsets in `ty_ctr1.h`).
 

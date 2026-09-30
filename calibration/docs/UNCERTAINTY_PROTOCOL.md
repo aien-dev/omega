@@ -7,7 +7,8 @@ written from this page reproduces every interval exactly (profile `independent_v
 
 Every model's context resets at a crumb start (MODEL_DESCRIPTION_ENCODING.md section 3), so the ideal code length of a
 file is exactly the sum of the ideal code lengths of its crumbs. The scorer checks this: sum over crumbs of
-L(D_c|M) must equal L(D|M) of the whole file, in micro-bits (ub, 1 bit = 1,000,000 ub), or the run is void.
+L(D_c|M) must equal L(D|M) of the whole file, in micro-bits (ub, 1 bit = 1,000,000 ub). A mismatch is found after scoring started, so it is a terminal S4 FAIL
+(refusal code CRUMB_SUM, FAILURE_REPORTING.md section 2), never a void.
 Events inside a crumb are never resampled separately. A crumb with zero events is not in the pool.
 
 ## 2. Statistic
@@ -97,8 +98,12 @@ overhead is a whole-stream quantity that does not split into crumbs. The coder e
   0.00316 bits/event (ratio 0.49). A2 is therefore optimistic by about x2.04 in spread. The power simulation
   (calibration/scripts/power_simulation.c) repeats the design with the spread inflated x2.04 and still reaches
   power 1.000 at n = 3 seeds per group for the declared minimum effect. The report states the inflated interval
-  (point estimate +/- 2.04 x half width, per side) next to the protocol interval as a sensitivity result; the
-  verdict uses the protocol interval.
+  next to the protocol interval as a sensitivity result; the verdict uses the protocol interval. The inflated
+  interval is computed per side, in integer ub, for T_ideal against B2 of every candidate in each group
+  (uncertainty.json key `T_ideal_vs_B2_inflated_x2.04`, written as [point, lo2, hi2]): with d_lo = point - lo and
+  d_hi = hi - point, lo2 = point - (204 x d_lo + 50) / 100 and hi2 = point + (204 x d_hi + 50) / 100, where / is
+  int64 division truncating toward zero. For d >= 0 this is 2.04 x d rounded half up; the two sides are inflated
+  separately, so an asymmetric percentile interval stays asymmetric.
 
 ## 9. What is not resampled
 

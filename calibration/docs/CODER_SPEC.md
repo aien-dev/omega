@@ -1,8 +1,8 @@
 # EXP-001 coder specification (lane B)
 
 Status: implemented and tested on branch `feat/turing-exp001-b`. Sections 1 to 8
-are normative. Section 9 is a proposal that freezes together with the lane A
-profile.
+are normative. Section 9 records the measured envelope; its rule is the profile field
+`coder_envelope` and freezes with the profile.
 
 Implementation: `src/turing/tc_pstream.[ch]` (formats), `src/turing/tc_range.[ch]`
 (coder A), `src/turing/tc_rans.[ch]` (coder B), `src/turing/tc_produce.[ch]`
@@ -221,7 +221,8 @@ other (profile ideal_codelength_method, EVALUATOR.md section 6.2):
    set bit (32 - i) of frac and m = m >> 1.
 3. log2 = (ip << 32) | frac; x = (16 << 32) - log2; ub(q) = (x * 1000000 + 2^31) >> 32.
 
-Test values: ub(1) = 16000000, ub(32768) = 1000000, ub(65536) = 0, ub(43481) = 591903,
+Test values: ub(1) = 16000000, ub(32768) = 1000000, ub(65536) = 0 (defined for completeness; a coded
+symbol never has q = 65536, since every other entry of its row is at least 1), ub(43481) = 591903,
 ub(46819) = 485194. The last two are one micro-bit above the correctly rounded
 -log2(q/65536) x 10^6 (591902, 485193); every other q agrees, so each symbol is within
 0.501 ub of the exact value. The rule, not correct rounding, is the definition. Bits = ub / 10^6.
@@ -235,6 +236,15 @@ on it), three models: uniform K=9 (`83c04b...`), TY-2 baseline (`59ae93...`),
 TY-2 candidate (`64a57b...`). Units: 21 whole files (N = 1,945,549 to 2,172,776)
 and 3,894 crumbs (1,298 per model, N = 403 to 20,004), each crumb coded as its
 own file with its own 56-byte header.
+
+Per-crumb coding (the S4 per-crumb envelope and sum checks) builds no new TPS1 file and no new
+digest. For the crumb with symbols [lo, hi) the evaluator takes rows lo..hi-1 of the one parsed file
+TPS1 (already checked, section 2) and symbols lo..hi-1 of the parsed TSY1, runs both coders on that
+slice from a fresh coder state (the section 5 and 6 payloads, no header written), decodes the payload
+with the same rows and compares it with the symbols, and counts the crumb as payload bytes plus 56,
+the size of a section 4 header. A crumb header would bind the file TPS1 digest, which the file-level
+BINDING check (S3) already covers. Per-crumb coded bytes are recomputed, not stored, and are reported
+in ideal_lengths.json (crumbs list) and the envelope result (`tools/turing_cal_eval.c`, per-crumb loop).
 
 Per file, overhead in bits (min / mean / max over 7 seeds):
 

@@ -63,8 +63,8 @@ The overlap audit's crumb-block hash (verify_holdout_separation.sh G9) covers by
 | 7 | ACCEPT | kind 2, prune 0, result_class 5 |
 | 8 | REJECT | kind 2, prune 0, result_class 6 or 7 |
 
-The context feature `op` is op_index (0..14) for EXPAND and 15 for SUBMIT. Refusals (the file is not scored and
-the run refuses before scoring): bad magic; version != 1; op_origin != 0; verify > 4; fit > 2; kind not 1 or 2;
+The context feature `op` is op_index (0..14) for EXPAND and 15 for SUBMIT. Refusals (the evaluator reads and validates every CTR1 file before it scores any file, so a bad file always
+refuses before any score exists: FORMAT, a void; EVALUATOR.md section 3): bad magic; version != 1; op_origin != 0; verify > 4; fit > 2; kind not 1 or 2;
 EXPAND with op_index >= 15 or prune > 4; pruned EXPAND with result_class != 1; unpruned EXPAND with result_class
 outside 2..4; SUBMIT with prune != 0 or result_class outside 5..7.
 
@@ -76,6 +76,11 @@ record in the file, otherwise the file is refused. The first record of a file mu
 more than one inside a crumb is a gap: it is counted and reported (`gaps`), never refused (G9). Crumbs are
 numbered 0, 1, 2, ... in file order; the crumb ordinal stored in TPS1 and used by the POS context is
 min(ordinal, 65535) (G10). A crumb is the unit of the per-crumb envelope (S4) and of the bootstrap pool.
+Saturation is accepted (CAL-0 review 2 Q15): in a file with more than 65,535 crumbs, every crumb from ordinal 65535
+on would share one ordinal, so the evaluator would treat them as a single crumb (one bootstrap unit, one per-crumb
+envelope entry) and the POS context would see one value for them. It cannot happen at this design: the development
+traces hold 181 to 188 crumbs per file, about 350 times below the limit, and the sealed traces come from the same
+generator with the same trace length.
 
 ## 2. Profile digest (G6)
 
@@ -104,7 +109,7 @@ working directory R:
 R/candidate_manifest.json     copy of the frozen manifest (from C_f)
 R/dataset_manifest.json       the sealed (or dev) dataset manifest, section 3
 R/candidates/                 the seven .tym files (or --cand-dir)
-R/bundle/                     the published bundle (below)
+R/bundle/                     the bundle (below); sealed R = $TC_EVAL_ROOT/<C_f>/run (FAILURE_REPORTING.md section 6)
 R/work/                       large intermediate files, referenced by relative path "work/..."
 R/work/probability_streams/g<g>_j<j>_<C>.tps   TPS1 stream per candidate and file
 R/work/symbols/g<g>_j<j>_<C>.tsy               TSY1 symbol stream per candidate and file

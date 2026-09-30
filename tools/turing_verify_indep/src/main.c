@@ -70,6 +70,8 @@ static int file_index(int g, int idx) { int i; for (i = 0; i < nf; i++) if (F[i]
  * digests from bundle/probability_streams/INDEX; TCR1/TCA1 paths from bundle/encoded_artifacts/INDEX.
  * TSY1 paths are not listed in any INDEX: work/symbols/g<g>_j<j>_<C>.tsy is the observed naming (SPEC_GAPS). */
 static char idx_tps_trailer[MAXC][MAXF][65], idx_tsy_trailer[MAXC][MAXF][65];
+/* INDEX file sha256 and byte columns (TPS1, TCR1, TCA1): checked against the files themselves */
+static char idx_sha[3][MAXC][MAXF][65]; static unsigned long long idx_bytes[3][MAXC][MAXF];
 static void load_bundle(const char *root) {
     char p[2048], line[4096]; FILE *f;
     snprintf(p, sizeof p, "%s/dataset_manifest.json", root);
@@ -98,6 +100,7 @@ static void load_bundle(const char *root) {
         snprintf(ST[ci][fi].tps, 1024, "%s/%s", root, path);
         snprintf(ST[ci][fi].tsy, 1024, "%s/work/symbols/g%d_j%d_%s.tsy", root, g, j, cn);
         strcpy(idx_tps_trailer[ci][fi], tr); strcpy(idx_tsy_trailer[ci][fi], ts);
+        strcpy(idx_sha[0][ci][fi], sha); idx_bytes[0][ci][fi] = by;
         ST[ci][fi].present |= 1;
     }
     fclose(f);
@@ -108,8 +111,8 @@ static void load_bundle(const char *root) {
         if (line[0] == '#') continue;
         if (sscanf(line, "%64s %15s %d %d %63s %llu %1023s", sha, coder, &g, &j, cn, &by, path) != 7) die("bad coded INDEX line");
         if ((ci = cand_index(cn)) < 0 || (fi = file_index(g, j)) < 0) die("coded INDEX names unknown candidate or file");
-        if (!strcmp(coder, "range")) { snprintf(ST[ci][fi].tcr, 1024, "%s/%s", root, path); ST[ci][fi].present |= 2; }
-        else if (!strcmp(coder, "rans")) { snprintf(ST[ci][fi].tca, 1024, "%s/%s", root, path); ST[ci][fi].present |= 4; }
+        if (!strcmp(coder, "range")) { snprintf(ST[ci][fi].tcr, 1024, "%s/%s", root, path); strcpy(idx_sha[1][ci][fi], sha); idx_bytes[1][ci][fi] = by; ST[ci][fi].present |= 2; }
+        else if (!strcmp(coder, "rans")) { snprintf(ST[ci][fi].tca, 1024, "%s/%s", root, path); strcpy(idx_sha[2][ci][fi], sha); idx_bytes[2][ci][fi] = by; ST[ci][fi].present |= 4; }
         else die("unknown coder in INDEX");
     }
     fclose(f);
@@ -198,7 +201,7 @@ static void score_one(int ci, int fi, const is_model *m) {
     if (ev->n) rs->crumb_ub[crumb++] = cub;
     if (crumb != ev->crumbs) die("crumb count mismatch");
     { int64_t sum = 0; uint64_t i; for (i = 0; i < crumb; i++) sum += rs->crumb_ub[i];
-      if (sum != rs->ideal_ub) die("sum over crumbs != file ideal (UNCERTAINTY 1): run void"); }
+      if (sum != rs->ideal_ub) die("sum over crumbs != file ideal (UNCERTAINTY_PROTOCOL.md section 1; S4 CRUMB_SUM)"); }
     is_sha256_final(&tc, tpsd); is_sha256_hex(tpsd, rs->tps_digest);
     if (tf) {
         uint8_t trl[32], extra;
@@ -227,6 +230,18 @@ static void score_one(int ci, int fi, const is_model *m) {
           }
       } }
     free(syms); free(tcr); free(tca);
+}
+
+/* INDEX columns: the file sha256 and byte count listed for the TPS1, TCR1 and TCA1 files must be those of the files read */
+static void check_index(int ci, int fi) {
+    const char *pth[3] = {ST[ci][fi].tps, ST[ci][fi].tcr, ST[ci][fi].tca}, *nm[3] = {"TPS1", "TCR1", "TCA1"};
+    int k;
+    for (k = 0; k < 3; k++) {
+        uint8_t d[32]; uint64_t by = 0; char hx[65];
+        if (is_sha256_file(pth[k], d, &by)) { note("%s unreadable: %s", nm[k], pth[k]); continue; }
+        is_sha256_hex(d, hx);
+        if (strcmp(hx, idx_sha[k][ci][fi]) || by != idx_bytes[k][ci][fi]) note("%s file sha256 or bytes differ from its INDEX line: %s", nm[k], pth[k]);
+    }
 }
 
 static int cmp64(const void *a, const void *b) { int64_t x = *(const int64_t *)a, y = *(const int64_t *)b; return x < y ? -1 : x > y; }
@@ -274,6 +289,7 @@ int main(int argc, char **argv) {
     for (fi = 0; fi < nf; fi++) {
         if (is_ctr1_load(F[fi].path, &F[fi].ev, msg, sizeof msg)) die(msg);
         is_sha256_hex(F[fi].ev.sha, hx);
+        if (!dry && !strcmp(F[fi].sha, "-")) die("sealed run: every trace needs its sha256 in the dataset manifest");
         if (strcmp(F[fi].sha, "-") && strcmp(F[fi].sha, hx)) die("trace sha256 differs from plan/dataset manifest");
         fprintf(stderr, "file g%d idx%d seed %s: %llu events, %llu crumbs, gaps %llu, sha %s\n", F[fi].g, F[fi].index, F[fi].seed,
                 (unsigned long long)F[fi].ev.n, (unsigned long long)F[fi].ev.crumbs, (unsigned long long)F[fi].ev.gaps, hx);
@@ -305,8 +321,8 @@ int main(int argc, char **argv) {
           free(cn);
       }
       fclose(cf); }
-    if (!(out = fopen(outp, "w")) || !(det = fopen(detp, "w"))) die("cannot write output");
-    fprintf(out, "{\n  \"schema\": \"turing.cal.scorer.v1\",\n  \"scorer\": \"lane D independent scorer (indep-scorer, C, written from calibration docs only)\",\n  \"dry_run\": %s,\n  \"profile_sha256\": \"%s\",\n  \"candidate_manifest_sha256\": \"%s\",\n  \"dataset_manifest_sha256\": \"%s\",\n  \"values\": [\n", dry ? "true" : "false", pd_hex, cm_hex, dm_hex);
+    if (!(out = fopen(outp, "wx")) || !(det = fopen(detp, "wx"))) die("cannot create output exclusively (an earlier scorer file is never replaced)");
+    fprintf(out, "{\n  \"schema\": \"turing.cal.scorer.v1\",\n  \"scorer\": \"lane D independent scorer (indep-scorer, C, written from calibration docs only)\",\n  \"dry_run\": %s,\n  \"profile_sha256\": \"%s\",\n  \"candidate_manifest_sha256\": \"%s\",\n  \"dataset_manifest_sha256\": \"%s\",\n  \"problems\": PROBLEMS_PLACEHOLDER,\n  \"values\": [\n", dry ? "true" : "false", pd_hex, cm_hex, dm_hex);
     fprintf(det, "{\n  \"schema\": \"lane_d.indep_scorer.details.v0\",\n  \"profile_digest\": \"%s\",\n  \"problems\": PROBLEMS_PLACEHOLDER,\n  \"files\": [\n", profile_hex);
     for (fi = 0; fi < nf; fi++) {
         is_sha256_hex(F[fi].ev.sha, hx);
@@ -322,6 +338,9 @@ int main(int argc, char **argv) {
               snprintf(k2, sizeof k2, "g%d.f%d.%s.rans_bytes", F[fi].g, F[fi].index, C[ci].name); val(k2, (int64_t)r->rans_bytes);
               if (strcmp(r->tps_digest, idx_tps_trailer[ci][fi])) note("my TPS1 digest != INDEX trailer digest: %s %s", C[ci].name, F[fi].seed);
               if (strcmp(r->tsy_digest, idx_tsy_trailer[ci][fi])) note("my TSY1 digest != INDEX digest: %s %s", C[ci].name, F[fi].seed); }
+            if (r->tps_match != 1) note("TPS1 file differs from my rebuilt stream: %s %s", C[ci].name, F[fi].seed);
+            if (r->tsy_match != 1) note("TSY1 file differs from my rebuilt symbols: %s %s", C[ci].name, F[fi].seed);
+            check_index(ci, fi);
             fprintf(det, "      {\"name\": \"%s\", \"ideal_ub\": %lld, \"ideal_ub_exact_rounding_variant\": %lld, \"events_with_undetermined_q\": %llu, \"rows_hit\": %llu, "
                     "\"tps1_digest\": \"%s\", \"tps1_equal\": %d, \"tps1_note\": \"%s\", \"tsy1_equal\": %d, \"range_bytes\": %llu, \"rans_bytes\": %llu, "
                     "\"range_decoded_ok\": %d, \"rans_decoded_ok\": %d, \"binding_ok\": %d, \"range_overhead_ub\": %lld, \"rans_overhead_ub\": %lld, "
@@ -339,7 +358,7 @@ int main(int argc, char **argv) {
         int64_t ideal[MAXC], rbits[MAXC], abits[MAXC];
         for (fi = 0; fi < nf; fi++) if (F[fi].g == g) { Cn += F[fi].ev.crumbs; events += F[fi].ev.n; any = 1; }
         if (!any) continue;
-        if (!Cn) die("VOID: a group has no crumbs");
+        if (!Cn) die("a group has no crumbs (NO_CRUMBS: S6 for group 1, S9 for group 2)");
         /* pool: files in index order (plan order must already be group then index), then crumb ordinal */
         idx = malloc(sizeof(uint32_t) * 10000 * Cn); dvec = malloc(sizeof(int64_t) * Cn); Tb = malloc(sizeof(int64_t) * 10000);
         if (!idx || !dvec || !Tb) die("oom");
@@ -373,10 +392,14 @@ int main(int argc, char **argv) {
     }
     fprintf(det, "  ]\n}\n"); fprintf(out, "\n  ]\n}\n");
     fclose(out); fclose(det);
-    /* patch problems count */
-    { uint8_t *b; uint64_t L; char num[32]; FILE *f; char *p;
-      if (!is_read_file(detp, &b, &L)) { snprintf(num, sizeof num, "%d", problems);
-        p = strstr((char *)b, "PROBLEMS_PLACEHOLDER"); f = fopen(detp, "w");
+    /* patch the problems count into both files (the gate fails S8 unless the scorer file says "problems": 0; a
+     * placeholder left by a crash here also fails S8) */
+    { const char *pp[2] = {outp, detp}; int k;
+      for (k = 0; k < 2; k++) { uint8_t *b; uint64_t L; char num[32]; FILE *f; char *p;
+        if (is_read_file(pp[k], &b, &L)) die("cannot reread output");
+        snprintf(num, sizeof num, "%d", problems);
+        p = strstr((char *)b, "PROBLEMS_PLACEHOLDER");
+        if (!p || !(f = fopen(pp[k], "w"))) die("cannot patch problems count");
         fwrite(b, 1, (size_t)(p - (char *)b), f); fputs(num, f); fwrite(p + 20, 1, L - (uint64_t)(p - (char *)b) - 20, f); fclose(f); free(b); } }
     fprintf(stderr, "done, %d problems\n", problems);
     return problems ? 3 : 0;

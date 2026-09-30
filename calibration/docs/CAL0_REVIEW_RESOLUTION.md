@@ -56,3 +56,27 @@ Nothing here is frozen yet; the freeze follows BLINDING_PROTOCOL.md section 2.
   with failed_criterion NONE and every criterion NOT_REACHED (EVALUATOR.md s3, FAILURE_REPORTING.md s2), not as a
   FAIL of a named criterion.
 - The independent scorer's `dry_run` field is derived from the dataset manifest split (`sealed_test` gives false).
+
+## CAL-0 review 2 (Q1 to Q19)
+
+| Id | Finding (short) | Resolution | Where |
+|---|---|---|---|
+| Q1 | Three-attempt limit: per step or whole experiment | Fixed. One counter for EXP-001: void receipts in `$TC_EVAL_ROOT/<C_f>/run/bundle`, shared by generation, frozen-tree tests (`record_void.sh`) and evaluation; the third void writes the INCONCLUSIVE (INFRA) final receipt; nothing starts after that | `scripts/tc_void_lib.sh`, `record_void.sh`, `generate_sealed_data.sh`, evaluator ATTEMPTS; FAILURE_REPORTING.md s2; profile stopping_rule |
+| Q2 | Blanket "VOID" wording contradicts the refusal table | Fixed. EVALUATOR.md s3 is the one classification; VOID only before any sealed score; CRUMB_SUM is S4, BINDING S3, freeze order S2 | UNCERTAINTY_PROTOCOL.md; preregistration.json verdict and stopping_rule |
+| Q3 | What lane D recomputes is undefined | Fixed. Lane D recomputes L(M), probabilities, its own TPS1 (compared byte for byte), TSY1, ideal lengths, crumb split, bootstrap and T; it checks every coded file (header, binding, own decode, INDEX sha and size) and reports `problems` | `tools/turing_verify_indep`; EVALUATOR.md s6 |
+| Q4 | Pinned coder spec not in the bundle | Fixed. `coders.spec_sha256` is the SHA-256 of CODER_SPEC.md at this commit; CODER_SPEC.md is in the docs bundle | preregistration.json |
+| Q5 | Void and terminal receipts carry no profile digest | Fixed. Every receipt carries profile_digest, freeze_commit, candidate_manifest_sha256 and (void) stage; a dataset freeze_commit that is not 40 hex refuses with no receipt | evaluator; schemas; tc_void_lib.sh |
+| Q6 | Bundle location contradictory | Fixed. One location (sealed `--out` must end in `/<C_f>/run/bundle`, OUT_PATH); later publication copies a fixed file list with `published_manifest.sha256`; stream and coded bytes stay outside git | FAILURE_REPORTING.md s6; BLINDING_PROTOCOL.md steps 8, 9 |
+| Q7 | Scorer binary name differs | Fixed. Listed as turing-verify-indep, file build/turing-verify-indep/indep-scorer | profile; EXP-001.md s11; EVALUATOR.md s6 |
+| Q8 | Manifest runtime value vs FILL_AT_FREEZE | Stated. The manifest values are development values, regenerated at freeze | EXP-001.md s11 |
+| Q9 | Step 7 builds five targets, runtime lists seven | Fixed. Step 7 builds all six make targets (seven binaries) with an empty PHYSICS_DIR; failures are voids via record_void.sh | BLINDING_PROTOCOL.md step 7 |
+| Q10 | Generation does not check the freeze receipt | Fixed. generate_sealed_data.sh refuses without a PASS freeze receipt for C_f on origin/main | generate_sealed_data.sh; profile holdout_commitment; BLINDING_PROTOCOL.md step 5 |
+| Q11 | Bad CTR1 mid-run: VOID or FAIL | Clarified. Every CTR1 file is validated before the first score, so it is a FORMAT void | DATA_FORMAT.md s1; EVALUATOR.md s3 |
+| Q12 | Lane D crash or no output | Fixed. INDEP_MISSING: S8 terminal FAIL, no retry; problems not 0 also fails S8 | gate; EVALUATOR.md s3, s6.3 |
+| Q13 | NO_CRUMBS maps to S6 for group 2 | Fixed. S9 for group 2 | evaluator; EVALUATOR.md s3 |
+| Q14 | Schema failed_criterion list incomplete | Fixed. Lists S1, S2, S3, S4, S6, S8, S9 and NONE | `schemas/terminal_receipt.schema.json` |
+| Q15 | Crumb ordinal saturation | Accepted and stated: cannot occur at this design (about 185 crumbs per file) | DATA_FORMAT.md G10 |
+| Q16 | A3 x2.04 interval rounding | Fixed. Exact integer rule per side; report-only | UNCERTAINTY_PROTOCOL.md s8 |
+| Q17 | CODER_SPEC s9 "proposal"; PC row 9 S4 | Fixed. s9 is the measured envelope frozen as coder_envelope; row 9 says S3 | CODER_SPEC.md; PROTOCOL_CONFORMANCE.md |
+| Q18 | Resolution file not in the reviewed bundle | Stated. This file is a history record, not part of the reviewed bundle; nothing normative depends on it | EXP-001.md s11 |
+| Q19 | Per-crumb coding stream not spelled out; q = 65536 | Fixed. Per-crumb coding slices the checked file TPS1 rows, writes no file, counts +56 header bytes; q = 65536 cannot occur for a coded symbol. D4 unchanged | CODER_SPEC.md s8, s9 |
