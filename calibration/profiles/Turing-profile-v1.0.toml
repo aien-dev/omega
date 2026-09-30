@@ -4,7 +4,7 @@
 # calibration/scripts/check_profile.sh can read it with sed. Values are strings unless they are plain integers.
 # The commitment is calibration/profiles/Turing-profile-v1.0.sha256 = SHA-256 over the exact bytes of this file.
 # Any byte change (including this comment) changes the digest. The sidecar is regenerated only at the freeze
-# commit, after every FILL_AT_FREEZE marker below is replaced with a value (check_profile.sh --freeze refuses
+# commit, after every fill-at-freeze placeholder below is replaced with a value (check_profile.sh --freeze refuses
 # any marker). After freeze this file never changes; a change is a new profile id.
 
 profile_id = "Turing-profile-v1.0"
