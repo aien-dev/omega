@@ -18,7 +18,7 @@
  * reported. No coder is called here; the phase-2 hookup fills brw_tps_coder_fn.
  * Range: |mu| < 2^31 and |b| < 2^51 (qint.v1 limit), so |b - centre| < 2^52 bins
  * (2^42 sd at sd_min); 51 classes cover it, anything beyond is refused with a
- * negative code. All masses are log-domain, so z of thousands of sd is fine.
+ * negative code. All masses are log-domain, so z of thousands of sd is fine. */
 #ifndef BRW_TPS_ADAPTER_H
 #define BRW_TPS_ADAPTER_H
 
