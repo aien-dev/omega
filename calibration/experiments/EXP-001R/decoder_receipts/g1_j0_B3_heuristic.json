@@ -1,0 +1,15 @@
+{
+  "schema": "turing.cal.decoder_receipt.v1",
+  "g": 1,
+  "index": 0,
+  "candidate": "B3_heuristic",
+  "profile_digest": "0267bffc758147718e6ee95e40581d9456322dbc92f2cabdd91a01b9b86d74d3",
+  "model_digest": "e729818b8289263e6819b21fc55f944f9d5113e7cfc4419d0badcc27f589f2ae",
+  "dataset_digest": "750fd109eef4bc00d7213d2b93c8c815bf1813b282653fc789b1f8b5632a0e17",
+  "tps1_digest": "9b74ff6a86948747cec78cd6e901625117a039bd1c390ecd055ebcfeb6eb3fa9",
+  "symbols_digest": "af7ae7033af7bb9673fed802a53f965a356f8a5cd48f16b2bb412223c7980992",
+  "count": 2000221,
+  "range": {"coded_sha256": "94b9b09780227e86cfd03823cc8f4cacc7454cab1620bd7edfe96f9682768f5e", "coded_bytes": 702087, "decoded_digest": "af7ae7033af7bb9673fed802a53f965a356f8a5cd48f16b2bb412223c7980992", "lossless": true},
+  "rans": {"coded_sha256": "0d6ed258ca0eaab4506f7e0a1c8507f515f5b211b19da83f5b6d3f22a5e70e46", "coded_bytes": 701857, "decoded_digest": "af7ae7033af7bb9673fed802a53f965a356f8a5cd48f16b2bb412223c7980992", "lossless": true},
+  "same_tps1_for_both_coders": true
+}

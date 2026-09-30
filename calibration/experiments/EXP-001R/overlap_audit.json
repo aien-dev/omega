@@ -1,0 +1,29 @@
+{
+  "schema": "turing.cal.overlap_audit.v1",
+  "freeze_commit": "8e6c5acd9bc8e1f46fa57a878b130f0b9ccd5399",
+  "freeze_commit_time_unix": 1790740813,
+  "profile_digest": "0267bffc758147718e6ee95e40581d9456322dbc92f2cabdd91a01b9b86d74d3",
+  "seed_commitment_sha256": "2ffdd1e54235bbac807c18095fd4fc8456740fdc98c2c2db9b846e3c528f0d77",
+  "dev_list_sha256": "59d3a0789a12ed16ae27efdb605a778c16b206a6084da725dc3f6695c9b12c76",
+  "dev_trace_files": 60,
+  "sealed_trace_files": 6,
+  "degenerate_trace_stream_digests": "8b6c064eb033c7fefb3f1b30e7883f9a454bfd5723dd4f6ccf6e44bcec48cc4d",
+  "ctr1": {"dev_files":60,"dev_records":99057701,"dev_crumbs":9420,"sealed_files":6,"sealed_records":12367907,"sealed_crumbs":1110,"crumb_block_overlap":0,"first_state_overlap":2,"record_body_overlap":0,"gated":["crumb_block_overlap"],"ctr1_gates_pass":true},
+  "g6_rule": "amended: a shared crumb_digest is exempt only if every sealed record carrying it is Ambiguous and its sealed_digest differs from every dev/burned sealed_digest carrying that crumb_digest",
+  "g6_exempt_matches": [
+  ],
+  "gates": {
+    "complete": {"pass": true, "detail": "COMPLETE matches seed_commitment.json"},
+    "integrity": {"pass": true, "detail": "48 kept files re-hashed"},
+    "seeds": {"pass": true, "detail": "6 seeds re-derived"},
+    "after_freeze": {"pass": true, "detail": "0 files not newer than commit time; manifest frozen at commit: 1"},
+    "single_link": {"pass": true, "detail": "0 files with extra hard links"},
+    "crumb_digest": {"pass": true, "detail": "0 shared, 0 exempt (Ambiguous, different hidden set)"},
+    "sealed_digest": {"pass": true, "detail": "0 shared"},
+    "trace_stream": {"pass": true, "detail": "0 shared (degenerate excluded)"},
+    "crumb_block": {"pass": true, "detail": "0 shared"}
+  },
+  "result": "PASS",
+  "failed": "",
+  "generated_utc": "2026-09-30T04:08:32Z"
+}

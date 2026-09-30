@@ -1,0 +1,15 @@
+{
+  "schema": "turing.cal.decoder_receipt.v1",
+  "g": 1,
+  "index": 0,
+  "candidate": "B0_uniform",
+  "profile_digest": "0267bffc758147718e6ee95e40581d9456322dbc92f2cabdd91a01b9b86d74d3",
+  "model_digest": "83c04bdfc10614febd634092355ef03997ed255fde5bdec9a80fe2d8964998ce",
+  "dataset_digest": "750fd109eef4bc00d7213d2b93c8c815bf1813b282653fc789b1f8b5632a0e17",
+  "tps1_digest": "df8108f0b78448d2e9e6a7d5eface7433224f9ed3658d142124f5412e534ebc2",
+  "symbols_digest": "af7ae7033af7bb9673fed802a53f965a356f8a5cd48f16b2bb412223c7980992",
+  "count": 2000221,
+  "range": {"coded_sha256": "c3235815d586dcd9d363b37f6d226ca4509c383892b209b68e0d35b17c195eb6", "coded_bytes": 792740, "decoded_digest": "af7ae7033af7bb9673fed802a53f965a356f8a5cd48f16b2bb412223c7980992", "lossless": true},
+  "rans": {"coded_sha256": "5b31aa026974caaa7e381cfeec6a3233b371a3aa87601c80ae0bb190d809b45c", "coded_bytes": 792490, "decoded_digest": "af7ae7033af7bb9673fed802a53f965a356f8a5cd48f16b2bb412223c7980992", "lossless": true},
+  "same_tps1_for_both_coders": true
+}
