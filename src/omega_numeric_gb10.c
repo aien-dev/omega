@@ -116,9 +116,9 @@ int omega_gb10_execute_simt_op(const char *op_name,
 
     uint32_t qmd0_words[OMEGA_BW_QMD_WORDS];
     uint32_t qmd1_words[OMEGA_BW_QMD_WORDS];
-    omega_blackwell_build_qmd0(qmd0_words, qmd0_va, qmd1_va);
-    omega_blackwell_build_qmd1(qmd1_words, &qmd_cfg);
-    if (omega_blackwell_verify_qmd_invariants(qmd1_words) != 0) {
+    if (omega_blackwell_build_qmd0(qmd0_words, qmd0_va, qmd1_va) != 0 ||
+        omega_blackwell_build_qmd1(qmd1_words, &qmd_cfg) != 0 ||
+        omega_blackwell_verify_qmd_invariants(qmd1_words) != 0) {
         m16_native_close(&ctx);
         return OMEGA_NUMERIC_ERR_DEVICE;
     }

@@ -301,16 +301,23 @@ num_under() {
 # this script's repository or the physics checkout: a receipt written there
 # would dirty the very tree it certifies as clean.
 num_check_evidence_dir() {
-    local omega=$1 d t
+    local omega=$1 d
     d=$(realpath -m "${NUM_EVIDENCE_DIR:-$NUM_EVIDENCE_DEFAULT}") ||
         m19r_fail "cannot resolve evidence directory ${NUM_EVIDENCE_DIR:-$NUM_EVIDENCE_DEFAULT}" || return 1
+    num_outside_trees "$d" "$omega" "evidence directory" || return 1
+    NUM_EVIDENCE_DIR=$d
+}
+
+# num_outside_trees PATH OMEGA WHAT -- refuse PATH (already resolved) when it
+# lies inside the omega tree, this script's repository or the physics checkout.
+num_outside_trees() {
+    local d=$1 omega=$2 what=$3 t
     for t in "$omega" "${M19R_OMEGA:-}" "${M19R_PHYSICS:-}"; do
         [ -n "$t" ] || continue
         if num_under "$d" "$t"; then
-            m19r_fail "evidence directory $d is inside $(realpath -m "$t"); receipts must live outside the candidate trees" || return 1
+            m19r_fail "$what $d is inside $(realpath -m "$t"); receipts must live outside the candidate trees" || return 1
         fi
     done
-    NUM_EVIDENCE_DIR=$d
 }
 
 
@@ -323,21 +330,27 @@ num_tree_clean() {
     fi
 }
 
-# num_keep_blob FILE EXT -- copy FILE into NUM_EVIDENCE_DIR/blobs/<sha256>.EXT
+# num_keep_blob FILE EXT OMEGA -- copy FILE into NUM_EVIDENCE_DIR/blobs/<sha256>.EXT
 # (mode 0444). An existing blob must already hash to that name. Receipts name
 # the gate log, stderr and binary by digest; the digest shows the receipt was
 # not altered, it does not prove who wrote it, so the named bytes are kept
 # beside it for anyone to re-hash and re-check.
 num_keep_blob() {
-    local src=$1 ext=$2 sha dst tmp
+    local src=$1 ext=$2 omega=$3 sha dst tmp bdir
     [ -f "$src" ] || return 0
     sha=$(m19r_sha_file "$src") && dst=$NUM_EVIDENCE_DIR/blobs/$sha.$ext
     mkdir -p "$NUM_EVIDENCE_DIR/blobs" || m19r_fail "cannot create $NUM_EVIDENCE_DIR/blobs" || return 1
+    # blobs/ may be a symlink planted into a candidate tree: resolve it and
+    # check where it really points before anything is written through it.
+    bdir=$(realpath -e "$NUM_EVIDENCE_DIR/blobs") && [ -d "$bdir" ] ||
+        m19r_fail "cannot resolve $NUM_EVIDENCE_DIR/blobs" || return 1
+    num_outside_trees "$bdir" "$omega" "blob directory" || return 1
+    dst=$bdir/$sha.$ext
     if [ -e "$dst" ]; then
         [ "$(m19r_sha_file "$dst")" = "$sha" ] || m19r_fail "blob $dst does not hash to its name" || return 1
         return 0
     fi
-    tmp=$(mktemp "$NUM_EVIDENCE_DIR/blobs/.tmp.XXXXXX") || return 1
+    tmp=$(mktemp "$bdir/.tmp.XXXXXX") || return 1
     cp "$src" "$tmp" && chmod 0444 "$tmp" && [ "$(m19r_sha_file "$tmp")" = "$sha" ] &&
         mv -n "$tmp" "$dst" && [ ! -e "$tmp" ] ||
         { rm -f "$tmp"; m19r_fail "cannot keep blob $dst"; return 1; }
@@ -363,9 +376,9 @@ num_write_receipt() {
     if [ "${NUM_RECORD:-0}" = 1 ]; then
         num_check_evidence_dir "$omega" || return 1
         if [ -n "${NUM_RUN_DIR:-}" ]; then
-            num_keep_blob "$NUM_RUN_DIR/gate5.log" log || return 1
-            num_keep_blob "$NUM_RUN_DIR/gate5.stderr" stderr || return 1
-            num_keep_blob "$NUM_RUN_DIR/test_omega_numeric" bin || return 1
+            num_keep_blob "$NUM_RUN_DIR/gate5.log" log "$omega" || return 1
+            num_keep_blob "$NUM_RUN_DIR/gate5.stderr" stderr "$omega" || return 1
+            num_keep_blob "$NUM_RUN_DIR/test_omega_numeric" bin "$omega" || return 1
         fi
         NUM_PERMANENT=$NUM_EVIDENCE_DIR/$digest.json
         m19r_write_immutable_receipt "$NUM_PERMANENT" <<< "$receipt" || { NUM_PERMANENT=; return 1; }
@@ -414,7 +427,7 @@ num_receipt() {
         m19r_fail "candidate trees not clean at receipt time" || return 1
     [[ $NUM_TS =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$ ]] || m19r_fail "missing UTC timestamp" || return 1
     if [ "${NUM_RECORD:-0}" = 1 ] && [ "$(cd -P "$omega" && pwd)" != "$M19R_OMEGA" ]; then
-        m19r_fail "a PASS receipt is written only into $M19R_OMEGA, not $omega" || return 1
+        m19r_fail "a recorded receipt certifies only the checkout this script runs from ($M19R_OMEGA), not $omega" || return 1
     fi
     pred=null
     [ ! -f "$omega/$NUM_HISTORICAL" ] || pred="\"$(m19r_sha_file "$omega/$NUM_HISTORICAL")\""
@@ -477,15 +490,17 @@ num_qualify() {
     bin=$NUM_RUN_DIR/test_omega_numeric
 
     exec 9> /tmp/aien-gb10.lock || m19r_fail "cannot open /tmp/aien-gb10.lock" || return 1
-    flock -x 9
+    flock -x 9 || { exec 9>&-; m19r_fail "cannot take the GPU lock /tmp/aien-gb10.lock; no build and no device access"; return 1; }
     rc=0
     num_build "$omega" "$M19R_PHYSICS" "$bin" "$NUM_RUN_DIR/build.log" || rc=1
     if [ "$rc" = 0 ]; then
         NUM_BINARY_SHA=$(m19r_sha_file "$bin")
-        m19r_git "$omega" rev-parse HEAD && NUM_RUN_COMMIT=$M19R_GIT
+        if m19r_git "$omega" rev-parse HEAD; then NUM_RUN_COMMIT=$M19R_GIT; else rc=1; m19r_fail "cannot read the omega HEAD commit"; fi
         NUM_TS=$(date -u +%Y-%m-%dT%H:%M:%S.%6NZ)
-        num_execute "$omega" "$bin" || rc=1
-        echo "gate binary exit status $NUM_EXEC_RC" >> "$NUM_RUN_DIR/build.log"
+        if [ "$rc" = 0 ]; then
+            num_execute "$omega" "$bin" || rc=1
+            echo "gate binary exit status $NUM_EXEC_RC" >> "$NUM_RUN_DIR/build.log"
+        fi
     fi
     exec 9>&-
     [ "$rc" = 0 ] || return 1

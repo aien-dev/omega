@@ -673,9 +673,9 @@ int main(void) {
             }
         }
         int caught = 0, cases = 0;
-        for (int m = 0; m < 27; m++) {
+        for (int m = 0; m < 32; m++) {
             OmegaNumericOp op = OMEGA_NOP_LDS_STS;
-            if (m >= 18) op = OMEGA_NOP_REDUCE_SUM;
+            if (m >= 18 && m != 27 && m != 31) op = OMEGA_NOP_REDUCE_SUM;
             if (m == 17) op = OMEGA_NOP_SHFL_DOWN;
             OmegaNumericPatchInsn p[OMEGA_NUMERIC_PATCH_MAX];
             int n = omega_numeric_patch_words(op, p);
@@ -717,6 +717,11 @@ int main(void) {
             case 24: what = "FADD adds R5"; p[5].w[1] = 5u; want = "does not add the shuffled"; break;
             case 25: what = "FADD writes R3"; p[1].w[0] = 0x02037221u; want = "writes R3"; break;
             case 26: what = "STG replaced by EXIT"; p[10] = p[11]; want = "is not stored"; break;
+            case 27: what = "STS stores R5 instead of a[i] in R2"; p[2].w[1] = 5u; want = "not the input value R2"; break;
+            case 28: what = "sum stored through address R8"; p[10].w[0] = 0x08007986u; want = "STG.E desc[UR4][R6.64]"; break;
+            case 29: what = "sum store predicated on P0"; p[10].w[0] = 0x06000986u; want = "STG.E desc[UR4][R6.64]"; break;
+            case 30: what = "sum store width changed"; p[10].w[2] ^= 0x00000200u; want = "STG.E desc[UR4][R6.64]"; break;
+            case 31: what = "LDS_STS result stored through address R8"; p[5].w[0] = 0x08007986u; want = "STG.E desc[UR4][R6.64]"; break;
             }
             char err[256];
             int rc = omega_numeric_check_patch(check_op, p, n, q, err, sizeof(err));

@@ -347,6 +347,13 @@ check "  named by its digest, mode 0444" '[ "$(jq "del(.receipt_digest)" "$prec"
 check "  a second record of the same PASS refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ "$(ls "$EVD"/*.json | wc -l)" = 1 ]'
 NUM_EVIDENCE_DIR=$omega/evidence/OMEGA-NUMERIC-0
 check "PASS receipt into an in-tree evidence directory refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
+# Review finding: blobs/ planted as a symlink into the candidate tree. The
+# evidence directory itself is outside; only blobs/ points in.
+EVS=$TMP/evidence-symlinked; mkdir -p "$EVS" "$omega/planted"; ln -s "$omega/planted" "$EVS/blobs"
+NUM_EVIDENCE_DIR=$EVS
+check "blobs/ symlinked into the omega tree refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [[ $M19R_ERR == "blob directory "*"inside"* ]]'
+check "  nothing written through the link, no receipt" '[ -z "$(ls -A "$omega/planted")" ] && ! ls "$EVS"/*.json >/dev/null 2>&1'
+rm -rf "$EVS" "$omega/planted"
 NUM_EVIDENCE_DIR=$EVD M19R_OMEGA=$keep_m19r
 rm -f "$prec" 2>/dev/null || { chmod u+w "$EVD"; rm -f "$prec"; }
 
@@ -372,6 +379,27 @@ check "failure path (num_main) removes the PASS preview and records FAIL" 'num_o
 urec=$TMP/immut/unit.json
 check "immutable writer: first write" 'printf "{\"unit_test\":true,\"status\":\"PASS\"}" | m19r_write_immutable_receipt "$urec"'
 check "immutable writer: overwrite refused, bytes kept" '! printf "{\"unit_test\":true,\"status\":\"FAIL\"}" | m19r_write_immutable_receipt "$urec" && [ "$(jq -r .status "$urec")" = PASS ]'
+
+echo "GPU lock (flock) failure stops the run before any build or device access"
+# qual_probe FLOCK_RC -- run num_qualify with flock, build and execute stubbed;
+# the stubs leave marker files so the test sees how far the run got.
+qual_probe() {
+    rm -f "$TMP/probe.built" "$TMP/probe.ran"
+    (
+        M19R_OMEGA=$omega NUM_RUN_ID=unit-flock NUM_RUN_DIR=$TMP/run-flock
+        mkdir -p "$NUM_RUN_DIR"
+        flock() { return "$FLOCK_RC"; }
+        eval "real_m19r_git() $(declare -f m19r_git | tail -n +2)"
+        m19r_git() { [ -z "${GIT_BROKEN:-}" ] || return 1; real_m19r_git "$@"; }
+        num_build() { touch "$TMP/probe.built"; [ -n "${PROBE_BUILD_OK:-}" ] || return 1; : > "$3"; [ -n "${GIT_OK:-}" ] || GIT_BROKEN=1; }
+        num_execute() { touch "$TMP/probe.ran"; return 1; }
+        FLOCK_RC=$1 num_qualify
+    )
+}
+check "control: with the lock taken, the run reaches the build" '! qual_probe 0 && [ -e "$TMP/probe.built" ] && [ ! -e "$TMP/probe.ran" ]'
+check "lock failure: run refused, nothing built, nothing run on the device" '! qual_probe 1 && [ ! -e "$TMP/probe.built" ] && [ ! -e "$TMP/probe.ran" ]'
+check "HEAD unreadable after the build: run refused before the device" '! PROBE_BUILD_OK=1 qual_probe 0 && [ -e "$TMP/probe.built" ] && [ ! -e "$TMP/probe.ran" ]'
+check "  control: with HEAD readable the run reaches the device" '! PROBE_BUILD_OK=1 GIT_OK=1 qual_probe 0 && [ -e "$TMP/probe.ran" ]'
 
 if [ "$fails" -ne 0 ]; then
     echo "Gate 5 qualifier tests: $fails FAILED"

@@ -643,6 +643,9 @@ static int bad(char *err, size_t err_len, const char *fmt, ...) {
 #define OPC_SHFL 0x7f89u
 #define OPC_FADD 0x7221u
 #define OPC_STG  0x7986u
+#define W_STG_WORD0 0x06007986u /* STG.E desc[UR4][R6.64], R9: address R6:R7, predicate PT */
+#define W_STG_WORD1 0x00000009u /* value R9, offset 0 */
+#define W_STG_WORD2 0x0c101904u /* 32-bit width, descriptor UR4 */
 
 #define SHFL_DELTA(p) (((p).w[1] >> 21) & 0x1fu)
 #define SHFL_CLAMP(p) (((p).w[1] >> 8) & 0x1fu)
@@ -668,6 +671,8 @@ int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *p,
         } else if (o == OPC_BAR) {
             if (p[t].w[0] != 0x00007b1du || p[t].w[1] != 0 || p[t].w[2] != 0x00010000u) return bad(err, err_len, "%s: barrier at %d is not BAR.SYNC 0", name, t); /* CHECK:bar_form */
             bar = t; n_bar++;
+        } else if ((p[t].w[0] & 0x0fffu) == (OPC_STG & 0x0fffu)) {
+            if (p[t].w[0] != W_STG_WORD0 || p[t].w[1] != W_STG_WORD1 || p[t].w[2] != W_STG_WORD2) return bad(err, err_len, "%s: store at %d is not the unpredicated STG.E desc[UR4][R6.64], R9 (32-bit, no offset)", name, t); /* CHECK:stg_form */
         } else if (o == OPC_SHF) {
             shf = t;
         } else if (o == OPC_LOP3) {
@@ -689,10 +694,11 @@ int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *p,
         if (n_sts != 1 || n_lds != 1 || n_bar != 1) return bad(err, err_len, "%s: expected one STS, one BAR.SYNC, one LDS (got %d, %d, %d)", name, n_sts, n_bar, n_lds); /* CHECK:shared_counts */
         if (!(sts < bar && bar < lds)) return bad(err, err_len, "%s: order must be STS, BAR.SYNC, LDS (at %d, %d, %d)", name, sts, bar, lds); /* CHECK:shared_order */
         if (barriers < 1u) return bad(err, err_len, "%s: QMD declares %u barriers; BAR.SYNC 0 needs at least 1", name, barriers); /* CHECK:qmd_barrier */
-        if (tx != OMEGA_NUMERIC_CTA_THREADS || (tx & (tx - 1u)) != 0) return bad(err, err_len, "%s: QMD CTA width %u is not the %u-thread power-of-two CTA", name, tx, OMEGA_NUMERIC_CTA_THREADS); /* CHECK:qmd_cta */
+        if (tx != OMEGA_NUMERIC_CTA_THREADS) return bad(err, err_len, "%s: QMD CTA width %u is not the %u-thread CTA", name, tx, OMEGA_NUMERIC_CTA_THREADS); /* CHECK:qmd_cta */
         if (need > shared_bytes) return bad(err, err_len, "%s: needs %u bytes of shared memory, QMD declares %u", name, need, shared_bytes); /* CHECK:qmd_shared_size */
         if (shf < 0 || shf > sts || INSN_SRCA(p[shf]) != 0u || p[shf].w[1] != 2u || p[shf].w[2] != 0x000006ffu) return bad(err, err_len, "%s: STS address is not SHF.L.U32 of R0 (tid.x) by 2", name); /* CHECK:addr_shift */
         if (INSN_SRCA(p[sts]) != INSN_DST(p[shf])) return bad(err, err_len, "%s: STS address register R%u is not the shifted tid R%u", name, INSN_SRCA(p[sts]), INSN_DST(p[shf])); /* CHECK:sts_addr_reg */
+        if (INSN_SRCB(p[sts]) != 2u) return bad(err, err_len, "%s: STS stores R%u, not the input value R2 (a[i])", name, INSN_SRCB(p[sts])); /* CHECK:sts_value_reg */
         if (lop < 0 || lop > lds || INSN_SRCA(p[lop]) != INSN_DST(p[shf]) || p[lop].w[2] != 0x078e3cffu) return bad(err, err_len, "%s: LDS address is not LOP3 XOR of the shifted tid", name); /* CHECK:lop3_form */
         if (p[lop].w[1] != (tx - 1u) * 4u) return bad(err, err_len, "%s: LDS address mask 0x%x is not (CTA-1)*4 = 0x%x (out of bounds or wrong partner)", name, p[lop].w[1], (tx - 1u) * 4u); /* CHECK:lop3_mask */
         if (INSN_SRCA(p[lds]) != INSN_DST(p[lop]) || INSN_DST(p[lds]) != 9u) return bad(err, err_len, "%s: LDS must load [R%u] into R9", name, INSN_DST(p[lop])); /* CHECK:lds_regs */
@@ -716,7 +722,7 @@ int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *p,
             if (INSN_SRCA(*fa) != acc || INSN_SRCB(*fa) != INSN_DST(*sh)) return bad(err, err_len, "%s: FADD of step %d does not add the shuffled value to the running sum", name, s); /* CHECK:reduce_fadd_srcs */
             if (INSN_DST(*fa) != (s == 4 ? 9u : acc)) return bad(err, err_len, "%s: FADD of step %d writes R%u", name, s, INSN_DST(*fa)); /* CHECK:reduce_fadd_dst */
         }
-        if (INSN_OP(p[10]) != OPC_STG || p[10].w[1] != 9u) return bad(err, err_len, "%s: the sum in R9 is not stored", name); /* CHECK:reduce_store */
+        if (p[10].w[0] != W_STG_WORD0 || p[10].w[1] != W_STG_WORD1 || p[10].w[2] != W_STG_WORD2) return bad(err, err_len, "%s: the sum in R9 is not stored by STG.E desc[UR4][R6.64] (unpredicated, 32-bit)", name); /* CHECK:reduce_store */
     }
     return OMEGA_NUMERIC_OK;
 }

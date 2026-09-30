@@ -168,7 +168,9 @@ test-m19r-qualify:
 NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c \
                    src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
                    src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
-build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) src/omega_numeric.h src/omega_numeric_provenance.h
+NUMERIC_CPU_HDRS = src/omega_numeric.h src/omega_numeric_provenance.h tests/numeric_oracle.h \
+                   src/omega_blackwell_qmd.h src/omega_blackwell_codegen.h src/omega_blackwell_encoder.h src/sha256.h
+build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) $(NUMERIC_CPU_HDRS)
 	@mkdir -p build
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(NUMERIC_CPU_SRCS)
 # test-numeric-cpu exit status: 0 means no host test failed and the only SKIPs
