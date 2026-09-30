@@ -48,7 +48,7 @@ Nothing here is frozen yet; the freeze follows BLINDING_PROTOCOL.md section 2.
 | G12 | BLAKE3 chain not checked | Accepted. Integrity is pinned by the dataset manifest SHA-256 of every trace file; no BLAKE3 in the tree | DATA_FORMAT.md s1 |
 | G13 | Small models cannot be rebuilt by an outsider | Accepted, same reason as G4: scoring is independent, model bytes are hash-pinned | candidate_manifest.json |
 
-## Not changed
+## Notes and follow-up fixes
 
 - runtime_digest stays FILL_AT_FREEZE (seven binaries); it is filled only in C_f.
 - No sealed data were generated and nothing was frozen in this round.
