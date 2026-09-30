@@ -39,8 +39,26 @@ static void report(const char *name, int ok) {
     else    { g_failed++; printf("[FAIL] %s\n", name); }
 }
 
+/* Test IDs that only a GB10 chip can decide. The CPU-only build (make
+ * test-numeric-cpu) must SKIP exactly these and nothing else. */
+static const char *const CHIP_ONLY_IDS[] = {
+    "CPU_GB10_BIT_PARITY", "SUBNORMALS_PRESERVED_NO_FTZ", "MUFU_SEED_ONLY_NOT_COMPARED",
+    "EDGE_CLASS_BEHAVIOR_VERIFIED", "HARDWARE_DESCRIPTOR_PROBED",
+};
+#define CHIP_ONLY_COUNT (sizeof(CHIP_ONLY_IDS) / sizeof(CHIP_ONLY_IDS[0]))
+static bool g_chip_only_skipped[CHIP_ONLY_COUNT];
+static int g_undeclared_skips = 0;
+
 static void skip(const char *name, const char *why) {
     g_skipped++;
+    bool declared = false;
+    for (size_t k = 0; k < CHIP_ONLY_COUNT; k++) {
+        if (strcmp(name, CHIP_ONLY_IDS[k]) == 0 && !g_chip_only_skipped[k]) {
+            g_chip_only_skipped[k] = true;
+            declared = true;
+        }
+    }
+    if (!declared) g_undeclared_skips++;
     printf("[SKIP] %s (%s)\n", name, why);
 }
 
@@ -222,7 +240,7 @@ static TierResult cpu_tier(OmegaNumericOp op) {
             }
             print_parity_json(info->name, "cpu", "BIT_EXACT_IEEE_TARGET", 0, false, N, &t, NULL);
         } else {
-            omega_numeric_parity(op, g_ref, g_cpu, N, &t);
+            if (omega_numeric_parity(op, g_ref, g_cpu, N, &t) != 0) { tr.ok = false; continue; }
             ClassTrace ct;
             class_trace(op, g_a, g_ref, g_cpu, N, &ct);
             print_parity_json(info->name, "cpu", omega_numeric_compare_name(info->compare),
@@ -245,8 +263,14 @@ static TierResult gb10_tier(OmegaNumericOp op, bool *class_ok) {
     for (size_t l = 0; l < launches; l++) {
         const float *c = NULL;
         if (op == OMEGA_NOP_FFMA) { fill_c(g_c, FFMA_C[l]); c = g_c; }
-        omega_numeric_reference(op, g_a, g_b, c, g_ref, N);
-        int rc = omega_gb10_execute_simt_op(info->name, g_a, info->arity >= 2 ? g_b : NULL, c, g_dev, N);
+        int rc = omega_numeric_reference(op, g_a, g_b, c, g_ref, N);
+        if (rc != 0) {
+            printf("OMEGA_NUMERIC_PARITY_JSON:{\"op\":\"%s\",\"tier\":\"gb10\",\"error\":%d,\"stage\":\"reference\"}\n", info->name, rc);
+            tr.ok = false;
+            *class_ok = false;
+            continue;
+        }
+        rc = omega_gb10_execute_simt_op(info->name, g_a, info->arity >= 2 ? g_b : NULL, c, g_dev, N);
         if (rc != 0) {
             printf("OMEGA_NUMERIC_PARITY_JSON:{\"op\":\"%s\",\"tier\":\"gb10\",\"error\":%d}\n", info->name, rc);
             tr.ok = false;
@@ -255,12 +279,23 @@ static TierResult gb10_tier(OmegaNumericOp op, bool *class_ok) {
         }
         OmegaParityTrace t;
         if (info->compare == OMEGA_CMP_SEED_BOUND) {
-            omega_numeric_seed_bound(op, g_a, g_dev, N, &t);
+            rc = omega_numeric_seed_bound(op, g_a, g_dev, N, &t);
+            if (rc != 0) {
+                printf("OMEGA_NUMERIC_PARITY_JSON:{\"op\":\"%s\",\"tier\":\"gb10\",\"error\":%d,\"stage\":\"seed_bound\"}\n", info->name, rc);
+                tr.ok = false;
+                continue;
+            }
             print_bound_json(info->name, "gb10", N, &t);
             if (t.out_of_bound || t.checked == 0) tr.ok = false;
             continue;
         }
-        omega_numeric_parity(op, g_ref, g_dev, N, &t);
+        rc = omega_numeric_parity(op, g_ref, g_dev, N, &t);
+        if (rc != 0) {
+            printf("OMEGA_NUMERIC_PARITY_JSON:{\"op\":\"%s\",\"tier\":\"gb10\",\"error\":%d,\"stage\":\"parity\"}\n", info->name, rc);
+            tr.ok = false;
+            *class_ok = false;
+            continue;
+        }
         ClassTrace ct;
         class_trace(op, g_a, g_ref, g_dev, N, &ct);
         print_parity_json(info->name, "gb10", omega_numeric_compare_name(info->compare),
@@ -554,14 +589,14 @@ int main(void) {
         size_t div_bad = 0, sqrt_bad = 0;
         if (omega_numeric_reference(OMEGA_NOP_DIV, g_a, g_b, NULL, g_ref, N) == 0 &&
             omega_numeric_cpu_realize(OMEGA_NOP_DIV, g_a, g_b, NULL, g_cpu, N) == 0) {
-            omega_numeric_parity(OMEGA_NOP_DIV, g_ref, g_cpu, N, &t);
+            if (omega_numeric_parity(OMEGA_NOP_DIV, g_ref, g_cpu, N, &t) != 0) { seq_ok = 0; t.mismatches = 1; }
             ClassTrace ct; class_trace(OMEGA_NOP_DIV, g_a, g_ref, g_cpu, N, &ct);
             print_parity_json("DIV", "cpu", "BIT_EXACT", 0, false, N, &t, &ct);
             div_bad = t.mismatches;
         } else seq_ok = 0;
         if (omega_numeric_reference(OMEGA_NOP_SQRT, g_a, NULL, NULL, g_ref, N) == 0 &&
             omega_numeric_cpu_realize(OMEGA_NOP_SQRT, g_a, NULL, NULL, g_cpu, N) == 0) {
-            omega_numeric_parity(OMEGA_NOP_SQRT, g_ref, g_cpu, N, &t);
+            if (omega_numeric_parity(OMEGA_NOP_SQRT, g_ref, g_cpu, N, &t) != 0) { seq_ok = 0; t.mismatches = 1; }
             ClassTrace ct; class_trace(OMEGA_NOP_SQRT, g_a, g_ref, g_cpu, N, &ct);
             print_parity_json("SQRT", "cpu", "BIT_EXACT", 0, false, N, &t, &ct);
             sqrt_bad = t.mismatches;
@@ -649,7 +684,7 @@ int main(void) {
             ord_ok = 0;
         } else {
             OmegaParityTrace t;
-            omega_numeric_parity(OMEGA_NOP_REDUCE_SUM, g_ref, g_cpu, N, &t);
+            if (omega_numeric_parity(OMEGA_NOP_REDUCE_SUM, g_ref, g_cpu, N, &t) != 0) ord_ok = 0;
             print_parity_json("REDUCE_SUM", "cpu", "BIT_EXACT", 0, false, N, &t, NULL);
             if (t.mismatches || t.checked != N / 32) ord_ok = 0;
         }
@@ -675,6 +710,7 @@ int main(void) {
         skip("SUBNORMALS_PRESERVED_NO_FTZ", "needs GB10");
         skip("MUFU_SEED_ONLY_NOT_COMPARED", "needs GB10");
         skip("EDGE_CLASS_BEHAVIOR_VERIFIED", "needs GB10");
+        skip("HARDWARE_DESCRIPTOR_PROBED", "needs GB10");
     }
 #ifndef OMEGA_NUMERIC_CPU_ONLY
     else {
@@ -825,15 +861,35 @@ int main(void) {
     }
     {
         /* Comparator sanity: one flipped low bit, and NaN vs number, are caught */
-        omega_numeric_reference(OMEGA_NOP_FADD, g_a, g_b, NULL, g_ref, N);
+        int ref_rc = omega_numeric_reference(OMEGA_NOP_FADD, g_a, g_b, NULL, g_ref, N);
         memcpy(g_cpu, g_ref, sizeof(g_cpu));
         g_cpu[3500] = F(U(g_cpu[3500]) ^ 1u);
         g_cpu[3600] = F(0x7fc00000u);
         OmegaParityTrace t;
-        omega_numeric_parity(OMEGA_NOP_FADD, g_ref, g_cpu, N, &t);
-        report("NEG_COMPARATOR_CATCHES_ONE_BIT", t.mismatches == 2 && t.first_index == 3500);
+        int par_rc = omega_numeric_parity(OMEGA_NOP_FADD, g_ref, g_cpu, N, &t);
+        report("NEG_COMPARATOR_CATCHES_ONE_BIT", ref_rc == 0 && par_rc == 0 &&
+               t.mismatches == 2 && t.first_index == 3500);
     }
 
     printf("\nGate 5 Results: TOTAL=%d PASSED=%d FAILED=%d SKIPPED=%d\n", g_total, g_passed, g_failed, g_skipped);
-    return g_failed == 0 ? 0 : 1;
+    /*
+     * Exit status. 0: nothing failed and every SKIP is accounted for.
+     * 1: a real failure (a FAIL, or a SKIP that is not allowed here).
+     * CPU-only build: the SKIPs must be exactly the CHIP_ONLY_IDS (the known
+     * gap a host cannot close). Chip build: no SKIP is allowed at all.
+     */
+    size_t chip_only_seen = 0;
+    for (size_t k = 0; k < CHIP_ONLY_COUNT; k++) chip_only_seen += g_chip_only_skipped[k];
+#ifdef OMEGA_NUMERIC_CPU_ONLY
+    bool gap_ok = g_undeclared_skips == 0 && chip_only_seen == CHIP_ONLY_COUNT;
+    const char *build = "cpu-only";
+#else
+    bool gap_ok = g_skipped == 0;
+    const char *build = "chip";
+#endif
+    const char *verdict = g_failed ? "HOST_REGRESSION" : !gap_ok ? "UNDECLARED_SKIP"
+                        : g_skipped ? "PASS_EXCEPT_DECLARED_CHIP_ONLY" : "PASS";
+    printf("Gate 5 Verdict: %s (build %s, declared chip-only skips %zu of %zu, undeclared skips %d)\n",
+           verdict, build, chip_only_seen, CHIP_ONLY_COUNT, g_undeclared_skips);
+    return (g_failed == 0 && gap_ok) ? 0 : 1;
 }

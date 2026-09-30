@@ -171,6 +171,11 @@ NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_nume
 build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) src/omega_numeric.h src/omega_numeric_provenance.h
 	@mkdir -p build
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(NUMERIC_CPU_SRCS)
+# test-numeric-cpu exit status: 0 means no host test failed and the only SKIPs
+# are the five declared chip-only IDs (CHIP_ONLY_IDS in the test; the last line
+# prints "Gate 5 Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY"). Nonzero means a real
+# host regression (verdict HOST_REGRESSION) or a SKIP nobody declared
+# (UNDECLARED_SKIP). The chip build allows no SKIP at all.
 test-numeric-cpu: build/test_omega_numeric_cpu
 	./build/test_omega_numeric_cpu
 
