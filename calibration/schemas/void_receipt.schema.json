@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "turing.cal.void_receipt.v1",
+  "title": "Turing-profile-v1.0 void receipt",
+  "description": "One VOID attempt of EXP-001: an infrastructure failure BEFORE any sealed score exists (no verdict). All void receipts of the sealed experiment share one numbered sequence in one directory, <eval root>/<C_f>/run/bundle/void_receipt_<n>.json (eval root ~/aien-data/turing-cal/eval), n = first free number, exclusive create, never overwritten. Three writers use it: generate_sealed_data.sh (stage generation), record_void.sh for a failed frozen-tree test at BLINDING_PROTOCOL.md step 7 (stage tests), and turing-cal-eval run (stage evaluation). The receipt with n = 3 also writes final_receipt.json (terminal_receipt schema, kind inconclusive_infra, verdict INCONCLUSIVE, reason INFRA), which ends EXP-001. A retry of a stage must repeat that stage's first void attempt byte for byte (command and inputs). A dry run writes void receipts in its own --out and never ends anything. Refusal codes: calibration/docs/EVALUATOR.md section 3; rule: calibration/docs/FAILURE_REPORTING.md section 2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "experiment", "kind", "stage", "dry_run", "created_utc", "attempt", "step", "code", "reason", "command", "inputs", "profile_digest", "freeze_commit", "candidate_manifest_sha256"],
+  "properties": {
+    "schema": {"const": "turing.cal.void_receipt.v1"},
+    "experiment": {"const": "EXP-001"},
+    "kind": {"const": "void"},
+    "stage": {"enum": ["generation", "tests", "evaluation"]},
+    "dry_run": {"type": "boolean"},
+    "created_utc": {"type": "string"},
+    "attempt": {"type": "integer", "minimum": 1, "description": "position in the one EXP-001 void sequence (all stages counted together)"},
+    "step": {"type": "string"},
+    "code": {"type": "string"},
+    "reason": {"type": "string"},
+    "command": {"type": "string", "description": "the exact command, argv joined by single spaces (quote, backslash and control characters replaced by an apostrophe)"},
+    "inputs": {"type": "string", "description": "evaluation: 'turing-cal-eval <sha256> manifest <sha256> dataset <sha256> overlap <sha256|NONE>'; generation: 'crumbs <sha256> learner <sha256|NONE> profile <sha256>'; tests: free text naming the tree tested"},
+    "profile_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$", "description": "SHA-256 of the profile file the attempt read"},
+    "freeze_commit": {"type": "string", "pattern": "^([0-9a-f]{40}|DRY_RUN)$", "description": "C_f; DRY_RUN in a development dry run"},
+    "candidate_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

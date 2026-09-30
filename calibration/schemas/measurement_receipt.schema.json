@@ -1,0 +1,479 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "turing.cal.measurement_receipt.v1",
+  "title": "Turing-profile-v1.0 measurement receipt",
+  "description": "One receipt per scored run: final (sealed), dry_run (development data, never evidence) or independent (lane D). A refused run writes a void receipt instead (void_receipt.schema.json). Written by turing-cal-eval (calibration/docs/EVALUATOR.md). Integers are exact: ub = micro-bits (1 bit = 1000000 ub). No sealed data bytes appear in a receipt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "experiment",
+    "kind",
+    "EXP_001_COMPRESSION_BRIDGE",
+    "verdict",
+    "run_id",
+    "created_utc",
+    "started_utc",
+    "scored_utc",
+    "profile",
+    "freeze",
+    "roots",
+    "runtime_sha256",
+    "sealed",
+    "groups",
+    "criteria",
+    "refusals",
+    "deviations",
+    "signed_by",
+    "notebook"
+  ],
+  "definitions": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha256_or_none": {
+      "type": "string",
+      "pattern": "^([0-9a-f]{64}|NONE)$"
+    },
+    "ub": {
+      "type": "integer"
+    },
+    "interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "point_ub",
+        "lo_ub",
+        "hi_ub"
+      ],
+      "properties": {
+        "point_ub": {
+          "$ref": "#/definitions/ub"
+        },
+        "lo_ub": {
+          "$ref": "#/definitions/ub"
+        },
+        "hi_ub": {
+          "$ref": "#/definitions/ub"
+        }
+      }
+    },
+    "coded": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "coder",
+        "coded_bytes",
+        "coded_bits",
+        "decoded_ok",
+        "overhead_ub",
+        "inside_envelope"
+      ],
+      "properties": {
+        "coder": {
+          "type": "string"
+        },
+        "coded_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coded_bits": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coded_sha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "decoded_ok": {
+          "type": "boolean"
+        },
+        "overhead_ub": {
+          "$ref": "#/definitions/ub"
+        },
+        "inside_envelope": {
+          "type": "boolean"
+        },
+        "t_vs_b2": {
+          "$ref": "#/definitions/interval"
+        }
+      }
+    },
+    "candidate_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "model_digest",
+        "lm_bits",
+        "ld_ideal_ub",
+        "per_crumb_sum_equals_file",
+        "t_vs_b2_ideal",
+        "coded"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "model_digest": {
+          "$ref": "#/definitions/sha256"
+        },
+        "lm_bits": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ld_ideal_ub": {
+          "$ref": "#/definitions/ub"
+        },
+        "per_crumb_sum_equals_file": {
+          "type": "boolean"
+        },
+        "t_vs_b2_ideal": {
+          "$ref": "#/definitions/interval"
+        },
+        "t_vs_other_baselines": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/interval"
+          }
+        },
+        "coded": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/coded"
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "schema": {
+      "const": "turing.cal.measurement_receipt.v1"
+    },
+    "experiment": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "final",
+        "dry_run",
+        "independent"
+      ]
+    },
+    "EXP_001_COMPRESSION_BRIDGE": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "INCONCLUSIVE",
+        "DRY_RUN_NOT_EVIDENCE"
+      ],
+      "description": "The verdict for kind final; DRY_RUN_NOT_EVIDENCE for kind dry_run whatever the criteria say."
+    },
+    "verdict": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "INCONCLUSIVE"
+      ],
+      "description": "The verdict rule (FAILURE_REPORTING.md section 2) applied to the criteria; for a dry run it is informational only."
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "started_utc": {
+      "type": "string"
+    },
+    "scored_utc": {
+      "type": "string"
+    },
+    "signed_by": {
+      "type": "string"
+    },
+    "created_utc": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "sidecar_matches"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "sidecar_matches": {
+          "type": "boolean"
+        }
+      }
+    },
+    "freeze": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit",
+        "status",
+        "frozen_at",
+        "candidate_manifest_sha256",
+        "preregistration_sha256"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|NONE)$",
+          "description": "C_f, the freeze commit (dataset manifest freeze_commit); NONE only in a dry run"
+        },
+        "origin_main_checked": {
+          "type": "string",
+          "description": "origin/main commit the ancestor check ran against; NONE in a dry run"
+        },
+        "status": {
+          "enum": [
+            "frozen",
+            "draft"
+          ],
+          "description": "draft only in a dry run"
+        },
+        "frozen_at": {
+          "type": "string",
+          "description": "UTC from freeze_candidate.sh --freeze; NONE only in a dry run"
+        },
+        "candidate_manifest_sha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "preregistration_sha256": {
+          "$ref": "#/definitions/sha256"
+        }
+      }
+    },
+    "roots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_root",
+        "dataset_root",
+        "probability_root",
+        "coding_root",
+        "analysis_root"
+      ],
+      "properties": {
+        "candidate_root": {
+          "$ref": "#/definitions/sha256"
+        },
+        "dataset_root": {
+          "$ref": "#/definitions/sha256"
+        },
+        "probability_root": {
+          "$ref": "#/definitions/sha256"
+        },
+        "coding_root": {
+          "$ref": "#/definitions/sha256"
+        },
+        "analysis_root": {
+          "$ref": "#/definitions/sha256"
+        }
+      }
+    },
+    "runtime_sha256": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/definitions/sha256"
+      }
+    },
+    "sealed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dataset_id",
+        "split",
+        "dataset_manifest_sha256",
+        "seed_commitment_sha256",
+        "manifest_sha256",
+        "complete_utc",
+        "overlap_audit_pass"
+      ],
+      "properties": {
+        "dataset_id": {
+          "type": "string"
+        },
+        "split": {
+          "enum": [
+            "sealed_test",
+            "development"
+          ]
+        },
+        "dataset_manifest_sha256": {
+          "$ref": "#/definitions/sha256"
+        },
+        "seed_commitment_sha256": {
+          "$ref": "#/definitions/sha256_or_none"
+        },
+        "manifest_sha256": {
+          "$ref": "#/definitions/sha256_or_none"
+        },
+        "complete_utc": {
+          "type": "string"
+        },
+        "overlap_audit_pass": {
+          "type": "boolean"
+        }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "g",
+          "seeds",
+          "stream_sha256",
+          "crumbs",
+          "events",
+          "bootstrap_seed",
+          "resamples",
+          "candidates"
+        ],
+        "properties": {
+          "g": {
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "seeds": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "stream_sha256": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/sha256"
+            }
+          },
+          "crumbs": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "events": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "bootstrap_seed": {
+            "type": "string",
+            "pattern": "^0x[0-9A-Fa-f]{16}$"
+          },
+          "resamples": {
+            "const": 10000
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/candidate_result"
+            }
+          }
+        }
+      }
+    },
+    "criteria": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "S1",
+        "S2",
+        "S3",
+        "S4",
+        "S5",
+        "S6",
+        "S7",
+        "S8",
+        "S9"
+      ],
+      "patternProperties": {
+        "^S[1-9]$": {
+          "enum": [
+            "PASS",
+            "FAIL",
+            "INCONCLUSIVE",
+            "NOT_REACHED",
+            "NOT_CHECKED"
+          ]
+        }
+      },
+      "description": "INCONCLUSIVE only for S6, S7, S9; NOT_CHECKED only for S2 in a dry run; NOT_REACHED counts as FAIL"
+    },
+    "refusals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "step",
+          "code",
+          "reason"
+        ],
+        "properties": {
+          "step": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "deviations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "void_attempts_cited": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "notes": {
+      "type": "string"
+    },
+    "notebook": {
+      "type": "object",
+      "description": "Notebook record (lab protocol, notebook record): operator = git user.name of --repo, host = hostname, kernel = uname sysname release machine, commit = HEAD of --repo, tree_clean = git status --porcelain empty. A non-dry run refuses (DIRTY_TREE) unless tree_clean is true.",
+      "required": [
+        "operator",
+        "host",
+        "kernel",
+        "commit",
+        "tree_clean"
+      ],
+      "properties": {
+        "operator": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "kernel": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{40}|UNKNOWN)$"
+        },
+        "tree_clean": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
