@@ -1,0 +1,93 @@
+{
+  "receipt": "est_eval_v1",
+  "protocol": "EST23_PROTOCOL_V1",
+  "protocol_commit": "f96dc97",
+  "protocol_doc_sha256": "dbd2a407a8cf12d353f9abff5d26985fb2f9d96f6d33872896169082c6082676",
+  "protocol_doc_matches_frozen_constant": true,
+  "interpretations_sha256": "30151cccc694ff9d13ffd350d014f8da6da34e414d1d46e6cb2b6f2e436c6333",
+  "tool_commit": "44f591b2b2d4c4aca37bb6a737662bd0129b05d3",
+  "tool_dirty": 0,
+  "eval_binary_sha256": "898bb6ba09d66e126df955ff9f46659d14f48a3e5003df26afb2a3e7805c40cb",
+  "recorded": true,
+  "synthetic_test": false,
+  "parameter_file": "docs/estimation/receipts/est23-v1/params.txt",
+  "parameter_file_sha256": "37a709480a3fc6ce3ea5f728cce8c44057312f6c1843fc8acd350f4b0bdf4ecd",
+  "parameter_file_validated_on_grid": true,
+  "fit_run_path": "evidence/R15/raw/20260929T020536Z-ad8e1f2ea4e4-silicon/machine-state.ndjson",
+  "fit_file_sha256": "6df4a2b079482b79c42da84da5627b6a8fb9c7d3ce885aac53437b0199d517db",
+  "fit_file_is_run_A": true,
+  "fit_sha_matches_run_A_SHA256SUMS_line": true,
+  "input_file": "evidence/R15/raw/20260929T025735Z-3e9e53be3358-silicon/machine-state.ndjson",
+  "input_file_sha256": "91a5fe34225926cd7aca2fca4be5ed51dc0772341a2fda5f9a39d0f72b8a6bb5",
+  "input_sha_matches_SHA256SUMS": true,
+  "input_sha_note": "only the evaluated input is verified by this tool against its SHA256SUMS line (loading refuses otherwise); the fit file digest is as recorded in the parameter file",
+  "marks_file_sha256": "d2dcc89fb1f9bfff15e1dce6be5248ba6f285cfe1fb7dd051c09764aec844d04",
+  "lines": 2009,
+  "marks": {"pairs": 133, "begins": 133, "ends": 133, "unclosed_begin_ran_to_eof": false, "nested_begins": 0, "stray_ends": 0},
+  "missing_observations": {"leading_before_first_valid": 0, "coasted": 0, "bad_value_lines": 0, "bad_t_lines": 0, "bad_t_overflow_lines": 0},
+  "time_gaps": {"duplicate_t": 0, "backward_t": 0, "steps_with_horizon_gt_1": 0},
+  "readings": {"burn_in": "steps with L<30 counted from the prior line (L=0) are excluded", "quarters": "four equal spans of included samples by logical time", "ten_step_origins": "coasted origins skipped"},
+  "replay": {"complete": true, "steps": 2009, "expected_steps": 2009, "chain_recorded_every_step": true, "raw_file_unchanged": true,
+             "prefix_invariance": {"method": "first k lines physically written to a temp file and replayed from scratch", "ks": "k=100,500,1000", "runs": 3, "pass": true}},
+  "streams": {"M0": {"file": "docs/estimation/receipts/est23-v1/receipt.json.M0.stream", "sha256": "2924c4cb64831c4c569dbc9a7fd485d19ce76c3f6ae713b74fbb55bc0a15f3f5"}, "M1": {"file": "docs/estimation/receipts/est23-v1/receipt.json.M1.stream", "sha256": "5255d44ff09b53139985b936ec3d51f128d3a3d264d320bad3d487597727f0bc"}},
+  "models": {
+    "M0": {
+      "q": 1000000, "r": 177827.94100389228, "fit_loglik": -16339.957728441204,
+      "samples": 1979, "included_logical_span_ns": [30000000000, 2008000000000],
+      "coverage_50": {"value": 0.72662961091460332, "wilson95": [0.70656846601083734, 0.74581263384072649], "pass": false},
+      "coverage_80": {"value": 0.83729156139464378, "wilson95": [0.8203789339570321, 0.85289728488559635], "pass": true},
+      "coverage_95": {"value": 0.92117230924709448, "wilson95": [0.90846751846280782, 0.93224518326802464], "pass": false},
+      "mean_nis": {"value": 1.0213668800604667, "pass": true},
+      "standardized_bias": {"value": -0.00058397837494506498, "pass": true},
+      "lag1_autocorr": {"value": 0.093909422606135939, "pass": true},
+      "ljung_box_q10_reported_only": 151.09638712740417,
+      "quarters_coverage95": [
+        {"n": 495, "value": 0.89292929292929291, "pass": false},
+        {"n": 495, "value": 0.91111111111111109, "pass": true},
+        {"n": 494, "value": 0.95546558704453444, "pass": true},
+        {"n": 495, "value": 0.92525252525252522, "pass": true}
+      ],
+      "regime_coverage95": {
+        "idle": {"n": 0, "value": 0, "gated": false, "pass": true},
+        "in_trial": {"n": 1979, "value": 0.92117230924709448, "gated": true, "pass": true}
+      },
+      "ten_step_coverage95": {"n": 1969, "value": 0.9827323514474352, "wilson95": [0.97596778660933103, 0.98761699180361151], "pass": true},
+      "log_score_per_step": -8.4806855737133269,
+      "rmse_one_step": 1166.3500133259711, "persistence_rmse": 1162.1102583889599, "rmse_no_worse_than_persistence": false,
+      "zero_innovation_fraction_extra": 0.027791814047498736,
+      "calibrated": false,
+      "failed_criteria": ["coverage_50", "coverage_95", "quarter_1"], "failed_verdict_only": ["rmse_vs_persistence"]
+    },
+    "M1": {
+      "q": 316227.76601683791, "r": 562341.32519034913, "fit_loglik": -16671.474822397133,
+      "samples": 1979, "included_logical_span_ns": [30000000000, 2008000000000],
+      "coverage_50": {"value": 0.7033855482566953, "wilson95": [0.68288298715435103, 0.72310005117397547], "pass": false},
+      "coverage_80": {"value": 0.83274381000505304, "wilson95": [0.81565980258351189, 0.84853853465674389], "pass": true},
+      "coverage_95": {"value": 0.92268822637695802, "wilson95": [0.91008498411529493, 0.9336536781496616], "pass": false},
+      "mean_nis": {"value": 1.0063344044769338, "pass": true},
+      "standardized_bias": {"value": -0.0004109027119764975, "pass": true},
+      "lag1_autocorr": {"value": 0.12692971650533569, "pass": true},
+      "ljung_box_q10_reported_only": 350.39520342680908,
+      "quarters_coverage95": [
+        {"n": 495, "value": 0.89292929292929291, "pass": false},
+        {"n": 495, "value": 0.93333333333333335, "pass": true},
+        {"n": 494, "value": 0.94736842105263153, "pass": true},
+        {"n": 495, "value": 0.91717171717171719, "pass": true}
+      ],
+      "regime_coverage95": {
+        "idle": {"n": 0, "value": 0, "gated": false, "pass": true},
+        "in_trial": {"n": 1979, "value": 0.92268822637695802, "gated": true, "pass": true}
+      },
+      "ten_step_coverage95": {"n": 1969, "value": 0.99136617572371766, "wilson95": [0.98621633660369834, 0.99460246730426805], "pass": false},
+      "log_score_per_step": -8.6542277569766224,
+      "rmse_one_step": 1387.5282902230952, "persistence_rmse": 1162.1102583889599, "rmse_no_worse_than_persistence": false,
+      "zero_innovation_fraction_extra": 0,
+      "calibrated": false,
+      "failed_criteria": ["coverage_50", "coverage_95", "quarter_1", "ten_step_coverage_95"], "failed_verdict_only": ["rmse_vs_persistence"]
+    }
+  },
+  "selected_model": null,
+  "failure_class_to_be_recorded_by_a_human_on_FAIL": null,
+  "ESTIMATION_REAL_SIGNAL": "PASS",
+  "ESTIMATION_CALIBRATION": "FAIL"
+}

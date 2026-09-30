@@ -1,0 +1,7 @@
+est_params_v1
+protocol_commit f96dc97
+fit_run_path evidence/R15/raw/20260929T020536Z-ad8e1f2ea4e4-silicon/machine-state.ndjson
+fit_file_sha256 6df4a2b079482b79c42da84da5627b6a8fb9c7d3ce885aac53437b0199d517db
+fit_lines 1953
+M0 q 1000000 r 177827.94100389228 loglik -16339.957728441204
+M1 q 316227.76601683791 r 562341.32519034913 loglik -16671.474822397133
