@@ -391,6 +391,9 @@ static void nis_calibration(void)
         unsigned n = 4, t, i, j, above = 0;
         rng_seed(&g, SEED_NIS_BASE + (uint64_t)m * SEED_STRIDE);
         mk_scen(&g, &s, n, m);
+        { /* stable truth: scale F so its infinity norm is <= 0.9 (spectral radius < 1); an unstable random F made the truth overflow (protocol note: test-setup fix, not a threshold change) */
+          double mx = 0; unsigned r_, c_; for (r_ = 0; r_ < n; r_++) { double rs = 0; for (c_ = 0; c_ < n; c_++) rs += fabs(s.F[r_ * n + c_]); if (rs > mx) mx = rs; }
+          if (mx > 0.9) for (r_ = 0; r_ < n * n; r_++) s.F[r_] *= 0.9 / mx; }
         fill_model(&s, &mdl);
         chol(s.Q, n, Lq); chol(s.R, m, Lr); chol(s.P0, n, Lp);
         samp(&g, Lp, n, w);
@@ -398,7 +401,7 @@ static void nis_calibration(void)
         CHECK(est_kf_prior(&mdl, s.x0, s.P0, 0, &b) == EST_OK, "nis prior");
         for (t = 1; t <= N; t++) {
             double z[ND], pn[ND], rn[ND], xn[ND];
-            CHECK(est_kf_predict(&mdl, &b, NULL, 1, &pred) == EST_OK, "nis predict");
+            { int rc_ = est_kf_predict(&mdl, &b, NULL, 1, &pred); if (rc_ != EST_OK) fprintf(stderr, "DBG predict rc=%d m=%u t=%u\n", rc_, m, t); CHECK(rc_ == EST_OK, "nis predict"); }
             samp(&g, Lq, n, pn);
             for (i = 0; i < n; i++) { double a = 0; for (j = 0; j < n; j++) a += s.F[i * n + j] * xt[j]; xn[i] = a + pn[i]; }
             memcpy(xt, xn, sizeof xn);
