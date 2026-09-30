@@ -80,3 +80,13 @@ Nothing here is frozen yet; the freeze follows BLINDING_PROTOCOL.md section 2.
 | Q17 | CODER_SPEC s9 "proposal"; PC row 9 S4 | Fixed. s9 is the measured envelope frozen as coder_envelope; row 9 says S3 | CODER_SPEC.md; PROTOCOL_CONFORMANCE.md |
 | Q18 | Resolution file not in the reviewed bundle | Stated. This file is a history record, not part of the reviewed bundle; nothing normative depends on it | EXP-001.md s11 |
 | Q19 | Per-crumb coding stream not spelled out; q = 65536 | Fixed. Per-crumb coding slices the checked file TPS1 rows, writes no file, counts +56 header bytes; q = 65536 cannot occur for a coded symbol. D4 unchanged | CODER_SPEC.md s8, s9 |
+
+## CAL-0 review 3 (R1 to R3, all MINOR, no blocker)
+
+| # | Finding | Resolution | Where |
+|---|---|---|---|
+| R1 | `model_cost_method` named `ty_model_decode` and contradicted itself on padding | Fixed. It names `ty_model_encode` and says once that the zero padding of the `.tym` file (at most 7 bits) is not part of L(M) and is not in any T total; the scorer takes L(M) from the exact bit count. Numbers unchanged | `profiles/Turing-profile-v1.0.toml` model_cost_method |
+| R2 | Scope of N in the S4 envelope not explicit | Fixed. A table in CODER_SPEC.md gives what N counts for each scope (per coder, per file, per crumb), taken from the evaluator code | `CODER_SPEC.md` s9 |
+| R3 | Scorer reproducibility from the docs alone untested | Covered. Lane D is an independent scorer built from the docs only (`tools/turing_verify_indep/`); on the fixed dry-run bundle it matches the primary scorer exactly, 228 of 228 values and the 4 compared header fields. The dry-run bundle is the known-answer check | `tools/turing_verify_indep/SPEC_GAPS.md`; `make turing-exp001-eval-dry` |
+
+The profile and CODER_SPEC digests changed with these fixes; the profile sidecar, candidate manifest and preregistration were re-pinned in the same commit.

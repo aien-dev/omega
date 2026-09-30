@@ -175,7 +175,7 @@
   ],
   "coders": {
     "spec": "calibration/docs/CODER_SPEC.md",
-    "spec_sha256": "652ea51ca3ab11b4b25502131b8f904de1dee9987335228544d953c0317e07ea",
+    "spec_sha256": "b5c33536b30714cbfe1b353cc68b603e948b037c95ca9eb49b759f62694b83bc",
     "reference_coder_1": "TCR1 v1 range",
     "reference_coder_2": "TCA1 v1 rANS, L = 2^23",
     "header_bytes": 56,

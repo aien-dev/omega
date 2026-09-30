@@ -286,6 +286,14 @@ Where the overhead comes from:
   482 bits, rANS file minimum -641 bits; crumb max 491 (range) and 480 (rANS)
   bits including the header.
 
+What N counts in each scope (from `tools/turing_cal_eval.c`, `env_band(n)` = 64e6 + 1000 x n in micro-bits):
+
+| Scope | N | Overhead compared with the band | Failure |
+|---|---|---|---|
+| per coder | not a separate N: the same band and the same N are applied once for the range coder and once for the rANS coder | coded bytes x 8 minus ideal length, per coder | either coder outside the band on any unit fails S4 |
+| per file | N = the number of symbols in the whole checked file (s.n, all crumbs of that TPS1/TSY1 file) | coded file bytes including the 56-byte header | that file fails S4 |
+| per crumb | N = the number of symbols in that one crumb (hi - lo of its row range) | crumb coded bytes plus the 56-byte header (no file is written) | that crumb fails S4 |
+
 A coder whose overhead leaves this band on any unit of a frozen run fails S4 for
 that unit. There is no alternative bound: the single two-sided band above is the
 only envelope (a one-sided range bound was considered and not adopted).
