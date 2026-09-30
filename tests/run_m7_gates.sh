@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Trusted Verification Ladder V0 -> V1 -> V2)
 echo "[*] Step 3: Running Demonstration (Trusted Verification Ladder V0 -> V1 -> V2)..."
-"$TOOL" --demonstrate-verify
+"$TOOL" --reference-demonstrate-verify
 echo ""
 
 # Step 4: Regression checks (M4, M5, M6)

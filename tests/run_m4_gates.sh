@@ -29,12 +29,12 @@ echo ""
 
 # Step 3: Run Demonstration 1 (Pure Arithmetic Equivalence)
 echo "[*] Step 3: Running Demonstration 1 (Representation Independence)..."
-"$TOOL" --demonstrate-arithmetic
+"$TOOL" --reference-demonstrate-arithmetic
 echo ""
 
 # Step 4: Run Demonstration 2 (Physics Authority Semantics)
 echo "[*] Step 4: Running Demonstration 2 (Physics Authority Semantics)..."
-"$TOOL" --demonstrate-physics
+"$TOOL" --reference-demonstrate-physics
 echo ""
 
 # Step 5: Dump and hash test vectors

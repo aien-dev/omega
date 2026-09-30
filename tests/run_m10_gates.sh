@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Library Catalog & Synthesis Reuse)
 echo "[*] Step 3: Running Demonstration (Library Catalog & Synthesis Reuse)..."
-"$TOOL" --demonstrate-library
+"$TOOL" --reference-demonstrate-library
 echo ""
 
 # Step 4: Regression checks (M4 through M9)

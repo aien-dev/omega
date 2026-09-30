@@ -29,7 +29,7 @@ echo ""
 
 # Step 3: Run Demonstration (Direct AArch64 Machine Realization)
 echo "[*] Step 3: Running Demonstration (Direct AArch64 Machine Realization)..."
-"$TOOL" --demonstrate-realization
+"$TOOL" --reference-demonstrate-realization
 echo ""
 
 # Step 4: Dump and hash test vectors and binaries

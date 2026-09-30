@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Autonomous Abstraction Discovery & Search Acceleration)
 echo "[*] Step 3: Running Demonstration (Autonomous Abstraction Discovery & Search Acceleration)..."
-"$TOOL" --demonstrate-discovery
+"$TOOL" --reference-demonstrate-discovery
 echo ""
 
 # Step 4: Regression checks (M4 through M10)

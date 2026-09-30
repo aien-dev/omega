@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Formal Accelerator Link & MachineGraph Binding)
 echo "[*] Step 3: Running Demonstration (Accelerator Link & MachineGraph Binding)..."
-"$TOOL" --demonstrate-accelerator
+"$TOOL" --reference-demonstrate-accelerator
 echo ""
 
 # Step 4: Regression checks (M4 through M14)

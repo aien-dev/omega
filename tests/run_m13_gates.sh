@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Formal Machine Hardware Graph & Microarchitecture Disambiguation)
 echo "[*] Step 3: Running Demonstration (Formal Machine Hardware Graph & Microarchitecture Disambiguation)..."
-"$TOOL" --demonstrate-machine
+"$TOOL" --reference-demonstrate-machine
 echo ""
 
 # Step 4: Regression checks (M4 through M11)

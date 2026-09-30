@@ -97,56 +97,56 @@ $(TARGET): check-physics-lock $(OBJS)
 
 test: $(TARGET)
 	./$(TARGET) --run-gates
-	./$(TARGET) --demonstrate-arithmetic
-	./$(TARGET) --demonstrate-physics
+	./$(TARGET) --reference-demonstrate-arithmetic
+	./$(TARGET) --reference-demonstrate-physics
 
 test-m5: $(TARGET)
 	./$(TARGET) --run-m5-gates
-	./$(TARGET) --demonstrate-realization
+	./$(TARGET) --reference-demonstrate-realization
 
 test-m6: $(TARGET)
 	./$(TARGET) --run-m6-gates
-	./$(TARGET) --demonstrate-self-host
+	./$(TARGET) --reference-demonstrate-self-host
 
 test-m7: $(TARGET)
 	./$(TARGET) --run-m7-gates
-	./$(TARGET) --demonstrate-verify
+	./$(TARGET) --reference-demonstrate-verify
 
 test-m8: $(TARGET)
 	./$(TARGET) --run-m8-gates
-	./$(TARGET) --demonstrate-program
+	./$(TARGET) --reference-demonstrate-program
 
 test-m9: $(TARGET)
 	./$(TARGET) --run-m9-gates
-	./$(TARGET) --demonstrate-synthesis
+	./$(TARGET) --reference-demonstrate-synthesis
 
 test-m10: $(TARGET)
 	./$(TARGET) --run-m10-gates
-	./$(TARGET) --demonstrate-library
+	./$(TARGET) --reference-demonstrate-library
 
 test-m11: $(TARGET)
 	./$(TARGET) --run-m11-gates
-	./$(TARGET) --demonstrate-discovery
+	./$(TARGET) --reference-demonstrate-discovery
 
 test-m12: $(TARGET)
 	./$(TARGET) --run-m12-gates
-	./$(TARGET) --demonstrate-living-matvec
+	./$(TARGET) --legacy-oracle-living-matvec
 
 test-m13: $(TARGET)
 	./$(TARGET) --run-m13-gates
-	./$(TARGET) --demonstrate-machine
+	./$(TARGET) --reference-demonstrate-machine
 
 test-m14: $(TARGET)
 	./$(TARGET) --run-m14-gates
-	./$(TARGET) --demonstrate-realization-synthesis
+	./$(TARGET) --reference-demonstrate-realization-synthesis
 
 test-m15: $(TARGET)
 	./$(TARGET) --run-m15-gates
-	./$(TARGET) --demonstrate-accelerator
+	./$(TARGET) --reference-demonstrate-accelerator
 
 test-m17: $(TARGET)
 	./$(TARGET) --run-m17-gates
-	./$(TARGET) --demonstrate-blackwell-vector
+	./$(TARGET) --reference-demonstrate-blackwell-vector
 
 clean:
 	rm -rf $(OUT_DIR)
@@ -577,6 +577,52 @@ r16-inventory: $(R16_INVENTORY)
 
 test-r16-inventory: $(R16_INVENTORY)
 	sh tests/r16_inventory/run.sh $(R16_INVENTORY)
+
+# R16-G3: the authoritative path with the legacy orchestrators unavailable.
+# Link map, shared libraries, embedded names and an exec trace of the R13
+# living system and the R14 recovery run, legacy programs stubbed on PATH.
+# Host mode uses the processor stand-in and cannot claim the gate. The silicon
+# target starts the GB10 seat: run it only as part of the qualification
+# ladder, detached, never under `timeout` and never killed.
+R16_STAMP := $(shell date -u +%Y%m%dT%H%M%SZ)
+.PHONY: test-r16-authpath test-r16-authpath-silicon
+test-r16-authpath: $(RX_R13_HOST) $(RX_R14_HOST)
+	sh tools/r16_authpath.sh host $(RX_R13_HOST) $(RX_R14_HOST) \
+		$(OUT_DIR)/r16/authpath/host-$(R16_STAMP) $(RX_R13_SRCS) $(AIENOS_CAP_LIB)
+
+test-r16-authpath-silicon: $(RX_R13_SILICON) $(RX_R14_SILICON)
+	sh tools/r16_authpath.sh silicon $(RX_R13_SILICON) $(RX_R14_SILICON) \
+		$(OUT_DIR)/r16/authpath/silicon-$(R16_STAMP) $(RX_R13_SRCS) \
+		src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
+		src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+		src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c \
+		$(PHYSICS_DIR)/nvrm/nvrm.c $(AIENOS_CAP_LIB)
+
+# R16-G4: legacy paths cannot bypass authority. The R13 body (R15 rig, RES-4,
+# host seat) is started; a legacy context tries six acts and each must be
+# refused with no change to authoritative state. Host only; no chip.
+RX_R16_NEGATIVE = $(OUT_DIR)/rx_r16_negative
+$(RX_R16_NEGATIVE): $(RX_R15_RIG_SRCS) tests/runtime/rx_r16_negative.c $(RX_R15_RIG_HDRS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_RIG_SRCS) tests/runtime/rx_r16_negative.c \
+		$(AIENOS_CAP_LIB) -lm
+
+.PHONY: test-r16-negative test-r16-negative-mutants
+test-r16-negative: $(RX_R16_NEGATIVE)
+	./$(RX_R16_NEGATIVE)
+
+# "Removing any one guard turns the test red": rebuilds the G4 test against
+# scratch copies with one guard removed at a time; each must FAIL. Minutes.
+test-r16-negative-mutants: $(RX_R16_NEGATIVE)
+	sh tests/r16_negative/mutate.sh "$(CC)" "$(CFLAGS)" "$(AIENOS_R7_DIR)" \
+		$(RX_R15_RIG_SRCS) tests/runtime/rx_r16_negative.c
+
+# R16-G5 API/build surface: legacy modes only under explicit names, the SEQ
+# loop only in rx_seq_reference.*, no legacy default mode, production entry
+# point documented (docs/r16-production-entry-point.md). Host only, seconds.
+.PHONY: test-r16-surface
+test-r16-surface: $(TARGET)
+	sh tests/r16_surface/run.sh ./$(TARGET)
 
 
 # OMEGA_ACTION_GRAPH_IR: goals compile to typed action graphs that run as

@@ -3740,9 +3740,14 @@ int omega_run_m15_gates(void) {
     return (gate_passed == gate_count) ? 0 : 1;
 }
 
+/* R16 (spec/r16-orchestrator-retirement.md, G5): the hand-sequenced living
+ * matvec demonstration is the class-A central sequencer the reaction world
+ * replaced. It survives only as a legacy oracle under an explicit mode name,
+ * --legacy-oracle-living-matvec; the old --demonstrate-living-matvec mode is
+ * gone. Nothing in the production path runs it. */
 static int legacy_oracle_demonstrate_living_matvec(int argc, char **argv) {
     (void)argc;
-    if (strcmp(argv[1], "--demonstrate-living-matvec") == 0) {
+    if (strcmp(argv[1], "--legacy-oracle-living-matvec") == 0) {
         legacy_oracle_run_demonstration_living_matvec();
         return 0;
     }
@@ -3751,7 +3756,9 @@ static int legacy_oracle_demonstrate_living_matvec(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m12-gates | --run-m13-gates | --run-m14-gates | --demonstrate-arithmetic | --demonstrate-physics | --demonstrate-realization | --demonstrate-self-host | --demonstrate-verify | --demonstrate-program | --demonstrate-synthesis | --demonstrate-library | --demonstrate-discovery | --demonstrate-living-matvec | --demonstrate-machine | --demonstrate-realization-synthesis | --dump-test-vectors <dir>]\n", argv[0]);
+        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m12-gates | --run-m13-gates | --run-m14-gates | --reference-demonstrate-arithmetic | --reference-demonstrate-physics | --reference-demonstrate-realization | --reference-demonstrate-self-host | --reference-demonstrate-verify | --reference-demonstrate-program | --reference-demonstrate-synthesis | --reference-demonstrate-library | --reference-demonstrate-discovery | --reference-demonstrate-machine | --reference-demonstrate-realization-synthesis | --dump-test-vectors <dir>]\n", argv[0]);
+        printf("Legacy oracle (R16: not the production path, reference only): %s --legacy-oracle-living-matvec\n", argv[0]);
+        printf("Production entry point: the resident reaction world, see docs/r16-production-entry-point.md\n");
         return 1;
     }
 
@@ -3767,7 +3774,7 @@ int main(int argc, char **argv) {
         return omega_run_m6_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-self-host") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-self-host") == 0) {
         run_demonstration_self_host();
         return 0;
     }
@@ -3776,7 +3783,7 @@ int main(int argc, char **argv) {
         return omega_run_m7_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-verify") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-verify") == 0) {
         run_demonstration_verify();
         return 0;
     }
@@ -3785,7 +3792,7 @@ int main(int argc, char **argv) {
         return omega_run_m8_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-program") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-program") == 0) {
         run_demonstration_program();
         return 0;
     }
@@ -3798,7 +3805,7 @@ int main(int argc, char **argv) {
         return omega_run_m10_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-library") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-library") == 0) {
         run_demonstration_library();
         return 0;
     }
@@ -3807,7 +3814,7 @@ int main(int argc, char **argv) {
         return omega_run_m11_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-discovery") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-discovery") == 0) {
         run_demonstration_discovery();
         return 0;
     }
@@ -3824,7 +3831,7 @@ int main(int argc, char **argv) {
         return omega_run_m13_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-machine") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-machine") == 0) {
         run_demonstration_machine();
         return 0;
     }
@@ -3833,7 +3840,7 @@ int main(int argc, char **argv) {
         return omega_run_m14_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-realization-synthesis") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-realization-synthesis") == 0) {
         run_demonstration_realization_synthesis();
         return 0;
     }
@@ -3842,7 +3849,7 @@ int main(int argc, char **argv) {
         return omega_run_m15_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-accelerator") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-accelerator") == 0) {
         run_demonstration_accelerator();
         return 0;
     }
@@ -3862,7 +3869,7 @@ int main(int argc, char **argv) {
     }
 
 
-    if (strcmp(argv[1], "--demonstrate-accelerator-world") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-accelerator-world") == 0) {
         run_demonstration_accelerator_world();
         return 0;
     }
@@ -3871,7 +3878,7 @@ int main(int argc, char **argv) {
         return run_m18_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-blackwell-matmul") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-blackwell-matmul") == 0) {
         run_demonstration_blackwell_matmul();
         return 0;
     }
@@ -3880,31 +3887,31 @@ int main(int argc, char **argv) {
         return run_m17_gates();
     }
 
-    if (strcmp(argv[1], "--demonstrate-blackwell-codegen") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-blackwell-codegen") == 0) {
         return omega_blackwell_test_codegen_variation();
     }
 
-    if (strcmp(argv[1], "--demonstrate-blackwell-vector") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-blackwell-vector") == 0) {
         run_demonstration_blackwell_vector();
         return 0;
     }
 
-    if (strcmp(argv[1], "--demonstrate-synthesis") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-synthesis") == 0) {
         run_demonstration_synthesis();
         return 0;
     }
 
-    if (strcmp(argv[1], "--demonstrate-realization") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-realization") == 0) {
         run_demonstration_realization();
         return 0;
     }
 
-    if (strcmp(argv[1], "--demonstrate-arithmetic") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-arithmetic") == 0) {
         run_demonstration_arithmetic();
         return 0;
     }
 
-    if (strcmp(argv[1], "--demonstrate-physics") == 0) {
+    if (strcmp(argv[1], "--reference-demonstrate-physics") == 0) {
         run_demonstration_physics();
         return 0;
     }

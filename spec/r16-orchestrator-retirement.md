@@ -278,3 +278,66 @@ aienos-capability crate is legacy under the no-Rust port (aienos #156).
 Omega's rx_caproot.c is a host reference root, not the trusted capability
 root. This affects G4/G6 wording only; the native C capability root remains
 the sole authoritative capability root.
+
+### C4 (2026-09-30)
+
+Made before any qualification data existed (only host development runs of
+the new G3 to G5 tests on the R16 branch). No gate is loosened.
+
+1. Precondition 4 (R4 target). R4 (causal trace) is proved by
+   `make test-r3`: `tests/runtime/rx_heartbeat_test.c` prints
+   `R4_CAUSAL_TRACE: PASS` and, in the same run, R1, R2, R3, R5 and R6. The
+   committed receipt `evidence/R3/ef3e5565b9deda5226b58caf00c3e05f467cf03f6ae91984c10898d98e28c321.json`
+   records `R4_CAUSAL_TRACE` PASS. In G7, R1 to R6 are each named with the
+   target `test-r3`.
+2. G3 in host mode (`make test-r16-authpath`) prints
+   `R16_G3_AUTHPATH=HOST_PASS_NON_SILICON`. Only `make
+   test-r16-authpath-silicon` on the candidate can print `PASS`.
+3. G4 act mapping (`tests/runtime/rx_r16_negative.c`). The legacy context
+   holds the world handle, a read-only authority view, the R9 store, a
+   forged reference, references it could observe (the external goal grant,
+   the promoter's grants) and grants of its own issued as fixtures.
+   - (1) AIEN belief and experiment belief; (2) Omega selection; (6) the
+     in-force and promotion records production reads: outside publication
+     with each reference, a reaction writing without a declared grant, a
+     reaction holding a forged or unrelated grant, and (belief) a reaction
+     whose real grant the office revokes while it runs.
+   - (3) cognition mint and revoke through the view, with a guessed token
+     and with none.
+   - (4) `rx_gen_promote` with the native authority as callback:
+     self-promotion with a real grant, another subject with the promoter's
+     grant, a forged reference, and a right the subject really holds but
+     that is not PROMOTE.
+   - (5) publication descriptors with a forged reference, an unrelated
+     grant, the promoter's grant, a real grant on the object's resource that
+     is not the writer of record's, and the writer's own grant after
+     revocation; and an overwritten physical record (refused as diverged,
+     canonical object unchanged).
+   - (6) "advance the world generation" means the records above plus the R9
+     active generation and lineage, in memory and recovered from disk,
+     which the test compares after every act.
+   After every act the watched objects, the R9 generation and the AIENOS
+   table (observer) must be unchanged, except for the office's own planned
+   revocations, which the test counts separately.
+4. "Removing any one guard turns the test red" is `make
+   test-r16-negative-mutants`: 15 mutants, each removing one guard from a
+   scratch copy (external publication cap check, reaction write coverage,
+   activation cap check, commit cap re-check, both, cognition mint,
+   cognition admin, self-promotion, promotion resource/right, promotion
+   authority callback result, boundary cap identity, boundary cap
+   validation, boundary divergence, SEQ pulse on a production world, SEQ
+   activation on a production world). All must be killed.
+5. G4 limits, stated in the receipt, not tested as refusals: world-owner
+   calls (`rx_world_create`, `rx_world_retire`, `rx_world_add_reaction`)
+   take no capability, and `rx_world_retire` moves an object's generation;
+   `rx_gen_promote` trusts the authority callback its caller passes; code in
+   the same address space can write process memory directly. Cognition mint
+   and admin refuse by construction (the view has no office token).
+6. G5. omegatool's class D milestone demonstrations run only under
+   `--reference-demonstrate-<name>`; the class A living matvec only under
+   `--legacy-oracle-living-matvec`; the old names are rejected. The class B
+   gate runners (`--run-gates`, `--run-m<N>-gates`) keep their names: they
+   run qualification tests and the map does not flag them for G5. With no
+   argument omegatool prints usage and exits 1. The production entry point
+   is `docs/r16-production-entry-point.md`; `make test-r16-surface` checks
+   all of this.
