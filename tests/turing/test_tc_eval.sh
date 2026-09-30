@@ -51,6 +51,9 @@ mkrepo() { # mkrepo DIR
     mkdir -p "$d/tools"
     cp "$REPO/tools/turing_cal_eval.c" "$d/tools/"
     cp -r "$REPO/tools/turing_verify_indep" "$d/tools/" && rm -rf "$d/tools/turing_verify_indep/build"
+    # The fixture manifest pins the shared-background files (docs, scripts) by hash; those files change
+    # legitimately after C_f, so re-pin the fixture copy only (the committed EXP-001 manifest is untouched).
+    refresh "$d"
 }
 # refresh DIR: after editing the profile, rewrite the sidecar and every hash the manifest pins.
 refresh() {
@@ -139,6 +142,12 @@ mkrepo "$F"
 FM="$F/calibration/experiments/EXP-001/candidate_manifest.json"
 FP="$F/calibration/profiles/Turing-profile-v1.0.toml"
 FC="$F/calibration/experiments/EXP-001/candidates"
+# The committed EXP-001 files are already frozen. The fixture replays the freeze from the draft state, so put the
+# fixture copy (never the committed files) back to draft: manifest and preregistration draft, runtime_digest unfilled,
+# and no published receipts.
+rm -f "$F/calibration/experiments/EXP-001/freeze_receipt.json" "$F/calibration/experiments/EXP-001/final_receipt.json"
+sed -i -E '/^  "frozen_at": /d; s/"status": "frozen"/"status": "draft"/' "$FM" "$F/calibration/experiments/EXP-001/preregistration.json"
+sed -i -E 's/^(runtime_digest = )"[0-9a-f]{64}"/\1"FILL_AT_FREEZE"/' "$FP"
 sed -i 's/FILL_AT_FREEZE/TEST_ONLY_NOT_A_FREEZE/g' "$FP"
 for mem in M_mem M_mem_seed1; do
     cp "$FC/B1_order0.tym" "$FC/$mem.tym"

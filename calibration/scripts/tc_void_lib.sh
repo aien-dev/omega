@@ -22,6 +22,7 @@ tc_void_count() {
 }
 
 # tc_void_ended DIR: true when EXP-001 has ended (a final receipt exists or the attempts are used up).
+# (the experiment named in receipts is $EXP_ID, default EXP-001)
 tc_void_ended() { [ -e "$1/final_receipt.json" ] || [ "$(tc_void_count "$1")" -ge "$TC_MAX_ATTEMPTS" ]; }
 
 # JSON-safe text: quote, backslash and control characters become an apostrophe (as in turing-cal-eval).
@@ -45,7 +46,7 @@ tc_void_write() {
     cat >>"$f" <<EOF
 {
   "schema": "turing.cal.void_receipt.v1",
-  "experiment": "EXP-001",
+  "experiment": "${EXP_ID:-EXP-001}",
   "kind": "void",
   "stage": "$stage",
   "dry_run": false,
@@ -65,7 +66,7 @@ EOF
         cat >>"$dir/final_receipt.json" <<EOF
 {
   "schema": "turing.cal.terminal_receipt.v1",
-  "experiment": "EXP-001",
+  "experiment": "${EXP_ID:-EXP-001}",
   "kind": "inconclusive_infra",
   "dry_run": false,
   "created_utc": "$t",

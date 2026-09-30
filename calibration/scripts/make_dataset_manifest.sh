@@ -31,7 +31,7 @@ case "$mode" in
     released="$(jstr started_utc "$sc")" finished="$(jstr finished_utc "$sc")"
     gen="$(grep -m1 '"generator"' "$sc" | sed -E 's/.*"sha256": *"([0-9a-f]{64})".*/\1/')"
     lrn="$(grep -m1 '"learner"' "$sc" | sed -E 's/.*"sha256": *"([0-9a-f]{64})".*/\1/')"
-    split=sealed_test dsid="EXP-001-sealed-$commit" scsha="$(sha "$sc")" smsha="$(sha "$sm")"
+    split=sealed_test dsid="${EXP_ID:-EXP-001}-sealed-$commit" scsha="$(sha "$sc")" smsha="$(sha "$sm")"
     rows=()
     while IFS= read -r l; do
         g="$(sed -E 's/.*"group": *([0-9]+).*/\1/' <<<"$l")"
@@ -50,7 +50,7 @@ case "$mode" in
     run="${2%/}" profile="$5" out="$6"
     [[ "$profile" =~ ^[0-9a-f]{64}$ ]] || die "bad profile sha256"
     commit=NONE released=NOT_SEALED finished=NOT_SEALED gen=NOT_RECORDED lrn=NOT_RECORDED
-    split=development dsid="EXP-001-dev-$(basename "$run")" scsha=NONE smsha=NONE
+    split=development dsid="${EXP_ID:-EXP-001}-dev-$(basename "$run")" scsha=NONE smsha=NONE
     rows=()
     for g in 1 2; do
         j=0
@@ -72,7 +72,7 @@ payload="$(for r in "${rows[@]}"; do read -r g j s h b _ <<<"$r"; echo "$g $j $s
     echo "{"
     echo "  \"schema\": \"turing.cal.dataset_manifest.v1\","
     echo "  \"dataset_id\": \"$dsid\","
-    echo "  \"experiment\": \"EXP-001\","
+    echo "  \"experiment\": \"${EXP_ID:-EXP-001}\","
     echo "  \"split\": \"$split\","
     echo "  \"profile_digest\": \"$profile\","
     echo "  \"freeze_commit\": \"$commit\","

@@ -1,5 +1,5 @@
 #!/bin/sh
-# check_profile.sh: Turing-profile-v1.0.toml must agree with the code it describes.
+# check_profile.sh: the experiment profile (EXP_ID, default EXP-001: Turing-profile-v1.0.toml; EXP-001R: v1.1) must agree with the code it describes.
 #
 #   TXA_CAND=build/turing-exp001-a/turing-cal-candidates sh calibration/scripts/check_profile.sh [--freeze]
 #
@@ -23,8 +23,9 @@
 # No Python. POSIX sh + sed + grep + sha256sum.
 set -eu
 dir=$(cd "$(dirname "$0")/../.." && pwd)
-toml="$dir/calibration/profiles/Turing-profile-v1.0.toml"
-side="$dir/calibration/profiles/Turing-profile-v1.0.sha256"
+. "$dir/calibration/scripts/tc_exp.sh"
+toml="$dir/$EXP_PROFILE"
+side="$dir/$EXP_SIDECAR"
 cand="${TXA_CAND:-$dir/build/turing-exp001-a/turing-cal-candidates}"
 cands="${TXA_CANDIDATES:-$dir/calibration/experiments/EXP-001/candidates_dev.txt}"
 power="${TXA_POWER_OUT:-$dir/calibration/experiments/EXP-001/power_simulation_output.txt}"
@@ -91,7 +92,7 @@ eq candidate_b3_mask b3_mask
 eq baseline_b2_model_digest b2_digest
 eq candidate_m_candidate_model_digest m_candidate_digest
 [ "$(val profile_digest)" = "SIDECAR" ] || bad "profile_digest must be the literal SIDECAR"
-[ "$(val profile_id)" = "Turing-profile-v1.0" ] || bad "profile_id"
+[ "$(val profile_id)" = "$EXP_PROFILE_ID" ] || bad "profile_id"
 
 # 4. L(M) formula for B3: 104 + 16(K-1) + 16 rows x (keybits + 16(K-1))
 K=$(c K); hb=$(c model_header_bits); qb=$(c qbits); kb=$(c b3_keybits)
@@ -167,7 +168,7 @@ else
 fi
 [ "$(val dataset_generator_command)" = "crumbs experiment --learner L --seed S --out DIR" ] || bad "dataset_generator_command"
 case "$(val dataset_generator)" in *"LINEAGE NOTE"*) ;; *) bad "dataset_generator lacks the LINEAGE NOTE" ;; esac
-grep -q 'LINEAGE NOTE' "$dir/calibration/preregistration/EXP-001.md" || bad "prereg lacks the LINEAGE NOTE"
+grep -q 'LINEAGE NOTE' "$dir/$EXP_PREREG" || bad "prereg lacks the LINEAGE NOTE"
 [ -f "$dir/$(val blinding_protocol_path)" ] || bad "blinding protocol missing"
 [ "$(val blinding_separate_sealed_user)" = no ] || bad "blinding_separate_sealed_user must be no"
 case "$(val blinding_method)" in *"temporal"*"same user id"*) ;; *) bad "blinding_method must state the temporal layer and the same-uid limit" ;; esac

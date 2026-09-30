@@ -6,6 +6,7 @@
 #   generate_sealed_data.sh --commit FREEZE_SHA --profile-digest SHA256 [--n N] [--keep-learning] [--no-fetch]
 #   generate_sealed_data.sh --derive-only --commit FREEZE_SHA --profile-digest SHA256 --n N
 #   generate_sealed_data.sh --trial-seed S [--commit REF]      (feasibility only; writes to the trial dir)
+#   generate_sealed_data.sh --is-burned SEED     (exit 0 and "burned" if the seed is refused, else exit 1)
 #
 # SEED RULE (turing.cal.sealed.v1). For group g in {1,2} and index j in 0..N-1:
 #   msg  = the ASCII bytes  turing.cal.sealed.v1|<commit>|<digest>|g<g>|<j>
@@ -17,7 +18,8 @@
 #   A reader can recompute any seed with:
 #     printf '%s' 'turing.cal.sealed.v1|<commit>|<digest>|g1|0' | sha256sum
 # Group 1 is the primary sealed test set; group 2 is the second-seed replication.
-# A seed equal to a burned development seed (0..10 or 20260927) or repeated is
+# A seed equal to a burned seed (dev 0..10, 20260927, or for EXP_ID=EXP-001R one of the six EXP-001 sealed seeds in
+# burned_seeds_exp001.txt) or repeated is
 # refused (probability ~2^-59; the script stops rather than skip).
 #
 # GENERATOR (pinned): crumbs experiment --learner L --seed S --out DIR
@@ -66,6 +68,8 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/tc_jail_lib.sh"
 # shellcheck source=tc_void_lib.sh
 . "$here/tc_void_lib.sh"
+# shellcheck source=tc_exp.sh
+. "$here/tc_exp.sh"
 
 CRUMBS="${TC_CRUMBS:-$HOME/workspace/hive-worktrees/crumbs-v1/target/release/crumbs}"
 CRUMBS_SHA256=72e396b15532aa93afb1f215521e04dca8470f779f3de35c10b04b07bff96638
@@ -73,14 +77,15 @@ CRUMBS_SHA256=72e396b15532aa93afb1f215521e04dca8470f779f3de35c10b04b07bff96638
 LEARNER_SHA256="${TC_LEARNER_SHA256:-8159bdff248efa67fa2cf75bb0b506bc359f4a2269139d03479753c0fc393416}"
 TRIAL_ROOT="$HOME/aien-data/turing-cal/trial"
 DOMAIN="turing.cal.sealed.v1"
-PROFILE_PATH=calibration/profiles/Turing-profile-v1.0.toml
-SIDECAR_PATH=calibration/profiles/Turing-profile-v1.0.sha256
-CANDIDATE_MANIFEST=calibration/experiments/EXP-001/candidate_manifest.json
+PROFILE_PATH=$EXP_PROFILE
+SIDECAR_PATH=$EXP_SIDECAR
+CANDIDATE_MANIFEST=$EXP_DIR/candidate_manifest.json
 PROFILE_N_KEY=sealed_seeds_per_group
 
 die() { echo "generate_sealed_data: $*" >&2; exit 2; }
 sha() { sha256sum -- "$1" | cut -d' ' -f1; }
 
+is_burned_q=""
 commit="" digest="" n="" derive_only=0 trial_seed="" keep_learning=0 fetch=1
 orig_cmd="generate_sealed_data.sh $*"
 repo="$(git -C "$here" rev-parse --show-toplevel)"
@@ -93,6 +98,7 @@ while [ $# -gt 0 ]; do
     --trial-seed) trial_seed="$2"; shift 2 ;;
     --keep-learning) keep_learning=1; shift ;;
     --no-fetch) fetch=0; shift ;;
+    --is-burned) is_burned_q="$2"; shift 2 ;;
     --repo) repo="$2"; shift 2 ;;
     *) die "unknown option '$1'" ;;
     esac
@@ -105,7 +111,10 @@ derive_seed() { # commit digest group index
     printf '%d\n' "$((16#$(printf '%x' "$top")${h:1}))"
 }
 
-is_burned() { [ "$1" -le 10 ] || [ "$1" = 20260927 ]; }
+# Burned: dev seeds 0..10, 20260927, and (EXP-001R) the six EXP-001 sealed seeds (burned_seeds_exp001.txt).
+is_burned() { [ "$1" -le 10 ] || [ "$1" = 20260927 ] || { [ -n "$EXP_BURNED_FILE" ] && grep -qx -- "$1" "$here/../../$EXP_BURNED_FILE" 2>/dev/null; }; }
+# --is-burned SEED: self-test hook; exit 0 = burned (refused), 1 = usable.
+if [ -n "$is_burned_q" ]; then is_burned "$is_burned_q" && { echo "burned"; exit 0; }; echo "usable"; exit 1; fi
 
 # Build the learner from a clean export of REF into $1; echo its path.
 build_learner() {
@@ -163,7 +172,7 @@ volatile_of() { # files whose bytes carry uuid-v7 ids or wall-clock times
 # ---------------------------------------------------------------- trial mode
 if [ -n "$trial_seed" ]; then
     [[ "$trial_seed" =~ ^[0-9]+$ ]] || die "--trial-seed must be decimal"
-    is_burned "$trial_seed" && die "trial seed is a burned development seed"
+    is_burned "$trial_seed" && die "trial seed is a burned seed"
     tc_have_bwrap
     work="$(mktemp -d)"
     trap 'rm -rf "$work"' EXIT
@@ -200,7 +209,7 @@ git -C "$repo" cat-file -e "$commit:$PROFILE_PATH" 2>/dev/null || die "$PROFILE_
 pd="$(git -C "$repo" show "$commit:$PROFILE_PATH" | sha256sum | cut -d' ' -f1)"
 [ "$pd" = "$digest" ] || die "profile bytes at $commit hash to $pd, not --profile-digest $digest"
 # The freeze receipt (step 4) must already be on origin/main and name this commit (CAL-0 review 2 Q10).
-FR=calibration/experiments/EXP-001/freeze_receipt.json
+FR=$EXP_DIR/freeze_receipt.json
 fr="$(git -C "$repo" show "origin/main:$FR" 2>/dev/null)" || die "no $FR on origin/main: commit the freeze receipt (BLINDING_PROTOCOL.md step 4) first"
 grep -q '^  "TURING_PROFILE_V1_FROZEN": "PASS",$' <<<"$fr" || die "freeze receipt on origin/main is not TURING_PROFILE_V1_FROZEN = PASS"
 grep -q "^  \"freeze_commit\": \"$commit\",\$" <<<"$fr" || die "freeze receipt on origin/main names another freeze commit"
@@ -222,9 +231,9 @@ n="${n:-$pn}"
 [[ "$n" =~ ^[1-9][0-9]*$ ]] || die "N unknown: profile has no '$PROFILE_N_KEY = <int>' and no --n given"
 
 dest="$TC_SEALED_ROOT/$commit"
-[ -e "$dest.INCONCLUSIVE_INFRA" ] && die "three generation attempts already failed for $commit: EXP-001 is INCONCLUSIVE (INFRA)"
+[ -e "$dest.INCONCLUSIVE_INFRA" ] && die "three generation attempts already failed for $commit: $EXP_ID is INCONCLUSIVE (INFRA)"
 vdir="$(tc_void_dir "$commit")"
-tc_void_ended "$vdir" && die "EXP-001 has ended: $vdir holds final_receipt.json or $TC_MAX_ATTEMPTS void receipts"
+tc_void_ended "$vdir" && die "$EXP_ID has ended: $vdir holds final_receipt.json or $TC_MAX_ATTEMPTS void receipts"
 attempt=1
 while [ -e "$dest.failed-$attempt" ]; do
     first_cmd="$(sed -n "s/^command: //p" "$dest.failed-1/FAILED")"
@@ -241,7 +250,7 @@ seeds=()
 for g in 1 2; do
     for ((j = 0; j < n; j++)); do
         s="$(derive_seed "$commit" "$digest" "$g" "$j")"
-        is_burned "$s" && die "derived seed g$g/$j = $s is a burned development seed"
+        is_burned "$s" && die "derived seed g$g/$j = $s is a burned seed"
         [ -n "${seen[$s]:-}" ] && die "derived seed $s repeats"
         seen[$s]=1
         seeds+=("$g $j $s")
@@ -253,7 +262,7 @@ trap 'rm -rf "$work"' EXIT
 learner=""
 
 # A failed attempt: keep the partial set under a numbered name with a FAILED note, write the void receipt into the
-# one EXP-001 counter, then stop.
+# one $EXP_ID counter, then stop.
 fail_attempt() {
     local k="$attempt" fd="$dest.failed-$attempt" n ls=NONE
     [ -n "$learner" ] && [ -f "$learner" ] && ls="$(sha "$learner")"
@@ -262,10 +271,10 @@ fail_attempt() {
     n="$(tc_void_write "$commit" generation generate GENERATION "$1 (kept as $fd)" "$orig_cmd" \
         "crumbs $CRUMBS_SHA256 learner $ls profile $digest" "$digest" "$cm_sha")" || die "cannot write the void receipt in $vdir"
     if [ "$n" -ge "$TC_MAX_ATTEMPTS" ]; then
-        printf 'EXP-001 INCONCLUSIVE reason INFRA: void attempt %s of EXP-001 was sealed generation attempt %s (%s)\n' "$n" "$k" "$vdir" >"$dest.INCONCLUSIVE_INFRA"
-        die "attempt $k failed ($1); void $n of EXP-001: EXP-001 is INCONCLUSIVE (INFRA); publish every FAILED note and void receipt"
+        printf '$EXP_ID INCONCLUSIVE reason INFRA: void attempt %s of $EXP_ID was sealed generation attempt %s (%s)\n' "$n" "$k" "$vdir" >"$dest.INCONCLUSIVE_INFRA"
+        die "attempt $k failed ($1); void $n of $EXP_ID: $EXP_ID is INCONCLUSIVE (INFRA); publish every FAILED note and void receipt"
     fi
-    die "attempt $k failed ($1); kept as $fd; void $n of EXP-001 recorded in $vdir; retry with the byte-identical command"
+    die "attempt $k failed ($1); kept as $fd; void $n of $EXP_ID recorded in $vdir; retry with the byte-identical command"
 }
 umask 077
 mkdir -p "$TC_SEALED_ROOT"

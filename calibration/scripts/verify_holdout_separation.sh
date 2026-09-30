@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Turing calibration (CAL-0 / EXP-001): prove the sealed test data is separate
+# Turing calibration (CAL-0 / EXP-001, EXP-001R): prove the sealed test data is separate
 # from all development data, and was made after the freeze. Writes overlap_audit.json.
 #
-# usage: verify_holdout_separation.sh --sealed-dir DIR --out FILE [--dev-list FILE] [--repo DIR]
+# usage: [EXP_ID=EXP-001R] verify_holdout_separation.sh --sealed-dir DIR --out FILE [--dev-list FILE] [--burned-dir DIR]... [--repo DIR]
 #
 #   --sealed-dir  ~/aien-data/turing-cal/sealed/<commit> (written by generate_sealed_data.sh)
 #   --out         where overlap_audit.json goes (normally
@@ -11,6 +11,11 @@
 #                 trace.ctr under ~/aien-data/crumbline (all burned development data,
 #                 both conditions, all runs). Each trace.ctr's sibling ledger.jsonl
 #                 is used for the ledger checks.
+#   --burned-dir  (repeatable) a sealed root of a finished experiment: its trace.ctr files (and sibling
+#                 ledgers) join the dev/burned comparison list. EXP_ID=EXP-001R adds the EXP-001 sealed
+#                 root by default (TC_EXP001_SEALED overrides its location). Added to --dev-list too.
+# EXP_ID selects the experiment (default EXP-001; see tc_exp.sh). EXP-001 keeps the original gates. EXP-001R
+# uses the amended G6 and refuses the six EXP-001 sealed seeds in G3.
 #   --repo        git repository (worktree or .git directory) holding the freeze
 #                 commit; default: the checkout holding this script. Needed inside
 #                 the Auditor jail, where the script runs from a git-archive export.
@@ -20,11 +25,16 @@
 # Gates (all must hold; exit 0 = PASS, 1 = FAIL, 2 = could not run):
 #   G1 complete        COMPLETE exists and equals SHA-256(seed_commitment.json)
 #   G2 integrity       every kept file in manifest.json has its recorded SHA-256
-#   G3 seeds           every seed re-derives from the rule, none is burned (0..10, 20260927)
+#   G3 seeds           every seed re-derives from the rule, none is burned (0..10, 20260927; EXP-001R also
+#                      the six EXP-001 sealed seeds)
 #   G4 after_freeze    every sealed file's mtime is later than the freeze commit's committer time, and the
 #                      candidate manifest at that commit is "status": "frozen" (the commit is C_f)
 #   G5 single_link     every sealed file has exactly one hard link
-#   G6 crumb_digest    no ledger crumb_digest shared between dev and sealed
+#   G6 crumb_digest    no ledger crumb_digest shared between dev/burned and sealed. EXP-001R amendment: a
+#                      shared crumb_digest is EXEMPT only when the sealed record population is Ambiguous AND its
+#                      sealed_digest differs from the sealed_digest of every dev/burned record carrying that
+#                      crumb_digest (crumb_digest hashes only the visible part; the hidden held-out set differs).
+#                      Exempt matches are counted and listed in overlap_audit.json (g6_exempt_matches).
 #   G7 sealed_digest   no ledger sealed_digest (hidden held-out set) shared
 #   G8 trace_stream    no ledger trace_stream_digest shared, except degenerate stream
 #                      digests (a digest repeated across distinct crumbs inside ONE
@@ -35,14 +45,17 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 toolrepo="$(cd "$here/../.." && pwd)"
+. "$here/tc_exp.sh"
 repo="$(git -C "$here" rev-parse --show-toplevel 2>/dev/null || true)"
 sealed="" out="" devlist=""
+burned_dirs=()
 die() { echo "verify_holdout_separation: $*" >&2; exit 2; }
 while [ $# -gt 0 ]; do
     case "$1" in
     --sealed-dir) sealed="$2"; shift 2 ;;
     --out) out="$2"; shift 2 ;;
     --dev-list) devlist="$2"; shift 2 ;;
+    --burned-dir) burned_dirs+=("$2"); shift 2 ;;
     --repo) repo="$2"; shift 2 ;;
     *) die "unknown option '$1'" ;;
     esac
@@ -90,6 +103,7 @@ while read -r g j s; do
     want="$((16#$(printf '%x' $((16#${h:0:1} & 7)))${h:1}))"
     [ "$want" = "$s" ] || { g3=0; echo "seed rule mismatch g$g/$j" >&2; }
     { [ "$s" -le 10 ] || [ "$s" = 20260927 ]; } && g3=0
+    if [ -n "$EXP_BURNED_FILE" ] && grep -qx -- "$s" "$here/../../$EXP_BURNED_FILE"; then g3=0; echo "burned EXP-001 seed g$g/$j" >&2; fi
 done < <(sed -n 's/.*"group": \([0-9]*\), "index": \([0-9]*\), "seed": \([0-9]*\)}.*/\1 \2 \3/p' "$sc")
 [ "$nseed" -gt 0 ] || g3=0
 
@@ -98,7 +112,7 @@ early="$(find "$sealed" -type f ! -newermt "@$ctime" | wc -l)"
 multi="$(find "$sealed" -type f -links +1 | wc -l)"
 # The seed commitment must name the freeze commit C_f: the candidate manifest there says "status": "frozen".
 frozen=0
-git -C "$repo" show "$commit:calibration/experiments/EXP-001/candidate_manifest.json" 2>/dev/null | grep -q "^  \"status\": \"frozen\"," && frozen=1
+git -C "$repo" show "$commit:$EXP_DIR/candidate_manifest.json" 2>/dev/null | grep -q "^  \"status\": \"frozen\"," && frozen=1
 g4=$([ "$early" = 0 ] && [ "$frozen" = 1 ] && echo 1 || echo 0)
 g5=$([ "$multi" = 0 ] && echo 1 || echo 0)
 
@@ -106,6 +120,16 @@ g5=$([ "$multi" = 0 ] && echo 1 || echo 0)
 if [ -z "$devlist" ]; then
     devlist="$work/dev.txt"
     find "$HOME/aien-data/crumbline" -name trace.ctr -type f | LC_ALL=C sort >"$devlist"
+fi
+# Burned sealed roots of finished experiments (EXP-001R: the EXP-001 sealed root) join the dev/burned list.
+[ -n "$EXP_BURNED_SEALED" ] && [ -d "$EXP_BURNED_SEALED" ] && [ "$EXP_BURNED_SEALED" != "$sealed" ] && burned_dirs+=("$EXP_BURNED_SEALED")
+if [ "$EXP_G6_RULE" = amended ] && [ -n "$EXP_BURNED_SEALED" ] && [ ! -d "$EXP_BURNED_SEALED" ]; then
+    die "EXP-001 sealed root $EXP_BURNED_SEALED missing: the burned traces must be in the comparison list"
+fi
+if [ "${#burned_dirs[@]}" -gt 0 ]; then
+    for bd in "${burned_dirs[@]}"; do [ -d "$bd" ] || die "--burned-dir $bd is not a directory"; done
+    { cat "$devlist"; for bd in "${burned_dirs[@]}"; do find "$bd" -name trace.ctr -type f; done; } | LC_ALL=C sort -u >"$work/dev_all.txt"
+    devlist="$work/dev_all.txt"
 fi
 find "$sealed" -name trace.ctr -type f | LC_ALL=C sort >"$work/sealed.txt"
 ledgers() { while IFS= read -r t; do l="$(dirname "$t")/ledger.jsonl"; [ -f "$l" ] && echo "$l"; done <"$1"; }
@@ -116,7 +140,33 @@ keys() { # key listfile -> sorted unique values
     xargs -d '\n' grep -ho "\"$1\":\"[0-9a-f]*\"" <"$2" | sed 's/.*:"\([0-9a-f]*\)"/\1/' | LC_ALL=C sort -u
 }
 shared() { LC_ALL=C comm -12 <(keys "$1" "$work/dev_ledgers.txt") <(keys "$1" "$work/sealed_ledgers.txt"); }
-n6="$(shared crumb_digest | wc -l)"
+# G6. Strict (EXP-001): any shared crumb_digest fails. Amended (EXP-001R): a shared crumb_digest is exempt only when
+# every sealed record carrying it is population Ambiguous AND its sealed_digest is not the sealed_digest of any
+# dev/burned record carrying that crumb_digest. No numeric tolerance.
+recs() { # ledger-list -> "crumb_digest<TAB>population<TAB>sealed_digest" per record
+    xargs -d '\n' cat <"$1" | awk '{
+        c = p = s = ""
+        if (match($0, /"crumb_digest":"[0-9a-f]*"/)) c = substr($0, RSTART + 16, RLENGTH - 17)
+        if (match($0, /"population":"[A-Za-z_]*"/)) p = substr($0, RSTART + 14, RLENGTH - 15)
+        if (match($0, /"sealed_digest":"[0-9a-f]*"/)) s = substr($0, RSTART + 16, RLENGTH - 17)
+        if (c != "") print c "\t" p "\t" s }' | LC_ALL=C sort -u
+}
+recs "$work/dev_ledgers.txt" >"$work/dev_recs.tsv"
+recs "$work/sealed_ledgers.txt" >"$work/sealed_recs.tsv"
+awk -F'\t' -v rule="$EXP_G6_RULE" '
+    NR == FNR { devc[$1] = 1; devs[$1, $3] = 1; dl[$1] = dl[$1] (dl[$1] == "" ? "" : ",") $3; next }
+    ($1 in devc) {
+        shared[$1] = 1
+        if (rule == "amended" && $2 == "Ambiguous" && !(($1, $3) in devs)) { ex[$1 "\t" $2 "\t" $3 "\t" dl[$1]] = $1 } else bad[$1] = 1
+    }
+    END {
+        ns = 0; nb = 0; ne = 0
+        for (c in shared) { ns++; if (c in bad) nb++; else ne++ }
+        print "COUNTS\t" ns "\t" nb "\t" ne
+        for (k in ex) if (!(ex[k] in bad)) print "EXEMPT\t" k
+    }' "$work/dev_recs.tsv" "$work/sealed_recs.tsv" | LC_ALL=C sort >"$work/g6.txt"
+read -r _ n6shared n6 n6exempt < <(grep '^COUNTS' "$work/g6.txt" | tr '\t' ' ')
+grep '^EXEMPT' "$work/g6.txt" | cut -f2- >"$work/g6_exempt.tsv" || true
 n7="$(shared sealed_digest | wc -l)"
 # Degenerate stream digests: repeated inside one ledger file (distinct crumbs, same stream).
 cat "$work/dev_ledgers.txt" "$work/sealed_ledgers.txt" | while IFS= read -r l; do
@@ -148,13 +198,20 @@ mkdir -p "$(dirname "$out")"
     echo "  \"sealed_trace_files\": $(wc -l <"$work/sealed.txt"),"
     echo "  \"degenerate_trace_stream_digests\": \"$degen\","
     echo "  \"ctr1\": $ctr1,"
+    if [ "$EXP_G6_RULE" = amended ]; then
+        echo "  \"g6_rule\": \"amended: a shared crumb_digest is exempt only if every sealed record carrying it is Ambiguous and its sealed_digest differs from every dev/burned sealed_digest carrying that crumb_digest\","
+        echo "  \"g6_exempt_matches\": ["
+        awk -F'\t' 'NF >= 4 { printf "%s    {\"crumb_digest\": \"%s\", \"population\": \"%s\", \"sealed_digest\": \"%s\", \"dev_or_burned_sealed_digests\": \"%s\"}", (n++ ? ",\n" : ""), $1, $2, $3, $4 } END { if (n) print "" }' "$work/g6_exempt.tsv"
+        echo "  ],"
+    fi
     echo "  \"gates\": {"
     gate complete "$g1" "COMPLETE matches seed_commitment.json"; echo ","
     gate integrity "$g2" "$nchk kept files re-hashed"; echo ","
     gate seeds "$g3" "$nseed seeds re-derived"; echo ","
     gate after_freeze "$g4" "$early files not newer than commit time; manifest frozen at commit: $frozen"; echo ","
     gate single_link "$g5" "$multi files with extra hard links"; echo ","
-    gate crumb_digest "$([ "$n6" = 0 ] && echo 1 || echo 0)" "$n6 shared"; echo ","
+    if [ "$EXP_G6_RULE" = amended ]; then g6d="$n6shared shared, $n6exempt exempt (Ambiguous, different hidden set)"; else g6d="$n6 shared"; fi
+    gate crumb_digest "$([ "$n6" = 0 ] && echo 1 || echo 0)" "$g6d"; echo ","
     gate sealed_digest "$([ "$n7" = 0 ] && echo 1 || echo 0)" "$n7 shared"; echo ","
     gate trace_stream "$([ "$n8" = 0 ] && echo 1 || echo 0)" "$n8 shared (degenerate excluded)"; echo ","
     gate crumb_block "$([ "$n9" = 0 ] && echo 1 || echo 0)" "$n9 shared"; echo

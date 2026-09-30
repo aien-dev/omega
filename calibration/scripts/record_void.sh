@@ -15,6 +15,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/tc_void_lib.sh"
 die() { echo "record_void: REFUSED: $*" >&2; exit 2; }
 repo="$(git -C "$here" rev-parse --show-toplevel)"
+. "$here/tc_exp.sh"
 cf="" step="" code="" reason="" command=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -29,13 +30,13 @@ while [ $# -gt 0 ]; do
 done
 [[ "$cf" =~ ^[0-9a-f]{40}$ ]] || die "--commit must be the 40-hex freeze commit C_f"
 [ -n "$step" ] && [ -n "$code" ] && [ -n "$reason" ] && [ -n "$command" ] || die "--step --code --reason --command are required"
-pd="$(git -C "$repo" show "$cf:calibration/profiles/Turing-profile-v1.0.toml" 2>/dev/null | sha256sum | cut -c1-64)"
-cm="$(git -C "$repo" show "$cf:calibration/experiments/EXP-001/candidate_manifest.json" 2>/dev/null | sha256sum | cut -c1-64)"
-git -C "$repo" cat-file -e "$cf:calibration/experiments/EXP-001/candidate_manifest.json" 2>/dev/null || die "no candidate manifest at $cf"
+pd="$(git -C "$repo" show "$cf:$EXP_PROFILE" 2>/dev/null | sha256sum | cut -c1-64)"
+cm="$(git -C "$repo" show "$cf:$EXP_DIR/candidate_manifest.json" 2>/dev/null | sha256sum | cut -c1-64)"
+git -C "$repo" cat-file -e "$cf:$EXP_DIR/candidate_manifest.json" 2>/dev/null || die "no candidate manifest at $cf"
 dir="$(tc_void_dir "$cf")"
-tc_void_ended "$dir" && die "EXP-001 has ended ($dir holds a final receipt or three void receipts)"
+tc_void_ended "$dir" && die "$EXP_ID has ended ($dir holds a final receipt or three void receipts)"
 first="$(tc_void_first_command "$dir" tests)"
 [ -z "$first" ] || [ "$first" = "$(tc_jclean "$command")" ] || die "retry differs from the first tests void ($first)"
 n="$(tc_void_write "$cf" tests "$step" "$code" "$reason" "$command" "frozen tree $cf" "$pd" "$cm")"
-echo "record_void: void attempt $n of EXP-001 written to $dir/void_receipt_$n.json" >&2
-[ "$n" -lt "$TC_MAX_ATTEMPTS" ] || echo "record_void: third void attempt: EXP-001 is INCONCLUSIVE (INFRA), final_receipt.json written" >&2
+echo "record_void: void attempt $n of $EXP_ID written to $dir/void_receipt_$n.json" >&2
+[ "$n" -lt "$TC_MAX_ATTEMPTS" ] || echo "record_void: third void attempt: $EXP_ID is INCONCLUSIVE (INFRA), final_receipt.json written" >&2

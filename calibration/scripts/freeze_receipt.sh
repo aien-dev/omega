@@ -21,9 +21,10 @@
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(git -C "$here" rev-parse --show-toplevel)"
+. "$here/tc_exp.sh"
 cf="${1:-}"
 shift || true
-fetch=1 out="$repo/calibration/experiments/EXP-001/freeze_receipt.json"
+fetch=1 out="$repo/$EXP_DIR/freeze_receipt.json"
 while [ $# -gt 0 ]; do
     case "$1" in
     --no-fetch) fetch=0; shift ;;
@@ -32,9 +33,9 @@ while [ $# -gt 0 ]; do
     esac
 done
 die() { echo "freeze_receipt: REFUSED: $*" >&2; exit 2; }
-M=calibration/experiments/EXP-001/candidate_manifest.json
-P=calibration/profiles/Turing-profile-v1.0.toml
-S=calibration/profiles/Turing-profile-v1.0.sha256
+M=$EXP_DIR/candidate_manifest.json
+P=$EXP_PROFILE
+S=$EXP_SIDECAR
 at() { git -C "$repo" show "$cf:$1"; }
 
 [[ "$cf" =~ ^[0-9a-f]{40}$ ]] || die "C_f must be a full 40-hex commit id"
@@ -45,7 +46,7 @@ git -C "$repo" merge-base --is-ancestor "$cf" "$om" || die "check 1: $cf is not 
 
 man="$(at "$M")" || die "check 2: $M missing at C_f"
 grep -q '^  "status": "frozen",' <<<"$man" || die "check 2: manifest at C_f is not frozen"
-pre="$(at calibration/experiments/EXP-001/preregistration.json)" || die "check 2: preregistration.json missing at C_f"
+pre="$(at $EXP_DIR/preregistration.json)" || die "check 2: preregistration.json missing at C_f"
 grep -q "^  \"status\": \"frozen\"," <<<"$pre" || die "check 2: preregistration.json at C_f is not status frozen"
 jv() { sed -n "s/^ *\"$1\": \"\([^\"]*\)\".*/\1/p" <<<"$man" | head -1; }
 
