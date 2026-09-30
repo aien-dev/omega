@@ -24,6 +24,8 @@
 #include "forge_descriptor.h"
 #endif
 
+#include "sha256.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -287,6 +289,35 @@ static int print_hw_descriptor(void) {
 }
 #endif
 
+/* Binds the log to this run and this binary: the run id the qualifier set in
+ * OMEGA_NUMERIC_RUN_ID and the SHA-256 of /proc/self/exe, which the qualifier
+ * compares with the file it built. */
+static void print_run_line(void) {
+    const char *id = getenv("OMEGA_NUMERIC_RUN_ID");
+    size_t n = id ? strlen(id) : 0;
+    if (n == 0 || n > 128) id = "";
+    for (size_t i = 0; id[0] && i < n; i++) {
+        char ch = id[i];
+        if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
+              ch == '-' || ch == '_' || ch == '.')) { id = ""; break; }
+    }
+    char hex[65] = "";
+    FILE *f = fopen("/proc/self/exe", "rb");
+    if (f) {
+        sha256_ctx ctx;
+        uint8_t buf[65536], dig[SHA256_DIGEST_SIZE];
+        size_t got;
+        sha256_init(&ctx);
+        while ((got = fread(buf, 1, sizeof(buf), f)) > 0) sha256_update(&ctx, buf, got);
+        if (!ferror(f)) {
+            sha256_final(&ctx, dig);
+            for (int i = 0; i < SHA256_DIGEST_SIZE; i++) snprintf(hex + 2 * i, 3, "%02x", dig[i]);
+        }
+        fclose(f);
+    }
+    printf("OMEGA_NUMERIC_RUN_JSON:{\"run_id\":\"%s\",\"binary_sha256\":\"%s\"}\n", id, hex);
+}
+
 /* ---- Main ----------------------------------------------------------------------- */
 
 int main(void) {
@@ -307,12 +338,16 @@ int main(void) {
     int hw_rc = print_hw_descriptor();
 #endif
 
+    print_run_line();
     build_corpus();
 
-    /* FPCR.FZ (bit 24) must be clear, or the host tiers themselves flush. */
-    uint64_t fpcr;
-    __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr));
-    report("FPCR_FLUSH_TO_ZERO_CLEAR", (fpcr & (1u << 24)) == 0);
+    /* The host tiers need round to nearest even with FZ (and DN, AH, FIZ, NEP,
+     * FZ16) clear; otherwise both tiers can agree on the same wrong result. */
+    uint64_t fpcr = omega_numeric_read_fpcr();
+    printf("[*] FPCR 0x%016llx, required-clear mask 0x%016llx\n", (unsigned long long)fpcr,
+           (unsigned long long)OMEGA_NUMERIC_FPCR_REQUIRED_CLEAR);
+    report("FPCR_RNE_NO_FTZ_REQUIRED",
+           (fpcr & OMEGA_NUMERIC_FPCR_REQUIRED_CLEAR) == 0 && omega_numeric_fpenv_ok());
 
     /* ---- Encoding and provenance ------------------------------------------------ */
     int fixtures_rc = omega_blackwell_verify_codegen_fixtures();
@@ -324,6 +359,9 @@ int main(void) {
         const OmegaNumericOpInfo *info = omega_numeric_op_at(i);
         printf("    %-11s %-10s %-10s %s\n", info->name, info->gb10_encoded ? "encoded" : "REFUSED",
                omega_numeric_compare_name(info->compare), info->reference);
+        printf("OMEGA_NUMERIC_REGISTRY_JSON:{\"op\":\"%s\",\"encoded\":%s,\"compare\":\"%s\",\"launches\":%zu}\n",
+               info->name, info->gb10_encoded ? "true" : "false", omega_numeric_compare_name(info->compare),
+               info->op == OMEGA_NOP_FFMA ? (size_t)FFMA_C_COUNT : (size_t)1);
         if (!info->gb10_encoded) continue;
         encoded++;
         uint8_t code[0x200];
@@ -396,8 +434,39 @@ int main(void) {
             print_parity_json("SQRT", "cpu", "BIT_EXACT", 0, false, N, &t, &ct);
             sqrt_bad = t.mismatches;
         } else seq_ok = 0;
-        printf("OMEGA_NUMERIC_FINDING_JSON:{\"id\":\"DIV_SQRT_NOT_CORRECTLY_ROUNDED\",\"corpus\":%u,"
-               "\"div_mismatches\":%zu,\"sqrt_mismatches\":%zu}\n", N, div_bad, sqrt_bad);
+        /* Named hard cases the review found (old Newton sequences failed each):
+         * 1/3 was 1 ULP low, max/min-subnormal gave NaN, sqrt(min normal) was
+         * 1 ULP low. Plus ties and results in the subnormal range. */
+        static const uint32_t DIV_HARD[][2] = {
+            { 0x3f800000u, 0x40400000u }, { 0x7f7fffffu, 0x00000001u }, { 0xff7fffffu, 0x00000001u },
+            { 0x00000001u, 0x7f7fffffu }, { 0x00800000u, 0x40000000u }, { 0x00000003u, 0x40000000u },
+            { 0x00000001u, 0x40000000u }, { 0x00000001u, 0x3f7fffffu }, { 0x007fffffu, 0x3f800001u },
+            { 0x7f7fffffu, 0x3f7fffffu }, { 0x3f7fffffu, 0x7f7fffffu }, { 0x00400000u, 0x00000003u },
+        };
+        static const uint32_t SQRT_HARD[] = {
+            0x00800000u, 0x00000001u, 0x00000002u, 0x007fffffu, 0x7f7fffffu, 0x3f7fffffu, 0x40000000u,
+        };
+        size_t hard_bad = 0;
+        for (size_t k = 0; k < sizeof(DIV_HARD) / sizeof(DIV_HARD[0]); k++) {
+            float x = F(DIV_HARD[k][0]), y = F(DIV_HARD[k][1]);
+            float want = omega_ieee_div(x, y), got = omega_math_div(x, y);
+            if (!omega_numeric_bits_equal(want, got)) {
+                hard_bad++;
+                printf("    DIV 0x%08x / 0x%08x: want 0x%08x got 0x%08x\n", U(x), U(y), U(want), U(got));
+            }
+        }
+        for (size_t k = 0; k < sizeof(SQRT_HARD) / sizeof(SQRT_HARD[0]); k++) {
+            float x = F(SQRT_HARD[k]);
+            float want = omega_ieee_sqrt(x), got = omega_math_sqrt(x);
+            if (!omega_numeric_bits_equal(want, got)) {
+                hard_bad++;
+                printf("    SQRT 0x%08x: want 0x%08x got 0x%08x\n", U(x), U(want), U(got));
+            }
+        }
+        printf("OMEGA_NUMERIC_FINDING_JSON:{\"id\":\"DIV_SQRT_CORRECT_ROUNDING\",\"corpus\":%u,"
+               "\"div_mismatches\":%zu,\"sqrt_mismatches\":%zu,\"hard_case_mismatches\":%zu}\n",
+               N, div_bad, sqrt_bad, hard_bad);
+        if (hard_bad) seq_ok = 0;
         if (div_bad || sqrt_bad) seq_ok = 0;
 
         /* exp / log: the Omega sequences are the definition; check edge
@@ -588,6 +657,39 @@ int main(void) {
         printf("    corrupted provenance copies rejected: %d of %d; clean copy accepted: %s\n",
                caught, cases, clean ? "yes" : "no");
         report("NEG_OPCODE_PROVENANCE_INTEGRITY_VERIFIED", caught == cases && clean);
+    }
+    {
+        /* A non-default FP environment must be refused by every host tier, not
+         * used silently: under round-up, 1 + 2^-24 is the next float above 1
+         * in both the reference and the CPU tier, and they would agree. */
+        uint64_t saved = omega_numeric_read_fpcr();
+        static const uint64_t BAD_ENV[] = { 1ULL << 22 /* RMode RP */, 3ULL << 22 /* RMode RZ */,
+                                            1ULL << 24 /* FZ */ };
+        static const char *BAD_NAME[] = { "round-up", "round-to-zero", "flush-to-zero" };
+        int cases_ok = 0;
+        for (size_t k = 0; k < 3; k++) {
+            uint64_t v = (saved & ~OMEGA_NUMERIC_FPCR_REQUIRED_CLEAR) | BAD_ENV[k];
+            __asm__ volatile("msr fpcr, %0" : : "r"(v) : "memory");
+            volatile float one = 1.0f, tiny = F(0x33800000u), half = F(0x33000000u), sub = F(0x00000001u);
+            volatile float up = one + tiny, down = one - half, flushed = sub * one;
+            bool env_ok = omega_numeric_fpenv_ok();
+            int r_ref = omega_numeric_reference(OMEGA_NOP_FADD, g_a, g_b, NULL, g_ref, N);
+            int r_cpu = omega_numeric_cpu_realize(OMEGA_NOP_FADD, g_a, g_b, NULL, g_cpu, N);
+            int r_ftz = omega_numeric_reference_ftz(OMEGA_NOP_FADD, g_a, g_b, NULL, g_cpu, N);
+            OmegaParityTrace t;
+            int r_seed = omega_numeric_seed_bound(OMEGA_NOP_MUFU_RCP, g_a, g_cpu, N, &t);
+            __asm__ volatile("msr fpcr, %0" : : "r"(saved) : "memory");
+            /* the environment really changed (else the probe proves nothing) */
+            bool changed = (k == 0) ? U(up) == 0x3f800001u
+                         : (k == 1) ? U(down) == 0x3f7fffffu : U(flushed) == 0u;
+            bool refused = !env_ok && r_ref == OMEGA_NUMERIC_ERR_FPENV && r_cpu == OMEGA_NUMERIC_ERR_FPENV &&
+                           r_ftz == OMEGA_NUMERIC_ERR_FPENV && r_seed == OMEGA_NUMERIC_ERR_FPENV;
+            printf("    FPCR %-13s: environment changed %s, tiers refused %s (rc %d %d %d %d)\n", BAD_NAME[k],
+                   changed ? "yes" : "no", refused ? "yes" : "no", r_ref, r_cpu, r_ftz, r_seed);
+            if (changed && refused) cases_ok++;
+        }
+        bool restored = omega_numeric_read_fpcr() == saved && omega_numeric_fpenv_ok();
+        report("NEG_NONDEFAULT_FPCR_REFUSED", cases_ok == 3 && restored);
     }
     {
         /* Comparator sanity: one flipped low bit, and NaN vs number, are caught */

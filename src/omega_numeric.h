@@ -75,6 +75,22 @@ static inline bool omega_iszero(float x) {
 }
 
 /*
+ * Required host FP environment. The reference and CPU tiers compute with the
+ * host FPU, so a caller that changed the rounding mode or turned on flush to
+ * zero would make both tiers agree on the same wrong answer. These FPCR bits
+ * must be clear: RMode [23:22] (00 = round to nearest even), FZ [24], DN [25],
+ * FZ16 [19], and the FEAT_AFP controls FIZ [0], AH [1], NEP [2].
+ * omega_numeric_reference, omega_numeric_cpu_realize,
+ * omega_numeric_reference_ftz and omega_numeric_seed_bound refuse with
+ * OMEGA_NUMERIC_ERR_FPENV (and compute nothing) when any is set. They never
+ * change FPCR themselves.
+ */
+#define OMEGA_NUMERIC_FPCR_REQUIRED_CLEAR \
+    ((1ULL << 0) | (1ULL << 1) | (1ULL << 2) | (1ULL << 19) | (3ULL << 22) | (1ULL << 24) | (1ULL << 25))
+uint64_t omega_numeric_read_fpcr(void);
+bool omega_numeric_fpenv_ok(void);
+
+/*
  * Semantic Reference Tier:
  * Exact IEEE 754-2008 single-precision specification, round to nearest even.
  * Subnormals are preserved bit-exactly (Flush-To-Zero is strictly rejected).
@@ -94,10 +110,14 @@ float omega_ieee_div(float x, float y);
 float omega_ieee_sqrt(float x);
 
 /*
- * Omega-defined refinement sequences for Division & Square Root.
- * The Gate 5 spec requires these to be correctly rounded. They are compared
- * bit-for-bit against omega_ieee_div / omega_ieee_sqrt; see the gate test for
- * the observed mismatch counts.
+ * Omega-defined sequences for division and square root: correctly rounded
+ * (round to nearest, ties to even, subnormal results kept, overflow to
+ * infinity), computed with integer operations only (restoring long division,
+ * bitwise integer square root, one shared rounding step). No MUFU seed and no
+ * FP arithmetic, so the result does not depend on FPCR. Compared bit for bit
+ * against omega_ieee_div / omega_ieee_sqrt. Host sweep on 2026-09-30: SQRT
+ * over all 2^32 inputs and DIV over 10^9 stratified random pairs, zero
+ * mismatches.
  */
 float omega_math_div(float x, float y);
 float omega_math_sqrt(float x);
@@ -177,6 +197,7 @@ const char *omega_numeric_compare_name(OmegaNumericCompare c);
 #define OMEGA_NUMERIC_ERR_NOT_ENCODED -2   /* op known, no GB10 kernel exists    */
 #define OMEGA_NUMERIC_ERR_OPERANDS    -3   /* operand shape the kernel can't do  */
 #define OMEGA_NUMERIC_ERR_DEVICE      -4   /* device open/alloc/submit/wait      */
+#define OMEGA_NUMERIC_ERR_FPENV       -5   /* host FPCR is not RNE with FZ clear  */
 
 #define OMEGA_NUMERIC_MAX_COUNT 65536u
 

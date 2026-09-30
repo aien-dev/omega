@@ -118,7 +118,7 @@ check "passing log writes a receipt" 'num_receipt "$omega" "$TMP/good.log"'
 rec=$omega/evidence/OMEGA-NUMERIC-0/$NUM_DIGEST.json
 check "  file named by its digest" '[ -f "$rec" ] && [ "$(jq "del(.receipt_digest)" "$rec" | "$JSON_CANON" --sha256)" = "$NUM_DIGEST" ]'
 check "  mode 0444" '[ "$(stat -c %a "$rec")" = 444 ]'
-check "  observed counts 19/19/0" '[ "$(jq -c "[.observed_test_count,.observed_pass_count,.observed_fail_count]" "$rec")" = "[19,19,0]" ]'
+check "  observed counts 20/20/0" '[ "$(jq -c "[.observed_test_count,.observed_pass_count,.observed_fail_count]" "$rec")" = "[20,20,0]" ]'
 check "  candidate == run commit, trees clean" '[ "$(jq -r ".candidate_git_commit == .run_git_commit and .candidate_trees_clean.omega and .candidate_trees_clean.physics" "$rec")" = true ]'
 check "  binary, hardware digest, UTC time, predecessor recorded" '[ "$(jq -r "(.candidate_binary_sha256|length)==64 and .hardware_descriptor_digest==\"$fake_digest\" and (.timestamp_utc|endswith(\"Z\")) and (.predecessor_historical_gate5_sha256|length)==64" "$rec")" = true ]'
 check "  historical gate5 file untouched" '[ "$(cat "$omega/evidence/m19r_gate5_omega_numeric_evidence.json")" = "{\"historical\":true}" ]'

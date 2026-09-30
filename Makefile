@@ -163,7 +163,7 @@ test-m19r-qualify:
 # Gate 5 (OMEGA-NUMERIC-0), CPU tiers only: reference, CPU parity, provenance
 # and negative tests. Opens no device. The GB10 tier and the receipt come
 # from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
-# item fails (today: vocabulary incomplete, div/sqrt not correctly rounded).
+# item fails (today: vocabulary incomplete: no LDS/STS or warp-reduction kernel).
 .PHONY: test-numeric-cpu test-numeric-qualify
 NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c \
                    src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \

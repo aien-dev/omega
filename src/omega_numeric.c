@@ -20,6 +20,18 @@ bool omega_numeric_bits_equal(float a, float b) {
     return omega_float_to_bits(a) == omega_float_to_bits(b);
 }
 
+/* ---- Required FP environment ----------------------------------------------- */
+
+uint64_t omega_numeric_read_fpcr(void) {
+    uint64_t v;
+    __asm__ volatile("mrs %0, fpcr" : "=r"(v) : : "memory");
+    return v;
+}
+
+bool omega_numeric_fpenv_ok(void) {
+    return (omega_numeric_read_fpcr() & OMEGA_NUMERIC_FPCR_REQUIRED_CLEAR) == 0;
+}
+
 /* ---- Semantic Reference Tier (Zero Libm) --------------------------------- */
 
 float omega_ref_fadd(float a, float b) { return a + b; }
@@ -78,27 +90,70 @@ float omega_ieee_sqrt(float x) {
     return r;
 }
 
-/* ---- Host seeds used by the Omega div/sqrt sequences ---------------------- */
-/* Magic-constant seeds. They are not a model of the hardware MUFU unit. */
+/* ---- Host seed used only by the raw-seed negative test ------------------- */
+/* Magic-constant reciprocal seed. It is not a model of the hardware MUFU unit. */
 
-static inline float omega_mufu_rcp_seed(float y) {
+float omega_numeric_host_rcp_seed(float y) {
     return omega_bits_to_float(0x7ef311c0U - omega_float_to_bits(y));
 }
 
-static inline float omega_mufu_rsq_seed(float x) {
-    return omega_bits_to_float(0x5f3759dfU - (omega_float_to_bits(x) >> 1));
+/* ---- Omega-defined division and square root -------------------------------
+ * Both sequences use integer operations only (add, subtract, shift, compare,
+ * select), which the SIMT integer pipe has. They use no MUFU seed and no FP
+ * arithmetic, so the result does not depend on the FP rounding mode or on
+ * flush-to-zero. The rounding step is written once (omega_round_pack) and
+ * rounds to nearest, ties to even, including into the subnormal range and to
+ * infinity on overflow. Result: correctly rounded IEEE a / b and sqrt(a).
+ *
+ * The earlier Newton sequences (magic-constant seed, two refinements, an
+ * unfused residual) were up to 1 ULP off and overflowed to NaN when the
+ * divisor was subnormal; the 4096-element corpus found 946 DIV and 201 SQRT
+ * mismatches. */
+
+/* Split finite nonzero |x| into m * 2^e with m in [2^23, 2^24). */
+static void omega_unpack(uint32_t u, uint32_t *m, int32_t *e) {
+    uint32_t be = (u >> 23) & 0xffU;
+    uint32_t f = u & 0x007fffffU;
+    if (be != 0) {
+        *m = f | 0x00800000U;
+        *e = (int32_t)be - 150;
+        return;
+    }
+    int32_t ex = -149;
+    while ((f & 0x00800000U) == 0) { f <<= 1; ex--; }
+    *m = f;
+    *e = ex;
 }
 
-float omega_numeric_host_rcp_seed(float y) {
-    return omega_mufu_rcp_seed(y);
+/*
+ * Round sig * 2^exp2 (plus a nonzero amount below the last bit of sig when
+ * sticky) to FP32, ties to even. sig must be >= 2^25 so there are at least a
+ * guard bit and one more bit below the 24-bit mantissa.
+ */
+static uint32_t omega_round_pack(uint32_t sign, uint64_t sig, int32_t exp2, bool sticky) {
+    int32_t p = 63;
+    while (((sig >> p) & 1U) == 0) p--;
+    int32_t lead = p + exp2;             /* exponent of the leading bit */
+    int32_t be = lead + 127;             /* biased exponent if normal */
+    if (be >= 255) return sign | OMEGA_INF_POS;
+    int32_t lsb = (be >= 1) ? lead - 23 : -149;
+    int32_t s = lsb - exp2;              /* bits to drop, >= 2 by the sig bound */
+    if (s > p + 1) return sign;          /* below half the smallest subnormal */
+    uint64_t mant = sig >> s;
+    bool guard = ((sig >> (s - 1)) & 1U) != 0;
+    bool rest = sticky || (sig & ((1ULL << (s - 1)) - 1U)) != 0;
+    if (guard && (rest || (mant & 1U))) mant++;
+    /* Normal: mant in [2^23, 2^24]; a carry to 2^24 moves into the exponent.
+     * Subnormal: mant in [0, 2^23]; 2^23 is the smallest normal. */
+    uint64_t bits = (be >= 1) ? ((uint64_t)(be - 1) << 23) + mant : mant;
+    if (bits >= OMEGA_INF_POS) return sign | OMEGA_INF_POS;
+    return sign | (uint32_t)bits;
 }
-
-/* ---- Omega-Defined Division Refinement Sequence -------------------------- */
 
 float omega_math_div(float x, float y) {
     if (omega_isnan(x) || omega_isnan(y)) return omega_bits_to_float(OMEGA_QNAN_BITS);
-    bool neg = (omega_signbit(x) != omega_signbit(y));
-    float sign_mult = neg ? -1.0f : 1.0f;
+    uint32_t sign = (omega_float_to_bits(x) ^ omega_float_to_bits(y)) & 0x80000000U;
+    bool neg = sign != 0;
 
     if (omega_iszero(y)) {
         if (omega_iszero(x)) return omega_bits_to_float(OMEGA_QNAN_BITS);
@@ -111,50 +166,44 @@ float omega_math_div(float x, float y) {
     }
     if (omega_isinf(y)) return neg ? -0.0f : 0.0f;
 
-    float x_work = omega_fabs(x);
-    float y_work = omega_fabs(y);
-    if (y_work < 1.17549435e-38f) {
-        x_work *= 16777216.0f;
-        y_work *= 16777216.0f;
+    uint32_t mx, my;
+    int32_t ex, ey;
+    omega_unpack(omega_float_to_bits(x), &mx, &ex);
+    omega_unpack(omega_float_to_bits(y), &my, &ey);
+
+    /* Restoring long division: q = floor(mx * 2^26 / my), 27 quotient bits.
+     * mx / my > 1/2, so q >= 2^25. rem stays below 2^25. */
+    uint32_t rem = mx, q = 0;
+    for (int i = 0; i < 27; i++) {
+        q <<= 1;
+        if (rem >= my) { rem -= my; q |= 1U; }
+        rem <<= 1;
     }
-
-    float r0 = omega_mufu_rcp_seed(y_work);
-    float e0 = 1.0f - y_work * r0;
-    float r1 = r0 + r0 * e0;
-    float e1 = 1.0f - y_work * r1;
-    float r2 = r1 + r1 * e1;
-    float q0 = x_work * r2;
-    float rem = x_work - y_work * q0;
-    float q = q0 + rem * r2;
-
-    return q * sign_mult;
+    return omega_bits_to_float(omega_round_pack(sign, q, ex - ey - 26, rem != 0));
 }
-
-/* ---- Omega-Defined Sqrt Refinement Sequence ------------------------------ */
 
 float omega_math_sqrt(float x) {
     if (omega_isnan(x)) return omega_bits_to_float(OMEGA_QNAN_BITS);
-    if (x < 0.0f) return omega_bits_to_float(OMEGA_QNAN_BITS);
     if (omega_iszero(x)) return x;
+    if (omega_signbit(x)) return omega_bits_to_float(OMEGA_QNAN_BITS);
     if (omega_isinf(x)) return omega_bits_to_float(OMEGA_INF_POS);
 
-    float x_work = x;
-    float scale_back = 1.0f;
+    uint32_t m;
+    int32_t e;
+    omega_unpack(omega_float_to_bits(x), &m, &e);
+    uint64_t mm = m;
+    if (e & 1) { mm <<= 1; e -= 1; }       /* even exponent: x = mm * 2^e */
 
-    if (x_work < 1.17549435e-38f) {
-        x_work *= 16777216.0f;
-        scale_back = 0.000244140625f;
+    /* Bitwise integer square root of M = mm * 2^28: s = floor(sqrt(M)),
+     * s in [2^25, 2^27). x = M * 2^(e-28), sqrt(x) = sqrt(M) * 2^(e/2-14). */
+    uint64_t op = mm << 28, s = 0, one = 1ULL << 62;
+    while (one > op) one >>= 2;
+    while (one != 0) {
+        if (op >= s + one) { op -= s + one; s = (s >> 1) + one; }
+        else s >>= 1;
+        one >>= 2;
     }
-
-    float r0 = omega_mufu_rsq_seed(x_work);
-    float h = 0.5f * x_work;
-    float r1 = r0 * (1.5f - h * r0 * r0);
-    float r2 = r1 * (1.5f - h * r1 * r1);
-    float s0 = x_work * r2;
-    float rem = x_work - s0 * s0;
-    float s = s0 + 0.5f * rem * r2;
-
-    return s * scale_back;
+    return omega_bits_to_float(omega_round_pack(0, s, e / 2 - 14, op != 0));
 }
 
 /* ---- Omega-Defined Exp Polynomial Sequence -------------------------------- */
@@ -283,9 +332,9 @@ static const OmegaNumericOpInfo OP_TABLE[OMEGA_NOP_COUNT] = {
       "and a QMD shared-memory size that are not encoded yet" },
     { OMEGA_NOP_SHFL_DOWN, "SHFL_DOWN", 1, true, OMEGA_CMP_INT_EXACT,
       "a[lane+1] within each 32-lane warp, lane 31 keeps its own value", NULL },
-    { OMEGA_NOP_DIV, "DIV", 2, false, OMEGA_CMP_BIT_EXACT, "correctly rounded a / b",
+    { OMEGA_NOP_DIV, "DIV", 2, false, OMEGA_CMP_BIT_EXACT, "correctly rounded a / b (integer long division, RNE)",
       "no GB10 kernel for the Omega division sequence exists (the old path ran FADD)" },
-    { OMEGA_NOP_SQRT, "SQRT", 1, false, OMEGA_CMP_BIT_EXACT, "correctly rounded sqrt(a)",
+    { OMEGA_NOP_SQRT, "SQRT", 1, false, OMEGA_CMP_BIT_EXACT, "correctly rounded sqrt(a) (integer square root, RNE)",
       "no GB10 kernel for the Omega square-root sequence exists (the old path ran FMUL)" },
     { OMEGA_NOP_EXP, "EXP", 1, false, OMEGA_CMP_BIT_EXACT, "omega_math_exp(a)",
       "no GB10 kernel for the Omega exp polynomial exists (the old path ran FADD)" },
@@ -506,6 +555,7 @@ static bool needs_b(OmegaNumericOp op) {
 int omega_numeric_reference(OmegaNumericOp op, const float *a, const float *b,
                             const float *c, float *out, size_t count) {
     if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (!omega_numeric_fpenv_ok()) return OMEGA_NUMERIC_ERR_FPENV;
     if (needs_b(op) && !b) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if ((op == OMEGA_NOP_SHFL_DOWN || op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0)
@@ -554,6 +604,7 @@ static float cpu_tree_sum32(const float *a) {
 int omega_numeric_cpu_realize(OmegaNumericOp op, const float *a, const float *b,
                               const float *c, float *out, size_t count) {
     if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (!omega_numeric_fpenv_ok()) return OMEGA_NUMERIC_ERR_FPENV;
     if (needs_b(op) && !b) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if ((op == OMEGA_NOP_SHFL_DOWN || op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0)
@@ -664,6 +715,7 @@ int omega_numeric_seed_bound(OmegaNumericOp op, const float *a, const float *got
                              size_t count, OmegaParityTrace *trace) {
     if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !got || !trace) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (OP_TABLE[op].compare != OMEGA_CMP_SEED_BOUND) return OMEGA_NUMERIC_ERR_OPERANDS;
+    if (!omega_numeric_fpenv_ok()) return OMEGA_NUMERIC_ERR_FPENV;
     memset(trace, 0, sizeof(*trace));
     trace->first_index = -1;
     const double bound = 1.0 / 1048576.0; /* 2^-20 relative */
@@ -705,6 +757,7 @@ static float ftz(float x) {
 int omega_numeric_reference_ftz(OmegaNumericOp op, const float *a, const float *b,
                                  const float *c, float *out, size_t count) {
     if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (!omega_numeric_fpenv_ok()) return OMEGA_NUMERIC_ERR_FPENV;
     if (needs_b(op) && !b) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     for (size_t i = 0; i < count; i++) {
