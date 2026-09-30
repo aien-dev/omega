@@ -12,6 +12,13 @@ reaction wakes on the objects it declared and commits under the grants it
 holds, checked by the native AIENOS capability authority (C, pinned by
 `aienos.lock`).
 
+Who may act is fixed by the runtime too (spec C6): at startup the entry point
+enrolls every production subject (`rx_living_enroll_callers`), closes
+enrollment (`rx_world_bind_callers`) and binds the generation store to the
+world and to the native authority (`rx_gen_bind_authority`). After that a
+reaction registration, a generation proposal or a promotion that does not
+carry the named subject's runtime-issued credential is refused.
+
 | what | sources | make target |
 |---|---|---|
 | living system, host seat | `$(RX_R13_SRCS)` (omega `src/`, `src/runtime/`, `tests/runtime/rx_r13_living.c`) + `libaienos_capability.a` | `test-r13-host` |
@@ -44,10 +51,11 @@ build stops and says exactly what to set.
 A="AIENOS_LOCK_REPO=$HOME/workspace/aienos-argus-cap"
 make $A r16-inventory test-r16-inventory     # G1/G2 (seconds)
 make $A test-r16-authpath                    # G3 host stand-in (about 30 s)
-make $A test-r16-negative                    # G4 (under 1 s); FAIL at 6d1ff1d: the listed attempts are
-                                             # refused ("R16 G4 core:"), but a promotion or a reaction that
-                                             # names the promoter as its subject is accepted ("R16 G4 OPEN"); spec C5
-make $A test-r16-negative-mutants            # G4 guards load-bearing (about 1 min; judged on the core line)
+make $A test-r16-negative                    # G4 (under 1 s); PASS since spec C6: every subject acts only with a
+                                             # runtime-issued caller credential, so the promoter-subject exploit that
+                                             # was accepted at 44d8c06 (spec C5) is refused with the identity error
+make $A test-r16-negative-mutants            # G4 guards load-bearing (about 1 min; judged on the gate line;
+                                             # 27 mutants incl. 12 identity mutants, all killed)
 make $A test-r16-surface                     # G5 (seconds)
 ```
 
