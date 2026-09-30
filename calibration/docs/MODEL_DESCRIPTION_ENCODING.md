@@ -2,7 +2,10 @@
 
 This document is sufficient to write a TYM0 decoder and scorer without reading omega source. The reference
 implementation is `src/turing/ty_model.c` (`ty_model_encode`, `ty_model_decode`, `ty_model_score`); where this
-document and the code disagree, the run is void and the disagreement is reported (FAILURE_REPORTING.md).
+document and the code disagree, the code is wrong: before the freeze the code is fixed; after sealed scoring
+has started it is a terminal FAIL of the criterion that used the value (S8 when the independent scorer, written
+from this document, disagrees; FAILURE_REPORTING.md section 2), never a void. The trace and bundle formats the
+scorer also needs are in DATA_FORMAT.md.
 
 L(M), the model cost under Turing-profile-v1.0, is the exact bit length of the TYM0 code defined here.
 

@@ -41,7 +41,7 @@ File = header (128 bytes) || count records || trailer (32 bytes).
 | 12 | 8 | count | number of records n |
 | 20 | 4 | record_bytes | 24 + 2K |
 | 24 | 4 | reserved | 0 |
-| 28 | 32 | profile_digest | digest of the frozen lane A profile sidecar |
+| 28 | 32 | profile_digest | the profile digest as 32 raw bytes: SHA-256 of the profile TOML file bytes, which is the 64-hex value on the sidecar line (DATA_FORMAT.md section 2), not the hash of the sidecar file |
 | 60 | 32 | model_digest | `ty_model_digest` = SHA-256("turing.ymodel.v0" 0x00 \|\| .tym bytes) |
 | 92 | 32 | dataset_digest | plain SHA-256 of the CTR1 file bytes |
 | 124 | 4 | reserved | 0 |
@@ -200,7 +200,8 @@ termination: x must equal L (else CORRUPT); pos must equal L_bytes (else TRAIL)
 that its ideal length equals `ty_model_score` exactly (else CORRUPT).
 
 - Events are the CTR1 events in file order. The crumb ordinal starts at 0 and
-  increments at every event with `first` set, except event 0.
+  increments at every event with `first` set, except event 0. `first` means
+  CTR1 event_index = 0 (DATA_FORMAT.md section 1.2; the file must start with one).
 - History p[0..4] (PREV1..PREV5) resets to K (the "none" value) at every `first`
   event, then after the event p shifts and p[0] = symbol.
 - Key = mixed radix, low digit first, over the fields in the model mask:
@@ -211,11 +212,21 @@ that its ideal length equals `ty_model_score` exactly (else CORRUPT).
 
 ## 8. Ideal length
 
-Ideal(t0..t1) = sum over t of `ty_ubits_q16(q_t[x_t])` micro-bits, the same
-integer method the TY-2 receipts use (per symbol within 0.501 ub of the exact
--log2(q/65536) x 10^6). Bits = ub / 10^6.
+Ideal(t0..t1) = sum over t of `ub(q_t[x_t])` micro-bits (`ty_ubits_q16`, the same
+integer method the TY-2 receipts use). ub(q) for q in 1..65536 is this exact rule and no
+other (profile ideal_codelength_method, EVALUATOR.md section 6.2):
 
-## 9. Envelope (proposed, freezes with profile)
+1. ip = index of the highest set bit of q; m = q << (62 - ip); frac = 0.
+2. For i = 1..32: m = (m * m) >> 62 (128-bit product, truncated); if m >= 2^63,
+   set bit (32 - i) of frac and m = m >> 1.
+3. log2 = (ip << 32) | frac; x = (16 << 32) - log2; ub(q) = (x * 1000000 + 2^31) >> 32.
+
+Test values: ub(1) = 16000000, ub(32768) = 1000000, ub(65536) = 0, ub(43481) = 591903,
+ub(46819) = 485194. The last two are one micro-bit above the correctly rounded
+-log2(q/65536) x 10^6 (591902, 485193); every other q agrees, so each symbol is within
+0.501 ub of the exact value. The rule, not correct rounding, is the definition. Bits = ub / 10^6.
+
+## 9. Envelope (frozen with the profile, coder_envelope)
 
 Overhead = coded bits (whole file, section 4) minus ideal bits. N = symbols in
 the unit. Measured with `make turing-exp001-envelope` on dev seeds 1 to 7 only
@@ -249,7 +260,7 @@ Where the overhead comes from:
   toward low symbols) codes about 5e-4 bits per symbol BELOW ideal. The 4-byte
   final state adds 32 bits. So the envelope must be two-sided.
 
-**Proposal (one two-sided envelope for both coders, any unit):**
+**The envelope (one two-sided band for both coders, any unit; the profile value):**
 
     | overhead - 448 | <= 64 + 1.0e-3 x N   bits
 
@@ -265,12 +276,28 @@ Where the overhead comes from:
   482 bits, rANS file minimum -641 bits; crumb max 491 (range) and 480 (rANS)
   bits including the header.
 
-A coder whose overhead leaves this band on any unit of a frozen run fails the
-calibration gate for that unit. If lane A prefers one bound per coder, the tighter
-split is range: 0 <= ovh - 448 <= 64 + 1.0e-3 x N; rANS: |ovh - 448| <= 64 +
-1.0e-3 x N (range never came below ideal plus header, but section 5 slack on the
-last symbol allows it in principle, so the one-sided range bound is data-backed,
-not proven).
+A coder whose overhead leaves this band on any unit of a frozen run fails S4 for
+that unit. There is no alternative bound: the single two-sided band above is the
+only envelope (a one-sided range bound was considered and not adopted).
+
+Measured on all seven candidates (CAL-0 review Q4; `make turing-exp001-envelope`,
+`calibration/scripts/envelope_summary.sh`): each candidate over the 7 dev files of
+seeds 1-7 and their 1,298 crumbs, 1,305 units per coder. Largest |overhead - 448|
+in bits over all units, and violations:
+
+| Candidate | Range | rANS | Violations |
+|---|---:|---:|---:|
+| B0_uniform | 1094.6 | 1089.4 | 0 |
+| B1_order0 | 953.5 | 32.7 | 0 |
+| B2_order1 | 984.7 | 33.5 | 0 |
+| B3_heuristic | 1217.8 | 790.2 | 0 |
+| M_candidate | 1133.8 | 33.4 | 0 |
+| M_mem | 1134.5 | 569.5 | 0 |
+| M_mem_seed1 | 547.8 | 71.2 | 0 |
+
+The closest unit of every candidate and coder is about 32 bits inside the bound.
+The dev models were fit in-sample on seeds 1-7; the numbers measure the coders on
+these streams, not model quality.
 
 Throughput on the Spark (single thread, -O2, millions of symbols per second,
 whole dev files): range encode 95 to 104, decode 137 to 143; rANS encode 103 to

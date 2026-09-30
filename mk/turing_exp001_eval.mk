@@ -33,6 +33,6 @@ test-turing-exp001-eval: $(TE_BIN) $(TE_BIN_ASAN)
 	bash tests/turing/test_tc_eval.sh $(TE_BIN_ASAN) $(TE_DIR)/t_asan
 	cmp $(TE_DIR)/t_plain/det.txt $(TE_DIR)/t_asan/det.txt
 
-turing-exp001-eval-dry: $(TE_BIN)
+turing-exp001-eval-dry: $(TE_BIN) turing-verify-indep
 	@test ! -e $(HOME)/workspace/.spark-quiet || { echo ".spark-quiet is set; not starting a heavy run"; exit 1; }
 	bash tests/turing/test_tc_eval_dry.sh $(TE_BIN) $(TE_DIR)/dry $(TE_DATA) $(TE_BIG)

@@ -16,7 +16,7 @@ Drake's brief, which is more specific than the protocols in places.
 
 | # | Requirement (doc + line) | Our artifact | Status |
 |---|---|---|---|
-| 1 | Freeze order: protocol, families, power sim, n fixed, profile frozen, candidates hashed, sealed data, evaluation (CVP 123-149) | `preregistration/EXP-001.md` sections 2, 6, 11; `freeze_candidate.sh`; `generate_sealed_data.sh` (needs freeze commit on origin/main); evaluator refusals NOT_FROZEN, FREEZE_COMMIT, FREEZE_AFTER_RELEASE | met |
+| 1 | Freeze order: protocol, families, power sim, n fixed, profile frozen, candidates hashed, sealed data, evaluation (CVP 123-149) | `preregistration/EXP-001.md` sections 2, 6, 11; `freeze_candidate.sh`; `generate_sealed_data.sh` (needs C_f on origin/main); `freeze_receipt.sh`; evaluator checks NOT_FROZEN, FREEZE_COMMIT, FREEZE_AFTER_RELEASE, SEED_DERIVATION | met with deviation D10 |
 | 2 | Profile field list, identity through failure policy (CVP 155-277) | `profiles/Turing-profile-v1.0.toml`; `check_profile.sh` section 5c requires every field name in CVP 155-277 | fixed now (56 missing names added) |
 | 3 | Profile digest is an input to every receipt (brief; CVP 1083) | sidecar `Turing-profile-v1.0.sha256`; `profile.digest`; receipt `profile.sha256`; checked against sidecar, candidate manifest and dataset manifest | met |
 | 4 | Sample size from a published simulation, not invented (CVP 279-291) | `scripts/power_simulation.c`, `experiments/EXP-001/power_simulation_output.txt`; n = 3 seeds per group | met |
@@ -33,11 +33,11 @@ Drake's brief, which is more specific than the protocols in places.
 | 15 | Acceptance criteria S1-S9 (CVP 445-477) | prereg section 5, `preregistration.json` criteria | met |
 | 16 | Gate value set (CVP 445-477 says PASS or FAIL; LEP 586-599 adds INCONCLUSIVE) | prereg section 5a; `FAILURE_REPORTING.md` section 2; schema enum; evaluator `gate` | fixed now, D9 |
 | 17 | INCONCLUSIVE needs an exact preregistered trigger (LEP 597-599; brief) | S6/S7/S9 interval contains 0 on the relevant side, no criterion FAIL or NOT_REACHED; `preregistration.json` verdict_rule; profile `verdict_inconclusive_trigger` | fixed now |
-| 18 | Actual vs ideal within preregistered overhead (CVP 445-477) | envelope abs(overhead - 448 bits) <= 64 bits + 0.001 bit per event, per file and per crumb (S2) | met |
+| 18 | Actual vs ideal within preregistered overhead (CVP 445-477) | envelope abs(overhead - 448 bits) <= 64 bits + 0.001 bit per event, per file and per crumb, all seven candidates (S4) | met |
 | 19 | No unexplained material ordering reversal (CVP 445-477) | S5 exact rule (band, 2 x band, group-1 vs group-2 T sign never explained); Spearman rho reported only | fixed now (rule made exact) |
 | 20 | Rank reversals classified by cause (CVP 1006-1025) | S5 classifies explained (inside the preregistered coder band) vs unexplained. No cause label was preregistered, so any unexplained reversal is FAIL whatever cause is found later; a cause label written afterwards is a diagnosis in REPORT and never changes S5 or the verdict (prereg S5, `preregistration.json`, FAILURE_REPORTING.md section 5) | fixed now |
 | 21 | Memorizer gets no spurious positive T (CVP 445-477; LEP 654-660) | S7, both memorizers, L(M) charges every stored count | met |
-| 22 | Independent scorer, separate package, no production code (CVP 445-477; LEP 584) | S8 compares `scorer_independent.json` key by key, integers only, zero tolerance, same key set, no repeated key, same schema and input digests; field contract in EVALUATOR.md section 6; NOT_INDEPENDENT refusal; lane D not written yet | open (O1) |
+| 22 | Independent scorer, separate package, no production code (CVP 445-477; LEP 584) | S8 compares `scorer_independent.json` key by key, integers only, zero tolerance, same key set, no repeated key, same schema and input digests; field contract in EVALUATOR.md section 6; NOT_INDEPENDENT refusal; lane D is `tools/turing_verify_indep` (C, written from the docs only, source pinned by independent_scorer_source_sha256, binary in runtime_digest) | fixed now |
 | 23 | New-seed replication preserves the conclusion (CVP 445-477; LEP 1615-1629) | group 2 (3 further sealed seeds), S9 | met |
 | 24 | Sensitivity: vary baseline, model code, precision, quantization, coder, length, holdout, seed, uncertainty method (CVP 989-1004) | `uncertainty.json`: T vs B0, B1, B3; L(M) byte-rounded and doubled; data-only gain; x2.04 interval; two coders; two seed groups | met for EXP-001 scope; full sweep belongs to gate TURING_PROFILE_SENSITIVITY (not in scope) |
 | 25 | Experiment bundle layout (CVP 1057-1081; brief) | `experiments/EXP-001/` as in EVALUATOR.md section 5 | met, with D2 and D5 |
@@ -51,7 +51,7 @@ Drake's brief, which is more specific than the protocols in places.
 | 33 | Failure policy: FAIL receipt, raw evidence, diagnosis, next version is a new experiment (CVP 1155-1173) | `FAILURE_REPORTING.md` sections 2-6; void receipts never overwritten; gate writes once | met |
 | 34 | Repository layout `turing-lab/` with Cargo crates (LEP 56-161) | `calibration/` in omega; C sources under `src/turing/tc_*`, `tools/turing_cal_*`, `calibration/scripts/` | deviation D1, D2 |
 | 35 | Helper scripts in Python (LEP 121-126) | shell and C only | deviation D1 |
-| 36 | Git tags for freeze and release (LEP 190-208) | named in prereg section 11, created at freeze | deviation D7 |
+| 36 | Git tags for freeze and release (LEP 190-208) | no tags: `freeze_receipt.json` records C_f, `seed_commitment.json` records the release time | deviation D7 |
 | 37 | Digest rule: canonical JSON, media_type, created_by (LEP 212-231) | SHA-256 over exact file bytes; one schema id per JSON file | deviation D3 |
 | 38 | Profile schema (LEP 233-276) | TOML + sidecar + `check_profile.sh` | met |
 | 39 | Candidate manifest fields (LEP 278-299) | `candidate_manifest.json`: name, file sha, model digest, K, key bits, rows, lm_bits, location, shared background, profile sha, status, frozen_at | met |
@@ -61,11 +61,11 @@ Drake's brief, which is more specific than the protocols in places.
 | 43 | CLI `turing ...` (LEP 435-599) | `turing-cal-eval run / gate`, `turing-coder`, make targets | deviation D1 |
 | 44 | Refuse a freeze after data release (LEP 500-513) | FREEZE_AFTER_RELEASE refusal and test | met |
 | 45 | EXP-001 statistics and memorizer rule (LEP 633-660) | prereg sections 5, 5a, 6 | met |
-| 46 | Phase 001-A: engineering qualification incl. independent-scorer parity on fixtures (LEP 808-894) | coder and evaluator tests pass; scorer parity waits for lane D | open (O1) |
+| 46 | Phase 001-A: engineering qualification incl. independent-scorer parity on fixtures (LEP 808-894) | coder and evaluator tests pass; independent-scorer parity on the development dry run (S8 PASS, `make turing-exp001-eval-dry`) | fixed now |
 | 47 | Report sections, preregistration through gate decision (LEP 896-935) | `REPORT.pending.md` "Report sections" block | fixed now |
-| 48 | Clean qualification build (LEP 1381-1407) | clean `make` of the six runtime binaries; `runtime_digest.sh` | met, with D1 |
+| 48 | Clean qualification build (LEP 1381-1407) | clean `make` of the seven runtime binaries; `runtime_digest.sh` | met, with D1 |
 | 49 | EXP-001 command sequence (LEP 1410-1455) | EVALUATOR.md sections 1-6, prereg section 11 | met, with D1 |
-| 50 | CAL-0 checklist incl. blinding verified and digest frozen (LEP 1599-1612; brief CAL-0 gate) | all drafted; profile still has 1 FILL_AT_FREEZE (runtime digest); fresh-reader review not done | open (O2, O3) |
+| 50 | CAL-0 checklist incl. blinding verified and digest frozen (LEP 1599-1612; brief CAL-0 gate) | all drafted; fresh-reader review done and resolved (`CAL0_REVIEW_RESOLUTION.md`); profile still has 1 FILL_AT_FREEZE (runtime digest) | open (O3) |
 | 51 | Notebook record per run: operator, host, dirty tree (LEP 1701-1721) | receipt `notebook`: operator (git user.name), host, kernel (uname), commit, tree_clean (git status --porcelain); outside a dry run a dirty or non-git tree is refused (DIRTY_TREE); schema `measurement_receipt.schema.json` | fixed now |
 | 52 | Deviation record fields (LEP 1723-1736) | deviation table below | met |
 | 53 | Publication package (LEP 1740-1758) | bundle + large files outside git with SHA-256 in INDEX files | met, with D5 |
@@ -83,20 +83,19 @@ decision. All were found on 2026-09-29 while drafting, before any sealed data; d
 | D4 | LEP 603-631, CVP 1125-1153 (trajectory-level bootstrap) | per-crumb bootstrap (brief; UNCERTAINTY_PROTOCOL.md); context resets at each crumb so code lengths add exactly; x2.04 inflated interval reported | narrower intervals than seed-level; reported, not used for verdict |
 | D5 | CVP 1057-1081 (streams and coded files inside the bundle) | large files kept outside git; SHA-256 and bytes in INDEX files and results records | same pinning, smaller repo |
 | D6 | CVP 1083-1122, LEP 409-430 (verifier signature) | `signed_by` = unsigned for profile v1.0; the git commit and its push are the record | no cryptographic signature. **Accepted by orchestrator 2026-09-29**; signing receipts with the owner key is a candidate for a later profile version. |
-| D7 | LEP 190-208 (git tags) | tag names fixed in prereg, created at freeze, not before | none |
+| D7 | LEP 190-208 (git tags) | no git tags. The freeze is recorded by `freeze_receipt.json` (C_f, TURING_PROFILE_V1_FROZEN = PASS) in a commit after C_f; the release by `seed_commitment.json` started_utc. Both are committed files with SHA-256 pins, which a tag would only name | none on numbers; a tag can be moved, a committed receipt cannot be changed without a new commit |
 | D8 | LEP 163-188 (separate principals) | same OS user in bwrap jails; temporal non-access (sealed data generated only after the freeze commit is on main) is the primary barrier | stated limit in BLINDING_PROTOCOL.md |
 | D9 | CVP 445-477 (gate PASS or FAIL only) | adds INCONCLUSIVE with an exact trigger, per LEP 597-599 and the brief | three-valued verdict; never converted after the result |
+| D10 | CVP 125-148 (profile frozen before candidate development is completed) | the profile is frozen together with the candidates in one commit C_f and holds numbers measured on the built candidates (model digests, L(M), the coder envelope measured on all seven) | the order is profile and candidates together, then sealed data. No sealed data exist before C_f, so nothing in the profile can depend on sealed data; the dev envelope is fitted to dev data only and stated as such |
 
 ## Open before freeze or verdict
 
-- O1: lane D independent scorer (separate code, no omega source) and its parity on the committed fixture (row 22, 46).
-- O2: CAL-0 fresh-reader reconstruction review (row 50).
 - O3: runtime digest (last FILL_AT_FREEZE), then sidecar, then `freeze_candidate.sh --freeze` (row 50).
 
-Closed in this pass: O4 (notebook record and DIRTY_TREE refusal, row 51) and O5 (unexplained reversal is FAIL, row 20).
+Closed: O1 (lane D independent scorer, rows 22 and 46) and O2 (CAL-0 fresh-reader review, row 50; resolution table `CAL0_REVIEW_RESOLUTION.md`) in the CAL-0 fix round. Earlier: O4 (notebook record and DIRTY_TREE refusal, row 51) and O5 (unexplained reversal is FAIL, row 20).
 
 ## Counts
 
-53 requirements: 25 met, 5 met with a deviation, 2 met by declaration or scope (energy not measured in
-EXP-001; full sensitivity sweep belongs to a later gate), 11 fixed now (one of them with D9), 7 deviations only,
-3 open. Nine deviations in all (D1-D9); D3 and D6 accepted by the orchestrator on 2026-09-29.
+53 requirements: 24 met, 6 met with a deviation, 2 met by declaration or scope (energy not measured in
+EXP-001; full sensitivity sweep belongs to a later gate), 13 fixed now (one of them with D9), 7 deviations only,
+1 open. Ten deviations in all (D1-D10); D3 and D6 accepted by the orchestrator on 2026-09-29.

@@ -21,7 +21,8 @@
 #   G1 complete        COMPLETE exists and equals SHA-256(seed_commitment.json)
 #   G2 integrity       every kept file in manifest.json has its recorded SHA-256
 #   G3 seeds           every seed re-derives from the rule, none is burned (0..10, 20260927)
-#   G4 after_freeze    every sealed file's mtime is later than the freeze commit's committer time
+#   G4 after_freeze    every sealed file's mtime is later than the freeze commit's committer time, and the
+#                      candidate manifest at that commit is "status": "frozen" (the commit is C_f)
 #   G5 single_link     every sealed file has exactly one hard link
 #   G6 crumb_digest    no ledger crumb_digest shared between dev and sealed
 #   G7 sealed_digest   no ledger sealed_digest (hidden held-out set) shared
@@ -95,7 +96,10 @@ done < <(sed -n 's/.*"group": \([0-9]*\), "index": \([0-9]*\), "seed": \([0-9]*\
 # G4 / G5
 early="$(find "$sealed" -type f ! -newermt "@$ctime" | wc -l)"
 multi="$(find "$sealed" -type f -links +1 | wc -l)"
-g4=$([ "$early" = 0 ] && echo 1 || echo 0)
+# The seed commitment must name the freeze commit C_f: the candidate manifest there says "status": "frozen".
+frozen=0
+git -C "$repo" show "$commit:calibration/experiments/EXP-001/candidate_manifest.json" 2>/dev/null | grep -q "^  \"status\": \"frozen\"," && frozen=1
+g4=$([ "$early" = 0 ] && [ "$frozen" = 1 ] && echo 1 || echo 0)
 g5=$([ "$multi" = 0 ] && echo 1 || echo 0)
 
 # Dev set
@@ -148,7 +152,7 @@ mkdir -p "$(dirname "$out")"
     gate complete "$g1" "COMPLETE matches seed_commitment.json"; echo ","
     gate integrity "$g2" "$nchk kept files re-hashed"; echo ","
     gate seeds "$g3" "$nseed seeds re-derived"; echo ","
-    gate after_freeze "$g4" "$early files not newer than commit time"; echo ","
+    gate after_freeze "$g4" "$early files not newer than commit time; manifest frozen at commit: $frozen"; echo ","
     gate single_link "$g5" "$multi files with extra hard links"; echo ","
     gate crumb_digest "$([ "$n6" = 0 ] && echo 1 || echo 0)" "$n6 shared"; echo ","
     gate sealed_digest "$([ "$n7" = 0 ] && echo 1 || echo 0)" "$n7 shared"; echo ","

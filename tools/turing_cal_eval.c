@@ -59,6 +59,12 @@
 static char why[1024];
 static const char *g_out;
 static int g_dry;
+/* g_scored: set once the first probability stream has been produced. From then on the verdict is final
+ * (FAILURE_REPORTING.md section 2): a failure is written as a final FAIL receipt, never as a void. */
+static int g_scored;
+static char g_cmd[4096];     /* the command line, recorded in every void receipt (identical-retry check) */
+static char g_inputs[1024];  /* "<name> <sha256>" pairs of the input files, same purpose */
+#define MAX_ATTEMPTS 3
 
 /* ---------- small helpers ---------- */
 
@@ -69,37 +75,104 @@ static void utc_now(char out[32]) {
     strftime(out, 32, "%Y-%m-%dT%H:%M:%SZ", &tm);
 }
 
-/* Refusal: the run is VOID. Writes <out>/void_receipt_<n>.json (n = 1, 2, ...: the first free number, exclusive
- * create, so an earlier void receipt is never overwritten) when the out dir exists. */
-static int refuse(const char *step, const char *code, const char *fmt, ...) {
+static void jclean(char *s) {
+    for (; *s; ++s)
+        if (*s == '"' || *s == '\\' || (unsigned char)*s < 0x20) *s = '\'';
+}
+
+/* Exclusive create of <out>/<name>; NULL if it exists or cannot be made. */
+static FILE *excl_open(const char *name) {
+    char p[PATH_MAX];
+    snprintf(p, sizeof p, "%s/%s", g_out, name);
+    int fd = open(p, O_WRONLY | O_CREAT | O_EXCL, 0644);
+    return fd >= 0 ? fdopen(fd, "w") : NULL;
+}
+
+/* Terminal failure after scoring started: final_receipt.json with verdict FAIL, the failing criterion FAIL and
+ * every other criterion NOT_REACHED (prereg section 5a: NOT_REACHED counts as FAIL). Exit status 1. */
+static int fail_final(const char *crit, const char *step, const char *code, const char *msg) {
+    fprintf(stderr, "FAILED %s: %s: %s (%s; the verdict is final)\n", step, code, msg, crit);
+    if (!g_out) return 1;
+    FILE *f = excl_open("final_receipt.json");
+    if (!f) return 1;
+    char t[32], m[1024];
+    utc_now(t);
+    snprintf(m, sizeof m, "%s", msg);
+    jclean(m);
+    fprintf(f, "{\n  \"schema\": \"turing.cal.terminal_receipt.v1\",\n  \"experiment\": \"EXP-001\",\n  \"kind\": \"terminal_fail\",\n"
+               "  \"dry_run\": %s,\n  \"created_utc\": \"%s\",\n  \"verdict\": \"FAIL\",\n  \"criteria\": {",
+            g_dry ? "true" : "false", t);
+    for (int i = 1; i <= 9; ++i) {
+        char nm[4];
+        snprintf(nm, sizeof nm, "S%d", i);
+        fprintf(f, "%s\"%s\": \"%s\"", i > 1 ? ", " : "", nm, strcmp(nm, crit) ? "NOT_REACHED" : "FAIL");
+    }
+    fprintf(f, "},\n  \"failed_criterion\": \"%s\",\n  \"step\": \"%s\",\n  \"code\": \"%s\",\n  \"reason\": \"%s\",\n"
+               "  \"EXP_001_COMPRESSION_BRIDGE\": \"%s\"\n}\n",
+            crit, step, code, m, g_dry ? "DRY_RUN_NOT_EVIDENCE" : "FAIL");
+    fclose(f);
+    return 1;
+}
+
+/* Refusal before any score exists: the attempt is VOID. Writes <out>/void_receipt_<n>.json (n = attempt number, the
+ * first free one, exclusive create, never overwritten) when the out dir exists. In sealed mode the third void
+ * attempt also writes final_receipt.json with verdict INCONCLUSIVE, reason INFRA (FAILURE_REPORTING.md section 2).
+ * After scoring started, a refusal is a terminal FAIL of the named criterion (see fail_final). */
+static int refuse_c(const char *crit, const char *step, const char *code, const char *fmt, ...) {
     char msg[1024];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(msg, sizeof msg, fmt, ap);
     va_end(ap);
+    if (g_scored) return fail_final(crit, step, code, msg);
     fprintf(stderr, "REFUSED %s: %s: %s\n", step, code, msg);
     if (g_out) {
-        char p[PATH_MAX], t[32];
+        char t[32], name[64];
         FILE *f = NULL;
-        for (int n = 1; n < 1000 && !f; ++n) {
-            snprintf(p, sizeof p, "%s/void_receipt_%d.json", g_out, n);
-            int fd = open(p, O_WRONLY | O_CREAT | O_EXCL, 0644);
-            if (fd >= 0) f = fdopen(fd, "w");
-            else if (errno != EEXIST) break;
+        int n = 1;
+        for (; n < 1000 && !f; ++n) {
+            snprintf(name, sizeof name, "void_receipt_%d.json", n);
+            f = excl_open(name);
+            if (!f && errno != EEXIST) break;
         }
+        --n;
         if (f) {
             utc_now(t);
-            for (char *c = msg; *c; ++c)
-                if (*c == '"' || *c == '\\') *c = '\'';
+            jclean(msg);
             fprintf(f,
                     "{\n  \"schema\": \"turing.cal.void_receipt.v1\",\n  \"experiment\": \"EXP-001\",\n"
-                    "  \"kind\": \"void\",\n  \"dry_run\": %s,\n  \"created_utc\": \"%s\",\n  \"step\": \"%s\",\n"
-                    "  \"code\": \"%s\",\n  \"reason\": \"%s\"\n}\n",
-                    g_dry ? "true" : "false", t, step, code, msg);
+                    "  \"kind\": \"void\",\n  \"dry_run\": %s,\n  \"created_utc\": \"%s\",\n  \"attempt\": %d,\n  \"step\": \"%s\",\n"
+                    "  \"code\": \"%s\",\n  \"reason\": \"%s\",\n  \"command\": \"%s\",\n  \"inputs\": \"%s\"\n}\n",
+                    g_dry ? "true" : "false", t, n, step, code, msg, g_cmd, g_inputs);
             fclose(f);
+            if (!g_dry && n >= MAX_ATTEMPTS && (f = excl_open("final_receipt.json"))) {
+                fprintf(f,
+                        "{\n  \"schema\": \"turing.cal.terminal_receipt.v1\",\n  \"experiment\": \"EXP-001\",\n"
+                        "  \"kind\": \"inconclusive_infra\",\n  \"dry_run\": false,\n  \"created_utc\": \"%s\",\n"
+                        "  \"verdict\": \"INCONCLUSIVE\",\n  \"reason\": \"INFRA\",\n  \"void_attempts\": %d,\n"
+                        "  \"last_step\": \"%s\",\n  \"last_code\": \"%s\",\n  \"EXP_001_COMPRESSION_BRIDGE\": \"INCONCLUSIVE\"\n}\n",
+                        t, n, step, code);
+                fclose(f);
+                fprintf(stderr, "attempt %d of %d was void: verdict INCONCLUSIVE (INFRA), final_receipt.json written\n", n,
+                        MAX_ATTEMPTS);
+            }
         }
     }
     return 2;
+}
+#define refuse(...) refuse_c("NONE", __VA_ARGS__)
+
+/* A freeze-order violation fixed by the frozen and published inputs (overlap audit FAIL, candidate manifest or
+ * profile not the ones at C_f, freeze after release, seed not derived from C_f) is S2 FAIL, final, in sealed mode
+ * (FAILURE_REPORTING.md section 2): retrying with the same inputs cannot change it. In a dry run it is a void. */
+static int s2_fail(const char *step, const char *code, const char *fmt, ...) {
+    char msg[1024];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof msg, fmt, ap);
+    va_end(ap);
+    if (g_dry) return refuse(step, code, "%s", msg);
+    return fail_final("S2", step, code, msg);
 }
 
 static void hexs(const uint8_t d[32], char o[65]) { tc_hex(d, o); }
@@ -133,6 +206,61 @@ static int run_capture(char *const argv[], char *buf, size_t n) {
     if (waitpid(pid, &st, 0) < 0 || !WIFEXITED(st)) return -1;
     while (k && (buf[k - 1] == '\n' || buf[k - 1] == '\r')) buf[--k] = 0;
     return WEXITSTATUS(st);
+}
+
+/* Run argv (no shell) and SHA-256 its exact stdout bytes. Returns the exit status, -1 if it could not run. */
+static int run_sha(char *const argv[], char o[65]) {
+    int fd[2];
+    o[0] = 0;
+    if (pipe(fd)) return -1;
+    pid_t pid = fork();
+    if (pid < 0) return close(fd[0]), close(fd[1]), -1;
+    if (pid == 0) {
+        dup2(fd[1], 1);
+        close(fd[0]), close(fd[1]);
+        int nul = open("/dev/null", O_WRONLY);
+        if (nul >= 0) dup2(nul, 2);
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+    close(fd[1]);
+    sha256_ctx c;
+    sha256_init(&c);
+    uint8_t tmp[4096], d[32];
+    ssize_t r;
+    while ((r = read(fd[0], tmp, sizeof tmp)) > 0) sha256_update(&c, tmp, (size_t)r);
+    close(fd[0]);
+    sha256_final(&c, d);
+    tc_hex(d, o);
+    int st;
+    if (waitpid(pid, &st, 0) < 0 || !WIFEXITED(st)) return -1;
+    return WEXITSTATUS(st);
+}
+
+/* "YYYY-MM-DDTHH:MM:SSZ" -> seconds since 1970 (UTC), -1 if malformed. */
+static int64_t utc_epoch(const char *s) {
+    int y, mo, d, h, mi, se;
+    if (strlen(s) != 20 || sscanf(s, "%4d-%2d-%2dT%2d:%2d:%2dZ", &y, &mo, &d, &h, &mi, &se) != 6 || mo < 1 || mo > 12)
+        return -1;
+    y -= mo <= 2;
+    int64_t era = (y >= 0 ? y : y - 399) / 400, yoe = y - era * 400;
+    int64_t doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + d - 1, doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return (era * 146097 + doe - 719468) * 86400 + h * 3600 + mi * 60 + se;
+}
+
+/* Sealed seed rule turing.cal.sealed.v1 (generate_sealed_data.sh): first 16 hex of
+ * SHA-256("turing.cal.sealed.v1|<commit>|<profile digest>|g<g>|<j>"), top bit cleared. */
+static int64_t sealed_seed(const char *commit, const char *digest, int g, int j) {
+    char m[256];
+    uint8_t d[32];
+    snprintf(m, sizeof m, "turing.cal.sealed.v1|%s|%s|g%d|%d", commit, digest, g, j);
+    sha256_ctx c;
+    sha256_init(&c);
+    sha256_update(&c, (const uint8_t *)m, strlen(m));
+    sha256_final(&c, d);
+    uint64_t v = 0;
+    for (int i = 0; i < 8; ++i) v = v << 8 | d[i];
+    return (int64_t)(v & 0x7fffffffffffffffULL);
 }
 
 /* Notebook record (lab protocol, notebook record): who ran it, where, from which commit, clean tree or not. */
@@ -396,6 +524,20 @@ static int cmd_run(int argc, char **argv) {
         else if (!strcmp(a, "--cand-dir") && ncd < 8) cdirs[ncd++] = v, ++i;
         else return refuse("args", "ARG", "unknown argument %s", a);
     }
+    /* Command and input record for the identical-retry rule (FAILURE_REPORTING.md section 2). */
+    for (int i = 0, k = 0; i < argc && k < (int)sizeof g_cmd - 2; ++i)
+        k += snprintf(g_cmd + k, sizeof g_cmd - (size_t)k, "%s%s", i ? " " : "", argv[i]);
+    {
+        const char *nm[] = {"turing-cal-eval", "manifest", "dataset", "overlap"};
+        char self[PATH_MAX] = "/proc/self/exe";
+        const char *pp[] = {self, manifest, dataset, overlap};
+        for (int i = 0, k = 0; i < 4; ++i) {
+            char h[65] = "NONE";
+            if (pp[i] && sha_file_hex(pp[i], h)) snprintf(h, sizeof h, "UNREADABLE");
+            k += snprintf(g_inputs + k, sizeof g_inputs - (size_t)k, "%s%s %s", i ? " " : "", nm[i], h);
+        }
+        jclean(g_cmd);
+    }
     const char *outp = g_out;
     g_out = NULL; /* no void receipt until the out dir is checked */
     if (!repo || !manifest || !dataset || !outp || !work || !ncd)
@@ -404,12 +546,26 @@ static int cmd_run(int argc, char **argv) {
     if (mkdir_p(outp) || mkdir_p(work)) return refuse("args", "IO", "cannot create out/work dirs");
     if (g_dry && (under_forbidden(repo, outp) || under_forbidden(repo, work)))
         return refuse("dry run", "DRY_RUN_TARGET", "a dry run may not write under %s", DRY_FORBIDDEN);
-    g_out = outp;
     {
         char p[PATH_MAX];
         struct stat st;
-        snprintf(p, sizeof p, "%s/final_receipt.json", g_out);
+        snprintf(p, sizeof p, "%s/final_receipt.json", outp);
         if (!stat(p, &st)) return refuse("write once", "EXISTS", "%s already exists; a verdict is never replaced", p);
+    }
+    g_out = outp;
+    /* A sealed retry after a void attempt must be the byte-identical command on byte-identical inputs. */
+    if (!g_dry) {
+        char p[PATH_MAX];
+        snprintf(p, sizeof p, "%s/void_receipt_1.json", g_out);
+        char *v1 = slurp(p, NULL);
+        if (v1) {
+            char c1[sizeof g_cmd] = "", i1[sizeof g_inputs] = "";
+            jtop(v1, "command", c1, sizeof c1);
+            jtop(v1, "inputs", i1, sizeof i1);
+            free(v1);
+            if (strcmp(c1, g_cmd) || strcmp(i1, g_inputs))
+                return refuse("retry", "RETRY_DIFFERS", "a retry must repeat attempt 1 byte for byte (command and input digests)");
+        }
     }
     /* Notebook record; a non-dry run refuses a dirty or unverifiable tree. */
     notebook_t nb;
@@ -440,9 +596,8 @@ static int cmd_run(int argc, char **argv) {
     char man_sha[65];
     char *man = slurp(manifest, NULL);
     if (!man || sha_file_hex(manifest, man_sha)) return refuse("manifest", "IO", "cannot read %s", manifest);
-    char status[32] = "", git_head[64] = "", frozen_at[40] = "", m_prof[65] = "";
+    char status[32] = "", frozen_at[40] = "", m_prof[65] = "";
     jtop(man, "status", status, sizeof status);
-    jtop(man, "git_head", git_head, sizeof git_head);
     jtop(man, "frozen_at", frozen_at, sizeof frozen_at);
     jtop(man, "profile_sha256", m_prof, sizeof m_prof);
     if (strcmp(m_prof, prof_sha))
@@ -450,6 +605,15 @@ static int cmd_run(int argc, char **argv) {
     if (!g_dry && strcmp(status, "frozen"))
         return refuse("freeze order", "NOT_FROZEN", "candidate manifest status is '%s', not 'frozen'", status);
     if (!g_dry && !frozen_at[0]) return refuse("freeze order", "NOT_FROZEN", "candidate manifest has no frozen_at");
+    if (!g_dry) { /* the independent scorer source in --repo is the frozen one (it may not be revised after C_f) */
+        char m_ind[80] = "", got[128] = "", scr[PATH_MAX];
+        jtop(man, "independent_scorer_source_sha256", m_ind, sizeof m_ind);
+        snprintf(scr, sizeof scr, "%s/calibration/scripts/indep_source_digest.sh", repo);
+        char *ai[] = {"sh", scr, NULL};
+        if (run_capture(ai, got, sizeof got) != 0 || strlen(m_ind) != 64 || strcmp(got, m_ind))
+            return refuse("independent scorer", "INDEP_SOURCE", "tools/turing_verify_indep digest %.16s is not the frozen %.16s", got,
+                          m_ind);
+    }
     char self_hex[65] = "", m_eval[65] = "";
     int n_bg = 0;
     {
@@ -565,8 +729,10 @@ static int cmd_run(int argc, char **argv) {
             return refuse("dataset", "FORMAT", "files not in group/index order");
     if (!nf || F[0].g != 1 || F[nf - 1].g != 2) return refuse("dataset", "FORMAT", "need group 1 and group 2");
 
-    /* --- freeze order --- */
-    char ov_result[16] = "", ov_commit[64] = "";
+    /* --- freeze order (two-step freeze, BLINDING_PROTOCOL.md section 2) ---
+     * C_f = the dataset manifest's freeze_commit: the commit that holds the frozen candidate manifest, profile and
+     * sidecar. C_f names no commit of its own; the sealed seeds are derived from it. */
+    char ov_result[16] = "", ov_commit[64] = "", origin_main[64] = "NONE";
     if (!g_dry) {
         if (!overlap) return refuse("freeze order", "OVERLAP", "--overlap overlap_audit.json is required");
         char *ov = slurp(overlap, NULL);
@@ -574,13 +740,45 @@ static int cmd_run(int argc, char **argv) {
         jtop(ov, "result", ov_result, sizeof ov_result);
         jtop(ov, "freeze_commit", ov_commit, sizeof ov_commit);
         free(ov);
-        if (strcmp(ov_result, "PASS")) return refuse("freeze order", "OVERLAP", "overlap audit result is '%s'", ov_result);
-        if (strcmp(ov_commit, git_head) || strcmp(d_commit, git_head))
-            return refuse("freeze order", "FREEZE_COMMIT", "manifest git_head, sealed freeze_commit and audit commit differ");
+        if (strcmp(ov_result, "PASS")) return s2_fail("freeze order", "OVERLAP", "overlap audit result is '%s'", ov_result);
+        if (strlen(d_commit) != 40 || strspn(d_commit, "0123456789abcdef") != 40)
+            return refuse("freeze order", "FREEZE_COMMIT", "dataset freeze_commit '%s' is not a 40-hex commit", d_commit);
+        if (strcmp(ov_commit, d_commit))
+            return refuse("freeze order", "FREEZE_COMMIT", "overlap audit commit differs from the sealed freeze_commit");
+        char spec[128], out[256];
+        char *a1[] = {"git", "-C", (char *)repo, "rev-parse", "--verify", "origin/main^{commit}", NULL};
+        if (run_capture(a1, origin_main, sizeof origin_main) != 0 || strlen(origin_main) != 40)
+            return refuse("freeze order", "FREEZE_COMMIT", "origin/main is not available in --repo (fetch first)");
+        char *a2[] = {"git", "-C", (char *)repo, "merge-base", "--is-ancestor", d_commit, "origin/main", NULL};
+        if (run_capture(a2, out, sizeof out) != 0)
+            return refuse("freeze order", "FREEZE_COMMIT", "freeze commit %.12s is not an ancestor of origin/main %.12s", d_commit,
+                          origin_main);
+        char h[65];
+        snprintf(spec, sizeof spec, "%s:calibration/experiments/EXP-001/candidate_manifest.json", d_commit);
+        char *a3[] = {"git", "-C", (char *)repo, "show", spec, NULL};
+        if (run_sha(a3, h) != 0 || strcmp(h, man_sha))
+            return s2_fail("freeze order", "FREEZE_COMMIT", "candidate manifest differs from the one at freeze commit %.12s", d_commit);
+        snprintf(spec, sizeof spec, "%s:calibration/profiles/Turing-profile-v1.0.toml", d_commit);
+        char *a4[] = {"git", "-C", (char *)repo, "show", spec, NULL};
+        if (run_sha(a4, h) != 0 || strcmp(h, prof_sha))
+            return s2_fail("freeze order", "FREEZE_COMMIT", "profile differs from the one at freeze commit %.12s", d_commit);
+        char *a5[] = {"git", "-C", (char *)repo, "show", "-s", "--format=%ct", d_commit, NULL};
+        long long ct = -1;
+        if (run_capture(a5, out, sizeof out) != 0 || sscanf(out, "%lld", &ct) != 1)
+            return refuse("freeze order", "FREEZE_COMMIT", "cannot read the commit time of %.12s", d_commit);
+        int64_t rel = utc_epoch(released);
+        if (rel < 0) return refuse("freeze order", "FREEZE_AFTER_RELEASE", "no data release time");
+        if (ct >= rel)
+            return s2_fail("freeze order", "FREEZE_AFTER_RELEASE", "freeze commit time %lld is not before the data release %s", ct,
+                          released);
+        for (int i = 0; i < nf; ++i)
+            if (F[i].seed != sealed_seed(d_commit, prof_sha, F[i].g, F[i].j))
+                return s2_fail("freeze order", "SEED_DERIVATION", "g%d/%d seed %" PRId64 " is not derived from freeze commit %.12s",
+                              F[i].g, F[i].j, F[i].seed, d_commit);
     }
     /* Both modes: a freeze receipt newer than the data release is refused when both times exist. */
     if (frozen_at[0] && released[0] && released[0] >= '0' && released[0] <= '9' && strcmp(frozen_at, released) >= 0)
-        return refuse("freeze order", "FREEZE_AFTER_RELEASE", "candidate frozen_at %s is not before data release %s", frozen_at,
+        return s2_fail("freeze order", "FREEZE_AFTER_RELEASE", "candidate frozen_at %s is not before data release %s", frozen_at,
                       released);
     if (!g_dry && (!released[0] || released[0] < '0' || released[0] > '9'))
         return refuse("freeze order", "FREEZE_AFTER_RELEASE", "no data release time");
@@ -622,6 +820,23 @@ static int cmd_run(int argc, char **argv) {
     char tsy_digest[MAXF][65];
     memset(tsy_digest, 0, sizeof tsy_digest);
 
+    /* --- every candidate model is parsed and checked before the first score (one at a time, freed) --- */
+    for (int ci = 0; ci < nc; ++ci) {
+        cand_t *c = &C[ci];
+        ty_model m;
+        uint8_t md[32];
+        uint64_t lm;
+        int rc = tc_load_model(c->path, &m, md, &lm, why, sizeof why);
+        if (rc != TC_OK) return refuse("candidate", tc_err_name(rc), "%s: %s", c->name, why);
+        char mh[65];
+        hexs(md, mh);
+        ty_model_free(&m);
+        if (strcmp(mh, c->model_digest)) return refuse("candidate", "MODEL_DIGEST", "%s model digest differs", c->name);
+        if ((int64_t)lm != c->lm_bits) return refuse("candidate", "LM_BITS", "%s L(M) %" PRIu64 " differs", c->name, lm);
+    }
+    /* From here on a score exists: the verdict is final and nothing is VOID any more. */
+    g_scored = 1;
+
     /* --- per candidate, per file --- */
     for (int ci = 0; ci < nc; ++ci) {
         cand_t *c = &C[ci];
@@ -641,11 +856,11 @@ static int cmd_run(int argc, char **argv) {
             tc_pstream p0, p;
             tc_symbols s0, s;
             if ((rc = tc_produce(&m, &f->s, pd, md, f->dd, &p0, &s0, why, sizeof why)) != TC_OK)
-                return refuse("produce", tc_err_name(rc), "%s g%d/%d: %s", c->name, f->g, f->j, why);
+                return refuse_c("S3", "produce", tc_err_name(rc), "%s g%d/%d: %s", c->name, f->g, f->j, why);
             uint8_t *pb, *sb;
             size_t pn, sn;
             if (tc_ps_serialize(&p0, &pb, &pn, why, sizeof why) != TC_OK || tc_sy_serialize(&s0, &sb, &sn, why, sizeof why) != TC_OK)
-                return refuse("serialize", "FORMAT", "%s", why);
+                return refuse_c("S3", "serialize", "FORMAT", "%s", why);
             tc_ps_free(&p0), tc_sy_free(&s0);
             char psp[PATH_MAX], syp[PATH_MAX];
             snprintf(psp, sizeof psp, "%s/probability_streams/g%d_j%d_%s.tps", work, f->g, f->j, c->name);
@@ -656,9 +871,9 @@ static int cmd_run(int argc, char **argv) {
             /* The coders consume the stream as re-read from disk. */
             if (tc_read_file(psp, &pb, &pn) != TC_OK || tc_read_file(syp, &sb, &sn) != TC_OK) return refuse("read", "IO", "%s", psp);
             if ((rc = tc_ps_parse(pb, pn, &p, why, sizeof why)) != TC_OK || (rc = tc_sy_parse(sb, sn, &s, why, sizeof why)) != TC_OK)
-                return refuse("parse", tc_err_name(rc), "%s", why);
+                return refuse_c("S3", "parse", tc_err_name(rc), "%s", why);
             if ((rc = tc_ps_expect(&p, pd, md, f->dd, why, sizeof why)) != TC_OK || (rc = tc_pair_check(&p, &s, why, sizeof why)) != TC_OK)
-                return refuse("stream binding", tc_err_name(rc), "%s", why);
+                return refuse_c("S3", "stream binding", tc_err_name(rc), "%s", why);
             free(pb), free(sb);
             char fsha[65];
             sha_file_hex(psp, fsha);
@@ -691,7 +906,7 @@ static int cmd_run(int argc, char **argv) {
                 for (size_t q = 0; q < k && q < ncr[fi]; ++q)
                     if (p.crumb[CR[fi][q].lo] != CR[fi][q].ord) S3 = 0;
             }
-            if (!S3) return refuse("S3", "SYMBOL_STREAM", "g%d/%d: candidates see different symbol streams", f->g, f->j);
+            if (!S3) return refuse_c("S3", "S3", "SYMBOL_STREAM", "g%d/%d: candidates see different symbol streams", f->g, f->j);
             tc_ideal_ub(&p, &s, 0, p.n, &r->ideal_ub);
             /* Coder A and coder B: same parsed TPS1, written, re-read, decoded. */
             const char *cname[2] = {"range", "rans"};
@@ -704,9 +919,9 @@ static int cmd_run(int argc, char **argv) {
                 uint8_t *cb;
                 size_t cn;
                 rc = x == 0 ? tc_range_encode(&p, &s, &cb, &cn, why, sizeof why) : tc_rans_encode(&p, &s, &cb, &cn, why, sizeof why);
-                if (rc != TC_OK) return refuse("encode", tc_err_name(rc), "%s %s: %s", cname[x], c->name, why);
+                if (rc != TC_OK) return refuse_c("S1", "encode", tc_err_name(rc), "%s %s: %s", cname[x], c->name, why);
                 if (cn < TC_CODED_HEADER || memcmp(cb + 16, p.digest, 32))
-                    return refuse("encode", "BINDING", "%s header is not bound to the TPS1 digest", cname[x]);
+                    return refuse_c("S3", "encode", "BINDING", "%s header is not bound to the TPS1 digest", cname[x]);
                 char cp[PATH_MAX];
                 snprintf(cp, sizeof cp, "%s/%s/g%d_j%d_%s.%s", work, x ? "ans" : "arithmetic", f->g, f->j, c->name, cext[x]);
                 if (tc_write_file(cp, cb, cn) != TC_OK) return refuse("write", "IO", "%s", cp);
@@ -772,7 +987,7 @@ static int cmd_run(int argc, char **argv) {
                 size_t nx, ny;
                 if (tc_range_encode_raw(p.q + lo * p.K, p.K, s.sym + lo, n, &x, &nx, NULL) != TC_OK ||
                     tc_rans_encode_raw(p.q + lo * p.K, p.K, s.sym + lo, n, &y, &ny) != TC_OK)
-                    return refuse("crumb encode", "IO", "%s g%d/%d crumb %u", c->name, f->g, f->j, CR[fi][q].ord);
+                    return refuse_c("S1", "crumb encode", "CODER", "%s g%d/%d crumb %u", c->name, f->g, f->j, CR[fi][q].ord);
                 if (tc_range_decode_raw(p.q + lo * p.K, p.K, x, nx, n, tmp, why, sizeof why) != TC_OK || memcmp(tmp, s.sym + lo, n) ||
                     tc_rans_decode_raw(p.q + lo * p.K, p.K, y, ny, n, tmp, why, sizeof why) != TC_OK || memcmp(tmp, s.sym + lo, n))
                     S1 = 0, r->lossless = 0;
@@ -789,7 +1004,7 @@ static int cmd_run(int argc, char **argv) {
             }
             free(tmp);
             if (r->crumb_sum_ub != r->ideal_ub)
-                return refuse("per-crumb sum", "VOID", "%s g%d/%d: crumb sum %" PRId64 " != file %" PRId64, c->name, f->g, f->j,
+                return refuse_c("S4", "per-crumb sum", "CRUMB_SUM", "%s g%d/%d: crumb sum %" PRId64 " != file %" PRId64, c->name, f->g, f->j,
                               r->crumb_sum_ub, r->ideal_ub);
             for (int z = 0; z < 2; ++z) {
                 uint64_t cb = z ? r->nrans : r->nrange;
@@ -827,7 +1042,7 @@ static int cmd_run(int argc, char **argv) {
                 }
             }
         size_t Cn = pool_n[g];
-        if (Cn == 0) return refuse("bootstrap", "VOID", "group %d has no crumbs", g);
+        if (Cn == 0) return refuse_c("S6", "bootstrap", "NO_CRUMBS", "group %d has no crumbs", g);
         /* Pool: (seed order, crumb ordinal); per candidate crumb ideal. */
         int64_t *pool[MAXC];
         for (int ci = 0; ci < nc; ++ci) {
@@ -879,7 +1094,7 @@ static int cmd_run(int argc, char **argv) {
 
     /* --- S5 reversals (prereg section 5, FAILURE_REPORTING section 5) --- */
     int S5 = 1, n_rev = 0, n_rev_expl = 0;
-    char revlog[8192] = "";
+    static char revlog[65536]; revlog[0] = 0; /* up to 84 DL + 36 T-sign entries, ~200 bytes each */
     size_t rl = 0;
     for (int g = 1; g <= 2; ++g)
         for (int x = 0; x < 2; ++x)
@@ -1121,9 +1336,9 @@ static int cmd_run(int argc, char **argv) {
         char pj[PATH_MAX], prj[65] = "";
         snprintf(pj, sizeof pj, "%s/calibration/experiments/EXP-001/preregistration.json", repo);
         if (sha_file_hex(pj, prj)) return refuse("prereg", "IO", "%s", pj);
-        fprintf(fr, "  \"freeze\": {\"commit\": \"%s\", \"status\": \"%s\", \"frozen_at\": \"%s\", "
+        fprintf(fr, "  \"freeze\": {\"commit\": \"%s\", \"origin_main_checked\": \"%s\", \"status\": \"%s\", \"frozen_at\": \"%s\", "
                     "\"candidate_manifest_sha256\": \"%s\", \"preregistration_sha256\": \"%s\"},\n",
-                git_head, status, frozen_at[0] ? frozen_at : "NONE", man_sha, prj);
+                g_dry ? "NONE" : d_commit, origin_main, status, frozen_at[0] ? frozen_at : "NONE", man_sha, prj);
     }
     fprintf(fr, "  \"notebook\": {\"operator\": \"%s\", \"host\": \"%s\", \"kernel\": \"%s\", \"commit\": \"%s\", \"tree_clean\": %s},\n",
             nb.operator_, nb.host, nb.kernel, nb.commit, nb.dirty == 0 ? "true" : "false");
@@ -1242,8 +1457,8 @@ static int cmd_run(int argc, char **argv) {
     fprintf(rp_, "## Report sections\n\n");
     fprintf(rp_, "- Preregistration: calibration/preregistration/EXP-001.md and preregistration.json (sha256 in final_receipt.json freeze.preregistration_sha256).\n");
     fprintf(rp_, "- Blinding: calibration/docs/BLINDING_PROTOCOL.md; overlap audit %s.\n", g_dry ? "not used (dry run)" : "PASS (overlap_audit.json)");
-    fprintf(rp_, "- Candidate freeze: candidate_manifest.json sha256 %s, status %s, frozen_at %s, commit %s.\n", man_sha, status,
-            frozen_at[0] ? frozen_at : "NONE", git_head);
+    fprintf(rp_, "- Candidate freeze: candidate_manifest.json sha256 %s, status %s, frozen_at %s, freeze commit C_f %s.\n", man_sha, status,
+            frozen_at[0] ? frozen_at : "NONE", g_dry ? "NONE (dry run)" : d_commit);
     fprintf(rp_, "- Model-cost accounting: L(M) = exact TYM0 bits (calibration/docs/MODEL_DESCRIPTION_ENCODING.md), re-checked against the manifest for every candidate.\n");
     fprintf(rp_, "- Probability stream: one TPS1 per candidate and file, probability_root %s (probability_streams/INDEX).\n", prob_root);
     fprintf(rp_, "- Ideal codelength: ideal_lengths.json (per file and per crumb, int64 ub).\n");
@@ -1335,7 +1550,7 @@ static int cmd_gate(int argc, char **argv) {
     struct stat st;
     snprintf(p, sizeof p, "%s/final_receipt.json", bundle);
     if (!stat(p, &st)) return refuse("write once", "EXISTS", "%s already exists; a verdict is never replaced", p);
-    g_out = bundle;
+    /* Gate refusals before the comparison are operator errors: no receipt of any kind is written. */
     snprintf(p, sizeof p, "%s/final_receipt.pending.json", bundle);
     char *rec = slurp(p, NULL);
     snprintf(q, sizeof q, "%s/REPORT.pending.md", bundle);
@@ -1348,6 +1563,9 @@ static int cmd_gate(int argc, char **argv) {
     if (sha_file_hex(prim, ph) || sha_file_hex(indep, ih)) return refuse("gate", "IO", "scorer files");
     int self_cmp = !strcmp(ph, ih);
     if (self_cmp && !g_dry) return refuse("S8", "NOT_INDEPENDENT", "scorer_independent.json is byte-identical to scorer_primary.json");
+    /* The run already produced scores: from here on any failure is a final FAIL, never a void. */
+    g_out = bundle;
+    g_scored = 1;
     /* S8: same key set, same int64 values. */
     kv_t *a, *b;
     int na, nb;

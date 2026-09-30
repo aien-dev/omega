@@ -189,7 +189,7 @@
     "condition": "control only",
     "output_dirs": "fresh"
   },
-  "lineage_note": "Pinned build reproduces final-20260927/rep10 byte-exactly but not dev data exp-20260927-rep10 (16 of 2,172,776 seed-1 records differ in result_class; learner rebuilt 12:00, rep10 ran 11:47). Candidates stay fit on exp-20260927-rep10; sealed data use the pinned build; declared known dev/sealed generator difference that can only hurt candidates.",
+  "lineage_note": "Pinned build reproduces final-20260927/rep10 byte-exactly but not dev data exp-20260927-rep10 (16 of 2,172,776 seed-1 records differ in result_class; learner rebuilt 12:00, rep10 ran 11:47). Candidates stay fit on exp-20260927-rep10; sealed data use the pinned build; declared known dev/sealed generator difference; direction unknown (B2 fit on the same data), size negligible (CAL-0 Q7).",
   "blinding": {
     "primary": "temporal: sealed seeds derived from the freeze commit",
     "second_layer": "bubblewrap jails",

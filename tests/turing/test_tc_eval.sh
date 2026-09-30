@@ -29,6 +29,19 @@ expect_refuse() {
     fi
 }
 
+# expect_final NAME CODE -- command...: a freeze-order violation in sealed mode is S2 FAIL, final (exit 1,
+# final_receipt.json kind terminal_fail with S2 FAIL), never a void. The out dir is the last --out argument.
+expect_final() {
+    local name="$1" code="$2"
+    shift 3
+    local rc=0 o="" prev=""
+    for a in "$@"; do [ "$prev" = --out ] && o="$a"; prev="$a"; done
+    "$@" >"$W/last.out" 2>"$W/last.err" || rc=$?
+    if [ "$rc" = 1 ] && grep -q "FAILED .*: $code:" "$W/last.err" && grep -q '"S2": "FAIL"' "$o/final_receipt.json" &&
+        grep -q '"kind": "terminal_fail"' "$o/final_receipt.json" && [ ! -e "$o/void_receipt_1.json" ]; then ok "$name ($code, S2 FAIL final)"; else
+        bad "$name: rc=$rc, wanted terminal $code; stderr: $(head -c 300 "$W/last.err")"
+    fi
+}
 # --- a fake repo: the files the evaluator reads, so tampering never touches the worktree ---
 mkrepo() { # mkrepo DIR
     local d="$1"
@@ -37,6 +50,7 @@ mkrepo() { # mkrepo DIR
     cp "$REPO"/src/turing/ty_model.[ch] "$REPO"/src/turing/ty_ctr1.[ch] "$REPO"/src/turing/ty_math.[ch] "$d/src/turing/"
     mkdir -p "$d/tools"
     cp "$REPO/tools/turing_cal_eval.c" "$d/tools/"
+    cp -r "$REPO/tools/turing_verify_indep" "$d/tools/" && rm -rf "$d/tools/turing_verify_indep/build"
 }
 # refresh DIR: after editing the profile, rewrite the sidecar and every hash the manifest pins.
 refresh() {
@@ -117,7 +131,9 @@ expect_refuse "run into a bundle that has a verdict" EXISTS -- run_dry --out "$W
 grep '"key"' "$W/dry/scorer_primary.json" >"$W/det.txt"
 
 # ================= non-dry (sealed-mode) refusals on a fake frozen setup =================
-# Fake frozen repo: profile without FILL_AT_FREEZE, memorizer names bound to small files, manifest frozen.
+# Fake frozen repo: profile without FILL_AT_FREEZE, memorizer names bound to small files. The two-step freeze
+# (BLINDING_PROTOCOL.md section 2) is played out for real: the commit that holds the frozen manifest is C_f,
+# refs/remotes/origin/main points at it, and the sealed seeds are derived from C_f and the profile digest.
 F="$W/frozen"
 mkrepo "$F"
 FM="$F/calibration/experiments/EXP-001/candidate_manifest.json"
@@ -130,47 +146,100 @@ for mem in M_mem M_mem_seed1; do
     grep -v "\"name\": \"$mem\"" "$FM" >"$W/fm.tmp"
     awk -v l="$line" '{print} /"name": "M_candidate"/{print l}' "$W/fm.tmp" >"$FM"
 done
+sed -i "s/\"status\": \"draft\"/\"status\": \"frozen\"/" "$F/calibration/experiments/EXP-001/preregistration.json"
 refresh "$F"
 FH="$(sha "$FP")"
-COMMIT=1111111111111111111111111111111111111111
-bash "$F/calibration/scripts/make_dataset_manifest.sh" --dev "$W/data" "1" "2" "$FH" "$W/fds.json" >/dev/null
-sed -i -E "s/\"split\": \"development\"/\"split\": \"sealed_test\"/; s/\"freeze_commit\": \"NONE\"/\"freeze_commit\": \"$COMMIT\"/; s/\"released_utc\": \"NOT_SEALED\"/\"released_utc\": \"2026-10-01T12:00:00Z\"/" "$W/fds.json"
-printf '{\n  "schema": "turing.cal.overlap_audit.v1",\n  "freeze_commit": "%s",\n  "result": "PASS"\n}\n' "$COMMIT" >"$W/ov.json"
 # Sealed mode needs --repo to be a clean git checkout: commit the fake repo before every sealed run.
 commit_f() { (cd "$F" && { [ -d .git ] || git init -q; } && git add -A && git -c user.name=tce-test -c user.email=tce@test -c commit.gpgsign=false commit -q --allow-empty -m fixture); }
 run_sealed_raw() { "$BIN" run --repo "$F" --manifest "$FM" --cand-dir "$FC" "$@"; }
 run_sealed() { commit_f; run_sealed_raw "$@"; }
+# seed_of COMMIT PROFILE G J: the turing.cal.sealed.v1 seed rule, as written in generate_sealed_data.sh.
+seed_of() {
+    local h
+    h="$(printf '%s' "turing.cal.sealed.v1|$1|$2|g$3|$4" | sha256sum | cut -c1-16)"
+    printf '%d' "$((16#$(printf '%x' $((16#${h:0:1} & 7)))${h:1}))"
+}
+# sealed_ds OUT COMMIT S1 S2 RELEASED: a sealed-split dataset manifest over the fixture, seeds S1 (group 1), S2 (group 2).
+sealed_ds() {
+    rm -rf "$W/sd" && mkdir -p "$W/sd/seed-$3/control" "$W/sd/seed-$4/control"
+    cp "$FIX" "$W/sd/seed-$3/control/trace.ctr" && cp "$FIX" "$W/sd/seed-$4/control/trace.ctr"
+    bash "$F/calibration/scripts/make_dataset_manifest.sh" --dev "$W/sd" "$3" "$4" "$FH" "$1" >/dev/null
+    sed -i -E "s/\"split\": \"development\"/\"split\": \"sealed_test\"/; s/\"freeze_commit\": \"NONE\"/\"freeze_commit\": \"$2\"/; s/\"released_utc\": \"NOT_SEALED\"/\"released_utc\": \"$5\"/" "$1"
+    # keep the trace files: the evaluator re-hashes them by path
+    rm -rf "$W/sd_$(basename "$1")" && mv "$W/sd" "$W/sd_$(basename "$1")"
+    sed -i "s#$W/sd/#$W/sd_$(basename "$1")/#g" "$1"
+}
+bash "$F/calibration/scripts/make_dataset_manifest.sh" --dev "$W/data" "1" "2" "$FH" "$W/pre.json" >/dev/null
 
-expect_refuse "sealed run, --repo not a git checkout" DIRTY_TREE -- run_sealed_raw --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s0" --work "$W/sw0"
+expect_refuse "sealed run, --repo not a git checkout" DIRTY_TREE -- run_sealed_raw --dataset "$W/pre.json" --out "$W/s0" --work "$W/sw0"
 commit_f
 touch "$F/uncommitted.txt"
-expect_refuse "sealed run, uncommitted change in --repo" DIRTY_TREE -- run_sealed_raw --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s0b" --work "$W/sw0b"
+expect_refuse "sealed run, uncommitted change in --repo" DIRTY_TREE -- run_sealed_raw --dataset "$W/pre.json" --out "$W/s0b" --work "$W/sw0b"
 rm -f "$F/uncommitted.txt"
+expect_refuse "draft manifest in sealed mode" NOT_FROZEN -- run_sealed --dataset "$W/pre.json" --out "$W/s1" --work "$W/sw1"
 
-expect_refuse "draft manifest in sealed mode" NOT_FROZEN -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s1" --work "$W/sw1"
-sed -i -E "s/\"status\": \"draft\"/\"status\": \"frozen\"/; s/(\"git_head\": \")[0-9a-f]{40}/\1$COMMIT/" "$FM"
-sed -i "s/^  \"status\": \"frozen\",/&\n  \"frozen_at\": \"2026-10-01T11:00:00Z\",/" "$FM"
+# Step 1 of the freeze: the frozen manifest (no commit named inside it) is committed; that commit is C_f.
+sed -i -E "s/\"status\": \"draft\"/\"status\": \"frozen\"/" "$FM"
+sed -i "s/^  \"status\": \"frozen\",/&\n  \"frozen_at\": \"2026-09-01T00:00:00Z\",/" "$FM"
+sed -i -E "s/(\"independent_scorer_source_sha256\": \")[0-9a-f]{64}/\1$(sh "$F/calibration/scripts/indep_source_digest.sh")/" "$FM"
 sed -i -E "s/(\"turing-cal-eval\": \")[0-9a-f]{64}/\1$(printf '0%.0s' $(seq 64))/" "$FM"
-expect_refuse "evaluator binary not the frozen runtime" RUNTIME_DIGEST -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s2" --work "$W/sw2"
+cp "$FM" "$W/fm_badrt"
 sed -i -E "s/(\"turing-cal-eval\": \")[0-9a-f]{64}/\1$(sha "$BIN")/" "$FM"
+commit_f
+CF="$(git -C "$F" rev-parse HEAD)"
+git -C "$F" update-ref refs/remotes/origin/main "$CF"
+REL=2030-01-01T00:00:00Z
+sealed_ds "$W/fds.json" "$CF" "$(seed_of "$CF" "$FH" 1 0)" "$(seed_of "$CF" "$FH" 2 0)" "$REL"
+printf '{\n  "schema": "turing.cal.overlap_audit.v1",\n  "freeze_commit": "%s",\n  "result": "PASS"\n}\n' "$CF" >"$W/ov.json"
+
+cp "$FM" "$W/fm.good"
+cp "$W/fm_badrt" "$FM"
+expect_refuse "evaluator binary not the frozen runtime" RUNTIME_DIGEST -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s2" --work "$W/sw2"
+cp "$W/fm.good" "$FM"
 cp "$W/fds.json" "$W/fds.ok"
 sed -i 's/"split": "sealed_test"/"split": "development"/' "$W/fds.json"
 expect_refuse "development split in sealed mode" SPLIT -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s3" --work "$W/sw3"
 cp "$W/fds.ok" "$W/fds.json"
 expect_refuse "no overlap audit" OVERLAP -- run_sealed --dataset "$W/fds.json" --out "$W/s4" --work "$W/sw4"
 sed 's/"PASS"/"FAIL"/' "$W/ov.json" >"$W/ovf.json"
-expect_refuse "overlap audit FAIL" OVERLAP -- run_sealed --dataset "$W/fds.json" --overlap "$W/ovf.json" --out "$W/s5" --work "$W/sw5"
-sed "s/$COMMIT/2222222222222222222222222222222222222222/" "$W/fds.json" >"$W/fds2.json"
-sed "s/$COMMIT/2222222222222222222222222222222222222222/" "$W/ov.json" >"$W/ov2.json"
-expect_refuse "manifest git_head is not the sealed freeze commit" FREEZE_COMMIT -- run_sealed --dataset "$W/fds2.json" --overlap "$W/ov2.json" --out "$W/s6" --work "$W/sw6"
-sed 's/"released_utc": "2026-10-01T12:00:00Z"/"released_utc": "2026-10-01T10:00:00Z"/' "$W/fds.json" >"$W/fds3.json"
-expect_refuse "candidate frozen after the data release" FREEZE_AFTER_RELEASE -- run_sealed --dataset "$W/fds3.json" --overlap "$W/ov.json" --out "$W/s7" --work "$W/sw7"
+expect_final "overlap audit FAIL" OVERLAP -- run_sealed --dataset "$W/fds.json" --overlap "$W/ovf.json" --out "$W/s5" --work "$W/sw5"
+sed "s/$CF/2222222222222222222222222222222222222222/" "$W/ov.json" >"$W/ov2.json"
+expect_refuse "overlap audit names another commit than C_f" FREEZE_COMMIT -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov2.json" --out "$W/s6" --work "$W/sw6"
+git -C "$F" update-ref refs/remotes/origin/main "$CF^"
+expect_refuse "C_f is not an ancestor of origin/main" FREEZE_COMMIT -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s6b" --work "$W/sw6b"
+git -C "$F" update-ref -d refs/remotes/origin/main
+expect_refuse "no origin/main in --repo" FREEZE_COMMIT -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s6c" --work "$W/sw6c"
+git -C "$F" update-ref refs/remotes/origin/main "$CF"
+sed -i 's/"fit_data": "exp-/"fit_data": "EDITED exp-/' "$FM"
+expect_final "candidate manifest edited after C_f" FREEZE_COMMIT -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s6d" --work "$W/sw6d"
+cp "$W/fm.good" "$FM"
+sealed_ds "$W/fds_seed.json" "$CF" "$(seed_of "$CF" "$FH" 1 0)" 12345 "$REL"
+expect_final "group 2 seed not derived from C_f" SEED_DERIVATION -- run_sealed --dataset "$W/fds_seed.json" --overlap "$W/ov.json" --out "$W/s6e" --work "$W/sw6e"
+sed 's/"released_utc": "[^"]*"/"released_utc": "2026-09-02T00:00:00Z"/' "$W/fds.json" >"$W/fds_ct.json"
+expect_final "data released before the C_f commit time" FREEZE_AFTER_RELEASE -- run_sealed --dataset "$W/fds_ct.json" --overlap "$W/ov.json" --out "$W/s7b" --work "$W/sw7b"
+sed 's/"released_utc": "[^"]*"/"released_utc": "2026-08-01T00:00:00Z"/' "$W/fds.json" >"$W/fds3.json"
+expect_final "candidate frozen_at after the data release" FREEZE_AFTER_RELEASE -- run_sealed --dataset "$W/fds3.json" --overlap "$W/ov.json" --out "$W/s7" --work "$W/sw7"
+echo "revised after the freeze" >>"$F/tools/turing_verify_indep/SPEC_GAPS.md"
+expect_refuse "independent scorer source revised after C_f" INDEP_SOURCE -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s7c" --work "$W/sw7c"
+cp "$REPO/tools/turing_verify_indep/SPEC_GAPS.md" "$F/tools/turing_verify_indep/SPEC_GAPS.md"
 cp "$FP" "$W/fp.bak"
 sed -i 's/TEST_ONLY_NOT_A_FREEZE/FILL_AT_FREEZE/' "$FP"
 refresh "$F"
 expect_refuse "profile still has FILL_AT_FREEZE" NOT_FROZEN -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s8" --work "$W/sw8"
 cp "$W/fp.bak" "$FP"
 refresh "$F"
+cp "$W/fm.good" "$FM"
+
+# Void attempts (FAILURE_REPORTING.md section 2): each void is kept and numbered; a retry must be byte-identical;
+# the third void attempt in sealed mode ends the experiment as INCONCLUSIVE (INFRA).
+expect_refuse "void attempt 1" OVERLAP -- run_sealed --dataset "$W/fds.json" --out "$W/rv" --work "$W/rvw"
+expect_refuse "retry with a different command" RETRY_DIFFERS -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/rv" --work "$W/rvw"
+[ ! -e "$W/rv/final_receipt.json" ] && ok "two void attempts: no verdict yet" || bad "verdict after two void attempts"
+expect_refuse "void attempt 3 (identical retry)" OVERLAP -- run_sealed --dataset "$W/fds.json" --out "$W/rv" --work "$W/rvw"
+grep -q '"attempt": 3' "$W/rv/void_receipt_3.json" && grep -q '"command": "' "$W/rv/void_receipt_1.json" &&
+    grep -q '"verdict": "INCONCLUSIVE"' "$W/rv/final_receipt.json" && grep -q '"reason": "INFRA"' "$W/rv/final_receipt.json" &&
+    ok "third void attempt writes INCONCLUSIVE (INFRA), all void receipts kept" || bad "INCONCLUSIVE INFRA after 3 voids"
+expect_refuse "no fourth attempt" EXISTS -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/rv" --work "$W/rvw"
 
 # Positive sealed-mode run on the fake setup, then S8 checks at the gate.
 run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/sealed" --work "$W/sealedw" 2>"$W/sealed.err" &&
@@ -200,6 +269,16 @@ verdict_case s6_straddle INCONCLUSIVE PASS PASS INCONCLUSIVE
 verdict_case s9_straddle PASS PASS INCONCLUSIVE INCONCLUSIVE
 verdict_case wrong_side_beats_straddle INCONCLUSIVE FAIL PASS FAIL
 
+# After scoring, a failure is final (FAILURE_REPORTING.md section 2): a gate that cannot read a criterion from
+# the pending receipt writes a terminal FAIL receipt, never a void one.
+b="$W/v_terminal"
+run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$b" --work "$W/vw" 2>/dev/null || bad "terminal case run"
+sed -i -E 's/"S9": "[A-Z_]+"/"SX": "PASS"/' "$b/final_receipt.pending.json"
+sed 's/(primary)/(test copy, same values)/' "$b/scorer_primary.json" >"$W/indep_ok.json"
+rc=0; "$BIN" gate --bundle "$b" --independent "$W/indep_ok.json" >/dev/null 2>&1 || rc=$?
+[ "$rc" = 1 ] && grep -q '"kind": "terminal_fail"' "$b/final_receipt.json" && grep -q '"verdict": "FAIL"' "$b/final_receipt.json" &&
+    [ ! -e "$b/void_receipt_1.json" ] && ok "failure after scoring is a terminal FAIL, not a void" || bad "terminal FAIL case: rc=$rc"
+
 # S8 comparison contract (EVALUATOR.md section 6): exact int64 values, same key set, same schema and input
 # digests, no repeated key; key order and spacing are free; a non-integer value never matches.
 s8_case() { # s8_case NAME EXPECTED_S8 SED_SCRIPT
@@ -214,6 +293,24 @@ s8_case float_value FAIL '0,/"value": -?[0-9]+/s/("value": -?[0-9]+)/\1.0/'
 s8_case other_profile_digest FAIL 's/("profile_sha256": ")[0-9a-f]/\10/'
 s8_case repeated_key FAIL '0,/\{"key"/s/^( *\{"key": "[^"]*", "value": -?[0-9]+\})(,?)$/\1,\n\1\2/'
 
+
+# Step 2 of the freeze: freeze_receipt.sh on the fake repo. First with the profile runtime_digest not filled
+# (refused, check 4), then filled and committed as a new C_f (PASS), then with sealed data present (refused).
+FR="$F/calibration/scripts/freeze_receipt.sh"
+rc=0; TC_SEALED_ROOT="$W/nosealed" bash "$FR" "$CF" --no-fetch --out "$W/fr0.json" 2>"$W/fr0.err" || rc=$?
+[ "$rc" = 2 ] && grep -q "check 4" "$W/fr0.err" && [ ! -e "$W/fr0.json" ] && ok "freeze receipt refused: runtime_digest not filled" || bad "freeze receipt check 4: $(cat "$W/fr0.err")"
+RD="$(sed -n 's/^ *"runtime_digest": "\([0-9a-f]\{64\}\)".*/\1/p' "$FM")"
+sed -i "s/^runtime_digest = \".*/runtime_digest = \"$RD\"/" "$FP"
+refresh "$F"
+commit_f
+CF2="$(git -C "$F" rev-parse HEAD)"
+git -C "$F" update-ref refs/remotes/origin/main "$CF2"
+rc=0; TC_SEALED_ROOT="$W/nosealed" bash "$FR" "$CF2" --no-fetch --out "$W/fr1.json" 2>"$W/fr1.err" || rc=$?
+[ "$rc" = 0 ] && grep -q '"TURING_PROFILE_V1_FROZEN": "PASS"' "$W/fr1.json" && grep -q "\"freeze_commit\": \"$CF2\"" "$W/fr1.json" &&
+    ok "freeze receipt PASS names C_f" || bad "freeze receipt PASS: $(cat "$W/fr1.err")"
+mkdir -p "$W/somesealed/$CF2"
+rc=0; TC_SEALED_ROOT="$W/somesealed" bash "$FR" "$CF2" --no-fetch --out "$W/fr2.json" 2>"$W/fr2.err" || rc=$?
+[ "$rc" = 2 ] && grep -q "check 7" "$W/fr2.err" && ok "freeze receipt refused: sealed data already exist" || bad "freeze receipt check 7"
 # The worktree's EXP-001 directory is untouched by all of the above.
 [ "$(exp_snap)" = "$EXP_BEFORE" ] && ok "calibration/experiments/EXP-001 unchanged" ||
     bad "calibration/experiments/EXP-001 changed"

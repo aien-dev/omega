@@ -2,7 +2,7 @@
 
 Source: `tools/turing_cal_eval.c` (C11 + POSIX). Build: `make turing-cal-eval` ->
 `build/turing-exp001-eval/turing-cal-eval`. Its SHA-256 is part of the frozen runtime digest
-(`calibration/scripts/runtime_digest.sh`, six binaries). Statistics: `UNCERTAINTY_PROTOCOL.md`. Coders and
+(`calibration/scripts/runtime_digest.sh`, seven binaries, including the independent scorer). Statistics: `UNCERTAINTY_PROTOCOL.md`. Coders and
 the TPS1 / TSY1 / TCR1 / TCA1 byte layouts: `CODER_SPEC.md`. Verdict rule: `preregistration/EXP-001.md`
 section 5a. All decisions use int64 micro-bits (ub; 1 bit = 1,000,000 ub).
 
@@ -24,8 +24,11 @@ turing-cal-eval gate [--dry-run] --bundle BUNDLE_DIR --independent SCORER_INDEPE
 - `--dry-run`: development data only; output may not be under `calibration/experiments/EXP-001`; the receipt
   says `kind = dry_run` and `EXP_001_COMPRESSION_BRIDGE = DRY_RUN_NOT_EVIDENCE`, and S2 is `NOT_CHECKED`.
 
-Exit codes: 0 finished (whatever the verdict), 2 refused (the run is VOID), anything else is a crash and
-is also VOID.
+Exit codes: 0 finished (whatever the verdict); 2 refused before any sealed score existed (the attempt is VOID,
+`void_receipt_<n>.json`); 1 a terminal failure (a criterion FAILs, `final_receipt.json` with verdict FAIL, see
+section 3). A crash (any other exit) before `run` has started scoring is VOID and follows the same retry rule. A
+crash after scoring started is a terminal FAIL of the criterion whose step crashed, recorded by hand in
+`final_receipt.json` with the stderr tail; it is never retried (FAILURE_REPORTING.md section 2).
 
 ## 2. What `run` does, in order
 
@@ -33,21 +36,26 @@ is also VOID.
    `FILL_AT_FREEZE`.
 2. Candidate manifest: its `profile_sha256` must equal the profile; outside a dry run `status = frozen` and
    `frozen_at` present. Every `shared_background_sha256` entry is re-hashed in `--repo`. The evaluator's own
-   SHA-256 must equal the frozen `turing-cal-eval` runtime digest (sealed mode). Each candidate file must match
-   `file_sha256`; after loading, its model digest and exact L(M) bits must match the manifest.
+   SHA-256 must equal the frozen `turing-cal-eval` runtime digest (sealed mode). In sealed mode
+   `independent_scorer_source_sha256` must equal `calibration/scripts/indep_source_digest.sh` run in `--repo`
+   (INDEP_SOURCE). Each candidate file must match `file_sha256`; after loading, its model digest and exact L(M)
+   bits must match the manifest (this pass loads, checks and frees every candidate before any scoring).
 3. Dataset manifest: `profile_digest` must equal the profile; split must be `sealed_test` (sealed mode) or
    `development` (dry run); `payload_digest` must equal the file list; files in group then index order, both
    groups present; every trace re-hashed.
-4. Freeze order (sealed mode): overlap audit present and PASS; the manifest `git_head`, the sealed
-   `freeze_commit` and the audit commit are one commit; candidate `frozen_at` strictly before the data release
-   time.
+4. Freeze order (sealed mode; two-step freeze, BLINDING_PROTOCOL.md section 2). C_f is the dataset manifest's
+   `freeze_commit`. Checks, in order: overlap audit present (void if not) and PASS; C_f is 40 hex; the audit
+   names C_f; `origin/main` exists in `--repo` and C_f is its ancestor (fetch first; void if not); the candidate
+   manifest and the profile given to the run hash to the files at C_f (`git show C_f:<path>`); C_f's commit time
+   is before `released_utc`; every file's seed equals the `turing.cal.sealed.v1` seed for (C_f, profile digest,
+   g, j). In both modes the manifest `frozen_at` must be before `released_utc` when both exist.
 5. For each sealed file and candidate: produce the TPS1 probability stream and TSY1 symbol stream, write them,
    re-read and parse them, encode with coder A (TCR1 range) and coder B (TCA1 rANS) from the same parsed TPS1,
-   write, re-read, decode, compare with the symbols (S1). Coded headers must carry the TPS1 digest (S4,
-   `BINDING`). All candidates must see the same symbol stream (S3, `SYMBOL_STREAM`). Per crumb: ideal length,
-   each coder on the crumb alone (56-byte header included), round trip.
+   write, re-read, decode, compare with the symbols (S1). Coded headers must carry the TPS1 digest (S3,
+   `BINDING`). All candidates must see the same symbol stream (S3, `SYMBOL_STREAM`). Per crumb (crumb boundary:
+   DATA_FORMAT.md section 1.2): ideal length, each coder on the crumb alone (56-byte header included), round trip.
 6. Per-crumb bootstrap (B = 10000, seed 0x4558503030315543 + group, common random numbers across candidates),
-   envelope per file and per crumb, reversal audit, criteria S1-S7 and S9.
+   envelope per file and per crumb for every candidate, reversal audit, criteria S1-S7 and S9.
 7. Write the bundle and the pending receipt and report (`final_receipt.pending.json`, `REPORT.pending.md`).
 
 Before step 5 the evaluator records the notebook: operator (`git config user.name`), host (hostname), kernel
@@ -55,35 +63,58 @@ Before step 5 the evaluator records the notebook: operator (`git config user.nam
 (`git status --porcelain` empty). All five go into the receipt under `notebook`. Outside a dry run a tree that is
 not clean is refused (DIRTY_TREE) before any measurement; a dry run records the state and continues.
 
-## 3. Refusal codes
+## 3. Refusal codes, void attempts and terminal failures
 
-Every refusal prints `REFUSED <step>: <code>: <reason>`, exits 2 and writes `<out>/void_receipt_<n>.json`
-(schema `schemas/void_receipt.schema.json`; n = first free number, created exclusively, never overwritten).
+Three outcomes (FAILURE_REPORTING.md section 2 is the rule; this is how the evaluator applies it):
 
-| Code | Meaning |
-|---|---|
-| ARG | bad or missing argument; `--only` outside a dry run |
-| IO | a file could not be read or written |
-| DRY_RUN_TARGET | a dry run tried to write under calibration/experiments/EXP-001 |
-| EXISTS | final_receipt.json already exists; a verdict is never replaced |
-| PROFILE_DIGEST | profile differs from its sidecar, or a manifest names another profile |
-| NOT_FROZEN | FILL_AT_FREEZE left, manifest not frozen, or no frozen_at (sealed mode) |
-| FORMAT | malformed manifest, dataset manifest, stream or criterion |
-| DIGEST | a candidate file or shared-background file differs from the manifest |
-| RUNTIME_DIGEST | the evaluator binary is not the frozen one |
-| MODEL_DIGEST | a loaded model's digest differs from the manifest |
-| LM_BITS | a loaded model's L(M) differs from the manifest |
-| SPLIT | sealed mode with development data, or a dry run with sealed data |
-| DATASET_DIGEST | payload digest or a trace file differs from the dataset manifest |
-| OVERLAP | overlap audit missing, unreadable or not PASS |
-| FREEZE_COMMIT | manifest, sealed data and audit name different commits |
-| FREEZE_AFTER_RELEASE | candidates frozen at or after the data release, or no release time |
-| BINDING | a coded header is not bound to the TPS1 digest |
-| SYMBOL_STREAM | candidates see different symbol streams |
-| VOID | a group has no crumbs |
-| MODE | gate `--dry-run` disagrees with the bundle |
-| NOT_INDEPENDENT | sealed-mode gate given a byte copy of scorer_primary.json |
-| DIRTY_TREE | outside a dry run, `--repo` is not a git checkout at its top level, or `git status --porcelain` is not empty |
+- **Void** (exit 2): an infrastructure or operator problem found before any sealed score exists. Prints
+  `REFUSED <step>: <code>: <reason>` and writes `<out>/void_receipt_<n>.json` (schema
+  `schemas/void_receipt.schema.json`; n = attempt number, created exclusively, never overwritten) with the exact
+  `command` and `inputs` (SHA-256 of the evaluator, candidate manifest, dataset manifest and overlap audit). A
+  retry must use the same `--out`, and its command and inputs must be byte-identical to attempt 1
+  (RETRY_DIFFERS otherwise). In sealed mode the third void attempt also writes `final_receipt.json` (schema
+  `schemas/terminal_receipt.schema.json`, kind `inconclusive_infra`): verdict INCONCLUSIVE, reason INFRA. Every
+  void receipt is published.
+- **Terminal FAIL** (exit 1): a criterion fails in a way retrying cannot change. Prints `FAILED <step>: <code>:
+  ...` and writes `final_receipt.json` (kind `terminal_fail`, verdict FAIL, the named criterion FAIL, the others
+  NOT_REACHED). This covers every failure after scoring started (the model-check pass has finished) and, in
+  sealed mode, the freeze-order violations marked S2 below. In a dry run the S2 cases are voids.
+- Refusals by `gate` before its comparison (ARG, EXISTS, IO of the pending files, MODE, NOT_INDEPENDENT) write no
+  receipt at all: they are operator errors on a finished run and do not count as attempts. After that point any
+  gate failure is a terminal FAIL.
+
+| Code | Meaning | Outcome |
+|---|---|---|
+| ARG | bad or missing argument; `--only` outside a dry run | void |
+| IO | a file could not be read or written | void before scoring, terminal FAIL after |
+| DRY_RUN_TARGET | a dry run tried to write under calibration/experiments/EXP-001 | void |
+| EXISTS | final_receipt.json already exists; a verdict is never replaced | no receipt |
+| RETRY_DIFFERS | a retry's command or inputs differ from void attempt 1 | void |
+| PROFILE_DIGEST | profile differs from its sidecar, or a manifest names another profile | void |
+| NOT_FROZEN | FILL_AT_FREEZE left, manifest not frozen, or no frozen_at (sealed mode) | void |
+| FORMAT | malformed manifest, dataset manifest, stream or criterion | void before scoring; S3 terminal FAIL for a stream that fails to serialize or parse |
+| DIGEST | a candidate file or shared-background file differs from the manifest | void |
+| RUNTIME_DIGEST | the evaluator binary is not the frozen one | void |
+| INDEP_SOURCE | the independent scorer source in `--repo` differs from the frozen hash | void |
+| MODEL_DIGEST | a loaded model's digest differs from the manifest | void |
+| LM_BITS | a loaded model's L(M) differs from the manifest | void |
+| SPLIT | sealed mode with development data, or a dry run with sealed data | void |
+| DATASET_DIGEST | payload digest or a trace file differs from the dataset manifest | void |
+| OVERLAP | overlap audit missing or unreadable (void); audit result not PASS (S2 terminal FAIL) | see meaning |
+| FREEZE_COMMIT | C_f malformed, audit names another commit, no origin/main or C_f not its ancestor (void); candidate manifest or profile differ from the files at C_f (S2 terminal FAIL) | see meaning |
+| FREEZE_AFTER_RELEASE | no release time (void); C_f committed, or candidates frozen, at or after the data release (S2 terminal FAIL) | see meaning |
+| SEED_DERIVATION | a sealed seed is not the rule's seed for C_f | S2 terminal FAIL |
+| BINDING | a coded header is not bound to the TPS1 digest | S3 terminal FAIL |
+| SYMBOL_STREAM | candidates see different symbol streams | S3 terminal FAIL |
+| CODER | a coder fails to encode a whole file or a crumb | S1 terminal FAIL |
+| CRUMB_SUM | per-crumb ideal lengths do not add up to the whole-file ideal length | S4 terminal FAIL |
+| NO_CRUMBS | a group has no crumbs | S6 terminal FAIL |
+| MODE | gate `--dry-run` disagrees with the bundle | no receipt |
+| NOT_INDEPENDENT | sealed-mode gate given a byte copy of scorer_primary.json | no receipt |
+| DIRTY_TREE | outside a dry run, `--repo` is not a git checkout at its top level, or `git status --porcelain` is not empty | void |
+
+A decoder mismatch (CORRUPT, TRAIL or a round-trip difference) is not a refusal: it is recorded and makes S1
+FAIL through the normal criterion path.
 
 ## 4. Dataset manifest
 
@@ -113,6 +144,15 @@ Roots in the receipt: `candidate_root` = SHA-256 of the candidate manifest; `dat
 
 This section is the whole contract for `scorer_independent.json`. The independent scorer reads only the
 dry-run or sealed bundle and the CTR1 trace files named in its dataset manifest; it never reads omega source.
+The data formats it needs are in `DATA_FORMAT.md` (CTR1 layout, crumb boundary, profile digest, run root and
+bundle layout).
+
+The independent scorer used for S8 is `tools/turing_verify_indep` (lane D: written from these documents only,
+C, built by `make turing-verify-indep`). Its source is pinned by `independent_scorer_source_sha256` in the
+candidate manifest (rule turing.cal.indep_source.v1, `calibration/scripts/indep_source_digest.sh`) and its binary
+is one of the seven binaries of the runtime digest. It runs in the evaluator environment, from the frozen tree
+at C_f, with the command in BLINDING_PROTOCOL.md section 2 step 8. Any change to its source after the sealed data
+is released makes S8 FAIL (a scorer that can be revised after seeing the data is not independent).
 
 ### 6.1 File layout
 
@@ -149,11 +189,22 @@ Units: `_ub` = micro-bits (1 bit = 1,000,000 ub); `_bits` = bits; `_bytes` = byt
 Candidates C are the seven manifest names (`B0_uniform`, `B1_order0`, `B2_order1`, `B3_heuristic`,
 `M_candidate`, `M_mem`, `M_mem_seed1`), in candidate-manifest order. Files j = the dataset-manifest `index` within group g.
 
-- A **crumb** is a maximal run of consecutive events in a trace with the same crumb id. Crumbs are listed in
-  trace order; group g's pool is its files in index order, crumbs in trace order.
-- `ideal(event)` = `round(1e6 * -log2(q/65536))` ub, where q is the candidate's 16-bit probability of the
-  observed symbol in its TPS1 stream (computed in integers with `ty_ubits_q16`; `|error| <= 0.501` ub per
-  event). Use the TPS1/TSY1 files in the bundle; they are the candidates' exact predictions.
+- A **crumb** starts at every CTR1 record with event_index 0 and runs to the record before the next one
+  (DATA_FORMAT.md section 1.2). Crumbs are listed in trace order; group g's pool is its files in index order,
+  crumbs in trace order.
+- `ideal(event)` = `ub(q)` micro-bits, where q (1..65536) is the candidate's 16-bit probability of the observed
+  symbol in its TPS1 stream (65536 stands for probability 1). `ub(q)` is this exact integer rule and no other
+  (it is `ty_ubits_q16`; the independent scorer implements the same steps):
+  1. `log2(q)` in Q32: `ip` = index of the highest set bit of q; `m = q << (62 - ip)` (a Q62 mantissa in
+     [1, 2)); `frac = 0`; repeat for i = 1..32: `m = (m * m) >> 62` (128-bit product, truncated); if
+     `m >= 2^63` then set bit `32 - i` of `frac` and `m = m >> 1`. The result is `(ip << 32) | frac`.
+  2. `x = (16 << 32) - log2(q)` (that is -log2(q/65536) in Q32, truncated).
+  3. `ub(q) = (x * 1000000 + 2^31) >> 32` (unsigned 64-bit).
+  Test values: ub(1) = 16000000, ub(32768) = 1000000, ub(65536) = 0, ub(43481) = 591903, ub(46819) = 485194.
+  At exactly those two q the result is one micro-bit above the correctly rounded value of
+  `1e6 * -log2(q/65536)` (591902 and 485193); the rule above is the definition and wins. Every other q agrees
+  with correct rounding.
+  Use the TPS1/TSY1 files in the bundle; they are the candidates' exact predictions.
 
 | Key | Value |
 |---|---|
@@ -206,9 +257,14 @@ once (exclusive create).
 small committed fixture: every row of the refusal table that a tampered input can trigger (dry-run target,
 tampered candidate, wrong model digest, profile edited, stale dataset manifest, shared background changed,
 dataset file or trace changed, gate mode mismatch, write-once, draft manifest in sealed mode, runtime digest,
-development split in sealed mode, missing or failing overlap audit, freeze commit mismatch, frozen after
-release, FILL_AT_FREEZE, self-comparison, dirty or non-git tree) must exit 2 with the named code; the sealed
+development split in sealed mode, missing overlap audit, audit naming another commit, C_f not on origin/main,
+FILL_AT_FREEZE, self-comparison, dirty or non-git tree, independent scorer source changed, retry
+with a different command) must exit 2 with the named code; three void attempts give INCONCLUSIVE INFRA and a
+fourth is refused; the sealed freeze-order failures (overlap FAIL, manifest edited after C_f, seed not derived
+from C_f, released before C_f, frozen after release) and a gate failure after scoring must exit 1 with a
+terminal-fail final_receipt.json and no void receipt; freeze_receipt.sh must refuse an unfilled runtime
+digest and existing sealed data and PASS otherwise; the sealed
 pending receipt must carry the notebook record; S8 must PASS for a reordered, re-spaced copy and FAIL for a
 float value, a different profile digest and a repeated key; the positive dry run and gate
 must finish, and plain and ASan output must agree. `make turing-exp001-eval-dry TE_DATA=<dev run dir>` runs
-the full development dry run (refuses to start when `~/workspace/.spark-quiet` exists).
+the full development dry run with the independent scorer, which must give S8 PASS and verdict PASS (refuses to start when `~/workspace/.spark-quiet` exists).

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "turing.cal.terminal_receipt.v1",
+  "title": "Turing-profile-v1.0 terminal receipt",
+  "description": "final_receipt.json written by turing-cal-eval instead of the normal measurement receipt in two cases (calibration/docs/FAILURE_REPORTING.md section 2): kind terminal_fail = a check failed after the first score was computed (verdict FAIL; the failing criterion FAIL, every other NOT_REACHED, which counts as FAIL); kind inconclusive_infra = the third void attempt in sealed mode (verdict INCONCLUSIVE, reason INFRA). Written once, exclusive create, never replaced.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "experiment", "kind", "dry_run", "created_utc", "verdict", "EXP_001_COMPRESSION_BRIDGE"],
+  "properties": {
+    "schema": {"const": "turing.cal.terminal_receipt.v1"},
+    "experiment": {"const": "EXP-001"},
+    "kind": {"enum": ["terminal_fail", "inconclusive_infra"]},
+    "dry_run": {"type": "boolean"},
+    "created_utc": {"type": "string"},
+    "verdict": {"enum": ["FAIL", "INCONCLUSIVE"]},
+    "criteria": {"type": "object", "description": "terminal_fail only: S1-S9, each FAIL or NOT_REACHED"},
+    "failed_criterion": {"type": "string", "description": "terminal_fail only: S1, S3, S4, S6 or NONE (infrastructure failure after scoring: every criterion NOT_REACHED)"},
+    "step": {"type": "string"},
+    "code": {"type": "string"},
+    "reason": {"type": "string"},
+    "void_attempts": {"type": "integer", "description": "inconclusive_infra only"},
+    "last_step": {"type": "string"},
+    "last_code": {"type": "string"},
+    "EXP_001_COMPRESSION_BRIDGE": {"enum": ["FAIL", "INCONCLUSIVE", "DRY_RUN_NOT_EVIDENCE"]}
+  }
+}

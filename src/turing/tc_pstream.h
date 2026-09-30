@@ -108,8 +108,8 @@ int tc_ps_expect(const tc_pstream *p, const uint8_t *profile, const uint8_t *mod
 /* Refuse unless (TPS1, TSY1) are a matching pair: K, count, dataset digest, sym < K. */
 int tc_pair_check(const tc_pstream *p, const tc_symbols *s, char *why, size_t whylen);
 
-/* Ideal code length: sum over t of round(1e6 * -log2(q_t[x_t] / 65536)) micro-bits,
- * computed with ty_ubits_q16 (integer only; |error| <= 0.501 ub per symbol). */
+/* Ideal code length: sum over t of ty_ubits_q16(q_t[x_t]) micro-bits, the exact
+ * integer rule of CODER_SPEC.md section 8 (|error| <= 0.501 ub per symbol vs -log2(q/65536) x 1e6). */
 int tc_ideal_ub(const tc_pstream *p, const tc_symbols *s, uint64_t lo, uint64_t hi, int64_t *ub);
 
 /* Whole-file helpers. */

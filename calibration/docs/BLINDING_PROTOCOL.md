@@ -26,7 +26,7 @@ The guarantee has three layers:
 |---|---|---|---|---|
 | Candidate | development data (`~/aien-data/crumbline`, read-only), the public profile and task definition, its own working tree, the git history (read-only) | its working tree | off (on only with `--net`) | `calibration/scripts/candidate_env.sh` |
 | Generator | the pinned generator binary and learner (read-only) | one sealed group directory | off | inside `generate_sealed_data.sh` |
-| Evaluator | the frozen evaluation tree (a clean export of the freeze commit: candidate artifacts, reference coders, verifier; read-only), one sealed set (read-only) | one output directory | off, always | `calibration/scripts/evaluator_env.sh` |
+| Evaluator | the frozen evaluation tree (a clean clone checked out at C_f, step 7: candidate artifacts, reference coders, verifier, independent scorer; read-only), one sealed set (read-only) | one output directory | off, always | `calibration/scripts/evaluator_env.sh` |
 | Auditor | development data and the sealed set, both read-only | the audit output | off | `evaluator_env.sh --ro ~/aien-data/crumbline` running `verify_holdout_separation.sh` |
 
 The Candidate cannot query the Evaluator. The Evaluator runs offline, exposes no
@@ -47,68 +47,156 @@ it has finished.
 1. **Protocol designed; candidate families declared; power simulation; sample size
    fixed.** Lane A, ordinary worktree. The profile states `sealed_seeds_per_group = N`.
    `generate_sealed_data.sh` reads that exact key.
-2. **Candidate development.** Candidate side, on development data only (rep10 seeds
-   1-7 for fitting; seeds 1-10 of `exp-20260927-rep10` and everything in
-   `final-20260927` are burned development data). Any computation that touches data
-   should run through `candidate_env.sh` so the sealed root is out of reach even
-   after it exists.
-3. **Candidate artifacts hashed and profile frozen.** `freeze_candidate` writes
-   `calibration/experiments/EXP-001/candidate_manifest.json` (hashes of every
-   candidate artifact). The profile `.toml` and its `.sha256` sidecar are
-   committed in the same commit. That commit is merged to `origin/main`: it is the
-   **freeze commit**. From here on no candidate artifact may change; any change
-   means a new freeze commit and a new sealed set, and both sets get reported.
-4. **Sealed data generated.** Orchestrator, ordinary shell (the script jails the
+2. **Candidate development.** Candidate side, on development data only. Vocabulary
+   (same as the profile `development_split`): rep10 seeds 1-7 are the development
+   seeds used for fitting; rep10 seeds 8-10 and everything in `final-20260927` were
+   never used for fitting but are burned (seen during earlier work), so they are
+   development data too and can never be sealed data. The seed check refuses 0-10
+   and 20260927. Any computation that touches data should run through
+   `candidate_env.sh` so the sealed root is out of reach even after it exists.
+3. **Freeze, step 1: the freeze commit C_f.** `freeze_candidate.sh --freeze` writes
+   `calibration/experiments/EXP-001/candidate_manifest.json` with `"status": "frozen"`:
+   the hash of every candidate artifact, the profile hash, every shared-background
+   hash, `independent_scorer_source_sha256` (the independent scorer's source tree,
+   rule in `indep_source_digest.sh`) and `runtime_sha256` (the seven binaries,
+   `runtime_digest.sh`). The profile `runtime_digest` value, the sidecar and
+   `preregistration.json` `"status": "frozen"` (set before `--freeze`, which refuses
+   otherwise) are in the same commit. The manifest names **no commit**: a file cannot hold
+   the hash of the commit that contains it. The commit that adds these files is the
+   **freeze commit C_f**. It reaches `origin/main` by a real merge or a fast-forward,
+   **never a squash or rebase merge** (those make a new commit and C_f would not be
+   on main). The binaries hashed at freeze are built from the tree that becomes C_f;
+   C_f only adds the manifest, the profile value and the sidecar, none of which is
+   compiled into any binary. From here on no candidate artifact, profile byte,
+   evaluator or independent-scorer source may change; a change is a new
+   experiment version, reported beside this one.
+4. **Freeze, step 2: the freeze receipt.** Orchestrator, ordinary shell, after
+   `git fetch origin`:
+
+   ```
+   calibration/scripts/freeze_receipt.sh <C_f>
+   ```
+
+   It reads C_f through git and refuses unless: C_f is an ancestor of `origin/main`;
+   the manifest there is frozen; the profile there has no `FILL_AT_FREEZE` and
+   matches its sidecar and the manifest; the profile `runtime_digest` equals the
+   manifest's; the independent-scorer source at C_f hashes to the manifest value;
+   every shared-background file at C_f matches; no sealed data exists for C_f. It
+   writes `calibration/experiments/EXP-001/freeze_receipt.json` with
+   `TURING_PROFILE_V1_FROZEN = PASS` and C_f. That receipt is committed in a later
+   commit (the first place C_f is written down); nothing the seeds or the evaluator
+   use changes in it.
+5. **Sealed data generated.** Orchestrator, ordinary shell (the script jails the
    generator itself):
 
    ```
-   calibration/scripts/generate_sealed_data.sh --commit <freeze commit> \
-       --profile-digest <contents of Turing-profile-v1.0.sha256>
+   calibration/scripts/generate_sealed_data.sh --commit <C_f> \
+       --profile-digest <digest in Turing-profile-v1.0.sha256 at C_f>
    ```
 
-   The script refuses unless all of these hold: the commit is an ancestor of
-   `origin/main`, `candidate_manifest.json` and the profile exist at that commit,
-   and the profile bytes at the commit hash to the given digest, which the sidecar
-   also carries. It also refuses if the generator and learner hashes differ from
-   the pins, or if `sealed/<commit>/` already exists. Details in section 3.
-5. **Sealed data released to the Evaluator.** The Evaluator reads
-   `sealed/<commit>/` through `evaluator_env.sh --sealed` only.
-6. **Overlap audit** (Auditor). First the orchestrator prepares the frozen tree in
-   an ordinary shell, because the jail binds it read-only and nothing can be built
-   inside it:
+   The seeds are derived from C_f (section 3). The script refuses unless all of these
+   hold: C_f is an ancestor of `origin/main` (it fetches first), the candidate
+   manifest at C_f is `"status": "frozen"`, the profile at C_f has no
+   `FILL_AT_FREEZE` and hashes to the given digest, which the sidecar also carries.
+   It also refuses if the generator and learner hashes differ from the pins, or if
+   `sealed/<C_f>/` already exists. It records C_f's commit time. Failed attempts
+   follow section 3 ("If generation fails").
+6. **Sealed data released to the Evaluator.** The Evaluator reads `sealed/<C_f>/`
+   through `evaluator_env.sh --sealed` only. The release time is the
+   `started_utc` of `seed_commitment.json` (the start of generation, the earliest
+   moment sealed bytes exist), copied into the dataset manifest as `released_utc`; the
+   evaluator refuses unless C_f's commit time and the manifest `frozen_at` are both
+   before it.
+7. **Frozen tree and overlap audit** (Auditor). First the orchestrator prepares the
+   frozen tree in an ordinary shell. It is a clone checked out at C_f (not a
+   `git archive` export), because the evaluator checks C_f against `origin/main`
+   and the clean-tree state through git; the jail binds it read-only and nothing
+   can be built inside it:
 
    ```
-   F=~/aien-data/turing-cal/frozen/<commit>
-   mkdir -p $F && git -C ~/workspace/omega archive <commit> | tar -x -C $F
-   make -C $F turing-cal-overlap        # plus the coders, verifier and scorer builds
+   F=~/aien-data/turing-cal/frozen/<C_f>
+   git clone -q https://github.com/aien-dev/omega $F && git -C $F checkout -q --detach <C_f>
+   make -C $F turing-cal-overlap turing-cal-eval turing-coder turing-verify-indep turing-cal-candidates
+   sh $F/calibration/scripts/runtime_digest.sh      # must print the frozen runtime_digest
    ```
 
-   Then the audit runs in the jail. `--repo` points at the git directory, which is
-   bound read-only, so the script can read the freeze commit's time:
+   Then the audit runs in the jail:
 
    ```
    $F/calibration/scripts/evaluator_env.sh --frozen $F \
-       --sealed ~/aien-data/turing-cal/sealed/<commit> \
-       --ro ~/aien-data/crumbline --ro ~/workspace/omega/.git \
-       --out ~/aien-data/turing-cal/eval/<commit>/audit -- \
+       --sealed ~/aien-data/turing-cal/sealed/<C_f> \
+       --ro ~/aien-data/crumbline \
+       --out ~/aien-data/turing-cal/eval/<C_f>/audit -- \
        $F/calibration/scripts/verify_holdout_separation.sh \
-       --sealed-dir ~/aien-data/turing-cal/sealed/<commit> \
-       --out ~/aien-data/turing-cal/eval/<commit>/audit/overlap_audit.json \
-       --repo ~/workspace/omega/.git
+       --sealed-dir ~/aien-data/turing-cal/sealed/<C_f> \
+       --out ~/aien-data/turing-cal/eval/<C_f>/audit/overlap_audit.json \
+       --repo $F
    ```
 
-   This exact command was run on 2026-09-29 against a throwaway freeze commit and
-   the full default development set (54 trace files, 86 million records). It
-   returned PASS in 3 min 44 s.
+   The same audit (with `git archive` and `--repo ~/workspace/omega/.git`, which
+   works the same way for the audit) was run on 2026-09-29 against a throwaway
+   freeze commit and the full default development set (54 trace files, 86 million
+   records). It returned PASS in 3 min 44 s.
 
-   The result is copied to `calibration/experiments/EXP-001/overlap_audit.json`.
-   A FAIL stops the experiment. The failure is reported (FAILURE_REPORTING.md);
-   the set is never quietly replaced.
-7. **Evaluation.** Evaluator, inside `evaluator_env.sh`: frozen candidates emit
-   probability streams over group 1 (primary). Coders A and B encode and decode
-   them, and the verifier and scorers run. Group 2 is the second-seed replication
-   and is scored the same way.
-8. **Results published whether pass or fail.**
+   The result is copied to `calibration/experiments/EXP-001/overlap_audit.json`. An
+   audit that runs to the end and finds an overlap or a freeze-order break is an
+   **S2 FAIL, final**: it is reported with the verdict FAIL (FAILURE_REPORTING.md
+   section 2); the set is never quietly replaced. An audit that cannot run (exit 2)
+   is an infrastructure failure and follows the void rule.
+8. **Evaluation.** Orchestrator, inside `evaluator_env.sh`, with run root
+   `R=~/aien-data/turing-cal/eval/<C_f>/run` (layout: DATA_FORMAT.md section 4).
+   First, in an ordinary shell (reads the sealed set only through the script's own
+   hash checks, writes one file):
+
+   ```
+   mkdir -p $R && cp $F/calibration/experiments/EXP-001/candidate_manifest.json $R/
+   $F/calibration/scripts/make_dataset_manifest.sh --sealed ~/aien-data/turing-cal/sealed/<C_f> $R/dataset_manifest.json
+   cp ~/aien-data/turing-cal/eval/<C_f>/audit/overlap_audit.json $R/
+   mkdir -p $R/docs/profiles && cp $F/calibration/profiles/Turing-profile-v1.0.toml $R/docs/profiles/
+   cp $F/calibration/experiments/EXP-001/candidate_manifest.json $R/docs/
+   ```
+
+   Then the run, in the jail. The two memorization controls (76 MB and 45 MB, not in
+   git) are bound read-only from `~/aien-data/turing-cal/candidates/`; they are the
+   files hashed at freeze and are never regenerated at evaluation time (the
+   evaluator re-checks every hash before scoring):
+
+   ```
+   $F/calibration/scripts/evaluator_env.sh --frozen $F \
+       --sealed ~/aien-data/turing-cal/sealed/<C_f> \
+       --ro ~/aien-data/turing-cal/candidates \
+       --out $R -- sh -c "cd $R && $F/build/turing-exp001-eval/turing-cal-eval run --repo $F \
+         --manifest candidate_manifest.json --cand-dir $F/calibration/experiments/EXP-001/candidates \
+         --cand-dir ~/aien-data/turing-cal/candidates --dataset dataset_manifest.json \
+         --overlap overlap_audit.json --out bundle --work work"
+   ```
+
+   Then the independent scorer, in the same jail and the same run root, reading only
+   the published docs at C_f, the bundle and the sealed CTR1 files named in the
+   dataset manifest (it never includes or links omega `src/`):
+
+   ```
+   ... -- sh -c "cd $R && $F/build/turing-verify-indep/indep-scorer --docs docs \
+         --bundle-root . --cand-dir $F/calibration/experiments/EXP-001/candidates \
+         --cand-dir ~/aien-data/turing-cal/candidates \
+         --out bundle/scorer_independent.json --details indep_details.json"
+   ```
+
+   (`docs/` holds the profile and the candidate manifest from C_f, copied above.)
+   Finally the gate, in the jail:
+
+   ```
+   ... -- sh -c "cd $R && $F/build/turing-exp001-eval/turing-cal-eval gate --bundle bundle \
+         --independent bundle/scorer_independent.json"
+   ```
+
+   The independent scorer is frozen at C_f (its source hash is in the manifest). It
+   may not be revised after the sealed release: a revision is a new scorer version,
+   and for this experiment S8 = FAIL. Group 2 (second-seed replication) is scored in
+   the same run. The dev dry run (`make turing-exp001-eval-dry`) runs exactly this
+   sequence on development seeds 7 and 6.
+9. **Results published whether pass or fail**, together with every void receipt and
+   every failed generation attempt.
 
 ## 3. Sealed data: seeds, generator, layout
 
@@ -180,10 +268,16 @@ flag and kept flag), `generation.log`, and `COMPLETE`, which is written last and
 holds the SHA-256 of `seed_commitment.json`. Files end mode 0400 and directories
 0500. No sealed file may have a second hard link.
 
-**If generation fails** part way, the directory lacks `COMPLETE` and must not be
-used. Rename it to `sealed/<commit>.failed-<UTC time>`, keep it, report it, and run
-the script again. The seeds are fixed by the commit, so a rerun produces the same
-data and gives no room to pick a better sample.
+**If generation fails** part way (before any score exists, so it is an infrastructure
+failure), the script itself renames the partial directory to
+`sealed/<commit>.failed-<k>` (k = 1, 2, 3) with a `FAILED` note (reason, exact command,
+time) and stops. It is kept and published, never used. The retry must be the
+byte-identical command under the same C_f: the seeds are fixed by C_f, so a retry
+produces the same data and gives no room to pick a better sample. Nothing may change
+between attempts. After the third failed attempt the script writes
+`sealed/<commit>.INCONCLUSIVE_INFRA` and refuses further attempts: EXP-001 ends
+INCONCLUSIVE with reason INFRA (FAILURE_REPORTING.md section 2). A new freeze commit
+is never used to get around a failed generation.
 
 ## 4. Overlap audit (`verify_holdout_separation.sh`)
 
@@ -194,7 +288,7 @@ It writes `overlap_audit.json`. PASS requires every gate:
 | complete | `COMPLETE` equals SHA-256 of `seed_commitment.json` |
 | integrity | every kept file re-hashes to its `manifest.json` value |
 | seeds | every seed re-derives from the rule; none is burned |
-| after_freeze | every sealed file's modification time is later than the freeze commit's committer time |
+| after_freeze | every sealed file's modification time is later than the freeze commit's committer time, and the candidate manifest at that commit is `"status": "frozen"` (so the commit is C_f) |
 | single_link | no sealed file has a second hard link |
 | crumb_digest | no ledger `crumb_digest` appears in both development and sealed data |
 | sealed_digest | no ledger `sealed_digest` (hidden held-out set) appears in both |
@@ -214,7 +308,7 @@ conditions and all runs, plus each one's sibling `ledger.jsonl`.
 Self-checks, run 2026-09-29 on a throwaway freeze commit with N = 1: PASS against
 development seeds 1-7. The same sealed set also got a planted overlap: one sealed
 trace was added to the development list. That run FAILED on crumb_digest (188),
-sealed_digest (188), trace_stream (186) and crumb_block (186), as it should. A second run used the full default development set (54 trace files, 86 million records) and the jailed Auditor command of section 2 step 6: PASS in about 4 minutes.
+sealed_digest (188), trace_stream (186) and crumb_block (186), as it should. A second run used the full default development set (54 trace files, 86 million records) and the jailed Auditor command of section 2 step 7 (archive form): PASS in about 4 minutes.
 
 ## 5. What the machine enforces, and its limit
 
@@ -271,3 +365,9 @@ not depend on this upgrade; the profile records which arrangement was used.
 * `calibration/scripts/verify_holdout_separation.sh` + `tools/turing_cal_overlap.c`: the overlap audit
 * `calibration/scripts/test_blinding.sh`: the enforcement self-test
 * `mk/turing_exp001_c.mk`: `make turing-cal-overlap`, `make test-turing-cal-blinding`
+* `calibration/scripts/freeze_candidate.sh`: the candidate manifest (step 1; `--freeze` makes C_f's content)
+* `calibration/scripts/freeze_receipt.sh`: step 4, the freeze receipt for C_f (TURING_PROFILE_V1_FROZEN)
+* `calibration/scripts/indep_source_digest.sh`: the independent scorer source digest (turing.cal.indep_source.v1)
+* `calibration/scripts/runtime_digest.sh`: the runtime digest over the seven binaries
+* `tools/turing_verify_indep/` (`make turing-verify-indep`, `mk/turing_exp001_indep.mk`): the lane D independent scorer
+* `calibration/docs/DATA_FORMAT.md`: the trace, dataset manifest, run root and bundle formats

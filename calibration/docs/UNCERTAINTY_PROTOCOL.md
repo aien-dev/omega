@@ -25,7 +25,8 @@ Positive T means M compresses the group's sealed data better than B2 after payin
 ## 3. Pool order
 
 The pool of group g is the list of all nonempty crumbs of the group's 3 sealed control files, ordered first by the
-seed order of the sealed manifest (lane C, BLINDING_PROTOCOL.md), then by crumb ordinal inside the file. The pool
+file index j = 0, 1, 2 of the dataset manifest (the seed-commitment order, which is the seed derivation index;
+not numeric seed order; DATA_FORMAT.md section 3), then by crumb ordinal inside the file. The pool
 has C crumbs. The index i of a crumb in this list is what the resampler draws.
 
 ## 4. Random numbers
@@ -72,7 +73,8 @@ that delta T > 0 under the bootstrap distribution".
 ## 7. Coded intervals
 
 For each reference coder (lane B, CODER_SPEC.md) the coded code length of a group under M is the exact size of the
-coded output in bits, all headers counted. The coder overhead of M is
+coded output in bits, all headers counted: coded_bits(M) = 8 x the sum of the byte sizes of the group's three
+whole-file coded files (three 56-byte headers). Per-crumb coded files are not used here. The coder overhead of M is
 
 ```
 o(M) = coded_bits(M) * 1000000 - sum_c L(D_c|M)     (ub; whole group, deterministic)

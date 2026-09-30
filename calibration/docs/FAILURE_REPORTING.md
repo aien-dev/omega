@@ -14,7 +14,8 @@ detail as a PASS.
 | PASS | every success criterion S1-S9 of the prereg is PASS | final_receipt.json verdict PASS |
 | FAIL | the run completed as specified and at least one criterion is FAIL or NOT_REACHED | final_receipt.json verdict FAIL, with each failed criterion and its numbers |
 | INCONCLUSIVE | the run completed, no criterion is FAIL or NOT_REACHED, and at least one of S6, S7, S9 is INCONCLUSIVE by the trigger below | final_receipt.json verdict INCONCLUSIVE, with the straddling intervals |
-| VOID | the run could not be completed as specified (a check refused, a digest mismatched, a seed failed to generate, the per-crumb sum did not equal the file sum, an overlap was found) | void_receipt_<n>.json naming the step, the refusal code and the time; no verdict |
+| VOID | an infrastructure or operator failure found before any sealed score exists: a check refused (digest, runtime, split, dirty tree, missing overlap audit, C_f not on origin/main), a sealed seed failed to generate, a crash before scoring | void_receipt_<n>.json naming the step, the refusal code, the exact command, the input digests and the time; no verdict |
+| INCONCLUSIVE INFRA | the third VOID attempt of the same step | final_receipt.json kind inconclusive_infra, verdict INCONCLUSIVE, reason INFRA; final |
 | DEVIATION | anything done differently from the prereg or profile | listed in REPORT.md; makes the run FAIL unless the profile itself allows it |
 
 INCONCLUSIVE trigger (declared 2026-09-29, before any sealed data exist; the evaluator implements exactly this).
@@ -35,9 +36,34 @@ sample could not separate the effect from zero; it is not a PASS, it is publishe
 never converted into PASS or FAIL by more data, other seeds or a changed interval (section 4). A development dry
 run carries EXP_001_COMPRESSION_BRIDGE = DRY_RUN_NOT_EVIDENCE whatever its criteria say, and S2 = NOT_CHECKED.
 
-A VOID run is not a FAIL of the hypothesis and not a PASS. Its sealed data are burned: they are never reused as
-sealed data. A new attempt needs a new freeze commit, new sealed seeds under the same rule, and it cites every
-earlier VOID receipt.
+VOID versus FAIL (the one rule; EVALUATOR.md section 3 maps every refusal code to it):
+
+- VOID is only for an infrastructure or operator failure found before any sealed score exists. "A score exists"
+  from the moment `run` finishes checking the candidates and starts writing the first sealed probability stream.
+- After that moment the verdict is final. A failure then is a terminal FAIL of the criterion whose step failed:
+  a coder or decoder failure is S1; a freeze-order violation (overlap audit FAIL, manifest or profile differing
+  from C_f, a seed not derived from C_f, C_f committed or candidates frozen at or after the release) is S2 even
+  though the evaluator checks it before scoring, because retrying cannot change it; a stream, binding or
+  serialization failure is S3; a per-crumb sum mismatch is S4; a group with no crumbs is S6; a lane D mismatch is
+  S8; a crash after scoring started is FAIL of the criterion whose step crashed. It is written as
+  final_receipt.json kind terminal_fail.
+- Every criterion that can FAIL is able to FAIL: each has at least one path above or in the criteria rules that
+  sets it to FAIL, and the tests exercise each terminal path (EVALUATOR.md section 7).
+- A retry after a VOID uses the same freeze commit C_f, the same sealed seeds, the same frozen tree and a
+  byte-identical command and inputs (the evaluator refuses a different one with RETRY_DIFFERS; sealed generation
+  refuses a different command). Nothing may be edited between attempts. At most three attempts are made; the
+  third VOID ends EXP-001 as INCONCLUSIVE INFRA, which is final. Any later attempt is a new experiment with its
+  own preregistration and its own seeds, and it cites every EXP-001 receipt.
+- Sealed data generation follows the same rule: a failed seed moves the set to `sealed/<C_f>.failed-<k>` with a
+  FAILED note (reason, command, attempt, time), the same command is run again (same seeds, same data), and the
+  third failure writes `sealed/<C_f>.INCONCLUSIVE_INFRA` (BLINDING_PROTOCOL.md section 2).
+- Every VOID receipt and every failed generation note is published with the final result.
+- Deviations: the operator lists every action not written in the prereg, the profile or BLINDING_PROTOCOL.md
+  section 2 in REPORT.md; the reviewer checks the list against the evaluation log. An unlisted deviation found
+  later makes the run FAIL.
+- Adversarial and unit tests run before the freeze (any failure is fixed before C_f; no sealed data exist) and
+  again on the frozen tree at step 7. A failure at step 7 is VOID with the same retry rule; the frozen code cannot
+  be changed, so a real defect ends in INCONCLUSIVE INFRA.
 
 ## 3. What every receipt contains
 
@@ -79,6 +105,14 @@ implementation defect, fundamental metric sensitivity) was preregistered for EXP
 FAIL whatever cause is later found. A cause label written after the result is a diagnosis in the report
 and never changes S5 or the verdict. The Spearman rank correlation of the DL ordering, ideal vs
 each coder, is reported and not used in the verdict.
+
+Scope and ties (the evaluator implements exactly this). The DL ordering check covers all 21 unordered pairs of
+the seven candidates, in each group, for each coder (range and rANS) against the ideal. DL under the ideal is
+L(M) x 1e6 + ideal_ub; DL under a coder is (L(M) + coded_bits) x 1e6, where coded_bits is 8 x the summed byte
+size of the group's whole-file coded files (one 56-byte header per file). The sign of a difference is -1, 0 or
++1; a pair whose sign differs between the ideal and the coder (including 0 on one side only) is a reversal. The
+T sign checks cover the six candidates other than B2, with the same three-valued sign; a T of exactly 0 has sign
+0. Every reversal found is written to uncertainty.json.
 
 ## 6. Where results go
 

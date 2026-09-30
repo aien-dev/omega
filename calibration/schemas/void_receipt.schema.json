@@ -2,18 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "turing.cal.void_receipt.v1",
   "title": "Turing-profile-v1.0 void receipt",
-  "description": "Written by turing-cal-eval when any check refuses (the run is VOID, no verdict). File <out>/void_receipt_<n>.json, n = first free number, exclusive create, never overwritten. Refusal codes: calibration/docs/EVALUATOR.md section 3.",
+  "description": "Written by turing-cal-eval when a check refuses BEFORE any score exists (the attempt is VOID, no verdict). File <out>/void_receipt_<n>.json, n = attempt number = first free number, exclusive create, never overwritten. A retry must repeat attempt 1 byte for byte (command and inputs fields); at most 3 attempts, and the third void attempt also writes final_receipt.json (terminal_receipt schema, verdict INCONCLUSIVE, reason INFRA). Refusal codes: calibration/docs/EVALUATOR.md section 3; rule: calibration/docs/FAILURE_REPORTING.md section 2.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema", "experiment", "kind", "dry_run", "created_utc", "step", "code", "reason"],
+  "required": ["schema", "experiment", "kind", "dry_run", "created_utc", "attempt", "step", "code", "reason", "command", "inputs"],
   "properties": {
     "schema": {"const": "turing.cal.void_receipt.v1"},
     "experiment": {"const": "EXP-001"},
     "kind": {"const": "void"},
     "dry_run": {"type": "boolean"},
     "created_utc": {"type": "string"},
+    "attempt": {"type": "integer", "minimum": 1},
     "step": {"type": "string"},
     "code": {"type": "string"},
-    "reason": {"type": "string"}
+    "reason": {"type": "string"},
+    "command": {"type": "string", "description": "argv joined by single spaces (quote and backslash replaced by an apostrophe)"},
+    "inputs": {"type": "string", "description": "'turing-cal-eval <sha256> manifest <sha256> dataset <sha256> overlap <sha256|NONE>'"}
   }
 }

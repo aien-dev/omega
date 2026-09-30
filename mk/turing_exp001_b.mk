@@ -73,14 +73,17 @@ test-turing-exp001-coders: $(TC_DIR)/test_tc $(TC_DIR)/test_tc_asan $(TC_DIR)/te
 	cmp $(TC_DIR)/cli_turing-coder/f.rans $(TC_DIR)/cli_turing-coder_asan/f.rans
 	@echo "test-turing-exp001-coders: TPS1/TSY1, range + rANS round trips and refusals pass; plain and ASan/UBSan identical"
 
-TC_ENV_MODELS = uniform:9 evidence/TURING_YIELD/ty2_baseline.tym $(TC_CAND)
+# All seven EXP-001 candidates (profile section "envelope"), per file and per crumb, both coders.
+# One model at a time (M_mem needs several GB): never run in parallel.
+TC_ENV_CANDS = B0_uniform B1_order0 B2_order1 B3_heuristic M_candidate M_mem M_mem_seed1
+TC_ENV_CDIRS ?= calibration/experiments/EXP-001/candidates $(HOME)/aien-data/turing-cal/candidates
 turing-exp001-envelope: $(TC_TOOL)
 	@mkdir -p $(TC_DIR)/envelope
-	@for S in 1 2 3 4 5 6 7; do \
-		./$(TC_TOOL) envelope $(TC_ZERO) $(TC_DIR)/envelope/seed-$$S.csv $(TC_DATA)/seed-$$S/control/trace.ctr \
-			$(TC_ENV_MODELS) > $(TC_DIR)/envelope/seed-$$S.txt & \
-	done; wait
-	cat $(TC_DIR)/envelope/seed-*.txt
-	@for S in 1 2 3 4 5 6 7; do \
-		test $$(grep -c "^file " $(TC_DIR)/envelope/seed-$$S.txt) -eq 3 || { echo "envelope: seed $$S incomplete or refused"; exit 1; }; \
-	done
+	@for S in 1 2 3 4 5 6 7; do for C in $(TC_ENV_CANDS); do \
+		F=""; for D in $(TC_ENV_CDIRS); do [ -f "$$D/$$C.tym" ] && { F="$$D/$$C.tym"; break; }; done; \
+		[ -n "$$F" ] || { echo "envelope: $$C.tym not found"; exit 1; }; \
+		./$(TC_TOOL) envelope $(TC_ZERO) $(TC_DIR)/envelope/seed-$$S.$$C.csv $(TC_DATA)/seed-$$S/control/trace.ctr \
+			"$$F" > $(TC_DIR)/envelope/seed-$$S.$$C.txt || { echo "envelope: seed $$S $$C refused"; exit 1; }; \
+		test $$(grep -c "^file " $(TC_DIR)/envelope/seed-$$S.$$C.txt) -eq 1 || { echo "envelope: seed $$S $$C incomplete"; exit 1; }; \
+	done; done
+	sh calibration/scripts/envelope_summary.sh $(TC_DIR)/envelope | tee $(TC_DIR)/envelope/summary.txt

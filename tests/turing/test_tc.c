@@ -523,6 +523,37 @@ static void test_fail_closed(void) {
     base_free(&B);
 }
 
+/* G2 (CAL-0 review): the one integer ideal-length rule, CODER_SPEC.md section 7. ub(q) for q in 1..65536 is
+ * floor(((16 * 2^32 - L(q)) * 10^6 + 2^31) / 2^32), L(q) = the 32-fractional-bit truncated bitwise log2 of q.
+ * At q = 43481 and q = 46819 this rule and the exactly rounded -log2(q/65536) differ by one micro-bit: the
+ * profile pins the truncated rule, so these two values are the check that an implementation follows it. */
+__extension__ typedef unsigned __int128 g2_u128;
+static void test_g2_rule(void) {
+    CHECK(ty_ubits_q16(43481) == 591903, "G2: ub(43481) = %" PRId64 ", want 591903", ty_ubits_q16(43481));
+    CHECK(ty_ubits_q16(46819) == 485194, "G2: ub(46819) = %" PRId64 ", want 485194", ty_ubits_q16(46819));
+    CHECK(ty_ubits_q16(65536) == 0 && ty_ubits_q16(32768) == 1000000 && ty_ubits_q16(1) == 16000000,
+          "G2: ub anchors (65536 -> 0, 32768 -> 1e6, 1 -> 16e6)");
+    /* The same rule written out from the spec text, independently of ty_math.c, for every q. */
+    int bad = 0;
+    for (uint32_t q = 1; q <= 65536 && bad < 3; ++q) {
+        unsigned e = 31u - (unsigned)__builtin_clz(q);
+        g2_u128 m = (g2_u128)q << (62 - e);
+        uint64_t frac = 0;
+        for (int i = 0; i < 32; ++i) {
+            m = (m * m) >> 62;
+            frac <<= 1;
+            if (m >= ((g2_u128)1 << 63)) m >>= 1, frac |= 1;
+        }
+        uint64_t v = ((uint64_t)16 << 32) - (((uint64_t)e << 32) | frac);
+        int64_t ub = (int64_t)(((g2_u128)v * 1000000u + ((uint64_t)1 << 31)) >> 32);
+        if (ub != ty_ubits_q16(q)) {
+            ++bad;
+            CHECK(0, "G2: spec rule %" PRId64 " != ty_ubits_q16 %" PRId64 " at q = %u", ub, ty_ubits_q16(q), q);
+        }
+    }
+    CHECK(bad == 0, "G2: spec rule equals ty_ubits_q16 for every q in 1..65536");
+}
+
 int main(int argc, char **argv) {
     if (argc != 2) {
         fprintf(stderr, "usage: test_tc <output prefix>\n");
@@ -534,6 +565,7 @@ int main(int argc, char **argv) {
     if (!g_det) return 2;
     test_round_trips();
     test_fail_closed();
+    test_g2_rule();
     fclose(g_det);
     printf("test_tc: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail ? 1 : 0;

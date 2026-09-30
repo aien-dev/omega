@@ -225,7 +225,12 @@
       "properties": {
         "commit": {
           "type": "string",
-          "pattern": "^[0-9a-f]{40}$"
+          "pattern": "^([0-9a-f]{40}|NONE)$",
+          "description": "C_f, the freeze commit (dataset manifest freeze_commit); NONE only in a dry run"
+        },
+        "origin_main_checked": {
+          "type": "string",
+          "description": "origin/main commit the ancestor check ran against; NONE in a dry run"
         },
         "status": {
           "enum": [

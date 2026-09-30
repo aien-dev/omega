@@ -33,7 +33,15 @@
 # lacks calibration/experiments/EXP-001/candidate_manifest.json or the profile;
 # SHA-256 of the profile bytes at the commit differs from --profile-digest (or its
 # .sha256 sidecar); the crumbs or learner binary hash differs from the pin;
-# sealed/<commit>/ already exists; N is missing or disagrees with the profile.
+# the candidate manifest at the commit is not "status": "frozen" or the profile there still holds FILL_AT_FREEZE;
+# sealed/<commit>/ already exists; N is missing or disagrees with the profile; a retry differs from the first
+# attempt; three attempts already failed.
+#
+# FAILED ATTEMPTS (FAILURE_REPORTING.md section 2). A generation failure is an infrastructure failure: no score
+# exists yet. The partial directory is renamed sealed/<commit>.failed-<k> (k = 1, 2, 3) with a FAILED note
+# (reason, exact command, time); it is kept and published with the results, never used. A retry must be the
+# byte-identical command. After the third failed attempt the script writes sealed/<commit>.INCONCLUSIVE_INFRA and
+# refuses every further attempt: EXP-001 then ends INCONCLUSIVE with reason INFRA.
 #
 # OUTPUT ~/aien-data/turing-cal/sealed/<commit>/
 #   group-<g>/seed-<S>/control/{trace.ctr,samples.cts,evaluations.jsonl,ledger.jsonl,promotion.json}
@@ -65,6 +73,7 @@ die() { echo "generate_sealed_data: $*" >&2; exit 2; }
 sha() { sha256sum -- "$1" | cut -d' ' -f1; }
 
 commit="" digest="" n="" derive_only=0 trial_seed="" keep_learning=0 fetch=1
+orig_cmd="generate_sealed_data.sh $*"
 repo="$(git -C "$here" rev-parse --show-toplevel)"
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -181,6 +190,10 @@ git -C "$repo" cat-file -e "$commit:$CANDIDATE_MANIFEST" 2>/dev/null || die "$CA
 git -C "$repo" cat-file -e "$commit:$PROFILE_PATH" 2>/dev/null || die "$PROFILE_PATH missing at $commit"
 pd="$(git -C "$repo" show "$commit:$PROFILE_PATH" | sha256sum | cut -d' ' -f1)"
 [ "$pd" = "$digest" ] || die "profile bytes at $commit hash to $pd, not --profile-digest $digest"
+git -C "$repo" show "$commit:$CANDIDATE_MANIFEST" | grep -q "^  \"status\": \"frozen\"," ||
+    die "$CANDIDATE_MANIFEST at $commit is not frozen (the commit must be the freeze commit C_f)"
+git -C "$repo" show "$commit:$PROFILE_PATH" | grep -q FILL_AT_FREEZE && die "profile at $commit still holds FILL_AT_FREEZE"
+ctime_utc="$(date -u -d "@$(git -C "$repo" show -s --format=%ct "$commit")" +%Y-%m-%dT%H:%M:%SZ)"
 if git -C "$repo" cat-file -e "$commit:$SIDECAR_PATH" 2>/dev/null; then
     sd="$(git -C "$repo" show "$commit:$SIDECAR_PATH" | awk '{print $1; exit}')"
     [ "$sd" = "$digest" ] || die "sidecar digest $sd != --profile-digest $digest"
@@ -193,6 +206,14 @@ n="${n:-$pn}"
 [[ "$n" =~ ^[1-9][0-9]*$ ]] || die "N unknown: profile has no '$PROFILE_N_KEY = <int>' and no --n given"
 
 dest="$TC_SEALED_ROOT/$commit"
+[ -e "$dest.INCONCLUSIVE_INFRA" ] && die "three generation attempts already failed for $commit: EXP-001 is INCONCLUSIVE (INFRA)"
+attempt=1
+while [ -e "$dest.failed-$attempt" ]; do
+    first_cmd="$(sed -n "s/^command: //p" "$dest.failed-1/FAILED")"
+    [ "$first_cmd" = "$orig_cmd" ] || die "retry differs from attempt 1 ($first_cmd); a retry must be byte-identical"
+    attempt=$((attempt + 1))
+done
+[ "$attempt" -le 3 ] || die "attempt $attempt: at most three attempts"
 [ -e "$dest" ] && die "$dest already exists (sealed data is generated exactly once per freeze commit)"
 tc_have_bwrap
 
@@ -214,23 +235,34 @@ trap 'rm -rf "$work"' EXIT
 learner="$(build_learner "$commit" "$work")"
 check_binaries "$learner"
 
+# A failed attempt: keep the partial set under a numbered name with a FAILED note, then stop.
+fail_attempt() {
+    local k="$attempt" fd="$dest.failed-$attempt"
+    mv "$dest" "$fd"
+    printf 'reason: %s\ncommand: %s\nattempt: %s\ntime_utc: %s\n' "$1" "$orig_cmd" "$k" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$fd/FAILED"
+    if [ "$k" -ge 3 ]; then
+        printf 'EXP-001 INCONCLUSIVE reason INFRA: three sealed generation attempts failed (%s.failed-1..3)\n' "$dest" >"$dest.INCONCLUSIVE_INFRA"
+        die "attempt $k failed ($1); three attempts failed: EXP-001 is INCONCLUSIVE (INFRA); publish all FAILED notes"
+    fi
+    die "attempt $k failed ($1); kept as $fd; retry with the byte-identical command (at most 3 attempts)"
+}
 umask 077
 mkdir -p "$TC_SEALED_ROOT"
 chmod 0700 "$TC_SEALED_ROOT"
 mkdir "$dest"
 log="$dest/generation.log"
 started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-echo "started $started commit $commit profile_digest $digest n_per_group $n" >"$log"
+echo "started $started commit $commit committed_utc $ctime_utc attempt $attempt profile_digest $digest n_per_group $n" >"$log"
 for row in "${seeds[@]}"; do
     read -r g j s <<<"$row"
     gdir="$dest/group-$g"
     mkdir -p "$gdir"
-    [ -e "$gdir/seed-$s" ] && die "$gdir/seed-$s already exists (the generator appends; refusing)"
+    [ -e "$gdir/seed-$s" ] && fail_attempt "$gdir/seed-$s already exists (the generator appends; refusing)"
     ns="" rc=""
     read -r ns rc < <(run_seed "$learner" "$s" "$gdir") || true
-    [ -n "$rc" ] || die "generation jail did not start for seed $s"
+    [ -n "$rc" ] || fail_attempt "generation jail did not start for seed $s"
     echo "g$g j=$j seed=$s rc=$rc wall_ms=$((ns / 1000000))" >>"$log"
-    [ "$rc" = 0 ] || die "generator failed for seed $s (rc $rc); $dest is incomplete and must not be used"
+    [ "$rc" = 0 ] || fail_attempt "generator failed for seed $s (rc $rc)"
 done
 
 # Manifest: every file, learning included, hashed before learning is dropped.
@@ -267,6 +299,8 @@ mv "$work/manifest.json" "$dest/manifest.json"
     echo "  \"schema\": \"turing.cal.seed_commitment.v1\","
     echo "  \"rule\": \"seed = (first 16 hex of SHA-256(ASCII '$DOMAIN|<commit>|<profile_digest>|g<group>|<index>')) with top bit cleared, decimal\","
     echo "  \"domain\": \"$DOMAIN\","
+    echo "  \"freeze_commit_time_utc\": \"$ctime_utc\","
+    echo "  \"attempt\": $attempt,"
     echo "  \"freeze_commit\": \"$commit\","
     echo "  \"profile_digest\": \"$digest\","
     echo "  \"n_per_group\": $n,"

@@ -12,11 +12,17 @@
 # are not committed: a copy goes to ~/aien-data/turing-cal/candidates/ ($TXA_BIG_STORE), their bytes are
 # regenerated deterministically from dev seeds 1-7 by `make turing-exp001-a-candidates`, and they must hash to
 # the recorded SHA-256 before use. runtime_sha256 lists runtime_digest.sh --lines when all binaries are built.
-# Also recorded: profile SHA-256, sidecar content, SHA-256 of every shared-background file, git HEAD.
+# Also recorded: profile SHA-256, sidecar content, SHA-256 of every shared-background file, and
+# independent_scorer_source_sha256 (rule below). The manifest names NO commit: the commit that adds the frozen
+# manifest is the freeze commit C_f (two-step freeze, BLINDING_PROTOCOL.md section 2); sealed seeds are derived
+# from C_f, and a later freeze-receipt commit (freeze_receipt.sh C_f) records it.
+# independent_scorer_source_sha256 = SHA-256 of the LF-terminated lines "<sha256>  <path>" for every file under
+# tools/turing_verify_indep/, path relative to that directory, sorted by path (LC_ALL=C byte order).
 #
 # Default (draft) mode: writes the manifest with "status": "draft".
 # --freeze: additionally requires a clean worktree, check_profile.sh --freeze passing (no FILL_AT_FREEZE, sidecar
-# matches), and refuses if any sealed data directory exists for HEAD. Writes "status": "frozen".
+# matches) and calibration/experiments/EXP-001/preregistration.json at "status": "frozen", and refuses if any sealed data directory exists at all (sealed data may only exist after C_f).
+# Writes "status": "frozen".
 # Refuses if the candidate directory holds anything other than the seven expected files, or if any sealed
 # path is passed. It never reads sealed data. No Python: POSIX sh, od, sha256sum.
 set -eu
@@ -38,11 +44,13 @@ extra=$(ls "$cdir" | grep -v -x -e B0_uniform.tym -e B1_order0.tym -e B2_order1.
 [ -z "$extra" ] || die "unexpected files in $cdir: $extra"
 [ -f "$toml" ] || die "profile missing"
 
-head=$(git -C "$dir" rev-parse HEAD)
+
 if [ "$freeze" = 1 ]; then
     [ -z "$(git -C "$dir" status --porcelain)" ] || die "worktree not clean"
     sh "$dir/calibration/scripts/check_profile.sh" --freeze || die "check_profile --freeze failed"
-    [ ! -e "$HOME/aien-data/turing-cal/sealed/$head" ] || die "sealed data already exist for $head"
+    grep -q "^  \"status\": \"frozen\"," "$dir/calibration/experiments/EXP-001/preregistration.json" || die "preregistration.json is not status frozen (set it in the same commit, before this step)"
+    sealed="${TC_SEALED_ROOT:-$HOME/aien-data/turing-cal/sealed}"
+    [ -z "$(ls -A "$sealed" 2>/dev/null)" ] || die "sealed data already exist under $sealed (freeze must come first)"
 fi
 
 # u(file, byte offset, nbytes) -> unsigned big-endian integer
@@ -58,7 +66,6 @@ sidec=""
     printf '  "experiment": "EXP-001",\n'
     printf '  "status": "%s",\n' "$([ "$freeze" = 1 ] && echo frozen || echo draft)"
     [ "$freeze" = 1 ] && printf '  "frozen_at": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '  "git_head": "%s",\n' "$head"
     printf '  "profile_path": "calibration/profiles/Turing-profile-v1.0.toml",\n'
     printf '  "profile_sha256": "%s",\n' "$psha"
     printf '  "profile_sidecar_sha256": "%s",\n' "$sidec"
@@ -97,19 +104,21 @@ sidec=""
         calibration/docs/BLINDING_PROTOCOL.md calibration/preregistration/EXP-001.md \
         calibration/experiments/EXP-001/preregistration.json calibration/profiles/Turing-profile-v1.0.toml \
         calibration/scripts/power_simulation.c calibration/experiments/EXP-001/power_simulation_output.txt \
-        calibration/docs/EVALUATOR.md tools/turing_cal_eval.c; do
+        calibration/docs/EVALUATOR.md calibration/docs/DATA_FORMAT.md \
+        tools/turing_cal_eval.c; do
         if [ -f "$dir/$p" ]; then h=$(sha256sum "$dir/$p" | cut -c1-64); else h="MISSING"; fi
         [ "$first" = 1 ] || printf ',\n'
         first=0
         printf '    "%s": "%s"' "$p" "$h"
     done
-    printf '\n  },\n  "runtime_sha256": {\n'
+    printf '\n  },\n  "independent_scorer_source_sha256": "%s",\n' "$(sh "$dir/calibration/scripts/indep_source_digest.sh")"
+    printf '  "runtime_sha256": {\n'
     rl=$(sh "$dir/calibration/scripts/runtime_digest.sh" --lines 2>/dev/null || true)
     if [ -n "$rl" ]; then
         printf '%s\n' "$rl" | sed 's/^\([0-9a-f]*\)  \(.*\)$/    "\2": "\1",/'
         printf '    "runtime_digest": "%s"' "$(printf '%s\n' "$rl" | sha256sum | cut -c1-64)"
     else
-        printf '    "runtime_digest": "not computed (build all six runtime binaries; see runtime_digest.sh)"'
+        printf '    "runtime_digest": "not computed (build all seven runtime binaries; see runtime_digest.sh)"'
     fi
     printf '\n  }\n}\n'
 } > "$out.tmp"
