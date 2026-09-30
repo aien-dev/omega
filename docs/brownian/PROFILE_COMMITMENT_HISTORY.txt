@@ -1,0 +1,40 @@
+# Brownian profile commitment history (append-only)
+#
+# docs/brownian/PROFILE_COMMITMENT.txt is a CURRENT POINTER: it always holds the five
+# lines of the newest profile version and is rewritten in place for each new version.
+# Its line prefix "brownian.profile.v1" names the line FORMAT (spec section 20), not the
+# profile version. This file pins every version that was ever published there.
+#
+# One block per profile version, in publication order. Rows are never edited or removed;
+# a later version only appends a block. The five lines of each block are byte-identical
+# to PROFILE_COMMITMENT.txt as of the listed omega merge commit, so each block can be
+# checked with: git show <merge>:docs/brownian/PROFILE_COMMITMENT.txt
+# The evaluator-only files these hashes commit to are published after BRN-10.
+
+profile v1.0 omega#100 merge c7687eae23a75b44b9a8717f99e2725cd69651b9
+brownian.profile.v1 spec sha256 e74ae947951b85e0207ecc91ed95d63ebea851c1f34ca7e9e98b476868bf980b
+brownian.profile.v1 evaluator-tree sha256 85b42b973a07b98985aa24275b6a93cdad9c3e09b042ca93d70cada9ba6c6c79
+brownian.profile.v1 slice-candidate sha256 4383e7db7804088d323ee964d625fc82e9571f9baf0dcabbde8afba1da19e5c7
+brownian.profile.v1 slice-brwdl sha256 86bf360cfa208d91338cf22faa0f6022c93dfe2ee1a574e2ee27a800ec6a557f
+brownian.profile.v1 slice-private sha256 fca680aa1a4104d65b1d7fa9766cbc3fe1eeb04956a33fff5e3b446a4679194a
+
+profile v1.1 omega#101 merge 6014187340daa7f7a3ececa6132d4c62815ac78a
+brownian.profile.v1 spec sha256 a1e232a39e77bea3be25a29795b6a3e5f9f13837933c17352b8563e53de4c198
+brownian.profile.v1 evaluator-tree sha256 a0bf13b93cf672ce773c25a6e67dcb9e6deb431840728431f21b990286a703a0
+brownian.profile.v1 slice-candidate sha256 4383e7db7804088d323ee964d625fc82e9571f9baf0dcabbde8afba1da19e5c7
+brownian.profile.v1 slice-brwdl sha256 86bf360cfa208d91338cf22faa0f6022c93dfe2ee1a574e2ee27a800ec6a557f
+brownian.profile.v1 slice-private sha256 fca680aa1a4104d65b1d7fa9766cbc3fe1eeb04956a33fff5e3b446a4679194a
+
+profile v1.2 omega#102 merge be553547b738a2794eb77b28454099c81950a5bb
+brownian.profile.v1 spec sha256 a1ade49523b26ba7e581d31f1858df4c1a65fd661117c8492cf7b089c9c06e00
+brownian.profile.v1 evaluator-tree sha256 22a6f49133d2167e9a29c9f653a4e0a34609799a067cf2b7cb14316908bed8ae
+brownian.profile.v1 slice-candidate sha256 4383e7db7804088d323ee964d625fc82e9571f9baf0dcabbde8afba1da19e5c7
+brownian.profile.v1 slice-brwdl sha256 86bf360cfa208d91338cf22faa0f6022c93dfe2ee1a574e2ee27a800ec6a557f
+brownian.profile.v1 slice-private sha256 fca680aa1a4104d65b1d7fa9766cbc3fe1eeb04956a33fff5e3b446a4679194a
+
+profile v1.3 omega#103 merge 6b9d4b7eb1d00ddb301eee532b18f50a17d354d6
+brownian.profile.v1 spec sha256 76ea08ab517ef9bcb7141c077cd0bf5263311dcc5a93432f5df8ab0f12a80991
+brownian.profile.v1 evaluator-tree sha256 4d5379c1764e33c911b23309143ffc72d2be63d4cb1cfd0cd27a2beba0c4118b
+brownian.profile.v1 slice-candidate sha256 4383e7db7804088d323ee964d625fc82e9571f9baf0dcabbde8afba1da19e5c7
+brownian.profile.v1 slice-brwdl sha256 86bf360cfa208d91338cf22faa0f6022c93dfe2ee1a574e2ee27a800ec6a557f
+brownian.profile.v1 slice-private sha256 fca680aa1a4104d65b1d7fa9766cbc3fe1eeb04956a33fff5e3b446a4679194a
