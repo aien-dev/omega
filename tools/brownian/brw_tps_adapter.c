@@ -198,6 +198,32 @@ int brw_tps_check_steps(const brw_tps_step *steps, size_t n)
     return BRW_TPS_OK;
 }
 
+/* Gate for one observation, computed from the steps AS GIVEN (so a tampered
+ * step list is judged on what it says, not on what the binariser produced):
+ * steps consistent, |sum - exact| <= 1e-9, |sum - qint| <= analytic bound. */
+static int tps_gate_one(double mu, double sd, int64_t b, const brw_tps_step *st, size_t ns,
+                        long double be, double *dx_o, double *dq_o, double *bound_o)
+{
+    double bq;
+    tyq_pred p = { 0, TYQ_FAM_GAUSS, mu, sd, 0, { { 0, 0, 0 } } };
+    if (ty_qcont_bits(&p, b, &bq, NULL) != TYQ_OK)
+        return BRW_TPS_E_RANGE;
+    if (brw_tps_check_steps(st, ns) != BRW_TPS_OK)
+        return BRW_TPS_E_PROOF;
+    long double bs = 0.0L;
+    for (size_t k = 0; k < ns; k++)
+        bs -= st[k].log2p_taken;
+    double dx = (double)fabsl(bs - be), dq = (double)fabsl(bs - (long double)bq);
+    if (!(dx <= BRW_TPS_EXACT_TOL))
+        return BRW_TPS_E_PROOF;
+    double r = TYQ_DELTA / (sd < TYQ_SD_MIN ? TYQ_SD_MIN : sd);
+    double bound = -log2(1.0 - r * r / 8.0);
+    if (!(dq <= bound + BRW_TPS_EXACT_TOL))
+        return BRW_TPS_E_PROOF;
+    *dx_o = dx; *dq_o = dq; *bound_o = bound;
+    return BRW_TPS_OK;
+}
+
 int brw_tps_check_stream(const double *mu, const double *sd, const int64_t *b,
                          size_t n, size_t *bad_index,
                          double *max_dev_exact, double *max_dev_qint,
@@ -210,23 +236,14 @@ int brw_tps_check_stream(const double *mu, const double *sd, const int64_t *b,
     for (size_t i = 0; i < n; i++) {
         size_t ns;
         long double bs, be;
-        double bq;
+        double dx, dq, bound;
         *bad_index = i;
         int rc = brw_tps_binarise(mu[i], sd[i], b[i], BRW_TPS_MAX_STEPS, st, &ns, &bs, &be);
         if (rc != BRW_TPS_OK)
             return rc;
-        tyq_pred p = { 0, TYQ_FAM_GAUSS, mu[i], sd[i], 0, { { 0, 0, 0 } } };
-        if (ty_qcont_bits(&p, b[i], &bq, NULL) != TYQ_OK)
-            return BRW_TPS_E_RANGE;
-        if (brw_tps_check_steps(st, ns) != BRW_TPS_OK)
-            return BRW_TPS_E_PROOF;
-        double dx = (double)fabsl(bs - be), dq = (double)fabsl(bs - (long double)bq);
-        if (!(dx <= BRW_TPS_EXACT_TOL))
-            return BRW_TPS_E_PROOF;
-        double r = TYQ_DELTA / (sd[i] < TYQ_SD_MIN ? TYQ_SD_MIN : sd[i]);
-        double bound = -log2(1.0 - r * r / 8.0);
-        if (!(dq <= bound + BRW_TPS_EXACT_TOL))
-            return BRW_TPS_E_PROOF;
+        rc = tps_gate_one(mu[i], sd[i], b[i], st, ns, be, &dx, &dq, &bound);
+        if (rc != BRW_TPS_OK)
+            return rc;
         if (dx > mx) mx = dx;
         if (dq > mq) mq = dq;
         if (dq - bound > me) me = dq - bound;
@@ -236,6 +253,75 @@ int brw_tps_check_stream(const double *mu, const double *sd, const int64_t *b,
     *max_qint_excess = me;
     return BRW_TPS_OK;
 }
+
+/* One pass over the observations. fill == NULL counts the steps; otherwise the
+ * rows and symbols are written. The gate runs on every observation in both. */
+static int tps_pass(const double *mu, const double *sd, const int64_t *b, size_t n,
+                    brw_tps_hook hook, void *hctx, tc_pstream *p, tc_symbols *s,
+                    size_t *total, size_t *bad_index, double *max_dev_exact)
+{
+    brw_tps_step st[BRW_TPS_MAX_STEPS];
+    size_t rec = 0;
+    double mx = 0.0;
+    for (size_t i = 0; i < n; i++) {
+        size_t ns;
+        long double be;
+        double dx, dq, bound;
+        *bad_index = i;
+        int rc = brw_tps_binarise(mu[i], sd[i], b[i], BRW_TPS_MAX_STEPS, st, &ns, NULL, &be);
+        if (rc != BRW_TPS_OK)
+            return rc;
+        if (hook)
+            hook(hctx, i, st, ns);
+        rc = tps_gate_one(mu[i], sd[i], b[i], st, ns, be, &dx, &dq, &bound);
+        if (rc != BRW_TPS_OK)
+            return rc;
+        if (dx > mx) mx = dx;
+        if (p) {
+            for (size_t k = 0; k < ns; k++, rec++) {
+                uint16_t f[2];
+                if (brw_tps_p1_to_freq(st[k].p1, f) != BRW_TPS_OK)
+                    return BRW_TPS_E_NUM;
+                p->q[rec * 2] = f[0];
+                p->q[rec * 2 + 1] = f[1];
+                p->key[rec] = (uint64_t)i;   /* synthetic: observation index */
+                p->crumb[rec] = 0;
+                s->sym[rec] = (uint8_t)st[k].bit;
+            }
+        } else {
+            rec += ns;
+        }
+    }
+    *total = rec;
+    *max_dev_exact = mx;
+    return BRW_TPS_OK;
+}
+
+int brw_tps_build(const double *mu, const double *sd, const int64_t *b, size_t n,
+                  brw_tps_hook hook, void *hctx, tc_pstream *p, tc_symbols *s,
+                  size_t *bad_index, double *max_dev_exact)
+{
+    if (!p || !s || !bad_index || !max_dev_exact || (n && (!mu || !sd || !b)))
+        return BRW_TPS_E_ARG;
+    size_t total = 0, chk = 0;
+    int rc = tps_pass(mu, sd, b, n, hook, hctx, NULL, NULL, &total, bad_index, max_dev_exact);
+    if (rc != BRW_TPS_OK)
+        return rc;
+    if (tc_ps_alloc(p, 2, total) != TC_OK)
+        return BRW_TPS_E_NUM;
+    if (tc_sy_alloc(s, 2, total) != TC_OK) {
+        tc_ps_free(p);
+        return BRW_TPS_E_NUM;
+    }
+    rc = tps_pass(mu, sd, b, n, hook, hctx, p, s, &chk, bad_index, max_dev_exact);
+    if (rc != BRW_TPS_OK || chk != total) {
+        tc_ps_free(p);
+        tc_sy_free(s);
+        return rc != BRW_TPS_OK ? rc : BRW_TPS_E_NUM;
+    }
+    return BRW_TPS_OK;
+}
+
 
 int brw_tps_p1_to_freq(double p1, uint16_t freq[2])
 {

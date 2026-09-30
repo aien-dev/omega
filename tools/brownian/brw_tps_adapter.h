@@ -25,6 +25,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "turing/tc_pstream.h"
+
 enum {
     BRW_TPS_OK = 0,
     BRW_TPS_E_ARG = -201,    /* null pointer or bad argument */
@@ -73,10 +75,28 @@ int brw_tps_check_stream(const double *mu, const double *sd, const int64_t *b,
 /* [f0, f1] u16 frequency row for a step: f0 + f1 == 65536, each >= 1. */
 int brw_tps_p1_to_freq(double p1, uint16_t freq[2]);
 
-/* Filled by the phase-2 coder hookup. Return 0 on success. */
+/* Generic per-step coder callback. Return 0 on success. */
 typedef int (*brw_tps_coder_fn)(void *ctx, const uint16_t freq[2], int bit);
 
 /* Convert each step to a frequency row and hand it to the callback. */
 int brw_tps_emit(const brw_tps_step *steps, size_t n, brw_tps_coder_fn fn, void *ctx);
+
+
+/* Phase 2: hookup to the frozen EXP-001 coders (calibration/docs/CODER_SPEC.md).
+ * Every binary step becomes one TPS1 record with K = 2: q = [f0, f1] (u16, sum
+ * 65536, floor 1) and symbol = the bit taken. Records of one observation are
+ * consecutive; context_key = observation index, crumb = 0, digests zero
+ * (synthetic use). tc_ps_serialize / tc_sy_serialize then fix the digests.
+ *
+ * The 1e-9 exact-mass gate (and the qint bound) runs on the steps as they
+ * stand at build time; a violation returns BRW_TPS_E_PROOF with *bad_index set
+ * and nothing allocated: the harness must STOP (Brownian hostile #27, TPS1 gate
+ * failure). hook, if not NULL, may edit each observation's steps after
+ * binarising and before the gate. Production passes NULL; tests use it to play
+ * a broken adapter. On success the caller frees with tc_ps_free / tc_sy_free. */
+typedef void (*brw_tps_hook)(void *ctx, size_t obs, brw_tps_step *steps, size_t n);
+int brw_tps_build(const double *mu, const double *sd, const int64_t *b, size_t n,
+                  brw_tps_hook hook, void *hctx, tc_pstream *p, tc_symbols *s,
+                  size_t *bad_index, double *max_dev_exact);
 
 #endif

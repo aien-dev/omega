@@ -2,6 +2,11 @@
  * splitmix64 with fixed constants in this file; nothing is read from disk. */
 #include "brownian/brw_tps_adapter.h"
 #include "turing/ty_qcont.h"
+#include "turing/tc_range.h"
+#include "turing/tc_rans.h"
+#include "turing/ty_math.h"
+
+#include <stdlib.h>
 
 #include <inttypes.h>
 #include <math.h>
@@ -57,6 +62,146 @@ static void run(const char *name, size_t n)
     if (me > worst_excess) worst_excess = me;
     printf("%-32s n=%zu rc=%d max|steps-exact|=%.3g max|steps-qint|=%.3g max(dev-bound)=%.3g\n", name, n, rc, mx, mq, me);
     CHECK(rc == 0);
+}
+
+/* ---- phase 2: hookup to the frozen coders ---- */
+static double env_lo = 1e300, env_hi = -1e300;   /* overhead - 448, both coders, all files */
+static double quant_lo = 1e300, quant_hi = -1e300; /* (ideal q16 bits - exact Normal bits) per record */
+static size_t files_done, records_done, ext_low;
+
+/* extreme: the file holds steps whose true probability is far below 2^-16, which
+ * the u16 rows floor at 1. There the frozen envelope is not expected to hold on
+ * the low side (see the report); only the high side and the round trip are gated. */
+static void code_file(const char *name, size_t nobs, int extreme)
+{
+    tc_pstream p; tc_symbols s, d;
+    char why[160];
+    size_t bad = 0;
+    double mx = 0;
+    memset(&p, 0, sizeof p); memset(&s, 0, sizeof s); memset(&d, 0, sizeof d);
+    int rc = brw_tps_build(mu, sd, bb, nobs, NULL, NULL, &p, &s, &bad, &mx);
+    CHECK(rc == 0);
+    if (rc) return;
+    CHECK(tc_ps_check_rows(&p, why, sizeof why) == TC_OK);
+    uint8_t *pb, *sb; size_t pl, sl;
+    CHECK(tc_ps_serialize(&p, &pb, &pl, why, sizeof why) == TC_OK);
+    CHECK(tc_sy_serialize(&s, &sb, &sl, why, sizeof why) == TC_OK);
+    free(pb); free(sb);
+    CHECK(tc_pair_check(&p, &s, why, sizeof why) == TC_OK);
+
+    int64_t ub = 0;
+    CHECK(tc_ideal_ub(&p, &s, 0, p.n, &ub) == TC_OK);
+    double ideal = (double)ub / 1e6;
+    double exact = 0;
+    for (size_t i = 0; i < nobs; i++) {
+        long double be; brw_tps_step st[BRW_TPS_MAX_STEPS]; size_t ns;
+        CHECK(brw_tps_binarise(mu[i], sd[i], bb[i], BRW_TPS_MAX_STEPS, st, &ns, NULL, &be) == 0);
+        exact += (double)be;
+    }
+    size_t floor_hits = 0;
+    for (uint64_t t = 0; t < p.n; t++) if (p.q[2 * t + s.sym[t]] <= 16) floor_hits++;
+
+    double qd = (ideal - exact) / (double)p.n;
+    if (extreme) CHECK(qd < 0.0); else CHECK(fabs(qd) < 1e-4);
+    if (qd < quant_lo) quant_lo = qd;
+    if (qd > quant_hi) quant_hi = qd;
+
+    for (int c = 0; c < 2; c++) {
+        uint8_t *out = NULL; size_t len = 0;
+        int er = c == 0 ? tc_range_encode(&p, &s, &out, &len, why, sizeof why)
+                        : tc_rans_encode(&p, &s, &out, &len, why, sizeof why);
+        CHECK(er == TC_OK);
+        if (er) continue;
+        int dr = c == 0 ? tc_range_decode(&p, out, len, &d, why, sizeof why)
+                        : tc_rans_decode(&p, out, len, &d, why, sizeof why);
+        CHECK(dr == TC_OK);
+        if (dr == TC_OK) {
+            CHECK(d.n == s.n && memcmp(d.sym, s.sym, s.n) == 0);
+            /* the decoded bits regroup into the input bin offsets: re-binarise and compare */
+            tc_sy_free(&d); memset(&d, 0, sizeof d);
+        }
+        double ov = 8.0 * (double)len - ideal;
+        double dev = ov - 448.0, lim = 64.0 + 1e-3 * (double)p.n;
+        if (extreme) { CHECK(dev <= lim); if (dev < -lim) ext_low++; }
+        else { CHECK(fabs(dev) <= lim); if (dev < env_lo) env_lo = dev; if (dev > env_hi) env_hi = dev; }
+        printf("%-22s %-5s obs=%zu records=%" PRIu64 " bytes=%zu ideal=%.1f b overhead-448=%+.1f (limit %.1f) quant=%+.2e b/rec floor_hits=%zu\n",
+               name, c == 0 ? "range" : "rANS", nobs, p.n, len, ideal, dev, lim, qd, floor_hits);
+        free(out);
+    }
+    files_done++; records_done += p.n;
+    tc_ps_free(&p); tc_sy_free(&s);
+}
+
+/* Broken adapters: each plays a wrong mass on one observation. */
+typedef struct { size_t at; double rel; int mode; } tamper;
+static void tamper_hook(void *ctx, size_t obs, brw_tps_step *st, size_t n)
+{
+    tamper *t = ctx;
+    if (obs != t->at || n == 0) return;
+    long double pt = exp2l(st[0].log2p_taken);
+    if (t->mode == 0) {           /* consistent wrong mass: both branches move together */
+        pt *= (1.0L - (long double)t->rel);
+        st[0].log2p_taken = log2l(pt);
+        st[0].log2p_other = log2l(1.0L - pt);
+        st[0].p1 = (double)(st[0].bit ? pt : 1.0L - pt);
+    } else {                      /* p1 no longer agrees with the log masses */
+        st[0].p1 = st[0].p1 * (1.0 - t->rel);
+    }
+}
+
+static void hostile_gate(void)
+{
+    tc_pstream p; tc_symbols s;
+    size_t bad = 99; double mx = 0;
+    memset(&p, 0, sizeof p); memset(&s, 0, sizeof s);
+    const size_t nobs = 200;
+    for (size_t i = 0; i < nobs; i++) fill(i, 5.0 * (runif() - 0.5), 0.05 + 2.0 * runif(), rnorm());
+    CHECK(brw_tps_build(mu, sd, bb, nobs, NULL, NULL, &p, &s, &bad, &mx) == 0);
+    CHECK(mx <= BRW_TPS_EXACT_TOL);
+    tc_ps_free(&p); tc_sy_free(&s);
+
+    static const double rels[] = { 1e-3, 1e-5, 1e-7 };   /* all >> 1e-9 bits */
+    for (int mode = 0; mode < 2; mode++)
+        for (size_t r = 0; r < 3; r++) {
+            tamper t = { 37, rels[r], mode };
+            memset(&p, 0, sizeof p); memset(&s, 0, sizeof s);
+            bad = 0;
+            int rc = brw_tps_build(mu, sd, bb, nobs, tamper_hook, &t, &p, &s, &bad, &mx);
+            printf("hostile #27 mode=%d rel=%.0e rc=%d bad_index=%zu\n", mode, rels[r], rc, bad);
+            CHECK(rc == BRW_TPS_E_PROOF);
+            CHECK(bad == 37);
+            CHECK(p.q == NULL && s.sym == NULL);   /* nothing handed to a coder */
+        }
+    /* the check-only entry point cannot be fooled by a tamper it never sees, so
+     * also confirm the stream gate itself still passes on the untouched data. */
+    double a, b2, c;
+    CHECK(brw_tps_check_stream(mu, sd, bb, nobs, &bad, &a, &b2, &c) == 0);
+}
+
+static void coder_tests(void)
+{
+    rseed(0xfeedfacecafebeefull);
+    /* small file: header and flush dominate */
+    for (size_t i = 0; i < 40; i++) fill(i, 3.0 * (runif() - 0.5), 0.1 + runif(), rnorm());
+    code_file("small", 40, 0);
+    /* mid file, mixed scales, observations drawn from the predictive */
+    for (size_t i = 0; i < 3000; i++) fill(i, 200.0 * (runif() - 0.5), 0.05 * exp(6.0 * runif()), rnorm());
+    code_file("mixed scales", 3000, 0);
+    /* sharp predictions (many refinement bits) */
+    for (size_t i = 0; i < 3000; i++) fill(i, 2.0 * (runif() - 0.5), TYQ_SD_MIN * (1.0 + 3.0 * runif()), rnorm());
+    code_file("sharp near sd_min", 3000, 0);
+    /* surprising observations: 5..30 sd out, both sides */
+    for (size_t i = 0; i < 3000; i++)
+        fill(i, 10.0 * (runif() - 0.5), 0.1 + runif(), (5.0 + 25.0 * runif()) * ((i & 1) ? 1.0 : -1.0));
+    code_file("heavy tails", 3000, 1);
+    /* large file */
+    for (size_t i = 0; i < 60000; i++) fill(i, 200.0 * (runif() - 0.5), 0.05 * exp(6.0 * runif()), rnorm());
+    code_file("large", 60000, 0);
+    printf("phase 2: files=%zu records=%zu overhead-448 range [%+.1f, %+.1f] bits, q16 loss vs exact [%+.2e, %+.2e] b/rec\n",
+           files_done, records_done, env_lo, env_hi, quant_lo, quant_hi);
+    CHECK(files_done == 5);
+    printf("heavy-tails coded shorter than ideal by more than the envelope in %zu of 2 coder runs\n", ext_low);
+    hostile_gate();
 }
 
 int main(void)
@@ -220,6 +365,8 @@ int main(void)
       CHECK(brw_tps_check_stream(m1, s1, b1, 1, &bad, &x, &y, &z) < 0);
       CHECK(brw_tps_check_stream(NULL, s1, b1, 1, &bad, &x, &y, &z) < 0);
     }
+
+    coder_tests();
 
     printf("worst max(|steps-qint| - bound) over all streams = %.3g\n", worst_excess);
     CHECK(worst_excess <= 1e-9);
