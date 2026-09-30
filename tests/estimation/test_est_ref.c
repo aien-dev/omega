@@ -282,9 +282,17 @@ static double rel_diff(const double *a, const double *ref, unsigned cnt)
 static void pack_P(const double *Pk, unsigned n, double *out) /* est records use stride EST_MAX_DIM? no: n*n */
 { memcpy(out, Pk, n * n * sizeof(double)); }
 
+/* The ASan/UBSan build passes smaller values (mk/estimation.mk): same checks, fewer scenarios/steps. */
+#ifndef NIS_STEPS
+#define NIS_STEPS 100000u
+#endif
+#ifndef XCHECK_SCENARIOS
+#define XCHECK_SCENARIOS 600u
+#endif
+
 static void xcheck(void)
 {
-    const unsigned NSCEN = 600, STEPS = 50;
+    const unsigned NSCEN = XCHECK_SCENARIOS, STEPS = 50;
     double wx = 0, wP = 0, wN = 0;
     unsigned sc, tested_steps = 0, coasts = 0, updates = 0;
     for (sc = 0; sc < NSCEN; sc++) {
@@ -377,7 +385,7 @@ static void samp(rng *g, const double *L, unsigned n, double *out)
 static void nis_calibration(void)
 {
     static const double CHI95[5] = {0, 3.841459, 5.991465, 7.814728, 9.487729};
-    const unsigned N = 100000;
+    const unsigned N = NIS_STEPS;
     unsigned m;
     for (m = 1; m <= 4; m++) {
         rng g;

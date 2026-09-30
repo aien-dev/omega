@@ -134,7 +134,7 @@ est_status est_kf_predict(const est_model *mdl, const est_belief *bel,
     if (st != EST_OK) return st;
     st = model_digest_matches(mdl, &bel->model);
     if (st != EST_OK) return st;
-    if (horizon < 1u) return EST_ERR_TIME;
+    if (horizon < 1u || horizon > EST_MAX_HORIZON) return EST_ERR_TIME;
     if (Bu) {
         for (uint32_t i = 0; i < n; i++)
             if (!isfinite(Bu[i])) return EST_ERR_NONFINITE;
@@ -177,6 +177,10 @@ est_status est_kf_predict(const est_model *mdl, const est_belief *bel,
     p.t_ns = bel->t_ns + span;
     p.n = n;
     p.m = m;
+    if (Bu) {
+        p.has_control = 1u;
+        for (uint32_t i = 0; i < n; i++) p.Bu[i] = Bu[i] == 0.0 ? 0.0 : Bu[i];
+    }
     memcpy(p.x, x, sizeof(double) * n);
     memcpy(p.P, P, sizeof(double) * n * n);
     for (uint32_t i = 0; i < m; i++) {
@@ -196,9 +200,12 @@ est_status est_kf_predict(const est_model *mdl, const est_belief *bel,
     return EST_OK;
 }
 
-/* Shared staleness / binding checks for update and coast. */
+/* Shared staleness / binding checks for update and coast. The prediction is
+ * not trusted: it is recomputed from the prior belief, the model and the
+ * control input it records, and must match bit for bit (canonical encoding). */
 static est_status bind_checks(const est_model *mdl, const est_belief *prior,
-                              const est_prediction *pred, est_digest *pred_digest)
+                              const est_prediction *pred, est_digest *pred_digest,
+                              est_digest *prior_digest)
 {
     est_status st = est_check_model(mdl);
     if (st != EST_OK) return st;
@@ -209,13 +216,27 @@ static est_status bind_checks(const est_model *mdl, const est_belief *prior,
     est_digest pd;
     st = est_digest_belief(prior, &pd);
     if (st != EST_OK) return st;
+    *prior_digest = pd;
     if (memcmp(pd.b, pred->prior.b, EST_DIGEST_SIZE) != 0) return EST_ERR_STALE;
     if (pred->generation != prior->generation + 1u || prior->generation == UINT64_MAX) return EST_ERR_STALE;
     st = model_digest_matches(mdl, &prior->model);
     if (st != EST_OK) return st;
     if (memcmp(pred->model.b, prior->model.b, EST_DIGEST_SIZE) != 0) return EST_ERR_MODEL;
     if (pred->n != mdl->n || pred->m != mdl->m || prior->n != mdl->n) return EST_ERR_DIM;
-    return est_digest_prediction(pred, pred_digest);
+    est_prediction re;
+    st = est_kf_predict(mdl, prior, pred->has_control ? pred->Bu : NULL, pred->horizon, &re);
+    if (st != EST_OK) return st;
+    est_digest rd;
+    st = est_digest_prediction(&re, &rd);
+    if (st != EST_OK) return st;
+    st = est_digest_prediction(pred, pred_digest);
+    if (st != EST_OK) return st;
+    return memcmp(rd.b, pred_digest->b, EST_DIGEST_SIZE) == 0 ? EST_OK : EST_ERR_STALE;
+}
+
+static int dig_eq(const est_digest *a, const est_digest *b)
+{
+    return memcmp(a->b, b->b, EST_DIGEST_SIZE) == 0;
 }
 
 est_status est_kf_update(const est_model *mdl, const est_belief *prior_belief,
@@ -223,11 +244,17 @@ est_status est_kf_update(const est_model *mdl, const est_belief *prior_belief,
                          est_belief *posterior, est_innovation *innovation)
 {
     if (!mdl || !prior_belief || !pred || !obs || !posterior) return EST_ERR_NULL;
-    est_digest pdig;
-    est_status st = bind_checks(mdl, prior_belief, pred, &pdig);
+    est_digest pdig, priordig;
+    est_status st = bind_checks(mdl, prior_belief, pred, &pdig, &priordig);
     if (st != EST_OK) return st;
     st = est_check_observation(obs);
     if (st != EST_OK) return st;
+    /* A prediction or belief must not be passed off as evidence. */
+    if (dig_eq(&obs->evidence, &pdig) || dig_eq(&obs->evidence, &priordig) ||
+        dig_eq(&obs->evidence, &prior_belief->parent) ||
+        dig_eq(&obs->evidence, &prior_belief->evidence_root) ||
+        dig_eq(&obs->evidence, &prior_belief->model))
+        return EST_ERR_KIND;
     uint32_t n = mdl->n, m = mdl->m;
     if (obs->m != m) return EST_ERR_DIM;
     if (obs->t_ns != pred->t_ns) return EST_ERR_TIME;
@@ -313,8 +340,8 @@ est_status est_kf_coast(const est_model *mdl, const est_prediction *pred,
                         const est_belief *prior_belief, est_belief *out)
 {
     if (!mdl || !pred || !prior_belief || !out) return EST_ERR_NULL;
-    est_digest pdig;
-    est_status st = bind_checks(mdl, prior_belief, pred, &pdig);
+    est_digest pdig, priordig;
+    est_status st = bind_checks(mdl, prior_belief, pred, &pdig, &priordig);
     if (st != EST_OK) return st;
     est_belief b;
     memset(&b, 0, sizeof b);

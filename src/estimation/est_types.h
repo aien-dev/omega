@@ -34,6 +34,9 @@
 #define EST_MAX_DIM 8u
 #define EST_DIGEST_SIZE 32u
 #define EST_FORMAT_VERSION 1u
+/* Longest predict horizon in steps; above this predict and every prediction
+ * check refuse with EST_ERR_TIME (bounded CPU per call). */
+#define EST_MAX_HORIZON 1000000u
 
 /* Digest domains (versioned; a layout change is a new domain). */
 #define EST_DOMAIN_MODEL       "omega.est.model.v1"
@@ -90,7 +93,10 @@ typedef enum {
     EST_ERR_UNIT = -7,         /* missing or unknown unit / meaning */
     EST_ERR_STALE = -8,        /* generation or parent digest does not match */
     EST_ERR_MODEL = -9,        /* record bound to a different model */
-    EST_ERR_KIND = -10,        /* wrong record kind (e.g. prediction as evidence) */
+    EST_ERR_KIND = -10,        /* wrong record kind: also an observation whose source digest is
+                                  zero, whose evidence digest is zero, or whose evidence digest
+                                  equals a digest of a prediction or belief passed to update
+                                  (a model output passed off as evidence) */
     EST_ERR_ENCODING = -11,    /* truncated or malformed bytes, bad version */
     EST_ERR_TIME = -12         /* logical time does not advance as required */
 } est_status;
@@ -110,6 +116,12 @@ typedef struct {
     int64_t step_ns;             /* logical duration of one transition step */
 } est_model;
 
+/* What the estimator can NOT verify: that `evidence` is really a digest of raw
+ * bytes a sensor path produced. It only checks that source and evidence are
+ * non-zero and that the evidence digest is not the digest of any prediction or
+ * belief record handed to the same update call (est_kf_update). Binding
+ * evidence digests to raw bytes, and keeping model-derived digests out of that
+ * field, is the CALLER's job (ARCH-0020 section 2.1). */
 /* Evidence. value and noise are what the sensor path declared; source names
  * the producer (e.g. digest of "R15.machine-state.thermal_mc[0]"); evidence
  * binds the raw bytes (e.g. the raw SHA256SUMS line or record digest). */
@@ -143,7 +155,7 @@ typedef struct {
 typedef struct {
     est_digest prior;            /* digest of the belief it came from */
     est_digest model;
-    uint32_t horizon;            /* steps, >= 1 */
+    uint32_t horizon;            /* steps, 1..EST_MAX_HORIZON */
     uint64_t generation;
     int64_t t_ns;                /* logical time predicted for */
     uint32_t n, m;
@@ -151,6 +163,8 @@ typedef struct {
     double P[EST_MAX_DIM * EST_MAX_DIM];
     double y_mean[EST_MAX_DIM];
     double S[EST_MAX_DIM * EST_MAX_DIM];   /* H P H^T + R */
+    uint32_t has_control;        /* 1 if a known input was applied each step, else 0 */
+    double Bu[EST_MAX_DIM];      /* the input (n entries, -0.0 canonicalized); zero if has_control == 0 */
 } est_prediction;
 
 /* Innovation: nu = z - y_mean, S its covariance, nis = nu^T S^-1 nu.
@@ -188,7 +202,7 @@ int est_digest_is_zero(const est_digest *d);
 
 /* ---- serialization: exact round trip; decode validates and refuses a kind
  * byte, version or length that does not match the target type ---- */
-#define EST_ENCODED_MAX 2304u
+#define EST_ENCODED_MAX 2304u /* n = m = 8 with control: model 2160, prediction 1320 */
 est_status est_encode_model(const est_model *mdl, uint8_t *buf, size_t cap, size_t *len);
 est_status est_decode_model(const uint8_t *buf, size_t len, est_model *out);
 est_status est_encode_observation(const est_observation *o, uint8_t *buf, size_t cap, size_t *len);

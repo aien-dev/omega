@@ -50,7 +50,7 @@ $(EST_DIR)/test_est_ref: tests/estimation/test_est_ref.c $(EST_REF_SRCS) tests/e
 	$(CC) $(EST_CFLAGS) -o $@ tests/estimation/test_est_ref.c $(EST_REF_SRCS) $(EST_KF_SRCS) -lm
 $(EST_DIR)/test_est_ref_asan: tests/estimation/test_est_ref.c $(EST_REF_SRCS) tests/estimation/est_ref_info.h $(EST_KF_SRCS) $(EST_HDRS)
 	@mkdir -p $(EST_DIR)
-	$(CC) $(EST_CFLAGS) $(EST_ASAN) -o $@ tests/estimation/test_est_ref.c $(EST_REF_SRCS) $(EST_KF_SRCS) -lm
+	$(CC) $(EST_CFLAGS) $(EST_ASAN) -DNIS_STEPS=5000u -DXCHECK_SCENARIOS=100u -o $@ tests/estimation/test_est_ref.c $(EST_REF_SRCS) $(EST_KF_SRCS) -lm
 
 test-est-types: $(EST_DIR)/test_est_types $(EST_DIR)/test_est_types_asan
 	./$(EST_DIR)/test_est_types

@@ -28,6 +28,12 @@ est_status est_kf_prior(const est_model *mdl, const double *x0, const double *P0
 est_status est_kf_predict(const est_model *mdl, const est_belief *b,
                           const double *Bu, uint32_t horizon, est_prediction *out);
 
+/* The prediction is recomputed from prior_belief, mdl and the control input it
+ * records, and must equal the supplied one bit for bit (else EST_ERR_STALE;
+ * EST_ERR_MODEL for a different model). Observation refusals: EST_ERR_KIND if
+ * source is zero or evidence is zero or equals a digest of the prediction, the
+ * prior belief, its parent, its evidence root or its model. The estimator cannot
+ * check that evidence digests match raw bytes: that binding is the caller's. */
 /* Needs the belief the prediction came from (checked by digest) so the
  * posterior can extend its evidence root. The observation is only read. */
 est_status est_kf_update(const est_model *mdl, const est_belief *prior_belief,

@@ -78,6 +78,8 @@ static void gen_pred(est_prediction *o)
     for (uint32_t i = 0; i < o->n; i++) o->x[i] = rdbl(-100, 100);
     for (uint32_t i = 0; i < o->m; i++) o->y_mean[i] = rdbl(-100, 100);
     gen_cov(o->P, o->n); gen_cov(o->S, o->m);
+    o->has_control = (uint32_t)(rnd() & 1u);
+    if (o->has_control) for (uint32_t i = 0; i < o->n; i++) o->Bu[i] = rdbl(-10, 10);
 }
 static void gen_innov(est_innovation *o)
 {
@@ -140,6 +142,8 @@ static int mut_pred(const est_prediction *b, est_prediction *o, int idx)
     for (uint32_t i = 0; i < n; i++) for (uint32_t j = i; j < n; j++) FIELD(bump_cov(o->P, n, i, j));
     for (uint32_t i = 0; i < m; i++) FIELD(o->y_mean[i] += 1.0);
     for (uint32_t i = 0; i < m; i++) for (uint32_t j = i; j < m; j++) FIELD(bump_cov(o->S, m, i, j));
+    FIELD(o->has_control ^= 1u);
+    if (b->has_control) for (uint32_t i = 0; i < n; i++) FIELD(o->Bu[i] += 1.0);
     return 0;
 }
 static int mut_innov(const est_innovation *b, est_innovation *o, int idx)
@@ -247,7 +251,7 @@ static void test_truncation_and_extension(void)
             memcpy(c, buf, l); c[4] = 99; CHECK_ST(dec_kind(ek, c, l), EST_ERR_KIND);
             /* encoder refuses a buffer that is too small */
             size_t l2;
-            CHECK_ST(est_encode_belief(&(est_belief){ .n = 1, .unit = { EST_UNIT_WATT }, .P = { 1.0 } }, c, 10, &l2), EST_ERR_ENCODING);
+            CHECK_ST(est_encode_belief(&(est_belief){ .n = 1, .unit = { EST_UNIT_WATT }, .P = { 1.0 }, .model = {{ 1 }} }, c, 10, &l2), EST_ERR_ENCODING);
         }
     CHECK_ST(dec_kind(3, NULL, 0), EST_ERR_NULL);
 }
@@ -310,8 +314,8 @@ static void test_digest_domains(void)
     memset(&pp, 0, sizeof pp); memset(&ii, 0, sizeof ii);
     mm.n = mm.m = 1; mm.estimator = EST_ESTIMATOR_LINEAR_KALMAN; mm.meaning = EST_UNCERTAINTY_GAUSSIAN_COVARIANCE;
     mm.state_unit[0] = mm.obs_unit[0] = EST_UNIT_WATT; mm.F[0] = mm.H[0] = mm.Q[0] = mm.R[0] = 1.0; mm.step_ns = 1;
-    oo.m = 1; oo.unit[0] = EST_UNIT_WATT; oo.z[0] = 1.0; oo.R[0] = 1.0; oo.evidence.b[0] = 1;
-    bb.n = 1; bb.unit[0] = EST_UNIT_WATT; bb.x[0] = 1.0; bb.P[0] = 1.0;
+    oo.m = 1; oo.unit[0] = EST_UNIT_WATT; oo.z[0] = 1.0; oo.R[0] = 1.0; oo.evidence.b[0] = 1; oo.source.b[0] = 2;
+    bb.n = 1; bb.unit[0] = EST_UNIT_WATT; bb.x[0] = 1.0; bb.P[0] = 1.0; bb.model.b[0] = 3;
     pp.n = pp.m = 1; pp.horizon = 1; pp.x[0] = pp.y_mean[0] = pp.P[0] = pp.S[0] = 1.0;
     ii.m = 1; ii.nu[0] = 1.0; ii.S[0] = 1.0; ii.nis = 1.0;
     est_digest d[5];
@@ -321,8 +325,27 @@ static void test_digest_domains(void)
     CHECK_ST(est_digest_prediction(&pp, &d[3]), EST_OK);
     CHECK_ST(est_digest_innovation(&ii, &d[4]), EST_OK);
     for (int i = 0; i < 5; i++) for (int j = i + 1; j < 5; j++) CHECK(!dig_eq(&d[i], &d[j]));
-    /* belief and prediction with all-zero digests and the same n: still different */
-    CHECK(est_digest_is_zero(&bb.model) == 1);
+    /* Domain separation, checked independently of the library: each digest is
+     * SHA-256(own domain || 0x00 || encoding), and hashing the SAME bytes under
+     * any other kind's domain gives a different value. */
+    {
+        static const char *dom[5] = { EST_DOMAIN_MODEL, EST_DOMAIN_OBSERVATION, EST_DOMAIN_BELIEF,
+                                      EST_DOMAIN_PREDICTION, EST_DOMAIN_INNOVATION };
+        uint8_t eb[5][BUF]; size_t el[5] = { 0 };
+        CHECK_ST(est_encode_model(&mm, eb[0], BUF, &el[0]), EST_OK);
+        CHECK_ST(est_encode_observation(&oo, eb[1], BUF, &el[1]), EST_OK);
+        CHECK_ST(est_encode_belief(&bb, eb[2], BUF, &el[2]), EST_OK);
+        CHECK_ST(est_encode_prediction(&pp, eb[3], BUF, &el[3]), EST_OK);
+        CHECK_ST(est_encode_innovation(&ii, eb[4], BUF, &el[4]), EST_OK);
+        for (int k = 0; k < 5; k++)
+            for (int dm = 0; dm < 5; dm++) {
+                sha256_ctx c; est_digest x; uint8_t zero = 0;
+                sha256_init(&c); sha256_update(&c, (const uint8_t *)dom[dm], strlen(dom[dm]));
+                sha256_update(&c, &zero, 1); sha256_update(&c, eb[k], el[k]); sha256_final(&c, x.b);
+                CHECK(dig_eq(&x, &d[k]) == (k == dm));
+            }
+    }
+    est_digest zb; memset(&zb, 0, sizeof zb);
     est_digest z; memset(&z, 0, sizeof z); CHECK(est_digest_is_zero(&z)); CHECK(!est_digest_is_zero(&d[0]));
 }
 
@@ -394,6 +417,17 @@ static void test_covariance_rules(void)
     CHECK_ST(est_check_covariance(big, 8), EST_OK);
     for (int i = 0; i < 8; i++) big[i * 8 + i] = 1e-300;
     CHECK_ST(est_check_covariance(big, 8), EST_OK);
+    /* a small negative variance next to a huge one is refused (was accepted) */
+    double d1[4] = { 1e12, 0, 0, -0.5 };
+    CHECK_ST(est_check_covariance(d1, 2), EST_ERR_NOT_PSD);
+    double d2[4] = { 1e6, 0.5, 0.5, 0 };            /* indefinite: zero variance, nonzero covariance */
+    CHECK_ST(est_check_covariance(d2, 2), EST_ERR_NOT_PSD);
+    double d3[4] = { 0, 1e-170, 1e-170, 0 };        /* indefinite, product underflows */
+    CHECK_ST(est_check_covariance(d3, 2), EST_ERR_NOT_PSD);
+    double d4[4] = { 1e12, 0, 0, 1e-6 };            /* wide scale disparity but valid */
+    CHECK_ST(est_check_covariance(d4, 2), EST_OK);
+    double d5[4] = { 1e-6, 2e-6, 2e-6, 1e-6 };      /* |corr| > 1 at tiny scale, det < 0 */
+    CHECK_ST(est_check_covariance(d5, 2), EST_ERR_NOT_PSD);
 }
 
 static est_model base_model(void)
@@ -410,6 +444,7 @@ static void test_invalid_records(void)
     double poison[3] = { NAN, INFINITY, -INFINITY };
     est_model m0 = base_model(); est_model m;
     CHECK_ST(est_check_model(&m0), EST_OK);
+    m = m0; m.R[0] = 0; CHECK_ST(est_check_model(&m), EST_ERR_NOT_PD);   /* R = 0 wedges every update */
     for (int p = 0; p < 3; p++) {
         m = m0; m.F[1] = poison[p]; CHECK_ST(est_check_model(&m), EST_ERR_NONFINITE);
         m = m0; m.H[0] = poison[p]; CHECK_ST(est_check_model(&m), EST_ERR_NONFINITE);
@@ -439,7 +474,7 @@ static void test_invalid_records(void)
     CHECK_ST(est_digest_model(&m, &d), EST_ERR_NONFINITE);
 
     est_observation o0; memset(&o0, 0, sizeof o0);
-    o0.m = 2; o0.unit[0] = EST_UNIT_WATT; o0.unit[1] = EST_UNIT_WATT; o0.z[0] = 1; o0.z[1] = 2; o0.R[0] = 1; o0.R[3] = 1; o0.evidence.b[3] = 9;
+    o0.m = 2; o0.unit[0] = EST_UNIT_WATT; o0.unit[1] = EST_UNIT_WATT; o0.z[0] = 1; o0.z[1] = 2; o0.R[0] = 1; o0.R[3] = 1; o0.evidence.b[3] = 9; o0.source.b[0] = 4;
     est_observation o;
     CHECK_ST(est_check_observation(&o0), EST_OK);
     for (int p = 0; p < 3; p++) {
@@ -450,6 +485,7 @@ static void test_invalid_records(void)
     o = o0; o.m = 9; CHECK_ST(est_check_observation(&o), EST_ERR_DIM);
     o = o0; o.unit[1] = EST_UNIT_NONE; CHECK_ST(est_check_observation(&o), EST_ERR_UNIT);
     o = o0; memset(&o.evidence, 0, sizeof o.evidence); CHECK_ST(est_check_observation(&o), EST_ERR_KIND);
+    o = o0; memset(&o.source, 0, sizeof o.source); CHECK_ST(est_check_observation(&o), EST_ERR_KIND);
     o = o0; o.R[1] = 3; CHECK_ST(est_check_observation(&o), EST_ERR_ASYMMETRIC);
     o = o0; o.R[0] = 1; o.R[1] = o.R[2] = 2; CHECK_ST(est_check_observation(&o), EST_ERR_NOT_PSD);
     CHECK_ST(est_check_observation(NULL), EST_ERR_NULL);
@@ -458,7 +494,7 @@ static void test_invalid_records(void)
     CHECK_ST(est_encode_observation(&o0, buf, sizeof buf, NULL), EST_ERR_NULL);
 
     est_belief b0; memset(&b0, 0, sizeof b0);
-    b0.n = 2; b0.unit[0] = b0.unit[1] = EST_UNIT_BYTE; b0.x[0] = 1; b0.x[1] = -1; b0.P[0] = 2; b0.P[3] = 3;
+    b0.n = 2; b0.unit[0] = b0.unit[1] = EST_UNIT_BYTE; b0.x[0] = 1; b0.x[1] = -1; b0.P[0] = 2; b0.P[3] = 3; b0.model.b[0] = 5;
     est_belief b;
     CHECK_ST(est_check_belief(&b0), EST_OK);
     for (int p = 0; p < 3; p++) {
@@ -473,6 +509,12 @@ static void test_invalid_records(void)
     b = b0; b.P[1] = b.P[2] = 5; CHECK_ST(est_check_belief(&b), EST_ERR_NOT_PSD);
     b = b0; b.P[0] = b.P[3] = -1; CHECK_ST(est_check_belief(&b), EST_ERR_NOT_PSD);
     CHECK_ST(est_check_belief(NULL), EST_ERR_NULL);
+    /* structure: model always named; generation 0 = declared prior; later needs a parent */
+    b = b0; memset(&b.model, 0, sizeof b.model); CHECK_ST(est_check_belief(&b), EST_ERR_MODEL);
+    b = b0; b.generation = 3; CHECK_ST(est_check_belief(&b), EST_ERR_STALE);          /* gen>0, zero parent */
+    b = b0; b.generation = 3; b.parent.b[0] = 1; CHECK_ST(est_check_belief(&b), EST_OK); /* zero root ok after coast */
+    b = b0; b.parent.b[0] = 1; CHECK_ST(est_check_belief(&b), EST_ERR_STALE);          /* gen 0 with a parent */
+    b = b0; b.evidence_root.b[0] = 1; CHECK_ST(est_check_belief(&b), EST_ERR_STALE);   /* gen 0 with evidence */
 
     est_prediction p0; memset(&p0, 0, sizeof p0);
     p0.n = 2; p0.m = 1; p0.horizon = 1; p0.x[0] = 1; p0.P[0] = 1; p0.P[3] = 1; p0.S[0] = 1;
@@ -485,6 +527,11 @@ static void test_invalid_records(void)
         p = p0; p.S[0] = poison[q]; CHECK_ST(est_check_prediction(&p), EST_ERR_NONFINITE);
     }
     p = p0; p.horizon = 0; CHECK_ST(est_check_prediction(&p), EST_ERR_TIME);
+    p = p0; p.horizon = EST_MAX_HORIZON; CHECK_ST(est_check_prediction(&p), EST_OK);
+    p = p0; p.horizon = EST_MAX_HORIZON + 1u; CHECK_ST(est_check_prediction(&p), EST_ERR_TIME);
+    p = p0; p.has_control = 2; CHECK_ST(est_check_prediction(&p), EST_ERR_ENCODING);
+    p = p0; p.has_control = 1; p.Bu[1] = poison[0]; CHECK_ST(est_check_prediction(&p), EST_ERR_NONFINITE);
+    p = p0; p.has_control = 0; p.Bu[1] = poison[0]; CHECK_ST(est_check_prediction(&p), EST_OK); /* unused, not identity */
     p = p0; p.n = 0; CHECK_ST(est_check_prediction(&p), EST_ERR_DIM);
     p = p0; p.n = 9; CHECK_ST(est_check_prediction(&p), EST_ERR_DIM);
     p = p0; p.m = 0; CHECK_ST(est_check_prediction(&p), EST_ERR_DIM);
