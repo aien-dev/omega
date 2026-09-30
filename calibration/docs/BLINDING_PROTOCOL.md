@@ -347,7 +347,7 @@ to determine the hidden answer) and its `sealed_digest`, the hidden held-out set
 therefore expected for such crumbs.
 
 EXP-001R (`EXP_ID=EXP-001R`, profile `Turing-profile-v1.1`, `calibration/preregistration/EXP-001R.md`) amends two
-things, written before any EXP-001R data exist. With `EXP_ID` unset the scripts behave as for EXP-001.
+things, written before any EXP-001R data exist. With `EXP_ID` unset the scripts behave as for EXP-001. The C tools read the same variable: `turing-cal-eval` and `indep-scorer` (both `EXP_ID=EXP-001` by default, profile v1.0; `EXP_ID=EXP-001R`, profile v1.1) put it in every receipt (`experiment`, `run_id`), keep the bridge key name `EXP_001_COMPRESSION_BRIDGE` for both, and refuse an unknown id. The void counter is per experiment because it lives in the per-freeze-commit run directory. `make turing-exp001-eval-dry EXP_ID=EXP-001R` is the development dry run for the successor.
 
 * **Amended G6.** A sealed `crumb_digest` shared with any development or burned `crumb_digest` FAILS, EXCEPT when the
   sealed record's population is Ambiguous AND its `sealed_digest` differs from the `sealed_digest` of every

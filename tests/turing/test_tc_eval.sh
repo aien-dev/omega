@@ -87,6 +87,10 @@ run_dry() { "$BIN" run --dry-run --repo "$R" --manifest "$MAN" --cand-dir "$CD" 
 expect_refuse "dry run out dir under EXP-001" DRY_RUN_TARGET -- run_dry --out "$R/calibration/experiments/EXP-001/x" --work "$W/w0"
 [ ! -e "$R/calibration/experiments/EXP-001/x/void_receipt_1.json" ] && ok "no void receipt written under EXP-001" || bad "void receipt under EXP-001"
 expect_refuse "dry run work dir under EXP-001" DRY_RUN_TARGET -- run_dry --out "$W/o0" --work "$R/calibration/experiments/EXP-001/w"
+# Experiment selection (env EXP_ID, same as the scripts): an unknown id is refused; EXP-001R forbids its own dir in a dry run.
+rc=0; EXP_ID=EXP-002 "$BIN" run >"$W/last.out" 2>"$W/last.err" || rc=$?
+{ [ "$rc" = 2 ] && grep -q "unknown EXP_ID" "$W/last.err"; } && ok "unknown EXP_ID refused" || bad "unknown EXP_ID: rc=$rc"
+EXP_ID=EXP-001R expect_refuse "EXP-001R dry run out dir under EXP-001R" DRY_RUN_TARGET -- run_dry --out "$R/calibration/experiments/EXP-001R/x" --work "$W/w0"
 expect_refuse "--only outside dry run" ARG -- "$BIN" run --repo "$R" --manifest "$MAN" --cand-dir "$CD" --dataset "$W/ds.json" --only B2_order1 --out "$W/o1" --work "$W/w1"
 
 cp "$CD/B2_order1.tym" "$W/b2.bak"

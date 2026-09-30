@@ -4,8 +4,9 @@
 # turing-cal-eval: build the evaluator (build/turing-exp001-eval/turing-cal-eval).
 # test-turing-exp001-eval: fail-closed tests on the small committed fixture (seconds, low memory)
 #   plus a small dry run end to end (run + gate) on the same fixture.
-# turing-exp001-eval-dry TE_DATA=<dev run dir>: the full dev dry run (group 1 = seed 7, group 2 = seed 6,
-#   all 7 candidates, ~few GB RAM, writes only under build/turing-exp001-eval/dry).
+# turing-exp001-eval-dry TE_DATA=<dev run dir> [EXP_ID=EXP-001R]: the full dev dry run (group 1 = seed 7, group 2 = seed 6,
+#   all 7 candidates, ~few GB RAM, writes only under build/turing-exp001-eval/dry, or dry_EXP-001R). EXP_ID (default
+#   EXP-001) selects the experiment and profile version for the evaluator, the independent scorer and the scripts.
 .PHONY: turing-cal-eval test-turing-exp001-eval turing-exp001-eval-dry
 TE_CFLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE -Wno-format-truncation -Isrc
 TE_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
@@ -18,6 +19,9 @@ TE_BIN = $(TE_DIR)/turing-cal-eval
 TE_BIN_ASAN = $(TE_DIR)/turing-cal-eval_asan
 TE_DATA ?= $(HOME)/aien-data/crumbline/exp-20260927-rep10
 TE_BIG ?= $(HOME)/aien-data/turing-cal/candidates
+EXP_ID ?= EXP-001
+export EXP_ID
+TE_DRY = $(TE_DIR)/dry$(if $(filter EXP-001R,$(EXP_ID)),_EXP-001R,)
 
 $(TE_BIN): tools/turing_cal_eval.c $(TE_SRCS) $(TE_HDRS)
 	@mkdir -p $(TE_DIR)
@@ -35,4 +39,4 @@ test-turing-exp001-eval: $(TE_BIN) $(TE_BIN_ASAN)
 
 turing-exp001-eval-dry: $(TE_BIN) turing-verify-indep
 	@test ! -e $(HOME)/workspace/.spark-quiet || { echo ".spark-quiet is set; not starting a heavy run"; exit 1; }
-	bash tests/turing/test_tc_eval_dry.sh $(TE_BIN) $(TE_DIR)/dry $(TE_DATA) $(TE_BIG)
+	bash tests/turing/test_tc_eval_dry.sh $(TE_BIN) $(TE_DRY) $(TE_DATA) $(TE_BIG)

@@ -1,4 +1,4 @@
-/* turing-cal-eval: the EXP-001 primary evaluator (Turing-profile-v1.0).
+/* turing-cal-eval: the EXP-001 / EXP-001R primary evaluator (Turing-profile-v1.0 / v1.1, chosen by env EXP_ID).
  * Normative description: calibration/docs/EVALUATOR.md. Statistics:
  * calibration/docs/UNCERTAINTY_PROTOCOL.md. Coders: calibration/docs/CODER_SPEC.md.
  *
@@ -54,7 +54,25 @@
 #define CANDIDATE "M_candidate"
 #define MEM1 "M_mem"
 #define MEM2 "M_mem_seed1"
-#define DRY_FORBIDDEN "calibration/experiments/EXP-001"
+#define DRY_FORBIDDEN g_forb
+/* Experiment selection, the same way as calibration/scripts/tc_exp.sh: env EXP_ID = EXP-001 (default, profile v1.0)
+ * or EXP-001R (profile v1.1). The bridge key name EXP_001_COMPRESSION_BRIDGE is the same for both (decision record). */
+static const char *g_exp = "EXP-001";
+static char g_expdir[64], g_forb[64], g_profid[32], g_prof[128], g_side[128];
+static int exp_select(void) {
+    const char *e = getenv("EXP_ID"), *v;
+    if (!e || !*e) e = "EXP-001";
+    if (!strcmp(e, "EXP-001")) v = "1.0";
+    else if (!strcmp(e, "EXP-001R")) v = "1.1";
+    else { fprintf(stderr, "turing-cal-eval: unknown EXP_ID (EXP-001 or EXP-001R)\n"); return 1; }
+    g_exp = !strcmp(e, "EXP-001") ? "EXP-001" : "EXP-001R";
+    snprintf(g_expdir, sizeof g_expdir, "calibration/experiments/%s", g_exp);
+    snprintf(g_forb, sizeof g_forb, "%s", g_expdir);
+    snprintf(g_profid, sizeof g_profid, "Turing-profile-v%s", v);
+    snprintf(g_prof, sizeof g_prof, "calibration/profiles/%s.toml", g_profid);
+    snprintf(g_side, sizeof g_side, "calibration/profiles/%s.sha256", g_profid);
+    return 0;
+}
 
 static char why[1024];
 static const char *g_out;
@@ -103,9 +121,9 @@ static int fail_final(const char *crit, const char *step, const char *code, cons
     utc_now(t);
     snprintf(m, sizeof m, "%s", msg);
     jclean(m);
-    fprintf(f, "{\n  \"schema\": \"turing.cal.terminal_receipt.v1\",\n  \"experiment\": \"EXP-001\",\n  \"kind\": \"terminal_fail\",\n"
+    fprintf(f, "{\n  \"schema\": \"turing.cal.terminal_receipt.v1\",\n  \"experiment\": \"%s\",\n  \"kind\": \"terminal_fail\",\n"
                "  \"dry_run\": %s,\n  \"created_utc\": \"%s\",\n  \"verdict\": \"FAIL\",\n  \"criteria\": {",
-            g_dry ? "true" : "false", t);
+            g_exp, g_dry ? "true" : "false", t);
     for (int i = 1; i <= 9; ++i) {
         char nm[4];
         snprintf(nm, sizeof nm, "S%d", i);
@@ -145,22 +163,22 @@ static int refuse_c(const char *crit, const char *step, const char *code, const 
             utc_now(t);
             jclean(msg);
             fprintf(f,
-                    "{\n  \"schema\": \"turing.cal.void_receipt.v1\",\n  \"experiment\": \"EXP-001\",\n"
+                    "{\n  \"schema\": \"turing.cal.void_receipt.v1\",\n  \"experiment\": \"%s\",\n"
                     "  \"kind\": \"void\",\n  \"stage\": \"evaluation\",\n  \"dry_run\": %s,\n  \"created_utc\": \"%s\",\n"
                     "  \"attempt\": %d,\n  \"step\": \"%s\",\n  \"code\": \"%s\",\n  \"reason\": \"%s\",\n  \"command\": \"%s\",\n"
                     "  \"inputs\": \"%s\",\n  \"profile_digest\": \"%s\",\n  \"freeze_commit\": \"%s\",\n"
                     "  \"candidate_manifest_sha256\": \"%s\"\n}\n",
-                    g_dry ? "true" : "false", t, n, step, code, msg, g_cmd, g_inputs, g_rprof, g_rfreeze, g_rman);
+                    g_exp, g_dry ? "true" : "false", t, n, step, code, msg, g_cmd, g_inputs, g_rprof, g_rfreeze, g_rman);
             fclose(f);
             if (!g_dry && n >= MAX_ATTEMPTS && (f = excl_open("final_receipt.json"))) {
                 fprintf(f,
-                        "{\n  \"schema\": \"turing.cal.terminal_receipt.v1\",\n  \"experiment\": \"EXP-001\",\n"
+                        "{\n  \"schema\": \"turing.cal.terminal_receipt.v1\",\n  \"experiment\": \"%s\",\n"
                         "  \"kind\": \"inconclusive_infra\",\n  \"dry_run\": false,\n  \"created_utc\": \"%s\",\n"
                         "  \"verdict\": \"INCONCLUSIVE\",\n  \"reason\": \"INFRA\",\n  \"void_attempts\": %d,\n"
                         "  \"last_step\": \"%s\",\n  \"last_code\": \"%s\",\n"
                         "  \"profile_digest\": \"%s\",\n  \"freeze_commit\": \"%s\",\n  \"candidate_manifest_sha256\": \"%s\",\n"
                         "  \"EXP_001_COMPRESSION_BRIDGE\": \"INCONCLUSIVE\"\n}\n",
-                        t, n, step, code, g_rprof, g_rfreeze, g_rman);
+                        g_exp, t, n, step, code, g_rprof, g_rfreeze, g_rman);
                 fclose(f);
                 fprintf(stderr, "attempt %d of %d was void: verdict INCONCLUSIVE (INFRA), final_receipt.json written\n", n,
                         MAX_ATTEMPTS);
@@ -555,7 +573,7 @@ static int cmd_run(int argc, char **argv) {
     /* Receipt-binding pre-pass (no receipt yet: a failure here is not an attempt, like a bad argument). */
     {
         char pp[PATH_MAX];
-        snprintf(pp, sizeof pp, "%s/calibration/profiles/Turing-profile-v1.0.toml", repo);
+        snprintf(pp, sizeof pp, "%s/%s", repo, g_prof);
         if (sha_file_hex(pp, g_rprof)) return refuse("args", "IO", "cannot read %s", pp);
         if (sha_file_hex(manifest, g_rman)) return refuse("args", "IO", "cannot read %s", manifest);
         snprintf(g_rfreeze, sizeof g_rfreeze, "DRY_RUN");
@@ -572,7 +590,7 @@ static int cmd_run(int argc, char **argv) {
         }
     }
     if (mkdir_p(outp) || mkdir_p(work)) return refuse("args", "IO", "cannot create out/work dirs");
-    /* One VOID counter for all of EXP-001 (FAILURE_REPORTING.md section 2): in sealed mode the bundle must be
+    /* One VOID counter for all of one experiment (FAILURE_REPORTING.md section 2): in sealed mode the bundle must be
      * <eval root>/<C_f>/run/bundle, the directory where sealed generation and the frozen-tree tests also write their
      * void receipts, so every void of the experiment lands in one numbered sequence. */
     if (!g_dry) {
@@ -591,7 +609,7 @@ static int cmd_run(int argc, char **argv) {
             ++nv;
         }
         if (nv >= MAX_ATTEMPTS)
-            return refuse("args", "ATTEMPTS", "%d void attempts already recorded: EXP-001 is INCONCLUSIVE (INFRA)", nv);
+            return refuse("args", "ATTEMPTS", "%d void attempts already recorded: %s is INCONCLUSIVE (INFRA)", nv, g_exp);
     }
     if (g_dry && (under_forbidden(repo, outp) || under_forbidden(repo, work)))
         return refuse("dry run", "DRY_RUN_TARGET", "a dry run may not write under %s", DRY_FORBIDDEN);
@@ -635,8 +653,8 @@ static int cmd_run(int argc, char **argv) {
 
     /* --- profile --- */
     char prof_path[PATH_MAX], side_path[PATH_MAX], prof_sha[65], side_sha[65] = "";
-    snprintf(prof_path, sizeof prof_path, "%s/calibration/profiles/Turing-profile-v1.0.toml", repo);
-    snprintf(side_path, sizeof side_path, "%s/calibration/profiles/Turing-profile-v1.0.sha256", repo);
+    snprintf(prof_path, sizeof prof_path, "%s/%s", repo, g_prof);
+    snprintf(side_path, sizeof side_path, "%s/%s", repo, g_side);
     if (sha_file_hex(prof_path, prof_sha)) return refuse("profile", "IO", "cannot read %s", prof_path);
     char *side = slurp(side_path, NULL);
     if (!side || sscanf(side, "%64s", side_sha) != 1 || strcmp(side_sha, prof_sha))
@@ -812,11 +830,11 @@ static int cmd_run(int argc, char **argv) {
             return refuse("freeze order", "FREEZE_COMMIT", "freeze commit %.12s is not an ancestor of origin/main %.12s", d_commit,
                           origin_main);
         char h[65];
-        snprintf(spec, sizeof spec, "%s:calibration/experiments/EXP-001/candidate_manifest.json", d_commit);
+        snprintf(spec, sizeof spec, "%s:%s/candidate_manifest.json", d_commit, g_expdir);
         char *a3[] = {"git", "-C", (char *)repo, "show", spec, NULL};
         if (run_sha(a3, h) != 0 || strcmp(h, man_sha))
             return s2_fail("freeze order", "FREEZE_COMMIT", "candidate manifest differs from the one at freeze commit %.12s", d_commit);
-        snprintf(spec, sizeof spec, "%s:calibration/profiles/Turing-profile-v1.0.toml", d_commit);
+        snprintf(spec, sizeof spec, "%s:%s", d_commit, g_prof);
         char *a4[] = {"git", "-C", (char *)repo, "show", spec, NULL};
         if (run_sha(a4, h) != 0 || strcmp(h, prof_sha))
             return s2_fail("freeze order", "FREEZE_COMMIT", "profile differs from the one at freeze commit %.12s", d_commit);
@@ -1365,7 +1383,7 @@ static int cmd_run(int argc, char **argv) {
     /* --- profile.digest --- */
     {
         char pdl[128];
-        snprintf(pdl, sizeof pdl, "%s  Turing-profile-v1.0.toml\n", prof_sha);
+        snprintf(pdl, sizeof pdl, "%s  %s.toml\n", prof_sha, g_profid);
         if (write_text(g_out, "profile.digest", pdl)) return refuse("out", "IO", "profile.digest");
     }
 
@@ -1383,17 +1401,18 @@ static int cmd_run(int argc, char **argv) {
 
     FILE *fr = open_out("final_receipt.pending.json");
     if (!fr) return refuse("out", "IO", "pending receipt");
-    fprintf(fr, "{\n  \"schema\": \"turing.cal.measurement_receipt.v1\",\n  \"experiment\": \"EXP-001\",\n  \"kind\": \"%s\",\n",
-            g_dry ? "dry_run" : "final");
+    fprintf(fr, "{\n  \"schema\": \"turing.cal.measurement_receipt.v1\",\n  \"experiment\": \"%s\",\n  \"kind\": \"%s\",\n",
+            g_exp, g_dry ? "dry_run" : "final");
     fprintf(fr, "  \"EXP_001_COMPRESSION_BRIDGE\": \"@BRIDGE@\",\n  \"verdict\": \"@VERDICT@\",\n");
-    fprintf(fr, "  \"run_id\": \"EXP-001-%s-%s\",\n  \"created_utc\": \"@CREATED@\",\n  \"started_utc\": \"%s\",\n  \"scored_utc\": \"%s\",\n",
-            g_dry ? "dry" : "sealed", t0, t0, t1);
-    fprintf(fr, "  \"profile\": {\"path\": \"calibration/profiles/Turing-profile-v1.0.toml\", \"sha256\": \"%s\", \"sidecar_matches\": true},\n",
-            prof_sha);
+    fprintf(fr, "  \"run_id\": \"%s-%s-%s\",\n  \"created_utc\": \"@CREATED@\",\n  \"started_utc\": \"%s\",\n  \"scored_utc\": \"%s\",\n",
+            g_exp, g_dry ? "dry" : "sealed", t0, t0, t1);
+    fprintf(fr, "  \"profile\": {\"path\": \"%s\", \"sha256\": \"%s\", \"sidecar_matches\": true},\n",
+            g_prof, prof_sha);
     {
         char pj[PATH_MAX], prj[65] = "";
-        snprintf(pj, sizeof pj, "%s/calibration/experiments/EXP-001/preregistration.json", repo);
-        if (sha_file_hex(pj, prj)) return refuse("prereg", "IO", "%s", pj);
+        snprintf(pj, sizeof pj, "%s/%s/preregistration.json", repo, g_expdir);
+        /* A dry run of an experiment without a committed preregistration.json (EXP-001R before its freeze) records NONE. */
+        if (sha_file_hex(pj, prj)) { if (!g_dry) return refuse("prereg", "IO", "%s", pj); snprintf(prj, sizeof prj, "NONE"); }
         fprintf(fr, "  \"freeze\": {\"commit\": \"%s\", \"origin_main_checked\": \"%s\", \"status\": \"%s\", \"frozen_at\": \"%s\", "
                     "\"candidate_manifest_sha256\": \"%s\", \"preregistration_sha256\": \"%s\"},\n",
                 g_dry ? "NONE" : d_commit, origin_main, status, frozen_at[0] ? frozen_at : "NONE", man_sha, prj);
@@ -1513,7 +1532,7 @@ static int cmd_run(int argc, char **argv) {
     fprintf(rp_, "Sensitivity (T against B0, B1, B3; L(M) byte-rounded and doubled; data-only gain; interval inflated x2.04) is in uncertainty.json; it is reported, not part of the verdict.\n\n");
     /* Required report sections (laboratory execution protocol, EXP-001 final report). */
     fprintf(rp_, "## Report sections\n\n");
-    fprintf(rp_, "- Preregistration: calibration/preregistration/EXP-001.md and preregistration.json (sha256 in final_receipt.json freeze.preregistration_sha256).\n");
+    fprintf(rp_, "- Preregistration: calibration/preregistration/%s.md and preregistration.json (sha256 in final_receipt.json freeze.preregistration_sha256).\n", g_exp);
     fprintf(rp_, "- Blinding: calibration/docs/BLINDING_PROTOCOL.md; overlap audit %s.\n", g_dry ? "not used (dry run)" : "PASS (overlap_audit.json)");
     fprintf(rp_, "- Candidate freeze: candidate_manifest.json sha256 %s, status %s, frozen_at %s, freeze commit C_f %s.\n", man_sha, status,
             frozen_at[0] ? frozen_at : "NONE", g_dry ? "NONE (dry run)" : d_commit);
@@ -1726,6 +1745,7 @@ static int cmd_gate(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     int rc = -1;
+    if (exp_select()) return 2;
     if (argc >= 2 && !strcmp(argv[1], "run")) rc = cmd_run(argc, argv);
     else if (argc >= 2 && !strcmp(argv[1], "gate")) rc = cmd_gate(argc, argv);
     /* A refusal ends the process at once: buffers of the abandoned run are not unwound (exit 2 stays exit 2
