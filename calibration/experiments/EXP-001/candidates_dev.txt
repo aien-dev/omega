@@ -1,0 +1,9 @@
+# EXP-001 candidate set, dev seeds 1-7 (in-sample). L(M) exact bits; L(D|M) ideal bits (micro-bit exact).
+# name rows L(M)_bits L(D|M)_bits DL_bits bits_per_event nsym seed1_bits_per_event code_bytes digest(turing.ymodel.v0)
+B0_uniform rows=0 lm_bits=232 ld_bits=45571493.299959 dl_bits=45571725.299959 bpe=3.169881 nsym=14376405 seed1_bpe=3.169881 bytes=29 digest=83c04bdfc10614febd634092355ef03997ed255fde5bdec9a80fe2d8964998ce
+B1_order0 rows=0 lm_bits=232 ld_bits=24559362.384375 dl_bits=24559594.384375 bpe=1.708310 nsym=14376405 seed1_bpe=1.706351 bytes=29 digest=a0962e1d516a71eb07bdd385fea01af79a3cd587ae2d6ed0ac710e26996e356a
+B2_order1 rows=7 lm_bits=1156 ld_bits=18379920.294421 dl_bits=18381076.294421 bpe=1.278478 nsym=14376405 seed1_bpe=1.275334 bytes=145 digest=59ae9398da24e809d92ab39e7456382a0a4b7e93e203862be6d2ca55450dfd04
+B3_heuristic rows=16 lm_bits=2344 ld_bits=40358094.760950 dl_bits=40360438.760950 bpe=2.807245 nsym=14376405 seed1_bpe=2.807265 bytes=293 digest=e729818b8289263e6819b21fc55f944f9d5113e7cfc4419d0badcc27f589f2ae
+M_candidate rows=1237 lm_bits=180834 ld_bits=11632692.543751 dl_bits=11813526.543751 bpe=0.809152 nsym=14376405 seed1_bpe=0.806632 bytes=22605 digest=64a57ba9cf6f8b6e4558751ef2145ae2aa729c5214bfa29373eabfa220a57bc7
+M_mem rows=3706331 lm_bits=607838516 ld_bits=18828523.886725 dl_bits=626667039.886725 bpe=1.309682 nsym=14376405 seed1_bpe=1.362118 bytes=75979815 digest=cbd6944c6618f508e5377e4698b0d472042cdf3b4592cb80e5427767e232c140
+M_mem_seed1 rows=2172776 lm_bits=356335496 ld_bits=45582483.218313 dl_bits=401917979.218313 bpe=3.170645 nsym=14376405 seed1_bpe=0.000176 bytes=44541937 digest=5dfeff7b643178807b547fbd62388319b9a407109e345614679e4bf20ccfd652
