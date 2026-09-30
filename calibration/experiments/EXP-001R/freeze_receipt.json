@@ -1,0 +1,15 @@
+{
+  "schema": "turing.cal.freeze_receipt.v1",
+  "TURING_PROFILE_V1_FROZEN": "PASS",
+  "freeze_commit": "8e6c5acd9bc8e1f46fa57a878b130f0b9ccd5399",
+  "freeze_commit_time_utc": "2026-09-30T04:00:13Z",
+  "origin_main_checked": "45be6c84554ec9de408548158b03468142389b74",
+  "profile_sha256": "0267bffc758147718e6ee95e40581d9456322dbc92f2cabdd91a01b9b86d74d3",
+  "candidate_manifest_sha256": "7edcd62e46c8af807b87c1a81dcc2aad14464ad9e54f936567ce52919725d307",
+  "runtime_digest": "73abab2143d598c8313c740acbbbd232a97957ff522553b18fabf280e0cb3baf",
+  "independent_scorer_source_sha256": "626e517a2586e30cfe837c75c411e9d1889e7fd90da498bdc6a5476815761aa3",
+  "shared_background_entries_checked": 19,
+  "sealed_data_present": false,
+  "written_utc": "2026-09-30T04:01:52Z",
+  "next": "commit this receipt (a later commit than C_f), then generate_sealed_data.sh --commit 8e6c5acd9bc8e1f46fa57a878b130f0b9ccd5399 --profile-digest 0267bffc758147718e6ee95e40581d9456322dbc92f2cabdd91a01b9b86d74d3"
+}
