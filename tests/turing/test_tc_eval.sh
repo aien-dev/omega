@@ -324,6 +324,32 @@ rc=0; "$BIN" gate --bundle "$b" --independent "$W/indep_ok.json" >/dev/null 2>&1
 [ "$rc" = 1 ] && grep -q '"kind": "terminal_fail"' "$b/final_receipt.json" && grep -q '"verdict": "FAIL"' "$b/final_receipt.json" &&
     [ ! -e "$b/void_receipt_1.json" ] && ok "failure after scoring is a terminal FAIL, not a void" || bad "terminal FAIL case: rc=$rc"
 
+# NO_CRUMBS (EVALUATOR.md section 3, FAILURE_REPORTING.md section 2): a sealed group with no crumbs is final after
+# scoring started. Group 2 empty -> S9 terminal FAIL (every other criterion NOT_REACHED); group 1 empty -> S6.
+nocrumbs_case() { # nocrumbs_case NAME EMPTY_GROUP CRITERION
+    local n="$1" eg="$2" crit="$3" s1 s2 d="$W/nc_$1" b="$W/nc_$1/$CF/run/bundle"
+    s1="$(seed_of "$CF" "$FH" 1 0)" s2="$(seed_of "$CF" "$FH" 2 0)"
+    mkdir -p "$d/seed-$s1/control" "$d/seed-$s2/control"
+    cp "$FIX" "$d/seed-$s1/control/trace.ctr" && cp "$FIX" "$d/seed-$s2/control/trace.ctr"
+    if [ "$eg" = 1 ]; then : >"$d/seed-$s1/control/trace.ctr"; else : >"$d/seed-$s2/control/trace.ctr"; fi
+    bash "$F/calibration/scripts/make_dataset_manifest.sh" --dev "$d" "$s1" "$s2" "$FH" "$W/nc_$n.json" >/dev/null
+    sed -i -E "s/\"split\": \"development\"/\"split\": \"sealed_test\"/; s/\"freeze_commit\": \"NONE\"/\"freeze_commit\": \"$CF\"/; s/\"released_utc\": \"NOT_SEALED\"/\"released_utc\": \"$REL\"/" "$W/nc_$n.json"
+    local rc=0 i others=1
+    run_sealed --dataset "$W/nc_$n.json" --overlap "$W/ov.json" --out "$b" --work "$W/ncw_$n" >"$W/last.out" 2>"$W/last.err" || rc=$?
+    for i in 1 2 3 4 5 6 7 8 9; do
+        [ "S$i" = "$crit" ] && continue
+        grep -q "\"S$i\": \"NOT_REACHED\"" "$b/final_receipt.json" 2>/dev/null || others=0
+    done
+    if [ "$rc" = 1 ] && grep -q "FAILED .*: NO_CRUMBS:" "$W/last.err" && grep -q "\"$crit\": \"FAIL\"" "$b/final_receipt.json" &&
+        grep -q "\"failed_criterion\": \"$crit\"" "$b/final_receipt.json" && grep -q '"code": "NO_CRUMBS"' "$b/final_receipt.json" &&
+        grep -q '"kind": "terminal_fail"' "$b/final_receipt.json" && grep -q '"verdict": "FAIL"' "$b/final_receipt.json" &&
+        grep -q '"EXP_001_COMPRESSION_BRIDGE": "FAIL"' "$b/final_receipt.json" && [ "$others" = 1 ] && [ ! -e "$b/void_receipt_1.json" ]; then
+        ok "group $eg without crumbs: NO_CRUMBS is $crit terminal FAIL, final, not void"
+    else bad "NO_CRUMBS group $eg: rc=$rc; stderr: $(head -c 300 "$W/last.err")"; fi
+}
+nocrumbs_case g2 2 S9
+nocrumbs_case g1 1 S6
+
 # S8 comparison contract (EVALUATOR.md section 6): exact int64 values, same key set, same schema and input
 # digests, no repeated key; key order and spacing are free; a non-integer value never matches.
 s8_case() { # s8_case NAME EXPECTED_S8 SED_SCRIPT
