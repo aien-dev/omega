@@ -1136,7 +1136,7 @@ static int l1_rig(R15Config cfg, const char *measure) {
         AienosCapEntry grant;
         if (rx_world_read(&r->w, r->aegis.o[0].slot[0], &slot) != RX_OK ||
             aienos_cap_inspect(r->view, (AienosCapRef){(uint32_t)slot.field[0],
-                                                       (uint32_t)slot.field[1]}, &grant) != 0)
+                                                       slot.field[1]}, &grant) != 0)
             ok = 0;
         static uint8_t blob[4096];
         for (int b = 0; b < 30 && ok; b++) {
