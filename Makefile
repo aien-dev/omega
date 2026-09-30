@@ -160,6 +160,11 @@ test-m19: $(TARGET)
 test-m19r-qualify:
 	tools/test_m19r_qualify.sh
 
+# Host-only tests of the Gate 14 combiner (tools/gate14_combine.sh). No GPU.
+.PHONY: test-gate14-combine
+test-gate14-combine:
+	tools/test_gate14_combine.sh
+
 # Gate 5 (OMEGA-NUMERIC-0), CPU tiers only: reference, CPU parity, provenance
 # and negative tests. Opens no device. The GB10 tier and the receipt come
 # from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
