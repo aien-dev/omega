@@ -200,7 +200,14 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request,
  * (RX_GEN_ERR_IDENTITY), and rx_gen_promote validates the promotion right
  * with the bound `auth` / `auth_ctx` only: an authority callback passed by the
  * caller is not consulted. There is no unbind. */
-typedef int (*RxGenCallerFn)(void *ctx, uint32_t subject, const RxCallerCred *cred);
+/* `op` is RX_CALLER_OP_CHECK, or RX_CALLER_OP_HOLD then RX_CALLER_OP_RELEASE
+ * (rx_caller.h): C7, rx_gen_promote checks the request subject again with
+ * HOLD right before the active pointer moves, and refuses the flip
+ * (RX_GEN_ERR_IDENTITY, active unchanged) when the promoter was revoked in
+ * the meantime; no revocation lands until the flip is in memory. On a bound
+ * store rx_gen_mutate_object and rx_gen_set_evidence, which carry no
+ * credential, return RX_GEN_ERR_IDENTITY. */
+typedef int (*RxGenCallerFn)(void *ctx, uint32_t subject, const RxCallerCred *cred, int op);
 int rx_gen_bind_authority(RxGenStore *store, RxGenCallerFn caller, void *caller_ctx,
                           RxGenAuthFn auth, void *auth_ctx);
 

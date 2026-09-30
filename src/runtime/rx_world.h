@@ -629,18 +629,27 @@ int  rx_world_add_reaction_keyed(RxWorld *w, const RxCallerKeyring *keys,
 
 /* R16 C5 caller credentials (rx_caller.h).
  * enroll: mint a credential for `subject` (RX_CALLER_ERR_EXISTS if it has
- *   one, RX_CALLER_ERR_CLOSED once bound). The secret is returned only here.
+ *   one, RX_CALLER_ERR_CLOSED once bound, RX_CALLER_ERR_FULL past
+ *   RX_CALLER_MAX). The secret is returned only here.
  * bind: from now on every reaction registration, activation and commit
- *   checks the subject's credential. One way; enrollment closes.
+ *   checks the subject's credential. One way; enrollment closes. Refused
+ *   (RX_ERR_IDENTITY, world left unbound) while any registered reaction was
+ *   admitted without a credential (C7): before binding, a reaction that names
+ *   a credential is fully checked, and one that names none is kept as
+ *   unauthenticated and can never run in a bound world.
  * revoke: retire `subject`'s enrollment; needs its current credential, so no
  *   caller can revoke another's identity. Its reactions are then blocked.
+ *   Takes the world lock (C7), so it never lands between a commit's identity
+ *   check and its publish: it precedes the check or follows the publish.
  * check: RX_CALLER_OK or the RX_CALLER_ERR_* reason. Constant-time compare.
- * check_fn: the same, shaped for rx_gen_bind_authority (ctx is the world). */
+ * check_fn: the same, shaped for rx_gen_bind_authority (ctx is the world),
+ *   with `op` one of RX_CALLER_OP_CHECK, _HOLD (on success the enrollment
+ *   table stays locked, so no revocation lands, until _RELEASE). */
 int  rx_world_enroll_caller(RxWorld *w, uint32_t subject, RxCallerCred *out);
 int  rx_world_bind_callers(RxWorld *w);
 int  rx_world_revoke_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred);
 int  rx_world_check_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred);
-int  rx_world_caller_check_fn(void *world, uint32_t subject, const RxCallerCred *cred);
+int  rx_world_caller_check_fn(void *world, uint32_t subject, const RxCallerCred *cred, int op);
 
 /* A stimulus from outside the organism (sensor, human input). Requires a
  * capability for (external_subject, object resource, WRITE). Returns the

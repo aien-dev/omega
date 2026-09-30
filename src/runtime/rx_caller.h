@@ -50,6 +50,15 @@ typedef struct {
 #define RX_CALLER_ERR_CLOSED   -6   /* enrollment closed (world bound) */
 #define RX_CALLER_ERR_EXISTS   -7   /* subject already enrolled */
 #define RX_CALLER_ERR_ENTROPY  -8   /* getrandom failed */
+#define RX_CALLER_ERR_FULL     -9   /* enrollment table full (RX_CALLER_MAX) */
+
+/* What a caller check does (RxGenCallerFn, rx_world_caller_check_fn).
+ * HOLD is the full check that, when it passes, keeps the enrollment table
+ * locked so no revocation can land until the matching RELEASE: the R9
+ * store holds it across the durable flip of the active pointer (R16 C7). */
+#define RX_CALLER_OP_CHECK   0
+#define RX_CALLER_OP_HOLD    1
+#define RX_CALLER_OP_RELEASE 2
 
 /* The credentials one component holds, looked up by subject when it
  * registers a reaction or calls R9. Held by the component, never published

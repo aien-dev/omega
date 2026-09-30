@@ -469,8 +469,106 @@ subject; it does not loosen any gate, and it does not make R16 complete
      G3 (the production binary does not link or exec the legacy code) is what
      covers that, as it covers any memory write.
    - `rx_gen_bind_authority` takes no lock; it is called once, at startup,
-     before any other thread uses the store.
+     before any other thread uses the store. Since C7 the bound flag is
+     published with release and read with acquire ordering.
    - Other world users outside the R15 rig and R13 / R14 (`rx_contract.c`,
      `rx_graph.c`, `rx_fusion.c`, `rx_route.c`) do not bind their worlds or
      stores yet, so they run unchecked as before. On a bound
      world their unkeyed registrations would be refused (default deny).
+
+### C7 (2026-09-30): outside review of C6, three gaps closed
+
+An outside review (Codex, Gemini) of the C6 commits found three real gaps.
+Each is reproduced by a probe in `tests/runtime/rx_r16_negative.c` (section
+"R16 C7", on scratch worlds and stores, so the rig is untouched), refused
+after the fix, and has a mutant that removes the fix. This narrows C6; it
+loosens no gate, and R16 is not complete (G6 to G8 and the receipt remain
+blocked).
+
+1. Promotion re-checks identity at the durable commit point.
+   - Gap: `rx_gen_promote` checked the promoter's credential only on entry.
+     A revocation in the live barrier or during the disk writes still moved
+     the active pointer.
+   - Fix: the caller check (`RxGenCallerFn`) now takes an `op`:
+     `RX_CALLER_OP_CHECK`, or `RX_CALLER_OP_HOLD` then `RX_CALLER_OP_RELEASE`
+     (`rx_caller.h`). Right before the pointer is written, the store checks
+     the request subject again with HOLD; on failure it returns
+     `RX_GEN_ERR_IDENTITY` and the pointer does not move. On success the
+     world's enrollment table stays locked, so no revocation lands, until the
+     new generation is active in memory; then RELEASE. The entry check stays,
+     so a forged promoter never reaches the live barrier or the disk.
+   - A refused flip leaves the candidate as the other pre-flip refusals do
+     (written but not active; recovery keeps the old generation).
+   - Probe P1: revoke the promoter from the live callback, then from the disk
+     hook. Before: promote rc 0, generation 1 -> 2 and 2 -> 3, on disk too.
+     After: rc `RX_GEN_ERR_IDENTITY`, generation unchanged in memory and on
+     disk (`rx_gen_recover`). A live promoter still promotes (control), and a
+     forged one is refused before the live barrier runs.
+   - Mutant `c7_flip_recheck`.
+2. Revocation is mutually exclusive with check-then-publish.
+   - Gap: `rx_world_revoke_caller` took only the caller lock. A commit and a
+     seat completion hold the world lock from `validate_caps` (identity
+     check) to `commit_writes` (publish), so a revocation could complete in
+     between and the write still landed.
+   - Fix: revocation takes the world lock first, then the caller lock (the
+     order every path uses). It now precedes the check or follows the
+     publish. It must not be called with the world lock held (reaction
+     bodies run without it).
+   - Probe P2: the world's capability validator, called inside the commit's
+     check after the identity check with the world lock held, starts a
+     revocation on another thread and waits up to 300 ms. Before: the
+     revocation finished inside that window and the write committed. After:
+     the revocation waits until the publish, then succeeds, and the next
+     activation is blocked. The seat completion path takes the same lock but
+     needs the graphics processor, so it is covered by the same lock, not by
+     a host probe.
+   - Mutant `c7_revoke_serialized`.
+3. Reactions registered before binding.
+   - Gap: an unbound world skipped the credential check but kept the
+     generation the caller claimed. Generations are sequential, so a reaction
+     registered before binding with a guessed generation and any secret ran
+     under that subject once the world was bound.
+   - Fix: an unbound world fully checks any credential a reaction names; one
+     that names none is kept as unauthenticated (generation 0).
+     `rx_world_bind_callers` refuses (`RX_ERR_IDENTITY`, world left unbound)
+     while any unauthenticated reaction is registered. Worlds that never bind
+     behave as before.
+   - Probe P3: before binding, a guessed generation with a zero or a random
+     secret: before RX_OK, after `RX_ERR_IDENTITY`; the issued credential is
+     still admitted and the world binds. With an unauthenticated reaction
+     registered: bind before RX_OK, after `RX_ERR_IDENTITY` and unbound.
+   - Mutants `c7_prebind_check`, `c7_bind_refuses_unauthenticated`.
+4. Smaller review items (Gemini), verified one by one:
+   - Fixed: enrollment past `RX_CALLER_MAX` returned `RX_ERR_FULL` (-2), the
+     same number as `RX_CALLER_ERR_UNKNOWN`; it now returns
+     `RX_CALLER_ERR_FULL` (-9).
+   - Fixed: the living promoter's `promotion_caller` silently sent a zeroed
+     credential when its keyring lacked the promoter's; it now fails with
+     `RX_GEN_ERR_IDENTITY` before anything is posted to the executor (the
+     store would refuse it anyway, so this has no mutant).
+   - Fixed: the store's bound flag uses release/acquire atomics.
+   - Fixed: `rx_gen_mutate_object` and `rx_gen_set_evidence` carry no
+     credential; a bound store now refuses them (`RX_GEN_ERR_IDENTITY`).
+     Only the R9 tests, on unbound stores, use them. Probe in P1; mutants
+     `c7_mutate_object_bound`, `c7_set_evidence_bound`.
+     `rx_gen_observe_object` and the work-accounting calls stay open: they
+     can make a promotion fail (denial of service), never succeed.
+   - Changed: the stored secret in a registered reaction is wiped with a
+     volatile loop. The memory stays live, so the plain `memset` could not
+     be removed by the compiler; this is belt and braces.
+   - Not changed, by design: an unbound store accepts the caller's
+     authority callback (the older tests; C6 says so). The credential
+     comparison is constant-time on the secret digest; the generation is
+     compared plainly because it is not secret.
+5. Evidence (`make test-r16-negative`, host): before the fix the C7 section
+   was 13/24 as expected (P1, P2 and P3 all failing; gate FAIL); after, 25/25
+   (one probe added: forged promoter refused before the barrier), with the
+   C5 section still 40/40, the exploit variants still refused and the control
+   still promoting; gate `R16_G4_LEGACY_REFUSED=PASS`. Mutants: 33 total
+   (27 + 6 C7), 33 killed, 0 survived, 0 broken.
+   Host ladder rerun after the fix: R7, R8 (116/0), R9, R10 (198/0), R11
+   (436/0), R13 host, R14 host (A to F PASS), R15 parity host (5 pairs, 0
+   failures), R15 G7 host (57/0), workflow fusion (17957/0), G5 surface,
+   visor authority check, G1/G2 inventory (280 sites, 0 unclassified) and
+   the G3 authority path (`HOST_PASS_NON_SILICON`) all pass; the silicon
+   binaries were compiled only. Nothing was run on the graphics processor.

@@ -762,7 +762,7 @@ int rx_world_enroll_caller(RxWorld *w, uint32_t subject, RxCallerCred *out) {
     int rc = RX_CALLER_OK;
     if (w->callers_bound) { rc = RX_CALLER_ERR_CLOSED; goto out; }
     if (caller_slot(w, subject) >= 0) { rc = RX_CALLER_ERR_EXISTS; goto out; }
-    if (w->n_callers >= RX_CALLER_MAX) { rc = RX_ERR_FULL; goto out; }
+    if (w->n_callers >= RX_CALLER_MAX) { rc = RX_CALLER_ERR_FULL; goto out; }
     uint8_t secret[RX_CALLER_SECRET_LEN];
     size_t n = 0;
     while (n < sizeof secret) {
@@ -790,15 +790,29 @@ out:
 int rx_world_bind_callers(RxWorld *w) {
     if (!w) return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
-    pthread_mutex_lock(&w->callers_mu);
-    w->callers_bound = true;
-    pthread_mutex_unlock(&w->callers_mu);
+    int rc = RX_OK;
+    /* R16 C7: a reaction admitted without a credential while the world was
+     * unbound would run in the bound world under a subject nobody proved.
+     * Refuse, and leave the world unbound. */
+    for (uint32_t i = 0; i < w->n_reactions; i++)
+        if (w->reactions[i].desc.caller.generation == 0) rc = RX_ERR_IDENTITY;
+    if (rc == RX_OK) {
+        pthread_mutex_lock(&w->callers_mu);
+        w->callers_bound = true;
+        pthread_mutex_unlock(&w->callers_mu);
+    }
     pthread_mutex_unlock(&w->mu);
-    return RX_OK;
+    return rc;
 }
 
 int rx_world_revoke_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred) {
     if (!w) return RX_ERR_ARG;
+    /* R16 C7: the world lock first (the order every path uses: mu, then
+     * callers_mu). A commit and a seat completion hold mu from their identity
+     * check to their publish, so a revocation precedes the check or follows
+     * the publish, never lands between them. Never call with mu held. */
+    const int serialize = 1;
+    if (serialize) pthread_mutex_lock(&w->mu);
     pthread_mutex_lock(&w->callers_mu);
     int rc = caller_check_locked(w, subject, cred);
     if (rc == RX_CALLER_OK) {
@@ -807,6 +821,7 @@ int rx_world_revoke_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cre
         memset(w->callers[s].digest, 0, sizeof w->callers[s].digest);
     }
     pthread_mutex_unlock(&w->callers_mu);
+    if (serialize) pthread_mutex_unlock(&w->mu);
     return rc;
 }
 
@@ -818,8 +833,18 @@ int rx_world_check_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred
     return rc;
 }
 
-int rx_world_caller_check_fn(void *world, uint32_t subject, const RxCallerCred *cred) {
-    return rx_world_check_caller((RxWorld *)world, subject, cred);
+int rx_world_caller_check_fn(void *world, uint32_t subject, const RxCallerCred *cred, int op) {
+    RxWorld *w = world;
+    if (!w) return RX_ERR_ARG;
+    if (op == RX_CALLER_OP_RELEASE) {
+        pthread_mutex_unlock(&w->callers_mu);
+        return RX_CALLER_OK;
+    }
+    pthread_mutex_lock(&w->callers_mu);
+    int rc = caller_check_locked(w, subject, cred);
+    /* HOLD: a pass keeps the table locked until RELEASE (no revocation). */
+    if (op != RX_CALLER_OP_HOLD || rc != RX_CALLER_OK) pthread_mutex_unlock(&w->callers_mu);
+    return rc;
 }
 
 static int validate_caps(const RxWorld *w, const RxReactionDesc *d, int *first_err) {
@@ -1699,8 +1724,11 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
         return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
     int rc = RX_OK;
-    /* R16 C5: the subject is the caller's own only with its credential. */
-    if (w->callers_bound) {
+    /* R16 C5: the subject is the caller's own only with its credential.
+     * C7: an unbound world checks a named credential too, so a guessed
+     * generation never survives binding; a reaction that names none is kept
+     * as unauthenticated (generation 0), which bind refuses. */
+    if (w->callers_bound || d->caller.generation != 0) {
         pthread_mutex_lock(&w->callers_mu);
         int irc = caller_check_locked(w, d->subject, &d->caller);
         pthread_mutex_unlock(&w->callers_mu);
@@ -1736,7 +1764,8 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
     memset(r, 0, sizeof(*r));
     r->desc = *d;
     /* Keep the admitted generation, never the secret. */
-    memset(r->desc.caller.secret, 0, sizeof r->desc.caller.secret);
+    for (size_t i = 0; i < sizeof r->desc.caller.secret; i++)
+        ((volatile uint8_t *)r->desc.caller.secret)[i] = 0;
     r->state = RX_DORMANT;
     /* Sequential reference: changes before registration are not work. */
     for (uint32_t i = 0; i < d->n_triggers; i++) {

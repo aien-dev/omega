@@ -360,10 +360,14 @@ static int fn_candidate(RxCtx *c) {
     return 0;
 }
 
-/* R16 C5: the promotion subject presents its own credential. */
-static void promotion_caller(const RxLivingPromoter *p, RxPromotionRequest *req) {
+/* R16 C5: the promotion subject presents its own credential. C7: a promoter
+ * given a keyring without that credential fails here, before anything is
+ * posted to the executor (a promoter with no keyring at all serves an
+ * unbound store, which checks no credential). */
+static int promotion_caller(const RxLivingPromoter *p, RxPromotionRequest *req) {
     const RxCallerCred *c = rx_caller_find(p->keys, RX_LIVING_PROMOTE_SUBJ);
-    if (c) req->caller = *c;
+    if (c) { req->caller = *c; return RX_GEN_OK; }
+    return p->keys ? RX_GEN_ERR_IDENTITY : RX_GEN_OK;
 }
 
 int rx_living_native_authority(void *ctx, uint32_t cap_id, uint64_t generation,
@@ -417,7 +421,8 @@ static int promote_durable(RxLivingPromoter *p, uint64_t id, int *rc, uint64_t *
     RxPromotionRequest req = {id, RX_LIVING_PROMOTE_SUBJ,
         p->promotion_authority.cap_id, p->promotion_authority.generation,
         RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE, {0, {0}}};
-    promotion_caller(p, &req);
+    *rc = promotion_caller(p, &req);
+    if (*rc != RX_GEN_OK) return 0;
     *rc = rx_gen_post_promote(p->store, id, &req, native_promotion, (void *)p->authority,
                               resume_promoter, p);
     rx_caller_wipe(&req.caller);
@@ -436,9 +441,10 @@ static void promote_inline(RxLivingPromoter *p, uint64_t id, int *rc, uint64_t *
     RxPromotionRequest req = {id, RX_LIVING_PROMOTE_SUBJ,
         p->promotion_authority.cap_id, p->promotion_authority.generation,
         RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE, {0, {0}}};
-    promotion_caller(p, &req);
-    *rc = rx_gen_promote(p->store, &req, native_promotion, (void *)p->authority,
-                         NULL, NULL, NULL, NULL);
+    *rc = promotion_caller(p, &req);
+    if (*rc == RX_GEN_OK)
+        *rc = rx_gen_promote(p->store, &req, native_promotion, (void *)p->authority,
+                             NULL, NULL, NULL, NULL);
     rx_caller_wipe(&req.caller);
     *ns = now_ns() - t0;
     rx_gen_active(p->store, active, &lineage);

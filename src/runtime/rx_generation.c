@@ -107,6 +107,11 @@ struct RxGenStore {
     void *bound_auth_ctx;
 };
 
+/* R16 C5: bound once (release), read with acquire by every caller. */
+static int store_bound(const RxGenStore *store) {
+    return __atomic_load_n(&store->bound, __ATOMIC_ACQUIRE);
+}
+
 static void set_active(RxGenStore *store, uint64_t id, uint64_t lineage) {
     pthread_mutex_lock(&store->active_mu);
     store->active_id = id;
@@ -773,12 +778,12 @@ int rx_gen_read_blob(const RxGenStore *store, uint64_t id, const char *name, uin
 int rx_gen_bind_authority(RxGenStore *store, RxGenCallerFn caller, void *caller_ctx,
                           RxGenAuthFn auth, void *auth_ctx) {
     if (!store || !caller || !auth) return RX_GEN_ERR_ARG;
-    if (store->bound) return RX_GEN_ERR_BUSY;
+    if (store_bound(store)) return RX_GEN_ERR_BUSY;
     store->caller = caller;
     store->caller_ctx = caller_ctx;
     store->bound_auth = auth;
     store->bound_auth_ctx = auth_ctx;
-    store->bound = 1;
+    __atomic_store_n(&store->bound, 1, __ATOMIC_RELEASE);
     return RX_GEN_OK;
 }
 
@@ -791,7 +796,7 @@ int rx_gen_propose_as(RxGenStore *store, uint32_t proposer, const RxCallerCred *
                       const RxGenDraft *draft, uint64_t *out_id) {
     if (!store || !draft || !out_id) return RX_GEN_ERR_ARG;
     /* R16 C5: the proposer is who the credential says, or nobody. */
-    if (store->bound && store->caller(store->caller_ctx, proposer, cred) != 0)
+    if (store_bound(store) && store->caller(store->caller_ctx, proposer, cred, RX_CALLER_OP_CHECK) != 0)
         return RX_GEN_ERR_IDENTITY;
     if (draft->n_objects > RX_GEN_MAX_OBJECTS) return RX_GEN_ERR_ARG;
     if (draft->n_objects && !draft->objects) return RX_GEN_ERR_ARG;
@@ -847,6 +852,8 @@ int rx_gen_propose_as(RxGenStore *store, uint32_t proposer, const RxCallerCred *
 int rx_gen_mutate_object(RxGenStore *store, uint64_t candidate, uint32_t index,
                          uint32_t generation, const uint8_t digest[32]) {
     if (!store || !digest) return RX_GEN_ERR_ARG;
+    /* R16 C7: these edits carry no credential; a bound store refuses them. */
+    if (store_bound(store)) return RX_GEN_ERR_IDENTITY;
     Candidate *c = find_cand(store, candidate);
     if (!c || index >= c->n_objects) return RX_GEN_ERR_ARG;
     if (c->closing) return RX_GEN_ERR_CLOSING;
@@ -863,6 +870,7 @@ int rx_gen_mutate_object(RxGenStore *store, uint64_t candidate, uint32_t index,
 
 int rx_gen_set_evidence(RxGenStore *store, uint64_t candidate, const uint8_t *bytes, size_t n) {
     if (!store) return RX_GEN_ERR_ARG;
+    if (store_bound(store)) return RX_GEN_ERR_IDENTITY;
     Candidate *c = find_cand(store, candidate);
     if (!c) return RX_GEN_ERR_ARG;
     if (c->closing && !c->draining) return RX_GEN_ERR_CLOSING;
@@ -984,8 +992,8 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     /* R16 C5: the request's subject is the caller's only with the credential
      * the runtime issued for it; and a bound store validates the promotion
      * right with its own authority, never the caller's callback. */
-    if (store->bound) {
-        if (store->caller(store->caller_ctx, request->subject, &request->caller) != 0)
+    if (store_bound(store)) {
+        if (store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_CHECK) != 0)
             return RX_GEN_ERR_IDENTITY;
         auth = store->bound_auth;
         auth_ctx = store->bound_auth_ctx;
@@ -1004,6 +1012,7 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     memset(&store->phases, 0, sizeof store->phases);
     store->phases.candidate_id = request->candidate_id;
     store->phases.enter_ns = monotonic_ns();
+    int held = 0;   /* R16 C7: the caller check is held across the flip */
     int rc = RX_GEN_OK;
     uint64_t disk_id = 0, disk_lineage = 0;
     uint8_t disk_digest[32];
@@ -1117,10 +1126,28 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
         rc = RX_GEN_ERR_IO;
         goto done;
     }
+    /* R16 C7: identity again at the durable commit point. The promoter may
+     * have been revoked since entry (in the live barrier, during the disk
+     * writes); refuse before the pointer moves. HOLD keeps any revocation out
+     * until the flip is in memory too. */
+    int recheck = store_bound(store);
+    if (recheck) {
+        if (store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_HOLD) != 0) {
+            rc = RX_GEN_ERR_IDENTITY;
+            goto done;
+        }
+        held = 1;
+    }
     rc = commit_file(store, active_path, pointer, sizeof pointer, RX_CRASH_DURING_ROOT_FLIP);
+    if (rc == RX_GEN_OK) {
+        store->phases.flip_ns = monotonic_ns();
+        set_active(store, view.id, view.lineage);
+    }
+    if (held) {
+        store->caller(store->caller_ctx, request->subject, NULL, RX_CALLER_OP_RELEASE);
+        held = 0;
+    }
     if (rc != RX_GEN_OK) goto done;
-    store->phases.flip_ns = monotonic_ns();
-    set_active(store, view.id, view.lineage);
     /* ARGUS: the World is committed at the flip. object_id = this store's identity
      * (hash of its directory: a reopened store keeps it), world_generation = lineage
      * (exactly parent+1 within a store). */
@@ -1145,6 +1172,7 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
 
 done:
     store->phases.result = rc;
+    if (held) store->caller(store->caller_ctx, request->subject, NULL, RX_CALLER_OP_RELEASE);
     /* The draft is finished: it is the active generation now, or it can never
      * be promoted (its parent is gone or an object it observed moved). Its
      * slot is free for the next proposal; the committed bytes live on disk. */
@@ -1437,7 +1465,7 @@ int rx_gen_post_propose_as(RxGenStore *store, uint64_t key, uint32_t proposer,
 
 int rx_gen_post_promote(RxGenStore *store, uint64_t key, const RxPromotionRequest *request,
                         RxGenAuthFn auth, void *auth_ctx, RxGenDoneFn done, void *done_ctx) {
-    if (!store || !store->exec || !request || (!auth && !store->bound)) return RX_GEN_ERR_ARG;
+    if (!store || !store->exec || !request || (!auth && !store_bound(store))) return RX_GEN_ERR_ARG;
     struct RxGenExec *x = store->exec;
     pthread_mutex_lock(&x->mu);
     Job *j = claim_slot(x, RX_GEN_JOB_PROMOTE);

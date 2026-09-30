@@ -10,7 +10,8 @@
 # PASS line ("R16 gate: R16_G4_LEGACY_REFUSED=PASS"). Since spec C5 is closed
 # (runtime-issued caller credentials, src/runtime/rx_caller.h) the gate line
 # covers the six acts, the promoter-subject exploit probes, the C5 identity
-# probes and the promotion control, so it is judged rather than the core line.
+# probes, the promotion control and the C7 review probes (spec C7), so it is
+# judged rather than the core line.
 # Every mutant must be killed.
 # The control build (no mutation) must pass, and every edit must apply exactly
 # where named, or the run fails.
@@ -168,11 +169,23 @@ mutant id_revoke_needs_credential $W 1 'if (rc == RX_CALLER_OK) {' 'if (rc == RX
 mutant id_enroll_closed $W 1 \
     'if (w->callers_bound) { rc = RX_CALLER_ERR_CLOSED; goto out; }' '(void)0;'
 mutant id_promote $G 1 \
-    'if (store->caller(store->caller_ctx, request->subject, &request->caller) != 0)' 'if (0)'
+    'if (store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_CHECK) != 0)' 'if (0)'
 mutant id_propose $G 1 \
-    'if (store->bound && store->caller(store->caller_ctx, proposer, cred) != 0)' \
-    'if (0 && store->bound && store->caller(store->caller_ctx, proposer, cred) != 0)'
+    'if (store_bound(store) && store->caller(store->caller_ctx, proposer, cred, RX_CALLER_OP_CHECK) != 0)' \
+    'if (0 && store_bound(store) && store->caller(store->caller_ctx, proposer, cred, RX_CALLER_OP_CHECK) != 0)'
 mutant id_bound_authority $G 1 'auth = store->bound_auth;' '(void)0;'
+
+# R16 C7: outside review of C5/C6. Each removes one fix; spec C7 names the probe.
+mutant c7_flip_recheck $G 1 'int recheck = store_bound(store);' 'int recheck = 0;'
+mutant c7_revoke_serialized $W 1 'const int serialize = 1;' 'const int serialize = 0;'
+mutant c7_prebind_check $W 1 \
+    'if (w->callers_bound || d->caller.generation != 0) {' 'if (w->callers_bound) {'
+mutant c7_bind_refuses_unauthenticated $W 1 \
+    'if (w->reactions[i].desc.caller.generation == 0) rc = RX_ERR_IDENTITY;' '(void)0;'
+mutant c7_mutate_object_bound $G 1 \
+    'if (store_bound(store)) return RX_GEN_ERR_IDENTITY;' '(void)0;'
+mutant c7_set_evidence_bound $G 2 \
+    'if (store_bound(store)) return RX_GEN_ERR_IDENTITY;' '(void)0;'
 
 echo "R16 G4 mutants: $total total, $killed killed, $survived survived, $broken broken"
 if [ $survived -eq 0 ] && [ $broken -eq 0 ]; then

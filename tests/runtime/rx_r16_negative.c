@@ -55,6 +55,11 @@
  * still promotes. The gate line covers all of it and is what the mutant suite
  * judges; the six-act core is also printed on its own line ("R16 G4 core:").
  *
+ * Spec C7 (outside review): the promotion re-checks identity at the flip
+ * (P1), a revocation cannot land between a commit's identity check and its
+ * publish (P2), and a reaction registered before binding cannot claim an
+ * identity it did not prove (P3); on scratch worlds and stores, in the gate.
+ *
  * Also checked (reported, outside the six): the SEQ reference loop refuses to
  * drive a production world.
  *
@@ -393,6 +398,7 @@ static const char *caller_err(int rc) {
     case RX_CALLER_ERR_FORGED: return "FORGED";
     case RX_CALLER_ERR_CLOSED: return "CLOSED";
     case RX_CALLER_ERR_EXISTS: return "EXISTS";
+    case RX_CALLER_ERR_FULL: return "FULL";
     default: return "other";
     }
 }
@@ -400,7 +406,7 @@ static const char *caller_err(int rc) {
 static void expect(Tally *t, long long rc, long long want, const char *what) {
     t->tried++;
     if (rc == want) { t->refused++; return; }
-    printf("R16 G4 FAIL: C5 identity: %s: rc %lld (%s), expected %lld (%s)\n", what, rc,
+    printf("R16 G4 FAIL: identity: %s: rc %lld (%s), expected %lld (%s)\n", what, rc,
            caller_err((int)rc), want, caller_err((int)want));
     g_fail++;
 }
@@ -425,6 +431,316 @@ static OmegaSharedWorldDesc publication(RxWorld *w, const RxObject *o, RxCapRef 
     st64(d.payload + 16, rx_world_explain(w, (RxObjRef){o->id, o->generation}, 0));
     rx_world_seal_descriptor(&d);
     return d;
+}
+
+/* ---- R16 C7: outside review of C6 -----------------------------------------
+ * Three gaps an outside review found in C6, each reproduced on scratch
+ * worlds and stores so the rig's own state is untouched:
+ *   P1  the promotion checked identity only on entry; a revocation in the
+ *       live barrier or during the disk writes still flipped the active
+ *       pointer. The flip must re-check and refuse.
+ *   P2  revocation took only the caller lock, so it could land between a
+ *       commit's identity check and its publish. It must wait for the world
+ *       lock: a revocation either precedes the check or follows the publish.
+ *   P3  an unbound world kept any caller generation a reaction claimed, and
+ *       generations are sequential, so a reaction registered before binding
+ *       with a guessed generation ran under that subject after binding.
+ * Plus the bound store refuses the credential-free candidate edits. */
+static int permissive_world(const void *ctx, RxCapRef ref, uint32_t subject, uint64_t resource,
+                            uint32_t rights, RxCapEntry *out) {
+    (void)ctx; (void)ref; (void)subject; (void)resource; (void)rights;
+    if (out) memset(out, 0, sizeof *out);
+    return RX_CAP_OK;
+}
+static int fn_noop(RxCtx *c) { (void)c; return 0; }
+
+static RxWorld *scratch_world(RxAuthValidateFn validate, const void *ctx) {
+    RxWorld *w = calloc(1, sizeof *w);
+    if (w && rx_world_init_with_auth(w, NULL, ctx, validate, NULL, 1, 1024) != RX_OK) {
+        free(w);
+        return NULL;
+    }
+    return w;
+}
+static void scratch_world_free(RxWorld *w) {
+    if (w) { rx_world_destroy(w); free(w); }
+}
+
+typedef struct { RxWorld *w; uint32_t subject; RxCallerCred cred; int rc, fired; } FlipRevoke;
+static void flip_revoke_live(void *ctx) {
+    FlipRevoke *f = ctx;
+    if (f->fired) return;
+    f->fired = 1;
+    f->rc = rx_world_revoke_caller(f->w, f->subject, &f->cred);
+}
+static void flip_revoke_disk(const char *dir, void *ctx) { (void)dir; flip_revoke_live(ctx); }
+static void count_live(void *ctx) { (*(int *)ctx)++; }
+
+static void probe_flip(Tally *t) {
+    enum { PROP = 7101, PRO_A = 7102, PRO_B = 7103, PRO_C = 7104 };
+    static RxCallerCred prop, pa, pb, pc;
+    char dir[64];
+    RxGenStore *g = NULL;
+    RxWorld *w = scratch_world(permissive_world, NULL);
+    int ok = w && rx_world_enroll_caller(w, PROP, &prop) == RX_CALLER_OK &&
+             rx_world_enroll_caller(w, PRO_A, &pa) == RX_CALLER_OK &&
+             rx_world_enroll_caller(w, PRO_B, &pb) == RX_CALLER_OK &&
+             rx_world_enroll_caller(w, PRO_C, &pc) == RX_CALLER_OK &&
+             rx_world_bind_callers(w) == RX_OK &&
+             mkdtemp(strcpy(dir, "/tmp/r16-review-XXXXXX")) &&
+             rx_gen_open(dir, &g) == RX_GEN_OK &&
+             rx_gen_bind_authority(g, rx_world_caller_check_fn, w, permissive_auth, NULL) ==
+                 RX_GEN_OK;
+    expect(t, ok, 1, "C7 P1: scratch world and bound store");
+    if (!ok) goto out;
+    static const uint8_t junk[] = "r16 review";
+    RxGenObject obj = {1, 1, {0}};
+    RxGenDraft gd;
+    memset(&gd, 0, sizeof gd);
+    gd.proofs_ok = 1;
+    gd.n_objects = 1; gd.objects = &obj;
+    gd.evidence = junk; gd.evidence_len = sizeof junk - 1;
+    {   /* a forged promoter is refused on entry: no barrier, no disk work */
+        uint64_t cand = 0;
+        int lives = 0;
+        int prc = rx_gen_propose_as(g, PROP, &prop, &gd, &cand);
+        RxPromotionRequest req = {cand, PRO_A, 1, 1, RX_GEN_RES_PROMOTION,
+                                  RX_GEN_RIGHT_PROMOTE, {pa.generation, {0}}};
+        fill_random(req.caller.secret, sizeof req.caller.secret);
+        int rc = prc != RX_GEN_OK ? prc
+               : rx_gen_promote(g, &req, NULL, NULL, NULL, NULL, count_live, &lives);
+        expect(t, rc == RX_GEN_ERR_IDENTITY && lives == 0, 1,
+               "C7 P1: forged promoter refused before the live barrier");
+    }
+    for (int v = 0; v < 3; v++) {
+        uint64_t cand = 0, a0 = 0, l0 = 0, a1 = 0, l1 = 0;
+        int prc = rx_gen_propose_as(g, PROP, &prop, &gd, &cand);
+        FlipRevoke f = {w, v == 0 ? PRO_A : v == 1 ? PRO_B : PRO_C,
+                        v == 0 ? pa : v == 1 ? pb : pc, -99, 0};
+        if (v == 2) {   /* the credential-free candidate edits, on a bound store */
+            uint8_t dg[32] = {0};
+            expect(t, rx_gen_mutate_object(g, cand, 0, 2, dg), RX_GEN_ERR_IDENTITY,
+                   "C7: rx_gen_mutate_object on a bound store");
+            expect(t, rx_gen_set_evidence(g, cand, junk, 3), RX_GEN_ERR_IDENTITY,
+                   "C7: rx_gen_set_evidence on a bound store");
+        }
+        rx_gen_active(g, &a0, &l0);
+        RxPromotionRequest req = {cand, f.subject, 1, 1, RX_GEN_RES_PROMOTION,
+                                  RX_GEN_RIGHT_PROMOTE, {0, {0}}};
+        req.caller = f.cred;
+        if (v == 1) rx_gen_set_disk_hook(g, flip_revoke_disk, &f);
+        int rc = prc != RX_GEN_OK ? prc
+               : rx_gen_promote(g, &req, NULL, NULL, NULL, NULL,
+                                v == 0 ? flip_revoke_live : NULL, v == 0 ? &f : NULL);
+        if (v == 1) rx_gen_set_disk_hook(g, NULL, NULL);
+        rx_caller_wipe(&req.caller);
+        rx_gen_active(g, &a1, &l1);
+        RxRecoveryRecord d;
+        memset(&d, 0, sizeof d);
+        rx_gen_recover(dir, &d);
+        if (v < 2) {
+            const char *where = v == 0 ? "the live barrier" : "the disk writes";
+            char what[160];
+            snprintf(what, sizeof what, "C7 P1: revoke the promoter during %s", where);
+            expect(t, f.rc, RX_CALLER_OK, what);
+            snprintf(what, sizeof what, "C7 P1: promotion whose promoter was revoked during %s",
+                     where);
+            expect(t, rc, RX_GEN_ERR_IDENTITY, what);
+            expect(t, a1 == a0 && l1 == l0 && d.active_id == a0, 1,
+                   "C7 P1: active generation unchanged, in memory and on disk");
+            printf("R16 C7 P1 revoke during %s: promote rc %d; generation %llu -> %llu, "
+                   "on disk %llu\n", where, rc, U(a0), U(a1), U(d.active_id));
+        } else {
+            expect(t, rc == RX_GEN_OK && a1 == cand && d.active_id == cand, 1,
+                   "C7 P1 control: a live promoter still promotes");
+            printf("R16 C7 P1 control: promote rc %d; generation %llu -> %llu, on disk %llu\n",
+                   rc, U(a0), U(a1), U(d.active_id));
+        }
+    }
+out:
+    if (g) rx_gen_close(g);
+    scratch_world_free(w);
+    rx_caller_wipe(&prop); rx_caller_wipe(&pa); rx_caller_wipe(&pb); rx_caller_wipe(&pc);
+}
+
+typedef struct {
+    RxWorld *w;
+    uint32_t subject;
+    RxCallerCred cred;
+    RxObjRef target;
+    atomic_int fn_ran, spawned, done;
+    int revoke_rc, revoked_during, joined;
+    pthread_t th;
+} Race;
+static void *race_revoker(void *arg) {
+    Race *r = arg;
+    r->revoke_rc = rx_world_revoke_caller(r->w, r->subject, &r->cred);
+    atomic_store(&r->done, 1);
+    return NULL;
+}
+/* Runs inside the commit's capability check, after its identity check, with
+ * the world lock held: starts a revocation and gives it 300 ms to land. */
+static int race_validate(const void *ctx, RxCapRef ref, uint32_t subject, uint64_t resource,
+                         uint32_t rights, RxCapEntry *out) {
+    Race *r = (Race *)ctx;
+    if (subject == r->subject && atomic_load(&r->fn_ran) && !atomic_exchange(&r->spawned, 1) &&
+        pthread_create(&r->th, NULL, race_revoker, r) == 0) {
+        r->joined = 1;
+        struct timespec ts = {0, 300000000};   /* one fixed window, no polling */
+        nanosleep(&ts, NULL);
+        r->revoked_during = atomic_load(&r->done);
+    }
+    return permissive_world(ctx, ref, subject, resource, rights, out);
+}
+static int fn_race(RxCtx *c) {
+    Race *r = c->user;
+    atomic_store(&r->fn_ran, 1);
+    c->out[c->n_out++] = (RxMutation){r->target, 0, 0xBADBADull};
+    return 0;
+}
+
+static void probe_race(Tally *t) {
+    enum { RACER = 7201, OUTSIDE = 7299 };
+    static Race race;
+    memset(&race, 0, sizeof race);
+    RxWorld *w = scratch_world(race_validate, &race);
+    RxObjRef trig = {0, 0};
+    uint64_t z[RX_MAX_FIELDS] = {0};
+    uint32_t id = 0;
+    int ok = w && rx_world_enroll_caller(w, RACER, &race.cred) == RX_CALLER_OK &&
+             rx_world_bind_callers(w) == RX_OK &&
+             rx_world_create(w, 1, RX_PERSIST_RESIDENT, 0x7201, z, &trig) == RX_OK &&
+             rx_world_create(w, 1, RX_PERSIST_RESIDENT, 0x7202, z, &race.target) == RX_OK;
+    race.w = w;
+    race.subject = RACER;
+    if (ok) {
+        w->external_subject = OUTSIDE;
+        RxReactionDesc d;
+        memset(&d, 0, sizeof d);
+        d.name = "c7.race";
+        d.faculty = RX_FACULTY_EXTERNAL;
+        d.subject = RACER;
+        d.caller = race.cred;
+        d.priority = RX_PRIO_FOREGROUND;
+        d.fn = fn_race;
+        d.user = &race;
+        d.n_triggers = 1;
+        d.triggers[0] = (RxDep){trig, RX_FIELD(0)};
+        d.n_writes = 1;
+        d.writes[0] = (RxDep){race.target, RX_FIELD(0)};
+        d.n_caps = 2;
+        d.caps[0] = (RxCapNeed){(RxCapRef){1, 1}, 0x7201, RX_RIGHT_READ};
+        d.caps[1] = (RxCapNeed){(RxCapRef){2, 1}, 0x7202, RX_RIGHT_WRITE};
+        ok = rx_world_add_reaction(w, &d, &id) == RX_OK;
+        rx_caller_wipe(&d.caller);
+    }
+    expect(t, ok, 1, "C7 P2: scratch world with an admitted reaction");
+    if (!ok) goto out;
+    RxMutation m = {trig, 0, 1};
+    int woke = rx_world_publish_external(w, (RxCapRef){3, 1}, &m, 1) > 0 &&
+               rx_world_wait_quiescent(w, 10000) == RX_OK;
+    if (race.joined) pthread_join(race.th, NULL);
+    pthread_mutex_lock(&w->mu);
+    uint64_t commits1 = w->reactions[id].commits;
+    pthread_mutex_unlock(&w->mu);
+    expect(t, woke && atomic_load(&race.spawned), 1,
+           "C7 P2: revocation started inside the commit's check");
+    expect(t, race.revoke_rc, RX_CALLER_OK, "C7 P2: the racing revocation itself");
+    expect(t, race.revoked_during && commits1 > 0, 0,
+           "C7 P2: a revocation completed between the commit's identity check and its publish");
+    printf("R16 C7 P2 revoke racing the commit: revocation finished inside the check window: %s;"
+           " commits %llu\n", race.revoked_during ? "yes" : "no (it waited)", U(commits1));
+    /* after the revocation: woken again, blocked */
+    m.value = 2;
+    woke = rx_world_publish_external(w, (RxCapRef){3, 1}, &m, 1) > 0 &&
+           rx_world_wait_quiescent(w, 10000) == RX_OK;
+    pthread_mutex_lock(&w->mu);
+    RxReaction rr = w->reactions[id];
+    const RxCrumb *k = rx_world_crumb(w, rr.last_crumb);
+    int blocked = k && k->kind == RX_CRUMB_BLOCKED_AUTHORITY;
+    pthread_mutex_unlock(&w->mu);
+    expect(t, woke && blocked && rr.commits == commits1, 1,
+           "C7 P2: activation after the revocation is blocked");
+out:
+    scratch_world_free(w);
+    rx_caller_wipe(&race.cred);
+}
+
+static int prebind_reaction(RxWorld *w, uint32_t subject, const RxCallerCred *cred, RxObjRef trig) {
+    RxReactionDesc d;
+    memset(&d, 0, sizeof d);
+    d.name = "c7.prebind";
+    d.faculty = RX_FACULTY_EXTERNAL;
+    d.subject = subject;
+    if (cred) d.caller = *cred;
+    d.priority = RX_PRIO_FOREGROUND;
+    d.fn = fn_noop;
+    d.n_triggers = 1;
+    d.triggers[0] = (RxDep){trig, RX_FIELD(0)};
+    d.n_caps = 1;
+    d.caps[0] = (RxCapNeed){(RxCapRef){1, 1}, 0x7301, RX_RIGHT_READ};
+    uint32_t id = 0;
+    int rc = rx_world_add_reaction(w, &d, &id);
+    rx_caller_wipe(&d.caller);
+    return rc;
+}
+
+static void probe_prebind(Tally *t) {
+    enum { VICTIM = 7301 };
+    for (int v = 0; v < 2; v++) {
+        static RxCallerCred cred;
+        RxWorld *w = scratch_world(permissive_world, NULL);
+        RxObjRef trig = {0, 0};
+        uint64_t z[RX_MAX_FIELDS] = {0};
+        int ok = w && rx_world_enroll_caller(w, VICTIM, &cred) == RX_CALLER_OK &&
+                 rx_world_create(w, 1, RX_PERSIST_RESIDENT, 0x7301, z, &trig) == RX_OK;
+        expect(t, ok, 1, "C7 P3: unbound scratch world");
+        if (ok && v == 0) {
+            /* generations are sequential: a guessed one with no secret, or a
+             * random secret, must not be admitted before binding either */
+            RxCallerCred guess = {cred.generation, {0}};
+            expect(t, prebind_reaction(w, VICTIM, &guess, trig), RX_ERR_IDENTITY,
+                   "C7 P3: pre-bind registration, guessed generation and zero secret");
+            fill_random(guess.secret, sizeof guess.secret);
+            expect(t, prebind_reaction(w, VICTIM, &guess, trig), RX_ERR_IDENTITY,
+                   "C7 P3: pre-bind registration, guessed generation and random secret");
+            rx_caller_wipe(&guess);
+            expect(t, prebind_reaction(w, VICTIM, &cred, trig), RX_OK,
+                   "C7 P3: pre-bind registration with the issued credential");
+            expect(t, rx_world_bind_callers(w), RX_OK,
+                   "C7 P3: bind with only authenticated reactions");
+        }
+        if (ok && v == 1) {
+            /* an unauthenticated registration is allowed while unbound (the
+             * worlds that never bind), but then the world cannot bind */
+            expect(t, prebind_reaction(w, VICTIM, NULL, trig), RX_OK,
+                   "C7 P3: unauthenticated registration on an unbound world");
+            expect(t, rx_world_bind_callers(w), RX_ERR_IDENTITY,
+                   "C7 P3: bind with an unauthenticated reaction registered");
+            pthread_mutex_lock(&w->mu);
+            int bound = w->callers_bound;
+            pthread_mutex_unlock(&w->mu);
+            expect(t, bound, 0, "C7 P3: the refused bind left the world unbound");
+        }
+        scratch_world_free(w);
+        rx_caller_wipe(&cred);
+    }
+}
+
+static int review_probes(void) {
+    Tally t = {0, 0};
+    uint32_t f0 = (uint32_t)g_fail;
+    probe_flip(&t);
+    uint32_t f1 = (uint32_t)g_fail;
+    probe_race(&t);
+    uint32_t f2 = (uint32_t)g_fail;
+    probe_prebind(&t);
+    uint32_t f3 = (uint32_t)g_fail;
+    int ok = t.tried > 0 && t.refused == t.tried;
+    printf("R16 C7 review probes: P1 flip %s, P2 revoke race %s, P3 pre-bind %s; "
+           "%u/%u as expected  %s\n", f1 == f0 ? "pass" : "FAIL", f2 == f1 ? "pass" : "FAIL",
+           f3 == f2 ? "pass" : "FAIL", t.refused, t.tried, ok ? "PASS" : "FAIL");
+    return ok;
 }
 
 int main(void) {
@@ -881,7 +1197,7 @@ int main(void) {
             for (uint32_t i = 0; i < RX_CALLER_MAX; i++)
                 enrolled += rx_world_enroll_caller(sw, 1000 + i, &many[i]) == RX_CALLER_OK;
             expect(&tc, enrolled, RX_CALLER_MAX, "enroll to capacity");
-            expect(&tc, rx_world_enroll_caller(sw, 5000, &x), RX_ERR_FULL, "enroll past capacity");
+            expect(&tc, rx_world_enroll_caller(sw, 5000, &x), RX_CALLER_ERR_FULL, "enroll past capacity");
             expect(&tc, rx_world_enroll_caller(sw, 1000, &x), RX_CALLER_ERR_EXISTS,
                    "enroll a subject twice");
             for (uint32_t i = 0; i < RX_CALLER_MAX; i++)
@@ -1003,6 +1319,8 @@ int main(void) {
                control_ok ? "yes" : "NO", prc, rc, U(a0), U(a1), U(d1.active_id));
     }
 
+    int review_ok = review_probes();
+
     int acts_ok = 0;
     const char *names[7] = {"", "belief", "selection", "mint", "promote", "boundary", "generation"};
     for (int a = 1; a <= 6; a++) {
@@ -1019,7 +1337,7 @@ int main(void) {
     r15_stop(r);
     free(r);
     int core = acts_ok == 6 && g_fail == 0;
-    int pass = core && probe_refused && rprobe_refused && ident_ok && control_ok;
+    int pass = core && probe_refused && rprobe_refused && ident_ok && control_ok && review_ok;
     printf("R16 G4 acts refused: %d/6\n", acts_ok);
     printf("R16 G4 core: %s\n", core ? "six acts refused, state unchanged, for the counted per-act attempts" : "FAIL");
     printf("R16 G4 promoter-subject exploit (4)+(6): %s; C5 identity probes: %s; promotion control: %s\n",
