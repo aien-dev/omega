@@ -57,7 +57,7 @@ int brw_tps_check_steps(const brw_tps_step *steps, size_t n);
 
 /* Whole-stream proof. For every observation: steps are consistent, and
  * |sum(-log2 p_step) - exact bin codelength| <= BRW_TPS_EXACT_TOL, and
- * |sum - ty_qcont_bits| <= log2(1 + (delta/sd)^2/24) + 1e-9 (sd floored at
+ * |sum - ty_qcont_bits| <= -log2(1 - (delta/sd)^2/8) + 1e-9 (sd floored at
  * sd_min), the analytic bound for the unnormalised qint.v1 masses. Any
  * violation returns BRW_TPS_E_PROOF and sets *bad_index; a refusal returns
  * its error code. Outputs: max exact deviation, max qint deviation, and the

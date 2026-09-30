@@ -223,7 +223,7 @@ int brw_tps_check_stream(const double *mu, const double *sd, const int64_t *b,
         if (!(dx <= BRW_TPS_EXACT_TOL))
             return BRW_TPS_E_PROOF;
         double r = TYQ_DELTA / (sd[i] < TYQ_SD_MIN ? TYQ_SD_MIN : sd[i]);
-        double bound = log2(1.0 + r * r / 24.0);
+        double bound = -log2(1.0 - r * r / 8.0);
         if (!(dq <= bound + BRW_TPS_EXACT_TOL))
             return BRW_TPS_E_PROOF;
         if (dx > mx) mx = dx;

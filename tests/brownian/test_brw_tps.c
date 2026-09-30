@@ -102,6 +102,25 @@ int main(void)
       CHECK(mq > 1e-9);   /* the qint gap is real at sd_min, and inside its bound */
     }
 
+    /* G: sd = sd_min, bin offset from mu of 0, 1, 5, 30, 1448, 2048, 4096 bins
+     * (ty_qcont's z_c is in sd units; here the offset is counted in bins),
+     * both signs, several fractional mu positions. */
+    {
+        static const int64_t offs[] = { 0, 1, 5, 30, 1448, 2048, 4096 };
+        static const double fr[] = { 0.0, 0.25, 0.5, 0.75, 0.999 };
+        size_t n = 0;
+        for (size_t o = 0; o < sizeof offs / sizeof offs[0]; o++)
+            for (int sg = -1; sg <= 1; sg += 2)
+                for (size_t f = 0; f < sizeof fr / sizeof fr[0]; f++)
+                    for (int m = 0; m < 4; m++) {
+                        double mm = ((double)(int64_t)(rnext() % 2000001 - 1000000) + fr[f]) * 0x1p-20 * 1.0 + m * 0.37;
+                        mu[n] = mm; sd[n] = TYQ_SD_MIN;
+                        bb[n] = (int64_t)floor(mm * 1048576.0) + sg * offs[o];
+                        n++;
+                    }
+        run("G sd_min offsets in bins", n);
+    }
+
     /* E: huge sd. */
     for (size_t i = 0; i < 10000; i++) {
         double s = (i & 1) ? 1e6 : 1e9 * (1.0 + runif());
