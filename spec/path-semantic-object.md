@@ -170,14 +170,14 @@ $$\text{SEMANTIC\_PATH\_ID} = \text{SHA256}(\text{"omega.path.v1"} \parallel 0x0
 Preimage Layout:
 1. Domain Tag:               "omega.path.v1" (13 bytes)
 2. Tag Terminator:           0x00 (1 byte)
-3. Start Anchor ID:          start_anchor_id (32 bytes SemanticId)
-4. End Anchor ID:            end_anchor_id (32 bytes SemanticId)
-5. Context Scope ID:         context_id (32 bytes SemanticId)
-6. Step Count:               step_count (2 bytes u16 big-endian)
-7. Canonical Step Stream:    Concatenation of canonical steps (0 to step_count - 1)
-8. Canonical Attributes:     Lexicographically sorted attributes
-9. Canonical Constraints:    Kind-sorted constraints
+3. Canonical Serialization:  the complete section 6.1 encoding, byte for byte and
+                             in section 6.1 field order: magic, version, kind,
+                             step_count, start_anchor_id, end_anchor_id,
+                             context_id, attributes, constraints,
+                             steps_payload_len, ordered_steps
 ```
+
+The preimage after the terminator is exactly the wire encoding of section 6.1, as the formula above states and as `spec/canonical-encoding.md` section 1 requires (identity is the hash of the canonical serialization). An earlier draft of this listing named only the anchors, step count, steps, attributes and constraints, in a different order; that listing contradicted the formula and section 6 and is superseded by this one (PATH-1 outside review, 2026-09-30).
 
 ### 5.2 Identity Invariants
 1. **Intensional Sequence**: Semantic Path identity is order-dependent. A path executing step A then step B produces a different identity than a path executing step B then step A.
@@ -192,7 +192,7 @@ $$\text{REALIZATION\_ID} = \text{SHA256}(\text{"omega.path.realization.v1"} \par
 
 ```text
 Realization Preimage Layout:
-1. Domain Tag:               "omega.path.realization.v1" (24 bytes)
+1. Domain Tag:               "omega.path.realization.v1" (25 bytes)
 2. Tag Terminator:           0x00 (1 byte)
 3. Semantic Path ID:         semantic_path_id (32 bytes)
 4. Machine ID:               machine_id (32 bytes content-addressed machine graph)
@@ -259,6 +259,32 @@ To guarantee bounded memory usage on bare-metal targets, the encoder and decoder
 | `PATH_MAX_ATTR_COUNT` | 32 attributes | Fail-closed: `RX_PATH_ERR_ATTR_LIMIT` (-84) |
 | `PATH_MAX_CONSTRAINT_COUNT` | 16 constraints | Fail-closed: `RX_PATH_ERR_CONST_LIMIT` (-85) |
 | `PATH_MAX_TOTAL_SERIALIZATION` | 65536 bytes (64 KiB) | Fail-closed: `RX_PATH_ERR_BUFFER_OVERFLOW` (-86) |
+
+`RX_PATH_ERR_BUFFER_OVERFLOW` (-86) is also returned when a caller's output buffer is shorter than the encoding; nothing is written in that case.
+
+### 6.4 Bootstrap Storage Bounds and Additional Refusal Codes
+
+The PATH-1 reference oracle (`src/path/rx_path.h`) reuses `OmegaAttribute` and `OmegaConstraint` from `src/omega_types.h`, the same storage the M4 codec uses. Their fixed buffers bound what the oracle can hold, below what the section 6.1 field widths could express:
+
+| Bound | Value | Source |
+|---|---|---|
+| Attribute key | 1 to 63 bytes | `OMEGA_MAX_KEY_LEN` (64) minus the terminator |
+| Attribute value | 0 to 512 bytes | `OMEGA_MAX_VAL_LEN` |
+| Constraint payload | 0 to 128 bytes | `OmegaConstraint.payload` (as enforced by `omega_codec.c`) |
+| Step arena | 2048 steps per arena | bootstrap storage only; never part of identity |
+| Fork depth | 64 ancestors | bootstrap storage only; never part of identity |
+
+Constraints follow `spec/canonical-encoding.md` section 2 rule 3: sorted by (kind, payload) with equal constraints kept, as in the M4 canonicalizer. Attribute keys follow rule 1: unsigned byte order, duplicates refused.
+
+The oracle adds five refusal codes that section 6.3 does not name:
+
+| Code | Value | Meaning |
+|---|---|---|
+| `RX_PATH_ERR_MALFORMED` | -87 | Non-canonical or structurally invalid input (bad magic, version, kind, role, order, length, trailing bytes, duplicate key) |
+| `RX_PATH_ERR_ID_MISMATCH` | -88 | Recomputed identity differs from the expected id, or an ancestor no longer hashes to the recorded `parent_path_id` |
+| `RX_PATH_ERR_FROZEN` | -89 | Mutation of a fork parent (section 7.1 rule 3) |
+| `RX_PATH_ERR_ARG` | -90 | Null pointer or out-of-range argument, including forking into an ancestor's storage |
+| `RX_PATH_ERR_CAPACITY` | -91 | Bootstrap arena or fork depth exhausted |
 
 ---
 

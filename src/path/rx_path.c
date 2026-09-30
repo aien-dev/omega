@@ -59,8 +59,10 @@ static int check_step(const RxPathStep *s) {
     return RX_PATH_OK;
 }
 
+/* Callers pass only steps that passed check_step, so no term can wrap. */
 static size_t step_size(const RxPathStep *s) {
-    return 8u + 32u * s->input_count + 32u + 2u + 32u * s->output_count + 4u + s->param_len;
+    return (size_t)8u + (size_t)32u * s->input_count + 32u + 2u +
+           (size_t)32u * s->output_count + 4u + (size_t)s->param_len;
 }
 
 static int key_cmp(const char *a, const char *b) {
@@ -121,8 +123,37 @@ int rx_path_init(RxPath *p, RxPathStepArena *arena, const SemanticId *start_anch
     return RX_PATH_OK;
 }
 
+/* Shape check of the caller-visible fields and of every stored step. The path
+ * and arena structs are public, so a record changed after insertion must not
+ * reach the encoder, the hash or a comparison with out-of-range counts. Every
+ * reader (encode, size, identity, equal) runs this first. */
+static int check_shape(const RxPath *p) {
+    if (p->attr_count > RX_PATH_MAX_ATTR_COUNT) return RX_PATH_ERR_ATTR_LIMIT;
+    if (p->constraint_count > RX_PATH_MAX_CONSTRAINT_COUNT) return RX_PATH_ERR_CONST_LIMIT;
+    if (p->tail_count > RX_PATH_MAX_STEPS) return RX_PATH_ERR_STEP_LIMIT;
+    if (rx_path_step_count(p) > RX_PATH_MAX_STEPS) return RX_PATH_ERR_STEP_LIMIT;
+    for (uint16_t i = 0; i < p->attr_count; i++) {
+        const OmegaAttribute *a = &p->attributes[i];
+        const char *z = memchr(a->key, 0, sizeof(a->key));
+        if (!z || z == a->key || a->val_len > OMEGA_MAX_VAL_LEN) return RX_PATH_ERR_MALFORMED;
+    }
+    for (uint16_t i = 0; i < p->constraint_count; i++)
+        if (p->constraints[i].payload_len > RX_PATH_MAX_CONSTRAINT_PAYLOAD)
+            return RX_PATH_ERR_MALFORMED;
+    uint32_t count = rx_path_step_count(p);
+    for (uint32_t i = 0; i < count; i++) {
+        const RxPathStep *s = resolve(p, i);
+        if (!s) return RX_PATH_ERR_MALFORMED;
+        int rc = check_step(s);
+        if (rc) return rc;
+    }
+    return RX_PATH_OK;
+}
+
 int rx_path_encoded_size(const RxPath *p, size_t *size) {
     if (!p || !size) return RX_PATH_ERR_ARG;
+    int rc = check_shape(p);
+    if (rc) return rc;
     size_t n = RX_PATH_HEADER_BYTES;
     for (uint16_t i = 0; i < p->attr_count; i++)
         n += 1u + strlen(p->attributes[i].key) + 2u + p->attributes[i].val_len;
@@ -131,12 +162,7 @@ int rx_path_encoded_size(const RxPath *p, size_t *size) {
         n += 4u + p->constraints[i].payload_len;
     n += 4u;
     uint32_t count = rx_path_step_count(p);
-    if (count > RX_PATH_MAX_STEPS) return RX_PATH_ERR_STEP_LIMIT;
-    for (uint32_t i = 0; i < count; i++) {
-        const RxPathStep *s = resolve(p, i);
-        if (!s) return RX_PATH_ERR_MALFORMED;
-        n += step_size(s);
-    }
+    for (uint32_t i = 0; i < count; i++) n += step_size(resolve(p, i));
     *size = n;
     return RX_PATH_OK;
 }
@@ -192,10 +218,10 @@ int rx_path_add_constraint(RxPath *p, uint16_t kind, const uint8_t *payload,
     c.kind = kind;
     c.payload_len = payload_len;
     if (payload_len) memcpy(c.payload, payload, payload_len);
+    /* Equal constraints are kept, as in the M4 canonicalizer (omega_canonical.c):
+     * SPEC-OMEGA-CANON-M4 rule 3 sorts constraints and forbids no duplicates. */
     uint16_t at = 0;
-    while (at < p->constraint_count && constraint_cmp(&p->constraints[at], &c) < 0) at++;
-    if (at < p->constraint_count && constraint_cmp(&p->constraints[at], &c) == 0)
-        return RX_PATH_ERR_MALFORMED; /* duplicate constraint */
+    while (at < p->constraint_count && constraint_cmp(&p->constraints[at], &c) <= 0) at++;
     memmove(&p->constraints[at + 1], &p->constraints[at],
             (size_t)(p->constraint_count - at) * sizeof(p->constraints[0]));
     p->constraints[at] = c;
@@ -227,6 +253,8 @@ int rx_path_get_step(const RxPath *p, uint32_t i, RxPathStep *out) {
     *out = *s;
     return RX_PATH_OK;
 }
+
+static int check_lineage(const RxPath *p);
 
 /* Canonical serialization (spec 6.1 and 6.2) into a sink. */
 static int emit_path(const RxPath *p, Emit *e) {
@@ -283,6 +311,8 @@ int rx_path_encode(const RxPath *p, uint8_t *out, size_t capacity, size_t *lengt
     size_t size;
     int rc = rx_path_encoded_size(p, &size);
     if (rc) return rc;
+    rc = check_lineage(p); /* never serialize a prefix that changed after fork */
+    if (rc) return rc;
     if (size > RX_PATH_MAX_TOTAL_SERIALIZATION || size > capacity)
         return RX_PATH_ERR_BUFFER_OVERFLOW;
     Emit e = {out, capacity, 0, NULL};
@@ -305,8 +335,8 @@ static int raw_semantic_id(const RxPath *p, SemanticId *out) {
     return RX_PATH_OK;
 }
 
-int rx_path_semantic_id(const RxPath *p, SemanticId *out) {
-    if (!p || !out) return RX_PATH_ERR_ARG;
+/* Every ancestor must still hash to the parent_path_id recorded at fork time. */
+static int check_lineage(const RxPath *p) {
     if (fork_depth(p) < 0) return RX_PATH_ERR_CAPACITY;
     for (const RxPath *q = p; q->parent; q = q->parent) {
         SemanticId pid;
@@ -314,6 +344,13 @@ int rx_path_semantic_id(const RxPath *p, SemanticId *out) {
         if (rc) return rc;
         if (memcmp(pid.bytes, q->parent_path_id.bytes, 32) != 0) return RX_PATH_ERR_ID_MISMATCH;
     }
+    return RX_PATH_OK;
+}
+
+int rx_path_semantic_id(const RxPath *p, SemanticId *out) {
+    if (!p || !out) return RX_PATH_ERR_ARG;
+    int rc = check_lineage(p);
+    if (rc) return rc;
     return raw_semantic_id(p, out);
 }
 
@@ -344,6 +381,10 @@ int rx_path_fork(RxPath *child, RxPath *parent, uint16_t divergence_step_index) 
     if (divergence_step_index > rx_path_step_count(parent)) return RX_PATH_ERR_ARG;
     int depth = fork_depth(parent);
     if (depth < 0 || depth + 1 > (int)RX_PATH_MAX_FORK_DEPTH) return RX_PATH_ERR_CAPACITY;
+    /* The child storage must not be an ancestor of parent: overwriting it
+     * would unfreeze a fork parent and close a cycle (spec 7.1 rule 3). */
+    for (const RxPath *q = parent->parent; q; q = q->parent)
+        if (q == child) return RX_PATH_ERR_ARG;
     SemanticId pid;
     int rc = rx_path_semantic_id(parent, &pid);
     if (rc) return rc;
@@ -382,6 +423,10 @@ static int step_eq(const RxPathStep *a, const RxPathStep *b) {
 int rx_path_equal(const RxPath *a, const RxPath *b, int *equal) {
     if (!a || !b || !equal) return RX_PATH_ERR_ARG;
     *equal = 0;
+    int rc = check_shape(a);
+    if (rc) return rc;
+    rc = check_shape(b);
+    if (rc) return rc;
     uint32_t n = rx_path_step_count(a);
     if (n != rx_path_step_count(b) || a->attr_count != b->attr_count ||
         a->constraint_count != b->constraint_count ||
@@ -480,7 +525,7 @@ static int decode_body(RxPath *p, Reader *r) {
         q = take(r, c->payload_len);
         if (!q) return RX_PATH_ERR_MALFORMED;
         memcpy(c->payload, q, c->payload_len);
-        if (i > 0 && constraint_cmp(&p->constraints[i - 1], c) >= 0) return RX_PATH_ERR_MALFORMED;
+        if (i > 0 && constraint_cmp(&p->constraints[i - 1], c) > 0) return RX_PATH_ERR_MALFORMED;
         p->constraint_count = (uint16_t)(i + 1);
     }
 

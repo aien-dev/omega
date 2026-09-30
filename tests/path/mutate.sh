@@ -37,7 +37,7 @@ run step-limit 's/if (rx_path_step_count(p) >= RX_PATH_MAX_STEPS)/if (rx_path_st
 run input-limit 's/input_count > RX_PATH_MAX_INPUTS_PER_STEP)/input_count > RX_PATH_MAX_INPUTS_PER_STEP + 1)/'
 run size-limit 's/if (size + step_size(step) > RX_PATH_MAX_TOTAL_SERIALIZATION)/if (0)/'
 run attr-sort 's/while (at < p->attr_count \&\& key_cmp(p->attributes\[at\].key, key) < 0) at++;/at = p->attr_count;/'
-run constraint-sort 's/while (at < p->constraint_count \&\& constraint_cmp(\&p->constraints\[at\], \&c) < 0) at++;/at = p->constraint_count;/'
+run constraint-sort 's/while (at < p->constraint_count \&\& constraint_cmp(\&p->constraints\[at\], \&c) <= 0) at++;/at = p->constraint_count;/'
 run step-index-check 's/if (!take_u16(r, \&index) || index != i)/if (!take_u16(r, \&index))/'
 run steps-payload-len '/if (steps_len != r->n - r->pos) return RX_PATH_ERR_MALFORMED;/d'
 run trailing-bytes '/if (r->pos != r->n) return RX_PATH_ERR_MALFORMED;/d'
@@ -50,4 +50,8 @@ run divergence-bound 's/if (divergence_step_index > rx_path_step_count(parent))/
 run prefix-resolve 's/if (p->parent \&\& i < p->divergence_step_index)/if (p->parent \&\& i <= p->divergence_step_index)/'
 run realization-machine '/emit_id(&e, &r->machine_id);/d'
 run realization-evidence '/emit_id(&e, &r->argus_observation_digest);/d'
+run shape-check 's/int rc = check_step(s);/int rc = 0;/'
+run ancestor-fork 's/if (q == child) return RX_PATH_ERR_ARG;/if (0) return RX_PATH_ERR_ARG;/'
+run encode-lineage '/rc = check_lineage(p); \/\* never serialize/d'
+run equal-constraints 's/constraint_cmp(\&p->constraints\[i - 1\], c) > 0)/constraint_cmp(\&p->constraints[i - 1], c) >= 0)/'
 echo "PATH mutations: $killed killed, $((total-killed)) survived ($total total)"

@@ -45,7 +45,7 @@
 #define RX_PATH_MAX_CONSTRAINT_COUNT 16u
 #define RX_PATH_MAX_TOTAL_SERIALIZATION 65536u
 
-/* Bootstrap storage bounds (not in the spec). Attribute and constraint storage
+/* Bootstrap storage bounds (spec 6.4). Attribute and constraint storage
  * reuse OmegaAttribute and OmegaConstraint from omega_types.h, so a key holds
  * at most OMEGA_MAX_KEY_LEN - 1 bytes, a value at most OMEGA_MAX_VAL_LEN bytes
  * and a constraint payload at most 128 bytes. */
@@ -63,7 +63,7 @@
 #define RX_PATH_ERR_ATTR_LIMIT -84
 #define RX_PATH_ERR_CONST_LIMIT -85
 #define RX_PATH_ERR_BUFFER_OVERFLOW -86
-/* Additional refusal codes. The spec names none for these cases. */
+/* Additional refusal codes (spec 6.4). */
 #define RX_PATH_ERR_MALFORMED -87   /* non-canonical or structurally invalid */
 #define RX_PATH_ERR_ID_MISMATCH -88 /* recomputed identity differs from expected */
 #define RX_PATH_ERR_FROZEN -89      /* path is a fork parent; spec 7.1 rule 3 */

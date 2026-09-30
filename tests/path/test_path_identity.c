@@ -531,6 +531,76 @@ static void no_authority(void) {
     CHECK(pa.frozen == 0 && rx_path_step_count(&pa) == 8);
 }
 
+/* Outside-review regressions (2026-09-30): tampered public records, fork into
+ * an ancestor, encode over a changed prefix, and equal constraints. */
+static void review_regressions(void) {
+    rx_path_arena_init(&arena);
+    SemanticId s = mkid(1), e = mkid(2), c = mkid(3), id, id2;
+    size_t n;
+    int eq;
+    CHECK(rx_path_init(&pa, &arena, &s, &e, &c) == 0);
+    RxPathStep t = simple_step(ROLE_JS_ACTION, 5);
+    CHECK(rx_path_append(&pa, &t) == 0);
+
+    /* A stored step changed after insertion is refused by every reader. */
+    arena.steps[pa.tail[0]].input_count = 9;
+    CHECK(rx_path_encoded_size(&pa, &n) == RX_PATH_ERR_INPUT_LIMIT);
+    CHECK(rx_path_encode(&pa, buf, sizeof(buf), &n) == RX_PATH_ERR_INPUT_LIMIT);
+    CHECK(rx_path_semantic_id(&pa, &id) == RX_PATH_ERR_INPUT_LIMIT);
+    CHECK(rx_path_equal(&pa, &pa, &eq) == RX_PATH_ERR_INPUT_LIMIT);
+    arena.steps[pa.tail[0]].input_count = t.input_count;
+    arena.steps[pa.tail[0]].param_len = 0xFFFFFFF0u;
+    CHECK(rx_path_encode(&pa, buf, sizeof(buf), &n) == RX_PATH_ERR_PARAM_LIMIT);
+    arena.steps[pa.tail[0]].param_len = t.param_len;
+    pa.attr_count = RX_PATH_MAX_ATTR_COUNT + 1;
+    CHECK(rx_path_encode(&pa, buf, sizeof(buf), &n) == RX_PATH_ERR_ATTR_LIMIT);
+    pa.attr_count = 0;
+    pa.constraint_count = RX_PATH_MAX_CONSTRAINT_COUNT + 1;
+    CHECK(rx_path_encode(&pa, buf, sizeof(buf), &n) == RX_PATH_ERR_CONST_LIMIT);
+    pa.constraint_count = 0;
+    CHECK(rx_path_semantic_id(&pa, &id) == 0);
+
+    /* Forking into the storage of an ancestor is refused; nothing changes. */
+    CHECK(rx_path_fork(&pb, &pa, 1) == RX_PATH_OK);
+    CHECK(rx_path_fork(&pa, &pb, 1) == RX_PATH_ERR_ARG);
+    CHECK(pa.frozen == 1 && pa.parent == NULL && rx_path_step_count(&pa) == 1);
+    CHECK(rx_path_semantic_id(&pa, &id2) == 0 && same(&id, &id2));
+    CHECK(rx_path_fork(&pc, &pb, 1) == RX_PATH_OK);
+    CHECK(rx_path_fork(&pa, &pc, 0) == RX_PATH_ERR_ARG);
+    CHECK(rx_path_semantic_id(&pa, &id2) == 0 && same(&id, &id2));
+
+    /* Encode refuses a child whose frozen ancestor changed after the fork. */
+    CHECK(rx_path_encode(&pb, buf, sizeof(buf), &n) == RX_PATH_OK);
+    pa.start_anchor_id = mkid(77);
+    CHECK(rx_path_encode(&pb, buf, sizeof(buf), &n) == RX_PATH_ERR_ID_MISMATCH);
+    CHECK(rx_path_encode(&pc, buf, sizeof(buf), &n) == RX_PATH_ERR_ID_MISMATCH);
+    pa.start_anchor_id = s;
+    CHECK(rx_path_encode(&pc, buf, sizeof(buf), &n) == RX_PATH_OK);
+
+    /* Equal constraints are kept (canonical-encoding rule 3), sorted, and
+     * survive a round trip; builder order still does not matter. */
+    uint8_t p1 = 1, p2 = 2;
+    CHECK(rx_path_init(&pd, &arena, &s, &e, &c) == 0);
+    CHECK(rx_path_add_constraint(&pd, 4, &p2, 1) == 0);
+    CHECK(rx_path_add_constraint(&pd, 4, &p1, 1) == 0);
+    CHECK(rx_path_add_constraint(&pd, 4, &p2, 1) == 0);
+    CHECK(pd.constraint_count == 3 && pd.constraints[0].payload[0] == 1 &&
+          pd.constraints[1].payload[0] == 2 && pd.constraints[2].payload[0] == 2);
+    CHECK(rx_path_init(&pe, &arena, &s, &e, &c) == 0);
+    CHECK(rx_path_add_constraint(&pe, 4, &p2, 1) == 0);
+    CHECK(rx_path_add_constraint(&pe, 4, &p2, 1) == 0);
+    CHECK(rx_path_add_constraint(&pe, 4, &p1, 1) == 0);
+    CHECK(rx_path_semantic_id(&pd, &id) == 0 && rx_path_semantic_id(&pe, &id2) == 0 && same(&id, &id2));
+    CHECK(rx_path_encode(&pd, buf, sizeof(buf), &n) == 0);
+    CHECK(decode_rc(buf, n, &id) == RX_PATH_OK && pc.constraint_count == 3);
+    eq = 0;
+    CHECK(rx_path_equal(&pc, &pd, &eq) == 0 && eq);
+    /* Two equal constraints differ in identity from one. */
+    CHECK(rx_path_init(&pf, &arena, &s, &e, &c) == 0);
+    CHECK(rx_path_add_constraint(&pf, 4, &p1, 1) == 0 && rx_path_add_constraint(&pf, 4, &p2, 1) == 0);
+    CHECK(rx_path_semantic_id(&pf, &id2) == 0 && !same(&id, &id2));
+}
+
 int main(void) {
     known_answer();
     randomized();
@@ -540,6 +610,7 @@ int main(void) {
     limits();
     fork_prefix();
     no_authority();
+    review_regressions();
     if (failures) {
         printf("PATH-1: %u of %u checks FAILED\n", failures, checks);
         return 1;
