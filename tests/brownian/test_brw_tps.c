@@ -55,7 +55,7 @@ static void run(const char *name, size_t n)
     double mx = 0, mq = 0, me = 0;
     int rc = brw_tps_check_stream(mu, sd, bb, n, &bad, &mx, &mq, &me);
     if (me > worst_excess) worst_excess = me;
-    printf("%-28s n=%zu rc=%d max|steps-exact|=%.3g max|steps-qint|=%.3g max(dev-bound)=%.3g\n", name, n, rc, mx, mq, me);
+    printf("%-32s n=%zu rc=%d max|steps-exact|=%.3g max|steps-qint|=%.3g max(dev-bound)=%.3g\n", name, n, rc, mx, mq, me);
     CHECK(rc == 0);
 }
 
@@ -119,6 +119,53 @@ int main(void)
                         n++;
                     }
         run("G sd_min offsets in bins", n);
+    }
+
+    /* H: sd = sd_min, z_c in sd units (as ty_qcont defines it), both signs,
+     * several fractional positions. At z = 1448 the exact bin mass is about
+     * e^-1e6, far below any floating range; everything runs on log masses. */
+    {
+        static const double zs[] = { 0, 1, 5, 30, 1448, 2048, 4096 };
+        static const double fr[] = { 0.0, 0.3, 0.5, 0.9 };
+        size_t n = 0;
+        for (size_t o = 0; o < sizeof zs / sizeof zs[0]; o++)
+            for (int sg = -1; sg <= 1; sg += 2)
+                for (size_t f = 0; f < sizeof fr / sizeof fr[0]; f++)
+                    for (int m = 0; m < 5; m++) {
+                        double mm = (double)(int64_t)(rnext() % 200001 - 100000) * 0x1p-10 + fr[f] * 0x1p-20;
+                        mu[n] = mm; sd[n] = TYQ_SD_MIN;
+                        bb[n] = (int64_t)floor(mm * 1048576.0) + sg * (int64_t)(zs[o] * 1024.0) + m;
+                        n++;
+                    }
+        run("H sd_min, z_c in sd units", n);
+        tyq_pred p = { 0, TYQ_FAM_GAUSS, 0.0, TYQ_SD_MIN, 0, { { 0, 0, 0 } } };
+        double qb = 0; int qr = ty_qcont_bits(&p, (int64_t)(4096 * 1024), &qb, NULL);
+        printf("ty_qcont_bits at z_c=4096 sd: rc=%d bits=%.17g\n", qr, qb);
+    }
+
+    /* I: reference-style stream: y_prev to y steps are N(0,1), predictor is
+     * Normal(y_prev, sd_min), so observations sit about 1000..4000 sd out. */
+    {
+        double y = 0.0; size_t n = 3000;
+        for (size_t i = 0; i < n; i++) {
+            double y2 = y + rnorm();
+            mu[i] = y; sd[i] = TYQ_SD_MIN;
+            bb[i] = (int64_t)floor(y2 * 1048576.0);
+            y = y2;
+        }
+        run("I y_prev predictor, N(0,1) steps", n);
+    }
+
+    /* Largest supported offset: |b - centre| < 2^52 bins (2^42 sd at sd_min),
+     * with |mu| < 2^31 and |b| < 2^51; beyond that is refused. */
+    {
+        brw_tps_step st[BRW_TPS_MAX_STEPS]; size_t ns;
+        int64_t lim = (INT64_C(1) << 51) - 1;
+        CHECK(brw_tps_binarise(0.0, TYQ_SD_MIN, lim, BRW_TPS_MAX_STEPS, st, &ns, NULL, NULL) == 0);
+        CHECK(brw_tps_binarise(0.0, TYQ_SD_MIN, -lim, BRW_TPS_MAX_STEPS, st, &ns, NULL, NULL) == 0);
+        CHECK(brw_tps_binarise(0.0, TYQ_SD_MIN, lim + 1, BRW_TPS_MAX_STEPS, st, &ns, NULL, NULL) < 0);
+        CHECK(brw_tps_binarise(2147483647.0, TYQ_SD_MIN, -lim, BRW_TPS_MAX_STEPS, st, &ns, NULL, NULL) == 0);
+        CHECK(brw_tps_binarise(-2147483647.0, TYQ_SD_MIN, lim, BRW_TPS_MAX_STEPS, st, &ns, NULL, NULL) == 0);
     }
 
     /* E: huge sd. */

@@ -14,8 +14,14 @@
  * about 1 + (delta/sd)^2/24, so a partition-based binariser can match it to
  * 1e-9 bits only where (delta/sd)^2/24 is small (sd of a few times sd_min and
  * up). The stream check gates hard on the exact Normal mass and gates on the
- * qint.v1 codelength with a caller-supplied tolerance; both maxima are
- * reported. No coder is called here; the phase-2 hookup fills brw_tps_coder_fn. */
+ * qint.v1 codelength with an analytic per-observation bound; both maxima are
+ * reported. No coder is called here; the phase-2 hookup fills brw_tps_coder_fn.
+ * Range: |mu| < 2^31 and |b| < 2^51 (qint.v1 limit), so |b - centre| < 2^52 bins
+ * (2^42 sd at sd_min); 51 classes cover it, anything beyond is refused with a
+ * negative code. All masses are log-domain, so z of thousands of sd is fine.
+ * Range: |mu| < 2^31 and |b| < 2^51 (qint.v1 limit), so |b - centre| < 2^52 bins
+ * (2^42 sd at sd_min); 51 classes cover it, anything beyond is refused with a
+ * negative code. All masses are log-domain, so z of thousands of sd is fine. */
 #ifndef BRW_TPS_ADAPTER_H
 #define BRW_TPS_ADAPTER_H
 
@@ -38,8 +44,8 @@ enum {
 typedef struct {
     double p1;            /* probability that bit == 1 */
     int bit;
-    double log2p_taken;   /* log2 probability of the branch taken, from log masses */
-    double log2p_other;   /* log2 probability of the branch not taken */
+    long double log2p_taken;   /* log2 probability of the branch taken, from log masses */
+    long double log2p_other;   /* log2 probability of the branch not taken */
 } brw_tps_step;
 
 /* Binarise one observation. steps has room for cap entries (use
@@ -48,7 +54,7 @@ typedef struct {
  * may be NULL. */
 int brw_tps_binarise(double mu, double sd, int64_t b, size_t cap,
                      brw_tps_step *steps, size_t *nsteps,
-                     double *bits_steps, double *bits_exact);
+                     long double *bits_steps, long double *bits_exact);
 
 /* Sanity check of one observation's steps: each step's two branch
  * probabilities sum to 1 (1e-12) and p1 agrees with log2p. Returns 0 or

@@ -95,15 +95,15 @@ static int tps_push(brw_tps_step *st, size_t cap, size_t *n, int bit,
     double p1 = (double)expl(l1);
     st[*n].p1 = p1;
     st[*n].bit = bit;
-    st[*n].log2p_taken = (double)(lt / LN2L);
-    st[*n].log2p_other = (double)(lo / LN2L);
+    st[*n].log2p_taken = lt / LN2L;
+    st[*n].log2p_other = lo / LN2L;
     (*n)++;
     return BRW_TPS_OK;
 }
 
 int brw_tps_binarise(double mu, double sd, int64_t b, size_t cap,
                      brw_tps_step *steps, size_t *nsteps,
-                     double *bits_steps, double *bits_exact)
+                     long double *bits_steps, long double *bits_exact)
 {
     if (!steps || !nsteps)
         return BRW_TPS_E_ARG;
@@ -169,7 +169,7 @@ int brw_tps_binarise(double mu, double sd, int64_t b, size_t cap,
         long double s = 0.0L;
         for (size_t i = 0; i < n; i++)
             s -= (long double)steps[i].log2p_taken;
-        *bits_steps = (double)s;
+        *bits_steps = s;
     }
     if (bits_exact) {
         long double le;
@@ -177,7 +177,7 @@ int brw_tps_binarise(double mu, double sd, int64_t b, size_t cap,
             le = lc;
         else if ((rc = tps_side_mass(&x, side, ad, ad + 1, &le)) != 0)
             return rc;
-        *bits_exact = (double)(-le / LN2L);
+        *bits_exact = -le / LN2L;
     }
     return BRW_TPS_OK;
 }
@@ -187,12 +187,12 @@ int brw_tps_check_steps(const brw_tps_step *steps, size_t n)
     if (!steps)
         return BRW_TPS_E_ARG;
     for (size_t i = 0; i < n; i++) {
-        double l1 = steps[i].bit ? steps[i].log2p_taken : steps[i].log2p_other;
-        double l0 = steps[i].bit ? steps[i].log2p_other : steps[i].log2p_taken;
-        double q1 = exp2(l1), q0 = exp2(l0);
-        if (!(fabs(q1 + q0 - 1.0) <= 1e-12))
+        long double l1 = steps[i].bit ? steps[i].log2p_taken : steps[i].log2p_other;
+        long double l0 = steps[i].bit ? steps[i].log2p_other : steps[i].log2p_taken;
+        long double q1 = exp2l(l1), q0 = exp2l(l0);
+        if (!(fabsl(q1 + q0 - 1.0L) <= 1e-12))
             return BRW_TPS_E_PROOF;
-        if (!(fabs(steps[i].p1 - q1) <= 1e-15 + 1e-12 * q1))
+        if (!(fabsl((long double)steps[i].p1 - q1) <= 1e-15 + 1e-12 * q1))
             return BRW_TPS_E_PROOF;
     }
     return BRW_TPS_OK;
@@ -209,7 +209,8 @@ int brw_tps_check_stream(const double *mu, const double *sd, const int64_t *b,
     double mx = 0.0, mq = 0.0, me = -1e300;
     for (size_t i = 0; i < n; i++) {
         size_t ns;
-        double bs, be, bq;
+        long double bs, be;
+        double bq;
         *bad_index = i;
         int rc = brw_tps_binarise(mu[i], sd[i], b[i], BRW_TPS_MAX_STEPS, st, &ns, &bs, &be);
         if (rc != BRW_TPS_OK)
@@ -219,7 +220,7 @@ int brw_tps_check_stream(const double *mu, const double *sd, const int64_t *b,
             return BRW_TPS_E_RANGE;
         if (brw_tps_check_steps(st, ns) != BRW_TPS_OK)
             return BRW_TPS_E_PROOF;
-        double dx = fabs(bs - be), dq = fabs(bs - bq);
+        double dx = (double)fabsl(bs - be), dq = (double)fabsl(bs - (long double)bq);
         if (!(dx <= BRW_TPS_EXACT_TOL))
             return BRW_TPS_E_PROOF;
         double r = TYQ_DELTA / (sd[i] < TYQ_SD_MIN ? TYQ_SD_MIN : sd[i]);
