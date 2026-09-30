@@ -232,7 +232,9 @@ fi
 echo "execution record: exit status, binary and log digests, run id"
 # A stand-in gate binary: prints STUB_LOG, then the same run line the real
 # binary prints (run id from OMEGA_NUMERIC_RUN_ID, digest of /proc/self/exe),
-# then exits with STUB_RC. It proves the plumbing, never a chip result.
+# then exits with STUB_RC. It also writes a line to stderr after every stdout
+# line, as the real binary's refusal messages do. It proves the plumbing,
+# never a chip result.
 cat > "$TMP/stub.c" <<'STUB'
 #include <stdio.h>
 #include <stdlib.h>
@@ -244,7 +246,7 @@ int main(void) {
     size_t got;
     sha256_ctx ctx;
     FILE *f = log ? fopen(log, "r") : NULL;
-    if (f) { while (fgets(line, sizeof line, f)) fputs(line, stdout); fclose(f); }
+    if (f) { while (fgets(line, sizeof line, f)) { fputs(line, stdout); fputs("stub stderr chatter\n", stderr); } fclose(f); }
     f = fopen("/proc/self/exe", "rb");
     if (f) {
         sha256_init(&ctx);
@@ -283,15 +285,19 @@ NUM_EXEC_RC=0
 check "  nor with the exit status variable forged to 0 (status file says 3)" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log"'
 
 check "binary exiting 0 accepted by the executor" 'fresh_run 0'
+check "  stderr chatter kept out of the gate log" 'num_check_log "$NUM_RUN_DIR/gate5.log" && ! grep -q chatter "$NUM_RUN_DIR/gate5.log" && grep -q chatter "$NUM_RUN_DIR/gate5.stderr" && [ "$NUM_STDERR_SHA" = "$(m19r_sha_file "$NUM_RUN_DIR/gate5.stderr")" ]'
 check "passing run makes a PASS preview" 'num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ -f "$NUM_RUN_DIR/receipt-preview.json" ]'
 pv=$NUM_RUN_DIR/receipt-preview.json
-check "  status PASS, exit status 0, digests bound" '[ "$(jq -r "(.status == \"PASS\") and (.gate_binary_exit_status == 0) and (.candidate_binary_sha256 == \"$NUM_BINARY_SHA\") and (.gate_log_sha256 == \"$NUM_LOG_SHA\") and (.run_id == \"$NUM_RUN_ID\")" "$pv")" = true ]'
+check "  status PASS, exit status 0, digests bound" '[ "$(jq -r "(.status == \"PASS\") and (.gate_stderr_sha256 == \"$NUM_STDERR_SHA\") and (.digest_meaning | startswith(\"integrity only, not authenticity\")) and (.gate_binary_exit_status == 0) and (.candidate_binary_sha256 == \"$NUM_BINARY_SHA\") and (.gate_log_sha256 == \"$NUM_LOG_SHA\") and (.run_id == \"$NUM_RUN_ID\")" "$pv")" = true ]'
 check "  clean flags from git status, commits from git" '[ "$(jq -r "(.candidate_trees_clean == {\"omega\":true,\"physics\":true}) and (.run_git_commit == \"$NUM_OMEGA_CAND\") and (.candidate_git_commit == .run_git_commit)" "$pv")" = true ]'
 check "  observed counts 22/22/0, historical untouched, predecessor recorded" '[ "$(jq -c "[.observed_test_count,.observed_pass_count,.observed_fail_count]" "$pv")" = "[22,22,0]" ] && [ "$(cat "$omega/evidence/m19r_gate5_omega_numeric_evidence.json")" = "{\"historical\":true}" ] && [ "$(jq -r ".predecessor_historical_gate5_sha256 | length" "$pv")" = 64 ]'
 check "  no permanent receipt without --record" '[ ! -e "$EVD" ] && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
 # Finding 4: nothing is taken on trust at receipt time.
 cp "$TMP/good.log" "$TMP/fabricated.log"
 check "fabricated log outside the run refused" '! num_receipt "$omega" "$TMP/fabricated.log"'
+echo x >> "$NUM_RUN_DIR/gate5.stderr"
+check "stderr changed after the run refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [[ $M19R_ERR == "gate stderr changed since the run"* ]]'
+sed -i '$d' "$NUM_RUN_DIR/gate5.stderr"
 cp "$NUM_RUN_DIR/gate5.log" "$TMP/keep.log"
 cp "$TMP/good.log" "$NUM_RUN_DIR/gate5.log"
 check "log replaced after the run refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log"'
@@ -338,7 +344,7 @@ prec=$EVD/$NUM_DIGEST.json
 check "  outside the tree, which stays clean" '[ "$(num_tree_clean "$omega")" = true ] && [ "$(num_tree_clean "$phys")" = true ] && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
 check "  binds run id, both commits, clean flags and binary digest" '[ "$(jq -r "(.status == \"PASS\") and (.run_id == \"$NUM_RUN_ID\") and (.candidate_git_commit == \"$NUM_OMEGA_CAND\") and (.physics_candidate_git_commit == \"$NUM_PHYSICS_CAND\") and (.candidate_trees_clean == {\"omega\":true,\"physics\":true}) and (.candidate_binary_sha256 == \"$NUM_BINARY_SHA\")" "$prec")" = true ]'
 check "  named by its digest, mode 0444" '[ "$(jq "del(.receipt_digest)" "$prec" | "$JSON_CANON" --sha256)" = "$NUM_DIGEST" ] && [ "$(stat -c %a "$prec")" = 444 ]'
-check "  a second record of the same PASS refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ "$(ls "$EVD" | wc -l)" = 1 ]'
+check "  a second record of the same PASS refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ "$(ls "$EVD"/*.json | wc -l)" = 1 ]'
 NUM_EVIDENCE_DIR=$omega/evidence/OMEGA-NUMERIC-0
 check "PASS receipt into an in-tree evidence directory refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
 NUM_EVIDENCE_DIR=$EVD M19R_OMEGA=$keep_m19r
@@ -353,12 +359,16 @@ frec=$EVD/$NUM_DIGEST.json
 check "  named by its digest, mode 0444" '[ -f "$frec" ] && [ "$(jq "del(.receipt_digest)" "$frec" | "$JSON_CANON" --sha256)" = "$NUM_DIGEST" ] && [ "$(stat -c %a "$frec")" = 444 ]'
 check "  omega tree still clean after recording (reported true in the receipt)" '[ "$(num_tree_clean "$omega")" = true ] && [ "$(jq -r .candidate_trees_clean.omega "$frec")" = true ] && [ "$(jq -r ".run_id == \"$NUM_RUN_ID\"" "$frec")" = true ]'
 check "  status FAIL with the reason and exit status" '[ "$(jq -r "(.status == \"FAIL\") and (.error == \"gate binary exited with status 3\") and (.gate_binary_exit_status == 3)" "$frec")" = true ]'
-check "  no preview left claiming a pass" '[ "$(jq -r .status "$NUM_RUN_DIR/receipt-preview.json")" = PASS ] || [ ! -e "$NUM_RUN_DIR/receipt-preview.json" ]'
+check "  blobs kept beside it, named by hash, mode 0444" '( for p in "log:$(jq -r .gate_log_sha256 "$frec")" "stderr:$(jq -r .gate_stderr_sha256 "$frec")" "bin:$(jq -r .candidate_binary_sha256 "$frec")"; do b=$EVD/blobs/${p#*:}.${p%%:*}; [ -f "$b" ] && [ "$(m19r_sha_file "$b")" = "${p#*:}" ] && [ "$(stat -c %a "$b")" = 444 ] || exit 1; done )'
+check "  the blobs are this run's files" 'cmp -s "$EVD/blobs/$(jq -r .gate_log_sha256 "$frec").log" "$NUM_RUN_DIR/gate5.log" && cmp -s "$EVD/blobs/$(jq -r .candidate_binary_sha256 "$frec").bin" "$NUM_RUN_DIR/test_omega_numeric"'
 orig=$(sha256sum < "$frec")
 check "same FAIL receipt again refused (never overwritten)" '! num_fail_receipt "$omega" "gate binary exited with status 3"'
 check "  because the file exists" '[[ $M19R_ERR == *"$NUM_DIGEST"* ]]'
 check "  original bytes unchanged" '[ "$(sha256sum < "$frec")" = "$orig" ]'
-check "a different failure appends a second receipt" 'num_fail_receipt "$omega" "another reason" && [ "$(ls "$EVD" | wc -l)" = 2 ] && [ "$(num_tree_clean "$omega")" = true ]'
+check "a different failure appends a second receipt" 'num_fail_receipt "$omega" "another reason" && [ "$(ls "$EVD"/*.json | wc -l)" = 2 ] && [ "$(num_tree_clean "$omega")" = true ]'
+NUM_EXEC_RC=0
+check "PASS preview present before a late failure" 'rm -f "$NUM_RUN_DIR/receipt-preview.json" && NUM_RECORD=0 num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ "$(jq -r .status "$NUM_RUN_DIR/receipt-preview.json")" = PASS ]'
+check "failure path (num_main) removes the PASS preview and records FAIL" 'num_on_failure "$omega" "late failure" 2>/dev/null && [ ! -e "$NUM_RUN_DIR/receipt-preview.json" ] && [ "$(jq -r "(.status == \"FAIL\") and (.error == \"late failure\")" "$NUM_PERMANENT")" = true ]'
 urec=$TMP/immut/unit.json
 check "immutable writer: first write" 'printf "{\"unit_test\":true,\"status\":\"PASS\"}" | m19r_write_immutable_receipt "$urec"'
 check "immutable writer: overwrite refused, bytes kept" '! printf "{\"unit_test\":true,\"status\":\"FAIL\"}" | m19r_write_immutable_receipt "$urec" && [ "$(jq -r .status "$urec")" = PASS ]'

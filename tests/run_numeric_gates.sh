@@ -31,7 +31,7 @@
 #      candidates re-checked, run commit re-read from git, evidence/
 #      unchanged.
 #
-# Output: build/qual-runs/<run-id>/{build.log,gate5.log,gate5.status,run.json}
+# Output: build/qual-runs/<run-id>/{build.log,gate5.log,gate5.stderr,gate5.status,run.json}
 # always; receipt-preview.json when every check passed. With --record a
 # permanent receipt <evidence-dir>/<receipt_digest>.json is written
 # for every run that got past argument parsing: "status":"PASS" when every
@@ -44,6 +44,11 @@
 # records whether both trees were still clean afterwards. Each receipt binds
 # the run id, the omega and physics commits with their clean flags, and the
 # gate binary digest.
+# The receipt digest shows the receipt was not altered after it was written;
+# it is not a signature and does not prove who wrote it. With --record the
+# gate log, stderr and binary it names are copied beside it as
+# <evidence-dir>/blobs/<sha256>.{log,stderr,bin} (mode 0444) so anyone can
+# re-hash them and re-run the log checks.
 # The historical file evidence/m19r_gate5_omega_numeric_evidence.json is not
 # touched; its hash is recorded as the predecessor.
 # All 15 ops in the manifest, LDS_STS and REDUCE_SUM included, need one GB10
@@ -158,13 +163,17 @@ num_build() {
 # A nonzero exit status fails, whatever the log says.
 num_execute() {
     local omega=$1 bin=$2 rc
-    NUM_EXEC_RC= NUM_LOG_SHA=
+    NUM_EXEC_RC= NUM_LOG_SHA= NUM_STDERR_SHA=
+    # stdout and stderr go to separate files: the binary's stderr (refusal
+    # messages) is unbuffered and would otherwise land inside half-written
+    # stdout JSON lines (seen on the chip run 20260930T164139Z-890338e1a62e).
     (cd "$omega" && exec env OMEGA_NUMERIC_RUN_ID="$NUM_RUN_ID" "$bin" 9>&-) \
-        > "$NUM_RUN_DIR/gate5.log" 2>&1
+        > "$NUM_RUN_DIR/gate5.log" 2> "$NUM_RUN_DIR/gate5.stderr"
     rc=$?
     NUM_EXEC_RC=$rc
     printf '%s\n' "$rc" > "$NUM_RUN_DIR/gate5.status"
     NUM_LOG_SHA=$(m19r_sha_file "$NUM_RUN_DIR/gate5.log")
+    NUM_STDERR_SHA=$(m19r_sha_file "$NUM_RUN_DIR/gate5.stderr")
     [ "$rc" -eq 0 ] ||
         m19r_fail "gate binary exited with status $rc; a crash or late failure disqualifies the run" || return 1
 }
@@ -313,12 +322,35 @@ num_tree_clean() {
     fi
 }
 
+# num_keep_blob FILE EXT -- copy FILE into NUM_EVIDENCE_DIR/blobs/<sha256>.EXT
+# (mode 0444). An existing blob must already hash to that name. Receipts name
+# the gate log, stderr and binary by digest; the digest shows the receipt was
+# not altered, it does not prove who wrote it, so the named bytes are kept
+# beside it for anyone to re-hash and re-check.
+num_keep_blob() {
+    local src=$1 ext=$2 sha dst tmp
+    [ -f "$src" ] || return 0
+    sha=$(m19r_sha_file "$src") && dst=$NUM_EVIDENCE_DIR/blobs/$sha.$ext
+    mkdir -p "$NUM_EVIDENCE_DIR/blobs" || m19r_fail "cannot create $NUM_EVIDENCE_DIR/blobs" || return 1
+    if [ -e "$dst" ]; then
+        [ "$(m19r_sha_file "$dst")" = "$sha" ] || m19r_fail "blob $dst does not hash to its name" || return 1
+        return 0
+    fi
+    tmp=$(mktemp "$NUM_EVIDENCE_DIR/blobs/.tmp.XXXXXX") || return 1
+    cp "$src" "$tmp" && chmod 0444 "$tmp" && [ "$(m19r_sha_file "$tmp")" = "$sha" ] &&
+        mv -n "$tmp" "$dst" && [ ! -e "$tmp" ] ||
+        { rm -f "$tmp"; m19r_fail "cannot keep blob $dst"; return 1; }
+}
+
 # num_write_receipt OMEGA BODY [PREVIEW=1] -- digest the body, write the
 # preview (PASS only), and with NUM_RECORD=1 the permanent append-only
 # receipt NUM_EVIDENCE_DIR/<digest>.json (never inside a candidate tree).
 # Sets NUM_DIGEST and NUM_PERMANENT.
 num_write_receipt() {
     local omega=$1 body=$2 preview=${3:-1} digest receipt
+    # The digest makes alteration detectable; it is not a signature and does
+    # not prove who wrote the receipt. The bytes it names are kept in blobs/.
+    body="${body%\}},\"digest_meaning\":\"integrity only, not authenticity: re-hash blobs/<sha256>.{log,stderr,bin} named here\"}"
     digest=$(printf '%s' "$body" | "$JSON_CANON" --sha256) ||
         m19r_fail "receipt body is not valid JSON" || return 1
     receipt="{\"receipt_digest\":\"$digest\",${body#\{}"
@@ -329,6 +361,11 @@ num_write_receipt() {
     NUM_DIGEST=$digest
     if [ "${NUM_RECORD:-0}" = 1 ]; then
         num_check_evidence_dir "$omega" || return 1
+        if [ -n "${NUM_RUN_DIR:-}" ]; then
+            num_keep_blob "$NUM_RUN_DIR/gate5.log" log || return 1
+            num_keep_blob "$NUM_RUN_DIR/gate5.stderr" stderr || return 1
+            num_keep_blob "$NUM_RUN_DIR/test_omega_numeric" bin || return 1
+        fi
         NUM_PERMANENT=$NUM_EVIDENCE_DIR/$digest.json
         m19r_write_immutable_receipt "$NUM_PERMANENT" <<< "$receipt" || { NUM_PERMANENT=; return 1; }
     fi
@@ -352,6 +389,8 @@ num_receipt() {
     [ "$status" = 0 ] || m19r_fail "recorded gate binary status is '${status}', need 0" || return 1
     [ -f "$log" ] && [ "$(m19r_sha_file "$log")" = "${NUM_LOG_SHA:-}" ] ||
         m19r_fail "gate log changed since the run (or no run recorded its digest)" || return 1
+    [ -f "$NUM_RUN_DIR/gate5.stderr" ] && [ "$(m19r_sha_file "$NUM_RUN_DIR/gate5.stderr")" = "${NUM_STDERR_SHA:-}" ] ||
+        m19r_fail "gate stderr changed since the run (or no run recorded its digest)" || return 1
     bin=$NUM_RUN_DIR/test_omega_numeric
     [ -f "$bin" ] || m19r_fail "gate binary $bin is missing" || return 1
     bin_sha=$(m19r_sha_file "$bin")
@@ -389,6 +428,7 @@ num_receipt() {
     body+=",\"candidate_trees_clean\":{\"omega\":$omega_clean,\"physics\":$physics_clean}"
     body+=",\"candidate_binary_sha256\":\"$bin_sha\",\"gate_binary_exit_status\":0"
     body+=",\"gate_log_sha256\":\"$NUM_LOG_SHA\""
+    body+=",\"gate_stderr_sha256\":\"$NUM_STDERR_SHA\""
     body+=",\"test_manifest_sha256\":\"$manifest_digest\",\"test_manifest\":$manifest"
     body+=",\"test_results\":$(m19r_events_json < "$NUM_TSV")"
     body+=",\"observed_test_count\":$(jq -n --argjson c "$counts" '$c.completed')"
@@ -421,7 +461,10 @@ num_fail_receipt() {
     body+=",\"gate_binary_exit_status\":$v"
     v=null; [ -z "${NUM_RUN_DIR:-}" ] || [ ! -f "$NUM_RUN_DIR/gate5.log" ] ||
         v="\"$(m19r_sha_file "$NUM_RUN_DIR/gate5.log")\""
-    body+=",\"gate_log_sha256\":$v}"
+    body+=",\"gate_log_sha256\":$v"
+    v=null; [ -z "${NUM_RUN_DIR:-}" ] || [ ! -f "$NUM_RUN_DIR/gate5.stderr" ] ||
+        v="\"$(m19r_sha_file "$NUM_RUN_DIR/gate5.stderr")\""
+    body+=",\"gate_stderr_sha256\":$v}"
     num_write_receipt "$omega" "$body" 0
 }
 
@@ -449,6 +492,23 @@ num_qualify() {
     after=$(m19r_historical) || return 1
     [ "$before" = "$after" ] || m19r_fail "evidence/ changed during the run" || return 1
     num_receipt "$omega" "$NUM_RUN_DIR/gate5.log"
+}
+
+# num_on_failure OMEGA REASON -- a failed run: forget any digest, remove the
+# PASS preview so nothing left behind claims a pass, and with NUM_RECORD=1
+# write the FAIL receipt.
+num_on_failure() {
+    NUM_DIGEST= NUM_PERMANENT=
+    rm -f "$NUM_RUN_DIR/receipt-preview.json"
+    if [ "${NUM_RECORD:-0}" = 1 ]; then
+        if num_fail_receipt "$1" "$2"; then
+            echo "Permanent FAIL receipt: $NUM_PERMANENT" >&2
+        else
+            echo "Could not write the FAIL receipt: $M19R_ERR" >&2
+        fi
+    else
+        echo "No receipt written (no --record)." >&2
+    fi
 }
 
 num_usage() {
@@ -500,17 +560,7 @@ num_main() {
         rc=1
         [ ! -s "$M19R_TMP/error" ] || M19R_ERR=$(cat "$M19R_TMP/error")
         echo "Gate 5 FAILED: $M19R_ERR" >&2
-        NUM_DIGEST= NUM_PERMANENT=
-        rm -f "$NUM_RUN_DIR/receipt-preview.json"
-        if [ "$NUM_RECORD" = 1 ]; then
-            if num_fail_receipt "$M19R_OMEGA" "$M19R_ERR"; then
-                echo "Permanent FAIL receipt: $NUM_PERMANENT" >&2
-            else
-                echo "Could not write the FAIL receipt: $M19R_ERR" >&2
-            fi
-        else
-            echo "No receipt written (no --record)." >&2
-        fi
+        num_on_failure "$M19R_OMEGA" "$M19R_ERR"
     fi
     run_json="{\"run_id\":$(m19r_jstr "$NUM_RUN_ID"),\"status\":\"$([ "$rc" = 0 ] && echo PASS || echo FAILED)\""
     run_json+=",\"physics_dir\":$(m19r_jstr "$M19R_PHYSICS")"
