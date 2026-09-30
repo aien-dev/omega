@@ -16,17 +16,34 @@
 #      the run stops and says so (moving the pin is an owner decision);
 #   4. clean build into build/qual-runs/<run-id>/ with -ffp-contract=off, no
 #      libm and no CUDA symbols in the binary;
-#   5. the binary runs; every expected test ID printed exactly once as PASS,
-#      no SKIP, a GB10 parity line with zero mismatches for every encoded op,
-#      and a hardware descriptor probed from the device (a fake one is refused);
-#   6. candidates re-checked and evidence/ unchanged at the end.
+#   5. the binary runs with OMEGA_NUMERIC_RUN_ID set; a nonzero exit status
+#      fails the run even when every printed record passes;
+#   6. the log: every expected test ID printed exactly once as PASS, no SKIP;
+#      one run line whose run id is this run and whose binary digest (the
+#      binary hashes /proc/self/exe) is the file that was built; registry
+#      lines equal to the manifest below; for every encoded op exactly the
+#      expected GB10 parity lines (FFMA: one per uniform c in NUM_FFMA_C, the
+#      others one) with the comparison mode taken from the manifest, never
+#      from the log, full corpus size, typed integer counts and zero
+#      mismatches; a hardware descriptor probed from the device (a fake one
+#      is refused);
+#   7. receipt time: binary and log digests unchanged since the run, both
+#      candidates re-checked, run commit re-read from git, evidence/
+#      unchanged.
 #
-# Output: build/qual-runs/<run-id>/{build.log,gate5.log,run.json} always;
-# receipt-preview.json when every check passed; with --record the permanent
-# receipt evidence/OMEGA-NUMERIC-0/<receipt_digest>.json (created exclusively,
-# mode 0444, never overwritten). No receipt is written on any failure.
+# Output: build/qual-runs/<run-id>/{build.log,gate5.log,gate5.status,run.json}
+# always; receipt-preview.json when every check passed. With --record a
+# permanent receipt evidence/OMEGA-NUMERIC-0/<receipt_digest>.json is written
+# for every run that got past argument parsing: "status":"PASS" when every
+# check passed, "status":"FAIL" (with the reason) otherwise. Receipts are
+# append-only: created exclusively, mode 0444, never overwritten. A PASS
+# receipt is written only into the repository this script belongs to.
 # The historical file evidence/m19r_gate5_omega_numeric_evidence.json is not
 # touched; its hash is recorded as the predecessor.
+# Today Gate 5 cannot PASS: FP32_SIMT_OPCODES_ENCODED needs GB10 kernels for
+# LDS_STS and REDUCE_SUM, which are expected-not-encoded (refused before
+# submission). A run therefore ends in FAIL (a FAIL receipt with --record)
+# until they are encoded and qualified; no op is relabelled to get round it.
 # Exit 0 on PASS, 1 on failure, 2 on bad arguments.
 #
 # Functions can be sourced (tools/test_numeric_qualify.sh does); main only
@@ -39,6 +56,7 @@ M19R_PROG=run_numeric_gates.sh
 
 NUM_SUITE=gate5
 NUM_HISTORICAL=evidence/m19r_gate5_omega_numeric_evidence.json
+NUM_RECEIPT_DIR=evidence/OMEGA-NUMERIC-0
 # Test IDs the chip build must print, each exactly once, each PASS.
 NUM_EXPECTED_IDS="FPCR_RNE_NO_FTZ_REQUIRED PROVENANCE_MATCHES_EXECUTOR
 NOT_ENCODED_OPS_REFUSED_BEFORE_SUBMISSION FP32_SIMT_OPCODES_ENCODED
@@ -50,9 +68,27 @@ NEG_FTZ_DETECTED_AND_REJECTED NEG_UNORDERED_REDUCTION_DIVERGENCE_CAUGHT
 NEG_RAW_MUFU_APPROX_REJECTED_WITHOUT_REFINEMENT NEG_UNKNOWN_OPCODE_FAILS_CLOSED
 NEG_OPCODE_PROVENANCE_INTEGRITY_VERIFIED NEG_NONDEFAULT_FPCR_REFUSED
 NEG_COMPARATOR_CATCHES_ONE_BIT"
-# Ops the executor encodes for GB10; each needs a GB10 parity line.
-NUM_ENCODED_OPS="FADD FSUB FMUL FFMA FSETP_SEL FSEL FMNMX_MIN FMNMX_MAX I2FP F2I
-MUFU_RCP MUFU_RSQ SHFL_DOWN"
+# The operation manifest: every op the executor encodes for GB10 and how its
+# result is compared. It mirrors OP_TABLE in src/omega_numeric.c (the host
+# test checks the two agree). The log never chooses its own comparison.
+NUM_OP_MANIFEST="FADD:BIT_EXACT FSUB:BIT_EXACT FMUL:BIT_EXACT FFMA:BIT_EXACT
+FSETP_SEL:INT_EXACT FSEL:INT_EXACT FMNMX_MIN:BIT_EXACT FMNMX_MAX:BIT_EXACT
+I2FP:BIT_EXACT F2I:INT_EXACT MUFU_RCP:SEED_BOUND MUFU_RSQ:SEED_BOUND
+SHFL_DOWN:INT_EXACT"
+NUM_ENCODED_OPS=$(printf '%s\n' $NUM_OP_MANIFEST | cut -d: -f1 | tr '\n' ' ')
+# Elements per launch (N in tests/test_omega_numeric.c).
+NUM_CORPUS_N=4096
+# FFMA runs once per uniform c (FFMA_C in tests/test_omega_numeric.c).
+NUM_FFMA_C="0x3f800000 0x80000000 0x00800000 0xbf800000 0x7fc00000 0x7f800000
+0x00000003 0x80800000"
+
+# num_manifest_json -- {"ops":{op:mode},"n":N,"ffma_c":[...]}
+num_manifest_json() {
+    jq -n --arg m "$NUM_OP_MANIFEST" --arg c "$NUM_FFMA_C" --argjson n "$NUM_CORPUS_N" '
+        {ops: ([$m | splits("\\s+") | select(length > 0) | split(":") | {key: .[0], value: .[1]}]
+               | from_entries),
+         n: $n, ffma_c: [$c | splits("\\s+") | select(length > 0)]}'
+}
 
 # num_check_physics OMEGA PHYSICS_DIR PHYSICS_CAND -- the physics dependency
 # is the commit in physics.lock; the checkout must be at it and carry forge/.
@@ -101,10 +137,79 @@ num_build() {
     fi
 }
 
+# num_execute OMEGA BIN -- run the gate binary once for this run. Writes
+# $NUM_RUN_DIR/gate5.log and gate5.status, sets NUM_EXEC_RC and NUM_LOG_SHA.
+# A nonzero exit status fails, whatever the log says.
+num_execute() {
+    local omega=$1 bin=$2 rc
+    NUM_EXEC_RC= NUM_LOG_SHA=
+    (cd "$omega" && exec env OMEGA_NUMERIC_RUN_ID="$NUM_RUN_ID" "$bin" 9>&-) \
+        > "$NUM_RUN_DIR/gate5.log" 2>&1
+    rc=$?
+    NUM_EXEC_RC=$rc
+    printf '%s\n' "$rc" > "$NUM_RUN_DIR/gate5.status"
+    NUM_LOG_SHA=$(m19r_sha_file "$NUM_RUN_DIR/gate5.log")
+    [ "$rc" -eq 0 ] ||
+        m19r_fail "gate binary exited with status $rc; a crash or late failure disqualifies the run" || return 1
+}
+
+# jq: the first problem with the GB10 parity lines against the manifest, or "".
+# Input: array of GB10 parity lines. $man: num_manifest_json.
+NUM_JQ_PARITY='
+def isint: type == "number" and . == floor and . >= 0;
+def problem($m):
+  . as $l
+  | if ($l | has("error")) then "a launch error (\($l.error | tojson))"
+    elif ($l.compare != $m) then "comparison \($l.compare | tojson) but the manifest says \($m)"
+    elif (($l.n | isint) | not) or $l.n != $man.n then "n \($l.n | tojson), need \($man.n)"
+    elif (($l.checked | isint) | not) then "checked is not an integer"
+    elif $m == "SEED_BOUND" then
+      if (($l.out_of_bound | isint) | not) or (($l.skipped | isint) | not) then "seed-bound counts are not integers"
+      elif $l.checked == 0 then "no element checked"
+      elif $l.checked + $l.skipped != $l.n then "checked + skipped != n"
+      elif $l.out_of_bound != 0 then "\($l.out_of_bound) results out of bound"
+      else "" end
+    else
+      if $l.checked != $man.n then "checked \($l.checked), need \($man.n)"
+      elif (($l.mismatches | isint) | not) then "mismatches is not an integer"
+      elif $l.mismatches != 0 then "\($l.mismatches) mismatches"
+      else "" end
+    end;
+. as $all
+| ([$all[] | select(.tier != "gb10") | .op] | first) as $badtier
+| ([$all[] | .op as $o | select(($man.ops | has($o)) | not) | $o] | first) as $stray
+| if $badtier != null then "a parity line for \($badtier | tojson) is not tier gb10"
+  elif $stray != null then "a GB10 parity line names \($stray | tojson), outside the encoded set"
+  else
+    [ $man.ops | to_entries[] | .key as $op | .value as $mode
+      | [$all[] | select(.op == $op)] as $ls
+      | if ($ls | length) == 0 then "no GB10 parity line for \($op)"
+        elif $op == "FFMA" then
+          if ([$ls[] | .c_bits] | sort) != ($man.ffma_c | sort)
+          then "FFMA launches \([$ls[] | .c_bits] | tojson), need exactly one per c in \($man.ffma_c | tojson)"
+          else ([$ls[] | problem($mode) | select(. != "") | "GB10 parity for FFMA: " + .] | first // "") end
+        elif ($ls | length) != 1 then "GB10 parity for \($op): \($ls | length) lines, need exactly 1"
+        elif ($ls[0] | has("c_bits")) then "GB10 parity for \($op) carries c_bits"
+        else ($ls[0] | problem($mode) | if . == "" then "" else "GB10 parity for \($op): " + . end) end
+      | select(. != "") ] | first // ""
+  end'
+
+# jq: the first problem with the registry lines against the manifest, or "".
+NUM_JQ_REGISTRY='
+([.[] | select(.encoded == true)]) as $enc
+| if ([.[] | .op] | length) != ([.[] | .op] | unique | length) then "an op appears twice in the registry lines"
+  elif ([$enc[] | .op] | sort) != ($man.ops | keys | sort)
+  then "registry encodes \([$enc[] | .op] | sort | tojson), manifest lists \($man.ops | keys | sort | tojson)"
+  else ([$enc[] | select(.compare != $man.ops[.op]) | "registry compares \(.op) as \(.compare | tojson), manifest says \($man.ops[.op])"]
+        + [$enc[] | select(.launches != (if .op == "FFMA" then ($man.ffma_c | length) else 1 end))
+           | "registry has \(.launches | tojson) launches for \(.op)"]) | first // ""
+  end'
+
 # num_check_log LOG -- validate the gate log. Sets NUM_TSV (events file),
-# NUM_HWDESC, NUM_HWDIGEST, NUM_PARITY (JSON array of GB10 parity lines).
+# NUM_HWDESC, NUM_HWDIGEST, NUM_PARITY (JSON array of GB10 parity lines),
+# NUM_LOG_RUN_ID, NUM_LOG_BINARY_SHA (from the run line).
 num_check_log() {
-    local log=$1 id n line op hw
+    local log=$1 id n hw man reg run problem
     [ -r "$log" ] || m19r_fail "cannot read gate log $log" || return 1
     if grep -Eq '^[[:space:]]*\[SKIP\]' "$log"; then
         m19r_fail "gate log has SKIP results; a qualifying run executes every test"; return 1
@@ -120,6 +225,15 @@ num_check_log() {
         m19r_fail "gate log has $n results; the manifest lists $(printf '%s\n' $NUM_EXPECTED_IDS | grep -c .)" || return 1
     m19r_require_passed < "$NUM_TSV" || return 1
 
+    run=$(m19r_tagged_json "$log" OMEGA_NUMERIC_RUN_JSON) || return 1
+    [ "$(printf '%s\n' "$run" | grep -c .)" -eq 1 ] ||
+        m19r_fail "expected exactly one run line (OMEGA_NUMERIC_RUN_JSON)" || return 1
+    NUM_LOG_RUN_ID=$(printf '%s' "$run" | jq -r 'if (.run_id | type) == "string" then .run_id else "" end')
+    NUM_LOG_BINARY_SHA=$(printf '%s' "$run" | jq -r 'if (.binary_sha256 | type) == "string" then .binary_sha256 else "" end')
+    [ -n "$NUM_LOG_RUN_ID" ] || m19r_fail "run line has no run id" || return 1
+    [[ $NUM_LOG_BINARY_SHA =~ ^[0-9a-f]{64}$ ]] ||
+        m19r_fail "run line has no binary digest" || return 1
+
     hw=$(m19r_tagged_json "$log" OMEGA_NUMERIC_HWDESC_JSON) || return 1
     [ "$(printf '%s\n' "$hw" | grep -c .)" -eq 1 ] ||
         m19r_fail "expected exactly one hardware descriptor line" || return 1
@@ -132,44 +246,104 @@ num_check_log() {
         m19r_fail "hardware descriptor digest is missing or all zero" || return 1
     NUM_HWDESC=$hw
 
+    man=$(num_manifest_json) || m19r_fail "cannot build the operation manifest" || return 1
+    reg=$(m19r_tagged_json "$log" OMEGA_NUMERIC_REGISTRY_JSON | jq -sc .) ||
+        m19r_fail "cannot read registry lines" || return 1
+    problem=$(printf '%s' "$reg" | jq -r --argjson man "$man" "$NUM_JQ_REGISTRY") ||
+        m19r_fail "cannot check registry lines" || return 1
+    [ -z "$problem" ] || m19r_fail "$problem" || return 1
+
     NUM_PARITY=$(m19r_tagged_json "$log" OMEGA_NUMERIC_PARITY_JSON | jq -sc '[.[] | select(.tier == "gb10")]') ||
         m19r_fail "cannot read GB10 parity lines" || return 1
-    for op in $NUM_ENCODED_OPS; do
-        line=$(printf '%s' "$NUM_PARITY" | jq -c --arg o "$op" '[.[] | select(.op == $o)]')
-        [ "$(printf '%s' "$line" | jq 'length')" -ge 1 ] ||
-            m19r_fail "no GB10 parity line for $op" || return 1
-        [ "$(printf '%s' "$line" | jq '[.[] | select(has("error")
-                or (if .compare == "SEED_BOUND" then (.out_of_bound != 0 or .checked == 0)
-                    else (.mismatches != 0 or .checked == 0 or .checked != .n) end))] | length')" -eq 0 ] ||
-            m19r_fail "GB10 parity for $op has an error or mismatches" || return 1
-    done
-    [ "$(printf '%s' "$NUM_PARITY" | jq --arg l "$NUM_ENCODED_OPS" '[.[].op] - ($l | split("\\s+"; null)) | length')" -eq 0 ] ||
-        m19r_fail "GB10 parity lines name an op outside the encoded set" || return 1
+    problem=$(printf '%s' "$NUM_PARITY" | jq -r --argjson man "$man" "$NUM_JQ_PARITY") ||
+        m19r_fail "cannot check GB10 parity lines" || return 1
+    [ -z "$problem" ] || m19r_fail "$problem" || return 1
 }
 
-# num_receipt OMEGA LOG -- build the receipt from a checked log and write the
-# preview (always) and, with NUM_RECORD=1, the permanent receipt. Needs
-# NUM_OMEGA_CAND NUM_PHYSICS_CAND NUM_RUN_COMMIT NUM_BINARY_SHA NUM_RUN_ID
-# NUM_TS NUM_RUN_DIR.
+# num_tree_clean REPO -- "true" or "false" from git status right now.
+num_tree_clean() {
+    if m19r_git "$1" status --porcelain --untracked-files=normal && [ -z "$M19R_GIT" ]; then
+        echo true
+    else
+        echo false
+    fi
+}
+
+# num_write_receipt OMEGA BODY [PREVIEW=1] -- digest the body, write the
+# preview (PASS only), and with
+# NUM_RECORD=1 the permanent append-only receipt. Sets NUM_DIGEST and
+# NUM_PERMANENT.
+num_write_receipt() {
+    local omega=$1 body=$2 preview=${3:-1} digest receipt
+    digest=$(printf '%s' "$body" | "$JSON_CANON" --sha256) ||
+        m19r_fail "receipt body is not valid JSON" || return 1
+    receipt="{\"receipt_digest\":\"$digest\",${body#\{}"
+    if [ "$preview" = 1 ] && [ -n "${NUM_RUN_DIR:-}" ] && [ -d "$NUM_RUN_DIR" ]; then
+        printf '%s' "$receipt" | "$JSON_CANON" --pretty > "$NUM_RUN_DIR/receipt-preview.json" ||
+            m19r_fail "cannot write receipt preview" || return 1
+    fi
+    NUM_DIGEST=$digest
+    if [ "${NUM_RECORD:-0}" = 1 ]; then
+        NUM_PERMANENT=$omega/$NUM_RECEIPT_DIR/$digest.json
+        m19r_write_immutable_receipt "$NUM_PERMANENT" <<< "$receipt" || { NUM_PERMANENT=; return 1; }
+    fi
+}
+
+# num_receipt OMEGA LOG -- revalidate everything this run produced and write
+# the PASS receipt. Nothing supplied by the caller is taken on trust: the log
+# must be this run's gate5.log with the digest recorded when the binary
+# exited 0, the binary must still hash to NUM_BINARY_SHA and match the run
+# line, both candidates are re-checked and the run commit is re-read from git.
+# Needs NUM_OMEGA_CAND NUM_PHYSICS_CAND NUM_RUN_COMMIT NUM_BINARY_SHA
+# NUM_EXEC_RC NUM_LOG_SHA NUM_RUN_ID NUM_TS NUM_RUN_DIR M19R_PHYSICS.
 num_receipt() {
-    local omega=$1 log=$2 manifest manifest_digest counts body digest receipt pred
+    local omega=$1 log=$2 bin bin_sha head status manifest manifest_digest counts body pred
+    local omega_clean physics_clean
+    [ -n "${NUM_RUN_DIR:-}" ] && [ "$log" = "$NUM_RUN_DIR/gate5.log" ] ||
+        m19r_fail "log $log is not this run's gate5.log" || return 1
+    [ "${NUM_EXEC_RC:-}" = 0 ] ||
+        m19r_fail "gate binary exit status is ${NUM_EXEC_RC:-unknown}, need 0" || return 1
+    status=$(cat "$NUM_RUN_DIR/gate5.status" 2>/dev/null)
+    [ "$status" = 0 ] || m19r_fail "recorded gate binary status is '${status}', need 0" || return 1
+    [ -f "$log" ] && [ "$(m19r_sha_file "$log")" = "${NUM_LOG_SHA:-}" ] ||
+        m19r_fail "gate log changed since the run (or no run recorded its digest)" || return 1
+    bin=$NUM_RUN_DIR/test_omega_numeric
+    [ -f "$bin" ] || m19r_fail "gate binary $bin is missing" || return 1
+    bin_sha=$(m19r_sha_file "$bin")
+    [ "$bin_sha" = "${NUM_BINARY_SHA:-}" ] ||
+        m19r_fail "gate binary digest $bin_sha differs from the built binary ${NUM_BINARY_SHA:-(none)}" || return 1
     num_check_log "$log" || return 1
-    [ "${NUM_RUN_COMMIT,,}" = "${NUM_OMEGA_CAND,,}" ] ||
-        m19r_fail "run commit $NUM_RUN_COMMIT differs from candidate $NUM_OMEGA_CAND" || return 1
-    [[ $NUM_BINARY_SHA =~ ^[0-9a-f]{64}$ ]] || m19r_fail "missing binary digest" || return 1
+    [ "$NUM_LOG_RUN_ID" = "$NUM_RUN_ID" ] ||
+        m19r_fail "log run id $NUM_LOG_RUN_ID is not this run ($NUM_RUN_ID)" || return 1
+    [ "$NUM_LOG_BINARY_SHA" = "$bin_sha" ] ||
+        m19r_fail "log was produced by binary $NUM_LOG_BINARY_SHA, not $bin_sha" || return 1
+    m19r_must_candidate "$omega" "$NUM_OMEGA_CAND" || return 1
+    num_check_physics "$omega" "$M19R_PHYSICS" "$NUM_PHYSICS_CAND" || return 1
+    m19r_git "$omega" rev-parse HEAD || return 1
+    head=$M19R_GIT
+    [ "${head,,}" = "${NUM_RUN_COMMIT,,}" ] && [ "${head,,}" = "${NUM_OMEGA_CAND,,}" ] ||
+        m19r_fail "run commit ${NUM_RUN_COMMIT} / HEAD $head differ from candidate $NUM_OMEGA_CAND" || return 1
+    omega_clean=$(num_tree_clean "$omega")
+    physics_clean=$(num_tree_clean "$M19R_PHYSICS")
+    [ "$omega_clean" = true ] && [ "$physics_clean" = true ] ||
+        m19r_fail "candidate trees not clean at receipt time" || return 1
     [[ $NUM_TS =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$ ]] || m19r_fail "missing UTC timestamp" || return 1
+    if [ "${NUM_RECORD:-0}" = 1 ] && [ "$(cd -P "$omega" && pwd)" != "$M19R_OMEGA" ]; then
+        m19r_fail "a PASS receipt is written only into $M19R_OMEGA, not $omega" || return 1
+    fi
     pred=null
     [ ! -f "$omega/$NUM_HISTORICAL" ] || pred="\"$(m19r_sha_file "$omega/$NUM_HISTORICAL")\""
-    manifest="{\"command\":\"tests/test_omega_numeric\",\"expected_test_ids\":$(printf '%s\n' $NUM_EXPECTED_IDS | jq -Rn '[inputs]'),\"encoded_ops\":$(printf '%s\n' $NUM_ENCODED_OPS | jq -Rn '[inputs]')}"
+    manifest="{\"command\":\"tests/test_omega_numeric\",\"expected_test_ids\":$(printf '%s\n' $NUM_EXPECTED_IDS | jq -Rn '[inputs]'),\"encoded_ops\":$(printf '%s\n' $NUM_ENCODED_OPS | jq -Rn '[inputs]'),\"operation_manifest\":$(num_manifest_json)}"
     manifest_digest=$(printf '%s' "$manifest" | "$JSON_CANON" --sha256) || return 1
     counts=$(m19r_observed_counts < "$NUM_TSV")
-    body="{\"schema\":\"AIEN_OMEGA_NUMERIC_0_V1\",\"gate\":\"M19R_GATE5_OMEGA_NUMERIC_0\""
+    body="{\"schema\":\"AIEN_OMEGA_NUMERIC_0_V1\",\"gate\":\"M19R_GATE5_OMEGA_NUMERIC_0\",\"status\":\"PASS\""
     body+=",\"run_id\":$(m19r_jstr "$NUM_RUN_ID"),\"timestamp_utc\":\"$NUM_TS\""
-    body+=",\"candidate_git_commit\":\"${NUM_OMEGA_CAND,,}\",\"run_git_commit\":\"${NUM_RUN_COMMIT,,}\""
+    body+=",\"candidate_git_commit\":\"${NUM_OMEGA_CAND,,}\",\"run_git_commit\":\"${head,,}\""
     body+=",\"physics_candidate_git_commit\":\"${NUM_PHYSICS_CAND,,}\""
     body+=",\"physics_lock\":\"$(m19r_strip "$(cat "$omega/physics.lock")" | tr 'A-F' 'a-f')\""
-    body+=",\"candidate_trees_clean\":{\"omega\":true,\"physics\":true}"
-    body+=",\"candidate_binary_sha256\":\"$NUM_BINARY_SHA\""
+    body+=",\"candidate_trees_clean\":{\"omega\":$omega_clean,\"physics\":$physics_clean}"
+    body+=",\"candidate_binary_sha256\":\"$bin_sha\",\"gate_binary_exit_status\":0"
+    body+=",\"gate_log_sha256\":\"$NUM_LOG_SHA\""
     body+=",\"test_manifest_sha256\":\"$manifest_digest\",\"test_manifest\":$manifest"
     body+=",\"test_results\":$(m19r_events_json < "$NUM_TSV")"
     body+=",\"observed_test_count\":$(jq -n --argjson c "$counts" '$c.completed')"
@@ -178,16 +352,32 @@ num_receipt() {
     body+=",\"hardware_descriptor\":$NUM_HWDESC,\"hardware_descriptor_digest\":\"$NUM_HWDIGEST\""
     body+=",\"gb10_parity\":$NUM_PARITY"
     body+=",\"predecessor_historical_gate5_sha256\":$pred,\"zero_libm_zero_libcuda\":true}"
-    digest=$(printf '%s' "$body" | "$JSON_CANON" --sha256) ||
-        m19r_fail "receipt body is not valid JSON" || return 1
-    receipt="{\"receipt_digest\":\"$digest\",${body#\{}"
-    printf '%s' "$receipt" | "$JSON_CANON" --pretty > "$NUM_RUN_DIR/receipt-preview.json" ||
-        m19r_fail "cannot write receipt preview" || return 1
-    NUM_DIGEST=$digest
-    if [ "${NUM_RECORD:-0}" = 1 ]; then
-        NUM_PERMANENT=$omega/evidence/OMEGA-NUMERIC-0/$digest.json
-        printf '%s' "$receipt" | m19r_write_immutable_receipt "$NUM_PERMANENT" || return 1
-    fi
+    num_write_receipt "$omega" "$body"
+}
+
+# num_fail_receipt OMEGA REASON -- the FAIL receipt for a run that did not
+# qualify: what was observed, nothing claimed. Only with NUM_RECORD=1.
+num_fail_receipt() {
+    local omega=$1 reason=$2 body f v
+    body="{\"schema\":\"AIEN_OMEGA_NUMERIC_0_V1\",\"gate\":\"M19R_GATE5_OMEGA_NUMERIC_0\",\"status\":\"FAIL\""
+    body+=",\"error\":$(m19r_jstr "$reason"),\"run_id\":$(m19r_jstr "$NUM_RUN_ID")"
+    body+=",\"timestamp_utc\":$(m19r_jstr "${NUM_TS:-$(date -u +%Y-%m-%dT%H:%M:%S.%6NZ)}")"
+    body+=",\"supplied_omega_candidate\":$(m19r_jstr "$NUM_OMEGA_CAND")"
+    body+=",\"supplied_physics_candidate\":$(m19r_jstr "$NUM_PHYSICS_CAND")"
+    v=null; m19r_git "$omega" rev-parse HEAD && v=$(m19r_jstr "$M19R_GIT")
+    body+=",\"omega_head\":$v"
+    v=null; [ -d "${M19R_PHYSICS:-/nonexistent}" ] && m19r_git "$M19R_PHYSICS" rev-parse HEAD && v=$(m19r_jstr "$M19R_GIT")
+    body+=",\"physics_head\":$v"
+    body+=",\"candidate_trees_clean\":{\"omega\":$(num_tree_clean "$omega"),\"physics\":$([ -d "${M19R_PHYSICS:-/nonexistent}" ] && num_tree_clean "$M19R_PHYSICS" || echo null)}"
+    v=null; [ -z "${NUM_RUN_DIR:-}" ] || [ ! -f "$NUM_RUN_DIR/test_omega_numeric" ] ||
+        v="\"$(m19r_sha_file "$NUM_RUN_DIR/test_omega_numeric")\""
+    body+=",\"candidate_binary_sha256\":$v"
+    v=null; [[ ${NUM_EXEC_RC:-} =~ ^[0-9]+$ ]] && v=$NUM_EXEC_RC
+    body+=",\"gate_binary_exit_status\":$v"
+    v=null; [ -z "${NUM_RUN_DIR:-}" ] || [ ! -f "$NUM_RUN_DIR/gate5.log" ] ||
+        v="\"$(m19r_sha_file "$NUM_RUN_DIR/gate5.log")\""
+    body+=",\"gate_log_sha256\":$v}"
+    num_write_receipt "$omega" "$body" 0
 }
 
 num_qualify() {
@@ -205,17 +395,14 @@ num_qualify() {
         NUM_BINARY_SHA=$(m19r_sha_file "$bin")
         m19r_git "$omega" rev-parse HEAD && NUM_RUN_COMMIT=$M19R_GIT
         NUM_TS=$(date -u +%Y-%m-%dT%H:%M:%S.%6NZ)
-        # A failing test exits nonzero; the log still decides, so no m19r_cmd here.
-        (cd "$omega" && exec "$bin" 9>&-) > "$NUM_RUN_DIR/gate5.log" 2>&1
-        echo "gate binary exit status $?" >> "$NUM_RUN_DIR/build.log"
+        num_execute "$omega" "$bin" || rc=1
+        echo "gate binary exit status $NUM_EXEC_RC" >> "$NUM_RUN_DIR/build.log"
     fi
     exec 9>&-
     [ "$rc" = 0 ] || return 1
 
     after=$(m19r_historical) || return 1
     [ "$before" = "$after" ] || m19r_fail "evidence/ changed during the run" || return 1
-    m19r_must_candidate "$omega" "$NUM_OMEGA_CAND" || return 1
-    m19r_must_candidate "$M19R_PHYSICS" "$NUM_PHYSICS_CAND" || return 1
     num_receipt "$omega" "$NUM_RUN_DIR/gate5.log"
 }
 
@@ -226,6 +413,7 @@ num_usage() {
 num_main() {
     local physics_dir= rc=0 run_json
     NUM_OMEGA_CAND= NUM_PHYSICS_CAND= NUM_RECORD=0 NUM_PERMANENT= NUM_DIGEST=
+    NUM_EXEC_RC= NUM_LOG_SHA= NUM_BINARY_SHA= NUM_RUN_COMMIT= NUM_TS=
     while [ $# -gt 0 ]; do
         case $1 in
             -h|--help) num_usage; exit 0;;
@@ -257,12 +445,22 @@ num_main() {
     rm -f "$M19R_TMP/error"
     if num_qualify; then
         echo "Gate 5 PASS: receipt digest $NUM_DIGEST"
-        [ -z "$NUM_PERMANENT" ] || echo "Permanent receipt: $NUM_PERMANENT"
+        [ -z "$NUM_PERMANENT" ] || echo "Permanent PASS receipt: $NUM_PERMANENT"
     else
         rc=1
         [ ! -s "$M19R_TMP/error" ] || M19R_ERR=$(cat "$M19R_TMP/error")
         echo "Gate 5 FAILED: $M19R_ERR" >&2
-        echo "No receipt written." >&2
+        NUM_DIGEST= NUM_PERMANENT=
+        rm -f "$NUM_RUN_DIR/receipt-preview.json"
+        if [ "$NUM_RECORD" = 1 ]; then
+            if num_fail_receipt "$M19R_OMEGA" "$M19R_ERR"; then
+                echo "Permanent FAIL receipt: $NUM_PERMANENT" >&2
+            else
+                echo "Could not write the FAIL receipt: $M19R_ERR" >&2
+            fi
+        else
+            echo "No receipt written (no --record)." >&2
+        fi
     fi
     run_json="{\"run_id\":$(m19r_jstr "$NUM_RUN_ID"),\"status\":\"$([ "$rc" = 0 ] && echo PASS || echo FAILED)\""
     run_json+=",\"physics_dir\":$(m19r_jstr "$M19R_PHYSICS")"

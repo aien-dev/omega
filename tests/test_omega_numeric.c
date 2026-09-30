@@ -405,12 +405,17 @@ int main(void) {
     report("NOT_ENCODED_OPS_REFUSED_BEFORE_SUBMISSION", refuse_ok);
 
     /* Gate item: the spec's vocabulary includes shared-memory load/store and a
-     * warp reduction primitive. Neither has a GB10 kernel yet. */
+     * warp reduction primitive. Neither has a GB10 kernel yet, so both are
+     * expected-not-encoded (refused above) and this test FAILS until they are
+     * encoded and qualified. It is never passed by relabelling an op. */
     {
         bool lds = omega_numeric_op_find("LDS_STS")->gb10_encoded;
         bool red = omega_numeric_op_find("REDUCE_SUM")->gb10_encoded;
         printf("OMEGA_NUMERIC_FINDING_JSON:{\"id\":\"VOCABULARY_INCOMPLETE\",\"shared_load_store_encoded\":%s,"
-               "\"warp_reduction_encoded\":%s}\n", lds ? "true" : "false", red ? "true" : "false");
+               "\"warp_reduction_encoded\":%s,\"expected_not_encoded\":[\"LDS_STS\",\"REDUCE_SUM\"],"
+               "\"blocks\":\"FP32_SIMT_OPCODES_ENCODED\"}\n", lds ? "true" : "false", red ? "true" : "false");
+        if (!lds || !red)
+            printf("    FP32_SIMT_OPCODES_ENCODED needs LDS_STS and REDUCE_SUM GB10 kernels; both are expected-not-encoded today\n");
         report("FP32_SIMT_OPCODES_ENCODED",
                fixtures_rc == 0 && prov_problems == 0 && build_ok && lds && red);
     }
