@@ -19,7 +19,21 @@
 #define EST_BURN_IN 30u
 #define EST_NQ 19
 #define EST_NR 25
+#define EST_PROTOCOL_DOC_SHA "dbd2a407a8cf12d353f9abff5d26985fb2f9d96f6d33872896169082c6082676"
 #define EST_SOURCE_TEXT "R15.machine-state.thermal_mc[0]"
+
+/* Run B identity (from that run's SHA256SUMS text only; no data file is read to know these). */
+#define EST_RUN_B_RAW_SHA_DEFAULT "91a5fe34225926cd7aca2fca4be5ed51dc0772341a2fda5f9a39d0f72b8a6bb5"
+#define EST_RUN_B_MARKS_SHA_DEFAULT "d2dcc89fb1f9bfff15e1dce6be5248ba6f285cfe1fb7dd051c09764aec844d04"
+const char *est_run_b_id(void);
+const char *est_run_b_raw_sha(void);
+const char *est_run_b_marks_sha(void);
+/* Nonzero only when est_eval --recorded has proven both inputs are run B. */
+extern int est_allow_run_b;
+/* 1 when the resolved (realpath) path has run B's id in any component. */
+int est_path_is_run_b(const char *path);
+/* Find "<hex>  <name>" in dir/SHA256SUMS (text only). 0 when found. */
+int est_sums_lookup(const char *dir, const char *name, char hex[65]);
 
 /* Whole file in memory, verified against the SHA256SUMS line beside it. */
 typedef struct {
@@ -36,6 +50,8 @@ typedef struct {
  * SHA-256 differs from its line in SHA256SUMS in the same directory, or when
  * there is no such line. */
 int est_file_load(const char *path, est_file *f, char *err, size_t errcap);
+/* Same reader without SHA256SUMS or the run B guard (used for temp copies). */
+int est_file_load_raw(const char *path, est_file *f, char *err, size_t errcap);
 void est_file_free(est_file *f);
 /* Hex SHA-256 of a whole file on disk (0 on success). */
 int est_sha_file_hex(const char *path, char out[65]);
@@ -44,7 +60,8 @@ void est_hex(const uint8_t *d, size_t n, char *out);
 /* Parsers. Return 0 on success, nonzero when the line does not parse. */
 int est_parse_t(const char *line, size_t len, int64_t *t_ns);
 int est_parse_thermal0(const char *line, size_t len, double *value);
-/* "<sec>.<9 digits>" at the start of s (used for marks lines). */
+/* "<sec>.<9 digits>" at the start of s (used for marks lines). Returns 2 when
+ * the seconds field has more than 10 digits or would overflow int64 ns. */
 int est_parse_time_prefix(const char *s, size_t len, int64_t *t_ns, size_t *used);
 
 double est_grid_q(int i);
@@ -74,6 +91,9 @@ typedef struct {
     size_t leading_missing;  /* lines before the first valid observation */
     size_t coasts;           /* missing observations after the first valid */
     size_t bad_value, bad_t; /* diagnostics, over all lines used */
+    size_t bad_t_overflow;   /* t with too many seconds digits (subset of bad_t) */
+    size_t gap_zero, gap_backward; /* duplicate / backward t between parsed lines */
+    size_t multi_horizon;    /* steps with horizon > 1 */
     est_model model;
     est_digest model_d;
     int error;               /* nonzero: filter refused something */
@@ -87,6 +107,10 @@ int est_replay_run(const est_file *f, size_t limit, int model_id, double q, doub
 void est_replay_free(est_replay *rp);
 void est_replay_write_stream(FILE *fp, const est_replay *rp, int model_id);
 
+/* Fit selection: best finite log-likelihood, strict >, q outer / r inner, so a
+ * tie keeps the smaller q then the smaller r. Returns 1 when none is finite. */
+int est_fit_pick(const double ll[EST_NQ][EST_NR], int *bi, int *bj);
+
 /* Parameter file (text). */
 typedef struct {
     char fit_path[1024];
@@ -96,5 +120,7 @@ typedef struct {
 } est_params;
 int est_params_write(const char *path, const est_params *p);
 int est_params_read(const char *path, est_params *p);
+/* Protocol checks: q and r finite and on the 19x25 grid (1e-9 relative). */
+int est_params_validate(const est_params *p, char *err, size_t cap);
 
 #endif

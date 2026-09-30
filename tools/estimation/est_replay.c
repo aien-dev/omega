@@ -1,6 +1,9 @@
 #include "est_replay.h"
 
 #include <ctype.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,7 +40,7 @@ static void setmsg(char *err, size_t cap, const char *fmt, const char *a, const 
 }
 
 /* Find "<hex>  <name>" in dir/SHA256SUMS. Returns 0 when found. */
-static int sums_lookup(const char *dir, const char *name, char hex[65])
+int est_sums_lookup(const char *dir, const char *name, char hex[65])
 {
     char p[1100];
     snprintf(p, sizeof p, "%s/SHA256SUMS", dir);
@@ -55,17 +58,90 @@ static int sums_lookup(const char *dir, const char *name, char hex[65])
     return found;
 }
 
+int est_allow_run_b = 0;
+
+const char *est_run_b_id(void)
+{
+#ifdef EST_TEST_BUILD
+    const char *e = getenv("EST_TEST_B_ID"); if (e && *e) return e;
+#endif
+    return EST_RUN_B_ID;
+}
+const char *est_run_b_raw_sha(void)
+{
+#ifdef EST_TEST_BUILD
+    const char *e = getenv("EST_TEST_B_RAW_SHA"); if (e && *e) return e;
+#endif
+    return EST_RUN_B_RAW_SHA_DEFAULT;
+}
+const char *est_run_b_marks_sha(void)
+{
+#ifdef EST_TEST_BUILD
+    const char *e = getenv("EST_TEST_B_MARKS_SHA"); if (e && *e) return e;
+#endif
+    return EST_RUN_B_MARKS_SHA_DEFAULT;
+}
+
+/* Resolve symlinks and relative parts, then look for run B's id in any path
+ * component. The unresolved string is checked too. A path that cannot be
+ * resolved is judged on its raw text only (the open then fails anyway). */
+int est_path_is_run_b(const char *path)
+{
+    char rp[PATH_MAX];
+    if (strstr(path, est_run_b_id())) return 1;
+    if (realpath(path, rp) && strstr(rp, est_run_b_id())) return 1;
+    return 0;
+}
+
+static int hex_is_run_b(const char *hex)
+{
+    return strcmp(hex, est_run_b_raw_sha()) == 0 || strcmp(hex, est_run_b_marks_sha()) == 0;
+}
+
+static int read_index(const char *path, est_file *f, char *err, size_t errcap);
+
 int est_file_load(const char *path, est_file *f, char *err, size_t errcap)
 {
     memset(f, 0, sizeof *f);
     if (strlen(path) >= sizeof f->path) { setmsg(err, errcap, "%s: path too long%s", path, ""); return 1; }
-    snprintf(f->path, sizeof f->path, "%s", path);
     char dir[1024]; const char *slash = strrchr(path, '/');
     const char *name = slash ? slash + 1 : path;
     if (slash) { size_t n = (size_t)(slash - path); memcpy(dir, path, n); dir[n] = 0; }
     else snprintf(dir, sizeof dir, ".");
+    if (!est_allow_run_b && est_path_is_run_b(path)) {
+        setmsg(err, errcap, "%s: resolves into run B; only est_eval --recorded may open run B%s", path, "");
+        return 1;
+    }
     char want[65];
-    if (sums_lookup(dir, name, want)) { setmsg(err, errcap, "%s: no SHA256SUMS line for %s", dir, name); return 1; }
+    if (est_sums_lookup(dir, name, want)) { setmsg(err, errcap, "%s: no SHA256SUMS line for %s", dir, name); return 1; }
+    if (!est_allow_run_b && hex_is_run_b(want)) {
+        setmsg(err, errcap, "%s: SHA256SUMS names run B's digest; refused before opening%s", path, "");
+        return 1;
+    }
+    if (read_index(path, f, err, errcap)) return 1;
+    if (strcmp(f->sha_hex, want) != 0) {
+        setmsg(err, errcap, "SHA-256 mismatch for %s (SHA256SUMS says %s)", path, want);
+        est_file_free(f);
+        return 1;
+    }
+    if (!est_allow_run_b && hex_is_run_b(f->sha_hex)) {
+        setmsg(err, errcap, "%s: content is run B; refused%s", path, "");
+        est_file_free(f);
+        return 1;
+    }
+    return 0;
+}
+
+int est_file_load_raw(const char *path, est_file *f, char *err, size_t errcap)
+{
+    memset(f, 0, sizeof *f);
+    if (strlen(path) >= sizeof f->path) { setmsg(err, errcap, "%s: path too long%s", path, ""); return 1; }
+    return read_index(path, f, err, errcap);
+}
+
+static int read_index(const char *path, est_file *f, char *err, size_t errcap)
+{
+    snprintf(f->path, sizeof f->path, "%s", path);
     FILE *fp = fopen(path, "rb");
     if (!fp) { setmsg(err, errcap, "cannot open %s%s", path, ""); return 1; }
     size_t cap = 1u << 20, len = 0;
@@ -80,17 +156,12 @@ int est_file_load(const char *path, est_file *f, char *err, size_t errcap)
     fclose(fp);
     uint8_t d[32]; sha256_hash(buf, len, d);
     est_hex(d, 32, f->sha_hex);
-    if (strcmp(f->sha_hex, want) != 0) {
-        free(buf);
-        setmsg(err, errcap, "SHA-256 mismatch for %s (SHA256SUMS says %s)", path, want);
-        return 1;
-    }
     f->data = buf; f->len = len;
     size_t nl = 0;
     for (size_t i = 0; i < len; i++) if (buf[i] == '\n') nl++;
     if (len && buf[len - 1] != '\n') nl++;
     f->off = malloc((nl + 1) * sizeof(size_t)); f->llen = malloc((nl + 1) * sizeof(size_t));
-    if (!f->off || !f->llen) return 1;
+    if (!f->off || !f->llen) { est_file_free(f); return 1; }
     size_t k = 0, start = 0;
     for (size_t i = 0; i < len; i++) if (buf[i] == '\n') { f->off[k] = start; f->llen[k] = i - start; k++; start = i + 1; }
     if (start < len) { f->off[k] = start; f->llen[k] = len - start; k++; }
@@ -108,7 +179,7 @@ int est_parse_time_prefix(const char *s, size_t len, int64_t *t_ns, size_t *used
 {
     size_t i = 0; int64_t sec = 0;
     while (i < len && s[i] >= '0' && s[i] <= '9') {
-        if (i >= 12) return 1;
+        if (i >= 10) return 2;               /* more than 10 seconds digits */
         sec = sec * 10 + (s[i] - '0'); i++;
     }
     if (i == 0 || i >= len || s[i] != '.') return 1;
@@ -119,6 +190,7 @@ int est_parse_time_prefix(const char *s, size_t len, int64_t *t_ns, size_t *used
         frac = frac * 10 + (s[i] - '0');
     }
     if (i < len && s[i] >= '0' && s[i] <= '9') return 1; /* more than nine digits */
+    if (sec > 9223372035ll) return 2;        /* sec * 1e9 must fit int64 */
     *t_ns = sec * NS + frac;
     if (used) *used = i;
     return 0;
@@ -129,7 +201,8 @@ int est_parse_t(const char *line, size_t len, int64_t *t_ns)
     static const char pre[] = "{\"t\":";
     if (len < sizeof pre - 1 || memcmp(line, pre, sizeof pre - 1) != 0) return 1;
     size_t used;
-    if (est_parse_time_prefix(line + 5, len - 5, t_ns, &used)) return 1;
+    int pr = est_parse_time_prefix(line + 5, len - 5, t_ns, &used);
+    if (pr) return pr;
     size_t e = 5 + used;
     if (e >= len || (line[e] != ',' && line[e] != '}')) return 1;
     return 0;
@@ -218,10 +291,13 @@ int est_replay_run(const est_file *f, size_t limit, int model_id, double q, doub
         const char *ln = (const char *)f->data + f->off[li];
         size_t ll = f->llen[li];
         double z = 0; int64_t wall = 0;
-        int t_ok = (est_parse_t(ln, ll, &wall) == 0);
-        int v_ok = (est_parse_thermal0(ln, ll, &z) == 0);
-        if (!t_ok) rp->bad_t++;
-        if (!v_ok) rp->bad_value++;
+        int tr = est_parse_t(ln, ll, &wall);
+        int t_ok = (tr == 0);
+        int v_parsed = (est_parse_thermal0(ln, ll, &z) == 0);
+        /* a line whose t fails to parse is a missing observation even when the value parses */
+        int v_ok = v_parsed && t_ok;
+        if (!t_ok) { rp->bad_t++; if (tr == 2) rp->bad_t_overflow++; }
+        if (!v_parsed) rp->bad_value++;
         uint8_t ev[32]; sha256_hash((const uint8_t *)ln, ll, ev);
         if (!have) {
             if (!v_ok) { rp->leading_missing++; if (t_ok) { prev_wall = wall; prev_ok = 1; } continue; }
@@ -244,6 +320,8 @@ int est_replay_run(const est_file *f, size_t limit, int model_id, double q, doub
         uint32_t h = 1;
         if (t_ok && prev_ok) {
             int64_t gap = wall - prev_wall;
+            if (gap == 0) rp->gap_zero++;
+            else if (gap < 0) rp->gap_backward++;
             if (gap > 0) {
                 int64_t hr = (gap + NS / 2) / NS; /* round half up */
                 if (hr < 1) hr = 1;
@@ -251,6 +329,7 @@ int est_replay_run(const est_file *f, size_t limit, int model_id, double q, doub
                 h = (uint32_t)hr;
             }
         }
+        if (h > 1) rp->multi_horizon++;
         if (t_ok) { prev_wall = wall; prev_ok = 1; }
         else if (prev_ok) prev_wall += NS; /* unparsable t: assume one nominal step */
 
@@ -320,46 +399,101 @@ int est_params_write(const char *path, const est_params *p)
     return fclose(fp) != 0;
 }
 
+int est_fit_pick(const double ll[EST_NQ][EST_NR], int *bi, int *bj)
+{
+    double best = -INFINITY; int pi = -1, pj = -1;
+    for (int i = 0; i < EST_NQ; i++)
+        for (int j = 0; j < EST_NR; j++) {
+            if (!isfinite(ll[i][j])) continue;
+            if (ll[i][j] > best) { best = ll[i][j]; pi = i; pj = j; }   /* strict: ties keep the earlier */
+        }
+    if (pi < 0) return 1;
+    *bi = pi; *bj = pj;
+    return 0;
+}
+
+static int is_hex64(const char *s)
+{
+    if (strlen(s) != 64) return 0;
+    for (int i = 0; i < 64; i++) if (!((s[i] >= '0' && s[i] <= '9') || (s[i] >= 'a' && s[i] <= 'f'))) return 0;
+    return 1;
+}
+
+/* Exactly: header, protocol_commit, fit_run_path, fit_file_sha256, fit_lines,
+ * M0, M1, in that order, nothing else. */
 int est_params_read(const char *path, est_params *p)
 {
     memset(p, 0, sizeof *p);
     FILE *fp = fopen(path, "r");
     if (!fp) return 1;
-    char line[1300]; int ok = 0, got = 0;
+    char line[1300]; int idx = 0, bad = 0;
     while (fgets(line, sizeof line, fp)) {
         size_t l = strlen(line);
-        while (l && (line[l - 1] == '\n' || line[l - 1] == '\r')) line[--l] = 0;
-        if (strcmp(line, "est_params_v1") == 0) ok = 1;
-        else if (strncmp(line, "fit_run_path ", 13) == 0) { snprintf(p->fit_path, sizeof p->fit_path, "%.1023s", line + 13); got |= 1; }
-        else if (strncmp(line, "fit_file_sha256 ", 16) == 0 && l == 16 + 64) { memcpy(p->fit_sha, line + 16, 65); got |= 2; }
-        else if (strncmp(line, "fit_lines ", 10) == 0) { p->fit_lines = (size_t)strtoull(line + 10, NULL, 10); }
-        else if (line[0] == 'M' && (line[1] == '0' || line[1] == '1')) {
-            int m = line[1] - '0';
-            if (sscanf(line + 2, " q %lf r %lf loglik %lf", &p->q[m], &p->r[m], &p->ll[m]) == 3) got |= (4 << m);
+        if (l == 0 || line[l - 1] != '\n') { bad = 1; break; }
+        line[--l] = 0;
+        switch (idx) {
+        case 0: if (strcmp(line, "est_params_v1") != 0) bad = 1; break;
+        case 1: if (strcmp(line, "protocol_commit " EST_PROTOCOL_COMMIT) != 0) bad = 1; break;
+        case 2:
+            if (strncmp(line, "fit_run_path ", 13) != 0 || l - 13 == 0 || l - 13 >= sizeof p->fit_path) bad = 1;
+            else snprintf(p->fit_path, sizeof p->fit_path, "%.1023s", line + 13);
+            break;
+        case 3:
+            if (strncmp(line, "fit_file_sha256 ", 16) != 0 || !is_hex64(line + 16)) bad = 1;
+            else memcpy(p->fit_sha, line + 16, 65);
+            break;
+        case 4: {
+            char *end;
+            if (strncmp(line, "fit_lines ", 10) != 0) { bad = 1; break; }
+            p->fit_lines = (size_t)strtoull(line + 10, &end, 10);
+            if (*end || end == line + 10) bad = 1;
+            break; }
+        case 5: case 6: {
+            int m = idx - 5, used = 0;
+            char tag[4]; snprintf(tag, sizeof tag, "M%d", m);
+            if (strncmp(line, tag, 2) != 0 ||
+                sscanf(line + 2, " q %lf r %lf loglik %lf%n", &p->q[m], &p->r[m], &p->ll[m], &used) != 3 ||
+                line[2 + used] != 0) bad = 1;
+            break; }
+        default: bad = 1;
         }
+        if (bad) break;
+        idx++;
     }
     fclose(fp);
-    return (ok && got == 15) ? 0 : 1;
+    return (!bad && idx == 7) ? 0 : 1;
+}
+
+int est_params_validate(const est_params *p, char *err, size_t cap)
+{
+    for (int m = 0; m < 2; m++) {
+        double q = p->q[m], r = p->r[m];
+        if (!isfinite(q) || !isfinite(r) || q <= 0 || r <= 0) { snprintf(err, cap, "M%d: q or r not finite and positive", m); return 1; }
+        int i = (int)floor((log10(q) + 3.0) / 0.5 + 0.5), j = (int)floor(log10(r) / 0.25 + 0.5);
+        if (i < 0 || i >= EST_NQ || fabs(q - est_grid_q(i)) > 1e-9 * est_grid_q(i)) { snprintf(err, cap, "M%d: q %.17g is not on the protocol grid", m, q); return 1; }
+        if (j < 0 || j >= EST_NR || fabs(r - est_grid_r(j)) > 1e-9 * est_grid_r(j)) { snprintf(err, cap, "M%d: r %.17g is not on the protocol grid", m, r); return 1; }
+    }
+    return 0;
 }
 
 #ifdef EST_REPLAY_MAIN
-/* est_replay [--recorded] <model 0|1> <q> <r> <machine-state.ndjson>
- * Prints the full observation/prediction/innovation stream, one line per step. */
+/* est_replay <model 0|1> <q> <r> <machine-state.ndjson>
+ * Prints the full observation/prediction/innovation stream, one line per step.
+ * Never opens run B (est_eval --recorded writes run B's streams itself). */
 int main(int argc, char **argv)
 {
-    int rec = 0, a = 1;
-    if (a < argc && strcmp(argv[a], "--recorded") == 0) { rec = 1; a++; }
-    if (argc - a != 4) { fprintf(stderr, "usage: est_replay [--recorded] model q r file\n"); return 2; }
-    if (strstr(argv[a + 3], EST_RUN_B_ID) && !rec) {
-        fprintf(stderr, "refusing run B without --recorded (protocol section 6)\n"); return 2;
-    }
+    if (argc != 5) { fprintf(stderr, "usage: est_replay model q r file\n"); return 2; }
+    char *e1, *e2, *e3;
+    long mid = strtol(argv[1], &e1, 10);
+    double q = strtod(argv[2], &e2), r = strtod(argv[3], &e3);
+    if (*e1 || *e2 || *e3 || (mid != 0 && mid != 1)) { fprintf(stderr, "bad model, q or r\n"); return 2; }
     est_file f; char err[300];
-    if (est_file_load(argv[a + 3], &f, err, sizeof err)) { fprintf(stderr, "refuse: %s\n", err); return 1; }
+    if (est_file_load(argv[4], &f, err, sizeof err)) { fprintf(stderr, "refuse: %s\n", err); return 1; }
     static est_replay rp;
-    if (est_replay_run(&f, (size_t)-1, atoi(argv[a]), atof(argv[a + 1]), atof(argv[a + 2]), &rp)) {
+    if (est_replay_run(&f, (size_t)-1, (int)mid, q, r, &rp)) {
         fprintf(stderr, "replay failed: %s\n", rp.errmsg); return 1;
     }
-    est_replay_write_stream(stdout, &rp, atoi(argv[a]));
+    est_replay_write_stream(stdout, &rp, (int)mid);
     fprintf(stderr, "steps=%zu coasts=%zu leading_missing=%zu bad_value=%zu bad_t=%zu\n",
             rp.nsteps, rp.coasts, rp.leading_missing, rp.bad_value, rp.bad_t);
     return 0;
