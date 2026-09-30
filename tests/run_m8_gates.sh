@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Program Composition and Contracts)
 echo "[*] Step 3: Running Demonstration (Program Composition and Contracts)..."
-"$TOOL" --demonstrate-program
+"$TOOL" --reference-demonstrate-program
 echo ""
 
 # Step 4: Regression checks (M4, M5, M6, M7)

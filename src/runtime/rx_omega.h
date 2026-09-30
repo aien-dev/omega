@@ -166,6 +166,9 @@ typedef struct RxOmegaFaculty {
     /* Observability only; no reaction reads these. */
     uint64_t served_reference, served_realized;
     uint64_t sandbox_runs, sandbox_crashes;
+    /* R16 C5: this faculty's caller credentials (rx_caller.h); null in a
+     * world without bound callers. Held here, never published. */
+    const RxCallerKeyring *keys;
 } RxOmegaFaculty;
 
 void rx_omega_default_config(RxOmegaConfig *cfg);

@@ -241,7 +241,44 @@ static void take_baseline(R15Rig *r) {
     pthread_mutex_unlock(&r->w.mu);
 }
 
+/* R16 C5: enroll one subject into a keyring (and, for a subject two
+ * components act as, copy the same credential into a second one). */
+static int enroll(R15Rig *r, RxCallerKeyring *k, uint32_t subject) {
+    if (k->n >= RX_CALLER_KEYRING_MAX) return -1;
+    if (rx_world_enroll_caller(&r->w, subject, &k->cred[k->n]) != RX_CALLER_OK) return -1;
+    k->subject[k->n++] = subject;
+    return 0;
+}
+
+static int share(RxCallerKeyring *to, const RxCallerKeyring *from, uint32_t subject) {
+    const RxCallerCred *c = rx_caller_find(from, subject);
+    if (!c || to->n >= RX_CALLER_KEYRING_MAX) return -1;
+    to->subject[to->n] = subject;
+    to->cred[to->n++] = *c;
+    return 0;
+}
+
+static int enroll_callers(R15Rig *r, const uint32_t *fixtures, uint32_t n_fixtures) {
+    if (n_fixtures > RX_CALLER_KEYRING_MAX) return -1;
+    if (enroll(r, &r->keys_omega, RX_OMEGA_SUBJ_SERVE) || enroll(r, &r->keys_omega, RX_OMEGA_SUBJ_OMEGA) ||
+        enroll(r, &r->keys_aien, RX_AIEN_SUBJ) ||
+        enroll(r, &r->keys_aegis, RX_AEGIS_SUBJ) || enroll(r, &r->keys_aegis, RX_AEGIS_ROOT_SUBJ) ||
+        enroll(r, &r->keys_living, RX_LIVING_SUBJ) || enroll(r, &r->keys_living, RX_LIVING_SEAT_SUBJ) ||
+        enroll(r, &r->keys_living, RX_LIVING_PREPARE_SUBJ) ||
+        enroll(r, &r->keys_promoter, RX_LIVING_PROMOTE_SUBJ) ||
+        share(&r->keys_rig, &r->keys_living, RX_LIVING_SEAT_SUBJ))
+        return -1;
+    for (uint32_t i = 0; i < n_fixtures; i++)
+        if (enroll(r, &r->fixtures, fixtures[i])) return -1;
+    return rx_world_bind_callers(&r->w) == RX_OK ? 0 : -1;
+}
+
 int r15_start(R15Rig *r, R15Config config) {
+    return r15_start_with(r, config, NULL, 0);
+}
+
+int r15_start_with(R15Rig *r, R15Config config, const uint32_t *fixture_subjects,
+                   uint32_t n_fixtures) {
     memset(r, 0, sizeof *r);
     r->config = config;
     r->stage = 1;
@@ -252,6 +289,10 @@ int r15_start(R15Rig *r, R15Config config) {
                                RX_CRUMBS_LONG_EPISODE);
     if (wrc != RX_OK) return -1;
     r->w.external_subject = EXTERNAL;
+    if (enroll_callers(r, fixture_subjects, n_fixtures) != 0) {
+        r->stage_why = "R16 C5: caller enrollment failed";
+        return -1;
+    }
     if (config == R15_SEQ) {
         /* The orchestrator is the only thing that runs reactions in SEQ, so
          * it runs from the start, as the workers do in RES. */
@@ -263,18 +304,25 @@ int r15_start(R15Rig *r, R15Config config) {
     }
     if (!mkdtemp(strcpy(r->generation_dir, "/tmp/r15-rig-XXXXXX"))) return -1;
     if (rx_gen_open(r->generation_dir, &r->gen) != RX_GEN_OK) return -1;
+    /* R16 C5: the store checks every proposer and promoter credential against
+     * this world, and uses the native authority whatever a caller passes. */
+    if (rx_gen_bind_authority(r->gen, rx_world_caller_check_fn, &r->w,
+                              rx_living_native_authority, r->view) != RX_GEN_OK) return -1;
     r->stage = 2;
     const uint32_t R = RX_RIGHT_READ, RW = RX_RIGHT_READ | RX_RIGHT_WRITE;
     RxOmegaConfig oc;
     rx_omega_default_config(&oc);
     oc.hot_calls = 64; oc.hot_ns = 200000; oc.margin_pct = 10;
     if (rx_omega_create_objects(&r->omega, &r->w, &oc) != RX_OK) return -1;
+    r->omega.keys = &r->keys_omega;
     RxAienConfig ac;
     rx_aien_default_config(&ac);
     RxAienInputs ai = {r->omega.o.demand, r->omega.o.selection};
     if (rx_aien_create_objects(&r->aien, &r->w, &ac, &ai) != RX_OK) return -1;
+    r->aien.keys = &r->keys_aien;
     if (rx_living_create(&r->living, &r->w, &r->aien, &r->omega, r->gen, r->view) != RX_OK)
         return -1;
+    r->living.keys = &r->keys_living;
     if (new_object(r, 0x6135, RES_INTENT, &r->intent) != RX_OK) return -1;
 
     RxAegisPolicy pol;
@@ -286,6 +334,7 @@ int r15_start(R15Rig *r, R15Config config) {
     RxAegisClient cl = {RX_LIVING_SEAT_SUBJ, RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT,
         RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT, RW};
     if (rx_aegis_create(&r->aegis, &r->w, r->admin, &pol, &cl, 1) != RX_OK) return -1;
+    r->aegis.keys = &r->keys_aegis;
     RxAegisCaps aeg;
     memset(&aeg, 0, sizeof aeg);
     aeg.aegis_request = mint(r, RX_AEGIS_SUBJ, rx_aegis_res(0, RX_AEGIS_RES_REQUEST), R);
@@ -369,6 +418,7 @@ int r15_start(R15Rig *r, R15Config config) {
     lc.output_prepare_read = mint(r, RX_LIVING_PREPARE_SUBJ,
         RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT, R);
     r->promoter.world = &r->w;
+    r->promoter.keys = &r->keys_promoter;
     r->promoter.store = r->gen;
     r->promoter.authority = r->view;
     r->promoter.candidate = r->living.o.candidate;
@@ -403,7 +453,7 @@ int r15_start(R15Rig *r, R15Config config) {
     d.caps[0] = (RxCapNeed){mint(r, RX_LIVING_SEAT_SUBJ, RES_INTENT, R), RES_INTENT, R};
     d.caps[1] = (RxCapNeed){mint(r, RX_LIVING_SEAT_SUBJ,
         rx_aegis_res(0, RX_AEGIS_RES_REQUEST), RW), rx_aegis_res(0, RX_AEGIS_RES_REQUEST), RW};
-    if (rx_world_add_reaction(&r->w, &d, &r->r_ask) != RX_OK) return -1;
+    if (rx_world_add_reaction_keyed(&r->w, &r->keys_rig, &d, &r->r_ask) != RX_OK) return -1;
     RxMutation request[6] = {
         {r->intent, 0, 1}, {r->intent, 1, RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT},
         {r->intent, 2, RW}, {r->intent, 3, 0}, {r->intent, 4, 0},

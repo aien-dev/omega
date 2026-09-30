@@ -192,7 +192,7 @@ heartbeat dispatch A (by non-use); sovereign-core spine E (§3.1); aienos boot
 | R16-G1 | Retirement map complete | `spec/r16-orchestrator-retirement-map.md` exists, was committed before any retirement code, records the five repository SHAs, reports a hit count for every §4 search term, and gives every loop found exactly one class A–F with a reason; zero rows unclassified |
 | R16-G2 | Code-search gate | `tools/r16_loop_inventory.sh` (shell or C; no Python) scans the five repositories for the §4 patterns, joins each match with the map, prints a machine-readable JSON inventory and exits non-zero if any match is unclassified or any omega match is class A and still reachable from a production build. On the candidate: remaining unclassified semantic-loop count = 0 and exit 0. With a planted `run_until_complete` loop in a scratch copy: exit non-zero |
 | R16-G3 | Authoritative path without legacy orchestrators | A test target (`make test-r16-authpath`) builds the production golden path with every class-A orchestrator absent: no omegatool sequencer linked, no aien-sovereign-core or aegis-runtime symbol linked, no exec of `spark-aegis`, `aegis-runtime` or any sovereign-core binary (checked from the link map and by exec tracing during the run). In that configuration R13 living system (`R13_LIVING_SYSTEM_PASS`) and the R14 recovery subset pass, host and silicon: goal in → AIEN reacts → Omega reacts → authority → GPU → evidence → generation promotes → recovery works |
-| R16-G4 | Legacy paths cannot bypass authority | `tests/runtime/rx_r16_negative.c` (`make test-r16-negative`): from a legacy/reference/oracle context, each of six acts is attempted and refused by the R7 native authority or the publication boundary: (1) write authoritative AIEN belief, (2) select an Omega realization, (3) mint authority, (4) promote a generation, (5) bypass the effect/authority boundary, (6) advance the world generation. 6/6 refused, with no change to authoritative state; removing any one guard turns the test red |
+| R16-G4 | Legacy paths cannot bypass authority | `tests/runtime/rx_r16_negative.c` (`make test-r16-negative`): from a legacy/reference/oracle context, each of six acts is attempted and refused by the R7 native authority or the publication boundary: (1) write authoritative AIEN belief, (2) select an Omega realization, (3) mint authority, (4) promote a generation, (5) bypass the effect/authority boundary, (6) advance the world generation. 6/6 refused, with no change to authoritative state; removing any one guard turns the test red. Since C6 a subject is bound to a runtime-issued caller credential, and the gate also needs the promoter-subject probes, the C6 identity probes and the promotion control |
 | R16-G5 | API/build surface | In omega, every surviving legacy entry point lives under an explicit name (`legacy_oracle`, `maintenance`, `recovery` or `reference`); the supported production entry point is documented in the repo; no legacy sequencer is the default target or default mode of any production binary. For the Rust repositories (§3.3 item 2), the map row carries the LEGACY / NOT-IN-CHARGE label |
 | R16-G6 | Protected things kept | The receipt shows, each with the file/symbol and the test that exercised it on the candidate: known-good fallback present = true; recovery path present = true; deterministic maintenance controls present = true; trusted capability root present = true; generation mechanism present = true; evidence present = true (the six of §49); and R9 crash recovery, R10 verifier, R12 seat-loss handling, R14 recovery paths, operator emergency controls and needed benchmark reference paths (SEQ) present and passing |
 | R16-G7 | Full ladder on the candidate | On the frozen candidate commit, clean tree: R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, R11, R12 host, R12 silicon, R13 host, R13 silicon, R14 host, R14 silicon all PASS, each named in the receipt with the make target that proved it; and the R15 physical qualification meets every pre-registered R15 gated criterion (R15 spec §11 G1–G16, with its clarifications). R15 numbers need not be byte-identical; if performance changes materially, a new R15-compatible measurement bundle is recorded in the R16 qualification |
@@ -278,3 +278,348 @@ aienos-capability crate is legacy under the no-Rust port (aienos #156).
 Omega's rx_caproot.c is a host reference root, not the trusted capability
 root. This affects G4/G6 wording only; the native C capability root remains
 the sole authoritative capability root.
+
+### C4 (2026-09-30)
+
+Made before any qualification data existed (only host development runs of
+the new G3 to G5 tests on the R16 branch). No gate is loosened.
+
+1. Precondition 4 (R4 target). R4 (causal trace) is proved by
+   `make test-r3`: `tests/runtime/rx_heartbeat_test.c` prints
+   `R4_CAUSAL_TRACE: PASS` and, in the same run, R1, R2, R3, R5 and R6. The
+   committed receipt `evidence/R3/ef3e5565b9deda5226b58caf00c3e05f467cf03f6ae91984c10898d98e28c321.json`
+   records `R4_CAUSAL_TRACE` PASS. In G7, R1 to R6 are each named with the
+   target `test-r3`.
+2. G3 in host mode (`make test-r16-authpath`) prints
+   `R16_G3_AUTHPATH=HOST_PASS_NON_SILICON`. Only `make
+   test-r16-authpath-silicon` on the candidate can print `PASS`.
+3. G4 act mapping (`tests/runtime/rx_r16_negative.c`). The legacy context
+   holds the world handle, a read-only authority view, the R9 store, a
+   forged reference, references it could observe (the external goal grant,
+   the promoter's grants) and grants of its own issued as fixtures.
+   - (1) AIEN belief and experiment belief; (2) Omega selection; (6) the
+     in-force and promotion records production reads: outside publication
+     with each reference, a reaction writing without a declared grant, a
+     reaction holding a forged or unrelated grant, and (belief) a reaction
+     whose real grant the office revokes while it runs.
+   - (3) cognition mint and revoke through the view, with a guessed token
+     and with none.
+   - (4) `rx_gen_promote` with the native authority as callback:
+     self-promotion with a real grant, another subject with the promoter's
+     grant, a forged reference, and a right the subject really holds but
+     that is not PROMOTE.
+   - (5) publication descriptors with a forged reference, an unrelated
+     grant, the promoter's grant, a real grant on the object's resource that
+     is not the writer of record's, and the writer's own grant after
+     revocation; and an overwritten physical record (refused as diverged,
+     canonical object unchanged).
+   - (6) "advance the world generation" means the records above plus the R9
+     active generation and lineage, in memory and recovered from disk,
+     which the test compares after every act.
+   After every act the watched objects, the R9 generation and the AIENOS
+   table (observer) must be unchanged, except for the office's own planned
+   revocations, which the test counts separately.
+4. "Removing any one guard turns the test red" is `make
+   test-r16-negative-mutants`: 15 mutants, each removing one guard from a
+   scratch copy (external publication cap check, reaction write coverage,
+   activation cap check, commit cap re-check, both, cognition mint,
+   cognition admin, self-promotion, promotion resource/right, promotion
+   authority callback result, boundary cap identity, boundary cap
+   validation, boundary divergence, SEQ pulse on a production world, SEQ
+   activation on a production world). All must be killed.
+5. G4 limits, stated in the receipt, not tested as refusals: world-owner
+   calls (`rx_world_create`, `rx_world_retire`, `rx_world_add_reaction`)
+   take no capability, and `rx_world_retire` moves an object's generation;
+   `rx_gen_promote` trusts the authority callback its caller passes; code in
+   the same address space can write process memory directly. Cognition mint
+   and admin refuse by construction (the view has no office token).
+6. G5. omegatool's class D milestone demonstrations run only under
+   `--reference-demonstrate-<name>`; the class A living matvec only under
+   `--legacy-oracle-living-matvec`; the old names are rejected. The class B
+   gate runners (`--run-gates`, `--run-m<N>-gates`) keep their names: they
+   run qualification tests and the map does not flag them for G5. With no
+   argument omegatool prints usage and exits 1. The production entry point
+   is `docs/r16-production-entry-point.md`; `make test-r16-surface` checks
+   all of this. The 16 reference modes live in one table (`reference_modes`)
+   that both the dispatcher and the usage text read; the check reads the
+   table, requires usage to list exactly those modes, requires every retired
+   `--demonstrate-<name>` (16 plus living-matvec) to be rejected, requires
+   every new name to be accepted by the real dispatcher through
+   `--reference-dispatch-dry-run <name>` (resolved, not run: several modes
+   need the chip), and runs `--reference-demonstrate-arithmetic` (CPU only).
+
+### C5 (2026-09-30): G4 is open (caller-named subjects); closed by C6
+
+Recorded after a review of the G3 to G5 branch found it; host data existed
+(the G4 host test). This records a discrepancy, it does not loosen G4.
+
+1. `rx_gen_promote` takes the subject from the request, a value the caller
+   supplies, and the authority callback checks the grant against that subject.
+   Nothing binds the subject to the caller. A legacy context that can read the
+   promoter's grant reference (`promotion_authority`, an id and a generation)
+   and names `RX_LIVING_PROMOTE_SUBJ` as the subject is accepted by the
+   unchanged native authority. Observed on host at 6d1ff1d plus this branch:
+   rc 0, R9 active generation 1 -> 3 in memory and on disk.
+   The same flaw is on the reaction path (found by review, confirmed on host):
+   `validate_caps` (rx_world.c) checks each grant against `d->subject`, the
+   subject the descriptor names, and `rx_world_add_reaction` does not check
+   who registers. A legacy reaction naming `RX_LIVING_PROMOTE_SUBJ` and
+   carrying the promoter's in-force grant was registered (rc 0), activated
+   once, committed once and wrote its marker 0xBADBAD into the authoritative
+   in-force record. So act (6), and by the same route acts (1) and (2) for any
+   writer whose grant reference the legacy context can read, are open too.
+   (The probe's wake uses a harness-minted scratch read grant for the promoter
+   subject; in normal operation the promoter's own candidate trigger would
+   wake it.)
+2. `tests/runtime/rx_r16_negative.c` now makes both attempts last (they move
+   authoritative state) and expects refusal. Until a subject is bound to
+   something the legacy path cannot supply (an authenticated caller or
+   registration handle, or the sealed reaction context of the grant's owner),
+   `make test-r16-negative` prints two `R16 G4 OPEN: ...` lines and
+   `R16_G4_LEGACY_REFUSED=FAIL`. The fix is a runtime change (`rx_world.c`,
+   `rx_generation.c`, `rx_living.c`, possibly the native capability library)
+   and a design decision; it is not made on this branch.
+3. The listed attempts of the six acts are still refused, and the test prints
+   `R16 G4 core: six acts refused, state unchanged, for the counted per-act
+   attempts only; this is NOT a claim that legacy cannot promote or write`. The mutant suite judges
+   that core line, so it still answers whether each of the 15 guards is load
+   bearing. No mutant exists for the missing binding, since there is no guard
+   yet to remove; when one is added, a mutant removing it must be added too.
+4. The G4 state comparison also covers the recovered lineage on disk, not
+   only the recovered active generation.
+5. C4 item 5's sentence on `rx_gen_promote` trusting its callback is
+   superseded here: the problem is the caller-supplied subject, which even
+   the real native callback accepts.
+
+### C6 (2026-09-30): C5 closed by runtime-issued caller credentials
+
+Records the runtime change C5 item 2 asked for. It narrows who can act as a
+subject; it does not loosen any gate, and it does not make R16 complete
+(G6 to G8 and the receipt remain blocked).
+
+1. Mechanism (`src/runtime/rx_caller.h`, `rx_world.c`, `rx_generation.c`).
+   - A subject acts only with a credential the runtime issued for it:
+     `rx_world_enroll_caller(w, subject, &cred)` draws a 32-byte secret from
+     `getrandom` and a world-unique generation (never 0; 0 means absent). The
+     world keeps only `SHA-256("AIEN_RX_CALLER_V1", subject, generation,
+     secret)` and compares in constant time; the secret exists only in the
+     enrolling component's keyring (`RxCallerKeyring`).
+   - `rx_world_bind_callers(w)` closes enrollment, one-way. From then on every
+     subject is checked. Worlds that never bind (older tests) behave as before.
+   - Errors (`RX_CALLER_ERR_*`): ABSENT (no credential, or generation 0),
+     UNKNOWN (never enrolled), REVOKED, STALE (another generation), FORGED
+     (secret does not match), CLOSED (enrollment after bind), EXISTS
+     (subject enrolled twice), ENTROPY. At the authority-bearing calls they
+     surface as `RX_ERR_IDENTITY` (world) and `RX_GEN_ERR_IDENTITY` (R9).
+   - Revocation (`rx_world_revoke_caller`) needs the credential itself; it
+     clears the stored digest. A revoked credential is refused everywhere,
+     and enrollment is closed, so the subject cannot be re-issued in that
+     world.
+2. Where it is checked (every authority-bearing call that takes a subject):
+   - `rx_world_add_reaction`: the descriptor's `caller` must be the named
+     subject's credential. The reaction keeps only the generation, never the
+     secret (it is zeroed on registration).
+   - `validate_caps` (activation, commit re-check and the seat completion
+     path): the enrollment the reaction was admitted under must still be live
+     at that generation, so revoking an identity stops a running reaction's
+     write and blocks later activations.
+   - R9, when the store is bound (`rx_gen_bind_authority`): `rx_gen_propose_as`
+     and the durable `rx_gen_post_propose_as` check the proposer's credential;
+     `rx_gen_promote` checks `request->caller` against `request->subject`, then
+     validates the promotion right with the store's own bound authority and
+     ignores the caller's `RxGenAuthFn`. This also closes C4 item 5.
+   - `rx_world_publish_external` is unchanged: its subject is the world's
+     fixed `external_subject`, never a caller-supplied value.
+3. Production wiring: the R15 rig (the production body for R13 to R16)
+   enrolls every production subject (Omega 21, 22; AIEN 31; Aegis 41, 42;
+   Living 61, 62, 63; promoter 64) into per-component keyrings right after the
+   world is created, then binds the world, then binds the R9 store to the world
+   and to the native authority (`rx_living_native_authority`, i.e.
+   `aienos_cap_validate`). Faculties register with
+   `rx_world_add_reaction_keyed`, which takes the credential from their own
+   keyring. The production entry point (R13 living, R14 recovery; see
+   `docs/r16-production-entry-point.md`) is wired the same way through
+   `rx_living_enroll_callers` (enrolls the nine production subjects into an
+   `RxLivingKeyrings`, does not bind). R14 also enrolls its lane, rogue and
+   cycle subjects: the rogue is an enrolled in-process party whose
+   capabilities are forged. Its B6 promotion forgery now meets the identity
+   check first when it names the promoter subject (`RX_GEN_ERR_IDENTITY`),
+   and the native authority when it names itself (`RX_GEN_ERR_AUTHORITY`).
+4. Evidence (`make test-r16-negative`, host):
+   - The pre-fix exploit is kept in the test. At 44d8c06 (before this change)
+     it was ACCEPTED: promotion rc 0, generation 1 -> 3 in memory and on disk;
+     the named-subject reaction committed and wrote 0xBADBAD into the in-force
+     record; gate `R16_G4_LEGACY_REFUSED=FAIL`.
+   - After: 6/6 promotion credential variants and 3/3 reaction variants are
+     refused with the identity error, nothing moved; 40/40 C5 identity probes
+     (spoofed subject, forged, stale, unknown, absent, collision, enrollment
+     after bind, revocation, in-flight revocation, replay after revocation,
+     permissive authority callback); positive control: the promoter with its
+     own credential still promotes. Gate `R16_G4_LEGACY_REFUSED=PASS`.
+   - `make test-r16-negative-mutants` judges the gate line (not only the core
+     line) and adds 12 identity mutants, one per check above: 27 mutants,
+     27 killed, 0 survived, 0 broken; gate `R16_G4_GUARDS_LOAD_BEARING=PASS`.
+   - Host regressions with the bound worlds: R7, R8, R9, R10, R11, R13 host,
+     R14 host (A to F PASS), R15 parity host, R15 G7 host, workflow fusion,
+     G5 surface, visor authority check and the G1/G2 inventory all pass.
+     Nothing was run on the graphics processor.
+5. Limits:
+   - Credentials are secrets in process memory. Code in the same address
+     space that reads another component's keyring can act as that component;
+     G3 (the production binary does not link or exec the legacy code) is what
+     covers that, as it covers any memory write.
+   - `rx_gen_bind_authority` takes no lock; it is called once, at startup,
+     before any other thread uses the store. Since C7 the bound flag is
+     published with release and read with acquire ordering.
+   - Other world users outside the R15 rig and R13 / R14 (`rx_contract.c`,
+     `rx_graph.c`, `rx_fusion.c`, `rx_route.c`) do not bind their worlds or
+     stores yet, so they run unchecked as before. On a bound
+     world their unkeyed registrations would be refused (default deny).
+
+### C7 (2026-09-30): outside review of C6, three gaps closed
+
+An outside review (Codex, Gemini) of the C6 commits found three real gaps.
+Each is reproduced by a probe in `tests/runtime/rx_r16_negative.c` (section
+"R16 C7", on scratch worlds and stores, so the rig is untouched), refused
+after the fix, and has a mutant that removes the fix. This narrows C6; it
+loosens no gate, and R16 is not complete (G6 to G8 and the receipt remain
+blocked).
+
+1. Promotion re-checks identity at the durable commit point.
+   - Gap: `rx_gen_promote` checked the promoter's credential only on entry.
+     A revocation in the live barrier or during the disk writes still moved
+     the active pointer.
+   - Fix: the caller check (`RxGenCallerFn`) now takes an `op`:
+     `RX_CALLER_OP_CHECK`, or `RX_CALLER_OP_HOLD` then `RX_CALLER_OP_RELEASE`
+     (`rx_caller.h`). Right before the pointer is written, the store checks
+     the request subject again with HOLD; on failure it returns
+     `RX_GEN_ERR_IDENTITY` and the pointer does not move. On success the
+     world's enrollment table stays locked, so no revocation lands, until the
+     new generation is active in memory; then RELEASE. The entry check stays,
+     so a forged promoter never reaches the live barrier or the disk.
+   - A refused flip leaves the candidate as the other pre-flip refusals do
+     (written but not active; recovery keeps the old generation).
+   - Probe P1: revoke the promoter from the live callback, then from the disk
+     hook. Before: promote rc 0, generation 1 -> 2 and 2 -> 3, on disk too.
+     After: rc `RX_GEN_ERR_IDENTITY`, generation unchanged in memory and on
+     disk (`rx_gen_recover`). A live promoter still promotes (control), and a
+     forged one is refused before the live barrier runs.
+   - Mutant `c7_flip_recheck`.
+2. Revocation is mutually exclusive with check-then-publish.
+   - Gap: `rx_world_revoke_caller` took only the caller lock. A commit and a
+     seat completion hold the world lock from `validate_caps` (identity
+     check) to `commit_writes` (publish), so a revocation could complete in
+     between and the write still landed.
+   - Fix: revocation takes the world lock first, then the caller lock (the
+     order every path uses). It now precedes the check or follows the
+     publish. It must not be called with the world lock held (reaction
+     bodies run without it).
+   - Probe P2: the world's capability validator, called inside the commit's
+     check after the identity check with the world lock held, starts a
+     revocation on another thread and waits up to 300 ms. Before: the
+     revocation finished inside that window and the write committed. After:
+     the revocation waits until the publish, then succeeds, and the next
+     activation is blocked. The seat completion path takes the same lock but
+     needs the graphics processor, so it is covered by the same lock, not by
+     a host probe.
+   - Mutant `c7_revoke_serialized`.
+3. Reactions registered before binding.
+   - Gap: an unbound world skipped the credential check but kept the
+     generation the caller claimed. Generations are sequential, so a reaction
+     registered before binding with a guessed generation and any secret ran
+     under that subject once the world was bound.
+   - Fix: an unbound world fully checks any credential a reaction names; one
+     that names none is kept as unauthenticated (generation 0).
+     `rx_world_bind_callers` refuses (`RX_ERR_IDENTITY`, world left unbound)
+     while any unauthenticated reaction is registered. Worlds that never bind
+     behave as before.
+   - Probe P3: before binding, a guessed generation with a zero or a random
+     secret: before RX_OK, after `RX_ERR_IDENTITY`; the issued credential is
+     still admitted and the world binds. With an unauthenticated reaction
+     registered: bind before RX_OK, after `RX_ERR_IDENTITY` and unbound.
+   - Mutants `c7_prebind_check`, `c7_bind_refuses_unauthenticated`.
+4. Smaller review items (Gemini), verified one by one:
+   - Fixed: enrollment past `RX_CALLER_MAX` returned `RX_ERR_FULL` (-2), the
+     same number as `RX_CALLER_ERR_UNKNOWN`; it now returns
+     `RX_CALLER_ERR_FULL` (-9).
+   - Fixed: the living promoter's `promotion_caller` silently sent a zeroed
+     credential when its keyring lacked the promoter's; it now fails with
+     `RX_GEN_ERR_IDENTITY` before anything is posted to the executor (the
+     store would refuse it anyway, so this has no mutant).
+   - Fixed: the store's bound flag uses release/acquire atomics.
+   - Fixed: `rx_gen_mutate_object` and `rx_gen_set_evidence` carry no
+     credential; a bound store now refuses them (`RX_GEN_ERR_IDENTITY`).
+     Only the R9 tests, on unbound stores, use them. Probe in P1; mutants
+     `c7_mutate_object_bound`, `c7_set_evidence_bound`.
+     `rx_gen_observe_object` stays open: it can only mark an object seen,
+     which can make a promotion fail (denial of service), never succeed.
+     The work-accounting calls were wrongly listed here too; see item 7.
+   - Changed: the stored secret in a registered reaction is wiped with a
+     volatile loop. The memory stays live, so the plain `memset` could not
+     be removed by the compiler; this is belt and braces.
+   - Not changed, by design: an unbound store accepts the caller's
+     authority callback (the older tests; C6 says so). The credential
+     comparison is constant-time on the secret digest; the generation is
+     compared plainly because it is not secret.
+5. Evidence (`make test-r16-negative`, host): before the fix (the C7 probes
+   compiled against the 8307a14 runtime; P2 then polled every 1 ms instead of
+   the single 300 ms wait it uses now, same pass and fail meaning) the C7 section
+   was 13/24 as expected (P1, P2 and P3 all failing; gate FAIL); after, 25/25
+   (one probe added: forged promoter refused before the barrier), with the
+   C5 section still 40/40, the exploit variants still refused and the control
+   still promoting; gate `R16_G4_LEGACY_REFUSED=PASS`. Mutants: 33 total
+   (27 + 6 C7), 33 killed, 0 survived, 0 broken.
+   Host ladder rerun after the fix: R7, R8 (116/0), R9, R10 (198/0), R11
+   (436/0), R13 host, R14 host (A to F PASS), R15 parity host (5 pairs, 0
+   failures), R15 G7 host (57/0), workflow fusion (17957/0), G5 surface,
+   visor authority check, G1/G2 inventory (280 sites, 0 unclassified) and
+   the G3 authority path (`HOST_PASS_NON_SILICON`) all pass; the silicon
+   binaries were compiled only. Nothing was run on the graphics processor.
+6. Limits:
+   - Between HOLD and RELEASE the promoter holds the world's enrollment lock
+     across the write and sync of the active pointer. Every activation,
+     commit, registration and revocation on that world waits for it, so each
+     promotion adds one sync's worth of stall to the whole world. The
+     alternative (check after the sync) would have to undo a durable flip.
+     The cost is unmeasured: R15 performance was compiled only on this branch.
+   - The durable before-evidence in the committed tree is the six C7 mutant
+     kills; the 13/24 run above used the older runtime.
+7. Second-round review (2026-09-30; Codex found nothing new, GLM one gap):
+   - Gap: on a bound store `rx_gen_finish_work` and `rx_gen_add_work` took
+     no credential, and `rx_gen_add_work` stored the caller's work state
+     as given. Anyone could complete, or insert already done, a required
+     evidence item, so a promotion that classify would refuse succeeded
+     without the drain ever running. Item 4's "never succeed" was wrong for
+     these two calls.
+   - Fix: `rx_gen_add_work_as` and `rx_gen_finish_work_as` take the caller's
+     subject and credential and, on a bound store, check it like
+     `rx_gen_propose_as`. The bare calls pass no credential, so a bound
+     store refuses them (`RX_GEN_ERR_IDENTITY`); unbound stores (R9, visor)
+     behave as before. On every store, work is added pending or issued only
+     (`RX_GEN_ERR_ARG` otherwise); only a finish call marks it done.
+   - Probe P4 (`probe_work`): baseline (unfinished required item, promotion
+     refused), completion with the bare call, an item offered already done
+     or cancelled, the bare add, forged credentials on both `_as` calls, and
+     a control (the proposer adds and completes its item, promotion
+     succeeds). Before the fix (probe built with `-DR16_BEFORE_WORK`, which
+     maps the `_as` calls to the bare ones, against the b199cfe runtime):
+     C7 section 39/49 as expected; the bare completion and the bare and
+     forged calls let promotions through (generation 2 -> 4, then 4 -> 6,
+     drain never called); gate FAIL. After: 49/49, C5 still 40/40, gate
+     `R16_G4_LEGACY_REFUSED=PASS`. Mutants `c7_add_work_credential`,
+     `c7_finish_work_credential`, `c7_add_work_state`: 36 total, 36 killed,
+     0 survived, 0 broken.
+   - Also: the P2 revocation thread's `pthread_join` result is now checked,
+     and the flip recheck carries the contract that `rx_gen_bind_authority`
+     is startup-only and lock-free.
+   - Limits: any live enrolled subject may add or finish work on any
+     candidate (the credential proves who the caller is, not that it owns
+     the candidate; a proposer-only rule would change the drain contract).
+     A drain callback on a bound store must now use `rx_gen_finish_work_as`;
+     no in-tree bound store uses a drain callback, so that path has no probe.
+   - Host ladder rerun after this fix: R7, R8 (116/0), R9, R10 (198/0), R11
+     (436/0), R13 host, R14 host (A to F PASS), R15 parity host (5 pairs, 0
+     failures), R15 G7 host (57/0), workflow fusion (17059/0; its check count
+     varies run to run), G5 surface, visor authority check, G1/G2 inventory
+     (280 sites, 0 unclassified) and the G3 authority path
+     (`HOST_PASS_NON_SILICON`) all pass; silicon binaries compiled only.

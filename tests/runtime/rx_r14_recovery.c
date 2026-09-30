@@ -82,6 +82,8 @@ typedef struct {
     RxAegisFaculty aegis;
     RxLiving living;
     RxLivingPromoter promoter;
+    RxLivingKeyrings keys;    /* R16 C6: runtime-issued caller credentials */
+    RxCallerKeyring fixtures; /* LANE, ROGUE and CYCLE: enrolled, not privileged */
     RxGenStore *gen;
     RxGpuSeat *seat;
     Opts opt;
@@ -294,7 +296,7 @@ static int lanes_register(Rig *r) {
         d.caps[1] = (RxCapNeed){{UINT32_MAX, 0}, RES_LANE_OUT, RX_RIGHT_WRITE};
         d.caps[2] = (RxCapNeed){slot_read, rx_aegis_res(1, RX_AEGIS_RES_SLOT0), R};
         rx_aegis_use_slot(&d, 1, slot);
-        if (rx_world_add_reaction(&r->w, &d, &r->r_lane[k]) != RX_OK) return -1;
+        if (rx_world_add_reaction_keyed(&r->w, &r->fixtures, &d, &r->r_lane[k]) != RX_OK) return -1;
 
         memset(&d, 0, sizeof d);
         d.name = "lane.check";
@@ -314,7 +316,7 @@ static int lanes_register(Rig *r) {
         d.caps[0] = (RxCapNeed){out_read, RES_LANE_OUT, R};
         d.caps[1] = (RxCapNeed){r->lane_in_read, RES_LANE_IN, R};
         d.caps[2] = (RxCapNeed){chk_rw, RES_LANE_CHK, RW};
-        if (rx_world_add_reaction(&r->w, &d, &r->r_check[k]) != RX_OK) return -1;
+        if (rx_world_add_reaction_keyed(&r->w, &r->fixtures, &d, &r->r_check[k]) != RX_OK) return -1;
     }
     return 0;
 }
@@ -353,6 +355,20 @@ static int start(Rig *r, const Opts *opt) {
     if (aienos_cap_start(&r->admin, &r->view) != 0) return -1;
     if (rx_world_init_native(&r->w, r->view, 4, RX_CRUMBS_LONG_EPISODE) != RX_OK) return -1;
     r->w.external_subject = EXTERNAL;
+    /* R16 C6: every subject that registers gets a runtime-issued credential
+     * (the rogue too: it is an enrolled in-process party whose capabilities
+     * are forged), then the world refuses registrations without one. */
+    if (rx_living_enroll_callers(&r->w, &r->keys) != RX_OK) return -1;
+    {
+        const uint32_t extra[] = {LANE_SUBJ, ROGUE_SUBJ, CYCLE_SUBJ};
+        for (uint32_t i = 0; i < 3; i++) {
+            if (rx_world_enroll_caller(&r->w, extra[i], &r->fixtures.cred[i]) != RX_CALLER_OK)
+                return -1;
+            r->fixtures.subject[i] = extra[i];
+        }
+        r->fixtures.n = 3;
+    }
+    if (rx_world_bind_callers(&r->w) != RX_OK) return -1;
     if (opt->gen_dir) {
         snprintf(r->generation_dir, sizeof r->generation_dir, "%s", opt->gen_dir);
     } else {
@@ -361,6 +377,8 @@ static int start(Rig *r, const Opts *opt) {
     }
     if (rx_gen_open(r->generation_dir, &r->gen) != RX_GEN_OK) return -1;
     if (opt->crash_step) rx_gen_set_crash(r->gen, opt->crash_step);
+    if (rx_gen_bind_authority(r->gen, rx_world_caller_check_fn, &r->w,
+                              rx_living_native_authority, r->view) != RX_GEN_OK) return -1;
     RxStabilityBudget sb;
     memset(&sb, 0, sizeof sb);
     sb.activation_budget = BUDGET;
@@ -373,12 +391,15 @@ static int start(Rig *r, const Opts *opt) {
     oc.hot_calls = 64; oc.hot_ns = 200000; oc.margin_pct = 10;
     oc.defect = (RxOmegaDefect)opt->defect;
     if (rx_omega_create_objects(&r->omega, &r->w, &oc) != RX_OK) return -1;
+    r->omega.keys = &r->keys.omega;
     RxAienConfig ac;
     rx_aien_default_config(&ac);
     RxAienInputs ai = {r->omega.o.demand, r->omega.o.selection};
     if (rx_aien_create_objects(&r->aien, &r->w, &ac, &ai) != RX_OK) return -1;
+    r->aien.keys = &r->keys.aien;
     if (rx_living_create(&r->living, &r->w, &r->aien, &r->omega, r->gen, r->view) != RX_OK)
         return -1;
+    r->living.keys = &r->keys.living;
     if (new_object(r, 0x6135, RES_INTENT, &r->intent) != RX_OK) return -1;
     if (opt->lanes && lanes_create(r) != 0) return -1;
 
@@ -395,6 +416,7 @@ static int start(Rig *r, const Opts *opt) {
         {LANE_SUBJ, RES_LANE_OUT, RES_LANE_OUT, RW}};
     uint32_t n_clients = opt->lanes ? 2u : 1u;
     if (rx_aegis_create(&r->aegis, &r->w, r->admin, &pol, cl, n_clients) != RX_OK) return -1;
+    r->aegis.keys = &r->keys.aegis;
     RxAegisCaps aeg[2];
     memset(aeg, 0, sizeof aeg);
     for (uint32_t k = 0; k < n_clients; k++) {
@@ -481,6 +503,7 @@ static int start(Rig *r, const Opts *opt) {
     lc.output_prepare_read = mint(r, RX_LIVING_PREPARE_SUBJ,
         RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT, R);
     r->promoter.world = &r->w;
+    r->promoter.keys = &r->keys.promoter;
     r->promoter.store = r->gen;
     r->promoter.authority = r->view;
     r->promoter.candidate = r->living.o.candidate;
@@ -521,7 +544,8 @@ static int start(Rig *r, const Opts *opt) {
         d.caps[0] = (RxCapNeed){mint(r, subj, res_in, R), res_in, R};
         d.caps[1] = (RxCapNeed){mint(r, subj, rx_aegis_res(k, RX_AEGIS_RES_REQUEST), RW),
                                 rx_aegis_res(k, RX_AEGIS_RES_REQUEST), RW};
-        if (rx_world_add_reaction(&r->w, &d, k ? &r->r_lane_ask : &r->r_ask) != RX_OK) return -1;
+        if (rx_world_add_reaction_keyed(&r->w, k ? &r->fixtures : &r->keys.living, &d,
+                                        k ? &r->r_lane_ask : &r->r_ask) != RX_OK) return -1;
     }
     RxMutation request[6] = {{r->intent, 0, 1},
         {r->intent, 1, RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT},
@@ -1241,7 +1265,7 @@ static int rogue_add(Rig *r, const char *name, RxObjRef trig, RxObjRef write, ui
     d.n_caps = 2;
     d.caps[0] = (RxCapNeed){read_cap, read_res, RX_RIGHT_READ};
     d.caps[1] = (RxCapNeed){write_cap, write_res, RX_RIGHT_READ | RX_RIGHT_WRITE};
-    return rx_world_add_reaction(&r->w, &d, id);
+    return rx_world_add_reaction_keyed(&r->w, &r->fixtures, &d, id);
 }
 
 /* Wait until reaction `id` has run at least `n` times and is not in flight. */
@@ -1349,7 +1373,7 @@ static void scenario_b(void) {
     d.n_caps = 2;
     d.caps[0] = (RxCapNeed){rin_read, RES_ROGUE + 1, RX_RIGHT_READ};
     d.caps[1] = (RxCapNeed){forged_gpu, RES_LANE_OUT, RX_RIGHT_WRITE};
-    CHECK(rx_world_add_reaction(&r->w, &d, &r_gpu) == RX_OK, "B: rogue seat");
+    CHECK(rx_world_add_reaction_keyed(&r->w, &r->fixtures, &d, &r_gpu) == RX_OK, "B: rogue seat");
 
     uint64_t t0 = served(r);
     /* B1-B3 fire together; rogue.revoked is still legitimate the first time. */
@@ -1448,7 +1472,7 @@ static void scenario_b(void) {
     d.caps[1] = (RxCapNeed){dec_w, rx_aegis_res(1, RX_AEGIS_RES_DECISION),
                             RX_RIGHT_READ | RX_RIGHT_WRITE};
     uint32_t r_decide;
-    CHECK(rx_world_add_reaction(&r->w, &d, &r_decide) == RX_OK, "B5: rogue.decide");
+    CHECK(rx_world_add_reaction_keyed(&r->w, &r->fixtures, &d, &r_decide) == RX_OK, "B5: rogue.decide");
     uint64_t mark5 = r->w.n_crumbs;
     RxMutation ask_promote[6] = {{r->lane_intent, 0, ++r->lane_intent_seq},
                                  {r->lane_intent, 1, RX_GEN_RES_PROMOTION},
@@ -1487,7 +1511,11 @@ static void scenario_b(void) {
     gd.proofs_ok = 1;
     gd.evidence = junk; gd.evidence_len = sizeof junk - 1;
     gd.realization = junk; gd.realization_len = sizeof junk - 1;
-    CHECK(rx_gen_propose(r->gen, ROGUE_SUBJ, &gd, &rogue_draft) == RX_GEN_OK, "B6: rogue draft");
+    /* R16 C6: the rogue is enrolled, so it proposes under its own credential;
+     * it can present only that credential when it asks to promote. */
+    const RxCallerCred *rogue_cred = rx_caller_find(&r->fixtures, ROGUE_SUBJ);
+    CHECK(rx_gen_propose_as(r->gen, ROGUE_SUBJ, rogue_cred, &gd, &rogue_draft) == RX_GEN_OK,
+          "B6: rogue draft");
     typedef struct { uint32_t subject; RxCapRef cap; } Try;
     Try tries[3] = {{RX_LIVING_PROMOTE_SUBJ, forged_promote},
                     {ROGUE_SUBJ, r->promoter.promotion_authority},
@@ -1496,11 +1524,15 @@ static void scenario_b(void) {
     for (int i = 0; i < 3; i++) {
         RxPromotionRequest req = {rogue_draft, tries[i].subject, tries[i].cap.cap_id,
                                   tries[i].cap.generation, RX_GEN_RES_PROMOTION,
-                                  RX_GEN_RIGHT_PROMOTE};
+                                  RX_GEN_RIGHT_PROMOTE, *rogue_cred};
         int prc = rx_gen_promote(r->gen, &req, b_native_promotion, (void *)r->view,
                              NULL, NULL, NULL, NULL);
-        if (prc != RX_GEN_ERR_AUTHORITY) b6 = 0;
-        CHECK(prc == RX_GEN_ERR_AUTHORITY, "B6: try %d returned %d", i, prc);
+        /* Try 0 claims the promoter subject with the rogue credential: the
+         * store refuses the identity. Tries 1-2 are the rogue as itself: the
+         * native authority refuses the capability. */
+        int want = i == 0 ? RX_GEN_ERR_IDENTITY : RX_GEN_ERR_AUTHORITY;
+        if (prc != want) b6 = 0;
+        CHECK(prc == want, "B6: try %d returned %d, expected %d", i, prc, want);
     }
     uint64_t gen6 = 0, lin6 = 0;
     rx_gen_active(r->gen, &gen6, &lin6);
@@ -1611,7 +1643,7 @@ static int hop_add(Rig *r, const char *name, Hop *h, RxCapRef rw, uint32_t loop_
     d.writes[0] = (RxDep){h->to, RX_FIELD(0)};
     d.n_caps = 1;
     d.caps[0] = (RxCapNeed){rw, RES_CYCLE, RX_RIGHT_READ | RX_RIGHT_WRITE};
-    return rx_world_add_reaction(&r->w, &d, id);
+    return rx_world_add_reaction_keyed(&r->w, &r->fixtures, &d, id);
 }
 
 static void scenario_c(void) {
@@ -2567,8 +2599,9 @@ static int receipt(int tests_ok) {
         "  \"limits\": [\n"
         "    \"R8: a principal wrongly given WRITE on a decision object can jam decisions until "
             "it is revoked; it cannot cause a mint\",\n"
-        "    \"R9: rx_gen_propose has no authority check; an in-process proposer can hold up to "
-            "four unpromotable drafts until the generation moves\",\n"
+        "    \"R9: rx_gen_propose checks the proposer credential (R16 C6) but no capability; an "
+            "enrolled in-process proposer can hold up to four unpromotable drafts until the "
+            "generation moves\",\n"
         "    \"R10: Omega's store keeps the first bytes filed under an identity; bytes that "
             "falsely claim an identity block the honest bytes for that identity in that "
             "process (found by reading, not exercised)\",\n"

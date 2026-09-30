@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Self-Hosting Compiler Reproduction)
 echo "[*] Step 3: Running Demonstration (Self-Hosting Compiler Reproduction)..."
-"$TOOL" --demonstrate-self-host
+"$TOOL" --reference-demonstrate-self-host
 echo ""
 
 # Step 4: Regression checks (M4 and M5)

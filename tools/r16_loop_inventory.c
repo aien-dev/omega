@@ -20,7 +20,8 @@
  *                loop condition or body (word list below)
  *   named term : any code line naming run_until_complete (anywhere in an
  *                identifier), or max_steps / max_turns (whole identifier)
- *   cli-mode   : C line testing argv[ against "--demonstrate-..." or "--run-..."
+ *   cli-mode   : C line testing argv[ against "--demonstrate-...", "--reference-..."
+ *                or "--run-..."
  *   manual row : map row whose line cell starts with "manual"; its evidence
  *                line must still exist in the file
  * Comments and string/char literal contents are blanked before matching.
@@ -576,7 +577,8 @@ static void scan_file(int repo, const char *root, const char *rel) {
             char *code = normalize_ws(s + a, b - a); /* strings blanked: argv[ must be code */
             int in_code = strstr(code, "argv[") != NULL;
             free(code);
-            if (in_code && (strstr(ev, "\"--demonstrate-") || strstr(ev, "\"--run-")) &&
+            if (in_code && (strstr(ev, "\"--demonstrate-") || strstr(ev, "\"--reference-") ||
+                            strstr(ev, "\"--run-")) &&
                 strspn(s + a, " \t") < b - a)
                 add_site(repo, rel, L + 1, sym[L], ev, "cli-mode");
             free(ev);
@@ -877,7 +879,7 @@ static void print_patterns(FILE *o) {
     fprintf(o, "\nflagged loop = unbounded OR a body word in condition or body\n");
     fprintf(o, "named terms (any code line; case/underscore-insensitive; run_until_complete anywhere in an identifier, max_steps and max_turns only as the whole identifier; hit counts use substring):");
     for (int i = 0; NAMED_SHOW[i]; i++) fprintf(o, " %s", NAMED_SHOW[i]);
-    fprintf(o, "\ncli-mode (C): a code line testing argv[ against a \"--demonstrate-...\" or \"--run-...\" literal\n"
+    fprintf(o, "\ncli-mode (C): a code line testing argv[ against a \"--demonstrate-...\", \"--reference-...\" or \"--run-...\" literal\n"
                "manual rows (line cell starts with \"manual\"): evidence line must still exist in the file\n"
                "  (symbol not verified); same class rules apply");
     fprintf(o, "\njoin key: repo + path + enclosing symbol + whitespace-collapsed source line\n");

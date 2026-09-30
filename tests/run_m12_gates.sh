@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Formal Living MatVec Adaptive Dispatch)
 echo "[*] Step 3: Running Demonstration (Living Kernel Multi-Realization & Adaptive Dispatch)..."
-"$TOOL" --demonstrate-living-matvec
+"$TOOL" --legacy-oracle-living-matvec
 echo ""
 
 # Step 4: Regression checks (M4 through M14)

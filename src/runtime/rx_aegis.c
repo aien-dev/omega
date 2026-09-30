@@ -308,7 +308,7 @@ int rx_aegis_register(RxAegisFaculty *f, const RxAegisCaps caps[]) {
         d.caps[0] = (RxCapNeed){ caps[k].aegis_request, res_of(w, o->request), R };
         d.caps[1] = (RxCapNeed){ caps[k].aegis_approval, res_of(w, o->approval), R };
         d.caps[2] = (RxCapNeed){ caps[k].aegis_decision, res_of(w, o->decision), RW };
-        if ((rc = rx_world_add_reaction(w, &d, &f->r_decide[k])) != RX_OK) return rc;
+        if ((rc = rx_world_add_reaction_keyed(w, f->keys, &d, &f->r_decide[k])) != RX_OK) return rc;
 
         memset(&d, 0, sizeof d);
         d.name = "root.install";
@@ -330,7 +330,7 @@ int rx_aegis_register(RxAegisFaculty *f, const RxAegisCaps caps[]) {
             d.writes[j] = (RxDep){ o->slot[j], RX_ALL_FIELDS };
             d.caps[2 + j] = (RxCapNeed){ caps[k].root_slot[j], res_of(w, o->slot[j]), RW };
         }
-        if ((rc = rx_world_add_reaction(w, &d, &f->r_install[k])) != RX_OK) return rc;
+        if ((rc = rx_world_add_reaction_keyed(w, f->keys, &d, &f->r_install[k])) != RX_OK) return rc;
     }
     return RX_OK;
 }

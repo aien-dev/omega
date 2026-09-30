@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Formal Realization Synthesis & Schedule Optimization)
 echo "[*] Step 3: Running Demonstration (Machine-Aware Realization Synthesis & Disambiguation)..."
-"$TOOL" --demonstrate-realization-synthesis
+"$TOOL" --reference-demonstrate-realization-synthesis
 echo ""
 
 # Step 4: Regression checks (M4 through M13)

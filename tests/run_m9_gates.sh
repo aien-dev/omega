@@ -28,7 +28,7 @@ echo ""
 
 # Step 3: Run Demonstration (Deterministic Program Synthesis)
 echo "[*] Step 3: Running Demonstration (Deterministic Program Synthesis)..."
-"$TOOL" --demonstrate-synthesis
+"$TOOL" --reference-demonstrate-synthesis
 echo ""
 
 # Step 4: Regression checks (M4 through M8)

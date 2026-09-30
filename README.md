@@ -133,6 +133,6 @@ make clean && make
 ./tests/run_m4_gates.sh
 
 # Run individual demonstrations
-./build/omegatool --demonstrate-arithmetic
-./build/omegatool --demonstrate-physics
+./build/omegatool --reference-demonstrate-arithmetic
+./build/omegatool --reference-demonstrate-physics
 ```
