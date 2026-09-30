@@ -21,9 +21,11 @@ PC=f63a6ef4c5dfa27fc32ee6e4f893bd2c42ec8a12
 OC2=8b719ff000000000000000000000000000000000
 DESC=1ce23d57112901c414ddc75ba35b65bc8c38fc0bb5e85f3a995634af456bf24b
 COMMON="\"candidate_git_commit\":\"$OC\",\"physics_candidate_git_commit\":\"$PC\",\"candidate_trees_clean\":{\"omega\":true,\"physics\":true}"
-M19R_BODY="{\"schema\":\"AIEN_M19R_QUALIFICATION_V1\",$COMMON,\"observed_gate_results_count\":2,\"observed_pass_count\":2,\"observed_fail_count\":0,\"test_results\":[{\"suite\":\"m19\",\"id\":\"A_PASS\",\"status\":\"PASS\"},{\"suite\":\"m19\",\"id\":\"B_PASS\",\"status\":\"PASS\"}],\"soak\":{\"passed\":true,\"cycles\":100000}}"
-FORGE_BODY="{\"schema\":\"AIEN_M19R_FORGE_GATES_V1\",\"status\":\"PASS\",$COMMON,\"gates\":{\"GATE_3_FORGE_0\":{\"status\":\"PASS\",\"gate_binary_exit_status\":0},\"GATE_4_FORGE_HWID\":{\"status\":\"PASS\",\"gate_binary_exit_status\":0,\"hardware_descriptor_digest\":\"$DESC\"}},\"hardware_descriptor_digest\":\"$DESC\",\"observed_fail_count\":0,\"observed_pass_count\":21}"
-NUM_BODY="{\"schema\":\"AIEN_OMEGA_NUMERIC_0_V1\",\"status\":\"PASS\",$COMMON,\"gate_binary_exit_status\":0,\"observed_fail_count\":0,\"hardware_descriptor_digest\":\"$DESC\",\"timestamp_utc\":\"2026-09-30T18:42:38.311108Z\"}"
+ACCEL=$(for i in $(seq 1 18); do printf '{"suite":"m19r","id":"OMEGA_ACCEL_RESIDENT_%02d","status":"PASS"},' "$i"; done)
+M19R_BODY="{\"schema\":\"AIEN_M19R_QUALIFICATION_V1\",$COMMON,\"observed_gate_results_count\":20,\"observed_pass_count\":20,\"observed_fail_count\":0,\"test_results\":[${ACCEL}{\"suite\":\"m19\",\"id\":\"A_PASS\",\"status\":\"PASS\"},{\"suite\":\"m19\",\"id\":\"B_PASS\",\"status\":\"PASS\"}],\"soak\":{\"passed\":true,\"cycles\":100000,\"bytes_churned\":419430400000,\"physical_memory_bytes\":130661117952}}"
+TR2='"test_results":[{"suite":"s","id":"X_PASS","status":"PASS"},{"suite":"s","id":"Y_PASS","status":"PASS"}],"observed_test_count":2,"observed_pass_count":2'
+FORGE_BODY="{\"schema\":\"AIEN_M19R_FORGE_GATES_V1\",\"status\":\"PASS\",$COMMON,\"gates\":{\"GATE_3_FORGE_0\":{\"status\":\"PASS\",\"gate_binary_exit_status\":0},\"GATE_4_FORGE_HWID\":{\"status\":\"PASS\",\"gate_binary_exit_status\":0,\"hardware_descriptor_digest\":\"$DESC\"}},\"hardware_descriptor_digest\":\"$DESC\",\"observed_fail_count\":0,$TR2}"
+NUM_BODY="{\"schema\":\"AIEN_OMEGA_NUMERIC_0_V1\",\"status\":\"PASS\",$COMMON,\"run_git_commit\":\"$OC\",\"physics_lock\":\"$PC\",\"gate_binary_exit_status\":0,\"observed_fail_count\":0,$TR2,\"hardware_descriptor_digest\":\"$DESC\",\"timestamp_utc\":\"2026-09-30T18:42:38.311108Z\"}"
 
 # mk NAME BODY [JQ_FILTER] -- write a leg receipt (pretty, digest over the
 # canonical body after the filter) to TMP/NAME and print the path.
@@ -55,7 +57,7 @@ check "digest-named leg file accepted" 'cp "$F" "$TMP/$(jq -r .receipt_digest "$
 
 echo "mismatched commits refused"
 REASON="omega commit mismatch"
-check "Gate 5 leg on another omega commit" 'refused "$M" "$F" "$(mk n2.json "$NUM_BODY" ".candidate_git_commit = \"$OC2\"")"'
+check "Gate 5 leg on another omega commit" 'refused "$M" "$F" "$(mk n2.json "$NUM_BODY" ".candidate_git_commit = \"$OC2\" | .run_git_commit = \"$OC2\"")"'
 REASON="physics commit mismatch"
 check "Gate 3/4 leg on another physics commit" 'refused "$M" "$(mk f2.json "$FORGE_BODY" ".physics_candidate_git_commit = \"$OC2\"")" "$N"'
 REASON="not the expected"
@@ -83,7 +85,7 @@ check "refusals wrote nothing" '[ "$(ls "$EV" | wc -l)" = 1 ]'
 
 echo "tampered or failing legs refused"
 REASON="receipt_digest does not match its content"
-check "edited after digesting" 'sed "s/\"observed_pass_count\": 21/\"observed_pass_count\": 22/" "$F" > "$TMP/t.json" && refused "$M" "$TMP/t.json" "$N"'
+check "edited after digesting" 'sed "s/\"observed_pass_count\": 2/\"observed_pass_count\": 3/" "$F" > "$TMP/t.json" && refused "$M" "$TMP/t.json" "$N"'
 REASON="named for a different digest"
 check "file named for another digest" 'cp "$F" "$TMP/$(jq -r .receipt_digest "$N").json" && refused "$M" "$TMP/$(jq -r .receipt_digest "$N").json" "$N"'
 REASON="does not record a PASS"
@@ -93,6 +95,17 @@ check "Gate 1/2 counts that do not add up" 'refused "$(mk m6.json "$M19R_BODY" "
 check "Gate 3/4 with gate 4 FAIL" 'refused "$M" "$(mk f4.json "$FORGE_BODY" ".status = \"FAIL\" | .gates.GATE_4_FORGE_HWID.status = \"FAIL\"")" "$N"'
 check "Gate 3/4 status PASS but gate 3 exit 1" 'refused "$M" "$(mk f5.json "$FORGE_BODY" ".gates.GATE_3_FORGE_0.gate_binary_exit_status = 1")" "$N"'
 check "Gate 5 status FAIL" 'refused "$M" "$F" "$(mk n5.json "$NUM_BODY" ".status = \"FAIL\"")"'
+check "Gate 3/4 status PASS but one test result FAIL" 'refused "$M" "$(mk f6.json "$FORGE_BODY" ".test_results[1].status = \"FAIL\"")" "$N"'
+check "Gate 3/4 without test results" 'refused "$M" "$(mk f7.json "$FORGE_BODY" "del(.test_results)")" "$N"'
+check "Gate 5 status PASS but one test result FAIL" 'refused "$M" "$F" "$(mk n8.json "$NUM_BODY" ".test_results[0].status = \"FAIL\"")"'
+check "Gate 5 test count does not match results" 'refused "$M" "$F" "$(mk n9.json "$NUM_BODY" ".observed_test_count = 3")"'
+check "Gate 5 ran on another omega commit" 'refused "$M" "$F" "$(mk n10.json "$NUM_BODY" ".run_git_commit = \"$OC2\"")"'
+check "Gate 5 physics.lock names another physics commit" 'refused "$M" "$F" "$(mk n11.json "$NUM_BODY" ".physics_lock = \"$OC2\"")"'
+check "Gate 1/2 soak too short" 'refused "$(mk m7.json "$M19R_BODY" ".soak.cycles = 99999")" "$F" "$N"'
+check "Gate 1/2 soak churned too little memory" 'refused "$(mk m8.json "$M19R_BODY" ".soak.bytes_churned = 1000")" "$F" "$N"'
+check "Gate 1/2 missing an OMEGA_ACCEL_RESIDENT_ result" 'refused "$(mk m9.json "$M19R_BODY" ".test_results |= .[1:] | .observed_gate_results_count = 19 | .observed_pass_count = 19")" "$F" "$N"'
+REASON="hardware_descriptor_digest is not 64 hex"
+check "descriptor digest carrying JSON is refused" 'refused "$(mk m10.json "$M19R_BODY" ".hardware_descriptor_digest = \"x\\\",\\\"candidate_git_commit\\\":\\\"$OC2\"")" "$(mk f8.json "$FORGE_BODY" "del(.hardware_descriptor_digest)")" "$(mk n12.json "$NUM_BODY" "del(.hardware_descriptor_digest)")"'
 REASON="two receipts for AIEN_OMEGA_NUMERIC_0_V1"
 check "same leg twice" 'refused "$M" "$F" "$N" "$(mk n6.json "$NUM_BODY" ".timestamp_utc = \"x\"")"'
 REASON="unknown schema"

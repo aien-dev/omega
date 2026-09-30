@@ -59,8 +59,19 @@ g14_criteria() {
 G14_ALL_CRITERIA="EVIDENCE_IMMUTABLE RECEIPTS_OBSERVED_NOT_ASSERTED DEVICE_MEMORY_LIFECYCLE COMPLETION_EXACTLY_ONCE LONG_RUNNING_GPU_SOAK FORGE_BOUNDARY HARDWARE_ID_OBSERVED FP32_CPU_GB10_PARITY"
 
 # g14_pass_rule SCHEMA -- jq expression, true when the leg receipt records a PASS.
+# results (every leg but Gate 1/2): a non-empty test_results list, every
+# entry PASS, its length equal to observed_test_count and observed_pass_count.
+# Gate 1/2 also needs the soak thresholds m19r_qualify.sh enforces (>= 100000
+# cycles, bytes churned > 2x physical memory) and exactly 18 OMEGA_ACCEL_RESIDENT_
+# results. The Gate 5 leg must have run on its candidates (run_git_commit,
+# physics_lock).
 # The Gate 1/2 receipt has no status field (it is written only on success),
 # so its PASS is read from its observed counts, results and soak.
+G14_RESULTS_RULE='((.test_results | type) == "array"
+            and (.test_results | length) > 0
+            and (.test_results | length) == .observed_test_count
+            and .observed_pass_count == .observed_test_count
+            and all(.test_results[]; .status == "PASS"))'
 g14_pass_rule() {
     case $1 in
         AIEN_M19R_QUALIFICATION_V1) echo '
@@ -72,48 +83,61 @@ g14_pass_rule() {
             and (.test_results | type) == "array"
             and (.test_results | length) == .observed_gate_results_count
             and all(.test_results[]; .status == "PASS")
-            and .soak.passed == true';;
+            and .soak.passed == true
+            and (.soak.cycles | type) == "number" and .soak.cycles >= 100000
+            and (.soak.physical_memory_bytes | type) == "number" and .soak.physical_memory_bytes > 0
+            and (.soak.bytes_churned | type) == "number"
+            and .soak.bytes_churned > 2 * .soak.physical_memory_bytes
+            and ([.test_results[] | select((.id | type) == "string" and (.id | startswith("OMEGA_ACCEL_RESIDENT_")))] | length) == 18';;
         AIEN_M19R_FORGE_GATES_V1) echo '
             .status == "PASS"
             and .observed_fail_count == 0
             and .gates.GATE_3_FORGE_0.status == "PASS"
             and .gates.GATE_3_FORGE_0.gate_binary_exit_status == 0
             and .gates.GATE_4_FORGE_HWID.status == "PASS"
-            and .gates.GATE_4_FORGE_HWID.gate_binary_exit_status == 0';;
+            and .gates.GATE_4_FORGE_HWID.gate_binary_exit_status == 0
+            and results';;
         AIEN_OMEGA_NUMERIC_0_V1) echo '
             .status == "PASS"
             and .gate_binary_exit_status == 0
-            and .observed_fail_count == 0';;
+            and .observed_fail_count == 0
+            and .run_git_commit == .candidate_git_commit
+            and .physics_lock == .physics_candidate_git_commit
+            and results';;
     esac
 }
 
 # g14_check_leg FILE -- validate one leg. Sets G14_LEG_SCHEMA, G14_LEG_DIGEST,
 # G14_LEG_OMEGA, G14_LEG_PHYSICS, G14_LEG_DESC.
 g14_check_leg() {
-    local f=$1 name recomputed rule
+    local f=$1 name recomputed rule s
     [ -f "$f" ] && [ -r "$f" ] || g14_refuse "cannot read receipt $f" || return 1
-    "$JSON_CANON" --check < "$f" || g14_refuse "$f is not valid JSON" || return 1
-    jq -e 'type == "object"' "$f" > /dev/null || g14_refuse "$f is not a JSON object" || return 1
-    G14_LEG_SCHEMA=$(jq -r '.schema // ""' "$f")
+    # every check reads one private copy, so the file cannot change between checks
+    s=$(mktemp "$G14_TMP/leg.XXXXXX") && cp -- "$f" "$s" || g14_refuse "cannot copy receipt $f" || return 1
+    "$JSON_CANON" --check < "$s" || g14_refuse "$f is not valid JSON" || return 1
+    jq -e 'type == "object"' "$s" > /dev/null || g14_refuse "$f is not a JSON object" || return 1
+    G14_LEG_SCHEMA=$(jq -r '.schema // ""' "$s")
     g14_criteria "$G14_LEG_SCHEMA" > /dev/null || g14_refuse "$f has unknown schema '$G14_LEG_SCHEMA'" || return 1
-    G14_LEG_DIGEST=$(jq -r '.receipt_digest // ""' "$f")
+    G14_LEG_DIGEST=$(jq -r '.receipt_digest // ""' "$s")
     [[ $G14_LEG_DIGEST =~ ^[0-9a-f]{64}$ ]] || g14_refuse "$f has no 64-hex receipt_digest" || return 1
-    recomputed=$(jq -c 'del(.receipt_digest)' "$f" | "$JSON_CANON" --sha256) ||
+    recomputed=$(jq -c 'del(.receipt_digest)' "$s" | "$JSON_CANON" --sha256) ||
         g14_refuse "cannot digest $f" || return 1
     [ "$recomputed" = "$G14_LEG_DIGEST" ] || g14_refuse "$f receipt_digest does not match its content" || return 1
     name=$(basename "$f")
     if [[ $name =~ ^[0-9a-f]{64}\.json$ ]]; then
         [ "${name%.json}" = "$G14_LEG_DIGEST" ] || g14_refuse "$f is named for a different digest" || return 1
     fi
-    G14_LEG_OMEGA=$(jq -r '.candidate_git_commit // ""' "$f")
-    G14_LEG_PHYSICS=$(jq -r '.physics_candidate_git_commit // ""' "$f")
+    G14_LEG_OMEGA=$(jq -r '.candidate_git_commit // ""' "$s")
+    G14_LEG_PHYSICS=$(jq -r '.physics_candidate_git_commit // ""' "$s")
     [[ $G14_LEG_OMEGA =~ ^[0-9a-f]{40}$ ]] || g14_refuse "$f candidate_git_commit is not a full 40-hex id" || return 1
     [[ $G14_LEG_PHYSICS =~ ^[0-9a-f]{40}$ ]] || g14_refuse "$f physics_candidate_git_commit is not a full 40-hex id" || return 1
-    jq -e '.candidate_trees_clean.omega == true and .candidate_trees_clean.physics == true' "$f" > /dev/null ||
+    jq -e '.candidate_trees_clean.omega == true and .candidate_trees_clean.physics == true' "$s" > /dev/null ||
         g14_refuse "$f was not made from clean omega and physics trees" || return 1
     rule=$(g14_pass_rule "$G14_LEG_SCHEMA")
-    jq -e "$rule" "$f" > /dev/null 2>&1 || g14_refuse "$f ($G14_LEG_SCHEMA) does not record a PASS" || return 1
-    G14_LEG_DESC=$(jq -r '.hardware_descriptor_digest // ""' "$f")
+    jq -e "def results: $G14_RESULTS_RULE; $rule" "$s" > /dev/null 2>&1 || g14_refuse "$f ($G14_LEG_SCHEMA) does not record a PASS" || return 1
+    G14_LEG_DESC=$(jq -r '.hardware_descriptor_digest // ""' "$s")
+    [ -z "$G14_LEG_DESC" ] || [[ $G14_LEG_DESC =~ ^[0-9a-f]{64}$ ]] ||
+        g14_refuse "$f hardware_descriptor_digest is not 64 hex" || return 1
 }
 
 # g14_combine OMEGA_EXPECTED PHYSICS_EXPECTED TS RECEIPT... -- check every leg
