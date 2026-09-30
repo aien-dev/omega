@@ -1,7 +1,7 @@
 {
   "schema": "turing.cal.preregistration.v1",
   "experiment": "EXP-001",
-  "status": "draft",
+  "status": "frozen",
   "document": "calibration/preregistration/EXP-001.md",
   "profile": "calibration/profiles/Turing-profile-v1.0.toml",
   "profile_sidecar": "calibration/profiles/Turing-profile-v1.0.sha256",
