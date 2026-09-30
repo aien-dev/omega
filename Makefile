@@ -160,6 +160,41 @@ test-m19: $(TARGET)
 test-m19r-qualify:
 	tools/test_m19r_qualify.sh
 
+# Gate 5 (OMEGA-NUMERIC-0), CPU tiers only: reference, CPU parity, provenance
+# and negative tests. Opens no device. The GB10 tier and the receipt come
+# from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
+# item fails.
+.PHONY: test-numeric-cpu test-numeric-qualify
+NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c \
+                   src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
+                   src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+NUMERIC_CPU_HDRS = src/omega_numeric.h src/omega_numeric_provenance.h tests/numeric_oracle.h \
+                   src/omega_blackwell_qmd.h src/omega_blackwell_codegen.h src/omega_blackwell_encoder.h src/sha256.h
+build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) $(NUMERIC_CPU_HDRS)
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(NUMERIC_CPU_SRCS)
+# test-numeric-cpu exit status: 0 means no host test failed and the only SKIPs
+# are the five declared chip-only IDs (CHIP_ONLY_IDS in the test; the last line
+# prints "Gate 5 Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY"). Nonzero means a real
+# host regression (verdict HOST_REGRESSION) or a SKIP nobody declared
+# (UNDECLARED_SKIP). The chip build allows no SKIP at all.
+test-numeric-cpu: build/test_omega_numeric_cpu
+	./build/test_omega_numeric_cpu
+
+# Host-only tests of the Gate 5 qualifier and receipt writer. No GPU.
+test-numeric-qualify: build/test_omega_numeric_cpu
+	tools/test_numeric_qualify.sh
+
+# Deletes each CHECK-marked pre-submission check in src/omega_numeric.c in a
+# scratch copy and proves a Gate 5 host test then fails. No GPU.
+# Then applies each arithmetic mutation in tools/numeric_oracle_mutations.sh
+# (broken EXP/LOG coefficients, wrong host instruction, wrong LDS index, an
+# undeclared SKIP) and proves the CPU-only run exits nonzero. No GPU.
+.PHONY: test-numeric-sweep
+test-numeric-sweep:
+	tools/numeric_check_sweep.sh
+	tools/numeric_oracle_mutations.sh
+
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
 RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
