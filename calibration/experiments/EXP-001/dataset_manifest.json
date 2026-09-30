@@ -1,0 +1,25 @@
+{
+  "schema": "turing.cal.dataset_manifest.v1",
+  "dataset_id": "EXP-001-sealed-d3cba292b9282116d1e374db22344bca4d47717e",
+  "experiment": "EXP-001",
+  "split": "sealed_test",
+  "profile_digest": "53214a548658898239b56ca96391f7448bc22a9911fb1b28b1b9d19b4a7a172e",
+  "freeze_commit": "d3cba292b9282116d1e374db22344bca4d47717e",
+  "generator_digest": "72e396b15532aa93afb1f215521e04dca8470f779f3de35c10b04b07bff96638",
+  "learner_digest": "8159bdff248efa67fa2cf75bb0b506bc359f4a2269139d03479753c0fc393416",
+  "parameter_commitment": "crumbs experiment --learner L --seed S --out DIR, control arm",
+  "seed_commitment_sha256": "a6268f40803f68b4aef4a0dd3f76c5d0f191a33f6e8e0e59bce061b1c73f0f49",
+  "sealed_manifest_sha256": "bad0a3dd59fab6718405a653c16b5df278b43f79fe6d15cbaf95bfcee8ec2afb",
+  "released_utc": "2026-09-30T03:22:38Z",
+  "generation_finished_utc": "2026-09-30T03:23:40Z",
+  "trajectory_count": 6,
+  "payload_digest": "433c04f2d430e8df5866740c8253e8ebf667c5c6cd286b8c424062a1671a1ad8",
+  "files": [
+    {"group": 1, "index": 0, "seed": 7481481076582086363, "sha256": "0bca4966de97ecf140efc27479d6e5a966c999a7cfef866fdbaca81b847806da", "bytes": 536835481, "path": "/home/drakestapleton/aien-data/turing-cal/sealed/d3cba292b9282116d1e374db22344bca4d47717e/group-1/seed-7481481076582086363/control/trace.ctr"},
+    {"group": 1, "index": 1, "seed": 66230220598789284, "sha256": "9cb83b152d73fc16edbd823f221ddbe605277bbeff08bf6da924f5ad6794708f", "bytes": 483846324, "path": "/home/drakestapleton/aien-data/turing-cal/sealed/d3cba292b9282116d1e374db22344bca4d47717e/group-1/seed-66230220598789284/control/trace.ctr"},
+    {"group": 1, "index": 2, "seed": 8226366202751587752, "sha256": "35b982398a7034a33800235c41c938853613fb3190df02aeed77d29c48556945", "bytes": 527074535, "path": "/home/drakestapleton/aien-data/turing-cal/sealed/d3cba292b9282116d1e374db22344bca4d47717e/group-1/seed-8226366202751587752/control/trace.ctr"},
+    {"group": 2, "index": 0, "seed": 3262853933230351977, "sha256": "fc71f8418e73916fef2054ddc5414686f7fbf99f7ed0ea8e995b327c2c8c693f", "bytes": 557150984, "path": "/home/drakestapleton/aien-data/turing-cal/sealed/d3cba292b9282116d1e374db22344bca4d47717e/group-2/seed-3262853933230351977/control/trace.ctr"},
+    {"group": 2, "index": 1, "seed": 3446771895668258148, "sha256": "d0445634710ffa27b0bc2a5c634a0cc023c550788cac6988672c3d09c1bc3cd4", "bytes": 528645208, "path": "/home/drakestapleton/aien-data/turing-cal/sealed/d3cba292b9282116d1e374db22344bca4d47717e/group-2/seed-3446771895668258148/control/trace.ctr"},
+    {"group": 2, "index": 2, "seed": 3220451139067114375, "sha256": "d22bdaf8d006496952c4d09211343839d7b3d343984ba0cb0ec46e4b20b4ae4a", "bytes": 508635491, "path": "/home/drakestapleton/aien-data/turing-cal/sealed/d3cba292b9282116d1e374db22344bca4d47717e/group-2/seed-3220451139067114375/control/trace.ctr"}
+  ]
+}
