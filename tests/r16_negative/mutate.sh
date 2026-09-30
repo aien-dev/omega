@@ -186,6 +186,13 @@ mutant c7_mutate_object_bound $G 1 \
     'if (store_bound(store)) return RX_GEN_ERR_IDENTITY;' '(void)0;'
 mutant c7_set_evidence_bound $G 2 \
     'if (store_bound(store)) return RX_GEN_ERR_IDENTITY;' '(void)0;'
+mutant c7_add_work_credential $G 1 \
+    'if (store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)' \
+    'if (0 && store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)'
+mutant c7_finish_work_credential $G 2 \
+    'if (store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)' \
+    'if (0 && store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)'
+mutant c7_add_work_state $G 1 'if (!starts_open) return RX_GEN_ERR_ARG;' '(void)starts_open;'
 
 echo "R16 G4 mutants: $total total, $killed killed, $survived survived, $broken broken"
 if [ $survived -eq 0 ] && [ $broken -eq 0 ]; then

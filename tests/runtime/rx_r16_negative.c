@@ -58,7 +58,9 @@
  * Spec C7 (outside review): the promotion re-checks identity at the flip
  * (P1), a revocation cannot land between a commit's identity check and its
  * publish (P2), and a reaction registered before binding cannot claim an
- * identity it did not prove (P3); on scratch worlds and stores, in the gate.
+ * identity it did not prove (P3); on a bound store the work-accounting calls
+ * need a credential and work cannot be added already done (P4); on scratch
+ * worlds and stores, in the gate.
  *
  * Also checked (reported, outside the six): the SEQ reference loop refuses to
  * drive a production world.
@@ -445,7 +447,8 @@ static OmegaSharedWorldDesc publication(RxWorld *w, const RxObject *o, RxCapRef 
  *   P3  an unbound world kept any caller generation a reaction claimed, and
  *       generations are sequential, so a reaction registered before binding
  *       with a guessed generation ran under that subject after binding.
- * Plus the bound store refuses the credential-free candidate edits. */
+ * Plus the bound store refuses the credential-free candidate edits.
+ *   P4  (second round, below) the work-accounting calls took no credential. */
 static int permissive_world(const void *ctx, RxCapRef ref, uint32_t subject, uint64_t resource,
                             uint32_t rights, RxCapEntry *out) {
     (void)ctx; (void)ref; (void)subject; (void)resource; (void)rights;
@@ -639,7 +642,8 @@ static void probe_race(Tally *t) {
     RxMutation m = {trig, 0, 1};
     int woke = rx_world_publish_external(w, (RxCapRef){3, 1}, &m, 1) > 0 &&
                rx_world_wait_quiescent(w, 10000) == RX_OK;
-    if (race.joined) pthread_join(race.th, NULL);
+    int join_rc = race.joined ? pthread_join(race.th, NULL) : 0;
+    expect(t, join_rc, 0, "C7 P2: join the revocation thread");
     pthread_mutex_lock(&w->mu);
     uint64_t commits1 = w->reactions[id].commits;
     pthread_mutex_unlock(&w->mu);
@@ -727,6 +731,118 @@ static void probe_prebind(Tally *t) {
     }
 }
 
+/* R16 C7 P4 (second-round review): the work-accounting calls. On a bound store
+ * rx_gen_finish_work and rx_gen_add_work took no credential, and add_work
+ * stored the caller's work state verbatim, so anyone could complete, or
+ * insert already done, a required evidence item and make a promotion succeed
+ * that classify would refuse. The before run of this probe was built with
+ * -DR16_BEFORE_WORK against the runtime without the _as calls. */
+#ifdef R16_BEFORE_WORK
+#define rx_gen_add_work_as(s, subj, cred, c, wk) rx_gen_add_work(s, c, wk)
+#define rx_gen_finish_work_as(s, subj, cred, c, id) rx_gen_finish_work(s, c, id)
+#endif
+static int drain_never(uint64_t work_id, void *ctx) {
+    (void)work_id;
+    (*(int *)ctx)++;
+    return -1;
+}
+
+static void probe_work(Tally *t) {
+    enum { PROP = 7401, PRO = 7402 };
+    static RxCallerCred prop, pro;
+    char dir[64];
+    RxGenStore *g = NULL;
+    RxWorld *w = scratch_world(permissive_world, NULL);
+    int ok = w && rx_world_enroll_caller(w, PROP, &prop) == RX_CALLER_OK &&
+             rx_world_enroll_caller(w, PRO, &pro) == RX_CALLER_OK &&
+             rx_world_bind_callers(w) == RX_OK &&
+             mkdtemp(strcpy(dir, "/tmp/r16-work-XXXXXX")) &&
+             rx_gen_open(dir, &g) == RX_GEN_OK &&
+             rx_gen_bind_authority(g, rx_world_caller_check_fn, w, permissive_auth, NULL) ==
+                 RX_GEN_OK;
+    expect(t, ok, 1, "C7 P4: scratch world and bound store");
+    if (!ok) goto out;
+    static const uint8_t junk[] = "r16 work";
+    RxGenObject obj = {1, 1, {0}};
+    RxGenDraft gd;
+    memset(&gd, 0, sizeof gd);
+    gd.proofs_ok = 1;
+    gd.n_objects = 1; gd.objects = &obj;
+    gd.evidence = junk; gd.evidence_len = sizeof junk - 1;
+    RxCallerCred forged = {prop.generation, {0}};
+    fill_random(forged.secret, sizeof forged.secret);
+    /* v0 baseline: an unfinished required item refuses the promotion.
+     * v1 attack: nobody completes it with the bare call.
+     * v2 attack: the proposer inserts it already done.
+     * v3 attack: the bare insert on a bound store; forged credentials.
+     * v4 control: the proposer adds it and completes it with its credential.
+     * The control runs first: a refused candidate keeps its slot (4 in all). */
+    static const int order[5] = {4, 0, 1, 2, 3};
+    for (int k = 0; k < 5; k++) {
+        int v = order[k];
+        uint64_t cand = 0, a0 = 0, l0 = 0, a1 = 0, l1 = 0;
+        int drains = 0;
+        int prc = rx_gen_propose_as(g, PROP, &prop, &gd, &cand);
+        RxGenWork item = {100 + (uint64_t)v, RX_WORK_EVIDENCE, RX_WORK_PENDING, 1};
+        int arc = RX_GEN_OK, frc = RX_GEN_OK;
+        if (prc == RX_GEN_OK && v != 2) arc = rx_gen_add_work_as(g, PROP, &prop, cand, &item);
+        expect(t, prc == RX_GEN_OK && arc == RX_GEN_OK, 1, "C7 P4: propose and add the item");
+        if (v == 1) {
+            frc = rx_gen_finish_work(g, cand, item.id);
+            expect(t, frc, RX_GEN_ERR_IDENTITY,
+                   "C7 P4: rx_gen_finish_work (no credential) on a bound store");
+        } else if (v == 2) {
+            RxGenWork done = item;
+            done.state = RX_WORK_DONE;
+            expect(t, rx_gen_add_work_as(g, PROP, &prop, cand, &done), RX_GEN_ERR_ARG,
+                   "C7 P4: a required evidence item added already done");
+            done.state = RX_WORK_CANCELLED;
+            expect(t, rx_gen_add_work_as(g, PROP, &prop, cand, &done), RX_GEN_ERR_ARG,
+                   "C7 P4: an item added already cancelled");
+            /* the item itself, so the promotion below still needs it */
+            expect(t, rx_gen_add_work_as(g, PROP, &prop, cand, &item), RX_GEN_OK,
+                   "C7 P4: the item added pending");
+        } else if (v == 3) {
+            RxGenWork more = {200, RX_WORK_EVIDENCE, RX_WORK_PENDING, 0};
+            expect(t, rx_gen_add_work(g, cand, &more), RX_GEN_ERR_IDENTITY,
+                   "C7 P4: rx_gen_add_work (no credential) on a bound store");
+            expect(t, rx_gen_add_work_as(g, PROP, &forged, cand, &more), RX_GEN_ERR_IDENTITY,
+                   "C7 P4: rx_gen_add_work_as with a forged credential");
+            expect(t, rx_gen_finish_work_as(g, PROP, &forged, cand, item.id),
+                   RX_GEN_ERR_IDENTITY, "C7 P4: rx_gen_finish_work_as with a forged credential");
+        } else if (v == 4) {
+            frc = rx_gen_finish_work_as(g, PROP, &prop, cand, item.id);
+            expect(t, frc, RX_GEN_OK, "C7 P4 control: the proposer completes its item");
+        }
+        rx_gen_active(g, &a0, &l0);
+        RxPromotionRequest req = {cand, PRO, 1, 1, RX_GEN_RES_PROMOTION,
+                                  RX_GEN_RIGHT_PROMOTE, {0, {0}}};
+        req.caller = pro;
+        int rc = rx_gen_promote(g, &req, NULL, NULL, drain_never, &drains, NULL, NULL);
+        rx_caller_wipe(&req.caller);
+        rx_gen_active(g, &a1, &l1);
+        static const char *const name[5] = {"baseline, item unfinished",
+                                            "item completed with no credential",
+                                            "item offered already done",
+                                            "bare and forged work calls",
+                                            "control, item completed by the proposer"};
+        char what[160];
+        if (v < 4) {
+            snprintf(what, sizeof what, "C7 P4: promotion, %s", name[v]);
+            expect(t, rc, RX_GEN_ERR_VERIFY, what);
+            expect(t, a1 == a0, 1, "C7 P4: active generation unchanged");
+        } else {
+            expect(t, rc == RX_GEN_OK && a1 == cand, 1, "C7 P4 control: promotion succeeds");
+        }
+        printf("R16 C7 P4 %s: promote rc %d; generation %llu -> %llu; drain calls %d\n",
+               name[v], rc, U(a0), U(a1), drains);
+    }
+out:
+    if (g) rx_gen_close(g);
+    scratch_world_free(w);
+    rx_caller_wipe(&prop); rx_caller_wipe(&pro);
+}
+
 static int review_probes(void) {
     Tally t = {0, 0};
     uint32_t f0 = (uint32_t)g_fail;
@@ -736,10 +852,13 @@ static int review_probes(void) {
     uint32_t f2 = (uint32_t)g_fail;
     probe_prebind(&t);
     uint32_t f3 = (uint32_t)g_fail;
+    probe_work(&t);
+    uint32_t f4 = (uint32_t)g_fail;
     int ok = t.tried > 0 && t.refused == t.tried;
-    printf("R16 C7 review probes: P1 flip %s, P2 revoke race %s, P3 pre-bind %s; "
-           "%u/%u as expected  %s\n", f1 == f0 ? "pass" : "FAIL", f2 == f1 ? "pass" : "FAIL",
-           f3 == f2 ? "pass" : "FAIL", t.refused, t.tried, ok ? "PASS" : "FAIL");
+    printf("R16 C7 review probes: P1 flip %s, P2 revoke race %s, P3 pre-bind %s, "
+           "P4 work accounting %s; %u/%u as expected  %s\n", f1 == f0 ? "pass" : "FAIL",
+           f2 == f1 ? "pass" : "FAIL", f3 == f2 ? "pass" : "FAIL", f4 == f3 ? "pass" : "FAIL",
+           t.refused, t.tried, ok ? "PASS" : "FAIL");
     return ok;
 }
 

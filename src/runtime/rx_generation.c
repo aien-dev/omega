@@ -887,18 +887,41 @@ int rx_gen_observe_object(RxGenStore *store, uint64_t candidate, uint32_t index,
 }
 
 int rx_gen_add_work(RxGenStore *store, uint64_t candidate, const RxGenWork *work) {
+    /* R16 C7: no credential, so a bound store refuses it (identity error). */
+    return rx_gen_add_work_as(store, 0, NULL, candidate, work);
+}
+
+int rx_gen_add_work_as(RxGenStore *store, uint32_t subject, const RxCallerCred *cred,
+                       uint64_t candidate, const RxGenWork *work) {
+    if (!store || !work) return RX_GEN_ERR_ARG;
+    /* R16 C7: on a bound store the caller is who the credential says. */
+    if (store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)
+        return RX_GEN_ERR_IDENTITY;
     Candidate *c = find_cand(store, candidate);
-    if (!c || !work) return RX_GEN_ERR_ARG;
+    if (!c) return RX_GEN_ERR_ARG;
     if (c->closing) return RX_GEN_ERR_CLOSING;
     if (c->n_work >= RX_GEN_MAX_WORK) return RX_GEN_ERR_BUSY;
     if (work->class != RX_WORK_EPHEMERAL && work->class != RX_WORK_EVIDENCE &&
         work->class != RX_WORK_EXTERNAL)
         return RX_GEN_ERR_ARG;
+    /* R16 C7: work starts pending or issued; only rx_gen_finish_work(_as)
+     * marks it done, and only classify cancels it. */
+    int starts_open = work->state == RX_WORK_PENDING || work->state == RX_WORK_ISSUED;
+    if (!starts_open) return RX_GEN_ERR_ARG;
     c->work[c->n_work++] = *work;
     return RX_GEN_OK;
 }
 
 int rx_gen_finish_work(RxGenStore *store, uint64_t candidate, uint64_t work_id) {
+    /* R16 C7: no credential, so a bound store refuses it (identity error). */
+    return rx_gen_finish_work_as(store, 0, NULL, candidate, work_id);
+}
+
+int rx_gen_finish_work_as(RxGenStore *store, uint32_t subject, const RxCallerCred *cred,
+                          uint64_t candidate, uint64_t work_id) {
+    if (!store) return RX_GEN_ERR_ARG;
+    if (store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)
+        return RX_GEN_ERR_IDENTITY;
     Candidate *c = find_cand(store, candidate);
     if (!c) return RX_GEN_ERR_ARG;
     for (uint32_t i = 0; i < c->n_work; i++) {
@@ -1129,7 +1152,8 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
     /* R16 C7: identity again at the durable commit point. The promoter may
      * have been revoked since entry (in the live barrier, during the disk
      * writes); refuse before the pointer moves. HOLD keeps any revocation out
-     * until the flip is in memory too. */
+     * until the flip is in memory too. rx_gen_bind_authority is startup-only
+     * and lock-free: by contract no bind races an in-flight promotion. */
     int recheck = store_bound(store);
     if (recheck) {
         if (store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_HOLD) != 0) {

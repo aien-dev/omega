@@ -551,8 +551,9 @@ blocked).
      credential; a bound store now refuses them (`RX_GEN_ERR_IDENTITY`).
      Only the R9 tests, on unbound stores, use them. Probe in P1; mutants
      `c7_mutate_object_bound`, `c7_set_evidence_bound`.
-     `rx_gen_observe_object` and the work-accounting calls stay open: they
-     can make a promotion fail (denial of service), never succeed.
+     `rx_gen_observe_object` stays open: it can only mark an object seen,
+     which can make a promotion fail (denial of service), never succeed.
+     The work-accounting calls were wrongly listed here too; see item 7.
    - Changed: the stored secret in a registered reaction is wiped with a
      volatile loop. The memory stays live, so the plain `memset` could not
      be removed by the compiler; this is belt and braces.
@@ -583,3 +584,42 @@ blocked).
      The cost is unmeasured: R15 performance was compiled only on this branch.
    - The durable before-evidence in the committed tree is the six C7 mutant
      kills; the 13/24 run above used the older runtime.
+7. Second-round review (2026-09-30; Codex found nothing new, GLM one gap):
+   - Gap: on a bound store `rx_gen_finish_work` and `rx_gen_add_work` took
+     no credential, and `rx_gen_add_work` stored the caller's work state
+     as given. Anyone could complete, or insert already done, a required
+     evidence item, so a promotion that classify would refuse succeeded
+     without the drain ever running. Item 4's "never succeed" was wrong for
+     these two calls.
+   - Fix: `rx_gen_add_work_as` and `rx_gen_finish_work_as` take the caller's
+     subject and credential and, on a bound store, check it like
+     `rx_gen_propose_as`. The bare calls pass no credential, so a bound
+     store refuses them (`RX_GEN_ERR_IDENTITY`); unbound stores (R9, visor)
+     behave as before. On every store, work is added pending or issued only
+     (`RX_GEN_ERR_ARG` otherwise); only a finish call marks it done.
+   - Probe P4 (`probe_work`): baseline (unfinished required item, promotion
+     refused), completion with the bare call, an item offered already done
+     or cancelled, the bare add, forged credentials on both `_as` calls, and
+     a control (the proposer adds and completes its item, promotion
+     succeeds). Before the fix (probe built with `-DR16_BEFORE_WORK`, which
+     maps the `_as` calls to the bare ones, against the b199cfe runtime):
+     C7 section 39/49 as expected; the bare completion and the bare and
+     forged calls let promotions through (generation 2 -> 4, then 4 -> 6,
+     drain never called); gate FAIL. After: 49/49, C5 still 40/40, gate
+     `R16_G4_LEGACY_REFUSED=PASS`. Mutants `c7_add_work_credential`,
+     `c7_finish_work_credential`, `c7_add_work_state`: 36 total, 36 killed,
+     0 survived, 0 broken.
+   - Also: the P2 revocation thread's `pthread_join` result is now checked,
+     and the flip recheck carries the contract that `rx_gen_bind_authority`
+     is startup-only and lock-free.
+   - Limits: any live enrolled subject may add or finish work on any
+     candidate (the credential proves who the caller is, not that it owns
+     the candidate; a proposer-only rule would change the drain contract).
+     A drain callback on a bound store must now use `rx_gen_finish_work_as`;
+     no in-tree bound store uses a drain callback, so that path has no probe.
+   - Host ladder rerun after this fix: R7, R8 (116/0), R9, R10 (198/0), R11
+     (436/0), R13 host, R14 host (A to F PASS), R15 parity host (5 pairs, 0
+     failures), R15 G7 host (57/0), workflow fusion (17059/0; its check count
+     varies run to run), G5 surface, visor authority check, G1/G2 inventory
+     (280 sites, 0 unclassified) and the G3 authority path
+     (`HOST_PASS_NON_SILICON`) all pass; silicon binaries compiled only.

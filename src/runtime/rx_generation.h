@@ -183,6 +183,15 @@ int rx_gen_observe_object(RxGenStore *store, uint64_t candidate, uint32_t index,
                           uint32_t generation);
 int rx_gen_add_work(RxGenStore *store, uint64_t candidate, const RxGenWork *work);
 int rx_gen_finish_work(RxGenStore *store, uint64_t candidate, uint64_t work_id);
+/* R16 C7: the work-accounting calls present the caller credential. On a bound
+ * store the bare rx_gen_add_work and rx_gen_finish_work are refused with
+ * RX_GEN_ERR_IDENTITY. Work is added pending or issued only (else
+ * RX_GEN_ERR_ARG); only rx_gen_finish_work(_as) marks it done. A drain
+ * callback on a bound store must use rx_gen_finish_work_as. */
+int rx_gen_add_work_as(RxGenStore *store, uint32_t subject, const RxCallerCred *cred,
+                       uint64_t candidate, const RxGenWork *work);
+int rx_gen_finish_work_as(RxGenStore *store, uint32_t subject, const RxCallerCred *cred,
+                          uint64_t candidate, uint64_t work_id);
 
 void rx_gen_set_crash(RxGenStore *store, int step);
 void rx_gen_set_disk_hook(RxGenStore *store, RxGenDiskHook fn, void *ctx);

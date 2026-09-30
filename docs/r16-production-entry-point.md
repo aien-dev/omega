@@ -21,7 +21,8 @@ carry the named subject's runtime-issued credential is refused. Since spec C7
 the promotion checks that credential again right before the active pointer
 moves, a revocation waits for any commit already past its identity check, and
 the world refuses to bind while a reaction registered without a credential
-exists.
+exists. Adding or completing candidate work on a bound store also needs a
+credential, and work can no longer be added already done.
 
 | what | sources | make target |
 |---|---|---|
@@ -59,7 +60,7 @@ make $A test-r16-negative                    # G4 (under 1 s); PASS since spec C
                                              # runtime-issued caller credential, so the promoter-subject exploit that
                                              # was accepted at 44d8c06 (spec C5) is refused with the identity error
 make $A test-r16-negative-mutants            # G4 guards load-bearing (about 1 min; judged on the gate line;
-                                             # 33 mutants incl. 12 identity and 6 C7 mutants, all killed)
+                                             # 36 mutants incl. 12 identity and 9 C7 mutants, all killed)
 make $A test-r16-surface                     # G5 (seconds)
 ```
 
