@@ -18,7 +18,7 @@ ESTIMATION_CALIBRATION   = FAIL   (no model calibrated, none selected, none prom
 ## Failure class (recorded by hand, as the protocol requires)
 Non-Gaussian, heavy-tailed one-step changes: most steps move very little and a few move a lot, so one Gaussian noise level cannot be right in both the middle and the tails. This is a wrong noise shape (with possible switching between calm and bursty behaviour), not a wrong mean.
 - Quantization looks irrelevant (section 5a): the standard deviation of a one-step change is about 1159 mC against a 100 mC reading step. (Only 2.8% of innovations were exactly zero, but raw one-step changes are exactly zero 33% of the time, so that figure alone is weak evidence.)
-- Not a wrong mean: bias and lag-1 autocorrelation passed. Autocorrelation beyond lag 1 is strong, though (Ljung-Box Q10 = 151 for M0 and 350 for M1, 5% cutoff about 18), so the noise shape and its persistence are both off. Independent recheck: docs note added by the verifier found no blocker or major issues.
+- Not a wrong mean: bias and lag-1 autocorrelation passed. Autocorrelation beyond lag 1 is strong, though (Ljung-Box Q10 = 151 for M0 and 350 for M1, 5% cutoff about 18), so the noise shape and its persistence are both off. An independent recheck (fresh worker, own C recompute from the saved streams) reproduced all statistics and found no blocker or major issues.
 - The regime split gave no information: every sample lies inside a load trial (idle n = 0).
 - The M0 fit sat at the upper edge of the frozen q grid (q = 1e6), also on run A. The grid is frozen under v1 and was not widened.
 
