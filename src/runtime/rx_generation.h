@@ -16,6 +16,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "rx_caller.h"
+
 #define RX_GEN_OK              0
 #define RX_GEN_ERR_ARG       -40
 #define RX_GEN_ERR_STALE     -41
@@ -27,6 +29,7 @@
 #define RX_GEN_ERR_BUSY      -47
 #define RX_GEN_ERR_VERIFY    -48
 #define RX_GEN_ERR_IO        -49
+#define RX_GEN_ERR_IDENTITY  -50   /* caller credential absent, forged, stale or revoked */
 
 #define RX_GEN_MAX_OBJECTS   32u
 #define RX_GEN_MAX_WORK      16u
@@ -104,6 +107,9 @@ typedef struct {
     uint64_t cap_generation;
     uint64_t resource;
     uint32_t rights;
+    /* R16 C5: the credential the runtime issued for `subject`. Required by a
+     * store bound with rx_gen_bind_authority; ignored by an unbound one. */
+    RxCallerCred caller;
 } RxPromotionRequest;
 
 typedef struct {
@@ -165,6 +171,10 @@ int rx_gen_read_blob(const RxGenStore *store, uint64_t id, const char *name, uin
 
 int rx_gen_propose(RxGenStore *store, uint32_t proposer, const RxGenDraft *draft,
                    uint64_t *out_id);
+/* R16 C5: the proposer presents its credential. On a bound store plain
+ * rx_gen_propose (no credential) is refused with RX_GEN_ERR_IDENTITY. */
+int rx_gen_propose_as(RxGenStore *store, uint32_t proposer, const RxCallerCred *cred,
+                      const RxGenDraft *draft, uint64_t *out_id);
 int rx_gen_mutate_object(RxGenStore *store, uint64_t candidate, uint32_t index,
                          uint32_t generation, const uint8_t digest[32]);
 int rx_gen_set_evidence(RxGenStore *store, uint64_t candidate, const uint8_t *bytes,
@@ -182,6 +192,17 @@ int rx_gen_release_barrier(RxGenStore *store);
 int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request,
                    RxGenAuthFn auth, void *auth_ctx, RxGenDrainFn drain, void *drain_ctx,
                    RxGenLiveFn live, void *live_ctx);
+
+/* R16 C5: bind the store to the runtime's caller check and to the native
+ * promotion authority, once (RX_GEN_ERR_BUSY if already bound). From then
+ * on: rx_gen_propose_as and rx_gen_promote check the proposer's / the
+ * request subject's credential through `caller` before anything else
+ * (RX_GEN_ERR_IDENTITY), and rx_gen_promote validates the promotion right
+ * with the bound `auth` / `auth_ctx` only: an authority callback passed by the
+ * caller is not consulted. There is no unbind. */
+typedef int (*RxGenCallerFn)(void *ctx, uint32_t subject, const RxCallerCred *cred);
+int rx_gen_bind_authority(RxGenStore *store, RxGenCallerFn caller, void *caller_ctx,
+                          RxGenAuthFn auth, void *auth_ctx);
 
 /* Durable executor (R15 G7). One thread per store that performs a store's
  * physical work (the fsyncs of a proposal and of a promotion) so that the
@@ -209,6 +230,9 @@ int rx_gen_exec_running(const RxGenStore *store);
  * untaken result. The draft is copied; the caller's buffers may go away. */
 int rx_gen_post_propose(RxGenStore *store, uint64_t key, uint32_t proposer,
                         const RxGenDraft *draft, RxGenDoneFn done, void *done_ctx);
+int rx_gen_post_propose_as(RxGenStore *store, uint64_t key, uint32_t proposer,
+                           const RxCallerCred *cred, const RxGenDraft *draft,
+                           RxGenDoneFn done, void *done_ctx);
 int rx_gen_post_promote(RxGenStore *store, uint64_t key, const RxPromotionRequest *request,
                         RxGenAuthFn auth, void *auth_ctx, RxGenDoneFn done, void *done_ctx);
 /* State of one slot; on RX_GEN_JOB_DONE `out` (if given) holds the result. */

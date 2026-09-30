@@ -838,14 +838,14 @@ int rx_omega_register(RxOmegaFaculty *f, const RxOmegaCaps *caps) {
     rd(&b, w, f->o.demand);
     wr(&b, w, f->o.demand);
     wr(&b, w, f->o.result);
-    if ((rc = rx_world_add_reaction(w, &b.d, &f->r_serve)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_serve)) != RX_OK) return rc;
 
     begin(&b, "omega.watch", RX_FACULTY_OMEGA, RX_OMEGA_SUBJ_OMEGA, RX_PRIO_FOREGROUND,
           fn_watch, f, caps->omega);
     trig(&b, w, f->o.demand, RX_FIELD(2));
     rd(&b, w, f->o.search);
     wr(&b, w, f->o.search);
-    if ((rc = rx_world_add_reaction(w, &b.d, &f->r_watch)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_watch)) != RX_OK) return rc;
 
     for (uint32_t k = 0; k < f->cfg.n_slots; k++) {
         f->slot[k].f = f;
@@ -856,7 +856,7 @@ int rx_omega_register(RxOmegaFaculty *f, const RxOmegaCaps *caps) {
         trig(&b, w, f->o.search, RX_FIELD(0));
         rd(&b, w, f->o.candidate[k]);
         wr(&b, w, f->o.candidate[k]);
-        if ((rc = rx_world_add_reaction(w, &b.d, &f->r_synth[k])) != RX_OK) return rc;
+        if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_synth[k])) != RX_OK) return rc;
 
         begin(&b, verify_names[k], RX_FACULTY_OMEGA, RX_OMEGA_SUBJ_OMEGA, RX_PRIO_LEARNING,
               fn_verify, &f->slot[k], caps->omega);
@@ -864,7 +864,7 @@ int rx_omega_register(RxOmegaFaculty *f, const RxOmegaCaps *caps) {
         rd(&b, w, f->o.search);
         rd(&b, w, f->o.verdict[k]);
         wr(&b, w, f->o.verdict[k]);
-        if ((rc = rx_world_add_reaction(w, &b.d, &f->r_verify[k])) != RX_OK) return rc;
+        if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_verify[k])) != RX_OK) return rc;
 
         begin(&b, measure_names[k], RX_FACULTY_OMEGA, RX_OMEGA_SUBJ_OMEGA, RX_PRIO_LEARNING,
               fn_measure, &f->slot[k], caps->omega);
@@ -873,7 +873,7 @@ int rx_omega_register(RxOmegaFaculty *f, const RxOmegaCaps *caps) {
         rd(&b, w, f->o.search);
         rd(&b, w, f->o.measure[k]);
         wr(&b, w, f->o.measure[k]);
-        if ((rc = rx_world_add_reaction(w, &b.d, &f->r_measure[k])) != RX_OK) return rc;
+        if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_measure[k])) != RX_OK) return rc;
     }
 
     begin(&b, "omega.select", RX_FACULTY_OMEGA, RX_OMEGA_SUBJ_OMEGA, RX_PRIO_LEARNING,
@@ -887,7 +887,7 @@ int rx_omega_register(RxOmegaFaculty *f, const RxOmegaCaps *caps) {
     rd(&b, w, f->o.search);
     rd(&b, w, f->o.selection);
     wr(&b, w, f->o.selection);
-    if ((rc = rx_world_add_reaction(w, &b.d, &f->r_select)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_select)) != RX_OK) return rc;
     return RX_OK;
 }
 
@@ -926,7 +926,7 @@ int rx_omega_register_reconsider(RxOmegaFaculty *f, RxObjRef plan, RxCapRef read
     d.caps[1] = (RxCapNeed){ search_cap, w->objects[f->o.search.id].resource,
                              RX_RIGHT_READ | RX_RIGHT_WRITE };
     d.caps[2] = (RxCapNeed){ selection_cap, w->objects[f->o.selection.id].resource, RX_RIGHT_READ };
-    return rx_world_add_reaction(w, &d, &f->r_reconsider);
+    return rx_world_add_reaction_keyed(w, f->keys, &d, &f->r_reconsider);
 }
 
 void rx_omega_destroy(RxOmegaFaculty *f) {

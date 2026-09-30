@@ -136,6 +136,9 @@ typedef struct {
     uint32_t r_observe, r_predict, r_explain, r_assess, r_plan;
     uint32_t r_experiment;
     RxObjRef experiment_evidence;
+    /* R16 C5: this faculty's caller credentials (rx_caller.h); null in a
+     * world without bound callers. Held here, never published. */
+    const RxCallerKeyring *keys;
 } RxAienFaculty;
 
 void rx_aien_default_config(RxAienConfig *cfg);

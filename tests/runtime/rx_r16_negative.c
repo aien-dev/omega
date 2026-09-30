@@ -34,25 +34,41 @@
  * re-check), and at the boundary a real grant that is not the writer of
  * record's (identity) and the writer's own grant after revocation (validation).
  *
- * Open (spec C5): last, a promotion naming the promoter itself as subject,
- * with the promoter's grant reference. The subject is a caller-supplied value
- * and the native authority accepts it, so this attempt is accepted and the gate
- * prints FAIL until promotion is bound to the caller. The six-act core is
- * printed on its own line ("R16 G4 core:"), which the mutant suite judges.
+ * Spec C5 (caller identity). The legacy context also holds runtime-issued
+ * caller credentials of its own (LEGACY, LEGACY2: enrolled by the rig as
+ * fixtures before the world's caller set is bound), never another subject's.
+ * The pre-fix exploit is kept: last, a promotion naming the promoter itself as
+ * subject with the promoter's grant reference, and a reaction naming the
+ * promoter as subject with its in-force grant. At 44d8c06 (before C5) both were
+ * ACCEPTED (generation moved 1 -> 3 in memory and on disk; the in-force record
+ * written) and the gate printed FAIL. Now each credential variant the legacy
+ * context could present (none, zero, random, its own, its own secret at the
+ * promoter's generation, a permissive authority callback) must be refused with
+ * the identity error, with nothing moved. Then the C5 identity probes: spoofed
+ * subject, forged / stale / unknown / absent credentials, enrollment after
+ * bind, revocation needing the credential, secret collision (rig credentials
+ * and 64 enrollments on a scratch world), an identity revoked while its
+ * reaction runs (the write must not commit, later activations blocked), the
+ * revoked credential replayed at check, revocation, proposal, promotion and
+ * registration, and a bound R9 store ignoring a permissive authority callback.
+ * Last, a positive control: the promoter, with its own credential and grant,
+ * still promotes. The gate line covers all of it and is what the mutant suite
+ * judges; the six-act core is also printed on its own line ("R16 G4 core:").
  *
  * Also checked (reported, outside the six): the SEQ reference loop refuses to
  * drive a production world.
  *
  * Limits (stated in the receipt, not tested as refusals):
- *   - world-owner calls (rx_world_create, rx_world_retire,
- *     rx_world_add_reaction) take no capability: any code holding the RxWorld
- *     pointer can retire an object, which moves that object's generation.
- *     Registering a reaction grants it nothing; its grants are checked at
- *     every activation (tested below).
- *   - rx_gen_promote takes its authority check from the caller (RxGenAuthFn).
- *     Production passes aienos_cap_validate; a caller in the same process could
- *     pass a permissive one. R9's own rules (no self-promotion, promotion
- *     resource and right) still apply and are tested below.
+ *   - world-owner calls (rx_world_create, rx_world_retire) take no capability:
+ *     any code holding the RxWorld pointer can retire an object, which moves
+ *     that object's generation. rx_world_add_reaction now needs the named
+ *     subject's credential on a bound world, and registering a reaction still
+ *     grants it nothing; its grants are checked at every activation.
+ *   - rx_gen_promote on a store bound with rx_gen_bind_authority uses the
+ *     store's own authority and ignores the caller's RxGenAuthFn (tested
+ *     below). An unbound store (older tests) still takes the caller's.
+ *   - Caller credentials are secrets in process memory: code in the same
+ *     address space that reads another component's keyring can act as it.
  *   - C code in the same address space can write any memory. G3 shows the
  *     production binary does not link or exec the legacy code at all.
  */
@@ -62,6 +78,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <time.h>
 
 #define U(x) ((unsigned long long)(x))
@@ -167,6 +184,9 @@ typedef struct {
     AienosCapAdmin *office;      /* the harness's office: used only to revoke, never by
                                     the legacy context's own calls */
     RxObjRef scratch;
+    RxObjRef scratch2;           /* a second scratch object (C5 in-flight probe target) */
+    const RxCallerKeyring *keys; /* its own caller credentials (LEGACY, LEGACY2), issued
+                                    by the runtime at enrollment */
     uint64_t candidate;          /* a draft proposed by LEGACY */
 } Legacy;
 
@@ -195,6 +215,10 @@ static int fn_poke(RxCtx *c) {
 static uint32_t g_named_subject;   /* 0: LEGACY_SUBJ; else the subject the reaction names */
 static RxDep g_named_trigger;      /* with g_named_subject: its trigger and read grant */
 static RxCapNeed g_named_read;
+/* With g_named_explicit: the credential the descriptor carries (NULL: none),
+ * instead of the one its keyring holds for the named subject. */
+static const RxCallerCred *g_named_cred;
+static int g_named_explicit;
 static int legacy_reaction_fn(Legacy *L, const char *name, RxObjRef target, uint64_t target_res,
                               RxCapRef cap, int declare_write, Poke *p, RxFn fn, void *user,
                               uint32_t *id) {
@@ -218,7 +242,13 @@ static int legacy_reaction_fn(Legacy *L, const char *name, RxObjRef target, uint
         d.caps[0] = g_named_read;
     }
     if (declare_write) d.caps[d.n_caps++] = (RxCapNeed){cap, target_res, RX_RIGHT_WRITE};
-    return rx_world_add_reaction(L->w, &d, id);
+    if (g_named_explicit) {
+        if (g_named_cred) d.caller = *g_named_cred;
+        int rc = rx_world_add_reaction(L->w, &d, id);
+        rx_caller_wipe(&d.caller);
+        return rc;
+    }
+    return rx_world_add_reaction_keyed(L->w, L->keys, &d, id);
 }
 static int legacy_reaction(Legacy *L, const char *name, RxObjRef target, uint64_t target_res,
                            RxCapRef cap, int declare_write, Poke *p, uint32_t *id) {
@@ -324,6 +354,57 @@ static int native_auth(void *ctx, uint32_t cap_id, uint64_t generation, uint32_t
                                rights, &e);
 }
 
+/* A caller-supplied authority callback that accepts everything. A store bound
+ * to the runtime's authority (rx_gen_bind_authority) must ignore it. */
+static int permissive_auth(void *ctx, uint32_t cap_id, uint64_t generation, uint32_t subject,
+                           uint64_t resource, uint32_t rights) {
+    (void)ctx; (void)cap_id; (void)generation; (void)subject; (void)resource; (void)rights;
+    return 0;
+}
+
+static void fill_random(uint8_t *p, size_t n) {
+    size_t k = 0;
+    while (k < n) {
+        ssize_t g = getrandom(p + k, n - k, 0);
+        if (g > 0) k += (size_t)g;
+    }
+}
+
+/* A LEGACY reaction whose body revokes LEGACY's own caller credential while
+ * the activation runs, then writes a target its real grant covers. The commit
+ * re-check must refuse the write: the identity the reaction was admitted under
+ * is gone. */
+typedef struct { Poke p; RxWorld *w; RxCallerCred cred; int revoked; } IdRevoke;
+static int fn_id_revoke(RxCtx *c) {
+    IdRevoke *f = c->user;
+    if (!f->revoked)
+        f->revoked = rx_world_revoke_caller(f->w, LEGACY_SUBJ, &f->cred) == RX_CALLER_OK;
+    c->out[c->n_out++] = (RxMutation){f->p.target, f->p.field, 0xBADBADull};
+    return 0;
+}
+
+static const char *caller_err(int rc) {
+    switch (rc) {
+    case RX_CALLER_OK: return "OK";
+    case RX_CALLER_ERR_ABSENT: return "ABSENT";
+    case RX_CALLER_ERR_UNKNOWN: return "UNKNOWN";
+    case RX_CALLER_ERR_REVOKED: return "REVOKED";
+    case RX_CALLER_ERR_STALE: return "STALE";
+    case RX_CALLER_ERR_FORGED: return "FORGED";
+    case RX_CALLER_ERR_CLOSED: return "CLOSED";
+    case RX_CALLER_ERR_EXISTS: return "EXISTS";
+    default: return "other";
+    }
+}
+/* One identity probe: rc must equal want. */
+static void expect(Tally *t, long long rc, long long want, const char *what) {
+    t->tried++;
+    if (rc == want) { t->refused++; return; }
+    printf("R16 G4 FAIL: C5 identity: %s: rc %lld (%s), expected %lld (%s)\n", what, rc,
+           caller_err((int)rc), want, caller_err((int)want));
+    g_fail++;
+}
+
 static void st32(uint8_t *p, uint32_t v) { for (int i = 0; i < 4; i++) p[i] = (uint8_t)(v >> (8 * i)); }
 static void st64(uint8_t *p, uint64_t v) { for (int i = 0; i < 8; i++) p[i] = (uint8_t)(v >> (8 * i)); }
 
@@ -348,7 +429,8 @@ static OmegaSharedWorldDesc publication(RxWorld *w, const RxObject *o, RxCapRef 
 
 int main(void) {
     R15Rig *r = calloc(1, sizeof *r);
-    if (!r || r15_start(r, R15_RES4) != 0) {
+    static const uint32_t fixtures[2] = {LEGACY_SUBJ, LEGACY2_SUBJ};
+    if (!r || r15_start_with(r, R15_RES4, fixtures, 2) != 0) {
         printf("R16 G4 FAIL: production body did not start (stage %d%s%s)\n", r ? r->stage : 0,
                r && r->stage_why ? ": " : "", r && r->stage_why ? r->stage_why : "");
         printf("R16 gate: R16_G4_LEGACY_REFUSED=FAIL\n");
@@ -362,6 +444,7 @@ int main(void) {
     L.w = &r->w;
     L.view = r->view;
     L.gen = r->gen;
+    L.keys = &r->fixtures;
     L.stolen_goal = r->ext_goal;
     L.borrowed_inforce = r->promoter.inforce_write;
     L.borrowed_promote = r->promoter.promotion_authority;
@@ -379,13 +462,16 @@ int main(void) {
     uint64_t init[RX_MAX_FIELDS] = {0};
     int fx = fx0 && rx_world_create(&r->w, 0x7160, RX_PERSIST_EPHEMERAL, RES_LEGACY_SCRATCH, init,
                              &L.scratch) == RX_OK;
+    fx = fx && rx_world_create(&r->w, 0x7161, RX_PERSIST_EPHEMERAL, RES_LEGACY_SCRATCH, init,
+                               &L.scratch2) == RX_OK;
     RxGenDraft gd;
     memset(&gd, 0, sizeof gd);
     static const uint8_t junk[] = "legacy";
     gd.proofs_ok = 1;
     gd.evidence = junk; gd.evidence_len = sizeof junk - 1;
     gd.realization = junk; gd.realization_len = sizeof junk - 1;
-    fx = fx && rx_gen_propose(r->gen, LEGACY_SUBJ, &gd, &L.candidate) == RX_GEN_OK;
+    fx = fx && rx_gen_propose_as(r->gen, LEGACY_SUBJ, rx_caller_find(L.keys, LEGACY_SUBJ), &gd,
+                                  &L.candidate) == RX_GEN_OK;
     RxCapRef honest_output = r->seat_output;
     CHECK(fx, "fixtures could not be built");
 
@@ -462,7 +548,9 @@ int main(void) {
         for (int i = 0; i < 4; i++) {
             RxPromotionRequest req = {L.candidate, tries[i].subject, tries[i].cap.cap_id,
                                       tries[i].cap.generation, RX_GEN_RES_PROMOTION,
-                                      tries[i].rights};
+                                      tries[i].rights, {0, {0}}};
+            const RxCallerCred *c = rx_caller_find(L.keys, tries[i].subject);
+            if (c) req.caller = *c;
             int rc = rx_gen_promote(L.gen, &req, native_auth, (void *)L.view, NULL, NULL, NULL,
                                     NULL);
             tally(&t[4], rc == RX_GEN_ERR_AUTHORITY, "(4) promote", tries[i].what, rc);
@@ -565,48 +653,88 @@ int main(void) {
     }
 
     /* (4), last: promotion naming the promoter itself as the subject, with the
-     * promoter's grant reference (which the legacy context can observe). The
-     * request's subject is a value the caller supplies; nothing binds it to the
-     * caller. Run last because an accepted promotion moves the generation in
-     * memory and on disk. A fresh draft is proposed so the parent is current. */
+     * promoter's grant reference (which the legacy context can observe). This
+     * is the pre-fix exploit: before R16 C5 the request's subject was a value
+     * the caller supplied, and this promotion was accepted (generation moved in
+     * memory and on disk). Now the request must also carry the promoter's
+     * runtime-issued caller credential, which the legacy context does not hold;
+     * every way it could fill that field is tried. Run last among the acts
+     * because an accepted promotion moves the generation. A fresh draft is
+     * proposed so the parent is current. */
     int probe_refused = 0;
+    uint64_t probe_cand = 0;
     {
-        uint64_t cand = 0, a0 = 0, l0 = 0, a1 = 0, l1 = 0;
+        const RxCallerCred *own = rx_caller_find(L.keys, LEGACY_SUBJ);
+        const RxCallerCred *prom = rx_caller_find(&r->keys_promoter, RX_LIVING_PROMOTE_SUBJ);
+        RxCallerCred zero, rnd, relabel, mixed;
+        memset(&zero, 0, sizeof zero);
+        zero.generation = prom->generation;           /* generations are guessable */
+        rnd = zero;
+        fill_random(rnd.secret, sizeof rnd.secret);
+        relabel = *own;                               /* its own real credential */
+        mixed = *own;
+        mixed.generation = prom->generation;          /* its own secret, promoter's generation */
+        struct { const RxCallerCred *c; RxGenAuthFn auth; const char *what; } v[6] = {
+            {NULL, native_auth, "no credential"},
+            {&zero, native_auth, "zero secret at the promoter's generation"},
+            {&rnd, native_auth, "random secret at the promoter's generation"},
+            {&relabel, native_auth, "its own real credential (LEGACY's)"},
+            {&mixed, native_auth, "its own secret at the promoter's generation"},
+            {&rnd, permissive_auth, "random secret with a permissive authority callback"},
+        };
+        uint64_t a0 = 0, l0 = 0, a1 = 0, l1 = 0;
         RxRecoveryRecord d0, d1;
         memset(&d0, 0, sizeof d0); memset(&d1, 0, sizeof d1);
-        int prc = rx_gen_propose(L.gen, LEGACY_SUBJ, &gd, &cand);
+        int prc = rx_gen_propose_as(L.gen, LEGACY_SUBJ, own, &gd, &probe_cand);
         CHECK(prc == RX_GEN_OK, "(4) the probe draft could not be proposed (%d)", prc);
         rx_gen_active(L.gen, &a0, &l0);
         rx_gen_recover(r->generation_dir, &d0);
-        RxPromotionRequest req = {cand, RX_LIVING_PROMOTE_SUBJ, L.borrowed_promote.cap_id,
-                                  L.borrowed_promote.generation, RX_GEN_RES_PROMOTION,
-                                  RX_GEN_RIGHT_PROMOTE};
-        int rc = rx_gen_promote(L.gen, &req, native_auth, (void *)L.view, NULL, NULL, NULL, NULL);
+        int refused = 0, last_rc = 0;
+        for (int i = 0; i < 6; i++) {
+            RxPromotionRequest req = {probe_cand, RX_LIVING_PROMOTE_SUBJ, L.borrowed_promote.cap_id,
+                                      L.borrowed_promote.generation, RX_GEN_RES_PROMOTION,
+                                      RX_GEN_RIGHT_PROMOTE, {0, {0}}};
+            if (v[i].c) req.caller = *v[i].c;
+            int rc = rx_gen_promote(L.gen, &req, v[i].auth, (void *)L.view, NULL, NULL, NULL, NULL);
+            rx_caller_wipe(&req.caller);
+            if (rc == RX_GEN_ERR_IDENTITY) refused++;
+            else printf("R16 G4 FAIL: (4) promoter-subject promotion, %s: rc %d (expected "
+                        "IDENTITY %d)\n", v[i].what, rc, RX_GEN_ERR_IDENTITY);
+            if (rc != RX_GEN_ERR_IDENTITY || i == 0) last_rc = rc;
+        }
         rx_gen_active(L.gen, &a1, &l1);
         rx_gen_recover(r->generation_dir, &d1);
-        probe_refused = prc == RX_GEN_OK && rc == RX_GEN_ERR_AUTHORITY && a1 == a0 &&
+        probe_refused = prc == RX_GEN_OK && refused == 6 && a1 == a0 && l1 == l0 &&
                         d1.active_id == d0.active_id && d1.lineage == d0.lineage;
         printf("R16 G4 (4) promotion naming the promoter as subject, with the promoter's grant: "
-               "%s (rc %d; generation %llu -> %llu in memory, %llu -> %llu on disk)\n",
-               probe_refused ? "REFUSED" : "ACCEPTED", rc, U(a0), U(a1), U(d0.active_id),
-               U(d1.active_id));
+               "%s (%d/6 credential variants refused with IDENTITY; rc %d; generation %llu -> %llu "
+               "in memory, %llu -> %llu on disk)\n",
+               probe_refused ? "REFUSED" : "ACCEPTED", refused, last_rc, U(a0), U(a1),
+               U(d0.active_id), U(d1.active_id));
         if (!probe_refused)
             printf("R16 G4 OPEN: promotion accepts the subject the caller names; any in-process "
-                   "holder of the promoter's grant reference can promote. Needs promotion bound "
-                   "to the caller (runtime change, not in this branch).\n");
+                   "holder of the promoter's grant reference can promote.\n");
     }
 
-    /* (6), last: the same flaw on the reaction path. A legacy reaction whose
+    /* (6), last: the same exploit on the reaction path. A legacy reaction whose
      * descriptor names the promoter as its subject and carries the promoter's
-     * in-force grant: validate_caps checks the grant against the subject the
-     * descriptor names, and rx_world_add_reaction does not check the caller. */
+     * in-force grant. Before R16 C5 validate_caps checked the grant against the
+     * subject the descriptor names and this write committed. Now registration
+     * needs the named subject's credential; each variant the legacy context
+     * could present is tried, and any that registers is woken to show its
+     * effect. */
     int rprobe_refused = 0;
     {
         RxObject b0, b1;
         rx_world_read(&r->w, r->living.o.inforce, &b0);
-        static Poke p_named;
-        uint32_t id_n = 0;
-        g_named_subject = RX_LIVING_PROMOTE_SUBJ;
+        const RxCallerCred *own = rx_caller_find(L.keys, LEGACY_SUBJ);
+        const RxCallerCred *prom = rx_caller_find(&r->keys_promoter, RX_LIVING_PROMOTE_SUBJ);
+        RxCallerCred rnd;
+        rnd.generation = prom->generation;
+        fill_random(rnd.secret, sizeof rnd.secret);
+        const RxCallerCred *v[3] = {NULL, own, &rnd};
+        const char *vw[3] = {"no credential", "its own real credential",
+                             "random secret at the promoter's generation"};
         /* Wake: a harness fixture grant lets the promoter subject read the
          * legacy scratch object, so the probe can be woken on demand (in normal
          * operation a candidate trigger with the promoter's candidate grant
@@ -614,32 +742,265 @@ int main(void) {
         g_named_trigger = (RxDep){L.scratch, RX_FIELD(0)};
         g_named_read = (RxCapNeed){r15_mint(r, RX_LIVING_PROMOTE_SUBJ, RES_LEGACY_SCRATCH,
                                             RX_RIGHT_READ), RES_LEGACY_SCRATCH, RX_RIGHT_READ};
-        int add = legacy_reaction(&L, "legacy.named-subject", r->living.o.inforce, b0.resource,
-                                  L.borrowed_inforce, 1, &p_named, &id_n);
-        g_named_subject = 0;
+        static Poke p_named[3];
+        uint32_t id_n[3] = {0, 0, 0};
+        int add[3], refused = 0, any_added = 0;
+        for (int i = 0; i < 3; i++) {
+            g_named_subject = RX_LIVING_PROMOTE_SUBJ;
+            g_named_cred = v[i];
+            g_named_explicit = 1;
+            add[i] = legacy_reaction(&L, "legacy.named-subject", r->living.o.inforce, b0.resource,
+                                     L.borrowed_inforce, 1, &p_named[i], &id_n[i]);
+            g_named_subject = 0;
+            g_named_explicit = 0;
+            g_named_cred = NULL;
+            if (add[i] == RX_ERR_IDENTITY) refused++;
+            else printf("R16 G4 FAIL: (6) promoter-subject reaction, %s: register rc %d "
+                        "(expected IDENTITY %d)\n", vw[i], add[i], RX_ERR_IDENTITY);
+            if (add[i] == RX_OK) any_added = 1;
+        }
         int woke = -1;
         uint64_t commits = 0, acts = 0;
         int crumb = -1;
-        if (add == RX_OK) {
+        if (any_added) {
             woke = wake_legacy(&L);
             pthread_mutex_lock(&r->w.mu);
-            commits = r->w.reactions[id_n].commits;
-            acts = r->w.reactions[id_n].activations;
-            const RxCrumb *k = rx_world_crumb(&r->w, r->w.reactions[id_n].last_crumb);
-            crumb = k ? (int)k->kind : -1;
+            for (int i = 0; i < 3; i++) {
+                if (add[i] != RX_OK) continue;
+                commits += r->w.reactions[id_n[i]].commits;
+                acts += r->w.reactions[id_n[i]].activations;
+                const RxCrumb *k = rx_world_crumb(&r->w, r->w.reactions[id_n[i]].last_crumb);
+                crumb = k ? (int)k->kind : -1;
+            }
             pthread_mutex_unlock(&r->w.mu);
         }
         rx_world_read(&r->w, r->living.o.inforce, &b1);
-        int moved = commits > 0 || b1.field[0] == 0xBADBADull;
-        rprobe_refused = add != RX_OK || (acts > 0 && !moved);
+        int moved = commits > 0 || b1.field[0] == 0xBADBADull || b1.version != b0.version;
+        rprobe_refused = refused == 3 && !moved;
         printf("R16 G4 (6) reaction naming the promoter as subject, with the promoter's in-force "
-               "grant: %s (register rc %d; woken %s; activations %llu, commits %llu, last crumb %d; in-force field0 0x%llx)\n",
-               add == RX_OK && acts == 0 ? "NOT EXERCISED" : rprobe_refused ? "REFUSED" : "ACCEPTED", add, woke == 0 ? "yes" : "no", U(acts), U(commits), crumb,
-               U(b1.field[0]));
-        CHECK(add != RX_OK || (woke == 0 && acts > 0), "(6) the named-subject probe was never woken");
+               "grant: %s (%d/3 credential variants refused at registration with IDENTITY; woken "
+               "%s; activations %llu, commits %llu, last crumb %d; in-force field0 0x%llx)\n",
+               rprobe_refused ? "REFUSED" : moved ? "ACCEPTED" : "NOT REFUSED AT REGISTRATION",
+               refused, woke == 0 ? "yes" : "no", U(acts), U(commits), crumb, U(b1.field[0]));
         if (!rprobe_refused)
             printf("R16 G4 OPEN: a reaction's subject is whatever its descriptor names; any "
                    "in-process holder of a writer's grant reference can write as that writer.\n");
+    }
+
+    /* ---- R16 C5: the caller credential itself (hostile probes) ----------- */
+    Tally tc = {0, 0};
+    {
+        RxWorld *w = &r->w;
+        const RxCallerCred *own = rx_caller_find(L.keys, LEGACY_SUBJ);
+        const RxCallerCred *own2 = rx_caller_find(L.keys, LEGACY2_SUBJ);
+        const RxCallerCred *prom = rx_caller_find(&r->keys_promoter, RX_LIVING_PROMOTE_SUBJ);
+        RxCallerCred x;
+        /* spoofed caller: every credential it could present for the promoter */
+        expect(&tc, rx_world_check_caller(w, RX_LIVING_PROMOTE_SUBJ, NULL), RX_CALLER_ERR_ABSENT,
+               "promoter subject, no credential");
+        memset(&x, 0, sizeof x);
+        expect(&tc, rx_world_check_caller(w, RX_LIVING_PROMOTE_SUBJ, &x), RX_CALLER_ERR_ABSENT,
+               "promoter subject, all-zero credential");
+        expect(&tc, rx_world_check_caller(w, RX_LIVING_PROMOTE_SUBJ, own), RX_CALLER_ERR_STALE,
+               "promoter subject, LEGACY's real credential");
+        x = *own; x.generation = prom->generation;
+        expect(&tc, rx_world_check_caller(w, RX_LIVING_PROMOTE_SUBJ, &x), RX_CALLER_ERR_FORGED,
+               "promoter subject, LEGACY's secret at the promoter's generation");
+        x = *prom; x.secret[0] ^= 1;
+        expect(&tc, rx_world_check_caller(w, RX_LIVING_PROMOTE_SUBJ, &x), RX_CALLER_ERR_FORGED,
+               "promoter subject, promoter's secret with one bit flipped");
+        x = *prom; x.generation += 1000;
+        expect(&tc, rx_world_check_caller(w, RX_LIVING_PROMOTE_SUBJ, &x), RX_CALLER_ERR_STALE,
+               "promoter subject, promoter's secret at another generation");
+        expect(&tc, rx_world_check_caller(w, 999, own), RX_CALLER_ERR_UNKNOWN,
+               "never-enrolled subject");
+        expect(&tc, rx_world_check_caller(w, LEGACY_SUBJ, own), RX_CALLER_OK,
+               "control: LEGACY's own credential for LEGACY");
+        /* enrollment is closed once the world is bound */
+        expect(&tc, rx_world_enroll_caller(w, 170, &x), RX_CALLER_ERR_CLOSED, "enroll after bind");
+        expect(&tc, x.generation, 0, "enroll after bind hands out no credential");
+        expect(&tc, rx_world_enroll_caller(w, RX_LIVING_PROMOTE_SUBJ, &x), RX_CALLER_ERR_CLOSED,
+               "re-enroll the promoter after bind");
+        /* revocation needs the credential itself */
+        expect(&tc, rx_world_revoke_caller(w, RX_LIVING_PROMOTE_SUBJ, own), RX_CALLER_ERR_STALE,
+               "revoke the promoter with LEGACY's credential");
+        expect(&tc, rx_world_revoke_caller(w, RX_LIVING_PROMOTE_SUBJ, NULL), RX_CALLER_ERR_ABSENT,
+               "revoke the promoter with no credential");
+        expect(&tc, rx_world_check_caller(w, RX_LIVING_PROMOTE_SUBJ, prom), RX_CALLER_OK,
+               "promoter still enrolled after the revoke attempts");
+        /* R9 proposal: the proposer is checked as well */
+        uint64_t c2 = 0;
+        expect(&tc, rx_gen_propose_as(L.gen, RX_LIVING_PREPARE_SUBJ, NULL, &gd, &c2),
+               RX_GEN_ERR_IDENTITY, "propose as the prepare subject with no credential");
+        expect(&tc, rx_gen_propose_as(L.gen, RX_LIVING_PREPARE_SUBJ, own, &gd, &c2),
+               RX_GEN_ERR_IDENTITY, "propose as the prepare subject with LEGACY's credential");
+        expect(&tc, rx_gen_propose(L.gen, LEGACY_SUBJ, &gd, &c2), RX_GEN_ERR_IDENTITY,
+               "legacy rx_gen_propose (no credential) as LEGACY");
+        /* A bound store ignores a permissive authority callback: LEGACY2 with
+         * its real credential and a forged grant is refused by the native
+         * authority. */
+        uint64_t a0 = 0, l0 = 0, a1 = 0, l1 = 0;
+        rx_gen_active(L.gen, &a0, &l0);
+        RxPromotionRequest req = {probe_cand, LEGACY2_SUBJ, L.forged.cap_id, L.forged.generation,
+                                  RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE, {0, {0}}};
+        req.caller = *own2;
+        expect(&tc, rx_gen_promote(L.gen, &req, permissive_auth, NULL, NULL, NULL, NULL, NULL),
+               RX_GEN_ERR_AUTHORITY, "permissive authority callback on a bound store");
+        rx_gen_active(L.gen, &a1, &l1);
+        expect(&tc, a1 == a0 && l1 == l0, 1, "generation unchanged by the permissive callback");
+        rx_caller_wipe(&req.caller);
+
+        /* collision: every credential the rig issued is distinct, and none
+         * validates for another subject */
+        const RxCallerKeyring *rings[6] = {&r->keys_omega, &r->keys_aien, &r->keys_aegis,
+                                           &r->keys_living, &r->keys_promoter, &r->fixtures};
+        uint32_t subj[32]; const RxCallerCred *cred[32]; uint32_t n = 0;
+        for (int k = 0; k < 6; k++)
+            for (uint32_t i = 0; i < rings[k]->n && n < 32; i++) {
+                subj[n] = rings[k]->subject[i]; cred[n++] = &rings[k]->cred[i];
+            }
+        uint32_t dup = 0, cross_ok = 0, cross = 0;
+        for (uint32_t i = 0; i < n; i++)
+            for (uint32_t j = 0; j < n; j++) {
+                if (i == j) continue;
+                if (j > i && memcmp(cred[i]->secret, cred[j]->secret, RX_CALLER_SECRET_LEN) == 0) dup++;
+                x = *cred[i]; x.generation = cred[j]->generation;
+                cross++;
+                cross_ok += rx_world_check_caller(w, subj[j], cred[i]) != RX_CALLER_OK &&
+                            rx_world_check_caller(w, subj[j], &x) == RX_CALLER_ERR_FORGED;
+            }
+        expect(&tc, dup, 0, "duplicate secrets among the rig's credentials");
+        expect(&tc, cross_ok, cross, "rig credentials cross-validating for another subject");
+        /* collision at capacity, on a scratch world */
+        RxWorld *sw = calloc(1, sizeof *sw);
+        int sw_ok = sw && rx_world_init_native(sw, r->view, 1, 1024) == RX_OK;
+        expect(&tc, sw_ok, 1, "scratch world for the capacity collision probe");
+        if (sw_ok) {
+            static RxCallerCred many[RX_CALLER_MAX];
+            uint32_t enrolled = 0, sdup = 0, scross = 0, sbad = 0;
+            for (uint32_t i = 0; i < RX_CALLER_MAX; i++)
+                enrolled += rx_world_enroll_caller(sw, 1000 + i, &many[i]) == RX_CALLER_OK;
+            expect(&tc, enrolled, RX_CALLER_MAX, "enroll to capacity");
+            expect(&tc, rx_world_enroll_caller(sw, 5000, &x), RX_ERR_FULL, "enroll past capacity");
+            expect(&tc, rx_world_enroll_caller(sw, 1000, &x), RX_CALLER_ERR_EXISTS,
+                   "enroll a subject twice");
+            for (uint32_t i = 0; i < RX_CALLER_MAX; i++)
+                for (uint32_t j = 0; j < RX_CALLER_MAX; j++) {
+                    if (i == j) {
+                        sbad += rx_world_check_caller(sw, 1000 + i, &many[i]) != RX_CALLER_OK;
+                        continue;
+                    }
+                    if (j > i && memcmp(many[i].secret, many[j].secret, RX_CALLER_SECRET_LEN) == 0) sdup++;
+                    x = many[i]; x.generation = many[j].generation;
+                    scross += rx_world_check_caller(sw, 1000 + j, &x) == RX_CALLER_ERR_FORGED;
+                }
+            expect(&tc, sdup, 0, "duplicate secrets among 64 enrollments");
+            expect(&tc, sbad, 0, "a credential not valid for its own subject");
+            expect(&tc, scross, RX_CALLER_MAX * (RX_CALLER_MAX - 1),
+                   "cross-subject checks refused as FORGED");
+            rx_world_bind_callers(sw);
+            expect(&tc, rx_world_enroll_caller(sw, 6000, &x), RX_CALLER_ERR_CLOSED,
+                   "scratch world: enroll after bind");
+            for (uint32_t i = 0; i < RX_CALLER_MAX; i++) rx_caller_wipe(&many[i]);
+            rx_world_destroy(sw);
+        }
+        free(sw);
+    }
+
+    /* ---- R16 C5: revocation, and the credential replayed after it --------- */
+    {
+        RxWorld *w = &r->w;
+        const RxCallerCred *own = rx_caller_find(L.keys, LEGACY_SUBJ);
+        const RxCallerCred *own2 = rx_caller_find(L.keys, LEGACY2_SUBJ);
+        RxObject s2a, s2b;
+        rx_world_read(w, L.scratch2, &s2a);
+        /* LEGACY's identity is revoked while its admitted reaction runs; the
+         * write its real grant covers must not commit. */
+        static IdRevoke f;
+        memset(&f, 0, sizeof f);
+        f.w = w;
+        f.cred = *own;
+        uint32_t id = 0;
+        int add = legacy_reaction_fn(&L, "legacy.identity-revoked-in-flight", L.scratch2,
+                                     RES_LEGACY_SCRATCH, L.own_scratch, 1, &f.p, fn_id_revoke, &f,
+                                     &id);
+        expect(&tc, add, RX_OK, "register LEGACY's reaction under its own credential");
+        if (add == RX_OK) {
+            CHECK(wake_legacy(&L) == 0, "C5: the in-flight identity reaction did not settle");
+            pthread_mutex_lock(&w->mu);
+            RxReaction rr = w->reactions[id];
+            const RxCrumb *k = rx_world_crumb(w, rr.last_crumb);
+            int rejected = k && k->kind == RX_CRUMB_REJECTED;
+            pthread_mutex_unlock(&w->mu);
+            expect(&tc, f.revoked, 1, "LEGACY revoked its own identity in flight");
+            expect(&tc, rr.activations >= 1 && rr.commits == 0 && rejected, 1,
+                   "write of a reaction whose identity was revoked in flight");
+            /* woken again: blocked at activation */
+            CHECK(wake_legacy(&L) == 0, "C5: the revoked reaction did not settle");
+            pthread_mutex_lock(&w->mu);
+            rr = w->reactions[id];
+            k = rx_world_crumb(w, rr.last_crumb);
+            int blocked = k && k->kind == RX_CRUMB_BLOCKED_AUTHORITY;
+            pthread_mutex_unlock(&w->mu);
+            expect(&tc, rr.commits == 0 && blocked, 1,
+                   "activation of a reaction whose identity is revoked");
+        }
+        rx_world_read(w, L.scratch2, &s2b);
+        expect(&tc, s2b.version == s2a.version && s2b.field[0] == s2a.field[0], 1,
+               "scratch target unchanged");
+        /* replay: the revoked credential opens nothing */
+        expect(&tc, rx_world_check_caller(w, LEGACY_SUBJ, own), RX_CALLER_ERR_REVOKED,
+               "revoked credential replayed at the check");
+        expect(&tc, rx_world_revoke_caller(w, LEGACY_SUBJ, own), RX_CALLER_ERR_REVOKED,
+               "revoked credential replayed at revocation");
+        uint64_t c3 = 0;
+        expect(&tc, rx_gen_propose_as(L.gen, LEGACY_SUBJ, own, &gd, &c3), RX_GEN_ERR_IDENTITY,
+               "revoked credential replayed at proposal");
+        RxPromotionRequest req = {probe_cand, LEGACY_SUBJ, L.own_promote.cap_id,
+                                  L.own_promote.generation, RX_GEN_RES_PROMOTION,
+                                  RX_GEN_RIGHT_PROMOTE, {0, {0}}};
+        req.caller = *own;
+        expect(&tc, rx_gen_promote(L.gen, &req, native_auth, (void *)L.view, NULL, NULL, NULL,
+                                   NULL), RX_GEN_ERR_IDENTITY,
+               "revoked credential replayed at promotion");
+        rx_caller_wipe(&req.caller);
+        static Poke p_replay;
+        uint32_t id_r = 0;
+        expect(&tc, legacy_reaction(&L, "legacy.replay", L.scratch2, RES_LEGACY_SCRATCH,
+                                    L.own_scratch, 1, &p_replay, &id_r), RX_ERR_IDENTITY,
+               "revoked credential replayed at registration");
+        expect(&tc, rx_world_check_caller(w, LEGACY2_SUBJ, own2), RX_CALLER_OK,
+               "another subject's enrollment unaffected");
+        rx_caller_wipe(&f.cred);
+    }
+    int ident_ok = tc.tried > 0 && tc.refused == tc.tried;
+    printf("R16 G4 C5 identity probes: %u/%u as expected  %s\n", tc.refused, tc.tried,
+           ident_ok ? "PASS" : "FAIL");
+
+    /* ---- positive control: promotion is not disabled ----------------------- */
+    int control_ok = 0;
+    {
+        uint64_t cand = 0, a0 = 0, l0 = 0, a1 = 0, l1 = 0;
+        int prc = rx_gen_propose_as(r->gen, RX_LIVING_PREPARE_SUBJ,
+                                    rx_caller_find(&r->keys_living, RX_LIVING_PREPARE_SUBJ), &gd,
+                                    &cand);
+        rx_gen_active(r->gen, &a0, &l0);
+        RxPromotionRequest req = {cand, RX_LIVING_PROMOTE_SUBJ,
+                                  r->promoter.promotion_authority.cap_id,
+                                  r->promoter.promotion_authority.generation,
+                                  RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE, {0, {0}}};
+        req.caller = *rx_caller_find(&r->keys_promoter, RX_LIVING_PROMOTE_SUBJ);
+        int rc = prc == RX_GEN_OK
+            ? rx_gen_promote(r->gen, &req, NULL, NULL, NULL, NULL, NULL, NULL) : prc;
+        rx_caller_wipe(&req.caller);
+        rx_gen_active(r->gen, &a1, &l1);
+        RxRecoveryRecord d1;
+        memset(&d1, 0, sizeof d1);
+        rx_gen_recover(r->generation_dir, &d1);
+        control_ok = rc == RX_GEN_OK && a1 == cand && a1 != a0 && d1.active_id == cand;
+        printf("R16 G4 control: the promoter, with its own credential and grant, promotes: %s "
+               "(propose rc %d, promote rc %d; generation %llu -> %llu, on disk %llu)\n",
+               control_ok ? "yes" : "NO", prc, rc, U(a0), U(a1), U(d1.active_id));
     }
 
     int acts_ok = 0;
@@ -658,9 +1019,12 @@ int main(void) {
     r15_stop(r);
     free(r);
     int core = acts_ok == 6 && g_fail == 0;
-    int pass = core && probe_refused && rprobe_refused;
+    int pass = core && probe_refused && rprobe_refused && ident_ok && control_ok;
     printf("R16 G4 acts refused: %d/6\n", acts_ok);
-    printf("R16 G4 core: %s\n", core ? "six acts refused, state unchanged, for the counted per-act attempts only; this is NOT a claim that legacy cannot promote or write (see the named-subject probes and the gate line)" : "FAIL");
+    printf("R16 G4 core: %s\n", core ? "six acts refused, state unchanged, for the counted per-act attempts" : "FAIL");
+    printf("R16 G4 promoter-subject exploit (4)+(6): %s; C5 identity probes: %s; promotion control: %s\n",
+           probe_refused && rprobe_refused ? "refused" : "ACCEPTED", ident_ok ? "pass" : "FAIL",
+           control_ok ? "promotes" : "FAIL");
     printf("R16 gate: R16_G4_LEGACY_REFUSED=%s\n", pass ? "PASS" : "FAIL");
     return pass ? 0 : 1;
 }

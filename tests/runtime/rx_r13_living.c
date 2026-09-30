@@ -33,6 +33,7 @@ typedef struct {
     RxAegisFaculty aegis;
     RxLiving living;
     RxLivingPromoter promoter;
+    RxLivingKeyrings keys;    /* R16 C6: runtime-issued caller credentials */
     RxGenStore *gen;
     RxGpuSeat *seat;
     pthread_t acceptor;
@@ -179,8 +180,14 @@ static int start(Rig *r, int mode) {
     if (aienos_cap_start(&r->admin, &r->view) != 0) return -1;
     if (rx_world_init_native(&r->w, r->view, 4, RX_CRUMBS_LONG_EPISODE) != RX_OK) return -1;
     r->w.external_subject = EXTERNAL;
+    /* R16 C6: every production subject gets a runtime-issued credential,
+     * then the world refuses any registration that does not present one. */
+    if (rx_living_enroll_callers(&r->w, &r->keys) != RX_OK ||
+        rx_world_bind_callers(&r->w) != RX_OK) return -1;
     if (!mkdtemp(strcpy(r->generation_dir, "/tmp/r13-living-XXXXXX"))) return -1;
     if (rx_gen_open(r->generation_dir, &r->gen) != RX_GEN_OK) return -1;
+    if (rx_gen_bind_authority(r->gen, rx_world_caller_check_fn, &r->w,
+                              rx_living_native_authority, r->view) != RX_GEN_OK) return -1;
     g_stage = 2;
     const uint32_t R = RX_RIGHT_READ, RW = RX_RIGHT_READ | RX_RIGHT_WRITE;
     RxOmegaConfig oc;
@@ -188,12 +195,15 @@ static int start(Rig *r, int mode) {
     oc.hot_calls = 64; oc.hot_ns = 200000; oc.margin_pct = 10;
     if (mode == FAILED_VERIFICATION) oc.defect = RX_OMEGA_DEFECT_CRASH;
     if (rx_omega_create_objects(&r->omega, &r->w, &oc) != RX_OK) return -1;
+    r->omega.keys = &r->keys.omega;
     RxAienConfig ac;
     rx_aien_default_config(&ac);
     RxAienInputs ai = {r->omega.o.demand, r->omega.o.selection};
     if (rx_aien_create_objects(&r->aien, &r->w, &ac, &ai) != RX_OK) return -1;
+    r->aien.keys = &r->keys.aien;
     if (rx_living_create(&r->living, &r->w, &r->aien, &r->omega,
                          r->gen, r->view) != RX_OK) return -1;
+    r->living.keys = &r->keys.living;
     if (new_object(r, 0x6135, RES_INTENT, &r->intent) != RX_OK) return -1;
 
     /* R8 permits exactly one experiment output resource. */
@@ -207,6 +217,7 @@ static int start(Rig *r, int mode) {
         RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT,
         RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT, RW};
     if (rx_aegis_create(&r->aegis, &r->w, r->admin, &pol, &cl, 1) != RX_OK) return -1;
+    r->aegis.keys = &r->keys.aegis;
     RxAegisCaps aeg;
     memset(&aeg, 0, sizeof aeg);
     aeg.aegis_request = mint(r, RX_AEGIS_SUBJ, rx_aegis_res(0, RX_AEGIS_RES_REQUEST), R);
@@ -309,6 +320,7 @@ static int start(Rig *r, int mode) {
     lc.output_prepare_read = mint(r, RX_LIVING_PREPARE_SUBJ,
         RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT, R);
     r->promoter.world = &r->w;
+    r->promoter.keys = &r->keys.promoter;
     r->promoter.store = r->gen;
     r->promoter.authority = r->view;
     r->promoter.candidate = r->living.o.candidate;
@@ -345,7 +357,7 @@ static int start(Rig *r, int mode) {
     d.caps[1] = (RxCapNeed){mint(r, RX_LIVING_SEAT_SUBJ,
         rx_aegis_res(0, RX_AEGIS_RES_REQUEST), RW),
         rx_aegis_res(0, RX_AEGIS_RES_REQUEST), RW};
-    if (rx_world_add_reaction(&r->w, &d, &r->r_ask) != RX_OK) return -1;
+    if (rx_world_add_reaction_keyed(&r->w, &r->keys.living, &d, &r->r_ask) != RX_OK) return -1;
     RxMutation request[6] = {
         {r->intent, 0, 1},
         {r->intent, 1, RX_LIVING_RES_BASE + RX_LIVING_RES_OUTPUT},

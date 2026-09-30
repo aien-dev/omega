@@ -6,11 +6,12 @@
 #
 # For each mutant, one guard is removed from a scratch copy of one file (the
 # tree is never edited), the G4 test is rebuilt with that copy in place of the
-# original, and run. A mutant is KILLED when the test does not print its core
-# line ("R16 G4 core: six acts refused, state unchanged"). The core line, not
-# the gate line, is judged: the gate also needs the named-subject promotion
-# probe, which is open until promotion is bound to the caller (spec C5), and
-# would otherwise kill every mutant trivially. Every mutant must be killed.
+# original, and run. A mutant is KILLED when the test does not print its gate
+# PASS line ("R16 gate: R16_G4_LEGACY_REFUSED=PASS"). Since spec C5 is closed
+# (runtime-issued caller credentials, src/runtime/rx_caller.h) the gate line
+# covers the six acts, the promoter-subject exploit probes, the C5 identity
+# probes and the promotion control, so it is judged rather than the core line.
+# Every mutant must be killed.
 # The control build (no mutation) must pass, and every edit must apply exactly
 # where named, or the run fails.
 #
@@ -55,7 +56,7 @@ build_run() {  # name out-dir sources lib
         return 2
     fi
     timeout 120 "$d/g4" > "$d/run.log" 2>&1
-    if grep -q "^R16 G4 core: six acts refused" "$d/run.log"; then
+    if grep -q "^R16 gate: R16_G4_LEGACY_REFUSED=PASS" "$d/run.log"; then
         return 0
     fi
     return 1
@@ -148,6 +149,30 @@ mutant seq_pulse_production $S 1 \
 mutant seq_activate_production $W 1 \
     'if (!w || !w->sequential || rid >= w->n_reactions) return RX_ERR_ARG;' \
     'if (!w || rid >= w->n_reactions) return RX_ERR_ARG;'
+
+# R16 C5: caller identity (runtime-issued credentials). Each removes one check.
+mutant id_register $W 1 \
+    'if (irc != RX_CALLER_OK) { rc = RX_ERR_IDENTITY; goto out; }' '(void)irc;'
+mutant id_activation_commit_recheck $W 1 \
+    'if (irc != RX_CALLER_OK) { if (first_err) *first_err = RX_ERR_IDENTITY; return -1; }' '(void)irc;'
+mutant id_secret_digest $W 1 \
+    'return diff ? RX_CALLER_ERR_FORGED : RX_CALLER_OK;' 'return (void)diff, RX_CALLER_OK;'
+mutant id_generation $W 1 \
+    'if (cred->generation != w->callers[s].generation) return RX_CALLER_ERR_STALE;' '(void)0;'
+mutant id_revoked_check $W 1 \
+    'if (!w->callers[s].live) return RX_CALLER_ERR_REVOKED;' '(void)0;'
+mutant id_revoked_still_live $W 1 \
+    ': !w->callers[s].live ? RX_CALLER_ERR_REVOKED' ': 0 ? RX_CALLER_ERR_REVOKED'
+mutant id_revoke_takes_effect $W 1 'w->callers[s].live = false;' '(void)0;'
+mutant id_revoke_needs_credential $W 1 'if (rc == RX_CALLER_OK) {' 'if (rc == RX_CALLER_OK || 1) {'
+mutant id_enroll_closed $W 1 \
+    'if (w->callers_bound) { rc = RX_CALLER_ERR_CLOSED; goto out; }' '(void)0;'
+mutant id_promote $G 1 \
+    'if (store->caller(store->caller_ctx, request->subject, &request->caller) != 0)' 'if (0)'
+mutant id_propose $G 1 \
+    'if (store->bound && store->caller(store->caller_ctx, proposer, cred) != 0)' \
+    'if (0 && store->bound && store->caller(store->caller_ctx, proposer, cred) != 0)'
+mutant id_bound_authority $G 1 'auth = store->bound_auth;' '(void)0;'
 
 echo "R16 G4 mutants: $total total, $killed killed, $survived survived, $broken broken"
 if [ $survived -eq 0 ] && [ $broken -eq 0 ]; then

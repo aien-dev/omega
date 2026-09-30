@@ -17,6 +17,9 @@ rx_cap_generation_advance
 # generation barrier (propose / mutate / promote)
 rx_gen_open
 rx_gen_propose
+rx_gen_propose_as
+rx_gen_post_propose_as
+rx_gen_bind_authority
 rx_gen_mutate_object
 rx_gen_set_evidence
 rx_gen_observe_object
@@ -25,6 +28,13 @@ rx_gen_finish_work
 rx_gen_hold_barrier
 rx_gen_release_barrier
 rx_gen_promote
+# R16 C5 caller identity (enrollment, binding, revocation)
+rx_world_enroll_caller
+rx_world_bind_callers
+rx_world_revoke_caller
+rx_world_add_reaction_keyed
+rx_living_enroll_callers
+
 # world mutation / publication
 rx_world_init
 rx_world_init_with_auth

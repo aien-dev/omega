@@ -74,6 +74,11 @@ typedef struct {
      * for the parity gate, which then runs exactly as before). */
     const struct R15Hooks *hooks;
     int64_t goal_crumb;         /* crumb of the goal publication */
+    /* R16 G4: runtime-issued caller credentials, one keyring per faculty
+     * (each holds only its own subjects), plus harness fixture subjects. */
+    RxCallerKeyring keys_omega, keys_aien, keys_aegis, keys_living, keys_promoter;
+    RxCallerKeyring keys_rig;   /* the rig's own R8 ask reaction (seat subject) */
+    RxCallerKeyring fixtures;   /* r15_start_with fixture subjects */
 } R15Rig;
 
 /* Called on the episode's thread; a nonzero return fails the episode.
@@ -122,6 +127,11 @@ typedef struct {
 } R15Outcome;
 
 int  r15_start(R15Rig *r, R15Config config);
+/* As r15_start, and also enrolls up to RX_CALLER_KEYRING_MAX fixture subjects
+ * (harness-only callers) before the world's caller set is bound; their
+ * credentials are in r->fixtures. */
+int  r15_start_with(R15Rig *r, R15Config config, const uint32_t *fixture_subjects,
+                    uint32_t n_fixtures);
 /* Runs the §4 episode shape without measurement windows: A725 warm-up until
  * Omega's first selection and AIEN's confirmed prediction; production
  * running; X925 placement and goal; until promotion; until AIEN assesses the

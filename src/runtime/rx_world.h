@@ -24,6 +24,7 @@
 #define RX_WORLD_H
 
 #include "rx_caproot.h"
+#include "rx_caller.h"
 #include "omega_shared_world_abi.h"
 
 #include <pthread.h>
@@ -119,6 +120,7 @@ enum { RX_CONTAIN_BUDGET = 1, RX_CONTAIN_OSCILLATION, RX_CONTAIN_LIVELOCK,
 #define RX_ERR_UNPLACED    -24
 #define RX_ERR_EXISTS      -25
 #define RX_ERR_SEAT_LOST   -26   /* the graphics seat died holding the claim */
+#define RX_ERR_IDENTITY    -27   /* caller credential absent, forged, stale or revoked */
 
 /* Reaction notices carried in the frozen 128-byte descriptor.
  * The older transform request/result values stay in the frozen layout and
@@ -262,6 +264,11 @@ typedef struct {
     const char *name;
     uint32_t faculty;
     uint32_t subject;           /* principal the capabilities must be bound to */
+    /* R16 C5: in a world with bound callers, the runtime-issued credential
+     * for `subject` (rx_caller.h). Checked at registration; the stored copy
+     * keeps only the generation, and activation and commit re-check that the
+     * enrollment is still live at it. Ignored by an unbound world. */
+    RxCallerCred caller;
     uint32_t priority;
     RxResourceNeed need;
     uint32_t n_triggers;
@@ -564,6 +571,19 @@ typedef struct RxWorld {
      * wakes; rx_seq_pulse decides what runs. */
     bool sequential;
     uint64_t seq_pulse_started, seq_idle_start;
+
+    /* R16 C5 caller enrollments (rx_caller.h). Only digests are kept. Own
+     * lock: taken inside mu (activation) and alone (R9's check). */
+    pthread_mutex_t callers_mu;
+    struct {
+        uint32_t subject;
+        bool live;
+        uint64_t generation;
+        uint8_t digest[32];
+    } callers[RX_CALLER_MAX];
+    uint32_t n_callers;
+    uint64_t caller_generation;      /* last generation issued */
+    bool callers_bound;              /* one way: set once, never cleared */
 } RxWorld;
 
 int  rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crumb_cap);
@@ -598,8 +618,29 @@ int  rx_world_create(RxWorld *w, uint32_t type, RxPersist persist, uint64_t reso
                      const uint64_t init[RX_MAX_FIELDS], RxObjRef *out);
 int  rx_world_retire(RxWorld *w, RxObjRef ref);
 
-/* Register a reaction; subscriptions go into the dependency index. */
+/* Register a reaction; subscriptions go into the dependency index. In a
+ * world with bound callers, d->caller must be the credential issued for
+ * d->subject, or the call returns RX_ERR_IDENTITY and registers nothing. */
 int  rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id);
+/* The same with d->caller taken from `keys` by d->subject (none when the
+ * keyring has no entry). The caller's descriptor is not modified. */
+int  rx_world_add_reaction_keyed(RxWorld *w, const RxCallerKeyring *keys,
+                                 const RxReactionDesc *d, uint32_t *out_id);
+
+/* R16 C5 caller credentials (rx_caller.h).
+ * enroll: mint a credential for `subject` (RX_CALLER_ERR_EXISTS if it has
+ *   one, RX_CALLER_ERR_CLOSED once bound). The secret is returned only here.
+ * bind: from now on every reaction registration, activation and commit
+ *   checks the subject's credential. One way; enrollment closes.
+ * revoke: retire `subject`'s enrollment; needs its current credential, so no
+ *   caller can revoke another's identity. Its reactions are then blocked.
+ * check: RX_CALLER_OK or the RX_CALLER_ERR_* reason. Constant-time compare.
+ * check_fn: the same, shaped for rx_gen_bind_authority (ctx is the world). */
+int  rx_world_enroll_caller(RxWorld *w, uint32_t subject, RxCallerCred *out);
+int  rx_world_bind_callers(RxWorld *w);
+int  rx_world_revoke_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred);
+int  rx_world_check_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred);
+int  rx_world_caller_check_fn(void *world, uint32_t subject, const RxCallerCred *cred);
 
 /* A stimulus from outside the organism (sensor, human input). Requires a
  * capability for (external_subject, object resource, WRITE). Returns the

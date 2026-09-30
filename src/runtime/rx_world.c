@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/random.h>
 #include <time.h>
 
 /* ---- helpers ------------------------------------------------------------ */
@@ -706,7 +707,128 @@ static RxCapRef need_ref(const RxWorld *w, const RxReactionDesc *d, uint32_t i) 
     return (RxCapRef){ (uint32_t)o->field[0], o->field[1] };
 }
 
+/* ---- R16 C5 caller credentials (rx_caller.h) ------------------------------ */
+
+static void caller_digest(uint32_t subject, uint64_t generation, const uint8_t *secret,
+                          uint8_t out[32]) {
+    sha256_ctx c;
+    sha256_init(&c);
+    sha256_update(&c, (const uint8_t *)"AIEN_RX_CALLER_V1", 17);
+    put32(&c, subject);
+    put64(&c, generation);
+    sha256_update(&c, secret, RX_CALLER_SECRET_LEN);
+    sha256_final(&c, out);
+}
+
+/* Caller holds callers_mu. */
+static int caller_slot(const RxWorld *w, uint32_t subject) {
+    for (uint32_t i = 0; i < w->n_callers; i++)
+        if (w->callers[i].subject == subject) return (int)i;
+    return -1;
+}
+
+/* Full check of a presented credential. Caller holds callers_mu. */
+static int caller_check_locked(const RxWorld *w, uint32_t subject, const RxCallerCred *cred) {
+    if (!cred || cred->generation == 0) return RX_CALLER_ERR_ABSENT;
+    int s = caller_slot(w, subject);
+    if (s < 0) return RX_CALLER_ERR_UNKNOWN;
+    if (!w->callers[s].live) return RX_CALLER_ERR_REVOKED;
+    if (cred->generation != w->callers[s].generation) return RX_CALLER_ERR_STALE;
+    uint8_t d[32];
+    caller_digest(subject, cred->generation, cred->secret, d);
+    uint8_t diff = 0;
+    for (int i = 0; i < 32; i++) diff |= (uint8_t)(d[i] ^ w->callers[s].digest[i]);
+    return diff ? RX_CALLER_ERR_FORGED : RX_CALLER_OK;
+}
+
+/* The enrollment a registered reaction was admitted under is still live at
+ * the same generation (its secret was checked at registration and is not
+ * kept). Caller holds mu. */
+static int caller_still_live(const RxWorld *w, uint32_t subject, uint64_t generation) {
+    RxWorld *mw = (RxWorld *)w;
+    pthread_mutex_lock(&mw->callers_mu);
+    int s = caller_slot(w, subject);
+    int rc = s < 0 ? RX_CALLER_ERR_UNKNOWN
+           : !w->callers[s].live ? RX_CALLER_ERR_REVOKED
+           : w->callers[s].generation != generation ? RX_CALLER_ERR_STALE : RX_CALLER_OK;
+    pthread_mutex_unlock(&mw->callers_mu);
+    return rc;
+}
+
+int rx_world_enroll_caller(RxWorld *w, uint32_t subject, RxCallerCred *out) {
+    if (!w || !out) return RX_ERR_ARG;
+    memset(out, 0, sizeof *out);
+    pthread_mutex_lock(&w->callers_mu);
+    int rc = RX_CALLER_OK;
+    if (w->callers_bound) { rc = RX_CALLER_ERR_CLOSED; goto out; }
+    if (caller_slot(w, subject) >= 0) { rc = RX_CALLER_ERR_EXISTS; goto out; }
+    if (w->n_callers >= RX_CALLER_MAX) { rc = RX_ERR_FULL; goto out; }
+    uint8_t secret[RX_CALLER_SECRET_LEN];
+    size_t n = 0;
+    while (n < sizeof secret) {
+        ssize_t g = getrandom(secret + n, sizeof secret - n, 0);
+        if (g < 0) {
+            if (errno == EINTR) continue;
+            rc = RX_CALLER_ERR_ENTROPY;
+            goto out;
+        }
+        n += (size_t)g;
+    }
+    uint32_t s = w->n_callers++;
+    w->callers[s].subject = subject;
+    w->callers[s].live = true;
+    w->callers[s].generation = ++w->caller_generation;
+    caller_digest(subject, w->callers[s].generation, secret, w->callers[s].digest);
+    out->generation = w->callers[s].generation;
+    memcpy(out->secret, secret, sizeof secret);
+    for (size_t i = 0; i < sizeof secret; i++) ((volatile uint8_t *)secret)[i] = 0;
+out:
+    pthread_mutex_unlock(&w->callers_mu);
+    return rc;
+}
+
+int rx_world_bind_callers(RxWorld *w) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    pthread_mutex_lock(&w->callers_mu);
+    w->callers_bound = true;
+    pthread_mutex_unlock(&w->callers_mu);
+    pthread_mutex_unlock(&w->mu);
+    return RX_OK;
+}
+
+int rx_world_revoke_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->callers_mu);
+    int rc = caller_check_locked(w, subject, cred);
+    if (rc == RX_CALLER_OK) {
+        int s = caller_slot(w, subject);
+        w->callers[s].live = false;
+        memset(w->callers[s].digest, 0, sizeof w->callers[s].digest);
+    }
+    pthread_mutex_unlock(&w->callers_mu);
+    return rc;
+}
+
+int rx_world_check_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->callers_mu);
+    int rc = caller_check_locked(w, subject, cred);
+    pthread_mutex_unlock(&w->callers_mu);
+    return rc;
+}
+
+int rx_world_caller_check_fn(void *world, uint32_t subject, const RxCallerCred *cred) {
+    return rx_world_check_caller((RxWorld *)world, subject, cred);
+}
+
 static int validate_caps(const RxWorld *w, const RxReactionDesc *d, int *first_err) {
+    /* R16 C5: the subject the capabilities are checked against is the one
+     * this reaction was admitted under, and that admission still stands. */
+    if (w->callers_bound) {
+        int irc = caller_still_live(w, d->subject, d->caller.generation);
+        if (irc != RX_CALLER_OK) { if (first_err) *first_err = RX_ERR_IDENTITY; return -1; }
+    }
     for (uint32_t i = 0; i < d->n_caps; i++) {
         int rc = rx_world_validate_cap(w, need_ref(w, d, i), d->subject,
                                        d->caps[i].resource, d->caps[i].rights, NULL);
@@ -1391,6 +1513,7 @@ static int init_common(RxWorld *w, RxCapRoot *root, const void *auth_ctx,
     if (!root && !validate) return RX_ERR_ARG;
     memset(w, 0, sizeof(*w));
     w->root = root;
+    pthread_mutex_init(&w->callers_mu, NULL);
     w->sequential = sequential;
     w->auth_ctx = auth_ctx;
     w->auth_validate = validate;
@@ -1466,6 +1589,7 @@ void rx_world_destroy(RxWorld *w) {
     pthread_cond_destroy(&w->idle_cv);
     pthread_cond_destroy(&w->claim_cv);
     pthread_mutex_destroy(&w->mu);
+    pthread_mutex_destroy(&w->callers_mu);
 }
 
 int rx_world_create(RxWorld *w, uint32_t type, RxPersist persist, uint64_t resource,
@@ -1575,6 +1699,13 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
         return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
     int rc = RX_OK;
+    /* R16 C5: the subject is the caller's own only with its credential. */
+    if (w->callers_bound) {
+        pthread_mutex_lock(&w->callers_mu);
+        int irc = caller_check_locked(w, d->subject, &d->caller);
+        pthread_mutex_unlock(&w->callers_mu);
+        if (irc != RX_CALLER_OK) { rc = RX_ERR_IDENTITY; goto out; }
+    }
     if (w->n_reactions >= RX_MAX_REACTIONS) { rc = RX_ERR_FULL; goto out; }
     /* Declared dependencies must exist now, and every read and write must be
      * covered by a declared capability need on that object's resource. The
@@ -1604,6 +1735,8 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
     RxReaction *r = &w->reactions[rid];
     memset(r, 0, sizeof(*r));
     r->desc = *d;
+    /* Keep the admitted generation, never the secret. */
+    memset(r->desc.caller.secret, 0, sizeof r->desc.caller.secret);
     r->state = RX_DORMANT;
     /* Sequential reference: changes before registration are not work. */
     for (uint32_t i = 0; i < d->n_triggers; i++) {
@@ -1619,6 +1752,17 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
     if (out_id) *out_id = rid;
 out:
     pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_add_reaction_keyed(RxWorld *w, const RxCallerKeyring *keys,
+                                const RxReactionDesc *d, uint32_t *out_id) {
+    if (!d) return RX_ERR_ARG;
+    RxReactionDesc k = *d;
+    const RxCallerCred *c = rx_caller_find(keys, d->subject);
+    if (c) k.caller = *c;
+    int rc = rx_world_add_reaction(w, &k, out_id);
+    rx_caller_wipe(&k.caller);
     return rc;
 }
 

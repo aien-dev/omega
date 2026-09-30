@@ -1206,7 +1206,7 @@ static void t_promote(void) {
     RxCapRef right = mint(&e, SUBJ_PROMOTER, RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE);
     RxCapRef self = mint(&e, SUBJ_PROPOSER, RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE);
     RxPromotionRequest req = { 0, SUBJ_PROMOTER, weak.cap_id, weak.generation, RX_GEN_RES_PROMOTION,
-                               RX_GEN_RIGHT_PROMOTE };
+                               RX_GEN_RIGHT_PROMOTE, {0, {0}}};
     uint64_t active0 = 0, lineage0 = 0;
     CHECK(rx_gen_active(store, &active0, &lineage0) == RX_GEN_OK, "store has an active generation");
 
@@ -1217,7 +1217,7 @@ static void t_promote(void) {
     R.promote_refused_no_right = rc == RX_GEN_ERR_AUTHORITY && MC.state == AG_MS_CANARY_PASSED;
     CHECK(R.promote_refused_no_right, "promotion without the promote right refused (%d)", rc);
     req = (RxPromotionRequest){ 0, SUBJ_PROPOSER, self.cap_id, self.generation, RX_GEN_RES_PROMOTION,
-                                RX_GEN_RIGHT_PROMOTE };
+                                RX_GEN_RIGHT_PROMOTE, {0, {0}} };
     rc = rx_fusion_promote(&MC, store, SUBJ_PROPOSER, &req, native_auth, &ac);
     R.promote_refused_same_subject = rc == RX_GEN_ERR_AUTHORITY && MC.state == AG_MS_CANARY_PASSED;
     CHECK(R.promote_refused_same_subject, "the proposer cannot promote its own candidate (%d)", rc);
@@ -1226,7 +1226,7 @@ static void t_promote(void) {
           "refusals left the active generation as it was");
 
     req = (RxPromotionRequest){ 0, SUBJ_PROMOTER, right.cap_id, right.generation, RX_GEN_RES_PROMOTION,
-                                RX_GEN_RIGHT_PROMOTE };
+                                RX_GEN_RIGHT_PROMOTE, {0, {0}} };
     rc = rx_fusion_promote(&MC, store, SUBJ_PROPOSER, &req, native_auth, &ac);
     CHECK(rc == RX_GEN_OK && MC.state == AG_MS_PROMOTED && MC.generation != active0, "promoted (%d)", rc);
     R.generation = MC.generation;

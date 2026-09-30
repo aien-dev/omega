@@ -99,6 +99,12 @@ struct RxGenStore {
      * a reaction may read them. Held only for the copy. */
     pthread_mutex_t active_mu;
     struct RxGenExec *exec;
+    /* R16 C5 (rx_gen_bind_authority): set once, never cleared. */
+    int bound;
+    RxGenCallerFn caller;
+    void *caller_ctx;
+    RxGenAuthFn bound_auth;
+    void *bound_auth_ctx;
 };
 
 static void set_active(RxGenStore *store, uint64_t id, uint64_t lineage) {
@@ -764,9 +770,29 @@ int rx_gen_read_blob(const RxGenStore *store, uint64_t id, const char *name, uin
     return RX_GEN_OK;
 }
 
+int rx_gen_bind_authority(RxGenStore *store, RxGenCallerFn caller, void *caller_ctx,
+                          RxGenAuthFn auth, void *auth_ctx) {
+    if (!store || !caller || !auth) return RX_GEN_ERR_ARG;
+    if (store->bound) return RX_GEN_ERR_BUSY;
+    store->caller = caller;
+    store->caller_ctx = caller_ctx;
+    store->bound_auth = auth;
+    store->bound_auth_ctx = auth_ctx;
+    store->bound = 1;
+    return RX_GEN_OK;
+}
+
 int rx_gen_propose(RxGenStore *store, uint32_t proposer, const RxGenDraft *draft,
                    uint64_t *out_id) {
+    return rx_gen_propose_as(store, proposer, NULL, draft, out_id);
+}
+
+int rx_gen_propose_as(RxGenStore *store, uint32_t proposer, const RxCallerCred *cred,
+                      const RxGenDraft *draft, uint64_t *out_id) {
     if (!store || !draft || !out_id) return RX_GEN_ERR_ARG;
+    /* R16 C5: the proposer is who the credential says, or nobody. */
+    if (store->bound && store->caller(store->caller_ctx, proposer, cred) != 0)
+        return RX_GEN_ERR_IDENTITY;
     if (draft->n_objects > RX_GEN_MAX_OBJECTS) return RX_GEN_ERR_ARG;
     if (draft->n_objects && !draft->objects) return RX_GEN_ERR_ARG;
     Candidate *slot = NULL;
@@ -954,7 +980,17 @@ static void release_candidate(Candidate *c) {
 int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAuthFn auth,
                    void *auth_ctx, RxGenDrainFn drain, void *drain_ctx, RxGenLiveFn live,
                    void *live_ctx) {
-    if (!store || !request || !auth) return RX_GEN_ERR_ARG;
+    if (!store || !request) return RX_GEN_ERR_ARG;
+    /* R16 C5: the request's subject is the caller's only with the credential
+     * the runtime issued for it; and a bound store validates the promotion
+     * right with its own authority, never the caller's callback. */
+    if (store->bound) {
+        if (store->caller(store->caller_ctx, request->subject, &request->caller) != 0)
+            return RX_GEN_ERR_IDENTITY;
+        auth = store->bound_auth;
+        auth_ctx = store->bound_auth_ctx;
+    }
+    if (!auth) return RX_GEN_ERR_ARG;
     Candidate *c = find_cand(store, request->candidate_id);
     if (!c) return RX_GEN_ERR_ARG;
     int locked_here = 0;
@@ -1210,6 +1246,7 @@ typedef struct {
     RxGenJobResult result;
     /* proposal: an owned copy of the draft */
     uint32_t proposer;
+    RxCallerCred proposer_cred;   /* R16 C5; wiped when the job has run */
     RxGenDraft draft;
     RxGenObject *objects;
     uint8_t *bytes;
@@ -1255,12 +1292,15 @@ static void *exec_main(void *arg) {
         r.key = next->key;
         uint64_t t0 = monotonic_ns();
         if (next == &x->job[RX_GEN_JOB_PROPOSE])
-            r.rc = rx_gen_propose(x->store, next->proposer, &next->draft, &r.id);
+            r.rc = rx_gen_propose_as(x->store, next->proposer, &next->proposer_cred,
+                                     &next->draft, &r.id);
         else
             r.rc = rx_gen_promote(x->store, &next->request, next->auth, next->auth_ctx,
                                   NULL, NULL, NULL, NULL);
         r.ns = monotonic_ns() - t0;
         rx_gen_active(x->store, &r.active, &r.lineage);
+        rx_caller_wipe(&next->proposer_cred);
+        rx_caller_wipe(&next->request.caller);
         job_free(next);
         pthread_mutex_lock(&x->mu);
         next->result = r;
@@ -1333,6 +1373,12 @@ static void post_locked(struct RxGenExec *x, Job *j, uint64_t key, RxGenDoneFn d
 
 int rx_gen_post_propose(RxGenStore *store, uint64_t key, uint32_t proposer,
                         const RxGenDraft *draft, RxGenDoneFn done, void *done_ctx) {
+    return rx_gen_post_propose_as(store, key, proposer, NULL, draft, done, done_ctx);
+}
+
+int rx_gen_post_propose_as(RxGenStore *store, uint64_t key, uint32_t proposer,
+                           const RxCallerCred *cred, const RxGenDraft *draft,
+                           RxGenDoneFn done, void *done_ctx) {
     if (!store || !store->exec || !draft) return RX_GEN_ERR_ARG;
     if (draft->n_objects > RX_GEN_MAX_OBJECTS || (draft->n_objects && !draft->objects))
         return RX_GEN_ERR_ARG;
@@ -1379,6 +1425,8 @@ int rx_gen_post_propose(RxGenStore *store, uint64_t key, uint32_t proposer,
         return RX_GEN_ERR_BUSY;
     }
     j->proposer = proposer;
+    if (cred) j->proposer_cred = *cred;
+    else memset(&j->proposer_cred, 0, sizeof j->proposer_cred);
     j->draft = copy;
     j->objects = objs;
     j->bytes = bytes;
@@ -1389,7 +1437,7 @@ int rx_gen_post_propose(RxGenStore *store, uint64_t key, uint32_t proposer,
 
 int rx_gen_post_promote(RxGenStore *store, uint64_t key, const RxPromotionRequest *request,
                         RxGenAuthFn auth, void *auth_ctx, RxGenDoneFn done, void *done_ctx) {
-    if (!store || !store->exec || !request || !auth) return RX_GEN_ERR_ARG;
+    if (!store || !store->exec || !request || (!auth && !store->bound)) return RX_GEN_ERR_ARG;
     struct RxGenExec *x = store->exec;
     pthread_mutex_lock(&x->mu);
     Job *j = claim_slot(x, RX_GEN_JOB_PROMOTE);
