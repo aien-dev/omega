@@ -1,0 +1,17 @@
+{
+  "schema": "turing.cal.terminal_receipt.v1",
+  "experiment": "EXP-001",
+  "kind": "terminal_fail",
+  "dry_run": false,
+  "created_utc": "2026-09-30T03:30:44Z",
+  "verdict": "FAIL",
+  "criteria": {"S1": "NOT_REACHED", "S2": "FAIL", "S3": "NOT_REACHED", "S4": "NOT_REACHED", "S5": "NOT_REACHED", "S6": "NOT_REACHED", "S7": "NOT_REACHED", "S8": "NOT_REACHED", "S9": "NOT_REACHED"},
+  "failed_criterion": "S2",
+  "step": "freeze order",
+  "code": "OVERLAP",
+  "reason": "overlap audit result is 'FAIL'",
+  "profile_digest": "53214a548658898239b56ca96391f7448bc22a9911fb1b28b1b9d19b4a7a172e",
+  "freeze_commit": "d3cba292b9282116d1e374db22344bca4d47717e",
+  "candidate_manifest_sha256": "d424dbc68c682c394f42bd2edf7ba45ff55de01e7146e882754cab29c63ec2aa",
+  "EXP_001_COMPRESSION_BRIDGE": "FAIL"
+}

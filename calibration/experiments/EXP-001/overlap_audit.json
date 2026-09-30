@@ -1,0 +1,26 @@
+{
+  "schema": "turing.cal.overlap_audit.v1",
+  "freeze_commit": "d3cba292b9282116d1e374db22344bca4d47717e",
+  "freeze_commit_time_unix": 1790736180,
+  "profile_digest": "53214a548658898239b56ca96391f7448bc22a9911fb1b28b1b9d19b4a7a172e",
+  "seed_commitment_sha256": "a6268f40803f68b4aef4a0dd3f76c5d0f191a33f6e8e0e59bce061b1c73f0f49",
+  "dev_list_sha256": "0848a1da0ad5fe037fe632926d4856138f7d2ec5d5d8485799cd59b6db8100f2",
+  "dev_trace_files": 54,
+  "sealed_trace_files": 6,
+  "degenerate_trace_stream_digests": "8b6c064eb033c7fefb3f1b30e7883f9a454bfd5723dd4f6ccf6e44bcec48cc4d",
+  "ctr1": {"dev_files":54,"dev_records":86336292,"dev_crumbs":8308,"sealed_files":6,"sealed_records":12721409,"sealed_crumbs":1112,"crumb_block_overlap":0,"first_state_overlap":5,"record_body_overlap":475,"gated":["crumb_block_overlap"],"ctr1_gates_pass":true},
+  "gates": {
+    "complete": {"pass": true, "detail": "COMPLETE matches seed_commitment.json"},
+    "integrity": {"pass": true, "detail": "48 kept files re-hashed"},
+    "seeds": {"pass": true, "detail": "6 seeds re-derived"},
+    "after_freeze": {"pass": true, "detail": "0 files not newer than commit time; manifest frozen at commit: 1"},
+    "single_link": {"pass": true, "detail": "0 files with extra hard links"},
+    "crumb_digest": {"pass": false, "detail": "1 shared"},
+    "sealed_digest": {"pass": true, "detail": "0 shared"},
+    "trace_stream": {"pass": true, "detail": "0 shared (degenerate excluded)"},
+    "crumb_block": {"pass": true, "detail": "0 shared"}
+  },
+  "result": "FAIL",
+  "failed": "crumb_digest",
+  "generated_utc": "2026-09-30T03:29:17Z"
+}
