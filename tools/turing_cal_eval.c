@@ -35,6 +35,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -102,6 +104,69 @@ static int refuse(const char *step, const char *code, const char *fmt, ...) {
 
 static void hexs(const uint8_t d[32], char o[65]) { tc_hex(d, o); }
 
+/* Run argv (no shell), capture up to n-1 bytes of stdout (trailing newline stripped). Returns the exit status,
+ * -1 if it could not run. */
+static int run_capture(char *const argv[], char *buf, size_t n) {
+    int fd[2];
+    buf[0] = 0;
+    if (pipe(fd)) return -1;
+    pid_t pid = fork();
+    if (pid < 0) return close(fd[0]), close(fd[1]), -1;
+    if (pid == 0) {
+        dup2(fd[1], 1);
+        close(fd[0]), close(fd[1]);
+        int nul = open("/dev/null", O_WRONLY);
+        if (nul >= 0) dup2(nul, 2);
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+    close(fd[1]);
+    size_t k = 0;
+    char tmp[4096];
+    ssize_t r;
+    while ((r = read(fd[0], tmp, sizeof tmp)) > 0)
+        for (ssize_t i = 0; i < r; ++i)
+            if (k + 1 < n) buf[k++] = tmp[i];
+    buf[k] = 0;
+    close(fd[0]);
+    int st;
+    if (waitpid(pid, &st, 0) < 0 || !WIFEXITED(st)) return -1;
+    while (k && (buf[k - 1] == '\n' || buf[k - 1] == '\r')) buf[--k] = 0;
+    return WEXITSTATUS(st);
+}
+
+/* Notebook record (lab protocol, notebook record): who ran it, where, from which commit, clean tree or not. */
+typedef struct {
+    char operator_[128], host[256], kernel[128], commit[64];
+    int dirty; /* 0 clean, 1 dirty, -1 unknown (not a git checkout) */
+} notebook_t;
+
+static void json_clean(char *s) {
+    for (; *s; ++s)
+        if (*s == '"' || *s == '\\' || (unsigned char)*s < 0x20) *s = '_';
+}
+
+static void notebook_of(const char *repo, notebook_t *nb) {
+    char out[8192];
+    char *a1[] = {"git", "-C", (char *)repo, "config", "user.name", NULL};
+    if (run_capture(a1, nb->operator_, sizeof nb->operator_) != 0 || !nb->operator_[0]) snprintf(nb->operator_, sizeof nb->operator_, "UNKNOWN");
+    char *a2[] = {"git", "-C", (char *)repo, "rev-parse", "HEAD", NULL};
+    if (run_capture(a2, nb->commit, sizeof nb->commit) != 0 || strlen(nb->commit) != 40) snprintf(nb->commit, sizeof nb->commit, "UNKNOWN");
+    char *a3[] = {"git", "-C", (char *)repo, "status", "--porcelain", NULL};
+    int rc = run_capture(a3, out, sizeof out);
+    nb->dirty = rc != 0 ? -1 : (out[0] != 0);
+    /* --repo must be the top of its own checkout, not a folder inside another one. */
+    char *a4[] = {"git", "-C", (char *)repo, "rev-parse", "--show-toplevel", NULL};
+    char top[PATH_MAX], rr[PATH_MAX], rt[PATH_MAX];
+    if (run_capture(a4, top, sizeof top) != 0 || !realpath(repo, rr) || !realpath(top, rt) || strcmp(rr, rt)) nb->dirty = -1;
+    if (gethostname(nb->host, sizeof nb->host)) snprintf(nb->host, sizeof nb->host, "UNKNOWN");
+    nb->host[sizeof nb->host - 1] = 0;
+    struct utsname u;
+    if (uname(&u)) snprintf(nb->kernel, sizeof nb->kernel, "UNKNOWN");
+    else snprintf(nb->kernel, sizeof nb->kernel, "%s %s %s", u.sysname, u.release, u.machine);
+    json_clean(nb->operator_), json_clean(nb->host), json_clean(nb->kernel);
+}
+
 static int sha_file_hex(const char *path, char o[65]) {
     uint8_t d[32];
     if (tc_file_sha256(path, d) != TC_OK) return -1;
@@ -146,6 +211,7 @@ static int jint(const char *line, const char *key, int64_t *v) {
     errno = 0;
     long long x = strtoll(p, &e, 10);
     if (e == p || errno) return -1;
+    if (*e != ',' && *e != '}' && *e != ' ' && *e != '\n' && *e != '\r' && *e != 0) return -1; /* integers only */
     *v = x;
     return 0;
 }
@@ -345,6 +411,11 @@ static int cmd_run(int argc, char **argv) {
         snprintf(p, sizeof p, "%s/final_receipt.json", g_out);
         if (!stat(p, &st)) return refuse("write once", "EXISTS", "%s already exists; a verdict is never replaced", p);
     }
+    /* Notebook record; a non-dry run refuses a dirty or unverifiable tree. */
+    notebook_t nb;
+    notebook_of(repo, &nb);
+    if (!g_dry && nb.dirty != 0)
+        return refuse("notebook", "DIRTY_TREE", "%s", nb.dirty < 0 ? "--repo is not a git checkout (clean state cannot be verified)" : "--repo has uncommitted changes (git status --porcelain is not empty)");
     char t0[32];
     utc_now(t0);
 
@@ -1054,6 +1125,8 @@ static int cmd_run(int argc, char **argv) {
                     "\"candidate_manifest_sha256\": \"%s\", \"preregistration_sha256\": \"%s\"},\n",
                 git_head, status, frozen_at[0] ? frozen_at : "NONE", man_sha, prj);
     }
+    fprintf(fr, "  \"notebook\": {\"operator\": \"%s\", \"host\": \"%s\", \"kernel\": \"%s\", \"commit\": \"%s\", \"tree_clean\": %s},\n",
+            nb.operator_, nb.host, nb.kernel, nb.commit, nb.dirty == 0 ? "true" : "false");
     fprintf(fr, "  \"roots\": {\"candidate_root\": \"%s\", \"dataset_root\": \"%s\", \"probability_root\": \"%s\", \"coding_root\": \"%s\", "
                 "\"analysis_root\": \"@ANALYSIS_ROOT@\"},\n",
             man_sha, payload, prob_root, coding_root);
@@ -1280,6 +1353,19 @@ static int cmd_gate(int argc, char **argv) {
     int na, nb;
     if (load_values(prim, &a, &na) || load_values(indep, &b, &nb)) return refuse("gate", "IO", "values");
     int s8 = na > 0 && na == nb, mism = 0;
+    /* The independent file must name the same inputs and schema, and may not repeat a key. */
+    {
+        static const char *hk[] = {"schema", "profile_sha256", "candidate_manifest_sha256", "dataset_manifest_sha256"};
+        char *ta = slurp(prim, NULL), *tb_ = slurp(indep, NULL);
+        for (int i = 0; i < 4; ++i) {
+            char va[128] = "", vb[128] = "";
+            if (!ta || !tb_ || jstr(ta, hk[i], va, sizeof va) || jstr(tb_, hk[i], vb, sizeof vb) || strcmp(va, vb)) ++mism;
+        }
+        free(ta), free(tb_);
+        for (int i = 0; i < nb; ++i)
+            for (int j = i + 1; j < nb; ++j)
+                if (!strcmp(b[i].key, b[j].key)) ++mism;
+    }
     for (int i = 0; i < na; ++i) {
         int found = 0;
         for (int j = 0; j < nb && !found; ++j)

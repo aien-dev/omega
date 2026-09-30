@@ -50,4 +50,3 @@ n	f0	false_positive	fail_at_fmin	inconclusive_at_fmin	mean_width_bits_at_fmin
 simulation_code: calibration/scripts/power_simulation.c; its SHA-256 is pinned in candidate_manifest.json shared_background_sha256
 declared_min_effect_f=0.100 declared_min_gain_per_event=0.047035 bits
 CHOSEN_SEEDS_PER_GROUP=3 (smallest n with joint power >= 0.95 at f_min, shift model)
-runtime_seconds=79

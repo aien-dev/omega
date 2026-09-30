@@ -116,7 +116,7 @@
     "S2": "freeze commit and frozen candidate manifest precede sealed data; overlap audit passes",
     "S3": "identical symbol stream digest for every candidate and coder",
     "S4": "per coder, every sealed file and crumb: |overhead_ub - 448000000| <= 64000000 + 1000 x N",
-    "S5": "no unexplained material reversal (FAILURE_REPORTING.md section 5): DL ordering reversal ideal vs coder explained iff |ideal DL gap| <= 2 x band(g); material T sign reversal ideal vs coder explained iff |T_ideal - T_coded| <= 2 x band(g); material T sign reversal group 1 vs group 2 never explained; band(g) = sum over files of (64000000 + 1000 x N_f) ub",
+    "S5": "no unexplained material reversal (FAILURE_REPORTING.md section 5): DL ordering reversal ideal vs coder explained iff |ideal DL gap| <= 2 x band(g); material T sign reversal ideal vs coder explained iff |T_ideal - T_coded| <= 2 x band(g); material T sign reversal group 1 vs group 2 never explained; no cause label is preregistered, so an unexplained reversal is FAIL whatever cause is found later; band(g) = sum over files of (64000000 + 1000 x N_f) ub",
     "S6": "group 1: lower bound of T(M_candidate) > 0, ideal and both coders",
     "S7": "group 1: upper bound of T(M_mem) < 0 and of T(M_mem_seed1) < 0, ideal and both coders",
     "S8": "independent scorer reproduces every number exactly",

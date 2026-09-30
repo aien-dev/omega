@@ -2,7 +2,7 @@
   "schema": "turing.cal.candidate_manifest.v1",
   "experiment": "EXP-001",
   "status": "draft",
-  "git_head": "0ca20c9e110191eeed3f0d7481d387f1836b824e",
+  "git_head": "ab32bd7d318411342f1b7b4fd0f7f0d7bc1e170e",
   "profile_path": "calibration/profiles/Turing-profile-v1.0.toml",
   "profile_sha256": "c3cf9601e877791ab71ad340005f089a752dc521d6d5d24d6be0c79117b1c41b",
   "profile_sidecar_sha256": "c3cf9601e877791ab71ad340005f089a752dc521d6d5d24d6be0c79117b1c41b",
@@ -27,23 +27,23 @@
     "calibration/docs/MODEL_DESCRIPTION_ENCODING.md": "9353ae9106798b0a0581bcd44a12604ca08ecd878f7fbabe232527a8245cef18",
     "calibration/docs/CODER_SPEC.md": "76389ba91a4dfadfeaaeb10968d8c1abb3c57a76b298b79b50db37e1af1fea57",
     "calibration/docs/UNCERTAINTY_PROTOCOL.md": "ca3440d487040573712cb43dbdd110f6bada61a706023c16b2c1d3a374c13cce",
-    "calibration/docs/FAILURE_REPORTING.md": "acc9234b6d454402150d1cee334741ff4542ce668577c668330c477cb05bf52b",
+    "calibration/docs/FAILURE_REPORTING.md": "8e2d6ef5a57456a25aba66a131e6879e95824a0dfbb7fc7594f9e145b6e45e18",
     "calibration/docs/BLINDING_PROTOCOL.md": "542d07c5014de1d5aae1a32c8e53107388cf40a57367b0e0eb1a5a1f490d35b0",
-    "calibration/preregistration/EXP-001.md": "17e78a13cf8c03dc7d617d7731b2b80f5356f8e470d8129df94c38f5f3aa0b0a",
-    "calibration/experiments/EXP-001/preregistration.json": "d3528d712e7fe98c343b25336815f51dde54edd7d0c61175f59f04c87136354f",
+    "calibration/preregistration/EXP-001.md": "8f4a0425b933436f578eb85a418b69d2df5ce7263c7f17b6684de888f62585f6",
+    "calibration/experiments/EXP-001/preregistration.json": "fe2d05590ae017be533fb11ec384ba83454717bd5ec6ac1d351f5ea815562004",
     "calibration/profiles/Turing-profile-v1.0.toml": "c3cf9601e877791ab71ad340005f089a752dc521d6d5d24d6be0c79117b1c41b",
-    "calibration/scripts/power_simulation.c": "b370f4badd64f62c4de2062ef67c7b909d59770e710a056b51dba302f6c78ace",
-    "calibration/experiments/EXP-001/power_simulation_output.txt": "533d5320f2143e067acefd7ac1ee43383e2e741345d7a5e5ef5dab7e80230870",
-    "calibration/docs/EVALUATOR.md": "135b8171ab5d1de5e460aad95e831562aae597b01d28f40172a99f3fefb51f4c",
-    "tools/turing_cal_eval.c": "413b5f833cc5b8f82d8bcc58d76ffddca28f46c2412e6fcf39578a9b3cbe123e"
+    "calibration/scripts/power_simulation.c": "a979073e2342e1c17cfde90ff9eae5c93ecf494fc249cdfd9fd1c7032f9dc9de",
+    "calibration/experiments/EXP-001/power_simulation_output.txt": "da2e88e5a8dea6fa6a802a40bf7fd192998d708bb0a1de017aea1ccbaf49a7f0",
+    "calibration/docs/EVALUATOR.md": "d29216b5fba7b690daabaec5b9518a1f0577c6a11bb90925b1ac0051c9448a8a",
+    "tools/turing_cal_eval.c": "45734ccd9d6f428d0071190418b1114f3b0ffffeee5292a8a0f160b6360700f7"
   },
   "runtime_sha256": {
     "crumbline-learner": "8159bdff248efa67fa2cf75bb0b506bc359f4a2269139d03479753c0fc393416",
     "crumbs": "72e396b15532aa93afb1f215521e04dca8470f779f3de35c10b04b07bff96638",
     "turing-cal-candidates": "73d1e072f7705fe5bc5924f55f23b3bc7f50da2e72c5988332f383c20ad92163",
-    "turing-cal-eval": "3121e26d5829f62c8f36285e885c455de272da36e3787d3ab12e10eb07a814ca",
+    "turing-cal-eval": "e620988b28ddc7b1f20d7740c0a20135f3202982a92dbf2182144ee3cf9da633",
     "turing-cal-overlap": "92a431556e2e861cb7a663882455e109e44cbc5d7747c52b424739211f6c0f65",
     "turing-coder": "caa33c5b0b7c4383874804f48e1e0cbc08f81aa303646850c7e710d8d87c1d23",
-    "runtime_digest": "b58db7eb993cfd24419c9a464d9de46d68904bd2e4bce41d052e35aa2791decd"
+    "runtime_digest": "23a2e0919a0286a69e22947014355bb7fadb16963fae32cb65e9e5ab844e1c9b"
   }
 }

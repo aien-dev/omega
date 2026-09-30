@@ -336,6 +336,6 @@ int main(int argc, char **argv) {
         printf("CHOSEN_SEEDS_PER_GROUP=%d (smallest n with joint power >= 0.95 at f_min, shift model)\n", chosen);
     else
         printf("CHOSEN_SEEDS_PER_GROUP=none within n<=%d\n", PS_NMAX);
-    printf("runtime_seconds=%ld\n", (long)(time(NULL) - t0));
+    fprintf(stderr, "runtime_seconds=%ld (wall clock; stderr only, so the pinned output stays byte-deterministic)\n", (long)(time(NULL) - t0));
     return 0;
 }

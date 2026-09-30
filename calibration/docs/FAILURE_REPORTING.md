@@ -73,7 +73,11 @@ Every reversal is listed in uncertainty.json. Let band(g) = sum over the files f
 - T sign reversal, group 1 vs group 2: the same measure of one candidate changes sign between the groups AND each
   interval excludes the other's point estimate. Always unexplained (the coder envelope cannot account for it).
 
-S5 is FAIL if any reversal is unexplained, else PASS. The Spearman rank correlation of the DL ordering, ideal vs
+S5 is FAIL if any reversal is unexplained, else PASS. The only preregistered explanation is the coder-band rule above; no cause label
+(CVP 1006-1025: decision boundary, sample size, baseline, model code, quantization, statistical instability,
+implementation defect, fundamental metric sensitivity) was preregistered for EXP-001, so an unexplained reversal is
+FAIL whatever cause is later found. A cause label written after the result is a diagnosis in the report
+and never changes S5 or the verdict. The Spearman rank correlation of the DL ordering, ideal vs
 each coder, is reported and not used in the verdict.
 
 ## 6. Where results go

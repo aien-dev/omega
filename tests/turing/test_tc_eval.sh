@@ -136,7 +136,16 @@ COMMIT=1111111111111111111111111111111111111111
 bash "$F/calibration/scripts/make_dataset_manifest.sh" --dev "$W/data" "1" "2" "$FH" "$W/fds.json" >/dev/null
 sed -i -E "s/\"split\": \"development\"/\"split\": \"sealed_test\"/; s/\"freeze_commit\": \"NONE\"/\"freeze_commit\": \"$COMMIT\"/; s/\"released_utc\": \"NOT_SEALED\"/\"released_utc\": \"2026-10-01T12:00:00Z\"/" "$W/fds.json"
 printf '{\n  "schema": "turing.cal.overlap_audit.v1",\n  "freeze_commit": "%s",\n  "result": "PASS"\n}\n' "$COMMIT" >"$W/ov.json"
-run_sealed() { "$BIN" run --repo "$F" --manifest "$FM" --cand-dir "$FC" "$@"; }
+# Sealed mode needs --repo to be a clean git checkout: commit the fake repo before every sealed run.
+commit_f() { (cd "$F" && { [ -d .git ] || git init -q; } && git add -A && git -c user.name=tce-test -c user.email=tce@test -c commit.gpgsign=false commit -q --allow-empty -m fixture); }
+run_sealed_raw() { "$BIN" run --repo "$F" --manifest "$FM" --cand-dir "$FC" "$@"; }
+run_sealed() { commit_f; run_sealed_raw "$@"; }
+
+expect_refuse "sealed run, --repo not a git checkout" DIRTY_TREE -- run_sealed_raw --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s0" --work "$W/sw0"
+commit_f
+touch "$F/uncommitted.txt"
+expect_refuse "sealed run, uncommitted change in --repo" DIRTY_TREE -- run_sealed_raw --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s0b" --work "$W/sw0b"
+rm -f "$F/uncommitted.txt"
 
 expect_refuse "draft manifest in sealed mode" NOT_FROZEN -- run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/s1" --work "$W/sw1"
 sed -i -E "s/\"status\": \"draft\"/\"status\": \"frozen\"/; s/(\"git_head\": \")[0-9a-f]{40}/\1$COMMIT/" "$FM"
@@ -166,6 +175,8 @@ refresh "$F"
 # Positive sealed-mode run on the fake setup, then S8 checks at the gate.
 run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$W/sealed" --work "$W/sealedw" 2>"$W/sealed.err" &&
     ok "sealed-mode run completes on the fake frozen setup" || bad "sealed-mode run: $(tail -3 "$W/sealed.err")"
+grep -q '"notebook": {"operator": "[^"]*", "host": "[^"]*", "kernel": "[^"]*", "commit": "[0-9a-f]\{40\}", "tree_clean": true}' "$W/sealed/final_receipt.pending.json" &&
+    ok "sealed receipt records operator, host, kernel, commit, clean tree" || bad "notebook record missing in sealed receipt"
 expect_refuse "self-comparison as independent scorer (sealed mode)" NOT_INDEPENDENT -- "$BIN" gate --bundle "$W/sealed" --independent "$W/sealed/scorer_primary.json"
 sed '0,/"value": /s/"value": \([0-9]\)/"value": 9\1/' "$W/sealed/scorer_primary.json" | sed 's/(primary)/(test copy, one value changed)/' >"$W/indep_bad.json"
 "$BIN" gate --bundle "$W/sealed" --independent "$W/indep_bad.json" >"$W/gate2.out" || true
@@ -188,6 +199,20 @@ verdict_case all_pass PASS PASS PASS PASS
 verdict_case s6_straddle INCONCLUSIVE PASS PASS INCONCLUSIVE
 verdict_case s9_straddle PASS PASS INCONCLUSIVE INCONCLUSIVE
 verdict_case wrong_side_beats_straddle INCONCLUSIVE FAIL PASS FAIL
+
+# S8 comparison contract (EVALUATOR.md section 6): exact int64 values, same key set, same schema and input
+# digests, no repeated key; key order and spacing are free; a non-integer value never matches.
+s8_case() { # s8_case NAME EXPECTED_S8 SED_SCRIPT
+    local b="$W/s8_$1"
+    run_sealed --dataset "$W/fds.json" --overlap "$W/ov.json" --out "$b" --work "$W/s8w" 2>/dev/null || { bad "S8 case $1 run"; return; }
+    sed 's/(primary)/(test copy)/' "$b/scorer_primary.json" | sed -E "$3" >"$W/indep_$1.json"
+    "$BIN" gate --bundle "$b" --independent "$W/indep_$1.json" >/dev/null 2>&1 || true
+    grep -q "\"S8\": \"$2\"" "$b/final_receipt.json" && ok "S8 contract: $1 -> $2" || bad "S8 contract case $1"
+}
+s8_case reordered_respaced PASS '1!G;h;$!d'
+s8_case float_value FAIL '0,/"value": -?[0-9]+/s/("value": -?[0-9]+)/\1.0/'
+s8_case other_profile_digest FAIL 's/("profile_sha256": ")[0-9a-f]/\10/'
+s8_case repeated_key FAIL '0,/\{"key"/s/^( *\{"key": "[^"]*", "value": -?[0-9]+\})(,?)$/\1,\n\1\2/'
 
 # The worktree's EXP-001 directory is untouched by all of the above.
 [ "$(exp_snap)" = "$EXP_BEFORE" ] && ok "calibration/experiments/EXP-001 unchanged" ||
