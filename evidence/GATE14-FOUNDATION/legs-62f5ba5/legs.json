@@ -1,0 +1,34 @@
+{
+  "schema": "AIEN_GATE14_LEGS_V0",
+  "note": "Constituent leg runs for the Combined Foundation Admission Gate (Gate 14). Not the Gate 14 receipt: no aggregator exists yet.",
+  "omega_candidate": "62f5ba5b8c2d3bf135a5db9132d8fb6a92e51741",
+  "physics_candidate": "f63a6ef4c5dfa27fc32ee6e4f893bd2c42ec8a12",
+  "hardware": "GB10 (DGX Spark)",
+  "run_utc": "2026-09-30T18:42:36Z/19:12:10Z",
+  "legs": [
+    {
+      "gates": "1,2",
+      "tool": "tools/m19r_qualify.sh (full, soak on)",
+      "status": "PASS",
+      "receipt": "evidence/M19R/2fb2a5943d433631070a709b47ded838040d318c1e9c4c1ab1343ae82674e6b5.json",
+      "pass": 230,
+      "fail": 0,
+      "soak_cycles": 100000
+    },
+    {
+      "gates": "3,4",
+      "tool": "physics tests/run_forge_gates.sh",
+      "status": "PASS",
+      "log": "evidence/GATE14-FOUNDATION/legs-62f5ba5/gate3_4_forge_f63a6ef.log",
+      "gate3": "11/11",
+      "gate4": "10/10",
+      "receipt": "none emitted by the runner (log only)"
+    },
+    {
+      "gates": "5",
+      "tool": "tests/run_numeric_gates.sh --record",
+      "status": "PASS",
+      "receipt": "evidence/OMEGA-NUMERIC-0/86fcbe4efb59577ad7af5159be69736df016ef6f6f75266d3c16e654c5369c16.json"
+    }
+  ]
+}
