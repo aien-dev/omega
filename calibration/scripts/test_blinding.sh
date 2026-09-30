@@ -170,6 +170,19 @@ while read -r s; do
 done <"$here/burned_seeds_exp001.txt"
 [ "$nb" = 6 ] && ok "(iv) all 6 burned EXP-001 sealed seeds are refused by generate_sealed_data.sh (EXP-001R)" || bad "(iv) expected 6 burned seeds, found $nb"
 if EXP_ID=EXP-001R "$G" --is-burned 12345678901234 >/dev/null 2>&1; then bad "(iv) an unrelated seed was refused"; else ok "(iv) an unrelated seed is not refused"; fi
+echo "== freeze sealed-root check (synthetic empty directories only)"
+sr="$scratch/sealed-root"; mkdir -p "$sr"
+bname=d3cba292b9282116d1e374db22344bca4d47717e
+sealed_ok() { ( EXP_ID="$1" . "$here/tc_exp.sh"; tc_sealed_clear "$sr" >/dev/null ) ; }
+sealed_ok EXP-001R && sealed_ok EXP-001 && ok "empty sealed root: freeze allowed for both" || bad "empty sealed root refused"
+mkdir "$sr/$bname"
+sealed_ok EXP-001R && ok "burned root present: freeze allowed for EXP-001R" || bad "burned root refused for EXP-001R"
+sealed_ok EXP-001 && bad "burned root present: EXP-001 must refuse" || ok "burned root present: refused for EXP-001 (any entry)"
+mkdir "$sr/0123456789abcdef0123456789abcdef01234567"
+sealed_ok EXP-001R && bad "extra directory accepted for EXP-001R" || ok "burned root plus an unknown directory: refused for EXP-001R"
+sealed_ok EXP-001 && bad "extra directory accepted for EXP-001" || ok "unknown directory: refused for EXP-001"
+rmdir "$sr/0123456789abcdef0123456789abcdef01234567"; mkdir "$sr/$bname.failed-1"
+sealed_ok EXP-001R && bad "burned root .failed-* accepted" || ok "a .failed-* sibling of the burned root is refused for EXP-001R (exact root only)"
 echo "skipped: dev-vs-dev audit mode (verify_holdout_separation.sh always compares one sealed dir against dev data; no such mode exists)"
 echo "blinding self-test: $pass passed, $fail failed"
 [ "$fail" = 0 ]
