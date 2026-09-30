@@ -45,7 +45,8 @@ VOID versus FAIL (the one rule; EVALUATOR.md section 3 maps every refusal code t
   from C_f, a seed not derived from C_f, C_f committed or candidates frozen at or after the release) is S2 even
   though the evaluator checks it before scoring, because retrying cannot change it; a stream, binding or
   serialization failure is S3; a per-crumb sum mismatch is S4; a group with no crumbs is S6; a lane D mismatch is
-  S8; a crash after scoring started is FAIL of the criterion whose step crashed. It is written as
+  S8; a crash after scoring started is FAIL of the criterion whose step crashed; a read or write failure after
+  scoring started that belongs to no single criterion is verdict FAIL with every criterion NOT_REACHED. It is written as
   final_receipt.json kind terminal_fail.
 - Every criterion that can FAIL is able to FAIL: each has at least one path above or in the criteria rules that
   sets it to FAIL, and the tests exercise each terminal path (EVALUATOR.md section 7).

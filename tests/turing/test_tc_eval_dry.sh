@@ -46,6 +46,16 @@ for g in 1 2; do
         done
     done
 done
+grep -q '"dry_run": true' scorer_independent.json || die "independent scorer did not report dry_run true on development data"
+# The independent scorer takes dry_run from the dataset manifest split: a sealed_test split must give false.
+mkdir -p sealedchk
+sed 's/"split": "development"/"split": "sealed_test"/' dataset_manifest.json >sealedchk/dataset_manifest.json
+cp candidate_manifest.json sealedchk/
+ln -sfn "$OUT/bundle" sealedchk/bundle; ln -sfn "$OUT/work" sealedchk/work; ln -sfn "$OUT/docs" sealedchk/docs
+(cd sealedchk && "$IND" --docs docs --bundle-root . --cand-dir "$SMALL" --cand-dir "$BIG" \
+    --out s.json --details d.json 2>e.txt) || { tail -5 sealedchk/e.txt; die "independent scorer failed on the sealed_test split copy"; }
+grep -q '"dry_run": false' sealedchk/s.json || die "independent scorer did not report dry_run false for split sealed_test"
+rm -rf sealedchk
 cd "$REPO"
 [ "$(git status --porcelain -- calibration/experiments/EXP-001)" = "$before" ] || die "the dry run changed calibration/experiments/EXP-001"
 du -sh "$OUT/work" | sed 's/^/work dir size: /'

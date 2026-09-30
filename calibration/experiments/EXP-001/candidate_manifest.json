@@ -26,18 +26,18 @@
     "calibration/docs/MODEL_DESCRIPTION_ENCODING.md": "3ca2aa3c65b27d6ad525f64a178e337b10a898e843f7f55ba64420e816486a4a",
     "calibration/docs/CODER_SPEC.md": "b0b17d996f898216ed85c9ee9b75795ec73ad27c49f2fbbe2dfe322a0617ec53",
     "calibration/docs/UNCERTAINTY_PROTOCOL.md": "eaf04fc150f0bc89d9617284ede531aeaf074e307f0bd1e6d26c3cdad464aded",
-    "calibration/docs/FAILURE_REPORTING.md": "254185a4fe98f582dd9d7e8f26cbdd68073f4e67a397316b7e795b2a69e9286b",
+    "calibration/docs/FAILURE_REPORTING.md": "c36c50a389f2a9f0cd51f5323eafe11602234e4da0a57b35982446af3fe9738a",
     "calibration/docs/BLINDING_PROTOCOL.md": "16bf71a47fff0fb7740470e846e899ed3f5140b7fa2b28f578a0f78e121c8550",
     "calibration/preregistration/EXP-001.md": "0e84b2c8df659fe4330a76f8ee7b2c5935c7d42d59611df439386385391fb871",
     "calibration/experiments/EXP-001/preregistration.json": "05d88b2932d3f519b3ef4e131e73701b6edbcf9157f13934486557f0985f5151",
     "calibration/profiles/Turing-profile-v1.0.toml": "8aa0fa765bc677184ed690c97d565947a7075eba0c1dea67d64d9b9a18863072",
     "calibration/scripts/power_simulation.c": "a979073e2342e1c17cfde90ff9eae5c93ecf494fc249cdfd9fd1c7032f9dc9de",
     "calibration/experiments/EXP-001/power_simulation_output.txt": "da2e88e5a8dea6fa6a802a40bf7fd192998d708bb0a1de017aea1ccbaf49a7f0",
-    "calibration/docs/EVALUATOR.md": "b57340e62b7b713605287b72f8291a9631716de14ad5f1482f28bc76091bf5f4",
+    "calibration/docs/EVALUATOR.md": "f5acba507113355666fc2c440bf6d64babfc196eedba2df9af1b77defae44e4a",
     "calibration/docs/DATA_FORMAT.md": "f4ee3608814cd142995fd6d686803ae794f5ee239df2486683474f4f75129ddb",
     "tools/turing_cal_eval.c": "75189165c528a458d290874694a69347b06d191bd189f4784c8b36673d300b05"
   },
-  "independent_scorer_source_sha256": "12427f0048c33d8ffb68df10a9d47e1c1f51371716a2414cc46a7f24a2a77534",
+  "independent_scorer_source_sha256": "840b4eb01098a9d1e4d329b1ebb86841543504af67539a738d224c4804b8f9ab",
   "runtime_sha256": {
     "crumbline-learner": "8159bdff248efa67fa2cf75bb0b506bc359f4a2269139d03479753c0fc393416",
     "crumbs": "72e396b15532aa93afb1f215521e04dca8470f779f3de35c10b04b07bff96638",
@@ -45,7 +45,7 @@
     "turing-cal-eval": "f7d9ede05ad2b081ad203df3dd52672e122b089175646fa853251f69b37d45c4",
     "turing-cal-overlap": "92a431556e2e861cb7a663882455e109e44cbc5d7747c52b424739211f6c0f65",
     "turing-coder": "caa33c5b0b7c4383874804f48e1e0cbc08f81aa303646850c7e710d8d87c1d23",
-    "turing-verify-indep": "8544dacba5730311b85447de4ba05e7220d705c51637232ea0743fa88a3e0bb3",
-    "runtime_digest": "d140271019036e4f235d479ec3de79d5812c0cd53a5b8afa7c000742920d2403"
+    "turing-verify-indep": "adec43bb39c6949441f91bc787b5bbb4247d8eec08114fadc8ddb228944cc069",
+    "runtime_digest": "87ef3454aaba53e99d01e7a6def25ac36cc229553b4282eb39fbd3afcdcd38ff"
   }
 }

@@ -86,7 +86,7 @@ Three outcomes (FAILURE_REPORTING.md section 2 is the rule; this is how the eval
 | Code | Meaning | Outcome |
 |---|---|---|
 | ARG | bad or missing argument; `--only` outside a dry run | void |
-| IO | a file could not be read or written | void before scoring, terminal FAIL after |
+| IO | a file could not be read or written | void before scoring; after scoring started a terminal FAIL with failed_criterion NONE, every criterion NOT_REACHED, verdict FAIL |
 | DRY_RUN_TARGET | a dry run tried to write under calibration/experiments/EXP-001 | void |
 | EXISTS | final_receipt.json already exists; a verdict is never replaced | no receipt |
 | RETRY_DIFFERS | a retry's command or inputs differ from void attempt 1 | void |
@@ -126,7 +126,7 @@ seed_commitment.json and manifest.json, re-hashes every control trace) or
 
 ## 5. Bundle and work directory
 
-Bundle (`--out`; for the sealed run `calibration/experiments/EXP-001`): `profile.digest`, `ideal_lengths.json`
+Exact layout, run root and INDEX column formats: DATA_FORMAT.md section 4. Bundle (`--out`; for the sealed run `calibration/experiments/EXP-001`): `profile.digest`, `ideal_lengths.json`
 (per file and per crumb), `scorer_primary.json`, `uncertainty.json`, `probability_streams/INDEX`,
 `arithmetic/results.json`, `ans/results.json`, `encoded_artifacts/INDEX`, `decoder_receipts/`,
 `final_receipt.pending.json`, `REPORT.pending.md`, and after `gate` `scorer_independent.json`,
@@ -152,7 +152,10 @@ C, built by `make turing-verify-indep`). Its source is pinned by `independent_sc
 candidate manifest (rule turing.cal.indep_source.v1, `calibration/scripts/indep_source_digest.sh`) and its binary
 is one of the seven binaries of the runtime digest. It runs in the evaluator environment, from the frozen tree
 at C_f, with the command in BLINDING_PROTOCOL.md section 2 step 8. Any change to its source after the sealed data
-is released makes S8 FAIL (a scorer that can be revised after seeing the data is not independent).
+is released makes S8 FAIL (a scorer that can be revised after seeing the data is not independent). The two
+rules differ in what they catch: the INDEP_SOURCE refusal (void) is for a wrong scorer source tree in `--repo`,
+found before scoring; S8 FAIL is the policy for results produced by a scorer built from revised source, which
+the gate itself cannot detect and which the frozen tree and the verbatim step 8 command prevent.
 
 ### 6.1 File layout
 

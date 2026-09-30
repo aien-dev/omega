@@ -267,7 +267,7 @@ int main(int argc, char **argv) {
       if (is_sha256_file(p, d, NULL)) die("cannot hash dataset manifest");
       is_sha256_hex(d, dm_hex);
       { uint8_t *b; uint64_t L; if (is_read_file(p, &b, &L)) die("cannot read dataset manifest");
-        { const char *k = "\"split\": \"sealed_test\""; uint64_t i; for (i = 0; i + 24 <= L; i++) if (!memcmp(b + i, k, 24)) { dry = 0; break; } } free(b); } }
+        { const char *k = "\"split\": \"sealed_test\""; size_t kl = strlen(k); uint64_t i; for (i = 0; i + kl <= L; i++) if (!memcmp(b + i, k, kl)) { dry = 0; break; } } free(b); } }
     load_manifest(root);
     if ((B2 = cand_index("B2_order1")) < 0) die("no B2_order1 in manifest");
     load_bundle(root);

@@ -52,3 +52,7 @@ Nothing here is frozen yet; the freeze follows BLINDING_PROTOCOL.md section 2.
 
 - runtime_digest stays FILL_AT_FREEZE (seven binaries); it is filled only in C_f.
 - No sealed data were generated and nothing was frozen in this round.
+- A read or write failure after scoring started that belongs to no single criterion is recorded as verdict FAIL
+  with failed_criterion NONE and every criterion NOT_REACHED (EVALUATOR.md s3, FAILURE_REPORTING.md s2), not as a
+  FAIL of a named criterion.
+- The independent scorer's `dry_run` field is derived from the dataset manifest split (`sealed_test` gives false).
