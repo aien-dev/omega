@@ -2,7 +2,7 @@
 # tests/run_numeric_gates.sh -- M19R Gate 5 (OMEGA-NUMERIC-0) qualification.
 #
 #   tests/run_numeric_gates.sh --omega-candidate SHA --physics-candidate SHA
-#                              [--physics-dir DIR] [--record]
+#                              [--physics-dir DIR] [--evidence-dir DIR] [--record]
 #
 # Needs the GB10: the test binary launches kernels on the chip. The build and
 # the run happen under /tmp/aien-gb10.lock.
@@ -33,17 +33,24 @@
 #
 # Output: build/qual-runs/<run-id>/{build.log,gate5.log,gate5.status,run.json}
 # always; receipt-preview.json when every check passed. With --record a
-# permanent receipt evidence/OMEGA-NUMERIC-0/<receipt_digest>.json is written
+# permanent receipt <evidence-dir>/<receipt_digest>.json is written
 # for every run that got past argument parsing: "status":"PASS" when every
 # check passed, "status":"FAIL" (with the reason) otherwise. Receipts are
 # append-only: created exclusively, mode 0444, never overwritten. A PASS
-# receipt is written only into the repository this script belongs to.
+# receipt is written only for the repository this script belongs to. The
+# evidence directory defaults to ~/workspace/evidence-out/OMEGA-NUMERIC-0 and
+# is refused (exit 2) when it lies inside the omega tree or the physics
+# checkout, so recording a receipt never dirties a candidate tree; run.json
+# records whether both trees were still clean afterwards. Each receipt binds
+# the run id, the omega and physics commits with their clean flags, and the
+# gate binary digest.
 # The historical file evidence/m19r_gate5_omega_numeric_evidence.json is not
 # touched; its hash is recorded as the predecessor.
-# Today Gate 5 cannot PASS: FP32_SIMT_OPCODES_ENCODED needs GB10 kernels for
-# LDS_STS and REDUCE_SUM, which are expected-not-encoded (refused before
-# submission). A run therefore ends in FAIL (a FAIL receipt with --record)
-# until they are encoded and qualified; no op is relabelled to get round it.
+# All 15 ops in the manifest, LDS_STS and REDUCE_SUM included, need one GB10
+# parity line each (FFMA one per c) at n=4096 with zero mismatches against the
+# CPU reference. REDUCE_SUM checks lane 0 of each warp (n/32 sums) and must
+# name the declared summation order. A PASS needs a real chip run; nothing
+# here can produce one without the GB10.
 # Exit 0 on PASS, 1 on failure, 2 on bad arguments.
 #
 # Functions can be sourced (tools/test_numeric_qualify.sh does); main only
@@ -56,7 +63,8 @@ M19R_PROG=run_numeric_gates.sh
 
 NUM_SUITE=gate5
 NUM_HISTORICAL=evidence/m19r_gate5_omega_numeric_evidence.json
-NUM_RECEIPT_DIR=evidence/OMEGA-NUMERIC-0
+# Permanent receipts go here, outside every candidate tree (--evidence-dir).
+NUM_EVIDENCE_DEFAULT=$HOME/workspace/evidence-out/OMEGA-NUMERIC-0
 # Test IDs the chip build must print, each exactly once, each PASS.
 NUM_EXPECTED_IDS="FPCR_RNE_NO_FTZ_REQUIRED PROVENANCE_MATCHES_EXECUTOR
 NOT_ENCODED_OPS_REFUSED_BEFORE_SUBMISSION FP32_SIMT_OPCODES_ENCODED
@@ -67,27 +75,35 @@ EDGE_CLASS_BEHAVIOR_VERIFIED HARDWARE_DESCRIPTOR_PROBED
 NEG_FTZ_DETECTED_AND_REJECTED NEG_UNORDERED_REDUCTION_DIVERGENCE_CAUGHT
 NEG_RAW_MUFU_APPROX_REJECTED_WITHOUT_REFINEMENT NEG_UNKNOWN_OPCODE_FAILS_CLOSED
 NEG_OPCODE_PROVENANCE_INTEGRITY_VERIFIED NEG_NONDEFAULT_FPCR_REFUSED
-NEG_COMPARATOR_CATCHES_ONE_BIT"
+NEG_COMPARATOR_CATCHES_ONE_BIT NEG_BAD_SHARED_AND_WARP_SHAPES_REFUSED
+NEG_PATCH_STRUCTURE_CHECKED_BEFORE_SUBMISSION"
 # The operation manifest: every op the executor encodes for GB10 and how its
 # result is compared. It mirrors OP_TABLE in src/omega_numeric.c (the host
 # test checks the two agree). The log never chooses its own comparison.
 NUM_OP_MANIFEST="FADD:BIT_EXACT FSUB:BIT_EXACT FMUL:BIT_EXACT FFMA:BIT_EXACT
 FSETP_SEL:INT_EXACT FSEL:INT_EXACT FMNMX_MIN:BIT_EXACT FMNMX_MAX:BIT_EXACT
 I2FP:BIT_EXACT F2I:INT_EXACT MUFU_RCP:SEED_BOUND MUFU_RSQ:SEED_BOUND
-SHFL_DOWN:INT_EXACT"
+SHFL_DOWN:INT_EXACT LDS_STS:INT_EXACT REDUCE_SUM:BIT_EXACT"
 NUM_ENCODED_OPS=$(printf '%s\n' $NUM_OP_MANIFEST | cut -d: -f1 | tr '\n' ' ')
 # Elements per launch (N in tests/test_omega_numeric.c).
 NUM_CORPUS_N=4096
 # FFMA runs once per uniform c (FFMA_C in tests/test_omega_numeric.c).
 NUM_FFMA_C="0x3f800000 0x80000000 0x00800000 0xbf800000 0x7fc00000 0x7f800000
 0x00000003 0x80800000"
+# REDUCE_SUM: only lane 0 of each 32-lane warp holds a sum, so it checks N/32
+# elements, and its parity line must name this summation order (the order
+# the chip kernel and the CPU reference both use: SHFL.DOWN deltas 16, 8, 4,
+# 2, 1, one FADD after each; OMEGA_WARP_REDUCTION_DECLARED_ORDER).
+NUM_REDUCE_ORDER=PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1
 
-# num_manifest_json -- {"ops":{op:mode},"n":N,"ffma_c":[...]}
+# num_manifest_json -- {"ops":{op:mode},"n":N,"ffma_c":[...],
+#   "checked":{op:count} (ops that do not check all N), "reduction_order":{op:order}}
 num_manifest_json() {
-    jq -n --arg m "$NUM_OP_MANIFEST" --arg c "$NUM_FFMA_C" --argjson n "$NUM_CORPUS_N" '
+    jq -n --arg m "$NUM_OP_MANIFEST" --arg c "$NUM_FFMA_C" --argjson n "$NUM_CORPUS_N" --arg ro "$NUM_REDUCE_ORDER" '
         {ops: ([$m | splits("\\s+") | select(length > 0) | split(":") | {key: .[0], value: .[1]}]
                | from_entries),
-         n: $n, ffma_c: [$c | splits("\\s+") | select(length > 0)]}'
+         n: $n, ffma_c: [$c | splits("\\s+") | select(length > 0)],
+         checked: {REDUCE_SUM: ($n / 32 | floor)}, reduction_order: {REDUCE_SUM: $ro}}'
 }
 
 # num_check_physics OMEGA PHYSICS_DIR PHYSICS_CAND -- the physics dependency
@@ -157,9 +173,12 @@ num_execute() {
 # Input: array of GB10 parity lines. $man: num_manifest_json.
 NUM_JQ_PARITY='
 def isint: type == "number" and . == floor and . >= 0;
-def problem($m):
+def problem($op; $m):
   . as $l
+  | ($man.checked[$op] // $man.n) as $need
+  | ($man.reduction_order[$op] // null) as $order
   | if ($l | has("error")) then "a launch error (\($l.error | tojson))"
+    elif $l.reduction_order != $order then "reduction_order \($l.reduction_order | tojson), the manifest says \($order | tojson)"
     elif ($l.compare != $m) then "comparison \($l.compare | tojson) but the manifest says \($m)"
     elif (($l.n | isint) | not) or $l.n != $man.n then "n \($l.n | tojson), need \($man.n)"
     elif (($l.checked | isint) | not) then "checked is not an integer"
@@ -170,7 +189,7 @@ def problem($m):
       elif $l.out_of_bound != 0 then "\($l.out_of_bound) results out of bound"
       else "" end
     else
-      if $l.checked != $man.n then "checked \($l.checked), need \($man.n)"
+      if $l.checked != $need then "checked \($l.checked), need \($need)"
       elif (($l.mismatches | isint) | not) then "mismatches is not an integer"
       elif $l.mismatches != 0 then "\($l.mismatches) mismatches"
       else "" end
@@ -187,10 +206,10 @@ def problem($m):
         elif $op == "FFMA" then
           if ([$ls[] | .c_bits] | sort) != ($man.ffma_c | sort)
           then "FFMA launches \([$ls[] | .c_bits] | tojson), need exactly one per c in \($man.ffma_c | tojson)"
-          else ([$ls[] | problem($mode) | select(. != "") | "GB10 parity for FFMA: " + .] | first // "") end
+          else ([$ls[] | problem($op; $mode) | select(. != "") | "GB10 parity for FFMA: " + .] | first // "") end
         elif ($ls | length) != 1 then "GB10 parity for \($op): \($ls | length) lines, need exactly 1"
         elif ($ls[0] | has("c_bits")) then "GB10 parity for \($op) carries c_bits"
-        else ($ls[0] | problem($mode) | if . == "" then "" else "GB10 parity for \($op): " + . end) end
+        else ($ls[0] | problem($op; $mode) | if . == "" then "" else "GB10 parity for \($op): " + . end) end
       | select(. != "") ] | first // ""
   end'
 
@@ -260,6 +279,31 @@ num_check_log() {
     [ -z "$problem" ] || m19r_fail "$problem" || return 1
 }
 
+# num_under PATH DIR -- true when PATH is DIR or inside it (both resolved).
+num_under() {
+    local p d
+    p=$(realpath -m "$1") && d=$(realpath -m "$2") || return 1
+    [ "$p" = "$d" ] || [[ $p == "$d"/* ]]
+}
+
+# num_check_evidence_dir OMEGA -- resolve NUM_EVIDENCE_DIR (default
+# $NUM_EVIDENCE_DEFAULT) and refuse it when it lies inside the omega tree,
+# this script's repository or the physics checkout: a receipt written there
+# would dirty the very tree it certifies as clean.
+num_check_evidence_dir() {
+    local omega=$1 d t
+    d=$(realpath -m "${NUM_EVIDENCE_DIR:-$NUM_EVIDENCE_DEFAULT}") ||
+        m19r_fail "cannot resolve evidence directory ${NUM_EVIDENCE_DIR:-$NUM_EVIDENCE_DEFAULT}" || return 1
+    for t in "$omega" "${M19R_OMEGA:-}" "${M19R_PHYSICS:-}"; do
+        [ -n "$t" ] || continue
+        if num_under "$d" "$t"; then
+            m19r_fail "evidence directory $d is inside $(realpath -m "$t"); receipts must live outside the candidate trees" || return 1
+        fi
+    done
+    NUM_EVIDENCE_DIR=$d
+}
+
+
 # num_tree_clean REPO -- "true" or "false" from git status right now.
 num_tree_clean() {
     if m19r_git "$1" status --porcelain --untracked-files=normal && [ -z "$M19R_GIT" ]; then
@@ -270,9 +314,9 @@ num_tree_clean() {
 }
 
 # num_write_receipt OMEGA BODY [PREVIEW=1] -- digest the body, write the
-# preview (PASS only), and with
-# NUM_RECORD=1 the permanent append-only receipt. Sets NUM_DIGEST and
-# NUM_PERMANENT.
+# preview (PASS only), and with NUM_RECORD=1 the permanent append-only
+# receipt NUM_EVIDENCE_DIR/<digest>.json (never inside a candidate tree).
+# Sets NUM_DIGEST and NUM_PERMANENT.
 num_write_receipt() {
     local omega=$1 body=$2 preview=${3:-1} digest receipt
     digest=$(printf '%s' "$body" | "$JSON_CANON" --sha256) ||
@@ -284,7 +328,8 @@ num_write_receipt() {
     fi
     NUM_DIGEST=$digest
     if [ "${NUM_RECORD:-0}" = 1 ]; then
-        NUM_PERMANENT=$omega/$NUM_RECEIPT_DIR/$digest.json
+        num_check_evidence_dir "$omega" || return 1
+        NUM_PERMANENT=$NUM_EVIDENCE_DIR/$digest.json
         m19r_write_immutable_receipt "$NUM_PERMANENT" <<< "$receipt" || { NUM_PERMANENT=; return 1; }
     fi
 }
@@ -407,27 +452,29 @@ num_qualify() {
 }
 
 num_usage() {
-    echo "usage: $M19R_PROG --omega-candidate SHA --physics-candidate SHA [--physics-dir DIR] [--record]"
+    echo "usage: $M19R_PROG --omega-candidate SHA --physics-candidate SHA [--physics-dir DIR] [--evidence-dir DIR] [--record]"
 }
 
 num_main() {
     local physics_dir= rc=0 run_json
-    NUM_OMEGA_CAND= NUM_PHYSICS_CAND= NUM_RECORD=0 NUM_PERMANENT= NUM_DIGEST=
+    NUM_OMEGA_CAND= NUM_PHYSICS_CAND= NUM_RECORD=0 NUM_PERMANENT= NUM_DIGEST= NUM_EVIDENCE_DIR=
     NUM_EXEC_RC= NUM_LOG_SHA= NUM_BINARY_SHA= NUM_RUN_COMMIT= NUM_TS=
     while [ $# -gt 0 ]; do
         case $1 in
             -h|--help) num_usage; exit 0;;
-            --omega-candidate|--physics-candidate|--physics-dir)
+            --omega-candidate|--physics-candidate|--physics-dir|--evidence-dir)
                 [ $# -ge 2 ] || { num_usage >&2; echo "$M19R_PROG: $1 needs a value" >&2; exit 2; }
                 case $1 in
                     --omega-candidate) NUM_OMEGA_CAND=$2;;
                     --physics-candidate) NUM_PHYSICS_CAND=$2;;
                     --physics-dir) physics_dir=$2;;
+                    --evidence-dir) NUM_EVIDENCE_DIR=$2;;
                 esac
                 shift;;
             --omega-candidate=*) NUM_OMEGA_CAND=${1#*=};;
             --physics-candidate=*) NUM_PHYSICS_CAND=${1#*=};;
             --physics-dir=*) physics_dir=${1#*=};;
+            --evidence-dir=*) NUM_EVIDENCE_DIR=${1#*=};;
             --record) NUM_RECORD=1;;
             *) num_usage >&2; echo "$M19R_PROG: unrecognized argument: $1" >&2; exit 2;;
         esac
@@ -437,6 +484,9 @@ num_main() {
         num_usage >&2; echo "$M19R_PROG: --omega-candidate and --physics-candidate are required" >&2; exit 2
     fi
     M19R_PHYSICS=$(realpath -m "${physics_dir:-$(dirname "$M19R_OMEGA")/physics}")
+    if ! num_check_evidence_dir "$M19R_OMEGA"; then
+        num_usage >&2; echo "$M19R_PROG: $M19R_ERR" >&2; exit 2
+    fi
     m19r_build_canon || { echo "Gate 5 failed: cannot build tools/json_canon.c" >&2; exit 1; }
     trap 'rm -rf "$M19R_TMP"' EXIT
     NUM_RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')
@@ -464,6 +514,8 @@ num_main() {
     fi
     run_json="{\"run_id\":$(m19r_jstr "$NUM_RUN_ID"),\"status\":\"$([ "$rc" = 0 ] && echo PASS || echo FAILED)\""
     run_json+=",\"physics_dir\":$(m19r_jstr "$M19R_PHYSICS")"
+    run_json+=",\"evidence_dir\":$(m19r_jstr "$NUM_EVIDENCE_DIR")"
+    run_json+=",\"trees_clean_after\":{\"omega\":$(num_tree_clean "$M19R_OMEGA"),\"physics\":$([ -d "$M19R_PHYSICS" ] && num_tree_clean "$M19R_PHYSICS" || echo null)}"
     [ "$rc" = 0 ] || run_json+=",\"error\":$(m19r_jstr "$M19R_ERR")"
     [ -z "$NUM_DIGEST" ] || run_json+=",\"receipt_digest\":\"$NUM_DIGEST\""
     [ -z "$NUM_PERMANENT" ] || run_json+=",\"permanent_receipt\":$(m19r_jstr "$NUM_PERMANENT")"

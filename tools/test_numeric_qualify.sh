@@ -66,7 +66,7 @@ good_log() {
         mode=$(mode_of "$op")
         echo "OMEGA_NUMERIC_REGISTRY_JSON:{\"op\":\"$op\",\"encoded\":true,\"compare\":\"$mode\",\"launches\":$([ "$op" = FFMA ] && echo 8 || echo 1)}"
     done
-    for op in LDS_STS DIV SQRT EXP LOG REDUCE_SUM; do
+    for op in DIV SQRT EXP LOG; do
         echo "OMEGA_NUMERIC_REGISTRY_JSON:{\"op\":\"$op\",\"encoded\":false,\"compare\":\"BIT_EXACT\",\"launches\":1}"
     done
     for id in $NUM_EXPECTED_IDS; do echo "[PASS] $id"; done
@@ -79,6 +79,8 @@ good_log() {
                    for c in $NUM_FFMA_C; do
                        echo "OMEGA_NUMERIC_PARITY_JSON:{\"op\":\"FFMA\",\"tier\":\"gb10\",\"compare\":\"$mode\",\"c_bits\":\"$c\",\"n\":4096,\"checked\":4096,\"mismatches\":0}"
                    done
+               elif [ "$op" = REDUCE_SUM ]; then
+                   echo "OMEGA_NUMERIC_PARITY_JSON:{\"op\":\"REDUCE_SUM\",\"tier\":\"gb10\",\"compare\":\"$mode\",\"reduction_order\":\"$NUM_REDUCE_ORDER\",\"n\":4096,\"checked\":128,\"mismatches\":0}"
                else
                    echo "OMEGA_NUMERIC_PARITY_JSON:{\"op\":\"$op\",\"tier\":\"gb10\",\"compare\":\"$mode\",\"n\":4096,\"checked\":4096,\"mismatches\":0}"
                fi;;
@@ -94,7 +96,7 @@ $2
     cmp -s "$TMP/good.log" "$TMP/$1.log" && bad "fixture $1: the edit changed nothing"; }
 check "complete passing log accepted" 'num_check_log "$TMP/good.log"'
 check "  hardware digest read from the log" '[ "$NUM_HWDIGEST" = "$fake_digest" ]'
-check "  20 GB10 parity lines kept (FFMA x8 + 12 ops)" '[ "$(printf "%s" "$NUM_PARITY" | jq length)" = 20 ]'
+check "  22 GB10 parity lines kept (FFMA x8 + 14 ops)" '[ "$(printf "%s" "$NUM_PARITY" | jq length)" = 22 ]'
 check "  run id and binary digest read from the run line" '[ "$NUM_LOG_RUN_ID" = "$LOG_RUN_ID" ] && [ "$NUM_LOG_BINARY_SHA" = "$LOG_BIN_SHA" ]'
 sed 's/"source":"FORGE_PROBE"/"source":"FAKE_NON_HARDWARE_CPU_ONLY","fake":true/' "$TMP/good.log" > "$TMP/fake.log"
 check "CPU-only fake descriptor refused" '! num_check_log "$TMP/fake.log"'
@@ -160,12 +162,58 @@ sed '/OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FADD"/s/"compare":"BIT_EXACT"/"compare"
 check "registry comparison differing from the manifest refused" '! num_check_log "$TMP/reg1.log"'
 sed '/OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FFMA"/s/"launches":8/"launches":1/' "$TMP/good.log" > "$TMP/reg2.log"
 check "registry launch count differing from the manifest refused" '! num_check_log "$TMP/reg2.log"'
-sed '/OMEGA_NUMERIC_REGISTRY_JSON:{"op":"LDS_STS"/s/"encoded":false/"encoded":true/' "$TMP/good.log" > "$TMP/reg3.log"
+sed '/OMEGA_NUMERIC_REGISTRY_JSON:{"op":"DIV"/s/"encoded":false/"encoded":true/' "$TMP/good.log" > "$TMP/reg3.log"
 check "registry encoding an op the manifest does not list refused" '! num_check_log "$TMP/reg3.log"'
+# LDS_STS and REDUCE_SUM: one line each, full check, declared summation order.
+grep -v '"op":"LDS_STS","tier":"gb10"' "$TMP/good.log" > "$TMP/nolds.log"
+check "missing LDS_STS GB10 parity line refused" '! num_check_log "$TMP/nolds.log"'
+check "  naming the op" '[ "$M19R_ERR" = "no GB10 parity line for LDS_STS" ]'
+gb10 ldsbit '/"op":"LDS_STS"/s/"mismatches":0/"mismatches":1/'
+check "one LDS_STS mismatch refused" '! num_check_log "$TMP/ldsbit.log"'
+gb10 redbit '/"op":"REDUCE_SUM"/s/"mismatches":0/"mismatches":1/'
+check "one REDUCE_SUM mismatch refused" '! num_check_log "$TMP/redbit.log"'
+gb10 redall '/"op":"REDUCE_SUM"/s/"checked":128/"checked":4096/'
+check "REDUCE_SUM claiming all 4096 lanes checked refused" '! num_check_log "$TMP/redall.log"'
+check "  needs n/32 = 128 warp sums" '[ "$M19R_ERR" = "GB10 parity for REDUCE_SUM: checked 4096, need 128" ]'
+gb10 redorder '/"op":"REDUCE_SUM"/s/"reduction_order":"[A-Z0-9_]*"/"reduction_order":"SEQUENTIAL_LANE_0_TO_31"/'
+check "REDUCE_SUM with another summation order refused" '! num_check_log "$TMP/redorder.log"'
+check "  naming both orders" '[[ $M19R_ERR == *"SEQUENTIAL_LANE_0_TO_31"*"$NUM_REDUCE_ORDER"* ]]'
+gb10 rednoorder '/"op":"REDUCE_SUM"/s/"reduction_order":"[A-Z0-9_]*",//'
+check "REDUCE_SUM without a declared order refused" '! num_check_log "$TMP/rednoorder.log"'
+gb10 faddorder '/"op":"FADD"/s/"n":4096/"reduction_order":"PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1","n":4096/'
+check "a summation order on an op that does not reduce refused" '! num_check_log "$TMP/faddorder.log"'
+{ cat "$TMP/good.log"; grep '"op":"REDUCE_SUM","tier":"gb10"' "$TMP/good.log"; } > "$TMP/red2.log"
+check "a second REDUCE_SUM launch refused" '! num_check_log "$TMP/red2.log"'
 grep -v '^OMEGA_NUMERIC_RUN_JSON' "$TMP/good.log" > "$TMP/norun.log"
 check "log without the binary's run line refused" '! num_check_log "$TMP/norun.log"'
 sed 's/"binary_sha256":"[0-9a-f]*"/"binary_sha256":""/' "$TMP/good.log" > "$TMP/nobin.log"
 check "run line without a binary digest refused" '! num_check_log "$TMP/nobin.log"'
+
+echo "evidence directory (receipts never land in a candidate tree)"
+keep_evd=${NUM_EVIDENCE_DIR:-}
+M19R_PHYSICS=$phys
+NUM_EVIDENCE_DIR=
+check "default evidence directory accepted" 'num_check_evidence_dir "$HERE"'
+check "  is ~/workspace/evidence-out/OMEGA-NUMERIC-0" '[ "$NUM_EVIDENCE_DIR" = "$(realpath -m "$HOME/workspace/evidence-out/OMEGA-NUMERIC-0")" ]'
+check "  and lies outside this repository" '! num_under "$NUM_EVIDENCE_DIR" "$HERE"'
+NUM_EVIDENCE_DIR=$HERE/evidence/OMEGA-NUMERIC-0
+check "evidence directory inside this repository refused" '! num_check_evidence_dir "$HERE"'
+check "  saying receipts must live outside the trees" '[[ $M19R_ERR == *"receipts must live outside the candidate trees" ]]'
+NUM_EVIDENCE_DIR=$omega/evidence/OMEGA-NUMERIC-0
+check "evidence directory inside the omega candidate refused" '! num_check_evidence_dir "$omega"'
+NUM_EVIDENCE_DIR=$omega
+check "the omega tree itself refused" '! num_check_evidence_dir "$omega"'
+NUM_EVIDENCE_DIR=$phys/receipts
+check "evidence directory inside the physics checkout refused" '! num_check_evidence_dir "$omega"'
+NUM_EVIDENCE_DIR=$TMP/evd/../omega/receipts
+check "  also when reached through .." '! num_check_evidence_dir "$omega"'
+ln -s "$omega" "$TMP/omega-link"
+NUM_EVIDENCE_DIR=$TMP/omega-link/receipts
+check "  also when reached through a symlink" '! num_check_evidence_dir "$omega"'
+NUM_EVIDENCE_DIR=$omega-sibling
+check "a sibling whose name only starts like the tree accepted" 'num_check_evidence_dir "$omega"'
+check "script refuses an in-tree --evidence-dir with exit 2, before any run" '"$HERE/tests/run_numeric_gates.sh" --omega-candidate x --physics-candidate y --evidence-dir "$HERE/evidence/OMEGA-NUMERIC-0" >/dev/null 2>&1; [ $? = 2 ] && [ ! -e "$HERE/evidence/OMEGA-NUMERIC-0" ]'
+NUM_EVIDENCE_DIR=$keep_evd
 
 cpu_bin=$HERE/build/test_omega_numeric_cpu
 if [ -x "$cpu_bin" ]; then
@@ -214,6 +262,7 @@ echo '{"historical":true}' > "$omega/evidence/m19r_gate5_omega_numeric_evidence.
 gitc "$omega" add -A && gitc "$omega" commit -qm "historical evidence"
 NUM_OMEGA_CAND=$(git -C "$omega" rev-parse HEAD) NUM_PHYSICS_CAND=$new M19R_PHYSICS=$phys
 NUM_TS=$(date -u +%Y-%m-%dT%H:%M:%S.%6NZ) NUM_RECORD=0
+EVD=$TMP/evidence-out/OMEGA-NUMERIC-0 NUM_EVIDENCE_DIR=$TMP/evidence-out/OMEGA-NUMERIC-0
 export STUB_LOG=$TMP/stub_body.log
 # fresh_run RC -- a new run directory, build the stand-in, run it like num_qualify.
 fresh_run() {
@@ -237,8 +286,8 @@ check "passing run makes a PASS preview" 'num_receipt "$omega" "$NUM_RUN_DIR/gat
 pv=$NUM_RUN_DIR/receipt-preview.json
 check "  status PASS, exit status 0, digests bound" '[ "$(jq -r "(.status == \"PASS\") and (.gate_binary_exit_status == 0) and (.candidate_binary_sha256 == \"$NUM_BINARY_SHA\") and (.gate_log_sha256 == \"$NUM_LOG_SHA\") and (.run_id == \"$NUM_RUN_ID\")" "$pv")" = true ]'
 check "  clean flags from git status, commits from git" '[ "$(jq -r "(.candidate_trees_clean == {\"omega\":true,\"physics\":true}) and (.run_git_commit == \"$NUM_OMEGA_CAND\") and (.candidate_git_commit == .run_git_commit)" "$pv")" = true ]'
-check "  observed counts 20/20/0, historical untouched, predecessor recorded" '[ "$(jq -c "[.observed_test_count,.observed_pass_count,.observed_fail_count]" "$pv")" = "[20,20,0]" ] && [ "$(cat "$omega/evidence/m19r_gate5_omega_numeric_evidence.json")" = "{\"historical\":true}" ] && [ "$(jq -r ".predecessor_historical_gate5_sha256 | length" "$pv")" = 64 ]'
-check "  no permanent receipt without --record" '[ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
+check "  observed counts 22/22/0, historical untouched, predecessor recorded" '[ "$(jq -c "[.observed_test_count,.observed_pass_count,.observed_fail_count]" "$pv")" = "[22,22,0]" ] && [ "$(cat "$omega/evidence/m19r_gate5_omega_numeric_evidence.json")" = "{\"historical\":true}" ] && [ "$(jq -r ".predecessor_historical_gate5_sha256 | length" "$pv")" = 64 ]'
+check "  no permanent receipt without --record" '[ ! -e "$EVD" ] && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
 # Finding 4: nothing is taken on trust at receipt time.
 cp "$TMP/good.log" "$TMP/fabricated.log"
 check "fabricated log outside the run refused" '! num_receipt "$omega" "$TMP/fabricated.log"'
@@ -281,22 +330,34 @@ check "num_tree_clean reads real git status" '[ "$(num_tree_clean "$omega")" = t
 check "recheck passes again once restored" 'num_receipt "$omega" "$NUM_RUN_DIR/gate5.log"'
 NUM_RECORD=1
 check "PASS receipt into a repository other than this script's refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log"'
-check "  and nothing written" '[ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
+check "  and nothing written" '[ ! -e "$EVD" ] && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
+keep_m19r=$M19R_OMEGA M19R_OMEGA=$omega
+check "PASS receipt recorded (script repository = this tree)" 'num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ -f "$EVD/$NUM_DIGEST.json" ] && [ "$NUM_PERMANENT" = "$(realpath -m "$EVD")/$NUM_DIGEST.json" ]'
+prec=$EVD/$NUM_DIGEST.json
+check "  outside the tree, which stays clean" '[ "$(num_tree_clean "$omega")" = true ] && [ "$(num_tree_clean "$phys")" = true ] && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
+check "  binds run id, both commits, clean flags and binary digest" '[ "$(jq -r "(.status == \"PASS\") and (.run_id == \"$NUM_RUN_ID\") and (.candidate_git_commit == \"$NUM_OMEGA_CAND\") and (.physics_candidate_git_commit == \"$NUM_PHYSICS_CAND\") and (.candidate_trees_clean == {\"omega\":true,\"physics\":true}) and (.candidate_binary_sha256 == \"$NUM_BINARY_SHA\")" "$prec")" = true ]'
+check "  named by its digest, mode 0444" '[ "$(jq "del(.receipt_digest)" "$prec" | "$JSON_CANON" --sha256)" = "$NUM_DIGEST" ] && [ "$(stat -c %a "$prec")" = 444 ]'
+check "  a second record of the same PASS refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ "$(ls "$EVD" | wc -l)" = 1 ]'
+NUM_EVIDENCE_DIR=$omega/evidence/OMEGA-NUMERIC-0
+check "PASS receipt into an in-tree evidence directory refused" '! num_receipt "$omega" "$NUM_RUN_DIR/gate5.log" && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
+NUM_EVIDENCE_DIR=$EVD M19R_OMEGA=$keep_m19r
+rm -f "$prec" 2>/dev/null || { chmod u+w "$EVD"; rm -f "$prec"; }
 
 echo "append-only receipts"
 NUM_EXEC_RC=3
-# Keep the temporary tree clean across receipts so a repeat is byte-identical.
-echo "evidence/OMEGA-NUMERIC-0/" >> "$omega/.git/info/exclude"
+# No git exclude needed: receipts live outside the tree, so it stays clean
+# and a repeat receipt is byte-identical.
 check "failed run writes a FAIL receipt" 'num_fail_receipt "$omega" "gate binary exited with status 3"'
-frec=$omega/evidence/OMEGA-NUMERIC-0/$NUM_DIGEST.json
+frec=$EVD/$NUM_DIGEST.json
 check "  named by its digest, mode 0444" '[ -f "$frec" ] && [ "$(jq "del(.receipt_digest)" "$frec" | "$JSON_CANON" --sha256)" = "$NUM_DIGEST" ] && [ "$(stat -c %a "$frec")" = 444 ]'
+check "  omega tree still clean after recording (reported true in the receipt)" '[ "$(num_tree_clean "$omega")" = true ] && [ "$(jq -r .candidate_trees_clean.omega "$frec")" = true ] && [ "$(jq -r ".run_id == \"$NUM_RUN_ID\"" "$frec")" = true ]'
 check "  status FAIL with the reason and exit status" '[ "$(jq -r "(.status == \"FAIL\") and (.error == \"gate binary exited with status 3\") and (.gate_binary_exit_status == 3)" "$frec")" = true ]'
 check "  no preview left claiming a pass" '[ "$(jq -r .status "$NUM_RUN_DIR/receipt-preview.json")" = PASS ] || [ ! -e "$NUM_RUN_DIR/receipt-preview.json" ]'
 orig=$(sha256sum < "$frec")
 check "same FAIL receipt again refused (never overwritten)" '! num_fail_receipt "$omega" "gate binary exited with status 3"'
 check "  because the file exists" '[[ $M19R_ERR == *"$NUM_DIGEST"* ]]'
 check "  original bytes unchanged" '[ "$(sha256sum < "$frec")" = "$orig" ]'
-check "a different failure appends a second receipt" 'num_fail_receipt "$omega" "another reason" && [ "$(ls "$omega/evidence/OMEGA-NUMERIC-0" | wc -l)" = 2 ]'
+check "a different failure appends a second receipt" 'num_fail_receipt "$omega" "another reason" && [ "$(ls "$EVD" | wc -l)" = 2 ] && [ "$(num_tree_clean "$omega")" = true ]'
 urec=$TMP/immut/unit.json
 check "immutable writer: first write" 'printf "{\"unit_test\":true,\"status\":\"PASS\"}" | m19r_write_immutable_receipt "$urec"'
 check "immutable writer: overwrite refused, bytes kept" '! printf "{\"unit_test\":true,\"status\":\"FAIL\"}" | m19r_write_immutable_receipt "$urec" && [ "$(jq -r .status "$urec")" = PASS ]'
