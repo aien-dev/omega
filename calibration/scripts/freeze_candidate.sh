@@ -27,13 +27,14 @@
 # path is passed. It never reads sealed data. No Python: POSIX sh, od, sha256sum.
 set -eu
 dir=$(cd "$(dirname "$0")/../.." && pwd)
+. "$dir/calibration/scripts/tc_exp.sh"
 freeze=0
 if [ "${1:-}" = "--freeze" ]; then freeze=1; shift; fi
 cdir="${1:-$dir/build/turing-exp001-a/candidates}"
-out="$dir/calibration/experiments/EXP-001/candidate_manifest.json"
-store="$dir/calibration/experiments/EXP-001/candidates"
-toml="$dir/calibration/profiles/Turing-profile-v1.0.toml"
-side="$dir/calibration/profiles/Turing-profile-v1.0.sha256"
+out="$dir/$EXP_DIR/candidate_manifest.json"
+store="$dir/$EXP_CAND_STORE"
+toml="$dir/$EXP_PROFILE"
+side="$dir/$EXP_SIDECAR"
 die() { echo "freeze_candidate: REFUSED: $*" >&2; exit 1; }
 
 case "$cdir" in *sealed*|*turing-cal/sealed*) die "candidate directory looks like sealed data: $cdir" ;; esac
@@ -48,7 +49,7 @@ extra=$(ls "$cdir" | grep -v -x -e B0_uniform.tym -e B1_order0.tym -e B2_order1.
 if [ "$freeze" = 1 ]; then
     [ -z "$(git -C "$dir" status --porcelain)" ] || die "worktree not clean"
     sh "$dir/calibration/scripts/check_profile.sh" --freeze || die "check_profile --freeze failed"
-    grep -q "^  \"status\": \"frozen\"," "$dir/calibration/experiments/EXP-001/preregistration.json" || die "preregistration.json is not status frozen (set it in the same commit, before this step)"
+    grep -q "^  \"status\": \"frozen\"," "$dir/$EXP_DIR/preregistration.json" || die "preregistration.json is not status frozen (set it in the same commit, before this step)"
     sealed="${TC_SEALED_ROOT:-$HOME/aien-data/turing-cal/sealed}"
     [ -z "$(ls -A "$sealed" 2>/dev/null)" ] || die "sealed data already exist under $sealed (freeze must come first)"
 fi
@@ -57,16 +58,16 @@ fi
 u() { od -An -t u1 -j "$2" -N "$3" "$1" | tr -s ' \n' '  ' | awk '{v=0; for(i=1;i<=NF;i++) v=v*256+$i; printf "%.0f", v}'; }
 # awk is used only as a calculator above; no data is interpreted by anything but the header layout.
 
-mkdir -p "$store"
+mkdir -p "$store" "$dir/$EXP_DIR"
 psha=$(sha256sum "$toml" | cut -c1-64)
 sidec=""
 [ -f "$side" ] && sidec=$(cut -c1-64 "$side")
 {
     printf '{\n  "schema": "turing.cal.candidate_manifest.v1",\n'
-    printf '  "experiment": "EXP-001",\n'
+    printf '  "experiment": "%s",\n' "$EXP_ID"
     printf '  "status": "%s",\n' "$([ "$freeze" = 1 ] && echo frozen || echo draft)"
     [ "$freeze" = 1 ] && printf '  "frozen_at": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    printf '  "profile_path": "calibration/profiles/Turing-profile-v1.0.toml",\n'
+    printf '  "profile_path": "%s",\n' "$EXP_PROFILE"
     printf '  "profile_sha256": "%s",\n' "$psha"
     printf '  "profile_sidecar_sha256": "%s",\n' "$sidec"
     printf '  "profile_sidecar_matches": %s,\n' "$([ "$psha" = "$sidec" ] && echo true || echo false)"
@@ -82,8 +83,8 @@ sidec=""
         lm=$((104 + 16 * (K - 1) + rows * (kb + 16 * (K - 1))))
         [ $(((lm + 7) / 8)) = "$bytes" ] || die "$n: header implies $lm bits but file has $bytes bytes"
         if [ "$bytes" -lt 1048576 ]; then
-            cp "$f" "$store/$n.tym"
-            loc="git:calibration/experiments/EXP-001/candidates/$n.tym"
+            if [ -f "$store/$n.tym" ]; then cmp -s "$f" "$store/$n.tym" || die "$n differs from the committed $store/$n.tym (no refit)"; else cp "$f" "$store/$n.tym"; fi
+            loc="git:$EXP_CAND_STORE/$n.tym"
         else
             big="${TXA_BIG_STORE:-$HOME/aien-data/turing-cal/candidates}"
             mkdir -p "$big"
@@ -101,9 +102,9 @@ sidec=""
     for p in src/turing/ty_model.c src/turing/ty_model.h src/turing/ty_ctr1.c src/turing/ty_ctr1.h \
         src/turing/ty_math.c src/turing/ty_math.h calibration/docs/MODEL_DESCRIPTION_ENCODING.md \
         calibration/docs/CODER_SPEC.md calibration/docs/UNCERTAINTY_PROTOCOL.md calibration/docs/FAILURE_REPORTING.md \
-        calibration/docs/BLINDING_PROTOCOL.md calibration/preregistration/EXP-001.md \
-        calibration/experiments/EXP-001/preregistration.json calibration/profiles/Turing-profile-v1.0.toml \
-        calibration/scripts/power_simulation.c calibration/experiments/EXP-001/power_simulation_output.txt \
+        calibration/docs/BLINDING_PROTOCOL.md $EXP_PREREG \
+        $EXP_DIR/preregistration.json $EXP_PROFILE \
+        calibration/scripts/power_simulation.c $EXP_POWER \
         calibration/docs/EVALUATOR.md calibration/docs/DATA_FORMAT.md \
         tools/turing_cal_eval.c; do
         if [ -f "$dir/$p" ]; then h=$(sha256sum "$dir/$p" | cut -c1-64); else h="MISSING"; fi

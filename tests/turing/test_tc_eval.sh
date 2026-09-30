@@ -51,6 +51,9 @@ mkrepo() { # mkrepo DIR
     mkdir -p "$d/tools"
     cp "$REPO/tools/turing_cal_eval.c" "$d/tools/"
     cp -r "$REPO/tools/turing_verify_indep" "$d/tools/" && rm -rf "$d/tools/turing_verify_indep/build"
+    # The fixture manifest pins the shared-background files (docs, scripts) by hash; those files change
+    # legitimately after C_f, so re-pin the fixture copy only (the committed EXP-001 manifest is untouched).
+    refresh "$d"
 }
 # refresh DIR: after editing the profile, rewrite the sidecar and every hash the manifest pins.
 refresh() {
@@ -84,6 +87,10 @@ run_dry() { "$BIN" run --dry-run --repo "$R" --manifest "$MAN" --cand-dir "$CD" 
 expect_refuse "dry run out dir under EXP-001" DRY_RUN_TARGET -- run_dry --out "$R/calibration/experiments/EXP-001/x" --work "$W/w0"
 [ ! -e "$R/calibration/experiments/EXP-001/x/void_receipt_1.json" ] && ok "no void receipt written under EXP-001" || bad "void receipt under EXP-001"
 expect_refuse "dry run work dir under EXP-001" DRY_RUN_TARGET -- run_dry --out "$W/o0" --work "$R/calibration/experiments/EXP-001/w"
+# Experiment selection (env EXP_ID, same as the scripts): an unknown id is refused; EXP-001R forbids its own dir in a dry run.
+rc=0; EXP_ID=EXP-002 "$BIN" run >"$W/last.out" 2>"$W/last.err" || rc=$?
+{ [ "$rc" = 2 ] && grep -q "unknown EXP_ID" "$W/last.err"; } && ok "unknown EXP_ID refused" || bad "unknown EXP_ID: rc=$rc"
+EXP_ID=EXP-001R expect_refuse "EXP-001R dry run out dir under EXP-001R" DRY_RUN_TARGET -- run_dry --out "$R/calibration/experiments/EXP-001R/x" --work "$W/w0"
 expect_refuse "--only outside dry run" ARG -- "$BIN" run --repo "$R" --manifest "$MAN" --cand-dir "$CD" --dataset "$W/ds.json" --only B2_order1 --out "$W/o1" --work "$W/w1"
 
 cp "$CD/B2_order1.tym" "$W/b2.bak"
@@ -139,6 +146,12 @@ mkrepo "$F"
 FM="$F/calibration/experiments/EXP-001/candidate_manifest.json"
 FP="$F/calibration/profiles/Turing-profile-v1.0.toml"
 FC="$F/calibration/experiments/EXP-001/candidates"
+# The committed EXP-001 files are already frozen. The fixture replays the freeze from the draft state, so put the
+# fixture copy (never the committed files) back to draft: manifest and preregistration draft, runtime_digest unfilled,
+# and no published receipts.
+rm -f "$F/calibration/experiments/EXP-001/freeze_receipt.json" "$F/calibration/experiments/EXP-001/final_receipt.json"
+sed -i -E '/^  "frozen_at": /d; s/"status": "frozen"/"status": "draft"/' "$FM" "$F/calibration/experiments/EXP-001/preregistration.json"
+sed -i -E 's/^(runtime_digest = )"[0-9a-f]{64}"/\1"FILL_AT_FREEZE"/' "$FP"
 sed -i 's/FILL_AT_FREEZE/TEST_ONLY_NOT_A_FREEZE/g' "$FP"
 for mem in M_mem M_mem_seed1; do
     cp "$FC/B1_order0.tym" "$FC/$mem.tym"

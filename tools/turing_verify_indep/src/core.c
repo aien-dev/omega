@@ -265,3 +265,11 @@ uint64_t is_draw(uint64_t *s, uint64_t C) {
     do r = is_splitmix64(s); while (r > lim);
     return r % C;
 }
+
+#include <stdlib.h>
+const char *is_profile_version(void) {
+    const char *e = getenv("EXP_ID");
+    if (!e || !*e || !strcmp(e, "EXP-001")) return "1.0";
+    if (!strcmp(e, "EXP-001R")) return "1.1";
+    return NULL;
+}

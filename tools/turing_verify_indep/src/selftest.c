@@ -49,9 +49,9 @@ int main(int argc, char **argv) {
       CHECK(is_model_load("/tmp/is_t.tym", &m, msg, sizeof msg) == -4, "refuse keybits mismatch (mask 2)");
     }
     if (docs) {
-        char p[1024]; snprintf(p, sizeof p, "%s/profiles/Turing-profile-v1.0.toml", docs);
+        char p[1024]; const char *pv = is_profile_version(); if (!pv) pv = "1.0"; snprintf(p, sizeof p, "%s/profiles/Turing-profile-v%s.toml", docs, pv);
         is_sha256_file(p, d, NULL); is_sha256_hex(d, hx);
-        { char sc[65] = ""; FILE *sf; snprintf(p, sizeof p, "%s/profiles/Turing-profile-v1.0.sha256", docs);
+        { char sc[65] = ""; FILE *sf; snprintf(p, sizeof p, "%s/profiles/Turing-profile-v%s.sha256", docs, pv);
           if ((sf = fopen(p, "r")) != NULL) { if (fread(sc, 1, 64, sf) != 64) sc[0] = 0; fclose(sf); }
           CHECK(!strcmp(hx, sc), "profile sha256 = sidecar"); }
     }

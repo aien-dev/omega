@@ -266,7 +266,7 @@ int main(int argc, char **argv) {
     is_ub_table_init();
     { /* alternative table: exact value correctly rounded, via the two q the literal method rounds differently (selftest) */
       uint32_t q; for (q = 0; q <= 65536; q++) ub_alt[q] = is_ub_q16[q]; ub_alt[43481] -= 1; ub_alt[46819] -= 1; }
-    snprintf(p, sizeof p, "%s/profiles/Turing-profile-v1.0.toml", docs);
+    { const char *pv = is_profile_version(); if (!pv) die("unknown EXP_ID (EXP-001 or EXP-001R)"); snprintf(p, sizeof p, "%s/profiles/Turing-profile-v%s.toml", docs, pv); }
     if (is_sha256_file(p, profile_dig, NULL)) die("cannot hash profile");
     is_sha256_hex(profile_dig, profile_hex);
     { uint8_t *b; uint64_t L; snprintf(p, sizeof p, "%s/bundle/profile.digest", root);

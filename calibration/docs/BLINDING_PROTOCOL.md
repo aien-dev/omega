@@ -1,4 +1,4 @@
-# Blinding protocol: Turing-profile-v1.0, EXP-001
+# Blinding protocol: Turing-profile-v1.0, EXP-001 (and Turing-profile-v1.1, EXP-001R, see the end of section 4)
 
 This document says who may see which data, when the sealed test data comes into
 existence, how the machine enforces the separation, and how anyone checks
@@ -240,7 +240,7 @@ Anyone can recompute a seed with:
 first 16 hex characters, subtract 8 from the first one if it is 8 or more, and read
 the result as a hexadecimal number. `generate_sealed_data.sh --derive-only --commit C
 --profile-digest D --n N` prints the whole table. A seed that equals a burned
-development seed (0-10 or 20260927), or that repeats, stops the script. The chance
+development seed (0-10 or 20260927), by EXP-001R also one of the six EXP-001 sealed seeds, or that repeats, stops the script. The chance
 is about 2^-59.
 
 **Generator (pinned).**
@@ -337,6 +337,35 @@ Self-checks, run 2026-09-29 on a throwaway freeze commit with N = 1: PASS agains
 development seeds 1-7. The same sealed set also got a planted overlap: one sealed
 trace was added to the development list. That run FAILED on crumb_digest (188),
 sealed_digest (188), trace_stream (186) and crumb_block (186), as it should. A second run used the full default development set (54 trace files, 86 million records) and the jailed Auditor command of section 2 step 7 (archive form): PASS in about 4 minutes.
+
+### EXP-001 outcome and the EXP-001R amendment
+
+EXP-001 used the table above unchanged. Its audit FAILED on `crumb_digest` (1 shared; every other gate passed) and
+EXP-001 ended as a terminal FAIL of S2, published in `calibration/experiments/EXP-001/`. `crumb_digest` hashes only the
+visible part of a crumb. The shared crumb was population Ambiguous (families that by design show too few observations
+to determine the hidden answer) and its `sealed_digest`, the hidden held-out set, differed. Chance matches are
+therefore expected for such crumbs.
+
+EXP-001R (`EXP_ID=EXP-001R`, profile `Turing-profile-v1.1`, `calibration/preregistration/EXP-001R.md`) amends two
+things, written before any EXP-001R data exist. With `EXP_ID` unset the scripts behave as for EXP-001. The C tools read the same variable: `turing-cal-eval` and `indep-scorer` (both `EXP_ID=EXP-001` by default, profile v1.0; `EXP_ID=EXP-001R`, profile v1.1) put it in every receipt (`experiment`, `run_id`), keep the bridge key name `EXP_001_COMPRESSION_BRIDGE` for both, and refuse an unknown id. The void counter is per experiment because it lives in the per-freeze-commit run directory. `make turing-exp001-eval-dry EXP_ID=EXP-001R` is the development dry run for the successor.
+
+* **Amended G6.** A sealed `crumb_digest` shared with any development or burned `crumb_digest` FAILS, EXCEPT when the
+  sealed record's population is Ambiguous AND its `sealed_digest` differs from the `sealed_digest` of every
+  development or burned record carrying that `crumb_digest`. Exempt matches are counted and listed (crumb_digest,
+  population, both sealed_digests) in `overlap_audit.json` under `g6_exempt_matches`; the G6 detail reads "N shared, M
+  exempt (Ambiguous, different hidden set)". G7 (`sealed_digest`), G8 (`trace_stream`) and G9 (`crumb_block`) are
+  unchanged for all populations. There is no numeric tolerance.
+* **Burned data added.** The six EXP-001 sealed seeds are burned (`calibration/scripts/burned_seeds_exp001.txt`):
+  `generate_sealed_data.sh` refuses them (`--is-burned SEED` prints the verdict) and gate G3 fails on them. The EXP-001
+  sealed traces and ledgers (`~/aien-data/turing-cal/sealed/d3cba292b9282116d1e374db22344bca4d47717e`) join the
+  development and burned comparison list (`--burned-dir DIR`, repeatable; EXP-001R adds this root by default,
+  `TC_EXP001_SEALED` overrides the location) in addition to every `trace.ctr` under `~/aien-data/crumbline`, which is
+  kept whole.
+
+`make test-turing-cal-blinding` checks both on synthetic planted ledgers: an Ambiguous visible-only match with a
+different `sealed_digest` passes with 1 exempt (against a development or a burned trace); the same match with an equal
+`sealed_digest`, or with a non-Ambiguous population, fails; the EXP-001 strict rule still fails the Ambiguous match;
+each burned seed is refused.
 
 ## 5. What the machine enforces, and its limit
 

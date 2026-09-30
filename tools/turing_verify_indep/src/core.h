@@ -64,4 +64,7 @@ uint64_t is_draw(uint64_t *s, uint64_t C);
 /* ---------- helpers ---------- */
 int is_read_file(const char *path, uint8_t **buf, uint64_t *len);
 void is_domain_digest_init(void *ctx, const char *tag);
+/* Experiment selection, same as the evaluator and the shell scripts: env EXP_ID = EXP-001 (default, profile v1.0)
+ * or EXP-001R (profile v1.1). Returns the profile version string, or NULL for an unknown id. */
+const char *is_profile_version(void);
 #endif
