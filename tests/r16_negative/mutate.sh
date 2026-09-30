@@ -6,8 +6,11 @@
 #
 # For each mutant, one guard is removed from a scratch copy of one file (the
 # tree is never edited), the G4 test is rebuilt with that copy in place of the
-# original, and run. A mutant is KILLED when the test does not print
-# R16_G4_LEGACY_REFUSED=PASS or exits nonzero. Every mutant must be killed.
+# original, and run. A mutant is KILLED when the test does not print its core
+# line ("R16 G4 core: six acts refused, state unchanged"). The core line, not
+# the gate line, is judged: the gate also needs the named-subject promotion
+# probe, which is open until promotion is bound to the caller (spec C5), and
+# would otherwise kill every mutant trivially. Every mutant must be killed.
 # The control build (no mutation) must pass, and every edit must apply exactly
 # where named, or the run fails.
 #
@@ -52,8 +55,7 @@ build_run() {  # name out-dir sources lib
         return 2
     fi
     timeout 120 "$d/g4" > "$d/run.log" 2>&1
-    rc=$?
-    if [ $rc -eq 0 ] && grep -q 'R16 gate: R16_G4_LEGACY_REFUSED=PASS' "$d/run.log"; then
+    if grep -q "^R16 G4 core: six acts refused" "$d/run.log"; then
         return 0
     fi
     return 1

@@ -44,8 +44,10 @@ Makefile's own default is read.
 A="AIENOS_LOCK_REPO=$HOME/workspace/aienos-argus-cap AIENOS_R7_DIR=build/aienos-authority/d39dd5b"
 make $A r16-inventory test-r16-inventory     # G1/G2 (seconds)
 make $A test-r16-authpath                    # G3 host stand-in (about 30 s)
-make $A test-r16-negative                    # G4 (under 1 s)
-make $A test-r16-negative-mutants            # G4 guards load-bearing (about 1 min)
+make $A test-r16-negative                    # G4 (under 1 s); FAIL at 6d1ff1d: the six acts are refused
+                                             # ("R16 G4 core: six acts refused"), but promotion naming the
+                                             # promoter as subject is accepted ("R16 G4 OPEN"); spec C5
+make $A test-r16-negative-mutants            # G4 guards load-bearing (about 1 min; judged on the core line)
 make $A test-r16-surface                     # G5 (seconds)
 ```
 

@@ -341,3 +341,33 @@ the new G3 to G5 tests on the R16 branch). No gate is loosened.
    argument omegatool prints usage and exits 1. The production entry point
    is `docs/r16-production-entry-point.md`; `make test-r16-surface` checks
    all of this.
+
+### C5 (2026-09-30): G4 act (4) is open
+
+Recorded after a review of the G3 to G5 branch found it; host data existed
+(the G4 host test). This records a discrepancy, it does not loosen G4.
+
+1. `rx_gen_promote` takes the subject from the request, a value the caller
+   supplies, and the authority callback checks the grant against that subject.
+   Nothing binds the subject to the caller. A legacy context that can read the
+   promoter's grant reference (`promotion_authority`, an id and a generation)
+   and names `RX_LIVING_PROMOTE_SUBJ` as the subject is accepted by the
+   unchanged native authority. Observed on host at 6d1ff1d plus this branch:
+   rc 0, R9 active generation 1 -> 3 in memory and on disk.
+2. `tests/runtime/rx_r16_negative.c` now makes that attempt last (it moves the
+   generation) and expects refusal. Until promotion is bound to something the
+   legacy path cannot supply (an authenticated caller handle, or the sealed
+   reaction context of the promoter), `make test-r16-negative` prints
+   `R16 G4 OPEN: ...` and `R16_G4_LEGACY_REFUSED=FAIL`. The fix is a runtime
+   change (`rx_generation.c`, `rx_living.c`, possibly the native capability
+   library) and a design decision; it is not made on this branch.
+3. The six-act core still holds and prints
+   `R16 G4 core: six acts refused, state unchanged`. The mutant suite judges
+   that core line, so it still answers whether each of the 15 guards is load
+   bearing. No mutant exists for the missing binding, since there is no guard
+   yet to remove; when one is added, a mutant removing it must be added too.
+4. The G4 state comparison also covers the recovered lineage on disk, not
+   only the recovered active generation.
+5. C4 item 5's sentence on `rx_gen_promote` trusting its callback is
+   superseded here: the problem is the caller-supplied subject, which even
+   the real native callback accepts.

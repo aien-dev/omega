@@ -34,6 +34,12 @@
  * re-check), and at the boundary a real grant that is not the writer of
  * record's (identity) and the writer's own grant after revocation (validation).
  *
+ * Open (spec C5): last, a promotion naming the promoter itself as subject,
+ * with the promoter's grant reference. The subject is a caller-supplied value
+ * and the native authority accepts it, so this attempt is accepted and the gate
+ * prints FAIL until promotion is bound to the caller. The six-act core is
+ * printed on its own line ("R16 G4 core:"), which the mutant suite judges.
+ *
  * Also checked (reported, outside the six): the SEQ reference loop refuses to
  * drive a production world.
  *
@@ -85,7 +91,7 @@ typedef struct {
     RxObjRef ref[N_WATCH];
     RxObject obj[N_WATCH];
     uint32_t n;
-    uint64_t gen_active, gen_lineage, recovered_active;
+    uint64_t gen_active, gen_lineage, recovered_active, recovered_lineage;
     uint64_t auth_changes;
     uint8_t digest[32];
 } Snap;
@@ -104,6 +110,7 @@ static int take(R15Rig *r, Snap *s) {
     RxRecoveryRecord rec;
     if (rx_gen_recover(r->generation_dir, &rec) != RX_GEN_OK) return -1;
     s->recovered_active = rec.active_id;
+    s->recovered_lineage = rec.lineage;
     s->auth_changes = atomic_load(&g_auth_changes);
     return 0;
 }
@@ -120,10 +127,12 @@ static int same_x(const Snap *a, const Snap *b, const char *act, unsigned long l
         }
     }
     if (a->gen_active != b->gen_active || a->gen_lineage != b->gen_lineage ||
-        a->recovered_active != b->recovered_active) {
-        printf("R16 G4 FAIL: %s moved the R9 generation (%llu/%llu -> %llu/%llu, disk %llu -> %llu)\n",
+        a->recovered_active != b->recovered_active ||
+        a->recovered_lineage != b->recovered_lineage) {
+        printf("R16 G4 FAIL: %s moved the R9 generation (%llu/%llu -> %llu/%llu, disk %llu/%llu -> %llu/%llu)\n",
                act, U(a->gen_active), U(a->gen_lineage), U(b->gen_active), U(b->gen_lineage),
-               U(a->recovered_active), U(b->recovered_active));
+               U(a->recovered_active), U(a->recovered_lineage), U(b->recovered_active),
+               U(b->recovered_lineage));
         return 0;
     }
     if (b->auth_changes - a->auth_changes != expected) {
@@ -548,6 +557,38 @@ int main(void) {
               "(5) authoritative state moved");
     }
 
+    /* (4), last: promotion naming the promoter itself as the subject, with the
+     * promoter's grant reference (which the legacy context can observe). The
+     * request's subject is a value the caller supplies; nothing binds it to the
+     * caller. Run last because an accepted promotion moves the generation in
+     * memory and on disk. A fresh draft is proposed so the parent is current. */
+    int probe_refused = 0;
+    {
+        uint64_t cand = 0, a0 = 0, l0 = 0, a1 = 0, l1 = 0;
+        RxRecoveryRecord d0, d1;
+        memset(&d0, 0, sizeof d0); memset(&d1, 0, sizeof d1);
+        int prc = rx_gen_propose(L.gen, LEGACY_SUBJ, &gd, &cand);
+        CHECK(prc == RX_GEN_OK, "(4) the probe draft could not be proposed (%d)", prc);
+        rx_gen_active(L.gen, &a0, &l0);
+        rx_gen_recover(r->generation_dir, &d0);
+        RxPromotionRequest req = {cand, RX_LIVING_PROMOTE_SUBJ, L.borrowed_promote.cap_id,
+                                  L.borrowed_promote.generation, RX_GEN_RES_PROMOTION,
+                                  RX_GEN_RIGHT_PROMOTE};
+        int rc = rx_gen_promote(L.gen, &req, native_auth, (void *)L.view, NULL, NULL, NULL, NULL);
+        rx_gen_active(L.gen, &a1, &l1);
+        rx_gen_recover(r->generation_dir, &d1);
+        probe_refused = prc == RX_GEN_OK && rc == RX_GEN_ERR_AUTHORITY && a1 == a0 &&
+                        d1.active_id == d0.active_id && d1.lineage == d0.lineage;
+        printf("R16 G4 (4) promotion naming the promoter as subject, with the promoter's grant: "
+               "%s (rc %d; generation %llu -> %llu in memory, %llu -> %llu on disk)\n",
+               probe_refused ? "REFUSED" : "ACCEPTED", rc, U(a0), U(a1), U(d0.active_id),
+               U(d1.active_id));
+        if (!probe_refused)
+            printf("R16 G4 OPEN: promotion accepts the subject the caller names; any in-process "
+                   "holder of the promoter's grant reference can promote. Needs promotion bound "
+                   "to the caller (runtime change, not in this branch).\n");
+    }
+
     int acts_ok = 0;
     const char *names[7] = {"", "belief", "selection", "mint", "promote", "boundary", "generation"};
     for (int a = 1; a <= 6; a++) {
@@ -563,8 +604,10 @@ int main(void) {
            g_fail ? "see failures" : "none", prod ? "yes" : "no");
     r15_stop(r);
     free(r);
-    int pass = acts_ok == 6 && g_fail == 0;
+    int core = acts_ok == 6 && g_fail == 0;
+    int pass = core && probe_refused;
     printf("R16 G4 acts refused: %d/6\n", acts_ok);
+    printf("R16 G4 core: %s\n", core ? "six acts refused, state unchanged (named-subject promotion probe reported separately)" : "FAIL");
     printf("R16 gate: R16_G4_LEGACY_REFUSED=%s\n", pass ? "PASS" : "FAIL");
     return pass ? 0 : 1;
 }
