@@ -205,6 +205,10 @@ RX_R7_TEST = $(OUT_DIR)/rx_r7_native_test
 $(AIENOS_CAP_LIB):
 	@if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ] && [ ! -d "$(AIENOS_R7_DIR)/native/capability" ]; then \
 		test -n "$(AIENOS_LOCK)" || { echo "aienos.lock is empty"; exit 1; }; \
+		git -C "$(AIENOS_LOCK_REPO)" cat-file -e "$(AIENOS_LOCK)^{commit}" 2>/dev/null || { \
+			echo "error: AIENOS_LOCK_REPO=$(AIENOS_LOCK_REPO) is not an aienos clone with commit $(AIENOS_LOCK) (aienos.lock)."; \
+			echo "  pass AIENOS_LOCK_REPO=<path to an aienos clone that has it>, e.g. make AIENOS_LOCK_REPO=$$HOME/workspace/aienos-argus-cap <target>,"; \
+			echo "  or AIENOS_R7_DIR=<an aienos tree at that commit>."; exit 1; }; \
 		mkdir -p "$(AIENOS_R7_DIR)" && \
 		git -C $(AIENOS_LOCK_REPO) archive $(AIENOS_LOCK) native/capability | tar -x -C "$(AIENOS_R7_DIR)"; \
 	fi

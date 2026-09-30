@@ -3745,10 +3745,50 @@ int omega_run_m15_gates(void) {
  * replaced. It survives only as a legacy oracle under an explicit mode name,
  * --legacy-oracle-living-matvec; the old --demonstrate-living-matvec mode is
  * gone. Nothing in the production path runs it. */
-static int legacy_oracle_demonstrate_living_matvec(int argc, char **argv) {
-    (void)argc;
-    if (strcmp(argv[1], "--legacy-oracle-living-matvec") == 0) {
-        legacy_oracle_run_demonstration_living_matvec();
+static int legacy_oracle_demonstrate_living_matvec(const char *arg, int dry) {
+    if (strcmp(arg, "--legacy-oracle-living-matvec") == 0) {
+        if (!dry) legacy_oracle_run_demonstration_living_matvec();
+        return 0;
+    }
+    return -1;
+}
+
+/* R16-G5: class D milestone demonstrations, reference only (not the production
+ * path). The dispatcher and the usage text both read this one table, and
+ * tests/r16_surface/run.sh checks that usage lists every name here and that
+ * each retired old name (this prefix without "reference-") is rejected. */
+static int ref_codegen(void) { return omega_blackwell_test_codegen_variation(); }
+typedef struct { const char *name; void (*run)(void); int (*run_rc)(void); } ReferenceMode;
+static const ReferenceMode reference_modes[] = {
+    {"arithmetic", run_demonstration_arithmetic, NULL},
+    {"physics", run_demonstration_physics, NULL},
+    {"realization", run_demonstration_realization, NULL},
+    {"self-host", run_demonstration_self_host, NULL},
+    {"verify", run_demonstration_verify, NULL},
+    {"program", run_demonstration_program, NULL},
+    {"synthesis", run_demonstration_synthesis, NULL},
+    {"library", run_demonstration_library, NULL},
+    {"discovery", run_demonstration_discovery, NULL},
+    {"machine", run_demonstration_machine, NULL},
+    {"realization-synthesis", run_demonstration_realization_synthesis, NULL},
+    {"accelerator", run_demonstration_accelerator, NULL},
+    {"accelerator-world", run_demonstration_accelerator_world, NULL},
+    {"blackwell-matmul", run_demonstration_blackwell_matmul, NULL},
+    {"blackwell-codegen", NULL, ref_codegen},
+    {"blackwell-vector", run_demonstration_blackwell_vector, NULL},
+};
+#define REFERENCE_PREFIX "--reference-demonstrate-"
+
+/* Returns -1 when arg is not a reference mode, else the mode's exit code (0 when dry:
+ * the mode is found and not run). */
+static int reference_demonstrate(const char *arg, int dry) {
+    size_t k = strlen(REFERENCE_PREFIX);
+    if (strncmp(arg, REFERENCE_PREFIX, k) != 0) return -1;
+    for (size_t i = 0; i < sizeof reference_modes / sizeof reference_modes[0]; i++) {
+        if (strcmp(arg + k, reference_modes[i].name) != 0) continue;
+        if (dry) return 0;
+        if (reference_modes[i].run_rc) return reference_modes[i].run_rc();
+        reference_modes[i].run();
         return 0;
     }
     return -1;
@@ -3756,11 +3796,30 @@ static int legacy_oracle_demonstrate_living_matvec(int argc, char **argv) {
 
 int main(int argc, char **argv) {
     if (argc < 2) {
-        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m12-gates | --run-m13-gates | --run-m14-gates | --reference-demonstrate-arithmetic | --reference-demonstrate-physics | --reference-demonstrate-realization | --reference-demonstrate-self-host | --reference-demonstrate-verify | --reference-demonstrate-program | --reference-demonstrate-synthesis | --reference-demonstrate-library | --reference-demonstrate-discovery | --reference-demonstrate-machine | --reference-demonstrate-realization-synthesis | --dump-test-vectors <dir>]\n", argv[0]);
+        printf("Usage: %s [--run-gates | --run-m5-gates | --run-m6-gates | --run-m7-gates | --run-m8-gates | --run-m9-gates | --run-m10-gates | --run-m11-gates | --run-m12-gates | --run-m13-gates | --run-m14-gates | --dump-test-vectors <dir>]\n", argv[0]);
+        printf("Reference demonstrations (R16: not the production path):");
+        for (size_t i = 0; i < sizeof reference_modes / sizeof reference_modes[0]; i++)
+            printf(" %s%s", REFERENCE_PREFIX, reference_modes[i].name);
+        printf("\n");
         printf("Legacy oracle (R16: not the production path, reference only): %s --legacy-oracle-living-matvec\n", argv[0]);
         printf("Production entry point: the resident reaction world, see docs/r16-production-entry-point.md\n");
         return 1;
     }
+
+    /* R16-G5 surface check: resolve a mode through the real dispatch without
+     * running it (the accelerator and Blackwell modes need the chip). */
+    if (strcmp(argv[1], "--reference-dispatch-dry-run") == 0) {
+        if (argc < 3) return 2;
+        if (reference_demonstrate(argv[2], 1) == 0 ||
+            legacy_oracle_demonstrate_living_matvec(argv[2], 1) == 0) {
+            printf("dispatch: %s accepted (not run)\n", argv[2]);
+            return 0;
+        }
+        printf("Unknown argument: %s\n", argv[2]);
+        return 1;
+    }
+    int ref_rc = reference_demonstrate(argv[1], 0);
+    if (ref_rc >= 0) return ref_rc;
 
     if (strcmp(argv[1], "--run-gates") == 0) {
         return omega_run_m4_gates();
@@ -3774,27 +3833,12 @@ int main(int argc, char **argv) {
         return omega_run_m6_gates();
     }
 
-    if (strcmp(argv[1], "--reference-demonstrate-self-host") == 0) {
-        run_demonstration_self_host();
-        return 0;
-    }
-
     if (strcmp(argv[1], "--run-m7-gates") == 0) {
         return omega_run_m7_gates();
     }
 
-    if (strcmp(argv[1], "--reference-demonstrate-verify") == 0) {
-        run_demonstration_verify();
-        return 0;
-    }
-
     if (strcmp(argv[1], "--run-m8-gates") == 0) {
         return omega_run_m8_gates();
-    }
-
-    if (strcmp(argv[1], "--reference-demonstrate-program") == 0) {
-        run_demonstration_program();
-        return 0;
     }
 
     if (strcmp(argv[1], "--run-m9-gates") == 0) {
@@ -3805,25 +3849,15 @@ int main(int argc, char **argv) {
         return omega_run_m10_gates();
     }
 
-    if (strcmp(argv[1], "--reference-demonstrate-library") == 0) {
-        run_demonstration_library();
-        return 0;
-    }
-
     if (strcmp(argv[1], "--run-m11-gates") == 0) {
         return omega_run_m11_gates();
-    }
-
-    if (strcmp(argv[1], "--reference-demonstrate-discovery") == 0) {
-        run_demonstration_discovery();
-        return 0;
     }
 
     if (strcmp(argv[1], "--run-m12-gates") == 0) {
         return omega_run_m12_gates();
     }
 
-    if (legacy_oracle_demonstrate_living_matvec(argc, argv) == 0) {
+    if (legacy_oracle_demonstrate_living_matvec(argv[1], 0) == 0) {
         return 0;
     }
 
@@ -3831,27 +3865,12 @@ int main(int argc, char **argv) {
         return omega_run_m13_gates();
     }
 
-    if (strcmp(argv[1], "--reference-demonstrate-machine") == 0) {
-        run_demonstration_machine();
-        return 0;
-    }
-
     if (strcmp(argv[1], "--run-m14-gates") == 0) {
         return omega_run_m14_gates();
     }
 
-    if (strcmp(argv[1], "--reference-demonstrate-realization-synthesis") == 0) {
-        run_demonstration_realization_synthesis();
-        return 0;
-    }
-
     if (strcmp(argv[1], "--run-m15-gates") == 0) {
         return omega_run_m15_gates();
-    }
-
-    if (strcmp(argv[1], "--reference-demonstrate-accelerator") == 0) {
-        run_demonstration_accelerator();
-        return 0;
     }
 
     if (strcmp(argv[1], "--run-world-lifecycle-gates") == 0) {
@@ -3869,51 +3888,12 @@ int main(int argc, char **argv) {
     }
 
 
-    if (strcmp(argv[1], "--reference-demonstrate-accelerator-world") == 0) {
-        run_demonstration_accelerator_world();
-        return 0;
-    }
-
     if (strcmp(argv[1], "--run-m18-gates") == 0) {
         return run_m18_gates();
     }
 
-    if (strcmp(argv[1], "--reference-demonstrate-blackwell-matmul") == 0) {
-        run_demonstration_blackwell_matmul();
-        return 0;
-    }
-
     if (strcmp(argv[1], "--run-m17-gates") == 0) {
         return run_m17_gates();
-    }
-
-    if (strcmp(argv[1], "--reference-demonstrate-blackwell-codegen") == 0) {
-        return omega_blackwell_test_codegen_variation();
-    }
-
-    if (strcmp(argv[1], "--reference-demonstrate-blackwell-vector") == 0) {
-        run_demonstration_blackwell_vector();
-        return 0;
-    }
-
-    if (strcmp(argv[1], "--reference-demonstrate-synthesis") == 0) {
-        run_demonstration_synthesis();
-        return 0;
-    }
-
-    if (strcmp(argv[1], "--reference-demonstrate-realization") == 0) {
-        run_demonstration_realization();
-        return 0;
-    }
-
-    if (strcmp(argv[1], "--reference-demonstrate-arithmetic") == 0) {
-        run_demonstration_arithmetic();
-        return 0;
-    }
-
-    if (strcmp(argv[1], "--reference-demonstrate-physics") == 0) {
-        run_demonstration_physics();
-        return 0;
     }
 
     if (strcmp(argv[1], "--dump-test-vectors") == 0) {

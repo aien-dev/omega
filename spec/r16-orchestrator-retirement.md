@@ -340,9 +340,15 @@ the new G3 to G5 tests on the R16 branch). No gate is loosened.
    run qualification tests and the map does not flag them for G5. With no
    argument omegatool prints usage and exits 1. The production entry point
    is `docs/r16-production-entry-point.md`; `make test-r16-surface` checks
-   all of this.
+   all of this. The 16 reference modes live in one table (`reference_modes`)
+   that both the dispatcher and the usage text read; the check reads the
+   table, requires usage to list exactly those modes, requires every retired
+   `--demonstrate-<name>` (16 plus living-matvec) to be rejected, requires
+   every new name to be accepted by the real dispatcher through
+   `--reference-dispatch-dry-run <name>` (resolved, not run: several modes
+   need the chip), and runs `--reference-demonstrate-arithmetic` (CPU only).
 
-### C5 (2026-09-30): G4 act (4) is open
+### C5 (2026-09-30): G4 is open (caller-named subjects)
 
 Recorded after a review of the G3 to G5 branch found it; host data existed
 (the G4 host test). This records a discrepancy, it does not loosen G4.
@@ -354,15 +360,28 @@ Recorded after a review of the G3 to G5 branch found it; host data existed
    and names `RX_LIVING_PROMOTE_SUBJ` as the subject is accepted by the
    unchanged native authority. Observed on host at 6d1ff1d plus this branch:
    rc 0, R9 active generation 1 -> 3 in memory and on disk.
-2. `tests/runtime/rx_r16_negative.c` now makes that attempt last (it moves the
-   generation) and expects refusal. Until promotion is bound to something the
-   legacy path cannot supply (an authenticated caller handle, or the sealed
-   reaction context of the promoter), `make test-r16-negative` prints
-   `R16 G4 OPEN: ...` and `R16_G4_LEGACY_REFUSED=FAIL`. The fix is a runtime
-   change (`rx_generation.c`, `rx_living.c`, possibly the native capability
-   library) and a design decision; it is not made on this branch.
-3. The six-act core still holds and prints
-   `R16 G4 core: six acts refused, state unchanged`. The mutant suite judges
+   The same flaw is on the reaction path (found by review, confirmed on host):
+   `validate_caps` (rx_world.c) checks each grant against `d->subject`, the
+   subject the descriptor names, and `rx_world_add_reaction` does not check
+   who registers. A legacy reaction naming `RX_LIVING_PROMOTE_SUBJ` and
+   carrying the promoter's in-force grant was registered (rc 0), activated
+   once, committed once and wrote its marker 0xBADBAD into the authoritative
+   in-force record. So act (6), and by the same route acts (1) and (2) for any
+   writer whose grant reference the legacy context can read, are open too.
+   (The probe's wake uses a harness-minted scratch read grant for the promoter
+   subject; in normal operation the promoter's own candidate trigger would
+   wake it.)
+2. `tests/runtime/rx_r16_negative.c` now makes both attempts last (they move
+   authoritative state) and expects refusal. Until a subject is bound to
+   something the legacy path cannot supply (an authenticated caller or
+   registration handle, or the sealed reaction context of the grant's owner),
+   `make test-r16-negative` prints two `R16 G4 OPEN: ...` lines and
+   `R16_G4_LEGACY_REFUSED=FAIL`. The fix is a runtime change (`rx_world.c`,
+   `rx_generation.c`, `rx_living.c`, possibly the native capability library)
+   and a design decision; it is not made on this branch.
+3. The listed attempts of the six acts are still refused, and the test prints
+   `R16 G4 core: six acts refused, state unchanged, for the counted per-act
+   attempts only; this is NOT a claim that legacy cannot promote or write`. The mutant suite judges
    that core line, so it still answers whether each of the 15 guards is load
    bearing. No mutant exists for the missing binding, since there is no guard
    yet to remove; when one is added, a mutant removing it must be added too.

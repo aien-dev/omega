@@ -39,7 +39,7 @@ unbounded: while(1) while(true) while(!0) for(;;) Rust loop{} Rust while true
 body words (identifier words, split at _ digits and case): sleep usleep nanosleep msleep poll recv heartbeat tick dispatch schedule scheduler orchestrate orchestrator turn turns pulse yield epoll
 flagged loop = unbounded OR a body word in condition or body
 named terms (any code line; case/underscore-insensitive; run_until_complete anywhere in an identifier, max_steps and max_turns only as the whole identifier; hit counts use substring): run_until_complete max_steps max_turns
-cli-mode (C): a code line testing argv[ against a "--demonstrate-..." or "--run-..." literal
+cli-mode (C): a code line testing argv[ against a "--demonstrate-...", "--reference-..." or "--run-..." literal
 manual rows (line cell starts with "manual"): evidence line must still exist in the file
   (symbol not verified); same class rules apply
 join key: repo + path + enclosing symbol + whitespace-collapsed source line
@@ -63,7 +63,9 @@ Notes:
 - Straight-line sequencers that no loop pattern can see are listed as manual rows (§4):
   the tool checks their source line still exists and applies the class rules to them.
   omegatool's hand-sequenced modes are caught by the `cli-mode` pattern (a C line
-  testing `argv[` against `"--demonstrate-…"` or `"--run-…"`).
+  testing `argv[` against `"--demonstrate-…"`, `"--reference-…"` or `"--run-…"`). The
+  16 reference demonstrations are dispatched from one table and have no such line;
+  manual row OM-M02 covers them.
 
 ## 3. Search-term hit counts (spec §4)
 
@@ -79,11 +81,11 @@ tools and tests; rescanned 2026-09-30) and the four other repos at the SHAs abov
 | max_turns | max_turns | 0 | 0 | 13 | 0 | 0 |
 | for/while semantic step loops | step, steps (counted, not a gate word: names plan steps and data arrays everywhere; step loops are caught as unbounded, by max_steps, or by a wait word) | 965 | 389 | 70 | 90 | 0 |
 | polling for semantic readiness | poll | 34 | 0 | 0 | 13 | 0 |
-| (waiting) | sleep, usleep, nanosleep, msleep | 77 | 27 | 0 | 0 | 3 |
-| (waiting) | wait (counted, not a gate word: too common in condvar code) | 234 | 18 | 0 | 29 | 13 |
+| (waiting) | sleep, usleep, nanosleep, msleep | 78 | 27 | 0 | 0 | 3 |
+| (waiting) | wait (counted, not a gate word: too common in condvar code) | 236 | 18 | 0 | 29 | 13 |
 | heartbeat task dispatch | heartbeat | 24 | 15 | 71 | 0 | 0 |
 | heartbeat task dispatch | tick | 68 | 4 | 26 | 32 | 0 |
-| heartbeat task dispatch | pulse | 17 | 30 | 27 | 0 | 0 |
+| heartbeat task dispatch | pulse | 18 | 30 | 27 | 0 | 0 |
 | central dispatch / manual faculty invocation | dispatch | 73 | 51 | 16 | 25 | 0 |
 | duplicate schedulers | schedule, scheduler, sched | 150 | 173 | 0 | 110 | 2 |
 | orchestration | orchestrate, orchestrator, orchestration | 10 | 0 | 8 | 0 | 0 |
@@ -205,36 +207,20 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | OM-089 | omega | `tools/omegatool.c` | 3749 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-gates") == 0) {` |
 | OM-090 | omega | `tools/omegatool.c` | 3753 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m5-gates") == 0) {` |
 | OM-091 | omega | `tools/omegatool.c` | 3757 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m6-gates") == 0) {` |
-| OM-092 | omega | `tools/omegatool.c` | 3761 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-self-host") == 0) {` |
 | OM-093 | omega | `tools/omegatool.c` | 3766 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m7-gates") == 0) {` |
-| OM-094 | omega | `tools/omegatool.c` | 3770 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-verify") == 0) {` |
 | OM-095 | omega | `tools/omegatool.c` | 3775 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m8-gates") == 0) {` |
-| OM-096 | omega | `tools/omegatool.c` | 3779 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-program") == 0) {` |
 | OM-097 | omega | `tools/omegatool.c` | 3784 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m9-gates") == 0) {` |
 | OM-098 | omega | `tools/omegatool.c` | 3788 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m10-gates") == 0) {` |
-| OM-099 | omega | `tools/omegatool.c` | 3792 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-library") == 0) {` |
 | OM-100 | omega | `tools/omegatool.c` | 3797 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m11-gates") == 0) {` |
-| OM-101 | omega | `tools/omegatool.c` | 3801 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-discovery") == 0) {` |
 | OM-102 | omega | `tools/omegatool.c` | 3806 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m12-gates") == 0) {` |
 | OM-104 | omega | `tools/omegatool.c` | 3815 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m13-gates") == 0) {` |
-| OM-105 | omega | `tools/omegatool.c` | 3819 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-machine") == 0) {` |
 | OM-106 | omega | `tools/omegatool.c` | 3824 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m14-gates") == 0) {` |
-| OM-107 | omega | `tools/omegatool.c` | 3828 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-realization-synthesis") == 0) {` |
 | OM-108 | omega | `tools/omegatool.c` | 3833 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m15-gates") == 0) {` |
-| OM-109 | omega | `tools/omegatool.c` | 3837 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-accelerator") == 0) {` |
 | OM-110 | omega | `tools/omegatool.c` | 3842 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-world-lifecycle-gates") == 0) {` |
 | OM-111 | omega | `tools/omegatool.c` | 3845 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m19r-soak") == 0) {` |
 | OM-112 | omega | `tools/omegatool.c` | 3848 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m19-gates") == 0) {` |
-| OM-113 | omega | `tools/omegatool.c` | 3857 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-accelerator-world") == 0) {` |
 | OM-114 | omega | `tools/omegatool.c` | 3862 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m18-gates") == 0) {` |
-| OM-115 | omega | `tools/omegatool.c` | 3866 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-blackwell-matmul") == 0) {` |
 | OM-116 | omega | `tools/omegatool.c` | 3871 | `main` | deterministic gate runner | maintenance control | B | false | spec 4 starting verdict: --run-*-gates = B (deterministic maintenance / qualification control) | `if (strcmp(argv[1], "--run-m17-gates") == 0) {` |
-| OM-117 | omega | `tools/omegatool.c` | 3875 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-blackwell-codegen") == 0) {` |
-| OM-118 | omega | `tools/omegatool.c` | 3879 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-blackwell-vector") == 0) {` |
-| OM-119 | omega | `tools/omegatool.c` | 3884 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-synthesis") == 0) {` |
-| OM-120 | omega | `tools/omegatool.c` | 3889 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-realization") == 0) {` |
-| OM-121 | omega | `tools/omegatool.c` | 3894 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-arithmetic") == 0) {` |
-| OM-122 | omega | `tools/omegatool.c` | 3899 | `main` | hand-sequenced milestone demonstration | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstration; migration map: omegatool = Oracle; not a production entry point; G5: kept under the explicit reference name `--reference-demonstrate-*` | `if (strcmp(argv[1], "--reference-demonstrate-physics") == 0) {` |
 | OM-123 | omega | `tools/r15_reduce.c` | 82,102 | `jparse` | JSON parse in R15 reducer | R15 evidence reducer | D | false | evidence reduction tool, not on the production path | `for (;;) {` |
 | OM-124 | omega | `tools/r15_reduce.c` | 325 | `read_file` | file read in R15 reducer | R15 evidence reducer | D | false | evidence reduction tool, not on the production path | `while (1) {` |
 | OM-125 | omega | `src/runtime/rx_argus.c` | 435 | `merge` | ARGUS event stream merge | - | N | false | N: merge: event stream merge pass across producer rings without wait or hand-off | `for (;;) {` |
@@ -261,6 +247,8 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | OM-146 | omega | `tools/estimation/est_replay.c` | 150 | `read_index` | whole-file read in the EST replay tool | EST evidence replay tool | N | false | N: read: file read into a growing buffer until end of file, without wait or hand-off; offline evidence tool, not on the production path | `for (;;) {` |
 | OM-147 | omega | `tools/json_canon.c` | 153 | `parse_string` | JSON string parse in the canonical-JSON helper | M19R qualifier helper | N | false | N: parse: JSON string parser without wait or hand-off; host tool, not on the production path | `for (;;) {` |
 | OM-148 | omega | `tools/json_canon.c` | 284,313 | `parse_value` | JSON object/array parse in the canonical-JSON helper | M19R qualifier helper | N | false | N: parse: JSON value recursive parser without wait or hand-off; host tool, not on the production path | `for (;;) {` |
+| OM-149 | omega | `tools/omegatool.c` | 3811 | `main` | surface-check resolver (R16-G5) | reference mode dry run | D | false | `--reference-dispatch-dry-run <name>` resolves a mode through the real dispatch and runs nothing; used only by tests/r16_surface/run.sh | `if (strcmp(argv[1], "--reference-dispatch-dry-run") == 0) {` |
+| OM-150 | omega | `tests/runtime/rx_r16_negative.c` | 537 | `main` | test/benchmark loop (for:body:nanosleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary (R16-G4 waits for one honest production request) | `for (int i = 0; i < 50 && r->served == served0; i++) nanosleep(&ts, NULL);` |
 | SC-001 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/engine_max.rs` | 55 | `start` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < timeout {` |
 | SC-002 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 96 | `start` | test/benchmark loop (while:body:tick) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while !stop_clone.load(Ordering::Relaxed) {` |
 | SC-003 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 168 | `enforce_thermal_cooldown` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < max_wait {` |
@@ -421,7 +409,8 @@ exists in the file (symbol not verified) and applies the same class rules.
 | AO-M01 | aienos | `crates/aienos-boot/src/handoff.rs` | manual (1621) | `main` | fixed boot stage sequence, then halt | boot / awakening sequence; deterministic maintenance and recovery path | C | true | migration map `handoff.rs:1621`: keep, "must never be removed (§49)"; spec §4 starting verdict C | `fn main() -> Status {` |
 | SC-M01 | aien-sovereign-core | `crates/aien-cli/src/commands.rs` | manual (1536) | `-` | CLI shells out to `spark-aegis` | legacy service glue, kept (Q2 = A) | A | false | spec §3.3 item 3: service glue used only by the retired aegis-runtime sequencing; not removed under Q2 = A, retired by non-use; omega never execs `spark-aegis` (G3 checks). LEGACY / NOT-IN-CHARGE | `let status = std::process::Command::new("spark-aegis")` |
 | OM-M01 | omega | `tools/omegatool.c` | manual (2642) | `legacy_oracle_run_demonstration_living_matvec` | body of the hand-sequenced living-matvec demonstration | retire with `--demonstrate-living-matvec` (W5) | A | false | the function the class-A dispatcher row calls; moved behind a `legacy_oracle` name (W5) | `static void legacy_oracle_run_demonstration_living_matvec(void) {` |
-| OM-103 | omega | `tools/omegatool.c` | manual (3750) | `legacy_oracle_demonstrate_living_matvec` | hand-sequenced living matvec demonstration (spec -> machine -> kernel -> benchmark -> select) | retire: legacy oracle only, under the explicit mode `--legacy-oracle-living-matvec` (R16-G5); the old `--demonstrate-living-matvec` mode is gone | A | false | spec 3.1 / 4: the omega hand-sequenced tool path replaced by the R13 living system; retired behind legacy_oracle symbol names (W5) and, for G5, an explicit legacy mode name; moved to the manual rows because the renamed mode no longer matches the cli-mode pattern | `if (strcmp(argv[1], "--legacy-oracle-living-matvec") == 0) {` |
+| OM-103 | omega | `tools/omegatool.c` | manual (3749) | `legacy_oracle_demonstrate_living_matvec` | hand-sequenced living matvec demonstration (spec -> machine -> kernel -> benchmark -> select) | retire: legacy oracle only, under the explicit mode `--legacy-oracle-living-matvec` (R16-G5); the old `--demonstrate-living-matvec` mode is gone | A | false | spec 3.1 / 4: the omega hand-sequenced tool path replaced by the R13 living system; retired behind legacy_oracle symbol names (W5) and, for G5, an explicit legacy mode name; moved to the manual rows because the renamed mode no longer matches the cli-mode pattern | `if (strcmp(arg, "--legacy-oracle-living-matvec") == 0) {` |
+| OM-M02 | omega | `tools/omegatool.c` | manual (3821) | `main` | hand-sequenced milestone demonstrations (16 modes: arithmetic, physics, realization, self-host, verify, program, synthesis, library, discovery, machine, realization-synthesis, accelerator, accelerator-world, blackwell-matmul, blackwell-codegen, blackwell-vector) | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstrations; migration map: omegatool = Oracle; not a production entry point; G5: kept only under `--reference-demonstrate-<name>`, dispatched from the one `reference_modes` table that also prints usage; replaces the 16 per-mode cli-mode rows, which the table-driven dispatch no longer shows to the pattern | `int ref_rc = reference_demonstrate(argv[1], 0);` |
 <!-- /r16-inventory:rows -->
 
 ## 5. Structural findings (non-greppable §4 terms)
@@ -468,7 +457,7 @@ Filled from the tool's JSON output on this map (§8).
 
 | repo | A | B | C | D | E | F | N | ? | loop/named/cli sites | manual rows |
 |---|---|---|---|---|---|---|---|---|---|---|
-| omega | 0 | 18 | 2 | 90 | 13 | 2 | 22 | 0 | 147 | 2 |
+| omega | 0 | 18 | 2 | 76 | 13 | 2 | 22 | 0 | 133 | 3 |
 | aien-sovereign-core | 14 | 5 | 0 | 40 | 11 | 18 | 2 | 0 | 90 | 1 |
 | aegis-runtime | 18 | 0 | 0 | 1 | 0 | 0 | 1 | 0 | 20 | 0 |
 | aienos | 0 | 0 | 0 | 12 | 8 | 1 | 11 | 0 | 32 | 1 |
@@ -476,9 +465,11 @@ Filled from the tool's JSON output on this map (§8).
 
 Manual rows: omega OM-M01 = A and OM-103 = A (moved to the manual rows in W5: the
 renamed `--legacy-oracle-living-matvec` mode no longer matches the cli-mode pattern),
+omega OM-M02 = D (the 16 `--reference-demonstrate-*` modes, dispatched from one table
+since the G5 review, so the per-mode cli-mode rows are gone),
 sovereign-core SC-M01 = A, aienos AO-M01 = C.
-Total (rescan 2026-09-30, omega at `6d1ff1d` plus the R16 branch): 294 pattern sites +
-4 manual rows; 0 unclassified; 0 questions remaining; 37 class N data/control-flow
+Total (rescan 2026-09-30, omega at `6d1ff1d` plus the R16 branch): 280 pattern sites +
+5 manual rows; 0 unclassified; 0 questions remaining; 37 class N data/control-flow
 idiom sites. The omega rows OM-137..OM-148 were added for code merged to main after
 the first scan.
 
@@ -486,8 +477,9 @@ the first scan.
 
 `make r16-inventory` -> exit 0, PASS:
 
-`sites=294 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
-(rescan 2026-09-30; first scan: `sites=283`)
+`sites=280 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
+(rescan 2026-09-30 after the G5 review made omegatool's reference modes table-driven:
+16 per-mode rows replaced by manual row OM-M02; before that `sites=294`; first scan: `sites=283`)
 
 1. `question=0`: all 44 question rows are resolved and reclassified (§6).
 2. `a_reachable=0`: omegatool `--demonstrate-living-matvec` (OM-103 dispatcher line and

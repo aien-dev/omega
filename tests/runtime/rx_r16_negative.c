@@ -192,6 +192,9 @@ static int fn_poke(RxCtx *c) {
 
 /* A reaction registered by the legacy context: woken by its scratch object,
  * it writes `target` holding `cap` declared for the target's resource. */
+static uint32_t g_named_subject;   /* 0: LEGACY_SUBJ; else the subject the reaction names */
+static RxDep g_named_trigger;      /* with g_named_subject: its trigger and read grant */
+static RxCapNeed g_named_read;
 static int legacy_reaction_fn(Legacy *L, const char *name, RxObjRef target, uint64_t target_res,
                               RxCapRef cap, int declare_write, Poke *p, RxFn fn, void *user,
                               uint32_t *id) {
@@ -199,7 +202,7 @@ static int legacy_reaction_fn(Legacy *L, const char *name, RxObjRef target, uint
     memset(&d, 0, sizeof d);
     d.name = name;
     d.faculty = RX_FACULTY_EXTERNAL;
-    d.subject = LEGACY_SUBJ;
+    d.subject = g_named_subject ? g_named_subject : LEGACY_SUBJ;
     d.priority = RX_PRIO_FOREGROUND;
     d.fn = fn;
     d.user = user;
@@ -210,6 +213,10 @@ static int legacy_reaction_fn(Legacy *L, const char *name, RxObjRef target, uint
     d.writes[0] = (RxDep){target, RX_FIELD(0)};
     d.n_caps = 1;
     d.caps[0] = (RxCapNeed){L->own_scratch, RES_LEGACY_SCRATCH, RX_RIGHT_READ};
+    if (g_named_subject) {             /* its scratch grant is LEGACY_SUBJ's */
+        d.triggers[0] = g_named_trigger;
+        d.caps[0] = g_named_read;
+    }
     if (declare_write) d.caps[d.n_caps++] = (RxCapNeed){cap, target_res, RX_RIGHT_WRITE};
     return rx_world_add_reaction(L->w, &d, id);
 }
@@ -589,6 +596,52 @@ int main(void) {
                    "to the caller (runtime change, not in this branch).\n");
     }
 
+    /* (6), last: the same flaw on the reaction path. A legacy reaction whose
+     * descriptor names the promoter as its subject and carries the promoter's
+     * in-force grant: validate_caps checks the grant against the subject the
+     * descriptor names, and rx_world_add_reaction does not check the caller. */
+    int rprobe_refused = 0;
+    {
+        RxObject b0, b1;
+        rx_world_read(&r->w, r->living.o.inforce, &b0);
+        static Poke p_named;
+        uint32_t id_n = 0;
+        g_named_subject = RX_LIVING_PROMOTE_SUBJ;
+        /* Wake: a harness fixture grant lets the promoter subject read the
+         * legacy scratch object, so the probe can be woken on demand (in normal
+         * operation a candidate trigger with the promoter's candidate grant
+         * would wake it). The grant under test is the borrowed in-force one. */
+        g_named_trigger = (RxDep){L.scratch, RX_FIELD(0)};
+        g_named_read = (RxCapNeed){r15_mint(r, RX_LIVING_PROMOTE_SUBJ, RES_LEGACY_SCRATCH,
+                                            RX_RIGHT_READ), RES_LEGACY_SCRATCH, RX_RIGHT_READ};
+        int add = legacy_reaction(&L, "legacy.named-subject", r->living.o.inforce, b0.resource,
+                                  L.borrowed_inforce, 1, &p_named, &id_n);
+        g_named_subject = 0;
+        int woke = -1;
+        uint64_t commits = 0, acts = 0;
+        int crumb = -1;
+        if (add == RX_OK) {
+            woke = wake_legacy(&L);
+            pthread_mutex_lock(&r->w.mu);
+            commits = r->w.reactions[id_n].commits;
+            acts = r->w.reactions[id_n].activations;
+            const RxCrumb *k = rx_world_crumb(&r->w, r->w.reactions[id_n].last_crumb);
+            crumb = k ? (int)k->kind : -1;
+            pthread_mutex_unlock(&r->w.mu);
+        }
+        rx_world_read(&r->w, r->living.o.inforce, &b1);
+        int moved = commits > 0 || b1.field[0] == 0xBADBADull;
+        rprobe_refused = add != RX_OK || (acts > 0 && !moved);
+        printf("R16 G4 (6) reaction naming the promoter as subject, with the promoter's in-force "
+               "grant: %s (register rc %d; woken %s; activations %llu, commits %llu, last crumb %d; in-force field0 0x%llx)\n",
+               add == RX_OK && acts == 0 ? "NOT EXERCISED" : rprobe_refused ? "REFUSED" : "ACCEPTED", add, woke == 0 ? "yes" : "no", U(acts), U(commits), crumb,
+               U(b1.field[0]));
+        CHECK(add != RX_OK || (woke == 0 && acts > 0), "(6) the named-subject probe was never woken");
+        if (!rprobe_refused)
+            printf("R16 G4 OPEN: a reaction's subject is whatever its descriptor names; any "
+                   "in-process holder of a writer's grant reference can write as that writer.\n");
+    }
+
     int acts_ok = 0;
     const char *names[7] = {"", "belief", "selection", "mint", "promote", "boundary", "generation"};
     for (int a = 1; a <= 6; a++) {
@@ -605,9 +658,9 @@ int main(void) {
     r15_stop(r);
     free(r);
     int core = acts_ok == 6 && g_fail == 0;
-    int pass = core && probe_refused;
+    int pass = core && probe_refused && rprobe_refused;
     printf("R16 G4 acts refused: %d/6\n", acts_ok);
-    printf("R16 G4 core: %s\n", core ? "six acts refused, state unchanged (named-subject promotion probe reported separately)" : "FAIL");
+    printf("R16 G4 core: %s\n", core ? "six acts refused, state unchanged, for the counted per-act attempts only; this is NOT a claim that legacy cannot promote or write (see the named-subject probes and the gate line)" : "FAIL");
     printf("R16 gate: R16_G4_LEGACY_REFUSED=%s\n", pass ? "PASS" : "FAIL");
     return pass ? 0 : 1;
 }

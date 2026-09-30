@@ -36,17 +36,17 @@ holds, checked by the native AIENOS capability authority (C, pinned by
 
 Run from the omega tree. `AIENOS_LOCK_REPO` must name a clone that has the
 `aienos.lock` commit (the default `../aienos-argus-cap` exists only for a
-checkout directly under `~/workspace`). `AIENOS_R7_DIR` is given explicitly
-because `mk/visor-authority.mk` defaults it to `../aienos-r9` before the
-Makefile's own default is read.
+checkout directly under `~/workspace`); it is needed only the first time, to
+extract the pinned authority into `build/aienos-authority/`. Without it the
+build stops and says exactly what to set.
 
 ```
-A="AIENOS_LOCK_REPO=$HOME/workspace/aienos-argus-cap AIENOS_R7_DIR=build/aienos-authority/d39dd5b"
+A="AIENOS_LOCK_REPO=$HOME/workspace/aienos-argus-cap"
 make $A r16-inventory test-r16-inventory     # G1/G2 (seconds)
 make $A test-r16-authpath                    # G3 host stand-in (about 30 s)
-make $A test-r16-negative                    # G4 (under 1 s); FAIL at 6d1ff1d: the six acts are refused
-                                             # ("R16 G4 core: six acts refused"), but promotion naming the
-                                             # promoter as subject is accepted ("R16 G4 OPEN"); spec C5
+make $A test-r16-negative                    # G4 (under 1 s); FAIL at 6d1ff1d: the listed attempts are
+                                             # refused ("R16 G4 core:"), but a promotion or a reaction that
+                                             # names the promoter as its subject is accepted ("R16 G4 OPEN"); spec C5
 make $A test-r16-negative-mutants            # G4 guards load-bearing (about 1 min; judged on the core line)
 make $A test-r16-surface                     # G5 (seconds)
 ```
