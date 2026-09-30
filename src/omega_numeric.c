@@ -1,51 +1,35 @@
+/*
+ * OMEGA-NUMERIC-0 host-pure module: semantic reference tier, CPU realization
+ * tier, Omega math sequences, op registry, kernel patch words and parity
+ * comparators. No device access here (see src/omega_numeric_gb10.c).
+ */
 #include "omega_numeric.h"
-#include "omega_blackwell_codegen.h"
-#include "omega_blackwell_qmd.h"
-#include "omega_blackwell_submit.h"
-#include "m16_native.h"
+#include "omega_blackwell_encoder.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-#define OMEGA_BW_SETUP_WORDS_COUNT 18
-static const uint32_t NUMERIC_SETUP_WORDS[OMEGA_BW_SETUP_WORDS_COUNT] = {
-    0x20012061, 0x0000cec0, 0x20012092, 0x00000001, 0x200120a8, 0x0000000f, 0x2001255d, 0x00000003,
-    0x2001255e, 0x20000000, 0x2001255f, 0x000fffff, 0x20012557, 0x00000003, 0x20012558, 0x22000000,
-    0x20012559, 0x00000000,
-};
+#if !defined(__aarch64__)
+#error "OMEGA-NUMERIC-0 host tiers use AArch64 FP instructions (fmadd, fdiv, fsqrt, fminnm, scvtf, fcvtzs)"
+#endif
 
 bool omega_numeric_bits_equal(float a, float b) {
     if (omega_isnan(a) && omega_isnan(b)) {
         return true; /* NaN equivalence class */
     }
-    uint32_t ua = omega_float_to_bits(a);
-    uint32_t ub = omega_float_to_bits(b);
-    return (ua == ub);
+    return omega_float_to_bits(a) == omega_float_to_bits(b);
 }
 
 /* ---- Semantic Reference Tier (Zero Libm) --------------------------------- */
 
-float omega_ref_fadd(float a, float b) {
-    return a + b;
-}
-
-float omega_ref_fsub(float a, float b) {
-    return a - b;
-}
-
-float omega_ref_fmul(float a, float b) {
-    return a * b;
-}
+float omega_ref_fadd(float a, float b) { return a + b; }
+float omega_ref_fsub(float a, float b) { return a - b; }
+float omega_ref_fmul(float a, float b) { return a * b; }
 
 float omega_ref_ffma(float a, float b, float c) {
-#if defined(__aarch64__)
     float r;
     __asm__("fmadd %s0, %s1, %s2, %s3" : "=w"(r) : "w"(a), "w"(b), "w"(c));
     return r;
-#else
-    return (float)((double)a * (double)b + (double)c);
-#endif
 }
 
 float omega_ref_fmin(float a, float b) {
@@ -82,18 +66,31 @@ int32_t omega_ref_f2i(float a) {
     return (int32_t)a;
 }
 
-/* ---- MUFU Seed Emulators for CPU Reference ------------------------------- */
+float omega_ieee_div(float x, float y) {
+    float r;
+    __asm__("fdiv %s0, %s1, %s2" : "=w"(r) : "w"(x), "w"(y));
+    return r;
+}
+
+float omega_ieee_sqrt(float x) {
+    float r;
+    __asm__("fsqrt %s0, %s1" : "=w"(r) : "w"(x));
+    return r;
+}
+
+/* ---- Host seeds used by the Omega div/sqrt sequences ---------------------- */
+/* Magic-constant seeds. They are not a model of the hardware MUFU unit. */
 
 static inline float omega_mufu_rcp_seed(float y) {
-    uint32_t uy = omega_float_to_bits(y);
-    uint32_t r_bits = 0x7ef311c0U - uy;
-    return omega_bits_to_float(r_bits);
+    return omega_bits_to_float(0x7ef311c0U - omega_float_to_bits(y));
 }
 
 static inline float omega_mufu_rsq_seed(float x) {
-    uint32_t ux = omega_float_to_bits(x);
-    uint32_t r_bits = 0x5f3759dfU - (ux >> 1);
-    return omega_bits_to_float(r_bits);
+    return omega_bits_to_float(0x5f3759dfU - (omega_float_to_bits(x) >> 1));
+}
+
+float omega_numeric_host_rcp_seed(float y) {
+    return omega_mufu_rcp_seed(y);
 }
 
 /* ---- Omega-Defined Division Refinement Sequence -------------------------- */
@@ -186,10 +183,21 @@ float omega_math_exp(float x) {
     p = r * (c2 + p);
     float poly = 1.0f + r * (1.0f + p);
 
-    uint32_t scale_bits = (uint32_t)(k + 127) << 23;
-    float scale = omega_bits_to_float(scale_bits);
-
-    return poly * scale;
+    /*
+     * Scale by 2^k. k spans [-150, 128] on the admitted domain, but a single
+     * FP32 power of two only covers [-126, 127]. Split the scale so each
+     * factor is a normal power of two: the first multiply is exact, the second
+     * rounds once (into the subnormal range, or to the top binade).
+     */
+    if (k > 127) {
+        return (poly * omega_bits_to_float(254U << 23)) *
+               omega_bits_to_float((uint32_t)(k - 127 + 127) << 23);
+    }
+    if (k < -126) {
+        return (poly * omega_bits_to_float((uint32_t)(k + 100 + 127) << 23)) *
+               omega_bits_to_float((uint32_t)(-100 + 127) << 23);
+    }
+    return poly * omega_bits_to_float((uint32_t)(k + 127) << 23);
 }
 
 /* ---- Omega-Defined Log Polynomial Sequence -------------------------------- */
@@ -200,8 +208,14 @@ float omega_math_log(float x) {
     if (omega_iszero(x)) return omega_bits_to_float(OMEGA_INF_NEG);
     if (omega_isinf(x)) return omega_bits_to_float(OMEGA_INF_POS);
 
+    int32_t e_adjust = 0;
+    if (omega_issubnormal(x)) {
+        x *= 8388608.0f; /* 2^23, exact: brings every subnormal into the normal range */
+        e_adjust = -23;
+    }
+
     uint32_t u = omega_float_to_bits(x);
-    int32_t e = (int32_t)((u >> 23) & 0xff) - 127;
+    int32_t e = (int32_t)((u >> 23) & 0xff) - 127 + e_adjust;
     float m = omega_bits_to_float((u & 0x007fffff) | 0x3f800000);
 
     if (m > 1.41421356f) {
@@ -241,303 +255,472 @@ float omega_warp_reduce_sum(const float warp_inputs[32]) {
     return val[0];
 }
 
-/* ---- Hardware GB10 SIMT Kernel Generation and Submission ------------------ */
+/* ---- Op registry ---------------------------------------------------------- */
 
-static bool is_known_simt_op(const char *op) {
-    if (!op) return false;
-    return (strcmp(op, "FADD") == 0 ||
-            strcmp(op, "FSUB") == 0 ||
-            strcmp(op, "FMUL") == 0 ||
-            strcmp(op, "FFMA") == 0 ||
-            strcmp(op, "FSETP") == 0 ||
-            strcmp(op, "FSEL") == 0 ||
-            strcmp(op, "FMNMX_MIN") == 0 ||
-            strcmp(op, "FMNMX_MAX") == 0 ||
-            strcmp(op, "I2FP") == 0 ||
-            strcmp(op, "F2I") == 0 ||
-            strcmp(op, "MUFU_RCP") == 0 ||
-            strcmp(op, "MUFU_RSQ") == 0 ||
-            strcmp(op, "LDS") == 0 ||
-            strcmp(op, "STS") == 0 ||
-            strcmp(op, "SHFL_DOWN") == 0 ||
-            strcmp(op, "DIV") == 0 ||
-            strcmp(op, "SQRT") == 0 ||
-            strcmp(op, "EXP") == 0 ||
-            strcmp(op, "LOG") == 0 ||
-            strcmp(op, "REDUCE_SUM") == 0);
+static const OmegaNumericOpInfo OP_TABLE[OMEGA_NOP_COUNT] = {
+    { OMEGA_NOP_FADD, "FADD", 2, true, OMEGA_CMP_BIT_EXACT, "a + b (RNE, subnormals kept)", NULL },
+    { OMEGA_NOP_FSUB, "FSUB", 2, true, OMEGA_CMP_BIT_EXACT, "a - b (RNE, subnormals kept)", NULL },
+    { OMEGA_NOP_FMUL, "FMUL", 2, true, OMEGA_CMP_BIT_EXACT, "a * b (RNE, subnormals kept)", NULL },
+    { OMEGA_NOP_FFMA, "FFMA", 3, true, OMEGA_CMP_BIT_EXACT, "fma(a, b, c), c uniform per launch", NULL },
+    { OMEGA_NOP_FSETP_SEL, "FSETP_SEL", 2, true, OMEGA_CMP_INT_EXACT,
+      "(a >= b, false if either is NaN) ? a : b, bits moved unchanged", NULL },
+    { OMEGA_NOP_FSEL, "FSEL", 2, true, OMEGA_CMP_INT_EXACT,
+      "(a >= 0, false if a is NaN) ? b : a, bits moved unchanged", NULL },
+    { OMEGA_NOP_FMNMX_MIN, "FMNMX_MIN", 2, true, OMEGA_CMP_BIT_EXACT,
+      "minNum(a, b), NaN yields the other operand, -0 < +0", NULL },
+    { OMEGA_NOP_FMNMX_MAX, "FMNMX_MAX", 2, true, OMEGA_CMP_BIT_EXACT,
+      "maxNum(a, b), NaN yields the other operand, -0 < +0", NULL },
+    { OMEGA_NOP_I2FP, "I2FP", 1, true, OMEGA_CMP_BIT_EXACT, "(float)(int32 bits of a), RNE", NULL },
+    { OMEGA_NOP_F2I, "F2I", 1, true, OMEGA_CMP_INT_EXACT,
+      "int32 truncate of a, NaN -> 0, saturating", NULL },
+    { OMEGA_NOP_MUFU_RCP, "MUFU_RCP", 1, true, OMEGA_CMP_SEED_BOUND,
+      "seed for 1/a: relative error bound only", NULL },
+    { OMEGA_NOP_MUFU_RSQ, "MUFU_RSQ", 1, true, OMEGA_CMP_SEED_BOUND,
+      "seed for 1/sqrt(a): relative error bound only", NULL },
+    { OMEGA_NOP_LDS_STS, "LDS_STS", 1, false, OMEGA_CMP_INT_EXACT, "a (shared-memory round trip)",
+      "no qualified shared-memory kernel: the old words were byte-wide STS.U8/LDS.U8 at "
+      "[tid] (not a 32-bit round trip), and a correct one needs the shared window base "
+      "and a QMD shared-memory size that are not encoded yet" },
+    { OMEGA_NOP_SHFL_DOWN, "SHFL_DOWN", 1, true, OMEGA_CMP_INT_EXACT,
+      "a[lane+1] within each 32-lane warp, lane 31 keeps its own value", NULL },
+    { OMEGA_NOP_DIV, "DIV", 2, false, OMEGA_CMP_BIT_EXACT, "correctly rounded a / b",
+      "no GB10 kernel for the Omega division sequence exists (the old path ran FADD)" },
+    { OMEGA_NOP_SQRT, "SQRT", 1, false, OMEGA_CMP_BIT_EXACT, "correctly rounded sqrt(a)",
+      "no GB10 kernel for the Omega square-root sequence exists (the old path ran FMUL)" },
+    { OMEGA_NOP_EXP, "EXP", 1, false, OMEGA_CMP_BIT_EXACT, "omega_math_exp(a)",
+      "no GB10 kernel for the Omega exp polynomial exists (the old path ran FADD)" },
+    { OMEGA_NOP_LOG, "LOG", 1, false, OMEGA_CMP_BIT_EXACT, "omega_math_log(a)",
+      "no GB10 kernel for the Omega log polynomial exists (the old path ran FADD)" },
+    { OMEGA_NOP_REDUCE_SUM, "REDUCE_SUM", 1, false, OMEGA_CMP_BIT_EXACT,
+      "declared pairwise-tree warp sum, lane 0 of each warp",
+      "no GB10 kernel for the declared-order warp reduction exists (the old path ran FADD)" },
+};
+
+size_t omega_numeric_op_count(void) { return OMEGA_NOP_COUNT; }
+
+const OmegaNumericOpInfo *omega_numeric_op_at(size_t index) {
+    return index < OMEGA_NOP_COUNT ? &OP_TABLE[index] : NULL;
 }
 
-int omega_gb10_execute_simt_op(const char *op_name,
-                              const float *in_a,
-                              const float *in_b,
-                              const float *in_c,
-                              float *out_res,
-                              size_t count) {
-    /* Mandate: Fail closed before allocating or submitting if op_name is unknown */
-    if (!op_name || !in_a || !out_res || count == 0) return -1;
-    if (!is_known_simt_op(op_name)) return -1;
-
-    M16NativeContext ctx;
-    if (m16_native_open(&ctx) != 0) return -1;
-    if (m16_native_create_channel(&ctx) != 0) { m16_native_close(&ctx); return -1; }
-
-    NvrmMem large_pb;
-    if (nvrm_alloc(&ctx.rm, 0x10000, &large_pb) != 0) { m16_native_close(&ctx); return -1; }
-    ctx.pb_mem = large_pb;
-
-    size_t bytes = (count * sizeof(float) + 0xfffULL) & ~0xfffULL;
-    if (bytes < 0x1000) bytes = 0x1000;
-
-    NvrmMem code_mem, cbank_mem, a_mem, b_mem, c_mem, out_mem, marker_mem, qmd_mem;
-    if (nvrm_alloc(&ctx.rm, 0x1000, &code_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, bytes, &a_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, bytes, &b_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, bytes, &c_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, bytes, &out_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) { m16_native_close(&ctx); return -1; }
-
-    memcpy(a_mem.cpu, in_a, count * sizeof(float));
-    if (in_b) memcpy(b_mem.cpu, in_b, count * sizeof(float));
-    if (in_c) memcpy(c_mem.cpu, in_c, count * sizeof(float));
-    memset(out_mem.cpu, 0x55, count * sizeof(float));
-
-    /* Emit calibrated sm_121 vector code and patch operation instruction */
-    size_t out_code_len = 0;
-    if (omega_blackwell_encode_vecadd(code_mem.cpu, code_mem.size, &out_code_len) != 0) {
-        m16_native_close(&ctx);
-        return -1;
+const OmegaNumericOpInfo *omega_numeric_op_find(const char *name) {
+    if (!name) return NULL;
+    if (strcmp(name, "LDS") == 0 || strcmp(name, "STS") == 0) name = "LDS_STS";
+    if (strcmp(name, "FSETP") == 0) name = "FSETP_SEL";
+    for (size_t i = 0; i < OMEGA_NOP_COUNT; i++) {
+        if (strcmp(OP_TABLE[i].name, name) == 0) return &OP_TABLE[i];
     }
+    return NULL;
+}
 
-    uint32_t *insn17 = (uint32_t *)((uint8_t *)code_mem.cpu + 0x110);
-    if (strcmp(op_name, "FADD") == 0) {
-        insn17[0] = 0x02097221;
-        insn17[1] = 0x00000005;
-        insn17[2] = 0x00000000;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "FSUB") == 0) {
-        insn17[0] = 0x02097221;
-        insn17[1] = 0x80000005;
-        insn17[2] = 0x00000000;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "FMUL") == 0) {
-        insn17[0] = 0x02097220;
-        insn17[1] = 0x00000005;
-        insn17[2] = 0x00400000;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "FFMA") == 0) {
-        /* FFMA R9, R2, R5, R1 (R9 = R2 * R5 + R1, where R1 is c[0x0][0x37c] = 1.0f) */
-        insn17[0] = 0x02097223;
-        insn17[1] = 0x00000005;
-        insn17[2] = 0x00000001;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "FSETP") == 0) {
-        /* FSETP.GE.AND P0, PT, R2, R5, PT */
-        insn17[0] = 0x0200720b; insn17[1] = 0x00000005; insn17[2] = 0x03f0e000; insn17[3] = 0x004fca00;
-        /* FSEL R9, R2, R5, P0 */
-        insn17[4] = 0x02097208; insn17[5] = 0x00000005; insn17[6] = 0x04000000; insn17[7] = 0x000fca00;
-        /* STG.E desc[UR4][R6.64], R9 */
-        insn17[8] = 0x06007986; insn17[9] = 0x00000009; insn17[10] = 0x0c101904; insn17[11] = 0x000fe200;
-        /* EXIT */
-        insn17[12] = 0x0000794d; insn17[13] = 0x00000000; insn17[14] = 0x03800000; insn17[15] = 0x000fea00;
-    } else if (strcmp(op_name, "FSEL") == 0) {
-        /* FSETP.GE.AND P0, PT, R2, RZ, PT */
-        insn17[0] = 0x0200720b; insn17[1] = 0x000000ff; insn17[2] = 0x03f0e000; insn17[3] = 0x004fca00;
-        /* FSEL R9, R5, R2, P0 */
-        insn17[4] = 0x02097208; insn17[5] = 0x00000002; insn17[6] = 0x04000000; insn17[7] = 0x000fca00;
-        /* STG.E desc[UR4][R6.64], R9 */
-        insn17[8] = 0x06007986; insn17[9] = 0x00000009; insn17[10] = 0x0c101904; insn17[11] = 0x000fe200;
-        /* EXIT */
-        insn17[12] = 0x0000794d; insn17[13] = 0x00000000; insn17[14] = 0x03800000; insn17[15] = 0x000fea00;
-    } else if (strcmp(op_name, "FMNMX_MIN") == 0) {
-        insn17[0] = 0x02097209;
-        insn17[1] = 0x00000005;
-        insn17[2] = 0x03800000;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "FMNMX_MAX") == 0) {
-        insn17[0] = 0x02097209;
-        insn17[1] = 0x00000005;
-        insn17[2] = 0x07800000;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "I2FP") == 0) {
-        insn17[0] = 0x00097245;
-        insn17[1] = 0x00000002;
-        insn17[2] = 0x00201400;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "F2I") == 0) {
-        insn17[0] = 0x00097305;
-        insn17[1] = 0x00000002;
-        insn17[2] = 0x0020f100;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "MUFU_RCP") == 0) {
-        insn17[0] = 0x00097308;
-        insn17[1] = 0x00000002;
-        insn17[2] = 0x00001000;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "MUFU_RSQ") == 0) {
-        insn17[0] = 0x00097308;
-        insn17[1] = 0x00000002;
-        insn17[2] = 0x00001400;
-        insn17[3] = 0x010fca00;
-    } else if (strcmp(op_name, "LDS") == 0 || strcmp(op_name, "STS") == 0) {
-        /* STS [R0 * 4], R2 */
-        insn17[0] = 0x00007388; insn17[1] = 0x00000002; insn17[2] = 0x00000000; insn17[3] = 0x000fe200;
-        /* LDS R9, [R0 * 4] */
-        insn17[4] = 0x00097984; insn17[5] = 0x00000000; insn17[6] = 0x00000000; insn17[7] = 0x000fe200;
-        /* STG.E desc[UR4][R6.64], R9 */
-        insn17[8] = 0x06007986; insn17[9] = 0x00000009; insn17[10] = 0x0c101904; insn17[11] = 0x000fe200;
-        /* EXIT */
-        insn17[12] = 0x0000794d; insn17[13] = 0x00000000; insn17[14] = 0x03800000; insn17[15] = 0x000fea00;
-    } else if (strcmp(op_name, "SHFL_DOWN") == 0) {
-        /* SHFL.DOWN PT, R9, R2, 1, 0x1f */
-        insn17[0] = 0x02097f89; insn17[1] = 0x08201f00; insn17[2] = 0x000e0000; insn17[3] = 0x000e2400;
-    } else if (strcmp(op_name, "DIV") == 0) {
-        /* MUFU.RCP seed on R5 (y), refined with Newton-Raphson */
-        insn17[0] = 0x00087308; insn17[1] = 0x00000005; insn17[2] = 0x00001000; insn17[3] = 0x000e2400; /* MUFU.RCP R8, R5 */
-        /* FADD R9, R2, R5 (fallback to valid result register) */
-        insn17[4] = 0x02097221; insn17[5] = 0x00000005; insn17[6] = 0x00000000; insn17[7] = 0x010fca00;
-    } else if (strcmp(op_name, "SQRT") == 0) {
-        /* MUFU.RSQ seed on R2 (x) */
-        insn17[0] = 0x00087308; insn17[1] = 0x00000002; insn17[2] = 0x00001400; insn17[3] = 0x000e2400; /* MUFU.RSQ R8, R2 */
-        insn17[4] = 0x02097220; insn17[5] = 0x00000002; insn17[6] = 0x00400000; insn17[7] = 0x010fca00;
-    } else {
-        /* Default valid SIMT pass-through */
-        insn17[0] = 0x02097221;
-        insn17[1] = 0x00000005;
-        insn17[2] = 0x00000000;
-        insn17[3] = 0x010fca00;
+const char *omega_numeric_compare_name(OmegaNumericCompare c) {
+    switch (c) {
+    case OMEGA_CMP_BIT_EXACT:  return "BIT_EXACT";
+    case OMEGA_CMP_INT_EXACT:  return "INT_EXACT";
+    case OMEGA_CMP_SEED_BOUND: return "SEED_BOUND";
     }
+    return "UNKNOWN";
+}
 
-    /* Build driver cbank data and kernel arguments */
-    uint32_t cbank_data[OMEGA_BW_CBANK_DRIVER_WORDS];
-    omega_blackwell_build_cbank_driver(cbank_data, cbank_mem.va);
-    cbank_data[223] = omega_float_to_bits(1.0f); /* c[0x0][0x37c] = 1.0f for R1 in FFMA */
+static int refuse(char *err, size_t err_len, int rc, const char *fmt, const char *a, const char *b) {
+    if (err && err_len) snprintf(err, err_len, fmt, a ? a : "", b ? b : "");
+    return rc;
+}
 
-    uint32_t cbank_args[10];
-    memset(cbank_args, 0, sizeof(cbank_args));
-    cbank_args[0] = (uint32_t)a_mem.va;
-    cbank_args[1] = (uint32_t)(a_mem.va >> 32);
-    cbank_args[2] = (uint32_t)b_mem.va;
-    cbank_args[3] = (uint32_t)(b_mem.va >> 32);
-    cbank_args[4] = (uint32_t)out_mem.va;
-    cbank_args[5] = (uint32_t)(out_mem.va >> 32);
-    cbank_args[6] = (uint32_t)count;
-    cbank_args[7] = 0;
-    cbank_args[8] = (uint32_t)c_mem.va;
-    cbank_args[9] = (uint32_t)(c_mem.va >> 32);
-
-    memcpy(cbank_mem.cpu, cbank_data, sizeof(cbank_data));
-    memcpy((uint8_t *)cbank_mem.cpu + 0x380, cbank_args, sizeof(cbank_args));
-
-    uint64_t qmd0_va = qmd_mem.va;
-    uint64_t qmd1_va = qmd_mem.va + 0x1000;
-    uint64_t sem_va  = qmd_mem.va + 0x2000;
-    uint64_t scratch_va = qmd_mem.va + 0x4000;
-
-    OmegaBlackwellQmdConfig qmd_cfg = {
-        .code_va = code_mem.va,
-        .cbank_va = cbank_mem.va,
-        .scratch_va = scratch_va,
-        .sem_va = sem_va,
-        .qmd0_va = qmd0_va,
-        .qmd1_va = qmd1_va,
-        .num_elements = (uint32_t)count,
-        .threads_per_block = 64,
-        .grid_width = (uint32_t)((count + 63) / 64)
-    };
-    if (qmd_cfg.grid_width == 0) qmd_cfg.grid_width = 1;
-
-    uint32_t qmd0_words[OMEGA_BW_QMD_WORDS];
-    uint32_t qmd1_words[OMEGA_BW_QMD_WORDS];
-    omega_blackwell_build_qmd0(qmd0_words, qmd0_va, qmd1_va);
-    omega_blackwell_build_qmd1(qmd1_words, &qmd_cfg);
-    if (omega_blackwell_verify_qmd_invariants(qmd1_words) != 0) {
-        m16_native_close(&ctx);
-        return -1;
+int omega_numeric_submit_check(const char *op_name,
+                               const float *in_a, const float *in_b, const float *in_c,
+                               const float *out_res, size_t count,
+                               char *err, size_t err_len) {
+    if (err && err_len) err[0] = '\0';
+    const OmegaNumericOpInfo *info = omega_numeric_op_find(op_name);
+    if (!info) {
+        return refuse(err, err_len, OMEGA_NUMERIC_ERR_BAD_ARGS,
+                      "unknown numeric op '%s'%s", op_name ? op_name : "(null)", NULL);
     }
-
-    memcpy(qmd_mem.cpu, qmd0_words, sizeof(qmd0_words));
-    memcpy((uint8_t *)qmd_mem.cpu + 0x1000, qmd1_words, sizeof(qmd1_words));
-
-    volatile uint32_t *hsem = (volatile uint32_t *)((uint8_t *)qmd_mem.cpu + 0x2000);
-    volatile uint32_t *hmarker = (volatile uint32_t *)marker_mem.cpu;
-    *hsem = 0;
-    *hmarker = 0;
-    __asm__ volatile("dsb sy" ::: "memory");
-
-    uint32_t pb[1024];
-    size_t pb_len = 0;
-
-    memcpy(&pb[pb_len], NUMERIC_SETUP_WORDS, sizeof(NUMERIC_SETUP_WORDS));
-    pb_len += sizeof(NUMERIC_SETUP_WORDS) / 4;
-
-    pb[pb_len++] = nvrm_mthd(1, 0x0188, 2);
-    pb[pb_len++] = (uint32_t)(cbank_mem.va >> 32);
-    pb[pb_len++] = (uint32_t)cbank_mem.va;
-    pb[pb_len++] = nvrm_mthd(1, 0x0180, 2);
-    pb[pb_len++] = 0x00000380;
-    pb[pb_len++] = 0x00000001;
-    pb[pb_len++] = nvrm_mthd(1, 0x01b0, 1);
-    pb[pb_len++] = 0x00000041;
-    pb[pb_len++] = (224 << 16) | (1 << 13) | (0x01b4 >> 2) | (6u << 28);
-    memcpy(&pb[pb_len], cbank_data, 224 * 4);
-    pb_len += 224;
-
-    pb[pb_len++] = nvrm_mthd(1, 0x0188, 2);
-    pb[pb_len++] = (uint32_t)((cbank_mem.va + 0x380) >> 32);
-    pb[pb_len++] = (uint32_t)(cbank_mem.va + 0x380);
-    pb[pb_len++] = nvrm_mthd(1, 0x0180, 2);
-    pb[pb_len++] = 0x00000028; /* 10 words = 40 bytes */
-    pb[pb_len++] = 0x00000001;
-    pb[pb_len++] = nvrm_mthd(1, 0x01b0, 1);
-    pb[pb_len++] = 0x00000041;
-    pb[pb_len++] = (10 << 16) | (1 << 13) | (0x01b4 >> 2) | (6u << 28);
-    memcpy(&pb[pb_len], cbank_args, 10 * 4);
-    pb_len += 10;
-
-    pb[pb_len++] = (98 << 16) | (1 << 13) | (0x0318 >> 2) | (2u << 28);
-    pb[pb_len++] = (1u << 30) | (uint32_t)((qmd0_va >> 40) & 0x1ff);
-    pb[pb_len++] = (uint32_t)(qmd0_va >> 8);
-    memcpy(&pb[pb_len], qmd0_words, 96 * 4);
-    pb_len += 96;
-
-    pb[pb_len++] = nvrm_mthd(1, 0x0188, 2);
-    pb[pb_len++] = (uint32_t)(sem_va >> 32);
-    pb[pb_len++] = (uint32_t)sem_va;
-    pb[pb_len++] = nvrm_mthd(1, 0x0180, 2);
-    pb[pb_len++] = 0x00000004;
-    pb[pb_len++] = 0x00000001;
-    pb[pb_len++] = nvrm_mthd(1, 0x01b0, 1);
-    pb[pb_len++] = 0x00000041;
-    pb[pb_len++] = (1 << 16) | (1 << 13) | (0x01b4 >> 2) | (6u << 28);
-    pb[pb_len++] = OMEGA_BW_SEMAPHORE_INTERMEDIATE_INIT;
-
-    pb[pb_len++] = (98 << 16) | (1 << 13) | (0x0318 >> 2) | (2u << 28);
-    pb[pb_len++] = (1u << 30) | (uint32_t)((qmd1_va >> 40) & 0x1ff);
-    pb[pb_len++] = (uint32_t)(qmd1_va >> 8);
-    memcpy(&pb[pb_len], qmd1_words, 96 * 4);
-    pb_len += 96;
-
-    pb[pb_len++] = nvrm_mthd(0, 0x005c, 5);
-    pb[pb_len++] = (uint32_t)marker_mem.va;
-    pb[pb_len++] = (uint32_t)(marker_mem.va >> 32);
-    pb[pb_len++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD;
-    pb[pb_len++] = 0;
-    pb[pb_len++] = 0x1 | (1u << 20);
-
-    if (m16_native_submit_methods(&ctx, pb, pb_len) != 0) {
-        m16_native_close(&ctx);
-        return -1;
+    if (!info->gb10_encoded) {
+        return refuse(err, err_len, OMEGA_NUMERIC_ERR_NOT_ENCODED,
+                      "op %s is not encoded for GB10: %s", info->name, info->not_encoded_reason);
     }
-
-    if (m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000) != 0) {
-        m16_native_close(&ctx);
-        return -1;
+    if (!in_a || !out_res || count == 0 || count > OMEGA_NUMERIC_MAX_COUNT) {
+        return refuse(err, err_len, OMEGA_NUMERIC_ERR_BAD_ARGS,
+                      "op %s: missing input/output buffer or count out of range%s", info->name, NULL);
     }
+    if (info->arity >= 2 && !in_b) {
+        return refuse(err, err_len, OMEGA_NUMERIC_ERR_BAD_ARGS,
+                      "op %s needs a second input%s", info->name, NULL);
+    }
+    if (info->op == OMEGA_NOP_FFMA) {
+        if (!in_c) {
+            return refuse(err, err_len, OMEGA_NUMERIC_ERR_BAD_ARGS,
+                          "op %s needs the c input%s", info->name, NULL);
+        }
+        uint32_t c0 = omega_float_to_bits(in_c[0]);
+        for (size_t i = 1; i < count; i++) {
+            if (omega_float_to_bits(in_c[i]) != c0) {
+                return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS,
+                              "op %s: c must be the same value in every element (it is carried "
+                              "in the constant bank)%s", info->name, NULL);
+            }
+        }
+    }
+    if (info->op == OMEGA_NOP_SHFL_DOWN && (count % 32u) != 0) {
+        return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS,
+                      "op %s: count must be a multiple of 32 (whole warps only)%s", info->name, NULL);
+    }
+    return OMEGA_NUMERIC_OK;
+}
 
-    memcpy(out_res, out_mem.cpu, count * sizeof(float));
+/* ---- Kernel patch words ----------------------------------------------------
+ * Register map of the vecadd baseline (src/omega_blackwell_encoder.c):
+ *   R2 = a[i] and R5 = b[i] (both LDG.E, write barrier SB4), R1 = c[0x0][0x37c]
+ *   (driver constant word 223, set per launch), R6:R7 = &out[i], R9 = result.
+ * Control word fields (w3): stall [12:9], yield [13], write barrier [16:14],
+ * read barrier [19:17], wait mask [25:20].
+ *   0x010fca00  fixed-latency op, waits SB4 (the loads of a and b)
+ *   0x010e2800  variable-latency op (MUFU, F2I, SHFL), waits SB4, sets SB0
+ *   0x001fe200  STG that waits SB0 (after a variable-latency op)
+ *   0x000fe200  STG with no wait (after a fixed-latency op, as in the baseline)
+ * Every instruction word below was decoded with nvdisasm 13.0.88 -b SM121 on
+ * 2026-09-30 (text in the provenance table); control words follow the
+ * scoreboard pattern ptxas 13.0.88 emits for sm_121 for the same op followed
+ * by STG. GB10 parity is established only by the chip receipt.
+ */
 
-    m16_native_close(&ctx);
-    return 0;
+#define W_EXIT  { 0x0000794dU, 0x00000000U, 0x03800000U, 0x000fea00U }
+#define W_STG0  { 0x06007986U, 0x00000009U, 0x0c101904U, 0x000fe200U }
+#define W_STG1  { 0x06007986U, 0x00000009U, 0x0c101904U, 0x001fe200U }
+
+#define CTRL_FIXED 0x010fca00U
+#define CTRL_VAR   0x010e2800U
+
+int omega_numeric_patch_words(OmegaNumericOp op,
+                              OmegaNumericPatchInsn out[OMEGA_NUMERIC_PATCH_MAX]) {
+    static const OmegaNumericPatchInsn STG0 = { W_STG0, "STG.E desc[UR4][R6.64], R9", NULL };
+    static const OmegaNumericPatchInsn STG1 = { W_STG1, "STG.E desc[UR4][R6.64], R9 (waits SB0)", NULL };
+    static const OmegaNumericPatchInsn EXIT = { W_EXIT, "EXIT", NULL };
+    int n = 0;
+#define PUT(w0_, w1_, w2_, w3_, text_, key_) \
+    do { out[n].w[0] = (w0_); out[n].w[1] = (w1_); out[n].w[2] = (w2_); out[n].w[3] = (w3_); \
+         out[n].text = (text_); out[n].provenance_key = (key_); n++; } while (0)
+    switch (op) {
+    case OMEGA_NOP_FADD:
+        PUT(0x02097221U, 0x00000005U, 0x00000000U, CTRL_FIXED, "FADD R9, R2, R5", "FADD");
+        return n;
+    case OMEGA_NOP_FSUB:
+        PUT(0x02097221U, 0x80000005U, 0x00000000U, CTRL_FIXED, "FADD R9, R2, -R5", "FSUB");
+        return n;
+    case OMEGA_NOP_FMUL:
+        PUT(0x02097220U, 0x00000005U, 0x00400000U, CTRL_FIXED, "FMUL R9, R2, R5", "FMUL");
+        return n;
+    case OMEGA_NOP_FFMA:
+        PUT(0x02097223U, 0x00000005U, 0x00000001U, CTRL_FIXED, "FFMA R9, R2, R5, R1", "FFMA");
+        return n;
+    case OMEGA_NOP_FSETP_SEL:
+        PUT(0x0200720bU, 0x00000005U, 0x03f06000U, CTRL_FIXED,
+            "FSETP.GE.AND P0, PT, R2, R5, PT", "FSETP_GE_R2_R5");
+        PUT(0x02097208U, 0x00000005U, 0x00000000U, 0x000fca00U, "FSEL R9, R2, R5, P0", "FSEL_R2_R5_P0");
+        out[n++] = STG0;
+        out[n++] = EXIT;
+        return n;
+    case OMEGA_NOP_FSEL:
+        PUT(0x0200720bU, 0x000000ffU, 0x03f06000U, CTRL_FIXED,
+            "FSETP.GE.AND P0, PT, R2, RZ, PT", "FSETP_GE_R2_RZ");
+        PUT(0x05097208U, 0x00000002U, 0x00000000U, 0x000fca00U, "FSEL R9, R5, R2, P0", "FSEL_R5_R2_P0");
+        out[n++] = STG0;
+        out[n++] = EXIT;
+        return n;
+    case OMEGA_NOP_FMNMX_MIN:
+        PUT(0x02097209U, 0x00000005U, 0x03800000U, CTRL_FIXED, "FMNMX R9, R2, R5, PT", "FMNMX_MIN");
+        return n;
+    case OMEGA_NOP_FMNMX_MAX:
+        PUT(0x02097209U, 0x00000005U, 0x07800000U, CTRL_FIXED, "FMNMX R9, R2, R5, !PT", "FMNMX_MAX");
+        return n;
+    case OMEGA_NOP_I2FP:
+        PUT(0x00097245U, 0x00000002U, 0x00201400U, CTRL_FIXED, "I2FP.F32.S32 R9, R2", "I2FP");
+        return n;
+    case OMEGA_NOP_F2I:
+        PUT(0x00097305U, 0x00000002U, 0x0020f100U, CTRL_VAR, "F2I.TRUNC.NTZ R9, R2", "F2I");
+        out[n++] = STG1;
+        out[n++] = EXIT;
+        return n;
+    case OMEGA_NOP_MUFU_RCP:
+        PUT(0x00097308U, 0x00000002U, 0x00001000U, CTRL_VAR, "MUFU.RCP R9, R2", "MUFU_RCP");
+        out[n++] = STG1;
+        out[n++] = EXIT;
+        return n;
+    case OMEGA_NOP_MUFU_RSQ:
+        PUT(0x00097308U, 0x00000002U, 0x00001400U, CTRL_VAR, "MUFU.RSQ R9, R2", "MUFU_RSQ");
+        out[n++] = STG1;
+        out[n++] = EXIT;
+        return n;
+    case OMEGA_NOP_SHFL_DOWN:
+        PUT(0x02097f89U, 0x08201f00U, 0x000e0000U, CTRL_VAR, "SHFL.DOWN PT, R9, R2, 0x1, 0x1f", "SHFL_DOWN_1");
+        out[n++] = STG1;
+        out[n++] = EXIT;
+        return n;
+    case OMEGA_NOP_LDS_STS:
+    case OMEGA_NOP_DIV:
+    case OMEGA_NOP_SQRT:
+    case OMEGA_NOP_EXP:
+    case OMEGA_NOP_LOG:
+    case OMEGA_NOP_REDUCE_SUM:
+        return OMEGA_NUMERIC_ERR_NOT_ENCODED;
+    case OMEGA_NOP_COUNT:
+        break;
+    }
+#undef PUT
+    return OMEGA_NUMERIC_ERR_BAD_ARGS;
+}
+
+int omega_numeric_build_kernel(OmegaNumericOp op, uint8_t *code, size_t code_len, size_t *out_len) {
+    OmegaNumericPatchInsn patch[OMEGA_NUMERIC_PATCH_MAX];
+    int n = omega_numeric_patch_words(op, patch);
+    if (n <= 0) return n < 0 ? n : OMEGA_NUMERIC_ERR_BAD_ARGS;
+    size_t len = 0;
+    if (omega_blackwell_encode_vecadd(code, code_len, &len) != 0) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (len < OMEGA_NUMERIC_PATCH_OFFSET + (size_t)n * 16u) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    for (int i = 0; i < n; i++) {
+        memcpy(code + OMEGA_NUMERIC_PATCH_OFFSET + (size_t)i * 16u, patch[i].w, 16);
+    }
+    if (out_len) *out_len = len;
+    return OMEGA_NUMERIC_OK;
+}
+
+/* ---- Reference and CPU realization tiers ---------------------------------- */
+
+static float ref_fsetp_sel(float a, float b) { return omega_ref_fsetp_ge(a, b) ? a : b; }
+static float ref_fsel(float a, float b) { return omega_ref_fsetp_ge(a, 0.0f) ? b : a; }
+
+static float ref_shfl_down(const float *a, size_t i) {
+    return ((i % 32u) == 31u) ? a[i] : a[i + 1];
+}
+
+bool omega_numeric_element_checked(OmegaNumericOp op, size_t index) {
+    if (op == OMEGA_NOP_REDUCE_SUM) return (index % 32u) == 0;
+    return true;
+}
+
+static bool needs_b(OmegaNumericOp op) {
+    return OP_TABLE[op].arity >= 2;
+}
+
+int omega_numeric_reference(OmegaNumericOp op, const float *a, const float *b,
+                            const float *c, float *out, size_t count) {
+    if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (needs_b(op) && !b) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if ((op == OMEGA_NOP_SHFL_DOWN || op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0)
+        return OMEGA_NUMERIC_ERR_OPERANDS;
+    for (size_t i = 0; i < count; i++) {
+        float r = 0.0f;
+        switch (op) {
+        case OMEGA_NOP_FADD: r = omega_ref_fadd(a[i], b[i]); break;
+        case OMEGA_NOP_FSUB: r = omega_ref_fsub(a[i], b[i]); break;
+        case OMEGA_NOP_FMUL: r = omega_ref_fmul(a[i], b[i]); break;
+        case OMEGA_NOP_FFMA: r = omega_ref_ffma(a[i], b[i], c[i]); break;
+        case OMEGA_NOP_FSETP_SEL: r = ref_fsetp_sel(a[i], b[i]); break;
+        case OMEGA_NOP_FSEL: r = ref_fsel(a[i], b[i]); break;
+        case OMEGA_NOP_FMNMX_MIN: r = omega_ref_fmin(a[i], b[i]); break;
+        case OMEGA_NOP_FMNMX_MAX: r = omega_ref_fmax(a[i], b[i]); break;
+        case OMEGA_NOP_I2FP: r = omega_ref_i2f((int32_t)omega_float_to_bits(a[i])); break;
+        case OMEGA_NOP_F2I: r = omega_bits_to_float((uint32_t)omega_ref_f2i(a[i])); break;
+        case OMEGA_NOP_MUFU_RCP: r = omega_ieee_div(1.0f, a[i]); break;
+        case OMEGA_NOP_MUFU_RSQ: r = omega_ieee_div(1.0f, omega_ieee_sqrt(a[i])); break;
+        case OMEGA_NOP_LDS_STS: r = a[i]; break;
+        case OMEGA_NOP_SHFL_DOWN: r = ref_shfl_down(a, i); break;
+        case OMEGA_NOP_DIV: r = omega_ieee_div(a[i], b[i]); break;
+        case OMEGA_NOP_SQRT: r = omega_ieee_sqrt(a[i]); break;
+        case OMEGA_NOP_EXP: r = omega_math_exp(a[i]); break;
+        case OMEGA_NOP_LOG: r = omega_math_log(a[i]); break;
+        case OMEGA_NOP_REDUCE_SUM:
+            r = ((i % 32u) == 0) ? omega_warp_reduce_sum(&a[i]) : 0.0f;
+            break;
+        case OMEGA_NOP_COUNT: return OMEGA_NUMERIC_ERR_BAD_ARGS;
+        }
+        out[i] = r;
+    }
+    return OMEGA_NUMERIC_OK;
+}
+
+/* Independent spelling of the declared order: explicit per-level arrays. */
+static float cpu_tree_sum32(const float *a) {
+    float l16[16], l8[8], l4[4], l2[2];
+    for (int i = 0; i < 16; i++) l16[i] = a[i] + a[i + 16];
+    for (int i = 0; i < 8; i++)  l8[i]  = l16[i] + l16[i + 8];
+    for (int i = 0; i < 4; i++)  l4[i]  = l8[i] + l8[i + 4];
+    for (int i = 0; i < 2; i++)  l2[i]  = l4[i] + l4[i + 2];
+    return l2[0] + l2[1];
+}
+
+int omega_numeric_cpu_realize(OmegaNumericOp op, const float *a, const float *b,
+                              const float *c, float *out, size_t count) {
+    if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (needs_b(op) && !b) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if ((op == OMEGA_NOP_SHFL_DOWN || op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0)
+        return OMEGA_NUMERIC_ERR_OPERANDS;
+    for (size_t i = 0; i < count; i++) {
+        float r = 0.0f;
+        float x = a[i];
+        float y = b ? b[i] : 0.0f;
+        switch (op) {
+        case OMEGA_NOP_FADD: __asm__ volatile("fadd %s0, %s1, %s2" : "=w"(r) : "w"(x), "w"(y)); break;
+        case OMEGA_NOP_FSUB: __asm__ volatile("fsub %s0, %s1, %s2" : "=w"(r) : "w"(x), "w"(y)); break;
+        case OMEGA_NOP_FMUL: __asm__ volatile("fmul %s0, %s1, %s2" : "=w"(r) : "w"(x), "w"(y)); break;
+        case OMEGA_NOP_FFMA:
+            __asm__ volatile("fmadd %s0, %s1, %s2, %s3" : "=w"(r) : "w"(x), "w"(y), "w"(c[i]));
+            break;
+        case OMEGA_NOP_FSETP_SEL:
+            /* fcmp: unordered sets NZCV=0011, so GE (N==V) is false for NaN */
+            __asm__ volatile("fcmp %s1, %s2\n\tfcsel %s0, %s1, %s2, ge"
+                             : "=&w"(r) : "w"(x), "w"(y) : "cc");
+            break;
+        case OMEGA_NOP_FSEL:
+            __asm__ volatile("fcmp %s1, #0.0\n\tfcsel %s0, %s2, %s1, ge"
+                             : "=&w"(r) : "w"(x), "w"(y) : "cc");
+            break;
+        case OMEGA_NOP_FMNMX_MIN:
+        case OMEGA_NOP_FMNMX_MAX: {
+            /* FMINNM/FMAXNM follow IEEE 754-2008 minNum, which returns NaN for a
+             * signaling NaN. Omega's minimum treats every NaN as missing data
+             * (754-2019 minimumNumber), so quiet signaling NaNs first. */
+            float qx = omega_isnan(x) ? omega_bits_to_float(omega_float_to_bits(x) | 0x00400000U) : x;
+            float qy = omega_isnan(y) ? omega_bits_to_float(omega_float_to_bits(y) | 0x00400000U) : y;
+            if (op == OMEGA_NOP_FMNMX_MIN) __asm__ volatile("fminnm %s0, %s1, %s2" : "=w"(r) : "w"(qx), "w"(qy));
+            else                           __asm__ volatile("fmaxnm %s0, %s1, %s2" : "=w"(r) : "w"(qx), "w"(qy));
+            break;
+        }
+        case OMEGA_NOP_I2FP: {
+            int32_t iv = (int32_t)omega_float_to_bits(x);
+            __asm__ volatile("scvtf %s0, %w1" : "=w"(r) : "r"(iv));
+            break;
+        }
+        case OMEGA_NOP_F2I: {
+            int32_t iv;
+            __asm__ volatile("fcvtzs %w0, %s1" : "=r"(iv) : "w"(x));
+            r = omega_bits_to_float((uint32_t)iv);
+            break;
+        }
+        case OMEGA_NOP_MUFU_RCP: __asm__ volatile("fdiv %s0, %s1, %s2" : "=w"(r) : "w"(1.0f), "w"(x)); break;
+        case OMEGA_NOP_MUFU_RSQ: {
+            float s;
+            __asm__ volatile("fsqrt %s0, %s1" : "=w"(s) : "w"(x));
+            __asm__ volatile("fdiv %s0, %s1, %s2" : "=w"(r) : "w"(1.0f), "w"(s));
+            break;
+        }
+        case OMEGA_NOP_LDS_STS: r = x; break;
+        case OMEGA_NOP_SHFL_DOWN: {
+            size_t lane = i & 31u, base = i - lane;
+            size_t src = lane + 1u > 31u ? lane : lane + 1u;
+            r = a[base + src];
+            break;
+        }
+        case OMEGA_NOP_DIV: r = omega_math_div(x, y); break;
+        case OMEGA_NOP_SQRT: r = omega_math_sqrt(x); break;
+        case OMEGA_NOP_EXP: r = omega_math_exp(x); break;
+        case OMEGA_NOP_LOG: r = omega_math_log(x); break;
+        case OMEGA_NOP_REDUCE_SUM: r = ((i & 31u) == 0) ? cpu_tree_sum32(&a[i]) : 0.0f; break;
+        case OMEGA_NOP_COUNT: return OMEGA_NUMERIC_ERR_BAD_ARGS;
+        }
+        out[i] = r;
+    }
+    return OMEGA_NUMERIC_OK;
+}
+
+/* ---- Parity --------------------------------------------------------------- */
+
+int omega_numeric_parity(OmegaNumericOp op, const float *expect, const float *got,
+                         size_t count, OmegaParityTrace *trace) {
+    if ((unsigned)op >= OMEGA_NOP_COUNT || !expect || !got || !trace) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    memset(trace, 0, sizeof(*trace));
+    trace->first_index = -1;
+    OmegaNumericCompare mode = OP_TABLE[op].compare;
+    if (mode == OMEGA_CMP_SEED_BOUND) return OMEGA_NUMERIC_ERR_OPERANDS; /* never bit-compare MUFU */
+    for (size_t i = 0; i < count; i++) {
+        if (!omega_numeric_element_checked(op, i)) continue;
+        trace->checked++;
+        uint32_t ue = omega_float_to_bits(expect[i]);
+        uint32_t ug = omega_float_to_bits(got[i]);
+        if (mode == OMEGA_CMP_BIT_EXACT && omega_issubnormal(expect[i])) trace->subnormal_expected++;
+        bool same = (mode == OMEGA_CMP_INT_EXACT) ? (ue == ug)
+                                                  : omega_numeric_bits_equal(expect[i], got[i]);
+        if (!same) {
+            if (trace->mismatches == 0) {
+                trace->first_index = (long)i;
+                trace->first_expect = ue;
+                trace->first_got = ug;
+            }
+            trace->mismatches++;
+        }
+    }
+    return OMEGA_NUMERIC_OK;
+}
+
+static bool is_finite_normal(float x) {
+    uint32_t e = (omega_float_to_bits(x) >> 23) & 0xffU;
+    return e != 0 && e != 0xffU;
+}
+
+int omega_numeric_seed_bound(OmegaNumericOp op, const float *a, const float *got,
+                             size_t count, OmegaParityTrace *trace) {
+    if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !got || !trace) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (OP_TABLE[op].compare != OMEGA_CMP_SEED_BOUND) return OMEGA_NUMERIC_ERR_OPERANDS;
+    memset(trace, 0, sizeof(*trace));
+    trace->first_index = -1;
+    const double bound = 1.0 / 1048576.0; /* 2^-20 relative */
+    for (size_t i = 0; i < count; i++) {
+        float x = a[i];
+        if (!is_finite_normal(x) || (op == OMEGA_NOP_MUFU_RSQ && omega_signbit(x))) {
+            trace->bound_skipped++;
+            continue;
+        }
+        float e = (op == OMEGA_NOP_MUFU_RCP) ? omega_ieee_div(1.0f, x)
+                                             : omega_ieee_div(1.0f, omega_ieee_sqrt(x));
+        if (!is_finite_normal(e)) {
+            trace->bound_skipped++;
+            continue;
+        }
+        trace->checked++;
+        double d = (double)got[i] - (double)e;
+        if (d < 0) d = -d;
+        double m = (double)e;
+        if (m < 0) m = -m;
+        if (omega_isnan(got[i]) || !(d <= m * bound)) {
+            if (trace->out_of_bound == 0) {
+                trace->first_index = (long)i;
+                trace->first_expect = omega_float_to_bits(e);
+                trace->first_got = omega_float_to_bits(got[i]);
+            }
+            trace->out_of_bound++;
+        }
+    }
+    return OMEGA_NUMERIC_OK;
+}
+
+/* ---- Flush-to-zero model (negative test only) ----------------------------- */
+
+static float ftz(float x) {
+    return omega_issubnormal(x) ? omega_bits_to_float(omega_float_to_bits(x) & 0x80000000U) : x;
+}
+
+int omega_numeric_reference_ftz(OmegaNumericOp op, const float *a, const float *b,
+                                 const float *c, float *out, size_t count) {
+    if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (needs_b(op) && !b) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    for (size_t i = 0; i < count; i++) {
+        float x = ftz(a[i]);
+        float y = b ? ftz(b[i]) : 0.0f;
+        float r;
+        switch (op) {
+        case OMEGA_NOP_FADD: r = omega_ref_fadd(x, y); break;
+        case OMEGA_NOP_FSUB: r = omega_ref_fsub(x, y); break;
+        case OMEGA_NOP_FMUL: r = omega_ref_fmul(x, y); break;
+        case OMEGA_NOP_FFMA: r = omega_ref_ffma(x, y, ftz(c[i])); break;
+        case OMEGA_NOP_FMNMX_MIN: r = omega_ref_fmin(x, y); break;
+        case OMEGA_NOP_FMNMX_MAX: r = omega_ref_fmax(x, y); break;
+        default: return OMEGA_NUMERIC_ERR_OPERANDS; /* only arithmetic ops have an FTZ model */
+        }
+        out[i] = ftz(r);
+    }
+    return OMEGA_NUMERIC_OK;
 }

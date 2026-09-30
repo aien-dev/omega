@@ -1,6 +1,20 @@
 #ifndef OMEGA_NUMERIC_H
 #define OMEGA_NUMERIC_H
 
+/*
+ * OMEGA-NUMERIC-0 (M19R Gate 5): FP32 substrate.
+ *
+ * This file is host-pure: the semantic reference tier, the CPU realization
+ * tier, the Omega math sequences, the op registry (which ops have a GB10
+ * encoding and how their results are compared), the kernel patch words, and
+ * the parity comparators. Nothing here opens a device. The GB10 executor is
+ * src/omega_numeric_gb10.c.
+ *
+ * Build with -ffp-contract=off: the reference and CPU tiers must not depend
+ * on whether the compiler fuses a*b+c. Fused operations are written as
+ * explicit AArch64 instructions.
+ */
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -10,22 +24,6 @@
  * Pairwise binary tree across 32 lanes (delta = 16, 8, 4, 2, 1).
  */
 #define OMEGA_WARP_REDUCTION_DECLARED_ORDER "PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1"
-
-/*
- * Bit-identical floating-point classification
- */
-typedef enum {
-    OMEGA_FP_ZERO_POS = 0,
-    OMEGA_FP_ZERO_NEG,
-    OMEGA_FP_INF_POS,
-    OMEGA_FP_INF_NEG,
-    OMEGA_FP_QNAN,
-    OMEGA_FP_SNAN,
-    OMEGA_FP_SUBNORMAL,
-    OMEGA_FP_NORMAL_SMALLEST,
-    OMEGA_FP_NORMAL_LARGEST,
-    OMEGA_FP_NORMAL_RANDOM
-} OmegaFpClass;
 
 /*
  * Bitcast utility functions
@@ -78,7 +76,7 @@ static inline bool omega_iszero(float x) {
 
 /*
  * Semantic Reference Tier:
- * Exact IEEE 754-2008 single-precision specification.
+ * Exact IEEE 754-2008 single-precision specification, round to nearest even.
  * Subnormals are preserved bit-exactly (Flush-To-Zero is strictly rejected).
  */
 float omega_ref_fadd(float a, float b);
@@ -90,11 +88,16 @@ float omega_ref_fmax(float a, float b);
 bool  omega_ref_fsetp_ge(float a, float b);
 float omega_ref_i2f(int32_t a);
 int32_t omega_ref_f2i(float a);
+/* Correctly rounded IEEE division and square root (the AArch64 FDIV/FSQRT
+ * instructions; not libm). The semantic target for omega_math_div/sqrt. */
+float omega_ieee_div(float x, float y);
+float omega_ieee_sqrt(float x);
 
 /*
- * Omega-defined refinement sequences for Division & Square Root:
- * Raw MUFU is allowed ONLY as an initial seed. Final result is computed
- * by an Omega-defined Newton-Raphson refinement sequence with subnormals preserved.
+ * Omega-defined refinement sequences for Division & Square Root.
+ * The Gate 5 spec requires these to be correctly rounded. They are compared
+ * bit-for-bit against omega_ieee_div / omega_ieee_sqrt; see the gate test for
+ * the observed mismatch counts.
  */
 float omega_math_div(float x, float y);
 float omega_math_sqrt(float x);
@@ -114,9 +117,155 @@ float omega_math_log(float x);
 float omega_warp_reduce_sum(const float warp_inputs[32]);
 
 /*
- * Execution on physical GB10 silicon:
- * Assembles and dispatches SIMT kernels to the GB10 GPFIFO channel
- * and reads back the computed results.
+ * Equivalence comparator:
+ * Verifies that two floats match bit-for-bit, except that all quiet/signaling
+ * NaNs are considered equivalent in the NaN class.
+ */
+bool omega_numeric_bits_equal(float a, float b);
+
+/* ---- Op registry --------------------------------------------------------- */
+
+typedef enum {
+    OMEGA_NOP_FADD = 0,
+    OMEGA_NOP_FSUB,
+    OMEGA_NOP_FMUL,
+    OMEGA_NOP_FFMA,        /* a*b + c, c uniform per launch (constant bank) */
+    OMEGA_NOP_FSETP_SEL,   /* FSETP.GE P0, a, b ; FSEL out = P0 ? a : b      */
+    OMEGA_NOP_FSEL,        /* FSETP.GE P0, a, RZ ; FSEL out = P0 ? b : a     */
+    OMEGA_NOP_FMNMX_MIN,
+    OMEGA_NOP_FMNMX_MAX,
+    OMEGA_NOP_I2FP,        /* input bits read as int32, output FP32          */
+    OMEGA_NOP_F2I,         /* input FP32, output bits are int32              */
+    OMEGA_NOP_MUFU_RCP,    /* seed only: never compared bit-exactly          */
+    OMEGA_NOP_MUFU_RSQ,    /* seed only: never compared bit-exactly          */
+    OMEGA_NOP_LDS_STS,     /* STS then LDS round trip: out = a               */
+    OMEGA_NOP_SHFL_DOWN,   /* SHFL.DOWN by 1, clamp 0x1f                     */
+    OMEGA_NOP_DIV,
+    OMEGA_NOP_SQRT,
+    OMEGA_NOP_EXP,
+    OMEGA_NOP_LOG,
+    OMEGA_NOP_REDUCE_SUM,
+    OMEGA_NOP_COUNT
+} OmegaNumericOp;
+
+typedef enum {
+    OMEGA_CMP_BIT_EXACT = 0,  /* FP32 bits equal; any NaN equals any NaN     */
+    OMEGA_CMP_INT_EXACT,      /* raw 32-bit words equal (integer results)    */
+    OMEGA_CMP_SEED_BOUND      /* MUFU: relative-error bound only, never bits */
+} OmegaNumericCompare;
+
+typedef struct {
+    OmegaNumericOp      op;
+    const char         *name;
+    int                 arity;          /* inputs used: 1 (a), 2 (a,b), 3 (a,b,c) */
+    bool                gb10_encoded;   /* a real kernel exists for this op       */
+    OmegaNumericCompare compare;
+    const char         *reference;      /* what the expected value is             */
+    const char         *not_encoded_reason;
+} OmegaNumericOpInfo;
+
+size_t omega_numeric_op_count(void);
+const OmegaNumericOpInfo *omega_numeric_op_at(size_t index);
+/* Finds an op by name. "LDS" and "STS" are aliases of LDS_STS, "FSETP" of
+ * FSETP_SEL. Returns NULL for unknown names. */
+const OmegaNumericOpInfo *omega_numeric_op_find(const char *name);
+const char *omega_numeric_compare_name(OmegaNumericCompare c);
+
+/* Return codes of omega_numeric_submit_check and omega_gb10_execute_simt_op */
+#define OMEGA_NUMERIC_OK               0
+#define OMEGA_NUMERIC_ERR_BAD_ARGS    -1   /* unknown op or missing buffers      */
+#define OMEGA_NUMERIC_ERR_NOT_ENCODED -2   /* op known, no GB10 kernel exists    */
+#define OMEGA_NUMERIC_ERR_OPERANDS    -3   /* operand shape the kernel can't do  */
+#define OMEGA_NUMERIC_ERR_DEVICE      -4   /* device open/alloc/submit/wait      */
+
+#define OMEGA_NUMERIC_MAX_COUNT 65536u
+
+/*
+ * Everything that must be true before any device is touched. Writes a
+ * one-line reason into err (if non-NULL) on refusal.
+ */
+int omega_numeric_submit_check(const char *op_name,
+                               const float *in_a, const float *in_b, const float *in_c,
+                               const float *out_res, size_t count,
+                               char *err, size_t err_len);
+
+/*
+ * Kernel patch: the instruction words written at byte offset
+ * OMEGA_NUMERIC_PATCH_OFFSET of the vecadd kernel (replacing its IADD3, and
+ * for multi-instruction ops also its STG/EXIT). Returns the number of 128-bit
+ * instructions, or a negative OMEGA_NUMERIC_ERR_* code for ops without an
+ * encoding.
+ */
+#define OMEGA_NUMERIC_PATCH_OFFSET 0x110u
+#define OMEGA_NUMERIC_PATCH_MAX    4u
+typedef struct {
+    uint32_t    w[4];
+    const char *text;
+    const char *provenance_key;   /* NULL for vecadd baseline STG / EXIT */
+} OmegaNumericPatchInsn;
+
+int omega_numeric_patch_words(OmegaNumericOp op,
+                              OmegaNumericPatchInsn out[OMEGA_NUMERIC_PATCH_MAX]);
+
+/* Encodes the vecadd baseline and applies the patch for op. */
+int omega_numeric_build_kernel(OmegaNumericOp op, uint8_t *code, size_t code_len,
+                               size_t *out_len);
+
+/* ---- Tiers and comparison ------------------------------------------------- */
+
+/* Semantic reference tier for every op. c may be NULL except for FFMA. */
+int omega_numeric_reference(OmegaNumericOp op, const float *a, const float *b,
+                            const float *c, float *out, size_t count);
+
+/* CPU realization tier: the AArch64 instruction (or the Omega sequence for
+ * DIV/SQRT/EXP/LOG) that realizes each op on the host. */
+int omega_numeric_cpu_realize(OmegaNumericOp op, const float *a, const float *b,
+                              const float *c, float *out, size_t count);
+
+/* Elements that carry a result for op (REDUCE_SUM: lane 0 of each warp). */
+bool omega_numeric_element_checked(OmegaNumericOp op, size_t index);
+
+typedef struct {
+    size_t   checked;        /* elements compared                          */
+    size_t   mismatches;
+    long     first_index;    /* -1 when none                               */
+    uint32_t first_expect;
+    uint32_t first_got;
+    size_t   subnormal_expected;  /* checked elements whose expected value is subnormal */
+    size_t   out_of_bound;   /* SEED_BOUND only: results outside the bound */
+    size_t   bound_skipped;  /* SEED_BOUND only: elements outside the bounded domain */
+} OmegaParityTrace;
+
+/*
+ * Bit parity: refuses (returns OMEGA_NUMERIC_ERR_OPERANDS) for a SEED_BOUND
+ * op. That refusal is the structural guarantee behind
+ * MUFU_SEED_ONLY_NOT_COMPARED.
+ */
+int omega_numeric_parity(OmegaNumericOp op, const float *expect, const float *got,
+                         size_t count, OmegaParityTrace *trace);
+
+/* Seed bound for MUFU: compares against the true 1/x or 1/sqrt(x) (IEEE)
+ * with relative error <= 2^-20 on inputs whose result is a finite normal.
+ * Refuses non-SEED_BOUND ops. */
+int omega_numeric_seed_bound(OmegaNumericOp op, const float *a, const float *got,
+                             size_t count, OmegaParityTrace *trace);
+
+/* Flush-to-zero model used by the negative test: subnormal inputs and outputs
+ * replaced by signed zero. */
+int omega_numeric_reference_ftz(OmegaNumericOp op, const float *a, const float *b,
+                                const float *c, float *out, size_t count);
+
+/* Host magic-constant seeds (NOT a model of hardware MUFU). Used only to show
+ * that an unrefined seed fails bit parity. */
+float omega_numeric_host_rcp_seed(float y);
+
+/* ---- GB10 executor (src/omega_numeric_gb10.c) ----------------------------- */
+
+/*
+ * Execution on physical GB10 silicon: runs omega_numeric_submit_check first
+ * (no device is opened when it refuses), then patches the calibrated vecadd
+ * kernel and dispatches it through the GPFIFO channel. FFMA's c operand must
+ * be uniform (it is carried in the constant bank).
  */
 int omega_gb10_execute_simt_op(const char *op_name,
                               const float *in_a,
@@ -124,12 +273,5 @@ int omega_gb10_execute_simt_op(const char *op_name,
                               const float *in_c,
                               float *out_res,
                               size_t count);
-
-/*
- * Equivalence comparator:
- * Verifies that two floats match bit-for-bit, except that all quiet/signaling
- * NaNs are considered equivalent in the NaN class.
- */
-bool omega_numeric_bits_equal(float a, float b);
 
 #endif /* OMEGA_NUMERIC_H */
