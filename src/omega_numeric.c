@@ -5,7 +5,9 @@
  */
 #include "omega_numeric.h"
 #include "omega_blackwell_encoder.h"
+#include "omega_blackwell_qmd.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -326,10 +328,9 @@ static const OmegaNumericOpInfo OP_TABLE[OMEGA_NOP_COUNT] = {
       "seed for 1/a: relative error bound only", NULL },
     { OMEGA_NOP_MUFU_RSQ, "MUFU_RSQ", 1, true, OMEGA_CMP_SEED_BOUND,
       "seed for 1/sqrt(a): relative error bound only", NULL },
-    { OMEGA_NOP_LDS_STS, "LDS_STS", 1, false, OMEGA_CMP_INT_EXACT, "a (shared-memory round trip)",
-      "no qualified shared-memory kernel: the old words were byte-wide STS.U8/LDS.U8 at "
-      "[tid] (not a 32-bit round trip), and a correct one needs the shared window base "
-      "and a QMD shared-memory size that are not encoded yet" },
+    { OMEGA_NOP_LDS_STS, "LDS_STS", 1, true, OMEGA_CMP_INT_EXACT,
+      "a[i ^ 63]: each thread stores a[i] to shared word tid, BAR.SYNC, then loads word tid ^ 63 "
+      "(mirror exchange inside each 64-thread CTA), bits moved unchanged", NULL },
     { OMEGA_NOP_SHFL_DOWN, "SHFL_DOWN", 1, true, OMEGA_CMP_INT_EXACT,
       "a[lane+1] within each 32-lane warp, lane 31 keeps its own value", NULL },
     { OMEGA_NOP_DIV, "DIV", 2, false, OMEGA_CMP_BIT_EXACT, "correctly rounded a / b (integer long division, RNE)",
@@ -340,9 +341,8 @@ static const OmegaNumericOpInfo OP_TABLE[OMEGA_NOP_COUNT] = {
       "no GB10 kernel for the Omega exp polynomial exists (the old path ran FADD)" },
     { OMEGA_NOP_LOG, "LOG", 1, false, OMEGA_CMP_BIT_EXACT, "omega_math_log(a)",
       "no GB10 kernel for the Omega log polynomial exists (the old path ran FADD)" },
-    { OMEGA_NOP_REDUCE_SUM, "REDUCE_SUM", 1, false, OMEGA_CMP_BIT_EXACT,
-      "declared pairwise-tree warp sum, lane 0 of each warp",
-      "no GB10 kernel for the declared-order warp reduction exists (the old path ran FADD)" },
+    { OMEGA_NOP_REDUCE_SUM, "REDUCE_SUM", 1, true, OMEGA_CMP_BIT_EXACT,
+      "declared pairwise-tree warp sum (" OMEGA_WARP_REDUCTION_DECLARED_ORDER "), lane 0 of each warp", NULL },
 };
 
 size_t omega_numeric_op_count(void) { return OMEGA_NOP_COUNT; }
@@ -370,6 +370,38 @@ const char *omega_numeric_compare_name(OmegaNumericCompare c) {
     return "UNKNOWN";
 }
 
+/* ---- Refused variants ------------------------------------------------------ */
+
+static const struct { const char *name; const char *reason; } REFUSED_VARIANTS[] = {
+    { "LDS.U8",     "only the 32-bit LDS form is encoded (the old byte-wide words were never a round trip)" },
+    { "STS.U8",     "only the 32-bit STS form is encoded (the old byte-wide words were never a round trip)" },
+    { "LDS.S8",     "only the 32-bit LDS form is encoded" },
+    { "LDS.U16",    "only the 32-bit LDS form is encoded" },
+    { "STS.U16",    "only the 32-bit STS form is encoded" },
+    { "LDS.64",     "only the 32-bit LDS form is encoded (no 64-bit register pair form)" },
+    { "STS.64",     "only the 32-bit STS form is encoded (no 64-bit register pair form)" },
+    { "LDS.128",    "only the 32-bit LDS form is encoded (no 128-bit form)" },
+    { "STS.128",    "only the 32-bit STS form is encoded (no 128-bit form)" },
+    { "SHFL_UP",    "only SHFL.DOWN is encoded" },
+    { "SHFL_BFLY",  "only SHFL.DOWN is encoded" },
+    { "SHFL_IDX",   "only SHFL.DOWN is encoded" },
+    { "REDUCE_MAX", "only the declared-order FP32 sum is encoded" },
+    { "REDUCE_MIN", "only the declared-order FP32 sum is encoded" },
+    { "REDUCE_SUM_BLOCK", "only the per-warp (32-lane) sum is encoded, not a CTA-wide one" },
+};
+#define REFUSED_VARIANT_COUNT (sizeof(REFUSED_VARIANTS) / sizeof(REFUSED_VARIANTS[0]))
+
+size_t omega_numeric_refused_variant_count(void) { return REFUSED_VARIANT_COUNT; }
+const char *omega_numeric_refused_variant_at(size_t index) {
+    return index < REFUSED_VARIANT_COUNT ? REFUSED_VARIANTS[index].name : NULL;
+}
+
+void omega_numeric_launch_shape(size_t count, uint32_t *threads_per_block, uint32_t *grid_width) {
+    uint32_t g = (uint32_t)((count + OMEGA_NUMERIC_CTA_THREADS - 1u) / OMEGA_NUMERIC_CTA_THREADS);
+    if (threads_per_block) *threads_per_block = OMEGA_NUMERIC_CTA_THREADS;
+    if (grid_width) *grid_width = g ? g : 1u;
+}
+
 static int refuse(char *err, size_t err_len, int rc, const char *fmt, const char *a, const char *b) {
     if (err && err_len) snprintf(err, err_len, fmt, a ? a : "", b ? b : "");
     return rc;
@@ -380,6 +412,9 @@ int omega_numeric_submit_check(const char *op_name,
                                const float *out_res, size_t count,
                                char *err, size_t err_len) {
     if (err && err_len) err[0] = '\0';
+    for (size_t v = 0; op_name && v < REFUSED_VARIANT_COUNT; v++) {
+        if (strcmp(op_name, REFUSED_VARIANTS[v].name) == 0) return refuse(err, err_len, OMEGA_NUMERIC_ERR_NOT_ENCODED, "variant %s is not encoded for GB10: %s", op_name, REFUSED_VARIANTS[v].reason); /* CHECK:variant_refused */
+    }
     const OmegaNumericOpInfo *info = omega_numeric_op_find(op_name);
     if (!info) {
         return refuse(err, err_len, OMEGA_NUMERIC_ERR_BAD_ARGS,
@@ -411,11 +446,25 @@ int omega_numeric_submit_check(const char *op_name,
             }
         }
     }
-    if (info->op == OMEGA_NOP_SHFL_DOWN && (count % 32u) != 0) {
-        return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS,
-                      "op %s: count must be a multiple of 32 (whole warps only)%s", info->name, NULL);
+    if ((info->op == OMEGA_NOP_SHFL_DOWN || info->op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "op %s: count must be a multiple of 32 (whole warps only)%s", info->name, NULL); /* CHECK:warp_count */
+    if (info->op == OMEGA_NOP_LDS_STS && (count % OMEGA_NUMERIC_CTA_THREADS) != 0) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "op %s: count must be a multiple of the CTA size 64 (whole CTAs: every thread must reach BAR.SYNC)%s", info->name, NULL); /* CHECK:cta_count */
+    /* The patch this op would submit, checked against a QMD for this launch. */
+    OmegaNumericPatchInsn patch[OMEGA_NUMERIC_PATCH_MAX];
+    int n = omega_numeric_patch_words(info->op, patch);
+    if (n <= 0) {
+        return refuse(err, err_len, OMEGA_NUMERIC_ERR_NOT_ENCODED,
+                      "op %s has no patch words%s", info->name, NULL);
     }
-    return OMEGA_NUMERIC_OK;
+    uint32_t qmd1[OMEGA_BW_QMD_WORDS];
+    OmegaBlackwellQmdConfig cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.num_elements = (uint32_t)count;
+    omega_numeric_launch_shape(count, &cfg.threads_per_block, &cfg.grid_width);
+    if (omega_blackwell_build_qmd1(qmd1, &cfg) != 0) {
+        return refuse(err, err_len, OMEGA_NUMERIC_ERR_BAD_ARGS, "op %s: launch QMD could not be built%s",
+                      info->name, NULL);
+    }
+    return omega_numeric_check_patch(info->op, patch, n, qmd1, err, err_len);
 }
 
 /* ---- Kernel patch words ----------------------------------------------------
@@ -440,6 +489,8 @@ int omega_numeric_submit_check(const char *op_name,
 
 #define CTRL_FIXED 0x010fca00U
 #define CTRL_VAR   0x010e2800U
+#define CTRL_SHFL_NEXT 0x000e2400U  /* later SHFL.DOWN: sets SB0, no wait (FADD before it is fixed latency) */
+#define CTRL_FADD_SB0  0x001fca00U  /* FADD that waits SB0 (the shuffled value)                         */
 
 int omega_numeric_patch_words(OmegaNumericOp op,
                               OmegaNumericPatchInsn out[OMEGA_NUMERIC_PATCH_MAX]) {
@@ -507,11 +558,39 @@ int omega_numeric_patch_words(OmegaNumericOp op,
         out[n++] = EXIT;
         return n;
     case OMEGA_NOP_LDS_STS:
+        /* Shared window: raw byte offsets from 0 through URZ, as NVK/NAK emit.
+         * ptxas instead forms a base from SR_CgaCtaId and 0x400; if the chip
+         * disagrees with the reference, that addressing is the first suspect. */
+        PUT(0x00087819U, 0x00000002U, 0x000006ffU, CTRL_FIXED, "SHF.L.U32 R8, R0, 0x2, RZ", "SHF_L_R8_R0_2");
+        PUT(0x080a7812U, 0x000000fcU, 0x078e3cffU, 0x000fca00U,
+            "LOP3.LUT R10, R8, 0xfc, RZ, 0x3c, !PT", "LOP3_R10_R8_XOR_FC");
+        PUT(0x08007988U, 0x00000002U, 0x080008ffU, 0x010fe200U, "STS [R8+URZ], R2", "STS_R8_R2");
+        PUT(0x00007b1dU, 0x00000000U, 0x00010000U, 0x000fec00U, "BAR.SYNC.DEFER_BLOCKING 0x0", "BAR_SYNC_0");
+        PUT(0x0a097984U, 0x000000ffU, 0x08000800U, 0x000e2800U, "LDS R9, [R10+URZ]", "LDS_R9_R10");
+        out[n++] = STG1;
+        out[n++] = EXIT;
+        return n;
+    case OMEGA_NOP_REDUCE_SUM:
+        /* Declared order: val[i] += val[i + d] for d = 16, 8, 4, 2, 1. Lanes
+         * with i + d >= 32 read their own value (clamp 0x1f) and never feed
+         * lane 0, so lane 0 is the declared sum. Only lane 0 is compared. */
+        PUT(0x02097f89U, 0x0a001f00U, 0x000e0000U, CTRL_VAR, "SHFL.DOWN PT, R9, R2, 0x10, 0x1f", "SHFL_DOWN_16");
+        PUT(0x02027221U, 0x00000009U, 0x00000000U, CTRL_FADD_SB0, "FADD R2, R2, R9", "FADD_R2_R2_R9");
+        PUT(0x02097f89U, 0x09001f00U, 0x000e0000U, CTRL_SHFL_NEXT, "SHFL.DOWN PT, R9, R2, 0x8, 0x1f", "SHFL_DOWN_8");
+        PUT(0x02027221U, 0x00000009U, 0x00000000U, CTRL_FADD_SB0, "FADD R2, R2, R9", "FADD_R2_R2_R9");
+        PUT(0x02097f89U, 0x08801f00U, 0x000e0000U, CTRL_SHFL_NEXT, "SHFL.DOWN PT, R9, R2, 0x4, 0x1f", "SHFL_DOWN_4");
+        PUT(0x02027221U, 0x00000009U, 0x00000000U, CTRL_FADD_SB0, "FADD R2, R2, R9", "FADD_R2_R2_R9");
+        PUT(0x02097f89U, 0x08401f00U, 0x000e0000U, CTRL_SHFL_NEXT, "SHFL.DOWN PT, R9, R2, 0x2, 0x1f", "SHFL_DOWN_2");
+        PUT(0x02027221U, 0x00000009U, 0x00000000U, CTRL_FADD_SB0, "FADD R2, R2, R9", "FADD_R2_R2_R9");
+        PUT(0x02097f89U, 0x08201f00U, 0x000e0000U, CTRL_SHFL_NEXT, "SHFL.DOWN PT, R9, R2, 0x1, 0x1f", "SHFL_DOWN_1");
+        PUT(0x02097221U, 0x00000009U, 0x00000000U, CTRL_FADD_SB0, "FADD R9, R2, R9", "FADD_R9_R2_R9");
+        out[n++] = STG0;
+        out[n++] = EXIT;
+        return n;
     case OMEGA_NOP_DIV:
     case OMEGA_NOP_SQRT:
     case OMEGA_NOP_EXP:
     case OMEGA_NOP_LOG:
-    case OMEGA_NOP_REDUCE_SUM:
         return OMEGA_NUMERIC_ERR_NOT_ENCODED;
     case OMEGA_NOP_COUNT:
         break;
@@ -531,6 +610,114 @@ int omega_numeric_build_kernel(OmegaNumericOp op, uint8_t *code, size_t code_len
         memcpy(code + OMEGA_NUMERIC_PATCH_OFFSET + (size_t)i * 16u, patch[i].w, 16);
     }
     if (out_len) *out_len = len;
+    return OMEGA_NUMERIC_OK;
+}
+
+/* ---- Structural patch check (before any device is touched) ----------------
+ * Each refusal is one line ending in a CHECK:<name> marker so that
+ * tools/numeric_check_sweep.sh can delete it and prove a test notices. */
+
+static int bad(char *err, size_t err_len, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+static int bad(char *err, size_t err_len, const char *fmt, ...) {
+    if (err && err_len) {
+        va_list ap;
+        va_start(ap, fmt);
+        vsnprintf(err, err_len, fmt, ap);
+        va_end(ap);
+    }
+    return OMEGA_NUMERIC_ERR_OPERANDS;
+}
+
+#define INSN_OP(p)   ((p).w[0] & 0xffffu)
+#define INSN_DST(p)  (((p).w[0] >> 16) & 0xffu)
+#define INSN_SRCA(p) (((p).w[0] >> 24) & 0xffu)
+#define INSN_SRCB(p) ((p).w[1] & 0xffu)
+#define CTRL_WBAR(w3) (((w3) >> 14) & 7u)
+#define CTRL_WAIT(w3) (((w3) >> 20) & 0x3fu)
+
+#define OPC_STS  0x7988u
+#define OPC_LDS  0x7984u
+#define OPC_BAR  0x7b1du
+#define OPC_SHF  0x7819u
+#define OPC_LOP3 0x7812u
+#define OPC_SHFL 0x7f89u
+#define OPC_FADD 0x7221u
+#define OPC_STG  0x7986u
+
+#define SHFL_DELTA(p) (((p).w[1] >> 21) & 0x1fu)
+#define SHFL_CLAMP(p) (((p).w[1] >> 8) & 0x1fu)
+#define SHFL_FIELDS   ((0x1fu << 21) | (0x1fu << 8))
+
+int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *p, int n,
+                              const uint32_t *qmd1, char *err, size_t err_len) {
+    if (err && err_len) err[0] = '\0';
+    if (!p || !qmd1 || (unsigned)op >= OMEGA_NOP_COUNT) return bad(err, err_len, "check_patch: missing patch or QMD");
+    if (n < 1 || n > (int)OMEGA_NUMERIC_PATCH_MAX) return bad(err, err_len, "patch length %d outside 1..%u", n, OMEGA_NUMERIC_PATCH_MAX); /* CHECK:patch_len */
+    const char *name = OP_TABLE[op].name;
+    int sts = -1, lds = -1, bar = -1, shf = -1, lop = -1, n_sts = 0, n_lds = 0, n_bar = 0, n_shfl = 0;
+    for (int t = 0; t < n; t++) {
+        uint32_t o = INSN_OP(p[t]);
+        /* a result that arrives through a scoreboard is waited on by the next instruction */
+        if (CTRL_WBAR(p[t].w[3]) <= 5u && (t + 1 >= n || !(CTRL_WAIT(p[t + 1].w[3]) & (1u << CTRL_WBAR(p[t].w[3]))))) return bad(err, err_len, "%s: instruction %d sets SB%u but the next instruction does not wait on it", name, t, CTRL_WBAR(p[t].w[3])); /* CHECK:scoreboard_wait */
+        if (o == OPC_STS) {
+            if ((p[t].w[0] & 0x00ffffffu) != 0x00007988u || (p[t].w[1] & ~0xffu) != 0 || p[t].w[2] != 0x080008ffu) return bad(err, err_len, "%s: STS at %d is not the encoded 32-bit STS [Rx+URZ] form", name, t); /* CHECK:sts_form */
+            sts = t; n_sts++;
+        } else if (o == OPC_LDS) {
+            if ((p[t].w[0] & 0x0000ffffu) != 0x00007984u || p[t].w[1] != 0x000000ffu || p[t].w[2] != 0x08000800u) return bad(err, err_len, "%s: LDS at %d is not the encoded 32-bit LDS Rd, [Rx+URZ] form", name, t); /* CHECK:lds_form */
+            lds = t; n_lds++;
+        } else if (o == OPC_BAR) {
+            if (p[t].w[0] != 0x00007b1du || p[t].w[1] != 0 || p[t].w[2] != 0x00010000u) return bad(err, err_len, "%s: barrier at %d is not BAR.SYNC 0", name, t); /* CHECK:bar_form */
+            bar = t; n_bar++;
+        } else if (o == OPC_SHF) {
+            shf = t;
+        } else if (o == OPC_LOP3) {
+            lop = t;
+        } else if (o == OPC_SHFL) {
+            if ((p[t].w[0] & 0x0000ffffu) != 0x00007f89u || (p[t].w[1] & ~SHFL_FIELDS) != 0x08000000u || p[t].w[2] != 0x000e0000u) return bad(err, err_len, "%s: shuffle at %d is not the encoded SHFL.DOWN form", name, t); /* CHECK:shfl_form */
+            if (SHFL_CLAMP(p[t]) != 0x1fu) return bad(err, err_len, "%s: shuffle at %d has clamp 0x%x, not 0x1f", name, t, SHFL_CLAMP(p[t])); /* CHECK:shfl_clamp */
+            n_shfl++;
+        }
+    }
+
+    bool uses_shared = n_sts || n_lds || n_bar;
+    if (op == OMEGA_NOP_LDS_STS && !(n_sts && n_lds)) return bad(err, err_len, "%s: patch has no STS/LDS pair", name); /* CHECK:lds_sts_present */
+    if (uses_shared) {
+        uint32_t tx = qmd1[34] & 0xffffu;
+        uint32_t barriers = (qmd1[35] >> 17) & 0x1fu;
+        uint32_t shared_bytes = (qmd1[36] & 0x7ffu) << 7;
+        uint32_t need = (tx - 1u) * 4u + 4u;
+        if (n_sts != 1 || n_lds != 1 || n_bar != 1) return bad(err, err_len, "%s: expected one STS, one BAR.SYNC, one LDS (got %d, %d, %d)", name, n_sts, n_bar, n_lds); /* CHECK:shared_counts */
+        if (!(sts < bar && bar < lds)) return bad(err, err_len, "%s: order must be STS, BAR.SYNC, LDS (at %d, %d, %d)", name, sts, bar, lds); /* CHECK:shared_order */
+        if (barriers < 1u) return bad(err, err_len, "%s: QMD declares %u barriers; BAR.SYNC 0 needs at least 1", name, barriers); /* CHECK:qmd_barrier */
+        if (tx != OMEGA_NUMERIC_CTA_THREADS || (tx & (tx - 1u)) != 0) return bad(err, err_len, "%s: QMD CTA width %u is not the %u-thread power-of-two CTA", name, tx, OMEGA_NUMERIC_CTA_THREADS); /* CHECK:qmd_cta */
+        if (need > shared_bytes) return bad(err, err_len, "%s: needs %u bytes of shared memory, QMD declares %u", name, need, shared_bytes); /* CHECK:qmd_shared_size */
+        if (shf < 0 || shf > sts || INSN_SRCA(p[shf]) != 0u || p[shf].w[1] != 2u || p[shf].w[2] != 0x000006ffu) return bad(err, err_len, "%s: STS address is not SHF.L.U32 of R0 (tid.x) by 2", name); /* CHECK:addr_shift */
+        if (INSN_SRCA(p[sts]) != INSN_DST(p[shf])) return bad(err, err_len, "%s: STS address register R%u is not the shifted tid R%u", name, INSN_SRCA(p[sts]), INSN_DST(p[shf])); /* CHECK:sts_addr_reg */
+        if (lop < 0 || lop > lds || INSN_SRCA(p[lop]) != INSN_DST(p[shf]) || p[lop].w[2] != 0x078e3cffu) return bad(err, err_len, "%s: LDS address is not LOP3 XOR of the shifted tid", name); /* CHECK:lop3_form */
+        if (p[lop].w[1] != (tx - 1u) * 4u) return bad(err, err_len, "%s: LDS address mask 0x%x is not (CTA-1)*4 = 0x%x (out of bounds or wrong partner)", name, p[lop].w[1], (tx - 1u) * 4u); /* CHECK:lop3_mask */
+        if (INSN_SRCA(p[lds]) != INSN_DST(p[lop]) || INSN_DST(p[lds]) != 9u) return bad(err, err_len, "%s: LDS must load [R%u] into R9", name, INSN_DST(p[lop])); /* CHECK:lds_regs */
+    }
+
+    if (op == OMEGA_NOP_SHFL_DOWN) {
+        int t = 0;
+        while (t < n && INSN_OP(p[t]) != OPC_SHFL) t++;
+        if (n_shfl != 1 || t >= n || SHFL_DELTA(p[t]) != 1u) return bad(err, err_len, "%s: expected one SHFL.DOWN by 1", name); /* CHECK:shfl_down_1 */
+    }
+    if (op == OMEGA_NOP_REDUCE_SUM) {
+        static const uint32_t DELTA[5] = { 16u, 8u, 4u, 2u, 1u };
+        if (n_shfl != 5 || n != 12) return bad(err, err_len, "%s: expected five SHFL.DOWN + FADD pairs, STG, EXIT (got %d shuffles, %d instructions)", name, n_shfl, n); /* CHECK:reduce_shape */
+        uint32_t acc = INSN_SRCA(p[0]);
+        for (int s = 0; s < 5; s++) {
+            const OmegaNumericPatchInsn *sh = &p[2 * s], *fa = &p[2 * s + 1];
+            if (INSN_OP(*sh) != OPC_SHFL || SHFL_DELTA(*sh) != DELTA[s]) return bad(err, err_len, "%s: step %d must be SHFL.DOWN by %u (declared order 16,8,4,2,1)", name, s, DELTA[s]); /* CHECK:reduce_delta_order */
+            if (INSN_SRCA(*sh) != acc) return bad(err, err_len, "%s: step %d shuffles R%u, not the running sum R%u", name, s, INSN_SRCA(*sh), acc); /* CHECK:reduce_shfl_src */
+            if (INSN_OP(*fa) != OPC_FADD || (fa->w[1] & ~0xffu) != 0 || fa->w[2] != 0) return bad(err, err_len, "%s: step %d is not followed by a plain FADD (no negate, no modifiers)", name, s); /* CHECK:reduce_fadd_form */
+            if (!(CTRL_WAIT(fa->w[3]) & (1u << CTRL_WBAR(sh->w[3]))) || CTRL_WBAR(sh->w[3]) > 5u) return bad(err, err_len, "%s: FADD of step %d does not wait on the shuffle", name, s); /* CHECK:reduce_fadd_wait */
+            if (INSN_SRCA(*fa) != acc || INSN_SRCB(*fa) != INSN_DST(*sh)) return bad(err, err_len, "%s: FADD of step %d does not add the shuffled value to the running sum", name, s); /* CHECK:reduce_fadd_srcs */
+            if (INSN_DST(*fa) != (s == 4 ? 9u : acc)) return bad(err, err_len, "%s: FADD of step %d writes R%u", name, s, INSN_DST(*fa)); /* CHECK:reduce_fadd_dst */
+        }
+        if (INSN_OP(p[10]) != OPC_STG || p[10].w[1] != 9u) return bad(err, err_len, "%s: the sum in R9 is not stored", name); /* CHECK:reduce_store */
+    }
     return OMEGA_NUMERIC_OK;
 }
 
@@ -560,6 +747,7 @@ int omega_numeric_reference(OmegaNumericOp op, const float *a, const float *b,
     if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if ((op == OMEGA_NOP_SHFL_DOWN || op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0)
         return OMEGA_NUMERIC_ERR_OPERANDS;
+    if (op == OMEGA_NOP_LDS_STS && (count % OMEGA_NUMERIC_CTA_THREADS) != 0) return OMEGA_NUMERIC_ERR_OPERANDS;
     for (size_t i = 0; i < count; i++) {
         float r = 0.0f;
         switch (op) {
@@ -575,7 +763,7 @@ int omega_numeric_reference(OmegaNumericOp op, const float *a, const float *b,
         case OMEGA_NOP_F2I: r = omega_bits_to_float((uint32_t)omega_ref_f2i(a[i])); break;
         case OMEGA_NOP_MUFU_RCP: r = omega_ieee_div(1.0f, a[i]); break;
         case OMEGA_NOP_MUFU_RSQ: r = omega_ieee_div(1.0f, omega_ieee_sqrt(a[i])); break;
-        case OMEGA_NOP_LDS_STS: r = a[i]; break;
+        case OMEGA_NOP_LDS_STS: r = a[i ^ (OMEGA_NUMERIC_CTA_THREADS - 1u)]; break;
         case OMEGA_NOP_SHFL_DOWN: r = ref_shfl_down(a, i); break;
         case OMEGA_NOP_DIV: r = omega_ieee_div(a[i], b[i]); break;
         case OMEGA_NOP_SQRT: r = omega_ieee_sqrt(a[i]); break;
@@ -609,6 +797,7 @@ int omega_numeric_cpu_realize(OmegaNumericOp op, const float *a, const float *b,
     if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if ((op == OMEGA_NOP_SHFL_DOWN || op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0)
         return OMEGA_NUMERIC_ERR_OPERANDS;
+    if (op == OMEGA_NOP_LDS_STS && (count % OMEGA_NUMERIC_CTA_THREADS) != 0) return OMEGA_NUMERIC_ERR_OPERANDS;
     for (size_t i = 0; i < count; i++) {
         float r = 0.0f;
         float x = a[i];
@@ -658,7 +847,12 @@ int omega_numeric_cpu_realize(OmegaNumericOp op, const float *a, const float *b,
             __asm__ volatile("fdiv %s0, %s1, %s2" : "=w"(r) : "w"(1.0f), "w"(s));
             break;
         }
-        case OMEGA_NOP_LDS_STS: r = x; break;
+        case OMEGA_NOP_LDS_STS: {
+            /* independent spelling: mirror position inside the CTA */
+            size_t base = i - (i % OMEGA_NUMERIC_CTA_THREADS);
+            r = a[base + (OMEGA_NUMERIC_CTA_THREADS - 1u) - (i - base)];
+            break;
+        }
         case OMEGA_NOP_SHFL_DOWN: {
             size_t lane = i & 31u, base = i - lane;
             size_t src = lane + 1u > 31u ? lane : lane + 1u;

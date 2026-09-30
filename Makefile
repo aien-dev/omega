@@ -163,11 +163,11 @@ test-m19r-qualify:
 # Gate 5 (OMEGA-NUMERIC-0), CPU tiers only: reference, CPU parity, provenance
 # and negative tests. Opens no device. The GB10 tier and the receipt come
 # from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
-# item fails (today: vocabulary incomplete: no LDS/STS or warp-reduction kernel).
+# item fails.
 .PHONY: test-numeric-cpu test-numeric-qualify
 NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c \
                    src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
-                   src/omega_blackwell_matmul.c src/sha256.c
+                   src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
 build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) src/omega_numeric.h src/omega_numeric_provenance.h
 	@mkdir -p build
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(NUMERIC_CPU_SRCS)
@@ -177,6 +177,12 @@ test-numeric-cpu: build/test_omega_numeric_cpu
 # Host-only tests of the Gate 5 qualifier and receipt writer. No GPU.
 test-numeric-qualify: build/test_omega_numeric_cpu
 	tools/test_numeric_qualify.sh
+
+# Deletes each CHECK-marked pre-submission check in src/omega_numeric.c in a
+# scratch copy and proves a Gate 5 host test then fails. No GPU.
+.PHONY: test-numeric-sweep
+test-numeric-sweep:
+	tools/numeric_check_sweep.sh
 
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).

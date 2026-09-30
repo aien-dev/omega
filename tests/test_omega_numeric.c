@@ -19,6 +19,7 @@
 #include "omega_numeric.h"
 #include "omega_numeric_provenance.h"
 #include "omega_blackwell_codegen.h"
+#include "omega_blackwell_qmd.h"
 
 #ifndef OMEGA_NUMERIC_CPU_ONLY
 #include "forge_descriptor.h"
@@ -153,6 +154,7 @@ static void print_parity_json(const char *op, const char *tier, const char *comp
                               bool has_c, size_t n, const OmegaParityTrace *t, const ClassTrace *ct) {
     printf("OMEGA_NUMERIC_PARITY_JSON:{\"op\":\"%s\",\"tier\":\"%s\",\"compare\":\"%s\",", op, tier, compare);
     if (has_c) printf("\"c_bits\":\"0x%08x\",", c_bits);
+    if (strcmp(op, "REDUCE_SUM") == 0) printf("\"reduction_order\":\"%s\",", OMEGA_WARP_REDUCTION_DECLARED_ORDER);
     printf("\"n\":%zu,\"checked\":%zu,\"mismatches\":%zu,\"subnormal_expected\":%zu,",
            n, t->checked, t->mismatches, t->subnormal_expected);
     if (t->first_index >= 0) {
@@ -370,12 +372,12 @@ int main(void) {
     }
     printf("[*] Provenance entries: %zu, encoded ops: %zu\n", omega_numeric_get_opcode_count(), encoded);
     report("PROVENANCE_MATCHES_EXECUTOR",
-           fixtures_rc == 0 && prov_problems == 0 && build_ok && encoded == 13 &&
-           omega_numeric_get_opcode_count() == 15);
+           fixtures_rc == 0 && prov_problems == 0 && build_ok && encoded == 15 &&
+           omega_numeric_get_opcode_count() == 26);
 
     /* Refusal before submission: never a silent wrong instruction. */
     int refuse_ok = 1;
-    static const char *NOT_ENCODED[] = { "DIV", "SQRT", "EXP", "LOG", "REDUCE_SUM", "LDS", "STS", "LDS_STS" };
+    static const char *NOT_ENCODED[] = { "DIV", "SQRT", "EXP", "LOG" };
     for (size_t i = 0; i < sizeof(NOT_ENCODED) / sizeof(NOT_ENCODED[0]); i++) {
         char err[256];
         int rc = omega_numeric_submit_check(NOT_ENCODED[i], g_a, g_b, NULL, g_dev, N, err, sizeof(err));
@@ -402,22 +404,147 @@ int main(void) {
         if (omega_numeric_submit_check("FADD", g_a, NULL, NULL, g_dev, N, err, sizeof(err)) != OMEGA_NUMERIC_ERR_BAD_ARGS)
             refuse_ok = 0;
     }
+    {
+        /* Variants of the shared-memory and warp ops that have no encoding:
+         * refused by name, never mapped onto the 32-bit or SHFL.DOWN kernel. */
+        size_t nv = omega_numeric_refused_variant_count();
+        for (size_t v = 0; v < nv; v++) {
+            char err[256];
+            const char *name = omega_numeric_refused_variant_at(v);
+            int rc = omega_numeric_submit_check(name, g_a, g_b, NULL, g_dev, N, err, sizeof(err));
+#ifndef OMEGA_NUMERIC_CPU_ONLY
+            if (omega_gb10_execute_simt_op(name, g_a, g_b, NULL, g_dev, N) != OMEGA_NUMERIC_ERR_NOT_ENCODED) refuse_ok = 0;
+#endif
+            if (rc != OMEGA_NUMERIC_ERR_NOT_ENCODED || !strstr(err, name)) refuse_ok = 0;
+        }
+        printf("    refused %zu unencoded variants (LDS.U8 ... REDUCE_SUM_BLOCK) by name\n", nv);
+        if (nv < 12 || omega_numeric_refused_variant_at(nv) != NULL) refuse_ok = 0;
+    }
     report("NOT_ENCODED_OPS_REFUSED_BEFORE_SUBMISSION", refuse_ok);
 
+    /* Shapes the shared-memory and reduction kernels cannot carry, refused
+     * before submission with the reason named. */
+    {
+        struct { const char *op; size_t count; const char *why; } SHAPES[] = {
+            { "LDS_STS", 32, "CTA size 64" },     /* half a CTA: threads 32..63 never reach BAR.SYNC */
+            { "LDS_STS", 96, "CTA size 64" },
+            { "LDS_STS", 4097, "CTA size 64" },
+            { "REDUCE_SUM", 33, "multiple of 32" },
+            { "REDUCE_SUM", 4080, "multiple of 32" },
+            { "SHFL_DOWN", 33, "multiple of 32" },
+        };
+        int shapes_ok = 1;
+        for (size_t k = 0; k < sizeof(SHAPES) / sizeof(SHAPES[0]); k++) {
+            char err[256];
+            int rc = omega_numeric_submit_check(SHAPES[k].op, g_a, NULL, NULL, g_dev, SHAPES[k].count, err, sizeof(err));
+            if (rc != OMEGA_NUMERIC_ERR_OPERANDS || !strstr(err, SHAPES[k].why)) shapes_ok = 0;
+            printf("    refused %-10s count %-5zu rc=%d: %s\n", SHAPES[k].op, SHAPES[k].count, rc, err);
+        }
+        char err[256];
+        if (omega_numeric_submit_check("LDS_STS", g_a, NULL, NULL, g_dev, N, err, sizeof(err)) != 0 ||
+            omega_numeric_submit_check("REDUCE_SUM", g_a, NULL, NULL, g_dev, N, err, sizeof(err)) != 0 ||
+            omega_numeric_submit_check("LDS_STS", g_a, NULL, NULL, g_dev, 64, err, sizeof(err)) != 0 ||
+            omega_numeric_submit_check("REDUCE_SUM", g_a, NULL, NULL, g_dev, 32, err, sizeof(err)) != 0) {
+            printf("    a valid shape was refused: %s\n", err);
+            shapes_ok = 0;
+        }
+        report("NEG_BAD_SHARED_AND_WARP_SHAPES_REFUSED", shapes_ok);
+    }
+
+    /* Structural patch check: every encoded op passes on the launch QMD, and
+     * one corruption per check is refused with that check's reason. */
+    {
+        int clean_ok = 1;
+        uint32_t qmd[OMEGA_BW_QMD_WORDS];
+        OmegaBlackwellQmdConfig cfg;
+        memset(&cfg, 0, sizeof(cfg));
+        cfg.num_elements = N;
+        omega_numeric_launch_shape(N, &cfg.threads_per_block, &cfg.grid_width);
+        omega_blackwell_build_qmd1(qmd, &cfg);
+        for (size_t i = 0; i < omega_numeric_op_count(); i++) {
+            const OmegaNumericOpInfo *info = omega_numeric_op_at(i);
+            if (!info->gb10_encoded) continue;
+            OmegaNumericPatchInsn p[OMEGA_NUMERIC_PATCH_MAX];
+            int n = omega_numeric_patch_words(info->op, p);
+            char err[256];
+            if (omega_numeric_check_patch(info->op, p, n, qmd, err, sizeof(err)) != 0) {
+                clean_ok = 0;
+                printf("    clean %s refused: %s\n", info->name, err);
+            }
+        }
+        int caught = 0, cases = 0;
+        for (int m = 0; m < 27; m++) {
+            OmegaNumericOp op = OMEGA_NOP_LDS_STS;
+            if (m >= 18) op = OMEGA_NOP_REDUCE_SUM;
+            if (m == 17) op = OMEGA_NOP_SHFL_DOWN;
+            OmegaNumericPatchInsn p[OMEGA_NUMERIC_PATCH_MAX];
+            int n = omega_numeric_patch_words(op, p);
+            uint32_t q[OMEGA_BW_QMD_WORDS];
+            memcpy(q, qmd, sizeof(q));
+            const char *want = "";
+            const char *what = "";
+            OmegaNumericOp check_op = op;
+            /* LDS_STS: 0 SHF, 1 LOP3, 2 STS, 3 BAR, 4 LDS, 5 STG, 6 EXIT
+             * REDUCE: 2s SHFL, 2s+1 FADD (s = 0..4), 10 STG, 11 EXIT */
+            switch (m) {
+            case 0:  what = "empty patch"; n = 0; want = "patch length"; break;
+            case 1:  what = "STG after LDS does not wait"; p[5].w[3] = 0x000fe200u; want = "does not wait on it"; break;
+            case 2:  what = "STS word changed (not the 32-bit form)"; p[2].w[2] ^= 0x00000200u; want = "STS at"; break;
+            case 3:  what = "LDS with an immediate offset"; p[4].w[1] = 0x000100ffu; want = "LDS at"; break;
+            case 4:  what = "barrier other than BAR.SYNC 0"; p[3].w[1] = 1u; want = "barrier at"; break;
+            case 5:  what = "FADD words submitted as LDS_STS"; check_op = OMEGA_NOP_LDS_STS;
+                     n = omega_numeric_patch_words(OMEGA_NOP_FADD, p); want = "no STS/LDS pair"; break;
+            case 6:  what = "BAR removed"; memmove(&p[3], &p[4], 3 * sizeof(p[0])); n = 6; want = "expected one STS"; break;
+            case 7:  what = "BAR before STS"; { OmegaNumericPatchInsn t = p[2]; p[2] = p[3]; p[3] = t; } want = "order must be"; break;
+            case 8:  what = "QMD declares no barrier"; q[35] &= ~(0x1fu << 17); want = "barriers"; break;
+            case 9:  what = "QMD CTA width 32"; q[34] = (q[34] & ~0xffffu) | 32u; want = "CTA width"; break;
+            case 10: what = "QMD shared size 128 bytes"; q[36] = (q[36] & ~0x7ffu) | 1u; want = "bytes of shared memory"; break;
+            case 11: what = "address shift 3 (tid * 8)"; p[0].w[1] = 3u; want = "SHF.L.U32"; break;
+            case 12: what = "STS address from R10"; p[2].w[0] = 0x0a007988u; want = "STS address register"; break;
+            case 13: what = "LOP3 AND instead of XOR"; p[1].w[2] = 0x078ec0ffu; want = "LOP3 XOR"; break;
+            case 14: what = "partner mask 0x1fc (out of bounds)"; p[1].w[1] = 0x1fcu; want = "(CTA-1)*4"; break;
+            case 15: what = "LDS into R8"; p[4].w[0] = 0x0a087984u; want = "LDS must load"; break;
+            case 16: what = "SHFL mode bits changed"; check_op = OMEGA_NOP_REDUCE_SUM;
+                     n = omega_numeric_patch_words(OMEGA_NOP_REDUCE_SUM, p); p[0].w[2] ^= 0x1u; want = "SHFL.DOWN form"; break;
+            case 17: what = "SHFL_DOWN by 2"; p[0].w[1] = 0x08401f00u; want = "SHFL.DOWN by 1"; break;
+            case 18: what = "last pair dropped"; p[8] = p[10]; p[9] = p[11]; n = 10; want = "five SHFL.DOWN"; break;
+            case 19: what = "deltas 16 and 8 swapped"; { uint32_t t = p[0].w[1]; p[0].w[1] = p[2].w[1]; p[2].w[1] = t; }
+                     want = "declared order"; break;
+            case 20: what = "clamp 0x0f"; p[4].w[1] = (p[4].w[1] & ~(0x1fu << 8)) | (0x0fu << 8); want = "clamp"; break;
+            case 21: what = "shuffle of R5"; p[2].w[0] = 0x05097f89u; want = "shuffles R"; break;
+            case 22: what = "FADD negates"; p[3].w[1] |= 0x80000000u; want = "plain FADD"; break;
+            case 23: what = "shuffle sets no barrier"; p[6].w[3] |= (7u << 14); want = "does not wait on the shuffle"; break;
+            case 24: what = "FADD adds R5"; p[5].w[1] = 5u; want = "does not add the shuffled"; break;
+            case 25: what = "FADD writes R3"; p[1].w[0] = 0x02037221u; want = "writes R3"; break;
+            case 26: what = "STG replaced by EXIT"; p[10] = p[11]; want = "is not stored"; break;
+            }
+            char err[256];
+            int rc = omega_numeric_check_patch(check_op, p, n, q, err, sizeof(err));
+            bool ok = rc == OMEGA_NUMERIC_ERR_OPERANDS && strstr(err, want) != NULL;
+            cases++;
+            if (ok) caught++;
+            else printf("    NOT CAUGHT (%s): rc=%d reason '%s', wanted '%s'\n", what, rc, err, want);
+        }
+        printf("    patch corruptions refused with the right reason: %d of %d; clean patches accepted: %s\n",
+               caught, cases, clean_ok ? "yes" : "no");
+        report("NEG_PATCH_STRUCTURE_CHECKED_BEFORE_SUBMISSION", caught == cases && clean_ok);
+    }
+
     /* Gate item: the spec's vocabulary includes shared-memory load/store and a
-     * warp reduction primitive. Neither has a GB10 kernel yet, so both are
-     * expected-not-encoded (refused above) and this test FAILS until they are
-     * encoded and qualified. It is never passed by relabelling an op. */
+     * warp reduction primitive. Both are encoded, keyed to provenance, and
+     * pass the structural check on the launch QMD for the corpus size. Parity
+     * on silicon is the GB10 tier's job, not this one. */
     {
         bool lds = omega_numeric_op_find("LDS_STS")->gb10_encoded;
         bool red = omega_numeric_op_find("REDUCE_SUM")->gb10_encoded;
-        printf("OMEGA_NUMERIC_FINDING_JSON:{\"id\":\"VOCABULARY_INCOMPLETE\",\"shared_load_store_encoded\":%s,"
-               "\"warp_reduction_encoded\":%s,\"expected_not_encoded\":[\"LDS_STS\",\"REDUCE_SUM\"],"
-               "\"blocks\":\"FP32_SIMT_OPCODES_ENCODED\"}\n", lds ? "true" : "false", red ? "true" : "false");
-        if (!lds || !red)
-            printf("    FP32_SIMT_OPCODES_ENCODED needs LDS_STS and REDUCE_SUM GB10 kernels; both are expected-not-encoded today\n");
+        char e1[256], e2[256];
+        bool lds_sub = omega_numeric_submit_check("LDS_STS", g_a, NULL, NULL, g_dev, N, e1, sizeof(e1)) == 0;
+        bool red_sub = omega_numeric_submit_check("REDUCE_SUM", g_a, NULL, NULL, g_dev, N, e2, sizeof(e2)) == 0;
+        if (!lds || !red || !lds_sub || !red_sub)
+            printf("    FP32_SIMT_OPCODES_ENCODED: LDS_STS encoded %d accepted %d (%s); REDUCE_SUM encoded %d accepted %d (%s)\n",
+                   lds, lds_sub, e1, red, red_sub, e2);
         report("FP32_SIMT_OPCODES_ENCODED",
-               fixtures_rc == 0 && prov_problems == 0 && build_ok && lds && red);
+               fixtures_rc == 0 && prov_problems == 0 && build_ok && lds && red && lds_sub && red_sub);
     }
 
     /* ---- Math sequences --------------------------------------------------------- */

@@ -1,9 +1,11 @@
 /*
  * OMEGA-NUMERIC-0 GB10 executor. Every request passes
  * omega_numeric_submit_check before any device is opened: unknown ops,
- * ops without a GB10 encoding (DIV, SQRT, EXP, LOG, REDUCE_SUM, LDS_STS) and
- * operand shapes the kernel cannot carry are refused here with a message on
- * stderr. The kernel is the calibrated vecadd with the op's patch words from
+ * ops without a GB10 encoding (DIV, SQRT, EXP, LOG and the refused variants
+ * such as LDS.U8 or SHFL_UP), operand shapes the kernel cannot carry, and a
+ * patch that fails the structural check (shared-memory order and bounds,
+ * barriers, reduction order) are refused here with a message on stderr. The
+ * structural check runs again on the exact QMD that is submitted. The kernel is the calibrated vecadd with the op's patch words from
  * omega_numeric_patch_words; there is no fallback instruction.
  */
 #include "omega_numeric.h"
@@ -109,10 +111,8 @@ int omega_gb10_execute_simt_op(const char *op_name,
         .qmd0_va = qmd0_va,
         .qmd1_va = qmd1_va,
         .num_elements = (uint32_t)count,
-        .threads_per_block = 64,
-        .grid_width = (uint32_t)((count + 63) / 64)
     };
-    if (qmd_cfg.grid_width == 0) qmd_cfg.grid_width = 1;
+    omega_numeric_launch_shape(count, &qmd_cfg.threads_per_block, &qmd_cfg.grid_width);
 
     uint32_t qmd0_words[OMEGA_BW_QMD_WORDS];
     uint32_t qmd1_words[OMEGA_BW_QMD_WORDS];
@@ -121,6 +121,17 @@ int omega_gb10_execute_simt_op(const char *op_name,
     if (omega_blackwell_verify_qmd_invariants(qmd1_words) != 0) {
         m16_native_close(&ctx);
         return OMEGA_NUMERIC_ERR_DEVICE;
+    }
+    {
+        /* same structural check as submit_check, on the QMD actually submitted */
+        OmegaNumericPatchInsn patch[OMEGA_NUMERIC_PATCH_MAX];
+        int np = omega_numeric_patch_words(info->op, patch);
+        char perr[256];
+        if (omega_numeric_check_patch(info->op, patch, np, qmd1_words, perr, sizeof(perr)) != OMEGA_NUMERIC_OK) {
+            fprintf(stderr, "omega_gb10_execute_simt_op: %s\n", perr);
+            m16_native_close(&ctx);
+            return OMEGA_NUMERIC_ERR_OPERANDS;
+        }
     }
 
     memcpy(qmd_mem.cpu, qmd0_words, sizeof(qmd0_words));

@@ -158,7 +158,7 @@ typedef enum {
     OMEGA_NOP_F2I,         /* input FP32, output bits are int32              */
     OMEGA_NOP_MUFU_RCP,    /* seed only: never compared bit-exactly          */
     OMEGA_NOP_MUFU_RSQ,    /* seed only: never compared bit-exactly          */
-    OMEGA_NOP_LDS_STS,     /* STS then LDS round trip: out = a               */
+    OMEGA_NOP_LDS_STS,     /* STS, BAR.SYNC, LDS: out[i] = a[i ^ 63] per CTA  */
     OMEGA_NOP_SHFL_DOWN,   /* SHFL.DOWN by 1, clamp 0x1f                     */
     OMEGA_NOP_DIV,
     OMEGA_NOP_SQRT,
@@ -202,6 +202,25 @@ const char *omega_numeric_compare_name(OmegaNumericCompare c);
 #define OMEGA_NUMERIC_MAX_COUNT 65536u
 
 /*
+ * Threads per CTA of every numeric launch (QMD CTA_THREAD_DIMENSION0 and the
+ * grid width in src/omega_numeric_gb10.c). LDS_STS exchanges values inside
+ * one CTA, so its count must be a whole number of CTAs: a partial CTA would
+ * have exited threads that never reach BAR.SYNC.
+ */
+#define OMEGA_NUMERIC_CTA_THREADS 64u
+/* Bytes of shared memory LDS_STS touches per CTA: one 32-bit word per thread. */
+#define OMEGA_NUMERIC_LDS_STS_SHARED_BYTES (OMEGA_NUMERIC_CTA_THREADS * 4u)
+
+/*
+ * Variants of the shared-memory and warp ops that have no GB10 encoding.
+ * omega_numeric_submit_check refuses each with OMEGA_NUMERIC_ERR_NOT_ENCODED
+ * and names it, so a caller asking for LDS.U8 or SHFL_UP learns it is
+ * unencoded instead of being handed the 32-bit or SHFL.DOWN kernel.
+ */
+size_t omega_numeric_refused_variant_count(void);
+const char *omega_numeric_refused_variant_at(size_t index);
+
+/*
  * Everything that must be true before any device is touched. Writes a
  * one-line reason into err (if non-NULL) on refusal.
  */
@@ -218,7 +237,7 @@ int omega_numeric_submit_check(const char *op_name,
  * encoding.
  */
 #define OMEGA_NUMERIC_PATCH_OFFSET 0x110u
-#define OMEGA_NUMERIC_PATCH_MAX    4u
+#define OMEGA_NUMERIC_PATCH_MAX    15u  /* slots 0x110..0x1f0 of the 0x200-byte kernel */
 typedef struct {
     uint32_t    w[4];
     const char *text;
@@ -231,6 +250,36 @@ int omega_numeric_patch_words(OmegaNumericOp op,
 /* Encodes the vecadd baseline and applies the patch for op. */
 int omega_numeric_build_kernel(OmegaNumericOp op, uint8_t *code, size_t code_len,
                                size_t *out_len);
+
+/*
+ * Structural check of a patch against the launch it will run in. Called by
+ * omega_numeric_submit_check (on a QMD built for count) and again by the GB10
+ * executor on the exact QMD it submits. It decodes the words, so it catches a
+ * wrong patch even when the patch table itself was edited:
+ *   every patch  length 1..PATCH_MAX; a variable-latency result (write
+ *                barrier set) is waited on by the very next instruction;
+ *                STS/LDS/BAR/SHFL words match their one encoded form in every
+ *                non-register bit (no .U8/.64/.128, no offsets, no other
+ *                barrier id, no SHFL mode other than DOWN);
+ *   shared use   STS before BAR.SYNC 0 before LDS; the QMD declares at least
+ *                one barrier; the address is SHF.L R0 (tid.x) by exactly 2,
+ *                the LDS address is that value XOR (CTA-1)*4; the CTA width
+ *                in the QMD is OMEGA_NUMERIC_CTA_THREADS (a power of two);
+ *                (CTA-1)*4 + 4 bytes fit in the QMD shared-memory size;
+ *   REDUCE_SUM   exactly five SHFL.DOWN, deltas 16, 8, 4, 2, 1 in that
+ *                order, clamp 0x1f, each followed by an FADD (no negate, no
+ *                modifiers) that waits on the shuffle, adds the shuffled value
+ *                to the running sum, and the last FADD writes R9, which the
+ *                STG stores.
+ * qmd1_words is the 96-word compute QMD. Returns OMEGA_NUMERIC_OK or
+ * OMEGA_NUMERIC_ERR_OPERANDS with a one-line reason in err.
+ */
+int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *patch, int n,
+                              const uint32_t *qmd1_words, char *err, size_t err_len);
+
+/* Launch shape for count elements: OMEGA_NUMERIC_CTA_THREADS threads per CTA
+ * and enough CTAs to cover count. Shared by submit_check and the executor. */
+void omega_numeric_launch_shape(size_t count, uint32_t *threads_per_block, uint32_t *grid_width);
 
 /* ---- Tiers and comparison ------------------------------------------------- */
 

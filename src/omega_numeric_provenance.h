@@ -34,8 +34,8 @@ const OmegaOpcodeProvenance *omega_numeric_get_opcode(size_t index);
  *    w0/w1/w2, and every entry is used by some op (no orphan claims);
  *  - STG/EXIT words equal the vecadd baseline at 0x120/0x130 (control aside);
  *  - scoreboards: the first patched instruction waits on the load barrier
- *    (SB4); a variable-latency instruction sets a write barrier and the next
- *    STG waits on it.
+ *    (SB4); a variable-latency instruction sets a write barrier and the very
+ *    next instruction (STG, FADD, ...) waits on it.
  * Returns 0 when consistent; otherwise the number of problems (each printed
  * to stderr when verbose).
  */

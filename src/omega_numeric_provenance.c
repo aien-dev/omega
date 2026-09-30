@@ -40,6 +40,31 @@ static const OmegaOpcodeProvenance PROVENANCE_TABLE[] = {
       0x00097308, 0x00000002, 0x00001400, true },
     { "SHFL_DOWN_1", "SHFL.DOWN PT, R9, R2, 0x1, 0x1f", 0x7f89, "warp shuffle down by one lane", ORACLE,
       0x02097f89, 0x08201f00, 0x000e0000, true },
+    { "SHFL_DOWN_16", "SHFL.DOWN PT, R9, R2, 0x10, 0x1f", 0x7f89, "declared-order reduction step 1: lane i + 16", ORACLE,
+      0x02097f89, 0x0a001f00, 0x000e0000, true },
+    { "SHFL_DOWN_8", "SHFL.DOWN PT, R9, R2, 0x8, 0x1f", 0x7f89, "declared-order reduction step 2: lane i + 8", ORACLE,
+      0x02097f89, 0x09001f00, 0x000e0000, true },
+    { "SHFL_DOWN_4", "SHFL.DOWN PT, R9, R2, 0x4, 0x1f", 0x7f89, "declared-order reduction step 3: lane i + 4", ORACLE,
+      0x02097f89, 0x08801f00, 0x000e0000, true },
+    { "SHFL_DOWN_2", "SHFL.DOWN PT, R9, R2, 0x2, 0x1f", 0x7f89, "declared-order reduction step 4: lane i + 2", ORACLE,
+      0x02097f89, 0x08401f00, 0x000e0000, true },
+    { "FADD_R2_R2_R9", "FADD R2, R2, R9", 0x7221, "running sum += shuffled value (RNE, subnormals kept)", ORACLE,
+      0x02027221, 0x00000009, 0x00000000, false },
+    { "FADD_R9_R2_R9", "FADD R9, R2, R9", 0x7221, "last reduction step, result into R9 for the STG", ORACLE,
+      0x02097221, 0x00000009, 0x00000000, false },
+    { "SHF_L_R8_R0_2", "SHF.L.U32 R8, R0, 0x2, RZ", 0x7819, "shared byte offset of word tid.x (tid * 4)", ORACLE,
+      0x00087819, 0x00000002, 0x000006ff, false },
+    { "LOP3_R10_R8_XOR_FC", "LOP3.LUT R10, R8, 0xfc, RZ, 0x3c, !PT", 0x7812,
+      "partner offset (tid ^ 63) * 4, bounded by the 64-thread CTA", ORACLE,
+      0x080a7812, 0x000000fc, 0x078e3cff, false },
+    { "STS_R8_R2", "STS [R8+URZ], R2", 0x7988,
+      "32-bit shared store at raw offset R8 (NVK/NAK form; ptxas bases on SR_CgaCtaId + 0x400, "
+      "first suspect if the chip disagrees)", ORACLE,
+      0x08007988, 0x00000002, 0x080008ff, false },
+    { "BAR_SYNC_0", "BAR.SYNC.DEFER_BLOCKING 0x0", 0x7b1d, "CTA barrier 0 between the store and the load", ORACLE,
+      0x00007b1d, 0x00000000, 0x00010000, false },
+    { "LDS_R9_R10", "LDS R9, [R10+URZ]", 0x7984, "32-bit shared load of the partner word", ORACLE,
+      0x0a097984, 0x000000ff, 0x08000800, true },
 };
 
 #define PROVENANCE_COUNT (sizeof(PROVENANCE_TABLE) / sizeof(PROVENANCE_TABLE[0]))
@@ -103,15 +128,16 @@ int omega_numeric_verify_fixture_table(const OmegaOpcodeProvenance *table, size_
         int pending_bar = -1;
         for (int t = 0; t < m; t++) {
             const OmegaNumericPatchInsn *w = &patch[t];
+            if (pending_bar >= 0) {
+                if (!(ctrl_wait(w->w[3]) & (1u << pending_bar)))
+                    PROBLEM("%s: instruction %d does not wait on SB%d set by the variable-latency op before it",
+                            info->name, t, pending_bar);
+                pending_bar = -1;
+            }
             if (!w->provenance_key) {
                 bool is_stg = w->w[0] == stg[0] && w->w[1] == stg[1] && w->w[2] == stg[2];
                 bool is_exit = w->w[0] == ex[0] && w->w[1] == ex[1] && w->w[2] == ex[2];
                 if (!is_stg && !is_exit) PROBLEM("%s: unkeyed word %d is neither baseline STG nor EXIT", info->name, t);
-                if (is_stg && pending_bar >= 0) {
-                    if (!(ctrl_wait(w->w[3]) & (1u << pending_bar)))
-                        PROBLEM("%s: STG does not wait on SB%d set by the variable-latency op", info->name, pending_bar);
-                    pending_bar = -1;
-                }
                 continue;
             }
             const OmegaOpcodeProvenance *p = NULL;
