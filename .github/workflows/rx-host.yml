@@ -71,7 +71,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: aien-dev/physics
-          ref: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          ref: f63a6ef4c5dfa27fc32ee6e4f893bd2c42ec8a12
           path: physics-src
       - name: Keep Physics checkout out of Omega tree status
         run: echo 'physics-src/' >> .git/info/exclude
@@ -92,7 +92,7 @@ jobs:
       - name: Build and run resident reaction host qualification
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          PHYSICS_COMMIT: f63a6ef4c5dfa27fc32ee6e4f893bd2c42ec8a12
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
@@ -157,7 +157,7 @@ jobs:
       - name: Build and run workflow fusion qualification
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          PHYSICS_COMMIT: f63a6ef4c5dfa27fc32ee6e4f893bd2c42ec8a12
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
@@ -174,7 +174,7 @@ jobs:
       - name: Build and run typed result constraints
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          PHYSICS_COMMIT: f63a6ef4c5dfa27fc32ee6e4f893bd2c42ec8a12
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
@@ -204,7 +204,7 @@ jobs:
       - name: Emit qualification receipt
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-          PHYSICS_COMMIT: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          PHYSICS_COMMIT: f63a6ef4c5dfa27fc32ee6e4f893bd2c42ec8a12
         run: |
           receipt="$(find build/qual-runs -name rx_heartbeat_receipt.json -type f | head -n 1)"
           native="$(find build/qual-runs -name rx_native_authority_receipt.json -type f | head -n 1)"
@@ -241,7 +241,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: aien-dev/physics
-          ref: fecbedb1b9cea9e4de0fa3c88fe795934fb361f9
+          ref: f63a6ef4c5dfa27fc32ee6e4f893bd2c42ec8a12
           path: physics-src
       - name: Read pinned AIENOS authority
         id: aienos
