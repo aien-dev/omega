@@ -155,6 +155,9 @@ static int mut_innov(const est_innovation *b, est_innovation *o, int idx)
 static int dig_eq(const est_digest *a, const est_digest *b) { return memcmp(a->b, b->b, 32) == 0; }
 
 /* Generic property runner, one instantiation per kind. */
+#ifndef PROP_ROUNDS
+#define PROP_ROUNDS 2000 /* the ASan/UBSan build passes a smaller value: same checks, fewer random records */
+#endif
 #define PROP(NAME, TYPE, GEN, MUT, ROUNDS)                                                   \
 static void prop_##NAME(void)                                                                \
 {                                                                                            \
@@ -179,11 +182,11 @@ static void prop_##NAME(void)                                                   
         }                                                                                    \
     }                                                                                        \
 }
-PROP(model, est_model, gen_model, mut_model, 2000)
-PROP(observation, est_observation, gen_obs, mut_obs, 2000)
-PROP(belief, est_belief, gen_belief, mut_belief, 2000)
-PROP(prediction, est_prediction, gen_pred, mut_pred, 2000)
-PROP(innovation, est_innovation, gen_innov, mut_innov, 2000)
+PROP(model, est_model, gen_model, mut_model, PROP_ROUNDS)
+PROP(observation, est_observation, gen_obs, mut_obs, PROP_ROUNDS)
+PROP(belief, est_belief, gen_belief, mut_belief, PROP_ROUNDS)
+PROP(prediction, est_prediction, gen_pred, mut_pred, PROP_ROUNDS)
+PROP(innovation, est_innovation, gen_innov, mut_innov, PROP_ROUNDS)
 
 /* ---- kind dispatch helpers ---- */
 typedef union { est_model m; est_observation o; est_belief b; est_prediction p; est_innovation i; } anyrec;

@@ -35,7 +35,7 @@ $(EST_DIR)/test_est_types: tests/estimation/test_est_types.c $(EST_TYPES_SRCS) $
 	$(CC) $(EST_CFLAGS) -o $@ tests/estimation/test_est_types.c $(EST_TYPES_SRCS) -lm
 $(EST_DIR)/test_est_types_asan: tests/estimation/test_est_types.c $(EST_TYPES_SRCS) $(EST_HDRS)
 	@mkdir -p $(EST_DIR)
-	$(CC) $(EST_CFLAGS) $(EST_ASAN) -o $@ tests/estimation/test_est_types.c $(EST_TYPES_SRCS) -lm
+	$(CC) $(EST_CFLAGS) $(EST_ASAN) -DPROP_ROUNDS=100 -o $@ tests/estimation/test_est_types.c $(EST_TYPES_SRCS) -lm
 
 $(EST_DIR)/test_est_kf: tests/estimation/test_est_kf.c $(EST_KF_SRCS) $(EST_HDRS)
 	@mkdir -p $(EST_DIR)

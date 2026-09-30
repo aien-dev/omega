@@ -188,7 +188,7 @@ int est_digest_is_zero(const est_digest *d);
 
 /* ---- serialization: exact round trip; decode validates and refuses a kind
  * byte, version or length that does not match the target type ---- */
-#define EST_ENCODED_MAX 1400u
+#define EST_ENCODED_MAX 2304u
 est_status est_encode_model(const est_model *mdl, uint8_t *buf, size_t cap, size_t *len);
 est_status est_decode_model(const uint8_t *buf, size_t len, est_model *out);
 est_status est_encode_observation(const est_observation *o, uint8_t *buf, size_t cap, size_t *len);
