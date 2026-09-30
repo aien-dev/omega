@@ -128,6 +128,9 @@ typedef struct {
     RxCapRef candidate_read, promotion_write, inforce_write, promotion_authority;
     uint32_t reaction;
     int result;
+    /* R16 C5: the promotion subject's credential (rx_caller.h), apart from
+     * the proposer's; null in a world without bound callers. */
+    const RxCallerKeyring *keys;
 } RxLivingPromoter;
 
 typedef struct {
@@ -145,6 +148,9 @@ typedef struct {
     uint64_t proposed_epoch, candidate_id;
     uint64_t refusals;          /* observability: why nothing was proposed */
     int last_refusal;
+    /* R16 C5: credentials of the living subjects other than the promotion
+     * subject (rx_caller.h); null in a world without bound callers. */
+    const RxCallerKeyring *keys;
 } RxLiving;
 
 /* Why generation.prepare declined (last_refusal). Never a semantic decision
@@ -168,6 +174,23 @@ int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
  * `restore_write` is RW on RX_LIVING_RES_RESTORE for RX_LIVING_PROMOTE_SUBJ.
  * Creates the restore object. Call after rx_living_register. */
 int rx_living_register_restore(RxLiving *l, RxLivingPromoter *promoter, RxCapRef restore_write);
+/* R16 C6: the production subjects' runtime-issued caller credentials, one
+ * keyring per component; each component holds only its own. */
+typedef struct {
+    RxCallerKeyring omega;      /* RX_OMEGA_SUBJ_SERVE, RX_OMEGA_SUBJ_OMEGA */
+    RxCallerKeyring aien;       /* RX_AIEN_SUBJ */
+    RxCallerKeyring aegis;      /* RX_AEGIS_SUBJ, RX_AEGIS_ROOT_SUBJ */
+    RxCallerKeyring living;     /* RX_LIVING_SUBJ, _SEAT_SUBJ, _PREPARE_SUBJ */
+    RxCallerKeyring promoter;   /* RX_LIVING_PROMOTE_SUBJ */
+} RxLivingKeyrings;
+/* Enrolls every production subject into w (rx_world_enroll_caller) and sets
+ * one keyring per component (the faculties' .keys pointers are set by the
+ * caller). Does not bind: the caller enrolls any further subjects, then calls rx_world_bind_callers. */
+int rx_living_enroll_callers(RxWorld *w, RxLivingKeyrings *k);
+/* The native promotion authority (aienos_cap_validate on an AienosCapView as
+ * ctx), for rx_gen_bind_authority. */
+int rx_living_native_authority(void *ctx, uint32_t cap_id, uint64_t generation,
+                               uint32_t subject, uint64_t resource, uint32_t rights);
 
 /* Same content digest the world gives an object: SHA-256 over
  * "AIEN_RX_OBJECT_V1", type and the eight fields. */

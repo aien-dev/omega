@@ -384,7 +384,7 @@ int rx_aien_register_experiment(RxAienFaculty *f, RxObjRef evidence,
     d.caps[0] = (RxCapNeed){ evidence_read, f->w->objects[evidence.id].resource, RX_RIGHT_READ };
     d.caps[1] = (RxCapNeed){ belief_write,
         RX_AIEN_RES_BASE + RX_AIEN_RES_EXPERIMENT_BELIEF, RX_RIGHT_READ | RX_RIGHT_WRITE };
-    return rx_world_add_reaction(f->w, &d, &f->r_experiment);
+    return rx_world_add_reaction_keyed(f->w, f->keys, &d, &f->r_experiment);
 }
 
 static void need(Builder *b, RxObjRef o, uint32_t rights) {
@@ -434,7 +434,7 @@ int rx_aien_register(RxAienFaculty *f, const RxAienCaps *caps) {
     rd(&b, f->o.prediction);
     rd(&b, f->o.hypothesis);
     wr(&b, f->o.belief);
-    if ((rc = rx_world_add_reaction(w, &b.d, &f->r_observe)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_observe)) != RX_OK) return rc;
 
     begin(&b, "aien.predict", RX_PRIO_LEARNING, fn_predict, f, caps);
     trig(&b, f->o.belief, RX_FIELD(5));
@@ -443,14 +443,14 @@ int rx_aien_register(RxAienFaculty *f, const RxAienCaps *caps) {
     rd(&b, f->in.selection);
     rd(&b, f->o.hypothesis);
     wr(&b, f->o.prediction);
-    if ((rc = rx_world_add_reaction(w, &b.d, &f->r_predict)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_predict)) != RX_OK) return rc;
 
     begin(&b, "aien.explain", RX_PRIO_LEARNING, fn_explain, f, caps);
     trig(&b, f->o.prediction, RX_FIELD(0) | RX_FIELD(6));
     rd(&b, f->o.hypothesis);
     rd(&b, f->o.placement);
     wr(&b, f->o.hypothesis);
-    if ((rc = rx_world_add_reaction(w, &b.d, &f->r_explain)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_explain)) != RX_OK) return rc;
 
     begin(&b, "aien.assess", RX_PRIO_LEARNING, fn_assess, f, caps);
     trig(&b, f->o.goal, RX_ALL_FIELDS);
@@ -459,7 +459,7 @@ int rx_aien_register(RxAienFaculty *f, const RxAienCaps *caps) {
     rd(&b, f->o.placement);
     rd(&b, f->o.assessment);
     wr(&b, f->o.assessment);
-    if ((rc = rx_world_add_reaction(w, &b.d, &f->r_assess)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_assess)) != RX_OK) return rc;
 
     begin(&b, "aien.plan", RX_PRIO_LEARNING, fn_plan, f, caps);
     trig(&b, f->o.hypothesis, RX_FIELD(7));
@@ -470,6 +470,6 @@ int rx_aien_register(RxAienFaculty *f, const RxAienCaps *caps) {
     wr(&b, f->o.plan);
     wr(&b, f->o.memory);
     wr(&b, f->o.hypothesis);
-    if ((rc = rx_world_add_reaction(w, &b.d, &f->r_plan)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, f->keys, &b.d, &f->r_plan)) != RX_OK) return rc;
     return RX_OK;
 }

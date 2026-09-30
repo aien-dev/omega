@@ -1136,7 +1136,7 @@ static int l1_rig(R15Config cfg, const char *measure) {
         AienosCapEntry grant;
         if (rx_world_read(&r->w, r->aegis.o[0].slot[0], &slot) != RX_OK ||
             aienos_cap_inspect(r->view, (AienosCapRef){(uint32_t)slot.field[0],
-                                                       (uint32_t)slot.field[1]}, &grant) != 0)
+                                                       slot.field[1]}, &grant) != 0)
             ok = 0;
         static uint8_t blob[4096];
         for (int b = 0; b < 30 && ok; b++) {
@@ -1155,10 +1155,12 @@ static int l1_rig(R15Config cfg, const char *measure) {
             rx_gen_store_io(r->gen, &b0, &s0);
             rx_gen_io_counters(&pb0, &ps0);
             uint64_t prep = r15_now_ns();
-            int prc = rx_gen_propose(r->gen, RX_LIVING_PREPARE_SUBJ, &d, &id);
+            int prc = rx_gen_propose_as(r->gen, RX_LIVING_PREPARE_SUBJ,
+                rx_caller_find(&r->keys_living, RX_LIVING_PREPARE_SUBJ), &d, &id);
             RxPromotionRequest req = {id, RX_LIVING_PROMOTE_SUBJ,
                 r->promoter.promotion_authority.cap_id, r->promoter.promotion_authority.generation,
-                RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE};
+                RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE, {0, {0}}};
+            req.caller = *rx_caller_find(&r->keys_promoter, RX_LIVING_PROMOTE_SUBJ);
             uint64_t n0 = r->w.n_crumbs;
             int rc = prc == RX_GEN_OK
                 ? rx_gen_promote(r->gen, &req, native_promotion, (void *)r->view, NULL, NULL, NULL, NULL) : prc;

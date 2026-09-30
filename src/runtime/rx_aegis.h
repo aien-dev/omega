@@ -138,6 +138,9 @@ typedef struct RxAegisFaculty {
 
     /* Observability only. */
     uint64_t mints, revokes, root_refusals;
+    /* R16 C5: this faculty's caller credentials (rx_caller.h); null in a
+     * world without bound callers. Held here, never published. */
+    const RxCallerKeyring *keys;
 } RxAegisFaculty;
 
 /* Pure policy evaluation. Returns a verdict; *rule_or_why gets the rule id or

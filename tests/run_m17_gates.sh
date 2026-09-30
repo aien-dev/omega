@@ -30,7 +30,7 @@ echo ""
 
 # Step 3: Run Live Demonstration
 echo "[*] Step 3: Running Physical Silicon Vector Demonstration (N=1024)..."
-"$TOOL" --demonstrate-blackwell-vector
+"$TOOL" --reference-demonstrate-blackwell-vector
 echo ""
 
 # Step 4: Regression checks (M4 through M15)

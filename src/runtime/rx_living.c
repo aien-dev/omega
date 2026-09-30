@@ -336,14 +336,16 @@ static int fn_candidate(RxCtx *c) {
              * worker. A proposal still in flight (this epoch's or an older
              * one's) resumes this activation when it lands. */
             if (rx_gen_job_state(l->store, RX_GEN_JOB_PROPOSE, NULL) == RX_GEN_JOB_IDLE &&
-                rx_gen_post_propose(l->store, epoch, RX_LIVING_PREPARE_SUBJ, &draft,
-                                    resume_candidate, l) != RX_GEN_OK) {
+                rx_gen_post_propose_as(l->store, epoch, RX_LIVING_PREPARE_SUBJ,
+                                       rx_caller_find(l->keys, RX_LIVING_PREPARE_SUBJ), &draft,
+                                       resume_candidate, l) != RX_GEN_OK) {
                 decline(l, RX_LIVING_WHY_PROPOSE);
                 return -1;
             }
             return RX_FN_DEFER;
         }
-        if (rx_gen_propose(l->store, RX_LIVING_PREPARE_SUBJ, &draft, &id) != RX_GEN_OK) {
+        if (rx_gen_propose_as(l->store, RX_LIVING_PREPARE_SUBJ,
+                              rx_caller_find(l->keys, RX_LIVING_PREPARE_SUBJ), &draft, &id) != RX_GEN_OK) {
             decline(l, RX_LIVING_WHY_PROPOSE);
             return -1;
         }
@@ -356,6 +358,23 @@ static int fn_candidate(RxCtx *c) {
     put(c, l->o.candidate, 6, s->field[6]);
     put(c, l->o.candidate, 7, s->field[5]);
     return 0;
+}
+
+/* R16 C5: the promotion subject presents its own credential. C7: a promoter
+ * given a keyring without that credential fails here, before anything is
+ * posted to the executor (a promoter with no keyring at all serves an
+ * unbound store, which checks no credential). */
+static int promotion_caller(const RxLivingPromoter *p, RxPromotionRequest *req) {
+    const RxCallerCred *c = rx_caller_find(p->keys, RX_LIVING_PROMOTE_SUBJ);
+    if (c) { req->caller = *c; return RX_GEN_OK; }
+    return p->keys ? RX_GEN_ERR_IDENTITY : RX_GEN_OK;
+}
+
+int rx_living_native_authority(void *ctx, uint32_t cap_id, uint64_t generation,
+                                uint32_t subject, uint64_t resource, uint32_t rights) {
+    AienosCapEntry entry;
+    return aienos_cap_validate(ctx, (AienosCapRef){cap_id, generation},
+                               subject, resource, rights, &entry);
 }
 
 static int native_promotion(void *ctx, uint32_t cap_id, uint64_t generation,
@@ -401,9 +420,12 @@ static int promote_durable(RxLivingPromoter *p, uint64_t id, int *rc, uint64_t *
     if (st == RX_GEN_JOB_PENDING) return 1;
     RxPromotionRequest req = {id, RX_LIVING_PROMOTE_SUBJ,
         p->promotion_authority.cap_id, p->promotion_authority.generation,
-        RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE};
+        RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE, {0, {0}}};
+    *rc = promotion_caller(p, &req);
+    if (*rc != RX_GEN_OK) return 0;
     *rc = rx_gen_post_promote(p->store, id, &req, native_promotion, (void *)p->authority,
                               resume_promoter, p);
+    rx_caller_wipe(&req.caller);
     return *rc == RX_GEN_OK;
 }
 
@@ -418,9 +440,12 @@ static void promote_inline(RxLivingPromoter *p, uint64_t id, int *rc, uint64_t *
     }
     RxPromotionRequest req = {id, RX_LIVING_PROMOTE_SUBJ,
         p->promotion_authority.cap_id, p->promotion_authority.generation,
-        RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE};
-    *rc = rx_gen_promote(p->store, &req, native_promotion, (void *)p->authority,
-                         NULL, NULL, NULL, NULL);
+        RX_GEN_RES_PROMOTION, RX_GEN_RIGHT_PROMOTE, {0, {0}}};
+    *rc = promotion_caller(p, &req);
+    if (*rc == RX_GEN_OK)
+        *rc = rx_gen_promote(p->store, &req, native_promotion, (void *)p->authority,
+                             NULL, NULL, NULL, NULL);
+    rx_caller_wipe(&req.caller);
     *ns = now_ns() - t0;
     rx_gen_active(p->store, active, &lineage);
 }
@@ -513,7 +538,7 @@ int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
     d.caps[0] = (RxCapNeed){caps->search_read, RX_OMEGA_RES_BASE + RX_OMEGA_RES_SEARCH, R};
     d.caps[1] = (RxCapNeed){caps->plan_read, RX_AIEN_RES_BASE + RX_AIEN_RES_PLAN, R};
     d.caps[2] = cap(caps->input_write, RX_LIVING_RES_INPUT, RW);
-    if ((rc = rx_world_add_reaction(w, &d, &l->r_prepare)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, l->keys, &d, &l->r_prepare)) != RX_OK) return rc;
 
     /* The seat: one data trigger, one write, R5 asks for the Blackwell
      * feature, and its output WRITE reference is read from the R8 slot at
@@ -532,7 +557,7 @@ int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
     d.caps[2] = (RxCapNeed){caps->output_slot_read,
                             w->objects[caps->output_slot.id].resource, R};
     rx_aegis_use_slot(&d, 1, caps->output_slot);
-    if ((rc = rx_world_add_reaction(w, &d, &l->r_seat)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, l->keys, &d, &l->r_seat)) != RX_OK) return rc;
 
     base(&d, "living.experiment.evidence", RX_FACULTY_OMEGA, RX_LIVING_SUBJ, fn_evidence, l);
     d.n_triggers = 1;
@@ -547,7 +572,7 @@ int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
     d.caps[0] = cap(caps->output_read, RX_LIVING_RES_OUTPUT, R);
     d.caps[1] = cap(caps->input_write, RX_LIVING_RES_INPUT, RW);
     d.caps[2] = cap(caps->evidence_write, RX_LIVING_RES_EVIDENCE, RW);
-    if ((rc = rx_world_add_reaction(w, &d, &l->r_evidence)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, l->keys, &d, &l->r_evidence)) != RX_OK) return rc;
 
     base(&d, "generation.prepare", RX_FACULTY_OMEGA, RX_LIVING_PREPARE_SUBJ, fn_candidate, l);
     d.n_triggers = 1;
@@ -573,7 +598,7 @@ int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
     d.caps[6] = (RxCapNeed){caps->search_prepare_read,
                             RX_OMEGA_RES_BASE + RX_OMEGA_RES_SEARCH, R};
     d.caps[7] = cap(caps->output_prepare_read, RX_LIVING_RES_OUTPUT, R);
-    if ((rc = rx_world_add_reaction(w, &d, &l->r_candidate)) != RX_OK) return rc;
+    if ((rc = rx_world_add_reaction_keyed(w, l->keys, &d, &l->r_candidate)) != RX_OK) return rc;
 
     base(&d, "generation.promote", RX_FACULTY_ROOT, RX_LIVING_PROMOTE_SUBJ, fn_promote,
          promoter);
@@ -589,7 +614,7 @@ int rx_living_register(RxLiving *l, const RxLivingCaps *caps,
     d.caps[0] = cap(promoter->candidate_read, RX_LIVING_RES_CANDIDATE, R);
     d.caps[1] = cap(promoter->promotion_write, RX_LIVING_RES_PROMOTION, RW);
     d.caps[2] = cap(promoter->inforce_write, RX_LIVING_RES_INFORCE, RW);
-    return rx_world_add_reaction(w, &d, &promoter->reaction);
+    return rx_world_add_reaction_keyed(w, promoter->keys, &d, &promoter->reaction);
 }
 
 /* ---- generation.restore (R14) ----
@@ -679,5 +704,34 @@ int rx_living_register_restore(RxLiving *l, RxLivingPromoter *promoter, RxCapRef
     d.n_caps = 2;
     d.caps[0] = cap(restore_write, RX_LIVING_RES_RESTORE, RW);
     d.caps[1] = cap(promoter->inforce_write, RX_LIVING_RES_INFORCE, RW);
-    return rx_world_add_reaction(w, &d, &l->r_restore);
+    return rx_world_add_reaction_keyed(w, promoter->keys, &d, &l->r_restore);
+}
+
+/* ---- R16 C6: production caller enrollment ---- */
+
+static int enroll_one(RxWorld *w, RxCallerKeyring *k, uint32_t subject) {
+    if (k->n >= RX_CALLER_KEYRING_MAX) return RX_ERR_FULL;
+    if (rx_world_enroll_caller(w, subject, &k->cred[k->n]) != RX_CALLER_OK)
+        return RX_ERR_IDENTITY;   /* closed, already enrolled, full or no entropy */
+    k->subject[k->n++] = subject;
+    return RX_OK;
+}
+
+int rx_living_enroll_callers(RxWorld *w, RxLivingKeyrings *k) {
+    if (!w || !k) return RX_ERR_ARG;
+    memset(k, 0, sizeof *k);
+    int rc;
+    if ((rc = enroll_one(w, &k->omega, RX_OMEGA_SUBJ_SERVE)) != RX_OK ||
+        (rc = enroll_one(w, &k->omega, RX_OMEGA_SUBJ_OMEGA)) != RX_OK ||
+        (rc = enroll_one(w, &k->aien, RX_AIEN_SUBJ)) != RX_OK ||
+        (rc = enroll_one(w, &k->aegis, RX_AEGIS_SUBJ)) != RX_OK ||
+        (rc = enroll_one(w, &k->aegis, RX_AEGIS_ROOT_SUBJ)) != RX_OK ||
+        (rc = enroll_one(w, &k->living, RX_LIVING_SUBJ)) != RX_OK ||
+        (rc = enroll_one(w, &k->living, RX_LIVING_SEAT_SUBJ)) != RX_OK ||
+        (rc = enroll_one(w, &k->living, RX_LIVING_PREPARE_SUBJ)) != RX_OK ||
+        (rc = enroll_one(w, &k->promoter, RX_LIVING_PROMOTE_SUBJ)) != RX_OK) {
+        for (unsigned i = 0; i < sizeof *k; i++) ((volatile uint8_t *)k)[i] = 0;
+        return rc;
+    }
+    return RX_OK;
 }

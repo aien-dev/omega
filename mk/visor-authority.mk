@@ -10,9 +10,14 @@
 # visor-authority-check  link check: no Visor object references/defines an authority-mutating symbol.
 # mk/*.mk is included before the Makefile defines AIENOS_R7_DIR/AIENOS_CAP_LIB, and a
 # prerequisite list is expanded when the rule is read, so the defaults are repeated here
-# (same values; the Makefile's later ?= are then no-ops). The library is a prerequisite of
-# the link, so a changed libaienos_capability.a relinks the test.
-AIENOS_R7_DIR ?= ../aienos-r9
+# (same values as the Makefile's R7 block, the pinned aienos.lock extraction; its later
+# definitions are then identical). The library is a prerequisite of the link, so a changed
+# libaienos_capability.a relinks the test. The old default ../aienos-r9 overrode the
+# Makefile's pinned default for every authority target (R7 to R16).
+AIENOS_LOCK_REPO ?= ../aienos-argus-cap
+AIENOS_LOCK = $(shell head -n 1 aienos.lock)
+AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(shell echo $(AIENOS_LOCK) | cut -c1-7)
+AIENOS_R7_DIR ?= $(AIENOS_R7_DEFAULT)
 AIENOS_CAP_LIB ?= $(AIENOS_R7_DIR)/native/capability/out/libaienos_capability.a
 VISOR_AUTH_CAP_LIB ?= $(AIENOS_CAP_LIB)
 VISOR_AUTH_RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \

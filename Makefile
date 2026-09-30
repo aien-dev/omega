@@ -97,56 +97,56 @@ $(TARGET): check-physics-lock $(OBJS)
 
 test: $(TARGET)
 	./$(TARGET) --run-gates
-	./$(TARGET) --demonstrate-arithmetic
-	./$(TARGET) --demonstrate-physics
+	./$(TARGET) --reference-demonstrate-arithmetic
+	./$(TARGET) --reference-demonstrate-physics
 
 test-m5: $(TARGET)
 	./$(TARGET) --run-m5-gates
-	./$(TARGET) --demonstrate-realization
+	./$(TARGET) --reference-demonstrate-realization
 
 test-m6: $(TARGET)
 	./$(TARGET) --run-m6-gates
-	./$(TARGET) --demonstrate-self-host
+	./$(TARGET) --reference-demonstrate-self-host
 
 test-m7: $(TARGET)
 	./$(TARGET) --run-m7-gates
-	./$(TARGET) --demonstrate-verify
+	./$(TARGET) --reference-demonstrate-verify
 
 test-m8: $(TARGET)
 	./$(TARGET) --run-m8-gates
-	./$(TARGET) --demonstrate-program
+	./$(TARGET) --reference-demonstrate-program
 
 test-m9: $(TARGET)
 	./$(TARGET) --run-m9-gates
-	./$(TARGET) --demonstrate-synthesis
+	./$(TARGET) --reference-demonstrate-synthesis
 
 test-m10: $(TARGET)
 	./$(TARGET) --run-m10-gates
-	./$(TARGET) --demonstrate-library
+	./$(TARGET) --reference-demonstrate-library
 
 test-m11: $(TARGET)
 	./$(TARGET) --run-m11-gates
-	./$(TARGET) --demonstrate-discovery
+	./$(TARGET) --reference-demonstrate-discovery
 
 test-m12: $(TARGET)
 	./$(TARGET) --run-m12-gates
-	./$(TARGET) --demonstrate-living-matvec
+	./$(TARGET) --legacy-oracle-living-matvec
 
 test-m13: $(TARGET)
 	./$(TARGET) --run-m13-gates
-	./$(TARGET) --demonstrate-machine
+	./$(TARGET) --reference-demonstrate-machine
 
 test-m14: $(TARGET)
 	./$(TARGET) --run-m14-gates
-	./$(TARGET) --demonstrate-realization-synthesis
+	./$(TARGET) --reference-demonstrate-realization-synthesis
 
 test-m15: $(TARGET)
 	./$(TARGET) --run-m15-gates
-	./$(TARGET) --demonstrate-accelerator
+	./$(TARGET) --reference-demonstrate-accelerator
 
 test-m17: $(TARGET)
 	./$(TARGET) --run-m17-gates
-	./$(TARGET) --demonstrate-blackwell-vector
+	./$(TARGET) --reference-demonstrate-blackwell-vector
 
 clean:
 	rm -rf $(OUT_DIR)
@@ -159,6 +159,41 @@ test-m19: $(TARGET)
 .PHONY: test-m19r-qualify
 test-m19r-qualify:
 	tools/test_m19r_qualify.sh
+
+# Gate 5 (OMEGA-NUMERIC-0), CPU tiers only: reference, CPU parity, provenance
+# and negative tests. Opens no device. The GB10 tier and the receipt come
+# from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
+# item fails.
+.PHONY: test-numeric-cpu test-numeric-qualify
+NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c \
+                   src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
+                   src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+NUMERIC_CPU_HDRS = src/omega_numeric.h src/omega_numeric_provenance.h tests/numeric_oracle.h \
+                   src/omega_blackwell_qmd.h src/omega_blackwell_codegen.h src/omega_blackwell_encoder.h src/sha256.h
+build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) $(NUMERIC_CPU_HDRS)
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(NUMERIC_CPU_SRCS)
+# test-numeric-cpu exit status: 0 means no host test failed and the only SKIPs
+# are the five declared chip-only IDs (CHIP_ONLY_IDS in the test; the last line
+# prints "Gate 5 Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY"). Nonzero means a real
+# host regression (verdict HOST_REGRESSION) or a SKIP nobody declared
+# (UNDECLARED_SKIP). The chip build allows no SKIP at all.
+test-numeric-cpu: build/test_omega_numeric_cpu
+	./build/test_omega_numeric_cpu
+
+# Host-only tests of the Gate 5 qualifier and receipt writer. No GPU.
+test-numeric-qualify: build/test_omega_numeric_cpu
+	tools/test_numeric_qualify.sh
+
+# Deletes each CHECK-marked pre-submission check in src/omega_numeric.c in a
+# scratch copy and proves a Gate 5 host test then fails. No GPU.
+# Then applies each arithmetic mutation in tools/numeric_oracle_mutations.sh
+# (broken EXP/LOG coefficients, wrong host instruction, wrong LDS index, an
+# undeclared SKIP) and proves the CPU-only run exits nonzero. No GPU.
+.PHONY: test-numeric-sweep
+test-numeric-sweep:
+	tools/numeric_check_sweep.sh
+	tools/numeric_oracle_mutations.sh
 
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
@@ -205,6 +240,10 @@ RX_R7_TEST = $(OUT_DIR)/rx_r7_native_test
 $(AIENOS_CAP_LIB):
 	@if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ] && [ ! -d "$(AIENOS_R7_DIR)/native/capability" ]; then \
 		test -n "$(AIENOS_LOCK)" || { echo "aienos.lock is empty"; exit 1; }; \
+		git -C "$(AIENOS_LOCK_REPO)" cat-file -e "$(AIENOS_LOCK)^{commit}" 2>/dev/null || { \
+			echo "error: AIENOS_LOCK_REPO=$(AIENOS_LOCK_REPO) is not an aienos clone with commit $(AIENOS_LOCK) (aienos.lock)."; \
+			echo "  pass AIENOS_LOCK_REPO=<path to an aienos clone that has it>, e.g. make AIENOS_LOCK_REPO=$$HOME/workspace/aienos-argus-cap <target>,"; \
+			echo "  or AIENOS_R7_DIR=<an aienos tree at that commit>."; exit 1; }; \
 		mkdir -p "$(AIENOS_R7_DIR)" && \
 		git -C $(AIENOS_LOCK_REPO) archive $(AIENOS_LOCK) native/capability | tar -x -C "$(AIENOS_R7_DIR)"; \
 	fi
@@ -577,6 +616,52 @@ r16-inventory: $(R16_INVENTORY)
 
 test-r16-inventory: $(R16_INVENTORY)
 	sh tests/r16_inventory/run.sh $(R16_INVENTORY)
+
+# R16-G3: the authoritative path with the legacy orchestrators unavailable.
+# Link map, shared libraries, embedded names and an exec trace of the R13
+# living system and the R14 recovery run, legacy programs stubbed on PATH.
+# Host mode uses the processor stand-in and cannot claim the gate. The silicon
+# target starts the GB10 seat: run it only as part of the qualification
+# ladder, detached, never under `timeout` and never killed.
+R16_STAMP := $(shell date -u +%Y%m%dT%H%M%SZ)
+.PHONY: test-r16-authpath test-r16-authpath-silicon
+test-r16-authpath: $(RX_R13_HOST) $(RX_R14_HOST)
+	sh tools/r16_authpath.sh host $(RX_R13_HOST) $(RX_R14_HOST) \
+		$(OUT_DIR)/r16/authpath/host-$(R16_STAMP) $(RX_R13_SRCS) $(AIENOS_CAP_LIB)
+
+test-r16-authpath-silicon: $(RX_R13_SILICON) $(RX_R14_SILICON)
+	sh tools/r16_authpath.sh silicon $(RX_R13_SILICON) $(RX_R14_SILICON) \
+		$(OUT_DIR)/r16/authpath/silicon-$(R16_STAMP) $(RX_R13_SRCS) \
+		src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
+		src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+		src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c \
+		$(PHYSICS_DIR)/nvrm/nvrm.c $(AIENOS_CAP_LIB)
+
+# R16-G4: legacy paths cannot bypass authority. The R13 body (R15 rig, RES-4,
+# host seat) is started; a legacy context tries six acts and each must be
+# refused with no change to authoritative state. Host only; no chip.
+RX_R16_NEGATIVE = $(OUT_DIR)/rx_r16_negative
+$(RX_R16_NEGATIVE): $(RX_R15_RIG_SRCS) tests/runtime/rx_r16_negative.c $(RX_R15_RIG_HDRS) \
+	$(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R15_RIG_SRCS) tests/runtime/rx_r16_negative.c \
+		$(AIENOS_CAP_LIB) -lm
+
+.PHONY: test-r16-negative test-r16-negative-mutants
+test-r16-negative: $(RX_R16_NEGATIVE)
+	./$(RX_R16_NEGATIVE)
+
+# "Removing any one guard turns the test red": rebuilds the G4 test against
+# scratch copies with one guard removed at a time; each must FAIL. Minutes.
+test-r16-negative-mutants: $(RX_R16_NEGATIVE)
+	sh tests/r16_negative/mutate.sh "$(CC)" "$(CFLAGS)" "$(AIENOS_R7_DIR)" \
+		$(RX_R15_RIG_SRCS) tests/runtime/rx_r16_negative.c
+
+# R16-G5 API/build surface: legacy modes only under explicit names, the SEQ
+# loop only in rx_seq_reference.*, no legacy default mode, production entry
+# point documented (docs/r16-production-entry-point.md). Host only, seconds.
+.PHONY: test-r16-surface
+test-r16-surface: $(TARGET)
+	sh tests/r16_surface/run.sh ./$(TARGET)
 
 
 # OMEGA_ACTION_GRAPH_IR: goals compile to typed action graphs that run as
