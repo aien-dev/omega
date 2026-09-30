@@ -50,34 +50,48 @@ est_status est_check_covariance(const double *A, uint32_t n)
     est_status st = check_finite(A, (size_t)n * n);
     if (st != EST_OK) return st;
 
-    double maxabs = 0.0, maxd = 0.0;
-    for (uint32_t i = 0; i < n; i++)
+    double maxabs = 0.0;
+    for (uint32_t i = 0; i < n; i++) {
+        if (A[i * n + i] < 0.0) return EST_ERR_NOT_PSD; /* any negative variance */
         for (uint32_t j = 0; j < n; j++) {
             double a = fabs(A[i * n + j]);
             if (a > maxabs) maxabs = a;
-            if (i == j && A[i * n + i] > maxd) maxd = A[i * n + i];
         }
+    }
     double stol = 1e-9 * maxabs;
     if (stol < 1e-300) stol = 1e-300;
     for (uint32_t i = 0; i < n; i++)
         for (uint32_t j = 0; j < i; j++)
             if (fabs(A[i * n + j] - A[j * n + i]) > stol) return EST_ERR_ASYMMETRIC;
 
-    /* LDL^T on the lower triangle, no pivoting. A pivot below -tol is a
-     * materially negative direction. A pivot within +-tol is a null direction:
-     * the rest of its column must then be null too (c^2 <= d * e), otherwise
-     * the matrix is indefinite (e.g. [[0,1],[1,0]]). */
-    double w[EST_MAX_DIM * EST_MAX_DIM];
+    /* Scale to unit diagonal so each variance is judged against itself, then
+     * LDL^T on the lower triangle. A zero variance needs a null row/column.
+     * Off-diagonals above the geometric mean of the two sds are refused.
+     * A pivot below -1e-12 is a materially negative direction; a pivot within
+     * +-1e-12 is a null direction whose column must be null too. */
+    double s[EST_MAX_DIM], w[EST_MAX_DIM * EST_MAX_DIM];
+    for (uint32_t i = 0; i < n; i++) s[i] = sqrt(A[i * n + i]);
     for (uint32_t i = 0; i < n; i++)
-        for (uint32_t j = 0; j <= i; j++) w[i * n + j] = A[i * n + j];
-    double tol = 1e-12 * maxd;
+        for (uint32_t j = 0; j <= i; j++) {
+            double c = A[i * n + j];
+            if (i == j) { w[i * n + j] = s[i] > 0.0 ? 1.0 : 0.0; continue; }
+            if (s[i] == 0.0 || s[j] == 0.0) {
+                if (c != 0.0) return EST_ERR_NOT_PSD;
+                w[i * n + j] = 0.0;
+                continue;
+            }
+            double r = (c / s[i]) / s[j];
+            if (fabs(r) > 1.0 + 1e-9) return EST_ERR_NOT_PSD;
+            w[i * n + j] = r;
+        }
+    const double tol = 1e-12;
     for (uint32_t k = 0; k < n; k++) {
         double d = w[k * n + k];
         if (d < -tol) return EST_ERR_NOT_PSD;
         if (d <= tol) {
             for (uint32_t i = k + 1; i < n; i++) {
                 double c = w[i * n + k];
-                if (c * c > tol * maxd) return EST_ERR_NOT_PSD;
+                if (c * c > tol) return EST_ERR_NOT_PSD;
             }
             continue;
         }
@@ -94,6 +108,24 @@ int est_digest_is_zero(const est_digest *d)
     uint8_t acc = 0;
     for (size_t i = 0; i < EST_DIGEST_SIZE; i++) acc |= d->b[i];
     return acc == 0;
+}
+
+/* Strict Cholesky: true if the symmetric n*n matrix is positive definite. */
+static int is_pd(const double *A, uint32_t n)
+{
+    double L[EST_MAX_DIM * EST_MAX_DIM];
+    for (uint32_t i = 0; i < n; i++)
+        for (uint32_t j = 0; j <= i; j++) {
+            double s = A[i * n + j];
+            for (uint32_t k = 0; k < j; k++) s -= L[i * n + k] * L[j * n + k];
+            if (i == j) {
+                if (!(s > 0.0) || !isfinite(s)) return 0;
+                L[i * n + i] = sqrt(s);
+            } else {
+                L[i * n + j] = s / L[j * n + j];
+            }
+        }
+    return 1;
 }
 
 est_status est_check_model(const est_model *mdl)
@@ -113,7 +145,10 @@ est_status est_check_model(const est_model *mdl)
     if (st != EST_OK) return st;
     st = est_check_covariance(mdl->Q, mdl->n);
     if (st != EST_OK) return st;
-    return est_check_covariance(mdl->R, mdl->m);
+    st = est_check_covariance(mdl->R, mdl->m);
+    if (st != EST_OK) return st;
+    /* Observation noise must be positive definite: R = 0 wedges every update. */
+    return is_pd(mdl->R, mdl->m) ? EST_OK : EST_ERR_NOT_PD;
 }
 
 est_status est_check_observation(const est_observation *o)
@@ -126,8 +161,10 @@ est_status est_check_observation(const est_observation *o)
     if (st != EST_OK) return st;
     st = est_check_covariance(o->R, o->m);
     if (st != EST_OK) return st;
-    /* Evidence with nothing bound to it is not evidence. */
+    /* Evidence with nothing bound to it is not evidence, and an observation
+     * that names no producer is not attributable. */
     if (est_digest_is_zero(&o->evidence)) return EST_ERR_KIND;
+    if (est_digest_is_zero(&o->source)) return EST_ERR_KIND;
     return EST_OK;
 }
 
@@ -139,6 +176,15 @@ est_status est_check_belief(const est_belief *b)
     if (st != EST_OK) return st;
     st = check_finite(b->x, b->n);
     if (st != EST_OK) return st;
+    /* Structure: a belief always names its model; generation 0 is a declared
+     * prior (no parent, no evidence); any later generation has a parent. The
+     * root may be zero after a coast from a prior, so it is not required. */
+    if (est_digest_is_zero(&b->model)) return EST_ERR_MODEL;
+    if (b->generation == 0u) {
+        if (!est_digest_is_zero(&b->parent) || !est_digest_is_zero(&b->evidence_root)) return EST_ERR_STALE;
+    } else if (est_digest_is_zero(&b->parent)) {
+        return EST_ERR_STALE;
+    }
     return est_check_covariance(b->P, b->n);
 }
 
@@ -146,9 +192,14 @@ est_status est_check_prediction(const est_prediction *p)
 {
     if (!p) return EST_ERR_NULL;
     if (!in_dim(p->n) || !in_dim(p->m)) return EST_ERR_DIM;
-    if (p->horizon < 1u) return EST_ERR_TIME;
+    if (p->horizon < 1u || p->horizon > EST_MAX_HORIZON) return EST_ERR_TIME;
+    if (p->has_control > 1u) return EST_ERR_ENCODING;
     est_status st = check_finite(p->x, p->n);
     if (st != EST_OK) return st;
+    if (p->has_control) {
+        st = check_finite(p->Bu, p->n);
+        if (st != EST_OK) return st;
+    }
     st = check_finite(p->y_mean, p->m);
     if (st != EST_OK) return st;
     st = est_check_covariance(p->P, p->n);
@@ -338,7 +389,8 @@ static est_status enc_belief(const est_belief *o, uint8_t *buf, size_t cap, size
 
 /* Prediction layout after the header:
  *   32 bytes prior, 32 bytes model, u32 horizon, u64 generation, i64 t_ns,
- *   u32 n, u32 m, f64 x[n], f64 P[n*n], f64 y_mean[m], f64 S[m*m]. */
+ *   u32 n, u32 m, f64 x[n], f64 P[n*n], f64 y_mean[m], f64 S[m*m],
+ *   u32 has_control (0 or 1), then f64 Bu[n] only if has_control == 1. */
 static est_status enc_prediction(const est_prediction *o, uint8_t *buf, size_t cap, size_t *len)
 {
     est_status st = est_check_prediction(o);
@@ -350,6 +402,8 @@ static est_status enc_prediction(const est_prediction *o, uint8_t *buf, size_t c
     w_u32(&w, o->n); w_u32(&w, o->m);
     w_farr(&w, o->x, o->n); w_farr(&w, o->P, (size_t)o->n * o->n);
     w_farr(&w, o->y_mean, o->m); w_farr(&w, o->S, (size_t)o->m * o->m);
+    w_u32(&w, o->has_control);
+    if (o->has_control) w_farr(&w, o->Bu, o->n);
     if (w.bad) return EST_ERR_ENCODING;
     *len = w.len;
     return EST_OK;
@@ -471,6 +525,9 @@ est_status est_decode_prediction(const uint8_t *buf, size_t len, est_prediction 
     if (r.st != EST_OK) return r.st;
     r_farr(&r, t.x, t.n); r_farr(&r, t.P, (size_t)t.n * t.n);
     r_farr(&r, t.y_mean, t.m); r_farr(&r, t.S, (size_t)t.m * t.m);
+    t.has_control = r_u32(&r);
+    if (r.st == EST_OK && t.has_control > 1u) r_fail(&r, EST_ERR_ENCODING);
+    if (t.has_control) r_farr(&r, t.Bu, t.n);
     st = r_done(&r);
     if (st != EST_OK) return st;
     st = est_check_prediction(&t);

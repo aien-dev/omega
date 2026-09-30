@@ -445,7 +445,7 @@ static void test_refusals(void)
     CHECK(memcmp(&post, &sent_b, sizeof post) == 0 && memcmp(&iv, &sent_i, sizeof iv) == 0);
 
     /* singular S: P = 0 and R = 0 */
-    est_model ms = scalar_model(1, 0, 1, 0);
+    est_model ms = scalar_model(1, 0, 1, 1);
     double zero = 0, z1 = 1, R0 = 0;
     est_belief bs = mk_prior(&ms, &zero, &zero);
     est_prediction ps;
@@ -503,7 +503,214 @@ static void test_long_run(void)
         if (est_check_covariance(b.P, 2) != EST_OK || b.P[0] < 0.0 || b.P[3] < 0.0 || b.P[1] != b.P[2]) { ok = 0; break; }
     }
     CHECK(ok);
-    CHECK(b.P[0] < 1e-6 || b.P[0] < 1.0);   /* did not blow up */
+    /* did not blow up: Q = 1e-6 per step keeps the variance
+     * far below the initial 1 (measured 2.4e-5 at the end of this run). */
+    CHECK(b.P[0] > 0.0 && b.P[0] < 1e-3);
+}
+
+/* ---- hardening: forged predictions, recorded control input, observations
+ * that are really model output, and the smaller refusals ---- */
+static int dig_same(const est_digest *a, const est_digest *b) { return memcmp(a->b, b->b, EST_DIGEST_SIZE) == 0; }
+
+static void test_forged_prediction(void)
+{
+    est_model m = scalar_model(1, 0.1, 1, 2);
+    double x0 = 1, P0 = 3, z = 4, R = 2;
+    est_belief b = mk_prior(&m, &x0, &P0);
+    est_prediction p, f; est_observation o; est_belief post, cst; est_innovation iv;
+    CHECK_ST(est_kf_predict(&m, &b, NULL, 1, &p), EST_OK);
+    o = mk_obs(&m, &z, &R, p.t_ns, 1);
+    CHECK_ST(est_kf_update(&m, &b, &p, &o, &post, &iv), EST_OK);
+    CHECK_ST(est_kf_coast(&m, &p, &b, &cst), EST_OK);
+
+    /* every derived field: tampering is refused by update and coast, even 1 ulp */
+    struct { const char *name; est_status want; } cases[] = {
+        { "x", EST_ERR_STALE }, { "x_ulp", EST_ERR_STALE }, { "P", EST_ERR_STALE }, { "y_mean", EST_ERR_STALE },
+        { "S", EST_ERR_STALE }, { "horizon", EST_ERR_STALE }, { "t_ns_back", EST_ERR_STALE },
+        { "t_ns_fwd", EST_ERR_STALE }, { "generation", EST_ERR_STALE }, { "prior", EST_ERR_STALE },
+        { "model", EST_ERR_MODEL }
+    };
+    for (unsigned c = 0; c < sizeof cases / sizeof cases[0]; c++) {
+        f = p;
+        switch (c) {
+        case 0: f.x[0] = 42; break;
+        case 1: f.x[0] = nextafter(f.x[0], 1e300); break;
+        case 2: f.P[0] = 1e-30; break;
+        case 3: f.y_mean[0] = -1e9; break;
+        case 4: f.S[0] = 7; break;
+        case 5: f.horizon = 2; break;
+        case 6: f.t_ns = -77; break;
+        case 7: f.t_ns += 1; break;
+        case 8: f.generation += 1; break;
+        case 9: f.prior.b[0] ^= 1; break;
+        default: f.model.b[0] ^= 1; break;
+        }
+        est_observation of = o; of.t_ns = f.t_ns;
+        est_belief out; memset(&out, 0xAB, sizeof out);
+        CHECK_ST(est_kf_update(&m, &b, &f, &of, &out, &iv), cases[c].want);
+        CHECK_ST(est_kf_coast(&m, &f, &b, &out), cases[c].want);
+        CHECK(*(unsigned char *)&out == 0xAB);
+    }
+    /* the review's forged prediction: overconfident, time before the prior */
+    f = p; f.x[0] = 42; f.P[0] = 1e-30; f.t_ns = -77; f.y_mean[0] = -1e9; f.S[0] = 7; f.horizon = 999;
+    est_observation of = mk_obs(&m, &z, &R, f.t_ns, 2);
+    CHECK_ST(est_kf_update(&m, &b, &f, &of, &post, &iv), EST_ERR_STALE);
+    /* update against a different model that matches nothing is still MODEL */
+    est_model m2 = scalar_model(1, 0.1, 1, 3);
+    CHECK_ST(est_kf_update(&m2, &b, &p, &o, &post, &iv), EST_ERR_MODEL);
+    CHECK_ST(est_kf_coast(&m2, &p, &b, &post), EST_ERR_MODEL);
+    /* a decoded, untampered prediction is accepted */
+    uint8_t buf[EST_ENCODED_MAX]; size_t l = 0; est_prediction d;
+    CHECK_ST(est_encode_prediction(&p, buf, sizeof buf, &l), EST_OK);
+    CHECK_ST(est_decode_prediction(buf, l, &d), EST_OK);
+    CHECK_ST(est_kf_update(&m, &b, &d, &o, &post, &iv), EST_OK);
+    /* horizon cap */
+    CHECK_ST(est_kf_predict(&m, &b, NULL, EST_MAX_HORIZON + 1u, &f), EST_ERR_TIME);
+    CHECK_ST(est_kf_predict(&m, &b, NULL, 0xFFFFFFFFu, &f), EST_ERR_TIME);
+}
+
+static void test_control_input(void)
+{
+    est_model m = scalar_model(1, 0.1, 1, 2);
+    double x0 = 1, P0 = 3, z = 4, R = 2, Bu = 0.5, Bz = 0.0;
+    est_belief b = mk_prior(&m, &x0, &P0);
+    est_prediction p0, pu, pz, dec, t; est_observation o; est_belief post, cst; est_innovation iv;
+    CHECK_ST(est_kf_predict(&m, &b, NULL, 1, &p0), EST_OK);
+    CHECK_ST(est_kf_predict(&m, &b, &Bu, 1, &pu), EST_OK);
+    CHECK_ST(est_kf_predict(&m, &b, &Bz, 1, &pz), EST_OK);
+    CHECK(p0.has_control == 0 && pu.has_control == 1 && pz.has_control == 1);
+    NEAR(pu.Bu[0], 0.5, 1e-15); NEAR(pu.x[0], 1.5, 1e-15);
+    /* control is identity: none, explicit zero and 0.5 all digest differently */
+    est_digest d0, du, dz;
+    CHECK_ST(est_digest_prediction(&p0, &d0), EST_OK);
+    CHECK_ST(est_digest_prediction(&pu, &du), EST_OK);
+    CHECK_ST(est_digest_prediction(&pz, &dz), EST_OK);
+    CHECK(!dig_same(&d0, &du) && !dig_same(&d0, &dz) && !dig_same(&du, &dz));
+    /* round trip is exact */
+    uint8_t buf[EST_ENCODED_MAX], buf2[EST_ENCODED_MAX]; size_t l = 0, l2 = 0;
+    CHECK_ST(est_encode_prediction(&pu, buf, sizeof buf, &l), EST_OK);
+    CHECK_ST(est_decode_prediction(buf, l, &dec), EST_OK);
+    CHECK(dec.has_control == 1 && dec.Bu[0] == 0.5);
+    CHECK_ST(est_encode_prediction(&dec, buf2, sizeof buf2, &l2), EST_OK);
+    CHECK(l == l2 && memcmp(buf, buf2, l) == 0);
+    /* update and coast accept it, with and without the round trip */
+    o = mk_obs(&m, &z, &R, pu.t_ns, 1);
+    CHECK_ST(est_kf_update(&m, &b, &pu, &o, &post, &iv), EST_OK);
+    CHECK_ST(est_kf_update(&m, &b, &dec, &o, &post, &iv), EST_OK);
+    CHECK_ST(est_kf_coast(&m, &pu, &b, &cst), EST_OK);
+    NEAR(cst.x[0], 1.5, 1e-15);
+    /* tampering with Bu, its flag, or dropping it: refused */
+    t = pu; t.Bu[0] = 0.6;
+    CHECK_ST(est_kf_update(&m, &b, &t, &o, &post, &iv), EST_ERR_STALE);
+    CHECK_ST(est_kf_coast(&m, &t, &b, &cst), EST_ERR_STALE);
+    t = pu; t.has_control = 0;
+    CHECK_ST(est_kf_update(&m, &b, &t, &o, &post, &iv), EST_ERR_STALE);
+    t = pu; t.Bu[0] = 0.0;      /* x still holds the effect of 0.5 */
+    CHECK_ST(est_kf_update(&m, &b, &t, &o, &post, &iv), EST_ERR_STALE);
+    t = p0; t.has_control = 1; t.Bu[0] = 0.5;   /* claim an input that was never applied */
+    CHECK_ST(est_kf_update(&m, &b, &t, &o, &post, &iv), EST_ERR_STALE);
+    /* -0.0 input canonicalizes: same digest as +0.0 */
+    double nz = -0.0; est_prediction pn; est_digest dn;
+    CHECK_ST(est_kf_predict(&m, &b, &nz, 1, &pn), EST_OK);
+    CHECK_ST(est_digest_prediction(&pn, &dn), EST_OK);
+    CHECK(dig_same(&dn, &dz));
+
+    /* largest case fits EST_ENCODED_MAX: n = m = 8 with control */
+    est_model big; memset(&big, 0, sizeof big);
+    big.n = big.m = 8; big.estimator = EST_ESTIMATOR_LINEAR_KALMAN; big.meaning = EST_UNCERTAINTY_GAUSSIAN_COVARIANCE;
+    double xb[8], Pb[64] = {0}, Bb[8];
+    for (uint32_t i = 0; i < 8; i++) {
+        big.state_unit[i] = big.obs_unit[i] = EST_UNIT_WATT;
+        big.F[i * 8 + i] = 1; big.H[i * 8 + i] = 1; big.Q[i * 8 + i] = 0.1; big.R[i * 8 + i] = 1;
+        xb[i] = i; Pb[i * 8 + i] = 1; Bb[i] = 0.25 * (double)i;
+    }
+    big.step_ns = NS;
+    est_belief bb = mk_prior(&big, xb, Pb);
+    est_prediction pb;
+    CHECK_ST(est_kf_predict(&big, &bb, Bb, 3, &pb), EST_OK);
+    CHECK_ST(est_encode_prediction(&pb, buf, sizeof buf, &l), EST_OK);
+    CHECK(l <= EST_ENCODED_MAX);
+    CHECK_ST(est_decode_prediction(buf, l, &dec), EST_OK);
+    est_model mbig = big; est_observation ob; memset(&ob, 0, sizeof ob);
+    ob.m = 8; ob.t_ns = pb.t_ns; ob.source.b[0] = 1; ob.evidence.b[0] = 1;
+    for (uint32_t i = 0; i < 8; i++) { ob.unit[i] = EST_UNIT_WATT; ob.z[i] = 1; ob.R[i * 8 + i] = 1; }
+    CHECK_ST(est_kf_update(&mbig, &bb, &dec, &ob, &post, &iv), EST_OK);
+}
+
+static void test_observation_is_evidence(void)
+{
+    est_model m = scalar_model(1, 0.1, 1, 2);
+    double x0 = 1, P0 = 3, z = 4, R = 2;
+    est_belief b0 = mk_prior(&m, &x0, &P0), b1;
+    CHECK_ST(step(&m, &b0, &z, &R, 1, NULL), EST_OK); /* b0 becomes generation 2, root set */
+    b1 = b0;
+    CHECK(!est_digest_is_zero(&b1.parent) && !est_digest_is_zero(&b1.evidence_root));
+    est_prediction p; est_observation o, bad; est_belief post; est_innovation iv;
+    CHECK_ST(est_kf_predict(&m, &b1, NULL, 1, &p), EST_OK);
+    o = mk_obs(&m, &z, &R, p.t_ns, 7);
+    CHECK_ST(est_kf_update(&m, &b1, &p, &o, &post, &iv), EST_OK);
+
+    est_digest pd, bd, md;
+    CHECK_ST(est_digest_prediction(&p, &pd), EST_OK);
+    CHECK_ST(est_digest_belief(&b1, &bd), EST_OK);
+    CHECK_ST(est_digest_model(&m, &md), EST_OK);
+    /* zero source */
+    bad = o; memset(&bad.source, 0, sizeof bad.source);
+    CHECK_ST(est_kf_update(&m, &b1, &p, &bad, &post, &iv), EST_ERR_KIND);
+    /* evidence = prediction digest, prior digest, prior parent, prior root, model digest */
+    bad = o; bad.evidence = pd;
+    CHECK_ST(est_kf_update(&m, &b1, &p, &bad, &post, &iv), EST_ERR_KIND);
+    bad = o; bad.evidence = bd;
+    CHECK_ST(est_kf_update(&m, &b1, &p, &bad, &post, &iv), EST_ERR_KIND);
+    bad = o; bad.evidence = b1.parent;
+    CHECK_ST(est_kf_update(&m, &b1, &p, &bad, &post, &iv), EST_ERR_KIND);
+    bad = o; bad.evidence = b1.evidence_root;
+    CHECK_ST(est_kf_update(&m, &b1, &p, &bad, &post, &iv), EST_ERR_KIND);
+    bad = o; bad.evidence = md;
+    CHECK_ST(est_kf_update(&m, &b1, &p, &bad, &post, &iv), EST_ERR_KIND);
+    /* the review's attack: z = y_mean, R = S, evidence = prediction digest, no source */
+    bad = mk_obs(&m, p.y_mean, p.S, p.t_ns, 8); bad.evidence = pd; memset(&bad.source, 0, sizeof bad.source);
+    CHECK_ST(est_kf_update(&m, &b1, &p, &bad, &post, &iv), EST_ERR_KIND);
+    /* a decoded observation with zero source cannot exist */
+    uint8_t buf[EST_ENCODED_MAX]; size_t l = 0; est_observation dec;
+    CHECK_ST(est_encode_observation(&o, buf, sizeof buf, &l), EST_OK);
+    memset(buf + l - 64, 0, 32);   /* source is the first of the last two digests */
+    CHECK_ST(est_decode_observation(buf, l, &dec), EST_ERR_KIND);
+}
+
+static void test_coast_keeps_evidence(void)
+{
+    est_model m = scalar_model(1, 0.1, 1, 2);
+    double x0 = 1, P0 = 3, z = 4, R = 2;
+    est_belief b = mk_prior(&m, &x0, &P0);
+    CHECK_ST(step(&m, &b, &z, &R, 1, NULL), EST_OK);
+    est_digest root = b.evidence_root;
+    CHECK(!est_digest_is_zero(&root));
+    est_belief c = b;
+    for (int k = 0; k < 3; k++) {
+        CHECK_ST(coast_step(&m, &c, 1), EST_OK);
+        CHECK(memcmp(c.evidence_root.b, root.b, 32) == 0);   /* neither reset nor extended */
+    }
+    est_belief v = c;
+    CHECK_ST(step(&m, &v, &z, &R, 2, NULL), EST_OK);
+    CHECK(memcmp(v.evidence_root.b, root.b, 32) != 0);
+    /* a coasted belief from a declared prior has a parent and a zero root */
+    est_belief p0 = mk_prior(&m, &x0, &P0);
+    CHECK_ST(coast_step(&m, &p0, 1), EST_OK);
+    CHECK(est_digest_is_zero(&p0.evidence_root) && !est_digest_is_zero(&p0.parent));
+}
+
+static void test_model_and_covariance_refusals(void)
+{
+    double x0 = 1, P0 = 3;
+    est_model m0 = scalar_model(1, 0.1, 1, 0);   /* R = 0 */
+    est_belief pr;
+    CHECK_ST(est_kf_prior(&m0, &x0, &P0, 0, &pr), EST_ERR_NOT_PD);
+    est_model m = scalar_model(1, 0.1, 1, 2);
+    double P2[4] = { 1e12, 0, 0, -0.5 };
+    est_model m2 = m; m2.n = 2; m2.state_unit[1] = EST_UNIT_WATT; m2.F[0] = m2.F[3] = 1; m2.H[0] = 1;
+    double x2[2] = { 0, 0 };
+    CHECK_ST(est_kf_prior(&m2, x2, P2, 0, &pr), EST_ERR_NOT_PSD);
 }
 
 int main(void)
@@ -521,6 +728,11 @@ int main(void)
     test_determinism_and_const();
     test_refusals();
     test_long_run();
+    test_forged_prediction();
+    test_control_input();
+    test_observation_is_evidence();
+    test_coast_keeps_evidence();
+    test_model_and_covariance_refusals();
     printf("test_est_kf: %d checks, %d failed\n", g_checks, g_fail);
     if (g_fail) { printf("test_est_kf: FAIL\n"); return 1; }
     printf("test_est_kf: PASS\n");
