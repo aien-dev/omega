@@ -21,7 +21,7 @@
 #
 # Default (draft) mode: writes the manifest with "status": "draft".
 # --freeze: additionally requires a clean worktree, check_profile.sh --freeze passing (no FILL_AT_FREEZE, sidecar
-# matches) and calibration/experiments/EXP-001/preregistration.json at "status": "frozen", and refuses if any sealed data directory exists at all (sealed data may only exist after C_f).
+# matches) and calibration/experiments/EXP-001/preregistration.json at "status": "frozen", and refuses if any sealed data entry exists (EXP-001R: other than the burned EXP-001 root) (sealed data may only exist after C_f).
 # Writes "status": "frozen".
 # Refuses if the candidate directory holds anything other than the seven expected files, or if any sealed
 # path is passed. It never reads sealed data. No Python: POSIX sh, od, sha256sum.
@@ -51,7 +51,7 @@ if [ "$freeze" = 1 ]; then
     sh "$dir/calibration/scripts/check_profile.sh" --freeze || die "check_profile --freeze failed"
     grep -q "^  \"status\": \"frozen\"," "$dir/$EXP_DIR/preregistration.json" || die "preregistration.json is not status frozen (set it in the same commit, before this step)"
     sealed="${TC_SEALED_ROOT:-$HOME/aien-data/turing-cal/sealed}"
-    [ -z "$(ls -A "$sealed" 2>/dev/null)" ] || die "sealed data already exist under $sealed (freeze must come first)"
+    _bad=$(tc_sealed_clear "$sealed") || die "sealed data already exist under $sealed (freeze must come first):$_bad"
 fi
 
 # u(file, byte offset, nbytes) -> unsigned big-endian integer

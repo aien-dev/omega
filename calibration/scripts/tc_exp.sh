@@ -31,3 +31,18 @@ if [ "$EXP_ID" = EXP-001R ]; then
     EXP_BURNED_SEALED="${TC_EXP001_SEALED:-${HOME:-}/aien-data/turing-cal/sealed/d3cba292b9282116d1e374db22344bca4d47717e}"
 fi
 export EXP_ID EXP_BURNED_FILE EXP_G6_RULE EXP_BURNED_SEALED
+
+# tc_sealed_clear SEALED_ROOT: succeeds only if nothing lives under SEALED_ROOT except, for EXP-001R, the one
+# directory that is exactly the burned EXP-001 root (EXP_BURNED_SEALED). EXP-001 (no burned root): any entry fails.
+# Prints the offending entries on stdout. Used by freeze_candidate.sh --freeze (freeze must come before sealed data).
+tc_sealed_clear() {
+    _bad=""
+    _keep=""
+    [ -z "$EXP_BURNED_SEALED" ] || _keep=$(basename "$EXP_BURNED_SEALED")
+    for _e in $(ls -A "$1" 2>/dev/null); do
+        [ -n "$_keep" ] && [ "$_e" = "$_keep" ] && continue
+        _bad="$_bad $_e"
+    done
+    [ -z "$_bad" ] || { echo "$_bad"; return 1; }
+    return 0
+}
