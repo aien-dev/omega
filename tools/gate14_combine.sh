@@ -88,7 +88,14 @@ g14_pass_rule() {
             and (.soak.physical_memory_bytes | type) == "number" and .soak.physical_memory_bytes > 0
             and (.soak.bytes_churned | type) == "number"
             and .soak.bytes_churned > 2 * .soak.physical_memory_bytes
-            and ([.test_results[] | select((.id | type) == "string" and (.id | startswith("OMEGA_ACCEL_RESIDENT_")))] | length) == 18';;
+            and ([.test_results[] | select((.id | type) == "string" and (.id | startswith("OMEGA_ACCEL_RESIDENT_"))) | .id] | unique | length) == 18
+            and ([.test_results[] | select((.id | type) == "string" and (.id | startswith("OMEGA_ACCEL_RESIDENT_")))] | length) == 18
+            and (.m19_observations | type) == "object"
+            and .m19_observations.m19_gates_completed == 18
+            and .m19_observations.m19_gates_passed == 18
+            and (.m19_observations.regression_gates_completed | type) == "number"
+            and .m19_observations.regression_gates_completed > 0
+            and .m19_observations.regression_gates_passed == .m19_observations.regression_gates_completed';;
         AIEN_M19R_FORGE_GATES_V1) echo '
             .status == "PASS"
             and .observed_fail_count == 0
@@ -96,6 +103,9 @@ g14_pass_rule() {
             and .gates.GATE_3_FORGE_0.gate_binary_exit_status == 0
             and .gates.GATE_4_FORGE_HWID.status == "PASS"
             and .gates.GATE_4_FORGE_HWID.gate_binary_exit_status == 0
+            and ([.gates[].candidate_binary_sha256] | all(type == "string" and test("^[0-9a-f]{64}$")))
+            and .gates.GATE_4_FORGE_HWID.hardware_descriptor_digest == .hardware_descriptor_digest
+            and (.hardware_descriptor_digest | type) == "string"
             and results';;
         AIEN_OMEGA_NUMERIC_0_V1) echo '
             .status == "PASS"
@@ -103,6 +113,7 @@ g14_pass_rule() {
             and .observed_fail_count == 0
             and .run_git_commit == .candidate_git_commit
             and .physics_lock == .physics_candidate_git_commit
+            and (.hardware_descriptor_digest | type) == "string"
             and results';;
     esac
 }
@@ -124,7 +135,7 @@ g14_check_leg() {
         g14_refuse "cannot digest $f" || return 1
     [ "$recomputed" = "$G14_LEG_DIGEST" ] || g14_refuse "$f receipt_digest does not match its content" || return 1
     name=$(basename "$f")
-    if [[ $name =~ ^[0-9a-f]{64}\.json$ ]]; then
+    if [[ $name =~ ^[0-9a-fA-F]{64}\.json$ ]]; then
         [ "${name%.json}" = "$G14_LEG_DIGEST" ] || g14_refuse "$f is named for a different digest" || return 1
     fi
     G14_LEG_OMEGA=$(jq -r '.candidate_git_commit // ""' "$s")
@@ -136,8 +147,8 @@ g14_check_leg() {
     rule=$(g14_pass_rule "$G14_LEG_SCHEMA")
     jq -e "def results: $G14_RESULTS_RULE; $rule" "$s" > /dev/null 2>&1 || g14_refuse "$f ($G14_LEG_SCHEMA) does not record a PASS" || return 1
     G14_LEG_DESC=$(jq -r '.hardware_descriptor_digest // ""' "$s")
-    [ -z "$G14_LEG_DESC" ] || [[ $G14_LEG_DESC =~ ^[0-9a-f]{64}$ ]] ||
-        g14_refuse "$f hardware_descriptor_digest is not 64 hex" || return 1
+    [ -z "$G14_LEG_DESC" ] || { [[ $G14_LEG_DESC =~ ^[0-9a-f]{64}$ ]] && [[ ! $G14_LEG_DESC =~ ^0+$ ]]; } ||
+        g14_refuse "$f hardware_descriptor_digest is not 64 hex (or is all zeros)" || return 1
 }
 
 # g14_combine OMEGA_EXPECTED PHYSICS_EXPECTED TS RECEIPT... -- check every leg
@@ -192,7 +203,8 @@ g14_write() {
     pretty=$G14_TMP/combined.pretty
     printf '%s' "$G14_RECEIPT" | "$JSON_CANON" --pretty > "$pretty" || g14_refuse "cannot format receipt" || return 1
     "$JSON_CANON" --write-exclusive "$dir/$G14_DIGEST.json" < "$pretty" 2> "$pretty.err" ||
-        g14_refuse "cannot write $dir/$G14_DIGEST.json: $(cat "$pretty.err")"
+        g14_refuse "cannot write $dir/$G14_DIGEST.json: $(cat "$pretty.err")" || return 1
+    chmod 0444 "$dir/$G14_DIGEST.json" || g14_refuse "cannot chmod $dir/$G14_DIGEST.json"
 }
 
 g14_usage() {
