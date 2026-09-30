@@ -560,7 +560,9 @@ blocked).
      authority callback (the older tests; C6 says so). The credential
      comparison is constant-time on the secret digest; the generation is
      compared plainly because it is not secret.
-5. Evidence (`make test-r16-negative`, host): before the fix the C7 section
+5. Evidence (`make test-r16-negative`, host): before the fix (the C7 probes
+   compiled against the 8307a14 runtime; P2 then polled every 1 ms instead of
+   the single 300 ms wait it uses now, same pass and fail meaning) the C7 section
    was 13/24 as expected (P1, P2 and P3 all failing; gate FAIL); after, 25/25
    (one probe added: forged promoter refused before the barrier), with the
    C5 section still 40/40, the exploit variants still refused and the control
@@ -572,3 +574,12 @@ blocked).
    visor authority check, G1/G2 inventory (280 sites, 0 unclassified) and
    the G3 authority path (`HOST_PASS_NON_SILICON`) all pass; the silicon
    binaries were compiled only. Nothing was run on the graphics processor.
+6. Limits:
+   - Between HOLD and RELEASE the promoter holds the world's enrollment lock
+     across the write and sync of the active pointer. Every activation,
+     commit, registration and revocation on that world waits for it, so each
+     promotion adds one sync's worth of stall to the whole world. The
+     alternative (check after the sync) would have to undo a durable flip.
+     The cost is unmeasured: R15 performance was compiled only on this branch.
+   - The durable before-evidence in the committed tree is the six C7 mutant
+     kills; the 13/24 run above used the older runtime.
