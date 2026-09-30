@@ -224,6 +224,7 @@ if [ -x "$cpu_bin" ]; then
     check "binary registry equals the shell manifest" '[ -z "$(jq -r --argjson man "$(num_manifest_json)" "$NUM_JQ_REGISTRY" "$TMP/cpu.reg")" ]'
     check "binary FFMA c values equal the shell manifest" '[ "$(m19r_tagged_json "$TMP/cpu.log" OMEGA_NUMERIC_PARITY_JSON | jq -sc "[.[] | select(.op == \"FFMA\" and .tier == \"cpu\") | .c_bits] | sort")" = "$(num_manifest_json | jq -c ".ffma_c | sort")" ]'
     check "binary corpus size equals the shell manifest" '[ "$(m19r_tagged_json "$TMP/cpu.log" OMEGA_NUMERIC_PARITY_JSON | jq -s "[.[] | select(.tier == \"cpu\" and .op == \"FADD\") | .n] | .[0]")" = "$NUM_CORPUS_N" ]'
+    check "binary REDUCE_SUM checked count and summation order equal the shell manifest" '[ "$(m19r_tagged_json "$TMP/cpu.log" OMEGA_NUMERIC_PARITY_JSON | jq -sc "[.[] | select(.tier == \"cpu\" and .op == \"REDUCE_SUM\") | [.checked, .reduction_order]] | .[0]")" = "$(num_manifest_json | jq -c "[.checked.REDUCE_SUM, .reduction_order.REDUCE_SUM]")" ]'
 else
     bad "build/test_omega_numeric_cpu missing (run make test-numeric-cpu first)"
 fi
