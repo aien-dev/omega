@@ -117,6 +117,7 @@ typedef struct {
     uint64_t goal_crumb;               /* EXTERNAL crumb of the goal */
     uint32_t reclaimed;                /* staged branches reclaimed at settle */
     uint8_t winner_digest[32];         /* J-Space content digest of the committed branch */
+    uint32_t prior_completed;          /* records of an earlier failed record completed first */
 } RxcResult;
 
 enum {
@@ -145,6 +146,12 @@ typedef struct RxCompose {
     uint64_t recovered_record;         /* Cortex id naming it */
     uint32_t rolled_back;              /* newer records refused (rollback admissions) */
     uint32_t recovered_completed;      /* composition records completed at open (0 = none missing) */
+    /* in-process state after RECORD_FAILED / NOT_DURABLE (cleared at open) */
+    int pending;                       /* 0 none; 1 record to complete first; 2 refuse: reopen */
+    int pend_released;                 /* the superseded branch was already released */
+    uint64_t pend_S, pend_V;
+    JsBranchRef pend_old;
+    uint8_t pend_cdig[RXC_K][32];
     /* fault injection */
     int fault_point;
     int fault_crash;                   /* 1: _exit(RXC_CRASH_EXIT); 0: fail in process */
@@ -169,7 +176,10 @@ int  rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, u
                      const SrRouter *router, RxcContract contract, AienosCapAdmin *admin,
                      AienosCapView *view, uint32_t n_workers);
 /* One goal through the whole path. Returns RX_OK with out->outcome set, or a
- * negative error (an injected in-process fault shows in outcome instead). */
+ * negative error (an injected in-process fault shows in outcome instead).
+ * After RXC_OUT_RECORD_FAILED the next run first completes that record (and
+ * releases the superseded branch); if it cannot, it returns RX_ERR_REPLAY.
+ * After RXC_OUT_NOT_DURABLE every run returns RX_ERR_REPLAY until reopened. */
 int  rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const CqHeld *held,
                     uint64_t now_us, RxcResult *out);
 void rx_compose_close(RxCompose *c);

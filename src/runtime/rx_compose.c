@@ -264,38 +264,51 @@ static int has_admission(CxStore *s, uint64_t tag, uint64_t link0) {
  * fixed order (claim 0, claim 1, evidence, [promotion], loser admissions);
  * the ones already present after S/V are reused, so recovery can complete an
  * interrupted record. `cdig` (may be NULL) holds candidate branch digests
- * taken before the reclaim. Returns records written, or -1. */
+ * taken before the reclaim. Returns records written, -1 when an append failed,
+ * or -2 when its inputs are absent (nothing can be, or was, written). */
 static int compose_records(RxCompose *c, uint64_t S, uint64_t V, const uint8_t (*cdig)[32],
                            int may_fault, RxcResult *out) {
     CxStore *s = &c->cx;
+    /* Appends may move the Cortex arena: copy every input value out first
+     * and hold no payload or object pointer across an append. */
+    uint64_t vf[8], cf[RXC_K][8], g_input;
     const uint64_t *vp = payload_of(s, V, CX_WREC_WORDS);
-    if (!vp) return -1;
-    const uint64_t *vf = vp + CX_WREC_FIELD0;
+    if (!vp) return -2;
+    memcpy(vf, vp + CX_WREC_FIELD0, sizeof vf);
     uint64_t G = latest_before(s, RXC_SLOT_GOAL, CX_OBSERVATION, CX_K_WORK_ACCEPTED, V);
     const uint64_t *gp = payload_of(s, G, CX_WREC_WORDS);
-    if (!gp) return -1;
+    if (!gp) return -2;
+    g_input = gp[CX_WREC_FIELD0 + RXC_G_INPUT];
     uint64_t Ck[RXC_K];
-    const uint64_t *cf[RXC_K];
     for (uint32_t k = 0; k < RXC_K; k++) {
         Ck[k] = latest_before(s, RXC_SLOT_CAND0 + k, CX_EXECUTION, CX_K_EXEC_COMMIT, V);
         const uint64_t *cp = payload_of(s, Ck[k], CX_WREC_WORDS);
-        if (!cp) return -1;
-        cf[k] = cp + CX_WREC_FIELD0;
+        if (!cp) return -2;
+        memcpy(cf[k], cp + CX_WREC_FIELD0, sizeof cf[k]);
     }
     uint32_t winner = (uint32_t)vf[RXC_V_WINNER];
-    if ((winner == RXC_NONE) != (S == 0)) return -1;
+    if ((winner == RXC_NONE) != (S == 0)) return -2;
 
-    /* Existing composition records after max(S, V) on the state subject. */
-    uint64_t after = S > V ? S : V, have[2 + 2 + RXC_K];
-    uint32_t n_have = 0;
+    /* Existing composition records of this goal (claims and evidence carry
+     * tag G; promotion and loser admissions link one of its claims), in
+     * append order, after max(S, V) on the state subject. */
+    uint64_t after = S > V ? S : V, have[2 + 2 + RXC_K], mine[RXC_K] = { 0, 0 };
+    uint32_t n_have = 0, n_mine = 0;
     const CxIdList *l = &s->by_subject[RXC_STATE_SUBJECT];
     for (uint32_t i = 0; i < l->n && n_have < 2 + 2 + RXC_K; i++) {
         const CxObject *o = cx_get(s, l->ids[i]);
         if (!o || o->id <= after) continue;
-        if (o->kind == CX_K_ENTITY_CREATED || o->kind == CX_K_EXEC_COMMIT) break;
-        if (o->kind == CX_K_CANDIDATE || o->kind == CX_K_EVIDENCE_REF || o->kind == CX_K_PROMOTION ||
-            (o->kind == CX_K_ADMISSION && o->tag == RXC_ADMIT_LOSER))
-            have[n_have++] = o->id;
+        int ours = 0;
+        if (o->kind == CX_K_CANDIDATE && o->tag == G) {
+            ours = 1;
+            if (n_mine < RXC_K) mine[n_mine++] = o->id;
+        } else if (o->kind == CX_K_EVIDENCE_REF && o->tag == G) {
+            ours = 1;
+        } else if (o->kind == CX_K_PROMOTION ||
+                   (o->kind == CX_K_ADMISSION && o->tag == RXC_ADMIT_LOSER)) {
+            for (uint32_t m = 0; m < n_mine; m++) ours |= o->links[0] == mine[m];
+        }
+        if (ours) have[n_have++] = o->id;
     }
     uint32_t step = 0;
     int written = 0;
@@ -325,7 +338,7 @@ static int compose_records(RxCompose *c, uint64_t S, uint64_t V, const uint8_t (
             p[RXC_CP_REF] = cf[k][RXC_C_REF];
             p[RXC_CP_RESULT] = cf[k][RXC_C_RESULT];
             p[RXC_CP_SKILL] = cf[k][RXC_C_SKILL];
-            p[RXC_CP_INPUT] = gp[CX_WREC_FIELD0 + RXC_G_INPUT];
+            p[RXC_CP_INPUT] = g_input;
             p[RXC_CP_GOALSEQ] = cf[k][RXC_C_GOAL];
             p[RXC_CP_PASS] = (vf[RXC_V_PASSMASK] >> k) & 1u;
             uint8_t d[32];
@@ -471,32 +484,71 @@ static int recover(RxCompose *c) {
     c->recovered = ref;
     c->recovered_record = chosen;
 
-    /* NEW recovered from a commit whose composition record is incomplete. */
-    const CxObject *so = chosen ? cx_get(s, chosen) : NULL;
-    if (so && so->kind == CX_K_EXEC_COMMIT) {
-        uint64_t V = latest_before(s, RXC_SLOT_VERDICT, CX_EXECUTION, CX_K_EXEC_COMMIT, chosen);
+    /* Complete every interrupted composition record, not only the newest:
+     * each recorded verdict whose goal had no winner (S = 0), or whose winner
+     * was committed by a state record that was not rolled back. A crash or
+     * failure anywhere inside a record leaves it completable here. */
+    const uint64_t vsubj = RXC_CX_SUBJECT(RXC_SLOT_VERDICT);
+    uint32_t done = 0;
+    for (uint32_t i = 0; i < s->by_subject[vsubj].n; i++) {
+        uint64_t V = s->by_subject[vsubj].ids[i];
+        const CxObject *vo = cx_get(s, V);
+        if (!vo || vo->kind != CX_K_EXEC_COMMIT) continue;
+        const uint64_t *vp = payload_of(s, V, CX_WREC_WORDS);
+        if (!vp || vp[CX_WREC_N_OUTPUTS] == 0) continue;   /* the verifier's own write */
+        const uint64_t goal = vp[CX_WREC_FIELD0 + RXC_V_GOAL];
+        const uint64_t winner = vp[CX_WREC_FIELD0 + RXC_V_WINNER];
+        if (goal == 0) continue;
+        uint64_t S = 0, sref = 0;
+        if (winner != RXC_NONE) {
+            /* Its commit: the first state record of the same goal after V,
+             * before the next verdict write and the next World. */
+            uint64_t bound = UINT64_MAX;
+            for (uint32_t j = i + 1; j < s->by_subject[vsubj].n; j++) {
+                uint64_t id = s->by_subject[vsubj].ids[j];
+                const CxObject *n2 = cx_get(s, id);
+                const uint64_t *np = payload_of(s, id, CX_WREC_WORDS);
+                if (n2 && (n2->kind == CX_K_ENTITY_CREATED ||
+                           (n2->kind == CX_K_EXEC_COMMIT && np && np[CX_WREC_N_OUTPUTS]))) {
+                    bound = id;
+                    break;
+                }
+            }
+            for (uint32_t j = 0; j < l->n; j++) {
+                const CxObject *o = cx_get(s, l->ids[j]);
+                if (!o || o->id <= V) continue;
+                if (o->id >= bound || o->kind == CX_K_ENTITY_CREATED) break;
+                if (o->kind != CX_K_EXEC_COMMIT) continue;
+                const uint64_t *p = payload_of(s, o->id, CX_WREC_WORDS);
+                if (p && p[CX_WREC_FIELD0 + RXC_S_GOAL] == goal) {
+                    S = o->id;
+                    sref = p[CX_WREC_FIELD0 + RXC_S_REF];
+                }
+                break;
+            }
+            if (!S || has_admission(s, RXC_ADMIT_ROLLBACK, S)) continue;   /* never NEW */
+        }
         RxcResult tmp;
         memset(&tmp, 0, sizeof tmp);
-        int n = V ? compose_records(c, chosen, V, NULL, 0, &tmp) : -1;
+        int n = compose_records(c, S, V, NULL, 0, &tmp);
+        if (n == -2 && S != chosen) continue;   /* inputs absent: the run wrote nothing either */
         if (n < 0) return RX_ERR_REPLAY;
         if (n > 0) {
-            uint64_t ap[RXC_AP_WORDS] = { ref_pack(ref), 0, 0 };
-            const uint64_t *vp = payload_of(s, V, CX_WREC_WORDS);
-            ap[RXC_AP_GOAL] = vp[CX_WREC_FIELD0 + RXC_V_GOAL];
-            ap[RXC_AP_K] = vp[CX_WREC_FIELD0 + RXC_V_WINNER];
+            uint64_t ap[RXC_AP_WORDS] = { sref, goal, winner };
             CxHeader h;
             memset(&h, 0, sizeof h);
             h.cls = CX_EVIDENCE;
             h.kind = CX_K_ADMISSION;
             h.subject = RXC_STATE_SUBJECT;
             h.tag = RXC_ADMIT_RECOVERED;
-            h.links[0] = chosen;
+            h.links[0] = S ? S : V;
             h.links[1] = tmp.cx_evidence;
             uint64_t id;
             if (cx_put(c, &h, ap, RXC_AP_WORDS, &id)) return RX_ERR_REPLAY;
+            done += (uint32_t)n;
         }
-        c->recovered_completed = (uint32_t)n;
     }
+    c->recovered_completed = done;
     return RX_OK;
 }
 
@@ -675,11 +727,42 @@ JsBranchRef rx_compose_state(RxCompose *c) {
     return ref_unpack(o.field[RXC_S_REF]);
 }
 
+/* Remember an incomplete record so the next run completes it first; without
+ * the World records naming it, refuse further runs until reopened. */
+static void set_pending(RxCompose *c, uint64_t S, uint64_t V, int committed, JsBranchRef old,
+                        int released, const uint8_t (*cdig)[32]) {
+    if (!V || (committed && !S)) {
+        c->pending = 2;
+        return;
+    }
+    c->pending = 1;
+    c->pend_S = S;
+    c->pend_V = V;
+    c->pend_old = old;
+    c->pend_released = released;
+    memcpy(c->pend_cdig, cdig, sizeof c->pend_cdig);
+}
+
 int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const CqHeld *held,
                    uint64_t now_us, RxcResult *out) {
     if (!c || !out) return RX_ERR_ARG;
     memset(out, 0, sizeof *out);
     out->winner = RXC_NONE;
+    /* A previous run left its record incomplete or its state not durable:
+     * never start another goal over it. */
+    if (c->pending == 2) return RX_ERR_REPLAY;
+    if (c->pending == 1) {
+        int m = compose_records(c, c->pend_S, c->pend_V,
+                                (const uint8_t (*)[32])c->pend_cdig, 0, NULL);
+        if (m == -1 || (m == -2 && c->pend_S)) return RX_ERR_REPLAY;
+        if (c->pend_S && !c->pend_released) {
+            js_branch_release_ref(&c->js, c->pend_old, 0);
+            c->pend_released = 1;
+        }
+        if (c->pend_S && js_space_commit(&c->js) != JS_OK) return RX_ERR_REPLAY;
+        out->prior_completed = m > 0 ? (uint32_t)m : 0;
+        c->pending = 0;
+    }
     /* Routing discovers the alternatives; it mints nothing. */
     SrRoute routes[RXC_K];
     int n = sr_route_alternatives(c->router, req, held, now_us, routes, RXC_K);
@@ -729,6 +812,7 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
         out->new_ref = nw;
         out->result = so.field[RXC_S_RESULT];
         if (fault(c, RXC_FP_RECLAIM, 0) || js_space_commit(&c->js) != JS_OK) {
+            c->pending = 2;
             out->outcome = RXC_OUT_NOT_DURABLE;
             return RX_OK;
         }
@@ -736,11 +820,13 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
         uint64_t S = rx_cortex_record_of(&c->w, rx_world_explain(&c->w, c->state, RXC_S_REF));
         uint64_t V = rx_cortex_record_of(&c->w, rx_world_explain(&c->w, c->verdict, RXC_V_GOAL));
         if (!S || !V || compose_records(c, S, V, (const uint8_t (*)[32])cdig, 1, out) < 0) {
+            set_pending(c, S, V, 1, old, 0, (const uint8_t (*)[32])cdig);
             out->outcome = RXC_OUT_RECORD_FAILED;
             return RX_OK;
         }
         js_branch_release_ref(&c->js, old, 0);   /* the superseded branch */
         if (js_space_commit(&c->js) != JS_OK) {
+            set_pending(c, S, V, 1, old, 1, (const uint8_t (*)[32])cdig);
             out->outcome = RXC_OUT_RECORD_FAILED;
             return RX_OK;
         }
@@ -751,6 +837,7 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
     if (vo.field[RXC_V_GOAL] == seq && vo.field[RXC_V_WINNER] == RXC_NONE) {
         uint64_t V = rx_cortex_record_of(&c->w, rx_world_explain(&c->w, c->verdict, RXC_V_GOAL));
         if (!V || compose_records(c, 0, V, (const uint8_t (*)[32])cdig, 1, out) < 0) {
+            set_pending(c, 0, V, 0, old, 1, (const uint8_t (*)[32])cdig);
             out->outcome = RXC_OUT_RECORD_FAILED;
             return RX_OK;
         }

@@ -431,6 +431,154 @@ static void t_cortex(void) {
     rmtree(d2);
 }
 
+/* The first goal's WORK_ACCEPTED record: claims and evidence of goal 1 carry it. */
+static uint64_t first_goal(void) {
+    for (uint64_t id = 1; id <= g_c.cx.n; id++) {
+        const CxObject *o = cx_get(&g_c.cx, id);
+        if (o && o->kind == CX_K_WORK_ACCEPTED && o->subject == RXC_CX_SUBJECT(RXC_SLOT_GOAL))
+            return id;
+    }
+    return 0;
+}
+
+/* Goal 1's no-winner record is whole: two claims, one evidence, two losers. */
+static void check_nowin_whole(const char *what, uint64_t G) {
+    CHECK(G && fx_count(&g_c.cx, CX_K_CANDIDATE, G) == 2, "%s: goal 1 claims %u", what,
+          fx_count(&g_c.cx, CX_K_CANDIDATE, G));
+    CHECK(fx_count(&g_c.cx, CX_K_EVIDENCE_REF, G) == 1, "%s: goal 1 evidence", what);
+    uint32_t losers = 0;
+    for (uint64_t id = 1; id <= g_c.cx.n; id++) {
+        const CxObject *o = cx_get(&g_c.cx, id);
+        if (!o || o->kind != CX_K_ADMISSION || o->tag != RXC_ADMIT_LOSER) continue;
+        const CxObject *cl = cx_get(&g_c.cx, o->links[0]);
+        losers += cl && cl->kind == CX_K_CANDIDATE && cl->tag == G;
+    }
+    CHECK(losers == 2, "%s: goal 1 losers %u", what, losers);
+}
+
+static void t_pending(void) {
+    printf("[*] incomplete records: completed before the next run, or at reopen\n");
+    char d[200];
+    RxcResult o;
+
+    /* (a) no winner, record fails in process; the next run completes it first. */
+    dir_for(d, sizeof d, "pend_nowin");
+    reset_c();
+    fx_a_bad = fx_b_bad = 1;
+    g_c.fault_point = RXC_FP_CORTEX;
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "a: open");
+    CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_RECORD_FAILED && g_c.fault_hit,
+          "a: no-winner record failed (%d)", o.outcome);
+    fx_a_bad = fx_b_bad = 0;
+    uint64_t G1 = first_goal();
+    CHECK(fx_count(&g_c.cx, CX_K_CANDIDATE, G1) == 1, "a: record partial");
+    CHECK(fx_run(&g_fx, &g_c, 6, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED && o.result == 19,
+          "a: next run commits (%d)", o.outcome);
+    CHECK(o.prior_completed == 4, "a: completed first %u", o.prior_completed);
+    check_nowin_whole("a", G1);
+    CHECK(fx_count(&g_c.cx, CX_K_PROMOTION, UINT64_MAX) == 1, "a: only goal 2 promoted");
+    JsBranchRef nw = o.new_ref;
+    fx_close(&g_fx, &g_c);
+    reset_c();
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK && g_c.recovered_completed == 0 &&
+          g_c.rolled_back == 0 && ref_eq(rx_compose_state(&g_c), nw), "a: reopen clean (%u)",
+          g_c.recovered_completed);
+    fx_close(&g_fx, &g_c);
+    rmtree(d);
+
+    /* (b) no winner, crash inside the record; reopen completes it. */
+    dir_for(d, sizeof d, "pend_nowin_crash");
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        reset_c();
+        fx_a_bad = fx_b_bad = 1;
+        g_c.fault_point = RXC_FP_CORTEX;
+        g_c.fault_crash = 1;
+        if (fx_open(&g_fx, &g_c, d, 1) != RX_OK) _exit(2);
+        fx_run(&g_fx, &g_c, 5, &o);
+        _exit(3);
+    }
+    int st = 0;
+    waitpid(pid, &st, 0);
+    CHECK(WIFEXITED(st) && WEXITSTATUS(st) == RXC_CRASH_EXIT, "b: child crashed in the record (%d)",
+          WIFEXITED(st) ? WEXITSTATUS(st) : -1);
+    reset_c();
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "b: reopen");
+    CHECK(g_c.recovered_completed > 0 && g_c.rolled_back == 0, "b: completed %u at open",
+          g_c.recovered_completed);
+    check_nowin_whole("b", first_goal());
+    CHECK(fx_count(&g_c.cx, CX_K_PROMOTION, UINT64_MAX) == 0, "b: nothing promoted");
+    CHECK(fx_count(&g_c.cx, CX_K_ADMISSION, RXC_ADMIT_RECOVERED) == 1, "b: one recovered admission");
+    const CxObject *ro = cx_get(&g_c.cx, g_c.recovered_record);
+    CHECK(ro && ro->kind == CX_K_ENTITY_CREATED, "b: OLD kept");
+    fx_close(&g_fx, &g_c);
+    reset_c();
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK && g_c.recovered_completed == 0, "b: second reopen clean");
+    fx_close(&g_fx, &g_c);
+    rmtree(d);
+
+    /* (c) winner, record fails in process; the next run completes it first. */
+    dir_for(d, sizeof d, "pend_win");
+    reset_c();
+    g_c.fault_point = RXC_FP_CORTEX;
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "c: open");
+    CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_RECORD_FAILED,
+          "c: record failed (%d)", o.outcome);
+    CHECK(fx_count(&g_c.cx, CX_K_PROMOTION, UINT64_MAX) == 0, "c: winner not yet promoted");
+    CHECK(fx_run(&g_fx, &g_c, 6, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED && o.result == 19,
+          "c: next run commits (%d)", o.outcome);
+    CHECK(o.prior_completed > 0, "c: completed first %u", o.prior_completed);
+    CHECK(fx_count(&g_c.cx, CX_K_PROMOTION, UINT64_MAX) == 2, "c: both winners promoted");
+    CHECK(fx_live_branches(&g_c.js) == 1, "c: superseded branches released (%u)",
+          fx_live_branches(&g_c.js));
+    nw = o.new_ref;
+    fx_close(&g_fx, &g_c);
+    reset_c();
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK && g_c.recovered_completed == 0 &&
+          ref_eq(rx_compose_state(&g_c), nw), "c: reopen clean (%u)", g_c.recovered_completed);
+    fx_close(&g_fx, &g_c);
+    rmtree(d);
+
+    /* (d) NOT_DURABLE: no further run until reopened. */
+    dir_for(d, sizeof d, "pend_notdurable");
+    reset_c();
+    g_c.fault_point = RXC_FP_RECLAIM;
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "d: open");
+    CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_NOT_DURABLE,
+          "d: not durable (%d)", o.outcome);
+    CHECK(fx_run(&g_fx, &g_c, 6, &o) == RX_ERR_REPLAY, "d: next run refused");
+    fx_close(&g_fx, &g_c);
+    reset_c();
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK && g_c.rolled_back == 1, "d: reopen rolls back");
+    CHECK(fx_run(&g_fx, &g_c, 6, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED, "d: then commits");
+    fx_close(&g_fx, &g_c);
+    rmtree(d);
+
+    /* (e) an earlier durable winner whose record was never completed, under a
+     * newer commit (pending bypassed): reopen completes the older one too. */
+    dir_for(d, sizeof d, "pend_older");
+    reset_c();
+    g_c.fault_point = RXC_FP_CORTEX;
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "e: open");
+    CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_RECORD_FAILED,
+          "e: record failed (%d)", o.outcome);
+    g_c.pending = 0;   /* simulate a writer that did not complete it */
+    CHECK(fx_run(&g_fx, &g_c, 6, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED,
+          "e: newer commit (%d)", o.outcome);
+    CHECK(fx_count(&g_c.cx, CX_K_PROMOTION, UINT64_MAX) == 1, "e: older winner unpromoted");
+    nw = o.new_ref;
+    fx_close(&g_fx, &g_c);
+    reset_c();
+    CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "e: reopen");
+    CHECK(g_c.recovered_completed > 0 && g_c.rolled_back == 0 && ref_eq(rx_compose_state(&g_c), nw),
+          "e: older record completed at open (%u)", g_c.recovered_completed);
+    CHECK(fx_count(&g_c.cx, CX_K_PROMOTION, UINT64_MAX) == 2, "e: older winner promoted");
+    CHECK(fx_live_branches(&g_c.js) == 1, "e: one durable branch");
+    fx_close(&g_fx, &g_c);
+    rmtree(d);
+}
+
 int main(void) {
     snprintf(g_base, sizeof g_base, "/tmp/rx_compose_test.XXXXXX");
     if (!mkdtemp(g_base)) { perror("mkdtemp"); return 1; }
@@ -440,6 +588,7 @@ int main(void) {
     t_no_winner();
     t_authority();
     t_cortex();
+    t_pending();
     fx_free(&g_fx);
     rmtree(g_base);
     printf("%s: %d checks, %d failed\n", g_fail ? "FAIL" : "PASS", g_checks, g_fail);
