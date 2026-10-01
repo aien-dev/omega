@@ -104,6 +104,14 @@ typedef struct { uint32_t slot; uint64_t generation; } OmegaTensor;
 /* Elementwise ops. Every op is an E1 scalar op applied per element.        */
 typedef enum {
     OMEGA_TU_SQRT = 0,   /* omega_math_sqrt, correctly rounded              */
+    /* E1 bounded-contract transcendentals (NOT correctly rounded): each is
+     * the frozen E1 CPU sequence in src/omega_numeric_transc.c applied per
+     * element, bit-exact with calling it directly; max ulp distance from the
+     * correctly rounded result per docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md. */
+    OMEGA_TU_EXP2,       /* omega_math_exp2,    <= OMEGA_TRANSC_MAX_ULP_EXP2 (2)    */
+    OMEGA_TU_LOG2,       /* omega_math_log2,    <= OMEGA_TRANSC_MAX_ULP_LOG2 (2)    */
+    OMEGA_TU_SIGMOID,    /* omega_math_sigmoid, <= OMEGA_TRANSC_MAX_ULP_SIGMOID (3) */
+    OMEGA_TU_TANH,       /* omega_math_tanh,    <= OMEGA_TRANSC_MAX_ULP_TANH (3)    */
     OMEGA_TU_COUNT
 } OmegaTensorUnaryOp;
 
@@ -147,6 +155,10 @@ typedef struct {
     int (*elementwise)(OmegaNumericOp op, const float *a, const float *b, const float *c,
                        float *out, size_t n);
     int (*reduce)(OmegaTensorReduceOp op, const float *x, size_t n, float *out);
+    /* Optional. out[i] = op(a[i]) for the bounded-contract unary ops
+     * (OMEGA_TU_EXP2 .. OMEGA_TU_TANH), bit-exact with the E1 CPU sequences.
+     * NULL: those ops return OMEGA_TENSOR_ERR_REALIZATION (other ops work). */
+    int (*transc)(OmegaTensorUnaryOp op, const float *a, float *out, size_t n);
 } OmegaTensorRealization;
 
 const OmegaTensorRealization *omega_tensor_cpu_realization(void);
