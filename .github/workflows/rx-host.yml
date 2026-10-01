@@ -34,42 +34,14 @@ on:
       - '.github/workflows/rx-host.yml'
       - 'aienos.lock'
       - 'argus.lock'
+      - 'tools/r16_authpath.sh'
+      - 'tools/ci_declare_skip.sh'
+  # Every push to main re-tests the merge result, whatever it touched (no path
+  # filter): a merge can break the runtime through files outside the PR filter.
   push:
     branches:
       - main
       - 'feat/rx-*'
-    paths:
-      - 'src/runtime/**'
-      - 'tests/runtime/**'
-      - 'Makefile'
-      - 'src/omega_matvec_quad.*'
-      - 'src/omega_types.h'
-      - 'src/omega_core.*'
-      - 'src/omega_canonical.*'
-      - 'src/omega_codec.*'
-      - 'src/omega_validate.*'
-      - 'src/visor/visor_effect_request.*'
-      - 'tests/effect/**'
-      - 'src/omega_program.*'
-      - 'src/omega_library.*'
-      - 'src/omega_discovery.*'
-      - 'src/language/**'
-      - 'tests/program/**'
-      - 'mk/program-id.mk'
-      - 'src/omega_realize_synth.*'
-      - 'src/aarch64_decoder.*'
-      - 'src/visor/visor_realization.*'
-      - 'tests/realize/**'
-      - 'mk/program-realize.mk'
-      - 'mk/machine-identity.mk'
-      - 'src/fabric/**'
-      - 'tests/fabric/**'
-      - 'mk/fabric.mk'
-      - 'src/omega_evidence.*'
-      - 'src/sha256.*'
-      - '.github/workflows/rx-host.yml'
-      - 'aienos.lock'
-      - 'argus.lock'
 
 jobs:
   host-reference:
@@ -320,6 +292,27 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make build/rx_r14_recovery_host
+      - name: R16-G3 host build link map (checks 1-3 of 5 on the current R13/R14 host binaries; not the gate)
+        # Sources, link map, shared libraries and embedded names of the living
+        # system as built from this commit. Checks 4-5 (exec trace + living run)
+        # need the Spark core classes and are declared SKIP below.
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: |
+          make test-r16-authpath-linkmap | tee build/r16-g3-linkmap-host.log
+          grep -qx 'R16-G3 static: R16_G3_LINKMAP=STATIC_PASS mode=host (checks 1-3 of 5 on this build; not the gate)' build/r16-g3-linkmap-host.log
+          grep -qx 'R16 gate: R16_G3_AUTHPATH=NOT_RUN (checks 4-5, exec trace and living run, not run in static-only mode)' build/r16-g3-linkmap-host.log
+          echo "- R16-G3 host build link map: checks 1-3 STATIC_PASS; gate NOT_RUN (checks 4-5 need the Spark)" >> "$GITHUB_STEP_SUMMARY"
+      - name: R16-G3 silicon build link map (silicon R13/R14 binaries built here and never run; checks 1-3 of 5; not the gate)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: |
+          make test-r16-authpath-linkmap-silicon | tee build/r16-g3-linkmap-silicon.log
+          grep -qx 'R16-G3 static: R16_G3_LINKMAP=STATIC_PASS mode=silicon (checks 1-3 of 5 on this build; not the gate)' build/r16-g3-linkmap-silicon.log
+          grep -qx 'R16 gate: R16_G3_AUTHPATH=NOT_RUN (checks 4-5, exec trace and living run, not run in static-only mode)' build/r16-g3-linkmap-silicon.log
+          echo "- R16-G3 silicon build link map (runner build, not run): checks 1-3 STATIC_PASS; gate NOT_RUN (needs the GB10 seat)" >> "$GITHUB_STEP_SUMMARY"
       - name: Empirical optimizer (OMEGA_EMPIRICAL_OPTIMIZER; the gate is claimed only on the DGX Spark)
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.sha }}
@@ -356,3 +349,45 @@ jobs:
           grep -q '"G5_identity": "PASS"' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
+
+  chip-only-declared:
+    # Checks that cannot run on a GitHub runner, declared explicitly so their
+    # absence is visible on every run. Each step prints one SKIP line (never a
+    # pass) and writes it to the job summary. chip-only: needs the GB10
+    # resident seat. spark-only: needs the DGX Spark itself (the R13/R14
+    # harnesses stop with "needs both core classes" unless the X925 and A725
+    # cores are present; hosted runners have neither). These are qualified only
+    # by candidate-bound receipts produced on the Spark.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Summary header
+        run: echo "### Declared SKIP (not run on GitHub runners; never a pass)" >> "$GITHUB_STEP_SUMMARY"
+      - name: R12 silicon seat (SKIP chip-only)
+        run: tools/ci_declare_skip.sh test-r12-silicon chip-only "needs the GB10 resident seat; qualified only by a candidate-bound Spark receipt"
+      - name: R13 living system host run (SKIP spark-only)
+        run: tools/ci_declare_skip.sh test-r13-host spark-only "needs both Spark core classes (X925 + A725); the build is checked in omega-faculty-arm"
+      - name: R14 living recovery host run (SKIP spark-only)
+        run: tools/ci_declare_skip.sh test-r14-host spark-only "needs both Spark core classes (X925 + A725); the build is checked in omega-faculty-arm"
+      - name: R13 living system silicon (SKIP chip-only)
+        run: tools/ci_declare_skip.sh test-r13-silicon chip-only "needs the GB10 resident seat and both Spark core classes; qualified only by a candidate-bound Spark receipt"
+      - name: R14 living recovery silicon (SKIP chip-only)
+        run: tools/ci_declare_skip.sh test-r14-silicon chip-only "needs the GB10 resident seat and both Spark core classes; qualified only by a candidate-bound Spark receipt"
+      - name: R15 G7 and parity host runs (SKIP spark-only)
+        run: |
+          tools/ci_declare_skip.sh test-r15-g7-host spark-only "runs R13 living episodes; needs both Spark core classes (X925 + A725)"
+          tools/ci_declare_skip.sh test-r15-parity-host spark-only "runs R13 living episodes; needs both Spark core classes (X925 + A725)"
+      - name: R15 parity silicon (SKIP chip-only)
+        run: tools/ci_declare_skip.sh test-r15-parity-silicon chip-only "needs the GB10 resident seat; qualified only by a candidate-bound Spark receipt"
+      - name: R16-G3 host checks 4-5, exec trace and living run (SKIP spark-only)
+        run: tools/ci_declare_skip.sh test-r16-authpath spark-only "checks 4-5 run the R13/R14 living systems, which need both Spark core classes; checks 1-3 run in omega-faculty-arm"
+      - name: R16-G3 silicon gate (SKIP chip-only)
+        run: tools/ci_declare_skip.sh test-r16-authpath-silicon chip-only "needs the GB10 resident seat; qualified only by a candidate-bound Spark receipt; checks 1-3 on the silicon build run in omega-faculty-arm"
+      - name: Composition gate on the GPU (SKIP chip-only)
+        run: tools/ci_declare_skip.sh test-composition-gate-gpu chip-only "needs the GB10 resident seat"
+      - name: Chip milestones M5, M19, M19R, gate 14 (SKIP chip-only; M6-M15 run and M17 is declared in host-suites-3.yml)
+        run: |
+          for t in test-m5 test-m19 test-m19r-qualify test-gate14-combine; do
+            tools/ci_declare_skip.sh "$t" chip-only "chip milestone gate; needs the GB10 (declared not-on-GitHub in host-suites.yml)"
+          done

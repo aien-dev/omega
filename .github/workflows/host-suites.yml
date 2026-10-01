@@ -13,7 +13,9 @@ name: Host suites
 #       machine-identity effect-cap64 workflow-fusion typed-results costmodel
 #   rx-host.yml omega-faculty-arm : program-id program-realize r10 r11
 #       empirical (EMPIRICAL_ALLOW_NO_WIN=1: single-core runner) plan-reuse
-#       (+ builds only of the R13/R14 living hosts)
+#       (+ builds only of the R13/R14 living hosts; R16-G3 checks 1-3 on the
+#       host and silicon builds: test-r16-authpath-linkmap{,-silicon})
+#   rx-host.yml chip-only-declared : prints SKIP for every Spark/chip-only run
 #   turing-yield.yml : turing-yield turing-energy
 #   host-suites-3.yml : numeric-transc numeric-transc-digest language test-m6..m15
 #       (test-numeric-transc-full and test-m17 are listed there as skipped jobs;

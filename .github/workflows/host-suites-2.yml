@@ -9,7 +9,8 @@ name: Host suites 2
 # Per-job triggering: the workflow-level `paths` is the union of every job's
 # inputs; the `changes` job then diffs the PR against its base and turns on
 # only the jobs whose own files changed. Makefile and this workflow file turn on
-# every job. A push to main is diffed against the previous tip the same way;
+# every job. A push to main is diffed against the previous tip the same way,
+# except that runtime and argus always run on a push to main (Lane 32);
 # workflow_dispatch (or a push with no known previous tip) runs everything.
 #
 # Jobs and the make targets they run (Spark -j1 time, 2026-10-01):
@@ -44,7 +45,9 @@ name: Host suites 2
 #   They run R13 living episodes that "need both core classes" (Spark X925 +
 #   A725); the runner has one class (g7: 7/18 checks fail; parity: no episode
 #   completes, SEQ_SEMANTIC_PARITY=FAIL; authpath: r13 exits 1). Same reason
-#   rx-host.yml only builds the R13/R14 hosts. Spark -j1: all three PASS;
+#   rx-host.yml only builds the R13/R14 hosts. Spark -j1: all three PASS.
+#   rx-host.yml runs R16-G3 checks 1-3 (sources, link map, embedded names) on
+#   the host and silicon builds and declares every Spark/chip-only run SKIP;
 #   test-polyglot: environment. mk/polyglot.mk builds its -O3 flavor with
 #   -mcpu=native next to -march=armv8.6-a+...; on the runner (Neoverse N2) gcc
 #   resolves native to a CPU that conflicts with that -march and -Werror stops
@@ -56,29 +59,10 @@ name: Host suites 2
 
 on:
   workflow_dispatch:
+  # Push to main is not path-filtered: the runtime and argus jobs re-test every
+  # merge result; the other jobs still run only when their own files changed.
   push:
     branches: [main]
-    paths:
-      - 'Makefile'
-      - '.github/workflows/host-suites-2.yml'
-      - 'physics.lock'
-      - 'aienos.lock'
-      - 'argus.lock'
-      - 'src/**'
-      - 'tests/**'
-      - 'tools/**'
-      - 'mk/**'
-      - 'spec/polyglot-0.md'
-      - 'spec/r16-*'
-      - 'docs/r16-*'
-      - 'docs/turing/**'
-      - 'calibration/**'
-      - 'data/crumbline/**'
-      - 'data/turing-cal/**'
-      - 'evidence/TURING_YIELD/**'
-      - 'evidence/POLYGLOT/**'
-      - 'evidence/MIXED_ALGEBRA/**'
-      - 'evidence/R15/**'
   pull_request:
     paths:
       - 'Makefile'
@@ -145,6 +129,8 @@ jobs:
           core='^src/(omega_|aarch64_|sha256\.)'
           sel() {
             if grep -Eq "$all|$2" changed.txt; then v=true; else v=false; fi
+            # every push to main re-tests the runtime and ARGUS on the merge result
+            if [ "$EVENT" = push ] && { [ "$1" = runtime ] || [ "$1" = argus ]; }; then v=true; fi
             echo "$1=$v" >> "$GITHUB_OUTPUT"; echo "$1=$v"
           }
           sel visor     "$core|^src/(visor|language)/|^tests/(visor|language)/|^mk/(00-visor-core|visor-[^/]*)\.mk$|^tools/omega\.c$|^src/runtime/rx_(aegis|caproot|coherent|generation|world)\.|^aienos\.lock$"
