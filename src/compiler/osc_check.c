@@ -66,6 +66,7 @@ typedef struct {
     int loop_depth;
     int term;             /* current path has returned */
     char sobj[64];        /* statement object (diagnostics) */
+    int contract;         /* 0 body; 1 checking a requires clause; 2 an ensures clause (OSC-2) */
 } C;
 
 #define NODE(i) (&c->ast->nodes[(i)])
@@ -568,6 +569,159 @@ static int fold(C *c, int i, OscScalar t, i128 *out)
     return 0;
 }
 
+
+/* ------------------------------------------------------------ contracts (OSC-2) */
+/* Static evaluation of a checked contract clause (docs/osc/OSC-2-DESIGN.md
+ * section 1.4). Constant folding only: a leaf is known if it is a literal /
+ * folded constant, a `true` / `false`, or a name whose value the caller
+ * supplies (call-site literal arguments, a constant return value). Operators
+ * follow section 5 of OSC-1 exactly; any operation that would trap at run time
+ * (overflow, divide by zero, shift range, cast range) makes the result
+ * unknown, as do array reads and calls. `&&` / `||` are decided left to
+ * right: the right operand is consulted only when the left one is known. */
+typedef struct {
+    int nk;                         /* symbols 0..nk-1 may be known (parameters) */
+    uint64_t v[OSC_MAX_PARAMS];
+    uint8_t k[OSC_MAX_PARAMS];
+    int res_sym;                    /* `result` symbol, or -1 */
+    uint8_t res_known;
+    uint64_t res_val;
+} CEnv;
+
+static uint64_t ccanon(OscScalar t, uint64_t x)
+{
+    unsigned w = osc_scalar_width(t);
+    if (t == OSC_T_BOOL) return x & 1;
+    if (w >= 64) return x;
+    if (osc_scalar_signed(t)) {
+        uint64_t m = 1ULL << (w - 1);
+        x &= (1ULL << w) - 1;
+        return (x ^ m) - m;
+    }
+    return x & ((1ULL << w) - 1);
+}
+static int sfits(unsigned w, i128 r) { return r >= -((i128)1 << (w - 1)) && r <= ((i128)1 << (w - 1)) - 1; }
+
+/* 1 known (*out canonical for the node's type), 0 unknown */
+static int ceval(C *c, int i, const CEnv *env, uint64_t *out)
+{
+    const OscNode *n = NODE(i);
+    if (n->is_const) { *out = n->cval; return 1; }
+    uint64_t a, b;
+    switch (n->kind) {
+    case ON_BOOL: *out = n->ival ? 1 : 0; return 1;
+    case ON_NAME:
+        if (n->sym >= 0 && n->sym < env->nk && env->k[n->sym]) { *out = env->v[n->sym]; return 1; }
+        if (n->sym >= 0 && n->sym == env->res_sym && env->res_known) { *out = env->res_val; return 1; }
+        return 0;
+    case ON_UN: {
+        if (!ceval(c, n->a, env, &a)) return 0;
+        OscScalar t = n->ty.s;
+        if (n->op == OT_BANG) { *out = a ^ 1; return 1; }
+        if (n->op == OT_TILDE) { *out = ccanon(t, ~a); return 1; }
+        if (osc_scalar_signed(t)) {
+            i128 r = -(i128)(int64_t)a;
+            if (!sfits(osc_scalar_width(t), r)) return 0;
+            *out = (uint64_t)(int64_t)r;
+            return 1;
+        }
+        *out = ccanon(t, 0 - a);
+        return 1;
+    }
+    case ON_CAST: {
+        if (!ceval(c, n->a, env, &a)) return 0;
+        OscScalar from = NODE(n->a)->ty.s, to = n->ty.s;
+        i128 v = osc_scalar_signed(from) ? (i128)(int64_t)a : (i128)a;
+        unsigned w = osc_scalar_width(to);
+        i128 lo = osc_scalar_signed(to) ? -((i128)1 << (w - 1)) : 0;
+        i128 hi = osc_scalar_signed(to) ? ((i128)1 << (w - 1)) - 1 : (((i128)1 << w) - 1);
+        if (v < lo || v > hi) return 0;
+        *out = (uint64_t)v;
+        return 1;
+    }
+    case ON_BIN: {
+        int op = n->op;
+        if (op == OT_ANDAND || op == OT_OROR) {
+            if (!ceval(c, n->a, env, &a)) return 0;
+            if (op == OT_ANDAND && !a) { *out = 0; return 1; }
+            if (op == OT_OROR && a) { *out = 1; return 1; }
+            if (!ceval(c, n->b, env, &b)) return 0;
+            *out = b;
+            return 1;
+        }
+        if (!ceval(c, n->a, env, &a) || !ceval(c, n->b, env, &b)) return 0;
+        if (is_cmpop(op)) {
+            OscScalar T = (OscScalar)n->flag;
+            int lt = osc_scalar_signed(T) ? (int64_t)a < (int64_t)b : a < b, eq = a == b;
+            switch (op) {
+            case OT_EQ: *out = eq; break;
+            case OT_NE: *out = !eq; break;
+            case OT_LT: *out = lt; break;
+            case OT_LE: *out = lt || eq; break;
+            case OT_GT: *out = !lt && !eq; break;
+            default: *out = !lt; break;
+            }
+            return 1;
+        }
+        OscScalar t = n->ty.s, tb = NODE(n->b)->ty.s;
+        unsigned w = osc_scalar_width(t);
+        int s = osc_scalar_signed(t);
+        i128 A = s ? (i128)(int64_t)a : (i128)a, B = osc_scalar_signed(tb) ? (i128)(int64_t)b : (i128)b, r;
+        switch (op) {
+        case OT_PLUS: if (!s) { *out = ccanon(t, a + b); return 1; } r = A + B; break;
+        case OT_MINUS: if (!s) { *out = ccanon(t, a - b); return 1; } r = A - B; break;
+        case OT_STAR: if (!s) { *out = ccanon(t, a * b); return 1; } r = A * B; break;
+        case OT_SLASH:
+            if (b == 0) return 0;
+            if (!s) { *out = a / b; return 1; }
+            r = A / B;
+            break;
+        case OT_PERCENT:
+            if (b == 0) return 0;
+            *out = s ? (uint64_t)(int64_t)(A % B) : a % b;
+            return 1;
+        case OT_AMP: *out = a & b; return 1;
+        case OT_PIPE: *out = a | b; return 1;
+        case OT_CARET: *out = a ^ b; return 1;
+        case OT_SHL: case OT_SHR:
+            if (B < 0 || B >= (i128)w) return 0;
+            if (op == OT_SHR) { *out = s ? (uint64_t)((int64_t)a >> (unsigned)B) : a >> (unsigned)B; return 1; }
+            if (!s) { *out = ccanon(t, a << (unsigned)B); return 1; }
+            r = A * ((i128)1 << (unsigned)B);
+            break;
+        default: return 0;
+        }
+        if (!sfits(w, r)) return 0;
+        *out = (uint64_t)(int64_t)r;
+        return 1;
+    }
+    default:
+        return 0; /* ON_INDEX (memory), ON_CALL (refused in clauses anyway) */
+    }
+}
+
+/* name check inside a clause: `result` is reserved there */
+static int contract_name(C *c, const OscNode *n)
+{
+    if (!c->contract) return 0;
+    char name[64];
+    osc_node_name(c->ast, n, name, sizeof name);
+    if (strcmp(name, "result") != 0) return 0;
+    char fname[64];
+    osc_node_name(c->ast, NODE(c->fnode), fname, sizeof fname);
+    if (c->contract == 1) {
+        osc_diag_set(c->d, OSC_DIAG_CONTRACT_INVALID, n->line, n->col, "result", NODE(c->fnode)->line, fname,
+                     "result in requires", "'result' (the return value) is not available in a requires clause");
+        return -1;
+    }
+    if (c->fret.s == OSC_T_VOID) {
+        osc_diag_set(c->d, OSC_DIAG_CONTRACT_INVALID, n->line, n->col, "result", NODE(c->fnode)->line, fname,
+                     "result in void function", "'%s' returns nothing, so its ensures clause has no 'result'", fname);
+        return -1;
+    }
+    return 0;
+}
+
 /* ------------------------------------------------------------ expressions */
 static int chk(C *c, int i, OscScalar want);
 static int chk_call(C *c, int i, OscScalar want, int as_stmt);
@@ -640,6 +794,7 @@ static int chk(C *c, int i, OscScalar want)
         t = OSC_T_BOOL;
         break;
     case ON_NAME: {
+        if (contract_name(c, n)) return -1;
         int s = resolve(c, n);
         if (s < 0) return -1;
         n->sym = s;
@@ -652,9 +807,17 @@ static int chk(C *c, int i, OscScalar want)
         break;
     }
     case ON_INDEX: {
+        if (contract_name(c, n)) return -1;
         int s = resolve(c, n);
         if (s < 0) return -1;
         n->sym = s;
+        if (c->contract == 2 && c->sym[s].kind != SK_SCALAR && !(c->sym[s].kind == SK_BORROW && c->sym[s].ty.ref == OSC_REF_SHARED)) {
+            osc_diag_set(c->d, OSC_DIAG_CONTRACT_INVALID, n->line, n->col, c->sym[s].name, c->sym[s].line, NULL,
+                         "array read in ensures",
+                         "an ensures clause may read elements only through a shared '&' parameter ('%s' is not one)",
+                         c->sym[s].name);
+            return -1;
+        }
         if (c->sym[s].kind == SK_SCALAR) {
             snprintf(msg, sizeof msg, "'%s' is a scalar, not an array", c->sym[s].name);
             return tmismatch(c, n, c->sym[s].name, msg);
@@ -665,6 +828,13 @@ static int chk(C *c, int i, OscScalar want)
         break;
     }
     case ON_CALL: {
+        if (c->contract) {
+            char cn[64];
+            osc_node_name(c->ast, n, cn, sizeof cn);
+            osc_diag_set(c->d, OSC_DIAG_CONTRACT_INVALID, n->line, n->col, cn, 0, c->contract == 1 ? "requires" : "ensures",
+                         "call in contract", "a contract clause may not call a function ('%s')", cn);
+            return -1;
+        }
         int r = chk_call(c, i, want, 0);
         if (r < 0) return -1;
         t = (OscScalar)r;
@@ -806,6 +976,112 @@ static int find_fn(C *c, const char *name, int *after)
 
 static int same_arr(const OscType *a, const OscType *b) { return a->elem == b->elem && a->len == b->len; }
 
+/* OSC-2: check fn fi's requires / ensures clauses (after its parameters are
+ * declared, before its body). See docs/osc/OSC-2-DESIGN.md section 1. */
+static int chk_contracts(C *c, int fi)
+{
+    OscAst *a = c->ast;
+    char fname[64];
+    osc_node_name(a, NODE(c->fnode), fname, sizeof fname);
+    CEnv none;
+    memset(&none, 0, sizeof none);
+    none.res_sym = -1;
+    uint64_t v;
+    if (a->reqn[fi] >= 0) {
+        int r = a->reqn[fi];
+        c->contract = 1;
+        snprintf(c->sobj, sizeof c->sobj, "requires");
+        /* element reads in a requires clause are uses at function entry (traced) */
+        if (chk(c, r, OSC_T_BOOL) < 0) return -1;
+        c->contract = 0;
+        if (ceval(c, r, &none, &v)) {
+            if (!v) {
+                osc_diag_set(c->d, OSC_DIAG_CONTRACT_VIOLATION, NODE(r)->line, NODE(r)->col, fname, NODE(r)->line,
+                             a->req[fi], "requires is constant false",
+                             "the requires clause of '%s' is false for every call", fname);
+                return -1;
+            }
+            a->req_elide[fi] = 1;
+        }
+    }
+    if (a->ensn[fi] >= 0) {
+        int e = a->ensn[fi];
+        OscTrace *tr = c->tr;
+        if (push_scope(c, NODE(e)->line)) return -1;
+        if (c->fret.s != OSC_T_VOID) {
+            /* the `result` pseudo binding, visible only inside the clause */
+            if (lookup(c, "result") >= 0) {
+                int p = lookup(c, "result");
+                osc_diag_set(c->d, OSC_DIAG_REDEFINED_NAME, NODE(e)->line, NODE(e)->col, "result", c->sym[p].line,
+                             fname, "parameter named result with ensures",
+                             "'result' names the return value in an ensures clause; parameter 'result' of '%s' "
+                             "collides with it", fname);
+                return -1;
+            }
+            if (c->nsym >= OSC_CHECK_MAX_SYMS) return cap_fail(c, NODE(e)->line, "symbol capacity");
+            int s = c->nsym++;
+            Sym *y = &c->sym[s];
+            memset(y, 0, sizeof *y);
+            snprintf(y->name, sizeof y->name, "result");
+            y->line = NODE(e)->line;
+            y->kind = SK_SCALAR;
+            y->ty = c->fret;
+            y->obj = y->bor = -1;
+            c->vis[c->nvis++] = s;
+            a->res_sym[fi] = s;
+        }
+        c->contract = 2;
+        snprintf(c->sobj, sizeof c->sobj, "ensures");
+        /* ensures reads happen at each return; only shared-borrow parameters may
+         * be read, which no body operation can invalidate, so they are not traced */
+        c->tr = NULL;
+        int rc = chk(c, e, OSC_T_BOOL);
+        c->tr = tr;
+        c->contract = 0;
+        if (rc < 0) return -1;
+        pop_scope(c);
+        if (ceval(c, e, &none, &v)) {
+            if (!v) {
+                osc_diag_set(c->d, OSC_DIAG_CONTRACT_VIOLATION, NODE(e)->line, NODE(e)->col, fname, NODE(e)->line,
+                             a->ens[fi], "ensures is constant false",
+                             "the ensures clause of '%s' is false for every return", fname);
+                return -1;
+            }
+            a->ens_elide[fi] = 1;
+        }
+    }
+    snprintf(c->sobj, sizeof c->sobj, "%s", fname);
+    return 0;
+}
+
+/* OSC-2: refuse a call whose literal / constant arguments make the callee's
+ * requires clause fold to false. */
+static int chk_call_requires(C *c, int i, int g, const int *args, int na)
+{
+    OscAst *a = c->ast;
+    if (a->reqn[g] < 0 || a->req_elide[g]) return 0;
+    const OscNode *n = NODE(i);
+    const OscNode *f = NODE(a->fns[g]);
+    CEnv env, none;
+    memset(&env, 0, sizeof env);
+    memset(&none, 0, sizeof none);
+    env.res_sym = none.res_sym = -1;
+    env.nk = na;
+    int k = 0;
+    for (int p = f->a; p >= 0 && k < na; p = NODE(p)->next, k++)
+        if (NODE(p)->ty.s != OSC_T_REF && ceval(c, args[k], &none, &env.v[k])) env.k[k] = 1;
+    uint64_t v;
+    if (ceval(c, a->reqn[g], &env, &v) && !v) {
+        char name[64];
+        osc_node_name(a, n, name, sizeof name);
+        osc_diag_set(c->d, OSC_DIAG_CONTRACT_VIOLATION, n->line, n->col, name, NODE(a->reqn[g])->line, a->req[g],
+                     "requires false at call", "these constant arguments make the requires clause of '%s' false",
+                     name);
+        return -1;
+    }
+    return 0;
+}
+
 static int chk_call(C *c, int i, OscScalar want, int as_stmt)
 {
     OscNode *n = NODE(i);
@@ -871,6 +1147,7 @@ static int chk_call(C *c, int i, OscScalar want, int as_stmt)
         if (b < 0) return -1;
         cb[ncb++] = b;
     }
+    if (chk_call_requires(c, i, g, args, na)) return -1;
     for (int k = ncb - 1; k >= 0; k--) end_bor(c, cb[k], n->line);
     if (as_stmt) return (int)f->ty.s;
     if (f->ty.s == OSC_T_VOID) {
@@ -1009,6 +1286,35 @@ static int chk_loop_body(C *c, OscNode *n, int is_for)
 out:
     free(s0);
     return rc;
+}
+
+/* OSC-2: `return E;` with E constant: fold the ensures clause with `result` = E.
+ * False -> static postcondition violation; true -> no check at this return
+ * (ON_RETURN flag = 1). */
+static int chk_return_ensures(C *c, OscNode *n)
+{
+    OscAst *a = c->ast;
+    int fi = c->fi;
+    if (a->ensn[fi] < 0 || a->ens_elide[fi] || a->res_sym[fi] < 0) return 0;
+    CEnv env;
+    memset(&env, 0, sizeof env);
+    env.res_sym = -1;
+    uint64_t rv, v;
+    if (!ceval(c, n->a, &env, &rv)) return 0;
+    env.res_sym = a->res_sym[fi];
+    env.res_known = 1;
+    env.res_val = rv;
+    if (!ceval(c, a->ensn[fi], &env, &v)) return 0;
+    if (!v) {
+        char fname[64];
+        osc_node_name(a, NODE(c->fnode), fname, sizeof fname);
+        osc_diag_set(c->d, OSC_DIAG_CONTRACT_VIOLATION, n->line, n->col, fname, NODE(a->ensn[fi])->line, a->ens[fi],
+                     "ensures false at return", "this constant return value makes the ensures clause of '%s' false",
+                     fname);
+        return -1;
+    }
+    n->flag = 1;
+    return 0;
 }
 
 static int chk_stmt(C *c, int i)
@@ -1173,6 +1479,7 @@ static int chk_stmt(C *c, int i)
                 return -1;
             }
             if (chk(c, n->a, c->fret.s) < 0) return -1;
+            if (chk_return_ensures(c, n)) return -1;
         }
         scope_exit_events(c, c->depth, n->line, n);
         c->term = 1;
@@ -1254,6 +1561,7 @@ static int chk_fn(C *c, int fi)
             c->bor[b].sym = s;
         }
     }
+    if (chk_contracts(c, fi)) return -1;
     if (chk_block(c, fn->b, 1)) return -1;
     if (!c->term) {
         if (fn->ty.s != OSC_T_VOID) {

@@ -1,0 +1,6 @@
+// expect: CONTRACT_VIOLATION object=f line=4
+// transition: requires is constant false
+// a clause that folds to false on its own can never hold
+fn f(x: u8) -> u8 requires false && x > 0 {
+    return x;
+}

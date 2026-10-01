@@ -193,7 +193,7 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
         break;
     }
     case OSC_I_TRAP:
-        NEED(in->imm >= OSC_TRAP_OVERFLOW && in->imm <= OSC_TRAP_RUNTIME, "TRAP bad code", fi, ii);
+        NEED(in->imm >= OSC_TRAP_OVERFLOW && in->imm <= OSC_TRAP_MAX, "TRAP bad code", fi, ii);
         break;
     case OSC_I_BR:
         NEED(in->blk_t >= 0 && in->blk_t < f->nblocks, "BR bad target", fi, ii);

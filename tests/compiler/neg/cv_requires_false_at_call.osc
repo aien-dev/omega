@@ -1,0 +1,10 @@
+// expect: CONTRACT_VIOLATION object=safe_sub line=9
+// transition: requires false at call
+// constant arguments make the callee's requires false (line = the call; origin_line = the clause)
+fn safe_sub(a: u32, b: u32) -> u32 requires a >= b {
+    return a - b;
+}
+
+fn caller() -> u32 {
+    return safe_sub(3, 5);
+}

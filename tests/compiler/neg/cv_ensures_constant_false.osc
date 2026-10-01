@@ -1,0 +1,5 @@
+// expect: CONTRACT_VIOLATION object=h line=3
+// transition: ensures is constant false
+fn h(x: i32) -> i32 ensures !true {
+    return x;
+}

@@ -1,0 +1,39 @@
+// entry: half_up void_check pick sum_first
+// OSC-2 ensures clauses that fail at run time: TRAP ENSURES after the return
+// value is computed and before the scope releases (no destructors run).
+// `half_up` is deliberately wrong for odd inputs.
+fn half_up(x: u16) -> u16 ensures result * 2 >= x {
+    return x / 2;
+}
+
+// void function: the check runs at the fall-off end, before `a` is released
+fn void_check(n: i64) ensures n >= 0 {
+    let a: own [i64; 4] = alloc(n);
+    a[0] = 1;
+}
+
+// checked at every return; the early return is wrong when x == 100
+fn pick(x: u8, y: u8) -> u8 ensures result != 100 {
+    if x == 100 { return x; }
+    if y > x { return y - x; }
+    return x - y;
+}
+
+// ensures reads elements through a shared borrow parameter
+fn first(a: &[u32; 3], k: u32) -> u32 ensures result == a[0] {
+    if k > 5 { return k; }
+    return a[0];
+}
+
+fn sum_first(k: u32) -> u32 {
+    let a: own [u32; 3] = alloc(4);
+    return first(&a, k);
+}
+// expect-run: half_up 7 -> trap=ENSURES
+// expect-run: half_up 8 -> 4
+// expect-run: void_check -1 -> trap=ENSURES
+// expect-run: void_check 3 -> 0
+// expect-run: pick 100 1 -> trap=ENSURES
+// expect-run: pick 9 1 -> 8
+// expect-run: sum_first 6 -> trap=ENSURES
+// expect-run: sum_first 5 -> 4

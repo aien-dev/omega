@@ -27,6 +27,9 @@ typedef enum {
     OSC_DIAG_STATIC_OUT_OF_BOUNDS,
     OSC_DIAG_IMMUTABLE_ASSIGN,
     OSC_DIAG_READ_ONLY_BORROW,
+    /* appended for OSC-2 contracts (docs/osc/OSC-2-DESIGN.md section 1) */
+    OSC_DIAG_CONTRACT_INVALID,     /* ill-formed clause: result in requires / void fn, call, own read */
+    OSC_DIAG_CONTRACT_VIOLATION,   /* clause decided false at compile time (constant folding) */
     OSC_DIAG__COUNT
 } OscDiagKind;
 
@@ -40,7 +43,7 @@ typedef struct {
     char message[160];         /* human-readable summary */
 } OscDiag;
 
-/* "SYNTAX", ..., "READ_ONLY_BORROW"; "NONE" for 0; "?" out of range. */
+/* "SYNTAX", ..., "CONTRACT_VIOLATION"; "NONE" for 0; "?" out of range. */
 const char *osc_diag_kind_name(int kind);
 /* Inverse of osc_diag_kind_name; -1 if unknown. */
 int osc_diag_kind_from_name(const char *name);

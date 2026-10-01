@@ -80,6 +80,16 @@ typedef struct {
     uint32_t nfns;
     char req[OSC_MAX_FUNCS][OSC_CLAUSE_MAX];
     char ens[OSC_MAX_FUNCS][OSC_CLAUSE_MAX];
+    /* OSC-2 contracts (docs/osc/OSC-2-DESIGN.md section 1). Parser: clause
+     * expression nodes (-1 = no clause). Checker: res_sym = symbol id of the
+     * `result` pseudo binding of a non-void function with an ensures clause
+     * (-1 otherwise); *_elide = 1 when the clause folds to true on its own and
+     * no runtime check is emitted. */
+    int32_t reqn[OSC_MAX_FUNCS];
+    int32_t ensn[OSC_MAX_FUNCS];
+    int32_t res_sym[OSC_MAX_FUNCS];
+    uint8_t req_elide[OSC_MAX_FUNCS];
+    uint8_t ens_elide[OSC_MAX_FUNCS];
     /* filled by the checker: symbol ids of owners to release, in emission order */
     int16_t rel[OSC_AST_MAX_REL];
     uint32_t nrel;

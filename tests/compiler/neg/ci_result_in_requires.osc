@@ -1,0 +1,6 @@
+// expect: CONTRACT_INVALID object=result line=4
+// transition: result in requires
+// `result` names the return value; it only exists in ensures
+fn f(x: u8) -> u8 requires result > 0 {
+    return x;
+}

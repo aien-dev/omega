@@ -1,0 +1,9 @@
+// expect: CONTRACT_INVALID object=id line=7
+// transition: call in contract
+// contracts are pure expressions: calls are refused (OSC-2 section 1)
+fn id(x: u8) -> u8 {
+    return x;
+}
+fn f(x: u8) -> u8 requires id(x) > 0 {
+    return x;
+}

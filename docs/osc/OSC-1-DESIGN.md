@@ -26,7 +26,7 @@ and control-flow core needed to write programs that exercise it:
 - unique allocation `own [T; N]`, moves, shared and mutable borrows `&[T; N]` /
   `&mut [T; N]`, indexing with a bounds check, deterministic destruction at
   scope end;
-- `requires` / `ensures` clauses parsed and recorded as text, **not checked**
+- `requires` / `ensures` clauses parsed and recorded as text, **not checked** (superseded by OSC-2 item 1: `docs/osc/OSC-2-DESIGN.md` section 1)
   (OSC-0 decision 3, III.6). Enforcement is OSC-2 and mandatory before any
   production C migrates.
 

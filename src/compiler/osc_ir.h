@@ -35,7 +35,7 @@
 #define OSC_MAX_BLOCKS   512     /* per function */
 #define OSC_MAX_ARRAY_LEN 64     /* elements per unique allocation */
 #define OSC_NAME_MAX      64
-#define OSC_CLAUSE_MAX   256     /* requires/ensures text (recorded, not checked: OSC-0 III.6) */
+#define OSC_CLAUSE_MAX   256     /* requires/ensures source text (recorded; enforced by the front end, OSC-2) */
 
 /* ---- types ------------------------------------------------------------ */
 typedef enum {
@@ -116,9 +116,16 @@ typedef enum {
     OSC_TRAP_CAST = 5,       /* checked conversion out of range                  */
     OSC_TRAP_OOM = 6,        /* allocation pool exhausted                        */
     OSC_TRAP_SHIFT = 7,      /* shift amount >= width or negative                */
-    OSC_TRAP_RUNTIME = 8     /* runtime invariant broken (double release, bad    */
+    OSC_TRAP_RUNTIME = 8,    /* runtime invariant broken (double release, bad    */
                              /*   handle): must never happen for checked code    */
+    /* Appended for OSC-2 contracts (docs/osc/OSC-2-DESIGN.md section 1).
+     * Existing codes are never renumbered. */
+    OSC_TRAP_REQUIRES = 9,   /* a `requires` clause evaluated to false at entry  */
+    OSC_TRAP_ENSURES = 10    /* an `ensures` clause evaluated to false at return */
 } OscTrap;
+
+/* Highest trap code; arrays indexed by trap code have OSC_TRAP_MAX + 1 entries. */
+#define OSC_TRAP_MAX OSC_TRAP_ENSURES
 
 typedef struct {
     uint8_t op;          /* OscOp */
@@ -148,7 +155,7 @@ typedef struct {
     uint32_t ninsns;
     OscBlock blocks[OSC_MAX_BLOCKS];
     uint16_t nblocks;    /* block 0 is the entry */
-    char requires_text[OSC_CLAUSE_MAX];  /* recorded, not checked (OSC-0 III.6) */
+    char requires_text[OSC_CLAUSE_MAX];  /* source text; checks are lowered into the CFG (OSC-2) */
     char ensures_text[OSC_CLAUSE_MAX];
 } OscFunc;
 

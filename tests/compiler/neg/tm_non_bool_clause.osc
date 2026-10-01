@@ -1,0 +1,7 @@
+// expect: TYPE_MISMATCH object=requires line=4
+// a clause must be a bool expression
+fn f(x: u8) -> u8
+    requires x + 1
+{
+    return x;
+}
