@@ -114,7 +114,7 @@ removed. Order and padding mutations are caught by the E1 WP-D suite.
 | CI | WIRED | `host-suites-2.yml` job `tensor`: `test-tensor` + `test-tensor-mutations` on the AArch64 hosted runner (not the Spark, not a qualification) |
 | GB10 parity | NOT_RUN | no GB10 realization table yet; no chip run in this work |
 | GB10 general matmul (Tensor Core beyond narrow K/tile) | MISSING_IMPLEMENTATION | |
-| Crash-safe storage lifetime | MISSING_IMPLEMENTATION | storage is in-process memory only; no persistence or crash recovery |
+| Crash-safe storage lifetime | NOT_RUN (implemented, awaiting forge) | `src/tensor/omega_tensor_store.{c,h}`: content-addressed payloads + checksummed journal, temp/fsync/rename/fsync-dir commit; recovery replays the journal, re-hashes every payload, refuses torn/short/corrupt records (typed errors), keeps generations monotonic; `test-tensor-store` (round trip, fork crash at all 8 commit phases, journal/payload truncated at every byte and bit-flipped, crafted journals) + 6 store mutants in `test-tensor-mutations` |
 | Reproducible receipt | PASS (CPU) | writer implemented and host-tested: `tools/m20_receipt.sh` writes `<evidence-dir>/<sha256>.json` (0444, exclusive, never overwritten), QUALIFIED only with GB10 parity GB10 PASS + matching chip evidence; `test-m20-receipt` + 11 receipt mutants in `test-tensor-mutations`, forge log HIVE-M20-receipt-175835. No real M20 receipt has been written yet because the GB10 parity evidence does not exist. |
 | E1 numeric closure | PASS (on main) | E1 PASSED on main 4863803; receipt merged in omega#177 |
 
