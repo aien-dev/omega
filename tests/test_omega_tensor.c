@@ -1729,12 +1729,8 @@ static void kat_digest(uint8_t out[32]) {
 
 /* ---- CR-3 mask compare + where ------------------------------------------- */
 /* Strict bit comparison (NaN payload and sign included): the mask ops and
- * where() promise exact bits, not just value identity. */
-static size_t bit_mismatches(const float *a, const float *b, size_t n) {
-    size_t m = 0;
-    for (size_t i = 0; i < n; i++) m += omega_float_to_bits(a[i]) != omega_float_to_bits(b[i]);
-    return m;
-}
+ * where() promise exact bits, not just value identity. Uses the shared
+ * bit_mismatches() helper defined with the transcendental tests above. */
 /* Independent reference: the E1 scalar predicate, then the two mask bit
  * patterns written as literals (not the header macros). */
 static float ref_mask(int selop, float a, float b) {
