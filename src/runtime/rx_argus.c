@@ -8,6 +8,7 @@
 #if RX_ARGUS
 
 #include "sha256.h"
+#include "aien_machine_id.h"
 
 #include <pthread.h>
 #include <sched.h>
@@ -600,7 +601,13 @@ static void consumer_place(pthread_t th) {
 }
 #endif
 
-static int rx_argus_start(const char *run_id, int consumer_mode, const char *stream_path) {
+_Static_assert(ARGUS_MACHINE_ID_LEN == AIEN_MID_ID_BYTES, "ARGUS machine slot is the canonical id");
+
+/* machine_id: the canonical AienMachineId slot bytes, or NULL for the provisional
+ * per-run id (removal path: drop the fallback once AIENOS provisioning writes the
+ * local identity record for every runtime host). */
+static int rx_argus_start(const char *run_id, const uint8_t *machine_id, int consumer_mode,
+                          const char *stream_path) {
     if (g.active) return ARGUS_ERR_STATE;
     if (argus_ring_footprint(RX_ARGUS_RING_CAPACITY) > RING_MEM_MAX) return ARGUS_ERR_ARG;
     g.ring_bytes = argus_ring_footprint(RX_ARGUS_RING_CAPACITY);
@@ -623,7 +630,9 @@ static int rx_argus_start(const char *run_id, int consumer_mode, const char *str
     (void)stream_path;
     g.mode = RX_ARGUS_CONSUMER_OFF;
 #endif
-    {   /* Provisional machine id: SHA-256("ARGUS-PROVISIONAL-MACHINE-v1" || run_id). */
+    if (machine_id) {
+        memcpy(g.machine_id, machine_id, ARGUS_MACHINE_ID_LEN);
+    } else {   /* Provisional machine id: SHA-256("ARGUS-PROVISIONAL-MACHINE-v1" || run_id). */
         static const char tag[] = "ARGUS-PROVISIONAL-MACHINE-v1";
         sha256_ctx h;
         sha256_init(&h);
@@ -828,7 +837,9 @@ int rx_argus_write_summary(const char *path, const char *suite) {
  *   RX_ARGUS_STREAM    path for the raw 128-byte record stream (ingest order)
  *   RX_ARGUS_SUMMARY   path for the JSON summary written at exit
  *   RX_ARGUS_SUITE     label in the summary
- *   RX_ARGUS_RUN_ID    run id for the machine id (default: pid-based)
+ *   RX_ARGUS_MACHINE_ID  canonical machine identity, text form (aien_machine_id.h);
+ *                      malformed = ARGUS does not start. Unset: provisional id
+ *   RX_ARGUS_RUN_ID    run id for the provisional machine id (default: pid-based)
  *   RX_ARGUS_CONSUMER_CPU  consumer placement: auto (default: the CPUs outside the
  *                      process mask, if any) | none | a CPU list such as "3" or "0-2,4" */
 __attribute__((constructor)) static void rx_argus_auto_start(void) {
@@ -844,7 +855,13 @@ __attribute__((constructor)) static void rx_argus_auto_start(void) {
         snprintf(fallback, sizeof fallback, "pid-%ld", (long)getpid());
         run = fallback;
     }
-    if (rx_argus_start(run, mode, getenv("RX_ARGUS_STREAM")) != ARGUS_OK)
+    const char *mtext = getenv("RX_ARGUS_MACHINE_ID");
+    AienMachineId mid;
+    if (mtext && aien_mid_from_text(mtext, &mid) != AIEN_MID_OK) {
+        fprintf(stderr, "rx_argus: RX_ARGUS_MACHINE_ID is not a canonical machine identity\n");
+        return;
+    }
+    if (rx_argus_start(run, mtext ? mid.id : NULL, mode, getenv("RX_ARGUS_STREAM")) != ARGUS_OK)
         fprintf(stderr, "rx_argus: start failed\n");
 }
 
