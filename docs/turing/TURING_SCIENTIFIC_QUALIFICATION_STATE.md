@@ -27,8 +27,8 @@ from the sealed Wave 1 records (section 2 row "EXP-002A to D", section 7). No ev
 | EXP-002D (Brownian) | INCOMPLETE | one hostile rule is not evaluable with the Wave 1 prediction format; 0 wrong verdicts on the rules that were evaluated |
 | interventional replication (Brownian) | PASS | profile v1.3, fresh sealed worlds |
 | EXP-003 | BLOCKED | needs a separate Wave 2 contract (draft under review, not accepted, not frozen) and must seal after BRN-10 |
-| R16 (orchestrator retirement) | IN PROGRESS | on main only the G1/G2 inventory; G3 to G5 work sits on an unmerged branch |
-| TURING wired into the live runtime | BLOCKED | runtime edit freeze until R16 closes |
+| R16 (orchestrator retirement) | CLOSED | omega#112 merged (`3dd5eaa`), gates G1 to G8 PASS (update 2026-09-30; section 4 keeps the earlier audit) |
+| TURING wired into the live runtime | NOT STARTED | the runtime edit freeze was lifted (aien-architecture #70); no wiring work exists yet |
 
 Highest claim level supported (protocol claim ladder, section 6): **Level 2** (Brownian scope, instrument certification only; see section 6). Outside the Brownian scope the ceiling stays Level 1.
 
@@ -68,10 +68,12 @@ All paths below exist on `62f5ba5`. States are about evidence, not code quality.
 - `calibration/docs/PROTOCOL_CONFORMANCE.md`: 53 protocol requirements mapped; declared deviations D1 to D10.
 - There is no top-level `turing/` directory. Code lives in `src/turing/`, `tests/turing/`, `tools/`, `calibration/`,
   `docs/turing/`.
-- No file in `src/runtime/*.c` mentions turing; TURING code stays outside the frozen runtime.
+- No file in `src/runtime/*.c` mentions turing; TURING code stays outside the runtime (the runtime was frozen at the time of this audit).
 
 ## 4. R16 and the runtime freeze
 
+- Update 2026-09-30: R16 CLOSED (omega#112, `3dd5eaa`, G1 to G8 PASS) and the runtime freeze LIFTED
+  (aien-architecture #70, `e89ba94`). The bullets below record the state at the original audit.
 - On main: `evidence/R16/` holds only `inventory.json`, added in `6fdc4c3` (PR #68, R16 spec pre-registration).
   `tests/runtime/rx_r16_negative.c` is not on main. No `AIEN_RX_R16_ORCHESTRATOR_RETIRED_V1` receipt.
 - aien-architecture `CURRENT_EXECUTION_PLAN.md` (at `b63297b`) line 45: R16 "IN PROGRESS ... G3-G8 qualification

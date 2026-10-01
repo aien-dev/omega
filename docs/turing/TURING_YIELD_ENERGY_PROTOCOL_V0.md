@@ -1,5 +1,7 @@
 # TURING Yield energy protocol V0 (TY-4 measurement reuse, TY-5 concurrent attribution)
 
+Update 2026-09-30: R16 is CLOSED (omega#112, `3dd5eaa`, all gates G1 to G8 PASS) and the `src/runtime/` edit freeze is LIFTED (aien-architecture #70, `e89ba94`). Statements below that the runtime is frozen "until R16" describe the state when this was written.
+
 Status: PRE-REGISTERED. Committed and pushed before any timed run of stage 1 or stage 2.
 Any change after data is seen is a dated amendment at the end of this file, committed before the run it affects.
 Branch `feat/turing-yield-ty45`, base omega `a927bd6`. Date 2026-09-29.
