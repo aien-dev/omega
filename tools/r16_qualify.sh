@@ -62,20 +62,12 @@ cat << MEOF > "$RAW_DIR/machine.json"
 }
 MEOF
 
-# Build all required test binaries
-echo "[*] Building test binaries..."
-make -j4 build/r16_loop_inventory build/omegatool build/rx_r16_negative \
-    build/rx_r13_living_host build/rx_r14_recovery_host \
-    build/rx_r13_living_silicon build/rx_r14_recovery_silicon \
-    build/rx_test build/rx_r7_test build/rx_r8_test build/rx_r9_test \
-    build/rx_r10_test build/rx_r11_test build/rx_r12_test build/rx_r12_silicon_test \
-    build/rx_r15_parity_host build/rx_r15_g7_host build/rx_r15_parity_silicon
-
 # 2. Gate 1 & 2: Loop Inventory
 echo "[*] Running R16-G1 / R16-G2: Loop Inventory..."
-build/r16_loop_inventory --map spec/r16-orchestrator-retirement-map.md --json "$RAW_DIR/inventory.json" > "$RAW_DIR/r16_inventory.log" 2>&1
+make r16-inventory > "$RAW_DIR/r16_inventory.log" 2>&1
+cp build/r16-inventory.json "$RAW_DIR/inventory.json"
 cp "$RAW_DIR/inventory.json" evidence/R16/inventory.json
-sh tests/r16_inventory/run.sh build/r16_loop_inventory >> "$RAW_DIR/r16_inventory.log" 2>&1
+make test-r16-inventory >> "$RAW_DIR/r16_inventory.log" 2>&1
 G1_STATUS="PASS"
 G2_STATUS="PASS"
 UNCLASS=$(jq -r '.unclassified // 1' "$RAW_DIR/inventory.json")
@@ -87,34 +79,15 @@ echo "    -> R16-G1: PASS, R16-G2: PASS (0 unclassified)"
 
 # 3. Gate 3: Authoritative path without legacy orchestrators (host + silicon)
 echo "[*] Running R16-G3: Authpath host & silicon..."
-sh tools/r16_authpath.sh host build/rx_r13_living_host build/rx_r14_recovery_host \
-    "$RAW_DIR/authpath-host" src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-    src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/runtime/rx_aien.c src/runtime/rx_omega.c \
-    src/runtime/rx_generation.c src/runtime/rx_living.c src/sha256.c src/omega_evidence.c src/omega_canonical.c \
-    src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c \
-    src/omega_realize.c src/omega_realize_synth.c src/omega_program.c src/omega_machine.c src/omega_exec.c \
-    src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c tests/runtime/rx_r13_living.c \
-    build/aienos-authority/d39dd5b/native/capability/out/libaienos_capability.a > "$RAW_DIR/r16_authpath_host.log" 2>&1
-
-sh tools/r16_authpath.sh silicon build/rx_r13_living_silicon build/rx_r14_recovery_silicon \
-    "$RAW_DIR/authpath-silicon" src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-    src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/runtime/rx_aien.c src/runtime/rx_omega.c \
-    src/runtime/rx_generation.c src/runtime/rx_living.c src/sha256.c src/omega_evidence.c src/omega_canonical.c \
-    src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c \
-    src/omega_realize.c src/omega_realize_synth.c src/omega_program.c src/omega_machine.c src/omega_exec.c \
-    src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c tests/runtime/rx_r13_living.c \
-    src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
-    src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
-    src/omega_blackwell_matmul.c "$PHYSICS_DIR/m16/m16_native.c" \
-    "$PHYSICS_DIR/nvrm/nvrm.c" build/aienos-authority/d39dd5b/native/capability/out/libaienos_capability.a > "$RAW_DIR/r16_authpath_silicon.log" 2>&1
-
+make test-r16-authpath > "$RAW_DIR/r16_authpath_host.log" 2>&1
+make test-r16-authpath-silicon > "$RAW_DIR/r16_authpath_silicon.log" 2>&1
 grep -q "R16 gate: R16_G3_AUTHPATH=PASS" "$RAW_DIR/r16_authpath_silicon.log" || { echo "ERROR: G3 failed"; exit 1; }
 G3_STATUS="PASS"
 echo "    -> R16-G3: PASS"
 
 # 4. Gate 4: Negative tests and load-bearing mutants
 echo "[*] Running R16-G4: Negative tests & 36 mutants..."
-./build/rx_r16_negative > "$RAW_DIR/r16_negative.log" 2>&1
+make test-r16-negative > "$RAW_DIR/r16_negative.log" 2>&1
 grep -q "R16 gate: R16_G4_LEGACY_REFUSED=PASS" "$RAW_DIR/r16_negative.log" || { echo "ERROR: G4 negative failed"; exit 1; }
 
 make test-r16-negative-mutants > "$RAW_DIR/r16_negative_mutants.log" 2>&1
@@ -124,7 +97,7 @@ echo "    -> R16-G4: PASS (36/36 mutants killed)"
 
 # 5. Gate 5: Surface
 echo "[*] Running R16-G5: Surface check..."
-sh tests/r16_surface/run.sh ./build/omegatool > "$RAW_DIR/r16_surface.log" 2>&1
+make test-r16-surface > "$RAW_DIR/r16_surface.log" 2>&1
 grep -q "R16 gate: R16_G5_SURFACE=PASS" "$RAW_DIR/r16_surface.log" || { echo "ERROR: G5 surface failed"; exit 1; }
 G5_STATUS="PASS"
 echo "    -> R16-G5: PASS"
@@ -133,52 +106,52 @@ echo "    -> R16-G5: PASS"
 echo "[*] Running R16-G7: Complete R1-R15 ladder on candidate..."
 
 echo "    Running R1-R6 (test-r3)..."
-./build/rx_test > "$RAW_DIR/r1_r6_heartbeat.log" 2>&1
+make test-r3 > "$RAW_DIR/r1_r6_heartbeat.log" 2>&1
 
 echo "    Running R7 (test-r7)..."
-./build/rx_r7_test > "$RAW_DIR/r7_native.log" 2>&1
+make test-r7 > "$RAW_DIR/r7_native.log" 2>&1
 
 echo "    Running R8 (test-r8)..."
-./build/rx_r8_test > "$RAW_DIR/r8_aegis.log" 2>&1
+make test-r8 > "$RAW_DIR/r8_aegis.log" 2>&1
 
 echo "    Running R9 (test-r9)..."
-./build/rx_r9_test > "$RAW_DIR/r9_barrier.log" 2>&1
+make test-r9 > "$RAW_DIR/r9_barrier.log" 2>&1
 
 echo "    Running R10 (test-r10)..."
-./build/rx_r10_test > "$RAW_DIR/r10_omega.log" 2>&1
+make test-r10 > "$RAW_DIR/r10_omega.log" 2>&1
 
 echo "    Running R11 (test-r11)..."
-./build/rx_r11_test > "$RAW_DIR/r11_aien.log" 2>&1
+make test-r11 > "$RAW_DIR/r11_aien.log" 2>&1
 
 echo "    Running R12 host (test-r12)..."
-./build/rx_r12_test > "$RAW_DIR/r12_host.log" 2>&1
+make test-r12 > "$RAW_DIR/r12_host.log" 2>&1
 
 echo "    Running R12 silicon (test-r12-silicon)..."
-./build/rx_r12_silicon_test > "$RAW_DIR/r12_silicon.log" 2>&1
+make test-r12-silicon > "$RAW_DIR/r12_silicon.log" 2>&1
 
 echo "    Running R13 host (test-r13-host)..."
-./build/rx_r13_living_host > "$RAW_DIR/r13_host.log" 2>&1
+make test-r13-host > "$RAW_DIR/r13_host.log" 2>&1
 
 echo "    Running R13 silicon (test-r13-silicon)..."
-./build/rx_r13_living_silicon > "$RAW_DIR/r13_silicon.log" 2>&1
+make test-r13-silicon > "$RAW_DIR/r13_silicon.log" 2>&1
 
 echo "    Running R14 host (test-r14-host)..."
-./build/rx_r14_recovery_host > "$RAW_DIR/r14_host.log" 2>&1
+make test-r14-host > "$RAW_DIR/r14_host.log" 2>&1
 
 echo "    Running R14 silicon (test-r14-silicon)..."
-./build/rx_r14_recovery_silicon > "$RAW_DIR/r14_silicon.log" 2>&1
+make test-r14-silicon > "$RAW_DIR/r14_silicon.log" 2>&1
 
 echo "    Running R15 parity host (test-r15-parity-host)..."
-./build/rx_r15_parity_host > "$RAW_DIR/r15_parity_host.log" 2>&1
+make test-r15-parity-host > "$RAW_DIR/r15_parity_host.log" 2>&1
 
 echo "    Running R15 G7 host (test-r15-g7-host)..."
-./build/rx_r15_g7_host > "$RAW_DIR/r15_g7_host.log" 2>&1
+make test-r15-g7-host > "$RAW_DIR/r15_g7_host.log" 2>&1
 
 echo "    Running R15 parity silicon (test-r15-parity-silicon)..."
-./build/rx_r15_parity_silicon > "$RAW_DIR/r15_parity_silicon.log" 2>&1
+make test-r15-parity-silicon > "$RAW_DIR/r15_parity_silicon.log" 2>&1
 
 echo "    Running R15 receipt verification (test-r15-receipt)..."
-tests/r15_receipt_test.sh > "$RAW_DIR/r15_receipt.log" 2>&1
+make test-r15-receipt > "$RAW_DIR/r15_receipt.log" 2>&1
 
 # Verify ladder results
 grep -q "R4_CAUSAL_TRACE: PASS" "$RAW_DIR/r1_r6_heartbeat.log" || { echo "ERROR: R1-R6 failed"; exit 1; }
