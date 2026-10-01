@@ -3,6 +3,7 @@
  * (E1 gap table row 10, receipt 6ca4ee4e, omega d25d7ad).
  *
  *   --chip [--repeats N] [--sizes a,b,c] [--ops SIGMOID,SQRT]
+ * Exit: 0 = clean (no unwritten output), 1 = hits or device error, 2 = refused / NOT_RUN.
  *
  * Reuses omega_ds_gb10_run (src/omega_numeric_divsqrt_gb10.c) unchanged: kernels
  * and dispatch are not touched. That function allocates its own buffers, fills

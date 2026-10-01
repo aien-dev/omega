@@ -2,6 +2,7 @@
 # C3b: build and run the GB10 unwritten-output trap. Forge queue only; the chip
 # run is never killed and never timed out. No Python.
 #   tools/run_unwritten_trap.sh [harness args]   (default: --chip --repeats 3000)
+#   Exit: 0 = clean (no unwritten output), 1 = hits or device error, 2 = refused / NOT_RUN.
 set -u
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 PHYSICS=${PHYSICS:-$HOME/workspace/physics}
