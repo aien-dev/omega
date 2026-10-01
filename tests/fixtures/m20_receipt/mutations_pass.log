@@ -1,0 +1,4 @@
+# fixture: shape of `make test-tensor-mutations` output, not a real run
+MUTATION RELEASE_BUMP: caught (4 failing checks)
+MUTATION STORAGE_GEN_CHECK: caught (9 failing checks)
+tensor mutation sweep: PASS (5 of 5 mutations caught)

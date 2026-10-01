@@ -12,6 +12,8 @@
 #                        OMEGA_TENSOR_TEST_HOOKS.
 # test-tensor-mutations  applies each MUT: source mutation in a scratch copy
 #                        and proves test-tensor's binary then fails
+# test-m20-receipt       tests/test_m20_receipt.sh: content-addressed M20
+#                        receipt writer tools/m20_receipt.sh (fixtures only)
 # test-tensor-e1-reduce  alias of test-tensor (the reduction seam always
 #                        calls omega_reduce_cpu, E1 WP-D, omega #134)
 ifndef TENSOR_MK
@@ -61,4 +63,8 @@ test-tensor-mutations:
 
 # Kept as an alias: the seam now always calls omega_reduce_cpu (E1 WP-D, #134 merged).
 test-tensor-e1-reduce: test-tensor
+
+.PHONY: test-m20-receipt
+test-m20-receipt:
+	tests/test_m20_receipt.sh
 endif
