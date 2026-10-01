@@ -1,7 +1,7 @@
 /*
  * OMEGA-NUMERIC-0 GB10 executor. Every request passes
  * omega_numeric_submit_check before any device is opened: unknown ops,
- * ops without a GB10 encoding (DIV, SQRT, EXP, LOG and the refused variants
+ * ops without a GB10 encoding (EXP, LOG and the refused variants
  * such as LDS.U8 or SHFL_UP), operand shapes the kernel cannot carry, and a
  * patch that fails the structural check (shared-memory order and bounds,
  * barriers, reduction order) are refused here with a message on stderr. The
@@ -9,6 +9,7 @@
  * omega_numeric_patch_words; there is no fallback instruction.
  */
 #include "omega_numeric.h"
+#include "omega_numeric_divsqrt_gb10.h"
 #include "omega_blackwell_codegen.h"
 #include "omega_blackwell_qmd.h"
 #include "omega_blackwell_submit.h"
@@ -38,6 +39,29 @@ int omega_gb10_execute_simt_op(const char *op_name,
         return check;
     }
     const OmegaNumericOpInfo *info = omega_numeric_op_find(op_name);
+
+    if (omega_numeric_op_whole_kernel(info->op)) {
+        /* DIV/SQRT: the whole-program kernels of src/omega_numeric_divsqrt_gb10.c
+         * (E1 row 7). omega_ds_gb10_run repeats the argument check and checks
+         * the kernel image, its nvdisasm-verified digest and the QMD before it
+         * opens the device. Inputs and outputs travel as bit patterns. */
+        OmegaDsOp dop = info->op == OMEGA_NOP_DIV ? OMEGA_DS_DIV : OMEGA_DS_SQRT;
+        uint32_t *ua = malloc(count * sizeof(uint32_t));
+        uint32_t *ub = malloc(count * sizeof(uint32_t));
+        uint32_t *uo = malloc(count * sizeof(uint32_t));
+        int drc = OMEGA_NUMERIC_ERR_DEVICE;
+        if (ua && ub && uo) {
+            memcpy(ua, in_a, count * sizeof(float));
+            if (in_b) memcpy(ub, in_b, count * sizeof(float));
+            else memset(ub, 0, count * sizeof(uint32_t));
+            drc = omega_ds_gb10_run(dop, ua, ub, uo, count);
+            if (drc == OMEGA_NUMERIC_OK) memcpy(out_res, uo, count * sizeof(float));
+        }
+        free(ua);
+        free(ub);
+        free(uo);
+        return drc;
+    }
 
     M16NativeContext ctx;
     if (m16_native_open(&ctx) != 0) return OMEGA_NUMERIC_ERR_DEVICE;

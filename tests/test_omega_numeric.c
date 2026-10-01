@@ -20,6 +20,7 @@
  */
 #include "omega_numeric.h"
 #include "omega_numeric_provenance.h"
+#include "omega_numeric_divsqrt_gb10.h"
 #include "omega_blackwell_codegen.h"
 #include "omega_blackwell_qmd.h"
 
@@ -865,13 +866,33 @@ int main(int argc, char **argv) {
                info->op == OMEGA_NOP_FFMA ? (size_t)FFMA_C_COUNT : (size_t)1);
         if (!info->gb10_encoded) continue;
         encoded++;
+        if (omega_numeric_op_whole_kernel(info->op)) {
+            /* DIV/SQRT: whole-program kernel, structural check and the
+             * nvdisasm-verified digest (src/omega_numeric_divsqrt_gb10.c). The
+             * vecadd patch path must refuse it. */
+            static uint8_t dcode[OMEGA_DS_MAX_CODE_BYTES];
+            size_t dlen = 0;
+            char derr[256];
+            OmegaDsOp dop = info->op == OMEGA_NOP_DIV ? OMEGA_DS_DIV : OMEGA_DS_SQRT;
+            OmegaNumericPatchInsn dp[OMEGA_NUMERIC_PATCH_MAX];
+            uint8_t pcode[0x200];
+            if (omega_ds_build_kernel(dop, dcode, sizeof(dcode), &dlen) != 0 ||
+                omega_ds_check_kernel(dop, dcode, dlen, OMEGA_DS_GPR_COUNT, derr, sizeof(derr)) != 0 ||
+                omega_ds_check_digest(dop, dcode, dlen, derr, sizeof(derr)) != 0 ||
+                omega_numeric_patch_words(info->op, dp) != OMEGA_NUMERIC_ERR_NOT_ENCODED ||
+                omega_numeric_build_kernel(info->op, pcode, sizeof(pcode), &dlen) == 0) {
+                printf("    %s whole-program kernel refused: %s\n", info->name, derr);
+                build_ok = 0;
+            }
+            continue;
+        }
         uint8_t code[0x200];
         size_t len = 0;
         if (omega_numeric_build_kernel(info->op, code, sizeof(code), &len) != 0) build_ok = 0;
     }
     printf("[*] Provenance entries: %zu, encoded ops: %zu\n", omega_numeric_get_opcode_count(), encoded);
     report("PROVENANCE_MATCHES_EXECUTOR",
-           fixtures_rc == 0 && prov_problems == 0 && build_ok && encoded == 38 &&
+           fixtures_rc == 0 && prov_problems == 0 && build_ok && encoded == 40 &&
            omega_numeric_get_opcode_count() == 52);
 
     /* Refusal before submission: never a silent wrong instruction. */
@@ -895,8 +916,9 @@ int main(int argc, char **argv) {
             refuse_ok = 0;
         printf("    refused %-14s rc=%d: %s\n", nname, rc, err);
     }
-    /* only DIV SQRT EXP LOG remain refused (the 23 E1 scalar ops are encoded, E1 WP-C) */
-    if (refused_ops != omega_numeric_op_count() - 38) refuse_ok = 0;
+    /* only EXP LOG remain refused (the 23 E1 scalar ops are encoded, E1 WP-C;
+     * DIV SQRT run the E1 row 7 whole-program kernels) */
+    if (refused_ops != omega_numeric_op_count() - 40) refuse_ok = 0;
     {
         char err[256];
         fill_c(g_c, 0x3f800000u);
@@ -970,6 +992,7 @@ int main(int argc, char **argv) {
         for (size_t i = 0; i < omega_numeric_op_count(); i++) {
             const OmegaNumericOpInfo *info = omega_numeric_op_at(i);
             if (!info->gb10_encoded) continue;
+            if (omega_numeric_op_whole_kernel(info->op)) continue; /* no patch: checked in PROVENANCE_MATCHES_EXECUTOR */
             OmegaNumericPatchInsn p[OMEGA_NUMERIC_PATCH_MAX];
             int n = omega_numeric_patch_words(info->op, p);
             char err[256];

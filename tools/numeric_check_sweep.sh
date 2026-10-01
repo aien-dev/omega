@@ -14,7 +14,7 @@ HERE=$(cd -P "$(dirname "$0")/.." && pwd)
 SRC=$HERE/src/omega_numeric.c
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-OTHER="tests/test_omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c
+OTHER="tests/test_omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c src/omega_blackwell_encoder.c
        src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c"
 names=$(grep -o '/\* CHECK:[a-z0-9_]* \*/' "$SRC" | sed 's|/\* CHECK:\([a-z0-9_]*\) \*/|\1|')
 total=0 killed=0 survived=0 broken=0

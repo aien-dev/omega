@@ -11,7 +11,7 @@ set -u
 HERE=$(cd -P "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-SRCS="tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c
+SRCS="tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c
       src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c
       src/omega_blackwell_qmd.c src/sha256.c"
 
