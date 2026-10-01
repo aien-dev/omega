@@ -97,6 +97,11 @@ uint32_t sr_skill_capabilities(const CqCatalog *graph, uint32_t skill_id, uint32
 int sr_route(const SrRouter *r, const SrRequirement *req, const CqHeld *held, uint64_t now_us,
              SrRoute *out);
 
+/* COMPOSITION-2: ranked admissible alternatives (dominated included), at
+ * most `max`; out[0] is sr_route's choice. Returns the count or an SR_E_*. */
+int sr_route_alternatives(const SrRouter *r, const SrRequirement *req, const CqHeld *held,
+                          uint64_t now_us, SrRoute *out, uint32_t max);
+
 /* Route, then bind action-graph node `node` (AG_SKILL/AG_RETRY) to the local
  * winner. SR_E_REMOTE leaves the node unbound and the route filled. */
 int sr_bind_node(const SrRouter *r, AgGraph *g, uint32_t node, const SrRequirement *req,

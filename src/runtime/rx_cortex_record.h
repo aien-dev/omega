@@ -54,4 +54,16 @@ uint64_t rx_cortex_record_of(RxWorld *w, uint64_t crumb);
 /* Newest committed result for an object slot: Cortex id (0 = none). */
 uint64_t rx_cortex_recall_result(CxStore *s, uint32_t obj_slot, CxWorldRecord *out);
 
+/* COMPOSITION-2: append a composition record (candidate, evidence,
+ * admission) through the attached single writer, under the world mutex.
+ * RX_ERR_NOT_FOUND when no store is attached; RX_ERR_FULL when Cortex
+ * refused it (counted in errors). */
+int rx_cortex_append(RxWorld *w, const CxHeader *h, const uint64_t *payload, uint32_t n,
+                     uint64_t *out_id);
+/* COMPOSITION-2: cx_promote through the attached writer (RX_ERR_ARG when
+ * Cortex refuses the pair). The only way a candidate becomes fact. */
+int rx_cortex_promote(RxWorld *w, uint64_t candidate, uint64_t evidence, uint64_t *out_id);
+/* Logical time the next attached append gets (0 = not attached). */
+uint64_t rx_cortex_next_t(RxWorld *w);
+
 #endif /* RX_CORTEX_RECORD_H */

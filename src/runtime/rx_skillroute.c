@@ -111,3 +111,51 @@ int sr_bind_node(const SrRouter *r, AgGraph *g, uint32_t node, const SrRequireme
     if (cq_bind_skill_node(g, node, &out->chosen) != CQ_OK) return out->verdict = SR_E_BIND;
     return SR_OK;
 }
+
+/* COMPOSITION-2: up to `max` admissible local-or-remote alternatives, ranked
+ * like sr_route (dominated providers included, so a costlier fallback is
+ * still offered). out[0] is what sr_route would choose. Returns the number
+ * filled (>= 1), or the sr_route error. Discovers only; mints nothing. */
+int sr_route_alternatives(const SrRouter *r, const SrRequirement *req, const CqHeld *held,
+                          uint64_t now_us, SrRoute *out, uint32_t max) {
+    if (!out || max == 0) return SR_E_ARG;
+    SrRoute *o = &out[0];
+    memset(o, 0, sizeof *o);
+    if (!r || !r->graph || !req) return o->verdict = SR_E_ARG;
+    CqPlan plan;
+    o->query_verdict = cq_compile(r->graph, &req->need, &plan);
+    memcpy(o->plan_digest, plan.digest, sizeof o->plan_digest);
+    if (o->query_verdict == CQ_E_NO_SOURCE) return o->verdict = SR_E_NO_CANDIDATE;
+    if (o->query_verdict != CQ_OK) return o->verdict = SR_E_QUERY;
+    CqTradeoffs t = req->t;
+    t.k = max < CQ_MAX_K ? max : CQ_MAX_K;
+    t.include_dominated = 1;
+    AdmitCtx ctx = { r, req, o };
+    CqResult res;
+    o->query_verdict = cq_query_admit(r->graph, &plan, &req->need, &t, held, now_us, admit, &ctx,
+                                      &res, &o->stats);
+    if (o->query_verdict != CQ_OK) return o->verdict = SR_E_QUERY;
+    o->n_admissible = res.n_feasible;
+    if (res.n == 0) return o->verdict = SR_E_NO_CANDIDATE;
+    uint32_t n = res.n < t.k ? res.n : t.k;
+    for (uint32_t i = 0; i < n; i++) {
+        SrRoute *x = &out[i];
+        if (i) {
+            memset(x, 0, sizeof *x);
+            x->query_verdict = o->query_verdict;
+            memcpy(x->plan_digest, o->plan_digest, sizeof x->plan_digest);
+            x->n_admissible = o->n_admissible;
+        }
+        x->chosen = res.cand[i];
+        x->remote = !res.cand[i].local;
+        CqKey k = cq_key_of_candidate(&res.cand[i]);
+        const CqEntry *e = cq_lookup(r->graph, &k);
+        if (e) {
+            x->skill_version = e->skill_version;
+            memcpy(x->skill_digest, e->skill_digest, 32);
+        }
+        x->target_known = cq_machine_identity(r->graph, res.cand[i].machine_id, &x->target) == CQ_OK;
+        x->verdict = x->remote ? SR_E_REMOTE : SR_OK;
+    }
+    return (int)n;
+}

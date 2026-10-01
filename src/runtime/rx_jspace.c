@@ -1721,3 +1721,20 @@ out:
     if (rc) js_space_destroy(s);
     return rc;
 }
+
+int js_branch_info(JsSpace *s, JsBranchRef ref, JsBranchInfo *out) {
+    if (!out) return JS_ERR_ARG;
+    LOCK(s);
+    JsBranch *b = branch_ref_at(s, ref);
+    if (b) {
+        memset(out, 0, sizeof *out);
+        out->owner = b->owner;
+        out->staged = b->staged;
+        out->locality = b->home.locality;
+        out->parent = b->parent_branch;
+        JsBranch *p = b->parent_branch != UINT32_MAX ? branch_at(s, b->parent_branch) : NULL;
+        out->parent_gen = p ? p->gen : 0;
+    }
+    UNLOCK(s);
+    return b ? JS_OK : JS_ERR_STALE;
+}

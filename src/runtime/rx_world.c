@@ -974,6 +974,86 @@ static int stage_mutations(RxWorld *w, const RxMutation *m, uint32_t n,
     return RX_OK;
 }
 
+/* ---- COMPOSITION-2 commit binder ---------------------------------------- */
+
+int rx_world_set_binder(RxWorld *w, RxBindCheckFn check, RxBindFn bind, RxBindAbortFn abort_fn,
+                        void *ctx) {
+    if (!w || !check || !bind) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    int rc = RX_OK;
+    if (w->bind_check) rc = RX_ERR_EXISTS;
+    else {
+        w->bind_check = check;
+        w->bind_fn = bind;
+        w->bind_abort = abort_fn;
+        w->bind_ctx = ctx;
+        memset(w->bind_mask, 0, sizeof w->bind_mask);
+    }
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_bind_field(RxWorld *w, RxObjRef obj, uint32_t field) {
+    if (!w || field >= RX_MAX_FIELDS) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    int rc = !w->bind_check ? RX_ERR_NOT_FOUND : !ref_live(w, obj) ? RX_ERR_STALE_GEN : RX_OK;
+    if (rc == RX_OK) w->bind_mask[obj.id] |= (uint8_t)(1u << field);
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_clear_binder(RxWorld *w, void *ctx) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    int rc = RX_ERR_NOT_FOUND;
+    if (w->bind_check && w->bind_ctx == ctx) {
+        w->bind_check = NULL;
+        w->bind_fn = NULL;
+        w->bind_abort = NULL;
+        w->bind_ctx = NULL;
+        memset(w->bind_mask, 0, sizeof w->bind_mask);
+        rc = RX_OK;
+    }
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+/* Caller holds mu; pw[] is staged and passed every other check. RX_OK when
+ * nothing is bound or every bound value was checked and bound; otherwise
+ * RX_ERR_BINDING and abort() has run for every proposed bound value. */
+static int bind_writes(RxWorld *w, const PendingWrite *pw, uint32_t n_pw, uint32_t subject) {
+    if (!w->bind_check) return RX_OK;
+    uint32_t n_bound = 0;
+    int rc = RX_OK;
+    for (int phase = 0; phase < 2 && rc == RX_OK; phase++)
+        for (uint32_t j = 0; j < n_pw && rc == RX_OK; j++) {
+            const RxObject *o = &w->objects[pw[j].obj.id];
+            uint64_t m = pw[j].changed & w->bind_mask[pw[j].obj.id];
+            for (uint32_t f = 0; f < RX_MAX_FIELDS && rc == RX_OK; f++) {
+                if (!(m & RX_FIELD(f))) continue;
+                rc = phase == 0 ? w->bind_check(w->bind_ctx, pw[j].obj, f, o->field[f],
+                                                pw[j].value[f], subject)
+                                : w->bind_fn(w->bind_ctx, pw[j].obj, f, o->field[f],
+                                             pw[j].value[f], subject);
+                if (rc == RX_OK && phase == 1) n_bound++;
+            }
+        }
+    if (rc == RX_OK) return RX_OK;
+    /* Refused: hand every proposed bound value back, saying which were bound
+     * (bound values precede the refused one in the same iteration order). */
+    uint32_t seen = 0;
+    for (uint32_t j = 0; j < n_pw; j++) {
+        uint64_t m = pw[j].changed & w->bind_mask[pw[j].obj.id];
+        for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) {
+            if (!(m & RX_FIELD(f))) continue;
+            if (w->bind_abort)
+                w->bind_abort(w->bind_ctx, pw[j].obj, f, pw[j].value[f], subject, seen < n_bound);
+            seen++;
+        }
+    }
+    return RX_ERR_BINDING;
+}
+
 static void commit_writes(RxWorld *w, PendingWrite *pw, uint32_t n_pw, RxCrumb *k) {
     k->n_outputs = 0;
     for (uint32_t j = 0; j < n_pw; j++) {
@@ -1410,6 +1490,20 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         end_activation(w, rid);
         return;
     }
+    /* 3b. COMPOSITION-2: every changed bound field accepted and bound by its
+     * store (rx_world_set_binder). Refusal leaves nothing visible. */
+    src = bind_writes(w, pw, n_pw, d->subject);
+    if (src != RX_OK) {
+        set_state(w, r, RX_REJECTED);
+        k.kind = RX_CRUMB_REJECTED;
+        k.reason = src;
+        k.t_end_ns = now_ns();
+        crumb_append(w, &k);
+        w->stats.rejected++;
+        note_conflict(w, r);
+        end_activation(w, rid);
+        return;
+    }
     /* 4. Atomic publish. */
     commit_writes(w, pw, n_pw, &k);
     k.kind = k.n_outputs ? RX_CRUMB_COMMIT : RX_CRUMB_NOOP;
@@ -1671,6 +1765,7 @@ int rx_world_create(RxWorld *w, uint32_t type, RxPersist persist, uint64_t resou
         o->locality = 0;
         o->coherency = 0;
         o->cap = (RxCapRef){ 0, 0 };
+        w->bind_mask[i] = 0;
         o->version = 1;
         for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) {
             o->field[f] = init ? init[f] : 0;
@@ -1844,6 +1939,8 @@ int64_t rx_world_publish_external(RxWorld *w, RxCapRef cap, const RxMutation *mu
     uint32_t n_pw = 0;
     int rc = stage_mutations(w, muts, n, NULL, 0, pw, &n_pw);
     if (rc != RX_OK) { pthread_mutex_unlock(&w->mu); return rc; }
+    rc = bind_writes(w, pw, n_pw, w->external_subject);
+    if (rc != RX_OK) { pthread_mutex_unlock(&w->mu); return rc; }
     RxCrumb k;
     memset(&k, 0, sizeof(k));
     w->stats.externals++;
@@ -2014,6 +2111,13 @@ int rx_resident_accept(RxWorld *w) {
     PendingWrite pw[RX_MAX_WRITES];
     uint32_t n_pw = 0;
     int src = stage_mutations(w, &mut, 1, desc->writes, desc->n_writes, pw, &n_pw);
+    if (src != RX_OK) {
+        rx_coherent_project(w, id);
+        seat_fail(w, (uint32_t)rid, &k, RX_CRUMB_REJECTED, src);
+        pthread_mutex_unlock(&w->mu);
+        return src;
+    }
+    src = bind_writes(w, pw, n_pw, desc->subject);
     if (src != RX_OK) {
         rx_coherent_project(w, id);
         seat_fail(w, (uint32_t)rid, &k, RX_CRUMB_REJECTED, src);
