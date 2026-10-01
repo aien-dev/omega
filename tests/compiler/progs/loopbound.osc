@@ -1,0 +1,34 @@
+// entry: count_to count_for else_returns
+// exactly N while iterations run; iteration N+1 traps LOOP_BOUND.
+// expect-run: count_to 10 -> 10
+// expect-run: count_to 11 -> trap=LOOP_BOUND
+// expect-run: count_to 0 -> 0
+// expect-run: count_for 5 -> 9
+// expect-run: else_returns 1 -> 12
+// expect-run: else_returns 0 -> 0
+fn count_to(n: u32) -> u32 {
+    let mut i: u32 = 0;
+    while i < n bound 10 {
+        i = i + 1;
+    }
+    return i;
+}
+
+fn count_for(k: i64) -> i64 {
+    let mut s: i64 = 0;
+    for i in -3 .. 3 {
+        s = s + i + k / 2;
+    }
+    return s;
+}
+
+fn else_returns(c: u8) -> u8 {
+    let a: own [u8; 3] = alloc(4);
+    let mut x: u8 = 0;
+    if c > 0 {
+        x = 1;
+    } else {
+        return 0;
+    }
+    return a[0] * 3 * x;
+}

@@ -1,0 +1,11 @@
+// entry: t_u8 t_u16 t_u32 t_u64 t_i8 t_i16 t_i32 t_i64 t_bool
+// one function per scalar type: unsigned wrap, signed checked.
+fn t_u8(a: u8, b: u8) -> u8 { return a * 3 + b - 7; }
+fn t_u16(a: u16, b: u16) -> u16 { return (a ^ b) * a + 65535; }
+fn t_u32(a: u32, b: u32) -> u32 { return a - b * 2 + (a | 1); }
+fn t_u64(a: u64, b: u64) -> u64 { return a * b + (a >> 3) - (b & 0xffff); }
+fn t_i8(a: i8, b: i8) -> i8 { return a + b; }
+fn t_i16(a: i16, b: i16) -> i16 { return a * b - 100; }
+fn t_i32(a: i32, b: i32) -> i32 { return a - b; }
+fn t_i64(a: i64, b: i64) -> i64 { return a * 2 + b / 3; }
+fn t_bool(a: bool, b: bool, c: bool) -> bool { return (a && !b) || (c == a) || (b != c && !a); }

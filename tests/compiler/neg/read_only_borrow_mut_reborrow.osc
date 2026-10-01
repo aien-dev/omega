@@ -1,0 +1,7 @@
+// expect: READ_ONLY_BORROW object=r line=6
+// transition: borrow_mut through shared borrow
+fn f() {
+    let a: own [i64; 4] = alloc(1);
+    let r: &[i64; 4] = &a;
+    let w: &mut [i64; 4] = &mut r;
+}

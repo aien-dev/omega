@@ -1,0 +1,7 @@
+// expect: MUTABLE_ALIAS object=a line=6
+// transition: borrow_shared while borrow_mut live
+fn g(x: &mut [i32; 3], y: &[i32; 3]) { x[0] = y[1]; }
+fn f() {
+    let a: own [i32; 3] = alloc(0);
+    g(&mut a, &a);
+}

@@ -1,0 +1,6 @@
+// expect: OVERFLOW_UNSAFE object=x line=4
+// literal does not fit its type.
+fn f() -> u8 {
+    let x: u8 = 256;
+    return x;
+}

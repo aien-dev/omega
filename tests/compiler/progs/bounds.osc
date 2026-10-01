@@ -1,0 +1,13 @@
+// entry: get set_get
+// dynamic indexes: out-of-range traps BOUNDS (negative signed indexes too).
+fn get(i: i8) -> i16 {
+    let a: own [i16; 10] = alloc(5);
+    for k in 0 .. 10 { a[k] = (k as i16) * 3; }
+    return a[i];
+}
+
+fn set_get(i: u16, j: i32, v: i16) -> i16 {
+    let a: own [i16; 12] = alloc(-1);
+    a[i] = v;
+    return a[j];
+}

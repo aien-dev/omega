@@ -1,0 +1,11 @@
+// expect: BORROW_OUTLIVES_OWNER object=b line=8
+// transition: inner owner
+fn f() -> i64 {
+    let a: own [i64; 4] = alloc(1);
+    let mut r: &[i64; 4] = &a;
+    {
+        let b: own [i64; 4] = alloc(2);
+        r = &b;
+    }
+    return r[0];
+}

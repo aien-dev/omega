@@ -1,0 +1,9 @@
+// expect: MUTABLE_ALIAS object=a line=6
+// transition: read while borrow_mut live
+fn f() -> i32 {
+    let a: own [i32; 3] = alloc(0);
+    let w: &mut [i32; 3] = &mut a;
+    let v: i32 = a[0];
+    w[1] = v;
+    return v;
+}

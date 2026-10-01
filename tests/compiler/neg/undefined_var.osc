@@ -1,0 +1,5 @@
+// expect: UNDEFINED_NAME object=y line=4
+// use of a name that was never defined.
+fn f(x: i32) -> i32 {
+    return x + y;
+}

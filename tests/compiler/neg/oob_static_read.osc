@@ -1,0 +1,6 @@
+// expect: STATIC_OUT_OF_BOUNDS object=a line=5
+// constant index outside 0..N-1 (read).
+fn f() -> i64 {
+    let a: own [i64; 4] = alloc(1);
+    return a[4];
+}

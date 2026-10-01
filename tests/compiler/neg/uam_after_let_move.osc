@@ -1,0 +1,7 @@
+// expect: USE_AFTER_MOVE object=a line=6
+// transition: use after move
+fn f() -> i64 {
+    let a: own [i64; 4] = alloc(1);
+    let b: own [i64; 4] = a;
+    return a[0] + b[0];
+}

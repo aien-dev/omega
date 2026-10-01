@@ -1,0 +1,7 @@
+// expect: IMMUTABLE_ASSIGN object=x line=5
+// assignment to a binding declared without `mut`.
+fn f() -> i32 {
+    let x: i32 = 1;
+    x = 2;
+    return x;
+}

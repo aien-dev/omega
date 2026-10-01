@@ -1,0 +1,94 @@
+// entry: oom
+// expect-run: oom 4 -> 14
+// expect-run: oom 5 -> trap=OOM
+// five call levels each holding 13 live owners: depth 5 needs 65 > 64 pool slots (OOM).
+fn level1(n: u8) -> u64 {
+    let a1: own [u64; 1] = alloc(1);
+    let a2: own [u64; 1] = alloc(2);
+    let a3: own [u64; 1] = alloc(3);
+    let a4: own [u64; 1] = alloc(4);
+    let a5: own [u64; 1] = alloc(5);
+    let a6: own [u64; 1] = alloc(6);
+    let a7: own [u64; 1] = alloc(7);
+    let a8: own [u64; 1] = alloc(8);
+    let a9: own [u64; 1] = alloc(9);
+    let a10: own [u64; 1] = alloc(10);
+    let a11: own [u64; 1] = alloc(11);
+    let a12: own [u64; 1] = alloc(12);
+    let a13: own [u64; 1] = alloc(13);
+    let mut s: u64 = a1[0] + a13[0];
+    return s;
+}
+fn level2(n: u8) -> u64 {
+    let a1: own [u64; 1] = alloc(1);
+    let a2: own [u64; 1] = alloc(2);
+    let a3: own [u64; 1] = alloc(3);
+    let a4: own [u64; 1] = alloc(4);
+    let a5: own [u64; 1] = alloc(5);
+    let a6: own [u64; 1] = alloc(6);
+    let a7: own [u64; 1] = alloc(7);
+    let a8: own [u64; 1] = alloc(8);
+    let a9: own [u64; 1] = alloc(9);
+    let a10: own [u64; 1] = alloc(10);
+    let a11: own [u64; 1] = alloc(11);
+    let a12: own [u64; 1] = alloc(12);
+    let a13: own [u64; 1] = alloc(13);
+    let mut s: u64 = a1[0] + a13[0];
+    if n > 1 { s = s + level1(n); }
+    return s;
+}
+fn level3(n: u8) -> u64 {
+    let a1: own [u64; 1] = alloc(1);
+    let a2: own [u64; 1] = alloc(2);
+    let a3: own [u64; 1] = alloc(3);
+    let a4: own [u64; 1] = alloc(4);
+    let a5: own [u64; 1] = alloc(5);
+    let a6: own [u64; 1] = alloc(6);
+    let a7: own [u64; 1] = alloc(7);
+    let a8: own [u64; 1] = alloc(8);
+    let a9: own [u64; 1] = alloc(9);
+    let a10: own [u64; 1] = alloc(10);
+    let a11: own [u64; 1] = alloc(11);
+    let a12: own [u64; 1] = alloc(12);
+    let a13: own [u64; 1] = alloc(13);
+    let mut s: u64 = a1[0] + a13[0];
+    if n > 2 { s = s + level2(n); }
+    return s;
+}
+fn level4(n: u8) -> u64 {
+    let a1: own [u64; 1] = alloc(1);
+    let a2: own [u64; 1] = alloc(2);
+    let a3: own [u64; 1] = alloc(3);
+    let a4: own [u64; 1] = alloc(4);
+    let a5: own [u64; 1] = alloc(5);
+    let a6: own [u64; 1] = alloc(6);
+    let a7: own [u64; 1] = alloc(7);
+    let a8: own [u64; 1] = alloc(8);
+    let a9: own [u64; 1] = alloc(9);
+    let a10: own [u64; 1] = alloc(10);
+    let a11: own [u64; 1] = alloc(11);
+    let a12: own [u64; 1] = alloc(12);
+    let a13: own [u64; 1] = alloc(13);
+    let mut s: u64 = a1[0] + a13[0];
+    if n > 3 { s = s + level3(n); }
+    return s;
+}
+fn level5(n: u8) -> u64 {
+    let a1: own [u64; 1] = alloc(1);
+    let a2: own [u64; 1] = alloc(2);
+    let a3: own [u64; 1] = alloc(3);
+    let a4: own [u64; 1] = alloc(4);
+    let a5: own [u64; 1] = alloc(5);
+    let a6: own [u64; 1] = alloc(6);
+    let a7: own [u64; 1] = alloc(7);
+    let a8: own [u64; 1] = alloc(8);
+    let a9: own [u64; 1] = alloc(9);
+    let a10: own [u64; 1] = alloc(10);
+    let a11: own [u64; 1] = alloc(11);
+    let a12: own [u64; 1] = alloc(12);
+    let a13: own [u64; 1] = alloc(13);
+    let mut s: u64 = a1[0] + a13[0];
+    if n > 4 { s = s + level4(n); }
+    return s;
+}
+fn oom(n: u8) -> u64 { return level5(n % 8); }

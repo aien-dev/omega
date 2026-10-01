@@ -1,0 +1,29 @@
+// entry: spread
+// min / max / argmax over a borrowed array of i16.
+fn amax(a: &[i16; 10]) -> i16 {
+    let mut m: i16 = a[0];
+    for i in 1 .. 10 { if a[i] > m { m = a[i]; } }
+    return m;
+}
+
+fn amin(a: &[i16; 10]) -> i16 {
+    let mut m: i16 = a[0];
+    for i in 1 .. 10 { if a[i] < m { m = a[i]; } }
+    return m;
+}
+
+fn argmax(a: &[i16; 10]) -> u8 {
+    let mut k: u8 = 0;
+    for i in 1 .. 10 { if a[i] > a[k] { k = i as u8; } }
+    return k;
+}
+
+fn spread(seed: u16, mul: u8) -> i32 {
+    let a: own [i16; 10] = alloc(0);
+    let mut x: u16 = seed;
+    for i in 0 .. 10 {
+        x = x * (mul as u16) + 12345;
+        a[i] = (x >> 1) as i16;
+    }
+    return (amax(&a) as i32) - (amin(&a) as i32) + (argmax(&a) as i32);
+}
