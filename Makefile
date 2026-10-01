@@ -1360,6 +1360,10 @@ RX_COMPOSE_LINK = $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ) $(RX_CAPQ_OBJ) $(R
 # and every other build compile them out.
 RX_COMPOSE_TEST = $(OUT_DIR)/rx_compose_test
 RX_COMPOSE_GATE = $(OUT_DIR)/rx_composition_gate
+# Attach hygiene (one per World, close waits for its own steps, inert
+# reactions + table bound); its ASan build is test-composition-attach-asan.
+RX_COMPOSE_ATTACH_TEST = $(OUT_DIR)/rx_compose_attach_test
+RX_COMPOSE_ATTACH_ASAN = $(OUT_DIR)/rx_compose_attach_test_asan
 
 $(RX_COMPOSE_TEST): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_test.c | $(OUT_DIR)
 	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_test.c \
@@ -1369,8 +1373,20 @@ $(RX_COMPOSE_GATE): $(RX_COMPOSE_DEPS) tests/runtime/rx_composition_gate.c | $(O
 	$(CC) $(CFLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_composition_gate.c \
 		$(RX_COMPOSE_LINK)
 
-test-composition: $(RX_COMPOSE_TEST)
+$(RX_COMPOSE_ATTACH_TEST): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_attach_test.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_COMPOSE_SRCS) \
+		tests/runtime/rx_compose_attach_test.c $(RX_COMPOSE_LINK)
+
+$(RX_COMPOSE_ATTACH_ASAN): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_attach_test.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -DRXC_TEST_HOOKS \
+		-pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_attach_test.c $(RX_COMPOSE_LINK)
+
+test-composition: $(RX_COMPOSE_TEST) $(RX_COMPOSE_ATTACH_TEST)
 	./$(RX_COMPOSE_TEST)
+	./$(RX_COMPOSE_ATTACH_TEST)
+
+test-composition-attach-asan: $(RX_COMPOSE_ATTACH_ASAN)
+	./$(RX_COMPOSE_ATTACH_ASAN)
 
 test-composition-gate: $(RX_COMPOSE_GATE)
 	./$(RX_COMPOSE_GATE) "$$(git rev-parse HEAD)" $(OUT_DIR)/composition_gate_receipt.json
@@ -1380,7 +1396,7 @@ composition-gate-bin: $(RX_COMPOSE_GATE)
 print-composition-gate-bin:
 	@echo $(RX_COMPOSE_GATE)
 
-.PHONY: test-composition test-composition-gate composition-gate-bin print-composition-gate-bin
+.PHONY: test-composition test-composition-gate test-composition-attach-asan composition-gate-bin print-composition-gate-bin
 
 # COMPOSITION-2 GPU tier: the same 14-step gate with both Skills executed on
 # the GB10 through the sovereign M16 native path (no CUDA); see
