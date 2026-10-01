@@ -8,7 +8,7 @@ set -u
 cd "$(dirname "$0")/.." || exit 2
 SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/tensor-mut.XXXXXX") || exit 2
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM
-DEPS="src/omega_numeric_reduce.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c \
+DEPS="src/omega_numeric_reduce.c src/omega_numeric_transc.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c \
 src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c"
 FLAGS="-std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -ffp-contract=off -O2 -DOMEGA_NUMERIC_CPU_ONLY -DOMEGA_TENSOR_TEST_HOOKS"
 
@@ -19,7 +19,9 @@ MUTATIONS='RELEASE_BUMP|omega_tensor.c|s/(\*gen)++/(void)0/
 STORAGE_GEN_CHECK|omega_tensor.c|s/ || s->gen != h.generation//
 BCAST_ZERO_STRIDE|omega_tensor.c|s/o.strides\[d\] = 0;/o.strides[d] = in->strides[sd];/
 PERMUTE_STRIDES|omega_tensor.c|s/in->strides\[perm\[d\]\]/in->strides[d]/
-SLICE_OFFSET|omega_tensor.c|s/start\[d\], in->strides\[d\]/start[d], 1/'
+SLICE_OFFSET|omega_tensor.c|s/start\[d\], in->strides\[d\]/start[d], 1/
+TRANSC_EXP2_LOG2_SWAP|omega_tensor_cpu.c|s/= omega_math_exp2, \(.*\)= omega_math_log2,/= omega_math_log2, \1= omega_math_exp2,/
+UNARY_VIEW_STRIDE|omega_tensor.c|s/gather(s, .in, src);/dense_strides(in.rank, in.shape, in.strides); gather(s, \&in, src);/'
 
 # Baseline: the unmutated build must PASS, otherwise every mutant would
 # look "caught" (e.g. the test refusing an unsuitable FP environment).

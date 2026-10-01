@@ -666,10 +666,33 @@ static int elementwise_n(OmegaTensorCtx *ctx, OmegaNumericOp op, unsigned arity,
     return rc;
 }
 
+/* Unary ops: gather the operand through its own view descriptor (offset,
+ * shape, strides, including stride-0 broadcast axes) into a dense buffer,
+ * then one realization call. SQRT goes through the E1 elementwise op; the
+ * bounded-contract transcendentals through the realization's transc entry. */
 int omega_tensor_unary(OmegaTensorCtx *ctx, OmegaTensorUnaryOp op, OmegaTensor a, OmegaTensor *out) {
-    if (!ctx) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    if (!ctx || !out) return OMEGA_TENSOR_ERR_BAD_ARGS;
     if ((unsigned)op >= OMEGA_TU_COUNT) return OMEGA_TENSOR_ERR_BAD_ARGS;
-    return elementwise_n(ctx, OMEGA_NOP_SQRT, 1, &a, out);
+    if (op != OMEGA_TU_SQRT && !ctx->real->transc) return OMEGA_TENSOR_ERR_REALIZATION;
+    TensorSlot *x;
+    StorageSlot *s;
+    int rc = tensor_get(ctx, a, &x, &s);
+    if (rc) return rc;
+    OmegaTensorInfo in = x->info;  /* copy: slot table may be reused below */
+    if (in.dtype != OMEGA_DT_F32) return OMEGA_TENSOR_ERR_DTYPE;
+    size_t n = (size_t)in.elements;
+    float *src = malloc(n * sizeof(float));
+    if (!src) return OMEGA_TENSOR_ERR_CAPACITY;
+    gather(s, &in, src); /* MUT:UNARY_VIEW_STRIDE */
+    void *buf;
+    rc = new_dense(ctx, OMEGA_DT_F32, in.rank, in.shape, out, &buf);
+    if (!rc) {
+        int nrc = op == OMEGA_TU_SQRT ? ctx->real->elementwise(OMEGA_NOP_SQRT, src, NULL, NULL, buf, n)
+                                      : ctx->real->transc(op, src, buf, n);
+        if (nrc) rc = numeric_fail(ctx, nrc, *out);
+    }
+    free(src);
+    return rc;
 }
 
 int omega_tensor_binary(OmegaTensorCtx *ctx, OmegaTensorBinaryOp op, OmegaTensor a, OmegaTensor b,

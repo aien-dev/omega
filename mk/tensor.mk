@@ -20,10 +20,10 @@ TENSOR_MK := 1
 TENSOR_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -ffp-contract=off -Isrc -Isrc/tensor \
 	-DOMEGA_NUMERIC_CPU_ONLY
 TENSOR_SRCS = src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor/omega_tensor_reduce_seam.c \
-	src/omega_numeric_reduce.c
+	src/omega_numeric_reduce.c src/omega_numeric_transc.c
 TENSOR_DEPS = src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c \
 	src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
-TENSOR_HDRS = src/tensor/omega_tensor.h src/tensor/omega_tensor_reduce_seam.h src/omega_numeric_reduce.h src/omega_numeric.h src/sha256.h
+TENSOR_HDRS = src/tensor/omega_tensor.h src/tensor/omega_tensor_reduce_seam.h src/omega_numeric_reduce.h src/omega_numeric.h src/sha256.h src/omega_numeric_transc.h
 # Test builds only: compiles the test-only storage-generation hook.
 TENSOR_TEST_FLAGS = -DOMEGA_TENSOR_TEST_HOOKS
 TENSOR_HOOK_SYMS = omega_tensor_test_set_storage_generation

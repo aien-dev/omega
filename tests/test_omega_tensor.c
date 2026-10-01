@@ -761,6 +761,197 @@ static void test_mutations(void) {
     free(a); free(b); free(ex);
 }
 
+/* ---- 7b. bounded-contract transcendentals (E1 WP-B) ----------------------
+ * EXP2 / LOG2 / SIGMOID / TANH carry the E1 bounded contract (not correctly
+ * rounded). The tensor layer adds no arithmetic, so its output must be
+ * bit-identical (raw bits, NaN included) to calling the E1 function directly
+ * on the logical element, whatever the view: dense, transposed, strided
+ * slice with offset, broadcast. Expected indices come from shape arithmetic
+ * only, never from the tensor's strides. */
+#include "omega_numeric_transc.h"
+
+typedef struct { OmegaTensorUnaryOp op; float (*f)(float); const char *name; } TranscCase;
+static const TranscCase TRANSC_CASES[] = {
+    {OMEGA_TU_EXP2, omega_math_exp2, "EXP2"},
+    {OMEGA_TU_LOG2, omega_math_log2, "LOG2"},
+    {OMEGA_TU_SIGMOID, omega_math_sigmoid, "SIGMOID"},
+    {OMEGA_TU_TANH, omega_math_tanh, "TANH"},
+};
+#define NTRANSC (sizeof(TRANSC_CASES) / sizeof(TRANSC_CASES[0]))
+
+/* Extra special inputs for the transcendental ranges (exp2 overflow and
+ * underflow edges, log2 of negatives and subnormals, saturation of sigmoid
+ * and tanh). */
+static const uint32_t TRANSC_SPECIALS[] = {
+    0x43000000U /* 128 */, 0x42fffffeU, 0xc3150000U /* -149 */, 0xc3160000U /* -150 */,
+    0xc2fc0000U /* -126 */, 0x41100000U /* 9 */, 0xc1100000U /* -9 */, 0x42c80000U /* 100 */,
+    0xc2c80000U /* -100 */, 0x3f800001U, 0x3f7fffffU, 0x40000000U, 0x3e800000U, 0xbf000000U,
+    0x00400000U, 0x80400000U, 0x7fffffffU, 0xffffffffU,
+};
+#define NTSPECIAL (sizeof(TRANSC_SPECIALS) / sizeof(TRANSC_SPECIALS[0]))
+
+static size_t bit_mismatches(const float *a, const float *b, size_t n) {
+    size_t m = 0;
+    for (size_t i = 0; i < n; i++) m += omega_float_to_bits(a[i]) != omega_float_to_bits(b[i]);
+    return m;
+}
+
+/* Run op on view V (logical size n) and compare with f(src[idx[i]]). */
+static void transc_check(const TranscCase *tc, OmegaTensor V, const float *src, const size_t *idx, size_t n,
+                         const char *what) {
+    float *ex = malloc(n * 4);
+    for (size_t i = 0; i < n; i++) ex[i] = tc->f(src[idx[i]]);
+    OmegaTensor O = {0, 0};
+    int rc = omega_tensor_unary(g, tc->op, V, &O);
+    float *got = rc ? NULL : rd(O);
+    size_t mm = got ? bit_mismatches(ex, got, n) : n;
+    CHECK(!rc && got && mm == 0, "transc %s %s bit-exact vs direct E1 (rc=%d, %zu of %zu differ)",
+          tc->name, what, rc, mm, n);
+    free(got);
+    free(ex);
+    if (!rc) omega_tensor_release(g, O);
+}
+
+static void test_transc_unary(void) {
+    const size_t n = 4096;
+    float *a = malloc(n * 4);
+    size_t *idx = malloc(n * sizeof(size_t));
+    fill(a, n, rand_f32);
+    for (size_t i = 0; i < NSPECIAL; i++) a[i] = omega_bits_to_float(SPECIALS[i]);
+    for (size_t i = 0; i < NTSPECIAL; i++) a[NSPECIAL + i] = omega_bits_to_float(TRANSC_SPECIALS[i]);
+    for (size_t i = NSPECIAL + NTSPECIAL; i < 1024; i++)  /* dense in-range sweep */
+        a[i] = omega_bits_to_float((uint32_t)((rnd() >> 32) & 0x807fffffU) | ((uint32_t)(118 + (i % 18)) << 23));
+    uint64_t s1[1] = {n}, s2[2] = {64, 64}, s3[3] = {8, 16, 32};
+    OmegaTensor A1 = mk(1, s1, a), A2 = mk(2, s2, a), A3 = mk(3, s3, a);
+    uint8_t id_before[32], id_after[32];
+    vid(A2, id_before);
+
+    /* transposed view of [64,64]: out[i][j] = f(a[j*64 + i]) */
+    OmegaTensor T = {0, 0};
+    int rct = omega_tensor_transpose(g, A2, &T);
+    CHECK(rct == 0, "transc: transpose view rc=%d", rct);
+    /* strided slice of [8,16,32] with offset: start {1,2,3} stop {8,15,32} step {2,3,5} -> [4,5,6] */
+    uint64_t st[3] = {1, 2, 3}, sp[3] = {8, 15, 32}, se[3] = {2, 3, 5};
+    OmegaTensor S = {0, 0};
+    int rcs = omega_tensor_slice(g, A3, st, sp, se, &S);
+    CHECK(rcs == 0, "transc: slice view rc=%d", rcs);
+    /* transpose of the slice: [4,6,5], strides all non-unit and non-row-major */
+    OmegaTensor ST = {0, 0};
+    int rcst = rcs ? -1 : omega_tensor_transpose(g, S, &ST);
+    CHECK(rcst == 0, "transc: transpose of slice rc=%d", rcst);
+    /* broadcast of a row [1,32] (first 32 elements) to [7,32], and a scalar to [3,5] */
+    uint64_t srow[2] = {1, 32}, sb[2] = {7, 32}, ssc[2] = {3, 5};
+    OmegaTensor R = mk(2, srow, a + 100), B = {0, 0}, C0, BC = {0, 0};
+    int rcb = omega_tensor_broadcast_to(g, R, 2, sb, &B);
+    CHECK(rcb == 0, "transc: broadcast row rc=%d", rcb);
+    C0 = mk(0, NULL, a + 5);
+    int rcc = omega_tensor_broadcast_to(g, C0, 2, ssc, &BC);
+    CHECK(rcc == 0, "transc: broadcast scalar rc=%d", rcc);
+
+    for (size_t k = 0; k < NTRANSC; k++) {
+        const TranscCase *tc = &TRANSC_CASES[k];
+        for (size_t i = 0; i < n; i++) idx[i] = i;
+        transc_check(tc, A1, a, idx, n, "dense [4096]");
+        if (!rct) {
+            for (size_t i = 0; i < 64; i++)
+                for (size_t j = 0; j < 64; j++) idx[i * 64 + j] = j * 64 + i;
+            transc_check(tc, T, a, idx, 64 * 64, "transpose [64,64]");
+        }
+        if (!rcs) {
+            for (size_t i = 0; i < 4; i++)
+                for (size_t j = 0; j < 5; j++)
+                    for (size_t l = 0; l < 6; l++)
+                        idx[(i * 5 + j) * 6 + l] = ((1 + 2 * i) * 16 + (2 + 3 * j)) * 32 + (3 + 5 * l);
+            transc_check(tc, S, a, idx, 4 * 5 * 6, "strided slice [4,5,6]");
+        }
+        if (!rcst) {
+            for (size_t i = 0; i < 4; i++)
+                for (size_t l = 0; l < 6; l++)
+                    for (size_t j = 0; j < 5; j++)
+                        idx[(i * 6 + l) * 5 + j] = ((1 + 2 * i) * 16 + (2 + 3 * j)) * 32 + (3 + 5 * l);
+            transc_check(tc, ST, a, idx, 4 * 6 * 5, "transpose of slice [4,6,5]");
+        }
+        if (!rcb) {
+            for (size_t i = 0; i < 7; i++)
+                for (size_t j = 0; j < 32; j++) idx[i * 32 + j] = 100 + j;
+            transc_check(tc, B, a, idx, 7 * 32, "broadcast [1,32]->[7,32]");
+        }
+        if (!rcc) {
+            for (size_t i = 0; i < 15; i++) idx[i] = 5;
+            transc_check(tc, BC, a, idx, 15, "broadcast scalar->[3,5]");
+        }
+        idx[0] = 5;
+        transc_check(tc, C0, a, idx, 1, "rank 0");
+    }
+    vid(A2, id_after);
+    CHECK(memcmp(id_before, id_after, 32) == 0, "transc: input value id unchanged");
+
+    /* NaN results are the canonical quiet NaN (E1 contract), kept bit-exact */
+    float neg[1] = {-1.0f};
+    OmegaTensor NG = mk(0, NULL, neg), O = {0, 0};
+    int rc = omega_tensor_unary(g, OMEGA_TU_LOG2, NG, &O);
+    float *got = rc ? NULL : rd(O);
+    CHECK(got && omega_float_to_bits(got[0]) == 0x7fc00000U, "transc: LOG2(-1) is canonical qNaN 0x%08x",
+          got ? omega_float_to_bits(got[0]) : 0U);
+    free(got);
+    if (!rc) omega_tensor_release(g, O);
+
+    /* refusals: unknown op, wrong dtype, stale handle, missing transc entry */
+    uint32_t lt0, ls0, lt1, ls1;
+    omega_tensor_live_counts(g, &lt0, &ls0);
+    const int bad_ops[] = {OMEGA_TU_COUNT, OMEGA_TU_COUNT + 1, 99, -1};
+    for (size_t i = 0; i < sizeof(bad_ops) / sizeof(bad_ops[0]); i++) {
+        rc = omega_tensor_unary(g, (OmegaTensorUnaryOp)bad_ops[i], A1, &O);
+        CHECK(rc == OMEGA_TENSOR_ERR_BAD_ARGS, "unknown unary op %d refused (rc=%d)", bad_ops[i], rc);
+    }
+    OmegaTensor H = {0, 0};
+    if (!omega_tensor_cast(g, A1, OMEGA_DT_F16, &H)) {
+        for (size_t k = 0; k < NTRANSC; k++) {
+            rc = omega_tensor_unary(g, TRANSC_CASES[k].op, H, &O);
+            CHECK(rc == OMEGA_TENSOR_ERR_DTYPE, "transc %s on F16 refused (rc=%d)", TRANSC_CASES[k].name, rc);
+        }
+        omega_tensor_release(g, H);
+    } else {
+        CHECK(0, "transc: F32->F16 cast for dtype refusal");
+    }
+    omega_tensor_live_counts(g, &lt1, &ls1);
+    CHECK(lt0 == lt1 && ls0 == ls1, "refused unary ops made no tensors (%u/%u -> %u/%u)", lt0, ls0, lt1, ls1);
+    OmegaTensor DEAD = mk(1, s1, a);
+    omega_tensor_release(g, DEAD);
+    for (size_t k = 0; k < NTRANSC; k++) {
+        rc = omega_tensor_unary(g, TRANSC_CASES[k].op, DEAD, &O);
+        CHECK(rc == OMEGA_TENSOR_ERR_STALE, "transc %s on released tensor refused (rc=%d)", TRANSC_CASES[k].name, rc);
+    }
+    OmegaTensorRealization notransc = *omega_tensor_cpu_realization();
+    notransc.name = "NO_TRANSC_ENTRY";
+    notransc.transc = NULL;
+    OmegaTensorCtx *c = NULL;
+    rc = omega_tensor_ctx_create(8, &notransc, &c);
+    CHECK(rc == 0, "realization without transc entry accepted for other ops (rc=%d)", rc);
+    if (!rc) {
+        OmegaTensor X = {0, 0}, Y = {0, 0};
+        omega_tensor_from_f32(c, 1, s1, a, &X);
+        for (size_t k = 0; k < NTRANSC; k++) {
+            rc = omega_tensor_unary(c, TRANSC_CASES[k].op, X, &Y);
+            CHECK(rc == OMEGA_TENSOR_ERR_REALIZATION, "transc %s refused without transc entry (rc=%d)",
+                  TRANSC_CASES[k].name, rc);
+        }
+        rc = omega_tensor_unary(c, OMEGA_TU_SQRT, X, &Y);
+        CHECK(rc == 0, "SQRT still served without transc entry (rc=%d)", rc);
+        omega_tensor_ctx_destroy(c);
+    }
+
+    OmegaTensor all[] = {A1, A2, A3, R, C0, NG};
+    for (size_t i = 0; i < sizeof(all) / sizeof(all[0]); i++) omega_tensor_release(g, all[i]);
+    if (!rct) omega_tensor_release(g, T);
+    if (!rcs) omega_tensor_release(g, S);
+    if (!rcst) omega_tensor_release(g, ST);
+    if (!rcb) omega_tensor_release(g, B);
+    if (!rcc) omega_tensor_release(g, BC);
+    free(a);
+    free(idx);
+}
+
 /* ---- 8. determinism ------------------------------------------------------- */
 static void kat_digest(uint8_t out[32]) {
     uint64_t save = g_rng;
@@ -805,6 +996,7 @@ int main(void) {
     test_reduce_parity();
     test_matmul_parity();
     test_mutations();
+    test_transc_unary();
     test_determinism();
     /* every test released what it made */
     uint32_t lt, ls;
