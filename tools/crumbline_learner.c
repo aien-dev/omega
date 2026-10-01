@@ -276,6 +276,9 @@ static int decode_file(const char *path) {
     }
     printf("ok enc=%u in=%ux%u out=%ux%u n=%u", c->encoding, c->in_arity, c->in_lane_bytes, c->out_arity,
            c->out_lane_bytes, c->n);
+    if (c->has_budget)
+        printf(" budget=%u,%u,%u,%u", c->budget_max_candidates, c->budget_max_depth, c->budget_max_oracle_queries,
+               c->budget_max_program_ops);
     for (uint32_t i = 0; i < c->n; ++i) {
         printf(" |");
         for (uint8_t l = 0; l < c->in_arity; ++l) printf(" %llu", (unsigned long long)c->in[i][l]);
