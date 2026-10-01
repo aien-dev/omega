@@ -54,7 +54,7 @@ int omega_gb10_execute_simt_op(const char *op_name,
             memcpy(ua, in_a, count * sizeof(float));
             if (in_b) memcpy(ub, in_b, count * sizeof(float));
             else memset(ub, 0, count * sizeof(uint32_t));
-            drc = omega_ds_gb10_run(dop, ua, ub, uo, count);
+            drc = omega_ds_gb10_run(dop, ua, in_b ? ub : NULL, uo, count);
             if (drc == OMEGA_NUMERIC_OK) memcpy(out_res, uo, count * sizeof(float));
         }
         free(ua);

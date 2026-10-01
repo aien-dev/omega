@@ -1350,7 +1350,9 @@ int main(int argc, char **argv) {
     {
         /* Corrupted provenance copies must each be rejected */
         size_t n = omega_numeric_get_opcode_count();
-        OmegaOpcodeProvenance copy[32];
+        OmegaOpcodeProvenance copy[64 + 1];   /* table limit 64 (verify_fixture_table) + the m == 4 extra */
+        int too_big = n > 64;
+        if (too_big) n = 64;
         int caught = 0, cases = 0;
         for (int m = 0; m < 5; m++) {
             for (size_t i = 0; i < n; i++) copy[i] = *omega_numeric_get_opcode(i);
@@ -1374,7 +1376,7 @@ int main(int argc, char **argv) {
         int clean = omega_numeric_verify_fixture_table(copy, n, false) == 0;
         printf("    corrupted provenance copies rejected: %d of %d; clean copy accepted: %s\n",
                caught, cases, clean ? "yes" : "no");
-        report("NEG_OPCODE_PROVENANCE_INTEGRITY_VERIFIED", caught == cases && clean);
+        report("NEG_OPCODE_PROVENANCE_INTEGRITY_VERIFIED", caught == cases && clean && !too_big);
     }
     {
         /* A non-default FP environment must be refused by every host tier, not
