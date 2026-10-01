@@ -5,6 +5,11 @@
 
 #include <string.h>
 
+/* Link-map marker (test build only): tools/r16_prod_hygiene.sh refuses any
+ * production binary that carries an aien_test_build_* symbol. */
+__attribute__((used)) const char aien_test_build_fab_loopback[] =
+    "AIEN_TEST_BUILD piece: Fabric F5-0 loopback transport and HMAC stand-in authenticator";
+
 static FabLoopBox *box_of(FabLoop *l, const AienMachineId *id) {
     for (uint32_t i = 0; i < l->n; i++)
         if (aien_mid_equal(&l->box[i].id, id)) return &l->box[i];

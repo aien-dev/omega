@@ -503,21 +503,37 @@ test-r12-silicon: $(RX_R12_SILICON)
 # of the canonical living build, so every R13/R14/R15/R16 binary links them.
 # rx_graph.o, rx_capq.o and rx_skillroute.o keep their own no-mint symbol
 # checks; the living host build depends on them so the checks run with it.
-# Lane 13: Fabric F5-0 (src/fabric, mk/fabric.mk) in the living build; the R13
-# host test runs a second simulated machine whose Skill the composition uses
-# (tests/fabric/fab_living_phase.h). Its purity check runs in test-fabric-living.
-RX_FABRIC_LIVING_SRCS = src/fabric/fabric.c src/fabric/fab_hmac.c src/fabric/fab_loopback.c \
-	src/fabric/fab_dispatch.c
 RX_COMPOSE_LIVING_SRCS = src/runtime/aien_machine_id.c src/runtime/rx_jspace.c \
 	src/runtime/rx_cortex.c src/runtime/rx_cortex_record.c src/runtime/rx_graph.c \
-	src/runtime/rx_capq.c src/runtime/rx_skillroute.c src/runtime/rx_compose.c \
-	$(RX_FABRIC_LIVING_SRCS)
+	src/runtime/rx_capq.c src/runtime/rx_skillroute.c src/runtime/rx_compose.c
 RX_COMPOSE_LIVING_CHECKS = $(OUT_DIR)/rx_graph.o $(OUT_DIR)/rx_capq.o $(OUT_DIR)/rx_skillroute.o \
-	src/runtime/rx_compose.h tests/runtime/rx_compose_fixture.h src/fabric/fab_dispatch.h \
-	tests/fabric/fab_living_phase.h
+	src/runtime/rx_compose.h
+
+# Lane 32: ONE test-build flag, AIEN_TEST_BUILD, off by default. It alone
+# admits the test-only pieces: the Fabric F5-0 loopback transport, the HMAC
+# stand-in authenticator and the in-process dispatcher (src/fabric, Lane 13),
+# the Fabric living phase with its fixed test keys (tests/fabric/
+# fab_living_phase.h), the composition fixture and the rx_compose fault and
+# rogue-candidate hooks (RXC_TEST_HOOKS, implied by the flag; alone it is an
+# #error). Their headers refuse to compile without it. The PRODUCTION program
+# (rx_r13_living_host/_silicon, test-r13-host/-silicon) never sets it, links
+# ARGUS and is checked by test-prod-hygiene; the TEST BUILD variant
+# (rx_r13_living_testbuild_*, test-r13-testbuild-*) carries the composition
+# and Fabric phases and reports R13_LIVING_SYSTEM_TEST_BUILD, never the gate.
+# docs/r16-production-entry-point.md has the table.
+AIEN_TEST_FLAGS = -DAIEN_TEST_BUILD=1
+RX_FABRIC_TEST_SRCS = src/fabric/fabric.c src/fabric/fab_hmac.c src/fabric/fab_loopback.c \
+	src/fabric/fab_dispatch.c
+RX_R13_TEST_CHECKS = tests/runtime/rx_compose_fixture.h src/fabric/fab_dispatch.h \
+	src/fabric/fab_loopback.h src/fabric/fab_hmac.h tests/fabric/fab_living_phase.h
+# The production build refuses the flag outright.
+RX_PROD_REFUSE_TEST = $(if $(findstring AIEN_TEST_BUILD,$(CFLAGS))$(findstring RXC_TEST_HOOKS,$(CFLAGS)),\
+	$(error the production program never builds with AIEN_TEST_BUILD or RXC_TEST_HOOKS in CFLAGS))
 
 # R13 host uses the R12 processor stand-in and cannot claim the silicon gate.
 # R13 silicon runs the same world against the physical resident GB10 seat.
+# RX_R13_SRCS is the PRODUCTION source set (no test piece); the R14/R15 rigs
+# filter rx_r13_living.c out of it.
 RX_R13_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
 	src/runtime/rx_coherent.c src/runtime/rx_native_bind.c \
 	src/runtime/rx_aegis.c src/runtime/rx_aien.c src/runtime/rx_omega.c \
@@ -529,32 +545,39 @@ RX_R13_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
 	src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
 	$(RX_COMPOSE_LIVING_SRCS) \
 	tests/runtime/rx_r13_living.c
+RX_R13_TEST_SRCS = $(RX_R13_SRCS) $(RX_FABRIC_TEST_SRCS)
+RX_R13_SILICON_EXTRA = src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
+	src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c \
+	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c
+# Production program (rules after the ARGUS block below: they link ARGUS).
 RX_R13_HOST = $(OUT_DIR)/rx_r13_living_host
 RX_R13_SILICON = $(OUT_DIR)/rx_r13_living_silicon
+# Test-build variant (no ARGUS).
+RX_R13_TEST_HOST = $(OUT_DIR)/rx_r13_living_testbuild_host
+RX_R13_TEST_SILICON = $(OUT_DIR)/rx_r13_living_testbuild_silicon
 
-$(RX_R13_HOST): $(RX_R13_SRCS) src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
-	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_R13_SRCS) $(AIENOS_CAP_LIB) -lm
+$(RX_R13_TEST_HOST): $(RX_R13_TEST_SRCS) src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) \
+	$(RX_R13_TEST_CHECKS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) $(AIEN_TEST_FLAGS) -pthread -o $@ $(RX_R13_TEST_SRCS) $(AIENOS_CAP_LIB) -lm
 
-# Lane 17: the Fabric phase (fab_living_phase.h) runs in the silicon binary too;
-# its Fabric part is CPU-only loopback, so it links unchanged. The composition
-# phase stays host-only: it needs the -DRXC_TEST_HOOKS rogue-candidate hook.
-$(RX_R13_SILICON): $(RX_R13_SRCS) src/runtime/rx_resident_gpu.c \
-	src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) \
-	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c \
-	src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c \
-	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
-	$(AIENOS_CAP_LIB) | $(OUT_DIR)
-	$(CC) $(CFLAGS) -DR13_SILICON -pthread -o $@ $(RX_R13_SRCS) \
-		src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
-		src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
-		src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c \
-		$(PHYSICS_DIR)/nvrm/nvrm.c $(AIENOS_CAP_LIB) -ldl -lm
+# Lane 17: the Fabric phase runs in the silicon test build too; its Fabric part
+# is CPU-only loopback. The composition phase stays host-only.
+$(RX_R13_TEST_SILICON): $(RX_R13_TEST_SRCS) $(RX_R13_SILICON_EXTRA) src/runtime/rx_living.h \
+	$(RX_COMPOSE_LIVING_CHECKS) $(RX_R13_TEST_CHECKS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) $(AIEN_TEST_FLAGS) -DR13_SILICON -pthread -o $@ $(RX_R13_TEST_SRCS) \
+		$(RX_R13_SILICON_EXTRA) $(AIENOS_CAP_LIB) -ldl -lm
 
 test-r13-host: $(RX_R13_HOST)
 	./$(RX_R13_HOST)
 
 test-r13-silicon: $(RX_R13_SILICON)
 	./$(RX_R13_SILICON)
+
+test-r13-testbuild-host: $(RX_R13_TEST_HOST)
+	./$(RX_R13_TEST_HOST)
+
+test-r13-testbuild-silicon: $(RX_R13_TEST_SILICON)
+	./$(RX_R13_TEST_SILICON)
 
 # OMEGA_BRANCH_STATE_REUSE: J-Space branches sharing one semantic prefix,
 # shared-state realization versus independent recomputation, FORGE placement.
@@ -741,6 +764,8 @@ test-r16-inventory: $(R16_INVENTORY)
 # R16-G3: the authoritative path with the legacy orchestrators unavailable.
 # Link map, shared libraries, embedded names and an exec trace of the R13
 # living system and the R14 recovery run, legacy programs stubbed on PATH.
+# The R13 binary is the PRODUCTION program (Lane 32: no test piece, ARGUS
+# linked); its source list includes the pinned ARGUS sources.
 # Host mode uses the processor stand-in and cannot claim the gate. The silicon
 # target starts the GB10 seat: run it only as part of the qualification
 # ladder, detached, never under `timeout` and never killed.
@@ -748,11 +773,11 @@ R16_STAMP := $(shell date -u +%Y%m%dT%H%M%SZ)
 .PHONY: test-r16-authpath test-r16-authpath-silicon
 test-r16-authpath: $(RX_R13_HOST) $(RX_R14_HOST)
 	sh tools/r16_authpath.sh host $(RX_R13_HOST) $(RX_R14_HOST) \
-		$(OUT_DIR)/r16/authpath/host-$(R16_STAMP) $(RX_R13_SRCS) $(AIENOS_CAP_LIB)
+		$(OUT_DIR)/r16/authpath/host-$(R16_STAMP) $(RX_R13_SRCS) $(RX_PROD_ARGUS_SRCS) $(AIENOS_CAP_LIB)
 
 test-r16-authpath-silicon: $(RX_R13_SILICON) $(RX_R14_SILICON)
 	sh tools/r16_authpath.sh silicon $(RX_R13_SILICON) $(RX_R14_SILICON) \
-		$(OUT_DIR)/r16/authpath/silicon-$(R16_STAMP) $(RX_R13_SRCS) \
+		$(OUT_DIR)/r16/authpath/silicon-$(R16_STAMP) $(RX_R13_SRCS) $(RX_PROD_ARGUS_SRCS) \
 		src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
 		src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
 		src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c \
@@ -766,11 +791,11 @@ test-r16-authpath-silicon: $(RX_R13_SILICON) $(RX_R14_SILICON)
 .PHONY: test-r16-authpath-linkmap test-r16-authpath-linkmap-silicon
 test-r16-authpath-linkmap: $(RX_R13_HOST) $(RX_R14_HOST)
 	R16_G3_STATIC_ONLY=1 sh tools/r16_authpath.sh host $(RX_R13_HOST) $(RX_R14_HOST) \
-		$(OUT_DIR)/r16/authpath/linkmap-host-$(R16_STAMP) $(RX_R13_SRCS) $(AIENOS_CAP_LIB)
+		$(OUT_DIR)/r16/authpath/linkmap-host-$(R16_STAMP) $(RX_R13_SRCS) $(RX_PROD_ARGUS_SRCS) $(AIENOS_CAP_LIB)
 
 test-r16-authpath-linkmap-silicon: $(RX_R13_SILICON) $(RX_R14_SILICON)
 	R16_G3_STATIC_ONLY=1 sh tools/r16_authpath.sh silicon $(RX_R13_SILICON) $(RX_R14_SILICON) \
-		$(OUT_DIR)/r16/authpath/linkmap-silicon-$(R16_STAMP) $(RX_R13_SRCS) \
+		$(OUT_DIR)/r16/authpath/linkmap-silicon-$(R16_STAMP) $(RX_R13_SRCS) $(RX_PROD_ARGUS_SRCS) \
 		src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
 		src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
 		src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c \
@@ -1115,6 +1140,47 @@ $(ARGUS_LIB_SRCS): $(ARGUS_STAMP)
 # RX_ARGUS=0 links no ARGUS code at all.
 ARGUS_RX = $(if $(filter 0,$(RX_ARGUS)),,src/runtime/rx_argus.c $(ARGUS_LIB_SRCS))
 ARGUS_LINK_FLAGS = $(if $(filter 0,$(RX_ARGUS)),,$(ARGUS_AUTH_FLAGS))
+
+# ---- Lane 32: the PRODUCTION R13 program, ARGUS linked ----------------------
+# Built without AIEN_TEST_BUILD (RX_PROD_REFUSE_TEST) and with ARGUS pinned by
+# argus.lock, the way the ARGUS suites build it, in the mode the ARGUS-1
+# decisions intend: observe and record. RX_ARGUS=2 (consumer thread ingesting
+# into argus_core), authority observer (the authority announces its own
+# mints/revokes through the aienos_cap_start link wrap). ARGUS holds no
+# capability and the pinned ARGUS has no response path, so it never blocks a
+# request and never expands its own authority. These flags are fixed here, not
+# taken from the overridable RX_ARGUS/ARGUS_AUTH. The program refuses to run
+# unobserved (rx_r13_living.c argus_check_start).
+RX_PROD_ARGUS_FLAGS = -DRX_ARGUS=2 -DRX_ARGUS_AUTHORITY_OBSERVER -I$(ARGUS_SRC) \
+	-Wl$(comma)--wrap=aienos_cap_start
+RX_PROD_ARGUS_SRCS = src/runtime/rx_argus.c $(ARGUS_LIB_SRCS)
+
+$(RX_R13_HOST): $(RX_R13_SRCS) src/runtime/rx_living.h src/runtime/rx_argus.h $(RX_COMPOSE_LIVING_CHECKS) \
+	$(ARGUS_STAMP) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(RX_PROD_REFUSE_TEST)
+	$(CC) $(CFLAGS) $(RX_PROD_ARGUS_FLAGS) -pthread -o $@ $(RX_R13_SRCS) $(RX_PROD_ARGUS_SRCS) \
+		$(AIENOS_CAP_LIB) -lm
+
+$(RX_R13_SILICON): $(RX_R13_SRCS) $(RX_R13_SILICON_EXTRA) src/runtime/rx_living.h src/runtime/rx_argus.h \
+	$(RX_COMPOSE_LIVING_CHECKS) $(ARGUS_STAMP) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(RX_PROD_REFUSE_TEST)
+	$(CC) $(CFLAGS) $(RX_PROD_ARGUS_FLAGS) -DR13_SILICON -pthread -o $@ $(RX_R13_SRCS) \
+		$(RX_PROD_ARGUS_SRCS) $(RX_R13_SILICON_EXTRA) $(AIENOS_CAP_LIB) -ldl -lm
+
+# Production hygiene (link map + strings + ARGUS present; host run of the
+# ARGUS probe where the binary can run) and the negative build test: compiling
+# the production program with any test piece must FAIL (tools/r16_prod_hygiene.sh).
+.PHONY: test-prod-hygiene test-prod-hygiene-silicon test-prod-refuses-test-pieces
+test-prod-hygiene: $(RX_R13_HOST)
+	sh tools/r16_prod_hygiene.sh host $(RX_R13_HOST)
+
+test-prod-hygiene-silicon: $(RX_R13_SILICON)
+	sh tools/r16_prod_hygiene.sh silicon $(RX_R13_SILICON)
+
+test-prod-refuses-test-pieces: $(ARGUS_STAMP)
+	CC="$(CC)" CFLAGS="$(CFLAGS)" ARGUS_SRC="$(ARGUS_SRC)" OUT="$(OUT_DIR)/prod-refuses" MAKE="$(MAKE)" PROD_BIN="$(RX_R13_HOST)" \
+		sh tools/r16_prod_refuses.sh
+
 ARGUS_R7 = $(ARGUS_OUT)/rx_r7_native_test
 ARGUS_R8 = $(ARGUS_OUT)/rx_r8_aegis_test
 ARGUS_R9 = $(ARGUS_OUT)/rx_r9_barrier_test
@@ -1437,9 +1503,10 @@ RX_COMPOSE_DEPS = $(RX_COMPOSE_SRCS) $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ)
 	src/runtime/rx_world.h src/runtime/rx_jspace.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB)
 RX_COMPOSE_LINK = $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ) $(RX_CAPQ_OBJ) $(RX_GRAPH_OBJ) \
 	$(AIENOS_CAP_LIB) -lm
-# RXC_TEST_HOOKS: the composition fault points and rogue-candidate hook
-# (rx_compose.h) exist only in the unit test and the R13 host test; the gate
-# and every other build compile them out.
+# Test build ($(AIEN_TEST_FLAGS), Lane 32): the composition fault points and
+# rogue-candidate hook (rx_compose.h, RXC_TEST_HOOKS) exist only in the unit
+# tests and the R13 test-build variant; the gate, the production program and
+# every other build compile them out.
 RX_COMPOSE_TEST = $(OUT_DIR)/rx_compose_test
 RX_COMPOSE_GATE = $(OUT_DIR)/rx_composition_gate
 # Attach hygiene (one per World, close waits for its own steps, inert
@@ -1448,7 +1515,7 @@ RX_COMPOSE_ATTACH_TEST = $(OUT_DIR)/rx_compose_attach_test
 RX_COMPOSE_ATTACH_ASAN = $(OUT_DIR)/rx_compose_attach_test_asan
 
 $(RX_COMPOSE_TEST): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_test.c | $(OUT_DIR)
-	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_test.c \
+	$(CC) $(CFLAGS) $(AIEN_TEST_FLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_test.c \
 		$(RX_COMPOSE_LINK)
 
 $(RX_COMPOSE_GATE): $(RX_COMPOSE_DEPS) tests/runtime/rx_composition_gate.c | $(OUT_DIR)
@@ -1456,11 +1523,11 @@ $(RX_COMPOSE_GATE): $(RX_COMPOSE_DEPS) tests/runtime/rx_composition_gate.c | $(O
 		$(RX_COMPOSE_LINK)
 
 $(RX_COMPOSE_ATTACH_TEST): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_attach_test.c | $(OUT_DIR)
-	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_COMPOSE_SRCS) \
+	$(CC) $(CFLAGS) $(AIEN_TEST_FLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) \
 		tests/runtime/rx_compose_attach_test.c $(RX_COMPOSE_LINK)
 
 $(RX_COMPOSE_ATTACH_ASAN): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_attach_test.c | $(OUT_DIR)
-	$(CC) $(CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -DRXC_TEST_HOOKS \
+	$(CC) $(CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all $(AIEN_TEST_FLAGS) \
 		-pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_attach_test.c $(RX_COMPOSE_LINK)
 
 test-composition: $(RX_COMPOSE_TEST) $(RX_COMPOSE_ATTACH_TEST)

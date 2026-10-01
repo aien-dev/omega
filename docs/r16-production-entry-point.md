@@ -26,10 +26,58 @@ credential, and work can no longer be added already done.
 
 | what | sources | make target |
 |---|---|---|
-| living system, host seat | `$(RX_R13_SRCS)` (omega `src/`, `src/runtime/`, `tests/runtime/rx_r13_living.c`) + `libaienos_capability.a` | `test-r13-host` |
-| living system, GB10 seat | the same + `rx_resident_gpu.c`, the Blackwell encoder/codegen and the physics seat (`m16_native.c`, `nvrm.c`) | `test-r13-silicon` |
+| living system, host seat (production program) | `$(RX_R13_SRCS)` (omega `src/`, `src/runtime/`, `tests/runtime/rx_r13_living.c`) + `libaienos_capability.a` + pinned ARGUS (`rx_argus.c`, `argus.lock`); no test pieces | `test-r13-host` |
+| living system, GB10 seat (production program) | the same + `rx_resident_gpu.c`, the Blackwell encoder/codegen and the physics seat (`m16_native.c`, `nvrm.c`) | `test-r13-silicon` |
 | recovery | `tests/runtime/rx_r14_recovery.c` on the same sources | `test-r14-host`, `test-r14-silicon` |
-| proof that no legacy orchestrator is in the path (G3) | link map, strings and exec trace of the two binaries above | `test-r16-authpath`, `test-r16-authpath-silicon` |
+| proof that no legacy orchestrator is in the path (G3) | link map, strings and exec trace of the production binaries above | `test-r16-authpath`, `test-r16-authpath-silicon` |
+
+### Production program and test build (Lane 32)
+
+Test-only pieces build only with one flag, `AIEN_TEST_BUILD` (`-DAIEN_TEST_BUILD=1`,
+Makefile `$(AIEN_TEST_FLAGS)`), which is off by default. The flag gates:
+
+- the Fabric F5-0 loopback transport (`src/fabric/fab_loopback.[ch]`), the HMAC
+  stand-in authenticator (`fab_hmac.[ch]`), the Fabric dispatcher
+  (`fab_dispatch.[ch]`) and the fixed test keys they carry (`fl-key-*`);
+- the R13 Fabric living phase (`tests/fabric/fab_living_phase.h`);
+- the composition fault, rogue-candidate and hold hooks (`RXC_TEST_HOOKS` in
+  `rx_compose.[ch]`; the flag turns them on) and the R13 composition phase that
+  uses them with `tests/runtime/rx_compose_fixture.h`.
+
+The build refuses these pieces without the flag: each test header stops with
+`#error`, `RXC_TEST_HOOKS` without the flag is an `#error`, the production
+rules stop if `CFLAGS` carries either flag, and the production R13 source stops
+unless ARGUS is linked (`RX_ARGUS=2`, authority observer).
+
+| program | binary | make target | flag | ARGUS | Fabric and composition phases | receipt / gate key |
+|---|---|---|---|---|---|---|
+| production, host seat | `build/rx_r13_living_host` | `test-r13-host` | off | linked | NOT_RUN, with the reason in the receipt | `R13/rx_living_receipt.json`, `R13_LIVING_SYSTEM` |
+| production, GB10 seat | `build/rx_r13_living_silicon` | `test-r13-silicon` | off | linked | NOT_RUN, with the reason | same |
+| test build, host seat | `build/rx_r13_living_testbuild_host` | `test-r13-testbuild-host` | on | not linked | run | `R13/rx_living_test_build_receipt.json`, `R13_LIVING_SYSTEM_TEST_BUILD` |
+| test build, GB10 seat | `build/rx_r13_living_testbuild_silicon` | `test-r13-testbuild-silicon` | on | not linked | Fabric run; composition NOT_RUN (host-seat fixture) | same |
+
+A phase that cannot run in the production program is reported NOT_RUN with its
+reason, never PASS. The Fabric phase returns once a real transport exists
+(after TRUST-1); the composition phase needs the rogue-candidate hook.
+
+ARGUS mode in production: observe and record (`RX_ARGUS=2`, authority
+observer, consumer `ingest`), pinned by `argus.lock` like the ARGUS suites.
+ARGUS holds no capability and the pinned ARGUS has no response path, so it
+never blocks, never revokes on its own and never expands its own authority
+(ARGUS-1 decisions: one narrow revoke is the only automatic response, and it
+is not in the pinned ARGUS yet). The production R13 run fails closed if ARGUS
+is not active, is not ingesting, or saw no authority event; the receipt
+carries the ARGUS counts. The R14 recovery and R15 rigs reuse the production
+sources (`$(filter-out ...,$(RX_R13_SRCS))`) without ARGUS.
+
+Checks: `make test-prod-hygiene` (link map and strings of the production
+binary hold no test piece; ARGUS symbols present; `--argus-probe` host run
+prints `ARGUS_OBSERVING=PASS`; with `RX_ARGUS_AUTO=0` the probe fails),
+`make test-prod-hygiene-silicon` (the same on the GB10 build), and
+`make test-prod-refuses-test-pieces` (negative build test: compiling the
+production program with each test piece must FAIL). R16-G3
+(`test-r16-authpath`) inspects the production program and runs the hygiene
+static checks as its check 2b.
 
 ## Legacy and reference paths (not production)
 
