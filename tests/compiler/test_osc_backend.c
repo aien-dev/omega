@@ -29,7 +29,7 @@
 #define NVEC 2000
 
 static unsigned long n_checks, n_fail;
-static unsigned long n_diff_runs, n_funcs_fuzzed, n_units, n_words, n_trap[OSC_TRAP_RUNTIME + 1];
+static unsigned long n_diff_runs, n_funcs_fuzzed, n_units, n_words, n_trap[OSC_TRAP_MAX + 1];
 static unsigned long n_enc_ok, n_enc_refused, n_dec_rand_ok, n_validate_neg;
 
 static void check(int cond, const char *fmt, ...) {
@@ -231,7 +231,7 @@ static void unit_check(OscUnit *u, const char *uname) {
                       osc_rt_same_outcome(rtI, rtN) ? "same" : "DIFFERENT");
             else
                 n_checks++;
-            if (tn >= 0 && tn <= OSC_TRAP_RUNTIME) n_trap[tn]++;
+            if (tn >= 0 && tn <= OSC_TRAP_MAX) n_trap[tn]++;
         }
     }
     osc_native_unmap(&nm);
@@ -481,7 +481,7 @@ static void gen_arrays(void) {
         fn(&b, u, "trap_sel", TS(OSC_T_U8), 1, pt);
         int nxt = blk(&b);
         k_br(&b, nxt);
-        for (int code = 1; code <= OSC_TRAP_RUNTIME; code++) {
+        for (int code = 1; code <= OSC_TRAP_MAX; code++) {
             at(&b, nxt);
             int hit = blk(&b);
             nxt = blk(&b);
@@ -893,7 +893,7 @@ static void test_validator(void) {
     CASE("cast to bool", { f0->insns[0] = I0(OSC_I_CAST); f0->insns[0].dst = 2; f0->insns[0].a = 0; f0->vtype[2] = TS(OSC_T_BOOL); f0->ret = TS(OSC_T_BOOL); });
     CASE("void vreg type", f0->vtype[2] = TVOID);
     CASE("TRAP code 0", { f0->insns[0] = I0(OSC_I_TRAP); f0->insns[0].imm = 0; });
-    CASE("TRAP code 9", { f0->insns[0] = I0(OSC_I_TRAP); f0->insns[0].imm = 9; });
+    CASE("TRAP code out of range", { f0->insns[0] = I0(OSC_I_TRAP); f0->insns[0].imm = OSC_TRAP_MAX + 1; });
     CASE("name not terminated", memset(f0->name, 'x', sizeof f0->name));
     CASE("zero blocks", f0->nblocks = 0);
     CASE("ref len 0", { f0->vtype[2] = TR(OSC_REF_OWN, OSC_T_I32, 0); });
@@ -964,7 +964,7 @@ int main(void) {
     gen_calls();
 
     /* every trap code must have been observed in the differential runs */
-    for (int c = 1; c <= OSC_TRAP_RUNTIME; c++) check(n_trap[c] > 0, "trap code %d never observed", c);
+    for (int c = 1; c <= OSC_TRAP_MAX; c++) check(n_trap[c] > 0, "trap code %d never observed", c);
     check(n_trap[0] > 0, "no normal return observed");
 
     clock_gettime(CLOCK_MONOTONIC, &t1);
@@ -972,8 +972,8 @@ int main(void) {
     printf("units=%lu funcs_fuzzed=%lu diff_runs=%lu words_roundtrip=%lu enc_random_ok=%lu enc_random_refused=%lu "
            "dec_random_words=%lu validator_neg=%lu\n",
            n_units, n_funcs_fuzzed, n_diff_runs, n_words, n_enc_ok, n_enc_refused, n_dec_rand_ok, n_validate_neg);
-    printf("traps: none=%lu overflow=%lu div0=%lu bounds=%lu loop_bound=%lu cast=%lu oom=%lu shift=%lu runtime=%lu\n",
-           n_trap[0], n_trap[1], n_trap[2], n_trap[3], n_trap[4], n_trap[5], n_trap[6], n_trap[7], n_trap[8]);
+    printf("traps: none=%lu overflow=%lu div0=%lu bounds=%lu loop_bound=%lu cast=%lu oom=%lu shift=%lu runtime=%lu requires=%lu ensures=%lu\n",
+           n_trap[0], n_trap[1], n_trap[2], n_trap[3], n_trap[4], n_trap[5], n_trap[6], n_trap[7], n_trap[8], n_trap[9], n_trap[10]);
     printf("checks=%lu failed=%lu time=%.2fs\n", n_checks, n_fail, secs);
     free(rtI);
     free(rtN);

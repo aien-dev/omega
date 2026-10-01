@@ -1,0 +1,35 @@
+// entry: safe_sub seven always use_safe_sub
+// OSC-2 contracts that hold for every call in range: requires / ensures are
+// enforced at run time; constant-true clauses and constant returns that
+// satisfy ensures are elided (docs/osc/OSC-2-DESIGN.md section 1).
+fn safe_sub(a: u32, b: u32) -> u32
+    requires a >= b
+    ensures result <= a
+{
+    return a - b;
+}
+
+// the first return folds `result == 7` to true: no check there
+fn seven(x: u8) -> u8 ensures result == 7 || result == x {
+    if x > 3 { return 7; }
+    return x;
+}
+
+// both clauses fold to true on their own: no runtime check at all
+fn always(x: u8) -> u8 requires true || false ensures !false {
+    return x;
+}
+
+// constant arguments that satisfy the callee's requires are accepted
+fn use_safe_sub(x: u32) -> u32 {
+    let k: u32 = safe_sub(10, 3);
+    if x >= k { return safe_sub(x, k); }
+    return k;
+}
+// expect-run: safe_sub 7 5 -> 2
+// expect-run: safe_sub 5 5 -> 0
+// expect-run: seven 9 -> 7
+// expect-run: seven 2 -> 2
+// expect-run: always 200 -> 200
+// expect-run: use_safe_sub 3 -> 7
+// expect-run: use_safe_sub 10 -> 3

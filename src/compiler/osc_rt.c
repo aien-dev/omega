@@ -51,7 +51,7 @@ static void log_event(OscRt *rt, uint8_t kind, unsigned slot, uint16_t len, uint
 }
 
 void osc_rt_trap(OscRt *rt, uint64_t code) {
-    rt->trap_code = (code >= 1 && code <= OSC_TRAP_RUNTIME) ? (uint32_t)code : OSC_TRAP_RUNTIME;
+    rt->trap_code = (code >= 1 && code <= OSC_TRAP_MAX) ? (uint32_t)code : OSC_TRAP_RUNTIME;
     longjmp(rt->jb, 1);
 }
 

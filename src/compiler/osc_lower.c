@@ -22,6 +22,7 @@ typedef struct {
     int cur;                 /* current block or -1 (dead) */
     int16_t vreg[OSC_CHECK_MAX_SYMS];
     int failed;
+    int fi;                  /* function being lowered */
 } L;
 
 #define NODE(i) (&l->ast->nodes[(i)])
@@ -229,6 +230,30 @@ static int expr(L *l, int i)
     }
 }
 
+/* OSC-2 contract check: evaluate clause (bool) with the checked semantics;
+ * false -> TRAP code (docs/osc/OSC-2-DESIGN.md section 1.5). */
+static void contract_check(L *l, int clause, unsigned code)
+{
+    uint32_t line = NODE(clause)->line;
+    int c = expr(l, clause);
+    int ok = newblk(l, line), bad = newblk(l, line);
+    cbr(l, c, ok, bad, line);
+    l->cur = bad;
+    OscInsn *x = emit(l, OSC_I_TRAP, line);
+    x->imm = code;
+    br(l, ok, line);
+    l->cur = ok;
+}
+
+/* ensures at a return whose value is in vreg v (-1 for void) */
+static void ensures_check(L *l, int v)
+{
+    const OscAst *a = l->ast;
+    if (a->ensn[l->fi] < 0 || a->ens_elide[l->fi]) return;
+    if (a->res_sym[l->fi] >= 0) l->vreg[a->res_sym[l->fi]] = (int16_t)v;
+    contract_check(l, a->ensn[l->fi], OSC_TRAP_ENSURES);
+}
+
 static void block(L *l, int i);
 
 static void stmt(L *l, int i)
@@ -377,6 +402,7 @@ static void stmt(L *l, int i)
     case ON_RETURN: {
         int v = -1;
         if (n->a >= 0) v = expr(l, n->a);
+        if (!n->flag) ensures_check(l, v); /* flag: checker proved it true here */
         releases(l, n);
         OscInsn *x = emit(l, OSC_I_RET, n->line);
         x->a = (int16_t)v;
@@ -422,8 +448,15 @@ static int lower_fn(L *l, int fi)
         f->nparams++;
     }
     l->cur = newblk(l, fn->line);
-    block(l, fn->b);
+    l->fi = fi;
+    if (a->reqn[fi] >= 0 && !a->req_elide[fi]) contract_check(l, a->reqn[fi], OSC_TRAP_REQUIRES);
+    /* body block inlined (same emission as block()) so a void function's
+     * fall-off ensures check precedes the body scope's releases */
+    const OscNode *body = NODE(fn->b);
+    for (int s = body->a; s >= 0 && l->cur >= 0; s = NODE(s)->next) stmt(l, s);
     if (l->cur >= 0) {
+        ensures_check(l, -1);
+        releases(l, body);
         releases(l, fn);
         OscInsn *x = emit(l, OSC_I_RET, (uint32_t)NODE(fn->b)->ival);
         x->a = -1;

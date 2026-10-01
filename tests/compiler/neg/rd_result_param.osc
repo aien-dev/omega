@@ -1,0 +1,6 @@
+// expect: REDEFINED_NAME object=result line=4
+// transition: parameter named result with ensures
+// `result` is reserved in a function that has an ensures clause
+fn f(result: u8) -> u8 ensures result >= 0 {
+    return result;
+}

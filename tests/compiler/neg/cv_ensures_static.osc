@@ -1,0 +1,7 @@
+// expect: CONTRACT_VIOLATION object=g line=6
+// transition: ensures false at return
+// a constant return value that violates ensures is refused at the return
+fn g(x: u8) -> u8 ensures result < 10 {
+    if x < 5 { return x; }
+    return 12;
+}

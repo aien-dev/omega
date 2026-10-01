@@ -569,19 +569,24 @@ static int parse_block(P *p)
     return n;
 }
 
-/* clause text: token spellings joined by single spaces, none after '(' or before ')' */
-static int parse_clause(P *p, char *out, const OscToken *kw)
+/* clause: one expression (OSC-2, docs/osc/OSC-2-DESIGN.md section 1). The
+ * source text is still recorded (token spellings joined by single spaces,
+ * none after '(' or before ')') and carried into the IR; the expression node
+ * is checked and lowered into runtime checks by the checker / lowerer. */
+static int parse_clause(P *p, char *out, const OscToken *kw, int32_t *node)
 {
-    size_t len = 0;
-    int depth = 0, prev = -1;
+    uint32_t start = p->pos;
     out[0] = 0;
-    for (;;) {
-        int k = cur(p)->kind;
-        if (k == OT_EOF) return syntax(p, "a function body '{'");
-        if (depth == 0 && (k == OT_LBRACE || k == OT_ENSURES)) break;
-        if (k == OT_LPAREN) depth++;
-        if (k == OT_RPAREN && depth > 0) depth--;
-        const OscToken *t = cur(p);
+    if (at(p, OT_LBRACE) || at(p, OT_ENSURES) || at(p, OT_EOF)) return syntax(p, "a contract expression");
+    int e = parse_expr(p);
+    if (e < 0) return -1;
+    if (!at(p, OT_LBRACE) && !at(p, OT_ENSURES))
+        return syntax(p, "'ensures' or a function body '{' after the contract expression");
+    size_t len = 0;
+    int prev = -1;
+    for (uint32_t i = start; i < p->pos; i++) {
+        const OscToken *t = &p->ast->toks[i];
+        int k = t->kind;
         int sp = len > 0 && prev != OT_LPAREN && k != OT_RPAREN;
         if (len + (size_t)sp + t->len + 1 > OSC_CLAUSE_MAX) {
             osc_diag_set(p->d, OSC_DIAG_CAPACITY, kw->line, kw->col, osc_tok_kind_name(kw->kind), 0, NULL,
@@ -593,8 +598,8 @@ static int parse_clause(P *p, char *out, const OscToken *kw)
         len += t->len;
         out[len] = 0;
         prev = k;
-        adv(p);
     }
+    *node = e;
     return 0;
 }
 
@@ -649,15 +654,17 @@ static int parse_fn(P *p)
     }
     uint32_t fi = a->nfns;
     a->req[fi][0] = a->ens[fi][0] = 0;
+    a->reqn[fi] = a->ensn[fi] = a->res_sym[fi] = -1;
+    a->req_elide[fi] = a->ens_elide[fi] = 0;
     if (at(p, OT_REQUIRES)) {
         const OscToken *kw = cur(p);
         adv(p);
-        if (parse_clause(p, a->req[fi], kw)) return -1;
+        if (parse_clause(p, a->req[fi], kw, &a->reqn[fi])) return -1;
     }
     if (at(p, OT_ENSURES)) {
         const OscToken *kw = cur(p);
         adv(p);
-        if (parse_clause(p, a->ens[fi], kw)) return -1;
+        if (parse_clause(p, a->ens[fi], kw, &a->ensn[fi])) return -1;
     }
     int b = parse_block(p);
     if (b < 0) return -1;

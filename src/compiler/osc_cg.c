@@ -37,8 +37,8 @@ typedef struct {
     size_t errn;
     /* per function */
     int64_t blk[OSC_MAX_BLOCKS];
-    int64_t trapl[OSC_TRAP_RUNTIME + 1];
-    int trap_used[OSC_TRAP_RUNTIME + 1];
+    int64_t trapl[OSC_TRAP_MAX + 1];
+    int trap_used[OSC_TRAP_MAX + 1];
     Fix *fx;
     size_t nfx, capfx;
     uint32_t frame;
@@ -321,7 +321,7 @@ static void gen_func(Cg *g, const OscUnit *u, int fi) {
     g->frame = (8u * f->nvregs + 8u + 15u) & ~15u;
     g->nfx = 0;
     for (int b = 0; b < OSC_MAX_BLOCKS; b++) g->blk[b] = -1;
-    for (int c = 0; c <= OSC_TRAP_RUNTIME; c++) { g->trapl[c] = -1; g->trap_used[c] = 0; }
+    for (int c = 0; c <= OSC_TRAP_MAX; c++) { g->trapl[c] = -1; g->trap_used[c] = 0; }
 
     /* prologue */
     E(g, osc_a64_pair(OSC_A64_STP_PRE, 29, 30, SP, -16));
@@ -408,7 +408,7 @@ static void gen_func(Cg *g, const OscUnit *u, int fi) {
         }
     }
     /* trap stubs, in code order */
-    for (int c = 1; c <= OSC_TRAP_RUNTIME; c++) {
+    for (int c = 1; c <= OSC_TRAP_MAX; c++) {
         if (!g->trap_used[c]) continue;
         g->trapl[c] = (int64_t)here(g);
         trap_seq(g, c);

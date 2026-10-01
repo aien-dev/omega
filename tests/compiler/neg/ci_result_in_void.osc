@@ -1,0 +1,6 @@
+// expect: CONTRACT_INVALID object=result line=4
+// transition: result in void function
+// a void function has no return value to name
+fn f(x: u8) ensures result == x {
+    let y: u8 = x;
+}

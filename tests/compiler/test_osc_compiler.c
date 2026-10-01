@@ -24,6 +24,7 @@
  * OSC-1 slice; not a general Omega compiler; no self-hosting.
  */
 #include <dirent.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,7 +38,7 @@
 #include "model/osc_model.h"
 
 static unsigned long checks, failures;
-static unsigned long trap_seen[9];
+static unsigned long trap_seen[OSC_TRAP_MAX + 1];
 static unsigned long diff_runs, rt_replays, trace_replays, rt_events_replayed;
 
 #define CHECK(cond, ...)                                  \
@@ -246,7 +247,7 @@ static int replay_rt(const OscRt *rt, char *why, size_t n)
 /* ------------------------------------------------------------ golden */
 static OscUnit *U1, *U2;
 static unsigned long expect_total;
-static const char *trap_names[9] = {"none", "OVERFLOW", "DIV0", "BOUNDS", "LOOP_BOUND", "CAST", "OOM", "SHIFT", "RUNTIME"};
+static const char *trap_names[OSC_TRAP_MAX + 1] = {"none", "OVERFLOW", "DIV0", "BOUNDS", "LOOP_BOUND", "CAST", "OOM", "SHIFT", "RUNTIME", "REQUIRES", "ENSURES"};
 
 static uint64_t parse_val(const char *s)
 {
@@ -334,7 +335,7 @@ static void golden(const char *dir, const char *name, unsigned fuzz)
         void *entry = osc_native_at(&nm, c1.entry[fi]);
         sm_state = 0x05C1C0DE00000000ull ^ (uint64_t)(fi * 7919) ^ (uint64_t)strlen(name) * 104729u;
         for (const char *q = name; *q; q++) sm_state = sm_state * 131 + (uint8_t)*q;
-        unsigned long pertrap[9] = {0};
+        unsigned long pertrap[OSC_TRAP_MAX + 1] = {0};
         for (unsigned it = 0; it < fuzz; it++) {
             uint64_t args[OSC_MAX_PARAMS] = {0}, ri = 0, rn = 0;
             for (int p = 0; p < f->nparams; p++) args[p] = gen_arg(f->vtype[p].s);
@@ -359,7 +360,7 @@ static void golden(const char *dir, const char *name, unsigned fuzz)
                 }
                 break;
             }
-            if (ti >= 0 && ti <= 8) { trap_seen[ti]++; pertrap[ti]++; }
+            if (ti >= 0 && ti <= OSC_TRAP_MAX) { trap_seen[ti]++; pertrap[ti]++; }
             CHECK(ti != OSC_TRAP_RUNTIME, "%s:%s RUNTIME trap (must never happen for checked code)", name, tok);
             if (ti == 0) {
                 CHECK(RI->live_count == 0 && RN->live_count == 0, "%s:%s leak: live_count interp %u native %u", name,
@@ -368,8 +369,8 @@ static void golden(const char *dir, const char *name, unsigned fuzz)
                 else CHECK(0, "%s:%s pool log replay rejected: %s", name, tok, why);
             }
         }
-        printf("  %-18s %-12s ok=%-5lu ovf=%-4lu div0=%-4lu bnd=%-4lu loop=%-4lu cast=%-4lu oom=%-4lu shift=%-4lu\n",
-               name, tok, pertrap[0], pertrap[1], pertrap[2], pertrap[3], pertrap[4], pertrap[5], pertrap[6], pertrap[7]);
+        printf("  %-18s %-12s ok=%-5lu ovf=%-4lu div0=%-4lu bnd=%-4lu loop=%-4lu cast=%-4lu oom=%-4lu shift=%-4lu rq=%-4lu en=%-4lu\n",
+               name, tok, pertrap[0], pertrap[1], pertrap[2], pertrap[3], pertrap[4], pertrap[5], pertrap[6], pertrap[7], pertrap[9], pertrap[10]);
     }
     expect_runs(name, src, &nm, &c1);
     osc_native_unmap(&nm);
@@ -494,6 +495,154 @@ static void negative(const char *dir, const char *name)
     free(src);
 }
 
+/* ------------------------------------------------------------ OSC-2 contract fuzz */
+/* Generated units: 2..4 helper functions with random `requires` / `ensures`
+ * clauses over their parameters (and `result`), plus an entry that chains
+ * calls to them. Each unit either compiles, or is refused statically with
+ * CONTRACT_VIOLATION (a clause or call that folds false); any other refusal
+ * is a failure. Compiled units run in the interpreter and natively on random
+ * arguments: identical trap / value / pool outcome (0 mismatches), and both
+ * TRAP REQUIRES and TRAP ENSURES must be observed. */
+static unsigned long cf_mismatch, cf_units, cf_compiled, cf_static_refused, cf_runs, cf_trap[OSC_TRAP_MAX + 1];
+
+static void cf_cat(char *b, size_t cap, const char *fmt, ...) __attribute__((format(printf, 3, 4)));
+static void cf_cat(char *b, size_t cap, const char *fmt, ...)
+{
+    size_t l = strlen(b);
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(b + l, cap - l, fmt, ap);
+    va_end(ap);
+}
+
+/* an atom of type T over the names in scope */
+static void cf_atom(char *o, size_t cap, int with_result)
+{
+    unsigned r = (unsigned)(sm() % (with_result ? 6 : 4));
+    switch (r) {
+    case 0: snprintf(o, cap, "a"); break;
+    case 1: snprintf(o, cap, "b"); break;
+    case 2: snprintf(o, cap, "%u", (unsigned)(sm() % 60)); break;
+    case 3: snprintf(o, cap, "%s %s %u", sm() & 1 ? "a" : "b", sm() & 1 ? "+" : "-", (unsigned)(sm() % 5)); break;
+    default: snprintf(o, cap, "result"); break;
+    }
+}
+
+static void cf_clause(char *o, size_t cap, int with_result)
+{
+    static const char *cmp[] = {"<", "<=", ">", ">=", "==", "!="};
+    char x[48], y[48], x2[48], y2[48];
+    do cf_atom(x, sizeof x, with_result); while (x[0] >= '0' && x[0] <= '9');
+    if (with_result && strcmp(x, "result") && sm() % 2) snprintf(x, sizeof x, "result");
+    cf_atom(y, sizeof y, 0);
+    unsigned shape = (unsigned)(sm() % 8);
+    if (shape < 4) { snprintf(o, cap, "%s %s %s", x, cmp[sm() % 6], y); return; }
+    do cf_atom(x2, sizeof x2, with_result); while (x2[0] >= '0' && x2[0] <= '9');
+    cf_atom(y2, sizeof y2, 0);
+    if (shape < 6)
+        snprintf(o, cap, "%s %s %s %s %s %s %s", x, cmp[sm() % 6], y, shape == 4 ? "&&" : "||", x2, cmp[sm() % 6], y2);
+    else if (shape == 6)
+        snprintf(o, cap, "!(%s %s %s)", x, cmp[sm() % 6], y);
+    else
+        snprintf(o, cap, "%s", sm() % 3 ? "true" : "a >= a");
+}
+
+static void contract_fuzz(unsigned n)
+{
+    static const char *tys[] = {"u8", "u16", "u32", "i8", "i16", "i32", "i64"};
+    static const OscScalar tsc[] = {OSC_T_U8, OSC_T_U16, OSC_T_U32, OSC_T_I8, OSC_T_I16, OSC_T_I32, OSC_T_I64};
+    static const char *ops[] = {"+", "-", "*", "&", "|", "^"};
+    static char src[8192];
+    sm_state = 0x05C2C0DEull;
+    for (unsigned u = 0; u < n; u++) {
+        unsigned ti = (unsigned)(sm() % 7);
+        const char *T = tys[ti];
+        unsigned nh = 2 + (unsigned)(sm() % 3);
+        src[0] = 0;
+        for (unsigned h = 0; h < nh; h++) {
+            char rq[200], en[200];
+            cf_clause(rq, sizeof rq, 0);
+            cf_clause(en, sizeof en, 1);
+            cf_cat(src, sizeof src, "fn g%u(a: %s, b: %s) -> %s", h, T, T, T);
+            if (sm() % 5) cf_cat(src, sizeof src, " requires %s", rq);
+            if (sm() % 5) cf_cat(src, sizeof src, " ensures %s", en);
+            unsigned body = (unsigned)(sm() % 4);
+            if (body == 0)
+                cf_cat(src, sizeof src, " {\n    return a %s b;\n}\n", ops[sm() % 6]);
+            else if (body == 1)
+                cf_cat(src, sizeof src, " {\n    if a > b { return a - b; }\n    return b %s a;\n}\n", ops[sm() % 6]);
+            else if (body == 2) /* a constant return: checked statically against ensures */
+                cf_cat(src, sizeof src, " {\n    if a == %u { return %u; }\n    return b;\n}\n",
+                       (unsigned)(sm() % 40), (unsigned)(sm() % 40));
+            else
+                cf_cat(src, sizeof src, " {\n    let t: %s = a %s %u;\n    return t;\n}\n", T, ops[sm() % 3],
+                       (unsigned)(sm() % 9));
+        }
+        cf_cat(src, sizeof src, "fn entry(a: %s, b: %s) -> %s {\n    let x0: %s = g0(a, b);\n", T, T, T, T);
+        for (unsigned h = 1; h < nh; h++) {
+            if (sm() % 6 == 0) /* literal arguments: decided at compile time when the clause folds */
+                cf_cat(src, sizeof src, "    let x%u: %s = g%u(%u, %u);\n", h, T, h, (unsigned)(sm() % 50),
+                       (unsigned)(sm() % 50));
+            else
+                cf_cat(src, sizeof src, "    let x%u: %s = g%u(x%u, %s);\n", h, T, h, h - 1, sm() & 1 ? "a" : "b");
+        }
+        cf_cat(src, sizeof src, "    return x%u;\n}\n", nh - 1);
+        cf_units++;
+
+        OscDiag d;
+        int rc = osc_compile(src, strlen(src), U1, &d, NULL);
+        if (rc) {
+            CHECK(d.kind == OSC_DIAG_CONTRACT_VIOLATION, "contract fuzz unit %u refused %s line %u object=%s: %s\n%s", u,
+                  osc_diag_kind_name(d.kind), d.line, d.object, d.message, src);
+            cf_static_refused++;
+            continue;
+        }
+        cf_compiled++;
+        OscCode c;
+        char err[160];
+        memset(&c, 0, sizeof c);
+        int cg = osc_cg_compile(U1, &c, err, sizeof err);
+        CHECK(cg == 0, "contract fuzz unit %u codegen refused: %s", u, err);
+        if (cg) continue;
+        OscNative nm;
+        int mr = osc_native_map(&nm, c.code, c.len);
+        CHECK(mr == 0, "contract fuzz unit %u native map failed (%d)", u, mr);
+        if (mr) { osc_cg_free(&c); continue; }
+        int fi = U1->nfuncs - 1;
+        void *entry = osc_native_at(&nm, c.entry[fi]);
+        for (unsigned it = 0; it < 64; it++) {
+            uint64_t args[OSC_MAX_PARAMS] = {0}, ri = 0, rn = 0;
+            args[0] = gen_arg(tsc[ti]);
+            args[1] = gen_arg(tsc[ti]);
+            osc_rt_reset(RI);
+            osc_rt_reset(RN);
+            int t1 = osc_interp_run_prevalidated(U1, fi, args, 2, RI, &ri);
+            int t2 = osc_rt_call_native(RN, entry, args, 2, &rn);
+            cf_runs++;
+            diff_runs++;
+            int same = t1 == t2 && t1 >= 0 && (t1 != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
+            CHECK(same, "contract fuzz unit %u args %llu %llu: interp trap %d ret %llu vs native trap %d ret %llu\n%s", u,
+                  (unsigned long long)args[0], (unsigned long long)args[1], t1, (unsigned long long)ri, t2,
+                  (unsigned long long)rn, src);
+            if (!same) { cf_mismatch++; break; }
+            if (t1 >= 0 && t1 <= OSC_TRAP_MAX) cf_trap[t1]++;
+            CHECK(t1 != OSC_TRAP_RUNTIME, "contract fuzz unit %u RUNTIME trap", u);
+        }
+        osc_native_unmap(&nm);
+        osc_cg_free(&c);
+    }
+    printf("contract fuzz: units=%lu compiled=%lu static_refused=%lu runs=%lu ok=%lu requires=%lu ensures=%lu "
+           "overflow=%lu other_traps=%lu mismatches=%lu\n",
+           cf_units, cf_compiled, cf_static_refused, cf_runs, cf_trap[0], cf_trap[OSC_TRAP_REQUIRES],
+           cf_trap[OSC_TRAP_ENSURES], cf_trap[OSC_TRAP_OVERFLOW],
+           cf_runs - cf_trap[0] - cf_trap[OSC_TRAP_REQUIRES] - cf_trap[OSC_TRAP_ENSURES] - cf_trap[OSC_TRAP_OVERFLOW] - cf_mismatch, cf_mismatch);
+    CHECK(cf_trap[OSC_TRAP_REQUIRES] > 0, "contract fuzz never hit TRAP REQUIRES");
+    CHECK(cf_trap[OSC_TRAP_ENSURES] > 0, "contract fuzz never hit TRAP ENSURES");
+    CHECK(cf_trap[0] > 0, "contract fuzz never returned normally");
+    CHECK(cf_static_refused > 0, "contract fuzz never produced a static CONTRACT_VIOLATION");
+    CHECK(cf_compiled > n / 2, "contract fuzz compiled only %lu of %u units", cf_compiled, n);
+}
+
 int main(int argc, char **argv)
 {
     unsigned fuzz = argc > 1 ? (unsigned)strtoul(argv[1], NULL, 10) : 1000;
@@ -522,12 +671,14 @@ int main(int argc, char **argv)
     unsigned muts = fuzz / 4 ? fuzz / 4 : 1;
     for (int i = 0; i < np; i++) mutate_fuzz(pdir, pv[i], muts);
     printf("front-end mutants: %lu (accepted %lu, refused %lu)\n", mut_total, mut_accepted, mut_refused);
+    contract_fuzz(fuzz / 5 ? fuzz / 5 : 20);
 
     const char *const *tn = trap_names;
     printf("trap coverage (runs, interpreter == native):\n");
-    for (int k = 0; k <= 8; k++) printf("  %-10s %lu\n", tn[k], trap_seen[k]);
+    for (int k = 0; k <= OSC_TRAP_MAX; k++) printf("  %-10s %lu\n", tn[k], trap_seen[k]);
     for (int k = 1; k <= 7; k++) CHECK(trap_seen[k] > 0, "trap %s never observed", tn[k]);
     CHECK(trap_seen[8] == 0, "RUNTIME trap observed");
+    CHECK(trap_seen[OSC_TRAP_REQUIRES] > 0 && trap_seen[OSC_TRAP_ENSURES] > 0, "golden fuzz never hit REQUIRES/ENSURES");
     CHECK(traces_skipped_overflow == 0, "%lu golden traces exceeded the model's 64 ids", traces_skipped_overflow);
 
     for (int i = 0; i < np; i++) free(pv[i]);
@@ -579,7 +730,7 @@ static void expect_runs(const char *name, const char *src, const OscNative *nm, 
                 uint64_t want = 0;
                 if (strncmp(res, "trap=", 5) == 0) {
                     want_trap = -1;
-                    for (int k = 1; k <= 8; k++)
+                    for (int k = 1; k <= OSC_TRAP_MAX; k++)
                         if (strcmp(res + 5, trap_names[k]) == 0) want_trap = k;
                 } else {
                     want = canon(f->ret.s, parse_val(res));

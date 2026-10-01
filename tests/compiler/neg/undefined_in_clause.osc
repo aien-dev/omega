@@ -1,0 +1,6 @@
+// expect: UNDEFINED_NAME object=y line=3
+// clauses see only the parameters (and result in ensures)
+fn f(x: u8) -> u8 requires x > y {
+    let y: u8 = 1;
+    return x + y;
+}
