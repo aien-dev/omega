@@ -223,6 +223,33 @@ check "T13b holder exits after overrun: flag released and logged" \
 check "T13c after the holder exits others are not blocked" '[ $crc = 0 ]'
 rm -f "$T/started" "$T/go" "$T/done" "$T/t13.err"
 
+# --- T13d/T13e the holder is quietlock OR its job (Drake 2026-10-01: release only when the holding job's
+# process exits). hold records job=<pid> jobgroup=<pgid> (the job runs in its own process group). If
+# quietlock itself is killed (-9) while the job runs on past expected_end, the flag stays held; once the
+# job ends, release-stale clears it.
+# Mutations killed: holder_alive() checking only pid= (T13d: release-stale releases, check 0);
+# no record_job() (T13d record check); release-stale ignoring a dead job group (T13e flag stays).
+reset
+QUIETLOCK_TEST=1 QUIETLOCK_TEST_MINUTE_SECONDS=2 "$Q" hold --owner A --minutes 1 -- \
+	sh -c 'touch "$1/started"; while [ ! -e "$1/go" ]; do sleep 1; done; touch "$1/done"' sh "$T" 2>/dev/null &
+hp=$!
+i=0; while [ $i -lt 20 ] && [ ! -e "$T/started" ]; do sleep 1; i=$((i + 1)); done
+jp=$(grep -o ' job=[0-9]*' "$FLAG" 2>/dev/null | cut -d= -f2)
+jg=$(grep -o ' jobgroup=[0-9]*' "$FLAG" 2>/dev/null | cut -d= -f2)
+check "T13d flag records the job pid and its own process group" '[ -n "$jp" ] && [ "$jg" = "$jp" ] && kill -0 "$jp" 2>/dev/null'
+kill -9 $hp; wait $hp 2>/dev/null
+sleep 3 # past expected_end (2 s after start)
+"$Q" check 2>/dev/null; crc=$?
+"$Q" release-stale >/dev/null 2>&1; src=$?
+check "T13d quietlock killed, job running past expected_end: flag held, check 75, release-stale refuses" \
+	'! kill -0 $hp 2>/dev/null && [ -e "$FLAG" ] && [ $crc = 75 ] && [ $src = 3 ] && [ ! -e "$T/done" ]'
+touch "$T/go"
+i=0; while [ $i -lt 20 ] && ! "$Q" release-stale >/dev/null 2>&1; do sleep 1; i=$((i + 1)); done
+"$Q" check 2>/dev/null; crc=$?
+check "T13e job ended: release-stale cleared the flag" \
+	'[ -e "$T/done" ] && [ ! -e "$FLAG" ] && [ $crc = 0 ] && grep -q "released stale flag: A quietlock .* job=$jp jobgroup=$jp" "$HIST"'
+rm -f "$T/started" "$T/go" "$T/done"
+
 # --- T14 expected_end without Z never counts as passed.
 # Mutation killed: making the trailing Z optional in parse_iso.
 D2=$(dead_pid)

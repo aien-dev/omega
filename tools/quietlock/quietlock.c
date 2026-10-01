@@ -7,7 +7,10 @@
  *   <f1> <f2> <f3> ... start=<iso> expected_end=<iso UTC> pid=<n> [hold=<id>]
  *
  * (first three fields = holder; pid= and expected_end= tokens anywhere).
- * quietlock adds a hold=<id> token; old lines without it still parse.
+ * quietlock adds a hold=<id> token; old lines without it still parse. After
+ * `hold` starts its command it also adds job=<pid> jobgroup=<pgid> (the
+ * command runs in its own process group). The holder counts as alive while
+ * pid=, job= or any process in jobgroup= is alive (zombies count as dead).
  *
  * Subcommands
  *   hold --owner ID --minutes N [--reason TEXT] -- CMD...
@@ -18,13 +21,13 @@
  *       77 if the approval token is missing or does not cover this hold.
  *   check
  *       Exit 0 if no flag, if the flag is stale (holder pid dead AND
- *       expected_end passed), or if $QUIETLOCK_HOLD equals the live hold id.
+ *       expected_end passed; holder = pid, job and jobgroup), or if $QUIETLOCK_HOLD equals the live hold id.
  *       Otherwise exit 75 with the holder on stderr.
  *   run -- CMD...
  *       check, then exec CMD.
  *   release-stale
- *       Remove the flag only when the holder pid is dead AND expected_end has
- *       passed (the quiet-guard.sh rule). Never touches a live hold (exit 3).
+ *       Remove the flag only when the holder (pid, job and jobgroup) is dead
+ *       AND expected_end has passed (the quiet-guard.sh rule). Never touches a live hold (exit 3).
  *
  * Approval token ($QUIETLOCK_DIR/.spark-quiet-approval), key=value lines:
  *   owner=<ID>  max_minutes=<N>  expires_at=<iso UTC>
@@ -58,6 +61,7 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -70,6 +74,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <termios.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -92,6 +97,10 @@ struct flag {
 	char holder[256];
 	long pid;
 	int has_pid;
+	long job;      /* job= : the command quietlock hold started */
+	int has_job;
+	long jobgrp;   /* jobgroup= : that command's own process group */
+	int has_jobgrp;
 	time_t end;
 	int has_end;
 	char end_text[64];
@@ -257,23 +266,104 @@ static void read_flag(struct flag *f)
 				f->has_end = 1;
 		} else if (!f->hold[0] && strncmp(tok, "hold=", 5) == 0) {
 			snprintf(f->hold, sizeof f->hold, "%s", tok + 5);
+		} else if (!f->has_job && strncmp(tok, "job=", 4) == 0) {
+			char *e;
+			long v;
+			errno = 0;
+			v = strtol(tok + 4, &e, 10);
+			if (e != tok + 4 && errno == 0 && v > 0) {
+				f->job = v;
+				f->has_job = 1;
+			}
+		} else if (!f->has_jobgrp && strncmp(tok, "jobgroup=", 9) == 0) {
+			char *e;
+			long v;
+			errno = 0;
+			v = strtol(tok + 9, &e, 10);
+			if (e != tok + 9 && errno == 0 && v > 0) {
+				f->jobgrp = v;
+				f->has_jobgrp = 1;
+			}
 		}
 	}
 }
 
-static int pid_alive(long pid)
+/* Reads /proc/<pid>/stat: state letter and process group. 0 = read, -1 = not readable. */
+static int proc_stat(const char *pid, char *state, long *pgrp)
 {
-	if (pid <= 0)
-		return 0;
-	if (kill((pid_t)pid, 0) == 0)
-		return 1;
-	return errno == EPERM; /* exists, owned by someone else */
+	char path[64], buf[512], *p;
+	FILE *fp;
+	long ppid;
+	snprintf(path, sizeof path, "/proc/%s/stat", pid);
+	fp = fopen(path, "r");
+	if (!fp)
+		return -1;
+	if (!fgets(buf, sizeof buf, fp)) {
+		fclose(fp);
+		return -1;
+	}
+	fclose(fp);
+	p = strrchr(buf, ')'); /* comm may hold spaces or ')' */
+	if (!p || sscanf(p + 1, " %c %ld %ld", state, &ppid, pgrp) != 3)
+		return -1;
+	return 0;
 }
 
-/* Stale = holder pid known and dead AND expected_end known and passed. */
+/* A zombie counts as dead (it runs nothing; an orphan may wait on a slow reaper). */
+static int pid_alive(long pid)
+{
+	char s[32], state;
+	long pg;
+	if (pid <= 0)
+		return 0;
+	if (kill((pid_t)pid, 0) != 0 && errno != EPERM) /* EPERM: exists, owned by someone else */
+		return 0;
+	snprintf(s, sizeof s, "%ld", pid);
+	if (proc_stat(s, &state, &pg) == 0 && state == 'Z')
+		return 0;
+	return 1;
+}
+
+/* Any non-zombie process in process group pgid. Without /proc: kill(-pgid, 0). */
+static int group_alive(long pgid)
+{
+	DIR *dir;
+	struct dirent *de;
+	if (pgid <= 0)
+		return 0;
+	if (kill((pid_t)-pgid, 0) != 0 && errno != EPERM)
+		return 0;
+	dir = opendir("/proc");
+	if (!dir)
+		return 1;
+	while ((de = readdir(dir)) != NULL) {
+		char state;
+		long pg;
+		if (de->d_name[0] < '1' || de->d_name[0] > '9')
+			continue;
+		if (proc_stat(de->d_name, &state, &pg) == 0 && pg == pgid && state != 'Z') {
+			closedir(dir);
+			return 1;
+		}
+	}
+	closedir(dir);
+	return 0;
+}
+
+/* Drake 2026-10-01: a hold lasts while its job runs. The holder is alive while
+ * the quietlock process (pid=) OR the job it started (job=) OR any process in
+ * the job's own process group (jobgroup=) is alive. */
+static int holder_alive(const struct flag *f)
+{
+	return (f->has_pid && pid_alive(f->pid)) || (f->has_job && pid_alive(f->job)) ||
+	       (f->has_jobgrp && group_alive(f->jobgrp));
+}
+
+/* Stale = holder pid known, holder (quietlock, job and job group) all dead,
+ * AND expected_end known and passed. */
 static int flag_stale(const struct flag *f)
 {
-	if (!f->has_pid || pid_alive(f->pid))
+	if (!f->has_pid || holder_alive(f))
 		return 0;
 	if (!f->has_end)
 		return 0;
@@ -282,14 +372,19 @@ static int flag_stale(const struct flag *f)
 
 static void describe(const struct flag *f, char *buf, size_t n)
 {
-	char pid[32];
+	char pid[32], job[64];
+	int alive = holder_alive(f);
 	if (f->has_pid)
 		snprintf(pid, sizeof pid, "%ld", f->pid);
 	else
 		snprintf(pid, sizeof pid, "?");
-	snprintf(buf, n, "holder='%s' pid=%s alive=%s expected_end=%s%s", f->holder[0] ? f->holder : "unknown",
-		 pid, f->has_pid && pid_alive(f->pid) ? "yes" : "no", f->end_text[0] ? f->end_text : "?",
-		 f->has_pid && pid_alive(f->pid) && f->has_end && time(NULL) > f->end ? " overrun=yes" : "");
+	job[0] = '\0';
+	if (f->has_job || f->has_jobgrp)
+		snprintf(job, sizeof job, " job=%ld jobgroup=%ld", f->has_job ? f->job : 0L,
+			 f->has_jobgrp ? f->jobgrp : 0L);
+	snprintf(buf, n, "holder='%s' pid=%s%s alive=%s expected_end=%s%s", f->holder[0] ? f->holder : "unknown",
+		 pid, job, alive ? "yes" : "no", f->end_text[0] ? f->end_text : "?",
+		 alive && f->has_end && time(NULL) > f->end ? " overrun=yes" : "");
 }
 
 /* No state dir (GitHub CI, another machine, fresh account): nothing can be held. */
@@ -418,11 +513,50 @@ static volatile sig_atomic_t g_child;
 static volatile sig_atomic_t g_sig;
 static const int g_fwd[] = { SIGINT, SIGTERM, SIGHUP, SIGQUIT };
 
+/* Forward to the job's whole process group (the job runs in its own group, so a
+ * signal sent to our group no longer reaches it directly); fall back to the pid. */
 static void on_signal(int sig)
 {
+	int e = errno;
 	g_sig = sig;
-	if (g_child > 0)
+	if (g_child > 0 && kill((pid_t)-g_child, sig) != 0)
 		kill((pid_t)g_child, sig);
+	errno = e;
+}
+
+/* After fork: add job=<pid> jobgroup=<pgid> to our own flag (under the flock,
+ * only if the flag still carries our hold id), published with rename(2). */
+static int record_job(const char *id, pid_t child)
+{
+	struct flag f;
+	char nl[1200], tmp[PBUF + 32];
+	int fd, tfd, n, ok = -1;
+	fd = lock_take(LOCK_EX);
+	read_flag(&f);
+	if (!f.present || strcmp(f.hold, id) != 0) {
+		lock_drop(fd);
+		history("hold %s: flag gone or replaced before the job was recorded, left alone", id);
+		return 0;
+	}
+	n = snprintf(nl, sizeof nl, "%s job=%ld jobgroup=%ld\n", f.line, (long)child, (long)child);
+	snprintf(tmp, sizeof tmp, "%s.tmp.%ld", g_flag, (long)getpid());
+	unlink(tmp);
+	if (n > 0 && (size_t)n < sizeof nl) {
+		tfd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
+		if (tfd >= 0) {
+			int wok = write(tfd, nl, (size_t)n) == n && fsync(tfd) == 0;
+			if (close(tfd) == 0 && wok && rename(tmp, g_flag) == 0)
+				ok = 0;
+		}
+	}
+	if (ok != 0) {
+		fprintf(stderr, "quietlock: cannot record the job in %s: %s\n", g_flag, strerror(errno));
+		unlink(tmp);
+	} else {
+		history("hold %s: job=%ld jobgroup=%ld recorded", id, (long)child, (long)child);
+	}
+	lock_drop(fd);
+	return ok;
 }
 
 static void make_hold_id(char *buf, size_t n)
@@ -485,7 +619,8 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 	int fd, tfd, n, status = 0, rc;
 	pid_t child;
 	time_t now, end_t;
-	int overrun = 0;
+	int overrun = 0, tty = 0;
+	int gate[2];
 
 	if (!owner || !valid_owner(owner)) {
 		fprintf(stderr, "quietlock: --owner must be 1-64 chars of A-Z a-z 0-9 . _ -\n");
@@ -575,28 +710,74 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 	sa.sa_handler = on_alarm; /* no SA_RESTART: interrupts waitpid at expected_end */
 	sigaction(SIGALRM, &sa, NULL);
 
+	/* The job runs in its own process group and waits on a pipe until its pid
+	 * and group are in the flag, so it never runs unrecorded: if quietlock dies
+	 * first, the job sees EOF and exits 127 without running. */
+	if (pipe(gate) != 0) {
+		fprintf(stderr, "quietlock: pipe: %s\n", strerror(errno));
+		release_mine(id, 1, 0);
+		return 1;
+	}
 	child = fork();
 	if (child < 0) {
 		fprintf(stderr, "quietlock: fork: %s\n", strerror(errno));
+		close(gate[0]);
+		close(gate[1]);
 		release_mine(id, 1, 0);
 		return 1;
 	}
 	if (child == 0) {
 		struct sigaction dfl;
+		char go;
+		ssize_t r;
 		memset(&dfl, 0, sizeof dfl);
 		dfl.sa_handler = SIG_DFL;
 		sigemptyset(&dfl.sa_mask);
 		for (i = 0; i < sizeof g_fwd / sizeof g_fwd[0]; i++)
 			sigaction(g_fwd[i], &dfl, NULL);
+		close(gate[1]);
+		setpgid(0, 0);
+		do
+			r = read(gate[0], &go, 1);
+		while (r < 0 && errno == EINTR);
+		if (r != 1)
+			_exit(127);
+		close(gate[0]);
 		if (setenv("QUIETLOCK_HOLD", id, 1) != 0)
 			_exit(127);
 		execvp(argv[0], argv);
 		fprintf(stderr, "quietlock: cannot run %s: %s\n", argv[0], strerror(errno));
 		_exit(127);
 	}
+	close(gate[0]);
+	setpgid(child, child); /* also done by the child; whichever runs first wins */
+	signal(SIGPIPE, SIG_IGN); /* a job that died before the go byte must not kill us */
 	g_child = child;
+	/* Interactive use: hand the terminal to the job's group (as a shell does) so
+	 * it can read the keyboard and gets Ctrl-C directly; taken back at exit. */
+	tty = isatty(STDIN_FILENO) && tcgetpgrp(STDIN_FILENO) == getpgrp();
+	if (tty) {
+		signal(SIGTTOU, SIG_IGN);
+		tcsetpgrp(STDIN_FILENO, child);
+	}
+	if (record_job(id, child) != 0) {
+		close(gate[1]); /* EOF: the job exits 127 without running */
+		while (waitpid(child, &status, 0) < 0 && errno == EINTR)
+			;
+		if (tty)
+			tcsetpgrp(STDIN_FILENO, getpgrp());
+		release_mine(id, 1, 0);
+		return 1;
+	}
+	{
+		ssize_t wr;
+		do
+			wr = write(gate[1], "g", 1);
+		while (wr < 0 && errno == EINTR);
+	}
+	close(gate[1]);
 	if (g_sig)
-		kill(child, g_sig);
+		on_signal(g_sig);
 	/* Drake 2026-10-01: expected_end is ADVISORY. When it passes and the command
 	 * is still running, the hold is KEPT and one overrun warning is logged. The
 	 * flag is released only when the command exits (below). The command is NEVER
@@ -630,6 +811,8 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 		rc = 128 + WTERMSIG(status);
 	else
 		rc = 1;
+	if (tty)
+		tcsetpgrp(STDIN_FILENO, getpgrp());
 	release_mine(id, rc, overrun);
 	return rc;
 }
