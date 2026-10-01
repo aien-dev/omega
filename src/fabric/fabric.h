@@ -48,7 +48,10 @@
  *                 sender, so a machine changes or withdraws only its own entries
  *   LEAVE       0
  *
- * Receive rules, in order (first failure is the verdict; nothing changes):
+ * Receive rules, in order (first failure is the verdict; nothing changes
+ * except that an authenticated message of the held generation that passed the
+ * REPLAY check consumes its seq even when refused later, so a refused message
+ * can never succeed on replay):
  *   form                        FAB_E_FORMAT
  *   dest != self, sender = self FAB_E_MISMATCH
  *   sender not on the roster    FAB_E_NOT_ENROLLED
@@ -69,10 +72,14 @@
  * own clock and hands the end to the graph (cq_machine_advertise_id). When
  * now >= lease end the member is LOST: every entry it advertised is withdrawn.
  * A lost member comes back only by a JOIN with a higher generation.
- * *
+ *
  * Generations never move back: a JOIN is accepted only with a generation
  * above the one held, and anything older is FAB_E_STALE_GEN, so old traffic
  * still in flight after a restart cannot roll membership back.
+ * Limits (F5-0): the held generation and seq live in memory only, so a
+ * receiver restart forgets them (persistence comes with the TRUST-1 / M6
+ * identity work), and a JOIN of a new generation refused before admission
+ * (ontology, capacity) is not remembered.
 
  * Capability generations. rx_capq accepts a record only when its generation
  * is newer than the one held. Advertisers number entries with

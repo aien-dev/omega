@@ -355,6 +355,18 @@ static void scenario(uint8_t out[4][32]) {
     CHECK(pump(h, t1) == 0, "owner withdraw accepted");
     CHECK(query(h, A, t1, 0).from[B] == 1, "B's withdrawn entry gone from A");
 
+    /* A refused message still consumes its sequence: replaying it is REPLAY. */
+    {
+        uint8_t zb[FAB_RENEW_BODY] = {0};
+        uint8_t rm[FAB_MSG_MAX];
+        size_t rl = 0;
+        CHECK(fab_seal(&h->node[B], &h->id[A], FAB_MSG_RENEW, zb, sizeof zb, t1, rm, &rl) == FAB_OK, "seal zero-lease renew");
+        v = deliver(h, A, rm, rl, t1);
+        CHECK(v.code == FAB_E_FORMAT, "zero-lease renew refused (%s)", fab_strerror(v.code));
+        v = deliver(h, A, rm, rl, t1);
+        CHECK(v.code == FAB_E_REPLAY, "replayed refused renew is REPLAY (%s)", fab_strerror(v.code));
+    }
+
     /* B leaves: its entries go; a later message is not a member's. */
     CHECK(fab_leave(&h->node[B], t1 + MS) == FAB_OK, "B leave");
     CHECK(pump(h, t1 + MS) == 0, "leave accepted");
@@ -363,6 +375,11 @@ static void scenario(uint8_t out[4][32]) {
     CHECK(fab_renew(&h->node[B], LEASE, t1 + 2 * MS) == FAB_OK, "B renew sent");
     pump(h, t1 + 2 * MS);
     CHECK(h->node[A].counts[-FAB_E_NOT_MEMBER] == 1, "after-leave renew refused");
+    uint64_t stale0 = h->node[A].counts[-FAB_E_STALE_GEN];
+    CHECK(fab_join(&h->node[B], LEASE, t1 + 3 * MS) == FAB_OK, "B same-generation rejoin sent");
+    pump(h, t1 + 3 * MS);
+    CHECK(h->node[A].counts[-FAB_E_STALE_GEN] == stale0 + 1, "same-generation JOIN after leave refused");
+    CHECK(fab_member(&h->node[A], &h->id[B])->state == FAB_ST_LEFT, "B stays left");
 
     /* A lease whose end would pass UINT64_MAX is refused before anything changes. */
     uint64_t tmax = UINT64_MAX - 10;

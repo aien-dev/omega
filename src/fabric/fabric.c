@@ -237,6 +237,11 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
         if (gen < m->generation) return refuse(n, v, FAB_E_STALE_GEN, 0, &sender, gen, seq, now_us);
         if (gen == m->generation && seq <= m->last_seq)
             return refuse(n, v, FAB_E_REPLAY, 0, &sender, gen, seq, now_us);
+        /* An authenticated, fresh message of the held generation consumes its
+         * sequence number whatever the outcome, so a refused message (for
+         * example a RENEW refused for catalog capacity) cannot succeed if it
+         * is replayed later. */
+        if (gen == m->generation) m->last_seq = seq;
     }
     const uint8_t *body = msg + FAB_HDR_BYTES;
     if (kind == FAB_MSG_JOIN) {
