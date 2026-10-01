@@ -416,3 +416,126 @@ New trap: TRAP ARENA_FULL = 11 (`OSC_TRAP_ARENA_FULL`, now `OSC_TRAP_MAX`).
     program's runtime behaviour satisfies the model.**
 - `make osc2-receipt ITEM=arenas` records the arena fuzz lines, the destruction order, the
   runtime model replay lines (plain and ASan) and the ARENA_FULL run count.
+
+## 4. Legacy AArch64 writer
+
+### 4.1 Statement
+
+`src/aarch64_encoder.c` is the instruction writer used by the existing Omega code
+(`omega_program_realize`, the matvec emitters, `omega_self_host`, `omega_exec`, the
+polyglot encoder, `rx_omega`, the M5/M6/M9/M14 gates). Up to OSC-1 it trimmed fields
+silently (`rm & 0x1f`, `imm19 & 0x7FFFF`, `(uoff >> scale) & 0xFFF`, `simm9 & 0x1FF`,
+`(shift / 16) & 3`, ...), which OSC-0 III.6 says must be hardened (OSC-1-DESIGN.md
+section 9 left it untouched). OSC-2 item 4 takes option A (fix, not retire):
+
+- every emitter checks every field against its exact architectural range before it
+  encodes anything;
+- an in-range call produces the same word as before: the encoding formulas are
+  unchanged and their masks are now no-ops;
+- an out-of-range field is refused, never trimmed (4.3);
+- the set of files that use the writer is frozen (4.4). New code uses the validating
+  encoder `src/compiler/osc_a64.c`.
+
+Option B (keep trimming for a caller that relies on it) was not needed: an audit of all
+280 call sites found no caller that passes an out-of-range field. Every constant is in
+range; computed values are either range-checked by the caller first
+(`src/polyglot/omx_encoder.c`, its `resolve()` branch fix-ups), already cast to the
+parameter type by the caller (`omega_self_host.c` instruction counts), or registers
+X0..X17/XZR. The M6/M9/M14 gates and the host suites in 4.5 run through the strict writer
+and pass unchanged.
+
+### 4.2 Ranges (normative)
+
+| Emitter | Field | Accepted |
+|---|---|---|
+| all | `rd` `rn` `rm` `rt` | 0..31 (31 is XZR or SP, as the instruction defines) |
+| all with `sf` | `sf` | C `bool` (0 or 1 by type) |
+| `movz` `movk` | `imm16` | 0..65535 (`uint16_t`) |
+| `movz` `movk` | `shift` | 0, 16, 32, 48 when `sf` = 1; 0, 16 when `sf` = 0 |
+| `b` | `imm26` (words) | -2^25 .. 2^25 - 1 |
+| `b_cond` | `cond` | 0..15 |
+| `b_cond` `cbz` `cbnz` | `imm19` (words) | -2^18 .. 2^18 - 1 |
+| `adr` | `imm21` (bytes) | -2^20 .. 2^20 - 1 |
+| `ldr_uoff` `str_uoff` | `uoff` (bytes) | multiple of 8 (`sf` = 1) or 4 (`sf` = 0), `uoff / size` <= 4095 |
+| `ldrb_uoff` `strb_uoff` | `uoff` (bytes) | 0..4095 |
+| `ldr_post` `str_post` `ldr_x_post` `str_x_post` | `simm9` | -256..255 |
+| `subs_imm` | `imm12` | 0..4095 |
+
+`ret` has no fields. The "buffer full" result (-1, nothing written) is unchanged.
+
+### 4.3 Refusal path
+
+A refused call writes nothing and does not advance `*pos`. It prints exactly one line on
+stderr,
+
+```
+A64_LEGACY_FIELD_OUT_OF_RANGE <emitter> <field>=<value>
+```
+
+(`<emitter>` is the C function name, e.g. `aarch64_emit_cbz`; `<field>` is the parameter
+name; `<value>` is the received value in signed decimal), and then calls `abort()`
+(SIGABRT). Abort is deliberate and deterministic: several existing callers ignore the
+emitter's `int` result (for example the matvec emitters), and this item may not change
+callers, so a soft error would silently drop an instruction and produce wrong code. A
+refusal is a bug in the caller.
+
+### 4.4 No new callers
+
+`tests/compiler/legacy_a64_allowlist.txt` lists the 16 C files that include
+`aarch64_encoder.h` or name an `aarch64_emit_*` function (14 callers, the writer itself
+and its header, plus this item's test). `tests/compiler/legacy_a64_callers.sh` scans every
+tracked and untracked (not ignored) `*.c` / `*.h` file and requires the set to equal the
+list:
+
+- `A64_LEGACY_NEW_CALLER <file>`: a file not on the list uses the writer;
+- `A64_LEGACY_ALLOWLIST_STALE <file>`: a listed file no longer uses it (drop the line;
+  the list may only shrink).
+
+`--selftest` first proves both refusals fire on a synthetic tree (a new includer, a new
+direct caller, a stale line). It runs in `make test-compiler`. The CI `compiler` job
+guard now also triggers on `src/aarch64_*` changes.
+
+### 4.5 Evidence
+
+- `tests/compiler/test_legacy_a64.c` (in `make test-compiler`, plain and ASan/UBSan):
+  - **differential:** the pre-OSC-2 formulas are kept in the test as the oracle
+    (`old_*`). For all 25 emitters, in-range fields give the oracle's word. The field
+    space is covered exhaustively for the register-register forms, `mov_reg`,
+    `movz`/`movk` (all registers, immediates and shifts), `b_cond` (all conditions and
+    offsets), `ldr`/`str` unsigned offset, `ldrb`/`strb`, the post-index forms and
+    `subs_imm`; `b`, `cbz`, `cbnz` and `adr` use 400 000 seeded random samples each with
+    every range edge (about 71 million words in all). Each word also decodes through
+    `src/aarch64_decoder.c` to the same operation and to every field that decoder reports
+    (`sf`, registers, `imm16`/`hw`, condition, raw branch field). The decoder does not
+    report load/store or `subs` immediates or the ADR offset, so the test checks the
+    `imm12` field of `ldr`/`str` and the reassembled ADR offset from the word directly.
+    Line: `legacy a64 differential: emitters=25 mode=full words=.. decoded=.. mismatches=0`.
+    The ASan leg runs `quick` (strided samples, same edges).
+  - **refusal:** 90 cases, every field of every emitter that has one, just outside its
+    range and at extremes (for example `rd=32`, `shift=17`, `shift=32` with `sf` = 0,
+    `imm26=2^25`, `cond=16`, misaligned `uoff`, `simm9=-257`). Each runs in a child
+    process with output buffer and position in shared memory; the child must die by
+    SIGABRT with exactly the line of 4.3 on stderr and must not touch buffer or position
+    (core dumps disabled in the child). Line:
+    `legacy a64 refusal: cases=90 named_abort_and_no_write=90`.
+  - mutation check (done once, not in the suite): removing the `simm9` check, or changing
+    one bit of the `mul_reg` formula, makes the test fail.
+- M6/M9/M14 gate output (from `omegatool --run` on) is byte-identical to the baseline
+  taken before this item.
+- Host suites that link the writer were run on one core and pass (list and results in
+  the item report); suites that need the GB10, the resident seat or the quiet flag were
+  not run.
+- `make osc2-receipt ITEM=encoder` records the differential, ASan and refusal lines, the
+  caller check line and, with `PHYSICS_DIR` set, the M6/M9/M14 gates.
+
+### 4.6 Not covered
+
+- Instructions are checked field by field; the writer still does not know whether a
+  register choice is legal for a particular form beyond 0..31 (for example it does not
+  refuse SP where an instruction reads XZR). Callers keep that responsibility; the OSC-1
+  encoder `osc_a64.c` is the one that checks SP vs XZR.
+- `src/aarch64_decoder.c` is unchanged: it still decodes only the subset above and keeps
+  no load/store or `subs` immediate.
+- The allowlist check scans C files only; it does not stop a caller written in another
+  language or one that declares the functions itself under another spelling.
+- Refusal ends the process; there is no recoverable error API for the legacy writer.
