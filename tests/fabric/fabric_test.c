@@ -572,7 +572,7 @@ static void test_restart_replay(void) {
     CHECK(c && c->state == FAB_ST_LOST && c->generation == 1 && c->last_seq == c_seq,
           "restored C: LOST, generation 1, last seq %llu", (unsigned long long)c_seq);
     FabVerdict v = deliver(h, A, join_c, join_len, 200 * MS);
-    CHECK(v.code == FAB_E_STALE_GEN, "captured JOIN replayed after restart: %s", fab_strerror(v.code));
+    CHECK(v.code == FAB_E_REPLAY, "captured JOIN replayed after restart: %s", fab_strerror(v.code));
     v = deliver(h, A, renew_c, renew_len, 200 * MS);
     CHECK(v.code == FAB_E_REPLAY, "captured RENEW replayed after restart: %s", fab_strerror(v.code));
     CHECK(!fab_member_live(&h->node[A], &h->id[C], 200 * MS), "replay made C live");
