@@ -204,8 +204,17 @@ int sr_route_alternatives(const SrRouter *r, const SrRequirement *req, const CqH
     return route_k(r, req, held, now_us, out, max, 1);
 }
 
+/* A machine is live when it is this one or its Fabric lease has not ended.
+ * Scans the catalog's lease table (keys are unique; no hash assumption). */
+static int lease_live(const CqCatalog *c, uint32_t machine, uint64_t now_us) {
+    if (machine == c->self_machine) return 1;
+    if (machine == 0 || !c->mach_key || !c->mach_lease) return 0;
+    for (uint32_t i = 0; i <= c->mach_mask; i++)
+        if (c->mach_key[i] == machine) return c->mach_lease[i] > now_us;
+    return 0;
+}
+
 int sr_route_check(const SrRouter *r, const SrRoute *route, uint64_t now_us) {
-    (void)now_us;
     if (!r || !r->graph || !route || (route->verdict != SR_OK && route->verdict != SR_E_REMOTE))
         return SR_E_ARG;
     const CqEntry *e = cq_lookup(r->graph, &route->key);
@@ -223,7 +232,8 @@ int sr_route_check(const SrRouter *r, const SrRoute *route, uint64_t now_us) {
             (route->target_known && !aien_mid_equal(&m, &route->target)))
             return SR_E_MACHINE;
     }
-    if (route->remote) return SR_E_REMOTE;     /* the lease is the Fabric's to check at send */
+    if (!lease_live(r->graph, e->machine_id, now_us)) return SR_E_MACHINE;   /* lease ended */
+    if (route->remote) return SR_E_REMOTE;
     if (e->machine_id != r->graph->self_machine) return SR_E_MACHINE;
     const AgSkill *s = executable(r->skills, e->skill_id);
     if (!s || (!digest_zero(e->skill_digest) && memcmp(e->skill_digest, s->identity, 32) != 0))

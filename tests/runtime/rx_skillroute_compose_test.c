@@ -355,6 +355,14 @@ static void t_machine(void) {
     CHECK(sr_bind_node(&f.r, &g_tmpl, (uint32_t)s, &q, &held, NOW_US, &route) == SR_E_REMOTE &&
           route.chosen.skill_id == 11 && aien_mid_equal(&route.target, &b) && unbound(s),
           "pinned to B: SR_E_REMOTE to B's skill 11, node unbound");
+    /* A held remote route is checked against the lease: valid before it ends, SR_E_MACHINE after. */
+    CHECK(sr_route_check(&f.r, &route, NOW_US) == SR_E_REMOTE, "held route to B before lease end: SR_E_REMOTE");
+    CHECK(sr_route_check(&f.r, &route, NOW_US + 999999) == SR_E_REMOTE, "one microsecond before lease end");
+    CHECK(sr_route_check(&f.r, &route, NOW_US + 1000000) == SR_E_MACHINE &&
+          sr_bind_route(&f.r, &g_tmpl, (uint32_t)s, &route, NOW_US + 2000000) == SR_E_MACHINE && unbound(s),
+          "held route to B after lease end: SR_E_MACHINE, node unbound");
+    CHECK(cq_machine_advertise_id(&f.c, &b, NOW_US + 5000000, NULL) == CQ_OK &&
+          sr_route_check(&f.r, &route, NOW_US + 2000000) == SR_E_REMOTE, "lease renewed: route valid again");
     /* A provider on a leased index with no canonical identity: never a target. */
     SrRequirement qs = requirement(OP_SUMMARIZE);
     qs.local_only = 0;

@@ -141,7 +141,7 @@ int sr_bind_node(const SrRouter *r, AgGraph *g, uint32_t node, const SrRequireme
  * sr_route_alternatives) still what the graph says? Fails closed with
  * SR_E_WITHDRAWN, SR_E_UNAVAILABLE, SR_E_STALE (generation, version or digest
  * moved, or the local procedure no longer matches) or SR_E_MACHINE (lease
- * ended, identity gone). Authority is not decided here: binding declares it
+ * ended at now_us, identity gone). Authority is not decided here: binding declares it
  * and compile finds it held or missing. */
 int sr_route_check(const SrRouter *r, const SrRoute *route, uint64_t now_us);
 
