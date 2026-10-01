@@ -1,0 +1,10 @@
+# fixture: shape of `make test-tensor` output, not a real run
+./build/test_omega_tensor
+reduce seam: omega_reduce_cpu (E1 WP-D)
+M20 OMEGA_TENSOR CPU tests: 412 pass, 0 fail
+M20 verdict: NOT QUALIFIED (CPU tier only; GB10 parity NOT_RUN)
+./build/test_omega_tensor_asan
+reduce seam: omega_reduce_cpu (E1 WP-D)
+M20 OMEGA_TENSOR CPU tests: 412 pass, 0 fail
+M20 verdict: NOT QUALIFIED (CPU tier only; GB10 parity NOT_RUN)
+test-tensor-no-hooks: PASS (test-only hook absent from default build)

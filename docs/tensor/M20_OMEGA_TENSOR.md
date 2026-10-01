@@ -111,7 +111,7 @@ removed. Order and padding mutations are caught by the E1 WP-D suite.
 | GB10 parity | NOT_RUN | no GB10 realization table yet; no chip run in this work |
 | GB10 general matmul (Tensor Core beyond narrow K/tile) | MISSING_IMPLEMENTATION | |
 | Crash-safe storage lifetime | MISSING_IMPLEMENTATION | storage is in-process memory only; no persistence or crash recovery |
-| Reproducible receipt | MISSING_IMPLEMENTATION | no content-addressed receipt writer for this gate yet |
+| Reproducible receipt | NOT_RUN | implemented, awaiting forge: `tools/m20_receipt.sh` writes `<evidence-dir>/<sha256>.json` (0444, exclusive, never overwritten) from the host logs, optional GB10 chip evidence and this table; `test-m20-receipt` + receipt mutants in `test-tensor-mutations` |
 | E1 numeric closure | PASS (on main) | E1 PASSED on main 4863803; receipt merged in omega#177 |
 
 **M20 verdict: not qualified.** GB10 parity NOT_RUN; crash-safe storage

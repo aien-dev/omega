@@ -58,5 +58,7 @@ EOM
     fi
 done
 IFS=$old_ifs
+# M20 receipt writer mutants (MUT: markers in tools/m20_receipt.sh), own sweep.
+tools/m20_receipt_mutations.sh || fail=1
 if [ "$fail" -ne 0 ]; then echo "tensor mutation sweep: FAIL"; exit 1; fi
 echo "tensor mutation sweep: PASS ($total of $total mutations caught)"
