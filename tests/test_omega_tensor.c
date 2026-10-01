@@ -1411,6 +1411,304 @@ static void test_const_neg(void) {
     for (size_t i = 0; i < sizeof(all) / sizeof(all[0]); i++) omega_tensor_release(g, all[i]);
 }
 
+/* ---- placement (CR-4): embed + concat ------------------------------------- *
+ * Reference: zero-filled row-major array; each source element's position is
+ * computed from shapes, start and step only (never from tensor strides).
+ * Every comparison is on raw bits (NaN payloads included: pure copies). */
+static uint32_t *rdbits(OmegaTensor t, uint64_t n) {
+    uint32_t *o = malloc((size_t)n * 4 + 4);
+    if (o && omega_tensor_read(g, t, o, (size_t)n * 4)) { free(o); return NULL; }
+    return o;
+}
+static void row_strides(uint32_t r, const uint64_t *s, uint64_t *st) {
+    uint64_t m = 1;
+    for (uint32_t d = r; d-- > 0;) { st[d] = m; m *= s[d]; }
+}
+static void ref_embed(uint32_t r, const uint64_t *xs, const uint32_t *x, const uint64_t *os,
+                      const uint64_t *start, const uint64_t *step, uint32_t *o) {
+    uint64_t ost[OMEGA_TENSOR_MAX_RANK];
+    row_strides(r, os, ost);
+    memset(o, 0, (size_t)prod(r, os) * 4);
+    for (uint64_t e = 0; e < prod(r, xs); e++) {
+        uint64_t rem = e, pos = 0;
+        for (uint32_t d = r; d-- > 0;) {
+            uint64_t i = rem % xs[d];
+            rem /= xs[d];
+            pos += (start[d] + i * (step ? step[d] : 1)) * ost[d];
+        }
+        o[pos] = x[e];
+    }
+}
+static size_t bits_diff(const uint32_t *a, const uint32_t *b, uint64_t n) {
+    size_t m = 0;
+    for (uint64_t i = 0; i < n; i++) m += a[i] != b[i];
+    return m;
+}
+static uint32_t live_tensors(void) { uint32_t t, s; omega_tensor_live_counts(g, &t, &s); return t; }
+
+static void test_placement(void) {
+    /* 1. slice(embed(x)) == x and embed == reference, random small shapes */
+    size_t bad_ref = 0, bad_rt = 0, bad_inv = 0;
+    int rcs = 0;
+    for (int trial = 0; trial < 60; trial++) {
+        uint32_t r = 1 + (uint32_t)(rnd() % 4);
+        uint64_t xs[4], os[4], st[4], sp[4], stop[4];
+        for (uint32_t d = 0; d < r; d++) {
+            xs[d] = 1 + rnd() % 4;
+            st[d] = rnd() % 3;
+            sp[d] = 1 + rnd() % 3;
+            stop[d] = st[d] + (xs[d] - 1) * sp[d] + 1;
+            os[d] = stop[d] + rnd() % 3;
+        }
+        uint64_t n = prod(r, xs), on = prod(r, os);
+        float *x = malloc((size_t)n * 4);
+        fill(x, (size_t)n, rand_f32);
+        OmegaTensor X = mk(r, xs, x), Y = {0, 0}, Z = {0, 0}, W = {0, 0};
+        uint32_t *want = malloc((size_t)on * 4), *xb = malloc((size_t)n * 4);
+        memcpy(xb, x, (size_t)n * 4);
+        ref_embed(r, xs, xb, os, st, sp, want);
+        int rc = omega_tensor_embed(g, X, r, os, st, sp, &Y);
+        rcs |= rc;
+        if (!rc) {
+            uint32_t *y = rdbits(Y, on);
+            bad_ref += y ? bits_diff(y, want, on) : 1;
+            if (!omega_tensor_slice(g, Y, st, stop, sp, &Z)) {
+                uint32_t *z = rdbits(Z, n);
+                bad_rt += z ? bits_diff(z, xb, n) : 1;
+                free(z);
+                /* embed(slice(y)) is y again here (y is zero off the placed set) */
+                if (!omega_tensor_embed(g, Z, r, os, st, sp, &W)) {
+                    uint32_t *w = rdbits(W, on);
+                    bad_inv += w ? bits_diff(w, want, on) : 1;
+                    free(w);
+                    omega_tensor_release(g, W);
+                } else bad_inv++;
+                omega_tensor_release(g, Z);
+            } else bad_rt++;
+            free(y);
+            omega_tensor_release(g, Y);
+        }
+        omega_tensor_release(g, X);
+        free(x); free(want); free(xb);
+    }
+    CHECK(rcs == 0, "embed: random trials all accepted");
+    CHECK(bad_ref == 0, "embed == independent reference (%zu bad elements)", bad_ref);
+    CHECK(bad_rt == 0, "slice(embed(x)) == x bit exact (%zu bad)", bad_rt);
+    CHECK(bad_inv == 0, "embed(slice(embed(x))) == embed(x) (%zu bad)", bad_inv);
+
+    /* 2. embed(slice(y)) keeps only the sliced positions, y full of non-zero bits */
+    {
+        uint64_t ys[3] = {5, 6, 7}, st[3] = {1, 0, 2}, stop[3] = {5, 6, 7}, sp[3] = {2, 3, 2};
+        uint64_t n = prod(3, ys);
+        uint32_t yb[210];
+        for (uint64_t i = 0; i < n; i++) yb[i] = 0x3f800000U + (uint32_t)i; /* never zero bits */
+        OmegaTensor Yt = mk(3, ys, (const float *)(const void *)yb), S, E;
+        CHECK(omega_tensor_slice(g, Yt, st, stop, sp, &S) == 0, "embed: slice of y");
+        CHECK(omega_tensor_embed(g, S, 3, ys, st, sp, &E) == 0, "embed(slice(y))");
+        uint32_t *e = rdbits(E, n);
+        size_t wrong = e ? 0 : 1, placed = 0;
+        for (uint64_t i = 0; e && i < n; i++) {
+            uint64_t a = i / 42, b = (i / 7) % 6, c = i % 7;
+            bool in = a >= 1 && (a - 1) % 2 == 0 && b % 3 == 0 && c >= 2 && (c - 2) % 2 == 0;
+            placed += in;
+            wrong += in ? e[i] != yb[i] : e[i] != 0;
+        }
+        CHECK(wrong == 0 && placed == 2 * 2 * 3, "embed(slice(y)): sliced positions = y, rest +0.0 (%zu wrong, %zu placed)",
+              wrong, placed);
+        free(e);
+        omega_tensor_release(g, E); omega_tensor_release(g, S); omega_tensor_release(g, Yt);
+    }
+
+    /* 3. strided and broadcast sources: expected from index arithmetic on the parent */
+    {
+        float d[12];
+        for (int i = 0; i < 12; i++) d[i] = (float)(i + 1);
+        OmegaTensor T = mk(2, (uint64_t[]){3, 4}, d), TT, E1, R, RB, E2;
+        CHECK(omega_tensor_transpose(g, T, &TT) == 0, "embed: transpose view");  /* [4,3], (i,j) = d[j*4+i] */
+        uint64_t os[2] = {9, 7}, st[2] = {1, 2}, sp[2] = {2, 2};
+        CHECK(omega_tensor_embed(g, TT, 2, os, st, sp, &E1) == 0, "embed of strided view");
+        uint32_t *e = rdbits(E1, 63);
+        size_t wrong = e ? 0 : 1;
+        for (uint64_t p = 0; e && p < 63; p++) {
+            uint64_t a = p / 7, b = p % 7;
+            float want = 0.0f;
+            if (a >= 1 && (a - 1) % 2 == 0 && (a - 1) / 2 < 4 && b >= 2 && (b - 2) % 2 == 0 && (b - 2) / 2 < 3)
+                want = d[((b - 2) / 2) * 4 + (a - 1) / 2];
+            uint32_t wb; memcpy(&wb, &want, 4);
+            wrong += e[p] != wb;
+        }
+        CHECK(wrong == 0, "embed of transposed view (%zu wrong)", wrong);
+        free(e);
+        R = mk(2, (uint64_t[]){1, 3}, (float[]){-0.0f, 2.5f, -7.0f});
+        CHECK(omega_tensor_broadcast_to(g, R, 2, (uint64_t[]){2, 3}, &RB) == 0, "embed: broadcast view");
+        CHECK(omega_tensor_embed(g, RB, 2, (uint64_t[]){3, 4}, (uint64_t[]){1, 1}, NULL, &E2) == 0,
+              "embed of broadcast view, step NULL");
+        uint32_t *f = rdbits(E2, 12);
+        static const float want2[12] = {0, 0, 0, 0, 0, -0.0f, 2.5f, -7.0f, 0, -0.0f, 2.5f, -7.0f};
+        uint32_t wb2[12];
+        memcpy(wb2, want2, sizeof(wb2));
+        CHECK(f && bits_diff(f, wb2, 12) == 0, "embed of broadcast: values, -0.0 kept, fill +0.0");
+        free(f);
+        /* F16 storage dtype: pure bit copy, no arithmetic dtype needed */
+        uint16_t h[2] = {0x7e01U, 0x8000U}, hb[4] = {1, 1, 1, 1};
+        OmegaTensor H, HE;
+        CHECK(omega_tensor_from_data(g, OMEGA_DT_F16, 1, (uint64_t[]){2}, h, &H) == 0, "f16 source");
+        CHECK(omega_tensor_embed(g, H, 1, (uint64_t[]){4}, (uint64_t[]){1}, (uint64_t[]){2}, &HE) == 0 &&
+              omega_tensor_read(g, HE, hb, sizeof(hb)) == 0 && hb[0] == 0 && hb[1] == 0x7e01U && hb[2] == 0 &&
+              hb[3] == 0x8000U, "embed F16 bit copy (NaN payload, -0)");
+        OmegaTensor rel[] = {HE, H, E2, RB, R, E1, TT, T};
+        for (size_t i = 0; i < sizeof(rel) / sizeof(rel[0]); i++) omega_tensor_release(g, rel[i]);
+    }
+
+    /* 4. concat: reference loop, slice recovers parts, views as parts */
+    {
+        size_t bad = 0, badrt = 0;
+        int crc = 0;
+        for (int trial = 0; trial < 40; trial++) {
+            uint32_t r = 1 + (uint32_t)(rnd() % 4), ax = (uint32_t)(rnd() % r), np = 1 + (uint32_t)(rnd() % 4);
+            uint64_t base[4];
+            for (uint32_t d = 0; d < r; d++) base[d] = 1 + rnd() % 3;
+            OmegaTensor P[4], C = {0, 0};
+            uint32_t *pb[4];
+            uint64_t ps[4][4], tot = 0;
+            for (uint32_t k = 0; k < np; k++) {
+                memcpy(ps[k], base, sizeof(base));
+                ps[k][ax] = 1 + rnd() % 3;
+                tot += ps[k][ax];
+                uint64_t n = prod(r, ps[k]);
+                float *x = malloc((size_t)n * 4);
+                fill(x, (size_t)n, rand_f32);
+                P[k] = mk(r, ps[k], x);
+                pb[k] = malloc((size_t)n * 4);
+                memcpy(pb[k], x, (size_t)n * 4);
+                free(x);
+            }
+            uint64_t cs[4];
+            memcpy(cs, base, sizeof(base));
+            cs[ax] = tot;
+            uint64_t cn = prod(r, cs), off = 0;
+            uint32_t *want = calloc((size_t)cn, 4);
+            for (uint32_t k = 0; k < np; k++) {  /* reference: embed each part at its axis offset */
+                uint64_t st[4] = {0, 0, 0, 0};
+                st[ax] = off;
+                uint64_t cst[4];
+                row_strides(r, cs, cst);
+                for (uint64_t e = 0; e < prod(r, ps[k]); e++) {
+                    uint64_t pos = 0, rem = e;
+                    for (uint32_t d = r; d-- > 0;) { pos += (rem % ps[k][d] + st[d]) * cst[d]; rem /= ps[k][d]; }
+                    want[pos] = pb[k][e];
+                }
+                off += ps[k][ax];
+            }
+            int rc = omega_tensor_concat(g, np, P, ax, &C);
+            crc |= rc;
+            if (!rc) {
+                uint32_t *c = rdbits(C, cn);
+                bad += c ? bits_diff(c, want, cn) : 1;
+                free(c);
+                off = 0;
+                for (uint32_t k = 0; k < np; k++) {
+                    uint64_t st[4] = {0, 0, 0, 0}, stop[4];
+                    memcpy(stop, cs, sizeof(cs));
+                    st[ax] = off;
+                    stop[ax] = off + ps[k][ax];
+                    OmegaTensor S;
+                    if (omega_tensor_slice(g, C, st, stop, NULL, &S) == 0) {
+                        uint32_t *sb = rdbits(S, prod(r, ps[k]));
+                        badrt += sb ? bits_diff(sb, pb[k], prod(r, ps[k])) : 1;
+                        free(sb);
+                        omega_tensor_release(g, S);
+                    } else badrt++;
+                    off += ps[k][ax];
+                }
+                omega_tensor_release(g, C);
+            }
+            for (uint32_t k = 0; k < np; k++) { omega_tensor_release(g, P[k]); free(pb[k]); }
+            free(want);
+        }
+        CHECK(crc == 0, "concat: random trials all accepted");
+        CHECK(bad == 0, "concat == independent reference (%zu bad)", bad);
+        CHECK(badrt == 0, "slice(concat(parts)) recovers each part (%zu bad)", badrt);
+    }
+    {   /* view parts: transpose [2,3]->[3,2] and broadcast [1,2]->[2,2], concat on axis 0 */
+        OmegaTensor A = mk(2, (uint64_t[]){2, 3}, (float[]){1, 2, 3, 4, 5, 6}), AT, B, BB, C;
+        omega_tensor_transpose(g, A, &AT);
+        B = mk(2, (uint64_t[]){1, 2}, (float[]){-0.0f, 9});
+        omega_tensor_broadcast_to(g, B, 2, (uint64_t[]){2, 2}, &BB);
+        OmegaTensor parts[2] = {AT, BB};
+        CHECK(omega_tensor_concat(g, 2, parts, 0, &C) == 0, "concat of views");
+        uint32_t *c = rdbits(C, 10);
+        static const float want[10] = {1, 4, 2, 5, 3, 6, -0.0f, 9, -0.0f, 9};
+        uint32_t wb[10];
+        memcpy(wb, want, sizeof(wb));
+        CHECK(c && bits_diff(c, wb, 10) == 0, "concat of transposed + broadcast views");
+        free(c);
+        OmegaTensor parts1[2] = {BB, AT};  /* axis 1: [2,2] ++ [3,2] mismatch on axis 0 */
+        CHECK(omega_tensor_concat(g, 2, parts1, 1, &C) == OMEGA_TENSOR_ERR_SHAPE, "concat: other axis mismatch");
+        OmegaTensor rel[] = {BB, B, AT, A};
+        for (size_t i = 0; i < 4; i++) omega_tensor_release(g, rel[i]);
+        omega_tensor_release(g, C);
+    }
+
+    /* 5. refusal paths: typed error, nothing created */
+    {
+        uint32_t live0 = live_tensors();
+        OmegaTensor X = mk(2, (uint64_t[]){2, 3}, (float[]){1, 2, 3, 4, 5, 6}), O;
+        uint32_t live1 = live_tensors();
+        uint64_t os[2] = {4, 6}, z2[2] = {0, 0};
+        CHECK(omega_tensor_embed(g, X, 1, os, z2, NULL, &O) == OMEGA_TENSOR_ERR_RANK, "embed: rank mismatch");
+        CHECK(omega_tensor_embed(g, X, 2, os, z2, (uint64_t[]){1, 0}, &O) == OMEGA_TENSOR_ERR_BAD_ARGS, "embed: step 0");
+        OmegaTensor tmp;
+        CHECK(omega_tensor_embed(g, X, 2, os, (uint64_t[]){2, 3}, NULL, &tmp) == 0, "embed: last position at edge ok");
+        omega_tensor_release(g, tmp);
+        CHECK(omega_tensor_embed(g, X, 2, os, (uint64_t[]){3, 3}, NULL, &O) == OMEGA_TENSOR_ERR_BOUNDS,
+              "embed: start one past the edge");
+        CHECK(omega_tensor_embed(g, X, 2, os, z2, (uint64_t[]){4, 1}, &O) == OMEGA_TENSOR_ERR_BOUNDS,
+              "embed: step pushes last position out (1*4 >= 4)");
+        CHECK(omega_tensor_embed(g, X, 2, os, (uint64_t[]){UINT64_MAX, 0}, NULL, &O) == OMEGA_TENSOR_ERR_BOUNDS,
+              "embed: start overflow");
+        CHECK(omega_tensor_embed(g, X, 2, os, z2, (uint64_t[]){UINT64_MAX, 1}, &O) == OMEGA_TENSOR_ERR_BOUNDS,
+              "embed: step overflow");
+        CHECK(omega_tensor_embed(g, X, 2, (uint64_t[]){4, 0}, z2, NULL, &O) == OMEGA_TENSOR_ERR_SHAPE,
+              "embed: zero dim");
+        CHECK(omega_tensor_embed(g, X, 2, (uint64_t[]){(1u << 15) + 1, 1u << 15}, z2, NULL, &O) ==
+              OMEGA_TENSOR_ERR_CAPACITY, "embed: result > MAX_ELEMS");
+        CHECK(omega_tensor_embed(g, X, 2, os, NULL, NULL, &O) == OMEGA_TENSOR_ERR_BAD_ARGS, "embed: NULL start");
+        CHECK(omega_tensor_embed(g, X, 2, os, z2, NULL, NULL) == OMEGA_TENSOR_ERR_BAD_ARGS, "embed: NULL out");
+        OmegaTensor S0 = mk(0, NULL, (float[]){1});
+        CHECK(omega_tensor_embed(g, S0, 0, NULL, NULL, NULL, &O) == OMEGA_TENSOR_ERR_RANK, "embed: rank 0");
+        CHECK(live_tensors() == live1 + 1, "embed refusals created nothing");
+        /* concat refusals */
+        OmegaTensor Y = mk(2, (uint64_t[]){2, 3}, (float[]){1, 2, 3, 4, 5, 6}), V = mk(1, (uint64_t[]){3}, (float[]){1, 2, 3});
+        OmegaTensor H;
+        uint16_t hv[6] = {0};
+        omega_tensor_from_data(g, OMEGA_DT_F16, 2, (uint64_t[]){2, 3}, hv, &H);
+        uint32_t live2 = live_tensors();
+        CHECK(omega_tensor_concat(g, 0, (OmegaTensor[]){X}, 0, &O) == OMEGA_TENSOR_ERR_BAD_ARGS, "concat: n = 0");
+        CHECK(omega_tensor_concat(g, 1, NULL, 0, &O) == OMEGA_TENSOR_ERR_BAD_ARGS, "concat: NULL list");
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){X, H}, 0, &O) == OMEGA_TENSOR_ERR_DTYPE, "concat: dtype mismatch");
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){X, V}, 0, &O) == OMEGA_TENSOR_ERR_RANK, "concat: rank mismatch");
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){X, Y}, 2, &O) == OMEGA_TENSOR_ERR_AXIS, "concat: axis >= rank");
+        CHECK(omega_tensor_concat(g, 1, (OmegaTensor[]){S0}, 0, &O) == OMEGA_TENSOR_ERR_RANK, "concat: rank 0");
+        OmegaTensor one = mk(1, (uint64_t[]){1}, (float[]){1}), big;
+        CHECK(omega_tensor_broadcast_to(g, one, 1, (uint64_t[]){((uint64_t)1 << 29) + 1}, &big) == 0, "big bcast view");
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){big, big}, 0, &O) == OMEGA_TENSOR_ERR_CAPACITY,
+              "concat: result > MAX_ELEMS");
+        OmegaTensor dead = mk(1, (uint64_t[]){3}, (float[]){1, 2, 3});
+        omega_tensor_release(g, dead);
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){V, dead}, 0, &O) == OMEGA_TENSOR_ERR_STALE, "concat: stale part");
+        CHECK(omega_tensor_embed(g, dead, 1, (uint64_t[]){4}, (uint64_t[]){0}, NULL, &O) == OMEGA_TENSOR_ERR_STALE,
+              "embed: stale source");
+        CHECK(live_tensors() == live2 + 2, "concat refusals created nothing");
+        OmegaTensor ok2;
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){X, Y}, 1, &ok2) == 0, "concat axis 1 accepted");
+        omega_tensor_release(g, ok2);
+        OmegaTensor rel[] = {big, one, H, V, Y, S0, X};
+        for (size_t i = 0; i < sizeof(rel) / sizeof(rel[0]); i++) omega_tensor_release(g, rel[i]);
+        CHECK(live_tensors() == live0, "placement refusals: all released");
+    }
+}
+
 /* ---- 8. determinism ------------------------------------------------------- */
 static void kat_digest(uint8_t out[32]) {
     uint64_t save = g_rng;
@@ -1460,6 +1758,7 @@ int main(void) {
     test_unary2_specials();
     test_trig_domain();
     test_const_neg();
+    test_placement();
     test_determinism();
     /* every test released what it made */
     uint32_t lt, ls;

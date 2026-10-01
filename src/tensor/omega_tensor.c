@@ -878,3 +878,125 @@ void omega_tensor_live_counts(const OmegaTensorCtx *ctx, uint32_t *tensors, uint
     if (tensors) *tensors = t;
     if (storages) *storages = s;
 }
+
+/* ---- placement (CR-4): embed and concat ---------------------------------- */
+/* Pure bit copies: gather the source in logical row-major order, then write
+ * it through a destination descriptor into fresh zero-filled dense storage
+ * (storage_alloc uses calloc: all-zero bits = +0.0 in F32/F16/BF16). */
+
+/* Inverse of gather: element e of src (row-major) goes to the storage index
+ * the descriptor `in` gives for logical index e. */
+static void scatter(StorageSlot *s, const OmegaTensorInfo *in, const void *src) {
+    size_t es = omega_dtype_size(in->dtype);
+    uint64_t idx[OMEGA_TENSOR_MAX_RANK] = {0};
+    uint64_t pos = in->offset;
+    uint8_t *dst = s->data;
+    const uint8_t *sp = src;
+    for (uint64_t e = 0; e < in->elements; e++) {
+        memcpy(dst + pos * es, sp + e * es, es);
+        for (uint32_t ax = in->rank; ax-- > 0;) {
+            if (++idx[ax] < in->shape[ax]) { pos += in->strides[ax]; break; }
+            pos -= (in->shape[ax] - 1) * in->strides[ax];
+            idx[ax] = 0;
+        }
+    }
+}
+
+/* Gather part (s, in) and scatter it through dst_desc into out's storage. */
+static int place(OmegaTensorCtx *ctx, const StorageSlot *s, const OmegaTensorInfo *in, OmegaTensor out,
+                 const OmegaTensorInfo *dst_desc) {
+    StorageSlot *ds = &ctx->st[ctx->ts[out.slot].info.storage.slot];
+    if (bounds_check(dst_desc, ds->elems)) return OMEGA_TENSOR_ERR_BOUNDS; /* defence in depth */
+    void *tmp = malloc((size_t)in->elements * omega_dtype_size(in->dtype));
+    if (!tmp) return OMEGA_TENSOR_ERR_CAPACITY;
+    gather(s, in, tmp);
+    scatter(ds, dst_desc, tmp);
+    free(tmp);
+    return OMEGA_TENSOR_OK;
+}
+
+int omega_tensor_embed(OmegaTensorCtx *ctx, OmegaTensor src, uint32_t rank, const uint64_t *out_shape,
+                       const uint64_t *start, const uint64_t *step, OmegaTensor *out) {
+    TensorSlot *x;
+    StorageSlot *s;
+    if (!out) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    int rc = tensor_get(ctx, src, &x, &s);
+    if (rc) return rc;
+    OmegaTensorInfo in = x->info;  /* copy: slot table may be reused below */
+    if (rank == 0 || rank != in.rank) return OMEGA_TENSOR_ERR_RANK;
+    if (!out_shape || !start) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    uint64_t n;
+    rc = shape_check(rank, out_shape, &n);
+    if (rc) return rc;
+    uint64_t ds[OMEGA_TENSOR_MAX_RANK];
+    dense_strides(rank, out_shape, ds);
+    OmegaTensorInfo v = in;  /* destination descriptor over out's storage */
+    v.offset = 0;
+    for (uint32_t d = 0; d < rank; d++) {
+        uint64_t st = step ? step[d] : 1;
+        if (st == 0) return OMEGA_TENSOR_ERR_BAD_ARGS;
+        uint64_t last, so;
+        if (__builtin_mul_overflow(in.shape[d] - 1, st, &last) ||
+            __builtin_add_overflow(last, start[d], &last) || last >= out_shape[d])
+            return OMEGA_TENSOR_ERR_BOUNDS;
+        if (__builtin_mul_overflow(start[d], ds[d], &so) || /* MUT:EMBED_START */
+            __builtin_add_overflow(v.offset, so, &v.offset))
+            return OMEGA_TENSOR_ERR_BOUNDS;
+        if (in.shape[d] == 1) v.strides[d] = 0;  /* never used; avoids overflow */
+        else if (__builtin_mul_overflow(ds[d], st, &v.strides[d])) /* MUT:EMBED_STEP */
+            return OMEGA_TENSOR_ERR_BOUNDS;
+    }
+    void *buf;
+    rc = new_dense(ctx, in.dtype, rank, out_shape, out, &buf);
+    if (rc) return rc;
+    rc = place(ctx, s, &in, *out, &v);
+    if (rc) omega_tensor_release(ctx, *out);
+    return rc;
+}
+
+int omega_tensor_concat(OmegaTensorCtx *ctx, uint32_t n, const OmegaTensor *tensors, uint32_t axis,
+                        OmegaTensor *out) {
+    if (!ctx || !out || !tensors || n == 0) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    TensorSlot *x0;
+    int rc = tensor_get(ctx, tensors[0], &x0, NULL);
+    if (rc) return rc;
+    OmegaTensorInfo first = x0->info;
+    if (first.rank == 0) return OMEGA_TENSOR_ERR_RANK;
+    if (axis >= first.rank) return OMEGA_TENSOR_ERR_AXIS;
+    uint64_t shape[OMEGA_TENSOR_MAX_RANK];
+    memcpy(shape, first.shape, sizeof(shape));
+    shape[axis] = 0;
+    for (uint32_t k = 0; k < n; k++) {  /* validate everything before allocating */
+        TensorSlot *xk;
+        rc = tensor_get(ctx, tensors[k], &xk, NULL);
+        if (rc) return rc;
+        const OmegaTensorInfo *ik = &xk->info;
+        if (ik->dtype != first.dtype) return OMEGA_TENSOR_ERR_DTYPE;
+        if (ik->rank != first.rank) return OMEGA_TENSOR_ERR_RANK;
+        for (uint32_t d = 0; d < first.rank; d++)
+            if (d != axis && ik->shape[d] != first.shape[d]) return OMEGA_TENSOR_ERR_SHAPE;
+        if (__builtin_add_overflow(shape[axis], ik->shape[axis], &shape[axis]) ||
+            shape[axis] > OMEGA_TENSOR_MAX_ELEMS)
+            return OMEGA_TENSOR_ERR_CAPACITY;
+    }
+    void *buf;
+    rc = new_dense(ctx, first.dtype, first.rank, shape, out, &buf);  /* MAX_ELEMS -> ERR_CAPACITY */
+    if (rc) return rc;
+    uint64_t ds[OMEGA_TENSOR_MAX_RANK];
+    dense_strides(first.rank, shape, ds);
+    uint64_t aoff = 0;
+    for (uint32_t k = 0; k < n && !rc; k++) {
+        TensorSlot *xk;
+        StorageSlot *sk;
+        rc = tensor_get(ctx, tensors[k], &xk, &sk);
+        if (rc) break;
+        OmegaTensorInfo ik = xk->info;
+        OmegaTensorInfo v = ik;
+        v.offset = aoff * ds[axis]; /* MUT:CONCAT_AXIS_OFFSET */
+        for (uint32_t d = 0; d < ik.rank; d++) v.strides[d] = ds[d];
+        rc = place(ctx, sk, &ik, *out, &v);
+        aoff += ik.shape[axis];
+    }
+    if (rc) omega_tensor_release(ctx, *out);
+    return rc;
+}

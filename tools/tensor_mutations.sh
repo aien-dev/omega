@@ -32,7 +32,10 @@ TRIG_DOMAIN_NUMBER|omega_tensor_cpu.c|s/out\[i\] = f(a\[i\]);/{ out[i] = f(a[i])
 ZEROS_NEG0|omega_tensor.c|s/shape, 0.0f, out)/shape, -0.0f, out)/
 NEG_SUB|omega_tensor.c|s/return u ^ 0x80000000U;/return omega_float_to_bits(0.0f - omega_bits_to_float(u));/
 NEG_NAN|omega_tensor.c|s/return 0x7fc00000U;/return u ^ 0x80000000U;/
-FULL_CANON|omega_tensor.c|s/uint32_t u = omega_float_to_bits(value);/uint32_t u = canon_bits(OMEGA_DT_F32, (const uint8_t *)\&value);/'
+FULL_CANON|omega_tensor.c|s/uint32_t u = omega_float_to_bits(value);/uint32_t u = canon_bits(OMEGA_DT_F32, (const uint8_t *)\&value);/
+EMBED_START|omega_tensor.c|s/start\[d\], ds\[d\]/start[d] + 1, ds[d]/
+EMBED_STEP|omega_tensor.c|s/ds\[d\], st, /ds[d], 1, /
+CONCAT_AXIS_OFFSET|omega_tensor.c|s/aoff \* ds\[axis\]/aoff/'
 
 # Baseline: the unmutated build must PASS, otherwise every mutant would
 # look "caught" (e.g. the test refusing an unsuitable FP environment).

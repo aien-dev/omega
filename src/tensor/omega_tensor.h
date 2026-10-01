@@ -303,6 +303,35 @@ int omega_tensor_reduce(OmegaTensorCtx *ctx, OmegaTensorReduceOp op, OmegaTensor
  */
 int omega_tensor_matmul(OmegaTensorCtx *ctx, OmegaTensor a, OmegaTensor b, OmegaTensor *out);
 
+/* ---- placement (CR-4): pure bit copies, no arithmetic -------------------- */
+/*
+ * Embed: the exact inverse placement of omega_tensor_slice. Returns a new
+ * dense tensor of (rank, out_shape), dtype of src, every element all-zero
+ * bits (+0.0 for F32/F16/BF16), except that src element i (logical row-major
+ * multi-index) is copied bit for bit to out position start + i * step, per
+ * axis. step may be NULL (all 1). For y = embed(x, start, step) and
+ * stop[d] = start[d] + (x.shape[d] - 1) * step[d] + 1,
+ * slice(y, start, stop, step) is x bit for bit.
+ * Refused (typed, nothing created): rank != src rank or rank 0 -> ERR_RANK;
+ * out_shape with a 0 dim -> ERR_SHAPE; result > OMEGA_TENSOR_MAX_ELEMS ->
+ * ERR_CAPACITY; a step of 0 (steps are unsigned, so "<= 0" is exactly 0) ->
+ * ERR_BAD_ARGS (as in slice); any placed position outside out_shape ->
+ * ERR_BOUNDS. Works for every dtype (no arithmetic).
+ */
+int omega_tensor_embed(OmegaTensorCtx *ctx, OmegaTensor src, uint32_t rank, const uint64_t *out_shape,
+                       const uint64_t *start, const uint64_t *step, OmegaTensor *out);
+/*
+ * Concat: n >= 1 tensors joined along axis, in array order, bit for bit.
+ * All parts must have the same dtype (else ERR_DTYPE), the same rank >= 1
+ * (else ERR_RANK) and equal sizes on every other axis (else ERR_SHAPE);
+ * axis >= rank -> ERR_AXIS; total > OMEGA_TENSOR_MAX_ELEMS -> ERR_CAPACITY;
+ * n == 0 or NULL arrays -> ERR_BAD_ARGS. Parts may be views (strided,
+ * broadcast). Part k occupies [off_k, off_k + part_k.shape[axis]) on axis,
+ * off_k = sum of earlier parts' sizes on axis.
+ */
+int omega_tensor_concat(OmegaTensorCtx *ctx, uint32_t n, const OmegaTensor *tensors, uint32_t axis,
+                        OmegaTensor *out);
+
 /* Live tensor descriptors and live storage slots (lifetime audits). */
 void omega_tensor_live_counts(const OmegaTensorCtx *ctx, uint32_t *tensors, uint32_t *storages);
 
