@@ -475,7 +475,11 @@ RX_R13_SILICON = $(OUT_DIR)/rx_r13_living_silicon
 $(RX_R13_HOST): $(RX_R13_SRCS) src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_R13_SRCS) $(AIENOS_CAP_LIB) -lm
 
+# Lane 17: the Fabric phase (fab_living_phase.h) runs in the silicon binary too;
+# its Fabric part is CPU-only loopback, so it links unchanged. The composition
+# phase stays host-only: it needs the -DRXC_TEST_HOOKS rogue-candidate hook.
 $(RX_R13_SILICON): $(RX_R13_SRCS) src/runtime/rx_resident_gpu.c \
+	src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) \
 	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c \
 	src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \

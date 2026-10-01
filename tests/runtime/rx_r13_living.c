@@ -2,9 +2,9 @@
 #include "runtime/rx_living.h"
 #include "runtime/rx_resident_gpu.h"
 #include "rx_compose_fixture.h"
-#ifndef R13_SILICON
+/* Fabric F5-0 runs in both builds (Lane 17): the Fabric path is CPU-only
+ * loopback and links in the host and the silicon binary alike. */
 #include "../fabric/fab_living_phase.h"
-#endif
 #include "omega_evidence.h"
 #include "sha256.h"
 
@@ -222,11 +222,10 @@ static int start(Rig *r, int mode) {
     /* R16 C6: every production subject gets a runtime-issued credential,
      * then the world refuses any registration that does not present one. */
     if (rx_living_enroll_callers(&r->w, &r->keys) != RX_OK) return -1;
-#ifndef R13_SILICON
-    /* The host composition phase runs inside this World (rx_compose_attach),
-     * so its subjects are enrolled here too, before enrollment closes. */
+    /* The composition phases run inside this World (rx_compose_attach): the
+     * host runs the composition and the Fabric phase, silicon the Fabric
+     * phase. Their subjects are enrolled here, before enrollment closes. */
     if (rx_compose_enroll_callers(&r->w, &r->compose_keys) != RX_OK) return -1;
-#endif
     if (rx_world_bind_callers(&r->w) != RX_OK) return -1;
     if (scratch_dir(r->generation_dir, sizeof r->generation_dir, "r13-living") != 0) return -1;
     if (scratch_dir(r->home_dir, sizeof r->home_dir, "r13-home") != 0 || living_identity(r) != 0)
@@ -1381,7 +1380,9 @@ out:
     return g->ok ? 0 : -1;
 }
 
-/* Fabric F5-0 in the living World (Lane 13, host only). A second simulated
+#endif /* !R13_SILICON (composition phase) */
+
+/* Fabric F5-0 in the living World (Lane 13; both builds since Lane 17). A second simulated
  * machine joins over the loopback transport and advertises a Skill; the
  * composition attached to this World finds it in the Capability Graph as a
  * CQ_SRC_FABRIC candidate, runs it through the Fabric dispatcher (an
@@ -1389,8 +1390,16 @@ out:
  * machine leaves, is lost and rejoins, and forged, stale and wrong-machine
  * traffic is refused (fab_living_phase.h has the steps). The living
  * generation, the in-force record and the single promotion holder must be
- * untouched. Runs after composition_phase, on a fresh composition directory:
- * one composition at a time per World (subjects 200..204). */
+ * untouched. On the host it runs after composition_phase, on a fresh
+ * composition directory: one composition at a time per World (subjects
+ * 200..204). In the silicon build (Lane 17) it runs in the World whose GPU
+ * work goes to the physical resident GB10 seat; the Fabric part stays CPU-only
+ * loopback (no network, HMAC stand-in) and its Skills are CPU procedures. */
+#ifdef R13_SILICON
+#define FL_BUILD "silicon"
+#else
+#define FL_BUILD "host"
+#endif
 static FlReceipt g_fab;
 
 static int fabric_attach(void *ctx, RxCompose *c, const char *dir, const AienMachineId *self,
@@ -1422,7 +1431,7 @@ static int fabric_phase(Rig *r) {
     uint64_t swept = 0, holders = 0;
     if (authority_sweep(r, &swept, &holders) != 0 || holders != 1) untouched = 0;
     g_fab.ok = rc == 0 && untouched;
-    printf("R13 Fabric (host, second machine in the living World): %s; %u checks, %u failed; "
+    printf("R13 Fabric (" FL_BUILD ", second machine in the living World): %s; %u checks, %u failed; "
            "remote wins %u, dispatched %llu, dispatcher refusals route %llu digest %llu; "
            "living untouched %d\n",
            g_fab.ok ? "PASS" : "FAIL", g_fab.checks, g_fab.failures, g_fab.remote_wins,
@@ -1434,14 +1443,14 @@ static int fabric_phase(Rig *r) {
 static void fabric_json(char *out, size_t n) {
     const FlReceipt *g = &g_fab;
     if (!g->ran) {
-        snprintf(out, n, "  \"fabric_host_phase\": {\"result\": \"NOT_RUN\"},\n");
+        snprintf(out, n, "  \"fabric_host_phase\": {\"result\": \"NOT_RUN\", \"build\": \"" FL_BUILD "\"},\n");
         return;
     }
     char rec[65], fab[65];
     fx_hex(g->record_digest, 32, rec);
     fx_hex(g->fabric_digest, 32, fab);
     snprintf(out, n,
-        "  \"fabric_host_phase\": {\"result\": \"%s\", \"checks\": %u, \"failures\": %u, "
+        "  \"fabric_host_phase\": {\"result\": \"%s\", \"build\": \"" FL_BUILD "\", \"checks\": %u, \"failures\": %u, "
         "\"transport\": \"F5-0 loopback (in-process)\", \"auth\": \"HMAC stand-in\", "
         "\"remote_execution\": \"in-process stand-in (fab_dispatch); no work message in F5-0\", "
         "\"remote_wins\": %u, \"dispatched\": %llu, \"results\": [%llu, %llu, %llu, %llu, %llu, %llu], "
@@ -1460,7 +1469,7 @@ static void fabric_json(char *out, size_t n) {
         g->remote_only_after_loss, U(g->dispatch_refused[FAB_DX_ROUTE]),
         U(g->dispatch_refused[FAB_DX_DIGEST]), g->fabric_held, rec, fab);
 }
-#endif /* !R13_SILICON */
+/* end Fabric phase */
 
 static void binary_digest(char out[65]) {
     strcpy(out, "unavailable");
@@ -1479,7 +1488,9 @@ static void binary_digest(char out[65]) {
 
 #define OBJ(o) (o).id, (o).generation
 
-/* The composition phase in the receipt (host only; silicon does not run it). */
+/* The composition phase in the receipt (host only: it needs the -DRXC_TEST_HOOKS
+ * rogue-candidate hook, which the silicon binary does not carry), then the
+ * Fabric phase (both builds). */
 static void composition_json(char *out, size_t n) {
 #ifndef R13_SILICON
     const CompositionReceipt *c = &g_comp;
@@ -1508,13 +1519,15 @@ static void composition_json(char *out, size_t n) {
             c->stale_commit_refused ? "true" : "false", c->stale_external_refused ? "true" : "false",
             c->identity_refused ? "true" : "false", c->generation_untouched ? "true" : "false",
             c->inforce_untouched ? "true" : "false", c->promote_holders_ok ? "true" : "false");
-        size_t used = strlen(out);
-        if (used < n) fabric_json(out + used, n - used);
-        return;
+    } else {
+        snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\"},\n");
     }
+#else
+    snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\"},\n");
 #endif
-    snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\"},\n"
-                     "  \"fabric_host_phase\": {\"result\": \"NOT_RUN\"},\n");
+    /* The Fabric phase runs in both builds (Lane 17). */
+    size_t used = strlen(out);
+    if (used < n) fabric_json(out + used, n - used);
 }
 
 static void receipt(int tests_ok) {
@@ -1671,8 +1684,9 @@ int main(void) {
         /* COMPOSITION-2 in the living system: host phase, after the episode,
          * while the living World and its authority are still up. */
         if (rc == 0 && mode == POSITIVE) rc = composition_phase(r);
-        if (rc == 0 && mode == POSITIVE) rc = fabric_phase(r);
 #endif
+        /* Fabric F5-0: both builds (Lane 17). */
+        if (rc == 0 && mode == POSITIVE) rc = fabric_phase(r);
         if (rc != 0)
             fprintf(stderr, "R13 %s FAILED: plan %llu search %llu GPU %llu evidence %llu "
                     "belief %llu selection %llu candidate %llu promotion %llu in force %llu "
