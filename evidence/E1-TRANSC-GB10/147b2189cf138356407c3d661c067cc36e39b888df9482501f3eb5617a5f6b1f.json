@@ -1,0 +1,57 @@
+{
+  "gate": "E1-TRANSC-GB10",
+  "row": "E1 gap table row 10: GB10 transcendentals bit-identical to the frozen CPU sequences",
+  "reference": "omega_math_<op> of src/omega_numeric_transc.c (CPU tier), every 32-bit input, bits compared exactly",
+  "omega_commit": "d25d7adac6572ef61d472be20e0e4cd365a3915c",
+  "omega_tree_clean_before": true,
+  "omega_tree_clean_after": true,
+  "omega_commit_unchanged_after": true,
+  "physics_commit": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "physics_lock_pin": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "physics_tree_clean_before": true,
+  "physics_tree_clean_after": true,
+  "physics_commit_unchanged_after": true,
+  "binary_sha256": "606a0a1551d51a2cfe08cde6dec99202ea8c7053638b71515fec7d26f3f28a96",
+  "chip_log_sha256": "ff37ef107c5878f34e2dcc50b6fa769b205270763283d8c7f813603548dde229",
+  "kernels": [
+    {
+      "op": "EXP2",
+      "instructions": 72,
+      "sha256": "e72d5cbf556dce39c83ce7e76335a7eef7eda3ebccd36f250bdddb272db7474c"
+    },
+    {
+      "op": "LOG2",
+      "instructions": 576,
+      "sha256": "14e461ec628b685ea23d197c060f7d35a302c88e794934628eacd6098a44f394"
+    },
+    {
+      "op": "SIGMOID",
+      "instructions": 344,
+      "sha256": "8607f5659b4d42a57fdb4ba2f26427a28d8e6e1497f3daa8529ae5da1f629b70"
+    },
+    {
+      "op": "TANH",
+      "instructions": 352,
+      "sha256": "4edc065511340d58d26ed8ef7c1464341b279caccd7abc18b62d2a9880694494"
+    }
+  ],
+  "nvdisasm_check": "nvdisasm: release 13.0, V13.0.85",
+  "host_tier": "SUMMARY passed=32 failed=0",
+  "ops_requested": [
+    "SIGMOID"
+  ],
+  "ops": [
+    {
+      "op": "SIGMOID",
+      "checked": 4294967296,
+      "exhaustive": true,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "PASS"
+    }
+  ],
+  "chip_exit_status": 0,
+  "started_utc": "2026-10-01T13:51:57Z",
+  "finished_utc": "2026-10-01T13:57:38Z",
+  "verdict": "PASS"
+}
