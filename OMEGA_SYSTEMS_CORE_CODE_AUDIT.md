@@ -1,5 +1,7 @@
 # Omega Systems Core: code audit (OSC-0) and machine semantics freeze (OSC-0B)
 
+> **Language wording superseded 2026-10-01.** References below to a "No-Rust rule" or to Rust as migration input describe the 2026-09-27 rule. [ADR 0024](https://github.com/aien-dev/aien-architecture/blob/main/docs/adr/0024-rust-scaffolding-omega-destination.md) now governs: Rust is scaffolding, Omega is the destination, C or assembly only where hardware, boot, ABI or measurement justifies them. Current status and sequencing: [CURRENT_EXECUTION_PLAN.md](https://github.com/aien-dev/aien-architecture/blob/main/CURRENT_EXECUTION_PLAN.md). The original text is kept below as history.
+
 Status: **PROPOSED, awaiting review.** Nothing in this document changes production code.
 Decision record: [docs/adr/OMEGA-SYSTEMS-CORE-0000.md](docs/adr/OMEGA-SYSTEMS-CORE-0000.md).
 Evidence appendices (worker reports, reviewed and spot-checked):
