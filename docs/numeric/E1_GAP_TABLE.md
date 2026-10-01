@@ -21,8 +21,8 @@ The six exit requirements are those in aien-architecture `CURRENT_EXECUTION_PLAN
 | Req | Subject | State | Evidence |
 |---|---|---|---|
 | 1 | General load/store | Not met | Row 2 unchanged: fixed addressing patterns only |
-| 2 | Scalar FP32 ops | Met | #124 (CPU) and #147 (GB10); receipts `evidence/OMEGA-NUMERIC-0/f4f6d362...json`, `dafb645a...json` |
-| 3 | Reductions incl. MAX/MIN/MEAN on GB10 | Not met | GB10 SUM only (`evidence/E1-REDUCE/be9d61ce...json`); MAX/MIN/MEAN on GB10 exist only on branch `feat/e1-gb10-reduce-minmax` `689ad4d`, no PR, no receipt |
+| 2 | Scalar FP32 ops | Met | #124 (CPU) and #147 (GB10); receipts `evidence/OMEGA-NUMERIC-0/f4f6d362...json` (untrusted: produced while the #147 provenance-copy overflow was live, fixed by #152) and `dafb645a...json`; no receipt yet on merged main |
+| 3 | Reductions incl. MAX/MIN/MEAN on GB10 | Partial | SUM/MAX/MIN/MEAN chip parity PASS, 380 cases, 0 mismatches (`evidence/E1-REDUCE/a04f4f7f...json`, omega#157, pre-rebase commit 689ad4d); MEAN final division is a declared host step; no receipt yet on merged main |
 | 4 | Defined DIV and SQRT | Met on the main GB10 path | #152: Gate 5 PASS 26/26, 47 parity lines incl. DIV and SQRT, receipt `evidence/OMEGA-NUMERIC-0/dafb645a9692aab551327c4de7c5dfd7d194504b1ae2ac998a0f5480c687cbb2.json`, run on commit `7852570`, code unchanged at merge |
 | 5 | Transcendentals | Not met | Nine ops CPU-only (#127), bounded ulp, not in `OP_TABLE`, no GB10, no receipt, no CI job runs `test-numeric-transc`. Exact versus bounded is an owner decision (aien-architecture PR #76), unresolved |
 | 6 | CPU/GB10 parity | Partial | Holds for the ops in the Gate 5 receipt; not for MAX/MIN/MEAN or transcendentals |
