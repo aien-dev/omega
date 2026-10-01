@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/visor",
+  "layer": "tests/visor",
+  "purpose": "Directory tests/visor. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "below": [
+    {
+      "name": "fixtures",
+      "role": ""
+    },
+    {
+      "name": "qualification",
+      "role": ""
+    },
+    {
+      "name": "sessions",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/visor. Purpose not yet described by a human.",
+      "files": [
+        "check_authority_link.sh",
+        "forbidden_symbols.txt",
+        "test_visor_authority.c",
+        "test_visor_console.c",
+        "test_visor_evidence.c",
+        "test_visor_machine.c",
+        "test_visor_realization.c",
+        "test_visor_semantic.c",
+        "test_visor_verify.c",
+        "test_visor_world.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 6,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "8b719ff",
+          "timestamp": "2026-09-30T15:52:29-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #106 from aien-dev/feat/r16-g3-g5-host",
+          "pr": 106
+        },
+        {
+          "source": "backfill-git",
+          "sha": "f7f60dd",
+          "timestamp": "2026-09-29T16:21:48-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #81 from aien-dev/feat/program-realize",
+          "pr": 81
+        },
+        {
+          "source": "backfill-git",
+          "sha": "3c8bc36",
+          "timestamp": "2026-09-29T14:44:29-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #83 from aien-dev/chore/no-python-m19r",
+          "pr": 83
+        },
+        {
+          "source": "backfill-git",
+          "sha": "805a3a6",
+          "timestamp": "2026-09-29T07:41:31-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #75 from aien-dev/fix/program-id-body",
+          "pr": 75
+        },
+        {
+          "source": "backfill-git",
+          "sha": "8e7a445",
+          "timestamp": "2026-09-29T06:52:59-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #71 from aien-dev/fix/effect-cap64",
+          "pr": 71
+        },
+        {
+          "source": "backfill-git",
+          "sha": "193a7e7",
+          "timestamp": "2026-09-29T06:27:22-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
+          "pr": 69
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/train",
+  "layer": "tests/train",
+  "purpose": "Directory tests/train. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/train. Purpose not yet described by a human.",
+      "files": [
+        "test_train.c",
+        "train_receipt.sh"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "54826a3",
+          "timestamp": "2026-10-01T02:33:10-05:00",
+          "author": "aien-dev",
+          "subject": "M22 substrate: transactional generation store, E5 two-tier provenance, SGD first (NOT QUALIFIED) (#140)",
+          "pr": 140
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane21",
+          "sha": "54826a3",
+          "pr": 140,
+          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
+          "ref": "2026-10-01-push-lane21-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "54826a3",
+          "pr": 140,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane21",
+          "sha": "54826a3",
+          "pr": 140,
+          "note": "~14:55Z Lane 21 DONE: omega #140 54826a3 (M22 substrate: shadow+atomic generation switch, 8-point crash tests OLD/NEW, E5 two-tier provenance, SGD path; M22 NOT QUALIFIED, waits M20/M21). Running: 2,",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        }
+      ]
+    }
+  }
+}

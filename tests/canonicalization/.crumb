@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/canonicalization",
+  "layer": "tests/canonicalization",
+  "purpose": "Directory tests/canonicalization. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/canonicalization. Purpose not yet described by a human.",
+      "files": [
+        "run_canon_tests.sh"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "30bb116",
+          "timestamp": "2026-09-26T02:47:10-05:00",
+          "author": "Drake Stapleton",
+          "subject": "feat(omega): Milestone 4 — OMEGA_SEMANTICS canonical semantic substrate and qualification (#1, #2, #3, #4)",
+          "pr": 1
+        }
+      ]
+    }
+  }
+}

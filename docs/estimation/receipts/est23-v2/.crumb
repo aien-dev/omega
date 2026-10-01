@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "name": "docs/estimation/receipts/est23-v2",
+  "layer": "docs/estimation/receipts/est23-v2",
+  "purpose": "Directory docs/estimation/receipts/est23-v2. Purpose not yet described by a human.",
+  "above": {
+    "name": "docs/estimation",
+    "path": "../.."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory docs/estimation/receipts/est23-v2. Purpose not yet described by a human.",
+      "files": [
+        "RESULT.md"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "8a56ace",
+          "timestamp": "2026-09-30T21:43:42-05:00",
+          "author": "aien-dev",
+          "subject": "estimation: EST-3b protocol v2 Phase A record (M2 tools, C1 pre-check FAIL, no promotion) (#118)",
+          "pr": 118
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane4",
+          "sha": "8a56ace",
+          "pr": 118,
+          "note": "Premise corrections vs the pasted plan: estimation v2 Phase A already FAILED (omega #118, quantization class), so Lane 4 designs v3 with a declared loaded period; aien-dev/forge does not exist (FORGE",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        }
+      ]
+    }
+  }
+}

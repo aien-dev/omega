@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/crumbline",
+  "layer": "tests/crumbline",
+  "purpose": "Directory tests/crumbline. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "below": [
+    {
+      "name": "vectors",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/crumbline. Purpose not yet described by a human.",
+      "files": [
+        "run_conformance.sh"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "b4547c5",
+          "timestamp": "2026-09-27T12:07:03-05:00",
+          "author": "aien-dev",
+          "subject": "feat(crumbline): Omega learner adapter for Crumb v1 (#34)",
+          "pr": 34
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/r16_negative",
+  "layer": "tests/r16_negative",
+  "purpose": "Directory tests/r16_negative. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/r16_negative. Purpose not yet described by a human.",
+      "files": [
+        "mutate.sh"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 2,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "520c895",
+          "timestamp": "2026-10-01T03:53:15-05:00",
+          "author": "aien-dev",
+          "subject": "r16: retarget mutant c7_bind_refuses_unauthenticated; run mutants in CI (Lane 28) (#146)",
+          "pr": 146
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "520c895",
+          "pr": 146,
+          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane28",
+          "sha": "520c895",
+          "pr": 146,
+          "note": "Verdict: PASS. PR aien-dev/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
+          "ref": "2026-10-01-push-lane28-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane28",
+          "sha": "520c895",
+          "pr": 146,
+          "note": "08:53Z Lane 28 DONE: omega #146 520c895 (mutant c7_bind_refuses_unauthenticated retargeted, 36/36 caught, added to runtime CI job; no regression in src/runtime). Lane 2 opened #147 WP-C batch 1. Runn",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "8b719ff",
+          "timestamp": "2026-09-30T15:52:29-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #106 from aien-dev/feat/r16-g3-g5-host",
+          "pr": 106
+        }
+      ]
+    }
+  }
+}

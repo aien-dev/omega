@@ -1,0 +1,474 @@
+{
+  "schema_version": "1.0.0",
+  "name": "mk",
+  "layer": "mk",
+  "purpose": "Directory mk. Purpose not yet described by a human.",
+  "above": {
+    "name": "cs-omega",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory mk. Purpose not yet described by a human.",
+      "files": [
+        "00-visor-core.mk",
+        "brownian_tps.mk",
+        "compiler.mk",
+        "estimation.mk",
+        "estimation_tools.mk",
+        "estimation_v3.mk",
+        "estimation_v3_tools.mk",
+        "fabric.mk",
+        "machine-identity.mk",
+        "polyglot-asm.mk",
+        "polyglot-encoder.mk",
+        "polyglot-mojo.mk",
+        "polyglot.mk",
+        "program-id.mk",
+        "program-realize.mk",
+        "searchtrace.mk",
+        "train.mk",
+        "turing_exp001_a.mk",
+        "turing_exp001_b.mk",
+        "turing_exp001_c.mk",
+        "turing_exp001_eval.mk",
+        "turing_exp001_indep.mk",
+        "turing_qcont.mk",
+        "turing_qrecord.mk",
+        "turing_yield_energy.mk",
+        "turing_yield_math.mk",
+        "visor-authority.mk",
+        "visor-console.mk",
+        "visor-language.mk",
+        "visor-machine.mk",
+        "visor-semantic.mk",
+        "visor-verify.mk",
+        "visor-world.mk"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 28,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "38a6dea",
+          "timestamp": "2026-10-01T08:18:50-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-3 items 0+1: owed OSC-2 review (NO FINDINGS); quick/full compiler suites (Lane 30) (#156)",
+          "pr": 156
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane30",
+          "sha": "38a6dea",
+          "pr": 156,
+          "note": "## Item 0 + 1 (one PR, omega#156, MERGED 38a6dea)",
+          "ref": "2026-10-01-push-lane30-report.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "7e713e3",
+          "timestamp": "2026-10-01T06:29:06-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-2 item 4: legacy AArch64 writer refuses out-of-range fields (Lane 27) (#151)",
+          "pr": 151
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "7e713e3",
+          "pr": 151,
+          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
+          "ref": "2026-10-01-push-lane27-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "7e713e3",
+          "pr": 151,
+          "note": "11:29Z Lane 27 DONE: omega #151 7e713e3 (strict writer; 71.3M words identical in-range). OSC-2 complete: #148,#149,#150,#151; Codex re-review owed; test-compiler 2m23/3m. Running: 2,15,29.",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane33",
+          "sha": "7e713e3",
+          "pr": 151,
+          "note": "12:33Z Review track 1 DONE (track1-repos-drift.md): omega 7e713e3, aienos c3878bb, arch 921797b, physics 006e426, sovereign-core 7011f2b; #152 green, #153 red for stale head, #136 never ran checks; h",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "c773622",
+          "timestamp": "2026-10-01T05:48:25-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-2 item 3: arenas wired to the OSC-0B memory model (Lane 27) (#150)",
+          "pr": 150
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "c773622",
+          "pr": 150,
+          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "ref": "2026-10-01-push-lane27-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "c773622",
+          "pr": 150,
+          "note": "10:50Z Lane 27 interim: omega #150 c773622 (OSC-2 item 3 arenas wired to OSC-0B model, receipt osc2-arenas-d32a589a); item 4 strict writer next. Running: 2,15,27,29.",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "845dce4",
+          "timestamp": "2026-10-01T04:53:49-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-2 item 2: fixed-layout structs (Lane 27) (#149)",
+          "pr": 149
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "845dce4",
+          "pr": 149,
+          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "ref": "2026-10-01-push-lane27-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "845dce4",
+          "pr": 149,
+          "note": "09:55Z Lane 27 interim: omega #149 845dce4 (OSC-2 item 2 fixed-layout structs, receipt osc2-structs-9ed6766b); continues arena<->memory model + strict writer. Running: 2,15,25,26,27.",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "0abdb08",
+          "timestamp": "2026-10-01T04:10:43-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-2 item 1: enforce requires/ensures contracts (Lane 27) (#148)",
+          "pr": 148
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "0abdb08",
+          "pr": 148,
+          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "ref": "2026-10-01-push-lane27-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "0abdb08",
+          "pr": 148,
+          "note": "09:13Z Lane 27 interim: omega #148 0abdb08 (OSC-2 item 1 requires/ensures; golden 27/27, neg 46/46); continues with structs/arena/writer. Running: 2,15,25,26,27.",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "b81f850",
+          "timestamp": "2026-10-01T03:35:26-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-1: first compiler slice (parse -> typed IR -> AArch64) + OSC-0B memory model gate (#144)",
+          "pr": 144
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane22",
+          "sha": "b81f850",
+          "pr": 144,
+          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "ref": "2026-10-01-push-lane22-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane22",
+          "sha": "b81f850",
+          "pr": 144,
+          "note": "~16:20Z Lane 22 DONE: omega #144 b81f850 (OSC-1 compiler slice: ints 8-64, let/if/bounded loops/calls/arrays+ownership; ~784k fuzz runs 0 mismatch; 24 golden byte-identical; 34 negatives; OSC-0B memo",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "54826a3",
+          "timestamp": "2026-10-01T02:33:10-05:00",
+          "author": "aien-dev",
+          "subject": "M22 substrate: transactional generation store, E5 two-tier provenance, SGD first (NOT QUALIFIED) (#140)",
+          "pr": 140
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane21",
+          "sha": "54826a3",
+          "pr": 140,
+          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
+          "ref": "2026-10-01-push-lane21-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "54826a3",
+          "pr": 140,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane21",
+          "sha": "54826a3",
+          "pr": 140,
+          "note": "~14:55Z Lane 21 DONE: omega #140 54826a3 (M22 substrate: shadow+atomic generation switch, 8-point crash tests OLD/NEW, E5 two-tier provenance, SGD path; M22 NOT QUALIFIED, waits M20/M21). Running: 2,",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "7fb59d3",
+          "timestamp": "2026-10-01T00:10:19-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #130 from aien-dev/lane12/g3-commitment-sig",
+          "pr": 130
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane12",
+          "sha": "7fb59d3",
+          "pr": 130,
+          "note": "PR omega #130 MERGED, merge commit 7fb59d3 (no GitHub checks configured for these paths).",
+          "ref": "2026-10-01-push-lane12-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "7fb59d3",
+          "pr": 130,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane12",
+          "sha": "7fb59d3",
+          "pr": 130,
+          "note": "~09:20Z Lane 12 DONE: aienos#189 6bcef8a (M5 migration sig, TEST keys; receipt f21f2c03… NOT_QUALIFIED pass15 blocked11 missing5 not_run0; QEMU checks ran), omega#130 7fb59d3 (G3 commitment signing",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "ff2af05",
+          "timestamp": "2026-10-01T00:06:34-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #132 from aien-dev/lane13/fabric-living",
+          "pr": 132
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane13",
+          "sha": "ff2af05",
+          "pr": 132,
+          "note": "Objective 1, Fabric in the living World: PASS. PR #132, merge ff2af05.",
+          "ref": "2026-10-01-push-lane13-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "ff2af05",
+          "pr": 132,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane13",
+          "sha": "ff2af05",
+          "pr": 132,
+          "note": "~10:10Z Lane 13 DONE: omega#132 ff2af05 (Fabric 2nd machine in living World), #131 f7b22f1 (COMPOSITION-2 GPU gate 14/14 x2, receipt in evidence/COMPOSITION-2), #133 c6cf052 (close waits on quiescenc",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "d78fd11",
+          "timestamp": "2026-09-30T23:43:21-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #129 from aien-dev/feat/est-v3",
+          "pr": 129
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "d78fd11",
+          "pr": 129,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane4",
+          "sha": "d78fd11",
+          "pr": 129,
+          "note": "omega #129: MERGED d78fd11 (merge commit, so 93b3579 stays in history).",
+          "ref": "2026-10-01-push-lane4-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane4",
+          "sha": "d78fd11",
+          "pr": 129,
+          "note": "~08:40Z Lane 4 DONE: EST v3 PHASE_A_FAIL recorded, omega#129 d78fd11, arch#80 ac83f0d; finding: 10-step variance ratio 2.137 (thermal ramp persists), F5 closest; EST-4/5 blocked. Launching Lane 15 (v",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "ce7821d",
+          "timestamp": "2026-09-30T22:50:18-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #122 from aien-dev/feat/m23-searchtrace-corpus",
+          "pr": 122
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "ce7821d",
+          "pr": 122,
+          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane7",
+          "sha": "ce7821d",
+          "pr": 122,
+          "note": "omega #122, merged as ce7821d84c2d837644323f795b9f6352d670e9f7 (merge commit, so receipt commit 12b4d6e stays in history)",
+          "ref": "2026-10-01-push-lane7-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane7",
+          "sha": "ce7821d",
+          "pr": 122,
+          "note": "~05:20Z Lane 7 (M23 corpus G1 + G3 commitment format) PASS, omega#122 merged ce7821d, receipt evidence/M23/receipts/m23-corpus-ee49821…json; G3 secret salt + sealed-set storage BLOCKED_OPERATOR (Dr",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "a18ec6b",
+          "timestamp": "2026-09-30T22:48:01-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #123 from aien-dev/fabric/f5-0-loopback",
+          "pr": 123
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane6",
+          "sha": "a18ec6b",
+          "pr": 123,
+          "note": "omega #123 MERGED a18ec6b (tested commit 0fc309c; re-run PASS after merging main 5c403f0). New files only: src/fabric/{fabric,fab_hmac,fab_loopback}.{h,c}, tests/fabric/{fabric_test.c,fabric_receipt.",
+          "ref": "2026-10-01-push-lane6-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane6",
+          "sha": "a18ec6b",
+          "pr": 123,
+          "note": "Codex review: 6 passes; every finding fixed or answered with a test (listed in omega #123 body).",
+          "ref": "2026-10-01-push-lane6-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane6",
+          "sha": "a18ec6b",
+          "pr": 123,
+          "note": "~05:00Z Lane 6 DONE: omega #123 a18ec6b Fabric F5-0 loopback PASS (receipt evidence/F5-0/e419a00b...), arch #78 40c17de spec. Drake decision added: accept aienos ADR 0010 (Fabric identity/advertiseme",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "8a56ace",
+          "timestamp": "2026-09-30T21:43:42-05:00",
+          "author": "aien-dev",
+          "subject": "estimation: EST-3b protocol v2 Phase A record (M2 tools, C1 pre-check FAIL, no promotion) (#118)",
+          "pr": 118
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane4",
+          "sha": "8a56ace",
+          "pr": 118,
+          "note": "Premise corrections vs the pasted plan: estimation v2 Phase A already FAILED (omega #118, quantization class), so Lane 4 designs v3 with a declared loaded period; aien-dev/forge does not exist (FORGE",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "16f8518",
+          "timestamp": "2026-09-30T20:33:19-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #113 from aien-dev/m20/identity-convergence",
+          "pr": 113
+        },
+        {
+          "source": "backfill-git",
+          "sha": "8b719ff",
+          "timestamp": "2026-09-30T15:52:29-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #106 from aien-dev/feat/r16-g3-g5-host",
+          "pr": 106
+        },
+        {
+          "source": "backfill-git",
+          "sha": "6d1ff1d",
+          "timestamp": "2026-09-30T09:20:35-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #105 from aien-dev/feat/est-0-1",
+          "pr": 105
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "6d1ff1d",
+          "pr": 105,
+          "note": "ADR 0020 EST table: EST-0/1/2 evidence omega#105 6d1ff1d (EST-2 \"exit not claimed\"); EST-3 \"FAIL recorded (v1 #105, v2 #118, v3 #129); v4 in progress\" (branch feat/est-v4, no PR); EST-4/5 \"blocked on",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "c7a1077",
+          "timestamp": "2026-09-29T22:58:17-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
+          "pr": 96
+        },
+        {
+          "source": "backfill-git",
+          "sha": "008c5eb",
+          "timestamp": "2026-09-29T21:50:44-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #91 from aien-dev/feat/turing-tps-adapter",
+          "pr": 91
+        },
+        {
+          "source": "backfill-git",
+          "sha": "81a7eee",
+          "timestamp": "2026-09-29T21:40:13-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "pr": 92
+        },
+        {
+          "source": "backfill-git",
+          "sha": "23aab4e",
+          "timestamp": "2026-09-29T18:13:33-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #90 from aien-dev/feat/qrecords",
+          "pr": 90
+        }
+      ]
+    }
+  }
+}

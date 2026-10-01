@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "name": "calibration/experiments/EXP-001R",
+  "layer": "calibration/experiments/EXP-001R",
+  "purpose": "Directory calibration/experiments/EXP-001R. Purpose not yet described by a human.",
+  "above": {
+    "name": "calibration",
+    "path": "../.."
+  },
+  "below": [
+    {
+      "name": "ans",
+      "role": ""
+    },
+    {
+      "name": "arithmetic",
+      "role": ""
+    },
+    {
+      "name": "decoder_receipts",
+      "role": ""
+    },
+    {
+      "name": "encoded_artifacts",
+      "role": ""
+    },
+    {
+      "name": "probability_streams",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory calibration/experiments/EXP-001R. Purpose not yet described by a human.",
+      "files": [
+        "REPORT.md",
+        "candidate_manifest.json",
+        "dataset_manifest.json",
+        "final_receipt.json",
+        "freeze_receipt.json",
+        "ideal_lengths.json",
+        "indep_details.json",
+        "overlap_audit.json",
+        "preregistration.json",
+        "profile.digest",
+        "published_manifest.sha256",
+        "scorer_independent.json",
+        "scorer_primary.json",
+        "uncertainty.json"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 3,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "806a9d6",
+          "timestamp": "2026-09-29T23:12:32-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #99 from aien-dev/feat/turing-exp001r-publish",
+          "pr": 99
+        },
+        {
+          "source": "backfill-git",
+          "sha": "990ba32",
+          "timestamp": "2026-09-29T23:02:07-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #98 from aien-dev/feat/turing-exp001r-receipt",
+          "pr": 98
+        },
+        {
+          "source": "backfill-git",
+          "sha": "45be6c8",
+          "timestamp": "2026-09-29T23:01:46-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #97 from aien-dev/feat/turing-exp001r-freeze",
+          "pr": 97
+        }
+      ]
+    }
+  }
+}

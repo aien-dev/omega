@@ -1,0 +1,72 @@
+{
+  "schema_version": "1.0.0",
+  "name": "calibration/experiments/EXP-001",
+  "layer": "calibration/experiments/EXP-001",
+  "purpose": "Directory calibration/experiments/EXP-001. Purpose not yet described by a human.",
+  "above": {
+    "name": "calibration",
+    "path": "../.."
+  },
+  "below": [
+    {
+      "name": "candidates",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory calibration/experiments/EXP-001. Purpose not yet described by a human.",
+      "files": [
+        "candidate_manifest.json",
+        "candidates_dev.txt",
+        "dataset_manifest.json",
+        "final_receipt.json",
+        "freeze_receipt.json",
+        "overlap_audit.json",
+        "power_simulation_output.txt",
+        "preregistration.json",
+        "published_manifest.sha256"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 4,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "e605a58",
+          "timestamp": "2026-09-29T22:33:00-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #95 from aien-dev/feat/turing-exp001-fail-publish",
+          "pr": 95
+        },
+        {
+          "source": "backfill-git",
+          "sha": "119cb6f",
+          "timestamp": "2026-09-29T21:43:31-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #94 from aien-dev/feat/turing-exp001-freeze-receipt",
+          "pr": 94
+        },
+        {
+          "source": "backfill-git",
+          "sha": "ac682f1",
+          "timestamp": "2026-09-29T21:43:15-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #93 from aien-dev/feat/turing-exp001-refreeze",
+          "pr": 93
+        },
+        {
+          "source": "backfill-git",
+          "sha": "81a7eee",
+          "timestamp": "2026-09-29T21:40:13-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "pr": 92
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "name": "research/m15/spbm",
+  "layer": "research/m15/spbm",
+  "purpose": "Directory research/m15/spbm. Purpose not yet described by a human.",
+  "above": {
+    "name": "research",
+    "path": "../.."
+  },
+  "below": [
+    {
+      "name": "runs",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory research/m15/spbm. Purpose not yet described by a human.",
+      "files": [
+        "Makefile",
+        "README.md",
+        "aien_spbm_readonly.c",
+        "collect-c2.sh",
+        "collect.sh",
+        "contract.h",
+        "contract_test.c",
+        "load.c",
+        "reduce.c",
+        "sample.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "bba3bd3",
+          "timestamp": "2026-09-28T22:36:09-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
+          "pr": 67
+        }
+      ]
+    }
+  }
+}

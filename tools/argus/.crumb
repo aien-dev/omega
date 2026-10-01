@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tools/argus",
+  "layer": "tools/argus",
+  "purpose": "Directory tools/argus. Purpose not yet described by a human.",
+  "above": {
+    "name": "tools",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tools/argus. Purpose not yet described by a human.",
+      "files": [
+        "bench_micro.sh",
+        "micro_stats.sh",
+        "r8_leaf.awk",
+        "r8_offcpu.awk",
+        "r8_perthread.awk",
+        "r8_perthread.sh",
+        "r8_stats.sh",
+        "r8_wall.sh",
+        "r8_wall_ab.sh"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "470dcae",
+          "timestamp": "2026-09-29T07:33:40-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #70: ARGUS producer v1.1 (emit on transition, use summaries), re-pinned to aienos d39dd5b",
+          "pr": 70
+        }
+      ]
+    }
+  }
+}

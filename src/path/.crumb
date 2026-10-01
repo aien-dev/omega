@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/path",
+  "layer": "src/path",
+  "purpose": "Directory src/path. Purpose not yet described by a human.",
+  "above": {
+    "name": "src",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory src/path. Purpose not yet described by a human.",
+      "files": [
+        "rx_path.c",
+        "rx_path.h"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "3875223",
+          "timestamp": "2026-09-30T16:32:26-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #109 from aien-dev/feat/path1-reference",
+          "pr": 109
+        }
+      ]
+    }
+  }
+}

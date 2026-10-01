@@ -1,0 +1,114 @@
+{
+  "schema_version": "1.0.0",
+  "name": "calibration",
+  "layer": "calibration",
+  "purpose": "Directory calibration. Purpose not yet described by a human.",
+  "above": {
+    "name": "cs-omega",
+    "path": ".."
+  },
+  "below": [
+    {
+      "name": "docs",
+      "role": ""
+    },
+    {
+      "name": "experiments",
+      "role": ""
+    },
+    {
+      "name": "preregistration",
+      "role": ""
+    },
+    {
+      "name": "profiles",
+      "role": ""
+    },
+    {
+      "name": "schemas",
+      "role": ""
+    },
+    {
+      "name": "scripts",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory calibration. Purpose not yet described by a human.",
+      "files": []
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 8,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "806a9d6",
+          "timestamp": "2026-09-29T23:12:32-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #99 from aien-dev/feat/turing-exp001r-publish",
+          "pr": 99
+        },
+        {
+          "source": "backfill-git",
+          "sha": "990ba32",
+          "timestamp": "2026-09-29T23:02:07-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #98 from aien-dev/feat/turing-exp001r-receipt",
+          "pr": 98
+        },
+        {
+          "source": "backfill-git",
+          "sha": "45be6c8",
+          "timestamp": "2026-09-29T23:01:46-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #97 from aien-dev/feat/turing-exp001r-freeze",
+          "pr": 97
+        },
+        {
+          "source": "backfill-git",
+          "sha": "c7a1077",
+          "timestamp": "2026-09-29T22:58:17-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
+          "pr": 96
+        },
+        {
+          "source": "backfill-git",
+          "sha": "e605a58",
+          "timestamp": "2026-09-29T22:33:00-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #95 from aien-dev/feat/turing-exp001-fail-publish",
+          "pr": 95
+        },
+        {
+          "source": "backfill-git",
+          "sha": "119cb6f",
+          "timestamp": "2026-09-29T21:43:31-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #94 from aien-dev/feat/turing-exp001-freeze-receipt",
+          "pr": 94
+        },
+        {
+          "source": "backfill-git",
+          "sha": "ac682f1",
+          "timestamp": "2026-09-29T21:43:15-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #93 from aien-dev/feat/turing-exp001-refreeze",
+          "pr": 93
+        },
+        {
+          "source": "backfill-git",
+          "sha": "81a7eee",
+          "timestamp": "2026-09-29T21:40:13-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "pr": 92
+        }
+      ]
+    }
+  }
+}

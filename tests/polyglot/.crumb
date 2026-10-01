@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/polyglot",
+  "layer": "tests/polyglot",
+  "purpose": "Directory tests/polyglot. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/polyglot. Purpose not yet described by a human.",
+      "files": [
+        "bench_polyglot.c",
+        "cs_call.S",
+        "polyglot_explain.c",
+        "test_asm.c",
+        "test_encoder.c",
+        "test_mojo.c",
+        "verify_polyglot.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "87938dc",
+          "timestamp": "2026-09-29T14:16:52-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
+          "pr": 80
+        }
+      ]
+    }
+  }
+}

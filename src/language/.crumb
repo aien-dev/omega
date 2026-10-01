@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/language",
+  "layer": "src/language",
+  "purpose": "Directory src/language. Purpose not yet described by a human.",
+  "above": {
+    "name": "src",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory src/language. Purpose not yet described by a human.",
+      "files": [
+        "omega_lex.c",
+        "omega_lex.h",
+        "omega_lower.c",
+        "omega_lower.h",
+        "omega_parse.c",
+        "omega_parse.h"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 2,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "805a3a6",
+          "timestamp": "2026-09-29T07:41:31-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #75 from aien-dev/fix/program-id-body",
+          "pr": 75
+        },
+        {
+          "source": "backfill-git",
+          "sha": "193a7e7",
+          "timestamp": "2026-09-29T06:27:22-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
+          "pr": 69
+        }
+      ]
+    }
+  }
+}
