@@ -1,8 +1,9 @@
 # M20 OMEGA_TENSOR: semantic layer and CPU realization
 
 Status 2026-10-01: **M20 NOT QUALIFIED.** The semantic layer and the CPU
-realization exist and pass their CPU tests. M20 qualification is blocked on
-E1 (numeric closure) being closed, and on GB10 parity, which has not run.
+realization exist and pass their CPU tests. E1 (numeric closure) PASSED on
+main 4863803 (receipt merged in omega#177). M20 qualification is blocked on
+GB10 parity, which has not run, crash-safe storage and a receipt.
 
 Plan source: `aien-architecture/CURRENT_EXECUTION_PLAN.md`, section
 "E2. M20 OMEGA_TENSOR". "M20" here means OMEGA_TENSOR only; the runtime
@@ -111,16 +112,17 @@ removed. Order and padding mutations are caught by the E1 WP-D suite.
 | GB10 general matmul (Tensor Core beyond narrow K/tile) | MISSING_IMPLEMENTATION | |
 | Crash-safe storage lifetime | MISSING_IMPLEMENTATION | storage is in-process memory only; no persistence or crash recovery |
 | Reproducible receipt | MISSING_IMPLEMENTATION | no content-addressed receipt writer for this gate yet |
-| E1 numeric closure | BLOCKED (other lane) | WP-B #127 and WP-D #134 merged; E1 still open (GB10 MAX/MIN/MEAN, transcendentals) |
+| E1 numeric closure | PASS (on main) | E1 PASSED on main 4863803; receipt merged in omega#177 |
 
-**M20 verdict: not qualified.** Blocked on E1 close, GB10 parity, crash-safe
-lifetime and a receipt.
+**M20 verdict: not qualified.** GB10 parity NOT_RUN; crash-safe storage
+lifetime and receipt MISSING_IMPLEMENTATION.
 
 ## Open seams
 
 1. Reductions: DONE, the seam calls `omega_reduce_cpu` (#134 merged).
-2. Transcendentals (#127): add EXP / LOG / ... to `OmegaTensorUnaryOp` once
-   the E1 bounded contract is merged.
+2. Transcendentals (#127): the E1 bounded contract is merged (E1 PASS on
+   main 4863803), so adding EXP / LOG / ... to `OmegaTensorUnaryOp` is a
+   follow-up, not blocked.
 3. GB10 realization table: elementwise through the E1 SIMT ops, reduce
    through `omega_reduce_gb10`, matmul either products + tree (bit-exact to
    this contract) or a Tensor Core path with its own declared bounded

@@ -812,6 +812,6 @@ int main(void) {
     CHECK(lt == 0 && ls == 0, "no leaked tensors (%u) or storage (%u)", lt, ls);
     omega_tensor_ctx_destroy(g);
     printf("M20 OMEGA_TENSOR CPU tests: %d pass, %d fail\n", g_pass, g_fail);
-    printf("M20 verdict: NOT QUALIFIED (CPU tier only; GB10 parity NOT_RUN; E1 open)\n");
+    printf("M20 verdict: NOT QUALIFIED (CPU tier only; GB10 parity NOT_RUN)\n");
     return g_fail ? 1 : 0;
 }
