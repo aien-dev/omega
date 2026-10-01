@@ -3,7 +3,7 @@
  *   searchtrace verify <corpus> [<taskset>]    strict format check (+ task-set binding)
  *   searchtrace replay <taskset> <corpus>      regenerate and compare byte for byte
  *   searchtrace hookcheck <taskset>            hook installed vs not: identical search results
- *   searchtrace holdout <commit|reveal|verify> ...   G3 sealed-holdout commitment format
+ *   searchtrace holdout <commit|reveal|verify|sign> ...   G3 sealed-holdout commitment format
  * Exit: 0 ok, 2 refused/failed, 1 usage. */
 #include "searchtrace/st_corpus.h"
 #include "searchtrace/st_holdout.h"
@@ -133,7 +133,7 @@ static int cmd_hookcheck(const char *tsp) {
 
 static int usage(void) {
     fprintf(stderr, "usage: searchtrace run <taskset> <out> | verify <corpus> [<taskset>] | replay <taskset> <corpus>\n"
-                    "       searchtrace hookcheck <taskset> | holdout <commit|reveal|verify> ...\n");
+                    "       searchtrace hookcheck <taskset> | holdout <commit|reveal|verify|sign> ...\n");
     return 1;
 }
 

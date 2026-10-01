@@ -1,13 +1,17 @@
 /* st_holdout.c - G3 sealed-holdout commitment format, v1.
  * See st_holdout.h and spec/searchtrace/G3_SEALED_HOLDOUT_COMMITMENT_V1.md.
- * Depends only on src/sha256.h and libc (POSIX for the CLI file helpers). */
+ * Depends only on src/sha256.h, the vendored src/searchtrace/sig (Ed25519)
+ * and libc (POSIX for the CLI file helpers). */
 #include "searchtrace/st_holdout.h"
 #include "sha256.h"
+#include "searchtrace/sig/aienos_sig.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #define ST_REC_MAX 1024 /* canonical records are < 512 bytes */
@@ -418,6 +422,180 @@ int st_holdout_reveal_receipt(const StHoldoutCommitment *c,
     return 0;
 }
 
+/* ---- owner signature (detached record) -------------------------------- */
+
+/* Two 64-hex halves, so the existing 32-byte parser does all hex checks. */
+static int parse_hex64(const char *v, size_t n, uint8_t out[64], char *why,
+                       size_t wl)
+{
+    if (n != 128) {
+        set_why(why, wl, "signature is not 128 hex characters");
+        return ST_HOLDOUT_EFORMAT;
+    }
+    int r = parse_hex32(v, 64, out, why, wl);
+    return r ? r : parse_hex32(v + 64, 64, out + 32, why, wl);
+}
+
+#define ST_SIG_MSG_MAX (sizeof(ST_HOLDOUT_SIG_DOMAIN) + ST_REC_MAX)
+
+/* "omega.g3.holdout.sig.v1" 0x00 || record. rec_len <= ST_REC_MAX (the
+ * caller has parsed the record already). */
+static size_t sig_message(const char *rec, size_t rec_len, uint8_t *msg)
+{
+    memcpy(msg, ST_HOLDOUT_SIG_DOMAIN, sizeof(ST_HOLDOUT_SIG_DOMAIN));
+    memcpy(msg + sizeof(ST_HOLDOUT_SIG_DOMAIN), rec, rec_len);
+    return sizeof(ST_HOLDOUT_SIG_DOMAIN) + rec_len;
+}
+
+int st_holdout_sign(const char *rec, size_t rec_len, const uint8_t sk[32],
+                    char *out, size_t cap, size_t *out_len, char *why,
+                    size_t wl)
+{
+    StHoldoutCommitment c;
+    uint8_t pk[32], kid[32], sig[64], end[32], msg[ST_SIG_MSG_MAX];
+    char rdh[65], kidh[65], sigh[129], endh[65], body[ST_REC_MAX];
+    int r;
+
+    if (!rec || !sk || !out || !out_len) {
+        set_why(why, wl, "null argument");
+        return ST_HOLDOUT_EARG;
+    }
+    if ((r = st_holdout_parse(rec, rec_len, &c, why, wl)) != 0)
+        return r;
+    if (aienos_ed25519_public_key(pk, sk) != AIENOS_SIG_OK) {
+        set_why(why, wl, "cannot derive public key");
+        return ST_HOLDOUT_EARG;
+    }
+    sha256_hash(pk, 32, kid);
+    size_t ml = sig_message(rec, rec_len, msg);
+    if (aienos_ed25519_sign(sig, msg, ml, sk) != AIENOS_SIG_OK ||
+        aienos_ed25519_verify(sig, msg, ml, pk) != AIENOS_SIG_OK) {
+        set_why(why, wl, "signature self-check failed");
+        return ST_HOLDOUT_ESIG;
+    }
+    hex_lower(c.record_digest, 32, rdh);
+    hex_lower(kid, 32, kidh);
+    hex_lower(sig, 64, sigh);
+    int n = snprintf(body, sizeof body,
+                     ST_HOLDOUT_SIG_MAGIC "\n"
+                     "domain " ST_HOLDOUT_SIG_DOMAIN "\n"
+                     "holdout_id %s\n"
+                     "record_digest %s\n"
+                     "key_id %s\n"
+                     "signature %s\n",
+                     c.holdout_id, rdh, kidh, sigh);
+    if (n < 0 || (size_t)n >= sizeof body) {
+        set_why(why, wl, "signature record too long");
+        return ST_HOLDOUT_EFORMAT;
+    }
+    sha256_hash((const uint8_t *)body, (size_t)n, end);
+    hex_lower(end, 32, endh);
+    size_t total = (size_t)n + 4 + 64 + 1;
+    if (cap < total) {
+        set_why(why, wl, "output buffer too small");
+        return ST_HOLDOUT_ECAP;
+    }
+    memcpy(out, body, (size_t)n);
+    memcpy(out + n, "end ", 4);
+    memcpy(out + n + 4, endh, 64);
+    out[total - 1] = '\n';
+    if (cap > total)
+        out[total] = '\0';
+    *out_len = total;
+    return 0;
+}
+
+int st_holdout_verify_signed(const char *rec, size_t rec_len,
+                             const char *sig, size_t sig_len,
+                             const uint8_t pk[32], StHoldoutCommitment *out,
+                             char *why, size_t wl)
+{
+    StHoldoutCommitment c;
+    uint8_t rd[32], kid[32], want_kid[32], s[64], end[32], d[32];
+    uint8_t msg[ST_SIG_MSG_MAX];
+    const char *v;
+    size_t vl;
+    int r;
+
+    if (!rec || !pk || !out) {
+        set_why(why, wl, "null argument");
+        return ST_HOLDOUT_EARG;
+    }
+    if ((r = st_holdout_parse(rec, rec_len, &c, why, wl)) != 0)
+        return r;
+    if (!sig || sig_len == 0) {
+        set_why(why, wl, "unsigned record (strict mode needs a signature)");
+        return ST_HOLDOUT_EUNSIGNED;
+    }
+    if (sig_len > ST_REC_MAX) {
+        set_why(why, wl, "signature record too long");
+        return ST_HOLDOUT_EFORMAT;
+    }
+    if (memchr(sig, '\0', sig_len) || memchr(sig, '\r', sig_len)) {
+        set_why(why, wl, "NUL or CR byte in signature record");
+        return ST_HOLDOUT_EFORMAT;
+    }
+    size_t ml = strlen(ST_HOLDOUT_SIG_MAGIC);
+    if (sig_len < ml + 1 || memcmp(sig, ST_HOLDOUT_SIG_MAGIC, ml) != 0 ||
+        sig[ml] != '\n') {
+        set_why(why, wl, "signature record: wrong magic or version");
+        return ST_HOLDOUT_EFORMAT;
+    }
+    Cur cur = {sig, sig_len, ml + 1};
+    if ((r = next_field(&cur, "domain", &v, &vl, why, wl)) != 0)
+        return r;
+    if (vl != strlen(ST_HOLDOUT_SIG_DOMAIN) ||
+        memcmp(v, ST_HOLDOUT_SIG_DOMAIN, vl) != 0) {
+        set_why(why, wl, "signature record: wrong domain");
+        return ST_HOLDOUT_EFORMAT;
+    }
+    if ((r = next_field(&cur, "holdout_id", &v, &vl, why, wl)) != 0)
+        return r;
+    if (!label_ok(v, vl)) {
+        set_why(why, wl, "signature record: bad holdout_id label");
+        return ST_HOLDOUT_EFORMAT;
+    }
+    int id_ok = vl == strlen(c.holdout_id) && memcmp(v, c.holdout_id, vl) == 0;
+    if ((r = next_field(&cur, "record_digest", &v, &vl, why, wl)) != 0 ||
+        (r = parse_hex32(v, vl, rd, why, wl)) != 0)
+        return r;
+    if ((r = next_field(&cur, "key_id", &v, &vl, why, wl)) != 0 ||
+        (r = parse_hex32(v, vl, kid, why, wl)) != 0)
+        return r;
+    if ((r = next_field(&cur, "signature", &v, &vl, why, wl)) != 0 ||
+        (r = parse_hex64(v, vl, s, why, wl)) != 0)
+        return r;
+    size_t body_len = cur.pos;
+    if ((r = next_field(&cur, "end", &v, &vl, why, wl)) != 0 ||
+        (r = parse_hex32(v, vl, end, why, wl)) != 0)
+        return r;
+    if (cur.pos != sig_len) {
+        set_why(why, wl, "signature record: trailing bytes after end line");
+        return ST_HOLDOUT_EFORMAT;
+    }
+    sha256_hash((const uint8_t *)sig, body_len, d);
+    if (!ct_equal(d, end, 32)) {
+        set_why(why, wl, "signature record: end digest mismatch");
+        return ST_HOLDOUT_EDIGEST;
+    }
+    if (!id_ok || !ct_equal(rd, c.record_digest, 32)) {
+        set_why(why, wl, "signature names a different commitment record");
+        return ST_HOLDOUT_EBIND;
+    }
+    sha256_hash(pk, 32, want_kid);
+    if (!ct_equal(kid, want_kid, 32)) {
+        set_why(why, wl, "signed by a different key (key_id mismatch)");
+        return ST_HOLDOUT_EKEY;
+    }
+    size_t mlen = sig_message(rec, rec_len, msg);
+    if (aienos_ed25519_verify(s, msg, mlen, pk) != AIENOS_SIG_OK) {
+        set_why(why, wl, "Ed25519 signature does not verify");
+        return ST_HOLDOUT_ESIG;
+    }
+    *out = c;
+    return 0;
+}
+
 /* ---- CLI -------------------------------------------------------------- */
 
 static int read_file(const char *path, uint8_t **buf, size_t *len)
@@ -630,12 +808,215 @@ static int cli_verify(char **argv)
     return 0;
 }
 
+static void wipe(void *p, size_t n)
+{
+    volatile uint8_t *v = p;
+    for (size_t i = 0; i < n; i++)
+        v[i] = 0;
+}
+
+/* Small regular file. Secret files with any group/other permission bit are
+ * refused (-3). -2 = larger than cap, -1 = cannot read. */
+static int read_key_file(const char *path, uint8_t *buf, size_t cap,
+                         size_t *len, int secret)
+{
+    /* O_NONBLOCK: a FIFO or device must not hang the tool; non-regular
+     * files are refused below. */
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+    if (fd < 0)
+        return -1;
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+        close(fd);
+        return -1;
+    }
+    if (secret && (st.st_mode & 077)) {
+        close(fd);
+        return -3;
+    }
+    size_t n = 0;
+    for (;;) {
+        ssize_t r = read(fd, buf + n, cap - n);
+        if (r < 0) {
+            if (errno == EINTR)
+                continue;
+            close(fd);
+            return -1;
+        }
+        if (r == 0)
+            break;
+        n += (size_t)r;
+        if (n == cap) {
+            uint8_t extra;
+            if (read(fd, &extra, 1) != 0) {
+                close(fd);
+                return -2;
+            }
+            break;
+        }
+    }
+    close(fd);
+    *len = n;
+    return 0;
+}
+
+/* Ed25519 key file: 32 raw bytes, 64 hex digits (+ LF), or DER (PKCS#8 for
+ * a secret key, SPKI for a public key), as `openssl pkey -outform DER`
+ * writes them. */
+static const uint8_t PKCS8_ED25519[16] = {0x30, 0x2e, 0x02, 0x01, 0x00, 0x30,
+                                          0x05, 0x06, 0x03, 0x2b, 0x65, 0x70,
+                                          0x04, 0x22, 0x04, 0x20};
+static const uint8_t SPKI_ED25519[12] = {0x30, 0x2a, 0x30, 0x05, 0x06, 0x03,
+                                         0x2b, 0x65, 0x70, 0x03, 0x21, 0x00};
+
+static int load_key(const char *path, int secret, uint8_t key[32])
+{
+    uint8_t buf[80];
+    size_t n = 0;
+    const uint8_t *pre = secret ? PKCS8_ED25519 : SPKI_ED25519;
+    size_t pl = secret ? sizeof PKCS8_ED25519 : sizeof SPKI_ED25519;
+    int r = read_key_file(path, buf, sizeof buf, &n, secret);
+    if (r == -3) {
+        fprintf(stderr, "st_holdout: secret key file %s is readable by group "
+                        "or others (chmod 600)\n", path);
+        wipe(buf, sizeof buf);
+        return -1;
+    }
+    if (r != 0) {
+        fprintf(stderr, "st_holdout: cannot read key file %s\n", path);
+        wipe(buf, sizeof buf);
+        return -1;
+    }
+    char why[64];
+    r = -1;
+    if (n == 32) {
+        memcpy(key, buf, 32);
+        r = 0;
+    } else if (n == 64 || (n == 65 && buf[64] == '\n')) {
+        /* accept either hex case in key files */
+        for (size_t i = 0; i < 64; i++)
+            if (buf[i] >= 'A' && buf[i] <= 'F')
+                buf[i] = (uint8_t)(buf[i] - 'A' + 'a');
+        r = parse_hex32((const char *)buf, 64, key, why, sizeof why) ? -1 : 0;
+    } else if (n == pl + 32 && memcmp(buf, pre, pl) == 0) {
+        memcpy(key, buf + pl, 32);
+        r = 0;
+    }
+    wipe(buf, sizeof buf);
+    if (r != 0) {
+        wipe(key, 32);
+        fprintf(stderr, "st_holdout: key file %s is not 32 raw bytes, 64 hex "
+                        "digits or Ed25519 %s DER\n", path,
+                secret ? "PKCS#8" : "SPKI");
+    }
+    return r;
+}
+
+static int cli_sign(char **argv)
+{
+    uint8_t *rb, sk[32];
+    size_t rbl, ol;
+    char why[128], out[ST_REC_MAX], path[4096], dh[65];
+    StHoldoutCommitment c;
+    if (read_file(argv[1], &rb, &rbl) != 0) {
+        fprintf(stderr, "st_holdout: cannot read record %s\n", argv[1]);
+        return 2;
+    }
+    if (st_holdout_parse((const char *)rb, rbl, &c, why, sizeof why) != 0) {
+        fprintf(stderr, "st_holdout: record refused: %s\n", why);
+        free(rb);
+        return 2;
+    }
+    if (load_key(argv[2], 1, sk) != 0) {
+        free(rb);
+        return 2;
+    }
+    int r = st_holdout_sign((const char *)rb, rbl, sk, out, sizeof out, &ol,
+                            why, sizeof why);
+    wipe(sk, sizeof sk);
+    free(rb);
+    if (r != 0) {
+        fprintf(stderr, "st_holdout: sign refused (%d): %s\n", r, why);
+        return 2;
+    }
+    hex_lower(c.record_digest, 32, dh);
+    if (snprintf(path, sizeof path, "%s/g3-sig-%s.txt", argv[3], dh) >=
+        (int)sizeof path)
+        return 2;
+    r = write_addressed(path, out, ol);
+    if (r != 0) {
+        fprintf(stderr, "st_holdout: cannot write %s%s\n", path,
+                r == -2 ? " (exists with different bytes)" : "");
+        return 2;
+    }
+    printf("%s\n", path);
+    return 0;
+}
+
+/* verify --strict <public_key> <record> [<sig>]. Without <sig>, the
+ * signature is g3-sig-<record digest>.txt in the record's directory; a
+ * missing signature is a refusal (unsigned record). */
+static int cli_verify_strict(int argc, char **argv)
+{
+    uint8_t pk[32], *rb, *sb = NULL, d[32];
+    size_t rbl, sbl = 0;
+    char why[128], dh[65], kh[65], sp[4200];
+    const char *sigp;
+    StHoldoutCommitment c;
+    if (load_key(argv[2], 0, pk) != 0)
+        return 2;
+    if (read_file(argv[3], &rb, &rbl) != 0) {
+        fprintf(stderr, "st_holdout: cannot read record %s\n", argv[3]);
+        return 2;
+    }
+    if (argc == 5) {
+        sigp = argv[4];
+    } else {
+        sha256_hash(rb, rbl, d);
+        hex_lower(d, 32, dh);
+        const char *slash = strrchr(argv[3], '/');
+        int dl = slash ? (int)(slash - argv[3]) : 1;
+        if (snprintf(sp, sizeof sp, "%.*s/g3-sig-%s.txt", dl,
+                     slash ? argv[3] : ".", dh) >= (int)sizeof sp) {
+            free(rb);
+            return 2;
+        }
+        sigp = sp;
+    }
+    if (read_file(sigp, &sb, &sbl) != 0) {
+        if (errno != ENOENT || argc == 5) {
+            fprintf(stderr, "st_holdout: cannot read signature %s\n", sigp);
+            free(rb);
+            return 2;
+        }
+        sb = NULL;
+        sbl = 0;
+    }
+    int r = st_holdout_verify_signed((const char *)rb, rbl, (const char *)sb,
+                                     sbl, pk, &c, why, sizeof why);
+    free(rb);
+    free(sb);
+    if (r != 0) {
+        fprintf(stderr, "st_holdout: strict verify refused (%d): %s\n", r,
+                why);
+        return 2;
+    }
+    hex_lower(c.record_digest, 32, dh);
+    sha256_hash(pk, 32, d);
+    hex_lower(d, 32, kh);
+    printf("OK SIGNED holdout_id %s task_count %lu record_digest %s key_id "
+           "%s\n", c.holdout_id, (unsigned long)c.task_count, dh, kh);
+    return 0;
+}
+
 static int usage(void)
 {
     fprintf(stderr,
             "usage: commit <holdout_id> <taskset_file> <salt_file> <out_dir>\n"
             "       reveal <record_file> <taskset_file> <salt_file> <out_dir>\n"
-            "       verify <record_file>\n");
+            "       verify <record_file>\n"
+            "       verify --strict <public_key_file> <record_file> [<sig_file>]\n"
+            "       sign <record_file> <secret_key_file> <out_dir>\n");
     return 1;
 }
 
@@ -647,6 +1028,11 @@ int st_holdout_cli(int argc, char **argv)
         return cli_commit(argv);
     if (strcmp(argv[0], "reveal") == 0 && argc == 5)
         return cli_reveal(argv);
+    if (strcmp(argv[0], "verify") == 0 && (argc == 4 || argc == 5) &&
+        strcmp(argv[1], "--strict") == 0)
+        return cli_verify_strict(argc, argv);
+    if (strcmp(argv[0], "sign") == 0 && argc == 4)
+        return cli_sign(argv);
     if (strcmp(argv[0], "verify") == 0 && argc == 2)
         return cli_verify(argv);
     return usage();

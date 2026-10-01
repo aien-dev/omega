@@ -109,7 +109,60 @@ tasks), holdout_id = `g3-kat-1`. Computed independently with `printf` +
 - end `f241a91082e4ee19e4612c4fb7a3c6108182449c515bee35be6797bd8ef387ee`
 - record digest `20ba763127e9ffd0b563365d1db13f7d3b813f39c9d3b215c1447a48e9f39a28`
 
+## Owner signature (detached, optional; lane 12)
+
+The commitment record above is unchanged byte for byte (the known-answer
+vector still holds). An owner signature is a separate file next to it.
+
+    signed message = "omega.g3.holdout.sig.v1" 0x00 || <whole commitment record>
+
+Pure Ed25519 (RFC 8032 section 5.1, no prehash, no context), from the in-house
+code vendored in `src/searchtrace/sig/` (copied unchanged from aienos
+`native/sig` at 913b962; see `PROVENANCE.txt`; omega does not read the aienos
+tree at build time). Verification refuses non-canonical and small-order keys
+and signatures (aienos native/sig policy).
+
+Signature record (canonical ASCII, LF only, fixed order, at most 1024 bytes):
+
+    OMEGA-G3-HOLDOUT-SIG v1
+    domain omega.g3.holdout.sig.v1
+    holdout_id <label, equal to the record's>
+    record_digest <64 lowercase hex: sha256 of the whole commitment record>
+    key_id <64 lowercase hex: sha256 of the 32-byte public key>
+    signature <128 lowercase hex>
+    end <64 lowercase hex: sha256 of every byte before "end ">
+
+File name: `g3-sig-<record_digest>.txt`, same folder as `g3-commit-<record_digest>.txt`.
+
+Strict verification (`st_holdout_verify_signed`, CLI `verify --strict`) checks
+in order and refuses on the first failure: commitment record parses (as
+above); signature present (else `EUNSIGNED`, -12); signature record canonical
+(`EFORMAT`) with matching end digest (`EDIGEST`); it names this record's
+holdout_id and record digest (`EBIND`, -13); its key_id is the given public
+key's (`EKEY`, -14); the Ed25519 signature verifies (`ESIG`, -15).
+`verify <record>` without `--strict` is unchanged (parse only, signature not
+required).
+
+CLI:
+
+- `sign <record_file> <secret_key_file> <out_dir>`: the key file must not be
+  readable by group or others; it holds the 32-byte Ed25519 seed as 32 raw
+  bytes, 64 hex digits, or Ed25519 PKCS#8 DER (as `openssl pkey -outform DER`
+  writes it). The tool never creates keys. Writes
+  `<out_dir>/g3-sig-<record_digest>.txt` (same bytes present: OK; different
+  bytes: refused).
+- `verify --strict <public_key_file> <record_file> [<sig_file>]`: public key
+  as 32 raw bytes, 64 hex digits or Ed25519 SPKI DER. Without `<sig_file>`,
+  reads `g3-sig-<record_digest>.txt` from the record's folder; missing means
+  unsigned and is refused (exit 2).
+
+Tests use only TEST keys (fixed labelled seeds, and random keys made and
+deleted by `tests/searchtrace/test_st_holdout_sig_cli.sh`; when openssl is
+installed it also checks the signatures independently). The real signature is
+made only in the offline owner key ceremony.
+
 ## Out of scope
 
-Salt generation, sealed storage of the task set and salt, signing the record,
+Salt generation, sealed storage of the task set and salt, signing the record
+with the real owner key (the signature format and tool exist, see above),
 publishing it to a timestamped location, and any real held-out data.
