@@ -57,6 +57,18 @@ Saturation thresholds (18, 104, 9.5, 128, 151, 4, 8, 15.5) are points past
 which the exact function rounds to the stated constant; the reasons are
 in comments next to each threshold and the exhaustive check confirms each.
 
+### Porting notes (GPU parity)
+
+- Division and square root must be the IEEE correctly rounded forms
+  (PTX `div.rn.f32`, `sqrt.rn.f32`), never `rcp`/`rsqrt.approx` or fast-math
+  division; denormals preserved (`.ftz` off); FMADD as `fma.rn.f32`; no
+  contraction of separate multiply and add.
+- The RSQRT rounding step uses a 128-bit integer product (`N^2 X < 2^75`);
+  a GPU port computes it with 64-bit multiply-high pairs. It is pure
+  integer arithmetic, so parity does not depend on the FP unit.
+- `scale2` is only ever called with a normal `m`; with a subnormal `m` it
+  could round twice.
+
 ## 3. Error metric (ulp)
 
 `ord(b)` maps FP32 bits to integers: `ord(b) = b` for sign 0 and

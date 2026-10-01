@@ -73,8 +73,8 @@ enum {
  * and the low mantissa bits of the sum hold that integer. */
 #define MAGIC 0xC00000p0f
 
-/* m * 2^k with k in [-252, 254]; one rounding (the last multiply), exact
- * when the result is normal. */
+/* m * 2^k with k in [-252, 254] and m normal (every caller passes a normal m);
+ * one rounding (the last multiply), exact when the result is normal. */
 static float scale2(float m, int32_t k) {
     if (k > 127) return fmul(fmul(m, pow2i(127)), pow2i(k - 127));
     if (k < -126) return fmul(fmul(m, pow2i(k + 126)), pow2i(-126));
@@ -94,8 +94,10 @@ static inline void two_sum(float a, float b, float *s, float *e) {
 
 /*
  * e^(ah + al) = m * 2^k, |al| tiny next to |ah|, |ah| <= 190.
- * k = nearest(ah / ln2); r = ah - k ln2 (Cody-Waite: the first FMADD is exact
- * because LN2_HI has 24 bits and |r| < 1), then r += al and
+ * k = nearest(ah / ln2); r = ah - k ln2 (Cody-Waite: the first FMADD is exact:
+ * when k != 0, |ah| > 0.34, so ah and k LN2_HI (21 significant bits) are both
+ * multiples of g = min(ulp(ah), 2^-24) >= 2^-25, and |r| < 0.35 < 2^24 g),
+ * then r += al and
  * m = 1 + r + r^2/2! + ... + r^8/8! (Horner, FMADD), |r| <= 0.35.
  */
 static float exp_core2(float ah, float al, int32_t *k_out, float *ml) {
