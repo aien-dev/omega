@@ -7,6 +7,7 @@
  * tools/divsqrt_check_sweep.sh deletes each one in a scratch copy and proves
  * a host test then fails. With -DOMEGA_NUMERIC_CPU_ONLY no device is touched.
  */
+#include <unistd.h>
 #include "omega_numeric_divsqrt_gb10.h"
 #include "omega_numeric.h"
 #include "omega_blackwell_encoder.h"
@@ -1119,6 +1120,10 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
         m16_native_close(&ctx);
         return OMEGA_NUMERIC_ERR_DEVICE;
     }
+    /* C3-H1 EXPERIMENT (diagnostic only, not for merge): settle 200 ms after the
+     * marker and semaphore before readback. If misses drop to 0, stores were
+     * visible late (H1); if not, they never reached memory. */
+    usleep(200000);
     __asm__ volatile("dsb sy" ::: "memory");
     memcpy(out, out_mem.cpu, count * 4);
     m16_native_close(&ctx);
