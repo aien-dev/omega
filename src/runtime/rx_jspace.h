@@ -43,6 +43,7 @@
 #define JS_ERR_STALE     -7   /* handle generation is not current: the object was reclaimed */
 #define JS_ERR_REMOTE    -8   /* not locally owned; this build has no remote transport */
 #define JS_ERR_OWNER     -9   /* caller is not the recorded owner */
+#define JS_ERR_VERSION  -10   /* RED EVIDENCE SHIM: declared only; old code never returns it */
 
 #include <pthread.h>
 

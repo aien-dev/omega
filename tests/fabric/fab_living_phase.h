@@ -299,8 +299,8 @@ static int fl_setup(FlRig *r, const AienMachineId *self) {
         fab_hmac_auth_init(&r->auth_b, &r->b, r->key_b, 2, r->roster_ids,
                            (const uint8_t (*)[32])r->roster_keys) != FAB_OK)
         return -5;
-    FabConfig ca = { r->a, &r->roster, &r->cat_a, &r->loop.transport, &r->auth_a.auth, FL_LEASE, 1 };
-    FabConfig cb = { r->b, &r->roster, &r->cat_b, &r->loop.transport, &r->auth_b.auth, FL_LEASE, 1 };
+    FabConfig ca = { r->a, &r->roster, &r->cat_a, &r->loop.transport, &r->auth_a.auth, FL_LEASE, 1, NULL, 0 };
+    FabConfig cb = { r->b, &r->roster, &r->cat_b, &r->loop.transport, &r->auth_b.auth, FL_LEASE, 1, NULL, 0 };
     if (fab_node_init(&r->node_a, &ca) != FAB_OK || fab_node_init(&r->node_b, &cb) != FAB_OK)
         return -6;
     if (fl_own_skill(&r->cat_b, &r->skills_b.skill[0], FX_OP_SCALE, 2, RX_RIGHT_READ, 5,
