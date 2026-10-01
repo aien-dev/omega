@@ -2,6 +2,7 @@
 #include "omega_canonical.h"
 #include "omega_exec.h"
 #include "sha256.h"
+#include "searchtrace/st_hook.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -99,6 +100,50 @@ int omega_synth_compute_signature(const OmegaProgram *prog, uint8_t out_hash[32]
     return 0;
 }
 
+/* ---- M23 search-trace recorder hook (src/searchtrace/st_hook.h) ----------
+ * Off by default. With no hook installed every emission point below is a single
+ * null test, so search order, pruning, results and stats are unchanged. */
+static _Thread_local StHookFn st_synth_hook;
+static _Thread_local void *st_synth_hook_ctx;
+
+int omega_synth_set_trace_hook(StHookFn fn, void *ctx) {
+    if (!fn || st_synth_hook) return -1;
+    st_synth_hook = fn;
+    st_synth_hook_ctx = ctx;
+    return 0;
+}
+
+int omega_synth_clear_trace_hook(void *ctx) {
+    if (!st_synth_hook || st_synth_hook_ctx != ctx) return -1;
+    st_synth_hook = NULL;
+    st_synth_hook_ctx = NULL;
+    return 0;
+}
+
+static void st_synth_emit(uint32_t depth, size_t parent_index, size_t prim_index,
+                          const OmegaProgram *parent, const OmegaProgram *prim,
+                          const OmegaProgram *child, uint32_t prune, uint32_t verdict,
+                          int eval_rc, int verify_rc, const uint8_t *sig) {
+    StEvent ev;
+    memset(&ev, 0, sizeof ev);
+    ev.kind = ST_EV_SYNTH_CANDIDATE;
+    ev.u.synth.depth = depth;
+    ev.u.synth.parent_index = parent ? (int32_t)parent_index : -1;
+    ev.u.synth.prim_index = (int32_t)prim_index;
+    ev.u.synth.parent = parent;
+    ev.u.synth.prim = prim;
+    ev.u.synth.child = child;
+    ev.u.synth.prune = prune;
+    ev.u.synth.verdict = verdict;
+    ev.u.synth.eval_rc = eval_rc;
+    ev.u.synth.verify_rc = verify_rc;
+    if (sig) {
+        ev.u.synth.has_signature = 1;
+        memcpy(ev.u.synth.signature, sig, 32);
+    }
+    st_synth_hook(st_synth_hook_ctx, &ev);
+}
+
 int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
                      const SynthesisConfig *config, SynthesisResult *result) {
     if (!task || !bank || !config || !result) return -1;
@@ -119,21 +164,31 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
     for (size_t i = 0; i < bank->count; ++i) {
         const OmegaProgram *p = &bank->programs[i];
         result->stats.candidates_generated++;
+        uint8_t sig[32];
+        bool has_sig = false;
 
         if (config->deduplicate_equiv) {
-            uint8_t sig[32];
             if (omega_synth_compute_signature(p, sig) == 0) {
+                has_sig = true;
                 if (omega_synth_equiv_contains_or_add(&equiv_tbl, sig, p->cost.insn_count)) {
                     result->stats.candidates_pruned_equiv++;
+                    if (st_synth_hook)
+                        st_synth_emit(1, 0, i, NULL, p, p, ST_PRUNE_EQUIV, ST_VERDICT_NONE, 0, 0, sig);
                     continue;
                 }
             }
         }
 
         bool solved = false;
-        if (omega_task_evaluate_candidate(task, p, &solved) == 0 && solved) {
+        int erc = omega_task_evaluate_candidate(task, p, &solved);
+        if (erc == 0 && solved) {
             VerifyReport rep;
-            if (omega_program_verify((OmegaProgram*)p, &rep) == 0) {
+            int vrc = omega_program_verify((OmegaProgram*)p, &rep);
+            if (st_synth_hook)
+                st_synth_emit(1, 0, i, NULL, p, p, ST_PRUNE_NONE,
+                              vrc == 0 ? ST_VERDICT_SOLVED : ST_VERDICT_VERIFY_FAIL, erc, vrc,
+                              has_sig ? sig : NULL);
+            if (vrc == 0) {
                 result->solved = true;
                 result->solution = *p;
                 result->verify_report = rep;
@@ -142,6 +197,9 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
             }
         } else {
             result->stats.candidates_failed_v1++;
+            if (st_synth_hook)
+                st_synth_emit(1, 0, i, NULL, p, p, ST_PRUNE_NONE, ST_VERDICT_REJECT, erc, 0,
+                              has_sig ? sig : NULL);
         }
 
         if (depth1_count < SYNTH_MAX_PRIMITIVES) {
@@ -159,6 +217,9 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
     for (size_t i = 0; i < depth1_count; ++i) {
         for (size_t j = 0; j < bank->count; ++j) {
             if (result->stats.candidates_generated >= config->max_candidates) {
+                if (st_synth_hook)
+                    st_synth_emit(2, i, j, &depth1[i], &bank->programs[j], NULL, ST_PRUNE_BUDGET,
+                                  ST_VERDICT_NONE, 0, 0, NULL);
                 goto cleanup;
             }
             result->stats.candidates_generated++;
@@ -167,20 +228,31 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
             char err[256];
             if (omega_program_compose(&depth1[i], &bank->programs[j], &cand, err, sizeof(err)) != 0) {
                 result->stats.candidates_pruned_type++;
+                if (st_synth_hook)
+                    st_synth_emit(2, i, j, &depth1[i], &bank->programs[j], NULL, ST_PRUNE_TYPE,
+                                  ST_VERDICT_NONE, 0, 0, NULL);
                 continue;
             }
 
             if (cand.cost.insn_count > task->cost_budget.insn_count ||
                 cand.cost.insn_count > config->max_cost) {
+                if (st_synth_hook)
+                    st_synth_emit(2, i, j, &depth1[i], &bank->programs[j], &cand, ST_PRUNE_COST,
+                                  ST_VERDICT_NONE, 0, 0, NULL);
                 omega_program_destroy(&cand);
                 continue;
             }
 
+            uint8_t sig[32];
+            bool has_sig = false;
             if (config->deduplicate_equiv) {
-                uint8_t sig[32];
                 if (omega_synth_compute_signature(&cand, sig) == 0) {
+                    has_sig = true;
                     if (omega_synth_equiv_contains_or_add(&equiv_tbl, sig, cand.cost.insn_count)) {
                         result->stats.candidates_pruned_equiv++;
+                        if (st_synth_hook)
+                            st_synth_emit(2, i, j, &depth1[i], &bank->programs[j], &cand, ST_PRUNE_EQUIV,
+                                          ST_VERDICT_NONE, 0, 0, sig);
                         omega_program_destroy(&cand);
                         continue;
                     }
@@ -188,9 +260,15 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
             }
 
             bool solved = false;
-            if (omega_task_evaluate_candidate(task, &cand, &solved) == 0 && solved) {
+            int erc = omega_task_evaluate_candidate(task, &cand, &solved);
+            if (erc == 0 && solved) {
                 VerifyReport rep;
-                if (omega_program_verify(&cand, &rep) == 0) {
+                int vrc = omega_program_verify(&cand, &rep);
+                if (st_synth_hook)
+                    st_synth_emit(2, i, j, &depth1[i], &bank->programs[j], &cand, ST_PRUNE_NONE,
+                                  vrc == 0 ? ST_VERDICT_SOLVED : ST_VERDICT_VERIFY_FAIL, erc, vrc,
+                                  has_sig ? sig : NULL);
+                if (vrc == 0) {
                     result->solved = true;
                     result->solution = cand;
                     result->verify_report = rep;
@@ -199,6 +277,9 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
                 }
             } else {
                 result->stats.candidates_failed_v1++;
+                if (st_synth_hook)
+                    st_synth_emit(2, i, j, &depth1[i], &bank->programs[j], &cand, ST_PRUNE_NONE,
+                                  ST_VERDICT_REJECT, erc, 0, has_sig ? sig : NULL);
             }
 
             if (depth2_count < SYNTH_MAX_CANDIDATES) {
@@ -219,6 +300,9 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
     for (size_t i = 0; i < depth2_count; ++i) {
         for (size_t j = 0; j < bank->count; ++j) {
             if (result->stats.candidates_generated >= config->max_candidates) {
+                if (st_synth_hook)
+                    st_synth_emit(3, i, j, &depth2[i], &bank->programs[j], NULL, ST_PRUNE_BUDGET,
+                                  ST_VERDICT_NONE, 0, 0, NULL);
                 goto cleanup;
             }
             result->stats.candidates_generated++;
@@ -227,20 +311,31 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
             char err[256];
             if (omega_program_compose(&depth2[i], &bank->programs[j], &cand, err, sizeof(err)) != 0) {
                 result->stats.candidates_pruned_type++;
+                if (st_synth_hook)
+                    st_synth_emit(3, i, j, &depth2[i], &bank->programs[j], NULL, ST_PRUNE_TYPE,
+                                  ST_VERDICT_NONE, 0, 0, NULL);
                 continue;
             }
 
             if (cand.cost.insn_count > task->cost_budget.insn_count ||
                 cand.cost.insn_count > config->max_cost) {
+                if (st_synth_hook)
+                    st_synth_emit(3, i, j, &depth2[i], &bank->programs[j], &cand, ST_PRUNE_COST,
+                                  ST_VERDICT_NONE, 0, 0, NULL);
                 omega_program_destroy(&cand);
                 continue;
             }
 
+            uint8_t sig[32];
+            bool has_sig = false;
             if (config->deduplicate_equiv) {
-                uint8_t sig[32];
                 if (omega_synth_compute_signature(&cand, sig) == 0) {
+                    has_sig = true;
                     if (omega_synth_equiv_contains_or_add(&equiv_tbl, sig, cand.cost.insn_count)) {
                         result->stats.candidates_pruned_equiv++;
+                        if (st_synth_hook)
+                            st_synth_emit(3, i, j, &depth2[i], &bank->programs[j], &cand, ST_PRUNE_EQUIV,
+                                          ST_VERDICT_NONE, 0, 0, sig);
                         omega_program_destroy(&cand);
                         continue;
                     }
@@ -248,9 +343,15 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
             }
 
             bool solved = false;
-            if (omega_task_evaluate_candidate(task, &cand, &solved) == 0 && solved) {
+            int erc = omega_task_evaluate_candidate(task, &cand, &solved);
+            if (erc == 0 && solved) {
                 VerifyReport rep;
-                if (omega_program_verify(&cand, &rep) == 0) {
+                int vrc = omega_program_verify(&cand, &rep);
+                if (st_synth_hook)
+                    st_synth_emit(3, i, j, &depth2[i], &bank->programs[j], &cand, ST_PRUNE_NONE,
+                                  vrc == 0 ? ST_VERDICT_SOLVED : ST_VERDICT_VERIFY_FAIL, erc, vrc,
+                                  has_sig ? sig : NULL);
+                if (vrc == 0) {
                     result->solved = true;
                     result->solution = cand;
                     result->verify_report = rep;
@@ -259,6 +360,9 @@ int omega_synthesize(const SynthesisTask *task, const SynthPrimitiveBank *bank,
                 }
             } else {
                 result->stats.candidates_failed_v1++;
+                if (st_synth_hook)
+                    st_synth_emit(3, i, j, &depth2[i], &bank->programs[j], &cand, ST_PRUNE_NONE,
+                                  ST_VERDICT_REJECT, erc, 0, has_sig ? sig : NULL);
             }
 
             omega_program_destroy(&cand);

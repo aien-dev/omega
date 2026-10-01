@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include "omega_exec.h"
 #include "omega_canonical.h"
+#include "searchtrace/st_hook.h"
 
 void omega_realize_task_init(RealizationSynthesisTask *task,
                              const OmegaProgram *prog,
@@ -170,8 +171,8 @@ OmegaRealizeSchedule omega_realize_choose_schedule(const OmegaMachineGraph *mg) 
     return OMEGA_SCHED_SEQUENTIAL;
 }
 
-int omega_synthesize_realization(const RealizationSynthesisTask *task,
-                                 RealizationSynthesisResult *result) {
+static int synthesize_realization_impl(const RealizationSynthesisTask *task,
+                                       RealizationSynthesisResult *result) {
     if (!task || !task->program || !task->machine || !result) return -1;
     memset(result, 0, sizeof(*result));
 
@@ -223,6 +224,43 @@ int omega_synthesize_realization(const RealizationSynthesisTask *task,
     omega_verify_v2_properties(NULL, r, &result->verify_report);
     result->solved = result->verify_report.passed;
     return result->solved ? 0 : -1;
+}
+
+/* ---- M23 search-trace recorder hook (src/searchtrace/st_hook.h) ----------
+ * Off by default: with no hook installed omega_synthesize_realization is the
+ * unchanged body above plus one null test. The recorder sees the finished
+ * result after the body returns and cannot change it. */
+static _Thread_local StHookFn st_realize_hook;
+static _Thread_local void *st_realize_hook_ctx;
+
+int omega_realize_set_trace_hook(StHookFn fn, void *ctx) {
+    if (!fn || st_realize_hook) return -1;
+    st_realize_hook = fn;
+    st_realize_hook_ctx = ctx;
+    return 0;
+}
+
+int omega_realize_clear_trace_hook(void *ctx) {
+    if (!st_realize_hook || st_realize_hook_ctx != ctx) return -1;
+    st_realize_hook = NULL;
+    st_realize_hook_ctx = NULL;
+    return 0;
+}
+
+int omega_synthesize_realization(const RealizationSynthesisTask *task,
+                                 RealizationSynthesisResult *result) {
+    int rc = synthesize_realization_impl(task, result);
+    if (st_realize_hook && task && result) {
+        StEvent ev;
+        memset(&ev, 0, sizeof ev);
+        ev.kind = ST_EV_REALIZATION;
+        ev.u.realize.program = task->program;
+        ev.u.realize.machine = task->machine;
+        ev.u.realize.result = result;
+        ev.u.realize.rc = rc;
+        st_realize_hook(st_realize_hook_ctx, &ev);
+    }
+    return rc;
 }
 
 int omega_synthesize_for_dgx_spark(const OmegaProgram *prog, RealizationSynthesisResult *result) {
