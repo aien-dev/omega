@@ -1,6 +1,6 @@
 --- a/lanes.sh
 +++ b/lanes.sh
-@@ -29,6 +29,39 @@
+@@ -29,6 +29,45 @@
  BACKLOG="$HOME/workspace/.hive-backlog"           # id|idea|phase|prereqs|unblocks|state (rendered into the ledger)
  HANDOFFS="$HOME/handoffs"
  SELF="$HOME/.claude/skills/orchestrate-lanes/lanes.sh"
@@ -12,7 +12,13 @@
 +FORGE_WAIT_SECONDS="${FORGE_WAIT_SECONDS:-}"  # seconds between looks at a held flag (default 60 main, 30 light)
 +ql_ok() { [ -x "$QL" ] || { echo "quietlock not installed at $QL; see omega tools/quietlock/install.sh" >&2; return 1; }; }
 +ql_wait_clear() { # $1 = seconds between looks; stale flags are released through quietlock only
-+  while ! "$QL" check >/dev/null 2>&1; do "$QL" release-stale >/dev/null 2>&1; sleep "$1"; done
++  # release-stale FIRST on every look: check alone treats a stale flag as clear, which would leave
++  # the dead holder's flag on disk for every other reader.
++  while :; do
++    "$QL" release-stale >/dev/null 2>&1
++    "$QL" check >/dev/null 2>&1 && return 0
++    sleep "$1"
++  done
 +}
 +# REFUSED_QUIET only when the job exited 75 AND the log's final line is quietlock's own refusal.
 +# A suite that merely prints the marker word somewhere is judged by its exit code like any other.
@@ -40,7 +46,7 @@
  TASKDIR="${LANES_TASKDIR:-$(ls -dt /tmp/claude-1000/-home-drakestapleton/*/tasks 2>/dev/null | head -1)}"
  
  now() { date -u +%s; }
-@@ -98,22 +131,15 @@
+@@ -98,22 +137,15 @@
    [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null && { echo "flush already running pid $(cat "$LOCK")"; exit 1; }
    echo $$ > "$LOCK"; trap 'rm -f "$LOCK"' EXIT
    mkdir -p "$LOGDIR"
@@ -67,7 +73,7 @@
    echo "flush complete, see $RESULTS"
  }
  
-@@ -124,14 +150,9 @@
+@@ -124,14 +156,9 @@
  }
  
  cmd_release_stale() {
@@ -85,7 +91,7 @@
  }
  
  # ---------- light forge (queen 2026-10-01: scale lever) ----------
-@@ -157,24 +178,17 @@
+@@ -157,24 +184,17 @@
    p=$(forge_light_pid) && { echo "light flush already running pid $p"; exit 1; }
    echo $$ > "$LOCK_L"; trap 'rm -f "$LOCK_L"' EXIT
    mkdir -p "$LOGDIR"

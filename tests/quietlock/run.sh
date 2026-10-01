@@ -11,7 +11,11 @@ S=$T/state
 mkdir -p "$S"
 QUIETLOCK_DIR=$S
 export QUIETLOCK_DIR
-unset QUIETLOCK_HOLD
+# Hermetic: nothing inherited from the runner may change a verdict. The forge that ran round 6 had
+# QUIET_HOLDER=1 in its environment, which (correctly) lets legacy flags through and so failed
+# T10, T15, H7 and H7c. Tests that want these variables set them per command.
+unset QUIETLOCK_HOLD QUIET_HOLDER QUIETLOCK_BIN QUIETLOCK_TEST QUIETLOCK_TEST_MINUTE_SECONDS QUIETLOCK_INSTALL_FAILPOINT
+unset REQUEUE_MAX FORGE_WAIT_SECONDS LANES_LIGHT_IDLE_MIN
 case "$S" in "$HOME"/workspace|"$HOME"/workspace/) echo "FAIL safety: state dir is the real one"; exit 1;; esac
 
 FLAG=$S/.spark-quiet
@@ -502,8 +506,9 @@ check "I6b forge make job passes the mk/ gate when clear" 'grep -q "^- M2: PASS"
 # I9 the forge waits for a clear flag before each job (no hold, no override). A flag held by another,
 # live, holder blocks the job until that holder is gone and its expected_end has passed; then the
 # stale flag is released through quietlock and the job runs.
-# Mutation killed: dropping ql_wait_clear (the job would run while the holder is still alive:
-# the job records whether the holder pid was alive when it started).
+# Mutations killed: dropping ql_wait_clear (the job would run while the holder is still alive:
+# the job records whether the holder pid was alive when it started); looping on check alone (stale counts
+# as clear, so the dead holder's flag would stay on disk with no release in the history).
 HP=$(sh -c 'sleep 4 >/dev/null 2>&1 & echo $!')  # reparented, so no zombie that kill -0 would still see
 echo "OTHER quietlock t start=$PAST expected_end=$PAST pid=$HP hold=qOTHER-9-0" > "$FF"
 printf 'M9|%s|if kill -0 %s 2>/dev/null; then echo HOLDER_ALIVE; exit 9; fi\n' "$T" "$HP" > "$F/workspace/.test-queue"
