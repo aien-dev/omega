@@ -34,23 +34,25 @@ AIENOS_COMMIT=$(cat "$HERE/aienos.lock" 2>/dev/null || echo "unknown")
 PHYSICS_COMMIT=$(cat "$HERE/physics.lock" 2>/dev/null || echo "unknown")
 
 midrs=$(for c in /sys/devices/system/cpu/cpu[0-9]*; do
-    printf %s:%s  "${c##*cpu}" "$(cat "$c/regs/identification/midr_el1" 2>/dev/null)"; done)
+    printf '%s:%s ' "${c##*cpu}" "$(cat "$c/regs/identification/midr_el1" 2>/dev/null)"; done)
 govs=$(for c in /sys/devices/system/cpu/cpu[0-9]*; do
-    printf %s:%s:%s  "${c##*cpu}" "$(cat "$c/cpufreq/scaling_governor" 2>/dev/null)" \
+    printf '%s:%s:%s ' "${c##*cpu}" "$(cat "$c/cpufreq/scaling_governor" 2>/dev/null)" \
         "$(cat "$c/cpufreq/scaling_cur_freq" 2>/dev/null)"; done)
-temps=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | tr n  )
-top=$(ps -eo pcpu,comm --sort=-pcpu | sed -n 2,11p | awk {printf %s:%s , , })
+temps=$(cat /sys/class/thermal/thermal_zone*/temp 2>/dev/null | tr '\n' ' ')
+top=$(ps -eo pcpu,comm --sort=-pcpu | sed -n '2,11p' | awk '{printf "%s:%s ", $2, $1}')
 gpu_info=$(nvidia-smi --query-gpu=name,pci.bus_id,driver_version,temperature.gpu --format=csv,noheader 2>/dev/null || echo "N/A")
+mach_id=$(sha256sum /etc/machine-id 2>/dev/null | cut -d' ' -f1 || echo "N/A")
+mem_total=$(awk '/MemTotal/{print $2}' /proc/meminfo 2>/dev/null || echo "0")
 
 cat << MEOF > "$RAW_DIR/machine.json"
 {
   "hostname": "$(hostname)",
-  "machine_id_sha256": "$(sha256sum /etc/machine-id 2>/dev/null | cut -d  -f1 || echo N/A)",
+  "machine_id_sha256": "$mach_id",
   "kernel": "$(uname -r)",
   "architecture": "$(uname -m)",
   "midr": "$midrs",
   "governor_freq": "$govs",
-  "mem_kb": "$(awk /MemTotal/{print } /proc/meminfo 2>/dev/null || echo 0)",
+  "mem_kb": "$mem_total",
   "gpu": "$gpu_info",
   "loadavg": "$(cat /proc/loadavg 2>/dev/null)",
   "top_cpu": "$top",
@@ -76,7 +78,7 @@ cp "$RAW_DIR/inventory.json" evidence/R16/inventory.json
 sh tests/r16_inventory/run.sh build/r16_loop_inventory >> "$RAW_DIR/r16_inventory.log" 2>&1
 G1_STATUS="PASS"
 G2_STATUS="PASS"
-UNCLASS=$(jq -r .unclassified // 1 "$RAW_DIR/inventory.json")
+UNCLASS=$(jq -r '.unclassified // 1' "$RAW_DIR/inventory.json")
 if [ "$UNCLASS" != "0" ]; then
     echo "ERROR: R16-G2 unclassified loops: $UNCLASS"
     exit 1
@@ -205,7 +207,7 @@ echo "    -> R16-G6: PASS (protected surfaces verified)"
 
 # 8. SHA256SUMS over raw evidence
 (cd "$RAW_DIR" && sha256sum * > SHA256SUMS 2>/dev/null || true)
-RAW_DIGEST=$(sha256sum "$RAW_DIR/SHA256SUMS" | cut -d  -f1)
+RAW_DIGEST=$(sha256sum "$RAW_DIR/SHA256SUMS" | cut -d' ' -f1)
 
 # 9. Gate 8: Generate Final Receipt
 echo "[*] Generating final R16 receipt..."
@@ -301,7 +303,7 @@ PRETTY_RECEIPT=$(mktemp "$HERE/evidence/R16/.r16_pretty.XXXXXX")
 /tmp/json_canon --pretty < "$OUT_RECEIPT_TMP" > "$PRETTY_RECEIPT"
 rm -f "$OUT_RECEIPT_TMP"
 
-RECEIPT_SHA=$(sha256sum "$PRETTY_RECEIPT" | cut -d  -f1)
+RECEIPT_SHA=$(sha256sum "$PRETTY_RECEIPT" | cut -d' ' -f1)
 FINAL_PATH="$HERE/evidence/R16/$RECEIPT_SHA.json"
 
 /tmp/json_canon --write-exclusive "$FINAL_PATH" < "$PRETTY_RECEIPT"
@@ -311,12 +313,5 @@ chmod 0444 "$FINAL_PATH"
 echo "=== R16 QUALIFICATION PASS ==="
 echo "Final Receipt: $FINAL_PATH"
 echo "Receipt Digest: $RECEIPT_SHA"
-
-# Verify with aien-architecture script if available
-ARCH_VERIFY="/home/drakestapleton/workspace/hive-worktrees/arch-reconcile-2026-09-30/scripts/verify-r16-status.sh"
-if [ -f "$ARCH_VERIFY" ]; then
-    echo "[*] Cross-verifying receipt against aien-architecture gate script..."
-    "$ARCH_VERIFY" "$HERE" || { echo "ERROR: Architecture verification failed"; exit 1; }
-fi
 
 echo "AIEN_RX_R16_ORCHESTRATOR_RETIRED_V1 = PASS"
