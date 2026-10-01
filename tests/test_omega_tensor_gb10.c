@@ -265,16 +265,33 @@ static uint64_t seed_of(const char *s) {
 /* Runs one case through real; status and value id (zeroed unless OK).
  * *e1 gets the underlying E1 code of the last numeric failure (0 if none),
  * read before the context is destroyed. Diagnostics only. */
-static int run_case(const OmegaTensorRealization *real, const Case *c, uint8_t id[32], int *e1) {
+typedef struct { uint8_t *bytes; size_t n, esz; } RawOut;   /* output elements, diagnostics only */
+
+static size_t dtype_size(OmegaDType d) { return d == OMEGA_DT_F32 ? 4u : 2u; }
+
+static int run_case(const OmegaTensorRealization *real, const Case *c, uint8_t id[32], int *e1, RawOut *raw) {
     OmegaTensorCtx *ctx;
     memset(id, 0, 32);
     *e1 = 0;
+    if (raw) { raw->bytes = NULL; raw->n = 0; raw->esz = 0; }
     int rc = omega_tensor_ctx_create(64, real, &ctx);
     if (rc) return rc;
     g_rng = seed_of(c->name);
     OmegaTensor out = { 0, 0 };
     rc = run_body(ctx, c, &out);
     if (!rc) rc = omega_tensor_value_id(ctx, out, id);
+    if (!rc && raw) {   /* copy the output elements out; a failure here only loses the diagnostics */
+        OmegaTensorInfo inf;
+        if (omega_tensor_info(ctx, out, &inf) == OMEGA_TENSOR_OK && inf.elements > 0) {
+            size_t esz = dtype_size(inf.dtype), bytes = (size_t)inf.elements * esz;
+            uint8_t *b = malloc(bytes);
+            if (b && omega_tensor_read(ctx, out, b, bytes) == OMEGA_TENSOR_OK) {
+                raw->bytes = b; raw->n = (size_t)inf.elements; raw->esz = esz;
+            } else {
+                free(b);
+            }
+        }
+    }
     *e1 = omega_tensor_last_numeric_error(ctx);
     omega_tensor_ctx_destroy(ctx);
     return rc;
@@ -282,6 +299,51 @@ static int run_case(const OmegaTensorRealization *real, const Case *c, uint8_t i
 
 static void hex8(const uint8_t id[32], char s[17]) {
     for (int i = 0; i < 8; i++) snprintf(s + 2 * i, 3, "%02x", id[i]);
+}
+
+/* ---- DIFFER diagnostics (print only; no check depends on them) -------------
+ * The E1 executors pre-fill every output buffer with the byte 0x55 before
+ * submission (src/omega_numeric_gb10.c:129, src/omega_numeric_reduce_gb10.c:341,
+ * src/omega_numeric_divsqrt_gb10.c:1077). An output element still holding that
+ * pattern was most likely read before the chip wrote it. */
+static uint32_t elem_bits(const RawOut *o, size_t i) {
+    if (o->esz == 4) { uint32_t v; memcpy(&v, o->bytes + i * 4, 4); return v; }
+    uint16_t h; memcpy(&h, o->bytes + i * 2, 2); return h;
+}
+
+/* TENSOR_GB10_FILL: elements of the output still holding the pre-fill pattern.
+ * Printed for every DIFFER case, and for any other case where the count is > 0. */
+static void fill_line(const char *name, const char *tag, const RawOut *o, bool always) {
+    uint32_t pat = o->esz == 4 ? 0x55555555u : 0x5555u;
+    size_t n = 0;
+    for (size_t i = 0; i < o->n; i++) n += elem_bits(o, i) == pat;
+    if (always || n > 0)
+        printf("TENSOR_GB10_FILL %s count=%zu of %zu pattern=0x%0*x tag=%s\n", name, n, o->n,
+               (int)(o->esz * 2), (unsigned)pat, tag);
+}
+
+static void diff_detail(const char *name, const char *tag, const RawOut *a, const RawOut *b) {
+    if (!a->bytes || !b->bytes || a->n != b->n || a->esz != b->esz) {
+        printf("TENSOR_GB10_FIRST_DIFF %s unavailable (cpu n=%zu esz=%zu, gb10 n=%zu esz=%zu) tag=%s\n", name,
+               a->n, a->esz, b->n, b->esz, tag);
+        if (b->bytes) fill_line(name, tag, b, true);
+        return;
+    }
+    size_t first = a->n, last = 0, count = 0;
+    for (size_t i = 0; i < a->n; i++)
+        if (elem_bits(a, i) != elem_bits(b, i)) {
+            if (first == a->n) first = i;
+            last = i;
+            count++;
+        }
+    if (count == 0) {   /* ids differ but bits agree: NaN payloads, which the value id canonicalizes */
+        printf("TENSOR_GB10_FIRST_DIFF %s none: 0 differing elements of %zu tag=%s\n", name, a->n, tag);
+    } else {
+        int w = (int)(a->esz * 2);
+        printf("TENSOR_GB10_FIRST_DIFF %s idx=%zu of %zu cpu_bits=0x%0*x gb10_bits=0x%0*x differing=%zu last_idx=%zu tag=%s\n",
+               name, first, a->n, w, (unsigned)elem_bits(a, first), w, (unsigned)elem_bits(b, first), count, last, tag);
+    }
+    fill_line(name, tag, b, true);
 }
 
 typedef struct { size_t cases, both_ok, differ, not_ok; } Cmp;
@@ -294,9 +356,10 @@ static Cmp compare(const OmegaTensorRealization *test, unsigned mask, const char
         if (mask && !(c->mut & mask)) continue;
         uint8_t ia[32], ib[32];
         int ea, eb;
-        int ra = run_case(omega_tensor_cpu_realization(), c, ia, &ea);
+        RawOut oa, ob;
+        int ra = run_case(omega_tensor_cpu_realization(), c, ia, &ea, &oa);
         fprintf(stderr, "GB10_CASE_BEGIN %s %s\n", tag, c->name);   /* ties stderr call lines to the case */
-        int rb = run_case(test, c, ib, &eb);
+        int rb = run_case(test, c, ib, &eb, &ob);
         r.cases++;
         bool ok = ra == OMEGA_TENSOR_OK && rb == OMEGA_TENSOR_OK;
         bool eq = ok && memcmp(ia, ib, 32) == 0;
@@ -310,6 +373,10 @@ static Cmp compare(const OmegaTensorRealization *test, unsigned mask, const char
             if (!ok) printf(" cpu_e1=%d test_e1=%d", ea, eb);   /* diagnostics only */
             printf("\n");
         }
+        if (ok && !eq) diff_detail(c->name, tag, &oa, &ob);
+        else if (ob.bytes) fill_line(c->name, tag, &ob, false);
+        free(oa.bytes);
+        free(ob.bytes);
     }
     return r;
 }
