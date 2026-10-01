@@ -1,0 +1,50 @@
+{
+  "gate": "E1-DIVSQRT",
+  "row": "E1 gap table row 7: GB10 correctly rounded FP32 DIV and SQRT",
+  "omega_commit": "9b5756efe5d6c91456181c4c46701808fa655b5e",
+  "omega_tree_clean_before": true,
+  "omega_tree_clean_after": true,
+  "omega_commit_unchanged_after": true,
+  "physics_commit": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "physics_lock_pin": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "physics_tree_clean_before": true,
+  "physics_tree_clean_after": true,
+  "physics_commit_unchanged_after": true,
+  "binary_sha256": "730b42a9767c163a52f311105a6140a9899ef9131007e54659a5928f341b8b9c",
+  "chip_log_sha256": "94ee51d977df743440595738613946b9ecfd2fee54fc1763639f89eeeac351c8",
+  "kernels": [
+    {
+      "op": "DIV",
+      "instructions": 264,
+      "sha256": "d847b9bd3ac4fe90405f86a2528ff952d47bdb95679d6d029e52ea7aa526675f"
+    },
+    {
+      "op": "SQRT",
+      "instructions": 336,
+      "sha256": "222c9aa5cf7b2d66d48de3ee4b7ce346627e888ab0786713d8986815bdca10d7"
+    }
+  ],
+  "nvdisasm_check": "nvdisasm: release 13.0, V13.0.85",
+  "host_tier": "SUMMARY passed=53 failed=0",
+  "div": {
+    "checked": 117440512,
+    "edge_and_corpus": 5033,
+    "mismatches_vs_fdiv": 0,
+    "mismatches_vs_omega_math_div": 0,
+    "mismatches_unwritten": 0,
+    "rng_seed": "0x9e3779b97f4a7c15",
+    "verdict": "PASS"
+  },
+  "sqrt": {
+    "checked": 4294967296,
+    "exhaustive": true,
+    "mismatches_vs_fsqrt": 0,
+    "mismatches_vs_omega_math_sqrt": 0,
+    "mismatches_unwritten": 0,
+    "verdict": "PASS"
+  },
+  "chip_exit_status": 0,
+  "started_utc": "2026-10-01T07:16:05Z",
+  "finished_utc": "2026-10-01T07:23:31Z",
+  "verdict": "PASS"
+}
