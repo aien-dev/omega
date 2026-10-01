@@ -26,6 +26,13 @@
  *               the runtime itself leaves them out so the same history
  *               hashes the same on any schedule), and episode (derived from
  *               wake_cause, so it is checked by rule, not hashed).
+ *               Capability generations (crumb caps and the INPUT capability)
+ *               are stored relative to the run's capability office
+ *               generation: the root seeds generations from boot time, so
+ *               raw ones never repeat across runs. Stored crumb digests are
+ *               over that relative form; the exporter first checks each
+ *               runtime digest against rxl_crumb_digest over the raw fields
+ *               (rx_crumb_export.h).
  *   INPUT       SHA-256 of the encoded payload (capability + mutations with
  *               their values: the crumb log alone does not carry values).
  *   CHECKPOINT  SHA-256 of the encoded payload (state hash of every object).

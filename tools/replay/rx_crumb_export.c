@@ -1,6 +1,8 @@
 /* rx_crumb_export.c -- RxCrumb -> RXCLOG01 record. */
 #include "replay/rx_crumb_export.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 _Static_assert((int)RXL_MAX_DEPS == (int)RX_MAX_DEPS, "rxlog input limit drifted from rx_world.h");
@@ -40,14 +42,59 @@ void rxx_crumb(const RxCrumb *k, rxl_crumb *o) {
     memcpy(o->digest, k->digest, 32);
 }
 
-int rxx_append_crumbs(rxl_log *log, RxWorld *w, uint64_t *next) {
-    for (;; (*next)++) {
-        const RxCrumb *k = rx_world_crumb(w, *next);
-        if (!k) return *next > w->n_crumbs ? 0 : -1;
+void rxx_init(rxx_ctx *x, uint64_t cap_base) {
+    memset(x, 0, sizeof *x);
+    x->cap_base = cap_base;
+    x->next = 1;
+}
+
+void rxx_free(rxx_ctx *x) {
+    free(x->raw);
+    free(x->rel);
+    memset(x, 0, sizeof *x);
+}
+
+static int grow(rxx_ctx *x) {
+    if (x->n < x->cap) return 0;
+    size_t nc = x->cap ? x->cap * 2 : 256;
+    uint8_t (*r)[32] = realloc(x->raw, nc * sizeof *r);
+    if (!r) return -1;
+    x->raw = r;
+    uint8_t (*l)[32] = realloc(x->rel, nc * sizeof *l);
+    if (!l) return -1;
+    x->rel = l;
+    x->cap = nc;
+    return 0;
+}
+
+int rxx_append_crumbs(rxl_log *log, RxWorld *w, rxx_ctx *x) {
+    for (;; x->next++) {
+        const RxCrumb *k = rx_world_crumb(w, x->next);
+        if (!k) return x->next > w->n_crumbs ? 0 : -1;
+        if (x->n != x->next - 1 || grow(x)) return -1;
         rxl_rec r;
         memset(&r, 0, sizeof r);
         r.type = RXL_CRUMB;
         rxx_crumb(k, &r.u.c);
+        uint8_t d[32];
+        rxl_crumb_digest(&r.u.c, (const uint8_t (*)[32])x->raw, x->n, d);
+        if (memcmp(d, k->digest, 32)) {
+            fprintf(stderr, "export: crumb %llu: runtime digest is not reproduced from its fields\n",
+                    (unsigned long long)k->id);
+            return -1;
+        }
+        memcpy(x->raw[x->n], k->digest, 32);
+        for (uint32_t i = 0; i < r.u.c.n_caps && i < RXL_MAX_CAPS; i++) {
+            if (r.u.c.caps[i].gen < x->cap_base) {
+                fprintf(stderr, "export: crumb %llu: capability generation below the run's root\n",
+                        (unsigned long long)k->id);
+                return -1;
+            }
+            r.u.c.caps[i].gen -= x->cap_base;
+        }
+        rxl_crumb_digest(&r.u.c, (const uint8_t (*)[32])x->rel, x->n, r.u.c.digest);
+        memcpy(x->rel[x->n], r.u.c.digest, 32);
+        x->n++;
         if (rxl_push(log, &r)) return -1;
     }
 }
