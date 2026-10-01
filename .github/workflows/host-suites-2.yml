@@ -166,7 +166,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Read pinned AIENOS authority
         id: aienos
@@ -195,7 +194,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: TURING field and selector (plain + ASan/UBSan)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing
@@ -214,7 +212,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Brownian TPS adapter
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-brownian-tps
@@ -227,7 +224,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: POLYGLOT hand-written AArch64 asm lane
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-polyglot-asm
@@ -242,7 +238,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Mixed algebra core (plain + ASan/UBSan)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-algebra test-algebra-asan
@@ -261,7 +256,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: PATH-1 identity, boundary and mutants
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-path
@@ -274,7 +268,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Crumbline learner conformance vectors
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-crumbline
@@ -356,7 +349,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Read pinned Physics, AIENOS and ARGUS commits
         id: pins
@@ -404,7 +396,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Reduce CPU tier and GB10 div/sqrt sequences on the host (CPU only)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-reduce-cpu test-divsqrt-host
