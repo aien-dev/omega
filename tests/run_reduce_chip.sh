@@ -57,7 +57,7 @@ FAIL_REASON=""
     -I"$NV/src/common/sdk/nvidia/inc" -I"$NV/kernel-open/common/inc" \
     -I"$NV/kernel-open/nvidia-uvm" -I"$NV/src/nvidia/arch/nvalloc/unix/include" \
     -o "$BIN" tests/test_omega_reduce.c src/omega_numeric_reduce.c src/omega_numeric_reduce_gb10.c \
-    src/omega_numeric.c src/omega_numeric_gb10.c \
+    src/omega_numeric.c src/omega_numeric_gb10.c src/omega_numeric_divsqrt_gb10.c \
     src/omega_numeric_provenance.c src/omega_blackwell_codegen.c \
     src/omega_blackwell_encoder.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c \
     src/forge_realization.c src/aegis_verification.c src/sha256.c \

@@ -578,10 +578,10 @@ static const OmegaNumericOpInfo OP_TABLE[OMEGA_NOP_COUNT] = {
       "(mirror exchange inside each 64-thread CTA), bits moved unchanged", NULL },
     { OMEGA_NOP_SHFL_DOWN, "SHFL_DOWN", 1, true, OMEGA_CMP_INT_EXACT,
       "a[lane+1] within each 32-lane warp, lane 31 keeps its own value", NULL },
-    { OMEGA_NOP_DIV, "DIV", 2, false, OMEGA_CMP_BIT_EXACT, "correctly rounded a / b (integer long division, RNE)",
-      "no GB10 kernel for the Omega division sequence exists (the old path ran FADD)" },
-    { OMEGA_NOP_SQRT, "SQRT", 1, false, OMEGA_CMP_BIT_EXACT, "correctly rounded sqrt(a) (integer square root, RNE)",
-      "no GB10 kernel for the Omega square-root sequence exists (the old path ran FMUL)" },
+    /* DIV and SQRT run the whole-program kernels of
+     * src/omega_numeric_divsqrt_gb10.c (E1 row 7), not a vecadd patch. */
+    { OMEGA_NOP_DIV, "DIV", 2, true, OMEGA_CMP_BIT_EXACT, "correctly rounded a / b (integer long division, RNE)", NULL },
+    { OMEGA_NOP_SQRT, "SQRT", 1, true, OMEGA_CMP_BIT_EXACT, "correctly rounded sqrt(a) (integer square root, RNE)", NULL },
     { OMEGA_NOP_EXP, "EXP", 1, false, OMEGA_CMP_BIT_EXACT, "omega_math_exp(a)",
       "no GB10 kernel for the Omega exp polynomial exists (the old path ran FADD)" },
     { OMEGA_NOP_LOG, "LOG", 1, false, OMEGA_CMP_BIT_EXACT, "omega_math_log(a)",
@@ -629,6 +629,10 @@ static const OmegaNumericOpInfo OP_TABLE[OMEGA_NOP_COUNT] = {
 };
 
 size_t omega_numeric_op_count(void) { return OMEGA_NOP_COUNT; }
+
+bool omega_numeric_op_whole_kernel(OmegaNumericOp op) {
+    return op == OMEGA_NOP_DIV || op == OMEGA_NOP_SQRT;
+}
 
 const OmegaNumericOpInfo *omega_numeric_op_at(size_t index) {
     return index < OMEGA_NOP_COUNT ? &OP_TABLE[index] : NULL;
@@ -755,6 +759,9 @@ int omega_numeric_submit_check(const char *op_name,
     }
     if ((info->op == OMEGA_NOP_SHFL_DOWN || info->op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "op %s: count must be a multiple of 32 (whole warps only)%s", info->name, NULL); /* CHECK:warp_count */
     if (info->op == OMEGA_NOP_LDS_STS && (count % OMEGA_NUMERIC_CTA_THREADS) != 0) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "op %s: count must be a multiple of the CTA size 64 (whole CTAs: every thread must reach BAR.SYNC)%s", info->name, NULL); /* CHECK:cta_count */
+    /* DIV/SQRT: whole-program kernels; omega_ds_gb10_run checks the kernel
+     * image, its nvdisasm-verified digest and the QMD before submission. */
+    if (omega_numeric_op_whole_kernel(info->op)) return OMEGA_NUMERIC_OK;
     /* The patch this op would submit, checked against a QMD for this launch. */
     OmegaNumericPatchInsn patch[OMEGA_NUMERIC_PATCH_MAX];
     int n = omega_numeric_patch_words(info->op, patch);

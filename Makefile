@@ -170,10 +170,10 @@ test-gate14-combine:
 # from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
 # item fails.
 .PHONY: test-numeric-cpu test-numeric-qualify
-NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c \
+NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c \
                    src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
                    src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
-NUMERIC_CPU_HDRS = src/omega_numeric.h src/omega_numeric_provenance.h tests/numeric_oracle.h \
+NUMERIC_CPU_HDRS = src/omega_numeric.h src/omega_numeric_provenance.h src/omega_numeric_divsqrt_gb10.h tests/numeric_oracle.h \
                    src/omega_blackwell_qmd.h src/omega_blackwell_codegen.h src/omega_blackwell_encoder.h src/sha256.h
 build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) $(NUMERIC_CPU_HDRS)
 	@mkdir -p build

@@ -260,6 +260,13 @@ const OmegaNumericOpInfo *omega_numeric_op_at(size_t index);
 const OmegaNumericOpInfo *omega_numeric_op_find(const char *name);
 const char *omega_numeric_compare_name(OmegaNumericCompare c);
 
+/* Ops whose GB10 kernel is a whole program from
+ * src/omega_numeric_divsqrt_gb10.c (DIV, SQRT) instead of a patch into the
+ * calibrated vecadd: they have no patch words, omega_numeric_build_kernel
+ * refuses them, and their structural checks (omega_ds_check_args, _kernel,
+ * _digest, _qmd) run inside omega_ds_gb10_run before the device is opened. */
+bool omega_numeric_op_whole_kernel(OmegaNumericOp op);
+
 /* Return codes of omega_numeric_submit_check and omega_gb10_execute_simt_op */
 #define OMEGA_NUMERIC_OK               0
 #define OMEGA_NUMERIC_ERR_BAD_ARGS    -1   /* unknown op or missing buffers      */

@@ -66,8 +66,8 @@ good_log() {
         mode=$(mode_of "$op")
         echo "OMEGA_NUMERIC_REGISTRY_JSON:{\"op\":\"$op\",\"encoded\":true,\"compare\":\"$mode\",\"launches\":$([ "$op" = FFMA ] && echo 8 || echo 1)}"
     done
-    # Not encoded for GB10: DIV SQRT EXP LOG.
-    for op in DIV SQRT EXP LOG; do
+    # Not encoded for GB10: EXP LOG.
+    for op in EXP LOG; do
         echo "OMEGA_NUMERIC_REGISTRY_JSON:{\"op\":\"$op\",\"encoded\":false,\"compare\":\"BIT_EXACT\",\"launches\":1}"
     done
     for id in $NUM_EXPECTED_IDS; do echo "[PASS] $id"; done
@@ -97,7 +97,7 @@ $2
     cmp -s "$TMP/good.log" "$TMP/$1.log" && bad "fixture $1: the edit changed nothing"; }
 check "complete passing log accepted" 'num_check_log "$TMP/good.log"'
 check "  hardware digest read from the log" '[ "$NUM_HWDIGEST" = "$fake_digest" ]'
-check "  45 GB10 parity lines kept (FFMA x8 + 37 ops)" '[ "$(printf "%s" "$NUM_PARITY" | jq length)" = 45 ]'
+check "  47 GB10 parity lines kept (FFMA x8 + 39 ops)" '[ "$(printf "%s" "$NUM_PARITY" | jq length)" = 47 ]'
 check "  run id and binary digest read from the run line" '[ "$NUM_LOG_RUN_ID" = "$LOG_RUN_ID" ] && [ "$NUM_LOG_BINARY_SHA" = "$LOG_BIN_SHA" ]'
 sed 's/"source":"FORGE_PROBE"/"source":"FAKE_NON_HARDWARE_CPU_ONLY","fake":true/' "$TMP/good.log" > "$TMP/fake.log"
 check "CPU-only fake descriptor refused" '! num_check_log "$TMP/fake.log"'
@@ -163,13 +163,13 @@ check "a ninth FFMA launch refused" '! num_check_log "$TMP/ffma9.log"'
 check "a second FADD launch refused" '! num_check_log "$TMP/fadd2.log"'
 gb10 cbits '/"op":"FADD"/s/"n":4096/"c_bits":"0x3f800000","n":4096/'
 check "c_bits on a non-FFMA op refused" '! num_check_log "$TMP/cbits.log"'
-gb10 stray '/"op":"FADD"/s/"op":"FADD"/"op":"DIV"/'
+gb10 stray '/"op":"FADD"/s/"op":"FADD"/"op":"EXP"/'
 check "parity line for an op outside the manifest refused" '! num_check_log "$TMP/stray.log"'
 sed '/OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FADD"/s/"compare":"BIT_EXACT"/"compare":"SEED_BOUND"/' "$TMP/good.log" > "$TMP/reg1.log"
 check "registry comparison differing from the manifest refused" '! num_check_log "$TMP/reg1.log"'
 sed '/OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FFMA"/s/"launches":8/"launches":1/' "$TMP/good.log" > "$TMP/reg2.log"
 check "registry launch count differing from the manifest refused" '! num_check_log "$TMP/reg2.log"'
-sed '/OMEGA_NUMERIC_REGISTRY_JSON:{"op":"DIV"/s/"encoded":false/"encoded":true/' "$TMP/good.log" > "$TMP/reg3.log"
+sed '/OMEGA_NUMERIC_REGISTRY_JSON:{"op":"EXP"/s/"encoded":false/"encoded":true/' "$TMP/good.log" > "$TMP/reg3.log"
 check "registry encoding an op the manifest does not list refused" '! num_check_log "$TMP/reg3.log"'
 # LDS_STS and REDUCE_SUM: one line each, full check, declared summation order.
 grep -v '"op":"LDS_STS","tier":"gb10"' "$TMP/good.log" > "$TMP/nolds.log"
