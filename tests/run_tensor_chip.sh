@@ -19,7 +19,8 @@
 #    "M20 Tensor GB10 Verdict: PASS", and clean trees with unmoved HEADs after.
 # 5. Writes a content-addressed receipt <evidence-dir>/<sha256>.json (mode
 #    0444, never overwritten) for PASS and FAIL alike, plus the log and binary
-#    as blobs/<sha256>.{log,bin}. The evidence dir must lie outside the trees.
+#    as blobs/<sha256>.{log,bin}, and the chip run stderr (GB10_CALL per-call
+#    timing, GB10_DEVFAIL device step diagnostics) as blobs/<sha256>.stderr. The evidence dir must lie outside the trees.
 # Shell + coreutils + git + jq + gcc. No Python. Exit 0 PASS, 1 FAIL, 2 refused.
 set -u
 SELF_DIR=$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -115,10 +116,16 @@ store_blob() {
     fi
     echo "$d"
 }
-BIN_SHA=""; LOG_SHA=""
+BIN_SHA=""; LOG_SHA=""; ERR_SHA=""
 if [ -f "$BIN" ]; then BIN_SHA=$(store_blob "$BIN" bin) || exit 2; fi
 [ -z "$BIN_SHA_BUILT" ] || [ "$BIN_SHA" = "$BIN_SHA_BUILT" ] || FAIL_REASON="${FAIL_REASON:-binary changed between build and receipt}"
 if [ -f "$OUT/tensor.log" ]; then LOG_SHA=$(store_blob "$OUT/tensor.log" log) || exit 2; fi
+if [ -f "$OUT/tensor.stderr" ]; then ERR_SHA=$(store_blob "$OUT/tensor.stderr" stderr) || exit 2; fi
+DEVFAIL_N=0; FAILED_CALLS_N=0
+if [ -f "$OUT/tensor.stderr" ]; then
+    DEVFAIL_N=$(grep -c "^GB10_DEVFAIL " "$OUT/tensor.stderr")
+    FAILED_CALLS_N=$(grep -c "^GB10_CALL .* FAILED$" "$OUT/tensor.stderr")
+fi
 VERDICT=PASS; [ -n "$FAIL_REASON" ] && VERDICT=FAIL
 line() { grep "^$1" "$OUT/tensor.log" 2>/dev/null | head -1; }
 TMP=$OUT/receipt.json
@@ -129,7 +136,8 @@ jq -n --arg suite M20_TENSOR_GB10_PARITY --arg status "$VERDICT" --arg reason "$
     --arg started "$STARTED" --arg finished "$FINISHED" \
     --arg order "RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL" \
     --arg mm_order "MATMUL_V1_FMUL_RNE_PRODUCTS_THEN_E1_REDUCE_SUM_RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL" \
-    --arg bin "$BIN_SHA" --arg log "$LOG_SHA" --arg exit_status "$STATUS" \
+    --arg bin "$BIN_SHA" --arg log "$LOG_SHA" --arg errlog "$ERR_SHA" \
+    --argjson devfail_n "$DEVFAIL_N" --argjson failed_calls_n "$FAILED_CALLS_N" --arg exit_status "$STATUS" \
     --arg host_line "$(line TENSOR_GB10_HOST:)" --arg parity "$(line TENSOR_GB10_PARITY:)" \
     --arg mutants "$(line TENSOR_GB10_MUTANTS:)" --arg cases "$(line 'cases:')" \
     --arg verdict_line "$(line 'M20 Tensor GB10 Verdict:')" \
@@ -139,6 +147,7 @@ jq -n --arg suite M20_TENSOR_GB10_PARITY --arg status "$VERDICT" --arg reason "$
       omega_commit_unchanged_after:$head_same,physics_commit:$physics,physics_lock_pin:$pin,
       physics_tree_clean_before:true,physics_tree_clean_after:$pclean_after,physics_commit_unchanged_after:$phead_same,
       reduce_declared_order:$order,matmul_declared_order:$mm_order,binary_sha256:$bin,chip_log_sha256:$log,
+      chip_stderr_sha256:$errlog,devfail_lines:$devfail_n,failed_gb10_calls:$failed_calls_n,
       chip_exit_status:$exit_status,cases_line:$cases,host_line:$host_line,parity_line:$parity,
       mutants_line:$mutants,verdict_line:$verdict_line,
       realization:{elementwise:"E1 omega_gb10_execute_simt_op (chunks <= 65536)",

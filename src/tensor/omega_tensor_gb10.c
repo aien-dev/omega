@@ -25,8 +25,10 @@
  */
 #include "omega_tensor.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "omega_numeric.h"
 #include "omega_numeric_reduce.h"
@@ -60,6 +62,40 @@ const char *omega_tensor_gb10_op_name(OmegaNumericOp op) {
     return GB10_OP_NAME[op];
 }
 
+/* Launch log (M20 GB10 instrumentation). Every E1 call this table makes gets
+ * a process-wide index and one GB10_CALL line on stderr: kind, op, count,
+ * return code and elapsed ms. A failed call keeps its failing return code:
+ * no retry, no fallback. The E1 executors add a GB10_DEVFAIL line naming the
+ * device step when the failure is a device error. */
+static unsigned long g_gb10_call_index;
+
+static double gb10_ms_since(const struct timespec *t0) {
+    struct timespec t;
+    timespec_get(&t, TIME_UTC);
+    return (double)(t.tv_sec - t0->tv_sec) * 1e3 + (double)(t.tv_nsec - t0->tv_nsec) / 1e6;
+}
+
+static int gb10_simt_call(const char *name, const float *a, const float *b, const float *c, float *out,
+                          size_t cnt) {
+    unsigned long idx = ++g_gb10_call_index;
+    struct timespec t0;
+    timespec_get(&t0, TIME_UTC);
+    int rc = omega_gb10_execute_simt_op(name, a, b, c, out, cnt);
+    fprintf(stderr, "GB10_CALL idx=%lu kind=simt op=%s count=%zu rc=%d ms=%.3f%s\n", idx, name, cnt, rc,
+            gb10_ms_since(&t0), rc == OMEGA_NUMERIC_OK ? "" : " FAILED");
+    return rc;
+}
+
+static int gb10_reduce_call(OmegaReduceOp r, const float *x, size_t n, float *out) {
+    unsigned long idx = ++g_gb10_call_index;
+    struct timespec t0;
+    timespec_get(&t0, TIME_UTC);
+    int rc = omega_reduce_gb10(r, x, n, out);
+    fprintf(stderr, "GB10_CALL idx=%lu kind=reduce op=%d n=%zu inner_launches=%u rc=%d ms=%.3f%s\n", idx, (int)r,
+            n, omega_reduce_gb10_last_launches(), rc, gb10_ms_since(&t0), rc == OMEGA_NUMERIC_OK ? "" : " FAILED");
+    return rc;
+}
+
 static int gb10_elementwise(OmegaNumericOp op, const float *a, const float *b, const float *c,
                             float *out, size_t n) {
     const char *name = omega_tensor_gb10_op_name(op);
@@ -69,8 +105,7 @@ static int gb10_elementwise(OmegaNumericOp op, const float *a, const float *b, c
     if (!a || !out || n == 0) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     for (size_t base = 0; base < n; base += OMEGA_NUMERIC_MAX_COUNT) {
         size_t cnt = n - base < OMEGA_NUMERIC_MAX_COUNT ? n - base : OMEGA_NUMERIC_MAX_COUNT;
-        int rc = omega_gb10_execute_simt_op(name, a + base, b ? b + base : NULL, c ? c + base : NULL,
-                                            out + base, cnt);
+        int rc = gb10_simt_call(name, a + base, b ? b + base : NULL, c ? c + base : NULL, out + base, cnt);
         if (rc != OMEGA_NUMERIC_OK) return rc;
     }
     return OMEGA_NUMERIC_OK;
@@ -93,7 +128,7 @@ static int gb10_reduce(OmegaTensorReduceOp op, const float *x, size_t n, float *
     if (n > OMEGA_REDUCE_GB10_MAX_N) return OMEGA_NUMERIC_ERR_OPERANDS;   /* MUT:GB10_REDUCE_MAX_N */
     OmegaReduceOp r;
     if (map_reduce_op(op, &r) != OMEGA_NUMERIC_OK || !x || !out || n == 0) return OMEGA_NUMERIC_ERR_BAD_ARGS;
-    return omega_reduce_gb10(r, x, n, out);
+    return gb10_reduce_call(r, x, n, out);
 }
 
 /* SUM of rows rows of n values, all rows per level in shared launches.
@@ -118,7 +153,7 @@ static int gb10_sum_rows(const float *x, size_t rows, size_t n, float *out) {
         }
         for (size_t base = 0; base < total && rc == OMEGA_NUMERIC_OK; base += OMEGA_NUMERIC_MAX_COUNT) {
             size_t cnt = total - base < OMEGA_NUMERIC_MAX_COUNT ? total - base : OMEGA_NUMERIC_MAX_COUNT;
-            rc = omega_gb10_execute_simt_op("REDUCE_SUM", lvl + base, NULL, NULL, res + base, cnt);
+            rc = gb10_simt_call("REDUCE_SUM", lvl + base, NULL, NULL, res + base, cnt);
         }
         if (rc != OMEGA_NUMERIC_OK) goto done;
         for (size_t r = 0; r < rows; r++)
@@ -142,7 +177,7 @@ static int gb10_reduce_rows(OmegaTensorReduceOp op, const float *x, size_t rows,
         return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (op == OMEGA_TR_SUM) return gb10_sum_rows(x, rows, n, out);
     for (size_t i = 0; i < rows; i++) {
-        int rc = omega_reduce_gb10(r, x + i * n, n, &out[i]);
+        int rc = gb10_reduce_call(r, x + i * n, n, &out[i]);
         if (rc != OMEGA_NUMERIC_OK) return rc;
     }
     return OMEGA_NUMERIC_OK;

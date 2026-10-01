@@ -262,16 +262,20 @@ static uint64_t seed_of(const char *s) {
     return h ? h : 1;
 }
 
-/* Runs one case through real; status and value id (zeroed unless OK). */
-static int run_case(const OmegaTensorRealization *real, const Case *c, uint8_t id[32]) {
+/* Runs one case through real; status and value id (zeroed unless OK).
+ * *e1 gets the underlying E1 code of the last numeric failure (0 if none),
+ * read before the context is destroyed. Diagnostics only. */
+static int run_case(const OmegaTensorRealization *real, const Case *c, uint8_t id[32], int *e1) {
     OmegaTensorCtx *ctx;
     memset(id, 0, 32);
+    *e1 = 0;
     int rc = omega_tensor_ctx_create(64, real, &ctx);
     if (rc) return rc;
     g_rng = seed_of(c->name);
     OmegaTensor out = { 0, 0 };
     rc = run_body(ctx, c, &out);
     if (!rc) rc = omega_tensor_value_id(ctx, out, id);
+    *e1 = omega_tensor_last_numeric_error(ctx);
     omega_tensor_ctx_destroy(ctx);
     return rc;
 }
@@ -289,8 +293,10 @@ static Cmp compare(const OmegaTensorRealization *test, unsigned mask, const char
         const Case *c = &g_cases[i];
         if (mask && !(c->mut & mask)) continue;
         uint8_t ia[32], ib[32];
-        int ra = run_case(omega_tensor_cpu_realization(), c, ia);
-        int rb = run_case(test, c, ib);
+        int ea, eb;
+        int ra = run_case(omega_tensor_cpu_realization(), c, ia, &ea);
+        fprintf(stderr, "GB10_CASE_BEGIN %s %s\n", tag, c->name);   /* ties stderr call lines to the case */
+        int rb = run_case(test, c, ib, &eb);
         r.cases++;
         bool ok = ra == OMEGA_TENSOR_OK && rb == OMEGA_TENSOR_OK;
         bool eq = ok && memcmp(ia, ib, 32) == 0;
@@ -299,8 +305,10 @@ static Cmp compare(const OmegaTensorRealization *test, unsigned mask, const char
         if (verbose || !eq) {
             char ha[17], hb[17];
             hex8(ia, ha); hex8(ib, hb);
-            printf("%s_CASE %s cpu=%s rc=%d test=%s rc=%d %s\n", tag, c->name, ha, ra, hb, rb,
+            printf("%s_CASE %s cpu=%s rc=%d test=%s rc=%d %s", tag, c->name, ha, ra, hb, rb,
                    eq ? "EQUAL" : ok ? "DIFFER" : "NOT_OK");
+            if (!ok) printf(" cpu_e1=%d test_e1=%d", ea, eb);   /* diagnostics only */
+            printf("\n");
         }
     }
     return r;

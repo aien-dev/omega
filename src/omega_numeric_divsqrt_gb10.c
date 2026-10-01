@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <time.h>
 
 #ifndef OMEGA_NUMERIC_CPU_ONLY
 #include "omega_blackwell_submit.h"
@@ -983,6 +985,39 @@ int omega_ds_check_qmd(const uint32_t *qmd1, uint64_t code_va, char *err, size_t
 
 /* ---- Executor ------------------------------------------------------------------ */
 
+#ifndef OMEGA_NUMERIC_CPU_ONLY
+/* Device-failure diagnostics (M20 GB10 instrumentation). Every
+ * OMEGA_NUMERIC_ERR_DEVICE return below goes through gb10_devfail, which
+ * prints one GB10_DEVFAIL line to stderr: the step that failed, the driver
+ * return code, errno, the nvrm error text, the wait value and the marker word
+ * for waits, and the elapsed ms since the launch began. It only reports: the
+ * return code stays OMEGA_NUMERIC_ERR_DEVICE, there is no retry and no wait
+ * value changes. */
+static double gb10_ms_since(const struct timespec *t0) {
+    struct timespec t;
+    timespec_get(&t, TIME_UTC); /* C11; no feature macro needed */
+    return (double)(t.tv_sec - t0->tv_sec) * 1e3 + (double)(t.tv_nsec - t0->tv_nsec) / 1e6;
+}
+
+static int gb10_devfail(const char *fn, const char *step, M16NativeContext *ctx, int do_close, int drv_rc,
+                        int saved_errno, long wait_ms, const volatile uint32_t *word, uint32_t want,
+                        const struct timespec *t0) {
+    double ms = gb10_ms_since(t0);
+    fprintf(stderr, "GB10_DEVFAIL fn=%s step=%s drv_rc=%d errno=%d rm_err=\"%s\" live_allocs=%u faulted=%u",
+            fn, step, drv_rc, saved_errno, ctx->rm.err, (unsigned)ctx->rm.live_count, (unsigned)ctx->rm.faulted);
+    if (wait_ms >= 0)
+        fprintf(stderr, " wait_ms=%ld word=0x%08x want=0x%08x", wait_ms, word ? (unsigned)*word : 0u, (unsigned)want);
+    fprintf(stderr, " elapsed_ms=%.3f\n", ms);
+    if (do_close) m16_native_close(ctx);
+    return OMEGA_NUMERIC_ERR_DEVICE;
+}
+/* Plain step: drv_rc is the value the call returned. */
+#define GB10_FAIL(step, close_, rc_) gb10_devfail(__func__, (step), &ctx, (close_), (rc_), errno, -1, NULL, 0u, &t0)
+/* Wait step: also log the wait value and the word read. */
+#define GB10_FAIL_WAIT(step, rc_, ms_, w_, want_) \
+    gb10_devfail(__func__, (step), &ctx, 1, (rc_), errno, (long)(ms_), (w_), (want_), &t0)
+#endif
+
 int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32_t *out, size_t count) {
     char err[256];
     int rc = omega_ds_check_args(op, a, b, out, count, err, sizeof(err));
@@ -1017,11 +1052,14 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
         0x2001255e, 0x20000000, 0x2001255f, 0x000fffff, 0x20012557, 0x00000003, 0x20012558, 0x22000000,
         0x20012559, 0x00000000,
     };
+    struct timespec t0;
+    timespec_get(&t0, TIME_UTC);
     M16NativeContext ctx;
-    if (m16_native_open(&ctx) != 0) return OMEGA_NUMERIC_ERR_DEVICE;
-    if (m16_native_create_channel(&ctx) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
+    int drc_;
+    if ((drc_ = m16_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
+    if ((drc_ = m16_native_create_channel(&ctx)) != 0) return GB10_FAIL("channel", 1, drc_);
     NvrmMem large_pb;
-    if (nvrm_alloc(&ctx.rm, 0x10000, &large_pb) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
+    if ((drc_ = nvrm_alloc(&ctx.rm, 0x10000, &large_pb)) != 0) return GB10_FAIL("alloc_pb", 1, drc_);
     ctx.pb_mem = large_pb;
     size_t bytes = (count * 4 + 0xfffULL) & ~0xfffULL;
     NvrmMem code_mem, cbank_mem, a_mem, b_mem, out_mem, marker_mem, qmd_mem;
@@ -1032,8 +1070,7 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
         nvrm_alloc(&ctx.rm, bytes, &out_mem) != 0 ||
         nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0 ||
         nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
-        m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+        return GB10_FAIL("alloc_buffers", 1, -1);
     }
     memcpy(a_mem.cpu, a, count * 4);
     if (b) memcpy(b_mem.cpu, b, count * 4); else memset(b_mem.cpu, 0, count * 4);
@@ -1105,19 +1142,17 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
     pb[n++] = (uint32_t)marker_mem.va; pb[n++] = (uint32_t)(marker_mem.va >> 32);
     pb[n++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD; pb[n++] = 0; pb[n++] = 0x1 | (1u << 20);
 
-    if (m16_native_submit_methods(&ctx, pb, n) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
+    if ((drc_ = m16_native_submit_methods(&ctx, pb, n)) != 0) return GB10_FAIL("submit", 1, drc_);
     /* Wait long: closing the channel under a running kernel jams the seat. */
-    if (m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000) != 0) {
-        m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+    if ((drc_ = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) {
+        return GB10_FAIL_WAIT("marker_wait", drc_, 600000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
     /* The host marker can land before the last CTAs' stores are visible: the
      * first chip run (receipt 88930d2f...) read the 0x55 fill pattern for
      * 49,359,680 SQRT outputs. Read only after the QMD's own release
      * semaphore (written after the grid completes, with its membar) is 6. */
-    if (m16_native_wait_marker(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000) != 0) {
-        m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+    if ((drc_ = m16_native_wait_marker(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) {
+        return GB10_FAIL_WAIT("sem_wait", drc_, 600000, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
     }
     __asm__ volatile("dsb sy" ::: "memory");
     memcpy(out, out_mem.cpu, count * 4);
