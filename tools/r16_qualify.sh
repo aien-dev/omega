@@ -15,7 +15,7 @@ export OMEGA_CANDIDATE_COMMIT="$CANDIDATE_COMMIT"
 
 RUN_COMMIT="$CANDIDATE_COMMIT"
 RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)-${CANDIDATE_COMMIT:0:12}
-RAW_DIR="$HERE/evidence/R16/raw/$RUN_ID"
+RAW_DIR="$HERE/build/r16-raw/$RUN_ID"
 mkdir -p "$RAW_DIR"
 
 echo "=== R16 Full Qualification: $RUN_ID ==="
@@ -66,7 +66,6 @@ MEOF
 echo "[*] Running R16-G1 / R16-G2: Loop Inventory..."
 make r16-inventory > "$RAW_DIR/r16_inventory.log" 2>&1
 cp build/r16-inventory.json "$RAW_DIR/inventory.json"
-cp "$RAW_DIR/inventory.json" evidence/R16/inventory.json
 make test-r16-inventory >> "$RAW_DIR/r16_inventory.log" 2>&1
 G1_STATUS="PASS"
 G2_STATUS="PASS"
@@ -178,14 +177,18 @@ echo "    -> R16-G7: PASS (entire R1-R15 ladder passed)"
 G6_STATUS="PASS"
 echo "    -> R16-G6: PASS (protected surfaces verified)"
 
-# 8. SHA256SUMS over raw evidence
-(cd "$RAW_DIR" && sha256sum * > SHA256SUMS 2>/dev/null || true)
-RAW_DIGEST=$(sha256sum "$RAW_DIR/SHA256SUMS" | cut -d' ' -f1)
+# 8. Copy raw evidence to evidence/R16/raw/$RUN_ID and update evidence/R16/inventory.json
+EVID_RAW_DIR="$HERE/evidence/R16/raw/$RUN_ID"
+mkdir -p "$EVID_RAW_DIR"
+cp -a "$RAW_DIR"/* "$EVID_RAW_DIR"/
+cp "$RAW_DIR/inventory.json" "$HERE/evidence/R16/inventory.json"
 
+(cd "$EVID_RAW_DIR" && rm -f SHA256SUMS && sha256sum $(ls -1 | sort) > SHA256SUMS)
+RAW_DIGEST=$(sha256sum "$EVID_RAW_DIR/SHA256SUMS" | cut -d' ' -f1)
 # 9. Gate 8: Generate Final Receipt
 echo "[*] Generating final R16 receipt..."
 G8_STATUS="PASS"
-OUT_RECEIPT_TMP=$(mktemp "$HERE/evidence/R16/.r16_receipt.XXXXXX")
+OUT_RECEIPT_TMP="/tmp/r16_receipt.$RUN_ID.json"
 
 # Compile json_canon
 gcc -std=gnu11 -O2 -Isrc -o /tmp/json_canon tools/json_canon.c src/sha256.c -lm
@@ -272,7 +275,7 @@ cat << RECOBJ > "$OUT_RECEIPT_TMP"
 RECOBJ
 
 # Format pretty
-PRETTY_RECEIPT=$(mktemp "$HERE/evidence/R16/.r16_pretty.XXXXXX")
+PRETTY_RECEIPT="/tmp/r16_pretty.$RUN_ID.json"
 /tmp/json_canon --pretty < "$OUT_RECEIPT_TMP" > "$PRETTY_RECEIPT"
 rm -f "$OUT_RECEIPT_TMP"
 
