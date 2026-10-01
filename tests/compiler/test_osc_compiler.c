@@ -918,10 +918,30 @@ static void struct_layout(void)
 /* Destruction order of progs/structs_dtor.osc: owners released at scope end in
  * reverse declaration order, the moved-from struct is not released, in the
  * interpreter and natively. */
-/* Run entry 0 of <dir>/<file> with argument arg in the interpreter and natively;
- * both pool logs must match the expected (kind, serial) sequence exactly. */
-static void dtor_order_k(const char *dir, const char *file, uint64_t arg, uint64_t want_ret, unsigned n,
-                         const uint8_t *want_kind, const uint32_t *want_ser)
+/* Index of the function named `name` that takes exactly `nargs` parameters,
+ * all scalar, or -1. The harnesses below pass raw integers as arguments; a
+ * ref parameter (own / borrow) would receive an integer where native code
+ * expects an object address and dereference it (segfault), so such a
+ * function is never a valid harness entry. */
+static int scalar_entry(const OscUnit *u, const char *name, unsigned nargs)
+{
+    for (int k = 0; k < u->nfuncs; k++) {
+        const OscFunc *f = &u->funcs[k];
+        if (strcmp(f->name, name) != 0) continue;
+        if ((unsigned)f->nparams != nargs) return -1;
+        for (unsigned p = 0; p < nargs; p++)
+            if (f->vtype[p].s == OSC_T_REF || f->vtype[p].s == OSC_T_VOID) return -1;
+        return k;
+    }
+    return -1;
+}
+
+/* Run function `entry` of <dir>/<file> with argument arg in the interpreter and
+ * natively; both pool logs must match the expected (kind, serial) sequence
+ * exactly. The entry is looked up by name: a program may define helpers before
+ * it (no forward references), so function 0 is not the entry in general. */
+static void dtor_order_k(const char *dir, const char *file, const char *entry, uint64_t arg, uint64_t want_ret,
+                         unsigned n, const uint8_t *want_kind, const uint32_t *want_ser)
 {
     char path[1024];
     snprintf(path, sizeof path, "%s/%s", dir, file);
@@ -935,15 +955,21 @@ static void dtor_order_k(const char *dir, const char *file, uint64_t arg, uint64
     memset(&c, 0, sizeof c);
     int rc = osc_compile(src, len, U1, &d, NULL);
     free(src);
-    CHECK(rc == 0 && osc_cg_compile(U1, &c, err, sizeof err) == 0, "%s: compile failed", file);
+    CHECK(rc == 0, "%s: compile failed", file);
     if (rc) return;
+    int fi = scalar_entry(U1, entry, 1);
+    CHECK(fi >= 0, "%s: no function '%s' taking one scalar argument", file, entry);
+    if (fi < 0) return;
+    int cg = osc_cg_compile(U1, &c, err, sizeof err);
+    CHECK(cg == 0, "%s: codegen refused: %s", file, err);
+    if (cg) return;
     OscNative nm;
     if (osc_native_map(&nm, c.code, c.len) != 0) { CHECK(0, "%s: map failed", file); osc_cg_free(&c); return; }
     uint64_t args[1] = {arg}, ri = 0, rn = 0;
     osc_rt_reset(RI);
     osc_rt_reset(RN);
-    int ti = osc_interp_run(U1, 0, args, 1, RI, &ri);
-    int tn = osc_rt_call_native(RN, osc_native_at(&nm, c.entry[0]), args, 1, &rn);
+    int ti = osc_interp_run(U1, fi, args, 1, RI, &ri);
+    int tn = osc_rt_call_native(RN, osc_native_at(&nm, c.entry[fi]), args, 1, &rn);
     rt_replay_run(RN, file);
     CHECK(ti == 0 && tn == 0 && ri == want_ret && rn == want_ret, "%s: run %d/%d ret %llu/%llu", file, ti, tn,
           (unsigned long long)ri, (unsigned long long)rn);
@@ -959,10 +985,10 @@ static void dtor_order_k(const char *dir, const char *file, uint64_t arg, uint64
     osc_cg_free(&c);
 }
 
-static void dtor_order(const char *dir, const char *file, uint64_t want_ret, unsigned n, const uint8_t *want_kind,
-                       const uint32_t *want_ser)
+static void dtor_order(const char *dir, const char *file, const char *entry, uint64_t want_ret, unsigned n,
+                       const uint8_t *want_kind, const uint32_t *want_ser)
 {
-    dtor_order_k(dir, file, 1, want_ret, n, want_kind, want_ser);
+    dtor_order_k(dir, file, entry, 1, want_ret, n, want_kind, want_ser);
 }
 
 /* OSC-3 item 3 (drop flags): progs/df_order.osc release order for k = 0, 1, 3
@@ -988,7 +1014,7 @@ static void df_dtor_order(const char *dir)
     const uint8_t *kinds[3] = {kind0, kind0, kind3};
     for (int t = 0; t < 3; t++) {
         unsigned long f0 = failures;
-        dtor_order_k(dir, "df_order.osc", ks[t], rets[t], 10, kinds[t], sers[t]);
+        dtor_order_k(dir, "df_order.osc", "order", ks[t], rets[t], 10, kinds[t], sers[t]);
         char li[128], ln[128];
         df_fmt_log(RI, li, sizeof li);
         df_fmt_log(RN, ln, sizeof ln);
@@ -996,13 +1022,25 @@ static void df_dtor_order(const char *dir)
                failures == f0 && strcmp(li, ln) == 0 ? "match" : "MISMATCH");
         CHECK(strcmp(li, ln) == 0, "df_order k=%llu: engines disagree", (unsigned long long)ks[t]);
     }
+    /* Regression (forge run lane30-dropflags-172347, test_osc_compiler segfault):
+     * df_order.osc defines its helper eata(a: own [u32; 2]) before the entry
+     * order(k: u32). The harness used to run function 0, so natively eata
+     * received k (0, 1, 3) as an array address and loaded through it. The
+     * entry is now resolved by name and must take only scalars. Counterexamples:
+     * running function 0 again crashes the run above; dropping the ref-param
+     * test in scalar_entry makes the eata check below fail. */
+    int fo = scalar_entry(U1, "order", 1), fe = scalar_entry(U1, "eata", 1);
+    CHECK(fo > 0, "df_order.osc: entry 'order' must not be function 0 (got %d); the regression would be vacuous", fo);
+    CHECK(fe < 0, "scalar_entry accepted 'eata' (own parameter) as a raw-argument entry (got %d)", fe);
+    printf("osc3 dropflags: harness entry by name: order=%d (not function 0), own-param helper eata refused=%s\n", fo,
+           fe < 0 ? "yes" : "NO");
 }
 
 static void struct_dtor_order(const char *dir)
 {
     static const uint8_t want_kind[8] = {1, 1, 1, 2, 2, 1, 2, 2};
     static const uint32_t want_ser[8] = {1, 2, 3, 3, 2, 4, 4, 1};
-    dtor_order(dir, "structs_dtor.osc", 14, 8, want_kind, want_ser);
+    dtor_order(dir, "structs_dtor.osc", "dtor", 14, 8, want_kind, want_ser);
     printf("struct destruction order: alloc 1 2 3, release 3 2, alloc 4, release 4 1 (interp == native)\n");
 }
 
@@ -1016,7 +1054,7 @@ static void arena_dtor_order(const char *dir)
 {
     static const uint8_t want_kind[12] = {1, 3, 4, 3, 4, 1, 2, 5, 1, 2, 5, 2};
     static const uint32_t want_ser[12] = {1, 2, 3, 4, 5, 6, 6, 4, 7, 7, 2, 1};
-    dtor_order(dir, "arena_dtor.osc", 8, 12, want_kind, want_ser);
+    dtor_order(dir, "arena_dtor.osc", "adtor", 8, 12, want_kind, want_ser);
     printf("arena destruction order: alloc 1, open 2, aalloc 3, open 4, aalloc 5, alloc 6, release 6, destroy 4, "
            "alloc 7, release 7, destroy 2, release 1 (interp == native)\n");
 }
