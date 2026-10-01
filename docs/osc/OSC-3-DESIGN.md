@@ -80,7 +80,7 @@ refused, never reinterpreted. None is applied by OSC-3.
 ## Slice order after item 4
 
 Per the audit (III.7 and the 2026-10-01 review), the first real migration is
-crumbline (`src/crumbline`-family C) once effects and capabilities exist:
+crumbline (`src/crumbline/`) once effects and capabilities exist:
 item 4 (effects/capabilities), then item 5 (identity break + ADR 0013
 request), then item 6 (crumbline as the first production C module under
 contracts; proposal in docs/osc first).
