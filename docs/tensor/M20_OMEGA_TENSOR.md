@@ -103,13 +103,15 @@ removed. Order and padding mutations are caught by the E1 WP-D suite.
 | CPU parity | PASS (CPU) | every op bit-exact vs independent reference (omega_ref_*, omega_ieee_div/sqrt, omega_ref_ffma_int, own tree copy), random + all special pairs |
 | General matmul | PASS (CPU) | 1x1x1, 7x13x5, 64x64x64, 129x3x257, 3x1025x2, 1x33x1, strided views, batched broadcast [2,1,3,4]x[5,4,6] |
 | Reductions | PASS (CPU) | lengths 1..32769 across tile/level edges, every axis of [3,37,5], keepdims, view vs copy, -0 sum |
-| Mutation / refusal | PASS (CPU) | `test-tensor-mutations`: 7/7 source mutations caught; 2 in-process mutant realizations (sequential sum, FFMA chain) caught; wrong order string refused |
+| Mutation / refusal | PASS (CPU) | `test-tensor-mutations`: 5/5 source mutations caught; 2 in-process mutant realizations (sequential sum, FFMA chain) caught; wrong order string refused |
 | Determinism | PASS (CPU) | repeated run same value id; frozen KAT value id in the test |
+| Test-only hook not in library | PASS (CPU) | `omega_tensor_test_set_storage_generation` exists only under `-DOMEGA_TENSOR_TEST_HOOKS` (test builds in `mk/tensor.mk`); `test-tensor-no-hooks` (run by `test-tensor`) builds the default objects and fails if `nm` shows the symbol |
+| CI | WIRED | `host-suites-2.yml` job `tensor`: `test-tensor` + `test-tensor-mutations` on the AArch64 hosted runner (not the Spark, not a qualification) |
 | GB10 parity | NOT_RUN | no GB10 realization table yet; no chip run in this work |
 | GB10 general matmul (Tensor Core beyond narrow K/tile) | MISSING_IMPLEMENTATION | |
 | Crash-safe storage lifetime | MISSING_IMPLEMENTATION | storage is in-process memory only; no persistence or crash recovery |
 | Reproducible receipt | MISSING_IMPLEMENTATION | no content-addressed receipt writer for this gate yet |
-| E1 numeric closure | BLOCKED (other lane) | E1 WP-B #127 and WP-D #134 open |
+| E1 numeric closure | BLOCKED (other lane) | WP-B #127 and WP-D #134 merged; E1 still open (GB10 MAX/MIN/MEAN, transcendentals) |
 
 **M20 verdict: not qualified.** Blocked on E1 close, GB10 parity, crash-safe
 lifetime and a receipt.

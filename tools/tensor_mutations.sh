@@ -10,7 +10,7 @@ SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/tensor-mut.XXXXXX") || exit 2
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM
 DEPS="src/omega_numeric_reduce.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c \
 src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c"
-FLAGS="-std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -ffp-contract=off -O2 -DOMEGA_NUMERIC_CPU_ONLY"
+FLAGS="-std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -ffp-contract=off -O2 -DOMEGA_NUMERIC_CPU_ONLY -DOMEGA_TENSOR_TEST_HOOKS"
 
 # name|file|sed expression (applied only to the line carrying MUT:<name>)
 # Reduction order and padding mutations live in the E1 WP-D suite

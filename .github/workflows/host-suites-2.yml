@@ -26,6 +26,8 @@ name: Host suites 2
 #               test-r16-negative-mutants 5 min (Spark: 4.3 min)
 #   argus     : test-argus-runtime test-machine-identity-argus
 #   numeric2  : test-numeric-reduce-cpu test-divsqrt-host 6 s
+#   tensor    : test-tensor (M20 CPU tier, plain + ASan/UBSan + default-build
+#               no-test-hook nm check) test-tensor-mutations
 # Pinned dependencies are read from physics.lock, aienos.lock and argus.lock.
 #
 # Deliberately NOT here:
@@ -117,6 +119,7 @@ jobs:
       runtime: ${{ steps.f.outputs.runtime }}
       argus: ${{ steps.f.outputs.argus }}
       numeric2: ${{ steps.f.outputs.numeric2 }}
+      tensor: ${{ steps.f.outputs.tensor }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -157,6 +160,7 @@ jobs:
           sel runtime   "$core|^src/(runtime|fabric)/|^tests/runtime/|^mk/fabric\.mk$|^tests/(r15_receipt_test\.sh|r16_[a-z_]+/)|^tools/(r15_|r16_|omegatool\.c)|^spec/r16-|^docs/r16-|^evidence/R15/|^(physics|aienos)\.lock$"
           sel argus     "^src/runtime/|^tests/runtime/|^tests/bench_rx_argus\.c$|^mk/machine-identity\.mk$|^src/(sha256|omega_evidence)\.|^(physics|aienos|argus)\.lock$"
           sel numeric2  "^tests/(test_omega_reduce|test_omega_divsqrt_gb10)\.c$|^tests/numeric_oracle\.h$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
+          sel tensor    "^src/tensor/|^tests/test_omega_tensor\.c$|^tools/tensor_mutations\.sh$|^mk/tensor\.mk$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
 
   visor:
     needs: changes
@@ -408,3 +412,18 @@ jobs:
           fetch-depth: 0
       - name: Reduce CPU tier and GB10 div/sqrt sequences on the host (CPU only)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-reduce-cpu test-divsqrt-host
+
+  tensor:
+    needs: changes
+    if: needs.changes.outputs.tensor == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: M20 OMEGA_TENSOR CPU tier (plain + ASan/UBSan, test hook absent from default build; CPU only)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-tensor
+      - name: M20 OMEGA_TENSOR mutation sweep (each rule must turn the tests red)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-tensor-mutations

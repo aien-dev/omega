@@ -81,6 +81,7 @@ void omega_tensor_ctx_destroy(OmegaTensorCtx *ctx) {
 
 int omega_tensor_last_numeric_error(const OmegaTensorCtx *ctx) { return ctx ? ctx->last_numeric : 0; }
 
+#ifdef OMEGA_TENSOR_TEST_HOOKS /* test build only, see omega_tensor.h */
 int omega_tensor_test_set_storage_generation(OmegaTensorCtx *ctx, uint32_t slot, uint64_t gen) {
     if (!ctx || slot >= ctx->cap || gen == 0) return OMEGA_TENSOR_ERR_BAD_ARGS;
     if (ctx->st[slot].live || ctx->st[slot].retired) return OMEGA_TENSOR_ERR_BAD_ARGS;
@@ -88,6 +89,7 @@ int omega_tensor_test_set_storage_generation(OmegaTensorCtx *ctx, uint32_t slot,
     ctx->st[slot].gen = gen;
     return OMEGA_TENSOR_OK;
 }
+#endif
 
 static StorageSlot *storage_get(const OmegaTensorCtx *ctx, OmegaStorageHandle h) {
     if (h.slot >= ctx->cap) return NULL;

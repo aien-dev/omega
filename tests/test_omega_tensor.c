@@ -13,6 +13,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef OMEGA_TENSOR_TEST_HOOKS
+#error "test_omega_tensor.c needs -DOMEGA_TENSOR_TEST_HOOKS (set by mk/tensor.mk test build)"
+#endif
 #include "omega_numeric.h"
 #include "omega_tensor.h"
 #include "omega_tensor_reduce_seam.h"

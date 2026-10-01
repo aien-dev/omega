@@ -254,8 +254,13 @@ int omega_tensor_matmul(OmegaTensorCtx *ctx, OmegaTensor a, OmegaTensor b, Omega
 /* Live tensor descriptors and live storage slots (lifetime audits). */
 void omega_tensor_live_counts(const OmegaTensorCtx *ctx, uint32_t *tensors, uint32_t *storages);
 
+#ifdef OMEGA_TENSOR_TEST_HOOKS
 /* Test-only: set the generation of a free storage slot, to exercise the
- * UINT64_MAX retirement rule without 2^64 releases. Refused on a live slot. */
+ * UINT64_MAX retirement rule without 2^64 releases. Refused on a live slot.
+ * Compiled only when OMEGA_TENSOR_TEST_HOOKS is defined (the test build in
+ * mk/tensor.mk); the default library build does not contain this symbol and
+ * test-tensor-no-hooks checks that with nm. */
 int omega_tensor_test_set_storage_generation(OmegaTensorCtx *ctx, uint32_t slot, uint64_t gen);
+#endif
 
 #endif /* OMEGA_TENSOR_H */
