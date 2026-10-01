@@ -977,7 +977,7 @@ int omega_numeric_patch_words(OmegaNumericOp op,
          * like a[i] and b[i], then FFMA. R10/R11 are free in the baseline. */
         PUT(0xff0a7b82U, 0x0000e800U, 0x00000a00U, CTRL_VAR, "LDC.64 R10, c[0x0][0x3a0]", "LDC64_R10_C3A0");
         PUT(0x090a7825U, 0x00000004U, 0x078e000aU, 0x001fcc00U, "IMAD.WIDE.U32 R10, R9, 0x4, R10", "IMAD_WIDE_R10_R9_4");
-        PUT(0x0a0b7981U, 0x00000004U, 0x0c1e1900U, 0x000e2200U, "LDG.E R11, desc[UR4][R10.64]", "LDG_R11_R10");
+        PUT(0x0a0b7981U, 0x00000004U, 0x0c1e1900U, 0x000e2800U, "LDG.E R11, desc[UR4][R10.64]", "LDG_R11_R10");
         PUT(0x02097223U, 0x00000005U, 0x0000000bU, CTRL_FADD_SB0, "FFMA R9, R2, R5, R11", "FFMA_R9_R2_R5_R11");
         out[n++] = STG0;
         out[n++] = EXIT;
@@ -1024,6 +1024,7 @@ static int bad(char *err, size_t err_len, const char *fmt, ...) {
 #define INSN_SRCB(p) ((p).w[1] & 0xffu)
 #define CTRL_WBAR(w3) (((w3) >> 14) & 7u)
 #define CTRL_WAIT(w3) (((w3) >> 20) & 0x3fu)
+#define CTRL_STALL(w3) (((w3) >> 9) & 0xfu)
 
 #define OPC_STS  0x7988u
 #define OPC_LDS  0x7984u
@@ -1098,6 +1099,10 @@ int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *p,
         uint32_t o = INSN_OP(p[t]);
         /* a result that arrives through a scoreboard is waited on by the next instruction */
         if (CTRL_WBAR(p[t].w[3]) <= 5u && (t + 1 >= n || !(CTRL_WAIT(p[t + 1].w[3]) & (1u << CTRL_WBAR(p[t].w[3]))))) return bad(err, err_len, "%s: instruction %d sets SB%u but the next instruction does not wait on it", name, t, CTRL_WBAR(p[t].w[3])); /* CHECK:scoreboard_wait */
+        /* ... and the setter stalls at least 2 cycles first: on GB10 a waiter issued 1 cycle after the
+         * setter does not see the barrier (chip, 2026-10-01: LDG stall 1 then FFMA read the stale R11;
+         * SHFL stall 2 then FADD is chip-proven in REDUCE_SUM) */
+        if (CTRL_WBAR(p[t].w[3]) <= 5u && CTRL_STALL(p[t].w[3]) < 2u) return bad(err, err_len, "%s: instruction %d sets SB%u with stall %u; the waiter needs a stall of at least 2", name, t, CTRL_WBAR(p[t].w[3]), CTRL_STALL(p[t].w[3])); /* CHECK:scoreboard_set_stall */
         if (o == OPC_STS) {
             if ((p[t].w[0] & 0x00ffffffu) != 0x00007988u || (p[t].w[1] & ~0xffu) != 0 || p[t].w[2] != 0x080008ffu) return bad(err, err_len, "%s: STS at %d is not the encoded 32-bit STS [Rx+URZ] form", name, t); /* CHECK:sts_form */
             sts = t; n_sts++;

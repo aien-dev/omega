@@ -980,13 +980,13 @@ int main(int argc, char **argv) {
         }
         int caught = 0, cases = 0;
         /* 32..43: E1 scalar ops (E1 WP-C) */
-        static const OmegaNumericOp E1_NEG_OP[17] = {
+        static const OmegaNumericOp E1_NEG_OP[18] = {
             OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FSETP_EQ_SEL, OMEGA_NOP_F2I_FLOOR,
             OMEGA_NOP_F32_TO_F16, OMEGA_NOP_F2I_FLOOR, OMEGA_NOP_I2FP_U32, OMEGA_NOP_FFMA_V,
             OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V,
             OMEGA_NOP_I2FP_U32, OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V,
-            OMEGA_NOP_FSETP_LT_SEL };
-        for (int m = 0; m < 49; m++) {
+            OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FFMA_V };
+        for (int m = 0; m < 50; m++) {
             OmegaNumericOp op = OMEGA_NOP_LDS_STS;
             if (m >= 18 && m != 27 && m != 31) op = OMEGA_NOP_REDUCE_SUM;
             if (m == 17) op = OMEGA_NOP_SHFL_DOWN;
@@ -1055,6 +1055,7 @@ int main(int argc, char **argv) {
             case 46: what = "FFMA_V c pointer into R2:R3 (clobbers a[i])"; p[0].w[0] = 0xff027b82u; p[1].w[0] = 0x09027825u; p[1].w[2] = 0x078e0002u; p[2].w[0] = 0x02037981u; p[3].w[2] = 3u; want = "c pointer is not"; break;
             case 47: what = "FFMA_V c load sets no barrier"; p[2].w[3] = 0x000fe200u; want = "c[i] is not LDG"; break;
             case 48: what = "early store through address R8 before the select"; p[1].w[0] = 0x08007986u; p[1].w[1] = 9u; p[1].w[2] = 0x0c101904u; p[1].w[3] = 0x000fe200u; want = "store at 1"; break;
+            case 49: what = "FFMA_V c load stalls 1 cycle before its waiter (chip FAIL 2026-10-01)"; p[2].w[3] = 0x000e2200u; want = "with stall 1"; break;
             }
             char err[256];
             int rc = omega_numeric_check_patch(check_op, p, n, q, err, sizeof(err));
