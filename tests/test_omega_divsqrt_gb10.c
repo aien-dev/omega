@@ -220,7 +220,7 @@ static int host_tier(void) {
                     (OmegaDsInsn){ .kind = DSK_IADD3_R, .d = 6, .a = 2, .b = 5, .c = OMEGA_DS_RZ }, "ds_reserved:");
         snprintf(id, sizeof(id), "DS_%s_REFUSES_REG_ABOVE_ALLOCATION", on);
         insn_expect(id, (OmegaDsOp)op, code, len, nb - 1,
-                    (OmegaDsInsn){ .kind = DSK_IADD3_R, .d = 40, .a = 2, .b = 5, .c = OMEGA_DS_RZ }, "ds_gpr:");
+                    (OmegaDsInsn){ .kind = DSK_IADD3_R, .d = 46, .a = 2, .b = 5, .c = OMEGA_DS_RZ }, "ds_gpr:");
         snprintf(id, sizeof(id), "DS_%s_REFUSES_RESULT_NOT_IN_R9", on);
         insn_expect(id, (OmegaDsOp)op, code, len, nb - 1,
                     (OmegaDsInsn){ .kind = DSK_IADD3_R, .d = 8, .a = 2, .b = 5, .c = OMEGA_DS_RZ }, "ds_result:");

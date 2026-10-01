@@ -947,7 +947,7 @@ int omega_ds_check_kernel(OmegaDsOp op, const uint8_t *code, size_t len,
         else defp[x.d] = true;
         last = x;
     }
-    if (maxreg + 1 > gpr_count || gpr_count > 255) return refuse(err, err_len, E_OP, "ds_gpr: R%u used, %u registers allocated", maxreg, gpr_count); /* CHECK:ds_gpr */
+    if (maxreg + 1 + OMEGA_DS_GPR_RESERVED > gpr_count || gpr_count > 255) return refuse(err, err_len, E_OP, "ds_gpr: R%u used, %u registers allocated (top %u reserved)", maxreg, gpr_count, OMEGA_DS_GPR_RESERVED); /* CHECK:ds_gpr */
     if (!writes_reg(&last) || last.d != OMEGA_DS_RESULT_REG) return refuse(err, err_len, E_OP, "ds_result: last body insn does not write R9"); /* CHECK:ds_result */
     return OMEGA_NUMERIC_OK;
 }

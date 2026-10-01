@@ -79,7 +79,12 @@ typedef struct {
 #define OMEGA_DS_PROLOGUE_INSNS 17u   /* vecadd 0x000-0x100 */
 #define OMEGA_DS_EPILOGUE_INSNS 3u    /* STG, EXIT, BRA self */
 #define OMEGA_DS_MAX_CODE_BYTES 0x4000u
-#define OMEGA_DS_GPR_COUNT      32u
+/* QMD register allocation. The hardware reserves the top two registers of the
+ * allocation (Xid 13 "Out Of Range Register" when a 32-register QMD ran a body
+ * using R30/R31, receipt 1dc85ef2), so a body may use R0..R(count-3). 48 is the
+ * next multiple of 16 that covers R31. */
+#define OMEGA_DS_GPR_COUNT      48u
+#define OMEGA_DS_GPR_RESERVED   2u
 #define OMEGA_DS_RESULT_REG     9u
 /* Control word (w3 & ~0x1ff) of every body instruction: stall 15, no write or
  * read barrier, wait on SB4 (the two LDGs of the prologue). The fixed-latency
