@@ -33,6 +33,25 @@
  * and leaves an audit line in .spark-quiet.history for every use; it does not
  * stop a determined local user. A signed token is a separate follow-up.
  *
+ * Where the lock is enforced: at real entry points only (mk/quiet.mk for every
+ * omega make goal, scripts run under `quietlock run --` or `quietlock hold`,
+ * and lanes.sh queue/flush/forge once wired to call quietlock). The decision
+ * is never made by pattern-matching command text; the Claude hook
+ * (tools/quietlock/quiet-guard.sh) is only a courtesy filter in front of it.
+ *
+ * Rules worth knowing
+ * - No state dir (GitHub CI, another machine): check is clear (exit 0).
+ * - Refusals print the fixed marker QUIETLOCK_REFUSED and exit 75.
+ * - Overrun: at expected_end, `hold` releases the flag and logs
+ *   "overrun: hold expired while command still running". It never kills the
+ *   command. So --minutes is a real cap on how long others are blocked.
+ * - Legacy flags (no hold= token) let their holder through with
+ *   QUIET_HOLDER=1, DEPRECATED, logged, for the transition only.
+ * - QUIETLOCK_DIR moves the state dir (tests use it). Anyone can point it at an
+ *   empty dir and pass check: this is a cooperative lock against accidents,
+ *   not a security boundary, like the token below.
+ * - Times must end in Z (UTC). A time without Z never counts as passed.
+ *
  * Plain C + POSIX, plus flock(2) (Linux/BSD) as the brief requires.
  */
 #ifndef _GNU_SOURCE
@@ -124,7 +143,10 @@ static void iso_utc(time_t t, char *buf, size_t n)
 		buf[0] = '\0';
 }
 
-/* Accepts YYYY-MM-DDTHH:MM:SS[Z] and YYYY-MM-DDTHH:MM[Z], read as UTC. */
+/* Accepts YYYY-MM-DDTHH:MM:SSZ and YYYY-MM-DDTHH:MMZ only. The trailing Z is
+ * REQUIRED: quiet-guard.sh and lanes.sh read a no-Z time with `date -d` as local
+ * time, so a no-Z (or +00:00) time is treated as unreadable, which never counts
+ * as passed (fails safe: such a flag is never stale). */
 static int parse_iso(const char *s, time_t *out)
 {
 	static const char *fmts[] = { "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M" };
@@ -136,9 +158,7 @@ static int parse_iso(const char *s, time_t *out)
 		e = strptime(s, fmts[i], &tm);
 		if (!e)
 			continue;
-		if (*e == 'Z')
-			e++;
-		if (*e != '\0')
+		if (*e != 'Z' || e[1] != '\0')
 			continue;
 		*out = timegm(&tm);
 		return *out == (time_t)-1 ? -1 : 0;
@@ -266,16 +286,30 @@ static void describe(const struct flag *f, char *buf, size_t n)
 		snprintf(pid, sizeof pid, "%ld", f->pid);
 	else
 		snprintf(pid, sizeof pid, "?");
-	snprintf(buf, n, "holder='%s' pid=%s alive=%s expected_end=%s", f->holder[0] ? f->holder : "unknown",
-		 pid, f->has_pid && pid_alive(f->pid) ? "yes" : "no", f->end_text[0] ? f->end_text : "?");
+	snprintf(buf, n, "holder='%s' pid=%s alive=%s expected_end=%s%s", f->holder[0] ? f->holder : "unknown",
+		 pid, f->has_pid && pid_alive(f->pid) ? "yes" : "no", f->end_text[0] ? f->end_text : "?",
+		 f->has_pid && pid_alive(f->pid) && f->has_end && time(NULL) > f->end ? " overrun=yes" : "");
+}
+
+/* No state dir (GitHub CI, another machine, fresh account): nothing can be held. */
+static int state_dir_missing(void)
+{
+	struct stat st;
+	return stat(g_dir, &st) != 0 && errno == ENOENT;
 }
 
 static int cmd_check(void)
 {
 	struct flag f;
 	const char *mine = getenv("QUIETLOCK_HOLD");
+	const char *legacy = getenv("QUIET_HOLDER");
 	char d[512];
-	int fd = lock_take(LOCK_SH);
+	int fd;
+	if (state_dir_missing()) {
+		fprintf(stderr, "quietlock: no state dir %s, so no quiet flag: clear\n", g_dir);
+		return 0;
+	}
+	fd = lock_take(LOCK_SH);
 	read_flag(&f);
 	lock_drop(fd);
 	if (!f.present)
@@ -288,8 +322,16 @@ static int cmd_check(void)
 				"'quietlock release-stale' removes it\n", d);
 		return 0;
 	}
-	fprintf(stderr, "quietlock: Spark quiet flag HELD (%s) at %s. Builds and tests wait until it is released. "
-			"The holder runs its commands under 'quietlock hold'.\n", d, g_flag);
+	/* DEPRECATED transition escape: a legacy flag (written before quietlock, so no
+	 * hold= token) lets its holder through with QUIET_HOLDER=1, as quiet-guard.sh
+	 * did. Never applies to a quietlock hold. Every use is logged. */
+	if (!f.hold[0] && legacy && strcmp(legacy, "1") == 0) {
+		history("DEPRECATED QUIET_HOLDER=1 passed legacy flag: %s", f.line);
+		fprintf(stderr, "quietlock: legacy flag passed with QUIET_HOLDER=1 (deprecated; use 'quietlock hold')\n");
+		return 0;
+	}
+	fprintf(stderr, "quietlock: QUIETLOCK_REFUSED Spark quiet flag HELD (%s) at %s. Builds and tests wait until it "
+			"is released. The holder runs its commands under 'quietlock hold'.\n", d, g_flag);
 	return EXIT_HELD;
 }
 
@@ -397,7 +439,13 @@ static void make_hold_id(char *buf, size_t n)
 	snprintf(buf, n, "q%ld-%lld-%08x", (long)getpid(), (long long)ts.tv_sec, r);
 }
 
-static void release_mine(const char *id, int rc)
+static void on_alarm(int sig)
+{
+	(void)sig; /* only interrupts waitpid() */
+}
+
+/* Remove the flag only if it still carries our hold id (never a foreign flag). */
+static void release_mine(const char *id, int rc, int overrun)
 {
 	struct flag f;
 	int fd = lock_take(LOCK_EX);
@@ -405,11 +453,28 @@ static void release_mine(const char *id, int rc)
 	if (f.present && strcmp(f.hold, id) == 0) {
 		if (unlink(g_flag) != 0)
 			fprintf(stderr, "quietlock: cannot remove flag %s: %s\n", g_flag, strerror(errno));
-		history("hold %s released (command exit %d)", id, rc);
+		if (overrun)
+			history("overrun: hold expired while command still running (hold %s); flag released, "
+				"command NOT killed", id);
+		else
+			history("hold %s released (command exit %d)", id, rc);
+	} else if (overrun) {
+		history("overrun: hold %s expired; flag already gone or replaced, left alone", id);
 	} else {
-		history("hold %s: flag already gone or replaced at exit (command exit %d)", id, rc);
+		history("hold %s: flag already gone or replaced at exit, left alone (command exit %d)", id, rc);
 	}
 	lock_drop(fd);
+}
+
+/* Seconds per --minutes unit. 60, except a test build may shorten it with
+ * QUIETLOCK_TEST=1 QUIETLOCK_TEST_MINUTE_SECONDS=N (only ever SHORTER holds). */
+static long minute_seconds(void)
+{
+	const char *t = getenv("QUIETLOCK_TEST"), *s = getenv("QUIETLOCK_TEST_MINUTE_SECONDS");
+	long v;
+	if (t && strcmp(t, "1") == 0 && parse_long(s, &v) == 0 && v >= 1 && v < 60)
+		return v;
+	return 60;
 }
 
 static int cmd_hold(const char *owner, const char *mins, const char *reason_in, char **argv)
@@ -421,7 +486,8 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 	size_t i;
 	int fd, tfd, n, status = 0, rc;
 	pid_t child;
-	time_t now;
+	time_t now, end_t;
+	int released = 0;
 
 	if (!owner || !valid_owner(owner)) {
 		fprintf(stderr, "quietlock: --owner must be 1-64 chars of A-Z a-z 0-9 . _ -\n");
@@ -439,12 +505,14 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 			reason[i] = '_';
 	}
 
+	if (state_dir_missing() && mkdir(g_dir, 0755) != 0 && errno != EEXIST)
+		die("cannot create state dir %s: %s", g_dir, strerror(errno));
 	fd = lock_take(LOCK_EX);
 	read_flag(&f);
 	if (f.present) {
 		describe(&f, d, sizeof d);
 		lock_drop(fd);
-		fprintf(stderr, "quietlock: refused: quiet flag already held (%s)%s\n", d,
+		fprintf(stderr, "quietlock: refused: QUIETLOCK_REFUSED quiet flag already held (%s)%s\n", d,
 			flag_stale(&f) ? "; it is stale, run 'quietlock release-stale' first" : "");
 		return EXIT_HELD;
 	}
@@ -463,7 +531,8 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 	make_hold_id(id, sizeof id);
 	now = time(NULL);
 	iso_utc(now, start, sizeof start);
-	iso_utc(now + minutes * 60, end, sizeof end);
+	end_t = now + minutes * minute_seconds();
+	iso_utc(end_t, end, sizeof end);
 	n = snprintf(line, sizeof line, "%s quietlock %s start=%s expected_end=%s pid=%ld hold=%s\n", owner, reason,
 		     start, end, (long)getpid(), id);
 	if (n < 0 || (size_t)n >= sizeof line) {
@@ -471,6 +540,7 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 		die("flag line too long");
 	}
 	snprintf(tmp, sizeof tmp, "%s.tmp.%ld", g_flag, (long)getpid());
+	unlink(tmp); /* leftover of a crashed run with the same pid; we hold the flock */
 	tfd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0644);
 	if (tfd < 0) {
 		lock_drop(fd);
@@ -504,11 +574,13 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 	sigemptyset(&sa.sa_mask);
 	for (i = 0; i < sizeof g_fwd / sizeof g_fwd[0]; i++)
 		sigaction(g_fwd[i], &sa, NULL);
+	sa.sa_handler = on_alarm; /* no SA_RESTART: interrupts waitpid at expected_end */
+	sigaction(SIGALRM, &sa, NULL);
 
 	child = fork();
 	if (child < 0) {
 		fprintf(stderr, "quietlock: fork: %s\n", strerror(errno));
-		release_mine(id, 1);
+		release_mine(id, 1, 0);
 		return 1;
 	}
 	if (child == 0) {
@@ -527,19 +599,41 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 	g_child = child;
 	if (g_sig)
 		kill(child, g_sig);
-	while (waitpid(child, &status, 0) < 0) {
-		if (errno != EINTR) {
+	/* At expected_end the hold ends even if the command is still running: the
+	 * flag is released and an overrun line logged. The command is NEVER killed
+	 * (standing rule: chip tests are never killed). */
+	for (;;) {
+		pid_t w;
+		if (!released) {
+			time_t t = time(NULL);
+			if (t >= end_t) {
+				release_mine(id, 0, 1);
+				released = 1;
+				fprintf(stderr, "quietlock: hold %s reached expected_end; flag released, command left running\n",
+					id);
+			} else {
+				alarm((unsigned)(end_t - t));
+			}
+		}
+		w = waitpid(child, &status, 0);
+		if (w == child)
+			break;
+		if (w < 0 && errno != EINTR) {
 			status = 1 << 8;
 			break;
 		}
 	}
+	alarm(0);
 	if (WIFEXITED(status))
 		rc = WEXITSTATUS(status);
 	else if (WIFSIGNALED(status))
 		rc = 128 + WTERMSIG(status);
 	else
 		rc = 1;
-	release_mine(id, rc);
+	if (released)
+		history("hold %s: command finished after overrun (exit %d)", id, rc);
+	else
+		release_mine(id, rc, 0);
 	return rc;
 }
 
@@ -547,7 +641,12 @@ static int cmd_release_stale(void)
 {
 	struct flag f;
 	char d[512];
-	int fd = lock_take(LOCK_EX);
+	int fd;
+	if (state_dir_missing()) {
+		printf("no flag\n");
+		return 0;
+	}
+	fd = lock_take(LOCK_EX);
 	read_flag(&f);
 	if (!f.present) {
 		lock_drop(fd);

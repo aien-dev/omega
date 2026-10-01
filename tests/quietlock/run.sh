@@ -157,8 +157,171 @@ echo "M18 gate16 desc start=$PAST expected_end=$PAST pid=$D" > "$FLAG"
 "$Q" check 2>/dev/null; rc=$?
 check "T10b old-format stale flag counts as clear for check" '[ $rc = 0 ]'
 
+# --- T2f refusals carry the fixed marker the forge keys on.
+# Mutation killed: dropping "QUIETLOCK_REFUSED" from the cmd_check message.
+live_flag
+"$Q" check 2>"$T/err2f"; rc=$?
+check "T2f refusal prints QUIETLOCK_REFUSED and exits 75" '[ $rc = 75 ] && grep -q QUIETLOCK_REFUSED "$T/err2f"'
+
+# --- T11 no state dir (GitHub CI, fresh machine) is clear, never an error.
+# Mutation killed: removing the state_dir_missing() branch in cmd_check (lock_take dies, exit 1).
+out=$(QUIETLOCK_DIR=$T/nonexistent $MK quietlock-check 2>&1); rc=$?
+check "T11 make passes with no state dir" '[ $rc = 0 ] && echo "$out" | grep -q "clear for this make run" && [ ! -e "$T/nonexistent" ]'
+QUIETLOCK_DIR=$T/nonexistent "$Q" release-stale >/dev/null; rc=$?
+check "T11b release-stale with no state dir says no flag" '[ $rc = 0 ] && [ ! -e "$T/nonexistent" ]'
+
+# --- T11c/d tool cannot be built: continue with NOTICE when no flag, refuse when a flag exists.
+# Mutations killed: always continuing on build failure (T11d); always refusing (T11c).
 reset
-echo "quietlock tests: $N checks, $FAILS failed"
-[ "$FAILS" = 0 ] && echo "QUIETLOCK_TESTS_PASS" && exit 0
-echo "QUIETLOCK_TESTS_FAIL"
+out=$(make -s -C "$HERE" OUT_DIR="$T/build2" CC=false quietlock-check 2>&1); rc=$?
+check "T11c unbuildable tool + no flag: NOTICE and continue" '[ $rc = 0 ] && echo "$out" | grep -q NOTICE'
+live_flag
+out=$(make -s -C "$HERE" OUT_DIR="$T/build2" CC=false quietlock-check 2>&1); rc=$?
+check "T11d unbuildable tool + flag: refused" '[ $rc != 0 ] && echo "$out" | grep -q QUIETLOCK_REFUSED'
+
+# --- T11e on-demand build writes a temp file and renames it (no half-written binary).
+# Mutation killed: compiling straight to $(QUIETLOCK_BIN) in mk/quiet.mk.
+reset
+printf '#!/bin/sh\necho "$@" >> "%s"\nexec %s "$@"\n' "$T/cc.log" "${CC:-gcc}" > "$T/ccspy"; chmod +x "$T/ccspy"
+out=$(make -s -C "$HERE" OUT_DIR="$T/build3" CC="$T/ccspy" quietlock-check 2>&1); rc=$?
+check "T11e on-demand build goes through a temp name" '[ $rc = 0 ] && grep -q -- "-o $T/build3/quietlock.tmp.[0-9]" "$T/cc.log" && [ -x "$T/build3/quietlock" ] && ! ls "$T/build3" | grep -q tmp'
+
+# --- T12 legacy QUIET_HOLDER=1 passes only a legacy flag (no hold=), logged as deprecated.
+# Mutations killed: removing the legacy branch (T12 fails); dropping its `!f.hold[0]` guard (T12b fails).
+echo "M18 gate16 desc start=$PAST expected_end=$FUTURE pid=$$" > "$FLAG"
+QUIET_HOLDER=1 "$Q" check 2>/dev/null; rc=$?
+check "T12 QUIET_HOLDER=1 passes a legacy flag, logged" '[ $rc = 0 ] && grep -q "DEPRECATED QUIET_HOLDER=1" "$HIST"'
+live_flag
+QUIET_HOLDER=1 "$Q" check 2>/dev/null; rc=$?
+check "T12b QUIET_HOLDER=1 does not pass a quietlock hold" '[ $rc = 75 ]'
+
+# --- T13 overrun: a 1-"minute" hold around a longer command stops blocking others at
+# expected_end, logs the overrun, and does NOT kill the command.
+# (QUIETLOCK_TEST_MINUTE_SECONDS=2 shortens a minute to 2 s; honoured only with QUIETLOCK_TEST=1.)
+# Mutations killed: removing the alarm/overrun release (check stays 75); killing the child at overrun.
+reset
+QUIETLOCK_TEST=1 QUIETLOCK_TEST_MINUTE_SECONDS=2 "$Q" hold --owner A --minutes 1 -- \
+	sh -c 'touch "$1/started"; while [ ! -e "$1/go" ]; do sleep 1; done; touch "$1/done"' sh "$T" 2>/dev/null &
+hp=$!
+i=0; while [ $i -lt 20 ] && ! grep -q "overrun: hold expired while command still running" "$HIST" 2>/dev/null; do sleep 1; i=$((i + 1)); done
+"$Q" check 2>/dev/null; crc=$?
+check "T13 after expected_end others are not blocked, command still running" \
+	'[ $crc = 0 ] && [ ! -e "$FLAG" ] && [ -e "$T/started" ] && [ ! -e "$T/done" ] && kill -0 $hp 2>/dev/null'
+touch "$T/go"; wait $hp; rc=$?
+check "T13b overrun command finished normally and was logged" '[ $rc = 0 ] && [ -e "$T/done" ] && grep -q "finished after overrun (exit 0)" "$HIST"'
+rm -f "$T/started" "$T/go" "$T/done"
+
+# --- T14 expected_end without Z never counts as passed.
+# Mutation killed: making the trailing Z optional in parse_iso.
+D2=$(dead_pid)
+echo "M18 gate16 desc start=$PAST expected_end=2000-01-01T00:00:00 pid=$D2" > "$FLAG"
+"$Q" release-stale >/dev/null; rc=$?
+check "T14 no-Z expected_end is never stale" '[ "$D2" != 0 ] && [ $rc = 3 ] && [ -e "$FLAG" ]'
+
+# --- T15 malformed flag (no pid=, no expected_end=) blocks and is never stale.
+# Mutation killed: treating a missing pid as dead, or a missing end as passed.
+echo "qemu_ck_store_test 3033916" > "$FLAG"
+"$Q" check 2>/dev/null; crc=$?
+"$Q" release-stale >/dev/null; rc=$?
+check "T15 malformed flag blocks and is not released" '[ $crc = 75 ] && [ $rc = 3 ] && [ -e "$FLAG" ]'
+
+# --- T16 a hold never deletes a flag that is not its own.
+# Mutation killed: release_mine() unlinking without comparing the hold id.
+reset
+"$Q" hold --owner A --minutes 1 -- sh -c 'rm -f "$1"; echo "FOREIGN x y start=$3 expected_end=$4 pid=$2 hold=qFOREIGN" > "$1"' sh "$FLAG" "$$" "$PAST" "$FUTURE"
+check "T16 foreign flag left alone at hold exit" 'grep -q "hold=qFOREIGN" "$FLAG"'
+
+# --- T17 SIGTERM to hold is forwarded to the command and the flag is released.
+# Mutations killed: no signal handler (quietlock dies, flag stays); handler not forwarding (rc 0 after 30 s).
+reset
+"$Q" hold --owner A --minutes 5 -- sh -c 'touch "$1"; exec sleep 30' sh "$T/ready" 2>/dev/null &
+hp=$!
+i=0; while [ $i -lt 20 ] && [ ! -e "$T/ready" ]; do sleep 1; i=$((i + 1)); done
+kill -TERM $hp; wait $hp; rc=$?
+check "T17 SIGTERM forwarded, flag released" '[ $rc = 143 ] && [ ! -e "$FLAG" ]'
+
+# ===== Proposed hook tools/quietlock/quiet-guard.sh (stdin = Claude Code hook JSON) =====
+HOOK=$HERE/tools/quietlock/quiet-guard.sh
+if ! command -v jq >/dev/null 2>&1; then
+	check "H0 jq available for hook tests" 'false'
+else
+hookrun() { # $1 = JSON; extra env via caller
+	printf '%s' "$1" | QUIETLOCK_BIN=$Q sh "$HOOK" 2>"$T/hookerr"
+}
+bash_json() { jq -n --arg c "$1" '{tool_name:"Bash",tool_input:{command:$c}}'; }
+reset; live_flag
+
+# H1 Edit/Write calls are never blocked, even with build words in the text.
+# Mutation killed: scanning the whole tool_input JSON (old text matching) instead of Bash commands only.
+hookrun "$(jq -n '{tool_name:"Edit",tool_input:{file_path:"notes.md",old_string:"a",new_string:"make test\ncargo build"}}')"; rc=$?
+check "H1 Edit of an .md mentioning make test allowed" '[ $rc = 0 ]'
+hookrun "$(jq -n '{tool_name:"Write",tool_input:{file_path:"x.md",content:"make -C x"}}')"; rc=$?
+check "H1b Write mentioning make allowed" '[ $rc = 0 ]'
+
+# H2 writing notes is never blocked.
+# Mutations killed: no quote stripping (H2, H2d); matching words anywhere instead of command position (H2b);
+# no heredoc stripping (H2c); per-line quote stripping (H2e).
+hookrun "$(bash_json 'echo "remember: make test before merge" >> ~/handoffs/x.md')"; rc=$?
+check "H2 echo \"... make ...\" >> handoff.md allowed" '[ $rc = 0 ]'
+hookrun "$(bash_json 'echo then run make test >> notes.md')"; rc=$?
+check "H2b unquoted make as an echo argument allowed" '[ $rc = 0 ]'
+hookrun "$(bash_json "$(printf 'cat > notes.md <<%sEOF%s\nmake test\ncargo build\nEOF' "'" "'")")"; rc=$?
+check "H2c heredoc into .md allowed" '[ $rc = 0 ]'
+hookrun "$(bash_json "sed -i 's/make all/make test/' doc.md")"; rc=$?
+check "H2d sed -i on .md allowed" '[ $rc = 0 ]'
+hookrun "$(bash_json "$(printf 'echo "first line\nmake test\nlast" >> notes.md')")"; rc=$?
+check "H2e multi-line quoted text allowed" '[ $rc = 0 ]'
+
+# H3 real heavy commands are blocked while held.
+# Mutations killed: hook always exiting 0 / not consulting quietlock (H3); no segment split (H3b);
+# no -c extraction (H3c); no wrapper/assignment skipping (H3d); cargo subcommand rule removed (H3e).
+hookrun "$(bash_json 'make -C x')"; rc=$?
+check "H3 make -C x blocked while held" '[ $rc = 2 ] && grep -q QUIETLOCK_REFUSED "$T/hookerr"'
+hookrun "$(bash_json 'cd x && make test')"; rc=$?
+check "H3b cd x && make test blocked" '[ $rc = 2 ]'
+hookrun "$(bash_json "bash -c 'make test'")"; rc=$?
+check "H3c bash -c 'make test' blocked" '[ $rc = 2 ]'
+hookrun "$(bash_json 'env FOO=1 nice -n 5 make all')"; rc=$?
+check "H3d env/nice wrapped make blocked" '[ $rc = 2 ]'
+hookrun "$(bash_json 'cargo build --release')"; rc=$?
+check "H3e cargo build blocked" '[ $rc = 2 ]'
+
+# H4 the holder passes (command prefix or hook env), a wrong id does not.
+# Mutation killed: not handing the extracted/env QUIETLOCK_HOLD to quietlock check.
+hookrun "$(bash_json 'QUIETLOCK_HOLD=qOTHER-1-0 make -C x')"; rc=$?
+check "H4 holder's QUIETLOCK_HOLD prefix allowed" '[ $rc = 0 ]'
+hookrun "$(bash_json 'QUIETLOCK_HOLD=qWRONG make -C x')"; rc=$?
+check "H4b wrong QUIETLOCK_HOLD blocked" '[ $rc = 2 ]'
+printf '%s' "$(bash_json 'make -C x')" | QUIETLOCK_HOLD=qOTHER-1-0 QUIETLOCK_BIN=$Q sh "$HOOK" 2>/dev/null; rc=$?
+check "H4c holder's QUIETLOCK_HOLD in hook env allowed" '[ $rc = 0 ]'
+
+# H5 control: clear flag lets heavy commands through.
+# Mutation killed: blocking heavy commands without asking quietlock.
+reset
+hookrun "$(bash_json 'make -C x')"; rc=$?
+check "H5 make allowed when clear" '[ $rc = 0 ]'
+
+# H6 stale flag is released through quietlock release-stale, then allowed.
+# Mutation killed: dropping the release-stale call (flag stays).
+D3=$(dead_pid)
+echo "M18 gate16 desc start=$PAST expected_end=$PAST pid=$D3" > "$FLAG"
+hookrun "$(bash_json 'make -C x')"; rc=$?
+check "H6 stale flag released by the hook via quietlock" '[ $rc = 0 ] && [ ! -e "$FLAG" ] && grep -q "released stale flag: M18 gate16 desc start=$PAST expected_end=$PAST pid=$D3" "$HIST"'
+
+# H7 DEPRECATED transition escapes still work in the hook.
+# Mutations killed: removing the QUIET_HOLDER=1 case (H7); removing the allow-line check (H7b); allow line matching everything (H7c).
+echo "M18 gate16 desc start=$PAST expected_end=$FUTURE pid=$$" > "$FLAG"
+hookrun "$(bash_json 'QUIET_HOLDER=1 make -C x')"; rc=$?
+check "H7 QUIET_HOLDER=1 allowed, marked deprecated" '[ $rc = 0 ] && grep -q DEPRECATED "$T/hookerr"'
+printf 'allow ^make -C special\n' >> "$FLAG"
+hookrun "$(bash_json 'make -C special')"; rc=$?
+check "H7b allow line lets a matching command through" '[ $rc = 0 ]'
+hookrun "$(bash_json 'make -C other')"; rc=$?
+check "H7c allow line does not let others through" '[ $rc = 2 ]'
+fi
+
+reset
+echo "quietlock tests (host): $N checks, $FAILS failed"
+[ "$FAILS" = 0 ] && echo "QUIETLOCK_TESTS_PASS host" && exit 0
+echo "QUIETLOCK_TESTS_FAIL host"
 exit 1
