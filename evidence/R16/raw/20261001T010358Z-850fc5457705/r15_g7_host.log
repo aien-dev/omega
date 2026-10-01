@@ -1,0 +1,17 @@
+./build/rx_r15_g7_host
+[*] RES-1: promotion while production runs
+  RES-1: episode 1 reached goal MET (generation 1 -> 2)
+    barrier 105.5 ms (flip at 75.4 ms); production commits during it 1926 (1388 before the flip); hook saw 1869 -> 1873 served in 0.22 ms
+[*] RES-4: promotion while production runs
+  RES-4: episode 1 reached goal MET (generation 1 -> 2)
+    barrier 79.7 ms (flip at 56.7 ms); production commits during it 1149 (864 before the flip); hook saw 1290 -> 1294 served in 0.22 ms
+[*] SEQ: the sequential reference is unchanged
+  SEQ: episode 1 reached goal MET (generation 1 -> 2)
+    barrier 87.7 ms; production commits during it 0
+[*] RES-1: stop before the flip
+    recovered generation 1 (lineage 1), rc 0, coherent 1
+[*] RES-1: stop during the flip
+    recovered generation 1 (lineage 1), rc 0, coherent 1
+[*] RES-1: stop after the flip
+    recovered generation 2 (lineage 2), rc 0, coherent 1
+R15 G7 worker split: 57 checks, 0 failures

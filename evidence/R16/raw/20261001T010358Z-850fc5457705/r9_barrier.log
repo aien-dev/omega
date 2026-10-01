@@ -1,0 +1,4 @@
+./build/rx_r9_barrier_test
+receipt: build/qual-runs/20261001T010827Z-850fc5457705/R9/rx_generation_barrier_receipt.json
+candidate bound: yes
+generation barrier kept a single coherent generation through every injected stop

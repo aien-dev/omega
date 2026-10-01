@@ -1,0 +1,15 @@
+{
+  "hostname": "spark-b87b",
+  "machine_id_sha256": "8383859c16f2a14ee62645efb08f9f25723377856bfdbf47b28ac3d08fb8ceb5",
+  "kernel": "7.0.0-1019-nvidia",
+  "architecture": "aarch64",
+  "midr": "0:0x00000000410fd871 1:0x00000000410fd871 10:0x00000000410fd871 11:0x00000000410fd871 12:0x00000000410fd871 13:0x00000000410fd871 14:0x00000000410fd871 15:0x00000000410fd851 16:0x00000000410fd851 17:0x00000000410fd851 18:0x00000000410fd851 19:0x00000000410fd851 2:0x00000000410fd871 3:0x00000000410fd871 4:0x00000000410fd871 5:0x00000000410fd851 6:0x00000000410fd851 7:0x00000000410fd851 8:0x00000000410fd851 9:0x00000000410fd851 ",
+  "governor_freq": "0:performance:2808000 1:performance:2808000 10:performance:2808000 11:performance:2808000 12:performance:2808000 13:performance:2808000 14:performance:2808000 15:performance:3900000 16:performance:3900000 17:performance:3900000 18:performance:3900000 19:performance:3900000 2:performance:2808000 3:performance:2808000 4:performance:2808000 5:performance:3900000 6:performance:3900000 7:performance:3900000 8:performance:3900000 9:performance:3900000 ",
+  "mem_kb": "127598748",
+  "gpu": "NVIDIA GB10, 0000000F:01:00.0, 580.173.02, 32",
+  "loadavg": "0.36 0.85 0.78 1/1416 2901899",
+  "top_cpu": "kworker/15:0-events:3.0 2.1.285:2.2 kworker/5:1-events:2.1 2.1.286:1.6 kworker/5:0-events:1.2 grafana:1.1 kworker/6:0-events:1.1 kworker/15:1-cgroup_release:1.0 kworker/16:3-cgroup_release:0.9 kworker/16:0-events:0.9 ",
+  "aienos_commit": "d39dd5bc3deb1a24e26a5059477a1342c110c71b",
+  "physics_commit": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+}

@@ -1,0 +1,19 @@
+build/r16_loop_inventory --map spec/r16-orchestrator-retirement-map.md --json build/r16-inventory.json
+WARN omega: scanned HEAD 850fc5457705 differs from map SHA 6d1ff1dbcb15972dcc5195239ddd4085e6ff6de7
+R16 loop inventory: sites=281 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS
+sh tests/r16_inventory/run.sh build/r16_loop_inventory
+ok   clean-fixture-passes (exit 0)
+ok   json-byte-stable
+ok   planted-run-until-complete-fails (exit 1)
+ok   planted-while-1-fails (exit 1)
+ok   planted-rust-tick-loop-fails (exit 1)
+ok   question-row-fails (exit 1)
+ok   omega-class-a-reachable-fails (exit 1)
+ok   stale-row-fails (exit 1)
+ok   missing-repo-skipped-fails (exit 1)
+ok   manual-row-gone-fails (exit 1)
+ok   bad-class-fails (exit 1)
+ok   class-n-passes (exit 0)
+ok   class-n-no-idiom-fails (exit 1)
+ok   class-n-wait-word-fails (exit 1)
+R16 inventory self-test: PASS

@@ -1,0 +1,15 @@
+./build/rx_r11_aien_test
+[*] no record yet: AIEN watches and publishes nothing
+[*] a steady record is predicted and confirmed; one outlier is not a failure
+[*] a failed prediction after a core-class change becomes a hypothesis and a plan
+[*] a failure with nothing else changed is drift; a second failure refutes it
+[*] a settled failure is relearned, so a later core move is still noticed
+[*] a human goal: unknown, met, unmet -> one plan, then unmet and explored
+[*] AIEN cannot write what it observes; revoked, AIEN stops and the world does not
+[*] living run: moved from Cortex-A725 to Cortex-X925, AIEN notices and Omega re-realizes
+    requests: served 416, wrong 0, timed out 0, refused 0, crumb overflow 0
+    A725 record 0 at 6831 ns; X925 under it 4865 ns; X925 new record 3f6db775476a4f99 at 2867 ns (1.69x)
+[*] control: the same move without AIEN leaves the body on the old record
+    control: A725 6672 ns, X925 after 176 more requests 4857 ns
+checks 436 failures 0
+receipt: build/qual-runs/20261001T010828Z-850fc5457705/R11/rx_aien_faculty_receipt.json

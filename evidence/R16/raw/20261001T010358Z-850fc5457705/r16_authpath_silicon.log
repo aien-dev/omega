@@ -1,0 +1,25 @@
+sh tools/r16_authpath.sh silicon build/rx_r13_living_silicon build/rx_r14_recovery_silicon \
+	build/r16/authpath/silicon-20261001T010422Z src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/runtime/rx_aien.c src/runtime/rx_omega.c src/runtime/rx_generation.c src/runtime/rx_living.c src/sha256.c src/omega_evidence.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c src/omega_program.c src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c tests/runtime/rx_r13_living.c \
+	src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
+	src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+	src/omega_blackwell_matmul.c /home/drakestapleton/workspace/hive-worktrees/physics-gate14-e95e3ed/m16/m16_native.c \
+	/home/drakestapleton/workspace/hive-worktrees/physics-gate14-e95e3ed/nvrm/nvrm.c build/aienos-authority/d39dd5b/native/capability/out/libaienos_capability.a
+R16-G3 sources: 34 files, omega and the native AIENOS capability library only
+R16-G3 link map rx_r13_living_silicon: no legacy orchestrator symbol; C runtime libraries only; SEQ world hooks present (reference, refused on production worlds): 5
+R16-G3 link map rx_r14_recovery_silicon: no legacy orchestrator symbol; C runtime libraries only; SEQ world hooks present (reference, refused on production worlds): 5
+R16-G3 strings: no legacy program name embedded
+R16-G3 exec trace r13: /bin/sh x3, build/rx_r13_living_silicon x1, /usr/bin/git x3, no legacy exec
+R16-G3   R13 costs: incumbent 6853 ns, target 3769 ns, selected 2689883 ps, reference on new cores 4562604 ps, AIEN now expects 2794 ns, goal status 2
+R16-G3   R13 costs: incumbent 6947 ns, target 3820 ns, selected 2692860 ps, reference on new cores 4562976 ps, AIEN now expects 2793 ns, goal status 2
+R16-G3   R13 control E episode: generation 1 -> 2, recovered 2; served 18432 (135 after promotion), crumbs 39913, GPU claims 16, durable links 11
+R16-G3   R13 gate: R13_LIVING_SYSTEM=PASS
+R16-G3 exec trace r14: /bin/sh x18, build/rx_r14_recovery_silicon x1, /usr/bin/git x3, /usr/bin/rm x15, no legacy exec
+R16-G3   R14 A_corrupt_candidate    PASS
+R16-G3   R14 B_forged_capability    PASS
+R16-G3   R14 C_reaction_cycle       PASS
+R16-G3   R14 D_gpu_saturation       PASS
+R16-G3   R14 E_gpu_seat_kill        PASS
+R16-G3   R14 F_checkpoint_crash     PASS
+R16-G3   R14 gate: R14_LIVING_RECOVERY=PASS
+R16 gate: R16_G3_AUTHPATH=PASS
+R16-G3 evidence: build/r16/authpath/silicon-20261001T010422Z

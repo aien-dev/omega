@@ -1,0 +1,30 @@
+./build/rx_r13_living_silicon
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 36408 passes in 50 ms, budget 1456320 (2000 ms window)
+R13 costs: incumbent 6883 ns, target 3785 ns, selected 2690976 ps, reference on new cores 4557395 ps, AIEN now expects 2983 ns, goal status 2
+R13 positive: generation 1 -> 2, recovered 2; served 1744 (132 after promotion), crumbs 3884, GPU claims 16, durable links 11
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35412 passes in 50 ms, budget 1416480 (2000 ms window)
+R13 control A: no AIEN -> no plan, no GPU experiment, no candidate, generation stays 1
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 36190 passes in 50 ms, budget 1447600 (2000 ms window)
+R13 control B: verified candidate 2 refused (RX_GEN_ERR_AUTHORITY); never in force, production stayed on the reference
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34650 passes in 50 ms, budget 1386000 (2000 ms window)
+R13 control C: revoked grant -> seat blocked on authority, no claim, no evidence; 770 requests served meanwhile
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35504 passes in 50 ms, budget 1420160 (2000 ms window)
+R13 control D: output generation changed mid-claim -> result refused, no evidence, no candidate
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35306 passes in 50 ms, budget 1412240 (2000 ms window)
+R13 control E: crashing candidate refused by the verifier; the promoted generation holds a verified one
+R13 costs: incumbent 6904 ns, target 3797 ns, selected 2696930 ps, reference on new cores 4575255 ps, AIEN now expects 3009 ns, goal status 2
+R13 control E episode: generation 1 -> 2, recovered 2; served 15825 (133 after promotion), crumbs 34309, GPU claims 16, durable links 11
+R13 gate: R13_LIVING_SYSTEM=PASS
+R13 receipt: build/qual-runs/20261001T010907Z-850fc5457705/R13/rx_living_receipt.json
