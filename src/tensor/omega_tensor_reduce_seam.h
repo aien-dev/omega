@@ -27,7 +27,7 @@
 
 /* Returns 0 or an OMEGA_NUMERIC_* code. n >= 1. */
 int omega_tensor_seam_reduce_cpu(OmegaTensorReduceOp op, const float *x, size_t n, float *out);
-/* Which build is linked: "LOCAL_E1_CPU_TIER" or "E1_WP_D_OMEGA_REDUCE_CPU". */
+/* Reduction source linked: "E1_WP_D_OMEGA_REDUCE_CPU". */
 const char *omega_tensor_seam_reduce_source(void);
 
 #endif /* OMEGA_TENSOR_REDUCE_SEAM_H */

@@ -288,7 +288,7 @@ static void test_views(void) {
     float *gp = rd(P);
     bool ok = gp != NULL;
     for (int i = 0; ok && i < 6; i++) for (int j = 0; j < 4; j++) for (int k = 0; k < 5; k++)
-        ok = gp[(i * 4 + j) * 5 + k] == d[(j * 5 + k) * 6 + i];
+        ok = ok && (gp[(i * 4 + j) * 5 + k] == d[(j * 5 + k) * 6 + i]);
     CHECK(ok, "permute values");
     free(gp);
     /* slice [1:4:2, 0:5:2, 2:6] then transpose last two */
@@ -301,7 +301,7 @@ static void test_views(void) {
     float *gts = rd(TS);
     ok = gts != NULL;
     for (int a = 0; ok && a < 2; a++) for (int k = 0; k < 4; k++) for (int j = 0; j < 3; j++)
-        ok = gts[(a * 4 + k) * 3 + j] == d[((1 + 2 * a) * 5 + 2 * j) * 6 + 2 + k];
+        ok = ok && (gts[(a * 4 + k) * 3 + j] == d[((1 + 2 * a) * 5 + 2 * j) * 6 + 2 + k]);
     CHECK(ok, "transpose of slice values");
     free(gts);
     /* slice of transpose == transpose of slice */
@@ -318,7 +318,7 @@ static void test_views(void) {
     float *gv2 = rd(V2);
     ok = gv2 != NULL;
     for (int k = 0; ok && k < 2; k++) for (int j = 0; j < 2; j++)  /* a=1, k+1, j+1 */
-        ok = gv2[k * 2 + j] == d[((1 + 2 * 1) * 5 + 2 * (j + 1)) * 6 + 2 + (k + 1)];
+        ok = ok && (gv2[k * 2 + j] == d[((1 + 2 * 1) * 5 + 2 * (j + 1)) * 6 + 2 + (k + 1)]);
     CHECK(ok, "view of view of view values");
     free(gv2);
     OmegaTensorInfo i2;
@@ -353,7 +353,7 @@ static void test_views(void) {
     omega_tensor_transpose(g, KB, &KBT);
     float *gk = rd(KBT);
     ok = gk != NULL;
-    for (int i = 0; ok && i < 6; i++) for (int j = 0; j < 4; j++) ok = gk[i * 4 + j] == col[j];
+    for (int i = 0; ok && i < 6; i++) for (int j = 0; j < 4; j++) ok = ok && (gk[i * 4 + j] == col[j]);
     CHECK(ok, "transpose of zero-stride view");
     free(gk);
     CHECK(omega_tensor_reshape(g, KB, 1, (uint64_t[]){24}, &Z) == OMEGA_TENSOR_ERR_NOT_CONTIGUOUS,
@@ -424,6 +424,8 @@ static void test_generations(void) {
     OmegaTensorCtx *c1;
     CHECK(omega_tensor_ctx_create(1, omega_tensor_cpu_realization(), &c1) == 0, "ctx cap 1");
     CHECK(omega_tensor_test_set_storage_generation(c1, 0, UINT64_MAX - 1) == 0, "set gen");
+    CHECK(omega_tensor_test_set_storage_generation(c1, 0, 5) == OMEGA_TENSOR_ERR_BAD_ARGS, "set gen rollback refused (free slot)");
+    CHECK(omega_tensor_test_set_storage_generation(c1, 0, UINT64_MAX - 1) == OMEGA_TENSOR_ERR_BAD_ARGS, "set gen same value refused");
     OmegaTensor t1, t2, t3;
     omega_tensor_from_f32(c1, 2, s, d, &t1);
     OmegaTensorInfo i1;

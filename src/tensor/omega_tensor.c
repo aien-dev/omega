@@ -84,6 +84,7 @@ int omega_tensor_last_numeric_error(const OmegaTensorCtx *ctx) { return ctx ? ct
 int omega_tensor_test_set_storage_generation(OmegaTensorCtx *ctx, uint32_t slot, uint64_t gen) {
     if (!ctx || slot >= ctx->cap || gen == 0) return OMEGA_TENSOR_ERR_BAD_ARGS;
     if (ctx->st[slot].live || ctx->st[slot].retired) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    if (gen <= ctx->st[slot].gen) return OMEGA_TENSOR_ERR_BAD_ARGS;  /* forward only: a rollback would revive stale handles (Codex) */
     ctx->st[slot].gen = gen;
     return OMEGA_TENSOR_OK;
 }

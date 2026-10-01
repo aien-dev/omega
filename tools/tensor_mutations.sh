@@ -21,6 +21,14 @@ BCAST_ZERO_STRIDE|omega_tensor.c|s/o.strides\[d\] = 0;/o.strides[d] = in->stride
 PERMUTE_STRIDES|omega_tensor.c|s/in->strides\[perm\[d\]\]/in->strides[d]/
 SLICE_OFFSET|omega_tensor.c|s/start\[d\], in->strides\[d\]/start[d], 1/'
 
+# Baseline: the unmutated build must PASS, otherwise every mutant would
+# look "caught" (e.g. the test refusing an unsuitable FP environment).
+if ! gcc $FLAGS -Isrc -Isrc/tensor -o "$SCRATCH/base" tests/test_omega_tensor.c \
+    src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor/omega_tensor_reduce_seam.c $DEPS \
+    > "$SCRATCH/base.log" 2>&1 || ! "$SCRATCH/base" > "$SCRATCH/base.run" 2>&1; then
+    head -5 "$SCRATCH/base.log" "$SCRATCH/base.run" 2>/dev/null
+    echo "tensor mutation sweep: FAIL (unmutated baseline does not pass)"; exit 1
+fi
 fail=0
 total=0
 old_ifs=$IFS
