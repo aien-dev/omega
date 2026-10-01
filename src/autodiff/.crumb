@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/autodiff",
+  "layer": "src/autodiff",
+  "purpose": "M21 OMEGA_AUTODIFF: reverse-mode tape over M20 tensor CPU ops, caller-owned nodes and scratch, per-op error contract, flat float32 gradients for M22 (not qualified)",
+  "invariants": [
+    "never edit src/tensor or src/train from here; tensor API needs are filed as change requests in docs/autodiff/M21_OMEGA_AUTODIFF.md",
+    "no heap allocation and no global state in src/autodiff",
+    "every MUT: marker must stay in tools/autodiff_mutations.sh"
+  ]
+}

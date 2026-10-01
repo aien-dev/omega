@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "docs/autodiff",
+  "layer": "docs",
+  "purpose": "M21 OMEGA_AUTODIFF scope, op and error-contract table, status (not qualified)"
+}
