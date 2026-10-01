@@ -1,0 +1,43 @@
+{
+  "schema": "omega.osc0b.model.receipt.v1",
+  "verdict": "PASS",
+  "gate": "OSC-0B exit: II.11 model rejects every named invalid transition across >= 10^6 seeded random sequences, zero false accepts",
+  "repo_commit": "6283a67a341f2988a9f011c3e7ee4cbe4e93f0b7",
+  "tree_clean": true,
+  "host_arch": "aarch64",
+  "compiler": "cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "seed": "0x05c0b5eed0010001",
+  "sequences": 1000000,
+  "valid_sequences": 249448,
+  "steps": 21905422,
+  "false_accepts": 0,
+  "wrong_name": 0,
+  "false_rejects": 0,
+  "sweep_digest": "7acef55477b7d971",
+  "unit_cases": 68,
+  "unit_failed": 0,
+  "classes": {
+    "use-after-move": {"injected": 58076, "rejected_correct": 58076, "rejected_wrong_name": 0, "accepted": 0},
+    "use-after-release": {"injected": 57680, "rejected_correct": 57680, "rejected_wrong_name": 0, "accepted": 0},
+    "double-release": {"injected": 57515, "rejected_correct": 57515, "rejected_wrong_name": 0, "accepted": 0},
+    "stale-generation": {"injected": 57696, "rejected_correct": 57696, "rejected_wrong_name": 0, "accepted": 0},
+    "generation-wrap": {"injected": 57733, "rejected_correct": 57733, "rejected_wrong_name": 0, "accepted": 0},
+    "mutable-alias": {"injected": 57882, "rejected_correct": 57882, "rejected_wrong_name": 0, "accepted": 0},
+    "borrow-outlives-owner": {"injected": 58008, "rejected_correct": 58008, "rejected_wrong_name": 0, "accepted": 0},
+    "arena-escape": {"injected": 57668, "rejected_correct": 57668, "rejected_wrong_name": 0, "accepted": 0},
+    "reclaim-without-quiesced": {"injected": 57777, "rejected_correct": 57777, "rejected_wrong_name": 0, "accepted": 0},
+    "read-before-observe": {"injected": 57728, "rejected_correct": 57728, "rejected_wrong_name": 0, "accepted": 0},
+    "publish-without-release": {"injected": 57767, "rejected_correct": 57767, "rejected_wrong_name": 0, "accepted": 0},
+    "forged-rights": {"injected": 57264, "rejected_correct": 57264, "rejected_wrong_name": 0, "accepted": 0},
+    "live-handle-durable": {"injected": 57758, "rejected_correct": 57758, "rejected_wrong_name": 0, "accepted": 0}
+  },
+  "sanitizer_run": {"flags": "-fsanitize=address,undefined -fno-sanitize-recover=all", "sequences": 1000000, "result": "OSC0B_MODEL_PASS", "digest_matches_plain": true},
+  "sources_sha256": {
+    "src/compiler/model/osc_model.h": "8c1225c64d3e2999234b6d8cdd91a24ca625ddee689ede8a7b1fef5feacb0006",
+    "src/compiler/model/osc_model.c": "fe0330e6e2e8f658df81a2c9e6d38f4227f121f764634b4be772d02c8ffa3319",
+    "src/compiler/model/osc_model_gen.h": "239ef9bed262222ae1b430eac5cf12c1b886430371c06817ebad3f500187e556",
+    "src/compiler/model/osc_model_gen.c": "87cabaa2a03e1998b94acc88b58410b7d567a6d4dbf0efb930d3e70e3e25f0f0",
+    "tests/compiler/test_osc_model.c": "805dc24d290283c4d43de388b934e7a5dd23cf7f24c7c6a46bdc169c2f496937"
+  },
+  "timing_measured": false
+}
