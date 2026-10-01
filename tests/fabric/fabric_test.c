@@ -298,6 +298,7 @@ static void scenario(uint8_t out[4][32]) {
     CHECK(fab_member_live(&h->node[A], &h->id[C], t1), "C live again");
     v = deliver(h, A, join_c1, join_c1_len, t1);
     CHECK(v.code == FAB_E_STALE_GEN, "stale-generation JOIN refused (%s)", fab_strerror(v.code));
+    CHECK(fab_member(&h->node[A], &h->id[C])->generation == 2, "membership did not roll back");
     /* Re-advertise under generation 2: the withdrawn entry comes back. */
     register_own(h, C, 0, 301, 1);
     CHECK(fab_advertise(&h->node[C], &h->own[C][0], CQ_WIRE_ADVERTISE, t1) == FAB_OK, "C re-adv");
