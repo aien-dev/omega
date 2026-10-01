@@ -114,6 +114,7 @@ const char *rx_crumb_kind_name(RxCrumbKind k) {
     case RX_CRUMB_NOOP: return "NOOP";
     case RX_CRUMB_RETIRE: return "RETIRE";
     case RX_CRUMB_QUARANTINE: return "QUARANTINE";
+    case RX_CRUMB_CANCELLED: return "CANCELLED";
     default: return "?";
     }
 }
@@ -1466,6 +1467,23 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         k.t_end_ns = now_ns();
         crumb_append(w, &k);
         w->stats.failed++;
+        end_activation(w, rid);
+        return;
+    }
+
+    /* HD-09 resource contract v0, first enforcement cut (aien-architecture
+     * docs/hardening/resource-contract-v0.md section 5): a declared deadline
+     * is enforced before publishing. Same comparison as charge(): strictly
+     * greater than the logical tick. The proposals in ctx.out are never
+     * staged, so nothing late is published; end_activation refunds the
+     * charge once. A function that never returns is not covered here. */
+    if (d->need.deadline && w->budget.logical_tick > d->need.deadline) {
+        set_state(w, r, RX_CANCELLED);
+        k.kind = RX_CRUMB_CANCELLED;
+        k.reason = RX_ERR_DEADLINE;
+        k.t_end_ns = now_ns();
+        crumb_append(w, &k);
+        w->stats.deadline_cancelled++;
         end_activation(w, rid);
         return;
     }

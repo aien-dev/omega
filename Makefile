@@ -281,6 +281,21 @@ $(RX_TEST): $(RX_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 test-r3: $(RX_TEST)
 	./$(RX_TEST)
 
+# HD-09 resource contract v0, first enforcement cut: a declared deadline is
+# enforced before publishing (late reaction cancelled, nothing published,
+# charge refunded once). CPU only, same links as R3 minus the heartbeat test.
+RX_DEADLINE_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/sha256.c src/omega_evidence.c tests/runtime/rx_deadline_cancel.c
+RX_DEADLINE_TEST = $(OUT_DIR)/rx_deadline_cancel
+
+$(RX_DEADLINE_TEST): $(RX_DEADLINE_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
+	src/runtime/omega_shared_world_abi.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_DEADLINE_SRCS)
+
+.PHONY: test-rx-deadline-cancel
+test-rx-deadline-cancel: $(RX_DEADLINE_TEST)
+	./$(RX_DEADLINE_TEST)
+
 # Omega semantic variables and incremental recomputation
 # (gate OMEGA_INCREMENTAL_SEMANTICS_PASS). CPU only, same links as R3.
 RX_SEM_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
