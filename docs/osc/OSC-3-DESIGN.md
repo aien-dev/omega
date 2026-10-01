@@ -47,11 +47,13 @@ budget. It is split:
 The quick wall time is measured inside every OSC-3 receipt
 (`test_compiler_quick.wall_seconds`, binaries already built).
 
-CI: the `compiler` job in `.github/workflows/host-suites.yml` runs on pull
-requests (quick always on compiler paths, full when `src/compiler/` or
-`src/aarch64_*` changes). `.github/workflows/compiler-main.yml` re-runs quick
-and full on every push to main that touches the compiler paths (the 2026-10-01
-audit found the compiler suites never ran after merge).
+CI: the `compiler` job in `.github/workflows/host-suites.yml` runs quick on
+every pull request touching the compiler paths and full when `src/compiler/`
+or `src/aarch64_*` changes. Since omega #154 (Lane 34) the workflow also runs
+on every push to main, and the compiler job then runs quick and full, so main
+has its own post-merge result (the 2026-10-01 audit found the compiler suites
+never ran after merge). An earlier draft of this item added a separate
+`compiler-main.yml` for this; it was dropped as redundant after #154.
 
 ## Generation width: remaining 32-bit sites and fix plan
 
