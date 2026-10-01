@@ -70,7 +70,10 @@ done
 note "sources: $# files, omega, the native AIENOS capability library and ARGUS pinned by argus.lock only"
 
 # 2. link map ----------------------------------------------------------------
-legacy_sym='legacy_oracle|run_demonstration|omega_run_m[0-9]+_gates|omega_run_m4_gates|rx_seq_pulse|rx_seq_run_until_complete|run_until_complete|^_ZN|^_R[a-zA-Z0-9]|rust_|__rust|aegis_runtime|spark_aegis|sovereign|aien_runtime_spine|AienRuntimeSpine'
+# Rust runtime symbols are rust_* or __rust_*, so "rust_" is matched only at a
+# word start: a substring match also hit ARGUS trust symbols (det_trust_escalation,
+# trust_rank_tab), which are C. Mangled Rust (_ZN, _R...) is still refused.
+legacy_sym='legacy_oracle|run_demonstration|omega_run_m[0-9]+_gates|omega_run_m4_gates|rx_seq_pulse|rx_seq_run_until_complete|run_until_complete|^_ZN|^_R[a-zA-Z0-9]|(^|_)rust_|__rust|aegis_runtime|spark_aegis|sovereign|aien_runtime_spine|AienRuntimeSpine'
 for b in "$r13" "$r14"; do
     [ -x "$b" ] || fail "binary missing: $b"
     n=$(basename "$b")
