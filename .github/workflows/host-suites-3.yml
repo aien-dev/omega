@@ -32,6 +32,7 @@ on:
       - 'tools/omegatool.c'
       - 'tests/test_omega_transc.c'
       - 'tests/language/**'
+      - 'tests/run_m*_gates.sh'
       - 'docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md'
 
 jobs:
