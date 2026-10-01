@@ -16,7 +16,8 @@ test-machine-identity: $(AIEN_MID_TEST)
 # its events (checked in the summary); a malformed one keeps ARGUS from starting.
 # Needs the ARGUS/aienos sources (see ARGUS_REPO, AIENOS_LOCK_REPO); not in CI.
 .PHONY: test-machine-identity-argus
-test-machine-identity-argus: $(AIEN_MID_TEST) $(ARGUS_R7)
+test-machine-identity-argus: $(AIEN_MID_TEST)
+	@$(MAKE) --no-print-directory $(ARGUS_R7)
 	@set -e; d=$$(mktemp -d); t=$$($(abspath $(AIEN_MID_TEST)) --kat-text); \
 	RX_ARGUS_MACHINE_ID=$$t RX_ARGUS_CONSUMER=ingest RX_ARGUS_SUMMARY=$$d/ok.json ./$(ARGUS_R7) > $$d/ok.log 2>&1; \
 	grep -q '"machine_id": "b3d2c32ee1a3ef5803e1cc604943dc8189fda2f5ea90bb5158eecc0acf5ff366"' $$d/ok.json; \
