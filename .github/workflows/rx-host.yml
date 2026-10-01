@@ -98,7 +98,7 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
-        run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph test-state-projection test-capability-query test-capability-graph test-semantic-comm test-cognitive-routing test-sem-incremental test-cortex test-jspace-prod
+        run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph test-state-projection test-capability-query test-capability-graph test-skillroute-compose test-semantic-comm test-cognitive-routing test-sem-incremental test-cortex test-jspace-prod
       - name: Canonical machine identity (M20)
         run: make test-machine-identity
       - name: Effect capability generations are 64-bit end to end (OMEGA_EFFECT_CAP64)
