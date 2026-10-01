@@ -804,6 +804,15 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
         m16_native_close(&ctx);
         return OMEGA_NUMERIC_ERR_DEVICE;
     }
+    /* The host marker can land before the last CTAs' stores are visible: the
+     * first chip run (receipt 88930d2f...) read the 0x55 fill pattern for
+     * 49,359,680 SQRT outputs. Read only after the QMD's own release
+     * semaphore (written after the grid completes, with its membar) is 6. */
+    if (m16_native_wait_marker(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000) != 0) {
+        m16_native_close(&ctx);
+        return OMEGA_NUMERIC_ERR_DEVICE;
+    }
+    __asm__ volatile("dsb sy" ::: "memory");
     memcpy(out, out_mem.cpu, count * 4);
     m16_native_close(&ctx);
     return OMEGA_NUMERIC_OK;

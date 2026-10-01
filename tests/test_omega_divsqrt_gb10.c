@@ -381,6 +381,7 @@ static int host_div(uint64_t n) {
 static int chip(void) {
     uint32_t *a = malloc((size_t)BATCH * 4), *b = malloc((size_t)BATCH * 4), *o = malloc((size_t)BATCH * 4);
     if (!a || !b || !o) return 2;
+    uint64_t dv_fill = 0, sq_fill = 0; /* mismatches that still hold the 0x55555555 fill: never written */
     uint64_t sq_checked = 0, sq_bad = 0, dv_checked = 0, dv_bad = 0, dv_edges = 0, dv_math_bad = 0, sq_math_bad = 0;
     int dev_err = 0;
     /* DIV: batch 0 starts with the corpus and the edge set */
@@ -392,7 +393,7 @@ static int chip(void) {
         if (rc != OMEGA_NUMERIC_OK) { printf("    DIV batch %d: device rc %d\n", bi, rc); dev_err = 1; break; }
         for (size_t k = 0; k < BATCH; k++) {
             uint32_t w = want_bits(OMEGA_DS_DIV, a[k], b[k]);
-            if (o[k] != w) { if (dv_bad < 16) printf("    DIV 0x%08x / 0x%08x: chip 0x%08x want 0x%08x\n", a[k], b[k], o[k], w); dv_bad++; }
+            if (o[k] != w) { dv_fill += o[k] == 0x55555555u; if (dv_bad < 16) printf("    DIV 0x%08x / 0x%08x: chip 0x%08x want 0x%08x\n", a[k], b[k], o[k], w); dv_bad++; }
             if (o[k] != omega_ds_cpu_semantic(OMEGA_DS_DIV, a[k], b[k])) dv_math_bad++;
         }
         dv_checked += BATCH;
@@ -406,7 +407,7 @@ static int chip(void) {
         if (rc != OMEGA_NUMERIC_OK) { printf("    SQRT batch %u: device rc %d\n", bi, rc); dev_err = 1; break; }
         for (uint32_t k = 0; k < BATCH; k++) {
             uint32_t w = want_bits(OMEGA_DS_SQRT, a[k], 0);
-            if (o[k] != w) { if (sq_bad < 16) printf("    SQRT 0x%08x: chip 0x%08x want 0x%08x\n", a[k], o[k], w); sq_bad++; }
+            if (o[k] != w) { sq_fill += o[k] == 0x55555555u; if (sq_bad < 16) printf("    SQRT 0x%08x: chip 0x%08x want 0x%08x\n", a[k], o[k], w); sq_bad++; }
             if (o[k] != omega_ds_cpu_semantic(OMEGA_DS_SQRT, a[k], 0)) sq_math_bad++;
         }
         sq_checked += BATCH;
@@ -414,10 +415,10 @@ static int chip(void) {
     }
     const char *dv = dev_err && dv_checked < (uint64_t)BATCH * (DIV_RANDOM_BATCHES + 1) ? "NOT_RUN" : dv_bad || dv_math_bad ? "FAIL" : "PASS";
     const char *sq = dev_err ? "NOT_RUN" : sq_bad || sq_math_bad ? "FAIL" : "PASS";
-    printf("RESULT chip DIV checked=%" PRIu64 " edge_and_corpus=%" PRIu64 " mismatches=%" PRIu64 " mismatches_vs_omega_math=%" PRIu64 " seed=0x9e3779b97f4a7c15 verdict=%s\n",
-           dv_checked, dv_edges, dv_bad, dv_math_bad, dv);
-    printf("RESULT chip SQRT checked=%" PRIu64 " mismatches=%" PRIu64 " mismatches_vs_omega_math=%" PRIu64 " verdict=%s\n",
-           sq_checked, sq_bad, sq_math_bad, sq);
+    printf("RESULT chip DIV checked=%" PRIu64 " edge_and_corpus=%" PRIu64 " mismatches=%" PRIu64 " mismatches_vs_omega_math=%" PRIu64 " unwritten=%" PRIu64 " seed=0x9e3779b97f4a7c15 verdict=%s\n",
+           dv_checked, dv_edges, dv_bad, dv_math_bad, dv_fill, dv);
+    printf("RESULT chip SQRT checked=%" PRIu64 " mismatches=%" PRIu64 " mismatches_vs_omega_math=%" PRIu64 " unwritten=%" PRIu64 " verdict=%s\n",
+           sq_checked, sq_bad, sq_math_bad, sq_fill, sq);
     const char *v = (!strcmp(dv, "PASS") && !strcmp(sq, "PASS")) ? "PASS" : (!strcmp(dv, "FAIL") || !strcmp(sq, "FAIL")) ? "FAIL" : "NOT_RUN";
     printf("VERDICT %s\n", v);
     free(a); free(b); free(o);
