@@ -2,6 +2,8 @@
 
 Update 2026-09-30: R16 is CLOSED (omega#112, `3dd5eaa`, all gates G1 to G8 PASS) and the `src/runtime/` edit freeze is LIFTED (aien-architecture #70, `e89ba94`). Statements below that the runtime is frozen "until R16" describe the state when this was written.
 
+Correction 2026-10-01 (recorded now, not at merge time): omega#112 (merge `3dd5eaa`) merged while the evidence-immutable check was FAILED (run 36799862685, head `6831117`), because `evidence/R16/inventory.json` was edited in place by commits `1edb56b` and `6831117`. The exception was not recorded at the time. The R16 receipt `evidence/R16/22d7a79a985514ac38139d39c71c9638d9b6b0a6e05425b6810bdb4833d1ea64.json` is QUALIFIED at candidate `850fc545` only. All R13 to R16 candidate-bound receipts predate omega#126 (`4f8485b`), so the current living build is IMPLEMENTED / NOT QUALIFIED and re-qualification is owed.
+
 Date 2026-09-29. Read-only: nothing built, run or edited. Ground truth = code. README/roadmaps = navigation only.
 
 ## 0. Pins

@@ -27,7 +27,7 @@ from the sealed Wave 1 records (section 2 row "EXP-002A to D", section 7). No ev
 | EXP-002D (Brownian) | INCOMPLETE | one hostile rule is not evaluable with the Wave 1 prediction format; 0 wrong verdicts on the rules that were evaluated |
 | interventional replication (Brownian) | PASS | profile v1.3, fresh sealed worlds |
 | EXP-003 | BLOCKED | needs a separate Wave 2 contract (draft under review, not accepted, not frozen) and must seal after BRN-10 |
-| R16 (orchestrator retirement) | CLOSED | omega#112 merged (`3dd5eaa`), gates G1 to G8 PASS (update 2026-09-30; section 4 keeps the earlier audit) |
+| R16 (orchestrator retirement) | CLOSED at candidate `850fc545`; living build IMPLEMENTED / NOT QUALIFIED | omega#112 merged (`3dd5eaa`), gates G1 to G8 PASS at that candidate (update 2026-09-30); merged with evidence-immutable FAILED, re-qualification owed (see the 2026-10-01 reconciliation section at the end) |
 | TURING wired into the live runtime | NOT STARTED | the runtime edit freeze was lifted (aien-architecture #70); no wiring work exists yet |
 
 Highest claim level supported (protocol claim ladder, section 6): **Level 2** (Brownian scope, instrument certification only; see section 6). Outside the Brownian scope the ceiling stays Level 1.
@@ -138,3 +138,17 @@ INCOMPLETE). The TY-2 bits result does not change the ceiling.
   planned; on its own it would be an independent implementation, not an external replication, and may not be enough for Level 8 (decided when it runs).
 - Section 5 is a planned order of work for TURING. Brownian Wave 1 ran as its own program, so its results above
   do not mean the earlier steps in section 5 are complete.
+
+## Reconciliation 2026-10-01 (omega main `07004a8`)
+
+Rows verified against merged PRs and open PR state. Nothing here upgrades a status.
+
+| Item | State | Evidence |
+|---|---|---|
+| E1 numerical closure | PARTIAL, not closed; 2 of 6 exit requirements met | `docs/numeric/E1_GAP_TABLE.md` status summary; #152 `07004a8` (Gate 5 PASS 26/26, 47 parity lines incl. DIV and SQRT) |
+| OSC-1 and OSC-2 | IMPLEMENTED / NOT QUALIFIED; host receipts only; not self-hosting; no general compiler | #148 `0abdb08`, #149 `845dce4`, #150 `c773622`, #151 `7e713e3`; addendum in `docs/osc/OSC-1-SELF-HOST-STATEMENT.md` |
+| R16 | CLOSED at candidate `850fc545` only; living build IMPLEMENTED / NOT QUALIFIED, re-qualification owed | #112 `3dd5eaa` merged with evidence-immutable FAILED (run 36799862685); `evidence/R16/inventory.json` edited in place by `1edb56b` and `6831117`; receipt `evidence/R16/22d7a79a...json`; all R13 to R16 candidate-bound receipts predate #126 `4f8485b` |
+| EST-3 | FAILED on main: v1 (#105), v2 (#118), v3 (#129 `d78fd11`, binding fit Phase A FAIL, sealed run NOT_RUN) | v4 attempt open as #153; attempts 1 and 2 void, no verdict yet |
+| M20 OMEGA_TENSOR | Not merged; open draft #136, not qualified, E1 open | PR #136 |
+| M22 substrate | NOT QUALIFIED per its own receipt and doc | #140 `54826a3`; `docs/train/M22_SUBSTRATE.md`; `evidence/M22/receipts/eaa0cdea...json` |
+| PATH-1 | FAILED EXPERIMENT (M1) | see `spec/path-semantic-object.md`, note 2026-10-01 |
