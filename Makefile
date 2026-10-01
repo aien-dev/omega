@@ -1322,3 +1322,41 @@ test-path: $(PATH1_TEST_BIN)
 	sh tests/path/check_path_boundary.sh
 	./$(PATH1_TEST_BIN)
 	CC="$(CC)" sh tests/path/mutate.sh
+
+# COMPOSITION-2: one World, one causal path (rx_compose). test-composition
+# runs every fault point in process and as a crashed child, the OLD-or-NEW
+# recovery, authority refusals and the Cortex record (WP-B, WP-C).
+# test-composition-gate runs the 14-step gate in fresh directories; the
+# receipt is written by tools/composition_gate.sh from a clean tree (WP-E).
+RX_COMPOSE_SRCS = src/runtime/rx_compose.c src/runtime/rx_jspace.c src/runtime/rx_caproot.c \
+	src/runtime/rx_world.c src/runtime/rx_coherent.c src/runtime/rx_native_bind.c \
+	src/runtime/rx_aegis.c src/runtime/rx_cortex_record.c src/runtime/aien_machine_id.c \
+	src/sha256.c src/omega_evidence.c src/omega_core.c src/omega_canonical.c
+RX_COMPOSE_DEPS = $(RX_COMPOSE_SRCS) $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ) $(RX_CAPQ_OBJ) \
+	$(RX_GRAPH_OBJ) src/runtime/rx_compose.h tests/runtime/rx_compose_fixture.h \
+	src/runtime/rx_world.h src/runtime/rx_jspace.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB)
+RX_COMPOSE_LINK = $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ) $(RX_CAPQ_OBJ) $(RX_GRAPH_OBJ) \
+	$(AIENOS_CAP_LIB) -lm
+RX_COMPOSE_TEST = $(OUT_DIR)/rx_compose_test
+RX_COMPOSE_GATE = $(OUT_DIR)/rx_composition_gate
+
+$(RX_COMPOSE_TEST): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_test.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_test.c \
+		$(RX_COMPOSE_LINK)
+
+$(RX_COMPOSE_GATE): $(RX_COMPOSE_DEPS) tests/runtime/rx_composition_gate.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_composition_gate.c \
+		$(RX_COMPOSE_LINK)
+
+test-composition: $(RX_COMPOSE_TEST)
+	./$(RX_COMPOSE_TEST)
+
+test-composition-gate: $(RX_COMPOSE_GATE)
+	./$(RX_COMPOSE_GATE) "$$(git rev-parse HEAD)" $(OUT_DIR)/composition_gate_receipt.json
+
+composition-gate-bin: $(RX_COMPOSE_GATE)
+
+print-composition-gate-bin:
+	@echo $(RX_COMPOSE_GATE)
+
+.PHONY: test-composition test-composition-gate composition-gate-bin print-composition-gate-bin

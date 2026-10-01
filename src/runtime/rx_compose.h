@@ -41,6 +41,14 @@
 #define RXC_K 2u                      /* alternatives explored per goal */
 #define RXC_UNIT 4096u
 #define RXC_CRASH_EXIT 77             /* exit code of an injected crash */
+#define RXC_NONE 0xFFFFFFFFu          /* verdict: no winner */
+
+/* World object slots, created in this order at every open; the Cortex
+ * subject of a World record is slot + 1 (rx_cortex_record.h). Composition
+ * records (candidates, evidence, promotion, admissions) are about the state
+ * object, so they share its subject. */
+enum { RXC_SLOT_GOAL = 0, RXC_SLOT_CAND0, RXC_SLOT_CAND1, RXC_SLOT_VERDICT, RXC_SLOT_STATE };
+#define RXC_CX_SUBJECT(slot) ((uint64_t)(slot) + 1u)
 
 /* Fault points on the path, in causal order. */
 enum {
@@ -57,6 +65,23 @@ enum {
 
 /* Admission tags (CX_K_ADMISSION.tag). */
 enum { RXC_ADMIT_LOSER = 1, RXC_ADMIT_ROLLBACK = 2, RXC_ADMIT_RECOVERED = 3 };
+
+/* Composition record payloads (subject RXC_CX_SUBJECT(RXC_SLOT_STATE)).
+ *   CX_K_CANDIDATE  (CLAIM)     tag = Cortex id of the goal record;
+ *                               links {candidate World record, goal record}
+ *   CX_K_EVIDENCE_REF (EVIDENCE, VERIFY_EVIDENCE) tag = goal record;
+ *                               links {verdict World record, claim 0, claim 1,
+ *                               state World record or 0}
+ *   CX_K_PROMOTION  cx_promote(winner claim, evidence)
+ *   CX_K_ADMISSION  tag = RXC_ADMIT_*; LOSER links {loser claim, evidence},
+ *                   ROLLBACK links {refused state record}, RECOVERED links
+ *                   {state record, evidence} */
+enum { RXC_CP_K = 0, RXC_CP_REF, RXC_CP_RESULT, RXC_CP_SKILL, RXC_CP_INPUT, RXC_CP_GOALSEQ,
+       RXC_CP_PASS, RXC_CP_DIGEST0, RXC_CP_SKILLDIG0 = RXC_CP_DIGEST0 + 4,
+       RXC_CP_WORDS = RXC_CP_SKILLDIG0 + 4 };
+enum { RXC_EP_WINNER = 0, RXC_EP_WREF, RXC_EP_LREF, RXC_EP_PASSMASK, RXC_EP_RESULT,
+       RXC_EP_GOALSEQ, RXC_EP_VERIFIER, RXC_EP_WDIGEST0, RXC_EP_WORDS = RXC_EP_WDIGEST0 + 4 };
+enum { RXC_AP_REF = 0, RXC_AP_GOAL, RXC_AP_K, RXC_AP_WORDS };
 
 /* Verdict object fields. */
 enum { RXC_V_WINNER = 0, RXC_V_WREF, RXC_V_LREF, RXC_V_PASSMASK, RXC_V_GOAL, RXC_V_RESULT };
@@ -92,6 +117,7 @@ typedef struct {
     uint64_t goal_crumb;               /* EXTERNAL crumb of the goal */
     uint32_t reclaimed;                /* staged branches reclaimed at settle */
     uint8_t winner_digest[32];         /* J-Space content digest of the committed branch */
+    uint32_t prior_completed;          /* records of an earlier failed record completed first */
 } RxcResult;
 
 enum {
@@ -113,13 +139,19 @@ typedef struct RxCompose {
     AienosCapAdmin *admin;
     uint64_t session;
     RxObjRef goal, cand[RXC_K], verdict, state;
-    RxCapRef c_ext;
     uint32_t rx_cand[RXC_K], rx_verify, rx_commit;
     uint64_t seq;
     /* recovery report of the last open */
     JsBranchRef recovered;
     uint64_t recovered_record;         /* Cortex id naming it */
     uint32_t rolled_back;              /* newer records refused (rollback admissions) */
+    uint32_t recovered_completed;      /* composition records completed at open (0 = none missing) */
+    /* in-process state after RECORD_FAILED / NOT_DURABLE (cleared at open) */
+    int pending;                       /* 0 none; 1 record to complete first; 2 refuse: reopen */
+    int pend_released;                 /* the superseded branch was already released */
+    uint64_t pend_S, pend_V;
+    JsBranchRef pend_old;
+    uint8_t pend_cdig[RXC_K][32];
     /* fault injection */
     int fault_point;
     int fault_crash;                   /* 1: _exit(RXC_CRASH_EXIT); 0: fail in process */
@@ -127,6 +159,13 @@ typedef struct RxCompose {
     int fault_hit;
     /* per-run scratch read by reactions */
     uint64_t run_input;
+    uint32_t n_routes;
+    SrRoute run_route[RXC_K];
+    /* authority minted at open (one per step, rights of that step only) */
+    RxCapRef cap_ext, cap_cand[RXC_K][3], cap_verify[4], cap_commit[2];
+    struct RxcCandUser { struct RxCompose *c; uint32_t k; } cand_user[RXC_K];
+    int attached;                      /* Cortex recorder attached to w */
+    int test_rogue_candidate;          /* test hook: candidate 0 also proposes a state write */
 } RxCompose;
 
 /* Open (or create) the composition in `dir`: machine identity must match the
@@ -137,7 +176,10 @@ int  rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, u
                      const SrRouter *router, RxcContract contract, AienosCapAdmin *admin,
                      AienosCapView *view, uint32_t n_workers);
 /* One goal through the whole path. Returns RX_OK with out->outcome set, or a
- * negative error (an injected in-process fault shows in outcome instead). */
+ * negative error (an injected in-process fault shows in outcome instead).
+ * After RXC_OUT_RECORD_FAILED the next run first completes that record (and
+ * releases the superseded branch); if it cannot, it returns RX_ERR_REPLAY.
+ * After RXC_OUT_NOT_DURABLE every run returns RX_ERR_REPLAY until reopened. */
 int  rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const CqHeld *held,
                     uint64_t now_us, RxcResult *out);
 void rx_compose_close(RxCompose *c);
