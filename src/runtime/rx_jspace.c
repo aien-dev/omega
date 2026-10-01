@@ -13,6 +13,10 @@
  */
 #include "rx_jspace.h"
 #include "sha256.h"
+#include "aien_machine_id.h"
+
+/* JsHome.machine carries AienMachineId bytes (aien_mid_to_slot / aien_mid_from_slot). */
+_Static_assert(JS_MACHINE_ID_BYTES == AIEN_MID_ID_BYTES, "JsHome.machine must match AienMachineId width");
 
 #include <errno.h>
 #include <fcntl.h>

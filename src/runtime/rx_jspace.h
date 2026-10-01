@@ -89,7 +89,7 @@ typedef struct { uint8_t b[32]; } JsSemId;
  * implemented: mutating a branch whose home is not JS_HOME_LOCAL, and
  * reading non-resident units of a REMOTE_OWNED branch, fail JS_ERR_REMOTE.
  */
-#define JS_MACHINE_ID_BYTES 32u   /* placeholder width; replace with the canonical identity */
+#define JS_MACHINE_ID_BYTES 32u   /* == AIEN_MID_ID_BYTES; holds AienMachineId bytes (placement is still a placeholder) */
 
 typedef enum {
     JS_HOME_LOCAL = 0,          /* owned and authoritative on this machine */
