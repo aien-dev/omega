@@ -309,7 +309,7 @@ static int dump(const char *dir) {
         uint8_t code[OMEGA_DS_MAX_CODE_BYTES];
         size_t len = 0;
         char path[512];
-        static const char *const NM[OMEGA_DS_OP_COUNT] = { "div", "sqrt", "exp2", "log2", "sigmoid", "tanh" };
+        static const char *const NM[OMEGA_DS_OP_COUNT] = { "div", "sqrt", "exp2", "log2", "sigmoid", "tanh", "sin", "cos", "erf", "gelu" };
         const char *nm = NM[op];
         if (build((OmegaDsOp)op, code, &len) != 0 || omega_ds_listing((OmegaDsOp)op, lst, sizeof(lst)) != 0) return 1;
         snprintf(path, sizeof(path), "%s/%s.bin", dir, nm);

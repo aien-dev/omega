@@ -1,6 +1,6 @@
 #!/bin/bash
 # divsqrt_nvdisasm_check.sh -- offline provenance for the E1 row 7 kernels.
-# Builds the CPU-only test, dumps the DIV, SQRT, EXP2 and LOG2 kernels Omega's own encoder
+# Builds the CPU-only test, dumps every whole-program kernel (DIV, SQRT and the transcendentals) Omega's own encoder
 # emits, disassembles every word with nvdisasm -b SM121 and compares the text
 # line by line with omega_ds_listing (what the encoder says each word is).
 # Any difference fails. nvdisasm is an offline decoder only; nothing it prints
@@ -16,7 +16,7 @@ make -s -C "$HERE" build/test_omega_divsqrt_gb10_cpu >/dev/null || { echo "VERDI
 "$HERE/build/test_omega_divsqrt_gb10_cpu" --dump "$TMP" || { echo "VERDICT FAIL: dump"; exit 1; }
 echo "nvdisasm: $("$NVDISASM" --version | grep -o "release [0-9.]*, V[0-9.]*")"
 rc=0
-for op in div sqrt exp2 log2 sigmoid tanh; do
+for op in div sqrt exp2 log2 sigmoid tanh sin cos erf gelu; do
     "$NVDISASM" -b SM121 "$TMP/$op.bin" > "$TMP/$op.raw" 2> "$TMP/$op.err" || { echo "[FAIL] $op: nvdisasm error"; cat "$TMP/$op.err"; rc=1; continue; }
     # keep "/*addr*/ text ;" lines, normalise spacing, drop the hex comments
     sed -n 's|^[[:space:]]*/\*\([0-9a-f]\{4\}\)\*/[[:space:]]*\(.*;\).*$|\1 \2|p' "$TMP/$op.raw" \
