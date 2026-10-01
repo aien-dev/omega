@@ -59,6 +59,11 @@ done
 case "$(grep '^legacy a64 differential:' "$O/legacy_a64.out" | tail -1)" in *" mode=full "*" mismatches=0") ;; *) die "legacy a64 full differential" ;; esac
 
 # golden corpus vs the OSC-2 baseline receipt
+# every program the OSC-2 baseline receipt lists must still exist (a deleted or renamed
+# golden program must not silently drop out of the comparison)
+for bp in $(grep -o '"program": "[^"]*"' "$BASEREC" | sed 's/"program": "//; s/"$//'); do
+    [ -f "$bp" ] || die "OSC-2 baseline golden program $bp is missing (renamed or deleted)"
+done
 : >"$T/corpus.txt"; : >"$T/changed.txt"
 NSAME=0; NBASE=0
 for f in tests/compiler/progs/*.osc; do
@@ -72,6 +77,7 @@ for f in tests/compiler/progs/*.osc; do
     fi
 done
 NCHG=$(wc -l <"$T/changed.txt" | tr -d ' ')
+NBL=$(grep -c "\"program\": " "$BASEREC"); [ "$NBASE" = "$NBL" ] || die "compared $NBASE of $NBL OSC-2 baseline programs"
 [ "$NCHG" = 0 ] || [ "${OSC3_CODE_CHANGE_OK:-0}" = 1 ] || { cat "$T/changed.txt"; die "$NCHG OSC-2 golden programs compile differently (set OSC3_CODE_CHANGE_OK=1 only if the item states why)"; }
 CORPUS_SHA=$(sha256sum "$T/corpus.txt" | cut -d' ' -f1)
 NPROG=$(wc -l <"$T/corpus.txt" | tr -d ' ')
