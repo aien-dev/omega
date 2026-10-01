@@ -97,7 +97,7 @@ $2
     cmp -s "$TMP/good.log" "$TMP/$1.log" && bad "fixture $1: the edit changed nothing"; }
 check "complete passing log accepted" 'num_check_log "$TMP/good.log"'
 check "  hardware digest read from the log" '[ "$NUM_HWDIGEST" = "$fake_digest" ]'
-check "  45 GB10 parity lines kept (FFMA x8 + 37 ops)" '[ "$(printf "%s" "$NUM_PARITY" | jq length)" = 45 ]'
+check "  47 GB10 parity lines kept (FFMA x8 + 39 ops)" '[ "$(printf "%s" "$NUM_PARITY" | jq length)" = 47 ]'
 check "  run id and binary digest read from the run line" '[ "$NUM_LOG_RUN_ID" = "$LOG_RUN_ID" ] && [ "$NUM_LOG_BINARY_SHA" = "$LOG_BIN_SHA" ]'
 sed 's/"source":"FORGE_PROBE"/"source":"FAKE_NON_HARDWARE_CPU_ONLY","fake":true/' "$TMP/good.log" > "$TMP/fake.log"
 check "CPU-only fake descriptor refused" '! num_check_log "$TMP/fake.log"'

@@ -163,6 +163,12 @@ int omega_numeric_verify_fixture_table(const OmegaOpcodeProvenance *table, size_
         const OmegaNumericOpInfo *info = omega_numeric_op_at(k);
         OmegaNumericPatchInsn patch[OMEGA_NUMERIC_PATCH_MAX];
         int m = omega_numeric_patch_words(info->op, patch);
+        if (omega_numeric_op_whole_kernel(info->op)) {
+            /* DIV/SQRT: whole-program kernels (src/omega_numeric_divsqrt_gb10.c,
+             * own structural check + nvdisasm digest); no vecadd patch. */
+            if (m != OMEGA_NUMERIC_ERR_NOT_ENCODED) PROBLEM("%s: whole-program op has patch words", info->name);
+            continue;
+        }
         if (!info->gb10_encoded) {
             if (m != OMEGA_NUMERIC_ERR_NOT_ENCODED) PROBLEM("%s: not encoded but has patch words", info->name);
             continue;
