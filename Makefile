@@ -40,7 +40,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-plan-reuse test-cortex
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-capability-graph test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-plan-reuse test-cortex
 
 all: $(TARGET)
 
@@ -713,12 +713,13 @@ test-action-graph: $(RX_GRAPH_TEST)
 # held or missing, never create it.
 RX_CAPQ_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
-	src/omega_core.c src/omega_canonical.c tests/runtime/rx_capability_query.c
+	src/omega_core.c src/omega_canonical.c src/runtime/aien_machine_id.c \
+	tests/runtime/rx_capability_query.c
 RX_CAPQ_TEST = $(OUT_DIR)/rx_capability_query_test
 RX_CAPQ_OBJ = $(OUT_DIR)/rx_capq.o
 
 $(RX_CAPQ_OBJ): src/runtime/rx_capq.c src/runtime/rx_capq.h src/runtime/rx_graph.h \
-	src/runtime/rx_world.h | $(OUT_DIR)
+	src/runtime/rx_world.h src/runtime/aien_machine_id.h | $(OUT_DIR)
 	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_capq.c
 	@if nm -u $@ | grep -E 'aienos_cap_|rx_caproot_mint|rx_caproot_revoke' ; then \
 		echo "rx_capq.o references an authority admin operation; a query must not mint"; \
@@ -731,6 +732,32 @@ $(RX_CAPQ_TEST): $(RX_CAPQ_SRCS) $(RX_CAPQ_OBJ) $(RX_GRAPH_OBJ) src/runtime/rx_c
 
 test-capability-query: $(RX_CAPQ_TEST)
 	./$(RX_CAPQ_TEST)
+
+# M20 canonical Capability Graph and Skill Router: rx_capq promoted (keys,
+# update/withdraw, canonical machine identity, wire form) plus rx_skillroute.
+# Like rx_capq.o, rx_skillroute.o must not reference an authority admin
+# operation: routing discovers, it never authorizes.
+RX_CAPGRAPH_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
+	src/omega_core.c src/omega_canonical.c src/runtime/aien_machine_id.c \
+	tests/runtime/rx_capability_graph.c
+RX_CAPGRAPH_TEST = $(OUT_DIR)/rx_capability_graph_test
+RX_SKILLROUTE_OBJ = $(OUT_DIR)/rx_skillroute.o
+
+$(RX_SKILLROUTE_OBJ): src/runtime/rx_skillroute.c src/runtime/rx_skillroute.h \
+	src/runtime/rx_capq.h src/runtime/aien_machine_id.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -c -o $@ src/runtime/rx_skillroute.c
+	@if nm -u $@ | grep -E 'aienos_cap_|rx_caproot_mint|rx_caproot_revoke' ; then \
+		echo "rx_skillroute.o references an authority admin operation; routing must not mint"; \
+		rm -f $@; exit 1; fi
+
+$(RX_CAPGRAPH_TEST): $(RX_CAPGRAPH_SRCS) $(RX_SKILLROUTE_OBJ) $(RX_CAPQ_OBJ) $(RX_GRAPH_OBJ) \
+	src/runtime/rx_caproot.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_CAPGRAPH_SRCS) $(RX_SKILLROUTE_OBJ) $(RX_CAPQ_OBJ) \
+		$(RX_GRAPH_OBJ) $(AIENOS_CAP_LIB) -lm
+
+test-capability-graph: $(RX_CAPGRAPH_TEST)
+	./$(RX_CAPGRAPH_TEST)
 
 # OMEGA_PLAN_REUSE: plan IR and verified plan cache. rx_plan.o must not
 # reference any AIENOS admin operation (the cache checks authority, never

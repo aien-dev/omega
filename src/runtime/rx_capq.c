@@ -65,15 +65,39 @@ int cq_catalog_init(CqCatalog *c, uint32_t self_machine, uint32_t alias_capacity
     c->mach_lease = calloc(mn, sizeof *c->mach_lease);
     c->cap_ops = 64;
     c->ops = calloc(c->cap_ops + 1, sizeof *c->ops);
-    if (!c->alias_key || !c->alias_op || !c->mach_key || !c->mach_lease || !c->ops) {
+    c->key_mask = 255;
+    c->key_slot = calloc(c->key_mask + 1, sizeof *c->key_slot);
+    if (!c->alias_key || !c->alias_op || !c->mach_key || !c->mach_lease || !c->ops || !c->key_slot) {
         cq_catalog_free(c);
         return CQ_E_NOMEM;
     }
     return CQ_OK;
 }
 
+int cq_catalog_init_canonical(CqCatalog *c, AienMachineIndex *machines, const AienMachineId *self,
+                              uint32_t alias_capacity, uint32_t machine_capacity) {
+    if (!c || !machines || !self) return CQ_E_ARG;
+    uint32_t idx = aien_mid_index_bind(machines, self);
+    if (idx == 0) return CQ_E_NO_IDENTITY;
+    int rc = cq_catalog_init(c, idx, alias_capacity, machine_capacity);
+    if (rc == CQ_OK) c->machines = machines;
+    return rc;
+}
+
+int cq_machine_identity(const CqCatalog *c, uint32_t machine, AienMachineId *out) {
+    if (!c || !out) return CQ_E_ARG;
+    if (!c->machines || aien_mid_index_get(c->machines, machine, out) != AIEN_MID_OK)
+        return CQ_E_NO_IDENTITY;
+    return CQ_OK;
+}
+
+uint32_t cq_machine_index(const CqCatalog *c, const AienMachineId *m) {
+    return c && c->machines && m ? aien_mid_index_find(c->machines, m) : 0;
+}
+
 void cq_catalog_free(CqCatalog *c) {
     if (!c) return;
+    free(c->key_slot);
     free(c->alias_key);
     free(c->alias_op);
     free(c->mach_key);
@@ -124,13 +148,123 @@ int cq_machine_advertise(CqCatalog *c, uint32_t machine, uint64_t lease_until_us
     return CQ_OK;
 }
 
+int cq_machine_advertise_id(CqCatalog *c, const AienMachineId *m, uint64_t lease_until_us,
+                            uint32_t *index_out) {
+    if (!c || !m) return CQ_E_ARG;
+    if (!c->machines) return CQ_E_NO_IDENTITY;
+    uint32_t idx = aien_mid_index_bind(c->machines, m);
+    if (idx == 0) return CQ_E_NO_IDENTITY;
+    int rc = cq_machine_advertise(c, idx, lease_until_us);
+    if (rc == CQ_OK && index_out) *index_out = idx;
+    return rc;
+}
+
+/* ---- entry keys ---- */
+
+CqKey cq_key_of(const CqEntry *e) {
+    return (CqKey){ e->capability_id, e->realization_id, e->machine_id, e->skill_id };
+}
+
+CqKey cq_key_of_candidate(const CqCandidate *x) {
+    return (CqKey){ x->capability_id, x->realization_id, x->machine_id, x->skill_id };
+}
+
+static uint32_t key_hash(const CqKey *k) {
+    uint64_t h = (uint64_t)k->capability_id * 0x9E3779B97F4A7C15ull;
+    h ^= (uint64_t)k->realization_id + 0xBF58476D1CE4E5B9ull + (h << 6) + (h >> 2);
+    h ^= (uint64_t)k->machine_id + 0x94D049BB133111EBull + (h << 6) + (h >> 2);
+    h ^= (uint64_t)k->skill_id + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
+    return (uint32_t)(h ^ (h >> 32));
+}
+
+static int key_eq(const CqEntry *e, const CqKey *k) {
+    return e->capability_id == k->capability_id && e->realization_id == k->realization_id &&
+           e->machine_id == k->machine_id && e->skill_id == k->skill_id;
+}
+
+/* Slot holding k, or the empty slot where it would go. */
+static uint32_t key_find(const CqCatalog *c, const CqKey *k) {
+    uint32_t i = key_hash(k) & c->key_mask;
+    while (c->key_slot[i] && !key_eq(&c->e[c->key_slot[i] - 1], k)) i = (i + 1) & c->key_mask;
+    return i;
+}
+
+static int key_grow(CqCatalog *c) {
+    uint32_t nm = (c->key_mask + 1) * 2 - 1;
+    uint32_t *ns = calloc((size_t)nm + 1, sizeof *ns);
+    if (!ns) return CQ_E_NOMEM;
+    free(c->key_slot);
+    c->key_slot = ns;
+    c->key_mask = nm;
+    for (uint32_t i = 0; i < c->n; i++) {
+        CqKey k = cq_key_of(&c->e[i]);
+        c->key_slot[key_find(c, &k)] = i + 1;
+    }
+    return CQ_OK;
+}
+
+const CqEntry *cq_lookup(const CqCatalog *c, const CqKey *k) {
+    if (!c || !k || !c->key_slot) return NULL;
+    uint32_t s = c->key_slot[key_find(c, k)];
+    return s ? &c->e[s - 1] : NULL;
+}
+
+int cq_set_availability(CqCatalog *c, const CqKey *k, uint32_t live) {
+    if (!c || !k || (live != CQ_LIVE_AVAILABLE && live != CQ_LIVE_UNAVAILABLE)) return CQ_E_ARG;
+    uint32_t s = c->key_slot[key_find(c, k)];
+    if (!s) return CQ_E_NOT_FOUND;
+    if (c->e[s - 1].live == CQ_LIVE_WITHDRAWN) return CQ_E_WITHDRAWN;
+    c->e[s - 1].live = live;   /* same (op, source) bucket: the index stays valid */
+    return CQ_OK;
+}
+
+int cq_withdraw(CqCatalog *c, const CqKey *k) {
+    if (!c || !k) return CQ_E_ARG;
+    uint32_t s = c->key_slot[key_find(c, k)];
+    if (!s) return CQ_E_NOT_FOUND;
+    c->e[s - 1].live = CQ_LIVE_WITHDRAWN;
+    return CQ_OK;
+}
+
 int cq_register(CqCatalog *c, const CqEntry *e, const char *desc, uint32_t desc_len) {
     if (!c || !e || e->op == 0 || e->op > c->n_ops || e->source >= CQ_SOURCES ||
-        e->machine_id == 0 || (desc_len && !desc))
+        e->machine_id == 0 || (desc_len && !desc) || e->live > CQ_LIVE_UNAVAILABLE)
         return CQ_E_ARG;
     if (!(c->ops[e->op].domains & CQ_SRC(e->source))) return CQ_E_ARG;
     /* Only the Fabric speaks for another machine; the Fabric only for another machine. */
     if ((e->source == CQ_SRC_FABRIC) != (e->machine_id != c->self_machine)) return CQ_E_ARG;
+    CqKey k = cq_key_of(e);
+    uint32_t ks = key_find(c, &k);
+    if (c->key_slot[ks]) {
+        /* Update in place. */
+        CqEntry *old = &c->e[c->key_slot[ks] - 1];
+        uint64_t off = old->desc_off;
+        uint32_t len = old->desc_len;
+        int moved = old->op != e->op || old->source != e->source;
+        if (desc_len) {
+            if (c->desc_bytes + desc_len > c->desc_cap) {
+                uint64_t nc = c->desc_cap ? c->desc_cap : 65536;
+                while (nc < c->desc_bytes + desc_len) nc *= 2;
+                char *n = realloc(c->desc, nc);
+                if (!n) return CQ_E_NOMEM;
+                c->desc = n;
+                c->desc_cap = nc;
+            }
+            memcpy(c->desc + c->desc_bytes, desc, desc_len);
+            off = c->desc_bytes;
+            len = desc_len;
+            c->desc_bytes += desc_len;   /* the old text stays as dead bytes */
+        }
+        *old = *e;
+        old->desc_off = off;
+        old->desc_len = len;
+        if (moved) c->built = 0;
+        return CQ_OK;
+    }
+    if ((c->n + 1) * 2 > c->key_mask + 1) {
+        if (key_grow(c) != CQ_OK) return CQ_E_NOMEM;
+        ks = key_find(c, &k);
+    }
     if (c->n == c->cap) {
         uint32_t nc = c->cap ? c->cap * 2 : 256;
         CqEntry *n = realloc(c->e, (size_t)nc * sizeof *n);
@@ -152,6 +286,7 @@ int cq_register(CqCatalog *c, const CqEntry *e, const char *desc, uint32_t desc_
     if (desc_len) memcpy(c->desc + c->desc_bytes, desc, desc_len);
     c->desc_bytes += desc_len;
     c->e[c->n++] = x;
+    c->key_slot[ks] = c->n;
     c->built = 0;
     return CQ_OK;
 }
@@ -187,7 +322,7 @@ uint32_t cq_resolve(const CqCatalog *c, uint32_t name) {
 uint64_t cq_catalog_bytes(const CqCatalog *c) {
     uint64_t b = (uint64_t)c->cap * sizeof(CqEntry) + (uint64_t)(c->cap_ops + 1) * sizeof(CqOp) +
                  (uint64_t)(c->alias_mask + 1) * 8u + (uint64_t)(c->mach_mask + 1) * 12u +
-                 c->desc_cap;
+                 (uint64_t)(c->key_mask + 1) * 4u + c->desc_cap;
     if (c->built) b += (uint64_t)((c->n_ops + 1) * CQ_SOURCES + 1) * 4u + (uint64_t)c->n * 4u;
     return b;
 }
@@ -207,6 +342,36 @@ static void put_u32(sha256_ctx *h, uint32_t v) {
 static void put_u64(sha256_ctx *h, uint64_t v) {
     put_u32(h, (uint32_t)v);
     put_u32(h, (uint32_t)(v >> 32));
+}
+
+static int cmp_u64_(const void *a, const void *b) {
+    uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
+    return x < y ? -1 : x > y;
+}
+
+void cq_ontology_digest(const CqCatalog *c, uint8_t out[32]) {
+    sha256_ctx h;
+    sha256_init(&h);
+    sha256_update(&h, (const uint8_t *)"OMEGA-CAPQ-ONTOLOGY-1", 21);
+    put_u32(&h, c->n_ops);
+    for (uint32_t op = 1; op <= c->n_ops; op++) {
+        put_u32(&h, c->ops[op].parent);
+        put_u32(&h, c->ops[op].domains);
+    }
+    /* Aliases in key order, not table order. */
+    uint64_t *pairs = malloc((size_t)(c->n_alias ? c->n_alias : 1) * sizeof *pairs);
+    uint32_t np = 0;
+    for (uint32_t i = 0; pairs && i <= c->alias_mask; i++)
+        if (c->alias_key[i]) pairs[np++] = (uint64_t)c->alias_key[i] << 32 | c->alias_op[i];
+    if (pairs) {
+        qsort(pairs, np, sizeof *pairs, cmp_u64_);
+        put_u32(&h, np);
+        for (uint32_t i = 0; i < np; i++) put_u64(&h, pairs[i]);
+    } else {
+        put_u32(&h, UINT32_MAX);   /* no memory: a digest no peer can match */
+    }
+    free(pairs);
+    sha256_final(&h, out);
 }
 
 int cq_compile(const CqCatalog *c, const CqNeed *need, CqPlan *plan) {
@@ -418,6 +583,12 @@ static uint32_t held_now(const CqHeld *h, uint64_t resource, uint32_t rights) {
 
 int cq_query(const CqCatalog *c, const CqPlan *plan, const CqNeed *need, const CqTradeoffs *t,
              const CqHeld *held, uint64_t now_us, CqResult *out, CqStats *stats) {
+    return cq_query_admit(c, plan, need, t, held, now_us, NULL, NULL, out, stats);
+}
+
+int cq_query_admit(const CqCatalog *c, const CqPlan *plan, const CqNeed *need,
+                   const CqTradeoffs *t, const CqHeld *held, uint64_t now_us,
+                   CqAdmitFn admit, void *admit_ctx, CqResult *out, CqStats *stats) {
     if (!out) return CQ_E_ARG;
     memset(out, 0, offsetof(CqResult, cand));
     CqStats st;
@@ -450,7 +621,11 @@ int cq_query(const CqCatalog *c, const CqPlan *plan, const CqNeed *need, const C
             for (uint32_t j = c->bucket_start[b]; j < c->bucket_start[b + 1]; j++) {
                 const CqEntry *e = &c->e[c->bucket[j]];
                 st.probed++;
-                if (!e->live || !machine_live(c, e->machine_id, now_us)) { st.rejected_dead++; continue; }
+                if (e->live == CQ_LIVE_WITHDRAWN || !machine_live(c, e->machine_id, now_us)) {
+                    st.rejected_dead++;
+                    continue;
+                }
+                if (e->live != CQ_LIVE_AVAILABLE) { st.rejected_unavailable++; continue; }
                 int local = e->machine_id == c->self_machine;
                 if (!(loc & (local ? CQ_LOC_LOCAL : CQ_LOC_FABRIC))) continue;
                 if (pin && e->machine_id != pin) continue;
@@ -486,6 +661,16 @@ int cq_query(const CqCatalog *c, const CqPlan *plan, const CqNeed *need, const C
                 x->source = e->source;
                 x->local = (uint8_t)local;
                 x->effects = e->effects;
+                if (t->require_held && !x->required_authority.held) {
+                    st.rejected_authority++;
+                    nf--;
+                    continue;
+                }
+                if (admit && !admit(admit_ctx, e, x)) {
+                    st.rejected_admission++;
+                    nf--;
+                    continue;
+                }
             }
         }
     st.feasible = nf;
@@ -519,4 +704,134 @@ const char *cq_source_name(uint32_t s) {
     static const char *n[CQ_SOURCES] = { "capability_graph", "skill_network", "mcp_registry",
                                          "local_physical", "fabric" };
     return s < CQ_SOURCES ? n[s] : "?";
+}
+
+/* ---- wire form (see rx_capq.h) ---- */
+
+static void w16(uint8_t *p, uint32_t v) { p[0] = (uint8_t)v; p[1] = (uint8_t)(v >> 8); }
+static void w32(uint8_t *p, uint32_t v) { w16(p, v); w16(p + 2, v >> 16); }
+static void w64(uint8_t *p, uint64_t v) { w32(p, (uint32_t)v); w32(p + 4, (uint32_t)(v >> 32)); }
+static uint32_t r16(const uint8_t *p) { return (uint32_t)p[0] | (uint32_t)p[1] << 8; }
+static uint32_t r32(const uint8_t *p) { return r16(p) | r16(p + 2) << 16; }
+static uint64_t r64(const uint8_t *p) { return (uint64_t)r32(p) | (uint64_t)r32(p + 4) << 32; }
+
+static void wire_check(const uint8_t *rec, uint8_t out[4]) {
+    uint8_t d[SHA256_DIGEST_SIZE];
+    sha256_hash(rec, CQ_WIRE_BYTES - 4, d);
+    memcpy(out, d, 4);
+}
+
+int cq_wire_encode(const CqCatalog *c, const CqEntry *e, uint32_t kind, uint8_t out[CQ_WIRE_BYTES]) {
+    if (!c || !e || !out || kind < CQ_WIRE_ADVERTISE || kind > CQ_WIRE_WITHDRAW) return CQ_E_ARG;
+    if (e->machine_id != c->self_machine || e->source == CQ_SRC_FABRIC || e->source >= CQ_SOURCES ||
+        e->live > CQ_LIVE_UNAVAILABLE)
+        return CQ_E_WIRE;
+    AienMachineId m;
+    if (cq_machine_identity(c, e->machine_id, &m) != CQ_OK) return CQ_E_NO_IDENTITY;
+    memset(out, 0, CQ_WIRE_BYTES);
+    memcpy(out, "ACGR", 4);
+    out[4] = CQ_WIRE_VERSION;
+    out[5] = (uint8_t)kind;
+    out[6] = e->source;
+    out[7] = e->evidence_level;
+    if (aien_mid_encode(&m, out + 8) != AIEN_MID_OK) return CQ_E_NO_IDENTITY;
+    w32(out + 52, e->capability_id);
+    w32(out + 56, e->realization_id);
+    w32(out + 60, e->skill_id);
+    w32(out + 64, e->skill_version);
+    memcpy(out + 68, e->skill_digest, 32);
+    w32(out + 100, e->op);
+    w16(out + 104, e->effects);
+    w16(out + 106, kind == CQ_WIRE_WITHDRAW ? CQ_LIVE_WITHDRAWN : e->live);
+    w64(out + 108, e->in_types);
+    w64(out + 116, e->out_types);
+    w64(out + 124, e->auth_resource);
+    w32(out + 132, e->auth_rights);
+    w32(out + 136, e->confidence_ppm);
+    w32(out + 140, e->reliability_ppm);
+    w64(out + 144, e->cost);
+    w64(out + 152, e->latency_us);
+    w64(out + 160, e->energy_uj);
+    w64(out + 168, e->evidence_ref);
+    w64(out + 176, e->generation);
+    wire_check(out, out + 184);
+    return CQ_OK;
+}
+
+int cq_wire_decode(const uint8_t *in, size_t len, uint32_t *kind, AienMachineId *machine,
+                   CqEntry *out) {
+    if (!in || !kind || !machine || !out) return CQ_E_ARG;
+    if (len != CQ_WIRE_BYTES || memcmp(in, "ACGR", 4) != 0 || in[4] != CQ_WIRE_VERSION)
+        return CQ_E_WIRE;
+    uint8_t chk[4];
+    wire_check(in, chk);
+    if (memcmp(chk, in + 184, 4) != 0) return CQ_E_WIRE;
+    uint32_t k = in[5], live = r16(in + 106);
+    if (k < CQ_WIRE_ADVERTISE || k > CQ_WIRE_WITHDRAW || in[6] >= CQ_SOURCES ||
+        in[6] == CQ_SRC_FABRIC || in[7] > CQ_EV_RECEIPT || live > CQ_LIVE_UNAVAILABLE ||
+        (k == CQ_WIRE_WITHDRAW) != (live == CQ_LIVE_WITHDRAWN))
+        return CQ_E_WIRE;
+    if (aien_mid_decode(in + 8, AIEN_MID_RECORD_BYTES, machine) != AIEN_MID_OK) return CQ_E_WIRE;
+    memset(out, 0, sizeof *out);
+    out->source = in[6];
+    out->evidence_level = in[7];
+    out->capability_id = r32(in + 52);
+    out->realization_id = r32(in + 56);
+    out->skill_id = r32(in + 60);
+    out->skill_version = r32(in + 64);
+    memcpy(out->skill_digest, in + 68, 32);
+    out->op = r32(in + 100);
+    out->effects = (uint16_t)r16(in + 104);
+    out->live = live;
+    out->in_types = r64(in + 108);
+    out->out_types = r64(in + 116);
+    out->auth_resource = r64(in + 124);
+    out->auth_rights = r32(in + 132);
+    out->confidence_ppm = r32(in + 136);
+    out->reliability_ppm = r32(in + 140);
+    out->cost = r64(in + 144);
+    out->latency_us = r64(in + 152);
+    out->energy_uj = r64(in + 160);
+    out->evidence_ref = r64(in + 168);
+    out->generation = r64(in + 176);
+    *kind = k;
+    return CQ_OK;
+}
+
+int cq_wire_apply(CqCatalog *c, const uint8_t *in, size_t len, CqKey *key_out) {
+    if (!c) return CQ_E_ARG;
+    if (!c->machines) return CQ_E_NO_IDENTITY;
+    uint32_t kind;
+    AienMachineId m;
+    CqEntry e;
+    int rc = cq_wire_decode(in, len, &kind, &m, &e);
+    if (rc != CQ_OK) return rc;
+    uint32_t idx = aien_mid_index_find(c->machines, &m);
+    if (idx == c->self_machine) return CQ_E_WIRE;           /* nobody speaks for us */
+    if (idx == 0) {
+        idx = aien_mid_index_bind(c->machines, &m);
+        if (idx == 0) return CQ_E_NO_IDENTITY;
+    }
+    uint32_t op = cq_resolve(c, e.op);
+    if (op == 0) return CQ_E_NO_OP;
+    e.op = op;
+    e.machine_id = idx;
+    e.source = CQ_SRC_FABRIC;                               /* local source was provenance only */
+    CqKey k = cq_key_of(&e);
+    const CqEntry *old = cq_lookup(c, &k);
+    if (old && e.generation <= old->generation) return CQ_E_STALE;
+    if (!old && kind != CQ_WIRE_ADVERTISE) return CQ_E_NOT_FOUND;
+    if (kind == CQ_WIRE_AVAILABILITY && old->live == CQ_LIVE_WITHDRAWN) return CQ_E_WITHDRAWN;
+    if (kind == CQ_WIRE_ADVERTISE) {
+        rc = cq_register(c, &e, NULL, 0);
+    } else {
+        /* Availability and withdrawal change only `live` (and the revision):
+         * the rest of the held entry stays as advertised. */
+        CqEntry x = *old;
+        x.live = e.live;
+        x.generation = e.generation;
+        rc = cq_register(c, &x, NULL, 0);
+    }
+    if (rc == CQ_OK && key_out) *key_out = k;
+    return rc;
 }

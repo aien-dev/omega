@@ -35,10 +35,27 @@
  * authority view whether the principal already holds it (a validation, never
  * a mint). This file has no admin handle; the build fails if rx_capq.o
  * references an authority admin operation.
+ *
+ * M20: this catalog IS the canonical Capability Graph. One entry says: this
+ * capability (capability_id, a semantic operation), provided by this provider
+ * (realization_id; a Skill when skill_id != 0, with skill_version and
+ * skill_digest = AgSkill.identity of the procedure), on this machine, needs
+ * this authority (a requirement, never a grant), under these constraints
+ * (types, effects, cost, latency, energy), with this availability (`live`)
+ * and this evidence (level + ref). An entry is keyed by CqKey; registering an
+ * existing key updates it in place.
+ *
+ * Machines. CqEntry/CqCandidate/CqNeed carry a uint32 machine INDEX, valid in
+ * this process only. A catalog made with cq_catalog_init_canonical resolves
+ * every index through the caller's AienMachineIndex (aien_machine_id.h);
+ * anything persisted or sent carries the 44-byte AienMachineId record instead
+ * (see the wire form below). A catalog made with cq_catalog_init has no
+ * identity table: it ranks and routes, but cannot export or ingest records.
  */
 #ifndef RX_CAPQ_H
 #define RX_CAPQ_H
 
+#include "aien_machine_id.h"
 #include "rx_graph.h"
 
 #include <stddef.h>
@@ -138,6 +155,7 @@ typedef struct {
     uint32_t min_confidence;            /* ppm */
     uint32_t k;                         /* at most this many (<= CQ_MAX_K) */
     uint32_t include_dominated;         /* 0: Pareto front only */
+    uint32_t require_held;              /* 1: only candidates whose authority is held now */
 } CqTradeoffs;
 
 /* ---- catalog (the Capability Graph and its sources) ---- */
@@ -155,10 +173,26 @@ typedef struct {
     uint32_t confidence_ppm, reliability_ppm;
     uint64_t cost, latency_us, energy_uj;
     uint64_t evidence_ref;
-    uint32_t live;                      /* 0: withdrawn, or its MCP session is gone */
+    uint32_t live;                      /* CQ_LIVE_*: withdrawn, available, unavailable */
     uint32_t desc_len;                  /* description text, kept in the catalog */
     uint64_t desc_off;
+    /* M20 Capability Graph fields (zero = none / unpinned). */
+    uint32_t skill_version;             /* version of skill_id's procedure */
+    uint8_t skill_digest[32];           /* AgSkill.identity the provider claims */
+    uint64_t generation;                /* advertiser's revision; newer replaces older */
 } CqEntry;
+
+/* Availability (CqEntry.live). Withdrawn is final for that registration: only
+ * a new registration of the key brings it back. */
+#define CQ_LIVE_WITHDRAWN   0u
+#define CQ_LIVE_AVAILABLE   1u
+#define CQ_LIVE_UNAVAILABLE 2u          /* registered, not usable now (busy, session down) */
+
+/* An entry's identity: which capability, from which provider, on which
+ * machine, through which Skill. Same tuple the ranking uses to break ties. */
+typedef struct {
+    uint32_t capability_id, realization_id, machine_id, skill_id;
+} CqKey;
 
 typedef struct {
     uint32_t parent;                    /* 0 = none */
@@ -184,6 +218,9 @@ typedef struct {
     uint32_t *bucket_start;             /* (op, source) -> first index in bucket[] */
     uint32_t *bucket;
     int built;
+    AienMachineIndex *machines;         /* canonical identity behind each index (may be NULL) */
+    uint32_t key_mask;                  /* CqKey -> entry: open addressing, slot = index + 1 */
+    uint32_t *key_slot;
 } CqCatalog;
 
 #define CQ_OK           0
@@ -193,18 +230,49 @@ typedef struct {
 #define CQ_E_NO_SOURCE -4               /* no source may realize it under the constraints */
 #define CQ_E_UNBUILT   -5
 #define CQ_E_PLAN_FULL -6               /* more specializations than CQ_MAX_PLAN_OPS */
+#define CQ_E_NOT_FOUND -7               /* no entry with that key */
+#define CQ_E_WITHDRAWN -8               /* the entry was withdrawn; register it again */
+#define CQ_E_NO_IDENTITY -9             /* no AienMachineIndex, or the index is unbound */
+#define CQ_E_WIRE      -10              /* malformed, foreign or self-originated record */
+#define CQ_E_STALE     -11              /* record older than (or as old as) what is held */
 
+/* Index-only catalog: self_machine is a local runtime index. */
 int  cq_catalog_init(CqCatalog *c, uint32_t self_machine, uint32_t alias_capacity,
                      uint32_t machine_capacity);
+/* Canonical catalog: binds `self` in `machines` (caller-owned, must outlive
+ * the catalog) and resolves every machine index through it. */
+int  cq_catalog_init_canonical(CqCatalog *c, AienMachineIndex *machines, const AienMachineId *self,
+                               uint32_t alias_capacity, uint32_t machine_capacity);
 void cq_catalog_free(CqCatalog *c);
+/* Canonical identity <-> local index (CQ_E_NO_IDENTITY without a table). */
+int  cq_machine_identity(const CqCatalog *c, uint32_t machine, AienMachineId *out);
+uint32_t cq_machine_index(const CqCatalog *c, const AienMachineId *m);   /* 0 if not bound */
+/* Fabric advertisement by canonical identity: binds an index, sets the lease. */
+int  cq_machine_advertise_id(CqCatalog *c, const AienMachineId *m, uint64_t lease_until_us,
+                             uint32_t *index_out);
 /* Operations are numbered 1..n and defined parent first. */
 int  cq_op_define(CqCatalog *c, uint32_t op, uint32_t parent, uint32_t domains);
 int  cq_alias(CqCatalog *c, uint32_t alias, uint32_t op);
 /* A machine's Fabric advertisement; its capabilities are live until the lease ends. */
 int  cq_machine_advertise(CqCatalog *c, uint32_t machine, uint64_t lease_until_us);
+/* Register, or update in place when the entry's CqKey is already present
+ * (a withdrawn entry is revived). An update that keeps op and source keeps
+ * the index built; anything else needs cq_catalog_build again. An update
+ * with no description keeps the old one. */
 int  cq_register(CqCatalog *c, const CqEntry *e, const char *desc, uint32_t desc_len);
+CqKey cq_key_of(const CqEntry *e);
+CqKey cq_key_of_candidate(const CqCandidate *c);
+/* The entry for a key, or NULL. The pointer is valid until the next register. */
+const CqEntry *cq_lookup(const CqCatalog *c, const CqKey *k);
+/* Availability: CQ_LIVE_AVAILABLE or CQ_LIVE_UNAVAILABLE. Never needs a rebuild. */
+int  cq_set_availability(CqCatalog *c, const CqKey *k, uint32_t live);
+/* Withdraw: the entry stays in the index but no query returns it again. */
+int  cq_withdraw(CqCatalog *c, const CqKey *k);
 /* Build the (operation, source) index. Registration order does not matter. */
 int  cq_catalog_build(CqCatalog *c);
+/* Digest of the operation catalog (tree, domains, aliases). Two nodes may
+ * exchange wire records only when their digests match (Fabric handshake). */
+void cq_ontology_digest(const CqCatalog *c, uint8_t out[32]);
 /* Alias or operation id -> canonical operation, 0 if unknown. */
 uint32_t cq_resolve(const CqCatalog *c, uint32_t name);
 /* Bytes the catalog holds (entries, index, descriptions). */
@@ -251,11 +319,24 @@ typedef struct {
     uint64_t feasible;
     uint64_t rejected_dead;             /* withdrawn, dead session, expired lease */
     uint64_t desc_bytes_read;           /* always 0: the query never reads descriptions */
+    uint64_t rejected_unavailable;      /* registered but CQ_LIVE_UNAVAILABLE */
+    uint64_t rejected_authority;        /* require_held and not held */
+    uint64_t rejected_admission;        /* refused by the caller's admit function */
 } CqStats;
 
 int cq_query(const CqCatalog *c, const CqPlan *plan, const CqNeed *need,
              const CqTradeoffs *t, const CqHeld *held, uint64_t now_us,
              CqResult *out, CqStats *stats);
+
+/* Admission before ranking: return nonzero to keep a feasible candidate. The
+ * Pareto front and the order are computed over the admitted set only, so a
+ * dominated but admissible provider is not lost behind an inadmissible one.
+ * The function reads; it must not change the catalog or mint authority. */
+typedef int (*CqAdmitFn)(void *ctx, const CqEntry *e, const CqCandidate *c);
+
+int cq_query_admit(const CqCatalog *c, const CqPlan *plan, const CqNeed *need,
+                   const CqTradeoffs *t, const CqHeld *held, uint64_t now_us,
+                   CqAdmitFn admit, void *admit_ctx, CqResult *out, CqStats *stats);
 
 /* The same ranking on a caller's set (used by the query; exposed for tests).
  * Orders `in` into `out` (at most k) and returns how many, or CQ_E_NOMEM;
@@ -273,5 +354,64 @@ uint64_t cq_dim_value(const CqCandidate *c, uint32_t dim);
 int cq_bind_skill_node(AgGraph *g, uint32_t node, const CqCandidate *c);
 
 const char *cq_source_name(uint32_t s);
+
+/* ---- wire form (Fabric advertisement of Capability Graph entries) ----
+ *
+ * One fixed-size record per entry, CQ_WIRE_BYTES long. Every multi-byte
+ * integer is little-endian; the machine is the 44-byte AienMachineId record,
+ * never an index. No description text, no pointer, no local index, no lease.
+ *
+ *   off len field
+ *     0   4 magic "ACGR"
+ *     4   1 version 0x01
+ *     5   1 kind           CQ_WIRE_ADVERTISE | CQ_WIRE_AVAILABILITY | CQ_WIRE_WITHDRAW
+ *     6   1 source         the provider's source on its own machine (never FABRIC)
+ *     7   1 evidence_level CQ_EV_*
+ *     8  44 machine        AienMachineId record (aien_machine_id.h)
+ *    52   4 capability_id
+ *    56   4 realization_id (the provider)
+ *    60   4 skill_id       0 = not a Skill
+ *    64   4 skill_version
+ *    68  32 skill_digest   AgSkill.identity (zero = unpinned)
+ *   100   4 op             semantic operation id of the shared operation catalog
+ *   104   2 effects        CQ_FX_*
+ *   106   2 live           CQ_LIVE_*
+ *   108   8 in_types
+ *   116   8 out_types
+ *   124   8 auth_resource  authority REQUIRED on the provider's machine (not a grant)
+ *   132   4 auth_rights
+ *   136   4 confidence_ppm
+ *   140   4 reliability_ppm
+ *   144   8 cost
+ *   152   8 latency_us
+ *   160   8 energy_uj
+ *   168   8 evidence_ref
+ *   176   8 generation     advertiser's revision of this entry; must increase
+ *   184   4 check          first 4 bytes of SHA-256(bytes 0..183)
+ *
+ * Rules. Only a machine's own entries are exported (machine = self, source !=
+ * FABRIC): nobody re-advertises another machine's capability. Ingestion
+ * refuses records naming the receiver itself, records whose op the receiver's
+ * operation catalog does not know (the handshake compares cq_ontology_digest),
+ * and records whose generation is not newer than the one held. An ingested
+ * entry becomes source CQ_SRC_FABRIC on its machine's index; the lease is the
+ * receiver's (cq_machine_advertise_id from the Fabric session), not the
+ * record's. Authenticating the sender is Fabric's job; this code checks form.
+ */
+#define CQ_WIRE_BYTES        188u
+#define CQ_WIRE_VERSION      0x01u
+#define CQ_WIRE_ADVERTISE    1u     /* register or update */
+#define CQ_WIRE_AVAILABILITY 2u     /* `live` changed */
+#define CQ_WIRE_WITHDRAW     3u
+
+/* Export one of this machine's entries. */
+int cq_wire_encode(const CqCatalog *c, const CqEntry *e, uint32_t kind, uint8_t out[CQ_WIRE_BYTES]);
+/* Parse and check a record: no catalog change. out->machine_id is 0; the
+ * machine is returned in *machine. */
+int cq_wire_decode(const uint8_t *in, size_t len, uint32_t *kind, AienMachineId *machine,
+                   CqEntry *out);
+/* Ingest a record from another machine into a canonical catalog. On success
+ * *key_out (optional) is the entry's local key. */
+int cq_wire_apply(CqCatalog *c, const uint8_t *in, size_t len, CqKey *key_out);
 
 #endif /* RX_CAPQ_H */
