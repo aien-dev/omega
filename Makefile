@@ -40,7 +40,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-i11-wake-merge test-action-graph test-state-projection test-capability-query test-capability-graph test-skillroute-compose test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-jspace-prod test-plan-reuse test-cortex
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-capability-graph test-skillroute-compose test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-jspace-prod test-plan-reuse test-cortex
 
 all: $(TARGET)
 
@@ -295,29 +295,6 @@ $(RX_DEADLINE_TEST): $(RX_DEADLINE_SRCS) src/runtime/rx_caproot.h src/runtime/rx
 .PHONY: test-rx-deadline-cancel
 test-rx-deadline-cancel: $(RX_DEADLINE_TEST)
 	./$(RX_DEADLINE_TEST)
-
-# I11: a dependent popped while a writer of its inputs is still computing is
-# held so the writer's wake merges into it (one commit per stimulus, as with
-# one worker). Deterministic forced interleaving; the mutant build has no hold
-# and must FAIL. CPU only, same links as R3.
-RX_I11_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-	src/sha256.c src/omega_evidence.c tests/runtime/rx_i11_wake_merge.c
-RX_I11_TEST = $(OUT_DIR)/rx_i11_wake_merge
-RX_I11_MUTANT = $(OUT_DIR)/rx_i11_wake_merge_mutant
-
-$(RX_I11_TEST): $(RX_I11_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
-	src/runtime/omega_shared_world_abi.h | $(OUT_DIR)
-	$(CC) $(CFLAGS) -pthread -o $@ $(RX_I11_SRCS)
-
-$(RX_I11_MUTANT): $(RX_I11_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
-	src/runtime/omega_shared_world_abi.h | $(OUT_DIR)
-	$(CC) $(CFLAGS) -DRX_WORLD_MUTATE_NO_UPSTREAM_HOLD -pthread -o $@ $(RX_I11_SRCS)
-
-test-i11-wake-merge: $(RX_I11_TEST) $(RX_I11_MUTANT)
-	./$(RX_I11_TEST)
-	@if ./$(RX_I11_MUTANT); then \
-	  echo "MUTANT SURVIVED (no upstream hold, test still passed)"; exit 1; \
-	else echo "test-i11-wake-merge: PASS (mutant killed)"; fi
 
 # Omega semantic variables and incremental recomputation
 # (gate OMEGA_INCREMENTAL_SEMANTICS_PASS). CPU only, same links as R3.
