@@ -26,6 +26,9 @@ MUTATIONS=(
 "cpu_i2f_unsigned|src/omega_numeric.c|\"scvtf %s0, %w1\"|\"ucvtf %s0, %w1\"|CPU_TIER_INDEPENDENT_ORACLE"
 "cpu_rcp_is_fmul|src/omega_numeric.c|case OMEGA_NOP_MUFU_RCP: __asm__ volatile(\"fdiv|case OMEGA_NOP_MUFU_RCP: __asm__ volatile(\"fmul|CPU_TIER_INDEPENDENT_ORACLE"
 "ref_lds_identity|src/omega_numeric.c|r = a[i ^ (OMEGA_NUMERIC_CTA_THREADS - 1u)];|r = a[i];|CPU_TIER_INDEPENDENT_ORACLE"
+"ref_rni_ties_away|src/omega_numeric.c|default:        if (frac == 3|default:        if (frac >= 2) mag++; else if (frac == 3|E1_SCALAR_INDEPENDENT_ORACLE"
+"cpu_gtu_is_gt|src/omega_numeric.c|CPU_SEL(\"hi\")|CPU_SEL(\"gt\")|E1_SCALAR_INDEPENDENT_ORACLE"
+"ref_ffma_int_no_sticky|src/omega_numeric.c|(lost ? 1U : 0U)|(lost ? 0U : 0U)|E1_SCALAR_BOUNDARY_VALUES"
 "undeclared_skip|tests/test_omega_numeric.c|    printf(\"\\nGate 5 Results:|    skip(\"NOT_A_CHIP_ONLY_ID\", \"mutation\");@NL@    printf(\"\\nGate 5 Results:|UNDECLARED_SKIP"
 )
 

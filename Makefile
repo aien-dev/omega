@@ -200,6 +200,13 @@ test-numeric-sweep:
 	tools/numeric_check_sweep.sh
 	tools/numeric_oracle_mutations.sh
 
+# E1 scalar contract, exhaustive: every 2^32 input of each unary E1 op through
+# the reference, the CPU tier and the integer oracle (one process per op,
+# docs/numeric/E1_SCALAR_CONTRACT.md). Not part of Gate 5. No GPU.
+.PHONY: test-numeric-e1-exhaustive
+test-numeric-e1-exhaustive: build/test_omega_numeric_cpu
+	./build/test_omega_numeric_cpu --e1-exhaustive
+
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
 RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \

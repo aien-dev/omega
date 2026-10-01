@@ -275,4 +275,142 @@ static bool or_same(uint32_t want, uint32_t got) {
     return want == got;
 }
 
+/* ---- E1 scalar contract (docs/numeric/E1_SCALAR_CONTRACT.md) ------------------
+ * Second derivations of the E1 ops, written differently from the reference
+ * in src/omega_numeric.c on purpose:
+ *   integer conversions  x scaled to a fixed point with 26 fraction bits in
+ *                        an int64; floor is the arithmetic right shift, ceil
+ *                        is -floor(-x), RNI adds one half and fixes the tie.
+ *   U32 -> FP32          or_pack of the integer.
+ *   FP32 -> F16          binary search over the 31744 finite F16 bit
+ *                        patterns, then an exact comparison with the
+ *                        midpoint (all values scaled to integers).
+ *   FP32 -> BF16         the bias trick on the bit pattern: add 0x7fff plus
+ *                        the kept lsb, drop 16 bits.
+ *   F16/BF16 -> FP32     or_pack of the narrow value's integer significand.
+ *   compare predicates   the total-order key (negative patterns inverted),
+ *                        -0 folded onto +0 first.
+ *   FFMA_V               or_fma above.
+ */
+enum { OR_RTZ, OR_FLOOR, OR_CEIL, OR_RNE };
+
+/* FP32 bits -> integer in rounding direction mode, saturated to [lo, hi],
+ * NaN -> 0. */
+static int64_t or_to_int(uint32_t u, int mode, int64_t lo, int64_t hi) {
+    uint32_t s; uint64_t m = 0; int e = 0;
+    int cl = or_decode(u, &s, &m, &e);
+    if (cl == OR_NAN || cl == OR_ZERO) return 0;
+    if (cl == OR_INFINITE) return s ? lo : hi;
+    int lead = 63 - __builtin_clzll(m) + e;          /* |x| in [2^lead, 2^(lead+1)) */
+    if (lead >= 32) return s ? lo : hi;              /* beyond every target range */
+    if (lead < -2) {                                 /* 0 < |x| < 1/4: no tie possible */
+        if (mode == OR_FLOOR) return s ? -1 : 0;
+        if (mode == OR_CEIL)  return s ? 0 : 1;
+        return 0;
+    }
+    /* lead >= -2 gives e >= -25: X = x * 2^26 is an exact integer below 2^58 */
+    int64_t X = (int64_t)(m << (e + 26));
+    if (s) X = -X;
+    const int64_t ONE = 1ll << 26, HALF = 1ll << 25;
+    int64_t q;
+    switch (mode) {
+    case OR_FLOOR: q = X >> 26; break;               /* arithmetic shift = floor */
+    case OR_CEIL:  q = -((-X) >> 26); break;
+    case OR_RNE: {
+        int64_t t = X + HALF;                        /* floor(x + 1/2) */
+        q = t >> 26;
+        if ((t & (ONE - 1)) == 0 && (q & 1)) q -= 1; /* exact tie: to even */
+        break;
+    }
+    default: q = s ? -((-X) >> 26) : (X >> 26); break;   /* toward zero */
+    }
+    return q < lo ? lo : q > hi ? hi : q;
+}
+
+static uint32_t or_u2f(uint32_t v) { return v ? or_pack(0, v, 0) : 0; }
+
+/* Exact value of a positive finite F16 pattern h (0..0x7bff) as hm * 2^he. */
+static void or_f16_val(uint32_t h, uint64_t *hm, int *he) {
+    uint32_t ef = (h >> 10) & 0x1fu, f = h & 0x3ffu;
+    if (ef == 0) { *hm = f; *he = -24; }
+    else         { *hm = f | 0x400u; *he = (int)ef - 25; }
+}
+
+/* v * 2^e scaled by 2^60 (e >= -60), as an integer. */
+static or_u128 or_scaled(uint64_t v, int e) { return ((or_u128)v) << (e + 60); }
+
+static uint32_t or_f32_to_f16(uint32_t u) {
+    uint32_t s; uint64_t m = 0; int e = 0;
+    int cl = or_decode(u, &s, &m, &e);
+    uint32_t sign = s >> 16;
+    if (cl == OR_NAN) return sign | 0x7e00u;
+    if (cl == OR_INFINITE) return sign | 0x7c00u;
+    if (cl == OR_ZERO) return sign;
+    int lead = 63 - __builtin_clzll(m) + e;         /* |x| in [2^lead, 2^(lead+1)) */
+    if (lead >= 17) return sign | 0x7c00u;          /* |x| >= 2^17: far past 65520 */
+    if (lead < -26) return sign;                    /* |x| < 2^-26 < half of 2^-24 */
+    /* now e >= -26 - 23 = -49, so |x| * 2^60 is an integer below 2^78 */
+    or_u128 X = or_scaled(m, e);
+    /* largest finite pattern lo with value(lo) <= |x| (0 if |x| < 2^-24) */
+    uint32_t lo = 0, hi = 0x7bffu;
+    while (lo < hi) {
+        uint32_t mid = (lo + hi + 1) / 2;
+        uint64_t hm; int he; or_f16_val(mid, &hm, &he);
+        if (or_scaled(hm, he) <= X) lo = mid; else hi = mid - 1;
+    }
+    uint64_t lm; int le; or_f16_val(lo, &lm, &le);
+    or_u128 L = or_scaled(lm, le), H;
+    if (lo == 0x7bffu) H = or_scaled(1, 16);        /* the next step past 65504 is 2^16 (inf) */
+    else { uint64_t hm; int he; or_f16_val(lo + 1, &hm, &he); H = or_scaled(hm, he); }
+    if (L == X) return sign | lo;
+    or_u128 twice = X * 2, sum = L + H;
+    uint32_t pick = (twice < sum) ? lo : (twice > sum) ? lo + 1 : ((lo & 1u) ? lo + 1 : lo);
+    return sign | pick;                             /* lo + 1 == 0x7c00 is +inf */
+}
+
+static uint32_t or_f32_to_bf16(uint32_t u) {
+    if (or_is_nan(u)) return ((u >> 16) & 0x8000u) | 0x7fc0u;
+    uint32_t lsb = (u >> 16) & 1u;
+    return (uint32_t)(((uint64_t)u + 0x7fffu + lsb) >> 16) & 0xffffu;
+}
+
+static uint32_t or_f16_to_f32(uint32_t h) {
+    uint32_t sign = (h & 0x8000u) << 16, ef = (h >> 10) & 0x1fu;
+    if (ef == 0x1fu) return (h & 0x3ffu) ? OR_QNAN : (sign | OR_INF);
+    uint64_t hm; int he; or_f16_val(h & 0x7fffu, &hm, &he);
+    return hm ? or_pack(sign, hm, he) : sign;
+}
+
+static uint32_t or_bf16_to_f32(uint32_t h) {
+    uint32_t sign = (h & 0x8000u) << 16, ef = (h >> 7) & 0xffu, f = h & 0x7fu;
+    if (ef == 0xffu) return f ? OR_QNAN : (sign | OR_INF);
+    if (ef == 0) return f ? or_pack(sign, f, -133) : sign;     /* f * 2^-126 / 2^7 */
+    return or_pack(sign, f | 0x80u, (int)ef - 134);
+}
+
+/* Total-order key: larger key, larger value. -0 is folded onto +0. */
+static uint32_t or_key(uint32_t u) {
+    if (u == OR_SIGN) u = 0;
+    return (u & OR_SIGN) ? ~u : (u | OR_SIGN);
+}
+
+/* Predicate by name: "LT" "LE" "GT" "GE" "EQ" "NE" "NUM" "NAN" and the U
+ * forms (true also when unordered). */
+static bool or_pred(const char *p, uint32_t a, uint32_t b) {
+    bool un = or_is_nan(a) || or_is_nan(b);
+    size_t n = 0; while (p[n]) n++;
+    if (p[0] == 'N' && p[1] == 'U' && p[2] == 'M') return !un;
+    if (p[0] == 'N' && p[1] == 'A' && p[2] == 'N') return un;
+    bool u_form = n == 3 && p[2] == 'U';
+    if (un) return u_form;
+    uint32_t ka = or_key(a), kb = or_key(b);
+    if (p[0] == 'L' && p[1] == 'T') return ka < kb;
+    if (p[0] == 'L' && p[1] == 'E') return ka <= kb;
+    if (p[0] == 'G' && p[1] == 'T') return ka > kb;
+    if (p[0] == 'G' && p[1] == 'E') return ka >= kb;
+    if (p[0] == 'E' && p[1] == 'Q') return ka == kb;
+    if (p[0] == 'N' && p[1] == 'E') return ka != kb;
+    return false;
+}
+
 #endif

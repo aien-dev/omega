@@ -79,14 +79,16 @@ static inline bool omega_iszero(float x) {
  * host FPU, so a caller that changed the rounding mode or turned on flush to
  * zero would make both tiers agree on the same wrong answer. These FPCR bits
  * must be clear: RMode [23:22] (00 = round to nearest even), FZ [24], DN [25],
- * FZ16 [19], and the FEAT_AFP controls FIZ [0], AH [1], NEP [2].
+ * FZ16 [19], AHP [26] (alternative half precision: F16 conversions must use
+ * IEEE binary16), and the FEAT_AFP controls FIZ [0], AH [1], NEP [2].
  * omega_numeric_reference, omega_numeric_cpu_realize,
  * omega_numeric_reference_ftz and omega_numeric_seed_bound refuse with
  * OMEGA_NUMERIC_ERR_FPENV (and compute nothing) when any is set. They never
  * change FPCR themselves.
  */
 #define OMEGA_NUMERIC_FPCR_REQUIRED_CLEAR \
-    ((1ULL << 0) | (1ULL << 1) | (1ULL << 2) | (1ULL << 19) | (3ULL << 22) | (1ULL << 24) | (1ULL << 25))
+    ((1ULL << 0) | (1ULL << 1) | (1ULL << 2) | (1ULL << 19) | (3ULL << 22) | (1ULL << 24) | (1ULL << 25) | \
+     (1ULL << 26))
 uint64_t omega_numeric_read_fpcr(void);
 bool omega_numeric_fpenv_ok(void);
 
@@ -104,6 +106,40 @@ float omega_ref_fmax(float a, float b);
 bool  omega_ref_fsetp_ge(float a, float b);
 float omega_ref_i2f(int32_t a);
 int32_t omega_ref_f2i(float a);
+/*
+ * E1 scalar contract (docs/numeric/E1_SCALAR_CONTRACT.md). Explicit,
+ * FPCR-independent reference definitions written with integer operations on
+ * the IEEE bit patterns; no host conversion or compare instruction is used.
+ *
+ * Integer conversions: NaN -> 0; the value is rounded to an integer in the
+ * named direction, then saturated to the target range (F2U: negatives -> 0).
+ * RNI is round to nearest, ties to even.
+ */
+int32_t  omega_ref_f2i_floor(float a);
+int32_t  omega_ref_f2i_ceil(float a);
+int32_t  omega_ref_f2i_rni(float a);
+uint32_t omega_ref_f2u(float a);            /* truncate                       */
+float    omega_ref_u2f(uint32_t a);         /* RNE                            */
+/* Narrowing: RNE, overflow to signed infinity, subnormal results kept, NaN
+ * stays NaN (payload not semantic). Widening is exact. */
+uint16_t omega_ref_f32_to_f16(float a);
+uint16_t omega_ref_f32_to_bf16(float a);
+float    omega_ref_f16_to_f32(uint16_t h);
+float    omega_ref_bf16_to_f32(uint16_t h);
+/*
+ * Compare predicate of a compare-and-select op (FSETP_SEL and the
+ * FSETP_<P>_SEL ops): 1 if the predicate holds for (a, b), 0 if not, -1 if
+ * op is not a compare-and-select op. Ordered predicates are false when either
+ * operand is NaN, unordered (U) ones true; -0 equals +0.
+ */
+int omega_ref_fsetp_pred(int op, float a, float b);
+/* a * b + c rounded once (RNE, subnormals kept), integer arithmetic on the bit
+ * patterns (no FMADD). NaN results are the canonical quiet NaN. */
+float    omega_ref_ffma_int(float a, float b, float c);
+/* True when the host CPU has FEAT_BF16 (BFCVT); the CPU realization of
+ * F32_TO_BF16 then uses BFCVT, otherwise it refuses (OMEGA_NUMERIC_ERR_NOT_ENCODED). */
+bool     omega_numeric_cpu_has_bf16(void);
+
 /* Correctly rounded IEEE division and square root (the AArch64 FDIV/FSQRT
  * instructions; not libm). The semantic target for omega_math_div/sqrt. */
 float omega_ieee_div(float x, float y);
@@ -165,14 +201,47 @@ typedef enum {
     OMEGA_NOP_EXP,
     OMEGA_NOP_LOG,
     OMEGA_NOP_REDUCE_SUM,
+    /* E1 scalar contract ops (docs/numeric/E1_SCALAR_CONTRACT.md): semantic
+     * reference + CPU realization only, gb10_encoded = false until a GB10
+     * lane encodes them. Compare-and-select: out = P(a, b) ? a : b, bits
+     * moved unchanged (FSETP.<P> P0, a, b ; FSEL out, a, b, P0).          */
+    OMEGA_NOP_FSETP_LT_SEL,
+    OMEGA_NOP_FSETP_LE_SEL,
+    OMEGA_NOP_FSETP_GT_SEL,
+    OMEGA_NOP_FSETP_EQ_SEL,
+    OMEGA_NOP_FSETP_NE_SEL,  /* ordered: false if either is NaN             */
+    OMEGA_NOP_FSETP_NUM_SEL, /* neither is NaN                              */
+    OMEGA_NOP_FSETP_NAN_SEL, /* either is NaN                               */
+    OMEGA_NOP_FSETP_LTU_SEL,
+    OMEGA_NOP_FSETP_LEU_SEL,
+    OMEGA_NOP_FSETP_GTU_SEL,
+    OMEGA_NOP_FSETP_GEU_SEL,
+    OMEGA_NOP_FSETP_EQU_SEL,
+    OMEGA_NOP_FSETP_NEU_SEL, /* IEEE !=: true if either is NaN              */
+    OMEGA_NOP_F2I_FLOOR,     /* input FP32, output bits are int32           */
+    OMEGA_NOP_F2I_CEIL,
+    OMEGA_NOP_F2I_RNI,
+    OMEGA_NOP_F2U,           /* input FP32, output bits are uint32          */
+    OMEGA_NOP_I2FP_U32,      /* input bits read as uint32, output FP32      */
+    OMEGA_NOP_F32_TO_F16,    /* output: F16 bits in [15:0], [31:16] zero    */
+    OMEGA_NOP_F32_TO_BF16,   /* output: BF16 bits in [15:0], [31:16] zero   */
+    OMEGA_NOP_F16_TO_F32,    /* input: F16 bits in [15:0], [31:16] ignored  */
+    OMEGA_NOP_BF16_TO_F32,   /* input: BF16 bits in [15:0], [31:16] ignored */
+    OMEGA_NOP_FFMA_V,        /* a*b + c, c read per element                 */
     OMEGA_NOP_COUNT
 } OmegaNumericOp;
 
 typedef enum {
     OMEGA_CMP_BIT_EXACT = 0,  /* FP32 bits equal; any NaN equals any NaN     */
     OMEGA_CMP_INT_EXACT,      /* raw 32-bit words equal (integer results)    */
-    OMEGA_CMP_SEED_BOUND      /* MUFU: relative-error bound only, never bits */
+    OMEGA_CMP_SEED_BOUND,     /* MUFU: relative-error bound only, never bits */
+    OMEGA_CMP_F16_BITS,       /* [31:16] zero; [15:0] F16 bits equal, any F16 NaN equals any F16 NaN */
+    OMEGA_CMP_BF16_BITS       /* [31:16] zero; [15:0] BF16 bits equal, any BF16 NaN equals any BF16 NaN */
 } OmegaNumericCompare;
+
+/* The equality a parity comparison uses for one element under mode (not
+ * defined for SEED_BOUND, which returns false). */
+bool omega_numeric_compare_equal(OmegaNumericCompare mode, uint32_t expect, uint32_t got);
 
 typedef struct {
     OmegaNumericOp      op;
@@ -283,7 +352,8 @@ void omega_numeric_launch_shape(size_t count, uint32_t *threads_per_block, uint3
 
 /* ---- Tiers and comparison ------------------------------------------------- */
 
-/* Semantic reference tier for every op. c may be NULL except for FFMA. */
+/* Semantic reference tier for every op. c may be NULL except for FFMA and
+ * FFMA_V (arity 3). */
 int omega_numeric_reference(OmegaNumericOp op, const float *a, const float *b,
                             const float *c, float *out, size_t count);
 
