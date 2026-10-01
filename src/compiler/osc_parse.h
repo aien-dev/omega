@@ -18,6 +18,7 @@
 #define OSC_AST_MAX_NODES 16384
 #define OSC_AST_MAX_DEPTH 64       /* nesting of blocks + expressions */
 #define OSC_AST_MAX_REL   16384    /* release-list entries (checker) */
+#define OSC_ARENA_MAX_CELLS OSC_MAX_ARRAY_LEN  /* arena bound K: 1..64 cells (one pool slot) */
 
 typedef enum {
     ON_NONE = 0,
@@ -54,8 +55,14 @@ typedef enum {
                      * flag = 1 for an array field "[e; N]" (ival = N) */
     ON_FIELD,       /* tok = struct binding; lo = field name token; a = index or -1;
                      * checker: sym = binding, hi = field index */
-    ON_FSTORE       /* tok = struct binding; lo = field name token; a = index or -1;
+    ON_FSTORE,      /* tok = struct binding; lo = field name token; a = index or -1;
                      * b = value; checker: sym = binding, hi = field index */
+    /* OSC-2 arenas (docs/osc/OSC-2-DESIGN.md section 3). An arena allocation
+     * is an ON_LET_ALLOC (or, refused by the checker, ON_LET_MOVE) whose c is
+     * an ON_NAME naming the arena ("in NAME"); c = -1 otherwise. */
+    ON_ARENA        /* tok = arena name; ival = bound K (1..OSC_ARENA_MAX_CELLS);
+                     * b = body ON_BLOCK; checker: sym = arena symbol, rel = the
+                     * body's owners then the arena itself (REGION_DESTROY) */
 } OscNodeKind;
 
 typedef struct {

@@ -1,0 +1,31 @@
+// entry: nested sibling
+// OSC-2 arenas: nested arenas; the inner arena is destroyed first, then the
+// outer one. Sibling arenas reuse the runtime slot of a destroyed arena.
+// expect-run: nested 3 -> 15
+// expect-run: sibling 2 -> 9
+fn nested(k: u16) -> u16 {
+    let mut s: u16 = 0;
+    arena outer bound 4 {
+        let a: own [u16; 2] in outer = alloc(k);
+        arena inner bound 4 {
+            let b: own [u16; 4] in inner = alloc(k * 2);
+            let c: own [u16; 2] in outer = alloc(3);
+            s = a[0] + b[3] + c[1] * 2;
+        }
+        s = s + 0;
+    }
+    return s;
+}
+
+fn sibling(k: u8) -> u8 {
+    let mut s: u8 = 0;
+    arena r1 bound 2 {
+        let a: own [u8; 2] in r1 = alloc(k);
+        s = a[1];
+    }
+    arena r2 bound 2 {
+        let b: own [u8; 2] in r2 = alloc(k + 5);
+        s = s + b[0];
+    }
+    return s;
+}

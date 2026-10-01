@@ -91,8 +91,16 @@ typedef enum {
     /* appended for OSC-2 structs (docs/osc/OSC-2-DESIGN.md section 2) */
     OSC_I_FLOAD,     /* dst = field imm of struct ref a; for an array field, element */
                      /*   b (any integer type, else -1); b out of range: TRAP_BOUNDS */
-    OSC_I_FSTORE     /* field imm of struct ref a (element b, as FLOAD) = c ;        */
+    OSC_I_FSTORE,    /* field imm of struct ref a (element b, as FLOAD) = c ;        */
                      /*   a is REF OWN or REF MUT                                    */
+    /* appended for OSC-2 arenas (docs/osc/OSC-2-DESIGN.md section 3) */
+    OSC_I_AOPEN,     /* dst(u64 handle) = open an arena of imm cells (1..64);         */
+                     /*   no free pool slot -> TRAP_OOM                              */
+    OSC_I_AALLOC,    /* dst(REF OWN, elem, len) = bump allocation of len cells from  */
+                     /*   arena handle b (u64, defined by AOPEN), every cell = a      */
+                     /*   (as ALLOC); arena too full -> TRAP_ARENA_FULL               */
+    OSC_I_ADESTROY   /* destroy arena handle a: zero all its cells, free its slot.   */
+                     /*   Arena objects are never RELEASEd individually.             */
 } OscOp;
 
 typedef enum {
@@ -131,11 +139,13 @@ typedef enum {
     /* Appended for OSC-2 contracts (docs/osc/OSC-2-DESIGN.md section 1).
      * Existing codes are never renumbered. */
     OSC_TRAP_REQUIRES = 9,   /* a `requires` clause evaluated to false at entry  */
-    OSC_TRAP_ENSURES = 10    /* an `ensures` clause evaluated to false at return */
+    OSC_TRAP_ENSURES = 10,   /* an `ensures` clause evaluated to false at return */
+    /* Appended for OSC-2 arenas (section 3). */
+    OSC_TRAP_ARENA_FULL = 11 /* an arena allocation exceeded the arena's capacity */
 } OscTrap;
 
 /* Highest trap code; arrays indexed by trap code have OSC_TRAP_MAX + 1 entries. */
-#define OSC_TRAP_MAX OSC_TRAP_ENSURES
+#define OSC_TRAP_MAX OSC_TRAP_ARENA_FULL
 
 typedef struct {
     uint8_t op;          /* OscOp */

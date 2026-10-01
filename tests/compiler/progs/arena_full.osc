@@ -1,0 +1,32 @@
+// entry: fill cond_fill
+// OSC-2 arenas: an allocation whose capacity cannot be decided statically
+// (inside a loop or a branch) is checked at run time: TRAP ARENA_FULL.
+// expect-run: fill 3 -> 3
+// expect-run: fill 4 -> trap=ARENA_FULL
+// expect-run: cond_fill 0 -> 2
+// expect-run: cond_fill 1 -> trap=ARENA_FULL
+fn fill(n: u8) -> u32 {
+    let mut s: u32 = 0;
+    arena r bound 10 {
+        let mut i: u8 = 0;
+        while i < n bound 20 {
+            let a: own [u32; 3] in r = alloc(i as u32);
+            s = s + a[0];
+            i = i + 1;
+        }
+    }
+    return s;
+}
+
+fn cond_fill(c: u8) -> u32 {
+    let mut s: u32 = 0;
+    arena r bound 4 {
+        let a: own [u32; 2] in r = alloc(1);
+        if c > 0 {
+            let b: own [u32; 3] in r = alloc(2);
+            s = b[0];
+        }
+        s = s + a[0] + 1;
+    }
+    return s;
+}

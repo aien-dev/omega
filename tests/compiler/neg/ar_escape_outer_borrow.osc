@@ -1,0 +1,11 @@
+// expect: ARENA_ESCAPE object=a line=8
+// transition: outer borrow assigned a borrow of an arena object
+fn f() -> u32 {
+    let u: own [u32; 2] = alloc(1);
+    let mut r: &[u32; 2] = &u;
+    arena a bound 4 {
+        let x: own [u32; 2] in a = alloc(2);
+        r = &x;
+    }
+    return r[0];
+}

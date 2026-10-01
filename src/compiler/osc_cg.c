@@ -366,6 +366,25 @@ static void gen_func(Cg *g, const OscUnit *u, int fi) {
                 mat(g, 2, T[in->a].len);
                 rt_call(g, 8);
                 break;
+            case OSC_I_AOPEN: /* x0 = rt->arena_open(rt, K) */
+                load_rt(g, 0);
+                mat(g, 1, in->imm);
+                rt_call(g, 24);
+                st(g, 0, in->dst);
+                break;
+            case OSC_I_AALLOC: /* x0 = rt->arena_alloc(rt, handle, len, init) */
+                load_rt(g, 0);
+                ld(g, 1, in->b);
+                mat(g, 2, T[in->dst].len);
+                ld(g, 3, in->a);
+                rt_call(g, 32);
+                st(g, 0, in->dst);
+                break;
+            case OSC_I_ADESTROY: /* rt->arena_destroy(rt, handle) */
+                load_rt(g, 0);
+                ld(g, 1, in->a);
+                rt_call(g, 40);
+                break;
             case OSC_I_LOAD:
             case OSC_I_STORE:
                 ld(g, 9, in->a);

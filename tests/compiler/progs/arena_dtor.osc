@@ -1,0 +1,22 @@
+// entry: adtor
+// OSC-2 arenas: deterministic destruction order. At the end of an arena block
+// the unique owners declared inside it are released first (reverse
+// declaration order), then the arena is destroyed (one REGION_DESTROY frees
+// all its objects). Nested: inner arena before outer. The event order is
+// asserted by test_osc_compiler (arena destruction order).
+// expect-run: adtor 1 -> 8
+fn adtor(k: u32) -> u32 {
+    let mut s: u32 = 0;
+    let u: own [u32; 1] = alloc(k);
+    arena outer bound 3 {
+        let a: own [u32; 1] in outer = alloc(1);
+        arena inner bound 2 {
+            let b: own [u32; 2] in inner = alloc(2);
+            let v: own [u32; 1] = alloc(3);
+            s = a[0] + b[1] + v[0];
+        }
+        let w: own [u32; 1] = alloc(1);
+        s = s + w[0];
+    }
+    return s + u[0];
+}

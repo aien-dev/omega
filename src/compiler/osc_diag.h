@@ -36,6 +36,10 @@ typedef enum {
     OSC_DIAG_MISSING_FIELD,        /* struct literal leaves a field uninitialised */
     OSC_DIAG_UNDEFINED_TYPE,       /* struct type name not declared (before use) */
     OSC_DIAG_RECURSIVE_STRUCT,     /* struct field names the struct itself */
+    /* OSC-2 item 3 (arenas, docs/osc/OSC-2-DESIGN.md section 3), appended */
+    OSC_DIAG_ARENA_ESCAPE,         /* a borrow of an arena object would outlive the arena */
+    OSC_DIAG_ARENA_MOVE,           /* an arena object is moved (out of the arena, or into own param) */
+    OSC_DIAG_ARENA_CAPACITY,       /* arena bound out of range, or allocations statically exceed it */
     OSC_DIAG__COUNT
 } OscDiagKind;
 

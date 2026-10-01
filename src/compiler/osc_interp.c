@@ -154,6 +154,9 @@ static uint64_t run_func(Ctx *c, int fi, const uint64_t *args) {
             case OSC_I_CAST: v[in->dst] = do_cast(c, T[in->dst].s, T[in->a].s, v[in->a]); break;
             case OSC_I_ALLOC: v[in->dst] = osc_rt_alloc(c->rt, T[in->dst].len, v[in->a]); break;
             case OSC_I_RELEASE: osc_rt_release(c->rt, v[in->a], T[in->a].len); break;
+            case OSC_I_AOPEN: v[in->dst] = osc_rt_arena_open(c->rt, in->imm); break;
+            case OSC_I_AALLOC: v[in->dst] = osc_rt_arena_alloc(c->rt, v[in->b], T[in->dst].len, v[in->a]); break;
+            case OSC_I_ADESTROY: osc_rt_arena_destroy(c->rt, v[in->a]); break;
             case OSC_I_LOAD: v[in->dst] = *elem(c, &T[in->a], v[in->a], T[in->b].s, v[in->b]); break;
             case OSC_I_STORE: *elem(c, &T[in->a], v[in->a], T[in->b].s, v[in->b]) = v[in->c]; break;
             case OSC_I_FLOAD:

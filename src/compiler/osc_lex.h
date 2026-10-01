@@ -27,6 +27,8 @@ typedef enum {
     OT_ANDAND, OT_OROR, OT_SHL, OT_SHR, OT_EQ, OT_NE, OT_LT, OT_LE, OT_GT, OT_GE,
     /* OSC-2 item 2 (structs), appended */
     OT_STRUCT, OT_DOT,
+    /* OSC-2 item 3 (arenas), appended */
+    OT_ARENA,
     OT__COUNT
 } OscTokKind;
 
