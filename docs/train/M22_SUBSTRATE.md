@@ -92,3 +92,7 @@ silently rolled back.
   verifiable end to end).
 - Dispatch records are held with the shadow and written at commit, so work
   that is never committed leaves no tier (a) record.
+- If the pointer rename succeeds but the directory `fsync` after it fails,
+  the commit returns `E_IO`, readers already see NEW, and the writer refuses
+  every further commit until the store is reopened (recovery decides).
+  This path is not exercised by a test (it needs a failing `fsync`).

@@ -385,9 +385,19 @@ static void t_negatives(const float *t)
     make_store(d, N_SMALL, 1);
     tg_open(d, &st, NULL); sgd_commit(st, t, N_SMALL, MOM, 1); sgd_commit(st, t, N_SMALL, MOM, 2); tg_close(st);
     snprintf(p, sizeof p, "%s/dispatch.log", d);
+    off_t committed_len = file_size(d, "dispatch.log");
+    {   /* uncommitted tail present: a refused open must not modify the store */
+        int fd = open(p, O_WRONLY | O_APPEND);
+        uint8_t junk[192]; memset(junk, 0xab, sizeof junk);
+        CHECK(fd >= 0 && write(fd, junk, sizeof junk) == (ssize_t)sizeof junk, "append tail");
+        if (fd >= 0) close(fd);
+    }
     flip_byte(p, 192 + 33);
     CHECK(tg_open(d, &st, NULL) == TG_E_CHAIN, "tampered dispatch record refused");
+    CHECK(file_size(d, "dispatch.log") == committed_len + 192, "refused open left the dispatch log untouched");
     flip_byte(p, 192 + 33);
+    CHECK(tg_open(d, &st, NULL) == TG_OK && file_size(d, "dispatch.log") == committed_len, "valid open drops the tail");
+    tg_close(st);
     CHECK(truncate(p, 192) == 0 && tg_open(d, &st, NULL) == TG_E_CHAIN, "truncated dispatch log refused");
     CHECK(count_refusals(d, "E_CHAIN") == 2, "E_CHAIN recorded");
 

@@ -31,6 +31,7 @@ struct tg_store {
     int log_fd;
     tg_snapshot cur;
     tg_stats stats;
+    int poisoned;   /* a switch is visible but not known durable: no commits until reopen */
 };
 
 /* ---- fail points ------------------------------------------------------ */
@@ -208,6 +209,8 @@ static int load_gen(const char *path, uint64_t expect_gen, const uint8_t *expect
     if (got < GEN_HDR) { close(fd); return TG_E_TRUNC; }
     if (memcmp(h, GEN_MAGIC, 8) || get32(h + 8) != GEN_VERSION || get32(h + 12) != 0) { close(fd); return TG_E_FORMAT; }
     uint64_t pb = get64(h + 32), ob = get64(h + 40);
+    /* Each length is capped at 2^40 before the sum, so `want` cannot overflow
+     * and the file-size check below bounds every allocation. */
     if (pb > (1ull << 40) || ob > (1ull << 40)) { close(fd); return TG_E_FORMAT; }
     uint64_t want = GEN_HDR + pb + ob;
     if ((uint64_t)sb.st_size < want) { close(fd); return TG_E_TRUNC; }
@@ -425,8 +428,8 @@ int tg_open(const char *dir, tg_store **out, tg_recovery *rec_out)
         tg_close(st);
         return r;
     }
-    if ((r = sweep(dir, gen, &rec))) { tg_close(st); return r; }
-    /* Dispatch log: drop records of uncommitted work, then verify the chain. */
+    /* Dispatch log: verify the committed prefix first. Nothing in the store is
+     * modified until the committed generation AND its chain both verify. */
     if (path_of(p, dir, "dispatch.log")) { tg_close(st); return TG_E_ARG; }
     st->log_fd = open(p, O_RDWR);
     struct stat sb;
@@ -436,10 +439,6 @@ int tg_open(const char *dir, tg_store **out, tg_recovery *rec_out)
         tg_close(st);
         return TG_E_CHAIN;
     }
-    if ((uint64_t)sb.st_size > st->cur.dispatch_len) {
-        rec.dispatch_truncated = (uint64_t)sb.st_size - st->cur.dispatch_len;
-        if (ftruncate(st->log_fd, (off_t)st->cur.dispatch_len) || fsync(st->log_fd)) { tg_close(st); return TG_E_IO; }
-    }
     uint8_t head[TG_DIGEST];
     r = tg_dispatch_chain(dir, st->cur.dispatch_len, head, NULL);
     if (!r && memcmp(head, st->cur.dispatch_head, TG_DIGEST)) r = TG_E_CHAIN;
@@ -448,6 +447,12 @@ int tg_open(const char *dir, tg_store **out, tg_recovery *rec_out)
         tg_close(st);
         return r;
     }
+    /* Then drop leftovers of an interrupted commit. */
+    if ((uint64_t)sb.st_size > st->cur.dispatch_len) {
+        rec.dispatch_truncated = (uint64_t)sb.st_size - st->cur.dispatch_len;
+        if (ftruncate(st->log_fd, (off_t)st->cur.dispatch_len) || fsync(st->log_fd)) { tg_close(st); return TG_E_IO; }
+    }
+    if ((r = sweep(dir, gen, &rec))) { tg_close(st); return r; }
     if (rec_out) *rec_out = rec;
     *out = st;
     return TG_OK;
@@ -540,6 +545,8 @@ int tg_commit(tg_store *st, tg_shadow *sh, tg_validate_fn validate, void *ctx)
 {
     char sp[PATHMAX], gp[PATHMAX];
     if (!st || !sh) return TG_E_ARG;
+    if (st->poisoned)
+        return refuse(st, sh, TG_E_STATE, "commit: previous switch not known durable; reopen the store to recover");
     if (sh->state != SH_OPEN) {
         st->stats.refusals++;
         record_refusal(st->dir, TG_E_STATE, st->cur.gen, "commit: shadow already committed or discarded (double switch)");
@@ -626,6 +633,7 @@ int tg_commit(tg_store *st, tg_shadow *sh, tg_validate_fn validate, void *ctx)
     free(sh->recs); sh->recs = NULL;
     sh->state = SH_COMMITTED;
     if (wp > 0) {
+        st->poisoned = 1;
         /* The switch is visible (readers see NEW) but its directory entry may not
          * be durable yet: report it, never undo it. */
         st->stats.refusals++;
