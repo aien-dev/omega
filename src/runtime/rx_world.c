@@ -1129,6 +1129,61 @@ static void finish_writes(RxWorld *w, PendingWrite *pw, uint32_t n_pw, uint64_t 
     }
 }
 
+
+/* ---- I11: merge an upstream writer's wake ------------------------------- */
+
+/* Is another activation running (fn called, not yet published) that may write
+ * a field rid triggers on or reads? With one worker this is never true when a
+ * worker pops rid: the only worker is the one popping, and the sequential
+ * reference never pops. With several workers it is true exactly when rid was
+ * popped while such a writer was still computing; run now, rid would read the
+ * pre-publication value, commit on it, and then be woken again by the writer:
+ * one extra commit per stimulus that a single worker merges (I11, omega.risk
+ * behind aien.hypothesis). Deferred and graphics-seat activations do not
+ * hold anyone: their completion is not bounded by this world's workers.
+ * Caller holds mu. */
+static bool upstream_running(const RxWorld *w, uint32_t rid) {
+#ifdef RX_WORLD_MUTATE_NO_UPSTREAM_HOLD
+    (void)w;
+    (void)rid;
+    return false;
+#else
+    RxDep deps[RX_MAX_DEPS];
+    uint32_t n = gather_deps(&w->reactions[rid].desc, deps);
+    for (uint32_t j = 0; j < w->n_reactions; j++) {
+        if (j == rid) continue;
+        const RxReaction *u = &w->reactions[j];
+        if (u->state != RX_RUNNING && u->state != RX_PUBLISHING) continue;
+        if (u->deferred || u->resident_seat || u->removed) continue;
+        for (uint32_t a = 0; a < u->desc.n_writes; a++) {
+            const RxDep *wd = &u->desc.writes[a];
+            for (uint32_t b = 0; b < n; b++)
+                if (wd->obj.id == deps[b].obj.id && wd->obj.generation == deps[b].obj.generation &&
+                    (wd->mask & deps[b].mask))
+                    return true;
+        }
+    }
+    return false;
+#endif
+}
+
+/* Put every held activation whose writers have all finished back on its ready
+ * ring, lowest reaction id first. It is still admitted (slot charged, counted
+ * in in_flight), so it is not admitted again. Caller holds mu. */
+static void release_upstream_held(RxWorld *w) {
+    for (uint32_t i = 0; i < w->n_reactions; i++) {
+        RxReaction *r = &w->reactions[i];
+        if (!r->upstream_held || upstream_running(w, i)) continue;
+        r->upstream_held = false;
+        uint32_t p = r->desc.priority;
+        if (p >= RX_PRIORITY_CLASSES) p = RX_PRIO_BACKGROUND;
+        uint32_t tail = (w->ready_head[p] + w->ready_len[p]) % RX_MAX_REACTIONS;
+        w->ready_q[p][tail] = i;
+        w->ready_len[p]++;
+        if (w->timing) r->t_ready = now_ns();
+        pthread_cond_signal(&w->work_cv);
+    }
+}
 /* ---- worker ------------------------------------------------------------- */
 
 static void arm_backoff(RxReaction *r) {
@@ -1276,6 +1331,9 @@ static void end_activation_inner(RxWorld *w, uint32_t rid) {
     if (r->quarantined) r->rearm = false;
     set_state(w, r, RX_DORMANT);
     if (w->in_flight) w->in_flight--;
+    /* I11: this activation published (or gave up); a dependent held behind
+     * it may run now, after its wake, if any, has merged. */
+    release_upstream_held(w);
     if (r->rearm && r->yield_left && others_busy(w, rid)) {
         r->yield_left--;
         r->parked = true;
@@ -1416,6 +1474,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         r->resident_seq = seq;
         r->resident_parent = r->wake_cause;
         pthread_cond_broadcast(&w->claim_cv);
+        release_upstream_held(w);   /* a seat activation holds no one (I11) */
         return;
     }
     RxCtx ctx;
@@ -1449,6 +1508,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
             w->n_deferred++;
             w->stats.deferrals++;
             if (r->resume_pending) resume_locked(w, rid);
+            release_upstream_held(w);   /* a deferred activation holds no one (I11) */
             return;
         }
     }
@@ -1632,6 +1692,13 @@ static void *worker_main(void *arg) {
             c0 = w->timing ? thread_cpu_ns() : 0;
         }
         if (w->stopping) break;
+        if (upstream_running(w, rid)) {
+            /* I11: a writer of its inputs is still computing. Hold the
+             * activation (admitted, READY, off the ring) so that writer's
+             * wake coalesces into it, as one worker would. */
+            w->reactions[rid].upstream_held = true;
+            continue;
+        }
         if (w->timing) {
             uint64_t c1 = thread_cpu_ns();
             uint64_t t1 = now_ns();
