@@ -5,7 +5,7 @@
 ifndef ESTIMATION_V3_TOOLS_MK
 ESTIMATION_V3_TOOLS_MK := 1
 include mk/estimation.mk
-.PHONY: est3c-fit est3c-eval test-est3c-tools est3c-tools-stamp
+.PHONY: est3c-fit est3c-eval test-est3c-tools est3c-tools-force
 ESTV3T_DIR = $(OUT_DIR)/est3c-tools
 ESTV3T_CFLAGS = $(EST_CFLAGS) -Itools/estimation
 ESTV3T_HDRS = tools/estimation/est3c_common.h tools/estimation/est_replay.h src/estimation/est_pred.h src/estimation/est_mix.h $(EST_HDRS)
@@ -30,11 +30,11 @@ ESTV3T_ID = -DTOOL_COMMIT='"$(ESTV3T_COMMIT)"' -DTOOL_DIRTY=$(ESTV3T_DIRTY) $(ES
 	-DC3_D2_SCHED_SHA='"$(if $(ESTV3T_D2SCHED),$(ESTV3T_D2SCHED),absent)"' -DC3_PARAMS_SHA='"$(if $(ESTV3T_PARAMS),$(ESTV3T_PARAMS),absent)"' \
 	-DC3_REPO_ROOT='"$(ESTV3T_ROOT)"'
 
-est3c-tools-stamp:
+$(ESTV3T_DIR)/toolid.stamp: est3c-tools-force
 	@mkdir -p $(ESTV3T_DIR)
 	@echo "$(ESTV3T_COMMIT) $(ESTV3T_DIRTY) $(ESTV3T_PROTO) $(ESTV3T_D2RAW) $(ESTV3T_D2MARKS) $(ESTV3T_D2SCHED) $(ESTV3T_PARAMS) $(ESTV3T_ROOT)" > $(ESTV3T_DIR)/toolid.new; \
 	cmp -s $(ESTV3T_DIR)/toolid.new $(ESTV3T_DIR)/toolid.stamp || mv $(ESTV3T_DIR)/toolid.new $(ESTV3T_DIR)/toolid.stamp; rm -f $(ESTV3T_DIR)/toolid.new
-$(ESTV3T_DIR)/toolid.stamp: | est3c-tools-stamp
+est3c-tools-force: ;
 
 $(ESTV3T_DIR)/est_pred.o: src/estimation/est_pred.c $(ESTV3T_HDRS)
 	@mkdir -p $(ESTV3T_DIR)
