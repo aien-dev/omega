@@ -39,7 +39,7 @@ budget. It is split:
   CI runs it when `src/compiler/` or `src/aarch64_*` changes.
 - `make test-compiler-quick`: the same binaries, every golden and negative
   program, determinism, the legacy caller allowlist; smaller sweeps (model
-  10^5 sequences, compiler fuzz 120 per entry plain and 24 under ASan/UBSan,
+  10^5 sequences, compiler fuzz 120 per entry, plain and under ASan/UBSan (smaller counts miss coverage checks),
   legacy writer differential in its sampled mode). Target under 60 s single
   core. CI runs it on every change to the compiler paths. It is a smoke run
   and is never receipt evidence.

@@ -114,7 +114,7 @@ test-compiler: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_model_asan \
 OSC_QDIR = $(OSC_DIR)/quick
 OSC_QUICK_MODEL_SEQ ?= 100000
 OSC_QUICK_FUZZ ?= 120
-OSC_QUICK_ASAN_FUZZ ?= 24
+OSC_QUICK_ASAN_FUZZ ?= 120
 test-compiler-full: test-compiler
 
 test-compiler-quick: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_backend $(OSC_DIR)/test_osc_backend_asan \
