@@ -665,6 +665,12 @@ static int elementwise_n(OmegaTensorCtx *ctx, OmegaNumericOp op, unsigned arity,
     for (unsigned i = 0; i < arity; i++) free(in[i]);
     return rc;
 }
+/* NEG: sign-bit flip; any NaN becomes the canonical quiet NaN. */
+static uint32_t neg_bits(uint32_t u) {
+    if ((u & 0x7f800000U) == 0x7f800000U && (u & 0x007fffffU)) return 0x7fc00000U; /* MUT:NEG_NAN */
+    return u ^ 0x80000000U; /* MUT:NEG_SUB */
+}
+
 
 /* RELU (M20 cut ops): no E1 op exists, so the tensor layer defines it as a
  * pure bit-level select on the FP32 pattern, with no float arithmetic and no
@@ -696,7 +702,7 @@ static void relu_dense(const float *src, float *dst, size_t n) {
 int omega_tensor_unary(OmegaTensorCtx *ctx, OmegaTensorUnaryOp op, OmegaTensor a, OmegaTensor *out) {
     if (!ctx || !out) return OMEGA_TENSOR_ERR_BAD_ARGS;
     if ((unsigned)op >= OMEGA_TU_COUNT) return OMEGA_TENSOR_ERR_BAD_ARGS;
-    if (op != OMEGA_TU_SQRT && op != OMEGA_TU_RELU && !ctx->real->transc) return OMEGA_TENSOR_ERR_REALIZATION;
+    if (op != OMEGA_TU_SQRT && op != OMEGA_TU_RELU && op != OMEGA_TU_NEG && !ctx->real->transc) return OMEGA_TENSOR_ERR_REALIZATION;
     TensorSlot *x;
     StorageSlot *s;
     int rc = tensor_get(ctx, a, &x, &s);
@@ -712,12 +718,39 @@ int omega_tensor_unary(OmegaTensorCtx *ctx, OmegaTensorUnaryOp op, OmegaTensor a
     if (!rc) {
         int nrc = 0;
         if (op == OMEGA_TU_RELU) relu_dense(src, buf, n);
-        else nrc = op == OMEGA_TU_SQRT ? ctx->real->elementwise(OMEGA_NOP_SQRT, src, NULL, NULL, buf, n)
-                                       : ctx->real->transc(op, src, buf, n);
+        else if (op == OMEGA_TU_NEG) {
+            uint32_t *ob = buf;
+            for (size_t i = 0; i < n; i++) ob[i] = neg_bits(omega_float_to_bits(src[i]));
+        } else {
+            nrc = op == OMEGA_TU_SQRT ? ctx->real->elementwise(OMEGA_NOP_SQRT, src, NULL, NULL, buf, n)
+                                      : ctx->real->transc(op, src, buf, n);
+        }
         if (nrc) rc = numeric_fail(ctx, nrc, *out);
     }
     free(src);
     return rc;
+}
+
+/* Constant tensors: pure bit fill, no arithmetic. */
+int omega_tensor_full(OmegaTensorCtx *ctx, uint32_t rank, const uint64_t *shape, float value,
+                      OmegaTensor *out) {
+    if (!ctx || !out) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    void *buf;
+    int rc = new_dense(ctx, OMEGA_DT_F32, rank, shape, out, &buf);
+    if (rc) return rc;
+    uint32_t u = omega_float_to_bits(value); /* MUT:FULL_CANON */
+    uint32_t *p = buf;
+    size_t n = (size_t)ctx->ts[out->slot].info.elements;
+    for (size_t i = 0; i < n; i++) p[i] = u;
+    return OMEGA_TENSOR_OK;
+}
+
+int omega_tensor_zeros(OmegaTensorCtx *ctx, uint32_t rank, const uint64_t *shape, OmegaTensor *out) {
+    return omega_tensor_full(ctx, rank, shape, 0.0f, out); /* MUT:ZEROS_NEG0 */
+}
+
+int omega_tensor_ones(OmegaTensorCtx *ctx, uint32_t rank, const uint64_t *shape, OmegaTensor *out) {
+    return omega_tensor_full(ctx, rank, shape, 1.0f, out);
 }
 
 int omega_tensor_binary(OmegaTensorCtx *ctx, OmegaTensorBinaryOp op, OmegaTensor a, OmegaTensor b,

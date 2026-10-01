@@ -1254,6 +1254,163 @@ static void test_trig_domain(void) {
     if (!rcs) omega_tensor_release(g, S);
 }
 
+/* ---- 7c. constants and NEG (LT-M21 CR-2) ----------------------------------
+ * Expected bits come from the definitions written in this test: a fill of the
+ * given bit pattern; NEG = flip bit 31, any NaN -> 0x7fc00000. Comparisons are
+ * raw bits (NOT same(): that would treat every NaN as equal). */
+static uint32_t neg_expect(uint32_t u) {
+    if ((u & 0x7f800000U) == 0x7f800000U && (u & 0x007fffffU)) return 0x7fc00000U;
+    return u ^ 0x80000000U;
+}
+static size_t all_bits_eq(OmegaTensor t, uint32_t want) {
+    float *v = rd(t);
+    if (!v) return (size_t)-1;
+    OmegaTensorInfo in;
+    omega_tensor_info(g, t, &in);
+    size_t m = 0;
+    for (size_t i = 0; i < (size_t)in.elements; i++) m += omega_float_to_bits(v[i]) != want;
+    free(v);
+    return m;
+}
+static void test_const_neg(void) {
+    uint64_t s2[2] = {3, 5}, s8[8] = {2, 2, 2, 2, 2, 2, 2, 2}, s9[9] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+    uint64_t sbig[2] = {OMEGA_TENSOR_MAX_ELEMS, 2}, sone[1] = {OMEGA_TENSOR_MAX_ELEMS + 1};
+    uint64_t szero[2] = {3, 0};
+    OmegaTensor t;
+    OmegaTensorInfo in;
+
+    CHECK(omega_tensor_zeros(g, 2, s2, &t) == 0 && all_bits_eq(t, 0x00000000U) == 0, "zeros are +0.0 bits");
+    omega_tensor_release(g, t);
+    CHECK(omega_tensor_ones(g, 2, s2, &t) == 0 && all_bits_eq(t, 0x3f800000U) == 0, "ones are 1.0f bits");
+    omega_tensor_release(g, t);
+    /* full keeps every bit pattern, -0.0 and NaN payloads included */
+    for (size_t k = 0; k < NSPECIAL; k++) {
+        int rc = omega_tensor_full(g, 2, s2, omega_bits_to_float(SPECIALS[k]), &t);
+        CHECK(rc == 0, "full special %08x rc=%d", SPECIALS[k], rc);
+        if (rc) continue;
+        CHECK(all_bits_eq(t, SPECIALS[k]) == 0, "full keeps exact bits %08x", SPECIALS[k]);
+        CHECK(omega_tensor_info(g, t, &in) == 0 && in.dtype == OMEGA_DT_F32 && in.rank == 2 &&
+                  in.shape[0] == 3 && in.shape[1] == 5 && in.elements == 15 && !in.is_view,
+              "full info %08x", SPECIALS[k]);
+        omega_tensor_release(g, t);
+    }
+    /* rank 0 and rank 8 (the limit) */
+    CHECK(omega_tensor_full(g, 0, NULL, 2.5f, &t) == 0 && all_bits_eq(t, 0x40200000U) == 0, "rank-0 full");
+    omega_tensor_release(g, t);
+    CHECK(omega_tensor_full(g, 8, s8, -1.0f, &t) == 0 && omega_tensor_info(g, t, &in) == 0 &&
+              in.elements == 256 && all_bits_eq(t, 0xbf800000U) == 0, "rank-8 full");
+    omega_tensor_release(g, t);
+    /* refusals */
+    CHECK(omega_tensor_full(g, 9, s9, 0.0f, &t) == OMEGA_TENSOR_ERR_RANK, "rank 9 refused");
+    CHECK(omega_tensor_full(g, 2, sbig, 0.0f, &t) == OMEGA_TENSOR_ERR_CAPACITY, "2^31 elements refused");
+    CHECK(omega_tensor_full(g, 1, sone, 0.0f, &t) == OMEGA_TENSOR_ERR_CAPACITY, "MAX_ELEMS+1 refused");
+    CHECK(omega_tensor_zeros(g, 2, szero, &t) == OMEGA_TENSOR_ERR_SHAPE, "zero dim refused (zeros)");
+    CHECK(omega_tensor_ones(g, 1, NULL, &t) == OMEGA_TENSOR_ERR_BAD_ARGS, "NULL shape refused (ones)");
+    CHECK(omega_tensor_full(g, 0, NULL, 0.0f, NULL) == OMEGA_TENSOR_ERR_BAD_ARGS, "NULL out refused");
+    CHECK(omega_tensor_full(NULL, 0, NULL, 0.0f, &t) == OMEGA_TENSOR_ERR_BAD_ARGS, "NULL ctx refused");
+
+    /* NEG on the special-value grid, dense */
+    float sv[NSPECIAL];
+    for (size_t i = 0; i < NSPECIAL; i++) sv[i] = omega_bits_to_float(SPECIALS[i]);
+    uint64_t sn[1] = {NSPECIAL};
+    OmegaTensor A = mk(1, sn, sv), N;
+    int rc = omega_tensor_unary(g, OMEGA_TU_NEG, A, &N);
+    CHECK(rc == 0, "neg rc=%d", rc);
+    if (!rc) {
+        float *v = rd(N);
+        for (size_t i = 0; v && i < NSPECIAL; i++)
+            CHECK(omega_float_to_bits(v[i]) == neg_expect(SPECIALS[i]), "neg(%08x) = %08x want %08x",
+                  SPECIALS[i], omega_float_to_bits(v[i]), neg_expect(SPECIALS[i]));
+        free(v);
+        omega_tensor_release(g, N);
+    }
+    /* explicit pins: +0 -> -0 and -0 -> +0 (0 - x gets +0 wrong), NaN canonical */
+    float pins[3] = {omega_bits_to_float(0x00000000U), omega_bits_to_float(0x80000000U),
+                     omega_bits_to_float(0x7fa00001U)};
+    uint64_t s3[1] = {3};
+    OmegaTensor P = mk(1, s3, pins);
+    rc = omega_tensor_unary(g, OMEGA_TU_NEG, P, &N);
+    if (!rc) {
+        float *v = rd(N);
+        CHECK(v && omega_float_to_bits(v[0]) == 0x80000000U, "neg(+0) = -0");
+        CHECK(v && omega_float_to_bits(v[1]) == 0x00000000U, "neg(-0) = +0");
+        CHECK(v && omega_float_to_bits(v[2]) == 0x7fc00000U, "neg(sNaN payload) = canonical qNaN");
+        free(v);
+        omega_tensor_release(g, N);
+    } else CHECK(0, "neg pins rc=%d", rc);
+    omega_tensor_release(g, P);
+
+    /* NEG through views: transpose, strided slice, broadcast */
+    float m[3 * 4];
+    for (size_t i = 0; i < 12; i++) m[i] = omega_bits_to_float(SPECIALS[(i * 7) % NSPECIAL]);
+    uint64_t s34[2] = {3, 4};
+    OmegaTensor M = mk(2, s34, m), T, S, B;
+    CHECK(omega_tensor_transpose(g, M, &T) == 0, "transpose");
+    rc = omega_tensor_unary(g, OMEGA_TU_NEG, T, &N);
+    if (!rc) {
+        float *v = rd(N);
+        size_t bad = 0;
+        for (size_t r = 0; v && r < 4; r++)
+            for (size_t c = 0; c < 3; c++)
+                bad += omega_float_to_bits(v[r * 3 + c]) != neg_expect(omega_float_to_bits(m[c * 4 + r]));
+        CHECK(v && bad == 0, "neg of transposed view (%zu bad)", bad);
+        free(v);
+        omega_tensor_release(g, N);
+    } else CHECK(0, "neg transpose rc=%d", rc);
+    uint64_t st1[2] = {0, 1}, sp1[2] = {3, 4}, stp[2] = {2, 2};
+    CHECK(omega_tensor_slice(g, M, st1, sp1, stp, &S) == 0, "slice");  /* rows 0,2 ; cols 1,3 */
+    rc = omega_tensor_unary(g, OMEGA_TU_NEG, S, &N);
+    if (!rc) {
+        float *v = rd(N);
+        size_t bad = 0;
+        for (size_t r = 0; v && r < 2; r++)
+            for (size_t c = 0; c < 2; c++)
+                bad += omega_float_to_bits(v[r * 2 + c]) != neg_expect(omega_float_to_bits(m[(2 * r) * 4 + 1 + 2 * c]));
+        CHECK(v && bad == 0, "neg of strided slice (%zu bad)", bad);
+        free(v);
+        omega_tensor_release(g, N);
+    } else CHECK(0, "neg slice rc=%d", rc);
+    uint64_t sb[2] = {2, NSPECIAL};
+    CHECK(omega_tensor_broadcast_to(g, A, 2, sb, &B) == 0, "broadcast_to");
+    rc = omega_tensor_unary(g, OMEGA_TU_NEG, B, &N);
+    if (!rc) {
+        float *v = rd(N);
+        size_t bad = 0;
+        for (size_t r = 0; v && r < 2; r++)
+            for (size_t c = 0; c < NSPECIAL; c++)
+                bad += omega_float_to_bits(v[r * NSPECIAL + c]) != neg_expect(SPECIALS[c]);
+        CHECK(v && bad == 0, "neg of broadcast view (%zu bad)", bad);
+        free(v);
+        omega_tensor_release(g, N);
+    } else CHECK(0, "neg broadcast rc=%d", rc);
+    /* F16 refused; NEG works with no transc entry in the realization */
+    uint16_t hh[2] = {0x3c00, 0x0000};
+    uint64_t s2h[1] = {2};
+    OmegaTensor H;
+    CHECK(omega_tensor_from_data(g, OMEGA_DT_F16, 1, s2h, hh, &H) == 0, "f16 create");
+    CHECK(omega_tensor_unary(g, OMEGA_TU_NEG, H, &N) == OMEGA_TENSOR_ERR_DTYPE, "neg of F16 refused");
+    omega_tensor_release(g, H);
+    {
+        OmegaTensorRealization nt = *omega_tensor_cpu_realization();
+        nt.transc = NULL;
+        OmegaTensorCtx *c;
+        CHECK(omega_tensor_ctx_create(8, &nt, &c) == 0, "ctx without transc");
+        OmegaTensor X, Y;
+        float one[1] = {3.0f};
+        uint64_t s1[1] = {1};
+        CHECK(omega_tensor_from_f32(c, 1, s1, one, &X) == 0, "x");
+        rc = omega_tensor_unary(c, OMEGA_TU_NEG, X, &Y);
+        float r1 = 0.0f;
+        CHECK(rc == 0 && omega_tensor_read_f32(c, Y, &r1, 1) == 0 && omega_float_to_bits(r1) == 0xc0400000U,
+              "NEG served without transc entry (rc=%d)", rc);
+        omega_tensor_ctx_destroy(c);
+    }
+    /* sources are immutable: NEG made a new tensor */
+    CHECK(all_bits_eq(A, SPECIALS[0]) != (size_t)-1, "source readable after neg");
+    OmegaTensor all[] = {A, M, T, S, B};
+    for (size_t i = 0; i < sizeof(all) / sizeof(all[0]); i++) omega_tensor_release(g, all[i]);
+}
+
 /* ---- 8. determinism ------------------------------------------------------- */
 static void kat_digest(uint8_t out[32]) {
     uint64_t save = g_rng;
@@ -1302,6 +1459,7 @@ int main(void) {
     test_relu_unary();
     test_unary2_specials();
     test_trig_domain();
+    test_const_neg();
     test_determinism();
     /* every test released what it made */
     uint32_t lt, ls;
