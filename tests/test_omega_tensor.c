@@ -780,6 +780,9 @@ static const TranscCase TRANSC_CASES[] = {
      * :501), not correctly rounded, bit-exact with the direct call. */
     {OMEGA_TU_EXP, omega_math_exp, "EXP"},
     {OMEGA_TU_LOG, omega_math_log, "LOG"},
+    {OMEGA_TU_RSQRT, omega_math_rsqrt, "RSQRT"},
+    {OMEGA_TU_ERF, omega_math_erf, "ERF"},
+    {OMEGA_TU_GELU, omega_math_gelu, "GELU"},
 };
 #define NTRANSC (sizeof(TRANSC_CASES) / sizeof(TRANSC_CASES[0]))
 
@@ -1075,6 +1078,80 @@ static void test_relu_unary(void) {
     }
 }
 
+/* ---- 7c. RSQRT / ERF / GELU special values (LT-M21 CR-1, unary2) ---------
+ * Edge inputs from docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md (RSQRT row 45:
+ * +0 -> +inf, -0 -> -inf, x < 0 -> NaN, +inf -> +0, subnormals; ERF row 48:
+ * |x| >= 4 -> +-1, +-0 -> +-0, seam at 0.5; GELU row 50: x >= 8 -> x,
+ * x < -15.5 -> -0, +-0 -> +-0). Every op runs on a dense tensor and on a
+ * step-2 strided slice with offset 1 (odd positions only hold the specials),
+ * compared bit for bit with direct E1 calls; then the contract-stated values
+ * are checked on the tensor output. */
+static const uint32_t U2_SPECIALS[] = {
+    0x00000000U, 0x80000000U, 0x7f800000U, 0xff800000U, 0x7fc00000U, 0xffc00123U, 0x7fa00001U,
+    0x00000001U, 0x80000001U, 0x007fffffU, 0x00800000U, 0x7f7fffffU, 0xbf800000U, 0x40800000U,
+    0x40800000U ^ 0x80000000U, 0x407fffffU, 0xc07fffffU, 0x3f000000U, 0xbf000000U, 0x3effffffU,
+    0x41000000U, 0x40ffffffU, 0xc1780000U, 0xc1780001U, 0xc177ffffU, 0x40000000U, 0x40800001U,
+    0x3f800000U, 0x3fb504f3U, 0xc0000000U,
+};
+#define NU2 (sizeof(U2_SPECIALS) / sizeof(U2_SPECIALS[0]))
+
+static uint32_t u2_out(OmegaTensorUnaryOp op, uint32_t xbits) {
+    float x = omega_bits_to_float(xbits);
+    OmegaTensor X = mk(0, NULL, &x), O = {0, 0};
+    uint32_t r = 0xdeadbeefU;
+    if (!omega_tensor_unary(g, op, X, &O)) {
+        float *got = rd(O);
+        if (got) r = omega_float_to_bits(got[0]);
+        free(got);
+        omega_tensor_release(g, O);
+    }
+    omega_tensor_release(g, X);
+    return r;
+}
+
+static void test_unary2_specials(void) {
+    float dense[NU2], wide[2 * NU2 + 1];
+    size_t idx[NU2];
+    for (size_t i = 0; i < NU2; i++) dense[i] = omega_bits_to_float(U2_SPECIALS[i]);
+    for (size_t i = 0; i < 2 * NU2 + 1; i++) wide[i] = 1234.5f;  /* filler at even positions */
+    for (size_t i = 0; i < NU2; i++) wide[1 + 2 * i] = dense[i];
+    uint64_t sd[1] = {NU2}, sw[1] = {2 * NU2 + 1}, st[1] = {1}, sp[1] = {2 * NU2 + 1}, se[1] = {2};
+    OmegaTensor D = mk(1, sd, dense), W = mk(1, sw, wide), S = {0, 0};
+    int rcs = omega_tensor_slice(g, W, st, sp, se, &S);
+    CHECK(rcs == 0, "unary2: step-2 slice rc=%d", rcs);
+    for (size_t k = 0; k < NTRANSC; k++) {
+        const TranscCase *tc = &TRANSC_CASES[k];
+        if (tc->op != OMEGA_TU_RSQRT && tc->op != OMEGA_TU_ERF && tc->op != OMEGA_TU_GELU) continue;
+        for (size_t i = 0; i < NU2; i++) idx[i] = i;
+        transc_check(tc, D, dense, idx, NU2, "special values dense");
+        for (size_t i = 0; i < NU2; i++) idx[i] = 1 + 2 * i;
+        if (!rcs) transc_check(tc, S, wide, idx, NU2, "special values step-2 slice");
+    }
+    struct { OmegaTensorUnaryOp op; uint32_t x, y; const char *what; } want[] = {
+        {OMEGA_TU_RSQRT, 0x00000000U, 0x7f800000U, "RSQRT(+0) = +inf"},
+        {OMEGA_TU_RSQRT, 0x80000000U, 0xff800000U, "RSQRT(-0) = -inf"},
+        {OMEGA_TU_RSQRT, 0xbf800000U, 0x7fc00000U, "RSQRT(-1) = canonical qNaN"},
+        {OMEGA_TU_RSQRT, 0x7f800000U, 0x00000000U, "RSQRT(+inf) = +0"},
+        {OMEGA_TU_RSQRT, 0x40800000U, 0x3f000000U, "RSQRT(4) = 0.5 exact"},
+        {OMEGA_TU_ERF, 0x80000000U, 0x80000000U, "ERF(-0) = -0"},
+        {OMEGA_TU_ERF, 0x40800000U, 0x3f800000U, "ERF(4) = +1"},
+        {OMEGA_TU_ERF, 0xff800000U, 0xbf800000U, "ERF(-inf) = -1"},
+        {OMEGA_TU_ERF, 0x7fa00001U, 0x7fc00000U, "ERF(sNaN) = canonical qNaN"},
+        {OMEGA_TU_GELU, 0x80000000U, 0x80000000U, "GELU(-0) = -0"},
+        {OMEGA_TU_GELU, 0x41000000U, 0x41000000U, "GELU(8) = 8"},
+        {OMEGA_TU_GELU, 0x7f800000U, 0x7f800000U, "GELU(+inf) = +inf"},
+        {OMEGA_TU_GELU, 0xff800000U, 0x80000000U, "GELU(-inf) = -0"},
+        {OMEGA_TU_GELU, 0xc1780001U, 0x80000000U, "GELU(just below -15.5) = -0"},
+    };
+    for (size_t i = 0; i < sizeof(want) / sizeof(want[0]); i++) {
+        uint32_t y = u2_out(want[i].op, want[i].x);
+        CHECK(y == want[i].y, "unary2 contract value %s (got 0x%08x)", want[i].what, y);
+    }
+    omega_tensor_release(g, D);
+    omega_tensor_release(g, W);
+    if (!rcs) omega_tensor_release(g, S);
+}
+
 /* ---- 8. determinism ------------------------------------------------------- */
 static void kat_digest(uint8_t out[32]) {
     uint64_t save = g_rng;
@@ -1121,6 +1198,7 @@ int main(void) {
     test_mutations();
     test_transc_unary();
     test_relu_unary();
+    test_unary2_specials();
     test_determinism();
     /* every test released what it made */
     uint32_t lt, ls;

@@ -706,7 +706,7 @@ int omega_tensor_unary(OmegaTensorCtx *ctx, OmegaTensorUnaryOp op, OmegaTensor a
     size_t n = (size_t)in.elements;
     float *src = malloc(n * sizeof(float));
     if (!src) return OMEGA_TENSOR_ERR_CAPACITY;
-    gather(s, &in, src); /* MUT:UNARY_VIEW_STRIDE */
+    gather(s, &in, src); /* MUT:UNARY_VIEW_STRIDE MUT:GELU_VIEW_STRIDE */
     void *buf;
     rc = new_dense(ctx, OMEGA_DT_F32, in.rank, in.shape, out, &buf);
     if (!rc) {

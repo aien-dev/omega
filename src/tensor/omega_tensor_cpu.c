@@ -20,6 +20,8 @@ static float (*const TRANSC_FN[OMEGA_TU_COUNT])(float) = {
     [OMEGA_TU_TANH] = omega_math_tanh,
     /* E1 Omega-defined polynomials, src/omega_numeric.c:458 and :501 (cut ops) */
     [OMEGA_TU_EXP] = omega_math_exp, [OMEGA_TU_LOG] = omega_math_log, /* MUT:TRANSC_EXP_LOG_SWAP */
+    [OMEGA_TU_RSQRT] = omega_math_rsqrt, [OMEGA_TU_ERF] = omega_math_erf, /* MUT:TRANSC_RSQRT_ERF_SWAP */
+    [OMEGA_TU_GELU] = omega_math_gelu,
 };
 
 static int cpu_transc(OmegaTensorUnaryOp op, const float *a, float *out, size_t n) {
