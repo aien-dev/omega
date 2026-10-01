@@ -178,6 +178,7 @@ lp_trn="$out/trn1"; lp_m22="$out/m22/a"; i=0
 while [ $i -lt 2100 ]; do lp_trn="$lp_trn/."; lp_m22="$lp_m22/."; i=$((i + 1)); done
 expect_refusal limit-corpus-path-too-long 2 "path too long" -- "$V" trn1-corpus "$lp_trn"
 expect_refusal limit-dispatch-path-too-long 1 "store path too long" -- "$V" verify-dispatch "$lp_m22"
+expect_refusal limit-mutate-path-too-long 2 "path too long" -- "$M" dispatch "$lp_m22" flip-op
 mkdir -p "$out/trn1/longline"
 { i=0; while [ $i -lt 1500 ]; do printf x; i=$((i + 1)); done; echo " OK"; } > "$out/trn1/longline/expected.txt"
 : > "$out/trn1/longline/compare.txt"

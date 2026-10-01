@@ -166,17 +166,31 @@ static void rechain(uint8_t *log, size_t n, uint8_t head[32]) {
     }
 }
 
+/* Build DIR/NAME into out[cap]. 0 = built; -1 = would not fit (reason to
+ * stderr). A truncated path can name a different file, so it is refused. */
+static int join_path(char *out, size_t cap, const char *dir, const char *name) {
+    int w = snprintf(out, cap, "%s/%s", dir, name);
+    if (w < 0 || (size_t)w >= cap) {
+        fprintf(stderr, "mutate: path too long (%d bytes, limit %zu): %s/%s\n", w, cap - 1, dir, name);
+        if (cap) out[0] = 0;
+        return -1;
+    }
+    return 0;
+}
+
 /* Rewrite the committed generation so it names `head`: header +56, digest
  * at +120 over [0,120) + body, CURRENT's hex digest. */
 static int reforge_store(const char *dir, const uint8_t head[32]) {
     char p[4096], gp[4096];
     size_t n;
-    snprintf(p, sizeof p, "%s/CURRENT", dir);
+    if (join_path(p, sizeof p, dir, "CURRENT")) return -1;
     uint8_t *cur = slurp(p, &n);
     if (!cur || n != 95) { free(cur); return -1; }
     char gen[21];
     memcpy(gen, cur + 9, 20); gen[20] = 0;
-    snprintf(gp, sizeof gp, "%s/gen-%s.bin", dir, gen);
+    char gname[40];
+    snprintf(gname, sizeof gname, "gen-%s.bin", gen);
+    if (join_path(gp, sizeof gp, dir, gname)) { free(cur); return -1; }
     size_t gn;
     uint8_t *g = slurp(gp, &gn);
     if (!g || gn < 152) { free(cur); free(g); return -1; }
@@ -195,7 +209,7 @@ static int reforge_store(const char *dir, const uint8_t head[32]) {
 
 static int dispatch(const char *dir, const char *name) {
     char p[4096];
-    snprintf(p, sizeof p, "%s/dispatch.log", dir);
+    if (join_path(p, sizeof p, dir, "dispatch.log")) return 2;
     size_t n;
     uint8_t *b = slurp(p, &n);
     if (!b || n < 192 * 4) { fprintf(stderr, "mutate: dispatch.log missing or under 4 records\n"); free(b); return 2; }
