@@ -309,10 +309,18 @@ if [ -n "$AREACH" ]; then REMAINING_CENTRAL=$AREACH; fi
 REMAINING_UNCLASS='"NOT_RUN"'
 if [ -n "$UNCLASS" ]; then REMAINING_UNCLASS=$UNCLASS; fi
 
-# G8 scope: the receipt itself (bound to the candidate, clean tree, named by its own
-# SHA-256). The merge with a merge commit is a separate human step recorded in the PR;
-# this script does not claim it. Dry mode never claims G8.
-if [ "$CAND_BOUND" = true ] && [ "$TREE_DIRTY" = false ] && [ "$DRY" != 1 ]; then G8=PASS; else G8=NOT_RUN; fi
+# G8 (spec/r16-orchestrator-retirement.md §G8) includes "the PR is merged with a merge
+# commit" and silicon_observed = true. This script runs before any merge, so it can
+# never observe the whole gate: G8 is always NOT_RUN here. It reports only whether the
+# receipt preconditions hold (bound, clean tree, silicon observed, not dry); G8 is
+# decided after the merge by whoever checks the merge commit.
+if [ "$CAND_BOUND" = true ] && [ "$TREE_DIRTY" = false ] && [ "$SIL_OBS" = true ] && [ "$DRY" != 1 ]; then
+    G8_PRECONDITIONS=met
+else
+    G8_PRECONDITIONS=not_met
+fi
+G8=NOT_RUN
+echo "[*] R16-G8: NOT_RUN (merge-commit part is outside this script; receipt preconditions $G8_PRECONDITIONS)"
 
 OVERALL=$(combine "$G1" "$G2" "$G3" "$G4" "$G5" "$G6" "$G7" "$G8")
 
