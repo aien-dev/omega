@@ -41,8 +41,11 @@ HOOK=$("$TOOL" hookcheck "$TASKSET") || die "hookcheck: $HOOK"
 make -s PHYSICS_DIR="$PHYSICS_DIR" build/omegatool >/dev/null 2>"$T1/build.err" || { tail -5 "$T1/build.err"; die "omegatool build failed"; }
 ./build/omegatool --run-m9-gates >"$T1/m9.log" 2>&1 || { tail -15 "$T1/m9.log"; die "M9 gates failed"; }
 ./build/omegatool --run-m14-gates >"$T1/m14.log" 2>&1 || { tail -15 "$T1/m14.log"; die "M14 gates failed"; }
-M9=$(grep -ci 'pass' "$T1/m9.log"); M9F=$(grep -ci 'fail' "$T1/m9.log" || true)
-M14=$(grep -ci 'pass' "$T1/m14.log"); M14F=$(grep -ci 'fail' "$T1/m14.log" || true)
+tot() { sed -n 's/.*TOTAL GATES: *\([0-9]*\) *| *PASSED: *\([0-9]*\) *| *FAILED: *\([0-9]*\).*/\1 \2 \3/p' "$1" | tail -1; }
+set -- $(tot "$T1/m9.log"); M9T=${1:-0}; M9P=${2:-0}; M9F=${3:-x}
+set -- $(tot "$T1/m14.log"); M14T=${1:-0}; M14P=${2:-0}; M14F=${3:-x}
+[ "$M9F" = 0 ] && [ "$M9P" = "$M9T" ] && [ "$M9T" -gt 0 ] || die "M9 totals not all PASS ($M9P/$M9T)"
+[ "$M14F" = 0 ] && [ "$M14P" = "$M14T" ] && [ "$M14T" -gt 0 ] || die "M14 totals not all PASS ($M14P/$M14T)"
 
 mkdir -p "$EVD/corpus" "$EVD/receipts"
 CORPUS="$EVD/corpus/corpus-$DIGEST.txt"
@@ -66,8 +69,8 @@ R="$T1/receipt.json"
   printf '  "replay": "%s",\n' "$(echo "$REPLAY" | cut -d' ' -f2)"
   printf '  "hook_equivalence": "%s",\n' "$(echo "$HOOK" | cut -d' ' -f2)"
   printf '  "unit_and_refusal_tests": "PASS (plain + ASan/UBSan, corpus + G3 holdout)",\n'
-  printf '  "m9_gates": {"exit": 0, "pass_lines": %s, "fail_lines": %s},\n' "$M9" "$M9F"
-  printf '  "m14_gates": {"exit": 0, "pass_lines": %s, "fail_lines": %s},\n' "$M14" "$M14F"
+  printf '  "m9_gates": {"exit": 0, "total": %s, "passed": %s, "failed": %s},\n' "$M9T" "$M9P" "$M9F"
+  printf '  "m14_gates": {"exit": 0, "total": %s, "passed": %s, "failed": %s},\n' "$M14T" "$M14P" "$M14F"
   printf '  "timing_measured": false,\n'
   printf '  "est_load_processes_at_run": %s\n' "$EST"
   printf '}\n'
