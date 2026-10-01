@@ -1,0 +1,27 @@
+./build/rx_r16_negative
+R16 G4 (4) promotion naming the promoter as subject, with the promoter's grant: REFUSED (6/6 credential variants refused with IDENTITY; rc -50; generation 1 -> 1 in memory, 1 -> 1 on disk)
+R16 G4 (6) reaction naming the promoter as subject, with the promoter's in-force grant: REFUSED (3/3 credential variants refused at registration with IDENTITY; woken no; activations 0, commits 0, last crumb -1; in-force field0 0x0)
+R16 G4 C5 identity probes: 40/40 as expected  PASS
+R16 G4 control: the promoter, with its own credential and grant, promotes: yes (propose rc 0, promote rc 0; generation 1 -> 4, on disk 4)
+R16 C7 P1 revoke during the live barrier: promote rc -50; generation 1 -> 1, on disk 1
+R16 C7 P1 revoke during the disk writes: promote rc -50; generation 1 -> 1, on disk 1
+R16 C7 P1 control: promote rc 0; generation 1 -> 5, on disk 5
+R16 C7 P2 revoke racing the commit: revocation finished inside the check window: no (it waited); commits 1
+R16 C7 P4 control, item completed by the proposer: promote rc 0; generation 1 -> 2; drain calls 0
+R16 C7 P4 baseline, item unfinished: promote rc -48; generation 2 -> 2; drain calls 1
+R16 C7 P4 item completed with no credential: promote rc -48; generation 2 -> 2; drain calls 1
+R16 C7 P4 item offered already done: promote rc -48; generation 2 -> 2; drain calls 1
+R16 C7 P4 bare and forged work calls: promote rc -48; generation 2 -> 2; drain calls 1
+R16 C7 review probes: P1 flip pass, P2 revoke race pass, P3 pre-bind pass, P4 work accounting pass; 49/49 as expected  PASS
+R16 G4 (1) belief     15/15 attempts refused  REFUSED
+R16 G4 (2) selection  7/7 attempts refused  REFUSED
+R16 G4 (3) mint       3/3 attempts refused  REFUSED
+R16 G4 (4) promote    4/4 attempts refused  REFUSED
+R16 G4 (5) boundary   6/6 attempts refused  REFUSED
+R16 G4 (6) generation 14/14 attempts refused  REFUSED
+R16 G4 SEQ reference on a production world: refused
+R16 G4 authoritative state unchanged: yes; AIENOS state changes other than the harness office's own revocations (2): none; production served after: yes
+R16 G4 acts refused: 6/6
+R16 G4 core: six acts refused, state unchanged, for the counted per-act attempts
+R16 G4 promoter-subject exploit (4)+(6): refused; C5 identity probes: pass; promotion control: promotes
+R16 gate: R16_G4_LEGACY_REFUSED=PASS

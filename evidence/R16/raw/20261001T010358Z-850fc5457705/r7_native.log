@@ -1,0 +1,4 @@
+./build/rx_r7_native_test
+receipt: build/qual-runs/20261001T010824Z-850fc5457705/R7/rx_native_authority_receipt.json
+candidate bound: yes
+native authority matched the linux oracle, and the world checks the native view

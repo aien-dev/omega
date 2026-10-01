@@ -1,0 +1,57 @@
+./build/rx_r15_parity_silicon
+R15 SEQ parity: GB10 resident seat
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34873 passes in 50 ms, budget 1394920 (2000 ms window)
+  detector control RES-1: starved 1 (workload.matvec.serve trigger 0: object 0 at version 2, last read 0), after slots restored 0
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34299 passes in 50 ms, budget 1371960 (2000 ms window)
+  detector control SEQ: starved 1 (workload.matvec.serve trigger 0: object 0 at version 2, last read 0), after slots restored 0
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 36179 passes in 50 ms, budget 1447160 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34629 passes in 50 ms, budget 1385160 (2000 ms window)
+  pair 0 (RES-1 first, target 3666 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6666 ns, selected 2686162 ps, reference 4555906 ps, served 2576, crumbs 5627
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6641 ns, selected 2686162 ps, reference 4564465 ps, served 370, crumbs 933
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35104 passes in 50 ms, budget 1404160 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35649 passes in 50 ms, budget 1425960 (2000 ms window)
+  pair 1 (SEQ first, target 3594 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6656 ns, selected 2697697 ps, reference 4573418 ps, served 2368, crumbs 5185
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6535 ns, selected 2684727 ps, reference 4554545 ps, served 368, crumbs 928
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35232 passes in 50 ms, budget 1409280 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35642 passes in 50 ms, budget 1425680 (2000 ms window)
+  pair 2 (RES-1 first, target 3669 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6672 ns, selected 2690604 ps, reference 4570069 ps, served 2352, crumbs 5146
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6649 ns, selected 2686883 ps, reference 4561116 ps, served 368, crumbs 929
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33931 passes in 50 ms, budget 1357240 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35871 passes in 50 ms, budget 1434840 (2000 ms window)
+  pair 3 (SEQ first, target 3678 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6993 ns, selected 2692837 ps, reference 4568186 ps, served 2530, crumbs 5529
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6688 ns, selected 2690976 ps, reference 4574906 ps, served 370, crumbs 934
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33683 passes in 50 ms, budget 1347320 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33601 passes in 50 ms, budget 1344040 (2000 ms window)
+  pair 4 (RES-1 first, target 3631 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6603 ns, selected 2690232 ps, reference 4568930 ps, served 2627, crumbs 5735
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6729 ns, selected 2690232 ps, reference 4567093 ps, served 369, crumbs 932
+R15 SEQ parity: 5 pairs, 0 failures
+SEQ_SEMANTIC_PARITY=PASS

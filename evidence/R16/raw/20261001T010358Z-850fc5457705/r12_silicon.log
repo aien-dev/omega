@@ -1,0 +1,40 @@
+./build/rx_r12_silicon_test
+[*] R12 resident seat on this machine's graphics chip
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34202 passes in 50 ms, budget 1368080 (2000 ms window)
+[*] chain A -> chip add -> B -> processor -> C
+    PASS (21 checks)
+[*] duplicate completion is not published twice
+    PASS (4 checks)
+[*] torn result notice is refused and B is restored
+    PASS (9 checks)
+[*] seat restart keeps identity and history
+seat build insns 363 gpr 50
+seat heartbeat 7 instructions 363 gpr 50
+seat lease: 35431 passes in 50 ms, budget 1417240 (2000 ms window)
+    PASS (13 checks)
+[*] detached window refuses the publication
+    PASS (11 checks)
+[*] capability revoked after the claim is refused at publication
+    PASS (12 checks)
+[*] generation moved in flight invalidates the chip's work
+    PASS (9 checks)
+[*] stale generation claim is refused on the chip
+    PASS (5 checks)
+[*] seat killed holding a claim: recorded, restored, released once, retried
+seat build insns 363 gpr 50
+seat heartbeat 20 instructions 363 gpr 50
+seat lease: 35291 passes in 50 ms, budget 1411640 (2000 ms window)
+    PASS (37 checks)
+[*] channel reset under load
+    resets 8 (held 4), with work in flight 8, claims lost and retried 8,
+    changes 2236, published 182, refused as input moved 8, stale refused 0,
+    longest channel teardown 1056 ms
+    PASS (57 checks)
+[*] objects past id 64 are claimed on the chip
+    PASS (12 checks)
+[*] seat leaves on request
+    PASS (4 checks)
+checks 210 failures 0 silicon 1
+receipt: build/qual-runs/20261001T010842Z-850fc5457705/R12/rx_resident_silicon_receipt.json
