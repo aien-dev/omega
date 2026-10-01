@@ -1064,6 +1064,25 @@ static int promote_phase(const RxCostModel *m, RxCostModel *durable) {
 
     rq = request(id, SUBJ_PROMOTER, promoter_cap);
     R.promote_rc = rx_gen_promote(st, &rq, native_auth, &a, NULL, NULL, NULL, NULL);
+    if (!R.proofs_ok) {
+        /* The judge rejected the learned model on this machine. Where the best
+         * static arm is the reference (a CI runner with one core class), the
+         * learned model can at best tie it on validation and timing noise
+         * decides. That is a no-win result, not a broken barrier: the barrier
+         * must refuse the candidate and the generation in force stays. The
+         * gate then reports no win (main). Recovery and the torn copy need a
+         * promoted generation and are not run; the receipt records why. */
+        CHECK(R.promote_rc == RX_GEN_ERR_VERIFY, "barrier refuses the model the judge rejected (%d)",
+              R.promote_rc);
+        CHECK(rx_gen_active(st, &act, &lin) == RX_GEN_OK && act == active0,
+              "the refused promotion left the active generation as it was");
+        rx_gen_close(st);
+        aienos_cap_stop(a.admin, a.view);
+        printf("    judge rejected the learned model (learned %.4f of always-reference): nothing promoted\n",
+               R.val_reference > 0 ? R.val_learned / R.val_reference : 0.0);
+        model_fresh(durable);
+        return 0;
+    }
     CHECK(R.promote_rc == RX_GEN_OK, "promoter promotes the judged model (%d)", R.promote_rc);
     rx_gen_close(st);
     aienos_cap_stop(a.admin, a.view);
@@ -1550,6 +1569,7 @@ int main(void) {
         }
         uint8_t a[32], b[32];
         rx_cm_digest(&online, a);
+        if (!R.proofs_ok) continue;   /* nothing was promoted: no durable model to reload */
         RxCostModel again;
         CHECK(load_durable(g_store_dir, &again, NULL) == RX_GEN_OK, "reload durable");
         rx_cm_digest(&again, b);
@@ -1568,6 +1588,10 @@ int main(void) {
     CHECK(R.touched_ineligible == 0, "an ineligible arm was chosen or measured");
     CHECK(R.explore_budget_violations == 0, "exploration exceeded its budget");
     Verdict v = judge_gate();
+    if (!R.proofs_ok) {
+        v.win = 0;
+        snprintf(v.why, sizeof v.why, "the judge rejected the learned model on validation; nothing promoted");
+    }
     const char *env = getenv("EMPIRICAL_ALLOW_NO_WIN");
     int allow = env && strcmp(env, "1") == 0;
     printf("    checked %llu runs against the reference: %llu mismatches\n",
