@@ -478,7 +478,16 @@ static int cmd_fit(int argc, char **argv)
             fprintf(fp, "\n");
         }
     }
-    int bad = fclose(fp);
+    int bad = ferror(fp) != 0;
+    if (fclose(fp) != 0) bad = 1;
+    if (bad) {
+        /* never leave a partial params file behind: it would block a rerun (wbx) */
+        remove(out);
+        fprintf(stderr, "est4 fit: writing %s failed; partial file removed\n", out);
+        for (int id = 1; id <= 3; id++) if (gf[id].have) c3_stats_free(&st[id]);
+        free(e); free(e0c); c3_ticks_free(&tk); est_file_free(&f);
+        return 1;
+    }
     char ph[65] = "unavailable";
     est_sha_file_hex(out, ph);
     printf("EST4_FIT selected=%s phase_a=%s params_sha256=%s synthetic_test=%d\n", gname(sel), sel ? "PASS" : "PHASE_A_FAIL", ph, synth);
