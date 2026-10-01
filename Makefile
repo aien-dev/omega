@@ -1177,7 +1177,7 @@ test-prod-hygiene: $(RX_R13_HOST)
 test-prod-hygiene-silicon: $(RX_R13_SILICON)
 	sh tools/r16_prod_hygiene.sh silicon $(RX_R13_SILICON)
 
-test-prod-refuses-test-pieces: $(ARGUS_STAMP)
+test-prod-refuses-test-pieces: $(ARGUS_STAMP) $(AIENOS_CAP_LIB)
 	CC="$(CC)" CFLAGS="$(CFLAGS)" ARGUS_SRC="$(ARGUS_SRC)" OUT="$(OUT_DIR)/prod-refuses" MAKE="$(MAKE)" PROD_BIN="$(RX_R13_HOST)" \
 		sh tools/r16_prod_refuses.sh
 

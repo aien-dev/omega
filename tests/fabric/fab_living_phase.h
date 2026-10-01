@@ -61,7 +61,7 @@
 
 /* Link-map marker (test build only): tools/r16_prod_hygiene.sh refuses any
  * production binary that carries an aien_test_build_* symbol. */
-__attribute__((used)) const char aien_test_build_fab_living_phase[] =
+__attribute__((used)) static const char aien_test_build_fab_living_phase[] =
     "AIEN_TEST_BUILD piece: Fabric living test phase (fixed test keys fl-key-*)";
 
 enum { FL_OP_REMOTE_ONLY = 2 };

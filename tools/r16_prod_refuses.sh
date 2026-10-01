@@ -7,9 +7,9 @@
 #
 # Environment (set by the Makefile): CC, CFLAGS, ARGUS_SRC, OUT, MAKE, PROD_BIN.
 set -u
-: "${CC:=cc}" "${PROD_BIN:?}" "${CFLAGS:?}" "${ARGUS_SRC:?}" "${OUT:?}" "${MAKE:=make}"
+: "${CC:=cc}" "${PROD_BIN:?}" "${CFLAGS?}" "${ARGUS_SRC:?}" "${OUT:?}" "${MAKE:=make}"
 mkdir -p "$OUT" || exit 2
-INC="-Itests/runtime -Itests/fabric -Isrc/runtime -Isrc/fabric"
+INC="-Isrc -Itests/runtime -Itests/fabric -Isrc/runtime -Isrc/fabric"
 ARGUSF="-DRX_ARGUS=2 -DRX_ARGUS_AUTHORITY_OBSERVER -I$ARGUS_SRC"
 PROD="$ARGUSF $INC"
 bad=0; n=0
@@ -56,7 +56,7 @@ fi
 # production build; the Fabric loopback compiles in the test build.
 expect_ok r13_production $PROD tests/runtime/rx_r13_living.c
 expect_ok rx_compose_production $PROD src/runtime/rx_compose.c
-expect_ok fab_loopback_testbuild -DAIEN_TEST_BUILD=1 -Isrc/runtime -Isrc/fabric src/fabric/fab_loopback.c
+expect_ok fab_loopback_testbuild -DAIEN_TEST_BUILD=1 -Isrc -Isrc/runtime -Isrc/fabric src/fabric/fab_loopback.c
 
 # The Makefile refuses the flag in CFLAGS for the production binaries.
 n=$((n + 1))

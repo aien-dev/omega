@@ -348,7 +348,7 @@ jobs:
           make test-prod-hygiene-silicon | tee build/prod-hygiene-silicon.log
           grep -q '^R16 prod: PROD_HYGIENE=PASS mode=silicon ' build/prod-hygiene-silicon.log
           echo "- Production hygiene silicon build: static checks PASS; ARGUS probe run NOT_RUN (Spark check)" >> "$GITHUB_STEP_SUMMARY"
-      - name: Negative build test (EXPECTED FAILURE: compiling the production program with any test piece must fail)
+      - name: Negative build test (EXPECTED FAILURE, compiling the production program with any test piece must fail)
         # Every case compiles a test piece with the production flags and must be
         # refused by its build-time guard; three controls must compile; make must
         # refuse AIEN_TEST_BUILD in CFLAGS for the production binary.

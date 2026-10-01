@@ -1,6 +1,7 @@
 /* R13: one world; after the goal, only production requests and observation. */
 #include "runtime/rx_living.h"
 #include "runtime/rx_resident_gpu.h"
+#include "runtime/aien_machine_id.h"
 /* Lane 32: two programs from this file (docs/r16-production-entry-point.md).
  * PRODUCTION (default, no flag): no test pieces. ARGUS is linked and observes
  * (RX_ARGUS=2, authority observer, consumer ingest), pinned by argus.lock; the
@@ -1519,7 +1520,6 @@ static void binary_digest(char out[65]) {
 }
 
 #define OBJ(o) (o).id, (o).generation
- * Fabric phase (both builds). */
 /* The composition phase in the receipt (host TEST build only: it needs the
  * AIEN_TEST_BUILD rogue-candidate hook and the test fixture), then the Fabric
  * phase (test builds only). */
