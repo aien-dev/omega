@@ -46,3 +46,41 @@ budget. It is split:
 
 The quick wall time is measured inside every OSC-3 receipt
 (`test_compiler_quick.wall_seconds`, binaries already built).
+
+CI: the `compiler` job in `.github/workflows/host-suites.yml` runs on pull
+requests (quick always on compiler paths, full when `src/compiler/` or
+`src/aarch64_*` changes). `.github/workflows/compiler-main.yml` re-runs quick
+and full on every push to main that touches the compiler paths (the 2026-10-01
+audit found the compiler suites never ran after merge).
+
+## Generation width: remaining 32-bit sites and fix plan
+
+ADR OMEGA-SYSTEMS-CORE-0000 decision 1 fixes capability and object generations
+at u64 end to end, a slot retired at the maximum, never wrapped. The 2026-10-01
+audit (track 2, s.F.3) found these sites still 32-bit; checked against main
+07004a8. A u64 generation stored into any of them is silently truncated, and a
+truncated generation can make a stale handle look live again.
+
+| Site (main 07004a8) | Today | Owner | Fix plan |
+|---|---|---|---|
+| `src/runtime/rx_world.h:177` `RxObjRef{uint32_t id; uint32_t generation}` | u32 | runtime lane (src/runtime) | widen `generation` to u64; retire the object id at UINT64_MAX; versioned like omega#71 |
+| `src/runtime/rx_world.h:305` object `generation` | u32 | runtime lane | same change, same PR as :177 |
+| `src/runtime/rx_world.h:328` `RxSub{reaction; generation; mask}` | u32 | runtime lane | widen with :177 (subscriptions compare against object generations) |
+| `src/runtime/rx_world.h:599` `seat_generation` | u32 | runtime lane | widen; retire the seat at max |
+| `src/runtime/rx_graph.c:517, :529` crumb/graph hash writes object generations with `put32` | u32 on the wire | runtime lane | `put64` together with a crumb/graph record version bump (old records refused, not reinterpreted), in the identity-break sequence (item 5) |
+| `src/runtime/rx_jspace.c:1406, :1413, :1414` J-Space body writes branch/slot generations with `put32` | u32 on the wire | runtime lane | `put64` with a J-Space record version bump, same rule |
+| `src/omega_accelerator.h:67, :87` `uint32_t capability_generation` | u32 | accelerator owner (not OSC) | widen to u64, retire at max; ADR decision 1 names this file |
+| `src/compiler/osc_rt.h:69-70` `slot_serial[]`, `next_serial` (`++next_serial`, no overflow check) | u32 | OSC (this lane) | item 2: handle generations are u64 with retire-at-max; the region serial is widened or traps on wrap (stated in the item 2 section) |
+| AIENOS ADR 0013 (`index u32; generation u32`, retire at u32::MAX) | u32 | aienos lane | request only, see item 5 (`docs/osc/OSC-3-ADR0013-REQUEST.md`); not edited from this repository |
+
+Only the `osc_rt` row is inside this lane's files. The others are listed so the
+owning lanes can schedule them; each is a versioned change with old records
+refused, never reinterpreted. None is applied by OSC-3.
+
+## Slice order after item 4
+
+Per the audit (III.7 and the 2026-10-01 review), the first real migration is
+crumbline (`src/crumbline`-family C) once effects and capabilities exist:
+item 4 (effects/capabilities), then item 5 (identity break + ADR 0013
+request), then item 6 (crumbline as the first production C module under
+contracts; proposal in docs/osc first).
