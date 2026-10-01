@@ -34,7 +34,7 @@
 +# The lane may carry a requeue count as LANE@rN.
 +ql_job() {
 +  base=${1%@r*}; n=0; case $1 in *@r[0-9]*) n=${1##*@r};; esac
-+  log="$LOGDIR/$base$5-$(date -u +%H%M%S).log"
++  log="$LOGDIR/$base$5-$(date -u +%H%M%S).log"; [ -e "$log" ] && log="${log%.log}-$$-$RANDOM.log"
 +  echo "[$(iso)] $base: $3"
 +  ( cd "$2" && exec env -u QUIET_HOLDER -u QUIETLOCK_HOLD "$QL" run -- bash -c "$3" ) >"$log" 2>&1 < /dev/null; rc=$?
 +  v=$(ql_verdict "$rc" "$log")
@@ -62,7 +62,7 @@
    [ -f "$QUEUE" ] || { echo "queue empty"; exit 0; }
    echo "## flush $(iso)" >> "$RESULTS"
    while IFS='|' read -r lane dir cmd; do
--    log="$LOGDIR/$lane-$(date -u +%H%M%S).log"
+-    log="$LOGDIR/$lane-$(date -u +%H%M%S).log"; [ -e "$log" ] && log="${log%.log}-$$-$RANDOM.log"
 -    echo "[$(iso)] $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
 -    [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
 -    # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)
@@ -109,7 +109,7 @@
 -      if [ "$6" = no ] && [ "$7" -le 0 ]; then cmd_release_stale; break; fi
 -      sleep 30
 -    done
--    log="$LOGDIR/$lane-light-$(date -u +%H%M%S).log"
+-    log="$LOGDIR/$lane-light-$(date -u +%H%M%S).log"; [ -e "$log" ] && log="${log%.log}-$$-$RANDOM.log"
 -    echo "[$(iso)] (light) $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
 -    [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
 -    # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)

@@ -106,7 +106,7 @@ cmd_flush() {
   [ -f "$QUEUE" ] || { echo "queue empty"; exit 0; }
   echo "## flush $(iso)" >> "$RESULTS"
   while IFS='|' read -r lane dir cmd; do
-    log="$LOGDIR/$lane-$(date -u +%H%M%S).log"
+    log="$LOGDIR/$lane-$(date -u +%H%M%S).log"; [ -e "$log" ] && log="${log%.log}-$$-$RANDOM.log"
     echo "[$(iso)] $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
     [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
     # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)
@@ -167,7 +167,7 @@ cmd_flush_light() {
       if [ "$6" = no ] && [ "$7" -le 0 ]; then cmd_release_stale; break; fi
       sleep 30
     done
-    log="$LOGDIR/$lane-light-$(date -u +%H%M%S).log"
+    log="$LOGDIR/$lane-light-$(date -u +%H%M%S).log"; [ -e "$log" ] && log="${log%.log}-$$-$RANDOM.log"
     echo "[$(iso)] (light) $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
     [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
     # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)
