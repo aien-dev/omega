@@ -21,7 +21,10 @@ BCAST_ZERO_STRIDE|omega_tensor.c|s/o.strides\[d\] = 0;/o.strides[d] = in->stride
 PERMUTE_STRIDES|omega_tensor.c|s/in->strides\[perm\[d\]\]/in->strides[d]/
 SLICE_OFFSET|omega_tensor.c|s/start\[d\], in->strides\[d\]/start[d], 1/
 TRANSC_EXP2_LOG2_SWAP|omega_tensor_cpu.c|s/= omega_math_exp2, \(.*\)= omega_math_log2,/= omega_math_log2, \1= omega_math_exp2,/
-UNARY_VIEW_STRIDE|omega_tensor.c|s/gather(s, .in, src);/dense_strides(in.rank, in.shape, in.strides); gather(s, \&in, src);/'
+UNARY_VIEW_STRIDE|omega_tensor.c|s/gather(s, .in, src);/dense_strides(in.rank, in.shape, in.strides); gather(s, \&in, src);/
+TRANSC_EXP_LOG_SWAP|omega_tensor_cpu.c|s/= omega_math_exp, \(.*\)= omega_math_log,/= omega_math_log, \1= omega_math_exp,/
+RELU_NEG_ZERO|omega_tensor.c|s/if (u >> 31) return 0U;/if (u >> 31) return u == 0x80000000U ? u : 0U;/
+RELU_NAN_PAYLOAD|omega_tensor.c|s/return OMEGA_QNAN_BITS;/return u;/'
 
 # Baseline: the unmutated build must PASS, otherwise every mutant would
 # look "caught" (e.g. the test refusing an unsuitable FP environment).

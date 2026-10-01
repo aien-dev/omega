@@ -112,6 +112,19 @@ typedef enum {
     OMEGA_TU_LOG2,       /* omega_math_log2,    <= OMEGA_TRANSC_MAX_ULP_LOG2 (2)    */
     OMEGA_TU_SIGMOID,    /* omega_math_sigmoid, <= OMEGA_TRANSC_MAX_ULP_SIGMOID (3) */
     OMEGA_TU_TANH,       /* omega_math_tanh,    <= OMEGA_TRANSC_MAX_ULP_TANH (3)    */
+    /* M20 cut ops (LT-M21 CR-1..CR-5). EXP / LOG: the E1 Omega-defined
+     * polynomial sequences omega_math_exp / omega_math_log
+     * (src/omega_numeric.c:458, :501) applied per element through the
+     * realization's transc entry, bit-exact with calling them directly. NOT
+     * correctly rounded: E1 checks them against binary128 within EXP 40 ulp,
+     * LOG 4 ulp (tests/test_omega_numeric.c:376-384). E1 has no GB10 kernel
+     * for either (src/omega_numeric.c:585-588).
+     * RELU: no E1 op; a tensor-layer bit select, no float arithmetic:
+     * x > +0 (incl. +inf, +subnormals) -> x; +0, -0, negatives, -inf -> +0;
+     * any NaN (any sign or payload) -> canonical qNaN OMEGA_QNAN_BITS. */
+    OMEGA_TU_EXP,        /* omega_math_exp, E1 polynomial                   */
+    OMEGA_TU_LOG,        /* omega_math_log, E1 polynomial                   */
+    OMEGA_TU_RELU,       /* bit select in the tensor layer (needs no transc) */
     OMEGA_TU_COUNT
 } OmegaTensorUnaryOp;
 
@@ -156,7 +169,8 @@ typedef struct {
                        float *out, size_t n);
     int (*reduce)(OmegaTensorReduceOp op, const float *x, size_t n, float *out);
     /* Optional. out[i] = op(a[i]) for the bounded-contract unary ops
-     * (OMEGA_TU_EXP2 .. OMEGA_TU_TANH), bit-exact with the E1 CPU sequences.
+     * (OMEGA_TU_EXP2 .. OMEGA_TU_TANH, OMEGA_TU_EXP, OMEGA_TU_LOG), bit-exact
+     * with the E1 CPU sequences.
      * NULL: those ops return OMEGA_TENSOR_ERR_REALIZATION (other ops work). */
     int (*transc)(OmegaTensorUnaryOp op, const float *a, float *out, size_t n);
 } OmegaTensorRealization;
