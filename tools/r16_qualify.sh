@@ -154,12 +154,12 @@ make test-r15-receipt > "$RAW_DIR/r15_receipt.log" 2>&1
 
 # Verify ladder results
 grep -q "R4_CAUSAL_TRACE: PASS" "$RAW_DIR/r1_r6_heartbeat.log" || { echo "ERROR: R1-R6 failed"; exit 1; }
-grep -q "R7_NATIVE_AUTHORITY_PASS" "$RAW_DIR/r7_native.log" || { echo "ERROR: R7 failed"; exit 1; }
-grep -q "R8_AEGIS_RESIDENT_PASS" "$RAW_DIR/r8_aegis.log" || { echo "ERROR: R8 failed"; exit 1; }
-grep -q "R9_GENERATION_BARRIER_PASS" "$RAW_DIR/r9_barrier.log" || { echo "ERROR: R9 failed"; exit 1; }
-grep -q "R10_OMEGA_FACULTY_PASS" "$RAW_DIR/r10_omega.log" || { echo "ERROR: R10 failed"; exit 1; }
-grep -q "R11_AIEN_FACULTY_PASS" "$RAW_DIR/r11_aien.log" || { echo "ERROR: R11 failed"; exit 1; }
-grep -q "R12_RESIDENT_SEAT_PASS" "$RAW_DIR/r12_host.log" || { echo "ERROR: R12 host failed"; exit 1; }
+grep -q "native authority matched the linux oracle" "$RAW_DIR/r7_native.log" || { echo "ERROR: R7 failed"; exit 1; }
+grep -q "failures 0" "$RAW_DIR/r8_aegis.log" || { echo "ERROR: R8 failed"; exit 1; }
+grep -q "generation barrier kept a single coherent generation" "$RAW_DIR/r9_barrier.log" || { echo "ERROR: R9 failed"; exit 1; }
+grep -q "failures 0" "$RAW_DIR/r10_omega.log" || { echo "ERROR: R10 failed"; exit 1; }
+grep -q "failures 0" "$RAW_DIR/r11_aien.log" || { echo "ERROR: R11 failed"; exit 1; }
+grep -q "failures 0" "$RAW_DIR/r12_host.log" || { echo "ERROR: R12 host failed"; exit 1; }
 grep -q "silicon 1" "$RAW_DIR/r12_silicon.log" || { echo "ERROR: R12 silicon failed"; exit 1; }
 grep -q "R13 gate: R13_LIVING_SYSTEM=HOST_PASS_NON_SILICON" "$RAW_DIR/r13_host.log" || { echo "ERROR: R13 host failed"; exit 1; }
 grep -q "R13 gate: R13_LIVING_SYSTEM=PASS" "$RAW_DIR/r13_silicon.log" || { echo "ERROR: R13 silicon failed"; exit 1; }
@@ -183,7 +183,7 @@ mkdir -p "$EVID_RAW_DIR"
 cp -a "$RAW_DIR"/* "$EVID_RAW_DIR"/
 cp "$RAW_DIR/inventory.json" "$HERE/evidence/R16/inventory.json"
 
-(cd "$EVID_RAW_DIR" && rm -f SHA256SUMS && sha256sum $(ls -1 | sort) > SHA256SUMS)
+(cd "$EVID_RAW_DIR" && rm -f SHA256SUMS && sha256sum * > SHA256SUMS)
 RAW_DIGEST=$(sha256sum "$EVID_RAW_DIR/SHA256SUMS" | cut -d' ' -f1)
 # 9. Gate 8: Generate Final Receipt
 echo "[*] Generating final R16 receipt..."
