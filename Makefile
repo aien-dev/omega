@@ -1591,3 +1591,19 @@ test-divsqrt-nvdisasm:
 	tools/divsqrt_nvdisasm_check.sh
 test-divsqrt-sweep:
 	tools/divsqrt_check_sweep.sh
+
+# E1 row 10: GB10 realizations of the frozen transcendental sequences (EXP2,
+# LOG2), bit-identical to src/omega_numeric_transc.c. Kernels live in
+# src/omega_numeric_divsqrt_gb10.c (same frame as DIV/SQRT; nvdisasm
+# provenance via test-divsqrt-nvdisasm). Host tier needs no device; the chip
+# run (all 2^32 inputs per op) is tools/run_numeric_transc_gate.sh only.
+TRANSC_GB10_SRCS = tests/test_omega_numeric_transc_gb10.c src/omega_numeric_divsqrt_gb10.c \
+                   src/omega_numeric_transc.c src/omega_numeric.c src/omega_numeric_provenance.c \
+                   src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c \
+                   src/omega_blackwell_qmd.c src/sha256.c
+.PHONY: test-numeric-transc-gb10-host
+build/test_omega_numeric_transc_gb10_cpu: $(TRANSC_GB10_SRCS) $(DIVSQRT_HDRS) src/omega_numeric_transc.h
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -fno-fast-math -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o $@ $(TRANSC_GB10_SRCS)
+test-numeric-transc-gb10-host: build/test_omega_numeric_transc_gb10_cpu
+	./build/test_omega_numeric_transc_gb10_cpu

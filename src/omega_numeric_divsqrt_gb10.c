@@ -27,10 +27,14 @@
 const char *const OMEGA_DS_KERNEL_SHA256[OMEGA_DS_OP_COUNT] = {
     "d847b9bd3ac4fe90405f86a2528ff952d47bdb95679d6d029e52ea7aa526675f", /* DIV, 264 words  */
     "222c9aa5cf7b2d66d48de3ee4b7ce346627e888ab0786713d8986815bdca10d7", /* SQRT, 336 words */
+    "e72d5cbf556dce39c83ce7e76335a7eef7eda3ebccd36f250bdddb272db7474c", /* EXP2, 72 words  */
+    "14e461ec628b685ea23d197c060f7d35a302c88e794934628eacd6098a44f394", /* LOG2, 576 words */
+    "8607f5659b4d42a57fdb4ba2f26427a28d8e6e1497f3daa8529ae5da1f629b70", /* SIGMOID, 344 words */
+    "4edc065511340d58d26ed8ef7c1464341b279caccd7abc18b62d2a9880694494", /* TANH, 352 words */
 };
 
 const char *omega_ds_op_name(OmegaDsOp op) {
-    return op == OMEGA_DS_DIV ? "DIV" : op == OMEGA_DS_SQRT ? "SQRT" : "?";
+    return op == OMEGA_DS_DIV ? "DIV" : op == OMEGA_DS_SQRT ? "SQRT" : op == OMEGA_DS_EXP2 ? "EXP2" : op == OMEGA_DS_LOG2 ? "LOG2" : op == OMEGA_DS_SIGMOID ? "SIGMOID" : op == OMEGA_DS_TANH ? "TANH" : "?";
 }
 
 /* ---- Forms ---------------------------------------------------------------
@@ -63,6 +67,11 @@ static const DsForm FORMS[DSK_COUNT] = {
     { DSK_SEL_R,   0x207, 0x00000000 },
     { DSK_SEL_I,   0x807, 0x00000000 },
     { DSK_I2FP,    0x245, 0x00201400 },
+    /* FP forms: the FADD/FSUB/FMUL/FFMA patch words of src/omega_numeric.c
+     * (nvdisasm 13.0.88 -b SM121, Gate 5 chip parity), registers generalized. */
+    { DSK_FADD_R,  0x221, 0x00000000 },
+    { DSK_FMUL_R,  0x220, 0x00400000 },
+    { DSK_FFMA_R,  0x223, 0x00000000 },
 };
 
 int omega_ds_encode(const OmegaDsInsn *in, uint32_t w[4]) {
@@ -127,6 +136,21 @@ int omega_ds_encode(const OmegaDsInsn *in, uint32_t w[4]) {
         w0 |= (uint32_t)in->d << 16;
         w1 = in->b;
         break;
+    case DSK_FADD_R:
+        w0 |= (uint32_t)in->d << 16 | (uint32_t)in->a << 24;
+        w1 = in->b | (in->negb ? 0x80000000u : 0);
+        break;
+    case DSK_FMUL_R:
+        if (in->negb) return -1;
+        w0 |= (uint32_t)in->d << 16 | (uint32_t)in->a << 24;
+        w1 = in->b;
+        break;
+    case DSK_FFMA_R:
+        if (in->negb) return -1;
+        w0 |= (uint32_t)in->d << 16 | (uint32_t)in->a << 24;
+        w1 = in->b;
+        w2 |= in->c;
+        break;
     default:
         return -1;
     }
@@ -168,6 +192,9 @@ int omega_ds_decode(const uint32_t w[4], OmegaDsInsn *out) {
         x.ps = (uint8_t)((w[2] >> 23) & 7); x.pneg = (w[2] >> 26) & 1;
         break;
     case DSK_I2FP: x.b = (uint8_t)w[1]; x.a = 0; break;
+    case DSK_FADD_R: x.b = (uint8_t)w[1]; x.negb = (w[1] >> 31) & 1; break;
+    case DSK_FMUL_R: x.b = (uint8_t)w[1]; break;
+    case DSK_FFMA_R: x.b = (uint8_t)w[1]; x.c = (uint8_t)w[2]; break;
     }
     uint32_t re[4];
     if (omega_ds_encode(&x, re) != 0) return -1;
@@ -224,6 +251,12 @@ int omega_ds_format(const OmegaDsInsn *in, char *buf, size_t len) {
         snprintf(buf, len, "SEL %s, %s, 0x%x, %sP%u", d, a, (unsigned)in->imm, in->pneg ? "!" : "", (unsigned)in->ps); break;
     case DSK_I2FP:
         snprintf(buf, len, "I2FP.F32.S32 %s, %s", d, b); break;
+    case DSK_FADD_R:
+        snprintf(buf, len, "FADD %s, %s, %s%s", d, a, in->negb ? "-" : "", b); break;
+    case DSK_FMUL_R:
+        snprintf(buf, len, "FMUL %s, %s, %s", d, a, b); break;
+    case DSK_FFMA_R:
+        snprintf(buf, len, "FFMA %s, %s, %s, %s", d, a, b, c); break;
     }
     return 0;
 }
@@ -317,10 +350,12 @@ static void round_pack(Bld *B, int sign, int sig, int exp2, int sticky) {
     lop(B, RES, T3, sign, RZ, LUT_OR);
 }
 
-static void body_div(Bld *B) {
-    lopi(B, AX, A_, 0x7fffffffu, LUT_AND);
-    lopi(B, BY, B_, 0x7fffffffu, LUT_AND);
-    lop(B, SGN, A_, B_, RZ, LUT_XOR);
+/* Correctly rounded ra / rb into RES (omega_math_div). Reads ra and rb only
+ * in its first three instructions; writes R8, R9 (RES), R10-R27 and P0-P6. */
+static void div_core(Bld *B, int ra, int rb) {
+    lopi(B, AX, ra, 0x7fffffffu, LUT_AND);
+    lopi(B, BY, rb, 0x7fffffffu, LUT_AND);
+    lop(B, SGN, ra, rb, RZ, LUT_XOR);
     lopi(B, SGN, SGN, 0x80000000u, LUT_AND);
     unpack(B, AX, MA, EA);
     unpack(B, BY, MB, EB);
@@ -358,6 +393,251 @@ static void body_div(Bld *B) {
     seli(B, RES, RES, 0x7fc00000u, 0, 1);           /* x / NaN        */
 }
 
+static void body_div(Bld *B) { div_core(B, A_, B_); }
+
+/* ---- Transcendentals (E1 row 10) -------------------------------------------
+ * Each body issues the frozen sequence of src/omega_numeric_transc.c in its
+ * written order. FP constants are loaded with IADD3 Rd, RZ, imm, RZ from
+ * their exact binary32 bit patterns (written below as the same hex literals
+ * the CPU source uses). fneg(v) is LOP3 v ^ 0x80000000 as on the CPU. */
+static void ffadd(Bld *B, int d, int a, int b) { emit(B, (OmegaDsInsn){ .kind = DSK_FADD_R, .d = d, .a = a, .b = b }); }
+static void ffsub(Bld *B, int d, int a, int b) { emit(B, (OmegaDsInsn){ .kind = DSK_FADD_R, .d = d, .a = a, .b = b, .negb = 1 }); }
+static void ffmul(Bld *B, int d, int a, int b) { emit(B, (OmegaDsInsn){ .kind = DSK_FMUL_R, .d = d, .a = a, .b = b }); }
+static void fffma(Bld *B, int d, int a, int b, int c) { emit(B, (OmegaDsInsn){ .kind = DSK_FFMA_R, .d = d, .a = a, .b = b, .c = c }); }
+static void movi(Bld *B, int d, uint32_t imm) { iaddi(B, d, RZ, (int32_t)imm, RZ); }
+static void movf(Bld *B, int d, float v) { movi(B, d, omega_float_to_bits(v)); }
+static void mov(Bld *B, int d, int s) { iadd(B, d, s, RZ, RZ); }
+/* p = ffma(p, f, c) with c loaded into tmp first. */
+static void horner(Bld *B, int p, int f, float c, int tmp) { movf(B, tmp, c); fffma(B, p, p, f, tmp); }
+
+/* scale2(m, k) of omega_numeric_transc.c into out: all three branches are
+ * computed, then chosen (k > 127 first, else k < -126, else the plain one).
+ * Writes t, q, ra, rb, rc and P1. */
+static void scale2_core(Bld *B, int out, int m, int k, int t, int q, int ra, int rb, int rc) {
+    iaddi(B, t, k, 127, RZ);
+    shli(B, t, t, 23);                      /* pow2i(k)                     */
+    ffmul(B, rc, m, t);
+    movi(B, t, 0x7f000000u);                /* pow2i(127)                   */
+    ffmul(B, q, m, t);
+    shli(B, t, k, 23);                      /* pow2i(k - 127)               */
+    ffmul(B, ra, q, t);
+    iaddi(B, t, k, 253, RZ);
+    shli(B, t, t, 23);                      /* pow2i(k + 126)               */
+    ffmul(B, q, m, t);
+    movi(B, t, 0x00800000u);                /* pow2i(-126)                  */
+    ffmul(B, rb, q, t);
+    setpi(B, 1, DS_CMP_LT, 1, k, (uint32_t)-126);
+    sel(B, out, rb, rc, 1, 0);
+    setpi(B, 1, DS_CMP_GT, 1, k, 127);
+    sel(B, out, ra, out, 1, 0);
+}
+
+/* omega_math_exp2. x in R2. */
+static void body_exp2(Bld *B) {
+    enum { X = 2, AX_ = 8, C = 10, T = 11, KF = 12, K = 13, F = 14, P = 15, M = 16,
+           U = 17, Q2 = 18, RA = 19, RB = 20, RC = 21, T4 = 22 };
+    movi(B, C, 0x4b400000u);                /* MAGIC = 1.5 * 2^23           */
+    ffadd(B, T, X, C);                      /* t = x + MAGIC                */
+    ffsub(B, KF, T, C);                     /* kf = t - MAGIC               */
+    isub(B, K, T, C);                       /* k = tb(t) - tb(MAGIC)        */
+    ffsub(B, F, X, KF);                     /* f = x - kf                   */
+    movf(B, P, 0xB16011p-43f);
+    horner(B, P, F, 0xFFE5FEp-40f, C);
+    horner(B, P, F, 0xA18489p-36f, C);
+    horner(B, P, F, 0xAEC3FFp-33f, C);
+    horner(B, P, F, 0x9D955Bp-30f, C);
+    horner(B, P, F, 0xE35847p-28f, C);
+    horner(B, P, F, 0xF5FDF0p-26f, C);
+    horner(B, P, F, 0xB17218p-24f, C);
+    movf(B, C, 1.0f);
+    fffma(B, M, P, F, C);                   /* m = ffma(p, f, 1)            */
+    scale2_core(B, RES, M, K, U, Q2, RA, RB, RC);
+    /* special inputs, lowest priority first */
+    lopi(B, AX_, X, 0x7fffffffu, LUT_AND);
+    setpi(B, 0, DS_CMP_GT, 0, AX_, 0x43170000u);   /* |x| > 151           */
+    setpi(B, 2, DS_CMP_LT, 1, X, 0);               /* sign bit set        */
+    sel(B, T4, RZ, RES, 0, 0);
+    sel(B, RES, T4, RES, 2, 0);                    /* x < -151: +0        */
+    setpi(B, 0, DS_CMP_GE, 1, X, 0x43000000u);
+    seli(B, RES, RES, 0x7f800000u, 0, 1);          /* x >= 128: +inf      */
+    setpi(B, 0, DS_CMP_GT, 0, AX_, 0x7f800000u);
+    seli(B, RES, RES, 0x7fc00000u, 0, 1);          /* NaN                 */
+}
+
+/* omega_math_log2. x in R2, kept in R3; R0, R4, R5, R28-R31 hold the values
+ * that live across the two divisions (div_core writes R8-R27). */
+static void body_log2(Bld *B) {
+    enum { X = 3, Z = 0, NZ = 4, RZL = 5, NUM = 28, DEN = 29, DL = 30, E = 31, ZL = 2 };
+    mov(B, X, A_);
+    /* subnormal: x * 2^23 (exact), eadj = -23 */
+    movi(B, 10, 0x4b000000u);
+    ffmul(B, 11, A_, 10);
+    lopi(B, 12, A_, 0x7f800000u, LUT_AND);
+    setp(B, 0, DS_CMP_EQ, 0, 12, RZ);
+    sel(B, 13, 11, A_, 0, 0);                      /* u                    */
+    seli(B, 14, RZ, (uint32_t)-23, 0, 1);          /* eadj                 */
+    shri(B, 15, 13, 23);
+    lopi(B, 15, 15, 0xffu, LUT_AND);
+    iaddi(B, E, 15, -127, 14);                     /* e                    */
+    lopi(B, 16, 13, 0x007fffffu, LUT_AND);
+    lopi(B, 16, 16, 0x3f800000u, LUT_OR);          /* m in [1, 2)          */
+    setpi(B, 1, DS_CMP_GT, 0, 16, omega_float_to_bits(0xB504F3p-23f));
+    movf(B, 17, 0.5f);
+    ffmul(B, 18, 16, 17);
+    sel(B, 16, 18, 16, 1, 0);                      /* m > sqrt2: m * 0.5   */
+    seli(B, 19, RZ, 1, 1, 1);
+    iadd(B, E, E, 19, RZ);                         /*            e + 1     */
+    movf(B, 20, 1.0f);
+    ffsub(B, NUM, 16, 20);                         /* num = m - 1          */
+    ffadd(B, DEN, 16, 20);                         /* two_sum(m, 1): den   */
+    ffsub(B, 21, DEN, 16);                         /* bv                   */
+    ffsub(B, 22, DEN, 21);                         /* av                   */
+    ffsub(B, 23, 16, 22);                          /* m - av               */
+    ffsub(B, 24, 20, 21);                          /* 1 - bv               */
+    ffadd(B, DL, 23, 24);                          /* dl                   */
+    div_core(B, NUM, DEN);                         /* z = num / den        */
+    mov(B, Z, RES);
+    lopi(B, NZ, Z, 0x80000000u, LUT_XOR);          /* -z                   */
+    fffma(B, RZL, NZ, DEN, NUM);                   /* rz = -z den + num    */
+    fffma(B, RZL, NZ, DL, RZL);                    /* rz = -z dl + rz      */
+    div_core(B, RZL, DEN);                         /* zl = rz / den        */
+    mov(B, ZL, RES);
+    movf(B, 10, 0xB8AA3Bp-22f);                    /* C_HI = 2/ln2         */
+    ffmul(B, 11, Z, Z);                            /* z2                   */
+    movf(B, 12, 0x864D42p-25f);
+    horner(B, 12, 11, 0xA4258Ap-25f, 13);
+    horner(B, 12, 11, 0xD30BB1p-25f, 13);
+    horner(B, 12, 11, 0x93BB63p-24f, 13);
+    horner(B, 12, 11, 0xF6384Fp-24f, 13);          /* p                    */
+    ffmul(B, 14, Z, 11);                           /* z3 = z * z2          */
+    ffmul(B, 15, Z, 10);                           /* ph = z * C_HI        */
+    lopi(B, 16, 15, 0x80000000u, LUT_XOR);
+    fffma(B, 17, Z, 10, 16);                       /* pl = z C_HI - ph     */
+    ffmul(B, 18, ZL, 10);                          /* zl * C_HI            */
+    movf(B, 19, 0xA57060p-48f);                    /* C_LO                 */
+    fffma(B, 18, Z, 19, 18);                       /* z C_LO + zl C_HI     */
+    fffma(B, 20, 14, 12, 18);                      /* lo = z3 p + ...      */
+    i2fp(B, 21, E);                                /* (float)e, exact      */
+    ffadd(B, 22, 21, 15);                          /* two_sum(e, ph): s    */
+    ffsub(B, 23, 22, 21);                          /* bv                   */
+    ffsub(B, 24, 22, 23);                          /* av                   */
+    ffsub(B, 25, 21, 24);                          /* e - av               */
+    ffsub(B, 26, 15, 23);                          /* ph - bv              */
+    ffadd(B, 27, 25, 26);                          /* se                   */
+    ffadd(B, 25, 17, 20);                          /* pl + lo              */
+    ffadd(B, 26, 27, 25);                          /* se + (pl + lo)       */
+    ffadd(B, RES, 22, 26);                         /* s + (...)            */
+    /* special inputs, lowest priority first (omega_math_log2 order) */
+    lopi(B, 8, X, 0x7fffffffu, LUT_AND);
+    setpi(B, 0, DS_CMP_EQ, 0, X, 0x7f800000u);
+    seli(B, RES, RES, 0x7f800000u, 0, 1);          /* +inf                 */
+    setpi(B, 0, DS_CMP_LT, 1, X, 0);
+    seli(B, RES, RES, 0x7fc00000u, 0, 1);          /* x < 0, incl. -inf    */
+    setp(B, 0, DS_CMP_EQ, 0, 8, RZ);
+    seli(B, RES, RES, 0xff800000u, 0, 1);          /* +-0: -inf            */
+    setpi(B, 0, DS_CMP_GT, 0, 8, 0x7f800000u);
+    seli(B, RES, RES, 0x7fc00000u, 0, 1);          /* NaN                  */
+}
+
+
+/* exp_core(ah, +0) of omega_numeric_transc.c: e^ah = m * 2^k (Cody-Waite,
+ * degree-8 Horner). ah must not be one of R10-R17 (read after they are
+ * written).
+ * Writes m, k and R10-R17. */
+static void exp_core_body(Bld *B, int ah, int m, int k) {
+    enum { C = 10, T = 11, KF = 12, NKF = 13, R = 14, P = 15, MG = 16, ZERO = 17 };
+    movf(B, C, 0xB8AA3Bp-23f);              /* INVLN2                       */
+    ffmul(B, T, ah, C);
+    movi(B, MG, 0x4b400000u);               /* MAGIC                        */
+    ffadd(B, T, T, MG);                     /* t = ah INVLN2 + MAGIC        */
+    ffsub(B, KF, T, MG);                    /* kf = t - MAGIC               */
+    isub(B, k, T, MG);                      /* k = tb(t) - tb(MAGIC)        */
+    lopi(B, NKF, KF, 0x80000000u, LUT_XOR); /* -kf                          */
+    movf(B, C, 0xB17218p-24f);              /* LN2_HI                       */
+    fffma(B, R, NKF, C, ah);                /* r = -kf LN2_HI + ah          */
+    movf(B, C, -0x82E308p-52f);             /* LN2_LO                       */
+    fffma(B, R, NKF, C, R);                 /* r = -kf LN2_LO + r           */
+    movi(B, ZERO, 0);
+    ffadd(B, R, R, ZERO);                   /* r = r + al (al = +0)         */
+    movf(B, P, 0xD00D01p-39f);              /* 1/8!                         */
+    horner(B, P, R, 0xD00D01p-36f, C);
+    horner(B, P, R, 0xB60B61p-33f, C);
+    horner(B, P, R, 0x888889p-30f, C);
+    horner(B, P, R, 0xAAAAABp-28f, C);
+    horner(B, P, R, 0xAAAAABp-26f, C);
+    horner(B, P, R, 0.5f, C);
+    horner(B, P, R, 1.0f, C);
+    movf(B, C, 1.0f);
+    fffma(B, m, P, R, C);                   /* m = ffma(p, r, 1)            */
+}
+
+/* omega_math_sigmoid. x in R2 (never written). m, k, t, d and 1.0 live
+ * across the division in R28-R31, R0, R3, R4. */
+static void body_sigmoid(Bld *B) {
+    enum { X = 2, M = 28, K = 29, TT = 30, ONE = 31, D = 0, Q = 3, NUMR = 4 };
+    lopi(B, 10, X, 0x80000000u, LUT_OR);           /* fneg(fabs(x))        */
+    mov(B, 18, 10);
+    exp_core_body(B, 18, M, K);
+    scale2_core(B, TT, M, K, 10, 11, 12, 13, 14);  /* t = scale2(m, k)     */
+    movf(B, ONE, 1.0f);
+    ffadd(B, D, ONE, TT);                          /* d = 1 + t            */
+    setpi(B, 0, DS_CMP_LT, 1, X, 0);               /* sign bit set         */
+    sel(B, NUMR, M, ONE, 0, 0);                    /* x < 0: m, else 1     */
+    div_core(B, NUMR, D);                          /* q = num / d          */
+    mov(B, Q, RES);
+    scale2_core(B, NUMR, Q, K, 10, 11, 12, 13, 14);/* x < 0: scale2(q, k)  */
+    setpi(B, 0, DS_CMP_LT, 1, X, 0);
+    sel(B, RES, NUMR, Q, 0, 0);
+    /* special inputs, lowest priority first */
+    lopi(B, AX, X, 0x7fffffffu, LUT_AND);
+    setpi(B, 0, DS_CMP_GE, 0, AX, 0x42d00000u);    /* |x| >= 104           */
+    setpi(B, 2, DS_CMP_LT, 1, X, 0);               /* sign bit set         */
+    sel(B, 12, RZ, RES, 0, 0);
+    sel(B, RES, 12, RES, 2, 0);                    /* x <= -104: +0        */
+    setpi(B, 0, DS_CMP_GE, 1, X, 0x41900000u);
+    seli(B, RES, RES, 0x3f800000u, 0, 1);          /* x >= 18: 1           */
+    setpi(B, 0, DS_CMP_GT, 0, AX, 0x7f800000u);
+    seli(B, RES, RES, 0x7fc00000u, 0, 1);          /* NaN                  */
+}
+
+/* omega_math_tanh. x in R2 (never written); sign, |x| and the series
+ * result live across the division in R0, R3, R4. */
+static void body_tanh(Bld *B) {
+    enum { X = 2, SG = 0, AXX = 3, RP = 4, M = 28, K = 29, DEN = 30, TWO = 31 };
+    lopi(B, SG, X, 0x80000000u, LUT_AND);
+    lopi(B, AXX, X, 0x7fffffffu, LUT_AND);
+    /* |x| < 0.5625: odd Taylor series */
+    ffmul(B, 10, AXX, AXX);                        /* x2                   */
+    movf(B, 11, 0xCB3F0Cp-37f);
+    horner(B, 11, 10, -0xFABEBCp-36f, 12);
+    horner(B, 11, 10, 0x9AAC12p-34f, 12);
+    horner(B, 11, 10, -0xBED1B2p-33f, 12);
+    horner(B, 11, 10, 0xEB69E8p-32f, 12);
+    horner(B, 11, 10, -0x91371Bp-30f, 12);
+    horner(B, 11, 10, 0xB327A4p-29f, 12);
+    horner(B, 11, 10, -0xDD0DD1p-28f, 12);
+    horner(B, 11, 10, 0x888889p-26f, 12);
+    horner(B, 11, 10, -0xAAAAABp-25f, 12);
+    ffmul(B, 13, AXX, 10);                         /* ax x2                */
+    fffma(B, RP, 13, 11, AXX);                     /* r = ax x2 p + ax     */
+    /* otherwise: 1 - 2/(e^(2|x|) + 1) */
+    ffadd(B, 18, AXX, AXX);
+    exp_core_body(B, 18, M, K);
+    scale2_core(B, 19, M, K, 10, 11, 12, 13, 14);  /* e2                   */
+    movf(B, 10, 1.0f);
+    ffadd(B, DEN, 19, 10);                         /* e2 + 1               */
+    movf(B, TWO, 2.0f);
+    div_core(B, TWO, DEN);
+    movf(B, 10, 1.0f);
+    ffsub(B, 11, 10, RES);                         /* 1 - 2/(e2+1)         */
+    setpi(B, 0, DS_CMP_LT, 0, AXX, 0x3f100000u);   /* |x| < 0.5625         */
+    sel(B, 11, RP, 11, 0, 0);
+    setpi(B, 0, DS_CMP_GE, 0, AXX, 0x41180000u);   /* |x| >= 9.5: 1        */
+    seli(B, 11, 11, 0x3f800000u, 0, 1);
+    lop(B, RES, 11, SG, RZ, LUT_OR);               /* r | sign             */
+    setpi(B, 0, DS_CMP_GT, 0, AXX, 0x7f800000u);
+    seli(B, RES, RES, 0x7fc00000u, 0, 1);          /* NaN                  */
+}
 static void body_sqrt(Bld *B) {
     lopi(B, AX, A_, 0x7fffffffu, LUT_AND);
     unpack(B, AX, MA, EA);
@@ -407,6 +687,10 @@ size_t omega_ds_body(OmegaDsOp op, OmegaDsInsn *out, size_t max) {
     if (!out) return 0;
     if (op == OMEGA_DS_DIV) body_div(&B);
     else if (op == OMEGA_DS_SQRT) body_sqrt(&B);
+    else if (op == OMEGA_DS_EXP2) body_exp2(&B);
+    else if (op == OMEGA_DS_LOG2) body_log2(&B);
+    else if (op == OMEGA_DS_SIGMOID) body_sigmoid(&B);
+    else if (op == OMEGA_DS_TANH) body_tanh(&B);
     else return 0;
     return B.bad ? 0 : B.n;
 }
@@ -437,6 +721,21 @@ static bool icmp(uint8_t cmp, bool sgn, uint32_t a, uint32_t b) {
     return false;
 }
 
+
+/* FADD / FMUL / FFMA on the host: the AArch64 binary32 instructions (round to
+ * nearest even, subnormals kept: FPCR is left at its Linux default), any NaN
+ * result replaced by 0x7fffffff, the canonical NaN the GB10 writes. */
+#if !defined(__aarch64__)
+#error "the host model of the FP forms issues AArch64 FADD/FMUL/FMADD"
+#endif
+static uint32_t hfp(int kind, uint32_t a, uint32_t b, uint32_t c) {
+    float x = omega_bits_to_float(a), y = omega_bits_to_float(b), z = omega_bits_to_float(c), r;
+    if (kind == 0) __asm__ volatile("fadd %s0, %s1, %s2" : "=w"(r) : "w"(x), "w"(y));
+    else if (kind == 1) __asm__ volatile("fmul %s0, %s1, %s2" : "=w"(r) : "w"(x), "w"(y));
+    else __asm__ volatile("fmadd %s0, %s1, %s2, %s3" : "=w"(r) : "w"(x), "w"(y), "w"(z));
+    uint32_t u = omega_float_to_bits(r);
+    return (u & 0x7fffffffu) > 0x7f800000u ? 0x7fffffffu : u;
+}
 static uint32_t run_body(const OmegaDsInsn *v, size_t n, uint32_t a, uint32_t b) {
     uint32_t r[256];
     bool p[8];
@@ -461,6 +760,9 @@ static uint32_t run_body(const OmegaDsInsn *v, size_t n, uint32_t a, uint32_t b)
         case DSK_SEL_R: res = (p[x->ps] ^ (x->pneg != 0)) ? ra : rb; break;
         case DSK_SEL_I: res = (p[x->ps] ^ (x->pneg != 0)) ? ra : x->imm; break;
         case DSK_I2FP: res = omega_float_to_bits((float)(int32_t)rb); break;
+        case DSK_FADD_R: res = hfp(0, ra, x->negb ? rb ^ 0x80000000u : rb, 0); break;
+        case DSK_FMUL_R: res = hfp(1, ra, rb, 0); break;
+        case DSK_FFMA_R: res = hfp(2, ra, rb, rc); break;
         }
         if (x->d != OMEGA_DS_RZ) r[x->d] = res;
     }
@@ -477,6 +779,7 @@ uint32_t omega_ds_host_exec(OmegaDsOp op, uint32_t a, uint32_t b) {
 
 uint32_t omega_ds_cpu_semantic(OmegaDsOp op, uint32_t a, uint32_t b) {
     if (op == OMEGA_DS_DIV) return omega_float_to_bits(omega_math_div(omega_bits_to_float(a), omega_bits_to_float(b)));
+    if (op != OMEGA_DS_SQRT) return 0x7fc00000u;
     return omega_float_to_bits(omega_math_sqrt(omega_bits_to_float(a)));
 }
 
@@ -582,6 +885,8 @@ static int src_regs(const OmegaDsInsn *x, uint8_t out[3]) {
     case DSK_ISETP_R: case DSK_SEL_R: out[n++] = x->a; out[n++] = x->b; break;
     case DSK_ISETP_I: case DSK_SEL_I: out[n++] = x->a; break;
     case DSK_I2FP: out[n++] = x->b; break;
+    case DSK_FADD_R: case DSK_FMUL_R: out[n++] = x->a; out[n++] = x->b; break;
+    case DSK_FFMA_R: out[n++] = x->a; out[n++] = x->b; out[n++] = x->c; break;
     }
     return n;
 }
