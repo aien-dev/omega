@@ -51,6 +51,9 @@ typedef struct {
 } MachineCacheLevel;
 
 typedef struct {
+    /* Machine PROFILE digest (one per hardware configuration, the same on every
+     * box of that model). Used inside realization triple ids. Not a machine
+     * identity: that is AienMachineId (src/runtime/aien_machine_id.h). */
     SemanticId machine_id;
     char name[64];
     uint8_t target_profile;
