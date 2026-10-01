@@ -39,7 +39,7 @@
 
 static unsigned long checks, failures;
 static unsigned long trap_seen[OSC_TRAP_MAX + 1];
-static unsigned long diff_runs, rt_replays, trace_replays, rt_events_replayed;
+static unsigned long diff_runs, rt_replays, trace_replays;
 
 #define CHECK(cond, ...)                                  \
     do {                                                  \
@@ -184,70 +184,137 @@ static int replay_trace(const OscTrace *t, uint32_t i0, uint32_t i1, OscModelRej
     return -1;
 }
 
-/* runtime pool log -> model ALLOC/RELEASE; windowed ids when > 64 objects */
+/* runtime pool log -> model events, windowed ids:
+ *   ALLOC -> ALLOC(obj, region 0); RELEASE -> RELEASE(obj);
+ *   REGION_OPEN -> REGION_OPEN(region); ARENA_ALLOC -> ALLOC(obj, region of
+ *   that arena slot); REGION_DESTROY -> REGION_DESTROY(region), which releases
+ *   the region's objects in the model.
+ * When the next object id would exceed 64 (or region id 16), a new window
+ * starts: a fresh model re-opens the open regions and re-allocates the live
+ * objects (with their regions) under fresh ids. Every event of the log is
+ * replayed; a trapping run's log is a prefix and replays the same way.
+ * Returns 0 (all accepted) or -1 (why says which event and reason). */
+static unsigned long rr_runs, rr_events, rr_accepted, rr_rejected;
 static int replay_rt(const OscRt *rt, char *why, size_t n)
 {
     static OscModel m;
     static uint32_t id_of_serial[1 << 16];
     static uint32_t serial_of_id[OSC_MODEL_MAX_OBJECTS + 1];
     static uint8_t live_id[OSC_MODEL_MAX_OBJECTS + 1];
-    uint32_t next = 1;
+    static int16_t aslot_of_id[OSC_MODEL_MAX_OBJECTS + 1]; /* arena slot, -1 = unique */
+    static uint32_t rid_of_slot[OSC_RT_SLOTS];               /* 0 = no open arena */
+    uint32_t next = 1, nextr = 1;
+    OscModelEvent ev;
     osc_model_init(&m, 0, UINT64_MAX);
     memset(live_id, 0, sizeof live_id);
+    memset(rid_of_slot, 0, sizeof rid_of_slot);
     uint32_t nev = rt->nev < OSC_RT_EVENTS ? rt->nev : OSC_RT_EVENTS;
     for (uint32_t i = 0; i < nev; i++) {
         const OscRtEvent *e = &rt->ev[i];
         if (e->serial >= (1u << 16)) { snprintf(why, n, "serial too large"); return -1; }
-        OscModelEvent ev;
-        memset(&ev, 0, sizeof ev);
-        if (e->kind == OSC_RT_EV_ALLOC) {
-            if (next > OSC_MODEL_MAX_OBJECTS) {
-                /* new window: re-create the live objects with fresh ids */
-                uint32_t keep[OSC_MODEL_MAX_OBJECTS], nk = 0;
-                for (uint32_t k = 1; k <= OSC_MODEL_MAX_OBJECTS; k++)
-                    if (live_id[k]) keep[nk++] = serial_of_id[k];
-                osc_model_init(&m, 0, UINT64_MAX);
-                memset(live_id, 0, sizeof live_id);
-                next = 1;
-                for (uint32_t k = 0; k < nk; k++) {
-                    memset(&ev, 0, sizeof ev);
-                    ev.kind = OSC_EV_ALLOC;
-                    ev.obj = next;
-                    if (osc_model_step(&m, &ev, NULL) != OSC_MODEL_ACCEPT) { snprintf(why, n, "re-alloc"); return -1; }
-                    id_of_serial[keep[k]] = next;
-                    serial_of_id[next] = keep[k];
-                    live_id[next] = 1;
-                    next++;
-                }
-                if (next > OSC_MODEL_MAX_OBJECTS) { snprintf(why, n, "64 live objects"); return -1; }
+        int is_alloc = e->kind == OSC_RT_EV_ALLOC || e->kind == OSC_RT_EV_ARENA_ALLOC;
+        if ((is_alloc && next > OSC_MODEL_MAX_OBJECTS) ||
+            (e->kind == OSC_RT_EV_REGION_OPEN && nextr > OSC_MODEL_MAX_REGIONS)) {
+            /* new window: re-open open regions, re-create live objects */
+            uint32_t keep[OSC_MODEL_MAX_OBJECTS], nk = 0;
+            int16_t keep_slot[OSC_MODEL_MAX_OBJECTS];
+            for (uint32_t k = 1; k <= OSC_MODEL_MAX_OBJECTS; k++)
+                if (live_id[k]) { keep_slot[nk] = aslot_of_id[k]; keep[nk++] = serial_of_id[k]; }
+            osc_model_init(&m, 0, UINT64_MAX);
+            memset(live_id, 0, sizeof live_id);
+            next = 1;
+            nextr = 1;
+            for (uint32_t s = 0; s < OSC_RT_SLOTS; s++) {
+                if (!rid_of_slot[s]) continue;
+                if (nextr > OSC_MODEL_MAX_REGIONS) { snprintf(why, n, "16 open regions"); return -1; }
                 memset(&ev, 0, sizeof ev);
+                ev.kind = OSC_EV_REGION_OPEN;
+                ev.region = nextr;
+                if (osc_model_step(&m, &ev, NULL) != OSC_MODEL_ACCEPT) { snprintf(why, n, "re-open"); return -1; }
+                rid_of_slot[s] = nextr++;
             }
+            for (uint32_t k = 0; k < nk; k++) {
+                memset(&ev, 0, sizeof ev);
+                ev.kind = OSC_EV_ALLOC;
+                ev.obj = next;
+                ev.region = keep_slot[k] >= 0 ? rid_of_slot[keep_slot[k]] : 0;
+                if (osc_model_step(&m, &ev, NULL) != OSC_MODEL_ACCEPT) { snprintf(why, n, "re-alloc"); return -1; }
+                id_of_serial[keep[k]] = next;
+                serial_of_id[next] = keep[k];
+                aslot_of_id[next] = keep_slot[k];
+                live_id[next] = 1;
+                next++;
+            }
+            if (is_alloc && next > OSC_MODEL_MAX_OBJECTS) { snprintf(why, n, "64 live objects"); return -1; }
+        }
+        memset(&ev, 0, sizeof ev);
+        switch (e->kind) {
+        case OSC_RT_EV_ALLOC:
+        case OSC_RT_EV_ARENA_ALLOC:
             ev.kind = OSC_EV_ALLOC;
             ev.obj = next;
+            if (e->kind == OSC_RT_EV_ARENA_ALLOC) {
+                ev.region = rid_of_slot[e->slot];
+                if (!ev.region) { snprintf(why, n, "arena alloc into unopened slot %u", e->slot); return -1; }
+            }
             id_of_serial[e->serial] = next;
             serial_of_id[next] = e->serial;
+            aslot_of_id[next] = e->kind == OSC_RT_EV_ARENA_ALLOC ? (int16_t)e->slot : -1;
             live_id[next] = 1;
             next++;
-        } else {
+            break;
+        case OSC_RT_EV_RELEASE:
             ev.kind = OSC_EV_RELEASE;
             ev.obj = id_of_serial[e->serial];
             if (!ev.obj || !live_id[ev.obj]) { snprintf(why, n, "release of unknown serial %u", e->serial); return -1; }
             live_id[ev.obj] = 0;
+            break;
+        case OSC_RT_EV_REGION_OPEN:
+            if (rid_of_slot[e->slot]) { snprintf(why, n, "region open on an open arena slot %u", e->slot); return -1; }
+            ev.kind = OSC_EV_REGION_OPEN;
+            ev.region = nextr;
+            rid_of_slot[e->slot] = nextr++;
+            break;
+        case OSC_RT_EV_REGION_DESTROY:
+            ev.kind = OSC_EV_REGION_DESTROY;
+            ev.region = rid_of_slot[e->slot];
+            if (!ev.region) { snprintf(why, n, "destroy of unopened arena slot %u", e->slot); return -1; }
+            rid_of_slot[e->slot] = 0;
+            for (uint32_t k = 1; k <= OSC_MODEL_MAX_OBJECTS; k++)
+                if (live_id[k] && aslot_of_id[k] == (int16_t)e->slot) live_id[k] = 0;
+            break;
+        default:
+            snprintf(why, n, "unknown runtime event kind %u", e->kind);
+            return -1;
         }
         OscModelReject r;
         if (osc_model_step(&m, &ev, &r) != OSC_MODEL_ACCEPT) {
             snprintf(why, n, "event %u %s rejected: %s", i, osc_model_event_name(ev.kind), osc_model_reject_name(r));
             return -1;
         }
-        rt_events_replayed++;
+        rr_events++;
     }
     return 0;
+}
+
+/* Replay the native run's runtime event log (every native run in this test:
+ * golden fuzz, expect-run lines, contract / struct / arena fuzz, destruction
+ * order tests). Non-trapping runs replay fully; trapping runs replay the
+ * prefix logged before the trap. This checks executed runs only. */
+static int rt_replay_run(const OscRt *rt, const char *ctx)
+{
+    char why[160];
+    rr_runs++;
+    if (replay_rt(rt, why, sizeof why) == 0) { rr_accepted++; return 0; }
+    rr_rejected++;
+    CHECK(0, "%s: runtime event log replay rejected: %s", ctx, why);
+    return -1;
 }
 
 /* ------------------------------------------------------------ golden */
 static OscUnit *U1, *U2;
 static unsigned long expect_total;
-static const char *trap_names[OSC_TRAP_MAX + 1] = {"none", "OVERFLOW", "DIV0", "BOUNDS", "LOOP_BOUND", "CAST", "OOM", "SHIFT", "RUNTIME", "REQUIRES", "ENSURES"};
+static const char *trap_names[OSC_TRAP_MAX + 1] = {"none", "OVERFLOW", "DIV0", "BOUNDS", "LOOP_BOUND", "CAST", "OOM", "SHIFT", "RUNTIME", "REQUIRES", "ENSURES", "ARENA_FULL"};
 
 static uint64_t parse_val(const char *s)
 {
@@ -265,7 +332,7 @@ static unsigned long golden_ok, golden_entries, golden_funcs, traces_skipped_ove
 
 static void golden(const char *dir, const char *name, unsigned fuzz)
 {
-    char path[1024], ent[512], why[160];
+    char path[1024], ent[512];
     snprintf(path, sizeof path, "%s/%s", dir, name);
     size_t len;
     char *src = read_file(path, &len);
@@ -365,12 +432,12 @@ static void golden(const char *dir, const char *name, unsigned fuzz)
             if (ti == 0) {
                 CHECK(RI->live_count == 0 && RN->live_count == 0, "%s:%s leak: live_count interp %u native %u", name,
                       tok, RI->live_count, RN->live_count);
-                if (replay_rt(RN, why, sizeof why) == 0) rt_replays++;
-                else CHECK(0, "%s:%s pool log replay rejected: %s", name, tok, why);
             }
+            if (rt_replay_run(RN, name) == 0 && ti == 0) rt_replays++;
         }
-        printf("  %-18s %-12s ok=%-5lu ovf=%-4lu div0=%-4lu bnd=%-4lu loop=%-4lu cast=%-4lu oom=%-4lu shift=%-4lu rq=%-4lu en=%-4lu\n",
-               name, tok, pertrap[0], pertrap[1], pertrap[2], pertrap[3], pertrap[4], pertrap[5], pertrap[6], pertrap[7], pertrap[9], pertrap[10]);
+        printf("  %-18s %-12s ok=%-5lu ovf=%-4lu div0=%-4lu bnd=%-4lu loop=%-4lu cast=%-4lu oom=%-4lu shift=%-4lu rq=%-4lu en=%-4lu af=%-4lu\n",
+               name, tok, pertrap[0], pertrap[1], pertrap[2], pertrap[3], pertrap[4], pertrap[5], pertrap[6], pertrap[7], pertrap[9], pertrap[10],
+               pertrap[11]);
     }
     expect_runs(name, src, &nm, &c1);
     osc_native_unmap(&nm);
@@ -439,6 +506,7 @@ static const char *mapped(int kind)
     case OSC_DIAG_MUTABLE_ALIAS: return "mutable-alias";
     case OSC_DIAG_BORROW_OUTLIVES_OWNER: return "borrow-outlives-owner";
     case OSC_DIAG_READ_ONLY_BORROW: return "forged-rights";
+    case OSC_DIAG_ARENA_ESCAPE: return "arena-escape";
     default: return NULL;
     }
 }
@@ -618,6 +686,7 @@ static void contract_fuzz(unsigned n)
             osc_rt_reset(RN);
             int t1 = osc_interp_run_prevalidated(U1, fi, args, 2, RI, &ri);
             int t2 = osc_rt_call_native(RN, entry, args, 2, &rn);
+            rt_replay_run(RN, "contract fuzz");
             cf_runs++;
             diff_runs++;
             int same = t1 == t2 && t1 >= 0 && (t1 != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
@@ -688,13 +757,16 @@ static void struct_layout(void)
 /* Destruction order of progs/structs_dtor.osc: owners released at scope end in
  * reverse declaration order, the moved-from struct is not released, in the
  * interpreter and natively. */
-static void struct_dtor_order(const char *dir)
+/* Run entry 0 of <dir>/<file> with argument 1 in the interpreter and natively;
+ * both pool logs must match the expected (kind, serial) sequence exactly. */
+static void dtor_order(const char *dir, const char *file, uint64_t want_ret, unsigned n, const uint8_t *want_kind,
+                       const uint32_t *want_ser)
 {
     char path[1024];
-    snprintf(path, sizeof path, "%s/structs_dtor.osc", dir);
+    snprintf(path, sizeof path, "%s/%s", dir, file);
     size_t len;
     char *src = read_file(path, &len);
-    CHECK(src != NULL, "structs_dtor.osc unreadable");
+    CHECK(src != NULL, "%s unreadable", file);
     if (!src) return;
     OscDiag d;
     OscCode c;
@@ -702,30 +774,51 @@ static void struct_dtor_order(const char *dir)
     memset(&c, 0, sizeof c);
     int rc = osc_compile(src, len, U1, &d, NULL);
     free(src);
-    CHECK(rc == 0 && osc_cg_compile(U1, &c, err, sizeof err) == 0, "structs_dtor: compile failed");
+    CHECK(rc == 0 && osc_cg_compile(U1, &c, err, sizeof err) == 0, "%s: compile failed", file);
     if (rc) return;
     OscNative nm;
-    if (osc_native_map(&nm, c.code, c.len) != 0) { CHECK(0, "structs_dtor: map failed"); osc_cg_free(&c); return; }
-    static const uint8_t want_kind[8] = {1, 1, 1, 2, 2, 1, 2, 2};
-    static const uint32_t want_ser[8] = {1, 2, 3, 3, 2, 4, 4, 1};
+    if (osc_native_map(&nm, c.code, c.len) != 0) { CHECK(0, "%s: map failed", file); osc_cg_free(&c); return; }
     uint64_t args[1] = {1}, ri = 0, rn = 0;
     osc_rt_reset(RI);
     osc_rt_reset(RN);
     int ti = osc_interp_run(U1, 0, args, 1, RI, &ri);
     int tn = osc_rt_call_native(RN, osc_native_at(&nm, c.entry[0]), args, 1, &rn);
-    CHECK(ti == 0 && tn == 0 && ri == 14 && rn == 14, "structs_dtor: run %d/%d ret %llu/%llu", ti, tn,
+    rt_replay_run(RN, file);
+    CHECK(ti == 0 && tn == 0 && ri == want_ret && rn == want_ret, "%s: run %d/%d ret %llu/%llu", file, ti, tn,
           (unsigned long long)ri, (unsigned long long)rn);
     const OscRt *rts[2] = {RI, RN};
     for (int r = 0; r < 2; r++) {
-        CHECK(rts[r]->nev == 8, "structs_dtor: %u pool events, expected 8", rts[r]->nev);
-        for (unsigned k = 0; k < 8 && k < rts[r]->nev; k++)
+        CHECK(rts[r]->nev == n, "%s: %u pool events, expected %u", file, rts[r]->nev, n);
+        for (unsigned k = 0; k < n && k < rts[r]->nev; k++)
             CHECK(rts[r]->ev[k].kind == want_kind[k] && rts[r]->ev[k].serial == want_ser[k],
-                  "structs_dtor: event %u is kind %u serial %u, expected kind %u serial %u", k, rts[r]->ev[k].kind,
+                  "%s: event %u is kind %u serial %u, expected kind %u serial %u", file, k, rts[r]->ev[k].kind,
                   rts[r]->ev[k].serial, want_kind[k], want_ser[k]);
     }
     osc_native_unmap(&nm);
     osc_cg_free(&c);
+}
+
+static void struct_dtor_order(const char *dir)
+{
+    static const uint8_t want_kind[8] = {1, 1, 1, 2, 2, 1, 2, 2};
+    static const uint32_t want_ser[8] = {1, 2, 3, 3, 2, 4, 4, 1};
+    dtor_order(dir, "structs_dtor.osc", 14, 8, want_kind, want_ser);
     printf("struct destruction order: alloc 1 2 3, release 3 2, alloc 4, release 4 1 (interp == native)\n");
+}
+
+/* OSC-2 arenas (arena_dtor.osc): u = ALLOC 1; outer = REGION_OPEN 2;
+ * a = ARENA_ALLOC 3; inner = REGION_OPEN 4; b = ARENA_ALLOC 5; v = ALLOC 6;
+ * inner block end: RELEASE v 6, REGION_DESTROY inner 4; w = ALLOC 7;
+ * outer block end: RELEASE w 7, REGION_DESTROY outer 2; return: RELEASE u 1.
+ * Unique owners inside an arena block are released before the arena is
+ * destroyed; the inner arena dies before the outer one. */
+static void arena_dtor_order(const char *dir)
+{
+    static const uint8_t want_kind[12] = {1, 3, 4, 3, 4, 1, 2, 5, 1, 2, 5, 2};
+    static const uint32_t want_ser[12] = {1, 2, 3, 4, 5, 6, 6, 4, 7, 7, 2, 1};
+    dtor_order(dir, "arena_dtor.osc", 8, 12, want_kind, want_ser);
+    printf("arena destruction order: alloc 1, open 2, aalloc 3, open 4, aalloc 5, alloc 6, release 6, destroy 4, "
+           "alloc 7, release 7, destroy 2, release 1 (interp == native)\n");
 }
 
 /* Struct fuzz: generated units with 1..2 structs of random integer, bool and
@@ -850,6 +943,7 @@ static void struct_fuzz(unsigned n)
             osc_rt_reset(RN);
             int t1 = osc_interp_run_prevalidated(U1, fi, args, 3, RI, &ri);
             int t2 = osc_rt_call_native(RN, entry, args, 3, &rn);
+            rt_replay_run(RN, "struct fuzz");
             sf_runs++;
             diff_runs++;
             int same = t1 == t2 && t1 >= 0 && (t1 != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
@@ -870,6 +964,150 @@ static void struct_fuzz(unsigned n)
     CHECK(sf_trap[0] > 0, "struct fuzz never returned normally");
     CHECK(sf_trap[OSC_TRAP_BOUNDS] > 0, "struct fuzz never hit TRAP BOUNDS");
     CHECK(sf_trap[OSC_TRAP_REQUIRES] > 0, "struct fuzz never hit TRAP REQUIRES");
+}
+
+/* OSC-2 arena fuzz: generated units with 1..3 levels of nested arenas of
+ * random bound (4..31 cells). Statements allocate arrays and struct literals
+ * into any visible arena, unique owners inside arena blocks, borrows of
+ * arena objects passed to & / &mut parameters (dynamic indexes reach BOUNDS),
+ * and allocations inside loops and branches whose capacity is only known at
+ * run time (TRAP ARENA_FULL). Definite allocations are kept within the bound
+ * (the generator tracks the static budget), so every unit must compile.
+ * Interpreter and native outcomes must be identical (0 mismatches); every
+ * native run's event log replays through the model (rt_replay_run). */
+static unsigned long af_units, af_runs, af_mismatch, af_trap[OSC_TRAP_MAX + 1], af_allocs;
+typedef struct { unsigned id, cap, used; } AfArena;
+
+static void af_alloc(char *src, size_t cap, AfArena *r, int definite, unsigned *nm)
+{
+    unsigned v = (*nm)++;
+    int st = sm() % 4 == 0;
+    unsigned len = st ? 3 : 1 + (unsigned)(sm() % 8);
+    if (sm() % 3 == 0) len = 4;
+    int wrap = definite && r->used + len > r->cap; /* would be refused statically: make it dynamic */
+    if (wrap) cf_cat(src, cap, "    if (a & 3) != 0 {\n");
+    if (definite && !wrap) r->used += len;
+    af_allocs++;
+    if (st) {
+        cf_cat(src, cap, "    let x%u: own P in r%u = P { x: %s, y: [b & 7; 2] };\n", v, r->id,
+               sm() % 6 ? "a & 1023" : "a");
+        cf_cat(src, cap, "    acc = acc + x%u.x + x%u.y[%s];\n", v, v, sm() % 3 ? "1" : "i % 2");
+    } else {
+        cf_cat(src, cap, "    let x%u: own [i64; %u] in r%u = alloc(%s);\n", v, len, r->id, sm() % 6 ? "a & 1023" : "a");
+        if (len == 4 && sm() % 2) cf_cat(src, cap, "    wr4(&mut x%u, i, b);\n    acc = acc + rd4(&x%u);\n", v, v);
+        else cf_cat(src, cap, "    acc = acc + x%u[%s];\n", v, sm() % 4 ? "0" : "i & 7");
+    }
+    if (wrap) cf_cat(src, cap, "    }\n");
+}
+
+static void af_body(char *src, size_t cap, AfArena *ar, unsigned nar, unsigned depth, unsigned *nm, unsigned *nmade)
+{
+    unsigned ns = 2 + (unsigned)(sm() % 4);
+    for (unsigned k = 0; k < ns; k++) {
+        AfArena *r = &ar[sm() % nar];
+        switch (sm() % 6) {
+        case 0:
+        case 1: af_alloc(src, cap, r, 1, nm); break;
+        case 2: {
+            unsigned j = (*nm)++;
+            cf_cat(src, cap, "    let mut j%u: u8 = 0;\n    while j%u < (i %% 6) bound 6 {\n", j, j);
+            af_alloc(src, cap, r, 0, nm);
+            cf_cat(src, cap, "    j%u = j%u + 1;\n    }\n", j, j);
+            break;
+        }
+        case 3:
+            cf_cat(src, cap, "    if a > b {\n");
+            af_alloc(src, cap, r, 0, nm);
+            cf_cat(src, cap, "    }\n");
+            break;
+        case 4: {
+            unsigned v = (*nm)++;
+            cf_cat(src, cap, "    let w%u: own [i64; 2] = alloc(b & 7);\n    acc = acc + w%u[1];\n", v, v);
+            break;
+        }
+        default:
+            if (depth < 3 && *nmade < 6) {
+                AfArena *in = &ar[nar];
+                in->id = (*nmade)++;
+                in->cap = 4 + (unsigned)(sm() % 28);
+                in->used = 0;
+                cf_cat(src, cap, "    arena r%u bound %u {\n", in->id, in->cap);
+                af_body(src, cap, ar, nar + 1, depth + 1, nm, nmade);
+                cf_cat(src, cap, "    }\n");
+            } else {
+                af_alloc(src, cap, r, 1, nm);
+            }
+        }
+    }
+}
+
+static void arena_fuzz(unsigned n)
+{
+    static char src[16384];
+    sm_state = 0x05C2A3E4Aull;
+    for (unsigned u = 0; u < n; u++) {
+        src[0] = 0;
+        cf_cat(src, sizeof src,
+               "struct P { x: i64, y: [i64; 2] }\n"
+               "fn rd4(p: &[i64; 4]) -> i64 { return p[0] + p[1] + p[2] + p[3]; }\n"
+               "fn wr4(p: &mut [i64; 4], i: u8, b: i64) { p[i & 3] = p[i %% 4] + (b & 15); p[i %% 5] = 1; }\n"
+               "fn entry(a: i64, b: i64, i: u8) -> i64 {\n    let mut acc: i64 = 0;\n");
+        AfArena ar[8];
+        unsigned nm = 0, nmade = 1;
+        ar[0].id = 0;
+        ar[0].cap = 4 + (unsigned)(sm() % 28);
+        ar[0].used = 0;
+        cf_cat(src, sizeof src, "    arena r0 bound %u {\n", ar[0].cap);
+        af_body(src, sizeof src, ar, 1, 1, &nm, &nmade);
+        cf_cat(src, sizeof src, "    }\n    return acc;\n}\n");
+        af_units++;
+
+        OscDiag d;
+        int rc = osc_compile(src, strlen(src), U1, &d, NULL);
+        CHECK(rc == 0, "arena fuzz unit %u refused %s line %u object=%s: %s\n%s", u, osc_diag_kind_name(d.kind),
+              d.line, d.object, d.message, src);
+        if (rc) continue;
+        OscCode c;
+        char err[160];
+        memset(&c, 0, sizeof c);
+        int cg = osc_cg_compile(U1, &c, err, sizeof err);
+        CHECK(cg == 0, "arena fuzz unit %u codegen refused: %s", u, err);
+        if (cg) continue;
+        OscNative nm2;
+        int mr = osc_native_map(&nm2, c.code, c.len);
+        CHECK(mr == 0, "arena fuzz unit %u native map failed (%d)", u, mr);
+        if (mr) { osc_cg_free(&c); continue; }
+        int fi = U1->nfuncs - 1;
+        void *entry = osc_native_at(&nm2, c.entry[fi]);
+        for (unsigned it = 0; it < 48; it++) {
+            uint64_t args[OSC_MAX_PARAMS] = {0}, ri = 0, rn = 0;
+            args[0] = gen_arg(OSC_T_I64);
+            args[1] = gen_arg(OSC_T_I64);
+            args[2] = it & 1 ? (uint64_t)(it % 6) : gen_arg(OSC_T_U8);
+            osc_rt_reset(RI);
+            osc_rt_reset(RN);
+            int t1 = osc_interp_run_prevalidated(U1, fi, args, 3, RI, &ri);
+            int t2 = osc_rt_call_native(RN, entry, args, 3, &rn);
+            rt_replay_run(RN, "arena fuzz");
+            af_runs++;
+            diff_runs++;
+            int same = t1 == t2 && t1 >= 0 && (t1 != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
+            CHECK(same, "arena fuzz unit %u args %llu %llu %llu: interp trap %d ret %llu vs native trap %d ret %llu\n%s",
+                  u, (unsigned long long)args[0], (unsigned long long)args[1], (unsigned long long)args[2], t1,
+                  (unsigned long long)ri, t2, (unsigned long long)rn, src);
+            if (!same) { af_mismatch++; break; }
+            if (t1 >= 0 && t1 <= OSC_TRAP_MAX) { af_trap[t1]++; trap_seen[t1]++; }
+            CHECK(t1 != OSC_TRAP_RUNTIME, "arena fuzz unit %u RUNTIME trap", u);
+            if (t1 == 0) CHECK(RI->live_count == 0 && RN->live_count == 0, "arena fuzz unit %u leak", u);
+        }
+        osc_native_unmap(&nm2);
+        osc_cg_free(&c);
+    }
+    printf("arena fuzz: units=%lu allocs=%lu runs=%lu ok=%lu arena_full=%lu bounds=%lu overflow=%lu mismatches=%lu\n",
+           af_units, af_allocs, af_runs, af_trap[0], af_trap[OSC_TRAP_ARENA_FULL], af_trap[OSC_TRAP_BOUNDS],
+           af_trap[OSC_TRAP_OVERFLOW], af_mismatch);
+    CHECK(af_trap[0] > 0, "arena fuzz never returned normally");
+    CHECK(af_trap[OSC_TRAP_ARENA_FULL] > 0, "arena fuzz never hit TRAP ARENA_FULL");
 }
 
 int main(int argc, char **argv)
@@ -903,7 +1141,9 @@ int main(int argc, char **argv)
     contract_fuzz(fuzz / 5 ? fuzz / 5 : 20);
     struct_layout();
     struct_dtor_order(pdir);
+    arena_dtor_order(pdir);
     struct_fuzz(fuzz / 8 ? fuzz / 8 : 16);
+    arena_fuzz(fuzz / 8 ? fuzz / 8 : 16);
 
     const char *const *tn = trap_names;
     printf("trap coverage (runs, interpreter == native):\n");
@@ -912,6 +1152,10 @@ int main(int argc, char **argv)
     CHECK(trap_seen[8] == 0, "RUNTIME trap observed");
     CHECK(trap_seen[OSC_TRAP_REQUIRES] > 0 && trap_seen[OSC_TRAP_ENSURES] > 0, "golden fuzz never hit REQUIRES/ENSURES");
     CHECK(traces_skipped_overflow == 0, "%lu golden traces exceeded the model's 64 ids", traces_skipped_overflow);
+    printf("runtime model replay: runs=%lu events=%lu accepted=%lu rejected=%lu\n", rr_runs, rr_events, rr_accepted,
+           rr_rejected);
+    CHECK(rr_runs > 0 && rr_rejected == 0 && rr_accepted == rr_runs, "runtime model replay: %lu of %lu runs rejected",
+          rr_rejected, rr_runs);
 
     for (int i = 0; i < np; i++) free(pv[i]);
     for (int i = 0; i < nn; i++) free(nv[i]);
@@ -922,7 +1166,7 @@ int main(int argc, char **argv)
     double secs = (double)(t1.tv_sec - t0.tv_sec) + (double)(t1.tv_nsec - t0.tv_nsec) / 1e9;
     printf("golden=%lu/%d funcs=%lu entries=%lu expect_runs=%lu diff_runs=%lu trace_replays=%lu rt_replays=%lu rt_events=%lu "
            "neg=%lu/%lu neg_traced=%lu checks=%lu failed=%lu time=%.2fs\n",
-           golden_ok, np, golden_funcs, golden_entries, expect_total, diff_runs, trace_replays, rt_replays, rt_events_replayed,
+           golden_ok, np, golden_funcs, golden_entries, expect_total, diff_runs, trace_replays, rt_replays, rr_events,
            neg_ok, neg_total, neg_traced, checks, failures, secs);
     if (failures == 0) {
         printf("OSC1_COMPILER_PASS golden=%lu neg=%lu diff_runs=%lu checks=%lu\n", golden_ok, neg_ok, diff_runs, checks);
@@ -972,6 +1216,7 @@ static void expect_runs(const char *name, const char *src, const OscNative *nm, 
                 osc_rt_reset(RN);
                 int ti = osc_interp_run(U1, fi, args, na, RI, &ri);
                 int tn = osc_rt_call_native(RN, osc_native_at(nm, code->entry[fi]), args, na, &rn);
+                rt_replay_run(RN, name);
                 int ok = ti == want_trap && tn == want_trap && (want_trap || (ri == want && rn == want &&
                                                                               RI->live_count == 0 && RN->live_count == 0));
                 CHECK(ok, "%s: expect-run '%.*s': interp trap %d ret %llu, native trap %d ret %llu", name, (int)l, p,

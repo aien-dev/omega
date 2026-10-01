@@ -910,6 +910,30 @@ static void test_validator(void) {
         f0->insns[1] = I0(OSC_I_MOV); f0->insns[1].dst = 2; f0->insns[1].a = 3;
         f0->insns[2] = I0(OSC_I_RELEASE); f0->insns[2].a = 2;
         f0->insns[3] = I0(OSC_I_RET); f0->insns[3].a = 0; f0->ninsns = 4; f0->blocks[0].count = 4; });
+    /* OSC-2 arenas: f0 body = AOPEN h(4); x = AALLOC [i32; 4] init a from h; ADESTROY h; RET a */
+#define ARENA_BODY(f) do { \
+        (f)->vtype[2] = TS(OSC_T_U64); (f)->vtype[3] = TR(OSC_REF_OWN, OSC_T_I32, 4); (f)->nvregs = 4; \
+        (f)->insns[0] = I0(OSC_I_AOPEN); (f)->insns[0].dst = 2; (f)->insns[0].imm = 4; \
+        (f)->insns[1] = I0(OSC_I_AALLOC); (f)->insns[1].dst = 3; (f)->insns[1].a = 0; (f)->insns[1].b = 2; \
+        (f)->insns[2] = I0(OSC_I_ADESTROY); (f)->insns[2].a = 2; \
+        (f)->insns[3] = I0(OSC_I_RET); (f)->insns[3].a = 0; (f)->ninsns = 4; (f)->blocks[0].count = 4; } while (0)
+    {
+        OscUnit *x = base_unit();
+        ARENA_BODY(&x->funcs[0]);
+        char e2[256] = {0};
+        check(osc_ir_validate(x, e2, sizeof e2) == 0, "valid arena unit refused: %s", e2);
+        free(x);
+    }
+    CASE("AOPEN bound 0", { ARENA_BODY(f0); f0->insns[0].imm = 0; });
+    CASE("AOPEN bound 65", { ARENA_BODY(f0); f0->insns[0].imm = 65; });
+    CASE("AOPEN handle not u64", { ARENA_BODY(f0); f0->vtype[2] = TS(OSC_T_U32); });
+    CASE("AOPEN twice into one handle", { ARENA_BODY(f0); f0->insns[2] = I0(OSC_I_AOPEN); f0->insns[2].dst = 2; f0->insns[2].imm = 4; });
+    CASE("AALLOC from a non-handle", { ARENA_BODY(f0); f0->vtype[1] = TS(OSC_T_U64); f0->insns[1].b = 1; });
+    CASE("AALLOC into a shared borrow", { ARENA_BODY(f0); f0->vtype[3] = TR(OSC_REF_SHARED, OSC_T_I32, 4); });
+    CASE("ADESTROY of a non-handle", { ARENA_BODY(f0); f0->vtype[1] = TS(OSC_T_U64); f0->insns[2].a = 1; });
+    CASE("arena handle used as a value", { ARENA_BODY(f0); f0->ret = TS(OSC_T_U64); f0->insns[3].a = 2; });
+    CASE("arena handle redefined by MOV", { ARENA_BODY(f0); f0->vtype[1] = TS(OSC_T_U64); f0->insns[2] = I0(OSC_I_MOV); f0->insns[2].dst = 2; f0->insns[2].a = 1; });
+#undef ARENA_BODY
     CASE("owner from borrow (MOV)", {
         f0->vtype[2] = TR(OSC_REF_OWN, OSC_T_I32, 4); f0->vtype[3] = TR(OSC_REF_SHARED, OSC_T_I32, 4);
         f0->vtype[4] = TR(OSC_REF_OWN, OSC_T_I32, 4); f0->nvregs = 5;

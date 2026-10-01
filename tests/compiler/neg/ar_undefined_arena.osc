@@ -1,0 +1,6 @@
+// expect: UNDEFINED_NAME object=nowhere line=4
+// transition: allocate in undefined arena
+fn f() -> u32 {
+    let x: own [u32; 2] in nowhere = alloc(2);
+    return x[0];
+}

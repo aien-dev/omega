@@ -646,6 +646,14 @@ static int parse_stmt(P *p)
             }
             adv(p);
             if (parse_ref_body(p, &N(n)->ty, OSC_REF_OWN)) return -1;
+            int in_arena = -1; /* OSC-2 arenas: "in NAME" */
+            if (at(p, OT_IN)) {
+                adv(p);
+                if (!at(p, OT_NAME)) return syntax(p, "an arena name after 'in'");
+                in_arena = new_node(p, ON_NAME, cur(p));
+                if (in_arena < 0) return -1;
+                adv(p);
+            }
             if (expect(p, OT_ASSIGN)) return -1;
             if (N(n)->ty.sid && at(p, OT_NAME) && peek_kind(p, 1) == OT_LBRACE) {
                 N(n)->kind = ON_LET_ALLOC;
@@ -675,6 +683,7 @@ static int parse_stmt(P *p)
             } else {
                 return syntax(p, "'alloc' or an owner name");
             }
+            N(n)->c = in_arena;
         } else if (at(p, OT_AMP)) {
             N(n)->kind = ON_LET_BORROW;
             N(n)->mut = (uint8_t)mut;
@@ -755,6 +764,30 @@ static int parse_stmt(P *p)
         }
         adv(p);
         return syntax(p, "'=', '[' or '(' after a name at statement start");
+    }
+    case OT_ARENA: { /* OSC-2 arenas: arena NAME bound K { ... } */
+        n = new_node(p, ON_ARENA, t);
+        if (n < 0) return -1;
+        adv(p);
+        if (parse_name_tok(p, n)) return -1;
+        if (!at(p, OT_BOUND)) return syntax(p, "'bound K' after the arena name");
+        adv(p);
+        if (!at(p, OT_INT)) return syntax(p, "bound INT");
+        const OscToken *bt = cur(p);
+        if (bt->ival == 0 || bt->ival > OSC_ARENA_MAX_CELLS) {
+            char nm[64];
+            osc_node_name(p->ast, N(n), nm, sizeof nm);
+            osc_diag_set(p->d, OSC_DIAG_ARENA_CAPACITY, bt->line, bt->col, nm, t->line, NULL,
+                         "arena bound outside 1..64", "arena bound %llu outside 1..%d cells",
+                         (unsigned long long)bt->ival, OSC_ARENA_MAX_CELLS);
+            return -1;
+        }
+        N(n)->ival = bt->ival;
+        adv(p);
+        int b = parse_block(p);
+        if (b < 0) return -1;
+        N(n)->b = b;
+        return n;
     }
     case OT_IF:
         return parse_if(p);

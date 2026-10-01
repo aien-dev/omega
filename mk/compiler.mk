@@ -72,7 +72,12 @@ test-compiler: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_model_asan \
 	@grep "^contract fuzz:" $(OSC_DIR)/compiler.out
 	@grep "^struct fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler.out
 	@grep "^struct fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler_asan.out
-	@echo "test-compiler: PASS (OSC-1 slice + OSC-2 contracts + structs; OSC-2 slice; not a general Omega compiler; no self-hosting.)"
+	@grep "^arena fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler.out
+	@grep "^arena fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler_asan.out
+	@grep "^arena destruction order: " $(OSC_DIR)/compiler.out
+	@grep "^runtime model replay: .* rejected=0$$" $(OSC_DIR)/compiler.out
+	@grep "^runtime model replay: .* rejected=0$$" $(OSC_DIR)/compiler_asan.out
+	@echo "test-compiler: PASS (OSC-1 slice + OSC-2 contracts + structs + arenas; OSC-2 slice; not a general Omega compiler; no self-hosting.)"
 
 osc0b-model-receipt:
 	sh tests/compiler/osc0b_model_receipt.sh

@@ -1,0 +1,8 @@
+// expect: ARENA_CAPACITY object=a line=4
+// transition: arena bound outside 1..64
+fn f() -> u32 {
+    arena a bound 0 {
+        let x: own [u32; 1] in a = alloc(2);
+    }
+    return 0;
+}

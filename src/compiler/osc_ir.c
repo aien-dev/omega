@@ -89,6 +89,8 @@ static int insn_uses(const OscInsn *in, int16_t *u) {
     switch (in->op) {
     case OSC_I_MOV: case OSC_I_UN: case OSC_I_CAST: case OSC_I_ALLOC: case OSC_I_RELEASE:
     case OSC_I_CBR: u[k++] = in->a; break;
+    case OSC_I_AALLOC: u[k++] = in->a; u[k++] = in->b; break;
+    case OSC_I_ADESTROY: u[k++] = in->a; break;
     case OSC_I_BIN: case OSC_I_CMP: case OSC_I_LOAD: u[k++] = in->a; u[k++] = in->b; break;
     case OSC_I_STORE: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; break;
     case OSC_I_FLOAD: u[k++] = in->a; if (in->b >= 0) u[k++] = in->b; break;
@@ -103,6 +105,7 @@ static int insn_def(const OscInsn *in) {
     switch (in->op) {
     case OSC_I_CONST: case OSC_I_MOV: case OSC_I_BIN: case OSC_I_UN: case OSC_I_CMP:
     case OSC_I_CAST: case OSC_I_ALLOC: case OSC_I_LOAD: case OSC_I_FLOAD: return in->dst;
+    case OSC_I_AOPEN: case OSC_I_AALLOC: return in->dst;
     case OSC_I_CALL: return in->dst;  /* may be -1 */
     default: return -1;
     }
@@ -175,6 +178,23 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
     case OSC_I_RELEASE:
         NEED(VR(in->a), "RELEASE bad vreg", fi, ii);
         NEED(type_is_ref(&T[in->a]) && T[in->a].ref == OSC_REF_OWN, "RELEASE of a non-owner", fi, ii);
+        break;
+    case OSC_I_AOPEN:
+        NEED(VR(in->dst), "AOPEN bad vreg", fi, ii);
+        NEED(type_is_scalar(&T[in->dst]) && T[in->dst].s == OSC_T_U64, "AOPEN handle not u64", fi, ii);
+        NEED(in->imm >= 1 && in->imm <= OSC_MAX_ARRAY_LEN, "AOPEN capacity out of range", fi, ii);
+        break;
+    case OSC_I_AALLOC:
+        NEED(VR(in->dst) && VR(in->a) && VR(in->b), "AALLOC bad vreg", fi, ii);
+        NEED(type_is_ref(&T[in->dst]) && T[in->dst].ref == OSC_REF_OWN, "AALLOC dst not an owner", fi, ii);
+        if (T[in->dst].sid)
+            NEED(type_is_scalar(&T[in->a]) && T[in->a].s == OSC_T_U64, "AALLOC struct init not u64", fi, ii);
+        else
+            NEED(type_is_scalar(&T[in->a]) && T[in->a].s == T[in->dst].elem, "AALLOC init type != elem type", fi, ii);
+        NEED(type_is_scalar(&T[in->b]) && T[in->b].s == OSC_T_U64, "AALLOC handle not u64", fi, ii);
+        break;
+    case OSC_I_ADESTROY:
+        NEED(VR(in->a) && type_is_scalar(&T[in->a]) && T[in->a].s == OSC_T_U64, "ADESTROY handle not u64", fi, ii);
         break;
     case OSC_I_LOAD:
         NEED(VR(in->dst) && VR(in->a) && VR(in->b), "LOAD bad vreg", fi, ii);
@@ -280,6 +300,34 @@ static int validate_func(const OscUnit *u, int fi, char *err, size_t n) {
         if (!cover[i]) return vfail(err, n, "func %d: insn %u in no block", fi, i);
     for (uint32_t i = 0; i < f->ninsns; i++)
         if (validate_insn(u, fi, f, i, err, n)) return -1;
+
+    /* OSC-2 arenas: an arena handle vreg is defined by exactly one AOPEN (no
+     * other definition, not a parameter) and is used only as the handle of
+     * AALLOC / ADESTROY, so a handle (an address) never reaches a value. */
+    uint8_t hk[OSC_MAX_VREGS];
+    memset(hk, 0, sizeof hk);
+    for (uint32_t i = 0; i < f->ninsns; i++) {
+        const OscInsn *x = &f->insns[i];
+        if (x->op != OSC_I_AOPEN) continue;
+        if (hk[x->dst] || x->dst < f->nparams) return vfail(err, n, "func %d insn %u: AOPEN handle vreg reused", fi, i);
+        hk[x->dst] = 1;
+    }
+    for (uint32_t i = 0; i < f->ninsns; i++) {
+        const OscInsn *x = &f->insns[i];
+        int d = insn_def(x);
+        if (x->op != OSC_I_AOPEN && d >= 0 && hk[d])
+            return vfail(err, n, "func %d insn %u: arena handle vreg redefined", fi, i);
+        if (x->op == OSC_I_AALLOC) {
+            if (!hk[x->b] || hk[x->a]) return vfail(err, n, "func %d insn %u: AALLOC handle misuse", fi, i);
+        } else if (x->op == OSC_I_ADESTROY) {
+            if (!hk[x->a]) return vfail(err, n, "func %d insn %u: ADESTROY of a non-handle", fi, i);
+        } else {
+            int16_t us[OSC_MAX_PARAMS + 3];
+            int k = insn_uses(x, us);
+            for (int j = 0; j < k; j++)
+                if (hk[us[j]]) return vfail(err, n, "func %d insn %u: arena handle used as a value", fi, i);
+        }
+    }
 
     /* definite assignment: every use reads a vreg defined on every path */
     int nb = f->nblocks;
@@ -404,13 +452,28 @@ static void wtext(W *w, const char *s, size_t cap) {
     wbytes(w, s, k);
 }
 
+/* 1 if any function uses an arena instruction (OSC-2 section 3) */
+static bool unit_has_arena(const OscUnit *u) {
+    for (int fi = 0; fi < u->nfuncs; fi++)
+        for (uint32_t i = 0; i < u->funcs[fi].ninsns; i++) {
+            uint8_t op = u->funcs[fi].insns[i].op;
+            if (op == OSC_I_AOPEN || op == OSC_I_AALLOC || op == OSC_I_ADESTROY) return true;
+        }
+    return false;
+}
+
 static void encode_unit(const OscUnit *u, W *w) {
     /* format version 1 (OSC-1, no structs) / 2 (OSC-2 structs: struct table
-     * after the magic). A unit without structs encodes exactly as version 1. */
+     * after the magic) / 3 (OSC-2 arenas: AOPEN/AALLOC/ADESTROY present; the
+     * struct count byte and table always follow the magic, even when 0).
+     * A unit without structs or arenas encodes exactly as version 1; one with
+     * structs but no arenas exactly as version 2. */
     uint8_t magic[8] = {'O', 'S', 'C', '1', 'I', 'R', 0, 1};
+    bool arena = unit_has_arena(u);
     if (u->nstructs) magic[7] = 2;
+    if (arena) magic[7] = 3;
     wbytes(w, magic, sizeof magic);
-    if (u->nstructs) {
+    if (u->nstructs || arena) {
         w8(w, u->nstructs);
         for (int k = 0; k < u->nstructs; k++) {
             const OscStruct *s = &u->structs[k];
@@ -447,6 +510,9 @@ static void encode_unit(const OscUnit *u, W *w) {
             case OSC_I_BIN: case OSC_I_CMP: w8(w, in->sub); wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
             case OSC_I_UN: w8(w, in->sub); wvr(w, in->dst); wvr(w, in->a); break;
             case OSC_I_RELEASE: wvr(w, in->a); break;
+            case OSC_I_AOPEN: wvr(w, in->dst); w8(w, in->imm); break;
+            case OSC_I_AALLOC: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
+            case OSC_I_ADESTROY: wvr(w, in->a); break;
             case OSC_I_LOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
             case OSC_I_STORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
             case OSC_I_FLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); w8(w, in->imm); break;

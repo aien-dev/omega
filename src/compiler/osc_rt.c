@@ -12,6 +12,9 @@
 _Static_assert(offsetof(OscRt, alloc) == 0, "OscRt.alloc must be at offset 0");
 _Static_assert(offsetof(OscRt, release) == 8, "OscRt.release must be at offset 8");
 _Static_assert(offsetof(OscRt, trap) == 16, "OscRt.trap must be at offset 16");
+_Static_assert(offsetof(OscRt, arena_open) == 24, "OscRt.arena_open must be at offset 24");
+_Static_assert(offsetof(OscRt, arena_alloc) == 32, "OscRt.arena_alloc must be at offset 32");
+_Static_assert(offsetof(OscRt, arena_destroy) == 40, "OscRt.arena_destroy must be at offset 40");
 _Static_assert(sizeof(void (*)(void)) == 8, "64-bit function pointers");
 
 #define FNV_OFF 1469598103934665603ULL
@@ -22,6 +25,9 @@ void osc_rt_init(OscRt *rt) {
     rt->alloc = osc_rt_alloc;
     rt->release = osc_rt_release;
     rt->trap = osc_rt_trap;
+    rt->arena_open = osc_rt_arena_open;
+    rt->arena_alloc = osc_rt_arena_alloc;
+    rt->arena_destroy = osc_rt_arena_destroy;
     rt->ev_hash = FNV_OFF;
 }
 
@@ -31,6 +37,8 @@ void osc_rt_reset(OscRt *rt) {
     memset(rt->live, 0, sizeof rt->live);
     memset(rt->slot_len, 0, sizeof rt->slot_len);
     memset(rt->slot_serial, 0, sizeof rt->slot_serial);
+    memset(rt->slot_arena, 0, sizeof rt->slot_arena);
+    memset(rt->arena_top, 0, sizeof rt->arena_top);
     rt->next_serial = 0;
     rt->live_count = 0;
     rt->nev = 0;
@@ -39,6 +47,9 @@ void osc_rt_reset(OscRt *rt) {
     rt->alloc = osc_rt_alloc;
     rt->release = osc_rt_release;
     rt->trap = osc_rt_trap;
+    rt->arena_open = osc_rt_arena_open;
+    rt->arena_alloc = osc_rt_arena_alloc;
+    rt->arena_destroy = osc_rt_arena_destroy;
 }
 
 static void log_event(OscRt *rt, uint8_t kind, unsigned slot, uint16_t len, uint32_t serial) {
@@ -89,13 +100,65 @@ int osc_rt_is_live_ref(const OscRt *rt, uint64_t addr, uint64_t len) {
 
 void osc_rt_release(OscRt *rt, uint64_t addr, uint64_t len) {
     int s = slot_of(rt, addr, len);
-    if (s < 0) osc_rt_trap(rt, OSC_TRAP_RUNTIME);
+    if (s < 0 || rt->slot_arena[s]) osc_rt_trap(rt, OSC_TRAP_RUNTIME);
     memset(rt->cells[s], 0, sizeof rt->cells[s]);
     rt->live[s] = 0;
     rt->live_count--;
     log_event(rt, OSC_RT_EV_RELEASE, (unsigned)s, (uint16_t)len, rt->slot_serial[s]);
     /* slot_len / slot_serial are kept: they describe the last occupant and let
      * osc_rt_reset find every slot that was ever used. */
+}
+
+/* ---- OSC-2 arenas ----------------------------------------------------- */
+
+uint64_t osc_rt_arena_open(OscRt *rt, uint64_t cap) {
+    if (cap < 1 || cap > OSC_MAX_ARRAY_LEN) osc_rt_trap(rt, OSC_TRAP_RUNTIME);
+    for (unsigned s = 0; s < OSC_RT_SLOTS; s++) {
+        if (rt->live[s]) continue;
+        memset(rt->cells[s], 0, sizeof rt->cells[s]);
+        rt->live[s] = 1;
+        rt->slot_arena[s] = 1;
+        rt->arena_top[s] = 0;
+        rt->slot_len[s] = (uint16_t)cap;
+        rt->slot_serial[s] = ++rt->next_serial;
+        rt->live_count++;
+        log_event(rt, OSC_RT_EV_REGION_OPEN, s, (uint16_t)cap, rt->slot_serial[s]);
+        return (uint64_t)(uintptr_t)&rt->cells[s][0];
+    }
+    osc_rt_trap(rt, OSC_TRAP_OOM);
+    return 0; /* not reached */
+}
+
+/* slot index of an open arena whose handle is h, or -1 */
+static int arena_of(const OscRt *rt, uint64_t h) {
+    uintptr_t base = (uintptr_t)&rt->cells[0][0];
+    uintptr_t a = (uintptr_t)h;
+    size_t stride = sizeof rt->cells[0];
+    if (a < base || a >= base + sizeof rt->cells || (a - base) % stride) return -1;
+    unsigned s = (unsigned)((a - base) / stride);
+    return rt->live[s] && rt->slot_arena[s] ? (int)s : -1;
+}
+
+uint64_t osc_rt_arena_alloc(OscRt *rt, uint64_t h, uint64_t len, uint64_t init) {
+    int s = arena_of(rt, h);
+    if (s < 0 || len < 1 || len > OSC_MAX_ARRAY_LEN) osc_rt_trap(rt, OSC_TRAP_RUNTIME);
+    unsigned top = rt->arena_top[s];
+    if (len > (uint64_t)(rt->slot_len[s] - top)) osc_rt_trap(rt, OSC_TRAP_ARENA_FULL);
+    for (unsigned i = 0; i < len; i++) rt->cells[s][top + i] = init;
+    rt->arena_top[s] = (uint16_t)(top + len);
+    log_event(rt, OSC_RT_EV_ARENA_ALLOC, (unsigned)s, (uint16_t)len, ++rt->next_serial);
+    return (uint64_t)(uintptr_t)&rt->cells[s][top];
+}
+
+void osc_rt_arena_destroy(OscRt *rt, uint64_t h) {
+    int s = arena_of(rt, h);
+    if (s < 0) osc_rt_trap(rt, OSC_TRAP_RUNTIME);
+    memset(rt->cells[s], 0, sizeof rt->cells[s]);
+    rt->live[s] = 0;
+    rt->slot_arena[s] = 0;
+    rt->arena_top[s] = 0;
+    rt->live_count--;
+    log_event(rt, OSC_RT_EV_REGION_DESTROY, (unsigned)s, rt->slot_len[s], rt->slot_serial[s]);
 }
 
 typedef uint64_t (*OscNativeFn)(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
@@ -119,6 +182,8 @@ int osc_rt_same_outcome(const OscRt *a, const OscRt *b) {
     if (a->next_serial != b->next_serial || a->live_count != b->live_count) return 0;
     if (memcmp(a->live, b->live, sizeof a->live) || memcmp(a->slot_len, b->slot_len, sizeof a->slot_len) ||
         memcmp(a->slot_serial, b->slot_serial, sizeof a->slot_serial)) return 0;
+    if (memcmp(a->slot_arena, b->slot_arena, sizeof a->slot_arena) ||
+        memcmp(a->arena_top, b->arena_top, sizeof a->arena_top)) return 0;
     uint32_t n = a->nev < OSC_RT_EVENTS ? a->nev : OSC_RT_EVENTS;
     for (uint32_t i = 0; i < n; i++)
         if (a->ev[i].kind != b->ev[i].kind || a->ev[i].slot != b->ev[i].slot ||

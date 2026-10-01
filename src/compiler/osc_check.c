@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { SK_SCALAR = 1, SK_OWNER, SK_BORROW };
+enum { SK_SCALAR = 1, SK_OWNER, SK_BORROW, SK_ARENA /* OSC-2 arenas */ };
 
 typedef struct {
     char name[64];
@@ -20,6 +20,13 @@ typedef struct {
     int loop_depth;
     int obj;   /* owner: object index */
     int bor;   /* borrow binding: current borrow index (-1 none) */
+    /* SK_ARENA (OSC-2 section 3): model region id (per function, 1-based),
+     * bound K in cells, cells taken by definite allocations so far, and the
+     * conditional depth at the declaration (with loop_depth: an allocation is
+     * definite when both depths equal the arena's) */
+    uint32_t region;
+    uint16_t cap, used;
+    int cond_depth;
 } Sym;
 
 typedef struct {
@@ -27,6 +34,7 @@ typedef struct {
     uint16_t n_shared, n_mut;
     uint32_t move_line;
     int sym;   /* owning symbol or -1 (stand-in / dummy) */
+    int arena1; /* OSC-2: arena symbol + 1 for an arena object, 0 for a unique owner */
 } Obj;
 
 typedef struct {
@@ -67,6 +75,8 @@ typedef struct {
     int term;             /* current path has returned */
     char sobj[64];        /* statement object (diagnostics) */
     int contract;         /* 0 body; 1 checking a requires clause; 2 an ensures clause (OSC-2) */
+    int cond_depth;       /* OSC-2 arenas: nesting of if/else branches */
+    uint32_t nregion;     /* OSC-2 arenas: model region ids handed out in this function */
 } C;
 
 #define NODE(i) (&c->ast->nodes[(i)])
@@ -86,7 +96,8 @@ static void tr_push(C *c, uint8_t op, const OscModelEvent *ev, uint32_t line, in
     if (ev) {
         e->ev = *ev;
         if (ev->obj > OSC_MODEL_MAX_OBJECTS || ev->obj2 > OSC_MODEL_MAX_OBJECTS ||
-            ev->borrow > OSC_MODEL_MAX_BORROWS || ev->via > OSC_MODEL_MAX_BORROWS)
+            ev->borrow > OSC_MODEL_MAX_BORROWS || ev->via > OSC_MODEL_MAX_BORROWS ||
+            ev->region > OSC_MODEL_MAX_REGIONS)
             t->overflow = 1;
     }
     if (refused) t->refused = 1;
@@ -100,6 +111,16 @@ static void tr_ev(C *c, uint32_t kind, int obj, int obj2, int borrow, int via, u
     ev.obj2 = obj2 >= 0 ? (uint32_t)obj2 + 1 : 0;
     ev.borrow = borrow >= 0 ? (uint32_t)borrow + 1 : 0;
     ev.via = via >= 0 ? (uint32_t)via + 1 : 0;
+    tr_push(c, OSC_TR_EVENT, &ev, line, refused);
+}
+/* OSC-2 arenas: REGION_OPEN / REGION_DESTROY of region, ALLOC of obj in region */
+static void tr_region(C *c, uint32_t kind, int obj, uint32_t region, uint32_t line, int refused)
+{
+    OscModelEvent ev;
+    memset(&ev, 0, sizeof ev);
+    ev.kind = kind;
+    ev.obj = obj >= 0 ? (uint32_t)obj + 1 : 0;
+    ev.region = region;
     tr_push(c, OSC_TR_EVENT, &ev, line, refused);
 }
 static void tr_save(C *c, uint32_t line) { tr_push(c, OSC_TR_SAVE, NULL, line, 0); }
@@ -349,30 +370,59 @@ static int push_scope(C *c, uint32_t line)
     return 0;
 }
 
+/* OSC-2 arenas: a borrow of an object of arena symbol as would outlive the
+ * arena. The refused event is the arena's REGION_DESTROY (the model rejects it
+ * with arena-escape while that borrow is live). */
+static int arena_escape(C *c, const OscNode *at, int as, const char *who, const char *transition)
+{
+    Sym *y = &c->sym[as];
+    tr_region(c, OSC_EV_REGION_DESTROY, -1, y->region, at->line, 1);
+    osc_diag_set(c->d, OSC_DIAG_ARENA_ESCAPE, at->line, at->col, y->name, y->line, who, transition,
+                 "a borrow of an object in arena '%s' would outlive the arena (%s)", y->name, transition);
+    return -1;
+}
+
 /* scope-end destruction of the innermost `levels` scopes (without popping).
- * Records released owner symbols into the AST release list. */
-static void scope_exit_events(C *c, int levels, uint32_t line, OscNode *rec)
+ * Records released owner symbols into the AST release list. OSC-2 arenas:
+ * arena objects are never released one by one; the arena symbol (declared in
+ * the scope just outside its body) emits REGION_DESTROY, which releases them
+ * all, and is recorded in the release list (the lowerer emits ADESTROY). Since
+ * scopes are walked innermost first and symbols newest first, the owners and
+ * borrows declared inside an arena body end before the arena is destroyed,
+ * and an inner arena before an outer one. */
+static int scope_exit_events(C *c, int levels, uint32_t line, OscNode *rec)
 {
     OscAst *a = c->ast;
     rec->rel_start = a->nrel;
     rec->rel_count = 0;
     for (int lv = 0; lv < levels; lv++) {
         int d = c->depth - 1 - lv;
-        for (int i = c->nvis - 1; i >= c->scope_start[d]; i--) {
+        /* each level visits only its own symbols (inner levels were done) */
+        int hi = lv == 0 ? c->nvis : c->scope_start[d + 1];
+        for (int i = hi - 1; i >= c->scope_start[d]; i--) {
             int s = c->vis[i];
             Sym *y = &c->sym[s];
             if (y->kind == SK_BORROW) {
                 if (y->bor >= 0 && c->bor[y->bor].live) end_bor(c, y->bor, line);
             } else if (y->kind == SK_OWNER) {
                 Obj *o = &c->obj[y->obj];
-                if (!o->moved) {
+                if (!o->moved && !o->arena1) {
                     tr_ev(c, OSC_EV_RELEASE, y->obj, -1, -1, -1, line, 0);
                     o->moved = 2; /* released (scope gone) */
                     if (a->nrel < OSC_AST_MAX_REL) { a->rel[a->nrel++] = (int16_t)s; rec->rel_count++; }
                 }
+            } else if (y->kind == SK_ARENA) {
+                for (int b = 0; b < c->nbor; b++)
+                    if (c->bor[b].live && c->obj[c->bor[b].obj].arena1 == s + 1)
+                        return arena_escape(c, rec, s, "scope end", "borrow live at arena end");
+                tr_region(c, OSC_EV_REGION_DESTROY, -1, y->region, line, 0);
+                for (int o = 0; o < c->nobj; o++)
+                    if (c->obj[o].arena1 == s + 1 && !c->obj[o].moved) c->obj[o].moved = 2;
+                if (a->nrel < OSC_AST_MAX_REL) { a->rel[a->nrel++] = (int16_t)s; rec->rel_count++; }
             }
         }
     }
+    return 0;
 }
 
 static void pop_scope(C *c)
@@ -725,6 +775,7 @@ static int contract_name(C *c, const OscNode *n)
 /* ------------------------------------------------------------ expressions */
 static int chk(C *c, int i, OscScalar want);
 static int chk_call(C *c, int i, OscScalar want, int as_stmt);
+static int arena_move_refused(C *c, const OscNode *at, int s, const char *transition);
 
 static int want_ok(C *c, const OscNode *n, OscScalar got, OscScalar want)
 {
@@ -744,6 +795,11 @@ static int resolve(C *c, const OscNode *n)
     if (s < 0)
         osc_diag_set(c->d, OSC_DIAG_UNDEFINED_NAME, n->line, n->col, name, 0, NULL, "use of undefined name",
                      "'%s' is not defined in an enclosing scope", name);
+    if (s >= 0 && c->sym[s].kind == SK_ARENA) {
+        osc_diag_set(c->d, OSC_DIAG_TYPE_MISMATCH, n->line, n->col, name, c->sym[s].line, NULL, "arena used as a value",
+                     "'%s' is an arena; it is only named by 'in %s' in an owner declaration", name, name);
+        return -1;
+    }
     return s;
 }
 
@@ -1212,6 +1268,7 @@ static int chk_call(C *c, int i, OscScalar want, int as_stmt)
                 snprintf(msg, sizeof msg, "'%s' is not an owner of %s", c->sym[s].name, rty(c, pt, tb, sizeof tb));
                 return tmismatch(c, a, c->sym[s].name, msg);
             }
+            if (arena_move_refused(c, a, s, "move into own parameter")) return -1;
             if (do_move(c, s, -1, a->line, a->col)) return -1;
             continue;
         }
@@ -1245,6 +1302,59 @@ static int chk_call(C *c, int i, OscScalar want, int as_stmt)
 }
 
 /* ------------------------------------------------------------ statements */
+/* OSC-2 arenas: the arena named by "in NAME" (node an) for an allocation of
+ * len cells by owner node n; checks the static capacity rule. Returns the
+ * arena symbol or -1. */
+static int arena_alloc_site(C *c, const OscNode *n, OscNode *an)
+{
+    char aname[64], oname[64];
+    osc_node_name(c->ast, an, aname, sizeof aname);
+    osc_node_name(c->ast, n, oname, sizeof oname);
+    int as = lookup(c, aname);
+    if (as < 0) {
+        osc_diag_set(c->d, OSC_DIAG_UNDEFINED_NAME, an->line, an->col, aname, 0, oname, "allocate in undefined arena",
+                     "arena '%s' is not defined in an enclosing scope", aname);
+        return -1;
+    }
+    Sym *y = &c->sym[as];
+    if (y->kind != SK_ARENA) {
+        osc_diag_set(c->d, OSC_DIAG_TYPE_MISMATCH, an->line, an->col, aname, y->line, oname, "in a non-arena",
+                     "'%s' is not an arena", aname);
+        return -1;
+    }
+    an->sym = as;
+    unsigned len = n->ty.len;
+    if (c->loop_depth == y->loop_depth && c->cond_depth == y->cond_depth) {
+        /* definite allocation: runs exactly once per arena lifetime */
+        if ((unsigned)y->used + len > y->cap) {
+            osc_diag_set(c->d, OSC_DIAG_ARENA_CAPACITY, n->line, n->col, oname, y->line, y->name,
+                         "arena capacity exceeded",
+                         "'%s' needs %u cell(s) but arena '%s' (bound %u) has %u left", oname, len, y->name,
+                         (unsigned)y->cap, (unsigned)(y->cap - y->used));
+            return -1;
+        }
+        y->used = (uint16_t)(y->used + len);
+    }
+    return as;
+}
+
+/* OSC-2 arenas: refuse moving owner symbol s if it is an arena object (slice
+ * restriction, stricter than the model, which would let the MOVE inherit the
+ * region; no trace event is recorded for it). */
+static int arena_move_refused(C *c, const OscNode *at, int s, const char *transition)
+{
+    Sym *y = &c->sym[s];
+    if (y->kind != SK_OWNER || !c->obj[y->obj].arena1) return 0;
+    const Sym *ar = &c->sym[c->obj[y->obj].arena1 - 1];
+    osc_diag_set(c->d, OSC_DIAG_ARENA_MOVE, at->line, at->col, y->name, y->line, ar->name, transition,
+                 "'%s' lives in arena '%s' and cannot be moved (arena objects are never moved in this slice)",
+                 y->name, ar->name);
+    return -1;
+}
+
+/* arena symbol + 1 of the object borrow b refers to (0 = not an arena object) */
+static int bor_arena1(C *c, int b) { return c->obj[c->bor[b].obj].arena1; }
+
 static int chk_block(C *c, int i, int new_scope);
 static int chk_stmt(C *c, int i);
 
@@ -1292,6 +1402,7 @@ static int chk_if(C *c, int i)
     Snap *s0 = snap_take(c);
     if (!s0) return cap_fail(c, n->line, "checker memory");
     int nobj0 = c->nobj;
+    c->cond_depth++; /* OSC-2 arenas: allocations in a branch are not definite */
     int rc = -1;
     Snap *s1 = NULL;
     tr_save(c, n->line);
@@ -1340,6 +1451,7 @@ static int chk_if(C *c, int i)
             tr_ev(c, OSC_EV_MOVE, o, -1, -1, -1, c->obj[o].move_line, 0);
     rc = 0;
 out:
+    c->cond_depth--;
     free(s0);
     free(s1);
     return rc;
@@ -1431,13 +1543,20 @@ static int chk_stmt(C *c, int i)
             for (int fi = n->a; fi >= 0; fi = NODE(fi)->next)
                 if (chk(c, NODE(fi)->a, st->fields[NODE(fi)->hi].s) < 0) return -1;
         } else if (chk(c, n->a, n->ty.elem) < 0) return -1;
+        int as = -1;
+        if (n->c >= 0 && (as = arena_alloc_site(c, n, NODE(n->c))) < 0) return -1;
         int s = declare(c, n, SK_OWNER, &n->ty, 0);
         if (s < 0) return -1;
         int o = new_obj(c, s, n->line);
         if (o < 0) return -1;
         c->sym[s].obj = o;
         n->sym = s;
-        tr_ev(c, OSC_EV_ALLOC, o, -1, -1, -1, n->line, 0);
+        if (as >= 0) {
+            c->obj[o].arena1 = as + 1;
+            tr_region(c, OSC_EV_ALLOC, o, c->sym[as].region, n->line, 0);
+        } else {
+            tr_ev(c, OSC_EV_ALLOC, o, -1, -1, -1, n->line, 0);
+        }
         return 0;
     }
     case ON_LET_MOVE: {
@@ -1445,6 +1564,11 @@ static int chk_stmt(C *c, int i)
         char name[64];
         osc_node_name(c->ast, n, name, sizeof name);
         if (lookup(c, name) >= 0) return declare(c, n, SK_OWNER, &n->ty, 0) < 0 ? -1 : -1;
+        if (n->c >= 0) {
+            osc_diag_set(c->d, OSC_DIAG_ARENA_MOVE, n->line, n->col, name, 0, NULL, "move into arena",
+                         "'%s': an owner cannot be moved into an arena (arena objects are created in place)", name);
+            return -1;
+        }
         OscNode *sn = NODE(n->a);
         int src = resolve(c, sn);
         if (src < 0) return -1;
@@ -1457,6 +1581,7 @@ static int chk_stmt(C *c, int i)
         }
         int o = new_obj(c, -1, n->line);
         if (o < 0) return -1;
+        if (arena_move_refused(c, sn, src, "move out of arena")) return -1;
         if (do_move(c, src, o, sn->line, sn->col)) return -1;
         int s = declare(c, n, SK_OWNER, &n->ty, 0);
         if (s < 0) return -1;
@@ -1526,6 +1651,9 @@ static int chk_stmt(C *c, int i)
         if (b < 0) return -1;
         y->bor = b;
         c->bor[b].sym = s;
+        int ar1 = bor_arena1(c, b);
+        if (ar1 && s < ar1 - 1) /* binding declared before the arena: it would outlive the arena */
+            return arena_escape(c, v, ar1 - 1, y->name, "outer borrow assigned a borrow of an arena object");
         if (src > s) /* declared after the binding: destroyed while the binding is still in scope */
             return outlives(c, v, src, b, y->name, "outer borrow assigned a borrow of an inner owner");
         return 0;
@@ -1570,6 +1698,7 @@ static int chk_stmt(C *c, int i)
             if (c->sym[s].kind == SK_SCALAR) return tmismatch(c, bn, c->sym[s].name, "only arrays are borrowed");
             int b = take_borrow(c, s, bn->mut, bn->line, bn->col);
             if (b < 0) return -1;
+            if (bor_arena1(c, b)) return arena_escape(c, bn, bor_arena1(c, b) - 1, "return", "borrow of an arena object returned");
             return outlives(c, bn, s, b, "return", "borrow returned from function");
         }
         if (c->fret.s == OSC_T_VOID) {
@@ -1583,8 +1712,27 @@ static int chk_stmt(C *c, int i)
             if (chk(c, n->a, c->fret.s) < 0) return -1;
             if (chk_return_ensures(c, n)) return -1;
         }
-        scope_exit_events(c, c->depth, n->line, n);
+        if (scope_exit_events(c, c->depth, n->line, n)) return -1;
         c->term = 1;
+        return 0;
+    }
+    case ON_ARENA: { /* OSC-2: arena NAME bound K { body } */
+        set_sobj_tok(c, n);
+        if (push_scope(c, n->line)) return -1;
+        OscType ta = {OSC_T_U64, OSC_REF_NONE, OSC_T_VOID, 0, 0};
+        int s = declare(c, n, SK_ARENA, &ta, 0);
+        if (s < 0) return -1;
+        Sym *y = &c->sym[s];
+        y->region = ++c->nregion;
+        y->cap = (uint16_t)n->ival;
+        y->used = 0;
+        y->cond_depth = c->cond_depth;
+        n->sym = s;
+        tr_region(c, OSC_EV_REGION_OPEN, -1, y->region, n->line, 0);
+        if (chk_block(c, n->b, 1)) return -1;
+        /* destroy after the body's own scope exit (its owners and borrows end first) */
+        if (!c->term && scope_exit_events(c, 1, (uint32_t)NODE(n->b)->ival, n)) return -1;
+        pop_scope(c);
         return 0;
     }
     case ON_CALLSTMT:
@@ -1610,7 +1758,7 @@ static int chk_block(C *c, int i, int new_scope)
         }
         if (chk_stmt(c, s)) return -1;
     }
-    if (!c->term && new_scope) scope_exit_events(c, 1, (uint32_t)n->ival, n);
+    if (!c->term && new_scope && scope_exit_events(c, 1, (uint32_t)n->ival, n)) return -1;
     if (new_scope) pop_scope(c);
     return 0;
 }
@@ -1624,6 +1772,8 @@ static int chk_fn(C *c, int fi)
     c->fnode = f;
     c->fret = fn->ty;
     c->nsym = c->nobj = c->nbor = c->nvis = c->depth = c->loop_depth = c->term = 0;
+    c->cond_depth = 0;
+    c->nregion = 0;
     char fname[64];
     osc_node_name(a, fn, fname, sizeof fname);
     snprintf(c->sobj, sizeof c->sobj, "%s", fname);
@@ -1672,7 +1822,7 @@ static int chk_fn(C *c, int fi)
                          "function '%s' returning %s can reach its end without 'return'", fname, tname(fn->ty.s));
             return -1;
         }
-        scope_exit_events(c, 1, (uint32_t)NODE(fn->b)->ival, fn);
+        if (scope_exit_events(c, 1, (uint32_t)NODE(fn->b)->ival, fn)) return -1;
     }
     pop_scope(c);
     return 0;

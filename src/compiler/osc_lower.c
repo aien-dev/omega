@@ -100,7 +100,9 @@ static void releases(L *l, const OscNode *n)
 {
     for (uint32_t k = 0; k < n->rel_count; k++) {
         int s = l->ast->rel[n->rel_start + k];
-        OscInsn *x = emit(l, OSC_I_RELEASE, n->line);
+        /* OSC-2 arenas: an arena symbol's vreg is its u64 handle (owners are REFs) */
+        int arena = l->f->vtype[l->vreg[s]].s != OSC_T_REF;
+        OscInsn *x = emit(l, arena ? OSC_I_ADESTROY : OSC_I_RELEASE, n->line);
         x->a = l->vreg[s];
     }
 }
@@ -280,6 +282,8 @@ static void stmt(L *l, int i)
         break;
     }
     case ON_LET_ALLOC: {
+        /* OSC-2 arenas: "in NAME" allocates from that arena's handle */
+        int ah = n->c >= 0 ? l->vreg[NODE(n->c)->sym] : -1;
         if (n->ty.sid) {
             /* struct literal: field values in source order, then one
              * allocation (cells zeroed), then one FSTORE per cell */
@@ -288,7 +292,8 @@ static void stmt(L *l, int i)
             int zero = kconst(l, OSC_T_U64, 0, n->line);
             int r = newv(l, &n->ty, n->line);
             l->vreg[n->sym] = (int16_t)r;
-            OscInsn *x = emit(l, OSC_I_ALLOC, n->line);
+            OscInsn *x = emit(l, ah >= 0 ? OSC_I_AALLOC : OSC_I_ALLOC, n->line);
+            if (ah >= 0) x->b = (int16_t)ah;
             x->dst = (int16_t)r;
             x->a = (int16_t)zero;
             int ix = -1, k = 0;
@@ -314,7 +319,8 @@ static void stmt(L *l, int i)
         int v = expr(l, n->a);
         int r = newv(l, &n->ty, n->line);
         l->vreg[n->sym] = (int16_t)r;
-        OscInsn *x = emit(l, OSC_I_ALLOC, n->line);
+        OscInsn *x = emit(l, ah >= 0 ? OSC_I_AALLOC : OSC_I_ALLOC, n->line);
+        if (ah >= 0) x->b = (int16_t)ah;
         x->dst = (int16_t)r;
         x->a = (int16_t)v;
         break;
@@ -462,6 +468,17 @@ static void stmt(L *l, int i)
     case ON_CALLSTMT:
         call(l, n->a, 0);
         break;
+    case ON_ARENA: { /* OSC-2: AOPEN, body, then (if live) the body's releases were
+                      * emitted by block(); the arena's own list destroys it */
+        int h = newvs(l, OSC_T_U64, n->line);
+        l->vreg[n->sym] = (int16_t)h;
+        OscInsn *x = emit(l, OSC_I_AOPEN, n->line);
+        x->dst = (int16_t)h;
+        x->imm = n->ival;
+        block(l, n->b);
+        if (l->cur >= 0) releases(l, n);
+        break;
+    }
     case ON_BLOCK:
         block(l, i);
         break;

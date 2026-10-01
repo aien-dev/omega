@@ -1,0 +1,29 @@
+// entry: borrows
+// OSC-2 arenas: shared and mutable borrows of arena objects inside the block,
+// passed to & and &mut parameters; all borrows end before the arena dies.
+// expect-run: borrows 2 -> 24
+fn sum4(a: &[u32; 4]) -> u32 {
+    return a[0] + a[1] + a[2] + a[3];
+}
+
+fn bump(a: &mut [u32; 4], k: u32) {
+    for i in 0 .. 4 { a[i] = a[i] + k; }
+}
+
+fn borrows(k: u32) -> u32 {
+    let mut s: u32 = 0;
+    arena r bound 8 {
+        let a: own [u32; 4] in r = alloc(1);
+        bump(&mut a, k);
+        {
+            let m: &mut [u32; 4] = &mut a;
+            m[0] = m[0] + 5;
+            let t: &[u32; 4] = &m;
+            s = sum4(&t);
+        }
+        let b: own [u32; 4] in r = alloc(0);
+        let rb: &[u32; 4] = &a;
+        s = s + rb[3] - b[0] + 6 - 2;
+    }
+    return s;
+}

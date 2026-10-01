@@ -1,0 +1,19 @@
+// entry: points
+// OSC-2 arenas: struct literals allocated from an arena; a struct uses its
+// cell count (Pt: 3 cells) of the arena's bound.
+// u8 arithmetic wraps (OSC-1 rule): points 200 -> 96.
+// expect-run: points 4 -> 20
+// expect-run: points 200 -> 96
+struct Pt { x: u8, y: u8, w: [u8; 1] }
+
+fn points(k: u8) -> u8 {
+    let mut s: u8 = 0;
+    arena r bound 7 {
+        let p: own Pt in r = Pt { x: k, y: 1, w: [2; 1] };
+        let q: own Pt in r = Pt { y: k * 2, x: 3, w: [0; 1] };
+        let t: own [u8; 1] in r = alloc(5);
+        p.x = p.x + q.y;
+        s = p.x + p.y + p.w[0] + t[0] + q.x - 3;
+    }
+    return s;
+}
