@@ -175,10 +175,19 @@ static void put32(sha256_ctx *c, uint32_t v) {
 }
 static void put64(sha256_ctx *c, uint64_t v) { put32(c, (uint32_t)v); put32(c, (uint32_t)(v >> 32)); }
 
+_Static_assert(RX_MAX_FIELDS == RXL_MAX_FIELDS, "RXCLOG01 state table field count must match RX_MAX_FIELDS");
+
 /* State checkpoint: every object's identity, version, values, field
- * versions and field writers (values are what crumbs do not carry). */
+ * versions and field writers (values are what crumbs do not carry). The
+ * hash is computed here from the runtime objects; the same fields go into
+ * the state table, from which the verifier recomputes the hash
+ * (rxl_state_hash) and the causal-order compare matches writers by causal
+ * identity instead of crumb id. */
 static int checkpoint(Env *e, rxl_log *log) {
     const RxObjRef objs[4] = { e->h.sensor, e->h.belief, e->h.plan, e->h.risk };
+    rxl_rec r;
+    memset(&r, 0, sizeof r);
+    r.type = RXL_CHECKPOINT;
     sha256_ctx c;
     sha256_init(&c);
     sha256_update(&c, (const uint8_t *)"RXCLOG01-STATE", 14);
@@ -186,13 +195,13 @@ static int checkpoint(Env *e, rxl_log *log) {
         RxObject o;
         if (rx_world_read(&e->w, objs[i], &o) != RX_OK) return -1;
         put32(&c, o.id); put32(&c, o.generation); put32(&c, o.type); put64(&c, o.version);
+        rxl_obj *t = &r.u.ck.obj[r.u.ck.n_obj++];
+        t->id = o.id; t->gen = o.generation; t->type = o.type; t->version = o.version;
         for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) {
             put64(&c, o.field[f]); put64(&c, o.field_version[f]); put64(&c, o.field_writer[f]);
+            t->value[f] = o.field[f]; t->fversion[f] = o.field_version[f]; t->writer[f] = o.field_writer[f];
         }
     }
-    rxl_rec r;
-    memset(&r, 0, sizeof r);
-    r.type = RXL_CHECKPOINT;
     r.u.ck.through_crumb = e->w.n_crumbs;
     r.u.ck.subsystem = 1;
     sha256_final(&c, r.u.ck.hash);

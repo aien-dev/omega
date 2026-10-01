@@ -6,7 +6,10 @@
 # test-replay      build, then tests/replay/run_replay_suite.sh: record a
 #                  World run, replay it from its log (1 and 4 workers),
 #                  negative controls, the mutation suites (World crumb log
-#                  and M22 dispatch.log), host-labelled receipt
+#                  and M22 dispatch.log), the causal-order 4-worker gate and
+#                  its mutants (tools/replay/CAUSAL_ORDER.md; strict 4-worker
+#                  sequence checks reported as non-gating KNOWN_FAIL, runtime
+#                  finding I11), host-labelled receipt
 # replay-asan      the same suite with ASan/UBSan builds
 # replay-purity    the verifier links nothing from src/runtime or src/train
 #

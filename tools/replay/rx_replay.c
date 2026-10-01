@@ -4,6 +4,9 @@
  *
  *   rx_replay verify LOG               one log against its own rules
  *   rx_replay compare EXPECTED ACTUAL  recorded run vs replayed run
+ *   rx_replay compare-causal EXP ACT   the same, committed history as a causal
+ *                                      partial order (concurrent commits; see
+ *                                      the section below and CAUSAL_ORDER.md)
  *   rx_replay verify-dispatch DIR      dispatch.log chain + committed head
  *   rx_replay compare-dispatch A B     two dispatch logs, record by record
  *
@@ -191,6 +194,23 @@ static int verify_log(const rxl_log *l, verdict *v) {
                 done = diverge(v, ev, "world.state", a, b, "CHECKPOINT does not name the crumbs before it");
                 break;
             }
+            if (r->u.ck.n_obj) {
+                uint8_t sh[32];
+                rxl_state_hash(&r->u.ck, sh);
+                if (memcmp(sh, r->u.ck.hash, 32)) {
+                    hexs(a, sh); hexs(b, r->u.ck.hash);
+                    done = diverge(v, ev, "world.state", a, b, "CHECKPOINT state table does not hash to its state hash");
+                    break;
+                }
+                for (uint32_t o = 0; o < r->u.ck.n_obj && !done; o++)
+                    for (uint32_t f = 0; f < RXL_MAX_FIELDS && !done; f++)
+                        if (r->u.ck.obj[o].writer[f] > nk) {
+                            snprintf(a, sizeof a, "writer<=%llu", (unsigned long long)nk);
+                            snprintf(b, sizeof b, "writer:%llu", (unsigned long long)r->u.ck.obj[o].writer[f]);
+                            done = diverge(v, ev, "world.state", a, b, "CHECKPOINT names a field writer that is not an earlier crumb");
+                        }
+                if (done) break;
+            }
         }
         rxl_head_step(head, r);
         events++;
@@ -340,6 +360,404 @@ static int compare_logs(const char *pa, const char *pb) {
     }
     rxl_free(&A); rxl_free(&B);
     return report(&v);
+}
+
+/* ---- Causal-order compare (concurrent commits) -------------------------
+ *
+ * rx_replay compare-causal EXPECTED ACTUAL
+ *
+ * Committed history as a causal partial order, not a sequence. With more
+ * than one worker the World commits causally unrelated reactions in either
+ * order and may supersede a run that read a stale belief (INVALIDATED crumb,
+ * then a rerun); crumb ids, and every id that refers to them, then depend on
+ * the schedule (runtime finding I11; tools/replay/CAUSAL_ORDER.md). This
+ * compare is the property that holds anyway, and is stricter than a
+ * sequence compare in no place and looser only where stated here:
+ *
+ *   identity  an entry's causal identity is a digest of its content (kind,
+ *             reaction, faculty, inputs with versions and masks, caps,
+ *             outputs with versions and masks, reason) and of the causal
+ *             identities of its wake cause and of every parent (as a sorted
+ *             set). Crumb ids are not part of it; cause links are, by
+ *             identity, recursively back to the first crumb.
+ *   excluded  coalesced_wakes (merged-wake count: how many wakes the
+ *             scheduler folded into one run is a schedule fact, 1 with one
+ *             worker and 0 with four in the decoded runs); it stays in the
+ *             log and in the sequence compare. worker and clocks, as in the
+ *             sequence compare. Crumb ids and the INPUT after_crumb /
+ *             CHECKPOINT through_crumb counts (positions; each log must still
+ *             verify by its own rules, which check them).
+ *   segments  the log is cut at INPUT records (the replayer waits for
+ *             quiescence after each), so entries are matched only within
+ *             the same stimulus. INPUT contents (capability, mutations,
+ *             values) must be equal, in order.
+ *   entries   within a segment, the multiset of causal identities of all
+ *             crumbs except superseded ones must be equal.
+ *   superseded  an INVALIDATED crumb (in either log) must be flagged as such:
+ *             kind INVALIDATED, a nonzero reason, no outputs. It must be
+ *             paired with its rerun: a later crumb of the same reaction in the
+ *             same episode and segment that is not itself INVALIDATED. A run
+ *             that was superseded but is logged as committed is not
+ *             superseded: it is an extra entry and fails (named "unflagged
+ *             superseded entry" when the same reaction has another entry in
+ *             the same episode).
+ *   state     every CHECKPOINT state table (required in both logs) must
+ *             match object for object: values, versions and field versions
+ *             exactly, field writers by causal identity, not crumb id.
+ *
+ * Output and exit codes as compare. MATCH lines also report how many
+ * superseded entries each log had. */
+
+typedef struct {
+    uint8_t (*cid)[32];      /* causal identity of crumb id, at [id - 1] */
+    uint8_t (*content)[32];  /* content digest (no links), at [id - 1] */
+    int *seg;                /* segment of crumb id */
+    size_t *rec;             /* record index of crumb id */
+    uint64_t n;              /* crumbs */
+    int n_seg;               /* segments (INPUT records + 1) */
+    uint64_t superseded;
+} causal_ix;
+
+static void causal_free(causal_ix *x) {
+    free(x->cid); free(x->content); free(x->seg); free(x->rec);
+    memset(x, 0, sizeof *x);
+}
+
+static void ch32(sha256_ctx *c, uint32_t v) {
+    uint8_t b[4] = { (uint8_t)v, (uint8_t)(v >> 8), (uint8_t)(v >> 16), (uint8_t)(v >> 24) };
+    sha256_update(c, b, 4);
+}
+static void ch64(sha256_ctx *c, uint64_t v) { ch32(c, (uint32_t)v); ch32(c, (uint32_t)(v >> 32)); }
+
+static int cmp32(const void *a, const void *b) { return memcmp(a, b, 32); }
+
+/* Index a log that verify_log accepted (ids dense, links point back). */
+static int causal_index(const rxl_log *l, causal_ix *x) {
+    memset(x, 0, sizeof *x);
+    size_t cap = l->n + 1;
+    x->cid = calloc(cap, 32); x->content = calloc(cap, 32);
+    x->seg = calloc(cap, sizeof *x->seg); x->rec = calloc(cap, sizeof *x->rec);
+    uint8_t (*ps)[32] = calloc(RXL_MAX_PARENTS, 32);
+    if (!x->cid || !x->content || !x->seg || !x->rec || !ps) { free(ps); causal_free(x); return -1; }
+    int seg = 0;
+    for (size_t i = 0; i < l->n; i++) {
+        const rxl_rec *r = &l->recs[i];
+        if (r->type == RXL_INPUT) { seg++; continue; }
+        if (r->type != RXL_CRUMB) continue;
+        const rxl_crumb *k = &r->u.c;
+        uint64_t j = x->n++;
+        sha256_ctx c;
+        sha256_init(&c);
+        sha256_update(&c, (const uint8_t *)"RXCLOG01-CAUSAL-CONTENT", 23);
+        ch32(&c, k->kind); ch32(&c, k->reaction); ch32(&c, k->faculty);
+        ch32(&c, k->n_inputs);
+        for (uint32_t q = 0; q < k->n_inputs; q++) {
+            ch32(&c, k->inputs[q].id); ch32(&c, k->inputs[q].gen);
+            ch64(&c, k->inputs[q].version); ch64(&c, k->inputs[q].mask);
+        }
+        ch32(&c, k->n_caps);
+        for (uint32_t q = 0; q < k->n_caps; q++) {
+            ch32(&c, k->caps[q].cap_id); ch64(&c, k->caps[q].gen); ch32(&c, k->caps[q].issuer);
+        }
+        ch32(&c, k->n_outputs);
+        for (uint32_t q = 0; q < k->n_outputs; q++) {
+            ch32(&c, k->outputs[q].id); ch32(&c, k->outputs[q].gen);
+            ch64(&c, k->outputs[q].version); ch64(&c, k->outputs[q].mask);
+        }
+        ch32(&c, (uint32_t)k->reason);
+        sha256_final(&c, x->content[j]);
+        /* links by identity: wake cause, then the sorted set of parents */
+        sha256_init(&c);
+        sha256_update(&c, (const uint8_t *)"RXCLOG01-CAUSAL-ID", 18);
+        sha256_update(&c, x->content[j], 32);
+        uint8_t z[32] = { 0 };
+        ch32(&c, k->wake_cause ? 1u : 0u);
+        sha256_update(&c, k->wake_cause ? x->cid[k->wake_cause - 1] : z, 32);
+        for (uint32_t q = 0; q < k->n_parents; q++) memcpy(ps[q], x->cid[k->parents[q] - 1], 32);
+        qsort(ps, k->n_parents, 32, cmp32);
+        ch32(&c, k->n_parents);
+        for (uint32_t q = 0; q < k->n_parents; q++) sha256_update(&c, ps[q], 32);
+        sha256_final(&c, x->cid[j]);
+        x->seg[j] = seg;
+        x->rec[j] = i;
+        if (k->kind == RXL_K_INVALIDATED) x->superseded++;
+    }
+    x->n_seg = seg + 1;
+    free(ps);
+    return 0;
+}
+
+/* Every superseded entry flagged and paired with its rerun. */
+static int causal_superseded(const rxl_log *l, const causal_ix *x, const char *side, verdict *v) {
+    char a[80], b[80];
+    for (uint64_t j = 0; j < x->n; j++) {
+        const rxl_crumb *k = &l->recs[x->rec[j]].u.c;
+        if (k->kind != RXL_K_INVALIDATED) continue;
+        if (k->reason == 0 || k->n_outputs) {
+            snprintf(a, sizeof a, "flagged:reason!=0,outputs=0");
+            snprintf(b, sizeof b, "reason:%d,outputs:%u", (int)k->reason, k->n_outputs);
+            return diverge(v, x->rec[j] + 1, "world.superseded", a, b,
+                           "%s crumb %llu: superseded entry is not flagged as superseded", side, (unsigned long long)k->id);
+        }
+        int paired = 0;
+        for (uint64_t q = j + 1; q < x->n && !paired; q++) {
+            const rxl_crumb *y = &l->recs[x->rec[q]].u.c;
+            if (x->seg[q] == x->seg[j] && y->reaction == k->reaction && y->episode == k->episode &&
+                y->kind != RXL_K_INVALIDATED) paired = 1;
+        }
+        if (!paired) {
+            snprintf(b, sizeof b, "crumb:%llu", (unsigned long long)k->id);
+            return diverge(v, x->rec[j] + 1, "world.superseded", "rerun", b,
+                           "%s crumb %llu: superseded entry has no rerun of reaction %u in episode %llu",
+                           side, (unsigned long long)k->id, k->reaction, (unsigned long long)k->episode);
+        }
+    }
+    return 0;
+}
+
+static int same_input(const rxl_input *p, const rxl_input *q) {
+    if (p->cap_id != q->cap_id || p->cap_gen != q->cap_gen || p->n != q->n) return 0;
+    for (uint32_t i = 0; i < p->n; i++)
+        if (p->m[i].id != q->m[i].id || p->m[i].gen != q->m[i].gen || p->m[i].field != q->m[i].field ||
+            p->m[i].value != q->m[i].value) return 0;
+    return 1;
+}
+
+/* Records of one segment: [*lo, *hi). */
+static void seg_bounds(const rxl_log *l, int seg, size_t *lo, size_t *hi) {
+    int s = 0;
+    size_t i = 0;
+    while (i < l->n && s < seg) { if (l->recs[i].type == RXL_INPUT) s++; i++; }
+    *lo = i;
+    while (i < l->n && l->recs[i].type != RXL_INPUT && l->recs[i].type != RXL_END) i++;
+    *hi = i;
+}
+
+static int causal_state(const rxl_checkpoint *p, const causal_ix *xa, const rxl_checkpoint *q,
+                        const causal_ix *xb, uint64_t ev, verdict *v) {
+    char a[80], b[80];
+    if (p->n_obj != q->n_obj) {
+        snprintf(a, sizeof a, "objects:%u", p->n_obj);
+        snprintf(b, sizeof b, "objects:%u", q->n_obj);
+        return diverge(v, ev, "world.state", a, b, "state tables have different object counts");
+    }
+    for (uint32_t o = 0; o < p->n_obj; o++) {
+        const rxl_obj *s = &p->obj[o], *t = &q->obj[o];
+        if (s->id != t->id || s->gen != t->gen || s->type != t->type || s->version != t->version) {
+            snprintf(a, sizeof a, "obj:%u/%u:t%u@v%llu", s->id, s->gen, s->type, (unsigned long long)s->version);
+            snprintf(b, sizeof b, "obj:%u/%u:t%u@v%llu", t->id, t->gen, t->type, (unsigned long long)t->version);
+            return diverge(v, ev, "world.state", a, b, "object %u identity or version differs", o);
+        }
+        for (uint32_t f = 0; f < RXL_MAX_FIELDS; f++) {
+            if (s->value[f] != t->value[f] || s->fversion[f] != t->fversion[f]) {
+                snprintf(a, sizeof a, "value:%llu@v%llu", (unsigned long long)s->value[f], (unsigned long long)s->fversion[f]);
+                snprintf(b, sizeof b, "value:%llu@v%llu", (unsigned long long)t->value[f], (unsigned long long)t->fversion[f]);
+                return diverge(v, ev, "world.state", a, b, "object %u field %u value or field version differs", s->id, f);
+            }
+            uint64_t wa = s->writer[f], wb = t->writer[f];
+            int same = (!wa && !wb) ||
+                       (wa && wb && wa <= xa->n && wb <= xb->n && !memcmp(xa->cid[wa - 1], xb->cid[wb - 1], 32));
+            if (!same) {
+                snprintf(a, sizeof a, "writer:crumb%llu", (unsigned long long)wa);
+                snprintf(b, sizeof b, "writer:crumb%llu", (unsigned long long)wb);
+                return diverge(v, ev, "world.state", a, b,
+                               "object %u field %u: snapshot writer differs by causal identity", s->id, f);
+            }
+        }
+    }
+    return 0;
+}
+
+static int causal_segment(const rxl_log *A, const causal_ix *xa, const rxl_log *B, const causal_ix *xb,
+                          int seg, verdict *v) {
+    char a[80], b[80];
+    size_t la, ha, lb, hb;
+    seg_bounds(A, seg, &la, &ha);
+    seg_bounds(B, seg, &lb, &hb);
+    if (seg > 0 && !same_input(&A->recs[la - 1].u.in, &B->recs[lb - 1].u.in)) {
+        uint8_t dx[32], dy[32];
+        rxl_event_digest(&A->recs[la - 1], dx); rxl_event_digest(&B->recs[lb - 1], dy);
+        hexs(a, dx); hexs(b, dy);
+        diverge(v, la, "world.input", a, b, "INPUT %d differs (capability, mutations or values)", seg);
+        rec_line(&A->recs[la - 1], v->rec_exp, sizeof v->rec_exp);
+        rec_line(&B->recs[lb - 1], v->rec_act, sizeof v->rec_act);
+        return 1;
+    }
+    /* entries of this segment, superseded ones left out */
+    uint64_t *ea = calloc(xa->n + 1, sizeof *ea), *eb = calloc(xb->n + 1, sizeof *eb);
+    char *used = calloc(xb->n + 1, 1);
+    if (!ea || !eb || !used) { free(ea); free(eb); free(used); return diverge(v, 0, "verifier", "memory", "none", "out of memory"); }
+    size_t na = 0, nb = 0;
+    for (uint64_t j = 0; j < xa->n; j++)
+        if (xa->seg[j] == seg && A->recs[xa->rec[j]].u.c.kind != RXL_K_INVALIDATED) ea[na++] = j;
+    for (uint64_t j = 0; j < xb->n; j++)
+        if (xb->seg[j] == seg && B->recs[xb->rec[j]].u.c.kind != RXL_K_INVALIDATED) eb[nb++] = j;
+    int bad = 0;
+    /* A reaction with more entries in the replayed stimulus than in the
+     * expected one ran again after a run that was logged as committed: a
+     * superseded run without its flag. Named before the entry match so the
+     * report says what happened, not only which entry differs. */
+    for (size_t q = 0; q < nb && !bad; q++) {
+        const rxl_crumb *y = &B->recs[xb->rec[eb[q]]].u.c;
+        if (y->kind == RXL_K_EXTERNAL || y->kind == RXL_K_CREATE) continue;
+        size_t ca = 0, cb = 0;
+        for (size_t p = 0; p < nb; p++) {
+            const rxl_crumb *z = &B->recs[xb->rec[eb[p]]].u.c;
+            if (z->reaction == y->reaction && z->kind != RXL_K_EXTERNAL && z->kind != RXL_K_CREATE) cb++;
+        }
+        for (size_t p = 0; p < na; p++) {
+            const rxl_crumb *z = &A->recs[xa->rec[ea[p]]].u.c;
+            if (z->reaction == y->reaction && z->kind != RXL_K_EXTERNAL && z->kind != RXL_K_CREATE) ca++;
+        }
+        if (cb > ca) {
+            snprintf(a, sizeof a, "reaction%u:entries=%zu", y->reaction, ca);
+            snprintf(b, sizeof b, "reaction%u:entries=%zu", y->reaction, cb);
+            diverge(v, xb->rec[eb[q]] + 1, "world.superseded", a, b,
+                    "stimulus %d: unflagged superseded entry (reaction %u logged as committed %zu times, expected %zu; first at replay crumb %llu)",
+                    seg, y->reaction, cb, ca, (unsigned long long)y->id);
+            rec_line(&B->recs[xb->rec[eb[q]]], v->rec_act, sizeof v->rec_act);
+            bad = 1;
+        }
+    }
+    for (size_t i = 0; i < na && !bad; i++) {
+        uint64_t ja = ea[i];
+        size_t hit = nb;
+        for (size_t q = 0; q < nb && hit == nb; q++)
+            if (!used[q] && !memcmp(xa->cid[ja], xb->cid[eb[q]], 32)) hit = q;
+        if (hit < nb) { used[hit] = 1; continue; }
+        const rxl_rec *ra = &A->recs[xa->rec[ja]];
+        const rxl_crumb *k = &ra->u.c;
+        hexs(a, xa->cid[ja]);
+        size_t near = nb;
+        for (size_t q = 0; q < nb && near == nb; q++)
+            if (!used[q] && !memcmp(xa->content[ja], xb->content[eb[q]], 32)) near = q;
+        if (near < nb) {
+            hexs(b, xb->cid[eb[near]]);
+            diverge(v, xa->rec[ja] + 1, "world.cause", a, b,
+                    "crumb %llu: same entry, different cause links (wake cause or parents, by identity; replay crumb %llu)",
+                    (unsigned long long)k->id, (unsigned long long)eb[near] + 1);
+        } else {
+            for (size_t q = 0; q < nb && near == nb; q++) {
+                const rxl_crumb *y = &B->recs[xb->rec[eb[q]]].u.c;
+                if (!used[q] && y->kind == k->kind && y->reaction == k->reaction) near = q;
+            }
+            if (near < nb) {
+                hexs(b, xb->cid[eb[near]]);
+                diverge(v, xa->rec[ja] + 1, "world.causal", a, b,
+                        "crumb %llu: committed entry differs (replay crumb %llu)", (unsigned long long)k->id,
+                        (unsigned long long)eb[near] + 1);
+            } else {
+                diverge(v, xa->rec[ja] + 1, "world.causal", a, "none",
+                        "crumb %llu: entry missing from the replayed run", (unsigned long long)k->id);
+            }
+        }
+        rec_line(ra, v->rec_exp, sizeof v->rec_exp);
+        if (near < nb) rec_line(&B->recs[xb->rec[eb[near]]], v->rec_act, sizeof v->rec_act);
+        bad = 1;
+    }
+    for (size_t q = 0; q < nb && !bad; q++) {
+        if (used[q]) continue;
+        const rxl_rec *rb = &B->recs[xb->rec[eb[q]]];
+        const rxl_crumb *y = &rb->u.c;
+        int twice = 0;
+        for (size_t p = 0; p < nb && !twice; p++) {
+            const rxl_crumb *z = &B->recs[xb->rec[eb[p]]].u.c;
+            if (p != q && z->reaction == y->reaction && z->episode == y->episode && y->kind != RXL_K_EXTERNAL) twice = 1;
+        }
+        hexs(b, xb->cid[eb[q]]);
+        if (twice)
+            diverge(v, xb->rec[eb[q]] + 1, "world.superseded", "none", b,
+                    "replay crumb %llu: unflagged superseded entry (reaction %u has another entry in episode %llu)",
+                    (unsigned long long)y->id, y->reaction, (unsigned long long)y->episode);
+        else
+            diverge(v, xb->rec[eb[q]] + 1, "world.causal", "none", b, "replay crumb %llu: extra entry",
+                    (unsigned long long)y->id);
+        rec_line(rb, v->rec_act, sizeof v->rec_act);
+        bad = 1;
+    }
+    free(ea); free(eb); free(used);
+    if (bad) return 1;
+    /* checkpoints of this segment, pairwise in order */
+    size_t ia = la, ib = lb;
+    for (;;) {
+        while (ia < ha && A->recs[ia].type != RXL_CHECKPOINT) ia++;
+        while (ib < hb && B->recs[ib].type != RXL_CHECKPOINT) ib++;
+        if (ia >= ha && ib >= hb) break;
+        if (ia >= ha || ib >= hb) {
+            snprintf(a, sizeof a, "%s", ia < ha ? "checkpoint" : "none");
+            snprintf(b, sizeof b, "%s", ib < hb ? "checkpoint" : "none");
+            return diverge(v, ia < ha ? ia + 1 : ha, "world.state", a, b, "segment %d: checkpoint counts differ", seg);
+        }
+        const rxl_checkpoint *p = &A->recs[ia].u.ck, *q = &B->recs[ib].u.ck;
+        if (!q->n_obj)
+            return diverge(v, ia + 1, "world.state", "state-table", "hash-only",
+                           "replayed CHECKPOINT has no state table: writers cannot be matched by identity");
+        if (p->subsystem != q->subsystem || causal_state(p, xa, q, xb, ia + 1, v)) {
+            if (!v->diverged) {
+                snprintf(a, sizeof a, "subsystem:%u", p->subsystem);
+                snprintf(b, sizeof b, "subsystem:%u", q->subsystem);
+                diverge(v, ia + 1, "world.state", a, b, "checkpoint subsystems differ");
+            }
+            return 1;
+        }
+        ia++; ib++;
+    }
+    return 0;
+}
+
+static int compare_causal(const char *pa, const char *pb) {
+    rxl_log A, B;
+    char err[160];
+    verdict v;
+    if (rxl_read(pa, &A, err, sizeof err)) { fprintf(stderr, "rx_replay: expected log: %s\n", err); return 2; }
+    if (verify_log(&A, &v)) {
+        printf("REFUSED expected log does not verify: event=%llu subsystem=%s (%s)\n",
+               (unsigned long long)v.event, v.subsystem, v.detail);
+        rxl_free(&A);
+        return 2;
+    }
+    for (size_t i = 0; i < A.n; i++)
+        if (A.recs[i].type == RXL_CHECKPOINT && !A.recs[i].u.ck.n_obj) {
+            printf("REFUSED expected log has a CHECKPOINT without a state table (event %zu)\n", i + 1);
+            rxl_free(&A);
+            return 2;
+        }
+    if (rxl_read(pb, &B, err, sizeof err)) {
+        printf("DIVERGENCE event=1 expected=RXCLOG01 actual=unreadable subsystem=world.log\ndetail: %s\n", err);
+        rxl_free(&A);
+        return 1;
+    }
+    /* The replayed log must hold its own rules first: dense ids, links that
+     * point back, recomputed digests, END chain, state tables that hash. */
+    if (verify_log(&B, &v)) { rxl_free(&A); rxl_free(&B); return report(&v); }
+    causal_ix xa, xb;
+    if (causal_index(&A, &xa) || causal_index(&B, &xb)) {
+        causal_free(&xa); rxl_free(&A); rxl_free(&B);
+        fprintf(stderr, "rx_replay: out of memory\n");
+        return 2;
+    }
+    memset(&v, 0, sizeof v);
+    char a[80], b[80];
+    if (xa.n_seg != xb.n_seg) {
+        snprintf(a, sizeof a, "inputs:%d", xa.n_seg - 1);
+        snprintf(b, sizeof b, "inputs:%d", xb.n_seg - 1);
+        diverge(&v, 1, "world.input", a, b, "different number of INPUT records");
+    }
+    if (!v.diverged) causal_superseded(&A, &xa, "expected", &v);
+    if (!v.diverged) causal_superseded(&B, &xb, "replayed", &v);
+    for (int s = 0; s < xa.n_seg && !v.diverged; s++) causal_segment(&A, &xa, &B, &xb, s, &v);
+    int rc;
+    if (v.diverged) rc = report(&v);
+    else {
+        printf("MATCH through event %llu (causal order: %d segments, %llu crumbs expected, %llu replayed; "
+               "superseded expected=%llu replayed=%llu; merged-wake counts excluded)\n",
+               (unsigned long long)(A.n - 1), xa.n_seg, (unsigned long long)xa.n, (unsigned long long)xb.n,
+               (unsigned long long)xa.superseded, (unsigned long long)xb.superseded);
+        rc = 0;
+    }
+    causal_free(&xa); causal_free(&xb);
+    rxl_free(&A); rxl_free(&B);
+    return rc;
 }
 
 /* ---- M22 dispatch.log --------------------------------------------------- */
@@ -726,6 +1144,7 @@ int main(int argc, char **argv) {
         return report(&v);
     }
     if (argc == 4 && !strcmp(argv[1], "compare")) return compare_logs(argv[2], argv[3]);
+    if (argc == 4 && !strcmp(argv[1], "compare-causal")) return compare_causal(argv[2], argv[3]);
     if (argc == 3 && !strcmp(argv[1], "verify-dispatch")) {
         verdict v;
         verify_dispatch(argv[2], &v, NULL, NULL);
@@ -734,7 +1153,7 @@ int main(int argc, char **argv) {
         return rc;
     }
     if (argc == 4 && !strcmp(argv[1], "compare-dispatch")) return compare_dispatch(argv[2], argv[3]);
-    fprintf(stderr, "usage: rx_replay verify LOG | compare EXPECTED ACTUAL |\n"
+    fprintf(stderr, "usage: rx_replay verify LOG | compare EXPECTED ACTUAL | compare-causal EXPECTED ACTUAL |\n"
                     "       verify-dispatch DIR | compare-dispatch DIR_A DIR_B |\n"
                     "       export-trn1 RXLOG OUT.trn | verify-trn1 FILE | compare-trn1 EXPECTED ACTUAL |\n"
                     "       trn1-corpus VECTORS_DIR | trn1-flipall FILE\n");

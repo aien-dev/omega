@@ -35,7 +35,12 @@
  *               (rx_crumb_export.h).
  *   INPUT       SHA-256 of the encoded payload (capability + mutations with
  *               their values: the crumb log alone does not carry values).
- *   CHECKPOINT  SHA-256 of the encoded payload (state hash of every object).
+ *   CHECKPOINT  SHA-256 of the encoded payload: the state hash of every
+ *               object and, since the causal-order compare, the state table
+ *               it was hashed from (object id, generation, type, version and
+ *               per field value, field version and writer crumb id). The
+ *               verifier recomputes the state hash from the table, so the
+ *               table cannot differ from what the recorder hashed.
  * END.head chains the compared digests of every record before it, so a
  * dropped tail or a forged middle is caught without trusting the file. */
 #ifndef OMEGA_RXLOG_H
@@ -54,9 +59,11 @@
 #define RXL_MAX_PARENTS 65u    /* RX_MAX_DEPS * RX_MAX_FIELDS + 1 */
 #define RXL_MAX_MUTS 16u
 #define RXL_MAX_PAYLOAD 4096u
+#define RXL_MAX_FIELDS 8u     /* RX_MAX_FIELDS (static-asserted by the recorder) */
+#define RXL_MAX_OBJS 16u
 
 /* Crumb kinds, as numbered in rx_world.h RxCrumbKind. */
-enum { RXL_K_CREATE = 1, RXL_K_EXTERNAL = 2, RXL_K_MAX = 10 };
+enum { RXL_K_CREATE = 1, RXL_K_EXTERNAL = 2, RXL_K_COMMIT = 3, RXL_K_INVALIDATED = 4, RXL_K_MAX = 10 };
 
 enum { RXL_CRUMB = 1, RXL_INPUT = 2, RXL_CHECKPOINT = 3, RXL_END = 0xFF };
 
@@ -89,10 +96,20 @@ typedef struct {
     rxl_mut m[RXL_MAX_MUTS];
 } rxl_input;
 
+/* One object of a CHECKPOINT state table, in the order the state hash
+ * covers it. writer[f] is the crumb id of the field's last writer (0 = none). */
+typedef struct {
+    uint32_t id, gen, type;
+    uint64_t version;
+    uint64_t value[RXL_MAX_FIELDS], fversion[RXL_MAX_FIELDS], writer[RXL_MAX_FIELDS];
+} rxl_obj;
+
 typedef struct {
     uint64_t through_crumb;
     uint32_t subsystem;        /* 1 = world object state */
     uint8_t hash[32];
+    uint32_t n_obj;            /* 0 = hash only (no state table) */
+    rxl_obj obj[RXL_MAX_OBJS];
 } rxl_checkpoint;
 
 typedef struct { uint64_t n_records; uint8_t head[32]; } rxl_end;
@@ -136,5 +153,8 @@ int  rxl_finish(rxl_log *l);
  * mutation tool uses it to build forged logs that are internally consistent. */
 int  rxl_seal(rxl_log *l);
 void rxl_hex(const uint8_t *d, size_t n, char *out);
+/* State hash of a CHECKPOINT table, exactly as the recorder hashes the
+ * objects (tests/replay/rx_world_replay.c checkpoint()). */
+void rxl_state_hash(const rxl_checkpoint *ck, uint8_t out[32]);
 
 #endif

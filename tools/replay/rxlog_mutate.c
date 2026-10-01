@@ -2,8 +2,9 @@
  * the replay mutation suite (tests/replay/run_replay_suite.sh).
  *
  *   rxlog_mutate world IN OUT NAME      World RXCLOG01 log
+ *   rxlog_mutate causal IN OUT NAME     World log, causal-order mutant or control
  *   rxlog_mutate dispatch DIR NAME      M22 store dir, edited in place
- *   rxlog_mutate list-world | list-dispatch
+ *   rxlog_mutate list-world | list-causal | list-dispatch
  *
  * World names starting "forged-" are re-sealed afterwards: every crumb
  * digest, episode and the END record are recomputed, so the log passes its
@@ -132,6 +133,192 @@ static int world(const char *in, const char *out, const char *name) {
     return rc;
 }
 
+/* ---- causal-order mutants and controls ------------------------------------
+ * For rx_replay compare-causal (tests/replay/run_replay_suite.sh). Every one
+ * is re-sealed (digests, episodes, END) and its CHECKPOINT state hashes are
+ * recomputed from the tables, so each log verifies by itself; inserted or
+ * swapped crumbs renumber every id that refers to a crumb (ids, wake causes,
+ * parents, field writers, INPUT and CHECKPOINT counts).
+ *   causal-*          a real difference: compare-causal must report DIVERGENCE
+ *   causal-control-*  what concurrent commits legitimately change (order of
+ *                     unrelated commits, a flagged superseded run with its
+ *                     rerun, the merged-wake count): compare-causal must
+ *                     report MATCH and the sequence compare DIVERGENCE. */
+static const char *CAUSAL[] = {
+    "causal-cause-link", "causal-parent-link", "causal-writer-swap", "causal-unflagged-superseded",
+    "causal-entry-changed", "causal-superseded-no-rerun",
+    "causal-control-swap-independent", "causal-control-flagged-superseded", "causal-control-coalesced", NULL };
+
+/* Last COMMIT with a wake cause, outputs and at least two parents. */
+static long causal_target(const rxl_log *l) {
+    long t = -1;
+    for (size_t i = 0; i < l->n; i++) {
+        const rxl_rec *r = &l->recs[i];
+        if (r->type == RXL_CRUMB && r->u.c.kind == RXL_K_COMMIT && r->u.c.wake_cause && r->u.c.n_outputs &&
+            r->u.c.n_parents >= 2) t = (long)i;
+    }
+    return t;
+}
+
+static void sort_parents(rxl_crumb *k) {
+    for (uint32_t i = 1; i < k->n_parents; i++)
+        for (uint32_t j = i; j > 0 && k->parents[j - 1] > k->parents[j]; j--) {
+            uint64_t x = k->parents[j]; k->parents[j] = k->parents[j - 1]; k->parents[j - 1] = x;
+        }
+}
+
+/* Apply map[old id] = new id to every crumb reference (map[0] = 0). */
+static void remap(rxl_log *l, const uint64_t *map, uint64_t n_ids) {
+    for (size_t i = 0; i < l->n; i++) {
+        rxl_rec *r = &l->recs[i];
+        if (r->type == RXL_CRUMB) {
+            rxl_crumb *k = &r->u.c;
+            if (k->id <= n_ids) k->id = map[k->id];
+            if (k->wake_cause <= n_ids) k->wake_cause = map[k->wake_cause];
+            for (uint32_t p = 0; p < k->n_parents; p++)
+                if (k->parents[p] <= n_ids) k->parents[p] = map[k->parents[p]];
+            sort_parents(k);
+        } else if (r->type == RXL_CHECKPOINT) {
+            for (uint32_t o = 0; o < r->u.ck.n_obj; o++)
+                for (uint32_t f = 0; f < RXL_MAX_FIELDS; f++)
+                    if (r->u.ck.obj[o].writer[f] <= n_ids) r->u.ck.obj[o].writer[f] = map[r->u.ck.obj[o].writer[f]];
+        }
+    }
+}
+
+static uint64_t count_crumbs(const rxl_log *l, size_t upto) {
+    uint64_t n = 0;
+    for (size_t i = 0; i < upto && i < l->n; i++) n += l->recs[i].type == RXL_CRUMB;
+    return n;
+}
+
+/* Insert crumb c as record idx: it takes id P = crumbs before idx + 1, and
+ * every later crumb shifts by one. c's own links must point below P. */
+static int insert_crumb(rxl_log *l, size_t idx, const rxl_crumb *c) {
+    uint64_t n_ids = count_crumbs(l, l->n), P = count_crumbs(l, idx) + 1;
+    uint64_t *map = calloc(n_ids + 2, sizeof *map);
+    if (!map) return -1;
+    for (uint64_t id = 0; id <= n_ids; id++) map[id] = id >= P ? id + 1 : id;
+    remap(l, map, n_ids);
+    free(map);
+    /* INPUT and CHECKPOINT records from idx on now have one more crumb before them */
+    for (size_t i = idx; i < l->n; i++) {
+        rxl_rec *r = &l->recs[i];
+        if (r->type == RXL_INPUT) r->u.in.after_crumb++;
+        if (r->type == RXL_CHECKPOINT) r->u.ck.through_crumb++;
+    }
+    rxl_rec nr;
+    memset(&nr, 0, sizeof nr);
+    nr.type = RXL_CRUMB;
+    nr.u.c = *c;
+    nr.u.c.id = P;
+    if (rxl_push(l, &nr)) return -1;   /* grow; then move it into place */
+    memmove(&l->recs[idx + 1], &l->recs[idx], (l->n - 1 - idx) * sizeof l->recs[0]);
+    l->recs[idx] = nr;
+    return 0;
+}
+
+/* Swap the last adjacent pair of COMMITs where the second neither wakes on
+ * nor reads from the first (causally unrelated), renumbering both. */
+static int swap_independent(rxl_log *l) {
+    long at = -1;
+    for (size_t i = 0; i + 1 < l->n; i++) {
+        const rxl_rec *x = &l->recs[i], *y = &l->recs[i + 1];
+        if (x->type != RXL_CRUMB || y->type != RXL_CRUMB) continue;
+        if (x->u.c.kind != RXL_K_COMMIT || y->u.c.kind != RXL_K_COMMIT) continue;
+        int dep = y->u.c.wake_cause == x->u.c.id;
+        for (uint32_t p = 0; p < y->u.c.n_parents; p++) if (y->u.c.parents[p] == x->u.c.id) dep = 1;
+        if (!dep) at = (long)i;
+    }
+    if (at < 0) return -1;
+    uint64_t n_ids = count_crumbs(l, l->n);
+    uint64_t *map = calloc(n_ids + 1, sizeof *map);
+    if (!map) return -1;
+    for (uint64_t id = 0; id <= n_ids; id++) map[id] = id;
+    uint64_t a = l->recs[at].u.c.id, b = l->recs[at + 1].u.c.id;
+    map[a] = b; map[b] = a;
+    swap_rec(l, (size_t)at, (size_t)at + 1);
+    remap(l, map, n_ids);
+    free(map);
+    return 0;
+}
+
+static void rehash_states(rxl_log *l) {
+    for (size_t i = 0; i < l->n; i++)
+        if (l->recs[i].type == RXL_CHECKPOINT && l->recs[i].u.ck.n_obj) rxl_state_hash(&l->recs[i].u.ck, l->recs[i].u.ck.hash);
+}
+
+/* A run of R that read a stale input: same wake and parents, the last input
+ * one version older. flagged: logged INVALIDATED (STALE_GEN, no outputs). */
+static rxl_crumb stale_copy(const rxl_crumb *R, int flagged) {
+    rxl_crumb c = *R;
+    c.coalesced = 0;
+    if (c.n_inputs && c.inputs[c.n_inputs - 1].version > 1) c.inputs[c.n_inputs - 1].version--;
+    if (flagged) { c.kind = RXL_K_INVALIDATED; c.reason = -3; c.n_outputs = 0; }
+    return c;
+}
+
+static int causal(const char *in, const char *out, const char *name) {
+    rxl_log l;
+    char err[160];
+    if (rxl_read(in, &l, err, sizeof err) || l.malformed) { fprintf(stderr, "mutate: %s\n", l.malformed ? l.why : err); return 2; }
+    if (l.n && l.recs[l.n - 1].type == RXL_END) l.n--;
+    long t = causal_target(&l);
+    if (t < 0) { fprintf(stderr, "mutate: no causal target crumb\n"); rxl_free(&l); return 2; }
+    rxl_crumb *k = &l.recs[t].u.c;
+    rxl_crumb R = *k;
+    int rc = 0;
+    if (!strcmp(name, "causal-cause-link")) {
+        /* wake on another earlier crumb of the same episode */
+        uint64_t w = R.episode != R.wake_cause ? R.episode : R.parents[0] != R.wake_cause ? R.parents[0] : R.parents[1];
+        if (w == R.wake_cause || !w) rc = -1; else k->wake_cause = w;
+    } else if (!strcmp(name, "causal-parent-link")) {
+        memmove(&k->parents[0], &k->parents[1], (k->n_parents - 1) * sizeof k->parents[0]);
+        k->n_parents--;
+    } else if (!strcmp(name, "causal-writer-swap")) {
+        long ck = -1;
+        for (size_t i = 0; i < l.n; i++) if (l.recs[i].type == RXL_CHECKPOINT && l.recs[i].u.ck.n_obj >= 2) ck = (long)i;
+        rc = -1;
+        if (ck >= 0) {
+            rxl_checkpoint *c = &l.recs[ck].u.ck;
+            /* field 0 of the last two objects whose writers differ */
+            for (uint32_t o = c->n_obj - 1; o > 0 && rc; o--)
+                for (uint32_t p = o; p > 0 && rc; p--) {
+                    rxl_obj *x = &c->obj[o], *y = &c->obj[p - 1];
+                    if (x->writer[0] && y->writer[0] && x->writer[0] != y->writer[0]) {
+                        uint64_t s = x->writer[0]; x->writer[0] = y->writer[0]; y->writer[0] = s;
+                        rc = 0;
+                    }
+                }
+        }
+    } else if (!strcmp(name, "causal-unflagged-superseded")) {
+        rxl_crumb c = stale_copy(&R, 0);
+        rc = insert_crumb(&l, (size_t)t, &c);
+    } else if (!strcmp(name, "causal-entry-changed")) {
+        k->outputs[0].version += 1;
+    } else if (!strcmp(name, "causal-superseded-no-rerun")) {
+        rxl_crumb c = stale_copy(&R, 1);
+        rc = insert_crumb(&l, (size_t)t + 1, &c);   /* after R: nothing reruns it */
+    } else if (!strcmp(name, "causal-control-swap-independent")) {
+        rc = swap_independent(&l);
+    } else if (!strcmp(name, "causal-control-flagged-superseded")) {
+        rxl_crumb c = stale_copy(&R, 1);
+        rc = insert_crumb(&l, (size_t)t, &c);       /* before R: R is its rerun */
+    } else if (!strcmp(name, "causal-control-coalesced")) {
+        k->coalesced ^= 1;
+    } else {
+        fprintf(stderr, "mutate: unknown causal mutant %s\n", name);
+        rxl_free(&l);
+        return 2;
+    }
+    if (rc) { fprintf(stderr, "mutate: %s: cannot apply to this log\n", name); rxl_free(&l); return 2; }
+    rehash_states(&l);
+    if (rxl_seal(&l)) { rxl_free(&l); return 2; }
+    rc = rxl_write(out, &l) ? 2 : 0;
+    rxl_free(&l);
+    return rc;
+}
+
 /* ---- dispatch ----------------------------------------------------------- */
 
 
@@ -247,8 +434,11 @@ static int dispatch(const char *dir, const char *name) {
 int main(int argc, char **argv) {
     if (argc == 2 && !strcmp(argv[1], "list-world")) { for (int i = 0; WORLD[i]; i++) puts(WORLD[i]); return 0; }
     if (argc == 2 && !strcmp(argv[1], "list-dispatch")) { for (int i = 0; DISPATCH[i]; i++) puts(DISPATCH[i]); return 0; }
+    if (argc == 2 && !strcmp(argv[1], "list-causal")) { for (int i = 0; CAUSAL[i]; i++) puts(CAUSAL[i]); return 0; }
     if (argc == 5 && !strcmp(argv[1], "world")) return world(argv[2], argv[3], argv[4]);
     if (argc == 4 && !strcmp(argv[1], "dispatch")) return dispatch(argv[2], argv[3]);
-    fprintf(stderr, "usage: rxlog_mutate world IN OUT NAME | dispatch DIR NAME | list-world | list-dispatch\n");
+    if (argc == 5 && !strcmp(argv[1], "causal")) return causal(argv[2], argv[3], argv[4]);
+    fprintf(stderr, "usage: rxlog_mutate world IN OUT NAME | causal IN OUT NAME | dispatch DIR NAME |\n"
+                    "       list-world | list-causal | list-dispatch\n");
     return 2;
 }

@@ -77,10 +77,20 @@ size_t rxl_encode(const rxl_rec *r, uint8_t *buf) {
         }
         break;
     }
-    case RXL_CHECKPOINT:
-        w64(&p, r->u.ck.through_crumb); w32(&p, r->u.ck.subsystem);
-        memcpy(p, r->u.ck.hash, 32); p += 32;
+    case RXL_CHECKPOINT: {
+        const rxl_checkpoint *ck = &r->u.ck;
+        w64(&p, ck->through_crumb); w32(&p, ck->subsystem);
+        memcpy(p, ck->hash, 32); p += 32;
+        w32(&p, ck->n_obj);
+        for (uint32_t i = 0; i < ck->n_obj && i < RXL_MAX_OBJS; i++) {
+            const rxl_obj *o = &ck->obj[i];
+            w32(&p, o->id); w32(&p, o->gen); w32(&p, o->type); w64(&p, o->version);
+            for (uint32_t f = 0; f < RXL_MAX_FIELDS; f++) {
+                w64(&p, o->value[f]); w64(&p, o->fversion[f]); w64(&p, o->writer[f]);
+            }
+        }
         break;
+    }
     case RXL_END:
         w64(&p, r->u.end.n_records);
         memcpy(p, r->u.end.head, 32); p += 32;
@@ -131,10 +141,21 @@ static int decode(uint32_t type, const uint8_t *buf, size_t len, rxl_rec *r, cha
         }
         break;
     }
-    case RXL_CHECKPOINT:
-        r->u.ck.through_crumb = r64(&d); r->u.ck.subsystem = r32(&d);
-        rbytes(&d, r->u.ck.hash, 32);
+    case RXL_CHECKPOINT: {
+        rxl_checkpoint *ck = &r->u.ck;
+        ck->through_crumb = r64(&d); ck->subsystem = r32(&d);
+        rbytes(&d, ck->hash, 32);
+        ck->n_obj = r32(&d);
+        if (ck->n_obj > RXL_MAX_OBJS) { snprintf(why, wn, "state table %u objects over limit", ck->n_obj); return -1; }
+        for (uint32_t i = 0; i < ck->n_obj; i++) {
+            rxl_obj *o = &ck->obj[i];
+            o->id = r32(&d); o->gen = r32(&d); o->type = r32(&d); o->version = r64(&d);
+            for (uint32_t f = 0; f < RXL_MAX_FIELDS; f++) {
+                o->value[f] = r64(&d); o->fversion[f] = r64(&d); o->writer[f] = r64(&d);
+            }
+        }
         break;
+    }
     case RXL_END:
         r->u.end.n_records = r64(&d);
         rbytes(&d, r->u.end.head, 32);
@@ -309,4 +330,18 @@ int rxl_finish(rxl_log *l) {
     e.u.end.n_records = l->n;
     memcpy(e.u.end.head, head, 32);
     return rxl_push(l, &e);
+}
+
+void rxl_state_hash(const rxl_checkpoint *ck, uint8_t out[32]) {
+    sha256_ctx c;
+    sha256_init(&c);
+    sha256_update(&c, (const uint8_t *)"RXCLOG01-STATE", 14);
+    for (uint32_t i = 0; i < ck->n_obj && i < RXL_MAX_OBJS; i++) {
+        const rxl_obj *o = &ck->obj[i];
+        h32(&c, o->id); h32(&c, o->gen); h32(&c, o->type); h64(&c, o->version);
+        for (uint32_t f = 0; f < RXL_MAX_FIELDS; f++) {
+            h64(&c, o->value[f]); h64(&c, o->fversion[f]); h64(&c, o->writer[f]);
+        }
+    }
+    sha256_final(&c, out);
 }
