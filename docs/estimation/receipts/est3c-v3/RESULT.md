@@ -31,18 +31,22 @@ has no partial pass.
 
 ## What failed and why (descriptive, D1 only, after the binding fit)
 
-- The failure class is **dependence (persistence of changes)**, not shape and
-  not quantization. On D1 the variance of 10-step changes is 2.14 times ten
-  one-step variances (VR(10) = 2.137). Every v3 candidate forecasts
-  the 10-step change as a sum of independent one-step changes (F3-F5 by
-  convolution, F1/F2 as a random walk), so every candidate is too narrow at
-  10 steps under a stepped CPU load: temperature ramps for many seconds after
-  a load step.
-- The quantization fix worked as designed: with discrete predictives and
-  fractional coverage, F4 and F5 reached one-step coverage inside the bands
-  on data with 54 % exact-zero one-step changes (v2's blocker).
-- Volatility adaptation was needed for the one-step rules: the fixed-scale
-  families (F3, F4) failed the idle regime (235 steps) or lag-1 z; F5 passed both.
+- The failure class of the best-scoring family (F5) is **dependence
+  (persistence of changes)**. On D1 the variance of 10-step changes is 2.14
+  times ten one-step variances (VR(10) = 2.137, computed descriptively from D1
+  after the binding fit; not in params.txt). Every v3 candidate forecasts the
+  10-step change as a sum of independent one-step changes (F3-F5 by
+  convolution, F1/F2 as a random walk). F5, the only family to meet every
+  one-step rule, was too narrow at 10 steps (0.809). F2 (0.922) and F4 (0.918)
+  passed the ten-step rule, but only with one-step predictives that failed
+  other rules (F2 far too wide at the centre, cov50 0.938; F4 lag-1 z and idle
+  regime), so they do not show that the independence assumption holds.
+- Observation, not a pass: with discrete predictives and fractional
+  coverage, F4 and F5 met the one-step coverage bands on data with 54 %
+  exact-zero one-step changes (also a descriptive D1 count), which was v2's
+  blocker. v3 as a whole still FAILED.
+- The fixed-scale families (F3, F4) failed the idle regime (235 steps) or
+  lag-1 z; the adaptive-scale F5 met both.
 - Grid edges were hit (F1/F2 r = 100, F3 nu = 1.5, F5 lambda = 0.5). This is
   recorded, not acted on: changing a grid now would be fitting to D1 after it
   was read, which section 9 forbids.
