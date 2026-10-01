@@ -160,6 +160,29 @@ else
     echo "NOT_RUN trn1-shared-corpus (set TRN1_VECTORS)" >> "$rec"
 fi
 
+echo "== Path and line limits: refuse, never truncate =="
+# expect_refusal NAME RC TEXT -- cmd...: exit code RC and TEXT in the output.
+# A truncated path or split corpus line must be refused loudly; before the
+# fix these inputs were read as a different (shorter) path or two lines.
+expect_refusal() {
+    name=$1; want_rc=$2; text=$3; shift 4
+    checks=$((checks + 1))
+    "$@" > "$out/last.txt" 2>&1
+    rc=$?
+    if [ $rc -eq "$want_rc" ] && grep -qF "$text" "$out/last.txt"; then st=ok; else st=FAIL; fails=$((fails + 1)); fi
+    printf '%-4s %-34s want=rc%s+"%s" got rc=%s\n' "$st" "$name" "$want_rc" "$text" "$rc" >> "$rec"
+    [ $st = ok ] || { echo "FAIL $name: wanted rc=$want_rc and \"$text\""; head -c 2000 "$out/last.txt"; echo; }
+}
+# Same directory, spelled with 2100 "/." segments: over 4096 bytes.
+lp_trn="$out/trn1"; lp_m22="$out/m22/a"; i=0
+while [ $i -lt 2100 ]; do lp_trn="$lp_trn/."; lp_m22="$lp_m22/."; i=$((i + 1)); done
+expect_refusal limit-corpus-path-too-long 2 "path too long" -- "$V" trn1-corpus "$lp_trn"
+expect_refusal limit-dispatch-path-too-long 1 "store path too long" -- "$V" verify-dispatch "$lp_m22"
+mkdir -p "$out/trn1/longline"
+{ i=0; while [ $i -lt 1500 ]; do printf x; i=$((i + 1)); done; echo " OK"; } > "$out/trn1/longline/expected.txt"
+: > "$out/trn1/longline/compare.txt"
+expect_refusal limit-corpus-line-too-long 1 "line longer than" -- "$V" trn1-corpus "$out/trn1/longline"
+
 commit=$(git rev-parse HEAD 2>/dev/null || echo unknown)
 if [ -n "$(git status --porcelain 2>/dev/null)" ]; then dirty=true; else dirty=false; fi
 if [ $fails -ne 0 ]; then verdict=FAIL; elif [ "$corpus_src" = none ]; then verdict="PASS (trn1_corpus NOT_RUN)"; else verdict=PASS; fi
