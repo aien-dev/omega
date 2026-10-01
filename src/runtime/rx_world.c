@@ -2346,7 +2346,7 @@ int rx_world_seq_activate_timed_locked(RxWorld *w, uint32_t rid, uint64_t cause,
                                        uint64_t poll_cpu) {
     if (!w || !w->sequential || rid >= w->n_reactions) return RX_ERR_ARG;
     RxReaction *r = &w->reactions[rid];
-    if (r->state != RX_DORMANT) return RX_ERR_ARG;
+    if (r->state != RX_DORMANT || r->removed) return RX_ERR_ARG; /* removed: never demanded */
     r->seq_pending = false;
     demand(w, rid, cause);          /* R6 budgets and quarantine, unchanged */
     if (!r->seq_pending) return 0;
