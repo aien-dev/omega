@@ -4,8 +4,7 @@ Status 2026-10-01: **M21 NOT QUALIFIED.** The tape, its tests and its
 mutation sweep are written. Forge host run on commit c098a74 (before the
 rebase onto omega#178/#179 and before the gate fixes): `test-autodiff` PASS
 182 pass / 0 fail (log HIVE-M21-181152.log), mutation sweep 10/10 caught (log
-HIVE-M21-181157.log). The current commit (rebased, bit-exact layer, pure
-1e-3 relative FD, 12 mutants) is NOT_RUN until the forge reruns it. GB10 NOT_RUN. M20, which this layer sits on, is itself not
+HIVE-M21-181157.log). Forge host run on commit 0f0938f (rebased, bit-exact layer, pure 1e-3 relative FD, 12 mutants): `test-autodiff` PASS 262 pass / 0 fail, plain and ASan/UBSan (log HIVE-M21-light-185710.log); mutation sweep PASS 12/12 caught (log HIVE-M21-light-185715.log). This doc-only commit changes no code, so the 0f0938f host receipt applies to its code. GB10 NOT_RUN. M20, which this layer sits on, is itself not
 qualified (GB10 parity NOT_RUN).
 
 Plan source: `aien-architecture/CURRENT_EXECUTION_PLAN.md`, section
@@ -182,39 +181,37 @@ expected to catch it (UNVERIFIED until the forge runs the sweep).
 Two commits matter here. **c098a74** (before the rebase, before the fixes
 below) has a forge receipt. **The current commit** (rebased onto omega#178
 and #179, with the bit-exact layer, the pure relative FD check and 12
-mutants) is NOT_RUN until the forge reruns it.
+mutants) has a forge host PASS receipt (0f0938f).
 
 | Item | c098a74 (forge receipt) | Current commit | Evidence |
 |---|---|---|---|
 | Reverse-mode tape over M20 CPU ops | WRITTEN | WRITTEN | `src/autodiff/` |
-| Contract layer | PASS | NOT_RUN | `make test-autodiff` |
-| Bit-exact layer (gate) | not present | NOT_RUN | `make test-autodiff` |
-| Finite differences, pure 1e-3 relative (gate) | not present (c098a74 used 5e-4 + 1e-3 \|fd\|) | NOT_RUN | `make test-autodiff` |
-| Composite graph end to end | PASS | NOT_RUN | `make test-autodiff` |
-| Determinism (bit-identical rerun) | PASS | NOT_RUN | `make test-autodiff` |
-| Error paths and leak check | PASS | NOT_RUN | `make test-autodiff` (plain and ASan/UBSan) |
-| Host test totals | PASS, 182 pass / 0 fail (log HIVE-M21-181152.log) | NOT_RUN | forge |
-| Mutation sweep | PASS, 10/10 caught (log HIVE-M21-181157.log) | NOT_RUN (12 mutants) | `sh tools/autodiff_mutations.sh` |
+| Contract layer | PASS | PASS (0f0938f) | `make test-autodiff` |
+| Bit-exact layer (gate) | not present | PASS (0f0938f) | `make test-autodiff` |
+| Finite differences, pure 1e-3 relative (gate) | not present (c098a74 used 5e-4 + 1e-3 \|fd\|) | PASS (0f0938f) | `make test-autodiff` |
+| Composite graph end to end | PASS | PASS (0f0938f) | `make test-autodiff` |
+| Determinism (bit-identical rerun) | PASS | PASS (0f0938f) | `make test-autodiff` |
+| Error paths and leak check | PASS | PASS (0f0938f) | `make test-autodiff` (plain and ASan/UBSan) |
+| Host test totals | PASS, 182 pass / 0 fail (log HIVE-M21-181152.log) | PASS, 262 pass / 0 fail (log HIVE-M21-light-185710.log) | forge |
+| Mutation sweep | PASS, 10/10 caught (log HIVE-M21-181157.log) | PASS, 12/12 caught (log HIVE-M21-light-185715.log) | `sh tools/autodiff_mutations.sh` |
 | CI wiring | MISSING | MISSING | no `autodiff` job in `host-suites-2.yml` yet |
 | GB10 | NOT_RUN | NOT_RUN | no GB10 realization of M20 yet |
 | Owner approval of the gate | | APPROVED | queen, 2026-10-01 (wording above) |
 | Reproducible receipt | MISSING_IMPLEMENTATION | MISSING_IMPLEMENTATION | no receipt writer for this gate yet; the forge receipt lines do not name the commit hash |
 
-**M21 verdict: NOT QUALIFIED** until the host run passes on the current
-commit and a GB10 chip receipt exists.
+**M21 verdict: NOT QUALIFIED.** Host PASS on 0f0938f; a GB10 chip receipt does not exist yet.
 
 ## Gate conformance (approved wording vs current tests)
 
 - **FD within 1e-3 relative.** Met by construction in the current commit:
   `fd_ok` is `|tape - fd| <= 1e-3 |fd|` with no absolute term (the 5e-4
   floor of c098a74 is removed), on FD data sets chosen so no gradient
-  element is near zero. NOT_RUN until the forge reruns it.
+  element is near zero. Host PASS on 0f0938f.
 - **Bit-exact against the same M20 operations.** Met by construction in the
   current commit: layer 2 replays every op case's backward rule with direct
   M20 calls and `memcmp`s it against the tape, for both inputs. The
   composite graph is covered by the per-op replays plus the bit-identical
-  determinism check, not by its own whole-graph replay. NOT_RUN until the
-  forge reruns it.
+  determinism check, not by its own whole-graph replay. Host PASS on 0f0938f.
 - Owed (inspector, recommended, not blocking): separate mutants for
   TRANSPOSE backward, SUM expand axis, the unbroadcast leading-axis loop
   and the capacity check; a forge receipt that records the commit hash.
