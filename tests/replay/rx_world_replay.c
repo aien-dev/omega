@@ -19,7 +19,16 @@
  * perturb (negative controls, so a passing compare means something):
  *   value      omega.realize adds 1001 instead of 1000 (same crumbs, other values)
  *   structure  omega.risk is not registered (different crumbs)
- *   input      the third INPUT is replayed with value + 1 */
+ *   input      the third INPUT is replayed with value + 8 (recorded values are
+ *              0..7, so the write is never a no-op and never the recorded one)
+ *
+ * Every recorded stimulus value differs from the field's current value: the
+ * runtime leaves an unchanged field out of the EXTERNAL crumb's outputs, and
+ * the verifier requires every INPUT mutation to appear there.
+ *
+ * Capability generations are boot-time seeded by the capability root, so the
+ * log carries them relative to the run's office generation (rx_crumb_export.h);
+ * INPUT records store the external capability's generation the same way. */
 #include "replay/rx_crumb_export.h"
 #include "runtime/rx_caproot.h"
 #include "runtime/rx_world.h"
@@ -191,7 +200,7 @@ static int checkpoint(Env *e, rxl_log *log) {
 }
 
 /* Publish one INPUT record, log it and everything it caused. */
-static int drive(Env *e, rxl_log *log, uint64_t *next, const rxl_input *in) {
+static int drive(Env *e, rxl_log *log, rxx_ctx *x, const rxl_input *in) {
     rxl_rec r;
     memset(&r, 0, sizeof r);
     r.type = RXL_INPUT;
@@ -201,10 +210,11 @@ static int drive(Env *e, rxl_log *log, uint64_t *next, const rxl_input *in) {
     RxMutation m[RXL_MAX_MUTS];
     for (uint32_t i = 0; i < in->n; i++)
         m[i] = (RxMutation){ { in->m[i].id, in->m[i].gen }, in->m[i].field, in->m[i].value };
-    int64_t rc = rx_world_publish_external(&e->w, (RxCapRef){ in->cap_id, in->cap_gen }, m, in->n);
+    if (in->cap_gen > UINT64_MAX - x->cap_base) { fprintf(stderr, "input capability generation out of range\n"); return -1; }
+    int64_t rc = rx_world_publish_external(&e->w, (RxCapRef){ in->cap_id, x->cap_base + in->cap_gen }, m, in->n);
     if (rc <= 0) { fprintf(stderr, "publish refused: %lld\n", (long long)rc); return -1; }
     if (rx_world_wait_quiescent(&e->w, 10000) != RX_OK) { fprintf(stderr, "no quiescence\n"); return -1; }
-    if (rxx_append_crumbs(log, &e->w, next)) return -1;
+    if (rxx_append_crumbs(log, &e->w, x)) return -1;
     return checkpoint(e, log);
 }
 
@@ -215,22 +225,29 @@ static int record(const char *out, uint32_t workers, uint32_t stimuli, uint32_t 
     if (setup(&e, workers, P_NONE)) { fprintf(stderr, "setup failed\n"); return 2; }
     rxl_log log;
     rxl_init(&log, RXL_FLAG_INPUTS);
-    uint64_t next = 1;
-    int bad = rxx_append_crumbs(&log, &e.w, &next) || checkpoint(&e, &log);
+    rxx_ctx x;
+    rxx_init(&x, rx_capadmin_office(&e.admin).generation);
+    int bad = e.c_ext.generation < x.cap_base || rxx_append_crumbs(&log, &e.w, &x) || checkpoint(&e, &log);
     for (uint32_t k = 0; k < stimuli && !bad; k++) {
         rxl_input in;
         memset(&in, 0, sizeof in);
         in.cap_id = e.c_ext.cap_id;
-        in.cap_gen = e.c_ext.generation;
+        in.cap_gen = e.c_ext.generation - x.cap_base;
+        RxObject s;
+        if (rx_world_read(&e.w, e.h.sensor, &s) != RX_OK) { fprintf(stderr, "sensor read failed\n"); bad = 1; break; }
+        /* current + 1..7, mod 8: never the value the field already holds */
         uint32_t pick = lcg(&seed) % 3;     /* temp, humidity, or both */
-        if (pick != 1) in.m[in.n++] = (rxl_mut){ e.h.sensor.id, e.h.sensor.generation, F_TEMP, lcg(&seed) % 8 };
-        if (pick != 0) in.m[in.n++] = (rxl_mut){ e.h.sensor.id, e.h.sensor.generation, F_HUMIDITY, lcg(&seed) % 8 };
-        bad = drive(&e, &log, &next, &in);
+        if (pick != 1) in.m[in.n++] = (rxl_mut){ e.h.sensor.id, e.h.sensor.generation, F_TEMP,
+                                                 (s.field[F_TEMP] + 1 + lcg(&seed) % 7) % 8 };
+        if (pick != 0) in.m[in.n++] = (rxl_mut){ e.h.sensor.id, e.h.sensor.generation, F_HUMIDITY,
+                                                 (s.field[F_HUMIDITY] + 1 + lcg(&seed) % 7) % 8 };
+        bad = drive(&e, &log, &x, &in);
     }
     teardown(&e);
+    rxx_free(&x);
     if (bad || rxl_finish(&log) || rxl_write(out, &log)) { fprintf(stderr, "record failed\n"); rxl_free(&log); return 2; }
     printf("recorded %zu events (%llu crumbs, %u stimuli, %u workers) to %s\n", log.n - 1,
-           (unsigned long long)(next - 1), stimuli, workers, out);
+           (unsigned long long)(x.next - 1), stimuli, workers, out);
     rxl_free(&log);
     return 0;
 }
@@ -243,23 +260,35 @@ static int replay(const char *in_path, const char *out, uint32_t workers, int pe
     if (setup(&e, workers, perturb)) { fprintf(stderr, "setup failed\n"); rxl_free(&in); return 2; }
     rxl_log log;
     rxl_init(&log, RXL_FLAG_INPUTS);
-    uint64_t next = 1;
-    int bad = rxx_append_crumbs(&log, &e.w, &next) || checkpoint(&e, &log);
+    rxx_ctx xc;
+    rxx_init(&xc, rx_capadmin_office(&e.admin).generation);
+    int bad = e.c_ext.generation < xc.cap_base || rxx_append_crumbs(&log, &e.w, &xc) || checkpoint(&e, &log);
     uint32_t n_in = 0;
     for (size_t i = 0; i < in.n && !bad; i++) {
         if (in.recs[i].type != RXL_INPUT) continue;
         rxl_input x = in.recs[i].u.in;
-        if (x.cap_id != e.c_ext.cap_id || x.cap_gen != e.c_ext.generation) {
+        if (x.cap_id != e.c_ext.cap_id || x.cap_gen != e.c_ext.generation - xc.cap_base) {
             fprintf(stderr, "replay: recorded capability %u/%llu is not the rebuilt one\n", x.cap_id,
                     (unsigned long long)x.cap_gen);
             bad = 1;
             break;
         }
-        if (perturb == P_INPUT && n_in == 2) x.m[0].value += 1;
+        if (perturb == P_INPUT && n_in == 2) {
+            /* never the recorded value, never the value the field holds */
+            RxObject s;
+            if (rx_world_read(&e.w, (RxObjRef){ x.m[0].id, x.m[0].gen }, &s) != RX_OK || x.m[0].field >= RX_MAX_FIELDS) {
+                fprintf(stderr, "replay: perturbed field unreadable\n");
+                bad = 1;
+                break;
+            }
+            x.m[0].value += 8;
+            if (x.m[0].value == s.field[x.m[0].field]) x.m[0].value += 8;
+        }
         n_in++;
-        bad = drive(&e, &log, &next, &x);
+        bad = drive(&e, &log, &xc, &x);
     }
     teardown(&e);
+    rxx_free(&xc);
     rxl_free(&in);
     if (bad || rxl_finish(&log) || rxl_write(out, &log)) { fprintf(stderr, "replay failed\n"); rxl_free(&log); return 2; }
     printf("replayed %u inputs into %zu events (%u workers) to %s\n", n_in, log.n - 1, workers, out);
