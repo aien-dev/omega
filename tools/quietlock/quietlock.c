@@ -512,7 +512,7 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 	if (f.present) {
 		describe(&f, d, sizeof d);
 		lock_drop(fd);
-		fprintf(stderr, "quietlock: refused: QUIETLOCK_REFUSED quiet flag already held (%s)%s\n", d,
+		fprintf(stderr, "quietlock: QUIETLOCK_REFUSED hold refused, quiet flag already held (%s)%s\n", d,
 			flag_stale(&f) ? "; it is stale, run 'quietlock release-stale' first" : "");
 		return EXIT_HELD;
 	}

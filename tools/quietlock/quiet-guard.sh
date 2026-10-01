@@ -67,6 +67,14 @@ body=$(printf '%s\n' "$cmd" | awk '
 	stop != "" { t = $0; if (strip) sub(/^\t+/, "", t); if (t == stop) stop = ""; next }
 	{ print }
 	/<<-?[ \t]*["\047]?[A-Za-z_][A-Za-z0-9_]*/ && $0 !~ /<<</ { strip = ($0 ~ /<<-/); stop = delim($0) }')
+# Queueing is not running (queen 2026-10-01): a lanes.sh queue / queue-light / idea / ledger /
+# brief / status call only writes a line for the forge, so its arguments (the queued command text)
+# are data. Each such call is replaced by ':' up to the next unquoted separator, so any command
+# AFTER it (`lanes.sh queue x d 'make'; make`) is still scanned. Only single-quoted args and
+# double-quoted args without $( or backquote are swallowed; anything else stays and is scanned.
+# Same rule as the live hook's exemption, anchored at command position instead of anywhere in the text.
+body=$(printf '%s\n' "$body" | sed -E \
+	"s#(^|[;&|(][[:space:]]*)(([A-Za-z_][A-Za-z0-9_]*=[^ ;&|]* +)*)((ba|da)?sh +)?[^ ;&|'\"]*lanes\\.sh +(queue|queue-light|idea|ledger|brief|status)( +('[^']*'|\"[^\"\$\`]*\"|[^ ;&|'\"()\`\$]+))*#\\1\\2:#g")
 # Quotes may span lines: flatten newlines to \001 while stripping, then restore.
 strip_quotes() { tr '\n' '\001' | sed -e "s/'[^']*'//g" -e 's/"[^"]*"//g' | tr '\001' '\n'; }
 # Quoted text after a shell's -<letters>c flag cluster (sh -c, bash -lc, dash -xc ...) is a

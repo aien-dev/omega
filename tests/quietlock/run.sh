@@ -373,35 +373,68 @@ expect_allow 'grep -c "make" notes.md'
 expect_allow 'sudo cat notes.md'
 expect_allow "bash -c 'echo hi' >> notes.md"
 expect_allow 'for f in a b; do echo make; done >> notes.md'
+# H10 queueing is not running: lanes.sh queue/queue-light/idea/ledger/brief/status are allowed while
+# the flag is held, whatever build words the queued text holds (queen 2026-10-01).
+# Mutations killed: no exemption (bash -c "make" inside the queued text is collected as a shell -c
+# command and blocks); exemption matched anywhere in the text like the live hook (H10f-H10h would pass);
+# exemption swallowing everything to end of line instead of stopping at a separator (H10f, H10g).
+expect_allow "lanes.sh queue X d 'make test'"
+expect_allow "\$HOME/.claude/skills/orchestrate-lanes/lanes.sh queue-light HD-13 ~/w 'cargo build'"
+expect_allow "bash ~/.claude/skills/orchestrate-lanes/lanes.sh queue X d 'bash -c \"make all\"'"
+expect_allow "lanes.sh idea X 'run make later'"
+expect_allow 'lanes.sh status'
+expect_block "lanes.sh queue X d 'make test'; make"
+expect_block 'lanes.sh queue X d x && cargo build'
+expect_block "echo lanes.sh queue X d y; make"
+# H10i `lanes.sh flush` is not a build word: the hook lets it start; the forge itself then waits for a
+# clear flag before every job (I9). Mutation killed: treating flush as heavy would stall the forge.
+expect_allow 'lanes.sh flush'
 fi
 
 
 # ===== Installer + lanes.sh patch (tools/quietlock/install.sh, lanes-quietlock.patch) =====
-# Runs against a FAKE $HOME under $T holding a copy of the real lanes.sh; never touches ~/.claude.
-# Skipped (printed SKIP, not counted as ok) where the real lanes.sh does not exist (CI).
-REAL_LANES=$HOME/.claude/skills/orchestrate-lanes/lanes.sh
-if [ ! -f "$REAL_LANES" ]; then
-	echo "SKIP I1-I6: no $REAL_LANES on this host"
+# Runs against a FAKE $HOME under $T holding the PINNED copies tools/quietlock/testdata/lanes.sh.base
+# and quiet-guard.sh.base (the live files the patch was made against). Never reads or touches ~/.claude
+# for pass/fail. The only look at the live lanes.sh is the informational note below, which never fails.
+TD=$HERE/tools/quietlock/testdata
+LIVE_LANES=$HOME/.claude/skills/orchestrate-lanes/lanes.sh
+if [ -f "$LIVE_LANES" ]; then
+	if grep -qF 'HD-13: the quiet flag is a real lock' "$LIVE_LANES"; then
+		echo "NOTE applies to live lanes.sh: already patched"
+	elif patch -F 0 --dry-run -s -o /dev/null "$LIVE_LANES" < "$HERE/tools/quietlock/lanes-quietlock.patch" >/dev/null 2>&1; then
+		echo "NOTE applies to live lanes.sh: yes"
+	else
+		echo "NOTE applies to live lanes.sh: no (live file changed; regenerate the patch before installing)"
+	fi
 else
-F=$T/fakehome
-mkdir -p "$F/.claude/hooks" "$F/.claude/skills/orchestrate-lanes" "$F/workspace"
-cp "$REAL_LANES" "$F/.claude/skills/orchestrate-lanes/lanes.sh"
-printf '#!/bin/sh\nexit 0\n' > "$F/.claude/hooks/quiet-guard.sh"
-cp "$F/.claude/skills/orchestrate-lanes/lanes.sh" "$T/lanes.before"
-cp "$F/.claude/hooks/quiet-guard.sh" "$T/hook.before"
-FL=$F/.claude/skills/orchestrate-lanes/lanes.sh
+	echo "NOTE applies to live lanes.sh: no live lanes.sh on this host"
+fi
 
-# I1 --dry-run changes nothing.
-# Mutation killed: do_() running commands in dry-run mode.
+mkhome() { # $1 = fake home; pinned lanes.sh + pinned hook, no quietlock binary
+	rm -rf "$1"
+	mkdir -p "$1/.claude/hooks" "$1/.claude/skills/orchestrate-lanes" "$1/workspace"
+	cp "$TD/lanes.sh.base" "$1/.claude/skills/orchestrate-lanes/lanes.sh"
+	cp "$TD/quiet-guard.sh.base" "$1/.claude/hooks/quiet-guard.sh"
+}
+# Run lanes.sh from fake home $F with its quietlock, never the caller's state dir or hold.
+fl() { ( unset QUIETLOCK_DIR QUIETLOCK_HOLD; HOME=$F; QUIETLOCK_BIN=$F/.local/bin/quietlock; export HOME QUIETLOCK_BIN; "$@" ); }
+F=$T/fakehome
+mkhome "$F"
+FL=$F/.claude/skills/orchestrate-lanes/lanes.sh
+FH=$F/.claude/hooks/quiet-guard.sh
+
+# I1 --dry-run changes nothing and leaves no temp files.
+# Mutations killed: dry-run doing the swap; staged *.tmp.* files left behind (no cleanup trap).
 ( HOME=$F; export HOME; sh "$HERE/tools/quietlock/install.sh" --dry-run ) >"$T/i1.log" 2>&1; rc=$?
-check "I1 install --dry-run changes nothing" '[ $rc = 0 ] && cmp -s "$FL" "$T/lanes.before" && cmp -s "$F/.claude/hooks/quiet-guard.sh" "$T/hook.before" && [ ! -e "$F/.local/bin/quietlock" ] && ! ls "$F/.claude/hooks" | grep -q bak'
+check "I1 install --dry-run changes nothing" '[ $rc = 0 ] && cmp -s "$FL" "$TD/lanes.sh.base" && cmp -s "$FH" "$TD/quiet-guard.sh.base" && [ ! -e "$F/.local/bin/quietlock" ] && [ -z "$(find "$F" -name "*.bak.*" -o -name "*.tmp.*" -o -name "*.rej" -o -name "*.orig")" ]'
 
 # I2 install builds the tool, backs up both files, installs the hook, patches lanes.sh with no bare rm of the flag.
 # Mutations killed: skipping the backup; skipping the patch; a patch that keeps rm -f "$FLAG".
 ( HOME=$F; export HOME; sh "$HERE/tools/quietlock/install.sh" ) >"$T/i2.log" 2>&1; rc=$?
 check "I2 install succeeds" '[ $rc = 0 ] && [ -x "$F/.local/bin/quietlock" ]'
-check "I2b backups equal the originals" 'cmp -s "$(ls "$FL".bak.* | head -1)" "$T/lanes.before" && cmp -s "$(ls "$F"/.claude/hooks/quiet-guard.sh.bak.* | head -1)" "$T/hook.before"'
-check "I2c hook installed, lanes.sh patched, no rm of the flag" 'cmp -s "$HERE/tools/quietlock/quiet-guard.sh" "$F/.claude/hooks/quiet-guard.sh" && grep -q "HD-13: the quiet flag is a real lock" "$FL" && ! grep -q "rm -f \"\$FLAG\"" "$FL"'
+check "I2b backups equal the originals" 'cmp -s "$(ls "$FL".bak.* | head -1)" "$TD/lanes.sh.base" && cmp -s "$(ls "$FH".bak.* | head -1)" "$TD/quiet-guard.sh.base"'
+check "I2c hook installed, lanes.sh patched, no rm of the flag" 'cmp -s "$HERE/tools/quietlock/quiet-guard.sh" "$FH" && grep -q "HD-13: the quiet flag is a real lock" "$FL" && ! grep -q "rm -f \"\$FLAG\"" "$FL" && bash -n "$FL"'
+check "I2d no temp, .rej or .orig files left" '[ -z "$(find "$F" -name "*.tmp.*" -o -name "*.rej" -o -name "*.orig")" ]'
 
 # I3 re-running is idempotent (patch not applied twice).
 # Mutation killed: removing the already-patched marker check.
@@ -410,31 +443,83 @@ check "I3 second install leaves lanes.sh patched once" '[ $rc = 0 ] && [ "$(grep
 
 # I4 patched `lanes.sh release-stale` goes through quietlock: live flag kept, stale flag released
 # with quietlock's history line.
-# Mutation killed: the old read-then-rm body (its history line has no "quietlock:" prefix; it ignores pid liveness rules the same way, so I4 checks the prefix).
+# Mutation killed: the old read-then-rm body (its history line has no "quietlock:" prefix).
 FF=$F/workspace/.spark-quiet
 echo "OTHER quietlock test start=$PAST expected_end=$FUTURE pid=$$ hold=qOTHER-1-0" > "$FF"
-( unset QUIETLOCK_DIR QUIETLOCK_HOLD; HOME=$F; QUIETLOCK_BIN=$F/.local/bin/quietlock; export HOME QUIETLOCK_BIN; bash "$FL" release-stale ) >/dev/null 2>&1
+fl bash "$FL" release-stale >/dev/null 2>&1
 check "I4 patched release-stale leaves a live flag" '[ -e "$FF" ]'
 D4=$(dead_pid)
 echo "OLD x y start=$PAST expected_end=$PAST pid=$D4" > "$FF"
-( unset QUIETLOCK_DIR QUIETLOCK_HOLD; HOME=$F; QUIETLOCK_BIN=$F/.local/bin/quietlock; export HOME QUIETLOCK_BIN; bash "$FL" release-stale ) >/dev/null 2>&1
+fl bash "$FL" release-stale >/dev/null 2>&1
 check "I4b patched release-stale releases through quietlock" '[ ! -e "$FF" ] && grep -q "quietlock: released stale flag: OLD x y" "$F/workspace/.spark-quiet.history"'
 
-# I5 patched light flush: PASS / FAIL / REFUSED_QUIET verdicts; refused job requeued.
-# Mutations killed: old verdict line (exit 75 recorded as FAIL); no requeue of refused jobs.
+# I5 patched light flush verdicts (queen round-5 ruling 2). REFUSED_QUIET only when the job exits 75
+# AND its final log line is quietlock's own refusal; capped requeues; everything else is judged by rc.
+#   L1 true -> PASS. L2 exit 3 -> FAIL(rc=3).
+#   L3 exit 75 with no quietlock line -> FAIL(rc=75), not requeued.
+#   L4 a failing suite printing the marker text in a label -> FAIL(rc=1), not requeued.
+#   L6 marker printed, then other output, exit 75 -> FAIL(rc=75) (marker not on the final line).
+#   L5 a real quietlock refusal (other holder's live flag, then the job clears it to keep the test
+#      short) -> REFUSED_QUIET, requeued as L5@r1..@r3, then REFUSED_QUIET_GAVE_UP (cap 3), no more requeue.
+# Mutations killed: grepping the marker anywhere in the log (L4, L6 would requeue); rc 75 alone (L3);
+# no cap (L5 loops forever / no GAVE_UP); counter not carried in the requeued line (never gives up).
 rm -f "$FF"
-printf 'L1|%s|true\nL2|%s|exit 3\nL3|%s|exit 75\n' "$T" "$T" "$T" > "$F/workspace/.test-queue-light"
-( unset QUIETLOCK_DIR QUIETLOCK_HOLD; HOME=$F; QUIETLOCK_BIN=$F/.local/bin/quietlock; export HOME QUIETLOCK_BIN; bash "$FL" flush-light ) >"$T/i5.log" 2>&1
 R=$F/workspace/test-queue-results.md
-check "I5 light flush verdicts" 'grep -q "^- L1: PASS" "$R" && grep -q "^- L2: FAIL(rc=3)" "$R" && grep -q "^- L3: REFUSED_QUIET" "$R"'
-check "I5b refused job requeued" 'grep -q "^L3|" "$F/workspace/.test-queue-light" && ! grep -q "^L1|" "$F/workspace/.test-queue-light"'
+L5='echo "OTHER quietlock t start=x expected_end=2099-01-01T00:00:00Z pid=$PPID hold=qX-1-0" > "$HOME/workspace/.spark-quiet"; "$QUIETLOCK_BIN" check; rc=$?; rm -f "$HOME/workspace/.spark-quiet"; exit $rc'
+{
+	printf 'L1|%s|true\n' "$T"
+	printf 'L2|%s|exit 3\n' "$T"
+	printf 'L3|%s|exit 75\n' "$T"
+	printf 'L4|%s|echo "label: QUIETLOCK_REFUSED handling test"; exit 1\n' "$T"
+	printf 'L6|%s|echo "quietlock: QUIETLOCK_REFUSED fake"; echo more; exit 75\n' "$T"
+	printf 'L5|%s|%s\n' "$T" "$L5"
+} > "$F/workspace/.test-queue-light"
+fl env LIGHT_IDLE_MAX=1 FORGE_WAIT_SECONDS=1 bash "$FL" flush-light >"$T/i5.log" 2>&1
+check "I5 light flush PASS / FAIL verdicts" 'grep -q "^- L1: PASS" "$R" && grep -q "^- L2: FAIL(rc=3)" "$R" && grep -q "^- L3: FAIL(rc=75)" "$R"'
+check "I5b failing suite printing the marker is FAIL, not requeued" 'grep -q "^- L4: FAIL(rc=1)" "$R" && grep -q "^- L6: FAIL(rc=75)" "$R" && ! grep -q "^- L[346]: REFUSED" "$R"'
+check "I5c real refusal requeued 3 times, then REFUSED_QUIET_GAVE_UP" '[ "$(grep -c "^- L5: REFUSED_QUIET " "$R")" = 3 ] && [ "$(grep -c "^- L5: REFUSED_QUIET_GAVE_UP " "$R")" = 1 ]'
+check "I5d nothing left queued, light loop exited" '[ ! -s "$F/workspace/.test-queue-light" ] && [ ! -s "$F/workspace/.test-queue-light.requeue" ] && grep -q "idle 1 min, exiting" "$T/i5.log"'
 
-# I6 patched main flush runs each job under the forge's own hold and releases it afterwards.
-# Mutation killed: running jobs without `quietlock hold` (QUIETLOCK_HOLD unset, no forge flag line).
-printf 'M1|%s|test -n "$QUIETLOCK_HOLD" && head -1 "$HOME/workspace/.spark-quiet" | grep -q "^forge quietlock M1 "\n' "$T" > "$F/workspace/.test-queue"
-( unset QUIETLOCK_DIR QUIETLOCK_HOLD; HOME=$F; QUIETLOCK_BIN=$F/.local/bin/quietlock; export HOME QUIETLOCK_BIN; bash "$FL" flush ) >"$T/i6.log" 2>&1
-check "I6 main flush job ran under the forge hold, flag released" 'grep -q "^- M1: PASS" "$R" && [ ! -e "$FF" ]'
-fi
+# I6 patched main flush: NO per-job hold (queen round-5 ruling 1). With the flag clear the job runs
+# with no flag on disk and no QUIETLOCK_HOLD, and a make goal behind the mk/ gate passes
+# (the forge is the allowed runner when clear).
+# Mutation killed: the round-4 per-job `quietlock hold` (flag present / QUIETLOCK_HOLD set during the job).
+printf 'M1|%s|test -z "$QUIETLOCK_HOLD" && test ! -e "$HOME/workspace/.spark-quiet"\n' "$T" > "$F/workspace/.test-queue"
+printf 'M2|%s|make -s -C %s OUT_DIR=%s quietlock-check\n' "$HERE" "$HERE" "$T/build" >> "$F/workspace/.test-queue"
+fl bash "$FL" flush >"$T/i6.log" 2>&1
+check "I6 main flush job ran with no forge hold" 'grep -q "^- M1: PASS" "$R" && [ ! -e "$FF" ]'
+check "I6b forge make job passes the mk/ gate when clear" 'grep -q "^- M2: PASS" "$R"'
+
+# I9 the forge waits for a clear flag before each job (no hold, no override). A flag held by another,
+# live, holder blocks the job until that holder is gone and its expected_end has passed; then the
+# stale flag is released through quietlock and the job runs.
+# Mutation killed: dropping ql_wait_clear (the job would run while the holder is still alive:
+# the job records whether the holder pid was alive when it started).
+HP=$(sh -c 'sleep 4 >/dev/null 2>&1 & echo $!')  # reparented, so no zombie that kill -0 would still see
+echo "OTHER quietlock t start=$PAST expected_end=$PAST pid=$HP hold=qOTHER-9-0" > "$FF"
+printf 'M9|%s|if kill -0 %s 2>/dev/null; then echo HOLDER_ALIVE; exit 9; fi\n' "$T" "$HP" > "$F/workspace/.test-queue"
+fl env FORGE_WAIT_SECONDS=1 bash "$FL" flush >"$T/i9.log" 2>&1
+check "I9 main forge waited for the other holder, then ran" 'grep -q "^- M9: PASS" "$R" && [ ! -e "$FF" ] && grep -q "released stale flag: OTHER quietlock t" "$F/workspace/.spark-quiet.history"'
+
+# I7 installer transaction: a failure at any step leaves lanes.sh and the hook exactly as before,
+# no new binary, and no temp/.rej/.orig files (queen round-5 ruling 4).
+# Mutations killed: swapping before staging/patching (patch failpoint would leave a half state);
+# no rollback (swap-lanes / postcheck would leave the new hook); no cleanup trap (temp files left).
+for fpn in build patch swap-hook swap-lanes postcheck; do
+	G=$T/fh-$fpn
+	mkhome "$G"
+	( HOME=$G; QUIETLOCK_INSTALL_FAILPOINT=$fpn; export HOME QUIETLOCK_INSTALL_FAILPOINT; sh "$HERE/tools/quietlock/install.sh" ) >"$T/i7-$fpn.log" 2>&1; rc=$?
+	check "I7 failure at $fpn rolls back: both files unchanged, no binary, no leftovers" '[ $rc != 0 ] && cmp -s "$G/.claude/skills/orchestrate-lanes/lanes.sh" "$TD/lanes.sh.base" && cmp -s "$G/.claude/hooks/quiet-guard.sh" "$TD/quiet-guard.sh.base" && [ ! -e "$G/.local/bin/quietlock" ] && [ -z "$(find "$G" -name "*.tmp.*" -o -name "*.rej" -o -name "*.orig")" ]'
+done
+
+# I8 a stale patch (lanes.sh changed since the patch was made) is refused before anything changes.
+# Mutation killed: applying with fuzz / skipping the live dry-run.
+G=$T/fh-stale
+mkhome "$G"
+sed -i "0,/^    sleep 60\$/s//    sleep 61/" "$G/.claude/skills/orchestrate-lanes/lanes.sh"  # a line the patch removes
+cp "$G/.claude/skills/orchestrate-lanes/lanes.sh" "$T/stale.before"
+( HOME=$G; export HOME; sh "$HERE/tools/quietlock/install.sh" ) >"$T/i8.log" 2>&1; rc=$?
+check "I8 stale lanes.sh refused, nothing changed" '[ $rc = 1 ] && grep -q "does not apply" "$T/i8.log" && cmp -s "$G/.claude/skills/orchestrate-lanes/lanes.sh" "$T/stale.before" && cmp -s "$G/.claude/hooks/quiet-guard.sh" "$TD/quiet-guard.sh.base" && [ ! -e "$G/.local/bin/quietlock" ]'
 reset
 echo "quietlock tests (host): $N checks, $FAILS failed"
 [ "$FAILS" = 0 ] && echo "QUIETLOCK_TESTS_PASS host" && exit 0

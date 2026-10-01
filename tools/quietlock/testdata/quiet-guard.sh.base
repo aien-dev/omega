@@ -1,0 +1,25 @@
+#!/bin/bash
+# PreToolUse hook (Bash): block heavy builds/tests while the Spark quiet flag is held by someone else.
+# Flag: ~/workspace/.spark-quiet (key-value lines). Holder marks its own commands with QUIET_HOLDER=1
+# or adds a line "allow <regex>" to the flag; anything matching that regex is let through.
+flag="$HOME/workspace/.spark-quiet"
+[ -f "$flag" ] || exit 0
+# Stale-flag release: if the holder pid is dead AND expected_end has passed, the hold is over. Never touches a live hold.
+l=$(head -1 "$flag"); p=$(echo "$l" | grep -o "pid=[0-9]*" | cut -d= -f2); e=$(echo "$l" | grep -o "expected_end=[^ ]*" | cut -d= -f2)
+if [ -n "$p" ] && [ -n "$e" ] && ! kill -0 "$p" 2>/dev/null && [ "$(date -u +%s)" -gt "$(date -u -d "$e" +%s 2>/dev/null || echo 9999999999)" ]; then
+  echo "[$(date -u +%FT%TZ)] quiet-guard released stale flag: $l" >> "$HOME/workspace/.spark-quiet.history"; rm -f "$flag"; exit 0
+fi
+owner=$(echo "$l" | awk "{print \$1\" \"\$2\" \"\$3}")
+cmd=$(jq -r '.tool_input.command // ""' 2>/dev/null)
+[ -n "$cmd" ] || exit 0
+case "$cmd" in *QUIET_HOLDER=1*) exit 0;; esac
+# queen 2026-10-01: queueing a job for the forge is not running it; never block lanes.sh queue/queue-light/idea/ledger/brief
+case "$cmd" in *lanes.sh\ queue*|*lanes.sh\ idea*|*lanes.sh\ ledger*|*lanes.sh\ brief*|*lanes.sh\ status*) exit 0;; esac
+allow=$(grep -m1 '^allow ' "$flag" | cut -d' ' -f2-)
+if [ -n "$allow" ] && printf '%s' "$cmd" | grep -Eq -- "$allow"; then exit 0; fi
+heavy='(^|[;&| ])(make|cmake|ninja|ctest|cargo (build|test|run|bench|clippy)|qemu-system[a-z0-9-]*|gcc|g\+\+|clang|cc|rustc|verify_all\.sh|est_load|run_gate|\./test[-_a-z0-9]*)([ ;&|]|$)'
+if printf '%s' "$cmd" | grep -Eq -- "$heavy"; then
+  echo "BLOCKED by quiet-guard: the Spark quiet flag is held by '${owner:-unknown}' ($l). Builds/tests/QEMU wait until the flag is released. Do code-only work or wait; check 'cat ~/workspace/.spark-quiet'. If you ARE the holder, prefix the command with QUIET_HOLDER=1." >&2
+  exit 2
+fi
+exit 0
