@@ -137,6 +137,10 @@ typedef enum {
      * sin(+-0) = +-0, cos(+-0) = +1. */
     OMEGA_TU_SIN,        /* omega_math_sin,     <= OMEGA_TRANSC_MAX_ULP_SIN (2)     */
     OMEGA_TU_COS,        /* omega_math_cos,     <= OMEGA_TRANSC_MAX_ULP_COS (2)     */
+    /* Pure sign-bit flip, no E1 call, no arithmetic: bits ^ 0x80000000, so
+     * neg(+0) = -0 and neg(-0) = +0. Any NaN in gives the canonical quiet
+     * NaN 0x7fc00000 (E1 convention, omega_numeric.h:137). Needs no transc. */
+    OMEGA_TU_NEG,
     OMEGA_TU_COUNT
 } OmegaTensorUnaryOp;
 
@@ -273,6 +277,15 @@ int omega_tensor_broadcast_shape(uint32_t ra, const uint64_t *sa, uint32_t rb, c
                                  uint32_t *rout, uint64_t *sout);
 
 int omega_tensor_unary(OmegaTensorCtx *ctx, OmegaTensorUnaryOp op, OmegaTensor a, OmegaTensor *out);
+/* Constant tensors (answers LT-M21 CR-2). full() writes the F32 bits of
+ * `value` exactly into every element: -0.0 and any NaN payload are kept (no
+ * canonicalization; value ids still treat all NaNs as one). zeros = +0.0
+ * (bits 0x00000000), ones = 1.0f. Shape rules as omega_tensor_from_f32
+ * (rank <= 8, dims >= 1, elements <= OMEGA_TENSOR_MAX_ELEMS). */
+int omega_tensor_full(OmegaTensorCtx *ctx, uint32_t rank, const uint64_t *shape, float value,
+                      OmegaTensor *out);
+int omega_tensor_zeros(OmegaTensorCtx *ctx, uint32_t rank, const uint64_t *shape, OmegaTensor *out);
+int omega_tensor_ones(OmegaTensorCtx *ctx, uint32_t rank, const uint64_t *shape, OmegaTensor *out);
 int omega_tensor_binary(OmegaTensorCtx *ctx, OmegaTensorBinaryOp op, OmegaTensor a, OmegaTensor b,
                         OmegaTensor *out);
 /* a*b + c rounded once (E1 FFMA), all three broadcast together. */
