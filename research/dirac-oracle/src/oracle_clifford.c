@@ -9,6 +9,8 @@
  *   d n                      generators and matrix size (n <= 4, d <= 4)
  *   m_0 .. m_{d-1}           metric diagonal entries (integers)
  *   then for each generator, n*n entries as pairs "re im", row major.
+ * Bounds: every entry magnitude must be <= 1048576 (2^20) and each metric entry
+ * must be in {-1,0,1}; inputs outside are rejected (exit 2), so no overflow occurs.
  * Output: one line "FAIL i j" per failing pair, then "PASS" or "FAIL_COUNT k".
  * Exit status 0 on PASS, 1 on FAIL, 2 on bad input.
  */
@@ -50,11 +52,11 @@ int main(void) {
     if (scanf("%d %d", &d, &n) != 2) return 2;
     if (d < 1 || d > MAXD || n < 1 || n > MAXN) return 2;
     for (i = 0; i < d; i++)
-        if (scanf("%lld", &metric[i]) != 1) return 2;
+        if (scanf("%lld", &metric[i]) != 1 || metric[i] < -1 || metric[i] > 1) return 2;
     for (i = 0; i < d; i++)
         for (r = 0; r < n; r++)
             for (c = 0; c < n; c++)
-                if (scanf("%lld %lld", &g[i].a[r][c].re, &g[i].a[r][c].im) != 2) return 2;
+                if (scanf("%lld %lld", &g[i].a[r][c].re, &g[i].a[r][c].im) != 2 || g[i].a[r][c].re > 1048576 || g[i].a[r][c].re < -1048576 || g[i].a[r][c].im > 1048576 || g[i].a[r][c].im < -1048576) return 2;
 
     for (i = 0; i < d; i++)
         for (j = i; j < d; j++) {

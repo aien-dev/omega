@@ -3,6 +3,8 @@
 # usage: oracle_kat_verify.sh dirac-kat-<sha256>.txt
 set -eu
 f="$1"
+[ "$(tail -c1 "$f" | od -An -c | tr -d " ")" = "\\n" ] || { echo "FAIL missing trailing LF"; exit 1; }
+[ "$(tail -n1 "$f")" = "end" ] || { echo "FAIL missing end marker"; exit 1; }
 want=$(sed -n 's/^corpus_digest //p' "$f")
 name=$(basename "$f" .txt)
 name=${name#dirac-kat-}
