@@ -357,6 +357,20 @@ static void scenario(uint8_t out[4][32]) {
     pump(h, t1 + 2 * MS);
     CHECK(h->node[A].counts[-FAB_E_NOT_MEMBER] == 1, "after-leave renew refused");
 
+    /* A lease whose end would pass UINT64_MAX is refused before anything changes. */
+    uint64_t tmax = UINT64_MAX - 10;
+    CHECK(fab_node_set_generation(&h->node[C], 3) == FAB_OK, "C generation 3");
+    CHECK(fab_seal(&h->node[C], &h->id[A], FAB_MSG_JOIN, NULL, 0, tmax, m, &ml) == FAB_E_ARG, "join needs a body");
+    {
+        uint8_t jb[FAB_JOIN_BODY];
+        cq_ontology_digest(&h->cat[C], jb);
+        put64(jb + 32, LEASE);
+        CHECK(fab_seal(&h->node[C], &h->id[A], FAB_MSG_JOIN, jb, sizeof jb, tmax, m, &ml) == FAB_OK, "seal join");
+    }
+    v = deliver(h, A, m, ml, tmax);
+    CHECK(v.code == FAB_E_FORMAT && fab_member(&h->node[A], &h->id[C])->generation == 2,
+          "overflowing lease refused, membership unchanged (%s)", fab_strerror(v.code));
+
     fab_loop_transcript(&h->loop, out[0]);
     for (int i = 0; i < 3; i++) fab_state_digest(&h->node[i], out[1 + i]);
     house_free(h);

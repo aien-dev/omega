@@ -173,8 +173,15 @@ int fab_tick(FabNode *n, uint64_t now_us) {
     return lost;
 }
 
-static int grant(FabNode *n, FabMember *m, uint64_t requested, uint64_t now_us) {
+/* The lease a request gets, or 0 when none can be granted (zero, or an end
+ * past UINT64_MAX). */
+static uint64_t lease_for(const FabNode *n, uint64_t requested, uint64_t now_us) {
     uint64_t lease = requested < n->cfg.max_lease_us ? requested : n->cfg.max_lease_us;
+    return lease > UINT64_MAX - now_us ? 0 : lease;
+}
+
+static int grant(FabNode *n, FabMember *m, uint64_t requested, uint64_t now_us) {
+    uint64_t lease = lease_for(n, requested, now_us);
     if (lease == 0) return FAB_E_FORMAT;
     m->lease_until_us = now_us + lease;
     uint32_t idx = 0;
@@ -238,7 +245,7 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
         uint8_t dg[32];
         cq_ontology_digest(n->cfg.catalog, dg);
         if (memcmp(dg, body, 32) != 0) return refuse(n, v, FAB_E_ONTOLOGY, 0, &sender, gen, seq, now_us);
-        if (r64(body + 32) == 0) return refuse(n, v, FAB_E_FORMAT, 0, &sender, gen, seq, now_us);
+        if (lease_for(n, r64(body + 32), now_us) == 0) return refuse(n, v, FAB_E_FORMAT, 0, &sender, gen, seq, now_us);
         if (!m) {
             if (n->n_members == FAB_MAX_MEMBERS)
                 return refuse(n, v, FAB_E_FULL, 0, &sender, gen, seq, now_us);
@@ -264,7 +271,7 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
     switch (kind) {
     case FAB_MSG_RENEW: {
         uint64_t req = r64(body);
-        if (req == 0) return refuse(n, v, FAB_E_FORMAT, 0, &sender, gen, seq, now_us);
+        if (lease_for(n, req, now_us) == 0) return refuse(n, v, FAB_E_FORMAT, 0, &sender, gen, seq, now_us);
         int rc = grant(n, m, req, now_us);
         if (rc != FAB_OK) return refuse(n, v, rc, 0, &sender, gen, seq, now_us);
         m->last_seq = seq;
