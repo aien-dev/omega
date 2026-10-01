@@ -92,6 +92,9 @@ typedef struct {
     OscType ty;         /* declared type (decls, params, casts, fn ret) / result type (exprs, checker) */
     uint8_t mut;
     uint8_t flag;
+    uint8_t dflag;      /* OSC-3 item 3, checker: an owner declaration (ON_LET_ALLOC,
+                         * ON_LET_MOVE, own parameter) whose owner may be moved on
+                         * only some paths; the lowerer gives it a drop flag */
     /* checker annotations */
     uint8_t is_const;   /* expression folded to cval (already canonical for ty) */
     uint64_t cval;

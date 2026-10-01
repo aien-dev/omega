@@ -1,0 +1,13 @@
+// entry: f
+// Was neg/conditional_move.osc (CONDITIONAL_MOVE, OSC-1/OSC-2). OSC-3 item 3
+// accepts it: `a` gets a drop flag and is released at the return only when
+// the branch did not move it.
+fn take(x: own [u8; 2]) -> u8 { return x[0]; }
+
+fn f(c: bool) -> u8 {
+    let a: own [u8; 2] = alloc(3);
+    if c { let s: u8 = take(a); }
+    return 1;
+}
+// expect-run: f 1 -> 1
+// expect-run: f 0 -> 1

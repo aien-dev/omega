@@ -127,7 +127,7 @@ argument for the duration of a call) holds a borrow of one or more owners.
   a move, any use of `a` (read, index, borrow, move) is refused: **use after
   move**. A move inside a loop body of an owner declared outside that loop is
   refused (use after move on the next iteration). A move on only some paths of
-  an `if` is refused (`conditional move`): OSC-1 has no drop flags.
+  an `if` is refused (`conditional move`): OSC-1 has no drop flags (superseded by OSC-3 item 3, drop flags).
 - Shared borrow `&a`: allowed while `a` is owned and not mutably borrowed.
 - Mutable borrow `&mut a`: `a` must be owned and not borrowed at all; through a
   borrow binding `r: &mut`, `&mut r` is a reborrow of the same target.

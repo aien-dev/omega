@@ -1,0 +1,31 @@
+// entry: f g
+// OSC-3 item 3 (drop flags): an owner moved in the then-branch only. After
+// the `if` it is maybe-moved: its drop flag is set at the declaration and
+// cleared by the move, and its scope-end release runs only when the flag
+// says live. A then-branch that returns leaves the owner definitely live
+// after the `if` (no flag).
+fn take(x: own [u8; 2]) -> u8 { return x[0] + x[1]; }
+
+fn f(k: u8) -> u8 {
+    let a: own [u8; 2] = alloc(k & 15);
+    let b: own [u8; 2] = alloc(4);
+    let mut r: u8 = 0;
+    if k > 3 { r = take(a); }
+    return r + b[0];
+}
+
+fn g(k: u8) -> u8 {
+    let a: own [u8; 2] = alloc(1);
+    if k == 1 {
+        let m: own [u8; 2] = a;
+        m[0] = 9;
+        return m[0] + m[1];
+    }
+    a[1] = k & 7;
+    return a[0] + a[1];
+}
+// expect-run: f 5 -> 14
+// expect-run: f 2 -> 4
+// expect-run: f 20 -> 12
+// expect-run: g 1 -> 10
+// expect-run: g 5 -> 6
