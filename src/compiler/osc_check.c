@@ -1008,16 +1008,16 @@ static int chk_contracts(C *c, int fi)
         int e = a->ensn[fi];
         OscTrace *tr = c->tr;
         if (push_scope(c, NODE(e)->line)) return -1;
+        if (lookup(c, "result") >= 0) { /* any fn with ensures: `result` is reserved there */
+            int p = lookup(c, "result");
+            osc_diag_set(c->d, OSC_DIAG_REDEFINED_NAME, NODE(e)->line, NODE(e)->col, "result", c->sym[p].line,
+                         fname, "parameter named result with ensures",
+                         "'result' names the return value in an ensures clause; parameter 'result' of '%s' "
+                         "collides with it", fname);
+            return -1;
+        }
         if (c->fret.s != OSC_T_VOID) {
             /* the `result` pseudo binding, visible only inside the clause */
-            if (lookup(c, "result") >= 0) {
-                int p = lookup(c, "result");
-                osc_diag_set(c->d, OSC_DIAG_REDEFINED_NAME, NODE(e)->line, NODE(e)->col, "result", c->sym[p].line,
-                             fname, "parameter named result with ensures",
-                             "'result' names the return value in an ensures clause; parameter 'result' of '%s' "
-                             "collides with it", fname);
-                return -1;
-            }
             if (c->nsym >= OSC_CHECK_MAX_SYMS) return cap_fail(c, NODE(e)->line, "symbol capacity");
             int s = c->nsym++;
             Sym *y = &c->sym[s];
