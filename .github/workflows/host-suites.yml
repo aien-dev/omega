@@ -16,7 +16,8 @@ name: Host suites
 #       (+ builds only of the R13/R14 living hosts)
 #   turing-yield.yml : turing-yield turing-energy
 #   this file : searchtrace, estimation est-tools estimation-v3 est3c-tools,
-#       numeric-cpu numeric-qualify, train (M22 substrate, Lane 21)
+#       numeric-cpu numeric-qualify, train (M22 substrate, Lane 21),
+#       compiler (OSC-1, own path guard)
 #
 # Deliberately NOT on GitHub (no GB10, no resident seat, no quiet flag here):
 #   test-composition-gate-gpu, test-r12-silicon, test-r13-silicon,
@@ -63,6 +64,10 @@ on:
       - 'src/train/**'
       - 'tests/train/**'
       - 'mk/train.mk'
+      # OSC-1 compiler slice + OSC-0B model (compiler job only; see its guard step)
+      - 'src/compiler/**'
+      - 'tests/compiler/**'
+      - 'mk/compiler.mk'
 
 jobs:
   searchtrace:
@@ -116,3 +121,27 @@ jobs:
           fetch-depth: 0
       - name: M22 substrate (generation store, crash matrix, provenance, SGD), plain + ASan/UBSan
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-train
+
+  compiler:
+    # OSC-1 compiler slice (docs/osc/OSC-1-DESIGN.md) and the OSC-0B II.11 model.
+    # Runs only when its own files (or this workflow / the shared sha256) change.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Changed-path guard (compiler files only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD \
+              | grep -Eq '^(src/compiler/|tests/compiler/|mk/compiler\.mk$|src/sha256\.|\.github/workflows/host-suites\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no OSC-1 compiler files changed; skipping"
+          fi
+      - name: OSC-0B model sweep, OSC-1 back end, compiler golden/negative/model agreement, determinism (plain + ASan/UBSan)
+        if: steps.guard.outputs.run == 'true'
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-compiler
