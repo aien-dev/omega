@@ -297,6 +297,7 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | OM-196 | omega | `tools/estimation/est_load.c` | 47 | `spin` | load generator spin worker | reference / test path (non-authoritative) | D | false | EST measurement load generator: busy worker that spins or naps at a set level; measurement tool, not built into any production binary | `while (!atomic_load(&g_quit)) {` |
 | OM-197 | omega | `tools/estimation/est_load.c` | 110 | `main` | load generator segment schedule | reference / test path (non-authoritative) | D | false | EST measurement load generator: steps through the load level schedule; measurement tool, not built into any production binary | `for (int i = 0; i < nseg && !g_stop; i++) {` |
 | OM-198 | omega | `tools/estimation/est_load.c` | 120 | `main` | load generator segment timer | reference / test path (non-authoritative) | D | false | EST measurement load generator: sleeps until the segment ends; measurement tool, not built into any production binary | `for (;;) {` |
+| OM-199 | omega | `tools/estimation/est4.c` | 237 | `e4_score` | EST4 scoring walk | - | N | false | N: walk: scores recorded ticks in order (data ticks, not a scheduler tick), without wait or hand-off; offline evidence tool, same shape as OM-195 | `for (size_t t = 0; t < tk->n && !rc; t++) {` |
 | SC-001 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/engine_max.rs` | 55 | `start` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < timeout {` |
 | SC-002 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 96 | `start` | test/benchmark loop (while:body:tick) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while !stop_clone.load(Ordering::Relaxed) {` |
 | SC-003 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 168 | `enforce_thermal_cooldown` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < max_wait {` |
@@ -546,7 +547,7 @@ The R16 re-qualification on candidate `3108fc2` (omega main of 2026-10-01) ran t
 and found `sites=328 unclassified=47` (receipt `evidence/REQUAL-3108fc2/`, G1 and G2
 FAIL). The 47 sites came from code added after this map's last update (compiler,
 estimation, fabric, rx_compose, searchtrace, train, tests, tools). Rows OM-152 to
-OM-198 classify them, each from reading the loop, with a one-line reason: 19 class N,
+OM-199 classify them (48 sites: the 47 first found plus est4.c:237, found by the forge run on b765cd6, Round 3), each from reading the loop, with a one-line reason: 20 class N,
 23 class D, 1 class E (`omega_numeric_reduce_gb10.c`, GPU reduction launcher, not on the
 reaction path), 4 class B (explicit close/drain of an attached composition in
 `rx_compose.c`), 0 class A. (Line numbers in these rows are at omega main `9ca297c`;
