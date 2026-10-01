@@ -58,10 +58,12 @@ if git diff --quiet "$BASE" HEAD -- $CORE; then CORE_UNCHANGED=true; else die "e
 GATES='"NOT_RUN (PHYSICS_DIR not set; core sources unchanged vs merge base)"'
 if [ -n "${PHYSICS_DIR:-}" ] && [ -d "$PHYSICS_DIR" ]; then
     G=""
+    rm -rf build/osc1-receipt-gates; mkdir -p build/osc1-receipt-gates  # gate targets need a relative OUT_DIR (./$(OUT_DIR)/omegatool); build/ is ignored
     for m in m6 m9 m14; do
-        nice make --no-print-directory OUT_DIR="$T/gates" PHYSICS_DIR="$PHYSICS_DIR" "test-$m" >"$T/$m.log" 2>&1 \
+        nice make --no-print-directory OUT_DIR=build/osc1-receipt-gates PHYSICS_DIR="$PHYSICS_DIR" "test-$m" >"$T/$m.log" 2>&1 \
             || { tail -20 "$T/$m.log"; die "test-$m failed"; }
         tot=$(grep 'TOTAL GATES' "$T/$m.log" | head -1 | sed 's/.*TOTAL GATES: \([0-9]*\) | PASSED: \([0-9]*\) | FAILED: \([0-9]*\).*/{"total": \1, "passed": \2, "failed": \3}/')
+        sed -n "/omegatool --run/,\$p" "$T/$m.log" >build/osc1-receipt-gates/$m.gate.log
         G="$G\"$m\": $tot, "
     done
     GATES="{${G%, }}"
