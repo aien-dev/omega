@@ -1,0 +1,18 @@
+{
+  "schema": "AIEN_GATE14_LEGS_V0",
+  "note": "Leg runs and combined Gate 14 receipt, all on one omega + physics pair. Combined by tools/gate14_combine.sh.",
+  "omega_candidate": "8024e9a7828a27a5ece7004ccab0e01afd27406e",
+  "physics_candidate": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "hardware": "GB10 (DGX Spark)",
+  "run_utc": "2026-09-30T23:00:07Z/23:29:38Z",
+  "combined_receipt": "evidence/GATE14-FOUNDATION/50dd611bfd28e8320443810b35f7425df5eb112777662e5840c227154271f872.json",
+  "legs": [
+    {"gates": "1,2", "tool": "tools/m19r_qualify.sh (full, soak on)", "status": "PASS", "pass": 230, "fail": 0, "soak_cycles": 100000,
+     "receipt": "evidence/M19R/ffd1fb09c1cc6a049f3a288d96e8044c4f3c68025cabb0cbbb2d381a6627df81.json"},
+    {"gates": "3,4", "tool": "physics tests/run_forge_gates.sh --record", "status": "PASS",
+     "receipt": "evidence/FORGE-GATES/702cf450534cf2727e4846243d00e7523b8252a95601d159ca8dd5d392ccafb7.json",
+     "log": "evidence/GATE14-FOUNDATION/legs-8024e9a/gate3_4_forge_e95e3ed.log"},
+    {"gates": "5", "tool": "tests/run_numeric_gates.sh --record", "status": "PASS",
+     "receipt": "evidence/OMEGA-NUMERIC-0/dc4e601212ae19b795534ab5986a9d176c98891d06b65570974f48bc9cf860db.json"}
+  ]
+}
