@@ -1726,6 +1726,219 @@ static void kat_digest(uint8_t out[32]) {
     for (int i = 0; i < 5; i++) omega_tensor_release(g, all[i]);
     g_rng = save;
 }
+
+/* ---- CR-3 mask compare + where ------------------------------------------- */
+/* Strict bit comparison (NaN payload and sign included): the mask ops and
+ * where() promise exact bits, not just value identity. */
+static size_t bit_mismatches(const float *a, const float *b, size_t n) {
+    size_t m = 0;
+    for (size_t i = 0; i < n; i++) m += omega_float_to_bits(a[i]) != omega_float_to_bits(b[i]);
+    return m;
+}
+/* Independent reference: the E1 scalar predicate, then the two mask bit
+ * patterns written as literals (not the header macros). */
+static float ref_mask(int selop, float a, float b) {
+    return omega_bits_to_float(omega_ref_fsetp_pred(selop, a, b) == 1 ? 0x3f800000U : 0x00000000U);
+}
+typedef struct { OmegaTensorBinaryOp cmp; OmegaTensorBinaryOp sel; int selop; const char *name; } CmpCase;
+static const CmpCase CMP_CASES[] = {
+    {OMEGA_TB_CMP_EQ, OMEGA_TB_SEL_EQ, OMEGA_NOP_FSETP_EQ_SEL, "CMP_EQ"},
+    {OMEGA_TB_CMP_NE, OMEGA_TB_SEL_NE, OMEGA_NOP_FSETP_NE_SEL, "CMP_NE"},
+    {OMEGA_TB_CMP_LT, OMEGA_TB_SEL_LT, OMEGA_NOP_FSETP_LT_SEL, "CMP_LT"},
+    {OMEGA_TB_CMP_LE, OMEGA_TB_SEL_LE, OMEGA_NOP_FSETP_LE_SEL, "CMP_LE"},
+    {OMEGA_TB_CMP_GT, OMEGA_TB_SEL_GT, OMEGA_NOP_FSETP_GT_SEL, "CMP_GT"},
+    {OMEGA_TB_CMP_GE, OMEGA_TB_SEL_GE, OMEGA_NOP_FSETP_SEL,    "CMP_GE"},
+};
+#define NCMP (sizeof(CMP_CASES) / sizeof(CMP_CASES[0]))
+
+static void test_mask(void) {
+    uint32_t lt0, ls0;
+    omega_tensor_live_counts(g, &lt0, &ls0);
+    /* (a) every predicate on the full special-value grid (400 pairs) plus
+     * random pairs, against the independent loop, strict bits. */
+    const size_t n = 4099;
+    float *a = malloc(n * 4), *b = malloc(n * 4), *ex = malloc(n * 4);
+    fill(a, n, rand_f32); fill(b, n, rand_f32);
+    for (size_t i = 0; i < NSPECIAL * NSPECIAL; i++) {
+        a[i] = omega_bits_to_float(SPECIALS[i / NSPECIAL]);
+        b[i] = omega_bits_to_float(SPECIALS[i % NSPECIAL]);
+    }
+    for (size_t i = NSPECIAL * NSPECIAL; i < NSPECIAL * NSPECIAL + 64; i++) b[i] = a[i]; /* equal bits */
+    uint64_t s[1] = {n};
+    OmegaTensor A = mk(1, s, a), B = mk(1, s, b), O, W, S;
+    for (size_t k = 0; k < NCMP; k++) {
+        const CmpCase *cc = &CMP_CASES[k];
+        for (size_t i = 0; i < n; i++) ex[i] = ref_mask(cc->selop, a[i], b[i]);
+        int rc = omega_tensor_binary(g, cc->cmp, A, B, &O);
+        float *got = rc ? NULL : rd(O);
+        CHECK(got && bit_mismatches(ex, got, n) == 0, "mask %s grid parity rc=%d", cc->name, rc);
+        size_t bad = 0;
+        for (size_t i = 0; got && i < n; i++) {
+            uint32_t u = omega_float_to_bits(got[i]);
+            bad += u != 0x3f800000U && u != 0x00000000U;
+        }
+        CHECK(got && bad == 0, "mask %s: only +1.0 / +0.0 bits (bad=%zu)", cc->name, bad);
+        free(got);
+        /* (b) consistency with the existing SEL op: where(CMP_P(a,b), a, b)
+         * equals SEL_P(a, b) bit for bit. */
+        if (!rc) {
+            int rw = omega_tensor_where(g, O, A, B, &W);
+            int rs = omega_tensor_binary(g, cc->sel, A, B, &S);
+            float *gw = rw ? NULL : rd(W), *gs = rs ? NULL : rd(S);
+            CHECK(gw && gs && bit_mismatches(gw, gs, n) == 0, "where(%s) == SEL rc=%d/%d", cc->name, rw, rs);
+            free(gw); free(gs);
+            if (!rw) omega_tensor_release(g, W);
+            if (!rs) omega_tensor_release(g, S);
+            omega_tensor_release(g, O);
+        }
+    }
+    /* (c) named corner cases: NaN never equal (ordered), -0 == +0, NE ordered. */
+    {
+        const uint32_t qn = 0x7fc00000U, pz = 0x00000000U, nz = 0x80000000U, one = 0x3f800000U;
+        struct { OmegaTensorBinaryOp op; uint32_t x, y, want; const char *what; } cs[] = {
+            {OMEGA_TB_CMP_EQ, qn, qn, 0x00000000U, "EQ(NaN,NaN)=+0"},
+            {OMEGA_TB_CMP_EQ, nz, pz, 0x3f800000U, "EQ(-0,+0)=+1"},
+            {OMEGA_TB_CMP_NE, qn, one, 0x00000000U, "NE(NaN,1)=+0 (ordered)"},
+            {OMEGA_TB_CMP_NE, nz, pz, 0x00000000U, "NE(-0,+0)=+0"},
+            {OMEGA_TB_CMP_LT, nz, pz, 0x00000000U, "LT(-0,+0)=+0"},
+            {OMEGA_TB_CMP_GE, qn, one, 0x00000000U, "GE(NaN,1)=+0"},
+            {OMEGA_TB_CMP_LE, one, one, 0x3f800000U, "LE(1,1)=+1"},
+        };
+        for (size_t i = 0; i < sizeof(cs) / sizeof(cs[0]); i++) {
+            float x = omega_bits_to_float(cs[i].x), y = omega_bits_to_float(cs[i].y), r = -1.0f;
+            OmegaTensor X = mk(0, NULL, &x), Y = mk(0, NULL, &y);
+            int rc = omega_tensor_binary(g, cs[i].op, X, Y, &O);
+            if (!rc) { omega_tensor_read_f32(g, O, &r, 1); omega_tensor_release(g, O); }
+            CHECK(!rc && omega_float_to_bits(r) == cs[i].want, "mask corner %s (got 0x%08x rc=%d)",
+                  cs[i].what, omega_float_to_bits(r), rc);
+            omega_tensor_release(g, X); omega_tensor_release(g, Y);
+        }
+    }
+    /* (d) broadcasting + a transposed view operand: a [3,1,4] vs b^T where
+     * b is [5,1] stored as [1,5] transposed -> out [3,5,4]. */
+    {
+        uint64_t sa[3] = {3, 1, 4}, sbr[2] = {1, 5}, sb[2] = {5, 1}, so[3] = {3, 5, 4};
+        float va[12], vb[5], exb[60];
+        for (int i = 0; i < 12; i++) va[i] = a[i * 31];
+        for (int i = 0; i < 5; i++) vb[i] = b[i * 37 + 1];
+        vb[2] = va[5];  /* guarantee some equal pairs */
+        OmegaTensor BA = mk(3, sa, va), BR = mk(2, sbr, vb), BT = {0, 0};
+        int rt = omega_tensor_transpose(g, BR, &BT);
+        CHECK(rt == 0, "mask: transpose view rc=%d", rt);
+        for (size_t k = 0; !rt && k < NCMP; k++) {
+            for (uint64_t f = 0; f < 60; f++)
+                exb[f] = ref_mask(CMP_CASES[k].selop, va[bcast_src(f, 3, so, 3, sa)], vb[bcast_src(f, 3, so, 2, sb)]);
+            int rc = omega_tensor_binary(g, CMP_CASES[k].cmp, BA, BT, &O);
+            OmegaTensorInfo oi;
+            float *got = rc ? NULL : rd(O);
+            bool shape_ok = !rc && !omega_tensor_info(g, O, &oi) && oi.rank == 3 &&
+                            oi.shape[0] == 3 && oi.shape[1] == 5 && oi.shape[2] == 4;
+            CHECK(got && shape_ok && bit_mismatches(exb, got, 60) == 0, "mask %s broadcast+view rc=%d",
+                  CMP_CASES[k].name, rc);
+            free(got);
+            if (!rc) omega_tensor_release(g, O);
+        }
+        if (!rt) omega_tensor_release(g, BT);
+        omega_tensor_release(g, BA); omega_tensor_release(g, BR);
+    }
+    /* (e) where(): bit copy with broadcasting across all three operands.
+     * cond [3,1], a [1,4], b scalar -> [3,4]. a and b carry -0.0, a NaN
+     * payload and a signalling NaN; the output must carry them unchanged. */
+    {
+        uint32_t cbits[3] = {0x3f800000U, 0x00000000U, 0x3f800000U};
+        uint32_t abits[4] = {0x80000000U, 0x7fa00001U, 0xffc00123U, 0x3f000000U};
+        uint32_t bbits = 0x7fc0beefU;
+        float cv[3], av[4], bv, exw[12];
+        for (int i = 0; i < 3; i++) cv[i] = omega_bits_to_float(cbits[i]);
+        for (int i = 0; i < 4; i++) av[i] = omega_bits_to_float(abits[i]);
+        bv = omega_bits_to_float(bbits);
+        uint64_t sc[2] = {3, 1}, sa[2] = {1, 4};
+        OmegaTensor C = mk(2, sc, cv), WA = mk(2, sa, av), WB = mk(0, NULL, &bv);
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 4; j++) exw[i * 4 + j] = cbits[i] == 0x3f800000U ? av[j] : bv;
+        int rc = omega_tensor_where(g, C, WA, WB, &O);
+        float *got = rc ? NULL : rd(O);
+        OmegaTensorInfo oi;
+        bool shape_ok = !rc && !omega_tensor_info(g, O, &oi) && oi.rank == 2 && oi.shape[0] == 3 && oi.shape[1] == 4;
+        CHECK(got && shape_ok && bit_mismatches(exw, got, 12) == 0, "where broadcast bit copy rc=%d", rc);
+        free(got);
+        if (!rc) omega_tensor_release(g, O);
+        /* where() over a strided slice view of cond: rows 0 and 2 of C. */
+        uint64_t st[2] = {0, 0}, sp[2] = {3, 1}, se[2] = {2, 1};
+        OmegaTensor CS = {0, 0};
+        int rs = omega_tensor_slice(g, C, st, sp, se, &CS);
+        CHECK(rs == 0, "where: slice of cond rc=%d", rs);
+        if (!rs) {
+            rc = omega_tensor_where(g, CS, WA, WB, &O);
+            got = rc ? NULL : rd(O);
+            CHECK(got && bit_mismatches(exw, got, 4) == 0 && bit_mismatches(exw + 8, got + 4, 4) == 0,
+                  "where over sliced cond rc=%d", rc);
+            free(got);
+            if (!rc) omega_tensor_release(g, O);
+            omega_tensor_release(g, CS);
+        }
+        /* (f) refusals: any cond element other than +1.0 / +0.0 bits. */
+        static const uint32_t BAD[] = {0x3f000000U /* 0.5 */, 0x80000000U /* -0.0 */, 0x7fc00000U /* NaN */,
+                                       0x40000000U /* 2.0 */, 0x3f800001U, 0xbf800000U /* -1.0 */,
+                                       0x00000001U /* subnormal */, 0x7f800000U /* +inf */};
+        uint32_t lt1, ls1, lt2, ls2;
+        for (size_t k = 0; k < sizeof(BAD) / sizeof(BAD[0]); k++) {
+            float cb[3] = {cv[0], omega_bits_to_float(BAD[k]), cv[2]};
+            OmegaTensor CB = mk(2, sc, cb), Z = {0, 0};
+            omega_tensor_live_counts(g, &lt1, &ls1);
+            rc = omega_tensor_where(g, CB, WA, WB, &Z);
+            omega_tensor_live_counts(g, &lt2, &ls2);
+            CHECK(rc == OMEGA_TENSOR_ERR_MASK && lt1 == lt2 && ls1 == ls2,
+                  "where refuses cond 0x%08x (rc=%d, nothing made)", BAD[k], rc);
+            if (!rc) omega_tensor_release(g, Z);
+            omega_tensor_release(g, CB);
+        }
+        /* shape, dtype, stale refusals */
+        uint64_t s5[1] = {5};
+        float f5[5] = {1, 0, 1, 0, 1};
+        OmegaTensor C5 = mk(1, s5, f5);
+        CHECK(omega_tensor_where(g, C5, WA, WB, &O) == OMEGA_TENSOR_ERR_SHAPE, "where [5] vs [1,4] refused");
+        uint16_t h4[4] = {0x3c00, 0, 0x3c00, 0};
+        uint64_t s4[1] = {4};
+        OmegaTensor H = {0, 0};
+        CHECK(omega_tensor_from_data(g, OMEGA_DT_F16, 1, s4, h4, &H) == 0, "where: f16 create");
+        CHECK(omega_tensor_where(g, H, WA, WB, &O) == OMEGA_TENSOR_ERR_DTYPE, "where f16 cond refused");
+        CHECK(omega_tensor_where(g, C, H, WB, &O) == OMEGA_TENSOR_ERR_DTYPE, "where f16 a refused");
+        CHECK(omega_tensor_binary(g, OMEGA_TB_CMP_EQ, H, WA, &O) == OMEGA_TENSOR_ERR_DTYPE, "CMP f16 refused");
+        CHECK(omega_tensor_where(g, C, WA, WB, NULL) == OMEGA_TENSOR_ERR_BAD_ARGS, "where NULL out refused");
+        omega_tensor_release(g, H);
+        omega_tensor_release(g, C5);
+        OmegaTensor stale = WB;
+        omega_tensor_release(g, WB);
+        CHECK(omega_tensor_where(g, C, WA, stale, &O) == OMEGA_TENSOR_ERR_STALE, "where stale b refused");
+        CHECK(omega_tensor_binary(g, OMEGA_TB_CMP_LT, WA, stale, &O) == OMEGA_TENSOR_ERR_STALE, "CMP stale refused");
+        omega_tensor_release(g, C); omega_tensor_release(g, WA);
+    }
+    /* (g) a realization without the compare entry refuses CMP_* (no silent
+     * fallback), while the other binary ops keep working. */
+    {
+        OmegaTensorRealization nr = *omega_tensor_cpu_realization();
+        nr.compare = NULL;
+        OmegaTensorCtx *c2 = NULL;
+        int rc = omega_tensor_ctx_create(8, &nr, &c2);
+        CHECK(rc == 0, "ctx without compare rc=%d", rc);
+        if (!rc) {
+            float one = 1.0f;
+            OmegaTensor X = {0, 0}, Y = {0, 0};
+            CHECK(omega_tensor_from_f32(c2, 0, NULL, &one, &X) == 0, "c2 create");
+            CHECK(omega_tensor_binary(c2, OMEGA_TB_CMP_EQ, X, X, &Y) == OMEGA_TENSOR_ERR_REALIZATION,
+                  "CMP without compare entry refused");
+            CHECK(omega_tensor_binary(c2, OMEGA_TB_ADD, X, X, &Y) == 0, "ADD still works without compare");
+            omega_tensor_ctx_destroy(c2);
+        }
+    }
+    omega_tensor_release(g, A); omega_tensor_release(g, B);
+    free(a); free(b); free(ex);
+    uint32_t lt9, ls9;
+    omega_tensor_live_counts(g, &lt9, &ls9);
+    CHECK(lt9 == lt0 && ls9 == ls0, "mask tests leak nothing (%u/%u vs %u/%u)", lt9, ls9, lt0, ls0);
+}
+
 static void test_determinism(void) {
     uint8_t d1[32], d2[32];
     kat_digest(d1);
@@ -1760,6 +1973,7 @@ int main(void) {
     test_const_neg();
     test_placement();
     test_determinism();
+    test_mask();
     /* every test released what it made */
     uint32_t lt, ls;
     omega_tensor_live_counts(g, &lt, &ls);
