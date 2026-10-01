@@ -16,15 +16,10 @@
  *   applied; levels repeat until one value is left. MEAN = omega_math_div(SUM,
  *   (float)n), 1 <= n <= 2^24.
  *
- * Two builds of the same seam:
- *   default                     local implementation of that order; every
- *                               combine is an E1 CPU-tier op
- *                               (omega_numeric_cpu_realize FADD / FMNMX / DIV).
- *   -DOMEGA_TENSOR_USE_E1_REDUCE calls omega_reduce_cpu from
- *                               src/omega_numeric_reduce.h (available once
- *                               PR #134 is on main); nothing else changes.
- * Either build must give the same bits; the test checks the order string and
- * the bits against an independent reference of the definition.
+ * The seam calls omega_reduce_cpu (src/omega_numeric_reduce.h, E1 WP-D,
+ * omega #134); the local copy of the order used before #134 merged is gone.
+ * The test checks the order string and the bits against an independent
+ * reference of the definition.
  */
 
 #include <stddef.h>

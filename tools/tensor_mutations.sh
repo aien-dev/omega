@@ -8,14 +8,14 @@ set -u
 cd "$(dirname "$0")/.." || exit 2
 SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/tensor-mut.XXXXXX") || exit 2
 trap 'rm -rf "$SCRATCH"' EXIT INT TERM
-DEPS="src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c \
+DEPS="src/omega_numeric_reduce.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c \
 src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c"
 FLAGS="-std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -ffp-contract=off -O2 -DOMEGA_NUMERIC_CPU_ONLY"
 
 # name|file|sed expression (applied only to the line carrying MUT:<name>)
-MUTATIONS='TREE_DELTAS|omega_tensor_reduce_seam.c|s/d = 16; d >= 1; d >>= 1/d = 1; d <= 16; d <<= 1/
-SUM_PAD|omega_tensor_reduce_seam.c|s/0x80000000U/0x00000000U/
-RELEASE_BUMP|omega_tensor.c|s/(\*gen)++/(void)0/
+# Reduction order and padding mutations live in the E1 WP-D suite
+# (test-numeric-reduce-cpu, RED_DIFFERENT_ORDER_CAUGHT): the seam calls it.
+MUTATIONS='RELEASE_BUMP|omega_tensor.c|s/(\*gen)++/(void)0/
 STORAGE_GEN_CHECK|omega_tensor.c|s/ || s->gen != h.generation//
 BCAST_ZERO_STRIDE|omega_tensor.c|s/o.strides\[d\] = 0;/o.strides[d] = in->strides[sd];/
 PERMUTE_STRIDES|omega_tensor.c|s/in->strides\[perm\[d\]\]/in->strides[d]/

@@ -85,14 +85,11 @@ exist yet.
 
 ## Reduction seam
 
-Default build: a local implementation of the frozen order in which every
-combine is an E1 CPU-tier op (`omega_numeric_cpu_realize` FADD / FMNMX /
-DIV). With `-DOMEGA_TENSOR_USE_E1_REDUCE` the same seam calls
-`omega_reduce_cpu` from `src/omega_numeric_reduce.h` (`make
-test-tensor-e1-reduce` once PR #134 is on main); a `_Static_assert` and a
-runtime check pin the order string. Checked on 2026-10-01 against PR #134 head
-6da80bf (files taken into a scratch directory, not committed): 324/324 pass,
-same KAT value id as the local build.
+The seam calls `omega_reduce_cpu` from `src/omega_numeric_reduce.h` (E1 WP-D,
+omega #134, merged c54d492); a `_Static_assert` and a runtime check pin the
+order string. Before #134 merged, a local copy of the order was cross-checked
+bit-identical against #134 head 6da80bf (same KAT value id); that copy is now
+removed. Order and padding mutations are caught by the E1 WP-D suite.
 
 ## Qualification checklist (plan E2)
 
@@ -119,8 +116,7 @@ lifetime and a receipt.
 
 ## Open seams
 
-1. Reductions: switch the seam to `omega_reduce_cpu` once #134 merges
-   (`-DOMEGA_TENSOR_USE_E1_REDUCE`, already verified bit-identical).
+1. Reductions: DONE, the seam calls `omega_reduce_cpu` (#134 merged).
 2. Transcendentals (#127): add EXP / LOG / ... to `OmegaTensorUnaryOp` once
    the E1 bounded contract is merged.
 3. GB10 realization table: elementwise through the E1 SIMT ops, reduce
