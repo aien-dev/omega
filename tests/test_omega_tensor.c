@@ -776,6 +776,10 @@ static const TranscCase TRANSC_CASES[] = {
     {OMEGA_TU_LOG2, omega_math_log2, "LOG2"},
     {OMEGA_TU_SIGMOID, omega_math_sigmoid, "SIGMOID"},
     {OMEGA_TU_TANH, omega_math_tanh, "TANH"},
+    /* M20 cut ops: the E1 Omega-defined polynomials (src/omega_numeric.c:458,
+     * :501), not correctly rounded, bit-exact with the direct call. */
+    {OMEGA_TU_EXP, omega_math_exp, "EXP"},
+    {OMEGA_TU_LOG, omega_math_log, "LOG"},
 };
 #define NTRANSC (sizeof(TRANSC_CASES) / sizeof(TRANSC_CASES[0]))
 
@@ -787,6 +791,12 @@ static const uint32_t TRANSC_SPECIALS[] = {
     0xc2fc0000U /* -126 */, 0x41100000U /* 9 */, 0xc1100000U /* -9 */, 0x42c80000U /* 100 */,
     0xc2c80000U /* -100 */, 0x3f800001U, 0x3f7fffffU, 0x40000000U, 0x3e800000U, 0xbf000000U,
     0x00400000U, 0x80400000U, 0x7fffffffU, 0xffffffffU,
+    /* EXP / LOG edges (omega_numeric.c:460-461): ~88.7228 cutoff and next float
+     * above it, -104 cutoff and its neighbours, -88 (subnormal result),
+     * ~ln2/2 (worst-ulp region), large +-, smallest +-subnormal, NaN payloads */
+    0x42b17218U, 0x42b17219U, 0xc2d00000U, 0xc2cfffffU, 0xc2d00001U, 0xc2b00000U,
+    0x3eb17218U, 0xbeb17218U, 0x4f000000U, 0xcf000000U, 0x00000002U, 0x80000002U,
+    0x7f800001U, 0xff800001U, 0x7fc00001U,
 };
 #define NTSPECIAL (sizeof(TRANSC_SPECIALS) / sizeof(TRANSC_SPECIALS[0]))
 
@@ -811,6 +821,17 @@ static void transc_check(const TranscCase *tc, OmegaTensor V, const float *src, 
     free(ex);
     if (!rc) omega_tensor_release(g, O);
 }
+
+/* Independent RELU reference, written from the rule in omega_tensor.h (not
+ * from omega_tensor.c): classify the FP32 pattern by its fields. */
+static float ref_relu(float x) {
+    uint32_t u = omega_float_to_bits(x);
+    uint32_t sign = u >> 31, expo = (u >> 23) & 0xffU, mant = u & 0x007fffffU;
+    if (expo == 0xffU && mant != 0) return omega_bits_to_float(0x7fc00000U); /* NaN -> canonical qNaN */
+    if (sign) return omega_bits_to_float(0x00000000U);                      /* -0, < 0, -inf -> +0 */
+    return x;                                                               /* +0, > 0, +inf */
+}
+static const TranscCase RELU_CASE = {OMEGA_TU_RELU, ref_relu, "RELU"};
 
 static void test_transc_unary(void) {
     const size_t n = 4096;
@@ -848,8 +869,9 @@ static void test_transc_unary(void) {
     int rcc = omega_tensor_broadcast_to(g, C0, 2, ssc, &BC);
     CHECK(rcc == 0, "transc: broadcast scalar rc=%d", rcc);
 
-    for (size_t k = 0; k < NTRANSC; k++) {
-        const TranscCase *tc = &TRANSC_CASES[k];
+    /* k == NTRANSC: RELU through the same views (tensor-layer bit select) */
+    for (size_t k = 0; k <= NTRANSC; k++) {
+        const TranscCase *tc = k < NTRANSC ? &TRANSC_CASES[k] : &RELU_CASE;
         for (size_t i = 0; i < n; i++) idx[i] = i;
         transc_check(tc, A1, a, idx, n, "dense [4096]");
         if (!rct) {
@@ -952,6 +974,107 @@ static void test_transc_unary(void) {
     free(idx);
 }
 
+/* ---- 7c. RELU (M20 cut ops) ----------------------------------------------
+ * Rule (omega_tensor.h): x > +0 -> x; +0, -0, negative, -inf -> +0.0; any NaN
+ * -> canonical qNaN 0x7fc00000. Explicit input -> output bit table, checked
+ * on raw bits (NaN payload and the sign of zero are semantic here). Also served
+ * by a realization without a transc entry, and refused like other unary ops. */
+static void test_relu_unary(void) {
+    static const uint32_t TABLE[][2] = {
+        {0x00000000U, 0x00000000U}, /* +0 -> +0 */
+        {0x80000000U, 0x00000000U}, /* -0 -> +0 */
+        {0x7f800000U, 0x7f800000U}, /* +inf -> +inf */
+        {0xff800000U, 0x00000000U}, /* -inf -> +0 */
+        {0x00000001U, 0x00000001U}, /* smallest +subnormal kept */
+        {0x007fffffU, 0x007fffffU}, /* largest +subnormal kept */
+        {0x80000001U, 0x00000000U}, /* -subnormal -> +0 */
+        {0x807fffffU, 0x00000000U},
+        {0x00800000U, 0x00800000U}, /* smallest +normal */
+        {0x7f7fffffU, 0x7f7fffffU}, /* largest +normal */
+        {0xff7fffffU, 0x00000000U}, /* most negative normal -> +0 */
+        {0x3f800000U, 0x3f800000U}, /* 1 */
+        {0xbf800000U, 0x00000000U}, /* -1 */
+        {0x7fc00000U, 0x7fc00000U}, /* canonical qNaN */
+        {0xffc00000U, 0x7fc00000U}, /* negative qNaN -> canonical */
+        {0x7fc00001U, 0x7fc00000U}, /* qNaN payloads -> canonical */
+        {0x7fa00001U, 0x7fc00000U}, /* sNaN -> canonical */
+        {0x7f800001U, 0x7fc00000U},
+        {0xff800001U, 0x7fc00000U},
+        {0xffc00123U, 0x7fc00000U},
+        {0x7fffffffU, 0x7fc00000U},
+        {0xffffffffU, 0x7fc00000U},
+    };
+    enum { NT = sizeof(TABLE) / sizeof(TABLE[0]) };
+    float in[NT];
+    for (size_t i = 0; i < NT; i++) in[i] = omega_bits_to_float(TABLE[i][0]);
+    uint64_t sh[1] = {NT};
+    OmegaTensor X = mk(1, sh, in), O = {0, 0};
+    uint8_t id_before[32], id_after[32];
+    vid(X, id_before);
+    int rc = omega_tensor_unary(g, OMEGA_TU_RELU, X, &O);
+    float *got = rc ? NULL : rd(O);
+    CHECK(!rc && got, "relu: dense special table rc=%d", rc);
+    for (size_t i = 0; got && i < NT; i++) {
+        uint32_t gb = omega_float_to_bits(got[i]);
+        CHECK(gb == TABLE[i][1], "relu(0x%08x) = 0x%08x, rule says 0x%08x", TABLE[i][0], gb, TABLE[i][1]);
+    }
+    free(got);
+    if (!rc) omega_tensor_release(g, O);
+    vid(X, id_after);
+    CHECK(memcmp(id_before, id_after, 32) == 0, "relu: input value id unchanged");
+
+    /* rank 0, -0 and a NaN payload: the two easiest bits to get wrong */
+    const uint32_t r0[2] = {0x80000000U, 0xffc00123U};
+    for (size_t i = 0; i < 2; i++) {
+        float v = omega_bits_to_float(r0[i]);
+        OmegaTensor S = mk(0, NULL, &v), R = {0, 0};
+        rc = omega_tensor_unary(g, OMEGA_TU_RELU, S, &R);
+        float *r = rc ? NULL : rd(R);
+        uint32_t want = i == 0 ? 0x00000000U : 0x7fc00000U;
+        CHECK(r && omega_float_to_bits(r[0]) == want, "relu rank0 0x%08x -> 0x%08x (want 0x%08x)", r0[i],
+              r ? omega_float_to_bits(r[0]) : 0U, want);
+        free(r);
+        if (!rc) omega_tensor_release(g, R);
+        omega_tensor_release(g, S);
+    }
+
+    /* refusals: F16 operand, stale handle */
+    OmegaTensor H = {0, 0};
+    if (!omega_tensor_cast(g, X, OMEGA_DT_F16, &H)) {
+        rc = omega_tensor_unary(g, OMEGA_TU_RELU, H, &O);
+        CHECK(rc == OMEGA_TENSOR_ERR_DTYPE, "relu on F16 refused (rc=%d)", rc);
+        omega_tensor_release(g, H);
+    } else {
+        CHECK(0, "relu: F32->F16 cast for dtype refusal");
+    }
+    omega_tensor_release(g, X);
+    rc = omega_tensor_unary(g, OMEGA_TU_RELU, X, &O);
+    CHECK(rc == OMEGA_TENSOR_ERR_STALE, "relu on released tensor refused (rc=%d)", rc);
+
+    /* served without a transc entry: RELU is not a realization op */
+    OmegaTensorRealization notransc = *omega_tensor_cpu_realization();
+    notransc.name = "NO_TRANSC_ENTRY";
+    notransc.transc = NULL;
+    OmegaTensorCtx *c = NULL;
+    rc = omega_tensor_ctx_create(8, &notransc, &c);
+    CHECK(rc == 0, "relu: realization without transc entry accepted (rc=%d)", rc);
+    if (!rc) {
+        OmegaTensor Y = {0, 0}, Z = {0, 0};
+        omega_tensor_from_f32(c, 1, sh, in, &Y);
+        rc = omega_tensor_unary(c, OMEGA_TU_RELU, Y, &Z);
+        float *z = NULL;
+        if (!rc) {
+            z = malloc(NT * sizeof(float));
+            if (z && omega_tensor_read_f32(c, Z, z, NT)) { free(z); z = NULL; }
+        }
+        size_t bad = 0;
+        for (size_t i = 0; z && i < NT; i++) bad += omega_float_to_bits(z[i]) != TABLE[i][1];
+        CHECK(!rc && z && bad == 0, "relu served without transc entry, same bits (rc=%d, %zu differ)", rc, bad);
+        free(z);
+        omega_tensor_ctx_destroy(c);
+    }
+}
+
 /* ---- 8. determinism ------------------------------------------------------- */
 static void kat_digest(uint8_t out[32]) {
     uint64_t save = g_rng;
@@ -997,6 +1120,7 @@ int main(void) {
     test_matmul_parity();
     test_mutations();
     test_transc_unary();
+    test_relu_unary();
     test_determinism();
     /* every test released what it made */
     uint32_t lt, ls;

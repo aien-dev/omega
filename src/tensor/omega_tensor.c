@@ -666,14 +666,37 @@ static int elementwise_n(OmegaTensorCtx *ctx, OmegaNumericOp op, unsigned arity,
     return rc;
 }
 
+/* RELU (M20 cut ops): no E1 op exists, so the tensor layer defines it as a
+ * pure bit-level select on the FP32 pattern, with no float arithmetic and no
+ * realization call. Rule: any NaN (exponent all ones, mantissa nonzero, any
+ * sign or payload) -> the canonical E1 qNaN OMEGA_QNAN_BITS (omega_numeric.h:48,
+ * as E1 ops return it, e.g. omega_numeric.c:459); sign bit set (-0, negative
+ * normals and subnormals, -inf) -> +0.0; otherwise (+0, positive values, +inf)
+ * -> the input bits unchanged. */
+static uint32_t relu_bits(uint32_t u) {
+    if ((u & 0x7fffffffU) > OMEGA_INF_POS) return OMEGA_QNAN_BITS; /* MUT:RELU_NAN_PAYLOAD */
+    if (u >> 31) return 0U; /* MUT:RELU_NEG_ZERO */
+    return u;
+}
+
+static void relu_dense(const float *src, float *dst, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        uint32_t u;
+        memcpy(&u, &src[i], sizeof u);
+        u = relu_bits(u);
+        memcpy(&dst[i], &u, sizeof u);
+    }
+}
+
 /* Unary ops: gather the operand through its own view descriptor (offset,
  * shape, strides, including stride-0 broadcast axes) into a dense buffer,
  * then one realization call. SQRT goes through the E1 elementwise op; the
- * bounded-contract transcendentals through the realization's transc entry. */
+ * bounded-contract transcendentals and EXP / LOG through the realization's
+ * transc entry; RELU is the tensor-layer bit select above (no realization). */
 int omega_tensor_unary(OmegaTensorCtx *ctx, OmegaTensorUnaryOp op, OmegaTensor a, OmegaTensor *out) {
     if (!ctx || !out) return OMEGA_TENSOR_ERR_BAD_ARGS;
     if ((unsigned)op >= OMEGA_TU_COUNT) return OMEGA_TENSOR_ERR_BAD_ARGS;
-    if (op != OMEGA_TU_SQRT && !ctx->real->transc) return OMEGA_TENSOR_ERR_REALIZATION;
+    if (op != OMEGA_TU_SQRT && op != OMEGA_TU_RELU && !ctx->real->transc) return OMEGA_TENSOR_ERR_REALIZATION;
     TensorSlot *x;
     StorageSlot *s;
     int rc = tensor_get(ctx, a, &x, &s);
@@ -687,8 +710,10 @@ int omega_tensor_unary(OmegaTensorCtx *ctx, OmegaTensorUnaryOp op, OmegaTensor a
     void *buf;
     rc = new_dense(ctx, OMEGA_DT_F32, in.rank, in.shape, out, &buf);
     if (!rc) {
-        int nrc = op == OMEGA_TU_SQRT ? ctx->real->elementwise(OMEGA_NOP_SQRT, src, NULL, NULL, buf, n)
-                                      : ctx->real->transc(op, src, buf, n);
+        int nrc = 0;
+        if (op == OMEGA_TU_RELU) relu_dense(src, buf, n);
+        else nrc = op == OMEGA_TU_SQRT ? ctx->real->elementwise(OMEGA_NOP_SQRT, src, NULL, NULL, buf, n)
+                                       : ctx->real->transc(op, src, buf, n);
         if (nrc) rc = numeric_fail(ctx, nrc, *out);
     }
     free(src);
