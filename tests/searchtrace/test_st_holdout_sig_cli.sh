@@ -40,6 +40,8 @@ expect 2 "sign with key 2 refuses to replace key 1's signature" "$tool" holdout 
 chmod 644 "$w/TEST-ONLY-random-key-2.sk"
 expect 2 "sign refuses a world-readable key file" "$tool" holdout sign "$rec" "$w/TEST-ONLY-random-key-2.sk" "$w/k2"
 chmod 600 "$w/TEST-ONLY-random-key-2.sk"
+mkfifo "$w/fifo.sk" && chmod 600 "$w/fifo.sk"
+expect 2 "sign refuses a named pipe as key file (no hang)" timeout 20 "$tool" holdout sign "$rec" "$w/fifo.sk" "$w/k2"
 
 if command -v openssl >/dev/null 2>&1; then
     openssl genpkey -algorithm ed25519 -out "$w/TEST-ONLY-openssl.pem" 2>/dev/null

@@ -484,8 +484,10 @@ int st_holdout_sign(const char *rec, size_t rec_len, const uint8_t sk[32],
                      "key_id %s\n"
                      "signature %s\n",
                      c.holdout_id, rdh, kidh, sigh);
-    if (n < 0 || (size_t)n >= sizeof body)
+    if (n < 0 || (size_t)n >= sizeof body) {
+        set_why(why, wl, "signature record too long");
         return ST_HOLDOUT_EFORMAT;
+    }
     sha256_hash((const uint8_t *)body, (size_t)n, end);
     hex_lower(end, 32, endh);
     size_t total = (size_t)n + 4 + 64 + 1;
@@ -818,7 +820,9 @@ static void wipe(void *p, size_t n)
 static int read_key_file(const char *path, uint8_t *buf, size_t cap,
                          size_t *len, int secret)
 {
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    /* O_NONBLOCK: a FIFO or device must not hang the tool; non-regular
+     * files are refused below. */
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0)
         return -1;
     struct stat st;
@@ -980,7 +984,7 @@ static int cli_verify_strict(int argc, char **argv)
         sigp = sp;
     }
     if (read_file(sigp, &sb, &sbl) != 0) {
-        if (errno != ENOENT) {
+        if (errno != ENOENT || argc == 5) {
             fprintf(stderr, "st_holdout: cannot read signature %s\n", sigp);
             free(rb);
             return 2;
