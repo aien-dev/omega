@@ -1,5 +1,7 @@
 # TURING Wave 1: ownership manifest
 
+Update 2026-09-30: R16 is CLOSED (omega#112, `3dd5eaa`, all gates G1 to G8 PASS) and the `src/runtime/` edit freeze is LIFTED (aien-architecture #70, `e89ba94`). Statements below that the runtime is frozen "until R16" describe the state when this was written.
+
 Branch: feat/turing-w1 (from omega origin/main 4b217aa). Scope: Field records + control-arm selector, post hoc over
 stored receipts. Kill test FAILED (K.6); reframed 2026-09-29 as the record-keeping layer (K.7). Spec: TURING_W0_PROPOSAL.md sections F, I, J, K. No PR is opened from this wave by the lanes.
 

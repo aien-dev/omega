@@ -1,5 +1,7 @@
 # TURING: current state of what already exists (read-only audit)
 
+Update 2026-09-30: R16 is CLOSED (omega#112, `3dd5eaa`, all gates G1 to G8 PASS) and the `src/runtime/` edit freeze is LIFTED (aien-architecture #70, `e89ba94`). Statements below that the runtime is frozen "until R16" describe the state when this was written.
+
 Date 2026-09-29. Read-only: nothing built, run or edited. Ground truth = code. README/roadmaps = navigation only.
 
 ## 0. Pins
