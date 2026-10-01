@@ -1,0 +1,31 @@
+{
+  "schema": "AIEN_LANE32_R16_REQUAL_GATE_SUMMARY_V1",
+  "candidate_commit": "3108fc2f5d499a76d6ed72f53681c3e2ba9281a4",
+  "candidate_bound": true,
+  "tree_dirty": false,
+  "tree_dirty_note": "git status --porcelain was empty before and after every gate (see gate_lines)",
+  "silicon_observed": true,
+  "producer": "lane32 worker D; individual targets run one at a time under the quiet flag; tools/r16_qualify.sh was NOT used (audit defects recorded in the PR body)",
+  "verdict": "FAIL",
+  "gates": {
+    "R16-G1": "FAIL",
+    "R16-G2": "FAIL",
+    "R16-G3": "PASS",
+    "R16-G4": "PASS",
+    "R16-G5": "PASS",
+    "R16-G6": "NOT_RUN",
+    "R16-G7": "FAIL",
+    "R16-G8": "NOT_RUN"
+  },
+  "basis": {
+    "R16-G1/G2": "r16-inventory target: sites=328 unclassified=47 -> FAIL (exit 2). The retirement map does not cover loop sites added after its last update (compiler, estimation, fabric, rx_compose, searchtrace, train, tests, tools). The inventory self-test passes.",
+    "R16-G3": "test-r16-authpath-silicon: R16_G3_AUTHPATH=PASS; host: HOST_PASS_NON_SILICON",
+    "R16-G4": "R16_G4_LEGACY_REFUSED=PASS; R16_G4_GUARDS_LOAD_BEARING=PASS (36 mutants)",
+    "R16-G5": "R16_G5_SURFACE=PASS",
+    "R16-G6": "tools/r16_qualify.sh has no check for it (literal PASS); not claimed here",
+    "R16-G7": "R3, R7-R11, R12 host+silicon, R13 host+silicon, R14 host+silicon, R15 parity host+silicon all PASS, but the R15 performance qualification FAILED (G1 and G15), so the R1-R15 ladder is not entirely passing",
+    "R16-G8": "no R16 receipt issued because G1/G2 failed",
+    "extra": "test-prod-refuses-test-pieces PASS; test-prod-hygiene-silicon PASS"
+  },
+  "gate_lines_sha256": "59b762f46dfb4c252e573881b9756857e6c91bc789875563dcf8ccf902578a6d"
+}
