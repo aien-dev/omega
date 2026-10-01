@@ -546,8 +546,8 @@ The R16 re-qualification on candidate `3108fc2` (omega main of 2026-10-01) ran t
 and found `sites=328 unclassified=47` (receipt `evidence/REQUAL-3108fc2/`, G1 and G2
 FAIL). The 47 sites came from code added after this map's last update (compiler,
 estimation, fabric, rx_compose, searchtrace, train, tests, tools). Rows OM-152 to
-OM-198 classify them, each from reading the loop, with a one-line reason: 22 class N,
-22 class D, 1 class E (`omega_numeric_reduce_gb10.c`, GPU reduction launcher, not on the
+OM-198 classify them, each from reading the loop, with a one-line reason: 19 class N,
+23 class D, 1 class E (`omega_numeric_reduce_gb10.c`, GPU reduction launcher, not on the
 reaction path), 4 class B (explicit close/drain of an attached composition in
 `rx_compose.c`), 0 class A. (Line numbers in these rows are at omega main `9ca297c`;
 the join key does not use them.) No new site sequences faculties on the production
