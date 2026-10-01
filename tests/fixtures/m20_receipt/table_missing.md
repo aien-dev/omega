@@ -1,4 +1,4 @@
-# M20 fixture table (missing)
+# M20 fixture table (missing: GB10 parity PASS + one MISSING_IMPLEMENTATION row)
 
 ## Qualification checklist (plan E2)
 
@@ -9,6 +9,7 @@
 | Mutation / refusal | PASS (CPU) | `test-tensor-mutations` |
 | CI | WIRED | hosted runner, not a qualification |
 | E1 numeric closure | PASS (on main) | E1 receipt |
+| GB10 parity | PASS (GB10) | chip evidence sha256 70a987ec6835d37836d0cc415e8b609df6edda6cd560a0b86e238b24cf4bd6d8 |
 | Crash-safe storage lifetime | MISSING_IMPLEMENTATION | |
 
 **M20 verdict: fixture.**

@@ -18,7 +18,7 @@ NOTRUN_FORCES_NQ@s/add_nq/:/
 GB10_NEEDS_EVIDENCE@s/|| refuse/|| :/
 GB10_HASH_MATCH@s/|| refuse/|| :/
 HOST_LOG_PASS@s/|| refuse/|| :/
-NO_ROWS_NQ@s/|| add_nq/|| :/
+GB10_PARITY_REQUIRED@s/|| add_nq/|| :/
 CLEAN_AFTER@s/|| add_nq/|| :/
 COMMIT_UNCHANGED@s/|| add_nq/|| :/
 NO_OVERWRITE@s/set -o noclobber; //'

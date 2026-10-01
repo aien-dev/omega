@@ -24,7 +24,7 @@
 #   a GB10 PASS row without --chip-evidence, or whose evidence cell does not
 #   name the sha256 of that file (first 64-hex string in the cell); an existing receipt with the same digest.
 #   NOT QUALIFIED (exit 1, receipt written): any NOT_RUN or
-#   MISSING_IMPLEMENTATION row; no host/GB10 PASS row at all; tree dirty or
+#   MISSING_IMPLEMENTATION row; "GB10 parity" row not GB10 PASS; tree dirty or
 #   HEAD moved after the inputs were stored; the test-only mid-run hook set.
 #   QUALIFIED (exit 0) otherwise.
 # Output: <evidence-dir>/<sha256>.json (mode 0444, created exclusively, never
@@ -100,7 +100,7 @@ CHIP_SHA=""; [ -z "$CHIP" ] || CHIP_SHA=$(sha "$CHIP")
 awk '/^## Qualification checklist/ {on = 1; next}
      on && (/^## / || /^\*\*/) {exit}
      on && /^\|/ {if ($0 ~ /^\|[-: |]*\|[[:space:]]*$/) next; print}' "$TABLE" > "$WORK/table.txt"
-COUNTED=0; HAS_HOST=0; HAS_GB10=0
+HAS_HOST=0; HAS_GB10=0; GB10_PARITY=0
 while IFS= read -r line; do
     line=${line#|}; line=${line%|}
     item=$(trim "${line%%|*}"); rest=${line#*|}
@@ -117,19 +117,22 @@ while IFS= read -r line; do
     esac
     case $label in
         NOT_RUN|MISSING_IMPLEMENTATION) add_nq "row '$item' is $label" ;;  # MUT:NOTRUN_FORCES_NQ
-        "host PASS") HAS_HOST=1; COUNTED=$((COUNTED + 1)); ev="$TLOG_SHA,$MLOG_SHA" ;;
+        "host PASS") HAS_HOST=1; ev="$TLOG_SHA,$MLOG_SHA" ;;
         "GB10 PASS")
-            HAS_GB10=1; COUNTED=$((COUNTED + 1))
+            HAS_GB10=1
             ehash=$(printf '%s' "$evcell" | grep -oE '[0-9a-f]{64}' | head -1)
             [ -n "$CHIP" ] || refuse "row '$item' is GB10 PASS but no --chip-evidence file was given"  # MUT:GB10_NEEDS_EVIDENCE
             [ "$ehash" = "$CHIP_SHA" ] || refuse "row '$item': GB10 PASS evidence hash does not match the chip evidence file"  # MUT:GB10_HASH_MATCH
+            [ "$item" != "GB10 parity" ] || GB10_PARITY=1
             ev=$CHIP_SHA ;;
     esac
     printf '%s\t%s\t%s\t%s\n' "$label" "$hw" "$item" "$ev" >> "$ROWS"
 done < "$WORK/table.txt"
 [ -s "$ROWS" ] || refuse "no rows found in the qualification table"
 if [ "$HAS_HOST" = 1 ]; then host_logs_pass || refuse "host PASS rows but the host logs do not show PASS"; fi  # MUT:HOST_LOG_PASS
-[ "$COUNTED" -gt 0 ] || add_nq "no host PASS or GB10 PASS row"  # MUT:NO_ROWS_NQ
+# M20 policy: only a GB10 parity row that is GB10 PASS with matching chip
+# evidence (checked above) can qualify; host-only evidence never does.
+[ "$GB10_PARITY" = 1 ] || add_nq "GB10 parity row is not GB10 PASS with matching chip evidence (host-only evidence never qualifies)"  # MUT:GB10_PARITY_REQUIRED
 HW=host; [ "$HAS_GB10" = 0 ] || HW=GB10
 
 # store_blob SRC EXT -> prints the digest (pattern of tests/run_reduce_chip.sh).

@@ -21,9 +21,9 @@ check() { # NAME CONDITION-EXIT-STATUS
     total=$((total + 1))
     if [ "$2" = 0 ]; then echo "PASS $1"; else echo "FAIL $1"; fail=1; fi
 }
-mkrepo() { # NAME TABLE-FIXTURE -> prints the repo path
+mkrepo() { # NAME TABLE (fixture tests/fixtures/m20_receipt/table_<TABLE>) -> prints the repo path
     local r=$T/repo-$1
-    mkdir -p "$r/docs/tensor" && cp "$FX/$2" "$r/docs/tensor/M20_OMEGA_TENSOR.md" \
+    mkdir -p "$r/docs/tensor" && cp "$FX/table_$2" "$r/docs/tensor/M20_OMEGA_TENSOR.md" \
         && $G -C "$r" init -q && $G -C "$r" add -A && $G -C "$r" commit -qm fixture \
         || { echo "FATAL: cannot create fixture repo $1"; exit 2; }
     echo "$r"
@@ -40,11 +40,12 @@ nojson() { ! ls "$1"/*.json > /dev/null 2>&1; }
 jqok() { jq -e "$2" "$1" > /dev/null 2>&1; }
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
-# 1. All rows host PASS (+ REFERENCE rows): QUALIFIED, sealed, content-addressed.
+# 1. All rows host PASS (+ REFERENCE rows), no GB10 parity row: host-only
+#    evidence never qualifies -> NOT QUALIFIED; sealed, content-addressed.
 R=$(mkrepo all all_pass.md)
 run all1 "$R" "$T/ev-a" "$PASSLOG" --binary "$FX/binary_stub.txt"; A=$REC
-check "all host PASS: exit 0" "$RC"
-[ -n "$A" ] && jqok "$A" '.verdict == "QUALIFIED" and .hardware == "host" and .gate == "M20_OMEGA_TENSOR"'; check "all host PASS: verdict QUALIFIED, hardware host" $?
+[ "$RC" = 1 ]; check "all host PASS: exit 1 (NOT QUALIFIED)" $?
+[ -n "$A" ] && jqok "$A" '.verdict == "NOT QUALIFIED" and .hardware == "host" and .gate == "M20_OMEGA_TENSOR" and (.verdict_reasons | any(test("GB10 parity")))'; check "all host PASS: NOT QUALIFIED, hardware host, GB10 parity reason" $?
 [ -n "$A" ] && [ "$(basename "$A" .json)" = "$(sha "$A")" ]; check "receipt name is its sha256" $?
 [ -n "$A" ] && [ "$(stat -c %a "$A")" = 444 ]; check "receipt mode 0444" $?
 [ -f "$T/ev-a/blobs/$(sha "$PASSLOG").log" ] && [ -f "$T/ev-a/blobs/$(sha "$MUTLOG").log" ] \
@@ -54,7 +55,7 @@ check "receipt fields: log/binary/commit hashes, clean after, row labels, no clo
 
 # 2. Reproducibility: same inputs, second evidence dir -> same hash, same bytes.
 run all2 "$R" "$T/ev-b" "$PASSLOG" --binary "$FX/binary_stub.txt"; B=$REC
-[ "$RC" = 0 ] && [ -n "$A" ] && [ "$(basename "$A")" = "$(basename "$B")" ] && cmp -s "$A" "$B"; check "reproducible: two runs give the same hash and bytes" $?
+[ "$RC" = 1 ] && [ -n "$A" ] && [ "$(basename "$A")" = "$(basename "$B")" ] && cmp -s "$A" "$B"; check "reproducible: two runs give the same hash and bytes" $?
 run ts1 "$R" "$T/ev-ts1" "$PASSLOG" --started-utc 2026-10-01T00:00:00Z --finished-utc 2026-10-01T00:01:00Z; T1=$REC
 run ts2 "$R" "$T/ev-ts2" "$PASSLOG" --started-utc 2026-10-01T00:00:00Z --finished-utc 2026-10-01T00:01:00Z; T2=$REC
 run ts3 "$R" "$T/ev-ts3" "$PASSLOG" --started-utc 2026-10-01T00:00:01Z --finished-utc 2026-10-01T00:01:00Z; T3=$REC
@@ -68,10 +69,11 @@ mkdir -p "$T/ev-sq" && [ -n "$A" ] && echo squatter > "$T/ev-sq/$(basename "$A")
 run squat "$R" "$T/ev-sq" "$PASSLOG" --binary "$FX/binary_stub.txt"
 [ "$RC" = 2 ] && [ "$(cat "$T/ev-sq/$(basename "$A")" 2> /dev/null)" = squatter ]; check "existing writable receipt name not overwritten" $?
 
-# 4. NOT_RUN / MISSING_IMPLEMENTATION / nothing counted -> NOT QUALIFIED (receipt written).
-R=$(mkrepo notrun not_run.md); run notrun "$R" "$T/ev-nr" "$PASSLOG"
+# 4. NOT_RUN / MISSING_IMPLEMENTATION (GB10 parity PASS, so only that rule
+#    can fail them) / nothing counted -> NOT QUALIFIED (receipt written).
+R=$(mkrepo notrun not_run.md); run notrun "$R" "$T/ev-nr" "$PASSLOG" --chip-evidence "$FX/chip_evidence.json"
 [ "$RC" = 1 ] && [ -n "$REC" ] && jqok "$REC" '.verdict == "NOT QUALIFIED" and (.verdict_reasons | any(test("NOT_RUN")))'; check "NOT_RUN row forces NOT QUALIFIED" $?
-R=$(mkrepo missing missing.md); run missing "$R" "$T/ev-mi" "$PASSLOG"
+R=$(mkrepo missing missing.md); run missing "$R" "$T/ev-mi" "$PASSLOG" --chip-evidence "$FX/chip_evidence.json"
 [ "$RC" = 1 ] && [ -n "$REC" ] && jqok "$REC" '.verdict == "NOT QUALIFIED" and (.verdict_reasons | any(test("MISSING_IMPLEMENTATION")))'; check "MISSING_IMPLEMENTATION row forces NOT QUALIFIED" $?
 R=$(mkrepo refonly reference_only.md); run refonly "$R" "$T/ev-ro" "$PASSLOG"
 [ "$RC" = 1 ] && [ -n "$REC" ] && jqok "$REC" '.verdict == "NOT QUALIFIED"'; check "only REFERENCE rows -> NOT QUALIFIED" $?
