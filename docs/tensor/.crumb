@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "docs/tensor",
+  "layer": "docs/tensor",
+  "purpose": "M20 OMEGA_TENSOR spec and qualification checklist"
+}

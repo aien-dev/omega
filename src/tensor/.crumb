@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/tensor",
+  "layer": "src/tensor",
+  "purpose": "M20 OMEGA_TENSOR: immutable tensor semantic layer, views, generation-checked storage, CPU realization over E1 (not qualified)"
+}
