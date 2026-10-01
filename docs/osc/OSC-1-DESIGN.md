@@ -2,7 +2,7 @@
 
 **OSC-1 slice; not a general Omega compiler; no self-hosting.**
 
-Status: in progress (Lane 22, 2026-10-01). Governing record:
+Status: implemented as a host-tested slice (Lane 22, 2026-10-01). Governing record:
 [OMEGA-SYSTEMS-CORE-0000](../adr/OMEGA-SYSTEMS-CORE-0000.md) and the audit
 sections it cites ([OMEGA_SYSTEMS_CORE_CODE_AUDIT.md](../../OMEGA_SYSTEMS_CORE_CODE_AUDIT.md)
 III.6 pipeline, III.7 OSC-1 definition, III.8 acceptance tests, II.9 determinism,
@@ -227,3 +227,29 @@ code bytes.
 See [OSC-1-SELF-HOST-STATEMENT.md](OSC-1-SELF-HOST-STATEMENT.md). Short form:
 the OSC-1 compiler cannot compile any part of itself, and this slice makes no
 self-hosting claim.
+
+## 10. Implementation notes and evidence
+
+- Files: `src/compiler/` (front end `osc_lex/parse/check/lower/front`, IR
+  `osc_ir`, reference interpreter `osc_interp`, encoder/decoder `osc_a64`,
+  codegen `osc_cg`, loader `osc_native`, bootstrap runtime `osc_rt`, CLI
+  `oscc_main.c`), the II.11 model in `src/compiler/model/`, tests in
+  `tests/compiler/` (OSC-0 III.8 names `tests/osc/`; this slice keeps its tests
+  next to its sources under `tests/compiler/`).
+- Encoder. `src/aarch64_encoder.c` (used by `omega_program_realize`, M5/M6/M9/M14)
+  masks register fields silently (`rm & 0x1f`), which is exactly what OSC-0 III.6
+  says must be hardened. Changing it would change the inputs of the existing
+  gates, so it is left untouched and OSC-1 uses its own validating encoder
+  `osc_a64.c` with a decoder mirror. The existing M6/M9/M14 gates were run
+  before and after this work and are unchanged.
+- `make test-compiler` (host, single core, about 70 s): OSC-0B model sweep
+  (10^6 sequences), back end differential test, compiler golden / negative /
+  model-agreement test, cross-process determinism; the three test binaries also
+  run under ASan/UBSan. `make compiler-receipt` writes the content-addressed
+  receipt `evidence/OSC-1/receipts/osc1-compiler-<sha256>.json`;
+  `make osc0b-model-receipt` writes the OSC-0B exit receipt
+  `evidence/OSC-1/receipts/osc0b-model-<sha256>.json`.
+- The reference interpreter is a second implementation of section 5 (signed
+  arithmetic computed exactly in 128 bits and range-checked), not a copy of the
+  codegen's flag logic. It is a differential oracle; agreement between two
+  implementations is evidence, not proof.
