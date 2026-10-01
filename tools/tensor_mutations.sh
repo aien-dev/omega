@@ -19,7 +19,7 @@ RELEASE_BUMP|omega_tensor.c|s/(\*gen)++/(void)0/
 STORAGE_GEN_CHECK|omega_tensor.c|s/ || s->gen != h.generation//
 BCAST_ZERO_STRIDE|omega_tensor.c|s/o.strides\[d\] = 0;/o.strides[d] = in->strides[sd];/
 PERMUTE_STRIDES|omega_tensor.c|s/in->strides\[perm\[d\]\]/in->strides[d]/
-SLICE_OFFSET|omega_tensor.c|s/start\[d\] \* in->strides\[d\]/start[d]/'
+SLICE_OFFSET|omega_tensor.c|s/start\[d\], in->strides\[d\]/start[d], 1/'
 
 fail=0
 total=0

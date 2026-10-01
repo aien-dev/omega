@@ -364,6 +364,14 @@ static void test_views(void) {
     uint64_t ee[3] = {0, 5, 6};
     CHECK(omega_tensor_slice(g, T, bs, ee, NULL, &Z) == OMEGA_TENSOR_ERR_SHAPE, "empty slice refused");
     CHECK(omega_tensor_slice(g, T, bs, sp, (uint64_t[]){1, 0, 1}, &Z) == OMEGA_TENSOR_ERR_BAD_ARGS, "step 0");
+    {   /* step near 2^64: one element per axis, no overflow, value T[0][0][0] */
+        OmegaTensor H;
+        uint64_t huge[3] = {UINT64_MAX, UINT64_MAX, UINT64_MAX / 3};
+        float hv = -1;
+        CHECK(omega_tensor_slice(g, T, bs, sp, huge, &H) == 0 && omega_tensor_read_f32(g, H, &hv, 1) == 0 &&
+              hv == d[0], "huge step slice");
+        omega_tensor_release(g, H);
+    }
     /* parent unchanged by all of the above */
     vid(T, after);
     CHECK(memcmp(before, after, 32) == 0, "parent value id unchanged by views");

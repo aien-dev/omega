@@ -488,9 +488,14 @@ int omega_tensor_slice(OmegaTensorCtx *ctx, OmegaTensor t, const uint64_t *start
         if (st == 0) return OMEGA_TENSOR_ERR_BAD_ARGS;
         if (stop[d] > in->shape[d]) return OMEGA_TENSOR_ERR_BOUNDS;
         if (start[d] >= stop[d]) return OMEGA_TENSOR_ERR_SHAPE;
-        v.shape[d] = (stop[d] - start[d] + st - 1) / st;
-        v.strides[d] = in->strides[d] * st;
-        v.offset += start[d] * in->strides[d]; /* MUT:SLICE_OFFSET */
+        v.shape[d] = (stop[d] - start[d] - 1) / st + 1;  /* ceil, no overflow */
+        uint64_t so;
+        if (__builtin_mul_overflow(start[d], in->strides[d], &so) || /* MUT:SLICE_OFFSET */
+            __builtin_add_overflow(v.offset, so, &v.offset))
+            return OMEGA_TENSOR_ERR_BOUNDS;
+        /* A single-element axis never uses its stride; 0 avoids overflow. */
+        if (v.shape[d] == 1) v.strides[d] = 0;
+        else if (__builtin_mul_overflow(in->strides[d], st, &v.strides[d])) return OMEGA_TENSOR_ERR_BOUNDS;
         n *= v.shape[d];
     }
     v.elements = n;
