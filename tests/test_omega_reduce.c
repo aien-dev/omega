@@ -310,8 +310,10 @@ static void test_independent_oracle(void) {
         }
         float m = 0;
         omega_reduce_reference(OMEGA_RED_MEAN, x, n, &m);
+        float mc = 0;
+        omega_reduce_cpu(OMEGA_RED_MEAN, x, n, &mc);
         cases++;
-        if (!omega_numeric_bits_equal(m, omega_ieee_div(want, (float)n))) { bad++; snprintf(d, sizeof(d), "MEAN n=%zu", n); }
+        if (!omega_numeric_bits_equal(m, omega_ieee_div(want, (float)n)) || !omega_numeric_bits_equal(mc, omega_ieee_div(want, (float)n))) { bad++; snprintf(d, sizeof(d), "MEAN n=%zu", n); }
         for (int dist = 0; dist < DIST_COUNT; dist++) {
             for (size_t i = 0; i < n; i++) x[i] = gen(dist);
             float smax = fb(0x7fc00000u), smin = fb(0x7fc00000u);
@@ -319,6 +321,10 @@ static void test_independent_oracle(void) {
             float a = 0, b = 0;
             omega_reduce_cpu(OMEGA_RED_MAX, x, n, &a);
             omega_reduce_cpu(OMEGA_RED_MIN, x, n, &b);
+            float ra = 0, rb = 0;
+            omega_reduce_reference(OMEGA_RED_MAX, x, n, &ra);
+            omega_reduce_reference(OMEGA_RED_MIN, x, n, &rb);
+            if (!omega_numeric_bits_equal(ra, smax) || !omega_numeric_bits_equal(rb, smin)) { bad++; snprintf(d, sizeof(d), "ref MAX/MIN n=%zu", n); }
             cases += 2;
             if (!omega_numeric_bits_equal(a, smax) || !omega_numeric_bits_equal(b, smin)) {
                 bad++; snprintf(d, sizeof(d), "MAX/MIN n=%zu dist=%s", n, DIST_NAMES[dist]);
@@ -344,6 +350,11 @@ static void test_different_order_caught(void) {
     omega_reduce_reference(OMEGA_RED_SUM, a33, 33, &r33);
     omega_reduce_reference(OMEGA_RED_SUM, a32, 32, &r32);
     omega_reduce_reference(OMEGA_RED_SUM, a64, 64, &r64);
+    float c33, c32, c64; /* the CPU tier must match the declared bits, not the mutants */
+    omega_reduce_cpu(OMEGA_RED_SUM, a33, 33, &c33);
+    omega_reduce_cpu(OMEGA_RED_SUM, a32, 32, &c32);
+    omega_reduce_cpu(OMEGA_RED_SUM, a64, 64, &c64);
+    if (bf(c33) != bf(r33) || bf(c32) != bf(r32) || bf(c64) != bf(r64)) { ok = 0; snprintf(d, sizeof(d), "CPU tier differs on crafted inputs"); }
     float s33 = omega_reduce_sequential_sum_not_contract(a33, 33);   /* 0x4B800000 */
     float m32 = mutant_reverse_deltas(a32, 32);                       /* 0x4B800000 */
     float f64 = mutant_flat_fold(a64, 64);                            /* 0x4B800001 */
@@ -357,6 +368,9 @@ static void test_different_order_caught(void) {
         for (int i = 0; i < 4097; i++) x[i] = gen(DIST_CANCEL);
         float r;
         omega_reduce_reference(OMEGA_RED_SUM, x, 4097, &r);
+        float c;
+        omega_reduce_cpu(OMEGA_RED_SUM, x, 4097, &c);
+        if (bf(c) != bf(r)) { ok = 0; snprintf(d, sizeof(d), "CPU tier differs on random input"); }
         if (!omega_numeric_bits_equal(r, omega_reduce_sequential_sum_not_contract(x, 4097))) caught++;
     }
     free(x);
@@ -433,13 +447,57 @@ static void test_gb10_parity(void) {
             }
         }
     }
-    /* crafted worked examples on chip */
-    float a33[33];
-    a33[0] = 16777216.0f; for (int i = 1; i < 33; i++) a33[i] = 1.0f;
-    float g33 = 0;
-    int rc = omega_reduce_gb10(OMEGA_RED_SUM, a33, 33, &g33);
-    cases++;
-    if (rc != OMEGA_NUMERIC_OK || bf(g33) != 0x4B800010u) { mism++; snprintf(d, sizeof(d), "worked example n=33 gb10=0x%08x", bf(g33)); }
+    /* crafted special-value vectors on chip, expected bits written out */
+    {
+        static float v[65537];
+        struct { size_t n; uint32_t fill, s0, s1; size_t i1; uint32_t want; } sv[] = {
+            { 33, 0x80000000u, 0x80000000u, 0x80000000u, 1, 0x80000000u },     /* all -0 -> -0        */
+            { 65537, 0x80000000u, 0x80000000u, 0x80000000u, 1, 0x80000000u },  /* all -0, 4 levels    */
+            { 1025, 0x80000000u, 0x80000000u, 0x00000000u, 1024, 0x00000000u },/* one +0 -> +0        */
+            { 40, 0x7f7fffffu, 0x7f7fffffu, 0x7f7fffffu, 1, 0x7f800000u },     /* overflow -> +inf    */
+            { 40, 0x3f800000u, 0x7f800000u, 0xff800000u, 38, 0x7fc00000u },    /* inf + -inf -> NaN   */
+            { 40, 0x3f800000u, 0xff800000u, 0x3f800000u, 38, 0xff800000u },    /* -inf                */
+            { 100, 0x00000001u, 0x00000001u, 0x00000001u, 1, 0x00000064u },    /* 100 * 2^-149 exact  */
+        };
+        for (size_t k = 0; k < sizeof(sv) / sizeof(sv[0]); k++) {
+            for (size_t i = 0; i < sv[k].n; i++) v[i] = fb(sv[k].fill);
+            v[0] = fb(sv[k].s0);
+            v[sv[k].i1] = fb(sv[k].s1);
+            float r = 0, g = 0;
+            omega_reduce_reference(OMEGA_RED_SUM, v, sv[k].n, &r);
+            int rc2 = omega_reduce_gb10(OMEGA_RED_SUM, v, sv[k].n, &g);
+            cases++;
+            launches += omega_reduce_gb10_last_launches();
+            printf("RED_GB10_CASE n=%zu dist=crafted%zu ref=0x%08x gb10=0x%08x want=0x%08x launches=%u rc=%d\n", sv[k].n, k,
+                   bf(r), bf(g), sv[k].want, omega_reduce_gb10_last_launches(), rc2);
+            if (rc2 != OMEGA_NUMERIC_OK || !omega_numeric_bits_equal(g, fb(sv[k].want)) || !omega_numeric_bits_equal(r, g)) {
+                if (!mism) snprintf(d, sizeof(d), "crafted %zu n=%zu gb10=0x%08x want 0x%08x", k, sv[k].n, bf(g), sv[k].want);
+                mism++;
+            }
+        }
+    }
+    /* the three hand-derived worked examples on chip */
+    {
+        float a33[33], a32[32], a64[64];
+        a33[0] = 16777216.0f; for (int i = 1; i < 33; i++) a33[i] = 1.0f;
+        for (int i = 0; i < 32; i++) a32[i] = fb(0x80000000u);
+        a32[0] = 16777216.0f; a32[1] = 1.0f; a32[17] = 1.0f;
+        for (int i = 0; i < 64; i++) a64[i] = fb(0x80000000u);
+        a64[0] = 16777216.0f; a64[1] = 1.0f; a64[33] = 1.0f;
+        const float *in[3] = { a33, a32, a64 };
+        static const size_t wn[3] = { 33, 32, 64 };
+        static const uint32_t want[3] = { 0x4B800010u, 0x4B800001u, 0x4B800000u };
+        for (int k = 0; k < 3; k++) {
+            float g = 0;
+            int rc = omega_reduce_gb10(OMEGA_RED_SUM, in[k], wn[k], &g);
+            cases++;
+            launches += omega_reduce_gb10_last_launches();
+            printf("RED_GB10_CASE n=%zu dist=worked%d gb10=0x%08x want=0x%08x rc=%d\n", wn[k], k, bf(g), want[k], rc);
+            if (rc != OMEGA_NUMERIC_OK || bf(g) != want[k]) {
+                mism++; snprintf(d, sizeof(d), "worked example n=%zu gb10=0x%08x want 0x%08x", wn[k], bf(g), want[k]);
+            }
+        }
+    }
     free(x);
     char det[1024];
     snprintf(det, sizeof(det), "op=SUM order=%s cases=%zu launches=%zu mismatches=%zu %s",

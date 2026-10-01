@@ -55,6 +55,8 @@ Notes:
 - Batched: `omega_reduce_rows_*(op, x, rows, n, row_stride, out)` reduces the
   last axis of `[rows, n]`, each row independently with the same order;
   `row_stride >= n` when `rows > 1`.
+- Lengths so large that padding would overflow the address range are refused
+  (`OMEGA_NUMERIC_ERR_OPERANDS`); the GB10 path is limited to `n <= 2^26`.
 
 ## Worked examples (expected bits written by hand in the test)
 
@@ -103,4 +105,4 @@ Notes:
 | `RED_DIFFERENT_ORDER_CAUGHT` | left-to-right, reversed deltas and flat fold each give different bits on crafted inputs and are flagged; left-to-right also differs on random data |
 | `RED_DETERMINISM` | n = 1000003, repeated runs and shifted buffers give identical bits |
 | `RED_GB10_PRESUBMIT_CHECKS` | refusals (MAX/MIN/MEAN not encoded, NULL, too large) and acceptance of every tested n, without a device |
-| `RED_GB10_PARITY` | chip only: GB10 SUM bits equal the reference for 18 lengths x 3 input classes (`n > 70000`: 1 class) and the n = 33 worked example |
+| `RED_GB10_PARITY` | chip only: GB10 SUM bits equal the reference for 18 lengths x 3 input classes (`n > 70000`: 1 class), 7 crafted special-value vectors with hand-written expected bits (all `-0`, one `+0`, overflow, `inf + -inf`, `-inf`, subnormal sum) and the three worked examples |

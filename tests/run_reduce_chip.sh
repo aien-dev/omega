@@ -73,6 +73,8 @@ if [ -z "$FAIL_REASON" ]; then
     if [ "$QUIET" = 1 ]; then
         # wait until no other flag exists, then create ours atomically
         until (set -o noclobber; echo "$FLAG_OWNER" > "$FLAG") 2>/dev/null; do sleep 60; done
+        # remove our flag (never anyone else's) however this script ends
+        trap '[ "$(cat "$FLAG" 2>/dev/null)" = "$FLAG_OWNER" ] && rm -f "$FLAG"' EXIT
         CREATED_FLAG=1
     fi
     flock /tmp/aien-gb10.lock "$BIN" > "$OUT/reduce.log" 2> "$OUT/reduce.stderr"
@@ -87,8 +89,8 @@ fi
 [ "$(git -C "$OMEGA" rev-parse HEAD)" = "$COMMIT" ] || FAIL_REASON="${FAIL_REASON:-HEAD moved during run}"
 
 BIN_SHA=""; LOG_SHA=""
-if [ -f "$BIN" ]; then BIN_SHA=$(sha256sum "$BIN" | cut -d' ' -f1); cp -n "$BIN" "$EVID/blobs/$BIN_SHA.bin"; chmod 0444 "$EVID/blobs/$BIN_SHA.bin"; fi
-if [ -f "$OUT/reduce.log" ]; then LOG_SHA=$(sha256sum "$OUT/reduce.log" | cut -d' ' -f1); cp -n "$OUT/reduce.log" "$EVID/blobs/$LOG_SHA.log"; chmod 0444 "$EVID/blobs/$LOG_SHA.log"; fi
+if [ -f "$BIN" ]; then BIN_SHA=$(sha256sum "$BIN" | cut -d' ' -f1); [ -e "$EVID/blobs/$BIN_SHA.bin" ] || cp "$BIN" "$EVID/blobs/$BIN_SHA.bin"; chmod 0444 "$EVID/blobs/$BIN_SHA.bin"; fi
+if [ -f "$OUT/reduce.log" ]; then LOG_SHA=$(sha256sum "$OUT/reduce.log" | cut -d' ' -f1); [ -e "$EVID/blobs/$LOG_SHA.log" ] || cp "$OUT/reduce.log" "$EVID/blobs/$LOG_SHA.log"; chmod 0444 "$EVID/blobs/$LOG_SHA.log"; fi
 VERDICT=PASS; [ -n "$FAIL_REASON" ] && VERDICT=FAIL
 PARITY=$(grep '^RED_GB10_PARITY:' "$OUT/reduce.log" 2>/dev/null | head -1)
 TMP=$OUT/receipt.json

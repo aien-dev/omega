@@ -39,6 +39,7 @@ static float empty_result(OmegaReduceOp op) {
 static int common_checks(OmegaReduceOp op, const float *x, size_t n, const float *out) {
     if ((unsigned)op >= OMEGA_RED_COUNT || !out || (n > 0 && !x)) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (op == OMEGA_RED_MEAN && n > OMEGA_REDUCE_MEAN_MAX_N) return OMEGA_NUMERIC_ERR_OPERANDS;
+    if (n > ((size_t)-1) / sizeof(float) - 64) return OMEGA_NUMERIC_ERR_OPERANDS; /* padding must not wrap */
     if (!omega_numeric_fpenv_ok()) return OMEGA_NUMERIC_ERR_FPENV;
     return OMEGA_NUMERIC_OK;
 }
@@ -61,7 +62,8 @@ static float ref_tile(OmegaReduceOp op, const float tile[32]) {
 }
 
 static int ref_sum_like(OmegaReduceOp op, const float *x, size_t n, float *out) {
-    if (n == 0) { *out = empty_result(op == OMEGA_RED_MEAN ? OMEGA_RED_SUM : op); return OMEGA_NUMERIC_OK; }
+    if (op == OMEGA_RED_MEAN) op = OMEGA_RED_SUM; /* MEAN reduces like SUM; the division is the caller's */
+    if (n == 0) { *out = empty_result(op); return OMEGA_NUMERIC_OK; }
     const float pad = omega_reduce_identity(op);
     size_t len = n;
     const float *cur = x;
@@ -119,6 +121,7 @@ static inline float cpu_combine(OmegaReduceOp op, float a, float b) {
 
 /* One buffer, compacted in place: tile j's result goes to buf[j] (j <= 32j). */
 static int cpu_sum_like(OmegaReduceOp op, const float *x, size_t n, float *out) {
+    if (op == OMEGA_RED_MEAN) op = OMEGA_RED_SUM; /* MEAN reduces like SUM; the division is the caller's */
     if (n == 0) { *out = empty_result(op); return OMEGA_NUMERIC_OK; }
     size_t cap = (n + 31) & ~(size_t)31;
     float *buf = malloc(cap * sizeof(float));
