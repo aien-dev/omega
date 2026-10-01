@@ -33,6 +33,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 static int g_total = 0, g_passed = 0, g_failed = 0, g_skipped = 0;
 
@@ -225,6 +227,7 @@ static TierResult cpu_tier(OmegaNumericOp op) {
     for (size_t l = 0; l < launches; l++) {
         const float *c = NULL;
         if (op == OMEGA_NOP_FFMA) { fill_c(g_c, FFMA_C[l]); c = g_c; }
+        if (op == OMEGA_NOP_FFMA_V) { for (size_t i = 0; i < N; i++) g_c[i] = g_a[N - 1 - i]; c = g_c; }
         if (omega_numeric_reference(op, g_a, g_b, c, g_ref, N) != 0 ||
             omega_numeric_cpu_realize(op, g_a, g_b, c, g_cpu, N) != 0) {
             tr.ok = false;
@@ -522,7 +525,303 @@ static bool oracle_tier(void) {
 }
 
 
-int main(void) {
+
+/* ---- E1 scalar contract (docs/numeric/E1_SCALAR_CONTRACT.md) ------------------------
+ * Three derivations per element: the integer reference (src), the CPU tier
+ * (AArch64 instructions, src) and the second integer oracle (numeric_oracle.h).
+ * Results are compared with omega_numeric_compare_equal under the op's mode. */
+
+#define E1_FIRST OMEGA_NOP_FSETP_LT_SEL
+#define E1_PRED_LAST OMEGA_NOP_FSETP_NEU_SEL
+#define E1_BATCH 65536u
+#ifndef E1_RANDOM_PER_OP
+#define E1_RANDOM_PER_OP (1u << 22)
+#endif
+
+/* Predicate per FSETP_*_SEL op, in enum order; checked against the op name. */
+static const char *const E1_PRED[] = { "LT", "LE", "GT", "EQ", "NE", "NUM", "NAN",
+                                       "LTU", "LEU", "GTU", "GEU", "EQU", "NEU" };
+
+static bool e1_is_pred(OmegaNumericOp op) { return op >= E1_FIRST && op <= E1_PRED_LAST; }
+
+static bool e1_pred_table_ok(void) {
+    if (sizeof(E1_PRED) / sizeof(E1_PRED[0]) != (size_t)(E1_PRED_LAST - E1_FIRST + 1)) return false;
+    for (int op = E1_FIRST; op <= E1_PRED_LAST; op++) {
+        char want[32];
+        snprintf(want, sizeof(want), "FSETP_%s_SEL", E1_PRED[op - E1_FIRST]);
+        if (strcmp(want, omega_numeric_op_at((size_t)op)->name) != 0) return false;
+    }
+    return true;
+}
+
+static uint32_t e1_oracle(OmegaNumericOp op, uint32_t a, uint32_t b, uint32_t c) {
+    if (e1_is_pred(op)) return or_pred(E1_PRED[op - E1_FIRST], a, b) ? a : b;
+    switch (op) {
+    case OMEGA_NOP_F2I_FLOOR: return (uint32_t)(int32_t)or_to_int(a, OR_FLOOR, INT32_MIN, INT32_MAX);
+    case OMEGA_NOP_F2I_CEIL:  return (uint32_t)(int32_t)or_to_int(a, OR_CEIL, INT32_MIN, INT32_MAX);
+    case OMEGA_NOP_F2I_RNI:   return (uint32_t)(int32_t)or_to_int(a, OR_RNE, INT32_MIN, INT32_MAX);
+    case OMEGA_NOP_F2U:       return (uint32_t)or_to_int(a, OR_RTZ, 0, UINT32_MAX);
+    case OMEGA_NOP_I2FP_U32:  return or_u2f(a);
+    case OMEGA_NOP_F32_TO_F16:  return or_f32_to_f16(a);
+    case OMEGA_NOP_F32_TO_BF16: return or_f32_to_bf16(a);
+    case OMEGA_NOP_F16_TO_F32:  return or_f16_to_f32(a & 0xffffu);
+    case OMEGA_NOP_BF16_TO_F32: return or_bf16_to_f32(a & 0xffffu);
+    case OMEGA_NOP_FFMA_V:      return or_fma(a, b, c);
+    default: return OR_QNAN;
+    }
+}
+
+typedef struct {
+    size_t n, cpu_vs_ref, oracle_vs_ref, oracle_vs_cpu, refused;
+    long first; uint32_t fa, fb, fc, fref, fcpu, forc;
+} E1Count;
+
+static float g_e1a[E1_BATCH], g_e1b[E1_BATCH], g_e1c[E1_BATCH], g_e1r[E1_BATCH], g_e1p[E1_BATCH];
+
+/* Runs n (<= E1_BATCH) elements of g_e1a/b/c through all three derivations. */
+static void e1_batch(OmegaNumericOp op, size_t n, E1Count *k) {
+    const OmegaNumericOpInfo *info = omega_numeric_op_at(op);
+    const float *b = info->arity >= 2 ? g_e1b : NULL, *c = info->arity >= 3 ? g_e1c : NULL;
+    if (omega_numeric_reference(op, g_e1a, b, c, g_e1r, n) != 0 ||
+        omega_numeric_cpu_realize(op, g_e1a, b, c, g_e1p, n) != 0) { k->refused++; return; }
+    for (size_t i = 0; i < n; i++) {
+        uint32_t ua = U(g_e1a[i]), ub = U(g_e1b[i]), uc = U(g_e1c[i]);
+        uint32_t r = U(g_e1r[i]), p = U(g_e1p[i]), o = e1_oracle(op, ua, ub, uc);
+        bool bad = false;
+        if (!omega_numeric_compare_equal(info->compare, r, p)) { k->cpu_vs_ref++; bad = true; }
+        if (!omega_numeric_compare_equal(info->compare, o, r)) { k->oracle_vs_ref++; bad = true; }
+        if (!omega_numeric_compare_equal(info->compare, o, p)) { k->oracle_vs_cpu++; bad = true; }
+        if (bad && k->first < 0) {
+            k->first = (long)(k->n + i); k->fa = ua; k->fb = ub; k->fc = uc;
+            k->fref = r; k->fcpu = p; k->forc = o;
+        }
+    }
+    k->n += n;
+}
+
+static void e1_print(const char *what, OmegaNumericOp op, const E1Count *k) {
+    printf("OMEGA_NUMERIC_E1_JSON:{\"op\":\"%s\",\"set\":\"%s\",\"n\":%zu,\"cpu_vs_ref\":%zu,"
+           "\"oracle_vs_ref\":%zu,\"oracle_vs_cpu\":%zu,\"refused\":%zu,",
+           omega_numeric_op_at(op)->name, what, k->n, k->cpu_vs_ref, k->oracle_vs_ref, k->oracle_vs_cpu, k->refused);
+    if (k->first >= 0)
+        printf("\"first\":{\"index\":%ld,\"a\":\"0x%08x\",\"b\":\"0x%08x\",\"c\":\"0x%08x\","
+               "\"ref\":\"0x%08x\",\"cpu\":\"0x%08x\",\"oracle\":\"0x%08x\"}}\n",
+               k->first, k->fa, k->fb, k->fc, k->fref, k->fcpu, k->forc);
+    else
+        printf("\"first\":null}\n");
+}
+
+/* Structured random FP32 pattern: half plain random bits, half aimed at the
+ * places the E1 ops round, saturate or change class. */
+static uint32_t e1_pattern(uint32_t *s) {
+    uint32_t r = lcg_next(s), q = lcg_next(s), sign = q & OR_SIGN;
+    switch (r & 15u) {
+    case 0: case 1: case 2: case 3: case 4: case 5: case 6: case 7:
+        return q ^ (lcg_next(s) >> 7);                          /* any bits */
+    case 8:  return sign | ((118u + (r >> 4) % 44u) << 23) | (lcg_next(s) & 0x7fffffu); /* |x| ~ 2^-9 .. 2^34 */
+    case 9:  return sign | ((96u + (r >> 4) % 48u) << 23) | (lcg_next(s) & 0x7fe000u) | 0x1000u; /* F16 ties */
+    case 10: return (lcg_next(s) & 0xffff0000u) | 0x8000u;     /* BF16 ties */
+    case 11: {                                                   /* k + 1/2: integer ties */
+        int32_t k = (int32_t)(lcg_next(s) >> ((r >> 4) % 31u)) * ((q & 1u) ? -1 : 1);
+        return U((float)k + 0.5f);
+    }
+    case 12: return sign | (lcg_next(s) & 0x00ffffffu);        /* subnormals and the smallest normals */
+    case 13: return sign | ((254u - (r >> 4) % 4u) << 23) | (lcg_next(s) & 0x7fffffu); /* near max */
+    case 14: return (r & 0x100u) ? (sign | 0x7f800000u | (lcg_next(s) & 0x7fffffu)) : (sign | 0x7f800000u); /* NaN / inf */
+    default: return U((float)(lcg_next(s) >> ((r >> 4) % 32u)));   /* integers, exactly or rounded */
+    }
+}
+
+/* Second and third operand, aimed at equality, sign and cancellation. */
+static void e1_partners(uint32_t *s, uint32_t a, uint32_t *b, uint32_t *c) {
+    uint32_t r = lcg_next(s);
+    switch (r & 7u) {
+    case 0: *b = a; break;
+    case 1: *b = a ^ OR_SIGN; break;
+    case 2: *b = a + 1u; break;
+    case 3: *b = a - 1u; break;
+    default: *b = e1_pattern(s); break;
+    }
+    switch ((r >> 3) & 3u) {
+    case 0: *c = U(-(F(a) * F(*b))); break;                     /* near-total cancellation */
+    case 1: *c = U(F(a) * F(*b)) ^ ((r >> 5) & 1u); break;           /* same sign, last-bit nudge */
+    default: *c = e1_pattern(s); break;
+    }
+}
+
+/* Random differential over every E1 op. Returns the two verdicts. */
+static void e1_random(bool *cpu_ok, bool *oracle_ok) {
+    *cpu_ok = *oracle_ok = true;
+    for (int op = E1_FIRST; op < OMEGA_NOP_COUNT; op++) {
+        E1Count k; memset(&k, 0, sizeof(k)); k.first = -1;
+        uint32_t s = 0x9e3779b9u ^ (uint32_t)op * 0x85ebca6bu;
+        for (size_t done = 0; done < E1_RANDOM_PER_OP; done += E1_BATCH) {
+            for (size_t i = 0; i < E1_BATCH; i++) {
+                uint32_t a = e1_pattern(&s), b, c;
+                e1_partners(&s, a, &b, &c);
+                g_e1a[i] = F(a); g_e1b[i] = F(b); g_e1c[i] = F(c);
+            }
+            e1_batch((OmegaNumericOp)op, E1_BATCH, &k);
+        }
+        e1_print("random", (OmegaNumericOp)op, &k);
+        if (k.cpu_vs_ref || k.refused) *cpu_ok = false;
+        if (k.oracle_vs_ref || k.oracle_vs_cpu || k.refused) *oracle_ok = false;
+    }
+    /* The widening ops read 16 bits: all 65536 patterns, with junk above. */
+    for (int op = OMEGA_NOP_F16_TO_F32; op <= OMEGA_NOP_BF16_TO_F32; op++) {
+        E1Count k; memset(&k, 0, sizeof(k)); k.first = -1;
+        for (uint32_t h = 0; h < 65536u; h++) g_e1a[h] = F(h | ((h * 0x9e37u) << 16));
+        e1_batch((OmegaNumericOp)op, 65536u, &k);
+        e1_print("exhaustive16", (OmegaNumericOp)op, &k);
+        if (k.cpu_vs_ref || k.refused) *cpu_ok = false;
+        if (k.oracle_vs_ref || k.oracle_vs_cpu || k.refused) *oracle_ok = false;
+    }
+}
+
+/* Hand-worked boundary values (expected bits written out, not computed). */
+typedef struct { OmegaNumericOp op; uint32_t a, b, c, want; } E1Case;
+static const E1Case E1_CASES[] = {
+    { OMEGA_NOP_F2I_FLOOR, 0x80000001u, 0, 0, 0xffffffffu },  /* -min subnormal -> -1 */
+    { OMEGA_NOP_F2I_FLOOR, 0xbfc00000u, 0, 0, 0xfffffffeu },  /* -1.5 -> -2 */
+    { OMEGA_NOP_F2I_FLOOR, 0x4f000000u, 0, 0, 0x7fffffffu },  /* 2^31 saturates */
+    { OMEGA_NOP_F2I_FLOOR, 0xcf000000u, 0, 0, 0x80000000u },  /* -2^31 exact */
+    { OMEGA_NOP_F2I_FLOOR, 0xff800000u, 0, 0, 0x80000000u },  /* -inf */
+    { OMEGA_NOP_F2I_FLOOR, 0x7fc00000u, 0, 0, 0x00000000u },  /* NaN -> 0 */
+    { OMEGA_NOP_F2I_CEIL,  0x00000001u, 0, 0, 0x00000001u },  /* min subnormal -> 1 */
+    { OMEGA_NOP_F2I_CEIL,  0xbf000000u, 0, 0, 0x00000000u },  /* -0.5 -> 0 */
+    { OMEGA_NOP_F2I_CEIL,  0x3fc00000u, 0, 0, 0x00000002u },  /* 1.5 -> 2 */
+    { OMEGA_NOP_F2I_RNI,   0x40200000u, 0, 0, 0x00000002u },  /* 2.5 -> 2 */
+    { OMEGA_NOP_F2I_RNI,   0xc0200000u, 0, 0, 0xfffffffeu },  /* -2.5 -> -2 */
+    { OMEGA_NOP_F2I_RNI,   0x3fc00000u, 0, 0, 0x00000002u },  /* 1.5 -> 2 */
+    { OMEGA_NOP_F2I_RNI,   0x3f000000u, 0, 0, 0x00000000u },  /* 0.5 -> 0 */
+    { OMEGA_NOP_F2I_RNI,   0x4affffffu, 0, 0, 0x00800000u },  /* 8388607.5 -> 8388608 */
+    { OMEGA_NOP_F2U,       0xbf800000u, 0, 0, 0x00000000u },  /* -1 -> 0 */
+    { OMEGA_NOP_F2U,       0x4f800000u, 0, 0, 0xffffffffu },  /* 2^32 saturates */
+    { OMEGA_NOP_F2U,       0x4f7fffffu, 0, 0, 0xffffff00u },  /* largest float below 2^32 */
+    { OMEGA_NOP_F2U,       0x4079999au, 0, 0, 0x00000003u },  /* 3.9 -> 3 */
+    { OMEGA_NOP_F2U,       0xffc00000u, 0, 0, 0x00000000u },  /* NaN -> 0 */
+    { OMEGA_NOP_I2FP_U32,  0x01000001u, 0, 0, 0x4b800000u },  /* 2^24+1: tie to even, down */
+    { OMEGA_NOP_I2FP_U32,  0x01000003u, 0, 0, 0x4b800002u },  /* 2^24+3: tie to even, up */
+    { OMEGA_NOP_I2FP_U32,  0xffffff80u, 0, 0, 0x4f800000u },  /* tie up to 2^32 */
+    { OMEGA_NOP_I2FP_U32,  0x80000000u, 0, 0, 0x4f000000u },  /* unsigned, not -2^31 */
+    { OMEGA_NOP_F32_TO_F16, 0x477ff000u, 0, 0, 0x7c00u },     /* 65520: tie, rounds to inf */
+    { OMEGA_NOP_F32_TO_F16, 0x477fefffu, 0, 0, 0x7bffu },     /* just below: 65504 */
+    { OMEGA_NOP_F32_TO_F16, 0x33000000u, 0, 0, 0x0000u },     /* 2^-25: tie to 0 */
+    { OMEGA_NOP_F32_TO_F16, 0x33000001u, 0, 0, 0x0001u },     /* above the tie */
+    { OMEGA_NOP_F32_TO_F16, 0x33c00000u, 0, 0, 0x0002u },     /* 1.5 * 2^-24: tie to even */
+    { OMEGA_NOP_F32_TO_F16, 0x3f801000u, 0, 0, 0x3c00u },     /* 1 + half ulp: even, down */
+    { OMEGA_NOP_F32_TO_F16, 0x3f803000u, 0, 0, 0x3c02u },     /* 1 + 1.5 ulp: even, up */
+    { OMEGA_NOP_F32_TO_F16, 0x80000000u, 0, 0, 0x8000u },     /* -0 */
+    { OMEGA_NOP_F32_TO_F16, 0x38800000u, 0, 0, 0x0400u },     /* 2^-14: smallest normal */
+    { OMEGA_NOP_F32_TO_F16, 0x7fc00000u, 0, 0, 0x7e00u },     /* NaN stays NaN */
+    { OMEGA_NOP_F32_TO_BF16, 0x3f808000u, 0, 0, 0x3f80u },    /* tie, even, down */
+    { OMEGA_NOP_F32_TO_BF16, 0x3f818000u, 0, 0, 0x3f82u },    /* tie, even, up */
+    { OMEGA_NOP_F32_TO_BF16, 0x7f7fffffu, 0, 0, 0x7f80u },    /* max float rounds to inf */
+    { OMEGA_NOP_F32_TO_BF16, 0x00018000u, 0, 0, 0x0002u },    /* subnormal tie, kept */
+    { OMEGA_NOP_F32_TO_BF16, 0xff800001u, 0, 0, 0xffc0u },    /* NaN stays NaN */
+    { OMEGA_NOP_F16_TO_F32, 0x0001u, 0, 0, 0x33800000u },     /* 2^-24 */
+    { OMEGA_NOP_F16_TO_F32, 0x03ffu, 0, 0, 0x387fc000u },     /* largest subnormal */
+    { OMEGA_NOP_F16_TO_F32, 0x7bffu, 0, 0, 0x477fe000u },     /* 65504 */
+    { OMEGA_NOP_F16_TO_F32, 0xfc00u, 0, 0, 0xff800000u },     /* -inf */
+    { OMEGA_NOP_F16_TO_F32, 0xabcd3c00u, 0, 0, 0x3f800000u }, /* bits [31:16] ignored */
+    { OMEGA_NOP_BF16_TO_F32, 0x0001u, 0, 0, 0x00010000u },    /* subnormal kept */
+    { OMEGA_NOP_BF16_TO_F32, 0x7f80u, 0, 0, 0x7f800000u },    /* inf */
+    { OMEGA_NOP_BF16_TO_F32, 0x12343f80u, 0, 0, 0x3f800000u },/* bits [31:16] ignored */
+    { OMEGA_NOP_FFMA_V, 0x3f800800u, 0x3f800800u, 0xbf800000u, 0x3a000400u }, /* one rounding */
+    { OMEGA_NOP_FFMA_V, 0x7f7fffffu, 0x40000000u, 0xff7fffffu, 0x7f7fffffu }, /* no overflow inside */
+    { OMEGA_NOP_FFMA_V, 0x1a000000u, 0x1a000000u, 0x80000000u, 0x00000000u }, /* 2^-150 + -0 -> +0 */
+    { OMEGA_NOP_FFMA_V, 0x0d800000u, 0x2b800000u, 0x00000000u, 0x00000200u }, /* subnormal 2^-140 */
+    { OMEGA_NOP_FFMA_V, 0x7f800000u, 0x00000000u, 0x3f800000u, 0x7fc00000u }, /* inf * 0 -> NaN */
+    { OMEGA_NOP_FFMA_V, 0x3f800800u, 0x3f800800u, 0x00000001u, 0x3f801001u }, /* 1+2^-11+2^-24 tie broken up by c = 2^-149 (sticky bit) */
+    { OMEGA_NOP_FFMA_V, 0x3f800800u, 0x3f800800u, 0x80000001u, 0x3f801000u }, /* the same tie broken down by c = -2^-149 */
+};
+
+/* Predicate truth per relation class, bits L E G U (a<b, a==b, a>b, unordered). */
+static const uint8_t E1_PRED_TRUTH[] = {
+    0x8, 0xc, 0x2, 0x4, 0xa, 0xe, 0x1,      /* LT LE GT EQ NE NUM NAN */
+    0x9, 0xd, 0x3, 0x7, 0x5, 0xb,           /* LTU LEU GTU GEU EQU NEU */
+};
+typedef struct { uint32_t a, b; uint8_t rel; } E1Pair;   /* rel: 8 L, 4 E, 2 G, 1 U */
+static const E1Pair E1_PAIRS[] = {
+    { 0x3f800000u, 0x40000000u, 8 }, { 0x40000000u, 0x3f800000u, 2 },
+    { 0x80000000u, 0x00000000u, 4 }, { 0x00000000u, 0x80000000u, 4 },
+    { 0x7fc00000u, 0x3f800000u, 1 }, { 0x3f800000u, 0xffc00001u, 1 },
+    { 0x7f800001u, 0x7f800001u, 1 }, { 0xff800000u, 0x7f800000u, 8 },
+    { 0x7f800000u, 0x7f800000u, 4 }, { 0x00000001u, 0x80000000u, 2 },
+    { 0xc0000000u, 0xbf800000u, 8 }, { 0x80000001u, 0x00000001u, 8 },
+};
+
+static bool e1_boundary(void) {
+    bool ok = e1_pred_table_ok();
+    if (!ok) printf("    E1 predicate table does not match the op names\n");
+    size_t cases = 0, bad = 0;
+    float a[1], b[1], c[1], r[1], p[1];
+    for (size_t t = 0; t < sizeof(E1_CASES) / sizeof(E1_CASES[0]) +
+                           (sizeof(E1_PRED_TRUTH)) * (sizeof(E1_PAIRS) / sizeof(E1_PAIRS[0])); t++) {
+        OmegaNumericOp op; uint32_t ua, ub = 0, uc = 0, want;
+        if (t < sizeof(E1_CASES) / sizeof(E1_CASES[0])) {
+            const E1Case *e = &E1_CASES[t];
+            op = e->op; ua = e->a; ub = e->b; uc = e->c; want = e->want;
+        } else {
+            size_t k = t - sizeof(E1_CASES) / sizeof(E1_CASES[0]);
+            size_t np = sizeof(E1_PAIRS) / sizeof(E1_PAIRS[0]);
+            size_t pi = k / np; const E1Pair *pr = &E1_PAIRS[k % np];
+            op = (OmegaNumericOp)(E1_FIRST + (int)pi);
+            ua = pr->a; ub = pr->b;
+            want = (E1_PRED_TRUTH[pi] & pr->rel) ? ua : ub;
+        }
+        const OmegaNumericOpInfo *info = omega_numeric_op_at(op);
+        a[0] = F(ua); b[0] = F(ub); c[0] = F(uc);
+        int rr = omega_numeric_reference(op, a, info->arity >= 2 ? b : NULL, info->arity >= 3 ? c : NULL, r, 1);
+        int pr = omega_numeric_cpu_realize(op, a, info->arity >= 2 ? b : NULL, info->arity >= 3 ? c : NULL, p, 1);
+        uint32_t o = e1_oracle(op, ua, ub, uc);
+        cases++;
+        if (rr || pr || !omega_numeric_compare_equal(info->compare, want, U(r[0])) ||
+            !omega_numeric_compare_equal(info->compare, want, U(p[0])) ||
+            !omega_numeric_compare_equal(info->compare, want, o)) {
+            bad++;
+            printf("    E1 boundary %s a=0x%08x b=0x%08x c=0x%08x want 0x%08x ref 0x%08x cpu 0x%08x oracle 0x%08x\n",
+                   info->name, ua, ub, uc, want, U(r[0]), U(p[0]), o);
+        }
+    }
+    printf("OMEGA_NUMERIC_E1_JSON:{\"set\":\"boundary\",\"cases\":%zu,\"bad\":%zu}\n", cases, bad);
+    return ok && bad == 0;
+}
+
+/* --e1-exhaustive: every 2^32 input pattern of each unary E1 op through all
+ * three derivations, one child process per op. Not part of the Gate 5 IDs. */
+static int e1_exhaustive(void) {
+    static const OmegaNumericOp OPS[] = { OMEGA_NOP_F2I_FLOOR, OMEGA_NOP_F2I_CEIL, OMEGA_NOP_F2I_RNI,
+                                          OMEGA_NOP_F2U, OMEGA_NOP_I2FP_U32, OMEGA_NOP_F32_TO_F16,
+                                          OMEGA_NOP_F32_TO_BF16, OMEGA_NOP_F16_TO_F32, OMEGA_NOP_BF16_TO_F32 };
+    const size_t nops = sizeof(OPS) / sizeof(OPS[0]);
+    pid_t pids[sizeof(OPS) / sizeof(OPS[0])];
+    fflush(stdout);
+    for (size_t j = 0; j < nops; j++) {
+        pids[j] = fork();
+        if (pids[j] < 0) { perror("fork"); return 1; }
+        if (pids[j] == 0) {
+            E1Count k; memset(&k, 0, sizeof(k)); k.first = -1;
+            for (uint64_t base = 0; base < (1ull << 32); base += E1_BATCH) {
+                for (uint32_t i = 0; i < E1_BATCH; i++) g_e1a[i] = F((uint32_t)(base + i));
+                e1_batch(OPS[j], E1_BATCH, &k);
+            }
+            e1_print("exhaustive32", OPS[j], &k);
+            fflush(stdout);
+            _exit((k.cpu_vs_ref || k.oracle_vs_ref || k.oracle_vs_cpu || k.refused || k.n != (1ull << 32)) ? 1 : 0);
+        }
+    }
+    int fails = 0;
+    for (size_t j = 0; j < nops; j++) {
+        int st = 0;
+        if (waitpid(pids[j], &st, 0) < 0 || !WIFEXITED(st) || WEXITSTATUS(st) != 0) fails++;
+    }
+    printf("E1 exhaustive verdict: %s (%zu ops x 2^32 inputs, %d failed)\n", fails ? "FAIL" : "PASS", nops, fails);
+    return fails ? 1 : 0;
+}
+int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--e1-exhaustive") == 0) return e1_exhaustive();
+    if (argc > 1) { fprintf(stderr, "usage: %s [--e1-exhaustive]\n", argv[0]); return 2; }
 #ifdef OMEGA_NUMERIC_CPU_ONLY
     const bool gb10 = false;
 #else
@@ -577,20 +876,27 @@ int main(void) {
 
     /* Refusal before submission: never a silent wrong instruction. */
     int refuse_ok = 1;
-    static const char *NOT_ENCODED[] = { "DIV", "SQRT", "EXP", "LOG" };
-    for (size_t i = 0; i < sizeof(NOT_ENCODED) / sizeof(NOT_ENCODED[0]); i++) {
+    size_t refused_ops = 0;
+    for (size_t oi = 0; oi < omega_numeric_op_count(); oi++) {
+        const OmegaNumericOpInfo *ninfo = omega_numeric_op_at(oi);
+        if (ninfo->gb10_encoded) continue;
+        const char *nname = ninfo->name;
+        const float *nc = ninfo->arity >= 3 ? g_c : NULL;
         char err[256];
-        int rc = omega_numeric_submit_check(NOT_ENCODED[i], g_a, g_b, NULL, g_dev, N, err, sizeof(err));
+        refused_ops++;
+        int rc = omega_numeric_submit_check(nname, g_a, g_b, nc, g_dev, N, err, sizeof(err));
 #ifndef OMEGA_NUMERIC_CPU_ONLY
-        int xrc = omega_gb10_execute_simt_op(NOT_ENCODED[i], g_a, g_b, NULL, g_dev, N);
+        int xrc = omega_gb10_execute_simt_op(nname, g_a, g_b, nc, g_dev, N);
         if (xrc != OMEGA_NUMERIC_ERR_NOT_ENCODED) refuse_ok = 0;
 #endif
         if (rc != OMEGA_NUMERIC_ERR_NOT_ENCODED || err[0] == '\0') refuse_ok = 0;
         OmegaNumericPatchInsn p[OMEGA_NUMERIC_PATCH_MAX];
-        if (omega_numeric_patch_words(omega_numeric_op_find(NOT_ENCODED[i])->op, p) != OMEGA_NUMERIC_ERR_NOT_ENCODED)
+        if (omega_numeric_patch_words(ninfo->op, p) != OMEGA_NUMERIC_ERR_NOT_ENCODED)
             refuse_ok = 0;
-        printf("    refused %-10s rc=%d: %s\n", NOT_ENCODED[i], rc, err);
+        printf("    refused %-14s rc=%d: %s\n", nname, rc, err);
     }
+    /* DIV SQRT EXP LOG and the 23 E1 scalar ops (docs/numeric/E1_SCALAR_CONTRACT.md) */
+    if (refused_ops != omega_numeric_op_count() - 15) refuse_ok = 0;
     {
         char err[256];
         fill_c(g_c, 0x3f800000u);
@@ -875,6 +1181,14 @@ int main(void) {
     report("CPU_TIER_SUBNORMALS_PRESERVED", cpu_ok && cpu_sub_ok);
     printf("\n[*] Independent oracle: integer soft-float, binary128 EXP/LOG, tagged LDS_STS\n");
     report("CPU_TIER_INDEPENDENT_ORACLE", oracle_tier());
+
+    /* ---- E1 scalar contract: boundary values, random differential, oracle ------------ */
+    printf("\n[*] E1 scalar contract: %u random inputs per op, 23 ops, three derivations\n", (unsigned)E1_RANDOM_PER_OP);
+    report("E1_SCALAR_BOUNDARY_VALUES", e1_boundary());
+    bool e1_cpu_ok = false, e1_oracle_ok = false;
+    e1_random(&e1_cpu_ok, &e1_oracle_ok);
+    report("E1_SCALAR_CPU_EQUALS_REFERENCE", e1_cpu_ok);
+    report("E1_SCALAR_INDEPENDENT_ORACLE", e1_oracle_ok);
 
     /* ---- GB10 tier ----------------------------------------------------------------- */
     if (!gb10) {

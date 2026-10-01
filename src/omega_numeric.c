@@ -10,6 +10,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/auxv.h>
 
 #if !defined(__aarch64__)
 #error "OMEGA-NUMERIC-0 host tiers use AArch64 FP instructions (fmadd, fdiv, fsqrt, fminnm, scvtf, fcvtzs)"
@@ -78,6 +79,250 @@ int32_t omega_ref_f2i(float a) {
     if (a >= 2147483647.0f) return 2147483647;
     if (a <= -2147483648.0f) return (int32_t)-2147483648LL;
     return (int32_t)a;
+}
+
+/* ---- E1 scalar contract: reference definitions -----------------------------
+ * Integer operations on the bit patterns only, so nothing here depends on
+ * FPCR or on how the compiler lowers a float operation. The semantic text is
+ * docs/numeric/E1_SCALAR_CONTRACT.md. */
+
+enum { REF_RTZ, REF_FLOOR, REF_CEIL, REF_RNE };
+
+/* Round the FP32 value u to an integer in direction mode, saturate to
+ * [lo, hi]. NaN -> 0. */
+static int64_t ref_to_int(uint32_t u, int mode, int64_t lo, int64_t hi) {
+    uint32_t be = (u >> 23) & 0xffU, f = u & 0x007fffffU;
+    bool neg = (u & 0x80000000U) != 0;
+    if (be == 0xffU) return f ? 0 : (neg ? lo : hi);
+    if (be == 0 && f == 0) return 0;
+    uint64_t m = be ? (f | 0x00800000U) : f;
+    int32_t e = be ? (int32_t)be - 150 : -149;
+    uint64_t ip;              /* integer part of |x|                       */
+    int frac;                 /* 0: none, 1: below half, 2: half, 3: above */
+    if (e >= 0) {
+        if (e > 16) return neg ? lo : hi;          /* |x| >= 2^40        */
+        ip = m << e;
+        frac = 0;
+    } else if (-e >= 40) {
+        ip = 0;
+        frac = 1;                                   /* 0 < |x| < 2^-16    */
+    } else {
+        int sh = -e;
+        ip = m >> sh;
+        uint64_t rem = m & ((1ULL << sh) - 1U), half = 1ULL << (sh - 1);
+        frac = rem == 0 ? 0 : rem < half ? 1 : rem == half ? 2 : 3;
+    }
+    uint64_t mag = ip;
+    switch (mode) {
+    case REF_RTZ:   break;
+    case REF_FLOOR: if (neg && frac) mag++; break;
+    case REF_CEIL:  if (!neg && frac) mag++; break;
+    default:        if (frac == 3 || (frac == 2 && (ip & 1U))) mag++; break;
+    }
+    int64_t v = neg ? -(int64_t)mag : (int64_t)mag;
+    return v < lo ? lo : v > hi ? hi : v;
+}
+
+int32_t omega_ref_f2i_floor(float a) {
+    return (int32_t)ref_to_int(omega_float_to_bits(a), REF_FLOOR, INT32_MIN, INT32_MAX);
+}
+int32_t omega_ref_f2i_ceil(float a) {
+    return (int32_t)ref_to_int(omega_float_to_bits(a), REF_CEIL, INT32_MIN, INT32_MAX);
+}
+int32_t omega_ref_f2i_rni(float a) {
+    return (int32_t)ref_to_int(omega_float_to_bits(a), REF_RNE, INT32_MIN, INT32_MAX);
+}
+uint32_t omega_ref_f2u(float a) {
+    return (uint32_t)ref_to_int(omega_float_to_bits(a), REF_RTZ, 0, UINT32_MAX);
+}
+
+/*
+ * Round sig * 2^exp2 (exact, sig > 0) to a binary format with man explicit
+ * mantissa bits and exponent bias bias (all-ones exponent field emax_field),
+ * nearest even, subnormals kept, overflow to infinity. Returns the format's
+ * bits without the sign.
+ */
+typedef unsigned __int128 ref_u128;
+
+static uint32_t ref_round_small(ref_u128 sig, int32_t exp2, int man, int bias, uint32_t emax_field) {
+    int32_t p = 127;
+    while (((sig >> p) & 1U) == 0) p--;
+    int32_t lead = p + exp2;
+    int32_t be = lead + bias;
+    if (be >= (int32_t)emax_field) return emax_field << man;
+    int32_t lsb = (be >= 1) ? lead - man : 1 - bias - man;
+    int32_t s = lsb - exp2;
+    uint64_t mant;
+    if (s <= 0) {
+        mant = (uint64_t)(sig << -s);
+    } else if (s > p + 1) {
+        return 0;
+    } else {
+        mant = (s >= 128) ? 0 : (uint64_t)(sig >> s);
+        bool guard = ((sig >> (s - 1)) & 1U) != 0;
+        bool rest = (s >= 2) && (sig & ((((ref_u128)1) << (s - 1)) - 1U)) != 0;
+        if (guard && (rest || (mant & 1U))) mant++;
+    }
+    /* normal: mant in [2^man, 2^(man+1)], the carry moves into the exponent */
+    uint64_t bits = (be >= 1) ? ((uint64_t)(be - 1) << man) + mant : mant;
+    if (bits >= ((uint64_t)emax_field << man)) return emax_field << man;
+    return (uint32_t)bits;
+}
+
+float omega_ref_u2f(uint32_t a) {
+    if (a == 0) return 0.0f;
+    return omega_bits_to_float(ref_round_small(a, 0, 23, 127, 0xffU));
+}
+
+static uint16_t ref_narrow(float a, int man, int bias, uint32_t emax_field) {
+    uint32_t u = omega_float_to_bits(a);
+    uint32_t sign = (u >> 16) & 0x8000U;
+    uint32_t be = (u >> 23) & 0xffU, f = u & 0x007fffffU;
+    uint32_t inf = emax_field << man;
+    if (be == 0xffU) {
+        if (!f) return (uint16_t)(sign | inf);
+        /* quiet NaN of the target format, top payload bits kept (not semantic) */
+        return (uint16_t)(sign | inf | (1U << (man - 1)) | (f >> (23 - man)));
+    }
+    if (be == 0 && f == 0) return (uint16_t)sign;
+    uint64_t m = be ? (f | 0x00800000U) : f;
+    int32_t e = be ? (int32_t)be - 150 : -149;
+    return (uint16_t)(sign | ref_round_small(m, e, man, bias, emax_field));
+}
+
+uint16_t omega_ref_f32_to_f16(float a)  { return ref_narrow(a, 10, 15, 0x1fU); }
+uint16_t omega_ref_f32_to_bf16(float a) { return ref_narrow(a, 7, 127, 0xffU); }
+
+float omega_ref_f16_to_f32(uint16_t h) {
+    uint32_t sign = ((uint32_t)h & 0x8000U) << 16;
+    uint32_t be = ((uint32_t)h >> 10) & 0x1fU, f = (uint32_t)h & 0x3ffU;
+    if (be == 0x1fU) return omega_bits_to_float(sign | 0x7f800000U | (f ? 0x00400000U | (f << 13) : 0));
+    if (be == 0) {
+        if (f == 0) return omega_bits_to_float(sign);
+        int32_t e = -14;                    /* value f * 2^-24 = (f / 2^10) * 2^-14 */
+        while ((f & 0x400U) == 0) { f <<= 1; e--; }
+        return omega_bits_to_float(sign | ((uint32_t)(e + 127) << 23) | ((f & 0x3ffU) << 13));
+    }
+    return omega_bits_to_float(sign | ((be - 15 + 127) << 23) | (f << 13));
+}
+
+/* BF16 is the top half of FP32: widening is exact by construction. */
+float omega_ref_bf16_to_f32(uint16_t h) { return omega_bits_to_float((uint32_t)h << 16); }
+
+/* Finite nonzero FP32 bits u as m * 2^e (m below 2^24, not normalized). */
+static void ref_split(uint32_t u, uint64_t *m, int32_t *e) {
+    uint32_t be = (u >> 23) & 0xffU, f = u & 0x007fffffU;
+    *m = be ? (f | 0x00800000U) : f;
+    *e = be ? (int32_t)be - 150 : -149;
+}
+
+static int32_t ref_msb(ref_u128 v) {
+    int32_t p = 127;
+    while (((v >> p) & 1U) == 0) p--;
+    return p;
+}
+
+/*
+ * a * b + c, one rounding. The exact product (below 2^48) and c are placed in
+ * one 128-bit window: the term whose leading bit is higher goes to bit 125,
+ * the other is shifted to the same scale with every lost bit ORed into bit 0.
+ * When bits are lost the terms are more than 2^77 apart, so the result keeps
+ * far more than the 26 bits rounding needs and the sticky bit only breaks
+ * ties, which is all it has to do.
+ */
+float omega_ref_ffma_int(float a, float b, float c) {
+    uint32_t ua = omega_float_to_bits(a), ub = omega_float_to_bits(b), uc = omega_float_to_bits(c);
+    uint32_t ps = (ua ^ ub) & 0x80000000U, cs = uc & 0x80000000U;
+    uint32_t xa = ua & 0x7fffffffU, xb = ub & 0x7fffffffU, xc = uc & 0x7fffffffU;
+    if (xa > OMEGA_INF_POS || xb > OMEGA_INF_POS || xc > OMEGA_INF_POS) return omega_bits_to_float(OMEGA_QNAN_BITS);
+    bool pinf = xa == OMEGA_INF_POS || xb == OMEGA_INF_POS, pzero = xa == 0 || xb == 0;
+    if (pinf && pzero) return omega_bits_to_float(OMEGA_QNAN_BITS);          /* inf * 0 */
+    if (pinf) {
+        if (xc == OMEGA_INF_POS && cs != ps) return omega_bits_to_float(OMEGA_QNAN_BITS);
+        return omega_bits_to_float(ps | OMEGA_INF_POS);
+    }
+    if (xc == OMEGA_INF_POS) return c;
+    if (pzero) return xc ? c : omega_bits_to_float(ps & cs);              /* exact zero sum: +0 unless both -0 */
+    uint64_t ma, mb, mc;
+    int32_t ea, eb, ec;
+    ref_split(xa, &ma, &ea);
+    ref_split(xb, &mb, &eb);
+    ref_u128 mp = (ref_u128)ma * mb;
+    int32_t ep = ea + eb;
+    if (xc == 0) return omega_bits_to_float(ps | ref_round_small(mp, ep, 23, 127, 0xffU));
+    ref_split(xc, &mc, &ec);
+    /* X: the term with the higher leading bit. */
+    ref_u128 X = mp, Y = mc;
+    int32_t ex = ep, ey = ec;
+    uint32_t sx = ps, sy = cs;
+    if (ref_msb(mc) + ec > ref_msb(mp) + ep) { X = mc; ex = ec; sx = cs; Y = mp; ey = ep; sy = ps; }
+    int32_t up = 125 - ref_msb(X);
+    X <<= up;
+    ex -= up;
+    int32_t d = ex - ey;                     /* Y is scaled by 2^-d: d >= 0 here */
+    if (d < 0) {
+        Y <<= -d;                            /* only when Y has fewer bits than X */
+    } else if (d >= 128) {
+        Y = 1;                               /* all of Y below bit 0: sticky only */
+    } else if (d > 0) {
+        bool lost = (Y & ((((ref_u128)1) << d) - 1U)) != 0;
+        Y = (Y >> d) | (lost ? 1U : 0U);
+    }
+    ref_u128 m;
+    uint32_t s;
+    if (sx == sy)    { m = X + Y; s = sx; }
+    else if (X >= Y) { m = X - Y; s = sx; }
+    else             { m = Y - X; s = sy; }
+    if (m == 0) return 0.0f;                 /* exact cancellation: +0 under RNE */
+    return omega_bits_to_float(s | ref_round_small(m, ex, 23, 127, 0xffU));
+}
+
+#ifndef HWCAP2_BF16
+#define HWCAP2_BF16 (1UL << 14)
+#endif
+bool omega_numeric_cpu_has_bf16(void) {
+    return (getauxval(AT_HWCAP2) & HWCAP2_BF16) != 0;
+}
+
+/* Predicate truth per comparison outcome: bit 0 less, bit 1 equal, bit 2
+ * greater, bit 3 unordered. */
+#define PL 1u
+#define PE 2u
+#define PG 4u
+#define PU 8u
+static unsigned fsetp_mask(int op) {
+    switch (op) {
+    case OMEGA_NOP_FSETP_SEL:     return PG | PE;            /* GE  */
+    case OMEGA_NOP_FSETP_LT_SEL:  return PL;
+    case OMEGA_NOP_FSETP_LE_SEL:  return PL | PE;
+    case OMEGA_NOP_FSETP_GT_SEL:  return PG;
+    case OMEGA_NOP_FSETP_EQ_SEL:  return PE;
+    case OMEGA_NOP_FSETP_NE_SEL:  return PL | PG;
+    case OMEGA_NOP_FSETP_NUM_SEL: return PL | PE | PG;
+    case OMEGA_NOP_FSETP_NAN_SEL: return PU;
+    case OMEGA_NOP_FSETP_LTU_SEL: return PL | PU;
+    case OMEGA_NOP_FSETP_LEU_SEL: return PL | PE | PU;
+    case OMEGA_NOP_FSETP_GTU_SEL: return PG | PU;
+    case OMEGA_NOP_FSETP_GEU_SEL: return PG | PE | PU;
+    case OMEGA_NOP_FSETP_EQU_SEL: return PE | PU;
+    case OMEGA_NOP_FSETP_NEU_SEL: return PL | PG | PU;
+    default:                      return 0;
+    }
+}
+
+/* Comparison outcome from the bit patterns: sign-magnitude to a signed key,
+ * so -0 and +0 both map to 0. */
+static unsigned ref_order(uint32_t ua, uint32_t ub) {
+    if ((ua & 0x7fffffffU) > 0x7f800000U || (ub & 0x7fffffffU) > 0x7f800000U) return PU;
+    int64_t ka = (ua & 0x80000000U) ? -(int64_t)(ua & 0x7fffffffU) : (int64_t)ua;
+    int64_t kb = (ub & 0x80000000U) ? -(int64_t)(ub & 0x7fffffffU) : (int64_t)ub;
+    return ka < kb ? PL : ka > kb ? PG : PE;
+}
+
+int omega_ref_fsetp_pred(int op, float a, float b) {
+    unsigned m = fsetp_mask(op);
+    if (!m) return -1;
+    return (m & ref_order(omega_float_to_bits(a), omega_float_to_bits(b))) ? 1 : 0;
 }
 
 float omega_ieee_div(float x, float y) {
@@ -343,6 +588,50 @@ static const OmegaNumericOpInfo OP_TABLE[OMEGA_NOP_COUNT] = {
       "no GB10 kernel for the Omega log polynomial exists (the old path ran FADD)" },
     { OMEGA_NOP_REDUCE_SUM, "REDUCE_SUM", 1, true, OMEGA_CMP_BIT_EXACT,
       "declared pairwise-tree warp sum (" OMEGA_WARP_REDUCTION_DECLARED_ORDER "), lane 0 of each warp", NULL },
+#define E1_SEL(op_, name_, text_, p_) \
+    { op_, name_, 2, false, OMEGA_CMP_INT_EXACT, text_ " ? a : b, bits moved unchanged", \
+      "E1 CPU contract only: no GB10 FSETP." p_ " + FSEL kernel encoded or chip-qualified yet" }
+    E1_SEL(OMEGA_NOP_FSETP_LT_SEL,  "FSETP_LT_SEL",  "(a < b, false if either is NaN)", "LT"),
+    E1_SEL(OMEGA_NOP_FSETP_LE_SEL,  "FSETP_LE_SEL",  "(a <= b, false if either is NaN)", "LE"),
+    E1_SEL(OMEGA_NOP_FSETP_GT_SEL,  "FSETP_GT_SEL",  "(a > b, false if either is NaN)", "GT"),
+    E1_SEL(OMEGA_NOP_FSETP_EQ_SEL,  "FSETP_EQ_SEL",  "(a == b, false if either is NaN, -0 == +0)", "EQ"),
+    E1_SEL(OMEGA_NOP_FSETP_NE_SEL,  "FSETP_NE_SEL",  "(a != b, false if either is NaN, -0 == +0)", "NE"),
+    E1_SEL(OMEGA_NOP_FSETP_NUM_SEL, "FSETP_NUM_SEL", "(neither a nor b is NaN)", "NUM"),
+    E1_SEL(OMEGA_NOP_FSETP_NAN_SEL, "FSETP_NAN_SEL", "(a or b is NaN)", "NAN"),
+    E1_SEL(OMEGA_NOP_FSETP_LTU_SEL, "FSETP_LTU_SEL", "(a < b, true if either is NaN)", "LTU"),
+    E1_SEL(OMEGA_NOP_FSETP_LEU_SEL, "FSETP_LEU_SEL", "(a <= b, true if either is NaN)", "LEU"),
+    E1_SEL(OMEGA_NOP_FSETP_GTU_SEL, "FSETP_GTU_SEL", "(a > b, true if either is NaN)", "GTU"),
+    E1_SEL(OMEGA_NOP_FSETP_GEU_SEL, "FSETP_GEU_SEL", "(a >= b, true if either is NaN)", "GEU"),
+    E1_SEL(OMEGA_NOP_FSETP_EQU_SEL, "FSETP_EQU_SEL", "(a == b, true if either is NaN, -0 == +0)", "EQU"),
+    E1_SEL(OMEGA_NOP_FSETP_NEU_SEL, "FSETP_NEU_SEL", "(a != b, true if either is NaN, -0 == +0)", "NEU"),
+#undef E1_SEL
+    { OMEGA_NOP_F2I_FLOOR, "F2I_FLOOR", 1, false, OMEGA_CMP_INT_EXACT,
+      "int32 floor of a, NaN -> 0, saturating", "E1 CPU contract only: no GB10 F2I.FLOOR kernel encoded or chip-qualified yet" },
+    { OMEGA_NOP_F2I_CEIL, "F2I_CEIL", 1, false, OMEGA_CMP_INT_EXACT,
+      "int32 ceiling of a, NaN -> 0, saturating", "E1 CPU contract only: no GB10 F2I.CEIL kernel encoded or chip-qualified yet" },
+    { OMEGA_NOP_F2I_RNI, "F2I_RNI", 1, false, OMEGA_CMP_INT_EXACT,
+      "int32 round-to-nearest-even of a, NaN -> 0, saturating",
+      "E1 CPU contract only: no GB10 F2I (round to nearest even) kernel encoded or chip-qualified yet" },
+    { OMEGA_NOP_F2U, "F2U", 1, false, OMEGA_CMP_INT_EXACT,
+      "uint32 truncate of a, NaN -> 0, negatives -> 0, saturating",
+      "E1 CPU contract only: no GB10 F2I.U32.TRUNC kernel encoded or chip-qualified yet" },
+    { OMEGA_NOP_I2FP_U32, "I2FP_U32", 1, false, OMEGA_CMP_BIT_EXACT,
+      "(float)(uint32 bits of a), RNE", "E1 CPU contract only: no GB10 I2FP.F32.U32 kernel encoded or chip-qualified yet" },
+    { OMEGA_NOP_F32_TO_F16, "F32_TO_F16", 1, false, OMEGA_CMP_F16_BITS,
+      "binary16 of a in bits [15:0] (RNE, overflow to inf, subnormals kept, NaN stays NaN), bits [31:16] zero",
+      "E1 CPU contract only: no GB10 F2F.F16.F32 kernel encoded or chip-qualified yet" },
+    { OMEGA_NOP_F32_TO_BF16, "F32_TO_BF16", 1, false, OMEGA_CMP_BF16_BITS,
+      "bfloat16 of a in bits [15:0] (RNE, overflow to inf, subnormals kept, NaN stays NaN), bits [31:16] zero",
+      "E1 CPU contract only: no GB10 F2F.BF16.F32 kernel encoded or chip-qualified yet" },
+    { OMEGA_NOP_F16_TO_F32, "F16_TO_F32", 1, false, OMEGA_CMP_BIT_EXACT,
+      "exact FP32 of the binary16 in bits [15:0] of a (bits [31:16] ignored)",
+      "E1 CPU contract only: no GB10 HADD2.F32 / F2F.F32.F16 kernel encoded or chip-qualified yet" },
+    { OMEGA_NOP_BF16_TO_F32, "BF16_TO_F32", 1, false, OMEGA_CMP_BIT_EXACT,
+      "exact FP32 of the bfloat16 in bits [15:0] of a (bits [31:16] ignored)",
+      "E1 CPU contract only: no GB10 BF16 widening kernel encoded or chip-qualified yet" },
+    { OMEGA_NOP_FFMA_V, "FFMA_V", 3, false, OMEGA_CMP_BIT_EXACT, "fma(a, b, c), c read per element",
+      "E1 CPU contract only: the GB10 FFMA kernel carries c in the constant bank (uniform); no per-element c "
+      "kernel (third LDG) encoded or chip-qualified yet" },
 };
 
 size_t omega_numeric_op_count(void) { return OMEGA_NOP_COUNT; }
@@ -366,8 +655,31 @@ const char *omega_numeric_compare_name(OmegaNumericCompare c) {
     case OMEGA_CMP_BIT_EXACT:  return "BIT_EXACT";
     case OMEGA_CMP_INT_EXACT:  return "INT_EXACT";
     case OMEGA_CMP_SEED_BOUND: return "SEED_BOUND";
+    case OMEGA_CMP_F16_BITS:   return "F16_BITS";
+    case OMEGA_CMP_BF16_BITS:  return "BF16_BITS";
     }
     return "UNKNOWN";
+}
+
+bool omega_numeric_compare_equal(OmegaNumericCompare mode, uint32_t expect, uint32_t got) {
+    switch (mode) {
+    case OMEGA_CMP_BIT_EXACT:
+        return omega_numeric_bits_equal(omega_bits_to_float(expect), omega_bits_to_float(got));
+    case OMEGA_CMP_INT_EXACT:
+        return expect == got;
+    case OMEGA_CMP_F16_BITS:
+    case OMEGA_CMP_BF16_BITS: {
+        /* 16-bit payload in [15:0]; [31:16] must be zero in both words. */
+        if ((expect >> 16) != 0 || (got >> 16) != 0) return false;
+        uint32_t inf = (mode == OMEGA_CMP_F16_BITS) ? 0x7c00U : 0x7f80U;
+        bool en = (expect & 0x7fffU) > inf, gn = (got & 0x7fffU) > inf;
+        if (en || gn) return en && gn;  /* NaN class: any NaN equals any NaN */
+        return expect == got;
+    }
+    case OMEGA_CMP_SEED_BOUND:
+        return false;                   /* never compared bit for bit */
+    }
+    return false;
 }
 
 /* ---- Refused variants ------------------------------------------------------ */
@@ -591,6 +903,30 @@ int omega_numeric_patch_words(OmegaNumericOp op,
     case OMEGA_NOP_SQRT:
     case OMEGA_NOP_EXP:
     case OMEGA_NOP_LOG:
+    /* E1 scalar contract ops: CPU contract only, no GB10 encoding yet. */
+    case OMEGA_NOP_FSETP_LT_SEL:
+    case OMEGA_NOP_FSETP_LE_SEL:
+    case OMEGA_NOP_FSETP_GT_SEL:
+    case OMEGA_NOP_FSETP_EQ_SEL:
+    case OMEGA_NOP_FSETP_NE_SEL:
+    case OMEGA_NOP_FSETP_NUM_SEL:
+    case OMEGA_NOP_FSETP_NAN_SEL:
+    case OMEGA_NOP_FSETP_LTU_SEL:
+    case OMEGA_NOP_FSETP_LEU_SEL:
+    case OMEGA_NOP_FSETP_GTU_SEL:
+    case OMEGA_NOP_FSETP_GEU_SEL:
+    case OMEGA_NOP_FSETP_EQU_SEL:
+    case OMEGA_NOP_FSETP_NEU_SEL:
+    case OMEGA_NOP_F2I_FLOOR:
+    case OMEGA_NOP_F2I_CEIL:
+    case OMEGA_NOP_F2I_RNI:
+    case OMEGA_NOP_F2U:
+    case OMEGA_NOP_I2FP_U32:
+    case OMEGA_NOP_F32_TO_F16:
+    case OMEGA_NOP_F32_TO_BF16:
+    case OMEGA_NOP_F16_TO_F32:
+    case OMEGA_NOP_BF16_TO_F32:
+    case OMEGA_NOP_FFMA_V:
         return OMEGA_NUMERIC_ERR_NOT_ENCODED;
     case OMEGA_NOP_COUNT:
         break;
@@ -750,7 +1086,7 @@ int omega_numeric_reference(OmegaNumericOp op, const float *a, const float *b,
     if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (!omega_numeric_fpenv_ok()) return OMEGA_NUMERIC_ERR_FPENV;
     if (needs_b(op) && !b) return OMEGA_NUMERIC_ERR_BAD_ARGS;
-    if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (OP_TABLE[op].arity >= 3 && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if ((op == OMEGA_NOP_SHFL_DOWN || op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0)
         return OMEGA_NUMERIC_ERR_OPERANDS;
     if (op == OMEGA_NOP_LDS_STS && (count % OMEGA_NUMERIC_CTA_THREADS) != 0) return OMEGA_NUMERIC_ERR_OPERANDS;
@@ -778,6 +1114,35 @@ int omega_numeric_reference(OmegaNumericOp op, const float *a, const float *b,
         case OMEGA_NOP_REDUCE_SUM:
             r = ((i % 32u) == 0) ? omega_warp_reduce_sum(&a[i]) : 0.0f;
             break;
+        case OMEGA_NOP_FSETP_LT_SEL:
+        case OMEGA_NOP_FSETP_LE_SEL:
+        case OMEGA_NOP_FSETP_GT_SEL:
+        case OMEGA_NOP_FSETP_EQ_SEL:
+        case OMEGA_NOP_FSETP_NE_SEL:
+        case OMEGA_NOP_FSETP_NUM_SEL:
+        case OMEGA_NOP_FSETP_NAN_SEL:
+        case OMEGA_NOP_FSETP_LTU_SEL:
+        case OMEGA_NOP_FSETP_LEU_SEL:
+        case OMEGA_NOP_FSETP_GTU_SEL:
+        case OMEGA_NOP_FSETP_GEU_SEL:
+        case OMEGA_NOP_FSETP_EQU_SEL:
+        case OMEGA_NOP_FSETP_NEU_SEL:
+            r = omega_ref_fsetp_pred((int)op, a[i], b[i]) == 1 ? a[i] : b[i]; /* bits moved, no FP op */
+            break;
+        case OMEGA_NOP_F2I_FLOOR: r = omega_bits_to_float((uint32_t)omega_ref_f2i_floor(a[i])); break;
+        case OMEGA_NOP_F2I_CEIL:  r = omega_bits_to_float((uint32_t)omega_ref_f2i_ceil(a[i])); break;
+        case OMEGA_NOP_F2I_RNI:   r = omega_bits_to_float((uint32_t)omega_ref_f2i_rni(a[i])); break;
+        case OMEGA_NOP_F2U:       r = omega_bits_to_float(omega_ref_f2u(a[i])); break;
+        case OMEGA_NOP_I2FP_U32:  r = omega_ref_u2f(omega_float_to_bits(a[i])); break;
+        case OMEGA_NOP_F32_TO_F16:  r = omega_bits_to_float(omega_ref_f32_to_f16(a[i])); break;
+        case OMEGA_NOP_F32_TO_BF16: r = omega_bits_to_float(omega_ref_f32_to_bf16(a[i])); break;
+        case OMEGA_NOP_F16_TO_F32:
+            r = omega_ref_f16_to_f32((uint16_t)(omega_float_to_bits(a[i]) & 0xffffU));
+            break;
+        case OMEGA_NOP_BF16_TO_F32:
+            r = omega_ref_bf16_to_f32((uint16_t)(omega_float_to_bits(a[i]) & 0xffffU));
+            break;
+        case OMEGA_NOP_FFMA_V: r = omega_ref_ffma_int(a[i], b[i], c[i]); break;
         case OMEGA_NOP_COUNT: return OMEGA_NUMERIC_ERR_BAD_ARGS;
         }
         out[i] = r;
@@ -800,10 +1165,11 @@ int omega_numeric_cpu_realize(OmegaNumericOp op, const float *a, const float *b,
     if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (!omega_numeric_fpenv_ok()) return OMEGA_NUMERIC_ERR_FPENV;
     if (needs_b(op) && !b) return OMEGA_NUMERIC_ERR_BAD_ARGS;
-    if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (OP_TABLE[op].arity >= 3 && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if ((op == OMEGA_NOP_SHFL_DOWN || op == OMEGA_NOP_REDUCE_SUM) && (count % 32u) != 0)
         return OMEGA_NUMERIC_ERR_OPERANDS;
     if (op == OMEGA_NOP_LDS_STS && (count % OMEGA_NUMERIC_CTA_THREADS) != 0) return OMEGA_NUMERIC_ERR_OPERANDS;
+    const bool bf16 = op == OMEGA_NOP_F32_TO_BF16 && omega_numeric_cpu_has_bf16();
     for (size_t i = 0; i < count; i++) {
         float r = 0.0f;
         float x = a[i];
@@ -870,6 +1236,83 @@ int omega_numeric_cpu_realize(OmegaNumericOp op, const float *a, const float *b,
         case OMEGA_NOP_EXP: r = omega_math_exp(x); break;
         case OMEGA_NOP_LOG: r = omega_math_log(x); break;
         case OMEGA_NOP_REDUCE_SUM: r = ((i & 31u) == 0) ? cpu_tree_sum32(&a[i]) : 0.0f; break;
+        /*
+         * E1 compare-and-select: FCMP then FCSEL on the AArch64 condition that
+         * is the predicate. FCMP flags: less 1000, equal 0110, greater 0010,
+         * unordered 0011 (NZCV). NE and EQU have no single condition, so they
+         * chain two FCSELs.
+         */
+#define CPU_SEL(cond_) __asm__ volatile("fcmp %s1, %s2\n\tfcsel %s0, %s1, %s2, " cond_ \
+                                        : "=&w"(r) : "w"(x), "w"(y) : "cc")
+        case OMEGA_NOP_FSETP_LT_SEL:  CPU_SEL("mi"); break;   /* N           */
+        case OMEGA_NOP_FSETP_LE_SEL:  CPU_SEL("ls"); break;   /* C==0 or Z   */
+        case OMEGA_NOP_FSETP_GT_SEL:  CPU_SEL("gt"); break;   /* !Z, N==V    */
+        case OMEGA_NOP_FSETP_EQ_SEL:  CPU_SEL("eq"); break;
+        case OMEGA_NOP_FSETP_NUM_SEL: CPU_SEL("vc"); break;   /* ordered     */
+        case OMEGA_NOP_FSETP_NAN_SEL: CPU_SEL("vs"); break;   /* unordered   */
+        case OMEGA_NOP_FSETP_LTU_SEL: CPU_SEL("lt"); break;   /* N!=V        */
+        case OMEGA_NOP_FSETP_LEU_SEL: CPU_SEL("le"); break;   /* Z or N!=V   */
+        case OMEGA_NOP_FSETP_GTU_SEL: CPU_SEL("hi"); break;   /* C and !Z    */
+        case OMEGA_NOP_FSETP_GEU_SEL: CPU_SEL("pl"); break;   /* N==0        */
+        case OMEGA_NOP_FSETP_NEU_SEL: CPU_SEL("ne"); break;   /* !Z          */
+#undef CPU_SEL
+        case OMEGA_NOP_FSETP_NE_SEL: {   /* less or greater */
+            float t;
+            __asm__ volatile("fcmp %s2, %s3\n\tfcsel %s1, %s2, %s3, gt\n\tfcsel %s0, %s2, %s1, mi"
+                             : "=&w"(r), "=&w"(t) : "w"(x), "w"(y) : "cc");
+            break;
+        }
+        case OMEGA_NOP_FSETP_EQU_SEL: {  /* equal or unordered */
+            float t;
+            __asm__ volatile("fcmp %s2, %s3\n\tfcsel %s1, %s2, %s3, vs\n\tfcsel %s0, %s2, %s1, eq"
+                             : "=&w"(r), "=&w"(t) : "w"(x), "w"(y) : "cc");
+            break;
+        }
+        /* E1 conversions: the AArch64 conversion instructions. NaN -> 0 and
+         * saturation are architectural for FCVT*S / FCVT*U. */
+#define CPU_F2I(insn_) do { int32_t iv_; \
+            __asm__ volatile(insn_ " %w0, %s1" : "=r"(iv_) : "w"(x)); \
+            r = omega_bits_to_float((uint32_t)iv_); } while (0)
+        case OMEGA_NOP_F2I_FLOOR: CPU_F2I("fcvtms"); break;
+        case OMEGA_NOP_F2I_CEIL:  CPU_F2I("fcvtps"); break;
+        case OMEGA_NOP_F2I_RNI:   CPU_F2I("fcvtns"); break;
+        case OMEGA_NOP_F2U:       CPU_F2I("fcvtzu"); break;
+#undef CPU_F2I
+        case OMEGA_NOP_I2FP_U32: {
+            uint32_t uv = omega_float_to_bits(x);
+            __asm__ volatile("ucvtf %s0, %w1" : "=w"(r) : "r"(uv));
+            break;
+        }
+        case OMEGA_NOP_F32_TO_F16: {
+            uint32_t hv;
+            __asm__ volatile("fcvt h16, %s1\n\tfmov %w0, s16" : "=r"(hv) : "w"(x) : "v16");
+            r = omega_bits_to_float(hv & 0xffffU);
+            break;
+        }
+        case OMEGA_NOP_F32_TO_BF16: {
+            if (!bf16) return OMEGA_NUMERIC_ERR_NOT_ENCODED;
+            uint32_t hv;
+            __asm__ volatile(".arch_extension bf16\n\tbfcvt h16, %s1\n\tfmov %w0, s16" : "=r"(hv) : "w"(x) : "v16");
+            r = omega_bits_to_float(hv & 0xffffU);
+            break;
+        }
+        case OMEGA_NOP_F16_TO_F32: {
+            uint32_t hv = omega_float_to_bits(x) & 0xffffU;
+            __asm__ volatile("fmov s16, %w1\n\tfcvt %s0, h16" : "=w"(r) : "r"(hv) : "v16");
+            break;
+        }
+        case OMEGA_NOP_BF16_TO_F32: {
+            /* AArch64 has no scalar BF16 -> FP32 instruction: widening is a
+             * 16-bit left shift (what SHLL / BFCVTN's inverse do). Same
+             * definition as the reference, so this is not an independent check. */
+            uint32_t hv = omega_float_to_bits(x) & 0xffffU, wv;
+            __asm__ volatile("lsl %w0, %w1, #16" : "=r"(wv) : "r"(hv));
+            r = omega_bits_to_float(wv);
+            break;
+        }
+        case OMEGA_NOP_FFMA_V:
+            __asm__ volatile("fmadd %s0, %s1, %s2, %s3" : "=w"(r) : "w"(x), "w"(y), "w"(c[i]));
+            break;
         case OMEGA_NOP_COUNT: return OMEGA_NUMERIC_ERR_BAD_ARGS;
         }
         out[i] = r;
@@ -892,8 +1335,7 @@ int omega_numeric_parity(OmegaNumericOp op, const float *expect, const float *go
         uint32_t ue = omega_float_to_bits(expect[i]);
         uint32_t ug = omega_float_to_bits(got[i]);
         if (mode == OMEGA_CMP_BIT_EXACT && omega_issubnormal(expect[i])) trace->subnormal_expected++;
-        bool same = (mode == OMEGA_CMP_INT_EXACT) ? (ue == ug)
-                                                  : omega_numeric_bits_equal(expect[i], got[i]);
+        bool same = omega_numeric_compare_equal(mode, ue, ug);
         if (!same) {
             if (trace->mismatches == 0) {
                 trace->first_index = (long)i;
@@ -959,7 +1401,7 @@ int omega_numeric_reference_ftz(OmegaNumericOp op, const float *a, const float *
     if ((unsigned)op >= OMEGA_NOP_COUNT || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (!omega_numeric_fpenv_ok()) return OMEGA_NUMERIC_ERR_FPENV;
     if (needs_b(op) && !b) return OMEGA_NUMERIC_ERR_BAD_ARGS;
-    if (op == OMEGA_NOP_FFMA && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
+    if (OP_TABLE[op].arity >= 3 && !c) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     for (size_t i = 0; i < count; i++) {
         float x = ftz(a[i]);
         float y = b ? ftz(b[i]) : 0.0f;

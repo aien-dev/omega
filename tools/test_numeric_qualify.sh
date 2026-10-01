@@ -66,7 +66,11 @@ good_log() {
         mode=$(mode_of "$op")
         echo "OMEGA_NUMERIC_REGISTRY_JSON:{\"op\":\"$op\",\"encoded\":true,\"compare\":\"$mode\",\"launches\":$([ "$op" = FFMA ] && echo 8 || echo 1)}"
     done
-    for op in DIV SQRT EXP LOG; do
+    # Not encoded for GB10: DIV SQRT EXP LOG and the E1 scalar ops (CPU contract only).
+    for op in DIV SQRT EXP LOG FSETP_LT_SEL FSETP_LE_SEL FSETP_GT_SEL FSETP_EQ_SEL FSETP_NE_SEL \
+              FSETP_NUM_SEL FSETP_NAN_SEL FSETP_LTU_SEL FSETP_LEU_SEL FSETP_GTU_SEL FSETP_GEU_SEL \
+              FSETP_EQU_SEL FSETP_NEU_SEL F2I_FLOOR F2I_CEIL F2I_RNI F2U I2FP_U32 F32_TO_F16 \
+              F32_TO_BF16 F16_TO_F32 BF16_TO_F32 FFMA_V; do
         echo "OMEGA_NUMERIC_REGISTRY_JSON:{\"op\":\"$op\",\"encoded\":false,\"compare\":\"BIT_EXACT\",\"launches\":1}"
     done
     for id in $NUM_EXPECTED_IDS; do echo "[PASS] $id"; done
@@ -212,7 +216,7 @@ NUM_EVIDENCE_DIR=$TMP/omega-link/receipts
 check "  also when reached through a symlink" '! num_check_evidence_dir "$omega"'
 NUM_EVIDENCE_DIR=$omega-sibling
 check "a sibling whose name only starts like the tree accepted" 'num_check_evidence_dir "$omega"'
-check "script refuses an in-tree --evidence-dir with exit 2, before any run" '"$HERE/tests/run_numeric_gates.sh" --omega-candidate x --physics-candidate y --evidence-dir "$HERE/evidence/OMEGA-NUMERIC-0" >/dev/null 2>&1; [ $? = 2 ] && [ ! -e "$HERE/evidence/OMEGA-NUMERIC-0" ]'
+check "script refuses an in-tree --evidence-dir with exit 2, before any run" '"$HERE/tests/run_numeric_gates.sh" --omega-candidate x --physics-candidate y --evidence-dir "$HERE/evidence/OMEGA-NUMERIC-0-intree-probe" >/dev/null 2>&1; [ $? = 2 ] && [ ! -e "$HERE/evidence/OMEGA-NUMERIC-0-intree-probe" ]'
 NUM_EVIDENCE_DIR=$keep_evd
 
 cpu_bin=$HERE/build/test_omega_numeric_cpu
@@ -290,7 +294,7 @@ check "passing run makes a PASS preview" 'num_receipt "$omega" "$NUM_RUN_DIR/gat
 pv=$NUM_RUN_DIR/receipt-preview.json
 check "  status PASS, exit status 0, digests bound" '[ "$(jq -r "(.status == \"PASS\") and (.gate_stderr_sha256 == \"$NUM_STDERR_SHA\") and (.digest_meaning | startswith(\"integrity only, not authenticity\")) and (.gate_binary_exit_status == 0) and (.candidate_binary_sha256 == \"$NUM_BINARY_SHA\") and (.gate_log_sha256 == \"$NUM_LOG_SHA\") and (.run_id == \"$NUM_RUN_ID\")" "$pv")" = true ]'
 check "  clean flags from git status, commits from git" '[ "$(jq -r "(.candidate_trees_clean == {\"omega\":true,\"physics\":true}) and (.run_git_commit == \"$NUM_OMEGA_CAND\") and (.candidate_git_commit == .run_git_commit)" "$pv")" = true ]'
-check "  observed counts 23/23/0, historical untouched, predecessor recorded" '[ "$(jq -c "[.observed_test_count,.observed_pass_count,.observed_fail_count]" "$pv")" = "[23,23,0]" ] && [ "$(cat "$omega/evidence/m19r_gate5_omega_numeric_evidence.json")" = "{\"historical\":true}" ] && [ "$(jq -r ".predecessor_historical_gate5_sha256 | length" "$pv")" = 64 ]'
+check "  observed counts 26/26/0, historical untouched, predecessor recorded" '[ "$(jq -c "[.observed_test_count,.observed_pass_count,.observed_fail_count]" "$pv")" = "[26,26,0]" ] && [ "$(cat "$omega/evidence/m19r_gate5_omega_numeric_evidence.json")" = "{\"historical\":true}" ] && [ "$(jq -r ".predecessor_historical_gate5_sha256 | length" "$pv")" = 64 ]'
 check "  no permanent receipt without --record" '[ ! -e "$EVD" ] && [ ! -e "$omega/evidence/OMEGA-NUMERIC-0" ]'
 # Finding 4: nothing is taken on trust at receipt time.
 cp "$TMP/good.log" "$TMP/fabricated.log"
