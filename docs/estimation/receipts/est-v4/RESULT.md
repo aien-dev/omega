@@ -13,8 +13,8 @@ unchanged. No threshold was loosened and no void data was refitted or rescored.
 
 | Attempt | Seeds D1 / D2 | Phase A | Sealed run | Why void | Record |
 |---|---|---|---|---|---|
-| 1 | 0xE5C4D1 / 0xD2E5C4 | PASS (G1) | PASS, G1 cov95 0.9476, ten-step 0.9321 | Lane 26 multi-core host build/test suites and a QEMU run overlapped both windows (coordinator report) | `void-attempt1/` |
-| 2 | 0xE5C4D2 / 0xD2E5C5 | PASS (G1) | PASS, G1 cov95 0.9570, ten-step 0.9534 | Lane 29 host tests (~10:05Z) and a ~2-min build (11:36-11:38Z); the watcher shows foreign builds and single-core tests in both windows | `void-attempt2/` |
+| 1 | 0xE5C4D1 / 0xD2E5C4 | PASS (G1) | PASS, G1 cov95 0.9476, ten-step 0.9321 | Lane 26 multi-core host build/test suites and a QEMU run overlapped both windows (coordinator report); Lane 29 host tests at ~10:05Z also fell in its D2 window (09:35:59-10:20:59Z) | `void-attempt1/` |
+| 2 | 0xE5C4D2 / 0xD2E5C5 | PASS (G1) | PASS, G1 cov95 0.9570, ten-step 0.9534 | Lane 29 ~2-min build (11:36-11:38Z) in the D2 window; the watcher shows foreign builds and single-core tests in both windows | `void-attempt2/` |
 | 3 | 0xE5C4D3 / not collected | not run | NOT_RUN | Another lane's `make test-compiler` ran 14:23:18-14:24:00Z, 4 s after the flag was taken; fails the standard fixed before attempt 3 | `void-attempt3/` |
 
 Each void attempt was voided on grounds of machine load alone, recorded before
@@ -27,7 +27,7 @@ PASS. The void PASS numbers are not evidence of calibration and are not the verd
 |---|---|---|---|---|
 | G1 lag | PASS | PASS | -1.95967 | yes (both) |
 | G2 AR change | PASS | PASS | -1.96012 | no |
-| G3 two-tank | PASS | PASS | -1.97353 | no (tau and q on grid edges) |
+| G3 two-tank | PASS | PASS | -1.97353 | no (lower one-step log score; attempt 2 tau and q on grid edges, flagged only) |
 
 ## Single most informative finding for a v5
 
