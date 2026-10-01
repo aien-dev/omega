@@ -8,7 +8,7 @@
 #                     agreement + cross-process determinism, plain and ASan/UBSan
 # oscc                build/compiler/oscc <file.osc>: prints IR and code digests
 # compiler-receipt    digest-named receipt under evidence/OSC-1/receipts (clean tree only)
-# osc2-receipt        ITEM=<name> (default contracts): receipt under evidence/OSC-2/receipts (clean tree only)
+# osc2-receipt        ITEM=contracts|structs (default contracts): receipt under evidence/OSC-2/receipts (clean tree only)
 ifndef COMPILER_MK
 COMPILER_MK := 1
 .PHONY: test-compiler oscc compiler-receipt osc0b-model-receipt osc2-receipt
@@ -70,7 +70,9 @@ test-compiler: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_model_asan \
 	sh tests/compiler/determinism.sh $(abspath $(OSC_DIR)/oscc) > $(OSC_DIR)/determinism.out
 	@tail -1 $(OSC_DIR)/determinism.out; grep -q '^OSC1_DETERMINISM_PASS$$' $(OSC_DIR)/determinism.out
 	@grep "^contract fuzz:" $(OSC_DIR)/compiler.out
-	@echo "test-compiler: PASS (OSC-1 slice + OSC-2 contracts; OSC-2 slice; not a general Omega compiler; no self-hosting.)"
+	@grep "^struct fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler.out
+	@grep "^struct fuzz: .* mismatches=0$$" $(OSC_DIR)/compiler_asan.out
+	@echo "test-compiler: PASS (OSC-1 slice + OSC-2 contracts + structs; OSC-2 slice; not a general Omega compiler; no self-hosting.)"
 
 osc0b-model-receipt:
 	sh tests/compiler/osc0b_model_receipt.sh

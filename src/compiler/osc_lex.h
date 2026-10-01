@@ -25,6 +25,8 @@ typedef enum {
     OT_ARROW, OT_DOTDOT, OT_ASSIGN,
     OT_PLUS, OT_MINUS, OT_STAR, OT_SLASH, OT_PERCENT, OT_AMP, OT_PIPE, OT_CARET, OT_TILDE, OT_BANG,
     OT_ANDAND, OT_OROR, OT_SHL, OT_SHR, OT_EQ, OT_NE, OT_LT, OT_LE, OT_GT, OT_GE,
+    /* OSC-2 item 2 (structs), appended */
+    OT_STRUCT, OT_DOT,
     OT__COUNT
 } OscTokKind;
 

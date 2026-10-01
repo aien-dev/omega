@@ -1,0 +1,7 @@
+// expect: CONTRACT_INVALID object=a line=4
+// transition: struct field read in ensures
+struct A { v: u8 }
+fn f(a: &mut A) -> u8 ensures a.v == result {
+    a.v = 3;
+    return 3;
+}

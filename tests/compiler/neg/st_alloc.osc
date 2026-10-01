@@ -1,0 +1,6 @@
+// expect: UNSUPPORTED object=a line=5
+// transition: alloc of a struct
+struct A { v: u8 }
+fn f() {
+    let a: own A = alloc(0);
+}

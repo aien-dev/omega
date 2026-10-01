@@ -1,0 +1,5 @@
+// expect: UNSUPPORTED object=a line=4
+// transition: struct-typed field
+struct A { v: u8 }
+struct B { a: A }
+fn f() { }

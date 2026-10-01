@@ -56,9 +56,9 @@ static uint64_t sm(void) {
 }
 
 /* ---- IR builder --------------------------------------------------------- */
-static OscType TS(OscScalar s) { OscType t = {s, OSC_REF_NONE, OSC_T_VOID, 0}; return t; }
-static OscType TR(OscRefKind k, OscScalar e, int len) { OscType t = {OSC_T_REF, k, e, (uint16_t)len}; return t; }
-static const OscType TVOID = {OSC_T_VOID, OSC_REF_NONE, OSC_T_VOID, 0};
+static OscType TS(OscScalar s) { OscType t = {s, OSC_REF_NONE, OSC_T_VOID, 0, 0}; return t; }
+static OscType TR(OscRefKind k, OscScalar e, int len) { OscType t = {OSC_T_REF, k, e, (uint16_t)len, 0}; return t; }
+static const OscType TVOID = {OSC_T_VOID, OSC_REF_NONE, OSC_T_VOID, 0, 0};
 
 typedef struct { OscUnit *u; OscFunc *f; int fi; int cur; } B;
 

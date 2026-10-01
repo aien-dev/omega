@@ -1,0 +1,19 @@
+// entry: dtor
+// OSC-2 structs: deterministic destruction. Owners are released at scope
+// end in reverse declaration order, structs and arrays alike, using the same
+// alloc/release events as arrays. A moved-from struct is not released again.
+// The release order is asserted by test_osc_compiler (serials 3 2 4 1).
+struct Pair { a: u32, b: u32 }
+
+fn dtor(k: u32) -> u32 {
+    let p: own Pair = Pair { a: k, b: 1 };
+    {
+        let arr: own [u32; 2] = alloc(2);
+        let q: own Pair = Pair { a: arr[0], b: arr[1] };
+        p.b = q.a + q.b;
+    }
+    let r: own Pair = Pair { a: 9, b: 9 };
+    let s: own Pair = r;
+    return p.a + p.b + s.a;
+}
+// expect-run: dtor 1 -> 14

@@ -43,19 +43,26 @@ static int vfail(char *err, size_t n, const char *fmt, ...) {
 static bool is_value_scalar(OscScalar s) { return s >= OSC_T_BOOL && s <= OSC_T_I64; }
 
 static bool type_is_scalar(const OscType *t) {
-    return is_value_scalar(t->s) && t->ref == OSC_REF_NONE && t->elem == OSC_T_VOID && t->len == 0;
+    return is_value_scalar(t->s) && t->ref == OSC_REF_NONE && t->elem == OSC_T_VOID && t->len == 0 && t->sid == 0;
 }
+/* The unit whose struct table type_is_ref consults (set by osc_ir_validate;
+ * validation is single-threaded per call). */
+static const OscUnit *g_unit;
 static bool type_is_ref(const OscType *t) {
-    return t->s == OSC_T_REF && t->ref >= OSC_REF_OWN && t->ref <= OSC_REF_MUT &&
-           is_value_scalar(t->elem) && t->len >= 1 && t->len <= OSC_MAX_ARRAY_LEN;
+    if (t->s != OSC_T_REF || t->ref < OSC_REF_OWN || t->ref > OSC_REF_MUT) return false;
+    if (t->sid == 0) return is_value_scalar(t->elem) && t->len >= 1 && t->len <= OSC_MAX_ARRAY_LEN;
+    return g_unit && t->sid <= g_unit->nstructs && t->elem == OSC_T_VOID &&
+           t->len == g_unit->structs[t->sid - 1].ncells;
 }
+static bool type_is_struct_ref(const OscType *t) { return type_is_ref(t) && t->sid != 0; }
+static bool type_is_array_ref(const OscType *t) { return type_is_ref(t) && t->sid == 0; }
 static bool type_eq(const OscType *a, const OscType *b) {
-    return a->s == b->s && a->ref == b->ref && a->elem == b->elem && a->len == b->len;
+    return a->s == b->s && a->ref == b->ref && a->elem == b->elem && a->len == b->len && a->sid == b->sid;
 }
 /* may a value of REF type `src` be bound to a REF slot of type `dst`? */
 static bool ref_bindable(const OscType *dst, const OscType *src) {
     if (!type_is_ref(dst) || !type_is_ref(src)) return false;
-    if (dst->elem != src->elem || dst->len != src->len) return false;
+    if (dst->elem != src->elem || dst->len != src->len || dst->sid != src->sid) return false;
     switch (dst->ref) {
     case OSC_REF_OWN: return src->ref == OSC_REF_OWN;               /* move */
     case OSC_REF_MUT: return src->ref == OSC_REF_OWN || src->ref == OSC_REF_MUT;
@@ -84,6 +91,8 @@ static int insn_uses(const OscInsn *in, int16_t *u) {
     case OSC_I_CBR: u[k++] = in->a; break;
     case OSC_I_BIN: case OSC_I_CMP: case OSC_I_LOAD: u[k++] = in->a; u[k++] = in->b; break;
     case OSC_I_STORE: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; break;
+    case OSC_I_FLOAD: u[k++] = in->a; if (in->b >= 0) u[k++] = in->b; break;
+    case OSC_I_FSTORE: u[k++] = in->a; if (in->b >= 0) u[k++] = in->b; u[k++] = in->c; break;
     case OSC_I_CALL: for (int i = 0; i < in->nargs && i < OSC_MAX_PARAMS; i++) u[k++] = in->args[i]; break;
     case OSC_I_RET: if (in->a >= 0) u[k++] = in->a; break;
     default: break;
@@ -93,7 +102,7 @@ static int insn_uses(const OscInsn *in, int16_t *u) {
 static int insn_def(const OscInsn *in) {
     switch (in->op) {
     case OSC_I_CONST: case OSC_I_MOV: case OSC_I_BIN: case OSC_I_UN: case OSC_I_CMP:
-    case OSC_I_CAST: case OSC_I_ALLOC: case OSC_I_LOAD: return in->dst;
+    case OSC_I_CAST: case OSC_I_ALLOC: case OSC_I_LOAD: case OSC_I_FLOAD: return in->dst;
     case OSC_I_CALL: return in->dst;  /* may be -1 */
     default: return -1;
     }
@@ -158,7 +167,10 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
     case OSC_I_ALLOC:
         NEED(VR(in->dst) && VR(in->a), "ALLOC bad vreg", fi, ii);
         NEED(type_is_ref(&T[in->dst]) && T[in->dst].ref == OSC_REF_OWN, "ALLOC dst not an owner", fi, ii);
-        NEED(type_is_scalar(&T[in->a]) && T[in->a].s == T[in->dst].elem, "ALLOC init type != elem type", fi, ii);
+        if (T[in->dst].sid)  /* struct: every cell starts at 0 (u64 0), fields are stored next */
+            NEED(type_is_scalar(&T[in->a]) && T[in->a].s == OSC_T_U64, "ALLOC struct init not u64", fi, ii);
+        else
+            NEED(type_is_scalar(&T[in->a]) && T[in->a].s == T[in->dst].elem, "ALLOC init type != elem type", fi, ii);
         break;
     case OSC_I_RELEASE:
         NEED(VR(in->a), "RELEASE bad vreg", fi, ii);
@@ -166,17 +178,33 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
         break;
     case OSC_I_LOAD:
         NEED(VR(in->dst) && VR(in->a) && VR(in->b), "LOAD bad vreg", fi, ii);
-        NEED(type_is_ref(&T[in->a]), "LOAD base not a ref", fi, ii);
+        NEED(type_is_array_ref(&T[in->a]), "LOAD base not an array ref", fi, ii);
         NEED(type_is_scalar(&T[in->b]) && osc_scalar_is_int(T[in->b].s), "LOAD index not integer", fi, ii);
         NEED(type_is_scalar(&T[in->dst]) && T[in->dst].s == T[in->a].elem, "LOAD dst type != elem", fi, ii);
         break;
     case OSC_I_STORE:
         NEED(VR(in->a) && VR(in->b) && VR(in->c), "STORE bad vreg", fi, ii);
-        NEED(type_is_ref(&T[in->a]) && (T[in->a].ref == OSC_REF_OWN || T[in->a].ref == OSC_REF_MUT),
+        NEED(type_is_array_ref(&T[in->a]) && (T[in->a].ref == OSC_REF_OWN || T[in->a].ref == OSC_REF_MUT),
              "STORE through a shared borrow or non-ref", fi, ii);
         NEED(type_is_scalar(&T[in->b]) && osc_scalar_is_int(T[in->b].s), "STORE index not integer", fi, ii);
         NEED(type_is_scalar(&T[in->c]) && T[in->c].s == T[in->a].elem, "STORE value type != elem", fi, ii);
         break;
+    case OSC_I_FLOAD: case OSC_I_FSTORE: {
+        bool ld = in->op == OSC_I_FLOAD;
+        NEED(VR(in->a) && type_is_struct_ref(&T[in->a]), "%s base not a struct ref", fi, ii, ld ? "FLOAD" : "FSTORE");
+        const OscStruct *st = &u->structs[T[in->a].sid - 1];
+        NEED(in->imm < st->nfields, "%s field %llu out of range", fi, ii, ld ? "FLOAD" : "FSTORE",
+             (unsigned long long)in->imm);
+        const OscField *fd = &st->fields[in->imm];
+        if (fd->alen) NEED(VR(in->b) && type_is_scalar(&T[in->b]) && osc_scalar_is_int(T[in->b].s),
+                           "field index not integer", fi, ii);
+        else NEED(in->b == -1, "scalar field with an index", fi, ii);
+        int v = ld ? in->dst : in->c;
+        NEED(VR(v) && type_is_scalar(&T[v]) && T[v].s == fd->s, "field value type != field type", fi, ii);
+        if (!ld) NEED(T[in->a].ref == OSC_REF_OWN || T[in->a].ref == OSC_REF_MUT,
+                      "FSTORE through a shared borrow", fi, ii);
+        break;
+    }
     case OSC_I_CALL: {
         NEED(in->callee >= 0 && in->callee < fi, "CALL to function %d not defined earlier", fi, ii, in->callee);
         const OscFunc *g = &u->funcs[in->callee];
@@ -223,7 +251,7 @@ static int validate_func(const OscUnit *u, int fi, char *err, size_t n) {
         return vfail(err, n, "func %d: contract text not terminated", fi);
     if (f->nparams > OSC_MAX_PARAMS) return vfail(err, n, "func %d: %u params > %d", fi, f->nparams, OSC_MAX_PARAMS);
     if (f->nvregs > OSC_MAX_VREGS || f->nparams > f->nvregs) return vfail(err, n, "func %d: bad nvregs", fi);
-    if (!(f->ret.s == OSC_T_VOID && f->ret.ref == OSC_REF_NONE && f->ret.elem == OSC_T_VOID && f->ret.len == 0) &&
+    if (!(f->ret.s == OSC_T_VOID && f->ret.ref == OSC_REF_NONE && f->ret.elem == OSC_T_VOID && f->ret.len == 0 && f->ret.sid == 0) &&
         !type_is_scalar(&f->ret))
         return vfail(err, n, "func %d: return type must be void or scalar", fi);
     for (int v = 0; v < f->nvregs; v++)
@@ -301,9 +329,37 @@ static int validate_func(const OscUnit *u, int fi, char *err, size_t n) {
     return rc;
 }
 
+/* struct table: names terminated and unique, fields well-typed, offsets are
+ * the prefix sums of the field cell counts (no padding), 1..64 cells. */
+static int validate_structs(const OscUnit *u, char *err, size_t n) {
+    if (u->nstructs > OSC_MAX_STRUCTS) return vfail(err, n, "too many structs");
+    for (int k = 0; k < u->nstructs; k++) {
+        const OscStruct *s = &u->structs[k];
+        if (!str_ok(s->name, sizeof s->name) || !s->name[0]) return vfail(err, n, "struct %d: bad name", k);
+        for (int j = 0; j < k; j++)
+            if (!strcmp(u->structs[j].name, s->name)) return vfail(err, n, "struct %d: duplicate name", k);
+        if (s->nfields < 1 || s->nfields > OSC_MAX_FIELDS) return vfail(err, n, "struct %d: bad field count", k);
+        unsigned off = 0;
+        for (int f = 0; f < s->nfields; f++) {
+            const OscField *fd = &s->fields[f];
+            if (!str_ok(fd->name, sizeof fd->name) || !fd->name[0]) return vfail(err, n, "struct %d field %d: bad name", k, f);
+            for (int g = 0; g < f; g++)
+                if (!strcmp(s->fields[g].name, fd->name)) return vfail(err, n, "struct %d field %d: duplicate", k, f);
+            if (!is_value_scalar(fd->s) || fd->alen > OSC_MAX_ARRAY_LEN)
+                return vfail(err, n, "struct %d field %d: bad type", k, f);
+            if (fd->off != off) return vfail(err, n, "struct %d field %d: offset %u != %u", k, f, fd->off, off);
+            off += fd->alen ? fd->alen : 1;
+        }
+        if (off != s->ncells || off < 1 || off > OSC_MAX_ARRAY_LEN) return vfail(err, n, "struct %d: bad size", k);
+    }
+    return 0;
+}
+
 int osc_ir_validate(const OscUnit *u, char *err, size_t n) {
     if (!u) return vfail(err, n, "null unit");
     if (u->nfuncs > OSC_MAX_FUNCS) return vfail(err, n, "too many functions");
+    g_unit = u;
+    if (validate_structs(u, err, n)) return -1;
     for (int fi = 0; fi < u->nfuncs; fi++)
         if (validate_func(u, fi, err, n)) return -1;
     if (err && n) err[0] = 0;
@@ -337,7 +393,10 @@ static void w64(W *w, uint64_t v) {
 static void wvr(W *w, int16_t v) { w16(w, (uint16_t)v); }  /* two's complement LE; -1 = 0xFFFF */
 static void wtype(W *w, const OscType *t) {
     w8(w, (uint8_t)t->s);
-    if (t->s == OSC_T_REF) { w8(w, (uint8_t)t->ref); w8(w, (uint8_t)t->elem); w16(w, t->len); }
+    if (t->s == OSC_T_REF) {
+        w8(w, (uint8_t)t->ref); w8(w, (uint8_t)t->elem); w16(w, t->len);
+        if (t->sid) w8(w, t->sid);  /* struct ref (elem VOID); array refs encode as OSC-1 */
+    }
 }
 static void wtext(W *w, const char *s, size_t cap) {
     size_t k = strnlen(s, cap);
@@ -346,8 +405,26 @@ static void wtext(W *w, const char *s, size_t cap) {
 }
 
 static void encode_unit(const OscUnit *u, W *w) {
-    static const uint8_t magic[8] = {'O', 'S', 'C', '1', 'I', 'R', 0, 1}; /* format version 1 */
+    /* format version 1 (OSC-1, no structs) / 2 (OSC-2 structs: struct table
+     * after the magic). A unit without structs encodes exactly as version 1. */
+    uint8_t magic[8] = {'O', 'S', 'C', '1', 'I', 'R', 0, 1};
+    if (u->nstructs) magic[7] = 2;
     wbytes(w, magic, sizeof magic);
+    if (u->nstructs) {
+        w8(w, u->nstructs);
+        for (int k = 0; k < u->nstructs; k++) {
+            const OscStruct *s = &u->structs[k];
+            size_t sl = strnlen(s->name, sizeof s->name);
+            w8(w, sl); wbytes(w, s->name, sl);
+            w8(w, s->nfields); w16(w, s->ncells);
+            for (int f = 0; f < s->nfields; f++) {
+                const OscField *fd = &s->fields[f];
+                size_t fl = strnlen(fd->name, sizeof fd->name);
+                w8(w, fl); wbytes(w, fd->name, fl);
+                w8(w, (uint8_t)fd->s); w16(w, fd->alen); w16(w, fd->off);
+            }
+        }
+    }
     w16(w, u->nfuncs);
     for (int fi = 0; fi < u->nfuncs; fi++) {
         const OscFunc *f = &u->funcs[fi];
@@ -372,6 +449,8 @@ static void encode_unit(const OscUnit *u, W *w) {
             case OSC_I_RELEASE: wvr(w, in->a); break;
             case OSC_I_LOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
             case OSC_I_STORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
+            case OSC_I_FLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); w8(w, in->imm); break;
+            case OSC_I_FSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); w8(w, in->imm); break;
             case OSC_I_CALL:
                 wvr(w, in->dst); w16(w, (uint16_t)in->callee); w8(w, in->nargs);
                 for (int k = 0; k < in->nargs; k++) wvr(w, in->args[k]);

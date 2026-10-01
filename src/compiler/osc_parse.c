@@ -130,16 +130,295 @@ static int parse_arr_body(P *p, OscType *ty, OscRefKind rk)
     return 0;
 }
 
-/* ptype: scalar | own[..] | &[..] | &mut[..] */
+static int parse_expr(P *p);
+
+/* ---- OSC-2 structs (docs/osc/OSC-2-DESIGN.md section 2) ---------------- */
+static int tok_eq(P *p, const OscToken *t, const char *s)
+{
+    size_t n = strlen(s);
+    return t->kind == OT_NAME && t->len == n && memcmp(p->ast->src + t->off, s, n) == 0;
+}
+
+/* index of the struct named by token t, -1 if none is declared (yet) */
+static int find_struct(P *p, const OscToken *t)
+{
+    for (int k = 0; k < p->ast->nstructs; k++)
+        if (tok_eq(p, t, p->ast->structs[k].name)) return k;
+    return -1;
+}
+
+/* index of field `t` in struct k, -1 if none */
+static int find_field(P *p, int k, const OscToken *t)
+{
+    const OscStruct *s = &p->ast->structs[k];
+    for (int f = 0; f < s->nfields; f++)
+        if (tok_eq(p, t, s->fields[f].name)) return f;
+    return -1;
+}
+
+static int undefined_type(P *p, const OscToken *t)
+{
+    char nm[64];
+    osc_tok_text(p->ast->src, t, nm, sizeof nm);
+    osc_diag_set(p->d, OSC_DIAG_UNDEFINED_TYPE, t->line, t->col, nm, 0, NULL, "undefined struct type",
+                 "struct type '%s' is not declared (structs are declared before use)", nm);
+    return -1;
+}
+
+/* a struct named where a value type is expected (let x: S, p: S, -> S) */
+static int struct_by_value(P *p, const OscToken *t, const char *transition)
+{
+    char nm[64];
+    osc_tok_text(p->ast->src, t, nm, sizeof nm);
+    osc_diag_set(p->d, OSC_DIAG_UNSUPPORTED, t->line, t->col, nm, p->ast->struct_line[find_struct(p, t)], NULL,
+                 transition, "struct '%s' is used through 'own', '&' or '&mut' only; it is never a value "
+                 "or a return type", nm);
+    return -1;
+}
+
+/* NAME with the ref kind already consumed: a reference to a declared struct */
+static int parse_struct_ref(P *p, OscType *ty, OscRefKind rk)
+{
+    const OscToken *t = cur(p);
+    int k = find_struct(p, t);
+    if (k < 0) return undefined_type(p, t);
+    adv(p);
+    memset(ty, 0, sizeof *ty);
+    ty->s = OSC_T_REF;
+    ty->ref = rk;
+    ty->elem = OSC_T_VOID;
+    ty->len = p->ast->structs[k].ncells;
+    ty->sid = (uint8_t)(k + 1);
+    return 0;
+}
+
+/* "[" ... (array) or NAME (struct), ref kind already consumed */
+static int parse_ref_body(P *p, OscType *ty, OscRefKind rk)
+{
+    if (at(p, OT_NAME)) return parse_struct_ref(p, ty, rk);
+    return parse_arr_body(p, ty, rk);
+}
+
+/* ptype: scalar | own[..] | &[..] | &mut[..] | own S | &S | &mut S */
 static int parse_ptype(P *p, OscType *ty)
 {
-    if (at(p, OT_OWN)) { adv(p); return parse_arr_body(p, ty, OSC_REF_OWN); }
+    if (at(p, OT_OWN)) { adv(p); return parse_ref_body(p, ty, OSC_REF_OWN); }
     if (at(p, OT_AMP)) {
         adv(p);
-        if (at(p, OT_MUT)) { adv(p); return parse_arr_body(p, ty, OSC_REF_MUT); }
-        return parse_arr_body(p, ty, OSC_REF_SHARED);
+        if (at(p, OT_MUT)) { adv(p); return parse_ref_body(p, ty, OSC_REF_MUT); }
+        return parse_ref_body(p, ty, OSC_REF_SHARED);
     }
+    if (at(p, OT_NAME) && find_struct(p, cur(p)) >= 0) return struct_by_value(p, cur(p), "struct by value");
     return parse_scalar(p, ty);
+}
+
+/* struct_decl = "struct" NAME "{" field { "," field } [","] "}" ;
+ * field = NAME ":" ( scalar | "[" scalar ";" INT "]" ) */
+static int parse_struct(P *p)
+{
+    OscAst *a = p->ast;
+    const OscToken *st = cur(p);
+    adv(p);
+    if (!at(p, OT_NAME)) return syntax(p, "a struct name");
+    const OscToken *nt = cur(p);
+    char sname[64];
+    osc_tok_text(a->src, nt, sname, sizeof sname);
+    int prev = find_struct(p, nt);
+    if (prev >= 0) {
+        osc_diag_set(p->d, OSC_DIAG_REDEFINED_NAME, nt->line, nt->col, sname, a->struct_line[prev], NULL,
+                     "struct declared twice", "struct '%s' is already declared", sname);
+        return -1;
+    }
+    if (a->nstructs >= OSC_MAX_STRUCTS) {
+        osc_diag_set(p->d, OSC_DIAG_CAPACITY, nt->line, nt->col, sname, 0, NULL, "struct capacity",
+                     "more than %d structs", OSC_MAX_STRUCTS);
+        return -1;
+    }
+    adv(p);
+    OscStruct *s = &a->structs[a->nstructs];
+    memset(s, 0, sizeof *s);
+    snprintf(s->name, sizeof s->name, "%s", sname);
+    if (expect(p, OT_LBRACE)) return -1;
+    if (at(p, OT_RBRACE)) {
+        osc_diag_set(p->d, OSC_DIAG_UNSUPPORTED, nt->line, nt->col, sname, 0, NULL, "empty struct",
+                     "struct '%s' declares no fields (1..%d required)", sname, OSC_MAX_FIELDS);
+        return -1;
+    }
+    unsigned cells = 0;
+    while (!at(p, OT_RBRACE)) {
+        const OscToken *ft = cur(p);
+        if (!at(p, OT_NAME)) return syntax(p, "a field name");
+        char fname[64];
+        osc_tok_text(a->src, ft, fname, sizeof fname);
+        for (int g = 0; g < s->nfields; g++)
+            if (!strcmp(s->fields[g].name, fname)) {
+                osc_diag_set(p->d, OSC_DIAG_DUPLICATE_FIELD, ft->line, ft->col, fname, nt->line, sname,
+                             "field declared twice", "struct '%s' declares field '%s' twice", sname, fname);
+                return -1;
+            }
+        if (s->nfields >= OSC_MAX_FIELDS) {
+            osc_diag_set(p->d, OSC_DIAG_CAPACITY, ft->line, ft->col, sname, nt->line, fname, "field capacity",
+                         "struct '%s' has more than %d fields", sname, OSC_MAX_FIELDS);
+            return -1;
+        }
+        adv(p);
+        if (expect(p, OT_COLON)) return -1;
+        OscField *fd = &s->fields[s->nfields];
+        snprintf(fd->name, sizeof fd->name, "%s", fname);
+        const OscToken *tt = cur(p);
+        if (at(p, OT_OWN) || at(p, OT_AMP) || at(p, OT_NAME)) {
+            uint32_t q = p->pos;
+            while (q < a->ntok && (a->toks[q].kind == OT_OWN || a->toks[q].kind == OT_AMP || a->toks[q].kind == OT_MUT)) q++;
+            const OscToken *rt = &a->toks[q];
+            if (tok_eq(p, rt, sname)) {
+                osc_diag_set(p->d, OSC_DIAG_RECURSIVE_STRUCT, rt->line, rt->col, sname, nt->line, fname,
+                             "struct field of its own type", "field '%s' of struct '%s' names '%s' itself "
+                             "(no recursive or self-referential structs)", fname, sname, sname);
+                return -1;
+            }
+            if (rt->kind == OT_NAME && find_struct(p, rt) < 0 && tt->kind == OT_NAME) return undefined_type(p, rt);
+            osc_diag_set(p->d, OSC_DIAG_UNSUPPORTED, tt->line, tt->col, fname, nt->line, sname,
+                         tt->kind == OT_NAME ? "struct-typed field" : "owner or borrow field",
+                         "field '%s': a field is an integer, bool or fixed array [T; N]", fname);
+            return -1;
+        }
+        if (at(p, OT_LBRACK)) {
+            OscType at_;
+            if (parse_arr_body(p, &at_, OSC_REF_OWN)) return -1;
+            fd->s = at_.elem;
+            fd->alen = at_.len;
+        } else {
+            OscType sc;
+            if (parse_scalar(p, &sc)) return -1;
+            fd->s = sc.s;
+        }
+        fd->off = (uint16_t)cells;
+        cells += fd->alen ? fd->alen : 1;
+        if (cells > OSC_MAX_ARRAY_LEN) {
+            osc_diag_set(p->d, OSC_DIAG_CAPACITY, tt->line, tt->col, sname, nt->line, fname, "struct size",
+                         "struct '%s' needs more than %d cells", sname, OSC_MAX_ARRAY_LEN);
+            return -1;
+        }
+        s->nfields++;
+        if (at(p, OT_COMMA)) { adv(p); continue; }
+        if (!at(p, OT_RBRACE)) return syntax(p, "',' or '}' after a field");
+    }
+    adv(p);
+    s->ncells = (uint16_t)cells;
+    a->struct_line[a->nstructs++] = st->line;
+    return 0;
+}
+
+/* struct literal  S "{" NAME ":" ( expr | "[" expr ";" INT "]" ) { "," ... } [","] "}"
+ * as the initialiser of `let x: own S`; cur is S. Fills n->a with ON_FINIT
+ * nodes. Every field exactly once: UNKNOWN_FIELD / DUPLICATE_FIELD / MISSING_FIELD. */
+static int parse_struct_lit(P *p, int n)
+{
+    OscAst *a = p->ast;
+    const OscToken *lt = cur(p);
+    int k = find_struct(p, lt);
+    char bname[64];
+    osc_node_name(a, N(n), bname, sizeof bname);
+    if (k < 0) return undefined_type(p, lt);
+    const OscStruct *s = &a->structs[k];
+    if (k + 1 != N(n)->ty.sid) {
+        osc_diag_set(p->d, OSC_DIAG_TYPE_MISMATCH, lt->line, lt->col, bname, N(n)->line,
+                     s->name, "struct literal of another type", "'%s' is declared own %s, initialised with a %s literal",
+                     bname, a->structs[N(n)->ty.sid - 1].name, s->name);
+        return -1;
+    }
+    adv(p);
+    if (expect(p, OT_LBRACE)) return -1;
+    uint32_t seen = 0;
+    int last = -1;
+    while (!at(p, OT_RBRACE)) {
+        const OscToken *ft = cur(p);
+        if (!at(p, OT_NAME)) return syntax(p, "a field name");
+        char fname[64];
+        osc_tok_text(a->src, ft, fname, sizeof fname);
+        int f = find_field(p, k, ft);
+        if (f < 0) {
+            osc_diag_set(p->d, OSC_DIAG_UNKNOWN_FIELD, ft->line, ft->col, fname, a->struct_line[k], s->name,
+                         "initialise unknown field", "struct '%s' has no field '%s'", s->name, fname);
+            return -1;
+        }
+        if (seen >> f & 1) {
+            osc_diag_set(p->d, OSC_DIAG_DUPLICATE_FIELD, ft->line, ft->col, fname, lt->line, s->name,
+                         "field initialised twice", "field '%s' of '%s' is initialised twice", fname, s->name);
+            return -1;
+        }
+        seen |= 1u << f;
+        int fi = new_node(p, ON_FINIT, ft);
+        if (fi < 0) return -1;
+        N(fi)->hi = f;
+        adv(p);
+        if (expect(p, OT_COLON)) return -1;
+        const OscField *fd = &s->fields[f];
+        if (fd->alen) {
+            if (!at(p, OT_LBRACK)) {
+                const OscToken *t = cur(p);
+                osc_diag_set(p->d, OSC_DIAG_TYPE_MISMATCH, t->line, t->col, fname, a->struct_line[k], s->name,
+                             "array field without [e; N]", "array field '%s' is initialised with '[value; %u]'",
+                             fname, fd->alen);
+                return -1;
+            }
+            adv(p);
+            int e = parse_expr(p);
+            if (e < 0) return -1;
+            N(fi)->a = e;
+            if (expect(p, OT_SEMI)) return -1;
+            if (!at(p, OT_INT)) return syntax(p, "array length INT");
+            const OscToken *nt = cur(p);
+            if (nt->ival != fd->alen) {
+                osc_diag_set(p->d, OSC_DIAG_TYPE_MISMATCH, nt->line, nt->col, fname, a->struct_line[k], s->name,
+                             "array field length mismatch", "array field '%s' has length %u, initialiser gives %llu",
+                             fname, fd->alen, (unsigned long long)nt->ival);
+                return -1;
+            }
+            N(fi)->flag = 1;
+            N(fi)->ival = nt->ival;
+            adv(p);
+            if (expect(p, OT_RBRACK)) return -1;
+        } else {
+            int e = parse_expr(p);
+            if (e < 0) return -1;
+            N(fi)->a = e;
+        }
+        if (last < 0) N(n)->a = fi; else N(last)->next = fi;
+        last = fi;
+        if (at(p, OT_COMMA)) { adv(p); continue; }
+        if (!at(p, OT_RBRACE)) return syntax(p, "',' or '}' in a struct literal");
+    }
+    for (int f = 0; f < s->nfields; f++)
+        if (!(seen >> f & 1)) {
+            const OscToken *t = cur(p);
+            osc_diag_set(p->d, OSC_DIAG_MISSING_FIELD, t->line, t->col, s->fields[f].name, lt->line, s->name,
+                         "field not initialised", "struct literal of '%s' does not initialise field '%s'",
+                         s->name, s->fields[f].name);
+            return -1;
+        }
+    adv(p);
+    return 0;
+}
+
+/* NAME "." NAME [ "[" expr "]" ] ; cur is the first NAME. kind = ON_FIELD / ON_FSTORE */
+static int parse_field_ref(P *p, int kind)
+{
+    int n = new_node(p, kind, cur(p));
+    if (n < 0) return -1;
+    adv(p);
+    adv(p);  /* '.' */
+    if (!at(p, OT_NAME)) return syntax(p, "a field name after '.'");
+    N(n)->lo = p->pos;
+    adv(p);
+    if (at(p, OT_LBRACK)) {
+        adv(p);
+        int ix = parse_expr(p);
+        if (ix < 0) return -1;
+        N(n)->a = ix;
+        if (expect(p, OT_RBRACK)) return -1;
+    }
+    return n;
 }
 
 static int parse_expr(P *p);
@@ -202,6 +481,7 @@ static int parse_primary(P *p)
         return n;
     case OT_NAME:
         if (peek_kind(p, 1) == OT_LPAREN) return parse_call(p);
+        if (peek_kind(p, 1) == OT_DOT) return parse_field_ref(p, ON_FIELD);
         if (peek_kind(p, 1) == OT_LBRACK) {
             n = new_node(p, ON_INDEX, t);
             if (n < 0) return -1;
@@ -365,9 +645,20 @@ static int parse_stmt(P *p)
                 return -1;
             }
             adv(p);
-            if (parse_arr_body(p, &N(n)->ty, OSC_REF_OWN)) return -1;
+            if (parse_ref_body(p, &N(n)->ty, OSC_REF_OWN)) return -1;
             if (expect(p, OT_ASSIGN)) return -1;
-            if (at(p, OT_ALLOC)) {
+            if (N(n)->ty.sid && at(p, OT_NAME) && peek_kind(p, 1) == OT_LBRACE) {
+                N(n)->kind = ON_LET_ALLOC;
+                if (parse_struct_lit(p, n)) return -1;
+            } else if (N(n)->ty.sid && at(p, OT_ALLOC)) {
+                const OscToken *at_ = cur(p);
+                char nm[64];
+                osc_node_name(p->ast, N(n), nm, sizeof nm);
+                osc_diag_set(p->d, OSC_DIAG_UNSUPPORTED, at_->line, at_->col, nm, 0,
+                             p->ast->structs[N(n)->ty.sid - 1].name, "alloc of a struct",
+                             "a struct owner is created by a struct literal, not alloc");
+                return -1;
+            } else if (at(p, OT_ALLOC)) {
                 adv(p);
                 N(n)->kind = ON_LET_ALLOC;
                 if (expect(p, OT_LPAREN)) return -1;
@@ -390,7 +681,7 @@ static int parse_stmt(P *p)
             adv(p);
             OscRefKind rk = OSC_REF_SHARED;
             if (at(p, OT_MUT)) { rk = OSC_REF_MUT; adv(p); }
-            if (parse_arr_body(p, &N(n)->ty, rk)) return -1;
+            if (parse_ref_body(p, &N(n)->ty, rk)) return -1;
             if (expect(p, OT_ASSIGN)) return -1;
             if (!at(p, OT_AMP)) return syntax(p, "a borrow '&name' or '&mut name'");
             int b = parse_borrow(p);
@@ -398,6 +689,7 @@ static int parse_stmt(P *p)
             N(n)->a = b;
         } else {
             N(n)->mut = (uint8_t)mut;
+            if (at(p, OT_NAME) && find_struct(p, cur(p)) >= 0) return struct_by_value(p, cur(p), "struct by value");
             if (parse_scalar(p, &N(n)->ty)) return -1;
             if (expect(p, OT_ASSIGN)) return -1;
             int e = parse_expr(p);
@@ -415,6 +707,16 @@ static int parse_stmt(P *p)
             int c = parse_call(p);
             if (c < 0) return -1;
             N(n)->a = c;
+            if (expect(p, OT_SEMI)) return -1;
+            return n;
+        }
+        if (k1 == OT_DOT) {
+            n = parse_field_ref(p, ON_FSTORE);
+            if (n < 0) return -1;
+            if (expect(p, OT_ASSIGN)) return -1;
+            int v = parse_expr(p);
+            if (v < 0) return -1;
+            N(n)->b = v;
             if (expect(p, OT_SEMI)) return -1;
             return n;
         }
@@ -644,6 +946,12 @@ static int parse_fn(P *p)
     N(f)->ty.s = OSC_T_VOID;
     if (at(p, OT_ARROW)) {
         adv(p);
+        {
+            uint32_t q = p->pos;
+            while (q < a->ntok && (a->toks[q].kind == OT_OWN || a->toks[q].kind == OT_AMP || a->toks[q].kind == OT_MUT)) q++;
+            if (a->toks[q].kind == OT_NAME && find_struct(p, &a->toks[q]) >= 0)
+                return struct_by_value(p, &a->toks[q], "struct return type");
+        }
         if (at(p, OT_OWN) || at(p, OT_AMP) || at(p, OT_LBRACK)) {
             const OscToken *t = cur(p);
             osc_diag_set(p->d, OSC_DIAG_UNSUPPORTED, t->line, t->col, fname, N(f)->line, NULL,
@@ -679,7 +987,10 @@ int osc_parse(OscAst *ast, OscDiag *d)
     ast->nnodes = 0;
     ast->nfns = 0;
     ast->nrel = 0;
-    while (!at(&p, OT_EOF))
+    ast->nstructs = 0;
+    while (!at(&p, OT_EOF)) {
+        if (at(&p, OT_STRUCT)) { if (parse_struct(&p)) return -1; continue; }
         if (parse_fn(&p)) return -1;
+    }
     return 0;
 }

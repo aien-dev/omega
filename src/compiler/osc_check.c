@@ -473,7 +473,7 @@ static int ovf(C *c, const OscNode *n, const char *transition, const char *msg)
 static int fold(C *c, int i, OscScalar t, i128 *out)
 {
     OscNode *n = NODE(i);
-    char msg[160];
+    char msg[320];
     if (t == OSC_T_BOOL) return tmismatch(c, n, "bool", "integer literal where bool is required");
     int sg = osc_scalar_signed(t);
     unsigned w = osc_scalar_width(t);
@@ -729,7 +729,7 @@ static int chk_call(C *c, int i, OscScalar want, int as_stmt);
 static int want_ok(C *c, const OscNode *n, OscScalar got, OscScalar want)
 {
     if (want && got != want) {
-        char msg[160];
+        char msg[320];
         snprintf(msg, sizeof msg, "expression of type %s where %s is required", tname(got), tname(want));
         return tmismatch(c, n, tname(got), msg);
     }
@@ -747,8 +747,23 @@ static int resolve(C *c, const OscNode *n)
     return s;
 }
 
+/* "[u8; 4]" for an array ref type, the struct name for a struct ref type */
+static const char *rty(C *c, const OscType *t, char *buf, size_t cap)
+{
+    if (t->sid) snprintf(buf, cap, "%s", c->ast->structs[t->sid - 1].name);
+    else snprintf(buf, cap, "[%s; %u]", tname(t->elem), t->len);
+    return buf;
+}
+
+static int chk_index_len(C *c, const char *name, uint32_t dline, unsigned len, int ix, const OscNode *at);
+
 /* index expression + static bounds; arr symbol s */
 static int chk_index(C *c, int s, int ix, const OscNode *at)
+{
+    return chk_index_len(c, c->sym[s].name, c->sym[s].line, c->sym[s].ty.len, ix, at);
+}
+
+static int chk_index_len(C *c, const char *name, uint32_t dline, unsigned len, int ix, const OscNode *at)
 {
     OscScalar it;
     if (ctxfree(c, ix)) it = (OscScalar)chk(c, ix, OSC_T_I64);
@@ -758,25 +773,70 @@ static int chk_index(C *c, int s, int ix, const OscNode *at)
     const OscNode *x = NODE(ix);
     if (x->is_const) {
         int64_t v = osc_scalar_signed(it) ? (int64_t)x->cval : (int64_t)(x->cval > (uint64_t)INT64_MAX ? -1 : (int64_t)x->cval);
-        int oob = osc_scalar_signed(it) ? (v < 0 || v >= (int64_t)c->sym[s].ty.len)
-                                        : (x->cval >= (uint64_t)c->sym[s].ty.len);
+        int oob = osc_scalar_signed(it) ? (v < 0 || v >= (int64_t)len)
+                                        : (x->cval >= (uint64_t)len);
         if (oob) {
             char other[64];
             if (osc_scalar_signed(it)) snprintf(other, sizeof other, "index %lld", (long long)v);
             else snprintf(other, sizeof other, "index %llu", (unsigned long long)x->cval);
-            osc_diag_set(c->d, OSC_DIAG_STATIC_OUT_OF_BOUNDS, at->line, at->col, c->sym[s].name, c->sym[s].line, other,
+            osc_diag_set(c->d, OSC_DIAG_STATIC_OUT_OF_BOUNDS, at->line, at->col, name, dline, other,
                          "index outside 0..N-1", "constant %s outside 0..%u of '%s'", other,
-                         c->sym[s].ty.len - 1u, c->sym[s].name);
+                         len - 1u, name);
             return -1;
         }
     }
     return 0;
 }
 
+/* OSC-2 structs: resolve the field of ON_FIELD / ON_FSTORE node n (base symbol
+ * s, already resolved), check its index, set n->hi. Returns the field or NULL. */
+static const OscField *chk_field(C *c, OscNode *n, int s)
+{
+    char msg[320], fname[64];
+    Sym *y = &c->sym[s];
+    osc_tok_text(c->ast->src, &c->ast->toks[n->lo], fname, sizeof fname);
+    if (y->kind == SK_SCALAR || !y->ty.sid) {
+        snprintf(msg, sizeof msg, "'%s' is %s, not a struct ('.%s')", y->name,
+                 y->kind == SK_SCALAR ? "a scalar" : "an array", fname);
+        tmismatch(c, n, y->name, msg);
+        return NULL;
+    }
+    const OscStruct *st = &c->ast->structs[y->ty.sid - 1];
+    int f = -1;
+    for (int k = 0; k < st->nfields; k++)
+        if (!strcmp(st->fields[k].name, fname)) f = k;
+    if (f < 0) {
+        const OscToken *ft = &c->ast->toks[n->lo];
+        osc_diag_set(c->d, OSC_DIAG_UNKNOWN_FIELD, ft->line, ft->col, fname, c->ast->struct_line[y->ty.sid - 1],
+                     st->name, "access unknown field", "struct '%s' (of '%s') has no field '%s'", st->name, y->name,
+                     fname);
+        return NULL;
+    }
+    n->hi = f;
+    const OscField *fd = &st->fields[f];
+    if (fd->alen && n->a < 0) {
+        snprintf(msg, sizeof msg, "array field '%s.%s' is used element by element ('%s.%s[i]')", y->name, fname,
+                 y->name, fname);
+        tmismatch(c, n, y->name, msg);
+        return NULL;
+    }
+    if (!fd->alen && n->a >= 0) {
+        snprintf(msg, sizeof msg, "field '%s.%s' is a scalar, not an array", y->name, fname);
+        tmismatch(c, n, y->name, msg);
+        return NULL;
+    }
+    if (fd->alen) {
+        char qn[64];
+        snprintf(qn, sizeof qn, "%.30s.%.30s", y->name, fname);
+        if (chk_index_len(c, qn, y->line, fd->alen, n->a, n)) return NULL;
+    }
+    return fd;
+}
+
 static int chk(C *c, int i, OscScalar want)
 {
     OscNode *n = NODE(i);
-    char msg[160];
+    char msg[320];
     if (ctxfree(c, i) && !want) {
         osc_diag_set(c->d, OSC_DIAG_AMBIGUOUS_WIDTH, n->line, n->col, c->sobj, 0, NULL, "literal without type context",
                      "integer literal has no type from context (ambiguous width)");
@@ -799,8 +859,8 @@ static int chk(C *c, int i, OscScalar want)
         if (s < 0) return -1;
         n->sym = s;
         if (c->sym[s].kind != SK_SCALAR) {
-            snprintf(msg, sizeof msg, "'%s' is an array %s, not a scalar value", c->sym[s].name,
-                     c->sym[s].kind == SK_OWNER ? "owner" : "borrow");
+            snprintf(msg, sizeof msg, "'%s' is %s %s, not a scalar value", c->sym[s].name,
+                     c->sym[s].ty.sid ? "a struct" : "an array", c->sym[s].kind == SK_OWNER ? "owner" : "borrow");
             return tmismatch(c, n, c->sym[s].name, msg);
         }
         t = c->sym[s].ty.s;
@@ -818,13 +878,33 @@ static int chk(C *c, int i, OscScalar want)
                          c->sym[s].name);
             return -1;
         }
-        if (c->sym[s].kind == SK_SCALAR) {
-            snprintf(msg, sizeof msg, "'%s' is a scalar, not an array", c->sym[s].name);
+        if (c->sym[s].kind == SK_SCALAR || c->sym[s].ty.sid) {
+            snprintf(msg, sizeof msg, "'%s' is a %s, not an array", c->sym[s].name,
+                     c->sym[s].ty.sid ? "struct" : "scalar");
             return tmismatch(c, n, c->sym[s].name, msg);
         }
         if (chk_index(c, s, n->a, n)) return -1;
         if (access(c, s, 0, n->line, n->col)) return -1;
         t = c->sym[s].ty.elem;
+        break;
+    }
+    case ON_FIELD: {
+        if (contract_name(c, n)) return -1;
+        int s = resolve(c, n);
+        if (s < 0) return -1;
+        n->sym = s;
+        if (c->contract == 2 && c->sym[s].kind != SK_SCALAR &&
+            !(c->sym[s].kind == SK_BORROW && c->sym[s].ty.ref == OSC_REF_SHARED)) {
+            osc_diag_set(c->d, OSC_DIAG_CONTRACT_INVALID, n->line, n->col, c->sym[s].name, c->sym[s].line, NULL,
+                         "struct field read in ensures",
+                         "an ensures clause may read fields only through a shared '&' parameter ('%s' is not one)",
+                         c->sym[s].name);
+            return -1;
+        }
+        const OscField *fd = chk_field(c, n, s);
+        if (!fd) return -1;
+        if (access(c, s, 0, n->line, n->col)) return -1;
+        t = fd->s;
         break;
     }
     case ON_CALL: {
@@ -974,7 +1054,10 @@ static int find_fn(C *c, const char *name, int *after)
     return -1;
 }
 
-static int same_arr(const OscType *a, const OscType *b) { return a->elem == b->elem && a->len == b->len; }
+static int same_arr(const OscType *a, const OscType *b)
+{
+    return a->elem == b->elem && a->len == b->len && a->sid == b->sid;
+}
 
 /* OSC-2: check fn fi's requires / ensures clauses (after its parameters are
  * declared, before its body). See docs/osc/OSC-2-DESIGN.md section 1. */
@@ -1125,7 +1208,8 @@ static int chk_call(C *c, int i, OscScalar want, int as_stmt)
             if (s < 0) return -1;
             a->sym = s;
             if (c->sym[s].kind != SK_OWNER || !same_arr(&c->sym[s].ty, pt)) {
-                snprintf(msg, sizeof msg, "'%s' is not an owner of [%s; %u]", c->sym[s].name, tname(pt->elem), pt->len);
+                char tb[72];
+                snprintf(msg, sizeof msg, "'%s' is not an owner of %s", c->sym[s].name, rty(c, pt, tb, sizeof tb));
                 return tmismatch(c, a, c->sym[s].name, msg);
             }
             if (do_move(c, s, -1, a->line, a->col)) return -1;
@@ -1140,7 +1224,9 @@ static int chk_call(C *c, int i, OscScalar want, int as_stmt)
         if (s < 0) return -1;
         a->sym = s;
         if (c->sym[s].kind == SK_SCALAR || !same_arr(&c->sym[s].ty, pt)) {
-            snprintf(msg, sizeof msg, "'%s' is not an array [%s; %u]", c->sym[s].name, tname(pt->elem), pt->len);
+            char tb[72];
+            snprintf(msg, sizeof msg, "'%s' is not %s %s", c->sym[s].name, pt->sid ? "a struct" : "an array",
+                     rty(c, pt, tb, sizeof tb));
             return tmismatch(c, a, c->sym[s].name, msg);
         }
         int b = take_borrow(c, s, a->mut, a->line, a->col);
@@ -1167,7 +1253,7 @@ static void set_sobj_tok(C *c, const OscNode *n) { osc_node_name(c->ast, n, c->s
 /* borrow node bn into a borrow of type ty (SHARED/MUT). Returns borrow index. */
 static int chk_borrow_src(C *c, OscNode *bn, const OscType *ty, int *src)
 {
-    char msg[160];
+    char msg[320];
     int s = resolve(c, bn);
     if (s < 0) return -1;
     bn->sym = s;
@@ -1177,8 +1263,9 @@ static int chk_borrow_src(C *c, OscNode *bn, const OscType *ty, int *src)
         return tmismatch(c, bn, c->sym[s].name, msg);
     }
     if (!same_arr(&c->sym[s].ty, ty) || (bn->mut != 0) != (ty->ref == OSC_REF_MUT)) {
-        snprintf(msg, sizeof msg, "borrow does not match %s[%s; %u]", ty->ref == OSC_REF_MUT ? "&mut " : "&",
-                 tname(ty->elem), ty->len);
+        char tb[72];
+        snprintf(msg, sizeof msg, "borrow does not match %s%s", ty->ref == OSC_REF_MUT ? "&mut " : "&",
+                 rty(c, ty, tb, sizeof tb));
         return tmismatch(c, bn, c->sym[s].name, msg);
     }
     return 0;
@@ -1191,7 +1278,7 @@ static int outlives(C *c, const OscNode *at, int s, int b, const char *who, cons
     if (y->kind == SK_OWNER) tr_ev(c, OSC_EV_RELEASE, y->obj, -1, -1, -1, at->line, 1);
     else tr_ev(c, OSC_EV_END_BORROW, -1, -1, y->bor, -1, at->line, 1);
     (void)b;
-    char msg[160];
+    char msg[320];
     snprintf(msg, sizeof msg, "borrow of '%s' would outlive it (%s)", y->name, transition);
     osc_diag_set(c->d, OSC_DIAG_BORROW_OUTLIVES_OWNER, at->line, at->col, y->name, y->line, who, transition, "%s", msg);
     return -1;
@@ -1237,7 +1324,7 @@ static int chk_if(C *c, int i)
             if (m1 != m2) {
                 int sym = c->obj[o].sym;
                 uint32_t ml = m1 ? s1->obj[o].move_line : c->obj[o].move_line;
-                char msg[160];
+                char msg[320];
                 snprintf(msg, sizeof msg, "'%s' is moved on only one path of the 'if' at line %u (no drop flags)",
                          sym >= 0 ? c->sym[sym].name : "?", n->line);
                 osc_diag_set(c->d, OSC_DIAG_CONDITIONAL_MOVE, ml, 0, sym >= 0 ? c->sym[sym].name : "?",
@@ -1267,7 +1354,7 @@ static int chk_loop_body(C *c, OscNode *n, int is_for)
     c->loop_depth++;
     if (is_for) {
         if (push_scope(c, n->line)) goto out;
-        OscType ti = {OSC_T_I64, OSC_REF_NONE, OSC_T_VOID, 0};
+        OscType ti = {OSC_T_I64, OSC_REF_NONE, OSC_T_VOID, 0, 0};
         int s = declare(c, n, SK_SCALAR, &ti, 0);
         if (s < 0) goto out;
         n->sym = s;
@@ -1320,7 +1407,7 @@ static int chk_return_ensures(C *c, OscNode *n)
 static int chk_stmt(C *c, int i)
 {
     OscNode *n = NODE(i);
-    char msg[160];
+    char msg[320];
     switch (n->kind) {
     case ON_LET: {
         set_sobj_tok(c, n);
@@ -1339,7 +1426,11 @@ static int chk_stmt(C *c, int i)
         char name[64];
         osc_node_name(c->ast, n, name, sizeof name);
         if (lookup(c, name) >= 0) return declare(c, n, SK_OWNER, &n->ty, 0) < 0 ? -1 : -1;
-        if (chk(c, n->a, n->ty.elem) < 0) return -1;
+        if (n->ty.sid) {  /* struct literal: field values in source order */
+            const OscStruct *st = &c->ast->structs[n->ty.sid - 1];
+            for (int fi = n->a; fi >= 0; fi = NODE(fi)->next)
+                if (chk(c, NODE(fi)->a, st->fields[NODE(fi)->hi].s) < 0) return -1;
+        } else if (chk(c, n->a, n->ty.elem) < 0) return -1;
         int s = declare(c, n, SK_OWNER, &n->ty, 0);
         if (s < 0) return -1;
         int o = new_obj(c, s, n->line);
@@ -1360,7 +1451,8 @@ static int chk_stmt(C *c, int i)
         sn->sym = src;
         n->sym2 = src;
         if (c->sym[src].kind != SK_OWNER || !same_arr(&c->sym[src].ty, &n->ty)) {
-            snprintf(msg, sizeof msg, "'%s' is not an owner of [%s; %u]", c->sym[src].name, tname(n->ty.elem), n->ty.len);
+            char tb[72];
+            snprintf(msg, sizeof msg, "'%s' is not an owner of %s", c->sym[src].name, rty(c, &n->ty, tb, sizeof tb));
             return tmismatch(c, sn, c->sym[src].name, msg);
         }
         int o = new_obj(c, -1, n->line);
@@ -1444,12 +1536,22 @@ static int chk_stmt(C *c, int i)
         if (s < 0) return -1;
         n->sym = s;
         Sym *y = &c->sym[s];
-        if (y->kind == SK_SCALAR) {
-            snprintf(msg, sizeof msg, "'%s' is a scalar, not an array", y->name);
+        if (y->kind == SK_SCALAR || y->ty.sid) {
+            snprintf(msg, sizeof msg, "'%s' is a %s, not an array", y->name, y->ty.sid ? "struct" : "scalar");
             return tmismatch(c, n, y->name, msg);
         }
         if (chk_index(c, s, n->a, n)) return -1;
         if (chk(c, n->b, y->ty.elem) < 0) return -1;
+        return access(c, s, 1, n->line, n->col);
+    }
+    case ON_FSTORE: {
+        set_sobj_tok(c, n);
+        int s = resolve(c, n);
+        if (s < 0) return -1;
+        n->sym = s;
+        const OscField *fd = chk_field(c, n, s);
+        if (!fd) return -1;
+        if (chk(c, n->b, fd->s) < 0) return -1;
         return access(c, s, 1, n->line, n->col);
     }
     case ON_IF:

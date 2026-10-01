@@ -46,7 +46,16 @@ typedef enum {
     ON_BORROW,      /* tok = name; mut */
     ON_BIN,         /* op = OscTokKind of the operator (incl. && ||); a, b */
     ON_UN,          /* op = OT_MINUS / OT_TILDE / OT_BANG; a */
-    ON_CAST         /* a; ty = target scalar */
+    ON_CAST,        /* a; ty = target scalar */
+    /* OSC-2 structs (docs/osc/OSC-2-DESIGN.md section 2). A struct literal is an
+     * ON_LET_ALLOC whose ty is a struct ref (ty.sid != 0) and whose a is the
+     * first ON_FINIT (linked by next, source order). */
+    ON_FINIT,       /* tok = field name; a = value expr; hi = field index;
+                     * flag = 1 for an array field "[e; N]" (ival = N) */
+    ON_FIELD,       /* tok = struct binding; lo = field name token; a = index or -1;
+                     * checker: sym = binding, hi = field index */
+    ON_FSTORE       /* tok = struct binding; lo = field name token; a = index or -1;
+                     * b = value; checker: sym = binding, hi = field index */
 } OscNodeKind;
 
 typedef struct {
@@ -93,6 +102,11 @@ typedef struct {
     /* filled by the checker: symbol ids of owners to release, in emission order */
     int16_t rel[OSC_AST_MAX_REL];
     uint32_t nrel;
+    /* OSC-2 structs: declarations in source order (parser); copied into the
+     * OscUnit by the lowerer. struct_line = line of the declaration. */
+    OscStruct structs[OSC_MAX_STRUCTS];
+    uint32_t struct_line[OSC_MAX_STRUCTS];
+    uint8_t nstructs;
 } OscAst;
 
 /* Parse the token stream into ast (ast->src/toks/ntok must be set). 0 ok, -1

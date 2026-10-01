@@ -380,6 +380,27 @@ static void gen_func(Cg *g, const OscUnit *u, int fi) {
                     E(g, osc_a64_mem(OSC_A64_STR_UOFF, 11, 12, 0));
                 }
                 break;
+            case OSC_I_FLOAD:
+            case OSC_I_FSTORE: {
+                /* OSC-2 structs: cell = field offset (+ checked element index) */
+                const OscField *fd = &u->structs[T[in->a].sid - 1].fields[in->imm];
+                int base = 9;
+                ld(g, 9, in->a);
+                if (in->op == OSC_I_FSTORE) ld(g, 11, in->c);
+                if (in->b >= 0) {
+                    ld(g, 10, in->b);
+                    bounds(g, 10, fd->alen);
+                    E(g, osc_a64_r3s(OSC_A64_ADD_REG, 12, 9, 10, OSC_A64_LSL, 3));
+                    base = 12;
+                }
+                if (in->op == OSC_I_FLOAD) {
+                    E(g, osc_a64_mem(OSC_A64_LDR_UOFF, 11, base, 8 * (int64_t)fd->off));
+                    st(g, 11, in->dst);
+                } else {
+                    E(g, osc_a64_mem(OSC_A64_STR_UOFF, 11, base, 8 * (int64_t)fd->off));
+                }
+                break;
+            }
             case OSC_I_CALL:
                 /* Direct BL needs the callee already emitted. osc_ir_validate refuses
                  * calls to later functions (and self), so this cannot trigger on a

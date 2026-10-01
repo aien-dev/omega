@@ -1,0 +1,6 @@
+// expect: READ_ONLY_BORROW object=p line=5
+// transition: write through shared borrow
+struct P { x: i32, y: i32 }
+fn f(p: &P) {
+    p.x = 1;
+}
