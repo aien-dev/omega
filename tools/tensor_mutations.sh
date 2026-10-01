@@ -38,7 +38,10 @@ EMBED_STEP|omega_tensor.c|s/ds\[d\], st, /ds[d], 1, /
 CONCAT_AXIS_OFFSET|omega_tensor.c|s/aoff \* ds\[axis\]/aoff/
 CMP_FALSE_NEG_ZERO|omega_tensor_cpu.c|s/zero = 0.0f;/zero = -0.0f;/
 CMP_EQ_NAN_TRUE|omega_tensor.c|s/OMEGA_NOP_FSETP_EQ_SEL,/OMEGA_NOP_FSETP_EQU_SEL,/
-WHERE_ACCEPTS_HALF|omega_tensor.c|s/u != OMEGA_TENSOR_MASK_FALSE_BITS)/u != OMEGA_TENSOR_MASK_FALSE_BITS \&\& u != 0x3f000000U)/'
+WHERE_ACCEPTS_HALF|omega_tensor.c|s/u != OMEGA_TENSOR_MASK_FALSE_BITS)/u != OMEGA_TENSOR_MASK_FALSE_BITS \&\& u != 0x3f000000U)/
+REDUCE_AXES_DESCENDING|omega_tensor.c|s/for (uint32_t d = in.rank; d-- > 0;)/for (uint32_t d = 0; d < in.rank; d++)/
+REDUCE_AXES_KEEPDIMS|omega_tensor.c|s/keep\[n\] = keepdims;/keep[n] = keepdims \&\& false;/
+SUM_TO_SHAPE_SIZE1|omega_tensor.c|s/ax\[n\] = d; keep\[n\] = true; n++;/(void)0;/'
 
 # Baseline: the unmutated build must PASS, otherwise every mutant would
 # look "caught" (e.g. the test refusing an unsuitable FP environment).

@@ -86,6 +86,36 @@ accumulation order, strided / transposed / sliced / broadcast operands,
 broadcast batches. The GB10 realization of this general matmul does not
 exist yet.
 
+## Multi-axis reduce and unbroadcast (CR-5)
+
+Answers LT-M21 CR-5 (autodiff needs broadcast backward). Both ops are
+compositions of the existing single-axis `omega_tensor_reduce`
+(`src/tensor/omega_tensor.h:254-256` on main 0171bd4), so their bits are
+defined by the frozen E1 reduction order above and nothing else.
+
+- `omega_tensor_reduce_axes(ctx, op, t, naxes, axes[], keepdims, out)`.
+  **Declared order:** one single-axis `omega_tensor_reduce` per listed axis,
+  in DESCENDING axis index, each with the caller's keepdims. The caller may
+  list the axes in any order; they are sorted. Descending keeps the remaining
+  indices valid when keepdims is false. Duplicate axes, an axis >= rank, or
+  more axes than the rank: `OMEGA_TENSOR_ERR_AXIS`. `naxes == 0`: dense copy,
+  no arithmetic. **MEAN over more than one axis is refused**
+  (`OMEGA_TENSOR_ERR_BAD_ARGS`): a chain would be a mean of means, which
+  rounds differently from one mean over all elements. Sum, then divide.
+- `omega_tensor_sum_to_shape(ctx, t, rank, shape, out)`: the unbroadcast
+  used by broadcast backward, numpy rules. Shapes align at the trailing axis.
+  Leading axes of t are summed away; aligned axes where the target is 1 and t
+  is larger are summed with keepdims. Axes of size 1 in t are never reduced
+  (their bits are copied, `-0` included). **Declared order:** those SUM
+  reductions as single-axis calls in DESCENDING axis index of t, then a bit
+  copy into the target shape. Refused: target rank above t's rank, or an
+  aligned target size that is neither t's size nor 1
+  (`OMEGA_TENSOR_ERR_SHAPE`); zero dim (`OMEGA_TENSOR_ERR_SHAPE`); rank > 8
+  (`OMEGA_TENSOR_ERR_RANK`); non-F32 (`OMEGA_TENSOR_ERR_DTYPE`).
+- GB10: these ops add no kernel; they call the realization's single-axis
+  `reduce`. No GB10 realization table exists yet (row "GB10 parity" below),
+  so GB10 for these ops is NOT_RUN.
+
 ## Reduction seam
 
 The seam calls `omega_reduce_cpu` from `src/omega_numeric_reduce.h` (E1 WP-D,
@@ -118,6 +148,7 @@ removed. Order and padding mutations are caught by the E1 WP-D suite.
 | GB10 mask compare / where (CR-3) | NOT_RUN | No GB10 `compare` entry. E1 has GB10 encodings for the FSETP_<P>_SEL compare-select ops (`src/omega_numeric.c:915-934`) but no compare-to-mask kernel; where() is data movement only. CPU tier only in this cut |
 | General matmul | PASS (CPU) | 1x1x1, 7x13x5, 64x64x64, 129x3x257, 3x1025x2, 1x33x1, strided views, batched broadcast [2,1,3,4]x[5,4,6] |
 | Reductions | PASS (CPU) | lengths 1..32769 across tile/level edges, every axis of [3,37,5], keepdims, view vs copy, -0 sum |
+| Multi-axis reduce, sum_to_shape (CR-5) | NOT_RUN | `tests/tensor_reduce_multi_tests.inc` (run by `test-tensor`): every axis subset of a [3,5,4,6] tensor x SUM/MAX/MIN (MEAN single axis) x keepdims vs an independent descending-order reference and vs the explicit single-axis reduce chain; strided view == copy; sum_to_shape(broadcast_to(x, S), shape(x)) exact for 6 shape pairs; refusals (duplicate / out-of-range axes, MEAN over 2 axes, incompatible shape, rank, dtype, stale). Mutants REDUCE_AXES_DESCENDING, REDUCE_AXES_KEEPDIMS, SUM_TO_SHAPE_SIZE1 added (sweep now 10 source mutants). Host NOT_RUN until a forge receipt; GB10 NOT_RUN |
 | Mutation / refusal | PASS (CPU) | `test-tensor-mutations`: 10/10 tensor source mutations caught (forge log `HIVE-M20-ops-light-185351`); 2 in-process mutant realizations (sequential sum, FFMA chain) caught; wrong order string refused |
 | Determinism | PASS (CPU) | repeated run same value id; frozen KAT value id in the test |
 | Test-only hook not in library | PASS (CPU) | `omega_tensor_test_set_storage_generation` exists only under `-DOMEGA_TENSOR_TEST_HOOKS` (test builds in `mk/tensor.mk`); `test-tensor-no-hooks` (run by `test-tensor`) builds the default objects and fails if `nm` shows the symbol |

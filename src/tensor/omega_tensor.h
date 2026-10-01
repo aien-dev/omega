@@ -329,6 +329,39 @@ int omega_tensor_reduce(OmegaTensorCtx *ctx, OmegaTensorReduceOp op, OmegaTensor
                         bool keepdims, OmegaTensor *out);
 
 /*
+ * Reduce over several axes (CR-5). Declared order, bit for bit: a sequence of
+ * single-axis omega_tensor_reduce calls, one per listed axis, in DESCENDING
+ * axis order (largest axis index first), each with the caller's keepdims.
+ * Descending order keeps the remaining axis indices valid when keepdims is
+ * false. Each step is the frozen E1 reduction (OMEGA_TENSOR_REDUCE_DECLARED_ORDER),
+ * so the result is fully defined by the existing single-axis contract.
+ *   naxes 1..rank, axes[] distinct and < rank (any order given; they are
+ *   sorted), else OMEGA_TENSOR_ERR_AXIS. naxes == 0: dense copy (no arithmetic).
+ *   OMEGA_TR_MEAN with naxes > 1 is REFUSED (OMEGA_TENSOR_ERR_BAD_ARGS): a
+ *   chain would be a mean of means, a different rounding from one mean over
+ *   all elements. Sum over the axes, then divide, if that is what is wanted.
+ *   F32 only; rank-0 input is OMEGA_TENSOR_ERR_RANK (as omega_tensor_reduce).
+ */
+int omega_tensor_reduce_axes(OmegaTensorCtx *ctx, OmegaTensorReduceOp op, OmegaTensor t,
+                             uint32_t naxes, const uint32_t *axes, bool keepdims, OmegaTensor *out);
+
+/*
+ * Unbroadcast (CR-5): the SUM that undoes omega_tensor_broadcast_to(x, shape(t)).
+ * Numpy unbroadcast rules: align (rank, shape) with t's shape at the trailing
+ * axis. Every leading axis of t (index < t.rank - rank) is summed away; every
+ * aligned axis where shape[d] == 1 and t's size is > 1 is summed with
+ * keepdims. Axes of size 1 in t are never reduced: their bits are copied.
+ * Declared order: those SUM reductions as single-axis omega_tensor_reduce
+ * calls in DESCENDING axis index of t (keepdims for aligned axes, not for
+ * leading ones), then a bit copy into the requested shape.
+ * Refused: rank > t.rank, or an aligned target size that is neither equal to
+ * t's size nor 1 (OMEGA_TENSOR_ERR_SHAPE); zero dim (OMEGA_TENSOR_ERR_SHAPE);
+ * rank > OMEGA_TENSOR_MAX_RANK (OMEGA_TENSOR_ERR_RANK); non-F32 (OMEGA_TENSOR_ERR_DTYPE).
+ */
+int omega_tensor_sum_to_shape(OmegaTensorCtx *ctx, OmegaTensor t, uint32_t rank,
+                              const uint64_t *shape, OmegaTensor *out);
+
+/*
  * General matmul, OMEGA_TENSOR_MATMUL_DECLARED_ORDER, F32 only.
  * Rank 2: [M,K] x [K,N] -> [M,N], any M, N, K >= 1.
  * Rank >= 3 (batched): [...,M,K] x [...,K,N]; the batch axes broadcast with

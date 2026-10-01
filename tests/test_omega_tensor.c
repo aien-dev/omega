@@ -1949,6 +1949,9 @@ static void test_determinism(void) {
     CHECK(strcmp(frozen, hex) == 0, "KAT matches frozen %s", frozen);
 }
 
+/* CR-5: multi-axis reduce and sum_to_shape (uses the helpers above). */
+#include "tensor_reduce_multi_tests.inc"
+
 int main(void) {
     if (!omega_numeric_fpenv_ok()) { printf("FPCR not RNE/no-FTZ: refusing to run\n"); return 2; }
     if (omega_tensor_ctx_create(4096, omega_tensor_cpu_realization(), &g)) { printf("ctx\n"); return 2; }
@@ -1970,6 +1973,8 @@ int main(void) {
     test_placement();
     test_determinism();
     test_mask();
+    test_reduce_axes();   /* CR-5, last: does not shift earlier random data */
+    test_sum_to_shape();
     /* every test released what it made */
     uint32_t lt, ls;
     omega_tensor_live_counts(g, &lt, &ls);

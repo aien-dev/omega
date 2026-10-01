@@ -28,6 +28,8 @@ TENSOR_SRCS = src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor
 TENSOR_DEPS = src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c \
 	src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
 TENSOR_HDRS = src/tensor/omega_tensor.h src/tensor/omega_tensor_reduce_seam.h src/omega_numeric_reduce.h src/omega_numeric.h src/sha256.h src/omega_numeric_transc.h
+# CR-5 tests are #included by tests/test_omega_tensor.c: rebuild when they change.
+TENSOR_HDRS += tests/tensor_reduce_multi_tests.inc
 # Test builds only: compiles the test-only storage-generation hook.
 TENSOR_TEST_FLAGS = -DOMEGA_TENSOR_TEST_HOOKS
 TENSOR_HOOK_SYMS = omega_tensor_test_set_storage_generation omega_tensor_store_test_set_crash_step
