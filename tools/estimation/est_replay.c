@@ -59,6 +59,15 @@ int est_sums_lookup(const char *dir, const char *name, char hex[65])
 }
 
 int est_allow_run_b = 0;
+int est_allow_heldout = 0;
+
+int est_path_is_heldout(const char *path)
+{
+    char rp[PATH_MAX];
+    if (strstr(path, EST_V2_HELDOUT_TAG)) return 1;
+    if (realpath(path, rp) && strstr(rp, EST_V2_HELDOUT_TAG)) return 1;
+    return 0;
+}
 
 const char *est_run_b_id(void)
 {
@@ -108,6 +117,10 @@ int est_file_load(const char *path, est_file *f, char *err, size_t errcap)
     const char *name = slash ? slash + 1 : path;
     if (slash) { size_t n = (size_t)(slash - path); memcpy(dir, path, n); dir[n] = 0; }
     else snprintf(dir, sizeof dir, ".");
+    if (!est_allow_heldout && est_path_is_heldout(path)) {
+        setmsg(err, errcap, "%s: resolves into the held-out run; only est_eval --protocol-v2 --recorded may open it%s", path, "");
+        return 1;
+    }
     if (!est_allow_run_b && est_path_is_run_b(path)) {
         setmsg(err, errcap, "%s: resolves into run B; only est_eval --recorded may open run B%s", path, "");
         return 1;
@@ -244,7 +257,7 @@ int est_make_model(int model_id, double q, double r, est_model *m)
     m->obs_unit[0] = EST_UNIT_MILLI_CELSIUS;
     m->state_unit[0] = EST_UNIT_MILLI_CELSIUS;
     m->R[0] = r;
-    if (model_id == 0) {
+    if (model_id == 0 || model_id == 2) {   /* M2 (protocol v2): M0 structure, r = 1e-12 */
         m->n = 1; m->F[0] = 1.0; m->Q[0] = q; m->H[0] = 1.0;
     } else if (model_id == 1) {
         m->n = 2;
@@ -302,7 +315,7 @@ int est_replay_run(const est_file *f, size_t limit, int model_id, double q, doub
         if (!have) {
             if (!v_ok) { rp->leading_missing++; if (t_ok) { prev_wall = wall; prev_ok = 1; } continue; }
             double x0[2] = { z, 0.0 }, P0[4] = { 0 };
-            if (model_id == 0) P0[0] = r; else { P0[0] = r; P0[3] = 1e6; }
+            if (model_id != 1) P0[0] = r; else { P0[0] = r; P0[3] = 1e6; }
             st = est_kf_prior(&rp->model, x0, P0, 0, &bel);
             if (st != EST_OK) return fail(rp, "prior", li, st);
             first = li; have = 1;
@@ -476,8 +489,85 @@ int est_params_validate(const est_params *p, char *err, size_t cap)
     return 0;
 }
 
+/* ---- protocol v2 ---- */
+size_t est_m2_changes(const est_replay *rp, double *e, size_t cap)
+{
+    size_t n = 0; double prev = 0; int have = 0;
+    for (size_t i = 0; i < rp->nsteps; i++) {
+        const est_step *s = &rp->steps[i];
+        if (s->coast) continue;
+        if (!s->prior && have && memcmp(&s->y_mean, &prev, sizeof prev) != 0 && s->L >= EST_BURN_IN) return (size_t)-1;
+        if (!s->prior && s->L >= EST_BURN_IN && s->horizon == 1 && n < cap) e[n++] = s->nu;
+        prev = s->z; have = 1;
+    }
+    return n;
+}
+
+int est_params2_write(const char *path, const est_params2 *p)
+{
+    FILE *fp = fopen(path, "wb");
+    if (!fp) return 1;
+    fprintf(fp, "est_params_v2\nv1_params_path %s\nv1_params_sha256 %s\nfit_run_path %s\nfit_file_sha256 %s\nfit_lines %zu\nfit_changes %zu\n",
+            p->v1_params_path, p->v1_params_sha, p->fit_path, p->fit_sha, p->fit_lines, p->fit_n);
+    fprintf(fp, "M2 q %.17g r %.17g k %u loglik %.17g\n", p->q, p->r, p->mix.k, p->ll);
+    for (uint32_t j = 0; j < p->mix.k; j++) fprintf(fp, "c%u w %.17g v %.17g\n", j, p->mix.w[j], p->mix.v[j]);
+    return fclose(fp) != 0;
+}
+
+static int str_field(const char *line, const char *key, char *dst, size_t cap)
+{
+    size_t kl = strlen(key), l = strlen(line);
+    if (strncmp(line, key, kl) != 0 || line[kl] != ' ' || l - kl - 1 == 0 || l - kl - 1 >= cap) return 1;
+    memcpy(dst, line + kl + 1, l - kl); /* includes the terminator */
+    return 0;
+}
+static int size_field(const char *line, const char *key, size_t *out)
+{
+    size_t kl = strlen(key); char *end;
+    if (strncmp(line, key, kl) != 0 || line[kl] != ' ' || !line[kl + 1]) return 1;
+    *out = (size_t)strtoull(line + kl + 1, &end, 10);
+    return *end != 0;
+}
+
+int est_params2_read(const char *path, est_params2 *p)
+{
+    memset(p, 0, sizeof *p);
+    FILE *fp = fopen(path, "r");
+    if (!fp) return 1;
+    char line[1300]; int idx = 0, bad = 0, total = 8;
+    while (fgets(line, sizeof line, fp)) {
+        size_t l = strlen(line);
+        if (l == 0 || line[l - 1] != '\n') { bad = 1; break; }
+        line[--l] = 0;
+        int used = 0;
+        switch (idx) {
+        case 0: bad = strcmp(line, "est_params_v2") != 0; break;
+        case 1: bad = str_field(line, "v1_params_path", p->v1_params_path, sizeof p->v1_params_path); break;
+        case 2: bad = str_field(line, "v1_params_sha256", p->v1_params_sha, sizeof p->v1_params_sha) || !is_hex64(p->v1_params_sha); break;
+        case 3: bad = str_field(line, "fit_run_path", p->fit_path, sizeof p->fit_path); break;
+        case 4: bad = str_field(line, "fit_file_sha256", p->fit_sha, sizeof p->fit_sha) || !is_hex64(p->fit_sha); break;
+        case 5: bad = size_field(line, "fit_lines", &p->fit_lines); break;
+        case 6: bad = size_field(line, "fit_changes", &p->fit_n); break;
+        case 7:
+            if (sscanf(line, "M2 q %lf r %lf k %u loglik %lf%n", &p->q, &p->r, &p->mix.k, &p->ll, &used) != 4 || line[used] != 0
+                || p->mix.k < 1 || p->mix.k > EST_MIX_MAX) bad = 1;
+            else total = 8 + (int)p->mix.k;
+            break;
+        default: {
+            unsigned j;
+            if (idx >= total || sscanf(line, "c%u w %lf v %lf%n", &j, &p->mix.w[idx - 8], &p->mix.v[idx - 8], &used) != 3
+                || line[used] != 0 || j != (unsigned)(idx - 8)) bad = 1;
+            break; }
+        }
+        if (bad) break;
+        idx++;
+    }
+    fclose(fp);
+    return (!bad && idx == total && idx > 8) ? 0 : 1;
+}
+
 #ifdef EST_REPLAY_MAIN
-/* est_replay <model 0|1> <q> <r> <machine-state.ndjson>
+/* est_replay <model 0|1|2> <q> <r> <machine-state.ndjson>
  * Prints the full observation/prediction/innovation stream, one line per step.
  * Never opens run B (est_eval --recorded writes run B's streams itself). */
 int main(int argc, char **argv)
@@ -486,7 +576,7 @@ int main(int argc, char **argv)
     char *e1, *e2, *e3;
     long mid = strtol(argv[1], &e1, 10);
     double q = strtod(argv[2], &e2), r = strtod(argv[3], &e3);
-    if (*e1 || *e2 || *e3 || (mid != 0 && mid != 1)) { fprintf(stderr, "bad model, q or r\n"); return 2; }
+    if (*e1 || *e2 || *e3 || (mid < 0 || mid > 2)) { fprintf(stderr, "bad model, q or r\n"); return 2; }
     est_file f; char err[300];
     if (est_file_load(argv[4], &f, err, sizeof err)) { fprintf(stderr, "refuse: %s\n", err); return 1; }
     static est_replay rp;

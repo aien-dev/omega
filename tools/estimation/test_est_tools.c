@@ -1,4 +1,4 @@
-/* Tests for est_replay / est_fit / est_eval (protocol v1). Run A and synthetic
+/* Tests for est_replay / est_fit / est_eval (protocol v1 and v2). Run A and synthetic
  * data only; this program never names run B's data file.
  *   test_est_tools <est_fit> <est_eval> <workdir> */
 #pragma GCC diagnostic ignored "-Wformat-truncation"
@@ -573,6 +573,141 @@ static void test_known_answers(void)
     printf("test_est_tools: unclosed begin runs to end of file and is reported PASS\n");
 }
 
+/* ---- protocol v2: noise shape, M2 fit/eval, held-out guard ---- */
+static void test_mix_known_answers(void)
+{
+    est_mix g = { 1, { 1.0 }, { 1.0 } };
+    double c, t, l;
+    CHECK(est_mix_cdf_abs(&g, 1, 1.959963984540054, &c) == EST_OK && fabs(c - 0.95) < 1e-12);
+    CHECK(est_mix_quantile_abs(&g, 1, 0.95, &t) == EST_OK && fabs(t - 1.959963984540054) < 1e-9);
+    CHECK(est_mix_quantile_abs(&g, 4, 0.95, &t) == EST_OK && fabs(t - 2.0 * 1.959963984540054) < 1e-9);
+    CHECK(est_mix_logpdf(&g, 1, 0.0, &l) == EST_OK && fabs(l + 0.5 * log(6.283185307179586)) < 1e-14);
+    est_mix m = { 2, { 0.5, 0.5 }, { 1.0, 4.0 } };
+    double want1 = 0.5 * erf(1.5 / sqrt(2.0)) + 0.5 * erf(1.5 / sqrt(8.0));
+    CHECK(est_mix_cdf_abs(&m, 1, 1.5, &c) == EST_OK && fabs(c - want1) < 1e-14);
+    /* two draws: variance 2 w.p. 1/4, 5 w.p. 1/2, 8 w.p. 1/4 */
+    double want2 = 0.25 * erf(3.0 / sqrt(4.0)) + 0.5 * erf(3.0 / sqrt(10.0)) + 0.25 * erf(3.0 / sqrt(16.0));
+    CHECK(est_mix_cdf_abs(&m, 2, 3.0, &c) == EST_OK && fabs(c - want2) < 1e-14);
+    double lw = log(0.25 * exp(-0.5 * (log(6.283185307179586 * 2.0) + 1.0 / 2.0)) + 0.5 * exp(-0.5 * (log(6.283185307179586 * 5.0) + 1.0 / 5.0))
+                    + 0.25 * exp(-0.5 * (log(6.283185307179586 * 8.0) + 1.0 / 8.0)));
+    CHECK(est_mix_logpdf(&m, 2, 1.0, &l) == EST_OK && fabs(l - lw) < 1e-13);
+    CHECK(fabs(est_mix_total_var(&m) - 2.5) < 1e-15);
+    est_mix bad = { 2, { 0.5, 0.6 }, { 1.0, 4.0 } };
+    CHECK(est_mix_check(&bad) != EST_OK);
+    CHECK(est_mix_cdf_abs(&m, 0, 1.0, &c) != EST_OK && est_mix_cdf_abs(&m, EST_MIX_MAX_H + 1, 1.0, &c) != EST_OK);
+    /* EM recovers a known two-scale mixture; same input gives the same bits */
+    size_t n = 20000; double *e = malloc(n * sizeof *e);
+    g_rng = 777;
+    for (size_t i = 0; i < n; i++) e[i] = (unif() < 0.3 ? 10.0 : 1000.0) * gauss();
+    est_mix f1, f2; double l1, l2;
+    CHECK(est_mix_fit_em(e, n, 2, 1.0, 500, &f1, &l1) == EST_OK);
+    CHECK(est_mix_fit_em(e, n, 2, 1.0, 500, &f2, &l2) == EST_OK);
+    CHECK(memcmp(&f1, &f2, sizeof f1) == 0 && memcmp(&l1, &l2, sizeof l1) == 0);
+    CHECK(fabs(f1.w[0] - 0.3) < 0.02 && fabs(sqrt(f1.v[0]) - 10.0) < 1.0 && fabs(sqrt(f1.v[1]) - 1000.0) < 30.0);
+    free(e);
+    printf("test_est_tools: noise shape known answers and EM recovery (w0=%.3f sd=%.2f,%.1f)\n", f1.w[0], sqrt(f1.v[0]), sqrt(f1.v[1]));
+}
+
+/* Random walk whose steps have a three-scale shape, observed exactly to 1 mC. */
+static void make_mix_series(const char *dir, size_t n, uint64_t seed)
+{
+    char p[1024], a[1024], b[1024], h1[65], h2[65];
+    sh("rm -rf %s && mkdir -p %s", dir, dir, "", "");
+    snprintf(a, sizeof a, "%s/machine-state.ndjson", dir); snprintf(b, sizeof b, "%s/machine-state-marks.txt", dir);
+    FILE *fp = fopen(a, "wb");
+    g_rng = seed; double x = 45000.0; long long wall = 1790000000ll;
+    for (size_t i = 0; i < n; i++) {
+        double u = unif();
+        x = floor(x + (u < 0.4 ? 20.0 : (u < 0.8 ? 300.0 : 2000.0)) * gauss() + 0.5);
+        fprintf(fp, "{\"t\":%lld.%09d,\"thermal_mc\":\"%.0f 30000 \"}\n", wall + (long long)i, (int)(rnd() % 3000000), x);
+    }
+    fclose(fp);
+    fp = fopen(b, "wb"); fclose(fp);          /* no trials, like the EST-3b collections */
+    est_sha_file_hex(a, h1); est_sha_file_hex(b, h2);
+    snprintf(p, sizeof p, "%s/SHA256SUMS", dir);
+    fp = fopen(p, "wb");
+    fprintf(fp, "%s  machine-state.ndjson\n%s  machine-state-marks.txt\n", h1, h2);
+    fclose(fp);
+}
+
+static void test_m2(void)
+{
+    char fd[1024], hd[1024], fr[1100], hr[1100], hm[1100], p2[1100], p2b[1100], rec[1100], v1[1100], cmd[16384], envs[1024];
+    char h1[65], h2[65], hf[65], hdoc[65];
+    snprintf(fd, sizeof fd, "%s/v2/s-est3b-fit-silicon", g_work);
+    snprintf(hd, sizeof hd, "%s/v2/s-est3b-heldout-silicon", g_work);
+    make_mix_series(fd, 4000, 4242);
+    make_mix_series(hd, 4000, 5353);
+    snprintf(fr, sizeof fr, "%s/machine-state.ndjson", fd);
+    snprintf(hr, sizeof hr, "%s/machine-state.ndjson", hd); snprintf(hm, sizeof hm, "%s/machine-state-marks.txt", hd);
+    snprintf(v1, sizeof v1, "%s/paramsA.txt", g_work);                      /* fit on run A by test_run_a_and_flags */
+    snprintf(p2, sizeof p2, "%s/v2/params2.txt", g_work); snprintf(p2b, sizeof p2b, "%s/v2/params2b.txt", g_work);
+    /* fit refuses the held-out run, by path, before opening it */
+    CHECK(sh_rc("%s --m2 --synthetic-test %s %s %s/v2/no.txt >/dev/null 2>&1", g_fit, hr, v1, g_work) != 0);
+    /* without --synthetic-test only run C1 (fixed SHA) is accepted */
+    CHECK(sh_rc("%s --m2 %s %s %s/v2/no.txt >/dev/null 2>&1", g_fit, fr, v1, g_work) != 0);
+    CHECK(sh_rc("%s --m2 --synthetic-test %s %s %s >/dev/null 2>&1", g_fit, fr, v1, p2) == 0);
+    CHECK(sh_rc("%s --m2 --synthetic-test %s %s %s >/dev/null 2>&1", g_fit, fr, v1, p2b) == 0);
+    sh("cmp -s %s %s || echo nondeterministic-fit > %s/v2/NONDET", p2, p2b, g_work, "");
+    snprintf(cmd, sizeof cmd, "%s/v2/NONDET", g_work);
+    FILE *nd = fopen(cmd, "r"); CHECK(nd == NULL); if (nd) fclose(nd);
+    /* persistence round trip: read then write gives the same bytes */
+    est_params2 pp; CHECK(est_params2_read(p2, &pp) == 0);
+    CHECK(pp.mix.k == EST_M2_K && pp.r == EST_M2_R && fabs(pp.q - est_mix_total_var(&pp.mix)) <= 1e-12 * pp.q);
+    snprintf(cmd, sizeof cmd, "%s/v2/params2c.txt", g_work);
+    CHECK(est_params2_write(cmd, &pp) == 0);
+    CHECK(sh_rc("cmp -s %s %s", p2, cmd, "", "") == 0);
+    sh("sed 's/^c2 w/c9 w/' %s > %s/v2/params2bad.txt", p2, g_work, "", "");
+    snprintf(cmd, sizeof cmd, "%s/v2/params2bad.txt", g_work);
+    CHECK(est_params2_read(cmd, &pp) != 0);
+    /* M2 replay mean is exactly the previous observation */
+    est_file f; char err[300]; static est_replay rp;
+    CHECK(est_file_load(fr, &f, err, sizeof err) == 0);
+    CHECK(est_params2_read(p2, &pp) == 0);
+    CHECK(est_replay_run(&f, (size_t)-1, 2, pp.q, pp.r, &rp) == 0);
+    double *e = malloc(rp.nsteps * sizeof *e);
+    CHECK(est_m2_changes(&rp, e, rp.nsteps) == pp.fit_n);
+    free(e); est_replay_free(&rp); est_file_free(&f);
+    /* held-out: v1 and v2 evaluation refuse it unless recorded */
+    snprintf(cmd, sizeof cmd, "%s --protocol-v2 --synthetic-test --params2 %s --raw %s --marks %s --out %s/v2/x.json 2>%s/v2/x.err", g_eval, p2, hr, hm, g_work, g_work);
+    CHECK(system(cmd) != 0);
+    snprintf(cmd, sizeof cmd, "%s --params %s --raw %s --marks %s --out %s/v2/y.json 2>%s/v2/y.err", g_eval, v1, hr, hm, g_work, g_work);
+    CHECK(system(cmd) != 0);
+    snprintf(cmd, sizeof cmd, "%s/v2/x.err", g_work); { char *t = slurp(cmd); CHECK(t && strstr(t, "held-out")); free(t); }
+    snprintf(cmd, sizeof cmd, "%s/v2/y.err", g_work); { char *t = slurp(cmd); CHECK(t && strstr(t, "held-out")); free(t); }
+    CHECK(est_file_load(hr, &f, err, sizeof err) != 0 && strstr(err, "held-out") != NULL);
+    /* recorded, test build: C2, C1, doc identities from the environment */
+    est_sha_file_hex(hr, h1); est_sha_file_hex(hm, h2); est_sha_file_hex(fr, hf);
+    snprintf(cmd, sizeof cmd, "%s/v2/doc.md", g_work);
+    sh("echo frozen-v2 > %s", cmd, "", "", ""); est_sha_file_hex(cmd, hdoc);
+    snprintf(envs, sizeof envs, "EST_TEST_C2_RAW_SHA=%s EST_TEST_C2_MARKS_SHA=%s EST_TEST_C1_SHA=%s EST_TEST_V2_DOC_SHA=%s", h1, h2, hf, hdoc);
+    snprintf(rec, sizeof rec, "%s/v2/receipt.json", g_work);
+    snprintf(cmd, sizeof cmd, "%s EST_TEST_DIRTY=1 %s --protocol-v2 --params2 %s --raw %s --marks %s --protocol-doc %s/v2/doc.md --recorded --out %s/v2/z.json >/dev/null 2>&1", envs, g_evalt, p2, hr, hm, g_work, g_work);
+    CHECK(system(cmd) != 0);
+    snprintf(cmd, sizeof cmd, "%s EST_TEST_DIRTY=0 %s --protocol-v2 --params2 %s --raw %s --marks %s --protocol-doc %s/v2/doc.md --recorded --out %s > %s/v2/eval.out 2>&1", envs, g_evalt, p2, hr, hm, g_work, rec, g_work);
+    CHECK(system(cmd) == 0);
+    char *js = slurp(rec); CHECK(js != NULL);
+    if (js) {
+        CHECK(strstr(js, "\"receipt\": \"est_eval_v2\"") != NULL);
+        CHECK(strstr(js, "\"recorded\": true") != NULL && strstr(js, "\"input_is_heldout_C2\": true") != NULL);
+        CHECK(strstr(js, "\"m2_mean_is_exact_persistence\": true") != NULL);
+        const char *mods = strstr(js, "\"models\": {");
+        const char *m2 = mods ? strstr(mods, "\"M2\": {") : NULL;
+        CHECK(m2 != NULL);
+        const char *cal = m2 ? strstr(m2, "\"calibrated\": ") : NULL;
+        CHECK(cal && strncmp(cal + 14, "true", 4) == 0);
+        CHECK(m2 && strstr(m2, "\"rmse_no_worse_than_persistence\": true") != NULL);
+        CHECK(strstr(js, "\"selected_model\": \"M2\"") != NULL);
+        CHECK(strstr(js, "\"ESTIMATION_REAL_SIGNAL\": \"PASS\"") != NULL);
+        CHECK(strstr(js, "\"ESTIMATION_CALIBRATION\": \"PASS\"") != NULL);
+        free(js);
+    }
+    /* a second recorded execution would overwrite: refused */
+    snprintf(cmd, sizeof cmd, "%s EST_TEST_DIRTY=0 %s --protocol-v2 --params2 %s --raw %s --marks %s --protocol-doc %s/v2/doc.md --recorded --out %s >/dev/null 2>&1", envs, g_evalt, p2, hr, hm, g_work, rec);
+    CHECK(system(cmd) != 0);
+    printf("test_est_tools: M2 fit deterministic, params v2 round trip, exact persistence, held-out guard, recorded v2 receipt\n");
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 5) { fprintf(stderr, "usage: test_est_tools est_fit est_eval est_eval_test_build workdir\n"); return 2; }
@@ -588,6 +723,8 @@ int main(int argc, char **argv)
     test_fit_tie_break();
     test_parse_and_gaps();
     test_known_answers();
+    test_mix_known_answers();
+    test_m2();
     printf("test_est_tools: %d checks, %d failed\n", g_checks, g_fail);
     if (g_fail) { printf("test_est_tools: FAIL\n"); return 1; }
     printf("test_est_tools: PASS\n");

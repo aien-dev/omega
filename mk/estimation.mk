@@ -15,7 +15,7 @@ EST_CFLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=2008
 EST_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
 EST_TYPES_SRCS = src/estimation/est_types.c src/sha256.c
 EST_KF_SRCS = src/estimation/est_kf.c $(EST_TYPES_SRCS)
-EST_HDRS = src/estimation/est_types.h src/estimation/est_kf.h
+EST_HDRS = src/estimation/est_types.h src/estimation/est_kf.h src/estimation/est_mix.h
 EST_DIR = $(OUT_DIR)/tests-estimation
 # An estimator is a calculator: it must not reference authority, World,
 # generation, capability, memory-mapping or process operations.
@@ -25,10 +25,10 @@ $(EST_DIR)/%.o: src/estimation/%.c $(EST_HDRS)
 	@mkdir -p $(EST_DIR)
 	$(CC) $(EST_CFLAGS) -c -o $@ $<
 
-est-purity: $(EST_DIR)/est_types.o $(EST_DIR)/est_kf.o
+est-purity: $(EST_DIR)/est_types.o $(EST_DIR)/est_kf.o $(EST_DIR)/est_mix.o
 	@if nm -u $^ | grep -E $(EST_FORBIDDEN) ; then \
 		echo "estimation object references an operation an estimator must not have"; exit 1; fi
-	@echo "est-purity: est_types.o and est_kf.o reference no forbidden symbol"
+	@echo "est-purity: est_types.o, est_kf.o and est_mix.o reference no forbidden symbol"
 
 $(EST_DIR)/test_est_types: tests/estimation/test_est_types.c $(EST_TYPES_SRCS) $(EST_HDRS)
 	@mkdir -p $(EST_DIR)

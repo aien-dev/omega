@@ -7,7 +7,7 @@ include mk/estimation.mk
 .PHONY: test-est-tools est-tools-purity est-tools
 ESTT_DIR = $(OUT_DIR)/est-tools
 ESTT_CFLAGS = $(EST_CFLAGS) -Itools/estimation
-ESTT_LIB = tools/estimation/est_replay.c $(EST_KF_SRCS)
+ESTT_LIB = tools/estimation/est_replay.c src/estimation/est_mix.c $(EST_KF_SRCS)
 ESTT_HDRS = tools/estimation/est_replay.h $(EST_HDRS)
 # Tool identity injected at build time: -DTOOL_COMMIT / -DTOOL_DIRTY. The stamp is
 # rewritten only when the commit or the dirty flag changes, so est_eval.o rebuilds then.

@@ -1,4 +1,4 @@
-/* EST-3 evaluation (protocol v1 sections 4 and 5).
+/* EST-3 evaluation (protocol v1 sections 4 and 5; --protocol-v2 for EST23_PROTOCOL_V2).
  *   est_eval --params P --raw machine-state.ndjson --marks machine-state-marks.txt
  *            --out receipt.json [--recorded] [--synthetic-test]
  * Takes the parameter file and the held-out file only; never fits. Refuses when
@@ -114,9 +114,27 @@ static int in_trial(const marks *mk, int64_t t)
     return 0;
 }
 
-static void compute(const est_replay *rp, const marks *mk, model_stats *st)
+/* mx == NULL: Gaussian intervals (v1). mx != NULL (protocol v2, M2): the
+ * h-step change has the mixture shape; intervals are its central quantiles and
+ * the log score is its log density. Thresholds are cached per horizon. */
+typedef struct { const est_mix *mx; double t[EST_MIX_MAX_H + 1][3]; int have[EST_MIX_MAX_H + 1]; size_t beyond; } shape_q;
+static const double PCOV[3] = { 0.50, 0.80, 0.95 };
+static int shape_thr(shape_q *sq, uint32_t h, double out[3])
+{
+    if (h < 1 || h > EST_MIX_MAX_H) { sq->beyond++; return 1; }
+    if (!sq->have[h]) {
+        for (int k = 0; k < 3; k++) if (est_mix_quantile_abs(sq->mx, h, PCOV[k], &sq->t[h][k]) != EST_OK) return 1;
+        sq->have[h] = 1;
+    }
+    for (int k = 0; k < 3; k++) out[k] = sq->t[h][k];
+    return 0;
+}
+
+static void compute(const est_replay *rp, const marks *mk, model_stats *st, const est_mix *mx, size_t *beyond)
 {
     memset(st, 0, sizeof *st);
+    static shape_q sq;
+    memset(&sq, 0, sizeof sq); sq.mx = mx;
     size_t cap = rp->nsteps;
     double *w = malloc(cap * sizeof *w), *nu = malloc(cap * sizeof *nu);
     size_t n = 0, hit[3] = { 0, 0, 0 }, zero = 0;
@@ -137,13 +155,16 @@ static void compute(const est_replay *rp, const marks *mk, model_stats *st)
         if (s->coast) continue;
         if (s->L >= EST_BURN_IN) {
             double sd = sqrt(s->S), a = fabs(s->nu);
+            double thr[3] = { ZC50 * sd, ZC80 * sd, ZC95 * sd };
+            if (mx && shape_thr(&sq, s->horizon, thr)) thr[0] = thr[1] = thr[2] = -1.0;   /* counted as misses, reported */
             nu[n] = s->nu; w[n] = s->nu / sd; n++;
-            if (a <= ZC50 * sd) hit[0]++;
-            if (a <= ZC80 * sd) hit[1]++;
-            int h95 = a <= ZC95 * sd;
+            if (a <= thr[0]) hit[0]++;
+            if (a <= thr[1]) hit[1]++;
+            int h95 = a <= thr[2];
             if (h95) hit[2]++;
             snis += s->nis;
-            sls += -0.5 * (log(TWO_PI * s->S) + s->nis);
+            if (mx) { double lp = -INFINITY; if (s->horizon >= 1 && s->horizon <= EST_MIX_MAX_H) est_mix_logpdf(mx, s->horizon, s->nu, &lp); sls += lp; }
+            else sls += -0.5 * (log(TWO_PI * s->S) + s->nis);
             sse += s->nu * s->nu;
             if (s->nu == 0.0) zero++;
             if (have_prev) { double e = s->z - prev_z; ssp += e * e; }
@@ -193,7 +214,9 @@ static void compute(const est_replay *rp, const marks *mk, model_stats *st)
         est_prediction p;
         if (est_kf_predict(&rp->model, &s->post, NULL, TEN_STEP, &p) != EST_OK) continue;
         tn++;
-        if (fabs(tg->z - p.y_mean[0]) <= ZC95 * sqrt(p.S[0])) th++;
+        double t10 = ZC95 * sqrt(p.S[0]);
+        if (mx) { double tt[3]; if (shape_thr(&sq, TEN_STEP, tt)) t10 = -1.0; else t10 = tt[2]; }
+        if (fabs(tg->z - p.y_mean[0]) <= t10) th++;
     }
     st->ten_n = tn;
     if (tn) { st->ten_cov = (double)th / (double)tn; wilson(th, tn, &st->ten_lo, &st->ten_hi); }
@@ -212,6 +235,7 @@ static void compute(const est_replay *rp, const marks *mk, model_stats *st)
     st->ok_ten = tn > 0 && in_band(st->ten_cov, BQ);
     if (!st->ok_ten) st->calibrated = 0;
     st->rmse_le_persist = n >= 3 && st->rmse <= st->persist_rmse;
+    if (beyond) *beyond = sq.beyond;
     free(w); free(nu);
 }
 
@@ -232,9 +256,16 @@ static void jd(FILE *fp, const char *k, double v)
     if (isfinite(v)) fprintf(fp, "\"%s\": %.17g", k, v); else fprintf(fp, "\"%s\": null", k);
 }
 
-static void emit_model(FILE *fp, int m, const est_params *p, const model_stats *s, int failed_prefix)
+static void emit_model(FILE *fp, int m, double q, double r, double ll, const est_mix *mx, const model_stats *s, int last)
 {
-    fprintf(fp, "    \"M%d\": {\n      \"q\": %.17g, \"r\": %.17g, \"fit_loglik\": %.17g,\n", m, p->q[m], p->r[m], p->ll[m]);
+    fprintf(fp, "    \"M%d\": {\n      \"q\": %.17g, \"r\": %.17g, \"fit_loglik\": %.17g,\n", m, q, r, ll);
+    if (mx) {
+        fprintf(fp, "      \"predictive_shape\": {\"kind\": \"gaussian_scale_mixture\", \"k\": %u, \"w\": [", mx->k);
+        for (uint32_t j = 0; j < mx->k; j++) fprintf(fp, "%s%.17g", j ? ", " : "", mx->w[j]);
+        fprintf(fp, "], \"v\": [");
+        for (uint32_t j = 0; j < mx->k; j++) fprintf(fp, "%s%.17g", j ? ", " : "", mx->v[j]);
+        fprintf(fp, "]},\n");
+    }
     fprintf(fp, "      \"samples\": %zu, \"included_logical_span_ns\": [%lld, %lld],\n", s->n, (long long)s->tmin_ns, (long long)s->tmax_ns);
     const char *nm[3] = { "50", "80", "95" };
     for (int k = 0; k < 3; k++) {
@@ -267,8 +298,7 @@ static void emit_model(FILE *fp, int m, const est_params *p, const model_stats *
     first = 1;
     FC(s->n >= 3, "samples_lt_3"); FC(s->rmse_le_persist, "rmse_vs_persistence");
 #undef FC
-    fprintf(fp, "]\n    }%s\n", m == 0 ? "," : "");
-    (void)failed_prefix;
+    fprintf(fp, "]\n    }%s\n", last ? "" : ",");
 }
 
 #ifndef TOOL_COMMIT
@@ -314,8 +344,8 @@ static int is_b_input(const char *path, const char *b_sha, int *by_path, int *by
 
 /* Physically truncate: write the first k lines to a temp file, replay that
  * file from scratch, compare bit for bit with the first records of the full run. */
-static int prefix_check(const est_file *f, const est_replay full[2], const est_params *p, const size_t *ks, int nk,
-                        size_t *ran)
+static int prefix_check(const est_file *f, const est_replay *full, int nm, const int *ids, const double *q, const double *r,
+                        const size_t *ks, int nk, size_t *ran)
 {
     const char *tb = getenv("TMPDIR"); if (!tb || !*tb) tb = "/tmp";
     char dir[600]; snprintf(dir, sizeof dir, "%s/est_eval_prefix_XXXXXX", tb);
@@ -334,8 +364,8 @@ static int prefix_check(const est_file *f, const est_replay full[2], const est_p
         if (fclose(fp)) { ok = 0; break; }
         est_file pf; char err[300];
         if (est_file_load_raw(path, &pf, err, sizeof err)) { ok = 0; break; }
-        for (int m = 0; m < 2; m++) {
-            if (est_replay_run(&pf, (size_t)-1, m, p->q[m], p->r[m], &pre)) { ok = 0; continue; }
+        for (int m = 0; m < nm; m++) {
+            if (est_replay_run(&pf, (size_t)-1, ids[m], q[m], r[m], &pre)) { ok = 0; continue; }
             size_t nn = pre.nsteps;
             if (nn == 0 || nn > full[m].nsteps) { ok = 0; continue; }
             for (size_t i = 0; i < nn; i++) if (!step_equal(&pre.steps[i], &full[m].steps[i])) { ok = 0; break; }
@@ -348,8 +378,201 @@ static int prefix_check(const est_file *f, const est_replay full[2], const est_p
     return ok;
 }
 
+/* ---- Protocol v2 (docs/estimation/EST23_PROTOCOL_V2.md) ----
+ *   est_eval --protocol-v2 --params2 P2 --raw F --marks M --out R
+ *            [--protocol-doc D] [--recorded] [--synthetic-test]
+ * Evaluates M0 and M1 with the frozen v1 parameters (named inside P2) and M2
+ * with its fitted shape, on one file. --recorded only for held-out run C2. */
+static const char *v2_heldout_raw_sha(void)
+{
+#ifdef EST_TEST_BUILD
+    const char *e = getenv("EST_TEST_C2_RAW_SHA"); if (e && *e) return e;
+#endif
+    return EST_V2_HELDOUT_RAW_SHA;
+}
+static const char *v2_heldout_marks_sha(void)
+{
+#ifdef EST_TEST_BUILD
+    const char *e = getenv("EST_TEST_C2_MARKS_SHA"); if (e && *e) return e;
+#endif
+    return EST_V2_HELDOUT_MARKS_SHA;
+}
+static const char *v2_fit_sha(void)
+{
+#ifdef EST_TEST_BUILD
+    const char *e = getenv("EST_TEST_C1_SHA"); if (e && *e) return e;
+#endif
+    return EST_V2_FIT_SHA;
+}
+static const char *v2_doc_sha(void)
+{
+#ifdef EST_TEST_BUILD
+    const char *e = getenv("EST_TEST_V2_DOC_SHA"); if (e && *e) return e;
+#endif
+    return EST_V2_PROTOCOL_DOC_SHA;
+}
+static int is_c2_input(const char *path, const char *want, int *by_path, int *by_sums)
+{
+    char dir[1024], hex[65]; const char *name;
+    dir_and_name(path, dir, sizeof dir, &name);
+    *by_path = est_path_is_heldout(path);
+    *by_sums = (est_sums_lookup(dir, name, hex) == 0 && strcmp(hex, want) == 0);
+    return *by_path || *by_sums;
+}
+
+static int main_v2(int argc, char **argv)
+{
+    const char *params = NULL, *raw = NULL, *mkp = NULL, *out = NULL, *pdoc = EST_V2_PROTOCOL_DOC;
+    int recorded = 0, synth = 0;
+    for (int i = 1; i < argc; i++) {
+        if (!strcmp(argv[i], "--params2") && i + 1 < argc) params = argv[++i];
+        else if (!strcmp(argv[i], "--raw") && i + 1 < argc) raw = argv[++i];
+        else if (!strcmp(argv[i], "--marks") && i + 1 < argc) mkp = argv[++i];
+        else if (!strcmp(argv[i], "--out") && i + 1 < argc) out = argv[++i];
+        else if (!strcmp(argv[i], "--protocol-doc") && i + 1 < argc) pdoc = argv[++i];
+        else if (!strcmp(argv[i], "--recorded")) recorded = 1;
+        else if (!strcmp(argv[i], "--synthetic-test")) synth = 1;
+        else { fprintf(stderr, "unknown argument %s\n", argv[i]); return 2; }
+    }
+    if (!params || !raw || !mkp || !out) {
+        fprintf(stderr, "usage: est_eval --protocol-v2 --params2 P2 --raw F --marks M --out R [--protocol-doc D] [--recorded] [--synthetic-test]\n");
+        return 2;
+    }
+    if (recorded && synth) { fprintf(stderr, "refuse: --recorded and --synthetic-test are exclusive\n"); return 2; }
+    int bp, bs;
+    if (is_b_input(raw, est_run_b_raw_sha(), &bp, &bs) || is_b_input(mkp, est_run_b_marks_sha(), &bp, &bs)) {
+        fprintf(stderr, "refuse: run B is closed evidence under protocol v1 and is never read by protocol v2\n"); return 2;
+    }
+    int rp_path, rp_sums, mp_path, mp_sums;
+    int raw_c2 = is_c2_input(raw, v2_heldout_raw_sha(), &rp_path, &rp_sums);
+    int mk_c2 = is_c2_input(mkp, v2_heldout_marks_sha(), &mp_path, &mp_sums);
+    if (recorded) {
+        if (!(rp_path && rp_sums)) { fprintf(stderr, "refuse: --recorded is accepted only for held-out run C2's raw file (path and SHA256SUMS digest must both match)\n"); return 2; }
+        if (!(mp_path && mp_sums)) { fprintf(stderr, "refuse: --recorded needs C2's own marks file (path and SHA256SUMS digest must both match)\n"); return 2; }
+        if (tool_dirty()) { fprintf(stderr, "refuse: --recorded needs a clean working tree at build time (TOOL_DIRTY=%d)\n", tool_dirty()); return 2; }
+    } else if (raw_c2 || mk_c2) {
+        fprintf(stderr, "refuse: the held-out run may only be evaluated with --recorded (protocol v2)\n"); return 2;
+    }
+    char err[300], p2hex[65], p1hex[65], pdoc_hex[65], bin_hex[65];
+    est_params2 p2; est_params p1;
+    if (est_params2_read(params, &p2)) { fprintf(stderr, "refuse: v2 parameter file is not exactly the expected format\n"); return 1; }
+    if (est_mix_check(&p2.mix) != EST_OK) { fprintf(stderr, "refuse: M2 shape is not a valid mixture\n"); return 1; }
+    double tv = est_mix_total_var(&p2.mix);
+    if (!(p2.r == EST_M2_R) || !(fabs(p2.q - tv) <= 1e-12 * tv)) { fprintf(stderr, "refuse: M2 q must be the shape's total variance and r must be %g\n", EST_M2_R); return 1; }
+    if (est_params_read(p2.v1_params_path, &p1) || est_params_validate(&p1, err, sizeof err)) { fprintf(stderr, "refuse: v1 parameter file %s is not valid\n", p2.v1_params_path); return 1; }
+    if (est_sha_file_hex(p2.v1_params_path, p1hex) || strcmp(p1hex, p2.v1_params_sha) != 0) { fprintf(stderr, "refuse: v1 parameter file digest differs from the one recorded in the v2 parameter file\n"); return 1; }
+    int v1_fit_is_a = strstr(p1.fit_path, EST_RUN_A_ID) != NULL && strcmp(p1.fit_sha, EST_RUN_A_SHA) == 0;
+    int fit_is_c1 = strstr(p2.fit_path, EST_V2_FIT_TAG) != NULL && strcmp(p2.fit_sha, v2_fit_sha()) == 0;
+    int fit_sums_ok = 0;
+    {
+        char dir[1024], hex[65]; const char *name;
+        dir_and_name(p2.fit_path, dir, sizeof dir, &name);
+        fit_sums_ok = (strcmp(name, "machine-state.ndjson") == 0 && est_sums_lookup(dir, name, hex) == 0 && strcmp(hex, p2.fit_sha) == 0);
+    }
+    if (!synth && !(v1_fit_is_a && fit_is_c1)) { fprintf(stderr, "refuse: M0/M1 must be fit on run A and M2 on run C1\n"); return 1; }
+    if (recorded && !fit_sums_ok) { fprintf(stderr, "refuse: --recorded needs the M2 fit file to match its SHA256SUMS line\n"); return 1; }
+    int pdoc_ok = !est_sha_file_hex(pdoc, pdoc_hex);
+    int pdoc_matches = pdoc_ok && strcmp(pdoc_hex, v2_doc_sha()) == 0;
+    if (recorded && !pdoc_matches) { fprintf(stderr, "refuse: --recorded needs the frozen v2 protocol document (SHA-256 %s)\n", v2_doc_sha()); return 1; }
+    if (!pdoc_ok) snprintf(pdoc_hex, sizeof pdoc_hex, "unavailable");
+    if (est_sha_file_hex("/proc/self/exe", bin_hex)) snprintf(bin_hex, sizeof bin_hex, "unavailable");
+    if (est_sha_file_hex(params, p2hex)) return 1;
+
+    est_allow_heldout = recorded;     /* only after every identity check above */
+    est_file f;
+    if (est_file_load(raw, &f, err, sizeof err)) { fprintf(stderr, "refuse: %s\n", err); return 1; }
+    if (recorded && strcmp(f.sha_hex, v2_heldout_raw_sha()) != 0) { fprintf(stderr, "refuse: raw digest is not C2's\n"); return 1; }
+    marks mk;
+    if (load_marks(mkp, &mk, err, sizeof err)) { fprintf(stderr, "refuse: %s\n", err); return 1; }
+    if (recorded && strcmp(mk.sha, v2_heldout_marks_sha()) != 0) { fprintf(stderr, "refuse: marks digest is not C2's\n"); return 1; }
+
+    enum { NM = 3 };
+    const int ids[NM] = { 0, 1, 2 };
+    const double q[NM] = { p1.q[0], p1.q[1], p2.q }, r[NM] = { p1.r[0], p1.r[1], p2.r }, ll[NM] = { p1.ll[0], p1.ll[1], p2.ll };
+    FILE *fp = NULL, *sfp[NM] = { NULL, NULL, NULL };
+    char spath[NM][1100];
+    if (open_excl(out, &fp)) return 1;
+    for (int m = 0; m < NM; m++) { snprintf(spath[m], sizeof spath[m], "%s.M%d.stream", out, m); if (open_excl(spath[m], &sfp[m])) return 1; }
+
+    static est_replay rp[NM];
+    model_stats st[NM];
+    memset(st, 0, sizeof st);
+    int replay_ok = 1, chain_ok = 1, m2_persist = 0;
+    size_t ks[3] = { 100, 500, 1000 }, prefix_ran = 0, expect_steps = 0, beyond = 0;
+    for (int m = 0; m < NM; m++) {
+        if (est_replay_run(&f, (size_t)-1, ids[m], q[m], r[m], &rp[m])) { replay_ok = 0; fprintf(stderr, "replay M%d: %s\n", m, rp[m].errmsg); continue; }
+        expect_steps = f.nlines - rp[m].leading_missing;
+        if (rp[m].nsteps != expect_steps) replay_ok = 0;
+        for (size_t i = 0; i < rp[m].nsteps; i++) if (!rp[m].steps[i].chain_ok) chain_ok = 0;
+        compute(&rp[m], &mk, &st[m], m == 2 ? &p2.mix : NULL, m == 2 ? &beyond : NULL);
+    }
+    if (replay_ok) {
+        double *e = malloc((rp[2].nsteps + 1) * sizeof *e);
+        m2_persist = e && est_m2_changes(&rp[2], e, rp[2].nsteps) != (size_t)-1;
+        free(e);
+    }
+    int prefix_ok = replay_ok && prefix_check(&f, rp, NM, ids, q, r, ks, 3, &prefix_ran);
+    char shash[NM][65] = { "unavailable", "unavailable", "unavailable" };
+    int streams_ok = replay_ok;
+    for (int m = 0; m < NM; m++) {
+        if (replay_ok) est_replay_write_stream(sfp[m], &rp[m], m);
+        int bad = fclose(sfp[m]);
+        if (bad || (replay_ok && est_sha_file_hex(spath[m], shash[m]))) { fprintf(stderr, "cannot write stream %s\n", spath[m]); return 1; }
+        if (!strcmp(shash[m], "unavailable")) streams_ok = 0;
+    }
+    char after[65]; int raw_preserved = !est_sha_file_hex(raw, after) && strcmp(after, f.sha_hex) == 0;
+    int sel = -1; double best = -INFINITY;
+    if (replay_ok) {
+        for (int m = 0; m < NM; m++) if (st[m].calibrated && st[m].logscore > best) best = st[m].logscore;
+        for (int m = 0; m < NM && sel < 0; m++) if (st[m].calibrated && st[m].logscore >= best - 0.01) sel = m;
+    }
+    int real_signal = replay_ok && prefix_ok && raw_preserved && chain_ok && streams_ok && m2_persist;
+    int calib = 0;
+    if (replay_ok) for (int m = 0; m < NM; m++) if (st[m].calibrated && st[m].rmse_le_persist) calib = 1;
+
+    fprintf(fp, "{\n  \"receipt\": \"est_eval_v2\",\n  \"protocol\": \"EST23_PROTOCOL_V2\",\n");
+    fprintf(fp, "  \"protocol_doc_sha256\": \"%s\",\n  \"protocol_doc_matches_frozen_constant\": %s,\n", pdoc_hex, b(pdoc_matches));
+    fprintf(fp, "  \"tool_commit\": "); js(fp, TOOL_COMMIT);
+    fprintf(fp, ",\n  \"tool_dirty\": %d,\n  \"eval_binary_sha256\": \"%s\",\n", tool_dirty(), bin_hex);
+    fprintf(fp, "  \"recorded\": %s,\n  \"synthetic_test\": %s,\n", b(recorded), b(synth));
+    fprintf(fp, "  \"parameter_file_v2\": "); js(fp, params);
+    fprintf(fp, ",\n  \"parameter_file_v2_sha256\": \"%s\",\n  \"v1_parameter_file\": ", p2hex); js(fp, p2.v1_params_path);
+    fprintf(fp, ",\n  \"v1_parameter_file_sha256\": \"%s\",\n  \"v1_models_fit_on_run_A\": %s,\n", p1hex, b(v1_fit_is_a));
+    fprintf(fp, "  \"m2_fit_run_path\": "); js(fp, p2.fit_path);
+    fprintf(fp, ",\n  \"m2_fit_file_sha256\": \"%s\",\n  \"m2_fit_is_run_C1\": %s,\n  \"m2_fit_sha_matches_SHA256SUMS_line\": %s,\n  \"m2_fit_changes\": %zu,\n",
+            p2.fit_sha, b(fit_is_c1), b(fit_sums_ok), p2.fit_n);
+    fprintf(fp, "  \"input_file\": "); js(fp, raw);
+    fprintf(fp, ",\n  \"input_file_sha256\": \"%s\",\n  \"input_sha_matches_SHA256SUMS\": true,\n  \"input_is_heldout_C2\": %s,\n", f.sha_hex, b(raw_c2 && rp_path && rp_sums));
+    fprintf(fp, "  \"marks_file_sha256\": \"%s\",\n", mk.sha);
+    fprintf(fp, "  \"lines\": %zu,\n  \"marks\": {\"pairs\": %zu, \"begins\": %zu, \"ends\": %zu, \"unclosed_begin_ran_to_eof\": %s, \"nested_begins\": %zu, \"stray_ends\": %zu},\n",
+            f.nlines, mk.n, mk.begins, mk.ends, b(mk.unclosed), mk.nested_begins, mk.stray_ends);
+    fprintf(fp, "  \"missing_observations\": {\"leading_before_first_valid\": %zu, \"coasted\": %zu, \"bad_value_lines\": %zu, \"bad_t_lines\": %zu, \"bad_t_overflow_lines\": %zu},\n",
+            rp[0].leading_missing, rp[0].coasts, rp[0].bad_value, rp[0].bad_t, rp[0].bad_t_overflow);
+    fprintf(fp, "  \"time_gaps\": {\"duplicate_t\": %zu, \"backward_t\": %zu, \"steps_with_horizon_gt_1\": %zu, \"m2_steps_beyond_exact_horizon\": %zu},\n",
+            rp[0].gap_zero, rp[0].gap_backward, rp[0].multi_horizon, beyond);
+    fprintf(fp, "  \"readings\": {\"burn_in\": \"steps with L<%u counted from the prior line (L=0) are excluded\", \"quarters\": \"four equal spans of included samples by logical time\", \"ten_step_origins\": \"coasted origins skipped\", \"m2_intervals\": \"central quantiles of the h-step mixture sum\"},\n", EST_BURN_IN);
+    fprintf(fp, "  \"m2_mean_is_exact_persistence\": %s,\n", b(m2_persist));
+    fprintf(fp, "  \"replay\": {\"complete\": %s, \"steps\": %zu, \"expected_steps\": %zu, \"chain_recorded_every_step\": %s, \"raw_file_unchanged\": %s,\n",
+            b(replay_ok), rp[0].nsteps, expect_steps, b(chain_ok), b(raw_preserved));
+    fprintf(fp, "             \"prefix_invariance\": {\"method\": \"first k lines physically written to a temp file and replayed from scratch\", \"ks\": \"k=100,500,1000\", \"runs\": %zu, \"pass\": %s}},\n", prefix_ran, b(prefix_ok));
+    fprintf(fp, "  \"streams\": {");
+    for (int m = 0; m < NM; m++) { fprintf(fp, "%s\"M%d\": {\"file\": ", m ? ", " : "", m); js(fp, spath[m]); fprintf(fp, ", \"sha256\": \"%s\"}", shash[m]); }
+    fprintf(fp, "},\n  \"models\": {\n");
+    if (replay_ok) for (int m = 0; m < NM; m++) emit_model(fp, m, q[m], r[m], ll[m], m == 2 ? &p2.mix : NULL, &st[m], m == NM - 1);
+    if (sel >= 0) fprintf(fp, "  },\n  \"selected_model\": \"M%d\",\n", sel); else fprintf(fp, "  },\n  \"selected_model\": null,\n");
+    fprintf(fp, "  \"failure_class_to_be_recorded_by_a_human_on_FAIL\": null,\n");
+    fprintf(fp, "  \"ESTIMATION_REAL_SIGNAL\": \"%s\",\n  \"ESTIMATION_CALIBRATION\": \"%s\"\n}\n", real_signal ? "PASS" : "FAIL", calib ? "PASS" : "FAIL");
+    if (fclose(fp)) return 1;
+    char rh[65]; est_sha_file_hex(out, rh);
+    printf("ESTIMATION_REAL_SIGNAL=%s ESTIMATION_CALIBRATION=%s selected=%s%d receipt_sha256=%s\n", real_signal ? "PASS" : "FAIL", calib ? "PASS" : "FAIL", sel >= 0 ? "M" : "none", sel, rh);
+    for (int m = 0; m < NM; m++) est_replay_free(&rp[m]);
+    est_file_free(&f);
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && !strcmp(argv[1], "--protocol-v2")) return main_v2(argc - 1, argv + 1);
     const char *params = NULL, *raw = NULL, *mkp = NULL, *out = NULL;
     const char *pdoc = "docs/estimation/EST23_PROTOCOL_V1.md";
     const char *interp = "docs/estimation/EST23_PROTOCOL_V1_INTERPRETATIONS.md";
@@ -437,9 +660,10 @@ int main(int argc, char **argv)
         expect_steps = f.nlines - rp[m].leading_missing;
         if (rp[m].nsteps != expect_steps) replay_ok = 0;
         for (size_t i = 0; i < rp[m].nsteps; i++) if (!rp[m].steps[i].chain_ok) chain_ok = 0;
-        compute(&rp[m], &mk, &st[m]);
+        compute(&rp[m], &mk, &st[m], NULL, NULL);
     }
-    int prefix_ok = replay_ok && prefix_check(&f, rp, &p, ks, 3, &prefix_ran);
+    const int ids[2] = { 0, 1 };
+    int prefix_ok = replay_ok && prefix_check(&f, rp, 2, ids, p.q, p.r, ks, 3, &prefix_ran);
     /* per-step observation / prediction / innovation stream, every evaluated model */
     char shash[2][65] = { "unavailable", "unavailable" };
     for (int m = 0; m < 2; m++) {
@@ -491,7 +715,7 @@ int main(int argc, char **argv)
     fprintf(fp, ", \"sha256\": \"%s\"}, \"M1\": {\"file\": ", shash[0]); js(fp, spath[1]);
     fprintf(fp, ", \"sha256\": \"%s\"}},\n", shash[1]);
     fprintf(fp, "  \"models\": {\n");
-    if (replay_ok) { emit_model(fp, 0, &p, &st[0], 0); emit_model(fp, 1, &p, &st[1], 0); }
+    if (replay_ok) { emit_model(fp, 0, p.q[0], p.r[0], p.ll[0], NULL, &st[0], 0); emit_model(fp, 1, p.q[1], p.r[1], p.ll[1], NULL, &st[1], 1); }
     fprintf(fp, "  },\n  \"selected_model\": %s%s%s,\n", sel >= 0 ? "\"M" : "null", sel >= 0 ? (sel ? "1" : "0") : "", sel >= 0 ? "\"" : "");
     fprintf(fp, "  \"failure_class_to_be_recorded_by_a_human_on_FAIL\": null,\n");
     fprintf(fp, "  \"ESTIMATION_REAL_SIGNAL\": \"%s\",\n  \"ESTIMATION_CALIBRATION\": \"%s\"\n}\n", real_signal ? "PASS" : "FAIL", calib ? "PASS" : "FAIL");
