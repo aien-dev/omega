@@ -1,4 +1,4 @@
-/* EST-2/EST-3 replay library (protocol v1, docs/estimation/EST23_PROTOCOL_V1.md).
+/* EST-2/EST-3 replay library (protocol v1 and v2, docs/estimation/EST23_PROTOCOL_V1.md, EST23_PROTOCOL_V2.md).
  * Shared parsing, SHA-256 file verification, and one strictly causal forward
  * pass over a machine-state.ndjson file with model M0 or M1. Tools only: it
  * may open files and print. The filter itself is src/estimation/est_kf.c. */
@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 #include "est_kf.h"
+#include "est_mix.h"
 #include "est_types.h"
 
 #define EST_PROTOCOL_COMMIT "f96dc97"
@@ -122,5 +123,47 @@ int est_params_write(const char *path, const est_params *p);
 int est_params_read(const char *path, est_params *p);
 /* Protocol checks: q and r finite and on the 19x25 grid (1e-9 relative). */
 int est_params_validate(const est_params *p, char *err, size_t cap);
+
+
+/* ---- Protocol v2 (docs/estimation/EST23_PROTOCOL_V2.md) ----
+ * M2: M0's structure with q = total variance of a fitted noise shape and
+ * r = EST_M2_R, so the predicted mean is the previous observation exactly
+ * (persistence) and the predicted change has the shape in est_mix.h.
+ * Fit run C1 and held-out run C2 are fresh 1 Hz collections (EST-3b). */
+#define EST_V2_FIT_TAG "-est3b-fit-"
+#define EST_V2_HELDOUT_TAG "-est3b-heldout-"
+#define EST_M2_R 1e-12
+#define EST_M2_FLOOR (100.0 * 100.0 / 12.0)   /* 100 mC sensor step: uniform quantization variance */
+#define EST_M2_K 3u
+#define EST_M2_ITERS 1000u
+/* C1 identity, fixed when C1 was committed (SHA256SUMS line beside it). */
+#define EST_V2_FIT_SHA "65252bae5f9d49d30a3b334fd2b9444c36db7627a45fcd9b6ef0bb4e5a7e5716"
+/* C2 identity (SHA256SUMS text beside it) and the frozen v2 protocol document. */
+#define EST_V2_HELDOUT_RAW_SHA "pending"
+#define EST_V2_HELDOUT_MARKS_SHA "pending"
+#define EST_V2_PROTOCOL_DOC_SHA "86b7b46f02dd6e51db78cc9f450aac27be189cdb1484894e923a1898429536f5"
+#define EST_V2_PROTOCOL_DOC "docs/estimation/EST23_PROTOCOL_V2.md"
+/* Nonzero only when est_eval --protocol-v2 --recorded has proven the inputs are C2. */
+extern int est_allow_heldout;
+/* 1 when the path or its resolved path names the held-out run. */
+int est_path_is_heldout(const char *path);
+
+typedef struct {
+    char v1_params_path[1024];
+    char v1_params_sha[65];
+    char fit_path[1024];
+    char fit_sha[65];
+    size_t fit_lines;
+    size_t fit_n;              /* one-step changes used by the EM fit */
+    double q, r, ll;           /* M2 q (= total shape variance), r, EM log-likelihood */
+    est_mix mix;
+} est_params2;
+int est_params2_write(const char *path, const est_params2 *p);
+/* Exactly the format written by est_params2_write, nothing else. */
+int est_params2_read(const char *path, est_params2 *p);
+/* M2 fit data: one-step changes (horizon 1, observed, L >= burn-in) of a
+ * replay with model 2. Fills e (cap entries) and returns the count; returns
+ * (size_t)-1 when the replay mean is not exactly the previous observation. */
+size_t est_m2_changes(const est_replay *rp, double *e, size_t cap);
 
 #endif
