@@ -183,10 +183,10 @@ static uint64_t lease_for(const FabNode *n, uint64_t requested, uint64_t now_us)
 static int grant(FabNode *n, FabMember *m, uint64_t requested, uint64_t now_us) {
     uint64_t lease = lease_for(n, requested, now_us);
     if (lease == 0) return FAB_E_FORMAT;
-    m->lease_until_us = now_us + lease;
     uint32_t idx = 0;
-    if (cq_machine_advertise_id(n->cfg.catalog, &m->machine, m->lease_until_us, &idx) != CQ_OK)
-        return FAB_E_FULL;
+    if (cq_machine_advertise_id(n->cfg.catalog, &m->machine, now_us + lease, &idx) != CQ_OK)
+        return FAB_E_FULL;               /* nothing changed */
+    m->lease_until_us = now_us + lease;
     m->index = idx;
     return FAB_OK;
 }
@@ -246,6 +246,7 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
         cq_ontology_digest(n->cfg.catalog, dg);
         if (memcmp(dg, body, 32) != 0) return refuse(n, v, FAB_E_ONTOLOGY, 0, &sender, gen, seq, now_us);
         if (lease_for(n, r64(body + 32), now_us) == 0) return refuse(n, v, FAB_E_FORMAT, 0, &sender, gen, seq, now_us);
+        int fresh = !m;
         if (!m) {
             if (n->n_members == FAB_MAX_MEMBERS)
                 return refuse(n, v, FAB_E_FULL, 0, &sender, gen, seq, now_us);
@@ -253,10 +254,13 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
             memset(m, 0, sizeof *m);
             m->machine = sender;
         }
+        int rc = grant(n, m, r64(body + 32), now_us);
+        if (rc != FAB_OK) {
+            if (fresh) n->n_members--;  /* refused: leave no trace */
+            return refuse(n, v, rc, 0, &sender, gen, seq, now_us);
+        }
         withdraw_all(n, m);             /* anything from an earlier generation */
         m->n_keys = 0;
-        int rc = grant(n, m, r64(body + 32), now_us);
-        if (rc != FAB_OK) return refuse(n, v, rc, 0, &sender, gen, seq, now_us);
         m->state = FAB_ST_JOINED;
         m->generation = gen;
         m->last_seq = seq;
