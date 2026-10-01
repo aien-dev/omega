@@ -318,6 +318,13 @@ static uint32_t or_gelu(uint32_t u) {
     if (x >= 16.0L) return u;                 /* x erfc(11.3)/2 < 2^-180 x; +inf */
     if (x <= -16.0L) return 0x80000000u;      /* |gelu| < 8 erfc(11.3) < 2^-180 */
     if (x == 0) return u;
+    if (qabs(x) < q_pow2(-100)) {
+        /* x^2/sqrt(2 pi) is below 2^-100 of x/2 and would vanish from the
+         * binary128 sum; any value in (x/2, x/2 + |x/2| 2^-100] rounds to float
+         * like the true one (only x/2 itself can be a float boundary). */
+        Q t = 0.5L * x;
+        return q_round(t + qabs(t) * q_pow2(-100));
+    }
     if (qabs(x) < q_pow2(-40)) return q_round(0.5L * x + x * x * QINV_SQRT2PI);  /* next x^4/(6 sqrt(2pi)) */
     return q_round(x * 0.5L * q_erfc(-x * QINV_SQRT2));
 }
@@ -370,7 +377,7 @@ static int64_t ord(uint32_t u) {
 static uint32_t dist(uint32_t s, uint32_t o) {
     if (nan_bits(o) || nan_bits(s)) return (s == QNANB && nan_bits(o)) ? 0 : UINT32_MAX;
     if ((o & 0x7fffffffu) == PINFB || (s & 0x7fffffffu) == PINFB) return s == o ? 0 : UINT32_MAX;
-    if ((o & 0x7fffffffu) == 0 && (s & 0x7fffffffu) == 0) return s == o ? 0 : UINT32_MAX;
+    if ((o & 0x7fffffffu) == 0 || (s & 0x7fffffffu) == 0) return s == o ? 0 : UINT32_MAX;  /* zero is exact: either side zero demands identical bits */
     int64_t d = ord(s) - ord(o);
     if (d < 0) d = -d;
     return d >= UINT32_MAX ? UINT32_MAX - 1 : (uint32_t)d;
@@ -550,6 +557,11 @@ static void special_values(void) {
     sv("cos", omega_math_cos, NINFB, QNANB); sv("cos", omega_math_cos, 0xca800001u, QNANB);
     sv("gelu", omega_math_gelu, SNAN, QNANB); sv("gelu", omega_math_gelu, PINFB, PINFB); sv("gelu", omega_math_gelu, NINFB, NZ);
     sv("gelu", omega_math_gelu, PZ, PZ); sv("gelu", omega_math_gelu, NZ, NZ);
+    /* tiny subnormal ties (Codex): x/2 + x^2/sqrt(2pi) breaks toward +inf */
+    sv("gelu", omega_math_gelu, 0x00000001u, 0x00000001u); sv("gelu", omega_math_gelu, 0x80000001u, NZ);
+    sv("gelu", omega_math_gelu, 0x00000003u, 0x00000002u); sv("gelu", omega_math_gelu, 0x80000003u, 0x80000001u);
+    sv("gelu", omega_math_gelu, 0x00800001u, 0x00400001u); sv("gelu", omega_math_gelu, 0x80800001u, 0x80400000u);
+    sv("gelu", omega_math_gelu, 0x00000002u, 0x00000001u); sv("gelu", omega_math_gelu, 0x80000002u, 0x80000001u);
     printf("special values: %s\n", g_fail ? "FAIL" : "PASS");
 }
 

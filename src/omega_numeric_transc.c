@@ -420,6 +420,15 @@ float omega_math_gelu(float x) {
     if (x >= 8.0f) return x;                   /* x erfc(x/sqrt2)/2 < 2^-25 x: rounds to x; +inf -> +inf */
     if (x < -15.5f) return tf(0x80000000u);    /* |gelu| < 2^-150: rounds to -0; -inf -> -0 */
     if ((tb(x) & 0x7fffffffu) == 0) return x;  /* gelu(+-0) = +-0 */
+    if ((tb(x) & 0x7fffffffu) < 0x01000000u) {
+        /* |x| < 2^-125: x/2 is exact or an exact midpoint between subnormals,
+         * and the correction x^2/sqrt(2 pi) > 0 is below 2^-124 of it, so it
+         * only breaks the tie, always toward +inf (Codex finding: rounding x/2
+         * first lost it, e.g. gelu(2^-149) = 2^-149, not 0). Integer only. */
+        uint32_t m = tb(x) & 0x7fffffffu;
+        uint32_t s = tb(x) & 0x80000000u;
+        return tf(s | (s ? (m >> 1) : ((m + 1u) >> 1)));
+    }
     const float INV_SQRT2 = K(MUT_GELU, 0xB504F3p-24f);
     float y = fmul(x, INV_SQRT2);
     float ay = fabs_(y);
