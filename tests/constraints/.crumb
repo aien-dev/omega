@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/constraints",
+  "layer": "tests/constraints",
+  "purpose": "Directory tests/constraints. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/constraints. Purpose not yet described by a human.",
+      "files": [
+        "run_constraints_tests.sh"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 2,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "8b719ff",
+          "timestamp": "2026-09-30T15:52:29-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #106 from aien-dev/feat/r16-g3-g5-host",
+          "pr": 106
+        },
+        {
+          "source": "backfill-git",
+          "sha": "30bb116",
+          "timestamp": "2026-09-26T02:47:10-05:00",
+          "author": "Drake Stapleton",
+          "subject": "feat(omega): Milestone 4 — OMEGA_SEMANTICS canonical semantic substrate and qualification (#1, #2, #3, #4)",
+          "pr": 1
+        }
+      ]
+    }
+  }
+}

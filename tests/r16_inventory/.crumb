@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/r16_inventory",
+  "layer": "tests/r16_inventory",
+  "purpose": "Directory tests/r16_inventory. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "below": [
+    {
+      "name": "fixture",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/r16_inventory. Purpose not yet described by a human.",
+      "files": [
+        "run.sh"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "6fdc4c3",
+          "timestamp": "2026-09-29T11:49:54-05:00",
+          "author": "aien-dev",
+          "subject": "R16 spec: orchestrator retirement (pre-registration) (#68)",
+          "pr": 68
+        }
+      ]
+    }
+  }
+}

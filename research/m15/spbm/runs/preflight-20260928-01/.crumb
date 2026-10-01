@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0.0",
+  "name": "research/m15/spbm/runs/preflight-20260928-01",
+  "layer": "research/m15/spbm/runs/preflight-20260928-01",
+  "purpose": "Directory research/m15/spbm/runs/preflight-20260928-01. Purpose not yet described by a human.",
+  "above": {
+    "name": "research/m15/spbm",
+    "path": "../.."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory research/m15/spbm/runs/preflight-20260928-01. Purpose not yet described by a human.",
+      "files": [
+        "DSDT.dat",
+        "SHA256SUMS",
+        "base-commit.txt",
+        "bios.txt",
+        "build.log",
+        "e-1.jsonl",
+        "e-2.jsonl",
+        "e-3.jsonl",
+        "idle-1.jsonl",
+        "idle-2.jsonl",
+        "idle-3.jsonl",
+        "load-e-1.jsonl",
+        "load-e-2.jsonl",
+        "load-e-3.jsonl",
+        "load-p-1.jsonl",
+        "load-p-2.jsonl",
+        "load-p-3.jsonl",
+        "loaded-srcversion.txt",
+        "module.txt",
+        "nvidia-smi.txt",
+        "p-1.jsonl",
+        "p-2.jsonl",
+        "p-3.jsonl",
+        "processes-before.txt",
+        "secure-boot.txt",
+        "source-binary.sha256",
+        "status.json",
+        "uname.txt",
+        "worktree.txt"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "bba3bd3",
+          "timestamp": "2026-09-28T22:36:09-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
+          "pr": 67
+        }
+      ]
+    }
+  }
+}

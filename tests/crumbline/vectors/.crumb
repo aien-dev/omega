@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/crumbline/vectors",
+  "layer": "tests/crumbline/vectors",
+  "purpose": "Directory tests/crumbline/vectors. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests/crumbline",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/crumbline/vectors. Purpose not yet described by a human.",
+      "files": [
+        "expected.txt",
+        "v001.crb",
+        "v002.crb",
+        "v003.crb",
+        "v004.crb",
+        "v005.crb",
+        "v006.crb",
+        "v007.crb",
+        "v008.crb",
+        "v009.crb",
+        "v010.crb",
+        "v011.crb",
+        "v012.crb",
+        "v013.crb",
+        "v014.crb",
+        "v015.crb",
+        "v016.crb",
+        "v017.crb",
+        "v018.crb",
+        "v019.crb",
+        "v020.crb",
+        "v021.crb",
+        "v022.crb",
+        "v023.crb",
+        "v024.crb",
+        "v025.crb",
+        "v026.crb",
+        "v027.crb",
+        "v028.crb",
+        "v029.crb",
+        "v030.crb",
+        "v031.crb",
+        "v032.crb",
+        "v033.crb",
+        "v034.crb",
+        "v035.crb",
+        "v036.crb",
+        "v037.crb",
+        "v038.crb",
+        "v039.crb",
+        "v040.crb",
+        "v041.crb",
+        "v042.crb",
+        "v043.crb",
+        "v044.crb",
+        "v045.crb",
+        "v046.crb",
+        "v047.crb",
+        "v048.crb",
+        "v049.crb"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "b4547c5",
+          "timestamp": "2026-09-27T12:07:03-05:00",
+          "author": "aien-dev",
+          "subject": "feat(crumbline): Omega learner adapter for Crumb v1 (#34)",
+          "pr": 34
+        }
+      ]
+    }
+  }
+}

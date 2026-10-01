@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/r16_inventory/fixture/omega/src",
+  "layer": "tests/r16_inventory/fixture/omega/src",
+  "purpose": "Directory tests/r16_inventory/fixture/omega/src. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests/r16_inventory/fixture",
+    "path": "../.."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/r16_inventory/fixture/omega/src. Purpose not yet described by a human.",
+      "files": [
+        "legacy_oracle_demo.c",
+        "world.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "6fdc4c3",
+          "timestamp": "2026-09-29T11:49:54-05:00",
+          "author": "aien-dev",
+          "subject": "R16 spec: orchestrator retirement (pre-registration) (#68)",
+          "pr": 68
+        }
+      ]
+    }
+  }
+}

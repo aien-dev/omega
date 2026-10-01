@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/estimation",
+  "layer": "tests/estimation",
+  "purpose": "Directory tests/estimation. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/estimation. Purpose not yet described by a human.",
+      "files": [
+        "est_ref_info.c",
+        "est_ref_info.h",
+        "test_est_kf.c",
+        "test_est_pred.c",
+        "test_est_ref.c",
+        "test_est_types.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 2,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "d78fd11",
+          "timestamp": "2026-09-30T23:43:21-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #129 from aien-dev/feat/est-v3",
+          "pr": 129
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "d78fd11",
+          "pr": 129,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane4",
+          "sha": "d78fd11",
+          "pr": 129,
+          "note": "omega #129: MERGED d78fd11 (merge commit, so 93b3579 stays in history).",
+          "ref": "2026-10-01-push-lane4-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane4",
+          "sha": "d78fd11",
+          "pr": 129,
+          "note": "~08:40Z Lane 4 DONE: EST v3 PHASE_A_FAIL recorded, omega#129 d78fd11, arch#80 ac83f0d; finding: 10-step variance ratio 2.137 (thermal ramp persists), F5 closest; EST-4/5 blocked. Launching Lane 15 (v",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "6d1ff1d",
+          "timestamp": "2026-09-30T09:20:35-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #105 from aien-dev/feat/est-0-1",
+          "pr": 105
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "6d1ff1d",
+          "pr": 105,
+          "note": "ADR 0020 EST table: EST-0/1/2 evidence omega#105 6d1ff1d (EST-2 \"exit not claimed\"); EST-3 \"FAIL recorded (v1 #105, v2 #118, v3 #129); v4 in progress\" (branch feat/est-v4, no PR); EST-4/5 \"blocked on",
+          "ref": "2026-10-01-push-lane23-report.md"
+        }
+      ]
+    }
+  }
+}

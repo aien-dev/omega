@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/turing/fixtures",
+  "layer": "tests/turing/fixtures",
+  "purpose": "Directory tests/turing/fixtures. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests/turing",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/turing/fixtures. Purpose not yet described by a human.",
+      "files": [
+        "PROVENANCE.md",
+        "ctr1_seed1_crumbs05-07.ctr",
+        "ctr1_seed1_crumbs10-12.ctr"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "f0dc0af",
+          "timestamp": "2026-09-29T16:05:27-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #85 from aien-dev/feat/turing-yield-ty12",
+          "pr": 85
+        }
+      ]
+    }
+  }
+}

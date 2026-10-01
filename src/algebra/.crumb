@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/algebra",
+  "layer": "src/algebra",
+  "purpose": "Directory src/algebra. Purpose not yet described by a human.",
+  "above": {
+    "name": "src",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory src/algebra. Purpose not yet described by a human.",
+      "files": [
+        "oma_pack.c",
+        "oma_pack.h",
+        "oma_quant.c",
+        "oma_quant.h",
+        "oma_select.c",
+        "oma_select.h",
+        "oma_trit.c",
+        "oma_trit.h",
+        "oma_z3.c",
+        "oma_z3.h",
+        "phase_twin.c",
+        "phase_twin.h",
+        "realize_binary.c",
+        "realize_bitplane.c",
+        "realize_common.c",
+        "realize_common.h",
+        "realize_dense.c",
+        "realize_rns.c",
+        "realize_sparse.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 3,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "7350a61",
+          "timestamp": "2026-09-29T14:46:35-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #84 from aien-dev/feat/mixed-algebra-phase-twin",
+          "pr": 84
+        },
+        {
+          "source": "backfill-git",
+          "sha": "7d10051",
+          "timestamp": "2026-09-29T14:40:59-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #82 from aien-dev/fix/mixed-algebra-turing-align",
+          "pr": 82
+        },
+        {
+          "source": "backfill-git",
+          "sha": "4b217aa",
+          "timestamp": "2026-09-29T12:59:58-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #78 from aien-dev/feat/mixed-algebra",
+          "pr": 78
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0.0",
+  "name": "docs/brownian",
+  "layer": "docs/brownian",
+  "purpose": "Directory docs/brownian. Purpose not yet described by a human.",
+  "above": {
+    "name": "docs",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory docs/brownian. Purpose not yet described by a human.",
+      "files": [
+        "PROFILE_COMMITMENT.txt",
+        "PROFILE_COMMITMENT_HISTORY.txt"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 5,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "b608dff",
+          "timestamp": "2026-09-30T06:56:11-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #104 from aien-dev/docs/brn-commit-history",
+          "pr": 104
+        },
+        {
+          "source": "backfill-git",
+          "sha": "6b9d4b7",
+          "timestamp": "2026-09-30T06:35:54-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #103 from aien-dev/docs/brn-commit-v13",
+          "pr": 103
+        },
+        {
+          "source": "backfill-git",
+          "sha": "be55354",
+          "timestamp": "2026-09-30T01:02:28-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #102 from aien-dev/docs/brownian-commitment-3",
+          "pr": 102
+        },
+        {
+          "source": "backfill-git",
+          "sha": "6014187",
+          "timestamp": "2026-09-30T00:58:32-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #101 from aien-dev/docs/brownian-commitment-2",
+          "pr": 101
+        },
+        {
+          "source": "backfill-git",
+          "sha": "c7687ea",
+          "timestamp": "2026-09-30T00:49:27-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #100 from aien-dev/docs/brownian-profile-commitment",
+          "pr": 100
+        }
+      ]
+    }
+  }
+}

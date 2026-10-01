@@ -1,0 +1,149 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/fabric",
+  "layer": "tests/fabric",
+  "purpose": "Directory tests/fabric. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/fabric. Purpose not yet described by a human.",
+      "files": [
+        "fab_living_phase.h",
+        "fabric_living_test.c",
+        "fabric_receipt.sh",
+        "fabric_test.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 4,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "a7e2db8",
+          "timestamp": "2026-10-01T08:17:03-05:00",
+          "author": "aien-dev",
+          "subject": "Lane 32 item 3: J-Space generations never wrap; Fabric generation width + replay after restart (#159)",
+          "pr": 159
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane32",
+          "sha": "a7e2db8",
+          "pr": 159,
+          "note": "Item 3 MERGED: omega #159 -> a7e2db8 (squash). J-Space realization generations u64, retire at UINT64_MAX; branch generations stay u32 (packed into a World field as gen<<32|id) but an exhausted branch",
+          "ref": "2026-10-01-push-lane32-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane32",
+          "sha": "a7e2db8",
+          "pr": 159,
+          "note": "13:18Z Lane 32 interim: omega #159 MERGED a7e2db8 (J-Space realization generations u64, retire at max; branch slot retire on exhaustion), omega #160 MERGED 6271ea8 (rx-host.yml on every push to main,",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "1299b19",
+          "timestamp": "2026-10-01T01:39:11-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #137 from aien-dev/lane19/fabric-sig64",
+          "pr": 137
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane19",
+          "sha": "1299b19",
+          "pr": 137,
+          "note": "Part B, omega Fabric 64-byte signature: PASS (host).** PR aien-dev/omega #137, merged 1299b19.",
+          "ref": "2026-10-01-push-lane19-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "1299b19",
+          "pr": 137,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane19",
+          "sha": "1299b19",
+          "pr": 137,
+          "note": "~12:50Z Lane 19 DONE: aienos#193 8d511d6 (resend jitter), omega#137 1299b19 (Fabric sig 64 B, format v2). Gap: omega CI never runs test-fabric for src/fabric-only changes (workflow outside lanes); qu",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "ff2af05",
+          "timestamp": "2026-10-01T00:06:34-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #132 from aien-dev/lane13/fabric-living",
+          "pr": 132
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane13",
+          "sha": "ff2af05",
+          "pr": 132,
+          "note": "Objective 1, Fabric in the living World: PASS. PR #132, merge ff2af05.",
+          "ref": "2026-10-01-push-lane13-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "ff2af05",
+          "pr": 132,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane13",
+          "sha": "ff2af05",
+          "pr": 132,
+          "note": "~10:10Z Lane 13 DONE: omega#132 ff2af05 (Fabric 2nd machine in living World), #131 f7b22f1 (COMPOSITION-2 GPU gate 14/14 x2, receipt in evidence/COMPOSITION-2), #133 c6cf052 (close waits on quiescenc",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "a18ec6b",
+          "timestamp": "2026-09-30T22:48:01-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #123 from aien-dev/fabric/f5-0-loopback",
+          "pr": 123
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane6",
+          "sha": "a18ec6b",
+          "pr": 123,
+          "note": "omega #123 MERGED a18ec6b (tested commit 0fc309c; re-run PASS after merging main 5c403f0). New files only: src/fabric/{fabric,fab_hmac,fab_loopback}.{h,c}, tests/fabric/{fabric_test.c,fabric_receipt.",
+          "ref": "2026-10-01-push-lane6-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane6",
+          "sha": "a18ec6b",
+          "pr": 123,
+          "note": "Codex review: 6 passes; every finding fixed or answered with a test (listed in omega #123 body).",
+          "ref": "2026-10-01-push-lane6-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane6",
+          "sha": "a18ec6b",
+          "pr": 123,
+          "note": "~05:00Z Lane 6 DONE: omega #123 a18ec6b Fabric F5-0 loopback PASS (receipt evidence/F5-0/e419a00b...), arch #78 40c17de spec. Drake decision added: accept aienos ADR 0010 (Fabric identity/advertiseme",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        }
+      ]
+    }
+  }
+}

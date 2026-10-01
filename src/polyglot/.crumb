@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/polyglot",
+  "layer": "src/polyglot",
+  "purpose": "Directory src/polyglot. Purpose not yet described by a human.",
+  "above": {
+    "name": "src",
+    "path": ".."
+  },
+  "below": [
+    {
+      "name": "asm",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory src/polyglot. Purpose not yet described by a human.",
+      "files": [
+        "omx_asm.c",
+        "omx_bench.c",
+        "omx_bench.h",
+        "omx_encoder.c",
+        "omx_encoder.h",
+        "omx_encoder_ext.c",
+        "omx_encoder_ext.h",
+        "omx_lang.c",
+        "omx_lang.h",
+        "omx_mojo.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "87938dc",
+          "timestamp": "2026-09-29T14:16:52-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
+          "pr": 80
+        }
+      ]
+    }
+  }
+}
