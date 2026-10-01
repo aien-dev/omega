@@ -1,0 +1,20 @@
+{
+  "gate": "F5_0_FABRIC_LOOPBACK",
+  "verdict": "PASS",
+  "reasons": "",
+  "scope": "host-only, in-process loopback transport, HMAC stand-in authenticator; no real network, no TRUST-1 signature, no hardware qualification",
+  "commit": "c5d7f1f22d15c114f8f2ac6fe017b9d7b973001e",
+  "tree": "71d08d58a3bbfce45e66f6b442af2b1d0942bc61",
+  "run_id": "20261001T062728Z",
+  "command": "make test-fabric (twice, clean build/fabric each time)",
+  "checks_per_binary_run": "489",
+  "replay_digest_run1": "0021534ccea059a6fc486741bf96ccde20631e17ca31de5d1b456336f6687dc3",
+  "replay_digest_run2": "0021534ccea059a6fc486741bf96ccde20631e17ca31de5d1b456336f6687dc3",
+  "transcript": "3436b10b0ebadba5fe7ec530ef9245d7e5b404df99572da43c4ad436dc79f31c",
+  "state_A": "f40d8a4b2609da6907a29f893e99590f47cbbe2f43eeeafb02a575ef3c9d68d0",
+  "state_B": "f5eb2d2f170d9caeb6d66f2fb7764104c2616436e33fe58e085462487d19ad6e",
+  "state_C": "de5b1cb26c5eac9003baf4052cace6eee0c580aa425a59865e285dcbcdb38c96",
+  "fabric_sources_sha256": "f05e966c219c2baf7fc25d49ea4da67d09e9715fdf6996861841a5970ff5e04d",
+  "logs_sha256": "18b2886b2c3871d63ac9d91e53abbb8befbeefe8f0bc04badae6fa9c2b964019",
+  "host": "Linux 7.0.0-1019-nvidia aarch64"
+}

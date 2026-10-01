@@ -7,7 +7,9 @@
  * transcript digest. Hooks let a test copy the last message, inject raw
  * bytes (replay, forgery, misdelivery) and silence a machine.
  *
- * Authenticator: HMAC-SHA256 with one 32-byte key per machine. This is a
+ * Authenticator: HMAC-SHA256 with one 32-byte key per machine, stretched to
+ * the 64-byte FAB_SIG_BYTES field (fab_hmac_sig64: two domain-separated
+ * HMAC-SHA256 halves). This is a
  * stand-in: a verifier holding a symmetric key could also sign with it, so it
  * proves only that the sender knew the key. The real transport replaces it
  * with the machine's owner-key signature (TRUST-1) behind the same FabAuth.

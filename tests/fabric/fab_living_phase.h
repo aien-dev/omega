@@ -376,7 +376,7 @@ static int fl_run(const AienMachineId *self, const char *dir, FlAttachFn attach,
         e.cost = 1;                      /* would outrank everything */
         FL_CHECK(cq_wire_encode(&r->cat_b, &e, CQ_WIRE_ADVERTISE, rec) == CQ_OK, "encode");
         FL_CHECK(fab_seal(&r->node_b, &r->a, FAB_MSG_ADVERTISE, rec, sizeof rec, t, msg, &len) == FAB_OK, "seal");
-        fab_hmac_sha256(r->key_x, 32, msg, len - FAB_TAG_BYTES, msg + len - FAB_TAG_BYTES);
+        fab_hmac_sig64(r->key_x, msg, len - FAB_SIG_BYTES, msg + len - FAB_SIG_BYTES);
         g->forged_wrong_key = fl_deliver_a(r, msg, len, t);
         FL_CHECK(g->forged_wrong_key == FAB_E_AUTH, "forged (wrong key) %d", g->forged_wrong_key);
         /* A genuine advertisement with one byte altered in flight. The
