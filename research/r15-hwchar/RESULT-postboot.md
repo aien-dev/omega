@@ -50,4 +50,4 @@ a machine-state failure. There are no selective power cycles.
 
 The first post-boot attempt (runs/hwchar-postboot-aborted-173714) ended after
 12 s because the session driving it exited. The orchestrator reran postboot.sh
-detached at 17:39:19. Reproduce the table: python3 research/r15-hwchar/compare.py
+detached at 17:39:19. Reproduce the table: research/r15-hwchar/compare.sh
