@@ -439,6 +439,23 @@ $(RX_R12_SILICON): $(RX_R12_SILICON_SRCS) src/runtime/rx_world.h \
 test-r12-silicon: $(RX_R12_SILICON)
 	./$(RX_R12_SILICON)
 
+# COMPOSITION-2 in the living system (WP-A): the composition modules are part
+# of the canonical living build, so every R13/R14/R15/R16 binary links them.
+# rx_graph.o, rx_capq.o and rx_skillroute.o keep their own no-mint symbol
+# checks; the living host build depends on them so the checks run with it.
+# Lane 13: Fabric F5-0 (src/fabric, mk/fabric.mk) in the living build; the R13
+# host test runs a second simulated machine whose Skill the composition uses
+# (tests/fabric/fab_living_phase.h). Its purity check runs in test-fabric-living.
+RX_FABRIC_LIVING_SRCS = src/fabric/fabric.c src/fabric/fab_hmac.c src/fabric/fab_loopback.c \
+	src/fabric/fab_dispatch.c
+RX_COMPOSE_LIVING_SRCS = src/runtime/aien_machine_id.c src/runtime/rx_jspace.c \
+	src/runtime/rx_cortex.c src/runtime/rx_cortex_record.c src/runtime/rx_graph.c \
+	src/runtime/rx_capq.c src/runtime/rx_skillroute.c src/runtime/rx_compose.c \
+	$(RX_FABRIC_LIVING_SRCS)
+RX_COMPOSE_LIVING_CHECKS = $(OUT_DIR)/rx_graph.o $(OUT_DIR)/rx_capq.o $(OUT_DIR)/rx_skillroute.o \
+	src/runtime/rx_compose.h tests/runtime/rx_compose_fixture.h src/fabric/fab_dispatch.h \
+	tests/fabric/fab_living_phase.h
+
 # R13 host uses the R12 processor stand-in and cannot claim the silicon gate.
 # R13 silicon runs the same world against the physical resident GB10 seat.
 RX_R13_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
@@ -450,12 +467,13 @@ RX_R13_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
 	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c \
 	src/omega_realize_synth.c src/omega_program.c src/omega_machine.c src/omega_exec.c \
 	src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c \
+	$(RX_COMPOSE_LIVING_SRCS) \
 	tests/runtime/rx_r13_living.c
 RX_R13_HOST = $(OUT_DIR)/rx_r13_living_host
 RX_R13_SILICON = $(OUT_DIR)/rx_r13_living_silicon
 
-$(RX_R13_HOST): $(RX_R13_SRCS) src/runtime/rx_living.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
-	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R13_SRCS) $(AIENOS_CAP_LIB) -lm
+$(RX_R13_HOST): $(RX_R13_SRCS) src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_R13_SRCS) $(AIENOS_CAP_LIB) -lm
 
 $(RX_R13_SILICON): $(RX_R13_SRCS) src/runtime/rx_resident_gpu.c \
 	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c \
@@ -507,7 +525,7 @@ RX_R14_SRCS = $(filter-out tests/runtime/rx_r13_living.c,$(RX_R13_SRCS)) \
 RX_R14_HOST = $(OUT_DIR)/rx_r14_recovery_host
 RX_R14_SILICON = $(OUT_DIR)/rx_r14_recovery_silicon
 
-$(RX_R14_HOST): $(RX_R14_SRCS) src/runtime/rx_living.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+$(RX_R14_HOST): $(RX_R14_SRCS) src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R14_SRCS) $(AIENOS_CAP_LIB) -lm
 
 $(RX_R14_SILICON): $(RX_R14_SRCS) src/runtime/rx_resident_gpu.c \
@@ -1337,11 +1355,14 @@ RX_COMPOSE_DEPS = $(RX_COMPOSE_SRCS) $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ)
 	src/runtime/rx_world.h src/runtime/rx_jspace.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB)
 RX_COMPOSE_LINK = $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ) $(RX_CAPQ_OBJ) $(RX_GRAPH_OBJ) \
 	$(AIENOS_CAP_LIB) -lm
+# RXC_TEST_HOOKS: the composition fault points and rogue-candidate hook
+# (rx_compose.h) exist only in the unit test and the R13 host test; the gate
+# and every other build compile them out.
 RX_COMPOSE_TEST = $(OUT_DIR)/rx_compose_test
 RX_COMPOSE_GATE = $(OUT_DIR)/rx_composition_gate
 
 $(RX_COMPOSE_TEST): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_test.c | $(OUT_DIR)
-	$(CC) $(CFLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_test.c \
+	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_test.c \
 		$(RX_COMPOSE_LINK)
 
 $(RX_COMPOSE_GATE): $(RX_COMPOSE_DEPS) tests/runtime/rx_composition_gate.c | $(OUT_DIR)
@@ -1360,3 +1381,28 @@ print-composition-gate-bin:
 	@echo $(RX_COMPOSE_GATE)
 
 .PHONY: test-composition test-composition-gate composition-gate-bin print-composition-gate-bin
+
+# COMPOSITION-2 GPU tier: the same 14-step gate with both Skills executed on
+# the GB10 through the sovereign M16 native path (no CUDA); see
+# tests/runtime/rx_compose_gpu_skill.h. A chip run: take the quiet flag and
+# use tools/composition_gate.sh --gpu (clean tree, content-addressed receipt).
+RX_COMPOSE_GATE_GPU = $(OUT_DIR)/rx_composition_gate_gpu
+RX_COMPOSE_GPU_SRCS = src/omega_blackwell_submit.c src/omega_blackwell_matmul.c \
+	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+	src/omega_blackwell_realize.c src/omega_vector.c src/omega_validate.c \
+	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c
+
+$(RX_COMPOSE_GATE_GPU): $(RX_COMPOSE_DEPS) $(RX_COMPOSE_GPU_SRCS) tests/runtime/rx_composition_gate.c \
+	tests/runtime/rx_compose_gpu_skill.h | check-physics-lock $(OUT_DIR)
+	$(CC) $(CFLAGS) -DRXC_GATE_GPU -Itests/runtime -pthread -o $@ $(RX_COMPOSE_SRCS) \
+		$(RX_COMPOSE_GPU_SRCS) tests/runtime/rx_composition_gate.c $(RX_COMPOSE_LINK) -ldl
+
+test-composition-gate-gpu: $(RX_COMPOSE_GATE_GPU)
+	./$(RX_COMPOSE_GATE_GPU) "$$(git rev-parse HEAD)" $(OUT_DIR)/composition_gate_gpu_receipt.json
+
+composition-gate-gpu-bin: $(RX_COMPOSE_GATE_GPU)
+
+print-composition-gate-gpu-bin:
+	@echo $(RX_COMPOSE_GATE_GPU)
+
+.PHONY: test-composition-gate-gpu composition-gate-gpu-bin print-composition-gate-gpu-bin

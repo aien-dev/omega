@@ -89,9 +89,9 @@
 #ifndef FABRIC_H
 #define FABRIC_H
 
-#include "aien_machine_id.h"
-#include "rx_capq.h"
-#include "rx_jspace.h"
+#include "runtime/aien_machine_id.h"
+#include "runtime/rx_capq.h"
+#include "runtime/rx_jspace.h"
 
 #include <stddef.h>
 #include <stdint.h>

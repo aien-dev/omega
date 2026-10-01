@@ -1,0 +1,232 @@
+est3c_params v3
+protocol docs/estimation/EST3C_PROTOCOL_V3.md
+protocol_doc_sha256 2f6393320eb632214afa4db7b6a79f3c14ceec4a2b570c459e115c3f5634eade
+protocol_doc_sha256_on_disk 2f6393320eb632214afa4db7b6a79f3c14ceec4a2b570c459e115c3f5634eade
+tool_commit 93b35797b31ffc1e2fa1881ee344cbf42c041cc2
+tool_dirty 0
+synthetic_test 0
+fit_raw_path evidence/EST3C/raw/20261001T025159Z-est3c-fit-silicon/machine-state.ndjson
+fit_raw_sha256 9d5473b56dbb3765e5fc5335ef74aec47a11485651bcffc75272062ab48dc230
+fit_marks_path evidence/EST3C/raw/20261001T025159Z-est3c-fit-silicon/machine-state-marks.txt
+fit_marks_sha256 4dfd06ec3f07c96eefe9697da2809634a0d4db2bfe4718909f2d0ca2c23d7a72
+fit_lines 2681
+assumption quantum 100 lo -40000 hi 150000 unit milli_celsius
+rule burn_in 30 ticks from the first valid observation
+rule f1_f2_p0 p0 = r
+rule f5_s0 s0 = sqrt(floor)
+rule tick_mapping one tick per line; round(gap)-1 inserted MISSING ticks before a line whose gap rounds above 1 s
+rule objective mean discrete one-step log score (nats) over scored ticks
+rule grid_tie first grid point in listed order (strict >)
+grid_stride 1
+ticks total 2681 inserted 0 gaps_capped 0 lines_multi 0 bad_t 0 absent_value 0 unparsable_value 0 gap_zero 0 gap_backward 0
+marks pairs 35 begins 35 ends 35 unclosed 0 nested 0 stray_ends 0 bad_lines 0
+family F1 available 1 nparam 3 param 56234.132519034909 100 100 0 0 0 0 0 logscore -2.8171844149018561 grid_points 425 grid_finite 425 grid_errors 0
+family F2 available 1 nparam 4 param 562341.32519034913 100 100 3 0 0 0 0 logscore -3.4459847653778048 grid_points 1700 grid_finite 1700 grid_errors 0
+family F3 available 1 nparam 2 param 1.5 63.095734448019329 0 0 0 0 0 0 logscore -1.9273552741277991 grid_points 510 grid_finite 510 grid_errors 0
+family F4 available 1 nparam 7 param 3 0.48273566934942225 0.46476962912682407 0.052494701523753719 833.33333333333337 45711.121164967233 5710380.2209609095 0 logscore -1.8677827340408035 grid_points 1 grid_finite 1 grid_errors 0
+family F5 available 1 nparam 5 param 0.5 2 0.59999999999999998 833.33333333333337 28.867513459481287 0 0 0 logscore -1.6285003799550359 grid_points 3087 grid_finite 3087 grid_errors 0
+f4_em status 0 changes 2651 loglik -16766.279475533487
+screen F1 coverage50 value 0.75976510701127364 band 0.46000000000000002 0.54000000000000004 n 2651 gated 1 pass 0
+screen F1 coverage80 value 0.88365979950566442 band 0.76000000000000001 0.83999999999999997 n 2651 gated 1 pass 0
+screen F1 coverage95 value 0.93921139156104128 band 0.93000000000000005 0.96999999999999997 n 2651 gated 1 pass 1
+screen F1 pit_bin0 value 0.055433321697565409 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F1 pit_bin1 value 0.035978230619366135 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F1 pit_bin2 value 0.047231063558407081 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F1 pit_bin3 value 0.061986749500409853 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F1 pit_bin4 value 0.28085931439254952 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F1 pit_bin5 value 0.28283996425402086 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F1 pit_bin6 value 0.073341489960916009 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F1 pit_bin7 value 0.056193188454351062 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F1 pit_bin8 value 0.04522979876564371 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F1 pit_bin9 value 0.060906878796770265 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F1 bias_mean_z value 0.032340792778035317 band -0.10000000000000001 0.10000000000000001 n 2651 gated 1 pass 1
+screen F1 lag1_z value 0.43663921318203225 band -0.20000000000000001 0.20000000000000001 n 2651 gated 1 pass 0
+screen F1 quarter1_coverage95 value 0.96147978072366325 band 0.90000000000000002 0.98999999999999999 n 662 gated 1 pass 1
+screen F1 quarter2_coverage95 value 0.92178849799741891 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F1 quarter3_coverage95 value 0.95112536031765105 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F1 quarter4_coverage95 value 0.92248551451940142 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F1 regime_trial_cov95 value 0.9614905581364156 band 0.90000000000000002 0.98999999999999999 n 2416 gated 1 pass 1
+screen F1 regime_idle_cov95 value 0.71016259817336291 band 0.90000000000000002 0.98999999999999999 n 235 gated 1 pass 0
+screen F1 ten_step_coverage95 value 0.86609215098401726 band 0.90000000000000002 0.98999999999999999 n 2641 gated 1 pass 0
+screen F1 n_scored value 2651 band 2000 inf n 2651 gated 1 pass 1
+screen_sharpness F1 width80_mean_mc 600 width80_median_mc 600 unscorable 0
+screen_result F1 pass 0 first_fail coverage50 n 2651 logscore -2.8171844149018561
+screen F2 coverage50 value 0.93848619424728097 band 0.46000000000000002 0.54000000000000004 n 2651 gated 1 pass 0
+screen F2 coverage80 value 0.95873125253333025 band 0.76000000000000001 0.83999999999999997 n 2651 gated 1 pass 0
+screen F2 coverage95 value 0.96722105403365022 band 0.93000000000000005 0.96999999999999997 n 2651 gated 1 pass 1
+screen F2 pit_bin0 value 0.020279244637928937 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F2 pit_bin1 value 0.0050934650889124409 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F2 pit_bin2 value 0.016247105711656197 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F2 pit_bin3 value 0.058298833849159203 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F2 pit_bin4 value 0.382160402033211 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F2 pit_bin5 value 0.40392862180986927 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F2 pit_bin6 value 0.070573717923673243 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F2 pit_bin7 value 0.017911866334022964 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F2 pit_bin8 value 0.0045172397828257471 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F2 pit_bin9 value 0.020989502828740906 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F2 bias_mean_z value 0.0065657555573130199 band -0.10000000000000001 0.10000000000000001 n 2651 gated 1 pass 1
+screen F2 lag1_z value 0.72515414893163388 band -0.20000000000000001 0.20000000000000001 n 2651 gated 1 pass 0
+screen F2 quarter1_coverage95 value 0.97615583162005393 band 0.90000000000000002 0.98999999999999999 n 662 gated 1 pass 1
+screen F2 quarter2_coverage95 value 0.96179351780586231 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F2 quarter3_coverage95 value 0.98039215686274506 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F2 quarter4_coverage95 value 0.95055618613189208 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F2 regime_trial_cov95 value 0.9816511185038439 band 0.90000000000000002 0.98999999999999999 n 2416 gated 1 pass 1
+screen F2 regime_idle_cov95 value 0.81886771037412787 band 0.90000000000000002 0.98999999999999999 n 235 gated 1 pass 0
+screen F2 ten_step_coverage95 value 0.92176389280604643 band 0.90000000000000002 0.98999999999999999 n 2641 gated 1 pass 1
+screen F2 n_scored value 2651 band 2000 inf n 2651 gated 1 pass 1
+screen_sharpness F2 width80_mean_mc 1998.6420218785363 width80_median_mc 2000 unscorable 0
+screen_result F2 pass 0 first_fail coverage50 n 2651 logscore -3.4459847653778048
+screen F3 coverage50 value 0.56120851434070551 band 0.46000000000000002 0.54000000000000004 n 2651 gated 1 pass 0
+screen F3 coverage80 value 0.73694356134122985 band 0.76000000000000001 0.83999999999999997 n 2651 gated 1 pass 0
+screen F3 coverage95 value 0.91725758325567675 band 0.93000000000000005 0.96999999999999997 n 2651 gated 1 pass 0
+screen F3 pit_bin0 value 0.12125572868796332 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F3 pit_bin1 value 0.053661188317680783 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F3 pit_bin2 value 0.074290989335218716 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F3 pit_bin3 value 0.11615425128071931 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F3 pit_bin4 value 0.11615425128071931 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F3 pit_bin5 value 0.11615425128071931 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F3 pit_bin6 value 0.11615425128071931 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F3 pit_bin7 value 0.080878868882784408 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F3 pit_bin8 value 0.063495509682674076 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F3 pit_bin9 value 0.14180070997080277 band 0.070000000000000007 0.13 n 2651 gated 1 pass 0
+screen F3 bias_mean_z value 0.049133878378984933 band -0.10000000000000001 0.10000000000000001 n 2651 gated 1 pass 1
+screen F3 lag1_z value 0.28388482083604494 band -0.20000000000000001 0.20000000000000001 n 2651 gated 1 pass 0
+screen F3 quarter1_coverage95 value 0.93610838802744067 band 0.90000000000000002 0.98999999999999999 n 662 gated 1 pass 1
+screen F3 quarter2_coverage95 value 0.90797770749219597 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F3 quarter3_coverage95 value 0.92853059391386883 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F3 quarter4_coverage95 value 0.89644207617557914 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 0
+screen F3 regime_trial_cov95 value 0.94413661814813821 band 0.90000000000000002 0.98999999999999999 n 2416 gated 1 pass 1
+screen F3 regime_idle_cov95 value 0.64091822878678828 band 0.90000000000000002 0.98999999999999999 n 235 gated 1 pass 0
+screen F3 ten_step_coverage95 value 0.88274380099154393 band 0.90000000000000002 0.98999999999999999 n 2641 gated 1 pass 0
+screen F3 n_scored value 2651 band 2000 inf n 2651 gated 1 pass 1
+screen_sharpness F3 width80_mean_mc 200 width80_median_mc 200 unscorable 0
+screen_result F3 pass 0 first_fail coverage50 n 2651 logscore -1.9273552741277991
+screen F4 coverage50 value 0.51128584896928808 band 0.46000000000000002 0.54000000000000004 n 2651 gated 1 pass 1
+screen F4 coverage80 value 0.81366777629065179 band 0.76000000000000001 0.83999999999999997 n 2651 gated 1 pass 1
+screen F4 coverage95 value 0.94774715455022385 band 0.93000000000000005 0.96999999999999997 n 2651 gated 1 pass 1
+screen F4 pit_bin0 value 0.086320063263788827 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 pit_bin1 value 0.090474067633305011 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 pit_bin2 value 0.10020793841748636 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 pit_bin3 value 0.10225716979386057 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 pit_bin4 value 0.10225716979386057 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 pit_bin5 value 0.10225716979386057 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 pit_bin6 value 0.10225716979386057 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 pit_bin7 value 0.10645178673394956 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 pit_bin8 value 0.10750530433046417 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 pit_bin9 value 0.1000121604455643 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F4 bias_mean_z value 0.043646016418802724 band -0.10000000000000001 0.10000000000000001 n 2651 gated 1 pass 1
+screen F4 lag1_z value 0.2801341178997992 band -0.20000000000000001 0.20000000000000001 n 2651 gated 1 pass 0
+screen F4 quarter1_coverage95 value 0.96792455078747797 band 0.90000000000000002 0.98999999999999999 n 662 gated 1 pass 1
+screen F4 quarter2_coverage95 value 0.93097619612434934 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F4 quarter3_coverage95 value 0.95865727665815204 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F4 quarter4_coverage95 value 0.93346102810940013 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F4 regime_trial_cov95 value 0.96727880855547244 band 0.90000000000000002 0.98999999999999999 n 2416 gated 1 pass 1
+screen F4 regime_idle_cov95 value 0.74694512869200458 band 0.90000000000000002 0.98999999999999999 n 235 gated 1 pass 0
+screen F4 ten_step_coverage95 value 0.9177673435445648 band 0.90000000000000002 0.98999999999999999 n 2641 gated 1 pass 1
+screen F4 n_scored value 2651 band 2000 inf n 2651 gated 1 pass 1
+screen_sharpness F4 width80_mean_mc 400 width80_median_mc 400 unscorable 0
+screen_result F4 pass 0 first_fail lag1_z n 2651 logscore -1.8677827340408035
+screen F5 coverage50 value 0.50556883514204154 band 0.46000000000000002 0.54000000000000004 n 2651 gated 1 pass 1
+screen F5 coverage80 value 0.79668530072996502 band 0.76000000000000001 0.83999999999999997 n 2651 gated 1 pass 1
+screen F5 coverage95 value 0.94318888593116501 band 0.93000000000000005 0.96999999999999997 n 2651 gated 1 pass 1
+screen F5 pit_bin0 value 0.081329425473098141 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 pit_bin1 value 0.097262205379107167 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 pit_bin2 value 0.094349684818481688 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 pit_bin3 value 0.10068816419339791 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 pit_bin4 value 0.10788692903821627 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 pit_bin5 value 0.1054385885536042 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 pit_bin6 value 0.098307863210182478 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 pit_bin7 value 0.09352074648415698 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 pit_bin8 value 0.099231119052818659 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 pit_bin9 value 0.12198527379693629 band 0.070000000000000007 0.13 n 2651 gated 1 pass 1
+screen F5 bias_mean_z value 0.079614059282840058 band -0.10000000000000001 0.10000000000000001 n 2651 gated 1 pass 1
+screen F5 lag1_z value 0.12779539619080912 band -0.20000000000000001 0.20000000000000001 n 2651 gated 1 pass 1
+screen F5 quarter1_coverage95 value 0.93152223185400307 band 0.90000000000000002 0.98999999999999999 n 662 gated 1 pass 1
+screen F5 quarter2_coverage95 value 0.94415304446550918 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F5 quarter3_coverage95 value 0.95640383769396864 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F5 quarter4_coverage95 value 0.94065883294786523 band 0.90000000000000002 0.98999999999999999 n 663 gated 1 pass 1
+screen F5 regime_trial_cov95 value 0.94660735605060853 band 0.90000000000000002 0.98999999999999999 n 2416 gated 1 pass 1
+screen F5 regime_idle_cov95 value 0.90804410376701294 band 0.90000000000000002 0.98999999999999999 n 235 gated 1 pass 1
+screen F5 ten_step_coverage95 value 0.80886815728457639 band 0.90000000000000002 0.98999999999999999 n 2641 gated 1 pass 0
+screen F5 n_scored value 2651 band 2000 inf n 2651 gated 1 pass 1
+screen_sharpness F5 width80_mean_mc 525.23576009053193 width80_median_mc 200 unscorable 0
+screen_result F5 pass 0 first_fail ten_step_coverage95 n 2651 logscore -1.6285003799550359
+e0_changes 2651
+e0_count -69 1
+e0_count -62 1
+e0_count -56 1
+e0_count -48 1
+e0_count -45 1
+e0_count -44 1
+e0_count -41 1
+e0_count -40 1
+e0_count -39 2
+e0_count -36 1
+e0_count -35 1
+e0_count -34 2
+e0_count -33 2
+e0_count -32 1
+e0_count -30 1
+e0_count -27 1
+e0_count -23 1
+e0_count -22 2
+e0_count -21 1
+e0_count -19 2
+e0_count -17 1
+e0_count -16 1
+e0_count -15 3
+e0_count -14 2
+e0_count -13 1
+e0_count -12 1
+e0_count -11 2
+e0_count -10 2
+e0_count -9 9
+e0_count -8 2
+e0_count -7 6
+e0_count -6 8
+e0_count -5 15
+e0_count -4 43
+e0_count -3 66
+e0_count -2 121
+e0_count -1 251
+e0_count 0 1435
+e0_count 1 297
+e0_count 2 145
+e0_count 3 88
+e0_count 4 36
+e0_count 5 22
+e0_count 6 13
+e0_count 7 3
+e0_count 8 5
+e0_count 9 6
+e0_count 10 4
+e0_count 11 3
+e0_count 12 4
+e0_count 14 3
+e0_count 15 1
+e0_count 16 2
+e0_count 17 5
+e0_count 18 3
+e0_count 19 1
+e0_count 20 2
+e0_count 21 1
+e0_count 25 1
+e0_count 26 1
+e0_count 29 1
+e0_count 33 1
+e0_count 36 1
+e0_count 37 1
+e0_count 40 1
+e0_count 46 2
+e0_count 56 1
+e0_count 62 1
+e0_count 77 1
+e0_count 82 1
+selection_rule best D1 log score among screen-passers; earliest family within 0.01 nats preferred
+selected none
+phase_a PHASE_A_FAIL
+phase_a_fail F1 coverage50=0.759765 coverage80=0.88366 pit_bin0=0.0554333 pit_bin1=0.0359782 pit_bin2=0.0472311 pit_bin3=0.0619867 pit_bin4=0.280859 pit_bin5=0.28284 pit_bin7=0.0561932 pit_bin8=0.0452298 pit_bin9=0.0609069 lag1_z=0.436639 regime_idle_cov95=0.710163 ten_step_coverage95=0.866092
+phase_a_fail F2 coverage50=0.938486 coverage80=0.958731 pit_bin0=0.0202792 pit_bin1=0.00509347 pit_bin2=0.0162471 pit_bin3=0.0582988 pit_bin4=0.38216 pit_bin5=0.403929 pit_bin7=0.0179119 pit_bin8=0.00451724 pit_bin9=0.0209895 lag1_z=0.725154 regime_idle_cov95=0.818868
+phase_a_fail F3 coverage50=0.561209 coverage80=0.736944 coverage95=0.917258 pit_bin1=0.0536612 pit_bin8=0.0634955 pit_bin9=0.141801 lag1_z=0.283885 quarter4_coverage95=0.896442 regime_idle_cov95=0.640918 ten_step_coverage95=0.882744
+phase_a_fail F4 lag1_z=0.280134 regime_idle_cov95=0.746945
+phase_a_fail F5 ten_step_coverage95=0.808868
