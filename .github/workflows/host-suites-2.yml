@@ -14,16 +14,14 @@ name: Host suites 2
 #
 # Jobs and the make targets they run (Spark -j1 time, 2026-10-01):
 #   visor     : test-visor (all Visor lanes + language + physics-free build) 25 s
-#   turing    : test-turing test-turing-cal-blinding test-turing-exp001-a
-#               test-turing-exp001-coders
-#               test-turing-qcont test-turing-qrecord test-turing-verify-indep 3.5 min
+#   turing    : test-turing test-turing-exp001-a test-turing-exp001-coders 3 min
+#               test-turing-verify-indep test-turing-qcont test-turing-qrecord
 #   brownian  : test-brownian-tps 4 min
 #   polyglot  : test-polyglot-asm test-polyglot-encoder 1 min
 #   algebra   : test-algebra test-algebra-asan test-realize test-phase-twin
 #               test-ma-digital-bottom 3.5 min
 #   path      : test-path 30 s;  crumbline : test-crumbline 1 s
-#   runtime   : test-r15-instr test-r15-g7-host
-#               test-r15-parity-host test-r15-receipt test-r16-inventory
+#   runtime   : test-r15-instr test-r15-parity-host test-r15-receipt test-r16-inventory
 #               test-r16-negative test-r16-surface test-r16-authpath (host)
 #   argus     : test-argus-runtime test-machine-identity-argus
 #   numeric2  : test-numeric-reduce-cpu test-divsqrt-host 6 s
@@ -38,6 +36,12 @@ name: Host suites 2
 #   action from the Spark power counters; the runner has none ("energy not
 #   measured lower (counters unavailable)", OMEGA_BRANCH_STATE_REUSE=FAIL).
 #   Spark -j1: PASS (4 min);
+#   test-turing-cal-blinding: environment. It reads development traces from
+#   $HOME/aien-data/crumbline, which lives only on the Spark (outside the
+#   repo). Spark -j1: PASS;
+#   test-r15-g7-host: environment. Its RES-1/RES-4/SEQ episodes must reach goal
+#   MET, which "needs both core classes" (Spark X925 + A725); the runner has
+#   one class, 7/18 checks fail. Spark -j1: PASS;
 #   test-polyglot: environment. mk/polyglot.mk builds its -O3 flavor with
 #   -mcpu=native next to -march=armv8.6-a+...; on the runner (Neoverse N2) gcc
 #   resolves native to a CPU that conflicts with that -march and -Werror stops
@@ -199,8 +203,8 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing
       - name: TURING EXP-001 calibration and reference coders
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-exp001-a test-turing-exp001-coders
-      - name: TURING calibration blinding and independent verifier
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-cal-blinding test-turing-verify-indep
+      - name: TURING independent verifier
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-verify-indep
       - name: TURING q-continuous coder and records
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-qcont test-turing-qrecord
 
@@ -309,22 +313,44 @@ jobs:
           path: aienos-src
       - name: Keep dependency checkouts out of Omega tree status
         run: printf 'physics-src/\naienos-src/\n' >> .git/info/exclude
-      - name: R15 instrumentation, G7 promotion, SEQ parity (host seat)
+      - name: R15 instrumentation
+        if: ${{ !cancelled() }}
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
-        run: make test-r15-instr test-r15-g7-host test-r15-parity-host
+        run: make test-r15-instr
+      - name: R15 SEQ semantic parity (host seat)
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r15-parity-host
       - name: R15 receipt writer (attempt 1 stays a FAIL)
+        if: ${{ !cancelled() }}
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make test-r15-receipt
-      - name: R16 G2 inventory, G4 legacy refusals, G5 surface
+      - name: R16 G2 loop inventory
+        if: ${{ !cancelled() }}
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
-        run: make test-r16-inventory test-r16-negative test-r16-surface
-      - name: R16 G3 authoritative path with legacy orchestrators unavailable (host stand-in; cannot claim the gate)
+        run: make test-r16-inventory
+      - name: R16 G4 legacy paths refused
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r16-negative
+      - name: R16 G5 API and build surface
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r16-surface
+      - name: R16 G3 authoritative path, legacy orchestrators unavailable (host stand-in; cannot claim the gate)
+        if: ${{ !cancelled() }}
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
