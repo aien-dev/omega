@@ -58,9 +58,11 @@ expect_ok r13_production $PROD tests/runtime/rx_r13_living.c
 expect_ok rx_compose_production $PROD src/runtime/rx_compose.c
 expect_ok fab_loopback_testbuild -DAIEN_TEST_BUILD=1 -Isrc -Isrc/runtime -Isrc/fabric src/fabric/fab_loopback.c
 
-# The Makefile refuses the flag in CFLAGS for the production binaries.
+# The Makefile refuses the flag in CFLAGS for the production binaries. Dry run
+# (-n), only the production binary considered out of date (-W on its main
+# source; the Makefile target builds it first, so no prerequisite is remade).
 n=$((n + 1))
-if $MAKE --no-print-directory -n -B "CFLAGS=$CFLAGS -DAIEN_TEST_BUILD=1" "${PROD_BIN:?}" \
+if $MAKE --no-print-directory -n -W tests/runtime/rx_r13_living.c "CFLAGS=$CFLAGS -DAIEN_TEST_BUILD=1" "$PROD_BIN" \
         > "$OUT/make_flag.log" 2>&1; then
     echo "R16 refuse FAIL: make accepted AIEN_TEST_BUILD in CFLAGS for the production program"; bad=1
 elif grep -q 'the production program never builds with AIEN_TEST_BUILD' "$OUT/make_flag.log"; then
