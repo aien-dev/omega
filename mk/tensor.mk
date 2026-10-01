@@ -16,9 +16,11 @@
 #                        receipt writer tools/m20_receipt.sh (fixtures only)
 # test-tensor-e1-reduce  alias of test-tensor (the reduction seam always
 #                        calls omega_reduce_cpu, E1 WP-D, omega #134)
+# test-tensor-store      crash-safe storage lifetime (omega_tensor_store):
+#                        plain + ASan/UBSan, then test-tensor-no-hooks
 ifndef TENSOR_MK
 TENSOR_MK := 1
-.PHONY: test-tensor test-tensor-no-hooks test-tensor-mutations test-tensor-e1-reduce
+.PHONY: test-tensor test-tensor-no-hooks test-tensor-mutations test-tensor-e1-reduce test-tensor-store
 TENSOR_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -ffp-contract=off -Isrc -Isrc/tensor \
 	-DOMEGA_NUMERIC_CPU_ONLY
 TENSOR_SRCS = src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor/omega_tensor_reduce_seam.c \
@@ -28,7 +30,10 @@ TENSOR_DEPS = src/omega_numeric.c src/omega_numeric_provenance.c src/omega_black
 TENSOR_HDRS = src/tensor/omega_tensor.h src/tensor/omega_tensor_reduce_seam.h src/omega_numeric_reduce.h src/omega_numeric.h src/sha256.h src/omega_numeric_transc.h
 # Test builds only: compiles the test-only storage-generation hook.
 TENSOR_TEST_FLAGS = -DOMEGA_TENSOR_TEST_HOOKS
-TENSOR_HOOK_SYMS = omega_tensor_test_set_storage_generation
+TENSOR_HOOK_SYMS = omega_tensor_test_set_storage_generation omega_tensor_store_test_set_crash_step
+# Crash-safe storage lifetime (omega_tensor_store); targets at the end of this file.
+TENSOR_STORE_SRCS = src/tensor/omega_tensor_store.c
+TENSOR_STORE_HDRS = src/tensor/omega_tensor_store.h
 
 $(OUT_DIR)/test_omega_tensor: tests/test_omega_tensor.c $(TENSOR_SRCS) $(TENSOR_DEPS) $(TENSOR_HDRS)
 	@mkdir -p $(OUT_DIR)
@@ -46,11 +51,15 @@ test-tensor: $(OUT_DIR)/test_omega_tensor $(OUT_DIR)/test_omega_tensor_asan
 
 # Default (library) build of the tensor sources: no OMEGA_TENSOR_TEST_HOOKS.
 # Fails if any test-only hook symbol is defined or referenced in the objects.
-test-tensor-no-hooks: src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor/omega_tensor_reduce_seam.c $(TENSOR_HDRS)
+test-tensor-no-hooks: src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor/omega_tensor_reduce_seam.c $(TENSOR_HDRS) \
+		$(TENSOR_STORE_SRCS) $(TENSOR_STORE_HDRS)
 	@mkdir -p $(OUT_DIR)/tensor-lib
 	gcc $(TENSOR_CFLAGS) -O2 -c -o $(OUT_DIR)/tensor-lib/omega_tensor.o src/tensor/omega_tensor.c
 	gcc $(TENSOR_CFLAGS) -O2 -c -o $(OUT_DIR)/tensor-lib/omega_tensor_cpu.o src/tensor/omega_tensor_cpu.c
 	gcc $(TENSOR_CFLAGS) -O2 -c -o $(OUT_DIR)/tensor-lib/omega_tensor_reduce_seam.o src/tensor/omega_tensor_reduce_seam.c
+	gcc $(TENSOR_CFLAGS) -O2 -c -o $(OUT_DIR)/tensor-lib/omega_tensor_store.o src/tensor/omega_tensor_store.c
+	@if nm $(OUT_DIR)/tensor-lib/omega_tensor_store.o | grep -q "\b_exit\b"; then \
+		echo "test-tensor-no-hooks: FAIL (crash hook _exit referenced by default omega_tensor_store.o)"; exit 1; fi
 	@nm $(OUT_DIR)/tensor-lib/omega_tensor.o | grep -q " T omega_tensor_ctx_create\b" \
 		|| { echo "test-tensor-no-hooks: FAIL (nm sanity: omega_tensor_ctx_create not found)"; exit 1; }
 	@for s in $(TENSOR_HOOK_SYMS); do \
@@ -67,4 +76,26 @@ test-tensor-e1-reduce: test-tensor
 .PHONY: test-m20-receipt
 test-m20-receipt:
 	tests/test_m20_receipt.sh
+
+# Crash-safe storage lifetime (src/tensor/omega_tensor_store.{c,h}): round
+# trip, crash at every commit phase (fork + test-only hook), torn writes,
+# crafted journals. Plain and ASan/UBSan, then test-tensor-no-hooks. Writes
+# only under $TMPDIR (default /tmp). Its mutants run in test-tensor-mutations.
+
+$(OUT_DIR)/test_omega_tensor_store: tests/test_omega_tensor_store.c $(TENSOR_STORE_SRCS) $(TENSOR_SRCS) $(TENSOR_DEPS) \
+		$(TENSOR_HDRS) $(TENSOR_STORE_HDRS)
+	@mkdir -p $(OUT_DIR)
+	gcc $(TENSOR_CFLAGS) $(TENSOR_TEST_FLAGS) -O2 -o $@ tests/test_omega_tensor_store.c $(TENSOR_STORE_SRCS) \
+		$(TENSOR_SRCS) $(TENSOR_DEPS)
+
+$(OUT_DIR)/test_omega_tensor_store_asan: tests/test_omega_tensor_store.c $(TENSOR_STORE_SRCS) $(TENSOR_SRCS) \
+		$(TENSOR_DEPS) $(TENSOR_HDRS) $(TENSOR_STORE_HDRS)
+	@mkdir -p $(OUT_DIR)
+	gcc $(TENSOR_CFLAGS) $(TENSOR_TEST_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all \
+		-o $@ tests/test_omega_tensor_store.c $(TENSOR_STORE_SRCS) $(TENSOR_SRCS) $(TENSOR_DEPS)
+
+test-tensor-store: $(OUT_DIR)/test_omega_tensor_store $(OUT_DIR)/test_omega_tensor_store_asan
+	./$(OUT_DIR)/test_omega_tensor_store
+	./$(OUT_DIR)/test_omega_tensor_store_asan
+	$(MAKE) --no-print-directory test-tensor-no-hooks
 endif

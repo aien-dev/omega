@@ -62,5 +62,49 @@ done
 IFS=$old_ifs
 # M20 receipt writer mutants (MUT: markers in tools/m20_receipt.sh), own sweep.
 tools/m20_receipt_mutations.sh || fail=1
+
+# Crash-safe storage lifetime (omega_tensor_store.c): each mutant rebuilds
+# tests/test_omega_tensor_store.c against the mutated copy and must FAIL it.
+# (Skipping the fsync before rename is not observable without power loss, so
+# it is not a mutant here.)
+STORE_MUTATIONS='TSTORE_HASH_VERIFY|s/memcmp(dig, sl->payload_sha, 32) != 0 || memcmp(vid, sl->value_id, 32) != 0/0/
+TSTORE_SHORT_RECORD|s/len != HDR_BYTES + count \* REC_BYTES/0/
+TSTORE_GEN_RESET|s/sl->gen = r->gen + 1;/sl->gen = 1;/
+TSTORE_RENAME_BEFORE_WRITE|s/const char \*wpath = tmp;/const char *wpath = final;/
+TSTORE_RECORD_SUM|s/memcmp(sum, in + REC_SUM, 32) != 0/0/
+TSTORE_HEADER_SUM|s/memcmp(sum, st->jbuf + HDR_SUM, 32) != 0/0/'
+STORE_SRCS="src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor/omega_tensor_reduce_seam.c"
+if ! gcc $FLAGS -Isrc -Isrc/tensor -o "$SCRATCH/sbase" tests/test_omega_tensor_store.c \
+    src/tensor/omega_tensor_store.c $STORE_SRCS $DEPS > "$SCRATCH/sbase.log" 2>&1 \
+    || ! "$SCRATCH/sbase" > "$SCRATCH/sbase.run" 2>&1; then
+    head -5 "$SCRATCH/sbase.log" "$SCRATCH/sbase.run" 2>/dev/null
+    echo "MUTATION store baseline: unmutated store test does not pass"; fail=1
+else
+    IFS='
+'
+    for m in $STORE_MUTATIONS; do
+        IFS=$old_ifs
+        name=${m%%|*}
+        expr=${m#*|}
+        total=$((total + 1))
+        cp src/tensor/omega_tensor_store.c "$SCRATCH/store.c"
+        sed -i "/MUT:$name/ $expr" "$SCRATCH/store.c"
+        if cmp -s src/tensor/omega_tensor_store.c "$SCRATCH/store.c"; then
+            echo "MUTATION $name: NOT APPLIED (marker or pattern missing)"; fail=1; continue
+        fi
+        if ! gcc $FLAGS -Isrc -Isrc/tensor -o "$SCRATCH/st" tests/test_omega_tensor_store.c \
+            "$SCRATCH/store.c" $STORE_SRCS $DEPS > "$SCRATCH/sbuild.log" 2>&1; then
+            head -5 "$SCRATCH/sbuild.log"
+            echo "MUTATION $name: does not build (fix the sed expression)"; fail=1; continue
+        fi
+        if "$SCRATCH/st" > "$SCRATCH/srun.log" 2>&1; then
+            echo "MUTATION $name: NOT CAUGHT (tests still pass)"; fail=1
+        else
+            echo "MUTATION $name: caught ($(grep -c '^FAIL' "$SCRATCH/srun.log") failing checks)"
+        fi
+    done
+    IFS=$old_ifs
+fi
+
 if [ "$fail" -ne 0 ]; then echo "tensor mutation sweep: FAIL"; exit 1; fi
 echo "tensor mutation sweep: PASS ($total of $total mutations caught)"
