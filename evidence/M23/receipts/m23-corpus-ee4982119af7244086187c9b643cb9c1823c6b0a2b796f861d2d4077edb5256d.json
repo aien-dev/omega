@@ -1,0 +1,17 @@
+{
+  "schema": "omega.m23.searchtrace.corpus.receipt.v1",
+  "verdict": "PASS",
+  "repo_commit": "12b4d6eea2e78febce4c21198ccf4c5e50c96d76",
+  "tree_clean": true,
+  "host_arch": "aarch64",
+  "taskset": {"path": "tests/searchtrace/frozen_taskset_v1.txt", "sha256": "17cbb686130e35a7211f8b37fb1fef9d0993f19674fe154280f8424d42a0a6fa"},
+  "corpus": {"path": "evidence/M23/corpus/corpus-c2700f220c87061e66c73f2668c4952aa2e388a9d7acbe3a704455441428f4aa.txt", "end_digest": "c2700f220c87061e66c73f2668c4952aa2e388a9d7acbe3a704455441428f4aa", "file_sha256": "9069619369bc6fe033b2bc08e540e20212e028d3ee07907fc71f52d155477fae", "steps": 3072},
+  "two_runs_byte_identical": true,
+  "replay": "PASS",
+  "hook_equivalence": "PASS",
+  "unit_and_refusal_tests": "PASS (plain + ASan/UBSan, corpus + G3 holdout)",
+  "m9_gates": {"exit": 0, "total": 10, "passed": 10, "failed": 0},
+  "m14_gates": {"exit": 0, "total": 10, "passed": 10, "failed": 0},
+  "timing_measured": false,
+  "est_load_processes_at_run": 0
+}
