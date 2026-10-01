@@ -3,7 +3,8 @@
  * (Lane 13). Runs the scenario of fab_living_phase.h on a composition that
  * owns its World and authority, twice in fresh directories, and requires
  * equal Cortex record and Fabric state digests (deterministic).
- * The same scenario runs inside the R13 living World (rx_r13_living.c).
+ * The same scenario runs inside the R13 test-build variant (rx_r13_living.c
+ * built with -DAIEN_TEST_BUILD=1; the production program has no Fabric).
  * One worker, as the COMPOSITION-2 gate: with more, the candidates finish in
  * varying order and the record order (not its content) varies.
  * Prints FABRIC_LIVING_PASS on success.

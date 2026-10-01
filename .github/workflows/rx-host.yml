@@ -35,6 +35,8 @@ on:
       - 'aienos.lock'
       - 'argus.lock'
       - 'tools/r16_authpath.sh'
+      - 'tools/r16_prod_hygiene.sh'
+      - 'tools/r16_prod_refuses.sh'
       - 'tools/ci_declare_skip.sh'
   # Every push to main re-tests the merge result, whatever it touched (no path
   # filter): a merge can break the runtime through files outside the PR filter.
@@ -217,7 +219,10 @@ jobs:
     # The hosted runner is not the DGX Spark: whether an Omega realization beats
     # the reference there is recorded, not required. The chain itself is required.
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      # Lane 32: the production R13 program links the pinned ARGUS (argus.lock).
+      ARGUS_REPO: ${{ github.workspace }}/aienos-argus
     steps:
       - uses: actions/checkout@v4
         with:
@@ -234,14 +239,23 @@ jobs:
           sha=$(awk 'NF && $1 !~ /^#/ {print $1; exit}' aienos.lock)
           test -n "$sha"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          g=$(awk 'NF && $1 !~ /^#/ {print $1; exit}' argus.lock)
+          test -n "$g"
+          echo "argus=$g" >> "$GITHUB_OUTPUT"
       - name: Checkout pinned AIENOS authority
         uses: actions/checkout@v4
         with:
           repository: aien-dev/aienos
           ref: ${{ steps.aienos.outputs.sha }}
           path: aienos-src
+      - name: Checkout pinned ARGUS sources (aienos native/argus, argus.lock; linked into the production R13 program)
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/aienos
+          ref: ${{ steps.aienos.outputs.argus }}
+          path: aienos-argus
       - name: Keep dependency checkouts out of Omega tree status
-        run: printf 'physics-src/\naienos-src/\n' >> .git/info/exclude
+        run: printf 'physics-src/\naienos-src/\naienos-argus/\n' >> .git/info/exclude
       - name: Program identity binds the canonical semantic body (OMEGA_PROGRAM_ID)
         # AArch64 job: the Visor objects this test links only build on AArch64 hosts
         # (visor_realization.c k_diff_inputs is aarch64-only, pre-existing).
@@ -282,11 +296,11 @@ jobs:
           grep -q '"tree_dirty": false,' "$receipt"
           sha256sum "$receipt"
           cat "$receipt"
-      - name: R13 living system builds (its run needs both GB10 core classes and the resident seat)
+      - name: R13 living system builds, production program (ARGUS linked) and AIEN_TEST_BUILD test variant (runs need both GB10 core classes and the resident seat)
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
-        run: make build/rx_r13_living_host
+        run: make build/rx_r13_living_host build/rx_r13_living_testbuild_host
       - name: R14 living recovery builds (its run needs the R13 body, both GB10 core classes and, for the gate, the resident seat)
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
@@ -313,6 +327,38 @@ jobs:
           grep -qx 'R16-G3 static: R16_G3_LINKMAP=STATIC_PASS mode=silicon (checks 1-3 of 5 on this build; not the gate)' build/r16-g3-linkmap-silicon.log
           grep -qx 'R16 gate: R16_G3_AUTHPATH=NOT_RUN (checks 4-5, exec trace and living run, not run in static-only mode)' build/r16-g3-linkmap-silicon.log
           echo "- R16-G3 silicon build link map (runner build, not run): checks 1-3 STATIC_PASS; gate NOT_RUN (needs the GB10 seat)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Production program hygiene, host (no test pieces in the link map or strings; ARGUS linked and observing in a host run)
+        # Lane 32: the production R13 program carries no AIEN_TEST_BUILD piece
+        # (Fabric loopback, HMAC stand-in, fixed test keys, Fabric living phase,
+        # composition fault and rogue hooks) and links the pinned ARGUS. The
+        # --argus-probe run proves ARGUS is present and observing on this host.
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: |
+          make test-prod-hygiene | tee build/prod-hygiene-host.log
+          grep -q '^R16 prod: PROD_HYGIENE=PASS mode=host ' build/prod-hygiene-host.log
+          echo "- Production hygiene host: PROD_HYGIENE=PASS (no test pieces; ARGUS linked and observing)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Production program hygiene, silicon build (static checks only; the binary is built here and never run)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          R16_PROD_NO_RUN: '1'
+        run: |
+          make test-prod-hygiene-silicon | tee build/prod-hygiene-silicon.log
+          grep -q '^R16 prod: PROD_HYGIENE=PASS mode=silicon ' build/prod-hygiene-silicon.log
+          echo "- Production hygiene silicon build: static checks PASS; ARGUS probe run NOT_RUN (Spark check)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Negative build test (EXPECTED FAILURE, compiling the production program with any test piece must fail)
+        # Every case compiles a test piece with the production flags and must be
+        # refused by its build-time guard; three controls must compile; make must
+        # refuse AIEN_TEST_BUILD in CFLAGS for the production binary.
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: |
+          make test-prod-refuses-test-pieces | tee build/prod-refuses.log
+          grep -q '^R16 prod: PROD_REFUSES_TEST_PIECES=PASS ' build/prod-refuses.log
+          echo "- Negative build test: every test piece refused in the production build (expected failures observed)" >> "$GITHUB_STEP_SUMMARY"
       - name: Empirical optimizer (OMEGA_EMPIRICAL_OPTIMIZER; the gate is claimed only on the DGX Spark)
         env:
           OMEGA_CANDIDATE_COMMIT: ${{ github.sha }}
@@ -372,6 +418,12 @@ jobs:
         run: tools/ci_declare_skip.sh test-r14-host spark-only "needs both Spark core classes (X925 + A725); the build is checked in omega-faculty-arm"
       - name: R13 living system silicon (SKIP chip-only)
         run: tools/ci_declare_skip.sh test-r13-silicon chip-only "needs the GB10 resident seat and both Spark core classes; qualified only by a candidate-bound Spark receipt"
+      - name: R13 test-build variant host run (SKIP spark-only)
+        run: tools/ci_declare_skip.sh test-r13-testbuild-host spark-only "needs both Spark core classes (X925 + A725); the test-build variant (AIEN_TEST_BUILD) is built in omega-faculty-arm"
+      - name: R13 test-build variant silicon (SKIP chip-only)
+        run: tools/ci_declare_skip.sh test-r13-testbuild-silicon chip-only "needs the GB10 resident seat and both Spark core classes; qualified only by a candidate-bound Spark receipt"
+      - name: Production hygiene silicon ARGUS probe run (SKIP chip-only)
+        run: tools/ci_declare_skip.sh test-prod-hygiene-silicon chip-only "the probe run of the silicon production binary is a Spark check; its static link map and strings checks run in omega-faculty-arm"
       - name: R14 living recovery silicon (SKIP chip-only)
         run: tools/ci_declare_skip.sh test-r14-silicon chip-only "needs the GB10 resident seat and both Spark core classes; qualified only by a candidate-bound Spark receipt"
       - name: R15 G7 and parity host runs (SKIP spark-only)

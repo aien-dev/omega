@@ -45,6 +45,12 @@
 #ifndef FAB_LIVING_PHASE_H
 #define FAB_LIVING_PHASE_H
 
+/* Lane 32: test-build only. The production program (docs/r16-production-entry-point.md)
+ * never compiles this; the build refuses it without -DAIEN_TEST_BUILD=1. */
+#ifndef AIEN_TEST_BUILD
+#error "fab_living_phase.h (Fabric living test phase with fixed test keys) is test and simulation only: build with -DAIEN_TEST_BUILD=1, never in the production program"
+#endif
+
 #include "fabric/fab_dispatch.h"
 #include "fabric/fab_hmac.h"
 #include "fabric/fab_loopback.h"
@@ -52,6 +58,11 @@
 
 #include <stdio.h>
 #include <string.h>
+
+/* Link-map marker (test build only): tools/r16_prod_hygiene.sh refuses any
+ * production binary that carries an aien_test_build_* symbol. */
+__attribute__((used)) static const char aien_test_build_fab_living_phase[] =
+    "AIEN_TEST_BUILD piece: Fabric living test phase (fixed test keys fl-key-*)";
 
 enum { FL_OP_REMOTE_ONLY = 2 };
 enum { FL_SKILL_LOCAL = 7, FL_SKILL_REMOTE = 9, FL_SKILL_ONLY = 10 };
