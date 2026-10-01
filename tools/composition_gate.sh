@@ -3,7 +3,14 @@
 # against the committed source, stores the receipt under its content hash:
 #   evidence/COMPOSITION-2/<sha256-of-receipt>.json
 # Extra arguments are passed to make (e.g. AIENOS_LOCK_REPO=...).
+# --gpu (first argument): the GPU tier, both Skills executed on the GB10.
+# Run it only while holding the quiet flag (~/workspace/.spark-quiet).
 set -eu
+bintarget=composition-gate-bin
+if [ "${1:-}" = "--gpu" ]; then
+    bintarget=composition-gate-gpu-bin
+    shift
+fi
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
@@ -12,8 +19,8 @@ if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
     exit 2
 fi
 commit=$(git rev-parse HEAD)
-make "$@" composition-gate-bin >/dev/null
-bin=$(make -s "$@" print-composition-gate-bin)
+make "$@" "$bintarget" >/dev/null
+bin=$(make -s "$@" "print-$bintarget")
 tmp=$(mktemp /tmp/composition_gate_receipt.XXXXXX)
 set +e
 "./$bin" "$commit" "$tmp"

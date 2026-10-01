@@ -1374,3 +1374,28 @@ print-composition-gate-bin:
 	@echo $(RX_COMPOSE_GATE)
 
 .PHONY: test-composition test-composition-gate composition-gate-bin print-composition-gate-bin
+
+# COMPOSITION-2 GPU tier: the same 14-step gate with both Skills executed on
+# the GB10 through the sovereign M16 native path (no CUDA); see
+# tests/runtime/rx_compose_gpu_skill.h. A chip run: take the quiet flag and
+# use tools/composition_gate.sh --gpu (clean tree, content-addressed receipt).
+RX_COMPOSE_GATE_GPU = $(OUT_DIR)/rx_composition_gate_gpu
+RX_COMPOSE_GPU_SRCS = src/omega_blackwell_submit.c src/omega_blackwell_matmul.c \
+	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+	src/omega_blackwell_realize.c src/omega_vector.c src/omega_validate.c \
+	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c
+
+$(RX_COMPOSE_GATE_GPU): $(RX_COMPOSE_DEPS) $(RX_COMPOSE_GPU_SRCS) tests/runtime/rx_composition_gate.c \
+	tests/runtime/rx_compose_gpu_skill.h | check-physics-lock $(OUT_DIR)
+	$(CC) $(CFLAGS) -DRXC_GATE_GPU -Itests/runtime -pthread -o $@ $(RX_COMPOSE_SRCS) \
+		$(RX_COMPOSE_GPU_SRCS) tests/runtime/rx_composition_gate.c $(RX_COMPOSE_LINK) -ldl
+
+test-composition-gate-gpu: $(RX_COMPOSE_GATE_GPU)
+	./$(RX_COMPOSE_GATE_GPU) "$$(git rev-parse HEAD)" $(OUT_DIR)/composition_gate_gpu_receipt.json
+
+composition-gate-gpu-bin: $(RX_COMPOSE_GATE_GPU)
+
+print-composition-gate-gpu-bin:
+	@echo $(RX_COMPOSE_GATE_GPU)
+
+.PHONY: test-composition-gate-gpu composition-gate-gpu-bin print-composition-gate-gpu-bin

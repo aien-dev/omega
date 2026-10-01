@@ -7,8 +7,19 @@
  * check held; the gate verdict is PASS only when every step of both runs did.
  *
  *   usage: rx_composition_gate <git-commit> <receipt-path>
+ *
+ * Built with -DRXC_GATE_GPU (rx_composition_gate_gpu) the two Skills run on
+ * the GB10 (rx_compose_gpu_skill.h); every other step is unchanged. That
+ * tier is PASS only when all 14 steps pass AND every Skill call executed on
+ * the chip with a checked result (receipt "chip" block).
  */
 #include "rx_compose_fixture.h"
+#ifdef RXC_GATE_GPU
+#include "rx_compose_gpu_skill.h"
+#define GATE_TIER "GPU"
+#else
+#define GATE_TIER "HOST"
+#endif
 
 #include <ftw.h>
 #include <sys/stat.h>
@@ -221,6 +232,11 @@ int main(int argc, char **argv) {
     snprintf(base, sizeof base, "/tmp/rx_composition_gate.XXXXXX");
     if (!mkdtemp(base)) { perror("mkdtemp"); return 2; }
     if (fx_init(&g_fx) != 0) { fprintf(stderr, "fixture init failed\n"); return 2; }
+#ifdef RXC_GATE_GPU
+    if (gpu_sk_init() != 0) { fprintf(stderr, "GB10 kernel synthesis failed\n"); return 2; }
+    g_fx.skills.skill[0].fn = gpu_sk_a;
+    g_fx.skills.skill[1].fn = gpu_sk_b;
+#endif
 
     static Run run[2];
     for (int i = 0; i < 2; i++) {
@@ -241,6 +257,13 @@ int main(int argc, char **argv) {
              "record_digest_equal=%d winner_digest_equal=%d both_runs_pass=%d", same_rec, same_win,
              both);
     int pass = all_pass(&run[0], N_STEPS) && all_pass(&run[1], N_STEPS);
+#ifdef RXC_GATE_GPU
+    /* Two runs, each runs Skill A and Skill B once on the chip. */
+    int chip_ok = g_gpu.failures == 0 && g_gpu.out_of_range == 0 && g_gpu.runs[0] >= 2 &&
+                  g_gpu.runs[1] >= 2 && g_gpu.zero_libcuda_linkage && g_gpu.zero_cuda_symbols &&
+                  g_gpu.zero_libcuda_runtime;
+    pass = pass && chip_ok;
+#endif
 
     char mid_hex[2 * AIEN_MID_ID_BYTES + 1];
     fx_hex(g_fx.self.id, AIEN_MID_ID_BYTES, mid_hex);
@@ -252,6 +275,23 @@ int main(int argc, char **argv) {
     if (!f) { perror(outp); return 2; }
     fprintf(f, "{\n  \"gate\": \"COMPOSITION-2\",\n  \"commit\": \"%s\",\n", commit);
     fprintf(f, "  \"verdict\": \"%s\",\n  \"machine_id\": \"%s\",\n", pass ? "PASS" : "FAIL", mid_hex);
+    fprintf(f, "  \"tier\": \"%s\",\n", GATE_TIER);
+#ifdef RXC_GATE_GPU
+    char kd[65];
+    fx_hex(g_gpu.kernel_digest, 32, kd);
+    fprintf(f, "  \"chip\": {\"device\": \"/dev/nvidia0\", \"target\": \"GB10 sm_121\", "
+               "\"path\": \"m16_native + nvrm (no CUDA)\", \"op\": \"INT32 matmul %ux%ux%u, C[0][0] = w0*x + w1\",\n"
+               "    \"kernel_code_digest\": \"%s\", \"kernel_insns\": %zu, "
+               "\"executions_skill_a\": %u, \"executions_skill_b\": %u, \"failures\": %u, "
+               "\"out_of_range\": %u, \"elapsed_ns_total\": %llu,\n"
+               "    \"completion_marker\": %u, \"intermediate_semaphore\": %u, "
+               "\"zero_libcuda_linkage\": %d, \"zero_cuda_symbols\": %d, \"zero_libcuda_runtime\": %d, "
+               "\"chip_ok\": %d},\n",
+            GPU_SK_DIM, GPU_SK_K, GPU_SK_DIM, kd, g_gpu.kernel_insns, g_gpu.runs[0], g_gpu.runs[1],
+            g_gpu.failures, g_gpu.out_of_range, (unsigned long long)g_gpu.elapsed_ns, g_gpu.last_marker,
+            g_gpu.last_semaphore, g_gpu.zero_libcuda_linkage, g_gpu.zero_cuda_symbols,
+            g_gpu.zero_libcuda_runtime, chip_ok);
+#endif
     fprintf(f, "  \"skills\": [{\"id\": %u, \"version\": 1, \"digest\": \"%s\"}, "
                "{\"id\": %u, \"version\": 1, \"digest\": \"%s\"}],\n",
             FX_SKILL_A, sk_a, FX_SKILL_B, sk_b);
@@ -280,7 +320,13 @@ int main(int argc, char **argv) {
     for (int s = 0; s < N_STEPS; s++)
         printf("  step %2d %-38s %s / %s  %s\n", s + 1, step_name[s], run[0].st[s].pass ? "PASS" : "FAIL",
                run[1].st[s].pass ? "PASS" : "FAIL", run[0].st[s].detail);
-    printf("COMPOSITION-2 gate: %s\n", pass ? "PASS" : "FAIL");
+#ifdef RXC_GATE_GPU
+    printf("  chip: skill_a=%u skill_b=%u failures=%u out_of_range=%u elapsed_ns=%llu chip_ok=%d\n",
+           g_gpu.runs[0], g_gpu.runs[1], g_gpu.failures, g_gpu.out_of_range,
+           (unsigned long long)g_gpu.elapsed_ns, chip_ok);
+    gpu_sk_free();
+#endif
+    printf("COMPOSITION-2 gate (%s tier): %s\n", GATE_TIER, pass ? "PASS" : "FAIL");
     fx_free(&g_fx);
     rmtree(base);
     return pass ? 0 : 1;
