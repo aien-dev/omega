@@ -12,7 +12,7 @@ static const struct { const char *w; int k; } keywords[] = {
     {"in", OT_IN}, {"return", OT_RETURN}, {"requires", OT_REQUIRES}, {"ensures", OT_ENSURES},
     {"as", OT_AS}, {"true", OT_TRUE}, {"false", OT_FALSE}, {"u8", OT_U8}, {"u16", OT_U16},
     {"u32", OT_U32}, {"u64", OT_U64}, {"i8", OT_I8}, {"i16", OT_I16}, {"i32", OT_I32},
-    {"i64", OT_I64}, {"bool", OT_BOOL},
+    {"i64", OT_I64}, {"bool", OT_BOOL}, {"struct", OT_STRUCT},
 };
 
 /* Reserved: destruction words (destruction has no surface syntax, III.8) and
@@ -20,7 +20,7 @@ static const struct { const char *w; int k; } keywords[] = {
 static const char *const reserved[] = {
     "free", "drop", "delete", "dealloc",
     "effect", "cap", "capability", "mint", "revoke", "grant", "publish", "promote", "authority", "admin",
-    "syscall", "io", "print", "import", "extern", "unsafe", "asm", "loop", "match", "struct", "enum",
+    "syscall", "io", "print", "import", "extern", "unsafe", "asm", "loop", "match", "enum",
     "var", "const", "self", "rec", "break", "continue",
 };
 
@@ -30,6 +30,7 @@ static const char *const kind_names[OT__COUNT] = {
     "ensures", "as", "true", "false", "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "bool",
     "(", ")", "{", "}", "[", "]", ",", ";", ":", "->", "..", "=",
     "+", "-", "*", "/", "%", "&", "|", "^", "~", "!", "&&", "||", "<<", ">>", "==", "!=", "<", "<=", ">", ">=",
+    "struct", ".",
 };
 
 const char *osc_tok_kind_name(int kind)
@@ -162,7 +163,7 @@ int osc_lex(const char *src, size_t len, OscToken *toks, uint32_t cap, uint32_t 
             {"]", OT_RBRACK}, {",", OT_COMMA}, {";", OT_SEMI}, {":", OT_COLON}, {"=", OT_ASSIGN},
             {"+", OT_PLUS}, {"-", OT_MINUS}, {"*", OT_STAR}, {"/", OT_SLASH}, {"%", OT_PERCENT},
             {"&", OT_AMP}, {"|", OT_PIPE}, {"^", OT_CARET}, {"~", OT_TILDE}, {"!", OT_BANG},
-            {"<", OT_LT}, {">", OT_GT},
+            {"<", OT_LT}, {">", OT_GT}, {".", OT_DOT},
         };
         int found = 0;
         for (size_t k = 0; k < sizeof punct / sizeof punct[0]; k++) {

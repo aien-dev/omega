@@ -1,0 +1,24 @@
+// entry: fields_rw pick_bits
+// OSC-2 structs: declaration, literal (each field once), field reads and
+// writes, array fields with dynamic indexes and a BOUNDS trap.
+struct Pt { x: i32, y: i32, ok: bool }
+struct Rec { tag: u8, vals: [i16; 4], n: u64 }
+
+fn fields_rw(a: i32, b: i32) -> i32 {
+    let p: own Pt = Pt { y: b, x: a, ok: a > b };
+    p.x = p.x - p.y;
+    if p.ok { p.y = 7; }
+    return p.x + p.y;
+}
+
+fn pick_bits(i: u8, v: i16) -> i64 {
+    let r: own Rec = Rec { tag: i, vals: [v; 4], n: 3 };
+    r.vals[1] = v - 1;
+    r.n = r.n + (r.tag as u64);
+    return (r.vals[i] as i64) + (r.n as i64);
+}
+// expect-run: fields_rw 5 2 -> 10
+// expect-run: fields_rw 1 4 -> 1
+// expect-run: pick_bits 1 10 -> 13
+// expect-run: pick_bits 3 -2 -> 4
+// expect-run: pick_bits 4 0 -> trap=BOUNDS

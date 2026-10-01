@@ -116,6 +116,22 @@ static uint64_t *elem(Ctx *c, const OscType *rt_, uint64_t base, OscScalar ti, u
     return (uint64_t *)(uintptr_t)base + idx;
 }
 
+/* OSC-2 structs: pointer to cell (field off + element idx) of struct ref base;
+ * an array field index obeys the same bounds rule as elem() against alen */
+static uint64_t *fcell(Ctx *c, const OscType *rt_, uint64_t base, unsigned field, bool has_ix, OscScalar ti,
+                       uint64_t idx) {
+    const OscField *fd = &c->u->structs[rt_->sid - 1].fields[field];
+    uint64_t cell = fd->off;
+    if (has_ix) {
+        if (osc_scalar_signed(ti) && (int64_t)idx < 0) trap(c, OSC_TRAP_BOUNDS);
+        if (idx >= fd->alen) trap(c, OSC_TRAP_BOUNDS);
+        cell += idx;
+    }
+    uintptr_t lo = (uintptr_t)&c->rt->cells[0][0], hi = lo + sizeof c->rt->cells;
+    if ((uintptr_t)base < lo || (uintptr_t)base + 8 * (cell + 1) > hi) trap(c, OSC_TRAP_RUNTIME);
+    return (uint64_t *)(uintptr_t)base + cell;
+}
+
 static uint64_t run_func(Ctx *c, int fi, const uint64_t *args) {
     const OscFunc *f = &c->u->funcs[fi];
     const OscType *T = f->vtype;
@@ -140,6 +156,14 @@ static uint64_t run_func(Ctx *c, int fi, const uint64_t *args) {
             case OSC_I_RELEASE: osc_rt_release(c->rt, v[in->a], T[in->a].len); break;
             case OSC_I_LOAD: v[in->dst] = *elem(c, &T[in->a], v[in->a], T[in->b].s, v[in->b]); break;
             case OSC_I_STORE: *elem(c, &T[in->a], v[in->a], T[in->b].s, v[in->b]) = v[in->c]; break;
+            case OSC_I_FLOAD:
+                v[in->dst] = *fcell(c, &T[in->a], v[in->a], (unsigned)in->imm, in->b >= 0,
+                                    in->b >= 0 ? T[in->b].s : OSC_T_VOID, in->b >= 0 ? v[in->b] : 0);
+                break;
+            case OSC_I_FSTORE:
+                *fcell(c, &T[in->a], v[in->a], (unsigned)in->imm, in->b >= 0, in->b >= 0 ? T[in->b].s : OSC_T_VOID,
+                       in->b >= 0 ? v[in->b] : 0) = v[in->c];
+                break;
             case OSC_I_CALL: {
                 uint64_t ca[OSC_MAX_PARAMS] = {0};
                 for (int k = 0; k < in->nargs; k++) ca[k] = v[in->args[k]];

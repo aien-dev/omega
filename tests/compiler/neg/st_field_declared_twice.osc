@@ -1,0 +1,4 @@
+// expect: DUPLICATE_FIELD object=x line=3
+// transition: field declared twice
+struct P { x: i32, x: u8 }
+fn f() { }

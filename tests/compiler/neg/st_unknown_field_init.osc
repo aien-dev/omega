@@ -1,0 +1,7 @@
+// expect: UNKNOWN_FIELD object=z line=5
+// transition: initialise unknown field
+struct P { x: i32, y: i32 }
+fn f() -> i32 {
+    let p: own P = P { x: 1, y: 2, z: 3 };
+    return p.x;
+}

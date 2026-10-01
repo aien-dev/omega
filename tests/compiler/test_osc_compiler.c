@@ -643,6 +643,235 @@ static void contract_fuzz(unsigned n)
     CHECK(cf_compiled > n / 2, "contract fuzz compiled only %lu of %u units", cf_compiled, n);
 }
 
+
+/* ------------------------------------------------------------ OSC-2 structs */
+/* Layout: fixed 8-byte cells in declaration order, scalar = 1 cell, [T; N] =
+ * N cells, offsets are prefix sums (no padding). The layout is part of the IR
+ * digest: reordering two fields changes it; a unit without structs keeps the
+ * OSC-1 encoding (format version byte 1). */
+static void struct_layout(void)
+{
+    static const char *s1 = "struct L { a: u8, b: [i16; 3], c: bool, d: [u64; 2], e: i64 }\n"
+                            "struct M { z: [u8; 64] }\nfn f() { }\n";
+    static const char *s2 = "struct L { b: [i16; 3], a: u8, c: bool, d: [u64; 2], e: i64 }\n"
+                            "struct M { z: [u8; 64] }\nfn f() { }\n";
+    static const char *s3 = "fn f() { }\n";
+    static const uint16_t off[5] = {0, 1, 4, 5, 7}, alen[5] = {0, 3, 0, 2, 0};
+    static const OscScalar sc[5] = {OSC_T_U8, OSC_T_I16, OSC_T_BOOL, OSC_T_U64, OSC_T_I64};
+    OscDiag d;
+    int rc = osc_compile(s1, strlen(s1), U1, &d, NULL);
+    CHECK(rc == 0, "struct layout: refused: %s %s", osc_diag_kind_name(d.kind), d.message);
+    if (rc) return;
+    CHECK(U1->nstructs == 2, "struct layout: nstructs %u", U1->nstructs);
+    const OscStruct *L = &U1->structs[0];
+    CHECK(strcmp(L->name, "L") == 0 && L->nfields == 5 && L->ncells == 8, "struct layout: L has %u fields, %u cells",
+          L->nfields, L->ncells);
+    for (int k = 0; k < 5 && k < L->nfields; k++)
+        CHECK(L->fields[k].off == off[k] && L->fields[k].alen == alen[k] && L->fields[k].s == sc[k],
+              "struct layout: field %s off %u alen %u", L->fields[k].name, L->fields[k].off, L->fields[k].alen);
+    CHECK(U1->structs[1].ncells == 64 && U1->structs[1].fields[0].off == 0, "struct layout: M has %u cells",
+          U1->structs[1].ncells);
+    uint8_t buf[4096], g1[32], g2[32];
+    size_t n = 0;
+    CHECK(osc_ir_encode(U1, buf, sizeof buf, &n) == 0 && n > 8 && buf[7] == 2, "struct layout: encoding version");
+    CHECK(osc_ir_digest(U1, g1) == 0, "struct layout: digest");
+    rc = osc_compile(s2, strlen(s2), U2, &d, NULL);
+    CHECK(rc == 0 && U2->structs[0].fields[0].off == 0 && U2->structs[0].fields[1].off == 3,
+          "struct layout: reordered L offsets");
+    CHECK(rc == 0 && osc_ir_digest(U2, g2) == 0 && memcmp(g1, g2, 32) != 0, "struct layout: digest ignores layout");
+    rc = osc_compile(s3, strlen(s3), U2, &d, NULL);
+    CHECK(rc == 0 && osc_ir_encode(U2, buf, sizeof buf, &n) == 0 && n > 8 && buf[7] == 1,
+          "struct layout: struct-free unit is not OSC-1 encoded");
+    printf("struct layout: L offsets 0 1 4 5 7 cells 8; M cells 64; digest binds layout\n");
+}
+
+/* Destruction order of progs/structs_dtor.osc: owners released at scope end in
+ * reverse declaration order, the moved-from struct is not released, in the
+ * interpreter and natively. */
+static void struct_dtor_order(const char *dir)
+{
+    char path[1024];
+    snprintf(path, sizeof path, "%s/structs_dtor.osc", dir);
+    size_t len;
+    char *src = read_file(path, &len);
+    CHECK(src != NULL, "structs_dtor.osc unreadable");
+    if (!src) return;
+    OscDiag d;
+    OscCode c;
+    char err[160];
+    memset(&c, 0, sizeof c);
+    int rc = osc_compile(src, len, U1, &d, NULL);
+    free(src);
+    CHECK(rc == 0 && osc_cg_compile(U1, &c, err, sizeof err) == 0, "structs_dtor: compile failed");
+    if (rc) return;
+    OscNative nm;
+    if (osc_native_map(&nm, c.code, c.len) != 0) { CHECK(0, "structs_dtor: map failed"); osc_cg_free(&c); return; }
+    static const uint8_t want_kind[8] = {1, 1, 1, 2, 2, 1, 2, 2};
+    static const uint32_t want_ser[8] = {1, 2, 3, 3, 2, 4, 4, 1};
+    uint64_t args[1] = {1}, ri = 0, rn = 0;
+    osc_rt_reset(RI);
+    osc_rt_reset(RN);
+    int ti = osc_interp_run(U1, 0, args, 1, RI, &ri);
+    int tn = osc_rt_call_native(RN, osc_native_at(&nm, c.entry[0]), args, 1, &rn);
+    CHECK(ti == 0 && tn == 0 && ri == 14 && rn == 14, "structs_dtor: run %d/%d ret %llu/%llu", ti, tn,
+          (unsigned long long)ri, (unsigned long long)rn);
+    const OscRt *rts[2] = {RI, RN};
+    for (int r = 0; r < 2; r++) {
+        CHECK(rts[r]->nev == 8, "structs_dtor: %u pool events, expected 8", rts[r]->nev);
+        for (unsigned k = 0; k < 8 && k < rts[r]->nev; k++)
+            CHECK(rts[r]->ev[k].kind == want_kind[k] && rts[r]->ev[k].serial == want_ser[k],
+                  "structs_dtor: event %u is kind %u serial %u, expected kind %u serial %u", k, rts[r]->ev[k].kind,
+                  rts[r]->ev[k].serial, want_kind[k], want_ser[k]);
+    }
+    osc_native_unmap(&nm);
+    osc_cg_free(&c);
+    printf("struct destruction order: alloc 1 2 3, release 3 2, alloc 4, release 4 1 (interp == native)\n");
+}
+
+/* Struct fuzz: generated units with 1..2 structs of random integer, bool and
+ * [T; N] fields, an entry that builds a struct literal, writes fields
+ * (dynamic array-field indexes reach BOUNDS), moves it, passes it as &mut,
+ * & (with a requires on a field) and own, and sums the fields. Every unit
+ * must compile; interpreter and native outcomes must be identical. */
+static unsigned long sf_units, sf_runs, sf_mismatch, sf_trap[OSC_TRAP_MAX + 1];
+
+static void struct_fuzz(unsigned n)
+{
+    static const char *tys[] = {"u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "bool"};
+    static char src[8192];
+    sm_state = 0x05C2517Cull;
+    for (unsigned u = 0; u < n; u++) {
+        unsigned ns = 1 + (unsigned)(sm() % 2), nf[2], ft[2][6], fl[2][6];
+        src[0] = 0;
+        for (unsigned s = 0; s < ns; s++) {
+            nf[s] = 1 + (unsigned)(sm() % 6);
+            cf_cat(src, sizeof src, "struct S%u {", s);
+            for (unsigned f = 0; f < nf[s]; f++) {
+                ft[s][f] = (unsigned)(sm() % 9);
+                fl[s][f] = ft[s][f] != 8 && sm() % 3 == 0 ? 1 + (unsigned)(sm() % 4) : 0;
+                if (fl[s][f]) cf_cat(src, sizeof src, "%s f%u: [%s; %u]", f ? "," : "", f, tys[ft[s][f]], fl[s][f]);
+                else cf_cat(src, sizeof src, "%s f%u: %s", f ? "," : "", f, tys[ft[s][f]]);
+            }
+            cf_cat(src, sizeof src, " }\n");
+        }
+        /* reader: requires on a field, sums every field through & */
+        for (unsigned s = 0; s < ns; s++) {
+            cf_cat(src, sizeof src, "fn rd%u(p: &S%u, k: i64) -> i64", s, s);
+            unsigned rf = (unsigned)(sm() % nf[s]);
+            if (sm() % 3 == 0) {
+                if (ft[s][rf] == 8) cf_cat(src, sizeof src, " requires p.f%u%s || k != 3", rf, fl[s][rf] ? "[0]" : "");
+                else cf_cat(src, sizeof src, " requires p.f%u%s != %u", rf, fl[s][rf] ? "[0]" : "", (unsigned)(sm() % 6));
+            }
+            cf_cat(src, sizeof src, " {\n    let mut acc: i64 = k;\n");
+            for (unsigned f = 0; f < nf[s]; f++) {
+                char ix[8];
+                snprintf(ix, sizeof ix, "%s", fl[s][f] ? "[0]" : "");
+                if (ft[s][f] == 8) cf_cat(src, sizeof src, "    if p.f%u%s { acc = acc + 1; }\n", f, ix);
+                else if (ft[s][f] == 3) cf_cat(src, sizeof src, "    acc = acc + ((p.f%u%s & 255) as i64);\n", f, ix);
+                else cf_cat(src, sizeof src, "    acc = acc + (p.f%u%s as i64);\n", f, ix);
+            }
+            cf_cat(src, sizeof src, "    return acc;\n}\n");
+            /* writer through &mut, dynamic index */
+            cf_cat(src, sizeof src, "fn wr%u(p: &mut S%u, i: u8, b: i64) {\n", s, s);
+            for (unsigned f = 0; f < nf[s]; f++) {
+                if (sm() % 2) continue;
+                char ix[16];
+                snprintf(ix, sizeof ix, "%s", fl[s][f] ? (sm() % 2 ? "[i & 3]" : "[i % 2]") : "");
+                if (ft[s][f] == 8) cf_cat(src, sizeof src, "    p.f%u%s = b > 0;\n", f, ix);
+                else cf_cat(src, sizeof src, "    p.f%u%s = p.f%u%s %s ((b & 7) as %s);\n", f, ix, f, ix,
+                            sm() % 2 ? "+" : "*", tys[ft[s][f]]);
+            }
+            cf_cat(src, sizeof src, "}\n");
+            cf_cat(src, sizeof src, "fn own%u(p: own S%u, i: u8, b: i64) -> i64 {\n    wr%u(&mut p, i, b);\n"
+                                    "    return rd%u(&p, b);\n}\n", s, s, s, s);
+        }
+        cf_cat(src, sizeof src, "fn entry(a: i64, b: i64, i: u8) -> i64 {\n    let mut acc: i64 = 0;\n");
+        for (unsigned s = 0; s < ns; s++) {
+            cf_cat(src, sizeof src, "    let v%u: own S%u = S%u {", s, s, s);
+            for (unsigned f = 0; f < nf[s]; f++) {
+                char val[64];
+                if (ft[s][f] == 8) snprintf(val, sizeof val, "a > b");
+                else if (sm() % 8 == 0) snprintf(val, sizeof val, "a as %s", tys[ft[s][f]]);
+                else snprintf(val, sizeof val, "(a & 15) as %s", tys[ft[s][f]]);
+                if (fl[s][f]) cf_cat(src, sizeof src, "%s f%u: [%s; %u]", f ? "," : "", f, val, fl[s][f]);
+                else cf_cat(src, sizeof src, "%s f%u: %s", f ? "," : "", f, val);
+            }
+            cf_cat(src, sizeof src, " };\n");
+            const char *cur = "v";
+            unsigned ops = 1 + (unsigned)(sm() % 4);
+            for (unsigned o = 0; o < ops; o++) {
+                unsigned f = (unsigned)(sm() % nf[s]);
+                switch (sm() % 4) {
+                case 0:
+                    if (ft[s][f] == 8) break;
+                    if (fl[s][f]) cf_cat(src, sizeof src, "    %s%u.f%u[i] = %s%u.f%u[0] + ((b & 3) as %s);\n", cur, s,
+                                         f, cur, s, f, tys[ft[s][f]]);
+                    else cf_cat(src, sizeof src, "    %s%u.f%u = %s%u.f%u - ((b & 3) as %s);\n", cur, s, f, cur, s,
+                                f, tys[ft[s][f]]);
+                    break;
+                case 1: cf_cat(src, sizeof src, "    wr%u(&mut %s%u, i, b);\n", s, cur, s); break;
+                case 2: cf_cat(src, sizeof src, "    acc = acc + rd%u(&%s%u, a & 7);\n", s, cur, s); break;
+                default:
+                    if (cur[0] == 'v') {
+                        cf_cat(src, sizeof src, "    let m%u: own S%u = v%u;\n", s, s, s);
+                        cur = "m";
+                    }
+                }
+            }
+            if (sm() % 2) cf_cat(src, sizeof src, "    acc = acc + own%u(%s%u, i, b);\n", s, cur, s);
+            else cf_cat(src, sizeof src, "    acc = acc + rd%u(&%s%u, 0);\n", s, cur, s);
+        }
+        cf_cat(src, sizeof src, "    return acc;\n}\n");
+        sf_units++;
+
+        OscDiag d;
+        int rc = osc_compile(src, strlen(src), U1, &d, NULL);
+        CHECK(rc == 0, "struct fuzz unit %u refused %s line %u object=%s: %s\n%s", u, osc_diag_kind_name(d.kind),
+              d.line, d.object, d.message, src);
+        if (rc) continue;
+        OscCode c;
+        char err[160];
+        memset(&c, 0, sizeof c);
+        int cg = osc_cg_compile(U1, &c, err, sizeof err);
+        CHECK(cg == 0, "struct fuzz unit %u codegen refused: %s", u, err);
+        if (cg) continue;
+        OscNative nm;
+        int mr = osc_native_map(&nm, c.code, c.len);
+        CHECK(mr == 0, "struct fuzz unit %u native map failed (%d)", u, mr);
+        if (mr) { osc_cg_free(&c); continue; }
+        int fi = U1->nfuncs - 1;
+        void *entry = osc_native_at(&nm, c.entry[fi]);
+        for (unsigned it = 0; it < 48; it++) {
+            uint64_t args[OSC_MAX_PARAMS] = {0}, ri = 0, rn = 0;
+            args[0] = gen_arg(OSC_T_I64);
+            args[1] = gen_arg(OSC_T_I64);
+            args[2] = it & 1 ? (uint64_t)(it % 5) : gen_arg(OSC_T_U8);
+            osc_rt_reset(RI);
+            osc_rt_reset(RN);
+            int t1 = osc_interp_run_prevalidated(U1, fi, args, 3, RI, &ri);
+            int t2 = osc_rt_call_native(RN, entry, args, 3, &rn);
+            sf_runs++;
+            diff_runs++;
+            int same = t1 == t2 && t1 >= 0 && (t1 != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
+            CHECK(same, "struct fuzz unit %u args %llu %llu %llu: interp trap %d ret %llu vs native trap %d ret %llu\n%s",
+                  u, (unsigned long long)args[0], (unsigned long long)args[1], (unsigned long long)args[2], t1,
+                  (unsigned long long)ri, t2, (unsigned long long)rn, src);
+            if (!same) { sf_mismatch++; break; }
+            if (t1 >= 0 && t1 <= OSC_TRAP_MAX) sf_trap[t1]++;
+            CHECK(t1 != OSC_TRAP_RUNTIME, "struct fuzz unit %u RUNTIME trap", u);
+            if (t1 == 0) CHECK(RI->live_count == 0 && RN->live_count == 0, "struct fuzz unit %u leak", u);
+        }
+        osc_native_unmap(&nm);
+        osc_cg_free(&c);
+    }
+    printf("struct fuzz: units=%lu runs=%lu ok=%lu bounds=%lu requires=%lu overflow=%lu cast=%lu mismatches=%lu\n",
+           sf_units, sf_runs, sf_trap[0], sf_trap[OSC_TRAP_BOUNDS], sf_trap[OSC_TRAP_REQUIRES],
+           sf_trap[OSC_TRAP_OVERFLOW], sf_trap[OSC_TRAP_CAST], sf_mismatch);
+    CHECK(sf_trap[0] > 0, "struct fuzz never returned normally");
+    CHECK(sf_trap[OSC_TRAP_BOUNDS] > 0, "struct fuzz never hit TRAP BOUNDS");
+    CHECK(sf_trap[OSC_TRAP_REQUIRES] > 0, "struct fuzz never hit TRAP REQUIRES");
+}
+
 int main(int argc, char **argv)
 {
     unsigned fuzz = argc > 1 ? (unsigned)strtoul(argv[1], NULL, 10) : 1000;
@@ -672,6 +901,9 @@ int main(int argc, char **argv)
     for (int i = 0; i < np; i++) mutate_fuzz(pdir, pv[i], muts);
     printf("front-end mutants: %lu (accepted %lu, refused %lu)\n", mut_total, mut_accepted, mut_refused);
     contract_fuzz(fuzz / 5 ? fuzz / 5 : 20);
+    struct_layout();
+    struct_dtor_order(pdir);
+    struct_fuzz(fuzz / 8 ? fuzz / 8 : 16);
 
     const char *const *tn = trap_names;
     printf("trap coverage (runs, interpreter == native):\n");

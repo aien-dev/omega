@@ -1,0 +1,7 @@
+// expect: TYPE_MISMATCH object=a line=6
+// transition: type mismatch
+struct A { v: u8 }
+fn f() {
+    let a: own A = A { v: 1 };
+    a[0] = 2;
+}

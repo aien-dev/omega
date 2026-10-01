@@ -36,6 +36,8 @@
 #define OSC_MAX_ARRAY_LEN 64     /* elements per unique allocation */
 #define OSC_NAME_MAX      64
 #define OSC_CLAUSE_MAX   256     /* requires/ensures source text (recorded; enforced by the front end, OSC-2) */
+#define OSC_MAX_STRUCTS   16     /* OSC-2 structs (docs/osc/OSC-2-DESIGN.md section 2) */
+#define OSC_MAX_FIELDS    16     /* fields per struct */
 
 /* ---- types ------------------------------------------------------------ */
 typedef enum {
@@ -57,7 +59,10 @@ typedef struct {
     OscScalar s;          /* for OSC_T_REF: the elements are `elem`        */
     OscRefKind ref;       /* OSC_REF_NONE unless s == OSC_T_REF            */
     OscScalar elem;       /* element scalar type (integer or bool)         */
-    uint16_t len;         /* static array length N, 1..OSC_MAX_ARRAY_LEN   */
+    uint16_t len;         /* static array length N, 1..OSC_MAX_ARRAY_LEN;  */
+                          /*   for a struct ref: the struct's cell count  */
+    uint8_t sid;          /* OSC-2 structs: 0 = array ref (or scalar);     */
+                          /*   k+1 = ref to OscUnit.structs[k] (elem VOID) */
 } OscType;
 
 /* ---- instructions ----------------------------------------------------- */
@@ -82,7 +87,12 @@ typedef enum {
     /* terminators */
     OSC_I_BR,        /* goto blk_t                                                   */
     OSC_I_CBR,       /* if a(bool) goto blk_t else goto blk_f                        */
-    OSC_I_RET        /* return a (or nothing if a == -1 and function is void)        */
+    OSC_I_RET,       /* return a (or nothing if a == -1 and function is void)        */
+    /* appended for OSC-2 structs (docs/osc/OSC-2-DESIGN.md section 2) */
+    OSC_I_FLOAD,     /* dst = field imm of struct ref a; for an array field, element */
+                     /*   b (any integer type, else -1); b out of range: TRAP_BOUNDS */
+    OSC_I_FSTORE     /* field imm of struct ref a (element b, as FLOAD) = c ;        */
+                     /*   a is REF OWN or REF MUT                                    */
 } OscOp;
 
 typedef enum {
@@ -159,9 +169,29 @@ typedef struct {
     char ensures_text[OSC_CLAUSE_MAX];
 } OscFunc;
 
+/* OSC-2 structs: fixed layout, no padding. Field k occupies cells
+ * [off, off + max(alen, 1)) of the struct's allocation; every cell is one
+ * 8-byte canonical value; offsets are the prefix sums of the field cell
+ * counts in declaration order; ncells = the total (1..OSC_MAX_ARRAY_LEN). */
+typedef struct {
+    char name[OSC_NAME_MAX];
+    OscScalar s;         /* integer scalar or bool */
+    uint16_t alen;       /* 0 = scalar field; N = inline array [s; N] */
+    uint16_t off;        /* first cell */
+} OscField;
+
+typedef struct {
+    char name[OSC_NAME_MAX];
+    uint8_t nfields;     /* 1..OSC_MAX_FIELDS */
+    uint16_t ncells;     /* size in bytes = 8 * ncells */
+    OscField fields[OSC_MAX_FIELDS];
+} OscStruct;
+
 typedef struct {
     OscFunc funcs[OSC_MAX_FUNCS];
     uint16_t nfuncs;
+    OscStruct structs[OSC_MAX_STRUCTS];  /* OSC-2; 0 structs = OSC-1 encoding */
+    uint8_t nstructs;
 } OscUnit;
 
 /* Structural validation (types agree, vregs in range, every block ends in one

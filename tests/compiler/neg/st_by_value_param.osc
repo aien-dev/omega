@@ -1,0 +1,4 @@
+// expect: UNSUPPORTED object=A line=4
+// transition: struct by value
+struct A { v: u8 }
+fn f(a: A) { }

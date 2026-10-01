@@ -30,6 +30,12 @@ typedef enum {
     /* appended for OSC-2 contracts (docs/osc/OSC-2-DESIGN.md section 1) */
     OSC_DIAG_CONTRACT_INVALID,     /* ill-formed clause: result in requires / void fn, call, own read */
     OSC_DIAG_CONTRACT_VIOLATION,   /* clause decided false at compile time (constant folding) */
+    /* appended for OSC-2 structs (docs/osc/OSC-2-DESIGN.md section 2) */
+    OSC_DIAG_UNKNOWN_FIELD,        /* s.f / literal names a field the struct does not declare */
+    OSC_DIAG_DUPLICATE_FIELD,      /* field declared twice, or initialised twice in a literal */
+    OSC_DIAG_MISSING_FIELD,        /* struct literal leaves a field uninitialised */
+    OSC_DIAG_UNDEFINED_TYPE,       /* struct type name not declared (before use) */
+    OSC_DIAG_RECURSIVE_STRUCT,     /* struct field names the struct itself */
     OSC_DIAG__COUNT
 } OscDiagKind;
 

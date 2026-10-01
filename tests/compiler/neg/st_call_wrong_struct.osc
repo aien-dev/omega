@@ -1,0 +1,9 @@
+// expect: TYPE_MISMATCH object=return line=8
+// transition: type mismatch
+struct A { v: u8 }
+struct B { v: u8 }
+fn g(b: &B) -> u8 { return b.v; }
+fn f() -> u8 {
+    let a: own A = A { v: 1 };
+    return g(&a);
+}

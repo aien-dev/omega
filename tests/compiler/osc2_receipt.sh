@@ -1,10 +1,10 @@
 #!/bin/sh
 # OSC-2 compiler slice receipt, one per item (docs/osc/OSC-2-DESIGN.md).
 # OSC-2 slice; not a general Omega compiler; no self-hosting.
-# Usage: tests/compiler/osc2_receipt.sh [ITEM]   (ITEM default: contracts)
+# Usage: tests/compiler/osc2_receipt.sh [ITEM]   (ITEM: contracts (default) or structs)
 #  1. refuses a dirty tree (any tracked or untracked change): receipts record an exact commit
 #  2. runs `make test-compiler` into a temporary OUT_DIR (model sweep, back end,
-#     compiler golden/negative/model agreement, contract fuzz, determinism; plain + ASan/UBSan)
+#     compiler golden/negative/model agreement, contract + struct fuzz, determinism; plain + ASan/UBSan)
 #  3. compiles every golden program with oscc and records its IR and machine-code digests
 #  4. checks that the existing Omega core sources (src/omega_*, src/aarch64_*,
 #     src/language/, tools/omegatool.c, Makefile) are unchanged against the merge
@@ -14,7 +14,7 @@
 # Never overwrites existing evidence (evidence/OSC-1 is never touched). Timing is not recorded.
 set -eu
 ITEM=${1:-${ITEM:-contracts}}
-case "$ITEM" in contracts) ;; *) echo "osc2-receipt: REFUSED: unknown ITEM $ITEM (known: contracts)" >&2; exit 2 ;; esac
+case "$ITEM" in contracts|structs) ;; *) echo "osc2-receipt: REFUSED: unknown ITEM $ITEM (known: contracts structs)" >&2; exit 2 ;; esac
 ROOT=$(cd "$(dirname "$0")/../.." && pwd -P)
 cd "$ROOT"
 EVD=evidence/OSC-2/receipts
@@ -42,6 +42,15 @@ for v in "$MSUM" "$BCOUNTS" "$BCHECKS" "$CLINE" "$DLINE"; do [ -n "$v" ] || die 
 FLINE=$(grep "^contract fuzz:" "$O/compiler.out" | tail -1)
 FLINE_ASAN=$(grep "^contract fuzz:" "$O/compiler_asan.out" | tail -1)
 [ -n "$FLINE" ] && [ -n "$FLINE_ASAN" ] || die "no contract fuzz line"
+SLINE=$(grep "^struct fuzz:" "$O/compiler.out" | tail -1)
+SLINE_ASAN=$(grep "^struct fuzz:" "$O/compiler_asan.out" | tail -1)
+if [ "$ITEM" = structs ]; then
+    case "$SLINE" in *" mismatches=0") ;; *) die "no struct fuzz line with mismatches=0" ;; esac
+    case "$SLINE_ASAN" in *" mismatches=0") ;; *) die "no ASan struct fuzz line with mismatches=0" ;; esac
+    LAYOUT=$(grep "^struct layout:" "$O/compiler.out" | tail -1)
+    DTOR=$(grep "^struct destruction order:" "$O/compiler.out" | tail -1)
+    [ -n "$LAYOUT" ] && [ -n "$DTOR" ] || die "no struct layout / destruction order line"
+fi
 for k in OVERFLOW DIV0 BOUNDS LOOP_BOUND CAST OOM SHIFT REQUIRES ENSURES; do
     n=$(tc $k); [ -n "$n" ] && [ "$n" -gt 0 ] || die "trap $k not observed in golden corpus"
 done
@@ -75,6 +84,10 @@ if [ -n "${PHYSICS_DIR:-}" ] && [ -d "$PHYSICS_DIR" ]; then
     GATES="{${G%, }}"
 fi
 
+SUBX=
+if [ "$ITEM" = structs ]; then
+    SUBX="; OSC-2 item 2: unit-level struct declarations (<= 16 structs, 1..16 fields of integer, bool or [T; N], <= 64 cells, declared before use, no recursion) with a fixed layout of 8-byte cells in declaration order (no padding, bound into the IR digest), struct literals initialising every field exactly once in let own, field reads and writes (array fields bounds-checked, TRAP BOUNDS), moves, own / & / &mut parameters with the array borrow rules, deterministic destruction with the same alloc/release events; requires reads fields through any struct parameter, ensures only through a shared & parameter; returning a struct is refused (UNSUPPORTED)"
+fi
 R="$T/receipt.json"
 {
   printf '{\n'
@@ -83,7 +96,7 @@ R="$T/receipt.json"
   printf '  "item": "%s",\n' "$ITEM"
   printf ''
   printf '  "statement": "OSC-2 slice; not a general Omega compiler; no self-hosting.",\n'
-  printf '  "subset": "integer scalars u8 u16 u32 u64 (wrap) and i8 i16 i32 i64 (checked, trap on overflow), bool; let / let mut; arithmetic, bitwise, shift, compare, logical (short-circuit), checked as-casts; if/else; while with static bound N (trap past N) and for over literal ranges; calls to earlier functions in the unit (no recursion, <= 6 params); unique allocation own [T; N] (N <= 64), moves, shared and mutable borrows with lexical lifetimes, bounds-checked indexing, deterministic destruction at scope end; OSC-2 item 1: requires/ensures are pure bool expressions over parameters (and result in ensures; element reads through parameters, ensures only via shared borrows; no calls), refused statically when constant folding decides them false (CONTRACT_VIOLATION), otherwise checked at run time (TRAP REQUIRES = 9 at entry, TRAP ENSURES = 10 at each return before releases; statically true clauses elided)",\n'
+  printf '  "subset": "integer scalars u8 u16 u32 u64 (wrap) and i8 i16 i32 i64 (checked, trap on overflow), bool; let / let mut; arithmetic, bitwise, shift, compare, logical (short-circuit), checked as-casts; if/else; while with static bound N (trap past N) and for over literal ranges; calls to earlier functions in the unit (no recursion, <= 6 params); unique allocation own [T; N] (N <= 64), moves, shared and mutable borrows with lexical lifetimes, bounds-checked indexing, deterministic destruction at scope end; OSC-2 item 1: requires/ensures are pure bool expressions over parameters (and result in ensures; element reads through parameters, ensures only via shared borrows; no calls), refused statically when constant folding decides them false (CONTRACT_VIOLATION), otherwise checked at run time (TRAP REQUIRES = 9 at entry, TRAP ENSURES = 10 at each return before releases; statically true clauses elided)%s",\n' "$SUBX"
   printf '  "pipeline": "surface text -> lexer/parser -> typed AST -> name/type + ownership/borrow analysis -> typed IR (canonical encoding + sha256) -> AArch64 via src/compiler/osc_a64 (validating encoder, decoder mirror)",\n'
   printf '  "repo_commit": "%s",\n' "$COMMIT"
   printf '  "base_commit": "%s",\n' "$BASE"
@@ -98,6 +111,12 @@ R="$T/receipt.json"
       "$(tc none)" "$(tc OVERFLOW)" "$(tc DIV0)" "$(tc BOUNDS)" "$(tc LOOP_BOUND)" "$(tc CAST)" "$(tc OOM)" "$(tc SHIFT)" "$(tc RUNTIME)" "$(tc REQUIRES)" "$(tc ENSURES)"
   printf '  "contract_fuzz": "%s; native == interpreter on every run",\n' "$FLINE"
   printf '  "contract_fuzz_asan": "%s",\n' "$FLINE_ASAN"
+  if [ "$ITEM" = structs ]; then
+    printf '  "struct_fuzz": "%s; native == interpreter on every run",\n' "$SLINE"
+    printf '  "struct_fuzz_asan": "%s",\n' "$SLINE_ASAN"
+    printf '  "struct_layout": "%s",\n' "$LAYOUT"
+    printf '  "struct_destruction_order": "%s",\n' "$DTOR"
+  fi
   printf '  "determinism": "%s (oscc in separate processes, byte-identical IR digest and machine code)",\n' "$DLINE"
   printf '  "sanitizers": "all three test binaries also pass under -fsanitize=address,undefined -fno-sanitize-recover=all (model sweep at 10^5)",\n'
   printf '  "golden_programs": %s,\n' "$NPROG"
@@ -113,7 +132,11 @@ R="$T/receipt.json"
   printf '  "omega_core_sources_unchanged_vs_base": %s,\n' "$CORE_UNCHANGED"
   printf '  "m6_m9_m14_gates": %s,\n' "$GATES"
   printf '  "self_host": "no: the OSC-2 compiler slice cannot compile any part of itself (docs/osc/OSC-1-SELF-HOST-STATEMENT.md)",\n'
-  printf '  "not_covered": "contracts beyond constant folding (no symbolic proof), effects/capabilities, structs, strings, generations, arenas, unsafe physical, FFI, Flow IR optimisation, self-hosting (OSC-14); not a general Omega compiler",\n'
+  if [ "$ITEM" = structs ]; then
+    printf '  "not_covered": "struct return values, struct-typed and owner/borrow fields, recursive structs, struct literals outside let own initialisers, whole-struct copy or compare, contracts beyond constant folding (no symbolic proof), effects/capabilities, strings, generations, arenas, unsafe physical, FFI, Flow IR optimisation, self-hosting (OSC-14); not a general Omega compiler",\n'
+  else
+    printf '  "not_covered": "contracts beyond constant folding (no symbolic proof), effects/capabilities, structs, strings, generations, arenas, unsafe physical, FFI, Flow IR optimisation, self-hosting (OSC-14); not a general Omega compiler",\n'
+  fi
   printf '  "timing_measured": false\n'
   printf '}\n'
 } >"$R"

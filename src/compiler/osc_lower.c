@@ -43,7 +43,7 @@ static int newv(L *l, const OscType *t, uint32_t line)
 }
 static int newvs(L *l, OscScalar s, uint32_t line)
 {
-    OscType t = {s, OSC_REF_NONE, OSC_T_VOID, 0};
+    OscType t = {s, OSC_REF_NONE, OSC_T_VOID, 0, 0};
     return newv(l, &t, line);
 }
 
@@ -176,6 +176,16 @@ static int expr(L *l, int i)
         x->b = (int16_t)ix;
         return r;
     }
+    case ON_FIELD: {
+        int ix = n->a >= 0 ? expr(l, n->a) : -1;
+        int r = newvs(l, n->ty.s, n->line);
+        OscInsn *x = emit(l, OSC_I_FLOAD, n->line);
+        x->dst = (int16_t)r;
+        x->a = l->vreg[n->sym];
+        x->b = (int16_t)ix;
+        x->imm = (uint64_t)n->hi;
+        return r;
+    }
     case ON_CALL: return call(l, i, 1);
     case ON_CAST: {
         int a = expr(l, n->a);
@@ -270,6 +280,37 @@ static void stmt(L *l, int i)
         break;
     }
     case ON_LET_ALLOC: {
+        if (n->ty.sid) {
+            /* struct literal: field values in source order, then one
+             * allocation (cells zeroed), then one FSTORE per cell */
+            int vals[OSC_MAX_FIELDS], nv = 0;
+            for (int fi = n->a; fi >= 0; fi = NODE(fi)->next) vals[nv++] = expr(l, NODE(fi)->a);
+            int zero = kconst(l, OSC_T_U64, 0, n->line);
+            int r = newv(l, &n->ty, n->line);
+            l->vreg[n->sym] = (int16_t)r;
+            OscInsn *x = emit(l, OSC_I_ALLOC, n->line);
+            x->dst = (int16_t)r;
+            x->a = (int16_t)zero;
+            int ix = -1, k = 0;
+            for (int fi = n->a; fi >= 0; fi = NODE(fi)->next, k++) {
+                const OscNode *fn = NODE(fi);
+                unsigned cnt = fn->flag ? (unsigned)fn->ival : 1;
+                for (unsigned e = 0; e < cnt; e++) {
+                    if (fn->flag) {
+                        if (ix < 0) ix = newvs(l, OSC_T_U64, n->line);
+                        OscInsn *c = emit(l, OSC_I_CONST, fn->line);
+                        c->dst = (int16_t)ix;
+                        c->imm = e;
+                    }
+                    x = emit(l, OSC_I_FSTORE, fn->line);
+                    x->a = (int16_t)r;
+                    x->b = (int16_t)(fn->flag ? ix : -1);
+                    x->c = (int16_t)vals[k];
+                    x->imm = (uint64_t)fn->hi;
+                }
+            }
+            break;
+        }
         int v = expr(l, n->a);
         int r = newv(l, &n->ty, n->line);
         l->vreg[n->sym] = (int16_t)r;
@@ -302,6 +343,16 @@ static void stmt(L *l, int i)
         x->a = l->vreg[n->sym];
         x->b = (int16_t)ix;
         x->c = (int16_t)v;
+        break;
+    }
+    case ON_FSTORE: {
+        int ix = n->a >= 0 ? expr(l, n->a) : -1;
+        int v = expr(l, n->b);
+        OscInsn *x = emit(l, OSC_I_FSTORE, n->line);
+        x->a = l->vreg[n->sym];
+        x->b = (int16_t)ix;
+        x->c = (int16_t)v;
+        x->imm = (uint64_t)n->hi;
         break;
     }
     case ON_IF: {
@@ -491,6 +542,8 @@ int osc_lower(const OscAst *ast, OscUnit *out, OscDiag *d)
         rc = lower_fn(l, (int)fi);
     }
     out->nfuncs = (uint16_t)ast->nfns;
+    memcpy(out->structs, ast->structs, sizeof out->structs);
+    out->nstructs = ast->nstructs;
     free(l);
     return rc;
 }

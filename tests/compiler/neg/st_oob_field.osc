@@ -1,0 +1,7 @@
+// expect: STATIC_OUT_OF_BOUNDS object=a.v line=6
+// transition: index outside 0..N-1
+struct A { v: [u8; 2] }
+fn f() -> u8 {
+    let a: own A = A { v: [1; 2] };
+    return a.v[2];
+}
