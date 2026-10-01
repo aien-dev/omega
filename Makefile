@@ -222,6 +222,36 @@ build/test_omega_reduce_cpu: $(REDUCE_CPU_SRCS) src/omega_numeric_reduce.h $(NUM
 test-numeric-reduce-cpu: build/test_omega_reduce_cpu
 	./build/test_omega_reduce_cpu
 
+# E1 WP-B: FP32 transcendental sequences (SIGMOID TANH RSQRT EXP2 LOG2 ERF SIN
+# COS GELU), CPU tier, bounded contract (docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md).
+# No libm, no GPU. test-numeric-transc: special values, oracle self-checks,
+# about 1.1M sampled inputs per op against the binary128 oracle, determinism,
+# then one build per perturbed coefficient (OMEGA_TRANSC_MUTATE=1..10) which
+# must FAIL. test-numeric-transc-full: all 2^32 inputs of every op (long; run
+# it detached). test-numeric-transc-digest: full-domain outputs against the
+# frozen digests.
+.PHONY: test-numeric-transc test-numeric-transc-full test-numeric-transc-digest
+TRANSC_SRCS = tests/test_omega_transc.c src/omega_numeric_transc.c src/sha256.c
+TRANSC_HDRS = src/omega_numeric_transc.h src/omega_numeric.h src/sha256.h
+TRANSC_CC = gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -fno-fast-math -pthread -Isrc
+TRANSC_MUTANTS = 1 2 3 4 5 6 7 8 9 10
+build/test_omega_transc: $(TRANSC_SRCS) $(TRANSC_HDRS)
+	@mkdir -p build
+	$(TRANSC_CC) -o $@ $(TRANSC_SRCS)
+test-numeric-transc: build/test_omega_transc
+	./build/test_omega_transc fast
+	@for m in $(TRANSC_MUTANTS); do \
+	  $(TRANSC_CC) -DOMEGA_TRANSC_MUTATE=$$m -o build/test_omega_transc_mut$$m $(TRANSC_SRCS) || exit 1; \
+	  if ./build/test_omega_transc_mut$$m fast > build/test_omega_transc_mut$$m.log 2>&1; then \
+	    echo "MUTANT $$m SURVIVED (bound check did not fail)"; exit 1; \
+	  else echo "mutant $$m killed: $$(grep -m1 '^FAIL' build/test_omega_transc_mut$$m.log)"; fi; \
+	done
+	@echo "test-numeric-transc: PASS (all $(words $(TRANSC_MUTANTS)) mutants killed)"
+test-numeric-transc-full: build/test_omega_transc
+	./build/test_omega_transc full
+test-numeric-transc-digest: build/test_omega_transc
+	./build/test_omega_transc digest
+
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
 RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
