@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define RXC_ISSUER 3u                 /* AIENOS issuer: system owner policy office */
@@ -68,6 +69,19 @@ static int fault(RxCompose *c, int point, uint32_t k) {
     return 0;
 }
 #define RXC_ROGUE(c) 0
+#endif
+
+/* Hold point (test builds only): see RxcTestHooks.hold_k1. */
+#ifdef RXC_TEST_HOOKS
+static void hold_point(RxCompose *c, uint32_t k) {
+    if (c->test.hold_k1 != k + 1u) return;
+    if (__atomic_exchange_n(&c->test.held, 1, __ATOMIC_ACQ_REL)) return;
+    struct timespec ts = { 0, 100000 };
+    while (!__atomic_load_n(&c->test.release, __ATOMIC_ACQUIRE)) nanosleep(&ts, NULL);
+    __atomic_store_n(&c->test.hold_done, 1, __ATOMIC_RELEASE);
+}
+#else
+static void hold_point(RxCompose *c, uint32_t k) { (void)c; (void)k; }
 #endif
 
 static const RxSnapshotDep *dep_of(const RxCtx *x, RxObjRef o) {
@@ -158,6 +172,7 @@ static int candidate_fn(RxCtx *x) {
                 out_put(x, c->state, RXC_S_REF, ref);   /* refused: not in its write set */
         }
     }
+    hold_point(c, k);
     RxObjRef me = c->cand[k];
     out_put(x, me, RXC_C_REF, ref);
     out_put(x, me, RXC_C_RESULT, result);
@@ -624,14 +639,17 @@ static RxCapRef *cap_at(RxCompose *c, uint32_t i) {
 }
 
 static int mint_next(RxCompose *c, uint32_t subject, uint64_t resource, uint32_t rights) {
+    if (c->n_minted >= RXC_N_CAPS) return RX_ERR_FULL;   /* cap_at has RXC_N_CAPS slots */
     int rc = mint(c, subject, resource, rights, cap_at(c, c->n_minted));
     if (rc == RX_OK) c->n_minted++;
     return rc;
 }
 
 static int add_reaction(RxCompose *c, const RxReactionDesc *d, uint32_t *id) {
-    return c->keys ? rx_world_add_reaction_keyed(c->world, c->keys, d, id)
-                   : rx_world_add_reaction(c->world, d, id);
+    int rc = c->keys ? rx_world_add_reaction_keyed(c->world, c->keys, d, id)
+                     : rx_world_add_reaction(c->world, d, id);
+    if (rc == RX_OK) c->n_rx++;
+    return rc;
 }
 
 /* Objects, authority, reactions, binder and Cortex link of the composition
@@ -767,6 +785,7 @@ static int open_home(RxCompose *c, const char *dir, const AienMachineId *self, u
                      const SrRouter *router, RxcContract contract, AienosCapAdmin *admin) {
     struct RxcTestHooks hooks = c->test;
     hooks.fault_hit = 0;
+    hooks.held = hooks.release = hooks.hold_done = 0;
     memset(c, 0, sizeof *c);
     c->test = hooks;
     snprintf(c->dir, sizeof c->dir, "%s", dir);
@@ -810,21 +829,57 @@ static int open_home(RxCompose *c, const char *dir, const AienMachineId *self, u
     return rc;
 }
 
-/* Undo what attach put into the caller's World; the World keeps running. */
+/* 1 while any of the composition's own reactions may still call into it:
+ * admitted (READY, BLOCKED_RESOURCE), running or publishing, or due to run
+ * again (re-armed, parked, deferred). Read under the World lock. */
+static int own_busy(RxCompose *c) {
+    uint32_t ids[4] = { c->rx_cand[0], c->rx_cand[1], c->rx_verify, c->rx_commit };
+    int busy = 0;
+    pthread_mutex_lock(&c->world->mu);
+    for (uint32_t i = 0; i < c->n_rx && i < 4 && !busy; i++) {
+        if (ids[i] >= c->world->n_reactions) continue;
+        const RxReaction *r = &c->world->reactions[ids[i]];
+        busy = r->state == RX_READY || r->state == RX_RUNNING || r->state == RX_PUBLISHING ||
+               r->state == RX_BLOCKED_RESOURCE || r->rearm || r->parked || r->deferred;
+    }
+    /* A wake held back by the World's fan-out limit waits in its backlog
+     * with the reaction still DORMANT: that is a pending run as well. */
+    for (uint32_t j = 0; j < c->world->deferred_len && !busy; j++) {
+        uint32_t rid = c->world->deferred[c->world->deferred_head + j].reaction;
+        for (uint32_t i = 0; i < c->n_rx && i < 4; i++)
+            if (rid == ids[i]) busy = 1;
+    }
+    pthread_mutex_unlock(&c->world->mu);
+    return busy;
+}
+
+/* Undo what attach put into the caller's World; the World keeps running
+ * (rx_compose.h, close in attach mode, steps 1-4). */
 static void leave_world(RxCompose *c) {
-    if (c->attached) rx_cortex_detach_store(c->world, &c->cx);
-    c->attached = 0;
-    if (c->has_binder) rx_world_clear_binder(c->world, c);
-    c->has_binder = 0;
-    for (uint32_t i = 0; i < c->n_objs; i++) rx_world_retire(c->world, c->obj[i]);
-    c->n_objs = 0;
+    /* 1. Revoke: from here on no composition step can publish anything. */
     AienosCapRef office;
-    if (aienos_cap_office(c->admin, &office) == 0)
+    int have_office = aienos_cap_office(c->admin, &office) == 0;
+    if (have_office)
         for (uint32_t i = 0; i < c->n_minted; i++) {
             RxCapRef *r = cap_at(c, i);
             (void)aienos_cap_revoke(c->admin, office, (AienosCapRef){ r->cap_id, r->generation });
         }
+    /* 2. The composition journal takes no further World records. */
+    if (c->attached) rx_cortex_detach_store(c->world, &c->cx);
+    c->attached = 0;
+    /* 3. Its own steps still use c: wait until none can run. No cutoff. */
+    struct timespec ts = { 0, 200000 };
+    while (own_busy(c)) nanosleep(&ts, NULL);
+    /* 4. Binder, objects, capability slots. */
+    if (c->has_binder) rx_world_clear_binder(c->world, c);
+    c->has_binder = 0;
+    for (uint32_t i = 0; i < c->n_objs; i++) rx_world_retire(c->world, c->obj[i]);
+    c->n_objs = 0;
+    if (have_office)
+        for (uint32_t i = 0; i < c->n_minted; i++)
+            (void)aienos_cap_reclaim(c->admin, office, cap_at(c, i)->cap_id);
     c->n_minted = 0;
+    c->n_rx = 0;
 }
 
 int rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, uint64_t session,
@@ -870,7 +925,17 @@ int rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, con
     /* The World's outside subject must not be a composition subject. */
     if (w->external_subject >= RXC_SUBJ_EXTERNAL && w->external_subject <= RXC_SUBJ_COMMIT)
         return RX_ERR_ARG;
-    if (w->bind_check) return RX_ERR_EXISTS;   /* one binder per World (re-checked at set) */
+    /* One binder per World (re-checked at set), and room for its four
+     * reactions (closed attaches leave theirs: rx_compose.h), read together
+     * under the World lock. Attaching is single-caller per World: two
+     * concurrent attaches may both pass here; the loser is refused at
+     * rx_world_set_binder after registering its reactions (rx_compose.h). */
+    pthread_mutex_lock(&w->mu);
+    int taken = w->bind_check != NULL;
+    int full = w->n_reactions + 4u > RX_MAX_REACTIONS;
+    pthread_mutex_unlock(&w->mu);
+    if (taken) return RX_ERR_EXISTS;
+    if (full) return RX_ERR_FULL;
     int rc = open_home(c, dir, self, session, router, contract, admin);
     if (rc != RX_OK) return rc;
     c->world = w;
@@ -1036,9 +1101,8 @@ void rx_compose_close(RxCompose *c) {
         c->has_binder = 0;
         c->n_objs = 0;
     } else {
-        /* Leave the caller's World running: nothing of the composition may
-         * still be in flight when its binder and objects go. */
-        (void)rx_world_wait_quiescent(c->world, 30000);
+        /* Leave the caller's World running; returns once none of the
+         * composition's own steps can run (rx_compose.h). */
         leave_world(c);
     }
     c->world = NULL;

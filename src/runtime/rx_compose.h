@@ -159,6 +159,7 @@ typedef struct RxCompose {
     uint64_t session;
     RxObjRef goal, cand[RXC_K], verdict, state;
     uint32_t rx_cand[RXC_K], rx_verify, rx_commit;
+    uint32_t n_rx;                     /* of those, registered so far (cand 0, cand 1, verify, commit) */
     uint64_t seq;
     /* recovery report of the last open */
     JsBranchRef recovered;
@@ -201,6 +202,11 @@ typedef struct RxCompose {
         uint32_t fault_k;              /* candidate index for candidate-side points */
         int fault_hit;
         int rogue_candidate;           /* candidate 0 also proposes a state write */
+        /* Hold candidate hold_k1 - 1 (0: none) once, after its Skill ran and
+         * before it proposes: it sets held, waits for release, then sets
+         * hold_done and returns its proposal for the World to publish. */
+        uint32_t hold_k1;
+        int held, release, hold_done;
     } test;
 } RxCompose;
 
@@ -244,11 +250,51 @@ void rx_compose_close(RxCompose *c);
  *     NULL;
  *   - it installs the World's commit binder: RX_ERR_EXISTS if `w` already has
  *     one (at most one binder per World).
- * close (attach mode) waits for quiescence, removes the binder and the scoped
- * Cortex link, retires the five objects (their reactions can never wake
- * again: triggers name retired generations), revokes every capability attach
- * minted, and leaves `w` running. The four inert reaction slots stay
- * registered (the World has no unregister); each attach uses four more. */
+ * close (attach mode), in this order: (1) revokes every capability attach
+ * minted, so no composition step can publish from here on (a step already
+ * running finds its rights gone at publish and is REJECTED); (2) removes the
+ * scoped Cortex link, so a refused late write never enters the composition
+ * journal (the World's crumb log still records it); (3) waits until none of
+ * the composition's OWN four reactions is READY, RUNNING, PUBLISHING,
+ * BLOCKED_RESOURCE, re-armed, parked, deferred, or waiting in the World's
+ * fan-out backlog (still DORMANT there): those still use the
+ * RxCompose as their user pointer. There is no wall-clock cutoff and no wait
+ * for the rest of the World: a living World may never be quiet as a whole,
+ * and returning while a step still runs would leave it using freed memory.
+ * A Skill that never returns therefore hangs close (the safe choice);
+ * (4) removes the binder, retires the five objects and reclaims the revoked
+ * capabilities (their AIENOS slots become free; the slot generation
+ * advances, so the old references never validate again). It leaves `w`
+ * running.
+ *
+ * Invariant: what a closed attach leaves behind. The World has no
+ * unregister, so each attach/close cycle leaves its four reactions
+ * registered, DORMANT and inert for the life of the World:
+ *   - they can never be woken: every trigger names an object generation that
+ *     retire advanced (a reused object slot gets the new generation, and the
+ *     World matches subscriptions by generation; generations never wrap);
+ *   - they can never write: even if run, every capability they name is
+ *     revoked and reclaimed (generation advanced), so the run is refused
+ *     before its function is called, and their write sets name retired
+ *     objects.
+ * What they still cost: one reaction-table slot each, one subscription per
+ * trigger on the reused object slots, and a little scan time where the
+ * World walks every reaction. Bound: attach needs four free reaction slots
+ * (checked before anything is built: RX_ERR_FULL, nothing changed, the World
+ * keeps working), so a World with R reactions of its own supports
+ * floor((RX_MAX_REACTIONS - R) / 4) attach/close cycles (256 when R is 0;
+ * the R13 living World and the tests have R > 0), and each live attach needs 13 free AIENOS capability slots
+ * (AIENOS_CAP_MAX 256 per authority, shared with the rest of the system).
+ *
+ * Invariant: one composition per World at a time. The composition subjects
+ * (RXC_SUBJ_*) are fixed and the World has one commit binder, so a second
+ * attach to a World that already runs one is refused with RX_ERR_EXISTS
+ * before it touches anything; the first keeps working. Attaching is
+ * single-caller per World: two attaches racing on one World are not
+ * supported (the loser is refused at the binder, but only after its four
+ * reactions are registered, which then stay as dormant slots). After close the same
+ * or another RxCompose can attach again and recovers OLD-or-NEW from its
+ * directory. */
 int  rx_compose_enroll_callers(RxWorld *w, RxCallerKeyring *keys);
 int  rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, const char *dir,
                        const AienMachineId *self, uint64_t session, const SrRouter *router,
