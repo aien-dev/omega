@@ -34,7 +34,14 @@ grep -q 'if (d->need.deadline && w->budget.logical_tick > d->need.deadline) {' "
 	{ echo "MUTANTS: deadline check not found in $src"; exit 1; }
 
 build_run() { # dir -> 0 pass, 1 fail, 2 build error
-	make -C "$1" --no-print-directory build/rx_deadline_cancel > "$1/.mut_build.log" 2>&1 || return 2
+	# PHYSICS_DIR / PHYSICS_LOCK_CHECK are passed through explicitly when set
+	# (host-only runs use PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0).
+	set --  "$1"
+	[ -n "${PHYSICS_DIR+x}" ] && set -- "$@" "PHYSICS_DIR=$PHYSICS_DIR"
+	[ -n "${PHYSICS_LOCK_CHECK+x}" ] && set -- "$@" "PHYSICS_LOCK_CHECK=$PHYSICS_LOCK_CHECK"
+	dir=$1; shift
+	make -C "$dir" --no-print-directory "$@" build/rx_deadline_cancel > "$dir/.mut_build.log" 2>&1 || return 2
+	set -- "$dir"
 	(cd "$1" && ./build/rx_deadline_cancel) > "$1/.mut_run.log" 2>&1 && return 0
 	return 1
 }
