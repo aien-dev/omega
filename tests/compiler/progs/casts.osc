@@ -1,0 +1,15 @@
+// entry: narrow sign_flip widen chain
+// expect-run: narrow 127 -> 127
+// expect-run: narrow 128 -> trap=CAST
+// expect-run: sign_flip 4294967295 -> trap=CAST
+// expect-run: chain 100 -> 75
+// `as` between integer types; out-of-range traps CAST.
+fn narrow(x: i64) -> i8 { return x as i8; }
+fn sign_flip(x: i32) -> u32 { return x as u32; }
+fn widen(x: u8, y: i16) -> i64 { return (x as i64) * 1000 + (y as i64); }
+fn chain(x: u16) -> i16 {
+    let a: u32 = x as u32;
+    let b: i64 = a as i64;
+    let c: u64 = (b * 3) as u64;
+    return (c / 4) as i16;
+}

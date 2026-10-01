@@ -1,0 +1,8 @@
+// expect: MUTABLE_ALIAS object=a line=6
+// transition: move while borrowed
+fn f() -> i32 {
+    let a: own [i32; 3] = alloc(0);
+    let r: &[i32; 3] = &a;
+    let b: own [i32; 3] = a;
+    return r[0] + b[0];
+}

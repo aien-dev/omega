@@ -1,0 +1,11 @@
+// expect: BORROW_OUTLIVES_OWNER object=r line=9
+// transition: end borrow while reborrowed
+fn f() -> i64 {
+    let a: own [i64; 4] = alloc(1);
+    let b: own [i64; 4] = alloc(2);
+    let mut r: &[i64; 4] = &a;
+    let t: &[i64; 4] = &r;
+    let v: i64 = t[0];
+    r = &b;
+    return v;
+}

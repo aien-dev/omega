@@ -1,0 +1,27 @@
+// entry: find_pair grid_walk
+// nested loops with early return inside loops.
+fn find_pair(target: i32) -> i32 {
+    for i in 0 .. 20 {
+        for j in 0 .. 20 {
+            if (i as i32) * 20 + (j as i32) == target {
+                return (i as i32) * 100 + (j as i32);
+            }
+        }
+    }
+    return -1;
+}
+
+fn grid_walk(n: u8, stop: u16) -> u16 {
+    let mut acc: u16 = 0;
+    let mut i: u8 = 0;
+    while i < n bound 12 {
+        let mut j: u8 = 0;
+        while j < i bound 12 {
+            acc = acc + (i as u16) * (j as u16);
+            if acc == stop { return 9999; }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    return acc;
+}

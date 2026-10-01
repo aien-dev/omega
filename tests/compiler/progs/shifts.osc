@@ -1,0 +1,15 @@
+// entry: shl_i32 shr_i8 mix_u64 rot_u32
+// expect-run: shl_i32 1 30 -> 1073741824
+// expect-run: shl_i32 1 31 -> trap=OVERFLOW
+// expect-run: shl_i32 1 32 -> trap=SHIFT
+// expect-run: shr_i8 18446744073709551488 7 -> 18446744073709551615
+// shifts with amounts of any integer type; amount >= width traps SHIFT,
+// signed << that loses bits traps OVERFLOW.
+fn shl_i32(x: i32, n: u8) -> i32 { return x << n; }
+fn shr_i8(x: i8, n: i64) -> i8 { return x >> n; }
+fn mix_u64(x: u64, n: i16) -> u64 { return (x << n) ^ (x >> 3) ^ (1 << 63); }
+fn rot_u32(x: u32, n: u32) -> u32 {
+    let k: u32 = n % 32;
+    if k == 0 { return x; }
+    return (x << k) | (x >> (32 - k));
+}

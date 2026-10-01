@@ -1,0 +1,39 @@
+// entry: sort_main
+// expect-run: sort_main 1 1 1 -> 255868620
+// insertion sort over own [i64; 16] filled from the parameters.
+fn fill(a: &mut [i64; 16], s: i64, m: i64, t: i64) {
+    let mut x: i64 = s;
+    for i in 0 .. 16 {
+        x = (x * m + t) % 1000003;
+        a[i] = x;
+    }
+}
+
+fn sort(a: &mut [i64; 16]) {
+    for i in 1 .. 16 {
+        let key: i64 = a[i];
+        let mut j: i64 = i - 1;
+        while j >= 0 && a[j] > key bound 16 {
+            a[j + 1] = a[j];
+            j = j - 1;
+        }
+        a[j + 1] = key;
+    }
+}
+
+fn is_sorted(a: &[i64; 16]) -> bool {
+    for i in 1 .. 16 {
+        if a[i - 1] > a[i] { return false; }
+    }
+    return true;
+}
+
+fn sort_main(s: i32, m: i16, t: i32) -> i64 {
+    let a: own [i64; 16] = alloc(0);
+    fill(&mut a, s as i64, m as i64, t as i64);
+    sort(&mut a);
+    if !is_sorted(&a) { return -1; }
+    let mut h: i64 = 0;
+    for i in 0 .. 16 { h = (h * 31 + a[i]) % 1000000007; }
+    return h;
+}

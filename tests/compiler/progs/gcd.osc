@@ -1,0 +1,35 @@
+// entry: gcd_u64 gcd_i32 lcm_u32
+// expect-run: gcd_u64 48 18 -> 6
+// expect-run: gcd_i32 4294967248 18 -> 6
+// expect-run: lcm_u32 4 6 -> 12
+// expect-run: lcm_u32 0 0 -> trap=DIV0
+// Euclid's algorithm (u64 wraps, i32 checked); lcm traps DIV0 on gcd 0.
+fn gcd_u64(a: u64, b: u64) -> u64 {
+    let mut x: u64 = a;
+    let mut y: u64 = b;
+    while y != 0 bound 200 {
+        let t: u64 = x % y;
+        x = y;
+        y = t;
+    }
+    return x;
+}
+
+fn gcd_i32(a: i32, b: i32) -> i32 {
+    let mut x: i32 = a;
+    let mut y: i32 = b;
+    if x < 0 { x = -x; }
+    if y < 0 { y = -y; }
+    while y != 0 bound 100 {
+        let t: i32 = x % y;
+        x = y;
+        y = t;
+    }
+    return x;
+}
+
+fn lcm_u32(a: u32, b: u32) -> u32 {
+    let g: u64 = gcd_u64(a as u64, b as u64);
+    let l: u64 = (a as u64) / g * (b as u64);
+    return l as u32;
+}

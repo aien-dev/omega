@@ -1,0 +1,20 @@
+// entry: safe_div guarded_index either
+// expect-run: safe_div 9 0 -> 0
+// expect-run: safe_div 9 2 -> 1
+// expect-run: guarded_index 4 -> trap=BOUNDS
+// expect-run: guarded_index 18446744073709551615 -> 2
+// && and || short-circuit: the right side runs only when needed.
+fn safe_div(a: i32, b: i32) -> bool {
+    return b != 0 && a / b > 3;
+}
+
+fn guarded_index(i: i64) -> i64 {
+    let a: own [i64; 4] = alloc(9);
+    if i >= 0 && i < 4 && a[i] == 9 { return 1; }
+    if i < 0 || a[i] > 0 { return 2; }
+    return 3;
+}
+
+fn either(a: u8, b: u8) -> bool {
+    return a == 0 || 200 / a > b;
+}

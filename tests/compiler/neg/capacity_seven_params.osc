@@ -1,0 +1,5 @@
+// expect: CAPACITY object=f line=3
+// at most 6 parameters (x0..x5).
+fn f(a: i64, b: i64, c: i64, d: i64, e: i64, g: i64, h: i64) -> i64 {
+    return a + b + c + d + e + g + h;
+}

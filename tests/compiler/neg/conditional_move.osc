@@ -1,0 +1,9 @@
+// expect: CONDITIONAL_MOVE object=a line=7
+// transition: conditional move
+fn take(x: own [u8; 2]) -> u8 { return x[0]; }
+
+fn f(c: bool) -> u8 {
+    let a: own [u8; 2] = alloc(3);
+    if c { let s: u8 = take(a); }
+    return 1;
+}

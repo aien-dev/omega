@@ -1,0 +1,23 @@
+// entry: prefix_main
+// expect-run: prefix_main 1 1 0 7 -> 36
+// expect-run: prefix_main 1 1 2 3 -> 7
+// expect-run: prefix_main 1 1 0 8 -> trap=BOUNDS
+// prefix sums in i32 (checked) over an owned array; queries a range sum.
+fn prefix(a: &mut [i32; 8]) {
+    for i in 1 .. 8 {
+        a[i] = a[i] + a[i - 1];
+    }
+}
+
+fn range_sum(p: &[i32; 8], lo: u8, hi: u8) -> i32 {
+    if lo == 0 { return p[hi]; }
+    return p[hi] - p[lo - 1];
+}
+
+fn prefix_main(x: i32, step: i16, lo: u8, hi: u8) -> i32 {
+    let a: own [i32; 8] = alloc(x);
+    for i in 0 .. 8 { a[i] = a[i] + (step as i32) * (i as i32); }
+    prefix(&mut a);
+    if lo > hi { return 0; }
+    return range_sum(&a, lo, hi);
+}

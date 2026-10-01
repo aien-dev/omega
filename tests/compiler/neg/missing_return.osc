@@ -1,0 +1,7 @@
+// expect: MISSING_RETURN object=f line=7
+// a non-void function can fall off its end.
+fn f(x: i32) -> i32 {
+    if x > 0 {
+        return 1;
+    }
+}

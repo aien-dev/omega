@@ -1,0 +1,24 @@
+// entry: fact_i32 fact_u16
+// expect-run: fact_i32 12 -> 479001600
+// expect-run: fact_i32 13 -> trap=OVERFLOW
+// expect-run: fact_i32 4294967295 -> 4294967295
+// expect-run: fact_u16 5 -> 120
+// checked factorial in i32 (OVERFLOW from 13!), wrapping in u16.
+fn fact_i32(n: i32) -> i32 {
+    if n < 0 { return -1; }
+    let mut r: i32 = 1;
+    let mut k: i32 = 2;
+    while k <= n bound 40 {
+        r = r * k;
+        k = k + 1;
+    }
+    return r;
+}
+
+fn fact_u16(n: u8) -> u16 {
+    let mut r: u16 = 1;
+    for k in 2 .. 30 {
+        if k as u8 <= n { r = r * (k as u16); }
+    }
+    return r;
+}

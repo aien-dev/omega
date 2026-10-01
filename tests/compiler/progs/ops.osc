@@ -1,0 +1,46 @@
+// entry: arith_i32 bits_u16 cmp_i16 cmp_u64 unary_i64 logic
+// expect-run: arith_i32 7 0 -> trap=DIV0
+// expect-run: cmp_i16 3 3 -> 41
+// expect-run: logic 1 0 -> 1
+// every operator: + - * / % & | ^ << >> == != < <= > >= && || ! - ~ as
+fn arith_i32(a: i32, b: i32) -> i32 {
+    let s: i32 = a + b;
+    let d: i32 = a - b;
+    let p: i32 = (a % 1000) * (b % 1000);
+    let q: i32 = a / b;
+    let r: i32 = a % b;
+    return s / 2 + d / 2 + p + q + r;
+}
+
+fn bits_u16(a: u16, b: u16, n: u8) -> u16 {
+    return ((a & b) | (a ^ ~b)) + (a << n) + (b >> n);
+}
+
+fn cmp_i16(a: i16, b: i16) -> u8 {
+    let mut m: u8 = 0;
+    if a == b { m = m | 1; }
+    if a != b { m = m | 2; }
+    if a < b { m = m | 4; }
+    if a <= b { m = m | 8; }
+    if a > b { m = m | 16; }
+    if a >= b { m = m | 32; }
+    return m;
+}
+
+fn cmp_u64(a: u64, b: u64) -> u8 {
+    let mut m: u8 = 0;
+    if a < b { m = m + 1; }
+    if a <= b { m = m + 2; }
+    if a > b { m = m + 4; }
+    if a >= b { m = m + 8; }
+    if 100 < a { m = m + 16; }
+    return m;
+}
+
+fn unary_i64(a: i64) -> i64 {
+    return -a + ~a * 2;
+}
+
+fn logic(a: bool, b: bool) -> bool {
+    return !(a && b) == (!a || !b);
+}

@@ -1,0 +1,6 @@
+// expect: TYPE_MISMATCH object=z line=4
+// bool in arithmetic.
+fn f(b: bool) -> i32 {
+    let z: i32 = b + 1;
+    return z;
+}
