@@ -6,6 +6,7 @@
 #include "omega_numeric_reduce.h"
 #include "omega_numeric.h"
 
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -169,6 +170,12 @@ static int rows_common(OmegaReduceOp op, const float *x, size_t rows, size_t n, 
     if ((unsigned)op >= OMEGA_RED_COUNT || (rows > 0 && !out) || (rows > 0 && n > 0 && !x))
         return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (rows > 1 && row_stride < n) return OMEGA_NUMERIC_ERR_OPERANDS;
+    if (rows > 0 && n > 0) {
+        /* last element index (rows-1)*row_stride + n-1 and its byte offset must not wrap */
+        size_t lim = SIZE_MAX / sizeof(float);
+        if (rows > 1 && row_stride > (lim - n) / (rows - 1)) return OMEGA_NUMERIC_ERR_OPERANDS;
+        if (n > lim) return OMEGA_NUMERIC_ERR_OPERANDS;
+    }
     return OMEGA_NUMERIC_OK;
 }
 

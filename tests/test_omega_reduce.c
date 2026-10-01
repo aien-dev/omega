@@ -282,6 +282,10 @@ static void test_cpu_equals_reference(void) {
     }
     float tmp[2];
     if (omega_reduce_rows_cpu(OMEGA_RED_SUM, x, 2, 10, 9, tmp) != OMEGA_NUMERIC_ERR_OPERANDS) mism++;
+    /* overflow: (rows-1)*row_stride + n must not wrap size_t (Codex P2) */
+    if (omega_reduce_rows_reference(OMEGA_RED_SUM, x, 3, 10, SIZE_MAX / 2, tmp) != OMEGA_NUMERIC_ERR_OPERANDS) mism++;
+    if (omega_reduce_rows_cpu(OMEGA_RED_SUM, x, 3, 10, SIZE_MAX / 2, tmp) != OMEGA_NUMERIC_ERR_OPERANDS) mism++;
+    if (omega_reduce_rows_cpu(OMEGA_RED_SUM, x, 2, 10, SIZE_MAX / sizeof(float), tmp) != OMEGA_NUMERIC_ERR_OPERANDS) mism++;
     free(x);
     char det[1024];
     snprintf(det, sizeof(det), "cases=%zu elements=%zu mismatches=%zu %s", cases, elems, mism, d);

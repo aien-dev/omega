@@ -89,8 +89,8 @@ fi
 [ "$(git -C "$OMEGA" rev-parse HEAD)" = "$COMMIT" ] || FAIL_REASON="${FAIL_REASON:-HEAD moved during run}"
 
 BIN_SHA=""; LOG_SHA=""
-if [ -f "$BIN" ]; then BIN_SHA=$(sha256sum "$BIN" | cut -d' ' -f1); [ -e "$EVID/blobs/$BIN_SHA.bin" ] || cp "$BIN" "$EVID/blobs/$BIN_SHA.bin"; chmod 0444 "$EVID/blobs/$BIN_SHA.bin"; fi
-if [ -f "$OUT/reduce.log" ]; then LOG_SHA=$(sha256sum "$OUT/reduce.log" | cut -d' ' -f1); [ -e "$EVID/blobs/$LOG_SHA.log" ] || cp "$OUT/reduce.log" "$EVID/blobs/$LOG_SHA.log"; chmod 0444 "$EVID/blobs/$LOG_SHA.log"; fi
+if [ -f "$BIN" ]; then BIN_SHA=$(sha256sum "$BIN" | cut -d' ' -f1); [ -n "$BIN_SHA" ] || die "cannot hash binary"; [ -e "$EVID/blobs/$BIN_SHA.bin" ] || cp "$BIN" "$EVID/blobs/$BIN_SHA.bin" || die "cannot store binary blob"; chmod 0444 "$EVID/blobs/$BIN_SHA.bin" || die "cannot seal binary blob"; fi
+if [ -f "$OUT/reduce.log" ]; then LOG_SHA=$(sha256sum "$OUT/reduce.log" | cut -d' ' -f1); [ -n "$LOG_SHA" ] || die "cannot hash log"; [ -e "$EVID/blobs/$LOG_SHA.log" ] || cp "$OUT/reduce.log" "$EVID/blobs/$LOG_SHA.log" || die "cannot store log blob"; chmod 0444 "$EVID/blobs/$LOG_SHA.log" || die "cannot seal log blob"; fi
 VERDICT=PASS; [ -n "$FAIL_REASON" ] && VERDICT=FAIL
 PARITY=$(grep '^RED_GB10_PARITY:' "$OUT/reduce.log" 2>/dev/null | head -1)
 TMP=$OUT/receipt.json
@@ -101,7 +101,9 @@ jq -n --arg suite E1_REDUCE_GB10_PARITY --arg status "$VERDICT" --arg reason "$F
     --arg host "$(uname -n)" --arg kernel "$(uname -r)" \
     '{suite:$suite,status:$status,reason:$reason,run_id:$run_id,omega_commit:$commit,omega_clean_before:true,
       omega_clean_after:$clean_after,physics_commit:$physics,declared_order:$order,binary_sha256:$bin,
-      log_sha256:$log,exit_status:$exit_status,parity_line:$parity,host:$host,kernel:$kernel}' > "$TMP"
+      log_sha256:$log,exit_status:$exit_status,parity_line:$parity,host:$host,kernel:$kernel}' > "$TMP" || die "receipt json (jq) failed, no receipt written"
+[ -s "$TMP" ] || die "empty receipt, not written"
+[ "$VERDICT" != PASS ] || { [ -n "$BIN_SHA" ] && [ -n "$LOG_SHA" ]; } || die "PASS without binary and log digests refused"
 DIG=$(sha256sum "$TMP" | cut -d' ' -f1)
 (set -o noclobber; cat "$TMP" > "$EVID/$DIG.json") || die "receipt $DIG.json already exists"
 chmod 0444 "$EVID/$DIG.json"
