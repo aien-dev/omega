@@ -911,6 +911,9 @@ int omega_tensor_reduce(OmegaTensorCtx *ctx, OmegaTensorReduceOp op, OmegaTensor
     return rc;
 }
 
+/* Products per matmul block (elements): bounds the scratch of one block. */
+#define MATMUL_BLOCK_ELEMS ((uint64_t)1 << 20)
+
 int omega_tensor_matmul(OmegaTensorCtx *ctx, OmegaTensor a, OmegaTensor b, OmegaTensor *out) {
     TensorSlot *xa, *xb;
     StorageSlot *sa, *sb;
@@ -947,26 +950,47 @@ int omega_tensor_matmul(OmegaTensorCtx *ctx, OmegaTensor a, OmegaTensor b, Omega
     uint64_t batches = va.elements / (M * K);
     float *A = malloc((size_t)va.elements * sizeof(float));
     float *BT = malloc((size_t)vb.elements * sizeof(float));
-    float *prod = malloc((size_t)K * sizeof(float));
-    if (!A || !BT || !prod) { free(A); free(BT); free(prod); return OMEGA_TENSOR_ERR_CAPACITY; }
+    /* Outputs are done in blocks: the products of a whole block go through
+     * one elementwise FMUL call and one row reduction (reduce_rows, or one
+     * reduce per row), so a device realization needs a few launches per
+     * block instead of two per output. Same bits: FMUL is per element and
+     * every row is reduced in the declared order. */
+    uint64_t outs = batches * M * N;
+    uint64_t blk = MATMUL_BLOCK_ELEMS / K;
+    if (blk == 0) blk = 1;
+    if (blk > outs) blk = outs;
+    float *pa = malloc((size_t)(blk * K) * sizeof(float));
+    float *pb = malloc((size_t)(blk * K) * sizeof(float));
+    float *prod = malloc((size_t)(blk * K) * sizeof(float));
+    if (!A || !BT || !pa || !pb || !prod) {
+        free(A); free(BT); free(pa); free(pb); free(prod);
+        return OMEGA_TENSOR_ERR_CAPACITY;
+    }
     gather(sa, &va, A);
     gather(sb, &vb, BT);
     void *buf;
     rc = new_dense(ctx, OMEGA_DT_F32, br + 2, sho, out, &buf);
     if (!rc) {
         float *o = buf;
-        for (uint64_t bt = 0; bt < batches && !rc; bt++)
-            for (uint64_t i = 0; i < M && !rc; i++)
-                for (uint64_t j = 0; j < N && !rc; j++) {
-                    const float *ar = A + (bt * M + i) * K;
-                    const float *bc = BT + (bt * N + j) * K;
-                    int nrc = ctx->real->elementwise(OMEGA_NOP_FMUL, ar, bc, NULL, prod, (size_t)K);
-                    if (!nrc) nrc = ctx->real->reduce(OMEGA_TR_SUM, prod, (size_t)K, &o[(bt * M + i) * N + j]);
-                    if (nrc) rc = numeric_fail(ctx, nrc, *out);
-                }
+        for (uint64_t o0 = 0; o0 < outs && !rc; o0 += blk) {
+            uint64_t cnt = outs - o0 < blk ? outs - o0 : blk;
+            for (uint64_t q = 0; q < cnt; q++) {
+                uint64_t e = o0 + q, j = e % N, i = (e / N) % M, bt = e / (N * M);
+                memcpy(pa + q * K, A + (bt * M + i) * K, (size_t)K * sizeof(float));
+                memcpy(pb + q * K, BT + (bt * N + j) * K, (size_t)K * sizeof(float));
+            }
+            int nrc = ctx->real->elementwise(OMEGA_NOP_FMUL, pa, pb, NULL, prod, (size_t)(cnt * K));
+            if (!nrc && ctx->real->reduce_rows)
+                nrc = ctx->real->reduce_rows(OMEGA_TR_SUM, prod, (size_t)cnt, (size_t)K, o + o0);
+            for (uint64_t q = 0; !nrc && !ctx->real->reduce_rows && q < cnt; q++)
+                nrc = ctx->real->reduce(OMEGA_TR_SUM, prod + q * K, (size_t)K, &o[o0 + q]);
+            if (nrc) rc = numeric_fail(ctx, nrc, *out);
+        }
     }
     free(A);
     free(BT);
+    free(pa);
+    free(pb);
     free(prod);
     return rc;
 }

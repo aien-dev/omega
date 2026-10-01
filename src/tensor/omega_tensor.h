@@ -209,9 +209,35 @@ typedef struct {
      * omega_ref_fsetp_pred(sel_op, a[i], b[i]) bit for bit.
      * NULL: the CMP_* binary ops return OMEGA_TENSOR_ERR_REALIZATION. */
     int (*compare)(OmegaNumericOp sel_op, const float *a, const float *b, float *out, size_t n);
+    /* Optional (NULL = the semantic layer calls reduce once per row):
+     * out[r] = reduce(op, x[r*n .. r*n + n)) for r < rows, every row in
+     * OMEGA_TENSOR_REDUCE_DECLARED_ORDER, so the bits equal one reduce call
+     * per row. Lets a device realization batch many short rows (matmul
+     * outputs) into a few launches. Added by M20 cut gb10. */
+    int (*reduce_rows)(OmegaTensorReduceOp op, const float *x, size_t rows, size_t n, float *out);
 } OmegaTensorRealization;
 
 const OmegaTensorRealization *omega_tensor_cpu_realization(void);
+
+/*
+ * GB10 realization (src/tensor/omega_tensor_gb10.c, M20 cut gb10). Needs the
+ * physics checkout to build; opens the device on every call.
+ *   elementwise: E1 omega_gb10_execute_simt_op, in chunks of at most
+ *                OMEGA_NUMERIC_MAX_COUNT. Only the ops the tensor layer uses
+ *                and that have a GB10 E1 kernel are mapped; any other op is
+ *                refused with OMEGA_NUMERIC_ERR_NOT_ENCODED before a device
+ *                is opened. Never falls back to the CPU.
+ *   reduce:      E1 omega_reduce_gb10 (n <= OMEGA_REDUCE_GB10_MAX_N), after
+ *                the same declared-order strcmp as the CPU seam.
+ *   reduce_rows: SUM batches all rows per tree level through the E1
+ *                REDUCE_SUM warp kernel (same patch words as
+ *                omega_reduce_gb10 SUM); other ops call omega_reduce_gb10 per
+ *                row. Matmul is therefore FMUL_RNE products + the E1 tree,
+ *                bit-exact with the CPU table. No Tensor Core, no FFMA.
+ */
+const OmegaTensorRealization *omega_tensor_gb10_realization(void);
+/* E1 op name the GB10 table submits for op, or NULL if op is refused. */
+const char *omega_tensor_gb10_op_name(OmegaNumericOp op);
 
 typedef struct OmegaTensorCtx OmegaTensorCtx;
 

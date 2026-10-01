@@ -100,4 +100,25 @@ test-tensor-store: $(OUT_DIR)/test_omega_tensor_store $(OUT_DIR)/test_omega_tens
 	./$(OUT_DIR)/test_omega_tensor_store
 	./$(OUT_DIR)/test_omega_tensor_store_asan
 	$(MAKE) --no-print-directory test-tensor-no-hooks
+
+# ---- GB10 realization table (M20 cut gb10) ---------------------------------
+# test-tensor-gb10-host  PHYSICS_DIR=<physics checkout at physics.lock>:
+#                        builds the GB10 table + tests/test_omega_tensor_gb10.c
+#                        against physics and runs host self checks only (no
+#                        --chip, no device), the nm no-CPU-fallback check and
+#                        the GB10 MUT: mutants (tools/tensor_mutations.sh --gb10)
+# test-tensor-gb10-chip  the chip parity gate: tests/run_tensor_chip.sh (pins,
+#                        clean trees, /tmp/aien-gb10.lock, receipt). Refuses
+#                        unless GB10_CHIP_RUN=1 is set, so it never runs by
+#                        accident. Never pass a quiet flag.
+.PHONY: test-tensor-gb10-host test-tensor-gb10-chip
+test-tensor-gb10-host:
+	@test -n "$(PHYSICS_DIR)" && test -d "$(PHYSICS_DIR)" \
+		|| { echo "test-tensor-gb10-host: set PHYSICS_DIR to the physics checkout"; exit 2; }
+	tools/tensor_mutations.sh --gb10 "$(PHYSICS_DIR)"
+
+test-tensor-gb10-chip:
+	@test "$$GB10_CHIP_RUN" = 1 || { echo "test-tensor-gb10-chip: chip run refused (set GB10_CHIP_RUN=1; forge only)"; exit 2; }
+	@test -n "$(PHYSICS_DIR)" || { echo "test-tensor-gb10-chip: set PHYSICS_DIR"; exit 2; }
+	tests/run_tensor_chip.sh --physics-dir "$(PHYSICS_DIR)"
 endif
