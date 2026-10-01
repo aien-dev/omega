@@ -16,7 +16,8 @@
  *   hold --owner ID --minutes N [--reason TEXT] -- CMD...
  *       Acquire the flag (flock on .spark-quiet.lock around the
  *       read-modify-write, flag published with link(2) so it never clobbers),
- *       run CMD with QUIETLOCK_HOLD=<id>, release on exit. Exit = CMD's exit.
+ *       run CMD with QUIETLOCK_HOLD=<id>, release when CMD and every process
+ *       left in its process group have exited. Exit = CMD's exit.
  *       N > 20 needs the approval token (see below). Exit 75 if already held,
  *       77 if the approval token is missing or does not cover this hold.
  *   check
@@ -580,6 +581,14 @@ static void on_alarm(int sig)
 }
 
 /* Remove the flag only if it still carries our hold id (never a foreign flag). */
+static void warn_overrun(const char *id)
+{
+	history("overrun: hold %s passed expected_end while command still running; flag KEPT "
+		"until the command exits, command NOT killed", id);
+	fprintf(stderr, "quietlock: WARNING overrun: hold %s passed expected_end; flag kept until "
+			"the command exits\n", id);
+}
+
 static void release_mine(const char *id, int rc, int overrun)
 {
 	struct flag f;
@@ -788,10 +797,7 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 			time_t t = time(NULL);
 			if (t >= end_t) {
 				overrun = 1;
-				history("overrun: hold %s passed expected_end while command still running; flag KEPT "
-					"until the command exits, command NOT killed", id);
-				fprintf(stderr, "quietlock: WARNING overrun: hold %s passed expected_end; flag kept until "
-						"the command exits\n", id);
+				warn_overrun(id);
 			} else {
 				alarm((unsigned)(end_t - t));
 			}
@@ -811,6 +817,25 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 		rc = 128 + WTERMSIG(status);
 	else
 		rc = 1;
+	/* The hold lasts until no process of the job's group is left (the same rule
+	 * check and release-stale apply when quietlock is gone). Leftover members are
+	 * never killed; we wait for them, once a second. Zombies count as dead. */
+	if (group_alive((long)child)) {
+		struct timespec sec = { 1, 0 };
+		history("hold %s: job exited (exit %d) but its group %ld still has processes; flag KEPT until "
+			"the group is gone, nothing killed", id, rc, (long)child);
+		fprintf(stderr, "quietlock: job exited, processes remain in its group %ld; holding until they end\n",
+			(long)child);
+		while (group_alive((long)child)) {
+			if (!overrun && time(NULL) >= end_t) {
+				overrun = 1;
+				warn_overrun(id);
+			}
+			nanosleep(&sec, NULL);
+		}
+		history("hold %s: last process of group %ld ended", id, (long)child);
+	}
+	g_child = 0;
 	if (tty)
 		tcsetpgrp(STDIN_FILENO, getpgrp());
 	release_mine(id, rc, overrun);

@@ -250,6 +250,26 @@ check "T13e job ended: release-stale cleared the flag" \
 	'[ -e "$T/done" ] && [ ! -e "$FLAG" ] && [ $crc = 0 ] && grep -q "released stale flag: A quietlock .* job=$jp jobgroup=$jp" "$HIST"'
 rm -f "$T/started" "$T/go" "$T/done"
 
+# --- T13f the job exits but leaves a background child in its process group: the hold stays until the
+# last group member ends (nothing is killed), then the flag is released.
+# Mutations killed: releasing as soon as the job pid is reaped (no group wait), or group_alive()
+# returning 0 (flag gone, check 0, second hold runs); killing the leftover child (no done file).
+reset
+"$Q" hold --owner A --minutes 5 -- \
+	sh -c '( while [ ! -e "$1/go" ]; do sleep 1; done; touch "$1/done" ) </dev/null >/dev/null 2>&1 & touch "$1/started"; exit 0' sh "$T" 2>/dev/null &
+hp=$!
+i=0; while [ $i -lt 20 ] && ! grep -q "job exited (exit 0) but its group .* still has processes" "$HIST" 2>/dev/null; do sleep 1; i=$((i + 1)); done
+"$Q" check 2>/dev/null; crc=$?
+"$Q" release-stale >/dev/null 2>&1; src=$?
+"$Q" hold --owner B --minutes 1 -- touch "$T/ran13f" 2>/dev/null; hrc=$?
+check "T13f job exited, child left in its group: flag held, check 75, release-stale 3, second hold refused" \
+	'[ -e "$T/started" ] && grep -q "job exited (exit 0) but its group" "$HIST" && [ -e "$FLAG" ] && [ $crc = 75 ] && [ $src = 3 ] && [ $hrc = 75 ] && [ ! -e "$T/ran13f" ] && [ ! -e "$T/done" ] && kill -0 $hp 2>/dev/null'
+touch "$T/go"; wait $hp; rc=$?
+"$Q" check 2>/dev/null; crc=$?
+check "T13f last group member ended: flag released, child was not killed" \
+	'[ $rc = 0 ] && [ -e "$T/done" ] && [ ! -e "$FLAG" ] && [ $crc = 0 ] && grep -q "last process of group" "$HIST"'
+rm -f "$T/started" "$T/go" "$T/done" "$T/ran13f"
+
 # --- T14 expected_end without Z never counts as passed.
 # Mutation killed: making the trailing Z optional in parse_iso.
 D2=$(dead_pid)
