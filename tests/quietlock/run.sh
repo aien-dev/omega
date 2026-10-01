@@ -318,6 +318,44 @@ hookrun "$(bash_json 'make -C special')"; rc=$?
 check "H7b allow line lets a matching command through" '[ $rc = 0 ]'
 hookrun "$(bash_json 'make -C other')"; rc=$?
 check "H7c allow line does not let others through" '[ $rc = 2 ]'
+
+# H8 round-3 bypasses are closed (each blocked while held).
+# Mutations killed: -c extraction only for the exact "-c" flag (bash -lc, sh -xc); dropping the shells
+# branch (bash -c make unquoted); dropping the keyword skip (if/for/while/until/else, a regression against
+# the old hook); replacing the wrapper "any later heavy word" rule with option skipping (sudo -u x,
+# taskset -c 0-3, chrt -f 10, timeout -s KILL 60, env -u VAR, xargs -n1, stdbuf -oL, ionice -c 3).
+reset; live_flag
+expect_block() {
+	hookrun "$(bash_json "$1")"; rc=$?
+	check "H8 blocked: $1" '[ $rc = 2 ] && grep -q QUIETLOCK_REFUSED "$T/hookerr"'
+}
+expect_allow() {
+	hookrun "$(bash_json "$1")"; rc=$?
+	check "H9 allowed: $1" '[ $rc = 0 ]'
+}
+expect_block 'bash -lc "make"'
+expect_block 'bash -c make'
+expect_block "sh -xc 'make all'"
+expect_block 'if make; then :; fi'
+expect_block 'for i in 1; do make; done'
+expect_block 'while make; do :; done'
+expect_block 'until make; do :; done'
+expect_block 'if true; then :; else make; fi'
+expect_block 'sudo -u x make'
+expect_block 'taskset -c 0-3 make'
+expect_block 'chrt -f 10 make'
+expect_block 'ionice -c 3 make'
+expect_block 'stdbuf -oL make'
+expect_block 'timeout -s KILL 60 make'
+expect_block 'xargs -n1 make'
+expect_block 'env -u VAR make'
+# H9 controls: lookalikes that are not builds stay allowed.
+# Mutations killed: collecting "-c '...'" text after any command, not only a shell (grep -c);
+# wrapper rule blocking on any word instead of a heavy word (sudo cat); scanning echo arguments (for/echo).
+expect_allow 'grep -c "make" notes.md'
+expect_allow 'sudo cat notes.md'
+expect_allow "bash -c 'echo hi' >> notes.md"
+expect_allow 'for f in a b; do echo make; done >> notes.md'
 fi
 
 reset

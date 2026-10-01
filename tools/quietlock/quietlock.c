@@ -480,7 +480,7 @@ static long minute_seconds(void)
 static int cmd_hold(const char *owner, const char *mins, const char *reason_in, char **argv)
 {
 	long minutes;
-	char reason[65], why[512], info[512], id[96], start[32], end[32], line[512], tmp[PBUF + 32], d[512];
+	char reason[65], why[PBUF + 128], info[512], id[96], start[32], end[32], line[512], tmp[PBUF + 32], d[512];
 	struct flag f;
 	struct sigaction sa;
 	size_t i;
