@@ -1,0 +1,42 @@
+    DIV batch 1/7 done, mismatches so far 0
+    DIV batch 2/7 done, mismatches so far 0
+    DIV batch 3/7 done, mismatches so far 0
+    DIV batch 4/7 done, mismatches so far 0
+    DIV batch 5/7 done, mismatches so far 0
+    DIV batch 6/7 done, mismatches so far 0
+    DIV batch 7/7 done, mismatches so far 0
+    SQRT batch 16/256 done, mismatches so far 0
+    SQRT 0x18de8000: chip 0x55555555 want 0x2c28c29b
+    SQRT 0x18de8001: chip 0x55555555 want 0x2c28c29c
+    SQRT 0x18de8002: chip 0x55555555 want 0x2c28c29c
+    SQRT 0x18de8003: chip 0x55555555 want 0x2c28c29d
+    SQRT 0x18de8004: chip 0x55555555 want 0x2c28c29d
+    SQRT 0x18de8005: chip 0x55555555 want 0x2c28c29d
+    SQRT 0x18de8006: chip 0x55555555 want 0x2c28c29e
+    SQRT 0x18de8007: chip 0x55555555 want 0x2c28c29e
+    SQRT 0x18de8008: chip 0x55555555 want 0x2c28c29f
+    SQRT 0x18de8009: chip 0x55555555 want 0x2c28c29f
+    SQRT 0x18de800a: chip 0x55555555 want 0x2c28c29f
+    SQRT 0x18de800b: chip 0x55555555 want 0x2c28c2a0
+    SQRT 0x18de800c: chip 0x55555555 want 0x2c28c2a0
+    SQRT 0x18de800d: chip 0x55555555 want 0x2c28c2a0
+    SQRT 0x18de800e: chip 0x55555555 want 0x2c28c2a1
+    SQRT 0x18de800f: chip 0x55555555 want 0x2c28c2a1
+    SQRT batch 32/256 done, mismatches so far 1589152
+    SQRT batch 48/256 done, mismatches so far 6613696
+    SQRT batch 64/256 done, mismatches so far 6613696
+    SQRT batch 80/256 done, mismatches so far 6613696
+    SQRT batch 96/256 done, mismatches so far 6613696
+    SQRT batch 112/256 done, mismatches so far 18945984
+    SQRT batch 128/256 done, mismatches so far 25132608
+    SQRT batch 144/256 done, mismatches so far 33063456
+    SQRT batch 160/256 done, mismatches so far 34637952
+    SQRT batch 176/256 done, mismatches so far 36406560
+    SQRT batch 192/256 done, mismatches so far 36406560
+    SQRT batch 208/256 done, mismatches so far 39694368
+    SQRT batch 224/256 done, mismatches so far 43008064
+    SQRT batch 240/256 done, mismatches so far 44462624
+    SQRT batch 256/256 done, mismatches so far 49359680
+RESULT chip DIV checked=117440512 edge_and_corpus=5033 mismatches=0 mismatches_vs_omega_math=0 seed=0x9e3779b97f4a7c15 verdict=PASS
+RESULT chip SQRT checked=4294967296 mismatches=49359680 mismatches_vs_omega_math=49359680 verdict=FAIL
+VERDICT FAIL

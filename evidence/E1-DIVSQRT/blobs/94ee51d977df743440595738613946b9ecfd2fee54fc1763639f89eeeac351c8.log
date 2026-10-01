@@ -1,0 +1,26 @@
+    DIV batch 1/7 done, mismatches so far 0
+    DIV batch 2/7 done, mismatches so far 0
+    DIV batch 3/7 done, mismatches so far 0
+    DIV batch 4/7 done, mismatches so far 0
+    DIV batch 5/7 done, mismatches so far 0
+    DIV batch 6/7 done, mismatches so far 0
+    DIV batch 7/7 done, mismatches so far 0
+    SQRT batch 16/256 done, mismatches so far 0
+    SQRT batch 32/256 done, mismatches so far 0
+    SQRT batch 48/256 done, mismatches so far 0
+    SQRT batch 64/256 done, mismatches so far 0
+    SQRT batch 80/256 done, mismatches so far 0
+    SQRT batch 96/256 done, mismatches so far 0
+    SQRT batch 112/256 done, mismatches so far 0
+    SQRT batch 128/256 done, mismatches so far 0
+    SQRT batch 144/256 done, mismatches so far 0
+    SQRT batch 160/256 done, mismatches so far 0
+    SQRT batch 176/256 done, mismatches so far 0
+    SQRT batch 192/256 done, mismatches so far 0
+    SQRT batch 208/256 done, mismatches so far 0
+    SQRT batch 224/256 done, mismatches so far 0
+    SQRT batch 240/256 done, mismatches so far 0
+    SQRT batch 256/256 done, mismatches so far 0
+RESULT chip DIV checked=117440512 edge_and_corpus=5033 mismatches=0 mismatches_vs_omega_math=0 unwritten=0 seed=0x9e3779b97f4a7c15 verdict=PASS
+RESULT chip SQRT checked=4294967296 mismatches=0 mismatches_vs_omega_math=0 unwritten=0 verdict=PASS
+VERDICT PASS
