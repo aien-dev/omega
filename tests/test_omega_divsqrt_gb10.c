@@ -272,6 +272,8 @@ static int host_tier(void) {
         check(omega_ds_check_qmd(q2, c.code_va, err, sizeof(err)) != 0 && !strncmp(err, "ds_qmd_gpr:", 11), "DS_QMD_REFUSES_16_REGISTERS");
         check(omega_ds_check_qmd(q, c.code_va + 0x1000, err, sizeof(err)) != 0 && !strncmp(err, "ds_qmd_code:", 12),
               "DS_QMD_REFUSES_OTHER_PROGRAM");
+        memcpy(q2, q, sizeof(q)); q2[33] ^= 1u; /* program address bit 36: 64 GiB away */
+        check(omega_ds_check_qmd(q2, c.code_va, err, sizeof(err)) != 0 && !strncmp(err, "ds_qmd_code:", 12), "DS_QMD_REFUSES_HIGH_ADDRESS_BITS");
     }
 
     /* host model of the exact body vs FDIV/FSQRT and omega_math_* */
@@ -350,10 +352,13 @@ static int host_sqrt_all(void) {
     omega_ds_host_exec(OMEGA_DS_SQRT, 0, 0); /* fill the body cache before threads */
     for (int i = 0; i < T; i++) {
         s[i].lo = (1ull << 32) * i / T; s[i].hi = (1ull << 32) * (i + 1) / T; s[i].bad = 0;
-        pthread_create(&th[i], NULL, sqrt_slice, &s[i]);
+        if (pthread_create(&th[i], NULL, sqrt_slice, &s[i]) != 0) { printf("[FAIL] host SQRT: thread %d not started\n", i); return 2; }
     }
     uint64_t bad = 0;
-    for (int i = 0; i < T; i++) { pthread_join(th[i], NULL); bad += s[i].bad; }
+    for (int i = 0; i < T; i++) {
+        if (pthread_join(th[i], NULL) != 0) { printf("[FAIL] host SQRT: thread %d not joined\n", i); return 2; }
+        bad += s[i].bad;
+    }
     printf("RESULT host SQRT checked=4294967296 mismatches=%" PRIu64 "\n", bad);
     return bad ? 1 : 0;
 }

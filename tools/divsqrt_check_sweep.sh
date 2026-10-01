@@ -3,7 +3,8 @@
 # src/omega_numeric_divsqrt_gb10.c is load-bearing. Every check is one line
 # ending in a /* CHECK:<name> */ marker. For each marker this script deletes
 # that line in a scratch copy, rebuilds the CPU-only test and runs the host
-# tier. The sweep passes only if every copy builds and every run FAILS.
+# tier. The sweep passes only if every copy builds and every run FAILS with
+# exit status 1 and a [FAIL] line (a crash or signal counts as BROKEN).
 # Unused-variable and unused-parameter warnings are allowed in the scratch
 # copies only: deleting a check can leave the value it tested unused.
 # Host only: opens no device, writes only under a temporary directory.
@@ -30,8 +31,12 @@ for name in $names; do
             -DOMEGA_NUMERIC_CPU_ONLY -o "$TMP/t" "$mut" $OTHER) > "$TMP/build.log" 2>&1; then
         echo "  [BROKEN]   $name: scratch copy does not build"; broken=$((broken + 1)); continue
     fi
-    if "$TMP/t" > "$TMP/run.log" 2>&1; then
+    "$TMP/t" > "$TMP/run.log" 2>&1; rc=$?
+    if [ "$rc" = 0 ]; then
         echo "  [SURVIVED] $name: removing this check fails no test"; survived=$((survived + 1))
+    elif [ "$rc" != 1 ] || ! grep -q "^\[FAIL\]" "$TMP/run.log"; then
+        # a crash, signal or other exit is not a test catching the mutation
+        echo "  [BROKEN]   $name: run ended with status $rc and no [FAIL] line (crash, not a caught mutation)"; broken=$((broken + 1))
     else
         echo "  [KILLED]   $name: $(grep -m2 '^\[FAIL\]' "$TMP/run.log" | sed 's/^\[FAIL\] //' | tr '\n' ' ')"
         killed=$((killed + 1))

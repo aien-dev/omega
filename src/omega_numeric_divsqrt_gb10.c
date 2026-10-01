@@ -626,7 +626,9 @@ int omega_ds_check_kernel(OmegaDsOp op, const uint8_t *code, size_t len,
         get_words(code + 16 * (OMEGA_DS_PROLOGUE_INSNS + i), w);
         if (((w[0] >> 12) & 0xfu) != 0x7u) return refuse(err, err_len, E_OP, "ds_guard: body insn %zu is predicated", i); /* CHECK:ds_guard */
         if (w[3] != OMEGA_DS_BODY_CTRL) return refuse(err, err_len, E_OP, "ds_ctrl: body insn %zu control 0x%08x", i, w[3]); /* CHECK:ds_ctrl */
-        if (omega_ds_decode(w, &x) != 0) return refuse(err, err_len, E_OP, "ds_forms: body insn %zu is not a recorded form", i); /* CHECK:ds_forms */
+        memset(&x, 0, sizeof(x));
+        int dec = omega_ds_decode(w, &x); /* decode kept off the CHECK line so deleting the check leaves x initialized */
+        if (dec != 0) return refuse(err, err_len, E_OP, "ds_forms: body insn %zu is not a recorded form", i); /* CHECK:ds_forms */
         int ns = src_regs(&x, s);
         for (int j = 0; j < ns; j++) {
             if (!defr[s[j]]) return refuse(err, err_len, E_OP, "ds_def_use: body insn %zu reads R%u before any write", i, (unsigned)s[j]); /* CHECK:ds_def_use */
@@ -669,7 +671,7 @@ int omega_ds_check_qmd(const uint32_t *qmd1, uint64_t code_va, char *err, size_t
     if (omega_blackwell_verify_qmd_invariants(qmd1) != 0) return refuse(err, err_len, E_OP, "ds_qmd: QMD invariants fail"); /* CHECK:ds_qmd */
     uint32_t gpr = (qmd1[35] >> 8) & 0x1ffu;
     if (gpr != OMEGA_DS_GPR_COUNT) return refuse(err, err_len, E_OP, "ds_qmd_gpr: QMD allocates %u registers, kernel needs %u", gpr, OMEGA_DS_GPR_COUNT); /* CHECK:ds_qmd_gpr */
-    if (qmd1[32] != (uint32_t)(code_va >> 4)) return refuse(err, err_len, E_OP, "ds_qmd_code: QMD program address is not the kernel"); /* CHECK:ds_qmd_code */
+    if (qmd1[32] != (uint32_t)(code_va >> 4) || (qmd1[33] & 0x1fffffu) != (uint32_t)((code_va >> 36) & 0x1fffffu)) return refuse(err, err_len, E_OP, "ds_qmd_code: QMD program address is not the kernel"); /* CHECK:ds_qmd_code */
     return OMEGA_NUMERIC_OK;
 }
 #undef E_OP

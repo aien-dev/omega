@@ -80,18 +80,21 @@ grep -E '^RESULT|^VERDICT' "$RUN/chip.log"
 
 OMEGA_CLEAN_AFTER=$([ -z "$(git -C "$HERE" status --porcelain)" ] && echo true || echo false)
 PHYS_CLEAN_AFTER=$([ -z "$(git -C "$PHYSICS" status --porcelain)" ] && echo true || echo false)
+OMEGA_SAME_AFTER=$([ "$(git -C "$HERE" rev-parse HEAD 2>/dev/null)" = "$OMEGA_COMMIT" ] && echo true || echo false)
+PHYS_SAME_AFTER=$([ "$(git -C "$PHYSICS" rev-parse HEAD 2>/dev/null)" = "$PHYS_COMMIT" ] && echo true || echo false)
 field() { grep "^RESULT chip $1 " "$RUN/chip.log" | tr ' ' '\n' | sed -n "s/^$2=//p" | head -1; }
 VERDICT=$(sed -n 's/^VERDICT \([A-Z_]*\).*/\1/p' "$RUN/chip.log" | tail -1)
 [ -n "$VERDICT" ] || VERDICT=NOT_RUN
 [ "$CHIP_RC" = 0 ] || [ "$VERDICT" != PASS ] || VERDICT=FAIL
-[ "$OMEGA_CLEAN_AFTER" = true ] && [ "$PHYS_CLEAN_AFTER" = true ] || { [ "$VERDICT" = PASS ] && VERDICT=FAIL; }
+[ "$OMEGA_CLEAN_AFTER" = true ] && [ "$PHYS_CLEAN_AFTER" = true ] && [ "$OMEGA_SAME_AFTER" = true ] && [ "$PHYS_SAME_AFTER" = true ] || { [ "$VERDICT" = PASS ] && VERDICT=FAIL; }
 
 mkdir -p "$EVID/blobs"
 LOG_SHA=$(sha "$RUN/chip.log")
-[ -e "$EVID/blobs/$LOG_SHA.log" ] || { cp "$RUN/chip.log" "$EVID/blobs/$LOG_SHA.log" && chmod 0444 "$EVID/blobs/$LOG_SHA.log"; }
+[ -e "$EVID/blobs/$LOG_SHA.log" ] || { cp "$RUN/chip.log" "$EVID/blobs/$LOG_SHA.log" && chmod 0444 "$EVID/blobs/$LOG_SHA.log"; } || { echo "could not store the chip log blob"; echo "VERDICT FAIL"; exit 1; }
 num() { local v; v=$(field "$1" "$2"); echo "${v:-null}"; }
 BODY=$(jq -n --arg gate "E1-DIVSQRT" --arg omega "$OMEGA_COMMIT" --arg phys "$PHYS_COMMIT" --arg pin "$PIN" \
     --argjson oclean true --argjson pclean true --argjson oafter "$OMEGA_CLEAN_AFTER" --argjson pafter "$PHYS_CLEAN_AFTER" \
+    --argjson osame "$OMEGA_SAME_AFTER" --argjson psame "$PHYS_SAME_AFTER" \
     --arg bin "$BIN_SHA" --arg log "$LOG_SHA" --arg kd "$KDIG" --arg start "$START" --arg end "$END" \
     --arg nvd "$(grep '^nvdisasm' "$RUN/nvdisasm.log")" --arg host "$(tail -1 "$RUN/host.log")" \
     --argjson dchk "$(num DIV checked)" --argjson dedge "$(num DIV edge_and_corpus)" \
@@ -101,17 +104,20 @@ BODY=$(jq -n --arg gate "E1-DIVSQRT" --arg omega "$OMEGA_COMMIT" --arg phys "$PH
     --argjson smath "$(num SQRT mismatches_vs_omega_math)" --argjson sfill "$(num SQRT unwritten)" --arg sver "$(field SQRT verdict)" \
     --arg verdict "$VERDICT" --argjson rc "$CHIP_RC" '{
   gate: $gate, row: "E1 gap table row 7: GB10 correctly rounded FP32 DIV and SQRT",
-  omega_commit: $omega, omega_tree_clean_before: $oclean, omega_tree_clean_after: $oafter,
-  physics_commit: $phys, physics_lock_pin: $pin, physics_tree_clean_before: $pclean, physics_tree_clean_after: $pafter,
+  omega_commit: $omega, omega_tree_clean_before: $oclean, omega_tree_clean_after: $oafter, omega_commit_unchanged_after: $osame,
+  physics_commit: $phys, physics_lock_pin: $pin, physics_tree_clean_before: $pclean, physics_tree_clean_after: $pafter, physics_commit_unchanged_after: $psame,
   binary_sha256: $bin, chip_log_sha256: $log, kernels: ($kd | split("\n") | map(select(length > 0) | split(" ") | {op: .[0], instructions: (.[1] | tonumber), sha256: .[2]})),
   nvdisasm_check: $nvd, host_tier: $host,
   div: {checked: $dchk, edge_and_corpus: $dedge, mismatches_vs_fdiv: $dbad, mismatches_vs_omega_math_div: $dmath, mismatches_unwritten: $dfill, rng_seed: $seed, verdict: $dver},
   sqrt: {checked: $schk, exhaustive: ($schk == 4294967296), mismatches_vs_fsqrt: $sbad, mismatches_vs_omega_math_sqrt: $smath, mismatches_unwritten: $sfill, verdict: $sver},
   chip_exit_status: $rc, started_utc: $start, finished_utc: $end, verdict: $verdict }')
-printf '%s\n' "$BODY" > "$RUN/receipt.json"
+[ -n "$BODY" ] && printf '%s\n' "$BODY" > "$RUN/receipt.json" && jq -e . "$RUN/receipt.json" >/dev/null || { echo "receipt JSON could not be built"; echo "VERDICT FAIL"; exit 1; }
 RSHA=$(sha "$RUN/receipt.json")
 OUT=$EVID/$RSHA.json
 if [ -e "$OUT" ]; then echo "receipt $OUT already exists (identical content)"; else
-    set -o noclobber; cat "$RUN/receipt.json" > "$OUT" && chmod 0444 "$OUT"; set +o noclobber; fi
+    set -o noclobber; { cat "$RUN/receipt.json" > "$OUT" && chmod 0444 "$OUT"; } || { echo "could not write receipt $OUT"; echo "VERDICT FAIL"; exit 1; }; set +o noclobber; fi
+cmp -s "$RUN/receipt.json" "$OUT" || { echo "receipt $OUT does not match what was built"; echo "VERDICT FAIL"; exit 1; }
 echo "RECEIPT $OUT"
 echo "VERDICT $VERDICT"
+[ "$VERDICT" = PASS ] || exit 1
+exit 0
