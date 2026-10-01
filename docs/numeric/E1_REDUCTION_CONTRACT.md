@@ -84,8 +84,9 @@ Notes:
   whole warps, so no tile straddles a launch). The host gathers lane 0 of each
   warp between launches: bit moves only, every FADD/FMNMX runs on the chip.
   One launch per chunk per level (n = 10^6: 16 + 1 + 1 + 1 = 19).
-  - SUM and MEAN levels: the existing REDUCE_SUM kernel via
-    `omega_gb10_execute_simt_op` (and its `omega_numeric_submit_check`).
+  - SUM and MEAN levels: the existing chip-proven REDUCE_SUM patch words
+    (`omega_numeric_patch_words`), checked with `omega_numeric_check_patch`
+    before submission (`omega_numeric_submit_check`) and again at launch.
   - MAX/MIN levels: a reduce-owned patch written at `OMEGA_NUMERIC_PATCH_OFFSET`
     of the vecadd kernel (`omega_reduce_gb10_minmax_patch`), 12 instructions:
     five pairs `SHFL.DOWN PT, R9, R2, d, 0x1f` + `FMNMX R2, R2, R9, !PT|PT`
@@ -97,12 +98,14 @@ Notes:
     (`make test-numeric-reduce-nvdisasm`).
   - `omega_reduce_gb10_check_minmax_patch` runs the generic
     `omega_numeric_check_patch` rules and then `CHECK:` markers `mm_shape`,
-    `mm_delta_order` (16, 8, 4, 2, 1), `mm_shfl_src`, `mm_fmnmx_form`,
+    `mm_delta_order` (16, 8, 4, 2, 1), `mm_shfl_src`, `mm_shfl_dst` (R9),
+    `mm_first_wait_load` (first shuffle waits on SB4), `mm_fmnmx_form`,
     `mm_fmnmx_pred` (MAX vs MIN), `mm_fmnmx_wait`, `mm_fmnmx_srcs`,
     `mm_fmnmx_dst`, `mm_fmnmx_stall`, `mm_store`, `mm_exit`. It runs before
     submission for every chunk size, and again inside the launch against the
     exact QMD and code image submitted.
-  - The MAX/MIN launch waits for the host completion marker and then for the
+  - Every level launch (all four ops) uses the reduce-owned executor, which
+    waits for the host completion marker and then for the
     QMD release semaphore (`OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE`) plus
     `dsb sy` before reading results (the stores-after-marker hazard found by
     the DIV/SQRT lane, omega#141).
@@ -129,7 +132,7 @@ Notes:
 | `RED_DETERMINISM` | n = 1000003, repeated runs and shifted buffers give identical bits |
 | `RED_GB10_PRESUBMIT_CHECKS` | refusals (NULL, too large, MEAN `n > 2^24`) and acceptance of every tested n for all four ops, without a device |
 | `RED_CRAFTED_TABLE` | 14 crafted vectors (all `-0`, signed zeros, overflow, inf, subnormal, all NaN, NaN with one number, sNaN, negative NaN, `+-FLT_MAX` cancel) with hand-written SUM, MAX, MIN and MEAN bits on reference and CPU |
-| `RED_GB10_MINMAX_PATCH` | the MAX and MIN patches pass their checks; 24 mutants (reversed or swapped deltas, delta 3, swapped shuffle pairs, MAX and MIN predicate flipped, swapped FMNMX operands, wrong last destination, missing wait, short stall, wrong shuffle clamp, stray modifier bit, and the other op's patch) are each refused; a host model that decodes the patch words equals the reference on 110 cases |
+| `RED_GB10_MINMAX_PATCH` | the MAX and MIN patches pass their checks; 30 mutants (reversed or swapped deltas, delta 3, shuffle into R2 or R6, first shuffle not waiting for the input load, swapped shuffle pairs, MAX and MIN predicate flipped, swapped FMNMX operands, wrong last destination, missing wait, short stall, wrong shuffle clamp, stray modifier bit, and the other op's patch) are each refused; a host model that decodes the patch words equals the reference on 110 cases |
 | `RED_WRONG_PAD_CAUGHT` | wrong pads (`-inf` or `+0` for MAX, `+inf` or `-0` for MIN) give different bits on crafted inputs and are caught; MEAN worked example n = 33 is `0x48F83E2F` and differs from the sequential order |
 | `RED_GB10_PARITY_<OP>` | chip only, per op SUM, MAX, MIN, MEAN: GB10 bits equal the reference for 21 lengths (0, 1, 2, 31, 32, 33, 63, 64, 65, 97, 1000, 1023, 1024, 1025, 4097, 32768, 32769, 65536, 65537, 10^6, 1000003) x 4 input classes (`n > 70000`: 2), plus the crafted table and the worked examples. NaN equals NaN (payload not semantic) |
 | `RED_GB10_PARITY` | chip only: overall line, PASS only when every op has 0 mismatches |

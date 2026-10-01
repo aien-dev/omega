@@ -522,7 +522,7 @@ static void test_gb10_minmax_patch(void) {
             ok = 0; snprintf(d, sizeof(d), "%s patch refused: %s", omega_reduce_op_name(rop), err);
         }
         /* each mutation of the order, the combine or the schedule is refused */
-        for (int k = 0; k < 11; k++) {
+        for (int k = 0; k < 14; k++) {
             memcpy(m, p, sizeof(p));
             switch (k) {
             case 0: for (int s = 0; s < 5; s++) m[2 * s].w[1] = p[2 * (4 - s)].w[1]; break; /* deltas 1,2,4,8,16 */
@@ -535,6 +535,12 @@ static void test_gb10_minmax_patch(void) {
             case 7: m[6].w[1] = (p[6].w[1] & ~(0x1fu << 8)) | (0x0fu << 8); break;         /* clamp 0x0f        */
             case 8: m[7].w[3] = (p[7].w[3] & ~(0xfu << 9)) | (2u << 9); break;             /* stall 2           */
             case 9: m[1].w[1] |= 0x100u; break;                                            /* modifier bit      */
+            case 11: case 12: {                         /* SHFL into R2 (running value) or R6 (store address), */
+                uint32_t r = k == 11 ? 2u : 6u;         /* with its FMNMX reading the same register             */
+                m[2].w[0] = (p[2].w[0] & 0xff00ffffu) | (r << 16);
+                m[3].w[1] = (p[3].w[1] & ~0xffu) | r;
+                break; }
+            case 13: m[0].w[3] &= ~(1u << 24); break;                                      /* first SHFL no SB4 wait */
             default: memcpy(&m[2], &p[4], 2 * sizeof(p[0])); memcpy(&m[4], &p[2], 2 * sizeof(p[0])); break; /* pairs swapped */
             }
             mutants++;

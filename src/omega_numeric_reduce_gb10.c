@@ -8,17 +8,21 @@
  * chunk) and gathers lane 0 of every warp as the next level. The gather moves
  * bits only; every combine runs on the chip.
  *
- *   SUM   the chip-proven REDUCE_SUM kernel through the public executor
- *         omega_gb10_execute_simt_op (unchanged since PR #134).
+ *   SUM   the chip-proven REDUCE_SUM patch words of the WP-C table
+ *         (omega_numeric_patch_words), checked by omega_numeric_check_patch,
+ *         launched by this file's executor (see below).
  *   MAX   this file's warp patch: five SHFL.DOWN (deltas 16, 8, 4, 2, 1,
  *   MIN   clamp 0x1f) each followed by FMNMX R2, R2, R9, !PT (MAX) or PT
  *         (MIN), the last one writing R9, then STG, EXIT. The words are the
  *         registry's chip-proven FMNMX_MAX/FMNMX_MIN form (registers changed)
  *         and the REDUCE_SUM SHFL.DOWN words and control words; every word was
  *         decoded with nvdisasm 13.0 -b SM121 (make test-numeric-reduce-nvdisasm).
- *         It runs through this file's executor (a copy of the vecadd launch of
- *         omega_numeric_gb10.c with this patch, plus a wait on the QMD release
- *         semaphore before outputs are read).
+ *
+ * Every op runs through this file's executor run_chunk: a copy of the vecadd
+ * launch of omega_numeric_gb10.c (which this lane does not edit) plus a wait on
+ * the QMD release semaphore and a dsb before outputs are read. The shared
+ * executor reads after the host marker only, which PR #141 showed can precede
+ * the last stores.
  *   MEAN  SUM levels on the chip, then the one final division
  *         omega_math_div(SUM, u2f(n)) on the host: a DECLARED HOST STEP (no
  *         GB10 DIV is merged on main yet; the chip DIV kernel is PR #141).
@@ -121,6 +125,8 @@ int omega_reduce_gb10_check_minmax_patch(OmegaReduceOp op, const OmegaNumericPat
         const OmegaNumericPatchInsn *sh = &p[2 * s], *mm = &p[2 * s + 1];
         if (P_OP(*sh) != 0x7f89u || P_SHFL_DELTA(*sh) != DELTA[s]) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "%s: step %d must be SHFL.DOWN by %u (declared order 16,8,4,2,1)", name, s, DELTA[s]); /* CHECK:mm_delta_order */
         if (P_SRCA(*sh) != acc) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "%s: step %d shuffles R%u, not the running value R2", name, s, P_SRCA(*sh)); /* CHECK:mm_shfl_src */
+        if (P_DST(*sh) != 9u) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "%s: step %d shuffles into R%u, not the scratch register R9 (R2 is the running value, R6:R7 the store address)", name, s, P_DST(*sh)); /* CHECK:mm_shfl_dst */
+        if (s == 0 && !(P_WAIT(*sh) & (1u << 4))) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "%s: first SHFL does not wait on SB4 (the input load of R2)", name); /* CHECK:mm_first_wait_load */
         if (P_OP(*mm) != 0x7209u || (mm->w[1] & ~0xffu) != 0) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "%s: step %d is not followed by a register FMNMX (no negate, no abs)", name, s); /* CHECK:mm_fmnmx_form */
         if (mm->w[2] != want_w2) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "%s: FMNMX of step %d has w2 0x%08x, not the %s form 0x%08x (wrong min/max predicate or modifier)", name, s, mm->w[2], name, want_w2); /* CHECK:mm_fmnmx_pred */
         if (P_WBAR(*sh) > 5u || !(P_WAIT(*mm) & (1u << P_WBAR(*sh)))) return refuse(err, err_len, OMEGA_NUMERIC_ERR_OPERANDS, "%s: FMNMX of step %d does not wait on the shuffle", name, s); /* CHECK:mm_fmnmx_wait */
@@ -254,9 +260,28 @@ static const uint32_t RED_SETUP_WORDS[18] = {
     0x20012559, 0x00000000,
 };
 
-static int run_minmax_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t count) {
+/* Patch words for one level launch of op: REDUCE_SUM's (WP-C table) for SUM
+ * and MEAN, the reduce-owned FMNMX patch for MAX and MIN. */
+static int chunk_patch(OmegaReduceOp op, OmegaNumericPatchInsn patch[OMEGA_NUMERIC_PATCH_MAX]) {
+    if (op == OMEGA_RED_MAX || op == OMEGA_RED_MIN) return omega_reduce_gb10_minmax_patch(op, patch);
+    if (op == OMEGA_RED_SUM || op == OMEGA_RED_MEAN) return omega_numeric_patch_words(OMEGA_NOP_REDUCE_SUM, patch);
+    return OMEGA_NUMERIC_ERR_BAD_ARGS;
+}
+
+static int chunk_check(OmegaReduceOp op, const OmegaNumericPatchInsn *patch, int np, const uint32_t *qmd1,
+                       char *err, size_t err_len) {
+    if (op == OMEGA_RED_MAX || op == OMEGA_RED_MIN)
+        return omega_reduce_gb10_check_minmax_patch(op, patch, np, qmd1, err, err_len);
+    return omega_numeric_check_patch(OMEGA_NOP_REDUCE_SUM, patch, np, qmd1, err, err_len);
+}
+
+/* One level chunk on GB10, every op. A copy of the vecadd launch of
+ * omega_numeric_gb10.c (not edited by this lane) that also waits for the QMD
+ * release semaphore before reading results; the shared executor reads after
+ * the host marker only. */
+static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t count) {
     OmegaNumericPatchInsn patch[OMEGA_NUMERIC_PATCH_MAX];
-    int np = omega_reduce_gb10_minmax_patch(op, patch);
+    int np = chunk_patch(op, patch);
     if (np <= 0 || count == 0 || count > OMEGA_NUMERIC_MAX_COUNT || count % 32u) return OMEGA_NUMERIC_ERR_BAD_ARGS;
 
     M16NativeContext ctx;
@@ -281,10 +306,12 @@ static int run_minmax_chunk(OmegaReduceOp op, const float *in, float *out_res, s
     memset(out_mem.cpu, 0x55, count * sizeof(float));
 
     size_t code_len = 0;
-    if (omega_reduce_gb10_build_minmax_kernel(op, code_mem.cpu, code_mem.size, &code_len) != OMEGA_NUMERIC_OK) {
+    if (omega_blackwell_encode_vecadd(code_mem.cpu, code_mem.size, &code_len) != 0 ||
+        code_len < OMEGA_NUMERIC_PATCH_OFFSET + (size_t)np * 16u) {
         m16_native_close(&ctx);
         return OMEGA_NUMERIC_ERR_DEVICE;
     }
+    for (int i = 0; i < np; i++) memcpy((uint8_t *)code_mem.cpu + OMEGA_NUMERIC_PATCH_OFFSET + (size_t)i * 16u, patch[i].w, 16);
 
     uint32_t cbank_data[OMEGA_BW_CBANK_DRIVER_WORDS];
     omega_blackwell_build_cbank_driver(cbank_data, cbank_mem.va);
@@ -311,7 +338,7 @@ static int run_minmax_chunk(OmegaReduceOp op, const float *in, float *out_res, s
     }
     { /* the structural check again, on the QMD actually submitted and the code image */
         char perr[256];
-        if (omega_reduce_gb10_check_minmax_patch(op, patch, np, qmd1_words, perr, sizeof(perr)) != OMEGA_NUMERIC_OK) {
+        if (chunk_check(op, patch, np, qmd1_words, perr, sizeof(perr)) != OMEGA_NUMERIC_OK) {
             fprintf(stderr, "omega_reduce_gb10: %s\n", perr);
             m16_native_close(&ctx);
             return OMEGA_NUMERIC_ERR_OPERANDS;
@@ -436,8 +463,7 @@ int omega_reduce_gb10(OmegaReduceOp op, const float *x, size_t n, float *out) {
         for (size_t base = 0; base < padded; base += OMEGA_NUMERIC_MAX_COUNT) {
             size_t count = padded - base;
             if (count > OMEGA_NUMERIC_MAX_COUNT) count = OMEGA_NUMERIC_MAX_COUNT;
-            rc = minmax ? run_minmax_chunk(op, cur + base, res, count)
-                        : omega_gb10_execute_simt_op("REDUCE_SUM", cur + base, NULL, NULL, res, count);
+            rc = run_chunk(op, cur + base, res, count);
             g_last_launches++;
             if (rc != OMEGA_NUMERIC_OK) { free(cur); free(res); return rc; }
             /* lane 0 of warp w holds tile (base/32 + w); base/32 + w <= base + 32w */

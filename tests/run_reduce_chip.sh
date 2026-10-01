@@ -49,8 +49,10 @@ EVID=$(cd "$EVID" && pwd)
 case "$EVID/" in "$OMEGA/"*|"$PHYS/"*) die "evidence dir must be outside the omega tree and physics checkout" ;; esac
 
 RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)-${COMMIT:0:12}
-OUT=$OMEGA/build/reduce-runs/$RUN_ID
-mkdir -p "$OUT"
+mkdir -p "$OMEGA/build/reduce-runs" || die "cannot create build/reduce-runs"
+# one fresh directory per invocation, so concurrent runs never share files
+OUT=$(mktemp -d "$OMEGA/build/reduce-runs/$RUN_ID.XXXXXX") || die "cannot create a run directory"
+RUN_ID=$(basename "$OUT")
 BIN=$OUT/test_omega_reduce_gb10
 NV=$PHYS/third_party/nvidia-open-580.173.02
 FAIL_REASON=""
@@ -70,6 +72,8 @@ if [ -z "$FAIL_REASON" ]; then
     nm -u "$BIN" | grep -Eq 'libcuda(rt)?\.so|\b(cuInit|cuCtx|cuMem|cuStream|cudaMalloc)\b' && FAIL_REASON="CUDA symbols in binary"
 fi
 STATUS=-1
+BIN_SHA_BUILT=""
+[ -z "$FAIL_REASON" ] && { BIN_SHA_BUILT=$(sha256sum "$BIN" | cut -d' ' -f1); [ -n "$BIN_SHA_BUILT" ] || FAIL_REASON="cannot hash binary after build"; }
 if [ -z "$FAIL_REASON" ]; then
     CREATED_FLAG=0
     if [ "$QUIET" = 1 ]; then
@@ -93,9 +97,32 @@ fi
 [ -z "$(git -C "$OMEGA" status --porcelain)" ] && CLEAN_AFTER=true || { CLEAN_AFTER=false; FAIL_REASON="${FAIL_REASON:-tree dirty after run}"; }
 [ "$(git -C "$OMEGA" rev-parse HEAD)" = "$COMMIT" ] || FAIL_REASON="${FAIL_REASON:-HEAD moved during run}"
 
+# store_blob SRC EXT -> prints the digest. An existing blob is trusted only if
+# its content hashes to its name; a new one is copied to a temp name, checked,
+# sealed and moved into place without overwriting.
+store_blob() {
+    local src=$1 ext=$2 d dst tmp have
+    d=$(sha256sum "$src" | cut -d' ' -f1); [ -n "$d" ] || die "cannot hash $src"
+    dst=$EVID/blobs/$d.$ext
+    if [ -e "$dst" ]; then
+        have=$(sha256sum "$dst" | cut -d' ' -f1)
+        [ "$have" = "$d" ] || die "existing blob $dst does not match its digest"
+    else
+        tmp=$(mktemp "$EVID/blobs/.tmp.XXXXXX") || die "cannot create temp blob"
+        cp "$src" "$tmp" || { rm -f "$tmp"; die "cannot store $ext blob"; }
+        have=$(sha256sum "$tmp" | cut -d' ' -f1)
+        [ "$have" = "$d" ] || { rm -f "$tmp"; die "stored $ext blob does not match its digest"; }
+        chmod 0444 "$tmp" || { rm -f "$tmp"; die "cannot seal $ext blob"; }
+        mv -n "$tmp" "$dst"; rm -f "$tmp"
+        have=$(sha256sum "$dst" | cut -d' ' -f1)
+        [ "$have" = "$d" ] || die "blob $dst does not match its digest after publish"
+    fi
+    echo "$d"
+}
 BIN_SHA=""; LOG_SHA=""
-if [ -f "$BIN" ]; then BIN_SHA=$(sha256sum "$BIN" | cut -d' ' -f1); [ -n "$BIN_SHA" ] || die "cannot hash binary"; [ -e "$EVID/blobs/$BIN_SHA.bin" ] || cp "$BIN" "$EVID/blobs/$BIN_SHA.bin" || die "cannot store binary blob"; chmod 0444 "$EVID/blobs/$BIN_SHA.bin" || die "cannot seal binary blob"; fi
-if [ -f "$OUT/reduce.log" ]; then LOG_SHA=$(sha256sum "$OUT/reduce.log" | cut -d' ' -f1); [ -n "$LOG_SHA" ] || die "cannot hash log"; [ -e "$EVID/blobs/$LOG_SHA.log" ] || cp "$OUT/reduce.log" "$EVID/blobs/$LOG_SHA.log" || die "cannot store log blob"; chmod 0444 "$EVID/blobs/$LOG_SHA.log" || die "cannot seal log blob"; fi
+if [ -f "$BIN" ]; then BIN_SHA=$(store_blob "$BIN" bin) || exit 2; fi
+[ -z "$BIN_SHA_BUILT" ] || [ "$BIN_SHA" = "$BIN_SHA_BUILT" ] || FAIL_REASON="${FAIL_REASON:-binary changed between build and receipt}"
+if [ -f "$OUT/reduce.log" ]; then LOG_SHA=$(store_blob "$OUT/reduce.log" log) || exit 2; fi
 VERDICT=PASS; [ -n "$FAIL_REASON" ] && VERDICT=FAIL
 PARITY=$(grep '^RED_GB10_PARITY:' "$OUT/reduce.log" 2>/dev/null | head -1)
 PSUM=$(grep '^RED_GB10_PARITY_SUM:' "$OUT/reduce.log" 2>/dev/null | head -1)
