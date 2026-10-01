@@ -130,6 +130,13 @@ typedef enum {
     OMEGA_TU_RSQRT,      /* omega_math_rsqrt, correctly rounded (OMEGA_TRANSC_MAX_ULP_RSQRT 0) */
     OMEGA_TU_ERF,        /* omega_math_erf,   <= OMEGA_TRANSC_MAX_ULP_ERF (3)     */
     OMEGA_TU_GELU,       /* omega_math_gelu,  <= OMEGA_TRANSC_MAX_ULP_GELU (3), erf form */
+    /* E1 trig (bounded contract, not correctly rounded): omega_math_sin /
+     * omega_math_cos per element, bit-exact with calling them directly.
+     * Admitted domain |x| <= 2^22 (OMEGA_TRANSC_TRIG_MAX_ABS, inclusive);
+     * outside it, +-inf and NaN give the canonical qNaN 0x7fc00000.
+     * sin(+-0) = +-0, cos(+-0) = +1. */
+    OMEGA_TU_SIN,        /* omega_math_sin,     <= OMEGA_TRANSC_MAX_ULP_SIN (2)     */
+    OMEGA_TU_COS,        /* omega_math_cos,     <= OMEGA_TRANSC_MAX_ULP_COS (2)     */
     OMEGA_TU_COUNT
 } OmegaTensorUnaryOp;
 
@@ -175,7 +182,8 @@ typedef struct {
     int (*reduce)(OmegaTensorReduceOp op, const float *x, size_t n, float *out);
     /* Optional. out[i] = op(a[i]) for the bounded-contract unary ops
      * (OMEGA_TU_EXP2 .. OMEGA_TU_TANH, OMEGA_TU_EXP, OMEGA_TU_LOG, OMEGA_TU_RSQRT,
-     * OMEGA_TU_ERF, OMEGA_TU_GELU), bit-exact with the E1 CPU sequences.
+     * OMEGA_TU_ERF, OMEGA_TU_GELU, OMEGA_TU_SIN, OMEGA_TU_COS), bit-exact with
+     * the E1 CPU sequences.
      * NULL: those ops return OMEGA_TENSOR_ERR_REALIZATION (other ops work). */
     int (*transc)(OmegaTensorUnaryOp op, const float *a, float *out, size_t n);
 } OmegaTensorRealization;

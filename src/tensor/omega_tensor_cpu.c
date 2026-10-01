@@ -1,9 +1,9 @@
 /* CPU realization of M20 OMEGA_TENSOR: the E1 CPU tier (explicit AArch64
  * instructions in omega_numeric_cpu_realize) for elementwise ops, the frozen
  * E1 transcendental sequences (omega_numeric_transc.c, bounded contract) for
- * EXP2 / LOG2 / SIGMOID / TANH, the E1 polynomials omega_math_exp / omega_math_log
- * (omega_numeric.c) for EXP / LOG, and the reduction seam for reductions. No
- * arithmetic outside those. RELU is a bit select in omega_tensor.c. */
+ * EXP2 / LOG2 / SIGMOID / TANH / SIN / COS, the E1 polynomials omega_math_exp /
+ * omega_math_log (omega_numeric.c) for EXP / LOG, and the reduction seam for
+ * reductions. No arithmetic outside those. RELU is a bit select in omega_tensor.c. */
 #include "omega_tensor.h"
 #include "omega_tensor_reduce_seam.h"
 #include "omega_numeric_transc.h"
@@ -22,13 +22,14 @@ static float (*const TRANSC_FN[OMEGA_TU_COUNT])(float) = {
     [OMEGA_TU_EXP] = omega_math_exp, [OMEGA_TU_LOG] = omega_math_log, /* MUT:TRANSC_EXP_LOG_SWAP */
     [OMEGA_TU_RSQRT] = omega_math_rsqrt, [OMEGA_TU_ERF] = omega_math_erf, /* MUT:TRANSC_RSQRT_ERF_SWAP */
     [OMEGA_TU_GELU] = omega_math_gelu,
+    [OMEGA_TU_SIN] = omega_math_sin, [OMEGA_TU_COS] = omega_math_cos, /* MUT:TRIG_SIN_COS_SWAP */
 };
 
 static int cpu_transc(OmegaTensorUnaryOp op, const float *a, float *out, size_t n) {
     if ((unsigned)op >= OMEGA_TU_COUNT || !TRANSC_FN[op] || !a || !out) return OMEGA_NUMERIC_ERR_BAD_ARGS;
     if (!omega_numeric_fpenv_ok()) return OMEGA_NUMERIC_ERR_FPENV;
     float (*f)(float) = TRANSC_FN[op];
-    for (size_t i = 0; i < n; i++) out[i] = f(a[i]);
+    for (size_t i = 0; i < n; i++) out[i] = f(a[i]); /* MUT:TRIG_DOMAIN_NUMBER */
     return OMEGA_NUMERIC_OK;
 }
 
