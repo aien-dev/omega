@@ -381,6 +381,10 @@ static void gen_func(Cg *g, const OscUnit *u, int fi) {
                 }
                 break;
             case OSC_I_CALL:
+                /* Direct BL needs the callee already emitted. osc_ir_validate refuses
+                 * calls to later functions (and self), so this cannot trigger on a
+                 * validated unit; kept so the invariant is local to the emitter. */
+                if (in->callee < 0 || in->callee >= fi) { cg_fail(g, "CALL to function %d not emitted before function %d", in->callee, fi); return; }
                 for (int k = 0; k < in->nargs; k++) ld(g, k, in->args[k]);
                 load_rt(g, 7);
                 E(g, osc_a64_br(OSC_A64_BL, ((int64_t)g->entry_word[in->callee] - (int64_t)here(g)) * 4));
