@@ -65,7 +65,11 @@ or in which an instruction that sets a scoreboard stalls fewer than 2 cycles
 before its waiter. That last rule comes from the chip: the first Gate 5 run
 (2026-10-01, FAIL receipt d40f37f9) had the c load stall 1 cycle, the FFMA did not
 see the barrier and read the stale address word (2349 of 4096 mismatches); with
-stall 4 a chip diagnostic gave 4096 of 4096 correct.
+stall 4 a chip diagnostic gave 4096 of 4096 correct. Gate 5 then PASSED on
+omega 7211b59 + physics e95e3ed (receipt f4f6d362..., in
+evidence/OMEGA-NUMERIC-0/): all 23 E1 scalar ops zero mismatches at n=4096.
+Fixed-latency instructions must also stall at least 5 cycles (the chip-proven
+ptxas value) and the FFMA_V LDG and IMAD words are checked in full.
 The checker is structural only: it cannot show that a word computes the right
 value. "Encoded" is not "correct on the chip": GB10 parity for each op
 is one Gate 5 parity line at n=4096 with zero mismatches under the manifest
