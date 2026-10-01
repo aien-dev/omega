@@ -2,6 +2,9 @@
 #include "runtime/rx_living.h"
 #include "runtime/rx_resident_gpu.h"
 #include "rx_compose_fixture.h"
+#ifndef R13_SILICON
+#include "../fabric/fab_living_phase.h"
+#endif
 #include "omega_evidence.h"
 #include "sha256.h"
 
@@ -1377,6 +1380,86 @@ out:
            g->stale_commit_outcome, g->stale_goal_rc);
     return g->ok ? 0 : -1;
 }
+
+/* Fabric F5-0 in the living World (Lane 13, host only). A second simulated
+ * machine joins over the loopback transport and advertises a Skill; the
+ * composition attached to this World finds it in the Capability Graph as a
+ * CQ_SRC_FABRIC candidate, runs it through the Fabric dispatcher (an
+ * in-process stand-in: F5-0 has no work message) and commits it; then the
+ * machine leaves, is lost and rejoins, and forged, stale and wrong-machine
+ * traffic is refused (fab_living_phase.h has the steps). The living
+ * generation, the in-force record and the single promotion holder must be
+ * untouched. Runs after composition_phase, on a fresh composition directory:
+ * one composition at a time per World (subjects 200..204). */
+static FlReceipt g_fab;
+
+static int fabric_attach(void *ctx, RxCompose *c, const char *dir, const AienMachineId *self,
+                         const SrRouter *router) {
+    Rig *r = ctx;
+    memset(c, 0, sizeof *c);
+    return rx_compose_attach(c, &r->w, &r->compose_keys, dir, self, FX_SESSION, router,
+                             fx_contract, r->admin);
+}
+
+static void fabric_close(void *ctx, RxCompose *c) { (void)ctx; rx_compose_close(c); }
+
+static int fabric_phase(Rig *r) {
+    char dir[200];
+    if (snprintf(dir, sizeof dir, "%s/compose-fabric", r->home_dir) >= (int)sizeof dir) {
+        fprintf(stderr, "R13 Fabric: home path too long\n");
+        return -1;
+    }
+    uint64_t gen_before = 0, lineage_before = 0, inforce_before[RX_MAX_FIELDS];
+    rx_gen_active(r->gen, &gen_before, &lineage_before);
+    for (uint32_t i = 0; i < RX_MAX_FIELDS; i++) inforce_before[i] = field(r, r->living.o.inforce, i);
+    int rc = fl_run(&r->machine, dir, fabric_attach, fabric_close, r, &g_fab);
+    uint64_t gen_after = 0, lineage_after = 0;
+    rx_gen_active(r->gen, &gen_after, &lineage_after);
+    int untouched = gen_after == gen_before && lineage_after == lineage_before &&
+                    r->w.external_subject == EXTERNAL;
+    for (uint32_t i = 0; i < RX_MAX_FIELDS; i++)
+        if (field(r, r->living.o.inforce, i) != inforce_before[i]) untouched = 0;
+    uint64_t swept = 0, holders = 0;
+    if (authority_sweep(r, &swept, &holders) != 0 || holders != 1) untouched = 0;
+    g_fab.ok = rc == 0 && untouched;
+    printf("R13 Fabric (host, second machine in the living World): %s; %u checks, %u failed; "
+           "remote wins %u, dispatched %llu, dispatcher refusals route %llu digest %llu; "
+           "living untouched %d\n",
+           g_fab.ok ? "PASS" : "FAIL", g_fab.checks, g_fab.failures, g_fab.remote_wins,
+           U(g_fab.dispatched), U(g_fab.dispatch_refused[FAB_DX_ROUTE]),
+           U(g_fab.dispatch_refused[FAB_DX_DIGEST]), untouched);
+    return g_fab.ok ? 0 : -1;
+}
+
+static void fabric_json(char *out, size_t n) {
+    const FlReceipt *g = &g_fab;
+    if (!g->ran) {
+        snprintf(out, n, "  \"fabric_host_phase\": {\"result\": \"NOT_RUN\"},\n");
+        return;
+    }
+    char rec[65], fab[65];
+    fx_hex(g->record_digest, 32, rec);
+    fx_hex(g->fabric_digest, 32, fab);
+    snprintf(out, n,
+        "  \"fabric_host_phase\": {\"result\": \"%s\", \"checks\": %u, \"failures\": %u, "
+        "\"transport\": \"F5-0 loopback (in-process)\", \"auth\": \"HMAC stand-in\", "
+        "\"remote_execution\": \"in-process stand-in (fab_dispatch); no work message in F5-0\", "
+        "\"remote_wins\": %u, \"dispatched\": %llu, \"results\": [%llu, %llu, %llu, %llu, %llu, %llu], "
+        "\"winners\": [%u, %u, %u, %u, %u, %u], \"refused\": {\"forged_wrong_key\": \"%s\", "
+        "\"forged_altered_byte\": \"%s\", \"relayed_other_machine_record\": \"%s\", "
+        "\"misdelivered\": \"%s\", \"stale_generation_replay\": \"%s\", "
+        "\"advertise_after_lease\": \"%s\", \"pinned_unknown_machine\": %d, "
+        "\"remote_only_after_loss\": %d, \"dispatch_route\": %llu, \"dispatch_digest\": %llu}, "
+        "\"fabric_candidates_held\": %d, \"record_digest\": \"%s\", \"fabric_digest\": \"%s\"},\n",
+        g->ok ? "PASS" : "FAIL", g->checks, g->failures, g->remote_wins, U(g->dispatched),
+        U(g->result[0]), U(g->result[1]), U(g->result[2]), U(g->result[3]), U(g->result[4]),
+        U(g->result[5]), g->winner[0], g->winner[1], g->winner[2], g->winner[3], g->winner[4],
+        g->winner[5], fab_strerror(g->forged_wrong_key), fab_strerror(g->forged_altered),
+        fab_strerror(g->relayed_record), fab_strerror(g->misdelivered),
+        fab_strerror(g->stale_gen), fab_strerror(g->lease_expired), g->pinned_wrong_machine,
+        g->remote_only_after_loss, U(g->dispatch_refused[FAB_DX_ROUTE]),
+        U(g->dispatch_refused[FAB_DX_DIGEST]), g->fabric_held, rec, fab);
+}
 #endif /* !R13_SILICON */
 
 static void binary_digest(char out[65]) {
@@ -1425,10 +1508,13 @@ static void composition_json(char *out, size_t n) {
             c->stale_commit_refused ? "true" : "false", c->stale_external_refused ? "true" : "false",
             c->identity_refused ? "true" : "false", c->generation_untouched ? "true" : "false",
             c->inforce_untouched ? "true" : "false", c->promote_holders_ok ? "true" : "false");
+        size_t used = strlen(out);
+        if (used < n) fabric_json(out + used, n - used);
         return;
     }
 #endif
-    snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\"},\n");
+    snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\"},\n"
+                     "  \"fabric_host_phase\": {\"result\": \"NOT_RUN\"},\n");
 }
 
 static void receipt(int tests_ok) {
@@ -1454,7 +1540,7 @@ static void receipt(int tests_ok) {
     struct utsname host;
     memset(&host, 0, sizeof host);
     uname(&host);
-    char comp[2048];
+    char comp[6144];
     composition_json(comp, sizeof comp);
     FILE *f = fopen(path, "w");
     if (!f) return;
@@ -1585,6 +1671,7 @@ int main(void) {
         /* COMPOSITION-2 in the living system: host phase, after the episode,
          * while the living World and its authority are still up. */
         if (rc == 0 && mode == POSITIVE) rc = composition_phase(r);
+        if (rc == 0 && mode == POSITIVE) rc = fabric_phase(r);
 #endif
         if (rc != 0)
             fprintf(stderr, "R13 %s FAILED: plan %llu search %llu GPU %llu evidence %llu "
