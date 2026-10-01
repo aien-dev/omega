@@ -17,8 +17,16 @@ encoder receipt. Item-specific evidence lines start with `osc3 <item>:`.
 
 ## Item 0: owed external review of OSC-2
 
-See the item 0 section below once the review has run (Codex was at its usage
-limit at 2026-10-01T11:31Z; retried before each later PR).
+OSC-2 (#148..#151) was reviewed only by the Gemini fallback because Codex was
+at its usage limit. The owed Codex review ran on 2026-10-01: first attempt
+11:30Z refused (usage limit, reset 12:03Z); second attempt 12:04Z,
+`codex exec -s read-only -c model="gpt-6-astra"` over
+`git diff 0abdb08^..7e713e3 -- src/compiler src/language tests/compiler mk/compiler.mk src/aarch64_encoder.c`,
+asked for correctness bugs only (miscompilation, interpreter/native
+disagreement, missed contract traps, unsound ownership/borrow/arena checks,
+compiler memory safety, layout, encoder ranges) with concrete failing inputs.
+Result: **NO FINDINGS**. No item 0 fix PR was needed; the result is recorded
+here and in the item 1 pull request.
 
 ## Item 1: quick and full compiler suites
 
