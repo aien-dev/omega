@@ -40,7 +40,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-capability-graph test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-plan-reuse test-cortex
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-capability-graph test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-jspace-prod test-plan-reuse test-cortex
 
 all: $(TARGET)
 
@@ -478,6 +478,20 @@ $(RX_BRANCH_REUSE_TEST): $(RX_BRANCH_REUSE_SRCS) src/runtime/rx_jspace.h | $(OUT
 
 test-branch-reuse: $(RX_BRANCH_REUSE_TEST)
 	./$(RX_BRANCH_REUSE_TEST)
+
+# M20 production J-Space mechanics: slab/extent reclamation, generation-safe
+# references, limits, concurrency, durable reopen/crash/torn metadata, World
+# commit compatibility. Fast; runs in CI.
+RX_JSPACE_PROD_SRCS = src/runtime/rx_jspace.c src/runtime/rx_caproot.c src/runtime/rx_world.c \
+	src/runtime/rx_coherent.c src/sha256.c src/omega_evidence.c tests/runtime/rx_jspace_prod.c
+RX_JSPACE_PROD_TEST = $(OUT_DIR)/rx_jspace_prod
+
+$(RX_JSPACE_PROD_TEST): $(RX_JSPACE_PROD_SRCS) src/runtime/rx_jspace.h src/runtime/rx_world.h \
+	src/runtime/rx_caproot.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_JSPACE_PROD_SRCS) -lm
+
+test-jspace-prod: $(RX_JSPACE_PROD_TEST)
+	./$(RX_JSPACE_PROD_TEST)
 
 # R14: the R13 organism attacked while alive. Host uses the R12 processor
 # stand-in and cannot claim the gate; silicon runs D and E on the GB10 seat.
