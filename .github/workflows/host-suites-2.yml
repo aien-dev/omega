@@ -15,14 +15,14 @@ name: Host suites 2
 # Jobs and the make targets they run (Spark -j1 time, 2026-10-01):
 #   visor     : test-visor (all Visor lanes + language + physics-free build) 25 s
 #   turing    : test-turing test-turing-cal-blinding test-turing-exp001-a
-#               test-turing-exp001-coders test-turing-exp001-eval
+#               test-turing-exp001-coders
 #               test-turing-qcont test-turing-qrecord test-turing-verify-indep 3.5 min
 #   brownian  : test-brownian-tps 4 min
 #   polyglot  : test-polyglot-asm test-polyglot-encoder 1 min
 #   algebra   : test-algebra test-algebra-asan test-realize test-phase-twin
 #               test-ma-digital-bottom 3.5 min
 #   path      : test-path 30 s;  crumbline : test-crumbline 1 s
-#   runtime   : test-branch-reuse test-r15-instr test-r15-g7-host
+#   runtime   : test-r15-instr test-r15-g7-host
 #               test-r15-parity-host test-r15-receipt test-r16-inventory
 #               test-r16-negative test-r16-surface test-r16-authpath (host)
 #   argus     : test-argus-runtime test-machine-identity-argus
@@ -31,6 +31,13 @@ name: Host suites 2
 #
 # Deliberately NOT here:
 #   test-polyglot-mojo (needs the Mojo toolchain);
+#   test-turing-exp001-eval: environment. Its fail-closed tests run the
+#   evaluator inside a bubblewrap jail (/usr/bin/bwrap), which the runner does
+#   not have (79 passed, 4 failed: "bubblewrap not found"). Spark -j1: PASS;
+#   test-branch-reuse: environment. Its gate requires energy measured lower per
+#   action from the Spark power counters; the runner has none ("energy not
+#   measured lower (counters unavailable)", OMEGA_BRANCH_STATE_REUSE=FAIL).
+#   Spark -j1: PASS (4 min);
 #   test-polyglot: environment. mk/polyglot.mk builds its -O3 flavor with
 #   -mcpu=native next to -march=armv8.6-a+...; on the runner (Neoverse N2) gcc
 #   resolves native to a CPU that conflicts with that -march and -Werror stops
@@ -63,9 +70,7 @@ on:
       - 'spec/r16-*'
       - 'docs/r16-*'
       - 'docs/turing/**'
-      - 'docs/CODER_SPEC.md'
-      - 'docs/EVALUATOR.md'
-      - 'docs/BLINDING_PROTOCOL.md'
+      - 'calibration/**'
       - 'data/crumbline/**'
       - 'data/turing-cal/**'
       - 'evidence/TURING_YIELD/**'
@@ -87,9 +92,7 @@ on:
       - 'spec/r16-*'
       - 'docs/r16-*'
       - 'docs/turing/**'
-      - 'docs/CODER_SPEC.md'
-      - 'docs/EVALUATOR.md'
-      - 'docs/BLINDING_PROTOCOL.md'
+      - 'calibration/**'
       - 'data/crumbline/**'
       - 'data/turing-cal/**'
       - 'evidence/TURING_YIELD/**'
@@ -143,7 +146,7 @@ jobs:
             echo "$1=$v" >> "$GITHUB_OUTPUT"; echo "$1=$v"
           }
           sel visor     "$core|^src/(visor|language)/|^tests/(visor|language)/|^mk/(00-visor-core|visor-[^/]*)\.mk$|^tools/omega\.c$|^src/runtime/rx_(aegis|caproot|coherent|generation|world)\.|^aienos\.lock$"
-          sel turing    "^src/(turing|algebra)/|^tests/turing/|^tools/turing_|^mk/turing_(exp001_[a-z]+|qcont|qrecord)\.mk$|^src/(omega_canonical|omega_types|sha256)\.|^data/(crumbline|turing-cal)/|^evidence/TURING_YIELD/|^docs/turing/|^docs/(CODER_SPEC|EVALUATOR|BLINDING_PROTOCOL)\.md$"
+          sel turing    "^src/(turing|algebra)/|^tests/turing/|^tools/turing_|^mk/turing_(exp001_[a-z]+|qcont|qrecord)\.mk$|^src/(omega_canonical|omega_types|sha256)\.|^data/(crumbline|turing-cal)/|^evidence/TURING_YIELD/|^docs/turing/|^calibration/"
           sel brownian  "^tests/brownian/|^tools/brownian/|^mk/brownian_tps\.mk$|^src/turing/(tc_|ty_math|ty_qcont)|^src/sha256\."
           sel polyglot  "^src/(polyglot|algebra)/|^tests/polyglot/|^mk/polyglot[^/]*\.mk$|^src/(aarch64_|sha256\.)|^spec/polyglot-0\.md$|^evidence/POLYGLOT/"
           sel algebra   "^src/(algebra|turing)/|^tests/algebra/|^src/(omega_canonical|omega_types|sha256)\.|^evidence/MIXED_ALGEBRA/"
@@ -194,8 +197,10 @@ jobs:
           fetch-depth: 0
       - name: TURING field and selector (plain + ASan/UBSan)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing
-      - name: TURING EXP-001 calibration, coders, evaluator, blinding, independent verifier
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-exp001-a test-turing-exp001-coders test-turing-exp001-eval test-turing-cal-blinding test-turing-verify-indep
+      - name: TURING EXP-001 calibration and reference coders
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-exp001-a test-turing-exp001-coders
+      - name: TURING calibration blinding and independent verifier
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-cal-blinding test-turing-verify-indep
       - name: TURING q-continuous coder and records
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-qcont test-turing-qrecord
 
@@ -304,11 +309,6 @@ jobs:
           path: aienos-src
       - name: Keep dependency checkouts out of Omega tree status
         run: printf 'physics-src/\naienos-src/\n' >> .git/info/exclude
-      - name: J-Space branch-state reuse
-        env:
-          PHYSICS_DIR: ${{ github.workspace }}/physics-src
-          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
-        run: make test-branch-reuse
       - name: R15 instrumentation, G7 promotion, SEQ parity (host seat)
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
