@@ -324,6 +324,23 @@ static uint8_t *slurp(const char *path, size_t *len) {
     return b;
 }
 
+/* Every file path the verifier builds fits in RX_PATH_CAP bytes or is
+ * refused. A silently truncated path can name a different file (or the
+ * store directory itself), so truncation is a hard error, never a guess. */
+#define RX_PATH_CAP 4096
+
+/* Build DIR/NAME into out[cap]. 0 = built; -1 = would not fit (out is
+ * emptied and the reason goes to stderr). */
+static int join_path(char *out, size_t cap, const char *dir, const char *name) {
+    int w = snprintf(out, cap, "%s/%s", dir, name);
+    if (w < 0 || (size_t)w >= cap) {
+        fprintf(stderr, "rx_replay: path too long (%d bytes, limit %zu): %s/%s\n", w, cap - 1, dir, name);
+        if (cap) out[0] = 0;
+        return -1;
+    }
+    return 0;
+}
+
 static void chain_step(const uint8_t prev[32], const uint8_t *rec, uint8_t out[32]) {
     sha256_ctx c;
     sha256_init(&c);
@@ -361,8 +378,11 @@ static const char *dispatch_field_diff(const uint8_t *x, const uint8_t *y) {
 /* Read CURRENT and the generation it names: committed dispatch length and
  * head. 0 = read, 1 = store has no CURRENT, -1 = malformed. */
 static int committed_head(const char *dir, uint64_t *len, uint8_t head[32], char *why, size_t wn) {
-    char p[4096];
-    snprintf(p, sizeof p, "%s/CURRENT", dir);
+    char p[RX_PATH_CAP];
+    if (join_path(p, sizeof p, dir, "CURRENT")) {
+        snprintf(why, wn, "store path too long");
+        return -1;
+    }
     size_t n;
     errno = 0;
     uint8_t *cur = slurp(p, &n);
@@ -380,7 +400,12 @@ static int committed_head(const char *dir, uint64_t *len, uint8_t head[32], char
     memcpy(gen, cur + 9, 20); gen[20] = 0;
     memcpy(hexd, cur + 30, 64); hexd[64] = 0;
     free(cur);
-    snprintf(p, sizeof p, "%s/gen-%s.bin", dir, gen);
+    char gname[32]; /* "gen-" + 20 + ".bin" + NUL = 29 */
+    snprintf(gname, sizeof gname, "gen-%s.bin", gen);
+    if (join_path(p, sizeof p, dir, gname)) {
+        snprintf(why, wn, "store path too long");
+        return -1;
+    }
     uint8_t *g = slurp(p, &n);
     if (!g || n < G_HDR) {
         free(g);
@@ -409,8 +434,9 @@ static int committed_head(const char *dir, uint64_t *len, uint8_t head[32], char
 
 static int verify_dispatch(const char *dir, verdict *v, uint8_t **out_log, size_t *out_n) {
     memset(v, 0, sizeof *v);
-    char p[4096], a[80], b[80], why[160];
-    snprintf(p, sizeof p, "%s/dispatch.log", dir);
+    char p[RX_PATH_CAP], a[80], b[80], why[160];
+    if (join_path(p, sizeof p, dir, "dispatch.log"))
+        return diverge(v, 1, "m22.commit", "store-path", "too-long", "store path too long");
     size_t n = 0;
     uint8_t *log = slurp(p, &n);
     if (!log) { log = calloc(1, 1); n = 0; }
@@ -531,21 +557,30 @@ static int trn1_compare_cmd(const char *pa, const char *pb) {
 /* Run a TRN1 corpus: every expected.txt and compare.txt line must be
  * reproduced exactly. Prints each mismatch and the conformance line. */
 static int trn1_corpus(const char *dir) {
-    char p[4096], l[1024], line[256];
+    char p[RX_PATH_CAP], l[1024], line[256];
     int pass = 0, fail = 0;
     for (int which = 0; which < 2; which++) {
-        snprintf(p, sizeof p, "%s/%s", dir, which ? "compare.txt" : "expected.txt");
+        if (join_path(p, sizeof p, dir, which ? "compare.txt" : "expected.txt")) return 2;
         FILE *f = fopen(p, "r");
         if (!f) { fprintf(stderr, "rx_replay: cannot open %s\n", p); return 2; }
         while (fgets(l, sizeof l, f)) {
+            size_t ll = strlen(l);
+            if (ll && l[ll - 1] != '\n' && !feof(f)) {
+                /* fgets split the line: refuse it instead of reading two halves. */
+                printf("MISMATCH %s: line longer than %zu bytes\n", p, sizeof l - 2);
+                fail++;
+                int c;
+                while ((c = fgetc(f)) != EOF && c != '\n') {}
+                continue;
+            }
             l[strcspn(l, "\r\n")] = 0;
             if (!l[0] || l[0] == '#') continue;
-            char a[512], b[512];
+            char a[RX_PATH_CAP], b[RX_PATH_CAP];
             const char *want;
             char *s1 = strchr(l, ' ');
             if (!s1) { fail++; continue; }
             *s1 = 0;
-            snprintf(a, sizeof a, "%s/%s", dir, l);
+            if (join_path(a, sizeof a, dir, l)) { printf("MISMATCH %s: path too long\n", l); fail++; continue; }
             size_t na = 0, nb = 0;
             uint8_t *A = slurp(a, &na), *B = NULL;
             if (!A) { A = calloc(1, 1); na = 0; }
@@ -553,7 +588,10 @@ static int trn1_corpus(const char *dir) {
                 char *s2 = strchr(s1 + 1, ' ');
                 if (!s2) { free(A); fail++; continue; }
                 *s2 = 0;
-                snprintf(b, sizeof b, "%s/%s", dir, s1 + 1);
+                if (join_path(b, sizeof b, dir, s1 + 1)) {
+                    printf("MISMATCH %s: path too long\n", s1 + 1);
+                    free(A); fail++; continue;
+                }
                 B = slurp(b, &nb);
                 if (!B) { B = calloc(1, 1); nb = 0; }
                 want = s2 + 1;
