@@ -22,14 +22,18 @@
  *            D commits exactly once, OD holds its value, no CANCELLED crumb,
  *            deadline_cancelled == 0, same footprint checks, chain verifies.
  *
- * Mutations that must make this test fail (none is applied by the build):
+ * Mutations that must make this test fail (none is applied by the build;
+ * tests/runtime/rx_deadline_cancel_mutants.sh applies M1-M4 to a temp copy
+ * and requires every one to fail). A second uncharge is not claimed: uncharge
+ * returns early once the reaction no longer holds a charge, so it is not
+ * observable.
  *   M1 `>` changed to `>=` in the run_one check: control cancels -> FAIL
  *      (control: commits 0, CANCELLED crumb present).
  *   M2 the run_one check deleted: late commits -> FAIL (late: commits 1,
  *      OD changed, no CANCELLED crumb).
  *   M3 cancel, but stage/commit the proposed writes anyway: late -> FAIL
  *      (OD field/version changed, COMMIT crumb of D present).
- *   M4 cancel without end_activation's refund (or with a second uncharge):
+ *   M4 cancel without end_activation's refund (charge marked released first):
  *      late -> FAIL (footprint after D ends is not exactly H's charge).
  *
  * Host only, CPU only. Exit 0 = PASS.
