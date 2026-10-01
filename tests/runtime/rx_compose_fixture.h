@@ -92,13 +92,16 @@ typedef struct {
     SrRouter router;
     AienosCapAdmin *admin;
     AienosCapView *view;
+    int owns_authority;      /* 1: fx_open started it, fx_close stops it */
 } Fx;
 
 /* Graph: Skill A (cost 10) and Skill B (cost 40), both local, both pinned
- * to the digest of the procedure this machine runs. Returns 0 on success. */
-static __attribute__((unused)) int fx_init(Fx *f) {
+ * to the digest of the procedure this machine runs, registered for the
+ * machine `self` (the living system passes its own provisioned identity;
+ * the stand-alone tests use fx_mid(1)). Returns 0 on success. */
+static __attribute__((unused)) int fx_init_for(Fx *f, const AienMachineId *self) {
     memset(f, 0, sizeof *f);
-    f->self = fx_mid(1);
+    f->self = *self;
     aien_mid_index_init(&f->ix, f->slots, 8);
     if (cq_catalog_init_canonical(&f->cat, &f->ix, &f->self, 8, 8) != CQ_OK) return -1;
     uint32_t all = CQ_SRC(CQ_SRC_GRAPH) | CQ_SRC(CQ_SRC_SKILL) | CQ_SRC(CQ_SRC_FABRIC);
@@ -121,10 +124,28 @@ static __attribute__((unused)) int fx_init(Fx *f) {
     return 0;
 }
 
+static __attribute__((unused)) int fx_init(Fx *f) {
+    AienMachineId m = fx_mid(1);
+    return fx_init_for(f, &m);
+}
+
 static __attribute__((unused)) void fx_free(Fx *f) { cq_catalog_free(&f->cat); }
+
+/* Open on an authority the caller already runs (the living system's AIENOS
+ * admin and view). fx_close then leaves that authority running. */
+static __attribute__((unused)) int fx_open_on(Fx *f, RxCompose *c, const char *dir,
+                                              uint32_t n_workers, AienosCapAdmin *admin,
+                                              AienosCapView *view) {
+    f->admin = admin;
+    f->view = view;
+    f->owns_authority = 0;
+    return rx_compose_open(c, dir, &f->self, FX_SESSION, &f->router, fx_contract, admin, view,
+                           n_workers);
+}
 
 static __attribute__((unused)) int fx_open(Fx *f, RxCompose *c, const char *dir, uint32_t n_workers) {
     if (aienos_cap_start(&f->admin, &f->view) != 0) return -100;
+    f->owns_authority = 1;
     int rc = rx_compose_open(c, dir, &f->self, FX_SESSION, &f->router, fx_contract, f->admin,
                              f->view, n_workers);
     if (rc != RX_OK) {
@@ -136,7 +157,7 @@ static __attribute__((unused)) int fx_open(Fx *f, RxCompose *c, const char *dir,
 
 static __attribute__((unused)) void fx_close(Fx *f, RxCompose *c) {
     rx_compose_close(c);
-    if (f->admin) aienos_cap_stop(f->admin, f->view);
+    if (f->admin && f->owns_authority) aienos_cap_stop(f->admin, f->view);
     f->admin = NULL;
 }
 
