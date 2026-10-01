@@ -43,6 +43,7 @@
  * 38 GB of reserved address space at 1128 B each), backed only as written. */
 #define RX_CRUMBS_LONG_EPISODE (1ull << 25)
 #define RX_MAX_WORKERS      16u
+#define RX_MAX_BINDERS      4u     /* commit binders per World (COMPOSITION-2) */
 #define RX_MAX_PARENTS      (RX_MAX_DEPS * RX_MAX_FIELDS + 1u)
 #define RX_PRIORITY_CLASSES 7u
 #define RX_DEFERRED_INITIAL 64u
@@ -122,6 +123,7 @@ enum { RX_CONTAIN_BUDGET = 1, RX_CONTAIN_OSCILLATION, RX_CONTAIN_LIVELOCK,
 #define RX_ERR_SEAT_LOST   -26   /* the graphics seat died holding the claim */
 #define RX_ERR_IDENTITY    -27   /* caller credential absent, forged, stale or revoked */
 #define RX_ERR_BINDING     -28   /* a bound field's external reference was refused (COMPOSITION-2) */
+#define RX_ERR_BUSY        -29   /* the reaction still has work pending (rx_world_remove_reaction) */
 
 /* Reaction notices carried in the frozen 128-byte descriptor.
  * The older transform request/result values stay in the frozen layout and
@@ -384,6 +386,10 @@ typedef struct {
     bool resident_seat;         /* handed to the graphics seat; fn is not called */
     bool deferred;              /* fn returned RX_FN_DEFER; waits for rx_world_resume */
     bool resume_pending;        /* resumed before the deferring run returned */
+    /* Taken out by rx_world_remove_reaction: no subscriptions, never woken
+     * or run; the slot may be reused by a registration with the same subject
+     * and faculty. */
+    bool removed;
     /* R15 timing (only with a timing buffer). */
     uint64_t t_demand, t_ready, t_run, t_fn_end, sched_ns, sched_cpu_ns;
     /* Sequential reference only (rx_seq_reference.c): the newest version of
@@ -517,7 +523,9 @@ typedef void (*RxRecordReleaseFn)(void *ctx);
  * So a World value never names a reference its store did not accept, and a
  * refused reference never becomes a World value. The binder must not call
  * back into the World. `subject` is the publishing reaction's subject, or the
- * World's external subject. At most one binder per World. */
+ * World's external subject. Up to RX_MAX_BINDERS binders per World, each
+ * owning the fields it bound (a field has at most one owner); a publication's
+ * bound fields are each checked, bound and aborted by their own binder. */
 typedef int  (*RxBindCheckFn)(void *ctx, RxObjRef obj, uint32_t field, uint64_t old_value,
                               uint64_t new_value, uint32_t subject);
 typedef int  (*RxBindFn)(void *ctx, RxObjRef obj, uint32_t field, uint64_t old_value,
@@ -625,13 +633,18 @@ typedef struct RxWorld {
     RxRecordReleaseFn recorder_release;
     void *recorder_ctx;
 
-    /* COMPOSITION-2 commit binder (rx_world_set_binder); at most one.
-     * bind_mask[slot]: fields of that object the binder owns. */
-    RxBindCheckFn bind_check;
-    RxBindFn bind_fn;
-    RxBindAbortFn bind_abort;
-    void *bind_ctx;
+    /* COMPOSITION-2 commit binders (rx_world_set_binder); up to
+     * RX_MAX_BINDERS. bind_mask[slot]: bound fields of that object;
+     * bind_owner[slot]: index into binder[] of the binder owning them. */
+    struct {
+        RxBindCheckFn check;
+        RxBindFn bind;
+        RxBindAbortFn abort_fn;
+        void *ctx;
+    } binder[RX_MAX_BINDERS];
+    uint32_t n_binders;
     uint8_t bind_mask[RX_MAX_OBJECTS];
+    uint8_t bind_owner[RX_MAX_OBJECTS];
 } RxWorld;
 
 int  rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crumb_cap);
@@ -656,13 +669,16 @@ int  rx_world_set_recorder(RxWorld *w, RxRecordFn fn, RxRecordReleaseFn release,
 /* Remove the recorder installed with `ctx` (RX_ERR_NOT_FOUND otherwise).
  * release is not called. */
 int  rx_world_clear_recorder(RxWorld *w, void *ctx);
-/* COMPOSITION-2: install the commit binder (RX_ERR_EXISTS if one is installed)
- * and name the fields it owns. Binding a field of a stale object is
- * RX_ERR_STALE_GEN. clear removes the binder and every bound field. */
+/* COMPOSITION-2: install a commit binder (RX_ERR_EXISTS if one with `ctx` is
+ * installed, RX_ERR_FULL past RX_MAX_BINDERS) and name the fields it owns.
+ * Binding a field of a stale object is RX_ERR_STALE_GEN; a field another
+ * binder owns is RX_ERR_EXISTS; without a binder for `ctx`, RX_ERR_NOT_FOUND.
+ * clear removes the binder of `ctx` and every field it bound. */
 int  rx_world_set_binder(RxWorld *w, RxBindCheckFn check, RxBindFn bind, RxBindAbortFn abort_fn,
                          void *ctx);
-int  rx_world_bind_field(RxWorld *w, RxObjRef obj, uint32_t field);
+int  rx_world_bind_field(RxWorld *w, void *ctx, RxObjRef obj, uint32_t field);
 int  rx_world_clear_binder(RxWorld *w, void *ctx);
+uint32_t rx_world_binder_count(RxWorld *w);
 /* R15: record an RxTiming per activation into `buf` (cap entries; later ones
  * are dropped and counted in n_timing beyond cap). Null turns it off. */
 void rx_world_set_timing(RxWorld *w, RxTiming *buf, uint64_t cap);
@@ -690,6 +706,34 @@ int  rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id
  * keyring has no entry). The caller's descriptor is not modified. */
 int  rx_world_add_reaction_keyed(RxWorld *w, const RxCallerKeyring *keys,
                                  const RxReactionDesc *d, uint32_t *out_id);
+/* Take a reaction out of the World. Allowed only while it is DORMANT with
+ * nothing pending (not re-armed, parked, deferred, resume-pending, holding
+ * resources, nor waiting in the fan-out backlog): RX_ERR_BUSY otherwise,
+ * nothing changed. Its subscriptions leave the dependency index, it is never
+ * woken or run again (demand ignores it), and its table slot is kept for
+ * reuse: rx_world_add_reaction fills a removed slot before growing the table,
+ * but only for a reaction with the same subject and faculty, so a crumb's
+ * reaction id keeps naming the principal that wrote it
+ * (rx_world_crumb_origin). RX_ERR_NOT_FOUND if out of range or removed. */
+int  rx_world_remove_reaction(RxWorld *w, uint32_t rid);
+
+/* What the World holds right now, for leak checks (read under the lock).
+ * The causal crumb log is history (append-only by design) and is not here. */
+typedef struct {
+    uint32_t reaction_slots;     /* n_reactions: table slots ever used */
+    uint32_t reactions_active;   /* registered, not removed */
+    uint32_t reactions_removed;  /* removed slots waiting for reuse */
+    uint64_t subscriptions;      /* entries in the dependency index */
+    uint32_t objects_live;
+    uint32_t binders;
+    uint32_t bound_fields;
+    uint32_t in_flight;
+    uint32_t fanout_backlog;
+    uint32_t deferred;
+    uint32_t used_slots;
+    uint64_t used_memory, used_energy;
+} RxFootprint;
+void rx_world_footprint(RxWorld *w, RxFootprint *out);
 
 /* R16 C5 caller credentials (rx_caller.h).
  * enroll: mint a credential for `subject` (RX_CALLER_ERR_EXISTS if it has

@@ -1355,7 +1355,7 @@ static int composition_phase(Rig *r) {
             AienosCapEntry e;
             if (aienos_cap_inspect(r->view, (AienosCapRef){id, gn}, &e) != 0 || e.state != 1u)
                 continue;
-            if (e.subject >= RXC_SUBJ_EXTERNAL && e.subject <= RXC_SUBJ_COMMIT &&
+            if (e.subject >= RXC_SUBJ_EXTERNAL && e.subject < RXC_SUBJ_OF(RXC_MAX_ACTIVE, RXC_SUBJ_EXTERNAL) &&
                 (e.rights & RX_RIGHT_PRIVILEGED))
                 CFAIL("composition subject %u holds a privileged right", e.subject);
         }

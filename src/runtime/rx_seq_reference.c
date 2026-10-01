@@ -51,7 +51,7 @@ int rx_seq_pulse(RxWorld *w, const RxSeqPlan *plan, uint32_t *ran) {
     w->stats.seq_pulses++;
     for (uint32_t i = 0; i < plan->n && rc == RX_OK; i++) {
         uint32_t rid = plan->order[i];
-        if (rid >= w->n_reactions) continue;
+        if (rid >= w->n_reactions || w->reactions[rid].removed) continue;
         RxReaction *r = &w->reactions[rid];
         /* The readiness poll is SEQ's scheduling work (spec §6.4). */
         uint64_t c0 = w->timing ? thread_cpu_ns() : 0;

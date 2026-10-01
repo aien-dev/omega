@@ -105,6 +105,14 @@ typedef enum {
 #define RXC_RES_CAND1   0xC2000003ull
 #define RXC_RES_VERDICT 0xC2000004ull
 #define RXC_RES_STATE   0xC2000005ull
+/* Instances: up to RXC_MAX_ACTIVE compositions share one World; instance i
+ * offsets the role subjects by RXC_SUBJ_STRIDE*i and the resources by
+ * RXC_RES_STRIDE*i (instance 0 = the values above). */
+#define RXC_MAX_ACTIVE 2u
+#define RXC_SUBJ_STRIDE 8u
+#define RXC_RES_STRIDE 0x100ull
+#define RXC_SUBJ_OF(inst, role) ((uint32_t)(role) + (uint32_t)(inst) * RXC_SUBJ_STRIDE)
+#define RXC_RES_OF(inst, res) ((uint64_t)(res) + (uint64_t)(inst) * RXC_RES_STRIDE)
 
 /* The contract the AEGIS verifier enforces on a candidate's result. */
 typedef int (*RxcContract)(uint64_t input, uint64_t result);
@@ -192,6 +200,10 @@ typedef struct RxCompose {
     /* what open/attach put into the World (attach close undoes it) */
     int has_binder;
     uint32_t n_objs, n_minted;
+    /* instance slot in its World (attach; 0 under open) and what it implies */
+    uint32_t inst;
+    uint32_t subj_cand[RXC_K], subj_aegis, subj_commit;
+    uint64_t res[5];
     RxObjRef obj[5];
     /* Test hooks. They fire only in builds compiled with -DRXC_TEST_HOOKS
      * (the composition unit test and the R13 host test); in every other
@@ -230,7 +242,8 @@ void rx_compose_close(RxCompose *c);
 /* COMPOSITION-2 inside an existing World (the living one).
  *
  * enroll_callers: the World's owner enrolls the four composition reaction
- * subjects (RXC_SUBJ_CAND0, _CAND1, _AEGIS, _COMMIT) into `w` and gets their
+ * subjects of every instance (role + RXC_SUBJ_STRIDE*i for i < RXC_MAX_ACTIVE: 8
+ * subjects) into `w` and gets their
  * credentials in `keys`; it must run before rx_world_bind_callers (R16: the
  * enrollment closes one way at bind). RX_ERR_IDENTITY once bound.
  *
@@ -248,8 +261,11 @@ void rx_compose_close(RxCompose *c);
  *   - reactions are registered with `keys` (rx_world_add_reaction_keyed), so a
  *     World with bound callers admits them; without bound callers keys may be
  *     NULL;
- *   - it installs the World's commit binder: RX_ERR_EXISTS if `w` already has
- *     one (at most one binder per World).
+ *   - it takes a free instance slot (below) and installs that instance's
+ *     commit binder (one of the World's RX_MAX_BINDERS): RX_ERR_EXISTS if
+ *     RXC_MAX_ACTIVE compositions already run in `w`, or one of them uses
+ *     `dir` (the journal is single-owner); RX_ERR_FULL if the reaction table
+ *     has no room for its four reactions. Either refusal changes nothing.
  * close (attach mode), in this order: (1) revokes every capability attach
  * minted, so no composition step can publish from here on (a step already
  * running finds its rights gone at publish and is REJECTED); (2) removes the
@@ -262,37 +278,33 @@ void rx_compose_close(RxCompose *c);
  * for the rest of the World: a living World may never be quiet as a whole,
  * and returning while a step still runs would leave it using freed memory.
  * A Skill that never returns therefore hangs close (the safe choice);
- * (4) removes the binder, retires the five objects and reclaims the revoked
+ * (4) removes its binder, retires the five objects and reclaims the revoked
  * capabilities (their AIENOS slots become free; the slot generation
- * advances, so the old references never validate again). It leaves `w`
- * running.
+ * advances, so the old references never validate again); (5) removes its
+ * four reactions from the World (rx_world_remove_reaction): their
+ * subscriptions go, the slots are marked removed and the next attach of the
+ * same instance reuses them. It leaves `w` running.
  *
- * Invariant: what a closed attach leaves behind. The World has no
- * unregister, so each attach/close cycle leaves its four reactions
- * registered, DORMANT and inert for the life of the World:
- *   - they can never be woken: every trigger names an object generation that
- *     retire advanced (a reused object slot gets the new generation, and the
- *     World matches subscriptions by generation; generations never wrap);
- *   - they can never write: even if run, every capability they name is
- *     revoked and reclaimed (generation advanced), so the run is refused
- *     before its function is called, and their write sets name retired
- *     objects.
- * What they still cost: one reaction-table slot each, one subscription per
- * trigger on the reused object slots, and a little scan time where the
- * World walks every reaction. Bound: attach needs four free reaction slots
- * (checked before anything is built: RX_ERR_FULL, nothing changed, the World
- * keeps working), so a World with R reactions of its own supports
- * floor((RX_MAX_REACTIONS - R) / 4) attach/close cycles (256 when R is 0;
- * the R13 living World and the tests have R > 0), and each live attach needs 13 free AIENOS capability slots
- * (AIENOS_CAP_MAX 256 per authority, shared with the rest of the system).
+ * Invariant: close reclaims everything attach allocated. After close the
+ * World's footprint (rx_world_footprint: active reactions, subscriptions,
+ * live objects, binders, bound fields, in-flight work, backlog, resource
+ * use) and the AIENOS capability table are what they were before attach; the
+ * reaction table does not grow across attach/close cycles (a removed slot is
+ * reused only by the same subject and faculty, so crumb provenance of old
+ * runs still names the right subject). Only the crumb log grows: it is
+ * history. Tested for 2000 cycles under ASan.
  *
- * Invariant: one composition per World at a time. The composition subjects
- * (RXC_SUBJ_*) are fixed and the World has one commit binder, so a second
- * attach to a World that already runs one is refused with RX_ERR_EXISTS
- * before it touches anything; the first keeps working. Attaching is
- * single-caller per World: two attaches racing on one World are not
- * supported (the loser is refused at the binder, but only after its four
- * reactions are registered, which then stay as dormant slots). After close the same
+ * Invariant: up to RXC_MAX_ACTIVE (2) compositions per World at a time, each
+ * isolated. Instance i (0 or 1) uses subjects RXC_SUBJ_OF(i, role) and
+ * resources RXC_RES_OF(i, res); instance 0 keeps 200..204 and
+ * 0xC2000001..5, so its records are the ones a single composition always
+ * wrote. Capabilities are scoped by subject and resource, so instance B's
+ * steps hold no right on instance A's objects (a write naming them is
+ * refused), each instance has its own binder on its own state object, its
+ * own Cortex scoped link and journal, and its own step set; run waits only
+ * for its own steps. The bound is the caller keyring: 2 instances x 4
+ * subjects = RX_CALLER_KEYRING_MAX. Attaches are serialized process-wide;
+ * runs and closes of different instances may overlap. After close the same
  * or another RxCompose can attach again and recovers OLD-or-NEW from its
  * directory. */
 int  rx_compose_enroll_callers(RxWorld *w, RxCallerKeyring *keys);
