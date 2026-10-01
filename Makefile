@@ -224,7 +224,7 @@ test-numeric-e1-exhaustive: build/test_omega_numeric_cpu
 # tests/run_reduce_chip.sh. Last line: "E1 Reduce Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY".
 .PHONY: test-numeric-reduce-cpu
 REDUCE_CPU_SRCS = tests/test_omega_reduce.c src/omega_numeric_reduce.c src/omega_numeric_reduce_gb10.c \
-                  src/omega_numeric.c src/omega_numeric_provenance.c \
+                  src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c \
                   $(NUMERIC_BW_SRCS)
 build/test_omega_reduce_cpu: $(REDUCE_CPU_SRCS) src/omega_numeric_reduce.h $(NUMERIC_CPU_HDRS)
 	@mkdir -p build

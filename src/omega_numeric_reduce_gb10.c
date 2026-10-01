@@ -24,8 +24,9 @@
  * executor reads after the host marker only, which PR #141 showed can precede
  * the last stores.
  *   MEAN  SUM levels on the chip, then the one final division
- *         omega_math_div(SUM, u2f(n)) on the host: a DECLARED HOST STEP (no
- *         GB10 DIV is merged on main yet; the chip DIV kernel is PR #141).
+ *         omega_math_div(SUM, u2f(n)) on the chip: the whole-program GB10 DIV
+ *         kernel of E1 row 7 (omega_ds_gb10_run, one element), bit-identical to
+ *         the CPU division. No host step remains.
  *
  * Every pre-submission check carries a CHECK: marker. With
  * -DOMEGA_NUMERIC_CPU_ONLY the checks still run but no device is touched
@@ -33,6 +34,7 @@
  */
 #include "omega_numeric_reduce.h"
 #include "omega_numeric.h"
+#include "omega_numeric_divsqrt_gb10.h"
 #include "omega_blackwell_encoder.h"
 #include "omega_blackwell_qmd.h"
 #ifndef OMEGA_NUMERIC_CPU_ONLY
@@ -510,8 +512,22 @@ int omega_reduce_gb10(OmegaReduceOp op, const float *x, size_t n, float *out) {
     float s = cur[0];
     free(cur);
     free(res);
-    /* MEAN: the one final division is a declared host step (see the header). */
-    *out = (op == OMEGA_RED_MEAN) ? omega_math_div(s, omega_ref_u2f((uint32_t)n)) : s;
+    if (op == OMEGA_RED_MEAN) {
+        /* MEAN: the one final division runs on the chip too: the GB10 DIV kernel of
+         * E1 row 7 (correctly rounded, bit-identical to omega_math_div). */
+        uint32_t sb, nb, ob;
+        float nf = omega_ref_u2f((uint32_t)n);
+#ifdef OMEGA_REDUCE_MUTATE_MEAN_DIV /* test builds only: divide by n + 1 (must FAIL chip parity) */
+        nf = omega_ref_u2f((uint32_t)n + 1u);
+#endif
+        memcpy(&sb, &s, 4);
+        memcpy(&nb, &nf, 4);
+        rc = omega_ds_gb10_run(OMEGA_DS_DIV, &sb, &nb, &ob, 1);
+        if (rc != OMEGA_NUMERIC_OK) return rc;
+        memcpy(out, &ob, 4);
+        return OMEGA_NUMERIC_OK;
+    }
+    *out = s;
     return OMEGA_NUMERIC_OK;
 #endif
 }
