@@ -137,11 +137,11 @@ int est_params_validate(const est_params *p, char *err, size_t cap);
 #define EST_M2_K 3u
 #define EST_M2_ITERS 1000u
 /* C1 identity, fixed when C1 was committed (SHA256SUMS line beside it). */
-#define EST_V2_FIT_SHA "pending"
+#define EST_V2_FIT_SHA "65252bae5f9d49d30a3b334fd2b9444c36db7627a45fcd9b6ef0bb4e5a7e5716"
 /* C2 identity (SHA256SUMS text beside it) and the frozen v2 protocol document. */
 #define EST_V2_HELDOUT_RAW_SHA "pending"
 #define EST_V2_HELDOUT_MARKS_SHA "pending"
-#define EST_V2_PROTOCOL_DOC_SHA "pending"
+#define EST_V2_PROTOCOL_DOC_SHA "86b7b46f02dd6e51db78cc9f450aac27be189cdb1484894e923a1898429536f5"
 #define EST_V2_PROTOCOL_DOC "docs/estimation/EST23_PROTOCOL_V2.md"
 /* Nonzero only when est_eval --protocol-v2 --recorded has proven the inputs are C2. */
 extern int est_allow_heldout;
