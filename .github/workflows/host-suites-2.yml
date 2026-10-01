@@ -22,7 +22,8 @@ name: Host suites 2
 #               test-ma-digital-bottom 3.5 min
 #   path      : test-path 30 s;  crumbline : test-crumbline 1 s
 #   runtime   : test-r15-instr test-r15-receipt test-r16-inventory
-#               test-r16-negative test-r16-surface 1 min
+#               test-r16-negative test-r16-surface
+#               test-r16-negative-mutants 5 min (Spark: 4.3 min)
 #   argus     : test-argus-runtime test-machine-identity-argus
 #   numeric2  : test-numeric-reduce-cpu test-divsqrt-host 6 s
 # Pinned dependencies are read from physics.lock, aienos.lock and argus.lock.
@@ -50,11 +51,6 @@ name: Host suites 2
 #   the build. On the Spark (X925/A725) native resolves to generic armv8-a and
 #   it passes (Spark -j1: 3.8 min, PASS);
 #   test-numeric-sweep, test-numeric-e1-exhaustive (too long for CI);
-#   test-r16-negative-mutants: FAILS on main, not an environment issue. Since
-#   omega #139 (4aa71bf, d717af3) rewrote the caller-generation guard in
-#   src/runtime/rx_world.c, mutant c7_bind_refuses_unauthenticated no longer
-#   applies (BROKEN; 35/36 killed, gate R16_G4_GUARDS_LOAD_BEARING=FAIL).
-#   Add it here once tests/r16_negative/mutate.sh is updated by its owner;
 #   test-turing-yield, test-turing-energy (already in turing-yield.yml);
 #   every *-silicon target and test-m5..test-m19 (GB10 chip).
 
@@ -345,6 +341,12 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make test-r16-surface
+      - name: R16 G4 every guard load-bearing (36 mutants, each must turn the G4 test red)
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r16-negative-mutants
 
   argus:
     needs: changes
