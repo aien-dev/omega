@@ -39,6 +39,7 @@ typedef struct {
     const SrRouter *r;
     const SrRequirement *req;
     SrRoute *out;
+    uint32_t pin_index;                 /* canonical pin resolved to a graph index (0 = none) */
 } AdmitCtx;
 
 static const AgSkill *executable(const AgSkillTable *t, uint32_t id) {
@@ -53,14 +54,30 @@ static int digest_zero(const uint8_t *d) {
     return acc == 0;
 }
 
-/* Admissible target: a Skill; locally, one we can run, byte-identical to
- * what the graph advertises; remotely, allowed by the requirement (the lease
- * was already checked by the query). */
+/* Admissible target: a Skill; matching the requirement's pins (version,
+ * digest, machine); on a machine with a canonical identity when the graph is
+ * canonical; locally, one we can run, byte-identical to what the graph
+ * advertises; remotely, allowed by the requirement (the lease was already
+ * checked by the query). */
 static int admit(void *ctx, const CqEntry *e, const CqCandidate *c) {
     AdmitCtx *a = ctx;
+    const SrRequirement *q = a->req;
     if (e->skill_id == 0) { a->out->rejected.not_a_skill++; return 0; }
+    if ((q->pin_skill_version && e->skill_version != q->pin_skill_version) ||
+        (!digest_zero(q->pin_skill_digest) && memcmp(e->skill_digest, q->pin_skill_digest, 32) != 0)) {
+        a->out->rejected.pin_mismatch++;
+        return 0;
+    }
+    if (a->pin_index && e->machine_id != a->pin_index) { a->out->rejected.machine_mismatch++; return 0; }
+    if (a->r->graph->machines) {
+        AienMachineId m;
+        if (cq_machine_identity(a->r->graph, e->machine_id, &m) != CQ_OK) {
+            a->out->rejected.machine_unknown++;
+            return 0;
+        }
+    }
     if (!c->local) {
-        if (a->req->local_only) { a->out->rejected.remote_refused++; return 0; }
+        if (q->local_only) { a->out->rejected.remote_refused++; return 0; }
         return 1;
     }
     const AgSkill *s = executable(a->r->skills, e->skill_id);
@@ -72,71 +89,68 @@ static int admit(void *ctx, const CqEntry *e, const CqCandidate *c) {
     return 1;
 }
 
-int sr_route(const SrRouter *r, const SrRequirement *req, const CqHeld *held, uint64_t now_us,
-             SrRoute *out) {
-    if (!out) return SR_E_ARG;
-    memset(out, 0, sizeof *out);
-    if (!r || !r->graph || !req) return out->verdict = SR_E_ARG;
-    CqPlan plan;
-    out->query_verdict = cq_compile(r->graph, &req->need, &plan);
-    memcpy(out->plan_digest, plan.digest, sizeof out->plan_digest);
-    if (out->query_verdict == CQ_E_NO_SOURCE) return out->verdict = SR_E_NO_CANDIDATE;
-    if (out->query_verdict != CQ_OK) return out->verdict = SR_E_QUERY;
-    CqTradeoffs t = req->t;
-    t.k = 1;                            /* the router needs the winner only */
-    AdmitCtx ctx = { r, req, out };
-    CqResult res;
-    out->query_verdict = cq_query_admit(r->graph, &plan, &req->need, &t, held, now_us, admit, &ctx,
-                                        &res, &out->stats);
-    if (out->query_verdict != CQ_OK) return out->verdict = SR_E_QUERY;
-    out->n_admissible = res.n_feasible;
-    if (res.n == 0) return out->verdict = SR_E_NO_CANDIDATE;
-    out->chosen = res.cand[0];
-    out->remote = !res.cand[0].local;
-    CqKey k = cq_key_of_candidate(&res.cand[0]);
-    const CqEntry *e = cq_lookup(r->graph, &k);
+static uint32_t why_of(const SrRoute *o) {
+    uint32_t w = 0;
+    if (o->stats.rejected_dead) w |= SR_WHY_GONE;
+    if (o->stats.rejected_unavailable) w |= SR_WHY_UNAVAILABLE;
+    if (o->stats.rejected_authority) w |= SR_WHY_AUTHORITY;
+    if (o->rejected.not_a_skill) w |= SR_WHY_NOT_SKILL;
+    if (o->rejected.not_executable) w |= SR_WHY_NOT_EXECUTABLE;
+    if (o->rejected.digest_mismatch) w |= SR_WHY_DIGEST;
+    if (o->rejected.remote_refused) w |= SR_WHY_REMOTE_REFUSED;
+    if (o->rejected.pin_mismatch) w |= SR_WHY_PIN;
+    if (o->rejected.machine_mismatch) w |= SR_WHY_MACHINE;
+    if (o->rejected.machine_unknown) w |= SR_WHY_MACHINE_UNKNOWN;
+    return w;
+}
+
+static void fill_target(const SrRouter *r, const CqCandidate *c, SrRoute *x) {
+    x->chosen = *c;
+    x->remote = !c->local;
+    x->key = cq_key_of_candidate(c);
+    const CqEntry *e = cq_lookup(r->graph, &x->key);
     if (e) {
-        out->skill_version = e->skill_version;
-        memcpy(out->skill_digest, e->skill_digest, 32);
+        x->skill_version = e->skill_version;
+        memcpy(x->skill_digest, e->skill_digest, 32);
+        x->generation = e->generation;
     }
-    out->target_known = cq_machine_identity(r->graph, res.cand[0].machine_id, &out->target) == CQ_OK;
-    return out->verdict = out->remote ? SR_E_REMOTE : SR_OK;
+    x->target_known = cq_machine_identity(r->graph, c->machine_id, &x->target) == CQ_OK;
+    x->verdict = x->remote ? SR_E_REMOTE : SR_OK;
 }
 
-int sr_bind_node(const SrRouter *r, AgGraph *g, uint32_t node, const SrRequirement *req,
-                 const CqHeld *held, uint64_t now_us, SrRoute *out) {
-    if (!g) return SR_E_ARG;
-    int rc = sr_route(r, req, held, now_us, out);
-    if (rc != SR_OK) return rc;
-    if (cq_bind_skill_node(g, node, &out->chosen) != CQ_OK) return out->verdict = SR_E_BIND;
-    return SR_OK;
-}
-
-/* COMPOSITION-2: up to `max` admissible local-or-remote alternatives, ranked
- * like sr_route (dominated providers included, so a costlier fallback is
- * still offered). out[0] is what sr_route would choose. Returns the number
- * filled (>= 1), or the sr_route error. Discovers only; mints nothing. */
-int sr_route_alternatives(const SrRouter *r, const SrRequirement *req, const CqHeld *held,
-                          uint64_t now_us, SrRoute *out, uint32_t max) {
-    if (!out || max == 0) return SR_E_ARG;
+/* Shared by sr_route (k = 1) and sr_route_alternatives (dominated included).
+ * Fills out[0..n-1]; returns n (>= 1) or the SR_E_* left in out[0].verdict. */
+static int route_k(const SrRouter *r, const SrRequirement *req, const CqHeld *held,
+                   uint64_t now_us, SrRoute *out, uint32_t max, int alternatives) {
     SrRoute *o = &out[0];
     memset(o, 0, sizeof *o);
     if (!r || !r->graph || !req) return o->verdict = SR_E_ARG;
+    AdmitCtx ctx = { r, req, o, 0 };
+    if (req->pin_machine_set) {
+        ctx.pin_index = cq_machine_index(r->graph, &req->pin_machine);
+        if (ctx.pin_index == 0) return o->verdict = SR_E_MACHINE;
+    }
     CqPlan plan;
     o->query_verdict = cq_compile(r->graph, &req->need, &plan);
     memcpy(o->plan_digest, plan.digest, sizeof o->plan_digest);
     if (o->query_verdict == CQ_E_NO_SOURCE) return o->verdict = SR_E_NO_CANDIDATE;
     if (o->query_verdict != CQ_OK) return o->verdict = SR_E_QUERY;
     CqTradeoffs t = req->t;
-    t.k = max < CQ_MAX_K ? max : CQ_MAX_K;
-    t.include_dominated = 1;
-    AdmitCtx ctx = { r, req, o };
+    if (alternatives) {
+        t.k = max < CQ_MAX_K ? max : CQ_MAX_K;
+        t.include_dominated = 1;
+    } else {
+        t.k = 1;                        /* the router needs the winner only */
+    }
     CqResult res;
     o->query_verdict = cq_query_admit(r->graph, &plan, &req->need, &t, held, now_us, admit, &ctx,
                                       &res, &o->stats);
     if (o->query_verdict != CQ_OK) return o->verdict = SR_E_QUERY;
     o->n_admissible = res.n_feasible;
-    if (res.n == 0) return o->verdict = SR_E_NO_CANDIDATE;
+    if (res.n == 0) {
+        o->why = why_of(o);
+        return o->verdict = SR_E_NO_CANDIDATE;
+    }
     uint32_t n = res.n < t.k ? res.n : t.k;
     for (uint32_t i = 0; i < n; i++) {
         SrRoute *x = &out[i];
@@ -146,16 +160,81 @@ int sr_route_alternatives(const SrRouter *r, const SrRequirement *req, const CqH
             memcpy(x->plan_digest, o->plan_digest, sizeof x->plan_digest);
             x->n_admissible = o->n_admissible;
         }
-        x->chosen = res.cand[i];
-        x->remote = !res.cand[i].local;
-        CqKey k = cq_key_of_candidate(&res.cand[i]);
-        const CqEntry *e = cq_lookup(r->graph, &k);
-        if (e) {
-            x->skill_version = e->skill_version;
-            memcpy(x->skill_digest, e->skill_digest, 32);
-        }
-        x->target_known = cq_machine_identity(r->graph, res.cand[i].machine_id, &x->target) == CQ_OK;
-        x->verdict = x->remote ? SR_E_REMOTE : SR_OK;
+        fill_target(r, &res.cand[i], x);
     }
     return (int)n;
+}
+
+int sr_route(const SrRouter *r, const SrRequirement *req, const CqHeld *held, uint64_t now_us,
+             SrRoute *out) {
+    if (!out) return SR_E_ARG;
+    int n = route_k(r, req, held, now_us, out, 1, 0);
+    return n < 0 ? n : out->verdict;
+}
+
+/* Bind without leaving a half-bound node behind on failure. */
+static int bind_closed(AgGraph *g, uint32_t node, const CqCandidate *c) {
+    if (node >= g->n_nodes) return SR_E_BIND;
+    uint32_t op = g->nodes[node].op, n_auth = g->n_auth;
+    if (cq_bind_skill_node(g, node, c) != CQ_OK) {
+        g->nodes[node].op = op;
+        g->n_auth = n_auth;
+        return SR_E_BIND;
+    }
+    return SR_OK;
+}
+
+int sr_bind_node(const SrRouter *r, AgGraph *g, uint32_t node, const SrRequirement *req,
+                 const CqHeld *held, uint64_t now_us, SrRoute *out) {
+    if (!g) return SR_E_ARG;
+    int rc = sr_route(r, req, held, now_us, out);
+    if (rc != SR_OK) return rc;
+    return out->verdict = bind_closed(g, node, &out->chosen);
+}
+
+/* COMPOSITION-2: up to `max` admissible local-or-remote alternatives, ranked
+ * like sr_route (dominated providers included, so a costlier fallback is
+ * still offered). out[0] is what sr_route would choose: the banded order
+ * keeps a dominator wherever it keeps what it dominates, and the dominator
+ * sorts first. Returns the number filled (>= 1), or the sr_route error.
+ * Discovers only; mints nothing. */
+int sr_route_alternatives(const SrRouter *r, const SrRequirement *req, const CqHeld *held,
+                          uint64_t now_us, SrRoute *out, uint32_t max) {
+    if (!out || max == 0) return SR_E_ARG;
+    return route_k(r, req, held, now_us, out, max, 1);
+}
+
+int sr_route_check(const SrRouter *r, const SrRoute *route, uint64_t now_us) {
+    (void)now_us;
+    if (!r || !r->graph || !route || (route->verdict != SR_OK && route->verdict != SR_E_REMOTE))
+        return SR_E_ARG;
+    const CqEntry *e = cq_lookup(r->graph, &route->key);
+    if (!e || e->live == CQ_LIVE_WITHDRAWN) return SR_E_WITHDRAWN;
+    if (e->live != CQ_LIVE_AVAILABLE) return SR_E_UNAVAILABLE;
+    if (e->generation != route->generation || e->skill_version != route->skill_version ||
+        memcmp(e->skill_digest, route->skill_digest, 32) != 0 ||
+        e->skill_id != route->chosen.skill_id ||
+        e->auth_resource != route->chosen.required_authority.resource ||
+        e->auth_rights != route->chosen.required_authority.rights)
+        return SR_E_STALE;
+    if (r->graph->machines) {
+        AienMachineId m;
+        if (cq_machine_identity(r->graph, e->machine_id, &m) != CQ_OK ||
+            (route->target_known && !aien_mid_equal(&m, &route->target)))
+            return SR_E_MACHINE;
+    }
+    if (route->remote) return SR_E_REMOTE;     /* the lease is the Fabric's to check at send */
+    if (e->machine_id != r->graph->self_machine) return SR_E_MACHINE;
+    const AgSkill *s = executable(r->skills, e->skill_id);
+    if (!s || (!digest_zero(e->skill_digest) && memcmp(e->skill_digest, s->identity, 32) != 0))
+        return SR_E_STALE;
+    return SR_OK;
+}
+
+int sr_bind_route(const SrRouter *r, AgGraph *g, uint32_t node, const SrRoute *route,
+                  uint64_t now_us) {
+    if (!g) return SR_E_ARG;
+    int rc = sr_route_check(r, route, now_us);
+    if (rc != SR_OK) return rc;
+    return bind_closed(g, node, &route->chosen);
 }
