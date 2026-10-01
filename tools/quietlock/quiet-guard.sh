@@ -34,7 +34,7 @@ tool=$(printf '%s' "$input" | jq -r '.tool_name // ""' 2>/dev/null)
 cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""' 2>/dev/null)
 [ -n "$cmd" ] || exit 0
 
-QL=${QUIETLOCK_BIN:-quietlock}
+QL=${QUIETLOCK_BIN:-$(command -v quietlock 2>/dev/null || echo "$HOME/.local/bin/quietlock")}
 hold=$(printf '%s\n' "$cmd" | grep -o 'QUIETLOCK_HOLD=[A-Za-z0-9._-]*' | head -1 | cut -d= -f2)
 if command -v "$QL" >/dev/null 2>&1; then
 	"$QL" release-stale >/dev/null 2>&1
@@ -103,6 +103,7 @@ heavy=$(printf '%s\n' "$scan" | awk '
 			if (k > m) continue
 			h = isheavy(w[k], w[k+1]); if (h != "") { print h; exit }
 			b = base(w[k])
+			if ((b == "command" || b == "type" || b == "which") && w[k+1] ~ /^-[vVp]*$/) continue  # lookup, not a run
 			if (index(wrap, " " b " ")) {
 				for (j = k + 1; j <= m; j++) { h = isheavy(w[j], w[j+1]); if (h != "") { print h " (after " b ")"; exit } }
 			} else if (index(shells, " " b " ")) {

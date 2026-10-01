@@ -22,7 +22,16 @@ The quiet flag (`~/workspace/.spark-quiet`) says "one heavy run owns the machine
 - **Not a security boundary**: `QUIETLOCK_DIR` moves the state dir (the tests need this), and anyone can delete the flag. The lock prevents accidents, not malice.
 - **Legacy** flags without `hold=`: `QUIET_HOLDER=1` still lets their holder through. This is DEPRECATED and logged, for the transition only.
 
-## Follow-up for the queen (files under ~/.claude, not edited by this PR)
+## Installing (the queen runs this; workers never edit ~/.claude)
+`sh tools/quietlock/install.sh --dry-run` shows every step and checks that the patch applies, without changing anything. `sh tools/quietlock/install.sh` then does the following:
+- builds `~/.local/bin/quietlock`
+- backs up `~/.claude/hooks/quiet-guard.sh` and `orchestrate-lanes/lanes.sh` to `*.bak.<UTC stamp>`
+- installs the hook
+- applies `lanes-quietlock.patch`, which covers points 2 and 3 below
+
+It refuses, changing nothing, if lanes.sh has changed since the patch was made. Neither the hook nor the patched lanes.sh ever deletes the flag except through `quietlock release-stale` under the flock.
+
+What the patch and hook do:
 1. **Hook**: install `tools/quietlock/quiet-guard.sh` as `~/.claude/hooks/quiet-guard.sh`, with `quietlock` on PATH (`~/.local/bin/quietlock`) or `QUIETLOCK_BIN` set.
 2. **lanes.sh `cmd_release_stale`** (and the old hook's stale branch): replace the read-then-`rm -f` with `quietlock release-stale`. A bare rm can delete a NEW live hold taken between the read and the rm. quietlock does the check and the delete under one flock.
 3. **lanes.sh `cmd_flush` / forge**: run **each job under its own hold**: `quietlock hold --owner forge --minutes N -- <job>`, with N no more than 20, or N from a valid approval token for longer jobs. Do not wrap the whole flush loop in one hold: it would overrun and lose the quiet period partway through. The job inherits the forge's `QUIETLOCK_HOLD`, so its own makes pass. When `hold` exits 75 (someone else holds), or the output shows `QUIETLOCK_REFUSED` (make exits 2 in that case), record **REFUSED_QUIET** and requeue. Never record it as FAIL.

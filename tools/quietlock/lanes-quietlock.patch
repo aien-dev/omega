@@ -1,0 +1,102 @@
+--- a/lanes.sh
++++ b/lanes.sh
+@@ -29,6 +29,21 @@
+ BACKLOG="$HOME/workspace/.hive-backlog"           # id|idea|phase|prereqs|unblocks|state (rendered into the ledger)
+ HANDOFFS="$HOME/handoffs"
+ SELF="$HOME/.claude/skills/orchestrate-lanes/lanes.sh"
++# HD-13: the quiet flag is a real lock (omega tools/quietlock). Every flag removal and every
++# job goes through quietlock under its flock; this script never rm's the flag itself.
++QL="${QUIETLOCK_BIN:-$(command -v quietlock 2>/dev/null || echo "$HOME/.local/bin/quietlock")}"
++FORGE_HOLD_MIN="${FORGE_HOLD_MIN:-20}"   # >20 needs Drake's approval token (.spark-quiet-approval, owner=forge)
++ql_ok() { [ -x "$QL" ] || { echo "quietlock not installed at $QL; run omega tools/quietlock/install.sh" >&2; return 1; }; }
++# wait until quietlock says clear (stale flags are released through quietlock only)
++ql_wait_clear() { # $1 = seconds between looks
++  while ! "$QL" check >/dev/null 2>&1; do "$QL" release-stale >/dev/null 2>&1; sleep "$1"; done
++}
++# verdict for one job: exit 75 or the QUIETLOCK_REFUSED marker in its log = REFUSED_QUIET (requeued, never FAIL)
++ql_verdict() { # $1 = rc, $2 = log
++  if [ "$1" -eq 0 ]; then echo PASS
++  elif [ "$1" -eq 75 ] || grep -q QUIETLOCK_REFUSED "$2" 2>/dev/null; then echo REFUSED_QUIET
++  else echo "FAIL(rc=$1)"; fi
++}
+ TASKDIR="${LANES_TASKDIR:-$(ls -dt /tmp/claude-1000/-home-drakestapleton/*/tasks 2>/dev/null | head -1)}"
+ 
+ now() { date -u +%s; }
+@@ -93,20 +108,22 @@
+   [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null && { echo "flush already running pid $(cat "$LOCK")"; exit 1; }
+   echo $$ > "$LOCK"; trap 'rm -f "$LOCK"' EXIT
+   mkdir -p "$LOGDIR"
+-  while [ -f "$FLAG" ]; do
+-    set -- $(flag_info)
+-    if [ "$6" = no ] && [ "$7" -le 0 ]; then cmd_release_stale; break; fi
+-    sleep 60
+-  done
++  ql_ok || exit 1
+   [ -f "$QUEUE" ] || { echo "queue empty"; exit 0; }
+   echo "## flush $(iso)" >> "$RESULTS"
++  # One quietlock hold PER JOB (never one hold around the whole flush: it would overrun and end the
++  # quiet period mid-flush). The job inherits the forge's QUIETLOCK_HOLD, so its own makes pass.
+   while IFS='|' read -r lane dir cmd; do
++    ql_wait_clear 60
+     log="$LOGDIR/$lane-$(date -u +%H%M%S).log"
+-    echo "[$(iso)] $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
+-    [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
++    echo "[$(iso)] $lane: $cmd"
++    ( cd "$dir" && "$QL" hold --owner forge --minutes "$FORGE_HOLD_MIN" --reason "$lane" -- bash -c "$cmd" ) >"$log" 2>&1 < /dev/null; rc=$?
++    v=$(ql_verdict "$rc" "$log")
++    [ "$v" = REFUSED_QUIET ] && echo "$lane|$dir|$cmd" >> "$QUEUE.requeue"
+     echo "- $lane: $v  cmd: \`$cmd\`  log: $log" >> "$RESULTS"; echo "   -> $v"
+   done < "$QUEUE"
+   mv "$QUEUE" "$QUEUE.done.$(date -u +%H%M%S)"
++  [ -s "$QUEUE.requeue" ] && { cat "$QUEUE.requeue" >> "$QUEUE"; rm -f "$QUEUE.requeue"; echo "REFUSED_QUIET jobs requeued for the next flush"; }
+   echo "flush complete, see $RESULTS"
+ }
+ 
+@@ -117,14 +134,9 @@
+ }
+ 
+ cmd_release_stale() {
+-  set -- $(flag_info)
+-  [ "$1" = held ] || { echo "no flag"; return; }
+-  if [ "$6" = no ] && [ "$7" -le 0 ]; then
+-    echo "[$(iso)] released stale flag: $(head -1 "$FLAG")" >> "$HOME/workspace/.spark-quiet.history"
+-    rm -f "$FLAG"; echo "released stale flag (holder dead, past expected_end)"
+-  else
+-    echo "flag is LIVE (alive=$6, minutes_left=$7); not touching it"
+-  fi
++  # HD-13: the check and the removal happen inside quietlock under its flock (no read-then-rm race).
++  ql_ok || { echo "flag NOT touched (quietlock missing)"; return; }
++  "$QL" release-stale
+ }
+ 
+ # ---------- light forge (queen 2026-10-01: scale lever) ----------
+@@ -149,20 +161,22 @@
+   p=$(forge_light_pid) && { echo "light flush already running pid $p"; exit 1; }
+   echo $$ > "$LOCK_L"; trap 'rm -f "$LOCK_L"' EXIT
+   mkdir -p "$LOGDIR"
++  ql_ok || exit 1
+   [ -f "$QUEUE_L" ] || { echo "light queue empty"; exit 0; }
+   echo "## flush-light $(iso)" >> "$RESULTS"
++  # Light jobs never hold the flag: they wait while it is held, then run under `quietlock run`
++  # (refused with 75 if a hold appears in between -> REFUSED_QUIET, requeued).
+   while IFS='|' read -r lane dir cmd; do
+-    while [ -f "$FLAG" ]; do
+-      set -- $(flag_info)
+-      if [ "$6" = no ] && [ "$7" -le 0 ]; then cmd_release_stale; break; fi
+-      sleep 30
+-    done
++    ql_wait_clear 30
+     log="$LOGDIR/$lane-light-$(date -u +%H%M%S).log"
+-    echo "[$(iso)] (light) $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
+-    [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
++    echo "[$(iso)] (light) $lane: $cmd"
++    ( cd "$dir" && "$QL" run -- bash -c "$cmd" ) >"$log" 2>&1 < /dev/null; rc=$?
++    v=$(ql_verdict "$rc" "$log")
++    [ "$v" = REFUSED_QUIET ] && echo "$lane|$dir|$cmd" >> "$QUEUE_L.requeue"
+     echo "- $lane: $v  cmd: \`$cmd\`  log: $log" >> "$RESULTS"; echo "   -> $v"
+   done < "$QUEUE_L"
+   mv "$QUEUE_L" "$QUEUE_L.done.$(date -u +%H%M%S)"
++  [ -s "$QUEUE_L.requeue" ] && { cat "$QUEUE_L.requeue" >> "$QUEUE_L"; rm -f "$QUEUE_L.requeue"; echo "REFUSED_QUIET jobs requeued (light)"; }
+   echo "light flush complete, see $RESULTS"
+ }
+ cmd_forge_light() {
