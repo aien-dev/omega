@@ -1519,9 +1519,12 @@ static void composition_json(char *out, size_t n) {
             c->stale_commit_refused ? "true" : "false", c->stale_external_refused ? "true" : "false",
             c->identity_refused ? "true" : "false", c->generation_untouched ? "true" : "false",
             c->inforce_untouched ? "true" : "false", c->promote_holders_ok ? "true" : "false");
-    } else
-#endif
+    } else {
+        snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\"},\n");
+    }
+#else
     snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\"},\n");
+#endif
     /* The Fabric phase runs in both builds (Lane 17). */
     size_t used = strlen(out);
     if (used < n) fabric_json(out + used, n - used);
