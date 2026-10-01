@@ -25,20 +25,22 @@
  *                 view (CqHeld), never here. The build fails if fabric.o
  *                 references an authority or World operation (mk/fabric.mk).
  *
- * Message (FAB_HDR_BYTES + body + FAB_TAG_BYTES; integers little-endian):
+ * Message (FAB_HDR_BYTES + body + FAB_SIG_BYTES; integers little-endian):
  *
  *   off len field
  *     0   4 magic "AFAB"
- *     4   1 version 0x01
+ *     4   1 version 0x02 (0x01 had a 32-byte tag; refused as FAB_E_FORMAT)
  *     5   1 kind        FAB_MSG_*
  *     6   2 body_len    must equal the kind's body size
  *     8  44 sender      AienMachineId record
  *    52  44 dest        AienMachineId record (the one receiver it is for)
  *    96   8 generation  sender's membership generation, >= 1, rises on rejoin
  *   104   8 seq         sender's sequence within that generation, >= 1, rising
- *   112   8 sent_us     sender's clock (informational; covered by the tag)
+ *   112   8 sent_us     sender's clock (informational; covered by the sig)
  *   120   n body
- *   120+n 32 tag        FabAuth tag over bytes 0 .. 120+n-1, by the sender
+ *   120+n 64 sig        FabAuth signature over bytes 0 .. 120+n-1, by the sender.
+ *                     Fixed width 64 = an Ed25519 signature (RFC 8032), so the
+ *                     TRUST-1 owner-key signer fits without a format change.
  *
  * Bodies:
  *   JOIN       40: ontology digest (cq_ontology_digest, 32) + requested lease (u64 us)
@@ -55,7 +57,7 @@
  *   form                        FAB_E_FORMAT
  *   dest != self, sender = self FAB_E_MISMATCH
  *   sender not on the roster    FAB_E_NOT_ENROLLED
- *   tag does not verify         FAB_E_AUTH      (forged identity, altered bytes)
+ *   sig does not verify         FAB_E_AUTH      (forged identity, altered bytes)
  *   generation < held           FAB_E_STALE_GEN
  *   same generation, seq <= last FAB_E_REPLAY
  *   JOIN with generation <= held FAB_E_STALE_GEN
@@ -96,13 +98,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define FAB_VERSION         0x01u
+#define FAB_VERSION         0x02u
 #define FAB_HDR_BYTES       120u
-#define FAB_TAG_BYTES       32u
+#define FAB_SIG_BYTES       64u     /* Ed25519-sized signature, fixed width */
 #define FAB_JOIN_BODY       40u
 #define FAB_RENEW_BODY      8u
 #define FAB_ADVERTISE_BODY  CQ_WIRE_BYTES
-#define FAB_MSG_MAX         (FAB_HDR_BYTES + FAB_ADVERTISE_BODY + FAB_TAG_BYTES)
+#define FAB_MSG_MAX         (FAB_HDR_BYTES + FAB_ADVERTISE_BODY + FAB_SIG_BYTES)
 
 #define FAB_MAX_MEMBERS     16u     /* peers one node tracks */
 #define FAB_MAX_KEYS        64u     /* capability entries one peer may advertise */
@@ -140,12 +142,14 @@ typedef struct {
     int (*recv)(void *ctx, const AienMachineId *self, uint8_t *buf, size_t cap, size_t *len);
 } FabTransport;
 
-/* Signs as this node; verifies a tag as coming from `claimed`. 0 = ok. */
+/* Signs as this node; verifies a signature as coming from `claimed`. 0 = ok.
+ * The signature is always FAB_SIG_BYTES (64) bytes; a signer with a shorter
+ * native output must still define every byte (the stand-in derives 64). */
 typedef struct {
     void *ctx;
-    int (*sign)(void *ctx, const uint8_t *msg, size_t len, uint8_t tag[FAB_TAG_BYTES]);
+    int (*sign)(void *ctx, const uint8_t *msg, size_t len, uint8_t sig[FAB_SIG_BYTES]);
     int (*verify)(void *ctx, const AienMachineId *claimed, const uint8_t *msg, size_t len,
-                  const uint8_t tag[FAB_TAG_BYTES]);
+                  const uint8_t sig[FAB_SIG_BYTES]);
 } FabAuth;
 
 /* Enrolled machines (from the AEGIS / owner-key boundary). Read-only here. */

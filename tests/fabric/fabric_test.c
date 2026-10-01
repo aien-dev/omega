@@ -206,7 +206,7 @@ static size_t peek(House *h, int i, int from, uint32_t kind, uint8_t *out) {
 }
 
 static void reseal(uint8_t *msg, size_t len, const uint8_t key[32]) {
-    fab_hmac_sha256(key, 32, msg, len - FAB_TAG_BYTES, msg + len - FAB_TAG_BYTES);
+    fab_hmac_sig64(key, msg, len - FAB_SIG_BYTES, msg + len - FAB_SIG_BYTES);
 }
 
 static void put64(uint8_t *p, uint64_t v) { for (int i = 0; i < 8; i++) p[i] = (uint8_t)(v >> (8 * i)); }
@@ -222,7 +222,7 @@ static void scenario(uint8_t out[4][32]) {
     /* t=0: everyone joins. Keep C's generation-1 JOIN to A for later. */
     for (int i = 0; i < 3; i++) CHECK(fab_join(&h->node[i], LEASE, 0) == FAB_OK, "join %d", i);
     join_c1_len = peek(h, A, C, FAB_MSG_JOIN, join_c1);
-    CHECK(join_c1_len == FAB_HDR_BYTES + FAB_JOIN_BODY + FAB_TAG_BYTES, "captured C join");
+    CHECK(join_c1_len == FAB_HDR_BYTES + FAB_JOIN_BODY + FAB_SIG_BYTES, "captured C join");
     CHECK(pump(h, 0) == 0, "joins accepted");
     for (int i = 0; i < 3; i++)
         for (int j = 0; j < 3; j++)
@@ -402,8 +402,57 @@ static void scenario(uint8_t out[4][32]) {
     house_free(h);
 }
 
+/* ---- Lane 19: 64-byte (Ed25519-sized) signature field ---- */
+static void test_sig64(void) {
+    static House hh;
+    House *h = &hh;
+    house_init(h);
+    CHECK(FAB_SIG_BYTES == 64 && FAB_MSG_MAX == FAB_HDR_BYTES + FAB_ADVERTISE_BODY + 64, "sig field is 64 bytes");
+    /* stand-in: first half is plain HMAC, second half is a different, keyed value */
+    uint8_t s[64], hm[32], s2[64];
+    fab_hmac_sig64(h->key[A], (const uint8_t *)"abc", 3, s);
+    fab_hmac_sha256(h->key[A], 32, (const uint8_t *)"abc", 3, hm);
+    CHECK(memcmp(s, hm, 32) == 0 && memcmp(s, s + 32, 32) != 0, "sig64 halves");
+    fab_hmac_sig64(h->key[B], (const uint8_t *)"abc", 3, s2);
+    CHECK(memcmp(s + 32, s2 + 32, 32) != 0, "sig64 second half depends on the key");
+    fab_hmac_sig64(h->key[A], (const uint8_t *)"abd", 3, s2);
+    CHECK(memcmp(s + 32, s2 + 32, 32) != 0, "sig64 second half depends on the message");
+
+    /* A seals a JOIN for B (not sent): every one of the 64 signature bytes is checked */
+    uint8_t jb[FAB_JOIN_BODY], m[FAB_MSG_MAX + 8], t[FAB_MSG_MAX + 8];
+    size_t ml;
+    cq_ontology_digest(&h->cat[A], jb);
+    put64(jb + 32, LEASE);
+    CHECK(fab_seal(&h->node[A], &h->id[B], FAB_MSG_JOIN, jb, sizeof jb, 0, m, &ml) == FAB_OK, "seal join");
+    CHECK(ml == FAB_HDR_BYTES + FAB_JOIN_BODY + 64, "join carries a 64-byte signature");
+    unsigned auth = 0;
+    for (size_t i = 0; i < 64; i++) {
+        memcpy(t, m, ml);
+        t[ml - 64 + i] ^= 0x01;
+        if (deliver(h, B, t, ml, 0).code == FAB_E_AUTH) auth++;
+    }
+    CHECK(auth == 64, "a flip in any of the 64 signature bytes is FAB_E_AUTH (%u/64)", auth);
+    /* 32-byte signature (truncated) is refused before authentication */
+    CHECK(deliver(h, B, m, ml - 32, 0).code == FAB_E_FORMAT, "32-byte signature refused");
+    /* the old v1 format (version 0x01, 32-byte HMAC tag, correctly computed) is refused */
+    memcpy(t, m, ml - 64);
+    t[4] = 0x01;
+    fab_hmac_sha256(h->key[A], 32, t, ml - 64, t + ml - 64);
+    CHECK(deliver(h, B, t, ml - 32, 0).code == FAB_E_FORMAT, "v1 32-byte-tag message refused");
+    /* a 64-byte signature with the old version byte is refused */
+    memcpy(t, m, ml);
+    t[4] = 0x01;
+    fab_hmac_sig64(h->key[A], t, ml - 64, t + ml - 64);
+    CHECK(deliver(h, B, t, ml, 0).code == FAB_E_FORMAT, "version 0x01 refused");
+    /* the untouched 64-byte signature round-trips: B admits A */
+    CHECK(deliver(h, B, m, ml, 0).code == FAB_OK, "64-byte signature round-trips");
+    CHECK(fab_member_live(&h->node[B], &h->id[A], 0), "A is a member in B's view");
+    house_free(h);
+}
+
 int main(void) {
     test_hmac();
+    test_sig64();
     uint8_t r1[4][32], r2[4][32];
     scenario(r1);
     unsigned first_checks = checks;
