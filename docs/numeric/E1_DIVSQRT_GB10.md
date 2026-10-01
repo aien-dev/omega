@@ -132,3 +132,32 @@ records:
 The script refuses to run on a dirty tree.
 
 ## Result
+
+Three chip runs, all receipts kept (none overwritten), all under
+`~/workspace/evidence-out/E1-DIVSQRT/`, physics pinned at e95e3ed:
+
+| Run | Omega commit | Verdict | Receipt (sha256) | What it showed |
+|-----|--------------|---------|------------------|----------------|
+| 1 | f2a6a19 | FAIL | 88930d2f03f98ba50e09a3a3e53ae17278e0f6b0c72a1b535e20ae74857e55c2 | DIV correct. 49,359,680 SQRT outputs still held the 0x55555555 fill: the host read results after the completion marker but before the stores were visible. Fix: wait for the QMD release semaphore (value 6) and a barrier before reading. |
+| 2 | 9bd4de2 | PASS | daa1d6235373f2e7cae97c410094d4d0aeb43dbe680baafe5aa2ffd70227fed5 | Same numbers as run 3 below. |
+| 3 | 9b5756e | PASS | de7b2dd6a930ae94529773cf4e31aa08aac7065602b1d771e13e6ed2784a9074 | Rerun after the Codex review fixes (gate exit status, commit binding, sweep crash handling, QMD high address bits, thread checks). Kernel words unchanged. This is the receipt of record. |
+
+Run 3 numbers:
+
+- DIV: 117,440,512 pairs (7 batches of 2^24; batch 0 opens with the 5,033
+  edge and corpus pairs, the rest are random from seed 0x9e3779b97f4a7c15). 0 mismatches against AArch64 FDIV, 0 against
+  `omega_math_div`, 0 unwritten outputs.
+- SQRT: all 4,294,967,296 inputs (exhaustive). 0 mismatches against AArch64
+  FSQRT, 0 against `omega_math_sqrt`, 0 unwritten outputs.
+- Host tier 53/53; nvdisasm 13.0.85 decodes all 264 + 336 words to the
+  encoder's text; mutation sweep 21/21 checks killed, 0 survived, 0 broken.
+- Chip binary sha256 730b42a9767c163a52f311105a6140a9899ef9131007e54659a5928f341b8b9c,
+  no libm math or CUDA symbols. Run 07:16:05Z to 07:23:31Z.
+
+Review: Codex (gpt-6-astra, read-only sandbox) found no arithmetic blocker and
+four MAJOR plus one MINOR integrity issues in the gate tooling; all five were
+fixed in 9b5756e before run 3.
+
+Not done here: the kernels are not yet called from `omega_numeric_gb10.c`
+(owned by another lane), so `omega_numeric` still refuses DIV/SQRT on GB10
+until that wiring lands.
