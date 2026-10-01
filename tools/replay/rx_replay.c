@@ -10,7 +10,9 @@
  * Output is exactly one verdict line:
  *   MATCH through event N
  *   DIVERGENCE event=N expected=<hash|value> actual=<hash|value> subsystem=<name>
- * optionally followed by one "detail:" line. Events are numbered from 1 in
+ * optionally followed by one "detail:" line and, for a world compare, the two
+ * first differing records decoded ("expected-record:", "actual-record:";
+ * diagnostic only, never parsed). Events are numbered from 1 in
  * log order (crumbs, inputs and checkpoints alike; dispatch: record seq + 1).
  * Exit 0 = MATCH, 1 = DIVERGENCE, 2 = cannot run (usage, or the reference
  * log of a compare does not verify by itself).
@@ -36,6 +38,7 @@ typedef struct {
     int diverged;
     uint64_t event;
     char expected[80], actual[80], subsystem[32], detail[200];
+    char rec_exp[640], rec_act[640];   /* first differing records, decoded (diagnostic only) */
 } verdict;
 
 static void hexs(char *out, const uint8_t d[32]) { rxl_hex(d, 32, out); }
@@ -64,6 +67,8 @@ static int report(const verdict *v) {
     printf("DIVERGENCE event=%llu expected=%s actual=%s subsystem=%s\n",
            (unsigned long long)v->event, v->expected, v->actual, v->subsystem);
     if (v->detail[0]) printf("detail: %s\n", v->detail);
+    if (v->rec_exp[0]) printf("expected-record: %s\n", v->rec_exp);
+    if (v->rec_act[0]) printf("actual-record:   %s\n", v->rec_act);
     return 1;
 }
 
@@ -232,6 +237,50 @@ static const char *crumb_field_diff(const rxl_crumb *x, const rxl_crumb *y) {
     return "parent digests";
 }
 
+/* Diagnostic: one record decoded on one line, so a failing compare shows
+ * both sides of the first difference (worker and times included, though
+ * they are not compared). Appends stop at the buffer end. */
+static void cat_f(char *o, size_t n, size_t *at, const char *fmt, ...) __attribute__((format(printf, 4, 5)));
+static void cat_f(char *o, size_t n, size_t *at, const char *fmt, ...) {
+    if (*at >= n) return;
+    va_list ap;
+    va_start(ap, fmt);
+    int k = vsnprintf(o + *at, n - *at, fmt, ap);
+    va_end(ap);
+    *at = k < 0 ? n : *at + (size_t)k;
+}
+
+static void rec_line(const rxl_rec *r, char *o, size_t n) {
+    size_t at = 0;
+    o[0] = 0;
+    if (r->type == RXL_CRUMB) {
+        const rxl_crumb *k = &r->u.c;
+        cat_f(o, n, &at, "crumb id=%llu kind=%u reaction=%u faculty=%u worker=%u wake_cause=%llu coalesced=%llu reason=%d in=",
+              (unsigned long long)k->id, k->kind, k->reaction, k->faculty, k->worker,
+              (unsigned long long)k->wake_cause, (unsigned long long)k->coalesced, (int)k->reason);
+        for (uint32_t i = 0; i < k->n_inputs && i < RXL_MAX_DEPS; i++)
+            cat_f(o, n, &at, "%s%u/%u@v%llu:m%llx", i ? "," : "", k->inputs[i].id, k->inputs[i].gen,
+                  (unsigned long long)k->inputs[i].version, (unsigned long long)k->inputs[i].mask);
+        cat_f(o, n, &at, " out=");
+        for (uint32_t i = 0; i < k->n_outputs && i < RXL_MAX_WRITES; i++)
+            cat_f(o, n, &at, "%s%u/%u@v%llu:m%llx", i ? "," : "", k->outputs[i].id, k->outputs[i].gen,
+                  (unsigned long long)k->outputs[i].version, (unsigned long long)k->outputs[i].mask);
+        cat_f(o, n, &at, " parents=");
+        for (uint32_t i = 0; i < k->n_parents && i < RXL_MAX_PARENTS; i++)
+            cat_f(o, n, &at, "%s%llu", i ? "," : "", (unsigned long long)k->parents[i]);
+    } else if (r->type == RXL_INPUT) {
+        const rxl_input *in = &r->u.in;
+        cat_f(o, n, &at, "input after_crumb=%llu muts=", (unsigned long long)in->after_crumb);
+        for (uint32_t i = 0; i < in->n && i < RXL_MAX_MUTS; i++)
+            cat_f(o, n, &at, "%s%u.f%u=%llu", i ? "," : "", in->m[i].id, in->m[i].field,
+                  (unsigned long long)in->m[i].value);
+    } else if (r->type == RXL_CHECKPOINT) {
+        cat_f(o, n, &at, "checkpoint through_crumb=%llu", (unsigned long long)r->u.ck.through_crumb);
+    } else {
+        cat_f(o, n, &at, "record type=%u", r->type);
+    }
+}
+
 static int compare_logs(const char *pa, const char *pb) {
     rxl_log A, B;
     char err[160];
@@ -276,6 +325,8 @@ static int compare_logs(const char *pa, const char *pb) {
                         (unsigned long long)x->u.c.id, crumb_field_diff(&x->u.c, &y->u.c));
             else
                 diverge(&v, ev, rec_sub(x->type), a, b, "record type %u vs %u", x->type, y->type);
+            rec_line(x, v.rec_exp, sizeof v.rec_exp);
+            rec_line(y, v.rec_act, sizeof v.rec_act);
             break;
         }
     }

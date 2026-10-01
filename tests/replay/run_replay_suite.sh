@@ -72,7 +72,7 @@ if [ $sched_match -eq 5 ]; then
 else
     fails=$((fails + 1))
     echo "FAIL world-replay-4-workers              $sched_match/5 MATCH" >> "$rec"
-    head -n 2 "$out"/world/replay4-*.txt
+    head -n 4 "$out"/world/replay4-*.txt
 fi
 
 echo "== World: negative controls (replay that really differs) =="
