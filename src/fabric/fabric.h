@@ -43,7 +43,9 @@
  * Bodies:
  *   JOIN       40: ontology digest (cq_ontology_digest, 32) + requested lease (u64 us)
  *   RENEW       8: requested lease (u64 us)
- *   ADVERTISE 188: one rx_capq wire record (CQ_WIRE_BYTES); its machine must be the sender
+ *   ADVERTISE 188: one rx_capq wire record (CQ_WIRE_BYTES) of any capq kind
+ *                 (advertise, availability, withdraw); its machine must be the
+ *                 sender, so a machine changes or withdraws only its own entries
  *   LEAVE       0
  *
  * Receive rules, in order (first failure is the verdict; nothing changes):
@@ -67,7 +69,11 @@
  * own clock and hands the end to the graph (cq_machine_advertise_id). When
  * now >= lease end the member is LOST: every entry it advertised is withdrawn.
  * A lost member comes back only by a JOIN with a higher generation.
- *
+ * *
+ * Generations never move back: a JOIN is accepted only with a generation
+ * above the one held, and anything older is FAB_E_STALE_GEN, so old traffic
+ * still in flight after a restart cannot roll membership back.
+
  * Capability generations. rx_capq accepts a record only when its generation
  * is newer than the one held. Advertisers number entries with
  * fab_entry_generation(node, rev) = generation << 32 | rev, so a rejoin with a

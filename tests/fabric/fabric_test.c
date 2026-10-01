@@ -348,6 +348,12 @@ static void scenario(uint8_t out[4][32]) {
     q = query(h, A, t1, 0);
     CHECK(q.n == 4 && q.from[B] == 2 && q.from[C] == 1 && q.held == 0, "graph unchanged by refusals");
 
+    /* An owner withdraws one of its own entries over ADVERTISE (capq kind WITHDRAW). */
+    register_own(h, B, 1, 202, 2);
+    CHECK(fab_advertise(&h->node[B], &h->own[B][1], CQ_WIRE_WITHDRAW, t1) == FAB_OK, "B withdraw sent");
+    CHECK(pump(h, t1) == 0, "owner withdraw accepted");
+    CHECK(query(h, A, t1, 0).from[B] == 1, "B's withdrawn entry gone from A");
+
     /* B leaves: its entries go; a later message is not a member's. */
     CHECK(fab_leave(&h->node[B], t1 + MS) == FAB_OK, "B leave");
     CHECK(pump(h, t1 + MS) == 0, "leave accepted");
