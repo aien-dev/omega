@@ -783,6 +783,8 @@ static const TranscCase TRANSC_CASES[] = {
     {OMEGA_TU_RSQRT, omega_math_rsqrt, "RSQRT"},
     {OMEGA_TU_ERF, omega_math_erf, "ERF"},
     {OMEGA_TU_GELU, omega_math_gelu, "GELU"},
+    {OMEGA_TU_SIN, omega_math_sin, "SIN"},
+    {OMEGA_TU_COS, omega_math_cos, "COS"},
 };
 #define NTRANSC (sizeof(TRANSC_CASES) / sizeof(TRANSC_CASES[0]))
 
@@ -1152,6 +1154,106 @@ static void test_unary2_specials(void) {
     if (!rcs) omega_tensor_release(g, S);
 }
 
+/* ---- 7c. trig domain (E1 SIN / COS) ---------------------------------------
+ * E1 admits |x| <= 2^22 (OMEGA_TRANSC_TRIG_MAX_ABS, inclusive,
+ * omega_numeric_transc.c sincos_core); outside it, +-inf and NaN give the
+ * canonical qNaN 0x7fc00000; sin(+-0) = +-0 and cos(+-0) = +1
+ * (docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md SIN/COS row). Each element is
+ * checked two ways: raw bits equal the direct E1 call on the logical element,
+ * and the declared domain rule holds on its own (in-domain finite input never
+ * gives NaN, out-of-domain input always gives exactly 0x7fc00000). The grid
+ * also goes through a broadcast and a reversed-order strided slice. */
+static const uint32_t TRIG_GRID[] = {
+    0x00000000U /* +0 */, 0x80000000U /* -0 */, 0x4a800000U /* 2^22 */, 0xca800000U /* -2^22 */,
+    0x4a7fffffU /* just below 2^22 */, 0xca7fffffU, 0x4a800001U /* just above 2^22 */, 0xca800001U,
+    0x4b000000U /* 2^23 */, 0x7f7fffffU /* FLT_MAX */, 0xff7fffffU, 0x7f800000U /* +inf */,
+    0xff800000U /* -inf */, 0x7fc00000U, 0x7fa00001U /* sNaN */, 0xffc00123U, 0x00000001U, 0x80000001U,
+    0x3f490fdbU /* pi/4 */, 0x3f490fdcU, 0x3fc90fdbU /* pi/2 */, 0x40490fdbU /* pi */, 0xc0490fdbU,
+    0x3f800000U, 0xbf800000U, 0x447a0000U /* 1000 */, 0x49742400U /* 1e6 */, 0x33800000U,
+};
+#define NTRIG (sizeof(TRIG_GRID) / sizeof(TRIG_GRID[0]))
+
+static int trig_in_domain(uint32_t b) { return (b & 0x7fffffffU) <= 0x4a800000U; } /* |x| <= 2^22, not inf/NaN */
+
+/* Check op on V (logical n) against E1 and the domain rule; src[idx[i]]. */
+static void trig_check(const TranscCase *tc, OmegaTensor V, const float *src, const size_t *idx, size_t n,
+                       const char *what) {
+    OmegaTensor O = {0, 0};
+    int rc = omega_tensor_unary(g, tc->op, V, &O);
+    float *got = rc ? NULL : rd(O);
+    size_t bad_e1 = got ? 0 : n, bad_dom = got ? 0 : n;
+    for (size_t i = 0; got && i < n; i++) {
+        uint32_t xb = omega_float_to_bits(src[idx[i]]), gb = omega_float_to_bits(got[i]);
+        bad_e1 += gb != omega_float_to_bits(tc->f(src[idx[i]]));
+        int is_nan = (gb & 0x7fffffffU) > 0x7f800000U;
+        bad_dom += trig_in_domain(xb) ? is_nan : gb != 0x7fc00000U;
+    }
+    CHECK(!rc && bad_e1 == 0, "trig %s %s bit-exact vs direct E1 (rc=%d, %zu of %zu differ)", tc->name, what, rc,
+          bad_e1, n);
+    CHECK(!rc && bad_dom == 0, "trig %s %s domain rule |x|<=2^22 else qNaN 0x7fc00000 (%zu of %zu violate)",
+          tc->name, what, bad_dom, n);
+    free(got);
+    if (!rc) omega_tensor_release(g, O);
+}
+
+static void test_trig_domain(void) {
+    float x[NTRIG];
+    size_t idx[3 * NTRIG];
+    for (size_t i = 0; i < NTRIG; i++) x[i] = omega_bits_to_float(TRIG_GRID[i]);
+    uint64_t s1[1] = {NTRIG}, srow[2] = {1, NTRIG}, sb[2] = {3, NTRIG};
+    OmegaTensor D = mk(1, s1, x), R = mk(2, srow, x), B = {0, 0}, S = {0, 0};
+    int rcb = omega_tensor_broadcast_to(g, R, 2, sb, &B);
+    CHECK(rcb == 0, "trig: broadcast [1,%zu]->[3,%zu] rc=%d", (size_t)NTRIG, (size_t)NTRIG, rcb);
+    /* odd positions of the grid: start 1, step 2 -> a strided view with offset */
+    uint64_t st[1] = {1}, sp[1] = {NTRIG}, se[1] = {2};
+    int rcs = omega_tensor_slice(g, D, st, sp, se, &S);
+    CHECK(rcs == 0, "trig: strided slice rc=%d", rcs);
+    const TranscCase trig[2] = {{OMEGA_TU_SIN, omega_math_sin, "SIN"}, {OMEGA_TU_COS, omega_math_cos, "COS"}};
+    for (size_t k = 0; k < 2; k++) {
+        for (size_t i = 0; i < NTRIG; i++) idx[i] = i;
+        trig_check(&trig[k], D, x, idx, NTRIG, "grid dense");
+        if (!rcb) {
+            for (size_t i = 0; i < 3 * NTRIG; i++) idx[i] = i % NTRIG;
+            trig_check(&trig[k], B, x, idx, 3 * NTRIG, "grid broadcast");
+        }
+        if (!rcs) {
+            for (size_t i = 0; i < NTRIG / 2; i++) idx[i] = 1 + 2 * i;
+            trig_check(&trig[k], S, x, idx, NTRIG / 2, "grid strided slice");
+        }
+    }
+    /* Declared values that do not depend on E1 internals. */
+    OmegaTensor O = {0, 0};
+    float *gs = omega_tensor_unary(g, OMEGA_TU_SIN, D, &O) ? NULL : rd(O);
+    if (gs) omega_tensor_release(g, O);
+    float *gc = omega_tensor_unary(g, OMEGA_TU_COS, D, &O) ? NULL : rd(O);
+    if (gc) omega_tensor_release(g, O);
+    CHECK(gs && omega_float_to_bits(gs[0]) == 0x00000000U && omega_float_to_bits(gs[1]) == 0x80000000U,
+          "trig: sin(+0) = +0, sin(-0) = -0 (0x%08x 0x%08x)", gs ? omega_float_to_bits(gs[0]) : 0U,
+          gs ? omega_float_to_bits(gs[1]) : 0U);
+    CHECK(gc && omega_float_to_bits(gc[0]) == 0x3f800000U && omega_float_to_bits(gc[1]) == 0x3f800000U,
+          "trig: cos(+0) = cos(-0) = +1 (0x%08x 0x%08x)", gc ? omega_float_to_bits(gc[0]) : 0U,
+          gc ? omega_float_to_bits(gc[1]) : 0U);
+    /* exactly 2^22 is admitted (a finite value in [-1, 1]); the next float up is not (qNaN) */
+    for (int k = 0; k < 2; k++) {
+        float *gv = k ? gc : gs;
+        const char *nm = k ? "cos" : "sin";
+        for (int j = 2; j <= 3; j++) {
+            float v = gv ? gv[j] : 2.0f;
+            CHECK(gv && v >= -1.0f && v <= 1.0f, "trig: %s(%s2^22) admitted, in [-1,1] (0x%08x)", nm,
+                  j == 3 ? "-" : "", gv ? omega_float_to_bits(gv[j]) : 0U);
+        }
+        for (int j = 6; j <= 7; j++)
+            CHECK(gv && omega_float_to_bits(gv[j]) == 0x7fc00000U, "trig: %s(%snextup(2^22)) is qNaN (0x%08x)", nm,
+                  j == 7 ? "-" : "", gv ? omega_float_to_bits(gv[j]) : 0U);
+    }
+    free(gs);
+    free(gc);
+    omega_tensor_release(g, D);
+    omega_tensor_release(g, R);
+    if (!rcb) omega_tensor_release(g, B);
+    if (!rcs) omega_tensor_release(g, S);
+}
+
 /* ---- 8. determinism ------------------------------------------------------- */
 static void kat_digest(uint8_t out[32]) {
     uint64_t save = g_rng;
@@ -1199,6 +1301,7 @@ int main(void) {
     test_transc_unary();
     test_relu_unary();
     test_unary2_specials();
+    test_trig_domain();
     test_determinism();
     /* every test released what it made */
     uint32_t lt, ls;
