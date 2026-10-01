@@ -40,7 +40,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-plan-reuse
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-plan-reuse test-cortex
 
 all: $(TARGET)
 
@@ -398,6 +398,19 @@ $(RX_SP_TEST): $(RX_SP_SRCS) $(RX_SP_OBJS) $(RX_AIEN_OBJ) tests/runtime/rx_sp_wo
 
 test-state-projection: $(RX_SP_TEST)
 	./$(RX_SP_TEST)
+
+# M20 Cortex canonicalization: canonical Cortex contract, journal, single
+# writer, typed recall, and World execution recorded through rx_cortex_record.
+RX_CX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_cortex_record.c src/sha256.c tests/runtime/rx_cortex_canon.c
+RX_CX_TEST = $(OUT_DIR)/rx_cortex_canon_test
+
+$(RX_CX_TEST): $(RX_CX_SRCS) $(OUT_DIR)/rx_cortex.o src/runtime/rx_cortex_record.h \
+	src/runtime/rx_world.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_CX_SRCS) $(OUT_DIR)/rx_cortex.o
+
+test-cortex: $(RX_CX_TEST)
+	./$(RX_CX_TEST)
 
 # Physical graphics seat against the native AIENOS authority. Not part of
 # GitHub checks. A pass on this machine is the only run that may set

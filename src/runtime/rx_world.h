@@ -490,6 +490,14 @@ typedef int (*RxAuthValidateFn)(const void *ctx, RxCapRef ref, uint32_t subject,
                                  uint64_t resource, uint32_t rights, RxCapEntry *out);
 typedef int (*RxAuthInspectFn)(const void *ctx, RxCapRef ref, RxCapEntry *out);
 
+/* Durable recorder (M20 Cortex). Called with the world mutex held, once per
+ * crumb, after the crumb is in the log; it reads the world and must not call
+ * back into it. It cannot veto or fail the commit it records. The one
+ * installed recorder is rx_cortex_record.c, the Cortex writer for World. */
+struct RxWorld;
+typedef void (*RxRecordFn)(void *ctx, const struct RxWorld *w, const RxCrumb *k);
+typedef void (*RxRecordReleaseFn)(void *ctx);
+
 typedef struct RxWorld {
     pthread_mutex_t mu;
     pthread_cond_t work_cv;
@@ -584,6 +592,11 @@ typedef struct RxWorld {
     uint32_t n_callers;
     uint64_t caller_generation;      /* last generation issued */
     bool callers_bound;              /* one way: set once, never cleared */
+
+    /* M20 durable recorder (rx_world_set_recorder); at most one. */
+    RxRecordFn recorder;
+    RxRecordReleaseFn recorder_release;
+    void *recorder_ctx;
 } RxWorld;
 
 int  rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crumb_cap);
@@ -599,6 +612,15 @@ struct AienosCapView;
 int  rx_world_init_native(RxWorld *w, const struct AienosCapView *view,
                           uint32_t n_workers, uint64_t crumb_cap);
 void rx_world_destroy(RxWorld *w);
+/* Install the durable recorder. With `replay`, every crumb already in the
+ * log is handed to it first, under the same lock, so nothing recorded before
+ * installation is missed. RX_ERR_EXISTS if one is installed. `release` (may
+ * be null) is called by rx_world_destroy if the recorder is still installed. */
+int  rx_world_set_recorder(RxWorld *w, RxRecordFn fn, RxRecordReleaseFn release, void *ctx,
+                           bool replay);
+/* Remove the recorder installed with `ctx` (RX_ERR_NOT_FOUND otherwise).
+ * release is not called. */
+int  rx_world_clear_recorder(RxWorld *w, void *ctx);
 /* R15: record an RxTiming per activation into `buf` (cap entries; later ones
  * are dropped and counted in n_timing beyond cap). Null turns it off. */
 void rx_world_set_timing(RxWorld *w, RxTiming *buf, uint64_t cap);

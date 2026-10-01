@@ -203,6 +203,7 @@ static uint64_t crumb_append(RxWorld *w, RxCrumb *k) {
     else k->episode = 0;
     w->crumbs[w->n_crumbs++] = *k;
     if (k->reaction < w->n_reactions) w->reactions[k->reaction].last_crumb = k->id;
+    if (w->recorder) w->recorder(w->recorder_ctx, w, &w->crumbs[w->n_crumbs - 1]);
     return k->id;
 }
 
@@ -233,6 +234,37 @@ const int rx_world_causal_digest_enabled = 0;
 const RxCrumb *rx_world_crumb(const RxWorld *w, uint64_t id) {
     if (id == 0 || id > w->n_crumbs) return NULL;
     return &w->crumbs[id - 1];
+}
+
+int rx_world_set_recorder(RxWorld *w, RxRecordFn fn, RxRecordReleaseFn release, void *ctx,
+                          bool replay) {
+    if (!w || !fn) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    if (w->recorder) {
+        pthread_mutex_unlock(&w->mu);
+        return RX_ERR_EXISTS;
+    }
+    if (replay)
+        for (uint64_t i = 0; i < w->n_crumbs; i++) fn(ctx, w, &w->crumbs[i]);
+    w->recorder = fn;
+    w->recorder_release = release;
+    w->recorder_ctx = ctx;
+    pthread_mutex_unlock(&w->mu);
+    return RX_OK;
+}
+
+int rx_world_clear_recorder(RxWorld *w, void *ctx) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    int rc = RX_ERR_NOT_FOUND;
+    if (w->recorder && w->recorder_ctx == ctx) {
+        w->recorder = NULL;
+        w->recorder_release = NULL;
+        w->recorder_ctx = NULL;
+        rc = RX_OK;
+    }
+    pthread_mutex_unlock(&w->mu);
+    return rc;
 }
 
 int rx_world_crumb_origin(RxWorld *w, uint64_t id, uint32_t *reaction, uint32_t *subject,
@@ -1605,6 +1637,10 @@ void rx_world_destroy(RxWorld *w) {
     pthread_cond_broadcast(&w->work_cv);
     pthread_mutex_unlock(&w->mu);
     for (uint32_t i = 0; i < w->n_workers; i++) pthread_join(w->workers[i], NULL);
+    if (w->recorder_release) w->recorder_release(w->recorder_ctx);
+    w->recorder = NULL;
+    w->recorder_release = NULL;
+    w->recorder_ctx = NULL;
     for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++) free(w->subs[i]);
     rx_coherent_free(w);
     free(w->deferred);
