@@ -1355,7 +1355,7 @@ static int composition_phase(Rig *r) {
             AienosCapEntry e;
             if (aienos_cap_inspect(r->view, (AienosCapRef){id, gn}, &e) != 0 || e.state != 1u)
                 continue;
-            if (e.subject >= RXC_SUBJ_EXTERNAL && e.subject <= RXC_SUBJ_COMMIT &&
+            if (e.subject >= RXC_SUBJ_EXTERNAL && e.subject < RXC_SUBJ_OF(RXC_MAX_ACTIVE, RXC_SUBJ_EXTERNAL) &&
                 (e.rights & RX_RIGHT_PRIVILEGED))
                 CFAIL("composition subject %u holds a privileged right", e.subject);
         }
@@ -1391,8 +1391,8 @@ out:
  * traffic is refused (fab_living_phase.h has the steps). The living
  * generation, the in-force record and the single promotion holder must be
  * untouched. On the host it runs after composition_phase, on a fresh
- * composition directory: one composition at a time per World (subjects
- * 200..204). In the silicon build (Lane 17) it runs in the World whose GPU
+ * composition directory, after the first composition closed (up to
+ * RXC_MAX_ACTIVE run at once, each isolated). In the silicon build (Lane 17) it runs in the World whose GPU
  * work goes to the physical resident GB10 seat; the Fabric part stays CPU-only
  * loopback (no network, HMAC stand-in) and its Skills are CPU procedures. */
 #ifdef R13_SILICON

@@ -2,23 +2,27 @@
  * COMPOSITION-2 attach hygiene (rx_compose.h, attach and close in attach
  * mode), in one caller-owned World that also runs an outside reaction:
  *
- *   one per World  a second attach while one runs is refused (RX_ERR_EXISTS)
- *                  and changes nothing; the first keeps committing goals;
- *                  after close another RxCompose reattaches and recovers.
+ *   two per World  two compositions attach to one World as instances 0 and 1
+ *                  and run goals at the same time; each keeps the winner it
+ *                  verified (its own state, results, journal); a step under
+ *                  one instance's subject cannot write the other's objects
+ *                  with its own or the other's capabilities; a third attach,
+ *                  or a second one on a directory in use, is refused
+ *                  (RX_ERR_EXISTS) and changes nothing; after one closes, a
+ *                  new attach takes its instance and reuses its slots.
  *   close          a candidate step is held mid-run and close is called:
  *                  close revokes first and waits for the step (no cutoff);
  *                  released, the step's write is REJECTED; close returns
  *                  only after it finished; durable state and the Cortex
  *                  record count are unchanged; the RxCompose is freed right
  *                  after close (heap), so an ASan build catches any late use.
- *   inert + bound  attach/close until the World's reaction table is full:
- *                  every closed attach's reactions stay DORMANT with
- *                  unchanged activation counts while later attaches reuse
- *                  the same object slots and run goals; the attach past the
- *                  bound is refused with RX_ERR_FULL before it builds
- *                  anything and the World keeps working. The cycle count
- *                  (far above AIENOS_CAP_MAX / 13) shows close reclaims its
- *                  capability slots.
+ *   reclaim        2000 attach/close rounds (a goal on every 50th): after every round the
+ *                  World's footprint (rx_world_footprint) is what it was
+ *                  before the round, the reaction table does not grow after
+ *                  the first round, and every attach gets the same 13
+ *                  AIENOS capability slots back (close reclaimed them).
+ *   full           a World with no room for four more reactions refuses the
+ *                  attach (RX_ERR_FULL) before building anything.
  */
 #include "rx_compose_fixture.h"
 
@@ -47,7 +51,8 @@ static int g_checks, g_fail;
 
 static Fx g_fx;
 static RxWorld g_w;                  /* large: static */
-static RxCompose g_c1, g_c2;
+static RxCompose g_c1, g_c2, g_c3;
+static RxWorld g_w2;                 /* the full-table World */
 static AienosCapAdmin *g_admin;
 static AienosCapView *g_view;
 static char g_base[128];
@@ -127,48 +132,215 @@ static int attach(RxCompose *c, const char *dir) {
                              fx_contract, g_admin);
 }
 
-static uint32_t n_reactions(void) {
-    pthread_mutex_lock(&g_w.mu);
-    uint32_t n = g_w.n_reactions;
-    pthread_mutex_unlock(&g_w.mu);
-    return n;
+
+static void footprint(RxFootprint *fp) { rx_world_footprint(&g_w, fp); }
+
+/* Every counter of the footprint equal; `slots` 0 skips the reaction-table
+ * size (the first attach of an instance grows it once, by design). */
+static int fp_same(const RxFootprint *a, const RxFootprint *b, int slots) {
+    return (!slots || (a->reaction_slots == b->reaction_slots &&
+                       a->reactions_removed == b->reactions_removed)) &&
+           a->reactions_active == b->reactions_active && a->subscriptions == b->subscriptions &&
+           a->objects_live == b->objects_live && a->binders == b->binders &&
+           a->bound_fields == b->bound_fields && a->in_flight == b->in_flight &&
+           a->fanout_backlog == b->fanout_backlog && a->deferred == b->deferred &&
+           a->used_slots == b->used_slots && a->used_memory == b->used_memory &&
+           a->used_energy == b->used_energy;
+}
+static void fp_print(const char *tag, const RxFootprint *f) {
+    fprintf(stderr, "    %s: slots %u active %u removed %u subs %llu objs %u binders %u bound %u "
+            "inflight %u backlog %u deferred %u used %u/%llu/%llu\n", tag, f->reaction_slots,
+            f->reactions_active, f->reactions_removed, (unsigned long long)f->subscriptions,
+            f->objects_live, f->binders, f->bound_fields, f->in_flight, f->fanout_backlog,
+            f->deferred, f->used_slots, (unsigned long long)f->used_memory,
+            (unsigned long long)f->used_energy);
 }
 
-/* ---- one composition per World ------------------------------------------- */
+/* ---- two compositions per World ------------------------------------------ */
 
-static void t_one_per_world(void) {
-    printf("[*] one composition per World: second attach refused, first unharmed, reattach\n");
-    char d1[256], d2[256];
+typedef struct {
+    RxCompose *c;
+    uint64_t base;
+    uint32_t n, ok, chain_ok;
+    JsBranchRef last;
+} Runner;
+
+/* n goals in a row on one composition; each must commit input*3+1 and build
+ * on the branch the previous goal committed. */
+static void *runner(void *arg) {
+    Runner *r = arg;
+    for (uint32_t i = 0; i < r->n; i++) {
+        RxcResult o;
+        if (fx_run(&g_fx, r->c, r->base + i, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED &&
+            o.result == (r->base + i) * 3 + 1 && o.winner < RXC_K)
+            r->ok++;
+        if (ref_eq(o.old_ref, r->last)) r->chain_ok++;
+        r->last = o.new_ref;
+    }
+    return NULL;
+}
+
+/* A rogue step: triggered by the outside object, writes field `field` of
+ * `target`, as `subject`, holding `cap` claimed on `resource`. */
+static uint64_t g_rogue_value;
+static RxObjRef g_rogue_target;
+static uint32_t g_rogue_field;
+static int rogue_fn(RxCtx *x) {
+    if (x->n_out < RX_MAX_MUTATIONS)
+        x->out[x->n_out++] = (RxMutation){ g_rogue_target, g_rogue_field, g_rogue_value };
+    return 0;
+}
+
+/* RX_OK if the rogue's write was refused (at registration or at run) and the
+ * target field kept its value; otherwise a description in *why. */
+static int rogue_refused(uint32_t subject, RxCapRef cap, uint64_t resource, RxObjRef target,
+                         uint32_t field, const char **why) {
+    static char buf[96];
+    RxObject before, after;
+    if (rx_world_read(&g_w, target, &before) != RX_OK) { *why = "target unreadable"; return -1; }
+    /* The rogue's trigger read is honest (its own READ right on the outside
+     * object), so the only authority in question is the write. */
+    RxCapRef rd;
+    if (mint(subject, RES_OUT_IN, RX_RIGHT_READ, &rd)) { *why = "mint read right"; return -1; }
+    RxReactionDesc d;
+    memset(&d, 0, sizeof d);
+    d.name = "compose.cross.rogue";
+    d.faculty = RX_FACULTY_OMEGA;
+    d.subject = subject;
+    d.priority = RX_PRIO_FOREGROUND;
+    d.triggers[d.n_triggers++] = (RxDep){ g_oin, RX_ALL_FIELDS };
+    d.writes[d.n_writes++] = (RxDep){ target, RX_FIELD(field) };
+    d.caps[d.n_caps++] = (RxCapNeed){ rd, RES_OUT_IN, RX_RIGHT_READ };
+    d.caps[d.n_caps++] = (RxCapNeed){ cap, resource, RX_RIGHT_WRITE };
+    d.fn = rogue_fn;
+    g_rogue_target = target;
+    g_rogue_field = field;
+    g_rogue_value = before.field[field] ^ 0x5A5Aull;
+    uint32_t rid;
+    int rc = rx_world_add_reaction(&g_w, &d, &rid), kind = 0, reason = 0;
+    if (rc == RX_OK) {
+        static uint64_t poke = 9000;         /* a new value each time: a change wakes */
+        (void)outside_poke(poke++);
+        pthread_mutex_lock(&g_w.mu);
+        const RxCrumb *k = rx_world_crumb(&g_w, g_w.reactions[rid].last_crumb);
+        kind = k ? (int)k->kind : -1;
+        reason = k ? (int)k->reason : 0;
+        pthread_mutex_unlock(&g_w.mu);
+        while (rx_world_remove_reaction(&g_w, rid) == RX_ERR_BUSY) sleep_us(1000);
+    }
+    AienosCapRef office;
+    if (aienos_cap_office(g_admin, &office) == 0) {
+        (void)aienos_cap_revoke(g_admin, office, (AienosCapRef){ rd.cap_id, rd.generation });
+        (void)aienos_cap_reclaim(g_admin, office, rd.cap_id);
+    }
+    if (rx_world_read(&g_w, target, &after) != RX_OK) { *why = "target gone"; return -1; }
+    if (after.field[field] != before.field[field]) { *why = "target field changed"; return -1; }
+    if (rc != RX_OK) {
+        snprintf(buf, sizeof buf, "refused at registration (%d)", rc);
+        printf("    rogue as subject %u: %s\n", subject, buf);
+        *why = buf;
+        return RX_OK;
+    }
+    snprintf(buf, sizeof buf, "crumb kind %d reason %d", kind, reason);
+    printf("    rogue as subject %u: %s\n", subject, buf);
+    *why = buf;
+    return kind == RX_CRUMB_BLOCKED_AUTHORITY || kind == RX_CRUMB_REJECTED ? RX_OK : -1;
+}
+
+static void t_two_per_world(void) {
+    printf("[*] two compositions per World: isolated, concurrent, third refused\n");
+    char d1[256], d2[256], d3[256];
     dir_for(d1, sizeof d1, "one");
     dir_for(d2, sizeof d2, "two");
+    dir_for(d3, sizeof d3, "three");
+    RxFootprint fp0, fp1, fp2;
+    footprint(&fp0);
     RxcResult o;
     CHECK(attach(&g_c1, d1) == RX_OK, "first attach");
-    CHECK(fx_run(&g_fx, &g_c1, 5, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED &&
-          o.result == 16, "first goal commits (%d, %llu)", o.outcome, (unsigned long long)o.result);
-    JsBranchRef first = o.new_ref;
-    uint32_t nr = n_reactions();
-    CHECK(attach(&g_c2, d2) == RX_ERR_EXISTS, "second attach (other dir) refused");
-    CHECK(attach(&g_c2, d1) == RX_ERR_EXISTS, "second attach (same dir) refused");
-    CHECK(g_c2.world == NULL, "refused attach left its RxCompose unattached");
-    CHECK(n_reactions() == nr, "refused attach registered nothing (%u vs %u)", n_reactions(), nr);
-    CHECK(g_w.bind_ctx == &g_c1, "binder still the first composition's");
-    CHECK(fx_run(&g_fx, &g_c1, 6, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED &&
-          o.result == 19 && ref_eq(o.old_ref, first),
-          "first composition still commits after the refusal (%d, %llu)", o.outcome,
-          (unsigned long long)o.result);
-    JsBranchRef second = o.new_ref;
-    CHECK(outside_poke(41), "outside reaction runs alongside");
+    CHECK(attach(&g_c2, d2) == RX_OK, "second attach (other dir) runs alongside");
+    CHECK(g_c1.inst == 0 && g_c2.inst == 1, "instances 0 and 1 (%u, %u)", g_c1.inst, g_c2.inst);
+    CHECK(g_c1.subj_commit == RXC_SUBJ_COMMIT && g_c2.subj_commit == RXC_SUBJ_COMMIT + 8u &&
+          g_c2.res[4] == RXC_RES_STATE + 0x100u, "instance 1 has its own subjects and resources");
+    footprint(&fp1);
+    CHECK(fp1.binders == 2 && fp1.bound_fields == 2 && fp1.reactions_active == fp0.reactions_active + 8 &&
+          fp1.objects_live == fp0.objects_live + 10, "two binders, 8 reactions, 10 objects");
+    CHECK(attach(&g_c3, d3) == RX_ERR_EXISTS, "third attach refused");
+    CHECK(attach(&g_c3, d1) == RX_ERR_EXISTS, "attach on a directory in use refused");
+    CHECK(g_c3.world == NULL, "refused attach left its RxCompose unattached");
+    footprint(&fp2);
+    CHECK(fp_same(&fp1, &fp2, 1), "refused attaches changed nothing");
+
+    /* Goals at the same time on both; the outside reaction runs too. */
+    Runner ra = { &g_c1, 1000, 40, 0, 0, rx_compose_state(&g_c1) };
+    Runner rb = { &g_c2, 5000, 40, 0, 0, rx_compose_state(&g_c2) };
+    pthread_t ta, tb;
+    CHECK(pthread_create(&ta, NULL, runner, &ra) == 0 && pthread_create(&tb, NULL, runner, &rb) == 0,
+          "runner threads");
+    uint32_t pokes = 0;
+    for (uint32_t i = 0; i < 20; i++) pokes += (uint32_t)outside_poke(600 + i);
+    pthread_join(ta, NULL);
+    pthread_join(tb, NULL);
+    CHECK(pokes == 20, "outside reaction answered during both runs (%u/20)", pokes);
+    CHECK(ra.ok == ra.n && rb.ok == rb.n, "every concurrent goal committed its own result (%u, %u)",
+          ra.ok, rb.ok);
+    CHECK(ra.chain_ok == ra.n && rb.chain_ok == rb.n,
+          "each goal built on its own composition's last commit (%u, %u)", ra.chain_ok, rb.chain_ok);
+    CHECK(ref_eq(rx_compose_state(&g_c1), ra.last) && ref_eq(rx_compose_state(&g_c2), rb.last),
+          "each composition keeps the winner it verified");
+    RxObject s1, s2;
+    CHECK(rx_world_read(&g_w, g_c1.state, &s1) == RX_OK && rx_world_read(&g_w, g_c2.state, &s2) == RX_OK &&
+          s1.field[RXC_S_REF] == fx_pack(ra.last) && s2.field[RXC_S_REF] == fx_pack(rb.last),
+          "state objects name their own branch");
+    CHECK(fx_count(&g_c1.cx, CX_K_PROMOTION, UINT64_MAX) == ra.n && fx_count(&g_c2.cx, CX_K_PROMOTION, UINT64_MAX) == rb.n,
+          "each journal holds only its own promotions (%u, %u)",
+          fx_count(&g_c1.cx, CX_K_PROMOTION, UINT64_MAX), fx_count(&g_c2.cx, CX_K_PROMOTION, UINT64_MAX));
+
+    /* Cross-talk: instance 1's steps against instance 0's objects. */
+    const char *why = "";
+    CHECK(rogue_refused(g_c2.subj_cand[0], g_c2.cap_cand[0][2], g_c2.res[1], g_c1.cand[0], RXC_C_REF, &why) == RX_OK,
+          "B candidate with its own right on its own resource cannot write A's candidate: %s", why);
+    CHECK(rogue_refused(g_c2.subj_cand[0], g_c2.cap_cand[0][2], g_c1.res[1], g_c1.cand[0], RXC_C_REF, &why) == RX_OK,
+          "B candidate claiming A's resource with its own right refused: %s", why);
+    CHECK(rogue_refused(g_c2.subj_cand[0], g_c1.cap_cand[0][2], g_c1.res[1], g_c1.cand[0], RXC_C_REF, &why) == RX_OK,
+          "B candidate presenting A's capability refused: %s", why);
+    CHECK(rogue_refused(g_c2.subj_commit, g_c1.cap_commit[1], g_c1.res[4], g_c1.state, RXC_S_REF, &why) == RX_OK,
+          "B commit presenting A's commit capability cannot move A's state: %s", why);
+    CHECK(rogue_refused(g_c1.subj_commit, g_c1.cap_commit[1], g_c2.res[4], g_c2.state, RXC_S_REF, &why) == RX_OK,
+          "A commit cannot move B's state: %s", why);
+    RxFootprint fpr;                /* rogues removed: their slots wait for reuse */
+    footprint(&fpr);
+    CHECK(fp_same(&fp1, &fpr, 0), "removed rogues left nothing active behind");
+    CHECK(fx_run(&g_fx, &g_c1, 7, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED && o.result == 22 &&
+          ref_eq(o.old_ref, ra.last), "A still commits after the rogues (%d)", o.outcome);
+    JsBranchRef a_last = o.new_ref;
+    CHECK(fx_run(&g_fx, &g_c2, 8, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED && o.result == 25 &&
+          ref_eq(o.old_ref, rb.last), "B still commits after the rogues (%d)", o.outcome);
+
+    /* Close A while B keeps running; a new attach takes instance 0 and its
+     * removed reaction slots, and recovers A's last commit. */
     rx_compose_close(&g_c1);
-    CHECK(g_w.bind_check == NULL, "close removed the binder");
-    CHECK(attach(&g_c2, d1) == RX_OK, "reattach after close (another RxCompose)");
-    CHECK(ref_eq(rx_compose_state(&g_c2), second), "reattach recovers the last commit");
-    CHECK(fx_run(&g_fx, &g_c2, 7, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED &&
-          o.result == 22 && ref_eq(o.old_ref, second), "goal after reattach commits (%d)",
-          o.outcome);
+    footprint(&fp2);
+    CHECK(fp2.binders == 1 && fp2.reactions_active == fp0.reactions_active + 4 &&
+          fp2.objects_live == fp0.objects_live + 5 && fp2.reactions_removed == fpr.reactions_removed + 4,
+          "close of A took back its binder, reactions and objects");
+    CHECK(fx_run(&g_fx, &g_c2, 9, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED && o.result == 28,
+          "B commits after A closed (%d)", o.outcome);
+    CHECK(attach(&g_c3, d1) == RX_OK && g_c3.inst == 0, "reattach on A's directory gets instance 0");
+    footprint(&fp2);
+    CHECK(fp2.reaction_slots == fpr.reaction_slots, "reattach reused the removed slots (%u vs %u)",
+          fp2.reaction_slots, fpr.reaction_slots);
+    CHECK(ref_eq(rx_compose_state(&g_c3), a_last), "reattach recovers A's last commit");
+    CHECK(fx_run(&g_fx, &g_c3, 10, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED && o.result == 31 &&
+          ref_eq(o.old_ref, a_last), "goal after reattach commits (%d)", o.outcome);
+    rx_compose_close(&g_c3);
     rx_compose_close(&g_c2);
+    footprint(&fp2);
+    CHECK(fp_same(&fp0, &fp2, 0), "after both close the footprint is what it was before");
+    if (!fp_same(&fp0, &fp2, 0)) { fp_print("before", &fp0); fp_print("after", &fp2); }
     CHECK(outside_poke(42), "World still works after close");
     rmtree(d1);
     rmtree(d2);
+    rmtree(d3);
 }
 
 /* ---- close waits for the composition's own steps -------------------------- */
@@ -249,7 +421,9 @@ static void t_close_waits(void) {
     const RxCrumb *k = rx_world_crumb(&g_w, r->last_crumb);
     int kind = k ? (int)k->kind : -1;
     pthread_mutex_unlock(&g_w.mu);
+    bool removed = g_w.reactions[rid].removed;
     CHECK(st == RX_DORMANT, "held step DORMANT after close (%s)", rx_state_name(st));
+    CHECK(removed, "close removed the held step from the World");
     CHECK(kind == RX_CRUMB_REJECTED, "its late write was REJECTED (crumb kind %d)", kind);
     CHECK(rx_world_read(&g_w, cand_obj, &before_obj) != RX_OK, "candidate object retired");
     free(c);                                /* any later use of c is a use-after-free */
@@ -284,66 +458,133 @@ static void t_close_waits(void) {
     rmtree(d);
 }
 
-/* ---- inert reactions and the reaction-table bound --------------------------- */
+/* ---- close reclaims everything: 2000 rounds -------------------------------- */
 
-#define MAX_CLOSED RX_MAX_REACTIONS
-static uint32_t g_closed_rid[MAX_CLOSED];
-static uint64_t g_closed_acts[MAX_CLOSED];
+#define ROUNDS 2000u
 
-static void t_inert_and_bound(void) {
-    printf("[*] inert reactions: attach/close until the reaction table is full\n");
+static void cap_ids(const RxCompose *c, uint32_t out[13]) {
+    uint32_t n = 0;
+    out[n++] = c->cap_ext.cap_id;
+    for (uint32_t k = 0; k < RXC_K; k++)
+        for (uint32_t j = 0; j < 3; j++) out[n++] = c->cap_cand[k][j].cap_id;
+    for (uint32_t j = 0; j < 4; j++) out[n++] = c->cap_verify[j].cap_id;
+    for (uint32_t j = 0; j < 2; j++) out[n++] = c->cap_commit[j].cap_id;
+    for (uint32_t i = 1; i < 13; i++)        /* sorted: the set, not the order */
+        for (uint32_t j = i; j > 0 && out[j - 1] > out[j]; j--) {
+            uint32_t t = out[j]; out[j] = out[j - 1]; out[j - 1] = t;
+        }
+}
+
+static void t_reclaim_rounds(void) {
+    printf("[*] reclaim: %u attach/close rounds, footprint identical after each\n", ROUNDS);
     char d[256];
-    dir_for(d, sizeof d, "cycle");
-    uint32_t base = n_reactions();
-    uint32_t want = (RX_MAX_REACTIONS - base) / 4u;
-    uint32_t cycles = 0, n_closed = 0, goals = 0, reused = 0, bad_goal = 0;
+    dir_for(d, sizeof d, "rounds");
+    RxFootprint before, after, first_after, during;
+    footprint(&before);
+    uint32_t caps0[13], caps[13];
+    uint32_t bad_fp = 0, bad_slots = 0, bad_caps = 0, bad_goal = 0, bad_attach = 0, bad_during = 0;
+    uint32_t bad_removed = 0, reused = 0, pokes = 0, poked = 0, goals = 0;
     RxObjRef first_goal = { UINT32_MAX, 0 };
-    int rc;
-    while ((rc = attach(&g_c1, d)) == RX_OK) {
-        if (cycles == 0) first_goal = g_c1.goal;
+    for (uint32_t r = 0; r < ROUNDS; r++) {
+        RxFootprint pre;
+        footprint(&pre);
+        if (attach(&g_c1, d) != RX_OK) { bad_attach++; break; }
+        if (r == 0) first_goal = g_c1.goal;
         else if (g_c1.goal.id == first_goal.id && g_c1.goal.generation != first_goal.generation)
             reused++;
-        /* A goal on the first cycles, then every 32nd and the last few. */
-        if (cycles < 3 || cycles % 32 == 0 || cycles + 2 >= want) {
+        footprint(&during);
+        if (during.reactions_active != pre.reactions_active + 4 || during.binders != pre.binders + 1 ||
+            during.objects_live != pre.objects_live + 5 || during.bound_fields != pre.bound_fields + 1)
+            bad_during++;
+        cap_ids(&g_c1, caps);
+        if (r == 0) memcpy(caps0, caps, sizeof caps0);
+        else if (memcmp(caps0, caps, sizeof caps)) bad_caps++;
+        /* A goal on the first rounds, every 50th and the last two: the
+         * leak check is about attach/close; goals show the World still works. */
+        if (r < 3 || r % 50 == 0 || r + 2 >= ROUNDS) {
             RxcResult o;
-            if (fx_run(&g_fx, &g_c1, 100 + cycles, &o) != RX_OK || o.outcome != RXC_OUT_COMMITTED)
-                bad_goal++;
             goals++;
+            if (fx_run(&g_fx, &g_c1, 100 + r, &o) != RX_OK || o.outcome != RXC_OUT_COMMITTED ||
+                o.result != (100 + r) * 3 + 1)
+                bad_goal++;
         }
         uint32_t ids[4] = { g_c1.rx_cand[0], g_c1.rx_cand[1], g_c1.rx_verify, g_c1.rx_commit };
         rx_compose_close(&g_c1);
         pthread_mutex_lock(&g_w.mu);
-        for (uint32_t i = 0; i < 4 && n_closed < MAX_CLOSED; i++) {
-            g_closed_rid[n_closed] = ids[i];
-            g_closed_acts[n_closed++] = g_w.reactions[ids[i]].activations;
-        }
+        for (uint32_t i = 0; i < 4; i++)
+            if (!g_w.reactions[ids[i]].removed || g_w.reactions[ids[i]].desc.fn) bad_removed++;
         pthread_mutex_unlock(&g_w.mu);
-        cycles++;
-        if (cycles > RX_MAX_REACTIONS) break;   /* never: the bound must stop it */
+        footprint(&after);
+        if (!fp_same(&pre, &after, r > 0)) {
+            if (!bad_fp) { fp_print("pre", &pre); fp_print("post", &after); }
+            bad_fp++;
+        }
+        if (r == 0) first_after = after;
+        else if (after.reaction_slots != first_after.reaction_slots) bad_slots++;
+        if (r % 100 == 0) { poked++; pokes += (uint32_t)outside_poke(20000 + r); }
     }
-    CHECK(rc == RX_ERR_FULL, "attach past the bound refused with RX_ERR_FULL (%d)", rc);
-    CHECK(cycles == want, "cycles %u = floor((%u - %u) / 4) = %u", cycles, RX_MAX_REACTIONS, base,
-          want);
-    CHECK(cycles > 256u / 13u, "more cycles than AIENOS slots without reclaim (%u)", cycles);
+    CHECK(bad_attach == 0, "every attach succeeded");
     CHECK(bad_goal == 0, "every goal committed (%u of %u failed)", bad_goal, goals);
+    CHECK(bad_during == 0, "each attach held exactly 4 reactions, 5 objects, 1 binder (%u off)",
+          bad_during);
+    CHECK(bad_fp == 0, "footprint after close identical to before the round (%u rounds differ)",
+          bad_fp);
+    CHECK(fp_same(&before, &first_after, 0) &&
+          first_after.reaction_slots <= before.reaction_slots + 4u &&
+          first_after.reactions_removed <= before.reactions_removed + 4u,
+          "first round: only the reaction table kept its (at most 4) removed slots for reuse");
+    CHECK(bad_slots == 0, "reaction table did not grow after the first round (%u rounds grew)",
+          bad_slots);
+    CHECK(bad_caps == 0, "every attach got the same 13 capability slots back (%u differ)", bad_caps);
+    CHECK(bad_removed == 0, "every closed reaction removed and unreachable (%u not)", bad_removed);
     CHECK(reused > 0, "later attaches reused the retired object slots (%u)", reused);
-    CHECK(g_c1.world == NULL && g_w.bind_check == NULL, "refused attach built nothing");
-    CHECK(n_reactions() == base + 4u * cycles, "refused attach registered nothing (%u)",
-          n_reactions());
-    CHECK(outside_poke(1234), "World works after the refusal");
-    CHECK(outside_poke(1235), "World works after the refusal (again)");
-    uint32_t ran = 0, awake = 0;
-    pthread_mutex_lock(&g_w.mu);
-    for (uint32_t i = 0; i < n_closed; i++) {
-        const RxReaction *r = &g_w.reactions[g_closed_rid[i]];
-        if (r->activations != g_closed_acts[i]) ran++;
-        if (r->state != RX_DORMANT || r->rearm || r->parked || r->deferred) awake++;
-    }
-    pthread_mutex_unlock(&g_w.mu);
-    CHECK(ran == 0, "no closed reaction ran again (%u of %u did)", ran, n_closed);
-    CHECK(awake == 0, "every closed reaction DORMANT (%u not)", awake);
-    printf("    %u attach/close cycles (base %u reactions), %u goals, %u inert reactions\n",
-           cycles, base, goals, n_closed);
+    CHECK(pokes == poked, "outside reaction kept working (%u/%u)", pokes, poked);
+    footprint(&after);
+    printf("    %u rounds, %u goals: reaction slots %u (before %u), active %u, objects %u, binders %u\n",
+           ROUNDS, goals, after.reaction_slots, before.reaction_slots, after.reactions_active,
+           after.objects_live, after.binders);
+    rmtree(d);
+}
+
+/* ---- a full reaction table refuses the attach ------------------------------- */
+
+static int filler_fn(RxCtx *x) { (void)x; return 0; }
+
+static void t_full_refused(void) {
+    printf("[*] full: no room for four reactions -> RX_ERR_FULL, nothing built\n");
+    char d[256];
+    dir_for(d, sizeof d, "full");
+    if (rx_world_init_native(&g_w2, g_view, 1, 1u << 16) != RX_OK) { CHECK(0, "second World"); return; }
+    g_w2.external_subject = EXT_SUBJ;
+    uint64_t z[RX_MAX_FIELDS] = { 0 };
+    RxObjRef o;
+    CHECK(rx_world_create(&g_w2, 1, RX_PERSIST_RESIDENT, RES_OUT_IN, z, &o) == RX_OK, "object");
+    RxReactionDesc fd;
+    memset(&fd, 0, sizeof fd);
+    fd.name = "filler";
+    fd.faculty = RX_FACULTY_OMEGA;
+    fd.subject = OUT_SUBJ;
+    fd.priority = RX_PRIO_BACKGROUND;
+    fd.triggers[fd.n_triggers++] = (RxDep){ o, RX_ALL_FIELDS };
+    fd.caps[fd.n_caps++] = (RxCapNeed){ g_cap_rin, RES_OUT_IN, RX_RIGHT_READ };
+    fd.fn = filler_fn;
+    uint32_t rid, n = 0;
+    while (g_w2.n_reactions < RX_MAX_REACTIONS - 3u && rx_world_add_reaction(&g_w2, &fd, &rid) == RX_OK)
+        n++;
+    CHECK(g_w2.n_reactions == RX_MAX_REACTIONS - 3u, "table filled to 3 free (%u)", g_w2.n_reactions);
+    RxFootprint a, b;
+    rx_world_footprint(&g_w2, &a);
+    int rc = rx_compose_attach(&g_c1, &g_w2, NULL, d, &g_fx.self, FX_SESSION, &g_fx.router,
+                               fx_contract, g_admin);
+    rx_world_footprint(&g_w2, &b);
+    CHECK(rc == RX_ERR_FULL, "attach refused with RX_ERR_FULL (%d)", rc);
+    CHECK(g_c1.world == NULL && fp_same(&a, &b, 1), "refused attach built nothing");
+    /* Removing other subjects' reactions does not make room: a removed slot
+     * is reused only by the same subject and faculty. */
+    CHECK(rx_world_remove_reaction(&g_w2, rid) == RX_OK, "filler removed");
+    CHECK(rx_world_remove_reaction(&g_w2, rid) == RX_ERR_NOT_FOUND, "second remove refused");
+    CHECK(rx_world_add_reaction(&g_w2, &fd, &n) == RX_OK && n == rid, "same subject reuses the slot");
+    rx_world_destroy(&g_w2);
     rmtree(d);
 }
 
@@ -353,9 +594,10 @@ int main(void) {
     if (fx_init(&g_fx) != 0) { fprintf(stderr, "fixture init failed\n"); return 1; }
     int rc = world_start();
     if (rc != 0) { fprintf(stderr, "world start failed (%d)\n", rc); return 1; }
-    t_one_per_world();
+    t_two_per_world();
     t_close_waits();
-    t_inert_and_bound();
+    t_reclaim_rounds();
+    t_full_refused();
     rx_world_destroy(&g_w);
     aienos_cap_stop(g_admin, g_view);
     fx_free(&g_fx);

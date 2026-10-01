@@ -488,6 +488,7 @@ static void demand(RxWorld *w, uint32_t rid, uint64_t cause) {
 
 static void demand_inner(RxWorld *w, uint32_t rid, uint64_t cause) {
     RxReaction *r = &w->reactions[rid];
+    if (r->removed) return;   /* rx_world_remove_reaction: never woken again */
     w->stats.wakes++;
     if (r->quarantined && !cause_is_external(w, cause)) {
         r->suppressed++;
@@ -827,7 +828,8 @@ int rx_world_bind_callers(RxWorld *w) {
      * unbound would run in the bound world under a subject nobody proved.
      * Refuse, and leave the world unbound. */
     for (uint32_t i = 0; i < w->n_reactions; i++)
-        if (w->reactions[i].desc.caller.generation == 0) rc = RX_ERR_IDENTITY;
+        if (!w->reactions[i].removed && w->reactions[i].desc.caller.generation == 0)
+            rc = RX_ERR_IDENTITY;
     if (rc == RX_OK) {
         pthread_mutex_lock(&w->callers_mu);
         w->callers_bound = true;
@@ -980,24 +982,41 @@ int rx_world_set_binder(RxWorld *w, RxBindCheckFn check, RxBindFn bind, RxBindAb
                         void *ctx) {
     if (!w || !check || !bind) return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
-    int rc = RX_OK;
-    if (w->bind_check) rc = RX_ERR_EXISTS;
-    else {
-        w->bind_check = check;
-        w->bind_fn = bind;
-        w->bind_abort = abort_fn;
-        w->bind_ctx = ctx;
-        memset(w->bind_mask, 0, sizeof w->bind_mask);
+    int rc = RX_ERR_FULL, free_at = -1;
+    for (uint32_t i = 0; i < RX_MAX_BINDERS; i++) {
+        if (w->binder[i].check && w->binder[i].ctx == ctx) { free_at = -2; break; }
+        if (!w->binder[i].check && free_at == -1) free_at = (int)i;
+    }
+    if (free_at == -2) rc = RX_ERR_EXISTS;
+    else if (free_at >= 0) {
+        w->binder[free_at].check = check;
+        w->binder[free_at].bind = bind;
+        w->binder[free_at].abort_fn = abort_fn;
+        w->binder[free_at].ctx = ctx;
+        w->n_binders++;
+        rc = RX_OK;
     }
     pthread_mutex_unlock(&w->mu);
     return rc;
 }
 
-int rx_world_bind_field(RxWorld *w, RxObjRef obj, uint32_t field) {
+static int binder_of(const RxWorld *w, const void *ctx) {
+    for (uint32_t i = 0; i < RX_MAX_BINDERS; i++)
+        if (w->binder[i].check && w->binder[i].ctx == ctx) return (int)i;
+    return -1;
+}
+
+int rx_world_bind_field(RxWorld *w, void *ctx, RxObjRef obj, uint32_t field) {
     if (!w || field >= RX_MAX_FIELDS) return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
-    int rc = !w->bind_check ? RX_ERR_NOT_FOUND : !ref_live(w, obj) ? RX_ERR_STALE_GEN : RX_OK;
-    if (rc == RX_OK) w->bind_mask[obj.id] |= (uint8_t)(1u << field);
+    int b = binder_of(w, ctx);
+    int rc = b < 0 ? RX_ERR_NOT_FOUND : !ref_live(w, obj) ? RX_ERR_STALE_GEN : RX_OK;
+    if (rc == RX_OK && w->bind_mask[obj.id] && w->bind_owner[obj.id] != (uint8_t)b)
+        rc = RX_ERR_EXISTS;   /* one owner per object */
+    if (rc == RX_OK) {
+        w->bind_mask[obj.id] |= (uint8_t)(1u << field);
+        w->bind_owner[obj.id] = (uint8_t)b;
+    }
     pthread_mutex_unlock(&w->mu);
     return rc;
 }
@@ -1006,35 +1025,49 @@ int rx_world_clear_binder(RxWorld *w, void *ctx) {
     if (!w) return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
     int rc = RX_ERR_NOT_FOUND;
-    if (w->bind_check && w->bind_ctx == ctx) {
-        w->bind_check = NULL;
-        w->bind_fn = NULL;
-        w->bind_abort = NULL;
-        w->bind_ctx = NULL;
-        memset(w->bind_mask, 0, sizeof w->bind_mask);
+    int b = binder_of(w, ctx);
+    if (b >= 0) {
+        memset(&w->binder[b], 0, sizeof w->binder[b]);
+        w->n_binders--;
+        for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++)
+            if (w->bind_mask[i] && w->bind_owner[i] == (uint8_t)b) {
+                w->bind_mask[i] = 0;
+                w->bind_owner[i] = 0;
+            }
         rc = RX_OK;
     }
     pthread_mutex_unlock(&w->mu);
     return rc;
 }
 
+uint32_t rx_world_binder_count(RxWorld *w) {
+    if (!w) return 0;
+    pthread_mutex_lock(&w->mu);
+    uint32_t n = w->n_binders;
+    pthread_mutex_unlock(&w->mu);
+    return n;
+}
+
 /* Caller holds mu; pw[] is staged and passed every other check. RX_OK when
- * nothing is bound or every bound value was checked and bound; otherwise
- * RX_ERR_BINDING and abort() has run for every proposed bound value. */
+ * nothing is bound or every bound value was checked and bound by the binder
+ * that owns it; otherwise RX_ERR_BINDING and every proposed bound value went
+ * to its own binder's abort(). */
 static int bind_writes(RxWorld *w, const PendingWrite *pw, uint32_t n_pw, uint32_t subject) {
-    if (!w->bind_check) return RX_OK;
+    if (!w->n_binders) return RX_OK;
     uint32_t n_bound = 0;
     int rc = RX_OK;
     for (int phase = 0; phase < 2 && rc == RX_OK; phase++)
         for (uint32_t j = 0; j < n_pw && rc == RX_OK; j++) {
             const RxObject *o = &w->objects[pw[j].obj.id];
             uint64_t m = pw[j].changed & w->bind_mask[pw[j].obj.id];
+            if (!m) continue;
+            const __typeof__(w->binder[0]) *b = &w->binder[w->bind_owner[pw[j].obj.id]];
             for (uint32_t f = 0; f < RX_MAX_FIELDS && rc == RX_OK; f++) {
                 if (!(m & RX_FIELD(f))) continue;
-                rc = phase == 0 ? w->bind_check(w->bind_ctx, pw[j].obj, f, o->field[f],
-                                                pw[j].value[f], subject)
-                                : w->bind_fn(w->bind_ctx, pw[j].obj, f, o->field[f],
-                                             pw[j].value[f], subject);
+                rc = phase == 0 ? b->check(b->ctx, pw[j].obj, f, o->field[f], pw[j].value[f],
+                                           subject)
+                                : b->bind(b->ctx, pw[j].obj, f, o->field[f], pw[j].value[f],
+                                          subject);
                 if (rc == RX_OK && phase == 1) n_bound++;
             }
         }
@@ -1044,10 +1077,12 @@ static int bind_writes(RxWorld *w, const PendingWrite *pw, uint32_t n_pw, uint32
     uint32_t seen = 0;
     for (uint32_t j = 0; j < n_pw; j++) {
         uint64_t m = pw[j].changed & w->bind_mask[pw[j].obj.id];
+        if (!m) continue;
+        const __typeof__(w->binder[0]) *b = &w->binder[w->bind_owner[pw[j].obj.id]];
         for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) {
             if (!(m & RX_FIELD(f))) continue;
-            if (w->bind_abort)
-                w->bind_abort(w->bind_ctx, pw[j].obj, f, pw[j].value[f], subject, seen < n_bound);
+            if (b->abort_fn)
+                b->abort_fn(b->ctx, pw[j].obj, f, pw[j].value[f], subject, seen < n_bound);
             seen++;
         }
     }
@@ -1766,6 +1801,7 @@ int rx_world_create(RxWorld *w, uint32_t type, RxPersist persist, uint64_t resou
         o->coherency = 0;
         o->cap = (RxCapRef){ 0, 0 };
         w->bind_mask[i] = 0;
+        w->bind_owner[i] = 0;
         o->version = 1;
         for (uint32_t f = 0; f < RX_MAX_FIELDS; f++) {
             o->field[f] = init ? init[f] : 0;
@@ -1865,7 +1901,15 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
         pthread_mutex_unlock(&w->callers_mu);
         if (irc != RX_CALLER_OK) { rc = RX_ERR_IDENTITY; goto out; }
     }
-    if (w->n_reactions >= RX_MAX_REACTIONS) { rc = RX_ERR_FULL; goto out; }
+    /* A removed slot of the same subject and faculty is reused before the
+     * table grows (rx_world_remove_reaction): crumbs naming the slot keep
+     * naming the same principal. */
+    int reuse = -1;
+    for (uint32_t i = 0; i < w->n_reactions && reuse < 0; i++)
+        if (w->reactions[i].removed && w->reactions[i].desc.subject == d->subject &&
+            w->reactions[i].desc.faculty == d->faculty)
+            reuse = (int)i;
+    if (reuse < 0 && w->n_reactions >= RX_MAX_REACTIONS) { rc = RX_ERR_FULL; goto out; }
     /* Declared dependencies must exist now, and every read and write must be
      * covered by a declared capability need on that object's resource. The
      * needs themselves are only validated against the root at run time. */
@@ -1890,7 +1934,7 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
         }
         if (w->n_subs[o] >= RX_MAX_SUBS) { rc = RX_ERR_FULL; goto out; }
     }
-    uint32_t rid = w->n_reactions++;
+    uint32_t rid = reuse >= 0 ? (uint32_t)reuse : w->n_reactions++;
     RxReaction *r = &w->reactions[rid];
     memset(r, 0, sizeof(*r));
     r->desc = *d;
@@ -1913,6 +1957,68 @@ int rx_world_add_reaction(RxWorld *w, const RxReactionDesc *d, uint32_t *out_id)
 out:
     pthread_mutex_unlock(&w->mu);
     return rc;
+}
+
+int rx_world_remove_reaction(RxWorld *w, uint32_t rid) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    int rc = RX_OK;
+    RxReaction *r = rid < w->n_reactions ? &w->reactions[rid] : NULL;
+    if (!r || r->removed) {
+        rc = RX_ERR_NOT_FOUND;
+        goto out;
+    }
+    if (r->state != RX_DORMANT || r->rearm || r->parked || r->deferred || r->resume_pending ||
+        r->holding || r->seq_pending) {
+        rc = RX_ERR_BUSY;
+        goto out;
+    }
+    for (uint32_t j = 0; j < w->deferred_len; j++)
+        if (w->deferred[w->deferred_head + j].reaction == rid) {
+            rc = RX_ERR_BUSY;
+            goto out;
+        }
+    /* Out of the dependency index: no publication can name it again. */
+    for (uint32_t i = 0; i < r->desc.n_triggers; i++) {
+        uint32_t o = r->desc.triggers[i].obj.id;
+        if (o >= RX_MAX_OBJECTS || !w->subs[o]) continue;
+        uint32_t k = 0;
+        for (uint32_t s = 0; s < w->n_subs[o]; s++)
+            if (w->subs[o][s].reaction != rid) w->subs[o][k++] = w->subs[o][s];
+        w->n_subs[o] = k;
+    }
+    r->removed = true;
+    r->quarantined = false;
+    r->desc.fn = NULL;      /* nothing of the old owner stays callable */
+    r->desc.user = NULL;
+out:
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+void rx_world_footprint(RxWorld *w, RxFootprint *out) {
+    memset(out, 0, sizeof *out);
+    if (!w) return;
+    pthread_mutex_lock(&w->mu);
+    out->reaction_slots = w->n_reactions;
+    for (uint32_t i = 0; i < w->n_reactions; i++) {
+        if (w->reactions[i].removed) out->reactions_removed++;
+        else out->reactions_active++;
+    }
+    for (uint32_t o = 0; o < RX_MAX_OBJECTS; o++) {
+        out->subscriptions += w->n_subs[o];
+        if (w->objects[o].live) out->objects_live++;
+        for (uint32_t f = 0; f < RX_MAX_FIELDS; f++)
+            if (w->bind_mask[o] & (1u << f)) out->bound_fields++;
+    }
+    out->binders = w->n_binders;
+    out->in_flight = w->in_flight;
+    out->fanout_backlog = w->deferred_len;
+    out->deferred = w->n_deferred;
+    out->used_slots = w->used_slots;
+    out->used_memory = w->used_memory;
+    out->used_energy = w->used_energy;
+    pthread_mutex_unlock(&w->mu);
 }
 
 int rx_world_add_reaction_keyed(RxWorld *w, const RxCallerKeyring *keys,
@@ -2240,7 +2346,7 @@ int rx_world_seq_activate_timed_locked(RxWorld *w, uint32_t rid, uint64_t cause,
                                        uint64_t poll_cpu) {
     if (!w || !w->sequential || rid >= w->n_reactions) return RX_ERR_ARG;
     RxReaction *r = &w->reactions[rid];
-    if (r->state != RX_DORMANT) return RX_ERR_ARG;
+    if (r->state != RX_DORMANT || r->removed) return RX_ERR_ARG; /* removed: never demanded */
     r->seq_pending = false;
     demand(w, rid, cause);          /* R6 budgets and quarantine, unchanged */
     if (!r->seq_pending) return 0;
