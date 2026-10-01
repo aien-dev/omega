@@ -10,7 +10,8 @@
  *   | n x (u32 len, input bytes, u32 len, output bytes) | [budget 4 x u32]
  *
  * Decoding is strict (canonical decimal, exact lengths, no trailing bytes).
- * Errors are bare codes.
+ * Errors are bare codes, numbered and ordered as in aien-protocols
+ * specs/crumb-visible/CRUMB_READER_CONTRACT.md 1.0.0.
  */
 #ifndef CL_CRUMB_H
 #define CL_CRUMB_H
@@ -19,6 +20,7 @@
 
 #define CL_CRUMB_MAX_LANES 8
 #define CL_CRUMB_MAX_EXAMPLES 64
+#define CL_CRUMB_MAX_FIELD 168 /* bytes per example field: 8 lanes x 21 */
 #define CL_ENC_DECIMAL 1
 #define CL_ENC_RAW_LE 2
 
@@ -40,6 +42,7 @@ typedef enum {
     CL_CRUMB_ERR_SHAPE = -3,
     CL_CRUMB_ERR_LANE = -4,
     CL_CRUMB_ERR_LENGTH = -5,
+    CL_CRUMB_ERR_NONCANONICAL = -6,
 } ClCrumbStatus;
 
 int cl_crumb_decode(const uint8_t *buf, size_t len, ClCrumb *out);

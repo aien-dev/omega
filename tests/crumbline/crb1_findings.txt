@@ -1,0 +1,5 @@
+# CRB1 Rust-vs-C findings: none known as of this commit (contract 1.0.0, corpus pin b50c00d).
+# Format: <file> <C outcome line> F<n>. Lane 42 recorded F1..F5 (truncation code,
+# NONCANONICAL, 168-byte field cap, check order, learner budget print); lane42b
+# changed cl_crumb.c and crumbline-learner to the contract and removed them.
+# A new difference must be listed here by an explicit decision, never to hide it.

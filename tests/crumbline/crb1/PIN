@@ -1,0 +1,4 @@
+source aien-dev/aien-protocols specs/crumb-visible/vectors
+contract CRUMB_READER_CONTRACT.md 1.0.0
+commit b50c00d737fa5c57ea7280e2aa4b0354ff166cf5
+manifest_sha256 ec53f43a800435cc7d2a238b61f0623fd11999e20123e6019f954ed30344a8f1
