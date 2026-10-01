@@ -21,7 +21,7 @@
  * indices, not identity. Logical time t = the store's next id, so it keeps
  * increasing across sessions on one journal.
  *
- * Attaching claims the store as its single writer: no other code may append
+ * Each attached store has one writer (its link): no other code may append
  * to it while attached (cx_append returns CX_ERR_WRITER), and a store held by
  * another writer cannot be attached.
  */
@@ -36,13 +36,29 @@
 /* Attach `s` (n_subjects >= RX_CORTEX_SUBJECTS) to `w` under `session`.
  * Crumbs already in the log are recorded first (their field values are the
  * objects' values at attach time, their digests the crumbs'). Returns RX_OK,
- * RX_ERR_EXISTS (world already has a recorder), RX_ERR_IDENTITY (store held
+ * RX_ERR_EXISTS (world already has a whole-World Cortex link, or a recorder
+ * that is not Cortex; scoped links may coexist), RX_ERR_IDENTITY (store held
  * by another writer), RX_ERR_ARG or RX_ERR_FULL (no memory). */
 int rx_cortex_attach(RxWorld *w, CxStore *s, uint64_t session);
 
-/* Detach and release the store's writer claim. Also done by
+/* Detach the default link (whole-World, else the only one) and release its
+ * store's writer claim. Every link is released by
  * rx_world_destroy. */
 int rx_cortex_detach(RxWorld *w);
+
+/* COMPOSITION-2 attach: a scoped link. Records only crumbs whose object
+ * (first output, else first input) is one of `objs` (live ref, generation
+ * included), under the matching `subjects` (stable across Worlds, unlike
+ * slots), into its own store `s`. It shares the World's recorder slot with
+ * the whole-World link and other scoped links (scopes must be disjoint):
+ * nobody loses their journal. Crumbs already in the log about `objs` are
+ * recorded first. RX_ERR_EXISTS (overlapping scope or a non-Cortex
+ * recorder), RX_ERR_IDENTITY (store held by another writer), RX_ERR_FULL. */
+#define RXCX_SCOPE_MAX 8u
+int rx_cortex_attach_scoped(RxWorld *w, CxStore *s, uint64_t session, const RxObjRef *objs,
+                            const uint64_t *subjects, uint32_t n);
+/* Detach the link writing `s` (whole-World or scoped). */
+int rx_cortex_detach_store(RxWorld *w, const CxStore *s);
 
 /* Records written and append failures (a failure never fails the commit;
  * it is counted here and the crumb stays in the World log). */
@@ -65,5 +81,15 @@ int rx_cortex_append(RxWorld *w, const CxHeader *h, const uint64_t *payload, uin
 int rx_cortex_promote(RxWorld *w, uint64_t candidate, uint64_t evidence, uint64_t *out_id);
 /* Logical time the next attached append gets (0 = not attached). */
 uint64_t rx_cortex_next_t(RxWorld *w);
+
+/* The same, addressed to the link writing `s` (NULL = the default link: the
+ * whole-World link, else the only link). The plain forms above use the
+ * default link. */
+uint64_t rx_cortex_record_in(RxWorld *w, const CxStore *s, uint64_t crumb);
+int rx_cortex_append_in(RxWorld *w, CxStore *s, const CxHeader *h, const uint64_t *payload,
+                        uint32_t n, uint64_t *out_id);
+int rx_cortex_promote_in(RxWorld *w, CxStore *s, uint64_t candidate, uint64_t evidence,
+                         uint64_t *out_id);
+uint64_t rx_cortex_next_t_in(RxWorld *w, const CxStore *s);
 
 #endif /* RX_CORTEX_RECORD_H */

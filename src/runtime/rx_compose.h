@@ -131,7 +131,10 @@ enum {
 typedef struct RxCompose {
     char dir[200];
     AienMachineId self;
-    RxWorld w;
+    RxWorld w;                         /* storage of the World rx_compose_open owns */
+    RxWorld *world;                    /* the World it runs in: &w (open) or the caller's (attach) */
+    int owns_world;                    /* 1: open built it and close destroys it */
+    const RxCallerKeyring *keys;       /* attach: credentials of the composition subjects */
     JsSpace js;
     CxStore cx;
     const SrRouter *router;
@@ -152,11 +155,6 @@ typedef struct RxCompose {
     uint64_t pend_S, pend_V;
     JsBranchRef pend_old;
     uint8_t pend_cdig[RXC_K][32];
-    /* fault injection */
-    int fault_point;
-    int fault_crash;                   /* 1: _exit(RXC_CRASH_EXIT); 0: fail in process */
-    uint32_t fault_k;                  /* candidate index for candidate-side points */
-    int fault_hit;
     /* per-run scratch read by reactions */
     uint64_t run_input;
     uint32_t n_routes;
@@ -164,14 +162,29 @@ typedef struct RxCompose {
     /* authority minted at open (one per step, rights of that step only) */
     RxCapRef cap_ext, cap_cand[RXC_K][3], cap_verify[4], cap_commit[2];
     struct RxcCandUser { struct RxCompose *c; uint32_t k; } cand_user[RXC_K];
-    int attached;                      /* Cortex recorder attached to w */
-    int test_rogue_candidate;          /* test hook: candidate 0 also proposes a state write */
+    int attached;                      /* its Cortex link is attached to the World */
+    /* what open/attach put into the World (attach close undoes it) */
+    int has_binder;
+    uint32_t n_objs, n_minted;
+    RxObjRef obj[5];
+    /* Test hooks. They fire only in builds compiled with -DRXC_TEST_HOOKS
+     * (the composition unit test and the R13 host test); in every other
+     * build they are ignored and the _exit path does not exist. */
+    struct RxcTestHooks {
+        int fault_point;               /* RXC_FP_* */
+        int fault_crash;               /* 1: _exit(RXC_CRASH_EXIT); 0: fail in process */
+        uint32_t fault_k;              /* candidate index for candidate-side points */
+        int fault_hit;
+        int rogue_candidate;           /* candidate 0 also proposes a state write */
+    } test;
 } RxCompose;
 
 /* Open (or create) the composition in `dir`: machine identity must match the
  * stored one (RX_ERR_IDENTITY otherwise), J-Space and the Cortex journal are
  * reopened (a torn journal tail is repaired, then the chain is verified), the
- * World is built with `n_workers`, state is recovered OLD-or-NEW. */
+ * World is built with `n_workers` (the composition owns it; see
+ * rx_compose_attach to run inside an existing World), state is recovered
+ * OLD-or-NEW. */
 int  rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, uint64_t session,
                      const SrRouter *router, RxcContract contract, AienosCapAdmin *admin,
                      AienosCapView *view, uint32_t n_workers);
@@ -183,6 +196,38 @@ int  rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, u
 int  rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const CqHeld *held,
                     uint64_t now_us, RxcResult *out);
 void rx_compose_close(RxCompose *c);
+/* COMPOSITION-2 inside an existing World (the living one).
+ *
+ * enroll_callers: the World's owner enrolls the four composition reaction
+ * subjects (RXC_SUBJ_CAND0, _CAND1, _AEGIS, _COMMIT) into `w` and gets their
+ * credentials in `keys`; it must run before rx_world_bind_callers (R16: the
+ * enrollment closes one way at bind). RX_ERR_IDENTITY once bound.
+ *
+ * attach: like open, on `dir` and `self`, but the composition runs inside
+ * `w` (which it neither builds nor destroys):
+ *   - its five objects get whatever ids `w` has free; c->goal..c->state hold
+ *     them. The Cortex journal in `dir` keeps the composition subjects
+ *     RXC_CX_SUBJECT(slot) through a scoped Cortex link
+ *     (rx_cortex_attach_scoped), so the record is the same as under open and
+ *     survives a reopen in a World that hands out other ids; living crumbs
+ *     never enter it, and the World's recorder slot stays free for (or
+ *     shared with) the World's own Cortex;
+ *   - w->external_subject is not changed: the goal capability is minted for
+ *     the World's own external subject, on the composition goal resource only;
+ *   - reactions are registered with `keys` (rx_world_add_reaction_keyed), so a
+ *     World with bound callers admits them; without bound callers keys may be
+ *     NULL;
+ *   - it installs the World's commit binder: RX_ERR_EXISTS if `w` already has
+ *     one (at most one binder per World).
+ * close (attach mode) waits for quiescence, removes the binder and the scoped
+ * Cortex link, retires the five objects (their reactions can never wake
+ * again: triggers name retired generations), revokes every capability attach
+ * minted, and leaves `w` running. The four inert reaction slots stay
+ * registered (the World has no unregister); each attach uses four more. */
+int  rx_compose_enroll_callers(RxWorld *w, RxCallerKeyring *keys);
+int  rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, const char *dir,
+                       const AienMachineId *self, uint64_t session, const SrRouter *router,
+                       RxcContract contract, AienosCapAdmin *admin);
 /* The branch the World names now. */
 JsBranchRef rx_compose_state(RxCompose *c);
 /* Content digest of the composition record (Cortex objects without timing
