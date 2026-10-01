@@ -17,11 +17,11 @@ AUTODIFF_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -ffp-contract=o
 	-Isrc/autodiff -DOMEGA_NUMERIC_CPU_ONLY
 AUTODIFF_SRCS = src/autodiff/omega_autodiff.c
 AUTODIFF_TENSOR_SRCS = src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c \
-	src/tensor/omega_tensor_reduce_seam.c src/omega_numeric_reduce.c
+	src/tensor/omega_tensor_reduce_seam.c src/omega_numeric_reduce.c src/omega_numeric_transc.c
 AUTODIFF_DEPS = src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c \
 	src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
 AUTODIFF_HDRS = src/autodiff/omega_autodiff.h src/tensor/omega_tensor.h src/tensor/omega_tensor_reduce_seam.h \
-	src/omega_numeric_reduce.h src/omega_numeric.h src/sha256.h
+	src/omega_numeric_reduce.h src/omega_numeric.h src/sha256.h src/omega_numeric_transc.h
 
 $(OUT_DIR)/test_omega_autodiff: tests/test_omega_autodiff.c $(AUTODIFF_SRCS) $(AUTODIFF_TENSOR_SRCS) \
 		$(AUTODIFF_DEPS) $(AUTODIFF_HDRS)
