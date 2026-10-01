@@ -11,8 +11,10 @@
 # 3. Runs it under /tmp/aien-gb10.lock (waits for the lock; never times out
 #    or kills the chip test). --quiet-flag also creates ~/workspace/.spark-quiet
 #    (only when no flag exists) and removes it afterwards.
-# 4. PASS needs exit status 0, "RED_GB10_PARITY: PASS" and
-#    "E1 Reduce Verdict: PASS" in the log, and a clean tree afterwards.
+# 4. PASS needs exit status 0, "RED_GB10_PARITY_<OP>: PASS" for each of
+#    SUM, MAX, MIN and MEAN, "RED_GB10_PARITY: PASS" and "E1 Reduce Verdict:
+#    PASS" in the log, and a clean tree afterwards. MEAN is chip SUM levels
+#    plus one declared host division (omega_math_div); the receipt says so.
 # 5. Writes a content-addressed receipt <evidence-dir>/<sha256>.json (mode
 #    0444, never overwritten) for PASS and FAIL alike, plus the log and binary
 #    as blobs/<sha256>.{log,bin}. The evidence dir must lie outside the tree.
@@ -82,6 +84,9 @@ if [ -z "$FAIL_REASON" ]; then
     if [ "$CREATED_FLAG" = 1 ] && [ "$(cat "$FLAG" 2>/dev/null)" = "$FLAG_OWNER" ]; then rm -f "$FLAG"; fi
     echo "$STATUS" > "$OUT/reduce.status"
     [ "$STATUS" = 0 ] || FAIL_REASON="test binary exit status $STATUS"
+    for op in SUM MAX MIN MEAN; do
+        grep -q "^RED_GB10_PARITY_${op}: PASS" "$OUT/reduce.log" || FAIL_REASON="${FAIL_REASON:-no RED_GB10_PARITY_${op} PASS line}"
+    done
     grep -q '^RED_GB10_PARITY: PASS' "$OUT/reduce.log" || FAIL_REASON="${FAIL_REASON:-no RED_GB10_PARITY PASS line}"
     grep -qx 'E1 Reduce Verdict: PASS' "$OUT/reduce.log" || FAIL_REASON="${FAIL_REASON:-verdict line is not PASS}"
 fi
@@ -93,15 +98,22 @@ if [ -f "$BIN" ]; then BIN_SHA=$(sha256sum "$BIN" | cut -d' ' -f1); [ -n "$BIN_S
 if [ -f "$OUT/reduce.log" ]; then LOG_SHA=$(sha256sum "$OUT/reduce.log" | cut -d' ' -f1); [ -n "$LOG_SHA" ] || die "cannot hash log"; [ -e "$EVID/blobs/$LOG_SHA.log" ] || cp "$OUT/reduce.log" "$EVID/blobs/$LOG_SHA.log" || die "cannot store log blob"; chmod 0444 "$EVID/blobs/$LOG_SHA.log" || die "cannot seal log blob"; fi
 VERDICT=PASS; [ -n "$FAIL_REASON" ] && VERDICT=FAIL
 PARITY=$(grep '^RED_GB10_PARITY:' "$OUT/reduce.log" 2>/dev/null | head -1)
+PSUM=$(grep '^RED_GB10_PARITY_SUM:' "$OUT/reduce.log" 2>/dev/null | head -1)
+PMAX=$(grep '^RED_GB10_PARITY_MAX:' "$OUT/reduce.log" 2>/dev/null | head -1)
+PMIN=$(grep '^RED_GB10_PARITY_MIN:' "$OUT/reduce.log" 2>/dev/null | head -1)
+PMEAN=$(grep '^RED_GB10_PARITY_MEAN:' "$OUT/reduce.log" 2>/dev/null | head -1)
 TMP=$OUT/receipt.json
 jq -n --arg suite E1_REDUCE_GB10_PARITY --arg status "$VERDICT" --arg reason "$FAIL_REASON" \
     --arg run_id "$RUN_ID" --arg commit "$COMMIT" --arg physics "$PHEAD" --argjson clean_after "$CLEAN_AFTER" \
     --arg order "RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL" \
-    --arg bin "$BIN_SHA" --arg log "$LOG_SHA" --arg parity "$PARITY" --arg exit_status "$STATUS" \
+    --arg bin "$BIN_SHA" --arg log "$LOG_SHA" --arg parity "$PARITY" --arg psum "$PSUM" --arg pmax "$PMAX" --arg pmin "$PMIN" --arg pmean "$PMEAN" --arg exit_status "$STATUS" \
     --arg host "$(uname -n)" --arg kernel "$(uname -r)" \
     '{suite:$suite,status:$status,reason:$reason,run_id:$run_id,omega_commit:$commit,omega_clean_before:true,
       omega_clean_after:$clean_after,physics_commit:$physics,declared_order:$order,binary_sha256:$bin,
-      log_sha256:$log,exit_status:$exit_status,parity_line:$parity,host:$host,kernel:$kernel}' > "$TMP" || die "receipt json (jq) failed, no receipt written"
+      log_sha256:$log,exit_status:$exit_status,parity_line:$parity,
+      ops:["SUM","MAX","MIN","MEAN"],parity_by_op:{SUM:$psum,MAX:$pmax,MIN:$pmin,MEAN:$pmean},
+      chip_kernels:{SUM:"REDUCE_SUM (WP-C patch, SHFL.DOWN+FADD)",MAX:"reduce minmax patch SHFL.DOWN+FMNMX !PT",MIN:"reduce minmax patch SHFL.DOWN+FMNMX PT",MEAN:"chip SUM levels"},
+      mean_final_division:"HOST_DECLARED_STEP omega_math_div(sum,u2f(n)); GB10 DIV kernel (omega#141) not merged",host:$host,kernel:$kernel}' > "$TMP" || die "receipt json (jq) failed, no receipt written"
 [ -s "$TMP" ] || die "empty receipt, not written"
 [ "$VERDICT" != PASS ] || { [ -n "$BIN_SHA" ] && [ -n "$LOG_SHA" ]; } || die "PASS without binary and log digests refused"
 DIG=$(sha256sum "$TMP" | cut -d' ' -f1)

@@ -252,6 +252,21 @@ test-numeric-transc-full: build/test_omega_transc
 test-numeric-transc-digest: build/test_omega_transc
 	./build/test_omega_transc digest
 
+# Offline provenance of the GB10 MAX/MIN warp patch: nvdisasm -b SM121 must
+# decode every word to the text the patch table records. No device opened;
+# nvdisasm is a decoder only. Last line: "E1 Reduce nvdisasm: PASS".
+.PHONY: test-numeric-reduce-nvdisasm
+REDUCE_NVDISASM ?= /usr/local/cuda/bin/nvdisasm
+test-numeric-reduce-nvdisasm: build/test_omega_reduce_cpu
+	@[ -x "$(REDUCE_NVDISASM)" ] || { echo "E1 Reduce nvdisasm: NOT_RUN ($(REDUCE_NVDISASM) missing)"; exit 2; }
+	@set -e; t=$$(mktemp -d); trap 'rm -rf "$$t"' EXIT; ./build/test_omega_reduce_cpu --dump "$$t"; \
+	for op in max min; do \
+	  "$(REDUCE_NVDISASM)" -b SM121 "$$t/$$op.bin" > "$$t/$$op.raw" || { echo "E1 Reduce nvdisasm: FAIL ($$op: nvdisasm error)"; exit 1; }; \
+	  sed -n 's|^[[:space:]]*/\*\([0-9a-f]\{4\}\)\*/[[:space:]]*\(.*;\).*$$|\1 \2|p' "$$t/$$op.raw" \
+	    | sed 's/[[:space:]]\{1,\}/ /g' > "$$t/$$op.got"; \
+	  diff -u "$$t/$$op.lst" "$$t/$$op.got" || { echo "E1 Reduce nvdisasm: FAIL ($$op)"; exit 1; }; echo "$$op: $$(wc -l < "$$t/$$op.lst") words decode to the recorded text"; \
+	done; echo "E1 Reduce nvdisasm: PASS ($$("$(REDUCE_NVDISASM)" --version | grep -o 'release [0-9.]*, V[0-9.]*'))"
+
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
 RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
