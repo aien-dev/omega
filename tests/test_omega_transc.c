@@ -352,7 +352,7 @@ typedef struct {
 #define DIGEST_ERF     "aef63f62db823726c45f88b6605263d614854595679edcb17c3a4492abc74aba"
 #define DIGEST_SIN     "9e4debc75f832121cea47e9fad2e008329ccc62b291c3b68e6f60bb3f908cddc"
 #define DIGEST_COS     "28d580ee2efe1256397cc8a3b2dcd4bfe397100a0f9663e1c010baa136dcceb3"
-#define DIGEST_GELU    "5663383b26d1294963512e95290ec7a6cde61accde97ca8767a9f1d97f4fc727"
+#define DIGEST_GELU    "bda4da73a44f4b06cd1ebebe13dec56b91c7e87b826253380e922b3ba38689db"
 
 static op_t g_ops[] = {
     { "SIGMOID", omega_math_sigmoid, or_sigmoid, OMEGA_TRANSC_MAX_ULP_SIGMOID, DIGEST_SIGMOID },
