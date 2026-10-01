@@ -389,11 +389,6 @@ typedef struct {
     bool resident_seat;         /* handed to the graphics seat; fn is not called */
     bool deferred;              /* fn returned RX_FN_DEFER; waits for rx_world_resume */
     bool resume_pending;        /* resumed before the deferring run returned */
-    /* I11: popped while a running writer of one of its inputs had not yet
-     * published. Admitted (charged, in in_flight), state READY, not on a
-     * ready ring; released when no such writer is running, so the writer's
-     * wake merges into this activation instead of causing a second one. */
-    bool upstream_held;
     /* Taken out by rx_world_remove_reaction: no subscriptions, never woken
      * or run; the slot may be reused by a registration with the same subject
      * and faculty. */
