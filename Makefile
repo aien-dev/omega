@@ -1628,3 +1628,14 @@ build/test_omega_numeric_transc_gb10_cpu: $(TRANSC_GB10_SRCS) $(DIVSQRT_HDRS) sr
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -fno-fast-math -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o $@ $(TRANSC_GB10_SRCS)
 test-numeric-transc-gb10-host: build/test_omega_numeric_transc_gb10_cpu
 	./build/test_omega_numeric_transc_gb10_cpu
+
+# C3: host-only detector for the intermittent unwritten-output event, with its
+# own unit test on synthetic buffers. The GB10 harness is
+# tests/test_omega_unwritten_trap_gb10.c (chip: forge queue only, see
+# tools/run_unwritten_trap.sh).
+.PHONY: test-unwritten-trap-host
+build/test_omega_unwritten_trap: tests/test_omega_unwritten_trap.c src/omega_unwritten_trap.c src/omega_unwritten_trap.h
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -o $@ tests/test_omega_unwritten_trap.c src/omega_unwritten_trap.c
+test-unwritten-trap-host: build/test_omega_unwritten_trap
+	./build/test_omega_unwritten_trap
