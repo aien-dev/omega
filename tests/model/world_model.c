@@ -215,6 +215,16 @@ uint32_t wm_step(const WmProfile *p, WmState *s, WmOp op) {
         end_activation(p, s, r, 1);
         break;
     case OP_FIN:
+        if (wm_deadline[r] && s->tick > wm_deadline[r]) {
+            /* run_one (HD-09 first enforcement cut): fn returned past its
+             * declared deadline -> RUNNING -> CANCELLED, nothing staged or
+             * published, no wake, charge refunded by end_activation. This
+             * is enforcement at return only; I4 (surfaced while running)
+             * is still not met by the as-built World. */
+            s->st[r] = WM_ENDING;
+            end_activation(p, s, r, 0);
+            break;
+        }
         if (s->stale[r]) {              /* PUBLISHING -> INVALIDATED */
             s->invalidations++;
             s->yield[r] = backoff(s->yield[r]);
