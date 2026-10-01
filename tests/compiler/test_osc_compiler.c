@@ -194,6 +194,159 @@ static int replay_trace(const OscTrace *t, uint32_t i0, uint32_t i1, OscModelRej
  * objects (with their regions) under fresh ids. Every event of the log is
  * replayed; a trapping run's log is a prefix and replays the same way.
  * Returns 0 (all accepted) or -1 (why says which event and reason). */
+/* OSC-3 item 2: runtime pool events -> OSC-0B slot/handle model events. One
+ * model per open pool (osc_model_init(gen_base = the declared base,
+ * gen_max = UINT64_MAX)); model slot = pool slot + 1. Each SLOT_ALLOC mints a
+ * fresh model handle (rights 3); HANDLE_USE and SLOT_FREE name the live
+ * handle of the slot. Every logged generation must equal the model slot's
+ * generation. Past 64 handles a fresh model is advanced to the same slot
+ * generations (ALLOC with no handle + explicit SLOT_FREE per generation step)
+ * and the live slots re-minted. A STALE / RETIRED / POOL_FULL trap is then
+ * confirmed: the refused operation replays as a model rejection
+ * (STALE_GENERATION / GENERATION_WRAP / every slot live). */
+static unsigned long rp_events, rp_stale_confirmed, rp_wrap_confirmed, rp_full_confirmed, rp_windows;
+typedef struct {
+    OscModel m;
+    uint64_t base;
+    uint8_t k, open;
+    uint32_t next;                             /* next model handle id */
+    uint32_t hid[OSC_POOL_SLOTS];              /* live handle of each slot (0 = none) */
+    uint32_t mslot[OSC_MODEL_MAX_HANDLES + 1]; /* minted handle -> pool slot + 1 */
+    uint64_t mgen[OSC_MODEL_MAX_HANDLES + 1];  /* minted handle -> generation */
+} RpPool;
+static RpPool rp[OSC_RT_POOLS];
+
+static int rp_step(OscModel *m, uint32_t kind, uint32_t slot, uint32_t handle, uint64_t gen, uint64_t rights,
+                   OscModelReject *r)
+{
+    OscModelEvent ev;
+    memset(&ev, 0, sizeof ev);
+    ev.kind = kind;
+    ev.slot = slot;
+    ev.handle = handle;
+    ev.gen = gen;
+    ev.rights = rights;
+    return osc_model_step(m, &ev, r) == OSC_MODEL_ACCEPT ? 0 : -1;
+}
+
+/* fresh model whose slots match q's: free/live at the same generation, or retired */
+static int rp_rewindow(RpPool *q, char *why, size_t n)
+{
+    OscModel old = q->m;
+    rp_windows++;
+    osc_model_init(&q->m, q->base, UINT64_MAX);
+    q->next = 1;
+    memset(q->mslot, 0, sizeof q->mslot);
+    for (uint32_t s = 1; s <= q->k; s++) {
+        const OscMSlot *o = &old.slot[s];
+        for (uint64_t g = q->base; g != o->gen || o->state == 2 /* retired: also free gen_max */; g++) {
+            if (rp_step(&q->m, OSC_EV_SLOT_ALLOC, s, 0, 0, 0, NULL) ||
+                rp_step(&q->m, OSC_EV_SLOT_FREE, s, 0, g, 0, NULL)) { snprintf(why, n, "re-window advance"); return -1; }
+            if (g == UINT64_MAX) break;
+        }
+        q->hid[s - 1] = 0;
+        if (o->state == 1) { /* live: re-mint */
+            uint32_t h = q->next++;
+            if (rp_step(&q->m, OSC_EV_SLOT_ALLOC, s, h, 0, 3, NULL)) { snprintf(why, n, "re-window mint"); return -1; }
+            q->hid[s - 1] = h;
+            q->mslot[h] = s;
+            q->mgen[h] = q->m.slot[s].gen;
+        }
+        if (q->m.slot[s].state != o->state || q->m.slot[s].gen != o->gen) { snprintf(why, n, "re-window state"); return -1; }
+    }
+    return 0;
+}
+
+static int rp_event(const OscRt *rt, uint32_t i, char *why, size_t n)
+{
+    const OscRtEvent *e = &rt->ev[i];
+    uint64_t gen = rt->ev_gen[i];
+    if (e->slot >= OSC_RT_POOLS) { snprintf(why, n, "pool event on bad pool %u", e->slot); return -1; }
+    RpPool *q = &rp[e->slot];
+    unsigned ps = e->len & 0xff, rights = e->len >> 8;
+    OscModelReject r = OSC_REJ_NONE;
+    rp_events++;
+    switch (e->kind) {
+    case OSC_RT_EV_POOL_OPEN:
+        if (q->open || e->len < 1 || e->len > OSC_POOL_SLOTS) { snprintf(why, n, "bad pool open"); return -1; }
+        memset(q, 0, sizeof *q);
+        q->open = 1;
+        q->k = (uint8_t)e->len;
+        q->base = gen;
+        q->next = 1;
+        osc_model_init(&q->m, gen, UINT64_MAX);
+        return 0;
+    case OSC_RT_EV_POOL_CLOSE:
+        if (!q->open) { snprintf(why, n, "close of a closed pool"); return -1; }
+        q->open = 0;
+        return 0;
+    case OSC_RT_EV_SLOT_ALLOC:
+        if (!q->open || ps >= q->k) { snprintf(why, n, "bad slot alloc"); return -1; }
+        if (q->next > OSC_MODEL_MAX_HANDLES && rp_rewindow(q, why, n)) return -1;
+        if (q->m.slot[ps + 1].gen != gen) { snprintf(why, n, "alloc generation %llu != model %llu", (unsigned long long)gen, (unsigned long long)q->m.slot[ps + 1].gen); return -1; }
+        if (rp_step(&q->m, OSC_EV_SLOT_ALLOC, ps + 1, q->next, 0, 3, &r)) break;
+        q->hid[ps] = q->next;
+        q->mslot[q->next] = ps + 1;
+        q->mgen[q->next] = gen;
+        q->next++;
+        return 0;
+    case OSC_RT_EV_SLOT_FREE:
+    case OSC_RT_EV_HANDLE_USE:
+        if (!q->open || ps >= q->k || !q->hid[ps]) { snprintf(why, n, "pool event on a slot with no handle"); return -1; }
+        if (q->mgen[q->hid[ps]] != gen) { snprintf(why, n, "handle generation %llu != minted %llu", (unsigned long long)gen, (unsigned long long)q->mgen[q->hid[ps]]); return -1; }
+        if (e->kind == OSC_RT_EV_SLOT_FREE) {
+            if (rp_step(&q->m, OSC_EV_SLOT_FREE, 0, q->hid[ps], 0, 0, &r)) break;
+            q->hid[ps] = 0;
+        } else {
+            if (rights < 1 || rights > 2) { snprintf(why, n, "bad use rights"); return -1; }
+            if (rp_step(&q->m, OSC_EV_HANDLE_USE, 0, q->hid[ps], 0, rights, &r)) break;
+        }
+        return 0;
+    default:
+        snprintf(why, n, "unknown pool event %u", e->kind);
+        return -1;
+    }
+    snprintf(why, n, "pool event %u rejected: %s", i, osc_model_reject_name(r));
+    return -1;
+}
+
+/* the refused operation of a pool trap is rejected by the model */
+static int rp_trap(const OscRt *rt, char *why, size_t n)
+{
+    unsigned code = rt->trap_code;
+    if (code != OSC_TRAP_STALE && code != OSC_TRAP_RETIRED && code != OSC_TRAP_POOL_FULL) return 0;
+    if (rt->nev > OSC_RT_EVENTS) return 0; /* log prefix not complete: nothing to confirm */
+    if (rt->trap_pool >= OSC_RT_POOLS || !rp[rt->trap_pool].open) { snprintf(why, n, "pool trap on unopened pool"); return -1; }
+    RpPool *q = &rp[rt->trap_pool];
+    OscModel m = q->m;
+    OscModelReject r = OSC_REJ_NONE;
+    if (code == OSC_TRAP_STALE) {
+        uint32_t s = rt->trap_slot + 1u, h = 0;
+        if (s > q->k) { snprintf(why, n, "stale trap on bad slot"); return -1; }
+        for (uint32_t k = 1; k < q->next && k <= OSC_MODEL_MAX_HANDLES; k++)
+            if (q->mslot[k] == s && q->mgen[k] == rt->trap_gen) h = k;
+        int rc;
+        if (h && rt->trap_op == 1) rc = rp_step(&m, OSC_EV_HANDLE_USE, 0, h, 0, rt->trap_rights, &r);
+        else if (h) rc = rp_step(&m, OSC_EV_SLOT_FREE, 0, h, 0, 0, &r);
+        else rc = rp_step(&m, OSC_EV_SLOT_FREE, s, 0, rt->trap_gen, 0, &r);
+        if (rc == 0 || r != OSC_REJ_STALE_GENERATION) { snprintf(why, n, "stale trap not a model STALE_GENERATION (%s)", osc_model_reject_name(r)); return -1; }
+        rp_stale_confirmed++;
+        return 0;
+    }
+    /* RETIRED / POOL_FULL: no slot of the pool can be allocated */
+    unsigned wrap = 0;
+    for (uint32_t s = 1; s <= q->k; s++) {
+        OscModel t = m;
+        if (rp_step(&t, OSC_EV_SLOT_ALLOC, s, 0, 0, 0, &r) == 0) { snprintf(why, n, "pool trap but model slot %u is free", s); return -1; }
+        if (r == OSC_REJ_GENERATION_WRAP) wrap++;
+        else if (r != OSC_REJ_PROTOCOL) { snprintf(why, n, "pool trap: unexpected %s", osc_model_reject_name(r)); return -1; }
+    }
+    if ((code == OSC_TRAP_RETIRED) != (wrap > 0)) { snprintf(why, n, "pool trap kind disagrees with the model"); return -1; }
+    if (code == OSC_TRAP_RETIRED) rp_wrap_confirmed++;
+    else rp_full_confirmed++;
+    return 0;
+}
+
 static unsigned long rr_runs, rr_events, rr_accepted, rr_rejected;
 static int replay_rt(const OscRt *rt, char *why, size_t n)
 {
@@ -208,9 +361,15 @@ static int replay_rt(const OscRt *rt, char *why, size_t n)
     osc_model_init(&m, 0, UINT64_MAX);
     memset(live_id, 0, sizeof live_id);
     memset(rid_of_slot, 0, sizeof rid_of_slot);
+    memset(rp, 0, sizeof rp);
     uint32_t nev = rt->nev < OSC_RT_EVENTS ? rt->nev : OSC_RT_EVENTS;
     for (uint32_t i = 0; i < nev; i++) {
         const OscRtEvent *e = &rt->ev[i];
+        if (e->kind >= OSC_RT_EV_POOL_OPEN) { /* OSC-3 item 2 */
+            if (rp_event(rt, i, why, n)) return -1;
+            rr_events++;
+            continue;
+        }
         if (e->serial >= (1u << 16)) { snprintf(why, n, "serial too large"); return -1; }
         int is_alloc = e->kind == OSC_RT_EV_ALLOC || e->kind == OSC_RT_EV_ARENA_ALLOC;
         if ((is_alloc && next > OSC_MODEL_MAX_OBJECTS) ||
@@ -294,6 +453,7 @@ static int replay_rt(const OscRt *rt, char *why, size_t n)
         }
         rr_events++;
     }
+    if (rp_trap(rt, why, n)) return -1;
     return 0;
 }
 
@@ -314,7 +474,7 @@ static int rt_replay_run(const OscRt *rt, const char *ctx)
 /* ------------------------------------------------------------ golden */
 static OscUnit *U1, *U2;
 static unsigned long expect_total;
-static const char *trap_names[OSC_TRAP_MAX + 1] = {"none", "OVERFLOW", "DIV0", "BOUNDS", "LOOP_BOUND", "CAST", "OOM", "SHIFT", "RUNTIME", "REQUIRES", "ENSURES", "ARENA_FULL"};
+static const char *trap_names[OSC_TRAP_MAX + 1] = {"none", "OVERFLOW", "DIV0", "BOUNDS", "LOOP_BOUND", "CAST", "OOM", "SHIFT", "RUNTIME", "REQUIRES", "ENSURES", "ARENA_FULL", "STALE", "POOL_FULL", "RETIRED"};
 
 static uint64_t parse_val(const char *s)
 {
@@ -507,6 +667,7 @@ static const char *mapped(int kind)
     case OSC_DIAG_BORROW_OUTLIVES_OWNER: return "borrow-outlives-owner";
     case OSC_DIAG_READ_ONLY_BORROW: return "forged-rights";
     case OSC_DIAG_ARENA_ESCAPE: return "arena-escape";
+    case OSC_DIAG_STALE_HANDLE: return "stale-generation"; /* OSC-3 item 2 */
     default: return NULL;
     }
 }
@@ -1110,6 +1271,202 @@ static void arena_fuzz(unsigned n)
     CHECK(af_trap[OSC_TRAP_ARENA_FULL] > 0, "arena fuzz never hit TRAP ARENA_FULL");
 }
 
+/* ------------------------------------------------------------ OSC-3 item 2 handle fuzz */
+/* Generated units: one pool (K = 1..4 slots of i64, generation base 0, small,
+ * or within 3 of 2^64 - 1) with 1..3 mutable handles (the first allocated,
+ * the others copies), then random reads, writes, conditional frees,
+ * re-allocations (leaking the old slot), free + re-allocate pairs, copies,
+ * bounded loops of alloc/free cycles and a nested second pool. Frees behind a
+ * dynamic condition make later uses stale at run time only (TRAP STALE);
+ * leaks fill the pool (TRAP POOL_FULL); near-maximum bases retire slots
+ * (TRAP RETIRED). The generator keeps definite allocations within the static
+ * K and generation budgets, so a unit is either compiled or refused with
+ * STALE_HANDLE (a copy made stale by a definite free, a static use after
+ * free); any other refusal fails. Interpreter and native outcomes must be
+ * identical; every native run replays through the OSC-0B model. */
+static unsigned long hf_units, hf_compiled, hf_refused, hf_runs, hf_mismatch, hf_trap[OSC_TRAP_MAX + 1];
+typedef struct { unsigned k, nh, used, off; uint64_t base, dallocs; } HfPool;
+
+static int hf_budget(const HfPool *p)
+{
+    uint64_t per = UINT64_MAX - p->base;
+    if (!p->off && p->used + 1 > p->k) return 0;
+    if (per < 8 && p->dallocs + 1 > (uint64_t)p->k * (per + 1)) return 0;
+    return 1;
+}
+
+/* one statement; definite = at the pool's own depth */
+static void hf_stmt(char *src, size_t cap, HfPool *p, int definite, unsigned depth, unsigned *nm)
+{
+    unsigned h = (unsigned)(sm() % p->nh), h2 = (unsigned)(sm() % p->nh);
+    switch (sm() % 9) {
+    case 0: case 1:
+        cf_cat(src, cap, "        acc = acc + p0[h%u];\n", h);
+        break;
+    case 2:
+        cf_cat(src, cap, "        p0[h%u] = (acc & 1023) + (b & 7);\n", h);
+        break;
+    case 3:
+        cf_cat(src, cap, "        if ((a >> %u) & 3) == 0 {\n            p0.free(h%u);\n        }\n", (unsigned)(sm() % 40), h);
+        p->off = 1;
+        break;
+    case 4: /* re-allocate, leaking the old slot */
+        if (definite && !hf_budget(p)) {
+            cf_cat(src, cap, "        if (b & %u) == 1 {\n            h%u = p0.alloc(a & 255);\n        }\n", 1u + (unsigned)(sm() % 7), h);
+        } else {
+            cf_cat(src, cap, "        h%u = p0.alloc(a & 255);\n", h);
+            if (definite) { p->used++; p->dallocs++; }
+        }
+        break;
+    case 5: /* free + re-allocate */
+        if (definite && !(p->dallocs + 1 <= (uint64_t)p->k * ((UINT64_MAX - p->base) < 8 ? (UINT64_MAX - p->base) + 1 : 64))) {
+            cf_cat(src, cap, "        acc = acc + p0[h%u];\n", h);
+        } else {
+            cf_cat(src, cap, "        p0.free(h%u);\n        h%u = p0.alloc(i as i64);\n", h, h);
+            if (definite) p->dallocs++;
+            else p->off = 1;
+        }
+        break;
+    case 6:
+        if (h != h2) cf_cat(src, cap, "        h%u = h%u;\n", h2, h);
+        else cf_cat(src, cap, "        acc = acc + p0[h%u];\n", h);
+        break;
+    case 7:
+        if (depth < 2) {
+            unsigned j = (*nm)++;
+            cf_cat(src, cap, "        let mut j%u: u8 = 0;\n        while j%u < (i %% 6) bound 6 {\n", j, j);
+            unsigned ns = 1 + (unsigned)(sm() % 3);
+            for (unsigned s = 0; s < ns; s++) hf_stmt(src, cap, p, 0, depth + 1, nm);
+            cf_cat(src, cap, "        j%u = j%u + 1;\n        }\n", j, j);
+        } else {
+            cf_cat(src, cap, "        acc = acc + p0[h%u];\n", h);
+        }
+        break;
+    default:
+        if (depth == 0 && sm() % 2) {
+            unsigned q = (*nm)++;
+            cf_cat(src, cap, "        pool q%u: [u8; %u] {\n            let g%u: handle q%u = q%u.alloc((a & 7) as u8);\n"
+                             "            q%u[g%u] = q%u[g%u] + 1;\n            acc = acc + (q%u[g%u] as i64);\n        }\n",
+                   q, 1u + (unsigned)(sm() % 3), q, q, q, q, q, q, q, q, q);
+        } else {
+            cf_cat(src, cap, "        acc = acc + p0[h%u];\n", h);
+        }
+    }
+}
+
+static void handle_fuzz(unsigned n)
+{
+    static char src[16384];
+    const unsigned long ev0 = rp_events, st0 = rp_stale_confirmed, wr0 = rp_wrap_confirmed, fu0 = rp_full_confirmed, wi0 = rp_windows;
+    sm_state = 0x05C3A2B4ull;
+    for (unsigned u = 0; u < n; u++) {
+        HfPool p;
+        memset(&p, 0, sizeof p);
+        p.k = 1 + (unsigned)(sm() % 4);
+        p.nh = 1 + (unsigned)(sm() % 3);
+        switch (sm() % 3) {
+        case 0: p.base = 0; break;
+        case 1: p.base = sm() % 1000; break;
+        default: p.base = UINT64_MAX - sm() % 4;
+        }
+        src[0] = 0;
+        cf_cat(src, sizeof src, "fn entry(a: i64, b: i64, i: u8) -> i64 {\n    let mut acc: i64 = 0;\n"
+                                "    pool p0: [i64; %u] gen %llu {\n        let mut h0: handle p0 = p0.alloc(a & 1023);\n",
+               p.k, (unsigned long long)p.base);
+        p.used = 1;
+        p.dallocs = 1;
+        for (unsigned h = 1; h < p.nh; h++) cf_cat(src, sizeof src, "        let mut h%u: handle p0 = h0;\n", h);
+        unsigned nm = 0, ns = 3 + (unsigned)(sm() % 6);
+        for (unsigned s = 0; s < ns; s++) hf_stmt(src, sizeof src, &p, 1, 0, &nm);
+        cf_cat(src, sizeof src, "        acc = acc + p0[h0];\n    }\n    return acc;\n}\n");
+        hf_units++;
+
+        OscDiag d;
+        int rc = osc_compile(src, strlen(src), U1, &d, NULL);
+        if (rc) {
+            CHECK(d.kind == OSC_DIAG_STALE_HANDLE, "handle fuzz unit %u refused %s line %u object=%s: %s\n%s", u,
+                  osc_diag_kind_name(d.kind), d.line, d.object, d.message, src);
+            hf_refused++;
+            continue;
+        }
+        hf_compiled++;
+        OscCode c;
+        char err[160];
+        memset(&c, 0, sizeof c);
+        int cg = osc_cg_compile(U1, &c, err, sizeof err);
+        CHECK(cg == 0, "handle fuzz unit %u codegen refused: %s", u, err);
+        if (cg) continue;
+        OscNative nm2;
+        int mr = osc_native_map(&nm2, c.code, c.len);
+        CHECK(mr == 0, "handle fuzz unit %u native map failed (%d)", u, mr);
+        if (mr) { osc_cg_free(&c); continue; }
+        int fi = U1->nfuncs - 1;
+        void *entry = osc_native_at(&nm2, c.entry[fi]);
+        for (unsigned it = 0; it < 48; it++) {
+            uint64_t args[OSC_MAX_PARAMS] = {0}, ri = 0, rn = 0;
+            args[0] = gen_arg(OSC_T_I64);
+            args[1] = gen_arg(OSC_T_I64);
+            args[2] = it & 1 ? (uint64_t)(it % 6) : gen_arg(OSC_T_U8);
+            osc_rt_reset(RI);
+            osc_rt_reset(RN);
+            int t1 = osc_interp_run_prevalidated(U1, fi, args, 3, RI, &ri);
+            int t2 = osc_rt_call_native(RN, entry, args, 3, &rn);
+            rt_replay_run(RN, "handle fuzz");
+            hf_runs++;
+            diff_runs++;
+            int same = t1 == t2 && t1 >= 0 && (t1 != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
+            CHECK(same, "handle fuzz unit %u args %llu %llu %llu: interp trap %d ret %llu vs native trap %d ret %llu\n%s",
+                  u, (unsigned long long)args[0], (unsigned long long)args[1], (unsigned long long)args[2], t1,
+                  (unsigned long long)ri, t2, (unsigned long long)rn, src);
+            if (!same) { hf_mismatch++; break; }
+            if (t1 >= 0 && t1 <= OSC_TRAP_MAX) { hf_trap[t1]++; trap_seen[t1]++; }
+            CHECK(t1 != OSC_TRAP_RUNTIME, "handle fuzz unit %u RUNTIME trap\n%s", u, src);
+        }
+        osc_native_unmap(&nm2);
+        osc_cg_free(&c);
+    }
+    printf("osc3 handles: units=%lu compiled=%lu static_refused=%lu runs=%lu ok=%lu stale_traps=%lu pool_full=%lu "
+           "retired=%lu overflow=%lu mismatches=%lu\n",
+           hf_units, hf_compiled, hf_refused, hf_runs, hf_trap[0], hf_trap[OSC_TRAP_STALE], hf_trap[OSC_TRAP_POOL_FULL],
+           hf_trap[OSC_TRAP_RETIRED], hf_trap[OSC_TRAP_OVERFLOW], hf_mismatch);
+    printf("osc3 handles: model replay pool_events=%lu stale_confirmed=%lu wrap_confirmed=%lu full_confirmed=%lu "
+           "windows=%lu (handle fuzz runs only); all runs re-windows=%lu\n", rp_events - ev0, rp_stale_confirmed - st0, rp_wrap_confirmed - wr0,
+           rp_full_confirmed - fu0, rp_windows - wi0, rp_windows);
+    CHECK(hf_trap[0] > 0, "handle fuzz never returned normally");
+    CHECK(hf_trap[OSC_TRAP_STALE] > 0, "handle fuzz never hit TRAP STALE");
+    CHECK(hf_trap[OSC_TRAP_POOL_FULL] > 0, "handle fuzz never hit TRAP POOL_FULL");
+    CHECK(hf_trap[OSC_TRAP_RETIRED] > 0, "handle fuzz never hit TRAP RETIRED");
+    CHECK(rp_stale_confirmed - st0 == hf_trap[OSC_TRAP_STALE], "stale traps %lu, model-confirmed %lu",
+          hf_trap[OSC_TRAP_STALE], rp_stale_confirmed - st0);
+    CHECK(rp_wrap_confirmed - wr0 == hf_trap[OSC_TRAP_RETIRED], "retired traps %lu, model-confirmed %lu",
+          hf_trap[OSC_TRAP_RETIRED], rp_wrap_confirmed - wr0);
+    CHECK(rp_full_confirmed - fu0 == hf_trap[OSC_TRAP_POOL_FULL], "pool_full traps %lu, model-confirmed %lu",
+          hf_trap[OSC_TRAP_POOL_FULL], rp_full_confirmed - fu0);
+    CHECK(hf_compiled > hf_refused, "handle fuzz mostly refused (%lu of %lu)", hf_refused, hf_units);
+    /* serial counters never wrap: at UINT32_MAX the next allocation traps RUNTIME, before any state changes */
+    unsigned long sw_traps = 0;
+    for (int w = 0; w < 4; w++) {
+        osc_rt_reset(RI);
+        volatile uint64_t ah = 0;
+        if (w == 2 && setjmp(RI->jb) == 0) ah = osc_rt_arena_open(RI, 4);
+        if (w == 3) RI->pool_serial = UINT32_MAX;
+        else RI->next_serial = UINT32_MAX;
+        volatile unsigned live = RI->live_count;
+        if (setjmp(RI->jb) == 0) {
+            if (w == 0) osc_rt_alloc(RI, 1, 0);
+            else if (w == 1) osc_rt_arena_open(RI, 4);
+            else if (w == 2) osc_rt_arena_alloc(RI, ah, 1, 0);
+            else osc_rt_pool_open(RI, 2, 0);
+            CHECK(0, "serial counter %d wrapped without a trap", w);
+        } else {
+            CHECK(RI->trap_code == OSC_TRAP_RUNTIME && RI->live_count == live, "serial wrap %d trapped %u", w,
+                  RI->trap_code);
+            sw_traps++;
+        }
+    }
+    printf("osc3 handles: serial counters at UINT32_MAX trap RUNTIME, never wrap: %lu of 4\n", sw_traps);
+}
+
 int main(int argc, char **argv)
 {
     unsigned fuzz = argc > 1 ? (unsigned)strtoul(argv[1], NULL, 10) : 1000;
@@ -1144,6 +1501,7 @@ int main(int argc, char **argv)
     arena_dtor_order(pdir);
     struct_fuzz(fuzz / 8 ? fuzz / 8 : 16);
     arena_fuzz(fuzz / 8 ? fuzz / 8 : 16);
+    handle_fuzz(fuzz / 8 ? fuzz / 8 : 16);
 
     const char *const *tn = trap_names;
     printf("trap coverage (runs, interpreter == native):\n");

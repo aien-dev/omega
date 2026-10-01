@@ -40,6 +40,11 @@ typedef enum {
     OSC_DIAG_ARENA_ESCAPE,         /* a borrow of an arena object would outlive the arena */
     OSC_DIAG_ARENA_MOVE,           /* an arena object is moved (out of the arena, or into own param) */
     OSC_DIAG_ARENA_CAPACITY,       /* arena bound out of range, or allocations statically exceed it */
+    /* OSC-3 item 2 (versioned handles, docs/osc/OSC-3-DESIGN.md "Item 2"), appended */
+    OSC_DIAG_STALE_HANDLE,         /* a handle is used or freed after its slot was freed (also via a copy) */
+    OSC_DIAG_WRONG_POOL,           /* a handle of one pool is used with another pool (or copied across pools) */
+    OSC_DIAG_POOL_CAPACITY,        /* pool K out of 1..16, or definite allocations exceed K live slots */
+    OSC_DIAG_GENERATION_EXHAUSTED, /* definite alloc/free cycles reuse a retired slot (generation would wrap) */
     OSC_DIAG__COUNT
 } OscDiagKind;
 

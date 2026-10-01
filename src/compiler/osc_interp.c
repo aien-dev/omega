@@ -157,6 +157,13 @@ static uint64_t run_func(Ctx *c, int fi, const uint64_t *args) {
             case OSC_I_AOPEN: v[in->dst] = osc_rt_arena_open(c->rt, in->imm); break;
             case OSC_I_AALLOC: v[in->dst] = osc_rt_arena_alloc(c->rt, v[in->b], T[in->dst].len, v[in->a]); break;
             case OSC_I_ADESTROY: osc_rt_arena_destroy(c->rt, v[in->a]); break;
+            case OSC_I_POPEN: v[in->dst] = osc_rt_pool_open(c->rt, in->nargs, in->imm); break;
+            case OSC_I_PCLOSE: osc_rt_pool_close(c->rt, v[in->a]); break;
+            case OSC_I_HALLOC: v[in->dst] = osc_rt_h_alloc(c->rt, v[in->b], v[in->a]); break;
+            case OSC_I_HGEN: v[in->dst] = osc_rt_h_gen(c->rt, v[in->a], v[in->b]); break;
+            case OSC_I_HFREE: osc_rt_h_free(c->rt, v[in->a], v[in->b], v[in->c]); break;
+            case OSC_I_HLOAD: v[in->dst] = osc_rt_h_load(c->rt, v[in->a], v[in->b], v[in->c]); break;
+            case OSC_I_HSTORE: osc_rt_h_store(c->rt, v[in->a], v[in->b], v[in->c], v[in->args[0]]); break;
             case OSC_I_LOAD: v[in->dst] = *elem(c, &T[in->a], v[in->a], T[in->b].s, v[in->b]); break;
             case OSC_I_STORE: *elem(c, &T[in->a], v[in->a], T[in->b].s, v[in->b]) = v[in->c]; break;
             case OSC_I_FLOAD:

@@ -1,0 +1,11 @@
+// expect: STALE_HANDLE object=h line=8
+// transition: write after free
+fn f() -> i64 {
+    let s: i64 = 0;
+    pool p: [i64; 2] {
+        let h: handle p = p.alloc(1);
+        p.free(h);
+        p[h] = 3;
+    }
+    return s;
+}

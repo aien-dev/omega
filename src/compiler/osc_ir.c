@@ -91,6 +91,10 @@ static int insn_uses(const OscInsn *in, int16_t *u) {
     case OSC_I_CBR: u[k++] = in->a; break;
     case OSC_I_AALLOC: u[k++] = in->a; u[k++] = in->b; break;
     case OSC_I_ADESTROY: u[k++] = in->a; break;
+    case OSC_I_PCLOSE: u[k++] = in->a; break;
+    case OSC_I_HALLOC: case OSC_I_HGEN: u[k++] = in->a; u[k++] = in->b; break;
+    case OSC_I_HFREE: case OSC_I_HLOAD: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; break;
+    case OSC_I_HSTORE: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; u[k++] = in->args[0]; break;
     case OSC_I_BIN: case OSC_I_CMP: case OSC_I_LOAD: u[k++] = in->a; u[k++] = in->b; break;
     case OSC_I_STORE: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; break;
     case OSC_I_FLOAD: u[k++] = in->a; if (in->b >= 0) u[k++] = in->b; break;
@@ -106,6 +110,7 @@ static int insn_def(const OscInsn *in) {
     case OSC_I_CONST: case OSC_I_MOV: case OSC_I_BIN: case OSC_I_UN: case OSC_I_CMP:
     case OSC_I_CAST: case OSC_I_ALLOC: case OSC_I_LOAD: case OSC_I_FLOAD: return in->dst;
     case OSC_I_AOPEN: case OSC_I_AALLOC: return in->dst;
+    case OSC_I_POPEN: case OSC_I_HALLOC: case OSC_I_HGEN: case OSC_I_HLOAD: return in->dst;
     case OSC_I_CALL: return in->dst;  /* may be -1 */
     default: return -1;
     }
@@ -196,6 +201,34 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
     case OSC_I_ADESTROY:
         NEED(VR(in->a) && type_is_scalar(&T[in->a]) && T[in->a].s == OSC_T_U64, "ADESTROY handle not u64", fi, ii);
         break;
+    case OSC_I_POPEN:
+        NEED(VR(in->dst) && type_is_scalar(&T[in->dst]) && T[in->dst].s == OSC_T_U64, "POPEN pool not u64", fi, ii);
+        NEED(in->nargs >= 1 && in->nargs <= OSC_POOL_SLOTS, "POPEN slot count out of range", fi, ii);
+        NEED(is_value_scalar((OscScalar)in->sub), "POPEN element type not scalar", fi, ii);
+        break;
+    case OSC_I_PCLOSE:
+        NEED(VR(in->a) && type_is_scalar(&T[in->a]) && T[in->a].s == OSC_T_U64, "PCLOSE pool not u64", fi, ii);
+        break;
+    case OSC_I_HALLOC:
+    case OSC_I_HGEN:
+    case OSC_I_HFREE:
+    case OSC_I_HLOAD:
+    case OSC_I_HSTORE: {
+        int16_t us[OSC_MAX_PARAMS + 3];
+        int k = insn_uses(in, us);
+        for (int j = 0; j < k; j++) NEED(VR(us[j]) && type_is_scalar(&T[us[j]]), "handle op bad operand", fi, ii);
+        int d = insn_def(in);
+        if (in->op == OSC_I_HALLOC || in->op == OSC_I_HGEN || in->op == OSC_I_HLOAD)
+            NEED(VR(d) && type_is_scalar(&T[d]), "handle op bad dst", fi, ii);
+        if (in->op == OSC_I_HALLOC || in->op == OSC_I_HGEN) NEED(T[d].s == OSC_T_U64, "handle slot/gen not u64", fi, ii);
+        if (in->op == OSC_I_HSTORE) NEED(in->nargs == 1, "HSTORE needs one value", fi, ii);
+        /* slot and gen are u64; the pool operand and the element types are
+         * checked against the defining POPEN by the pool discipline */
+        if (in->op == OSC_I_HALLOC) break;
+        NEED(T[in->b].s == OSC_T_U64, "handle slot not u64", fi, ii);
+        if (in->op != OSC_I_HGEN) NEED(T[in->c].s == OSC_T_U64, "handle gen not u64", fi, ii);
+        break;
+    }
     case OSC_I_LOAD:
         NEED(VR(in->dst) && VR(in->a) && VR(in->b), "LOAD bad vreg", fi, ii);
         NEED(type_is_array_ref(&T[in->a]), "LOAD base not an array ref", fi, ii);
@@ -326,6 +359,50 @@ static int validate_func(const OscUnit *u, int fi, char *err, size_t n) {
             int k = insn_uses(x, us);
             for (int j = 0; j < k; j++)
                 if (hk[us[j]]) return vfail(err, n, "func %d insn %u: arena handle used as a value", fi, i);
+        }
+    }
+
+    /* OSC-3 item 2: a pool vreg is defined by exactly one POPEN (not a
+     * parameter, never redefined) and is used only as the pool operand of
+     * HALLOC / HGEN / HFREE / HLOAD / HSTORE / PCLOSE. Element types of
+     * HALLOC init, HLOAD dst and HSTORE value match the POPEN element type. */
+    uint8_t pk[OSC_MAX_VREGS];
+    memset(pk, 0, sizeof pk);
+    for (uint32_t i = 0; i < f->ninsns; i++) {
+        const OscInsn *x = &f->insns[i];
+        if (x->op != OSC_I_POPEN) continue;
+        if (pk[x->dst] || hk[x->dst] || x->dst < f->nparams)
+            return vfail(err, n, "func %d insn %u: POPEN pool vreg reused", fi, i);
+        pk[x->dst] = (uint8_t)x->sub;
+    }
+    for (uint32_t i = 0; i < f->ninsns; i++) {
+        const OscInsn *x = &f->insns[i];
+        int d = insn_def(x);
+        if (x->op != OSC_I_POPEN && d >= 0 && pk[d])
+            return vfail(err, n, "func %d insn %u: pool vreg redefined", fi, i);
+        switch (x->op) {
+        case OSC_I_PCLOSE:
+            if (!pk[x->a]) return vfail(err, n, "func %d insn %u: PCLOSE of a non-pool", fi, i);
+            break;
+        case OSC_I_HALLOC:
+            if (!pk[x->b] || pk[x->a]) return vfail(err, n, "func %d insn %u: HALLOC pool misuse", fi, i);
+            if (f->vtype[x->a].s != (OscScalar)pk[x->b])
+                return vfail(err, n, "func %d insn %u: HALLOC init type != pool element type", fi, i);
+            break;
+        case OSC_I_HGEN: case OSC_I_HFREE: case OSC_I_HLOAD: case OSC_I_HSTORE:
+            if (!pk[x->a] || pk[x->b] || (x->op != OSC_I_HGEN && pk[x->c]))
+                return vfail(err, n, "func %d insn %u: handle pool misuse", fi, i);
+            if (x->op == OSC_I_HLOAD && f->vtype[x->dst].s != (OscScalar)pk[x->a])
+                return vfail(err, n, "func %d insn %u: HLOAD type != pool element type", fi, i);
+            if (x->op == OSC_I_HSTORE && (pk[x->args[0]] || f->vtype[x->args[0]].s != (OscScalar)pk[x->a]))
+                return vfail(err, n, "func %d insn %u: HSTORE value type != pool element type", fi, i);
+            break;
+        default: {
+            int16_t us[OSC_MAX_PARAMS + 3];
+            int k = insn_uses(x, us);
+            for (int j = 0; j < k; j++)
+                if (pk[us[j]]) return vfail(err, n, "func %d insn %u: pool used as a value", fi, i);
+        }
         }
     }
 
@@ -462,6 +539,16 @@ static bool unit_has_arena(const OscUnit *u) {
     return false;
 }
 
+/* 1 if any function uses a pool instruction (OSC-3 item 2) */
+static bool unit_has_pool(const OscUnit *u) {
+    for (int fi = 0; fi < u->nfuncs; fi++)
+        for (uint32_t i = 0; i < u->funcs[fi].ninsns; i++) {
+            uint8_t op = u->funcs[fi].insns[i].op;
+            if (op >= OSC_I_POPEN && op <= OSC_I_HSTORE) return true;
+        }
+    return false;
+}
+
 static void encode_unit(const OscUnit *u, W *w) {
     /* format version 1 (OSC-1, no structs) / 2 (OSC-2 structs: struct table
      * after the magic) / 3 (OSC-2 arenas: AOPEN/AALLOC/ADESTROY present; the
@@ -472,8 +559,10 @@ static void encode_unit(const OscUnit *u, W *w) {
     bool arena = unit_has_arena(u);
     if (u->nstructs) magic[7] = 2;
     if (arena) magic[7] = 3;
+    bool pool = unit_has_pool(u); /* OSC-3 item 2: version 4, same layout as 3 */
+    if (pool) magic[7] = 4;
     wbytes(w, magic, sizeof magic);
-    if (u->nstructs || arena) {
+    if (u->nstructs || arena || pool) {
         w8(w, u->nstructs);
         for (int k = 0; k < u->nstructs; k++) {
             const OscStruct *s = &u->structs[k];
@@ -513,6 +602,12 @@ static void encode_unit(const OscUnit *u, W *w) {
             case OSC_I_AOPEN: wvr(w, in->dst); w8(w, in->imm); break;
             case OSC_I_AALLOC: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
             case OSC_I_ADESTROY: wvr(w, in->a); break;
+            case OSC_I_POPEN: wvr(w, in->dst); w8(w, in->sub); w8(w, in->nargs); w64(w, in->imm); break;
+            case OSC_I_PCLOSE: wvr(w, in->a); break;
+            case OSC_I_HALLOC: case OSC_I_HGEN: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
+            case OSC_I_HFREE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
+            case OSC_I_HLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
+            case OSC_I_HSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); wvr(w, in->args[0]); break;
             case OSC_I_LOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
             case OSC_I_STORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
             case OSC_I_FLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); w8(w, in->imm); break;

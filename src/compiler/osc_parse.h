@@ -19,6 +19,7 @@
 #define OSC_AST_MAX_DEPTH 64       /* nesting of blocks + expressions */
 #define OSC_AST_MAX_REL   16384    /* release-list entries (checker) */
 #define OSC_ARENA_MAX_CELLS OSC_MAX_ARRAY_LEN  /* arena bound K: 1..64 cells (one pool slot) */
+#define OSC_POOL_MAX_SLOTS  16  /* pool K: 1..16 slots (OSC-0B model slot capacity) */
 
 typedef enum {
     ON_NONE = 0,
@@ -60,9 +61,23 @@ typedef enum {
     /* OSC-2 arenas (docs/osc/OSC-2-DESIGN.md section 3). An arena allocation
      * is an ON_LET_ALLOC (or, refused by the checker, ON_LET_MOVE) whose c is
      * an ON_NAME naming the arena ("in NAME"); c = -1 otherwise. */
-    ON_ARENA        /* tok = arena name; ival = bound K (1..OSC_ARENA_MAX_CELLS);
+    ON_ARENA,       /* tok = arena name; ival = bound K (1..OSC_ARENA_MAX_CELLS);
                      * b = body ON_BLOCK; checker: sym = arena symbol, rel = the
                      * body's owners then the arena itself (REGION_DESTROY) */
+    /* OSC-3 item 2: versioned handles (docs/osc/OSC-3-DESIGN.md "Item 2").
+     * Appended. */
+    ON_POOL,        /* tok = pool name; ty.s = element scalar; ival = K slots
+                     * (1..OSC_POOL_MAX_SLOTS); lo = declared generation base
+                     * (u64 bits); b = body ON_BLOCK; checker: sym = pool symbol,
+                     * rel = the body's owners then the pool itself (PCLOSE) */
+    ON_LET_HANDLE,  /* mut; tok = handle name; c = ON_NAME of the declared pool;
+                     * a = ON_PALLOC or ON_NAME (copy of a handle) */
+    ON_PALLOC,      /* tok = pool name; a = initial value expr ("p.alloc(e)") */
+    ON_PFREE,       /* tok = pool name; a = handle expr ("p.free(h);") */
+    ON_HLOAD,       /* checker rewrite of ON_INDEX on a pool: tok = pool; a = handle;
+                     * sym = pool symbol, sym2 = handle symbol */
+    ON_HSTORE       /* checker rewrite of ON_STORE on a pool: tok = pool; a = handle;
+                     * b = value; sym = pool symbol, sym2 = handle symbol */
 } OscNodeKind;
 
 typedef struct {

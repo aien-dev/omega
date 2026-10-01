@@ -42,7 +42,20 @@ typedef enum {
      * counter (next_serial). */
     OSC_RT_EV_REGION_OPEN = 3,
     OSC_RT_EV_ARENA_ALLOC = 4,
-    OSC_RT_EV_REGION_DESTROY = 5
+    OSC_RT_EV_REGION_DESTROY = 5,
+    /* OSC-3 item 2 versioned handles (docs/osc/OSC-3-DESIGN.md "Item 2"). For
+     * the five pool events, slot = the pool table index, serial = the pool
+     * instance serial (pool_serial, its own counter), and the u64 generation
+     * is in ev_gen[] at the same index. POOL_OPEN / POOL_CLOSE: len = K,
+     * gen = the declared generation base. SLOT_ALLOC / SLOT_FREE: len = the
+     * pool slot (0-based), gen = the slot generation (SLOT_FREE: the
+     * generation being freed). HANDLE_USE: len = slot | rights << 8 (rights
+     * 1 = read, 2 = write), gen = the handle generation. */
+    OSC_RT_EV_POOL_OPEN = 6,
+    OSC_RT_EV_SLOT_ALLOC = 7,
+    OSC_RT_EV_SLOT_FREE = 8,
+    OSC_RT_EV_HANDLE_USE = 9,
+    OSC_RT_EV_POOL_CLOSE = 10
 } OscRtEventKind;
 
 typedef struct {
@@ -51,6 +64,20 @@ typedef struct {
     uint16_t len;      /* elements */
     uint32_t serial;   /* allocation serial number (object identity, 1-based) */
 } OscRtEvent;
+
+/* OSC-3 item 2 pool slot states */
+enum { OSC_RT_SLOT_FREE = 0, OSC_RT_SLOT_LIVE = 1, OSC_RT_SLOT_RETIRED = 2 };
+#define OSC_RT_POOLS 8
+
+typedef struct {
+    uint8_t  open;
+    uint8_t  k;                        /* slots 1..OSC_POOL_SLOTS */
+    uint8_t  state[OSC_POOL_SLOTS];    /* OSC_RT_SLOT_* */
+    uint32_t serial;                   /* pool instance serial (1-based) */
+    uint64_t base;                     /* declared generation base */
+    uint64_t gen[OSC_POOL_SLOTS];
+    uint64_t val[OSC_POOL_SLOTS];
+} OscRtPool;
 
 typedef struct OscRt OscRt;
 struct OscRt {
@@ -62,6 +89,14 @@ struct OscRt {
     uint64_t (*arena_open)(OscRt *rt, uint64_t cap);                          /* offset 24 */
     uint64_t (*arena_alloc)(OscRt *rt, uint64_t h, uint64_t len, uint64_t init); /* offset 32 */
     void     (*arena_destroy)(OscRt *rt, uint64_t h);                         /* offset 40 */
+    /* OSC-3 item 2 pools (appended; native code reaches them at these offsets). */
+    uint64_t (*pool_open)(OscRt *rt, uint64_t k, uint64_t base);                    /* offset 48 */
+    void     (*pool_close)(OscRt *rt, uint64_t p);                                  /* offset 56 */
+    uint64_t (*h_alloc)(OscRt *rt, uint64_t p, uint64_t init);                      /* offset 64 */
+    uint64_t (*h_gen)(OscRt *rt, uint64_t p, uint64_t slot);                        /* offset 72 */
+    void     (*h_free)(OscRt *rt, uint64_t p, uint64_t slot, uint64_t gen);         /* offset 80 */
+    uint64_t (*h_load)(OscRt *rt, uint64_t p, uint64_t slot, uint64_t gen);         /* offset 88 */
+    void     (*h_store)(OscRt *rt, uint64_t p, uint64_t slot, uint64_t gen, uint64_t v); /* offset 96 */
     /* Host-side state. */
     uint64_t cells[OSC_RT_SLOTS][OSC_MAX_ARRAY_LEN];
     uint8_t  live[OSC_RT_SLOTS];
@@ -82,6 +117,17 @@ struct OscRt {
      * is the bump pointer (cells handed out so far). */
     uint8_t  slot_arena[OSC_RT_SLOTS];
     uint16_t arena_top[OSC_RT_SLOTS];
+    /* OSC-3 item 2 pools: OSC_RT_POOLS table entries; pool id = index + 1. */
+    OscRtPool pools[OSC_RT_POOLS];
+    uint32_t pool_serial;
+    uint64_t ev_gen[OSC_RT_EVENTS];
+    /* The refused operation of a STALE / RETIRED / POOL_FULL trap (not logged:
+     * the log holds the accepted prefix). trap_op: 1 = use, 2 = free,
+     * 3 = alloc; trap_pool: pool index; trap_slot / trap_gen: the stale
+     * handle (STALE) or the lowest retired slot (RETIRED); trap_rights: the
+     * use's rights (1 read, 2 write). Zero when the last run did not trap so. */
+    uint8_t  trap_op, trap_pool, trap_slot, trap_rights;
+    uint64_t trap_gen;
 };
 
 void osc_rt_init(OscRt *rt);
@@ -121,5 +167,23 @@ int osc_rt_is_live_ref(const OscRt *rt, uint64_t addr, uint64_t len);
 uint64_t osc_rt_arena_open(OscRt *rt, uint64_t cap);
 uint64_t osc_rt_arena_alloc(OscRt *rt, uint64_t h, uint64_t len, uint64_t init);
 void osc_rt_arena_destroy(OscRt *rt, uint64_t h);
+
+/* ---- OSC-3 item 2 versioned handles (docs/osc/OSC-3-DESIGN.md) ----------
+ * A pool holds k (1..16) slots; each slot is free, live or retired and has
+ * a u64 generation (initially the declared base). A handle is (slot, gen).
+ * osc_rt_h_alloc takes the lowest free slot (POOL_FULL if every slot is live,
+ * RETIRED if none is free and at least one is retired). osc_rt_h_free
+ * retires a slot freed at generation UINT64_MAX, else bumps its generation;
+ * generations never wrap. Use or free through a handle whose slot is not live
+ * at that generation traps OSC_TRAP_STALE. A bad pool id or slot traps
+ * OSC_TRAP_RUNTIME (never happens for checked code); no free pool table entry
+ * traps OSC_TRAP_OOM. Pools do not touch the array slots or live_count. */
+uint64_t osc_rt_pool_open(OscRt *rt, uint64_t k, uint64_t base);
+void osc_rt_pool_close(OscRt *rt, uint64_t p);
+uint64_t osc_rt_h_alloc(OscRt *rt, uint64_t p, uint64_t init);
+uint64_t osc_rt_h_gen(OscRt *rt, uint64_t p, uint64_t slot);
+void osc_rt_h_free(OscRt *rt, uint64_t p, uint64_t slot, uint64_t gen);
+uint64_t osc_rt_h_load(OscRt *rt, uint64_t p, uint64_t slot, uint64_t gen);
+void osc_rt_h_store(OscRt *rt, uint64_t p, uint64_t slot, uint64_t gen, uint64_t v);
 
 #endif /* OSC_RT_H */

@@ -1,0 +1,7 @@
+// expect: POOL_CAPACITY object=p line=4
+// transition: pool size outside 1..16
+fn f() -> i64 {
+    pool p: [i64; 17] {
+    }
+    return 0;
+}
