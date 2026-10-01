@@ -927,6 +927,7 @@ int main(int argc, char **argv) {
     int skipped = 0;
     for (int r = 0; r < NREPO; r++) {
         scan_repo(r, defp[r]);
+        if (!repo_skipped[r]) fprintf(stderr, "SCANNED %s HEAD %s (%s)\n", REPO_NAME[r], repo_head[r], defp[r]);
         if (repo_skipped[r]) {
             skipped++;
             fprintf(stderr, "SKIPPED %s: no git work tree at %s (set %s). Skipping is NOT a pass.\n",

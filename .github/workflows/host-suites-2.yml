@@ -23,7 +23,7 @@ name: Host suites 2
 #               test-ma-digital-bottom 3.5 min
 #   path      : test-path 30 s;  crumbline : test-crumbline 1 s
 #   runtime   : test-r15-instr test-r15-receipt test-r16-inventory
-#               test-r16-negative test-r16-surface
+#               test-r16-negative test-r16-surface test-r16-qualify-selftest
 #               test-r16-negative-mutants 5 min (Spark: 4.3 min)
 #   argus     : test-argus-runtime test-machine-identity-argus
 #   numeric2  : test-numeric-reduce-cpu test-divsqrt-host 6 s
@@ -330,6 +330,9 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make test-r16-negative-mutants
+      - name: R16 qualify script self-test (dirty tree refused, NOT_RUN honest, failing check exits non-zero)
+        if: ${{ !cancelled() }}
+        run: make test-r16-qualify-selftest
 
   argus:
     needs: changes

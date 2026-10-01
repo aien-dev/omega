@@ -762,6 +762,11 @@ r16-inventory: $(R16_INVENTORY)
 test-r16-inventory: $(R16_INVENTORY)
 	sh tests/r16_inventory/run.sh $(R16_INVENTORY)
 
+# Lane 32 follow-up: dry-mode self-test of tools/r16_qualify.sh (no chip, no build).
+.PHONY: test-r16-qualify-selftest
+test-r16-qualify-selftest:
+	bash tests/r16_qualify/run.sh
+
 # R16-G3: the authoritative path with the legacy orchestrators unavailable.
 # Link map, shared libraries, embedded names and an exec trace of the R13
 # living system and the R14 recovery run, legacy programs stubbed on PATH.
