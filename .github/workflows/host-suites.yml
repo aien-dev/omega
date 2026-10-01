@@ -1,0 +1,103 @@
+name: Host suites
+
+# Host-runnable suites that rx-host.yml does not run, each triggered by its own
+# files. All jobs run on the AArch64 hosted runner (same instruction set as the
+# DGX Spark; searchtrace executes generated AArch64 code). The runner is NOT the
+# Spark: nothing here is a chip or hardware qualification.
+#
+# Coverage map of `make test-*` targets (Lane 20 audit, 2026-10-01):
+#   rx-host.yml host-reference : r3 r7 r8 r9 r12 action-graph state-projection
+#       capability-query capability-graph skillroute-compose semantic-comm
+#       cognitive-routing sem-incremental cortex jspace-prod composition
+#       composition-attach-asan composition-gate fabric fabric-living
+#       machine-identity effect-cap64 workflow-fusion typed-results costmodel
+#   rx-host.yml omega-faculty-arm : program-id program-realize r10 r11
+#       empirical (EMPIRICAL_ALLOW_NO_WIN=1: single-core runner) plan-reuse
+#       (+ builds only of the R13/R14 living hosts)
+#   turing-yield.yml : turing-yield turing-energy
+#   this file : searchtrace, estimation est-tools estimation-v3 est3c-tools,
+#       numeric-cpu numeric-qualify
+#
+# Deliberately NOT on GitHub (no GB10, no resident seat, no quiet flag here):
+#   test-composition-gate-gpu, test-r12-silicon, test-r13-silicon,
+#   test-r14-silicon, test-r15-parity-silicon, test-r16-authpath-silicon,
+#   test-m5..test-m19 (chip milestones), test-m19r-qualify, test-gate14-combine,
+#   test-polyglot-mojo (needs Mojo toolchain), test-r13-host / test-r14-host
+#   (need both GB10 core classes; rx-host builds them only).
+# Not yet wired (host-only, follow-up): test-numeric-sweep,
+#   test-numeric-e1-exhaustive (2^32 inputs per op, too long), visor-*,
+#   turing-* other than yield/energy, polyglot*, algebra, realize, phase-twin,
+#   ma-digital-bottom, path, crumbline, brownian-tps, argus-runtime,
+#   branch-reuse, r15-*-host, r16-inventory/negative/surface.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Makefile'
+      - '.github/workflows/host-suites.yml'
+      - 'src/sha256.*'
+      # searchtrace (links the Omega core and realization)
+      - 'src/searchtrace/**'
+      - 'tests/searchtrace/**'
+      - 'mk/searchtrace.mk'
+      - 'src/omega_*'
+      - 'src/aarch64_*'
+      # estimation
+      - 'src/estimation/**'
+      - 'tests/estimation/**'
+      - 'tools/estimation/**'
+      - 'mk/estimation*.mk'
+      - 'docs/estimation/EST3C_PROTOCOL_V3.md'
+      - 'docs/estimation/receipts/est3c-v3/**'
+      - 'evidence/R15/raw/**'
+      # numeric (Gate 5 CPU tier)
+      - 'tests/test_omega_numeric.c'
+      - 'tests/numeric_oracle.h'
+      - 'tests/run_numeric_gates.sh'
+      - 'tools/test_numeric_qualify.sh'
+      - 'tools/numeric_*'
+      - 'tools/m19r_qualify.sh'
+      - 'tools/json_canon.c'
+
+jobs:
+  searchtrace:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Search-trace corpus, G3 holdout format and signature (M23), plain + ASan/UBSan
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-searchtrace
+
+  estimation:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: EST-0/EST-1 types, filter, reference (plain + ASan/UBSan, purity)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-estimation
+      - name: EST-2/EST-3 replay, fit and evaluation tools (synthetic + run A data)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-est-tools
+      - name: ESTIMATION-2 v3 predictive layer
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-estimation-v3
+      - name: EST-3c v3 tools (synthetic data; no sealed run)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-est3c-tools
+
+  numeric-cpu:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Gate 5 CPU tier (only the declared chip-only IDs may SKIP)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-cpu
+      - name: Gate 5 qualifier and receipt writer (host-only, fake descriptors)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-qualify
