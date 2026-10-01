@@ -1,0 +1,1 @@
+INVALID_FOREIGN_PROCESS: attempt 1 (seed 0xE5C5D1) saw 111 foreign build/test samples between 15:01:57Z and 15:07:32Z (cargo, rustc, make, cc, test_osc_backend); aborted by lane44 at 15:31Z after 1824 s. No WINDOW file; recorded unfitted, never scored.
