@@ -114,33 +114,55 @@ static int candidate_fn(RxCtx *x) {
     uint64_t seq = g->field[RXC_G_SEQ];
     if (seq == 0) return 0;
     uint64_t skill_word = g->field[k == 0 ? RXC_G_SKILL0 : RXC_G_SKILL1];
-    uint64_t ref = 0, result = 0;
-    if (k < c->n_routes && skill_word != 0 && c->run_route[k].verdict == SR_OK) {
-        const AgSkill *s = skill_of(c, (uint32_t)skill_word);
-        const uint8_t *want = c->run_route[k].skill_digest;
-        if (s && s->fn && (digest_zero(want) || memcmp(want, s->identity, 32) == 0)) {
-            if (fault(c, RXC_FP_BEFORE_FORK, k)) return -1;
-            JsBranchRef base = ref_unpack(st->field[RXC_S_REF]), next;
-            uint32_t subj = k == 0 ? RXC_SUBJ_CAND0 : RXC_SUBJ_CAND1;
-            if (js_branch_fork_staged(&c->js, base, subj, &next) != JS_OK) return -1;
-            uint64_t in = g->field[RXC_G_INPUT];
-            int failed = 0;
-            uint64_t r = s->fn(&in, 1, 0, &failed);
-            if (failed || js_branch_derive(&c->js, next.id, r) != JS_OK) {
-                js_branch_release_ref(&c->js, next, subj);
-            } else {
-                if (fault(c, RXC_FP_CANDIDATE, k)) return -1;
-                ref = ref_pack(next);
-                result = r;
-                if (k == 0 && RXC_ROGUE(c))
-                    out_put(x, c->state, RXC_S_REF, ref);   /* refused: not in its write set */
-            }
+    uint64_t ref = 0, result = 0, home = RXC_HOME_LOCAL;
+    const SrRoute *rt = k < c->n_routes ? &c->run_route[k] : NULL;
+    const AgSkill *s = NULL;
+    int runnable = 0;
+    if (rt && skill_word != 0 && rt->verdict == SR_OK) {
+        s = skill_of(c, (uint32_t)skill_word);
+        const uint8_t *want = rt->skill_digest;
+        runnable = s && s->fn && (digest_zero(want) || memcmp(want, s->identity, 32) == 0);
+    } else if (rt && skill_word != 0 && rt->verdict == SR_E_REMOTE) {
+        /* The provider is on another machine: the Fabric runs it there (the
+         * hook revalidates the route and the machine's lease first). The
+         * claim names that machine's advertised procedure whether it ran,
+         * was refused or no hook is set (never a local identity). */
+        home = RXC_HOME_FABRIC;
+        memcpy(c->remote.digest[k], rt->skill_digest, 32);
+        c->remote.seq[k] = seq;
+        runnable = c->remote.run != NULL;
+    }
+    if (runnable) {
+        if (fault(c, RXC_FP_BEFORE_FORK, k)) return -1;
+        JsBranchRef base = ref_unpack(st->field[RXC_S_REF]), next;
+        uint32_t subj = k == 0 ? RXC_SUBJ_CAND0 : RXC_SUBJ_CAND1;
+        if (js_branch_fork_staged(&c->js, base, subj, &next) != JS_OK) return -1;
+        uint64_t in = g->field[RXC_G_INPUT];
+        int failed = 0;
+        uint64_t r = 0;
+        if (home == RXC_HOME_LOCAL) {
+            r = s->fn(&in, 1, 0, &failed);
+        } else if (c->remote.run(c->remote.ctx, c->router, rt, in, c->run_now, &r) != 0) {
+            failed = 1;
+            __atomic_add_fetch(&c->remote.refused, 1, __ATOMIC_RELAXED);
+        } else {
+            __atomic_add_fetch(&c->remote.ran, 1, __ATOMIC_RELAXED);
+        }
+        if (failed || js_branch_derive(&c->js, next.id, r) != JS_OK) {
+            js_branch_release_ref(&c->js, next, subj);
+        } else {
+            if (fault(c, RXC_FP_CANDIDATE, k)) return -1;
+            ref = ref_pack(next);
+            result = r;
+            if (k == 0 && RXC_ROGUE(c))
+                out_put(x, c->state, RXC_S_REF, ref);   /* refused: not in its write set */
         }
     }
     RxObjRef me = c->cand[k];
     out_put(x, me, RXC_C_REF, ref);
     out_put(x, me, RXC_C_RESULT, result);
     out_put(x, me, RXC_C_SKILL, skill_word);
+    out_put(x, me, RXC_C_HOME, home);
     out_put(x, me, RXC_C_GOAL, seq);
     out_put(x, me, RXC_C_DONE, seq);
     return 0;
@@ -363,10 +385,20 @@ static int compose_records(RxCompose *c, uint64_t S, uint64_t V, const uint8_t (
                 if (js_branch_check(&c->js, r) == JS_OK) js_branch_content_digest(&c->js, r.id, d);
             }
             words_from_digest(d, p + RXC_CP_DIGEST0);
-            /* The procedure that produced it: its executable identity, which
-             * the router admitted only when it equals the graph's digest. */
-            const AgSkill *sk = skill_of(c, (uint32_t)cf[k][RXC_C_SKILL]);
-            if (sk && cf[k][RXC_C_SKILL]) words_from_digest(sk->identity, p + RXC_CP_SKILLDIG0);
+            /* The procedure that produced it: locally its executable
+             * identity, which the router admitted only when it equals the
+             * graph's digest; on a Fabric machine the digest that machine
+             * advertised (and ran, if the claim has a branch). It is held in
+             * memory per goal; a pending record is completed only within the
+             * same open, before the next goal's candidates run. */
+            p[RXC_CP_HOME] = cf[k][RXC_C_HOME];
+            if (cf[k][RXC_C_HOME] == RXC_HOME_FABRIC) {
+                if (c->remote.seq[k] && c->remote.seq[k] == cf[k][RXC_C_GOAL])
+                    words_from_digest(c->remote.digest[k], p + RXC_CP_SKILLDIG0);
+            } else {
+                const AgSkill *sk = skill_of(c, (uint32_t)cf[k][RXC_C_SKILL]);
+                if (sk && cf[k][RXC_C_SKILL]) words_from_digest(sk->identity, p + RXC_CP_SKILLDIG0);
+            }
             CxHeader h;
             memset(&h, 0, sizeof h);
             h.cls = CX_CLAIM;
@@ -855,6 +887,13 @@ int rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, con
     return RX_OK;
 }
 
+int rx_compose_set_remote(RxCompose *c, RxcRemoteRun run, void *ctx) {
+    if (!c || !c->world) return RX_ERR_ARG;
+    c->remote.run = run;
+    c->remote.ctx = run ? ctx : NULL;
+    return RX_OK;
+}
+
 JsBranchRef rx_compose_state(RxCompose *c) {
     RxObject o;
     if (rx_world_read(c->world, c->state, &o) != RX_OK) return (JsBranchRef){ UINT32_MAX, 0 };
@@ -915,6 +954,7 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
     out->old_ref = old;
     uint64_t seq = ++c->seq;
     c->run_input = input;
+    c->run_now = now_us;
     uint64_t sk[RXC_K] = { 0, 0 };
     for (uint32_t k = 0; k < (uint32_t)n && k < RXC_K; k++)
         sk[k] = ((uint64_t)routes[k].skill_version << 32) | routes[k].chosen.skill_id;

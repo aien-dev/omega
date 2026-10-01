@@ -78,7 +78,8 @@ enum { RXC_ADMIT_LOSER = 1, RXC_ADMIT_ROLLBACK = 2, RXC_ADMIT_RECOVERED = 3 };
  *                   {state record, evidence} */
 enum { RXC_CP_K = 0, RXC_CP_REF, RXC_CP_RESULT, RXC_CP_SKILL, RXC_CP_INPUT, RXC_CP_GOALSEQ,
        RXC_CP_PASS, RXC_CP_DIGEST0, RXC_CP_SKILLDIG0 = RXC_CP_DIGEST0 + 4,
-       RXC_CP_WORDS = RXC_CP_SKILLDIG0 + 4 };
+       RXC_CP_HOME = RXC_CP_SKILLDIG0 + 4,      /* RXC_HOME_*: where the Skill ran */
+       RXC_CP_WORDS };
 enum { RXC_EP_WINNER = 0, RXC_EP_WREF, RXC_EP_LREF, RXC_EP_PASSMASK, RXC_EP_RESULT,
        RXC_EP_GOALSEQ, RXC_EP_VERIFIER, RXC_EP_WDIGEST0, RXC_EP_WORDS = RXC_EP_WDIGEST0 + 4 };
 enum { RXC_AP_REF = 0, RXC_AP_GOAL, RXC_AP_K, RXC_AP_WORDS };
@@ -86,7 +87,9 @@ enum { RXC_AP_REF = 0, RXC_AP_GOAL, RXC_AP_K, RXC_AP_WORDS };
 /* Verdict object fields. */
 enum { RXC_V_WINNER = 0, RXC_V_WREF, RXC_V_LREF, RXC_V_PASSMASK, RXC_V_GOAL, RXC_V_RESULT };
 /* Candidate object fields. */
-enum { RXC_C_REF = 0, RXC_C_RESULT, RXC_C_SKILL, RXC_C_GOAL, RXC_C_DONE };
+enum { RXC_C_REF = 0, RXC_C_RESULT, RXC_C_SKILL, RXC_C_GOAL, RXC_C_DONE, RXC_C_HOME };
+/* Where a candidate's Skill ran (candidate RXC_C_HOME, claim RXC_CP_HOME). */
+enum { RXC_HOME_LOCAL = 0, RXC_HOME_FABRIC = 1 };
 /* Goal object fields. */
 enum { RXC_G_INPUT = 0, RXC_G_OP, RXC_G_SKILL0, RXC_G_SKILL1, RXC_G_SEQ };
 /* State object fields. */
@@ -105,6 +108,19 @@ typedef enum {
 
 /* The contract the AEGIS verifier enforces on a candidate's result. */
 typedef int (*RxcContract)(uint64_t input, uint64_t result);
+
+/* Fabric: how a candidate runs a route whose provider is on another machine
+ * (route->verdict == SR_E_REMOTE). Called from the candidate reaction, on a
+ * World worker, with the run's clock. It must revalidate the route against
+ * the Capability Graph (sr_route_check == SR_E_REMOTE) and the machine's
+ * Fabric membership at now_us, run exactly the procedure the route names
+ * (skill id + advertised digest) on that machine, and return 0 with its
+ * result, or nonzero to refuse (the candidate then proposes nothing). It
+ * mints and holds no World authority: the result is only a candidate, checked
+ * by the AEGIS verifier like any local one. Two candidates may call it at
+ * once. Without a hook a remote route proposes nothing (as before). */
+typedef int (*RxcRemoteRun)(void *ctx, const SrRouter *router, const SrRoute *route,
+                            uint64_t input, uint64_t now_us, uint64_t *result);
 
 typedef struct {
     int outcome;                       /* RXC_OUT_* */
@@ -159,6 +175,15 @@ typedef struct RxCompose {
     uint64_t run_input;
     uint32_t n_routes;
     SrRoute run_route[RXC_K];
+    uint64_t run_now;                  /* the run's clock (remote dispatch revalidates at it) */
+    /* Fabric dispatch of remote routes (rx_compose_set_remote; cleared at open/attach). */
+    struct {
+        RxcRemoteRun run;
+        void *ctx;
+        uint64_t ran, refused;         /* remote candidate runs: done / refused by the hook */
+        uint64_t seq[RXC_K];           /* goal seq of the last remote run of candidate k */
+        uint8_t digest[RXC_K][32];     /* the advertised digest it ran */
+    } remote;
     /* authority minted at open (one per step, rights of that step only) */
     RxCapRef cap_ext, cap_cand[RXC_K][3], cap_verify[4], cap_commit[2];
     struct RxcCandUser { struct RxCompose *c; uint32_t k; } cand_user[RXC_K];
@@ -228,6 +253,9 @@ int  rx_compose_enroll_callers(RxWorld *w, RxCallerKeyring *keys);
 int  rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, const char *dir,
                        const AienMachineId *self, uint64_t session, const SrRouter *router,
                        RxcContract contract, AienosCapAdmin *admin);
+/* Install (run != NULL) or remove the Fabric dispatch of remote routes. Call
+ * after open/attach (both clear it) and never during rx_compose_run. */
+int  rx_compose_set_remote(RxCompose *c, RxcRemoteRun run, void *ctx);
 /* The branch the World names now. */
 JsBranchRef rx_compose_state(RxCompose *c);
 /* Content digest of the composition record (Cortex objects without timing

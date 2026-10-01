@@ -443,11 +443,18 @@ test-r12-silicon: $(RX_R12_SILICON)
 # of the canonical living build, so every R13/R14/R15/R16 binary links them.
 # rx_graph.o, rx_capq.o and rx_skillroute.o keep their own no-mint symbol
 # checks; the living host build depends on them so the checks run with it.
+# Lane 13: Fabric F5-0 (src/fabric, mk/fabric.mk) in the living build; the R13
+# host test runs a second simulated machine whose Skill the composition uses
+# (tests/fabric/fab_living_phase.h). Its purity check runs in test-fabric-living.
+RX_FABRIC_LIVING_SRCS = src/fabric/fabric.c src/fabric/fab_hmac.c src/fabric/fab_loopback.c \
+	src/fabric/fab_dispatch.c
 RX_COMPOSE_LIVING_SRCS = src/runtime/aien_machine_id.c src/runtime/rx_jspace.c \
 	src/runtime/rx_cortex.c src/runtime/rx_cortex_record.c src/runtime/rx_graph.c \
-	src/runtime/rx_capq.c src/runtime/rx_skillroute.c src/runtime/rx_compose.c
+	src/runtime/rx_capq.c src/runtime/rx_skillroute.c src/runtime/rx_compose.c \
+	$(RX_FABRIC_LIVING_SRCS)
 RX_COMPOSE_LIVING_CHECKS = $(OUT_DIR)/rx_graph.o $(OUT_DIR)/rx_capq.o $(OUT_DIR)/rx_skillroute.o \
-	src/runtime/rx_compose.h tests/runtime/rx_compose_fixture.h
+	src/runtime/rx_compose.h tests/runtime/rx_compose_fixture.h src/fabric/fab_dispatch.h \
+	tests/fabric/fab_living_phase.h
 
 # R13 host uses the R12 processor stand-in and cannot claim the silicon gate.
 # R13 silicon runs the same world against the physical resident GB10 seat.
