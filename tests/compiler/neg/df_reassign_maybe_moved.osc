@@ -1,0 +1,10 @@
+// expect: IMMUTABLE_ASSIGN object=a line=8
+// re-assigning a maybe-moved owner is refused (owners are never reassigned).
+fn take(x: own [u8; 2]) -> u8 { return x[0]; }
+fn f(c: bool) -> u8 {
+    let a: own [u8; 2] = alloc(3);
+    let b: own [u8; 2] = alloc(4);
+    if c { let s: u8 = take(a); }
+    a = b;
+    return 0;
+}

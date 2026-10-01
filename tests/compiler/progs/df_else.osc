@@ -1,0 +1,18 @@
+// entry: f
+// OSC-3 item 3 (drop flags): a struct owner moved in the else-branch only
+// (by a let-move into a branch-local owner, released at the branch end).
+struct P { x: u32, y: u32 }
+
+fn f(k: u32) -> u32 {
+    let p: own P = P { x: k & 255, y: 3 };
+    let mut r: u32 = 1;
+    if k < 10 {
+        r = r + p.x;
+    } else {
+        let q: own P = p;
+        r = q.y * 2;
+    }
+    return r;
+}
+// expect-run: f 4 -> 5
+// expect-run: f 12 -> 6

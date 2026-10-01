@@ -918,10 +918,30 @@ static void struct_layout(void)
 /* Destruction order of progs/structs_dtor.osc: owners released at scope end in
  * reverse declaration order, the moved-from struct is not released, in the
  * interpreter and natively. */
-/* Run entry 0 of <dir>/<file> with argument 1 in the interpreter and natively;
- * both pool logs must match the expected (kind, serial) sequence exactly. */
-static void dtor_order(const char *dir, const char *file, uint64_t want_ret, unsigned n, const uint8_t *want_kind,
-                       const uint32_t *want_ser)
+/* Index of the function named `name` that takes exactly `nargs` parameters,
+ * all scalar, or -1. The harnesses below pass raw integers as arguments; a
+ * ref parameter (own / borrow) would receive an integer where native code
+ * expects an object address and dereference it (segfault), so such a
+ * function is never a valid harness entry. */
+static int scalar_entry(const OscUnit *u, const char *name, unsigned nargs)
+{
+    for (int k = 0; k < u->nfuncs; k++) {
+        const OscFunc *f = &u->funcs[k];
+        if (strcmp(f->name, name) != 0) continue;
+        if ((unsigned)f->nparams != nargs) return -1;
+        for (unsigned p = 0; p < nargs; p++)
+            if (f->vtype[p].s == OSC_T_REF || f->vtype[p].s == OSC_T_VOID) return -1;
+        return k;
+    }
+    return -1;
+}
+
+/* Run function `entry` of <dir>/<file> with argument arg in the interpreter and
+ * natively; both pool logs must match the expected (kind, serial) sequence
+ * exactly. The entry is looked up by name: a program may define helpers before
+ * it (no forward references), so function 0 is not the entry in general. */
+static void dtor_order_k(const char *dir, const char *file, const char *entry, uint64_t arg, uint64_t want_ret,
+                         unsigned n, const uint8_t *want_kind, const uint32_t *want_ser)
 {
     char path[1024];
     snprintf(path, sizeof path, "%s/%s", dir, file);
@@ -935,15 +955,21 @@ static void dtor_order(const char *dir, const char *file, uint64_t want_ret, uns
     memset(&c, 0, sizeof c);
     int rc = osc_compile(src, len, U1, &d, NULL);
     free(src);
-    CHECK(rc == 0 && osc_cg_compile(U1, &c, err, sizeof err) == 0, "%s: compile failed", file);
+    CHECK(rc == 0, "%s: compile failed", file);
     if (rc) return;
+    int fi = scalar_entry(U1, entry, 1);
+    CHECK(fi >= 0, "%s: no function '%s' taking one scalar argument", file, entry);
+    if (fi < 0) return;
+    int cg = osc_cg_compile(U1, &c, err, sizeof err);
+    CHECK(cg == 0, "%s: codegen refused: %s", file, err);
+    if (cg) return;
     OscNative nm;
     if (osc_native_map(&nm, c.code, c.len) != 0) { CHECK(0, "%s: map failed", file); osc_cg_free(&c); return; }
-    uint64_t args[1] = {1}, ri = 0, rn = 0;
+    uint64_t args[1] = {arg}, ri = 0, rn = 0;
     osc_rt_reset(RI);
     osc_rt_reset(RN);
-    int ti = osc_interp_run(U1, 0, args, 1, RI, &ri);
-    int tn = osc_rt_call_native(RN, osc_native_at(&nm, c.entry[0]), args, 1, &rn);
+    int ti = osc_interp_run(U1, fi, args, 1, RI, &ri);
+    int tn = osc_rt_call_native(RN, osc_native_at(&nm, c.entry[fi]), args, 1, &rn);
     rt_replay_run(RN, file);
     CHECK(ti == 0 && tn == 0 && ri == want_ret && rn == want_ret, "%s: run %d/%d ret %llu/%llu", file, ti, tn,
           (unsigned long long)ri, (unsigned long long)rn);
@@ -959,11 +985,62 @@ static void dtor_order(const char *dir, const char *file, uint64_t want_ret, uns
     osc_cg_free(&c);
 }
 
+static void dtor_order(const char *dir, const char *file, const char *entry, uint64_t want_ret, unsigned n,
+                       const uint8_t *want_kind, const uint32_t *want_ser)
+{
+    dtor_order_k(dir, file, entry, 1, want_ret, n, want_kind, want_ser);
+}
+
+/* OSC-3 item 3 (drop flags): progs/df_order.osc release order for k = 0, 1, 3
+ * (see the program header). Each engine's pool log is printed as A<serial>
+ * (alloc) / R<serial> (release) after dtor_order_k checked it exactly. */
+static void df_fmt_log(const OscRt *rt, char *out, size_t cap)
+{
+    out[0] = 0;
+    for (unsigned k = 0; k < rt->nev; k++) {
+        size_t l = strlen(out);
+        snprintf(out + l, cap - l, "%s%c%u", k ? " " : "", rt->ev[k].kind == 1 ? 'A' : rt->ev[k].kind == 2 ? 'R' : '?',
+                 rt->ev[k].serial);
+    }
+}
+
+static void df_dtor_order(const char *dir)
+{
+    static const uint8_t kind0[10] = {1, 1, 1, 2, 1, 1, 2, 2, 2, 2}, kind3[10] = {1, 1, 1, 2, 1, 2, 1, 2, 2, 2};
+    static const uint32_t ser0[10] = {1, 2, 3, 2, 4, 5, 5, 4, 3, 1}, ser1[10] = {1, 2, 3, 1, 4, 5, 5, 4, 3, 2},
+                          ser3[10] = {1, 2, 3, 1, 4, 4, 5, 5, 3, 2};
+    static const uint64_t ks[3] = {0, 1, 3}, rets[3] = {8, 8, 26};
+    const uint32_t *sers[3] = {ser0, ser1, ser3};
+    const uint8_t *kinds[3] = {kind0, kind0, kind3};
+    for (int t = 0; t < 3; t++) {
+        unsigned long f0 = failures;
+        dtor_order_k(dir, "df_order.osc", "order", ks[t], rets[t], 10, kinds[t], sers[t]);
+        char li[128], ln[128];
+        df_fmt_log(RI, li, sizeof li);
+        df_fmt_log(RN, ln, sizeof ln);
+        printf("osc3 dropflags: order k=%llu interp=[%s] native=[%s] %s\n", (unsigned long long)ks[t], li, ln,
+               failures == f0 && strcmp(li, ln) == 0 ? "match" : "MISMATCH");
+        CHECK(strcmp(li, ln) == 0, "df_order k=%llu: engines disagree", (unsigned long long)ks[t]);
+    }
+    /* Regression (forge run lane30-dropflags-172347, test_osc_compiler segfault):
+     * df_order.osc defines its helper eata(a: own [u32; 2]) before the entry
+     * order(k: u32). The harness used to run function 0, so natively eata
+     * received k (0, 1, 3) as an array address and loaded through it. The
+     * entry is now resolved by name and must take only scalars. Counterexamples:
+     * running function 0 again crashes the run above; dropping the ref-param
+     * test in scalar_entry makes the eata check below fail. */
+    int fo = scalar_entry(U1, "order", 1), fe = scalar_entry(U1, "eata", 1);
+    CHECK(fo > 0, "df_order.osc: entry 'order' must not be function 0 (got %d); the regression would be vacuous", fo);
+    CHECK(fe < 0, "scalar_entry accepted 'eata' (own parameter) as a raw-argument entry (got %d)", fe);
+    printf("osc3 dropflags: harness entry by name: order=%d (not function 0), own-param helper eata refused=%s\n", fo,
+           fe < 0 ? "yes" : "NO");
+}
+
 static void struct_dtor_order(const char *dir)
 {
     static const uint8_t want_kind[8] = {1, 1, 1, 2, 2, 1, 2, 2};
     static const uint32_t want_ser[8] = {1, 2, 3, 3, 2, 4, 4, 1};
-    dtor_order(dir, "structs_dtor.osc", 14, 8, want_kind, want_ser);
+    dtor_order(dir, "structs_dtor.osc", "dtor", 14, 8, want_kind, want_ser);
     printf("struct destruction order: alloc 1 2 3, release 3 2, alloc 4, release 4 1 (interp == native)\n");
 }
 
@@ -977,7 +1054,7 @@ static void arena_dtor_order(const char *dir)
 {
     static const uint8_t want_kind[12] = {1, 3, 4, 3, 4, 1, 2, 5, 1, 2, 5, 2};
     static const uint32_t want_ser[12] = {1, 2, 3, 4, 5, 6, 6, 4, 7, 7, 2, 1};
-    dtor_order(dir, "arena_dtor.osc", 8, 12, want_kind, want_ser);
+    dtor_order(dir, "arena_dtor.osc", "adtor", 8, 12, want_kind, want_ser);
     printf("arena destruction order: alloc 1, open 2, aalloc 3, open 4, aalloc 5, alloc 6, release 6, destroy 4, "
            "alloc 7, release 7, destroy 2, release 1 (interp == native)\n");
 }
@@ -1467,6 +1544,225 @@ static void handle_fuzz(unsigned n)
     printf("osc3 handles: serial counters at UINT32_MAX trap RUNTIME, never wrap: %lu of 4\n", sw_traps);
 }
 
+/* OSC-3 item 3 (drop flags) fuzz: generated units whose entry declares
+ * array ([u32; 3]) and struct (S) owners and runs a random statement tree
+ * of depth <= 3: if / else / else-if with conditions on the arguments,
+ * moves by own call and by let-move, reads and writes, branch-local owners,
+ * early returns, loop-local owners moved on one path, and calls of an own
+ * parameter helper that moves its parameter on some paths. The generator
+ * mirrors the checker's merge rule (live / moved / maybe) and only touches
+ * owners that are live on the current path, so every unit must compile.
+ * Each unit: static trace replay per function (no refused event, model
+ * accepts), then interpreter vs native on 24 argument triples with the
+ * runtime pool log replayed through the model, no RUNTIME trap, no leak. */
+static unsigned long df_units, df_runs, df_mismatch, df_maybe_units, df_rej, df_trace_skip, df_traced,
+    df_trap[OSC_TRAP_MAX + 1];
+typedef struct { char name[8]; uint8_t st, isst; } DfOwn; /* st: 0 live, 1 moved, 3 maybe */
+static DfOwn df_o[64];
+static unsigned df_no, df_id, df_maybe;
+static char df_src[16384];
+#define DFC(...) cf_cat(df_src, sizeof df_src, __VA_ARGS__)
+
+static void df_ind(unsigned d) { for (unsigned k = 0; k <= d; k++) DFC("    "); }
+static void df_cond(void)
+{
+    static const char *v[] = {"a", "b", "c"};
+    const char *x = v[sm() % 3];
+    switch (sm() % 3) {
+    case 0: DFC("%s > %u", x, (unsigned)(sm() % 16)); break;
+    case 1: DFC("(%s & %u) == %u", x, 1 + (unsigned)(sm() % 7), (unsigned)(sm() % 4)); break;
+    default: DFC("%s < %u", x, (unsigned)(sm() % 16)); break;
+    }
+}
+/* a random owner with state 0 (live) at index >= lo, or -1 */
+static int df_pick(unsigned lo)
+{
+    int c[64], k = 0;
+    for (unsigned i = lo; i < df_no; i++)
+        if (df_o[i].st == 0) c[k++] = (int)i;
+    return k ? c[sm() % (unsigned)k] : -1;
+}
+static unsigned df_new(const char *pfx, int isst)
+{
+    unsigned i = df_no++;
+    snprintf(df_o[i].name, sizeof df_o[i].name, "%s%u", pfx, df_id++);
+    df_o[i].st = 0;
+    df_o[i].isst = (uint8_t)isst;
+    return i;
+}
+static void df_decl(unsigned d, int isst, const char *pfx)
+{
+    unsigned i = df_new(pfx, isst);
+    df_ind(d);
+    if (isst) DFC("let %s: own S = S { x: (b & 31) as u32, v: [(c & 3) as u32; 2] };\n", df_o[i].name);
+    else DFC("let %s: own [u32; 3] = alloc((a & 15) as u32);\n", df_o[i].name);
+}
+
+/* one block body at depth d; lo = first owner that may be moved (owners
+ * declared outside an enclosing loop stay unmoved); returns 1 if the block
+ * ends in a return. Branch-local owners are dropped from df_o at the end. */
+static int df_block(unsigned d, unsigned lo, int inloop)
+{
+    unsigned base = df_no, ns = 1 + (unsigned)(sm() % 3);
+    for (unsigned s = 0; s < ns; s++) {
+        unsigned k = (unsigned)(sm() % 16);
+        int o;
+        if (k < 4 && (o = df_pick(lo)) >= 0) { /* move by own call */
+            df_ind(d);
+            if (df_o[o].isst && sm() % 2) DFC("acc = acc + pm(%s, a);\n", df_o[o].name);
+            else DFC("acc = acc + %s(%s);\n", df_o[o].isst ? "es" : "ea", df_o[o].name);
+            df_o[o].st = 1;
+        } else if (k < 6 && (o = df_pick(lo)) >= 0) { /* let-move */
+            int isst = df_o[o].isst;
+            df_o[o].st = 1;
+            unsigned m = df_new("m", isst);
+            df_ind(d);
+            DFC("let %s: own %s = %s;\n", df_o[m].name, isst ? "S" : "[u32; 3]", df_o[o].name);
+            df_ind(d);
+            DFC("acc = acc + (%s%s as u64);\n", df_o[m].name, isst ? ".x" : "[1]");
+        } else if (k < 8 && (o = df_pick(0)) >= 0) { /* read and write */
+            df_ind(d);
+            if (df_o[o].isst) DFC("%s.v[1] = %s.x + ((b & 7) as u32);\n", df_o[o].name, df_o[o].name);
+            else DFC("%s[2] = %s[0] + ((b & 7) as u32);\n", df_o[o].name, df_o[o].name);
+            df_ind(d);
+            DFC("acc = acc + (%s%s as u64);\n", df_o[o].name, df_o[o].isst ? ".v[1]" : "[2]");
+        } else if (k < 12 && d < 3) { /* if / else */
+            uint8_t s0[64], s1[64];
+            for (unsigned i = 0; i < df_no; i++) s0[i] = df_o[i].st;
+            df_ind(d);
+            DFC("if ");
+            df_cond();
+            DFC(" {\n");
+            int t1 = df_block(d + 1, lo, inloop);
+            df_ind(d);
+            DFC("}");
+            for (unsigned i = 0; i < df_no; i++) { s1[i] = df_o[i].st; df_o[i].st = s0[i]; }
+            int t2 = 0;
+            if (sm() % 2) {
+                DFC(" else {\n");
+                t2 = df_block(d + 1, lo, inloop);
+                df_ind(d);
+                DFC("}");
+            }
+            DFC("\n");
+            if (t1 && t2) { df_no = base; return 1; }
+            if (t2) for (unsigned i = 0; i < df_no; i++) df_o[i].st = s1[i];
+            else if (!t1)
+                for (unsigned i = 0; i < df_no; i++)
+                    if (s1[i] != df_o[i].st) { df_o[i].st = 3; df_maybe = 1; }
+        } else if (k < 13) { /* branch-local or block owner */
+            df_decl(d, (int)(sm() % 2), "t");
+        } else if (k < 14 && d < 2 && !inloop) { /* loop-local owner moved on one path */
+            unsigned iv = df_id++, lb = df_no;
+            df_ind(d);
+            DFC("for i%u in 0 .. 3 {\n", iv);
+            unsigned w = df_new("w", 0);
+            df_ind(d + 1);
+            DFC("let %s: own [u32; 3] = alloc((i%u as u32) + ((c & 3) as u32));\n", df_o[w].name, iv);
+            df_block(d + 1, lb, 1);
+            df_no = lb;
+            df_ind(d);
+            DFC("}\n");
+        } else if (k < 15 && !inloop && sm() % 2) { /* early return */
+            df_ind(d);
+            DFC("return acc + %u;\n", (unsigned)(sm() % 50));
+            df_no = base;
+            return 1;
+        }
+    }
+    df_no = base;
+    return 0;
+}
+
+static void dropflags_fuzz(unsigned n)
+{
+    sm_state = 0xD50F1A65ull;
+    unsigned long rej0 = rr_rejected;
+    for (unsigned u = 0; u < n; u++) {
+        df_src[0] = 0;
+        df_no = df_id = df_maybe = 0;
+        DFC("struct S { x: u32, v: [u32; 2] }\n");
+        DFC("fn es(p: own S) -> u64 { return (p.x as u64) + (p.v[1] as u64); }\n");
+        DFC("fn ea(x: own [u32; 3]) -> u64 { return (x[0] as u64) + (x[2] as u64); }\n");
+        DFC("fn pm(p: own S, k: u64) -> u64 {\n    if k > %u { return es(p) + 1; }\n"
+            "    let mut r: u64 = p.x as u64;\n    if (k & 1) == 1 { r = r + es(p); }",
+            (unsigned)(sm() % 16));
+        if (sm() % 2) DFC(" else { let q: own S = p; r = r + (q.v[0] as u64); }\n");
+        else DFC("\n");
+        DFC("    return r;\n}\n");
+        DFC("fn entry(a: u64, b: u64, c: u64) -> u64 {\n    let mut acc: u64 = 0;\n");
+        unsigned no = 2 + (unsigned)(sm() % 4);
+        for (unsigned i = 0; i < no; i++) df_decl(0, (int)(sm() % 2), "o");
+        unsigned keep = df_no;
+        if (!df_block(0, 0, 0)) DFC("    return acc;\n");
+        df_no = keep;
+        DFC("}\n");
+        df_units++;
+        if (df_maybe) df_maybe_units++;
+
+        OscDiag d;
+        int rc = osc_compile(df_src, strlen(df_src), U1, &d, TR);
+        CHECK(rc == 0, "dropflags fuzz unit %u refused %s line %u object=%s: %s\n%s", u, osc_diag_kind_name(d.kind),
+              d.line, d.object, d.message, df_src);
+        if (rc) continue;
+        CHECK(!TR->refused, "dropflags fuzz unit %u: trace has a refused event", u);
+        if (!TR->overflow) {
+            uint32_t i = 0;
+            while (i < TR->n) {
+                uint32_t j = i;
+                while (j < TR->n && TR->e[j].func == TR->e[i].func) j++;
+                OscModelReject r;
+                int bad = replay_trace(TR, i, j, &r);
+                CHECK(bad < 0, "dropflags fuzz unit %u: trace rejected at event %d: %s\n%s", u, bad,
+                      osc_model_reject_name(r), df_src);
+                trace_replays++;
+                df_traced++;
+                i = j;
+            }
+        } else df_trace_skip++;
+        OscCode c;
+        char err[160];
+        memset(&c, 0, sizeof c);
+        int cg = osc_cg_compile(U1, &c, err, sizeof err);
+        CHECK(cg == 0, "dropflags fuzz unit %u codegen refused: %s", u, err);
+        if (cg) continue;
+        OscNative nm;
+        int mr = osc_native_map(&nm, c.code, c.len);
+        CHECK(mr == 0, "dropflags fuzz unit %u native map failed (%d)", u, mr);
+        if (mr) { osc_cg_free(&c); continue; }
+        int fi = U1->nfuncs - 1;
+        void *entry = osc_native_at(&nm, c.entry[fi]);
+        for (unsigned it = 0; it < 24; it++) {
+            uint64_t args[OSC_MAX_PARAMS] = {0}, ri = 0, rn = 0;
+            for (int k = 0; k < 3; k++) args[k] = it < 16 ? sm() % 20 : gen_arg(OSC_T_U64);
+            osc_rt_reset(RI);
+            osc_rt_reset(RN);
+            int t1 = osc_interp_run_prevalidated(U1, fi, args, 3, RI, &ri);
+            int t2 = osc_rt_call_native(RN, entry, args, 3, &rn);
+            if (rt_replay_run(RN, "dropflags fuzz") != 0) df_rej++;
+            df_runs++;
+            diff_runs++;
+            int same = t1 == t2 && t1 >= 0 && (t1 != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
+            CHECK(same, "dropflags fuzz unit %u args %llu %llu %llu: interp trap %d ret %llu vs native trap %d ret "
+                        "%llu\n%s", u, (unsigned long long)args[0], (unsigned long long)args[1],
+                  (unsigned long long)args[2], t1, (unsigned long long)ri, t2, (unsigned long long)rn, df_src);
+            if (!same) { df_mismatch++; break; }
+            if (t1 >= 0 && t1 <= OSC_TRAP_MAX) df_trap[t1]++;
+            CHECK(t1 != OSC_TRAP_RUNTIME, "dropflags fuzz unit %u RUNTIME trap (double release)\n%s", u, df_src);
+            if (t1 == 0) CHECK(RI->live_count == 0 && RN->live_count == 0, "dropflags fuzz unit %u leak\n%s", u, df_src);
+        }
+        osc_native_unmap(&nm);
+        osc_cg_free(&c);
+    }
+    printf("osc3 dropflags: fuzz units=%lu runs=%lu mismatches=%lu model_rejected=%lu maybe_units=%lu ok=%lu "
+           "traces=%lu trace_skipped=%lu\n", df_units, df_runs, df_mismatch, rr_rejected - rej0, df_maybe_units, df_trap[0],
+           df_traced, df_trace_skip);
+    CHECK(df_rej == 0 && rr_rejected == rej0, "dropflags fuzz: %lu runs rejected by the model", df_rej);
+    CHECK(df_maybe_units > 0, "dropflags fuzz never generated a maybe-moved owner");
+    CHECK(df_trap[0] > 0, "dropflags fuzz never returned normally");
+}
+#undef DFC
+
 int main(int argc, char **argv)
 {
     unsigned fuzz = argc > 1 ? (unsigned)strtoul(argv[1], NULL, 10) : 1000;
@@ -1502,6 +1798,8 @@ int main(int argc, char **argv)
     struct_fuzz(fuzz / 8 ? fuzz / 8 : 16);
     arena_fuzz(fuzz / 8 ? fuzz / 8 : 16);
     handle_fuzz(fuzz / 8 ? fuzz / 8 : 16);
+    df_dtor_order(pdir);
+    dropflags_fuzz(fuzz / 8 ? fuzz / 8 : 16);
 
     const char *const *tn = trap_names;
     printf("trap coverage (runs, interpreter == native):\n");

@@ -1,0 +1,40 @@
+// entry: f h
+// OSC-3 item 3 (drop flags): struct owners, an own parameter moved on one
+// path, and an owner declared inside a loop body and moved on one path (its
+// flag is set again by each iteration's declaration).
+struct P { x: u32, v: [u32; 2] }
+
+fn eat(p: own P) -> u32 { return p.x + p.v[1]; }
+
+fn eat2(a: own [u32; 2]) -> u32 { return a[0] + a[1]; }
+
+fn pass(p: own P, k: u32) -> u32 {
+    if k > 3 { return eat(p) + 1; }
+    let mut r: u32 = p.x;
+    if k == 1 { r = r + eat(p); }
+    return r;
+}
+
+fn f(k: u32) -> u32 {
+    let p: own P = P { x: k & 7, v: [1; 2] };
+    let q: own P = P { x: 2, v: [k & 3; 2] };
+    let mut r: u32 = pass(q, k);
+    if k > 8 { r = r + eat(p); }
+    return r;
+}
+
+fn h(n: u32) -> u32 {
+    let mut s: u32 = 0;
+    for i in 0 .. 6 {
+        let a: own [u32; 2] = alloc(i as u32);
+        if (i as u32) < n { s = s + eat2(a); }
+    }
+    return s;
+}
+// expect-run: f 0 -> 2
+// expect-run: f 1 -> 5
+// expect-run: f 5 -> 4
+// expect-run: f 9 -> 6
+// expect-run: h 3 -> 6
+// expect-run: h 0 -> 0
+// expect-run: h 10 -> 30

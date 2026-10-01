@@ -1,0 +1,10 @@
+// expect: USE_AFTER_MOVE object=a line=7
+// transition: move inside loop
+fn take(x: own [u8; 2]) -> u8 { return x[0]; }
+fn f() -> u8 {
+    let a: own [u8; 2] = alloc(3);
+    for i in 0 .. 3 {
+        if i == 1 { let s: u8 = take(a); }
+    }
+    return 0;
+}
