@@ -1,5 +1,7 @@
 # TURING Wave 0: proposal (A-K), revision 2 (+ K.7 verdict and reframe, 2026-09-29)
 
+Update 2026-09-30: R16 is CLOSED (omega#112, `3dd5eaa`, all gates G1 to G8 PASS) and the `src/runtime/` edit freeze is LIFTED (aien-architecture #70, `e89ba94`). Statements below that the runtime is frozen "until R16" describe the state when this was written.
+
 Inputs: TURING_CURRENT_STATE.md (live audit, omega 4b217aa, aienos 603c91d), TURING_PRIOR_ART_MATRIX.md (30 sources opened),
 polyglot review def197d (fixes in progress on feat/polyglot-0), Fable review of revision 1 (9 REQUIRED items, adopted in
 full; they override revision 1 wherever the two differ). Standing rules applied: C (+asm), no Rust, no Python, no outside

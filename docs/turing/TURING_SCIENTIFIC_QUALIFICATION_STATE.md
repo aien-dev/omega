@@ -9,7 +9,7 @@ log records a past result; it does not claim a fresh pass.
 Rule: implementation and evidence beat planning claims. Where they disagree, the disagreement is written down.
 Origin: a first draft was machine-written (Gemini) and then checked claim by claim against the repository. Claims
 that could not be confirmed were removed or corrected; section 7 lists them.
-Update 2026-09-30 (Brownian Wave 1 reconciliation), based on origin/main `8a56ace`: EXP-002A to 002D, EXP-003 and the claim ladder were updated
+Update 2026-09-30 (Brownian Wave 1 reconciliation), based on omega origin/main `8a56ace` (the rest of this page is still the audit at `62f5ba5`): EXP-002A to 002D, Brownian interventional replication, EXP-003 and the claim ladder were updated
 from the sealed Wave 1 records (section 2 row "EXP-002A to D", section 7). No evaluator-only material is quoted here.
 
 ## 1. Summary
@@ -24,13 +24,13 @@ from the sealed Wave 1 records (section 2 row "EXP-002A to D", section 7). No ev
 | H5 physical part (T/J) | NOT STARTED | needs H4 |
 | H3 (replay, statistical robustness) | PARTIAL | bootstrap and replay code exist; no standalone H3 receipt |
 | EXP-002A, 002B, 002C | PASS (Brownian Wave 1, sealed) | certification of the scorer on known stochastic cases; 002A PASS under a successor profile; 002B PASS without its Occam curve; the Occam curve itself PASS separately under profile v1.3; 002C repeated PASS on fresh sealed worlds under v1.3 |
-| EXP-002D | INCOMPLETE | 0 wrong verdicts on every rule that could be evaluated; one hostile rule is not evaluable with the Wave 1 prediction format |
+| EXP-002D (Brownian) | INCOMPLETE | one hostile rule is not evaluable with the Wave 1 prediction format; 0 wrong verdicts on the rules that were evaluated |
 | interventional replication (Brownian) | PASS | profile v1.3, fresh sealed worlds |
 | EXP-003 | BLOCKED | needs a separate Wave 2 contract (draft under review, not accepted, not frozen) and must seal after BRN-10 |
-| R16 (orchestrator retirement) | IN PROGRESS | on main only the G1/G2 inventory; G3 to G5 work sits on an unmerged branch |
-| TURING wired into the live runtime | BLOCKED | runtime edit freeze until R16 closes |
+| R16 (orchestrator retirement) | CLOSED | omega#112 merged (`3dd5eaa`), gates G1 to G8 PASS (update 2026-09-30; section 4 keeps the earlier audit) |
+| TURING wired into the live runtime | NOT STARTED | the runtime edit freeze was lifted (aien-architecture #70); no wiring work exists yet |
 
-Highest claim level supported (protocol claim ladder, section 6): **Level 2** (Brownian scope, instrument certification only; see section 6).
+Highest claim level supported (protocol claim ladder, section 6): **Level 2** (Brownian scope, instrument certification only; see section 6). Outside the Brownian scope the ceiling stays Level 1.
 
 ## 2. Gate table
 
@@ -42,8 +42,9 @@ Highest claim level supported (protocol claim ladder, section 6): **Level 2** (B
 | H5 info (TY-2) | see `git log -- evidence/TURING_YIELD` | `evidence/TURING_YIELD/ty2_heldout_receipt.txt` (`t_microbits=2559679824815`, verdict PASS); `brn_p_ty2_verify_2026-09-29.log` ("VERIFY OK"); `docs/turing/TURING_YIELD_TY2_RESULT.md` | `tests/turing/test_ty_math.c` etc. (target `test-turing-yield`, `mk/turing_yield_math.mk`) | `tools/turing_yield.c` (`heldout`, `verify`) | measured under Turing Yield profile V0, not calibration profile v1.1; verification is `turing-yield verify`, the same tool as the primary scorer, so it is a self re-derivation, not an independent scorer like EXP-001R lane D |
 | H4 energy | protocol `99c1f69`; boundaries `4386897` | none in `evidence/` | `tests/turing/test_ty_energy.c`, `test_ty_energy_fixtures.sh`, `ty_energy_fixture.c`, `ty_energy_window.c` (target `test-turing-energy`, `mk/turing_yield_energy.mk`) | driver `tools/ty_energy_run.sh` (uses `tests/turing/ty_workload.c`), reducer `tools/ty_energy_reduce.c` | protocol status is PRE-REGISTERED; no stage 1 or stage 2 timed run is recorded in the repo |
 | H3 | none | none standalone | bootstrap inside EXP-001R evaluation; `src/turing/replay.c` | n/a | no H3 qualification receipt |
-| EXP-002A to D (Brownian Wave 1) | profile commitments published before sealed data: v1.0 omega#100, v1.1 omega#101, v1.2 omega#102, v1.3 omega#103; append-only history `docs/brownian/PROFILE_COMMITMENT_HISTORY.txt` (omega#104) | sealed results and verdicts live in the PRIVATE repo aien-dev/aien-sealed: decision record R3-49 and results-v1.3 at commit `6a90109`, erratum and archived run procedure at `6b893de` | in aien-sealed (evaluator code, hostile tests, verdict tests); omega carries only the TPS1 adapter `tools/brownian/brw_tps_adapter.c` and `tests/brownian/test_brw_tps.c` | not publicly reproducible yet: the profile bytes and evaluator tree are published into omega only after BRN-10 seals, and must hash to the committed digests | public summary: aien-architecture `docs/brownian-calibration-explainer.md` (merged #67, `76a77e7`); EXP-002D INCOMPLETE (one hostile rule not evaluable with the Wave 1 prediction format); this omega doc does not re-verify the sealed records |
-| EXP-003 | none | none | none | n/a | specified in the same protocol, section starting line 760; Wave 2 contract is a draft in aien-sealed, not accepted |
+| EXP-002A to D (Brownian Wave 1) | profile commitments published before sealed data: v1.0 omega#100, v1.1 omega#101, v1.2 omega#102, v1.3 omega#103; append-only history `docs/brownian/PROFILE_COMMITMENT_HISTORY.txt` (omega#104) | sealed results and verdicts live in the PRIVATE repo aien-dev/aien-sealed: decision record R3-49 and results-v1.3 at commit `6a90109`, erratum and archived run procedure at `6b893de` (the erratum corrects record text; no verdict changed) | in aien-sealed (evaluator code, hostile tests, verdict tests); omega carries only the TPS1 adapter `tools/brownian/brw_tps_adapter.c` and `tests/brownian/test_brw_tps.c` | not publicly reproducible yet: the profile bytes and evaluator tree are published into omega only after BRN-10 seals, and must hash to the committed digests | public summary: aien-architecture `docs/brownian-calibration-explainer.md` (merged #67, `76a77e7`); EXP-002D INCOMPLETE (one hostile rule not evaluable with the Wave 1 prediction format); this omega doc does not re-verify the sealed records |
+| interventional replication (Brownian) | profile v1.3 commitment omega#103 | same private records as the row above (R3-49) | in aien-sealed | not publicly reproducible until after BRN-10, as above | fresh sealed worlds under v1.3; repeats the EXP-002C intervention phase |
+| EXP-003 | none | none | none | n/a | specified in the same protocol, section starting line 760; Wave 2 contract is a draft in aien-sealed, not accepted, not frozen, and must seal after BRN-10 |
 
 ## 3. What exists in code
 
@@ -67,10 +68,12 @@ All paths below exist on `62f5ba5`. States are about evidence, not code quality.
 - `calibration/docs/PROTOCOL_CONFORMANCE.md`: 53 protocol requirements mapped; declared deviations D1 to D10.
 - There is no top-level `turing/` directory. Code lives in `src/turing/`, `tests/turing/`, `tools/`, `calibration/`,
   `docs/turing/`.
-- No file in `src/runtime/*.c` mentions turing; TURING code stays outside the frozen runtime.
+- No file in `src/runtime/*.c` mentions turing; TURING code stays outside the runtime (the runtime was frozen at the time of this audit).
 
 ## 4. R16 and the runtime freeze
 
+- Update 2026-09-30: R16 CLOSED (omega#112, `3dd5eaa`, G1 to G8 PASS) and the runtime freeze LIFTED
+  (aien-architecture #70, `e89ba94`). The bullets below record the state at the original audit.
 - On main: `evidence/R16/` holds only `inventory.json`, added in `6fdc4c3` (PR #68, R16 spec pre-registration).
   `tests/runtime/rx_r16_negative.c` is not on main. No `AIEN_RX_R16_ORCHESTRATOR_RETIRED_V1` receipt.
 - aien-architecture `CURRENT_EXECUTION_PLAN.md` (at `b63297b`) line 45: R16 "IN PROGRESS ... G3-G8 qualification
@@ -100,11 +103,11 @@ From the `Claim Ladder` section of the calibration protocol (`.tex` line 1175).
 | 1 | EXP-001 | reproducibly connected to actual lossless compression in tested regime | met by EXP-001R |
 | 2 | EXP-002A/B/C | discriminates supported from unsupported stochastic structure | met for the Brownian scope (scorer certification on known cases, sealed in aien-sealed; public replay after BRN-10) |
 | 3 | interventions + EXP-002D | invariant or unifying explanatory structure | not met: interventional replication PASS, EXP-002D INCOMPLETE |
-| 4 | EXP-003 | explanatory models improve experimental choice | blocked (Wave 2 contract not accepted) |
+| 4 | EXP-003 | explanatory models improve experimental choice | blocked (Wave 2 contract not accepted or frozen; must seal after BRN-10) |
 | 5 | H4 | physical energy attribution validated | partial (no timed run) |
 | 6 | H5 | explanatory efficiency measurable as T/J in tested regime | blocked on H4 |
-| 7 | sensitivity | conclusion stable across reasonable profile choices | blocked in Brownian Wave 1 (variants were not named before sealed data) |
-| 8 | independent replication | independently reproducible metrology | not attempted (the EXP-001R lane D scorer is an independent scorer, not an independent replication); for the Brownian scope BLOCKED until BRN-10 seals |
+| 7 | sensitivity | conclusion stable across reasonable profile choices | not attempted; Brownian scope: not evaluable for Wave 1 (variants were not named before sealed data), to be named in advance for Wave 2 |
+| 8 | independent replication | independently reproducible metrology | not attempted (the EXP-001R lane D scorer is an independent scorer, not an independent replication); Brownian scope: BLOCKED until BRN-10 seals |
 | 9 | multiple unrelated domains | broader applicability | not attempted |
 
 Current ceiling: **Level 2**, for the Brownian scope only, and only as instrument certification: it says the scorer
@@ -130,5 +133,8 @@ INCOMPLETE). The TY-2 bits result does not change the ceiling.
   explainer (#67) reported them run. The explainer was right; the rows above now follow the sealed Wave 1 records.
   Naming caution: in the Brownian program, "H4" means GPU rows (INCOMPLETE, none in Wave 1) and "H5" means the
   six-build rescoring check (PASS); "H3" means replay and the preregistered statistical signs (both PASS). The H3,
-  H4 and H5 rows in section 1 use the TURING qualification meanings (H3 replay and statistical robustness, H4 physical energy attribution, H5 T/J) and are not changed by Wave 1.
-- The Brownian independent replication (Level 8) is BLOCKED until BRN-10 seals; an in-house implementation is planned.
+  H4 and H5 rows in section 1 use the TURING qualification meanings (H3 replay and statistical robustness, H4 physical energy attribution, H5 information part T in bits and H5 physical part T/J) and are not changed by Wave 1.
+- The Brownian independent replication (Level 8) is BLOCKED until BRN-10 seals. An in-house independent implementation is
+  planned; on its own it would be an independent implementation, not an external replication, and may not be enough for Level 8 (decided when it runs).
+- Section 5 is a planned order of work for TURING. Brownian Wave 1 ran as its own program, so its results above
+  do not mean the earlier steps in section 5 are complete.

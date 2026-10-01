@@ -25,6 +25,9 @@ MERGED. No open PR anywhere mentions TURING yield, Evolution Arena runtime, or T
 
 ## 1. Q1: is src/runtime frozen? Is tests/runtime?
 
+- **Update 2026-09-30: no longer frozen.** R16 CLOSED (omega#112, `3dd5eaa`); freeze lifted (aien-architecture #70,
+  `e89ba94`). The bullets below are the audit as of 2026-09-29. The TY-0..TY-7 non-touch rule for `rx_costmodel` and
+  `rx_argus` (section 9 item 1) stays as a scope rule.
 - **R16 is IN PROGRESS: yes, frozen.** arch `CURRENT_EXECUTION_PLAN.md:45` "R16 ... IN PROGRESS"; `:540` "No edits to
   `omega/src/runtime/` (or other R16-mapped files) until R16 (`aien-dev/omega#68`) closes." arch `doctrine/ROADMAP.md:282`
   (after #59) "IN PROGRESS ... only R16-G1/G2 loop-inventory gate PASS. Not yet evidenced: G3..G8 receipt".
@@ -231,9 +234,9 @@ The honest pairing:
 
 ## 9. Q7: constraints and brief conflicts
 
-1. src/runtime frozen (R16 IN PROGRESS). Nothing in TY-0..TY-7 may touch `rx_costmodel`, `rx_argus` or the rest of the
-   runtime. Joining T/J into the cost model or selector is out of scope anyway ("no new cost model, no new selector").
-2. tests/runtime edits frozen. r15_measure can be linked only as is. NVML avoidable only by bypassing `r15_energy_open` (§4).
+1. src/runtime is no longer frozen: R16 CLOSED (omega#112, `3dd5eaa`), freeze lifted (aien-architecture #70). Scope rule
+   (unchanged): nothing in TY-0..TY-7 may touch `rx_costmodel`, `rx_argus` or the rest of the runtime. Joining T/J into the cost model or selector is out of scope anyway ("no new cost model, no new selector").
+2. tests/runtime: the R16 edit freeze is lifted; by TY-0..TY-7 scope, r15_measure is still linked only as is. NVML avoidable only by bypassing `r15_energy_open` (§4).
 3. ARGUS observes authority decisions (`rx_argus.h:1-8`). It carries no energy. "ARGUS observes" cannot supply joules
    today; energy must come from r15_measure windows.
 4. TY-2 data is produced by Rust (`crumbs` crate). Reading is C-only and possible. Regenerating is not C-only, and chain

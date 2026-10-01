@@ -121,6 +121,7 @@ enum { RX_CONTAIN_BUDGET = 1, RX_CONTAIN_OSCILLATION, RX_CONTAIN_LIVELOCK,
 #define RX_ERR_EXISTS      -25
 #define RX_ERR_SEAT_LOST   -26   /* the graphics seat died holding the claim */
 #define RX_ERR_IDENTITY    -27   /* caller credential absent, forged, stale or revoked */
+#define RX_ERR_BINDING     -28   /* a bound field's external reference was refused (COMPOSITION-2) */
 
 /* Reaction notices carried in the frozen 128-byte descriptor.
  * The older transform request/result values stay in the frozen layout and
@@ -498,6 +499,32 @@ struct RxWorld;
 typedef void (*RxRecordFn)(void *ctx, const struct RxWorld *w, const RxCrumb *k);
 typedef void (*RxRecordReleaseFn)(void *ctx);
 
+/* Commit binder (COMPOSITION-2). A bound field holds a reference into a store
+ * outside the World (a J-Space branch). The binder is consulted with the world
+ * mutex held, after a publication has passed every other check (versions,
+ * authority, write set) and before anything in it becomes visible:
+ *
+ *   check(each changed bound field)   may refuse: nothing is visible, the
+ *                                     activation ends REJECTED with
+ *                                     RX_ERR_BINDING, abort() runs for every
+ *                                     bound value the publication proposed
+ *   bind(each changed bound field)    the binder's point of no return (J-Space
+ *                                     seals the branch). A failure here also
+ *                                     refuses the publication; abort() is told
+ *                                     which values were already bound
+ *   then the commit is applied        old values stay in the binder's care
+ *
+ * So a World value never names a reference its store did not accept, and a
+ * refused reference never becomes a World value. The binder must not call
+ * back into the World. `subject` is the publishing reaction's subject, or the
+ * World's external subject. At most one binder per World. */
+typedef int  (*RxBindCheckFn)(void *ctx, RxObjRef obj, uint32_t field, uint64_t old_value,
+                              uint64_t new_value, uint32_t subject);
+typedef int  (*RxBindFn)(void *ctx, RxObjRef obj, uint32_t field, uint64_t old_value,
+                         uint64_t new_value, uint32_t subject);
+typedef void (*RxBindAbortFn)(void *ctx, RxObjRef obj, uint32_t field, uint64_t value,
+                              uint32_t subject, int was_bound);
+
 typedef struct RxWorld {
     pthread_mutex_t mu;
     pthread_cond_t work_cv;
@@ -597,6 +624,14 @@ typedef struct RxWorld {
     RxRecordFn recorder;
     RxRecordReleaseFn recorder_release;
     void *recorder_ctx;
+
+    /* COMPOSITION-2 commit binder (rx_world_set_binder); at most one.
+     * bind_mask[slot]: fields of that object the binder owns. */
+    RxBindCheckFn bind_check;
+    RxBindFn bind_fn;
+    RxBindAbortFn bind_abort;
+    void *bind_ctx;
+    uint8_t bind_mask[RX_MAX_OBJECTS];
 } RxWorld;
 
 int  rx_world_init(RxWorld *w, RxCapRoot *root, uint32_t n_workers, uint64_t crumb_cap);
@@ -621,6 +656,13 @@ int  rx_world_set_recorder(RxWorld *w, RxRecordFn fn, RxRecordReleaseFn release,
 /* Remove the recorder installed with `ctx` (RX_ERR_NOT_FOUND otherwise).
  * release is not called. */
 int  rx_world_clear_recorder(RxWorld *w, void *ctx);
+/* COMPOSITION-2: install the commit binder (RX_ERR_EXISTS if one is installed)
+ * and name the fields it owns. Binding a field of a stale object is
+ * RX_ERR_STALE_GEN. clear removes the binder and every bound field. */
+int  rx_world_set_binder(RxWorld *w, RxBindCheckFn check, RxBindFn bind, RxBindAbortFn abort_fn,
+                         void *ctx);
+int  rx_world_bind_field(RxWorld *w, RxObjRef obj, uint32_t field);
+int  rx_world_clear_binder(RxWorld *w, void *ctx);
 /* R15: record an RxTiming per activation into `buf` (cap entries; later ones
  * are dropped and counted in n_timing beyond cap). Null turns it off. */
 void rx_world_set_timing(RxWorld *w, RxTiming *buf, uint64_t cap);
