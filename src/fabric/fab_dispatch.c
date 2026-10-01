@@ -3,6 +3,11 @@
 
 #include <string.h>
 
+/* Link-map marker (test build only): tools/r16_prod_hygiene.sh refuses any
+ * production binary that carries an aien_test_build_* symbol. */
+__attribute__((used)) const char aien_test_build_fab_dispatch[] =
+    "AIEN_TEST_BUILD piece: Fabric F5-0 in-process simulated-machine dispatcher";
+
 int fab_dispatch_init(FabDispatch *d, FabNode *node) {
     if (!d || !node || !node->cfg.catalog) return FAB_E_ARG;
     memset(d, 0, sizeof *d);

@@ -1,0 +1,84 @@
+{
+  "gate": "E1-TRANSC-GB10",
+  "row": "E1 gap table row 10: GB10 transcendentals bit-identical to the frozen CPU sequences",
+  "reference": "omega_math_<op> of src/omega_numeric_transc.c (CPU tier), every 32-bit input, bits compared exactly",
+  "omega_commit": "01615e087645473bc09d2217289c48ee2254b1a4",
+  "omega_tree_clean_before": true,
+  "omega_tree_clean_after": true,
+  "omega_commit_unchanged_after": true,
+  "physics_commit": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "physics_lock_pin": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "physics_tree_clean_before": true,
+  "physics_tree_clean_after": true,
+  "physics_commit_unchanged_after": true,
+  "binary_sha256": "d12937796f738c494fd0fe644962107a49a5f5f4ec2f9a35448ce64e5f9a1689",
+  "chip_log_sha256": "055a89f3e4470acc3f7c5eb85f48c5706d9c61b9852a549057ebd5772d5b8e86",
+  "kernels": [
+    {
+      "op": "EXP2",
+      "instructions": 72,
+      "sha256": "e72d5cbf556dce39c83ce7e76335a7eef7eda3ebccd36f250bdddb272db7474c"
+    },
+    {
+      "op": "LOG2",
+      "instructions": 576,
+      "sha256": "14e461ec628b685ea23d197c060f7d35a302c88e794934628eacd6098a44f394"
+    },
+    {
+      "op": "SIGMOID",
+      "instructions": 344,
+      "sha256": "8607f5659b4d42a57fdb4ba2f26427a28d8e6e1497f3daa8529ae5da1f629b70"
+    },
+    {
+      "op": "TANH",
+      "instructions": 352,
+      "sha256": "4edc065511340d58d26ed8ef7c1464341b279caccd7abc18b62d2a9880694494"
+    }
+  ],
+  "nvdisasm_check": "nvdisasm: release 13.0, V13.0.85",
+  "host_tier": "SUMMARY passed=32 failed=0",
+  "ops_requested": [
+    "EXP2",
+    "LOG2",
+    "SIGMOID",
+    "TANH"
+  ],
+  "ops": [
+    {
+      "op": "EXP2",
+      "checked": 4294967296,
+      "exhaustive": true,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "PASS"
+    },
+    {
+      "op": "LOG2",
+      "checked": 0,
+      "exhaustive": false,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "NOT_RUN"
+    },
+    {
+      "op": "SIGMOID",
+      "checked": 0,
+      "exhaustive": false,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "NOT_RUN"
+    },
+    {
+      "op": "TANH",
+      "checked": 0,
+      "exhaustive": false,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "NOT_RUN"
+    }
+  ],
+  "chip_exit_status": 1,
+  "started_utc": "2026-10-01T12:50:06Z",
+  "finished_utc": "2026-10-01T13:25:49Z",
+  "verdict": "NOT_RUN"
+}

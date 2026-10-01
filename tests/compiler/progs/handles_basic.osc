@@ -1,0 +1,31 @@
+// entry: basic reuse
+// OSC-3 item 2: versioned handles. A handle is a copyable (slot, generation)
+// value of one function-local pool; it never owns its slot. Freeing bumps the
+// slot generation, so the slot is reused by the next allocation.
+// expect-run: basic 5 -> 23
+// expect-run: reuse 2 -> 8
+fn basic(k: i64) -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 2] {
+        let a: handle p = p.alloc(k);
+        let b: handle p = p.alloc(10);
+        p[a] = p[a] + p[b];
+        s = p[a] + 8;
+        p.free(b);
+        p.free(a);
+    }
+    return s;
+}
+
+fn reuse(k: i64) -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 1] {
+        let mut h: handle p = p.alloc(k);
+        let c: handle p = h;
+        s = p[c];
+        p.free(h);
+        h = p.alloc(k * 3);
+        s = s + p[h];
+    }
+    return s;
+}

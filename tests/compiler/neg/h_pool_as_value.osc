@@ -1,0 +1,9 @@
+// expect: TYPE_MISMATCH object=p line=6
+// transition: pool used as a value
+fn f() -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 2] {
+        s = p;
+    }
+    return s;
+}

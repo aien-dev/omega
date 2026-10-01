@@ -5,6 +5,11 @@
 
 #include <string.h>
 
+/* Link-map marker (test build only): tools/r16_prod_hygiene.sh refuses any
+ * production binary that carries an aien_test_build_* symbol. */
+__attribute__((used)) const char aien_test_build_fab_hmac[] =
+    "AIEN_TEST_BUILD piece: Fabric F5-0 HMAC stand-in (not a real signature)";
+
 void fab_hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *msg, size_t msg_len,
                      uint8_t out[32]) {
     uint8_t k[SHA256_BLOCK_SIZE], pad[SHA256_BLOCK_SIZE], inner[SHA256_DIGEST_SIZE];

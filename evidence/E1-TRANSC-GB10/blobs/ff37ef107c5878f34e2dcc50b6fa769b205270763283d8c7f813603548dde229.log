@@ -1,0 +1,18 @@
+    SIGMOID batch 16/256 done, mismatches so far 0
+    SIGMOID batch 32/256 done, mismatches so far 0
+    SIGMOID batch 48/256 done, mismatches so far 0
+    SIGMOID batch 64/256 done, mismatches so far 0
+    SIGMOID batch 80/256 done, mismatches so far 0
+    SIGMOID batch 96/256 done, mismatches so far 0
+    SIGMOID batch 112/256 done, mismatches so far 0
+    SIGMOID batch 128/256 done, mismatches so far 0
+    SIGMOID batch 144/256 done, mismatches so far 0
+    SIGMOID batch 160/256 done, mismatches so far 0
+    SIGMOID batch 176/256 done, mismatches so far 0
+    SIGMOID batch 192/256 done, mismatches so far 0
+    SIGMOID batch 208/256 done, mismatches so far 0
+    SIGMOID batch 224/256 done, mismatches so far 0
+    SIGMOID batch 240/256 done, mismatches so far 0
+    SIGMOID batch 256/256 done, mismatches so far 0
+RESULT chip SIGMOID checked=4294967296 exhaustive=true mismatches=0 unwritten=0 verdict=PASS
+VERDICT PASS

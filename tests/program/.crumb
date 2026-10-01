@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/program",
+  "layer": "tests/program",
+  "purpose": "Directory tests/program. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/program. Purpose not yet described by a human.",
+      "files": [
+        "test_program_id.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "805a3a6",
+          "timestamp": "2026-09-29T07:41:31-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #75 from aien-dev/fix/program-id-body",
+          "pr": 75
+        }
+      ]
+    }
+  }
+}

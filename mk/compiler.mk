@@ -5,6 +5,8 @@
 # the OSC-2 item 4 test also links the legacy writer src/aarch64_encoder.c + decoder.
 # OSC-1 slice; not a general Omega compiler; no self-hosting.
 #
+# test-compiler-quick smoke (< 60 s single core): same programs, small sweeps; CI on every change
+# test-compiler-full  = test-compiler (receipts and src/compiler CI use it)
 # test-compiler       model sweep (10^6) + back end + compiler golden/negative/model
 #                     agreement + cross-process determinism, plain and ASan/UBSan
 #                     + legacy AArch64 writer differential/refusal + frozen-caller check
@@ -13,7 +15,7 @@
 # osc2-receipt        ITEM=contracts|structs|arenas|encoder (default contracts): receipt under evidence/OSC-2/receipts (clean tree only)
 ifndef COMPILER_MK
 COMPILER_MK := 1
-.PHONY: test-compiler oscc compiler-receipt osc0b-model-receipt osc2-receipt
+.PHONY: test-compiler test-compiler-full test-compiler-quick oscc compiler-receipt osc0b-model-receipt osc2-receipt osc3-receipt
 OSC_DIR = $(OUT_DIR)/compiler
 OSC_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc -Isrc/compiler -Isrc/compiler/model
 OSC_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
@@ -102,6 +104,44 @@ test-compiler: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_model_asan \
 	@tail -1 $(OSC_DIR)/legacy_callers.out; grep -q '^OSC2_LEGACY_CALLERS_PASS ' $(OSC_DIR)/legacy_callers.out
 	@echo "test-compiler: PASS (OSC-1 slice + OSC-2 contracts + structs + arenas + legacy AArch64 writer; OSC-2 slice; not a general Omega compiler; no self-hosting.)"
 
+
+# OSC-3 item 1: the split. test-compiler-full is everything (the targets above,
+# full counts; receipts use it). test-compiler is kept as an alias of full so old
+# commands and scripts keep their meaning. test-compiler-quick (< 60 s single
+# core) is the every-change CI leg: same binaries, same golden and negative
+# programs, same determinism check, smaller sweeps and fuzz counts (stated in
+# each output). Quick is a smoke run, never receipt evidence.
+OSC_QDIR = $(OSC_DIR)/quick
+OSC_QUICK_MODEL_SEQ ?= 100000
+OSC_QUICK_FUZZ ?= 120
+OSC_QUICK_ASAN_FUZZ ?= 120
+test-compiler-full: test-compiler
+
+test-compiler-quick: $(OSC_DIR)/test_osc_model $(OSC_DIR)/test_osc_backend $(OSC_DIR)/test_osc_backend_asan \
+		$(OSC_DIR)/test_osc_compiler $(OSC_DIR)/test_osc_compiler_asan $(OSC_DIR)/oscc \
+		$(OSC_DIR)/test_legacy_a64 $(OSC_DIR)/test_legacy_a64_asan
+	@mkdir -p $(OSC_QDIR)
+	$(abspath $(OSC_DIR)/test_osc_model) 05c0b5eed0010001 $(OSC_QUICK_MODEL_SEQ) > $(OSC_QDIR)/model.out
+	@tail -1 $(OSC_QDIR)/model.out; grep -Eq '^OSC0B_MODEL_(SMOKE_)?PASS$$' $(OSC_QDIR)/model.out
+	$(abspath $(OSC_DIR)/test_osc_backend) > $(OSC_QDIR)/backend.out
+	@tail -1 $(OSC_QDIR)/backend.out; grep -q '^OSC1_BACKEND_PASS$$' $(OSC_QDIR)/backend.out
+	$(abspath $(OSC_DIR)/test_osc_backend_asan) > $(OSC_QDIR)/backend_asan.out
+	@tail -1 $(OSC_QDIR)/backend_asan.out; grep -q '^OSC1_BACKEND_PASS$$' $(OSC_QDIR)/backend_asan.out
+	$(abspath $(OSC_DIR)/test_osc_compiler) $(OSC_QUICK_FUZZ) > $(OSC_QDIR)/compiler.out
+	@tail -1 $(OSC_QDIR)/compiler.out; grep -Eq '^OSC1_COMPILER_PASS( |$$)' $(OSC_QDIR)/compiler.out
+	$(abspath $(OSC_DIR)/test_osc_compiler_asan) $(OSC_QUICK_ASAN_FUZZ) > $(OSC_QDIR)/compiler_asan.out
+	@tail -1 $(OSC_QDIR)/compiler_asan.out; grep -Eq '^OSC1_COMPILER_PASS( |$$)' $(OSC_QDIR)/compiler_asan.out
+	sh tests/compiler/determinism.sh $(abspath $(OSC_DIR)/oscc) > $(OSC_QDIR)/determinism.out
+	@tail -1 $(OSC_QDIR)/determinism.out; grep -q '^OSC1_DETERMINISM_PASS$$' $(OSC_QDIR)/determinism.out
+	@grep "^struct fuzz: .* mismatches=0$$" $(OSC_QDIR)/compiler.out
+	@grep "^arena fuzz: .* mismatches=0$$" $(OSC_QDIR)/compiler.out
+	@grep "^runtime model replay: .* rejected=0$$" $(OSC_QDIR)/compiler.out
+	$(abspath $(OSC_DIR)/test_legacy_a64) quick > $(OSC_QDIR)/legacy_a64.out
+	@tail -1 $(OSC_QDIR)/legacy_a64.out; grep -q '^OSC2_LEGACY_A64_PASS$$' $(OSC_QDIR)/legacy_a64.out
+	sh tests/compiler/legacy_a64_callers.sh --selftest > $(OSC_QDIR)/legacy_callers.out
+	@tail -1 $(OSC_QDIR)/legacy_callers.out; grep -q '^OSC2_LEGACY_CALLERS_PASS ' $(OSC_QDIR)/legacy_callers.out
+	@echo "test-compiler-quick: PASS (smoke counts; not receipt evidence; full = make test-compiler-full. OSC-3 slice; not a general Omega compiler; no self-hosting.)"
+
 osc0b-model-receipt:
 	sh tests/compiler/osc0b_model_receipt.sh
 
@@ -111,4 +151,8 @@ compiler-receipt:
 osc2-receipt: ITEM ?= contracts
 osc2-receipt:
 	sh tests/compiler/osc2_receipt.sh $(ITEM)
+
+# OSC-3: ITEM=review|split|handles|dropflags|effects|identity|module; needs PHYSICS_DIR (M6/M9/M14)
+osc3-receipt:
+	sh tests/compiler/osc3_receipt.sh $(ITEM)
 endif

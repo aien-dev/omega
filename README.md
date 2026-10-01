@@ -1,138 +1,60 @@
-# OMEGA — Sovereign Semantic Substrate
+# OMEGA
+
+Omega is the reaction runtime and the compiler for Omega Systems Core, written in C. It defines what computation means without committing that meaning to one machine representation: every program has a content-addressed semantic identity, and realizations (CPU, GB10 GPU) are derived from it and verified against it.
 
 ```text
-Milestone:       MILESTONE 4 — OMEGA_SEMANTICS
-Lineage:         SILICON -> ATLAS (M1) -> PHYSICS (M2/M3) -> OMEGA (M4+) -> AIEN
-Qualification:   QUALIFIED / 12 OF 12 GATES PASS
-Receipt:         evidence/omega_qualification_receipt.json
-Repository:      https://github.com/aien-dev/omega
+SILICON -> ATLAS -> PHYSICS/FORGE -> OMEGA -> AIEN        (full picture: aien-architecture)
 ```
 
----
+Omega was decided by Drake on 2026-09-29 to be both the reaction runtime and the compiler for Omega Systems Core ([decision record](docs/adr/OMEGA-SYSTEMS-CORE-0000.md), frozen). This retires the earlier "not a compiler" wording.
 
-## 1. Executive Summary
+## Current state
 
-Milestone 4 establishes the first executable semantic substrate of OMEGA:
+Research-grade and pre-alpha. Plainly:
 
-> **OMEGA DEFINES WHAT COMPUTATION MEANS WITHOUT COMMITTING THAT MEANING TO A PARTICULAR MACHINE REPRESENTATION.**
+- **Omega Systems Core compiler:** OSC-0 is frozen as a design. OSC-1 and OSC-2 are implemented with host receipts and are NOT QUALIFIED. OSC-3 is in progress ([OSC-3-DESIGN](docs/osc/OSC-3-DESIGN.md)). It is not self-hosting and there is no general Omega compiler yet; the old Milestone 6 "self-host" result was a fixed-output self-copy check, not compilation ([note](docs/osc/OSC-1-SELF-HOST-STATEMENT.md)).
+- **Reaction runtime:** the R1 to R16 qualification ladder passed on builds that predate the composition modules (omega#126). The current living build is IMPLEMENTED / NOT QUALIFIED until re-qualified. Composition, Capability Graph, Skill Router, J-Space and Cortex run on the host; the Fabric interface is a host-only loopback with no network; none of this is on silicon as a qualified system.
+- **Numerics (E1):** 2 of 6 exit requirements met; E1 is not closed. GB10 reductions and division/square root have chip receipts; see [E1_GAP_TABLE](docs/numeric/E1_GAP_TABLE.md).
+- **Hardware:** results on the DGX Spark GB10 are tied to the exact commit in each receipt. Host and emulator passes are never reported as hardware qualification.
 
-OMEGA is the reaction runtime and the compiler for Omega Systems Core. It is the smallest sovereign semantic system capable of representing computation independently of the physical machine that will eventually realize it, and it compiles Omega Systems Core programs into that machine. (Decided by Drake, 2026-09-29, in [OMEGA-SYSTEMS-CORE-0000](docs/adr/OMEGA-SYSTEMS-CORE-0000.md); this retires the earlier "not a programming language or compiler" doctrine. The Milestone 6 "self-host" result was a fixed-output self-copy check, not compilation.)
+The live status is owned by [aien-architecture](https://github.com/aien-dev/aien-architecture): [CURRENT_EXECUTION_PLAN.md](https://github.com/aien-dev/aien-architecture/blob/main/CURRENT_EXECUTION_PLAN.md) and [doctrine/ROADMAP.md](https://github.com/aien-dev/aien-architecture/blob/main/doctrine/ROADMAP.md). This file does not restate numbers that drift. Historical milestone receipts (for example Milestone 4, `OMEGA_SEMANTICS`, 12 of 12 gates) stay in `evidence/` unchanged as history.
 
-### The Sovereign Axioms
-- **`SMART ≠ TRUSTED`**: Trust is not earned through cognitive capability, model scale, or heuristic brilliance. Trust is binary and verified through auditable invariant enforcement.
-- **`INTELLIGENCE ≠ AUTHORITY`**: AIEN cognitive agents will explore semantic spaces and propose abstractions, but intelligence possesses zero authority. Physical effects are exclusively mediated by PHYSICS via capability-bounded, receipt-producing transactions.
-- **`MEANING IS PERMANENT; REPRESENTATION IS DISPOSABLE`**: Non-semantic representation variations (textual syntax, builder order, memory addresses, serialization formats) collapse into a unique content-addressed semantic identity (`SEMANTIC_ID`).
+## Core ideas
 
----
+- **SMART is not TRUSTED, INTELLIGENCE is not AUTHORITY.** Trust comes from verified invariants, never from capability.
+- **Meaning is permanent; representation is disposable.** Equivalent programs collapse to one `SEMANTIC_ID` (SHA-256 of the canonical encoding); different programs get different ones.
+- **Pure computation is separate from effects**, and effects need capability-bounded, receipt-producing transactions.
 
-## 2. Primary Invariant
+## How this fits with the other repositories
 
-$$\text{SEMANTICALLY\_EQUIVALENT}(A, B) \implies \text{SEMANTIC\_ID}(A) = \text{SEMANTIC\_ID}(B)$$
-$$\text{SEMANTICALLY\_DIFFERENT}(A, B) \implies \text{SEMANTIC\_ID}(A) \neq \text{SEMANTIC\_ID}(B)$$
+[aienos](https://github.com/aien-dev/aienos) is the kernel Omega is meant to run on. [physics](https://github.com/aien-dev/physics) provides FORGE machine realization and the GB10 native path (pinned in `physics.lock`). [aien-architecture](https://github.com/aien-dev/aien-architecture) owns status and sequencing. ARGUS-0/1 (a defensive plane), Physics Zero, DIRAC-0 and the Evolution Arena are specifications and plans only.
 
-Derived strictly through the canonicalization pipeline:
+## Standing rules
 
-```text
-RAW REPRESENTATION
-       ↓
-PARSE / CONSTRUCT
-       ↓
-VALIDATE
-       ↓
-CANONICALIZE SEMANTICS
-       ↓
-CANONICAL SEMANTIC ENCODING ("OMG0")
-       ↓
-SEMANTIC_ID = SHA256(canonical_bytes)
-```
+Language rule: Rust is scaffolding, Omega is the destination, and C or assembly stay only where hardware, boot, ABI or measurement justifies them (aien-architecture ADR 0024, which supersedes the old "C is the target, no new Rust" rule). No Python anywhere (tools are C or shell). No CUDA toolkit or CUDA library dependence: the GB10 is driven natively. No systemd. Offline, in-house builds. Never overwrite failed experiments or old receipts. Verdict words: PASS, FAIL, NOT_RUN, BLOCKED_HARDWARE, BLOCKED_OPERATOR, MISSING_IMPLEMENTATION.
 
----
+## Build and verify
 
-## 3. Repository Structure
-
-```text
-omega/
-    doctrine/
-        README.md             - Core sovereign axioms and canonical stack
-    spec/
-        semantic-object.md    - The 11 first-class semantic categories
-        type-system.md        - The bounded type system
-        canonical-encoding.md - Deterministic binary serialization and hashing rules
-    src/
-        sha256.h / sha256.c   - Standalone NIST FIPS 180-4 SHA-256 implementation
-        omega_types.h         - Bootstrap C types (marked non-permanent definition)
-        omega_canonical.h/.c  - Lexicographical sorting and canonical encoding
-        omega_validate.h/.c   - Graph validation, bounds, DAG cycle checking
-        omega_core.h/.c       - Semantic builders, relations, constraints, evaluation
-        omega_codec.h/.c      - Binary wire codec and non-canonical text parser
-    tools/
-        omegatool.c           - Qualification harness and demonstration runner
-    tests/
-        identity/             - Representation independence tests
-        malformed/            - Malformed corpus and cycle refusal tests
-        canonicalization/     - Binary canonicalization tests
-        relations/            - Directed relation tests
-        constraints/          - Invariant envelope and authority law tests
-        run_m4_gates.sh       - Master qualification runner
-    evidence/
-        test_vectors/         - Binary and textual test vectors
-        corpus_digests.txt    - SHA-256 digests of all specs, source files, and vectors
-        omega_qualification_receipt.json - Formal cryptographic qualification receipt
-    Makefile                  - POSIX C99 build rules (-Wall -Wextra -Werror -pedantic)
-    README.md
-```
-
----
-
-## 4. Central Demonstrations
-
-### Demonstration 1: Pure Arithmetic Equivalence Across 4 Forms
-Computation: $\text{ADD}(a = \text{U32}(7), b = \text{U32}(11)) \implies \text{U32}(18)$
-- Builder Ordering A: `674c6d710c35de930e49454618b3bbc63d5d1d0ed0506fc0181365bd050e9870`
-- Builder Ordering B: `674c6d710c35de930e49454618b3bbc63d5d1d0ed0506fc0181365bd050e9870`
-- Binary Wire Decoder: `674c6d710c35de930e49454618b3bbc63d5d1d0ed0506fc0181365bd050e9870`
-- Textual Parser: `674c6d710c35de930e49454618b3bbc63d5d1d0ed0506fc0181365bd050e9870`
-- Result: **All 4 representations yield identical SEMANTIC_ID**.
-- Operator Mutation (`ADD` $\to$ `SUB`): yields `54e676c014745193a2ec7ec3672c57b584a0653ea8bfb44710e6cbc718eccf23` (**Distinct SEMANTIC_ID confirmed**).
-
-### Demonstration 2: Physics Authority Semantics
-The Milestone 3 authority law:
-$$\text{child.bounds} \subseteq \text{parent.bounds} \quad \land \quad \text{child.rights} \subseteq \text{parent.rights}$$
-- Construction 1 (Bounds then Rights): `e9b290e4505c41cbe09d25a6f4406c81a9a2d932996bb176a89e2c37ec6a403e`
-- Construction 2 (Rights then Bounds): `e9b290e4505c41cbe09d25a6f4406c81a9a2d932996bb176a89e2c37ec6a403e`
-- Result: **Identical canonical semantic ID**.
-
----
-
-## 5. Canonical Qualification Gates
-
-```text
-[PASS] OMEGA_OBJECT_MODEL_PASS                : 11 first-class categories instantiated and typed
-[PASS] OMEGA_TYPE_SYSTEM_PASS                 : Bounded widths enforced, invalid widths refused
-[PASS] OMEGA_GRAPH_VALIDATION_PASS            : DAG validation and dangling reference refusal
-[PASS] OMEGA_CANONICAL_ENCODING_PASS          : OMG0 wire header and lexicographical attribute sorting
-[PASS] OMEGA_SEMANTIC_ID_DETERMINISM_PASS     : Cross-allocation bit-for-bit SHA-256 identity
-[PASS] OMEGA_REPRESENTATION_INDEPENDENCE_PASS : 4 independent representations collapse to identical ID
-[PASS] OMEGA_SEMANTIC_DIFFERENCE_PASS         : ADD -> SUB produces distinct SEMANTIC_ID
-[PASS] OMEGA_RELATION_PASS                    : Relation ordering independence confirmed
-[PASS] OMEGA_CONSTRAINT_PASS                  : Constraint ordering independence confirmed
-[PASS] OMEGA_PURE_EFFECT_SEPARATION_PASS      : Pure computation decoupled from physical effect tokens
-[PASS] OMEGA_MALFORMED_OBJECT_REFUSAL_PASS    : Structural cycles and corrupt wire packets rejected
-[PASS] OMEGA_CROSS_BUILD_DETERMINISM_PASS     : Known-answer test evaluation matches specification
-```
-
----
-
-## 6. Build and Verification Instructions
+Needs gcc and make. Host suites need no GPU and no physics checkout:
 
 ```bash
-# Build omegatool
-make clean && make
-
-# Run master qualification gate suite
-./tests/run_m4_gates.sh
-
-# Run individual demonstrations
-./build/omegatool --reference-demonstrate-arithmetic
-./build/omegatool --reference-demonstrate-physics
+make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-compiler-quick   # compiler, quick suite
+make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-cpu      # E1 CPU numerics
+make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-realize
 ```
+
+The full omegatool build (`make`) links the `physics` repository at the commit in `physics.lock`. Some older milestone gate scripts rewrite their receipts in place, so do not run them on a clean checkout you mean to keep; prefer the `make test-*` targets above. Targets that touch the GB10 need the DGX Spark, run one at a time, and are never killed mid-run. CI definitions in `.github/workflows/` list the suites that run on every push.
+
+## Repository layout
+
+`src/` core and C compiler (`src/compiler/`), `src/runtime/` reaction runtime, `spec/` and `docs/` specifications, `tests/` gate suites, `evidence/` content-addressed receipts, `tools/` harnesses.
+
+## Contributing
+
+Open a pull request with the exact command you ran and its output. Receipts are content-addressed, name the exact commit and refuse a dirty tree. Do not edit existing evidence in place. External review is expected before merge. See [CONTRIBUTORS.md](CONTRIBUTORS.md). Contact: aien@aienos.com.
+
+## Crumbs
+
+This repo uses the Crumb Protocol (RFC-0001). Each directory carries a `.crumb` file (what the directory is for, its rules, and a backfilled history). Live coordination between agents goes in `.crumb.local`, which is never committed.
+Before editing a directory, read its `.crumb`. Rules and the `crumb` tool: https://github.com/aien-dev/aien-architecture/blob/main/docs/CRUMB_PROTOCOL.md
+Backfilled history (marked as such, not live whispers) is in `docs/crumbs/BACKFILL.md`.

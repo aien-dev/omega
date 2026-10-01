@@ -50,10 +50,14 @@ static uint64_t ref_pack(JsBranchRef r) { return js_branch_ref_pack(r); }
 static JsBranchRef ref_unpack(uint64_t v) { return js_branch_ref_unpack(v); }
 static int ref_eq(JsBranchRef a, JsBranchRef b) { return a.id == b.id && a.gen == b.gen; }
 
-/* One fault point (test builds only, -DRXC_TEST_HOOKS). Fires once;
+/* One fault point (test builds only, -DAIEN_TEST_BUILD=1). Fires once;
  * candidate-side points fire only for fault_k. Returns 1 when the caller must
- * fail in process. Without RXC_TEST_HOOKS it never fires. */
+ * fail in process. Without the test build it never fires. */
 #ifdef RXC_TEST_HOOKS
+/* Link-map marker: the production hygiene check (tools/r16_prod_hygiene.sh)
+ * refuses any binary that carries an aien_test_build_* symbol. */
+__attribute__((used)) const char aien_test_build_rx_compose_hooks[] =
+    "AIEN_TEST_BUILD piece: rx_compose test hooks (fault points, rogue candidate, hold point)";
 static int fault(RxCompose *c, int point, uint32_t k) {
     if (c->test.fault_point != point) return 0;
     if ((point == RXC_FP_BEFORE_FORK || point == RXC_FP_CANDIDATE) && k != c->test.fault_k)

@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "name": "docs/osc/audit",
+  "layer": "docs/osc/audit",
+  "purpose": "Directory docs/osc/audit. Purpose not yet described by a human.",
+  "above": {
+    "name": "docs/osc",
+    "path": ".."
+  },
+  "below": [
+    {
+      "name": "baseline",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory docs/osc/audit. Purpose not yet described by a human.",
+      "files": [
+        "aienos-physics.md",
+        "baseline.md",
+        "language-compiler.md",
+        "omega-runtime.md"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "a927bd6",
+          "timestamp": "2026-09-29T14:35:32-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-0/OSC-0B: Omega Systems Core audit and machine semantics freeze (Accepted 2026-09-29) (#76)",
+          "pr": 76
+        }
+      ]
+    }
+  }
+}

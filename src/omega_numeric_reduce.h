@@ -29,6 +29,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "omega_numeric.h"
+
 #define OMEGA_REDUCE_DECLARED_ORDER \
     "RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL"
 
@@ -80,12 +82,15 @@ int omega_reduce_rows_cpu(OmegaReduceOp op, const float *x, size_t rows, size_t 
 float omega_reduce_sequential_sum_not_contract(const float *x, size_t n);
 
 /*
- * GB10 realization (src/omega_numeric_reduce_gb10.c). SUM only: each level
- * is padded with -0.0 to a multiple of 32 on the host and run through the
- * chip-proven REDUCE_SUM warp kernel (omega_gb10_execute_simt_op) in chunks
- * of at most OMEGA_NUMERIC_MAX_COUNT values; the host only gathers lane 0 of
- * each warp between launches (data movement, no arithmetic). Every FADD runs
- * on the chip. MAX/MIN/MEAN return OMEGA_NUMERIC_ERR_NOT_ENCODED.
+ * GB10 realization (src/omega_numeric_reduce_gb10.c), all four ops. Each
+ * level is padded with the op identity to a multiple of 32 on the host and run
+ * through a warp kernel in chunks of at most OMEGA_NUMERIC_MAX_COUNT values;
+ * the host only gathers lane 0 of each warp between launches (data movement,
+ * no arithmetic).
+ *   SUM       the chip-proven REDUCE_SUM patch words, own launch with a semaphore wait.
+ *   MAX, MIN  this file's warp patch: five SHFL.DOWN (16..1) + FMNMX pairs.
+ *   MEAN      SUM levels on the chip, then omega_math_div(SUM, u2f(n)) on the
+ *             host: a declared host step until a GB10 DIV is merged.
  *
  * omega_reduce_gb10_check runs every pre-submission check (CHECK: markers)
  * without opening a device.
@@ -96,5 +101,16 @@ int omega_reduce_gb10_check(OmegaReduceOp op, const float *x, size_t n, const fl
 int omega_reduce_gb10(OmegaReduceOp op, const float *x, size_t n, float *out);
 /* Launches the GB10 path made in the last omega_reduce_gb10 call. */
 unsigned omega_reduce_gb10_last_launches(void);
+
+/* MAX/MIN warp patch (12 instructions written at OMEGA_NUMERIC_PATCH_OFFSET
+ * of the vecadd kernel). Returns the count or OMEGA_NUMERIC_ERR_NOT_ENCODED. */
+int omega_reduce_gb10_minmax_patch(OmegaReduceOp op, OmegaNumericPatchInsn out[OMEGA_NUMERIC_PATCH_MAX]);
+/* Structural check of a MAX/MIN patch against the QMD it runs in: the numeric
+ * executor's generic rules plus deltas 16,8,4,2,1 in order, FMNMX form and
+ * min/max predicate, operand order, waits, stall, store, exit. */
+int omega_reduce_gb10_check_minmax_patch(OmegaReduceOp op, const OmegaNumericPatchInsn *p, int n,
+                                         const uint32_t *qmd1, char *err, size_t err_len);
+/* vecadd kernel with the MAX/MIN patch applied (what the executor submits). */
+int omega_reduce_gb10_build_minmax_kernel(OmegaReduceOp op, uint8_t *code, size_t code_len, size_t *out_len);
 
 #endif /* OMEGA_NUMERIC_REDUCE_H */

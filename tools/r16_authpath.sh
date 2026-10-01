@@ -4,6 +4,7 @@
 #
 # Usage: tools/r16_authpath.sh <mode> <r13-binary> <r14-binary> <outdir> <r13-sources...>
 #   mode: host | silicon
+#   R16_G3_STATIC_ONLY=1: run checks 1-3 only and report the gate NOT_RUN (CI).
 #
 # Checks, in order, and stops at the first failure:
 #   1. sources: the living-system build lists only omega sources and the
@@ -13,6 +14,9 @@
 #      symbol (omegatool legacy_oracle / demonstration / gate runners, the SEQ
 #      pulse loop, run_until_complete, Rust-mangled or aegis/sovereign names),
 #      and neither needs a shared library beyond the C runtime.
+#   2b. (Lane 32) the R13 binary is the PRODUCTION program: no test-build
+#      piece (AIEN_TEST_BUILD markers, Fabric loopback/HMAC stand-in, fixed
+#      test keys, composition hooks) and ARGUS linked (tools/r16_prod_hygiene.sh).
 #   3. no legacy program name is embedded in either binary as a string.
 #   4. exec tracing: each binary runs under strace (execve only, seccomp
 #      filter, so nothing else is slowed) with stub programs named after the
@@ -46,6 +50,11 @@ note() { echo "R16-G3 $*"; }
 
 # 1. sources -----------------------------------------------------------------
 printf '%s\n' "$@" > "$out/sources.txt"
+# Lane 32: the production program links ARGUS, extracted at the argus.lock
+# commit into $(OUT_DIR)/argus-src/<short>/native/argus (Makefile ARGUS block).
+argus_short=$(head -n 1 argus.lock 2>/dev/null | cut -c1-7)
+[ -n "$argus_short" ] || fail "argus.lock is missing or empty"
+argus_dir="*/argus-src/$argus_short/native/argus"
 for s in "$@"; do
     case "$s" in
         tools/omegatool.c|*/omegatool.c) fail "source list links omegatool: $s" ;;
@@ -54,13 +63,17 @@ for s in "$@"; do
         src/*.c|src/runtime/*.c|tests/runtime/*.c) ;;
         *libaienos_capability.a) ;;
         */m16/m16_native.c|*/nvrm/nvrm.c) [ "$mode" = silicon ] || fail "physical seat source in a host build: $s" ;;
+        $argus_dir/argus_*.c) ;;  # ARGUS pinned by argus.lock (git archive extract; pattern unquoted on purpose)
         *) fail "source outside omega src/ and tests/runtime/: $s" ;;
     esac
 done
-note "sources: $# files, omega and the native AIENOS capability library only"
+note "sources: $# files, omega, the native AIENOS capability library and ARGUS pinned by argus.lock only"
 
 # 2. link map ----------------------------------------------------------------
-legacy_sym='legacy_oracle|run_demonstration|omega_run_m[0-9]+_gates|omega_run_m4_gates|rx_seq_pulse|rx_seq_run_until_complete|run_until_complete|^_ZN|^_R[a-zA-Z0-9]|rust_|__rust|aegis_runtime|spark_aegis|sovereign|aien_runtime_spine|AienRuntimeSpine'
+# Rust runtime symbols are rust_* or __rust_*, so "rust_" is matched only at a
+# word start: a substring match also hit ARGUS trust symbols (det_trust_escalation,
+# trust_rank_tab), which are C. Mangled Rust (_ZN, _R...) is still refused.
+legacy_sym='legacy_oracle|run_demonstration|omega_run_m[0-9]+_gates|omega_run_m4_gates|rx_seq_pulse|rx_seq_run_until_complete|run_until_complete|^_ZN|^_R[a-zA-Z0-9]|(^|_)rust_|__rust|aegis_runtime|spark_aegis|sovereign|aien_runtime_spine|AienRuntimeSpine'
 for b in "$r13" "$r14"; do
     [ -x "$b" ] || fail "binary missing: $b"
     n=$(basename "$b")
@@ -77,6 +90,13 @@ for b in "$r13" "$r14"; do
     note "link map $n: no legacy orchestrator symbol; C runtime libraries only; SEQ world hooks present (reference, refused on production worlds): $(wc -l < "$out/$n.reference-hooks")"
 done
 
+# 2b. production program (Lane 32): the R13 binary must be the production
+# program, not the AIEN_TEST_BUILD variant: no test piece in its link map or
+# strings, ARGUS linked (tools/r16_prod_hygiene.sh, static part only here).
+R16_PROD_NO_RUN=1 sh tools/r16_prod_hygiene.sh "$mode" "$r13" > "$out/prod-hygiene.out" 2>&1 \
+    || fail "the R13 binary is not the production program: $(grep -E 'FAIL' "$out/prod-hygiene.out" | head -3 | tr '\n' ' ')"
+note "production program: $(grep -E '^R16 prod: ' "$out/prod-hygiene.out" | head -1 | sed 's/^R16 prod: //')"
+
 # 3. embedded program names ----------------------------------------------------
 legacy_exe='spark-aegis|aegis-runtime|aien-cli|aien-runtime|aien-server|spark-dream|sovereign-core|omegatool'
 for b in "$r13" "$r14"; do
@@ -86,6 +106,19 @@ for b in "$r13" "$r14"; do
     fi
 done
 note "strings: no legacy program name embedded"
+
+# Static-only mode (R16_G3_STATIC_ONLY=1): stop after checks 1-3. These read
+# only the build (source list, link map, shared libraries, embedded strings)
+# and run nothing, so they can run where the binaries cannot (a CI runner has
+# neither the GB10 seat nor the Spark's two core classes). This is NOT the
+# gate: checks 4-5 (exec trace and the living runs) are not run, and the gate
+# line says NOT_RUN.
+if [ "${R16_G3_STATIC_ONLY:-0}" = 1 ]; then
+    echo "R16-G3 static: R16_G3_LINKMAP=STATIC_PASS mode=$mode (checks 1-3 of 5 on this build; not the gate)"
+    echo "R16 gate: R16_G3_AUTHPATH=NOT_RUN (checks 4-5, exec trace and living run, not run in static-only mode)"
+    echo "R16-G3 evidence: $out"
+    exit 0
+fi
 
 # 4 + 5. run under exec tracing, legacy programs stubbed ------------------------
 stubs="$out/legacy-stubs"
@@ -125,7 +158,8 @@ else
     r14_want='R14 gate: R14_LIVING_RECOVERY=PASS'
 fi
 run_traced "$r13" r13 "$r13_want"
-grep -E '^R13 (gate|costs|control E episode):' "$out/r13.out" | sed 's/^/R16-G3   /'
+grep -E '^R13 (gate|costs|control E episode|ARGUS):' "$out/r13.out" | sed 's/^/R16-G3   /'
+grep -q '^R13 ARGUS: observing' "$out/r13.out" || fail "R13 did not report ARGUS observing"
 run_traced "$r14" r14 "$r14_want"
 grep -E '^R14 [A-F]_[a-z_]+ +(PASS|FAIL)|^R14 gate:' "$out/r14.out" | sed 's/^/R16-G3   /'
 if grep -E '^R14 [A-F]_[a-z_]+ +FAIL' "$out/r14.out" > /dev/null; then

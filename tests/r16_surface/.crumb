@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/r16_surface",
+  "layer": "tests/r16_surface",
+  "purpose": "Directory tests/r16_surface. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/r16_surface. Purpose not yet described by a human.",
+      "files": [
+        "run.sh"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "8b719ff",
+          "timestamp": "2026-09-30T15:52:29-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #106 from aien-dev/feat/r16-g3-g5-host",
+          "pr": 106
+        }
+      ]
+    }
+  }
+}

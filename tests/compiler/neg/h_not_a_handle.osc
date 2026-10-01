@@ -1,0 +1,10 @@
+// expect: TYPE_MISMATCH object=i line=7
+// transition: pool index not a handle
+fn f() -> i64 {
+    let mut s: i64 = 0;
+    let i: i64 = 0;
+    pool p: [i64; 2] {
+        s = p[i];
+    }
+    return s;
+}

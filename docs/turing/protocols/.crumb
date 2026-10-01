@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "name": "docs/turing/protocols",
+  "layer": "docs/turing/protocols",
+  "purpose": "Directory docs/turing/protocols. Purpose not yet described by a human.",
+  "above": {
+    "name": "docs/turing",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory docs/turing/protocols. Purpose not yet described by a human.",
+      "files": [
+        "README.md",
+        "turing-instrument-calibration-validation-protocol-v1-0.pdf",
+        "turing-instrument-calibration-validation-protocol-v1-0.tex",
+        "turing-laboratory-execution-protocol-v1-0.pdf",
+        "turing-laboratory-execution-protocol-v1-0.tex"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 2,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "2d52219",
+          "timestamp": "2026-09-29T18:10:40-05:00",
+          "author": "Aien",
+          "subject": "docs(turing): calibration protocol references public paper Version 1.0"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "737f8b3",
+          "timestamp": "2026-09-29T17:53:45-05:00",
+          "author": "Aien",
+          "subject": "docs(turing): publish Turing calibration and laboratory execution protocols v1.0"
+        }
+      ]
+    }
+  }
+}

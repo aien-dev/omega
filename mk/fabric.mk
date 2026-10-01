@@ -2,8 +2,12 @@
 # advertisement, leases and loss detection keyed by AienMachineId, over the
 # in-process loopback transport. Files under src/fabric/ and tests/fabric/.
 # Picked up by `-include mk/*.mk`. Not part of `all` or `test` (that runs only
-# the omegatool gates); CI runs test-fabric and test-fabric-living (rx-host.yml)
-# and the living build links the Fabric (RX_FABRIC_LIVING_SRCS). It uses the Capability Graph only
+# the omegatool gates); CI runs test-fabric and test-fabric-living (rx-host.yml).
+# Lane 32: every Fabric build here is a TEST build (-DAIEN_TEST_BUILD=1): the
+# loopback transport, HMAC stand-in and dispatcher refuse to compile without
+# it, and only the R13 test-build variant links them (RX_FABRIC_TEST_SRCS); the
+# production program carries no Fabric until a real transport exists (TRUST-1).
+# It uses the Capability Graph only
 # through src/runtime/rx_capq.h and links the same objects test-capability-graph
 # links (rx_capq.o, rx_graph.o, the pinned AIENOS capability library).
 #
@@ -14,12 +18,13 @@
 #                     COMPOSITION-2 causal path (rx_compose) through the Fabric
 #                     dispatcher (fab_dispatch.c); lease loss, forgery and wrong
 #                     machine refused; plain and ASan/UBSan, two runs each. The
-#                     same scenario runs inside the R13 living World.
+#                     same scenario runs inside the R13 test-build variant.
 ifndef FABRIC_MK
 FABRIC_MK := 1
 .PHONY: test-fabric test-fabric-living fabric-purity fabric-receipt
 FAB_DIR = $(OUT_DIR)/fabric
-FAB_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc -Isrc/runtime -Isrc/fabric
+FAB_CFLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc -Isrc/runtime -Isrc/fabric \
+	-DAIEN_TEST_BUILD=1
 FAB_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
 FAB_SRCS = src/fabric/fabric.c src/fabric/fab_hmac.c src/fabric/fab_loopback.c
 FAB_LIVING_SRCS = $(FAB_SRCS) src/fabric/fab_dispatch.c

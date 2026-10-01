@@ -1,0 +1,11 @@
+// expect: POOL_CAPACITY object=p line=7
+// transition: pool full
+fn f() -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 1] {
+        let a: handle p = p.alloc(1);
+        let b: handle p = p.alloc(2);
+        s = p[a] + p[b];
+    }
+    return s;
+}

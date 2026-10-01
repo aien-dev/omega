@@ -1,0 +1,64 @@
+name: Omega smoke
+
+# Always-on check (Lane 34, 2026-10-01): NO path filter, so it runs on every PR
+# and can be a required status check under branch protection. Every other omega
+# workflow is path-filtered and would block unrelated PRs if required.
+# Cheap (a few minutes on the AArch64 hosted runner, NOT the Spark; nothing here
+# is a chip qualification): build omegatool against the pinned Physics, run the
+# base gates (make test), the language V0 golden suite and the E1 FP32
+# transcendental sampled check with its mutant kill.
+# On pull_request actions/checkout uses refs/pull/N/merge: the merged result is tested.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: omega-smoke
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read pinned Physics
+        id: pins
+        run: |
+          sha=$(tr -d '[:space:]' < physics.lock)
+          test -n "$sha"
+          echo "physics=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Physics
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/physics
+          ref: ${{ steps.pins.outputs.physics }}
+          path: physics-src
+      - name: Keep Physics checkout out of Omega tree status
+        run: echo 'physics-src/' >> .git/info/exclude
+      - name: Build and base gates (make test)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -o pipefail
+          make test | tee base.log
+          grep -E 'TOTAL GATES: ([0-9]+) \| PASSED: \1 \| FAILED: 0' base.log
+          ! grep -qE 'FAILED: [1-9]|\[FAIL\]|\(FAIL\)' base.log
+      - name: Language V0 golden
+        run: |
+          set -o pipefail
+          make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-language | tee lang.log
+          grep -E '^PASS ([0-9]+)/\1$' lang.log
+          ! grep -q '^FAIL' lang.log
+      - name: FP32 transcendentals, sampled check and mutant kill
+        run: |
+          set -o pipefail
+          make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-transc | tee transc.log
+          test "$(grep -cE '^mutant [0-9]+ killed' transc.log)" -eq 10
+          grep -qE '^test-numeric-transc: PASS \(all 10 mutants killed\)' transc.log
+          ! grep -q '^FAIL' transc.log

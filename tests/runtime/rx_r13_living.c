@@ -1,10 +1,24 @@
 /* R13: one world; after the goal, only production requests and observation. */
 #include "runtime/rx_living.h"
 #include "runtime/rx_resident_gpu.h"
+#include "runtime/aien_machine_id.h"
+/* Lane 32: two programs from this file (docs/r16-production-entry-point.md).
+ * PRODUCTION (default, no flag): no test pieces. ARGUS is linked and observes
+ * (RX_ARGUS=2, authority observer, consumer ingest), pinned by argus.lock; the
+ * composition and Fabric phases are reported NOT_RUN with their reason.
+ * TEST BUILD (-DAIEN_TEST_BUILD=1, test-r13-testbuild-*): adds the composition
+ * phase (rx_compose test hooks, host only) and the Fabric F5-0 phase (loopback
+ * transport, HMAC stand-in, fixed test keys); its gate line is
+ * R13_LIVING_SYSTEM_TEST_BUILD and it never claims R13_LIVING_SYSTEM. */
+#ifdef AIEN_TEST_BUILD
 #include "rx_compose_fixture.h"
-/* Fabric F5-0 runs in both builds (Lane 17): the Fabric path is CPU-only
- * loopback and links in the host and the silicon binary alike. */
 #include "../fabric/fab_living_phase.h"
+#else
+#include "runtime/rx_argus.h"
+#if RX_ARGUS != 2 || !defined(RX_ARGUS_AUTHORITY_OBSERVER)
+#error "the production R13 program links ARGUS: build with -DRX_ARGUS=2 -DRX_ARGUS_AUTHORITY_OBSERVER (Makefile RX_PROD_ARGUS_FLAGS)"
+#endif
+#endif
 #include "omega_evidence.h"
 #include "sha256.h"
 
@@ -222,10 +236,12 @@ static int start(Rig *r, int mode) {
     /* R16 C6: every production subject gets a runtime-issued credential,
      * then the world refuses any registration that does not present one. */
     if (rx_living_enroll_callers(&r->w, &r->keys) != RX_OK) return -1;
-    /* The composition phases run inside this World (rx_compose_attach): the
-     * host runs the composition and the Fabric phase, silicon the Fabric
-     * phase. Their subjects are enrolled here, before enrollment closes. */
+    /* Test build only: the composition and Fabric phases run inside this
+     * World (rx_compose_attach); their subjects are enrolled here, before
+     * enrollment closes. The production program enrolls no test subject. */
+#ifdef AIEN_TEST_BUILD
     if (rx_compose_enroll_callers(&r->w, &r->compose_keys) != RX_OK) return -1;
+#endif
     if (rx_world_bind_callers(&r->w) != RX_OK) return -1;
     if (scratch_dir(r->generation_dir, sizeof r->generation_dir, "r13-living") != 0) return -1;
     if (scratch_dir(r->home_dir, sizeof r->home_dir, "r13-home") != 0 || living_identity(r) != 0)
@@ -1145,7 +1161,9 @@ static void stop(Rig *r) {
  * closed composition's reactions stay registered but inert (their objects are
  * retired and their rights revoked); the composition subjects 200..204 are
  * fixed, so one composition per World. */
-#ifndef R13_SILICON
+/* Test build only (Lane 32): it needs the AIEN_TEST_BUILD rogue-candidate hook
+ * and the test fixture (rx_compose_fixture.h). */
+#if defined(AIEN_TEST_BUILD) && !defined(R13_SILICON)
 typedef struct {
     int ran, ok;
     uint64_t result1, result2;
@@ -1380,9 +1398,12 @@ out:
     return g->ok ? 0 : -1;
 }
 
-#endif /* !R13_SILICON (composition phase) */
+#endif /* AIEN_TEST_BUILD && !R13_SILICON (composition phase) */
 
-/* Fabric F5-0 in the living World (Lane 13; both builds since Lane 17). A second simulated
+#ifdef AIEN_TEST_BUILD
+/* Fabric F5-0 in the living World (Lane 13; host and silicon TEST builds since
+ * Lane 17; test build only since Lane 32: loopback, HMAC stand-in and fixed
+ * test keys never enter the production program). A second simulated
  * machine joins over the loopback transport and advertises a Skill; the
  * composition attached to this World finds it in the Capability Graph as a
  * CQ_SRC_FABRIC candidate, runs it through the Fabric dispatcher (an
@@ -1470,6 +1491,18 @@ static void fabric_json(char *out, size_t n) {
         U(g->dispatch_refused[FAB_DX_DIGEST]), g->fabric_held, rec, fab);
 }
 /* end Fabric phase */
+#else  /* production program: no Fabric (no real transport before TRUST-1) */
+#ifdef R13_SILICON
+#define FL_BUILD "silicon"
+#else
+#define FL_BUILD "host"
+#endif
+static void fabric_json(char *out, size_t n) {
+    snprintf(out, n, "  \"fabric_host_phase\": {\"result\": \"NOT_RUN\", \"build\": \"" FL_BUILD "\", "
+             "\"reason\": \"production program: Fabric F5-0 has only the loopback transport and "
+             "HMAC stand-in (test build only, AIEN_TEST_BUILD); no real transport before TRUST-1\"},\n");
+}
+#endif /* AIEN_TEST_BUILD (Fabric phase) */
 
 static void binary_digest(char out[65]) {
     strcpy(out, "unavailable");
@@ -1487,12 +1520,11 @@ static void binary_digest(char out[65]) {
 }
 
 #define OBJ(o) (o).id, (o).generation
-
-/* The composition phase in the receipt (host only: it needs the -DRXC_TEST_HOOKS
- * rogue-candidate hook, which the silicon binary does not carry), then the
- * Fabric phase (both builds). */
+/* The composition phase in the receipt (host TEST build only: it needs the
+ * AIEN_TEST_BUILD rogue-candidate hook and the test fixture), then the Fabric
+ * phase (test builds only). */
 static void composition_json(char *out, size_t n) {
-#ifndef R13_SILICON
+#if defined(AIEN_TEST_BUILD) && !defined(R13_SILICON)
     const CompositionReceipt *c = &g_comp;
     if (c->ran) {
         snprintf(out, n,
@@ -1520,19 +1552,118 @@ static void composition_json(char *out, size_t n) {
             c->identity_refused ? "true" : "false", c->generation_untouched ? "true" : "false",
             c->inforce_untouched ? "true" : "false", c->promote_holders_ok ? "true" : "false");
     } else {
-        snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\"},\n");
+        snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\", "
+                 "\"reason\": \"phase did not run (an earlier step failed)\"},\n");
     }
+#elif defined(AIEN_TEST_BUILD)
+    snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\", \"reason\": "
+             "\"silicon test build: the composition phase runs in the host test build only\"},\n");
 #else
-    snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\"},\n");
+    snprintf(out, n, "  \"composition_host_phase\": {\"result\": \"NOT_RUN\", \"reason\": "
+             "\"production program: the composition phase needs the AIEN_TEST_BUILD rogue-candidate "
+             "hook and test fixture (test-r13-testbuild-host)\"},\n");
 #endif
-    /* The Fabric phase runs in both builds (Lane 17). */
+    /* Then the Fabric phase (NOT_RUN with its reason in the production program). */
     size_t used = strlen(out);
     if (used < n) fabric_json(out + used, n - used);
 }
 
+/* Which program this is (Lane 32). The test build has its own receipt and
+ * gate key, so it can never stand in for the production R13 gate. */
+#ifdef AIEN_TEST_BUILD
+#define R13_RECEIPT "R13/rx_living_test_build_receipt.json"
+#define R13_GATE_KEY "R13_LIVING_SYSTEM_TEST_BUILD"
+#define R13_BUILD "test (AIEN_TEST_BUILD)"
+static int g_argus_ok = 1;   /* ARGUS is not linked into the test build */
+static char g_argus_json[512] =
+    "  \"argus\": {\"result\": \"NOT_RUN\", \"reason\": \"test build: ARGUS is linked into "
+    "the production program only\"},\n";
+#else
+#define R13_RECEIPT "R13/rx_living_receipt.json"
+#define R13_GATE_KEY "R13_LIVING_SYSTEM"
+#define R13_BUILD "production"
+static int g_argus_ok;
+static char g_argus_json[1024] =
+    "  \"argus\": {\"result\": \"FAIL\", \"reason\": \"ARGUS was not checked\"},\n";
+
+/* ARGUS in the production program (ARGUS-1 decisions, 2026-09-29): observe and
+ * record only. ARGUS (pinned by argus.lock) receives the runtime's capability
+ * events and the authority's own mint/revoke announcements, runs its
+ * detectors and keeps findings. It holds no capability, takes no action and
+ * never blocks a request, so it cannot expand its own authority; the one
+ * narrow automatic revoke the decisions allow is not in the pinned ARGUS.
+ * The program refuses to run unobserved: ARGUS must be active with its
+ * consumer ingesting (RX_ARGUS_AUTO=0 or RX_ARGUS_CONSUMER=off/discard make
+ * the gate FAIL). */
+static int argus_check_start(void) {
+    RxArgusStats s;
+    rx_argus_stats(&s);
+    if (rx_argus_active() && s.consumer_mode == RX_ARGUS_CONSUMER_INGEST) return 0;
+    snprintf(g_argus_json, sizeof g_argus_json,
+             "  \"argus\": {\"result\": \"FAIL\", \"reason\": \"ARGUS not observing at start "
+             "(active %d, consumer mode %d; production needs ingest)\"},\n",
+             rx_argus_active(), s.consumer_mode);
+    fprintf(stderr, "R13 ARGUS: not observing at start (active %d, consumer mode %d); "
+            "the production program refuses to run unobserved\n", rx_argus_active(), s.consumer_mode);
+    return -1;
+}
+
+/* After every World is stopped (producers quiescent): drain, stop the
+ * consumer, record what ARGUS saw. Findings are recorded, never acted on. */
+static void argus_finish(void) {
+    RxArgusStats s;
+    rx_argus_stats(&s);
+    int mode = s.consumer_mode;
+    rx_argus_shutdown();
+    rx_argus_stats(&s);
+    uint64_t obs = 0;
+    for (unsigned k = 0; k < 9; k++) obs += s.authority_obs[k];
+    g_argus_ok = mode == RX_ARGUS_CONSUMER_INGEST && s.received > 0 && obs > 0 &&
+                 s.ingest_errors == 0;
+    snprintf(g_argus_json, sizeof g_argus_json,
+             "  \"argus\": {\"result\": \"%s\", \"mode\": \"observe and record (RX_ARGUS=2, "
+             "authority observer, consumer ingest); no response action, holds no capability\", "
+             "\"argus_lock\": \"argus.lock\", \"emitted\": %llu, \"received\": %llu, "
+             "\"authority_observations\": %llu, \"authority_mints\": %llu, "
+             "\"authority_revokes\": %llu, \"findings\": %llu, \"ingest_errors\": %llu, "
+             "\"ring_refused\": %llu},\n",
+             g_argus_ok ? "OBSERVED" : "FAIL", U(s.emitted), U(s.received), U(obs),
+             U(s.authority_obs[AIENOS_CAP_OBS_MINT]), U(s.authority_obs[AIENOS_CAP_OBS_REVOKE]),
+             U(s.findings_total), U(s.ingest_errors), U(s.ring_refused));
+    printf("R13 ARGUS: %s; observe and record, received %llu events, %llu authority "
+           "observations, %llu findings, %llu ingest errors\n",
+           g_argus_ok ? "observing" : "FAIL", U(s.received), U(obs), U(s.findings_total),
+           U(s.ingest_errors));
+    const char *p = getenv("RX_ARGUS_SUMMARY");
+    if (p) rx_argus_write_summary(p, getenv("RX_ARGUS_SUITE") ? getenv("RX_ARGUS_SUITE") : "r13");
+}
+
+/* `--argus-probe`: the host-run check that ARGUS is present and observing in
+ * THIS binary (test-prod-hygiene; CI cannot run the living episode, which
+ * needs both Spark core classes). It starts one authority through the same
+ * link-wrapped aienos_cap_start the living run uses, makes one observed
+ * authority call, stops it and requires ARGUS to have received the events.
+ * It runs no living episode and writes no receipt. */
+static int argus_probe(void) {
+    if (argus_check_start() != 0) return 1;
+    AienosCapAdmin *admin = NULL;
+    AienosCapView *view = NULL;
+    AienosCapRef office;
+    if (aienos_cap_start(&admin, &view) != 0 || aienos_cap_office(admin, &office) != 0 ||
+        aienos_cap_advance_clock(admin, office, 1) != 0) {
+        fprintf(stderr, "R13 ARGUS probe: authority start failed\n");
+        return 1;
+    }
+    aienos_cap_stop(admin, view);
+    argus_finish();
+    printf("R13 ARGUS probe: ARGUS_OBSERVING=%s\n", g_argus_ok ? "PASS" : "FAIL");
+    return g_argus_ok ? 0 : 1;
+}
+#endif
+
 static void receipt(int tests_ok) {
     char path[512], commit[41] = {0}, binary[65], physics[80] = {0};
-    if (omega_evidence_path("R13/rx_living_receipt.json", path, sizeof path) != 0)
+    if (omega_evidence_path(R13_RECEIPT, path, sizeof path) != 0)
         return;
     if (!omega_evidence_run_commit(commit)) strcpy(commit, "unknown");
     if (!omega_evidence_physics_commit(physics, sizeof physics))
@@ -1545,9 +1676,9 @@ static void receipt(int tests_ok) {
     int controls = 1;
     for (uint32_t i = 0; i < 5; i++) controls &= g_controls[i];
     const Receipt *g = &g_receipt;
-    int pass = tests_ok && controls && bound && g->silicon_observed;
+    int pass = tests_ok && controls && g_argus_ok && bound && g->silicon_observed;
     const char *gate = pass ? "PASS"
-        : !tests_ok || !controls ? "FAIL"
+        : !tests_ok || !controls || !g_argus_ok ? "FAIL"
         : !g->silicon_observed ? "HOST_PASS_NON_SILICON"
         : "SILICON_PASS_UNBOUND";
     struct utsname host;
@@ -1555,6 +1686,9 @@ static void receipt(int tests_ok) {
     uname(&host);
     char comp[6144];
     composition_json(comp, sizeof comp);
+    size_t used = strlen(comp);
+    if (used < sizeof comp)
+        snprintf(comp + used, sizeof comp - used, "  \"build\": \"" R13_BUILD "\",\n%s", g_argus_json);
     FILE *f = fopen(path, "w");
     if (!f) return;
     fprintf(f,
@@ -1571,7 +1705,7 @@ static void receipt(int tests_ok) {
         "  \"machine_identity\": {\"node\": \"%s\", \"system\": \"%s\", "
             "\"release\": \"%s\", \"architecture\": \"%s\"},\n"
         "  \"silicon_observed\": %s,\n"
-        "  \"gate\": {\"R13_LIVING_SYSTEM\": \"%s\"},\n"
+        "  \"gate\": {\"" R13_GATE_KEY "\": \"%s\"},\n"
         "  \"scenario\": {\"operation\": \"omega integer matvec 64x256\", "
             "\"goal\": \"cost below %u%% of the confirmed incumbent, semantics preserved\", "
             "\"incumbent_ns\": %llu, \"target_ns\": %llu, "
@@ -1664,14 +1798,28 @@ static void receipt(int tests_ok) {
         g_controls[2] ? "PASS" : "FAIL", g_controls[3] ? "PASS" : "FAIL",
         g_controls[4] ? "PASS" : "FAIL", comp);
     fclose(f);
-    printf("R13 gate: R13_LIVING_SYSTEM=%s\nR13 receipt: %s\n", gate, path);
+    printf("R13 gate: " R13_GATE_KEY "=%s\nR13 receipt: %s\n", gate, path);
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
     setvbuf(stdout, NULL, _IONBF, 0);
+#ifndef AIEN_TEST_BUILD
+    if (argc == 2 && strcmp(argv[1], "--argus-probe") == 0) return argus_probe();
+#endif
+    if (argc != 1) {
+        fprintf(stderr, "usage: %s [--argus-probe (production program only)]\n", argv[0]);
+        return 2;
+    }
     if (seen_fit(1u << 17) != 0) return 1;
     int result = 0;
+#ifndef AIEN_TEST_BUILD
+    /* Production: ARGUS observes from the first authority on, or nothing runs. */
+    if (argus_check_start() != 0) {
+        receipt(0);
+        return 1;
+    }
+#endif
     static const char *names[] = {"positive", "A no AIEN", "B no promotion authority",
         "C revoked experiment", "D stale generation", "E failed verification"};
     for (int mode = POSITIVE; mode <= FAILED_VERIFICATION; mode++) {
@@ -1680,13 +1828,15 @@ int main(void) {
         int rc = start(r, mode);
         if (rc != 0) fprintf(stderr, "R13 %s: setup failed at stage %d\n", names[mode], g_stage);
         if (rc == 0) rc = run(r, mode);
-#ifndef R13_SILICON
-        /* COMPOSITION-2 in the living system: host phase, after the episode,
+#if defined(AIEN_TEST_BUILD) && !defined(R13_SILICON)
+        /* COMPOSITION-2 in the living system (host test build only), after the episode,
          * while the living World and its authority are still up. */
         if (rc == 0 && mode == POSITIVE) rc = composition_phase(r);
 #endif
-        /* Fabric F5-0: both builds (Lane 17). */
+#ifdef AIEN_TEST_BUILD
+        /* Fabric F5-0: host and silicon test builds (Lane 17, Lane 32). */
         if (rc == 0 && mode == POSITIVE) rc = fabric_phase(r);
+#endif
         if (rc != 0)
             fprintf(stderr, "R13 %s FAILED: plan %llu search %llu GPU %llu evidence %llu "
                     "belief %llu selection %llu candidate %llu promotion %llu in force %llu "
@@ -1701,6 +1851,9 @@ int main(void) {
         free(r);
         if (rc != 0) { result = 1; break; }
     }
+#ifndef AIEN_TEST_BUILD
+    argus_finish();   /* every World is stopped: producers are quiescent */
+#endif
     receipt(result == 0);
     free(g_seen);
     free(g_stack);

@@ -1,0 +1,151 @@
+{
+  "schema_version": "1.0.0",
+  "name": "docs/turing",
+  "layer": "docs/turing",
+  "purpose": "Directory docs/turing. Purpose not yet described by a human.",
+  "above": {
+    "name": "docs",
+    "path": ".."
+  },
+  "below": [
+    {
+      "name": "protocols",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory docs/turing. Purpose not yet described by a human.",
+      "files": [
+        "TURING_AGENT_WAVE_1.md",
+        "TURING_CURRENT_STATE.md",
+        "TURING_PRIOR_ART_MATRIX.md",
+        "TURING_QCONT_RECORDS_V0.md",
+        "TURING_SCIENTIFIC_QUALIFICATION_STATE.md",
+        "TURING_W0_PROPOSAL.md",
+        "TURING_YIELD_CURRENT_STATE.md",
+        "TURING_YIELD_ENERGY_PROTOCOL_V0.md",
+        "TURING_YIELD_PROFILE_V0.md",
+        "TURING_YIELD_TY2_RESULT.md"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 10,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "56f5244",
+          "timestamp": "2026-10-01T07:45:54-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #155 from aien-dev/docs/lane33-reconcile",
+          "pr": 155
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane33",
+          "sha": "56f5244",
+          "pr": 155,
+          "note": "| omega | #155 (Sonnet worker) | 56f5244 | Codex: no findings | evidence-immutable pass |",
+          "ref": "2026-10-01-push-lane33-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane33",
+          "sha": "56f5244",
+          "pr": 155,
+          "note": "omega #155:**",
+          "ref": "2026-10-01-push-lane33-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane33",
+          "sha": "56f5244",
+          "pr": 155,
+          "note": "12:51Z Lane 33 DONE: arch #82, omega #155, aienos #206 MERGED (docs truthful: E1 2/6, kernel 9/14 QEMU, TRUST-1 not qualified, R16 merged-with-failing-check noted; Gate 5 failed receipt added to omeg",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "43089c2",
+          "timestamp": "2026-09-30T22:07:26-05:00",
+          "author": "aien-dev",
+          "subject": "docs/turing: Grok and Gemini review fixes for #119 (#120)",
+          "pr": 120
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane5",
+          "sha": "43089c2",
+          "pr": 120,
+          "note": "~04:20Z Lane 5 DONE: aienos #184 999b5aa M6-A hosted C net stack PASS (host only; receipt native/net/receipts/m6a_net_host_30de56f0...). Deferred: native NIC binding (needs C kernel, Drake port order",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "a6def0c",
+          "timestamp": "2026-09-30T21:52:32-05:00",
+          "author": "aien-dev",
+          "subject": "docs/turing: reconcile qualification state with Brownian Wave 1 (#119)",
+          "pr": 119
+        },
+        {
+          "source": "backfill-git",
+          "sha": "909307a",
+          "timestamp": "2026-09-30T15:53:12-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #108 from aien-dev/docs/turing-qualification-state",
+          "pr": 108
+        },
+        {
+          "source": "backfill-git",
+          "sha": "23aab4e",
+          "timestamp": "2026-09-29T18:13:33-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #90 from aien-dev/feat/qrecords",
+          "pr": 90
+        },
+        {
+          "source": "backfill-git",
+          "sha": "2d52219",
+          "timestamp": "2026-09-29T18:10:40-05:00",
+          "author": "Aien",
+          "subject": "docs(turing): calibration protocol references public paper Version 1.0"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "737f8b3",
+          "timestamp": "2026-09-29T17:53:45-05:00",
+          "author": "Aien",
+          "subject": "docs(turing): publish Turing calibration and laboratory execution protocols v1.0"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "071a1e1",
+          "timestamp": "2026-09-29T17:13:56-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #86 from aien-dev/fix/turing-energy-closeout",
+          "pr": 86
+        },
+        {
+          "source": "backfill-git",
+          "sha": "f0dc0af",
+          "timestamp": "2026-09-29T16:05:27-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #85 from aien-dev/feat/turing-yield-ty12",
+          "pr": 85
+        },
+        {
+          "source": "backfill-git",
+          "sha": "dbfb474",
+          "timestamp": "2026-09-29T14:13:22-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #79 from aien-dev/feat/turing-w1",
+          "pr": 79
+        }
+      ]
+    }
+  }
+}

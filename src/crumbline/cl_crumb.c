@@ -2,9 +2,48 @@
 
 #include <string.h>
 
+/*
+ * Conforms to aien-protocols specs/crumb-visible/CRUMB_READER_CONTRACT.md
+ * 1.0.0: refusal codes and check order (section 6) follow the Rust reference.
+ * Reading past the end of the buffer at any step is LENGTH.
+ */
+
 static bool lane_bytes_ok(uint8_t enc, uint8_t b) {
     if (enc == CL_ENC_DECIMAL) return b == 0;
     return b == 1 || b == 2 || b == 4 || b == 8;
+}
+
+/* Strict UTF-8 validity, same accept set as Rust std::str::from_utf8
+ * (no overlong forms, no surrogates, nothing above U+10FFFF). */
+static bool utf8_ok(const uint8_t *p, size_t len) {
+    size_t i = 0;
+    while (i < len) {
+        uint8_t c = p[i];
+        size_t extra;
+        uint8_t lo = 0x80, hi = 0xBF;
+        if (c < 0x80) {
+            i++;
+            continue;
+        } else if (c >= 0xC2 && c <= 0xDF) {
+            extra = 1;
+        } else if (c >= 0xE0 && c <= 0xEF) {
+            extra = 2;
+            if (c == 0xE0) lo = 0xA0;
+            if (c == 0xED) hi = 0x9F;
+        } else if (c >= 0xF0 && c <= 0xF4) {
+            extra = 3;
+            if (c == 0xF0) lo = 0x90;
+            if (c == 0xF4) hi = 0x8F;
+        } else {
+            return false;
+        }
+        if (extra > len - i - 1) return false;
+        if (p[i + 1] < lo || p[i + 1] > hi) return false;
+        for (size_t k = 2; k <= extra; ++k)
+            if (p[i + k] < 0x80 || p[i + k] > 0xBF) return false;
+        i += extra + 1;
+    }
+    return true;
 }
 
 static int parse_lanes(uint8_t enc, uint8_t lane_bytes, uint8_t arity, const uint8_t *p, size_t len, uint64_t *out) {
@@ -17,26 +56,41 @@ static int parse_lanes(uint8_t enc, uint8_t lane_bytes, uint8_t arity, const uin
         }
         return CL_CRUMB_OK;
     }
-    /* Decimal: arity canonical base-10 u64 values separated by single spaces. */
+    /* Decimal: valid UTF-8 (else LANE), exactly arity parts split on single
+     * spaces (else LANE), then per part in order: empty, non-digit or leading
+     * zero is NONCANONICAL; a value above 2^64 - 1 is LANE. */
+    if (!utf8_ok(p, len)) return CL_CRUMB_ERR_LANE;
+    size_t parts = 1;
+    for (size_t i = 0; i < len; ++i)
+        if (p[i] == ' ') parts++;
+    if (parts != arity) return CL_CRUMB_ERR_LANE;
     size_t pos = 0;
     for (uint8_t l = 0; l < arity; ++l) {
-        if (l > 0) {
-            if (pos >= len || p[pos] != ' ') return CL_CRUMB_ERR_LANE;
-            pos++;
-        }
         size_t start = pos;
+        while (pos < len && p[pos] != ' ') pos++;
+        size_t digits = pos - start;
+        if (digits == 0 || (digits > 1 && p[start] == '0')) return CL_CRUMB_ERR_NONCANONICAL;
+        for (size_t k = start; k < pos; ++k)
+            if (p[k] < '0' || p[k] > '9') return CL_CRUMB_ERR_NONCANONICAL;
         uint64_t v = 0;
-        while (pos < len && p[pos] >= '0' && p[pos] <= '9') {
-            uint64_t d = (uint64_t)(p[pos] - '0');
+        for (size_t k = start; k < pos; ++k) {
+            uint64_t d = (uint64_t)(p[k] - '0');
             if (v > (UINT64_MAX - d) / 10) return CL_CRUMB_ERR_LANE;
             v = v * 10 + d;
-            pos++;
         }
-        size_t digits = pos - start;
-        if (digits == 0 || (digits > 1 && p[start] == '0')) return CL_CRUMB_ERR_LANE;
         out[l] = v;
+        pos++; /* skip the separator (or step past the end after the last part) */
     }
-    return pos == len ? CL_CRUMB_OK : CL_CRUMB_ERR_LANE;
+    return CL_CRUMB_OK;
+}
+
+/* Read one length-prefixed example field (at most CL_CRUMB_MAX_FIELD bytes). */
+static bool read_field(ClReader *r, const uint8_t **p, uint32_t *n) {
+    *n = cl_r_u32(r);
+    if (r->error || *n > CL_CRUMB_MAX_FIELD || *n > r->len - r->pos) return false;
+    *p = r->buf + r->pos;
+    r->pos += *n;
+    return true;
 }
 
 int cl_crumb_decode(const uint8_t *buf, size_t len, ClCrumb *out) {
@@ -44,32 +98,37 @@ int cl_crumb_decode(const uint8_t *buf, size_t len, ClCrumb *out) {
     ClReader r;
     cl_r_init(&r, buf, len);
     uint8_t magic[4];
-    cl_r_bytes(&r, magic, 4);
-    if (r.error || memcmp(magic, "CRB1", 4) != 0) return CL_CRUMB_ERR_MAGIC;
-    if (cl_r_u16(&r) != 1) return CL_CRUMB_ERR_VERSION;
+    if (!cl_r_bytes(&r, magic, 4)) return CL_CRUMB_ERR_LENGTH;
+    if (memcmp(magic, "CRB1", 4) != 0) return CL_CRUMB_ERR_MAGIC;
+    uint16_t schema = cl_r_u16(&r);
+    if (r.error) return CL_CRUMB_ERR_LENGTH;
+    if (schema != 1) return CL_CRUMB_ERR_VERSION;
     out->encoding = cl_r_u8(&r);
+    if (r.error) return CL_CRUMB_ERR_LENGTH;
+    if (out->encoding != CL_ENC_DECIMAL && out->encoding != CL_ENC_RAW_LE) return CL_CRUMB_ERR_SHAPE;
     uint8_t flags = cl_r_u8(&r);
+    if (r.error) return CL_CRUMB_ERR_LENGTH;
+    if (flags & ~1u) return CL_CRUMB_ERR_NONCANONICAL;
     out->in_arity = cl_r_u8(&r);
     out->out_arity = cl_r_u8(&r);
     out->in_lane_bytes = cl_r_u8(&r);
     out->out_lane_bytes = cl_r_u8(&r);
-    if (r.error || (out->encoding != CL_ENC_DECIMAL && out->encoding != CL_ENC_RAW_LE) || (flags & ~1u) ||
-        out->in_arity < 1 || out->in_arity > CL_CRUMB_MAX_LANES || out->out_arity < 1 ||
+    if (r.error) return CL_CRUMB_ERR_LENGTH;
+    if (out->in_arity < 1 || out->in_arity > CL_CRUMB_MAX_LANES || out->out_arity < 1 ||
         out->out_arity > CL_CRUMB_MAX_LANES || !lane_bytes_ok(out->encoding, out->in_lane_bytes) ||
         !lane_bytes_ok(out->encoding, out->out_lane_bytes))
         return CL_CRUMB_ERR_SHAPE;
     out->n = cl_r_u32(&r);
     if (r.error || out->n == 0 || out->n > CL_CRUMB_MAX_EXAMPLES) return CL_CRUMB_ERR_LENGTH;
     for (uint32_t i = 0; i < out->n; ++i) {
-        for (int side = 0; side < 2; ++side) {
-            uint32_t n = cl_r_u32(&r);
-            if (r.error || n > r.len - r.pos) return CL_CRUMB_ERR_LENGTH;
-            const uint8_t *p = r.buf + r.pos;
-            r.pos += n;
-            int rc = side == 0 ? parse_lanes(out->encoding, out->in_lane_bytes, out->in_arity, p, n, out->in[i])
-                               : parse_lanes(out->encoding, out->out_lane_bytes, out->out_arity, p, n, out->out[i]);
-            if (rc != CL_CRUMB_OK) return rc;
-        }
+        const uint8_t *ip, *op;
+        uint32_t in_n, out_n;
+        /* Both fields of an example are read before either is validated. */
+        if (!read_field(&r, &ip, &in_n) || !read_field(&r, &op, &out_n)) return CL_CRUMB_ERR_LENGTH;
+        int rc = parse_lanes(out->encoding, out->in_lane_bytes, out->in_arity, ip, in_n, out->in[i]);
+        if (rc == CL_CRUMB_OK)
+            rc = parse_lanes(out->encoding, out->out_lane_bytes, out->out_arity, op, out_n, out->out[i]);
+        if (rc != CL_CRUMB_OK) return rc;
     }
     if (flags & 1u) {
         out->has_budget = true;

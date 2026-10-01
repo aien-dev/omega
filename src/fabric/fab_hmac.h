@@ -6,6 +6,12 @@
 #ifndef FAB_HMAC_H
 #define FAB_HMAC_H
 
+/* Lane 32: test-build only. The production program (docs/r16-production-entry-point.md)
+ * never compiles this; the build refuses it without -DAIEN_TEST_BUILD=1. */
+#ifndef AIEN_TEST_BUILD
+#error "fab_hmac.h (HMAC stand-in for a real per-machine signature) is test and simulation only: build with -DAIEN_TEST_BUILD=1, never in the production program"
+#endif
+
 #include <stddef.h>
 #include <stdint.h>
 

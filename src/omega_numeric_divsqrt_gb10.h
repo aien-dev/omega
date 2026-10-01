@@ -19,12 +19,25 @@
  * (27 result bits, 32-bit remainder form), one shared rounding block.
  * The only non-integer instruction is I2FP.F32.S32 on a subnormal's
  * fraction (< 2^23, so the conversion is exact) to find its leading bit.
+ *
+ * E1 row 10 adds the transcendentals (EXP2, LOG2) to the same frame. Their
+ * bodies issue the frozen CPU sequence of src/omega_numeric_transc.c in the
+ * written order: FADD (FSUB = FADD with -Rb), FMUL and FFMA (single
+ * rounding) in place of the AArch64 FADD/FSUB/FMUL/FMADD, the integer DIV
+ * body above in place of FDIV, integer bit operations for sign flips,
+ * classification and powers of two, and every branch computed and chosen
+ * with ISETP/SEL. Constants are loaded with IADD3 Rd, RZ, imm, RZ. No MUFU.
+ * The host model runs the FP forms with the AArch64 instructions themselves
+ * and turns any NaN result into 0x7fffffff (the GB10 canonical NaN); the
+ * chip run, not the model, establishes GB10 parity.
  */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-typedef enum { OMEGA_DS_DIV = 0, OMEGA_DS_SQRT = 1, OMEGA_DS_OP_COUNT = 2 } OmegaDsOp;
+/* DIV and SQRT (E1 row 7) and the transcendentals of E1 row 10, each a
+ * GB10 realization of the frozen CPU sequence in src/omega_numeric_transc.c. */
+typedef enum { OMEGA_DS_DIV = 0, OMEGA_DS_SQRT = 1, OMEGA_DS_EXP2 = 2, OMEGA_DS_LOG2 = 3, OMEGA_DS_SIGMOID = 4, OMEGA_DS_TANH = 5, OMEGA_DS_OP_COUNT = 6 } OmegaDsOp;
 
 typedef enum {
     DSK_IADD3_R = 0, /* IADD3 Rd, PT, PT, [-]Ra, [-]Rb, Rc            */
@@ -40,6 +53,9 @@ typedef enum {
     DSK_SEL_R,       /* SEL Rd, Ra, Rb, [!]Ps                         */
     DSK_SEL_I,       /* SEL Rd, Ra, imm, [!]Ps                        */
     DSK_I2FP,        /* I2FP.F32.S32 Rd, Rb                           */
+    DSK_FADD_R,      /* FADD Rd, Ra, [-]Rb   (RN, subnormals kept)    */
+    DSK_FMUL_R,      /* FMUL Rd, Ra, Rb      (RN, subnormals kept)    */
+    DSK_FFMA_R,      /* FFMA Rd, Ra, Rb, Rc  (one rounding, RN)       */
     DSK_COUNT
 } OmegaDsKind;
 
@@ -59,11 +75,16 @@ typedef struct {
     uint32_t imm;
 } OmegaDsInsn;
 
-#define OMEGA_DS_MAX_BODY       512u
+#define OMEGA_DS_MAX_BODY       1000u
 #define OMEGA_DS_PROLOGUE_INSNS 17u   /* vecadd 0x000-0x100 */
 #define OMEGA_DS_EPILOGUE_INSNS 3u    /* STG, EXIT, BRA self */
 #define OMEGA_DS_MAX_CODE_BYTES 0x4000u
-#define OMEGA_DS_GPR_COUNT      32u
+/* QMD register allocation. The hardware reserves the top two registers of the
+ * allocation (Xid 13 "Out Of Range Register" when a 32-register QMD ran a body
+ * using R30/R31, receipt 1dc85ef2), so a body may use R0..R(count-3). 48 is the
+ * next multiple of 16 that covers R31. */
+#define OMEGA_DS_GPR_COUNT      48u
+#define OMEGA_DS_GPR_RESERVED   2u
 #define OMEGA_DS_RESULT_REG     9u
 /* Control word (w3 & ~0x1ff) of every body instruction: stall 15, no write or
  * read barrier, wait on SB4 (the two LDGs of the prologue). The fixed-latency
@@ -97,11 +118,14 @@ int omega_ds_build_kernel(OmegaDsOp op, uint8_t *code, size_t max, size_t *out_l
 /* Expected nvdisasm listing of the kernel, one line per instruction: 4-digit hex address, a space, the nvdisasm text. */
 int omega_ds_listing(OmegaDsOp op, char *buf, size_t len);
 
-/* Runs the body instruction list on the host (bit-exact model of the
- * integer forms; I2FP via the host's exact int->float conversion). */
+/* Runs the body instruction list on the host (bit-exact model of the integer
+ * forms; I2FP via the host's exact int->float conversion; FADD/FMUL/FFMA via the
+ * AArch64 instructions, NaN results as 0x7fffffff). */
 uint32_t omega_ds_host_exec(OmegaDsOp op, uint32_t a, uint32_t b);
 
-/* The CPU semantic the chip must equal: omega_math_div / omega_math_sqrt. */
+/* The CPU semantic the chip must equal for DIV and SQRT: omega_math_div /
+ * omega_math_sqrt (0x7fc00000 for any other op; the transcendental semantic
+ * lives in src/omega_numeric_transc.c, which this module does not link). */
 uint32_t omega_ds_cpu_semantic(OmegaDsOp op, uint32_t a, uint32_t b);
 
 /* Structural pre-submission check of a kernel image (see CHECK: markers).

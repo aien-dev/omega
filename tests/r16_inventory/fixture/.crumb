@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/r16_inventory/fixture",
+  "layer": "tests/r16_inventory/fixture",
+  "purpose": "Directory tests/r16_inventory/fixture. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests/r16_inventory",
+    "path": ".."
+  },
+  "below": [
+    {
+      "name": "aegis-runtime",
+      "role": ""
+    },
+    {
+      "name": "aien-sovereign-core",
+      "role": ""
+    },
+    {
+      "name": "aienos",
+      "role": ""
+    },
+    {
+      "name": "omega",
+      "role": ""
+    },
+    {
+      "name": "physics",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/r16_inventory/fixture. Purpose not yet described by a human.",
+      "files": [
+        "map.md"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "6fdc4c3",
+          "timestamp": "2026-09-29T11:49:54-05:00",
+          "author": "aien-dev",
+          "subject": "R16 spec: orchestrator retirement (pre-registration) (#68)",
+          "pr": 68
+        }
+      ]
+    }
+  }
+}

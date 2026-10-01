@@ -1,0 +1,106 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/turing",
+  "layer": "src/turing",
+  "purpose": "Directory src/turing. Purpose not yet described by a human.",
+  "above": {
+    "name": "src",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory src/turing. Purpose not yet described by a human.",
+      "files": [
+        "field.c",
+        "field.h",
+        "field_select.c",
+        "field_select_v0_retired.c",
+        "history_selector.c",
+        "replay.c",
+        "select.h",
+        "tc_produce.c",
+        "tc_produce.h",
+        "tc_pstream.c",
+        "tc_pstream.h",
+        "tc_range.c",
+        "tc_range.h",
+        "tc_rans.c",
+        "tc_rans.h",
+        "tc_tool.c",
+        "ty_ctr1.c",
+        "ty_ctr1.h",
+        "ty_energy.c",
+        "ty_energy.h",
+        "ty_math.c",
+        "ty_math.h",
+        "ty_model.c",
+        "ty_model.h",
+        "ty_prd.c",
+        "ty_prd.h",
+        "ty_profile.c",
+        "ty_qcont.c",
+        "ty_qcont.h",
+        "ty_qrecord.c",
+        "ty_qrecord.h",
+        "ty_record.c",
+        "ty_record.h"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 6,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "81a7eee",
+          "timestamp": "2026-09-29T21:40:13-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "pr": 92
+        },
+        {
+          "source": "backfill-git",
+          "sha": "23aab4e",
+          "timestamp": "2026-09-29T18:13:33-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #90 from aien-dev/feat/qrecords",
+          "pr": 90
+        },
+        {
+          "source": "backfill-git",
+          "sha": "3633030",
+          "timestamp": "2026-09-29T18:08:02-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #89 from aien-dev/feat/qcont-scorer",
+          "pr": 89
+        },
+        {
+          "source": "backfill-git",
+          "sha": "071a1e1",
+          "timestamp": "2026-09-29T17:13:56-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #86 from aien-dev/fix/turing-energy-closeout",
+          "pr": 86
+        },
+        {
+          "source": "backfill-git",
+          "sha": "f0dc0af",
+          "timestamp": "2026-09-29T16:05:27-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #85 from aien-dev/feat/turing-yield-ty12",
+          "pr": 85
+        },
+        {
+          "source": "backfill-git",
+          "sha": "dbfb474",
+          "timestamp": "2026-09-29T14:13:22-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #79 from aien-dev/feat/turing-w1",
+          "pr": 79
+        }
+      ]
+    }
+  }
+}

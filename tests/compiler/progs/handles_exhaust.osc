@@ -1,0 +1,51 @@
+// entry: retire full cycle
+// OSC-3 item 2: a declared generation base reaches exhaustion in a test. A slot
+// freed at generation 2^64 - 1 is retired, never wrapped; allocating when every
+// slot is live or retired traps RETIRED (some slot retired) or POOL_FULL.
+// expect-run: retire 2 -> 3
+// expect-run: retire 3 -> trap=RETIRED
+// expect-run: full 3 -> 3
+// expect-run: full 4 -> trap=POOL_FULL
+// expect-run: cycle 100 -> 4950
+// (cycle: 100 allocations from one slot; the model replay re-windows past
+// its 64 handle ids)
+fn retire(n: u8) -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 1] gen 18446744073709551614 {
+        let mut i: u8 = 0;
+        while i < n bound 8 {
+            let h: handle p = p.alloc(i as i64);
+            s = s + p[h] + 1;
+            p.free(h);
+            i = i + 1;
+        }
+    }
+    return s;
+}
+
+fn full(n: u8) -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 3] {
+        let mut i: u8 = 0;
+        while i < n bound 8 {
+            let h: handle p = p.alloc(i as i64);
+            s = s + p[h];
+            i = i + 1;
+        }
+    }
+    return s;
+}
+
+fn cycle(n: u8) -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 1] {
+        let mut i: u8 = 0;
+        while i < n bound 200 {
+            let h: handle p = p.alloc(i as i64);
+            s = s + p[h];
+            p.free(h);
+            i = i + 1;
+        }
+    }
+    return s;
+}

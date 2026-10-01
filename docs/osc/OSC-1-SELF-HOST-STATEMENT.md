@@ -39,3 +39,26 @@ need: `compiler_n` built by `compiler_{n-1}` producing byte-identical output
 on a fixed corpus. The M6 `OMEGA_SELF_HOST` result is a fixed-output self-copy
 check and is never evidence of a compiler (OSC-0 decision 2, ROADMAP §3 M6
 correction note). OSC-1 does not change that and does not touch M6.
+
+## Addendum 2026-10-01: OSC-2 status (history above is kept unchanged)
+
+The text above describes OSC-1 as written. OSC-2 has since changed two of its six reasons:
+
+- Reason 2 ("No structs, unions or tagged data") is superseded for structs by OSC-2 item 2
+  (omega#149, merge `845dce4`).
+- Reason 6 ("No checked contracts") is superseded by OSC-2 item 1 (omega#148, merge `0abdb08`):
+  `requires`/`ensures` are now enforced, by constant folding or a run-time check.
+- OSC-2 item 3 (omega#150, merge `c773622`) wires arenas to the OSC-0B memory model.
+  OSC-2 item 4 (omega#151, merge `7e713e3`) makes the legacy AArch64 writer refuse out-of-range fields.
+- Reasons 1, 3, 4 and 5 are not addressed by this addendum.
+
+Status of OSC-1 and OSC-2: **IMPLEMENTED / NOT QUALIFIED.** The receipts are host receipts only. Neither slice
+is self-hosting, neither is a general Omega compiler, and no production code is compiled by either.
+
+OSC-2 shortfalls against `docs/adr/OMEGA-SYSTEMS-CORE-0000.md` and audit III.7
+(`OMEGA_SYSTEMS_CORE_CODE_AUDIT.md`):
+
+- The aienos ADR 0013 u64 generation amendment is not done.
+- The II.6 identity break is not done.
+- Generational handles moved to OSC-3 (not merged).
+- Crumbline migration is not done.

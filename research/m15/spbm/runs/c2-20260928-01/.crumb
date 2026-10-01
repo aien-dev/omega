@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0.0",
+  "name": "research/m15/spbm/runs/c2-20260928-01",
+  "layer": "research/m15/spbm/runs/c2-20260928-01",
+  "purpose": "Directory research/m15/spbm/runs/c2-20260928-01. Purpose not yet described by a human.",
+  "above": {
+    "name": "research/m15/spbm",
+    "path": "../.."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory research/m15/spbm/runs/c2-20260928-01. Purpose not yet described by a human.",
+      "files": [
+        "SHA256SUMS",
+        "base-commit.txt",
+        "both-1.jsonl",
+        "both-2.jsonl",
+        "both-3.jsonl",
+        "cpu-1.jsonl",
+        "cpu-2.jsonl",
+        "cpu-3.jsonl",
+        "gpu-1.jsonl",
+        "gpu-2.jsonl",
+        "gpu-3.jsonl",
+        "idle-1.jsonl",
+        "idle-2.jsonl",
+        "idle-3.jsonl",
+        "load-cpu-1.jsonl",
+        "load-cpu-2.jsonl",
+        "load-cpu-3.jsonl",
+        "load-cpu-b1.jsonl",
+        "load-cpu-b2.jsonl",
+        "load-cpu-b3.jsonl",
+        "load-gpu-1.err",
+        "load-gpu-1.jsonl",
+        "load-gpu-2.err",
+        "load-gpu-2.jsonl",
+        "load-gpu-3.err",
+        "load-gpu-3.jsonl",
+        "load-gpu-b1.err",
+        "load-gpu-b1.jsonl",
+        "load-gpu-b2.err",
+        "load-gpu-b2.jsonl",
+        "load-gpu-b3.err",
+        "load-gpu-b3.jsonl",
+        "loaded-srcversion.txt",
+        "lockdown.txt",
+        "module.txt",
+        "nvidia-smi.txt",
+        "processes-before.txt",
+        "secure-boot.txt",
+        "source-binary.sha256",
+        "status.json",
+        "summary.json",
+        "uname.txt",
+        "worktree.txt"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "bba3bd3",
+          "timestamp": "2026-09-28T22:36:09-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
+          "pr": 67
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,128 @@
+name: Host suites 3
+
+# Third batch of host-runnable suites (Lane 34, 2026-10-01): the `make test-*`
+# targets that no workflow ran. All real jobs run on the AArch64 hosted runner
+# (same instruction set as the DGX Spark). The runner is NOT the Spark: nothing
+# here is a chip or hardware qualification.
+#
+# Coverage of this file:
+#   numeric-transc        test-numeric-transc (sampled bound check + 10 mutants)
+#   numeric-transc-digest test-numeric-transc-digest (full 2^32 domain, 9 ops,
+#                         against the frozen digests; long, own job)
+#   language              test-language (Omega language V0 golden)
+#   milestones            test-m6 .. test-m15 (omegatool gates + reference
+#                         demonstrations; models and host reference, no chip)
+# Listed as skipped jobs so GitHub shows them skipped, never green:
+#   test-numeric-transc-full (2^32 inputs against the binary128 oracle, twice;
+#       too long for a hosted runner, run detached on the Spark)
+#   test-m17 (its DEVICE_OUTPUT gate needs physical SM execution on the GB10)
+# NOT WIRED, no such Makefile target on main: test-tensor, test-m16.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'Makefile'
+      - 'mk/**'
+      - '.github/workflows/host-suites-3.yml'
+      - 'physics.lock'
+      - 'src/**'
+      - 'tools/omegatool.c'
+      - 'tests/test_omega_transc.c'
+      - 'tests/language/**'
+      - 'tests/run_m*_gates.sh'
+      - 'docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md'
+
+jobs:
+  numeric-transc:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: FP32 transcendentals, sampled bound check and mutant kill (E1 WP-B)
+        run: |
+          set -o pipefail
+          make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-transc | tee transc.log
+          echo "mutants killed: $(grep -c '^mutant [0-9]* killed' transc.log)"
+          test "$(grep -c '^mutant [0-9]* killed' transc.log)" -eq 10
+          ! grep -q '^FAIL' transc.log
+
+  numeric-transc-digest:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: FP32 transcendentals, full-domain digests against the frozen digests
+        run: |
+          set -o pipefail
+          make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-transc-digest | tee digest.log
+          echo "frozen digests matched: $(grep -c 'matches frozen digest' digest.log)"
+          test "$(grep -c 'matches frozen digest' digest.log)" -ge 1
+          ! grep -q 'FAIL' digest.log
+
+  numeric-transc-full:
+    name: "test-numeric-transc-full (SKIP: 2^32 inputs x 9 ops against the oracle, twice; too long for a hosted runner)"
+    if: ${{ false }}
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - run: echo skipped
+
+  language:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Omega language V0 golden
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-language
+
+  milestones:
+    # omegatool links Physics headers and sources, so the pinned Physics commit
+    # (physics.lock) is checked out and the lock check stays on.
+    name: test-${{ matrix.m }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        m: [m6, m7, m8, m9, m10, m11, m12, m13, m14, m15]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Read pinned Physics
+        id: pins
+        run: |
+          sha=$(tr -d '[:space:]' < physics.lock)
+          test -n "$sha"
+          echo "physics=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Physics
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/physics
+          ref: ${{ steps.pins.outputs.physics }}
+          path: physics-src
+      - name: Keep Physics checkout out of Omega tree status
+        run: echo 'physics-src/' >> .git/info/exclude
+      - name: make test-${{ matrix.m }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+        run: |
+          set -o pipefail
+          make test-${{ matrix.m }} | tee gate.log
+          grep -E 'TOTAL GATES: [0-9]+ \| PASSED: [0-9]+ \| FAILED: 0' gate.log
+          ! grep -E 'FAILED: [1-9]' gate.log
+
+  m17:
+    name: "test-m17 (SKIP: needs GB10 chip, physical SM execution gate)"
+    if: ${{ false }}
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - run: echo skipped

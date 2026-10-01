@@ -1,0 +1,1 @@
+VOID_EXTERNAL_LOAD: a foreign host test suite (make test-compiler, test_osc_* binaries, from another lane's worktree) ran 14:23:18-14:24:00Z inside this collection window, 4 s after the quiet flag was taken. Collection stopped by lane15 at 14:24:08Z (54 lines). Never fitted, never used. See docs/estimation/receipts/est-v4/void-attempt3/VOID.md.

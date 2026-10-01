@@ -29,6 +29,8 @@ typedef enum {
     OT_STRUCT, OT_DOT,
     /* OSC-2 item 3 (arenas), appended */
     OT_ARENA,
+    /* OSC-3 item 2 (versioned handles), appended */
+    OT_POOL, OT_HANDLE,
     OT__COUNT
 } OscTokKind;
 

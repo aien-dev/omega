@@ -1,0 +1,171 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/compiler/neg",
+  "layer": "tests/compiler/neg",
+  "purpose": "Directory tests/compiler/neg. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests/compiler",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/compiler/neg. Purpose not yet described by a human.",
+      "files": [
+        "ambiguous_width.osc",
+        "ar_arena_as_value.osc",
+        "ar_capacity_bound_65.osc",
+        "ar_capacity_bound_zero.osc",
+        "ar_capacity_static.osc",
+        "ar_escape_outer_borrow.osc",
+        "ar_escape_return_borrow.osc",
+        "ar_move_into.osc",
+        "ar_move_out.osc",
+        "ar_move_own_param.osc",
+        "ar_not_an_arena.osc",
+        "ar_object_after_block.osc",
+        "ar_shadowing.osc",
+        "ar_undefined_arena.osc",
+        "ar_use_after_block.osc",
+        "boo_outer_binding.osc",
+        "boo_reassign_reborrowed.osc",
+        "boo_return_borrow.osc",
+        "capacity_seven_params.osc",
+        "ci_array_read_ensures.osc",
+        "ci_call_in_contract.osc",
+        "ci_result_in_requires.osc",
+        "ci_result_in_void.osc",
+        "conditional_move.osc",
+        "cv_constant_false_clause.osc",
+        "cv_ensures_constant_false.osc",
+        "cv_ensures_static.osc",
+        "cv_requires_false_at_call.osc",
+        "immutable_assign.osc",
+        "ma_call_mut_and_shared.osc",
+        "ma_move_while_borrowed.osc",
+        "ma_mut_while_shared_binding.osc",
+        "ma_read_under_mut.osc",
+        "missing_return.osc",
+        "oob_static_read.osc",
+        "oob_static_write.osc",
+        "ovf_literal_shift.osc",
+        "ovf_literal_too_big.osc",
+        "ovf_signed_const.osc",
+        "ovf_zero_divisor.osc",
+        "rd_result_param.osc",
+        "rd_result_param_void.osc",
+        "read_only_borrow_mut_reborrow.osc",
+        "read_only_borrow_write.osc",
+        "redefined_shadow.osc",
+        "st_alloc.osc",
+        "st_array_field_len.osc",
+        "st_array_field_scalar_init.osc",
+        "st_array_field_whole.osc",
+        "st_borrow_outlives_owner.osc"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 4,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "c773622",
+          "timestamp": "2026-10-01T05:48:25-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-2 item 3: arenas wired to the OSC-0B memory model (Lane 27) (#150)",
+          "pr": 150
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "c773622",
+          "pr": 150,
+          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "ref": "2026-10-01-push-lane27-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "c773622",
+          "pr": 150,
+          "note": "10:50Z Lane 27 interim: omega #150 c773622 (OSC-2 item 3 arenas wired to OSC-0B model, receipt osc2-arenas-d32a589a); item 4 strict writer next. Running: 2,15,27,29.",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "845dce4",
+          "timestamp": "2026-10-01T04:53:49-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-2 item 2: fixed-layout structs (Lane 27) (#149)",
+          "pr": 149
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "845dce4",
+          "pr": 149,
+          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "ref": "2026-10-01-push-lane27-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "845dce4",
+          "pr": 149,
+          "note": "09:55Z Lane 27 interim: omega #149 845dce4 (OSC-2 item 2 fixed-layout structs, receipt osc2-structs-9ed6766b); continues arena<->memory model + strict writer. Running: 2,15,25,26,27.",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "0abdb08",
+          "timestamp": "2026-10-01T04:10:43-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-2 item 1: enforce requires/ensures contracts (Lane 27) (#148)",
+          "pr": 148
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "0abdb08",
+          "pr": 148,
+          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "ref": "2026-10-01-push-lane27-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane27",
+          "sha": "0abdb08",
+          "pr": 148,
+          "note": "09:13Z Lane 27 interim: omega #148 0abdb08 (OSC-2 item 1 requires/ensures; golden 27/27, neg 46/46); continues with structs/arena/writer. Running: 2,15,25,26,27.",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "b81f850",
+          "timestamp": "2026-10-01T03:35:26-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-1: first compiler slice (parse -> typed IR -> AArch64) + OSC-0B memory model gate (#144)",
+          "pr": 144
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane22",
+          "sha": "b81f850",
+          "pr": 144,
+          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "ref": "2026-10-01-push-lane22-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane22",
+          "sha": "b81f850",
+          "pr": 144,
+          "note": "~16:20Z Lane 22 DONE: omega #144 b81f850 (OSC-1 compiler slice: ints 8-64, let/if/bounded loops/calls/arrays+ownership; ~784k fuzz runs 0 mismatch; 24 golden byte-identical; 34 negatives; OSC-0B memo",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        }
+      ]
+    }
+  }
+}

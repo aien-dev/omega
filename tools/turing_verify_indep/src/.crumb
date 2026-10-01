@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tools/turing_verify_indep/src",
+  "layer": "tools/turing_verify_indep/src",
+  "purpose": "Directory tools/turing_verify_indep/src. Purpose not yet described by a human.",
+  "above": {
+    "name": "tools/turing_verify_indep",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tools/turing_verify_indep/src. Purpose not yet described by a human.",
+      "files": [
+        "core.c",
+        "core.h",
+        "main.c",
+        "selftest.c",
+        "sha256.c",
+        "sha256.h"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 2,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "c7a1077",
+          "timestamp": "2026-09-29T22:58:17-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
+          "pr": 96
+        },
+        {
+          "source": "backfill-git",
+          "sha": "81a7eee",
+          "timestamp": "2026-09-29T21:40:13-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "pr": 92
+        }
+      ]
+    }
+  }
+}

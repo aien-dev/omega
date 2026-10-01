@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/path",
+  "layer": "tests/path",
+  "purpose": "Directory tests/path. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/path. Purpose not yet described by a human.",
+      "files": [
+        "check_path_boundary.sh",
+        "mutate.sh",
+        "test_path_identity.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "3875223",
+          "timestamp": "2026-09-30T16:32:26-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #109 from aien-dev/feat/path1-reference",
+          "pr": 109
+        }
+      ]
+    }
+  }
+}

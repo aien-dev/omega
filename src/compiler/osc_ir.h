@@ -99,8 +99,21 @@ typedef enum {
     OSC_I_AALLOC,    /* dst(REF OWN, elem, len) = bump allocation of len cells from  */
                      /*   arena handle b (u64, defined by AOPEN), every cell = a      */
                      /*   (as ALLOC); arena too full -> TRAP_ARENA_FULL               */
-    OSC_I_ADESTROY   /* destroy arena handle a: zero all its cells, free its slot.   */
+    OSC_I_ADESTROY,  /* destroy arena handle a: zero all its cells, free its slot.   */
                      /*   Arena objects are never RELEASEd individually.             */
+    /* appended for OSC-3 item 2 versioned handles (docs/osc/OSC-3-DESIGN.md) */
+    OSC_I_POPEN,     /* dst(u64 pool id) = open a pool of nargs slots (1..16) of     */
+                     /*   element scalar sub, every slot free at generation imm;    */
+                     /*   no free pool table entry -> TRAP_OOM                      */
+    OSC_I_PCLOSE,    /* close pool a: zero its slots, free its table entry          */
+    OSC_I_HALLOC,    /* dst(u64 slot) = lowest free slot of pool b, value = a (elem  */
+                     /*   type); no free slot: TRAP_RETIRED if a slot is retired,   */
+                     /*   else TRAP_POOL_FULL                                       */
+    OSC_I_HGEN,      /* dst(u64) = current generation of slot b of pool a            */
+    OSC_I_HFREE,     /* free handle (slot b, gen c) of pool a: stale -> TRAP_STALE;  */
+                     /*   gen == 2^64-1 retires the slot, else gen + 1              */
+    OSC_I_HLOAD,     /* dst(elem) = value of handle (b, c) of pool a; stale -> STALE */
+    OSC_I_HSTORE     /* value of handle (b, c) of pool a = args[0] (nargs = 1)       */
 } OscOp;
 
 typedef enum {
@@ -141,11 +154,17 @@ typedef enum {
     OSC_TRAP_REQUIRES = 9,   /* a `requires` clause evaluated to false at entry  */
     OSC_TRAP_ENSURES = 10,   /* an `ensures` clause evaluated to false at return */
     /* Appended for OSC-2 arenas (section 3). */
-    OSC_TRAP_ARENA_FULL = 11 /* an arena allocation exceeded the arena's capacity */
+    OSC_TRAP_ARENA_FULL = 11, /* an arena allocation exceeded the arena's capacity */
+    /* appended for OSC-3 item 2 versioned handles */
+    OSC_TRAP_STALE = 12,     /* a handle whose generation no longer matches its slot */
+    OSC_TRAP_POOL_FULL = 13, /* pool alloc with every slot live                       */
+    OSC_TRAP_RETIRED = 14    /* pool alloc with no free slot and at least one slot   */
+                             /*   retired at the maximum generation (never wrapped)  */
 } OscTrap;
 
 /* Highest trap code; arrays indexed by trap code have OSC_TRAP_MAX + 1 entries. */
-#define OSC_TRAP_MAX OSC_TRAP_ARENA_FULL
+#define OSC_TRAP_MAX OSC_TRAP_RETIRED
+#define OSC_POOL_SLOTS 16    /* OSC-3 item 2: slots per pool */
 
 typedef struct {
     uint8_t op;          /* OscOp */

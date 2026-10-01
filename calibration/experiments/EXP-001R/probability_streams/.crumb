@@ -1,0 +1,34 @@
+{
+  "schema_version": "1.0.0",
+  "name": "calibration/experiments/EXP-001R/probability_streams",
+  "layer": "calibration/experiments/EXP-001R/probability_streams",
+  "purpose": "Directory calibration/experiments/EXP-001R/probability_streams. Purpose not yet described by a human.",
+  "above": {
+    "name": "calibration/experiments/EXP-001R",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory calibration/experiments/EXP-001R/probability_streams. Purpose not yet described by a human.",
+      "files": [
+        "INDEX"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "806a9d6",
+          "timestamp": "2026-09-29T23:12:32-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #99 from aien-dev/feat/turing-exp001r-publish",
+          "pr": 99
+        }
+      ]
+    }
+  }
+}

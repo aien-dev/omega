@@ -1,0 +1,286 @@
+{
+  "schema_version": "1.0.0",
+  "name": "docs/numeric",
+  "layer": "docs/numeric",
+  "purpose": "Directory docs/numeric. Purpose not yet described by a human.",
+  "above": {
+    "name": "docs",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory docs/numeric. Purpose not yet described by a human.",
+      "files": [
+        "E1_DIVSQRT_GB10.md",
+        "E1_GAP_TABLE.md",
+        "E1_REDUCTION_CONTRACT.md",
+        "E1_SCALAR_CONTRACT.md",
+        "E1_TRANSCENDENTAL_CONTRACT.md"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 9,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "bab761c",
+          "timestamp": "2026-10-01T08:13:57-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #157 from aien-dev/feat/e1-gb10-reduce-minmax",
+          "pr": 157
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "bab761c",
+          "pr": 157,
+          "note": "13:2xZ: omega#157 GB10 MAX/MIN/MEAN MERGED bab761c (chip PASS 380 cases 0 mismatches, receipt evidence/E1-REDUCE/a04f4f7f...json on 689ad4d pre-rebase). #136 M20 rebased (77e055c), CI job `tensor` gr",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "bab761c",
+          "pr": 157,
+          "note": "13:14Z Lane 2 interim: omega #157 MERGED bab761c (GB10 MAX/MIN/MEAN chip PASS 380/0, receipt evidence/E1-REDUCE/a04f4f7f on pre-rebase 689ad4d, so still no E1 receipt on merged main; consolidated chi",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "56f5244",
+          "timestamp": "2026-10-01T07:45:54-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #155 from aien-dev/docs/lane33-reconcile",
+          "pr": 155
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane33",
+          "sha": "56f5244",
+          "pr": 155,
+          "note": "| omega | #155 (Sonnet worker) | 56f5244 | Codex: no findings | evidence-immutable pass |",
+          "ref": "2026-10-01-push-lane33-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane33",
+          "sha": "56f5244",
+          "pr": 155,
+          "note": "omega #155:**",
+          "ref": "2026-10-01-push-lane33-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane33",
+          "sha": "56f5244",
+          "pr": 155,
+          "note": "12:51Z Lane 33 DONE: arch #82, omega #155, aienos #206 MERGED (docs truthful: E1 2/6, kernel 9/14 QEMU, TRUST-1 not qualified, R16 merged-with-failing-check noted; Gate 5 failed receipt added to omeg",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "07004a8",
+          "timestamp": "2026-10-01T07:30:32-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #152 from aien-dev/feat/e1-c2-gb10-divsqrt-transc",
+          "pr": 152
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "07004a8",
+          "pr": 152,
+          "note": "(1) #147 overflow (copy[32] vs 52 rows): fixed by #152, MERGED 07004a8 (by W8). Receipt OMEGA-NUMERIC-0/f4f6d362 is UNTRUSTED (made while broken). Fresh Gate 5 chip run on merged main pending.",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane30",
+          "sha": "07004a8",
+          "pr": 152,
+          "note": "Push-to-main trigger: done via #154 + #156 guard. Branch pushed. Crumbline set as the item after effects. 32-bit generation sites listed with fix plan in docs/osc/OSC-3-DESIGN.md (\"Generation width\" ",
+          "ref": "2026-10-01-push-lane30-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane32",
+          "sha": "07004a8",
+          "pr": 152,
+          "note": "Lead: Claude Opus 5.5 (Lane 32 lead). Started 2026-10-01. Base: omega origin/main 07004a8.",
+          "ref": "2026-10-01-push-lane32-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane35",
+          "sha": "07004a8",
+          "pr": 152,
+          "note": "Reviews: Codex on both PRs plus the C2S delta. Fixed: C overflow bounds; verifier LF/end-marker check; oracle-in-readable-repo leakage (placement rule: public fixtures in omega, sealed keys in privat",
+          "ref": "2026-10-01-push-lane35-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "07004a8",
+          "pr": 152,
+          "note": "12:35Z Lane 2 interim: #152 MERGED 07004a8 (overflow fix + DIV/SQRT main path), #143 0580ef8 committed SUM receipt be9d61ce; f4f6d362 marked UNTRUSTED, fresh Gate 5 run on merged main pending; #136 r",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "2d8cd68",
+          "timestamp": "2026-10-01T05:36:00-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #147 from aien-dev/feat/e1-c-gb10-scalar",
+          "pr": 147
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "2d8cd68",
+          "pr": 147,
+          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "2d8cd68",
+          "pr": 147,
+          "note": "DIV/SQRT GB10: standalone kernels merged #141 (6b14354), receipt evidence/E1-DIVSQRT/de7b2dd6...json PASS; wiring into the main GB10 path and GB10 EXP2/LOG2/other transcendentals: W8 running (feat/e1",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "2d8cd68",
+          "pr": 147,
+          "note": "10:38Z Lane 2 interim: omega #147 2d8cd68 (WP-C batch 1: 23 E1 scalar ops encoded on GB10, Gate 5 chip PASS receipt f4f6d362; first chip run FAIL kept d40f37f9, FFMA_V wait fixed). EXP/LOG next; #127",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "7a5a13c",
+          "timestamp": "2026-10-01T03:47:11-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #127 from aien-dev/feat/e1-b-transcendental",
+          "pr": 127
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "7a5a13c",
+          "pr": 127,
+          "note": "DIV/SQRT GB10: standalone kernels merged #141 (6b14354), receipt evidence/E1-DIVSQRT/de7b2dd6...json PASS; wiring into the main GB10 path and GB10 EXP2/LOG2/other transcendentals: W8 running (feat/e1",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "7a5a13c",
+          "pr": 127,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane9",
+          "sha": "7a5a13c",
+          "pr": 127,
+          "note": "~08:00Z Lane 9 DONE: omega#128 ee89461 merged (test-empirical flake fix, test-only, Gemini review). omega#127 open: check owner.",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "6b14354",
+          "timestamp": "2026-10-01T02:35:52-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #141 from aien-dev/feat/e1-gb10-divsqrt",
+          "pr": 141
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "6b14354",
+          "pr": 141,
+          "note": "DIV/SQRT GB10: standalone kernels merged #141 (6b14354), receipt evidence/E1-DIVSQRT/de7b2dd6...json PASS; wiring into the main GB10 path and GB10 EXP2/LOG2/other transcendentals: W8 running (feat/e1",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "6b14354",
+          "pr": 141,
+          "note": "~15:15Z Lane 2 progress: omega #141 DIV/SQRT MERGED 6b14354; open #136 M20, #127 WP-B. Launched Lane 24 (omega host-suites-2.yml: remaining host suites into CI). Told Lane 2 to commit the #134 GB10 r",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "c54d492",
+          "timestamp": "2026-10-01T02:20:55-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #134 from aien-dev/feat/e1-d-reductions",
+          "pr": 134
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "c54d492",
+          "pr": 134,
+          "note": "MAX/MIN/MEAN on GB10: W7 branch feat/e1-gb10-reduce-minmax, chip run on the post-Codex-fix commit in progress; verdict pending. CPU tier merged (#134 c54d492).",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "c54d492",
+          "pr": 134,
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane23",
+          "sha": "c54d492",
+          "pr": 134,
+          "note": "2. omega #134 GB10 reduction receipt be9d61ce... is outside the repo (~/workspace/evidence-out/E1-REDUCE/ on the Spark), so it cannot be checked via gh; cited as such.",
+          "ref": "2026-10-01-push-lane23-report.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "d3194f6",
+          "timestamp": "2026-09-30T22:52:26-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #124 from aien-dev/feat/e1-a-scalar-contract",
+          "pr": 124
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "d3194f6",
+          "pr": 124,
+          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "ref": "2026-10-01-push-lane2-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane2",
+          "sha": "d3194f6",
+          "pr": 124,
+          "note": "~05:50Z Lane 2 WP-A (E1 scalar contract CPU tier) MERGED omega#124 d3194f6; test-numeric-cpu 21 PASS + 5 declared chip-only SKIP; env note: shared ../physics at 006e426 vs lock e95e3ed (second lane t",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "c2160f5",
+          "timestamp": "2026-09-30T21:30:59-05:00",
+          "author": "aien-dev",
+          "subject": "docs: E1 numeric closure gap table (#117)",
+          "pr": 117
+        }
+      ]
+    }
+  }
+}

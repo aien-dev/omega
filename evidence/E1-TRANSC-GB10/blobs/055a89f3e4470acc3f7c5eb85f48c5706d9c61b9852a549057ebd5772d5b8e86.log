@@ -1,0 +1,24 @@
+    EXP2 batch 16/256 done, mismatches so far 0
+    EXP2 batch 32/256 done, mismatches so far 0
+    EXP2 batch 48/256 done, mismatches so far 0
+    EXP2 batch 64/256 done, mismatches so far 0
+    EXP2 batch 80/256 done, mismatches so far 0
+    EXP2 batch 96/256 done, mismatches so far 0
+    EXP2 batch 112/256 done, mismatches so far 0
+    EXP2 batch 128/256 done, mismatches so far 0
+    EXP2 batch 144/256 done, mismatches so far 0
+    EXP2 batch 160/256 done, mismatches so far 0
+    EXP2 batch 176/256 done, mismatches so far 0
+    EXP2 batch 192/256 done, mismatches so far 0
+    EXP2 batch 208/256 done, mismatches so far 0
+    EXP2 batch 224/256 done, mismatches so far 0
+    EXP2 batch 240/256 done, mismatches so far 0
+    EXP2 batch 256/256 done, mismatches so far 0
+RESULT chip EXP2 checked=4294967296 exhaustive=true mismatches=0 unwritten=0 verdict=PASS
+    LOG2 batch 0: device rc -4
+RESULT chip LOG2 checked=0 exhaustive=false mismatches=0 unwritten=0 verdict=NOT_RUN
+    SIGMOID batch 0: device rc -4
+RESULT chip SIGMOID checked=0 exhaustive=false mismatches=0 unwritten=0 verdict=NOT_RUN
+    TANH batch 0: device rc -4
+RESULT chip TANH checked=0 exhaustive=false mismatches=0 unwritten=0 verdict=NOT_RUN
+VERDICT NOT_RUN

@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.0.0",
+  "name": "research",
+  "layer": "research",
+  "purpose": "Directory research. Purpose not yet described by a human.",
+  "above": {
+    "name": "cs-omega",
+    "path": ".."
+  },
+  "below": [
+    {
+      "name": "dirac-oracle",
+      "role": ""
+    },
+    {
+      "name": "m15",
+      "role": ""
+    },
+    {
+      "name": "r14-failure-modes",
+      "role": ""
+    }
+  ],
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory research. Purpose not yet described by a human.",
+      "files": []
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 2,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "458c57f",
+          "timestamp": "2026-10-01T07:45:33-05:00",
+          "author": "aien-dev",
+          "subject": "research(dirac-oracle): independent oracle spec + KAT corpus format (DIRAC-0 D-02, NOT_RUN) (#158)",
+          "pr": 158
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane35",
+          "sha": "458c57f",
+          "pr": 158,
+          "note": "D-02 omega PR #158 MERGED 458c57f: research/dirac-oracle/ (ORACLE-SPEC.md, CORPUS-FORMAT.md with 3 hand-checked records, src/oracle_clifford.c, src/oracle_kat_verify.sh, README-NOT-BUILT.md). NOT_RUN",
+          "ref": "2026-10-01-push-lane35-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane35",
+          "sha": "458c57f",
+          "pr": 158,
+          "note": "12:53Z Lane 35 DONE: arch #83 6ebd2fe (DIRAC-0 spec + ADR 0023, C2S ladder D-1..D3, status proposed, DIRAC_PREP_FROZEN not passed) + omega #158 458c57f (oracle plan, public fixtures only; sealed keys",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        },
+        {
+          "source": "backfill-git",
+          "sha": "bba3bd3",
+          "timestamp": "2026-09-28T22:36:09-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
+          "pr": 67
+        }
+      ]
+    }
+  }
+}

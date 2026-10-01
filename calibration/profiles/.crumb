@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0.0",
+  "name": "calibration/profiles",
+  "layer": "calibration/profiles",
+  "purpose": "Directory calibration/profiles. Purpose not yet described by a human.",
+  "above": {
+    "name": "calibration",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory calibration/profiles. Purpose not yet described by a human.",
+      "files": [
+        "Turing-profile-v1.0.sha256",
+        "Turing-profile-v1.0.toml",
+        "Turing-profile-v1.1.sha256",
+        "Turing-profile-v1.1.toml"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 3,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "c7a1077",
+          "timestamp": "2026-09-29T22:58:17-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
+          "pr": 96
+        },
+        {
+          "source": "backfill-git",
+          "sha": "ac682f1",
+          "timestamp": "2026-09-29T21:43:15-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #93 from aien-dev/feat/turing-exp001-refreeze",
+          "pr": 93
+        },
+        {
+          "source": "backfill-git",
+          "sha": "81a7eee",
+          "timestamp": "2026-09-29T21:40:13-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "pr": 92
+        }
+      ]
+    }
+  }
+}

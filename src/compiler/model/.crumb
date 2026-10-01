@@ -1,0 +1,53 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/compiler/model",
+  "layer": "src/compiler/model",
+  "purpose": "Directory src/compiler/model. Purpose not yet described by a human.",
+  "above": {
+    "name": "src/compiler",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory src/compiler/model. Purpose not yet described by a human.",
+      "files": [
+        "osc_model.c",
+        "osc_model.h",
+        "osc_model_gen.c",
+        "osc_model_gen.h"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "b81f850",
+          "timestamp": "2026-10-01T03:35:26-05:00",
+          "author": "aien-dev",
+          "subject": "OSC-1: first compiler slice (parse -> typed IR -> AArch64) + OSC-0B memory model gate (#144)",
+          "pr": 144
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane22",
+          "sha": "b81f850",
+          "pr": 144,
+          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "ref": "2026-10-01-push-lane22-report.md"
+        },
+        {
+          "source": "backfill-lane-report",
+          "lane": "lane22",
+          "sha": "b81f850",
+          "pr": 144,
+          "note": "~16:20Z Lane 22 DONE: omega #144 b81f850 (OSC-1 compiler slice: ints 8-64, let/if/bounded loops/calls/arrays+ownership; ~784k fuzz runs 0 mismatch; 24 golden byte-identical; 34 negatives; OSC-0B memo",
+          "ref": "2026-10-01-next-major-push-orchestrator.md"
+        }
+      ]
+    }
+  }
+}

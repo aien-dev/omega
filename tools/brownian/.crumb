@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tools/brownian",
+  "layer": "tools/brownian",
+  "purpose": "Directory tools/brownian. Purpose not yet described by a human.",
+  "above": {
+    "name": "tools",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tools/brownian. Purpose not yet described by a human.",
+      "files": [
+        "brw_tps_adapter.c",
+        "brw_tps_adapter.h"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "008c5eb",
+          "timestamp": "2026-09-29T21:50:44-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #91 from aien-dev/feat/turing-tps-adapter",
+          "pr": 91
+        }
+      ]
+    }
+  }
+}

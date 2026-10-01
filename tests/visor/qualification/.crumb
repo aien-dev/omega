@@ -1,0 +1,59 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/visor/qualification",
+  "layer": "tests/visor/qualification",
+  "purpose": "Directory tests/visor/qualification. Purpose not yet described by a human.",
+  "above": {
+    "name": "tests/visor",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory tests/visor/qualification. Purpose not yet described by a human.",
+      "files": [
+        "hostile.exit",
+        "hostile.expected",
+        "hostile.omega-session",
+        "run_qualification.sh",
+        "semantic.exit",
+        "semantic.expected",
+        "semantic.omega-session",
+        "usability.exit",
+        "usability.expected",
+        "usability.omega-session"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 3,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "3c8bc36",
+          "timestamp": "2026-09-29T14:44:29-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #83 from aien-dev/chore/no-python-m19r",
+          "pr": 83
+        },
+        {
+          "source": "backfill-git",
+          "sha": "805a3a6",
+          "timestamp": "2026-09-29T07:41:31-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #75 from aien-dev/fix/program-id-body",
+          "pr": 75
+        },
+        {
+          "source": "backfill-git",
+          "sha": "193a7e7",
+          "timestamp": "2026-09-29T06:27:22-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
+          "pr": 69
+        }
+      ]
+    }
+  }
+}

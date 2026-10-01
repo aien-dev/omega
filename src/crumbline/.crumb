@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/crumbline",
+  "layer": "src/crumbline",
+  "purpose": "Directory src/crumbline. Purpose not yet described by a human.",
+  "above": {
+    "name": "src",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory src/crumbline. Purpose not yet described by a human.",
+      "files": [
+        "cl_common.c",
+        "cl_common.h",
+        "cl_crumb.c",
+        "cl_crumb.h",
+        "cl_program.c",
+        "cl_program.h",
+        "cl_search.c",
+        "cl_search.h"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "b4547c5",
+          "timestamp": "2026-09-27T12:07:03-05:00",
+          "author": "aien-dev",
+          "subject": "feat(crumbline): Omega learner adapter for Crumb v1 (#34)",
+          "pr": 34
+        }
+      ]
+    }
+  }
+}

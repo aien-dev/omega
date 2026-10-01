@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "name": "research/m15/pmu",
+  "layer": "research/m15/pmu",
+  "purpose": "Directory research/m15/pmu. Purpose not yet described by a human.",
+  "above": {
+    "name": "research",
+    "path": "../.."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory research/m15/pmu. Purpose not yet described by a human.",
+      "files": [
+        "README.md",
+        "pmu_probe.c"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "bba3bd3",
+          "timestamp": "2026-09-28T22:36:09-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
+          "pr": 67
+        }
+      ]
+    }
+  }
+}

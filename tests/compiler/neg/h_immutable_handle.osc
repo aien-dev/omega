@@ -1,0 +1,10 @@
+// expect: IMMUTABLE_ASSIGN object=h line=7
+fn f() -> i64 {
+    pool p: [i64; 2] {
+        let h: handle p = p.alloc(1);
+        p.free(h);
+        let g: handle p = p.alloc(2);
+        h = g;
+    }
+    return 0;
+}

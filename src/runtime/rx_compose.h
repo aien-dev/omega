@@ -31,6 +31,16 @@
 #ifndef RX_COMPOSE_H
 #define RX_COMPOSE_H
 
+/* Lane 32: ONE test-build flag. AIEN_TEST_BUILD (off by default, never set for
+ * the production program) turns on the composition test hooks below; a bare
+ * RXC_TEST_HOOKS without it is refused at build time. */
+#if defined(RXC_TEST_HOOKS) && !defined(AIEN_TEST_BUILD)
+#error "RXC_TEST_HOOKS (composition fault and rogue-candidate hooks) needs -DAIEN_TEST_BUILD=1; it never goes in the production program"
+#endif
+#if defined(AIEN_TEST_BUILD) && !defined(RXC_TEST_HOOKS)
+#define RXC_TEST_HOOKS 1
+#endif
+
 #include "aien_machine_id.h"
 #include "aienos_cap.h"
 #include "rx_cortex.h"
@@ -205,9 +215,10 @@ typedef struct RxCompose {
     uint32_t subj_cand[RXC_K], subj_aegis, subj_commit;
     uint64_t res[5];
     RxObjRef obj[5];
-    /* Test hooks. They fire only in builds compiled with -DRXC_TEST_HOOKS
-     * (the composition unit test and the R13 host test); in every other
-     * build they are ignored and the _exit path does not exist. */
+    /* Test hooks. They fire only in builds compiled with -DAIEN_TEST_BUILD=1
+     * (the composition unit tests and the R13 test-build variant); in every
+     * other build, the production program included, they are ignored and
+     * the _exit path does not exist. */
     struct RxcTestHooks {
         int fault_point;               /* RXC_FP_* */
         int fault_crash;               /* 1: _exit(RXC_CRASH_EXIT); 0: fail in process */

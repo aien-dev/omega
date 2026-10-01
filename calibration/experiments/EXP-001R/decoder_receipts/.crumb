@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "name": "calibration/experiments/EXP-001R/decoder_receipts",
+  "layer": "calibration/experiments/EXP-001R/decoder_receipts",
+  "purpose": "Directory calibration/experiments/EXP-001R/decoder_receipts. Purpose not yet described by a human.",
+  "above": {
+    "name": "calibration/experiments/EXP-001R",
+    "path": ".."
+  },
+  "extensions": {
+    "seed": {
+      "purpose_auto": "Directory calibration/experiments/EXP-001R/decoder_receipts. Purpose not yet described by a human.",
+      "files": [
+        "g1_j0_B0_uniform.json",
+        "g1_j0_B1_order0.json",
+        "g1_j0_B2_order1.json",
+        "g1_j0_B3_heuristic.json",
+        "g1_j0_M_candidate.json",
+        "g1_j0_M_mem.json",
+        "g1_j0_M_mem_seed1.json",
+        "g1_j1_B0_uniform.json",
+        "g1_j1_B1_order0.json",
+        "g1_j1_B2_order1.json",
+        "g1_j1_B3_heuristic.json",
+        "g1_j1_M_candidate.json",
+        "g1_j1_M_mem.json",
+        "g1_j1_M_mem_seed1.json",
+        "g1_j2_B0_uniform.json",
+        "g1_j2_B1_order0.json",
+        "g1_j2_B2_order1.json",
+        "g1_j2_B3_heuristic.json",
+        "g1_j2_M_candidate.json",
+        "g1_j2_M_mem.json",
+        "g1_j2_M_mem_seed1.json",
+        "g2_j0_B0_uniform.json",
+        "g2_j0_B1_order0.json",
+        "g2_j0_B2_order1.json",
+        "g2_j0_B3_heuristic.json",
+        "g2_j0_M_candidate.json",
+        "g2_j0_M_mem.json",
+        "g2_j0_M_mem_seed1.json",
+        "g2_j1_B0_uniform.json",
+        "g2_j1_B1_order0.json",
+        "g2_j1_B2_order1.json",
+        "g2_j1_B3_heuristic.json",
+        "g2_j1_M_candidate.json",
+        "g2_j1_M_mem.json",
+        "g2_j1_M_mem_seed1.json",
+        "g2_j2_B0_uniform.json",
+        "g2_j2_B1_order0.json",
+        "g2_j2_B2_order1.json",
+        "g2_j2_B3_heuristic.json",
+        "g2_j2_M_candidate.json",
+        "g2_j2_M_mem.json",
+        "g2_j2_M_mem_seed1.json"
+      ]
+    },
+    "owner_lane": "",
+    "provenance": {
+      "source": "backfill",
+      "total_commits": 1,
+      "ledger_cap": 20,
+      "entries": [
+        {
+          "source": "backfill-git",
+          "sha": "806a9d6",
+          "timestamp": "2026-09-29T23:12:32-05:00",
+          "author": "aien-dev",
+          "subject": "Merge pull request #99 from aien-dev/feat/turing-exp001r-publish",
+          "pr": 99
+        }
+      ]
+    }
+  }
+}
