@@ -99,7 +99,7 @@ static void house_init(House *h) {
                                  (const uint8_t (*)[32])h->key) == FAB_E_ARG, "oversized verifier roster refused");
         CHECK(fab_hmac_auth_init(&h->auth[i], &h->id[i], h->key[i], 3, h->roster_ids,
                                  (const uint8_t (*)[32])h->key) == FAB_OK, "verifier roster");
-        FabConfig cfg = { h->id[i], &h->roster, c, &h->loop.transport, &h->auth[i].auth, LEASE, 1 };
+        FabConfig cfg = { h->id[i], &h->roster, c, &h->loop.transport, &h->auth[i].auth, LEASE, 1, NULL, 0 };
         CHECK(fab_node_init(&h->node[i], &cfg) == FAB_OK, "node init");
     }
 }
@@ -450,9 +450,206 @@ static void test_sig64(void) {
     house_free(h);
 }
 
+/* ---- Lane 32: generation width ----
+ * Entry generations are generation << 32 | rev, so a membership generation of
+ * 2^32 or more would lose its high bits (2^32 would rank as 0). Every way in
+ * refuses it with FAB_E_GENERATION and changes nothing. Outside scenario() so
+ * the replay digest is unchanged. */
+static void test_gen_width(void) {
+    static House hh;
+    static FabNode tmp;
+    House *h = &hh;
+    house_init(h);
+    const uint64_t wide[2] = { 1ull << 32, (1ull << 32) + 1 };
+    for (int w = 0; w < 2; w++) {
+        CHECK(fab_node_set_generation(&h->node[A], wide[w]) == FAB_E_GENERATION,
+              "set_generation(%llu) not refused", (unsigned long long)wide[w]);
+        CHECK(h->node[A].cfg.generation == 1, "refused set_generation changed the generation");
+        FabConfig cfg = { h->id[A], &h->roster, &h->cat[A], &h->loop.transport, &h->auth[A].auth,
+                          LEASE, wide[w], NULL, 0 };
+        CHECK(fab_node_init(&tmp, &cfg) == FAB_E_GENERATION, "init with generation %llu not refused",
+              (unsigned long long)wide[w]);
+    }
+    CHECK(fab_entry_generation(&h->node[A], 7) == (1ull << 32 | 7), "entry generation at 1");
+
+    /* A peer's JOIN claiming generation 2^32 or 2^32+1 (validly signed). */
+    for (int i = 0; i < 3; i++) CHECK(fab_join(&h->node[i], LEASE, 0) == FAB_OK, "join %d", i);
+    uint8_t m[FAB_MSG_MAX];
+    size_t len = peek(h, A, C, FAB_MSG_JOIN, m);
+    CHECK(len == FAB_HDR_BYTES + FAB_JOIN_BODY + FAB_SIG_BYTES, "captured C join");
+    CHECK(pump(h, 0) == 0, "joins accepted");
+    for (int w = 0; w < 2; w++) {
+        put64(m + 96, wide[w]);
+        put64(m + 104, 100 + (uint64_t)w);
+        reseal(m, len, h->key[C]);
+        FabVerdict v = deliver(h, A, m, len, MS);
+        CHECK(v.code == FAB_E_GENERATION, "JOIN at generation %llu: %s",
+              (unsigned long long)wide[w], fab_strerror(v.code));
+        const FabMember *c = fab_member(&h->node[A], &h->id[C]);
+        CHECK(c && c->generation == 1 && c->state == FAB_ST_JOINED,
+              "JOIN at generation %llu changed C's membership", (unsigned long long)wide[w]);
+    }
+    /* The top of the range still works and keeps every bit. */
+    CHECK(fab_node_set_generation(&h->node[A], FAB_GEN_MAX) == FAB_OK, "set_generation(FAB_GEN_MAX)");
+    CHECK(fab_entry_generation(&h->node[A], 7) == ((uint64_t)FAB_GEN_MAX << 32 | 7), "entry generation at max");
+    house_free(h);
+}
+
+/* ---- Lane 32: replay window survives a receiver restart ---- */
+
+typedef struct {
+    uint8_t rec[FAB_STATE_MAX + 64];
+    size_t len;
+    int has, fail_save, fail_load;
+    unsigned saves;
+} MemStore;
+
+static int mem_save(void *ctx, const uint8_t *rec, size_t len) {
+    MemStore *s = ctx;
+    if (s->fail_save || len > sizeof s->rec) return -1;
+    memcpy(s->rec, rec, len);
+    s->len = len;
+    s->has = 1;
+    s->saves++;
+    return 0;
+}
+
+static int mem_load(void *ctx, uint8_t *buf, size_t cap, size_t *len) {
+    MemStore *s = ctx;
+    if (s->fail_load) return -1;
+    if (!s->has) return 0;
+    if (s->len > cap) return -1;
+    memcpy(buf, s->rec, s->len);
+    *len = s->len;
+    return 1;
+}
+
+/* Node i starts over: new catalog (memory is gone), window from the store. */
+static int restart(House *h, int i, const FabStore *st, uint32_t fresh) {
+    cq_catalog_free(&h->cat[i]);
+    aien_mid_index_init(&h->index[i], h->slots[i], 8);
+    CqCatalog *c = &h->cat[i];
+    CHECK(cq_catalog_init_canonical(c, &h->index[i], &h->id[i], 8, 16) == CQ_OK, "catalog");
+    uint32_t dom = CQ_SRC(CQ_SRC_GRAPH) | CQ_SRC(CQ_SRC_FABRIC);
+    CHECK(cq_op_define(c, 1, 0, dom) == CQ_OK && cq_op_define(c, 2, 1, dom) == CQ_OK, "ops");
+    FabConfig cfg = { h->id[i], &h->roster, c, &h->loop.transport, &h->auth[i].auth, LEASE, 1, st, fresh };
+    return fab_node_init(&h->node[i], &cfg);
+}
+
+static uint64_t seq_of(House *h, int i, int peer) {
+    const FabMember *m = fab_member(&h->node[i], &h->id[peer]);
+    return m ? m->last_seq : UINT64_MAX;
+}
+
+static void test_restart_replay(void) {
+    static House hh;
+    static MemStore ms;
+    static FabNode tmp;
+    House *h = &hh;
+    memset(&ms, 0, sizeof ms);
+    FabStore st = { &ms, mem_save, mem_load };
+    house_init(h);
+    CHECK(restart(h, A, &st, 1) == FAB_OK, "A first start with an empty store");
+    CHECK(ms.has, "first start saved an empty window");
+
+    /* t=0 joins; t=100ms C renews. Capture C's JOIN and RENEW to A. */
+    uint8_t join_c[FAB_MSG_MAX], renew_c[FAB_MSG_MAX], renew_c2[FAB_MSG_MAX];
+    for (int i = 0; i < 3; i++) CHECK(fab_join(&h->node[i], LEASE, 0) == FAB_OK, "join %d", i);
+    size_t join_len = peek(h, A, C, FAB_MSG_JOIN, join_c);
+    CHECK(pump(h, 0) == 0, "joins accepted");
+    CHECK(fab_renew(&h->node[C], LEASE, 100 * MS) == FAB_OK, "renew C");
+    size_t renew_len = peek(h, A, C, FAB_MSG_RENEW, renew_c);
+    CHECK(join_len && renew_len, "captured C's JOIN and RENEW");
+    CHECK(pump(h, 100 * MS) == 0, "renewal accepted");
+    const FabMember *c = fab_member(&h->node[A], &h->id[C]);
+    uint64_t c_seq = c ? c->last_seq : 0;
+    CHECK(c && c->state == FAB_ST_JOINED && c->generation == 1 && c_seq >= 2, "A holds C");
+
+    /* Receiver A restarts from its store. */
+    CHECK(restart(h, A, &st, 0) == FAB_OK, "A restarts from the saved window");
+    CHECK(fab_node_set_generation(&h->node[A], 2) == FAB_OK, "A sends in a new generation");
+    c = fab_member(&h->node[A], &h->id[C]);
+    CHECK(c && c->state == FAB_ST_LOST && c->generation == 1 && c->last_seq == c_seq,
+          "restored C: LOST, generation 1, last seq %llu", (unsigned long long)c_seq);
+    FabVerdict v = deliver(h, A, join_c, join_len, 200 * MS);
+    CHECK(v.code == FAB_E_STALE_GEN, "captured JOIN replayed after restart: %s", fab_strerror(v.code));
+    v = deliver(h, A, renew_c, renew_len, 200 * MS);
+    CHECK(v.code == FAB_E_REPLAY, "captured RENEW replayed after restart: %s", fab_strerror(v.code));
+    CHECK(!fab_member_live(&h->node[A], &h->id[C], 200 * MS), "replay made C live");
+
+    /* A fresh legitimate message after the restart: C rejoins at generation 2. */
+    CHECK(fab_node_set_generation(&h->node[C], 2) == FAB_OK, "C new generation");
+    CHECK(fab_join(&h->node[C], LEASE, 300 * MS) == FAB_OK, "C rejoins");
+    CHECK(pump(h, 300 * MS) == 0, "fresh JOIN after restart accepted");
+    c = fab_member(&h->node[A], &h->id[C]);
+    CHECK(c && c->state == FAB_ST_JOINED && c->generation == 2, "A holds C at generation 2");
+    CHECK(fab_member_live(&h->node[A], &h->id[C], 300 * MS), "C live on A after rejoin");
+    v = deliver(h, A, join_c, join_len, 300 * MS);
+    CHECK(v.code == FAB_E_STALE_GEN, "old JOIN after rejoin: %s", fab_strerror(v.code));
+
+    /* A save that fails refuses the message and consumes nothing. */
+    CHECK(fab_renew(&h->node[C], LEASE, 400 * MS) == FAB_OK, "renew C");
+    size_t renew2_len = peek(h, A, C, FAB_MSG_RENEW, renew_c2);
+    CHECK(renew2_len > 0, "captured second RENEW");
+    uint64_t before = seq_of(h, A, C);
+    ms.fail_save = 1;
+    CHECK(pump(h, 400 * MS) == 1, "unsaved RENEW refused (B accepts its copy)");
+    CHECK(seq_of(h, A, C) == before, "unsaved RENEW consumed its seq");
+    ms.fail_save = 0;
+    v = deliver(h, A, renew_c2, renew2_len, 400 * MS);
+    CHECK(v.code == FAB_OK, "same RENEW once the store works: %s", fab_strerror(v.code));
+    v = deliver(h, A, renew_c2, renew2_len, 400 * MS);
+    CHECK(v.code == FAB_E_REPLAY, "second delivery: %s", fab_strerror(v.code));
+
+    /* Second restart: the generation-2 window came back too. */
+    CHECK(restart(h, A, &st, 0) == FAB_OK, "A restarts again");
+    c = fab_member(&h->node[A], &h->id[C]);
+    CHECK(c && c->generation == 2 && c->state == FAB_ST_LOST, "generation 2 restored");
+    v = deliver(h, A, renew_c2, renew2_len, 500 * MS);
+    CHECK(v.code == FAB_E_REPLAY, "RENEW replayed after second restart: %s", fab_strerror(v.code));
+
+    /* Fail closed. Each refused start leaves the store as it was. */
+    FabConfig cfg = { h->id[A], &h->roster, &h->cat[A], &h->loop.transport, &h->auth[A].auth,
+                      LEASE, 3, &st, 0 };
+    MemStore keep = ms;
+    CHECK(fab_node_init(&tmp, &cfg) == FAB_OK, "intact window starts");
+    cfg.store_fresh = 1;
+    CHECK(fab_node_init(&tmp, &cfg) == FAB_E_STATE, "first start over a saved window");
+    cfg.store_fresh = 0;
+    ms.has = 0;
+    CHECK(fab_node_init(&tmp, &cfg) == FAB_E_STATE, "missing window started (would forget)");
+    ms = keep;
+    ms.fail_load = 1;
+    CHECK(fab_node_init(&tmp, &cfg) == FAB_E_STATE, "unreadable window started");
+    ms = keep;
+    for (size_t at = 0; at < keep.len; at += 13) {
+        ms.rec[at] ^= 0x01;
+        CHECK(fab_node_init(&tmp, &cfg) == FAB_E_STATE, "window with byte %zu flipped started", at);
+        ms.rec[at] ^= 0x01;
+    }
+    ms.len = keep.len - 1;
+    CHECK(fab_node_init(&tmp, &cfg) == FAB_E_STATE, "truncated window started");
+    ms.len = keep.len + 1;
+    CHECK(fab_node_init(&tmp, &cfg) == FAB_E_STATE, "padded window started");
+    ms = keep;
+    FabConfig other = { h->id[B], &h->roster, &h->cat[B], &h->loop.transport, &h->auth[B].auth,
+                        LEASE, 3, &st, 0 };
+    CHECK(fab_node_init(&tmp, &other) == FAB_E_STATE, "another machine's window accepted");
+    FabStore half = { &ms, mem_save, NULL };
+    cfg.store = &half;
+    CHECK(fab_node_init(&tmp, &cfg) == FAB_E_ARG, "store without load accepted");
+    cfg.store = NULL;
+    cfg.store_fresh = 1;
+    CHECK(fab_node_init(&tmp, &cfg) == FAB_E_ARG, "store_fresh without a store accepted");
+    CHECK(ms.len == keep.len && memcmp(ms.rec, keep.rec, keep.len) == 0, "refused starts changed the store");
+    house_free(h);
+}
+
 int main(void) {
     test_hmac();
     test_sig64();
+    test_gen_width();
+    test_restart_replay();
     uint8_t r1[4][32], r2[4][32];
     scenario(r1);
     unsigned first_checks = checks;

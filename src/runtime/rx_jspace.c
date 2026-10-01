@@ -209,28 +209,48 @@ static int slab_chunk(JsSpace *s, uint32_t slot) {
     return JS_OK;
 }
 
+/* The generation after g, saturating at the retired marker: never wraps. */
+static uint64_t real_gen_next(uint64_t g) {
+    return g < JS_REAL_GEN_RETIRED ? g + 1 : JS_REAL_GEN_RETIRED;
+}
+
+/* A never-used slot can be handed out: below max_reals and its starting
+ * generation (the chunk's, or the floor for a chunk not yet made) is live. */
+static bool slab_fresh_ok(const JsSpace *s) {
+    if (s->real_hw >= s->limits.max_reals) return false;
+    const JsReal *c = s->real_hw / JS_SLAB_CHUNK < s->slab_chunks ? s->slab[s->real_hw / JS_SLAB_CHUNK] : NULL;
+    uint64_t g = c ? c[s->real_hw % JS_SLAB_CHUNK].gen : s->real_gen_floor;
+    return g != JS_REAL_GEN_RETIRED;
+}
+
 static JsReal *slab_take(JsSpace *s) {
     JsReal *r = s->real_free;
     if (r) {
         s->real_free = r->free_next;
     } else {
-        if (s->real_hw >= s->limits.max_reals) return NULL;
+        if (!slab_fresh_ok(s)) return NULL;
         if (slab_chunk(s, s->real_hw) != JS_OK) return NULL;
         r = &s->slab[s->real_hw / JS_SLAB_CHUNK][s->real_hw % JS_SLAB_CHUNK];
         s->real_hw++;
     }
-    uint32_t slot = r->slot, gen = r->gen;
+    uint32_t slot = r->slot;
+    uint64_t gen = r->gen;
     memset(r, 0, sizeof *r);
     r->slot = slot; r->gen = gen;
     r->patch_off = UINT64_MAX;
     return r;
 }
 
+/* Release a slot: its generation moves on so every old JsRealId is stale. A
+ * slot whose next generation would be JS_REAL_GEN_RETIRED retires: it keeps
+ * that marker and never returns to the free list. */
 static void slab_give(JsSpace *s, JsReal *r) {
-    uint32_t slot = r->slot, gen = r->gen + 1;
+    uint32_t slot = r->slot;
+    uint64_t gen = real_gen_next(r->gen);
     memset(r, 0, sizeof *r);
     r->slot = slot; r->gen = gen;
-    if (gen + 1 > s->real_gen_floor) s->real_gen_floor = gen + 1;
+    if (real_gen_next(gen) > s->real_gen_floor) s->real_gen_floor = real_gen_next(gen);
+    if (gen == JS_REAL_GEN_RETIRED) return;
     r->free_next = s->real_free;
     s->real_free = r;
 }
@@ -239,6 +259,8 @@ static void slab_give(JsSpace *s, JsReal *r) {
 
 static int room(const JsSpace *s, uint32_t reals, uint64_t resident) {
     if (reals && s->stats.live_reals + reals > s->limits.max_reals) return JS_ERR_FULL;
+    /* Retired slots count toward no live total but are never handed out. */
+    if (reals && !s->real_free && !slab_fresh_ok(s)) return JS_ERR_FULL;
     if (resident && s->limits.max_resident_bytes &&
         s->stats.resident_bytes + resident > s->limits.max_resident_bytes) return JS_ERR_FULL;
     return JS_OK;
@@ -885,8 +907,11 @@ static int release_u(JsSpace *s, uint32_t bid) {
     free(b->units);
     free(b);
     s->branches[bid] = NULL;
-    s->branch_gen[bid]++;                     /* every old reference is now stale */
-    s->free_branch[s->n_free_branch++] = bid;
+    /* Every old reference is now stale. A slot whose next generation would be
+     * JS_BRANCH_GEN_RETIRED retires: the marker stays and the slot is never
+     * handed out again (32-bit generations: the ref packs into a World field). */
+    if (s->branch_gen[bid] < JS_BRANCH_GEN_RETIRED) s->branch_gen[bid]++;
+    if (s->branch_gen[bid] != JS_BRANCH_GEN_RETIRED) s->free_branch[s->n_free_branch++] = bid;
     return JS_OK;
 }
 
@@ -1282,30 +1307,34 @@ int js_branch_home(JsSpace *s, JsBranchRef ref, JsHome *out) {
 /* ---- durable checkpoint ------------------------------------------------------
  *
  * jspace.meta, little-endian, all fixed-width fields:
- *   header (128 B): "OMJSPC01" | u32 version=1 | u32 header_bytes=128 |
+ *   header (128 B): "OMJSPC01" | u32 version=2 | u32 header_bytes=128 |
  *     u64 commit_seq | u64 body_len | u32 n_types | u32 n_reals |
  *     u32 n_branch_slots | u32 n_branches | u64 spill_end |
- *     u32 real_gen_floor | u32 reserved | sha256(body) | sha256(header[0..96))
+ *     u64 real_gen_floor | sha256(body) | sha256(header[0..96))
  *   body:
  *     n_types   x { u32 type | u32 0 | u64 unit_bytes }
- *     n_branch_slots x u32 slot generation
- *     n_reals   x 128 B { u32 slot | u32 gen | u32 parent_slot | u32 parent_gen |
+ *     n_branch_slots x u32 slot generation (JS_BRANCH_GEN_RETIRED = retired)
+ *     n_reals   x 136 B { u32 slot | u32 parent_slot | u64 gen | u64 parent_gen |
  *                         u32 type | u32 recipe | u64 token | u32 edit_off |
  *                         u32 edit_len | u64 patch_off | u32 placement | u32 0 |
  *                         u64 spill_off | semid[32] | content[32] }
  *     n_branches x { u32 id | u32 gen | u32 parent | u32 common_ancestor |
  *                    u32 divergence | u32 frozen | u32 owner | u32 locality |
  *                    u32 type | u32 n_units | machine[32] |
- *                    n_units x { u32 slot | u32 gen } }
- * No pointer is stored. Placement is SPILLED (bytes at spill_off in
+ *                    n_units x { u32 slot | u64 gen } }
+ * Version 2 widened realization generations to 64 bits (Lane 32). Version 1
+ * (32-bit realization generations) is refused with JS_ERR_VERSION, never
+ * reinterpreted. No pointer is stored. Placement is SPILLED (bytes at spill_off in
  * jspace.data) or EVICTED (rebuild from the recipe). EDIT patches live in
  * jspace.data at patch_off. Staged branches and realizations only they reach
  * are left out. */
 
 #define JS_META_MAGIC   "OMJSPC01"
-#define JS_META_VERSION 1u
+#define JS_META_VERSION 2u
+#define JS_META_VERSION_V1 1u
 #define JS_META_HDR     128u
-#define JS_META_REAL    128u
+#define JS_META_REAL    136u
+#define JS_META_UNIT    12u
 #define JS_META_BRANCH  72u
 
 typedef struct { uint8_t *p; size_t n, cap; bool oom; } Buf;
@@ -1410,8 +1439,8 @@ static int commit_u(JsSpace *s) {
         JsReal *r = slab_at(s, k);
         n_reals++;
         JsReal *p = r->parent_realization;
-        put32(&body, r->slot); put32(&body, r->gen);
-        put32(&body, p ? p->slot : UINT32_MAX); put32(&body, p ? p->gen : 0);
+        put32(&body, r->slot); put32(&body, p ? p->slot : UINT32_MAX);
+        put64(&body, r->gen); put64(&body, p ? p->gen : 0);
         put32(&body, (uint32_t)r->realization_type); put32(&body, (uint32_t)r->recipe);
         put64(&body, r->token);
         put32(&body, r->edit_off); put32(&body, r->edit_len);
@@ -1434,7 +1463,7 @@ static int commit_u(JsSpace *s) {
         put32(&body, (uint32_t)b->realizer->type); put32(&body, b->n_units);
         buf_put(&body, b->home.machine, JS_MACHINE_ID_BYTES);
         for (uint32_t u = 0; u < b->n_units; u++) {
-            put32(&body, b->units[u]->slot); put32(&body, b->units[u]->gen);
+            put32(&body, b->units[u]->slot); put64(&body, b->units[u]->gen);
         }
     }
     if (body.oom) { free(body.p); return JS_ERR_NOMEM; }
@@ -1448,12 +1477,12 @@ static int commit_u(JsSpace *s) {
     le32(h + 32, n_types); le32(h + 36, n_reals);
     le32(h + 40, s->n_branches); le32(h + 44, n_br);
     le64(h + 48, s->spill_end);
-    uint32_t floor = s->real_gen_floor;
+    uint64_t floor = s->real_gen_floor;
     for (uint32_t k = 0; k < s->real_hw; k++) {
         JsReal *r = slab_at(s, k);
-        if (r->gen + 1 > floor) floor = r->gen + 1;
+        if (real_gen_next(r->gen) > floor) floor = real_gen_next(r->gen);
     }
-    le32(h + 56, floor);
+    le64(h + 56, floor);
     sha256_hash(body.p ? body.p : (const uint8_t *)"", body.n, h + 64);
     sha256_hash(h, 96, h + 96);
 
@@ -1499,6 +1528,8 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
     uint8_t d[32];
     sha256_hash(f, 96, d);
     if (memcmp(d, f + 96, 32)) return JS_ERR_CORRUPT;
+    /* Version 1 had 32-bit realization generations: refused, never reinterpreted. */
+    if (rd32(f + 8) == JS_META_VERSION_V1) return JS_ERR_VERSION;
     if (rd32(f + 8) != JS_META_VERSION || rd32(f + 12) != JS_META_HDR) return JS_ERR_CORRUPT;
     uint64_t body_len = rd64(f + 24);
     if (body_len != fn - JS_META_HDR) return JS_ERR_CORRUPT;
@@ -1509,7 +1540,7 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
     uint32_t n_slots = rd32(f + 40), n_br = rd32(f + 44);
     uint64_t spill_end = rd64(f + 48);
     s->commit_seq = rd64(f + 16);
-    s->real_gen_floor = rd32(f + 56);
+    s->real_gen_floor = rd64(f + 56);
     if (n_types > 64 || n_slots > s->limits.max_branches || n_br > n_slots ||
         n_reals > s->limits.max_reals) return JS_ERR_CORRUPT;
     if (s->limits.max_spill_bytes && spill_end > s->limits.max_spill_bytes) return JS_ERR_FULL;
@@ -1535,13 +1566,14 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
     /* Realizations: place each at its own slot, link parents in a second pass. */
     if ((size_t)(end - p) < (size_t)n_reals * JS_META_REAL) return JS_ERR_CORRUPT;
     uint32_t *parent_slot = malloc((n_reals ? n_reals : 1) * sizeof *parent_slot);
-    uint32_t *parent_gen = malloc((n_reals ? n_reals : 1) * sizeof *parent_gen);
+    uint64_t *parent_gen = malloc((n_reals ? n_reals : 1) * sizeof *parent_gen);
     JsReal **loaded = malloc((n_reals ? n_reals : 1) * sizeof *loaded);
     JsExtent *ext = malloc((2 * (size_t)n_reals + 1) * sizeof *ext);
     uint32_t n_ext = 0;
     int rc = parent_slot && parent_gen && loaded && ext ? JS_OK : JS_ERR_NOMEM;
     for (uint32_t i = 0; i < n_reals && rc == JS_OK; i++, p += JS_META_REAL) {
-        uint32_t slot = rd32(p), gen = rd32(p + 4), ty = rd32(p + 16), rec = rd32(p + 20);
+        uint32_t slot = rd32(p), ty = rd32(p + 24), rec = rd32(p + 28);
+        uint64_t gen = rd64(p + 8);
         const JsRealizer *rz = NULL;
         for (uint32_t t = 0; t < n_types; t++) if ((uint32_t)types[t]->type == ty) rz = types[t];
         if (!rz || slot >= s->limits.max_reals || gen >= s->real_gen_floor ||
@@ -1554,18 +1586,18 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
         r->realizer = rz;
         r->realization_type = rz->type;
         r->recipe = (JsRecipeKind)rec;
-        r->token = rd64(p + 24);
-        r->edit_off = rd32(p + 32); r->edit_len = rd32(p + 36);
-        r->patch_off = rd64(p + 40);
-        uint32_t place = rd32(p + 48);
-        memcpy(r->semantic_state_id.b, p + 64, 32);
-        memcpy(r->content, p + 96, 32);
+        r->token = rd64(p + 32);
+        r->edit_off = rd32(p + 40); r->edit_len = rd32(p + 44);
+        r->patch_off = rd64(p + 48);
+        uint32_t place = rd32(p + 56);
+        memcpy(r->semantic_state_id.b, p + 72, 32);
+        memcpy(r->content, p + 104, 32);
         r->placement = JS_PLACE_EVICTED;
-        parent_slot[i] = rd32(p + 8); parent_gen[i] = rd32(p + 12);
+        parent_slot[i] = rd32(p + 4); parent_gen[i] = rd64(p + 16);
         loaded[i] = r;
         s->stats.live_reals++;
         if (place == JS_PLACE_SPILLED) {
-            r->spill_off = rd64(p + 56);
+            r->spill_off = rd64(p + 64);
             r->placement = JS_PLACE_SPILLED;
             ext[n_ext++] = (JsExtent){ r->spill_off, rz->unit_bytes };
             charge(s, r, +1);
@@ -1630,8 +1662,9 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
         uint32_t loc = rd32(p + 28);
         const JsRealizer *rz = NULL;
         for (uint32_t t = 0; t < n_types; t++) if ((uint32_t)types[t]->type == ty) rz = types[t];
-        if (!rz || id >= n_slots || s->branches[id] || gen != s->branch_gen[id] || !nu ||
-            loc > JS_HOME_REPLICA || (size_t)(end - p) < JS_META_BRANCH + (size_t)nu * 8) {
+        if (!rz || id >= n_slots || s->branches[id] || gen != s->branch_gen[id] ||
+            gen == JS_BRANCH_GEN_RETIRED || !nu ||
+            loc > JS_HOME_REPLICA || (size_t)(end - p) < JS_META_BRANCH + (size_t)nu * JS_META_UNIT) {
             rc = JS_ERR_CORRUPT; break;
         }
         JsBranch *b = calloc(1, sizeof *b);
@@ -1645,9 +1678,9 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
         b->units = units; b->cap_units = nu + 64;
         s->branches[id] = b;
         const uint8_t *u = p + JS_META_BRANCH;
-        for (uint32_t k = 0; k < nu; k++, u += 8) {
+        for (uint32_t k = 0; k < nu; k++, u += JS_META_UNIT) {
             JsReal *r = slab_at(s, rd32(u));
-            if (!r || !r->realizer || r->gen != rd32(u + 4) || r->realizer != rz) {
+            if (!r || !r->realizer || r->gen != rd64(u + 4) || r->realizer != rz) {
                 rc = JS_ERR_CORRUPT; break;
             }
             b->units[b->n_units++] = r;
@@ -1667,11 +1700,13 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
             JsReal *r = &s->slab[k / JS_SLAB_CHUNK][k % JS_SLAB_CHUNK];
             if (r->realizer) continue;
             r->gen = s->real_gen_floor;
+            if (r->gen == JS_REAL_GEN_RETIRED) continue;   /* exhausted: never reused */
             r->free_next = s->real_free;
             s->real_free = r;
         }
         for (uint32_t i = n_slots; i-- > 0;)
-            if (!s->branches[i]) s->free_branch[s->n_free_branch++] = i;
+            if (!s->branches[i] && s->branch_gen[i] != JS_BRANCH_GEN_RETIRED)
+                s->free_branch[s->n_free_branch++] = i;   /* a retired slot stays retired */
     }
     free(parent_slot); free(parent_gen); free(loaded); free(ext);
     return rc;
