@@ -139,13 +139,22 @@ jobs:
       - name: Changed-path guard (compiler files only)
         id: guard
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if git diff --name-only HEAD^1 HEAD \
-              | grep -Eq '^(src/compiler/|tests/compiler/|mk/compiler\.mk$|src/sha256\.|src/aarch64_|\.github/workflows/host-suites\.yml$)'; then
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; echo "full=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          CHANGED=$(git diff --name-only HEAD^1 HEAD)
+          if echo "$CHANGED" | grep -Eq '^(src/compiler/|tests/compiler/|mk/compiler\.mk$|src/sha256\.|src/aarch64_|\.github/workflows/host-suites\.yml$)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
-            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no OSC-1 compiler files changed; skipping"
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no OSC compiler files changed; skipping"
           fi
-      - name: OSC-0B model sweep, OSC-1 back end, compiler golden/negative/model agreement, determinism (plain + ASan/UBSan)
+          # OSC-3 item 1: the full suite runs when the compiler or the legacy writer itself changes
+          if echo "$CHANGED" | grep -Eq '^(src/compiler/|src/aarch64_)'; then
+            echo "full=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "full=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: OSC compiler quick suite (every compiler-path change; smoke counts, < 60 s)
         if: steps.guard.outputs.run == 'true'
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-compiler
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-compiler-quick
+      - name: OSC-0B model sweep, back end, compiler golden/negative/model agreement, determinism, legacy writer (full, plain + ASan/UBSan)
+        if: steps.guard.outputs.run == 'true' && steps.guard.outputs.full == 'true'
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-compiler-full
