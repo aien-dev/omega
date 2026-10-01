@@ -57,6 +57,8 @@ on:
       - 'tests/run_numeric_gates.sh'
       - 'tools/test_numeric_qualify.sh'
       - 'tools/numeric_*'
+      - 'tools/m19r_qualify.sh'
+      - 'tools/json_canon.c'
 
 jobs:
   searchtrace:
