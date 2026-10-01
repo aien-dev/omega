@@ -418,6 +418,15 @@ mkhome() { # $1 = fake home; pinned lanes.sh + pinned hook, no quietlock binary
 }
 # Run lanes.sh from fake home $F with its quietlock, never the caller's state dir or hold.
 fl() { ( unset QUIETLOCK_DIR QUIETLOCK_HOLD; HOME=$F; QUIETLOCK_BIN=$F/.local/bin/quietlock; export HOME QUIETLOCK_BIN; "$@" ); }
+# Every flush / flush-light runs with LANES_LIGHT_IDLE_MIN=0 (exit as soon as the queue is empty) and
+# under a bounded wait: timeout(1) signals only its own process group (the fake-home lanes.sh and the
+# jobs it started in $T), never anything outside the test tree. An overrun is recorded as FAIL.
+# Mutation killed: dropping LANES_LIGHT_IDLE_MIN=0 (the persistent light loop idles 30 min; the bound trips).
+bounded() { # $1 seconds, $2 test name, $3 log file, rest = lanes.sh command
+	bn=$1; bname=$2; blog=$3; shift 3
+	fl timeout -k 5 "$bn" env LANES_LIGHT_IDLE_MIN=0 "$@" >"$blog" 2>&1; brc=$?
+	check "$bname finished within ${bn}s (no hang)" '[ $brc != 124 ] && [ $brc != 137 ]'
+}
 F=$T/fakehome
 mkhome "$F"
 FL=$F/.claude/skills/orchestrate-lanes/lanes.sh
@@ -474,11 +483,11 @@ L5='echo "OTHER quietlock t start=x expected_end=2099-01-01T00:00:00Z pid=$PPID 
 	printf 'L6|%s|echo "quietlock: QUIETLOCK_REFUSED fake"; echo more; exit 75\n' "$T"
 	printf 'L5|%s|%s\n' "$T" "$L5"
 } > "$F/workspace/.test-queue-light"
-fl env LIGHT_IDLE_MAX=1 FORGE_WAIT_SECONDS=1 bash "$FL" flush-light >"$T/i5.log" 2>&1
+bounded 180 I5 "$T/i5.log" env FORGE_WAIT_SECONDS=1 bash "$FL" flush-light
 check "I5 light flush PASS / FAIL verdicts" 'grep -q "^- L1: PASS" "$R" && grep -q "^- L2: FAIL(rc=3)" "$R" && grep -q "^- L3: FAIL(rc=75)" "$R"'
 check "I5b failing suite printing the marker is FAIL, not requeued" 'grep -q "^- L4: FAIL(rc=1)" "$R" && grep -q "^- L6: FAIL(rc=75)" "$R" && ! grep -q "^- L[346]: REFUSED" "$R"'
 check "I5c real refusal requeued 3 times, then REFUSED_QUIET_GAVE_UP" '[ "$(grep -c "^- L5: REFUSED_QUIET " "$R")" = 3 ] && [ "$(grep -c "^- L5: REFUSED_QUIET_GAVE_UP " "$R")" = 1 ]'
-check "I5d nothing left queued, light loop exited" '[ ! -s "$F/workspace/.test-queue-light" ] && [ ! -s "$F/workspace/.test-queue-light.requeue" ] && grep -q "idle 1 min, exiting" "$T/i5.log"'
+check "I5d nothing left queued, light loop exited" '[ ! -s "$F/workspace/.test-queue-light" ] && [ ! -s "$F/workspace/.test-queue-light.requeue" ] && grep -q "idle 0 min, exiting" "$T/i5.log"'
 
 # I6 patched main flush: NO per-job hold (queen round-5 ruling 1). With the flag clear the job runs
 # with no flag on disk and no QUIETLOCK_HOLD, and a make goal behind the mk/ gate passes
@@ -486,7 +495,7 @@ check "I5d nothing left queued, light loop exited" '[ ! -s "$F/workspace/.test-q
 # Mutation killed: the round-4 per-job `quietlock hold` (flag present / QUIETLOCK_HOLD set during the job).
 printf 'M1|%s|test -z "$QUIETLOCK_HOLD" && test ! -e "$HOME/workspace/.spark-quiet"\n' "$T" > "$F/workspace/.test-queue"
 printf 'M2|%s|make -s -C %s OUT_DIR=%s quietlock-check\n' "$HERE" "$HERE" "$T/build" >> "$F/workspace/.test-queue"
-fl bash "$FL" flush >"$T/i6.log" 2>&1
+bounded 300 I6 "$T/i6.log" bash "$FL" flush
 check "I6 main flush job ran with no forge hold" 'grep -q "^- M1: PASS" "$R" && [ ! -e "$FF" ]'
 check "I6b forge make job passes the mk/ gate when clear" 'grep -q "^- M2: PASS" "$R"'
 
@@ -498,7 +507,7 @@ check "I6b forge make job passes the mk/ gate when clear" 'grep -q "^- M2: PASS"
 HP=$(sh -c 'sleep 4 >/dev/null 2>&1 & echo $!')  # reparented, so no zombie that kill -0 would still see
 echo "OTHER quietlock t start=$PAST expected_end=$PAST pid=$HP hold=qOTHER-9-0" > "$FF"
 printf 'M9|%s|if kill -0 %s 2>/dev/null; then echo HOLDER_ALIVE; exit 9; fi\n' "$T" "$HP" > "$F/workspace/.test-queue"
-fl env FORGE_WAIT_SECONDS=1 bash "$FL" flush >"$T/i9.log" 2>&1
+bounded 120 I9 "$T/i9.log" env FORGE_WAIT_SECONDS=1 bash "$FL" flush
 check "I9 main forge waited for the other holder, then ran" 'grep -q "^- M9: PASS" "$R" && [ ! -e "$FF" ] && grep -q "released stale flag: OTHER quietlock t" "$F/workspace/.spark-quiet.history"'
 
 # I7 installer transaction: a failure at any step leaves lanes.sh and the hook exactly as before,

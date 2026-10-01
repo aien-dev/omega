@@ -109,6 +109,8 @@ cmd_flush() {
     log="$LOGDIR/$lane-$(date -u +%H%M%S).log"
     echo "[$(iso)] $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
     [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
+    # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)
+    [ $rc -eq 0 ] && grep -qE "NOT_RUN|NOT_ALL_GATES_PASS|quiet flag .* is held|SKIPPED: quiet" "$log" && v="SUSPECT(rc=0 but NOT_RUN/skip seen in log)"
     echo "- $lane: $v  cmd: \`$cmd\`  log: $log" >> "$RESULTS"; echo "   -> $v"
   done < "$QUEUE"
   mv "$QUEUE" "$QUEUE.done.$(date -u +%H%M%S)"
@@ -117,7 +119,7 @@ cmd_flush() {
 
 cmd_forge() {
   p=$(forge_pid) && { echo "forge already running pid $p; refusing a second one"; exit 1; }
-  pgrep -f "orchestrate-lanes/lanes.sh flush" >/dev/null && { echo "a flush process is already running ($(pgrep -f 'orchestrate-lanes/lanes.sh flush' | tr '\n' ' ')); refusing a second one"; exit 1; }
+  pgrep -f "orchestrate-lanes/lanes.sh flush$" >/dev/null && { echo "a flush process is already running ($(pgrep -f 'orchestrate-lanes/lanes.sh flush$' | tr '\n' ' ')); refusing a second one"; exit 1; }
   cmd_flush --detach
 }
 
@@ -157,7 +159,7 @@ cmd_flush_light() {
   mkdir -p "$LOGDIR"
   idle=0
   while :; do
-  if [ ! -f "$QUEUE_L" ]; then idle=$((idle+1)); [ $idle -ge 30 ] && { echo "light lane idle 30 min, exiting"; break; }; sleep 60; continue; fi; idle=0
+  if [ ! -f "$QUEUE_L" ]; then idle=$((idle+1)); [ $idle -ge "${LANES_LIGHT_IDLE_MIN:-30}" ] && { echo "light lane idle ${LANES_LIGHT_IDLE_MIN:-30} min, exiting"; break; }; sleep 60; continue; fi; idle=0
   echo "## flush-light $(iso)" >> "$RESULTS"
   while IFS='|' read -r lane dir cmd; do
     while [ -f "$FLAG" ]; do
@@ -168,6 +170,8 @@ cmd_flush_light() {
     log="$LOGDIR/$lane-light-$(date -u +%H%M%S).log"
     echo "[$(iso)] (light) $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
     [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
+    # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)
+    [ $rc -eq 0 ] && grep -qE "NOT_RUN|NOT_ALL_GATES_PASS|quiet flag .* is held|SKIPPED: quiet" "$log" && v="SUSPECT(rc=0 but NOT_RUN/skip seen in log)"
     echo "- $lane: $v  cmd: \`$cmd\`  log: $log" >> "$RESULTS"; echo "   -> $v"
   done < "$QUEUE_L"
   mv "$QUEUE_L" "$QUEUE_L.done.$(date -u +%H%M%S)"

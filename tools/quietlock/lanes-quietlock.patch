@@ -1,6 +1,6 @@
 --- a/lanes.sh
 +++ b/lanes.sh
-@@ -29,6 +29,38 @@
+@@ -29,6 +29,39 @@
  BACKLOG="$HOME/workspace/.hive-backlog"           # id|idea|phase|prereqs|unblocks|state (rendered into the ledger)
  HANDOFFS="$HOME/handoffs"
  SELF="$HOME/.claude/skills/orchestrate-lanes/lanes.sh"
@@ -9,7 +9,6 @@
 +# before each job it waits until quietlock says clear. Jobs that need quiet raise their own hold.
 +QL="${QUIETLOCK_BIN:-$(command -v quietlock 2>/dev/null || echo "$HOME/.local/bin/quietlock")}"
 +REQUEUE_MAX="${REQUEUE_MAX:-3}"          # REFUSED_QUIET requeues per job before giving up
-+LIGHT_IDLE_MAX="${LIGHT_IDLE_MAX:-30}"   # light loop: idle minutes before it exits
 +FORGE_WAIT_SECONDS="${FORGE_WAIT_SECONDS:-}"  # seconds between looks at a held flag (default 60 main, 30 light)
 +ql_ok() { [ -x "$QL" ] || { echo "quietlock not installed at $QL; see omega tools/quietlock/install.sh" >&2; return 1; }; }
 +ql_wait_clear() { # $1 = seconds between looks; stale flags are released through quietlock only
@@ -30,6 +29,8 @@
 +  echo "[$(iso)] $base: $3"
 +  ( cd "$2" && "$QL" run -- bash -c "$3" ) >"$log" 2>&1 < /dev/null; rc=$?
 +  v=$(ql_verdict "$rc" "$log")
++  # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)
++  [ $rc -eq 0 ] && grep -qE "NOT_RUN|NOT_ALL_GATES_PASS|quiet flag .* is held|SKIPPED: quiet" "$log" && v="SUSPECT(rc=0 but NOT_RUN/skip seen in log)"
 +  if [ "$v" = REFUSED_QUIET ]; then
 +    if [ "$n" -ge "$REQUEUE_MAX" ]; then v=REFUSED_QUIET_GAVE_UP
 +    else echo "$base@r$((n + 1))|$2|$3" >> "$4.requeue"; fi
@@ -39,7 +40,7 @@
  TASKDIR="${LANES_TASKDIR:-$(ls -dt /tmp/claude-1000/-home-drakestapleton/*/tasks 2>/dev/null | head -1)}"
  
  now() { date -u +%s; }
-@@ -98,20 +130,15 @@
+@@ -98,22 +131,15 @@
    [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null && { echo "flush already running pid $(cat "$LOCK")"; exit 1; }
    echo $$ > "$LOCK"; trap 'rm -f "$LOCK"' EXIT
    mkdir -p "$LOGDIR"
@@ -55,6 +56,8 @@
 -    log="$LOGDIR/$lane-$(date -u +%H%M%S).log"
 -    echo "[$(iso)] $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
 -    [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
+-    # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)
+-    [ $rc -eq 0 ] && grep -qE "NOT_RUN|NOT_ALL_GATES_PASS|quiet flag .* is held|SKIPPED: quiet" "$log" && v="SUSPECT(rc=0 but NOT_RUN/skip seen in log)"
 -    echo "- $lane: $v  cmd: \`$cmd\`  log: $log" >> "$RESULTS"; echo "   -> $v"
 +    ql_wait_clear "${FORGE_WAIT_SECONDS:-60}"
 +    ql_job "$lane" "$dir" "$cmd" "$QUEUE" ""
@@ -64,7 +67,7 @@
    echo "flush complete, see $RESULTS"
  }
  
-@@ -122,14 +149,9 @@
+@@ -124,14 +150,9 @@
  }
  
  cmd_release_stale() {
@@ -82,15 +85,14 @@
  }
  
  # ---------- light forge (queen 2026-10-01: scale lever) ----------
-@@ -155,22 +177,17 @@
+@@ -157,24 +178,17 @@
    p=$(forge_light_pid) && { echo "light flush already running pid $p"; exit 1; }
    echo $$ > "$LOCK_L"; trap 'rm -f "$LOCK_L"' EXIT
    mkdir -p "$LOGDIR"
 +  ql_ok || exit 1
    idle=0
    while :; do
--  if [ ! -f "$QUEUE_L" ]; then idle=$((idle+1)); [ $idle -ge 30 ] && { echo "light lane idle 30 min, exiting"; break; }; sleep 60; continue; fi; idle=0
-+  if [ ! -f "$QUEUE_L" ]; then idle=$((idle+1)); [ $idle -ge "$LIGHT_IDLE_MAX" ] && { echo "light lane idle $LIGHT_IDLE_MAX min, exiting"; break; }; sleep 60; continue; fi; idle=0
+   if [ ! -f "$QUEUE_L" ]; then idle=$((idle+1)); [ $idle -ge "${LANES_LIGHT_IDLE_MIN:-30}" ] && { echo "light lane idle ${LANES_LIGHT_IDLE_MIN:-30} min, exiting"; break; }; sleep 60; continue; fi; idle=0
    echo "## flush-light $(iso)" >> "$RESULTS"
    while IFS='|' read -r lane dir cmd; do
 -    while [ -f "$FLAG" ]; do
@@ -101,6 +103,8 @@
 -    log="$LOGDIR/$lane-light-$(date -u +%H%M%S).log"
 -    echo "[$(iso)] (light) $lane: $cmd" ; ( cd "$dir" && bash -c "$cmd" ) >"$log" 2>&1; rc=$?
 -    [ $rc -eq 0 ] && v=PASS || v="FAIL(rc=$rc)"
+-    # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)
+-    [ $rc -eq 0 ] && grep -qE "NOT_RUN|NOT_ALL_GATES_PASS|quiet flag .* is held|SKIPPED: quiet" "$log" && v="SUSPECT(rc=0 but NOT_RUN/skip seen in log)"
 -    echo "- $lane: $v  cmd: \`$cmd\`  log: $log" >> "$RESULTS"; echo "   -> $v"
 +    ql_wait_clear "${FORGE_WAIT_SECONDS:-30}"
 +    ql_job "$lane" "$dir" "$cmd" "$QUEUE_L" "-light"
