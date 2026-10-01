@@ -1,0 +1,5 @@
+// expect: REDEFINED_NAME object=P line=4
+// transition: struct declared twice
+struct P { x: i32 }
+struct P { y: i32 }
+fn f() { }

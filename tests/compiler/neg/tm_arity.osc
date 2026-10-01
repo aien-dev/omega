@@ -1,0 +1,6 @@
+// expect: TYPE_MISMATCH object=g line=5
+// wrong number of arguments.
+fn g(a: i32, b: i32) -> i32 { return a + b; }
+fn f() -> i32 {
+    return g(1);
+}

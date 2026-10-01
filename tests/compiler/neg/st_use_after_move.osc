@@ -1,0 +1,8 @@
+// expect: USE_AFTER_MOVE object=p line=7
+// transition: use after move
+struct P { x: i32, y: i32 }
+fn f() -> i32 {
+    let p: own P = P { x: 1, y: 2 };
+    let q: own P = p;
+    return p.x + q.y;
+}

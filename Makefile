@@ -170,10 +170,10 @@ test-gate14-combine:
 # from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
 # item fails.
 .PHONY: test-numeric-cpu test-numeric-qualify
-NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c \
+NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c \
                    src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
                    src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
-NUMERIC_CPU_HDRS = src/omega_numeric.h src/omega_numeric_provenance.h tests/numeric_oracle.h \
+NUMERIC_CPU_HDRS = src/omega_numeric.h src/omega_numeric_provenance.h src/omega_numeric_divsqrt_gb10.h tests/numeric_oracle.h \
                    src/omega_blackwell_qmd.h src/omega_blackwell_codegen.h src/omega_blackwell_encoder.h src/sha256.h
 build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) $(NUMERIC_CPU_HDRS)
 	@mkdir -p build
@@ -206,6 +206,51 @@ test-numeric-sweep:
 .PHONY: test-numeric-e1-exhaustive
 test-numeric-e1-exhaustive: build/test_omega_numeric_cpu
 	./build/test_omega_numeric_cpu --e1-exhaustive
+
+# E1 WP-D general reductions (docs/numeric/E1_REDUCTION_CONTRACT.md), CPU
+# tiers only: reference, CPU realization, oracles, negative order test and the
+# GB10 pre-submission checks. Opens no device. The chip parity run is
+# tests/run_reduce_chip.sh. Last line: "E1 Reduce Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY".
+.PHONY: test-numeric-reduce-cpu
+REDUCE_CPU_SRCS = tests/test_omega_reduce.c src/omega_numeric_reduce.c src/omega_numeric_reduce_gb10.c \
+                  src/omega_numeric.c src/omega_numeric_provenance.c \
+                  src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
+                  src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+build/test_omega_reduce_cpu: $(REDUCE_CPU_SRCS) src/omega_numeric_reduce.h $(NUMERIC_CPU_HDRS)
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(REDUCE_CPU_SRCS)
+test-numeric-reduce-cpu: build/test_omega_reduce_cpu
+	./build/test_omega_reduce_cpu
+
+# E1 WP-B: FP32 transcendental sequences (SIGMOID TANH RSQRT EXP2 LOG2 ERF SIN
+# COS GELU), CPU tier, bounded contract (docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md).
+# No libm, no GPU. test-numeric-transc: special values, oracle self-checks,
+# about 1.1M sampled inputs per op against the binary128 oracle, determinism,
+# then one build per perturbed coefficient (OMEGA_TRANSC_MUTATE=1..10) which
+# must FAIL. test-numeric-transc-full: all 2^32 inputs of every op (long; run
+# it detached). test-numeric-transc-digest: full-domain outputs against the
+# frozen digests.
+.PHONY: test-numeric-transc test-numeric-transc-full test-numeric-transc-digest
+TRANSC_SRCS = tests/test_omega_transc.c src/omega_numeric_transc.c src/sha256.c
+TRANSC_HDRS = src/omega_numeric_transc.h src/omega_numeric.h src/sha256.h
+TRANSC_CC = gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -fno-fast-math -pthread -Isrc
+TRANSC_MUTANTS = 1 2 3 4 5 6 7 8 9 10
+build/test_omega_transc: $(TRANSC_SRCS) $(TRANSC_HDRS)
+	@mkdir -p build
+	$(TRANSC_CC) -o $@ $(TRANSC_SRCS)
+test-numeric-transc: build/test_omega_transc
+	./build/test_omega_transc fast
+	@for m in $(TRANSC_MUTANTS); do \
+	  $(TRANSC_CC) -DOMEGA_TRANSC_MUTATE=$$m -o build/test_omega_transc_mut$$m $(TRANSC_SRCS) || exit 1; \
+	  if ./build/test_omega_transc_mut$$m fast > build/test_omega_transc_mut$$m.log 2>&1; then \
+	    echo "MUTANT $$m SURVIVED (bound check did not fail)"; exit 1; \
+	  else echo "mutant $$m killed: $$(grep -m1 '^FAIL' build/test_omega_transc_mut$$m.log)"; fi; \
+	done
+	@echo "test-numeric-transc: PASS (all $(words $(TRANSC_MUTANTS)) mutants killed)"
+test-numeric-transc-full: build/test_omega_transc
+	./build/test_omega_transc full
+test-numeric-transc-digest: build/test_omega_transc
+	./build/test_omega_transc digest
 
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
@@ -443,11 +488,18 @@ test-r12-silicon: $(RX_R12_SILICON)
 # of the canonical living build, so every R13/R14/R15/R16 binary links them.
 # rx_graph.o, rx_capq.o and rx_skillroute.o keep their own no-mint symbol
 # checks; the living host build depends on them so the checks run with it.
+# Lane 13: Fabric F5-0 (src/fabric, mk/fabric.mk) in the living build; the R13
+# host test runs a second simulated machine whose Skill the composition uses
+# (tests/fabric/fab_living_phase.h). Its purity check runs in test-fabric-living.
+RX_FABRIC_LIVING_SRCS = src/fabric/fabric.c src/fabric/fab_hmac.c src/fabric/fab_loopback.c \
+	src/fabric/fab_dispatch.c
 RX_COMPOSE_LIVING_SRCS = src/runtime/aien_machine_id.c src/runtime/rx_jspace.c \
 	src/runtime/rx_cortex.c src/runtime/rx_cortex_record.c src/runtime/rx_graph.c \
-	src/runtime/rx_capq.c src/runtime/rx_skillroute.c src/runtime/rx_compose.c
+	src/runtime/rx_capq.c src/runtime/rx_skillroute.c src/runtime/rx_compose.c \
+	$(RX_FABRIC_LIVING_SRCS)
 RX_COMPOSE_LIVING_CHECKS = $(OUT_DIR)/rx_graph.o $(OUT_DIR)/rx_capq.o $(OUT_DIR)/rx_skillroute.o \
-	src/runtime/rx_compose.h tests/runtime/rx_compose_fixture.h
+	src/runtime/rx_compose.h tests/runtime/rx_compose_fixture.h src/fabric/fab_dispatch.h \
+	tests/fabric/fab_living_phase.h
 
 # R13 host uses the R12 processor stand-in and cannot claim the silicon gate.
 # R13 silicon runs the same world against the physical resident GB10 seat.
@@ -468,7 +520,11 @@ RX_R13_SILICON = $(OUT_DIR)/rx_r13_living_silicon
 $(RX_R13_HOST): $(RX_R13_SRCS) src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
 	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_R13_SRCS) $(AIENOS_CAP_LIB) -lm
 
+# Lane 17: the Fabric phase (fab_living_phase.h) runs in the silicon binary too;
+# its Fabric part is CPU-only loopback, so it links unchanged. The composition
+# phase stays host-only: it needs the -DRXC_TEST_HOOKS rogue-candidate hook.
 $(RX_R13_SILICON): $(RX_R13_SRCS) src/runtime/rx_resident_gpu.c \
+	src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) \
 	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c \
 	src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
@@ -1353,6 +1409,10 @@ RX_COMPOSE_LINK = $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ) $(RX_CAPQ_OBJ) $(R
 # and every other build compile them out.
 RX_COMPOSE_TEST = $(OUT_DIR)/rx_compose_test
 RX_COMPOSE_GATE = $(OUT_DIR)/rx_composition_gate
+# Attach hygiene (one per World, close waits for its own steps, inert
+# reactions + table bound); its ASan build is test-composition-attach-asan.
+RX_COMPOSE_ATTACH_TEST = $(OUT_DIR)/rx_compose_attach_test
+RX_COMPOSE_ATTACH_ASAN = $(OUT_DIR)/rx_compose_attach_test_asan
 
 $(RX_COMPOSE_TEST): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_test.c | $(OUT_DIR)
 	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_test.c \
@@ -1362,8 +1422,20 @@ $(RX_COMPOSE_GATE): $(RX_COMPOSE_DEPS) tests/runtime/rx_composition_gate.c | $(O
 	$(CC) $(CFLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_composition_gate.c \
 		$(RX_COMPOSE_LINK)
 
-test-composition: $(RX_COMPOSE_TEST)
+$(RX_COMPOSE_ATTACH_TEST): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_attach_test.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_COMPOSE_SRCS) \
+		tests/runtime/rx_compose_attach_test.c $(RX_COMPOSE_LINK)
+
+$(RX_COMPOSE_ATTACH_ASAN): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_attach_test.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -DRXC_TEST_HOOKS \
+		-pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_attach_test.c $(RX_COMPOSE_LINK)
+
+test-composition: $(RX_COMPOSE_TEST) $(RX_COMPOSE_ATTACH_TEST)
 	./$(RX_COMPOSE_TEST)
+	./$(RX_COMPOSE_ATTACH_TEST)
+
+test-composition-attach-asan: $(RX_COMPOSE_ATTACH_ASAN)
+	./$(RX_COMPOSE_ATTACH_ASAN)
 
 test-composition-gate: $(RX_COMPOSE_GATE)
 	./$(RX_COMPOSE_GATE) "$$(git rev-parse HEAD)" $(OUT_DIR)/composition_gate_receipt.json
@@ -1373,4 +1445,49 @@ composition-gate-bin: $(RX_COMPOSE_GATE)
 print-composition-gate-bin:
 	@echo $(RX_COMPOSE_GATE)
 
-.PHONY: test-composition test-composition-gate composition-gate-bin print-composition-gate-bin
+.PHONY: test-composition test-composition-gate test-composition-attach-asan composition-gate-bin print-composition-gate-bin
+
+# COMPOSITION-2 GPU tier: the same 14-step gate with both Skills executed on
+# the GB10 through the sovereign M16 native path (no CUDA); see
+# tests/runtime/rx_compose_gpu_skill.h. A chip run: take the quiet flag and
+# use tools/composition_gate.sh --gpu (clean tree, content-addressed receipt).
+RX_COMPOSE_GATE_GPU = $(OUT_DIR)/rx_composition_gate_gpu
+RX_COMPOSE_GPU_SRCS = src/omega_blackwell_submit.c src/omega_blackwell_matmul.c \
+	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+	src/omega_blackwell_realize.c src/omega_vector.c src/omega_validate.c \
+	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c
+
+$(RX_COMPOSE_GATE_GPU): $(RX_COMPOSE_DEPS) $(RX_COMPOSE_GPU_SRCS) tests/runtime/rx_composition_gate.c \
+	tests/runtime/rx_compose_gpu_skill.h | check-physics-lock $(OUT_DIR)
+	$(CC) $(CFLAGS) -DRXC_GATE_GPU -Itests/runtime -pthread -o $@ $(RX_COMPOSE_SRCS) \
+		$(RX_COMPOSE_GPU_SRCS) tests/runtime/rx_composition_gate.c $(RX_COMPOSE_LINK) -ldl
+
+test-composition-gate-gpu: $(RX_COMPOSE_GATE_GPU)
+	./$(RX_COMPOSE_GATE_GPU) "$$(git rev-parse HEAD)" $(OUT_DIR)/composition_gate_gpu_receipt.json
+
+composition-gate-gpu-bin: $(RX_COMPOSE_GATE_GPU)
+
+print-composition-gate-gpu-bin:
+	@echo $(RX_COMPOSE_GATE_GPU)
+
+.PHONY: test-composition-gate-gpu composition-gate-gpu-bin print-composition-gate-gpu-bin
+
+# E1 row 7: correctly rounded FP32 DIV and SQRT on the GB10
+# (docs/numeric/E1_DIVSQRT_GB10.md). Host tier, offline nvdisasm provenance
+# and the CHECK mutation sweep need no device; the chip run is
+# tools/run_divsqrt_gate.sh only (quiet flag, detached, receipt).
+DIVSQRT_SRCS = tests/test_omega_divsqrt_gb10.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric.c \
+               src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
+               src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+DIVSQRT_HDRS = src/omega_numeric_divsqrt_gb10.h src/omega_numeric.h src/omega_blackwell_encoder.h \
+               src/omega_blackwell_qmd.h src/sha256.h
+.PHONY: test-divsqrt-host test-divsqrt-nvdisasm test-divsqrt-sweep
+build/test_omega_divsqrt_gb10_cpu: $(DIVSQRT_SRCS) $(DIVSQRT_HDRS)
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o $@ $(DIVSQRT_SRCS)
+test-divsqrt-host: build/test_omega_divsqrt_gb10_cpu
+	./build/test_omega_divsqrt_gb10_cpu
+test-divsqrt-nvdisasm:
+	tools/divsqrt_nvdisasm_check.sh
+test-divsqrt-sweep:
+	tools/divsqrt_check_sweep.sh

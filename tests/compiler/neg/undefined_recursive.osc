@@ -1,0 +1,6 @@
+// expect: UNDEFINED_NAME object=fact line=5
+// no recursion: a function is defined only after its body.
+fn fact(n: i64) -> i64 {
+    if n <= 1 { return 1; }
+    return n * fact(n - 1);
+}

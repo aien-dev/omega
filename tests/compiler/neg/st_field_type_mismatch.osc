@@ -1,0 +1,7 @@
+// expect: TYPE_MISMATCH object=p line=6
+// transition: type mismatch
+struct P { x: i32, ok: bool }
+fn f(v: u32) {
+    let p: own P = P { x: 1, ok: true };
+    p.x = v;
+}

@@ -1,0 +1,6 @@
+// expect: SYNTAX object=free line=5
+// destruction has no surface syntax: `free` is reserved.
+fn f() {
+    let a: own [i64; 4] = alloc(1);
+    free(a);
+}

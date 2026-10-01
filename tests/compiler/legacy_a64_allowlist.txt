@@ -1,0 +1,21 @@
+# Frozen set of C files that include src/aarch64_encoder.h or call aarch64_emit_*
+# (OSC-2 item 4, docs/osc/OSC-2-DESIGN.md section 4). Checked exactly by
+# tests/compiler/legacy_a64_callers.sh in `make test-compiler`.
+# New code must NOT be added here: it uses the validating encoder src/compiler/osc_a64.c.
+# Removing a line when a caller stops using the legacy writer is the only allowed edit.
+src/aarch64_encoder.c
+src/aarch64_encoder.h
+src/omega_exec.c
+src/omega_matvec.c
+src/omega_matvec_quad.c
+src/omega_program.c
+src/omega_realize.c
+src/omega_realize_synth.c
+src/omega_self_host.c
+src/polyglot/omx_encoder.c
+src/runtime/rx_omega.c
+tests/compiler/test_legacy_a64.c
+tests/polyglot/test_encoder.c
+tests/realize/test_program_realize.c
+tests/visor/test_visor_realization.c
+tools/omegatool.c

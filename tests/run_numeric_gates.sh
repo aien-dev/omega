@@ -51,7 +51,9 @@
 # re-hash them and re-run the log checks.
 # The historical file evidence/m19r_gate5_omega_numeric_evidence.json is not
 # touched; its hash is recorded as the predecessor.
-# All 15 ops in the manifest, LDS_STS and REDUCE_SUM included, need one GB10
+# All 40 ops in the manifest (the 15 original ops, the 23 E1 scalar ops, and
+# DIV and SQRT, which run the E1 row 7 whole-program kernels),
+# LDS_STS and REDUCE_SUM included, need one GB10
 # parity line each (FFMA one per c) at n=4096 with zero mismatches against the
 # CPU reference. REDUCE_SUM checks lane 0 of each warp (n/32 sums) and must
 # name the declared summation order. A PASS needs a real chip run; nothing
@@ -90,7 +92,13 @@ E1_SCALAR_BOUNDARY_VALUES E1_SCALAR_CPU_EQUALS_REFERENCE E1_SCALAR_INDEPENDENT_O
 NUM_OP_MANIFEST="FADD:BIT_EXACT FSUB:BIT_EXACT FMUL:BIT_EXACT FFMA:BIT_EXACT
 FSETP_SEL:INT_EXACT FSEL:INT_EXACT FMNMX_MIN:BIT_EXACT FMNMX_MAX:BIT_EXACT
 I2FP:BIT_EXACT F2I:INT_EXACT MUFU_RCP:SEED_BOUND MUFU_RSQ:SEED_BOUND
-SHFL_DOWN:INT_EXACT LDS_STS:INT_EXACT REDUCE_SUM:BIT_EXACT"
+SHFL_DOWN:INT_EXACT LDS_STS:INT_EXACT REDUCE_SUM:BIT_EXACT
+FSETP_LT_SEL:INT_EXACT FSETP_LE_SEL:INT_EXACT FSETP_GT_SEL:INT_EXACT FSETP_EQ_SEL:INT_EXACT
+FSETP_NE_SEL:INT_EXACT FSETP_NUM_SEL:INT_EXACT FSETP_NAN_SEL:INT_EXACT FSETP_LTU_SEL:INT_EXACT
+FSETP_LEU_SEL:INT_EXACT FSETP_GTU_SEL:INT_EXACT FSETP_GEU_SEL:INT_EXACT FSETP_EQU_SEL:INT_EXACT
+FSETP_NEU_SEL:INT_EXACT F2I_FLOOR:INT_EXACT F2I_CEIL:INT_EXACT F2I_RNI:INT_EXACT F2U:INT_EXACT
+I2FP_U32:BIT_EXACT F32_TO_F16:F16_BITS F32_TO_BF16:BF16_BITS F16_TO_F32:BIT_EXACT
+BF16_TO_F32:BIT_EXACT FFMA_V:BIT_EXACT DIV:BIT_EXACT SQRT:BIT_EXACT"
 NUM_ENCODED_OPS=$(printf '%s\n' $NUM_OP_MANIFEST | cut -d: -f1 | tr '\n' ' ')
 # Elements per launch (N in tests/test_omega_numeric.c).
 NUM_CORPUS_N=4096
@@ -146,6 +154,7 @@ num_build() {
         -I"$nv/src/common/sdk/nvidia/inc" -I"$nv/kernel-open/common/inc" \
         -I"$nv/kernel-open/nvidia-uvm" -I"$nv/src/nvidia/arch/nvalloc/unix/include" \
         -o "$out" tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_gb10.c \
+        src/omega_numeric_divsqrt_gb10.c \
         src/omega_numeric_provenance.c src/omega_blackwell_codegen.c \
         src/omega_blackwell_encoder.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c \
         src/forge_realization.c src/aegis_verification.c src/sha256.c \

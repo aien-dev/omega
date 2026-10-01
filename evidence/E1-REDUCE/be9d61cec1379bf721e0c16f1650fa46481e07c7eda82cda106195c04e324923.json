@@ -1,0 +1,17 @@
+{
+  "suite": "E1_REDUCE_GB10_PARITY",
+  "status": "PASS",
+  "reason": "",
+  "run_id": "20261001T052527Z-6da80bf6e90a",
+  "omega_commit": "6da80bf6e90a6b05761b796857cbb1c2f328b1e7",
+  "omega_clean_before": true,
+  "omega_clean_after": true,
+  "physics_commit": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "declared_order": "RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL",
+  "binary_sha256": "8e3690348bbf95a27062ae7fe196e3b9ea1216b531232b991a7d2462e69db840",
+  "log_sha256": "bd857c91ba73e501bd5dac9b2030d1739603e39a4daa8fbae06302b05d48d606",
+  "exit_status": "0",
+  "parity_line": "RED_GB10_PARITY: PASS op=SUM order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=60 launches=160 mismatches=0 ",
+  "host": "spark-b87b",
+  "kernel": "7.0.0-1019-nvidia"
+}

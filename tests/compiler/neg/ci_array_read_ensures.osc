@@ -1,0 +1,7 @@
+// expect: CONTRACT_INVALID object=a line=4
+// transition: array read in ensures
+// ensures may read elements only through a shared & parameter
+fn f(a: &mut [u8; 2]) -> u8 ensures a[0] == result {
+    a[0] = 3;
+    return 3;
+}

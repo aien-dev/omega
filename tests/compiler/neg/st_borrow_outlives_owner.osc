@@ -1,0 +1,12 @@
+// expect: BORROW_OUTLIVES_OWNER object=q line=9
+// transition: outer borrow assigned a borrow of an inner owner
+struct P { x: i32, y: i32 }
+fn f() -> i32 {
+    let p: own P = P { x: 1, y: 2 };
+    let mut r: &P = &p;
+    {
+        let q: own P = P { x: 3, y: 4 };
+        r = &q;
+    }
+    return r.x;
+}

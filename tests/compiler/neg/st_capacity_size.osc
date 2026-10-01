@@ -1,0 +1,4 @@
+// expect: CAPACITY object=P line=3
+// transition: struct size
+struct P { a: [u64; 60], b: [u8; 5] }
+fn f() { }

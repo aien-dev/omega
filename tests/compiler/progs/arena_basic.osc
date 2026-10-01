@@ -1,0 +1,39 @@
+// entry: basic ret_inside mixed
+// OSC-2 arenas: allocations from a bounded arena; objects are never released
+// one by one, the whole arena is destroyed at the end of its block (also on a
+// return from inside the block). Unique owners and arena objects mix.
+// expect-run: basic 5 -> 17
+// expect-run: ret_inside 3 -> 13
+// expect-run: ret_inside 0 -> 7
+// expect-run: mixed 4 -> 30
+fn basic(k: u32) -> u32 {
+    let mut s: u32 = 0;
+    arena r bound 8 {
+        let a: own [u32; 3] in r = alloc(k);
+        let b: own [u32; 5] in r = alloc(2);
+        a[1] = a[0] + b[4] * 5;
+        s = a[1] + b[0];
+    }
+    return s;
+}
+
+fn ret_inside(k: u8) -> u32 {
+    arena r bound 64 {
+        let a: own [u32; 60] in r = alloc(k as u32);
+        if k > 0 { return a[59] + 10; }
+        let b: own [u32; 4] in r = alloc(7);
+        return b[3];
+    }
+}
+
+fn mixed(k: u32) -> u32 {
+    let u: own [u32; 2] = alloc(k);
+    let mut s: u32 = 0;
+    arena r bound 6 {
+        let a: own [u32; 6] in r = alloc(k * 2);
+        let v: own [u32; 1] = alloc(10);
+        s = a[5] + u[1] + v[0];
+    }
+    let w: own [u32; 2] = alloc(8);
+    return s + w[0];
+}

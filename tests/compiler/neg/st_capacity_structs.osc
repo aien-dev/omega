@@ -1,0 +1,20 @@
+// expect: CAPACITY object=S16 line=19
+// transition: struct capacity
+struct S0 { v: u8 }
+struct S1 { v: u8 }
+struct S2 { v: u8 }
+struct S3 { v: u8 }
+struct S4 { v: u8 }
+struct S5 { v: u8 }
+struct S6 { v: u8 }
+struct S7 { v: u8 }
+struct S8 { v: u8 }
+struct S9 { v: u8 }
+struct S10 { v: u8 }
+struct S11 { v: u8 }
+struct S12 { v: u8 }
+struct S13 { v: u8 }
+struct S14 { v: u8 }
+struct S15 { v: u8 }
+struct S16 { v: u8 }
+fn f() { }

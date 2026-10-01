@@ -1,0 +1,11 @@
+// expect: ARENA_MOVE object=x line=8
+// transition: move into own parameter
+fn take(v: own [u32; 2]) -> u32 { return v[0]; }
+fn f() -> u32 {
+    let mut s: u32 = 0;
+    arena a bound 4 {
+        let x: own [u32; 2] in a = alloc(2);
+        s = take(x);
+    }
+    return s;
+}

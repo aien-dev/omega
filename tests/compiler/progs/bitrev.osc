@@ -1,0 +1,26 @@
+// entry: rev8 rev16 rev16_twice
+// expect-run: rev8 1 -> 128
+// expect-run: rev8 6 -> 96
+// expect-run: rev16 1 -> 32768
+// expect-run: rev16 4660 -> 11336
+// expect-run: rev16_twice 513 -> 1
+// bit reversal for u8 and u16.
+fn rev8(x: u8) -> u8 {
+    let mut r: u8 = 0;
+    let mut v: u8 = x;
+    for i in 0 .. 8 {
+        r = (r << 1) | (v & 1);
+        v = v >> 1;
+    }
+    return r;
+}
+
+fn rev16(x: u16) -> u16 {
+    let lo: u8 = (x & 0xff) as u8;
+    let hi: u8 = (x >> 8) as u8;
+    return ((rev8(lo) as u16) << 8) | (rev8(hi) as u16);
+}
+
+fn rev16_twice(x: u16) -> bool {
+    return rev16(rev16(x)) == x;
+}

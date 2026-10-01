@@ -1,0 +1,7 @@
+// expect: DUPLICATE_FIELD object=x line=5
+// transition: field initialised twice
+struct P { x: i32, y: i32 }
+fn f() -> i32 {
+    let p: own P = P { x: 1, y: 2, x: 3 };
+    return p.x;
+}

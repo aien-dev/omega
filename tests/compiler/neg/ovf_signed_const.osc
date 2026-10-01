@@ -1,0 +1,6 @@
+// expect: OVERFLOW_UNSAFE object=x line=4
+// signed constant overflow: 100 + 100 does not fit i8.
+fn f() -> i8 {
+    let x: i8 = 100 + 100;
+    return x;
+}

@@ -1,0 +1,6 @@
+// expect: UNSUPPORTED object=f line=3
+// OSC-1 functions return scalars only.
+fn f() -> own [i64; 4] {
+    let a: own [i64; 4] = alloc(1);
+    return 0;
+}

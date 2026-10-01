@@ -26,8 +26,17 @@ void fab_hmac_sha256(const uint8_t *key, size_t key_len, const uint8_t *msg, siz
     memset(pad, 0, sizeof pad);
 }
 
-int fab_tag_equal(const uint8_t a[32], const uint8_t b[32]) {
+int fab_ct_equal(const uint8_t *a, const uint8_t *b, size_t n) {
     uint8_t acc = 0;
-    for (unsigned i = 0; i < 32; i++) acc |= (uint8_t)(a[i] ^ b[i]);
+    for (size_t i = 0; i < n; i++) acc |= (uint8_t)(a[i] ^ b[i]);
     return acc == 0;
+}
+
+void fab_hmac_sig64(const uint8_t key[32], const uint8_t *msg, size_t msg_len, uint8_t out[64]) {
+    static const char half2[] = "AFAB stand-in sig64 half 2";
+    uint8_t k2[32];
+    fab_hmac_sha256(key, 32, msg, msg_len, out);
+    fab_hmac_sha256(key, 32, (const uint8_t *)half2, sizeof half2 - 1, k2);
+    fab_hmac_sha256(k2, 32, msg, msg_len, out + 32);
+    memset(k2, 0, sizeof k2);
 }

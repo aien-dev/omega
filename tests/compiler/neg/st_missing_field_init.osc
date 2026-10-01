@@ -1,0 +1,7 @@
+// expect: MISSING_FIELD object=y line=5
+// transition: field not initialised
+struct P { x: i32, y: i32 }
+fn f() -> i32 {
+    let p: own P = P { x: 1 };
+    return p.x;
+}

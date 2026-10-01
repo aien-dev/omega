@@ -78,7 +78,8 @@ enum { RXC_ADMIT_LOSER = 1, RXC_ADMIT_ROLLBACK = 2, RXC_ADMIT_RECOVERED = 3 };
  *                   {state record, evidence} */
 enum { RXC_CP_K = 0, RXC_CP_REF, RXC_CP_RESULT, RXC_CP_SKILL, RXC_CP_INPUT, RXC_CP_GOALSEQ,
        RXC_CP_PASS, RXC_CP_DIGEST0, RXC_CP_SKILLDIG0 = RXC_CP_DIGEST0 + 4,
-       RXC_CP_WORDS = RXC_CP_SKILLDIG0 + 4 };
+       RXC_CP_HOME = RXC_CP_SKILLDIG0 + 4,      /* RXC_HOME_*: where the Skill ran */
+       RXC_CP_WORDS };
 enum { RXC_EP_WINNER = 0, RXC_EP_WREF, RXC_EP_LREF, RXC_EP_PASSMASK, RXC_EP_RESULT,
        RXC_EP_GOALSEQ, RXC_EP_VERIFIER, RXC_EP_WDIGEST0, RXC_EP_WORDS = RXC_EP_WDIGEST0 + 4 };
 enum { RXC_AP_REF = 0, RXC_AP_GOAL, RXC_AP_K, RXC_AP_WORDS };
@@ -86,7 +87,9 @@ enum { RXC_AP_REF = 0, RXC_AP_GOAL, RXC_AP_K, RXC_AP_WORDS };
 /* Verdict object fields. */
 enum { RXC_V_WINNER = 0, RXC_V_WREF, RXC_V_LREF, RXC_V_PASSMASK, RXC_V_GOAL, RXC_V_RESULT };
 /* Candidate object fields. */
-enum { RXC_C_REF = 0, RXC_C_RESULT, RXC_C_SKILL, RXC_C_GOAL, RXC_C_DONE };
+enum { RXC_C_REF = 0, RXC_C_RESULT, RXC_C_SKILL, RXC_C_GOAL, RXC_C_DONE, RXC_C_HOME };
+/* Where a candidate's Skill ran (candidate RXC_C_HOME, claim RXC_CP_HOME). */
+enum { RXC_HOME_LOCAL = 0, RXC_HOME_FABRIC = 1 };
 /* Goal object fields. */
 enum { RXC_G_INPUT = 0, RXC_G_OP, RXC_G_SKILL0, RXC_G_SKILL1, RXC_G_SEQ };
 /* State object fields. */
@@ -102,9 +105,30 @@ typedef enum {
 #define RXC_RES_CAND1   0xC2000003ull
 #define RXC_RES_VERDICT 0xC2000004ull
 #define RXC_RES_STATE   0xC2000005ull
+/* Instances: up to RXC_MAX_ACTIVE compositions share one World; instance i
+ * offsets the role subjects by RXC_SUBJ_STRIDE*i and the resources by
+ * RXC_RES_STRIDE*i (instance 0 = the values above). */
+#define RXC_MAX_ACTIVE 2u
+#define RXC_SUBJ_STRIDE 8u
+#define RXC_RES_STRIDE 0x100ull
+#define RXC_SUBJ_OF(inst, role) ((uint32_t)(role) + (uint32_t)(inst) * RXC_SUBJ_STRIDE)
+#define RXC_RES_OF(inst, res) ((uint64_t)(res) + (uint64_t)(inst) * RXC_RES_STRIDE)
 
 /* The contract the AEGIS verifier enforces on a candidate's result. */
 typedef int (*RxcContract)(uint64_t input, uint64_t result);
+
+/* Fabric: how a candidate runs a route whose provider is on another machine
+ * (route->verdict == SR_E_REMOTE). Called from the candidate reaction, on a
+ * World worker, with the run's clock. It must revalidate the route against
+ * the Capability Graph (sr_route_check == SR_E_REMOTE) and the machine's
+ * Fabric membership at now_us, run exactly the procedure the route names
+ * (skill id + advertised digest) on that machine, and return 0 with its
+ * result, or nonzero to refuse (the candidate then proposes nothing). It
+ * mints and holds no World authority: the result is only a candidate, checked
+ * by the AEGIS verifier like any local one. Two candidates may call it at
+ * once. Without a hook a remote route proposes nothing (as before). */
+typedef int (*RxcRemoteRun)(void *ctx, const SrRouter *router, const SrRoute *route,
+                            uint64_t input, uint64_t now_us, uint64_t *result);
 
 typedef struct {
     int outcome;                       /* RXC_OUT_* */
@@ -143,6 +167,7 @@ typedef struct RxCompose {
     uint64_t session;
     RxObjRef goal, cand[RXC_K], verdict, state;
     uint32_t rx_cand[RXC_K], rx_verify, rx_commit;
+    uint32_t n_rx;                     /* of those, registered so far (cand 0, cand 1, verify, commit) */
     uint64_t seq;
     /* recovery report of the last open */
     JsBranchRef recovered;
@@ -159,6 +184,15 @@ typedef struct RxCompose {
     uint64_t run_input;
     uint32_t n_routes;
     SrRoute run_route[RXC_K];
+    uint64_t run_now;                  /* the run's clock (remote dispatch revalidates at it) */
+    /* Fabric dispatch of remote routes (rx_compose_set_remote; cleared at open/attach). */
+    struct {
+        RxcRemoteRun run;
+        void *ctx;
+        uint64_t ran, refused;         /* remote candidate runs: done / refused by the hook */
+        uint64_t seq[RXC_K];           /* goal seq of the last remote run of candidate k */
+        uint8_t digest[RXC_K][32];     /* the advertised digest it ran */
+    } remote;
     /* authority minted at open (one per step, rights of that step only) */
     RxCapRef cap_ext, cap_cand[RXC_K][3], cap_verify[4], cap_commit[2];
     struct RxcCandUser { struct RxCompose *c; uint32_t k; } cand_user[RXC_K];
@@ -166,6 +200,10 @@ typedef struct RxCompose {
     /* what open/attach put into the World (attach close undoes it) */
     int has_binder;
     uint32_t n_objs, n_minted;
+    /* instance slot in its World (attach; 0 under open) and what it implies */
+    uint32_t inst;
+    uint32_t subj_cand[RXC_K], subj_aegis, subj_commit;
+    uint64_t res[5];
     RxObjRef obj[5];
     /* Test hooks. They fire only in builds compiled with -DRXC_TEST_HOOKS
      * (the composition unit test and the R13 host test); in every other
@@ -176,6 +214,11 @@ typedef struct RxCompose {
         uint32_t fault_k;              /* candidate index for candidate-side points */
         int fault_hit;
         int rogue_candidate;           /* candidate 0 also proposes a state write */
+        /* Hold candidate hold_k1 - 1 (0: none) once, after its Skill ran and
+         * before it proposes: it sets held, waits for release, then sets
+         * hold_done and returns its proposal for the World to publish. */
+        uint32_t hold_k1;
+        int held, release, hold_done;
     } test;
 } RxCompose;
 
@@ -199,7 +242,8 @@ void rx_compose_close(RxCompose *c);
 /* COMPOSITION-2 inside an existing World (the living one).
  *
  * enroll_callers: the World's owner enrolls the four composition reaction
- * subjects (RXC_SUBJ_CAND0, _CAND1, _AEGIS, _COMMIT) into `w` and gets their
+ * subjects of every instance (role + RXC_SUBJ_STRIDE*i for i < RXC_MAX_ACTIVE: 8
+ * subjects) into `w` and gets their
  * credentials in `keys`; it must run before rx_world_bind_callers (R16: the
  * enrollment closes one way at bind). RX_ERR_IDENTITY once bound.
  *
@@ -217,17 +261,59 @@ void rx_compose_close(RxCompose *c);
  *   - reactions are registered with `keys` (rx_world_add_reaction_keyed), so a
  *     World with bound callers admits them; without bound callers keys may be
  *     NULL;
- *   - it installs the World's commit binder: RX_ERR_EXISTS if `w` already has
- *     one (at most one binder per World).
- * close (attach mode) waits for quiescence, removes the binder and the scoped
- * Cortex link, retires the five objects (their reactions can never wake
- * again: triggers name retired generations), revokes every capability attach
- * minted, and leaves `w` running. The four inert reaction slots stay
- * registered (the World has no unregister); each attach uses four more. */
+ *   - it takes a free instance slot (below) and installs that instance's
+ *     commit binder (one of the World's RX_MAX_BINDERS): RX_ERR_EXISTS if
+ *     RXC_MAX_ACTIVE compositions already run in `w`, or one of them uses
+ *     `dir` (the journal is single-owner); RX_ERR_FULL if the reaction table
+ *     has no room for its four reactions. Either refusal changes nothing.
+ * close (attach mode), in this order: (1) revokes every capability attach
+ * minted, so no composition step can publish from here on (a step already
+ * running finds its rights gone at publish and is REJECTED); (2) removes the
+ * scoped Cortex link, so a refused late write never enters the composition
+ * journal (the World's crumb log still records it); (3) waits until none of
+ * the composition's OWN four reactions is READY, RUNNING, PUBLISHING,
+ * BLOCKED_RESOURCE, re-armed, parked, deferred, or waiting in the World's
+ * fan-out backlog (still DORMANT there): those still use the
+ * RxCompose as their user pointer. There is no wall-clock cutoff and no wait
+ * for the rest of the World: a living World may never be quiet as a whole,
+ * and returning while a step still runs would leave it using freed memory.
+ * A Skill that never returns therefore hangs close (the safe choice);
+ * (4) removes its binder, retires the five objects and reclaims the revoked
+ * capabilities (their AIENOS slots become free; the slot generation
+ * advances, so the old references never validate again); (5) removes its
+ * four reactions from the World (rx_world_remove_reaction): their
+ * subscriptions go, the slots are marked removed and the next attach of the
+ * same instance reuses them. It leaves `w` running.
+ *
+ * Invariant: close reclaims everything attach allocated. After close the
+ * World's footprint (rx_world_footprint: active reactions, subscriptions,
+ * live objects, binders, bound fields, in-flight work, backlog, resource
+ * use) and the AIENOS capability table are what they were before attach; the
+ * reaction table does not grow across attach/close cycles (a removed slot is
+ * reused only by the same subject and faculty, so crumb provenance of old
+ * runs still names the right subject). Only the crumb log grows: it is
+ * history. Tested for 2000 cycles under ASan.
+ *
+ * Invariant: up to RXC_MAX_ACTIVE (2) compositions per World at a time, each
+ * isolated. Instance i (0 or 1) uses subjects RXC_SUBJ_OF(i, role) and
+ * resources RXC_RES_OF(i, res); instance 0 keeps 200..204 and
+ * 0xC2000001..5, so its records are the ones a single composition always
+ * wrote. Capabilities are scoped by subject and resource, so instance B's
+ * steps hold no right on instance A's objects (a write naming them is
+ * refused), each instance has its own binder on its own state object, its
+ * own Cortex scoped link and journal, and its own step set; run waits only
+ * for its own steps. The bound is the caller keyring: 2 instances x 4
+ * subjects = RX_CALLER_KEYRING_MAX. Attaches are serialized process-wide;
+ * runs and closes of different instances may overlap. After close the same
+ * or another RxCompose can attach again and recovers OLD-or-NEW from its
+ * directory. */
 int  rx_compose_enroll_callers(RxWorld *w, RxCallerKeyring *keys);
 int  rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, const char *dir,
                        const AienMachineId *self, uint64_t session, const SrRouter *router,
                        RxcContract contract, AienosCapAdmin *admin);
+/* Install (run != NULL) or remove the Fabric dispatch of remote routes. Call
+ * after open/attach (both clear it) and never during rx_compose_run. */
+int  rx_compose_set_remote(RxCompose *c, RxcRemoteRun run, void *ctx);
 /* The branch the World names now. */
 JsBranchRef rx_compose_state(RxCompose *c);
 /* Content digest of the composition record (Cortex objects without timing

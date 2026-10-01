@@ -1,0 +1,8 @@
+// expect: MUTABLE_ALIAS object=p line=7
+// transition: borrow_shared while borrow_mut live
+struct P { x: i32, y: i32 }
+fn g(a: &mut P, b: &P) { a.x = b.y; }
+fn f() {
+    let p: own P = P { x: 1, y: 2 };
+    g(&mut p, &p);
+}

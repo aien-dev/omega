@@ -1,0 +1,10 @@
+// expect: REDEFINED_NAME object=x line=6
+// shadowing in an inner scope is refused.
+fn f(a: i32) -> i32 {
+    let x: i32 = a;
+    if a > 0 {
+        let x: i32 = 2;
+        return x;
+    }
+    return x;
+}

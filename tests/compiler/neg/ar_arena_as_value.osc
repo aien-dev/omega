@@ -1,0 +1,9 @@
+// expect: TYPE_MISMATCH object=a line=6
+// transition: arena used as a value
+fn f() -> u64 {
+    let mut s: u64 = 0;
+    arena a bound 4 {
+        s = a;
+    }
+    return s;
+}

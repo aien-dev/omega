@@ -181,7 +181,8 @@ mutant c7_revoke_serialized $W 1 'const int serialize = 1;' 'const int serialize
 mutant c7_prebind_check $W 1 \
     'if (w->callers_bound || d->caller.generation != 0) {' 'if (w->callers_bound) {'
 mutant c7_bind_refuses_unauthenticated $W 1 \
-    'if (w->reactions[i].desc.caller.generation == 0) rc = RX_ERR_IDENTITY;' '(void)0;'
+    'if (!w->reactions[i].removed && w->reactions[i].desc.caller.generation == 0)' \
+    'if (0 && !w->reactions[i].removed && w->reactions[i].desc.caller.generation == 0)'
 mutant c7_mutate_object_bound $G 1 \
     'if (store_bound(store)) return RX_GEN_ERR_IDENTITY;' '(void)0;'
 mutant c7_set_evidence_bound $G 2 \

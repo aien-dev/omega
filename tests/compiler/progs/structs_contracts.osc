@@ -1,0 +1,28 @@
+// entry: run_req run_ens
+// OSC-2 structs in contracts: requires reads fields through any struct
+// parameter; ensures reads fields only through a shared & parameter.
+struct Win { lo: u16, hi: u16 }
+
+fn width(w: &mut Win) -> u16 requires w.hi >= w.lo {
+    w.lo = w.lo + 0;
+    return w.hi - w.lo;
+}
+
+fn clampv(w: &Win, v: u16) -> u16 ensures result >= w.lo {
+    if v < w.lo { return v; }
+    return v;
+}
+
+fn run_req(a: u16, b: u16) -> u16 {
+    let w: own Win = Win { lo: a, hi: b };
+    return width(&mut w);
+}
+
+fn run_ens(a: u16, v: u16) -> u16 {
+    let w: own Win = Win { lo: a, hi: 100 };
+    return clampv(&w, v);
+}
+// expect-run: run_req 3 9 -> 6
+// expect-run: run_req 9 3 -> trap=REQUIRES
+// expect-run: run_ens 5 7 -> 7
+// expect-run: run_ens 5 2 -> trap=ENSURES

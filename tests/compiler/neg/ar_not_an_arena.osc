@@ -1,0 +1,7 @@
+// expect: TYPE_MISMATCH object=k line=5
+// transition: in a non-arena
+fn f() -> u32 {
+    let k: u32 = 3;
+    let x: own [u32; 2] in k = alloc(2);
+    return x[0];
+}

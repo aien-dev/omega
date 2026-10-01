@@ -1,0 +1,36 @@
+// entry: fib_i64 fib_u8 sum_squares
+// Fibonacci (i64 checked: OVERFLOW past fib 92), u8 wrapping, sum of squares.
+fn fib_i64(n: u8) -> i64 {
+    let mut a: i64 = 0;
+    let mut b: i64 = 1;
+    let mut k: u8 = 0;
+    while k < n bound 255 {
+        let t: i64 = a + b;
+        a = b;
+        b = t;
+        k = k + 1;
+    }
+    return a;
+}
+
+fn fib_u8(n: u8) -> u8 {
+    let mut a: u8 = 0;
+    let mut b: u8 = 1;
+    for k in 0 .. 255 {
+        if (k as u8) >= n { return a; }
+        let t: u8 = a + b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+
+fn sum_squares(n: u16) -> u32 {
+    let mut s: u32 = 0;
+    let mut i: u32 = 1;
+    while i <= (n as u32) bound 3000 {
+        s = s + i * i;
+        i = i + 1;
+    }
+    return s;
+}

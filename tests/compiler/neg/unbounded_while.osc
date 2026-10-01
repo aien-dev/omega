@@ -1,0 +1,9 @@
+// expect: UNBOUNDED_LOOP object=while line=5
+// a while loop must declare a bound.
+fn f(x: u32) -> u32 {
+    let mut n: u32 = x;
+    while n > 0 {
+        n = n - 1;
+    }
+    return n;
+}

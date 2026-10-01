@@ -1,0 +1,3 @@
+// expect: UNDEFINED_TYPE object=Q line=3
+// transition: undefined struct type
+fn f(p: &Q) { }

@@ -1,0 +1,4 @@
+// expect: RECURSIVE_STRUCT object=N line=3
+// transition: struct field of its own type
+struct N { v: i32, next: N }
+fn f() { }

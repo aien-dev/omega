@@ -1,0 +1,17 @@
+// entry: c0 c6 call_all
+// calls with 0..6 scalar parameters.
+fn c0() -> i64 { return 42; }
+fn c1(a: i64) -> i64 { return a + c0(); }
+fn c2(a: i64, b: i32) -> i64 { return c1(a) - (b as i64); }
+fn c3(a: i64, b: i32, c: u8) -> i64 { return c2(a, b) * (c as i64); }
+fn c4(a: i64, b: i32, c: u8, d: bool) -> i64 {
+    if d { return c3(a, b, c); }
+    return c3(a, b, c) + 1;
+}
+fn c5(a: i64, b: i32, c: u8, d: bool, e: u16) -> i64 { return c4(a, b, c, d) ^ (e as i64); }
+fn c6(a: i64, b: i32, c: u8, d: bool, e: u16, f: i8) -> i64 { return c5(a, b, c, d, e) + (f as i64); }
+fn noop() { }
+fn call_all(x: i32) -> i64 {
+    noop();
+    return c6(x as i64, x, 3, x > 0, 7, -1) + c0();
+}

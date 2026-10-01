@@ -1,0 +1,6 @@
+// expect: TYPE_MISMATCH object=v line=5
+// transition: array field without [e; N]
+struct A { v: [u8; 3] }
+fn f() {
+    let a: own A = A { v: 1 };
+}

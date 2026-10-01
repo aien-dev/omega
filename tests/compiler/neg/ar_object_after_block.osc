@@ -1,0 +1,8 @@
+// expect: UNDEFINED_NAME object=x line=7
+// transition: use of undefined name
+fn f() -> u32 {
+    arena a bound 4 {
+        let x: own [u32; 2] in a = alloc(2);
+    }
+    return x[0];
+}

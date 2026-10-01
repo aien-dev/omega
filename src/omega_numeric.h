@@ -202,8 +202,8 @@ typedef enum {
     OMEGA_NOP_LOG,
     OMEGA_NOP_REDUCE_SUM,
     /* E1 scalar contract ops (docs/numeric/E1_SCALAR_CONTRACT.md): semantic
-     * reference + CPU realization only, gb10_encoded = false until a GB10
-     * lane encodes them. Compare-and-select: out = P(a, b) ? a : b, bits
+     * reference, CPU realization and GB10 encoding (E1 WP-C; GB10 parity is
+     * established by the Gate 5 chip receipt only). Compare-and-select: out = P(a, b) ? a : b, bits
      * moved unchanged (FSETP.<P> P0, a, b ; FSEL out, a, b, P0).          */
     OMEGA_NOP_FSETP_LT_SEL,
     OMEGA_NOP_FSETP_LE_SEL,
@@ -259,6 +259,13 @@ const OmegaNumericOpInfo *omega_numeric_op_at(size_t index);
  * FSETP_SEL. Returns NULL for unknown names. */
 const OmegaNumericOpInfo *omega_numeric_op_find(const char *name);
 const char *omega_numeric_compare_name(OmegaNumericCompare c);
+
+/* Ops whose GB10 kernel is a whole program from
+ * src/omega_numeric_divsqrt_gb10.c (DIV, SQRT) instead of a patch into the
+ * calibrated vecadd: they have no patch words, omega_numeric_build_kernel
+ * refuses them, and their structural checks (omega_ds_check_args, _kernel,
+ * _digest, _qmd) run inside omega_ds_gb10_run before the device is opened. */
+bool omega_numeric_op_whole_kernel(OmegaNumericOp op);
 
 /* Return codes of omega_numeric_submit_check and omega_gb10_execute_simt_op */
 #define OMEGA_NUMERIC_OK               0

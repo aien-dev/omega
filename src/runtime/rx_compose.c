@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 
 #define RXC_ISSUER 3u                 /* AIENOS issuer: system owner policy office */
@@ -70,6 +71,19 @@ static int fault(RxCompose *c, int point, uint32_t k) {
 #define RXC_ROGUE(c) 0
 #endif
 
+/* Hold point (test builds only): see RxcTestHooks.hold_k1. */
+#ifdef RXC_TEST_HOOKS
+static void hold_point(RxCompose *c, uint32_t k) {
+    if (c->test.hold_k1 != k + 1u) return;
+    if (__atomic_exchange_n(&c->test.held, 1, __ATOMIC_ACQ_REL)) return;
+    struct timespec ts = { 0, 100000 };
+    while (!__atomic_load_n(&c->test.release, __ATOMIC_ACQUIRE)) nanosleep(&ts, NULL);
+    __atomic_store_n(&c->test.hold_done, 1, __ATOMIC_RELEASE);
+}
+#else
+static void hold_point(RxCompose *c, uint32_t k) { (void)c; (void)k; }
+#endif
+
 static const RxSnapshotDep *dep_of(const RxCtx *x, RxObjRef o) {
     for (uint32_t i = 0; i < x->n_in; i++)
         if (x->in[i].obj.id == o.id && x->in[i].obj.generation == o.generation) return &x->in[i];
@@ -114,33 +128,56 @@ static int candidate_fn(RxCtx *x) {
     uint64_t seq = g->field[RXC_G_SEQ];
     if (seq == 0) return 0;
     uint64_t skill_word = g->field[k == 0 ? RXC_G_SKILL0 : RXC_G_SKILL1];
-    uint64_t ref = 0, result = 0;
-    if (k < c->n_routes && skill_word != 0 && c->run_route[k].verdict == SR_OK) {
-        const AgSkill *s = skill_of(c, (uint32_t)skill_word);
-        const uint8_t *want = c->run_route[k].skill_digest;
-        if (s && s->fn && (digest_zero(want) || memcmp(want, s->identity, 32) == 0)) {
-            if (fault(c, RXC_FP_BEFORE_FORK, k)) return -1;
-            JsBranchRef base = ref_unpack(st->field[RXC_S_REF]), next;
-            uint32_t subj = k == 0 ? RXC_SUBJ_CAND0 : RXC_SUBJ_CAND1;
-            if (js_branch_fork_staged(&c->js, base, subj, &next) != JS_OK) return -1;
-            uint64_t in = g->field[RXC_G_INPUT];
-            int failed = 0;
-            uint64_t r = s->fn(&in, 1, 0, &failed);
-            if (failed || js_branch_derive(&c->js, next.id, r) != JS_OK) {
-                js_branch_release_ref(&c->js, next, subj);
-            } else {
-                if (fault(c, RXC_FP_CANDIDATE, k)) return -1;
-                ref = ref_pack(next);
-                result = r;
-                if (k == 0 && RXC_ROGUE(c))
-                    out_put(x, c->state, RXC_S_REF, ref);   /* refused: not in its write set */
-            }
+    uint64_t ref = 0, result = 0, home = RXC_HOME_LOCAL;
+    const SrRoute *rt = k < c->n_routes ? &c->run_route[k] : NULL;
+    const AgSkill *s = NULL;
+    int runnable = 0;
+    if (rt && skill_word != 0 && rt->verdict == SR_OK) {
+        s = skill_of(c, (uint32_t)skill_word);
+        const uint8_t *want = rt->skill_digest;
+        runnable = s && s->fn && (digest_zero(want) || memcmp(want, s->identity, 32) == 0);
+    } else if (rt && skill_word != 0 && rt->verdict == SR_E_REMOTE) {
+        /* The provider is on another machine: the Fabric runs it there (the
+         * hook revalidates the route and the machine's lease first). The
+         * claim names that machine's advertised procedure whether it ran,
+         * was refused or no hook is set (never a local identity). */
+        home = RXC_HOME_FABRIC;
+        memcpy(c->remote.digest[k], rt->skill_digest, 32);
+        c->remote.seq[k] = seq;
+        runnable = c->remote.run != NULL;
+    }
+    if (runnable) {
+        if (fault(c, RXC_FP_BEFORE_FORK, k)) return -1;
+        JsBranchRef base = ref_unpack(st->field[RXC_S_REF]), next;
+        uint32_t subj = c->subj_cand[k];
+        if (js_branch_fork_staged(&c->js, base, subj, &next) != JS_OK) return -1;
+        uint64_t in = g->field[RXC_G_INPUT];
+        int failed = 0;
+        uint64_t r = 0;
+        if (home == RXC_HOME_LOCAL) {
+            r = s->fn(&in, 1, 0, &failed);
+        } else if (c->remote.run(c->remote.ctx, c->router, rt, in, c->run_now, &r) != 0) {
+            failed = 1;
+            __atomic_add_fetch(&c->remote.refused, 1, __ATOMIC_RELAXED);
+        } else {
+            __atomic_add_fetch(&c->remote.ran, 1, __ATOMIC_RELAXED);
+        }
+        if (failed || js_branch_derive(&c->js, next.id, r) != JS_OK) {
+            js_branch_release_ref(&c->js, next, subj);
+        } else {
+            if (fault(c, RXC_FP_CANDIDATE, k)) return -1;
+            ref = ref_pack(next);
+            result = r;
+            if (k == 0 && RXC_ROGUE(c))
+                out_put(x, c->state, RXC_S_REF, ref);   /* refused: not in its write set */
         }
     }
+    hold_point(c, k);
     RxObjRef me = c->cand[k];
     out_put(x, me, RXC_C_REF, ref);
     out_put(x, me, RXC_C_RESULT, result);
     out_put(x, me, RXC_C_SKILL, skill_word);
+    out_put(x, me, RXC_C_HOME, home);
     out_put(x, me, RXC_C_GOAL, seq);
     out_put(x, me, RXC_C_DONE, seq);
     return 0;
@@ -196,12 +233,12 @@ static int bind_check(void *ctx, RxObjRef obj, uint32_t field, uint64_t old_valu
                       uint64_t new_value, uint32_t subject) {
     RxCompose *c = ctx;
     if (obj.id != c->state.id || field != RXC_S_REF) return RX_ERR_BINDING;
-    if (subject != RXC_SUBJ_COMMIT) return RX_ERR_BINDING;
+    if (subject != c->subj_commit) return RX_ERR_BINDING;
     JsBranchRef old = ref_unpack(old_value), nw = ref_unpack(new_value);
     JsBranchInfo bi;
     if (js_branch_info(&c->js, nw, &bi) != JS_OK) return RX_ERR_BINDING;
     if (!bi.staged || bi.locality != JS_HOME_LOCAL) return RX_ERR_BINDING;
-    if (bi.owner != RXC_SUBJ_CAND0 && bi.owner != RXC_SUBJ_CAND1) return RX_ERR_BINDING;
+    if (bi.owner != c->subj_cand[0] && bi.owner != c->subj_cand[1]) return RX_ERR_BINDING;
     if (bi.parent != old.id || bi.parent_gen != old.gen) return RX_ERR_BINDING;
     if (fault(c, RXC_FP_AFTER_VALIDATION, 0)) return RX_ERR_BINDING;
     return RX_OK;
@@ -363,10 +400,20 @@ static int compose_records(RxCompose *c, uint64_t S, uint64_t V, const uint8_t (
                 if (js_branch_check(&c->js, r) == JS_OK) js_branch_content_digest(&c->js, r.id, d);
             }
             words_from_digest(d, p + RXC_CP_DIGEST0);
-            /* The procedure that produced it: its executable identity, which
-             * the router admitted only when it equals the graph's digest. */
-            const AgSkill *sk = skill_of(c, (uint32_t)cf[k][RXC_C_SKILL]);
-            if (sk && cf[k][RXC_C_SKILL]) words_from_digest(sk->identity, p + RXC_CP_SKILLDIG0);
+            /* The procedure that produced it: locally its executable
+             * identity, which the router admitted only when it equals the
+             * graph's digest; on a Fabric machine the digest that machine
+             * advertised (and ran, if the claim has a branch). It is held in
+             * memory per goal; a pending record is completed only within the
+             * same open, before the next goal's candidates run. */
+            p[RXC_CP_HOME] = cf[k][RXC_C_HOME];
+            if (cf[k][RXC_C_HOME] == RXC_HOME_FABRIC) {
+                if (c->remote.seq[k] && c->remote.seq[k] == cf[k][RXC_C_GOAL])
+                    words_from_digest(c->remote.digest[k], p + RXC_CP_SKILLDIG0);
+            } else {
+                const AgSkill *sk = skill_of(c, (uint32_t)cf[k][RXC_C_SKILL]);
+                if (sk && cf[k][RXC_C_SKILL]) words_from_digest(sk->identity, p + RXC_CP_SKILLDIG0);
+            }
             CxHeader h;
             memset(&h, 0, sizeof h);
             h.cls = CX_CLAIM;
@@ -387,7 +434,7 @@ static int compose_records(RxCompose *c, uint64_t S, uint64_t V, const uint8_t (
         p[RXC_EP_PASSMASK] = vf[RXC_V_PASSMASK];
         p[RXC_EP_RESULT] = vf[RXC_V_RESULT];
         p[RXC_EP_GOALSEQ] = vf[RXC_V_GOAL];
-        p[RXC_EP_VERIFIER] = RXC_SUBJ_AEGIS;
+        p[RXC_EP_VERIFIER] = c->subj_aegis;
         words_from_digest(wdig, p + RXC_EP_WDIGEST0);
         CxHeader h;
         memset(&h, 0, sizeof h);
@@ -581,6 +628,17 @@ static const uint64_t RXC_RES[5] = { RXC_RES_GOAL, RXC_RES_CAND0, RXC_RES_CAND1,
                                      RXC_RES_STATE };
 #define RXC_N_CAPS (1u + RXC_K * 3u + 4u + 2u)
 
+/* Instance `inst` of a World's composition slots: its own subjects and its
+ * own resources (rx_compose.h, RXC_SUBJ_OF / RXC_RES_OF). */
+static void set_instance(RxCompose *c, uint32_t inst) {
+    c->inst = inst;
+    c->subj_cand[0] = RXC_SUBJ_OF(inst, RXC_SUBJ_CAND0);
+    c->subj_cand[1] = RXC_SUBJ_OF(inst, RXC_SUBJ_CAND1);
+    c->subj_aegis = RXC_SUBJ_OF(inst, RXC_SUBJ_AEGIS);
+    c->subj_commit = RXC_SUBJ_OF(inst, RXC_SUBJ_COMMIT);
+    for (uint32_t i = 0; i < 5; i++) c->res[i] = RXC_RES_OF(inst, RXC_RES[i]);
+}
+
 /* The capabilities minted at open/attach, in mint order. */
 static RxCapRef *cap_at(RxCompose *c, uint32_t i) {
     if (i == 0) return &c->cap_ext;
@@ -592,23 +650,32 @@ static RxCapRef *cap_at(RxCompose *c, uint32_t i) {
 }
 
 static int mint_next(RxCompose *c, uint32_t subject, uint64_t resource, uint32_t rights) {
+    if (c->n_minted >= RXC_N_CAPS) return RX_ERR_FULL;   /* cap_at has RXC_N_CAPS slots */
     int rc = mint(c, subject, resource, rights, cap_at(c, c->n_minted));
     if (rc == RX_OK) c->n_minted++;
     return rc;
 }
 
 static int add_reaction(RxCompose *c, const RxReactionDesc *d, uint32_t *id) {
-    return c->keys ? rx_world_add_reaction_keyed(c->world, c->keys, d, id)
-                   : rx_world_add_reaction(c->world, d, id);
+    int rc = c->keys ? rx_world_add_reaction_keyed(c->world, c->keys, d, id)
+                     : rx_world_add_reaction(c->world, d, id);
+    if (rc == RX_OK) c->n_rx++;
+    return rc;
 }
 
 /* Objects, authority, reactions, binder and Cortex link of the composition
  * in c->world. `own`: the World was just built for it (open): its object ids
  * must be 0..4 and its whole-World recorder is the composition journal, as
  * before attach existed. Otherwise (attach) ids are whatever the World hands
- * out and a scoped Cortex link maps them to the composition subjects. */
+ * out and a scoped Cortex link maps them to the composition subjects. Every
+ * subject and resource is the instance's own (set_instance), so two
+ * compositions in one World hold no right on each other's objects. */
 static int build_in_world(RxCompose *c, int own) {
     int rc;
+    /* The binder first: it claims the instance's slot in the World. */
+    if ((rc = rx_world_set_binder(c->world, bind_check, bind_fn, bind_abort, c)) != RX_OK)
+        return rc;
+    c->has_binder = 1;
     uint64_t z[RX_MAX_FIELDS] = { 0 }, st[RX_MAX_FIELDS] = { 0 };
     st[RXC_S_REF] = ref_pack(c->recovered);
     if (c->recovered_record) {
@@ -620,7 +687,7 @@ static int build_in_world(RxCompose *c, int own) {
     }
     RxObjRef o[5];
     for (uint32_t i = 0; i < 5; i++) {
-        rc = rx_world_create(c->world, 1, RX_PERSIST_RESIDENT, RXC_RES[i],
+        rc = rx_world_create(c->world, 1, RX_PERSIST_RESIDENT, c->res[i],
                              i == RXC_SLOT_STATE ? st : z, &o[i]);
         if (rc != RX_OK) return rc;
         c->obj[c->n_objs++] = o[i];
@@ -631,23 +698,25 @@ static int build_in_world(RxCompose *c, int own) {
     c->cand[1] = o[RXC_SLOT_CAND1];
     c->verdict = o[RXC_SLOT_VERDICT];
     c->state = o[RXC_SLOT_STATE];
+    const uint64_t *R = c->res;
 
     /* Each step holds only the rights it needs. Outside input comes in under
      * the World's own external subject, on the goal resource only. */
-    if ((rc = mint_next(c, c->world->external_subject, RXC_RES_GOAL, RX_RIGHT_WRITE))) return rc;
+    if ((rc = mint_next(c, c->world->external_subject, R[RXC_SLOT_GOAL], RX_RIGHT_WRITE)))
+        return rc;
     for (uint32_t k = 0; k < RXC_K; k++) {
-        uint32_t subj = k ? RXC_SUBJ_CAND1 : RXC_SUBJ_CAND0;
-        if ((rc = mint_next(c, subj, RXC_RES_GOAL, RX_RIGHT_READ)) ||
-            (rc = mint_next(c, subj, RXC_RES_STATE, RX_RIGHT_READ)) ||
-            (rc = mint_next(c, subj, RXC_RES[RXC_SLOT_CAND0 + k], RX_RIGHT_WRITE)))
+        uint32_t subj = c->subj_cand[k];
+        if ((rc = mint_next(c, subj, R[RXC_SLOT_GOAL], RX_RIGHT_READ)) ||
+            (rc = mint_next(c, subj, R[RXC_SLOT_STATE], RX_RIGHT_READ)) ||
+            (rc = mint_next(c, subj, R[RXC_SLOT_CAND0 + k], RX_RIGHT_WRITE)))
             return rc;
     }
-    if ((rc = mint_next(c, RXC_SUBJ_AEGIS, RXC_RES_CAND0, RX_RIGHT_READ)) ||
-        (rc = mint_next(c, RXC_SUBJ_AEGIS, RXC_RES_CAND1, RX_RIGHT_READ)) ||
-        (rc = mint_next(c, RXC_SUBJ_AEGIS, RXC_RES_GOAL, RX_RIGHT_READ)) ||
-        (rc = mint_next(c, RXC_SUBJ_AEGIS, RXC_RES_VERDICT, RX_RIGHT_WRITE)) ||
-        (rc = mint_next(c, RXC_SUBJ_COMMIT, RXC_RES_VERDICT, RX_RIGHT_READ)) ||
-        (rc = mint_next(c, RXC_SUBJ_COMMIT, RXC_RES_STATE, RX_RIGHT_WRITE)))
+    if ((rc = mint_next(c, c->subj_aegis, R[RXC_SLOT_CAND0], RX_RIGHT_READ)) ||
+        (rc = mint_next(c, c->subj_aegis, R[RXC_SLOT_CAND1], RX_RIGHT_READ)) ||
+        (rc = mint_next(c, c->subj_aegis, R[RXC_SLOT_GOAL], RX_RIGHT_READ)) ||
+        (rc = mint_next(c, c->subj_aegis, R[RXC_SLOT_VERDICT], RX_RIGHT_WRITE)) ||
+        (rc = mint_next(c, c->subj_commit, R[RXC_SLOT_VERDICT], RX_RIGHT_READ)) ||
+        (rc = mint_next(c, c->subj_commit, R[RXC_SLOT_STATE], RX_RIGHT_WRITE)))
         return rc;
 
     for (uint32_t k = 0; k < RXC_K; k++) {
@@ -655,14 +724,14 @@ static int build_in_world(RxCompose *c, int own) {
         memset(&d, 0, sizeof d);
         d.name = k ? "compose.candidate.1" : "compose.candidate.0";
         d.faculty = RX_FACULTY_OMEGA;
-        d.subject = k ? RXC_SUBJ_CAND1 : RXC_SUBJ_CAND0;
+        d.subject = c->subj_cand[k];
         d.priority = RX_PRIO_FOREGROUND;
         d.triggers[d.n_triggers++] = (RxDep){ c->goal, RX_ALL_FIELDS };
         d.reads[d.n_reads++] = (RxDep){ c->state, RX_FIELD(RXC_S_REF) };
         d.writes[d.n_writes++] = (RxDep){ c->cand[k], RX_ALL_FIELDS };
-        d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][0], RXC_RES_GOAL, RX_RIGHT_READ };
-        d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][1], RXC_RES_STATE, RX_RIGHT_READ };
-        d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][2], RXC_RES[RXC_SLOT_CAND0 + k],
+        d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][0], R[RXC_SLOT_GOAL], RX_RIGHT_READ };
+        d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][1], R[RXC_SLOT_STATE], RX_RIGHT_READ };
+        d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][2], R[RXC_SLOT_CAND0 + k],
                                           RX_RIGHT_WRITE };
         c->cand_user[k] = (struct RxcCandUser){ c, k };
         d.fn = candidate_fn;
@@ -673,16 +742,16 @@ static int build_in_world(RxCompose *c, int own) {
     memset(&v, 0, sizeof v);
     v.name = "compose.verify";
     v.faculty = RX_FACULTY_AEGIS;
-    v.subject = RXC_SUBJ_AEGIS;
+    v.subject = c->subj_aegis;
     v.priority = RX_PRIO_FOREGROUND;
     v.triggers[v.n_triggers++] = (RxDep){ c->cand[0], RX_ALL_FIELDS };
     v.triggers[v.n_triggers++] = (RxDep){ c->cand[1], RX_ALL_FIELDS };
     v.reads[v.n_reads++] = (RxDep){ c->goal, RX_ALL_FIELDS };
     v.writes[v.n_writes++] = (RxDep){ c->verdict, RX_ALL_FIELDS };
-    v.caps[v.n_caps++] = (RxCapNeed){ c->cap_verify[0], RXC_RES_CAND0, RX_RIGHT_READ };
-    v.caps[v.n_caps++] = (RxCapNeed){ c->cap_verify[1], RXC_RES_CAND1, RX_RIGHT_READ };
-    v.caps[v.n_caps++] = (RxCapNeed){ c->cap_verify[2], RXC_RES_GOAL, RX_RIGHT_READ };
-    v.caps[v.n_caps++] = (RxCapNeed){ c->cap_verify[3], RXC_RES_VERDICT, RX_RIGHT_WRITE };
+    v.caps[v.n_caps++] = (RxCapNeed){ c->cap_verify[0], R[RXC_SLOT_CAND0], RX_RIGHT_READ };
+    v.caps[v.n_caps++] = (RxCapNeed){ c->cap_verify[1], R[RXC_SLOT_CAND1], RX_RIGHT_READ };
+    v.caps[v.n_caps++] = (RxCapNeed){ c->cap_verify[2], R[RXC_SLOT_GOAL], RX_RIGHT_READ };
+    v.caps[v.n_caps++] = (RxCapNeed){ c->cap_verify[3], R[RXC_SLOT_VERDICT], RX_RIGHT_WRITE };
     v.fn = verify_fn;
     v.user = c;
     if ((rc = add_reaction(c, &v, &c->rx_verify)) != RX_OK) return rc;
@@ -691,20 +760,17 @@ static int build_in_world(RxCompose *c, int own) {
     memset(&m, 0, sizeof m);
     m.name = "compose.commit";
     m.faculty = RX_FACULTY_OMEGA;
-    m.subject = RXC_SUBJ_COMMIT;
+    m.subject = c->subj_commit;
     m.priority = RX_PRIO_FOREGROUND;
     m.triggers[m.n_triggers++] = (RxDep){ c->verdict, RX_ALL_FIELDS };
     m.writes[m.n_writes++] = (RxDep){ c->state, RX_ALL_FIELDS };
-    m.caps[m.n_caps++] = (RxCapNeed){ c->cap_commit[0], RXC_RES_VERDICT, RX_RIGHT_READ };
-    m.caps[m.n_caps++] = (RxCapNeed){ c->cap_commit[1], RXC_RES_STATE, RX_RIGHT_WRITE };
+    m.caps[m.n_caps++] = (RxCapNeed){ c->cap_commit[0], R[RXC_SLOT_VERDICT], RX_RIGHT_READ };
+    m.caps[m.n_caps++] = (RxCapNeed){ c->cap_commit[1], R[RXC_SLOT_STATE], RX_RIGHT_WRITE };
     m.fn = commit_fn;
     m.user = c;
     if ((rc = add_reaction(c, &m, &c->rx_commit)) != RX_OK) return rc;
 
-    if ((rc = rx_world_set_binder(c->world, bind_check, bind_fn, bind_abort, c)) != RX_OK)
-        return rc;
-    c->has_binder = 1;
-    if ((rc = rx_world_bind_field(c->world, c->state, RXC_S_REF)) != RX_OK) return rc;
+    if ((rc = rx_world_bind_field(c->world, c, c->state, RXC_S_REF)) != RX_OK) return rc;
     if (own) {
         rc = rx_cortex_attach(c->world, &c->cx, c->session);
     } else {
@@ -723,6 +789,7 @@ static int build_world(RxCompose *c, AienosCapView *view, uint32_t n_workers) {
     c->world = &c->w;
     c->owns_world = 1;
     c->w.external_subject = RXC_SUBJ_EXTERNAL;
+    set_instance(c, 0);
     return build_in_world(c, 1);
 }
 
@@ -735,6 +802,7 @@ static int open_home(RxCompose *c, const char *dir, const AienMachineId *self, u
                      const SrRouter *router, RxcContract contract, AienosCapAdmin *admin) {
     struct RxcTestHooks hooks = c->test;
     hooks.fault_hit = 0;
+    hooks.held = hooks.release = hooks.hold_done = 0;
     memset(c, 0, sizeof *c);
     c->test = hooks;
     snprintf(c->dir, sizeof c->dir, "%s", dir);
@@ -778,21 +846,81 @@ static int open_home(RxCompose *c, const char *dir, const AienMachineId *self, u
     return rc;
 }
 
-/* Undo what attach put into the caller's World; the World keeps running. */
+/* 1 while any of the composition's own reactions may still call into it:
+ * admitted (READY, BLOCKED_RESOURCE), running or publishing, or due to run
+ * again (re-armed, parked, deferred, resume or sequential pulse pending,
+ * holding). Read under the World lock. */
+static int own_busy(RxCompose *c) {
+    uint32_t ids[4] = { c->rx_cand[0], c->rx_cand[1], c->rx_verify, c->rx_commit };
+    int busy = 0;
+    pthread_mutex_lock(&c->world->mu);
+    for (uint32_t i = 0; i < c->n_rx && i < 4 && !busy; i++) {
+        if (ids[i] >= c->world->n_reactions) continue;
+        const RxReaction *r = &c->world->reactions[ids[i]];
+        busy = r->state == RX_READY || r->state == RX_RUNNING || r->state == RX_PUBLISHING ||
+               r->state == RX_BLOCKED_RESOURCE || r->rearm || r->parked || r->deferred ||
+               r->resume_pending || r->holding || r->seq_pending;
+    }
+    /* A wake held back by the World's fan-out limit waits in its backlog
+     * with the reaction still DORMANT: that is a pending run as well. */
+    for (uint32_t j = 0; j < c->world->deferred_len && !busy; j++) {
+        uint32_t rid = c->world->deferred[c->world->deferred_head + j].reaction;
+        for (uint32_t i = 0; i < c->n_rx && i < 4; i++)
+            if (rid == ids[i]) busy = 1;
+    }
+    pthread_mutex_unlock(&c->world->mu);
+    return busy;
+}
+
+/* Wait until none of the composition's own steps can still run (attach
+ * mode: the rest of a living World need never be quiet). RX_ERR_TIMEOUT
+ * after timeout_ms. */
+static int wait_own(RxCompose *c, int timeout_ms) {
+    struct timespec ts = { 0, 100000 }, t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    while (own_busy(c)) {
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        int64_t ms = (int64_t)(t1.tv_sec - t0.tv_sec) * 1000 + (t1.tv_nsec - t0.tv_nsec) / 1000000;
+        if (ms >= timeout_ms) return RX_ERR_TIMEOUT;
+        nanosleep(&ts, NULL);
+    }
+    return RX_OK;
+}
+
+/* Undo what attach put into the caller's World; the World keeps running
+ * (rx_compose.h, close in attach mode, steps 1-5). */
 static void leave_world(RxCompose *c) {
-    if (c->attached) rx_cortex_detach_store(c->world, &c->cx);
-    c->attached = 0;
-    if (c->has_binder) rx_world_clear_binder(c->world, c);
-    c->has_binder = 0;
-    for (uint32_t i = 0; i < c->n_objs; i++) rx_world_retire(c->world, c->obj[i]);
-    c->n_objs = 0;
+    /* 1. Revoke: from here on no composition step can publish anything. */
     AienosCapRef office;
-    if (aienos_cap_office(c->admin, &office) == 0)
+    int have_office = aienos_cap_office(c->admin, &office) == 0;
+    if (have_office)
         for (uint32_t i = 0; i < c->n_minted; i++) {
             RxCapRef *r = cap_at(c, i);
             (void)aienos_cap_revoke(c->admin, office, (AienosCapRef){ r->cap_id, r->generation });
         }
+    /* 2. The composition journal takes no further World records. */
+    if (c->attached) rx_cortex_detach_store(c->world, &c->cx);
+    c->attached = 0;
+    /* 3. Its own steps still use c: wait until none can run. No cutoff. */
+    struct timespec ts = { 0, 200000 };
+    while (own_busy(c)) nanosleep(&ts, NULL);
+    /* 4. Binder, objects, capability slots. */
+    if (c->has_binder) rx_world_clear_binder(c->world, c);
+    c->has_binder = 0;
+    for (uint32_t i = 0; i < c->n_objs; i++) rx_world_retire(c->world, c->obj[i]);
+    c->n_objs = 0;
+    if (have_office)
+        for (uint32_t i = 0; i < c->n_minted; i++)
+            (void)aienos_cap_reclaim(c->admin, office, cap_at(c, i)->cap_id);
     c->n_minted = 0;
+    /* 5. Its reactions leave the World (rx_world_remove_reaction): their
+     * subscriptions go and their slots are reused by the next attach of the
+     * same instance. Every object they name is retired, so nothing can wake
+     * them now; a BUSY answer is a step that is just finishing. */
+    uint32_t ids[4] = { c->rx_cand[0], c->rx_cand[1], c->rx_verify, c->rx_commit };
+    for (uint32_t i = 0; i < c->n_rx && i < 4; i++)
+        while (rx_world_remove_reaction(c->world, ids[i]) == RX_ERR_BUSY) nanosleep(&ts, NULL);
+    c->n_rx = 0;
 }
 
 int rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, uint64_t session,
@@ -816,18 +944,59 @@ int rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, ui
 
 int rx_compose_enroll_callers(RxWorld *w, RxCallerKeyring *keys) {
     if (!w || !keys) return RX_ERR_ARG;
-    static const uint32_t subj[4] = { RXC_SUBJ_CAND0, RXC_SUBJ_CAND1, RXC_SUBJ_AEGIS,
+    static const uint32_t role[4] = { RXC_SUBJ_CAND0, RXC_SUBJ_CAND1, RXC_SUBJ_AEGIS,
                                       RXC_SUBJ_COMMIT };
+    _Static_assert(RXC_MAX_ACTIVE * 4u <= RX_CALLER_KEYRING_MAX,
+                   "one keyring holds every instance's composition subjects");
     memset(keys, 0, sizeof *keys);
-    for (uint32_t i = 0; i < 4; i++) {
-        if (keys->n >= RX_CALLER_KEYRING_MAX ||
-            rx_world_enroll_caller(w, subj[i], &keys->cred[keys->n]) != RX_CALLER_OK) {
-            for (unsigned b = 0; b < sizeof *keys; b++) ((volatile uint8_t *)keys)[b] = 0;
-            return RX_ERR_IDENTITY;   /* bound already, enrolled, full or no entropy */
+    for (uint32_t inst = 0; inst < RXC_MAX_ACTIVE; inst++)
+        for (uint32_t i = 0; i < 4; i++) {
+            uint32_t s = RXC_SUBJ_OF(inst, role[i]);
+            if (keys->n >= RX_CALLER_KEYRING_MAX ||
+                rx_world_enroll_caller(w, s, &keys->cred[keys->n]) != RX_CALLER_OK) {
+                for (unsigned b = 0; b < sizeof *keys; b++) ((volatile uint8_t *)keys)[b] = 0;
+                return RX_ERR_IDENTITY;   /* bound already, enrolled, full or no entropy */
+            }
+            keys->subject[keys->n++] = s;
         }
-        keys->subject[keys->n++] = subj[i];
-    }
     return RX_OK;
+}
+
+/* Attaches are serialized process-wide, so choosing an instance slot and
+ * claiming it (installing the binder) is one step; runs and closes are not
+ * serialized. */
+static pthread_mutex_t g_attach_mu = PTHREAD_MUTEX_INITIALIZER;
+
+/* Under w->mu: the instance slots taken in `w` by attached compositions
+ * (bit i = instance i), and whether one of them uses `dir`. */
+static uint32_t taken_instances(RxWorld *w, const char *dir, int *same_dir) {
+    uint32_t taken = 0;
+    *same_dir = 0;
+    for (uint32_t i = 0; i < RX_MAX_BINDERS; i++) {
+        if (w->binder[i].check != bind_check || !w->binder[i].ctx) continue;
+        const RxCompose *o = w->binder[i].ctx;
+        if (o->inst < RXC_MAX_ACTIVE) taken |= 1u << o->inst;
+        if (strcmp(o->dir, dir) == 0) *same_dir = 1;
+    }
+    return taken;
+}
+
+/* Under w->mu: table slots the four reactions of `inst` still need (a removed
+ * slot of the same subject and faculty is reused, rx_world_remove_reaction). */
+static uint32_t slots_needed(const RxWorld *w, uint32_t inst) {
+    const uint32_t subj[4] = { RXC_SUBJ_OF(inst, RXC_SUBJ_CAND0), RXC_SUBJ_OF(inst, RXC_SUBJ_CAND1),
+                               RXC_SUBJ_OF(inst, RXC_SUBJ_AEGIS), RXC_SUBJ_OF(inst, RXC_SUBJ_COMMIT) };
+    const uint32_t fac[4] = { RX_FACULTY_OMEGA, RX_FACULTY_OMEGA, RX_FACULTY_AEGIS,
+                              RX_FACULTY_OMEGA };
+    uint32_t need = 0;
+    for (uint32_t k = 0; k < 4; k++) {
+        int found = 0;
+        for (uint32_t i = 0; i < w->n_reactions && !found; i++)
+            found = w->reactions[i].removed && w->reactions[i].desc.subject == subj[k] &&
+                    w->reactions[i].desc.faculty == fac[k];
+        if (!found) need++;
+    }
+    return need;
 }
 
 int rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, const char *dir,
@@ -836,22 +1005,47 @@ int rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, con
     if (!c || !w || !dir || !self || !admin || strlen(dir) >= sizeof c->dir - 32)
         return RX_ERR_ARG;
     /* The World's outside subject must not be a composition subject. */
-    if (w->external_subject >= RXC_SUBJ_EXTERNAL && w->external_subject <= RXC_SUBJ_COMMIT)
+    if (w->external_subject >= RXC_SUBJ_EXTERNAL &&
+        w->external_subject < RXC_SUBJ_OF(RXC_MAX_ACTIVE, RXC_SUBJ_EXTERNAL))
         return RX_ERR_ARG;
-    if (w->bind_check) return RX_ERR_EXISTS;   /* one binder per World (re-checked at set) */
-    int rc = open_home(c, dir, self, session, router, contract, admin);
-    if (rc != RX_OK) return rc;
+    pthread_mutex_lock(&g_attach_mu);
+    /* A free instance slot (RXC_MAX_ACTIVE per World), no composition of this
+     * World already on `dir`, and room for its four reactions, read together
+     * under the World lock. */
+    char d[sizeof c->dir];
+    snprintf(d, sizeof d, "%s", dir);
+    int same_dir;
+    pthread_mutex_lock(&w->mu);
+    uint32_t taken = taken_instances(w, d, &same_dir), inst = RXC_MAX_ACTIVE;
+    for (uint32_t i = 0; i < RXC_MAX_ACTIVE && inst == RXC_MAX_ACTIVE; i++)
+        if (!(taken & (1u << i))) inst = i;
+    int full = inst < RXC_MAX_ACTIVE && w->n_reactions + slots_needed(w, inst) > RX_MAX_REACTIONS;
+    pthread_mutex_unlock(&w->mu);
+    int rc = same_dir || inst == RXC_MAX_ACTIVE ? RX_ERR_EXISTS : full ? RX_ERR_FULL : RX_OK;
+    if (rc == RX_OK) rc = open_home(c, dir, self, session, router, contract, admin);
+    if (rc != RX_OK) {
+        pthread_mutex_unlock(&g_attach_mu);
+        return rc;
+    }
     c->world = w;
     c->owns_world = 0;
     c->keys = keys;
+    set_instance(c, inst);
     rc = build_in_world(c, 0);
     if (rc != RX_OK) {
         leave_world(c);
         c->world = NULL;
         js_space_destroy(&c->js);
         cx_close(&c->cx);
-        return rc;
     }
+    pthread_mutex_unlock(&g_attach_mu);
+    return rc;
+}
+
+int rx_compose_set_remote(RxCompose *c, RxcRemoteRun run, void *ctx) {
+    if (!c || !c->world) return RX_ERR_ARG;
+    c->remote.run = run;
+    c->remote.ctx = run ? ctx : NULL;
     return RX_OK;
 }
 
@@ -915,6 +1109,7 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
     out->old_ref = old;
     uint64_t seq = ++c->seq;
     c->run_input = input;
+    c->run_now = now_us;
     uint64_t sk[RXC_K] = { 0, 0 };
     for (uint32_t k = 0; k < (uint32_t)n && k < RXC_K; k++)
         sk[k] = ((uint64_t)routes[k].skill_version << 32) | routes[k].chosen.skill_id;
@@ -925,7 +1120,9 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
     int64_t crumb = rx_world_publish_external(c->world, c->cap_ext, g, 5);
     if (crumb < 0) return (int)crumb;
     out->goal_crumb = (uint64_t)crumb;
-    int rc = rx_world_wait_quiescent(c->world, 30000);
+    /* Its own World: wait for all of it. Attached: only for its own steps (the
+     * rest of a living World, or another composition, need never be quiet). */
+    int rc = c->owns_world ? rx_world_wait_quiescent(c->world, 30000) : wait_own(c, 30000);
     if (rc != RX_OK) return rc;
 
     /* settle */
@@ -996,9 +1193,8 @@ void rx_compose_close(RxCompose *c) {
         c->has_binder = 0;
         c->n_objs = 0;
     } else {
-        /* Leave the caller's World running: nothing of the composition may
-         * still be in flight when its binder and objects go. */
-        (void)rx_world_wait_quiescent(c->world, 30000);
+        /* Leave the caller's World running; returns once none of the
+         * composition's own steps can run (rx_compose.h). */
         leave_world(c);
     }
     c->world = NULL;

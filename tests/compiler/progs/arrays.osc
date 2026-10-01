@@ -1,0 +1,36 @@
+// entry: arr_main
+// expect-run: arr_main 1 2 3 -> 59
+// alloc, move, borrow, reborrow, index read and write, own/&/&mut params.
+fn consume(a: own [u32; 8]) -> u32 {
+    let mut s: u32 = 0;
+    for i in 0 .. 8 { s = s + a[i]; }
+    return s;
+}
+
+fn scale(a: &mut [u32; 8], k: u32) {
+    for i in 0 .. 8 { a[i] = a[i] * k; }
+}
+
+fn peek(a: &[u32; 8], i: u8) -> u32 { return a[i]; }
+
+fn arr_main(v: u32, k: u32, i: u8) -> u32 {
+    let a: own [u32; 8] = alloc(v);
+    a[3] = 7;
+    scale(&mut a, k);
+    {
+        let r: &mut [u32; 8] = &mut a;
+        r[0] = r[0] + 1;
+        let tmp: own [u32; 8] = alloc(1);
+        tmp[1] = r[1];
+    }
+    let x: u32 = peek(&a, i % 8);
+    let b: own [u32; 8] = a;
+    b[7] = x;
+    let mut y: u32 = 0;
+    {
+        let s: &[u32; 8] = &b;
+        let s2: &[u32; 8] = &s;
+        y = s[2] + peek(&b, 7) + peek(&s2, 1);
+    }
+    return consume(b) + y;
+}

@@ -1,0 +1,6 @@
+// expect: REDEFINED_NAME object=result line=4
+// transition: parameter named result with ensures
+// the reservation holds in a void function too (OSC-2-DESIGN 1.3)
+fn f(result: u8) ensures result == 1 {
+    let y: u8 = result;
+}

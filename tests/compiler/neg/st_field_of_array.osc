@@ -1,0 +1,6 @@
+// expect: TYPE_MISMATCH object=return line=5
+// transition: type mismatch
+fn f() -> u8 {
+    let a: own [u8; 2] = alloc(1);
+    return a.v;
+}

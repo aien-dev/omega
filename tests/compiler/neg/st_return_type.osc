@@ -1,0 +1,6 @@
+// expect: UNSUPPORTED object=A line=4
+// transition: struct return type
+struct A { v: u8 }
+fn f(a: own A) -> own A {
+    return a;
+}

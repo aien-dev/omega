@@ -1,0 +1,24 @@
+// entry: classify grade
+// if / else if / else chains.
+fn classify(x: i32) -> u8 {
+    if x < -1000 {
+        return 0;
+    } else if x < 0 {
+        return 1;
+    } else if x == 0 {
+        return 2;
+    } else if x <= 1000 {
+        return 3;
+    } else {
+        return 4;
+    }
+}
+
+fn grade(score: u8, bonus: bool) -> u8 {
+    let mut s: u16 = score as u16;
+    if bonus { s = s + 10; }
+    let mut g: u8 = 0;
+    if s >= 90 { g = 4; } else if s >= 80 { g = 3; } else if s >= 70 { g = 2; } else { g = 1; }
+    if s > 255 { g = 9; }
+    return g;
+}

@@ -1,0 +1,37 @@
+// entry: scopes_main early
+// inner-scope destruction, moves into inner owners, early returns that
+// release several owners (including inside loops).
+fn sum4(a: &[u16; 4]) -> u16 { return a[0] + a[1] + a[2] + a[3]; }
+
+fn scopes_main(x: u16) -> u16 {
+    let outer: own [u16; 4] = alloc(x);
+    let mut acc: u16 = 0;
+    {
+        let inner: own [u16; 4] = alloc(2);
+        acc = acc + sum4(&inner);
+        {
+            let deeper: own [u16; 4] = inner;
+            deeper[0] = 9;
+            acc = acc + sum4(&deeper);
+        }
+    }
+    for i in 0 .. 3 {
+        let tmp: own [u16; 4] = alloc(i as u16);
+        acc = acc + sum4(&tmp) + sum4(&outer);
+    }
+    return acc;
+}
+
+fn early(x: i32, limit: i32) -> i32 {
+    let a: own [i32; 3] = alloc(x);
+    let mut n: i32 = 0;
+    while n < 50 bound 50 {
+        let b: own [i32; 2] = alloc(n);
+        for j in 0 .. 4 {
+            let c: own [i32; 1] = alloc(j as i32);
+            if n * 4 + c[0] >= limit { return a[0] + b[0] + c[0]; }
+        }
+        n = n + 1;
+    }
+    return -7;
+}

@@ -1,0 +1,48 @@
+// entry: safe_sub abs8 inc use_arr give
+// OSC-2 requires clauses that fail at run time: TRAP REQUIRES at entry of the
+// callee, after which the run ends with no destructors (owners stay live in
+// the pool log, as for every OSC-1 trap). The clause obeys the checked
+// semantics: signed overflow inside it traps OVERFLOW, a dynamic index BOUNDS.
+fn safe_sub(a: u32, b: u32) -> u32 requires a >= b {
+    return a - b;
+}
+
+fn abs8(x: i8) -> i8 requires x != -128 ensures result >= 0 {
+    if x < 0 { return -x; }
+    return x;
+}
+
+// `x + 1` itself overflows for x = i32 max: OVERFLOW, not REQUIRES
+fn inc(x: i32) -> i32 requires x + 1 > x ensures result - 1 == x {
+    return x + 1;
+}
+
+// element reads through a borrow parameter
+fn first_pos(a: &[i32; 4]) -> i32 requires a[0] > 0 ensures result == a[0] {
+    return a[0];
+}
+
+fn use_arr(x: i32) -> i32 {
+    let a: own [i32; 4] = alloc(x);
+    return first_pos(&a);
+}
+
+// element read through an own parameter, dynamic index (BOUNDS inside the clause)
+fn take(a: own [u8; 2], i: u8) -> u8 requires a[i] == 7 {
+    return a[1];
+}
+
+fn give(i: u8) -> u8 {
+    let a: own [u8; 2] = alloc(7);
+    return take(a, i);
+}
+// expect-run: safe_sub 5 7 -> trap=REQUIRES
+// expect-run: safe_sub 9 7 -> 2
+// expect-run: abs8 -128 -> trap=REQUIRES
+// expect-run: abs8 -5 -> 5
+// expect-run: inc 2147483647 -> trap=OVERFLOW
+// expect-run: inc 4 -> 5
+// expect-run: use_arr 0 -> trap=REQUIRES
+// expect-run: use_arr 5 -> 5
+// expect-run: give 1 -> 7
+// expect-run: give 5 -> trap=BOUNDS

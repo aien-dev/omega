@@ -1,0 +1,5 @@
+// expect: READ_ONLY_BORROW object=a line=4
+// transition: write through shared borrow
+fn f(a: &[i64; 4]) {
+    a[0] = 1;
+}

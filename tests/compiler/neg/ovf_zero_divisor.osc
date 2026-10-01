@@ -1,0 +1,6 @@
+// expect: OVERFLOW_UNSAFE object=y line=4
+// literal zero divisor.
+fn f(x: i32) -> i32 {
+    let y: i32 = x / 0;
+    return y;
+}

@@ -1,0 +1,38 @@
+// entry: rb_main
+// reborrows through &mut, shared reborrow of a shared borrow, borrow
+// binding reassignment, &mut parameter reborrowed into another call.
+fn total(a: &[i32; 6]) -> i32 {
+    let mut s: i32 = 0;
+    for i in 0 .. 6 { s = s + a[i]; }
+    return s;
+}
+
+fn bump(a: &mut [i32; 6], k: i32) {
+    for i in 0 .. 6 { a[i] = a[i] + k; }
+}
+
+fn twice(a: &mut [i32; 6], k: i32) -> i32 {
+    bump(&mut a, k);
+    {
+        let m: &mut [i32; 6] = &mut a;
+        bump(&mut m, k);
+        m[5] = 0;
+        {
+            let t: &[i32; 6] = &m;
+            let u: &[i32; 6] = &t;
+            if t[0] > 100 { return total(&u); }
+        }
+    }
+    return total(&a);
+}
+
+fn rb_main(x: i32, k: i16) -> i32 {
+    let a: own [i32; 6] = alloc(x);
+    let b: own [i32; 6] = alloc(1);
+    let s3: i32 = twice(&mut a, k as i32);
+    let mut cur: &[i32; 6] = &a;
+    let s1: i32 = total(&cur);
+    cur = &b;
+    let s2: i32 = total(&cur);
+    return s1 - s2 + s3;
+}

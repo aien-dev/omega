@@ -1,0 +1,16 @@
+// entry: six_main
+// a callee with 6 mixed parameters: own, &, &mut and scalars.
+fn mix6(o: own [u8; 4], s: &[u8; 4], m: &mut [u8; 4], a: u8, b: i64, c: bool) -> i64 {
+    m[0] = o[1] + s[2] + a;
+    let mut r: i64 = (m[0] as i64) + b;
+    if c { r = r - (s[3] as i64); }
+    return r;
+}
+
+fn six_main(a: u8, b: i32, c: bool) -> i64 {
+    let o: own [u8; 4] = alloc(a);
+    let s: own [u8; 4] = alloc(3);
+    let m: own [u8; 4] = alloc(0);
+    let r: i64 = mix6(o, &s, &mut m, a, b as i64, c);
+    return r + (m[0] as i64);
+}

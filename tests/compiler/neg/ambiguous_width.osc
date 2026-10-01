@@ -1,0 +1,6 @@
+// expect: AMBIGUOUS_WIDTH object=y line=4
+// a bare literal as the source of `as` has no width.
+fn f() -> i64 {
+    let y: i64 = 300 as i64;
+    return y;
+}

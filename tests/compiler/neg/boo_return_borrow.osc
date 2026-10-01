@@ -1,0 +1,6 @@
+// expect: BORROW_OUTLIVES_OWNER object=a line=5
+// transition: borrow returned from function
+fn f() -> i64 {
+    let a: own [i64; 4] = alloc(1);
+    return &a;
+}
