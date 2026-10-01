@@ -50,10 +50,10 @@ static void dir_for(char *out, size_t n, const char *name) {
 }
 
 static void reset_c(void) {
-    g_c.fault_point = RXC_FP_NONE;
-    g_c.fault_crash = 0;
-    g_c.fault_k = 0;
-    g_c.test_rogue_candidate = 0;
+    g_c.test.fault_point = RXC_FP_NONE;
+    g_c.test.fault_crash = 0;
+    g_c.test.fault_k = 0;
+    g_c.test.rogue_candidate = 0;
 }
 
 static int ref_eq(JsBranchRef a, JsBranchRef b) { return a.id == b.id && a.gen == b.gen; }
@@ -156,9 +156,9 @@ static void fault_case(int point, int crash, uint32_t k) {
         pid_t pid = fork();
         if (pid == 0) {
             reset_c();
-            g_c.fault_point = point;
-            g_c.fault_crash = 1;
-            g_c.fault_k = k;
+            g_c.test.fault_point = point;
+            g_c.test.fault_crash = 1;
+            g_c.test.fault_k = k;
             if (fx_open(&g_fx, &g_c, d, 1) != RX_OK) _exit(2);
             RxcResult o;
             fx_run(&g_fx, &g_c, 5, &o);
@@ -170,15 +170,15 @@ static void fault_case(int point, int crash, uint32_t k) {
               what, WIFEXITED(st) ? WEXITSTATUS(st) : -1);
     } else {
         reset_c();
-        g_c.fault_point = point;
-        g_c.fault_k = k;
+        g_c.test.fault_point = point;
+        g_c.test.fault_k = k;
         CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "%s: open", what);
         RxcResult o;
         CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK, "%s: run", what);
         int want = point == RXC_FP_RECLAIM ? RXC_OUT_NOT_DURABLE
                  : point == RXC_FP_CORTEX  ? RXC_OUT_RECORD_FAILED : RXC_OUT_NOT_COMMITTED;
         CHECK(o.outcome == want, "%s: outcome %d want %d", what, o.outcome, want);
-        CHECK(g_c.fault_hit, "%s: fault fired", what);
+        CHECK(g_c.test.fault_hit, "%s: fault fired", what);
         fx_close(&g_fx, &g_c);
     }
     reset_c();
@@ -245,7 +245,7 @@ static void t_authority(void) {
     char d[200];
     dir_for(d, sizeof d, "rogue");
     reset_c();
-    g_c.test_rogue_candidate = 1;
+    g_c.test.rogue_candidate = 1;
     CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "open");
     RxcResult o;
     CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_NOT_COMMITTED,
@@ -465,9 +465,9 @@ static void t_pending(void) {
     dir_for(d, sizeof d, "pend_nowin");
     reset_c();
     fx_a_bad = fx_b_bad = 1;
-    g_c.fault_point = RXC_FP_CORTEX;
+    g_c.test.fault_point = RXC_FP_CORTEX;
     CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "a: open");
-    CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_RECORD_FAILED && g_c.fault_hit,
+    CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_RECORD_FAILED && g_c.test.fault_hit,
           "a: no-winner record failed (%d)", o.outcome);
     fx_a_bad = fx_b_bad = 0;
     uint64_t G1 = first_goal();
@@ -493,8 +493,8 @@ static void t_pending(void) {
     if (pid == 0) {
         reset_c();
         fx_a_bad = fx_b_bad = 1;
-        g_c.fault_point = RXC_FP_CORTEX;
-        g_c.fault_crash = 1;
+        g_c.test.fault_point = RXC_FP_CORTEX;
+        g_c.test.fault_crash = 1;
         if (fx_open(&g_fx, &g_c, d, 1) != RX_OK) _exit(2);
         fx_run(&g_fx, &g_c, 5, &o);
         _exit(3);
@@ -521,7 +521,7 @@ static void t_pending(void) {
     /* (c) winner, record fails in process; the next run completes it first. */
     dir_for(d, sizeof d, "pend_win");
     reset_c();
-    g_c.fault_point = RXC_FP_CORTEX;
+    g_c.test.fault_point = RXC_FP_CORTEX;
     CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "c: open");
     CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_RECORD_FAILED,
           "c: record failed (%d)", o.outcome);
@@ -543,7 +543,7 @@ static void t_pending(void) {
     /* (d) NOT_DURABLE: no further run until reopened. */
     dir_for(d, sizeof d, "pend_notdurable");
     reset_c();
-    g_c.fault_point = RXC_FP_RECLAIM;
+    g_c.test.fault_point = RXC_FP_RECLAIM;
     CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "d: open");
     CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_NOT_DURABLE,
           "d: not durable (%d)", o.outcome);
@@ -559,7 +559,7 @@ static void t_pending(void) {
      * newer commit (pending bypassed): reopen completes the older one too. */
     dir_for(d, sizeof d, "pend_older");
     reset_c();
-    g_c.fault_point = RXC_FP_CORTEX;
+    g_c.test.fault_point = RXC_FP_CORTEX;
     CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "e: open");
     CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_RECORD_FAILED,
           "e: record failed (%d)", o.outcome);

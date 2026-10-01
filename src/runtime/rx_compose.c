@@ -49,15 +49,26 @@ static uint64_t ref_pack(JsBranchRef r) { return js_branch_ref_pack(r); }
 static JsBranchRef ref_unpack(uint64_t v) { return js_branch_ref_unpack(v); }
 static int ref_eq(JsBranchRef a, JsBranchRef b) { return a.id == b.id && a.gen == b.gen; }
 
-/* One fault point. Fires once; candidate-side points fire only for fault_k.
- * Returns 1 when the caller must fail in process. */
+/* One fault point (test builds only, -DRXC_TEST_HOOKS). Fires once;
+ * candidate-side points fire only for fault_k. Returns 1 when the caller must
+ * fail in process. Without RXC_TEST_HOOKS it never fires. */
+#ifdef RXC_TEST_HOOKS
 static int fault(RxCompose *c, int point, uint32_t k) {
-    if (c->fault_point != point) return 0;
-    if ((point == RXC_FP_BEFORE_FORK || point == RXC_FP_CANDIDATE) && k != c->fault_k) return 0;
-    if (__atomic_exchange_n(&c->fault_hit, 1, __ATOMIC_ACQ_REL)) return 0;
-    if (c->fault_crash) _exit(RXC_CRASH_EXIT);
+    if (c->test.fault_point != point) return 0;
+    if ((point == RXC_FP_BEFORE_FORK || point == RXC_FP_CANDIDATE) && k != c->test.fault_k)
+        return 0;
+    if (__atomic_exchange_n(&c->test.fault_hit, 1, __ATOMIC_ACQ_REL)) return 0;
+    if (c->test.fault_crash) _exit(RXC_CRASH_EXIT);
     return 1;
 }
+#define RXC_ROGUE(c) ((c)->test.rogue_candidate)
+#else
+static int fault(RxCompose *c, int point, uint32_t k) {
+    (void)c; (void)point; (void)k;
+    return 0;
+}
+#define RXC_ROGUE(c) 0
+#endif
 
 static const RxSnapshotDep *dep_of(const RxCtx *x, RxObjRef o) {
     for (uint32_t i = 0; i < x->n_in; i++)
@@ -121,7 +132,7 @@ static int candidate_fn(RxCtx *x) {
                 if (fault(c, RXC_FP_CANDIDATE, k)) return -1;
                 ref = ref_pack(next);
                 result = r;
-                if (k == 0 && c->test_rogue_candidate)
+                if (k == 0 && RXC_ROGUE(c))
                     out_put(x, c->state, RXC_S_REF, ref);   /* refused: not in its write set */
             }
         }
@@ -201,13 +212,15 @@ static int bind_fn(void *ctx, RxObjRef obj, uint32_t field, uint64_t old_value,
     (void)obj; (void)field; (void)old_value; (void)subject;
     RxCompose *c = ctx;
     JsBranchRef nw = ref_unpack(new_value);
-    if (c->fault_point == RXC_FP_SEAL &&
-        !__atomic_exchange_n(&c->fault_hit, 1, __ATOMIC_ACQ_REL)) {
-        if (!c->fault_crash) return RX_ERR_BINDING;   /* seal refused */
+#ifdef RXC_TEST_HOOKS
+    if (c->test.fault_point == RXC_FP_SEAL &&
+        !__atomic_exchange_n(&c->test.fault_hit, 1, __ATOMIC_ACQ_REL)) {
+        if (!c->test.fault_crash) return RX_ERR_BINDING;   /* seal refused */
         js_branch_seal(&c->js, nw);
         js_branch_set_owner(&c->js, nw, 0);
-        _exit(RXC_CRASH_EXIT);                        /* crash right after the seal */
+        _exit(RXC_CRASH_EXIT);                             /* crash right after the seal */
     }
+#endif
     if (js_branch_seal(&c->js, nw) != JS_OK) return RX_ERR_BINDING;
     js_branch_set_owner(&c->js, nw, 0);
     return RX_OK;
@@ -225,15 +238,16 @@ static void bind_abort(void *ctx, RxObjRef obj, uint32_t field, uint64_t value,
 
 static int cx_put(RxCompose *c, CxHeader *h, const uint64_t *p, uint32_t n, uint64_t *id) {
     if (c->attached) {
-        h->t = rx_cortex_next_t(&c->w);
-        return rx_cortex_append(&c->w, h, p, n, id) == RX_OK ? 0 : -1;
+        h->t = rx_cortex_next_t_in(c->world, &c->cx);
+        return rx_cortex_append_in(c->world, &c->cx, h, p, n, id) == RX_OK ? 0 : -1;
     }
     h->t = c->cx.n + 1;
     return cx_append(&c->cx, h, p, n, id) == CX_OK ? 0 : -1;
 }
 
 static int cx_prom(RxCompose *c, uint64_t cand, uint64_t ev, uint64_t *id) {
-    if (c->attached) return rx_cortex_promote(&c->w, cand, ev, id) == RX_OK ? 0 : -1;
+    if (c->attached)
+        return rx_cortex_promote_in(c->world, &c->cx, cand, ev, id) == RX_OK ? 0 : -1;
     return cx_promote(&c->cx, 0, cand, ev, c->cx.n + 1, id) == CX_OK ? 0 : -1;
 }
 
@@ -563,10 +577,38 @@ static int mint(RxCompose *c, uint32_t subject, uint64_t resource, uint32_t righ
     return RX_OK;
 }
 
-static int build_world(RxCompose *c, AienosCapView *view, uint32_t n_workers) {
-    int rc = rx_world_init_native(&c->w, view, n_workers, 1u << 14);
-    if (rc != RX_OK) return rc;
-    c->w.external_subject = RXC_SUBJ_EXTERNAL;
+static const uint64_t RXC_RES[5] = { RXC_RES_GOAL, RXC_RES_CAND0, RXC_RES_CAND1, RXC_RES_VERDICT,
+                                     RXC_RES_STATE };
+#define RXC_N_CAPS (1u + RXC_K * 3u + 4u + 2u)
+
+/* The capabilities minted at open/attach, in mint order. */
+static RxCapRef *cap_at(RxCompose *c, uint32_t i) {
+    if (i == 0) return &c->cap_ext;
+    i -= 1;
+    if (i < RXC_K * 3u) return &c->cap_cand[i / 3u][i % 3u];
+    i -= RXC_K * 3u;
+    if (i < 4u) return &c->cap_verify[i];
+    return &c->cap_commit[i - 4u];
+}
+
+static int mint_next(RxCompose *c, uint32_t subject, uint64_t resource, uint32_t rights) {
+    int rc = mint(c, subject, resource, rights, cap_at(c, c->n_minted));
+    if (rc == RX_OK) c->n_minted++;
+    return rc;
+}
+
+static int add_reaction(RxCompose *c, const RxReactionDesc *d, uint32_t *id) {
+    return c->keys ? rx_world_add_reaction_keyed(c->world, c->keys, d, id)
+                   : rx_world_add_reaction(c->world, d, id);
+}
+
+/* Objects, authority, reactions, binder and Cortex link of the composition
+ * in c->world. `own`: the World was just built for it (open): its object ids
+ * must be 0..4 and its whole-World recorder is the composition journal, as
+ * before attach existed. Otherwise (attach) ids are whatever the World hands
+ * out and a scoped Cortex link maps them to the composition subjects. */
+static int build_in_world(RxCompose *c, int own) {
+    int rc;
     uint64_t z[RX_MAX_FIELDS] = { 0 }, st[RX_MAX_FIELDS] = { 0 };
     st[RXC_S_REF] = ref_pack(c->recovered);
     if (c->recovered_record) {
@@ -576,14 +618,13 @@ static int build_world(RxCompose *c, AienosCapView *view, uint32_t n_workers) {
             st[RXC_S_GOAL] = p[CX_WREC_FIELD0 + RXC_S_GOAL];
         }
     }
-    static const uint64_t res[5] = { RXC_RES_GOAL, RXC_RES_CAND0, RXC_RES_CAND1, RXC_RES_VERDICT,
-                                     RXC_RES_STATE };
     RxObjRef o[5];
     for (uint32_t i = 0; i < 5; i++) {
-        rc = rx_world_create(&c->w, 1, RX_PERSIST_RESIDENT, res[i], i == RXC_SLOT_STATE ? st : z,
-                             &o[i]);
+        rc = rx_world_create(c->world, 1, RX_PERSIST_RESIDENT, RXC_RES[i],
+                             i == RXC_SLOT_STATE ? st : z, &o[i]);
         if (rc != RX_OK) return rc;
-        if (o[i].id != i) return RX_ERR_BAD_DESC;   /* slot layout is part of the record */
+        c->obj[c->n_objs++] = o[i];
+        if (own && o[i].id != i) return RX_ERR_BAD_DESC;   /* slot layout is part of the record */
     }
     c->goal = o[RXC_SLOT_GOAL];
     c->cand[0] = o[RXC_SLOT_CAND0];
@@ -591,21 +632,22 @@ static int build_world(RxCompose *c, AienosCapView *view, uint32_t n_workers) {
     c->verdict = o[RXC_SLOT_VERDICT];
     c->state = o[RXC_SLOT_STATE];
 
-    /* Each step holds only the rights it needs. */
-    if ((rc = mint(c, RXC_SUBJ_EXTERNAL, RXC_RES_GOAL, RX_RIGHT_WRITE, &c->cap_ext))) return rc;
+    /* Each step holds only the rights it needs. Outside input comes in under
+     * the World's own external subject, on the goal resource only. */
+    if ((rc = mint_next(c, c->world->external_subject, RXC_RES_GOAL, RX_RIGHT_WRITE))) return rc;
     for (uint32_t k = 0; k < RXC_K; k++) {
         uint32_t subj = k ? RXC_SUBJ_CAND1 : RXC_SUBJ_CAND0;
-        if ((rc = mint(c, subj, RXC_RES_GOAL, RX_RIGHT_READ, &c->cap_cand[k][0])) ||
-            (rc = mint(c, subj, RXC_RES_STATE, RX_RIGHT_READ, &c->cap_cand[k][1])) ||
-            (rc = mint(c, subj, res[RXC_SLOT_CAND0 + k], RX_RIGHT_WRITE, &c->cap_cand[k][2])))
+        if ((rc = mint_next(c, subj, RXC_RES_GOAL, RX_RIGHT_READ)) ||
+            (rc = mint_next(c, subj, RXC_RES_STATE, RX_RIGHT_READ)) ||
+            (rc = mint_next(c, subj, RXC_RES[RXC_SLOT_CAND0 + k], RX_RIGHT_WRITE)))
             return rc;
     }
-    if ((rc = mint(c, RXC_SUBJ_AEGIS, RXC_RES_CAND0, RX_RIGHT_READ, &c->cap_verify[0])) ||
-        (rc = mint(c, RXC_SUBJ_AEGIS, RXC_RES_CAND1, RX_RIGHT_READ, &c->cap_verify[1])) ||
-        (rc = mint(c, RXC_SUBJ_AEGIS, RXC_RES_GOAL, RX_RIGHT_READ, &c->cap_verify[2])) ||
-        (rc = mint(c, RXC_SUBJ_AEGIS, RXC_RES_VERDICT, RX_RIGHT_WRITE, &c->cap_verify[3])) ||
-        (rc = mint(c, RXC_SUBJ_COMMIT, RXC_RES_VERDICT, RX_RIGHT_READ, &c->cap_commit[0])) ||
-        (rc = mint(c, RXC_SUBJ_COMMIT, RXC_RES_STATE, RX_RIGHT_WRITE, &c->cap_commit[1])))
+    if ((rc = mint_next(c, RXC_SUBJ_AEGIS, RXC_RES_CAND0, RX_RIGHT_READ)) ||
+        (rc = mint_next(c, RXC_SUBJ_AEGIS, RXC_RES_CAND1, RX_RIGHT_READ)) ||
+        (rc = mint_next(c, RXC_SUBJ_AEGIS, RXC_RES_GOAL, RX_RIGHT_READ)) ||
+        (rc = mint_next(c, RXC_SUBJ_AEGIS, RXC_RES_VERDICT, RX_RIGHT_WRITE)) ||
+        (rc = mint_next(c, RXC_SUBJ_COMMIT, RXC_RES_VERDICT, RX_RIGHT_READ)) ||
+        (rc = mint_next(c, RXC_SUBJ_COMMIT, RXC_RES_STATE, RX_RIGHT_WRITE)))
         return rc;
 
     for (uint32_t k = 0; k < RXC_K; k++) {
@@ -620,11 +662,12 @@ static int build_world(RxCompose *c, AienosCapView *view, uint32_t n_workers) {
         d.writes[d.n_writes++] = (RxDep){ c->cand[k], RX_ALL_FIELDS };
         d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][0], RXC_RES_GOAL, RX_RIGHT_READ };
         d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][1], RXC_RES_STATE, RX_RIGHT_READ };
-        d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][2], res[RXC_SLOT_CAND0 + k], RX_RIGHT_WRITE };
+        d.caps[d.n_caps++] = (RxCapNeed){ c->cap_cand[k][2], RXC_RES[RXC_SLOT_CAND0 + k],
+                                          RX_RIGHT_WRITE };
         c->cand_user[k] = (struct RxcCandUser){ c, k };
         d.fn = candidate_fn;
         d.user = &c->cand_user[k];
-        if ((rc = rx_world_add_reaction(&c->w, &d, &c->rx_cand[k])) != RX_OK) return rc;
+        if ((rc = add_reaction(c, &d, &c->rx_cand[k])) != RX_OK) return rc;
     }
     RxReactionDesc v;
     memset(&v, 0, sizeof v);
@@ -642,7 +685,7 @@ static int build_world(RxCompose *c, AienosCapView *view, uint32_t n_workers) {
     v.caps[v.n_caps++] = (RxCapNeed){ c->cap_verify[3], RXC_RES_VERDICT, RX_RIGHT_WRITE };
     v.fn = verify_fn;
     v.user = c;
-    if ((rc = rx_world_add_reaction(&c->w, &v, &c->rx_verify)) != RX_OK) return rc;
+    if ((rc = add_reaction(c, &v, &c->rx_verify)) != RX_OK) return rc;
 
     RxReactionDesc m;
     memset(&m, 0, sizeof m);
@@ -656,27 +699,44 @@ static int build_world(RxCompose *c, AienosCapView *view, uint32_t n_workers) {
     m.caps[m.n_caps++] = (RxCapNeed){ c->cap_commit[1], RXC_RES_STATE, RX_RIGHT_WRITE };
     m.fn = commit_fn;
     m.user = c;
-    if ((rc = rx_world_add_reaction(&c->w, &m, &c->rx_commit)) != RX_OK) return rc;
+    if ((rc = add_reaction(c, &m, &c->rx_commit)) != RX_OK) return rc;
 
-    if ((rc = rx_world_set_binder(&c->w, bind_check, bind_fn, bind_abort, c)) != RX_OK) return rc;
-    if ((rc = rx_world_bind_field(&c->w, c->state, RXC_S_REF)) != RX_OK) return rc;
-    if ((rc = rx_cortex_attach(&c->w, &c->cx, c->session)) != RX_OK) return rc;
+    if ((rc = rx_world_set_binder(c->world, bind_check, bind_fn, bind_abort, c)) != RX_OK)
+        return rc;
+    c->has_binder = 1;
+    if ((rc = rx_world_bind_field(c->world, c->state, RXC_S_REF)) != RX_OK) return rc;
+    if (own) {
+        rc = rx_cortex_attach(c->world, &c->cx, c->session);
+    } else {
+        uint64_t subj[5];
+        for (uint32_t i = 0; i < 5; i++) subj[i] = RXC_CX_SUBJECT(i);
+        rc = rx_cortex_attach_scoped(c->world, &c->cx, c->session, o, subj, 5);
+    }
+    if (rc != RX_OK) return rc;
     c->attached = 1;
     return RX_OK;
 }
 
+static int build_world(RxCompose *c, AienosCapView *view, uint32_t n_workers) {
+    int rc = rx_world_init_native(&c->w, view, n_workers, 1u << 14);
+    if (rc != RX_OK) return rc;
+    c->world = &c->w;
+    c->owns_world = 1;
+    c->w.external_subject = RXC_SUBJ_EXTERNAL;
+    return build_in_world(c, 1);
+}
+
 /* ---- public API ------------------------------------------------------------ */
 
-int rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, uint64_t session,
-                    const SrRouter *router, RxcContract contract, AienosCapAdmin *admin,
-                    AienosCapView *view, uint32_t n_workers) {
-    if (!c || !dir || !self || !admin || !view || strlen(dir) >= sizeof c->dir - 32)
-        return RX_ERR_ARG;
-    /* Keep only the caller's test settings across the reset. */
-    int fp = c->fault_point, fc = c->fault_crash, rogue = c->test_rogue_candidate;
-    uint32_t fk = c->fault_k;
+/* Shared by open and attach: reset (keeping the caller's test settings,
+ * but not whether a fault already fired), machine identity, Cortex journal,
+ * durable J-Space, OLD-or-NEW recovery. */
+static int open_home(RxCompose *c, const char *dir, const AienMachineId *self, uint64_t session,
+                     const SrRouter *router, RxcContract contract, AienosCapAdmin *admin) {
+    struct RxcTestHooks hooks = c->test;
+    hooks.fault_hit = 0;
     memset(c, 0, sizeof *c);
-    c->fault_point = fp; c->fault_crash = fc; c->fault_k = fk; c->test_rogue_candidate = rogue;
+    c->test = hooks;
     snprintf(c->dir, sizeof c->dir, "%s", dir);
     c->self = *self;
     c->session = session;
@@ -711,9 +771,83 @@ int rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, ui
         return RX_ERR_REPLAY;
     }
     int rc = recover(c);
-    if (rc == RX_OK) rc = build_world(c, view, n_workers ? n_workers : 1);
+    if (rc != RX_OK) {
+        js_space_destroy(&c->js);
+        cx_close(&c->cx);
+    }
+    return rc;
+}
+
+/* Undo what attach put into the caller's World; the World keeps running. */
+static void leave_world(RxCompose *c) {
+    if (c->attached) rx_cortex_detach_store(c->world, &c->cx);
+    c->attached = 0;
+    if (c->has_binder) rx_world_clear_binder(c->world, c);
+    c->has_binder = 0;
+    for (uint32_t i = 0; i < c->n_objs; i++) rx_world_retire(c->world, c->obj[i]);
+    c->n_objs = 0;
+    AienosCapRef office;
+    if (aienos_cap_office(c->admin, &office) == 0)
+        for (uint32_t i = 0; i < c->n_minted; i++) {
+            RxCapRef *r = cap_at(c, i);
+            (void)aienos_cap_revoke(c->admin, office, (AienosCapRef){ r->cap_id, r->generation });
+        }
+    c->n_minted = 0;
+}
+
+int rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, uint64_t session,
+                    const SrRouter *router, RxcContract contract, AienosCapAdmin *admin,
+                    AienosCapView *view, uint32_t n_workers) {
+    if (!c || !dir || !self || !admin || !view || strlen(dir) >= sizeof c->dir - 32)
+        return RX_ERR_ARG;
+    int rc = open_home(c, dir, self, session, router, contract, admin);
+    if (rc != RX_OK) return rc;
+    c->world = &c->w;
+    rc = build_world(c, view, n_workers ? n_workers : 1);
     if (rc != RX_OK) {
         if (c->w.n_workers) rx_world_destroy(&c->w);
+        c->world = NULL;
+        js_space_destroy(&c->js);
+        cx_close(&c->cx);
+        return rc;
+    }
+    return RX_OK;
+}
+
+int rx_compose_enroll_callers(RxWorld *w, RxCallerKeyring *keys) {
+    if (!w || !keys) return RX_ERR_ARG;
+    static const uint32_t subj[4] = { RXC_SUBJ_CAND0, RXC_SUBJ_CAND1, RXC_SUBJ_AEGIS,
+                                      RXC_SUBJ_COMMIT };
+    memset(keys, 0, sizeof *keys);
+    for (uint32_t i = 0; i < 4; i++) {
+        if (keys->n >= RX_CALLER_KEYRING_MAX ||
+            rx_world_enroll_caller(w, subj[i], &keys->cred[keys->n]) != RX_CALLER_OK) {
+            for (unsigned b = 0; b < sizeof *keys; b++) ((volatile uint8_t *)keys)[b] = 0;
+            return RX_ERR_IDENTITY;   /* bound already, enrolled, full or no entropy */
+        }
+        keys->subject[keys->n++] = subj[i];
+    }
+    return RX_OK;
+}
+
+int rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, const char *dir,
+                      const AienMachineId *self, uint64_t session, const SrRouter *router,
+                      RxcContract contract, AienosCapAdmin *admin) {
+    if (!c || !w || !dir || !self || !admin || strlen(dir) >= sizeof c->dir - 32)
+        return RX_ERR_ARG;
+    /* The World's outside subject must not be a composition subject. */
+    if (w->external_subject >= RXC_SUBJ_EXTERNAL && w->external_subject <= RXC_SUBJ_COMMIT)
+        return RX_ERR_ARG;
+    if (w->bind_check) return RX_ERR_EXISTS;   /* one binder per World (re-checked at set) */
+    int rc = open_home(c, dir, self, session, router, contract, admin);
+    if (rc != RX_OK) return rc;
+    c->world = w;
+    c->owns_world = 0;
+    c->keys = keys;
+    rc = build_in_world(c, 0);
+    if (rc != RX_OK) {
+        leave_world(c);
+        c->world = NULL;
         js_space_destroy(&c->js);
         cx_close(&c->cx);
         return rc;
@@ -723,8 +857,13 @@ int rx_compose_open(RxCompose *c, const char *dir, const AienMachineId *self, ui
 
 JsBranchRef rx_compose_state(RxCompose *c) {
     RxObject o;
-    if (rx_world_read(&c->w, c->state, &o) != RX_OK) return (JsBranchRef){ UINT32_MAX, 0 };
+    if (rx_world_read(c->world, c->state, &o) != RX_OK) return (JsBranchRef){ UINT32_MAX, 0 };
     return ref_unpack(o.field[RXC_S_REF]);
+}
+
+/* Cortex id of the record of the publication that last wrote obj.field. */
+static uint64_t record_of(RxCompose *c, RxObjRef obj, uint32_t field) {
+    return rx_cortex_record_in(c->world, &c->cx, rx_world_explain(c->world, obj, field));
 }
 
 /* Remember an incomplete record so the next run completes it first; without
@@ -783,16 +922,17 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
         { c->goal, RXC_G_INPUT, input }, { c->goal, RXC_G_OP, req->need.semantic_operation },
         { c->goal, RXC_G_SKILL0, sk[0] }, { c->goal, RXC_G_SKILL1, sk[1] },
         { c->goal, RXC_G_SEQ, seq } };
-    int64_t crumb = rx_world_publish_external(&c->w, c->cap_ext, g, 5);
+    int64_t crumb = rx_world_publish_external(c->world, c->cap_ext, g, 5);
     if (crumb < 0) return (int)crumb;
     out->goal_crumb = (uint64_t)crumb;
-    int rc = rx_world_wait_quiescent(&c->w, 30000);
+    int rc = rx_world_wait_quiescent(c->world, 30000);
     if (rc != RX_OK) return rc;
 
     /* settle */
     RxObject so, vo, co[RXC_K];
-    if (rx_world_read(&c->w, c->state, &so) != RX_OK || rx_world_read(&c->w, c->verdict, &vo) ||
-        rx_world_read(&c->w, c->cand[0], &co[0]) || rx_world_read(&c->w, c->cand[1], &co[1]))
+    if (rx_world_read(c->world, c->state, &so) != RX_OK ||
+        rx_world_read(c->world, c->verdict, &vo) ||
+        rx_world_read(c->world, c->cand[0], &co[0]) || rx_world_read(c->world, c->cand[1], &co[1]))
         return RX_ERR_NOT_FOUND;
     uint8_t cdig[RXC_K][32];
     memset(cdig, 0, sizeof cdig);
@@ -817,8 +957,8 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
             return RX_OK;
         }
         js_branch_content_digest(&c->js, nw.id, out->winner_digest);
-        uint64_t S = rx_cortex_record_of(&c->w, rx_world_explain(&c->w, c->state, RXC_S_REF));
-        uint64_t V = rx_cortex_record_of(&c->w, rx_world_explain(&c->w, c->verdict, RXC_V_GOAL));
+        uint64_t S = record_of(c, c->state, RXC_S_REF);
+        uint64_t V = record_of(c, c->verdict, RXC_V_GOAL);
         if (!S || !V || compose_records(c, S, V, (const uint8_t (*)[32])cdig, 1, out) < 0) {
             set_pending(c, S, V, 1, old, 0, (const uint8_t (*)[32])cdig);
             out->outcome = RXC_OUT_RECORD_FAILED;
@@ -835,7 +975,7 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
     }
     out->new_ref = old;
     if (vo.field[RXC_V_GOAL] == seq && vo.field[RXC_V_WINNER] == RXC_NONE) {
-        uint64_t V = rx_cortex_record_of(&c->w, rx_world_explain(&c->w, c->verdict, RXC_V_GOAL));
+        uint64_t V = record_of(c, c->verdict, RXC_V_GOAL);
         if (!V || compose_records(c, 0, V, (const uint8_t (*)[32])cdig, 1, out) < 0) {
             set_pending(c, 0, V, 0, old, 1, (const uint8_t (*)[32])cdig);
             out->outcome = RXC_OUT_RECORD_FAILED;
@@ -849,9 +989,19 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
 }
 
 void rx_compose_close(RxCompose *c) {
-    if (!c) return;
-    rx_world_destroy(&c->w);     /* detaches the recorder */
-    c->attached = 0;
+    if (!c || !c->world) return;
+    if (c->owns_world) {
+        rx_world_destroy(&c->w);     /* detaches the recorder */
+        c->attached = 0;
+        c->has_binder = 0;
+        c->n_objs = 0;
+    } else {
+        /* Leave the caller's World running: nothing of the composition may
+         * still be in flight when its binder and objects go. */
+        (void)rx_world_wait_quiescent(c->world, 30000);
+        leave_world(c);
+    }
+    c->world = NULL;
     js_space_destroy(&c->js);    /* never commits: durable state is what settle made durable */
     cx_close(&c->cx);
 }

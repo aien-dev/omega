@@ -38,6 +38,7 @@ typedef struct {
     RxLiving living;
     RxLivingPromoter promoter;
     RxLivingKeyrings keys;    /* R16 C6: runtime-issued caller credentials */
+    RxCallerKeyring compose_keys;  /* the composition's subjects (rx_compose_enroll_callers) */
     RxGenStore *gen;
     RxGpuSeat *seat;
     pthread_t acceptor;
@@ -217,8 +218,13 @@ static int start(Rig *r, int mode) {
     r->w.external_subject = EXTERNAL;
     /* R16 C6: every production subject gets a runtime-issued credential,
      * then the world refuses any registration that does not present one. */
-    if (rx_living_enroll_callers(&r->w, &r->keys) != RX_OK ||
-        rx_world_bind_callers(&r->w) != RX_OK) return -1;
+    if (rx_living_enroll_callers(&r->w, &r->keys) != RX_OK) return -1;
+#ifndef R13_SILICON
+    /* The host composition phase runs inside this World (rx_compose_attach),
+     * so its subjects are enrolled here too, before enrollment closes. */
+    if (rx_compose_enroll_callers(&r->w, &r->compose_keys) != RX_OK) return -1;
+#endif
+    if (rx_world_bind_callers(&r->w) != RX_OK) return -1;
     if (scratch_dir(r->generation_dir, sizeof r->generation_dir, "r13-living") != 0) return -1;
     if (scratch_dir(r->home_dir, sizeof r->home_dir, "r13-home") != 0 || living_identity(r) != 0)
         return -1;
@@ -1127,10 +1133,16 @@ static void stop(Rig *r) {
  * generation) composition capability writes nothing, and the R9 generation,
  * the in-force record and the promotion right are untouched.
  *
- * Integration limit (stated in the receipt): rx_compose_open builds and owns
- * its own RxWorld (rx_world_init_native in build_world), so the composition
- * runs beside the living World on the same authority and machine identity,
- * not inside it. */
+ * The composition runs inside the living World (rx_compose_attach on r->w):
+ * its five objects are created in that World, its reactions are registered
+ * with the credentials enrolled in start() before rx_world_bind_callers, its
+ * Cortex store is a scoped link on the World's recorder (only its own
+ * objects' crumbs reach it), the World keeps its external subject (the
+ * composition's goal right is minted to it) and close leaves the World up.
+ * Limits (stated in the receipt): the World has no reaction unregister, so a
+ * closed composition's reactions stay registered but inert (their objects are
+ * retired and their rights revoked); the composition subjects 200..204 are
+ * fixed, so one composition per World. */
 #ifndef R13_SILICON
 typedef struct {
     int ran, ok;
@@ -1140,6 +1152,7 @@ typedef struct {
     int recall_verified, replay_ok, identity_refused;
     int stale_commit_refused, stale_external_refused, rogue_refused;
     int living_refuses_subject, living_refuses_cap, compose_refuses_living_cap;
+    int in_living_world, keyed_foreign_refused, world_alive_after_close;
     int subject_rc, stale_commit_outcome, stale_goal_rc;   /* the refusals as returned */
     int generation_untouched, inforce_untouched, promote_holders_ok;
     char machine[65];
@@ -1150,6 +1163,13 @@ static RxCompose g_compose;              /* large: static */
 static Fx g_cfx;
 
 static int intruder_fn(RxCtx *x) { (void)x; return 0; }
+
+/* Attach this machine's composition to the living World. */
+static int compose_attach(Rig *r, Fx *f, RxCompose *c, const char *dir) {
+    memset(c, 0, sizeof *c);
+    return rx_compose_attach(c, &r->w, &r->compose_keys, dir, &f->self, FX_SESSION, &f->router,
+                             fx_contract, r->admin);
+}
 
 static int composition_ok_route(const RxcResult *o) {
     return o->n_alternatives == 2 && o->route[0].chosen.skill_id == FX_SKILL_A &&
@@ -1184,10 +1204,12 @@ static int composition_phase(Rig *r) {
     /* Capability Graph: two digest-pinned Skills registered for this machine. */
     if (fx_init_for(&g_cfx, &r->machine) != 0) CFAIL("capability graph");
     fx = 1;
-    memset(c, 0, sizeof *c);
-    rc = fx_open_on(&g_cfx, c, dir, 2, r->admin, r->view);
-    if (rc != RX_OK) CFAIL("open (%d)", rc);
+    rc = compose_attach(r, &g_cfx, c, dir);
+    if (rc != RX_OK) CFAIL("attach (%d)", rc);
     is_open = 1;
+    g->in_living_world = c->world == &r->w && !c->owns_world;
+    if (!g->in_living_world) CFAIL("composition is not in the living World");
+    if (r->w.external_subject != EXTERNAL) CFAIL("attach changed the external subject");
     if (memcmp(c->self.id, r->machine.id, 32) != 0) CFAIL("composition machine is not the living one");
 
     RxcResult o;
@@ -1212,7 +1234,9 @@ static int composition_phase(Rig *r) {
     JsBranchRef first = o.new_ref;
     uint64_t winner_claim = o.cx_candidate[0];
 
-    /* The living World's boundary holds against the composition. */
+    /* The boundary holds inside the shared World: a composition subject cannot
+     * be registered without the composition's credential (unkeyed, or keyed
+     * with the living system's keyrings). */
     RxReactionDesc d;
     memset(&d, 0, sizeof d);
     d.name = "compose.commit.intruder";
@@ -1228,27 +1252,32 @@ static int composition_phase(Rig *r) {
     g->subject_rc = rc;
     g->living_refuses_subject = rc == RX_ERR_IDENTITY || rc == RX_ERR_AUTHORITY;
     if (!g->living_refuses_subject) CFAIL("living World registered a composition subject (%d)", rc);
+    int krc = rx_world_add_reaction_keyed(&r->w, &r->keys.living, &d, &rid);
+    int krc2 = rx_world_add_reaction_keyed(&r->w, &r->keys.omega, &d, &rid);
+    g->keyed_foreign_refused = krc != RX_OK && krc2 != RX_OK;
+    if (!g->keyed_foreign_refused)
+        CFAIL("composition subject registered with living credentials (%d %d)", krc, krc2);
     RxMutation mi = {r->intent, 0, 1};
     g->living_refuses_cap = rx_world_publish_external(&r->w, c->cap_ext, &mi, 1) < 0;
     if (!g->living_refuses_cap) CFAIL("living World took a composition capability");
     RxMutation mg = {c->goal, RXC_G_INPUT, 9};
-    g->compose_refuses_living_cap = rx_world_publish_external(&c->w, r->ext_goal, &mg, 1) < 0;
-    if (!g->compose_refuses_living_cap) CFAIL("composition World took a living capability");
+    g->compose_refuses_living_cap = rx_world_publish_external(c->world, r->ext_goal, &mg, 1) < 0;
+    if (!g->compose_refuses_living_cap) CFAIL("composition goal took a living capability");
 
     /* A candidate that also proposes a state write is refused; OLD kept. */
-    c->test_rogue_candidate = 1;
+    c->test.rogue_candidate = 1;
     rc = fx_run(&g_cfx, c, 6, &o);
-    c->test_rogue_candidate = 0;
+    c->test.rogue_candidate = 0;
     now = rx_compose_state(c);
     g->rogue_refused = rc == RX_OK && o.outcome == RXC_OUT_NOT_COMMITTED &&
                        now.id == first.id && now.gen == first.gen;
     if (!g->rogue_refused) CFAIL("rogue candidate (rc %d outcome %d)", rc, o.outcome);
 
-    /* Replay: close, reopen on the same machine and authority. */
-    fx_close(&g_cfx, c);
+    /* Replay: close (the living World stays up), attach again on the same
+     * machine, authority and World; recovery names OLD or NEW. */
+    rx_compose_close(c);
     is_open = 0;
-    memset(c, 0, sizeof *c);
-    if ((rc = fx_open_on(&g_cfx, c, dir, 2, r->admin, r->view)) != RX_OK) CFAIL("reopen (%d)", rc);
+    if ((rc = compose_attach(r, &g_cfx, c, dir)) != RX_OK) CFAIL("reattach (%d)", rc);
     is_open = 1;
     now = rx_compose_state(c);
     if (now.id != first.id || now.gen != first.gen) CFAIL("reopen does not name the winner");
@@ -1287,17 +1316,20 @@ static int composition_phase(Rig *r) {
     g->cx_records = c->cx.n;
     g->cx_promotions = fx_count(&c->cx, CX_K_PROMOTION, UINT64_MAX);
     if (g->cx_promotions != 2) CFAIL("promotions %llu, want 2", U(g->cx_promotions));
-    fx_close(&g_cfx, c);
+    rx_compose_close(c);
     is_open = 0;
+    /* Close left the living World up: its objects still read. */
+    g->world_alive_after_close = field(r, r->living.o.inforce, 0) != UINT64_MAX &&
+                                 field(r, r->intent, 0) != UINT64_MAX;
+    if (!g->world_alive_after_close) CFAIL("living World objects gone after close");
 
     /* Another machine cannot open this machine's composition. */
     AienMachineId other = fx_mid(2);
     Fx foreign;
     if (fx_init_for(&foreign, &other) != 0) CFAIL("foreign graph");
-    memset(c, 0, sizeof *c);
-    rc = fx_open_on(&foreign, c, dir, 1, r->admin, r->view);
+    rc = compose_attach(r, &foreign, c, dir);
     g->identity_refused = rc == RX_ERR_IDENTITY;
-    if (rc == RX_OK) fx_close(&foreign, c);
+    if (rc == RX_OK) rx_compose_close(c);
     fx_free(&foreign);
     if (!g->identity_refused) CFAIL("foreign machine opened the composition (%d)", rc);
 
@@ -1327,18 +1359,19 @@ static int composition_phase(Rig *r) {
         }
     g->ok = 1;
 out:
-    if (is_open) fx_close(&g_cfx, c);
+    if (is_open) rx_compose_close(c);
     if (fx) fx_free(&g_cfx);
-    printf("R13 composition (host, own World beside the living one): %s; machine %.16s..., "
+    printf("R13 composition (host, inside the living World): %s; machine %.16s..., "
            "goal 5 -> %llu (winner %u of %u, reclaimed %u), replay -> %llu, recall %s, "
            "Cortex %llu records %llu promotions; refusals: living subject %d, living cap %d, "
-           "cross cap %d, rogue %d, stale commit %d, stale goal %d, foreign machine %d; "
+           "cross cap %d, keyed living credential %d, rogue %d, stale commit %d, stale goal %d, foreign machine %d; "
            "living generation %d in force %d promotion right %d; codes: subject rc %d, "
            "revoked commit outcome %d, revoked goal rc %d\n",
            g->ok ? "PASS" : "FAIL", g->machine, U(g->result1), g->winner, g->alternatives,
            g->reclaimed, U(g->result2), g->recall_verified ? "verified" : "missing",
            U(g->cx_records), U(g->cx_promotions), g->living_refuses_subject,
-           g->living_refuses_cap, g->compose_refuses_living_cap, g->rogue_refused,
+           g->living_refuses_cap, g->compose_refuses_living_cap, g->keyed_foreign_refused,
+           g->rogue_refused,
            g->stale_commit_refused, g->stale_external_refused, g->identity_refused,
            g->generation_untouched, g->inforce_untouched, g->promote_holders_ok, g->subject_rc,
            g->stale_commit_outcome, g->stale_goal_rc);
@@ -1370,20 +1403,24 @@ static void composition_json(char *out, size_t n) {
     if (c->ran) {
         snprintf(out, n,
             "  \"composition_host_phase\": {\"result\": \"%s\", \"machine_id\": \"%s\", "
-            "\"world\": \"own RxWorld beside the living World (rx_compose_open owns it)\", "
+            "\"world\": \"the living RxWorld (rx_compose_attach)\", \"in_living_world\": %s, "
+            "\"world_alive_after_close\": %s, "
             "\"authority\": \"living AIENOS admin\", \"alternatives\": %u, \"winner\": %u, "
             "\"goal_5_result\": %llu, \"after_replay_goal_7_result\": %llu, "
             "\"winner_digest\": \"%s\", \"cortex_records\": %llu, \"promotions\": %llu, "
             "\"recall_verified\": %s, \"refused\": {\"composition_subject_in_living_world\": %s, "
+            "\"composition_subject_with_living_credential\": %s, "
             "\"composition_cap_in_living_world\": %s, \"living_cap_in_composition\": %s, "
             "\"rogue_candidate_state_write\": %s, \"revoked_commit_right\": %s, "
             "\"revoked_goal_right\": %s, \"foreign_machine\": %s}, "
             "\"living_generation_untouched\": %s, \"in_force_untouched\": %s, "
             "\"single_promotion_holder\": %s},\n",
-            c->ok ? "PASS" : "FAIL", c->machine, c->alternatives, c->winner, U(c->result1),
+            c->ok ? "PASS" : "FAIL", c->machine, c->in_living_world ? "true" : "false",
+            c->world_alive_after_close ? "true" : "false", c->alternatives, c->winner, U(c->result1),
             U(c->result2), c->winner_digest, U(c->cx_records), U(c->cx_promotions),
             c->recall_verified ? "true" : "false",
-            c->living_refuses_subject ? "true" : "false", c->living_refuses_cap ? "true" : "false",
+            c->living_refuses_subject ? "true" : "false", c->keyed_foreign_refused ? "true" : "false",
+            c->living_refuses_cap ? "true" : "false",
             c->compose_refuses_living_cap ? "true" : "false", c->rogue_refused ? "true" : "false",
             c->stale_commit_refused ? "true" : "false", c->stale_external_refused ? "true" : "false",
             c->identity_refused ? "true" : "false", c->generation_untouched ? "true" : "false",
@@ -1417,7 +1454,7 @@ static void receipt(int tests_ok) {
     struct utsname host;
     memset(&host, 0, sizeof host);
     uname(&host);
-    char comp[1024];
+    char comp[2048];
     composition_json(comp, sizeof comp);
     FILE *f = fopen(path, "w");
     if (!f) return;

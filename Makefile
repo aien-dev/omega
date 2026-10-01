@@ -466,7 +466,7 @@ RX_R13_HOST = $(OUT_DIR)/rx_r13_living_host
 RX_R13_SILICON = $(OUT_DIR)/rx_r13_living_silicon
 
 $(RX_R13_HOST): $(RX_R13_SRCS) src/runtime/rx_living.h $(RX_COMPOSE_LIVING_CHECKS) $(AIENOS_CAP_LIB) | $(OUT_DIR)
-	$(CC) $(CFLAGS) -pthread -o $@ $(RX_R13_SRCS) $(AIENOS_CAP_LIB) -lm
+	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_R13_SRCS) $(AIENOS_CAP_LIB) -lm
 
 $(RX_R13_SILICON): $(RX_R13_SRCS) src/runtime/rx_resident_gpu.c \
 	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c \
@@ -1348,11 +1348,14 @@ RX_COMPOSE_DEPS = $(RX_COMPOSE_SRCS) $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ)
 	src/runtime/rx_world.h src/runtime/rx_jspace.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB)
 RX_COMPOSE_LINK = $(OUT_DIR)/rx_cortex.o $(RX_SKILLROUTE_OBJ) $(RX_CAPQ_OBJ) $(RX_GRAPH_OBJ) \
 	$(AIENOS_CAP_LIB) -lm
+# RXC_TEST_HOOKS: the composition fault points and rogue-candidate hook
+# (rx_compose.h) exist only in the unit test and the R13 host test; the gate
+# and every other build compile them out.
 RX_COMPOSE_TEST = $(OUT_DIR)/rx_compose_test
 RX_COMPOSE_GATE = $(OUT_DIR)/rx_composition_gate
 
 $(RX_COMPOSE_TEST): $(RX_COMPOSE_DEPS) tests/runtime/rx_compose_test.c | $(OUT_DIR)
-	$(CC) $(CFLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_test.c \
+	$(CC) $(CFLAGS) -DRXC_TEST_HOOKS -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_compose_test.c \
 		$(RX_COMPOSE_LINK)
 
 $(RX_COMPOSE_GATE): $(RX_COMPOSE_DEPS) tests/runtime/rx_composition_gate.c | $(OUT_DIR)
