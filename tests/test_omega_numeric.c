@@ -980,13 +980,14 @@ int main(int argc, char **argv) {
         }
         int caught = 0, cases = 0;
         /* 32..43: E1 scalar ops (E1 WP-C) */
-        static const OmegaNumericOp E1_NEG_OP[18] = {
+        static const OmegaNumericOp E1_NEG_OP[22] = {
             OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FSETP_EQ_SEL, OMEGA_NOP_F2I_FLOOR,
             OMEGA_NOP_F32_TO_F16, OMEGA_NOP_F2I_FLOOR, OMEGA_NOP_I2FP_U32, OMEGA_NOP_FFMA_V,
             OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V,
             OMEGA_NOP_I2FP_U32, OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V,
-            OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FFMA_V };
-        for (int m = 0; m < 50; m++) {
+            OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FFMA_V, OMEGA_NOP_I2FP_U32, OMEGA_NOP_FFMA_V,
+            OMEGA_NOP_FFMA_V, OMEGA_NOP_FSETP_LT_SEL };
+        for (int m = 0; m < 54; m++) {
             OmegaNumericOp op = OMEGA_NOP_LDS_STS;
             if (m >= 18 && m != 27 && m != 31) op = OMEGA_NOP_REDUCE_SUM;
             if (m == 17) op = OMEGA_NOP_SHFL_DOWN;
@@ -1056,6 +1057,10 @@ int main(int argc, char **argv) {
             case 47: what = "FFMA_V c load sets no barrier"; p[2].w[3] = 0x000fe200u; want = "c[i] is not LDG"; break;
             case 48: what = "early store through address R8 before the select"; p[1].w[0] = 0x08007986u; p[1].w[1] = 9u; p[1].w[2] = 0x0c101904u; p[1].w[3] = 0x000fe200u; want = "store at 1"; break;
             case 49: what = "FFMA_V c load stalls 1 cycle before its waiter (chip FAIL 2026-10-01)"; p[2].w[3] = 0x000e2200u; want = "with stall 1"; break;
+            case 50: what = "I2FP stall cleared: baseline STG would read R9 early (Codex review)"; p[0].w[3] &= ~0x1e00u; want = "stalls 0 cycles"; break;
+            case 51: what = "FFMA_V LDG descriptor/offset word changed (Codex review)"; p[2].w[1] = 0x00000005u; want = "c[i] is not LDG"; break;
+            case 52: what = "FFMA_V IMAD.WIDE upper w2 bits changed (Codex review)"; p[1].w[2] = 0x078e010au; want = "c address is not IMAD"; break;
+            case 53: what = "FSETP stalls 1 before the FSEL that reads P0"; p[0].w[3] = 0x010fc200u; want = "stalls 1 cycles"; break;
             }
             char err[256];
             int rc = omega_numeric_check_patch(check_op, p, n, q, err, sizeof(err));

@@ -1048,6 +1048,20 @@ static int bad(char *err, size_t err_len, const char *fmt, ...) {
 #define OPC_LDG   0x7981u
 #define OPC_FFMA  0x7223u
 
+/* Opcodes (predicate nibble ignored) whose result is not scoreboarded: an ALU result read after a
+ * fixed delay. Stores, barriers, EXIT and the variable-latency units (LDG, LDS, LDC, SHFL, MUFU,
+ * F2I, F2F) are not producers in this sense; the scoreboard rules cover the latter. */
+static inline bool fixed_latency_producer(uint32_t o) {
+    switch (o & 0x0fffu) {
+    case 0x986u: case 0x988u: case 0xb1du: case 0x94du:            /* STG STS BAR EXIT */
+    case 0x981u: case 0x984u: case 0xb82u: case 0xf89u:            /* LDG LDS LDC SHFL */
+    case 0x308u: case 0x305u: case 0x304u:                         /* MUFU F2I F2F */
+        return false;
+    default:
+        return true;
+    }
+}
+
 /* FSETP compare code per E1 select op (nvdisasm 13.0.88 -b SM121). */
 static int e1_fsetp_code(OmegaNumericOp op) {
     switch (op) {
@@ -1103,6 +1117,10 @@ int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *p,
          * setter does not see the barrier (chip, 2026-10-01: LDG stall 1 then FFMA read the stale R11;
          * SHFL stall 2 then FADD is chip-proven in REDUCE_SUM) */
         if (CTRL_WBAR(p[t].w[3]) <= 5u && CTRL_STALL(p[t].w[3]) < 2u) return bad(err, err_len, "%s: instruction %d sets SB%u with stall %u; the waiter needs a stall of at least 2", name, t, CTRL_WBAR(p[t].w[3]), CTRL_STALL(p[t].w[3])); /* CHECK:scoreboard_set_stall */
+        /* a fixed-latency result has no scoreboard: its own stall is the only thing keeping the next
+         * instruction (or the baseline STG) from reading it early. Every chip-proven fixed-latency
+         * patch instruction stalls at least 5 (ptxas 13.0.88 sm_121 uses 5 before a dependent STG). */
+        if (CTRL_WBAR(p[t].w[3]) > 5u && fixed_latency_producer(o) && CTRL_STALL(p[t].w[3]) < 5u) return bad(err, err_len, "%s: fixed-latency instruction %d stalls %u cycles; its consumer needs at least 5", name, t, CTRL_STALL(p[t].w[3])); /* CHECK:fixed_latency_stall */
         if (o == OPC_STS) {
             if ((p[t].w[0] & 0x00ffffffu) != 0x00007988u || (p[t].w[1] & ~0xffu) != 0 || p[t].w[2] != 0x080008ffu) return bad(err, err_len, "%s: STS at %d is not the encoded 32-bit STS [Rx+URZ] form", name, t); /* CHECK:sts_form */
             sts = t; n_sts++;
@@ -1180,8 +1198,8 @@ int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *p,
     if (op == OMEGA_NOP_FFMA_V) {
         if (n != 6 || INSN_OP(p[0]) != OPC_LDC || INSN_OP(p[1]) != OPC_IMADW || INSN_OP(p[2]) != OPC_LDG || INSN_OP(p[3]) != OPC_FFMA) return bad(err, err_len, "%s: expected LDC.64, IMAD.WIDE.U32, LDG.E, FFMA, STG, EXIT", name); /* CHECK:ffmav_shape */
         if (p[0].w[0] != 0xff0a7b82u || p[0].w[1] != 0x0000e800u || p[0].w[2] != 0x00000a00u || CTRL_WBAR(p[0].w[3]) > 5u) return bad(err, err_len, "%s: c pointer is not LDC.64 R10 (free pair R10:R11) of c[0x0][0x3a0] (kernel argument words 8..9) with a write barrier", name); /* CHECK:ffmav_cptr */
-        if (INSN_SRCA(p[1]) != 9u || p[1].w[1] != 4u || (p[1].w[2] & 0xffu) != INSN_DST(p[0]) || INSN_DST(p[1]) != INSN_DST(p[0])) return bad(err, err_len, "%s: c address is not IMAD.WIDE.U32 of the index R9 by 4 onto the c pointer", name); /* CHECK:ffmav_addr */
-        if (INSN_SRCA(p[2]) != INSN_DST(p[1]) || INSN_DST(p[2]) != 11u || p[2].w[2] != 0x0c1e1900u || CTRL_WBAR(p[2].w[3]) > 5u) return bad(err, err_len, "%s: c[i] is not LDG.E (32-bit, desc[UR4]) from the computed address into the free R11, with a write barrier", name); /* CHECK:ffmav_load */
+        if (INSN_SRCA(p[1]) != 9u || p[1].w[1] != 4u || p[1].w[2] != 0x078e000au || INSN_DST(p[1]) != INSN_DST(p[0])) return bad(err, err_len, "%s: c address is not IMAD.WIDE.U32 of the index R9 by 4 onto the c pointer", name); /* CHECK:ffmav_addr */
+        if (INSN_SRCA(p[2]) != INSN_DST(p[1]) || INSN_DST(p[2]) != 11u || p[2].w[1] != 4u || p[2].w[2] != 0x0c1e1900u || CTRL_WBAR(p[2].w[3]) > 5u) return bad(err, err_len, "%s: c[i] is not LDG.E (32-bit, desc[UR4]) from the computed address into the free R11, with a write barrier", name); /* CHECK:ffmav_load */
         if (INSN_DST(p[3]) != 9u || INSN_SRCA(p[3]) != 2u || INSN_SRCB(p[3]) != 5u || (p[3].w[2] & 0xffu) != INSN_DST(p[2]) || (p[3].w[1] & ~0xffu) != 0 || (p[3].w[2] & ~0xffu) != 0) return bad(err, err_len, "%s: FFMA is not R9 = R2 * R5 + c[i] (no negate, no modifiers)", name); /* CHECK:ffmav_fma_regs */
     }
     /* A multi-instruction patch stores R9 itself and ends; a single one uses the baseline STG. */
