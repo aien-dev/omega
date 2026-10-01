@@ -16,7 +16,11 @@ ifndef REPLAY_MK
 REPLAY_MK := 1
 CC ?= gcc
 OUT_DIR ?= build
-.PHONY: test-replay replay-asan replay-purity replay-tools
+PHYSICS_DIR ?= ../physics
+# nvrm.h (via omega_evidence.h) lives in the physics repo; empty = world replay NOT_RUN
+REPLAY_NVRM_H := $(wildcard $(PHYSICS_DIR)/nvrm/nvrm.h)
+REPLAY_NVRM_INC = -I$(PHYSICS_DIR)/nvrm
+.PHONY: replay-run test-replay replay-asan replay-purity replay-tools
 REPLAY_DIR = $(OUT_DIR)/replay
 # TRN1 shared corpus (aien-protocols specs/execution-transcript/vectors); empty = NOT_RUN
 TRN1_VECTORS ?=
@@ -40,7 +44,7 @@ $(REPLAY_DIR)/rxlog_mutate$(1): $(REPLAY_MUTATE_SRCS) $(REPLAY_HDRS)
 	$(CC) $(REPLAY_CFLAGS) $(2) -o $$@ $(REPLAY_MUTATE_SRCS)
 $(REPLAY_DIR)/rx_world_replay$(1): $(REPLAY_WORLD_SRCS) $(REPLAY_HDRS)
 	@mkdir -p $(REPLAY_DIR)
-	$(CC) $(REPLAY_CFLAGS) $(2) -pthread -o $$@ $(REPLAY_WORLD_SRCS)
+	$(CC) $(REPLAY_CFLAGS) $(2) -pthread $(REPLAY_NVRM_INC) -o $$@ $(REPLAY_WORLD_SRCS)
 $(REPLAY_DIR)/m22_dispatch_run$(1): $(REPLAY_M22_SRCS) $(REPLAY_HDRS)
 	@mkdir -p $(REPLAY_DIR)
 	$(CC) $(REPLAY_CFLAGS) -ffp-contract=off $(2) -o $$@ $(REPLAY_M22_SRCS) -lm
@@ -58,7 +62,14 @@ replay-purity:
 	if [ -n "$$bad" ]; then echo "replay-purity: FAIL, verifier includes:"; echo "$$bad"; exit 1; fi; \
 	echo "replay-purity: verifier depends only on libc, sha256, rxlog and trn1"
 
-test-replay: replay-purity $(REPLAY_BINS)
+test-replay: replay-purity
+ifeq ($(REPLAY_NVRM_H),)
+	@echo "test-replay: NOT_RUN (nvrm.h not found under PHYSICS_DIR=$(PHYSICS_DIR); set PHYSICS_DIR to a physics checkout)"
+else
+	$(MAKE) -f mk/replay.mk PHYSICS_DIR=$(PHYSICS_DIR) OUT_DIR=$(OUT_DIR) replay-run
+endif
+
+replay-run: $(REPLAY_BINS)
 	REPLAY_BIN=$(REPLAY_DIR) REPLAY_SUFFIX= TRN1_VECTORS=$(TRN1_VECTORS) sh tests/replay/run_replay_suite.sh $(REPLAY_DIR)/run
 
 replay-asan: replay-purity $(REPLAY_BINS:%=%_asan)
