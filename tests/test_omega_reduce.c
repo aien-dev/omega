@@ -11,6 +11,7 @@
  */
 #include "omega_numeric.h"
 #include "omega_numeric_reduce.h"
+#include "omega_blackwell_qmd.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -407,80 +408,289 @@ static void test_gb10_presubmit(void) {
     int ok = 1;
     char err[320], d[512] = "";
     float v[64] = { 0 }, o = 0;
-    if (omega_reduce_gb10_check(OMEGA_RED_MAX, v, 64, &o, err, sizeof(err)) != OMEGA_NUMERIC_ERR_NOT_ENCODED) ok = 0;
-    if (omega_reduce_gb10_check(OMEGA_RED_MIN, v, 64, &o, err, sizeof(err)) != OMEGA_NUMERIC_ERR_NOT_ENCODED) ok = 0;
-    if (omega_reduce_gb10_check(OMEGA_RED_MEAN, v, 64, &o, err, sizeof(err)) != OMEGA_NUMERIC_ERR_NOT_ENCODED) ok = 0;
     if (omega_reduce_gb10_check((OmegaReduceOp)7, v, 64, &o, err, sizeof(err)) != OMEGA_NUMERIC_ERR_BAD_ARGS) ok = 0;
-    if (omega_reduce_gb10_check(OMEGA_RED_SUM, NULL, 64, &o, err, sizeof(err)) != OMEGA_NUMERIC_ERR_BAD_ARGS) ok = 0;
-    if (omega_reduce_gb10_check(OMEGA_RED_SUM, v, 64, NULL, err, sizeof(err)) != OMEGA_NUMERIC_ERR_BAD_ARGS) ok = 0;
-    if (omega_reduce_gb10_check(OMEGA_RED_SUM, v, OMEGA_REDUCE_GB10_MAX_N + 1, &o, err, sizeof(err)) != OMEGA_NUMERIC_ERR_OPERANDS) ok = 0;
-    if (!ok) snprintf(d, sizeof(d), "a refusal is missing");
-    for (size_t k = 0; k < NLIST_N; k++)
-        if (omega_reduce_gb10_check(OMEGA_RED_SUM, v, NLIST[k], &o, err, sizeof(err)) != OMEGA_NUMERIC_OK) {
-            ok = 0; snprintf(d, sizeof(d), "n=%zu refused: %s", NLIST[k], err);
-        }
+    for (int op = 0; op < OMEGA_RED_COUNT; op++) {
+        if (omega_reduce_gb10_check((OmegaReduceOp)op, NULL, 64, &o, err, sizeof(err)) != OMEGA_NUMERIC_ERR_BAD_ARGS) ok = 0;
+        if (omega_reduce_gb10_check((OmegaReduceOp)op, v, 64, NULL, err, sizeof(err)) != OMEGA_NUMERIC_ERR_BAD_ARGS) ok = 0;
+        if (omega_reduce_gb10_check((OmegaReduceOp)op, v, OMEGA_REDUCE_GB10_MAX_N + 1, &o, err, sizeof(err)) != OMEGA_NUMERIC_ERR_OPERANDS) ok = 0;
+    }
+    if (omega_reduce_gb10_check(OMEGA_RED_MEAN, v, (size_t)OMEGA_REDUCE_MEAN_MAX_N + 1, &o, err, sizeof(err)) != OMEGA_NUMERIC_ERR_OPERANDS) ok = 0;
+    if (omega_reduce_gb10_check(OMEGA_RED_MAX, v, (size_t)OMEGA_REDUCE_MEAN_MAX_N + 1, &o, err, sizeof(err)) != OMEGA_NUMERIC_OK) ok = 0;
+    if (!ok) snprintf(d, sizeof(d), "a refusal or acceptance is wrong");
+    for (int op = 0; op < OMEGA_RED_COUNT; op++)
+        for (size_t k = 0; k < NLIST_N; k++)
+            if (omega_reduce_gb10_check((OmegaReduceOp)op, v, NLIST[k], &o, err, sizeof(err)) != OMEGA_NUMERIC_OK) {
+                ok = 0; snprintf(d, sizeof(d), "%s n=%zu refused: %s", omega_reduce_op_name((OmegaReduceOp)op), NLIST[k], err);
+            }
     verdict("RED_GB10_PRESUBMIT_CHECKS", ok, d);
 }
+
+/* Crafted special-value vectors (fill, x[0] = s0, x[i1] = s1) with hand-written
+ * expected bits per op; checked on both CPU tiers (RED_CRAFTED_TABLE) and on chip. */
+struct crafted { size_t n; uint32_t fill, s0, s1; size_t i1; uint32_t want[4]; };
+static const struct crafted CRAFTED[] = {
+            /*                                                     SUM          MAX          MIN          MEAN */
+            { 33, 0x80000000u, 0x80000000u, 0x80000000u, 1,      { 0x80000000u, 0x80000000u, 0x80000000u, 0x80000000u } }, /* all -0          */
+            { 65537, 0x80000000u, 0x80000000u, 0x80000000u, 1,   { 0x80000000u, 0x80000000u, 0x80000000u, 0x80000000u } }, /* all -0, 4 levels */
+            { 1025, 0x80000000u, 0x80000000u, 0x00000000u, 1024, { 0x00000000u, 0x00000000u, 0x80000000u, 0x00000000u } }, /* one +0 in -0    */
+            { 1025, 0x00000000u, 0x00000000u, 0x80000000u, 1024, { 0x00000000u, 0x00000000u, 0x80000000u, 0x00000000u } }, /* one -0 in +0    */
+            { 40, 0x7f7fffffu, 0x7f7fffffu, 0x7f7fffffu, 1,      { 0x7f800000u, 0x7f7fffffu, 0x7f7fffffu, 0x7f800000u } }, /* overflow        */
+            { 40, 0x3f800000u, 0x7f800000u, 0xff800000u, 38,     { 0x7fc00000u, 0x7f800000u, 0xff800000u, 0x7fc00000u } }, /* inf and -inf    */
+            { 40, 0x3f800000u, 0xff800000u, 0x3f800000u, 38,     { 0xff800000u, 0x3f800000u, 0xff800000u, 0xff800000u } }, /* -inf            */
+            { 100, 0x00000001u, 0x00000001u, 0x00000001u, 1,     { 0x00000064u, 0x00000001u, 0x00000001u, 0x00000001u } }, /* subnormal sum   */
+            { 100, 0x00000001u, 0x00000001u, 0x80000002u, 50,    { 0x00000061u, 0x00000001u, 0x80000002u, 0x00000001u } }, /* subnormal signs */
+            { 33, 0x7fc00000u, 0x7fc00000u, 0x7fc00000u, 1,      { 0x7fc00000u, 0x7fc00000u, 0x7fc00000u, 0x7fc00000u } }, /* all NaN         */
+            { 1025, 0x7fc00000u, 0x7fc00000u, 0x40a00000u, 1000, { 0x7fc00000u, 0x40a00000u, 0x40a00000u, 0x7fc00000u } }, /* one 5.0 in NaN  */
+            { 33, 0x7fa00001u, 0x7fa00001u, 0xc0400000u, 17,     { 0x7fc00000u, 0xc0400000u, 0xc0400000u, 0x7fc00000u } }, /* one -3 in sNaN  */
+            { 65, 0xffc00123u, 0xffc00123u, 0xff800000u, 64,     { 0x7fc00000u, 0xff800000u, 0xff800000u, 0x7fc00000u } }, /* -inf in -NaN    */
+            { 1024, 0x3f800000u, 0x7f7fffffu, 0xff7fffffu, 1023, { 0x00000000u, 0x7f7fffffu, 0xff7fffffu, 0x00000000u } }, /* +-max cancel    */
+};
+#define CRAFTED_N (sizeof(CRAFTED) / sizeof(CRAFTED[0]))
+
+static void test_crafted_table(void) {
+    static float v[65537];
+    char d[512] = "";
+    size_t bad = 0;
+    for (int op = 0; op < OMEGA_RED_COUNT; op++)
+        for (size_t k = 0; k < CRAFTED_N; k++) {
+            for (size_t i = 0; i < CRAFTED[k].n; i++) v[i] = fb(CRAFTED[k].fill);
+            v[0] = fb(CRAFTED[k].s0);
+            v[CRAFTED[k].i1] = fb(CRAFTED[k].s1);
+            if (!expect_bits((OmegaReduceOp)op, v, CRAFTED[k].n, CRAFTED[k].want[op], d, sizeof(d))) bad++;
+        }
+    char det[700];
+    snprintf(det, sizeof(det), "%zu vectors x 4 ops, hand-written bits on reference and CPU tiers, bad=%zu %s", CRAFTED_N, bad, d);
+    verdict("RED_CRAFTED_TABLE", bad == 0, det);
+}
+
+/* ---- MAX/MIN warp patch: host model of the decoded words and mutations ---- */
+
+/* Runs a patch on 32 lanes from its decoded words: SHFL.DOWN by the delta in
+ * the word (clamp: a lane past 31 reads its own value), FMNMX by the
+ * predicate bit of the word (PT = min, !PT = max), register numbers from the
+ * words. Returns lane 0 of the register the STG stores. */
+static float model_patch_tile(const OmegaNumericPatchInsn *p, int n, const float tile[32]) {
+    float r[32][16];
+    for (int i = 0; i < 32; i++) for (int k = 0; k < 16; k++) r[i][k] = 0;
+    for (int i = 0; i < 32; i++) r[i][2] = tile[i];
+    for (int t = 0; t < n; t++) {
+        uint32_t o = p[t].w[0] & 0xffffu, dst = (p[t].w[0] >> 16) & 0xfu, sa = (p[t].w[0] >> 24) & 0xfu, sb = p[t].w[1] & 0xfu;
+        if (o == 0x7f89u) {
+            uint32_t dl = (p[t].w[1] >> 21) & 0x1fu;
+            float nv[32];
+            for (uint32_t i = 0; i < 32; i++) nv[i] = r[(i + dl) < 32 ? i + dl : i][sa];
+            for (int i = 0; i < 32; i++) r[i][dst] = nv[i];
+        } else if (o == 0x7209u) {
+            int mx = ((p[t].w[2] >> 26) & 1u) != 0; /* !PT */
+            for (int i = 0; i < 32; i++) r[i][dst] = mx ? omega_ref_fmax(r[i][sa], r[i][sb]) : omega_ref_fmin(r[i][sa], r[i][sb]);
+        } else if (o == 0x7986u) {
+            return r[0][p[t].w[1] & 0xfu];
+        }
+    }
+    return fb(0xdeadbeefu);
+}
+
+/* The host level loop with a given patch model and pad, as the chip runs it. */
+static float model_levels(const OmegaNumericPatchInsn *p, int np, uint32_t pad, const float *x, size_t n, float *buf) {
+    memcpy(buf, x, n * sizeof(float));
+    size_t len = n;
+    do {
+        size_t padded = (len + 31) & ~(size_t)31;
+        for (size_t i = len; i < padded; i++) buf[i] = fb(pad);
+        for (size_t j = 0; j < padded / 32; j++) buf[j] = model_patch_tile(p, np, buf + 32 * j);
+        len = padded / 32;
+    } while (len > 1);
+    return buf[0];
+}
+
+static void test_gb10_minmax_patch(void) {
+    int ok = 1;
+    char d[640] = "", err[320];
+    uint32_t qmd1[OMEGA_BW_QMD_WORDS];
+    OmegaBlackwellQmdConfig cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.num_elements = 64;
+    omega_numeric_launch_shape(64, &cfg.threads_per_block, &cfg.grid_width);
+    if (omega_blackwell_build_qmd1(qmd1, &cfg) != 0) { verdict("RED_GB10_MINMAX_PATCH", 0, "qmd"); return; }
+    size_t mutants = 0, caught = 0, model_cases = 0, model_bad = 0;
+    float *x = malloc(40000 * sizeof(float)), *buf = malloc(40000 * sizeof(float));
+    for (int op = OMEGA_RED_MAX; op <= OMEGA_RED_MIN; op++) {
+        OmegaReduceOp rop = (OmegaReduceOp)op;
+        OmegaNumericPatchInsn p[OMEGA_NUMERIC_PATCH_MAX], m[OMEGA_NUMERIC_PATCH_MAX];
+        int np = omega_reduce_gb10_minmax_patch(rop, p);
+        if (np != 12 || omega_reduce_gb10_check_minmax_patch(rop, p, np, qmd1, err, sizeof(err)) != OMEGA_NUMERIC_OK) {
+            ok = 0; snprintf(d, sizeof(d), "%s patch refused: %s", omega_reduce_op_name(rop), err);
+        }
+        /* each mutation of the order, the combine or the schedule is refused */
+        for (int k = 0; k < 14; k++) {
+            memcpy(m, p, sizeof(p));
+            switch (k) {
+            case 0: for (int s = 0; s < 5; s++) m[2 * s].w[1] = p[2 * (4 - s)].w[1]; break; /* deltas 1,2,4,8,16 */
+            case 1: m[0].w[1] = p[2].w[1]; m[2].w[1] = p[0].w[1]; break;                   /* 8,16,4,2,1        */
+            case 2: m[4].w[1] = (p[4].w[1] & ~(0x1fu << 21)) | (3u << 21); break;          /* delta 3           */
+            case 3: m[3].w[2] ^= 0x04000000u; break;                                       /* min <-> max       */
+            case 4: m[1].w[0] = (p[1].w[0] & 0x00ffffffu) | (9u << 24); m[1].w[1] = 2u; break; /* operands swapped */
+            case 5: m[9].w[0] = (p[9].w[0] & 0xff00ffffu) | (2u << 16); break;            /* last dst R2       */
+            case 6: m[5].w[3] &= ~(0x3fu << 20); break;                                    /* no wait on SHFL   */
+            case 7: m[6].w[1] = (p[6].w[1] & ~(0x1fu << 8)) | (0x0fu << 8); break;         /* clamp 0x0f        */
+            case 8: m[7].w[3] = (p[7].w[3] & ~(0xfu << 9)) | (2u << 9); break;             /* stall 2           */
+            case 9: m[1].w[1] |= 0x100u; break;                                            /* modifier bit      */
+            case 11: case 12: {                         /* SHFL into R2 (running value) or R6 (store address), */
+                uint32_t r = k == 11 ? 2u : 6u;         /* with its FMNMX reading the same register             */
+                m[2].w[0] = (p[2].w[0] & 0xff00ffffu) | (r << 16);
+                m[3].w[1] = (p[3].w[1] & ~0xffu) | r;
+                break; }
+            case 13: m[0].w[3] &= ~(1u << 24); break;                                      /* first SHFL no SB4 wait */
+            default: memcpy(&m[2], &p[4], 2 * sizeof(p[0])); memcpy(&m[4], &p[2], 2 * sizeof(p[0])); break; /* pairs swapped */
+            }
+            mutants++;
+            if (omega_reduce_gb10_check_minmax_patch(rop, m, np, qmd1, err, sizeof(err)) != OMEGA_NUMERIC_OK) caught++;
+            else if (strlen(d) < 400) snprintf(d + strlen(d), sizeof(d) - strlen(d), " %s mutant %d not caught;", omega_reduce_op_name(rop), k);
+        }
+        mutants++; /* the other op's patch under this op */
+        omega_reduce_gb10_minmax_patch(rop == OMEGA_RED_MAX ? OMEGA_RED_MIN : OMEGA_RED_MAX, m);
+        if (omega_reduce_gb10_check_minmax_patch(rop, m, np, qmd1, err, sizeof(err)) != OMEGA_NUMERIC_OK) caught++;
+        /* the decoded patch, run by the host model with the declared pad, equals the reference */
+        static const size_t mn[] = { 1, 2, 31, 32, 33, 64, 97, 1023, 1024, 1025, 33000 };
+        for (size_t a = 0; a < sizeof(mn) / sizeof(mn[0]); a++)
+            for (int dist = 0; dist < DIST_COUNT; dist++) {
+                for (size_t i = 0; i < mn[a]; i++) x[i] = gen(dist);
+                float r, g = model_levels(p, np, OMEGA_REDUCE_MINMAX_PAD_BITS, x, mn[a], buf);
+                omega_reduce_reference(rop, x, mn[a], &r);
+                model_cases++;
+                if (!omega_numeric_bits_equal(r, g)) model_bad++;
+            }
+    }
+    free(x); free(buf);
+    if (model_bad) ok = 0;
+    if (caught != mutants) ok = 0;
+    char det[1024];
+    snprintf(det, sizeof(det), "patch accepted; mutants caught %zu/%zu; host model of decoded words = reference %zu/%zu%s",
+             caught, mutants, model_cases - model_bad, model_cases, d);
+    verdict("RED_GB10_MINMAX_PATCH", ok, det);
+}
+
+/* Wrong padding must be caught: the same level loop with -inf, +inf or +0 as
+ * pad gives different bits from the reference on crafted inputs. */
+static void test_gb10_wrong_pad_caught(void) {
+    int ok = 1;
+    char d[512] = "";
+    OmegaNumericPatchInsn pmax[OMEGA_NUMERIC_PATCH_MAX], pmin[OMEGA_NUMERIC_PATCH_MAX];
+    int nmax = omega_reduce_gb10_minmax_patch(OMEGA_RED_MAX, pmax), nmin = omega_reduce_gb10_minmax_patch(OMEGA_RED_MIN, pmin);
+    float x[33], buf[64], r;
+    /* all NaN: declared pad keeps NaN; -inf pad (MAX) or +inf pad (MIN) does not */
+    for (int i = 0; i < 33; i++) x[i] = fb(0x7fc00000u);
+    omega_reduce_reference(OMEGA_RED_MAX, x, 33, &r);
+    if (!omega_numeric_bits_equal(r, model_levels(pmax, nmax, OMEGA_REDUCE_MINMAX_PAD_BITS, x, 33, buf))) { ok = 0; snprintf(d, sizeof(d), "declared pad differs"); }
+    if (omega_numeric_bits_equal(r, model_levels(pmax, nmax, 0xff800000u, x, 33, buf))) { ok = 0; snprintf(d, sizeof(d), "-inf pad (MAX) not caught"); }
+    if (omega_numeric_bits_equal(r, model_levels(pmin, nmin, 0x7f800000u, x, 33, buf))) { ok = 0; snprintf(d, sizeof(d), "+inf pad (MIN) not caught"); }
+    /* all negative: +0 pad wins MAX; all positive: -0 pad wins MIN */
+    for (int i = 0; i < 33; i++) x[i] = -2.0f;
+    omega_reduce_reference(OMEGA_RED_MAX, x, 33, &r);
+    if (bf(r) != 0xc0000000u || omega_numeric_bits_equal(r, model_levels(pmax, nmax, 0x00000000u, x, 33, buf))) { ok = 0; snprintf(d, sizeof(d), "+0 pad (MAX) not caught"); }
+    for (int i = 0; i < 33; i++) x[i] = 2.0f;
+    omega_reduce_reference(OMEGA_RED_MIN, x, 33, &r);
+    if (bf(r) != 0x40000000u || omega_numeric_bits_equal(r, model_levels(pmin, nmin, 0x80000000u, x, 33, buf))) { ok = 0; snprintf(d, sizeof(d), "-0 pad (MIN) not caught"); }
+    /* the GB10 path refuses to run with a pad that is not the declared identity:
+     * it pads with omega_reduce_identity and checks those bits (CHECK:red_mm_pad_identity) */
+    if (bf(omega_reduce_identity(OMEGA_RED_MAX)) != OMEGA_REDUCE_MINMAX_PAD_BITS || bf(omega_reduce_identity(OMEGA_RED_MIN)) != OMEGA_REDUCE_MINMAX_PAD_BITS ||
+        bf(omega_reduce_identity(OMEGA_RED_MEAN)) != OMEGA_REDUCE_SUM_PAD_BITS) { ok = 0; snprintf(d, sizeof(d), "identity bits changed"); }
+    /* MEAN order: the n = 33 worked example divided by 33, hand-derived bits.
+     * (2^24 + 32) / 33 = 508401.4545..., ulp 2^-5 -> 508401.46875 = 0x48F83E2F;
+     * left-to-right gives 2^24 / 33 -> 0x48F83E1F. */
+    float a33[33];
+    a33[0] = 16777216.0f; for (int i = 1; i < 33; i++) a33[i] = 1.0f;
+    float mr, mc;
+    omega_reduce_reference(OMEGA_RED_MEAN, a33, 33, &mr);
+    omega_reduce_cpu(OMEGA_RED_MEAN, a33, 33, &mc);
+    float seq = omega_math_div(omega_reduce_sequential_sum_not_contract(a33, 33), 33.0f);
+    if (bf(mr) != 0x48F83E2Fu || bf(mc) != 0x48F83E2Fu || bf(seq) == bf(mr)) { ok = 0; snprintf(d, sizeof(d), "MEAN worked example ref=0x%08x cpu=0x%08x seq=0x%08x", bf(mr), bf(mc), bf(seq)); }
+    verdict("RED_WRONG_PAD_CAUGHT", ok, d);
+}
+
+/* --dump DIR: MAX/MIN patch words and their expected text for nvdisasm. */
+static int dump_patches(const char *dir) {
+    for (int op = OMEGA_RED_MAX; op <= OMEGA_RED_MIN; op++) {
+        OmegaNumericPatchInsn p[OMEGA_NUMERIC_PATCH_MAX];
+        int np = omega_reduce_gb10_minmax_patch((OmegaReduceOp)op, p);
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s.bin", dir, op == OMEGA_RED_MAX ? "max" : "min");
+        FILE *fb_ = fopen(path, "wb");
+        snprintf(path, sizeof(path), "%s/%s.lst", dir, op == OMEGA_RED_MAX ? "max" : "min");
+        FILE *fl = fopen(path, "w");
+        if (!fb_ || !fl || np <= 0) { if (fb_) fclose(fb_); if (fl) fclose(fl); return 1; }
+        for (int i = 0; i < np; i++) {
+            fwrite(p[i].w, 4, 4, fb_);
+            fprintf(fl, "%04x %s ;\n", i * 16, p[i].text);
+        }
+        fclose(fb_); fclose(fl);
+    }
+    return 0;
+}
+
+#ifndef OMEGA_NUMERIC_CPU_ONLY
+static int g_nan_bits_seen[4];
+static uint32_t g_nan_bits[4];
+
+/* One chip case: compare with the reference (bit for bit; NaN results compare
+ * as the NaN class, the contract's parity rule) and with want when given. */
+static void chip_case(OmegaReduceOp op, const float *x, size_t n, const char *tag, int has_want, uint32_t want,
+                      size_t *cases, size_t *mism, size_t *launches, char *d, size_t dl) {
+    float r = 0, g = 0;
+    omega_reduce_reference(op, x, n, &r);
+    int rc = omega_reduce_gb10(op, x, n, &g);
+    *launches += omega_reduce_gb10_last_launches();
+    (*cases)++;
+    if (rc == OMEGA_NUMERIC_OK && omega_isnan(g) && g_nan_bits_seen[op] < 1) { g_nan_bits_seen[op] = 1; g_nan_bits[op] = bf(g); }
+    char ws[24] = "";
+    if (has_want) snprintf(ws, sizeof(ws), " want=0x%08x", want);
+    printf("RED_GB10_CASE op=%s n=%zu dist=%s ref=0x%08x gb10=0x%08x%s launches=%u rc=%d\n", omega_reduce_op_name(op), n, tag,
+           bf(r), bf(g), ws, omega_reduce_gb10_last_launches(), rc);
+    int bad = rc != OMEGA_NUMERIC_OK || !omega_numeric_bits_equal(r, g) || (has_want && !omega_numeric_bits_equal(g, fb(want)));
+    if (bad) {
+        if (!*mism) snprintf(d, dl, "first: op=%s n=%zu dist=%s ref=0x%08x gb10=0x%08x rc=%d", omega_reduce_op_name(op), n, tag, bf(r), bf(g), rc);
+        (*mism)++;
+    }
+}
+#endif
 
 static void test_gb10_parity(void) {
 #ifdef OMEGA_NUMERIC_CPU_ONLY
     printf("RED_GB10_PARITY: SKIP chip-only (CPU build)\n");
     g_skip++;
 #else
-    static const size_t gn[] = { 0, 1, 2, 31, 32, 33, 63, 64, 65, 97, 1000, 1024, 1025, 4097,
-                                 65536, 65537, 1000003, 1000000 };
-    size_t cases = 0, mism = 0, launches = 0;
-    char d[512] = "";
+    static const size_t gn[] = { 0, 1, 2, 31, 32, 33, 63, 64, 65, 97, 1000, 1023, 1024, 1025, 4097,
+                                 32768, 32769, 65536, 65537, 1000003, 1000000 };
+    size_t cases[4] = { 0 }, mism[4] = { 0 }, launches[4] = { 0 };
+    char d[4][512] = { "", "", "", "" };
     float *x = malloc(1000003 * sizeof(float));
-    for (size_t k = 0; k < sizeof(gn) / sizeof(gn[0]); k++) {
-        size_t n = gn[k];
-        int dists[3] = { DIST_CANCEL, DIST_SPECIAL, DIST_SUBNORMAL };
-        for (int q = 0; q < (n > 70000 ? 1 : 3); q++) {
-            for (size_t i = 0; i < n; i++) x[i] = gen(dists[q]);
-            float r = 0, g = 0;
-            omega_reduce_reference(OMEGA_RED_SUM, x, n, &r);
-            int rc = omega_reduce_gb10(OMEGA_RED_SUM, x, n, &g);
-            launches += omega_reduce_gb10_last_launches();
-            cases++;
-            printf("RED_GB10_CASE n=%zu dist=%s ref=0x%08x gb10=0x%08x launches=%u rc=%d\n", n, DIST_NAMES[dists[q]],
-                   bf(r), bf(g), omega_reduce_gb10_last_launches(), rc);
-            if (rc != OMEGA_NUMERIC_OK || !omega_numeric_bits_equal(r, g)) {
-                if (!mism) snprintf(d, sizeof(d), "first: n=%zu dist=%s ref=0x%08x gb10=0x%08x rc=%d", n,
-                                    DIST_NAMES[dists[q]], bf(r), bf(g), rc);
-                mism++;
+    for (int op = 0; op < OMEGA_RED_COUNT; op++) {
+        OmegaReduceOp rop = (OmegaReduceOp)op;
+        for (size_t k = 0; k < sizeof(gn) / sizeof(gn[0]); k++) {
+            size_t n = gn[k];
+            int dists[4] = { DIST_CANCEL, DIST_SPECIAL, DIST_SUBNORMAL, DIST_BITS };
+            for (int q = 0; q < (n > 70000 ? 2 : 4); q++) {
+                int dist = n > 70000 ? (q == 0 ? DIST_CANCEL : DIST_SPECIAL) : dists[q];
+                for (size_t i = 0; i < n; i++) x[i] = gen(dist);
+                chip_case(rop, x, n, DIST_NAMES[dist], 0, 0, &cases[op], &mism[op], &launches[op], d[op], sizeof(d[op]));
             }
         }
     }
-    /* crafted special-value vectors on chip, expected bits written out */
+    /* SUM crafted special-value vectors, expected bits written out (as PR #134) */
     {
         static float v[65537];
-        struct { size_t n; uint32_t fill, s0, s1; size_t i1; uint32_t want; } sv[] = {
-            { 33, 0x80000000u, 0x80000000u, 0x80000000u, 1, 0x80000000u },     /* all -0 -> -0        */
-            { 65537, 0x80000000u, 0x80000000u, 0x80000000u, 1, 0x80000000u },  /* all -0, 4 levels    */
-            { 1025, 0x80000000u, 0x80000000u, 0x00000000u, 1024, 0x00000000u },/* one +0 -> +0        */
-            { 40, 0x7f7fffffu, 0x7f7fffffu, 0x7f7fffffu, 1, 0x7f800000u },     /* overflow -> +inf    */
-            { 40, 0x3f800000u, 0x7f800000u, 0xff800000u, 38, 0x7fc00000u },    /* inf + -inf -> NaN   */
-            { 40, 0x3f800000u, 0xff800000u, 0x3f800000u, 38, 0xff800000u },    /* -inf                */
-            { 100, 0x00000001u, 0x00000001u, 0x00000001u, 1, 0x00000064u },    /* 100 * 2^-149 exact  */
-        };
-        for (size_t k = 0; k < sizeof(sv) / sizeof(sv[0]); k++) {
-            for (size_t i = 0; i < sv[k].n; i++) v[i] = fb(sv[k].fill);
-            v[0] = fb(sv[k].s0);
-            v[sv[k].i1] = fb(sv[k].s1);
-            float r = 0, g = 0;
-            omega_reduce_reference(OMEGA_RED_SUM, v, sv[k].n, &r);
-            int rc2 = omega_reduce_gb10(OMEGA_RED_SUM, v, sv[k].n, &g);
-            cases++;
-            launches += omega_reduce_gb10_last_launches();
-            printf("RED_GB10_CASE n=%zu dist=crafted%zu ref=0x%08x gb10=0x%08x want=0x%08x launches=%u rc=%d\n", sv[k].n, k,
-                   bf(r), bf(g), sv[k].want, omega_reduce_gb10_last_launches(), rc2);
-            if (rc2 != OMEGA_NUMERIC_OK || !omega_numeric_bits_equal(g, fb(sv[k].want)) || !omega_numeric_bits_equal(r, g)) {
-                if (!mism) snprintf(d, sizeof(d), "crafted %zu n=%zu gb10=0x%08x want 0x%08x", k, sv[k].n, bf(g), sv[k].want);
-                mism++;
+        const struct crafted *sv = CRAFTED;
+        for (int op = 0; op < OMEGA_RED_COUNT; op++)
+            for (size_t k = 0; k < CRAFTED_N; k++) {
+                for (size_t i = 0; i < sv[k].n; i++) v[i] = fb(sv[k].fill);
+                v[0] = fb(sv[k].s0);
+                v[sv[k].i1] = fb(sv[k].s1);
+                char tag[32];
+                snprintf(tag, sizeof(tag), "crafted%zu", k);
+                chip_case((OmegaReduceOp)op, v, sv[k].n, tag, 1, sv[k].want[op], &cases[op], &mism[op], &launches[op], d[op], sizeof(d[op]));
             }
-        }
     }
-    /* the three hand-derived worked examples on chip */
+    /* the three hand-derived SUM worked examples and the MEAN one on chip */
     {
         float a33[33], a32[32], a64[64];
         a33[0] = 16777216.0f; for (int i = 1; i < 33; i++) a33[i] = 1.0f;
@@ -488,29 +698,32 @@ static void test_gb10_parity(void) {
         a32[0] = 16777216.0f; a32[1] = 1.0f; a32[17] = 1.0f;
         for (int i = 0; i < 64; i++) a64[i] = fb(0x80000000u);
         a64[0] = 16777216.0f; a64[1] = 1.0f; a64[33] = 1.0f;
-        const float *in[3] = { a33, a32, a64 };
-        static const size_t wn[3] = { 33, 32, 64 };
-        static const uint32_t want[3] = { 0x4B800010u, 0x4B800001u, 0x4B800000u };
-        for (int k = 0; k < 3; k++) {
-            float g = 0;
-            int rc = omega_reduce_gb10(OMEGA_RED_SUM, in[k], wn[k], &g);
-            cases++;
-            launches += omega_reduce_gb10_last_launches();
-            printf("RED_GB10_CASE n=%zu dist=worked%d gb10=0x%08x want=0x%08x rc=%d\n", wn[k], k, bf(g), want[k], rc);
-            if (rc != OMEGA_NUMERIC_OK || bf(g) != want[k]) {
-                mism++; snprintf(d, sizeof(d), "worked example n=%zu gb10=0x%08x want 0x%08x", wn[k], bf(g), want[k]);
-            }
-        }
+        chip_case(OMEGA_RED_SUM, a33, 33, "worked0", 1, 0x4B800010u, &cases[0], &mism[0], &launches[0], d[0], sizeof(d[0]));
+        chip_case(OMEGA_RED_SUM, a32, 32, "worked1", 1, 0x4B800001u, &cases[0], &mism[0], &launches[0], d[0], sizeof(d[0]));
+        chip_case(OMEGA_RED_SUM, a64, 64, "worked2", 1, 0x4B800000u, &cases[0], &mism[0], &launches[0], d[0], sizeof(d[0]));
+        chip_case(OMEGA_RED_MEAN, a33, 33, "worked_mean", 1, 0x48F83E2Fu, &cases[3], &mism[3], &launches[3], d[3], sizeof(d[3]));
     }
     free(x);
-    char det[1024];
-    snprintf(det, sizeof(det), "op=SUM order=%s cases=%zu launches=%zu mismatches=%zu %s",
-             OMEGA_REDUCE_DECLARED_ORDER, cases, launches, mism, d);
-    verdict("RED_GB10_PARITY", mism == 0 && cases > 0, det);
+    size_t total_mism = 0, total_cases = 0;
+    for (int op = 0; op < OMEGA_RED_COUNT; op++) {
+        char det[1200];
+        snprintf(det, sizeof(det), "op=%s order=%s cases=%zu launches=%zu mismatches=%zu chip_nan_bits=%s0x%08x%s %.500s",
+                 omega_reduce_op_name((OmegaReduceOp)op), OMEGA_REDUCE_DECLARED_ORDER, cases[op], launches[op], mism[op],
+                 g_nan_bits_seen[op] ? "" : "(none) ", g_nan_bits[op],
+                 op == OMEGA_RED_MEAN ? " final_division=HOST_DECLARED_STEP" : "", d[op]);
+        char id[64];
+        snprintf(id, sizeof(id), "RED_GB10_PARITY_%s", omega_reduce_op_name((OmegaReduceOp)op));
+        verdict(id, mism[op] == 0 && cases[op] > 0, det);
+        total_mism += mism[op]; total_cases += cases[op];
+    }
+    char det[256];
+    snprintf(det, sizeof(det), "ops=SUM,MAX,MIN,MEAN cases=%zu mismatches=%zu", total_cases, total_mism);
+    printf("RED_GB10_PARITY: %s %s\n", total_mism == 0 && total_cases > 0 ? "PASS" : "FAIL", det);
 #endif
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc == 3 && strcmp(argv[1], "--dump") == 0) return dump_patches(argv[2]);
     if (!omega_numeric_fpenv_ok()) {
         printf("FPENV: FAIL host FPCR is not RNE / no FTZ\n");
         return 1;
@@ -522,7 +735,10 @@ int main(void) {
     test_independent_oracle();
     test_different_order_caught();
     test_determinism();
+    test_crafted_table();
     test_gb10_presubmit();
+    test_gb10_minmax_patch();
+    test_gb10_wrong_pad_caught();
     test_gb10_parity();
 #ifdef OMEGA_NUMERIC_CPU_ONLY
     int ok = g_fail == 0 && g_skip == 1;

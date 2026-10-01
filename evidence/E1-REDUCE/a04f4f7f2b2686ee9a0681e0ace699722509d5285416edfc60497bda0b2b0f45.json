@@ -1,0 +1,36 @@
+{
+  "suite": "E1_REDUCE_GB10_PARITY",
+  "status": "PASS",
+  "reason": "",
+  "run_id": "20261001T121359Z-689ad4df1b42.JT4CoF",
+  "omega_commit": "689ad4df1b42ed6aeabac16455e265df04068a91",
+  "omega_clean_before": true,
+  "omega_clean_after": true,
+  "physics_commit": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "declared_order": "RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL",
+  "binary_sha256": "75d7d4ed8a910e15cc115f46be8c2c51617345386a381d4cc99bfbff18af4c89",
+  "log_sha256": "c6c54fea9c5bde01d0a4efc3ee37b8baf7947107c10d4ffec55104feaa2f3f76",
+  "exit_status": "0",
+  "parity_line": "RED_GB10_PARITY: PASS ops=SUM,MAX,MIN,MEAN cases=380 mismatches=0",
+  "ops": [
+    "SUM",
+    "MAX",
+    "MIN",
+    "MEAN"
+  ],
+  "parity_by_op": {
+    "SUM": "RED_GB10_PARITY_SUM: PASS op=SUM order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=97 launches=283 mismatches=0 chip_nan_bits=0x7fffffff ",
+    "MAX": "RED_GB10_PARITY_MAX: PASS op=MAX order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=94 launches=278 mismatches=0 chip_nan_bits=0x7fc00000 ",
+    "MIN": "RED_GB10_PARITY_MIN: PASS op=MIN order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=94 launches=278 mismatches=0 chip_nan_bits=0x7fc00000 ",
+    "MEAN": "RED_GB10_PARITY_MEAN: PASS op=MEAN order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=95 launches=280 mismatches=0 chip_nan_bits=0x7fc00000 final_division=HOST_DECLARED_STEP "
+  },
+  "chip_kernels": {
+    "SUM": "REDUCE_SUM (WP-C patch, SHFL.DOWN+FADD)",
+    "MAX": "reduce minmax patch SHFL.DOWN+FMNMX !PT",
+    "MIN": "reduce minmax patch SHFL.DOWN+FMNMX PT",
+    "MEAN": "chip SUM levels"
+  },
+  "mean_final_division": "HOST_DECLARED_STEP omega_math_div(sum,u2f(n)); GB10 DIV kernel (omega#141) not merged",
+  "host": "spark-b87b",
+  "kernel": "7.0.0-1019-nvidia"
+}
