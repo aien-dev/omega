@@ -1,0 +1,408 @@
+name: Host suites 2
+
+# Second batch of host-runnable suites (Lane 24, 2026-10-01), the follow-up list
+# in host-suites.yml. All jobs run on the AArch64 hosted runner (same
+# instruction set as the DGX Spark; several suites execute generated or
+# hand-written AArch64 code). The runner is NOT the Spark: nothing here is a
+# chip or hardware qualification, and no suite here touches the GB10.
+#
+# Per-job triggering: the workflow-level `paths` is the union of every job's
+# inputs; the `changes` job then diffs the PR against its base and turns on
+# only the jobs whose own files changed. Makefile and this workflow file turn on
+# every job. A push to main is diffed against the previous tip the same way;
+# workflow_dispatch (or a push with no known previous tip) runs everything.
+#
+# Jobs and the make targets they run (Spark -j1 time, 2026-10-01):
+#   visor     : test-visor (all Visor lanes + language + physics-free build) 25 s
+#   turing    : test-turing test-turing-exp001-a test-turing-exp001-coders 3 min
+#               test-turing-verify-indep test-turing-qcont test-turing-qrecord
+#   brownian  : test-brownian-tps 4 min
+#   polyglot  : test-polyglot-asm test-polyglot-encoder 1 min
+#   algebra   : test-algebra test-algebra-asan test-realize test-phase-twin
+#               test-ma-digital-bottom 3.5 min
+#   path      : test-path 30 s;  crumbline : test-crumbline 1 s
+#   runtime   : test-r15-instr test-r15-receipt test-r16-inventory
+#               test-r16-negative test-r16-surface 1 min
+#   argus     : test-argus-runtime test-machine-identity-argus
+#   numeric2  : test-numeric-reduce-cpu test-divsqrt-host 6 s
+# Pinned dependencies are read from physics.lock, aienos.lock and argus.lock.
+#
+# Deliberately NOT here:
+#   test-polyglot-mojo (needs the Mojo toolchain);
+#   test-turing-exp001-eval: environment. Its fail-closed tests run the
+#   evaluator inside a bubblewrap jail (/usr/bin/bwrap), which the runner does
+#   not have (79 passed, 4 failed: "bubblewrap not found"). Spark -j1: PASS;
+#   test-branch-reuse: environment. Its gate requires energy measured lower per
+#   action from the Spark power counters; the runner has none ("energy not
+#   measured lower (counters unavailable)", OMEGA_BRANCH_STATE_REUSE=FAIL).
+#   Spark -j1: PASS (4 min);
+#   test-turing-cal-blinding: environment. It reads development traces from
+#   $HOME/aien-data/crumbline, which lives only on the Spark (outside the
+#   repo). Spark -j1: PASS;
+#   test-r15-g7-host, test-r15-parity-host, test-r16-authpath: environment.
+#   They run R13 living episodes that "need both core classes" (Spark X925 +
+#   A725); the runner has one class (g7: 7/18 checks fail; parity: no episode
+#   completes, SEQ_SEMANTIC_PARITY=FAIL; authpath: r13 exits 1). Same reason
+#   rx-host.yml only builds the R13/R14 hosts. Spark -j1: all three PASS;
+#   test-polyglot: environment. mk/polyglot.mk builds its -O3 flavor with
+#   -mcpu=native next to -march=armv8.6-a+...; on the runner (Neoverse N2) gcc
+#   resolves native to a CPU that conflicts with that -march and -Werror stops
+#   the build. On the Spark (X925/A725) native resolves to generic armv8-a and
+#   it passes (Spark -j1: 3.8 min, PASS);
+#   test-numeric-sweep, test-numeric-e1-exhaustive (too long for CI);
+#   test-r16-negative-mutants: FAILS on main, not an environment issue. Since
+#   omega #139 (4aa71bf, d717af3) rewrote the caller-generation guard in
+#   src/runtime/rx_world.c, mutant c7_bind_refuses_unauthenticated no longer
+#   applies (BROKEN; 35/36 killed, gate R16_G4_GUARDS_LOAD_BEARING=FAIL).
+#   Add it here once tests/r16_negative/mutate.sh is updated by its owner;
+#   test-turing-yield, test-turing-energy (already in turing-yield.yml);
+#   every *-silicon target and test-m5..test-m19 (GB10 chip).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'Makefile'
+      - '.github/workflows/host-suites-2.yml'
+      - 'physics.lock'
+      - 'aienos.lock'
+      - 'argus.lock'
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'mk/**'
+      - 'spec/polyglot-0.md'
+      - 'spec/r16-*'
+      - 'docs/r16-*'
+      - 'docs/turing/**'
+      - 'calibration/**'
+      - 'data/crumbline/**'
+      - 'data/turing-cal/**'
+      - 'evidence/TURING_YIELD/**'
+      - 'evidence/POLYGLOT/**'
+      - 'evidence/MIXED_ALGEBRA/**'
+      - 'evidence/R15/**'
+  pull_request:
+    paths:
+      - 'Makefile'
+      - '.github/workflows/host-suites-2.yml'
+      - 'physics.lock'
+      - 'aienos.lock'
+      - 'argus.lock'
+      - 'src/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'mk/**'
+      - 'spec/polyglot-0.md'
+      - 'spec/r16-*'
+      - 'docs/r16-*'
+      - 'docs/turing/**'
+      - 'calibration/**'
+      - 'data/crumbline/**'
+      - 'data/turing-cal/**'
+      - 'evidence/TURING_YIELD/**'
+      - 'evidence/POLYGLOT/**'
+      - 'evidence/MIXED_ALGEBRA/**'
+      - 'evidence/R15/**'
+
+jobs:
+  changes:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    outputs:
+      visor: ${{ steps.f.outputs.visor }}
+      turing: ${{ steps.f.outputs.turing }}
+      brownian: ${{ steps.f.outputs.brownian }}
+      polyglot: ${{ steps.f.outputs.polyglot }}
+      algebra: ${{ steps.f.outputs.algebra }}
+      path: ${{ steps.f.outputs.path }}
+      crumbline: ${{ steps.f.outputs.crumbline }}
+      runtime: ${{ steps.f.outputs.runtime }}
+      argus: ${{ steps.f.outputs.argus }}
+      numeric2: ${{ steps.f.outputs.numeric2 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Select jobs from the changed files
+        id: f
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -eu
+          zero=0000000000000000000000000000000000000000
+          if [ "$EVENT" = pull_request ]; then
+            git diff --name-only "$BASE...$HEAD" > changed.txt
+          elif [ "$EVENT" = push ] && [ -n "$BASE" ] && [ "$BASE" != "$zero" ] \
+              && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            git diff --name-only "$BASE" "$HEAD" > changed.txt
+          else
+            # workflow_dispatch, or a push whose previous tip is unknown: run all
+            echo Makefile > changed.txt
+          fi
+          echo "changed files:"; cat changed.txt
+          all='^(Makefile|\.github/workflows/host-suites-2\.yml)$'
+          core='^src/(omega_|aarch64_|sha256\.)'
+          sel() {
+            if grep -Eq "$all|$2" changed.txt; then v=true; else v=false; fi
+            echo "$1=$v" >> "$GITHUB_OUTPUT"; echo "$1=$v"
+          }
+          sel visor     "$core|^src/(visor|language)/|^tests/(visor|language)/|^mk/(00-visor-core|visor-[^/]*)\.mk$|^tools/omega\.c$|^src/runtime/rx_(aegis|caproot|coherent|generation|world)\.|^aienos\.lock$"
+          sel turing    "^src/(turing|algebra)/|^tests/turing/|^tools/turing_|^mk/turing_(exp001_[a-z]+|qcont|qrecord)\.mk$|^src/(omega_canonical|omega_types|sha256)\.|^data/(crumbline|turing-cal)/|^evidence/TURING_YIELD/|^docs/turing/|^calibration/"
+          sel brownian  "^tests/brownian/|^tools/brownian/|^mk/brownian_tps\.mk$|^src/turing/(tc_|ty_math|ty_qcont)|^src/sha256\."
+          sel polyglot  "^src/(polyglot|algebra)/|^tests/polyglot/|^mk/polyglot[^/]*\.mk$|^src/(aarch64_|sha256\.)|^spec/polyglot-0\.md$|^evidence/POLYGLOT/"
+          sel algebra   "^src/(algebra|turing)/|^tests/algebra/|^src/(omega_canonical|omega_types|sha256)\.|^evidence/MIXED_ALGEBRA/"
+          sel path      "^src/path/|^tests/path/|^src/(omega_types|sha256)\."
+          sel crumbline "$core|^src/crumbline/|^tests/crumbline/|^tools/crumbline_learner\.c$|^data/crumbline/"
+          sel runtime   "$core|^src/(runtime|fabric)/|^tests/runtime/|^mk/fabric\.mk$|^tests/(r15_receipt_test\.sh|r16_[a-z_]+/)|^tools/(r15_|r16_|omegatool\.c)|^spec/r16-|^docs/r16-|^evidence/R15/|^(physics|aienos)\.lock$"
+          sel argus     "^src/runtime/|^tests/runtime/|^tests/bench_rx_argus\.c$|^mk/machine-identity\.mk$|^src/(sha256|omega_evidence)\.|^(physics|aienos|argus)\.lock$"
+          sel numeric2  "^tests/(test_omega_reduce|test_omega_divsqrt_gb10)\.c$|^tests/numeric_oracle\.h$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
+
+  visor:
+    needs: changes
+    if: needs.changes.outputs.visor == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Read pinned AIENOS authority
+        id: aienos
+        run: |
+          sha=$(awk 'NF && $1 !~ /^#/ {print $1; exit}' aienos.lock)
+          test -n "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned AIENOS authority
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/aienos
+          ref: ${{ steps.aienos.outputs.sha }}
+          path: aienos-src
+      - name: Keep AIENOS checkout out of Omega tree status
+        run: echo 'aienos-src/' >> .git/info/exclude
+      - name: Visor suite (semantic, language, verify, evidence, machine, realization, console, world, authority, physics-free build)
+        env:
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-visor
+
+  turing:
+    needs: changes
+    if: needs.changes.outputs.turing == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: TURING field and selector (plain + ASan/UBSan)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing
+      - name: TURING EXP-001 calibration and reference coders
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-exp001-a test-turing-exp001-coders
+      - name: TURING independent verifier
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-verify-indep
+      - name: TURING q-continuous coder and records
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-turing-qcont test-turing-qrecord
+
+  brownian:
+    needs: changes
+    if: needs.changes.outputs.brownian == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Brownian TPS adapter
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-brownian-tps
+
+  polyglot:
+    needs: changes
+    if: needs.changes.outputs.polyglot == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: POLYGLOT hand-written AArch64 asm lane
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-polyglot-asm
+      - name: POLYGLOT encoder lane
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-polyglot-encoder
+
+  algebra:
+    needs: changes
+    if: needs.changes.outputs.algebra == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Mixed algebra core (plain + ASan/UBSan)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-algebra test-algebra-asan
+      - name: MA-2 realizations (dotprod/i8mm/SVE) and selector
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-realize
+      - name: Phase twin
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-phase-twin
+      - name: MA DIGITAL_V1 bottom layer
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-ma-digital-bottom
+
+  path:
+    needs: changes
+    if: needs.changes.outputs.path == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: PATH-1 identity, boundary and mutants
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-path
+
+  crumbline:
+    needs: changes
+    if: needs.changes.outputs.crumbline == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Crumbline learner conformance vectors
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-crumbline
+
+  runtime:
+    needs: changes
+    if: needs.changes.outputs.runtime == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Read pinned Physics and AIENOS commits
+        id: pins
+        run: |
+          p=$(tr -d '[:space:]' < physics.lock)
+          a=$(awk 'NF && $1 !~ /^#/ {print $1; exit}' aienos.lock)
+          test -n "$p" && test -n "$a"
+          echo "physics=$p" >> "$GITHUB_OUTPUT"
+          echo "aienos=$a" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Physics headers
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/physics
+          ref: ${{ steps.pins.outputs.physics }}
+          path: physics-src
+      - name: Checkout pinned AIENOS authority
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/aienos
+          ref: ${{ steps.pins.outputs.aienos }}
+          path: aienos-src
+      - name: Keep dependency checkouts out of Omega tree status
+        run: printf 'physics-src/\naienos-src/\n' >> .git/info/exclude
+      - name: R15 instrumentation
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r15-instr
+      - name: R15 receipt writer (attempt 1 stays a FAIL)
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r15-receipt
+      - name: R16 G2 loop inventory
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r16-inventory
+      - name: R16 G4 legacy paths refused
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r16-negative
+      - name: R16 G5 API and build surface
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r16-surface
+
+  argus:
+    needs: changes
+    if: needs.changes.outputs.argus == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Read pinned Physics, AIENOS and ARGUS commits
+        id: pins
+        run: |
+          p=$(tr -d '[:space:]' < physics.lock)
+          a=$(awk 'NF && $1 !~ /^#/ {print $1; exit}' aienos.lock)
+          g=$(awk 'NF && $1 !~ /^#/ {print $1; exit}' argus.lock)
+          test -n "$p" && test -n "$a" && test -n "$g"
+          echo "physics=$p" >> "$GITHUB_OUTPUT"
+          echo "aienos=$a" >> "$GITHUB_OUTPUT"
+          echo "argus=$g" >> "$GITHUB_OUTPUT"
+      - name: Checkout pinned Physics headers
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/physics
+          ref: ${{ steps.pins.outputs.physics }}
+          path: physics-src
+      - name: Checkout pinned AIENOS authority
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/aienos
+          ref: ${{ steps.pins.outputs.aienos }}
+          path: aienos-src
+      - name: Checkout pinned ARGUS sources (aienos native/argus)
+        uses: actions/checkout@v4
+        with:
+          repository: aien-dev/aienos
+          ref: ${{ steps.pins.outputs.argus }}
+          path: aienos-argus
+      - name: Keep dependency checkouts out of Omega tree status
+        run: printf 'physics-src/\naienos-src/\naienos-argus/\n' >> .git/info/exclude
+      - name: ARGUS runtime integration (R7/R8/R9 into the real argus_core) and machine-id stamping
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+          ARGUS_REPO: ${{ github.workspace }}/aienos-argus
+          ARGUS_STREAMS: ${{ runner.temp }}/argus-streams
+        run: make test-argus-runtime test-machine-identity-argus
+
+  numeric2:
+    needs: changes
+    if: needs.changes.outputs.numeric2 == 'true'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Reduce CPU tier and GB10 div/sqrt sequences on the host (CPU only)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-reduce-cpu test-divsqrt-host
