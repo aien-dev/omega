@@ -52,8 +52,12 @@ and wait on scoreboard SB4. SB4 is the write barrier both vecadd `LDG`s set.
 Every body instruction is fixed-latency, so stall 15 is the conservative
 ptxas `-O0` pattern for this class.
 
-The QMD allocates 32 registers. The body writes R8 through R27 and R9, and
-never touches R1, R6, R7 or the uniform registers.
+The QMD allocates 48 registers. The hardware reserves the top two of the
+allocation: a 32-register QMD faulted (Xid 13, "Out Of Range Register") on
+the LOG2, SIGMOID and TANH bodies, which use R30 and R31 (receipt
+`1dc85ef2`, kept as NOT_RUN). DIV and SQRT write R8 through R27 and R9; the
+transcendental bodies use up to R31. No body touches R1, R6, R7 or the
+uniform registers.
 
 ## Provenance (no invented encodings)
 
@@ -92,7 +96,7 @@ shows that the host tier then fails.
 | `ds_def_use` | no register is read before it is written |
 | `ds_pred_def_use` | no predicate is read before it is written |
 | `ds_reserved` | the body never writes R1, R6 or R7 |
-| `ds_gpr` | every register fits inside the QMD allocation |
+| `ds_gpr` | every register fits inside the QMD allocation, below the two registers the hardware reserves at its top |
 | `ds_result` | the last body instruction writes R9 |
 | `ds_digest` | the kernel digest equals the recorded nvdisasm-verified digest |
 | `ds_args_op`, `ds_buffers`, `ds_count` | arguments |

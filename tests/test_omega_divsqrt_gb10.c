@@ -6,7 +6,7 @@
  *                   host model of the body vs omega_math_* and the AArch64
  *                   FDIV/FSQRT on the hard corpus, edge classes and random
  *                   samples. Exit 0 only when every [PASS] holds. No device.
- *   --dump DIR      writes DIR/{div,sqrt}.bin and DIR/{div,sqrt}.lst (the
+ *   --dump DIR      writes DIR/{div,sqrt,exp2,log2}.bin and .lst (the
  *                   expected nvdisasm text) for tools/divsqrt_nvdisasm_check.sh
  *   --digest        prints the SHA-256 of each emitted kernel
  *   --host-sqrt-all host model of SQRT on all 2^32 inputs
@@ -220,7 +220,7 @@ static int host_tier(void) {
                     (OmegaDsInsn){ .kind = DSK_IADD3_R, .d = 6, .a = 2, .b = 5, .c = OMEGA_DS_RZ }, "ds_reserved:");
         snprintf(id, sizeof(id), "DS_%s_REFUSES_REG_ABOVE_ALLOCATION", on);
         insn_expect(id, (OmegaDsOp)op, code, len, nb - 1,
-                    (OmegaDsInsn){ .kind = DSK_IADD3_R, .d = 40, .a = 2, .b = 5, .c = OMEGA_DS_RZ }, "ds_gpr:");
+                    (OmegaDsInsn){ .kind = DSK_IADD3_R, .d = 46, .a = 2, .b = 5, .c = OMEGA_DS_RZ }, "ds_gpr:");
         snprintf(id, sizeof(id), "DS_%s_REFUSES_RESULT_NOT_IN_R9", on);
         insn_expect(id, (OmegaDsOp)op, code, len, nb - 1,
                     (OmegaDsInsn){ .kind = DSK_IADD3_R, .d = 8, .a = 2, .b = 5, .c = OMEGA_DS_RZ }, "ds_result:");
@@ -309,7 +309,8 @@ static int dump(const char *dir) {
         uint8_t code[OMEGA_DS_MAX_CODE_BYTES];
         size_t len = 0;
         char path[512];
-        const char *nm = op == OMEGA_DS_DIV ? "div" : "sqrt";
+        static const char *const NM[OMEGA_DS_OP_COUNT] = { "div", "sqrt", "exp2", "log2", "sigmoid", "tanh" };
+        const char *nm = NM[op];
         if (build((OmegaDsOp)op, code, &len) != 0 || omega_ds_listing((OmegaDsOp)op, lst, sizeof(lst)) != 0) return 1;
         snprintf(path, sizeof(path), "%s/%s.bin", dir, nm);
         FILE *f = fopen(path, "wb");
