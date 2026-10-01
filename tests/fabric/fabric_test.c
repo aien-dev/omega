@@ -95,8 +95,10 @@ static void house_init(House *h) {
         uint32_t dom = CQ_SRC(CQ_SRC_GRAPH) | CQ_SRC(CQ_SRC_FABRIC);
         CHECK(cq_op_define(c, 1, 0, dom) == CQ_OK && cq_op_define(c, 2, 1, dom) == CQ_OK, "ops");
         /* Verifiers hold the roster's keys (HMAC stand-in, see fab_loopback.h). */
-        fab_hmac_auth_init(&h->auth[i], &h->id[i], h->key[i], 3, h->roster_ids,
-                           (const uint8_t (*)[32])h->key);
+        CHECK(fab_hmac_auth_init(&h->auth[i], &h->id[i], h->key[i], FAB_HMAC_MAX_PEERS + 1, h->roster_ids,
+                                 (const uint8_t (*)[32])h->key) == FAB_E_ARG, "oversized verifier roster refused");
+        CHECK(fab_hmac_auth_init(&h->auth[i], &h->id[i], h->key[i], 3, h->roster_ids,
+                                 (const uint8_t (*)[32])h->key) == FAB_OK, "verifier roster");
         FabConfig cfg = { h->id[i], &h->roster, c, &h->loop.transport, &h->auth[i].auth, LEASE, 1 };
         CHECK(fab_node_init(&h->node[i], &cfg) == FAB_OK, "node init");
     }

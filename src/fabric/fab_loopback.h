@@ -58,7 +58,11 @@ typedef struct {
     FabAuth auth;                   /* points back at this authenticator */
 } FabHmacAuth;
 
-void fab_hmac_auth_init(FabHmacAuth *a, const AienMachineId *self, const uint8_t self_key[32],
+/* Peer tables hold at most FAB_HMAC_MAX_PEERS entries; ids and keys must each
+ * have n elements. Returns FAB_OK, or FAB_E_ARG (nothing usable) when an
+ * argument is NULL or n is 0 or above the cap. */
+#define FAB_HMAC_MAX_PEERS 64
+int fab_hmac_auth_init(FabHmacAuth *a, const AienMachineId *self, const uint8_t self_key[32],
                         uint32_t n, const AienMachineId *ids, const uint8_t (*keys)[32]);
 
 #endif

@@ -303,7 +303,17 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
         CqKey got;
         cq = cq_wire_apply(n->cfg.catalog, body, CQ_WIRE_BYTES, &got);
         if (cq != CQ_OK) return refuse(n, v, FAB_E_CAPQ, cq, &sender, gen, seq, now_us);
-        if (i == m->n_keys) m->keys[m->n_keys++] = got;
+        /* Track the key the graph actually holds, so loss and LEAVE always
+         * withdraw the real entry. */
+        uint32_t j = 0;
+        while (j < m->n_keys && memcmp(&m->keys[j], &got, sizeof got) != 0) j++;
+        if (j == m->n_keys) {
+            if (m->n_keys == FAB_MAX_KEYS) {  /* untrackable: take it back out */
+                (void)cq_withdraw(n->cfg.catalog, &got);
+                return refuse(n, v, FAB_E_FULL, 0, &sender, gen, seq, now_us);
+            }
+            m->keys[m->n_keys++] = got;
+        }
         if (!n->cfg.catalog->built) (void)cq_catalog_build(n->cfg.catalog);
         m->last_seq = seq;
         event(n, FAB_EV_ADVERTISED, FAB_OK, CQ_OK, kind, &sender, gen, seq, now_us);

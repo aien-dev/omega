@@ -105,9 +105,11 @@ static int hmac_verify(void *ctx, const AienMachineId *claimed, const uint8_t *m
     return -1;
 }
 
-void fab_hmac_auth_init(FabHmacAuth *a, const AienMachineId *self, const uint8_t self_key[32],
+int fab_hmac_auth_init(FabHmacAuth *a, const AienMachineId *self, const uint8_t self_key[32],
                         uint32_t n, const AienMachineId *ids, const uint8_t (*keys)[32]) {
+    if (!a) return FAB_E_ARG;
     memset(a, 0, sizeof *a);
+    if (!self || !self_key || !ids || !keys || n == 0 || n > FAB_HMAC_MAX_PEERS) return FAB_E_ARG;
     a->self = *self;
     memcpy(a->self_key, self_key, 32);
     a->n = n;
@@ -116,4 +118,5 @@ void fab_hmac_auth_init(FabHmacAuth *a, const AienMachineId *self, const uint8_t
     a->auth.ctx = a;
     a->auth.sign = hmac_sign;
     a->auth.verify = hmac_verify;
+    return FAB_OK;
 }
