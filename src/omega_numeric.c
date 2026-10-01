@@ -1092,6 +1092,7 @@ int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *p,
     if (!p || !qmd1 || (unsigned)op >= OMEGA_NOP_COUNT) return bad(err, err_len, "check_patch: missing patch or QMD");
     if (n < 1 || n > (int)OMEGA_NUMERIC_PATCH_MAX) return bad(err, err_len, "patch length %d outside 1..%u", n, OMEGA_NUMERIC_PATCH_MAX); /* CHECK:patch_len */
     const char *name = OP_TABLE[op].name;
+    if (!(CTRL_WAIT(p[0].w[3]) & (1u << 4))) return bad(err, err_len, "%s: first instruction does not wait on SB4 (the a/b loads)", name); /* CHECK:first_waits_loads */
     int sts = -1, lds = -1, bar = -1, shf = -1, lop = -1, n_sts = 0, n_lds = 0, n_bar = 0, n_shfl = 0;
     for (int t = 0; t < n; t++) {
         uint32_t o = INSN_OP(p[t]);
@@ -1173,11 +1174,13 @@ int omega_numeric_check_patch(OmegaNumericOp op, const OmegaNumericPatchInsn *p,
     }
     if (op == OMEGA_NOP_FFMA_V) {
         if (n != 6 || INSN_OP(p[0]) != OPC_LDC || INSN_OP(p[1]) != OPC_IMADW || INSN_OP(p[2]) != OPC_LDG || INSN_OP(p[3]) != OPC_FFMA) return bad(err, err_len, "%s: expected LDC.64, IMAD.WIDE.U32, LDG.E, FFMA, STG, EXIT", name); /* CHECK:ffmav_shape */
-        if (p[0].w[1] != 0x0000e800u || p[0].w[2] != 0x00000a00u || (p[0].w[0] >> 24) != 0xffu) return bad(err, err_len, "%s: c pointer is not LDC.64 of c[0x0][0x3a0] (kernel argument words 8..9)", name); /* CHECK:ffmav_cptr */
+        if (p[0].w[0] != 0xff0a7b82u || p[0].w[1] != 0x0000e800u || p[0].w[2] != 0x00000a00u || CTRL_WBAR(p[0].w[3]) > 5u) return bad(err, err_len, "%s: c pointer is not LDC.64 R10 (free pair R10:R11) of c[0x0][0x3a0] (kernel argument words 8..9) with a write barrier", name); /* CHECK:ffmav_cptr */
         if (INSN_SRCA(p[1]) != 9u || p[1].w[1] != 4u || (p[1].w[2] & 0xffu) != INSN_DST(p[0]) || INSN_DST(p[1]) != INSN_DST(p[0])) return bad(err, err_len, "%s: c address is not IMAD.WIDE.U32 of the index R9 by 4 onto the c pointer", name); /* CHECK:ffmav_addr */
-        if (INSN_SRCA(p[2]) != INSN_DST(p[1]) || p[2].w[2] != 0x0c1e1900u) return bad(err, err_len, "%s: c[i] is not LDG.E (32-bit, desc[UR4]) from the computed address", name); /* CHECK:ffmav_load */
+        if (INSN_SRCA(p[2]) != INSN_DST(p[1]) || INSN_DST(p[2]) != 11u || p[2].w[2] != 0x0c1e1900u || CTRL_WBAR(p[2].w[3]) > 5u) return bad(err, err_len, "%s: c[i] is not LDG.E (32-bit, desc[UR4]) from the computed address into the free R11, with a write barrier", name); /* CHECK:ffmav_load */
         if (INSN_DST(p[3]) != 9u || INSN_SRCA(p[3]) != 2u || INSN_SRCB(p[3]) != 5u || (p[3].w[2] & 0xffu) != INSN_DST(p[2]) || (p[3].w[1] & ~0xffu) != 0 || (p[3].w[2] & ~0xffu) != 0) return bad(err, err_len, "%s: FFMA is not R9 = R2 * R5 + c[i] (no negate, no modifiers)", name); /* CHECK:ffmav_fma_regs */
     }
+    /* A multi-instruction patch stores R9 itself and ends; a single one uses the baseline STG. */
+    if (n > 1 && (p[n - 2].w[0] != W_STG_WORD0 || p[n - 2].w[1] != W_STG_WORD1 || p[n - 2].w[2] != W_STG_WORD2 || p[n - 1].w[0] != 0x0000794du || p[n - 1].w[1] != 0u || p[n - 1].w[2] != 0x03800000u)) return bad(err, err_len, "%s: patch does not end with STG.E desc[UR4][R6.64], R9 ; EXIT", name); /* CHECK:tail_store_exit */
     return OMEGA_NUMERIC_OK;
 }
 
@@ -1529,6 +1532,7 @@ int omega_numeric_reference_ftz(OmegaNumericOp op, const float *a, const float *
         case OMEGA_NOP_FSUB: r = omega_ref_fsub(x, y); break;
         case OMEGA_NOP_FMUL: r = omega_ref_fmul(x, y); break;
         case OMEGA_NOP_FFMA: r = omega_ref_ffma(x, y, ftz(c[i])); break;
+        case OMEGA_NOP_FFMA_V: r = omega_ref_ffma_int(x, y, ftz(c[i])); break;
         case OMEGA_NOP_FMNMX_MIN: r = omega_ref_fmin(x, y); break;
         case OMEGA_NOP_FMNMX_MAX: r = omega_ref_fmax(x, y); break;
         default: return OMEGA_NUMERIC_ERR_OPERANDS; /* only arithmetic ops have an FTZ model */

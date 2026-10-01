@@ -153,7 +153,7 @@ static const uint32_t FFMA_C[] = {
 
 static bool ftz_sensitive(OmegaNumericOp op) {
     return op == OMEGA_NOP_FADD || op == OMEGA_NOP_FSUB || op == OMEGA_NOP_FMUL ||
-           op == OMEGA_NOP_FFMA || op == OMEGA_NOP_FMNMX_MIN || op == OMEGA_NOP_FMNMX_MAX;
+           op == OMEGA_NOP_FFMA || op == OMEGA_NOP_FFMA_V || op == OMEGA_NOP_FMNMX_MIN || op == OMEGA_NOP_FMNMX_MAX;
 }
 
 /* Per-class parity on top of omega_numeric_parity (class of input a). */
@@ -980,11 +980,13 @@ int main(int argc, char **argv) {
         }
         int caught = 0, cases = 0;
         /* 32..43: E1 scalar ops (E1 WP-C) */
-        static const OmegaNumericOp E1_NEG_OP[12] = {
+        static const OmegaNumericOp E1_NEG_OP[17] = {
             OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FSETP_EQ_SEL, OMEGA_NOP_F2I_FLOOR,
             OMEGA_NOP_F32_TO_F16, OMEGA_NOP_F2I_FLOOR, OMEGA_NOP_I2FP_U32, OMEGA_NOP_FFMA_V,
-            OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V };
-        for (int m = 0; m < 44; m++) {
+            OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V,
+            OMEGA_NOP_I2FP_U32, OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V,
+            OMEGA_NOP_FSETP_LT_SEL };
+        for (int m = 0; m < 49; m++) {
             OmegaNumericOp op = OMEGA_NOP_LDS_STS;
             if (m >= 18 && m != 27 && m != 31) op = OMEGA_NOP_REDUCE_SUM;
             if (m == 17) op = OMEGA_NOP_SHFL_DOWN;
@@ -1048,6 +1050,11 @@ int main(int argc, char **argv) {
             case 41: what = "FFMA_V c address indexed by R2"; p[1].w[0] = 0x020a7825u; want = "c address is not"; break;
             case 42: what = "FFMA_V c loaded from R12"; p[2].w[0] = 0x0c0b7981u; want = "c[i] is not LDG"; break;
             case 43: what = "FFMA_V adds R1 instead of c[i]"; p[3].w[2] = 0x00000001u; want = "FFMA is not"; break;
+            case 44: what = "I2FP_U32 does not wait on the a/b loads"; p[0].w[3] = 0x000fca00u; want = "does not wait on SB4"; break;
+            case 45: what = "FSETP_LT_SEL store replaced by EXIT"; p[2] = p[3]; want = "does not end with STG"; break;
+            case 46: what = "FFMA_V c pointer into R2:R3 (clobbers a[i])"; p[0].w[0] = 0xff027b82u; p[1].w[0] = 0x09027825u; p[1].w[2] = 0x078e0002u; p[2].w[0] = 0x02037981u; p[3].w[2] = 3u; want = "c pointer is not"; break;
+            case 47: what = "FFMA_V c load sets no barrier"; p[2].w[3] = 0x000fe200u; want = "c[i] is not LDG"; break;
+            case 48: what = "early store through address R8 before the select"; p[1].w[0] = 0x08007986u; p[1].w[1] = 9u; p[1].w[2] = 0x0c101904u; p[1].w[3] = 0x000fe200u; want = "store at 1"; break;
             }
             char err[256];
             int rc = omega_numeric_check_patch(check_op, p, n, q, err, sizeof(err));
@@ -1264,6 +1271,7 @@ int main(int argc, char **argv) {
             if (!ftz_sensitive(op)) continue;
             const float *c = NULL;
             if (op == OMEGA_NOP_FFMA) { fill_c(g_c, 0x00800000u); c = g_c; }
+            if (op == OMEGA_NOP_FFMA_V) { for (size_t k = 0; k < N; k++) g_c[k] = g_a[N - 1 - k]; c = g_c; }
             OmegaParityTrace t;
             if (omega_numeric_reference(op, g_a, g_b, c, g_ref, N) != 0 ||
                 omega_numeric_reference_ftz(op, g_a, g_b, c, g_cpu, N) != 0 ||

@@ -57,8 +57,12 @@ GB10 encodings were added by E1 WP-C. Every instruction word decodes under
 nvdisasm 13.0.88 `-b SM121` to the intended instruction (provenance table in
 `src/omega_numeric_provenance.c`); control words follow ptxas 13.0.88 sm_121
 output. The structural checker (`omega_numeric_check_patch`) refuses a patch
-whose compare code, conversion mode, latency class or FFMA_V c path does not
-match the op. "Encoded" is not "correct on the chip": GB10 parity for each op
+whose compare code, conversion mode or latency class does not match the op,
+whose first instruction does not wait on the a/b loads, whose multi-instruction
+form does not end with the STG + EXIT pair, or whose FFMA_V c path is not
+LDC.64 R10 / IMAD.WIDE.U32 / LDG.E R11 (both scoreboarded) / FFMA R9, R2, R5, R11.
+The checker is structural only: it cannot show that a word computes the right
+value. "Encoded" is not "correct on the chip": GB10 parity for each op
 is one Gate 5 parity line at n=4096 with zero mismatches under the manifest
 compare mode (`tests/run_numeric_gates.sh`, now 38 ops), recorded in the
 chip receipt.
