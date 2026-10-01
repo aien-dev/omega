@@ -207,6 +207,21 @@ test-numeric-sweep:
 test-numeric-e1-exhaustive: build/test_omega_numeric_cpu
 	./build/test_omega_numeric_cpu --e1-exhaustive
 
+# E1 WP-D general reductions (docs/numeric/E1_REDUCTION_CONTRACT.md), CPU
+# tiers only: reference, CPU realization, oracles, negative order test and the
+# GB10 pre-submission checks. Opens no device. The chip parity run is
+# tests/run_reduce_chip.sh. Last line: "E1 Reduce Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY".
+.PHONY: test-numeric-reduce-cpu
+REDUCE_CPU_SRCS = tests/test_omega_reduce.c src/omega_numeric_reduce.c src/omega_numeric_reduce_gb10.c \
+                  src/omega_numeric.c src/omega_numeric_provenance.c \
+                  src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
+                  src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+build/test_omega_reduce_cpu: $(REDUCE_CPU_SRCS) src/omega_numeric_reduce.h $(NUMERIC_CPU_HDRS)
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(REDUCE_CPU_SRCS)
+test-numeric-reduce-cpu: build/test_omega_reduce_cpu
+	./build/test_omega_reduce_cpu
+
 # Resident reaction runtime heartbeat (ADR 0016, R3/R4 host reference).
 # CPU only; links no PHYSICS/NVRM code (omega_evidence.c needs only the header).
 RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
