@@ -23,6 +23,11 @@ typedef struct {
     int16_t vreg[OSC_CHECK_MAX_SYMS];
     int failed;
     int fi;                  /* function being lowered */
+    /* OSC-3 item 2: symbol kinds the lowerer must tell apart (reset per
+     * function). A pool symbol's vreg is its u64 pool id; a handle symbol's
+     * vreg r is its slot and r + 1 its generation. */
+    uint8_t ispool[OSC_CHECK_MAX_SYMS];
+    uint8_t ishandle[OSC_CHECK_MAX_SYMS];
 } L;
 
 #define NODE(i) (&l->ast->nodes[(i)])
@@ -102,7 +107,7 @@ static void releases(L *l, const OscNode *n)
         int s = l->ast->rel[n->rel_start + k];
         /* OSC-2 arenas: an arena symbol's vreg is its u64 handle (owners are REFs) */
         int arena = l->f->vtype[l->vreg[s]].s != OSC_T_REF;
-        OscInsn *x = emit(l, arena ? OSC_I_ADESTROY : OSC_I_RELEASE, n->line);
+        OscInsn *x = emit(l, l->ispool[s] ? OSC_I_PCLOSE : arena ? OSC_I_ADESTROY : OSC_I_RELEASE, n->line);
         x->a = l->vreg[s];
     }
 }
@@ -169,6 +174,15 @@ static int expr(L *l, int i)
     case ON_BOOL: return kconst(l, OSC_T_BOOL, n->ival ? 1 : 0, n->line);
     case ON_INT: return kconst(l, n->ty.s, n->cval, n->line);
     case ON_NAME: return l->vreg[n->sym];
+    case ON_HLOAD: { /* OSC-3 item 2: P[h] */
+        int r = newvs(l, n->ty.s, n->line);
+        OscInsn *x = emit(l, OSC_I_HLOAD, n->line);
+        x->dst = (int16_t)r;
+        x->a = l->vreg[n->sym];
+        x->b = l->vreg[n->sym2];
+        x->c = (int16_t)(l->vreg[n->sym2] + 1);
+        return r;
+    }
     case ON_INDEX: {
         int ix = expr(l, n->a);
         int r = newvs(l, n->ty.s, n->line);
@@ -266,6 +280,45 @@ static void ensures_check(L *l, int v)
     contract_check(l, a->ensn[l->fi], OSC_TRAP_ENSURES);
 }
 
+/* OSC-3 item 2: the (slot, gen) vregs of handle value i (ON_PALLOC allocates
+ * from its pool: HALLOC then HGEN; ON_NAME is a copy of another handle).
+ * Returns the slot vreg; *gen gets the generation vreg. */
+static int hval(L *l, int i, int *gen)
+{
+    const OscNode *v = NODE(i);
+    if (v->kind == ON_PALLOC) {
+        int init = expr(l, v->a);
+        int pool = l->vreg[v->sym];
+        int s = newvs(l, OSC_T_U64, v->line);
+        int g = newvs(l, OSC_T_U64, v->line);
+        OscInsn *x = emit(l, OSC_I_HALLOC, v->line);
+        x->dst = (int16_t)s;
+        x->a = (int16_t)init;
+        x->b = (int16_t)pool;
+        x = emit(l, OSC_I_HGEN, v->line);
+        x->dst = (int16_t)g;
+        x->a = (int16_t)pool;
+        x->b = (int16_t)s;
+        *gen = g;
+        return s;
+    }
+    int r = l->vreg[v->sym];
+    *gen = r + 1;
+    return r;
+}
+
+/* bind handle symbol s (vregs r, r + 1) to the value of node i */
+static void hbind(L *l, int s, int i, uint32_t line)
+{
+    int g, v = hval(l, i, &g);
+    OscInsn *x = emit(l, OSC_I_MOV, line);
+    x->dst = l->vreg[s];
+    x->a = (int16_t)v;
+    x = emit(l, OSC_I_MOV, line);
+    x->dst = (int16_t)(l->vreg[s] + 1);
+    x->a = (int16_t)g;
+}
+
 static void block(L *l, int i);
 
 static void stmt(L *l, int i)
@@ -335,6 +388,7 @@ static void stmt(L *l, int i)
         break;
     }
     case ON_ASSIGN: {
+        if (l->ishandle[n->sym]) { hbind(l, n->sym, n->a, n->line); break; }
         const OscNode *v = NODE(n->a);
         int src = v->kind == ON_BORROW ? l->vreg[n->sym2] : expr(l, n->a);
         OscInsn *x = emit(l, OSC_I_MOV, n->line);
@@ -468,6 +522,45 @@ static void stmt(L *l, int i)
     case ON_CALLSTMT:
         call(l, n->a, 0);
         break;
+    case ON_POOL: { /* OSC-3 item 2: POPEN, body, then (if live) PCLOSE */
+        int p = newvs(l, OSC_T_U64, n->line);
+        l->vreg[n->sym] = (int16_t)p;
+        l->ispool[n->sym] = 1;
+        OscInsn *x = emit(l, OSC_I_POPEN, n->line);
+        x->dst = (int16_t)p;
+        x->sub = (uint8_t)n->ty.s;
+        x->nargs = (uint8_t)n->ival;
+        x->imm = (uint64_t)n->lo;
+        block(l, n->b);
+        if (l->cur >= 0) releases(l, n);
+        break;
+    }
+    case ON_LET_HANDLE: {
+        int r = newvs(l, OSC_T_U64, n->line);
+        int g = newvs(l, OSC_T_U64, n->line);
+        if (g != r + 1) { lcap(l, n->line, "vreg limit"); break; }
+        l->vreg[n->sym] = (int16_t)r;
+        l->ishandle[n->sym] = 1;
+        hbind(l, n->sym, n->a, n->line);
+        break;
+    }
+    case ON_PFREE: {
+        OscInsn *x = emit(l, OSC_I_HFREE, n->line);
+        x->a = l->vreg[n->sym];
+        x->b = l->vreg[n->sym2];
+        x->c = (int16_t)(l->vreg[n->sym2] + 1);
+        break;
+    }
+    case ON_HSTORE: {
+        int v = expr(l, n->b);
+        OscInsn *x = emit(l, OSC_I_HSTORE, n->line);
+        x->a = l->vreg[n->sym];
+        x->b = l->vreg[n->sym2];
+        x->c = (int16_t)(l->vreg[n->sym2] + 1);
+        x->args[0] = (int16_t)v;
+        x->nargs = 1;
+        break;
+    }
     case ON_ARENA: { /* OSC-2: AOPEN, body, then (if live) the body's releases were
                       * emitted by block(); the arena's own list destroys it */
         int h = newvs(l, OSC_T_U64, n->line);
@@ -509,6 +602,8 @@ static int lower_fn(L *l, int fi)
     f->ret = fn->ty;
     l->nins = 0;
     l->nblk = 0;
+    memset(l->ispool, 0, sizeof l->ispool);
+    memset(l->ishandle, 0, sizeof l->ishandle);
     for (int p = fn->a; p >= 0; p = NODE(p)->next) {
         const OscNode *pn = NODE(p);
         int r = newv(l, &pn->ty, pn->line);

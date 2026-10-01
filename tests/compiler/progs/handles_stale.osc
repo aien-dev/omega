@@ -1,0 +1,43 @@
+// entry: stale dfree aba
+// OSC-3 item 2: a free the checker cannot decide (behind a branch) leaves the
+// handle and its copies checked at run time: a use or free whose generation
+// no longer matches the slot traps STALE, also after the slot was reused.
+// expect-run: stale 0 -> 7
+// expect-run: stale 1 -> trap=STALE
+// expect-run: dfree 0 -> 1
+// expect-run: dfree 1 -> trap=STALE
+// expect-run: aba 0 -> 10
+// expect-run: aba 1 -> trap=STALE
+fn stale(k: u8) -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 2] {
+        let h: handle p = p.alloc(7);
+        let c: handle p = h;
+        if k > 0 { p.free(h); }
+        s = p[c];
+    }
+    return s;
+}
+
+fn dfree(k: u8) -> i64 {
+    pool p: [i64; 1] {
+        let h: handle p = p.alloc(5);
+        if k == 1 { p.free(h); }
+        p.free(h);
+    }
+    return 1;
+}
+
+fn aba(k: u8) -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 1] {
+        let mut h: handle p = p.alloc(5);
+        let old: handle p = h;
+        if k > 0 {
+            p.free(h);
+            h = p.alloc(9);
+        }
+        s = p[h] + p[old];
+    }
+    return s;
+}

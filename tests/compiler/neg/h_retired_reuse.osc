@@ -1,0 +1,10 @@
+// expect: GENERATION_EXHAUSTED object=p line=7
+// transition: retired slot reused
+fn f() -> i64 {
+    pool p: [i64; 1] gen 18446744073709551615 {
+        let mut h: handle p = p.alloc(1);
+        p.free(h);
+        h = p.alloc(2);
+    }
+    return 0;
+}

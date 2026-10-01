@@ -199,6 +199,17 @@ static int parse_ref_body(P *p, OscType *ty, OscRefKind rk)
     return parse_arr_body(p, ty, rk);
 }
 
+/* OSC-3 item 2: pools and handles are function-local (never parameters or
+ * results) */
+static int local_only(P *p)
+{
+    const OscToken *t = cur(p);
+    osc_diag_set(p->d, OSC_DIAG_UNSUPPORTED, t->line, t->col, at(p, OT_HANDLE) ? "handle" : "pool", 0, NULL,
+                 "handle crosses a function boundary",
+                 "pools and handles are function-local: no handle or pool parameters or return types");
+    return -1;
+}
+
 /* ptype: scalar | own[..] | &[..] | &mut[..] | own S | &S | &mut S */
 static int parse_ptype(P *p, OscType *ty)
 {
@@ -209,6 +220,7 @@ static int parse_ptype(P *p, OscType *ty)
         return parse_ref_body(p, ty, OSC_REF_SHARED);
     }
     if (at(p, OT_NAME) && find_struct(p, cur(p)) >= 0) return struct_by_value(p, cur(p), "struct by value");
+    if (at(p, OT_HANDLE) || at(p, OT_POOL)) return local_only(p);
     return parse_scalar(p, ty);
 }
 
@@ -481,6 +493,19 @@ static int parse_primary(P *p)
         return n;
     case OT_NAME:
         if (peek_kind(p, 1) == OT_LPAREN) return parse_call(p);
+        if (peek_kind(p, 1) == OT_DOT && peek_kind(p, 2) == OT_ALLOC) { /* OSC-3 item 2: P.alloc(e) */
+            n = new_node(p, ON_PALLOC, t);
+            if (n < 0) return -1;
+            adv(p); adv(p); adv(p);
+            if (expect(p, OT_LPAREN)) return -1;
+            if (enter(p)) return -1;
+            int e0 = parse_expr(p);
+            leave(p);
+            if (e0 < 0) return -1;
+            N(n)->a = e0;
+            if (expect(p, OT_RPAREN)) return -1;
+            return n;
+        }
         if (peek_kind(p, 1) == OT_DOT) return parse_field_ref(p, ON_FIELD);
         if (peek_kind(p, 1) == OT_LBRACK) {
             n = new_node(p, ON_INDEX, t);
@@ -637,6 +662,22 @@ static int parse_stmt(P *p)
         if (n < 0) return -1;
         if (parse_name_tok(p, n)) return -1;
         if (expect(p, OT_COLON)) return -1;
+        if (at(p, OT_HANDLE)) { /* OSC-3 item 2: let [mut] h: handle P = P.alloc(e) | h2; */
+            N(n)->kind = ON_LET_HANDLE;
+            N(n)->mut = (uint8_t)mut;
+            adv(p);
+            if (!at(p, OT_NAME)) return syntax(p, "a pool name after 'handle'");
+            int pn = new_node(p, ON_NAME, cur(p));
+            if (pn < 0) return -1;
+            adv(p);
+            N(n)->c = pn;
+            if (expect(p, OT_ASSIGN)) return -1;
+            int e = parse_expr(p);
+            if (e < 0) return -1;
+            N(n)->a = e;
+            if (expect(p, OT_SEMI)) return -1;
+            return n;
+        }
         if (at(p, OT_OWN)) {
             if (mut) {
                 const OscToken *mt = &p->ast->toks[N(n)->tok - 1];
@@ -719,6 +760,19 @@ static int parse_stmt(P *p)
             if (expect(p, OT_SEMI)) return -1;
             return n;
         }
+        if (k1 == OT_DOT && peek_kind(p, 2) == OT_RESERVED && p->ast->toks[p->pos + 2].len == 4 &&
+            memcmp(p->ast->src + p->ast->toks[p->pos + 2].off, "free", 4) == 0) { /* OSC-3 item 2: P.free(h); */
+            n = new_node(p, ON_PFREE, t);
+            if (n < 0) return -1;
+            adv(p); adv(p); adv(p);
+            if (expect(p, OT_LPAREN)) return -1;
+            int h = parse_expr(p);
+            if (h < 0) return -1;
+            N(n)->a = h;
+            if (expect(p, OT_RPAREN)) return -1;
+            if (expect(p, OT_SEMI)) return -1;
+            return n;
+        }
         if (k1 == OT_DOT) {
             n = parse_field_ref(p, ON_FSTORE);
             if (n < 0) return -1;
@@ -764,6 +818,40 @@ static int parse_stmt(P *p)
         }
         adv(p);
         return syntax(p, "'=', '[' or '(' after a name at statement start");
+    }
+    case OT_POOL: { /* OSC-3 item 2: pool NAME: [T; K] [gen B] { ... } */
+        n = new_node(p, ON_POOL, t);
+        if (n < 0) return -1;
+        adv(p);
+        if (parse_name_tok(p, n)) return -1;
+        if (expect(p, OT_COLON)) return -1;
+        if (expect(p, OT_LBRACK)) return -1;
+        if (parse_scalar(p, &N(n)->ty)) return -1;
+        if (expect(p, OT_SEMI)) return -1;
+        if (!at(p, OT_INT)) return syntax(p, "a slot count INT");
+        const OscToken *kt = cur(p);
+        if (kt->ival == 0 || kt->ival > OSC_POOL_MAX_SLOTS) {
+            char nm[64];
+            osc_node_name(p->ast, N(n), nm, sizeof nm);
+            osc_diag_set(p->d, OSC_DIAG_POOL_CAPACITY, kt->line, kt->col, nm, t->line, NULL,
+                         "pool size outside 1..16", "pool size %llu outside 1..%d slots",
+                         (unsigned long long)kt->ival, OSC_POOL_MAX_SLOTS);
+            return -1;
+        }
+        N(n)->ival = kt->ival;
+        adv(p);
+        if (expect(p, OT_RBRACK)) return -1;
+        N(n)->lo = 0;
+        if (at(p, OT_NAME) && tok_eq(p, cur(p), "gen")) { /* declared generation base */
+            adv(p);
+            if (!at(p, OT_INT)) return syntax(p, "gen INT (the generation base)");
+            N(n)->lo = (int64_t)cur(p)->ival;
+            adv(p);
+        }
+        int b = parse_block(p);
+        if (b < 0) return -1;
+        N(n)->b = b;
+        return n;
     }
     case OT_ARENA: { /* OSC-2 arenas: arena NAME bound K { ... } */
         n = new_node(p, ON_ARENA, t);
@@ -985,6 +1073,7 @@ static int parse_fn(P *p)
             if (a->toks[q].kind == OT_NAME && find_struct(p, &a->toks[q]) >= 0)
                 return struct_by_value(p, &a->toks[q], "struct return type");
         }
+        if (at(p, OT_HANDLE) || at(p, OT_POOL)) return local_only(p);
         if (at(p, OT_OWN) || at(p, OT_AMP) || at(p, OT_LBRACK)) {
             const OscToken *t = cur(p);
             osc_diag_set(p->d, OSC_DIAG_UNSUPPORTED, t->line, t->col, fname, N(f)->line, NULL,

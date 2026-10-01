@@ -385,6 +385,44 @@ static void gen_func(Cg *g, const OscUnit *u, int fi) {
                 ld(g, 1, in->a);
                 rt_call(g, 40);
                 break;
+            /* OSC-3 item 2 pools: calls into the shared runtime */
+            case OSC_I_POPEN: /* x0 = rt->pool_open(rt, K, base) */
+                load_rt(g, 0);
+                mat(g, 1, in->nargs);
+                mat(g, 2, in->imm);
+                rt_call(g, 48);
+                st(g, 0, in->dst);
+                break;
+            case OSC_I_PCLOSE: /* rt->pool_close(rt, pool) */
+                load_rt(g, 0);
+                ld(g, 1, in->a);
+                rt_call(g, 56);
+                break;
+            case OSC_I_HALLOC: /* x0 = rt->h_alloc(rt, pool, init) */
+                load_rt(g, 0);
+                ld(g, 1, in->b);
+                ld(g, 2, in->a);
+                rt_call(g, 64);
+                st(g, 0, in->dst);
+                break;
+            case OSC_I_HGEN: /* x0 = rt->h_gen(rt, pool, slot) */
+                load_rt(g, 0);
+                ld(g, 1, in->a);
+                ld(g, 2, in->b);
+                rt_call(g, 72);
+                st(g, 0, in->dst);
+                break;
+            case OSC_I_HFREE:  /* rt->h_free(rt, pool, slot, gen) */
+            case OSC_I_HLOAD:  /* x0 = rt->h_load(rt, pool, slot, gen) */
+            case OSC_I_HSTORE: /* rt->h_store(rt, pool, slot, gen, value) */
+                load_rt(g, 0);
+                ld(g, 1, in->a);
+                ld(g, 2, in->b);
+                ld(g, 3, in->c);
+                if (in->op == OSC_I_HSTORE) ld(g, 4, in->args[0]);
+                rt_call(g, in->op == OSC_I_HFREE ? 80 : in->op == OSC_I_HLOAD ? 88 : 96);
+                if (in->op == OSC_I_HLOAD) st(g, 0, in->dst);
+                break;
             case OSC_I_LOAD:
             case OSC_I_STORE:
                 ld(g, 9, in->a);

@@ -1,0 +1,13 @@
+// expect: WRONG_POOL object=h line=9
+// transition: handle of another pool
+fn f() -> i64 {
+    let mut s: i64 = 0;
+    pool p: [i64; 2] {
+        pool q: [i64; 2] {
+            let h: handle p = p.alloc(1);
+            let g: handle q = q.alloc(2);
+            s = q[h] + q[g];
+        }
+    }
+    return s;
+}

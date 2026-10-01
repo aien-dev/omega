@@ -1,0 +1,5 @@
+// expect: UNSUPPORTED object=handle line=3
+// transition: handle crosses a function boundary
+fn f(h: handle p) -> i64 {
+    return 0;
+}
