@@ -3,7 +3,7 @@
 # frozen FP32 transcendental sequences (src/omega_numeric_transc.c), every
 # 2^32 input of each op compared bit for bit with the CPU tier.
 #
-# Usage: tools/run_numeric_transc_gate.sh [OP ...]   (default: EXP2 LOG2 SIGMOID TANH)
+# Usage: tools/run_numeric_transc_gate.sh [OP ...]   (default: EXP2 LOG2 SIGMOID TANH SIN COS ERF GELU)
 # Order: refuse a dirty omega tree or a physics checkout that is dirty or not
 # at the physics.lock pin; refuse while ~/workspace/.spark-quiet exists, an
 # est_load process runs or /tmp/aien-gb10.lock is held; run the host tier and
@@ -23,7 +23,7 @@ PHYSICS=${PHYSICS_DIR:-$HOME/workspace/hive-worktrees/physics-gate14-e95e3ed}
 EVID=${TRANSC_GB10_EVIDENCE_DIR:-$HOME/workspace/evidence-out/E1-TRANSC-GB10}
 QUIET=$HOME/workspace/.spark-quiet
 OWNER="lane2 E1 transcendental GB10 chip run"
-OPS=("$@"); [ ${#OPS[@]} -gt 0 ] || OPS=(EXP2 LOG2 SIGMOID TANH)
+OPS=("$@"); [ ${#OPS[@]} -gt 0 ] || OPS=(EXP2 LOG2 SIGMOID TANH SIN COS ERF GELU)
 RUN=$(mktemp -d /tmp/transc-gb10-run.XXXXXX)
 FLAG_MINE=0
 refuse() { echo "REFUSED: $*"; echo "VERDICT NOT_RUN"; exit 1; }
@@ -31,7 +31,7 @@ cleanup() { if [ "$FLAG_MINE" = 1 ] && grep -q "^$OWNER" "$QUIET" 2>/dev/null; t
 trap cleanup EXIT
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 
-for op in "${OPS[@]}"; do case "$op" in EXP2|LOG2|SIGMOID|TANH) ;; *) refuse "unknown op $op";; esac; done
+for op in "${OPS[@]}"; do case "$op" in EXP2|LOG2|SIGMOID|TANH|SIN|COS|ERF|GELU) ;; *) refuse "unknown op $op";; esac; done
 case "$(realpath -m "$EVID")/" in "$HERE"/*|"$(realpath -m "$PHYSICS")"/*) refuse "evidence dir $EVID is inside a candidate tree";; esac
 [ -z "$(git -C "$HERE" status --porcelain)" ] || refuse "omega tree $HERE is dirty"
 OMEGA_COMMIT=$(git -C "$HERE" rev-parse HEAD) || refuse "cannot read omega HEAD"
