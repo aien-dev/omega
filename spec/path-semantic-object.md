@@ -8,6 +8,8 @@ Status:          SPECIFICATION FOR PATH-0 / PATH-1
 Domain Tags:     "omega.path.v1" (semantic), "omega.path.realization.v1" (realization)
 ```
 
+> **Note 2026-10-01: the PATH-1 M1 experiment FAILED.** Result: nDCG +2.5% against a 5% target, and 27 ms latency against 0.38 ms for the baseline. The record is kept on the aien-sovereign-core branch `experiment/pearl-cortex-m1-fixture` (head `c934968557e70aeae375be061d1eb8c098d3bb39`). This specification is not evidence that M1 passed. Torn-write checks wait for the C disk layer.
+
 ---
 
 ## 1. Executive Principle and Scope

@@ -63,7 +63,7 @@ form does not end with the STG + EXIT pair, or whose FFMA_V c path is not
 LDC.64 R10 / IMAD.WIDE.U32 / LDG.E R11 (both scoreboarded) / FFMA R9, R2, R5, R11,
 or in which an instruction that sets a scoreboard stalls fewer than 2 cycles
 before its waiter. That last rule comes from the chip: the first Gate 5 run
-(2026-10-01, FAIL receipt d40f37f9) had the c load stall 1 cycle, the FFMA did not
+(2026-10-01, FAIL receipt `evidence/OMEGA-NUMERIC-0/d40f37f9f653e631b4c5e4b8c69dc8951b5bb0e74d4f102cb711441e718f111a.json`, run on omega `b0c7b9c`, added to the repository on 2026-10-01 as a new file; its name is its internal `receipt_digest`, the file itself hashes to `ef5db55e...`) had the c load stall 1 cycle, the FFMA did not
 see the barrier and read the stale address word (2349 of 4096 mismatches); with
 stall 4 a chip diagnostic gave 4096 of 4096 correct. Gate 5 then PASSED on
 omega 7211b59 + physics e95e3ed (receipt f4f6d362..., in

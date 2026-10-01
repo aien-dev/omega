@@ -1,0 +1,22 @@
+{
+  "candidate_binary_sha256": "df714ad5cb1d8d33fe661c63adc944876d56f244d16a315ac8e69a603c986c57",
+  "candidate_trees_clean": {
+    "omega": true,
+    "physics": true
+  },
+  "digest_meaning": "integrity only, not authenticity: re-hash blobs/<sha256>.{log,stderr,bin} named here",
+  "error": "gate binary exited with status 1; a crash or late failure disqualifies the run",
+  "gate": "M19R_GATE5_OMEGA_NUMERIC_0",
+  "gate_binary_exit_status": 1,
+  "gate_log_sha256": "400e81e10ffa5154fea027e5cdb8126a7e88e15f21a7bc0cdb19eca3da990c1f",
+  "gate_stderr_sha256": "089c11b6e55c0ce8ad79c010742804e66d80890f0dc54148b56f87bd363f8a8b",
+  "omega_head": "b0c7b9c3a9afdff04367de2bf2f8dfba28dbefbe",
+  "physics_head": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "receipt_digest": "d40f37f9f653e631b4c5e4b8c69dc8951b5bb0e74d4f102cb711441e718f111a",
+  "run_id": "20261001T045927Z-853d0c9f07c1",
+  "schema": "AIEN_OMEGA_NUMERIC_0_V1",
+  "status": "FAIL",
+  "supplied_omega_candidate": "b0c7b9c3a9afdff04367de2bf2f8dfba28dbefbe",
+  "supplied_physics_candidate": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "timestamp_utc": "2026-10-01T04:59:29.353822Z"
+}

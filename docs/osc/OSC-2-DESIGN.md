@@ -2,6 +2,8 @@
 
 OSC-2 slice; not a general Omega compiler; no self-hosting.
 
+Status note 2026-10-01: OSC-2 items 1 to 4 are merged (omega#148 `0abdb08` contracts, #149 `845dce4` structs, #150 `c773622` arenas, #151 `7e713e3` writer range checks). Status is IMPLEMENTED / NOT QUALIFIED (host receipts only). Shortfalls against the ADR and audit III.7 are listed in the addendum of `docs/osc/OSC-1-SELF-HOST-STATEMENT.md`.
+
 OSC-2 extends the OSC-1 slice (`docs/osc/OSC-1-DESIGN.md`) item by item. Everything
 OSC-1 states stays in force unless a section below changes it. Each item ships with
 its own golden programs, named negatives, fuzz coverage and a receipt
