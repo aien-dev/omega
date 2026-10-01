@@ -25,6 +25,7 @@ on:
       - 'src/visor/visor_realization.*'
       - 'tests/realize/**'
       - 'mk/program-realize.mk'
+      - 'mk/machine-identity.mk'
       - '.github/workflows/rx-host.yml'
       - 'aienos.lock'
       - 'argus.lock'
@@ -54,6 +55,7 @@ on:
       - 'src/visor/visor_realization.*'
       - 'tests/realize/**'
       - 'mk/program-realize.mk'
+      - 'mk/machine-identity.mk'
       - '.github/workflows/rx-host.yml'
       - 'aienos.lock'
       - 'argus.lock'
@@ -97,6 +99,8 @@ jobs:
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
           AIENOS_COMMIT: ${{ steps.aienos.outputs.sha }}
         run: make test-r3 test-r7 test-r8 test-r9 test-r12 test-action-graph test-state-projection test-capability-query test-semantic-comm test-cognitive-routing test-sem-incremental test-cortex
+      - name: Canonical machine identity (M20)
+        run: make test-machine-identity
       - name: Effect capability generations are 64-bit end to end (OMEGA_EFFECT_CAP64)
         env:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src

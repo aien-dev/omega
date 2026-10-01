@@ -31,6 +31,7 @@ In sovereign architecture:
 3. **Execution Pipeline Modeling**: Explicit representation of issue width, dispatch ports, execution latency, and throughput per unit type.
 4. **Memory Hierarchy Modeling**: Multi-level cache topologies (L1I, L1D, L2, L3) with capacity, line size, associativity, and cycle latency.
 5. **Topology Disambiguation**: Heterogeneous microarchitectures (e.g., NVIDIA DGX Spark Neoverse V2 vs QEMU Cortex-A57) yield distinct `MACHINE_ID`s.
+   `MACHINE_ID` here names a hardware *profile*, not a machine: two boxes of the same model share it. The identity of one physical machine is the canonical `AienMachineId` (`src/runtime/aien_machine_id.h`, M20), which FORGE `machine_identity`, the AIENOS receipt `machine_id_digest` and ARGUS `machine_id` all carry.
 6. **Realization Cost Grounding**: $G_M$ provides empirical cost functions (cycle latency, register pressure limits) to guide optimal realization synthesis.
 
 ---
