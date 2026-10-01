@@ -376,6 +376,7 @@ void fab_state_digest(const FabNode *n, uint8_t out[32]) {
     sha256_update(&h, evd, 32);
     for (uint32_t i = 0; i < n->n_members; i++) {
         const FabMember *m = &n->members[i];
+        sha256_update(&h, &m->machine.root, 1);  /* provenance, not identity */
         sha256_update(&h, m->machine.id, AIEN_MID_ID_BYTES);
         w32(b, m->state); sha256_update(&h, b, 4);
         w64(b, m->generation); sha256_update(&h, b, 8);
