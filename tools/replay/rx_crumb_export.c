@@ -3,13 +3,13 @@
 
 #include <string.h>
 
-_Static_assert(RXL_MAX_DEPS == RX_MAX_DEPS, "rxlog input limit drifted from rx_world.h");
-_Static_assert(RXL_MAX_WRITES == RX_MAX_WRITES, "rxlog output limit drifted from rx_world.h");
-_Static_assert(RXL_MAX_CAPS == RX_MAX_CAPS, "rxlog cap limit drifted from rx_world.h");
-_Static_assert(RXL_MAX_PARENTS == RX_MAX_PARENTS, "rxlog parent limit drifted from rx_world.h");
-_Static_assert(RXL_MAX_MUTS == RX_MAX_MUTATIONS, "rxlog mutation limit drifted from rx_world.h");
-_Static_assert(RXL_K_EXTERNAL == RX_CRUMB_EXTERNAL && RXL_K_CREATE == RX_CRUMB_CREATE &&
-               RXL_K_MAX == RX_CRUMB_QUARANTINE, "rxlog crumb kinds drifted from rx_world.h");
+_Static_assert((int)RXL_MAX_DEPS == (int)RX_MAX_DEPS, "rxlog input limit drifted from rx_world.h");
+_Static_assert((int)RXL_MAX_WRITES == (int)RX_MAX_WRITES, "rxlog output limit drifted from rx_world.h");
+_Static_assert((int)RXL_MAX_CAPS == (int)RX_MAX_CAPS, "rxlog cap limit drifted from rx_world.h");
+_Static_assert((int)RXL_MAX_PARENTS == (int)RX_MAX_PARENTS, "rxlog parent limit drifted from rx_world.h");
+_Static_assert((int)RXL_MAX_MUTS == (int)RX_MAX_MUTATIONS, "rxlog mutation limit drifted from rx_world.h");
+_Static_assert((int)RXL_K_EXTERNAL == (int)RX_CRUMB_EXTERNAL && (int)RXL_K_CREATE == (int)RX_CRUMB_CREATE &&
+               (int)RXL_K_MAX == (int)RX_CRUMB_QUARANTINE, "rxlog crumb kinds drifted from rx_world.h");
 
 void rxx_crumb(const RxCrumb *k, rxl_crumb *o) {
     memset(o, 0, sizeof *o);
