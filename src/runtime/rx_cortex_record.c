@@ -166,3 +166,39 @@ uint64_t rx_cortex_recall_result(CxStore *s, uint32_t obj_slot, CxWorldRecord *o
     if (cx_recall_id(s, id, &r) != CX_OK || cx_world_decode(&r, out) != CX_OK) return 0;
     return id;
 }
+
+/* COMPOSITION-2: records the composition layer adds about World work
+ * (candidates, verification evidence, admissions, promotions) go through the
+ * same single writer, under the world mutex so they interleave with crumb
+ * records in one order. */
+int rx_cortex_append(RxWorld *w, const CxHeader *h, const uint64_t *payload, uint32_t n,
+                     uint64_t *out_id) {
+    if (!w || !h) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    CortexLink *l = w->recorder == record ? w->recorder_ctx : NULL;
+    int rc = !l ? RX_ERR_NOT_FOUND
+           : cx_append_as(l->s, l->token, h, payload, n, out_id) == CX_OK ? RX_OK : RX_ERR_FULL;
+    if (l && rc != RX_OK) l->errors++;
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_cortex_promote(RxWorld *w, uint64_t candidate, uint64_t evidence, uint64_t *out_id) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    CortexLink *l = w->recorder == record ? w->recorder_ctx : NULL;
+    int rc = !l ? RX_ERR_NOT_FOUND
+           : cx_promote(l->s, l->token, candidate, evidence, l->s->n + 1, out_id) == CX_OK
+           ? RX_OK : RX_ERR_ARG;
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+uint64_t rx_cortex_next_t(RxWorld *w) {
+    if (!w) return 0;
+    pthread_mutex_lock(&w->mu);
+    CortexLink *l = w->recorder == record ? w->recorder_ctx : NULL;
+    uint64_t t = l ? l->s->n + 1 : 0;
+    pthread_mutex_unlock(&w->mu);
+    return t;
+}

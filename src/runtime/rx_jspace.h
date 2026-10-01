@@ -332,6 +332,17 @@ uint32_t js_space_reclaim_staged(JsSpace *s);
 int  js_branch_set_owner(JsSpace *s, JsBranchRef b, uint32_t owner);
 int  js_branch_set_home(JsSpace *s, JsBranchRef b, const JsHome *home);
 int  js_branch_home(JsSpace *s, JsBranchRef b, JsHome *out);
+/* COMPOSITION-2: lifecycle facts of one branch, read under the space lock
+ * (JS_ERR_STALE for a reclaimed reference). parent_gen is the generation of
+ * the parent slot's current occupant, 0 when the branch is a root or the
+ * parent slot is empty. */
+typedef struct {
+    uint32_t owner;
+    uint32_t parent, parent_gen;
+    bool staged;
+    uint32_t locality;              /* JsLocality */
+} JsBranchInfo;
+int  js_branch_info(JsSpace *s, JsBranchRef b, JsBranchInfo *out);
 
 /* Measure the costs the policy reads, for this realizer on this machine. */
 void js_calibrate(JsSpace *s, const JsRealizer *r);
