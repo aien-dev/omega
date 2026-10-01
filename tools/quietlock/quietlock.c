@@ -42,9 +42,10 @@
  * Rules worth knowing
  * - No state dir (GitHub CI, another machine): check is clear (exit 0).
  * - Refusals print the fixed marker QUIETLOCK_REFUSED and exit 75.
- * - Overrun: at expected_end, `hold` releases the flag and logs
- *   "overrun: hold expired while command still running". It never kills the
- *   command. So --minutes is a real cap on how long others are blocked.
+ * - Overrun: expected_end is ADVISORY (Drake 2026-10-01). If the command is
+ *   still running when it passes, `hold` KEEPS the flag and logs one
+ *   "overrun:" warning; the flag is released only when the command exits.
+ *   The command is never killed.
  * - Legacy flags (no hold= token) let their holder through with
  *   QUIET_HOLDER=1, DEPRECATED, logged, for the transition only.
  * - QUIETLOCK_DIR moves the state dir (tests use it). Anyone can point it at an
@@ -454,12 +455,9 @@ static void release_mine(const char *id, int rc, int overrun)
 		if (unlink(g_flag) != 0)
 			fprintf(stderr, "quietlock: cannot remove flag %s: %s\n", g_flag, strerror(errno));
 		if (overrun)
-			history("overrun: hold expired while command still running (hold %s); flag released, "
-				"command NOT killed", id);
+			history("hold %s released when its command exited after overrun (command exit %d)", id, rc);
 		else
 			history("hold %s released (command exit %d)", id, rc);
-	} else if (overrun) {
-		history("overrun: hold %s expired; flag already gone or replaced, left alone", id);
 	} else {
 		history("hold %s: flag already gone or replaced at exit, left alone (command exit %d)", id, rc);
 	}
@@ -487,7 +485,7 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 	int fd, tfd, n, status = 0, rc;
 	pid_t child;
 	time_t now, end_t;
-	int released = 0;
+	int overrun = 0;
 
 	if (!owner || !valid_owner(owner)) {
 		fprintf(stderr, "quietlock: --owner must be 1-64 chars of A-Z a-z 0-9 . _ -\n");
@@ -599,18 +597,20 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 	g_child = child;
 	if (g_sig)
 		kill(child, g_sig);
-	/* At expected_end the hold ends even if the command is still running: the
-	 * flag is released and an overrun line logged. The command is NEVER killed
-	 * (standing rule: chip tests are never killed). */
+	/* Drake 2026-10-01: expected_end is ADVISORY. When it passes and the command
+	 * is still running, the hold is KEPT and one overrun warning is logged. The
+	 * flag is released only when the command exits (below). The command is NEVER
+	 * killed (standing rule: chip tests are never killed). */
 	for (;;) {
 		pid_t w;
-		if (!released) {
+		if (!overrun) {
 			time_t t = time(NULL);
 			if (t >= end_t) {
-				release_mine(id, 0, 1);
-				released = 1;
-				fprintf(stderr, "quietlock: hold %s reached expected_end; flag released, command left running\n",
-					id);
+				overrun = 1;
+				history("overrun: hold %s passed expected_end while command still running; flag KEPT "
+					"until the command exits, command NOT killed", id);
+				fprintf(stderr, "quietlock: WARNING overrun: hold %s passed expected_end; flag kept until "
+						"the command exits\n", id);
 			} else {
 				alarm((unsigned)(end_t - t));
 			}
@@ -630,10 +630,7 @@ static int cmd_hold(const char *owner, const char *mins, const char *reason_in, 
 		rc = 128 + WTERMSIG(status);
 	else
 		rc = 1;
-	if (released)
-		history("hold %s: command finished after overrun (exit %d)", id, rc);
-	else
-		release_mine(id, rc, 0);
+	release_mine(id, rc, overrun);
 	return rc;
 }
 

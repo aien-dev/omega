@@ -199,22 +199,29 @@ live_flag
 QUIET_HOLDER=1 "$Q" check 2>/dev/null; rc=$?
 check "T12b QUIET_HOLDER=1 does not pass a quietlock hold" '[ $rc = 75 ]'
 
-# --- T13 overrun: a 1-"minute" hold around a longer command stops blocking others at
-# expected_end, logs the overrun, and does NOT kill the command.
+# --- T13 overrun (Drake 2026-10-01: expected_end is ADVISORY). A 1-"minute" hold around a longer
+# command KEEPS the flag past expected_end while the command runs, logs one "overrun" warning, and
+# releases the flag only when the command exits. The command is never killed.
 # (QUIETLOCK_TEST_MINUTE_SECONDS=2 shortens a minute to 2 s; honoured only with QUIETLOCK_TEST=1.)
-# Mutations killed: removing the alarm/overrun release (check stays 75); killing the child at overrun.
+# Mutations killed: releasing the flag at expected_end (T13a flag gone, check 0, second hold wins);
+# dropping the overrun warning (T13a grep fails); not releasing at command exit (T13b flag stays);
+# killing the child at overrun (T13a kill -0 fails, T13b rc/done fail).
 reset
 QUIETLOCK_TEST=1 QUIETLOCK_TEST_MINUTE_SECONDS=2 "$Q" hold --owner A --minutes 1 -- \
-	sh -c 'touch "$1/started"; while [ ! -e "$1/go" ]; do sleep 1; done; touch "$1/done"' sh "$T" 2>/dev/null &
+	sh -c 'touch "$1/started"; while [ ! -e "$1/go" ]; do sleep 1; done; touch "$1/done"' sh "$T" 2>"$T/t13.err" &
 hp=$!
-i=0; while [ $i -lt 20 ] && ! grep -q "overrun: hold expired while command still running" "$HIST" 2>/dev/null; do sleep 1; i=$((i + 1)); done
-check "T13 overrun line appended to history at the declared end" 'grep -q "overrun: hold expired while command still running" "$HIST"'
+i=0; while [ $i -lt 20 ] && ! grep -q "overrun: hold .* passed expected_end" "$HIST" 2>/dev/null; do sleep 1; i=$((i + 1)); done
 "$Q" check 2>/dev/null; crc=$?
-check "T13 after expected_end others are not blocked, command still running" \
-	'[ $crc = 0 ] && [ ! -e "$FLAG" ] && [ -e "$T/started" ] && [ ! -e "$T/done" ] && kill -0 $hp 2>/dev/null'
+"$Q" release-stale >/dev/null 2>&1; src=$?
+"$Q" hold --owner B --minutes 1 -- true 2>/dev/null; hrc=$?
+check "T13a past expected_end with a live holder: flag still held, overrun logged, others refused" \
+	'grep -q "overrun: hold .* passed expected_end while command still running; flag KEPT" "$HIST" && grep -q "WARNING overrun" "$T/t13.err" && [ -e "$FLAG" ] && grep -q "^A quietlock " "$FLAG" && [ $crc = 75 ] && [ $src = 3 ] && [ $hrc = 75 ] && [ -e "$T/started" ] && [ ! -e "$T/done" ] && kill -0 $hp 2>/dev/null'
 touch "$T/go"; wait $hp; rc=$?
-check "T13b overrun command finished normally and was logged" '[ $rc = 0 ] && [ -e "$T/done" ] && grep -q "finished after overrun (exit 0)" "$HIST"'
-rm -f "$T/started" "$T/go" "$T/done"
+check "T13b holder exits after overrun: flag released and logged" \
+	'[ $rc = 0 ] && [ -e "$T/done" ] && [ ! -e "$FLAG" ] && grep -q "released when its command exited after overrun (command exit 0)" "$HIST"'
+"$Q" check 2>/dev/null; crc=$?
+check "T13c after the holder exits others are not blocked" '[ $crc = 0 ]'
+rm -f "$T/started" "$T/go" "$T/done" "$T/t13.err"
 
 # --- T14 expected_end without Z never counts as passed.
 # Mutation killed: making the trailing Z optional in parse_iso.
