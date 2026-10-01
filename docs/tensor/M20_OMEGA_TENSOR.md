@@ -104,11 +104,11 @@ removed. Order and padding mutations are caught by the E1 WP-D suite.
 | Generation safety | PASS (CPU) | use after release, double release, stale view of released storage (read, info, op, matmul, view, id), no ABA on slot reuse, UINT64_MAX retirement |
 | Immutability / no in-place | PASS (CPU) | no write API exists; input value ids unchanged by every op; outputs never alias inputs |
 | CPU parity | PASS (CPU) | every op bit-exact vs independent reference (omega_ref_*, omega_ieee_div/sqrt, omega_ref_ffma_int, own tree copy), random + all special pairs |
-| Transcendental unary ops (EXP2, LOG2, SIGMOID, TANH) | NOT_RUN | CPU tier, branch `hive/M20-transc`, awaiting forge receipt. Bounded contract, NOT correctly rounded (max ulp EXP2 2, LOG2 2, SIGMOID 3, TANH 3; `docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md`). `test-tensor` section 7b: raw-bit equality with direct `omega_math_*` calls on dense, transposed, strided-slice-with-offset, transpose-of-slice, broadcast row/scalar and rank-0 operands incl. specials; canonical qNaN; unknown op / F16 / stale / missing `transc` entry refused. Mutants `TRANSC_EXP2_LOG2_SWAP`, `UNARY_VIEW_STRIDE` in `test-tensor-mutations` |
+| Transcendental unary ops (EXP2, LOG2, SIGMOID, TANH) | PASS (CPU) | Host PASS, CPU tier: forge log `HIVE-M20-transc-175026` (`test-tensor` + `test-tensor-mutations`, 7/7 mutants caught). Bounded contract, NOT correctly rounded (max ulp EXP2 2, LOG2 2, SIGMOID 3, TANH 3; `docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md`). `test-tensor` section 7b: raw-bit equality with direct `omega_math_*` calls on dense, transposed, strided-slice-with-offset, transpose-of-slice, broadcast row/scalar and rank-0 operands incl. specials; canonical qNaN; unknown op / F16 / stale / missing `transc` entry refused. Mutants `TRANSC_EXP2_LOG2_SWAP`, `UNARY_VIEW_STRIDE` in `test-tensor-mutations` |
 | GB10 transcendental tensor ops | NOT_RUN | GB10 transcendental tensor ops: NOT_RUN (follow-up). No GB10 `transc` entry; a table without one refuses these ops with `OMEGA_TENSOR_ERR_REALIZATION` |
 | General matmul | PASS (CPU) | 1x1x1, 7x13x5, 64x64x64, 129x3x257, 3x1025x2, 1x33x1, strided views, batched broadcast [2,1,3,4]x[5,4,6] |
 | Reductions | PASS (CPU) | lengths 1..32769 across tile/level edges, every axis of [3,37,5], keepdims, view vs copy, -0 sum |
-| Mutation / refusal | PASS (CPU) | `test-tensor-mutations`: 5/5 source mutations caught; 2 in-process mutant realizations (sequential sum, FFMA chain) caught; wrong order string refused |
+| Mutation / refusal | PASS (CPU) | `test-tensor-mutations`: 7/7 source mutations caught; 2 in-process mutant realizations (sequential sum, FFMA chain) caught; wrong order string refused |
 | Determinism | PASS (CPU) | repeated run same value id; frozen KAT value id in the test |
 | Test-only hook not in library | PASS (CPU) | `omega_tensor_test_set_storage_generation` exists only under `-DOMEGA_TENSOR_TEST_HOOKS` (test builds in `mk/tensor.mk`); `test-tensor-no-hooks` (run by `test-tensor`) builds the default objects and fails if `nm` shows the symbol |
 | CI | WIRED | `host-suites-2.yml` job `tensor`: `test-tensor` + `test-tensor-mutations` on the AArch64 hosted runner (not the Spark, not a qualification) |
@@ -124,8 +124,8 @@ lifetime and receipt MISSING_IMPLEMENTATION.
 ## Open seams
 
 1. Reductions: DONE, the seam calls `omega_reduce_cpu` (#134 merged).
-2. Transcendentals (#127): CPU tier landed on branch `hive/M20-transc`
-   (host NOT_RUN until the forge receipt). `OmegaTensorUnaryOp` gained
+2. Transcendentals (#127): CPU tier host PASS (CPU), forge log
+   `HIVE-M20-transc-175026`. `OmegaTensorUnaryOp` gained
    `OMEGA_TU_EXP2`, `OMEGA_TU_LOG2`, `OMEGA_TU_SIGMOID`, `OMEGA_TU_TANH`
    (appended after SQRT, no renumbering). They are bounded-contract ops, not
    correctly rounded: the CPU realization's optional `transc` entry calls
