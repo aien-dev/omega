@@ -251,12 +251,12 @@ static int node_backward(OmegaAdTape *t, const OmegaAdNode *n) {
         }
         if (wants(t, n->in1)) {
             /* gb = -(g * (y / b)) */
-            rc = omega_tensor_binary(t->ctx, OMEGA_TB_DIV, n->value, nb->value, &tmp);
+            rc = omega_tensor_binary(t->ctx, OMEGA_TB_DIV, n->value, nb->value, &tmp); /* MUT:DIV_FORMULA */
             if (rc) return rc;
-            rc = omega_tensor_binary(t->ctx, OMEGA_TB_MUL, g, tmp, &c2);
+            rc = omega_tensor_binary(t->ctx, OMEGA_TB_MUL, g, tmp, &c2); /* MUT:DIV_FORMULA */
             rel(t, tmp);
             if (rc) return rc;
-            rc = scale(t, c2, -1.0f, &c);
+            rc = scale(t, c2, -1.0f, &c); /* MUT:DIV_B_SIGN */
             rel(t, c2);
             if (!rc) rc = contribute(t, n->in1, c);
         }

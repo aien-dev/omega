@@ -1,14 +1,18 @@
 /*
  * M21 OMEGA_AUTODIFF CPU tests (docs/autodiff/M21_OMEGA_AUTODIFF.md).
  *
- * Three independent checks of every backward rule, all computed here:
+ * Four independent checks of every backward rule, all computed here:
  *  1. Contract: the tape's gradient against an exact reference written in
  *     this file from the calculus (double precision, index arithmetic on
  *     shapes only), within the per-op bound of omega_autodiff.h.
- *  2. Finite differences: central differences of the M20 CPU forward pass
- *     (the same tape ops, re-run on perturbed inputs), PROPOSED tolerance
- *     |tape - fd| <= FD_ATOL + FD_RTOL * |fd| with step FD_H.
- *  3. Determinism: two full runs in two contexts give bit-identical
+ *  2. Bit-exact (approved M21 gate): the backward rule replayed here by
+ *     calling the same M20 tensor ops directly, in the tape's order; the
+ *     tape's gradient must equal it bit for bit (memcmp).
+ *  3. Finite differences (approved M21 gate): central differences of the M20
+ *     CPU forward pass (the same tape ops, re-run on perturbed inputs), pure
+ *     relative tolerance |tape - fd| <= FD_RTOL * |fd| with step FD_H, on a
+ *     separate data set whose gradients are away from zero (or exactly zero).
+ *  4. Determinism: two full runs in two contexts give bit-identical
  *     gradients and the same loss value id.
  * Plus the error paths (tape full, shape mismatch, seed shape, state,
  * scratch, dtype, bad ids) and a leak check. Each check computes its own
@@ -31,8 +35,14 @@ static int g_pass, g_fail;
 static OmegaTensorCtx *g;
 
 #define FD_H    0.015625   /* 2^-6 */
+/* Approved M21 gate (owner, 2026-10-01): "gradients bit-exact against the same
+ * M20 operations, plus a finite-difference check within 1e-3 relative error".
+ * FD_RTOL is that 1e-3 relative bound, applied with no absolute slack term
+ * (fd_ok below). Near-zero gradients are not compared against FD: the FD data
+ * sets (gen_fd_data, lin_data_fd) keep every gradient element either >= ~0.1
+ * in magnitude or exactly zero, and every element, near zero or not, is
+ * covered by the bit-exact layer. Do not raise FD_RTOL or add an absolute term. */
 #define FD_RTOL 1e-3
-#define FD_ATOL 5e-4
 #define U32     5.9604644775390625e-08   /* 2^-24 */
 #define MAXE    128
 
@@ -50,6 +60,9 @@ static double dsqrt(double a) {
     }
     return y;
 }
+
+/* Approved M21 FD gate: relative error <= 1e-3, no absolute term. */
+static bool fd_ok(double an, double fd) { return dabs(an - fd) <= FD_RTOL * dabs(fd); }
 
 static double gamma_k(int k) { return k * U32 / (1.0 - k * U32); }
 
@@ -317,6 +330,241 @@ static void gen_data(const OpCase *c, float *a, float *b) {
     }
 }
 
+/*
+ * FD data set. With the FD seed R in [0.5, 1], every gradient element is a
+ * sum of same-sign terms of magnitude >= ~0.1, or exactly zero (MAX routing,
+ * where the perturbed forward is unchanged and fd is exactly 0 too), so the
+ * pure relative bound compares meaningful values. ADD/SUB/BROADCAST/SUM/MEAN/
+ * TRANSPOSE/MAX gradients depend only on R; SQRT keeps a in [1, 4]; MUL,
+ * DIV and MATMUL get positive operands here.
+ */
+#define FD_RLO 0.5f
+#define FD_RHI 1.0f
+static void gen_fd_data(const OpCase *c, float *a, float *b) {
+    size_t na = numel(c->ra, c->sa), nb = c->has_b ? numel(c->rb, c->sb) : 0;
+    gen_data(c, a, b);
+    switch (c->op) {
+    case OMEGA_AD_MUL: case OMEGA_AD_MATMUL:
+        for (size_t i = 0; i < na; i++) a[i] = urand(0.5f, 1.0f);
+        for (size_t i = 0; i < nb; i++) b[i] = urand(0.5f, 1.0f);
+        break;
+    case OMEGA_AD_DIV: /* b stays in [1, 2] */
+        for (size_t i = 0; i < na; i++) a[i] = urand(1.0f, 2.0f);
+        break;
+    default: break;
+    }
+}
+
+/* Records the case on a fresh tape, seeds backward with R drawn from
+ * [rlo, rhi] (y's shape, written to R), reads the gradients of a (and b). */
+static int tape_grads(const OpCase *c, const float *a, const float *b, float rlo, float rhi,
+                      float *R, size_t *ny, float *ga, float *gb) {
+    OmegaAdNode nodes[4];
+    OmegaAdTape t;
+    float scratch[3 * MAXE];
+    size_t na = numel(c->ra, c->sa), nb = c->has_b ? numel(c->rb, c->sb) : 0;
+    memset(&t, 0, sizeof(t));
+    OmegaTensor ta = mk(c->ra, c->sa, a), tb = { 0, 0 }, ty = { 0, 0 }, tr = { 0, 0 };
+    if (c->has_b) tb = mk(c->rb, c->sb, b);
+    OmegaTensorInfo yi;
+    memset(&yi, 0, sizeof(yi));
+    uint32_t ia = 0, ib = 0, iy = 0;
+    int rc = omega_ad_tape_init(&t, g, nodes, 4, scratch, 3 * MAXE);
+    if (!rc) rc = build(c, &t, ta, tb, &ia, &ib, &iy);
+    if (!rc) rc = omega_ad_value(&t, iy, &ty);
+    if (!rc) rc = omega_tensor_info(g, ty, &yi);
+    if (!rc) {
+        *ny = (size_t)yi.elements;
+        for (size_t i = 0; i < *ny; i++) R[i] = urand(rlo, rhi);
+        tr = mk(yi.rank, yi.shape, R);
+        rc = omega_ad_backward_seed(&t, iy, tr);
+        omega_tensor_release(g, tr);
+    }
+    if (!rc) rc = omega_ad_grad_read_f32(&t, ia, ga, na);
+    if (!rc && c->has_b) rc = omega_ad_grad_read_f32(&t, ib, gb, nb);
+    omega_ad_tape_release(&t);
+    omega_tensor_release(g, ta);
+    if (c->has_b) omega_tensor_release(g, tb);
+    return rc;
+}
+
+/* ---- bit-exact layer: each backward rule replayed with direct M20 calls ----------- */
+
+static int rp_scalar(float v, OmegaTensor *out) {
+    uint64_t dummy = 1;
+    return omega_tensor_from_f32(g, 0, &dummy, &v, out);
+}
+
+/* Reads x into out and releases x. */
+static int rp_take(OmegaTensor x, float *out, size_t n) {
+    int rc = omega_tensor_read_f32(g, x, out, n);
+    omega_tensor_release(g, x);
+    return rc;
+}
+
+/* Sums `full` (consumed) back to shape (rt, st) in the tape's order: extra
+ * leading axes first (reduce SUM over axis 0, one at a time), then every
+ * size-1 axis of the target (reduce SUM, keepdims), and reads the result. */
+static int rp_out(OmegaTensor full, uint32_t rt, const uint64_t *st, float *out) {
+    OmegaTensor cur = full;
+    OmegaTensorInfo ci;
+    int rc = omega_tensor_info(g, cur, &ci);
+    while (!rc && ci.rank > rt) {
+        OmegaTensor nx;
+        rc = omega_tensor_reduce(g, OMEGA_TR_SUM, cur, 0, false, &nx);
+        omega_tensor_release(g, cur);
+        if (rc) return rc;
+        cur = nx;
+        rc = omega_tensor_info(g, cur, &ci);
+    }
+    for (uint32_t d = 0; !rc && d < rt; d++) {
+        if (st[d] == 1 && ci.shape[d] != 1) {
+            OmegaTensor nx;
+            rc = omega_tensor_reduce(g, OMEGA_TR_SUM, cur, d, true, &nx);
+            omega_tensor_release(g, cur);
+            if (rc) return rc;
+            cur = nx;
+            rc = omega_tensor_info(g, cur, &ci);
+        }
+    }
+    if (rc) { omega_tensor_release(g, cur); return rc; }
+    return rp_take(cur, out, numel(rt, st));
+}
+
+/*
+ * Expected gradients ea (and eb) for seed tg: the backward formula of the
+ * case's op computed here with the same M20 calls the tape is documented to
+ * make (omega_autodiff.h), in the same order. MAX routing is the documented
+ * host data move, with the routing rule written here independently.
+ */
+static int replay(const OpCase *c, OmegaTensor ta, OmegaTensor tb, OmegaTensor tg,
+                  const OmegaTensorInfo *yi, float *ea, float *eb) {
+    OmegaTensor x = { 0, 0 }, x2 = { 0, 0 }, k = { 0, 0 };
+    int rc = 0;
+    switch (c->op) {
+    case OMEGA_AD_ADD: case OMEGA_AD_SUB:
+        rc = omega_tensor_contiguous(g, tg, &x);
+        if (!rc) rc = rp_out(x, c->ra, c->sa, ea);
+        if (rc) return rc;
+        if (c->op == OMEGA_AD_ADD) {
+            rc = omega_tensor_contiguous(g, tg, &x);
+        } else {
+            rc = rp_scalar(-1.0f, &k);
+            if (rc) return rc;
+            rc = omega_tensor_binary(g, OMEGA_TB_MUL, tg, k, &x);
+            omega_tensor_release(g, k);
+        }
+        if (!rc) rc = rp_out(x, c->rb, c->sb, eb);
+        return rc;
+    case OMEGA_AD_MUL:
+        rc = omega_tensor_binary(g, OMEGA_TB_MUL, tg, tb, &x);
+        if (!rc) rc = rp_out(x, c->ra, c->sa, ea);
+        if (!rc) rc = omega_tensor_binary(g, OMEGA_TB_MUL, tg, ta, &x);
+        if (!rc) rc = rp_out(x, c->rb, c->sb, eb);
+        return rc;
+    case OMEGA_AD_DIV: {
+        OmegaTensor y = { 0, 0 };
+        rc = omega_tensor_binary(g, OMEGA_TB_DIV, tg, tb, &x);             /* g / b */
+        if (!rc) rc = rp_out(x, c->ra, c->sa, ea);
+        if (rc) return rc;
+        rc = omega_tensor_binary(g, OMEGA_TB_DIV, ta, tb, &y);             /* y = a / b */
+        if (rc) return rc;
+        rc = omega_tensor_binary(g, OMEGA_TB_DIV, y, tb, &x2);             /* y / b */
+        omega_tensor_release(g, y);
+        if (rc) return rc;
+        rc = omega_tensor_binary(g, OMEGA_TB_MUL, tg, x2, &x);             /* g * (y / b) */
+        omega_tensor_release(g, x2);
+        if (rc) return rc;
+        rc = rp_scalar(-1.0f, &k);
+        if (rc) { omega_tensor_release(g, x); return rc; }
+        rc = omega_tensor_binary(g, OMEGA_TB_MUL, x, k, &x2);              /* * -1 */
+        omega_tensor_release(g, k);
+        omega_tensor_release(g, x);
+        if (!rc) rc = rp_out(x2, c->rb, c->sb, eb);
+        return rc;
+    }
+    case OMEGA_AD_MAX: {
+        size_t m = (size_t)yi->elements;
+        float va[MAXE], vb[MAXE], vg[MAXE], da[MAXE], db[MAXE];
+        rc = omega_tensor_broadcast_to(g, ta, yi->rank, yi->shape, &x);
+        if (!rc) rc = rp_take(x, va, m);
+        if (!rc) rc = omega_tensor_broadcast_to(g, tb, yi->rank, yi->shape, &x);
+        if (!rc) rc = rp_take(x, vb, m);
+        if (!rc) rc = omega_tensor_read_f32(g, tg, vg, m);
+        if (rc) return rc;
+        for (size_t i = 0; i < m; i++) {
+            bool to_a = va[i] == va[i] && (vb[i] != vb[i] || va[i] > vb[i]);
+            da[i] = to_a ? vg[i] : 0.0f;
+            db[i] = to_a ? 0.0f : vg[i];
+        }
+        rc = omega_tensor_from_f32(g, yi->rank, yi->shape, da, &x);
+        if (!rc) rc = rp_out(x, c->ra, c->sa, ea);
+        if (!rc) rc = omega_tensor_from_f32(g, yi->rank, yi->shape, db, &x);
+        if (!rc) rc = rp_out(x, c->rb, c->sb, eb);
+        return rc;
+    }
+    case OMEGA_AD_SQRT: {
+        OmegaTensor y = { 0, 0 };
+        rc = omega_tensor_unary(g, OMEGA_TU_SQRT, ta, &y);
+        if (rc) return rc;
+        rc = omega_tensor_binary(g, OMEGA_TB_ADD, y, y, &x2);              /* y + y */
+        omega_tensor_release(g, y);
+        if (rc) return rc;
+        rc = omega_tensor_binary(g, OMEGA_TB_DIV, tg, x2, &x);             /* g / (y + y) */
+        omega_tensor_release(g, x2);
+        if (!rc) rc = rp_out(x, c->ra, c->sa, ea);
+        return rc;
+    }
+    case OMEGA_AD_MATMUL:
+        rc = omega_tensor_transpose(g, tb, &x2);
+        if (rc) return rc;
+        rc = omega_tensor_matmul(g, tg, x2, &x);                            /* g @ B^T */
+        omega_tensor_release(g, x2);
+        if (!rc) rc = rp_out(x, c->ra, c->sa, ea);
+        if (rc) return rc;
+        rc = omega_tensor_transpose(g, ta, &x2);
+        if (rc) return rc;
+        rc = omega_tensor_matmul(g, x2, tg, &x);                            /* A^T @ g */
+        omega_tensor_release(g, x2);
+        if (!rc) rc = rp_out(x, c->rb, c->sb, eb);
+        return rc;
+    case OMEGA_AD_TRANSPOSE:
+        rc = omega_tensor_transpose(g, tg, &x2);
+        if (rc) return rc;
+        rc = omega_tensor_contiguous(g, x2, &x);
+        omega_tensor_release(g, x2);
+        if (!rc) rc = rp_out(x, c->ra, c->sa, ea);
+        return rc;
+    case OMEGA_AD_BROADCAST:
+        rc = omega_tensor_contiguous(g, tg, &x);
+        if (!rc) rc = rp_out(x, c->ra, c->sa, ea);
+        return rc;
+    case OMEGA_AD_SUM: case OMEGA_AD_MEAN: {
+        uint64_t ks[4];
+        OmegaTensor r = { 0, 0 }, bc = { 0, 0 };
+        for (uint32_t d = 0; d < c->ra; d++) ks[d] = d == c->axis ? 1 : c->sa[d];
+        rc = omega_tensor_reshape(g, tg, c->ra, ks, &r);
+        if (rc) return rc;
+        rc = omega_tensor_broadcast_to(g, r, c->ra, c->sa, &bc);
+        if (rc) { omega_tensor_release(g, r); return rc; }
+        rc = omega_tensor_contiguous(g, bc, &x2);
+        omega_tensor_release(g, bc);
+        omega_tensor_release(g, r);
+        if (rc) return rc;
+        if (c->op == OMEGA_AD_SUM) return rp_out(x2, c->ra, c->sa, ea);
+        rc = rp_scalar((float)c->sa[c->axis], &k);
+        if (rc) { omega_tensor_release(g, x2); return rc; }
+        rc = omega_tensor_binary(g, OMEGA_TB_DIV, x2, k, &x);              /* / n */
+        omega_tensor_release(g, k);
+        omega_tensor_release(g, x2);
+        if (!rc) rc = rp_out(x, c->ra, c->sa, ea);
+        return rc;
+    }
+    default:
+        return OMEGA_AD_ERR_BAD_ARGS;
+    }
+}
+
 static void test_op_case(const OpCase *c) {
     float a[MAXE], b[MAXE], R[MAXE], ga[MAXE], gb[MAXE];
     double ra_[MAXE], aa[MAXE], rb_[MAXE], ab[MAXE];
@@ -343,13 +591,30 @@ static void test_op_case(const OpCase *c) {
     for (size_t i = 0; i < ny; i++) R[i] = urand(-1, 1);
     OmegaTensor tr = mk(yi.rank, yi.shape, R);
     rc = omega_ad_backward_seed(&t, iy, tr);
-    omega_tensor_release(g, tr);
     CHECK(rc == 0, "%s: backward rc %d", c->name, rc);
     int r1 = omega_ad_grad_read_f32(&t, ia, ga, na);
     int r2 = c->has_b ? omega_ad_grad_read_f32(&t, ib, gb, nb) : 0;
     CHECK(r1 == 0 && r2 == 0, "%s: grad read rc %d %d (grad shape must equal input shape)", c->name, r1, r2);
     omega_ad_tape_release(&t);
-    if (rc || r1 || r2) goto out;
+    if (rc || r1 || r2) { omega_tensor_release(g, tr); goto out; }
+
+    /* bit-exact (approved M21 gate): same M20 ops called directly, same bits */
+    float ea[MAXE], eb[MAXE];
+    int rr = replay(c, ta, tb, tr, &yi, ea, eb);
+    omega_tensor_release(g, tr);
+    CHECK(rr == 0, "%s: bit-exact replay rc %d", c->name, rr);
+    if (!rr) {
+        CHECK(memcmp(ga, ea, na * sizeof(float)) == 0,
+              "%s: grad a not bit-exact with the direct M20 replay", c->name);
+        if (c->has_b)
+            CHECK(memcmp(gb, eb, nb * sizeof(float)) == 0,
+                  "%s: grad b not bit-exact with the direct M20 replay", c->name);
+        if (c == &CASES[0]) { /* counterexample: a one-bit change must be seen */
+            uint32_t bits;
+            memcpy(&bits, &ea[0], 4); bits ^= 1u; memcpy(&ea[0], &bits, 4);
+            CHECK(memcmp(ga, ea, na * sizeof(float)) != 0, "bit-exact comparator missed a one-bit difference");
+        }
+    }
 
     /* 1. contract */
     reference(c, a, b, R, yi.rank, yi.shape, ra_, aa, ka, rb_, ab, kb);
@@ -362,22 +627,29 @@ static void test_op_case(const OpCase *c) {
               bad, first, (double)gb[first], rb_[first]);
     }
 
-    /* 2. central finite differences of the CPU forward */
+    /* central finite differences of the CPU forward (approved M21 gate), on
+     * the FD data set: a fresh tape, its own inputs and a positive seed */
+    float fa[MAXE], fb[MAXE], fR[MAXE], fga[MAXE], fgb[MAXE];
+    size_t fny = 0;
+    gen_fd_data(c, fa, fb);
+    int rf = tape_grads(c, fa, fb, FD_RLO, FD_RHI, fR, &fny, fga, fgb);
+    CHECK(rf == 0, "%s: FD data set tape rc %d", c->name, rf);
+    if (rf) goto out;
     for (int which = 0; which < (c->has_b ? 2 : 1); which++) {
-        float *x = which ? b : a;
-        const float *an = which ? gb : ga;
+        float *x = which ? fb : fa;
+        const float *an = which ? fgb : fga;
         size_t nx = which ? nb : na, fbad = 0, ffirst = 0;
         double fdv = 0;
         for (size_t i = 0; i < nx; i++) {
             float x0 = x[i], xp = (float)(x0 + FD_H), xm = (float)(x0 - FD_H);
             double Lp = 0, Lm = 0;
             x[i] = xp;
-            int e1 = forward_loss(c, a, b, R, ny, &Lp);
+            int e1 = forward_loss(c, fa, fb, fR, fny, &Lp);
             x[i] = xm;
-            int e2 = forward_loss(c, a, b, R, ny, &Lm);
+            int e2 = forward_loss(c, fa, fb, fR, fny, &Lm);
             x[i] = x0;
             double fd = (Lp - Lm) / ((double)xp - (double)xm);
-            if (e1 || e2 || !(dabs((double)an[i] - fd) <= FD_ATOL + FD_RTOL * dabs(fd))) {
+            if (e1 || e2 || !fd_ok((double)an[i], fd)) {
                 if (!fbad) { ffirst = i; fdv = fd; }
                 fbad++;
             }
@@ -406,8 +678,12 @@ static void test_comparators_reject(void) {
     CHECK(bound_violations(wrong, ra_, aa, ka, 12, &first) > 0, "contract comparator accepted a perturbed gradient");
     for (int i = 0; i < 12; i++) wrong[i] = (float)ra_[i];
     CHECK(bound_violations(wrong, ra_, aa, ka, 12, &first) == 0, "contract comparator rejected the exact gradient");
-    /* FD comparator: a sign-flipped gradient must disagree */
-    size_t fbad = 0;
+    /* FD comparator (pure 1e-3 relative), on the FD data set: it accepts the
+     * exact gradient, and rejects a sign-flipped one and one 2e-3 too large */
+    gen_fd_data(c, a, b);
+    for (int i = 0; i < 12; i++) R[i] = urand(FD_RLO, FD_RHI);
+    reference(c, a, b, R, 2, sy, ra_, aa, ka, rb_, ab, kb);
+    size_t fbad = 0, facc = 0, fbig = 0;
     for (size_t i = 0; i < 12; i++) {
         float x0 = a[i], xp = (float)(x0 + FD_H), xm = (float)(x0 - FD_H);
         double Lp = 0, Lm = 0;
@@ -415,10 +691,13 @@ static void test_comparators_reject(void) {
         a[i] = xm; forward_loss(c, a, b, R, 12, &Lm);
         a[i] = x0;
         double fd = (Lp - Lm) / ((double)xp - (double)xm);
-        double flipped = -ra_[i];
-        if (!(dabs(flipped - fd) <= FD_ATOL + FD_RTOL * dabs(fd))) fbad++;
+        if (fd_ok(ra_[i], fd)) facc++;
+        if (!fd_ok(-ra_[i], fd)) fbad++;
+        if (!fd_ok(ra_[i] * 1.002, fd)) fbig++;
     }
+    CHECK(facc == 12, "FD comparator rejected the exact gradient at %zu of 12 elements", 12 - facc);
     CHECK(fbad > 0, "FD comparator accepted a sign-flipped gradient");
+    CHECK(fbig == 12, "FD comparator accepted a gradient 2e-3 too large at %zu of 12 elements", 12 - fbig);
 }
 
 /* MAX ties go to b (relu gradient 0 at 0). */
@@ -458,8 +737,10 @@ typedef struct {
 } LinData;
 
 /* loss = mean_i( sum_j ( (X W + bias - Y)_ij ^2 ) ). d is used twice: fan-out. */
+/* loss_d (optional): the same loss computed in double from the tape's float d
+ * values, mean_i sum_j d_ij^2, for the FD layer. */
 static int lin_run(OmegaTensorCtx *ctx, const LinData *D, float *loss, float *flat_grads,
-                   uint8_t loss_id[32]) {
+                   uint8_t loss_id[32], double *loss_d) {
     uint64_t sx[2] = { CX_N, CX_IN }, sw[2] = { CX_IN, CX_OUT }, sb[1] = { CX_OUT }, sy[2] = { CX_N, CX_OUT };
     OmegaTensor tx, tw, tb, ty;
     int rc = omega_tensor_from_f32(ctx, 2, sx, D->X, &tx);
@@ -485,6 +766,17 @@ static int lin_run(OmegaTensorCtx *ctx, const LinData *D, float *loss, float *fl
     if (!rc) rc = omega_ad_value(&t, l, &tl);
     if (!rc) rc = omega_tensor_read_f32(ctx, tl, loss, 1);
     if (!rc && loss_id) rc = omega_tensor_value_id(ctx, tl, loss_id);
+    if (!rc && loss_d) {
+        OmegaTensor td = { 0, 0 };
+        float dv[CX_N * CX_OUT];
+        rc = omega_ad_value(&t, d, &td);
+        if (!rc) rc = omega_tensor_read_f32(ctx, td, dv, CX_N * CX_OUT);
+        if (!rc) {
+            double acc = 0;
+            for (int i = 0; i < CX_N * CX_OUT; i++) acc += (double)dv[i] * (double)dv[i];
+            *loss_d = acc / CX_N;
+        }
+    }
     if (!rc && flat_grads) {
         rc = omega_ad_backward(&t, l);
         uint32_t ids[2] = { iw, ib };
@@ -508,11 +800,21 @@ static void lin_data(LinData *D) {
     for (int i = 0; i < CX_N * CX_OUT; i++) D->Y[i] = urand(-1, 1);
 }
 
+/* FD data set: X, W, bias in [0.5, 1], Y in [-0.5, 0], so E = XW + b - Y lies
+ * in [1.25, 4.5] and every gradient, (2/N) X^T E and (2/N) sum_i E, is >= 1.25:
+ * no near-zero gradient element for the pure relative FD bound. */
+static void lin_data_fd(LinData *D) {
+    for (int i = 0; i < CX_N * CX_IN; i++) D->X[i] = urand(0.5f, 1.0f);
+    for (int i = 0; i < CX_IN * CX_OUT; i++) D->W[i] = urand(0.5f, 1.0f);
+    for (int i = 0; i < CX_OUT; i++) D->bias[i] = urand(0.5f, 1.0f);
+    for (int i = 0; i < CX_N * CX_OUT; i++) D->Y[i] = urand(-0.5f, 0.0f);
+}
+
 static void test_composite(void) {
     LinData D;
     lin_data(&D);
     float loss, grads[CX_IN * CX_OUT + CX_OUT];
-    int rc = lin_run(g, &D, &loss, grads, NULL);
+    int rc = lin_run(g, &D, &loss, grads, NULL, NULL);
     CHECK(rc == 0, "composite: rc %d (incl. no grad for X, Y; grad for W)", rc);
     if (rc) return;
     /* exact reference in double: dL/dW = (2/N) X^T E, dL/db = (2/N) sum_i E, E = XW + b - Y */
@@ -538,19 +840,27 @@ static void test_composite(void) {
         if (!(dabs(grads[CX_IN * CX_OUT + j] - s) <= 1e-5 + 1e-5 * dabs(s))) bad_ref++;
     }
     CHECK(bad_ref == 0, "composite: %zu gradients differ from the closed form (2/N) X^T E", bad_ref);
-    /* central FD on every parameter (W then bias, the flatten order) */
+    /* central FD on every parameter (W then bias, the flatten order), pure
+     * 1e-3 relative (approved M21 gate), on the FD data set lin_data_fd */
+    LinData F;
+    lin_data_fd(&F);
+    float floss, fgrads[CX_IN * CX_OUT + CX_OUT];
+    rc = lin_run(g, &F, &floss, fgrads, NULL, NULL);
+    CHECK(rc == 0, "composite FD data set: rc %d", rc);
+    if (rc) return;
     size_t fbad = 0;
-    float *params[2] = { D.W, D.bias };
+    float *params[2] = { F.W, F.bias };
     int counts[2] = { CX_IN * CX_OUT, CX_OUT };
     for (int pnum = 0, off = 0; pnum < 2; off += counts[pnum], pnum++)
         for (int i = 0; i < counts[pnum]; i++) {
             float *x = &params[pnum][i], x0 = *x, xp = (float)(x0 + FD_H), xm = (float)(x0 - FD_H);
-            float Lp = 0, Lm = 0;
-            *x = xp; int e1 = lin_run(g, &D, &Lp, NULL, NULL);
-            *x = xm; int e2 = lin_run(g, &D, &Lm, NULL, NULL);
+            float Lpf = 0, Lmf = 0;
+            double Lp = 0, Lm = 0;
+            *x = xp; int e1 = lin_run(g, &F, &Lpf, NULL, NULL, &Lp);
+            *x = xm; int e2 = lin_run(g, &F, &Lmf, NULL, NULL, &Lm);
             *x = x0;
-            double fd = ((double)Lp - (double)Lm) / ((double)xp - (double)xm);
-            if (e1 || e2 || !(dabs((double)grads[off + i] - fd) <= FD_ATOL + FD_RTOL * dabs(fd))) fbad++;
+            double fd = (Lp - Lm) / ((double)xp - (double)xm);
+            if (e1 || e2 || !fd_ok((double)fgrads[off + i], fd)) fbad++;
         }
     CHECK(fbad == 0, "composite: %zu parameter gradients disagree with central FD", fbad);
 }
@@ -565,7 +875,7 @@ static void test_determinism(void) {
     if (rc) return;
     float l1, l2, g1[8], g2[8];
     uint8_t id1[32], id2[32];
-    int r1 = lin_run(g, &D, &l1, g1, id1), r2 = lin_run(c2, &D, &l2, g2, id2);
+    int r1 = lin_run(g, &D, &l1, g1, id1, NULL), r2 = lin_run(c2, &D, &l2, g2, id2, NULL);
     CHECK(r1 == 0 && r2 == 0, "determinism: runs rc %d %d", r1, r2);
     CHECK(memcmp(g1, g2, sizeof(g1)) == 0, "determinism: gradients differ between two runs");
     CHECK(memcmp(id1, id2, 32) == 0, "determinism: loss value id differs between two runs");

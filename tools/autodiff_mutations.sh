@@ -16,6 +16,9 @@ src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_q
 FLAGS="-std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -ffp-contract=off -O2 -DOMEGA_NUMERIC_CPU_ONLY"
 
 # name|file|sed expression (applied only to the line carrying MUT:<name>)
+# DIV_FORMULA computes gb as -((g * y) / b) instead of -(g * (y / b)): the same
+# real number with the same rounding count, so it stays inside the per-op
+# contract and the 1e-3 FD bound; it is aimed at the bit-exact layer.
 MUTATIONS='TAPE_WALK|omega_autodiff.c|s/root + 1; i-- > 0/root; i-- > 0/
 ACCUMULATE|omega_autodiff.c|s/omega_tensor_binary(t->ctx, OMEGA_TB_ADD, n->grad, contrib, &sum)/omega_tensor_contiguous(t->ctx, contrib, \&sum)/
 UNBROADCAST|omega_autodiff.c|s/if (target->shape/if (0 \&\& target->shape/
@@ -25,7 +28,9 @@ MATMUL_TRANSPOSE|omega_autodiff.c|s/matmul(t->ctx, g, tmp, &c)/matmul(t->ctx, g,
 SQRT_TWICE|omega_autodiff.c|s/omega_tensor_binary(t->ctx, OMEGA_TB_ADD, n->value, n->value, &tmp)/omega_tensor_contiguous(t->ctx, n->value, \&tmp)/
 MEAN_DIVISOR|omega_autodiff.c|s/(float)len/(float)(len + 1)/
 MAX_ROUTE|omega_autodiff.c|s/return a > b;/return a < b;/
-MAX_TIE|omega_autodiff.c|s/return a > b;/return a >= b;/'
+MAX_TIE|omega_autodiff.c|s/return a > b;/return a >= b;/
+DIV_B_SIGN|omega_autodiff.c|s/-1\.0f/1.0f/
+DIV_FORMULA|omega_autodiff.c|{s/OMEGA_TB_DIV, n->value, nb->value, &tmp)/OMEGA_TB_MUL, g, n->value, \&tmp)/;s/OMEGA_TB_MUL, g, tmp, &c2)/OMEGA_TB_DIV, tmp, nb->value, \&c2)/}'
 
 build() { # $1 = autodiff source dir, $2 = output binary
     gcc $FLAGS -Isrc -Isrc/tensor -I"$1" -o "$2" tests/test_omega_autodiff.c "$1/omega_autodiff.c" \

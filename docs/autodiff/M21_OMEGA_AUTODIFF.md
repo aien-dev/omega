@@ -1,8 +1,11 @@
 # M21 OMEGA_AUTODIFF: reverse-mode tape, CPU tier
 
 Status 2026-10-01: **M21 NOT QUALIFIED.** The tape, its tests and its
-mutation sweep are written. None of them has run yet: host NOT_RUN (the
-forge fills it), GB10 NOT_RUN. M20, which this layer sits on, is itself not
+mutation sweep are written. Forge host run on commit c098a74 (before the
+rebase onto omega#178/#179 and before the gate fixes): `test-autodiff` PASS
+182 pass / 0 fail (log HIVE-M21-181152.log), mutation sweep 10/10 caught (log
+HIVE-M21-181157.log). The current commit (rebased, bit-exact layer, pure
+1e-3 relative FD, 12 mutants) is NOT_RUN until the forge reruns it. GB10 NOT_RUN. M20, which this layer sits on, is itself not
 qualified (GB10 parity NOT_RUN).
 
 Plan source: `aien-architecture/CURRENT_EXECUTION_PLAN.md`, section
@@ -10,8 +13,13 @@ Plan source: `aien-architecture/CURRENT_EXECUTION_PLAN.md`, section
 backward graph. The backward pass is ordinary Omega and uses the same
 Forge/AEGIS path." ROADMAP row M21: "Sovereign automatic differentiation
 generating gradient semantic graphs", PLANNED. Neither document states an
-M21 exit gate or a gradient tolerance. The gate below is a **PROPOSED gate,
-pending owner approval**, not doctrine.
+M21 exit gate or a gradient tolerance. The owner approved the M21 gate
+(queen, 2026-10-01):
+
+> **M21 gate: gradients bit-exact against the same M20 operations, plus a
+> finite-difference check within 1e-3 relative error.**
+
+See "Gate conformance" below for how the current tests map onto it.
 
 ## Scope
 
@@ -24,8 +32,9 @@ forward pass. One exception: MAX routing is a host-side data move (compare
 and copy, no arithmetic) in the caller's scratch buffer, because M20 has no
 mask-producing op (CR-3 below).
 
-Out of scope here: GB10 realization, transcendental activations (M20 has
-none yet), slicing/concat/gather gradients, second derivatives, dispatch
+Out of scope here: GB10 realization, gradients for the M20 transcendental
+unary ops (EXP2, LOG2, SIGMOID, TANH, added by omega#178; a later cut,
+pending LT-M20), slicing/concat/gather gradients, second derivatives, dispatch
 provenance records for forward/backward ops (open question for E5), and
 any edit of `src/tensor` or `src/train`.
 
@@ -35,8 +44,8 @@ any edit of `src/tensor` or `src/train`.
 |---|---|
 | `src/autodiff/omega_autodiff.h` | The meaning: ops, ownership, determinism rules, per-op error contract |
 | `src/autodiff/omega_autodiff.c` | The tape: recording, backward walk, unbroadcast, M22 flatten. No heap allocation |
-| `tests/test_omega_autodiff.c` | Contract, finite-difference, determinism, error-path and leak checks |
-| `tools/autodiff_mutations.sh` | Source mutation sweep (10 mutants) |
+| `tests/test_omega_autodiff.c` | Contract, bit-exact replay, finite-difference, determinism, error-path and leak checks |
+| `tools/autodiff_mutations.sh` | Source mutation sweep (12 mutants) |
 | `mk/autodiff.mk` | `make test-autodiff`, `make test-autodiff-mutations` (alias `autodiff-mutants`) |
 
 ## Determinism and resources
@@ -102,26 +111,51 @@ choice is a prefix of `omega_tensor_value_id` of the gradient tensors
 tape or by `tg_sgd_step`; where to refuse them (tape end or the `tg_commit`
 validate callback) is an open decision.
 
-## Test design (PROPOSED gate, pending owner approval)
+## Test design (M21 gate, approved 2026-10-01)
+
+Approved M21 gate (owner, via the queen, 2026-10-01): **"gradients bit-exact
+against the same M20 operations, plus a finite-difference check within 1e-3
+relative error"**. Layers 2 and 3 below are that gate; layers 1, 4 and 5 are
+extra.
 
 `tests/test_omega_autodiff.c`, 21 op cases (every op, with and without
 broadcasting, batched matmul) plus a composite graph:
 
 1. **Contract layer.** Each tape gradient against an exact reference written
    in the test from the calculus (double precision, index arithmetic on
-   shapes only), within the bound in the table above. Exact cases must be
-   bit-exact.
-2. **Finite-difference layer.** Central differences of the M20 CPU forward
-   pass on perturbed float inputs, step h = 2^-6 (actual step taken from the
-   rounded floats), loss L = sum(y * R) in double with a fixed random R used
-   as the backward seed. Pass if |tape - fd| <= 5e-4 + 1e-3 |fd|. Inputs are
-   kept away from kinks (MAX) and singular points (DIV, SQRT).
-3. **Composite.** Linear layer + squared error, `mean_i sum_j (XW + b - Y)^2`,
-   with a reused node (fan-out): closed form `(2/N) X^T E` within 1e-5 and
-   FD on every parameter; X and Y have no gradient.
-4. **Determinism.** Two full runs in two M20 contexts: flat gradients
+   shapes only), within the bound in the table above.
+2. **Bit-exact layer (gate).** For every op case the test replays the
+   backward rule itself with direct M20 calls in the tape's order (for
+   example MUL: `binary MUL (g, b)`, then reduce SUM over the extra leading
+   axes and the size-1 axes of a, keepdims) and compares the tape's gradient
+   with it bit for bit (`memcmp`), for a and for b. MAX routing, a host data
+   move, is replayed with the routing rule written independently in the
+   test. In-process counterexample: a one-bit flip of the replay must make
+   `memcmp` differ.
+3. **Finite-difference layer (gate).** Central differences of the M20 CPU
+   forward pass, step h = 2^-6 (actual step taken from the rounded floats),
+   loss L = sum(y * R) in double. Pass if `|tape - fd| <= 1e-3 |fd|`
+   (`FD_RTOL`, `fd_ok`): pure relative, **no absolute term**. Near-zero
+   gradients are handled by choosing the test points, not by loosening:
+   the FD layer runs on its own data set (`gen_fd_data`, seed R in
+   [0.5, 1]; MUL and MATMUL operands in [0.5, 1], DIV numerator in [1, 2],
+   SQRT input in [1, 4]) where every gradient element is a sum of same-sign
+   terms of magnitude about 0.1 or more, or exactly zero (MAX routing, where
+   the perturbed forward is unchanged and fd is exactly 0 too). Every
+   element, near zero or not, is still covered by layers 1 and 2 on the
+   mixed-sign data. Inputs are kept away from kinks (MAX) and singular
+   points (DIV, SQRT). In-process counterexamples: the FD comparator accepts
+   the exact gradient on all 12 elements of a MUL case, rejects a sign flip,
+   and rejects a gradient 2e-3 too large on all 12.
+4. **Composite.** Linear layer + squared error, `mean_i sum_j (XW + b - Y)^2`,
+   with a reused node (fan-out): closed form `(2/N) X^T E` within 1e-5 on
+   mixed-sign data; FD (pure 1e-3 relative) on every parameter on a second
+   data set (`lin_data_fd`: X, W, b in [0.5, 1], Y in [-0.5, 0], so every
+   gradient is >= 1.25), with the FD loss computed in double from the tape's
+   float `d` values. X and Y have no gradient.
+5. **Determinism.** Two full runs in two M20 contexts: flat gradients
    bit-identical (memcmp) and the loss value id identical.
-5. **Error paths.** Tape full (no state change, no leak), shape mismatch
+6. **Error paths.** Tape full (no state change, no leak), shape mismatch
    (`[3,4]+[5]`, `[3,5]x[4,2]`, `[3,5]x[3,5]`, broadcast `[5]->[4]`, bad axis),
    wrong seed shape, scalar seed on a non-scalar root, too little scratch,
    second backward, recording after backward, unreached leaf, no-grad root,
@@ -129,42 +163,69 @@ broadcasting, batched matmul) plus a composite graph:
    check of the M20 context.
 
 Counterexamples in process: the contract comparator must reject a gradient
-off by 2^-20 relative and accept the exact one; the FD comparator must
-reject a sign-flipped gradient; the determinism comparator must see a
-one-bit flip.
+off by 2^-20 relative and accept the exact one; the FD comparator as above;
+the bit-exact and determinism comparators must see a one-bit flip.
 
 Mutation sweep (`tools/autodiff_mutations.sh`), each must make the test
-fail: TAPE_WALK (skip the root), ACCUMULATE (replace instead of add),
-UNBROADCAST (skip size-1 axis sums), SUB_NEGATE, MUL_OPERAND, MATMUL_TRANSPOSE,
-SQRT_TWICE, MEAN_DIVISOR (n+1), MAX_ROUTE (reverse comparison), MAX_TIE
-(ties to a).
+fail (12 mutants): TAPE_WALK (skip the root), ACCUMULATE (replace instead of
+add), UNBROADCAST (skip size-1 axis sums), SUB_NEGATE, MUL_OPERAND,
+MATMUL_TRANSPOSE, SQRT_TWICE, MEAN_DIVISOR (n+1), MAX_ROUTE (reverse
+comparison), MAX_TIE (ties to a), DIV_B_SIGN (drop the minus on the DIV
+b-gradient) and DIV_FORMULA. DIV_FORMULA computes the DIV b-gradient as
+`-((g * y) / b)` instead of `-(g * (y / b))`: the same real number with the
+same number of roundings, so by construction it stays inside the contract
+bound gamma(D(b)+3) and the 1e-3 FD bound, and only the bit-exact layer is
+expected to catch it (UNVERIFIED until the forge runs the sweep).
 
 ## Qualification checklist
 
-| Item | Status | Evidence |
-|---|---|---|
-| Reverse-mode tape over M20 CPU ops | WRITTEN, NOT_RUN | `src/autodiff/` |
-| Per-op error contract (contract layer) | NOT_RUN | `make test-autodiff` |
-| Central finite differences | NOT_RUN | `make test-autodiff` |
-| Composite graph end to end | NOT_RUN | `make test-autodiff` |
-| Determinism (bit-identical rerun) | NOT_RUN | `make test-autodiff` |
-| Error paths and leak check | NOT_RUN | `make test-autodiff` (plain and ASan/UBSan) |
-| Mutation sweep (10 mutants) | NOT_RUN | `make test-autodiff-mutations` |
-| Host run (forge) | NOT_RUN | forge fills this |
-| CI wiring | MISSING | no `autodiff` job in `host-suites-2.yml` yet |
-| GB10 | NOT_RUN | no GB10 realization of M20 yet |
-| Owner approval of the PROPOSED gate | MISSING | no M21 exit gate in CEP or ROADMAP |
-| Reproducible receipt | MISSING_IMPLEMENTATION | no receipt writer for this gate yet |
+Two commits matter here. **c098a74** (before the rebase, before the fixes
+below) has a forge receipt. **The current commit** (rebased onto omega#178
+and #179, with the bit-exact layer, the pure relative FD check and 12
+mutants) is NOT_RUN until the forge reruns it.
 
-**M21 verdict: NOT QUALIFIED** until the host run passes and a GB10 chip
-receipt exists.
+| Item | c098a74 (forge receipt) | Current commit | Evidence |
+|---|---|---|---|
+| Reverse-mode tape over M20 CPU ops | WRITTEN | WRITTEN | `src/autodiff/` |
+| Contract layer | PASS | NOT_RUN | `make test-autodiff` |
+| Bit-exact layer (gate) | not present | NOT_RUN | `make test-autodiff` |
+| Finite differences, pure 1e-3 relative (gate) | not present (c098a74 used 5e-4 + 1e-3 \|fd\|) | NOT_RUN | `make test-autodiff` |
+| Composite graph end to end | PASS | NOT_RUN | `make test-autodiff` |
+| Determinism (bit-identical rerun) | PASS | NOT_RUN | `make test-autodiff` |
+| Error paths and leak check | PASS | NOT_RUN | `make test-autodiff` (plain and ASan/UBSan) |
+| Host test totals | PASS, 182 pass / 0 fail (log HIVE-M21-181152.log) | NOT_RUN | forge |
+| Mutation sweep | PASS, 10/10 caught (log HIVE-M21-181157.log) | NOT_RUN (12 mutants) | `sh tools/autodiff_mutations.sh` |
+| CI wiring | MISSING | MISSING | no `autodiff` job in `host-suites-2.yml` yet |
+| GB10 | NOT_RUN | NOT_RUN | no GB10 realization of M20 yet |
+| Owner approval of the gate | | APPROVED | queen, 2026-10-01 (wording above) |
+| Reproducible receipt | MISSING_IMPLEMENTATION | MISSING_IMPLEMENTATION | no receipt writer for this gate yet; the forge receipt lines do not name the commit hash |
+
+**M21 verdict: NOT QUALIFIED** until the host run passes on the current
+commit and a GB10 chip receipt exists.
+
+## Gate conformance (approved wording vs current tests)
+
+- **FD within 1e-3 relative.** Met by construction in the current commit:
+  `fd_ok` is `|tape - fd| <= 1e-3 |fd|` with no absolute term (the 5e-4
+  floor of c098a74 is removed), on FD data sets chosen so no gradient
+  element is near zero. NOT_RUN until the forge reruns it.
+- **Bit-exact against the same M20 operations.** Met by construction in the
+  current commit: layer 2 replays every op case's backward rule with direct
+  M20 calls and `memcmp`s it against the tape, for both inputs. The
+  composite graph is covered by the per-op replays plus the bit-identical
+  determinism check, not by its own whole-graph replay. NOT_RUN until the
+  forge reruns it.
+- Owed (inspector, recommended, not blocking): separate mutants for
+  TRANSPOSE backward, SUM expand axis, the unbroadcast leading-axis loop
+  and the capacity check; a forge receipt that records the commit hash.
 
 ## Tensor API change requests (not made here; owner LT-M20)
 
-- **CR-1** Unary ops beyond SQRT: EXP, LOG and the E1 bounded set (SIGMOID,
-  TANH, RSQRT, EXP2, LOG2, ERF, SIN, COS, GELU) in `OmegaTensorUnaryOp`. The
-  scalar functions exist; the tensor enum has only SQRT. Needed for any
-  non-linear activation except relu.
+- **CR-1** PARTLY RESOLVED by omega#178 (1a470c2): `OmegaTensorUnaryOp` now
+  has `OMEGA_TU_EXP2`, `OMEGA_TU_LOG2`, `OMEGA_TU_SIGMOID`, `OMEGA_TU_TANH`
+  (E1 bounded contract, via the optional `transc` realization hook).
+  Still open: EXP, LOG, RSQRT, ERF, SIN, COS, GELU. Autodiff for the four
+  new ops is not in this cut (later cut, pending LT-M20).
 - **CR-2** Constant helpers (full / zeros / ones / neg). Convenience; the
   tape builds constants with `omega_tensor_from_f32`.
 - **CR-3** A mask-producing op (compare returning 1.0 / 0.0, or
@@ -176,7 +237,6 @@ receipt exists.
 
 ## Open questions
 
-1. Owner approval (or an ADR note) of the PROPOSED gate and tolerances.
-2. Whether forward/backward ops should write E5 tier (a) dispatch records.
-3. Where NaN/Inf gradients are refused before an optimizer commit.
-4. What "the same Forge/AEGIS path" (CEP E3) requires of a CPU-tier tape.
+1. Whether forward/backward ops should write E5 tier (a) dispatch records.
+2. Where NaN/Inf gradients are refused before an optimizer commit.
+3. What "the same Forge/AEGIS path" (CEP E3) requires of a CPU-tier tape.
