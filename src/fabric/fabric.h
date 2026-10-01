@@ -55,11 +55,13 @@
  * REPLAY check consumes its seq even when refused later, so a refused message
  * can never succeed on replay):
  *   form                        FAB_E_FORMAT
+ *   generation > FAB_GEN_MAX    FAB_E_GENERATION (never truncated)
  *   dest != self, sender = self FAB_E_MISMATCH
  *   sender not on the roster    FAB_E_NOT_ENROLLED
  *   sig does not verify         FAB_E_AUTH      (forged identity, altered bytes)
  *   generation < held           FAB_E_STALE_GEN
  *   same generation, seq <= last FAB_E_REPLAY
+ *   window not saved (store)    FAB_E_STATE     (see Restart; nothing applied)
  *   JOIN with generation <= held FAB_E_STALE_GEN
  *   non-JOIN, not a member, or a
  *     generation it never joined with FAB_E_NOT_MEMBER
@@ -78,15 +80,32 @@
  * Generations never move back: a JOIN is accepted only with a generation
  * above the one held, and anything older is FAB_E_STALE_GEN, so old traffic
  * still in flight after a restart cannot roll membership back.
- * Limits (F5-0): the held generation and seq live in memory only, so a
- * receiver restart forgets them (persistence comes with the TRUST-1 / M6
- * identity work), and a JOIN of a new generation refused before admission
- * (ontology, capacity) is not remembered.
+ *
+ * Restart. With a FabStore the replay window (each peer's generation and
+ * last seq) is saved before it changes: a message of the held generation is
+ * saved before its seq is consumed, and a JOIN before it is admitted. A save
+ * that fails refuses the message with FAB_E_STATE and changes nothing in
+ * memory. On restart fab_node_init restores every peer as LOST with its
+ * generation and last seq, so a captured message replayed after the restart
+ * is FAB_E_STALE_GEN or FAB_E_REPLAY exactly as before it, and a peer comes
+ * back only by a JOIN with a higher generation. A missing (without
+ * store_fresh), unreadable or corrupt record is FAB_E_STATE: the node fails
+ * closed instead of starting with an empty window.
+ * Limits: the store must resist rollback; the record's sha256 detects damage,
+ * not an attacker who restores an older record (that needs the TRUST-1
+ * sealed / owner-key storage, not done here). A node with no store keeps the
+ * window in memory only and forgets it on restart. The node's own sending
+ * generation is not saved: after a restart the caller must give a higher one
+ * (fab_node_set_generation). Every authenticated fresh message costs one
+ * save. A JOIN refused before admission (ontology, capacity) is not reliably
+ * remembered: a refusal after its save only makes the record stricter until
+ * the next save rewrites it from memory.
 
  * Capability generations. rx_capq accepts a record only when its generation
  * is newer than the one held. Advertisers number entries with
  * fab_entry_generation(node, rev) = generation << 32 | rev, so a rejoin with a
- * new generation always outranks anything from before.
+ * new generation always outranks anything from before. Generations above
+ * FAB_GEN_MAX are refused, so the shift never drops a high bit.
  */
 #ifndef FABRIC_H
 #define FABRIC_H
@@ -110,6 +129,19 @@
 #define FAB_MAX_KEYS        64u     /* capability entries one peer may advertise */
 #define FAB_EVENT_RING      256u
 
+/* Membership generations are 1 .. FAB_GEN_MAX: entry generations pack
+ * generation << 32 | rev into 64 bits, so a wider one would lose its high
+ * bits. Anything above is FAB_E_GENERATION everywhere (init, set, seal,
+ * receive), never truncated. */
+#define FAB_GEN_MAX         UINT32_MAX
+
+/* Replay-window record (see FabStore): "AFST" | u32 version | self record |
+ * u32 n | n x { machine record | u64 generation | u64 last_seq } | sha256 of
+ * everything before it. */
+#define FAB_STATE_VERSION   1u
+#define FAB_STATE_ENTRY     (AIEN_MID_RECORD_BYTES + 16u)
+#define FAB_STATE_MAX       (12u + AIEN_MID_RECORD_BYTES + FAB_MAX_MEMBERS * FAB_STATE_ENTRY + 32u)
+
 enum { FAB_MSG_JOIN = 1, FAB_MSG_RENEW = 2, FAB_MSG_ADVERTISE = 3, FAB_MSG_LEAVE = 4 };
 
 /* Member states in this node's view. */
@@ -129,6 +161,8 @@ enum { FAB_ST_NONE = 0, FAB_ST_JOINED = 1, FAB_ST_LOST = 2, FAB_ST_LEFT = 3 };
 #define FAB_E_CAPQ          -11
 #define FAB_E_FULL          -12
 #define FAB_E_TRANSPORT     -13
+#define FAB_E_GENERATION    -14   /* membership generation outside 1 .. FAB_GEN_MAX */
+#define FAB_E_STATE         -15   /* replay-window store missing, corrupt or not durable */
 
 /* ---- what a real transport and a real signer must provide ---- */
 
@@ -152,6 +186,16 @@ typedef struct {
                   const uint8_t sig[FAB_SIG_BYTES]);
 } FabAuth;
 
+/* Where the replay window survives a restart. Supplied by the caller (the
+ * Fabric itself touches no file, socket or process). save: 0 only once the
+ * record is durable, anything else is a failure. load: 1 with a record in buf
+ * (len bytes), 0 when nothing was ever saved, <0 on error. */
+typedef struct {
+    void *ctx;
+    int (*save)(void *ctx, const uint8_t *rec, size_t len);
+    int (*load)(void *ctx, uint8_t *buf, size_t cap, size_t *len);
+} FabStore;
+
 /* Enrolled machines (from the AEGIS / owner-key boundary). Read-only here. */
 typedef struct {
     uint32_t n;
@@ -165,7 +209,14 @@ typedef struct {
     const FabTransport *transport;
     const FabAuth *auth;
     uint64_t max_lease_us;          /* longest lease this node grants */
-    uint64_t generation;            /* this node's membership generation, >= 1 */
+    uint64_t generation;            /* this node's membership generation, 1 .. FAB_GEN_MAX */
+    /* Replay window store. NULL keeps the window in memory only (loopback
+     * tests); a node that can restart must have one. store_fresh = 1 is the
+     * caller saying this is the node's first start: the store must then be
+     * empty. With store_fresh = 0 an empty, unreadable or corrupt store is
+     * FAB_E_STATE: the node does not start rather than forget. */
+    const FabStore *store;
+    uint32_t store_fresh;
 } FabConfig;
 
 /* ---- typed records ---- */
@@ -213,8 +264,13 @@ typedef struct {
 
 /* ---- node ---- */
 
+/* FAB_E_ARG for a bad config (generation 0 included), FAB_E_GENERATION for a
+ * generation above FAB_GEN_MAX, FAB_E_STATE when cfg->store cannot be read,
+ * holds a damaged record or one for another machine, is empty without
+ * store_fresh, or is not empty with it. On any error n holds no usable node. */
 int  fab_node_init(FabNode *n, const FabConfig *cfg);
-/* Start a new membership generation (after a restart): must be higher. */
+/* Start a new membership generation (after a restart): must be higher
+ * (FAB_E_STALE_GEN) and at most FAB_GEN_MAX (FAB_E_GENERATION). */
 int  fab_node_set_generation(FabNode *n, uint64_t generation);
 uint64_t fab_entry_generation(const FabNode *n, uint32_t rev);
 

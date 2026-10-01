@@ -43,6 +43,7 @@
 #define JS_ERR_STALE     -7   /* handle generation is not current: the object was reclaimed */
 #define JS_ERR_REMOTE    -8   /* not locally owned; this build has no remote transport */
 #define JS_ERR_OWNER     -9   /* caller is not the recorded owner */
+#define JS_ERR_VERSION  -10   /* durable checkpoint in a refused older format (v1: 32-bit realization generations) */
 
 #include <pthread.h>
 
@@ -77,6 +78,17 @@ typedef struct { uint8_t b[32]; } JsSemId;
  *    place: once forked it is frozen, so older World generations keep reading
  *    the bytes they named.
  *
+ * Generations never wrap. A realization generation is 64 bits: one slot
+ * reused once per nanosecond needs about 584 years to exhaust it, and if it
+ * ever were, the slot retires (JS_REAL_GEN_RETIRED) instead of wrapping. A
+ * branch generation stays 32 bits because a JsBranchRef packs into one 64-bit
+ * World field ({id, gen}); a branch slot whose next generation would be
+ * JS_BRANCH_GEN_RETIRED (UINT32_MAX) retires instead: it is never handed out
+ * again, in memory or after js_space_open, the rule World objects follow
+ * (rx_world_retire). A retired branch slot costs one of max_branches; when no
+ * slot is left, a new branch fails JS_ERR_FULL. Either way a reference to a
+ * reclaimed object never validates again.
+ *
  * Concurrency: one space mutex (recursive) serializes every public call,
  * matching the World reference's single world mutex. Realized bytes never
  * change after publication, so a read returns the bytes of the generation
@@ -102,8 +114,12 @@ typedef struct {
     uint32_t locality;                      /* JsLocality */
 } JsHome;
 
-typedef struct { uint32_t slot; uint32_t gen; } JsRealId;
+typedef struct { uint32_t slot; uint64_t gen; } JsRealId;
 typedef struct { uint32_t id; uint32_t gen; } JsBranchRef;
+
+/* Generation values that are never live (see "Generations never wrap"). */
+#define JS_REAL_GEN_RETIRED   UINT64_MAX
+#define JS_BRANCH_GEN_RETIRED UINT32_MAX
 
 /* A branch reference fits one 64-bit World field. */
 static inline uint64_t js_branch_ref_pack(JsBranchRef r) {
@@ -192,7 +208,8 @@ struct JsReal {
     uint64_t reads;
     JsReal *index_next;             /* semantic reuse index chain */
     /* M20: stable identity and durable recipe input. */
-    uint32_t slot, gen;             /* JsRealId; the slab never moves a JsReal */
+    uint32_t slot;                  /* JsRealId slot; the slab never moves a JsReal */
+    uint64_t gen;                   /* JsRealId generation, never JS_REAL_GEN_RETIRED while live */
     uint64_t patch_off;             /* EDIT patch extent in the data file, UINT64_MAX if none */
     JsReal *free_next;              /* slab free list */
 };
@@ -274,13 +291,13 @@ typedef struct {
     JsLimits limits;
     pthread_mutex_t mu;             /* recursive; serializes every public call */
     bool mu_ready;
-    uint32_t branch_gen[JS_MAX_BRANCHES];
+    uint32_t branch_gen[JS_MAX_BRANCHES];   /* JS_BRANCH_GEN_RETIRED = slot retired */
     uint32_t free_branch[JS_MAX_BRANCHES];
     uint32_t n_free_branch;
     JsReal **slab;                  /* chunks of JS_SLAB_CHUNK realizations */
     uint32_t slab_chunks;
     uint32_t real_hw;               /* slots ever handed out */
-    uint32_t real_gen_floor;        /* first generation of a never-used slot */
+    uint64_t real_gen_floor;        /* first generation of a never-used slot (saturates) */
     JsReal *real_free;
     JsExtent *ext_free;             /* free extents, sorted by offset, coalesced */
     uint32_t n_ext_free, cap_ext_free;
@@ -308,7 +325,9 @@ void js_limits_default(JsLimits *lim);
  * SPILLED (if their extent was checkpointed) or EVICTED and rebuild from their
  * recipe. `realizers` must name every realization type the checkpoint uses
  * (matched by type and unit_bytes). A torn or corrupt checkpoint fails with
- * JS_ERR_CORRUPT and leaves no state; a leftover temporary file is ignored. */
+ * JS_ERR_CORRUPT and leaves no state; a leftover temporary file is ignored.
+ * A version-1 checkpoint (32-bit realization generations) fails with
+ * JS_ERR_VERSION and leaves no state: it is refused, never reinterpreted. */
 int  js_space_open(JsSpace *s, const char *dir, const JsRealizer *const *realizers,
                    uint32_t n_realizers, const JsLimits *lim, const JsHome *local_home);
 /* Make the current non-staged state the durable checkpoint: data first

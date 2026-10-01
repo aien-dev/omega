@@ -68,20 +68,119 @@ static void withdraw_all(FabNode *n, FabMember *m) {
     for (uint32_t i = 0; i < m->n_keys; i++) (void)cq_withdraw(n->cfg.catalog, &m->keys[i]);
 }
 
+/* ---- replay window store (see fabric.h, Restart) ---- */
+
+static uint32_t r32(const uint8_t *p) {
+    return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+/* Save the window as it will be once `who` holds (gen, seq): every member as
+ * held, with who's entry replaced, or appended when who is not yet a member.
+ * FAB_OK without a store (memory only). */
+static int window_save(FabNode *n, const AienMachineId *who, uint64_t gen, uint64_t seq) {
+    const FabStore *st = n->cfg.store;
+    if (!st) return FAB_OK;
+    uint8_t rec[FAB_STATE_MAX];
+    uint32_t cnt = 0;
+    int found = 0;
+    uint8_t *p = rec + 12 + AIEN_MID_RECORD_BYTES;
+    for (uint32_t i = 0; i <= n->n_members; i++) {
+        const AienMachineId *mid;
+        uint64_t g, s;
+        if (i < n->n_members) {
+            const FabMember *m = &n->members[i];
+            if (m->state == FAB_ST_NONE) continue;
+            mid = &m->machine;
+            g = m->generation;
+            s = m->last_seq;
+            if (who && aien_mid_equal(mid, who)) { g = gen; s = seq; found = 1; }
+        } else {
+            if (!who || found) break;
+            mid = who; g = gen; s = seq;
+        }
+        if (cnt == FAB_MAX_MEMBERS || aien_mid_encode(mid, p) != AIEN_MID_OK) return FAB_E_STATE;
+        w64(p + AIEN_MID_RECORD_BYTES, g);
+        w64(p + AIEN_MID_RECORD_BYTES + 8, s);
+        p += FAB_STATE_ENTRY;
+        cnt++;
+    }
+    memcpy(rec, "AFST", 4);
+    w32(rec + 4, FAB_STATE_VERSION);
+    if (aien_mid_encode(&n->cfg.self, rec + 8) != AIEN_MID_OK) return FAB_E_STATE;
+    w32(rec + 8 + AIEN_MID_RECORD_BYTES, cnt);
+    size_t len = (size_t)(p - rec);
+    sha256_hash(rec, len, p);
+    return st->save(st->ctx, rec, len + 32) == 0 ? FAB_OK : FAB_E_STATE;
+}
+
+/* Restore a saved window: every peer comes back LOST with its generation and
+ * last seq. Any damage is FAB_E_STATE and restores nothing. */
+static int window_restore(FabNode *n, const uint8_t *rec, size_t len) {
+    const size_t head = 12 + AIEN_MID_RECORD_BYTES;
+    if (len < head + 32 || len > FAB_STATE_MAX || memcmp(rec, "AFST", 4) != 0 ||
+        r32(rec + 4) != FAB_STATE_VERSION)
+        return FAB_E_STATE;
+    uint32_t cnt = r32(rec + 8 + AIEN_MID_RECORD_BYTES);
+    if (cnt > FAB_MAX_MEMBERS || len != head + (size_t)cnt * FAB_STATE_ENTRY + 32) return FAB_E_STATE;
+    uint8_t dg[32];
+    sha256_hash(rec, len - 32, dg);
+    if (memcmp(dg, rec + len - 32, 32) != 0) return FAB_E_STATE;
+    AienMachineId self;
+    if (aien_mid_decode(rec + 8, AIEN_MID_RECORD_BYTES, &self) != AIEN_MID_OK ||
+        !aien_mid_equal(&self, &n->cfg.self))
+        return FAB_E_STATE;              /* another machine's window */
+    FabMember got[FAB_MAX_MEMBERS];
+    const uint8_t *p = rec + head;
+    for (uint32_t i = 0; i < cnt; i++, p += FAB_STATE_ENTRY) {
+        FabMember *m = &got[i];
+        memset(m, 0, sizeof *m);
+        if (aien_mid_decode(p, AIEN_MID_RECORD_BYTES, &m->machine) != AIEN_MID_OK ||
+            aien_mid_equal(&m->machine, &n->cfg.self))
+            return FAB_E_STATE;
+        for (uint32_t j = 0; j < i; j++)
+            if (aien_mid_equal(&got[j].machine, &m->machine)) return FAB_E_STATE;
+        m->generation = r64(p + AIEN_MID_RECORD_BYTES);
+        m->last_seq = r64(p + AIEN_MID_RECORD_BYTES + 8);
+        if (m->generation == 0 || m->generation > FAB_GEN_MAX) return FAB_E_STATE;
+        m->state = FAB_ST_LOST;          /* back only by a JOIN of a higher generation */
+    }
+    memcpy(n->members, got, cnt * sizeof got[0]);
+    n->n_members = cnt;
+    return FAB_OK;
+}
+
+static int window_open(FabNode *n) {
+    const FabStore *st = n->cfg.store;
+    if (!st) return FAB_OK;
+    uint8_t rec[FAB_STATE_MAX];
+    size_t len = 0;
+    int got = st->load(st->ctx, rec, sizeof rec, &len);
+    if (got == 0) return n->cfg.store_fresh ? window_save(n, NULL, 0, 0) : FAB_E_STATE;
+    if (got != 1 || n->cfg.store_fresh || len > sizeof rec) return FAB_E_STATE;
+    return window_restore(n, rec, len);
+}
+
 int fab_node_init(FabNode *n, const FabConfig *cfg) {
     if (!n || !cfg || !cfg->roster || !cfg->catalog || !cfg->transport || !cfg->auth ||
         !cfg->transport->send || !cfg->transport->recv || !cfg->auth->sign ||
         !cfg->auth->verify || cfg->generation == 0 || cfg->max_lease_us == 0)
         return FAB_E_ARG;
+    if (cfg->store ? !cfg->store->save || !cfg->store->load || cfg->store_fresh > 1
+                   : cfg->store_fresh != 0)
+        return FAB_E_ARG;
+    if (cfg->generation > FAB_GEN_MAX) return FAB_E_GENERATION;
     if (aien_mid_is_zero_(cfg->self.id) || !cfg->catalog->machines) return FAB_E_ARG;
     if (cq_machine_index(cfg->catalog, &cfg->self) != cfg->catalog->self_machine) return FAB_E_ARG;
     memset(n, 0, sizeof *n);
     n->cfg = *cfg;
     sha256_init(&n->event_hash);
-    return FAB_OK;
+    int rc = window_open(n);
+    if (rc != FAB_OK) memset(n, 0, sizeof *n);
+    return rc;
 }
 
 int fab_node_set_generation(FabNode *n, uint64_t generation) {
+    if (n && generation > FAB_GEN_MAX) return FAB_E_GENERATION;
     if (!n || generation <= n->cfg.generation) return FAB_E_STALE_GEN;
     n->cfg.generation = generation;
     n->seq = 0;
@@ -96,6 +195,7 @@ int fab_seal(FabNode *n, const AienMachineId *dest, uint32_t kind, const uint8_t
              size_t body_len, uint64_t now_us, uint8_t *out, size_t *out_len) {
     if (!n || !dest || !out || !out_len || body_size(kind) != body_len || (body_len && !body))
         return FAB_E_ARG;
+    if (n->cfg.generation == 0 || n->cfg.generation > FAB_GEN_MAX) return FAB_E_GENERATION;
     memcpy(out, "AFAB", 4);
     out[4] = FAB_VERSION;
     out[5] = (uint8_t)kind;
@@ -221,6 +321,7 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
     v->sender = sender;
     uint64_t gen = r64(msg + 96), seq = r64(msg + 104);
     if (gen == 0 || seq == 0) return refuse(n, v, FAB_E_FORMAT, 0, &sender, gen, seq, now_us);
+    if (gen > FAB_GEN_MAX) return refuse(n, v, FAB_E_GENERATION, 0, &sender, gen, seq, now_us);
 
     /* addressing and identity */
     if (!aien_mid_equal(&dest, &n->cfg.self) || aien_mid_equal(&sender, &n->cfg.self))
@@ -241,7 +342,12 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
          * sequence number whatever the outcome, so a refused message (for
          * example a RENEW refused for catalog capacity) cannot succeed if it
          * is replayed later. */
-        if (gen == m->generation) m->last_seq = seq;
+        if (gen == m->generation) {
+            /* Saved before it is consumed: a restart never forgets it. */
+            if (window_save(n, &sender, gen, seq) != FAB_OK)
+                return refuse(n, v, FAB_E_STATE, 0, &sender, gen, seq, now_us);
+            m->last_seq = seq;
+        }
     }
     const uint8_t *body = msg + FAB_HDR_BYTES;
     if (kind == FAB_MSG_JOIN) {
@@ -255,6 +361,11 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
         if (!m) {
             if (n->n_members == FAB_MAX_MEMBERS)
                 return refuse(n, v, FAB_E_FULL, 0, &sender, gen, seq, now_us);
+        }
+        /* Saved before admission: after a restart this JOIN is stale. */
+        if (window_save(n, &sender, gen, seq) != FAB_OK)
+            return refuse(n, v, FAB_E_STATE, 0, &sender, gen, seq, now_us);
+        if (!m) {
             m = &n->members[n->n_members++];
             memset(m, 0, sizeof *m);
             m->machine = sender;
@@ -408,6 +519,8 @@ const char *fab_strerror(int code) {
     case FAB_E_CAPQ: return "capability graph refused the record";
     case FAB_E_FULL: return "table full";
     case FAB_E_TRANSPORT: return "transport error";
+    case FAB_E_GENERATION: return "membership generation out of range (1 .. 2^32-1)";
+    case FAB_E_STATE: return "replay window store missing, corrupt or not saved";
     default: return "unknown";
     }
 }

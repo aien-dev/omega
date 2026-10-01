@@ -13,6 +13,7 @@
 #include "runtime/rx_caproot.h"
 #include "runtime/rx_world.h"
 #include "runtime/rx_jspace.h"
+#include "sha256.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -670,6 +671,154 @@ static void test_world(void) {
     printf("  world: %u writer activations, %u committed steps\n", u.ran, n);
 }
 
+/* ---- Lane 32: generations never wrap (no ABA) ------------------------------
+ *
+ * A slot is driven to the last live generation its type can hold (standing in
+ * for ~2^64 realization reuses or ~2^32 branch reuses) by writing the public
+ * struct field, then released and reused. The exhausted slot must never be
+ * handed out again and no older reference may validate. The top is computed
+ * from the field's own type so this test also compiles against 32-bit
+ * realization generations, where it fails (the slot wraps to generation 0 and
+ * the first occupant's reference validates again). */
+#define GEN_TOP(T) ((T)~(T)0)
+typedef __typeof__(((JsReal *)0)->gen) RealGen;
+typedef __typeof__(((JsBranchRef *)0)->gen) BranchGen;
+
+static void test_gen_exhaustion(void) {
+    static JsSpace s;
+    /* Realization slot. */
+    CHECK(js_space_init(&s, "/tmp/jspace_prod_spill") == JS_OK, "init");
+    uint32_t root;
+    js_branch_root(&s, &RZ, 77, &root);
+    JsBranchRef rr, c;
+    js_branch_ref(&s, root, &rr);
+    CHECK(js_branch_fork_staged(&s, rr, 0, &c) == JS_OK, "fork");
+    CHECK(js_branch_derive(&s, c.id, 700) == JS_OK, "derive");
+    uint32_t last = s.branches[c.id]->n_units - 1;
+    JsRealId first, top;
+    js_real_id(&s, c.id, last, &first);
+    CHECK(first.gen == 0, "first occupant generation %llu", (unsigned long long)first.gen);
+    JsReal *r = unit_of(&s, c.id, last);
+    r->gen = GEN_TOP(RealGen) - 1;            /* the last live generation */
+    js_real_id(&s, c.id, last, &top);
+    CHECK(js_real_lookup(&s, top) == r, "top-generation reference resolves while live");
+    CHECK(js_branch_release_ref(&s, c, 0) == JS_OK, "release at top generation");
+    CHECK(js_real_lookup(&s, top) == NULL, "released top-generation reference resolves");
+    for (int k = 0; k < 4; k++) {
+        CHECK(js_branch_fork_staged(&s, rr, 0, &c) == JS_OK, "refork %d", k);
+        CHECK(js_branch_derive(&s, c.id, 701 + (uint64_t)k) == JS_OK, "rederive %d", k);
+        JsRealId now;
+        js_real_id(&s, c.id, s.branches[c.id]->n_units - 1, &now);
+        CHECK(now.slot != first.slot, "cycle %d: exhausted realization slot %u handed out again (gen %llu)",
+              k, now.slot, (unsigned long long)now.gen);
+        CHECK(js_real_lookup(&s, first) == NULL, "cycle %d: first occupant's reference validates (ABA)", k);
+        CHECK(js_real_lookup(&s, top) == NULL, "cycle %d: top-generation reference validates", k);
+        CHECK(js_branch_release_ref(&s, c, 0) == JS_OK, "release %d", k);
+    }
+    js_space_destroy(&s);
+
+    /* Branch slot: 32-bit generations (a JsBranchRef packs into a World field). */
+    CHECK(js_space_init(&s, "/tmp/jspace_prod_spill") == JS_OK, "init");
+    js_branch_root(&s, &RZ, 78, &root);
+    js_branch_ref(&s, root, &rr);
+    JsBranchRef b0, btop;
+    CHECK(js_branch_fork_staged(&s, rr, 0, &b0) == JS_OK, "fork b0");
+    CHECK(b0.gen == 0, "first branch occupant generation %u", b0.gen);
+    s.branch_gen[b0.id] = GEN_TOP(BranchGen) - 1;
+    s.branches[b0.id]->gen = GEN_TOP(BranchGen) - 1;
+    btop = (JsBranchRef){ b0.id, GEN_TOP(BranchGen) - 1 };
+    CHECK(js_branch_check(&s, btop) == JS_OK, "top-generation branch ref valid while live");
+    CHECK(js_branch_check(&s, b0) == JS_ERR_STALE, "older branch ref valid");
+    CHECK(js_branch_release_ref(&s, btop, 0) == JS_OK, "release branch at top generation");
+    for (int k = 0; k < 4; k++) {
+        JsBranchRef nb;
+        CHECK(js_branch_fork_staged(&s, rr, 0, &nb) == JS_OK, "branch refork %d", k);
+        CHECK(nb.id != b0.id, "cycle %d: exhausted branch slot %u handed out again (gen %u)", k, nb.id, nb.gen);
+        CHECK(js_branch_check(&s, b0) == JS_ERR_STALE, "cycle %d: first branch reference validates (ABA)", k);
+        CHECK(js_branch_check(&s, btop) == JS_ERR_STALE, "cycle %d: top branch reference validates", k);
+        CHECK(js_branch_release_ref(&s, nb, 0) == JS_OK, "branch release %d", k);
+    }
+    /* A full space whose only free slot retired refuses a new branch. */
+    js_space_destroy(&s);
+    JsLimits l = lim(64, 2, 0, 0);
+    CHECK(js_space_init_limits(&s, "/tmp/jspace_prod_spill", &l) == JS_OK, "init 2 branches");
+    js_branch_root(&s, &RZ, 79, &root);
+    js_branch_ref(&s, root, &rr);
+    CHECK(js_branch_fork_staged(&s, rr, 0, &b0) == JS_OK, "fork into the last slot");
+    s.branch_gen[b0.id] = GEN_TOP(BranchGen) - 1;
+    s.branches[b0.id]->gen = GEN_TOP(BranchGen) - 1;
+    btop = (JsBranchRef){ b0.id, GEN_TOP(BranchGen) - 1 };
+    CHECK(js_branch_release_ref(&s, btop, 0) == JS_OK, "release last slot at top generation");
+    JsBranchRef nb;
+    CHECK(js_branch_fork_staged(&s, rr, 0, &nb) == JS_ERR_FULL, "retired slot reused instead of JS_ERR_FULL");
+    js_space_destroy(&s);
+}
+
+/* Durable: a retired branch slot stays retired after reopen, a realization
+ * generation above 2^32 comes back whole, and a version-1 checkpoint (32-bit
+ * realization generations) is refused with JS_ERR_VERSION. */
+static void test_gen_durable(void) {
+    char dir[64], meta[128], data[128];
+    snprintf(dir, sizeof dir, "/tmp/jspace_gen_XXXXXX");
+    if (!mkdtemp(dir)) { CHECK(0, "mkdtemp"); return; }
+    snprintf(meta, sizeof meta, "%s/jspace.meta", dir);
+    snprintf(data, sizeof data, "%s/jspace.data", dir);
+    static JsSpace s;
+    JsHome me = { .locality = JS_HOME_LOCAL };
+    memset(me.machine, 0x11, sizeof me.machine);
+    CHECK(js_space_open(&s, dir, RZS, 2, NULL, &me) == JS_OK, "fresh open");
+    uint32_t a, b, c;
+    js_branch_root(&s, &RZ, 90, &a);
+    for (unsigned i = 0; i < 3; i++) js_branch_derive(&s, a, 900 + i);
+    CHECK(js_branch_fork(&s, a, &b) == JS_OK, "fork b");
+    CHECK(js_branch_derive(&s, b, 950) == JS_OK, "derive b");
+    uint32_t bl = s.branches[b]->n_units - 1;
+    const RealGen wide = sizeof(RealGen) == 8 ? (RealGen)((1ull << 32) + 5) : (RealGen)5;
+    CHECK(sizeof(RealGen) == 8, "realization generations are %zu bytes, not 8", sizeof(RealGen));
+    unit_of(&s, b, bl)->gen = wide;
+    JsRealId wid;
+    js_real_id(&s, b, bl, &wid);
+    CHECK(js_branch_fork(&s, a, &c) == JS_OK, "fork c");
+    s.branch_gen[c] = GEN_TOP(BranchGen) - 1;
+    s.branches[c]->gen = GEN_TOP(BranchGen) - 1;
+    CHECK(js_branch_release(&s, c) == JS_OK, "release c at top generation");
+    CHECK(js_space_commit(&s) == JS_OK, "commit");
+    js_space_destroy(&s);
+
+    CHECK(js_space_open(&s, dir, RZS, 2, NULL, &me) == JS_OK, "reopen");
+    JsRealId got;
+    CHECK(js_real_id(&s, b, bl, &got) == JS_OK && got.gen == wid.gen && got.slot == wid.slot,
+          "wide realization generation did not survive reopen (%llu vs %llu)",
+          (unsigned long long)got.gen, (unsigned long long)wid.gen);
+    JsRealId low = { wid.slot, (RealGen)(uint32_t)wid.gen };
+    CHECK(js_real_lookup(&s, low) == NULL, "truncated generation resolves");
+    CHECK(s.branch_gen[c] == GEN_TOP(BranchGen), "retired branch slot generation %u after reopen", s.branch_gen[c]);
+    JsBranchRef ar;
+    js_branch_ref(&s, a, &ar);
+    for (int k = 0; k < 3; k++) {
+        JsBranchRef nb;
+        CHECK(js_branch_fork_staged(&s, ar, 0, &nb) == JS_OK, "fork after reopen %d", k);
+        CHECK(nb.id != c, "retired branch slot %u handed out after reopen", c);
+        CHECK(js_branch_check(&s, (JsBranchRef){ c, 0 }) == JS_ERR_STALE, "first ref of retired slot valid");
+        js_branch_release_ref(&s, nb, 0);
+    }
+    js_space_destroy(&s);
+
+    /* Rewrite the header as version 1 (header hash recomputed): refused. */
+    int fd = open(meta, O_RDWR);
+    uint8_t h[128];
+    CHECK(fd >= 0 && pread(fd, h, sizeof h, 0) == (ssize_t)sizeof h, "read header");
+    h[8] = 1; h[9] = h[10] = h[11] = 0;
+    sha256_hash(h, 96, h + 96);
+    CHECK(fd >= 0 && pwrite(fd, h, sizeof h, 0) == (ssize_t)sizeof h, "write v1 header");
+    if (fd >= 0) close(fd);
+    int rc = js_space_open(&s, dir, RZS, 2, NULL, &me);
+    CHECK(rc == JS_ERR_VERSION, "version-1 checkpoint: open rc %d, want JS_ERR_VERSION", rc);
+    if (rc == JS_OK) js_space_destroy(&s);
+    unlink(meta); unlink(data);
+    rmdir(dir);
+}
+
 int main(void) {
     struct { const char *name; void (*fn)(void); } t[] = {
         { "alloc_reclaim", test_alloc_reclaim },
@@ -679,6 +828,8 @@ int main(void) {
         { "remote", test_remote },
         { "durable", test_durable },
         { "world_commit", test_world },
+        { "gen_exhaustion", test_gen_exhaustion },
+        { "gen_durable", test_gen_durable },
     };
     for (size_t i = 0; i < sizeof t / sizeof *t; i++) {
         int before = g_fail;
