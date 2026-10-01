@@ -1,6 +1,6 @@
 --- a/lanes.sh
 +++ b/lanes.sh
-@@ -29,6 +29,45 @@
+@@ -29,6 +29,48 @@
  BACKLOG="$HOME/workspace/.hive-backlog"           # id|idea|phase|prereqs|unblocks|state (rendered into the ledger)
  HANDOFFS="$HOME/handoffs"
  SELF="$HOME/.claude/skills/orchestrate-lanes/lanes.sh"
@@ -10,13 +10,16 @@
 +QL="${QUIETLOCK_BIN:-$(command -v quietlock 2>/dev/null || echo "$HOME/.local/bin/quietlock")}"
 +REQUEUE_MAX="${REQUEUE_MAX:-3}"          # REFUSED_QUIET requeues per job before giving up
 +FORGE_WAIT_SECONDS="${FORGE_WAIT_SECONDS:-}"  # seconds between looks at a held flag (default 60 main, 30 light)
-+ql_ok() { [ -x "$QL" ] || { echo "quietlock not installed at $QL; see omega tools/quietlock/install.sh" >&2; return 1; }; }
++# The forge is never a holder: an inherited QUIET_HOLDER=1 (legacy escape) or QUIETLOCK_HOLD would let
++# every job and every wait pass a legacy flag, e.g. an aienos QEMU noclobber hold. ql_ok (called by both
++# flushes) drops them for the whole forge process; the wait and every job also run under env -u.
++ql_ok() { unset QUIET_HOLDER QUIETLOCK_HOLD; [ -x "$QL" ] || { echo "quietlock not installed at $QL; see omega tools/quietlock/install.sh" >&2; return 1; }; }
 +ql_wait_clear() { # $1 = seconds between looks; stale flags are released through quietlock only
 +  # release-stale FIRST on every look: check alone treats a stale flag as clear, which would leave
 +  # the dead holder's flag on disk for every other reader.
 +  while :; do
 +    "$QL" release-stale >/dev/null 2>&1
-+    "$QL" check >/dev/null 2>&1 && return 0
++    env -u QUIET_HOLDER -u QUIETLOCK_HOLD "$QL" check >/dev/null 2>&1 && return 0
 +    sleep "$1"
 +  done
 +}
@@ -33,7 +36,7 @@
 +  base=${1%@r*}; n=0; case $1 in *@r[0-9]*) n=${1##*@r};; esac
 +  log="$LOGDIR/$base$5-$(date -u +%H%M%S).log"
 +  echo "[$(iso)] $base: $3"
-+  ( cd "$2" && "$QL" run -- bash -c "$3" ) >"$log" 2>&1 < /dev/null; rc=$?
++  ( cd "$2" && exec env -u QUIET_HOLDER -u QUIETLOCK_HOLD "$QL" run -- bash -c "$3" ) >"$log" 2>&1 < /dev/null; rc=$?
 +  v=$(ql_verdict "$rc" "$log")
 +  # queen 2026-10-01: a zero exit that skipped work is not a PASS (TR-02 18:15Z looked green with all QEMU legs skipped)
 +  [ $rc -eq 0 ] && grep -qE "NOT_RUN|NOT_ALL_GATES_PASS|quiet flag .* is held|SKIPPED: quiet" "$log" && v="SUSPECT(rc=0 but NOT_RUN/skip seen in log)"
@@ -46,7 +49,7 @@
  TASKDIR="${LANES_TASKDIR:-$(ls -dt /tmp/claude-1000/-home-drakestapleton/*/tasks 2>/dev/null | head -1)}"
  
  now() { date -u +%s; }
-@@ -98,22 +137,15 @@
+@@ -98,22 +140,15 @@
    [ -f "$LOCK" ] && kill -0 "$(cat "$LOCK")" 2>/dev/null && { echo "flush already running pid $(cat "$LOCK")"; exit 1; }
    echo $$ > "$LOCK"; trap 'rm -f "$LOCK"' EXIT
    mkdir -p "$LOGDIR"
@@ -73,7 +76,7 @@
    echo "flush complete, see $RESULTS"
  }
  
-@@ -124,14 +156,9 @@
+@@ -124,14 +159,9 @@
  }
  
  cmd_release_stale() {
@@ -91,7 +94,7 @@
  }
  
  # ---------- light forge (queen 2026-10-01: scale lever) ----------
-@@ -157,24 +184,17 @@
+@@ -157,24 +187,17 @@
    p=$(forge_light_pid) && { echo "light flush already running pid $p"; exit 1; }
    echo $$ > "$LOCK_L"; trap 'rm -f "$LOCK_L"' EXIT
    mkdir -p "$LOGDIR"

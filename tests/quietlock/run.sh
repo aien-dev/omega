@@ -515,6 +515,21 @@ printf 'M9|%s|if kill -0 %s 2>/dev/null; then echo HOLDER_ALIVE; exit 9; fi\n' "
 bounded 120 I9 "$T/i9.log" env FORGE_WAIT_SECONDS=1 bash "$FL" flush
 check "I9 main forge waited for the other holder, then ran" 'grep -q "^- M9: PASS" "$R" && [ ! -e "$FF" ] && grep -q "released stale flag: OTHER quietlock t" "$F/workspace/.spark-quiet.history"'
 
+# I10 the forge is never a holder (inspector R7-1/R7-2): with QUIET_HOLDER=1 and a QUIETLOCK_HOLD
+# exported into the forge (as found in a live flush-light environment) and a LIVE legacy flag
+# (no hold=, e.g. an aienos QEMU noclobber hold), neither the main nor the light forge runs the job.
+# The forge is expected to keep waiting; timeout(1) ends it (only its own process group) after 8 s.
+# Mutation killed: removing the unset in ql_ok and the env -u on the wait and the job (the legacy
+# escape lets the wait and `quietlock run` pass, so the job runs and leaves its marker file).
+echo "qemu_ck_net_test 1 noclobber start=$PAST expected_end=$FUTURE pid=$$" > "$FF"
+printf 'M10|%s|touch %s/ran10main\n' "$T" "$T" > "$F/workspace/.test-queue"
+fl timeout -k 2 8 env LANES_LIGHT_IDLE_MIN=0 FORGE_WAIT_SECONDS=1 QUIET_HOLDER=1 QUIETLOCK_HOLD=qANY-1-0 bash "$FL" flush >"$T/i10.log" 2>&1; rc=$?
+check "I10 main forge with QUIET_HOLDER=1 does not run past a live legacy flag" '[ $rc = 124 ] && [ ! -e "$T/ran10main" ] && [ -e "$FF" ]'
+printf 'L10|%s|touch %s/ran10light\n' "$T" "$T" > "$F/workspace/.test-queue-light"
+fl timeout -k 2 8 env LANES_LIGHT_IDLE_MIN=0 FORGE_WAIT_SECONDS=1 QUIET_HOLDER=1 QUIETLOCK_HOLD=qANY-1-0 bash "$FL" flush-light >"$T/i10b.log" 2>&1; rc=$?
+check "I10b light forge with QUIET_HOLDER=1 does not run past a live legacy flag" '[ $rc = 124 ] && [ ! -e "$T/ran10light" ] && [ -e "$FF" ]'
+rm -f "$FF" "$F/workspace/.test-queue" "$F/workspace/.test-queue-light"
+
 # I7 installer transaction: a failure at any step leaves lanes.sh and the hook exactly as before,
 # no new binary, and no temp/.rej/.orig files (queen round-5 ruling 4).
 # Mutations killed: swapping before staging/patching (patch failpoint would leave a half state);
