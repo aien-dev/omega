@@ -1,0 +1,19 @@
+Vendored Ed25519 signature code (pure Ed25519, RFC 8032 section 5.1) and SHA-512.
+
+Source: aien-dev/aienos native/sig/ at commit
+913b962ee59c3da7bdb2874582d24b1f38dc3daa (aienos PR #188, in-house, no outside library).
+Copied byte for byte; nothing changed. Omega does not read the aienos tree at build
+time; these copies are the build input. To update, copy the files again from a newer
+aienos commit, update this note and rerun `make test-searchtrace` (the RFC 8032 test 1
+vector in tests/searchtrace/test_st_holdout_sig.c must still pass).
+
+sha256 of each copied file:
+0133d4861881f9da953f2dfeb67ea795297c7fde3b34f273a2247f5c5432bd6c  aienos_sig.h
+c7aa5431ea458532abb6d9edeadb267275f89c9e278256585a472128de842cea  sig_internal.h
+33714a7d8605cda4b13c13d7d2f75e6116bafebe95af4c30a11b8e04d82f3026  ed25519.c
+110c6322c699ce77011906486aa5ff3cb8becdede12534d20efb92711b90ba22  sha512.c
+59b7d18636e7acfc4f5f78d7c6abd7f7dd52cc45a342fb4888be6b4c83413035  ct.c
+
+Check: (cd src/searchtrace/sig && sha256sum -c) < the five lines above.
+The full aienos test suite (5917 checks, all RFC 8032 section 7.1 vectors, ASan/UBSan,
+mutants) lives in aienos native/sig/tests and is not copied here.

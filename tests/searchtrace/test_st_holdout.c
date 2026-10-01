@@ -1,7 +1,7 @@
 /* test_st_holdout.c - G3 sealed-holdout commitment format v1 tests.
- * Build: gcc -std=c11 -Wall -Wextra -Werror -pedantic -O2
- *        -D_POSIX_C_SOURCE=200809L -Isrc -o /tmp/t tests/searchtrace/
- *        test_st_holdout.c src/searchtrace/st_holdout.c src/sha256.c */
+ * Build: make test-searchtrace (mk/searchtrace.mk: -std=gnu11, links
+ *        src/searchtrace/st_holdout.c, src/sha256.c and the vendored
+ *        src/searchtrace/sig Ed25519, which needs unsigned __int128). */
 #include "searchtrace/st_holdout.h"
 #include "sha256.h"
 
