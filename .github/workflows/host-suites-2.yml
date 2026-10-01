@@ -9,7 +9,8 @@ name: Host suites 2
 # Per-job triggering: the workflow-level `paths` is the union of every job's
 # inputs; the `changes` job then diffs the PR against its base and turns on
 # only the jobs whose own files changed. Makefile and this workflow file turn on
-# every job; workflow_dispatch and pushes to main run everything.
+# every job. A push to main is diffed against the previous tip the same way;
+# workflow_dispatch (or a push with no known previous tip) runs everything.
 #
 # Jobs and the make targets they run (Spark -j1 time, 2026-10-01):
 #   visor     : test-visor (all Visor lanes + language + physics-free build) 25 s
@@ -17,21 +18,24 @@ name: Host suites 2
 #               test-turing-exp001-coders test-turing-exp001-eval
 #               test-turing-qcont test-turing-qrecord test-turing-verify-indep 3.5 min
 #   brownian  : test-brownian-tps 4 min
-#   polyglot  : test-polyglot test-polyglot-asm test-polyglot-encoder 4.7 min
+#   polyglot  : test-polyglot-asm test-polyglot-encoder 1 min
 #   algebra   : test-algebra test-algebra-asan test-realize test-phase-twin
 #               test-ma-digital-bottom 3.5 min
 #   path      : test-path 30 s;  crumbline : test-crumbline 1 s
 #   runtime   : test-branch-reuse test-r15-instr test-r15-g7-host
 #               test-r15-parity-host test-r15-receipt test-r16-inventory
-#               test-r16-negative test-r16-surface
+#               test-r16-negative test-r16-surface test-r16-authpath (host)
 #   argus     : test-argus-runtime test-machine-identity-argus
 #   numeric2  : test-numeric-reduce-cpu test-divsqrt-host 6 s
 # Pinned dependencies are read from physics.lock, aienos.lock and argus.lock.
 #
 # Deliberately NOT here:
 #   test-polyglot-mojo (needs the Mojo toolchain);
-#   test-r16-authpath (links the R13/R14 living hosts, which need both GB10
-#   core classes; same reason rx-host.yml only builds them);
+#   test-polyglot: environment. mk/polyglot.mk builds its -O3 flavor with
+#   -mcpu=native next to -march=armv8.6-a+...; on the runner (Neoverse N2) gcc
+#   resolves native to a CPU that conflicts with that -march and -Werror stops
+#   the build. On the Spark (X925/A725) native resolves to generic armv8-a and
+#   it passes (Spark -j1: 3.8 min, PASS);
 #   test-numeric-sweep, test-numeric-e1-exhaustive (too long for CI);
 #   test-r16-negative-mutants: FAILS on main, not an environment issue. Since
 #   omega #139 (4aa71bf, d717af3) rewrote the caller-generation guard in
@@ -117,13 +121,18 @@ jobs:
         id: f
         env:
           EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -eu
+          zero=0000000000000000000000000000000000000000
           if [ "$EVENT" = pull_request ]; then
             git diff --name-only "$BASE...$HEAD" > changed.txt
+          elif [ "$EVENT" = push ] && [ -n "$BASE" ] && [ "$BASE" != "$zero" ] \
+              && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            git diff --name-only "$BASE" "$HEAD" > changed.txt
           else
+            # workflow_dispatch, or a push whose previous tip is unknown: run all
             echo Makefile > changed.txt
           fi
           echo "changed files:"; cat changed.txt
@@ -213,8 +222,6 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: POLYGLOT lanes verify (plain + ASan) and bench self-test (no Mojo lane on the runner)
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-polyglot
       - name: POLYGLOT hand-written AArch64 asm lane
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-polyglot-asm
       - name: POLYGLOT encoder lane
@@ -317,6 +324,11 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make test-r16-inventory test-r16-negative test-r16-surface
+      - name: R16 G3 authoritative path with legacy orchestrators unavailable (host stand-in; cannot claim the gate)
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r16-authpath
 
   argus:
     needs: changes
