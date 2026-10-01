@@ -44,18 +44,24 @@ equals any 16-bit NaN; everything else must match bit for bit
 
 | Op | CPU tier | Independent of the reference? | GB10 |
 |---|---|---|---|
-| 13 `FSETP_*_SEL` | `fcmp` + `fcsel` (NE, EQU: two `fcsel`) | yes | not encoded, refused |
-| `F2I_FLOOR` / `CEIL` / `RNI` | `fcvtms` / `fcvtps` / `fcvtns` | yes | not encoded, refused |
-| `F2U` | `fcvtzu` | yes | not encoded, refused |
-| `I2FP_U32` | `ucvtf` | yes | not encoded, refused |
-| `F32_TO_F16` / `F16_TO_F32` | `fcvt` between `s` and `h` registers | yes | not encoded, refused |
-| `F32_TO_BF16` | `bfcvt` (refused at run time if the CPU lacks BF16) | yes | not encoded, refused |
-| `BF16_TO_F32` | 16-bit shift | **no**: AArch64 has no scalar BF16 widening instruction, so the CPU tier is the same shift the definition is; the oracle is the separate check | not encoded, refused |
-| `FFMA_V` | `fmadd` with per-element `c` | yes (the reference is a 128-bit integer fma) | not encoded, refused (the GB10 FFMA kernel carries `c` uniform) |
+| 13 `FSETP_*_SEL` | `fcmp` + `fcsel` (NE, EQU: two `fcsel`) | yes | encoded: `FSETP.<P>.AND P0` + `FSEL R9, R2, R5, P0` |
+| `F2I_FLOOR` / `CEIL` / `RNI` | `fcvtms` / `fcvtps` / `fcvtns` | yes | encoded: `F2I.FLOOR.NTZ` / `F2I.CEIL.NTZ` / `F2I.NTZ` (variable latency, STG waits on its scoreboard) |
+| `F2U` | `fcvtzu` | yes | encoded: `F2I.U32.TRUNC.NTZ` (variable latency) |
+| `I2FP_U32` | `ucvtf` | yes | encoded: `I2FP.F32.U32` (fixed latency) |
+| `F32_TO_F16` / `F16_TO_F32` | `fcvt` between `s` and `h` registers | yes | encoded: `F2F.F16.F32` (variable latency, stored unmasked: the hardware must write bits [31:16] = 0, which `F16_BITS` parity checks on every element) / `HADD2.F32 R9, -RZ, R2.H0_H0` (the ptxas form of `cvt.f32.f16`) |
+| `F32_TO_BF16` | `bfcvt` (refused at run time if the CPU lacks BF16) | yes | encoded: `F2F.BF16.F32` (variable latency, stored unmasked; `BF16_BITS` parity checks bits [31:16] = 0) |
+| `BF16_TO_F32` | 16-bit shift | **no**: AArch64 has no scalar BF16 widening instruction, so the CPU tier is the same shift the definition is; the oracle is the separate check | encoded: `SHF.L.U32 R9, R2, 0x10, RZ`, the ptxas form of `cvt.f32.bf16`. **Not an independent hardware conversion**: it is the same 16-bit shift as the definition |
+| `FFMA_V` | `fmadd` with per-element `c` | yes (the reference is a 128-bit integer fma) | encoded: `LDC.64 R10, c[0x0][0x3a0]` (the c pointer, kernel argument words 8..9), `IMAD.WIDE.U32 R10, R9, 0x4, R10`, `LDG.E R11`, `FFMA R9, R2, R5, R11` |
 
-"Not encoded" means `omega_numeric_submit_check` and the GB10 executor return
-`OMEGA_NUMERIC_ERR_NOT_ENCODED` before anything is submitted. The GB10 parity
-manifest stays at 15 ops.
+GB10 encodings were added by E1 WP-C. Every instruction word decodes under
+nvdisasm 13.0.88 `-b SM121` to the intended instruction (provenance table in
+`src/omega_numeric_provenance.c`); control words follow ptxas 13.0.88 sm_121
+output. The structural checker (`omega_numeric_check_patch`) refuses a patch
+whose compare code, conversion mode, latency class or FFMA_V c path does not
+match the op. "Encoded" is not "correct on the chip": GB10 parity for each op
+is one Gate 5 parity line at n=4096 with zero mismatches under the manifest
+compare mode (`tests/run_numeric_gates.sh`, now 38 ops), recorded in the
+chip receipt.
 
 ## How it is checked
 

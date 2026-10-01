@@ -167,8 +167,7 @@ static void class_trace(OmegaNumericOp op, const float *a, const float *expect, 
         if (!omega_numeric_element_checked(op, i)) continue;
         int c = classify(a[i]);
         ct->n[c]++;
-        bool same = info->compare == OMEGA_CMP_INT_EXACT ? U(expect[i]) == U(got[i])
-                                                         : omega_numeric_bits_equal(expect[i], got[i]);
+        bool same = omega_numeric_compare_equal(info->compare, U(expect[i]), U(got[i]));
         if (!same) ct->bad[c]++;
     }
 }
@@ -276,6 +275,7 @@ static TierResult gb10_tier(OmegaNumericOp op, bool *class_ok) {
     for (size_t l = 0; l < launches; l++) {
         const float *c = NULL;
         if (op == OMEGA_NOP_FFMA) { fill_c(g_c, FFMA_C[l]); c = g_c; }
+        if (op == OMEGA_NOP_FFMA_V) { for (size_t i = 0; i < N; i++) g_c[i] = g_a[N - 1 - i]; c = g_c; }
         int rc = omega_numeric_reference(op, g_a, g_b, c, g_ref, N);
         if (rc != 0) {
             printf("OMEGA_NUMERIC_PARITY_JSON:{\"op\":\"%s\",\"tier\":\"gb10\",\"error\":%d,\"stage\":\"reference\"}\n", info->name, rc);
@@ -871,8 +871,8 @@ int main(int argc, char **argv) {
     }
     printf("[*] Provenance entries: %zu, encoded ops: %zu\n", omega_numeric_get_opcode_count(), encoded);
     report("PROVENANCE_MATCHES_EXECUTOR",
-           fixtures_rc == 0 && prov_problems == 0 && build_ok && encoded == 15 &&
-           omega_numeric_get_opcode_count() == 26);
+           fixtures_rc == 0 && prov_problems == 0 && build_ok && encoded == 38 &&
+           omega_numeric_get_opcode_count() == 52);
 
     /* Refusal before submission: never a silent wrong instruction. */
     int refuse_ok = 1;
@@ -895,8 +895,8 @@ int main(int argc, char **argv) {
             refuse_ok = 0;
         printf("    refused %-14s rc=%d: %s\n", nname, rc, err);
     }
-    /* DIV SQRT EXP LOG and the 23 E1 scalar ops (docs/numeric/E1_SCALAR_CONTRACT.md) */
-    if (refused_ops != omega_numeric_op_count() - 15) refuse_ok = 0;
+    /* only DIV SQRT EXP LOG remain refused (the 23 E1 scalar ops are encoded, E1 WP-C) */
+    if (refused_ops != omega_numeric_op_count() - 38) refuse_ok = 0;
     {
         char err[256];
         fill_c(g_c, 0x3f800000u);
@@ -979,10 +979,16 @@ int main(int argc, char **argv) {
             }
         }
         int caught = 0, cases = 0;
-        for (int m = 0; m < 32; m++) {
+        /* 32..43: E1 scalar ops (E1 WP-C) */
+        static const OmegaNumericOp E1_NEG_OP[12] = {
+            OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FSETP_LT_SEL, OMEGA_NOP_FSETP_EQ_SEL, OMEGA_NOP_F2I_FLOOR,
+            OMEGA_NOP_F32_TO_F16, OMEGA_NOP_F2I_FLOOR, OMEGA_NOP_I2FP_U32, OMEGA_NOP_FFMA_V,
+            OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V, OMEGA_NOP_FFMA_V };
+        for (int m = 0; m < 44; m++) {
             OmegaNumericOp op = OMEGA_NOP_LDS_STS;
             if (m >= 18 && m != 27 && m != 31) op = OMEGA_NOP_REDUCE_SUM;
             if (m == 17) op = OMEGA_NOP_SHFL_DOWN;
+            if (m >= 32) op = E1_NEG_OP[m - 32];
             OmegaNumericPatchInsn p[OMEGA_NUMERIC_PATCH_MAX];
             int n = omega_numeric_patch_words(op, p);
             uint32_t q[OMEGA_BW_QMD_WORDS];
@@ -1028,6 +1034,20 @@ int main(int argc, char **argv) {
             case 29: what = "sum store predicated on P0"; p[10].w[0] = 0x06000986u; want = "STG.E desc[UR4][R6.64]"; break;
             case 30: what = "sum store width changed"; p[10].w[2] ^= 0x00000200u; want = "STG.E desc[UR4][R6.64]"; break;
             case 31: what = "LDS_STS result stored through address R8"; p[5].w[0] = 0x08007986u; want = "STG.E desc[UR4][R6.64]"; break;
+            case 32: what = "FSETP_LT_SEL with the GT compare code"; p[0].w[2] = 0x03f04000u; want = "FSETP compare code"; break;
+            case 33: what = "FSETP compares a with R6"; p[0].w[1] = 6u; want = "patch is not FSETP"; break;
+            case 34: what = "FSEL operands swapped"; p[1].w[0] = 0x05097208u; p[1].w[1] = 2u; want = "select is not FSEL"; break;
+            case 35: what = "F2I_FLOOR submitted with CEIL rounding"; p[0].w[2] = 0x0020b100u; want = "conversion at 0"; break;
+            case 36: what = "F32_TO_F16 submitted as F2F.BF16"; p[0].w[2] = 0x00202000u; want = "conversion at 0"; break;
+            case 37: what = "F2I_FLOOR result not scoreboarded"; p[0].w[3] = 0x010fca00u; want = "must be a scoreboarded"; break;
+            case 38: what = "I2FP_U32 with an extra STG, EXIT"; p[1] = p[0]; p[1].w[0] = 0x06007986u; p[1].w[1] = 9u; p[1].w[2] = 0x0c101904u;
+                     p[1].w[3] = 0x000fe200u; p[2].w[0] = 0x0000794du; p[2].w[1] = 0; p[2].w[2] = 0x03800000u; p[2].w[3] = 0x000fea00u;
+                     n = 3; want = "must be fixed latency"; break;
+            case 39: what = "FFMA_V without the c load"; p[2] = p[3]; p[3] = p[4]; p[4] = p[5]; n = 5; want = "expected LDC.64"; break;
+            case 40: what = "FFMA_V c pointer from c[0x0][0x3a8]"; p[0].w[1] = 0x0000ea00u; want = "c pointer is not"; break;
+            case 41: what = "FFMA_V c address indexed by R2"; p[1].w[0] = 0x020a7825u; want = "c address is not"; break;
+            case 42: what = "FFMA_V c loaded from R12"; p[2].w[0] = 0x0c0b7981u; want = "c[i] is not LDG"; break;
+            case 43: what = "FFMA_V adds R1 instead of c[i]"; p[3].w[2] = 0x00000001u; want = "FFMA is not"; break;
             }
             char err[256];
             int rc = omega_numeric_check_patch(check_op, p, n, q, err, sizeof(err));
@@ -1035,6 +1055,13 @@ int main(int argc, char **argv) {
             cases++;
             if (ok) caught++;
             else printf("    NOT CAUGHT (%s): rc=%d reason '%s', wanted '%s'\n", what, rc, err, want);
+        }
+        {   /* FFMA_V reads c per element: a submission without c is refused. */
+            char e3[256];
+            int rc3 = omega_numeric_submit_check("FFMA_V", g_a, g_b, NULL, g_dev, N, e3, sizeof(e3));
+            cases++;
+            if (rc3 == OMEGA_NUMERIC_ERR_BAD_ARGS && strstr(e3, "third input")) caught++;
+            else printf("    NOT CAUGHT (FFMA_V without c): rc=%d reason '%s'\n", rc3, e3);
         }
         printf("    patch corruptions refused with the right reason: %d of %d; clean patches accepted: %s\n",
                caught, cases, clean_ok ? "yes" : "no");

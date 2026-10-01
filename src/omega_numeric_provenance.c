@@ -7,6 +7,8 @@
 
 #define ORACLE "nvdisasm 13.0.88 -b SM121 decode of these words (2026-09-30); " \
                "scoreboard pattern from ptxas 13.0.88 sm_121; GB10 parity: receipt only"
+#define ORACLE_E1 "nvdisasm 13.0.88 -b SM121 decode of these words (2026-09-30, E1 WP-C); " \
+               "scoreboard pattern from ptxas 13.0.88 sm_121; GB10 parity: receipt only"
 
 static const OmegaOpcodeProvenance PROVENANCE_TABLE[] = {
     { "FADD", "FADD R9, R2, R5", 0x7221, "FP32 add, RNE, subnormals kept", ORACLE,
@@ -65,6 +67,52 @@ static const OmegaOpcodeProvenance PROVENANCE_TABLE[] = {
       0x00007b1d, 0x00000000, 0x00010000, false },
     { "LDS_R9_R10", "LDS R9, [R10+URZ]", 0x7984, "32-bit shared load of the partner word", ORACLE,
       0x0a097984, 0x000000ff, 0x08000800, true },
+    /* ---- E1 scalar contract ops (E1 WP-C) ---- */
+#define FSETP_ROW(key_, txt_, code_, desc_) \
+    { key_, txt_, 0x720b, desc_, ORACLE_E1, 0x0200720b, 0x00000005, 0x03f00000u | ((code_) << 12), false }
+    FSETP_ROW("FSETP_LT_R2_R5",  "FSETP.LT.AND P0, PT, R2, R5, PT",  0x1u, "ordered a < b (false on NaN)"),
+    FSETP_ROW("FSETP_EQ_R2_R5",  "FSETP.EQ.AND P0, PT, R2, R5, PT",  0x2u, "ordered a == b (false on NaN)"),
+    FSETP_ROW("FSETP_LE_R2_R5",  "FSETP.LE.AND P0, PT, R2, R5, PT",  0x3u, "ordered a <= b (false on NaN)"),
+    FSETP_ROW("FSETP_GT_R2_R5",  "FSETP.GT.AND P0, PT, R2, R5, PT",  0x4u, "ordered a > b (false on NaN)"),
+    FSETP_ROW("FSETP_NE_R2_R5",  "FSETP.NE.AND P0, PT, R2, R5, PT",  0x5u, "ordered a != b (false on NaN)"),
+    FSETP_ROW("FSETP_NUM_R2_R5", "FSETP.NUM.AND P0, PT, R2, R5, PT", 0x7u, "neither a nor b is NaN"),
+    FSETP_ROW("FSETP_NAN_R2_R5", "FSETP.NAN.AND P0, PT, R2, R5, PT", 0x8u, "a or b is NaN"),
+    FSETP_ROW("FSETP_LTU_R2_R5", "FSETP.LTU.AND P0, PT, R2, R5, PT", 0x9u, "unordered a < b (true on NaN)"),
+    FSETP_ROW("FSETP_EQU_R2_R5", "FSETP.EQU.AND P0, PT, R2, R5, PT", 0xau, "unordered a == b (true on NaN)"),
+    FSETP_ROW("FSETP_LEU_R2_R5", "FSETP.LEU.AND P0, PT, R2, R5, PT", 0xbu, "unordered a <= b (true on NaN)"),
+    FSETP_ROW("FSETP_GTU_R2_R5", "FSETP.GTU.AND P0, PT, R2, R5, PT", 0xcu, "unordered a > b (true on NaN)"),
+    FSETP_ROW("FSETP_NEU_R2_R5", "FSETP.NEU.AND P0, PT, R2, R5, PT", 0xdu, "unordered a != b (true on NaN)"),
+    FSETP_ROW("FSETP_GEU_R2_R5", "FSETP.GEU.AND P0, PT, R2, R5, PT", 0xeu, "unordered a >= b (true on NaN)"),
+#undef FSETP_ROW
+    { "F2I_FLOOR", "F2I.FLOOR.NTZ R9, R2", 0x7305, "FP32 -> S32, round toward -inf, NaN -> 0, saturating", ORACLE_E1,
+      0x00097305, 0x00000002, 0x00207100, true },
+    { "F2I_CEIL", "F2I.CEIL.NTZ R9, R2", 0x7305, "FP32 -> S32, round toward +inf, NaN -> 0, saturating", ORACLE_E1,
+      0x00097305, 0x00000002, 0x0020b100, true },
+    { "F2I_RNI", "F2I.NTZ R9, R2", 0x7305, "FP32 -> S32, round to nearest even (no rounding suffix = RN)", ORACLE_E1,
+      0x00097305, 0x00000002, 0x00203100, true },
+    { "F2U", "F2I.U32.TRUNC.NTZ R9, R2", 0x7305, "FP32 -> U32, truncate, NaN and negatives -> 0, saturating", ORACLE_E1,
+      0x00097305, 0x00000002, 0x0020f000, true },
+    { "I2FP_U32", "I2FP.F32.U32 R9, R2", 0x7245, "U32 -> FP32, round to nearest even (fixed latency)", ORACLE_E1,
+      0x00097245, 0x00000002, 0x00201000, false },
+    { "F2F_F16_F32", "F2F.F16.F32 R9, R2", 0x7304,
+      "FP32 -> binary16 RNE in [15:0]; [31:16] expected zero (ptxas stores it unmasked), checked by the receipt", ORACLE_E1,
+      0x00097304, 0x00000002, 0x00200800, true },
+    { "F2F_BF16_F32", "F2F.BF16.F32 R9, R2", 0x7304,
+      "FP32 -> bfloat16 RNE in [15:0]; [31:16] expected zero (ptxas stores it unmasked), checked by the receipt", ORACLE_E1,
+      0x00097304, 0x00000002, 0x00202000, true },
+    { "HADD2_F32_R2_H0", "HADD2.F32 R9, -RZ, R2.H0_H0", 0x7230, "binary16 [15:0] -> FP32 (-0 + h), ptxas form of cvt.f32.f16", ORACLE_E1,
+      0xff097230, 0x20000002, 0x00004100, false },
+    { "SHF_L_R9_R2_16", "SHF.L.U32 R9, R2, 0x10, RZ", 0x7819,
+      "bfloat16 [15:0] -> FP32 by shift (ptxas form of cvt.f32.bf16); not a hardware conversion unit", ORACLE_E1,
+      0x02097819, 0x00000010, 0x000006ff, false },
+    { "LDC64_R10_C3A0", "LDC.64 R10, c[0x0][0x3a0]", 0x7b82, "c pointer from kernel argument words 8..9", ORACLE_E1,
+      0xff0a7b82, 0x0000e800, 0x00000a00, true },
+    { "IMAD_WIDE_R10_R9_4", "IMAD.WIDE.U32 R10, R9, 0x4, R10", 0x7825, "&c[i] = c + index * 4", ORACLE_E1,
+      0x090a7825, 0x00000004, 0x078e000a, false },
+    { "LDG_R11_R10", "LDG.E R11, desc[UR4][R10.64]", 0x7981, "32-bit global load of c[i]", ORACLE_E1,
+      0x0a0b7981, 0x00000004, 0x0c1e1900, true },
+    { "FFMA_R9_R2_R5_R11", "FFMA R9, R2, R5, R11", 0x7223, "FP32 fused multiply-add, c[i] per element", ORACLE_E1,
+      0x02097223, 0x00000005, 0x0000000b, false },
 };
 
 #define PROVENANCE_COUNT (sizeof(PROVENANCE_TABLE) / sizeof(PROVENANCE_TABLE[0]))

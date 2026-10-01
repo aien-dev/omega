@@ -66,11 +66,8 @@ good_log() {
         mode=$(mode_of "$op")
         echo "OMEGA_NUMERIC_REGISTRY_JSON:{\"op\":\"$op\",\"encoded\":true,\"compare\":\"$mode\",\"launches\":$([ "$op" = FFMA ] && echo 8 || echo 1)}"
     done
-    # Not encoded for GB10: DIV SQRT EXP LOG and the E1 scalar ops (CPU contract only).
-    for op in DIV SQRT EXP LOG FSETP_LT_SEL FSETP_LE_SEL FSETP_GT_SEL FSETP_EQ_SEL FSETP_NE_SEL \
-              FSETP_NUM_SEL FSETP_NAN_SEL FSETP_LTU_SEL FSETP_LEU_SEL FSETP_GTU_SEL FSETP_GEU_SEL \
-              FSETP_EQU_SEL FSETP_NEU_SEL F2I_FLOOR F2I_CEIL F2I_RNI F2U I2FP_U32 F32_TO_F16 \
-              F32_TO_BF16 F16_TO_F32 BF16_TO_F32 FFMA_V; do
+    # Not encoded for GB10: DIV SQRT EXP LOG.
+    for op in DIV SQRT EXP LOG; do
         echo "OMEGA_NUMERIC_REGISTRY_JSON:{\"op\":\"$op\",\"encoded\":false,\"compare\":\"BIT_EXACT\",\"launches\":1}"
     done
     for id in $NUM_EXPECTED_IDS; do echo "[PASS] $id"; done
@@ -100,7 +97,7 @@ $2
     cmp -s "$TMP/good.log" "$TMP/$1.log" && bad "fixture $1: the edit changed nothing"; }
 check "complete passing log accepted" 'num_check_log "$TMP/good.log"'
 check "  hardware digest read from the log" '[ "$NUM_HWDIGEST" = "$fake_digest" ]'
-check "  22 GB10 parity lines kept (FFMA x8 + 14 ops)" '[ "$(printf "%s" "$NUM_PARITY" | jq length)" = 22 ]'
+check "  45 GB10 parity lines kept (FFMA x8 + 37 ops)" '[ "$(printf "%s" "$NUM_PARITY" | jq length)" = 45 ]'
 check "  run id and binary digest read from the run line" '[ "$NUM_LOG_RUN_ID" = "$LOG_RUN_ID" ] && [ "$NUM_LOG_BINARY_SHA" = "$LOG_BIN_SHA" ]'
 sed 's/"source":"FORGE_PROBE"/"source":"FAKE_NON_HARDWARE_CPU_ONLY","fake":true/' "$TMP/good.log" > "$TMP/fake.log"
 check "CPU-only fake descriptor refused" '! num_check_log "$TMP/fake.log"'
@@ -134,6 +131,12 @@ check "FADD relabelled SEED_BOUND with 4096 mismatches refused" '! num_check_log
 check "  comparison taken from the manifest" '[ "$M19R_ERR" = "GB10 parity for FADD: comparison \"SEED_BOUND\" but the manifest says BIT_EXACT" ]'
 gb10 relabel2 '/"op":"FSEL"/s/"compare":"INT_EXACT"/"compare":"BIT_EXACT"/'
 check "FSEL relabelled BIT_EXACT refused" '! num_check_log "$TMP/relabel2.log"'
+gb10 relabel3 '/"op":"F32_TO_F16"/s/"compare":"F16_BITS"/"compare":"BIT_EXACT"/'
+check "F32_TO_F16 relabelled BIT_EXACT refused (manifest says F16_BITS)" '! num_check_log "$TMP/relabel3.log"'
+gb10 e1mis '/"op":"F32_TO_BF16"/s/"mismatches":0/"mismatches":3/'
+check "F32_TO_BF16 with 3 mismatches refused" '! num_check_log "$TMP/e1mis.log"'
+gb10 e1gone '/"op":"FFMA_V"/d'
+check "missing FFMA_V parity line refused" '! num_check_log "$TMP/e1gone.log"'
 gb10 strn '/"op":"FMUL"/s/"n":4096,"checked":4096/"n":"4096","checked":"4096"/'
 check "string-typed counts refused" '! num_check_log "$TMP/strn.log"'
 gb10 strm '/"op":"FMUL"/s/"mismatches":0/"mismatches":"0"/'

@@ -202,8 +202,8 @@ typedef enum {
     OMEGA_NOP_LOG,
     OMEGA_NOP_REDUCE_SUM,
     /* E1 scalar contract ops (docs/numeric/E1_SCALAR_CONTRACT.md): semantic
-     * reference + CPU realization only, gb10_encoded = false until a GB10
-     * lane encodes them. Compare-and-select: out = P(a, b) ? a : b, bits
+     * reference, CPU realization and GB10 encoding (E1 WP-C; GB10 parity is
+     * established by the Gate 5 chip receipt only). Compare-and-select: out = P(a, b) ? a : b, bits
      * moved unchanged (FSETP.<P> P0, a, b ; FSEL out, a, b, P0).          */
     OMEGA_NOP_FSETP_LT_SEL,
     OMEGA_NOP_FSETP_LE_SEL,
