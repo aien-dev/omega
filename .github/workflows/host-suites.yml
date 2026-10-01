@@ -16,7 +16,7 @@ name: Host suites
 #       (+ builds only of the R13/R14 living hosts)
 #   turing-yield.yml : turing-yield turing-energy
 #   this file : searchtrace, estimation est-tools estimation-v3 est3c-tools,
-#       numeric-cpu numeric-qualify
+#       numeric-cpu numeric-qualify, train (M22 substrate, Lane 21)
 #
 # Deliberately NOT on GitHub (no GB10, no resident seat, no quiet flag here):
 #   test-composition-gate-gpu, test-r12-silicon, test-r13-silicon,
@@ -59,6 +59,10 @@ on:
       - 'tools/numeric_*'
       - 'tools/m19r_qualify.sh'
       - 'tools/json_canon.c'
+      # train (M22 optimizer substrate + E5 provenance)
+      - 'src/train/**'
+      - 'tests/train/**'
+      - 'mk/train.mk'
 
 jobs:
   searchtrace:
@@ -101,3 +105,14 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-cpu
       - name: Gate 5 qualifier and receipt writer (host-only, fake descriptors)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-qualify
+
+  train:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: M22 substrate (generation store, crash matrix, provenance, SGD), plain + ASan/UBSan
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-train
