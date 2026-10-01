@@ -743,6 +743,24 @@ test-r16-authpath-silicon: $(RX_R13_SILICON) $(RX_R14_SILICON)
 		src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c \
 		$(PHYSICS_DIR)/nvrm/nvrm.c $(AIENOS_CAP_LIB)
 
+# R16-G3 checks 1-3 only (sources, link map, shared libraries, embedded names)
+# on the current living-system build, for CI runners. Nothing is executed, so
+# neither the GB10 seat nor the Spark core classes are needed; the gate line
+# stays NOT_RUN. The -silicon variant builds the silicon binaries and never
+# runs them. The gate itself is still test-r16-authpath(-silicon).
+.PHONY: test-r16-authpath-linkmap test-r16-authpath-linkmap-silicon
+test-r16-authpath-linkmap: $(RX_R13_HOST) $(RX_R14_HOST)
+	R16_G3_STATIC_ONLY=1 sh tools/r16_authpath.sh host $(RX_R13_HOST) $(RX_R14_HOST) \
+		$(OUT_DIR)/r16/authpath/linkmap-host-$(R16_STAMP) $(RX_R13_SRCS) $(AIENOS_CAP_LIB)
+
+test-r16-authpath-linkmap-silicon: $(RX_R13_SILICON) $(RX_R14_SILICON)
+	R16_G3_STATIC_ONLY=1 sh tools/r16_authpath.sh silicon $(RX_R13_SILICON) $(RX_R14_SILICON) \
+		$(OUT_DIR)/r16/authpath/linkmap-silicon-$(R16_STAMP) $(RX_R13_SRCS) \
+		src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c \
+		src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
+		src/omega_blackwell_matmul.c $(PHYSICS_DIR)/m16/m16_native.c \
+		$(PHYSICS_DIR)/nvrm/nvrm.c $(AIENOS_CAP_LIB)
+
 # R16-G4: legacy paths cannot bypass authority. The R13 body (R15 rig, RES-4,
 # host seat) is started; a legacy context tries six acts and each must be
 # refused with no change to authoritative state. Host only; no chip.

@@ -4,6 +4,7 @@
 #
 # Usage: tools/r16_authpath.sh <mode> <r13-binary> <r14-binary> <outdir> <r13-sources...>
 #   mode: host | silicon
+#   R16_G3_STATIC_ONLY=1: run checks 1-3 only and report the gate NOT_RUN (CI).
 #
 # Checks, in order, and stops at the first failure:
 #   1. sources: the living-system build lists only omega sources and the
@@ -86,6 +87,19 @@ for b in "$r13" "$r14"; do
     fi
 done
 note "strings: no legacy program name embedded"
+
+# Static-only mode (R16_G3_STATIC_ONLY=1): stop after checks 1-3. These read
+# only the build (source list, link map, shared libraries, embedded strings)
+# and run nothing, so they can run where the binaries cannot (a CI runner has
+# neither the GB10 seat nor the Spark's two core classes). This is NOT the
+# gate: checks 4-5 (exec trace and the living runs) are not run, and the gate
+# line says NOT_RUN.
+if [ "${R16_G3_STATIC_ONLY:-0}" = 1 ]; then
+    echo "R16-G3 static: R16_G3_LINKMAP=STATIC_PASS mode=$mode (checks 1-3 of 5 on this build; not the gate)"
+    echo "R16 gate: R16_G3_AUTHPATH=NOT_RUN (checks 4-5, exec trace and living run, not run in static-only mode)"
+    echo "R16-G3 evidence: $out"
+    exit 0
+fi
 
 # 4 + 5. run under exec tracing, legacy programs stubbed ------------------------
 stubs="$out/legacy-stubs"
