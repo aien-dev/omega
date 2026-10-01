@@ -1422,3 +1422,23 @@ print-composition-gate-gpu-bin:
 	@echo $(RX_COMPOSE_GATE_GPU)
 
 .PHONY: test-composition-gate-gpu composition-gate-gpu-bin print-composition-gate-gpu-bin
+
+# E1 row 7: correctly rounded FP32 DIV and SQRT on the GB10
+# (docs/numeric/E1_DIVSQRT_GB10.md). Host tier, offline nvdisasm provenance
+# and the CHECK mutation sweep need no device; the chip run is
+# tools/run_divsqrt_gate.sh only (quiet flag, detached, receipt).
+DIVSQRT_SRCS = tests/test_omega_divsqrt_gb10.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric.c \
+               src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
+               src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+DIVSQRT_HDRS = src/omega_numeric_divsqrt_gb10.h src/omega_numeric.h src/omega_blackwell_encoder.h \
+               src/omega_blackwell_qmd.h src/sha256.h
+.PHONY: test-divsqrt-host test-divsqrt-nvdisasm test-divsqrt-sweep
+build/test_omega_divsqrt_gb10_cpu: $(DIVSQRT_SRCS) $(DIVSQRT_HDRS)
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o $@ $(DIVSQRT_SRCS)
+test-divsqrt-host: build/test_omega_divsqrt_gb10_cpu
+	./build/test_omega_divsqrt_gb10_cpu
+test-divsqrt-nvdisasm:
+	tools/divsqrt_nvdisasm_check.sh
+test-divsqrt-sweep:
+	tools/divsqrt_check_sweep.sh
