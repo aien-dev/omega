@@ -85,6 +85,7 @@ crumbline-learner: $(LEARNER)
 
 test-crumbline: $(LEARNER)
 	./tests/crumbline/run_conformance.sh $(LEARNER) tests/crumbline/vectors
+	./tests/crumbline/run_crb1_conformance.sh $(LEARNER) tests/crumbline/crb1 tests/crumbline/crb1_findings.txt
 
 $(LEARNER): $(LEARNER_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(LEARNER_OBJS)
