@@ -110,7 +110,7 @@ int fab_seal(FabNode *n, const AienMachineId *dest, uint32_t kind, const uint8_t
     if (n->cfg.auth->sign(n->cfg.auth->ctx, out, FAB_HDR_BYTES + body_len,
                           out + FAB_HDR_BYTES + body_len) != 0)
         return FAB_E_AUTH;
-    *out_len = FAB_HDR_BYTES + body_len + FAB_TAG_BYTES;
+    *out_len = FAB_HDR_BYTES + body_len + FAB_SIG_BYTES;
     return FAB_OK;
 }
 
@@ -207,12 +207,12 @@ int fab_receive(FabNode *n, const uint8_t *msg, size_t len, uint64_t now_us, Fab
     fab_tick(n, now_us);
 
     /* form */
-    if (len < FAB_HDR_BYTES + FAB_TAG_BYTES || memcmp(msg, "AFAB", 4) != 0 || msg[4] != FAB_VERSION)
+    if (len < FAB_HDR_BYTES + FAB_SIG_BYTES || memcmp(msg, "AFAB", 4) != 0 || msg[4] != FAB_VERSION)
         return refuse(n, v, FAB_E_FORMAT, 0, NULL, 0, 0, now_us);
     uint32_t kind = msg[5];
     size_t body_len = r16(msg + 6);
     v->msg_kind = kind;
-    if (body_size(kind) != body_len || len != FAB_HDR_BYTES + body_len + FAB_TAG_BYTES)
+    if (body_size(kind) != body_len || len != FAB_HDR_BYTES + body_len + FAB_SIG_BYTES)
         return refuse(n, v, FAB_E_FORMAT, 0, NULL, 0, 0, now_us);
     AienMachineId sender, dest;
     if (aien_mid_decode(msg + 8, AIEN_MID_RECORD_BYTES, &sender) != AIEN_MID_OK ||
