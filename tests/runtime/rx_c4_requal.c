@@ -771,6 +771,58 @@ static void v2_lost_journal_case(void) {
     rmtree(d);
 }
 
+/* C4: a record in the MIDDLE of the journal whose length field is enlarged reads
+ * as a torn tail in cx_open, and open_home opens with CX_OPEN_REPAIR_TAIL, which
+ * truncates the file from that record on. Compose open must still refuse, because
+ * the journal is then shorter than the checkpoint anchor (a refusal, never a
+ * silent recovery). Recorded in the message: whether the file was shortened by the
+ * failed open (the truncate is not undone). */
+static void middle_length_case(void) {
+    const char *nm = "cortex_cut/middle_record_length_enlarged";
+    char d[200], jp[260], mp[260];
+    Sig tmp[NGOAL + 1];
+    mkcasedir(d, sizeof d, "midlen");
+    if (run_task(d, tmp) != 0) { add_case(nm, "DIVERGED", 0, "no directory"); return; }
+    snprintf(jp, sizeof jp, "%s/cortex.cx", d);
+    snprintf(mp, sizeof mp, "%s/jspace/jspace.meta", d);
+    uint8_t *j = NULL, *m = NULL;
+    size_t jn = 0, mn = 0;
+    static size_t off[4096];
+    int nrec = 0;
+    if (read_file_all(jp, &j, &jn) || read_file_all(mp, &m, &mn) || mn < 176u ||
+        journal_bounds(j, jn, off, 4096, &nrec)) {
+        add_case(nm, "DIVERGED", 0, "cannot parse journal or checkpoint");
+        free(j); free(m); rmtree(d);
+        return;
+    }
+    uint64_t cnt = le64_at(m + mn - 48);
+    free(m);
+    free(j);
+    if (cnt < 2 || cnt > (uint64_t)nrec) {
+        add_case(nm, "DIVERGED", 0, "anchor count %llu vs %d records", (unsigned long long)cnt, nrec);
+        rmtree(d);
+        return;
+    }
+    uint64_t victim = cnt / 2;   /* 0-based record index, strictly inside the anchored prefix */
+    uint8_t big[8] = { 0, 0, 0, 0x10, 0, 0, 0, 0 };   /* payload words = 2^28: past the end of file */
+    int fd = open(jp, O_WRONLY);
+    int wr = fd >= 0 && pwrite(fd, big, 8, (off_t)(off[victim] + 12u * 8u)) == 8;
+    if (fd >= 0) close(fd);
+    struct stat s0, s1;
+    int st0 = stat(jp, &s0);
+    int rc = wr ? open_dir(d) : -1;
+    if (rc == RX_OK) fx_close(&g_fx, &g_c);
+    int st1 = stat(jp, &s1);
+    int rc2 = wr ? open_dir(d) : -1;
+    if (rc2 == RX_OK) fx_close(&g_fx, &g_c);
+    add_case(nm, rc == RX_ERR_REPLAY ? "REFUSED" : "DIVERGED",
+             wr && st0 == 0 && st1 == 0 && rc == RX_ERR_REPLAY && rc2 == RX_ERR_REPLAY,
+             "record %llu of %d (anchor count %llu) length enlarged: open rc=%d again rc=%d (want %d); journal %lld -> %lld bytes after the failed open",
+             (unsigned long long)victim, nrec, (unsigned long long)cnt, rc, rc2, RX_ERR_REPLAY,
+             (long long)s0.st_size, (long long)s1.st_size);
+    rmtree(d);
+}
+
 static void jstr(FILE *f, const char *s) {
     fputc('"', f);
     for (; *s; s++) {
@@ -814,6 +866,7 @@ int main(int argc, char **argv) {
         for (int k = 1; k < NGOAL; k++) stale_case(k);
         boundary_cut_cases();
         v2_lost_journal_case();
+        middle_length_case();
         byte_sweep("jspace/jspace.meta", 1);
         byte_sweep("cortex.cx", 7);
         byte_sweep("machine.id", 1);
