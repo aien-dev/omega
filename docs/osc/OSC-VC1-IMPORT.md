@@ -105,8 +105,14 @@ function or includes that header, or if anything names the admit door, the list 
 `src/crumbline/cl_program.c` and `src/omega_discovery.c` no longer call `omega_library_insert` with a bare hash. Both go
 through `src/omega_vc_bridge.c`, which builds the program's canonical Verified Crumb, mints an evidence receipt of kind
 `host-v1`, tier HOST_TEST, and lets `omega_resolve_admit` check it before the library entry is made (ADR 0029 Decision
-11). The receipt is SELF-MINTED in the same process that just ran `omega_program_verify`: it proves the record is well
-formed and accepted by the resolver chain, not that an independent verifier re-ran anything. The test
+11). The bridge itself runs `omega_program_verify` on a private copy of the program and recomputes the program id from
+the IR it stores, and refuses on failure; it does not trust the caller's `is_verified` flag or `program_id`. The
+receipt is still SELF-MINTED: the code asking for admission writes it, so it proves the record is well formed and
+accepted by the resolver chain, not that an independent verifier re-ran anything. For that reason every record the
+bridge mints lists the capability `omega-bridge.selfminted`, and the build-domain resolver refuses any record that
+lists it: a bridge record can satisfy a dev import (tainted) but never `oscv --domain build`. `make test-vc-bridge`
+reproduces the hand test that found the earlier hole (corrupt the machine code, flip the flags, forge an id) and kills
+four mutants. This is also why VC-GENESIS-1 can be empty (see its audit). The test
 `library-insert-in-src-is-named-only-by-the-library-and-the-bridge` keeps new direct inserts out of `src/`.
 
 ## The compiler hook cannot be swapped for another
@@ -135,7 +141,10 @@ sources for forbidden words and runs `oscv` with unknown switches and with envir
   this stage.
 - A source digest cannot satisfy the build domain (it cannot be recomputed to a program id here), so a record kept only
   as OSC source needs an IR record beside it.
-- The bridge receipt is self-minted HOST_TEST evidence (see above), not an independent verification.
+- The bridge receipt is self-minted HOST_TEST evidence (see above), not an independent verification. It cannot
+  satisfy a build import. Real aien-test receipts for Crumbline and discovery programs are owed (ADR 0029 Decisions 5
+  and 11), as is a resolver-side minimum profile for the build domain (a host-v1 receipt written by hand still
+  satisfies a build import for a record that does not carry the bridge capability).
 - `omega_library_insert_bootstrap` still exists on the in-memory library and is not tied to the Genesis Set. No code calls
   it; it is not a way into the Verified Crumb Store.
 - A dependency cycle cannot be built through the store API; it is refused when a tampered store holds one.

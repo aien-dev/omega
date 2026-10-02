@@ -2054,3 +2054,29 @@ test-genesis-real: tests/test_omega_genesis.c src/omega_genesis.h docs/osc/VC-GE
 	  gmut gr-contains-everything no-program-we-know-and-no-junk-id-is-a-member 's|if (!id \|\| memcmp(id, zero, 32) == 0) return 0;|(void)zero; return 1;|'; \
 	  gmut gr-name-changed       set-name-is-vc-genesis-1 's|#define OMEGA_GENESIS_SET_NAME "VC-GENESIS-1"|#define OMEGA_GENESIS_SET_NAME "VC-GENESIS-2"|'
 	@echo "test-genesis-real: PASS (pinned set and audit record agree, 3 mutants killed)"
+
+# test-vc-bridge (VC1 stage 6 fix): the bridge verifies and recomputes the id itself, and what it
+# mints cannot satisfy a build import. Each VC1B-tagged guard is broken in a copy and the named
+# check must FAIL. The tag lines are single lines, so sed replaces whole lines.
+.PHONY: test-vc-bridge
+VCB_DIR = $(OUT_DIR)/vc-bridge-test
+VCB_STACK = src/omega_library.c src/omega_receipt.c src/omega_blake3.c src/sha256.c src/omega_vcstore.c $(RESOLVE_PROGRAM_STACK)
+test-vc-bridge: tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_vc_bridge.h src/omega_resolve.c src/omega_resolve.h
+	@mkdir -p $(VCB_DIR)
+	$(CC) $(RESOLVE_FLAGS) -o $(VCB_DIR)/test_omega_vc_bridge tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_resolve.c $(VCB_STACK)
+	$(VCB_DIR)/test_omega_vc_bridge
+	$(CC) $(RESOLVE_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o $(VCB_DIR)/test_omega_vc_bridge_asan tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_resolve.c $(VCB_STACK)
+	$(VCB_DIR)/test_omega_vc_bridge_asan
+	@set -eu; vmut() { name=$$1; which=$$2; chk=$$3; repl=$$4; \
+	  sed "/VC1B:$$name/c\\$$repl" src/$$which.c > $(VCB_DIR)/mut_$$name.c; \
+	  if cmp -s src/$$which.c $(VCB_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  if [ $$which = omega_vc_bridge ]; then a=$(VCB_DIR)/mut_$$name.c; b=src/omega_resolve.c; else a=src/omega_vc_bridge.c; b=$(VCB_DIR)/mut_$$name.c; fi; \
+	  $(CC) $(RESOLVE_FLAGS) -o $(VCB_DIR)/mut_$$name tests/test_omega_vc_bridge.c $$a $$b $(VCB_STACK); \
+	  rc=0; $(VCB_DIR)/mut_$$name > $(VCB_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -eq 0 ] || ! grep -q "^FAIL $$chk\$$" $(VCB_DIR)/mut_$$name.out; then echo "mutant $$name NOT killed by $$chk (exit $$rc)"; tail -5 $(VCB_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed by $$chk (exit $$rc)"; }; \
+	  vmut verify                    omega_vc_bridge refuse-corrupted-program-even-with-flags-set '        (void)rep;'; \
+	  vmut id                        omega_vc_bridge refuse-forged-program-id-at-admit            '        (void)rid_;'; \
+	  vmut cap                       omega_vc_bridge refuse-bridge-record-in-build-domain         '    ou32(&o, 0);'; \
+	  vmut build-refuses-selfminted  omega_resolve   refuse-bridge-record-in-build-domain         '    (void)lists_selfminted_cap;'
+	@echo "test-vc-bridge: PASS (bridge verifies and recomputes the id, bridge records refused in build, ASan/UBSan clean, 4 mutants killed)"
