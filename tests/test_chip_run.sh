@@ -15,6 +15,9 @@ SRC_MODULE=${MODULE:-$TESTS_DIR/../tools/chip_run.sh}
 
 if [ "${1:-}" = --mutants ]; then
     M=$(mktemp -d) || exit 1; trap 'rm -rf "$M"' EXIT; bad=0; n=0
+    # the unmutated suite must pass first: a failing baseline can print "FAIL <id>:" for every mutant (no arguments, so no recursion)
+    MODULE="$SRC_MODULE" bash "${BASH_SOURCE[0]}" > "$M/base.out" 2>&1 \
+        || { echo "CHIP_RUN_MUTANTS: FAIL baseline self-test does not pass"; grep -E '^(FAIL|CHIP_RUN_SELFTEST)' "$M/base.out" | head -20 | sed 's/^/     | /'; exit 1; }
     for id in $(grep -o '# REFUSAL:[a-z_]*$' "$SRC_MODULE" | sed 's/.*://' | sort -u); do
         n=$((n + 1))
         sed "s/^.*# REFUSAL:$id\$/:/" "$SRC_MODULE" > "$M/chip_run.sh"
