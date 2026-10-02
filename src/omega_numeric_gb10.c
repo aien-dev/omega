@@ -7,6 +7,10 @@
  * barriers, reduction order) are refused here with a message on stderr. The
  * structural check runs again on the exact QMD that is submitted. The kernel is the calibrated vecadd with the op's patch words from
  * omega_numeric_patch_words; there is no fallback instruction.
+ * Completion is observed the C3 way, like the ldst, reduce and divsqrt
+ * launchers: a GPU-uncached marker page (marker, then an L2 flush and a
+ * second marker), then the QMD's own release semaphore. A timeout is
+ * uncertain completion and poisons the process (omega_numeric_native.h).
  */
 #include "omega_numeric.h"
 #include "omega_numeric_divsqrt_gb10.h"
@@ -117,7 +121,7 @@ int omega_gb10_execute_simt_op(const char *op_name,
         nvrm_alloc(&ctx.rm, bytes, &b_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &c_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &out_mem) != 0 ||
-        nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0 ||
+        nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem) != 0 ||
         nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
         return GB10_FAIL("alloc_buffers", 1, -1);
     }
@@ -198,6 +202,10 @@ int omega_gb10_execute_simt_op(const char *op_name,
     volatile uint32_t *hmarker = (volatile uint32_t *)marker_mem.cpu;
     *hsem = 0;
     *hmarker = 0;
+#ifndef OMEGA_C3_PROTECT_OFF
+    volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
+    *hmarker2 = 0;
+#endif
     __asm__ volatile("dsb sy" ::: "memory");
 
     uint32_t pb[1024];
@@ -259,19 +267,45 @@ int omega_gb10_execute_simt_op(const char *op_name,
     pb[pb_len++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20);
+#ifndef OMEGA_C3_PROTECT_OFF
+    /* C3 hardening, the same block as omega_ds_gb10_run (src/omega_numeric_divsqrt_gb10.c)
+     * and run_chunk (src/omega_numeric_reduce_gb10.c): after the WFI marker, flush GPU L2
+     * dirty lines to memory (NVC96F_MEM_OP_A..D = 0x28..0x34, D bits 31:27 OPERATION =
+     * L2_FLUSH_DIRTY 0x10), then a second WFI marker the host waits for before the
+     * readback. The marker page is GPU-uncached (727dc03), so this last write becomes
+     * CPU-visible when it lands, not when GPU L2 happens to drain. */
+    pb[pb_len++] = nvrm_mthd(0, 0x0028, 4);
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = (0x10u << 27);
+    pb[pb_len++] = nvrm_mthd(0, 0x005c, 5);
+    pb[pb_len++] = (uint32_t)(marker_mem.va + 0x10);
+    pb[pb_len++] = (uint32_t)((marker_mem.va + 0x10) >> 32);
+    pb[pb_len++] = 0x46464646u;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0x1 | (1u << 20);
+#endif
 
     if ((drc_ = m16_native_submit_methods(&ctx, pb, pb_len)) != 0) {
         return GB10_FAIL("submit", 1, drc_);
     }
 
-    if ((drc_ = omega_numeric_native_wait(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000)) != 0) {
-        return GB10_FAIL_WAIT("marker_wait", drc_, 5000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
+    /* A timeout is uncertain completion, even after a long wait: the same 600 s cap
+     * as the ldst, reduce and divsqrt launchers; the wrapper poisons the process. */
+    if ((drc_ = omega_numeric_native_wait(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) {
+        return GB10_FAIL_WAIT("marker_wait", drc_, 600000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
+#ifndef OMEGA_C3_PROTECT_OFF
+    if ((drc_ = omega_numeric_native_wait(hmarker2, 0x46464646u, 600000)) != 0) {
+        return GB10_FAIL_WAIT("marker2_wait", drc_, 600000, hmarker2, 0x46464646u);
+    }
+#endif
 
     /* Match the reduction path: the host marker alone can precede the
      * QMD release. Do not expose outputs until both have completed. */
-    if ((drc_ = omega_numeric_native_wait(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 5000)) != 0) {
-        return GB10_FAIL_WAIT("sem_wait", drc_, 5000, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
+    if ((drc_ = omega_numeric_native_wait(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) {
+        return GB10_FAIL_WAIT("sem_wait", drc_, 600000, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
     }
     __asm__ volatile("dsb sy" ::: "memory");
 
