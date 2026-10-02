@@ -1655,10 +1655,10 @@ static int df_block(unsigned d, unsigned lo, int inloop)
         } else if (k < 14 && d < 2 && !inloop) { /* loop-local owner moved on one path */
             unsigned iv = df_id++, lb = df_no;
             df_ind(d);
-            DFC("for i%u in 0 .. 3 {\n", iv);
+            DFC("for v%u in 0 .. 3 {\n", iv);
             unsigned w = df_new("w", 0);
             df_ind(d + 1);
-            DFC("let %s: own [u32; 3] = alloc((i%u as u32) + ((c & 3) as u32));\n", df_o[w].name, iv);
+            DFC("let %s: own [u32; 3] = alloc((v%u as u32) + ((c & 3) as u32));\n", df_o[w].name, iv);
             df_block(d + 1, lb, 1);
             df_no = lb;
             df_ind(d);
