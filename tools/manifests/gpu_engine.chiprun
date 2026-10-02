@@ -1,0 +1,31 @@
+# Phase B only: needs the GB10, queen's go, quiet flag via chip_run; never run in Phase A.
+# Manifest for tools/chip_run.sh: the Omega GPU Engine chip test (cut A3b2, docs/numeric/OMEGA_GPU_ENGINE.md).
+# Sourced as shell by chip_run.sh, which provides $HERE (omega root) and $PHYSICS.
+# Format follows tools/manifests/unwritten_trap.chiprun (omega#205). NOT_RUN: never executed by its author.
+# Verdict lines printed by tests/test_omega_gpu_engine_gb10.c:
+#   "GPU_ENGINE: PASS" or "GPU_ENGINE: FAIL" on a completed run (exit 0 or 1)
+#   "GPU_ENGINE: NOT_RUN ..." and exit 2 when --chip is missing
+# The "GPU_ENGINE_CASES ..." and "GPU_ENGINE_BLOCKED ..." lines do not start with the verdict tag
+# followed by a space, so they are not verdict candidates.
+GATE=gpu_engine
+OWNER=gpu_engine
+TEST_SOURCE="tests/test_omega_gpu_engine_gb10.c"
+# The real engine core, the Blackwell backend, the vector wrapper and what the vector builder needs.
+# Not the fake driver: the real m16_native.c and nvrm.c come in below.
+SOURCES="src/omega_gpu_engine.c src/omega_blackwell_engine.c src/omega_blackwell_submit.c src/omega_blackwell_realize.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/omega_vector.c src/omega_validate.c src/omega_core.c src/omega_canonical.c src/sha256.c"
+EXTRA_BUILD_SOURCES="$PHYSICS/nvrm/nvrm.c $PHYSICS/m16/m16_native.c"
+RUN_ARGS="--chip"
+VERDICT_RE='^GPU_ENGINE: '
+PASS_LINE='^GPU_ENGINE: PASS$'
+EVIDENCE_DIR="$HOME/workspace/evidence-out/OMEGA-GPU-ENGINE"
+# Refusals keep the harness's own NOT_RUN line and exit code 2.
+REFUSE_EXIT=2
+REFUSE_VERDICT_LINE="GPU_ENGINE: NOT_RUN"
+# A chip run: raise the quiet flag (only with the queen's go) and take the GPU lock.
+RAISE_QUIET=1
+TAKE_GPU_LOCK=1
+REFUSE_DIRTY_OMEGA=1
+REQUIRE_ALL_PASS=0
+CHILD_EXIT_PASSTHROUGH=1
+# Host tier first (nonzero refuses): the simulated-driver test and the backend mutants, real target names.
+HOST_TIER_CMD="make test-gpu-engine-sim test-gpu-engine-backend-mutants PHYSICS_DIR=\"$PHYSICS\""

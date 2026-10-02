@@ -606,7 +606,7 @@ Status: DRAFT, host NOT_RUN, chip NOT_RUN. Nothing in this section has been
 compiled or executed by its author. The queue lines `DEEP2-A3b1-backend`,
 `DEEP2-A3b1-prod`, `DEEP2-A3b1-host` and `DEEP2-A3b1-mut` carry the first runs.
 The simulated-driver host test, the backend mutants, the chip test and the chip
-manifest are the next cut (A3b2).
+manifest are section 14.1 (cut A3b2).
 
 What this cut adds:
 - `src/omega_blackwell_engine.c` and `.h`: the backend table
@@ -665,6 +665,188 @@ Choices of this cut:
   UNVERIFIED (confidence 90% harmless, no address is hard coded).
 - One run at a time: the backend keeps one static context and refuses a second
   open while a run is active.
+
+### 14.1 Simulated-driver host test, backend mutants, chip test (A3b2)
+
+Status: DRAFT, host NOT_RUN, chip NOT_RUN. Written without compiling or running
+anything (Phase A rule). The first run is the queue lines `DEEP2-A3b2-sim`,
+`-mut`, `-gb10c` and the regression lines named in the handoff.
+
+Files:
+- `tests/test_omega_blackwell_engine.c` and `tests/fake_m16_native.c/.h`
+  (`make test-gpu-engine-sim`). The REAL engine core, the REAL Blackwell backend
+  and the REAL `omega_blackwell_execute_vector` run on the host. Only seven
+  driver symbols are replaced by the fake: `m16_native_open`,
+  `m16_native_create_channel`, `m16_native_submit_methods`, `m16_native_wait_marker`,
+  `m16_native_close`, `nvrm_alloc`, `nvrm_free`. No physics C file is linked.
+  Output is `[PASS] id` or `[FAIL] id` per check and a last line
+  `SUMMARY passed=N failed=M`.
+- `tools/gpu_engine_backend_mutations.sh` (`make test-gpu-engine-backend-mutants`),
+  a table adapter over `tools/mutation_runner.sh`. One mutant per protection in
+  `src/omega_blackwell_engine.c` and in the vector wrapper. The real sources carry
+  no marker comments; the rows match their text exactly once or by line range.
+- `tests/test_omega_gpu_engine_gb10.c` (compile only here,
+  `make test-gpu-engine-gb10-compile`) and `tools/manifests/gpu_engine.chiprun`
+  (omega#205 chip_run format). Phase B only: needs the GB10, the queen's go and
+  the quiet flag via chip_run. Never run in Phase A. The chip test is a fresh
+  rewrite against the real API; GPT-6 Astra's first-cut test (commit 21392ee,
+  older API) was the outline.
+
+Test case groups (each id starts with `sim_`; the full list is the `check` calls in the test):
+`success` (24-entry call order, allocation sizes, pushbuffer packet order, wait
+order, zeroed sync words at the doorbell, kernel arguments and addresses),
+`noc3`, `twice` (back to back runs), `open`, `channel`, `alloc` (fault on each of
+the 8 allocations, and a buffer that fails its own checks), `submit`, `unc_*`
+(8 uncertain-completion scenarios: marker, second marker and semaphore each
+hanging and overshooting, plus no-C3), `cleanup` (free and close faults),
+`unchanged` (unwritten output, wrong program bytes), `guard` (direct table calls
+with bad roles, lengths, NULLs, page rounding), `close` (close unmaps the sync
+words), `vec` (the wrapper: result, oracle, poison complement, timeouts, flags,
+timestamps).
+
+Failure names that no driver fault can reach through the real backend, covered
+only by the fake-backend core test (`tests/test_omega_gpu_engine.c`): `PREPARE`
+(copy-in and build refuse only on arguments the core already validated),
+`VISIBILITY_WAIT` (the barrier always returns 0), `INTERNAL_INVARIANT` (the
+backend table is complete).
+
+Modelling assumptions of the fake. Every one is a MODEL, UNVERIFIED on the chip,
+confidence about 70 percent that it matches the real driver and device:
+device memory is host memory with GPU address equal to CPU address and a dirty
+0x5a fill; the second marker release lands only if an L2 flush came between the
+two releases; a successful real `nvrm_free` clobbers `errno` (to EBADF); the
+channel's own 4 KiB pushbuffer buffer is orphaned when the backend installs the
+large ring; the pushbuffer is parsed and executed in order. The link set (the
+Makefile `RX_COMPOSE_GPU_SRCS` list plus `omega_core.c`, `omega_canonical.c`,
+`sha256.c`) is UNVERIFIED (confidence moderate): nothing was compiled.
+
+Backend and wrapper mutants. Each must be KILLED by the sim test, or carries class
+`redundant` with a reason (a surviving redundant mutant is accepted by the runner).
+
+- `BE_ALLOC_CHECK_CPU`: a buffer without a CPU mapping is refused (ALLOC)
+- `BE_ALLOC_CHECK_SIZE`: a buffer smaller than asked is refused (ALLOC)
+- `BE_ALLOC_CHECK_ALIGN`: a GPU address that is not 256-byte aligned is refused (ALLOC)
+- `BE_ALLOC_OWN_CHECK_NOTE`: the backend's own refusal text reaches the result
+- `BE_ALLOC_OWN_CHECK_FREE`: a buffer that fails its own checks is freed, not leaked
+- `BE_ROLE_FREE_SKIPPED`: free_buf really frees a program, input or output buffer
+- `BE_SCRATCH_FREE_SKIPPED`: release_scratch really frees all four SCRATCH parts
+- `BE_SCRATCH_FREE_ERROR_DROPPED`: a failed SCRATCH part free is reported
+- `BE_SCRATCH_FREE_STOPS_AT_ERROR`: one failed SCRATCH part free does not leave the other parts allocated
+- `BE_SCRATCH_ALLOC_FAIL_NO_RELEASE`: a failed SCRATCH allocation frees the parts that did succeed (the core does not)
+- `BE_ERRNO_NOT_RESTORED`: the frees after a failed SCRATCH allocation do not clobber the errno the core reads
+- `BE_ALLOC_FAIL_TEXT_RESTORE` (redundant): the failure text survives the cleanup frees. Reason: release_scratch writes neither c->text nor the driver text on a successful free, in the simulated driver and in nvrm_free (physics nvrm.h: free only zeroes the NvrmMem); the restore is a safety net for a driver that writes text on success, which no model here does
+- `BE_SCRATCH_PB_NOT_INSTALLED`: the large pushbuffer ring replaces the channel's 4 KiB buffer
+- `BE_PB_REPLACED_RESET` (redundant): the flag that records the replaced ring is cleared after SCRATCH is freed. Reason: the zeroing of m.pb_mem stays (it is a separate line); a stale flag only repeats that harmless zeroing, and open memsets the whole context each run. physics m16_native_close is only nvrm_close(&ctx->rm) and never reads pb_mem
+- `BE_BUSY_CHECK_DROPPED`: a second open while a run is retained is refused
+- `BE_OPEN_FAIL_KEEPS_BUSY`: a failed open releases the busy flag
+- `BE_CLOSE_BUSY_CLEAR_DROPPED`: close releases the busy flag so the next run can open
+- `BE_OPEN_MEMSET_DROPPED`: open resets the whole context, including the previous run's snapshot
+- `BE_OPEN_NATIVE_FLAG_DROPPED`: a failed open still reports the driver's own text
+- `BE_OPEN_ERROR_IGNORED`: a failed driver open is reported (DEVICE_OPEN)
+- `BE_OPEN_LAST_RC_DROPPED`: the failed open's driver code reaches the result
+- `BE_CHANNEL_ERROR_IGNORED`: a failed channel create is reported (CHANNEL_CREATE)
+- `BE_CHANNEL_LAST_RC_DROPPED`: the failed channel create's driver code reaches the result
+- `BE_ALLOC_LAST_RC_DROPPED`: the failed allocation's driver code reaches the result
+- `BE_ALLOC_UNKNOWN_ROLE_ACCEPTED`: alloc refuses an unknown role
+- `BE_ROLE_MEM_UPPER_BOUND`: a role above the last one has no buffer slot
+- `BE_ROLE_MEM_LOWER_BOUND`: a negative role has no buffer slot
+- `BE_ROUND_PAGES_ZERO_ACCEPTED`: a zero-byte allocation is refused
+- `BE_ROUND_PAGES_NO_ROUNDING`: allocation sizes round up to whole pages
+- `BE_ROUND_PAGES_MINIMUM` (redundant): one-page minimum. Reason: after the zero check, rounding any nonzero byte count up to a page multiple already gives at least one page, so the minimum can never apply
+- `BE_COPY_IN_NO_MEMCPY`: copy_in really copies the program and the inputs
+- `BE_COPY_IN_BOUNDS`: copy_in refuses a length beyond the buffer
+- `BE_COPY_IN_NULL_SOURCE`: copy_in refuses a NULL source
+- `BE_FILL_POISON_DROPPED`: the device output is pre-filled with the poison words
+- `BE_FILL_POISON_SHORT`: every output word is pre-filled, including the last
+- `BE_FILL_POISON_BOUNDS`: fill_poison refuses a length beyond the output buffer
+- `BE_COPY_OUT_NO_MEMCPY`: copy_out really reads the device output back
+- `BE_COPY_OUT_BOUNDS`: copy_out refuses a length beyond the output buffer
+- `BE_BUILD_LAYOUT_CHECK`: build refuses a missing job and an unsupported layout
+- `BE_BUILD_COUNT_OVERFLOW` (redundant): grid arithmetic overflow guard. Reason: an element count above UINT32_MAX - 63 needs at least 16 GiB of input, output and input buffers, so the buffer-size check in the same condition chain refuses it first; only the grid rounding (n + 63) could overflow, and it is never reached
+- `BE_BUILD_BUFFERS_SIZE`: build refuses buffers smaller than the element count needs
+- `BE_C3_FLAG_IGNORED`: the NO_C3 flag removes the L2 flush and the second marker
+- `BE_C3_NEVER`: with flags 0 the L2 flush and the second marker are in the pushbuffer
+- `BE_THREADS_WRONG`: the launch covers every element
+- `BE_GRID_ROUNDS_DOWN`: the grid rounds up so a partial last block still runs
+- `BE_ARGS_C_SWAPPED`: the kernel writes the OUTPUT buffer
+- `BE_ARGS_A_B_SWAPPED`: the kernel gets input A and input B in the right argument slots
+- `BE_PROGRAM_VA`: the QMD points at the program buffer
+- `BE_CBANK_VA`: the QMD points at the constant bank buffer
+- `BE_SEM_VA`: the QMD release semaphore address is the word the host waits on
+- `BE_MARKER_VA`: the first release lands on the word the host waits on
+- `BE_SEM_ZERO_DROPPED`: the semaphore word is zeroed before the doorbell (no stale DONE)
+- `BE_MARKER_ZERO_DROPPED`: the first marker word is zeroed before the doorbell (no stale payload)
+- `BE_MARKER2_ZERO_DROPPED`: the second marker word is zeroed before the doorbell
+- `BE_NOC3_MARKER2_REPORTED`: with NO_C3 the second marker is neither waited for nor reported
+- `BE_MARKER2_OFFSET_CHANGED`: the second marker is 0x10 bytes after the first
+- `BE_MARKER2_PAYLOAD_CHANGED`: the second marker payload is 0x46464646
+- `BE_RELEASE1_PAYLOAD_ZERO`: the first release writes the completion payload
+- `BE_RELEASE2_PAYLOAD_ZERO`: the second release writes its payload
+- `BE_FLUSH_OP_DROPPED`: the L2 flush operation word is L2_FLUSH_DIRTY
+- `BE_FLUSH_METHOD_CHANGED`: the flush uses the memory-operation method
+- `BE_WFI_FLAG_RELEASE1`: the first release waits for idle (WFI)
+- `BE_WFI_FLAG_RELEASE2`: the second release waits for idle (WFI)
+- `BE_BARRIER_IN_BUILD` (redundant): dsb sy after zeroing the sync words. Reason: a CPU barrier instruction has no effect a host test can observe (the fake driver runs on the same core); it is verified on the chip only (Phase B)
+- `BE_QMD_RELEASE_CHECK` (redundant): extra QMD1 release-word checks. Reason: the real descriptor builder always produces these words (src/omega_blackwell_qmd.c), so no input makes the check fire; it guards a future change of the builder, which tests/test_omega_blackwell_qmd.c style checks cover
+- `BE_PB_OVERFLOW` (redundant): pushbuffer word-capacity guard. Reason: the vector pushbuffer is a fixed 492 words against a 1024-word capacity, so it cannot overflow for any job
+- `BE_SUBMIT_NOTHING_BUILT` (redundant): submit before build is refused. Reason: the driver refuses an empty submission too (physics m16_native.c m16_native_enqueue_methods: count == 0 returns -1), so the result is the same refusal
+- `BE_LAUNCH_NS_DROPPED`: the launch time is recorded before the doorbell
+- `BE_SUBMIT_ERROR_IGNORED`: a failed submit is reported (SUBMIT), not treated as launched
+- `BE_WAIT_UNMAPPED_ACCEPTED`: a wait before build or after free is refused without a driver call
+- `BE_WAIT_DRIVER_RC_DROPPED`: the driver's wait code reaches the result
+- `BE_WAIT_RC_MAPPING` (redundant): timeout versus driver fault classification. Reason: the engine core treats every nonzero wait result the same (uncertain completion), and the real m16_native_wait_marker returns only 0 or -1 (m16_native.c)
+- `BE_WAIT_EQUALITY_RECHECK`: an overshoot of the ">=" compare is refused (UNKNOWN_STATE)
+- `BE_WAIT_SNAPSHOT_DROPPED`: the observed word is recorded after every wait
+- `BE_MARKER_DONE_NS_ALWAYS`: the completion time is recorded only when the first marker wait succeeded
+- `BE_WAIT_MARKER_WRONG_WORD`: wait_marker waits on the first marker word
+- `BE_WAIT_SEMAPHORE_WRONG_VALUE`: the release semaphore wait is for DONE (6), not the initial value (5)
+- `BE_DIAG_DRV_RC_DROPPED`: diagnostics report the raw driver code
+- `BE_DIAG_TEXT_OWN_DROPPED`: diagnostics report the backend's own text
+- `BE_DIAG_TEXT_DRIVER_DROPPED`: diagnostics fall back to the driver's text
+- `BE_DIAG_MARKER_DROPPED`: diagnostics report the first marker word
+- `BE_DIAG_MARKER2_DROPPED`: diagnostics report the second marker word
+- `BE_DIAG_SEMAPHORE_DROPPED`: diagnostics report the semaphore word
+- `BE_DIAG_VALID_MARKER_DROPPED`: the first marker is flagged valid only when mapped
+- `BE_DIAG_VALID_MARKER2_DROPPED`: the second marker is flagged valid only when mapped
+- `BE_DIAG_VALID_SEMAPHORE_DROPPED`: the semaphore is flagged valid only when mapped
+- `BE_FREE_SCRATCH_ROLE_DROPPED`: free_buf of SCRATCH frees the four SCRATCH parts
+- `BE_FREE_UNKNOWN_ROLE_ACCEPTED`: free_buf refuses an unknown role
+- `BE_FREE_ERROR_DROPPED`: a failed free is reported (CLEANUP)
+- `BE_RELEASE_KEEPS_MARKER_POINTER`: the first marker word is unmapped before SCRATCH is freed
+- `BE_RELEASE_KEEPS_MARKER2_POINTER`: the second marker word is unmapped before SCRATCH is freed
+- `BE_RELEASE_KEEPS_SEM_POINTER`: the semaphore word is unmapped before SCRATCH is freed
+- `BE_CLOSE_KEEPS_MARKER_POINTER`: close unmaps the first marker word
+- `BE_CLOSE_KEEPS_MARKER2_POINTER`: close unmaps the second marker word
+- `BE_CLOSE_KEEPS_SEM_POINTER`: close unmaps the semaphore word
+- `BE_CLOSE_NOT_CALLED`: close really closes the driver
+- `BE_CLOSE_ERROR_IGNORED`: a failed close is reported (CLEANUP)
+- `WRAP_POISON_NOT_COMPLEMENT`: the poison word is the complement of the expected sum
+- `WRAP_POISON_CONSTANT`: the poison word never collides with a legitimate sum (0xdeadbeef is one)
+- `WRAP_ENGINE_FAILURE_IGNORED`: an engine failure (here a cleanup fault) fails the wrapper
+- `WRAP_ORACLE_IGNORED`: the host oracle decides success, not the engine
+- `WRAP_PARITY_FLAG_FORCED`: parity_verified follows the oracle
+- `WRAP_MARKER_NOT_REPORTED`: the completion marker is reported
+- `WRAP_SEMAPHORE_NOT_REPORTED`: the semaphore value is reported
+- `WRAP_LAUNCH_TIME_NOT_REPORTED`: the launch time is reported
+- `WRAP_DONE_TIME_NOT_REPORTED`: the completion time is reported
+- `WRAP_ELAPSED_NOT_REPORTED`: the elapsed time is reported
+- `WRAP_SM_ARCH_NOT_REPORTED`: the architecture is reported
+- `WRAP_ELEMENT_COUNT_NOT_REPORTED`: the element count is reported
+- `WRAP_NULL_GUARD_DROPPED`: a NULL argument is refused before any use
+- `WRAP_ZERO_COUNT_GUARD` (redundant): a zero element count is refused by the wrapper. Reason: the engine refuses element_count 0 as INVALID_ARGS (src/omega_gpu_engine.c job_valid) and the wrapper then returns -1, so the result is the same refusal
+- `WRAP_MARKER_TIMEOUT`: the first marker wait limit is 5000 ms
+- `WRAP_SEMAPHORE_TIMEOUT`: the semaphore wait limit is 5000 ms
+- `WRAP_MARKER2_TIMEOUT`: the second marker wait limit is 5000 ms
+- `WRAP_VISIBILITY_TIMEOUT` (redundant): the visibility limit is 5000 ms. Reason: the Blackwell barrier callback ignores its timeout argument (it is a CPU dsb sy that cannot wait), so no host observation depends on the value
+- `WRAP_FLAGS_ALL_PROTECTIONS`: the wrapper runs with every protection on (flags 0)
+- `WRAP_BACKEND_NOT_INSTALLED`: the wrapper installs the Blackwell backend itself
+- `WRAP_PROGRAM_LENGTH`: the whole encoded program is handed to the engine
+- `WRAP_MARKER_CHECK` (redundant): second check of the marker payload. Reason: the backend wait_word already refuses any first-marker value other than 0x44444444 (UNKNOWN_STATE), so the engine fails before this line is reached
+- `WRAP_SEMAPHORE_CHECK` (redundant): second check of the semaphore value. Reason: the backend wait_word already refuses any semaphore value other than DONE (6), so the engine fails before this line is reached
+
+The `dsb sy` barrier mutants are chip only: a CPU barrier instruction has no
+effect a host test can observe, so they are redundant on the host and belong to
+Phase B. Mutants of the core itself stay in `tools/gpu_engine_mutations.sh`.
 
 ## 15. Origin
 
