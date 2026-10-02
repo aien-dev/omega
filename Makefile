@@ -1708,3 +1708,96 @@ test-library: tests/test_omega_library.c src/omega_library.c src/omega_library.h
 	  build_mutant refuse-valid          capacity             '    if (prog->name[3] == (char)55) return -1;'; \
 	  build_mutant refuse-deps           dep-null             '    if (dep_count > 0) return -1;'
 	@echo "test-library: PASS (all checks, all mutants killed)"
+
+# VC1-STORE (VC1 stage 3): unit test for the Verified Crumb Store (omega_vcstore): golden
+# vectors from aien-protocols (tests/vcstore/golden, PIN names the commit), immutability,
+# dependency closure, insert-order-independent digest, name index, save/load. Plus a mutation
+# proof: each mutant is a copy of src/omega_vcstore.c with one tagged line (VC1S:<tag>) deleted or
+# weakened; the test must exit 1 (KILLED) for every one. A mutant whose sed changed nothing
+# fails the build. Physics-free; CPU only; needs only src/sha256.c.
+.PHONY: test-vcstore
+VCSTEST_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc
+VCSTEST_DIR = $(OUT_DIR)/vcstore-test
+test-vcstore: tests/test_omega_vcstore.c src/omega_vcstore.c src/omega_vcstore.h src/sha256.c
+	@mkdir -p $(VCSTEST_DIR)
+	$(CC) $(VCSTEST_FLAGS) -o $(VCSTEST_DIR)/test_omega_vcstore tests/test_omega_vcstore.c src/omega_vcstore.c src/sha256.c
+	$(VCSTEST_DIR)/test_omega_vcstore
+	@set -eu; build_mutant() { name=$$1; tag=$$2; repl=$$3; \
+	  sed "/VC1S:$$tag/c\\$$repl" src/omega_vcstore.c > $(VCSTEST_DIR)/mut_$$name.c; \
+	  if cmp -s src/omega_vcstore.c $(VCSTEST_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  $(CC) $(VCSTEST_FLAGS) -o $(VCSTEST_DIR)/mut_$$name tests/test_omega_vcstore.c $(VCSTEST_DIR)/mut_$$name.c src/sha256.c; \
+	  rc=0; $(VCSTEST_DIR)/mut_$$name $$name > $(VCSTEST_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -ne 1 ] || ! grep -q "^MUTANT $$name KILLED by " $(VCSTEST_DIR)/mut_$$name.out; then \
+	    echo "mutant $$name NOT killed (exit $$rc)"; tail -5 $(VCSTEST_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed (exit 1)"; }; \
+	  build_mutant refuse-valid             dec-trailing           '    if (!c.err && c.pos == c.n) cfail(&c, OMEGA_VCS_TRAILING_BYTES);'; \
+	  build_mutant refuse-existing-dep      dep-exists             '        if (vcs_find(s, dep, &di)) { rc = OMEGA_VCS_UNVERIFIED_DEPENDENCY; break; } else continue;'; \
+	  build_mutant caps-reversed            dec-caps-order         '        if (!c.err && i > 0 && str_cmp(&v->capabilities[i - 1], &v->capabilities[i]) <= 0) cfail(&c, OMEGA_VCS_NONCANONICAL_SET);'; \
+	  build_mutant kind-source-only         dec-kind               '        if (v->digest_kind != OMEGA_VC_DIGEST_SOURCE) cfail(&c, OMEGA_VCS_BAD_DIGEST_KIND);'; \
+	  build_mutant id-hash                  id-hash                '    sha256_hash(bytes + (len >= 22 ? 22 : 0), len >= 22 ? len - 22 : len, out);'; \
+	  build_mutant dec-dep-dup              dec-dep-dup            '        ;'; \
+	  build_mutant dec-dep-order            dec-dep-order          '        ;'; \
+	  build_mutant dec-receipt              dec-receipt            '    ;'; \
+	  build_mutant dec-dep-self             dec-dep-self           '        ;'; \
+	  build_mutant dec-trailing             dec-trailing           '    ;'; \
+	  build_mutant dec-version              dec-version            '    ;'; \
+	  build_mutant dec-truncated            dec-truncated          '    if (c->n - c->pos < k) return 0;'; \
+	  build_mutant dec-tag                  dec-tag                '    ;'; \
+	  build_mutant dec-exports-order        dec-exports-order      '        ;'; \
+	  build_mutant dec-kind                 dec-kind               '        ;'; \
+	  build_mutant dec-zero-ids             dec-zero-ids           '    ;'; \
+	  build_mutant dec-string-char          dec-string-char        '        (void)ch;'; \
+	  build_mutant dec-count                dec-count              '    ;'; \
+	  build_mutant dec-real-order           dec-real-order         '        (void)prev;'; \
+	  build_mutant dec-caps-order           dec-caps-order         '        ;'; \
+	  build_mutant dec-dep-zero             dec-dep-zero           '        (void)req;'; \
+	  build_mutant dec-evroot               dec-evroot             '    ;'; \
+	  build_mutant dec-string-empty         dec-string-len         '    if (len > OMEGA_VC_MAX_STRING) { cfail(c, OMEGA_VCS_BAD_STRING); return; }'; \
+	  build_mutant dec-string-max           dec-string-len         '    if (len == 0) { cfail(c, OMEGA_VCS_BAD_STRING); return; }'; \
+	  build_mutant claimed-required         claimed-required       '    if (!claimed) { static uint8_t zz[32]; omega_vc_compute_id(canon, len, zz); claimed = zz; }'; \
+	  build_mutant insert-idcheck           insert-idcheck         '    if (0) { free(rec); return OMEGA_VCS_VCSTORE_ID_MISMATCH; }'; \
+	  build_mutant idempotent               idempotent             '        (void)o;'; \
+	  build_mutant idempotent-ignores-kind  idempotent             '        if (o->len == len && memcmp(o->bytes, canon, len) == 0) return OMEGA_VCS_OK;'; \
+	  build_mutant immutable                immutable              '        return OMEGA_VCS_OK;'; \
+	  build_mutant dep-exists               dep-exists             '        if (!vcs_find(s, dep, &di)) continue;'; \
+	  build_mutant dep-contract             dep-contract           '        ;'; \
+	  build_mutant no-cap                   no-cap                 '    if (s->count >= 128) return OMEGA_VCS_VCSTORE_CAPACITY;'; \
+	  build_mutant sorted-insert            sorted-insert          '    size_t at = s->count;'; \
+	  build_mutant kind-bootstrap           kind-bootstrap         '    return vcs_insert(s, canonical, len, claimed_vc_id, OMEGA_VCS_ADMISSION_VERIFIED);'; \
+	  build_mutant get-recompute            get-recompute          '    ;'; \
+	  build_mutant get-key                  get-key                '    ;'; \
+	  build_mutant receipt-of               receipt-of             '    if (rc == OMEGA_VCS_OK) memcpy(out_receipt, rec->vc.evidence_root, 32);'; \
+	  build_mutant walk-order               walk-order             '            const uint8_t *dep = f->deps + 64 * (size_t)(f->n_dep - 1 - f->next++);'; \
+	  build_mutant walk-visited             walk-visited           '            ;'; \
+	  build_mutant walk-capacity            walk-capacity          '    ;'; \
+	  build_mutant walk-dep-exists          walk-dep-exists        '            if (!vcs_find(s, dep, &di)) continue;'; \
+	  build_mutant walk-contract            walk-contract          '            ;'; \
+	  build_mutant walk-cycle               walk-cycle             '            if (state[di] == 1) continue;'; \
+	  build_mutant walk-names               walk-names             '    if (s->n_names) return OMEGA_VCS_UNVERIFIED_DEPENDENCY;'; \
+	  build_mutant digest-magic             digest-magic           '    sha256_update(&ctx, (const uint8_t *)"VCS2", 4);'; \
+	  build_mutant digest-kind              digest-kind            '        uint8_t kind = 0;'; \
+	  build_mutant digest-bytes             digest-bytes           '        sha256_update(&ctx, o->bytes, 0);'; \
+	  build_mutant digest-names             digest-names           '    u64be(&ctx, (uint64_t)s->n_names);'; \
+	  build_mutant namedigest-id            namedigest-id          '        sha256_update(&ctx, nm->id, 0);'; \
+	  build_mutant name-sorted              name-sorted            '    return name_insert_at(s, s->n_names, name, id);'; \
+	  build_mutant name-many                name-many              '    for (size_t k = 0; k < s->n_names; k++) if (memcmp(s->names[k].id, id, 32) == 0) return OMEGA_VCS_VCSTORE_NAME_EXISTS;'; \
+	  build_mutant name-no-silent-rebind    name-no-silent-rebind  '        { memcpy(s->names[np].id, id, 32); return OMEGA_VCS_OK; }'; \
+	  build_mutant rebind-write             rebind-write           '    ;'; \
+	  build_mutant rebind-exists            rebind-exists          '    if (!name_find(s, name, &np)) np = 0;'; \
+	  build_mutant rebind-id-exists         rebind-id-exists       '    (void)vcs_find(s, id, &di);'; \
+	  build_mutant name-id-exists           name-id-exists         '    (void)vcs_find(s, id, &di);'; \
+	  build_mutant name-valid               name-valid             '    ;'; \
+	  build_mutant resolve                  resolve                '    memset(out_id, 0, 32);'; \
+	  build_mutant load-names               load-names             '        ;'; \
+	  build_mutant load-fail                load-fail              '        omega_vcstore_destroy(s);'; \
+	  build_mutant load-magic               load-magic             '    if (!m) return OMEGA_VCS_VCSTORE_MALFORMED;'; \
+	  build_mutant load-digest-obj          load-digest-obj        '    ;'; \
+	  build_mutant load-digest-names        load-digest-names      '    ;'; \
+	  build_mutant load-trailing            load-trailing          '    ;'; \
+	  build_mutant load-kind                load-kind              '        ;'; \
+	  build_mutant load-order               load-order             '        ;'; \
+	  build_mutant load-graph               load-graph             '    (void)vcs_graph_check;'; \
+	  build_mutant load-graph-missing       load-graph             '    (void)vcs_graph_check;'; \
+	  build_mutant load-name-id             load-name-id           '        (void)vcs_find(t, id, &di);'; \
+	  build_mutant save-verify              save-verify            '        int rc = 0;'
+	@echo "test-vcstore: PASS (all checks, all mutants killed)"
