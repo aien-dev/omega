@@ -1,6 +1,7 @@
 # Commit a reaction: design note
 
 Status: DESIGN NOTE, docs only. No runtime code changes. Nothing here is implemented, qualified or measured.
+Update 2026-10-02: the FORGE question in section 5 is decided (Option B). See "Decision 2026-10-02" at the end.
 Evidence base: omega `origin/main` at 2dc9dd8. Every line number below was checked against that commit.
 Vocabulary (module, interface, seam, adapter, depth) follows the codebase-design skill.
 Owner of `src/runtime`: the M20 program. This note touches no file there.
@@ -123,7 +124,9 @@ rename and narrow it, not to rewrite it. The recovery rules (M05, M06, M12, M16)
 
 Not decided here: whether open and recovery are part of the same module or a second one.
 
-## 5. Decision for Drake (plain English)
+Note (2026-10-02): the phrase "where FORGE would plug in if Option A is chosen" in seam (a) is closed by the decision below. Option A was not chosen.
+
+## 5. Decision for Drake (plain English) [CLOSED 2026-10-02: Option B chosen, see "Decision 2026-10-02" below]
 
 Where we are: the review found that the part of Omega that decides "this result is accepted and
 remembered" works as one well-guarded sequence, but the piece called FORGE, which the design documents
@@ -164,3 +167,17 @@ behavior and makes the order easier to protect. That is an engineering suggestio
 
 One question: do you want FORGE to be part of how Omega accepts a result (A), only a memory policy with the
 documents corrected (B), or to leave it for now (C)?
+
+The options text above (A, B, C) is kept as the record of what was offered. Option B was chosen. Options A and C are closed.
+
+## Decision 2026-10-02
+
+Drake chose Option B on 2026-10-02.
+
+- FORGE is a memory and realization policy. It is not a stage of accepting a reaction result.
+- The accept chain is World -> J-Space -> compose.verify -> commit -> Cortex, as documented in section 1.
+- Inside J-Space, FORGE is the memory-pressure policy (`js_forge_choose`, `js_forge_enforce`). Elsewhere it is the hardware realizer (`omega_forge_realize`). Neither is a step of this chain (section 2).
+- If hardware realization later needs a hook on this path, that is a new decision. It is not implied by this one.
+- No runtime code changed. This is a documents-only record.
+- The FORGE question in section 5 is closed.
+- The architecture repository carries a matching ADR 0016 amendment (companion PR in aien-architecture).
