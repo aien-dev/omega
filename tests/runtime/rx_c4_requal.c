@@ -36,6 +36,7 @@
  * Needs -DAIEN_TEST_BUILD=1 (crash points). usage: rx_c4_requal <receipt.json>
  */
 #include "rx_compose_fixture.h"
+#include "sha256.h"
 
 #include <dirent.h>
 #include <stdarg.h>
@@ -725,6 +726,51 @@ static void boundary_cut_cases(void) {
     rmtree(d);
 }
 
+/* C4: a version-2 checkpoint (no anchor) cannot detect a lost journal through
+ * the anchor, so recover() must still refuse durable J-Space history that has no
+ * state record in the Cortex. The v2 file is made from the v3 one the way
+ * rx_jspace_prod does: drop the 48-byte anchor section, patch the version and
+ * recompute the body and header digests. A control reopen with the journal intact
+ * proves the conversion is valid; the emptied-journal reopen must be refused. */
+static void v2_lost_journal_case(void) {
+    const char *nm = "cortex_cut/v2_checkpoint_journal_emptied";
+    char d[200], mp[260], jp[260];
+    Sig tmp[NGOAL + 1];
+    mkcasedir(d, sizeof d, "v2lost");
+    if (run_task(d, tmp) != 0) { add_case(nm, "DIVERGED", 0, "no directory"); return; }
+    snprintf(mp, sizeof mp, "%s/jspace/jspace.meta", d);
+    snprintf(jp, sizeof jp, "%s/cortex.cx", d);
+    uint8_t *m = NULL;
+    size_t mn = 0;
+    if (read_file_all(mp, &m, &mn) || mn < 176u || m[8] != 3) {
+        add_case(nm, "DIVERGED", 0, "cannot read a version-3 checkpoint");
+        free(m); rmtree(d);
+        return;
+    }
+    size_t nn = mn - 48;
+    uint64_t bl = (uint64_t)nn - 128;
+    for (int i = 0; i < 8; i++) m[24 + i] = (uint8_t)(bl >> (8 * i));
+    m[8] = 2;
+    sha256_hash(m + 128, bl, m + 64);
+    sha256_hash(m, 96, m + 96);
+    int fd = open(mp, O_WRONLY | O_TRUNC);
+    int wr = fd >= 0 && write(fd, m, nn) == (ssize_t)nn;
+    if (fd >= 0) close(fd);
+    free(m);
+    /* Control: v2 checkpoint, journal intact. */
+    int rc0 = wr ? open_dir(d) : -1;
+    if (rc0 == RX_OK) fx_close(&g_fx, &g_c);
+    /* Journal emptied. */
+    int tr = truncate(jp, 0);
+    int rc = wr ? open_dir(d) : -1;
+    if (rc == RX_OK) fx_close(&g_fx, &g_c);
+    add_case(nm, rc == RX_ERR_REPLAY ? "REFUSED" : "DIVERGED",
+             wr && tr == 0 && rc0 == RX_OK && rc == RX_ERR_REPLAY,
+             "version-2 checkpoint: intact journal open rc=%d (want 0); journal emptied open rc=%d (want %d)",
+             rc0, rc, RX_ERR_REPLAY);
+    rmtree(d);
+}
+
 static void jstr(FILE *f, const char *s) {
     fputc('"', f);
     for (; *s; s++) {
@@ -767,6 +813,7 @@ int main(int argc, char **argv) {
         identity_case();
         for (int k = 1; k < NGOAL; k++) stale_case(k);
         boundary_cut_cases();
+        v2_lost_journal_case();
         byte_sweep("jspace/jspace.meta", 1);
         byte_sweep("cortex.cx", 7);
         byte_sweep("machine.id", 1);
