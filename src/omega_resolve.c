@@ -301,6 +301,12 @@ int omega_resolve_check_record_receipt(const OmegaResolver *r, const OmegaVcView
         rc = fail(err, OMEGA_RES_RECEIPT_HASH_MISMATCH, 0, sid, "the file stored under receipt %s holds another receipt", rid);
         goto done;
     }
+    /* A digest authenticates receipt bytes, not a clean source checkout.
+     * DEV may inspect this evidence, but its output remains tainted. */
+    if (r->domain == OMEGA_DOMAIN_BUILD && rcpt.dirty) { /* VC1R:rule-clean */
+        rc = fail(err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "receipt %s was produced from a dirty checkout", rid);
+        goto done;
+    }
     /* rule 4: the receipt names this program (semantic id), then this source (digest) */
     snprintf(want, sizeof want, "sha256:%s", sid);
     if (!has_artifact(&rcpt, want)) { /* VC1R:rule4-semantic */
@@ -480,7 +486,7 @@ static int resolve_node(Walk *w, const uint8_t id[32], const uint8_t *lock_recei
         }
     if (rec->admission_kind == OMEGA_VCS_ADMISSION_VERIFIED) { /* VC1R:verified-needs-receipt */
         rc = omega_resolve_check_record_receipt(r, vc, w->err);
-        if (rc) { if (name) snprintf(w->err->subject, sizeof w->err->subject, "%s", name); goto out; }
+        if (rc) { if (name && w->err) snprintf(w->err->subject, sizeof w->err->subject, "%s", name); goto out; }
     }
     if (w->n == w->cap) {
         size_t nc = w->cap ? w->cap * 2 : 16;

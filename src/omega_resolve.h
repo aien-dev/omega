@@ -142,7 +142,9 @@ int omega_resolve_imports(const OmegaResolver *r, const OmegaLock *lock, const c
 
 /* SPEC 5.1 for one record: the receipt named by vc->receipt_id against profile, semantic id,
  * source digest, evidence root and the receipt ids of the record's dependencies (read from the
- * store). Steps 5 and 6 of the chain; exported for the admit path and tests. */
+ * store). BUILD also requires a clean-checkout receipt; DEV may inspect dirty
+ * evidence, with the normal DEV output taint. Steps 5 and 6 of the chain;
+ * exported for the admit path and tests. */
 int omega_resolve_check_record_receipt(const OmegaResolver *r, const OmegaVcView *vc, OmegaResolveError *err);
 
 /* ---- the one door into the store ---- */

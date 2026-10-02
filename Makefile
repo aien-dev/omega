@@ -1852,6 +1852,7 @@ test-resolve: tests/test_omega_resolve.c $(OUT_DIR)/compiler/oscv $(RESOLVE_SRC)
 	  build_mutant lock-order-sorted        lock-order             resolve lock-refuses-unsorted                        '        if (n > 0 && strcmp(ents[n - 1].name, en.name) == 0) {'; \
 	  build_mutant missing-receipt          missing-receipt        resolve refuse-missing-receipt                       '    if (fr != 0) return fail(err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "receipt unavailable");'; \
 	  build_mutant rule1-name               rule1-name             resolve refuse-receipt-file-holds-another-receipt    '    if (0) {'; \
+	  build_mutant rule-clean               rule-clean             resolve refuse-dirty-receipt-in-build                '    if (0) {'; \
 	  build_mutant rule4-semantic           rule4-semantic         resolve refuse-receipt-does-not-name-program         '    if (0) {'; \
 	  build_mutant rule4-source             rule4-source           resolve refuse-stale-receipt                         '        if (0) {'; \
 	  build_mutant rule3                    rule3                  resolve refuse-receipt-output-digest-is-not-evidence-root '    if (0) {'; \
@@ -1902,4 +1903,4 @@ test-resolve: tests/test_omega_resolve.c $(OUT_DIR)/compiler/oscv $(RESOLVE_SRC)
 	  build_mutant prod-authority-trim      prod-authority         receipt  receipt-refuses-production-blank-authority       '        if (b == 0) { ef(&e, "receipt: PRODUCTION receipts require an authority reference%s", ""); goto done; }'; \
 	  build_mutant prod-spelling            prod-spelling          receipt  receipt-refuses-production-test-only-authority   '        int bad = strstr(low, "test-only") || strstr(low, "testonly");'; \
 	  build_mutant prod-bad-refused         prod-bad-refused       receipt  receipt-refuses-production-test-only-authority   '        if (bad && 0) { ef(&e, "receipt: a TEST_ONLY signer cannot produce a PRODUCTION receipt%s", ""); goto done; }'
-	@echo "test-resolve: PASS (all checks, ASan/UBSan clean, all 64 mutants killed)"
+	@echo "test-resolve: PASS (all checks, ASan/UBSan clean, all 65 mutants killed)"
