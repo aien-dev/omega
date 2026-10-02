@@ -17,7 +17,10 @@
  * 1025, 32769) for SUM/MAX/MIN/MEAN, multi-row reductions along both axes,
  * elementwise binary/unary/fma/cast over a grid of specials (NaN, -0, inf,
  * subnormals) plus random bit patterns, broadcast elementwise and one call
- * longer than a launch chunk.
+ * longer than a launch chunk. The six CMP_* mask compare ops (CR-3) are NOT
+ * parity cases: the GB10 table has no compare entry, so a host self check
+ * requires it to refuse each with OMEGA_TENSOR_ERR_REALIZATION (nothing made,
+ * no device call), with a counterexample table that does set compare.
  *
  * Mutants (in-process realization tables over a base table: the CPU table in
  * host mode, the GB10 table in chip mode): WRONG_REDUCE_ORDER (rows reduced
@@ -100,7 +103,10 @@ static void mm_case(const char *name, uint32_t ra, const uint64_t *sa, uint32_t 
 }
 
 static const char *RED_NAME[OMEGA_TR_COUNT] = { "SUM", "MAX", "MIN", "MEAN" };
-static const char *BIN_NAME[OMEGA_TB_COUNT] = {
+/* Sized to the 20 parity binary ops (everything before OMEGA_TB_CMP_EQ). The CMP_*
+ * ops are not parity cases (the GB10 table has no compare entry), so no name
+ * is ever looked up for them and no entry stays NULL. */
+static const char *BIN_NAME[OMEGA_TB_CMP_EQ] = {
     "ADD", "SUB", "MUL", "DIV", "MIN", "MAX", "SEL_GE", "SEL_LT", "SEL_LE", "SEL_GT", "SEL_EQ", "SEL_NE",
     "SEL_NUM", "SEL_NAN", "SEL_LTU", "SEL_LEU", "SEL_GTU", "SEL_GEU", "SEL_EQU", "SEL_NEU",
 };
@@ -143,7 +149,9 @@ static void build_cases(void) {
         c->op = op; c->ra = 2; c->sa[0] = 1025; c->sa[1] = 3; c->axis = 0;
     }
     /* elementwise */
-    for (int op = 0; op < OMEGA_TB_COUNT; op++) {
+    /* ops before OMEGA_TB_CMP_EQ only: the 20 cases of the original gate. The
+     * CMP_* ops are refused by the GB10 table, checked in host_checks. */
+    for (int op = 0; op < OMEGA_TB_CMP_EQ; op++) {
         snprintf(nm, sizeof(nm), "bin_%s", BIN_NAME[op]);
         unsigned mut = (op == OMEGA_TB_SUB || op == OMEGA_TB_DIV || op == OMEGA_TB_SEL_LT) ? MUT_SWAP : 0;
         Case *c = add_case(nm, K_BIN, mut);
@@ -550,6 +558,63 @@ static const char *mut_map_uniform_ffma(OmegaNumericOp op) {
     return op == OMEGA_NOP_FFMA_V ? "FFMA" : omega_tensor_gb10_op_name(op);
 }
 
+/* CR-3 mask compare ops. The GB10 table has no compare entry, so the semantic
+ * layer must refuse each CMP_* op with OMEGA_TENSOR_ERR_REALIZATION before it
+ * gathers anything or calls the table: no tensor or storage slot is made, the
+ * output handle stays zero and no numeric error is recorded (so no device was
+ * reached). Returns the number of problems. */
+static const OmegaTensorBinaryOp CMP_OPS[] = {
+    OMEGA_TB_CMP_EQ, OMEGA_TB_CMP_NE, OMEGA_TB_CMP_LT, OMEGA_TB_CMP_LE, OMEGA_TB_CMP_GT, OMEGA_TB_CMP_GE,
+};
+#define NCMP_OPS (sizeof(CMP_OPS) / sizeof(CMP_OPS[0]))
+
+static int check_cmp_refused(const OmegaTensorRealization *real, bool verbose) {
+    static const uint64_t shape[1] = { 4 };
+    static const float da[4] = { 1.0f, 2.0f, 3.0f, 4.0f }, db[4] = { 1.0f, 5.0f, 3.0f, 0.0f };
+    OmegaTensorCtx *ctx = NULL;
+    OmegaTensor a = { 0, 0 }, b = { 0, 0 };
+    if (omega_tensor_ctx_create(8, real, &ctx) != OMEGA_TENSOR_OK) {
+        if (verbose) printf("  cmp: context create refused\n");
+        return 1;
+    }
+    if (omega_tensor_from_f32(ctx, 1, shape, da, &a) != OMEGA_TENSOR_OK ||
+        omega_tensor_from_f32(ctx, 1, shape, db, &b) != OMEGA_TENSOR_OK) {
+        if (verbose) printf("  cmp: input tensors not made\n");
+        omega_tensor_ctx_destroy(ctx);
+        return 1;
+    }
+    uint32_t t0 = 0, s0 = 0;
+    omega_tensor_live_counts(ctx, &t0, &s0);
+    int bad = 0;
+    for (size_t i = 0; i < NCMP_OPS; i++) {
+        OmegaTensor out = { 0, 0 };
+        int rc = omega_tensor_binary(ctx, CMP_OPS[i], a, b, &out);
+        uint32_t t1 = 0, s1 = 0;
+        omega_tensor_live_counts(ctx, &t1, &s1);
+        if (rc != OMEGA_TENSOR_ERR_REALIZATION) {
+            bad++;
+            if (verbose) printf("  cmp: op %d returned %d, expected %d\n", (int)CMP_OPS[i], rc, OMEGA_TENSOR_ERR_REALIZATION);
+        }
+        if (t1 != t0 || s1 != s0 || out.slot != 0 || out.generation != 0) {
+            bad++;
+            if (verbose) printf("  cmp: op %d made a tensor or storage slot\n", (int)CMP_OPS[i]);
+        }
+        if (omega_tensor_last_numeric_error(ctx) != 0) {
+            bad++;
+            if (verbose) printf("  cmp: op %d reached a numeric call\n", (int)CMP_OPS[i]);
+        }
+    }
+    omega_tensor_ctx_destroy(ctx);
+    return bad;
+}
+
+/* counterexample table: the GB10 table WITH a compare entry (a stub that fills +0.0) */
+static int cmp_stub(OmegaNumericOp sel_op, const float *a, const float *b, float *out, size_t n) {
+    (void)sel_op; (void)a; (void)b;
+    for (size_t i = 0; i < n; i++) out[i] = 0.0f;
+    return OMEGA_NUMERIC_OK;
+}
+
 static void host_checks(void) {
     const OmegaTensorRealization *g = omega_tensor_gb10_realization();
     CHECK(g && g->name && g->elementwise && g->reduce && g->reduce_rows && g->reduce_order,
@@ -590,6 +655,15 @@ static void host_checks(void) {
           "reduce_rows past OMEGA_REDUCE_GB10_MAX_N not refused as OPERANDS");
     CHECK(g->reduce((OmegaTensorReduceOp)OMEGA_TR_COUNT, a, 4, &r1) == OMEGA_NUMERIC_ERR_BAD_ARGS,
           "unknown reduce op not refused");
+
+    /* CR-3 compare: no compare entry, each CMP_* op refused with ERR_REALIZATION,
+     * nothing made, no device call; and the counterexample: the same table with
+     * a compare entry set must fail this very check */
+    CHECK(g->compare == NULL, "GB10 table has a compare entry (CMP_* must be refused)");
+    CHECK(check_cmp_refused(g, true) == 0, "GB10 table does not refuse the CMP_* ops cleanly");
+    OmegaTensorRealization with_cmp = *g;
+    with_cmp.compare = cmp_stub;
+    CHECK(check_cmp_refused(&with_cmp, false) > 0, "CMP refusal check missed a table with a compare entry");
 
     /* the harness itself, on the CPU: CPU vs CPU equal on every case, and
      * every mutant (over the CPU table) caught */
