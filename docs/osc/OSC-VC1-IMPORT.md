@@ -44,10 +44,15 @@ is TAINTED: its artifact header says `tainted 1`, its build id commits to the do
 to insert it (and refuses any record that lists the capability `omega-dev.taint`). A record listing that capability
 can never satisfy an import in either domain.
 
-BOOTSTRAP (genesis) records satisfy an import only with `allow_genesis`. A BOOTSTRAP record may NOT depend on a
+BOOTSTRAP (genesis) records satisfy an import only with `allow_genesis`. That is a field inside the resolver library.
+The `oscv` driver has no option, file or environment variable that sets it (the old `--allow-genesis` flag was removed), so a store
+that holds only BOOTSTRAP records always yields UNVERIFIED_DEPENDENCY in both domains. The stage 6 genesis loader will be the
+only caller that sets the field. A BOOTSTRAP record may NOT depend on a
 VERIFIED record (the audited base must be closed over itself); a VERIFIED record may depend on BOOTSTRAP.
 
 ## No escape hatch
+
+`oscv --blobs` is optional: leaving it out skips only the recheck of source digests against stored blobs.
 
 No `unsafe import`, no skip switch, no environment variable. `make test-resolve` greps the compiler and resolver
 sources for forbidden words and runs `oscv` with unknown switches and with environment variables set.

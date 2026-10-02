@@ -103,13 +103,14 @@ typedef struct {
     const char *inputs[4]; int n_in;
     const char *deps[4]; int n_dep;
     char root[65];
-    int assert_pass, extra_key, dup_key, lease;
+    int assert_pass, extra_key, dup_key, lease, no_assertion;
+    const char *authority;
 } RJ;
 static void rj_default(RJ *j) {
     memset(j, 0, sizeof *j);
     j->kind = "host-v1"; j->tier = "HOST_TEST"; j->env_class = NULL; j->result = "PASS";
     j->schema = "EvidenceReceiptV1"; j->decl_mut = "NONE"; j->obs_mut = "NONE";
-    j->procedure = "fixture"; j->reserved = ""; j->feature = NULL; j->version = 1; j->assert_pass = 1;
+    j->procedure = "fixture"; j->authority = ""; j->reserved = ""; j->feature = NULL; j->version = 1; j->assert_pass = 1;
     memset(j->root, '6', 64); j->root[64] = 0;
 }
 static char *rj_emit(const RJ *j, const char *idhex, size_t *len) {
@@ -125,12 +126,14 @@ static char *rj_emit(const RJ *j, const char *idhex, size_t *len) {
     PF("\"toolchain\": \"fixture\",\n\"procedure\": \"%s\",\n\"machine\": \"host\",\n\"env_class\": \"%s\",\n", j->procedure, j->env_class ? j->env_class : j->tier);
     PF("\"input_artifacts\": [");
     for (int i = 0; i < j->n_in; i++) PF("%s\"%s\"", i ? ", " : "", j->inputs[i]);
-    PF("],\n\"output_artifacts\": [],\n\"assertions\": [{\"id\": \"fixture_check\", \"expected\": \"pass\", \"observed\": \"%s\", \"pass\": %s, \"source\": \"test\", \"note\": \"\"}],\n",
-       j->assert_pass ? "pass" : "fail", j->assert_pass ? "true" : "false");
+    PF("],\n\"output_artifacts\": [],\n");
+    if (j->no_assertion) PF("\"assertions\": [],\n");
+    else PF("\"assertions\": [{\"id\": \"fixture_check\", \"expected\": \"pass\", \"observed\": \"%s\", \"pass\": %s, \"source\": \"test\", \"note\": \"\"}],\n",
+            j->assert_pass ? "pass" : "fail", j->assert_pass ? "true" : "false");
     PF("\"dependencies\": [");
     for (int i = 0; i < j->n_dep; i++) PF("%s\"%s\"", i ? ", " : "", j->deps[i]);
-    PF("],\n\"declared_mutation\": \"%s\",\n\"observed_mutation\": \"%s\",\n\"authority\": \"\",\n\"output_digest\": \"%s\",\n\"external_refs\": [],\n\"ledger\": null,\n",
-       j->decl_mut, j->obs_mut, j->root);
+    PF("],\n\"declared_mutation\": \"%s\",\n\"observed_mutation\": \"%s\",\n\"authority\": \"%s\",\n\"output_digest\": \"%s\",\n\"external_refs\": [],\n\"ledger\": null,\n",
+       j->decl_mut, j->obs_mut, j->authority, j->root);
     if (j->lease) PF("\"lease\": {\"hold_id\": \"%s\", \"resource\": \"fixture-lease\"},\n", "1111111111111111111111111111111111111111111111111111111111111111");
     else PF("\"lease\": null,\n");
     if (j->feature) PF("\"required_features\": [\"%s\"],\n", j->feature); else PF("\"required_features\": [],\n");
@@ -458,6 +461,19 @@ static void t_receipts(void) {
     rj_default(&j); j.obs_mut = "VOLATILE_ONLY";           check("receipt-refuses-observed-over-declared", rj_refused(&j));
     rj_default(&j); j.decl_mut = "VOLATILE_ONLY"; j.obs_mut = "VOLATILE_ONLY";
     check("receipt-control-valid-variant-parses", !rj_refused(&j));
+    rj_default(&j); j.no_assertion = 1;                    check("receipt-refuses-pass-without-assertion", rj_refused(&j));
+    rj_default(&j); j.no_assertion = 1; j.result = "FAIL"; check("receipt-control-fail-without-assertion-parses", !rj_refused(&j));
+    rj_default(&j); j.tier = "PRODUCTION"; j.kind = "production-v1"; j.authority = "release-key-1";
+    check("receipt-control-production-with-authority-parses", !rj_refused(&j));
+    {
+        int blank = 1, testonly = 1;
+        static const char *const blanks[] = { "", " ", "   ", "\t" };
+        static const char *const marks[] = { "TEST-ONLY signer", "a test_only key", "TestOnly", "test-only", "TEST_ONLY" };
+        for (size_t i = 0; i < sizeof blanks / sizeof blanks[0]; i++) { rj_default(&j); j.tier = "PRODUCTION"; j.kind = "production-v1"; j.authority = blanks[i]; if (!rj_refused(&j)) blank = 0; }
+        for (size_t i = 0; i < sizeof marks / sizeof marks[0]; i++) { rj_default(&j); j.tier = "PRODUCTION"; j.kind = "production-v1"; j.authority = marks[i]; if (!rj_refused(&j)) testonly = 0; }
+        check("receipt-refuses-production-blank-authority", blank);
+        check("receipt-refuses-production-test-only-authority", testonly);
+    }
     free(ja); free(jb); free(jc);
 
     int tab_ok = 1;
@@ -1095,6 +1111,47 @@ static void t_admit(void) {
     }
 }
 
+/* ---- guards: chain depth, duplicate imports through the API ---- */
+static void build_chain(W *w, int n) {
+    Opt o = opt0();
+    for (int k = 1; k <= n; k++) {
+        uint8_t d[1][32];
+        if (k > 1) mkid(d[0], (uint8_t)(k - 1));
+        if (add_comp(w, (uint8_t)k, k > 1 ? d : NULL, k > 1 ? 1 : 0, &o) != 0) setup_fail("chain insert");
+    }
+}
+static void t_guards(void) {
+    W w; Run r;
+    w_init(&w); build_chain(&w, 128);
+    { Pin p[1] = { { "top", 128, 0 } }; const char *nm[1] = { "top" };
+      run_compile(&w, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lock_text(&w, p, 1), &r); }
+    check("accept-dependency-chain-at-the-limit", r.rc == 0 && r.h.closure.n == 128);
+    run_free(&r); w_free(&w);
+    w_init(&w); build_chain(&w, 129);
+    { Pin p[1] = { { "top", 129, 0 } }; const char *nm[1] = { "top" };
+      run_compile(&w, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lock_text(&w, p, 1), &r); }
+    check("refuse-dependency-chain-too-deep", refused_msg(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "deeper than") && r.h.closure.n == 0);
+    run_free(&r); w_free(&w);
+
+    /* the same import name listed twice, straight into the resolver (the parser cannot produce it) */
+    w_init(&w);
+    { Opt o = opt0(); add_comp(&w, 0x51, NULL, 0, &o); }
+    { Pin p[1] = { { "foo", 0x51, 0 } };
+      OmegaLock lock; OmegaResolveError e; OmegaClosure cl;
+      const char *lk = lock_text(&w, p, 1);
+      if (omega_lock_parse(lk, strlen(lk), &lock, &e)) setup_fail("lock");
+      OmegaResolver rv = resolver_of(&w, &w.rt);
+      const char *twice[2] = { "foo", "foo" };
+      memset(&cl, 0, sizeof cl);
+      int rc = omega_resolve_imports(&rv, &lock, twice, 2, &cl, &e);
+      check("refuse-duplicate-import-names-through-the-api", rc == OMEGA_RES_BAD_ARGUMENT && cl.n == 0 && cl.entries == NULL);
+      const char *once[1] = { "foo" };
+      rc = omega_resolve_imports(&rv, &lock, once, 1, &cl, &e);
+      check("accept-single-import-name-through-the-api", rc == 0 && cl.n == 1);
+      omega_closure_free(&cl); omega_lock_free(&lock); }
+    w_free(&w);
+}
+
 /* ---- build identity, domains, artifact header ---- */
 static void t_identity(void) {
     uint8_t ir[32], cl[32], got[32], ref[32];
@@ -1199,6 +1256,35 @@ static void t_no_escape(void) {
     }
     closedir(d);
     check("no-escape-hatch-in-compiler-and-resolver-sources", !found && nfiles > 20);
+    /* the driver and its adapter: no genesis switch, and no option beyond the allow-list */
+    {
+        static const char *const cli_files[] = { "src/oscv_main.c", "src/omega_resolve_osc.c", "src/omega_resolve_osc.h" };
+        static const char *const cli_words[] = { "allow-genesis", "allow_genesis" };
+        static const char *const allowed[] = { "--domain", "--lock", "--store", "--receipts", "--blobs", "--meta-out" };
+        int clean = 1, opts_ok = 1, n_opts = 0;
+        for (size_t f = 0; f < sizeof cli_files / sizeof cli_files[0]; f++) {
+            size_t n; uint8_t *b = slurp_file(cli_files[f], &n);
+            if (!b) setup_fail("cannot read a driver source");
+            for (size_t w = 0; w < sizeof cli_words / sizeof cli_words[0]; w++) {
+                size_t k = strlen(cli_words[w]);
+                for (size_t a = 0; a + k <= n; a++) if (memcmp(b + a, cli_words[w], k) == 0) clean = 0;
+            }
+            if (strcmp(cli_files[f], "src/oscv_main.c") == 0)
+                for (size_t a = 0; a + 3 <= n; a++)
+                    if (b[a] == '"' && b[a + 1] == '-' && b[a + 2] == '-') {
+                        size_t e = a + 1;
+                        while (e < n && b[e] != '"' && b[e] != ' ') e++;
+                        int known = 0;
+                        for (size_t o = 0; o < sizeof allowed / sizeof allowed[0]; o++)
+                            if (strlen(allowed[o]) == e - (a + 1) && memcmp(allowed[o], b + a + 1, e - (a + 1)) == 0) known = 1;
+                        n_opts++;
+                        if (!known) opts_ok = 0;
+                    }
+            free(b);
+        }
+        check("no-genesis-switch-in-the-driver-sources", clean);
+        check("driver-options-are-exactly-the-allow-list", opts_ok && n_opts >= 6);
+    }
     const char *h2;
     int control = 1;
     for (size_t i = 0; i < N_FORBIDDEN; i++) {
@@ -1352,6 +1438,36 @@ static void t_cli(void) {
     snprintf(cmd, sizeof cmd, "OMEGA_SKIP_VERIFY=1 SKIP_VERIFY=1 OMEGA_UNSAFE=1 %s --lock %s/missing.lock %s/a.osc 2>&1", OSCV_PATH, dir, dir);
     rc = sh(cmd, out, sizeof out);
     check("cli-ignores-environment-variables", rc == 1 && strstr(out, "resolve_code=DEPENDENCY_NOT_PINNED") != NULL);
+    /* genesis: no switch, no way round it from the driver */
+    snprintf(cmd, sizeof cmd, "%s --allow-genesis %s/a.osc 2>&1", OSCV_PATH, dir);
+    rc = sh(cmd, out, sizeof out);
+    check("cli-refuses-allow-genesis-as-unknown-option", rc == 2 && strstr(out, "unknown or repeated argument") != NULL && strstr(out, "ir_sha256") == NULL);
+    snprintf(cmd, sizeof cmd, "%s --allow_genesis %s/a.osc 2>&1", OSCV_PATH, dir);
+    rc = sh(cmd, out, sizeof out);
+    check("cli-refuses-allow_genesis-spelling-too", rc == 2);
+    {
+        W g; w_init(&g);
+        Opt b = opt0(); b.boot = 1;
+        add_comp(&g, 0x91, NULL, 0, &b);
+        Pin gp[1] = { { "base", 0x91, 0 } };
+        const char *glk = lock_text(&g, gp, 1);
+        snprintf(path, sizeof path, "%s/g.vcstore", dir);
+        if (omega_vcstore_save(g.st, path)) setup_fail("save genesis store");
+        snprintf(path, sizeof path, "%s/g.lock", dir); wfile(path, glk, strlen(glk));
+        snprintf(src, sizeof src, "import base;\n%s", FN);
+        snprintf(path, sizeof path, "%s/g.osc", dir); wfile(path, src, strlen(src));
+        static const char *const flags[3] = { "", "--domain dev", "--domain build" };
+        static const char *const envs[2] = { "", "OMEGA_ALLOW_GENESIS=1 ALLOW_GENESIS=1 " };
+        int all = 1;
+        for (int f = 0; f < 3; f++)
+            for (int e2 = 0; e2 < 2; e2++) {
+                snprintf(cmd, sizeof cmd, "%s%s %s --store %s/g.vcstore --lock %s/g.lock --receipts %s %s/g.osc 2>&1", envs[e2], OSCV_PATH, flags[f], dir, dir, rdir, dir);
+                rc = sh(cmd, out, sizeof out);
+                if (!(rc == 1 && strstr(out, "resolve_code=UNVERIFIED_DEPENDENCY") != NULL && strstr(out, "genesis") != NULL && strstr(out, "build_id") == NULL)) all = 0;
+            }
+        check("cli-genesis-only-store-is-refused-in-every-mode", all);
+        w_free(&g);
+    }
     snprintf(cmd, sizeof cmd, "%s --domain prod %s/a.osc 2>&1", OSCV_PATH, dir);
     rc = sh(cmd, out, sizeof out);
     check("cli-refuses-unknown-domain", rc == 2);
@@ -1418,6 +1534,15 @@ static const struct { const char *mutant, *check; } MUTANTS[] = {
     { "mutation-order", "receipt-refuses-observed-over-declared" },
     { "canon-sort", "receipt-canon-order-independent" },
     { "id-compare", "receipt-refuses-wrong-id" },
+    { "max-depth-removed", "refuse-dependency-chain-too-deep" },
+    { "max-depth-one-too-many", "refuse-dependency-chain-too-deep" },
+    { "max-depth-one-too-few", "accept-dependency-chain-at-the-limit" },
+    { "dup-import", "refuse-duplicate-import-names-through-the-api" },
+    { "pass-needs-assertion", "receipt-refuses-pass-without-assertion" },
+    { "prod-authority-empty", "receipt-refuses-production-blank-authority" },
+    { "prod-authority-trim", "receipt-refuses-production-blank-authority" },
+    { "prod-spelling", "receipt-refuses-production-test-only-authority" },
+    { "prod-bad-refused", "receipt-refuses-production-test-only-authority" },
 };
 #define N_MUT (sizeof MUTANTS / sizeof MUTANTS[0])
 
@@ -1435,6 +1560,7 @@ int main(int argc, char **argv) {
     t_refusals();
     t_graphs();
     t_admit();
+    t_guards();
     t_identity();
     t_no_escape();
     t_cli();

@@ -501,7 +501,7 @@ int omega_receipt_parse(const uint8_t *json, size_t len, OmegaReceipt *r, char *
             want_str(&e, a, "source", 0, &as->source) || want_str(&e, a, "note", 0, &as->note))
             goto done;
     }
-    if (r->n_assertions == 0 && r->result == OMEGA_RECEIPT_PASS) { ef(&e, "receipt: PASS receipts must carry at least one assertion%s", ""); goto done; }
+    if (r->n_assertions == 0 && r->result == OMEGA_RECEIPT_PASS) { ef(&e, "receipt: PASS receipts must carry at least one assertion%s", ""); goto done; } /* VC1R:pass-needs-assertion */
     for (size_t i = 0; i < r->n_assertions; i++) {
         if (!r->assertions[i].id[0]) { ef(&e, "receipt: assertion id must not be empty%s", ""); goto done; }
         for (size_t k = 0; k < i; k++)
@@ -520,13 +520,13 @@ int omega_receipt_parse(const uint8_t *json, size_t len, OmegaReceipt *r, char *
     if (r->tier_rank == 7) {
         size_t a = 0, b = strlen(r->authority);
         while (a < b && (r->authority[a] == ' ' || r->authority[a] == '\t' || r->authority[a] == '\n' || r->authority[a] == '\r')) a++;
-        if (a == b) { ef(&e, "receipt: PRODUCTION receipts require an authority reference%s", ""); goto done; }
+        if (a == b) { ef(&e, "receipt: PRODUCTION receipts require an authority reference%s", ""); goto done; } /* VC1R:prod-authority */
         char *low = strdup(r->authority);
         if (!low) { ef(&e, "receipt: out of memory%s", ""); goto done; }
         for (char *c = low; *c; c++) if (*c >= 'A' && *c <= 'Z') *c = (char)(*c - 'A' + 'a');
-        int bad = strstr(low, "test-only") || strstr(low, "test_only") || strstr(low, "testonly");
+        int bad = strstr(low, "test-only") || strstr(low, "test_only") || strstr(low, "testonly"); /* VC1R:prod-spelling */
         free(low);
-        if (bad) { ef(&e, "receipt: a TEST_ONLY signer cannot produce a PRODUCTION receipt%s", ""); goto done; }
+        if (bad) { ef(&e, "receipt: a TEST_ONLY signer cannot produce a PRODUCTION receipt%s", ""); goto done; } /* VC1R:prod-bad-refused */
     }
     /* ledger and lease: null or an object (deny_unknown_fields) */
     const J *lg = oget(root, "ledger");

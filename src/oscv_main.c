@@ -2,12 +2,13 @@
  * oscv_main.c -- `oscv`: the VERIFIED OSC driver (VC1 stage 4, ADR 0029).
  *
  *   oscv [--domain dev|build] [--lock FILE] [--store FILE] [--receipts DIR] [--blobs DIR]
- *        [--allow-genesis] [--meta-out FILE] <file.osc>
+ *        [--meta-out FILE] <file.osc>
  *
  * Compiles an OSC unit exactly as oscc does and ALSO resolves its `import NAME;` lines, only
  * through omega.lock -> semantic id -> Verified Crumb Store -> receipt check -> closure. Defaults
  * sit next to the source file: omega.lock, omega.vcstore, receipts/. There is no option that
- * skips a check, and nothing is read from the environment. The only way to change what is legal
+ * skips a check (--blobs is optional: leaving it out skips only the source digest recheck, which
+ * stage 6 makes mandatory), and nothing is read from the environment. There is no genesis option. The only way to change what is legal
  * is to change the closure.
  *
  * Output (success): ir_sha256= code_sha256= funcs= domain= tainted= imports= closure_entries=
@@ -74,7 +75,6 @@ int main(int argc, char **argv)
 {
     OmegaDomain domain = OMEGA_DOMAIN_BUILD;
     const char *lockp = NULL, *storep = NULL, *recdir = NULL, *blobdir = NULL, *metaout = NULL, *file = NULL;
-    int allow_genesis = 0;
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
         if (strcmp(a, "--domain") == 0 && i + 1 < argc) {
@@ -87,12 +87,11 @@ int main(int argc, char **argv)
         else if (strcmp(a, "--receipts") == 0 && i + 1 < argc) recdir = argv[++i];
         else if (strcmp(a, "--blobs") == 0 && i + 1 < argc) blobdir = argv[++i];
         else if (strcmp(a, "--meta-out") == 0 && i + 1 < argc) metaout = argv[++i];
-        else if (strcmp(a, "--allow-genesis") == 0) allow_genesis = 1;
         else if (a[0] == '-' || file) { fprintf(stderr, "oscv: unknown or repeated argument '%s'\n", a); return 2; }
         else file = a;
     }
     if (!file) {
-        fprintf(stderr, "usage: oscv [--domain dev|build] [--lock F] [--store F] [--receipts D] [--blobs D] [--allow-genesis] [--meta-out F] <file.osc>\n");
+        fprintf(stderr, "usage: oscv [--domain dev|build] [--lock F] [--store F] [--receipts D] [--blobs D] [--meta-out F] <file.osc>\n");
         return 2;
     }
     char lockd[4096], stored[4096], recd[4096];
@@ -140,7 +139,7 @@ int main(int argc, char **argv)
     h.resolver.fetch_receipt = omega_receipt_dir_fetch;
     h.resolver.fetch_ctx = (void *)recdir;
     if (blobdir) { h.resolver.fetch_blob = omega_blob_dir_fetch; h.resolver.blob_ctx = (void *)blobdir; }
-    h.resolver.allow_genesis = allow_genesis;
+    /* genesis (BOOTSTRAP) records are never permitted here: no option, file or variable turns that on */
     h.lock = have_lock ? &lock : NULL;
 
     OscUnit *u = malloc(sizeof *u);

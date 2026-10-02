@@ -432,7 +432,7 @@ static int resolve_node(Walk *w, const uint8_t id[32], const uint8_t *lock_recei
             return fail(w->err, OMEGA_RES_RECEIPT_HASH_MISMATCH, 0, subj, "the lock pins another receipt than the record carries for %s", sid);
         return 0;
     }
-    if (depth >= MAX_DEPTH) return fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "dependency chain deeper than %d", MAX_DEPTH);
+    if (depth >= MAX_DEPTH) return fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "dependency chain deeper than %d", MAX_DEPTH); /* VC1R:max-depth */
     OmegaVcRecord *rec = malloc(sizeof *rec);
     if (!rec) return fail(w->err, OMEGA_RES_NOMEM, 0, sid, "out of memory");
     int rc = omega_vcstore_get(r->store, id, rec);
@@ -530,7 +530,7 @@ int omega_resolve_imports(const OmegaResolver *r, const OmegaLock *lock, const c
     if (!lock) lock = &empty;
     for (size_t i = 0; i < n_names; i++)
         for (size_t k = 0; k < i; k++)
-            if (strcmp(names[i], names[k]) == 0) return fail(err, OMEGA_RES_BAD_ARGUMENT, 0, names[i], "import '%s' is listed twice", names[i]);
+            if (strcmp(names[i], names[k]) == 0) return fail(err, OMEGA_RES_BAD_ARGUMENT, 0, names[i], "import '%s' is listed twice", names[i]); /* VC1R:dup-import */
     /* declaration check: every import is pinned, every pin is imported */
     for (size_t i = 0; i < n_names; i++)
         if (!omega_lock_find(lock, names[i])) /* VC1R:not-pinned */
