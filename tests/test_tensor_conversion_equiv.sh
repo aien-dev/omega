@@ -1,9 +1,19 @@
 #!/bin/sh
 # Proof that tools/tensor_mutations.sh, now an adapter over
 # tools/mutation_runner.sh, behaves like the legacy sweep. Host only, CPU only.
-# Runs the OLD script (pinned commit 2dc9dd8) and the NEW script on the same
-# tree and requires identical stdout, identical exit code and an identical
-# per-mutant verdict list (name + KILLED/SURVIVED/ERROR).
+# Runs the OLD script (pinned commit ab66c17, omega#192, the last main commit
+# with the unconverted sweep and the current 27-row table) and the NEW script
+# on the same tree and requires identical stdout, identical exit code and an
+# identical per-mutant verdict list (name + KILLED/SURVIVED/ERROR). It also
+# requires the MUTATIONS and STORE_MUTATIONS tables to be identical in both
+# scripts. The old copy is written into tools/ of this tree, so old and new
+# both call this tree's own tools/m20_receipt_mutations.sh (already an adapter
+# on the runner since omega#207); only the tensor sweep itself differs between
+# old and new. The verdict list holds the main rows, the 11 M20 receipt rows
+# and the store rows (currently 27 + 11 + 6 = 44). The row counts the test
+# expects are read from the pinned script's own tables, never typed in here.
+# When a later PR adds table rows, the tables stop matching the pin: re-pin to
+# the newest main commit that still has the unconverted script.
 #
 # Normalised text: none. The sweeps print no temp paths or timings on stdout
 # (scratch dirs are only used internally), so stdout is compared byte for byte.
@@ -11,7 +21,7 @@
 set -u
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root" || exit 2
-PIN=2dc9dd8
+PIN=ab66c171fd5b553d3910b47c3ecf9fecde117fd8
 old=tools/tensor_mutations_legacy.$$.sh
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/tensor-equiv.XXXXXX") || exit 2
 trap 'rm -rf "$tmp" "$root/$old"' EXIT INT TERM
@@ -28,6 +38,21 @@ verdicts() {
             s/^MUTATION \(store baseline\): .*/\1 ERROR/p' "$1"
 }
 
+# table_text NAME FILE: the NAME='...' table of a sweep script, one row per
+# line (the assignment ends at the first line that ends with a single quote).
+# table_rows NAME FILE: how many rows it holds (every row contains a '|').
+table_text() {
+    awk -v v="$1" 'index($0, v "=\047") == 1 { p = 1 } p { print } p && /\047$/ { exit }' "$2"
+}
+table_rows() { table_text "$1" "$2" | grep -c '|'; }
+main_rows=$(table_rows MUTATIONS "$old")
+store_rows=$(table_rows STORE_MUTATIONS "$old")
+new_main_rows=$(table_rows MUTATIONS tools/tensor_mutations.sh)
+table_text MUTATIONS "$old" > "$tmp/old.main.table"
+table_text MUTATIONS tools/tensor_mutations.sh > "$tmp/new.main.table"
+table_text STORE_MUTATIONS "$old" > "$tmp/old.store.table"
+table_text STORE_MUTATIONS tools/tensor_mutations.sh > "$tmp/new.store.table"
+
 sh "$old" > "$tmp/old.out" 2>/dev/null; echo $? > "$tmp/old.rc"
 tools/tensor_mutations.sh > "$tmp/new.out" 2>/dev/null; echo $? > "$tmp/new.rc"
 verdicts "$tmp/old.out" > "$tmp/old.v"
@@ -37,7 +62,11 @@ n=$(wc -l < "$tmp/new.v")
 cmp -s "$tmp/old.out" "$tmp/new.out"; ok "stdout identical old vs new" $?
 cmp -s "$tmp/old.rc" "$tmp/new.rc"; ok "exit code identical old vs new ($(cat "$tmp/old.rc") vs $(cat "$tmp/new.rc"))" $?
 cmp -s "$tmp/old.v" "$tmp/new.v"; ok "per-mutant verdict list identical" $?
-[ "$n" -ge 26 ]; ok "compared at least 26 mutants (21 main + 6 store), got $n" $?
+[ "$main_rows" -gt 0 ] && [ "$store_rows" -gt 0 ]; ok "found both tables in the pinned script ($main_rows main rows, $store_rows store rows)" $?
+cmp -s "$tmp/old.main.table" "$tmp/new.main.table"; ok "MUTATIONS table identical old vs new ($new_main_rows rows)" $?
+cmp -s "$tmp/old.store.table" "$tmp/new.store.table"; ok "STORE_MUTATIONS table identical old vs new" $?
+floor=$((main_rows + store_rows))
+[ "$n" -ge "$floor" ]; ok "compared at least $floor mutants ($main_rows main + $store_rows store), got $n" $?
 [ "$(wc -l < "$tmp/old.v")" = "$n" ]; ok "old and new list the same number of mutants" $?
 
 # Negative checks: the comparison must be able to fail.
@@ -47,6 +76,8 @@ verdicts "$tmp/alt.out" > "$tmp/alt.v"
 cmp -s "$tmp/old.v" "$tmp/alt.v"; [ $? -ne 0 ]; ok "negative: altered verdict list is reported different" $?
 echo $(( $(cat "$tmp/old.rc") + 1 )) > "$tmp/alt.rc"
 cmp -s "$tmp/old.rc" "$tmp/alt.rc"; [ $? -ne 0 ]; ok "negative: altered exit code is reported different" $?
+{ cat "$tmp/new.main.table"; echo 'EXTRA_ROW|omega_tensor.c|s/a/b/'; } > "$tmp/alt.main.table"
+cmp -s "$tmp/old.main.table" "$tmp/alt.main.table"; [ $? -ne 0 ]; ok "negative: altered table is reported different" $?
 
 # Negative check for the adapter's row-count guard: a runner that dies reports
 # no verdicts, and the sweep must then FAIL, never print PASS (0 of 0). The
@@ -62,7 +93,7 @@ chmod +x "$dead/tools/tensor_mutations.sh" "$dead/tools/mutation_runner.sh" "$de
 sh "$dead/tools/tensor_mutations.sh" > "$dead/out" 2>/dev/null; drc=$?
 [ "$drc" -ne 0 ]; ok "negative: dead runner makes the sweep exit nonzero (got $drc)" $?
 grep -q 'PASS' "$dead/out"; [ $? -ne 0 ]; ok "negative: dead runner never prints PASS" $?
-grep -q 'runner reported 0 verdicts for 21 rows' "$dead/out"; ok "negative: dead runner reports the verdict shortfall (0 verdicts for 21 main rows)" $?
+grep -q "runner reported 0 verdicts for $new_main_rows rows" "$dead/out"; ok "negative: dead runner reports the verdict shortfall (0 verdicts for $new_main_rows main rows)" $?
 
 if [ "$fails" -ne 0 ]; then echo "tensor conversion equivalence: FAIL ($fails)"; exit 1; fi
 echo "tensor conversion equivalence: PASS ($n mutants compared)"
