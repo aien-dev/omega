@@ -726,15 +726,33 @@ static void boundary_cut_cases(void) {
     rmtree(d);
 }
 
+/* The format version byte of a J-Space checkpoint file (offset 8), or -1. */
+static int jspace_meta_version(const char *mp) {
+    uint8_t *m = NULL;
+    size_t mn = 0;
+    int v = -1;
+    if (read_file_all(mp, &m, &mn) == 0 && mn > 8) v = m[8];
+    free(m);
+    return v;
+}
+
 /* C4: a version-2 checkpoint (no anchor) cannot detect a lost journal through
  * the anchor, so recover() must still refuse durable J-Space history that has no
  * state record in the Cortex. The v2 file is made from the v3 one the way
  * rx_jspace_prod does: drop the 48-byte anchor section, patch the version and
  * recompute the body and header digests. A control reopen with the journal intact
- * proves the conversion is valid; the emptied-journal reopen must be refused. */
+ * proves the conversion is valid; the emptied-journal reopen must be refused.
+ *
+ * The control reopen runs on a COPY of the directory. A successful open commits
+ * the J-Space checkpoint again (recover() ends with commit_js), and that commit
+ * writes version 3 WITH an anchor; if the control ran on the case directory itself
+ * the emptied-journal open would be refused by the anchor check in open_home before
+ * recover() is reached, and the genesis refusal (mutant M02) would not be tested.
+ * The version of the checkpoint is read again right before the emptied-journal
+ * open and must still be 2. */
 static void v2_lost_journal_case(void) {
     const char *nm = "cortex_cut/v2_checkpoint_journal_emptied";
-    char d[200], mp[260], jp[260];
+    char d[200], dc[200], cmd[640], mp[260], jp[260];
     Sig tmp[NGOAL + 1];
     mkcasedir(d, sizeof d, "v2lost");
     if (run_task(d, tmp) != 0) { add_case(nm, "DIVERGED", 0, "no directory"); return; }
@@ -757,17 +775,22 @@ static void v2_lost_journal_case(void) {
     int wr = fd >= 0 && write(fd, m, nn) == (ssize_t)nn;
     if (fd >= 0) close(fd);
     free(m);
-    /* Control: v2 checkpoint, journal intact. */
-    int rc0 = wr ? open_dir(d) : -1;
+    /* Control: v2 checkpoint, journal intact, on a copy (the open rewrites it). */
+    mkcasedir(dc, sizeof dc, "v2lost_ctl");
+    snprintf(cmd, sizeof cmd, "cp -a '%s' '%s'", d, dc);
+    int cp = system(cmd);
+    int rc0 = (wr && cp == 0) ? open_dir(dc) : -1;
     if (rc0 == RX_OK) fx_close(&g_fx, &g_c);
-    /* Journal emptied. */
+    rmtree(dc);
+    /* Journal emptied, checkpoint still version 2 (no anchor). */
     int tr = truncate(jp, 0);
-    int rc = wr ? open_dir(d) : -1;
+    int ver = jspace_meta_version(mp);
+    int rc = (wr && ver == 2) ? open_dir(d) : -1;
     if (rc == RX_OK) fx_close(&g_fx, &g_c);
     add_case(nm, rc == RX_ERR_REPLAY ? "REFUSED" : "DIVERGED",
-             wr && tr == 0 && rc0 == RX_OK && rc == RX_ERR_REPLAY,
-             "version-2 checkpoint: intact journal open rc=%d (want 0); journal emptied open rc=%d (want %d)",
-             rc0, rc, RX_ERR_REPLAY);
+             wr && cp == 0 && tr == 0 && ver == 2 && rc0 == RX_OK && rc == RX_ERR_REPLAY,
+             "version-2 checkpoint: intact journal open (on a copy) rc=%d (want 0); checkpoint version before the emptied open=%d (want 2); journal emptied open rc=%d (want %d)",
+             rc0, ver, rc, RX_ERR_REPLAY);
     rmtree(d);
 }
 
