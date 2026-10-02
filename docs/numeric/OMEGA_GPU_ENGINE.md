@@ -1,8 +1,15 @@
 # Omega GPU Engine: design (phase A2, reconciled to Drake's first-cut plan)
 
-Status: DESIGN ONLY. Nothing here launches a GPU kernel yet. Every test and
-chip label for this work is NOT_RUN (host NOT_RUN, chip NOT_RUN). No receipt
-exists today.
+Status: DRAFT, chip-unproven. The engine core (section 13) and, since cut A3b1,
+the Blackwell backend (section 14) exist, and the vector executor
+`omega_blackwell_execute_vector` now routes through `omega_gpu_execute`. No
+other launcher is converted. Every test and chip label for this work is
+NOT_RUN (host NOT_RUN, chip NOT_RUN). No receipt exists today. Editing
+`src/omega_blackwell_submit.c` changes the sha256 that the M17 and M18 gates
+compute at run time (`tests/run_m17_gates.sh:66-67,129-130`,
+`src/omega_blackwell_gates.c:1166-1167`), so receipts for the vector gates can
+only be verified on the chip in Phase B, and any PR carrying this change stays
+DRAFT until then.
 
 Plan authority: Drake's pasted first-cut plan, items 1 to 11, 2026-10-02
 (`~/handoffs/2026-10-02-DEEP2-first-cut-drake.md`), plus the queen rulings in
@@ -459,6 +466,10 @@ Carried from A1 and A1b, plus new ones from this cut:
     the queen may want SUBMIT to count as uncertain too. UNVERIFIED, 50%.
 13. Whether the COMPLETION_WAIT / RELEASE_WAIT split in section 4.4 matches
     the queen's intent.
+14. (A3b1) Whether `src/omega_gpu_engine.h` and `.c` join the sha256 pinned lists next to
+    `src/omega_blackwell_engine.*` (the vector executor now depends on them). They are not
+    added in A3b1. Also whether free-then-close is safe on the chip for the vector launch
+    (section 14, UNVERIFIED, 70%).
 
 ## 12. Changes from the first draft (omega#218 commit 6e077f1)
 
@@ -588,3 +599,83 @@ currently marked redundant):
 Not covered by any host test (needs the chip, see section 10): whether the
 sequence is sufficient on real hardware, cache visibility under faults,
 recovery after an uncertain completion, persistent kernels.
+
+## 14. Blackwell backend and the vector executor (A3b1)
+
+Status: DRAFT, host NOT_RUN, chip NOT_RUN. Nothing in this section has been
+compiled or executed by its author. The queue lines `DEEP2-A3b1-backend`,
+`DEEP2-A3b1-prod`, `DEEP2-A3b1-host` and `DEEP2-A3b1-mut` carry the first runs.
+The simulated-driver host test, the backend mutants, the chip test and the chip
+manifest are the next cut (A3b2).
+
+What this cut adds:
+- `src/omega_blackwell_engine.c` and `.h`: the backend table
+  (`omega_blackwell_engine_backend()`, type `OmegaGpuBackend`) that the core
+  drives. It defines no job, result or execute type. The device sequence is the
+  one in `omega_blackwell_execute_vector` as it stood at commit 676f16f, split
+  into the fifteen callbacks.
+- `omega_blackwell_execute_vector` in `src/omega_blackwell_submit.c` keeps its
+  public signature and result fields. Inside, it encodes the program, builds the
+  poison words, calls `omega_gpu_execute`, then runs the vector oracle
+  (`omega_vector_verify_oracle`) on the host as before.
+- Makefile: `src/omega_blackwell_engine.c` and `src/omega_gpu_engine.c` join the
+  two source lists that already hold `src/omega_blackwell_submit.c` (`SRCS` and
+  `RX_COMPOSE_GPU_SRCS`), nothing else.
+- `mk/omega-gpu-engine.mk`: `test-gpu-engine-backend-compile` (syntax check of
+  the backend, `-c` only, no link, no device) and `test-gpu-engine-prod-build`
+  (`make build/omegatool` at the physics pin: links only, opens no device).
+- Digest lists: `src/omega_blackwell_engine.h` and `.c` are added to the pinned
+  list in `src/omega_blackwell_gates.c` (manifest at 1166-1169) and in
+  `tests/run_m17_gates.sh`. `src/omega_gpu_engine.h` and `.c` are NOT added (the
+  vector executor depends on them now; whether to pin them is open, section 11).
+
+Choices of this cut:
+- Poison. The wrapper supplies it. Each poison word is the bit complement of the
+  expected output word (`~(a[i] + b[i])`), computed on the host before launch.
+  A word and its complement always differ, so a poison word never equals the
+  expected word at its position. This replaces the constant
+  `OMEGA_VECTOR_POISON_VALUE` for this executor.
+- L2 flush. The core has no callback for it, so `build` emits the L2 flush and
+  the second release marker (0x46464646 at marker page + 0x10) inside the
+  pushbuffer unless the job sets NO_C3, as divsqrt does today
+  (`src/omega_numeric_divsqrt_gb10.c:1145-1152`). The vector wrapper passes flags
+  0, so the vector launch now has C3, a second marker wait and a semaphore wait
+  that it did not have at 676f16f (A1 finding 1 and 3). The timeouts are 5000 ms
+  each, the value the old marker wait used.
+- Completion rule per wait: the native wait is a ">=" serial compare
+  (`physics/m16/m16_native.c:93-108`), so each wait callback also re-checks that
+  the word is exactly the expected value and reports a mismatch as
+  `UNKNOWN_STATE` (an uncertain completion). The check is from GPT-6 Astra's
+  first cut.
+- Values on success. The core copies driver diagnostics only on a failure, and
+  frees and closes the device (unmapping the marker and semaphore memory) before
+  it returns. So the backend snapshots the marker, second marker and semaphore
+  words inside its wait callbacks, plus the submit and marker-done timestamps,
+  and `omega_blackwell_engine_run_info` returns them. The wrapper fills
+  `completion_marker`, `intermediate_semaphore`, `launch_timestamp_ns`,
+  `completion_timestamp_ns` and `elapsed_ns` from that. The engine result itself
+  cannot supply these on success.
+- Cleanup. The backend frees every buffer with `nvrm_free` before `close`,
+  which the old launcher never did (it relied on `nvrm_close`, `nvrm.c:757-766`).
+  `nvrm_free` before close is used by `src/omega_accelerator_world.c`
+  (A1b section 4). Chip behaviour of this order for the vector launch is
+  UNVERIFIED (confidence 70%).
+- Allocation order differs from 676f16f: the four SCRATCH buffers come first,
+  then program, input A, input B, output. Sizes are unchanged. Chip effect
+  UNVERIFIED (confidence 90% harmless, no address is hard coded).
+- One run at a time: the backend keeps one static context and refuses a second
+  open while a run is active.
+
+## 15. Origin
+
+The engine core and the Blackwell backend were seeded from the first cut written
+by GPT-6 Astra (branch `fix/omega-gpu-engine-first-cut`, commit 21392ee, dated
+2026-10-02). Claude workers did the host test, the mutation sweep, the
+reconciliation of Astra's single-file engine to the omega#218 public API
+(`OmegaGpuJob`, `OmegaGpuResult`, `omega_gpu_execute`, the backend table), and the
+vector wrapper. What was kept from Astra: the device call order, the pushbuffer
+and QMD sequence, the allocation checks, the QMD1 word checks, the exact-value
+re-check after each wait, the dsb barrier and the L2 flush plus second marker.
+What was not copied: Astra's own job and result types, her state machine, the
+poison comparison and the quarantine logic, because the A3a core already does
+those.

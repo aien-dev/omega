@@ -19,7 +19,7 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 	src/omega_library.c src/omega_discovery.c src/omega_machine.c src/omega_realize_synth.c \
 	src/omega_matvec.c src/omega_accelerator.c src/omega_accelerator_world.c \
 	src/omega_vector.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
-	src/omega_blackwell_realize.c src/omega_blackwell_submit.c src/omega_blackwell_gates.c src/omega_blackwell_matmul.c src/omega_blackwell_codegen.c src/omega_world_gates.c \
+	src/omega_blackwell_realize.c src/omega_blackwell_submit.c src/omega_blackwell_engine.c src/omega_gpu_engine.c src/omega_blackwell_gates.c src/omega_blackwell_matmul.c src/omega_blackwell_codegen.c src/omega_world_gates.c \
 	src/omega_evidence.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
 	tools/omegatool.c
@@ -1612,7 +1612,7 @@ print-c4-requal-bin:
 # tests/runtime/rx_compose_gpu_skill.h. A chip run: take the quiet flag and
 # use tools/composition_gate.sh --gpu (clean tree, content-addressed receipt).
 RX_COMPOSE_GATE_GPU = $(OUT_DIR)/rx_composition_gate_gpu
-RX_COMPOSE_GPU_SRCS = src/omega_blackwell_submit.c src/omega_blackwell_matmul.c \
+RX_COMPOSE_GPU_SRCS = src/omega_blackwell_submit.c src/omega_blackwell_engine.c src/omega_gpu_engine.c src/omega_blackwell_matmul.c \
 	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
 	src/omega_blackwell_realize.c src/omega_vector.c src/omega_validate.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c

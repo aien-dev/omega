@@ -1165,6 +1165,8 @@ static bool test_m18_gate18_receipt(void) {
         "src/omega_blackwell_qmd.c",
         "src/omega_blackwell_submit.h",
         "src/omega_blackwell_submit.c",
+        "src/omega_blackwell_engine.h",
+        "src/omega_blackwell_engine.c",
         "src/omega_blackwell_gates.h",
         "src/omega_blackwell_gates.c",
         "tools/omegatool.c",
