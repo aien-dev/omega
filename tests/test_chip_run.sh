@@ -378,6 +378,19 @@ mkman "$T/m-fs4.sh" "FINAL_LINE_STYLE=bogus"
 reset_world; CRMAN=$T/m-fs4.sh cr final_style_value -- "${PD[@]}"
 expect final_style_value 1 '^CHIP_RUN: BAD_MANIFEST FINAL_LINE_STYLE='
 
+# seam: GPU_LOCK_MODE=fuser refuses early on ANY open handle of the lock file (flock mode does not), then blocks on flock
+mkman "$T/m-fu.sh" "GPU_LOCK_MODE=fuser"
+reset_world; exec 8> "$LOCK"; CRMAN=$T/m-fu.sh cr gpu_fuser -- "${PD[@]}"; exec 8>&-
+expect gpu_fuser 2 "^REFUSED: $LOCK is held\$"
+assert gpu_fuser "refused before the host tier and the quiet flag" no_flag
+reset_world; exec 8> "$LOCK"; cr gpu_fuser_ctl -- "${PD[@]}"; exec 8>&-
+expect gpu_fuser_ctl 0 '^CHIP_RUN: PASS'
+reset_world; CRMAN=$T/m-fu.sh cr gpu_fuser_free -- "${PD[@]}"
+expect gpu_fuser_free 0 '^CHIP_RUN: PASS'
+mkman "$T/m-fu2.sh" "GPU_LOCK_MODE=bogus"
+reset_world; CRMAN=$T/m-fu2.sh cr gpu_mode_value -- "${PD[@]}"
+expect gpu_mode_value 1 '^CHIP_RUN: BAD_MANIFEST GPU_LOCK_MODE='
+
 # happy path and receipt
 reset_world; cr happy -- "${PD[@]}" -- --x 1
 expect happy 0 '^VERDICT PASS$'
