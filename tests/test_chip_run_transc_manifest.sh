@@ -64,7 +64,7 @@ g() { local d=$1; shift; git -C "$d" -c user.email=t@t -c user.name=t -c commit.
 W=""; OM=""; PHYS=""; N=0
 build_world() { # MANIFEST
     N=$((N + 1)); W=$T/w$N; OM=$W/omega; PHYS=$W/physics
-    mkdir -p "$PHYS/nvrm" "$OM/tools/manifests"
+    mkdir -p "$PHYS/nvrm" "$OM/tools/manifests" "$W/tmp"
     git init -q "$PHYS" && echo "/* fake */" > "$PHYS/nvrm/nvrm.c" && g "$PHYS" add -A && g "$PHYS" commit -q -m physics
     git init -q "$OM"
     cp "$HERE/tools/chip_run.sh" "$HERE/tools/run_numeric_transc_gate.sh" "$OM/tools/"
@@ -89,7 +89,6 @@ runw() {
     RC=$?
     R=$(ls "$W"/ev-"$name"/*.json 2>/dev/null | head -1)
 }
-mkdir -p "$T/w0/tmp"
 
 # suite MANIFEST: every world-based check; prints "PASS id" / "FAIL id" lines.
 suite() {
