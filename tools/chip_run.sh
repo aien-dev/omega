@@ -2,6 +2,7 @@
 # chip_run.sh MANIFEST [--physics-dir DIR] [--evidence-dir DIR] [-- gate args]
 # Run one chip binary under evidence. The one place that knows how (ground truth:
 # tools/run_numeric_transc_gate.sh, tools/run_unwritten_trap.sh, tests/run_reduce_chip.sh).
+# The gcc line is the transc/unwritten-trap one; reduce differs (see NOT COVERED).
 # MANIFEST is shell syntax setting: GATE TEST_SOURCE SOURCES EXTRA_BUILD_SOURCES (relative
 #   to the omega root, may use $PHYSICS and $HERE) RUN_ARGS VERDICT_RE PASS_LINE OWNER
 #   EVIDENCE_DIR RAISE_QUIET TAKE_GPU_LOCK REFUSE_DIRTY_OMEGA (default 1) REFUSE_EXIT
@@ -10,23 +11,32 @@
 #   VERDICT_RE must also match PASS_LINE, so set VERDICT_RE to verdict lines only), hooks
 #   HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
 #   $log = chip log). The manifest cannot change the test seam variables below, QUIET_FLAG,
-#   GPU_LOCK or EST_LOAD_CMD (checked and restored after it is sourced).
+#   GPU_LOCK or EST_LOAD_CMD (checked and restored after it is sourced). That is an accident guard,
+#   not a boundary: the manifest is sourced into this shell and could still set any other variable.
+# Gate args after "--" REPLACE the manifest RUN_ARGS (not appended); RUN_ARGS is split on whitespace.
+# receipt host_tier = last line of the HOST_TIER_CMD log (empty if none); only its last 3 lines are
+#   printed. HOST_TIER_CMD runs in the omega root with CHIPRUN_RUN_DIR set, before the quiet flag and lock.
 # Physics dir, first match wins: --physics-dir, $PHYSICS_DIR, $PHYSICS, ~/workspace/physics.
 # Exit: 0 PASS; 1 FAIL (binary ran, verdict not PASS or tree changed); REFUSE_EXIT (default 2,
 #   as run_unwritten_trap.sh) after printing "REFUSED: why" and REFUSE_VERDICT_LINE. A gate that
 #   keeps transc semantics sets REFUSE_EXIT=1 REFUSE_VERDICT_LINE="VERDICT NOT_RUN".
-# REFUSES (nothing is run): bad usage, argument or manifest; missing manifest variables or GATE
-#   characters; no evidence dir; test override env without CHIPRUN_SELFTEST=1 (checked before and
+#   Those two apply only to refusals after the manifest is sourced; usage, argument, seam-before and
+#   missing-manifest refusals always exit 2 with "CHIP_RUN: NOT_RUN". Exit 1 is also BAD_MANIFEST and
+#   the post-run "fatal" paths (log blob or receipt not written): "CHIP_RUN: FAIL ...", no receipt promised.
+# REFUSES (the chip binary is not run; HOST_TIER_CMD, gcc and nm may already have run): bad usage,
+#   argument or manifest; missing manifest variables or GATE characters; no evidence dir; test override env without CHIPRUN_SELFTEST=1 (checked before and
 #   after the manifest is sourced; a manifest that changes one is refused); no physics checkout;
 #   unreadable omega or physics HEAD or physics.lock; physics not at the physics.lock pin;
 #   physics dirty; omega dirty (if REFUSE_DIRTY_OMEGA=1); evidence dir inside omega or physics;
 #   quiet flag already up or lost in a create race (if RAISE_QUIET=1); an est_load process; the
 #   GPU lock unopenable or held (if TAKE_GPU_LOCK=1); no temp dir; HOST_TIER_CMD failing; a
-#   missing source; gcc failing; nm unreadable; libm math or CUDA symbols in the binary.
+#   missing source; gcc failing; nm unreadable; libm math or CUDA symbols in the binary. The libm check
+#   is a fixed list: sqrt exp exp2 log log2 pow fma sin cos tanh erf round fabs and their f variants;
+#   floor, ceil, fmod, tan, sinh, atan, log10 and the rest are not caught.
 # FAILS (ran to the end, receipt written): nonzero exit; no line matching VERDICT_RE; last such
 #   line not matching PASS_LINE (any such line, if REQUIRE_ALL_PASS=1); omega (if
 #   REFUSE_DIRTY_OMEGA=1) or physics dirty after the run; either HEAD moved. Never killed, never
-#   timed out. Quiet flag dropped only if still ours.
+#   timed out. Quiet flag dropped only if still ours. The receipt "reason" holds only the first failure.
 # RECEIPT <evidence>/<sha256 of its content>.json, mode 0444, noclobber, plus blobs/<sha>.log.
 #   Fields: gate owner omega_commit omega_tree_clean_before omega_tree_clean_after
 #   omega_commit_unchanged_after physics_commit physics_lock_pin physics_tree_clean_before
@@ -44,11 +54,15 @@
 #   - REQUIRE_ALL_PASS checks lines that appear, not that a particular line appears: reduce's
 #     SUM, MAX, MIN, MEAN, RED_GB10_PARITY and E1 lines are not each demanded.
 #   - receipt reuse (an existing receipt with the same name is compared, not rewritten) has no case.
+#   - the build line: reduce (tests/run_reduce_chip.sh) adds -I"$PHYS/forge" (no variable here for it)
+#     and has neither -fno-fast-math nor -pthread; this module uses the transc/unwritten-trap flags.
 # Test seam (only with CHIPRUN_SELFTEST=1): CHIPRUN_PREBUILT_BIN CHIPRUN_QUIET_FLAG
 #   CHIPRUN_GPU_LOCK CHIPRUN_EST_LOAD_CMD. Mutation check: each refusal line ends in
 #   "# REFUSAL:<id>"; tests/test_chip_run.sh --mutants deletes each one and needs case <id> to FAIL.
-#   Not tagged: the "fatal" exits after the run (receipt and blob writing).
-# Shell + coreutils + git + jq + gcc + nm + flock. No Python.
+#   The restore of QUIET_FLAG, GPU_LOCK and EST_LOAD_CMD after the manifest is tagged the same way
+#   (case restore_vars). --mutants also reverts the jq "x" prefix for the verdict lines and for the
+#   run args and needs case dash_verdict or happy to FAIL. Not tagged: the "fatal" exits after the run.
+# Shell + GNU coreutils (date -d, realpath -m) + git + jq + gcc + nm + flock. No Python.
 set -u
 HERE=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 NVDIR=third_party/nvidia-open-580.173.02   # the one definition of the NVIDIA header tree
@@ -112,7 +126,7 @@ case $REFUSE_EXIT in ''|*[!0-9]*) REX_BAD=1 ;; *) { [ "${#REFUSE_EXIT}" -le 3 ] 
 case $REQUIRE_ALL_PASS in 0|1) ;; *) bad_manifest "REQUIRE_ALL_PASS=$REQUIRE_ALL_PASS is not 0 or 1" ;; esac # REFUSAL:require_all_value
 seam_check # REFUSAL:seam_after
 for v in "${SEAM_VARS[@]}"; do [ "${!v:-}" = "${SEAM0[$v]}" ] || refuse "manifest changed $v, a test seam variable"; done # REFUSAL:seam_changed
-QUIET_FLAG=$QUIET0; GPU_LOCK=$GPU0; EST_LOAD_CMD=$EST0
+QUIET_FLAG=$QUIET0; GPU_LOCK=$GPU0; EST_LOAD_CMD=$EST0 # REFUSAL:restore_vars
 [ "$MRC" = 0 ] || refuse "manifest $MANIFEST failed to load" # REFUSAL:manifest_load
 for v in GATE TEST_SOURCE VERDICT_RE PASS_LINE OWNER; do [ -n "${!v}" ] || refuse "manifest does not set $v"; done # REFUSAL:manifest_vars
 case $GATE in *[!A-Za-z0-9_.-]*) refuse "GATE $GATE has characters outside A-Za-z0-9_.-" ;; esac # REFUSAL:gate_chars
@@ -203,7 +217,7 @@ if [ ! -e "$EVID/blobs/$LOG_SHA.log" ]; then
     rm -f "$TMPB"
 fi
 [ "$(sha "$EVID/blobs/$LOG_SHA.log")" = "$LOG_SHA" ] || fatal "log blob does not match its digest"
-# The two arrays go to jq with an "x" prefix that jq strips: jq 1.7 still reads any --args value starting with "-" as an option.
+# The two arrays go to jq with an "x" prefix that jq strips: jq 1.7 reads an --args value that starts with "--" or with "-" and a letter as an option.
 BODY=$(jq -n --arg gate "$GATE" --arg owner "$OWNER" --arg omega "$OMEGA_COMMIT" --arg phys "$PHYS_COMMIT" --arg pin "$PIN" \
     --argjson oclean "$OMEGA_CLEAN_BEFORE" --argjson pclean "$PHYS_CLEAN_BEFORE" \
     --argjson oafter "$OMEGA_CLEAN_AFTER" --argjson pafter "$PHYS_CLEAN_AFTER" --argjson osame "$OMEGA_SAME" --argjson psame "$PHYS_SAME" \

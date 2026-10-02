@@ -25,6 +25,20 @@ if [ "${1:-}" = --mutants ]; then
         MODULE="$M/chip_run.sh" bash "${BASH_SOURCE[0]}" > "$M/out" 2>&1
         if grep -q "^FAIL $id:" "$M/out"; then echo "killed   $id"; else echo "SURVIVED $id"; bad=1; fi
     done
+    # the jq array fix has no refusal line to delete: revert the "x" prefix idiom in a copy and need the named case to FAIL
+    # (the copy must contain the plain old idiom, else the sed missed and the "kill" would be for the wrong reason)
+    jqmut() { # NAME CASE SED-SCRIPT OLD-IDIOM-TEXT
+        n=$((n + 1))
+        sed "$3" "$SRC_MODULE" > "$M/chip_run.sh"
+        cmp -s "$M/chip_run.sh" "$SRC_MODULE" && { echo "NOCHANGE $1"; bad=1; return; }
+        grep -qF -- "$4" "$M/chip_run.sh" || { echo "NOCHANGE $1 (old idiom not in the copy)"; bad=1; return; }
+        MODULE="$M/chip_run.sh" bash "${BASH_SOURCE[0]}" > "$M/out" 2>&1
+        if grep -q "^FAIL $2:" "$M/out"; then echo "killed   $1"; else echo "SURVIVED $1"; bad=1; fi
+    }
+    jqmut jq_vlines_prefix dash_verdict '/--argjson vlines/{s/ | map(\.\[1:\])//;s|\${VLINES\[@\]/#/x}|${VLINES[@]}|;}' \
+        "'\$ARGS.positional' --args \"\${VLINES[@]}\""
+    jqmut jq_gate_args_prefix happy '/--argjson run_args/{s/ | map(\.\[1:\])//;s|\${GATE_ARGS\[@\]/#/x}|${GATE_ARGS[@]}|;}' \
+        "'\$ARGS.positional' --args \"\${GATE_ARGS[@]}\""
     [ "$n" -gt 0 ] || bad=1
     [ "$bad" = 0 ] && { echo "CHIP_RUN_MUTANTS: PASS ($n mutants killed)"; exit 0; }
     echo "CHIP_RUN_MUTANTS: FAIL"; exit 1
@@ -49,7 +63,7 @@ int main(int argc, char **argv) {
     if (!strcmp(m, "fail")) { printf("RESULT chip x ok=false\nVERDICT FAIL\n"); return 0; }
     if (!strcmp(m, "failpass")) { printf("VERDICT FAIL\nVERDICT PASS\n"); return 0; }
     if (!strcmp(m, "passrc")) { printf("VERDICT PASS\n"); return 3; }
-    if (!strcmp(m, "dash")) { printf("- VERDICT PASS\n"); return 0; }
+    if (!strcmp(m, "dash")) { printf("--- VERDICT PASS\n"); return 0; }
     printf("RESULT chip x ok=true\nVERDICT PASS\n");
     return 0;
 }
@@ -89,7 +103,7 @@ mkman "$T/m.sh"; mkman "$T/m-hostfail.sh" "HOST_TIER_CMD=false"
 mkman "$T/m-map.sh" "REFUSE_EXIT=1; REFUSE_VERDICT_LINE='VERDICT NOT_RUN'"
 mkman "$T/m-off.sh" "RAISE_QUIET=0; TAKE_GPU_LOCK=0"
 mkman "$T/m-all.sh" "REQUIRE_ALL_PASS=1; VERDICT_RE='^VERDICT'"
-mkman "$T/m-dash.sh" "VERDICT_RE='^- VERDICT'; PASS_LINE='^- VERDICT PASS\$'"
+mkman "$T/m-dash.sh" "VERDICT_RE='^--- VERDICT'; PASS_LINE='^--- VERDICT PASS\$'"
 CRMAN=$T/m.sh; PD=(--physics-dir "$PHYS")
 
 reset_world() {
@@ -192,6 +206,15 @@ expect seam_changed 2 '^REFUSED: manifest changed CHIPRUN_PREBUILT_BIN'
 mkman "$T/m-selfset.sh" "RAISE_QUIET=0; TAKE_GPU_LOCK=0; CHIPRUN_SELFTEST=1"
 reset_world; raw -- "$T/m-selfset.sh" --evidence-dir "$T/ev-seam_selftest" "${PD[@]}"
 expect seam_selftest 2 '^REFUSED: manifest changed CHIPRUN_SELFTEST'
+# a manifest that assigns QUIET_FLAG, GPU_LOCK and EST_LOAD_CMD is undone after it is sourced. Each hostile value
+# would refuse the run if it leaked (flag already up, lock held, est_load answers); the chip checks the flag is at the seam path.
+mkman "$T/m-restore.sh" "QUIET_FLAG=$T/hostile-flag; GPU_LOCK=$T/hostile.lock; EST_LOAD_CMD='echo 4242'"
+reset_world; rm -f "$LOCK" "$T/hostile.lock"; echo hostile > "$T/hostile-flag"; exec 8> "$T/hostile.lock"; flock -x 8
+CRMAN=$T/m-restore.sh cr restore_vars FAKE_CMD="test -e $FLAG" -- "${PD[@]}"; exec 8>&-; CRMAN=$T/m.sh
+expect restore_vars 0 '^CHIP_RUN: PASS'
+assert restore_vars "the flag is dropped at the seam path after the run" no_flag
+assert restore_vars "the manifest's flag path is left alone" test "$(cat "$T/hostile-flag" 2>/dev/null)" = hostile
+assert restore_vars "the GPU lock was opened at the seam path" test -e "$LOCK"
 
 # usage, arguments, manifest
 reset_world; raw --
@@ -306,11 +329,19 @@ assert happy "receipt verdict PASS, run_args from the command line" jqt '.verdic
 LS=$(jq -r .chip_log_sha256 "$R" 2>/dev/null)
 assert happy "log blob exists, mode 0444, named by its sha256" test "$(stat -c %a "$T/ev-happy/blobs/$LS.log" 2>/dev/null)" = 444 -a "$(sha256sum "$T/ev-happy/blobs/$LS.log" 2>/dev/null | cut -d' ' -f1)" = "$LS"
 
-# a verdict line that starts with "-" must reach the receipt intact (jq once read it as an option)
+# a verdict line jq 1.7 would read as an option (it starts with "--") must reach the receipt intact;
+# "- VERDICT PASS" (dash, space) would not be one, so it would not catch the bug
 reset_world; CRMAN=$T/m-dash.sh cr dash_verdict FAKE_MODE=dash -- "${PD[@]}"; CRMAN=$T/m.sh
 expect dash_verdict 0 '^CHIP_RUN: PASS'
 RD=$(ls "$T"/ev-dash_verdict/*.json 2>/dev/null | head -1)
-assert dash_verdict "receipt verdict_lines is the dash line, unchanged" jqt '.verdict_lines == ["- VERDICT PASS"]' "$RD"
+assert dash_verdict "receipt verdict_lines is the dash line, unchanged" jqt '.verdict_lines == ["--- VERDICT PASS"]' "$RD"
+# no run args at all (RUN_ARGS empty, none on the command line): the binary gets none and run_args is []
+mkman "$T/m-noargs.sh" 'RUN_ARGS=""'
+reset_world; CRMAN=$T/m-noargs.sh cr empty_args -- "${PD[@]}"; CRMAN=$T/m.sh
+expect empty_args 0 '^CHIP_RUN: PASS'
+RE=$(ls "$T"/ev-empty_args/*.json 2>/dev/null | head -1)
+assert empty_args "receipt run_args is the empty list" jqt '.run_args == []' "$RE"
+assert empty_args "the binary was started with no arguments" grep -q '^fake chip args=0$' "$T"/ev-empty_args/blobs/*.log
 
 if [ "$BAD" = 0 ]; then echo "CHIP_RUN_SELFTEST: PASS"; exit 0; fi
 echo "CHIP_RUN_SELFTEST: FAIL ($BAD)"; exit 1
