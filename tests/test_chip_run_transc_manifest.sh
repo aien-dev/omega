@@ -170,9 +170,11 @@ suite() {
     runw nvdfail FAKE_NVD_RC=1 -- EXP2
     ck nvdfail_refusal test "$RC" = 1 -a "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
     ck nvdfail_no_chip lacks '^== chip run'
+    ck nvdfail_text has '^host tier \(0\) or nvdisasm check \(1\) failed$'
     runw digfail FAKE_DIGEST_RC=1 -- EXP2
     ck digfail_refusal test "$RC" = 1 -a "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
     ck digfail_no_chip lacks '^== chip run'
+    ck digfail_text has '^kernel digest failed$'
     # fuser: any open handle on the lock file refuses, even without flock
     exec 8> "$LOCK"; runw fuser -- EXP2; exec 8>&-
     ck fuser_refusal test "$RC" = 1 -a "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
