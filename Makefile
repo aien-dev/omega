@@ -1670,3 +1670,41 @@ build/test_omega_unwritten_trap: tests/test_omega_unwritten_trap.c src/omega_unw
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -o $@ tests/test_omega_unwritten_trap.c src/omega_unwritten_trap.c
 test-unwritten-trap-host: build/test_omega_unwritten_trap
 	./build/test_omega_unwritten_trap
+
+# VC1-LIB: unit test for the library admission gate (receipt required, bootstrap kind,
+# dependencies must exist, no truncation) plus mutation proof. Each mutant is a copy of
+# src/omega_library.c with one tagged guard line (VC1:<tag>) deleted or weakened; the test
+# must exit 1 (KILLED) for every one. A mutant whose sed did not change the file fails the build.
+# Physics-free; CPU only.
+.PHONY: test-library
+LIBTEST_CORE = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_program.c src/omega_synthesis.c
+LIBTEST_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc
+LIBTEST_DIR = $(OUT_DIR)/library-test
+test-library: tests/test_omega_library.c src/omega_library.c src/omega_library.h
+	@mkdir -p $(LIBTEST_DIR)
+	$(CC) $(LIBTEST_FLAGS) -o $(LIBTEST_DIR)/test_omega_library tests/test_omega_library.c src/omega_library.c $(LIBTEST_CORE)
+	$(LIBTEST_DIR)/test_omega_library
+	@set -eu; build_mutant() { name=$$1; tag=$$2; repl=$$3; \
+	  sed "/VC1:$$tag/c\\$$repl" src/omega_library.c > $(LIBTEST_DIR)/mut_$$name.c; \
+	  if cmp -s src/omega_library.c $(LIBTEST_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  $(CC) $(LIBTEST_FLAGS) -o $(LIBTEST_DIR)/mut_$$name tests/test_omega_library.c $(LIBTEST_DIR)/mut_$$name.c $(LIBTEST_CORE); \
+	  rc=0; $(LIBTEST_DIR)/mut_$$name $$name > $(LIBTEST_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -ne 1 ] || ! grep -q "^MUTANT $$name KILLED" $(LIBTEST_DIR)/mut_$$name.out; then \
+	    echo "mutant $$name NOT killed (exit $$rc)"; cat $(LIBTEST_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed (exit 1)"; }; \
+	  build_mutant allow-null-receipt    null-receipt         '    if (!receipt_hash) receipt_hash = (const uint8_t *)"0123456789abcdef0123456789abcdef";'; \
+	  build_mutant allow-zero-receipt    zero-receipt         '    ;'; \
+	  build_mutant bootstrap-null-audit  bootstrap-null-audit '    if (!audit_hash) audit_hash = (const uint8_t *)"0123456789abcdef0123456789abcdef";'; \
+	  build_mutant bootstrap-zero-audit  bootstrap-zero-audit '    ;'; \
+	  build_mutant allow-unverified      verified-gate        '    ;'; \
+	  build_mutant allow-duplicate       duplicate            '    ;'; \
+	  build_mutant allow-unknown-dep     dep-unknown          '        ;'; \
+	  build_mutant truncate-deps         dep-overflow         '    if (dep_count > OMEGA_LIB_MAX_DEPS) dep_count = OMEGA_LIB_MAX_DEPS;'; \
+	  build_mutant max-deps-off-by-one   dep-overflow         '    if (dep_count >= OMEGA_LIB_MAX_DEPS) return -1;'; \
+	  build_mutant digest-ignores-kind   digest-kind          '            uint8_t kind = 0;'; \
+	  build_mutant bootstrap-as-verified kind-bootstrap       '    return lib_admit(lib, prog, deps, dep_count, audit_hash, OMEGA_LIB_ADMISSION_VERIFIED);'; \
+	  build_mutant refuse-valid          capacity             '    if (prog->name[3] == (char)55) return -1;'; \
+	  build_mutant refuse-deps           dep-null             '    if (dep_count > 0) return -1;'
+	@echo "test-library: PASS (all checks, all mutants killed)"
