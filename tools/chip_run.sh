@@ -11,7 +11,8 @@
 #   VERDICT_RE must also match PASS_LINE, so set VERDICT_RE to verdict lines only), CHILD_EXIT_PASSTHROUGH
 #   (default 0; 0 or 1; when 1 and the binary exited nonzero, this module exits with the binary's
 #   exit code, receipt and verdict still written; exit 0 with a non-PASS verdict still gives 1), hooks
-#   ECHO_RE (default empty = echo the whole chip log; else echo only lines matching it; the chip log blob and
+#   FINAL_LINE_STYLE (default chip_run: last line "CHIP_RUN: <verdict> [reason]", fatal errors "CHIP_RUN: FAIL why"; verdict: last line
+#   "VERDICT <verdict>", fatal errors print "why" then "VERDICT FAIL"), ECHO_RE (default empty = echo the whole chip log; else echo only lines matching it; the chip log blob and
 #   the verdict are unaffected), HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
 #   $log = chip log, $hostlog = the whole HOST_TIER_CMD output, empty if none; it may replace a FAIL
 #   verdict with another upper-case word such as NOT_RUN, never create or remove a PASS). The manifest cannot change the test seam variables below, QUIET_FLAG,
@@ -76,7 +77,8 @@ EST_LOAD_CMD=${CHIPRUN_EST_LOAD_CMD:-pgrep est_load}
 FLAG_MINE=0; FLAG_TEXT=""; FAIL_REASON=""
 REFUSE_EXIT=2; REFUSE_VERDICT_LINE="CHIP_RUN: NOT_RUN"
 refuse() { echo "REFUSED: $*"; echo "$REFUSE_VERDICT_LINE"; exit "$REFUSE_EXIT"; }
-bad_manifest() { echo "CHIP_RUN: BAD_MANIFEST $*"; exit 1; }
+FINAL_LINE_STYLE=chip_run   # manifest may set "verdict": the last line is "VERDICT <word>" (old transc style)
+fatal() { if [ "$FINAL_LINE_STYLE" = verdict ]; then echo "$*"; echo "VERDICT FAIL"; else echo "CHIP_RUN: FAIL $*"; fi; exit 1; }
 fatal() { echo "CHIP_RUN: FAIL $*"; exit 1; }
 fail() { FAIL_REASON=${FAIL_REASON:-$*}; }
 cleanup() {
@@ -129,6 +131,7 @@ case $REFUSE_EXIT in ''|*[!0-9]*) REX_BAD=1 ;; *) { [ "${#REFUSE_EXIT}" -le 3 ] 
 [ -z "$REX_BAD" ] || bad_manifest "REFUSE_EXIT=$REFUSE_EXIT is not an integer from 1 to 125" # REFUSAL:refuse_exit
 case $REQUIRE_ALL_PASS in 0|1) ;; *) bad_manifest "REQUIRE_ALL_PASS=$REQUIRE_ALL_PASS is not 0 or 1" ;; esac # REFUSAL:require_all_value
 case $CHILD_EXIT_PASSTHROUGH in 0|1) ;; *) bad_manifest "CHILD_EXIT_PASSTHROUGH=$CHILD_EXIT_PASSTHROUGH is not 0 or 1" ;; esac # REFUSAL:child_exit_value
+case $FINAL_LINE_STYLE in chip_run|verdict) ;; *) bad_manifest "FINAL_LINE_STYLE=$FINAL_LINE_STYLE is not chip_run or verdict" ;; esac # REFUSAL:final_style_value
 seam_check # REFUSAL:seam_after
 for v in "${SEAM_VARS[@]}"; do [ "${!v:-}" = "${SEAM0[$v]}" ] || refuse "manifest changed $v, a test seam variable"; done # REFUSAL:seam_changed
 QUIET_FLAG=$QUIET0; GPU_LOCK=$GPU0; EST_LOAD_CMD=$EST0 # REFUSAL:restore_vars
@@ -250,6 +253,6 @@ if [ ! -e "$OUT" ]; then
 fi
 cmp -s "$RUN/receipt.json" "$OUT" || fatal "receipt $OUT does not match what was built"
 echo "RECEIPT $OUT"
-echo "CHIP_RUN: $VERDICT${FAIL_REASON:+ $FAIL_REASON}"
+if [ "$FINAL_LINE_STYLE" = verdict ]; then echo "VERDICT $VERDICT"; else echo "CHIP_RUN: $VERDICT${FAIL_REASON:+ $FAIL_REASON}"; fi # REFUSAL:final_style
 [ "$CHILD_EXIT_PASSTHROUGH" = 1 ] && [ "$CHIP_RC" != 0 ] && exit "$CHIP_RC" # REFUSAL:child_exit_passthrough
 [ "$VERDICT" = PASS ]

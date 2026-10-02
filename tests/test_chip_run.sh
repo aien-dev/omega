@@ -361,6 +361,23 @@ assert echo_re "the log blob still holds the whole log" grep -q '^fake chip args
 reset_world; cr echo_default -- "${PD[@]}"
 assert echo_default "without ECHO_RE the whole chip log is echoed" grep -q '^fake chip args' "$OUT"
 
+# seam: FINAL_LINE_STYLE=verdict prints "VERDICT <word>" last (old transc style), also for fatal errors
+mkman "$T/m-fs.sh" "FINAL_LINE_STYLE=verdict; RECEIPT_EXTRA_JQ='.verdict = \"NOT_RUN\"'"
+reset_world; CRMAN=$T/m-fs.sh cr final_style FAKE_MODE=fail -- "${PD[@]}"
+expect final_style 1 '^VERDICT NOT_RUN$'
+assert final_style "no CHIP_RUN: line in verdict style" bash -c '! grep -q "^CHIP_RUN:" "$1"' _ "$OUT"
+assert final_style "the last line is the verdict line" test "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
+mkman "$T/m-fs2.sh" "FINAL_LINE_STYLE=verdict"
+reset_world; CRMAN=$T/m-fs2.sh cr final_style_pass -- "${PD[@]}"
+expect final_style_pass 0 '^VERDICT PASS$'
+mkman "$T/m-fs3.sh" "FINAL_LINE_STYLE=verdict; RECEIPT_EXTRA_JQ='.verdict = \"PASS\"'"
+reset_world; CRMAN=$T/m-fs3.sh cr final_style_fatal FAKE_MODE=fail -- "${PD[@]}"
+expect final_style_fatal 1 '^RECEIPT_EXTRA_JQ forged a PASS verdict$'
+assert final_style_fatal "fatal ends with VERDICT FAIL" test "$(tail -n 1 "$OUT")" = "VERDICT FAIL"
+mkman "$T/m-fs4.sh" "FINAL_LINE_STYLE=bogus"
+reset_world; CRMAN=$T/m-fs4.sh cr final_style_value -- "${PD[@]}"
+expect final_style_value 1 '^CHIP_RUN: BAD_MANIFEST FINAL_LINE_STYLE='
+
 # happy path and receipt
 reset_world; cr happy -- "${PD[@]}" -- --x 1
 expect happy 0 '^VERDICT PASS$'
