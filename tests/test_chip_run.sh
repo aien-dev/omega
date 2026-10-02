@@ -1,0 +1,189 @@
+#!/bin/bash
+# tests/test_chip_run.sh -- host-only self-test of tools/chip_run.sh. No GPU, no chip sources.
+# Builds a throwaway fake omega and fake physics (git repos) in a mktemp dir and runs the module
+# against tiny fake chip binaries (compiled with host gcc from 3-20 line C files, because the
+# module's nm check needs real ELF files). Prints one line per case and a final
+# "CHIP_RUN_SELFTEST: PASS" or "CHIP_RUN_SELFTEST: FAIL"; exits nonzero on any failure.
+#   tests/test_chip_run.sh             run every case
+#   tests/test_chip_run.sh --mutants   mutation check: for each "# REFUSAL:<id>" line in the
+#       module, delete that line in a temp copy and require this test to report "FAIL <id>:"
+#       (MODULE=path runs the test against any copy of the module; do this by hand to try a mutant)
+# Needs: bash git jq gcc nm flock coreutils.
+set -u
+TESTS_DIR=$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+SRC_MODULE=${MODULE:-$TESTS_DIR/../tools/chip_run.sh}
+
+if [ "${1:-}" = --mutants ]; then
+    M=$(mktemp -d) || exit 1; trap 'rm -rf "$M"' EXIT; bad=0; n=0
+    for id in $(grep -o '# REFUSAL:[a-z_]*$' "$SRC_MODULE" | sed 's/.*://' | sort -u); do
+        n=$((n + 1))
+        sed "s/^.*# REFUSAL:$id\$/:/" "$SRC_MODULE" > "$M/chip_run.sh"
+        cmp -s "$M/chip_run.sh" "$SRC_MODULE" && { echo "NOCHANGE $id"; bad=1; continue; }
+        MODULE="$M/chip_run.sh" bash "${BASH_SOURCE[0]}" > "$M/out" 2>&1
+        if grep -q "^FAIL $id:" "$M/out"; then echo "killed   $id"; else echo "SURVIVED $id"; bad=1; fi
+    done
+    [ "$n" -gt 0 ] || bad=1
+    [ "$bad" = 0 ] && { echo "CHIP_RUN_MUTANTS: PASS ($n mutants killed)"; exit 0; }
+    echo "CHIP_RUN_MUTANTS: FAIL"; exit 1
+fi
+
+T=$(mktemp -d) || exit 1
+trap 'rm -rf "$T"' EXIT
+mkdir -p "$T/tmp" "$T/bin"
+PHYS=$T/physics; OM=$T/omega; FLAG=$T/flag; LOCK=$T/gpu.lock; OUT=$T/out.txt; BAD=0; RC=0
+g() { local d=$1; shift; git -C "$d" -c user.email=t@t -c user.name=t -c commit.gpgsign=false "$@"; }
+
+# fake binaries
+cat > "$T/ok.c" <<'EOC'
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+int main(int argc, char **argv) {
+    const char *m = getenv("FAKE_MODE"); if (!m) m = "pass";
+    printf("fake chip args=%d\n", argc - 1);
+    if (getenv("FAKE_CMD") && system(getenv("FAKE_CMD")) != 0) return 9;
+    if (!strcmp(m, "silent")) return 0;
+    if (!strcmp(m, "fail")) { printf("RESULT chip x ok=false\nVERDICT FAIL\n"); return 0; }
+    if (!strcmp(m, "passrc")) { printf("VERDICT PASS\n"); return 3; }
+    printf("RESULT chip x ok=true\nVERDICT PASS\n");
+    return 0;
+}
+EOC
+printf '#include <math.h>\n#include <stdio.h>\nint main(void){ volatile float x = 2.0f; printf("VERDICT PASS %%f\\n", expf(x)); return 0; }\n' > "$T/libm.c"
+printf 'extern int cuInit(unsigned) __attribute__((weak));\n#include <stdio.h>\nint main(void){ if (cuInit) cuInit(0); puts("VERDICT PASS"); return 0; }\n' > "$T/cuda.c"
+gcc -O0 -o "$T/bin/ok" "$T/ok.c" && gcc -O0 -fno-builtin -o "$T/bin/libm" "$T/libm.c" -lm && gcc -O0 -o "$T/bin/cuda" "$T/cuda.c" \
+    || { echo "FAIL setup: host gcc could not build the fake binaries"; echo "CHIP_RUN_SELFTEST: FAIL"; exit 1; }
+printf '#!/bin/sh\necho VERDICT PASS\n' > "$T/bin/script"; chmod +x "$T/bin/script"
+
+# fake physics (pinned) and fake omega (clean, with the module under test)
+mkdir -p "$PHYS/nvrm" "$OM/tools" "$OM/src"
+git init -q "$PHYS" && echo "/* fake */" > "$PHYS/nvrm/nvrm.c" && g "$PHYS" add -A && g "$PHYS" commit -q -m physics
+PIN=$(git -C "$PHYS" rev-parse HEAD)
+git init -q "$OM" && cp "$SRC_MODULE" "$OM/tools/chip_run.sh" && echo "$PIN" > "$OM/physics.lock" && echo "/* fake */" > "$OM/src/a.c" \
+    && g "$OM" add -A && g "$OM" commit -q -m omega
+OM_HEAD=$(git -C "$OM" rev-parse HEAD)
+
+mkman() { cat > "$1" <<EOM
+GATE=selftest-gate
+TEST_SOURCE=src/a.c
+VERDICT_RE='^RESULT|^VERDICT'
+PASS_LINE='^VERDICT PASS\$'
+OWNER="chip_run selftest"
+EVIDENCE_DIR=$T/ev-default
+RAISE_QUIET=1
+TAKE_GPU_LOCK=1
+REFUSE_DIRTY_OMEGA=1
+RUN_ARGS="--chip"
+HOST_TIER_CMD='echo host-tier-ok'
+RECEIPT_EXTRA_JQ='. + {extra_marker: "x"}'
+${2:-}
+EOM
+}
+mkman "$T/m.sh"; mkman "$T/m-hostfail.sh" "HOST_TIER_CMD=false"
+mkman "$T/m-map.sh" "REFUSE_EXIT=1; REFUSE_VERDICT_LINE='VERDICT NOT_RUN'"
+mkman "$T/m-off.sh" "RAISE_QUIET=0; TAKE_GPU_LOCK=0"
+CRMAN=$T/m.sh; PD=(--physics-dir "$PHYS")
+
+reset_world() {
+    g "$OM" reset -q --hard "$OM_HEAD"; g "$OM" clean -fdq
+    g "$PHYS" reset -q --hard "$PIN"; g "$PHYS" clean -fdq
+    rm -f "$FLAG"; exec 8>&-
+}
+# cr ID [NAME=VALUE ...] -- [module args]: run the module from outside both trees
+cr() {
+    local id=$1; shift; local extra=()
+    while [ "$1" != -- ]; do extra+=("$1"); shift; done; shift
+    ( cd "$T" && env -u PHYSICS_DIR -u PHYSICS CHIPRUN_SELFTEST=1 CHIPRUN_PREBUILT_BIN="$T/bin/ok" CHIPRUN_QUIET_FLAG="$FLAG" \
+        CHIPRUN_GPU_LOCK="$LOCK" CHIPRUN_EST_LOAD_CMD=true FAKE_MODE=pass TMPDIR="$T/tmp" "${extra[@]}" \
+        bash "$OM/tools/chip_run.sh" "$CRMAN" --evidence-dir "$T/ev-$id" "$@" ) > "$OUT" 2>&1
+    RC=$?
+}
+bad() { echo "FAIL $1: $2"; sed 's/^/     | /' "$OUT" | head -8; BAD=$((BAD + 1)); }
+# expect ID RC REGEX: exit code and a matching output line
+expect() {
+    if [ "$RC" = "$2" ] && grep -Eq -- "$3" "$OUT"; then echo "ok   $1 (exit $RC)"; else bad "$1" "exit $RC, wanted $2 and /$3/"; fi
+}
+# assert ID DESC cmd...: extra condition for a case
+assert() { local id=$1 d=$2; shift 2; if "$@"; then echo "ok   $id: $d"; else bad "$id" "$d"; fi; }
+no_flag() { [ ! -e "$FLAG" ]; }
+flag_is_other() { [ "$(cat "$FLAG" 2>/dev/null)" = other ]; }
+receipt_verdict() { [ "$(jq -r .verdict "$T"/ev-"$1"/*.json 2>/dev/null)" = "$2" ]; }
+
+reset_world; cr selftest_override CHIPRUN_SELFTEST=0 -- "${PD[@]}"
+expect selftest_override 2 '^REFUSED: .*self-test override'
+reset_world; cr no_physics -- --physics-dir "$T/nonexistent"
+expect no_physics 2 '^REFUSED: no physics checkout'
+reset_world; CRMAN=$T/m-map.sh cr refuse_map -- --physics-dir "$T/nonexistent"
+expect refuse_map 1 '^VERDICT NOT_RUN$'; CRMAN=$T/m.sh
+reset_world; g "$PHYS" commit -q --allow-empty -m moved; cr physics_pin -- "${PD[@]}"
+expect physics_pin 2 '^REFUSED: physics checkout is at .*physics.lock pins'
+reset_world; echo x > "$PHYS/junk"; cr physics_dirty -- "${PD[@]}"
+expect physics_dirty 2 '^REFUSED: physics checkout .* is dirty'
+reset_world; echo x > "$OM/junk"; cr omega_dirty -- "${PD[@]}"
+expect omega_dirty 2 '^REFUSED: omega tree .* is dirty'
+reset_world; cr evidence_inside -- "${PD[@]}" --evidence-dir "$OM/evid"
+expect evidence_inside 2 '^REFUSED: evidence dir .* inside a candidate tree'
+reset_world; cr evidence_inside_physics -- "${PD[@]}" --evidence-dir "$PHYS/evid"
+expect evidence_inside_physics 2 '^REFUSED: evidence dir .* inside a candidate tree'
+reset_world; echo other > "$FLAG"; cr quiet_flag -- "${PD[@]}"
+expect quiet_flag 2 '^REFUSED: quiet flag is up: other'
+assert quiet_flag "a flag that is not ours is left alone" flag_is_other
+reset_world; cr est_load CHIPRUN_EST_LOAD_CMD='echo 4242' -- "${PD[@]}"
+expect est_load 2 '^REFUSED: an est_load process is running'
+reset_world; exec 8> "$LOCK"; flock -x 8; cr gpu_lock -- "${PD[@]}"; exec 8>&-
+expect gpu_lock 2 '^REFUSED: GPU lock .* is held'
+assert gpu_lock "the quiet flag we raised is dropped on refusal" no_flag
+reset_world; CRMAN=$T/m-hostfail.sh cr host_tier -- "${PD[@]}"
+expect host_tier 2 '^REFUSED: host tier failed'; CRMAN=$T/m.sh
+reset_world; cr nm_unreadable CHIPRUN_PREBUILT_BIN="$T/bin/script" -- "${PD[@]}"
+expect nm_unreadable 2 '^REFUSED: nm cannot read'
+reset_world; cr libm CHIPRUN_PREBUILT_BIN="$T/bin/libm" -- "${PD[@]}"
+expect libm 2 '^REFUSED: libm math symbols'
+reset_world; cr cuda CHIPRUN_PREBUILT_BIN="$T/bin/cuda" -- "${PD[@]}"
+expect cuda 2 '^REFUSED: CUDA symbols'
+reset_world; cr rc_nonzero FAKE_MODE=passrc -- "${PD[@]}"
+expect rc_nonzero 1 '^CHIP_RUN: FAIL binary exit status 3'
+reset_world; cr no_verdict FAKE_MODE=silent -- "${PD[@]}"
+expect no_verdict 1 '^CHIP_RUN: FAIL no verdict line'
+reset_world; cr fail_verdict FAKE_MODE=fail -- "${PD[@]}"
+expect fail_verdict 1 '^CHIP_RUN: FAIL last verdict line does not match PASS_LINE'
+assert fail_verdict "a FAIL receipt is still written" receipt_verdict fail_verdict FAIL
+reset_world; cr omega_dirty_after FAKE_CMD="touch $OM/dirt" -- "${PD[@]}"
+expect omega_dirty_after 1 '^CHIP_RUN: FAIL omega tree dirty after run'
+reset_world; cr physics_dirty_after FAKE_CMD="touch $PHYS/dirt" -- "${PD[@]}"
+expect physics_dirty_after 1 '^CHIP_RUN: FAIL physics tree dirty after run'
+reset_world; cr head_moved FAKE_CMD="git -C $OM -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q --allow-empty -m x" -- "${PD[@]}"
+expect head_moved 1 '^CHIP_RUN: FAIL a HEAD moved'
+
+# physics dir resolution order: flag, PHYSICS_DIR, PHYSICS
+reset_world; cr order_env_dir PHYSICS="$T/nonexistent" PHYSICS_DIR="$PHYS" --
+expect order_env_dir 0 '^CHIP_RUN: PASS'
+reset_world; cr order_flag PHYSICS_DIR="$T/nonexistent" -- "${PD[@]}"
+expect order_flag 0 '^CHIP_RUN: PASS'
+reset_world; cr order_env_physics PHYSICS="$PHYS" --
+expect order_env_physics 0 '^CHIP_RUN: PASS'
+# optional steps off: flag up and lock held do not matter
+reset_world; echo other > "$FLAG"; exec 8> "$LOCK"; flock -x 8; CRMAN=$T/m-off.sh cr optional_off -- "${PD[@]}"; exec 8>&-; CRMAN=$T/m.sh
+expect optional_off 0 '^CHIP_RUN: PASS'
+assert optional_off "a flag we never raised is untouched" flag_is_other
+
+# happy path and receipt
+reset_world; cr happy -- "${PD[@]}" -- --x 1
+expect happy 0 '^VERDICT PASS$'
+grep -q '^CHIP_RUN: PASS$' "$OUT" || bad happy "no final CHIP_RUN: PASS line"
+assert happy "quiet flag dropped after the run" no_flag
+R=$(ls "$T"/ev-happy/*.json 2>/dev/null | head -1)
+assert happy "exactly one receipt" test "$(ls "$T"/ev-happy/*.json 2>/dev/null | wc -l)" = 1
+assert happy "receipt mode is 0444" test "$(stat -c %a "$R" 2>/dev/null)" = 444
+assert happy "receipt name is the sha256 of its content" test "$(sha256sum "$R" 2>/dev/null | cut -d' ' -f1).json" = "$(basename "$R")"
+for f in gate owner omega_commit omega_tree_clean_before omega_tree_clean_after omega_commit_unchanged_after physics_commit physics_lock_pin \
+         physics_tree_clean_before physics_tree_clean_after physics_commit_unchanged_after binary_sha256 chip_log_sha256 run_args host_tier \
+         verdict_lines chip_exit_status started_utc finished_utc verdict reason extra_marker; do
+    assert happy "receipt has field $f" jq -e --arg f "$f" 'has($f)' "$R" > /dev/null
+done
+assert happy "receipt verdict PASS, run_args from the command line" jq -e '.verdict == "PASS" and .run_args == ["--x","1"] and .host_tier == "host-tier-ok" and .omega_commit == "'"$OM_HEAD"'"' "$R" > /dev/null
+LS=$(jq -r .chip_log_sha256 "$R" 2>/dev/null)
+assert happy "log blob exists, mode 0444, named by its sha256" test "$(stat -c %a "$T/ev-happy/blobs/$LS.log" 2>/dev/null)" = 444 -a "$(sha256sum "$T/ev-happy/blobs/$LS.log" 2>/dev/null | cut -d' ' -f1)" = "$LS"
+
+if [ "$BAD" = 0 ]; then echo "CHIP_RUN_SELFTEST: PASS"; exit 0; fi
+echo "CHIP_RUN_SELFTEST: FAIL ($BAD)"; exit 1

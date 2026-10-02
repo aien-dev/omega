@@ -166,6 +166,12 @@ test-m19r-qualify:
 test-gate14-combine:
 	tools/test_gate14_combine.sh
 
+# Host-only self-test of the shared chip-run module (tools/chip_run.sh): every
+# refusal path with fake binaries. No GPU.
+.PHONY: test-chip-run
+test-chip-run:
+	tests/test_chip_run.sh
+
 # Gate 5 (OMEGA-NUMERIC-0), CPU tiers only: reference, CPU parity, provenance
 # and negative tests. Opens no device. The GB10 tier and the receipt come
 # from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
