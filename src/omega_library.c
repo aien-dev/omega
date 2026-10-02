@@ -20,68 +20,50 @@ void omega_library_destroy(OmegaLibrary *lib) {
     memset(lib, 0, sizeof(OmegaLibrary));
 }
 
+static void lib_digest_u32(sha256_ctx *ctx, uint32_t v) {
+    uint8_t b[4];
+    b[0] = (uint8_t)((v >> 24) & 0xFF);
+    b[1] = (uint8_t)((v >> 16) & 0xFF);
+    b[2] = (uint8_t)((v >> 8) & 0xFF);
+    b[3] = (uint8_t)(v & 0xFF);
+    sha256_update(ctx, b, sizeof b);
+}
+
+/* Streaming digest over the whole library: no fixed buffer, so no entry can ever fall
+ * outside the digest however many entries or dependencies the library holds. */
 int omega_library_compute_digest(OmegaLibrary *lib) {
     if (!lib) return -1;
 
-    uint8_t buffer[65536];
-    size_t pos = 0;
+    sha256_ctx ctx;
+    sha256_init(&ctx);
 
     /* Magic "LIB1" */
-    buffer[pos++] = 'L'; buffer[pos++] = 'I'; buffer[pos++] = 'B'; buffer[pos++] = '1';
+    sha256_update(&ctx, (const uint8_t *)"LIB1", 4);
 
-    /* Version (4 bytes BE) */
-    buffer[pos++] = (uint8_t)((lib->version >> 24) & 0xFF);
-    buffer[pos++] = (uint8_t)((lib->version >> 16) & 0xFF);
-    buffer[pos++] = (uint8_t)((lib->version >> 8) & 0xFF);
-    buffer[pos++] = (uint8_t)(lib->version & 0xFF);
-
-    /* Count (4 bytes BE) */
-    uint32_t cnt = (uint32_t)lib->count;
-    buffer[pos++] = (uint8_t)((cnt >> 24) & 0xFF);
-    buffer[pos++] = (uint8_t)((cnt >> 16) & 0xFF);
-    buffer[pos++] = (uint8_t)((cnt >> 8) & 0xFF);
-    buffer[pos++] = (uint8_t)(cnt & 0xFF);
+    lib_digest_u32(&ctx, lib->version);
+    lib_digest_u32(&ctx, (uint32_t)lib->count);
 
     for (size_t i = 0; i < lib->count; ++i) {
         const OmegaLibraryEntry *e = &lib->entries[i];
 
-        /* Program ID */
-        memcpy(&buffer[pos], e->program.program_id.bytes, OMEGA_ID_BYTES);
-        pos += OMEGA_ID_BYTES;
-
-        /* Realization ID */
-        memcpy(&buffer[pos], e->program.realization.realization_id.bytes, OMEGA_ID_BYTES);
-        pos += OMEGA_ID_BYTES;
-
-        /* Version introduced */
-        buffer[pos++] = (uint8_t)((e->version_introduced >> 24) & 0xFF);
-        buffer[pos++] = (uint8_t)((e->version_introduced >> 16) & 0xFF);
-        buffer[pos++] = (uint8_t)((e->version_introduced >> 8) & 0xFF);
-        buffer[pos++] = (uint8_t)(e->version_introduced & 0xFF);
-
-        /* Dependency count */
-        uint32_t dc = (uint32_t)e->dep_count;
-        buffer[pos++] = (uint8_t)((dc >> 24) & 0xFF);
-        buffer[pos++] = (uint8_t)((dc >> 16) & 0xFF);
-        buffer[pos++] = (uint8_t)((dc >> 8) & 0xFF);
-        buffer[pos++] = (uint8_t)(dc & 0xFF);
-
-        /* Dependency IDs */
-        for (size_t d = 0; d < e->dep_count && d < OMEGA_LIB_MAX_DEPS; ++d) {
-            memcpy(&buffer[pos], e->dependency_ids[d].bytes, OMEGA_ID_BYTES);
-            pos += OMEGA_ID_BYTES;
+        sha256_update(&ctx, e->program.program_id.bytes, OMEGA_ID_BYTES);
+        sha256_update(&ctx, e->program.realization.realization_id.bytes, OMEGA_ID_BYTES);
+        lib_digest_u32(&ctx, e->version_introduced);
+        {
+            uint8_t kind = e->admission_kind;   /* VC1:digest-kind */
+            sha256_update(&ctx, &kind, 1);
         }
-
-        /* Evidence receipt hash */
-        memcpy(&buffer[pos], e->evidence_receipt_hash, 32);
-        pos += 32;
-
-        if (pos + 256 > sizeof(buffer)) break;
+        lib_digest_u32(&ctx, (uint32_t)e->dep_count);
+        for (size_t d = 0; d < e->dep_count && d < OMEGA_LIB_MAX_DEPS; ++d) {
+            sha256_update(&ctx, e->dependency_ids[d].bytes, OMEGA_ID_BYTES);
+        }
+        sha256_update(&ctx, e->evidence_receipt_hash, 32);
     }
 
-    sha256_hash(buffer, pos, lib->state_digest);
+    sha256_final(&ctx, lib->state_digest);
     return 0;
 }
+
 
 int omega_library_advance_version(OmegaLibrary *lib) {
     if (!lib) return -1;
@@ -158,37 +140,46 @@ bool omega_library_has_cycle(const OmegaLibrary *lib, const SemanticId *target_i
     return false;
 }
 
-int omega_library_insert(OmegaLibrary *lib, const OmegaProgram *prog,
-                         const SemanticId *deps, size_t dep_count,
-                         const uint8_t receipt_hash[32]) {
+static bool lib_hash_is_zero(const uint8_t h[32]) {
+    uint8_t acc = 0;
+    for (size_t i = 0; i < 32; ++i) acc |= h[i];
+    return acc == 0;
+}
+
+/* Shared admission path. Every refusal returns -1 before the library is touched.
+ * Each guard sits on one tagged line: the VC1-LIB mutation test (Makefile test-library)
+ * deletes or weakens exactly that line in a copy of this file and expects the unit test
+ * to fail. Keep one guard per line when editing. */
+static int lib_admit(OmegaLibrary *lib, const OmegaProgram *prog,
+                     const SemanticId *deps, size_t dep_count,
+                     const uint8_t hash[32], uint8_t kind) {
     if (!lib || !prog) return -1;
 
     /* Fail-closed verification gating: only verified programs admitted */
-    if (!prog->is_verified || !prog->is_realized) {
-        return -1;
-    }
+    if (!prog->is_verified || !prog->is_realized) return -1; /* VC1:verified-gate */
 
     /* Capacity check */
-    if (lib->count >= OMEGA_LIB_MAX_PROGRAMS) {
-        return -1;
-    }
+    if (lib->count >= OMEGA_LIB_MAX_PROGRAMS) return -1; /* VC1:capacity */
 
     /* No identity (no semantic body): refuse (spec/program-identity.md 2.3) */
     {
         static const uint8_t zero[OMEGA_ID_BYTES];
-        if (memcmp(prog->program_id.bytes, zero, OMEGA_ID_BYTES) == 0) return -1;
+        if (memcmp(prog->program_id.bytes, zero, OMEGA_ID_BYTES) == 0) return -1; /* VC1:zero-id */
     }
 
     /* Duplicate check */
-    if (omega_library_find_by_id(lib, &prog->program_id) != NULL) {
-        return -1;
+    if (omega_library_find_by_id(lib, &prog->program_id) != NULL) return -1; /* VC1:duplicate */
+
+    /* Dependencies: never truncated, every one must already be in the library */
+    if (dep_count > OMEGA_LIB_MAX_DEPS) return -1; /* VC1:dep-overflow */
+    if (dep_count > 0 && !deps) return -1; /* VC1:dep-null */
+    for (size_t i = 0; i < dep_count; ++i) {
+        if (omega_library_find_by_id(lib, &deps[i]) == NULL) return -1; /* VC1:dep-unknown */
     }
 
-    /* Cycle check */
-    if (deps && dep_count > 0) {
-        if (omega_library_has_cycle(lib, &prog->program_id, deps, dep_count)) {
-            return -1;
-        }
+    /* Cycle check (kept: defence in depth; unreachable while deps must pre-exist) */
+    if (dep_count > 0) {
+        if (omega_library_has_cycle(lib, &prog->program_id, deps, dep_count)) return -1; /* VC1:cycle */
     }
 
     OmegaLibraryEntry *e = &lib->entries[lib->count];
@@ -197,21 +188,34 @@ int omega_library_insert(OmegaLibrary *lib, const OmegaProgram *prog,
     e->program = *prog;
     e->version_introduced = lib->version;
     e->timestamp_added = (uint64_t)time(NULL);
-
-    if (deps && dep_count > 0) {
-        size_t to_copy = dep_count < OMEGA_LIB_MAX_DEPS ? dep_count : OMEGA_LIB_MAX_DEPS;
-        e->dep_count = to_copy;
-        for (size_t i = 0; i < to_copy; ++i) {
-            e->dependency_ids[i] = deps[i];
-        }
+    e->admission_kind = kind;
+    e->dep_count = dep_count;
+    for (size_t i = 0; i < dep_count; ++i) {
+        e->dependency_ids[i] = deps[i];
     }
-
-    if (receipt_hash) {
-        memcpy(e->evidence_receipt_hash, receipt_hash, 32);
-    }
+    memcpy(e->evidence_receipt_hash, hash, 32);
 
     lib->count++;
     return omega_library_compute_digest(lib);
+}
+
+int omega_library_insert(OmegaLibrary *lib, const OmegaProgram *prog,
+                         const SemanticId *deps, size_t dep_count,
+                         const uint8_t receipt_hash[32]) {
+    /* Evidence: a receipt hash is mandatory */
+    if (!receipt_hash) return -1; /* VC1:null-receipt */
+    if (lib_hash_is_zero(receipt_hash)) return -1; /* VC1:zero-receipt */
+    return lib_admit(lib, prog, deps, dep_count, receipt_hash, OMEGA_LIB_ADMISSION_VERIFIED);
+}
+
+/* Genesis loading only. See the contract in omega_library.h. No flag unlocks this. */
+int omega_library_insert_bootstrap(OmegaLibrary *lib, const OmegaProgram *prog,
+                                   const SemanticId *deps, size_t dep_count,
+                                   const uint8_t audit_hash[32]) {
+    /* Evidence: the audit hash of the manual genesis audit is mandatory */
+    if (!audit_hash) return -1; /* VC1:bootstrap-null-audit */
+    if (lib_hash_is_zero(audit_hash)) return -1; /* VC1:bootstrap-zero-audit */
+    return lib_admit(lib, prog, deps, dep_count, audit_hash, OMEGA_LIB_ADMISSION_BOOTSTRAP); /* VC1:kind-bootstrap */
 }
 
 int omega_library_export_primitives(const OmegaLibrary *lib, SynthPrimitiveBank *bank) {
