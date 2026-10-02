@@ -261,7 +261,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Crumbline learner conformance vectors
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-crumbline
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-crumbline test-library test-vcstore
 
   runtime:
     needs: changes

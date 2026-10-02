@@ -480,6 +480,9 @@ static void test_mutation(void) {
     printf("mutations: %ld single mutations over %d programs\n", mut, MUT_N);
 }
 
+/* Non-zero evidence hash: omega_library_insert refuses NULL or all-zero. */
+static const uint8_t OMEGA_TEST_LIB_RECEIPT[32] = { 0xA5, 0x5A, 0xC3, 0x3C };
+
 /* -------------------------------------------------------- LIBRARY_REGRESSION */
 static void test_library(void) {
     OmegaLibrary *lib = calloc(1, sizeof *lib);
@@ -492,10 +495,10 @@ static void test_library(void) {
     omega_program_build_unary_op(&b, "plus_seven", OP_ADD, 7);
     omega_program_build_unary_op(&c, "add7", OP_ADD, 8);
     a.is_verified = b.is_verified = c.is_verified = true;
-    CHECK(G_LIB, omega_library_insert(lib, &a, NULL, 0, NULL) == 0, "insert add7");
-    CHECK(G_LIB, omega_library_insert(lib, &b, NULL, 0, NULL) != 0 && lib->count == 1,
+    CHECK(G_LIB, omega_library_insert(lib, &a, NULL, 0, OMEGA_TEST_LIB_RECEIPT) == 0, "insert add7");
+    CHECK(G_LIB, omega_library_insert(lib, &b, NULL, 0, OMEGA_TEST_LIB_RECEIPT) != 0 && lib->count == 1,
           "same body + contract under another name is a duplicate");
-    CHECK(G_LIB, omega_library_insert(lib, &c, NULL, 0, NULL) == 0 && lib->count == 2,
+    CHECK(G_LIB, omega_library_insert(lib, &c, NULL, 0, OMEGA_TEST_LIB_RECEIPT) == 0 && lib->count == 2,
           "different body under the same name is admitted");
     CHECK(G_LIB, omega_library_find_by_id(lib, &a.program_id) && omega_library_find_by_id(lib, &c.program_id) &&
                  omega_library_find_by_id(lib, &a.program_id) != omega_library_find_by_id(lib, &c.program_id),
@@ -503,12 +506,12 @@ static void test_library(void) {
     omega_program_init(&d, "opaque");
     d.contract = a.contract; d.is_verified = d.is_realized = true;
     omega_program_compute_id(&d);
-    CHECK(G_LIB, omega_library_insert(lib, &d, NULL, 0, NULL) != 0 && lib->count == 2, "no-body program refused");
+    CHECK(G_LIB, omega_library_insert(lib, &d, NULL, 0, OMEGA_TEST_LIB_RECEIPT) != 0 && lib->count == 2, "no-body program refused");
     /* dependency DAG */
     CHECK(G_LIB, omega_program_compose(&a, &c, &comp, err, sizeof err) == 0, "compose");
     comp.is_verified = true;
     SemanticId deps[2] = { a.program_id, c.program_id };
-    CHECK(G_LIB, omega_library_insert(lib, &comp, deps, 2, NULL) == 0, "insert composite with deps");
+    CHECK(G_LIB, omega_library_insert(lib, &comp, deps, 2, OMEGA_TEST_LIB_RECEIPT) == 0, "insert composite with deps");
     SemanticId cyc[1] = { comp.program_id };
     CHECK(G_LIB, omega_library_has_cycle(lib, &a.program_id, cyc, 1), "cycle detected");
     omega_library_destroy(lib);

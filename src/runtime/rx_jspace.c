@@ -1307,7 +1307,7 @@ int js_branch_home(JsSpace *s, JsBranchRef ref, JsHome *out) {
 /* ---- durable checkpoint ------------------------------------------------------
  *
  * jspace.meta, little-endian, all fixed-width fields:
- *   header (128 B): "OMJSPC01" | u32 version=2 | u32 header_bytes=128 |
+ *   header (128 B): "OMJSPC01" | u32 version=3 | u32 header_bytes=128 |
  *     u64 commit_seq | u64 body_len | u32 n_types | u32 n_reals |
  *     u32 n_branch_slots | u32 n_branches | u64 spill_end |
  *     u64 real_gen_floor | sha256(body) | sha256(header[0..96))
@@ -1322,6 +1322,10 @@ int js_branch_home(JsSpace *s, JsBranchRef ref, JsHome *out) {
  *                    u32 divergence | u32 frozen | u32 owner | u32 locality |
  *                    u32 type | u32 n_units | machine[32] |
  *                    n_units x { u32 slot | u64 gen } }
+ * Version 3 appends a fixed 48-byte opaque client anchor (u64 count | digest[32] |
+ * u64 reserved, little-endian) as the last bytes of the body, after the branches,
+ * covered by the body digest. A version-2 checkpoint (no anchor section) still
+ * loads with the anchor absent; the next commit writes version 3.
  * Version 2 widened realization generations to 64 bits (Lane 32). Version 1
  * (32-bit realization generations) is refused with JS_ERR_VERSION, never
  * reinterpreted. No pointer is stored. Placement is SPILLED (bytes at spill_off in
@@ -1330,7 +1334,9 @@ int js_branch_home(JsSpace *s, JsBranchRef ref, JsHome *out) {
  * are left out. */
 
 #define JS_META_MAGIC   "OMJSPC01"
-#define JS_META_VERSION 2u
+#define JS_META_VERSION 3u
+#define JS_META_VERSION_V2 2u
+#define JS_META_ANCHOR  48u
 #define JS_META_VERSION_V1 1u
 #define JS_META_HDR     128u
 #define JS_META_REAL    136u
@@ -1466,6 +1472,7 @@ static int commit_u(JsSpace *s) {
             put32(&body, b->units[u]->slot); put64(&body, b->units[u]->gen);
         }
     }
+    buf_put(&body, s->anchor_set ? s->anchor : (const uint8_t[JS_META_ANCHOR]){ 0 }, JS_META_ANCHOR);
     if (body.oom) { free(body.p); return JS_ERR_NOMEM; }
 
     /* 3. Header. */
@@ -1515,6 +1522,21 @@ static int commit_u(JsSpace *s) {
 
 int js_space_commit(JsSpace *s) { LOCKED_INT(commit_u(s)); }
 
+void js_space_set_anchor(JsSpace *s, const uint8_t anchor[48]) {
+    LOCK(s);
+    memcpy(s->anchor, anchor, JS_META_ANCHOR);
+    s->anchor_set = true;
+    UNLOCK(s);
+}
+
+int js_space_anchor(const JsSpace *s, uint8_t out[48]) {
+    LOCK(s);
+    int set = s->anchor_set ? 1 : 0;
+    if (set) memcpy(out, s->anchor, JS_META_ANCHOR);
+    UNLOCK(s);
+    return set;
+}
+
 static int ext_cmp(const void *a, const void *b) {
     const JsExtent *x = a, *y = b;
     return (x->off > y->off) - (x->off < y->off);
@@ -1530,7 +1552,9 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
     if (memcmp(d, f + 96, 32)) return JS_ERR_CORRUPT;
     /* Version 1 had 32-bit realization generations: refused, never reinterpreted. */
     if (rd32(f + 8) == JS_META_VERSION_V1) return JS_ERR_VERSION;
-    if (rd32(f + 8) != JS_META_VERSION || rd32(f + 12) != JS_META_HDR) return JS_ERR_CORRUPT;
+    uint32_t ver = rd32(f + 8);
+    if ((ver != JS_META_VERSION && ver != JS_META_VERSION_V2) || rd32(f + 12) != JS_META_HDR)
+        return JS_ERR_CORRUPT;
     uint64_t body_len = rd64(f + 24);
     if (body_len != fn - JS_META_HDR) return JS_ERR_CORRUPT;
     const uint8_t *p = f + JS_META_HDR, *end = p + body_len;
@@ -1687,6 +1711,16 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
             r->refs++; r->holders++;
         }
         p = u;
+    }
+    if (rc == JS_OK && ver == JS_META_VERSION) {
+        if ((size_t)(end - p) != JS_META_ANCHOR) rc = JS_ERR_CORRUPT;
+        else {
+            /* An all-zero section is "never set": absent, like version 2. */
+            static const uint8_t zero[JS_META_ANCHOR];
+            memcpy(s->anchor, p, JS_META_ANCHOR);
+            s->anchor_set = memcmp(p, zero, JS_META_ANCHOR) != 0;
+            p = end;
+        }
     }
     if (rc == JS_OK && p != end) rc = JS_ERR_CORRUPT;
     /* Every persisted realization is held by something; nothing dangles. */

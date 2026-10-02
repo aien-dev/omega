@@ -1,0 +1,6 @@
+-std=gnu11
+-Isrc
+-Itests
+-Itests/runtime
+-I../physics/m16
+-I../physics/nvrm

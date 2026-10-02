@@ -214,9 +214,12 @@ enum {
  * After a CX_OK open, callers may assume the objects in memory equal the
  * journal, and that cx_verify on an object read from this store cannot fail
  * except through memory corruption or a later in-memory edit.
- * NOT checked: a journal cut exactly at a record boundary looks like a shorter
- * valid journal. The file holds no record count or head marker, so such a
- * truncation is not detectable at open. */
+ * NOT checked by cx_open: a journal cut exactly at a record boundary looks like a
+ * shorter valid journal (the file holds no record count or head marker). That
+ * cut is detected by rx_compose, which records the Cortex record count and head
+ * record digest in the J-Space checkpoint anchor and cross-checks it at open.
+ * KNOWN LIMIT: if both the Cortex journal and the J-Space checkpoint roll back
+ * together, nothing local detects it (an external anchor problem). */
 int  cx_open(CxStore *s, const char *path, uint64_t n_subjects, uint32_t flags);
 void cx_close(CxStore *s);   /* = cx_free */
 

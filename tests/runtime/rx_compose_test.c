@@ -392,26 +392,56 @@ static void t_cortex(void) {
         CHECK(cx_verify_chain(&g_c.cx) == CX_OK, "chain after repair");
         fx_close(&g_fx, &g_c);
     }
-    /* Tear inside the composition record itself: completed at open. */
+    /* Admission cut short by a real crash: the process dies after the first
+     * composition record and before the loser admission, so the checkpoint
+     * still holds the previous anchor. Open completes the rest. A winning
+     * composition is 5 records (2 claims, evidence, promotion, 1 loser
+     * admission); one was written, so 4 are completed at open. */
     char d2[200];
     dir_for(d2, sizeof d2, "cortex2");
+    fflush(NULL);
+    pid_t pid = fork();
+    if (pid == 0) {
+        reset_c();
+        g_c.test.fault_point = RXC_FP_CORTEX;
+        g_c.test.fault_crash = 1;
+        if (fx_open(&g_fx, &g_c, d2, 1) != RX_OK) _exit(2);
+        RxcResult oc;
+        fx_run(&g_fx, &g_c, 5, &oc);
+        _exit(3);   /* the fault did not fire */
+    }
+    int cst = 0;
+    waitpid(pid, &cst, 0);
+    CHECK(WIFEXITED(cst) && WEXITSTATUS(cst) == RXC_CRASH_EXIT, "crash mid-admission (%d)",
+          WIFEXITED(cst) ? WEXITSTATUS(cst) : -1);
     reset_c();
-    CHECK(fx_open(&g_fx, &g_c, d2, 1) == RX_OK, "open 2");
-    CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED, "commit 2");
-    uint64_t last_adm = o.cx_admission[1];
-    CHECK(last_adm == g_c.cx.n, "loser admission is the last record");
-    fx_close(&g_fx, &g_c);
-    snprintf(p, sizeof p, "%s/cortex.cx", d2);
-    CHECK(stat(p, &sb) == 0 && truncate(p, sb.st_size - 3) == 0, "tear the admission");
-    reset_c();
-    rc = fx_open(&g_fx, &g_c, d2, 1);
-    CHECK(rc == RX_OK && g_c.recovered_completed == 1, "torn admission rewritten at open (%d, %u)",
-          rc, g_c.recovered_completed);
-    if (rc == RX_OK) {
+    int rc2 = fx_open(&g_fx, &g_c, d2, 1);
+    CHECK(rc2 == RX_OK && g_c.recovered_completed == 4, "torn admission rewritten at open (%d, %u)",
+          rc2, g_c.recovered_completed);
+    if (rc2 == RX_OK) {
         CHECK(fx_count(&g_c.cx, CX_K_ADMISSION, RXC_ADMIT_LOSER) == 1 &&
               fx_count(&g_c.cx, CX_K_ADMISSION, RXC_ADMIT_RECOVERED) == 1, "completed + marked");
         fx_close(&g_fx, &g_c);
     }
+
+    /* Artificial tear: a clean commit anchored the last admission, then the
+     * record is cut away. That is durable data that vanished, so open refuses
+     * (the checkpoint anchor is ahead of the journal). */
+    char d3[200];
+    dir_for(d3, sizeof d3, "cortex3");
+    reset_c();
+    CHECK(fx_open(&g_fx, &g_c, d3, 1) == RX_OK, "open 3");
+    CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED, "commit 3");
+    CHECK(o.cx_admission[1] == g_c.cx.n, "loser admission is the last record");
+    fx_close(&g_fx, &g_c);
+    snprintf(p, sizeof p, "%s/cortex.cx", d3);
+    CHECK(stat(p, &sb) == 0 && truncate(p, sb.st_size - 3) == 0, "tear the anchored admission");
+    reset_c();
+    rc = fx_open(&g_fx, &g_c, d3, 1);
+    CHECK(rc == RX_ERR_REPLAY, "anchored record lost is refused (%d)", rc);
+    if (rc == RX_OK) fx_close(&g_fx, &g_c);
+    rmtree(d3);
+    snprintf(p, sizeof p, "%s/cortex.cx", d2);
 
     /* Corrupt middle: one flipped byte in the body is refused, not repaired. */
     CHECK(stat(p, &sb) == 0, "stat");
