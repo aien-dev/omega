@@ -1,0 +1,89 @@
+# Manifest for tools/chip_run.sh: E1 row 10, GB10 transcendentals (EXP2 LOG2 SIGMOID TANH),
+# every 2^32 input compared bit for bit with the CPU tier. Sourced as shell by chip_run.sh,
+# which provides $HERE (omega root) and $PHYSICS. Forge queue only.
+# Converted from the old tools/run_numeric_transc_gate.sh (origin/main) without changing what
+# the gate measures: same sources, same gcc flags (the module's), same chip args, same verdict
+# words, same receipt fields in the same order. The old-versus-new differences are listed in
+# the PR and pinned by tests/test_chip_run_transc_manifest.sh.
+# Verdict semantics, from tests/test_omega_numeric_transc_gb10.c:
+#   one "RESULT chip <op> checked=.. exhaustive=.. mismatches=.. unwritten=.. verdict=.." per op,
+#   then "VERDICT PASS|FAIL|NOT_RUN" (line 223); exit 1 unless PASS.
+GATE=E1-TRANSC-GB10
+OWNER="lane2 E1 transcendental GB10 chip run"
+TEST_SOURCE="tests/test_omega_numeric_transc_gb10.c"
+SOURCES="src/omega_numeric_divsqrt_gb10.c src/omega_numeric_transc.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c"
+EXTRA_BUILD_SOURCES="$PHYSICS/nvrm/nvrm.c $PHYSICS/m16/m16_native.c"
+# The wrapper passes "--chip OP..." itself; this is the old default for direct use.
+RUN_ARGS="--chip EXP2 LOG2 SIGMOID TANH"
+# Old verdict: the last "VERDICT <word>" line of the chip log. RESULT lines come before it.
+VERDICT_RE='^RESULT|^VERDICT'
+PASS_LINE='^VERDICT PASS([^A-Z_]|$)'
+EVIDENCE_DIR=${TRANSC_GB10_EVIDENCE_DIR:-$HOME/workspace/evidence-out/E1-TRANSC-GB10}
+# Old refusals: exit 1 and "VERDICT NOT_RUN". Old console: RESULT and VERDICT lines of the chip
+# log, then RECEIPT and a final "VERDICT <word>" line. Old exit: 0 PASS, else 1.
+REFUSE_EXIT=1
+REFUSE_VERDICT_LINE='VERDICT NOT_RUN'
+ECHO_RE='^RESULT|^VERDICT'
+FINAL_LINE_STYLE=verdict
+CHILD_EXIT_PASSTHROUGH=0
+# Old script: dirty omega refused, quiet flag raised for the run (owner string above), GPU lock
+# taken, refusal on ANY process holding the lock file (fuser), then a blocking flock.
+REFUSE_DIRTY_OMEGA=1
+RAISE_QUIET=1
+TAKE_GPU_LOCK=1
+GPU_LOCK_MODE=fuser
+REQUIRE_ALL_PASS=0
+# Host tier, in the old order's spirit: host build, offline nvdisasm provenance check (all
+# whole-program kernels), kernel digest, then the host run LAST so the receipt's host_tier
+# (the module records the last line of this output) is the host run's last line, as before.
+# Lines tagged HOSTTIER_NVD: and HOSTTIER_KDIG: are read back by RECEIPT_EXTRA_JQ via $hostlog.
+HOST_TIER_CMD='
+echo "== host tier"
+make -s -C . build/test_omega_numeric_transc_gb10_cpu > "$CHIPRUN_RUN_DIR/host-build.log" 2>&1 || { echo "host build failed"; exit 1; }
+echo "== nvdisasm provenance"
+tools/divsqrt_nvdisasm_check.sh > "$CHIPRUN_RUN_DIR/nvdisasm.log" 2>&1; NVD_RC=$?
+grep -E "^\[|^VERDICT|^nvdisasm" "$CHIPRUN_RUN_DIR/nvdisasm.log"
+grep "^nvdisasm" "$CHIPRUN_RUN_DIR/nvdisasm.log" | sed "s/^/HOSTTIER_NVD:/"
+build/test_omega_numeric_transc_gb10_cpu --digest > "$CHIPRUN_RUN_DIR/kdig.txt" || { echo "kernel digest failed"; exit 1; }
+sed "s/^/HOSTTIER_KDIG:/" "$CHIPRUN_RUN_DIR/kdig.txt"
+build/test_omega_numeric_transc_gb10_cpu; HOST_RC=$?
+[ "$HOST_RC" = 0 ] && [ "$NVD_RC" = 0 ] || { echo "host tier ($HOST_RC) or nvdisasm check ($NVD_RC) failed"; exit 1; }
+'
+# Receipt: the old object, same fields in the same order. The module's own owner, run_args,
+# verdict_lines and reason are dropped (the old receipt had none); row, reference, kernels,
+# nvdisasm_check, ops_requested and ops are rebuilt from the chip log and the host tier output.
+# verdict: the chip's own last word (PASS, FAIL or NOT_RUN; none = NOT_RUN); a PASS the module
+# does not confirm (nonzero exit, dirty tree, moved HEAD) becomes FAIL, as in the old script.
+RECEIPT_EXTRA_JQ='
+def tagged($t): $hostlog | split("\n") | map(select(startswith($t)) | .[($t | length):]);
+def chipword: ([$log | split("\n")[] | capture("^VERDICT (?<w>[A-Z_]*)") | .w] | last) // "";
+def typed($v): if $v == "true" then true elif $v == "false" then false elif ($v | test("^[0-9]")) then ($v | tonumber) else $v end;
+def opsjson: try ([$log | split("\n")[] | select(startswith("RESULT chip ")) | split(" ") | map(select(length > 0)) as $f
+  | reduce $f[3:][] as $kv ({op: $f[2]}; ($kv | split("=")) as $p | . + {($p[0]): typed(if ($p | length) > 1 then ($p[1:] | join("=")) else $kv end)})]) catch [];
+. as $r | (chipword) as $cw
+| {
+  gate: $r.gate,
+  row: "E1 gap table row 10: GB10 transcendentals bit-identical to the frozen CPU sequences",
+  reference: "omega_math_<op> of src/omega_numeric_transc.c (CPU tier), every 32-bit input, bits compared exactly",
+  omega_commit: $r.omega_commit,
+  omega_tree_clean_before: $r.omega_tree_clean_before,
+  omega_tree_clean_after: $r.omega_tree_clean_after,
+  omega_commit_unchanged_after: $r.omega_commit_unchanged_after,
+  physics_commit: $r.physics_commit,
+  physics_lock_pin: $r.physics_lock_pin,
+  physics_tree_clean_before: $r.physics_tree_clean_before,
+  physics_tree_clean_after: $r.physics_tree_clean_after,
+  physics_commit_unchanged_after: $r.physics_commit_unchanged_after,
+  binary_sha256: $r.binary_sha256,
+  chip_log_sha256: $r.chip_log_sha256,
+  kernels: (tagged("HOSTTIER_KDIG:") | join("\n") | split("\n") | map(select(length > 0) | split(" ") | {op: .[0], instructions: (.[1] | tonumber), sha256: .[2]})),
+  nvdisasm_check: (tagged("HOSTTIER_NVD:") | join("\n")),
+  host_tier: $r.host_tier,
+  ops_requested: ($r.run_args[1:]),
+  ops: opsjson,
+  chip_exit_status: $r.chip_exit_status,
+  started_utc: $r.started_utc,
+  finished_utc: $r.finished_utc,
+  verdict: (if $r.verdict == "PASS" then "PASS" elif $cw == "PASS" then "FAIL" elif $cw == "" then "NOT_RUN" else $cw end)
+}
+'

@@ -328,6 +328,74 @@ reset_world; echo other > "$FLAG"; exec 8> "$LOCK"; flock -x 8; CRMAN=$T/m-off.s
 expect optional_off 0 '^CHIP_RUN: PASS'
 assert optional_off "a flag we never raised is untouched" flag_is_other
 
+# seam: RECEIPT_EXTRA_JQ can read the whole HOST_TIER_CMD output as $hostlog (empty without one)
+mkman "$T/m-hostlog.sh" "HOST_TIER_CMD='echo AAA; echo BBB'; RECEIPT_EXTRA_JQ='. + {hl: \$hostlog}'"
+reset_world; CRMAN=$T/m-hostlog.sh cr hostlog -- "${PD[@]}"
+expect hostlog 0 '^CHIP_RUN: PASS'
+assert hostlog "receipt carries the whole host tier output" jq -e '.hl == "AAA\nBBB\n" and .host_tier == "BBB"' "$T"/ev-hostlog/*.json
+mkman "$T/m-hostlog0.sh" "HOST_TIER_CMD=''; RECEIPT_EXTRA_JQ='. + {hl: \$hostlog}'"
+reset_world; CRMAN=$T/m-hostlog0.sh cr hostlog_none -- "${PD[@]}"
+expect hostlog_none 0 '^CHIP_RUN: PASS'
+assert hostlog_none "no host tier gives an empty \$hostlog" jq -e '.hl == ""' "$T"/ev-hostlog_none/*.json
+
+# seam: RECEIPT_EXTRA_JQ may replace a FAIL verdict with another upper-case word; PASS is never forged or removed
+mkman "$T/m-vw.sh" "RECEIPT_EXTRA_JQ='.verdict = \"NOT_RUN\"'"
+reset_world; CRMAN=$T/m-vw.sh cr verdict_word_ok FAKE_MODE=fail -- "${PD[@]}"
+expect verdict_word_ok 1 '^CHIP_RUN: NOT_RUN last verdict line'
+assert verdict_word_ok "receipt verdict is the rewritten word" receipt_verdict verdict_word_ok NOT_RUN
+reset_world; CRMAN=$T/m-vw.sh cr verdict_pass_changed -- "${PD[@]}"
+expect verdict_pass_changed 1 '^CHIP_RUN: FAIL RECEIPT_EXTRA_JQ changed a PASS verdict'
+mkman "$T/m-vf.sh" "RECEIPT_EXTRA_JQ='.verdict = \"PASS\"'"
+reset_world; CRMAN=$T/m-vf.sh cr verdict_forged FAKE_MODE=fail -- "${PD[@]}"
+expect verdict_forged 1 '^CHIP_RUN: FAIL RECEIPT_EXTRA_JQ forged a PASS verdict'
+mkman "$T/m-vb.sh" "RECEIPT_EXTRA_JQ='.verdict = \"not run\"'"
+reset_world; CRMAN=$T/m-vb.sh cr verdict_word FAKE_MODE=fail -- "${PD[@]}"
+expect verdict_word 1 '^CHIP_RUN: FAIL receipt verdict is not an upper-case word'
+
+# seam: ECHO_RE limits the stdout echo of the chip log; the log blob stays complete
+mkman "$T/m-echo.sh" "ECHO_RE='^VERDICT'"
+reset_world; CRMAN=$T/m-echo.sh cr echo_re -- "${PD[@]}"
+expect echo_re 0 '^VERDICT PASS$'
+assert echo_re "default-echoed noise line is not shown with ECHO_RE" bash -c '! grep -q "^fake chip args" "$1"' _ "$OUT"
+assert echo_re "the log blob still holds the whole log" grep -q '^fake chip args' "$T"/ev-echo_re/blobs/*.log
+reset_world; cr echo_default -- "${PD[@]}"
+assert echo_default "without ECHO_RE the whole chip log is echoed" grep -q '^fake chip args' "$OUT"
+
+# seam: FINAL_LINE_STYLE=verdict prints "VERDICT <word>" last (old transc style), also for fatal errors
+mkman "$T/m-fs.sh" "FINAL_LINE_STYLE=verdict; RECEIPT_EXTRA_JQ='.verdict = \"NOT_RUN\"'"
+reset_world; CRMAN=$T/m-fs.sh cr final_style FAKE_MODE=fail -- "${PD[@]}"
+expect final_style 1 '^VERDICT NOT_RUN$'
+assert final_style "no CHIP_RUN: line in verdict style" bash -c '! grep -q "^CHIP_RUN:" "$1"' _ "$OUT"
+assert final_style "the last line is the verdict line" test "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
+mkman "$T/m-fs2.sh" "FINAL_LINE_STYLE=verdict"
+reset_world; CRMAN=$T/m-fs2.sh cr final_style_pass -- "${PD[@]}"
+expect final_style_pass 0 '^VERDICT PASS$'
+mkman "$T/m-fs3.sh" "FINAL_LINE_STYLE=verdict; RECEIPT_EXTRA_JQ='.verdict = \"PASS\"'"
+reset_world; CRMAN=$T/m-fs3.sh cr final_style_fatal FAKE_MODE=fail -- "${PD[@]}"
+expect final_style_fatal 1 '^RECEIPT_EXTRA_JQ forged a PASS verdict$'
+assert final_style_fatal "fatal ends with VERDICT FAIL" test "$(tail -n 1 "$OUT")" = "VERDICT FAIL"
+assert fatal_verdict_style "fatal prints a VERDICT FAIL line and no CHIP_RUN: FAIL line" bash -c '[ "$(tail -n 2 "$1" | head -n 1)" = "RECEIPT_EXTRA_JQ forged a PASS verdict" ] && [ "$(tail -n 1 "$1")" = "VERDICT FAIL" ] && ! grep -q "^CHIP_RUN: FAIL" "$1"' _ "$OUT"
+mkman "$T/m-fs4.sh" "FINAL_LINE_STYLE=bogus"
+reset_world; CRMAN=$T/m-fs4.sh cr final_style_value -- "${PD[@]}"
+expect final_style_value 1 '^CHIP_RUN: BAD_MANIFEST FINAL_LINE_STYLE='
+
+# seam: GPU_LOCK_MODE=fuser refuses early on ANY open handle of the lock file (flock mode does not), then blocks on flock
+mkman "$T/m-fu.sh" "GPU_LOCK_MODE=fuser"
+reset_world; exec 8> "$LOCK"; CRMAN=$T/m-fu.sh cr gpu_fuser -- "${PD[@]}"; exec 8>&-
+expect gpu_fuser 2 "^REFUSED: $LOCK is held\$"
+assert gpu_fuser "refused before the host tier and the quiet flag" no_flag
+reset_world; exec 8> "$LOCK"; cr gpu_fuser_ctl -- "${PD[@]}"; exec 8>&-
+expect gpu_fuser_ctl 0 '^CHIP_RUN: PASS'
+reset_world; CRMAN=$T/m-fu.sh cr gpu_fuser_free -- "${PD[@]}"
+expect gpu_fuser_free 0 '^CHIP_RUN: PASS'
+mkman "$T/m-fu2.sh" "GPU_LOCK_MODE=bogus"
+reset_world; CRMAN=$T/m-fu2.sh cr gpu_mode_value -- "${PD[@]}"
+expect gpu_mode_value 1 '^CHIP_RUN: BAD_MANIFEST GPU_LOCK_MODE='
+# regression (PR 213 review): a bad manifest value must stop the run (fail-open if bad_manifest is undefined), with no receipt and no shell error
+assert bad_manifest_def "bad manifest exits nonzero, no 'command not found'" bash -c '! grep -q "command not found" "$1"' _ "$OUT"
+assert final_style_value "bad manifest wrote no receipt" test -z "$(ls "$T"/ev-final_style_value/*.json 2>/dev/null)"
+assert gpu_mode_value "bad GPU_LOCK_MODE wrote no receipt" test -z "$(ls "$T"/ev-gpu_mode_value/*.json 2>/dev/null)"
+
 # happy path and receipt
 reset_world; cr happy -- "${PD[@]}" -- --x 1
 expect happy 0 '^VERDICT PASS$'

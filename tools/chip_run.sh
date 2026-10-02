@@ -11,8 +11,13 @@
 #   VERDICT_RE must also match PASS_LINE, so set VERDICT_RE to verdict lines only), CHILD_EXIT_PASSTHROUGH
 #   (default 0; 0 or 1; when 1 and the binary exited nonzero, this module exits with the binary's
 #   exit code, receipt and verdict still written; exit 0 with a non-PASS verdict still gives 1), hooks
-#   HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
-#   $log = chip log). The manifest cannot change the test seam variables below, QUIET_FLAG,
+#   GPU_LOCK_MODE (default flock = flock -n after the host tier; fuser = refuse early, before the host tier, if ANY process has
+#   the lock file open (old transc test, text "<lock> is held"), then take it with a blocking flock -x),
+#   FINAL_LINE_STYLE (default chip_run: last line "CHIP_RUN: <verdict> [reason]", fatal errors "CHIP_RUN: FAIL why"; verdict: last line
+#   "VERDICT <verdict>", fatal errors print "why" then "VERDICT FAIL"), ECHO_RE (default empty = echo the whole chip log; else echo only lines matching it; the chip log blob and
+#   the verdict are unaffected), HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
+#   $log = chip log, $hostlog = the whole HOST_TIER_CMD output, empty if none; it may replace a FAIL
+#   verdict with another upper-case word such as NOT_RUN, never create or remove a PASS). The manifest cannot change the test seam variables below, QUIET_FLAG,
 #   GPU_LOCK or EST_LOAD_CMD (checked and restored after it is sourced). That is an accident guard,
 #   not a boundary: the manifest is sourced into this shell and could still set any other variable.
 # Gate args after "--" REPLACE the manifest RUN_ARGS (not appended); RUN_ARGS is split on whitespace.
@@ -46,10 +51,8 @@
 #   run_args host_tier verdict_lines chip_exit_status started_utc finished_utc verdict reason
 #   (plus whatever RECEIPT_EXTRA_JQ adds).
 # NOT COVERED by this module (a gate that needs one adds it, or does not use this module yet):
-#   - transc's KDIG kernel-digest field and its unknown-op check: use RECEIPT_EXTRA_JQ.
-#   - transc's nvdisasm check: use HOST_TIER_CMD.
-#   - transc locks with fuser (refuses if ANY process holds the lock file); this module uses
-#     flock -n (refuses only if another flock holder has it). Not the same test.
+#   - transc's kernel-digest field and unknown-op check: RECEIPT_EXTRA_JQ over $hostlog, and the wrapper; its nvdisasm check: HOST_TIER_CMD.
+#   - transc locks with fuser; set GPU_LOCK_MODE=fuser for that (default flock -n is the other test).
 #   - reduce WAITS for the lock and the quiet flag; this module REFUSES at once.
 #   - binary blob storage: reduce stores blobs/<sha>.bin and refuses a PASS with no digests;
 #     this module stores only the log blob, and records binary_sha256 without keeping the binary.
@@ -74,8 +77,9 @@ EST_LOAD_CMD=${CHIPRUN_EST_LOAD_CMD:-pgrep est_load}
 FLAG_MINE=0; FLAG_TEXT=""; FAIL_REASON=""
 REFUSE_EXIT=2; REFUSE_VERDICT_LINE="CHIP_RUN: NOT_RUN"
 refuse() { echo "REFUSED: $*"; echo "$REFUSE_VERDICT_LINE"; exit "$REFUSE_EXIT"; }
-bad_manifest() { echo "CHIP_RUN: BAD_MANIFEST $*"; exit 1; }
-fatal() { echo "CHIP_RUN: FAIL $*"; exit 1; }
+bad_manifest() { echo "CHIP_RUN: BAD_MANIFEST $*"; exit 1; } # REFUSAL:bad_manifest_def
+FINAL_LINE_STYLE=chip_run   # manifest may set "verdict": the last line is "VERDICT <word>" (old transc style)
+fatal() { if [ "$FINAL_LINE_STYLE" = verdict ]; then echo "$*"; echo "VERDICT FAIL"; else echo "CHIP_RUN: FAIL $*"; fi; exit 1; } # REFUSAL:fatal_verdict_style
 fail() { FAIL_REASON=${FAIL_REASON:-$*}; }
 cleanup() {
     [ "$FLAG_MINE" = 1 ] || return 0
@@ -119,7 +123,7 @@ PHYSICS=${PHYS_FLAG:-${PHYSICS_DIR:-${PHYSICS:-$HOME/workspace/physics}}}
 PHYSICS=$(realpath -m "$PHYSICS")
 
 GATE=""; TEST_SOURCE=""; SOURCES=""; EXTRA_BUILD_SOURCES=""; RUN_ARGS=""; VERDICT_RE=""; PASS_LINE=""
-OWNER=""; EVIDENCE_DIR=""; RAISE_QUIET=1; TAKE_GPU_LOCK=1; REFUSE_DIRTY_OMEGA=1; HOST_TIER_CMD=""; RECEIPT_EXTRA_JQ=""; REQUIRE_ALL_PASS=0; CHILD_EXIT_PASSTHROUGH=0
+OWNER=""; EVIDENCE_DIR=""; RAISE_QUIET=1; TAKE_GPU_LOCK=1; REFUSE_DIRTY_OMEGA=1; HOST_TIER_CMD=""; RECEIPT_EXTRA_JQ=""; REQUIRE_ALL_PASS=0; CHILD_EXIT_PASSTHROUGH=0; ECHO_RE=""; GPU_LOCK_MODE=flock
 [ -f "$MANIFEST" ] || refuse "no manifest at $MANIFEST" # REFUSAL:no_manifest
 . "$MANIFEST"; MRC=$?
 REX_BAD=""
@@ -127,6 +131,8 @@ case $REFUSE_EXIT in ''|*[!0-9]*) REX_BAD=1 ;; *) { [ "${#REFUSE_EXIT}" -le 3 ] 
 [ -z "$REX_BAD" ] || bad_manifest "REFUSE_EXIT=$REFUSE_EXIT is not an integer from 1 to 125" # REFUSAL:refuse_exit
 case $REQUIRE_ALL_PASS in 0|1) ;; *) bad_manifest "REQUIRE_ALL_PASS=$REQUIRE_ALL_PASS is not 0 or 1" ;; esac # REFUSAL:require_all_value
 case $CHILD_EXIT_PASSTHROUGH in 0|1) ;; *) bad_manifest "CHILD_EXIT_PASSTHROUGH=$CHILD_EXIT_PASSTHROUGH is not 0 or 1" ;; esac # REFUSAL:child_exit_value
+case $FINAL_LINE_STYLE in chip_run|verdict) ;; *) bad_manifest "FINAL_LINE_STYLE=$FINAL_LINE_STYLE is not chip_run or verdict" ;; esac # REFUSAL:final_style_value
+case $GPU_LOCK_MODE in flock|fuser) ;; *) bad_manifest "GPU_LOCK_MODE=$GPU_LOCK_MODE is not flock or fuser" ;; esac # REFUSAL:gpu_mode_value
 seam_check # REFUSAL:seam_after
 for v in "${SEAM_VARS[@]}"; do [ "${!v:-}" = "${SEAM0[$v]}" ] || refuse "manifest changed $v, a test seam variable"; done # REFUSAL:seam_changed
 QUIET_FLAG=$QUIET0; GPU_LOCK=$GPU0; EST_LOAD_CMD=$EST0 # REFUSAL:restore_vars
@@ -150,6 +156,7 @@ PHYS_COMMIT=$(head_of "$PHYSICS") || refuse "cannot read physics HEAD at $PHYSIC
 OMEGA_CLEAN_BEFORE=$(clean "$HERE"); PHYS_CLEAN_BEFORE=true
 [ "$RAISE_QUIET" != 1 ] || [ ! -e "$QUIET_FLAG" ] || refuse "quiet flag is up: $(cat "$QUIET_FLAG")" # REFUSAL:quiet_flag
 [ -z "$(bash -c "$EST_LOAD_CMD" 2>/dev/null)" ] || refuse "an est_load process is running" # REFUSAL:est_load
+[ "$TAKE_GPU_LOCK" != 1 ] || [ "$GPU_LOCK_MODE" != fuser ] || ! fuser "$GPU_LOCK" > /dev/null 2>&1 || refuse "$GPU_LOCK is held" # REFUSAL:gpu_fuser
 
 RUN=$(mktemp -d "${TMPDIR:-/tmp}/chip-run.XXXXXX") || refuse "cannot create a run directory" # REFUSAL:mktemp
 if [ -n "$HOST_TIER_CMD" ]; then
@@ -157,6 +164,7 @@ if [ -n "$HOST_TIER_CMD" ]; then
     tail -n 3 "$RUN/host.log"
     [ "$HRC" = 0 ] || refuse "host tier failed (exit $HRC); no chip run" # REFUSAL:host_tier
 fi
+[ -e "$RUN/host.log" ] || : > "$RUN/host.log"   # seam: $hostlog is always readable by RECEIPT_EXTRA_JQ
 HOST_TIER=$(tail -n 1 "$RUN/host.log" 2>/dev/null)
 
 START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -170,7 +178,8 @@ fi
 if [ "$TAKE_GPU_LOCK" = 1 ]; then
     { : >> "$GPU_LOCK"; } 2>/dev/null || refuse "cannot open $GPU_LOCK" # REFUSAL:gpu_open
     exec 9>> "$GPU_LOCK"
-    flock -n 9 || refuse "GPU lock $GPU_LOCK is held" # REFUSAL:gpu_lock
+    [ "$GPU_LOCK_MODE" != fuser ] || flock -x 9 || refuse "cannot take $GPU_LOCK"   # fuser mode: the early fuser check refused any holder, now wait for the lock like the old transc script
+    [ "$GPU_LOCK_MODE" = fuser ] || flock -n 9 || refuse "GPU lock $GPU_LOCK is held" # REFUSAL:gpu_lock
 fi
 
 if [ -n "${CHIPRUN_PREBUILT_BIN:-}" ]; then
@@ -199,7 +208,7 @@ echo "== chip run (not killed, not timed out): ${GATE_ARGS[*]}"
 END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 exec 9>&-
 mapfile -t VLINES < <(grep -E -- "$VERDICT_RE" "$RUN/chip.log")
-cat "$RUN/chip.log"   # the full chip log goes to stdout, as the old trap script did (HIT and DEVERR lines included)
+if [ -n "$ECHO_RE" ]; then grep -E -- "$ECHO_RE" "$RUN/chip.log"; else cat "$RUN/chip.log"; fi   # default: the full chip log goes to stdout (HIT and DEVERR lines included); seam: ECHO_RE limits the echo
 
 OMEGA_CLEAN_AFTER=$(clean "$HERE"); PHYS_CLEAN_AFTER=$(clean "$PHYSICS")
 OMEGA_SAME=$([ "$(head_of "$HERE")" = "$OMEGA_COMMIT" ] && echo true || echo false)
@@ -233,15 +242,20 @@ BODY=$(jq -n --arg gate "$GATE" --arg owner "$OWNER" --arg omega "$OMEGA_COMMIT"
   physics_tree_clean_after: $pafter, physics_commit_unchanged_after: $psame, binary_sha256: $bin, chip_log_sha256: $log,
   run_args: $run_args, host_tier: $host, verdict_lines: $vlines, chip_exit_status: $rc, started_utc: $start,
   finished_utc: $end, verdict: $verdict, reason: $reason }') || fatal "receipt JSON could not be built"
-if [ -n "$RECEIPT_EXTRA_JQ" ]; then BODY=$(printf '%s' "$BODY" | jq --rawfile log "$RUN/chip.log" "$RECEIPT_EXTRA_JQ") || fatal "RECEIPT_EXTRA_JQ failed"; fi
+if [ -n "$RECEIPT_EXTRA_JQ" ]; then BODY=$(printf '%s' "$BODY" | jq --rawfile log "$RUN/chip.log" --rawfile hostlog "$RUN/host.log" "$RECEIPT_EXTRA_JQ") || fatal "RECEIPT_EXTRA_JQ failed"; fi
 printf '%s\n' "$BODY" > "$RUN/receipt.json"
 jq -e '.gate and .verdict and .binary_sha256' "$RUN/receipt.json" > /dev/null || fatal "receipt lost its required fields"
+RVERDICT=$(jq -r ".verdict | strings" "$RUN/receipt.json" 2>/dev/null)
+case $RVERDICT in ""|*[!A-Z_]*) fatal "receipt verdict is not an upper-case word" ;; esac # REFUSAL:verdict_word
+[ "$VERDICT" != PASS ] || [ "$RVERDICT" = PASS ] || fatal "RECEIPT_EXTRA_JQ changed a PASS verdict" # REFUSAL:verdict_pass_changed
+[ "$VERDICT" = PASS ] || [ "$RVERDICT" != PASS ] || fatal "RECEIPT_EXTRA_JQ forged a PASS verdict" # REFUSAL:verdict_forged
+VERDICT=$RVERDICT   # seam: RECEIPT_EXTRA_JQ may replace a FAIL with another non-PASS word (for example NOT_RUN); PASS cannot be forged
 RSHA=$(sha "$RUN/receipt.json"); OUT=$EVID/$RSHA.json
 if [ ! -e "$OUT" ]; then
     set -o noclobber; { cat "$RUN/receipt.json" > "$OUT" && chmod 0444 "$OUT"; } || { set +o noclobber; fatal "could not write receipt $OUT"; }; set +o noclobber
 fi
 cmp -s "$RUN/receipt.json" "$OUT" || fatal "receipt $OUT does not match what was built"
 echo "RECEIPT $OUT"
-echo "CHIP_RUN: $VERDICT${FAIL_REASON:+ $FAIL_REASON}"
+if [ "$FINAL_LINE_STYLE" = verdict ]; then echo "VERDICT $VERDICT"; else echo "CHIP_RUN: $VERDICT${FAIL_REASON:+ $FAIL_REASON}"; fi # REFUSAL:final_style
 [ "$CHILD_EXIT_PASSTHROUGH" = 1 ] && [ "$CHIP_RC" != 0 ] && exit "$CHIP_RC" # REFUSAL:child_exit_passthrough
 [ "$VERDICT" = PASS ]

@@ -177,6 +177,11 @@ test-chip-run:
 test-chip-run-trap-manifest:
 	tests/test_chip_run_trap_manifest.sh
 
+# Host-only check of the transcendental-gate manifest and its wrapper (fake chip, old-vs-new receipt keys). No GPU.
+.PHONY: test-chip-run-transc-manifest
+test-chip-run-transc-manifest:
+	tests/test_chip_run_transc_manifest.sh
+
 # Gate 5 (OMEGA-NUMERIC-0), CPU tiers only: reference, CPU parity, provenance
 # and negative tests. Opens no device. The GB10 tier and the receipt come
 # from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
