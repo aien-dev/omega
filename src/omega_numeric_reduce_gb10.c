@@ -24,8 +24,9 @@
  * executor reads after the host marker only, which PR #141 showed can precede
  * the last stores.
  *   MEAN  SUM levels on the chip, then the one final division
- *         omega_math_div(SUM, u2f(n)) on the host: a DECLARED HOST STEP (no
- *         GB10 DIV is merged on main yet; the chip DIV kernel is PR #141).
+ *         omega_math_div(SUM, u2f(n)) on the chip: the whole-program GB10 DIV
+ *         kernel of E1 row 7 (omega_ds_gb10_run, one element), bit-identical to
+ *         the CPU division. No host step remains.
  *
  * Every pre-submission check carries a CHECK: marker. With
  * -DOMEGA_NUMERIC_CPU_ONLY the checks still run but no device is touched
@@ -33,11 +34,12 @@
  */
 #include "omega_numeric_reduce.h"
 #include "omega_numeric.h"
+#include "omega_numeric_divsqrt_gb10.h"
 #include "omega_blackwell_encoder.h"
 #include "omega_blackwell_qmd.h"
 #ifndef OMEGA_NUMERIC_CPU_ONLY
 #include "omega_blackwell_submit.h"
-#include "m16_native.h"
+#include "omega_numeric_native.h"
 #endif
 
 #include <stdarg.h>
@@ -277,17 +279,15 @@ static int chunk_check(OmegaReduceOp op, const OmegaNumericPatchInsn *patch, int
     return omega_numeric_check_patch(OMEGA_NOP_REDUCE_SUM, patch, np, qmd1, err, err_len);
 }
 
-/* One level chunk on GB10, every op. A copy of the vecadd launch of
- * omega_numeric_gb10.c (not edited by this lane) that also waits for the QMD
- * release semaphore before reading results; the shared executor reads after
- * the host marker only. */
+/* One level chunk on GB10, every op. Like the SIMT launcher, require both
+ * the host marker and the QMD release semaphore before reading results. */
 /* Device-failure diagnostics (M20 GB10 instrumentation). Every
  * OMEGA_NUMERIC_ERR_DEVICE return below goes through gb10_devfail, which
  * prints one GB10_DEVFAIL line to stderr: the step that failed, the driver
  * return code, errno, the nvrm error text, the wait value and the marker word
- * for waits, and the elapsed ms since the launch began. It only reports: the
- * return code stays OMEGA_NUMERIC_ERR_DEVICE, there is no retry and no wait
- * value changes. */
+ * for waits, and the elapsed ms since the launch began. The lifecycle wrapper
+ * retains resources after uncertain completion and refuses later numeric
+ * launches. There is no retry and no wait value changes. */
 static double gb10_ms_since(const struct timespec *t0) {
     struct timespec t;
     timespec_get(&t, TIME_UTC); /* C11; no feature macro needed */
@@ -303,8 +303,13 @@ static int gb10_devfail(const char *fn, const char *step, M16NativeContext *ctx,
     if (wait_ms >= 0)
         fprintf(stderr, " wait_ms=%ld word=0x%08x want=0x%08x", wait_ms, word ? (unsigned)*word : 0u, (unsigned)want);
     fprintf(stderr, " elapsed_ms=%.3f\n", ms);
-    if (do_close) m16_native_close(ctx);
+    if (do_close) omega_numeric_native_close(ctx);
     return OMEGA_NUMERIC_ERR_DEVICE;
+}
+/* Slow-wait note: one stderr line when a successful wait finished more than 1000 ms after launch began. */
+static void gb10_note_slow(const char *step, const struct timespec *t0) {
+    double ms = gb10_ms_since(t0);
+    if (ms > 1000.0) fprintf(stderr, "GB10_SLOW_WAIT step=%s elapsed_ms=%.3f\n", step, ms);
 }
 /* Plain step: drv_rc is the value the call returned. */
 #define GB10_FAIL(step, close_, rc_) gb10_devfail(__func__, (step), &ctx, (close_), (rc_), errno, -1, NULL, 0u, &t0)
@@ -321,7 +326,7 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     timespec_get(&t0, TIME_UTC);
     M16NativeContext ctx;
     int drc_;
-    if ((drc_ = m16_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
+    if ((drc_ = omega_numeric_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
     if ((drc_ = m16_native_create_channel(&ctx)) != 0) return GB10_FAIL("channel", 1, drc_);
     NvrmMem large_pb;
     if ((drc_ = nvrm_alloc(&ctx.rm, 0x10000, &large_pb)) != 0) return GB10_FAIL("alloc_pb", 1, drc_);
@@ -333,7 +338,7 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     if (nvrm_alloc(&ctx.rm, 0x1000, &code_mem) != 0 || nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &a_mem) != 0 || nvrm_alloc(&ctx.rm, bytes, &b_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &c_mem) != 0 || nvrm_alloc(&ctx.rm, bytes, &out_mem) != 0 ||
-        nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0 || nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
+        nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem) != 0 || nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
         return GB10_FAIL("alloc_buffers", 1, -1);
     }
     memcpy(a_mem.cpu, in, count * sizeof(float));
@@ -373,13 +378,13 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
         char perr[256];
         if (chunk_check(op, patch, np, qmd1_words, perr, sizeof(perr)) != OMEGA_NUMERIC_OK) {
             fprintf(stderr, "omega_reduce_gb10: %s\n", perr);
-            m16_native_close(&ctx);
+            omega_numeric_native_close(&ctx);
             return OMEGA_NUMERIC_ERR_OPERANDS;
         }
         for (int i = 0; i < np; i++)
             if (memcmp((uint8_t *)code_mem.cpu + OMEGA_NUMERIC_PATCH_OFFSET + (size_t)i * 16u, patch[i].w, 16) != 0) {
                 fprintf(stderr, "omega_reduce_gb10: code image differs from the checked patch at %d\n", i);
-                m16_native_close(&ctx);
+                omega_numeric_native_close(&ctx);
                 return OMEGA_NUMERIC_ERR_OPERANDS;
             }
     }
@@ -390,6 +395,9 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     volatile uint32_t *hmarker = (volatile uint32_t *)marker_mem.cpu;
     *hsem = 0;
     *hmarker = 0;
+#ifndef OMEGA_C3_PROTECT_OFF /* C3 hardening, same as omega_ds_gb10_run (-DOMEGA_C3_PROTECT_OFF = A/B control arm) */
+    *(volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10) = 0;
+#endif
     __asm__ volatile("dsb sy" ::: "memory");
 
     uint32_t pb[1024];
@@ -444,20 +452,45 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     pb[pb_len++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20);
+#ifndef OMEGA_C3_PROTECT_OFF
+    /* C3 hardening, copied from omega_ds_gb10_run (src/omega_numeric_divsqrt_gb10.c): after the WFI
+     * marker flush GPU L2 dirty lines to memory (NVC96F_MEM_OP_A..D = 0x28..0x34, D bits 31:27
+     * OPERATION = L2_FLUSH_DIRTY 0x10), then a second WFI marker the host waits for before the readback. */
+    pb[pb_len++] = nvrm_mthd(0, 0x0028, 4);
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = (0x10u << 27);
+    pb[pb_len++] = nvrm_mthd(0, 0x005c, 5);
+    pb[pb_len++] = (uint32_t)(marker_mem.va + 0x10);
+    pb[pb_len++] = (uint32_t)((marker_mem.va + 0x10) >> 32);
+    pb[pb_len++] = 0x46464646u;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0x1 | (1u << 20);
+#endif
 
     if ((drc_ = m16_native_submit_methods(&ctx, pb, pb_len)) != 0) return GB10_FAIL("submit", 1, drc_);
-    if ((drc_ = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000)) != 0) {
-        return GB10_FAIL_WAIT("marker_wait", drc_, 5000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
+    if ((drc_ = omega_numeric_native_wait(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) {
+        return GB10_FAIL_WAIT("marker_wait", drc_, 600000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
+    gb10_note_slow("marker", &t0);
+#ifndef OMEGA_C3_PROTECT_OFF
+    volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
+    if ((drc_ = omega_numeric_native_wait(hmarker2, 0x46464646u, 600000)) != 0) {
+        return GB10_FAIL_WAIT("marker2_wait", drc_, 600000, hmarker2, 0x46464646u);
+    }
+    gb10_note_slow("marker2", &t0);
+#endif
     /* The host marker can land before the last CTAs' stores are visible (seen
      * by the DIV/SQRT gate, PR #141). Read only after the QMD's own release
      * semaphore, written after the grid completes, is DONE. */
-    if ((drc_ = m16_native_wait_marker(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 5000)) != 0) {
-        return GB10_FAIL_WAIT("sem_wait", drc_, 5000, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
+    if ((drc_ = omega_numeric_native_wait(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) {
+        return GB10_FAIL_WAIT("sem_wait", drc_, 600000, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
     }
+    gb10_note_slow("sem", &t0);
     __asm__ volatile("dsb sy" ::: "memory");
     memcpy(out_res, out_mem.cpu, count * sizeof(float));
-    m16_native_close(&ctx);
+    if (omega_numeric_native_close(&ctx) != 0) return OMEGA_NUMERIC_ERR_DEVICE;
     return OMEGA_NUMERIC_OK;
 }
 #endif
@@ -510,8 +543,22 @@ int omega_reduce_gb10(OmegaReduceOp op, const float *x, size_t n, float *out) {
     float s = cur[0];
     free(cur);
     free(res);
-    /* MEAN: the one final division is a declared host step (see the header). */
-    *out = (op == OMEGA_RED_MEAN) ? omega_math_div(s, omega_ref_u2f((uint32_t)n)) : s;
+    if (op == OMEGA_RED_MEAN) {
+        /* MEAN: the one final division runs on the chip too: the GB10 DIV kernel of
+         * E1 row 7 (correctly rounded, bit-identical to omega_math_div). */
+        uint32_t sb, nb, ob;
+        float nf = omega_ref_u2f((uint32_t)n);
+#ifdef OMEGA_REDUCE_MUTATE_MEAN_DIV /* test builds only: divide by n + 1 (must FAIL chip parity) */
+        nf = omega_ref_u2f((uint32_t)n + 1u);
+#endif
+        memcpy(&sb, &s, 4);
+        memcpy(&nb, &nf, 4);
+        rc = omega_ds_gb10_run(OMEGA_DS_DIV, &sb, &nb, &ob, 1);
+        if (rc != OMEGA_NUMERIC_OK) return rc;
+        memcpy(out, &ob, 4);
+        return OMEGA_NUMERIC_OK;
+    }
+    *out = s;
     return OMEGA_NUMERIC_OK;
 #endif
 }

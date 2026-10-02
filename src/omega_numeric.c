@@ -4,6 +4,7 @@
  * comparators. No device access here (see src/omega_numeric_gb10.c).
  */
 #include "omega_numeric.h"
+#include "omega_numeric_lifecycle.h"
 #include "omega_blackwell_encoder.h"
 #include "omega_blackwell_qmd.h"
 
@@ -11,6 +12,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/auxv.h>
+
+atomic_int omega_numeric_native_state = ATOMIC_VAR_INIT(OMEGA_NUMERIC_NATIVE_IDLE);
 
 #if !defined(__aarch64__)
 #error "OMEGA-NUMERIC-0 host tiers use AArch64 FP instructions (fmadd, fdiv, fsqrt, fminnm, scvtf, fcvtzs)"

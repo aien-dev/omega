@@ -37,7 +37,7 @@
 
 /* DIV and SQRT (E1 row 7) and the transcendentals of E1 row 10, each a
  * GB10 realization of the frozen CPU sequence in src/omega_numeric_transc.c. */
-typedef enum { OMEGA_DS_DIV = 0, OMEGA_DS_SQRT = 1, OMEGA_DS_EXP2 = 2, OMEGA_DS_LOG2 = 3, OMEGA_DS_SIGMOID = 4, OMEGA_DS_TANH = 5, OMEGA_DS_OP_COUNT = 6 } OmegaDsOp;
+typedef enum { OMEGA_DS_DIV = 0, OMEGA_DS_SQRT = 1, OMEGA_DS_EXP2 = 2, OMEGA_DS_LOG2 = 3, OMEGA_DS_SIGMOID = 4, OMEGA_DS_TANH = 5, OMEGA_DS_SIN = 6, OMEGA_DS_COS = 7, OMEGA_DS_ERF = 8, OMEGA_DS_GELU = 9, OMEGA_DS_RSQRT = 10, OMEGA_DS_OP_COUNT = 11 } OmegaDsOp;
 
 typedef enum {
     DSK_IADD3_R = 0, /* IADD3 Rd, PT, PT, [-]Ra, [-]Rb, Rc            */

@@ -229,7 +229,7 @@ test-numeric-e1-exhaustive: build/test_omega_numeric_cpu
 # tests/run_reduce_chip.sh. Last line: "E1 Reduce Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY".
 .PHONY: test-numeric-reduce-cpu
 REDUCE_CPU_SRCS = tests/test_omega_reduce.c src/omega_numeric_reduce.c src/omega_numeric_reduce_gb10.c \
-                  src/omega_numeric.c src/omega_numeric_provenance.c \
+                  src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c \
                   $(NUMERIC_BW_SRCS)
 build/test_omega_reduce_cpu: $(REDUCE_CPU_SRCS) src/omega_numeric_reduce.h $(NUMERIC_CPU_HDRS)
 	@mkdir -p build
@@ -1670,6 +1670,23 @@ build/test_omega_unwritten_trap: tests/test_omega_unwritten_trap.c src/omega_unw
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -o $@ tests/test_omega_unwritten_trap.c src/omega_unwritten_trap.c
 test-unwritten-trap-host: build/test_omega_unwritten_trap
 	./build/test_omega_unwritten_trap
+
+# E1 row 2: general global load/store on the GB10 (src/omega_numeric_ldst_gb10.h,
+# docs/numeric/E1_LDST_GB10.md). test-ldst-host needs no device; test-ldst-nvdisasm
+# decodes every table kernel offline; the chip run is tools/run_numeric_ldst_chip.sh.
+LDST_SRCS = tests/test_omega_ldst_gb10.c src/omega_numeric_ldst_gb10.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric.c \
+            src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
+            src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+LDST_HDRS = src/omega_numeric_ldst_gb10.h src/omega_numeric_divsqrt_gb10.h src/omega_numeric.h src/omega_blackwell_encoder.h \
+            src/omega_blackwell_qmd.h src/sha256.h
+.PHONY: test-ldst-host test-ldst-nvdisasm
+build/test_omega_ldst_gb10_cpu: $(LDST_SRCS) $(LDST_HDRS)
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o $@ $(LDST_SRCS)
+test-ldst-host: build/test_omega_ldst_gb10_cpu
+	./build/test_omega_ldst_gb10_cpu
+test-ldst-nvdisasm:
+	tools/ldst_nvdisasm_check.sh
 
 # VC1-LIB: unit test for the library admission gate (receipt required, bootstrap kind,
 # dependencies must exist, no truncation) plus mutation proof. Each mutant is a copy of

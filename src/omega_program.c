@@ -49,14 +49,99 @@ static OmegaObject *build_type_for(OmegaGraph *g, TypeTag tag, uint16_t width) {
         case TYPE_UNSIGNED_INT: return omega_build_type_uint(g, width);
         case TYPE_SIGNED_INT:   return omega_build_type_signed_int(g, width);
         case TYPE_BITVECTOR:    return omega_build_type_bitvector(g, width);
+        case TYPE_FP32:         return width == 32 ? omega_build_type_fp32(g) : NULL;
         default:                return NULL;
     }
+}
+
+/* FP32 programs (spec/program-fp32.md). A body is FP32-involved when the contract names
+ * TYPE_FP32 or a step is OP_CONVERT. Such a body runs a two-state machine: in the FP32
+ * state a step is ADD SUB MUL DIV with a binary32 constant, or OP_CONVERT to u32; in the
+ * u32 state the only step is OP_CONVERT to FP32 (integer arithmetic stays on the integer
+ * tier). No other step is accepted, so a u32 value never meets an FP32 operation
+ * without an explicit conversion. The overflow policy declared on the operations is
+ * SATURATE: binary32 overflow goes to infinity and F2U clamps. */
+static bool body_is_fp32(const OmegaProgram *prog) {
+    if (prog->contract.input_type == TYPE_FP32 || prog->contract.output_type == TYPE_FP32) return true;
+    for (uint16_t i = 0; i < prog->body.step_count && i < OMEGA_PROGRAM_MAX_STEPS; ++i)
+        if (prog->body.steps[i].op == OP_CONVERT) return true;
+    return false;
+}
+
+static const OmegaObject *lower_body_fp32(OmegaGraph *g, const OmegaProgram *prog) {
+    const OmegaProgramBody *b = &prog->body;
+    const OmegaContract *c = &prog->contract;
+    if (c->input_width != 32 || c->output_width != 32) return NULL;
+    if ((c->input_type != TYPE_FP32 && c->input_type != TYPE_UNSIGNED_INT) ||
+        (c->output_type != TYPE_FP32 && c->output_type != TYPE_UNSIGNED_INT)) return NULL;
+    OmegaObject *tf = omega_build_type_fp32(g);
+    OmegaObject *tu = omega_build_type_uint(g, 32);
+    if (!tf || !tf->has_id || !tu || !tu->has_id) return NULL;
+    SemanticId tfid = tf->id, tuid = tu->id;
+    TypeTag cur_tag = c->input_type;
+    OmegaObject *cur = omega_build_param(g, cur_tag == TYPE_FP32 ? &tfid : &tuid, 0);
+    if (!cur || !cur->has_id) return NULL;
+    SemanticId cur_id = cur->id;
+    for (uint16_t i = 0; i < b->step_count; ++i) {
+        uint8_t op = b->steps[i].op;
+        uint64_t imm = b->steps[i].imm;
+        if (op == OP_CONVERT) {
+            if (imm != TYPE_FP32 && imm != TYPE_UNSIGNED_INT) return NULL;
+            if ((TypeTag)imm == cur_tag) return NULL;
+            const SemanticId *from = cur_tag == TYPE_FP32 ? &tfid : &tuid;
+            const SemanticId *to = imm == TYPE_FP32 ? &tfid : &tuid;
+            OmegaObject *o = omega_graph_add_object(g, KIND_OPERATION);
+            if (!o) return NULL;
+            OperationPayload opp;
+            memset(&opp, 0, sizeof(opp));
+            opp.opcode = OP_CONVERT;
+            opp.overflow = OVERFLOW_SATURATE;
+            opp.arity = 1;
+            memcpy(opp.type_id.bytes, to->bytes, OMEGA_ID_BYTES);
+            memcpy(opp.input_types[0].bytes, from->bytes, OMEGA_ID_BYTES);
+            memcpy(opp.output_type.bytes, to->bytes, OMEGA_ID_BYTES);
+            memcpy(o->payload, &opp, sizeof(opp));
+            o->payload_len = sizeof(opp);
+            omega_compute_semantic_id(o);
+            SemanticId opid = o->id;
+            OmegaObject *a = omega_graph_add_object(g, KIND_OPERATION);
+            if (!a) return NULL;
+            ApplyPayload app;
+            memset(&app, 0, sizeof(app));
+            memcpy(app.op_id.bytes, opid.bytes, OMEGA_ID_BYTES);
+            app.operand_count = 1;
+            memcpy(app.operands[0].bytes, cur_id.bytes, OMEGA_ID_BYTES);
+            memcpy(a->payload, &app, sizeof(app));
+            a->payload_len = sizeof(app);
+            omega_compute_semantic_id(a);
+            if (!a->has_id) return NULL;
+            cur = a;
+            cur_id = a->id;
+            cur_tag = (TypeTag)imm;
+            continue;
+        }
+        if (cur_tag != TYPE_FP32) return NULL;
+        if (op != OP_ADD && op != OP_SUB && op != OP_MUL && op != OP_DIV) return NULL;
+        if (imm > 0xFFFFFFFFull) return NULL;
+        OmegaObject *k = omega_build_val_uint(g, &tfid, 32, imm);
+        if (!k || !k->has_id) return NULL;
+        SemanticId kid = k->id;
+        OmegaObject *o = omega_build_op_binary(g, (OpCode)op, OVERFLOW_SATURATE, &tfid);
+        if (!o || !o->has_id) return NULL;
+        SemanticId opid = o->id;
+        cur = omega_build_apply(g, &opid, &cur_id, &kid);
+        if (!cur || !cur->has_id) return NULL;
+        cur_id = cur->id;
+    }
+    if (cur_tag != c->output_type) return NULL;
+    return cur;
 }
 
 /* Lower the body into g with the existing builders; returns the root object. */
 static const OmegaObject *lower_body(OmegaGraph *g, const OmegaProgram *prog) {
     const OmegaProgramBody *b = &prog->body;
     if (!b->has_body || b->step_count > OMEGA_PROGRAM_MAX_STEPS) return NULL;
+    if (body_is_fp32(prog)) return lower_body_fp32(g, prog);
     uint16_t w = prog->contract.input_width;
     OmegaObject *t = build_type_for(g, prog->contract.input_type, w);
     if (!t || !t->has_id) return NULL;
@@ -606,7 +691,8 @@ int omega_program_compose(const OmegaProgram *a, const OmegaProgram *b, OmegaPro
     }
 
     /* 3. Cost Derivation: Monotonic cost accumulation */
-    out_c->cost.insn_count = a->cost.insn_count + b->cost.insn_count - 1; /* Ret eliminated */
+    out_c->cost.insn_count = a->cost.insn_count + b->cost.insn_count;
+    if (out_c->cost.insn_count > 0) out_c->cost.insn_count -= 1; /* Ret eliminated; FP32 library-tier programs carry no code */
     out_c->cost.reg_pressure = (a->cost.reg_pressure > b->cost.reg_pressure) ? a->cost.reg_pressure : b->cost.reg_pressure;
     out_c->cost.memory_bytes = a->cost.memory_bytes + b->cost.memory_bytes;
     out_c->cost.latency_cycles = a->cost.latency_cycles + b->cost.latency_cycles;

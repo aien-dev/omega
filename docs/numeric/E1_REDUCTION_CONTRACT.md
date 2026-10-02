@@ -1,7 +1,7 @@
 # E1 reduction contract (WP-D)
 
 Closes gap table row 5 (`docs/numeric/E1_GAP_TABLE.md`) on the CPU tiers and
-on GB10 for SUM, MAX, MIN and MEAN (MEAN with one declared host division). Code: `src/omega_numeric_reduce.h`, `src/omega_numeric_reduce.c`
+on GB10 for SUM, MAX, MIN and MEAN (MEAN = chip SUM levels plus one chip division). Code: `src/omega_numeric_reduce.h`, `src/omega_numeric_reduce.c`
 (reference + CPU realization), `src/omega_numeric_reduce_gb10.c` (GB10),
 tests `tests/test_omega_reduce.c`, chip runner `tests/run_reduce_chip.sh`.
 
@@ -109,11 +109,12 @@ Notes:
     QMD release semaphore (`OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE`) plus
     `dsb sy` before reading results (the stores-after-marker hazard found by
     the DIV/SQRT lane, omega#141).
-  - MEAN: the chip computes the SUM levels; the final
-    `omega_math_div(SUM, u2f(n))` is one declared host step (the GB10 DIV
-    kernel of omega#141 is not merged; switch to it once it is, the bits do not
-    change because both are correctly rounded). Receipts say
-    `HOST_DECLARED_STEP` for MEAN.
+  - MEAN: the chip computes the SUM levels, then the final
+    `omega_math_div(SUM, u2f(n))` on the chip as one launch of the whole-program
+    GB10 DIV kernel (E1 row 7, `omega_ds_gb10_run`). The bits are the same as
+    the former host division because both are correctly rounded. Receipts say
+    `GB10_DIV` for MEAN. Mutant: `-DOMEGA_REDUCE_MUTATE_MEAN_DIV` divides by n+1
+    and must FAIL chip parity.
   - Pre-submission checks carry `CHECK:` markers (op, buffers, size, MEAN
     `n <= 2^24`, order string, kernel registered as BIT_EXACT, padding bits,
     level count, chunk shape, per-chunk submit check).

@@ -1,4 +1,4 @@
-# Manifest for tools/chip_run.sh: E1 row 10, GB10 transcendentals (EXP2 LOG2 SIGMOID TANH),
+# Manifest for tools/chip_run.sh: E1 row 10, GB10 transcendentals (EXP2 LOG2 SIGMOID TANH SIN COS ERF GELU RSQRT),
 # every 2^32 input compared bit for bit with the CPU tier. Sourced as shell by chip_run.sh,
 # which provides $HERE (omega root) and $PHYSICS. Forge queue only.
 # Converted from the old tools/run_numeric_transc_gate.sh (origin/main) without changing what
@@ -14,7 +14,7 @@ TEST_SOURCE="tests/test_omega_numeric_transc_gb10.c"
 SOURCES="src/omega_numeric_divsqrt_gb10.c src/omega_numeric_transc.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c"
 EXTRA_BUILD_SOURCES="$PHYSICS/nvrm/nvrm.c $PHYSICS/m16/m16_native.c"
 # The wrapper passes "--chip OP..." itself; this is the old default for direct use.
-RUN_ARGS="--chip EXP2 LOG2 SIGMOID TANH"
+RUN_ARGS="--chip EXP2 LOG2 SIGMOID TANH SIN COS ERF GELU RSQRT"
 # Old verdict: the last "VERDICT <word>" line of the chip log. RESULT lines come before it.
 VERDICT_RE='^RESULT|^VERDICT'
 PASS_LINE='^VERDICT PASS([^A-Z_]|$)'

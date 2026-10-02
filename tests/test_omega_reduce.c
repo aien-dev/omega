@@ -710,7 +710,7 @@ static void test_gb10_parity(void) {
         snprintf(det, sizeof(det), "op=%s order=%s cases=%zu launches=%zu mismatches=%zu chip_nan_bits=%s0x%08x%s %.500s",
                  omega_reduce_op_name((OmegaReduceOp)op), OMEGA_REDUCE_DECLARED_ORDER, cases[op], launches[op], mism[op],
                  g_nan_bits_seen[op] ? "" : "(none) ", g_nan_bits[op],
-                 op == OMEGA_RED_MEAN ? " final_division=HOST_DECLARED_STEP" : "", d[op]);
+                 op == OMEGA_RED_MEAN ? " final_division=GB10_DIV" : "", d[op]);
         char id[64];
         snprintf(id, sizeof(id), "RED_GB10_PARITY_%s", omega_reduce_op_name((OmegaReduceOp)op));
         verdict(id, mism[op] == 0 && cases[op] > 0, det);

@@ -109,11 +109,11 @@ suite() {
     runw happy -- ; HAPPY_R=$R
     ck happy_exit test "$RC" = 0
     ck happy_last_line last_is "VERDICT PASS"
-    ck happy_results_echoed test "$(grep -c '^RESULT chip ' "$OUT")" = 4
+    ck happy_results_echoed test "$(grep -c '^RESULT chip ' "$OUT")" = 9
     ck happy_noise_not_echoed lacks '^noise'
     ck happy_receipt_line has '^RECEIPT /.*\.json$'
     ck happy_no_chiprun_line lacks '^CHIP_RUN:'
-    ck happy_default_ops rj '.ops_requested == ["EXP2","LOG2","SIGMOID","TANH"] and (.ops | map(.op)) == ["EXP2","LOG2","SIGMOID","TANH"]'
+    ck happy_default_ops rj '.ops_requested == ["EXP2","LOG2","SIGMOID","TANH","SIN","COS","ERF","GELU","RSQRT"] and (.ops | map(.op)) == ["EXP2","LOG2","SIGMOID","TANH","SIN","COS","ERF","GELU","RSQRT"]'
     ck happy_ops_typed rj '.ops[0] == {op:"EXP2",checked:4294967296,exhaustive:true,mismatches:0,unwritten:0,verdict:"PASS"}'
     ck happy_kernels rj '.kernels == [{op:"EXP2",instructions:12,sha256:"aaaa"},{op:"LOG2",instructions:34,sha256:"bbbb"}]'
     ck happy_nvd rj '.nvdisasm_check == "nvdisasm fake provenance line"'
