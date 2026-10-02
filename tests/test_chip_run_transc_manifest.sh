@@ -81,7 +81,7 @@ build_world() { # MANIFEST
 OUT=$T/out.txt; RC=0
 # runw NAME [ENV=VALUE ...] -- wrapper args
 runw() {
-    local name=$1; shift; local extra=(); while [ "$1" != -- ]; do extra+=("$1"); shift; done; shift
+    local name=$1; RUNNAME=$name; shift; local extra=(); while [ "$1" != -- ]; do extra+=("$1"); shift; done; shift
     rm -f "$FLAG"; g "$OM" clean -fdxq
     ( cd "$T" && env -u PHYSICS PHYSICS_DIR="$PHYS" CHIPRUN_SELFTEST=1 CHIPRUN_PREBUILT_BIN="$T/bin/chip" CHIPRUN_QUIET_FLAG="$FLAG" \
         CHIPRUN_GPU_LOCK="$LOCK" CHIPRUN_EST_LOAD_CMD=true TMPDIR="$W/tmp" TRANSC_GB10_EVIDENCE_DIR="$W/ev-$name" FAKE_FLAG="$FLAG" \
@@ -90,11 +90,16 @@ runw() {
     R=$(ls "$W"/ev-"$name"/*.json 2>/dev/null | head -1)
 }
 
+# ck_diag: after a failing check, show the first 15 lines of the last run's console, once per run name
+# (RUNNAME is set by runw and by the two inline runs). Lines start with "     | " so they never
+# match the "^PASS" / "^FAIL" greps below. It does not change what counts as a pass.
+ck_diag() { [ "${DIAG_NAME:-}" = "${RUNNAME:-}" ] && return 0; DIAG_NAME=${RUNNAME:-}; head -n 15 "$OUT" 2>/dev/null | sed 's/^/     | /'; return 0; }
+
 # suite MANIFEST: every world-based check; prints "PASS id" / "FAIL id" lines.
 suite() {
-    local man=$1 id k
+    local man=$1 id k; RUNNAME=""; DIAG_NAME=""
     build_world "$man"
-    ck() { id=$1; shift; if "$@"; then echo "PASS $id"; else echo "FAIL $id"; fi; }
+    ck() { id=$1; shift; if "$@"; then echo "PASS $id"; else echo "FAIL $id"; ck_diag; fi; }
     last_is() { [ "$(tail -n 1 "$OUT")" = "$1" ]; }
     has() { grep -Eq -- "$1" "$OUT"; }
     lacks() { ! grep -Eq -- "$1" "$OUT"; }
@@ -174,13 +179,13 @@ suite() {
     ck fuser_text has "^REFUSED: $LOCK is held\$"
     ck fuser_no_host_tier lacks '^== host tier'
     # dirty omega
-    echo x > "$OM/junk"; rm -f "$FLAG"
+    echo x > "$OM/junk"; rm -f "$FLAG"; RUNNAME=dirty
     ( cd "$T" && env -u PHYSICS PHYSICS_DIR="$PHYS" CHIPRUN_SELFTEST=1 CHIPRUN_PREBUILT_BIN="$T/bin/chip" CHIPRUN_QUIET_FLAG="$FLAG" CHIPRUN_GPU_LOCK="$LOCK" \
         CHIPRUN_EST_LOAD_CMD=true TMPDIR="$W/tmp" TRANSC_GB10_EVIDENCE_DIR="$W/ev-dirty" bash "$OM/tools/run_numeric_transc_gate.sh" EXP2 ) > "$OUT" 2>&1; RC=$?
     rm -f "$OM/junk"
     ck dirty_refusal test "$RC" = 1 -a "$(sed -n 1p "$OUT")" = "REFUSED: omega tree $OM is dirty" -a "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
     # quiet flag up
-    echo other > "$FLAG"
+    echo other > "$FLAG"; RUNNAME=flagup
     ( cd "$T" && env -u PHYSICS PHYSICS_DIR="$PHYS" CHIPRUN_SELFTEST=1 CHIPRUN_PREBUILT_BIN="$T/bin/chip" CHIPRUN_QUIET_FLAG="$FLAG" CHIPRUN_GPU_LOCK="$LOCK" \
         CHIPRUN_EST_LOAD_CMD=true TMPDIR="$W/tmp" TRANSC_GB10_EVIDENCE_DIR="$W/ev-flagup" bash "$OM/tools/run_numeric_transc_gate.sh" EXP2 ) > "$OUT" 2>&1; RC=$?
     ck flagup_refusal test "$RC" = 1 -a "$(sed -n 1p "$OUT")" = "REFUSED: quiet flag is up: other" -a "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
