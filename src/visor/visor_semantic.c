@@ -108,7 +108,7 @@ static int parse_object(const OmegaObject *o, Parsed *p, char *reason, size_t rn
         case KIND_TYPE:
             if (o->payload_len < sizeof(TypePayload)) { snprintf(reason, rn, "TYPE payload_len %u < %zu", (unsigned)o->payload_len, sizeof(TypePayload)); return -2; }
             memcpy(&p->tp, o->payload, sizeof(TypePayload));
-            if ((unsigned)p->tp.tag == TYPE_INVALID || (unsigned)p->tp.tag > TYPE_EFFECT_RECEIPT_REF) { snprintf(reason, rn, "invalid type tag 0x%02x", (unsigned)p->tp.tag); return -2; }
+            if ((unsigned)p->tp.tag == TYPE_INVALID || (unsigned)p->tp.tag > TYPE_FP32) { snprintf(reason, rn, "invalid type tag 0x%02x", (unsigned)p->tp.tag); return -2; }
             p->shape = VISOR_SHAPE_TYPE;
             break;
         case KIND_VALUE:
@@ -120,7 +120,7 @@ static int parse_object(const OmegaObject *o, Parsed *p, char *reason, size_t rn
         case KIND_OPERATION:
             if (o->payload_len >= sizeof(OperationPayload)) {
                 memcpy(&p->op, o->payload, sizeof(OperationPayload));
-                if ((unsigned)p->op.opcode == OP_INVALID || (unsigned)p->op.opcode > OP_COMPILE) { snprintf(reason, rn, "invalid opcode 0x%02x", (unsigned)p->op.opcode); return -2; }
+                if ((unsigned)p->op.opcode == OP_INVALID || (unsigned)p->op.opcode > OP_CONVERT) { snprintf(reason, rn, "invalid opcode 0x%02x", (unsigned)p->op.opcode); return -2; }
                 if ((unsigned)p->op.overflow == OVERFLOW_DEFAULT || (unsigned)p->op.overflow > OVERFLOW_FAIL_CLOSED) { snprintf(reason, rn, "invalid overflow policy 0x%02x", (unsigned)p->op.overflow); return -2; }
                 if (p->op.arity > 4) { snprintf(reason, rn, "arity %u > 4", p->op.arity); return -2; }
                 p->shape = VISOR_SHAPE_OPERATION;
@@ -197,6 +197,7 @@ static int type_text_of(const OmegaGraph *g, const SemanticId *type_id, char *ou
         case TYPE_CAPABILITY_REF: snprintf(out, n, "cap_ref"); break;
         case TYPE_EFFECT_INTENT_REF: snprintf(out, n, "effect_intent_ref"); break;
         case TYPE_EFFECT_RECEIPT_REF: snprintf(out, n, "effect_receipt_ref"); break;
+        case TYPE_FP32: snprintf(out, n, "fp32"); break;
         default: snprintf(out, n, "?"); return -1;
     }
     return 0;

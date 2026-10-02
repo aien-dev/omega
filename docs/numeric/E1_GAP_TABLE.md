@@ -39,13 +39,13 @@ Classification of every row (C3 = the unwritten-output bug, branch `c3-h1-fence`
 | Row | Class | State |
 |---|---|---|
 | 1, 3, 4, 6, 7 | Already closed | No change |
-| 2 | Closable with code, too large for this PR | Needs new LDG/STG encodings with encoder checks and a chip run; not started |
+| 2 | Closed in code, chip run queued (e1-gap-close-2) | General LDG/STG kernels (all widths, signed and unsigned narrow loads, byte strides, signed 24-bit offsets) built from nvdisasm-read encodings; host model equals a byte oracle; 148 table kernels decode with nvdisasm; chip job `E1B-LDST-CHIP` queued |
 | 5 | Closed in code, chip receipt pending | MEAN divides on the GB10 DIV kernel, mutant hook in the build |
 | 8 | Already closed (decided) | No change |
 | 9 | Closed | CI runs the check; full-domain CPU run PASS |
-| 10 | Four of five ops closed in code, chip receipt pending; RSQRT open | SIN, COS, ERF, GELU kernels equal the CPU tier on all 2^32 inputs on the host model; RSQRT needs a different exact-rounding scheme |
-| 11 | Open, needs the receipts from rows 5 and 10 and a Gate 5 expected-ID extension | Gate 5 rerun at this PR's head queued (`E1-CLOSE-GATE5`) |
-| 12 | Blocked on a design decision | M20 tensor tier calls the library; the program IR FP32 type is a design choice for Drake and the program-IR owner |
+| 10 | Closed in code for all five ops (e1-gap-close, e1-gap-close-2), chip receipts pending | SIN, COS, ERF, GELU (e1-gap-close) and RSQRT (e1-gap-close-2, exact-rounding by FMA error-free transforms, no integer multiply) equal the CPU tier on the host model; chip jobs `E1-CLOSE-TRANSC-CHIP` and `E1B-RSQRT-CHIP` queued |
+| 11 | Open, needs the receipts from rows 5 and 10 and a Gate 5 expected-ID extension | Gate 5 rerun queued (`E1-CLOSE-GATE5`) on commit `9d11565`, the first commit of this PR, not on the PR head (`b48d132`); the rerun on the head is still to be queued |
+| 12 | Closed in code (e1-gap-close-2) | FP32 is an explicit program IR type (tag `0x0E`) with an explicit `CONVERT` op; the type check refuses mixed types; evaluation uses the library tier; `make test-program-fp32` PASS 33/33; `spec/program-fp32.md`. Amendment to the ratified type table, no existing id changes |
 | Unwritten-output root cause (row 10 note) | Blocked on C3 | Not touched |
 
 Chip evidence for rows 5, 10 and 11 comes from the shared forge queue (`E1-CLOSE-REDUCE`,
@@ -140,3 +140,38 @@ Largest three gaps:
 1. Row 7: DIV/SQRT on GB10. L, GPU.
 2. Row 10 with row 9: transcendental set and its GB10 kernels. L + L, CPU first then GPU.
 3. Row 5: reductions beyond one warp. L, GPU.
+
+## Update, branch `e1-gap-close-2` (based on `e1-gap-close` at `b48d132`)
+
+Row 4 of the brief (wording fix): the table line for row 11 said the Gate 5 rerun was queued "at this PR's
+head". The queued job `E1-CLOSE-GATE5` is pinned to commit `9d11565`, the first commit of PR #198, not to
+the head `b48d132`. The classification entry now says so, and the rerun on the head is still to be queued.
+
+Row 10, RSQRT (`src/omega_numeric_divsqrt_gb10.c`, `body_rsqrt`, 344 words). The CPU sequence decides rounding with
+a 128-bit midpoint test; the DS frame has no integer multiply. The kernel decides the same question with
+FP32 FMA error-free transforms: |x| is normalized to `x'` in [1,4) (a subnormal by an exact 2^24, the parity of
+the exponent folded into `x'`), a seed `y0` within one ulp of the correctly rounded 1/sqrt(x') comes from a magic
+number, three FMA Newton steps and one FMA residual correction, then the sign of `mu^2 x' - 1` and `ml^2 x' - 1`
+at the two midpoints `y0 +- 2^-25` is computed exactly (TwoProduct by FMA, Knuth TwoSum, Shewchuk
+GROW-EXPANSION; the sign of an expansion is the sign of its highest nonzero component). The result is
+`y0 + [mu^2 x' < 1] + [ml^2 x' < 1] - 1`, rescaled by an exact power of two (two exact FMULs). Evidence: `tools/divsqrt_nvdisasm_check.sh`
+decodes every word (all eleven kernels), `make test-numeric-transc-gb10-host` equals `omega_math_rsqrt` on the
+edge set, every 4093rd input and 10^6 random inputs, and the all-input host run (`--host-all RSQRT`, forge job
+`E1B-RSQRT-HOSTALL`) covers all 2^32. Chip job `E1B-RSQRT-CHIP`
+(`tools/run_numeric_transc_gate.sh RSQRT`).
+
+Row 2, general load/store (`src/omega_numeric_ldst_gb10.{h,c}`, `docs/numeric/E1_LDST_GB10.md`). Evidence source
+for the encodings: the verified vecadd words in `src/omega_blackwell_encoder.c` (the `LDG.E` and `STG.E` forms
+the existing kernels use), extended only for the fields nvdisasm 13.0.85 `-b SM121` decoded when each bit
+was varied one at a time: the signed 24-bit byte offset (word 1 bits 8 to 31, both LDG and STG), the access
+size (word 2 bits 9 to 11: U8, S8, U16, S16, 32, 64, 128 for loads; 8, 16, 32, 64, 128 for stores) and the
+stride immediate of `IMAD.WIDE.U32`. `make test-ldst-nvdisasm`: 148 of 148 table kernels decode word for word
+to the encoder's text (a flipped offset bit changes the decode, so the check is not vacuous);
+`make test-ldst-host`: 33 PASS (host model equals a typed-C byte oracle on every spec, 13 refusal rules,
+10 kernel mutations caught). Chip job `E1B-LDST-CHIP` (`tools/run_numeric_ldst_chip.sh`).
+
+Row 12, FP32 in the program IR: see `spec/program-fp32.md`. No program-IR owner document forbids it
+(`spec/type-system.md` is ratified for M4, so tag `0x0E` is an amendment, not a conflict).
+
+Chip failure classification for these jobs: a FAIL whose log shows bytes still equal to the fill pattern or
+block-aligned unwritten spans is the unwritten-output bug C3 (branch `c3-h1-fence`), not a defect of these kernels.
