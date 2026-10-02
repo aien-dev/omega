@@ -605,6 +605,126 @@ static void stale_case(int k) {
     rmtree(d);
 }
 
+/* ---- Cortex journal cut at a record boundary ------------------------------
+ * cx_open accepts a journal cut exactly at a record boundary (no count or head
+ * in its header). rx_compose cross-checks the J-Space checkpoint anchor
+ * (count + head digest): a cut behind the anchored count must be refused at the
+ * compose seam; a cut that only drops records written after the last commit
+ * (count == anchor count) must still open. The test parses the journal and the
+ * anchor (last 48 bytes of jspace.meta, version 3) itself. */
+static int read_file_all(const char *path, uint8_t **out, size_t *n) {
+    FILE *f = fopen(path, "rb");
+    if (!f) return -1;
+    fseek(f, 0, SEEK_END);
+    long sz = ftell(f);
+    fseek(f, 0, SEEK_SET);
+    uint8_t *b = malloc(sz > 0 ? (size_t)sz : 1);
+    if (!b || (sz > 0 && fread(b, 1, (size_t)sz, f) != (size_t)sz)) { free(b); fclose(f); return -1; }
+    fclose(f);
+    *out = b; *n = (size_t)sz;
+    return 0;
+}
+static uint64_t le64_at(const uint8_t *p) {
+    uint64_t v = 0;
+    for (int i = 0; i < 8; i++) v |= (uint64_t)p[i] << (8 * i);
+    return v;
+}
+
+/* Fill off[0..nrec] with record boundaries (off[0] = journal header end). */
+static int journal_bounds(const uint8_t *j, size_t n, size_t *off, int max, int *nrec) {
+    size_t pos = 4u * 8u;   /* CX_J_HDR_WORDS * 8 */
+    int k = 0;
+    if (n < pos) return -1;
+    off[0] = pos;
+    while (pos + 13u * 8u <= n && k + 1 < max) {
+        uint64_t pw = le64_at(j + pos + 12u * 8u);   /* word index 12: payload words */
+        size_t len = (size_t)(13u + pw + 4u) * 8u;
+        if (pos + len > n) return -1;
+        pos += len;
+        off[++k] = pos;
+    }
+    if (pos != n) return -1;
+    *nrec = k;
+    return 0;
+}
+
+static int cx_alone_opens(const char *path) {
+    CxStore cx;
+    int rc = cx_open(&cx, path, RX_CORTEX_SUBJECTS, CX_OPEN_SYNC | CX_OPEN_REPAIR_TAIL);
+    if (rc == CX_OK) cx_close(&cx);
+    return rc;
+}
+
+static void boundary_cut_cases(void) {
+    const char *nA = "cortex_cut/boundary_behind_checkpoint_anchor";
+    const char *nB = "cortex_cut/boundary_after_last_commit_only";
+    char d[200], jp[260], mp[260];
+    Sig tmp[NGOAL + 1];
+    mkcasedir(d, sizeof d, "cutb");
+    if (run_task(d, tmp) != 0) {
+        add_case(nA, "DIVERGED", 0, "no directory");
+        add_case(nB, "DIVERGED", 0, "no directory");
+        return;
+    }
+    snprintf(jp, sizeof jp, "%s/cortex.cx", d);
+    snprintf(mp, sizeof mp, "%s/jspace/jspace.meta", d);
+    uint8_t *j = NULL, *m = NULL;
+    size_t jn = 0, mn = 0;
+    static size_t off[4096];
+    int nrec = 0;
+    if (read_file_all(jp, &j, &jn) || read_file_all(mp, &m, &mn) || mn < 176u ||
+        journal_bounds(j, jn, off, 4096, &nrec)) {
+        add_case(nA, "DIVERGED", 0, "cannot parse journal or checkpoint");
+        add_case(nB, "DIVERGED", 0, "cannot parse journal or checkpoint");
+        free(j); free(m); rmtree(d);
+        return;
+    }
+    uint64_t cnt = le64_at(m + mn - 48);   /* anchor: u64 count first */
+    free(m);
+    if (cnt < 1 || cnt > (uint64_t)nrec) {
+        add_case(nA, "DIVERGED", 0, "anchor count %llu vs %d records", (unsigned long long)cnt, nrec);
+        add_case(nB, "DIVERGED", 0, "anchor count %llu vs %d records", (unsigned long long)cnt, nrec);
+        free(j); rmtree(d);
+        return;
+    }
+    /* (a) cut to cnt-1 records: at least the newest checkpointed record is gone. */
+    char da[200], db[200], cmd[640];
+    mkcasedir(da, sizeof da, "cutb_a");
+    snprintf(cmd, sizeof cmd, "cp -a '%s' '%s'", d, da);
+    int cp = system(cmd);
+    char ja[260];
+    snprintf(ja, sizeof ja, "%s/cortex.cx", da);
+    int tr = truncate(ja, (off_t)off[cnt - 1]);
+    int rc = open_dir(da);
+    if (rc == RX_OK) fx_close(&g_fx, &g_c);
+    int rc2 = open_dir(da);
+    if (rc2 == RX_OK) fx_close(&g_fx, &g_c);
+    int cxrc = cx_alone_opens(ja);
+    add_case(nA, rc == RX_ERR_REPLAY ? "REFUSED" : "DIVERGED",
+             cp == 0 && tr == 0 && rc == RX_ERR_REPLAY && rc2 == RX_ERR_REPLAY && cxrc == CX_OK,
+             "cut to %llu of %d records (anchor count %llu): compose open rc=%d again rc=%d (want %d), cx_open alone rc=%d (want %d)",
+             (unsigned long long)(cnt - 1), nrec, (unsigned long long)cnt, rc, rc2, RX_ERR_REPLAY, cxrc, CX_OK);
+    rmtree(da);
+    /* (b) cut to exactly the anchored count: only post-commit records dropped. */
+    if ((uint64_t)nrec == cnt) {
+        add_case(nB, "NOT_APPLICABLE", 1, "no records written after the final commit (%d records, anchor count %llu); lower bound not exercised", nrec, (unsigned long long)cnt);
+    } else {
+        mkcasedir(db, sizeof db, "cutb_b");
+        snprintf(cmd, sizeof cmd, "cp -a '%s' '%s'", d, db);
+        cp = system(cmd);
+        char jb[260];
+        snprintf(jb, sizeof jb, "%s/cortex.cx", db);
+        tr = truncate(jb, (off_t)off[cnt]);
+        rc = open_dir(db);
+        if (rc == RX_OK) fx_close(&g_fx, &g_c);
+        add_case(nB, rc == RX_OK ? "RECOVERED" : "DIVERGED", cp == 0 && tr == 0 && rc == RX_OK,
+                 "cut to anchor count %llu of %d records: open rc=%d (want 0)", (unsigned long long)cnt, nrec, rc);
+        rmtree(db);
+    }
+    free(j);
+    rmtree(d);
+}
+
 static void jstr(FILE *f, const char *s) {
     fputc('"', f);
     for (; *s; s++) {
@@ -646,6 +766,7 @@ int main(int argc, char **argv) {
         corrupt_all();
         identity_case();
         for (int k = 1; k < NGOAL; k++) stale_case(k);
+        boundary_cut_cases();
         byte_sweep("jspace/jspace.meta", 1);
         byte_sweep("cortex.cx", 7);
         byte_sweep("machine.id", 1);
