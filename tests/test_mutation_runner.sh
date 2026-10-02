@@ -69,6 +69,13 @@ run 'N~missing.c~s/a/b/~no file' -k table -t "$TEST" -b "$BUILD"
 [ $rc -ne 0 ] && has "$tmp/err" '^N ERROR'; ok "4c missing file is ERROR" $?
 run 'B~add.c~s/int add/int add_/~breaks the build' -k table -t "$TEST" -b "$BUILD"
 [ $rc -ne 0 ] && has "$tmp/err" '^B ERROR' && has "$tmp/j.json" 'build failed'; ok "4d build failure is ERROR" $?
+# -e TEXT: the note of a build that failed with an EMPTY log. Without -e it stays "build failed: ".
+run 'E~add.c~s/a + b/a - b/~empty build log' -k table -t "$TEST" -b 'exit 1' -e 'empty make log (make killed or never started)'
+[ $rc -ne 0 ] && has "$tmp/err" '^E ERROR' && has "$tmp/j.json" '"note": "build failed: empty make log (make killed or never started)"'; ok "4e empty build log with -e: note is build failed: TEXT" $?
+run 'E~add.c~s/a + b/a - b/~empty build log' -k table -t "$TEST" -b 'exit 1'
+[ $rc -ne 0 ] && has "$tmp/err" '^E ERROR' && has "$tmp/j.json" '"note": "build failed: "'; ok "4f empty build log without -e: note stays build failed: (unchanged)" $?
+run 'E~add.c~s/a + b/a - b/~error in log' -k table -t "$TEST" -b 'echo "x error: boom"; exit 1' -e 'empty make log (make killed or never started)'
+[ $rc -ne 0 ] && has "$tmp/err" '^E ERROR' && has "$tmp/j.json" '"note": "build failed: x error: boom"' && ! has "$tmp/j.json" 'empty make log'; ok "4g non-empty build log with -e keeps the first error line" $?
 
 # (5) replace edit: exactly once works, twice is ERROR, @NL@ is a newline
 run 'R1~add.c~R:return a + b;@>@return a - b;~replace once' -k table -t "$TEST" -b "$BUILD"

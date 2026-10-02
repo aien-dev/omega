@@ -42,10 +42,12 @@ copy="src tests tools Makefile mk aienos.lock physics.lock build/aienos-authorit
 build="nice -n 10 make PHYSICS_DIR=\"$phys\" ${MAKE_ARGS:-} c4-requal-bin"
 test_cmd='./build/rx_c4_requal "$PWD/r.json"'
 
-# The runner prints the per-mutant lines on stderr as before. It FAILS an empty
+# The runner prints the per-mutant lines on stderr as before. -e keeps the old
+# note for a build that failed with an empty make log. It FAILS an empty
 # sweep (ONLY matching nothing); the legacy script exited 0 then, so map it back.
 res=$(printf '%s\n' "$MUTANTS" | "$root/tools/mutation_runner.sh" -k table -m - -t "$test_cmd" \
-    -d "$root" -b "$build" -c "$copy" -o "$out" -f FAIL)
+    -d "$root" -b "$build" -e "empty make log (make killed or never started)" \
+    -c "$copy" -o "$out" -f FAIL)
 rc=$?
 printf '%s\n' "$res"
 case $res in "mutants: 0 total,"*) rc=0;; esac
