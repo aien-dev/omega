@@ -623,7 +623,74 @@ static const OmegaNumericOp BINARY_MAP[OMEGA_TB_COUNT] = {
     [OMEGA_TB_SEL_LTU] = OMEGA_NOP_FSETP_LTU_SEL, [OMEGA_TB_SEL_LEU] = OMEGA_NOP_FSETP_LEU_SEL,
     [OMEGA_TB_SEL_GTU] = OMEGA_NOP_FSETP_GTU_SEL, [OMEGA_TB_SEL_GEU] = OMEGA_NOP_FSETP_GEU_SEL,
     [OMEGA_TB_SEL_EQU] = OMEGA_NOP_FSETP_EQU_SEL, [OMEGA_TB_SEL_NEU] = OMEGA_NOP_FSETP_NEU_SEL,
+    /* CR-3 mask compare: the ordered E1 compare-select op whose predicate
+     * the realization's compare entry evaluates. */
+    [OMEGA_TB_CMP_EQ] = OMEGA_NOP_FSETP_EQ_SEL, /* MUT:CMP_EQ_NAN_TRUE */
+    [OMEGA_TB_CMP_NE] = OMEGA_NOP_FSETP_NE_SEL, [OMEGA_TB_CMP_LT] = OMEGA_NOP_FSETP_LT_SEL,
+    [OMEGA_TB_CMP_LE] = OMEGA_NOP_FSETP_LE_SEL, [OMEGA_TB_CMP_GT] = OMEGA_NOP_FSETP_GT_SEL,
+    [OMEGA_TB_CMP_GE] = OMEGA_NOP_FSETP_SEL,
 };
+
+static bool binary_is_cmp(OmegaTensorBinaryOp op) {
+    return op >= OMEGA_TB_CMP_EQ && op <= OMEGA_TB_CMP_GE;
+}
+
+/* Gather 1..3 F32 operands, broadcast together (numpy rules), into dense
+ * malloc'd buffers in[0..arity). On success the caller frees in[]. Moves
+ * data only. */
+static int gather_broadcast(OmegaTensorCtx *ctx, unsigned arity, const OmegaTensor *ops, uint32_t *rank,
+                            uint64_t *shape, float **in, size_t *count) {
+    TensorSlot *x[3] = {NULL, NULL, NULL};
+    StorageSlot *s[3] = {NULL, NULL, NULL};
+    for (unsigned i = 0; i < arity; i++) {
+        int rc = tensor_get(ctx, ops[i], &x[i], &s[i]);
+        if (rc) return rc;
+    }
+    for (unsigned i = 0; i < arity; i++)
+        if (x[i]->info.dtype != OMEGA_DT_F32) return OMEGA_TENSOR_ERR_DTYPE;
+    uint32_t r = x[0]->info.rank;
+    if (r) memcpy(shape, x[0]->info.shape, r * sizeof(uint64_t));
+    for (unsigned i = 1; i < arity; i++) {
+        int rc = omega_tensor_broadcast_shape(r, shape, x[i]->info.rank, x[i]->info.shape, &r, shape);
+        if (rc) return rc;
+    }
+    OmegaTensorInfo bi[3] = {0};
+    for (unsigned i = 0; i < arity; i++) {
+        int rc = broadcast_info(&x[i]->info, r, shape, &bi[i]);
+        if (rc) return rc;
+    }
+    size_t n = (size_t)bi[0].elements;
+    for (unsigned i = 0; i < arity; i++) {
+        in[i] = malloc(n * sizeof(float));
+        if (!in[i]) { for (unsigned j = 0; j < i; j++) { free(in[j]); in[j] = NULL; } return OMEGA_TENSOR_ERR_CAPACITY; }
+        gather(s[i], &bi[i], in[i]);
+    }
+    *rank = r;
+    *count = n;
+    return OMEGA_TENSOR_OK;
+}
+
+/* CR-3 compare: two operands broadcast together, then one call of the
+ * realization's compare entry (+1.0 / +0.0 per element). */
+static int compare_n(OmegaTensorCtx *ctx, OmegaNumericOp sel_op, const OmegaTensor *ops, OmegaTensor *out) {
+    if (!out) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    if (!ctx->real->compare) return OMEGA_TENSOR_ERR_REALIZATION;
+    uint32_t r;
+    uint64_t shape[OMEGA_TENSOR_MAX_RANK];
+    float *in[3] = {NULL, NULL, NULL};
+    size_t n;
+    int rc = gather_broadcast(ctx, 2, ops, &r, shape, in, &n);
+    if (rc) return rc;
+    void *buf;
+    rc = new_dense(ctx, OMEGA_DT_F32, r, shape, out, &buf);
+    if (!rc) {
+        int nrc = ctx->real->compare(sel_op, in[0], in[1], buf, n);
+        if (nrc) rc = numeric_fail(ctx, nrc, *out);
+    }
+    free(in[0]);
+    free(in[1]);
+    return rc;
+}
 
 /* Elementwise over 1..3 F32 operands broadcast together. */
 static int elementwise_n(OmegaTensorCtx *ctx, OmegaNumericOp op, unsigned arity, const OmegaTensor *ops,
@@ -758,6 +825,7 @@ int omega_tensor_binary(OmegaTensorCtx *ctx, OmegaTensorBinaryOp op, OmegaTensor
     if (!ctx) return OMEGA_TENSOR_ERR_BAD_ARGS;
     if ((unsigned)op >= OMEGA_TB_COUNT) return OMEGA_TENSOR_ERR_BAD_ARGS;
     OmegaTensor ops[2] = {a, b};
+    if (binary_is_cmp(op)) return compare_n(ctx, BINARY_MAP[op], ops, out);
     return elementwise_n(ctx, BINARY_MAP[op], 2, ops, out);
 }
 
@@ -765,6 +833,37 @@ int omega_tensor_fma(OmegaTensorCtx *ctx, OmegaTensor a, OmegaTensor b, OmegaTen
     if (!ctx) return OMEGA_TENSOR_ERR_BAD_ARGS;
     OmegaTensor ops[3] = {a, b, c};
     return elementwise_n(ctx, OMEGA_NOP_FFMA_V, 3, ops, out);
+}
+
+/* CR-3 where: data movement only. Every cond element is checked against the
+ * two mask bit patterns before any tensor is made; then each output element
+ * is a 4-byte copy of a[i] or b[i]. */
+int omega_tensor_where(OmegaTensorCtx *ctx, OmegaTensor cond, OmegaTensor a, OmegaTensor b,
+                       OmegaTensor *out) {
+    if (!ctx || !out) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    OmegaTensor ops[3] = {cond, a, b};
+    uint32_t r;
+    uint64_t shape[OMEGA_TENSOR_MAX_RANK];
+    float *in[3] = {NULL, NULL, NULL};
+    size_t n;
+    int rc = gather_broadcast(ctx, 3, ops, &r, shape, in, &n);
+    if (rc) return rc;
+    for (size_t i = 0; i < n && !rc; i++) {
+        uint32_t u = omega_float_to_bits(in[0][i]);
+        if (u != OMEGA_TENSOR_MASK_TRUE_BITS && u != OMEGA_TENSOR_MASK_FALSE_BITS) /* MUT:WHERE_ACCEPTS_HALF */
+            rc = OMEGA_TENSOR_ERR_MASK;
+    }
+    void *buf = NULL;
+    if (!rc) rc = new_dense(ctx, OMEGA_DT_F32, r, shape, out, &buf);
+    if (!rc) {
+        uint8_t *o = buf;
+        for (size_t i = 0; i < n; i++) {
+            const float *src = omega_float_to_bits(in[0][i]) == OMEGA_TENSOR_MASK_TRUE_BITS ? &in[1][i] : &in[2][i];
+            memcpy(o + i * sizeof(float), src, sizeof(float));
+        }
+    }
+    for (unsigned i = 0; i < 3; i++) free(in[i]);
+    return rc;
 }
 
 int omega_tensor_reduce(OmegaTensorCtx *ctx, OmegaTensorReduceOp op, OmegaTensor t, uint32_t axis,

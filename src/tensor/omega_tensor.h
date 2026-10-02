@@ -88,7 +88,8 @@ typedef enum {
     OMEGA_TENSOR_ERR_CAPACITY        = -8,  /* no free slot / size overflow / OOM */
     OMEGA_TENSOR_ERR_AXIS            = -9,  /* axis / permutation invalid         */
     OMEGA_TENSOR_ERR_NUMERIC         = -10, /* realization refused (E1 code kept) */
-    OMEGA_TENSOR_ERR_REALIZATION     = -11  /* realization table incomplete       */
+    OMEGA_TENSOR_ERR_REALIZATION     = -11, /* realization table incomplete       */
+    OMEGA_TENSOR_ERR_MASK            = -12  /* where(): cond not exactly +1.0/+0.0 */
 } OmegaTensorStatus;
 
 typedef enum {
@@ -156,6 +157,18 @@ typedef enum {
     OMEGA_TB_SEL_EQ, OMEGA_TB_SEL_NE, OMEGA_TB_SEL_NUM, OMEGA_TB_SEL_NAN,
     OMEGA_TB_SEL_LTU, OMEGA_TB_SEL_LEU, OMEGA_TB_SEL_GTU, OMEGA_TB_SEL_GEU,
     OMEGA_TB_SEL_EQU, OMEGA_TB_SEL_NEU,
+    /* CR-3 mask compare: out = P(a, b) ? +1.0 : +0.0 (bits 0x3f800000 /
+     * 0x00000000, never -0.0). P is EXACTLY the predicate of the ordered E1
+     * compare-select op named on the right (omega_ref_fsetp_pred,
+     * src/omega_numeric.c:322): false when either operand is NaN (CMP_NE too:
+     * NaN != x gives +0.0, unlike IEEE !=), and -0 == +0. Realized by the
+     * realization's compare entry (NULL: OMEGA_TENSOR_ERR_REALIZATION).    */
+    OMEGA_TB_CMP_EQ,     /* FSETP_EQ_SEL predicate                           */
+    OMEGA_TB_CMP_NE,     /* FSETP_NE_SEL predicate (ordered)                 */
+    OMEGA_TB_CMP_LT,     /* FSETP_LT_SEL predicate                           */
+    OMEGA_TB_CMP_LE,     /* FSETP_LE_SEL predicate                           */
+    OMEGA_TB_CMP_GT,     /* FSETP_GT_SEL predicate                           */
+    OMEGA_TB_CMP_GE,     /* FSETP_SEL (GE) predicate                         */
     OMEGA_TB_COUNT
 } OmegaTensorBinaryOp;
 
@@ -190,6 +203,12 @@ typedef struct {
      * the E1 CPU sequences.
      * NULL: those ops return OMEGA_TENSOR_ERR_REALIZATION (other ops work). */
     int (*transc)(OmegaTensorUnaryOp op, const float *a, float *out, size_t n);
+    /* Optional (CR-3). out[i] = +1.0f if the E1 predicate of the compare-
+     * select op sel_op (OMEGA_NOP_FSETP_SEL or an OMEGA_NOP_FSETP_<P>_SEL)
+     * holds for (a[i], b[i]), else +0.0f; the predicate equals
+     * omega_ref_fsetp_pred(sel_op, a[i], b[i]) bit for bit.
+     * NULL: the CMP_* binary ops return OMEGA_TENSOR_ERR_REALIZATION. */
+    int (*compare)(OmegaNumericOp sel_op, const float *a, const float *b, float *out, size_t n);
 } OmegaTensorRealization;
 
 const OmegaTensorRealization *omega_tensor_cpu_realization(void);
@@ -290,6 +309,20 @@ int omega_tensor_binary(OmegaTensorCtx *ctx, OmegaTensorBinaryOp op, OmegaTensor
                         OmegaTensor *out);
 /* a*b + c rounded once (E1 FFMA), all three broadcast together. */
 int omega_tensor_fma(OmegaTensorCtx *ctx, OmegaTensor a, OmegaTensor b, OmegaTensor c, OmegaTensor *out);
+
+/*
+ * CR-3 where: out[i] = cond[i] is +1.0 ? a[i] : b[i], cond, a and b broadcast
+ * together (numpy rules above), all F32. The result is a bit copy of the
+ * chosen element (no arithmetic: -0.0 and NaN payloads are kept). cond must
+ * hold only the bit patterns OMEGA_TENSOR_MASK_TRUE_BITS (+1.0) and
+ * OMEGA_TENSOR_MASK_FALSE_BITS (+0.0), as the CMP_* ops produce; any other
+ * element (-0.0, NaN, 0.5, 2.0, ...) is refused with OMEGA_TENSOR_ERR_MASK
+ * and no tensor is made.
+ */
+#define OMEGA_TENSOR_MASK_TRUE_BITS  0x3f800000U
+#define OMEGA_TENSOR_MASK_FALSE_BITS 0x00000000U
+int omega_tensor_where(OmegaTensorCtx *ctx, OmegaTensor cond, OmegaTensor a, OmegaTensor b,
+                       OmegaTensor *out);
 
 /* Reduce along one axis. keepdims keeps that axis with size 1. */
 int omega_tensor_reduce(OmegaTensorCtx *ctx, OmegaTensorReduceOp op, OmegaTensor t, uint32_t axis,
