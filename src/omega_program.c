@@ -100,6 +100,25 @@ static int type_id_for(TypeTag tag, uint16_t width, SemanticId *out) {
     return rc;
 }
 
+int omega_program_contract_id(const OmegaProgram *prog, uint8_t out[OMEGA_ID_BYTES]) {
+    SemanticId tin, tout;
+    if (!prog || !out ||
+        type_id_for(prog->contract.input_type, prog->contract.input_width, &tin) != 0 ||
+        type_id_for(prog->contract.output_type, prog->contract.output_width, &tout) != 0)
+        return -1;
+    static const char domain[] = "aien.vc1.contract.v1";
+    uint8_t buf[sizeof(domain) + 4 * OMEGA_ID_BYTES];
+    size_t pos = 0;
+    memcpy(buf, domain, sizeof(domain));   /* includes the terminating 0x00 */
+    pos += sizeof(domain);
+    memcpy(&buf[pos], tin.bytes, OMEGA_ID_BYTES); pos += OMEGA_ID_BYTES;
+    memcpy(&buf[pos], tout.bytes, OMEGA_ID_BYTES); pos += OMEGA_ID_BYTES;
+    memcpy(&buf[pos], prog->contract.precondition_id.bytes, OMEGA_ID_BYTES); pos += OMEGA_ID_BYTES;
+    memcpy(&buf[pos], prog->contract.postcondition_id.bytes, OMEGA_ID_BYTES); pos += OMEGA_ID_BYTES;
+    sha256_hash(buf, pos, out);
+    return 0;
+}
+
 int omega_program_compute_id(OmegaProgram *prog) {
     if (!prog) return -1;
     memset(prog->program_id.bytes, 0, OMEGA_ID_BYTES);

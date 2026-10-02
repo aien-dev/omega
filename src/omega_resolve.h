@@ -12,10 +12,12 @@
  * Per node, in this order (SPEC 6; the first failure wins):
  *   1 lock      name has a lock line, else DEPENDENCY_NOT_PINNED
  *   2 store     omega_vcstore_get(semantic_id); absent or integrity failure: UNVERIFIED_DEPENDENCY
- *   3 identity  key == record id; optional blob digest (below); lock receipt == record
+ *   3 identity  key == record id; source or IR recheck (below); lock receipt == record
  *               receipt_id, else RECEIPT_HASH_MISMATCH
- *   - kind      BOOTSTRAP records satisfy an import only when allow_genesis is set, else
- *               UNVERIFIED_DEPENDENCY
+ *   - kind      a BOOTSTRAP record satisfies an import only when its id is a member of the
+ *               pinned genesis set VC-GENESIS-1 (omega_genesis.h), else UNVERIFIED_DEPENDENCY
+ *               (store code GENESIS_NOT_LISTED). Membership is the ONLY input: no flag, no
+ *               environment variable, nothing read from the store.
  *   4 taint     capability "omega-dev.taint": TAINTED_ARTIFACT (both domains)
  *   5 profile   not in the table: UNKNOWN_VERIFIER_PROFILE; version below the minimum (or not a
  *               dotted number): VERIFIER_TOO_OLD
@@ -31,11 +33,19 @@
  *
  * DECISIONS (also in the PR body):
  *  - BOOTSTRAP records (the audited genesis set) carry an audit hash in receipt_id, not a
- *    receipt. When allow_genesis is set they skip steps 5 and 6 (the lock must still pin the
- *    audit hash). A BOOTSTRAP record may NOT depend on a VERIFIED record: the audited base must
- *    be closed over itself, so the resolver refuses it (UNVERIFIED_DEPENDENCY) and
- *    omega_resolve_admit_genesis refuses to insert it. A VERIFIED record may depend on BOOTSTRAP
- *    (the genesis set is where trust starts), and only resolves with allow_genesis.
+ *    receipt. A listed one skips steps 5 and 6 (the lock must still pin the audit hash). A
+ *    BOOTSTRAP record may NOT depend on a VERIFIED record: the audited base must be closed over
+ *    itself, so the resolver refuses it (UNVERIFIED_DEPENDENCY) and omega_resolve_admit_genesis
+ *    refuses to insert it. A VERIFIED record may depend on BOOTSTRAP (the genesis set is where
+ *    trust starts). The set is pinned in the source (omega_genesis.h, docs/osc/VC-GENESIS-1.md);
+ *    changing it is a reviewed source change, never a runtime switch.
+ *  - SOURCE/IR RECHECK (SPEC 6 step 3). In the build domain the source or IR store is
+ *    MANDATORY: with no fetch_blob every node is refused (UNVERIFIED_DEPENDENCY). The blob must
+ *    hash to source_or_ir_digest, and when the digest kind is IR the program id is recomputed
+ *    with omega_program_compute_id (omega_program_ir.h) and must equal the record's semantic id.
+ *    A record whose digest kind is OSC source cannot be recomputed to a program id here, so the
+ *    build domain refuses it. The dev domain may omit the blob store (its output is tainted);
+ *    when it supplies one the same checks run.
  *  - omega-dev and omega-build run the SAME checks. The domain never loosens a check (ADR 0029
  *    Decision 4: flags cannot change what is legal, only the closure can). It labels the output:
  *    an omega-dev artifact is TAINTED, its identity (build id) commits to that, and the resolver
@@ -44,9 +54,8 @@
  *    compiler. A test greps for them.
  *
  * LIMITS (stated, not hidden): receipts are hashes, not signatures (see omega_receipt.h); the
- * blob check below is optional until stage 6 supplies the source/IR store; the receipt binding
- * (rule 4) ties semantic_id and source digest, but the program id is not recomputed from source
- * here (SPEC 6 step 3 first half is done only for the digest). */
+ * receipt binding (rule 4) ties semantic_id and source digest; contract_id is not recomputed
+ * from the IR (the edge check compares the stored contract ids only). */
 
 #include <stddef.h>
 #include <stdint.h>
@@ -117,10 +126,11 @@ typedef struct {
     size_t n_profiles;
     OmegaReceiptFetch fetch_receipt;       /* required for any VERIFIED record */
     void *fetch_ctx;
-    OmegaBlobFetch fetch_blob;             /* optional: when set, SHA-256 of the blob named by
-                                              source_or_ir_digest must equal that digest */
+    OmegaBlobFetch fetch_blob;             /* REQUIRED in the build domain (without it every node
+                                              is refused); optional in dev. SHA-256 of the blob named
+                                              by source_or_ir_digest must equal that digest, and an
+                                              IR blob must recompute to the semantic id */
     void *blob_ctx;
-    int allow_genesis;                     /* BOOTSTRAP records may satisfy imports (stage 6) */
 } OmegaResolver;
 
 typedef struct { uint8_t semantic_id[32], receipt_id[32], admission_kind; } OmegaClosureEntry;
@@ -167,17 +177,25 @@ int omega_artifact_meta_text(const OmegaArtifactMeta *m, char *buf, size_t cap);
  * BAD_ARGUMENT for malformed text). */
 int omega_artifact_meta_parse(const char *text, size_t len, OmegaArtifactMeta *m, OmegaResolveError *err);
 
-/* Insert a Verified Crumb into the store, only together with the receipt that qualifies it:
+/* Insert a Verified Crumb into the store, only together with the receipt that qualifies it
+ * (THE only way a VERIFIED record enters a store; the raw insert is private to this file, see
+ * omega_vcstore_priv.h):
  * origin (may be NULL when the record did not come from a compile) tainted: TAINTED_ARTIFACT;
  * the record lists omega-dev.taint: TAINTED_ARTIFACT; then steps 5 and 6 above; then
- * omega_vcstore_insert (VERIFIED). The store is unchanged on every refusal. */
+ * the private raw insert (VERIFIED). The store is unchanged on every refusal. */
 int omega_resolve_admit(const OmegaResolver *r, OmegaVcStore *s, const uint8_t *canonical, size_t len,
                         const uint8_t claimed_vc_id[32], const OmegaArtifactMeta *origin, OmegaResolveError *err);
-/* Genesis loading (stage 6): same taint refusals, no receipt (audit hash), refuses any VERIFIED
- * dependency, inserts with omega_vcstore_insert_bootstrap. */
+/* Genesis loading: same taint refusals, no receipt (audit hash), refuses any VERIFIED
+ * dependency, and refuses any record whose semantic id is not a member of VC-GENESIS-1
+ * (UNVERIFIED_DEPENDENCY with store code GENESIS_NOT_LISTED). THE only way a BOOTSTRAP record
+ * enters a store. */
 int omega_resolve_admit_genesis(OmegaVcStore *s, const uint8_t *canonical, size_t len,
                                 const uint8_t claimed_vc_id[32], const OmegaArtifactMeta *origin, OmegaResolveError *err);
 
 #define OMEGA_TAINT_CAPABILITY "omega-dev.taint"
+/* A record minted by omega_vc_bridge (no independent qualification run) lists this capability. The
+ * build-domain resolver refuses it, so a bridge record can sit in a store but can never satisfy a
+ * build import (VC1 stage 6 fix). The dev domain accepts it (the artifact is tainted anyway). */
+#define OMEGA_BRIDGE_SELFMINTED_CAPABILITY "omega-bridge.selfminted"
 
 #endif /* OMEGA_RESOLVE_H */

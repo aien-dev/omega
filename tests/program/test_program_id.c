@@ -22,6 +22,7 @@
 #include "omega_program.h"
 #include "omega_library.h"
 #include "omega_discovery.h"
+#include "omega_vc_bridge.h"
 #include "omega_synthesis.h"
 #include "omega_machine.h"
 #include "omega_realize.h"
@@ -543,7 +544,11 @@ static void test_library(void) {
         OmegaLibrary *l2 = calloc(1, sizeof *l2);
         omega_library_init(l2);
         uint8_t rh[32] = { 1 };
-        CHECK(G_LIB, omega_discovery_admit_to_library(l2, cand, rh) == 0 && l2->count == 1, "abstraction admitted");
+        OmegaVcBridge *br = calloc(1, sizeof *br);
+        CHECK(G_LIB, br && omega_vc_bridge_init(br) == 0 && omega_vc_bridge_admit_abstraction(br, l2, cand, rh) == 0 && l2->count == 1,
+              "abstraction admitted through the Verified Crumb admit path");
+        if (br) omega_vc_bridge_destroy(br);
+        free(br);
         omega_library_destroy(l2);
         free(l2);
     }
