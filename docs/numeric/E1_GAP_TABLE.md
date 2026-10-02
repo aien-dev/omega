@@ -3,6 +3,8 @@
 Status: research note, 2026-09-30, read-only survey of `origin/main` at `529ebfa`; rows refreshed 2026-10-01 (see the status summary below).
 No code was built or run for this note.
 
+Update 2026-10-02: Gate 5 chip PASS on the corrected #225 candidate 1720a8d + physics e95e3ed, receipt `evidence/OMEGA-NUMERIC-0/3bb806d2...e5bab8.json`. A combined Gate 14 refresh on that pair did NOT complete (Gates 1/2 leg FAIL, see `evidence/GATE14-FOUNDATION/legs-1720a8d/README.md`).
+
 Plan source: `aien-architecture/CURRENT_EXECUTION_PLAN.md`, section 8, "E1. Numerical closure"
 (must close before M20 tensor training). Evidence source: the merged M19R Gate 5
 (OMEGA-NUMERIC-0, omega#107, merge `62f5ba5`), canonical receipt

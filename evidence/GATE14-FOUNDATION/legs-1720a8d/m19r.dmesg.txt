@@ -1,0 +1,2 @@
+Fri Oct  2 05:51:06 PM UTC 2026
+dmesg: read kernel buffer failed: Operation not permitted
