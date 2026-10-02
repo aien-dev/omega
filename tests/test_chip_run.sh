@@ -374,7 +374,7 @@ mkman "$T/m-fs3.sh" "FINAL_LINE_STYLE=verdict; RECEIPT_EXTRA_JQ='.verdict = \"PA
 reset_world; CRMAN=$T/m-fs3.sh cr final_style_fatal FAKE_MODE=fail -- "${PD[@]}"
 expect final_style_fatal 1 '^RECEIPT_EXTRA_JQ forged a PASS verdict$'
 assert final_style_fatal "fatal ends with VERDICT FAIL" test "$(tail -n 1 "$OUT")" = "VERDICT FAIL"
-assert fatal_verdict_style "fatal prints a VERDICT FAIL line and no CHIP_RUN: FAIL line" bash -c 'grep -q "^VERDICT FAIL$" "$1" && ! grep -q "^CHIP_RUN: FAIL" "$1"' _ "$OUT"
+assert fatal_verdict_style "fatal prints a VERDICT FAIL line and no CHIP_RUN: FAIL line" bash -c '[ "$(tail -n 2 "$1" | head -n 1)" = "RECEIPT_EXTRA_JQ forged a PASS verdict" ] && [ "$(tail -n 1 "$1")" = "VERDICT FAIL" ] && ! grep -q "^CHIP_RUN: FAIL" "$1"' _ "$OUT"
 mkman "$T/m-fs4.sh" "FINAL_LINE_STYLE=bogus"
 reset_world; CRMAN=$T/m-fs4.sh cr final_style_value -- "${PD[@]}"
 expect final_style_value 1 '^CHIP_RUN: BAD_MANIFEST FINAL_LINE_STYLE='
