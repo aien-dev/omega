@@ -90,7 +90,7 @@ exist yet.
 
 Answers LT-M21 CR-5 (autodiff needs broadcast backward). Both ops are
 compositions of the existing single-axis `omega_tensor_reduce`
-(`src/tensor/omega_tensor.h:254-256` on main 0171bd4), so their bits are
+(`src/tensor/omega_tensor.h:327-329` at the rebased head ca133e9), so their bits are
 defined by the frozen E1 reduction order above and nothing else.
 
 - `omega_tensor_reduce_axes(ctx, op, t, naxes, axes[], keepdims, out)`.
@@ -148,7 +148,7 @@ removed. Order and padding mutations are caught by the E1 WP-D suite.
 | GB10 mask compare / where (CR-3) | NOT_RUN | No GB10 `compare` entry. E1 has GB10 encodings for the FSETP_<P>_SEL compare-select ops (`src/omega_numeric.c:915-934`) but no compare-to-mask kernel; where() is data movement only. CPU tier only in this cut |
 | General matmul | PASS (CPU) | 1x1x1, 7x13x5, 64x64x64, 129x3x257, 3x1025x2, 1x33x1, strided views, batched broadcast [2,1,3,4]x[5,4,6] |
 | Reductions | PASS (CPU) | lengths 1..32769 across tile/level edges, every axis of [3,37,5], keepdims, view vs copy, -0 sum |
-| Multi-axis reduce, sum_to_shape (CR-5) | NOT_RUN | `tests/tensor_reduce_multi_tests.inc` (run by `test-tensor`): every axis subset of a [3,5,4,6] tensor x SUM/MAX/MIN (MEAN single axis) x keepdims vs an independent descending-order reference and vs the explicit single-axis reduce chain; strided view == copy; sum_to_shape(broadcast_to(x, S), shape(x)) exact for 6 shape pairs; refusals (duplicate / out-of-range axes, MEAN over 2 axes, incompatible shape, rank, dtype, stale). Mutants REDUCE_AXES_DESCENDING, REDUCE_AXES_KEEPDIMS, SUM_TO_SHAPE_SIZE1 added (sweep now 10 source mutants). Host NOT_RUN until a forge receipt; GB10 NOT_RUN |
+| Multi-axis reduce, sum_to_shape (CR-5) | NOT_RUN | `tests/tensor_reduce_multi_tests.inc` (run by `test-tensor`): every axis subset of a [3,5,4,6] tensor x SUM/MAX/MIN (MEAN single axis) x keepdims vs an independent descending-order reference and vs the explicit single-axis reduce chain; strided view == copy; sum_to_shape(broadcast_to(x, S), shape(x)) exact for 6 shape pairs; refusals (duplicate / out-of-range axes, MEAN over 2 axes, incompatible shape, rank, dtype, stale). Mutants REDUCE_AXES_DESCENDING, REDUCE_AXES_KEEPDIMS, SUM_TO_SHAPE_SIZE1 added (tensor sweep now 27 source mutants at this head, 33 with the 6 store mutants, counted from the MUTATIONS and STORE_MUTATIONS lists in tools/tensor_mutations.sh). Host receipt at a6618da: PASS (919 / 0, 30 of 30 mutants at that head, log LT-M20B-reduce-light-052347); rebased head receipt queued (NOT_RUN until the forge reports). GB10 NOT_RUN |
 | Mutation / refusal | PASS (CPU) | `test-tensor-mutations`: 10/10 tensor source mutations caught (forge log `HIVE-M20-ops-light-185351`); 2 in-process mutant realizations (sequential sum, FFMA chain) caught; wrong order string refused |
 | Determinism | PASS (CPU) | repeated run same value id; frozen KAT value id in the test |
 | Test-only hook not in library | PASS (CPU) | `omega_tensor_test_set_storage_generation` exists only under `-DOMEGA_TENSOR_TEST_HOOKS` (test builds in `mk/tensor.mk`); `test-tensor-no-hooks` (run by `test-tensor`) builds the default objects and fails if `nm` shows the symbol |
