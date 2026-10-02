@@ -5,29 +5,49 @@
 # MANIFEST is shell syntax setting: GATE TEST_SOURCE SOURCES EXTRA_BUILD_SOURCES (relative
 #   to the omega root, may use $PHYSICS and $HERE) RUN_ARGS VERDICT_RE PASS_LINE OWNER
 #   EVIDENCE_DIR RAISE_QUIET TAKE_GPU_LOCK REFUSE_DIRTY_OMEGA (default 1) REFUSE_EXIT
-#   (default 2) REFUSE_VERDICT_LINE (default "CHIP_RUN: NOT_RUN"), hooks HOST_TIER_CMD
-#   (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt, $log = chip log).
+#   (default 2; must be an integer 1..125, else exit 1 "CHIP_RUN: BAD_MANIFEST") REFUSE_VERDICT_LINE
+#   (default "CHIP_RUN: NOT_RUN") REQUIRE_ALL_PASS (default 0; 0 or 1; when 1 EVERY line matching
+#   VERDICT_RE must also match PASS_LINE, so set VERDICT_RE to verdict lines only), hooks
+#   HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
+#   $log = chip log). The manifest cannot change the test seam variables below, QUIET_FLAG,
+#   GPU_LOCK or EST_LOAD_CMD (checked and restored after it is sourced).
 # Physics dir, first match wins: --physics-dir, $PHYSICS_DIR, $PHYSICS, ~/workspace/physics.
 # Exit: 0 PASS; 1 FAIL (binary ran, verdict not PASS or tree changed); REFUSE_EXIT (default 2,
 #   as run_unwritten_trap.sh) after printing "REFUSED: why" and REFUSE_VERDICT_LINE. A gate that
 #   keeps transc semantics sets REFUSE_EXIT=1 REFUSE_VERDICT_LINE="VERDICT NOT_RUN".
-# REFUSES (nothing is run): bad usage or manifest; test override env without CHIPRUN_SELFTEST=1;
-#   no physics checkout; physics not at the physics.lock pin; physics dirty; omega dirty (if
-#   REFUSE_DIRTY_OMEGA=1); evidence dir inside omega or physics; quiet flag already up (if
-#   RAISE_QUIET=1); an est_load process; the GPU lock held (if TAKE_GPU_LOCK=1); HOST_TIER_CMD
-#   failing; a missing source; gcc failing; nm unreadable; libm math or CUDA symbols in the binary.
+# REFUSES (nothing is run): bad usage, argument or manifest; missing manifest variables or GATE
+#   characters; no evidence dir; test override env without CHIPRUN_SELFTEST=1 (checked before and
+#   after the manifest is sourced; a manifest that changes one is refused); no physics checkout;
+#   unreadable omega or physics HEAD or physics.lock; physics not at the physics.lock pin;
+#   physics dirty; omega dirty (if REFUSE_DIRTY_OMEGA=1); evidence dir inside omega or physics;
+#   quiet flag already up or lost in a create race (if RAISE_QUIET=1); an est_load process; the
+#   GPU lock unopenable or held (if TAKE_GPU_LOCK=1); no temp dir; HOST_TIER_CMD failing; a
+#   missing source; gcc failing; nm unreadable; libm math or CUDA symbols in the binary.
 # FAILS (ran to the end, receipt written): nonzero exit; no line matching VERDICT_RE; last such
-#   line not matching PASS_LINE; omega (if REFUSE_DIRTY_OMEGA=1) or physics dirty after the run;
-#   either HEAD moved. Never killed, never timed out. Quiet flag dropped only if still ours.
+#   line not matching PASS_LINE (any such line, if REQUIRE_ALL_PASS=1); omega (if
+#   REFUSE_DIRTY_OMEGA=1) or physics dirty after the run; either HEAD moved. Never killed, never
+#   timed out. Quiet flag dropped only if still ours.
 # RECEIPT <evidence>/<sha256 of its content>.json, mode 0444, noclobber, plus blobs/<sha>.log.
 #   Fields: gate owner omega_commit omega_tree_clean_before omega_tree_clean_after
 #   omega_commit_unchanged_after physics_commit physics_lock_pin physics_tree_clean_before
 #   physics_tree_clean_after physics_commit_unchanged_after binary_sha256 chip_log_sha256
 #   run_args host_tier verdict_lines chip_exit_status started_utc finished_utc verdict reason
 #   (plus whatever RECEIPT_EXTRA_JQ adds).
+# NOT COVERED by this module (a gate that needs one adds it, or does not use this module yet):
+#   - transc's KDIG kernel-digest field and its unknown-op check: use RECEIPT_EXTRA_JQ.
+#   - transc's nvdisasm check: use HOST_TIER_CMD.
+#   - transc locks with fuser (refuses if ANY process holds the lock file); this module uses
+#     flock -n (refuses only if another flock holder has it). Not the same test.
+#   - reduce WAITS for the lock and the quiet flag; this module REFUSES at once.
+#   - binary blob storage: reduce stores blobs/<sha>.bin and refuses a PASS with no digests;
+#     this module stores only the log blob, and records binary_sha256 without keeping the binary.
+#   - REQUIRE_ALL_PASS checks lines that appear, not that a particular line appears: reduce's
+#     SUM, MAX, MIN, MEAN, RED_GB10_PARITY and E1 lines are not each demanded.
+#   - receipt reuse (an existing receipt with the same name is compared, not rewritten) has no case.
 # Test seam (only with CHIPRUN_SELFTEST=1): CHIPRUN_PREBUILT_BIN CHIPRUN_QUIET_FLAG
 #   CHIPRUN_GPU_LOCK CHIPRUN_EST_LOAD_CMD. Mutation check: each refusal line ends in
 #   "# REFUSAL:<id>"; tests/test_chip_run.sh --mutants deletes each one and needs case <id> to FAIL.
+#   Not tagged: the "fatal" exits after the run (receipt and blob writing).
 # Shell + coreutils + git + jq + gcc + nm + flock. No Python.
 set -u
 HERE=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -38,56 +58,83 @@ EST_LOAD_CMD=${CHIPRUN_EST_LOAD_CMD:-pgrep est_load}
 FLAG_MINE=0; FLAG_TEXT=""; FAIL_REASON=""
 REFUSE_EXIT=2; REFUSE_VERDICT_LINE="CHIP_RUN: NOT_RUN"
 refuse() { echo "REFUSED: $*"; echo "$REFUSE_VERDICT_LINE"; exit "$REFUSE_EXIT"; }
+bad_manifest() { echo "CHIP_RUN: BAD_MANIFEST $*"; exit 1; }
 fatal() { echo "CHIP_RUN: FAIL $*"; exit 1; }
 fail() { FAIL_REASON=${FAIL_REASON:-$*}; }
-cleanup() { [ "$FLAG_MINE" = 1 ] && [ "$(cat "$QUIET_FLAG" 2>/dev/null)" = "$FLAG_TEXT" ] && rm -f "$QUIET_FLAG"; return 0; }
+cleanup() {
+    [ "$FLAG_MINE" = 1 ] || return 0
+    [ "$(cat "$QUIET_FLAG" 2>/dev/null)" = "$FLAG_TEXT" ] || return 0 # REFUSAL:flag_not_ours
+    rm -f "$QUIET_FLAG"; return 0
+}
 trap cleanup EXIT
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 clean() { [ -z "$(git -C "$1" status --porcelain 2>/dev/null)" ] && echo true || echo false; }
 head_of() { git -C "$1" rev-parse HEAD 2>/dev/null; }
 
-[ $# -ge 1 ] || refuse "usage: chip_run.sh MANIFEST [--physics-dir DIR] [--evidence-dir DIR] [-- gate args]"
+# Test seam: snapshot before the manifest is sourced, check before and after, restore after.
+SEAM_VARS=(CHIPRUN_SELFTEST CHIPRUN_PREBUILT_BIN CHIPRUN_QUIET_FLAG CHIPRUN_GPU_LOCK CHIPRUN_EST_LOAD_CMD)
+declare -A SEAM0; for v in "${SEAM_VARS[@]}"; do SEAM0[$v]=${!v:-}; done
+SELFTEST0=${CHIPRUN_SELFTEST:-}; QUIET0=$QUIET_FLAG; GPU0=$GPU_LOCK; EST0=$EST_LOAD_CMD
+seam_check() {
+    [ -z "${CHIPRUN_PREBUILT_BIN:-}" ] || [ "$SELFTEST0" = 1 ] || refuse "CHIPRUN_PREBUILT_BIN is a self-test override; set CHIPRUN_SELFTEST=1" # REFUSAL:seam_prebuilt
+    [ -z "${CHIPRUN_QUIET_FLAG:-}" ] || [ "$SELFTEST0" = 1 ] || refuse "CHIPRUN_QUIET_FLAG is a self-test override; set CHIPRUN_SELFTEST=1" # REFUSAL:seam_quiet
+    [ -z "${CHIPRUN_GPU_LOCK:-}" ] || [ "$SELFTEST0" = 1 ] || refuse "CHIPRUN_GPU_LOCK is a self-test override; set CHIPRUN_SELFTEST=1" # REFUSAL:seam_gpu
+    [ -z "${CHIPRUN_EST_LOAD_CMD:-}" ] || [ "$SELFTEST0" = 1 ] || refuse "CHIPRUN_EST_LOAD_CMD is a self-test override; set CHIPRUN_SELFTEST=1" # REFUSAL:seam_est
+}
+
+[ $# -ge 1 ] || refuse "usage: chip_run.sh MANIFEST [--physics-dir DIR] [--evidence-dir DIR] [-- gate args]" # REFUSAL:usage
 MANIFEST=$1; shift
-PHYS_FLAG=""; EVID_FLAG=""
+PHYS_FLAG=""; EVID_FLAG=""; BAD_ARG=""
 while [ $# -gt 0 ]; do
+    case $1 in --physics-dir|--evidence-dir) [ $# -ge 2 ] || refuse "$1 needs a value" ;; esac # REFUSAL:arg_value
     case $1 in
-        --physics-dir) [ $# -ge 2 ] || refuse "--physics-dir needs a value"; PHYS_FLAG=$2; shift 2 ;;
-        --evidence-dir) [ $# -ge 2 ] || refuse "--evidence-dir needs a value"; EVID_FLAG=$2; shift 2 ;;
+        --physics-dir) PHYS_FLAG=$2; shift 2 ;;
+        --evidence-dir) EVID_FLAG=$2; shift 2 ;;
         --) shift; break ;;
-        *) refuse "unknown argument $1" ;;
+        *) BAD_ARG=$1; break ;;
     esac
 done
+[ -z "$BAD_ARG" ] || refuse "unknown argument $BAD_ARG" # REFUSAL:bad_arg
 GATE_ARGS=("$@")
-for v in CHIPRUN_PREBUILT_BIN CHIPRUN_QUIET_FLAG CHIPRUN_GPU_LOCK CHIPRUN_EST_LOAD_CMD; do [ -z "${!v:-}" ] || [ "${CHIPRUN_SELFTEST:-}" = 1 ] || refuse "$v is a self-test override; set CHIPRUN_SELFTEST=1"; done # REFUSAL:selftest_override
+seam_check # REFUSAL:seam_before
 
 # Physics dir resolution lives here and nowhere else.
 PHYSICS=${PHYS_FLAG:-${PHYSICS_DIR:-${PHYSICS:-$HOME/workspace/physics}}}
 PHYSICS=$(realpath -m "$PHYSICS")
 
 GATE=""; TEST_SOURCE=""; SOURCES=""; EXTRA_BUILD_SOURCES=""; RUN_ARGS=""; VERDICT_RE=""; PASS_LINE=""
-OWNER=""; EVIDENCE_DIR=""; RAISE_QUIET=1; TAKE_GPU_LOCK=1; REFUSE_DIRTY_OMEGA=1; HOST_TIER_CMD=""; RECEIPT_EXTRA_JQ=""
-[ -f "$MANIFEST" ] || refuse "no manifest at $MANIFEST"
-. "$MANIFEST" || refuse "manifest $MANIFEST failed to load"
-for v in GATE TEST_SOURCE VERDICT_RE PASS_LINE OWNER; do [ -n "${!v}" ] || refuse "manifest does not set $v"; done
-case $GATE in *[!A-Za-z0-9_.-]*) refuse "GATE $GATE has characters outside A-Za-z0-9_.-" ;; esac
+OWNER=""; EVIDENCE_DIR=""; RAISE_QUIET=1; TAKE_GPU_LOCK=1; REFUSE_DIRTY_OMEGA=1; HOST_TIER_CMD=""; RECEIPT_EXTRA_JQ=""; REQUIRE_ALL_PASS=0
+[ -f "$MANIFEST" ] || refuse "no manifest at $MANIFEST" # REFUSAL:no_manifest
+. "$MANIFEST"; MRC=$?
+REX_BAD=""
+case $REFUSE_EXIT in ''|*[!0-9]*) REX_BAD=1 ;; *) { [ "${#REFUSE_EXIT}" -le 3 ] && [ "$((10#$REFUSE_EXIT))" -ge 1 ] && [ "$((10#$REFUSE_EXIT))" -le 125 ]; } || REX_BAD=1 ;; esac
+[ -z "$REX_BAD" ] || bad_manifest "REFUSE_EXIT=$REFUSE_EXIT is not an integer from 1 to 125" # REFUSAL:refuse_exit
+case $REQUIRE_ALL_PASS in 0|1) ;; *) bad_manifest "REQUIRE_ALL_PASS=$REQUIRE_ALL_PASS is not 0 or 1" ;; esac # REFUSAL:require_all_value
+seam_check # REFUSAL:seam_after
+for v in "${SEAM_VARS[@]}"; do [ "${!v:-}" = "${SEAM0[$v]}" ] || refuse "manifest changed $v, a test seam variable"; done # REFUSAL:seam_changed
+QUIET_FLAG=$QUIET0; GPU_LOCK=$GPU0; EST_LOAD_CMD=$EST0
+[ "$MRC" = 0 ] || refuse "manifest $MANIFEST failed to load" # REFUSAL:manifest_load
+for v in GATE TEST_SOURCE VERDICT_RE PASS_LINE OWNER; do [ -n "${!v}" ] || refuse "manifest does not set $v"; done # REFUSAL:manifest_vars
+case $GATE in *[!A-Za-z0-9_.-]*) refuse "GATE $GATE has characters outside A-Za-z0-9_.-" ;; esac # REFUSAL:gate_chars
 EVID=${EVID_FLAG:-$EVIDENCE_DIR}
-[ -n "$EVID" ] || refuse "no evidence dir (manifest EVIDENCE_DIR or --evidence-dir)"
+[ -n "$EVID" ] || refuse "no evidence dir (manifest EVIDENCE_DIR or --evidence-dir)" # REFUSAL:no_evidence
 EVID=$(realpath -m "$EVID")
 if [ "${#GATE_ARGS[@]}" -eq 0 ]; then read -ra GATE_ARGS <<< "$RUN_ARGS"; fi
 
 [ -d "$PHYSICS/nvrm" ] || refuse "no physics checkout at $PHYSICS" # REFUSAL:no_physics
-case "$EVID/" in "$HERE"/*|"$PHYSICS"/*) refuse "evidence dir $EVID is inside a candidate tree" ;; esac # REFUSAL:evidence_inside
-OMEGA_COMMIT=$(head_of "$HERE") || refuse "cannot read omega HEAD"
+case "$EVID/" in "$HERE"/*) refuse "evidence dir $EVID is inside a candidate tree" ;; esac # REFUSAL:evidence_inside
+case "$EVID/" in "$PHYSICS"/*) refuse "evidence dir $EVID is inside a candidate tree" ;; esac # REFUSAL:evidence_inside_physics
+OMEGA_COMMIT=$(head_of "$HERE") || refuse "cannot read omega HEAD" # REFUSAL:omega_head
 [ "$REFUSE_DIRTY_OMEGA" != 1 ] || [ "$(clean "$HERE")" = true ] || refuse "omega tree $HERE is dirty" # REFUSAL:omega_dirty
-PIN=$(tr -d '[:space:]' < "$HERE/physics.lock") || refuse "cannot read physics.lock"
-PHYS_COMMIT=$(head_of "$PHYSICS") || refuse "cannot read physics HEAD at $PHYSICS"
+PIN=$(tr -d '[:space:]' < "$HERE/physics.lock") || refuse "cannot read physics.lock" # REFUSAL:physics_lock
+PHYS_COMMIT=$(head_of "$PHYSICS") || refuse "cannot read physics HEAD at $PHYSICS" # REFUSAL:physics_head
 [ "$PHYS_COMMIT" = "$PIN" ] || refuse "physics checkout is at $PHYS_COMMIT, physics.lock pins $PIN" # REFUSAL:physics_pin
 [ "$(clean "$PHYSICS")" = true ] || refuse "physics checkout $PHYSICS is dirty" # REFUSAL:physics_dirty
 OMEGA_CLEAN_BEFORE=$(clean "$HERE"); PHYS_CLEAN_BEFORE=true
 [ "$RAISE_QUIET" != 1 ] || [ ! -e "$QUIET_FLAG" ] || refuse "quiet flag is up: $(cat "$QUIET_FLAG")" # REFUSAL:quiet_flag
 [ -z "$(bash -c "$EST_LOAD_CMD" 2>/dev/null)" ] || refuse "an est_load process is running" # REFUSAL:est_load
 
-RUN=$(mktemp -d "${TMPDIR:-/tmp}/chip-run.XXXXXX") || refuse "cannot create a run directory"
+RUN=$(mktemp -d "${TMPDIR:-/tmp}/chip-run.XXXXXX") || refuse "cannot create a run directory" # REFUSAL:mktemp
 if [ -n "$HOST_TIER_CMD" ]; then
     (cd "$HERE" && CHIPRUN_RUN_DIR="$RUN" bash -c "$HOST_TIER_CMD") > "$RUN/host.log" 2>&1; HRC=$?
     tail -n 3 "$RUN/host.log"
@@ -99,29 +146,31 @@ START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if [ "$RAISE_QUIET" = 1 ]; then
     FLAG_TEXT="$OWNER start=$START expected_end=$(date -u -d '+2 hours' +%Y-%m-%dT%H:%M:%SZ) pid=$$"
     set -o noclobber
-    echo "$FLAG_TEXT" > "$QUIET_FLAG" 2>/dev/null || { set +o noclobber; refuse "could not create the quiet flag"; }
+    echo "$FLAG_TEXT" > "$QUIET_FLAG" 2>/dev/null || { set +o noclobber; refuse "could not create the quiet flag"; } # REFUSAL:flag_create
     set +o noclobber
     FLAG_MINE=1
 fi
 if [ "$TAKE_GPU_LOCK" = 1 ]; then
-    exec 9> "$GPU_LOCK" || refuse "cannot open $GPU_LOCK"
+    { : >> "$GPU_LOCK"; } 2>/dev/null || refuse "cannot open $GPU_LOCK" # REFUSAL:gpu_open
+    exec 9>> "$GPU_LOCK"
     flock -n 9 || refuse "GPU lock $GPU_LOCK is held" # REFUSAL:gpu_lock
 fi
 
 if [ -n "${CHIPRUN_PREBUILT_BIN:-}" ]; then
     BIN=$CHIPRUN_PREBUILT_BIN
-    [ -x "$BIN" ] || refuse "CHIPRUN_PREBUILT_BIN $BIN is not executable"
+    [ -x "$BIN" ] || refuse "CHIPRUN_PREBUILT_BIN $BIN is not executable" # REFUSAL:prebuilt_not_exec
 else
     echo "== chip build"
     BIN=$RUN/$GATE.bin
     read -ra SRCS <<< "$TEST_SOURCE $SOURCES $EXTRA_BUILD_SOURCES"
-    for s in "${SRCS[@]}"; do case $s in /*) f=$s ;; *) f=$HERE/$s ;; esac; [ -f "$f" ] || refuse "missing source $s"; done
+    for s in "${SRCS[@]}"; do case $s in /*) f=$s ;; *) f=$HERE/$s ;; esac; [ -f "$f" ] || refuse "missing source $s"; done # REFUSAL:missing_source
     NV=$PHYSICS/$NVDIR
     (cd "$HERE" && gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -fno-fast-math -pthread \
         -Isrc -I"$PHYSICS/nvrm" -I"$PHYSICS/m16" \
         -I"$NV/src/common/sdk/nvidia/inc" -I"$NV/kernel-open/common/inc" \
         -I"$NV/kernel-open/nvidia-uvm" -I"$NV/src/nvidia/arch/nvalloc/unix/include" \
-        -o "$BIN" "${SRCS[@]}") > "$RUN/chip-build.log" 2>&1 || { cat "$RUN/chip-build.log"; refuse "chip build failed"; }
+        -o "$BIN" "${SRCS[@]}") > "$RUN/chip-build.log" 2>&1; BRC=$?
+    [ "$BRC" = 0 ] || { cat "$RUN/chip-build.log"; refuse "chip build failed"; } # REFUSAL:build_failed
 fi
 SYMS=$(nm -u "$BIN" 2>&1) || refuse "nm cannot read $BIN" # REFUSAL:nm_unreadable
 if printf '%s\n' "$SYMS" | grep -Eq '\b(sqrtf?|expf?|exp2f?|logf?|log2f?|powf?|fmaf?|sinf?|cosf?|tanhf?|erff?|roundf?|fabsf?)\b'; then refuse "libm math symbols in $BIN"; fi # REFUSAL:libm
@@ -141,6 +190,7 @@ PHYS_SAME=$([ "$(head_of "$PHYSICS")" = "$PHYS_COMMIT" ] && echo true || echo fa
 [ "$CHIP_RC" = 0 ] || fail "binary exit status $CHIP_RC" # REFUSAL:rc_nonzero
 [ "${#VLINES[@]}" -gt 0 ] || fail "no verdict line matching $VERDICT_RE" # REFUSAL:no_verdict
 [ "${#VLINES[@]}" -eq 0 ] || printf '%s\n' "${VLINES[$((${#VLINES[@]} - 1))]}" | grep -Eq -- "$PASS_LINE" || fail "last verdict line does not match PASS_LINE" # REFUSAL:fail_verdict
+if [ "$REQUIRE_ALL_PASS" = 1 ] && [ "${#VLINES[@]}" -gt 0 ] && printf '%s\n' "${VLINES[@]}" | grep -Evq -- "$PASS_LINE"; then fail "a verdict line does not match PASS_LINE (REQUIRE_ALL_PASS=1)"; fi # REFUSAL:fail_any_verdict
 [ "$REFUSE_DIRTY_OMEGA" != 1 ] || [ "$OMEGA_CLEAN_AFTER" = true ] || fail "omega tree dirty after run" # REFUSAL:omega_dirty_after
 [ "$PHYS_CLEAN_AFTER" = true ] || fail "physics tree dirty after run" # REFUSAL:physics_dirty_after
 [ "$OMEGA_SAME" = true ] && [ "$PHYS_SAME" = true ] || fail "a HEAD moved during the run" # REFUSAL:head_moved

@@ -44,6 +44,7 @@ int main(int argc, char **argv) {
     if (getenv("FAKE_CMD") && system(getenv("FAKE_CMD")) != 0) return 9;
     if (!strcmp(m, "silent")) return 0;
     if (!strcmp(m, "fail")) { printf("RESULT chip x ok=false\nVERDICT FAIL\n"); return 0; }
+    if (!strcmp(m, "failpass")) { printf("VERDICT FAIL\nVERDICT PASS\n"); return 0; }
     if (!strcmp(m, "passrc")) { printf("VERDICT PASS\n"); return 3; }
     printf("RESULT chip x ok=true\nVERDICT PASS\n");
     return 0;
@@ -59,7 +60,8 @@ printf '#!/bin/sh\necho VERDICT PASS\n' > "$T/bin/script"; chmod +x "$T/bin/scri
 mkdir -p "$PHYS/nvrm" "$OM/tools" "$OM/src"
 git init -q "$PHYS" && echo "/* fake */" > "$PHYS/nvrm/nvrm.c" && g "$PHYS" add -A && g "$PHYS" commit -q -m physics
 PIN=$(git -C "$PHYS" rev-parse HEAD)
-git init -q "$OM" && cp "$SRC_MODULE" "$OM/tools/chip_run.sh" && echo "$PIN" > "$OM/physics.lock" && echo "/* fake */" > "$OM/src/a.c" \
+git init -q "$OM" && cp "$SRC_MODULE" "$OM/tools/chip_run.sh" && echo "$PIN" > "$OM/physics.lock" && echo "/* fake */" > "$OM/src/a.c" && echo "int main(void){ return undefined_thing; }" > "$OM/src/bad.c" \
+    && printf "#include <stdio.h>\\nint main(void){ puts(\"VERDICT PASS\"); return 0; }\\n" > "$OM/src/okchip.c" \
     && g "$OM" add -A && g "$OM" commit -q -m omega
 OM_HEAD=$(git -C "$OM" rev-parse HEAD)
 
@@ -82,6 +84,7 @@ EOM
 mkman "$T/m.sh"; mkman "$T/m-hostfail.sh" "HOST_TIER_CMD=false"
 mkman "$T/m-map.sh" "REFUSE_EXIT=1; REFUSE_VERDICT_LINE='VERDICT NOT_RUN'"
 mkman "$T/m-off.sh" "RAISE_QUIET=0; TAKE_GPU_LOCK=0"
+mkman "$T/m-all.sh" "REQUIRE_ALL_PASS=1; VERDICT_RE='^VERDICT'"
 CRMAN=$T/m.sh; PD=(--physics-dir "$PHYS")
 
 reset_world() {
@@ -91,11 +94,11 @@ reset_world() {
 }
 # cr ID [NAME=VALUE ...] -- [module args]: run the module from outside both trees
 cr() {
-    local id=$1; shift; local extra=()
+    local id=$1; shift; local extra=() ev=(--evidence-dir "$T/ev-$id"); [ -z "${NOEVID:-}" ] || ev=()
     while [ "$1" != -- ]; do extra+=("$1"); shift; done; shift
     ( cd "$T" && env -u PHYSICS_DIR -u PHYSICS CHIPRUN_SELFTEST=1 CHIPRUN_PREBUILT_BIN="$T/bin/ok" CHIPRUN_QUIET_FLAG="$FLAG" \
         CHIPRUN_GPU_LOCK="$LOCK" CHIPRUN_EST_LOAD_CMD=true FAKE_MODE=pass TMPDIR="$T/tmp" "${extra[@]}" \
-        bash "$OM/tools/chip_run.sh" "$CRMAN" --evidence-dir "$T/ev-$id" "$@" ) > "$OUT" 2>&1
+        bash "${RAWMOD:-$OM/tools/chip_run.sh}" "$CRMAN" "${ev[@]}" "$@" ) > "$OUT" 2>&1
     RC=$?
 }
 bad() { echo "FAIL $1: $2"; sed 's/^/     | /' "$OUT" | head -8; BAD=$((BAD + 1)); }
@@ -154,6 +157,117 @@ reset_world; cr physics_dirty_after FAKE_CMD="touch $PHYS/dirt" -- "${PD[@]}"
 expect physics_dirty_after 1 '^CHIP_RUN: FAIL physics tree dirty after run'
 reset_world; cr head_moved FAKE_CMD="git -C $OM -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q --allow-empty -m x" -- "${PD[@]}"
 expect head_moved 1 '^CHIP_RUN: FAIL a HEAD moved'
+
+# raw ENV=VALUE... -- args: run the module with every seam variable unset (no CHIPRUN_SELFTEST)
+raw() {
+    local extra=(); while [ "$1" != -- ]; do extra+=("$1"); shift; done; shift
+    ( cd "$T" && env -u PHYSICS_DIR -u PHYSICS -u CHIPRUN_SELFTEST -u CHIPRUN_PREBUILT_BIN -u CHIPRUN_QUIET_FLAG -u CHIPRUN_GPU_LOCK \
+        -u CHIPRUN_EST_LOAD_CMD TMPDIR="$T/tmp" "${extra[@]}" bash "${RAWMOD:-$OM/tools/chip_run.sh}" "$@" ) > "$OUT" 2>&1
+    RC=$?
+}
+# test seam: each of the four variables ALONE, without CHIPRUN_SELFTEST=1, is refused (manifest is m-off: no real flag or lock)
+for sv in "seam_prebuilt CHIPRUN_PREBUILT_BIN $T/bin/ok" "seam_quiet CHIPRUN_QUIET_FLAG $FLAG" "seam_gpu CHIPRUN_GPU_LOCK $LOCK" "seam_est CHIPRUN_EST_LOAD_CMD true"; do
+    read -r sid svar sval <<< "$sv"
+    reset_world; raw "$svar=$sval" -- "$T/m-off.sh" --evidence-dir "$T/ev-$sid" "${PD[@]}"
+    expect "$sid" 2 "^REFUSED: $svar is a self-test override"
+done
+# checked before the manifest is read: a missing manifest still gets the seam message
+reset_world; raw CHIPRUN_PREBUILT_BIN="$T/bin/ok" -- "$T/nope.sh" --evidence-dir "$T/ev-seam_before" "${PD[@]}"
+expect seam_before 2 '^REFUSED: CHIPRUN_PREBUILT_BIN is a self-test override'
+# checked after the manifest is read: a manifest that sets the variable cannot slip it in
+mkman "$T/m-seamset.sh" "RAISE_QUIET=0; TAKE_GPU_LOCK=0; CHIPRUN_PREBUILT_BIN=$T/bin/ok"
+reset_world; raw -- "$T/m-seamset.sh" --evidence-dir "$T/ev-seam_after" "${PD[@]}"
+expect seam_after 2 '^REFUSED: CHIPRUN_PREBUILT_BIN is a self-test override'
+# even with CHIPRUN_SELFTEST=1 in the environment, a manifest cannot change a seam variable or set CHIPRUN_SELFTEST
+mkman "$T/m-seamchg.sh" "RAISE_QUIET=0; TAKE_GPU_LOCK=0; CHIPRUN_PREBUILT_BIN=$T/bin/libm"
+reset_world; raw CHIPRUN_SELFTEST=1 CHIPRUN_PREBUILT_BIN="$T/bin/ok" -- "$T/m-seamchg.sh" --evidence-dir "$T/ev-seam_changed" "${PD[@]}"
+expect seam_changed 2 '^REFUSED: manifest changed CHIPRUN_PREBUILT_BIN'
+mkman "$T/m-selfset.sh" "RAISE_QUIET=0; TAKE_GPU_LOCK=0; CHIPRUN_SELFTEST=1"
+reset_world; raw -- "$T/m-selfset.sh" --evidence-dir "$T/ev-seam_selftest" "${PD[@]}"
+expect seam_selftest 2 '^REFUSED: manifest changed CHIPRUN_SELFTEST'
+
+# usage, arguments, manifest
+reset_world; raw --
+expect usage 2 '^REFUSED: usage'
+reset_world; cr bad_arg -- "${PD[@]}" --bogus
+expect bad_arg 2 '^REFUSED: unknown argument --bogus'
+reset_world; cr arg_value -- --physics-dir
+expect arg_value 2 '^REFUSED: --physics-dir needs a value'
+reset_world; CRMAN=$T/nope.sh cr no_manifest -- "${PD[@]}"
+expect no_manifest 2 '^REFUSED: no manifest at'
+mkman "$T/m-loadfail.sh" "false"
+reset_world; CRMAN=$T/m-loadfail.sh cr manifest_load -- "${PD[@]}"
+expect manifest_load 2 '^REFUSED: manifest .* failed to load'
+mkman "$T/m-novars.sh" 'OWNER=""'
+reset_world; CRMAN=$T/m-novars.sh cr manifest_vars -- "${PD[@]}"
+expect manifest_vars 2 '^REFUSED: manifest does not set OWNER'
+mkman "$T/m-gate.sh" 'GATE="bad/gate"'
+reset_world; CRMAN=$T/m-gate.sh cr gate_chars -- "${PD[@]}"
+expect gate_chars 2 '^REFUSED: GATE .* characters'
+mkman "$T/m-noevid.sh" 'EVIDENCE_DIR=""'
+reset_world; NOEVID=1; CRMAN=$T/m-noevid.sh cr no_evidence -- "${PD[@]}"; unset NOEVID
+expect no_evidence 2 '^REFUSED: no evidence dir'
+# REFUSE_EXIT must be an integer 1..125; REQUIRE_ALL_PASS must be 0 or 1
+for rx in "refuse_exit 0" "refuse_exit_text abc" "refuse_exit_big 126" "refuse_exit_empty ''"; do
+    read -r rid rval <<< "$rx"; mkman "$T/m-$rid.sh" "REFUSE_EXIT=$rval"
+    reset_world; CRMAN=$T/m-$rid.sh cr "$rid" -- "${PD[@]}"
+    expect "$rid" 1 '^CHIP_RUN: BAD_MANIFEST REFUSE_EXIT='
+done
+mkman "$T/m-rx125.sh" "REFUSE_EXIT=125"
+reset_world; CRMAN=$T/m-rx125.sh cr refuse_exit_125 -- --physics-dir "$T/nonexistent"
+expect refuse_exit_125 125 '^REFUSED: no physics checkout'
+mkman "$T/m-rap-bad.sh" "REQUIRE_ALL_PASS=yes"
+reset_world; CRMAN=$T/m-rap-bad.sh cr require_all_value -- "${PD[@]}"
+expect require_all_value 1 '^CHIP_RUN: BAD_MANIFEST REQUIRE_ALL_PASS='
+
+# refusals that need a special world
+mkdir -p "$T/nogit-om/tools" "$T/nogit/nvrm"; cp "$SRC_MODULE" "$T/nogit-om/tools/chip_run.sh"
+reset_world; RAWMOD=$T/nogit-om/tools/chip_run.sh cr omega_head -- "${PD[@]}"
+expect omega_head 2 '^REFUSED: cannot read omega HEAD'
+mkman "$T/m-nolock.sh" "REFUSE_DIRTY_OMEGA=0"
+reset_world; rm -f "$OM/physics.lock"; CRMAN=$T/m-nolock.sh cr physics_lock -- "${PD[@]}"
+expect physics_lock 2 '^REFUSED: cannot read physics.lock'
+reset_world; cr physics_head -- --physics-dir "$T/nogit"
+expect physics_head 2 '^REFUSED: cannot read physics HEAD'
+reset_world; cr mktemp TMPDIR="$T/nonexistent" -- "${PD[@]}"
+expect mktemp 2 '^REFUSED: cannot create a run directory'
+mkman "$T/m-race.sh" "HOST_TIER_CMD='echo other > $FLAG'"
+reset_world; CRMAN=$T/m-race.sh cr flag_create -- "${PD[@]}"
+expect flag_create 2 '^REFUSED: could not create the quiet flag'
+assert flag_create "a flag created by someone else in the race is left alone" flag_is_other
+reset_world; cr gpu_open CHIPRUN_GPU_LOCK="$T/nodir/x.lock" -- "${PD[@]}"
+expect gpu_open 2 '^REFUSED: cannot open'
+assert gpu_open "the quiet flag we raised is dropped on refusal" no_flag
+reset_world; cr prebuilt_not_exec CHIPRUN_PREBUILT_BIN="$T/nonexistent" -- "${PD[@]}"
+expect prebuilt_not_exec 2 '^REFUSED: CHIPRUN_PREBUILT_BIN .* is not executable'
+mkman "$T/m-nosrc.sh" "TEST_SOURCE=src/nope.c"
+reset_world; CRMAN=$T/m-nosrc.sh cr missing_source CHIPRUN_PREBUILT_BIN= -- "${PD[@]}"
+expect missing_source 2 '^REFUSED: missing source src/nope.c'
+mkman "$T/m-badsrc.sh" "TEST_SOURCE=src/bad.c"
+reset_world; CRMAN=$T/m-badsrc.sh cr build_failed CHIPRUN_PREBUILT_BIN= -- "${PD[@]}"
+expect build_failed 2 '^REFUSED: chip build failed'
+mkman "$T/m-oksrc.sh" "TEST_SOURCE=src/okchip.c"
+reset_world; CRMAN=$T/m-oksrc.sh cr build_ok CHIPRUN_PREBUILT_BIN= -- "${PD[@]}"
+expect build_ok 0 '^CHIP_RUN: PASS'
+# quiet flag: dropped only if still ours
+reset_world; cr flag_not_ours FAKE_CMD="echo other > $FLAG" -- "${PD[@]}"
+expect flag_not_ours 0 '^CHIP_RUN: PASS'
+assert flag_not_ours "a flag someone else rewrote during the run is left alone" flag_is_other
+# verdict logic: FAIL line then PASS line
+reset_world; cr last_line_default FAKE_MODE=failpass -- "${PD[@]}"
+expect last_line_default 0 '^CHIP_RUN: PASS'
+reset_world; CRMAN=$T/m-all.sh cr fail_any_verdict FAKE_MODE=failpass -- "${PD[@]}"
+expect fail_any_verdict 1 '^CHIP_RUN: FAIL a verdict line does not match PASS_LINE'
+assert fail_any_verdict "a FAIL receipt is still written" receipt_verdict fail_any_verdict FAIL
+reset_world; CRMAN=$T/m-all.sh cr all_pass_ok FAKE_MODE=pass -- "${PD[@]}"
+expect all_pass_ok 0 '^CHIP_RUN: PASS'
+# evidence reuse: a second run keeps one log blob; a tampered blob is caught
+reset_world; cr reuse -- "${PD[@]}"; cr reuse -- "${PD[@]}"
+expect reuse 0 '^CHIP_RUN: PASS'
+assert reuse "one log blob for two identical logs" test "$(ls "$T"/ev-reuse/blobs/*.log 2>/dev/null | wc -l)" = 1
+RB=$(ls "$T"/ev-reuse/blobs/*.log 2>/dev/null | head -1); chmod u+w "$RB" 2>/dev/null; echo tamper >> "$RB"
+reset_world; cr reuse -- "${PD[@]}"
+expect blob_tamper 1 '^CHIP_RUN: FAIL log blob does not match its digest'
 
 # physics dir resolution order: flag, PHYSICS_DIR, PHYSICS
 reset_world; cr order_env_dir PHYSICS="$T/nonexistent" PHYSICS_DIR="$PHYS" --
