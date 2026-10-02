@@ -1,9 +1,10 @@
 #!/bin/sh
-# M20 OMEGA_TENSOR mutation sweep. For each rule marked MUT:<name> in
-# src/tensor/*.c, copy src/tensor to a scratch directory, break that one rule,
-# rebuild the CPU test against the copy and require the test to FAIL.
-# A mutation that does not apply, or that the tests do not catch, fails the
-# sweep. CPU only, no device. Shell only (no Python).
+# M20 OMEGA_TENSOR mutation sweep, a thin adapter over tools/mutation_runner.sh.
+# For each rule marked MUT:<name> in src/tensor/*.c the runner copies the tree
+# to a scratch directory, breaks that one rule, rebuilds the CPU test there and
+# requires the test to FAIL. A mutation that does not apply, does not build or
+# is not caught fails the sweep. The adapter maps the runner verdicts back to
+# the legacy stdout lines. CPU only, no device. Shell only (no Python).
 set -u
 cd "$(dirname "$0")/.." || exit 2
 SCRATCH=$(mktemp -d "${TMPDIR:-/tmp}/tensor-mut.XXXXXX") || exit 2
@@ -43,50 +44,6 @@ REDUCE_AXES_DESCENDING|omega_tensor.c|s/for (uint32_t d = in.rank; d-- > 0;)/for
 REDUCE_AXES_KEEPDIMS|omega_tensor.c|s/keep\[n\] = keepdims;/keep[n] = keepdims \&\& false;/
 SUM_TO_SHAPE_SIZE1|omega_tensor.c|s/ax\[n\] = d; keep\[n\] = true; n++;/(void)0;/'
 
-# Baseline: the unmutated build must PASS, otherwise every mutant would
-# look "caught" (e.g. the test refusing an unsuitable FP environment).
-if ! gcc $FLAGS -Isrc -Isrc/tensor -o "$SCRATCH/base" tests/test_omega_tensor.c \
-    src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor/omega_tensor_reduce_seam.c $DEPS \
-    > "$SCRATCH/base.log" 2>&1 || ! "$SCRATCH/base" > "$SCRATCH/base.run" 2>&1; then
-    head -5 "$SCRATCH/base.log" "$SCRATCH/base.run" 2>/dev/null
-    echo "tensor mutation sweep: FAIL (unmutated baseline does not pass)"; exit 1
-fi
-fail=0
-total=0
-old_ifs=$IFS
-IFS='
-'
-for m in $MUTATIONS; do
-    IFS=$old_ifs
-    IFS='|' read -r name file expr <<EOM
-$m
-EOM
-    total=$((total + 1))
-    rm -rf "$SCRATCH/tensor" && cp -r src/tensor "$SCRATCH/tensor"
-    sed -i "/MUT:$name/ $expr" "$SCRATCH/tensor/$file"
-    if cmp -s "src/tensor/$file" "$SCRATCH/tensor/$file"; then
-        echo "MUTATION $name: NOT APPLIED (marker or pattern missing)"; fail=1; continue
-    fi
-    if ! gcc $FLAGS -Isrc -I"$SCRATCH/tensor" -o "$SCRATCH/t" tests/test_omega_tensor.c \
-        "$SCRATCH/tensor/omega_tensor.c" "$SCRATCH/tensor/omega_tensor_cpu.c" \
-        "$SCRATCH/tensor/omega_tensor_reduce_seam.c" $DEPS > "$SCRATCH/build.log" 2>&1; then
-        head -5 "$SCRATCH/build.log"
-        echo "MUTATION $name: does not build (fix the sed expression)"; fail=1; continue
-    fi
-    if "$SCRATCH/t" > "$SCRATCH/run.log" 2>&1; then
-        echo "MUTATION $name: NOT CAUGHT (tests still pass)"; fail=1
-    else
-        echo "MUTATION $name: caught ($(grep -c '^FAIL' "$SCRATCH/run.log") failing checks)"
-    fi
-done
-IFS=$old_ifs
-# M20 receipt writer mutants (MUT: markers in tools/m20_receipt.sh), own sweep.
-tools/m20_receipt_mutations.sh || fail=1
-
-# Crash-safe storage lifetime (omega_tensor_store.c): each mutant rebuilds
-# tests/test_omega_tensor_store.c against the mutated copy and must FAIL it.
-# (Skipping the fsync before rename is not observable without power loss, so
-# it is not a mutant here.)
 STORE_MUTATIONS='TSTORE_HASH_VERIFY|s/memcmp(dig, sl->payload_sha, 32) != 0 || memcmp(vid, sl->value_id, 32) != 0/0/
 TSTORE_SHORT_RECORD|s/len != HDR_BYTES + count \* REC_BYTES/0/
 TSTORE_GEN_RESET|s/sl->gen = r->gen + 1;/sl->gen = 1;/
@@ -94,36 +51,67 @@ TSTORE_RENAME_BEFORE_WRITE|s/const char \*wpath = tmp;/const char *wpath = final
 TSTORE_RECORD_SUM|s/memcmp(sum, in + REC_SUM, 32) != 0/0/
 TSTORE_HEADER_SUM|s/memcmp(sum, st->jbuf + HDR_SUM, 32) != 0/0/'
 STORE_SRCS="src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor/omega_tensor_reduce_seam.c"
-if ! gcc $FLAGS -Isrc -Isrc/tensor -o "$SCRATCH/sbase" tests/test_omega_tensor_store.c \
-    src/tensor/omega_tensor_store.c $STORE_SRCS $DEPS > "$SCRATCH/sbase.log" 2>&1 \
-    || ! "$SCRATCH/sbase" > "$SCRATCH/sbase.run" 2>&1; then
-    head -5 "$SCRATCH/sbase.log" "$SCRATCH/sbase.run" 2>/dev/null
-    echo "MUTATION store baseline: unmutated store test does not pass"; fail=1
-else
-    IFS='
-'
-    for m in $STORE_MUTATIONS; do
-        IFS=$old_ifs
-        name=${m%%|*}
-        expr=${m#*|}
+# The runner reads its own env var ONLY; the legacy sweep never did.
+unset ONLY
+fail=0
+total=0
+
+# run_block ROWSFILE BUILDCMD TESTCMD: run the shared runner (marker reader,
+# baseline check on) and print one legacy "MUTATION <name>: ..." line per
+# mutant, in row order. Returns 3 if the unmutated baseline does not pass.
+# Legacy notes that need no mapping beyond the verdict: KILLED note
+# "<N> failing case(s), first: ..." becomes "caught (<N> failing checks)",
+# "harness exit" (nonzero exit, no FAIL line) becomes "caught (0 failing
+# checks)". The 5-line build-log head the old script printed on a build error
+# is replaced by the runner's one-line build error note.
+run_block() {
+    rb_rows=$1
+    "tools/mutation_runner.sh" -k marker -m "$rb_rows" -t "$3" -b "$2" -c "src tests" -f FAIL -B \
+        > "$SCRATCH/rb.out" 2> "$SCRATCH/rb.err"
+    if grep -q 'unmutated baseline does not pass' "$SCRATCH/rb.out"; then
+        cat "$SCRATCH/rb.err"; return 3
+    fi
+    while IFS= read -r rb_l; do
+        rb_id=${rb_l%% *}; rb_r=${rb_l#* }; rb_st=${rb_r%% *}
+        rb_note=${rb_l#*\(}; rb_note=${rb_note%)}
         total=$((total + 1))
-        cp src/tensor/omega_tensor_store.c "$SCRATCH/store.c"
-        sed -i "/MUT:$name/ $expr" "$SCRATCH/store.c"
-        if cmp -s src/tensor/omega_tensor_store.c "$SCRATCH/store.c"; then
-            echo "MUTATION $name: NOT APPLIED (marker or pattern missing)"; fail=1; continue
-        fi
-        if ! gcc $FLAGS -Isrc -Isrc/tensor -o "$SCRATCH/st" tests/test_omega_tensor_store.c \
-            "$SCRATCH/store.c" $STORE_SRCS $DEPS > "$SCRATCH/sbuild.log" 2>&1; then
-            head -5 "$SCRATCH/sbuild.log"
-            echo "MUTATION $name: does not build (fix the sed expression)"; fail=1; continue
-        fi
-        if "$SCRATCH/st" > "$SCRATCH/srun.log" 2>&1; then
-            echo "MUTATION $name: NOT CAUGHT (tests still pass)"; fail=1
-        else
-            echo "MUTATION $name: caught ($(grep -c '^FAIL' "$SCRATCH/srun.log") failing checks)"
-        fi
-    done
-    IFS=$old_ifs
+        case $rb_st in
+            KILLED)
+                rb_n=$(printf '%s\n' "$rb_note" | sed -n 's/^\([0-9][0-9]*\) failing case.*/\1/p')
+                echo "MUTATION $rb_id: caught (${rb_n:-0} failing checks)" ;;
+            SURVIVED*) echo "MUTATION $rb_id: NOT CAUGHT (tests still pass)"; fail=1 ;;
+            *)
+                case $rb_note in
+                    "build failed"*) echo "$rb_note"; echo "MUTATION $rb_id: does not build (fix the sed expression)" ;;
+                    *) echo "MUTATION $rb_id: NOT APPLIED (marker or pattern missing)" ;;
+                esac
+                fail=1 ;;
+        esac
+    done < "$SCRATCH/rb.err"
+}
+
+# Main block. Rows are name|file|sed expression; the file column is relative
+# to src/tensor, the runner wants it relative to the tree root.
+printf '%s\n' "$MUTATIONS" | sed 's#^\([A-Z0-9_]*\)|#\1|src/tensor/#' > "$SCRATCH/main.rows"
+# Baseline: the unmutated build must PASS, otherwise every mutant would
+# look "caught" (e.g. the test refusing an unsuitable FP environment).
+if ! run_block "$SCRATCH/main.rows" \
+    "gcc $FLAGS -Isrc -Isrc/tensor -o .tensor_t tests/test_omega_tensor.c src/tensor/omega_tensor.c src/tensor/omega_tensor_cpu.c src/tensor/omega_tensor_reduce_seam.c $DEPS" \
+    ./.tensor_t; then
+    echo "tensor mutation sweep: FAIL (unmutated baseline does not pass)"; exit 1
+fi
+# M20 receipt writer mutants (MUT: markers in tools/m20_receipt.sh), own sweep.
+tools/m20_receipt_mutations.sh || fail=1
+
+# Crash-safe storage lifetime (omega_tensor_store.c): each mutant rebuilds
+# tests/test_omega_tensor_store.c against the mutated copy and must FAIL it.
+# (Skipping the fsync before rename is not observable without power loss, so
+# it is not a mutant here.) Rows are name|expr, the file is implied.
+printf '%s\n' "$STORE_MUTATIONS" | sed 's#^\([A-Z0-9_]*\)|#\1|src/tensor/omega_tensor_store.c|#' > "$SCRATCH/store.rows"
+if ! run_block "$SCRATCH/store.rows" \
+    "gcc $FLAGS -Isrc -Isrc/tensor -o .tstore_t tests/test_omega_tensor_store.c src/tensor/omega_tensor_store.c $STORE_SRCS $DEPS" \
+    ./.tstore_t; then
+    echo "MUTATION store baseline: unmutated store test does not pass"; fail=1
 fi
 
 if [ "$fail" -ne 0 ]; then echo "tensor mutation sweep: FAIL"; exit 1; fi
