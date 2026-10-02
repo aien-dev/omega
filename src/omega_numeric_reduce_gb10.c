@@ -392,6 +392,9 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     volatile uint32_t *hmarker = (volatile uint32_t *)marker_mem.cpu;
     *hsem = 0;
     *hmarker = 0;
+#ifndef OMEGA_C3_PROTECT_OFF /* C3 hardening, same as omega_ds_gb10_run (-DOMEGA_C3_PROTECT_OFF = A/B control arm) */
+    *(volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10) = 0;
+#endif
     __asm__ volatile("dsb sy" ::: "memory");
 
     uint32_t pb[1024];
@@ -446,11 +449,33 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     pb[pb_len++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20);
+#ifndef OMEGA_C3_PROTECT_OFF
+    /* C3 hardening, copied from omega_ds_gb10_run (src/omega_numeric_divsqrt_gb10.c): after the WFI
+     * marker flush GPU L2 dirty lines to memory (NVC96F_MEM_OP_A..D = 0x28..0x34, D bits 31:27
+     * OPERATION = L2_FLUSH_DIRTY 0x10), then a second WFI marker the host waits for before the readback. */
+    pb[pb_len++] = nvrm_mthd(0, 0x0028, 4);
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = (0x10u << 27);
+    pb[pb_len++] = nvrm_mthd(0, 0x005c, 5);
+    pb[pb_len++] = (uint32_t)(marker_mem.va + 0x10);
+    pb[pb_len++] = (uint32_t)((marker_mem.va + 0x10) >> 32);
+    pb[pb_len++] = 0x46464646u;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0x1 | (1u << 20);
+#endif
 
     if ((drc_ = m16_native_submit_methods(&ctx, pb, pb_len)) != 0) return GB10_FAIL("submit", 1, drc_);
     if ((drc_ = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000)) != 0) {
         return GB10_FAIL_WAIT("marker_wait", drc_, 5000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
+#ifndef OMEGA_C3_PROTECT_OFF
+    volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
+    if ((drc_ = m16_native_wait_marker(hmarker2, 0x46464646u, 5000)) != 0) {
+        return GB10_FAIL_WAIT("marker2_wait", drc_, 5000, hmarker2, 0x46464646u);
+    }
+#endif
     /* The host marker can land before the last CTAs' stores are visible (seen
      * by the DIV/SQRT gate, PR #141). Read only after the QMD's own release
      * semaphore, written after the grid completes, is DONE. */

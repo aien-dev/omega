@@ -175,3 +175,8 @@ Row 12, FP32 in the program IR: see `spec/program-fp32.md`. No program-IR owner 
 
 Chip failure classification for these jobs: a FAIL whose log shows bytes still equal to the fill pattern or
 block-aligned unwritten spans is the unwritten-output bug C3 (branch `c3-h1-fence`), not a defect of these kernels.
+
+C3 hardening (branch `e1-gap-close`): the reduce launcher (`run_chunk`) and the ldst launcher (`omega_ldst_gb10_run`) had the same
+pre-fix pattern as `omega_ds_gb10_run` and now take its L2 flush plus second release marker, waited on before every readback (step
+`marker2_wait`). A/B script: `~/workspace/scripts/lt-e1-c3-ab.sh` (control arm `-DOMEGA_C3_PROTECT_OFF`, compiles out only the new
+reduce and ldst protection). Results: NOT_RUN until the forge reports. No claim is made that this fixes the observed rc=-4.
