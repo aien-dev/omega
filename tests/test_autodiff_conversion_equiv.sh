@@ -41,6 +41,8 @@ sed '1s/KILLED/SURVIVED/' "$tmp/new.v" > "$tmp/alt.v"
 if cmp -s "$tmp/old.v" "$tmp/alt.v"; then chk "negative: altered verdict is detected" 1; else chk "negative: altered verdict is detected" 0; fi
 sed '1s/^MUTATION/MUTATIONX/' "$tmp/new.out" > "$tmp/alt.out"
 if cmp -s "$tmp/old.out" "$tmp/alt.out"; then chk "negative: altered stdout is detected" 1; else chk "negative: altered stdout is detected" 0; fi
+echo $(( $(cat "$tmp/old.rc") + 1 )) > "$tmp/alt.rc"
+if cmp -s "$tmp/old.rc" "$tmp/alt.rc"; then chk "negative: altered exit code is detected" 1; else chk "negative: altered exit code is detected" 0; fi
 
 echo "compared $count mutants"
 if [ "$fails" -ne 0 ]; then echo "autodiff conversion equivalence: FAIL"; exit 1; fi
