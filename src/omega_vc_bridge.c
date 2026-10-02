@@ -252,8 +252,10 @@ int omega_vc_bridge_admit(OmegaVcBridge *b, OmegaLibrary *lib, const OmegaProgra
     r.blob_ctx = b;
     OmegaResolveError err;
     if (omega_resolve_admit(&r, &b->store, vc, o.n, vcid, NULL, &err) != 0) goto done;
-    /* store first, library second: the library entry carries the receipt id as its evidence hash */
-    rc = omega_library_insert(lib, prog, deps, dep_count, rid);
+    /* store first, library second: the library entry carries the receipt id as its evidence hash.
+     * Insert the copy the bridge verified itself (the library copies it by value); the caller's
+     * is_verified flag is never consulted. */
+    rc = omega_library_insert(lib, cp, deps, dep_count, rid);
 done:
     free(ir);
     free(vc);
