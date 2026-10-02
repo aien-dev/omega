@@ -1099,3 +1099,109 @@ int omega_tensor_concat(OmegaTensorCtx *ctx, uint32_t n, const OmegaTensor *tens
     if (rc) omega_tensor_release(ctx, *out);
     return rc;
 }
+
+/* ---- multi-axis reduce and unbroadcast (CR-5) ------------------------------ */
+
+/* Bit copy of t (any layout) into a new dense tensor of (rank, shape) holding
+ * the same number of elements in the same logical row-major order. Used only
+ * to drop or keep size-1 axes. No arithmetic. */
+static int copy_as_shape(OmegaTensorCtx *ctx, OmegaTensor t, uint32_t rank, const uint64_t *shape,
+                         OmegaTensor *out) {
+    TensorSlot *x;
+    StorageSlot *s;
+    int rc = tensor_get(ctx, t, &x, &s);
+    if (rc) return rc;
+    OmegaTensorInfo in = x->info;  /* copy: slot table may be reused below */
+    uint64_t n;
+    rc = shape_check(rank, shape, &n);
+    if (rc) return rc;
+    if (n != in.elements) return OMEGA_TENSOR_ERR_SHAPE;
+    void *buf;
+    rc = new_dense(ctx, in.dtype, rank, shape, out, &buf);
+    if (rc) return rc;
+    gather(s, &in, buf);
+    return OMEGA_TENSOR_OK;
+}
+
+/* Single-axis reduce chain: step i reduces axis ax[i] with keepdims keep[i].
+ * The caller lists the axes in descending order. Every intermediate tensor is
+ * released; t itself never is. n >= 1. */
+static int reduce_chain(OmegaTensorCtx *ctx, OmegaTensorReduceOp op, OmegaTensor t, uint32_t n,
+                        const uint32_t *ax, const bool *keep, OmegaTensor *out) {
+    OmegaTensor cur = t;
+    for (uint32_t i = 0; i < n; i++) {
+        OmegaTensor next;
+        int rc = omega_tensor_reduce(ctx, op, cur, ax[i], keep[i], &next);
+        if (i > 0) omega_tensor_release(ctx, cur);
+        if (rc) return rc;
+        cur = next;
+    }
+    *out = cur;
+    return OMEGA_TENSOR_OK;
+}
+
+int omega_tensor_reduce_axes(OmegaTensorCtx *ctx, OmegaTensorReduceOp op, OmegaTensor t,
+                             uint32_t naxes, const uint32_t *axes, bool keepdims, OmegaTensor *out) {
+    TensorSlot *x;
+    if (!out || (unsigned)op >= OMEGA_TR_COUNT || (naxes && !axes)) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    int rc = tensor_get(ctx, t, &x, NULL);
+    if (rc) return rc;
+    OmegaTensorInfo in = x->info;
+    if (in.dtype != OMEGA_DT_F32) return OMEGA_TENSOR_ERR_DTYPE;
+    if (in.rank == 0) return OMEGA_TENSOR_ERR_RANK;
+    if (naxes > in.rank) return OMEGA_TENSOR_ERR_AXIS;
+    /* Mean over several axes would be a mean of means: refused (header). */
+    if (op == OMEGA_TR_MEAN && naxes > 1) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    bool seen[OMEGA_TENSOR_MAX_RANK] = {false};
+    for (uint32_t i = 0; i < naxes; i++) {
+        if (axes[i] >= in.rank || seen[axes[i]]) return OMEGA_TENSOR_ERR_AXIS;
+        seen[axes[i]] = true;
+    }
+    if (naxes == 0) return omega_tensor_contiguous(ctx, t, out);
+    uint32_t ax[OMEGA_TENSOR_MAX_RANK];
+    bool keep[OMEGA_TENSOR_MAX_RANK];
+    uint32_t n = 0;
+    for (uint32_t d = in.rank; d-- > 0;) { /* MUT:REDUCE_AXES_DESCENDING */
+        if (!seen[d]) continue;
+        ax[n] = d;
+        keep[n] = keepdims; /* MUT:REDUCE_AXES_KEEPDIMS */
+        n++;
+    }
+    return reduce_chain(ctx, op, t, n, ax, keep, out);
+}
+
+int omega_tensor_sum_to_shape(OmegaTensorCtx *ctx, OmegaTensor t, uint32_t rank,
+                              const uint64_t *shape, OmegaTensor *out) {
+    TensorSlot *x;
+    if (!out) return OMEGA_TENSOR_ERR_BAD_ARGS;
+    int rc = tensor_get(ctx, t, &x, NULL);
+    if (rc) return rc;
+    OmegaTensorInfo in = x->info;
+    uint64_t elems;
+    rc = shape_check(rank, shape, &elems);
+    if (rc) return rc;
+    if (in.dtype != OMEGA_DT_F32) return OMEGA_TENSOR_ERR_DTYPE;
+    if (rank > in.rank) return OMEGA_TENSOR_ERR_SHAPE;
+    uint32_t lead = in.rank - rank;
+    /* Plan first (every check before any arithmetic), descending axis of t. */
+    uint32_t ax[OMEGA_TENSOR_MAX_RANK];
+    bool keep[OMEGA_TENSOR_MAX_RANK];
+    uint32_t n = 0;
+    for (uint32_t d = in.rank; d-- > 0;) {
+        if (d < lead) {            /* leading axis: summed away, never kept */
+            if (in.shape[d] > 1) { ax[n] = d; keep[n] = false; n++; }
+            continue;
+        }
+        uint64_t want = shape[d - lead];
+        if (want == in.shape[d]) continue;
+        if (want != 1) return OMEGA_TENSOR_ERR_SHAPE;
+        ax[n] = d; keep[n] = true; n++; /* MUT:SUM_TO_SHAPE_SIZE1 */
+    }
+    if (n == 0) return copy_as_shape(ctx, t, rank, shape, out);
+    OmegaTensor red;
+    rc = reduce_chain(ctx, OMEGA_TR_SUM, t, n, ax, keep, &red);
+    if (rc) return rc;
+    rc = copy_as_shape(ctx, red, rank, shape, out);
+    omega_tensor_release(ctx, red);
+    return rc;
+}
