@@ -220,6 +220,11 @@ int omega_ldst_host_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
 
 /* ---- chip ---------------------------------------------------------------------- */
 
+static int g_spec_id = -1;
+void omega_ldst_gb10_set_spec_id(int id) { g_spec_id = id; }
+/* One stderr line saying which device step failed, then the device error code. No other behaviour. */
+#define LDST_DEVERR(step, rc) (fprintf(stderr, "OMEGA_DEVERR step=%s rc=%d spec=%d\n", (step), (int)(rc), g_spec_id), OMEGA_NUMERIC_ERR_DEVICE)
+
 int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in_len, uint8_t *out_buf, size_t out_len,
                         size_t pad, size_t count) {
     char err[256];
@@ -259,20 +264,21 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
         0x20012559, 0x00000000,
     };
     M16NativeContext ctx;
-    if (m16_native_open(&ctx) != 0) return OMEGA_NUMERIC_ERR_DEVICE;
-    if (m16_native_create_channel(&ctx) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
+    int drc;
+    if ((drc = m16_native_open(&ctx)) != 0) return LDST_DEVERR("open", drc);
+    if ((drc = m16_native_create_channel(&ctx)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("open", drc); }
     NvrmMem large_pb;
-    if (nvrm_alloc(&ctx.rm, 0x10000, &large_pb) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
+    if ((drc = nvrm_alloc(&ctx.rm, 0x10000, &large_pb)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("alloc", drc); }
     ctx.pb_mem = large_pb;
     /* the prologue also reads 4 bytes at index i of the "b" buffer: give it the input, zero padded to 4*count */
     size_t in_dev = in_len > count * 4 ? in_len : count * 4;
     size_t in_bytes = (in_dev + 0xfffULL) & ~0xfffULL, out_bytes = (out_len + 0xfffULL) & ~0xfffULL;
     NvrmMem code_mem, cbank_mem, a_mem, out_mem, marker_mem, qmd_mem;
-    if (nvrm_alloc(&ctx.rm, OMEGA_DS_MAX_CODE_BYTES, &code_mem) != 0 || nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem) != 0 ||
-        nvrm_alloc(&ctx.rm, in_bytes, &a_mem) != 0 || nvrm_alloc(&ctx.rm, out_bytes, &out_mem) != 0 ||
-        nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0 || nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
+    if ((drc = nvrm_alloc(&ctx.rm, OMEGA_DS_MAX_CODE_BYTES, &code_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem)) != 0 ||
+        (drc = nvrm_alloc(&ctx.rm, in_bytes, &a_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, out_bytes, &out_mem)) != 0 ||
+        (drc = nvrm_alloc(&ctx.rm, 0x1000, &marker_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem)) != 0) {
         m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+        return LDST_DEVERR("alloc", drc);
     }
     memset(a_mem.cpu, 0, in_bytes);
     memcpy(a_mem.cpu, in_buf, in_len);
@@ -339,10 +345,10 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
     pb[n++] = (uint32_t)marker_mem.va; pb[n++] = (uint32_t)(marker_mem.va >> 32);
     pb[n++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD; pb[n++] = 0; pb[n++] = 0x1 | (1u << 20);
 
-    if (m16_native_submit_methods(&ctx, pb, n) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
+    if ((drc = m16_native_submit_methods(&ctx, pb, n)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("submit", drc); }
     /* Wait long: closing the channel under a running kernel jams the seat. */
-    if (m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
-    if (m16_native_wait_marker(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
+    if ((drc = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("wait", drc); }
+    if ((drc = m16_native_wait_marker(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("wait", drc); }
     __asm__ volatile("dsb sy" ::: "memory");
     memcpy(out_buf, out_mem.cpu, out_len);
     m16_native_close(&ctx);

@@ -220,9 +220,11 @@ static int host_tier(void) {
     return g_fail ? 1 : 0;
 }
 
-static int chip(void) {
+/* first..last (inclusive) specs, each run `repeats` times; omega_ldst_gb10_set_spec_id labels any OMEGA_DEVERR line. */
+static int chip(size_t first, size_t last, unsigned repeats) {
     int bad_specs = 0;
-    for (size_t k = 0; k < g_nspecs; k++) {
+    for (size_t k = first; k <= last && k < g_nspecs; k++)
+    for (unsigned rep = 0; rep < repeats; rep++) {
         const OmegaLdstSpec *s = &g_specs[k];
         Bufs b;
         char d[96];
@@ -231,6 +233,7 @@ static int chip(void) {
         memcpy(want, b.out, b.out_len);
         memcpy(got, b.out, b.out_len);
         if (omega_ldst_host_run(s, b.in, b.in_len, want, b.out_len, OMEGA_LDST_PAD, COUNT) != 0) return 2;
+        omega_ldst_gb10_set_spec_id((int)k);
         int rc = omega_ldst_gb10_run(s, b.in, b.in_len, got, b.out_len, OMEGA_LDST_PAD, COUNT);
         uint64_t mism = 0, unwritten = 0;
         if (rc == 0)
@@ -247,9 +250,23 @@ static int chip(void) {
     return bad_specs ? 1 : 0;
 }
 
+/* --chip [--spec N] [--repeats R]: all specs once by default; with --spec only spec N, R times (default 1). */
 int main(int argc, char **argv) {
     build_table();
     if (argc >= 3 && !strcmp(argv[1], "--dump")) return dump(argv[2]);
-    if (argc >= 2 && !strcmp(argv[1], "--chip")) return chip();
+    if (argc >= 2 && !strcmp(argv[1], "--chip")) {
+        size_t first = 0, last = g_nspecs ? g_nspecs - 1 : 0;
+        unsigned repeats = 1;
+        for (int i = 2; i < argc; i++) {
+            if (!strcmp(argv[i], "--spec") && i + 1 < argc) {
+                first = last = (size_t)strtoul(argv[++i], NULL, 10);
+                if (first >= g_nspecs) { fprintf(stderr, "--spec %zu out of range (0..%zu)\n", first, g_nspecs - 1); return 2; }
+            } else if (!strcmp(argv[i], "--repeats") && i + 1 < argc) {
+                repeats = (unsigned)strtoul(argv[++i], NULL, 10);
+                if (repeats == 0) { fprintf(stderr, "--repeats must be >= 1\n"); return 2; }
+            } else { fprintf(stderr, "unknown chip argument: %s\n", argv[i]); return 2; }
+        }
+        return chip(first, last, repeats);
+    }
     return host_tier();
 }
