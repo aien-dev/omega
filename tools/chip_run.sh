@@ -203,13 +203,14 @@ if [ ! -e "$EVID/blobs/$LOG_SHA.log" ]; then
     rm -f "$TMPB"
 fi
 [ "$(sha "$EVID/blobs/$LOG_SHA.log")" = "$LOG_SHA" ] || fatal "log blob does not match its digest"
+# The two arrays go to jq with an "x" prefix that jq strips: jq 1.7 still reads any --args value starting with "-" as an option.
 BODY=$(jq -n --arg gate "$GATE" --arg owner "$OWNER" --arg omega "$OMEGA_COMMIT" --arg phys "$PHYS_COMMIT" --arg pin "$PIN" \
     --argjson oclean "$OMEGA_CLEAN_BEFORE" --argjson pclean "$PHYS_CLEAN_BEFORE" \
     --argjson oafter "$OMEGA_CLEAN_AFTER" --argjson pafter "$PHYS_CLEAN_AFTER" --argjson osame "$OMEGA_SAME" --argjson psame "$PHYS_SAME" \
     --arg bin "$BIN_SHA" --arg log "$LOG_SHA" --arg host "$HOST_TIER" --argjson rc "$CHIP_RC" \
     --arg start "$START" --arg end "$END" --arg verdict "$VERDICT" --arg reason "$FAIL_REASON" \
-    --argjson run_args "$(jq -n '$ARGS.positional' --args "${GATE_ARGS[@]}")" \
-    --argjson vlines "$(jq -n '$ARGS.positional' --args "${VLINES[@]}")" '{
+    --argjson run_args "$(jq -n '$ARGS.positional | map(.[1:])' --args "${GATE_ARGS[@]/#/x}")" \
+    --argjson vlines "$(jq -n '$ARGS.positional | map(.[1:])' --args "${VLINES[@]/#/x}")" '{
   gate: $gate, owner: $owner, omega_commit: $omega, omega_tree_clean_before: $oclean, omega_tree_clean_after: $oafter,
   omega_commit_unchanged_after: $osame, physics_commit: $phys, physics_lock_pin: $pin, physics_tree_clean_before: $pclean,
   physics_tree_clean_after: $pafter, physics_commit_unchanged_after: $psame, binary_sha256: $bin, chip_log_sha256: $log,

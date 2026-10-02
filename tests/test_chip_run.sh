@@ -46,6 +46,7 @@ int main(int argc, char **argv) {
     if (!strcmp(m, "fail")) { printf("RESULT chip x ok=false\nVERDICT FAIL\n"); return 0; }
     if (!strcmp(m, "failpass")) { printf("VERDICT FAIL\nVERDICT PASS\n"); return 0; }
     if (!strcmp(m, "passrc")) { printf("VERDICT PASS\n"); return 3; }
+    if (!strcmp(m, "dash")) { printf("- VERDICT PASS\n"); return 0; }
     printf("RESULT chip x ok=true\nVERDICT PASS\n");
     return 0;
 }
@@ -85,6 +86,7 @@ mkman "$T/m.sh"; mkman "$T/m-hostfail.sh" "HOST_TIER_CMD=false"
 mkman "$T/m-map.sh" "REFUSE_EXIT=1; REFUSE_VERDICT_LINE='VERDICT NOT_RUN'"
 mkman "$T/m-off.sh" "RAISE_QUIET=0; TAKE_GPU_LOCK=0"
 mkman "$T/m-all.sh" "REQUIRE_ALL_PASS=1; VERDICT_RE='^VERDICT'"
+mkman "$T/m-dash.sh" "VERDICT_RE='^- VERDICT'; PASS_LINE='^- VERDICT PASS\$'"
 CRMAN=$T/m.sh; PD=(--physics-dir "$PHYS")
 
 reset_world() {
@@ -111,6 +113,8 @@ assert() { local id=$1 d=$2; shift 2; if "$@"; then echo "ok   $id: $d"; else ba
 no_flag() { [ ! -e "$FLAG" ]; }
 flag_is_other() { [ "$(cat "$FLAG" 2>/dev/null)" = other ]; }
 receipt_verdict() { [ "$(jq -r .verdict "$T"/ev-"$1"/*.json 2>/dev/null)" = "$2" ]; }
+# jqt FILTER FILE: jq -e with its stdout dropped, so assert still prints its own ok or FAIL line
+jqt() { jq -e "$@" > /dev/null; }
 
 reset_world; cr selftest_override CHIPRUN_SELFTEST=0 -- "${PD[@]}"
 expect selftest_override 2 '^REFUSED: .*self-test override'
@@ -293,11 +297,17 @@ assert happy "receipt name is the sha256 of its content" test "$(sha256sum "$R" 
 for f in gate owner omega_commit omega_tree_clean_before omega_tree_clean_after omega_commit_unchanged_after physics_commit physics_lock_pin \
          physics_tree_clean_before physics_tree_clean_after physics_commit_unchanged_after binary_sha256 chip_log_sha256 run_args host_tier \
          verdict_lines chip_exit_status started_utc finished_utc verdict reason extra_marker; do
-    assert happy "receipt has field $f" jq -e --arg f "$f" 'has($f)' "$R" > /dev/null
+    assert happy "receipt has field $f" jqt --arg f "$f" 'has($f)' "$R"
 done
-assert happy "receipt verdict PASS, run_args from the command line" jq -e '.verdict == "PASS" and .run_args == ["--x","1"] and .host_tier == "host-tier-ok" and .omega_commit == "'"$OM_HEAD"'"' "$R" > /dev/null
+assert happy "receipt verdict PASS, run_args from the command line" jqt '.verdict == "PASS" and .run_args == ["--x","1"] and .host_tier == "host-tier-ok" and .omega_commit == "'"$OM_HEAD"'"' "$R"
 LS=$(jq -r .chip_log_sha256 "$R" 2>/dev/null)
 assert happy "log blob exists, mode 0444, named by its sha256" test "$(stat -c %a "$T/ev-happy/blobs/$LS.log" 2>/dev/null)" = 444 -a "$(sha256sum "$T/ev-happy/blobs/$LS.log" 2>/dev/null | cut -d' ' -f1)" = "$LS"
+
+# a verdict line that starts with "-" must reach the receipt intact (jq once read it as an option)
+reset_world; CRMAN=$T/m-dash.sh cr dash_verdict FAKE_MODE=dash -- "${PD[@]}"; CRMAN=$T/m.sh
+expect dash_verdict 0 '^CHIP_RUN: PASS'
+RD=$(ls "$T"/ev-dash_verdict/*.json 2>/dev/null | head -1)
+assert dash_verdict "receipt verdict_lines is the dash line, unchanged" jqt '.verdict_lines == ["- VERDICT PASS"]' "$RD"
 
 if [ "$BAD" = 0 ]; then echo "CHIP_RUN_SELFTEST: PASS"; exit 0; fi
 echo "CHIP_RUN_SELFTEST: FAIL ($BAD)"; exit 1
