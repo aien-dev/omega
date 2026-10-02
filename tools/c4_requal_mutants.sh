@@ -15,11 +15,11 @@ phys=${PHYSICS_DIR:-$(cd "$root/../physics" && pwd)}
 work=$(mktemp -d /tmp/c4mut.XXXXXX)
 trap 'rm -rf "$work"' EXIT
 
+# M03 retired: cx_open is the single integrity seam; rx_compose no longer re-walks the chain.
 # id~file~sed expression~what the original check does
 MUTANTS='
 M01~src/runtime/rx_compose.c~s/ || !aien_mid_equal(&stored, self))/ || 0)/~machine identity must match the stored one
 M02~src/runtime/rx_compose.c~s/n_units > 1) return RX_ERR_REPLAY;/n_units > 100000) return RX_ERR_REPLAY;/~refuse durable history when the Cortex journal has no state record
-M03~src/runtime/rx_compose.c~s/if (cx_verify_chain(&c->cx) != CX_OK) { cx_close(&c->cx); return RX_ERR_REPLAY; }/;/~Cortex hash chain verified at open~redundant: at open the chain value is rebuilt from the stored record digests (rx_cortex.c chain_step in append at line 166) and cx_verify_chain re-hashes the in-memory objects that replay already verified per record (M09) and compares them to a chain rebuilt by the same loop, so it can only fail on RAM corruption between replay and verify and alone adds nothing; M13 removes both and is KILLED. Candidate equivalent mutant, UNVERIFIED
 M04~src/runtime/rx_compose.c~s/js_branch_info(&c->js, r, &bi) == JS_OK \&\& !bi.staged/js_branch_info(\&c->js, r, \&bi) == JS_OK/~recovered state branch must be sealed, not staged~redundant: no injection can leave a staged branch in the durable checkpoint (staged branches are never persisted, rx_compose.h recovery note), candidate equivalent mutant, UNVERIFIED
 M05~src/runtime/rx_compose.c~s/if (!o || o->id <= chosen) continue;/continue;/~answer newer, non-durable state records with a rollback admission
 M06~src/runtime/rx_compose.c~s/for (uint32_t i = l->n; i-- > 0;) {/for (uint32_t i = 0; i < l->n; i++) {/~choose the NEWEST durable state record
@@ -29,7 +29,7 @@ M09~src/runtime/rx_cortex.c~s/if (memcmp(s->obj\[id - 1\].digest, b + p + 8 \* (
 M10~src/runtime/rx_jspace.c~s/if (memcmp(d, f + 64, 32)) return JS_ERR_CORRUPT;/;/~J-Space checkpoint body digest~redundant: header digest, body digest and the restore-time content check overlap; each alone is covered by the others and by structural validation
 M11~src/runtime/rx_jspace.c~s/if (memcmp(d, f + 96, 32)) return JS_ERR_CORRUPT;/;/~J-Space checkpoint header digest~redundant: header digest, body digest and the restore-time content check overlap; each alone is covered by the others and by structural validation
 M12~src/runtime/rx_compose.c~s/if (js_space_commit(&c->js) != JS_OK) return RX_ERR_REPLAY;/;/~recovered state is made durable before the World starts
-M13~src/runtime/rx_compose.c,src/runtime/rx_cortex.c~s/if (cx_verify_chain(&c->cx) != CX_OK) { cx_close(&c->cx); return RX_ERR_REPLAY; }/;/@@s/if (memcmp(s->obj\[id - 1\].digest, b + p + 8 \* (CX_R_FIXED + n), 32) != 0) {/if (0) {/~Cortex integrity (both the load digest and the chain check removed)
+M13~src/runtime/rx_cortex.c,src/runtime/rx_cortex.c~s/if (memcmp(s->obj\[id - 1\].digest, b + p + 8 \* (CX_R_FIXED + n), 32) != 0) {/if (0) {/@@s/return memcmp(chain, s->chain, 32) == 0 ? CX_OK : CX_ERR_DIGEST;/return CX_OK;/~Cortex integrity (open-time record digest and the audit chain compare both removed)
 M14~src/runtime/rx_jspace.c,src/runtime/rx_jspace.c~s/if (memcmp(d, f + 64, 32)) return JS_ERR_CORRUPT;/;/@@s/if (memcmp(d, f + 96, 32)) return JS_ERR_CORRUPT;/;/~J-Space checkpoint integrity (header and body digests both removed)~gap: with every J-Space integrity digest removed all 820 single-byte flips of the task checkpoint are still refused structurally or benign, so the digests are not shown to bite
 M15~src/runtime/rx_jspace.c,src/runtime/rx_jspace.c,src/runtime/rx_jspace.c~s/if (memcmp(d, f + 64, 32)) return JS_ERR_CORRUPT;/;/@@s/if (memcmp(d, f + 96, 32)) return JS_ERR_CORRUPT;/;/@@s/if (memcmp(chk, r->content, 32)) { s->stats.corrupt_restores++; return JS_ERR_CORRUPT; }/;/~J-Space integrity, all three layers (header digest, body digest, restore-time content check) removed~gap: with every J-Space integrity digest removed all 820 single-byte flips of the task checkpoint are still refused structurally or benign, so the digests are not shown to bite
 M16~src/runtime/rx_compose.c~s/if (pp \&\& state_ref_promoted(s, pp\[CX_WREC_FIELD0 + RXC_S_REF\])) return RX_ERR_REPLAY;/(void)pp; (void)state_ref_promoted;/~refuse a J-Space checkpoint that lost a state Cortex already promoted
@@ -58,6 +58,7 @@ echo "$MUTANTS" | while IFS="~" read -r id file expr what redund; do
         log="$work/$id.log"
         if ! (cd "$dir" && nice -n 10 make PHYSICS_DIR="$phys" ${MAKE_ARGS:-} c4-requal-bin >"$log" 2>&1); then
             status=ERROR; note="build failed: $(grep -m1 -E "error:|Error " "$log" | cut -c1-120)"
+            [ -s "$log" ] || note="build failed: empty make log (make killed or never started)"
         else
             (cd "$dir" && ./build/rx_c4_requal "$dir/r.json") >"$log.run" 2>&1
             rc=$?

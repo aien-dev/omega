@@ -290,6 +290,7 @@ static int replay(CxStore *s, const uint8_t *b, size_t len, size_t *good_end) {
     return rc;
 }
 
+/* The single integrity seam: see the guarantee in rx_cortex.h. */
 int cx_open(CxStore *s, const char *path, uint64_t n_subjects, uint32_t flags) {
     if (!s || !path) return CX_ERR_ARG;
     int ro = (flags & CX_OPEN_READONLY) != 0;

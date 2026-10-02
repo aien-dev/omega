@@ -177,6 +177,35 @@ static void test_persistence(void) {
     CHECK(cx_open(&t, path, 16, CX_OPEN_REPAIR_TAIL) == CX_ERR_DIGEST, "tampered journal opened");
 }
 
+/* 4b. the chain is derived; opening is the integrity seam --------------------- */
+static void test_chain_derived(void) {
+    g_test = "chain derived at open";
+    printf("[*] %s\n", g_test);
+    char path[512];
+    path_of(path, sizeof path, "derived.cx");
+    CxStore s;
+    CHECK(cx_open(&s, path, 16, 0) == CX_OK, "create journal");
+    for (uint64_t t = 1; t <= 4; t++) {
+        CxHeader h = hdr(CX_CLAIM, CX_K_CLAIM, t % 3, t);
+        uint64_t pay[2] = { t, t + 50 };
+        CHECK(cx_append(&s, &h, pay, 2, NULL) == CX_OK, "append %llu", (unsigned long long)t);
+    }
+    uint8_t chain[32];
+    memcpy(chain, s.chain, 32);
+    CHECK(cx_verify_chain(&s) == CX_OK, "chain verifies before corruption");
+    memset(s.chain, 0xA5, 32);
+    CHECK(cx_verify_chain(&s) == CX_ERR_DIGEST, "corrupt chain not detected");
+    for (uint64_t id = 1; id <= s.n; id++)
+        CHECK(cx_verify(&s, id) == CX_OK, "record %llu digest broke with intact records",
+              (unsigned long long)id);
+    cx_close(&s);
+
+    CHECK(cx_open(&s, path, 16, 0) == CX_OK, "reopen from disk");
+    CHECK(s.n == 4 && memcmp(s.chain, chain, 32) == 0 && cx_verify_chain(&s) == CX_OK,
+          "reopened chain differs from the original");
+    cx_close(&s);
+}
+
 /* 5. execution -> Cortex through the real World ------------------------------ */
 
 enum { SUBJ_WORKER = 1, SUBJ_EXTERNAL = 100, ISSUER = 3, RES_IN = 0x10, RES_OUT = 0x20 };
@@ -353,6 +382,7 @@ int main(void) {
     test_provenance();
     test_recall();
     test_persistence();
+    test_chain_derived();
     test_execution();
     test_single_writer();
     char cmd[300];
