@@ -99,7 +99,7 @@ out="evidence/C4-REQUAL/$sum.json"
 cp "$tmp" "$out"
 chmod 0644 "$out"
 cat "$work/injection.out" | tail -n 5
-[ $want_mut -eq 1 ] && tail -n 2 "$work/mutants.out"
+[ $want_mut -eq 1 ] && cat "$work/mutants.out"   # one line per mutant (an ERROR line carries the make exit code and last log lines)
 echo "receipt: $out"
 echo "verdict: $verdict (omega $commit, binding $binding)"
 [ "$verdict" = PASS ]
