@@ -32,46 +32,44 @@ MAX_TIE|omega_autodiff.c|s/return a > b;/return a >= b;/
 DIV_B_SIGN|omega_autodiff.c|s/-1\.0f/1.0f/
 DIV_FORMULA|omega_autodiff.c|{s/OMEGA_TB_DIV, n->value, nb->value, &tmp)/OMEGA_TB_MUL, g, n->value, \&tmp)/;s/OMEGA_TB_MUL, g, tmp, &c2)/OMEGA_TB_DIV, tmp, nb->value, \&c2)/}'
 
-build() { # $1 = autodiff source dir, $2 = output binary
-    gcc $FLAGS -Isrc -Isrc/tensor -I"$1" -o "$2" tests/test_omega_autodiff.c "$1/omega_autodiff.c" \
-        $TENSOR $DEPS
-}
-
-# Baseline: the unmutated build must PASS, otherwise every mutant would
-# look "caught" (e.g. the test refusing an unsuitable FP environment).
-if ! build src/autodiff "$SCRATCH/base" > "$SCRATCH/base.log" 2>&1 || \
-   ! "$SCRATCH/base" > "$SCRATCH/base.run" 2>&1; then
-    head -5 "$SCRATCH/base.log" "$SCRATCH/base.run" 2>/dev/null
+# Runs on the shared runner tools/mutation_runner.sh (marker reader). This
+# script is a thin adapter: it feeds the rows above, then maps the runner's
+# per-mutant stderr lines back to the legacy stdout lines and exit codes.
+# Rows name src/autodiff/<file>, relative to the runner's scratch tree.
+BUILD="gcc $FLAGS -Isrc -Isrc/tensor -Isrc/autodiff -o t tests/test_omega_autodiff.c src/autodiff/omega_autodiff.c \
+$TENSOR $DEPS"
+printf '%s\n' "$MUTATIONS" | sed 's#^\([A-Z_]*\)|#\1|src/autodiff/#' > "$SCRATCH/rows"
+tools/mutation_runner.sh -k marker -m "$SCRATCH/rows" -d . -c "src tests/test_omega_autodiff.c" \
+    -b "$BUILD" -t ./t -f FAIL -B > "$SCRATCH/runner.out" 2> "$SCRATCH/runner.err"
+if grep -q 'unmutated baseline' "$SCRATCH/runner.out"; then
+    cat "$SCRATCH/runner.err"
     echo "autodiff mutation sweep: FAIL (unmutated baseline does not pass)"; exit 1
 fi
 fail=0
 total=0
-old_ifs=$IFS
-IFS='
-'
-for m in $MUTATIONS; do
-    IFS=$old_ifs
-    IFS='|' read -r name file expr <<EOM
-$m
-EOM
-    IFS=$old_ifs
+while IFS= read -r line; do
+    case $line in
+        *' KILLED '*|*' SURVIVED '*|*' ERROR '*) ;;
+        *) continue;;
+    esac
+    name=${line%% *}
+    rest=${line#* }; status=${rest%% *}
+    note=${line#* (}; note=${note%)}
     total=$((total + 1))
-    rm -rf "$SCRATCH/autodiff" && cp -r src/autodiff "$SCRATCH/autodiff"
-    sed -i "/MUT:$name/ $expr" "$SCRATCH/autodiff/$file"
-    if cmp -s "src/autodiff/$file" "$SCRATCH/autodiff/$file"; then
-        echo "MUTATION $name: NOT APPLIED (marker or pattern missing)"; fail=1; continue
-    fi
-    if ! build "$SCRATCH/autodiff" "$SCRATCH/t" > "$SCRATCH/build.log" 2>&1; then
-        head -5 "$SCRATCH/build.log"
-        echo "MUTATION $name: does not build (fix the sed expression)"; fail=1; continue
-    fi
-    if "$SCRATCH/t" > "$SCRATCH/run.log" 2>&1; then
-        echo "MUTATION $name: NOT CAUGHT (tests still pass)"; fail=1
-    else
-        echo "MUTATION $name: caught ($(grep -c '^FAIL' "$SCRATCH/run.log") failing checks)"
-    fi
-done
-IFS=$old_ifs
+    case $status in
+        KILLED)
+            n=0
+            case $note in *' failing case(s)'*) n=${note%% failing case(s)*};; esac
+            echo "MUTATION $name: caught ($n failing checks)";;
+        SURVIVED) echo "MUTATION $name: NOT CAUGHT (tests still pass)"; fail=1;;
+        *)
+            case $note in
+                'edit did not apply'*) echo "MUTATION $name: NOT APPLIED (marker or pattern missing)";;
+                *) echo "$note"; echo "MUTATION $name: does not build (fix the sed expression)";;
+            esac
+            fail=1;;
+    esac
+done < "$SCRATCH/runner.err"
 if [ "$total" -lt 5 ]; then echo "autodiff mutation sweep: FAIL (fewer than 5 mutations)"; exit 1; fi
 if [ "$fail" -ne 0 ]; then echo "autodiff mutation sweep: FAIL"; exit 1; fi
 echo "autodiff mutation sweep: PASS ($total of $total mutations caught)"
