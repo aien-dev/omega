@@ -145,10 +145,10 @@ Rows verified against merged PRs and open PR state. Nothing here upgrades a stat
 
 | Item | State | Evidence |
 |---|---|---|
-| E1 numerical closure | PARTIAL, not closed; 2 of 6 exit requirements met | `docs/numeric/E1_GAP_TABLE.md` status summary; #152 `07004a8` (Gate 5 PASS 26/26, 47 parity lines incl. DIV and SQRT) |
+| E1 numerical closure | CLOSED 2026-10-02 on the fb36109 chip campaign (merged #225 `40d1ea37`), exclusions recorded (natural-base EXP/LOG not on GB10) | `evidence/E1-CLOSURE/e7851c69d34ac777a9436af16d0bdd5d69264c8528c62d562b600f5d89153061.json`; `docs/numeric/E1_GAP_TABLE.md` closure section |
 | OSC-1 and OSC-2 | IMPLEMENTED / NOT QUALIFIED; host receipts only; not self-hosting; no general compiler | #148 `0abdb08`, #149 `845dce4`, #150 `c773622`, #151 `7e713e3`; addendum in `docs/osc/OSC-1-SELF-HOST-STATEMENT.md` |
 | R16 | CLOSED at candidate `850fc545` only; living build IMPLEMENTED / NOT QUALIFIED, re-qualification owed | #112 `3dd5eaa` merged with evidence-immutable FAILED (run 36799862685); `evidence/R16/inventory.json` edited in place by `1edb56b` and `6831117`; receipt `evidence/R16/22d7a79a...json`; all R13 to R16 candidate-bound receipts predate #126 `4f8485b` |
 | EST-3 | FAILED on main: v1 (#105), v2 (#118), v3 (#129 `d78fd11`, binding fit Phase A FAIL, sealed run NOT_RUN) | v4 attempt open as #153; attempts 1 and 2 void, no verdict yet |
-| M20 OMEGA_TENSOR | Not merged; open draft #136, not qualified, E1 open | PR #136 |
+| M20 OMEGA_TENSOR | Not merged; open draft #136, not qualified; its E1 prerequisite closed 2026-10-02 | PR #136 |
 | M22 substrate | NOT QUALIFIED per its own receipt and doc | #140 `54826a3`; `docs/train/M22_SUBSTRATE.md`; `evidence/M22/receipts/eaa0cdea...json` |
 | PATH-1 | FAILED EXPERIMENT (M1) | see `spec/path-semantic-object.md`, note 2026-10-01 |

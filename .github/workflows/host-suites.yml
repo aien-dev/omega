@@ -68,6 +68,7 @@ on:
       - 'tools/numeric_*'
       - 'tools/m19r_qualify.sh'
       - 'tools/json_canon.c'
+      - 'tools/e1_*'
       # train (M22 optimizer substrate + E5 provenance)
       - 'src/train/**'
       - 'tests/train/**'
@@ -116,6 +117,8 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-cpu
       - name: Gate 5 qualifier and receipt writer (host-only, fake descriptors)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-qualify
+      - name: E1 closure combiner (host-only, synthetic constituents, every hostile mutant refused)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-e1-combine
 
   train:
     runs-on: ubuntu-24.04-arm

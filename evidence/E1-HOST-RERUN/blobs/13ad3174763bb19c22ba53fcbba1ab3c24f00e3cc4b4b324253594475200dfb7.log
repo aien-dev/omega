@@ -1,0 +1,654 @@
+gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o build/test_omega_numeric_cpu tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+./build/test_omega_numeric_cpu
+============================================================
+        GATE 5: OMEGA-NUMERIC-0 QUALIFICATION SUITE         
+        mode: CPU tiers only (no device)
+============================================================
+
+OMEGA_NUMERIC_HWDESC_JSON:{"source":"FAKE_NON_HARDWARE_CPU_ONLY","fake":true,"descriptor_digest":"0000000000000000000000000000000000000000000000000000000000000000"}
+OMEGA_NUMERIC_RUN_JSON:{"run_id":"","binary_sha256":"b68a6149edacce02adee2f9328d656127181175effcc89390dfb2fe9e25bfebe"}
+[*] FPCR 0x0000000000000000, required-clear mask 0x0000000007c80007
+[PASS] FPCR_RNE_NO_FTZ_REQUIRED
+[*] Op registry:
+    FADD        encoded    BIT_EXACT  a + b (RNE, subnormals kept)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FADD","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FSUB        encoded    BIT_EXACT  a - b (RNE, subnormals kept)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSUB","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FMUL        encoded    BIT_EXACT  a * b (RNE, subnormals kept)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FMUL","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FFMA        encoded    BIT_EXACT  fma(a, b, c), c uniform per launch
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FFMA","encoded":true,"compare":"BIT_EXACT","launches":8}
+    FSETP_SEL   encoded    INT_EXACT  (a >= b, false if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSEL        encoded    INT_EXACT  (a >= 0, false if a is NaN) ? b : a, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FMNMX_MIN   encoded    BIT_EXACT  minNum(a, b), NaN yields the other operand, -0 < +0
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FMNMX_MIN","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FMNMX_MAX   encoded    BIT_EXACT  maxNum(a, b), NaN yields the other operand, -0 < +0
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FMNMX_MAX","encoded":true,"compare":"BIT_EXACT","launches":1}
+    I2FP        encoded    BIT_EXACT  (float)(int32 bits of a), RNE
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"I2FP","encoded":true,"compare":"BIT_EXACT","launches":1}
+    F2I         encoded    INT_EXACT  int32 truncate of a, NaN -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2I","encoded":true,"compare":"INT_EXACT","launches":1}
+    MUFU_RCP    encoded    SEED_BOUND seed for 1/a: relative error bound only
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"MUFU_RCP","encoded":true,"compare":"SEED_BOUND","launches":1}
+    MUFU_RSQ    encoded    SEED_BOUND seed for 1/sqrt(a): relative error bound only
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"MUFU_RSQ","encoded":true,"compare":"SEED_BOUND","launches":1}
+    LDS_STS     encoded    INT_EXACT  a[i ^ 63]: each thread stores a[i] to shared word tid, BAR.SYNC, then loads word tid ^ 63 (mirror exchange inside each 64-thread CTA), bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"LDS_STS","encoded":true,"compare":"INT_EXACT","launches":1}
+    SHFL_DOWN   encoded    INT_EXACT  a[lane+1] within each 32-lane warp, lane 31 keeps its own value
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"SHFL_DOWN","encoded":true,"compare":"INT_EXACT","launches":1}
+    DIV         encoded    BIT_EXACT  correctly rounded a / b (integer long division, RNE)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"DIV","encoded":true,"compare":"BIT_EXACT","launches":1}
+    SQRT        encoded    BIT_EXACT  correctly rounded sqrt(a) (integer square root, RNE)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"SQRT","encoded":true,"compare":"BIT_EXACT","launches":1}
+    EXP         REFUSED    BIT_EXACT  omega_math_exp(a)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"EXP","encoded":false,"compare":"BIT_EXACT","launches":1}
+    LOG         REFUSED    BIT_EXACT  omega_math_log(a)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"LOG","encoded":false,"compare":"BIT_EXACT","launches":1}
+    REDUCE_SUM  encoded    BIT_EXACT  declared pairwise-tree warp sum (PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1), lane 0 of each warp
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"REDUCE_SUM","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FSETP_LT_SEL encoded    INT_EXACT  (a < b, false if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_LT_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_LE_SEL encoded    INT_EXACT  (a <= b, false if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_LE_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_GT_SEL encoded    INT_EXACT  (a > b, false if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_GT_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_EQ_SEL encoded    INT_EXACT  (a == b, false if either is NaN, -0 == +0) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_EQ_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_NE_SEL encoded    INT_EXACT  (a != b, false if either is NaN, -0 == +0) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_NE_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_NUM_SEL encoded    INT_EXACT  (neither a nor b is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_NUM_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_NAN_SEL encoded    INT_EXACT  (a or b is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_NAN_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_LTU_SEL encoded    INT_EXACT  (a < b, true if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_LTU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_LEU_SEL encoded    INT_EXACT  (a <= b, true if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_LEU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_GTU_SEL encoded    INT_EXACT  (a > b, true if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_GTU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_GEU_SEL encoded    INT_EXACT  (a >= b, true if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_GEU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_EQU_SEL encoded    INT_EXACT  (a == b, true if either is NaN, -0 == +0) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_EQU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_NEU_SEL encoded    INT_EXACT  (a != b, true if either is NaN, -0 == +0) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_NEU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    F2I_FLOOR   encoded    INT_EXACT  int32 floor of a, NaN -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2I_FLOOR","encoded":true,"compare":"INT_EXACT","launches":1}
+    F2I_CEIL    encoded    INT_EXACT  int32 ceiling of a, NaN -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2I_CEIL","encoded":true,"compare":"INT_EXACT","launches":1}
+    F2I_RNI     encoded    INT_EXACT  int32 round-to-nearest-even of a, NaN -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2I_RNI","encoded":true,"compare":"INT_EXACT","launches":1}
+    F2U         encoded    INT_EXACT  uint32 truncate of a, NaN -> 0, negatives -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2U","encoded":true,"compare":"INT_EXACT","launches":1}
+    I2FP_U32    encoded    BIT_EXACT  (float)(uint32 bits of a), RNE
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"I2FP_U32","encoded":true,"compare":"BIT_EXACT","launches":1}
+    F32_TO_F16  encoded    F16_BITS   binary16 of a in bits [15:0] (RNE, overflow to inf, subnormals kept, NaN stays NaN), bits [31:16] zero
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F32_TO_F16","encoded":true,"compare":"F16_BITS","launches":1}
+    F32_TO_BF16 encoded    BF16_BITS  bfloat16 of a in bits [15:0] (RNE, overflow to inf, subnormals kept, NaN stays NaN), bits [31:16] zero
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F32_TO_BF16","encoded":true,"compare":"BF16_BITS","launches":1}
+    F16_TO_F32  encoded    BIT_EXACT  exact FP32 of the binary16 in bits [15:0] of a (bits [31:16] ignored)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F16_TO_F32","encoded":true,"compare":"BIT_EXACT","launches":1}
+    BF16_TO_F32 encoded    BIT_EXACT  exact FP32 of the bfloat16 in bits [15:0] of a (bits [31:16] ignored)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"BF16_TO_F32","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FFMA_V      encoded    BIT_EXACT  fma(a, b, c), c read per element
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FFMA_V","encoded":true,"compare":"BIT_EXACT","launches":1}
+[*] Provenance entries: 52, encoded ops: 40
+[PASS] PROVENANCE_MATCHES_EXECUTOR
+    refused EXP            rc=-2: op EXP is not encoded for GB10: no GB10 kernel for the Omega exp polynomial exists (the old path ran FADD)
+    refused LOG            rc=-2: op LOG is not encoded for GB10: no GB10 kernel for the Omega log polynomial exists (the old path ran FADD)
+    refused FFMA non-uniform c: op FFMA: c must be the same value in every element (it is carried in the constant bank)
+    refused SHFL_DOWN count 33: op SHFL_DOWN: count must be a multiple of 32 (whole warps only)
+    refused 15 unencoded variants (LDS.U8 ... REDUCE_SUM_BLOCK) by name
+[PASS] NOT_ENCODED_OPS_REFUSED_BEFORE_SUBMISSION
+    refused LDS_STS    count 32    rc=-3: op LDS_STS: count must be a multiple of the CTA size 64 (whole CTAs: every thread must reach BAR.SYNC)
+    refused LDS_STS    count 96    rc=-3: op LDS_STS: count must be a multiple of the CTA size 64 (whole CTAs: every thread must reach BAR.SYNC)
+    refused LDS_STS    count 4097  rc=-3: op LDS_STS: count must be a multiple of the CTA size 64 (whole CTAs: every thread must reach BAR.SYNC)
+    refused REDUCE_SUM count 33    rc=-3: op REDUCE_SUM: count must be a multiple of 32 (whole warps only)
+    refused REDUCE_SUM count 4080  rc=-3: op REDUCE_SUM: count must be a multiple of 32 (whole warps only)
+    refused SHFL_DOWN  count 33    rc=-3: op SHFL_DOWN: count must be a multiple of 32 (whole warps only)
+[PASS] NEG_BAD_SHARED_AND_WARP_SHAPES_REFUSED
+    patch corruptions refused with the right reason: 55 of 55; clean patches accepted: yes
+[PASS] NEG_PATCH_STRUCTURE_CHECKED_BEFORE_SUBMISSION
+[PASS] FP32_SIMT_OPCODES_ENCODED
+OMEGA_NUMERIC_PARITY_JSON:{"op":"DIV","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":115,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"SQRT","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_FINDING_JSON:{"id":"DIV_SQRT_CORRECT_ROUNDING","corpus":4096,"div_mismatches":0,"sqrt_mismatches":0,"hard_case_mismatches":0}
+[*] exp/log edge and consistency checks: ok
+[PASS] OMEGA_MATH_SEQUENCES_QUALIFIED
+OMEGA_NUMERIC_PARITY_JSON:{"op":"REDUCE_SUM","tier":"cpu","compare":"BIT_EXACT","reduction_order":"PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1","n":4096,"checked":128,"mismatches":0,"subnormal_expected":12,"first_mismatch":null,"by_input_class":{"zero":{"n":0,"mismatches":0},"inf":{"n":0,"mismatches":0},"nan":{"n":0,"mismatches":0},"subnormal":{"n":0,"mismatches":0},"normal":{"n":0,"mismatches":0}}}
+[*] Declared Reduction Order: PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1
+[PASS] WARP_REDUCTION_ORDER_DECLARED
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FADD","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":609,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSUB","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":614,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FMUL","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":565,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x3f800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x80000000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":565,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x00800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":372,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0xbf800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x7fc00000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x7f800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x00000003","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":1439,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x80800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":269,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FMNMX_MIN","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":876,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FMNMX_MAX","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":731,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"I2FP","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"MUFU_RCP","tier":"cpu","compare":"SELF_CONSISTENT_HOST_FDIV","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":0,"mismatches":0},"inf":{"n":0,"mismatches":0},"nan":{"n":0,"mismatches":0},"subnormal":{"n":0,"mismatches":0},"normal":{"n":0,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"MUFU_RSQ","tier":"cpu","compare":"SELF_CONSISTENT_HOST_FDIV","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":0,"mismatches":0},"inf":{"n":0,"mismatches":0},"nan":{"n":0,"mismatches":0},"subnormal":{"n":0,"mismatches":0},"normal":{"n":0,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"LDS_STS","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"SHFL_DOWN","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"EXP","tier":"cpu","compare":"SELF_CONSISTENT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"LOG","tier":"cpu","compare":"SELF_CONSISTENT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LT_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LE_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_GT_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_EQ_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NE_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NUM_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NAN_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LTU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LEU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_GTU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_GEU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_EQU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NEU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I_FLOOR","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I_CEIL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I_RNI","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2U","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"I2FP_U32","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F32_TO_F16","tier":"cpu","compare":"F16_BITS","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F32_TO_BF16","tier":"cpu","compare":"BF16_BITS","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F16_TO_F32","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"BF16_TO_F32","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":250,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA_V","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":69,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+[PASS] CPU_TIER_EQUALS_REFERENCE
+[PASS] CPU_TIER_SUBNORMALS_PRESERVED
+
+[*] Independent oracle: integer soft-float, binary128 EXP/LOG, tagged LDS_STS
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FADD","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FADD","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FSUB","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FSUB","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FMUL","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FMUL","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x3f800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x3f800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x80000000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x80000000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x00800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x00800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0xbf800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0xbf800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x7fc00000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x7fc00000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x7f800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x7f800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x00000003","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x00000003","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x80800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x80800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"I2FP","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"I2FP","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"DIV","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"DIV","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"SQRT","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"SQRT","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"MUFU_RCP","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"MUFU_RCP","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"MUFU_RSQ","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"MUFU_RSQ","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"EXP","oracle":"binary128_series_rounded_once","against":"reference","compare":"ULP_BOUND","bound_ulp":40,"n":4096,"normal_or_inf_results":3459,"max_ulp_normal_or_inf":37,"subnormal_or_zero_results":488,"max_ulp_subnormal_or_zero":0,"nan_class_mismatches":0,"over_bound":0,"first_violation":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"LOG","oracle":"binary128_series_rounded_once","against":"reference","compare":"ULP_BOUND","bound_ulp":4,"n":4096,"normal_or_inf_results":2161,"max_ulp_normal_or_inf":1,"subnormal_or_zero_results":32,"max_ulp_subnormal_or_zero":0,"nan_class_mismatches":0,"over_bound":0,"first_violation":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"LDS_STS","oracle":"index_tagged_mirror","n":4096,"wrong_source":0,"fixed_points":0,"not_involution":0}
+[PASS] CPU_TIER_INDEPENDENT_ORACLE
+
+[*] E1 scalar contract: 4194304 random inputs per op, 23 ops, three derivations
+OMEGA_NUMERIC_E1_JSON:{"set":"boundary","cases":209,"bad":0}
+[PASS] E1_SCALAR_BOUNDARY_VALUES
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_LT_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_LE_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_GT_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_EQ_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_NE_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_NUM_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_NAN_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_LTU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_LEU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_GTU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_GEU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_EQU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_NEU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F2I_FLOOR","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F2I_CEIL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F2I_RNI","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F2U","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"I2FP_U32","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F32_TO_F16","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F32_TO_BF16","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F16_TO_F32","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"BF16_TO_F32","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FFMA_V","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F16_TO_F32","set":"exhaustive16","n":65536,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"BF16_TO_F32","set":"exhaustive16","n":65536,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+[PASS] E1_SCALAR_CPU_EQUALS_REFERENCE
+[PASS] E1_SCALAR_INDEPENDENT_ORACLE
+[SKIP] CPU_GB10_BIT_PARITY (needs GB10)
+[SKIP] SUBNORMALS_PRESERVED_NO_FTZ (needs GB10)
+[SKIP] MUFU_SEED_ONLY_NOT_COMPARED (needs GB10)
+[SKIP] EDGE_CLASS_BEHAVIOR_VERIFIED (needs GB10)
+[SKIP] HARDWARE_DESCRIPTOR_PROBED (needs GB10)
+
+[*] Negative tests
+    FTZ model vs reference, FADD     : 654 mismatches
+    FTZ model vs reference, FSUB     : 650 mismatches
+    FTZ model vs reference, FMUL     : 695 mismatches
+    FTZ model vs reference, FFMA     : 554 mismatches
+    FTZ model vs reference, FMNMX_MIN: 876 mismatches
+    FTZ model vs reference, FMNMX_MAX: 731 mismatches
+    FTZ model vs reference, FFMA_V   : 163 mismatches
+[PASS] NEG_FTZ_DETECTED_AND_REJECTED
+    sequential 16777216.0 vs declared tree 16777246.0
+[PASS] NEG_UNORDERED_REDUCTION_DIVERGENCE_CAUGHT
+    raw seed vs IEEE reciprocal: 640 of 640 differ; MUFU bit compare refused: yes
+[PASS] NEG_RAW_MUFU_APPROX_REJECTED_WITHOUT_REFINEMENT
+[PASS] NEG_UNKNOWN_OPCODE_FAILS_CLOSED
+    corrupted provenance copies rejected: 5 of 5; clean copy accepted: yes
+[PASS] NEG_OPCODE_PROVENANCE_INTEGRITY_VERIFIED
+    FPCR round-up     : environment changed yes, tiers refused yes (rc -5 -5 -5 -5)
+    FPCR round-to-zero: environment changed yes, tiers refused yes (rc -5 -5 -5 -5)
+    FPCR flush-to-zero: environment changed yes, tiers refused yes (rc -5 -5 -5 -5)
+[PASS] NEG_NONDEFAULT_FPCR_REFUSED
+[PASS] NEG_COMPARATOR_CATCHES_ONE_BIT
+
+Gate 5 Results: TOTAL=21 PASSED=21 FAILED=0 SKIPPED=5
+Gate 5 Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY (build cpu-only, declared chip-only skips 5 of 5, undeclared skips 0)
+gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -fno-fast-math -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o build/test_omega_numeric_transc_gb10_cpu tests/test_omega_numeric_transc_gb10.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric_transc.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+./build/test_omega_numeric_transc_gb10_cpu
+[PASS] TG_EXP2_BODY_BUILDS (47 insns)
+[PASS] TG_EXP2_BODY_HAS_FP_FORMS (16 FADD/FMUL/FFMA)
+[PASS] TG_EXP2_KERNEL_BUILDS
+[PASS] TG_EXP2_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] TG_EXP2_KERNEL_DIGEST_IS_RECORDED
+[PASS] TG_EXP2_HOST_MODEL_EDGE_SET (72 inputs)
+[PASS] TG_EXP2_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_EXP2_HOST_MODEL_RANDOM_1M
+[PASS] TG_LOG2_BODY_BUILDS (553 insns)
+[PASS] TG_LOG2_BODY_HAS_FP_FORMS (31 FADD/FMUL/FFMA)
+[PASS] TG_LOG2_KERNEL_BUILDS
+[PASS] TG_LOG2_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] TG_LOG2_KERNEL_DIGEST_IS_RECORDED
+[PASS] TG_LOG2_HOST_MODEL_EDGE_SET (72 inputs)
+[PASS] TG_LOG2_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_LOG2_HOST_MODEL_RANDOM_1M
+[PASS] TG_SIGMOID_BODY_BUILDS (322 insns)
+[PASS] TG_SIGMOID_BODY_HAS_FP_FORMS (25 FADD/FMUL/FFMA)
+[PASS] TG_SIGMOID_KERNEL_BUILDS
+[PASS] TG_SIGMOID_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] TG_SIGMOID_KERNEL_DIGEST_IS_RECORDED
+[PASS] TG_SIGMOID_HOST_MODEL_EDGE_SET (72 inputs)
+[PASS] TG_SIGMOID_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_SIGMOID_HOST_MODEL_RANDOM_1M
+[PASS] TG_TANH_BODY_BUILDS (325 insns)
+[PASS] TG_TANH_BODY_HAS_FP_FORMS (34 FADD/FMUL/FFMA)
+[PASS] TG_TANH_KERNEL_BUILDS
+[PASS] TG_TANH_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] TG_TANH_KERNEL_DIGEST_IS_RECORDED
+[PASS] TG_TANH_HOST_MODEL_EDGE_SET (72 inputs)
+[PASS] TG_TANH_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_TANH_HOST_MODEL_RANDOM_1M
+[PASS] TG_SIN_BODY_BUILDS (95 insns)
+[PASS] TG_SIN_BODY_HAS_FP_FORMS (50 FADD/FMUL/FFMA)
+[PASS] TG_SIN_KERNEL_BUILDS
+[PASS] TG_SIN_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] TG_SIN_KERNEL_DIGEST_IS_RECORDED
+[PASS] TG_SIN_HOST_MODEL_EDGE_SET (72 inputs)
+[PASS] TG_SIN_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_SIN_HOST_MODEL_RANDOM_1M
+[PASS] TG_COS_BODY_BUILDS (93 insns)
+[PASS] TG_COS_BODY_HAS_FP_FORMS (50 FADD/FMUL/FFMA)
+[PASS] TG_COS_KERNEL_BUILDS
+[PASS] TG_COS_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] TG_COS_KERNEL_DIGEST_IS_RECORDED
+[PASS] TG_COS_HOST_MODEL_EDGE_SET (72 inputs)
+[PASS] TG_COS_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_COS_HOST_MODEL_RANDOM_1M
+[PASS] TG_ERF_BODY_BUILDS (334 insns)
+[PASS] TG_ERF_BODY_HAS_FP_FORMS (49 FADD/FMUL/FFMA)
+[PASS] TG_ERF_KERNEL_BUILDS
+[PASS] TG_ERF_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] TG_ERF_KERNEL_DIGEST_IS_RECORDED
+[PASS] TG_ERF_HOST_MODEL_EDGE_SET (72 inputs)
+[PASS] TG_ERF_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_ERF_HOST_MODEL_RANDOM_1M
+[PASS] TG_GELU_BODY_BUILDS (399 insns)
+[PASS] TG_GELU_BODY_HAS_FP_FORMS (72 FADD/FMUL/FFMA)
+[PASS] TG_GELU_KERNEL_BUILDS
+[PASS] TG_GELU_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] TG_GELU_KERNEL_DIGEST_IS_RECORDED
+[PASS] TG_GELU_HOST_MODEL_EDGE_SET (72 inputs)
+[PASS] TG_GELU_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_GELU_HOST_MODEL_RANDOM_1M
+[PASS] TG_RSQRT_BODY_BUILDS (318 insns)
+[PASS] TG_RSQRT_BODY_HAS_FP_FORMS (225 FADD/FMUL/FFMA)
+[PASS] TG_RSQRT_KERNEL_BUILDS
+[PASS] TG_RSQRT_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] TG_RSQRT_KERNEL_DIGEST_IS_RECORDED
+[PASS] TG_RSQRT_HOST_MODEL_EDGE_SET (72 inputs)
+[PASS] TG_RSQRT_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_RSQRT_HOST_MODEL_RANDOM_1M
+SUMMARY passed=72 failed=0
+gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o build/test_omega_divsqrt_gb10_cpu tests/test_omega_divsqrt_gb10.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+./build/test_omega_divsqrt_gb10_cpu
+[PASS] DS_DIV_BODY_BUILDS (242 insns)
+[PASS] DS_DIV_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_DIV_KERNEL_BUILDS
+[PASS] DS_DIV_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_DIV_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_DIV_REFUSES_BAD_OP
+[PASS] DS_DIV_REFUSES_BAD_LENGTH
+[PASS] DS_DIV_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_DIV_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_DIV_REFUSES_PAD_CHANGE
+[PASS] DS_DIV_REFUSES_PREDICATED_BODY
+[PASS] DS_DIV_REFUSES_CONTROL_CHANGE
+[PASS] DS_DIV_REFUSES_UNRECORDED_FORM
+[PASS] DS_DIV_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_DIV_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_DIV_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_DIV_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_DIV_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_DIV_REFUSES_EMPTY_BODY
+[PASS] DS_DIV_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_SQRT_BODY_BUILDS (310 insns)
+[PASS] DS_SQRT_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_SQRT_KERNEL_BUILDS
+[PASS] DS_SQRT_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_SQRT_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_SQRT_REFUSES_BAD_OP
+[PASS] DS_SQRT_REFUSES_BAD_LENGTH
+[PASS] DS_SQRT_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_SQRT_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_SQRT_REFUSES_PAD_CHANGE
+[PASS] DS_SQRT_REFUSES_PREDICATED_BODY
+[PASS] DS_SQRT_REFUSES_CONTROL_CHANGE
+[PASS] DS_SQRT_REFUSES_UNRECORDED_FORM
+[PASS] DS_SQRT_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_SQRT_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_SQRT_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_SQRT_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_SQRT_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_SQRT_REFUSES_EMPTY_BODY
+[PASS] DS_SQRT_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_EXP2_BODY_BUILDS (47 insns)
+[PASS] DS_EXP2_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_EXP2_KERNEL_BUILDS
+[PASS] DS_EXP2_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_EXP2_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_EXP2_REFUSES_BAD_OP
+[PASS] DS_EXP2_REFUSES_BAD_LENGTH
+[PASS] DS_EXP2_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_EXP2_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_EXP2_REFUSES_PAD_CHANGE
+[PASS] DS_EXP2_REFUSES_PREDICATED_BODY
+[PASS] DS_EXP2_REFUSES_CONTROL_CHANGE
+[PASS] DS_EXP2_REFUSES_UNRECORDED_FORM
+[PASS] DS_EXP2_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_EXP2_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_EXP2_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_EXP2_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_EXP2_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_EXP2_REFUSES_EMPTY_BODY
+[PASS] DS_EXP2_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_LOG2_BODY_BUILDS (553 insns)
+[PASS] DS_LOG2_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_LOG2_KERNEL_BUILDS
+[PASS] DS_LOG2_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_LOG2_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_LOG2_REFUSES_BAD_OP
+[PASS] DS_LOG2_REFUSES_BAD_LENGTH
+[PASS] DS_LOG2_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_LOG2_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_LOG2_REFUSES_PAD_CHANGE
+[PASS] DS_LOG2_REFUSES_PREDICATED_BODY
+[PASS] DS_LOG2_REFUSES_CONTROL_CHANGE
+[PASS] DS_LOG2_REFUSES_UNRECORDED_FORM
+[PASS] DS_LOG2_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_LOG2_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_LOG2_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_LOG2_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_LOG2_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_LOG2_REFUSES_EMPTY_BODY
+[PASS] DS_LOG2_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_SIGMOID_BODY_BUILDS (322 insns)
+[PASS] DS_SIGMOID_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_SIGMOID_KERNEL_BUILDS
+[PASS] DS_SIGMOID_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_SIGMOID_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_SIGMOID_REFUSES_BAD_OP
+[PASS] DS_SIGMOID_REFUSES_BAD_LENGTH
+[PASS] DS_SIGMOID_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_SIGMOID_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_SIGMOID_REFUSES_PAD_CHANGE
+[PASS] DS_SIGMOID_REFUSES_PREDICATED_BODY
+[PASS] DS_SIGMOID_REFUSES_CONTROL_CHANGE
+[PASS] DS_SIGMOID_REFUSES_UNRECORDED_FORM
+[PASS] DS_SIGMOID_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_SIGMOID_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_SIGMOID_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_SIGMOID_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_SIGMOID_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_SIGMOID_REFUSES_EMPTY_BODY
+[PASS] DS_SIGMOID_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_TANH_BODY_BUILDS (325 insns)
+[PASS] DS_TANH_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_TANH_KERNEL_BUILDS
+[PASS] DS_TANH_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_TANH_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_TANH_REFUSES_BAD_OP
+[PASS] DS_TANH_REFUSES_BAD_LENGTH
+[PASS] DS_TANH_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_TANH_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_TANH_REFUSES_PAD_CHANGE
+[PASS] DS_TANH_REFUSES_PREDICATED_BODY
+[PASS] DS_TANH_REFUSES_CONTROL_CHANGE
+[PASS] DS_TANH_REFUSES_UNRECORDED_FORM
+[PASS] DS_TANH_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_TANH_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_TANH_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_TANH_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_TANH_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_TANH_REFUSES_EMPTY_BODY
+[PASS] DS_TANH_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_SIN_BODY_BUILDS (95 insns)
+[PASS] DS_SIN_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_SIN_KERNEL_BUILDS
+[PASS] DS_SIN_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_SIN_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_SIN_REFUSES_BAD_OP
+[PASS] DS_SIN_REFUSES_BAD_LENGTH
+[PASS] DS_SIN_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_SIN_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_SIN_REFUSES_PAD_CHANGE
+[PASS] DS_SIN_REFUSES_PREDICATED_BODY
+[PASS] DS_SIN_REFUSES_CONTROL_CHANGE
+[PASS] DS_SIN_REFUSES_UNRECORDED_FORM
+[PASS] DS_SIN_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_SIN_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_SIN_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_SIN_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_SIN_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_SIN_REFUSES_EMPTY_BODY
+[PASS] DS_SIN_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_COS_BODY_BUILDS (93 insns)
+[PASS] DS_COS_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_COS_KERNEL_BUILDS
+[PASS] DS_COS_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_COS_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_COS_REFUSES_BAD_OP
+[PASS] DS_COS_REFUSES_BAD_LENGTH
+[PASS] DS_COS_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_COS_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_COS_REFUSES_PAD_CHANGE
+[PASS] DS_COS_REFUSES_PREDICATED_BODY
+[PASS] DS_COS_REFUSES_CONTROL_CHANGE
+[PASS] DS_COS_REFUSES_UNRECORDED_FORM
+[PASS] DS_COS_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_COS_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_COS_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_COS_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_COS_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_COS_REFUSES_EMPTY_BODY
+[PASS] DS_COS_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_ERF_BODY_BUILDS (334 insns)
+[PASS] DS_ERF_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_ERF_KERNEL_BUILDS
+[PASS] DS_ERF_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_ERF_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_ERF_REFUSES_BAD_OP
+[PASS] DS_ERF_REFUSES_BAD_LENGTH
+[PASS] DS_ERF_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_ERF_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_ERF_REFUSES_PAD_CHANGE
+[PASS] DS_ERF_REFUSES_PREDICATED_BODY
+[PASS] DS_ERF_REFUSES_CONTROL_CHANGE
+[PASS] DS_ERF_REFUSES_UNRECORDED_FORM
+[PASS] DS_ERF_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_ERF_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_ERF_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_ERF_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_ERF_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_ERF_REFUSES_EMPTY_BODY
+[PASS] DS_ERF_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_GELU_BODY_BUILDS (399 insns)
+[PASS] DS_GELU_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_GELU_KERNEL_BUILDS
+[PASS] DS_GELU_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_GELU_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_GELU_REFUSES_BAD_OP
+[PASS] DS_GELU_REFUSES_BAD_LENGTH
+[PASS] DS_GELU_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_GELU_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_GELU_REFUSES_PAD_CHANGE
+[PASS] DS_GELU_REFUSES_PREDICATED_BODY
+[PASS] DS_GELU_REFUSES_CONTROL_CHANGE
+[PASS] DS_GELU_REFUSES_UNRECORDED_FORM
+[PASS] DS_GELU_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_GELU_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_GELU_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_GELU_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_GELU_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_GELU_REFUSES_EMPTY_BODY
+[PASS] DS_GELU_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_RSQRT_BODY_BUILDS (318 insns)
+[PASS] DS_RSQRT_ENCODE_DECODE_ROUND_TRIP
+[PASS] DS_RSQRT_KERNEL_BUILDS
+[PASS] DS_RSQRT_KERNEL_PASSES_STRUCTURAL_CHECK
+[PASS] DS_RSQRT_KERNEL_DIGEST_IS_RECORDED
+[PASS] DS_RSQRT_REFUSES_BAD_OP
+[PASS] DS_RSQRT_REFUSES_BAD_LENGTH
+[PASS] DS_RSQRT_REFUSES_PROLOGUE_CHANGE
+[PASS] DS_RSQRT_REFUSES_EPILOGUE_CHANGE
+[PASS] DS_RSQRT_REFUSES_PAD_CHANGE
+[PASS] DS_RSQRT_REFUSES_PREDICATED_BODY
+[PASS] DS_RSQRT_REFUSES_CONTROL_CHANGE
+[PASS] DS_RSQRT_REFUSES_UNRECORDED_FORM
+[PASS] DS_RSQRT_REFUSES_READ_BEFORE_WRITE
+[PASS] DS_RSQRT_REFUSES_PRED_READ_BEFORE_WRITE
+[PASS] DS_RSQRT_REFUSES_WRITE_TO_ADDRESS_REG
+[PASS] DS_RSQRT_REFUSES_REG_ABOVE_ALLOCATION
+[PASS] DS_RSQRT_REFUSES_RESULT_NOT_IN_R9
+[PASS] DS_RSQRT_REFUSES_EMPTY_BODY
+[PASS] DS_RSQRT_REFUSES_CHANGED_IMMEDIATE_BY_DIGEST
+[PASS] DS_ARGS_REFUSE_BAD_OP
+[PASS] DS_ARGS_REFUSE_MISSING_B
+[PASS] DS_ARGS_SQRT_NEEDS_NO_B
+[PASS] DS_ARGS_REFUSE_ZERO_COUNT
+[PASS] DS_ARGS_REFUSE_OVERSIZE_COUNT
+[PASS] DS_QMD_ACCEPTS_BUILT_QMD
+[PASS] DS_QMD_REFUSES_INVARIANT_BREAK
+[PASS] DS_QMD_REFUSES_16_REGISTERS
+[PASS] DS_QMD_REFUSES_OTHER_PROGRAM
+[PASS] DS_QMD_REFUSES_HIGH_ADDRESS_BITS
+[PASS] DS_HOST_MODEL_HARD_CORPUS
+[PASS] DS_HOST_MODEL_EDGE_CLASSES (5033 DIV pairs)
+[PASS] DS_HOST_MODEL_RANDOM_200K
+SUMMARY passed=233 failed=0
+tools/divsqrt_nvdisasm_check.sh
+nvdisasm: release 13.0, V13.0.85
+[PASS] div: all 264 words decode to the encoder's text
+[PASS] sqrt: all 336 words decode to the encoder's text
+[PASS] exp2: all 72 words decode to the encoder's text
+[PASS] log2: all 576 words decode to the encoder's text
+[PASS] sigmoid: all 344 words decode to the encoder's text
+[PASS] tanh: all 352 words decode to the encoder's text
+[PASS] sin: all 120 words decode to the encoder's text
+[PASS] cos: all 120 words decode to the encoder's text
+[PASS] erf: all 360 words decode to the encoder's text
+[PASS] gelu: all 424 words decode to the encoder's text
+[PASS] rsqrt: all 344 words decode to the encoder's text
+VERDICT PASS
+gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o build/test_omega_reduce_cpu tests/test_omega_reduce.c src/omega_numeric_reduce.c src/omega_numeric_reduce_gb10.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+./build/test_omega_reduce_cpu
+RED_RUN seed=0x9e3779b97f4a7c15 order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL
+RED_ORDER_DECLARED: PASS order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL 
+RED_EMPTY_IDENTITY_SPECIAL_VALUES: PASS
+RED_CPU_EQUALS_REFERENCE: PASS cases=3168 elements=28713455 mismatches=0 
+RED_INDEPENDENT_ORACLE: PASS cases=432 bad=0 
+RED_DIFFERENT_ORDER_CAUGHT: PASS sequential/reverse/flat mutants all differ on crafted inputs; random n=4097 sequential differs 45/50 
+RED_DETERMINISM: PASS n=1000003, 4 ops, two runs, two alignments, identical bits
+RED_CRAFTED_TABLE: PASS 14 vectors x 4 ops, hand-written bits on reference and CPU tiers, bad=0 
+RED_GB10_PRESUBMIT_CHECKS: PASS
+RED_GB10_MINMAX_PATCH: PASS patch accepted; mutants caught 30/30; host model of decoded words = reference 110/110
+RED_WRONG_PAD_CAUGHT: PASS
+RED_GB10_PARITY: SKIP chip-only (CPU build)
+E1 Reduce Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY
+max: 12 words decode to the recorded text
+min: 12 words decode to the recorded text
+E1 Reduce nvdisasm: PASS (release 13.0, V13.0.85)
+gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o build/test_omega_ldst_gb10_cpu tests/test_omega_ldst_gb10.c src/omega_numeric_ldst_gb10.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+./build/test_omega_ldst_gb10_cpu
+omega_ldst_gb10_run: refused: access outside the buffers
+[PASS] LDST_TABLE_SPECS_VALID (148 specs)
+[PASS] LDST_KERNELS_BUILD_AND_PASS_STRUCTURAL_CHECK
+[PASS] LDST_HOST_MODEL_EQUALS_BYTE_ORACLE
+[PASS] LDST_TABLE_COVERS_EVERY_VALID_LOAD_STORE_PAIR
+[PASS] LDST_OFFSET_24BIT_EXTREMES_ENCODE
+[PASS] NEG_STORE_WIDER_THAN_LOAD_REFUSED
+[PASS] NEG_NARROW_LOAD_WIDE_STORE_REFUSED
+[PASS] NEG_STRIDE_BELOW_WIDTH_REFUSED
+[PASS] NEG_STRIDE_NOT_MULTIPLE_REFUSED
+[PASS] NEG_INPUT_OFFSET_MISALIGNED_REFUSED
+[PASS] NEG_OUTPUT_OFFSET_MISALIGNED_REFUSED
+[PASS] NEG_OFFSET_OUTSIDE_24BIT_REFUSED
+[PASS] NEG_NEGATIVE_OFFSET_OUTSIDE_24BIT_REFUSED
+[PASS] NEG_ZERO_STRIDE_REFUSED
+[PASS] NEG_STRIDE_2_POW_24_REFUSED
+[PASS] NEG_UNKNOWN_LOAD_KIND_REFUSED
+[PASS] NEG_UNKNOWN_STORE_KIND_REFUSED
+[PASS] NEG_ZERO_COUNT_REFUSED
+[PASS] NEG_LDG_OFFSET_BIT_FLIPPED_CAUGHT
+[PASS] NEG_LDG_SIZE_FIELD_CHANGED_CAUGHT
+[PASS] NEG_LDG_DEST_REGISTER_CHANGED_CAUGHT
+[PASS] NEG_STG_SIZE_FIELD_CHANGED_CAUGHT
+[PASS] NEG_STG_OFFSET_BIT_FLIPPED_CAUGHT
+[PASS] NEG_INPUT_STRIDE_WORD_CHANGED_CAUGHT
+[PASS] NEG_OUTPUT_STRIDE_WORD_CHANGED_CAUGHT
+[PASS] NEG_IADD3_CONTROL_WORD_CHANGED_CAUGHT
+[PASS] NEG_PROLOGUE_WORD_CHANGED_CAUGHT
+[PASS] NEG_EPILOGUE_WORD_CHANGED_CAUGHT
+[PASS] NEG_SHORT_KERNEL_CAUGHT
+[PASS] LDST_HOST_RUN_INSIDE_BUFFER_OK
+[PASS] NEG_HOST_RUN_PAST_END_REFUSED
+[PASS] NEG_HOST_RUN_BEFORE_START_REFUSED
+[PASS] NEG_GB10_RUN_PAST_END_REFUSED_BEFORE_DEVICE
+Gate LDST host: PASSED=33 FAILED=0
+VERDICT PASS_HOST
+tools/ldst_nvdisasm_check.sh
+nvdisasm: release 13.0, V13.0.85
+[PASS] ldst: 148 of 148 kernels decode, every word, to the encoder's text
+VERDICT PASS

@@ -1,0 +1,3 @@
+nvdisasm: release 13.0, V13.0.85
+[PASS] ldst: 148 of 148 kernels decode, every word, to the encoder's text
+VERDICT PASS

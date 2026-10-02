@@ -1,0 +1,6 @@
+make: 'build/test_omega_numeric_transc_gb10_cpu' is up to date.
+RESULT host SIN checked=4294967296 mismatches=0
+RESULT host COS checked=4294967296 mismatches=0
+RESULT host ERF checked=4294967296 mismatches=0
+RESULT host GELU checked=4294967296 mismatches=0
+RESULT host RSQRT checked=4294967296 mismatches=0

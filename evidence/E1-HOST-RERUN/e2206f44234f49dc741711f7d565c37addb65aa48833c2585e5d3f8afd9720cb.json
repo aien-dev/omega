@@ -1,0 +1,26 @@
+{
+  "digest_meaning": "file name is the SHA-256 of this file; integrity only, not authenticity",
+  "finished_utc": "2026-10-02T23:16:48Z",
+  "lines": {
+    "GB10-COMPILE": "PASS",
+    "HOSTALL": "PASS",
+    "MANIFEST": "PASS",
+    "NUMERIC-HOST": "PASS",
+    "PROGRAM": "PASS",
+    "TRANSC": "PASS"
+  },
+  "log_sha256": {
+    "GB10-COMPILE": "63f63c3d5835038bb7179d96b092058e8d9a5f6dc4929644fe4cb9ffa3d555db",
+    "HOSTALL": "ad4dadec35f018ae45a0f80fb71292080bd7d2605e37f7cd31b739e0768b52d8",
+    "MANIFEST": "ed7c20fca94f05178f2aea505f6ff095437ddcbaef9bc4d6986f5d81852ea25a",
+    "NUMERIC-HOST": "13ad3174763bb19c22ba53fcbba1ab3c24f00e3cc4b4b324253594475200dfb7",
+    "PROGRAM": "60ef12ef569a72237b89975c50e1e1a5b4f3698b18313da0dacab6ca4e6f4d77",
+    "TRANSC": "57131eab7f0fe2b8ecbd4dab38aefd8b5590531026b18c83c75e93cc4f286bc9"
+  },
+  "omega_commit": "40d1ea378617403727f35868742dc4dd3d60515b",
+  "schema": "AIEN_E1_HOST_RERUN_V1",
+  "started_utc": "2026-10-02T22:41:57Z",
+  "summary_sha256": "aabf9230630574992cc9ad5fa1e7bde610172697455f41fd9d80e12659bd242c",
+  "tracked_tree_clean_after": true,
+  "tracked_tree_clean_before": true
+}
