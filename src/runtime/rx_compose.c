@@ -305,6 +305,22 @@ static uint64_t latest_before(CxStore *s, uint32_t slot, uint32_t cls, uint32_t 
     return cx_latest(s, RXC_CX_SUBJECT(slot), before > 1 ? before - 1 : 0, &f);
 }
 
+/* C4: 1 if a Cortex promotion names a winner claim whose branch is `packed_ref`.
+ * A promotion is written only after its state is durable (settle order), so a
+ * promoted state that J-Space no longer holds is a regressed checkpoint, not a
+ * crash window: recovery must refuse it rather than roll it back. */
+static int state_ref_promoted(const CxStore *s, uint64_t packed_ref) {
+    for (uint64_t id = 1; id <= s->n; id++) {
+        const CxObject *o = cx_get(s, id);
+        if (!o || o->kind != CX_K_PROMOTION) continue;
+        const CxObject *claim = cx_get(s, o->links[0]);
+        if (!claim || claim->kind != CX_K_CANDIDATE) continue;
+        const uint64_t *pl = payload_of(s, claim->id, RXC_CP_WORDS);
+        if (pl && pl[RXC_CP_REF] == packed_ref) return 1;
+    }
+    return 0;
+}
+
 static int has_admission(CxStore *s, uint64_t tag, uint64_t link0) {
     const CxIdList *l = &s->by_subject[RXC_STATE_SUBJECT];
     for (uint32_t i = 0; i < l->n; i++) {
@@ -519,6 +535,10 @@ static int recover(RxCompose *c) {
         if (!o || o->id <= chosen) continue;
         if (o->kind != CX_K_ENTITY_CREATED && o->kind != CX_K_EXEC_COMMIT) continue;
         if (has_admission(s, RXC_ADMIT_ROLLBACK, o->id)) continue;
+        {
+            const uint64_t *pp = payload_of(s, o->id, CX_WREC_WORDS);
+            if (pp && state_ref_promoted(s, pp[CX_WREC_FIELD0 + RXC_S_REF])) return RX_ERR_REPLAY;
+        }
         const uint64_t *p = payload_of(s, o->id, CX_WREC_WORDS);
         uint64_t ap[RXC_AP_WORDS] = { p ? p[CX_WREC_FIELD0 + RXC_S_REF] : 0,
                                       p ? p[CX_WREC_FIELD0 + RXC_S_GOAL] : 0, RXC_NONE };
@@ -535,6 +555,12 @@ static int recover(RxCompose *c) {
     }
     if (!chosen) {
         /* Genesis: drop anything durable, root seeded by the machine identity. */
+        /* C4: a lost or emptied Cortex journal must not silently reset a World
+         * whose J-Space holds committed history. The genesis root is one unit;
+         * every committed goal derives more. Durable history with no state
+         * record is refused, never overwritten with a fresh genesis. */
+        for (uint32_t b = 0; b < c->js.n_branches; b++)
+            if (c->js.branches[b] && c->js.branches[b]->n_units > 1) return RX_ERR_REPLAY;
         for (uint32_t b = 0; b < c->js.n_branches; b++)
             if (c->js.branches[b]) js_branch_release(&c->js, b);
         uint32_t root;

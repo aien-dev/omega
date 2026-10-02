@@ -1568,6 +1568,25 @@ print-composition-gate-bin:
 
 .PHONY: test-composition test-composition-gate test-composition-attach-asan composition-gate-bin print-composition-gate-bin
 
+# C4 (Convergence plan item 4): requalification of the local runtime with
+# interruption and recovery (crash at every stage boundary, SIGKILL sweep, on-disk
+# corruption). Test build only (crash points). Receipt: tools/c4_requal.sh.
+RX_C4_REQUAL = $(OUT_DIR)/rx_c4_requal
+
+$(RX_C4_REQUAL): $(RX_COMPOSE_DEPS) tests/runtime/rx_c4_requal.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) $(AIEN_TEST_FLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_c4_requal.c \
+		$(RX_COMPOSE_LINK)
+
+test-c4-requal: $(RX_C4_REQUAL)
+	./$(RX_C4_REQUAL) $(OUT_DIR)/c4_requal_receipt.json
+
+c4-requal-bin: $(RX_C4_REQUAL)
+
+print-c4-requal-bin:
+	@echo $(RX_C4_REQUAL)
+
+.PHONY: test-c4-requal c4-requal-bin print-c4-requal-bin
+
 # COMPOSITION-2 GPU tier: the same 14-step gate with both Skills executed on
 # the GB10 through the sovereign M16 native path (no CUDA); see
 # tests/runtime/rx_compose_gpu_skill.h. A chip run: take the quiet flag and
