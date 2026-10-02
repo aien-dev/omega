@@ -151,7 +151,7 @@ BE_CLOSE_ERROR_IGNORED~src/omega_blackwell_engine.c~/^static int be_close/,/^}/ 
 # ---- the vector wrapper (src/omega_blackwell_submit.c) ----------------------------------
 WRAP_POISON_NOT_COMPLEMENT~src/omega_blackwell_submit.c~/^int omega_blackwell_execute_vector/,/^}/ s/poison\[i\] = .(uint32_t)(h_a\[i\] + h_b\[i\]);/poison[i] = (uint32_t)(h_a[i] + h_b[i]);/~the poison word is the complement of the expected sum
 WRAP_POISON_CONSTANT~src/omega_blackwell_submit.c~/^int omega_blackwell_execute_vector/,/^}/ s/poison\[i\] = .(uint32_t)(h_a\[i\] + h_b\[i\]);/poison[i] = 0xdeadbeefu;/~the poison word never collides with a legitimate sum (0xdeadbeef is one)
-WRAP_ENGINE_FAILURE_IGNORED~src/omega_blackwell_submit.c~/^int omega_blackwell_execute_vector/,/^}/ s/if (erc != OMEGA_GPU_ENGINE_OK) {/if (0) {/~an engine failure (here a cleanup fault) fails the wrapper
+WRAP_ENGINE_FAILURE_IGNORED~src/omega_blackwell_submit.c~/^int omega_blackwell_execute_vector/,/^}/ s/if (erc != OMEGA_GPU_ENGINE_OK) {/if ((void)erc, 0) {/~an engine failure (here a cleanup fault) fails the wrapper
 WRAP_ORACLE_IGNORED~src/omega_blackwell_submit.c~/^int omega_blackwell_execute_vector/,/^}/ s/return parity_res;/return 0;/~the host oracle decides success, not the engine
 WRAP_PARITY_FLAG_FORCED~src/omega_blackwell_submit.c~/^int omega_blackwell_execute_vector/,/^}/ s/exec_info->parity_verified = (parity_res == 0);/exec_info->parity_verified = 1;/~parity_verified follows the oracle
 WRAP_MARKER_NOT_REPORTED~src/omega_blackwell_submit.c~/^int omega_blackwell_execute_vector/,/^}/ s/exec_info->completion_marker = info.marker;/exec_info->completion_marker = 0;/~the completion marker is reported

@@ -624,6 +624,10 @@ static void uncertain_case(const char *tag, int mk, int mk2, int sem, uint32_t f
               fk.free_calls == 8);
     omega_gpu_engine_test_reset_block();
     make_job(&job);
+    /* The simulated driver still has the hang or overshoot of this case armed: restore a healthy chip. */
+    fk.marker_mode = FK_SYNC_NORMAL;
+    fk.marker2_mode = FK_SYNC_NORMAL;
+    fk.sem_mode = FK_SYNC_NORMAL;
     idf(id, sizeof id, tag, "backend_works_again_after_drain");
     check(id, run() == OMEGA_GPU_ENGINE_OK && output_correct(outbuf));
 }

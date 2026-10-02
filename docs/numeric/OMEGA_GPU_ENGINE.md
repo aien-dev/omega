@@ -668,9 +668,15 @@ Choices of this cut:
 
 ### 14.1 Simulated-driver host test, backend mutants, chip test (A3b2)
 
-Status: DRAFT, host NOT_RUN, chip NOT_RUN. Written without compiling or running
-anything (Phase A rule). The first run is the queue lines `DEEP2-A3b2-sim`,
-`-mut`, `-gb10c` and the regression lines named in the handoff.
+Status: host PASS at DEEP2-A3b3 (333 sim assertions, 120 mutants: 107 killed, 13
+redundant as listed, 0 test gaps), chip NOT_RUN. The A3b2 run found no bug in the
+engine or backend sources: the first run failed because the test re-used the hang
+or overshoot armed in the simulated driver for its "backend works again after
+drain" check (test bug, fixed in the test), and one mutant row did not build
+(unused variable under -Werror, fixed in the row). An address and undefined-behaviour
+sanitizer run of the sim test is clean except one old finding in src/omega_blackwell_qmd.c
+line 139 (`0x1000 << 19` overflows a signed int; gcc wraps it to the intended value). The
+file is gate-hashed (M17/M18) and was left unchanged.
 
 Files:
 - `tests/test_omega_blackwell_engine.c` and `tests/fake_m16_native.c/.h`
@@ -718,7 +724,7 @@ two releases; a successful real `nvrm_free` clobbers `errno` (to EBADF); the
 channel's own 4 KiB pushbuffer buffer is orphaned when the backend installs the
 large ring; the pushbuffer is parsed and executed in order. The link set (the
 Makefile `RX_COMPOSE_GPU_SRCS` list plus `omega_core.c`, `omega_canonical.c`,
-`sha256.c`) is UNVERIFIED (confidence moderate): nothing was compiled.
+`sha256.c`) links and runs on the host (checked at A3b3); whether it also matches the chip build is not tested here.
 
 Backend and wrapper mutants. Each must be KILLED by the sim test, or carries class
 `redundant` with a reason (a surviving redundant mutant is accepted by the runner).
