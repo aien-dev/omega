@@ -1,7 +1,7 @@
 # E1 Numerical Closure: Gap Table
 
 Status: research note, 2026-09-30, read-only survey of `origin/main` at `529ebfa`; rows refreshed 2026-10-01 (see the status summary below).
-No code was built or run for this note.
+The 2026-10-01 rows were built and run; see the update section below.
 
 Plan source: `aien-architecture/CURRENT_EXECUTION_PLAN.md`, section 8, "E1. Numerical closure"
 (must close before M20 tensor training). Evidence source: the merged M19R Gate 5
@@ -31,6 +31,25 @@ Receipt naming caveat: a receipt's file name is its internal `receipt_digest`, n
 For `dafb645a...` and `dc4e6012...` the file hashes differently (`dafb645a...` file sha256 begins `3e6bfec8`).
 Verify content through the receipt's own fields (`digest_meaning` in each receipt says "integrity only,
 not authenticity").
+
+## Update, branch `e1-gap-close` (convergence plan item 3, part 2)
+
+Classification of every row (C3 = the unwritten-output bug, branch `c3-h1-fence`, not touched here):
+
+| Row | Class | State |
+|---|---|---|
+| 1, 3, 4, 6, 7 | Already closed | No change |
+| 2 | Closed in code, chip run queued (e1-gap-close-2) | General LDG/STG kernels (all widths, signed and unsigned narrow loads, byte strides, signed 24-bit offsets) built from nvdisasm-read encodings; host model equals a byte oracle; 148 table kernels decode with nvdisasm; chip job `E1B-LDST-CHIP` queued |
+| 5 | Closed in code, chip receipt pending | MEAN divides on the GB10 DIV kernel, mutant hook in the build |
+| 8 | Already closed (decided) | No change |
+| 9 | Closed | CI runs the check; full-domain CPU run PASS |
+| 10 | Closed in code for all five ops (e1-gap-close, e1-gap-close-2), chip receipts pending | SIN, COS, ERF, GELU (e1-gap-close) and RSQRT (e1-gap-close-2, exact-rounding by FMA error-free transforms, no integer multiply) equal the CPU tier on the host model; chip jobs `E1-CLOSE-TRANSC-CHIP` and `E1B-RSQRT-CHIP` queued |
+| 11 | Open, needs the receipts from rows 5 and 10 and a Gate 5 expected-ID extension | Gate 5 rerun queued (`E1-CLOSE-GATE5`) on commit `9d11565`, the first commit of this PR, not on the PR head (`b48d132`); the rerun on the head is still to be queued |
+| 12 | Closed in code (e1-gap-close-2) | FP32 is an explicit program IR type (tag `0x0E`) with an explicit `CONVERT` op; the type check refuses mixed types; evaluation uses the library tier; `make test-program-fp32` PASS 33/33; `spec/program-fp32.md`. Amendment to the ratified type table, no existing id changes |
+| Unwritten-output root cause (row 10 note) | Blocked on C3 | Not touched |
+
+Chip evidence for rows 5, 10 and 11 comes from the shared forge queue (`E1-CLOSE-REDUCE`,
+`E1-CLOSE-TRANSC-CHIP`, `E1-CLOSE-GATE5`); the receipts are added to this table when they land.
 
 ## 1. What Gate 5 actually counts
 
@@ -90,14 +109,14 @@ later, not now.
 | 2 | FP32 load/store | Partial | Global STG fixed form (`src/omega_numeric.c:675` CHECK:stg_form); shared LDS_STS mirror exchange inside one 64-thread CTA (`omega_numeric.c:332`) | Only one fixed addressing pattern each; no general strided, offset or vector loads/stores | Define a load/store contract (offset, stride, alignment) with encoder checks, then chip parity | M | Yes |
 | 3 | Comparison / select | Covered (CPU and main GB10 path) | 13 `FSETP_*_SEL` predicates plus FSEL and FMNMX; CPU contract omega#124 (merge `d3194f6`, `docs/numeric/E1_SCALAR_CONTRACT.md`); GB10 encoding omega#147 (merge `2d8cd68`); chip parity lines with 0 mismatches in receipts `f4f6d362...` and `dafb645a...` (`evidence/OMEGA-NUMERIC-0/`) | None for the original gap (only GE existed) | None | - | No |
 | 4 | Conversion | Covered (CPU and main GB10 path) | I2FP, F2I; added `F2I_FLOOR/CEIL/RNI`, `F2U`, `I2FP_U32`, `F32<->F16`, `F32<->BF16` on CPU by omega#124 (merge `d3194f6`; 2^32-input exhaustive run on the 9 unary ops, 0 mismatches); GB10 encodings omega#147 (merge `2d8cd68`); chip parity 0 mismatches in receipts `f4f6d362...` and `dafb645a...` | FP16/BF16 arithmetic is not defined (conversions only) | None | - | No |
-| 5 | Reductions | Covered on GB10 for SUM/MAX/MIN; MEAN = chip SUM + one declared host division | omega#134 (merge `c54d492`): SUM, MAX, MIN, MEAN over any length n >= 0 in frozen order `RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL`; CPU verdict `PASS_EXCEPT_DECLARED_CHIP_ONLY`. GB10 SUM receipt `evidence/E1-REDUCE/be9d61ce...json` (omega 6da80bf). GB10 MAX/MIN via a reduce-owned SHFL.DOWN+FMNMX patch (omega#157): receipt `evidence/E1-REDUCE/a04f4f7f...json` (PASS, SUM/MAX/MIN/MEAN 380 cases, 0 mismatches, omega 689ad4d, pre-rebase) | MEAN final division still on the host (GB10 DIV is on the main path since omega#152; switch pending); no single-launch shared-memory CTA kernel; no receipt yet on merged main | Switch MEAN to GB10 DIV; consolidated chip run on merged main; optional CTA kernel with the same bits | S | Yes |
+| 5 | Reductions | Closed in code (MEAN divides on the GB10); chip receipt pending | omega#134 (merge `c54d492`): SUM, MAX, MIN, MEAN over any length n >= 0 in frozen order `RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL`. GB10 SUM receipt `evidence/E1-REDUCE/be9d61ce...json` (omega 6da80bf); MAX/MIN via a reduce-owned SHFL.DOWN+FMNMX patch (omega#157): receipt `evidence/E1-REDUCE/a04f4f7f...json` (SUM/MAX/MIN/MEAN 380 cases, 0 mismatches, omega 689ad4d). This PR (`e1-gap-close`, commit `9d11565`): the final MEAN division now runs on the GB10 DIV kernel (`omega_ds_gb10_run(OMEGA_DS_DIV, ...)`), no host step; build flag `-DOMEGA_REDUCE_MUTATE_MEAN_DIV` divides by n+1 so the chip run must FAIL; `make test-numeric-reduce-cpu` PASS_EXCEPT_DECLARED_CHIP_ONLY and `make test-numeric-reduce-nvdisasm` PASS | Chip run of the new MEAN path and its mutant on a clean commit (queued: forge job `E1-CLOSE-REDUCE`); optional single-launch CTA kernel not built | Read the receipt when the forge job finishes | S | Yes |
 | 6 | Division and square root (definition) | Covered on CPU | Integer-only correctly rounded sequences, bit-exact vs IEEE, hard cases (`tests/test_omega_numeric.c:756-801`); header records full SQRT sweep and 10^9 DIV pairs (`src/omega_numeric.h:112-123`) | Full DIV sweep is sampled, not exhaustive (not feasible for two inputs; acceptable) | None for definition | - | No |
 | 7 | Division and square root on GB10 | Closed (chip PASS) | Standalone GB10 kernels `src/omega_numeric_divsqrt_gb10.c` (DIV 264 words, SQRT 336 words, every word from Omega's encoder and checked by nvdisasm); `make test-divsqrt-host`; gate `tools/run_divsqrt_gate.sh`; receipt `E1-DIVSQRT/de7b2dd6a930ae94529773cf4e31aa08aac7065602b1d771e13e6ed2784a9074.json` ; wired into the main GB10 path (`omega_numeric_gb10.c` dispatches DIV/SQRT to `omega_ds_gb10_run`); Gate 5 chip parity 0 of 4096 mismatches each, receipt `OMEGA-NUMERIC-0/dafb645a9692aab551327c4de7c5dfd7d194504b1ae2ac998a0f5480c687cbb2.json` | None for DIV/SQRT | None | - | No |
 | 8 | Transcendental: exact sequences (wording) | Met (decided) | EXP/LOG frozen polynomial sequences (`omega_numeric.h:125-131`); edge and round-trip checks (`test_omega_numeric.c:803-844`); binary128 oracle bound EXP 40 ulp, LOG 4 ulp (lines 379-380) | Decided by aien-architecture #76 (merge `15808f9`, Option 1): "exact" means a frozen sequence with a declared per-op error bound, bit-identical on CPU and GB10, not correct rounding. RSQRT, DIV and SQRT stay correctly rounded. EXP worst case 39 ulp against its 40 ulp bound (omega#107 notes) | None for the wording; GB10 parity is tracked in row 10 | - | No |
-| 9 | Transcendental: coverage | Partial (CPU only) | omega#127 (merge `7a5a13c`): SIGMOID, TANH, RSQRT, EXP2, LOG2, ERF, SIN, COS, GELU. Frozen binary32 sequences, bounded ulp (declared 3, 3, 0, 2, 2, 3, 2, 2, 3), checked against a binary128 oracle over all 2^32 inputs. Not in `OP_TABLE`; no CI job runs `make test-numeric-transc`; no receipt | pow variants not defined. Exact-versus-bounded wording is an owner decision (aien-architecture PR #76, unresolved) | Owner decision, then a CI job and a receipt | S | No |
-| 10 | Transcendental on GB10 | PASS on merged main for EXP2, LOG2, SIGMOID, TANH (five ops still open) | Whole-program GB10 kernels (`src/omega_numeric_divsqrt_gb10.c`), same operation order and FMA placement as `src/omega_numeric_transc.c`, no MUFU, nvdisasm-checked, digest-pinned. Merged-main receipt `evidence/E1-TRANSC-GB10/96fbc78df41fb62244e9d16cd59531182f64a01fb8c5ef1e02c8dadb8be6f556.json` (omega `4863803`, merge of #165; physics `e95e3ed`; run 2026-10-01 16:58:11Z-17:20:50Z; chip exit 0; host tier 32/0; unsigned, content-addressed, chip log `blobs/c65e0041...log`): EXP2, LOG2, SIGMOID, TANH each every 32-bit input, 0 mismatches, 0 unwritten. Earlier pre-merge receipts (omega `d25d7ad`): `6ca4ee4e...json` (EXP2, LOG2, TANH PASS) and `147b2189...json` (SIGMOID PASS). Kept FAILs: `1dc85ef2...json` (32-register QMD, Xid 13 on LOG2/SIGMOID/TANH, fixed by a 48-register allocation) and SIGMOID in `6ca4ee4e` (98,304 outputs never written in one batch, every written value matched; the SIGMOID-only rerun passed) | RSQRT, ERF, SIN, COS, GELU have no GB10 kernel (RSQRT needs exact-midpoint checks for correct rounding). EXP/LOG of `OP_TABLE` still NOT_ENCODED. Not yet in `OP_TABLE` dispatch. Intermittent unwritten-output event on the DS executor is not root-caused (did not recur in the merged-main run) | Encode the remaining five ops; root-cause the unwritten batch | M | Yes |
+| 9 | Transcendental: coverage | Closed on CPU | omega#127 (merge `7a5a13c`): SIGMOID, TANH, RSQRT, EXP2, LOG2, ERF, SIN, COS, GELU. Frozen binary32 sequences, bounded ulp (declared 3, 3, 0, 2, 2, 3, 2, 2, 3), checked against a binary128 oracle over all 2^32 inputs. CI: `.github/workflows/pr-smoke.yml` runs `test-numeric-transc` (sampled bound check and 10 mutants, must print `all 10 mutants killed`) and `host-suites-3.yml` runs it with `test-numeric-transc-digest`. Full-domain run `test-numeric-transc-full` PASS on omega `9d11565` (forge job `E1-CLOSE-TRANSC-FULL`, "E1 WP-B verdict: PASS", every op's full-domain digest matches the frozen one; GELU max 2 ulp at bound 3). The erfcx tables now live in one header, `src/omega_numeric_transc_tables.h`, read by both the CPU sequence and the GB10 kernels | pow variants not defined (no plan requirement); not in `OP_TABLE` dispatch | None | - | No |
+| 10 | Transcendental on GB10 | EXP2, LOG2, SIGMOID, TANH PASS on chip; SIN, COS, ERF, GELU closed in code, chip receipt pending; RSQRT open | Whole-program GB10 kernels (`src/omega_numeric_divsqrt_gb10.c`), same operation order and FMA placement as `src/omega_numeric_transc.c`, no MUFU, nvdisasm-checked, digest-pinned. Merged-main receipt `evidence/E1-TRANSC-GB10/96fbc78df41fb62244e9d16cd59531182f64a01fb8c5ef1e02c8dadb8be6f556.json` (omega `4863803`, physics `e95e3ed`): EXP2, LOG2, SIGMOID, TANH each every 32-bit input, 0 mismatches. This PR (commit `966c47c`) adds SIN (120 words), COS (120), ERF (360), GELU (424): `tools/divsqrt_nvdisasm_check.sh` VERDICT PASS for all ten kernels; `make test-numeric-transc-gb10-host` 64/0 (edge set, stride 4093, 1M random per op, digest recorded); the host model of each new kernel equals the CPU tier on every one of the 2^32 inputs (`--host-all` SIN, COS, ERF, GELU: 4294967296 checked, 0 mismatches, forge job `E1-CLOSE-HOSTALL`). Kept FAILs from earlier runs are listed in the receipts' history | Chip run of the four new ops over all 2^32 inputs (queued: forge job `E1-CLOSE-TRANSC-CHIP`). RSQRT has no GB10 kernel: the CPU sequence decides rounding with a 128-bit integer midpoint test (`mid_below`), and the DS frame has no integer multiply, so a bit-identical kernel needs a different exact-rounding scheme (FMA residual checks); not attempted here. Unwritten-output intermittent event on the DS executor is C3 part 1 (branch `c3-h1-fence`), not touched | Run the chip job; design the RSQRT exact-rounding scheme | M (RSQRT) | Yes |
 | 11 | CPU/GB10 parity under frozen contracts | Partial | Gate 5 receipt `OMEGA-NUMERIC-0/dafb645a9692aab551327c4de7c5dfd7d194504b1ae2ac998a0f5480c687cbb2.json` (omega 7852570, physics e95e3ed): 40 encoded ops, 47 GB10 parity lines (FFMA x8), 0 mismatches over 4096 inputs each incl. subnormal/NaN/inf classes, DIV and SQRT included; frozen contracts = FPCR rule, declared reduction order, provenance table, physics.lock pin | EXP and LOG (row 10) and the nine #127 ops are still refused on the main path and have no Gate 5 chip parity | Rerun Gate 5 with each new op added; keep the 23 tests and extend the expected-ID list | M per batch | Yes |
-| 12 | Integration (not named in the plan, implied by "before tensor training") | Missing | `omega_numeric.h` is included only by the four numeric source files; program IR refuses DIV (`tests/realize/test_program_realize.c:249`); no FP32 type in `src/omega_program.c` | Nothing downstream (program IR, visor, M20 jspace from #116) uses the qualified numeric library | M20-side decision: M20 tensor ops must call these contracts, and the program IR needs an FP32 value type | M | No |
+| 12 | Integration (not named in the plan, implied by "before tensor training") | Partial (tensor tier closed; program IR FP32 type open) | The M20 tensor CPU tier now calls the qualified library: `src/tensor/omega_tensor_cpu.c` routes elementwise ops through `omega_numeric_cpu_realize`, EXP2/LOG2/SIGMOID/TANH/SIN/COS/RSQRT/ERF/GELU through `omega_numeric_transc.c`, and reductions through `omega_tensor_reduce_seam.c` into `omega_reduce_cpu`; `tools/tensor_mutations.sh` and `tools/autodiff_mutations.sh` mutate those call sites. Program IR still refuses DIV (`tests/realize/test_program_realize.c:249`) and `src/omega_program.c` has no FP32 type | The program IR and visor do not carry FP32 values | Design decision (FP32 value type in the program IR) belongs to the program-IR owner and Drake; not code that can be closed by a test alone. Blocked on that decision | M | No |
 
 ## 3. Counts
 
@@ -121,3 +140,43 @@ Largest three gaps:
 1. Row 7: DIV/SQRT on GB10. L, GPU.
 2. Row 10 with row 9: transcendental set and its GB10 kernels. L + L, CPU first then GPU.
 3. Row 5: reductions beyond one warp. L, GPU.
+
+## Update, branch `e1-gap-close-2` (based on `e1-gap-close` at `b48d132`)
+
+Row 4 of the brief (wording fix): the table line for row 11 said the Gate 5 rerun was queued "at this PR's
+head". The queued job `E1-CLOSE-GATE5` is pinned to commit `9d11565`, the first commit of PR #198, not to
+the head `b48d132`. The classification entry now says so, and the rerun on the head is still to be queued.
+
+Row 10, RSQRT (`src/omega_numeric_divsqrt_gb10.c`, `body_rsqrt`, 344 words). The CPU sequence decides rounding with
+a 128-bit midpoint test; the DS frame has no integer multiply. The kernel decides the same question with
+FP32 FMA error-free transforms: |x| is normalized to `x'` in [1,4) (a subnormal by an exact 2^24, the parity of
+the exponent folded into `x'`), a seed `y0` within one ulp of the correctly rounded 1/sqrt(x') comes from a magic
+number, three FMA Newton steps and one FMA residual correction, then the sign of `mu^2 x' - 1` and `ml^2 x' - 1`
+at the two midpoints `y0 +- 2^-25` is computed exactly (TwoProduct by FMA, Knuth TwoSum, Shewchuk
+GROW-EXPANSION; the sign of an expansion is the sign of its highest nonzero component). The result is
+`y0 + [mu^2 x' < 1] + [ml^2 x' < 1] - 1`, rescaled by an exact power of two (two exact FMULs). Evidence: `tools/divsqrt_nvdisasm_check.sh`
+decodes every word (all eleven kernels), `make test-numeric-transc-gb10-host` equals `omega_math_rsqrt` on the
+edge set, every 4093rd input and 10^6 random inputs, and the all-input host run (`--host-all RSQRT`, forge job
+`E1B-RSQRT-HOSTALL`) covers all 2^32. Chip job `E1B-RSQRT-CHIP`
+(`tools/run_numeric_transc_gate.sh RSQRT`).
+
+Row 2, general load/store (`src/omega_numeric_ldst_gb10.{h,c}`, `docs/numeric/E1_LDST_GB10.md`). Evidence source
+for the encodings: the verified vecadd words in `src/omega_blackwell_encoder.c` (the `LDG.E` and `STG.E` forms
+the existing kernels use), extended only for the fields nvdisasm 13.0.85 `-b SM121` decoded when each bit
+was varied one at a time: the signed 24-bit byte offset (word 1 bits 8 to 31, both LDG and STG), the access
+size (word 2 bits 9 to 11: U8, S8, U16, S16, 32, 64, 128 for loads; 8, 16, 32, 64, 128 for stores) and the
+stride immediate of `IMAD.WIDE.U32`. `make test-ldst-nvdisasm`: 148 of 148 table kernels decode word for word
+to the encoder's text (a flipped offset bit changes the decode, so the check is not vacuous);
+`make test-ldst-host`: 33 PASS (host model equals a typed-C byte oracle on every spec, 13 refusal rules,
+10 kernel mutations caught). Chip job `E1B-LDST-CHIP` (`tools/run_numeric_ldst_chip.sh`).
+
+Row 12, FP32 in the program IR: see `spec/program-fp32.md`. No program-IR owner document forbids it
+(`spec/type-system.md` is ratified for M4, so tag `0x0E` is an amendment, not a conflict).
+
+Chip failure classification for these jobs: a FAIL whose log shows bytes still equal to the fill pattern or
+block-aligned unwritten spans is the unwritten-output bug C3 (branch `c3-h1-fence`), not a defect of these kernels.
+
+C3 hardening (branch `e1-gap-close`): the reduce launcher (`run_chunk`) and the ldst launcher (`omega_ldst_gb10_run`) had the same
+pre-fix pattern as `omega_ds_gb10_run` and now take its L2 flush plus second release marker, waited on before every readback (step
+`marker2_wait`). A/B script: `~/workspace/scripts/lt-e1-c3-ab.sh` (control arm `-DOMEGA_C3_PROTECT_OFF`, compiles out only the new
+reduce and ldst protection). Round 1 result: bug not reproduced / comparison inconclusive (round 1 complete, rounds 2-5 not started); record `docs/numeric/E1_C3_REDUCE_LDST_AB_ROUND1.md`. No claim is made that this fixes the observed rc=-4.

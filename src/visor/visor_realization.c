@@ -69,6 +69,7 @@ static const char *opcode_name(OpCode op) {
         case OP_CONCAT: return "CONCAT";
         case OP_SLICE: return "SLICE";
         case OP_COMPILE: return "COMPILE";
+        case OP_CONVERT: return "CONVERT";
         default: return "INVALID";
     }
 }

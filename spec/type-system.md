@@ -35,6 +35,7 @@ The OMEGA type system enforces:
 | `0x0B` | `CAPABILITY_REFERENCE` | `slot: u32, generation: u64` | OMEGA reference to an M3 capability token (64-bit generation: see `spec/effect-cap64-migration.md`) |
 | `0x0C` | `EFFECT_INTENT_REFERENCE`| `intent_digest: [u8; 32]` | Reference to an intended physical effect |
 | `0x0D` | `EFFECT_RECEIPT_REFERENCE`| `receipt_digest: [u8; 32]` | Reference to an authoritative execution receipt |
+| `0x0E` | `FP32`| `width: u16 = 32` | IEEE binary32 value; amendment for E1 gap row 12 (spec/program-fp32.md); mixing with integers needs an explicit `CONVERT` (opcode `0x10`) |
 
 ---
 

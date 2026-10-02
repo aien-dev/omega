@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const OmegaDsOp OPS[] = { OMEGA_DS_EXP2, OMEGA_DS_LOG2, OMEGA_DS_SIGMOID, OMEGA_DS_TANH };
+static const OmegaDsOp OPS[] = { OMEGA_DS_EXP2, OMEGA_DS_LOG2, OMEGA_DS_SIGMOID, OMEGA_DS_TANH, OMEGA_DS_SIN, OMEGA_DS_COS, OMEGA_DS_ERF, OMEGA_DS_GELU, OMEGA_DS_RSQRT };
 #define N_OPS (sizeof(OPS) / sizeof(OPS[0]))
 
 static int g_pass, g_fail;
@@ -45,6 +45,11 @@ static uint32_t want_bits(OmegaDsOp op, uint32_t a) {
     case OMEGA_DS_LOG2: r = omega_math_log2(x); break;
     case OMEGA_DS_SIGMOID: r = omega_math_sigmoid(x); break;
     case OMEGA_DS_TANH: r = omega_math_tanh(x); break;
+    case OMEGA_DS_SIN: r = omega_math_sin(x); break;
+    case OMEGA_DS_COS: r = omega_math_cos(x); break;
+    case OMEGA_DS_ERF: r = omega_math_erf(x); break;
+    case OMEGA_DS_GELU: r = omega_math_gelu(x); break;
+    case OMEGA_DS_RSQRT: r = omega_math_rsqrt(x); break;
     default: return 0xffffffffu;
     }
     return omega_float_to_bits(r);

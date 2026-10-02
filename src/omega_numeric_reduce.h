@@ -89,8 +89,8 @@ float omega_reduce_sequential_sum_not_contract(const float *x, size_t n);
  * no arithmetic).
  *   SUM       the chip-proven REDUCE_SUM patch words, own launch with a semaphore wait.
  *   MAX, MIN  this file's warp patch: five SHFL.DOWN (16..1) + FMNMX pairs.
- *   MEAN      SUM levels on the chip, then omega_math_div(SUM, u2f(n)) on the
- *             host: a declared host step until a GB10 DIV is merged.
+ *   MEAN      SUM levels on the chip, then omega_math_div(SUM, u2f(n)) as the GB10
+ *             DIV kernel (E1 row 7), one element. No host step.
  *
  * omega_reduce_gb10_check runs every pre-submission check (CHECK: markers)
  * without opening a device.
