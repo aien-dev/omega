@@ -26,12 +26,14 @@
  *    reserved for that verifier and the resolver.
  *  - It does not read lockfiles and does not decide trust from a name.
  *
- * ADMISSION KIND: two insert functions, as in omega_library (#221). VERIFIED is the normal path.
- * BOOTSTRAP is for the manually audited GENESIS set only (VC1 stage 6). There is no flag,
- * environment variable or build option that unlocks it or skips any refusal; reviewers must
- * reject any caller of omega_vcstore_insert_bootstrap that is not the genesis loader. For a
- * bootstrap record the receipt_id field carries the hash of the audit record. The kind is part
- * of the state digest.
+ * ADMISSION KIND: VERIFIED is the normal path. BOOTSTRAP is for the manually audited Genesis Set
+ * VC-GENESIS-1 only (src/omega_genesis.h, docs/osc/VC-GENESIS-1.md). The two raw insert functions
+ * are private (omega_vcstore_priv.h) and reachable only through omega_resolve_admit and
+ * omega_resolve_admit_genesis. There is no flag, environment variable or build option that unlocks
+ * BOOTSTRAP or skips any refusal: a BOOTSTRAP record whose semantic id is not on the list is
+ * refused when it is inserted and when a store file holding it is loaded (GENESIS_NOT_LISTED).
+ * For a bootstrap record the receipt_id field carries the hash of the audit record. The kind is
+ * part of the state digest.
  *
  * NAME INDEX: a separate map name -> semantic_id. Many names may point at one id. A bound name
  * changes only through the explicit omega_vcstore_name_rebind(). Nothing in get, closure,
@@ -86,7 +88,8 @@ enum {
     OMEGA_VCS_VCSTORE_NAME_EXISTS,         /* name already bound to another id; use name_rebind */
     OMEGA_VCS_VCSTORE_CAPACITY,            /* closure output array too small (needed count returned) */
     OMEGA_VCS_VCSTORE_NOMEM,
-    OMEGA_VCS_VCSTORE_IO
+    OMEGA_VCS_VCSTORE_IO,
+    OMEGA_VCS_GENESIS_NOT_LISTED           /* BOOTSTRAP record whose semantic id is not in VC-GENESIS-1 */
 };
 
 const char *omega_vcstore_code_name(int code);
@@ -155,24 +158,9 @@ int  omega_vcstore_init(OmegaVcStore *s);
 void omega_vcstore_destroy(OmegaVcStore *s);
 size_t omega_vcstore_count(const OmegaVcStore *s);
 
-/* Insert a verified Verified Crumb (admission kind VERIFIED). claimed_vc_id is required (NULL is
- * MALFORMED, never "skip the check"). The store is unchanged on every refusal. Refusals:
- *  - NULL argument, zero length: VCSTORE_MALFORMED
- *  - any SPEC 3.6 format refusal (includes MISSING_RECEIPT for a zero receipt_id and
- *    DEPENDENCY_CYCLE for a self dependency)
- *  - SHA-256(bytes) != claimed_vc_id: VCSTORE_ID_MISMATCH
- *  - semantic_id already present with different bytes or another admission kind:
- *    VCSTORE_IMMUTABLE_CONFLICT (identical bytes and kind: success, no change)
- *  - a dependency semantic_id not in the store, or whose contract_id differs from the entry's
- *    required_contract: UNVERIFIED_DEPENDENCY
- *  - out of memory: VCSTORE_NOMEM
- * There is no capacity limit: the store grows. */
-int omega_vcstore_insert(OmegaVcStore *s, const uint8_t *canonical, size_t len,
-                         const uint8_t claimed_vc_id[32]);
-
-/* Genesis loading only. Same refusals; admission kind BOOTSTRAP. See the header comment. */
-int omega_vcstore_insert_bootstrap(OmegaVcStore *s, const uint8_t *canonical, size_t len,
-                                   const uint8_t claimed_vc_id[32]);
+/* There is no public insert. Records enter only through omega_resolve_admit and
+ * omega_resolve_admit_genesis (src/omega_resolve.h); the raw functions are declared in the private
+ * header omega_vcstore_priv.h (VC1 stage 6). */
 
 /* Fetch by semantic_id. Recomputes the VC id of the stored bytes and re-decodes them; any
  * mismatch is VCSTORE_ID_MISMATCH. Absent: UNVERIFIED_DEPENDENCY. */

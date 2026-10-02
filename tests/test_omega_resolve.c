@@ -18,6 +18,7 @@
  * test, which is anchored by the Rust receipts above.
  */
 #include <dirent.h>
+#include <ftw.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,13 +27,16 @@
 #include <unistd.h>
 
 #include "omega_blake3.h"
+#include "omega_genesis.h"
 #include "omega_receipt.h"
 #include "omega_resolve.h"
 #include "omega_resolve_osc.h"
 #include "omega_vcstore.h"
+#include "omega_vcstore_priv.h"
 #include "osc_front.h"
 #include "osc_cg.h"
 #include "sha256.h"
+#include "vc_fixture.h"
 
 #ifndef OSCV_PATH
 #define OSCV_PATH "build/compiler/oscv"
@@ -72,7 +76,8 @@ static void hx(const uint8_t *d, char out[65]) {
     for (int i = 0; i < 32; i++) { out[2 * i] = h[d[i] >> 4]; out[2 * i + 1] = h[d[i] & 15]; }
     out[64] = 0;
 }
-static void mkid(uint8_t out[32], uint8_t b0) { memset(out, 0x77, 32); out[0] = b0; }
+/* fixture program b0: a real program (tests/vc_fixture.h), so the build-domain recompute can hold */
+static void mkid(uint8_t out[32], uint8_t b0) { memcpy(out, vcfx(b0)->id, 32); }
 static void con_of(const uint8_t sid[32], uint8_t out[32]) { memcpy(out, sid, 32); out[0] ^= 0x80; }
 
 /* ---- test-side Verified Crumb encoder (writes lists exactly as given) ---- */
@@ -188,7 +193,8 @@ typedef struct {
     OmegaVcStore *st;
     RTab rt;
     uint8_t last_rid[32];
-    int allow_genesis;
+    int no_blobs;      /* the resolver gets no source/IR store */
+    int wrong_blobs;   /* the source/IR store answers every digest with the same wrong bytes */
 } W;
 static void w_init(W *w) {
     memset(w, 0, sizeof *w);
@@ -204,26 +210,39 @@ static void w_free(W *w) {
 typedef struct {
     const char *prof, *ver, *tier, *result;
     int assert_fail, skip_sid, stale_src, wrong_root, extra_rdep, wrong_kind, no_store, swap, taint, boot, lease, dirty;
+    int src_of;        /* the record's digest is the IR digest of fixture src_of (another program) */
+    int kind_source;   /* digest kind OSC source, digest of the source stand-in */
+    int kind_garbage;  /* digest kind IR, digest of bytes that are not an IR */
 } Opt;
 static Opt opt0(void) {
     Opt o; memset(&o, 0, sizeof o);
     o.prof = "host-v1"; o.ver = "1.0.0"; o.tier = "HOST_TEST"; o.result = "PASS";
     return o;
 }
+/* VC-GENESIS-1 is EMPTY in the real source, so a BOOTSTRAP record cannot be inserted here. A fixture that
+ * needs the BOOTSTRAP kind (to show the resolver refuses an unlisted one) inserts the record as VERIFIED and
+ * flips the kind byte in the store, whose fields the header declares public for tampering. Listed members,
+ * with a non-empty list, are test_omega_genesis_set.c. */
+static void flip_boot(OmegaVcStore *st, const uint8_t sid[32]) {
+    for (size_t i = 0; i < st->count; i++)
+        if (memcmp(st->objs[i].semantic_id, sid, 32) == 0) { st->objs[i].admission_kind = OMEGA_VCS_ADMISSION_BOOTSTRAP; return; }
+    setup_fail("flip_boot: no such object");
+}
 static int ins_spec(OmegaVcStore *st, const Spec *sp, int boot) {
     B b = { 0, 0, 0 };
     encode(&b, sp);
     uint8_t id[32];
     omega_vc_compute_id(b.p, b.n, id);
-    int rc = boot ? omega_vcstore_insert_bootstrap(st, b.p, b.n, id) : omega_vcstore_insert(st, b.p, b.n, id);
+    int rc = omega_vcstore_insert(st, b.p, b.n, id);
+    if (rc == 0 && boot) flip_boot(st, sp->sem);
     free(b.p);
     return rc;
 }
 static void spec_for(Spec *sp, uint8_t b0, const uint8_t (*deps)[32], uint32_t nd, uint8_t (*dbuf)[64]) {
     memset(sp, 0, sizeof *sp);
-    sp->ver = 1; sp->kind = 1;
+    sp->ver = 1; sp->kind = OMEGA_VC_DIGEST_IR;
     mkid(sp->sem, b0); con_of(sp->sem, sp->con);
-    memset(sp->src, 0x33, 32); sp->src[0] = b0;
+    memcpy(sp->src, vcfx(b0)->digest, 32);
     memset(sp->root, 0x66, 32); sp->root[0] = b0;
     memset(sp->rcpt, 0x55, 32);
     for (uint32_t i = 0; i < nd; i++) { memcpy(dbuf[i], deps[i], 32); con_of(deps[i], dbuf[i] + 32); }
@@ -231,11 +250,21 @@ static void spec_for(Spec *sp, uint8_t b0, const uint8_t (*deps)[32], uint32_t n
     sp->prof = "host-v1"; sp->pver = "1.0.0";
 }
 /* add one component; returns the insert result. Its receipt id is left in w->last_rid. */
-static int add_comp(W *w, uint8_t b0, const uint8_t (*deps)[32], uint32_t nd, const Opt *o) {
+static int add_comp(W *w, uint8_t b0, const uint8_t (*deps_in)[32], uint32_t nd, const Opt *o) {
     uint8_t dbuf[8][64];
+    uint8_t deps[8][32];       /* real ids have no useful order: keep the dependency list ascending, as the store requires */
+    if (nd > 8) setup_fail("too many dependencies");
+    if (nd) memcpy(deps, deps_in, 32 * (size_t)nd);
+    for (uint32_t a = 1; a < nd; a++)
+        for (uint32_t b = a; b > 0 && memcmp(deps[b - 1], deps[b], 32) > 0; b--) {
+            uint8_t t[32]; memcpy(t, deps[b - 1], 32); memcpy(deps[b - 1], deps[b], 32); memcpy(deps[b], t, 32);
+        }
     Spec sp;
     spec_for(&sp, b0, deps, nd, dbuf);
     sp.prof = o->prof; sp.pver = o->ver;
+    if (o->src_of) memcpy(sp.src, vcfx((uint8_t)o->src_of)->digest, 32);
+    if (o->kind_source) { sp.kind = OMEGA_VC_DIGEST_SOURCE; vcfx_source_digest(sp.src); }
+    if (o->kind_garbage) vcfx_garbage_digest(sp.src);
     const char *taintcap[1] = { OMEGA_TAINT_CAPABILITY };
     if (o->taint) { sp.n_cap = 1; sp.cap = taintcap; }
     if (o->boot) {
@@ -326,7 +355,7 @@ static void run_compile(W *w, const char *src, OmegaDomain d, const char *lockte
     r->h.resolver.domain = d;
     r->h.resolver.fetch_receipt = tab_fetch;
     r->h.resolver.fetch_ctx = &w->rt;
-    r->h.resolver.allow_genesis = w->allow_genesis;
+    if (!w->no_blobs) { r->h.resolver.fetch_blob = w->wrong_blobs ? vcfx_fetch_wrong : vcfx_fetch_blob; }
     r->rc = osc_compile_imports(src, strlen(src), r->u, &r->dg, NULL, omega_osc_import_hook, &r->h);
 }
 static void run_free(Run *r) {
@@ -848,63 +877,68 @@ static void t_refusals(void) {
     check("accept-hardware-receipt-with-lease", r.rc == 0);
     run_free(&r); w_free(&w);
 
-    /* blob check (optional source/IR store of stage 6): a blob that does not hash to the digest */
+    /* SPEC 6 step 3: the source/IR recheck. The build domain REQUIRES the store, the blob must hash to its
+     * digest, and an IR blob must recompute to the semantic id. */
     {
-        w_init(&w);
-        o = opt0(); add_comp(&w, 0x51, NULL, 0, &o);
+        W w2; Run r2; Opt oo = opt0();
+        w_init(&w2); add_comp(&w2, 0x51, NULL, 0, &oo);
         Pin p[1] = { { "foo", 0x51, 0 } }; const char *nm[1] = { "foo" };
-        const char *lk = lock_text(&w, p, 1);
-        char dir[] = "/tmp/omega-resolve-blobs-XXXXXX";
-        if (!mkdtemp(dir)) setup_fail("mkdtemp");
-        uint8_t src[32]; memset(src, 0x33, 32); src[0] = 0x51;
-        char hh[65], path[300]; hx(src, hh);
-        snprintf(path, sizeof path, "%s/%s.blob", dir, hh);
-        FILE *f = fopen(path, "wb"); fputs("not the source", f); fclose(f);
-        (void)src_imports(nm, 1);
-        memset(&r, 0, sizeof r);
-        r.u = malloc(sizeof *r.u);
-        OmegaResolveError le; omega_lock_parse(lk, strlen(lk), &r.lock, &le);
-        r.h.lock = &r.lock; r.h.resolver.store = w.st; r.h.resolver.domain = OMEGA_DOMAIN_BUILD;
-        r.h.resolver.fetch_receipt = tab_fetch; r.h.resolver.fetch_ctx = &w.rt;
-        r.h.resolver.fetch_blob = omega_blob_dir_fetch; r.h.resolver.blob_ctx = dir;
-        r.rc = osc_compile_imports(g_src, strlen(g_src), r.u, &r.dg, NULL, omega_osc_import_hook, &r.h);
-        check("refuse-blob-does-not-hash-to-digest", refused(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY));
-        run_free(&r);
-        /* a blob that does hash to the digest passes */
-        uint8_t blobdig[32]; const char *content = "the real source";
-        sha256_hash((const uint8_t *)content, strlen(content), blobdig);
-        /* record 0x52 whose source_or_ir_digest is the digest of the blob we write */
-        {
-            uint8_t dbuf[1][64]; Spec sp; spec_for(&sp, 0x52, NULL, 0, dbuf);
-            memcpy(sp.src, blobdig, 32);
-            char sid_h[65], src_h[65], root_h[65], inp0[80], inp1[80]; hx(sp.sem, sid_h); hx(sp.src, src_h); hx(sp.root, root_h);
-            RJ j; rj_default(&j);
-            snprintf(inp0, sizeof inp0, "sha256:%s", sid_h); snprintf(inp1, sizeof inp1, "sha256:%s", src_h);
-            j.inputs[0] = inp0; j.inputs[1] = inp1; j.n_in = 2; memcpy(j.root, root_h, 65);
-            uint8_t rid[32]; char *json; size_t jl;
-            if (rj_make(&j, rid, &json, &jl)) setup_fail("blob receipt");
-            memcpy(sp.rcpt, rid, 32); tab_put(&w.rt, rid, json, jl); free(json);
-            if (ins_spec(w.st, &sp, 0) != 0) setup_fail("blob record");
-            snprintf(path, sizeof path, "%s/%s.blob", dir, src_h);
-            f = fopen(path, "wb"); fputs(content, f); fclose(f);
-        }
-        Pin p2[1] = { { "foo", 0x52, 0 } };
-        const char *lk2 = lock_text(&w, p2, 1);
-        memset(&r, 0, sizeof r);
-        r.u = malloc(sizeof *r.u);
-        omega_lock_parse(lk2, strlen(lk2), &r.lock, &le);
-        r.h.lock = &r.lock; r.h.resolver.store = w.st; r.h.resolver.domain = OMEGA_DOMAIN_BUILD;
-        r.h.resolver.fetch_receipt = tab_fetch; r.h.resolver.fetch_ctx = &w.rt;
-        r.h.resolver.fetch_blob = omega_blob_dir_fetch; r.h.resolver.blob_ctx = dir;
-        r.rc = osc_compile_imports(g_src, strlen(g_src), r.u, &r.dg, NULL, omega_osc_import_hook, &r.h);
-        check("accept-blob-that-hashes-to-digest", r.rc == 0);
-        run_free(&r); w_free(&w);
-        char cmd[400]; snprintf(cmd, sizeof cmd, "rm -rf %s", dir);
-        if (system(cmd) != 0) setup_fail("cleanup");
+        w2.no_blobs = 1;
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lock_text(&w2, p, 1), &r2);
+        check("refuse-build-domain-without-blob-store", refused_msg(&r2, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "needs the source or IR store") && r2.h.closure.n == 0);
+        run_free(&r2);
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_DEV, lock_text(&w2, p, 1), &r2);
+        check("accept-dev-domain-without-blob-store", r2.rc == 0 && r2.h.closure.n == 1);
+        run_free(&r2);
+        w2.no_blobs = 0; w2.wrong_blobs = 1;
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lock_text(&w2, p, 1), &r2);
+        check("refuse-blob-does-not-hash-to-digest", refused_msg(&r2, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "does not hash"));
+        run_free(&r2);
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_DEV, lock_text(&w2, p, 1), &r2);
+        check("refuse-blob-does-not-hash-in-dev-domain-too", refused(&r2, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY));
+        run_free(&r2);
+        w2.wrong_blobs = 0;
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lock_text(&w2, p, 1), &r2);
+        check("accept-ir-blob-that-hashes-and-recomputes", r2.rc == 0 && r2.h.closure.n == 1);
+        run_free(&r2); w_free(&w2);
+    }
+    {   /* a record whose digest is the IR digest of ANOTHER program: the blob hashes fine, the id does not recompute */
+        W w2; Run r2; Opt oo = opt0(); oo.src_of = 0x77;
+        w_init(&w2); (void)vcfx(0x77);
+        if (add_comp(&w2, 0x51, NULL, 0, &oo) != 0) setup_fail("mismatch insert");
+        Pin p[1] = { { "foo", 0x51, 0 } }; const char *nm[1] = { "foo" };
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lock_text(&w2, p, 1), &r2);
+        check("refuse-ir-that-does-not-recompute-to-semantic-id", refused_msg(&r2, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "does not recompute") && r2.h.closure.n == 0);
+        run_free(&r2);
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_DEV, lock_text(&w2, p, 1), &r2);
+        check("refuse-ir-mismatch-in-dev-domain-when-blobs-are-given", refused_msg(&r2, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "does not recompute"));
+        run_free(&r2); w_free(&w2);
+    }
+    {   /* bytes that hash to the digest but are not an IR at all */
+        W w2; Run r2; Opt oo = opt0(); oo.kind_garbage = 1;
+        w_init(&w2);
+        if (add_comp(&w2, 0x51, NULL, 0, &oo) != 0) setup_fail("garbage insert");
+        Pin p[1] = { { "foo", 0x51, 0 } }; const char *nm[1] = { "foo" };
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lock_text(&w2, p, 1), &r2);
+        check("refuse-blob-that-is-not-an-ir", refused_msg(&r2, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "does not recompute"));
+        run_free(&r2); w_free(&w2);
+    }
+    {   /* an OSC-source digest cannot be recomputed to a program id: the build domain refuses it, dev checks the digest only */
+        W w2; Run r2; Opt oo = opt0(); oo.kind_source = 1;
+        w_init(&w2);
+        if (add_comp(&w2, 0x51, NULL, 0, &oo) != 0) setup_fail("source insert");
+        Pin p[1] = { { "foo", 0x51, 0 } }; const char *nm[1] = { "foo" };
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lock_text(&w2, p, 1), &r2);
+        check("refuse-source-digest-record-in-build-domain", refused_msg(&r2, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "OSC source") && r2.h.closure.n == 0);
+        run_free(&r2);
+        run_compile(&w2, src_imports(nm, 1), OMEGA_DOMAIN_DEV, lock_text(&w2, p, 1), &r2);
+        check("accept-source-digest-record-in-dev-domain", r2.rc == 0 && r2.h.closure.n == 1);
+        run_free(&r2); w_free(&w2);
     }
 }
 
 /* ---- graphs: closure, cycle, edges, genesis ---- */
+static int cmp_ent32(const void *a, const void *b) { return memcmp(a, b, 32); }
 static void t_graphs(void) {
     W w; Run r; Opt o = opt0();
 
@@ -921,13 +955,16 @@ static void t_graphs(void) {
     int ok = r.rc == 0 && r.h.closure.n == 4;
     OmegaClosureEntry want[4];
     static const uint8_t ids[4] = { 0x10, 0x20, 0x30, 0x40 };
-    for (int i = 0; i < 4 && ok; i++) {
+    for (int i = 0; i < 4; i++) {
         mkid(want[i].semantic_id, ids[i]);
         omega_vcstore_receipt_of(w.st, want[i].semantic_id, want[i].receipt_id);
         want[i].admission_kind = 1;
+    }
+    _Static_assert(offsetof(OmegaClosureEntry, semantic_id) == 0, "sorted by the first 32 bytes");
+    qsort(want, 4, sizeof want[0], cmp_ent32);   /* the reference order: ascending real semantic id */
+    for (int i = 0; i < 4 && ok; i++)
         if (memcmp(r.h.closure.entries[i].semantic_id, want[i].semantic_id, 32) || memcmp(r.h.closure.entries[i].receipt_id, want[i].receipt_id, 32) ||
             r.h.closure.entries[i].admission_kind != 1) ok = 0;
-    }
     uint8_t rd[32];
     if (ok) ref_closure_digest(want, 4, rd);
     check("closure-diamond-has-each-node-once-in-id-order", ok);
@@ -944,16 +981,21 @@ static void t_graphs(void) {
 
     /* resolution order differs from id order: names alpha -> 0x90, zeta -> 0x10 */
     w_free(&w); w_init(&w);
-    add_comp(&w, 0x90, NULL, 0, &o); add_comp(&w, 0x10, NULL, 0, &o);
-    { Pin p[2] = { { "alpha", 0x90, 0 }, { "zeta", 0x10, 0 } }; const char *nm[2] = { "alpha", "zeta" };
+    /* alpha (resolved first) gets the LARGER real id, zeta the smaller one */
+    uint8_t big = 0x90, small = 0x10;
+    if (memcmp(vcfx(big)->id, vcfx(small)->id, 32) < 0) { big = 0x10; small = 0x90; }
+    add_comp(&w, big, NULL, 0, &o); add_comp(&w, small, NULL, 0, &o);
+    { Pin p[2] = { { "alpha", big, 0 }, { "zeta", small, 0 } }; const char *nm[2] = { "alpha", "zeta" };
       run_compile(&w, src_imports(nm, 2), OMEGA_DOMAIN_BUILD, lock_text(&w, p, 2), &r); }
     int sorted = r.rc == 0 && r.h.closure.n == 2 && memcmp(r.h.closure.entries[0].semantic_id, r.h.closure.entries[1].semantic_id, 32) < 0 &&
-                 r.h.closure.entries[0].semantic_id[0] == 0x10;
+                 memcmp(r.h.closure.entries[0].semantic_id, vcfx(small)->id, 32) == 0;
     check("closure-sorted-ascending-by-semantic-id", sorted);
     run_free(&r); w_free(&w);
 
-    /* DEPENDENCY_CYCLE: only a tampered store can hold one (insert refuses it), shown with genesis records */
-    w_init(&w); w.allow_genesis = 1;
+    /* DEPENDENCY_CYCLE: only a tampered store can hold one (insert refuses it), shown with genesis-kind records
+     * (no receipts to contradict a cycle). The gate that refuses unlisted genesis records sits AFTER the walk, so the
+     * cycle is still found first. */
+    w_init(&w);
     { Opt b = opt0(); b.boot = 1; uint8_t d[1][32];
       add_comp(&w, 0x71, NULL, 0, &b);
       mkid(d[0], 0x71); add_comp(&w, 0x72, d, 1, &b);
@@ -979,34 +1021,30 @@ static void t_graphs(void) {
     check("refuse-edge-contract-mismatch", refused(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY) && strstr(r.h.err.message, "contract") != NULL);
     run_free(&r); w_free(&w);
 
-    /* genesis (BOOTSTRAP) records */
+    /* genesis (BOOTSTRAP) records. VC-GENESIS-1 is empty, so every BOOTSTRAP record in this file is an unlisted one
+     * (a flipped fixture) and must be refused wherever it sits in a closure. Listed members: test_omega_genesis_set.c. */
     { Opt b = opt0(); b.boot = 1;
       w_init(&w);
       add_comp(&w, 0x91, NULL, 0, &b);
       Pin p[1] = { { "base", 0x91, 0 } }; const char *nm[1] = { "base" };
       const char *lk = lock_text(&w, p, 1);
       run_compile(&w, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lk, &r);
-      check("refuse-genesis-record-without-permission", refused_msg(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "genesis"));
+      check("refuse-genesis-record-without-permission", refused_msg(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "genesis") &&
+            r.h.err.store_code == OMEGA_VCS_GENESIS_NOT_LISTED && !omega_genesis_contains(vcfx(0x91)->id) && r.h.closure.n == 0);
       run_free(&r);
-      w.allow_genesis = 1;
-      run_compile(&w, src_imports(nm, 1), OMEGA_DOMAIN_BUILD, lk, &r);
-      check("accept-genesis-record-with-permission", r.rc == 0 && r.h.closure.n == 1 && r.h.closure.entries[0].admission_kind == 2);
+      run_compile(&w, src_imports(nm, 1), OMEGA_DOMAIN_DEV, lk, &r);
+      check("refuse-genesis-record-in-dev-domain-too", refused(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY) && r.h.err.store_code == OMEGA_VCS_GENESIS_NOT_LISTED);
       run_free(&r);
-      /* a verified record on top of a genesis record needs the permission too */
+      /* a verified record on top of an unlisted genesis record is refused too */
       uint8_t d[1][32]; mkid(d[0], 0x91);
       add_comp(&w, 0x92, d, 1, &o);
       Pin p2[1] = { { "top", 0x92, 0 } }; const char *nm2[1] = { "top" };
-      const char *lk2 = lock_text(&w, p2, 1);
-      run_compile(&w, src_imports(nm2, 1), OMEGA_DOMAIN_BUILD, lk2, &r);
-      check("accept-verified-on-genesis-with-permission", r.rc == 0 && r.h.closure.n == 2);
+      run_compile(&w, src_imports(nm2, 1), OMEGA_DOMAIN_BUILD, lock_text(&w, p2, 1), &r);
+      check("refuse-verified-on-unlisted-genesis-record", refused(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY) && r.h.err.store_code == OMEGA_VCS_GENESIS_NOT_LISTED);
       run_free(&r);
-      w.allow_genesis = 0;
-      run_compile(&w, src_imports(nm2, 1), OMEGA_DOMAIN_BUILD, lk2, &r);
-      check("refuse-verified-on-genesis-without-permission", refused(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY));
-      run_free(&r);
-      /* a genesis record may NOT depend on a verified record */
-      w.allow_genesis = 1;
-      mkid(d[0], 0x92);
+      /* a genesis record may NOT depend on a verified record (the verified leaf 0x94 resolves; the edge is what is refused) */
+      add_comp(&w, 0x94, NULL, 0, &o);
+      mkid(d[0], 0x94);
       add_comp(&w, 0x93, d, 1, &b);
       Pin p3[1] = { { "bad", 0x93, 0 } }; const char *nm3[1] = { "bad" };
       run_compile(&w, src_imports(nm3, 1), OMEGA_DOMAIN_BUILD, lock_text(&w, p3, 1), &r);
@@ -1030,7 +1068,7 @@ static int take(W *w, uint8_t b0, uint8_t **bytes, size_t *len, uint8_t id[32]) 
 }
 static OmegaResolver resolver_of(W *dst, RTab *rt) {
     OmegaResolver r; memset(&r, 0, sizeof r);
-    r.store = dst->st; r.domain = OMEGA_DOMAIN_BUILD; r.fetch_receipt = tab_fetch; r.fetch_ctx = rt;
+    r.store = dst->st; r.domain = OMEGA_DOMAIN_BUILD; r.fetch_receipt = tab_fetch; r.fetch_ctx = rt; r.fetch_blob = vcfx_fetch_blob;
     return r;
 }
 static void t_admit(void) {
@@ -1094,37 +1132,30 @@ static void t_admit(void) {
             free(b); w_free(&dst); w_free(&src);
         }
     }
-    {   /* genesis loading: no receipt, but it may depend only on genesis records */
+    {   /* genesis loading: VC-GENESIS-1 is empty, so no record is admissible; a verified dependency is refused for ITS reason first */
         W src, dst; Opt b = opt0(); b.boot = 1; Opt v = opt0();
         w_init(&src); w_init(&dst);
         add_comp(&src, 0x61, NULL, 0, &b);
         uint8_t *g; size_t gn; uint8_t gid[32];
         if (take(&src, 0x61, &g, &gn, gid)) setup_fail("take");
         int rc = omega_resolve_admit_genesis(dst.st, g, gn, gid, NULL, &e);
-        uint8_t kind = 0; uint8_t sid[32]; mkid(sid, 0x61);
-        check("admit-genesis-records-bootstrap-kind", rc == 0 && omega_vcstore_admission_kind(dst.st, sid, &kind) == 0 && kind == OMEGA_VCS_ADMISSION_BOOTSTRAP);
-        /* depends on a genesis record already loaded: fine */
-        uint8_t d[1][32]; mkid(d[0], 0x61);
-        add_comp(&src, 0x62, d, 1, &b);
-        uint8_t *g2; size_t g2n; uint8_t g2id[32];
-        if (take(&src, 0x62, &g2, &g2n, g2id)) setup_fail("take");
-        rc = omega_resolve_admit_genesis(dst.st, g2, g2n, g2id, NULL, &e);
-        check("admit-genesis-may-depend-on-genesis", rc == 0 && omega_vcstore_count(dst.st) == 2);
-        /* depends on a verified record: refused */
+        check("admit-genesis-refuses-unlisted-record", rc == OMEGA_RES_UNVERIFIED_DEPENDENCY && e.store_code == OMEGA_VCS_GENESIS_NOT_LISTED && strstr(e.message, "pinned genesis set") != NULL &&
+              omega_vcstore_count(dst.st) == 0 && !omega_genesis_contains(vcfx(0x61)->id));
+        /* depends on a verified record: refused for that reason (store code 0), before the list is consulted */
         add_comp(&dst, 0x63, NULL, 0, &v);               /* verified record in the target store */
         add_comp(&src, 0x63, NULL, 0, &v);
-        mkid(d[0], 0x63);
+        uint8_t d[1][32]; mkid(d[0], 0x63);
         add_comp(&src, 0x64, d, 1, &b);
         uint8_t *g3; size_t g3n; uint8_t g3id[32];
         if (take(&src, 0x64, &g3, &g3n, g3id)) setup_fail("take");
         size_t before = omega_vcstore_count(dst.st);
         rc = omega_resolve_admit_genesis(dst.st, g3, g3n, g3id, NULL, &e);
-        check("admit-genesis-refuses-verified-dependency", rc == OMEGA_RES_UNVERIFIED_DEPENDENCY && omega_vcstore_count(dst.st) == before);
+        check("admit-genesis-refuses-verified-dependency", rc == OMEGA_RES_UNVERIFIED_DEPENDENCY && e.store_code == 0 && omega_vcstore_count(dst.st) == before);
         OmegaArtifactMeta m; uint8_t ir[32], cl[32]; memset(ir, 1, 32); memset(cl, 2, 32);
         omega_artifact_meta_make(&m, OMEGA_DOMAIN_DEV, ir, cl);
         rc = omega_resolve_admit_genesis(dst.st, g, gn, gid, &m, &e);
         check("admit-genesis-refuses-tainted-origin", rc == OMEGA_RES_TAINTED_ARTIFACT);
-        free(g); free(g2); free(g3); w_free(&dst); w_free(&src);
+        free(g); free(g3); w_free(&dst); w_free(&src);
     }
 }
 
@@ -1257,7 +1288,8 @@ static int scan_file(const char *path, const char **hit) {
 }
 static void t_no_escape(void) {
     static const char *const files[] = { "src/omega_resolve.c", "src/omega_resolve.h", "src/omega_receipt.c", "src/omega_receipt.h",
-        "src/omega_blake3.c", "src/omega_blake3.h", "src/omega_resolve_osc.c", "src/omega_resolve_osc.h", "src/oscv_main.c" };
+        "src/omega_blake3.c", "src/omega_blake3.h", "src/omega_resolve_osc.c", "src/omega_resolve_osc.h", "src/oscv_main.c",
+        "src/omega_genesis.h", "src/omega_vcstore_priv.h", "src/omega_program_ir.c", "src/omega_program_ir.h", "src/omega_vc_bridge.c", "src/omega_vc_bridge.h" };
     const char *hit = NULL;
     int found = 0, nfiles = 0;
     for (size_t i = 0; i < sizeof files / sizeof files[0]; i++) { nfiles++; if (scan_file(files[i], &hit)) { found = 1; printf("note: %s contains \"%s\"\n", files[i], hit); } }
@@ -1311,6 +1343,85 @@ static void t_no_escape(void) {
     check("no-escape-scanner-detects-every-forbidden-word", control && !scan_buf("clean text", 10, &h2));
 }
 
+/* ---- the doors: who may call what (VC1 stage 6) ---- */
+static const char *g_tok;
+static const char *const *g_allow;
+static size_t g_n_allow;
+static int g_hits, g_unreadable;
+static int has_tok(const uint8_t *b, size_t n, const char *tok) {
+    size_t k = strlen(tok);
+    for (size_t a = 0; a + k <= n; a++) if (memcmp(b + a, tok, k) == 0) return 1;
+    return 0;
+}
+static int scan_cb(const char *path, const struct stat *sb, int tf, struct FTW *ftw) {
+    (void)sb; (void)ftw;
+    if (tf != FTW_F) return 0;
+    size_t l = strlen(path);
+    if (l < 3 || (strcmp(path + l - 2, ".c") && strcmp(path + l - 2, ".h"))) return 0;
+    for (size_t i = 0; i < g_n_allow; i++) if (strcmp(path, g_allow[i]) == 0) return 0;
+    size_t n; uint8_t *b = slurp_file(path, &n);
+    if (!b) { g_unreadable++; return 0; }
+    if (has_tok(b, n, g_tok)) { g_hits++; printf("note: %s mentions %s\n", path, g_tok); }
+    free(b);
+    return 0;
+}
+/* how many .c/.h files under the roots, outside the allow-list, contain tok; -1 if one was unreadable or no file was seen */
+static int outside_hits(const char *tok, const char *const *allow, size_t n_allow, const char *const *roots, size_t n_roots) {
+    g_tok = tok; g_allow = allow; g_n_allow = n_allow; g_hits = 0; g_unreadable = 0;
+    for (size_t i = 0; i < n_roots; i++) if (nftw(roots[i], scan_cb, 16, FTW_PHYS) != 0) return -1;
+    return g_unreadable ? -1 : g_hits;
+}
+static int wfile(const char *path, const void *d, size_t n);
+static void t_doors(void) {
+    static const char *const src_tools[2] = { "src", "tools" };
+    static const char *const src_only[1] = { "src" };
+    {   /* the raw store inserts */
+        static const char *const ok[] = { "src/omega_vcstore.c", "src/omega_vcstore.h", "src/omega_vcstore_priv.h", "src/omega_resolve.c", "src/omega_resolve.h" };
+        check("raw-store-insert-is-named-only-by-the-store-and-the-resolver", outside_hits("omega_vcstore_insert", ok, 5, src_tools, 2) == 0);
+        static const char *const ok2[] = { "src/omega_vcstore.c", "src/omega_vcstore.h", "src/omega_vcstore_priv.h", "src/omega_resolve.c", "src/omega_resolve.h" };
+        check("private-store-header-is-included-only-by-the-store-and-the-resolver", outside_hits("omega_vcstore_priv.h", ok2, 5, src_tools, 2) == 0);
+    }
+    {   /* genesis admission and the list */
+        /* the resolver defines it; four headers only DESCRIBE it in a comment (that they never call it) */
+        static const char *const ok[] = { "src/omega_resolve.c", "src/omega_resolve.h", "src/omega_genesis.h", "src/omega_vcstore.h", "src/omega_vcstore_priv.h", "src/omega_vc_bridge.h" };
+        check("genesis-admission-is-named-only-by-the-resolver", outside_hits("omega_resolve_admit_genesis", ok, 6, src_tools, 2) == 0);
+        static const char *const ok2[] = { "src/omega_genesis.h", "src/omega_vcstore.c", "src/omega_resolve.c" };
+        check("genesis-list-is-consulted-only-by-the-store-and-the-resolver", outside_hits("omega_genesis_contains", ok2, 3, src_tools, 2) == 0);
+        static const char *const ok3[] = { "src/omega_genesis.h" };
+        check("genesis-table-is-named-only-by-its-header", outside_hits("OMEGA_GENESIS_1", ok3, 1, src_tools, 2) == 0);
+        check("no-allow-genesis-field-or-switch-anywhere-in-src-or-tools", outside_hits("allow_genesis", NULL, 0, src_tools, 2) == 0 &&
+              outside_hits("allow-genesis", NULL, 0, src_tools, 2) == 0);
+    }
+    {   /* library inserts: the migrated callers (Crumbline, discovery) go through the bridge */
+        static const char *const ok[] = { "src/omega_library.c", "src/omega_library.h", "src/omega_vc_bridge.c", "src/omega_vc_bridge.h" };
+        check("library-insert-in-src-is-named-only-by-the-library-and-the-bridge", outside_hits("omega_library_insert", ok, 4, src_only, 1) == 0);
+    }
+    {   /* the compiler's import hook: only the real driver installs one, and it installs the real resolver */
+        static const char *const ok[] = { "src/compiler/osc_front.c", "src/compiler/osc_front.h", "src/compiler/osc_parse.h", "src/oscv_main.c" };
+        check("import-hook-is-installed-only-by-the-real-driver", outside_hits("osc_compile_imports", ok, 4, src_tools, 2) == 0);
+        size_t n; uint8_t *b = slurp_file("src/oscv_main.c", &n);
+        if (!b) setup_fail("src/oscv_main.c");
+        check("the-real-driver-installs-the-real-resolver-hook", has_tok(b, n, "osc_compile_imports(src, slen, u, &d, NULL, omega_osc_import_hook, &h)"));
+        free(b);
+    }
+    {   /* the scanner itself: a violation outside the allow-list is seen, one inside is not */
+        char dir[] = "/tmp/omega-doors-XXXXXX";
+        if (!mkdtemp(dir)) setup_fail("mkdtemp");
+        char p1[300], p2[300];
+        snprintf(p1, sizeof p1, "%s/rogue.c", dir); snprintf(p2, sizeof p2, "%s/fine.c", dir);
+        wfile(p1, "int f(void) { return omega_vcstore_insert(0, 0, 0, 0); }\n", strlen("int f(void) { return omega_vcstore_insert(0, 0, 0, 0); }\n"));
+        wfile(p2, "int g(void) { return 1; }\n", strlen("int g(void) { return 1; }\n"));
+        const char *roots[1] = { dir };
+        const char *allow[1] = { p1 };
+        int seen = outside_hits("omega_vcstore_insert", NULL, 0, roots, 1);
+        int allowed = outside_hits("omega_vcstore_insert", allow, 1, roots, 1);
+        int missing = outside_hits("omega_vcstore_insert", NULL, 0, (const char *const[]){ "/tmp/omega-doors-no-such-root" }, 1);
+        check("door-scanner-sees-a-rogue-caller-and-honors-the-allow-list", seen == 1 && allowed == 0 && missing == -1);
+        char cmd[400]; snprintf(cmd, sizeof cmd, "rm -rf %s", dir);
+        if (system(cmd) != 0) setup_fail("cleanup");
+    }
+}
+
 /* ---- the real driver, end to end ---- */
 static int sh(const char *cmd, char *out, size_t cap) {
     FILE *p = popen(cmd, "r");
@@ -1360,6 +1471,14 @@ static void t_cli(void) {
     add_comp(&w, 0x51, NULL, 0, &o);
     Opt t = opt0(); t.taint = 1; add_comp(&w, 0x52, NULL, 0, &t);
     write_receipts(&w, rdir);
+    char bdir[700]; snprintf(bdir, sizeof bdir, "%s/blobs", dir);
+    if (mkdir(bdir, 0700)) setup_fail("mkdir blobs");
+    { static const uint8_t bs[2] = { 0x51, 0x52 };      /* the build domain's source/IR store: blobs/ next to the source */
+      for (int k = 0; k < 2; k++) {
+          char bh[65]; hx(vcfx(bs[k])->digest, bh);
+          snprintf(path, sizeof path, "%.200s/%s.blob", bdir, bh);
+          if (wfile(path, vcfx(bs[k])->ir, vcfx(bs[k])->ir_len)) setup_fail("write blob");
+      } }
     snprintf(path, sizeof path, "%s/omega.vcstore", dir);
     if (omega_vcstore_save(w.st, path)) setup_fail("save store");
     Pin pin[1] = { { "foo", 0x51, 0 } };
@@ -1397,6 +1516,19 @@ static void t_cli(void) {
     sh(cmd, out, sizeof out);
     kv(out, "tainted", v, sizeof v);
     check("cli-build-domain-is-not-tainted", strcmp(v, "0") == 0);
+    /* the build domain REQUIRES the source/IR store; the dev domain does not */
+    snprintf(path, sizeof path, "%s/blobs-off", dir);
+    if (rename(bdir, path)) setup_fail("rename blobs away");
+    snprintf(cmd, sizeof cmd, "%s %s/a.osc 2>&1", OSCV_PATH, dir);
+    rc = sh(cmd, out, sizeof out);
+    check("cli-refuses-build-domain-without-the-blob-store", rc == 1 && strstr(out, "resolve_code=UNVERIFIED_DEPENDENCY") != NULL && strstr(out, "build_id") == NULL);
+    snprintf(cmd, sizeof cmd, "%s --domain dev %s/a.osc 2>&1", OSCV_PATH, dir);
+    rc = sh(cmd, out, sizeof out);
+    check("cli-dev-domain-runs-without-the-blob-store", rc == 0 && kv(out, "tainted", v, sizeof v) == 0 && strcmp(v, "1") == 0);
+    snprintf(cmd, sizeof cmd, "%s --blobs %s/blobs-off %s/a.osc 2>&1", OSCV_PATH, dir, dir);
+    rc = sh(cmd, out, sizeof out);
+    check("cli-blobs-option-points-the-build-domain-at-a-store", rc == 0 && kv(out, "tainted", v, sizeof v) == 0 && strcmp(v, "0") == 0);
+    if (rename(path, bdir)) setup_fail("rename blobs back");
     /* meta header file */
     snprintf(cmd, sizeof cmd, "%s --domain dev --meta-out %s/meta.txt %s/a.osc 2>&1", OSCV_PATH, dir, dir);
     rc = sh(cmd, out, sizeof out);
@@ -1480,9 +1612,9 @@ static void t_cli(void) {
             for (int e2 = 0; e2 < 2; e2++) {
                 snprintf(cmd, sizeof cmd, "%s%s %s --store %s/g.vcstore --lock %s/g.lock --receipts %s %s/g.osc 2>&1", envs[e2], OSCV_PATH, flags[f], dir, dir, rdir, dir);
                 rc = sh(cmd, out, sizeof out);
-                if (!(rc == 1 && strstr(out, "resolve_code=UNVERIFIED_DEPENDENCY") != NULL && strstr(out, "genesis") != NULL && strstr(out, "build_id") == NULL)) all = 0;
+                if (!(rc == 1 && strstr(out, "resolve_code=UNVERIFIED_DEPENDENCY") != NULL && strstr(out, "GENESIS_NOT_LISTED") != NULL && strstr(out, "build_id") == NULL)) all = 0;
             }
-        check("cli-genesis-only-store-is-refused-in-every-mode", all);
+        check("cli-store-holding-an-unlisted-genesis-record-is-refused-in-every-mode", all);
         w_free(&g);
     }
     snprintf(cmd, sizeof cmd, "%s --domain prod %s/a.osc 2>&1", OSCV_PATH, dir);
@@ -1542,6 +1674,10 @@ static const struct { const char *mutant, *check; } MUTANTS[] = {
     { "admit-receipt", "admit-refuses-mismatched-receipt" },
     { "genesis-dep", "admit-genesis-refuses-verified-dependency" },
     { "blob-digest", "refuse-blob-does-not-hash-to-digest" },
+    { "admit-genesis-list", "admit-genesis-refuses-unlisted-record" },
+    { "build-needs-blobs", "refuse-build-domain-without-blob-store" },
+    { "program-id", "refuse-ir-that-does-not-recompute-to-semantic-id" },
+    { "ir-kind", "refuse-source-digest-record-in-build-domain" },
     { "json-dup-key", "receipt-refuses-duplicate-key" },
     { "deny-unknown", "receipt-refuses-unknown-field" },
     { "schema", "receipt-refuses-unknown-schema" },
@@ -1581,6 +1717,7 @@ int main(int argc, char **argv) {
     t_guards();
     t_identity();
     t_no_escape();
+    t_doors();
     t_cli();
     if (g_mutant) {
         if (g_expect_failed) { printf("MUTANT %s KILLED by %s\n", g_mutant, g_expect_check); return 1; }

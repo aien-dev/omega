@@ -9,7 +9,10 @@
 #include <string.h>
 #include <strings.h>
 
+#include "omega_genesis.h"
+#include "omega_program_ir.h"
 #include "omega_receipt.h"
+#include "omega_vcstore_priv.h"
 #include "sha256.h"
 
 /* the shared codes must keep the store's numbers */
@@ -453,6 +456,10 @@ static int resolve_node(Walk *w, const uint8_t id[32], const uint8_t *lock_recei
         rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, subj, "the record fetched for %s names a different semantic id", sid);
         goto out;
     }
+    if (!r->fetch_blob && r->domain == OMEGA_DOMAIN_BUILD) { /* VC1R:build-needs-blobs */
+        rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, subj, "the build domain needs the source or IR store to recompute %s (SPEC 6 step 3), and none was given", sid);
+        goto out;
+    }
     if (r->fetch_blob) {
         uint8_t *bb = NULL;
         size_t bl = 0;
@@ -460,11 +467,24 @@ static int resolve_node(Walk *w, const uint8_t id[32], const uint8_t *lock_recei
         int fr = r->fetch_blob(r->blob_ctx, vc->source_or_ir_digest, &bb, &bl);
         if (fr != 0) { rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, subj, "the source or IR named by %s is not available to recompute its digest", sid); goto out; }
         sha256_hash(bb, bl, dg);
-        free(bb);
         if (memcmp(dg, vc->source_or_ir_digest, 32) != 0) { /* VC1R:blob-digest */
+            free(bb);
             rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, subj, "the stored source or IR of %s does not hash to its source_or_ir_digest", sid);
             goto out;
         }
+        if (vc->digest_kind == OMEGA_VC_DIGEST_IR) {
+            uint8_t pid[32];
+            if (omega_program_ir_recompute_id(bb, bl, pid) != 0 || memcmp(pid, id, 32) != 0) { /* VC1R:program-id */
+                free(bb);
+                rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, subj, "the stored IR of %s does not recompute to its semantic id", sid);
+                goto out;
+            }
+        } else if (r->domain == OMEGA_DOMAIN_BUILD) { /* VC1R:ir-kind */
+            free(bb);
+            rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, subj, "%s was recorded from OSC source, and only an IR digest can be recomputed to its program id in the build domain", sid);
+            goto out;
+        }
+        free(bb);
     }
     if (lock_receipt && memcmp(lock_receipt, vc->receipt_id, 32) != 0) { /* VC1R:lock-receipt */
         rc = fail(w->err, OMEGA_RES_RECEIPT_HASH_MISMATCH, 0, subj, "the lock pins another receipt than the record carries for %s", sid);
@@ -472,10 +492,6 @@ static int resolve_node(Walk *w, const uint8_t id[32], const uint8_t *lock_recei
     }
     if (rec->admission_kind != OMEGA_VCS_ADMISSION_VERIFIED && rec->admission_kind != OMEGA_VCS_ADMISSION_BOOTSTRAP) {
         rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, subj, "%s has an unknown admission kind", sid);
-        goto out;
-    }
-    if (rec->admission_kind == OMEGA_VCS_ADMISSION_BOOTSTRAP && !r->allow_genesis) { /* VC1R:genesis-gate */
-        rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, subj, "%s is a genesis (bootstrap) record and genesis records are not permitted in this resolution", sid);
         goto out;
     }
     for (uint32_t i = 0; i < vc->n_capabilities; i++)
@@ -517,6 +533,12 @@ static int resolve_node(Walk *w, const uint8_t id[32], const uint8_t *lock_recei
             rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "genesis record %s depends on a non-genesis record: the audited base must be closed over itself", sid);
             goto out;
         }
+    }
+    /* THE genesis gate: reached only after the whole subtree resolved, and refusing any BOOTSTRAP record whose id the pinned
+     * VC-GENESIS-1 does not list. Nothing but list membership can satisfy it (no flag, no variable, nothing from the store). */
+    if (rec->admission_kind == OMEGA_VCS_ADMISSION_BOOTSTRAP && !omega_genesis_contains(vc->semantic_id)) { /* VC1R:genesis-gate */
+        rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, OMEGA_VCS_GENESIS_NOT_LISTED, subj, "%s is a genesis (bootstrap) record whose id is not in the pinned set %s", sid, OMEGA_GENESIS_SET_NAME);
+        goto out;
     }
     w->nodes[me].state = 2;
 out:
@@ -708,6 +730,10 @@ int omega_resolve_admit_genesis(OmegaVcStore *s, const uint8_t *canonical, size_
             free(view);
             return fail(err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "a genesis record may depend only on genesis records already in the store");
         }
+    }
+    if (!omega_genesis_contains(view->semantic_id)) { /* VC1R:admit-genesis-list */
+        free(view);
+        return fail(err, OMEGA_RES_UNVERIFIED_DEPENDENCY, OMEGA_VCS_GENESIS_NOT_LISTED, sid, "%s is not a member of the pinned genesis set %s", sid, OMEGA_GENESIS_SET_NAME);
     }
     free(view);
     rc = omega_vcstore_insert_bootstrap(s, canonical, len, claimed_vc_id);

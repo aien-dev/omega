@@ -1,4 +1,6 @@
 #include "omega_vcstore.h"
+#include "omega_vcstore_priv.h"
+#include "omega_genesis.h"
 #include "sha256.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -49,6 +51,7 @@ const char *omega_vcstore_code_name(int code) {
     case OMEGA_VCS_VCSTORE_CAPACITY: return "VCSTORE_CAPACITY";
     case OMEGA_VCS_VCSTORE_NOMEM: return "VCSTORE_NOMEM";
     case OMEGA_VCS_VCSTORE_IO: return "VCSTORE_IO";
+    case OMEGA_VCS_GENESIS_NOT_LISTED: return "GENESIS_NOT_LISTED";
     }
     return "UNKNOWN_CODE";
 }
@@ -232,6 +235,7 @@ static int vcs_insert(OmegaVcStore *s, const uint8_t *canon, size_t len, const u
     uint8_t id[32];
     omega_vc_compute_id(canon, len, id);
     if (memcmp(id, claimed, 32) != 0) { free(rec); return OMEGA_VCS_VCSTORE_ID_MISMATCH; } /* VC1S:insert-idcheck */
+    if (kind == OMEGA_VCS_ADMISSION_BOOTSTRAP && !omega_genesis_contains(rec->vc.semantic_id)) { free(rec); return OMEGA_VCS_GENESIS_NOT_LISTED; } /* VC1S:insert-genesis */
     size_t pos;
     if (vcs_find(s, rec->vc.semantic_id, &pos)) {
         const OmegaVcObject *o = &s->objs[pos];
@@ -628,6 +632,7 @@ static int parse_store(OmegaVcStore *t, const uint8_t *b, size_t n) {
         const uint8_t *ob = r_take(&r, (size_t)len);
         rc = omega_vc_decode(ob, (size_t)len, &rec->vc);
         if (rc) break;
+        if (kind == OMEGA_VCS_ADMISSION_BOOTSTRAP && !omega_genesis_contains(rec->vc.semantic_id)) { rc = OMEGA_VCS_GENESIS_NOT_LISTED; break; } /* VC1S:load-genesis */
         if (t->count > 0 && memcmp(t->objs[t->count - 1].semantic_id, rec->vc.semantic_id, 32) >= 0) { rc = OMEGA_VCS_VCSTORE_MALFORMED; break; } /* VC1S:load-order */
         rec->canonical = ob;
         rec->canonical_len = (size_t)len;

@@ -143,7 +143,7 @@ jobs:
           sel polyglot  "^src/(polyglot|algebra)/|^tests/polyglot/|^mk/polyglot[^/]*\.mk$|^src/(aarch64_|sha256\.)|^spec/polyglot-0\.md$|^evidence/POLYGLOT/"
           sel algebra   "^src/(algebra|turing)/|^tests/algebra/|^src/(omega_canonical|omega_types|sha256)\.|^evidence/MIXED_ALGEBRA/"
           sel path      "^src/path/|^tests/path/|^src/(omega_types|sha256)\."
-          sel crumbline "$core|^src/crumbline/|^tests/crumbline/|^tools/crumbline_learner\.c$|^data/crumbline/"
+          sel crumbline "$core|^src/crumbline/|^tests/crumbline/|^tools/crumbline_learner\.c$|^data/crumbline/|^tests/(test_omega_[a-z_]+\.c|vc_fixture\.h|genesis_variant/)|^docs/osc/VC-GENESIS-1\.md$"
           sel runtime   "$core|^src/(runtime|fabric)/|^tests/runtime/|^mk/fabric\.mk$|^tests/(r15_receipt_test\.sh|r16_[a-z_]+/)|^tools/(r15_|r16_|omegatool\.c)|^spec/r16-|^docs/r16-|^evidence/R15/|^(physics|aienos)\.lock$"
           sel argus     "^src/runtime/|^tests/runtime/|^tests/bench_rx_argus\.c$|^mk/machine-identity\.mk$|^src/(sha256|omega_evidence)\.|^(physics|aienos|argus)\.lock$"
           sel numeric2  "^tests/(test_omega_reduce|test_omega_divsqrt_gb10)\.c$|^tests/numeric_oracle\.h$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
@@ -261,7 +261,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Crumbline learner conformance vectors
-        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-crumbline test-library test-vcstore test-resolve
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-crumbline test-library test-vcstore test-resolve test-vcstore-genesis test-resolve-genesis test-genesis test-genesis-real test-program-ir
 
   runtime:
     needs: changes

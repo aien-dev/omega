@@ -6,10 +6,14 @@
  *
  * Compiles an OSC unit exactly as oscc does and ALSO resolves its `import NAME;` lines, only
  * through omega.lock -> semantic id -> Verified Crumb Store -> receipt check -> closure. Defaults
- * sit next to the source file: omega.lock, omega.vcstore, receipts/. There is no option that
- * skips a check (--blobs is optional: leaving it out skips only the source digest recheck, which
- * stage 6 makes mandatory), and nothing is read from the environment. There is no genesis option. The only way to change what is legal
- * is to change the closure.
+ * sit next to the source file: omega.lock, omega.vcstore, receipts/ and (build domain only)
+ * blobs/. There is no option that skips a check, and nothing is read from the environment. In
+ * the build domain the source/IR store is MANDATORY (SPEC 6 step 3): every imported record's
+ * blob must be there, hash to its digest and, for an IR digest, recompute to its semantic id,
+ * else the import is refused (UNVERIFIED_DEPENDENCY). The dev domain may leave --blobs out; its
+ * output is tainted either way. There is no genesis option: a BOOTSTRAP record satisfies an
+ * import only if its id is a member of the pinned set VC-GENESIS-1 compiled into the resolver
+ * (docs/osc/VC-GENESIS-1.md). The only way to change what is legal is to change the closure.
  *
  * Output (success): ir_sha256= code_sha256= funcs= domain= tainted= imports= closure_entries=
  * closure_sha256= build_id=   (build_id folds the domain and the closure digest into the identity).
@@ -94,10 +98,11 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: oscv [--domain dev|build] [--lock F] [--store F] [--receipts D] [--blobs D] [--meta-out F] <file.osc>\n");
         return 2;
     }
-    char lockd[4096], stored[4096], recd[4096];
+    char lockd[4096], stored[4096], recd[4096], blobd[4096];
     if (!lockp) { join_dir(lockd, sizeof lockd, file, "omega.lock"); lockp = lockd; }
     if (!storep) { join_dir(stored, sizeof stored, file, "omega.vcstore"); storep = stored; }
     if (!recdir) { join_dir(recd, sizeof recd, file, "receipts"); recdir = recd; }
+    if (!blobdir && domain == OMEGA_DOMAIN_BUILD) { join_dir(blobd, sizeof blobd, file, "blobs"); blobdir = blobd; }
 
     size_t slen = 0;
     int missing;
@@ -139,7 +144,7 @@ int main(int argc, char **argv)
     h.resolver.fetch_receipt = omega_receipt_dir_fetch;
     h.resolver.fetch_ctx = (void *)recdir;
     if (blobdir) { h.resolver.fetch_blob = omega_blob_dir_fetch; h.resolver.blob_ctx = (void *)blobdir; }
-    /* genesis (BOOTSTRAP) records are never permitted here: no option, file or variable turns that on */
+    /* a BOOTSTRAP record is accepted only if the resolver's pinned VC-GENESIS-1 lists it: no option, file or variable turns that on */
     h.lock = have_lock ? &lock : NULL;
 
     OscUnit *u = malloc(sizeof *u);

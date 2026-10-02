@@ -177,10 +177,18 @@ void cl_bank_digest(const ClBank *bank, uint8_t out[CL_DIGEST_BYTES]) {
 
 int cl_library_init(ClLearnerLibrary *l) {
     memset(l, 0, sizeof(*l));
-    return omega_library_init(&l->lib);
+    if (omega_vc_bridge_init(&l->bridge) != 0) return -1;
+    if (omega_library_init(&l->lib) != 0) {
+        omega_vc_bridge_destroy(&l->bridge);
+        return -1;
+    }
+    return 0;
 }
 
-void cl_library_destroy(ClLearnerLibrary *l) { omega_library_destroy(&l->lib); }
+void cl_library_destroy(ClLearnerLibrary *l) {
+    omega_library_destroy(&l->lib);
+    omega_vc_bridge_destroy(&l->bridge);
+}
 
 int cl_library_admit(ClLearnerLibrary *l, const ClSteps *steps, uint8_t scope_bits, uint32_t op_ref) {
     if (!l || !steps || steps->n == 0 || l->lib.count >= OMEGA_LIB_MAX_PROGRAMS) return -1;
@@ -189,12 +197,12 @@ int cl_library_admit(ClLearnerLibrary *l, const ClSteps *steps, uint8_t scope_bi
     VerifyReport rep;
     int rc = -1;
     if (omega_program_verify(&prog, &rep) == 0 && cl_steps_differential(steps, &prog, NULL, 0, NULL) == 0) {
-        uint8_t pre[4 + CL_DIGEST_BYTES], receipt[CL_DIGEST_BYTES];
+        uint8_t pre[4 + CL_DIGEST_BYTES], evidence[CL_DIGEST_BYTES];
         for (int k = 0; k < 4; ++k) pre[k] = (uint8_t)(op_ref >> (8 * k));
         cl_steps_digest(steps, pre + 4);
-        cl_digest("CRUMBLINE-OMEGA-ADMISSION", pre, sizeof(pre), receipt);
+        cl_digest("CRUMBLINE-OMEGA-ADMISSION", pre, sizeof(pre), evidence);
         size_t slot = l->lib.count;
-        if (omega_library_insert(&l->lib, &prog, NULL, 0, receipt) == 0) {
+        if (omega_vc_bridge_admit(&l->bridge, &l->lib, &prog, NULL, 0, evidence) == 0) {
             l->steps[slot] = *steps;
             l->scope_bits[slot] = scope_bits;
             l->op_ref[slot] = op_ref;
