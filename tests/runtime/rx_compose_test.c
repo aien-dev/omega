@@ -394,7 +394,9 @@ static void t_cortex(void) {
     }
     /* Admission cut short by a real crash: the process dies after the first
      * composition record and before the loser admission, so the checkpoint
-     * still holds the previous anchor. Open completes the rest. */
+     * still holds the previous anchor. Open completes the rest. A winning
+     * composition is 5 records (2 claims, evidence, promotion, 1 loser
+     * admission); one was written, so 4 are completed at open. */
     char d2[200];
     dir_for(d2, sizeof d2, "cortex2");
     fflush(NULL);
@@ -414,7 +416,7 @@ static void t_cortex(void) {
           WIFEXITED(cst) ? WEXITSTATUS(cst) : -1);
     reset_c();
     int rc2 = fx_open(&g_fx, &g_c, d2, 1);
-    CHECK(rc2 == RX_OK && g_c.recovered_completed == 1, "torn admission rewritten at open (%d, %u)",
+    CHECK(rc2 == RX_OK && g_c.recovered_completed == 4, "torn admission rewritten at open (%d, %u)",
           rc2, g_c.recovered_completed);
     if (rc2 == RX_OK) {
         CHECK(fx_count(&g_c.cx, CX_K_ADMISSION, RXC_ADMIT_LOSER) == 1 &&
