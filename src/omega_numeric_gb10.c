@@ -13,7 +13,7 @@
 #include "omega_blackwell_codegen.h"
 #include "omega_blackwell_qmd.h"
 #include "omega_blackwell_submit.h"
-#include "m16_native.h"
+#include "omega_numeric_native.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,9 +26,9 @@
  * OMEGA_NUMERIC_ERR_DEVICE return below goes through gb10_devfail, which
  * prints one GB10_DEVFAIL line to stderr: the step that failed, the driver
  * return code, errno, the nvrm error text, the wait value and the marker word
- * for waits, and the elapsed ms since the launch began. It only reports: the
- * return code stays OMEGA_NUMERIC_ERR_DEVICE, there is no retry and no wait
- * value changes. */
+ * for waits, and the elapsed ms since the launch began. The lifecycle wrapper
+ * retains resources after uncertain completion and refuses later numeric
+ * launches. There is no retry and no wait value changes. */
 static double gb10_ms_since(const struct timespec *t0) {
     struct timespec t;
     timespec_get(&t, TIME_UTC); /* C11; no feature macro needed */
@@ -44,7 +44,7 @@ static int gb10_devfail(const char *fn, const char *step, M16NativeContext *ctx,
     if (wait_ms >= 0)
         fprintf(stderr, " wait_ms=%ld word=0x%08x want=0x%08x", wait_ms, word ? (unsigned)*word : 0u, (unsigned)want);
     fprintf(stderr, " elapsed_ms=%.3f\n", ms);
-    if (do_close) m16_native_close(ctx);
+    if (do_close) omega_numeric_native_close(ctx);
     return OMEGA_NUMERIC_ERR_DEVICE;
 }
 /* Plain step: drv_rc is the value the call returned. */
@@ -100,7 +100,7 @@ int omega_gb10_execute_simt_op(const char *op_name,
     timespec_get(&t0, TIME_UTC);
     M16NativeContext ctx;
     int drc_;
-    if ((drc_ = m16_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
+    if ((drc_ = omega_numeric_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
     if ((drc_ = m16_native_create_channel(&ctx)) != 0) return GB10_FAIL("channel", 1, drc_);
 
     NvrmMem large_pb;
@@ -186,7 +186,7 @@ int omega_gb10_execute_simt_op(const char *op_name,
         char perr[256];
         if (omega_numeric_check_patch(info->op, patch, np, qmd1_words, perr, sizeof(perr)) != OMEGA_NUMERIC_OK) {
             fprintf(stderr, "omega_gb10_execute_simt_op: %s\n", perr);
-            m16_native_close(&ctx);
+            omega_numeric_native_close(&ctx);
             return OMEGA_NUMERIC_ERR_OPERANDS;
         }
     }
@@ -264,12 +264,19 @@ int omega_gb10_execute_simt_op(const char *op_name,
         return GB10_FAIL("submit", 1, drc_);
     }
 
-    if ((drc_ = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000)) != 0) {
+    if ((drc_ = omega_numeric_native_wait(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000)) != 0) {
         return GB10_FAIL_WAIT("marker_wait", drc_, 5000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
 
+    /* Match the reduction path: the host marker alone can precede the
+     * QMD release. Do not expose outputs until both have completed. */
+    if ((drc_ = omega_numeric_native_wait(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 5000)) != 0) {
+        return GB10_FAIL_WAIT("sem_wait", drc_, 5000, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
+    }
+    __asm__ volatile("dsb sy" ::: "memory");
+
     memcpy(out_res, out_mem.cpu, count * sizeof(float));
 
-    m16_native_close(&ctx);
+    if (omega_numeric_native_close(&ctx) != 0) return OMEGA_NUMERIC_ERR_DEVICE;
     return OMEGA_NUMERIC_OK;
 }
