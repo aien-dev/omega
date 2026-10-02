@@ -1,0 +1,31 @@
+# Manifest for tools/chip_run.sh: the GB10 unwritten-output trap (C3b).
+# Sourced as shell by chip_run.sh, which provides $HERE (omega root) and $PHYSICS.
+# Forge queue only. Verdict semantics follow tests/test_omega_unwritten_trap_gb10.c:
+#   line 182  prints "OMEGA_UNWRITTEN_TRAP: <hits>/<runs>" on a completed run
+#   line 185  returns 1 if hits or device errors, else 0
+#   lines 87,104,110,113,123 print "OMEGA_UNWRITTEN_TRAP: NOT_RUN..." and return 2
+# Hit lines (OMEGA_UNWRITTEN_HIT, line 170) and DEVERR lines (line 153) are not verdict lines.
+GATE=unwritten_trap
+OWNER=unwritten_trap
+TEST_SOURCE="tests/test_omega_unwritten_trap_gb10.c"
+SOURCES="src/omega_unwritten_trap.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric_transc.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c"
+EXTRA_BUILD_SOURCES="$PHYSICS/nvrm/nvrm.c $PHYSICS/m16/m16_native.c"
+# Same default as the old script.
+RUN_ARGS="--chip --repeats 3000"
+# Every line starting with the trap tag is a verdict candidate (this includes NOT_RUN lines);
+# only "<0>/<runs>" passes, so "N/M" with N>0 and "NOT_RUN" both fail.
+VERDICT_RE='^OMEGA_UNWRITTEN_TRAP: '
+PASS_LINE='^OMEGA_UNWRITTEN_TRAP: 0/[0-9]+$'
+# Evidence receipts go outside both candidate trees.
+EVIDENCE_DIR="$HOME/workspace/evidence/unwritten_trap"
+# Old script exit codes kept: 2 = refused / NOT_RUN, with its refusal text line.
+REFUSE_EXIT=2
+REFUSE_VERDICT_LINE="OMEGA_UNWRITTEN_TRAP: NOT_RUN"
+# Old script took only the GPU lock (blocking). It never raised the quiet flag, and the
+# forge queue already serialises runs, so keep that.
+RAISE_QUIET=0
+TAKE_GPU_LOCK=1
+# DECISION (explicit): refuse on a dirty omega tree. The old script had no check; the trap
+# script is run from the forge queue on a clean checkout, so this costs nothing there and
+# makes the receipt's omega_commit trustworthy.
+REFUSE_DIRTY_OMEGA=1
