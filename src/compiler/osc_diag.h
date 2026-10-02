@@ -45,6 +45,8 @@ typedef enum {
     OSC_DIAG_WRONG_POOL,           /* a handle of one pool is used with another pool (or copied across pools) */
     OSC_DIAG_POOL_CAPACITY,        /* pool K out of 1..16, or definite allocations exceed K live slots */
     OSC_DIAG_GENERATION_EXHAUSTED, /* definite alloc/free cycles reuse a retired slot (generation would wrap) */
+    /* VC1 stage 4 (docs/osc/OSC-VC1-IMPORT.md), appended */
+    OSC_DIAG_IMPORT_REFUSED,       /* an import did not resolve; transition = the resolver refusal code name */
     OSC_DIAG__COUNT
 } OscDiagKind;
 

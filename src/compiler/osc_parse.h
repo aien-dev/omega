@@ -20,6 +20,12 @@
 #define OSC_AST_MAX_REL   16384    /* release-list entries (checker) */
 #define OSC_ARENA_MAX_CELLS OSC_MAX_ARRAY_LEN  /* arena bound K: 1..64 cells (one pool slot) */
 #define OSC_POOL_MAX_SLOTS  16  /* pool K: 1..16 slots (OSC-0B model slot capacity) */
+#define OSC_MAX_IMPORTS     64     /* `import NAME;` lines per unit (VC1 stage 4) */
+
+typedef struct {
+    uint32_t line, col;                /* of the NAME token */
+    char name[OSC_LEX_NAME_MAX + 1];
+} OscImport;
 
 typedef enum {
     ON_NONE = 0,
@@ -132,6 +138,10 @@ typedef struct {
     OscStruct structs[OSC_MAX_STRUCTS];
     uint32_t struct_line[OSC_MAX_STRUCTS];
     uint8_t nstructs;
+    /* VC1 stage 4: `import NAME;` lines, in source order (parser). Only the verified driver
+     * resolves them (osc_compile_imports); plain osc_compile refuses a unit that has any. */
+    OscImport imports[OSC_MAX_IMPORTS];
+    uint8_t nimports;
 } OscAst;
 
 /* Parse the token stream into ast (ast->src/toks/ntok must be set). 0 ok, -1

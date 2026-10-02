@@ -1103,6 +1103,34 @@ static int parse_fn(P *p)
     return 0;
 }
 
+static int parse_import(P *p)
+{
+    OscAst *a = p->ast;
+    const OscToken *kw = cur(p);
+    adv(p);
+    if (!at(p, OT_NAME)) return syntax(p, "NAME");
+    const OscToken *nm = cur(p);
+    if (a->nimports >= OSC_MAX_IMPORTS) {
+        osc_diag_set(p->d, OSC_DIAG_CAPACITY, kw->line, kw->col, "unit", 0, NULL, "import capacity",
+                     "more than %d imports", OSC_MAX_IMPORTS);
+        return -1;
+    }
+    OscImport *im = &a->imports[a->nimports];
+    im->line = nm->line;
+    im->col = nm->col;
+    osc_tok_text(a->src, nm, im->name, sizeof im->name);
+    for (uint8_t k = 0; k < a->nimports; k++)
+        if (strcmp(a->imports[k].name, im->name) == 0) {
+            osc_diag_set(p->d, OSC_DIAG_REDEFINED_NAME, nm->line, nm->col, im->name, a->imports[k].line, NULL,
+                         "import", "import '%s' is listed twice", im->name);
+            return -1;
+        }
+    adv(p);
+    if (expect(p, OT_SEMI)) return -1;
+    a->nimports++;
+    return 0;
+}
+
 int osc_parse(OscAst *ast, OscDiag *d)
 {
     P p = {ast, d, 0, 0};
@@ -1110,7 +1138,18 @@ int osc_parse(OscAst *ast, OscDiag *d)
     ast->nfns = 0;
     ast->nrel = 0;
     ast->nstructs = 0;
+    ast->nimports = 0;
     while (!at(&p, OT_EOF)) {
+        if (at(&p, OT_IMPORT)) {
+            if (ast->nstructs || ast->nfns) {
+                const OscToken *t = cur(&p);
+                osc_diag_set(d, OSC_DIAG_SYNTAX, t->line, t->col, "import", 0, NULL, "import position",
+                             "imports must come before any struct or function");
+                return -1;
+            }
+            if (parse_import(&p)) return -1;
+            continue;
+        }
         if (at(&p, OT_STRUCT)) { if (parse_struct(&p)) return -1; continue; }
         if (parse_fn(&p)) return -1;
     }
