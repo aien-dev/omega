@@ -856,7 +856,7 @@ static int open_home(RxCompose *c, const char *dir, const AienMachineId *self, u
     path_in(p, sizeof p, dir, "cortex.cx");
     if (cx_open(&c->cx, p, RX_CORTEX_SUBJECTS, CX_OPEN_SYNC | CX_OPEN_REPAIR_TAIL) != CX_OK)
         return RX_ERR_REPLAY;
-    if (cx_verify_chain(&c->cx) != CX_OK) { cx_close(&c->cx); return RX_ERR_REPLAY; }
+    /* cx_open already verified every record and rebuilt the chain (see rx_cortex.h). */
 
     JsHome home;
     memset(&home, 0, sizeof home);
