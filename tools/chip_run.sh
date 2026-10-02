@@ -11,7 +11,8 @@
 #   VERDICT_RE must also match PASS_LINE, so set VERDICT_RE to verdict lines only), CHILD_EXIT_PASSTHROUGH
 #   (default 0; 0 or 1; when 1 and the binary exited nonzero, this module exits with the binary's
 #   exit code, receipt and verdict still written; exit 0 with a non-PASS verdict still gives 1), hooks
-#   HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
+#   ECHO_RE (default empty = echo the whole chip log; else echo only lines matching it; the chip log blob and
+#   the verdict are unaffected), HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
 #   $log = chip log, $hostlog = the whole HOST_TIER_CMD output, empty if none; it may replace a FAIL
 #   verdict with another upper-case word such as NOT_RUN, never create or remove a PASS). The manifest cannot change the test seam variables below, QUIET_FLAG,
 #   GPU_LOCK or EST_LOAD_CMD (checked and restored after it is sourced). That is an accident guard,
@@ -120,7 +121,7 @@ PHYSICS=${PHYS_FLAG:-${PHYSICS_DIR:-${PHYSICS:-$HOME/workspace/physics}}}
 PHYSICS=$(realpath -m "$PHYSICS")
 
 GATE=""; TEST_SOURCE=""; SOURCES=""; EXTRA_BUILD_SOURCES=""; RUN_ARGS=""; VERDICT_RE=""; PASS_LINE=""
-OWNER=""; EVIDENCE_DIR=""; RAISE_QUIET=1; TAKE_GPU_LOCK=1; REFUSE_DIRTY_OMEGA=1; HOST_TIER_CMD=""; RECEIPT_EXTRA_JQ=""; REQUIRE_ALL_PASS=0; CHILD_EXIT_PASSTHROUGH=0
+OWNER=""; EVIDENCE_DIR=""; RAISE_QUIET=1; TAKE_GPU_LOCK=1; REFUSE_DIRTY_OMEGA=1; HOST_TIER_CMD=""; RECEIPT_EXTRA_JQ=""; REQUIRE_ALL_PASS=0; CHILD_EXIT_PASSTHROUGH=0; ECHO_RE=""
 [ -f "$MANIFEST" ] || refuse "no manifest at $MANIFEST" # REFUSAL:no_manifest
 . "$MANIFEST"; MRC=$?
 REX_BAD=""
@@ -201,7 +202,7 @@ echo "== chip run (not killed, not timed out): ${GATE_ARGS[*]}"
 END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 exec 9>&-
 mapfile -t VLINES < <(grep -E -- "$VERDICT_RE" "$RUN/chip.log")
-cat "$RUN/chip.log"   # the full chip log goes to stdout, as the old trap script did (HIT and DEVERR lines included)
+if [ -n "$ECHO_RE" ]; then grep -E -- "$ECHO_RE" "$RUN/chip.log"; else cat "$RUN/chip.log"; fi   # default: the full chip log goes to stdout (HIT and DEVERR lines included); seam: ECHO_RE limits the echo
 
 OMEGA_CLEAN_AFTER=$(clean "$HERE"); PHYS_CLEAN_AFTER=$(clean "$PHYSICS")
 OMEGA_SAME=$([ "$(head_of "$HERE")" = "$OMEGA_COMMIT" ] && echo true || echo false)

@@ -352,6 +352,15 @@ mkman "$T/m-vb.sh" "RECEIPT_EXTRA_JQ='.verdict = \"not run\"'"
 reset_world; CRMAN=$T/m-vb.sh cr verdict_word FAKE_MODE=fail -- "${PD[@]}"
 expect verdict_word 1 '^CHIP_RUN: FAIL receipt verdict is not an upper-case word'
 
+# seam: ECHO_RE limits the stdout echo of the chip log; the log blob stays complete
+mkman "$T/m-echo.sh" "ECHO_RE='^VERDICT'"
+reset_world; CRMAN=$T/m-echo.sh cr echo_re -- "${PD[@]}"
+expect echo_re 0 '^VERDICT PASS$'
+assert echo_re "default-echoed noise line is not shown with ECHO_RE" bash -c '! grep -q "^fake chip args" "$1"' _ "$OUT"
+assert echo_re "the log blob still holds the whole log" grep -q '^fake chip args' "$T"/ev-echo_re/blobs/*.log
+reset_world; cr echo_default -- "${PD[@]}"
+assert echo_default "without ECHO_RE the whole chip log is echoed" grep -q '^fake chip args' "$OUT"
+
 # happy path and receipt
 reset_world; cr happy -- "${PD[@]}" -- --x 1
 expect happy 0 '^VERDICT PASS$'
