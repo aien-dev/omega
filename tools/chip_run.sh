@@ -8,7 +8,9 @@
 #   EVIDENCE_DIR RAISE_QUIET TAKE_GPU_LOCK REFUSE_DIRTY_OMEGA (default 1) REFUSE_EXIT
 #   (default 2; must be an integer 1..125, else exit 1 "CHIP_RUN: BAD_MANIFEST") REFUSE_VERDICT_LINE
 #   (default "CHIP_RUN: NOT_RUN") REQUIRE_ALL_PASS (default 0; 0 or 1; when 1 EVERY line matching
-#   VERDICT_RE must also match PASS_LINE, so set VERDICT_RE to verdict lines only), hooks
+#   VERDICT_RE must also match PASS_LINE, so set VERDICT_RE to verdict lines only), CHILD_EXIT_PASSTHROUGH
+#   (default 0; 0 or 1; when 1 and the binary exited nonzero, this module exits with the binary's
+#   exit code, receipt and verdict still written; exit 0 with a non-PASS verdict still gives 1), hooks
 #   HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
 #   $log = chip log). The manifest cannot change the test seam variables below, QUIET_FLAG,
 #   GPU_LOCK or EST_LOAD_CMD (checked and restored after it is sourced). That is an accident guard,
@@ -117,13 +119,14 @@ PHYSICS=${PHYS_FLAG:-${PHYSICS_DIR:-${PHYSICS:-$HOME/workspace/physics}}}
 PHYSICS=$(realpath -m "$PHYSICS")
 
 GATE=""; TEST_SOURCE=""; SOURCES=""; EXTRA_BUILD_SOURCES=""; RUN_ARGS=""; VERDICT_RE=""; PASS_LINE=""
-OWNER=""; EVIDENCE_DIR=""; RAISE_QUIET=1; TAKE_GPU_LOCK=1; REFUSE_DIRTY_OMEGA=1; HOST_TIER_CMD=""; RECEIPT_EXTRA_JQ=""; REQUIRE_ALL_PASS=0
+OWNER=""; EVIDENCE_DIR=""; RAISE_QUIET=1; TAKE_GPU_LOCK=1; REFUSE_DIRTY_OMEGA=1; HOST_TIER_CMD=""; RECEIPT_EXTRA_JQ=""; REQUIRE_ALL_PASS=0; CHILD_EXIT_PASSTHROUGH=0
 [ -f "$MANIFEST" ] || refuse "no manifest at $MANIFEST" # REFUSAL:no_manifest
 . "$MANIFEST"; MRC=$?
 REX_BAD=""
 case $REFUSE_EXIT in ''|*[!0-9]*) REX_BAD=1 ;; *) { [ "${#REFUSE_EXIT}" -le 3 ] && [ "$((10#$REFUSE_EXIT))" -ge 1 ] && [ "$((10#$REFUSE_EXIT))" -le 125 ]; } || REX_BAD=1 ;; esac
 [ -z "$REX_BAD" ] || bad_manifest "REFUSE_EXIT=$REFUSE_EXIT is not an integer from 1 to 125" # REFUSAL:refuse_exit
 case $REQUIRE_ALL_PASS in 0|1) ;; *) bad_manifest "REQUIRE_ALL_PASS=$REQUIRE_ALL_PASS is not 0 or 1" ;; esac # REFUSAL:require_all_value
+case $CHILD_EXIT_PASSTHROUGH in 0|1) ;; *) bad_manifest "CHILD_EXIT_PASSTHROUGH=$CHILD_EXIT_PASSTHROUGH is not 0 or 1" ;; esac # REFUSAL:child_exit_value
 seam_check # REFUSAL:seam_after
 for v in "${SEAM_VARS[@]}"; do [ "${!v:-}" = "${SEAM0[$v]}" ] || refuse "manifest changed $v, a test seam variable"; done # REFUSAL:seam_changed
 QUIET_FLAG=$QUIET0; GPU_LOCK=$GPU0; EST_LOAD_CMD=$EST0 # REFUSAL:restore_vars
@@ -240,4 +243,5 @@ fi
 cmp -s "$RUN/receipt.json" "$OUT" || fatal "receipt $OUT does not match what was built"
 echo "RECEIPT $OUT"
 echo "CHIP_RUN: $VERDICT${FAIL_REASON:+ $FAIL_REASON}"
+[ "$CHILD_EXIT_PASSTHROUGH" = 1 ] && [ "$CHIP_RC" != 0 ] && exit "$CHIP_RC" # REFUSAL:child_exit_passthrough
 [ "$VERDICT" = PASS ]

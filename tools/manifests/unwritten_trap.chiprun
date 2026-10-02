@@ -34,3 +34,6 @@ REFUSE_DIRTY_OMEGA=1
 # line must pass" are the same test; keeping 0 means a future extra tagged line (for example a
 # NOT_RUN note before a completed line) is judged by the last line, as the old script did.
 REQUIRE_ALL_PASS=0
+# Old script exit codes passed straight through: 0 clean, 1 hits or device error, 2 NOT_RUN
+# printed by the harness (tests/test_omega_unwritten_trap_gb10.c lines 87,104,110,113,123).
+CHILD_EXIT_PASSTHROUGH=1

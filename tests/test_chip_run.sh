@@ -63,6 +63,8 @@ int main(int argc, char **argv) {
     if (!strcmp(m, "fail")) { printf("RESULT chip x ok=false\nVERDICT FAIL\n"); return 0; }
     if (!strcmp(m, "failpass")) { printf("VERDICT FAIL\nVERDICT PASS\n"); return 0; }
     if (!strcmp(m, "passrc")) { printf("VERDICT PASS\n"); return 3; }
+    if (!strcmp(m, "rc1")) { printf("VERDICT FAIL\n"); return 1; }
+    if (!strcmp(m, "rc2")) { printf("VERDICT PASS\n"); return 2; }
     if (!strcmp(m, "dash")) { printf("--- VERDICT PASS\n"); return 0; }
     printf("RESULT chip x ok=true\nVERDICT PASS\n");
     return 0;
@@ -103,6 +105,7 @@ mkman "$T/m.sh"; mkman "$T/m-hostfail.sh" "HOST_TIER_CMD=false"
 mkman "$T/m-map.sh" "REFUSE_EXIT=1; REFUSE_VERDICT_LINE='VERDICT NOT_RUN'"
 mkman "$T/m-off.sh" "RAISE_QUIET=0; TAKE_GPU_LOCK=0"
 mkman "$T/m-all.sh" "REQUIRE_ALL_PASS=1; VERDICT_RE='^VERDICT'"
+mkman "$T/m-pt.sh" "CHILD_EXIT_PASSTHROUGH=1"; mkman "$T/m-pt-bad.sh" "CHILD_EXIT_PASSTHROUGH=2"
 mkman "$T/m-dash.sh" "VERDICT_RE='^--- VERDICT'; PASS_LINE='^--- VERDICT PASS\$'"
 CRMAN=$T/m.sh; PD=(--physics-dir "$PHYS")
 
@@ -291,6 +294,20 @@ expect fail_any_verdict 1 '^CHIP_RUN: FAIL a verdict line does not match PASS_LI
 assert fail_any_verdict "a FAIL receipt is still written" receipt_verdict fail_any_verdict FAIL
 reset_world; CRMAN=$T/m-all.sh cr all_pass_ok FAKE_MODE=pass -- "${PD[@]}"
 expect all_pass_ok 0 '^CHIP_RUN: PASS'
+# child exit passthrough: fake binary exiting 0, 1, 2 (exit 2 is the trap harness NOT_RUN code)
+reset_world; CRMAN=$T/m-pt.sh cr child_exit_pass0 FAKE_MODE=pass -- "${PD[@]}"
+expect child_exit_pass0 0 '^CHIP_RUN: PASS'
+reset_world; CRMAN=$T/m-pt.sh cr child_exit_pass1 FAKE_MODE=rc1 -- "${PD[@]}"
+expect child_exit_pass1 1 '^CHIP_RUN: FAIL'
+reset_world; CRMAN=$T/m-pt.sh cr child_exit_passthrough FAKE_MODE=rc2 -- "${PD[@]}"
+expect child_exit_passthrough 2 '^CHIP_RUN: FAIL binary exit status 2'
+assert child_exit_passthrough "receipt still written with chip_exit_status 2" jq -e '.chip_exit_status == 2 and .verdict == "FAIL"' "$T"/ev-child_exit_passthrough/*.json
+reset_world; CRMAN=$T/m-pt.sh cr child_exit_zero_fail FAKE_MODE=fail -- "${PD[@]}"
+expect child_exit_zero_fail 1 '^CHIP_RUN: FAIL'
+reset_world; CRMAN=$T/m.sh cr child_exit_default FAKE_MODE=rc2 -- "${PD[@]}"
+expect child_exit_default 1 '^CHIP_RUN: FAIL binary exit status 2'
+reset_world; CRMAN=$T/m-pt-bad.sh cr child_exit_value -- "${PD[@]}"
+expect child_exit_value 1 '^CHIP_RUN: BAD_MANIFEST CHILD_EXIT_PASSTHROUGH='; CRMAN=$T/m.sh
 # evidence reuse: a second run keeps one log blob; a tampered blob is caught
 reset_world; cr reuse -- "${PD[@]}"; cr reuse -- "${PD[@]}"
 expect reuse 0 '^CHIP_RUN: PASS'
