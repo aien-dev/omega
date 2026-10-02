@@ -1073,6 +1073,7 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
     volatile uint32_t *hmarker = (volatile uint32_t *)marker_mem.cpu;
     *hsem = 0;
     *hmarker = 0;
+    *(volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10) = 0;
     __asm__ volatile("dsb sy" ::: "memory");
 
     static uint32_t pb[1024];
@@ -1104,10 +1105,23 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
     pb[n++] = nvrm_mthd(0, 0x005c, 5);
     pb[n++] = (uint32_t)marker_mem.va; pb[n++] = (uint32_t)(marker_mem.va >> 32);
     pb[n++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD; pb[n++] = 0; pb[n++] = 0x1 | (1u << 20);
+    /* C3 FIX A: after the WFI marker, flush GPU L2 dirty lines to memory
+     * (NVC96F_MEM_OP_A..D = 0x28..0x34, D bits 31:27 OPERATION = L2_FLUSH_DIRTY 0x10;
+     * third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc/class/clc96f.h:36-73),
+     * then a second WFI marker that the host waits for before the readback. */
+    pb[n++] = nvrm_mthd(0, 0x0028, 4); pb[n++] = 0; pb[n++] = 0; pb[n++] = 0; pb[n++] = (0x10u << 27);
+    pb[n++] = nvrm_mthd(0, 0x005c, 5);
+    pb[n++] = (uint32_t)(marker_mem.va + 0x10); pb[n++] = (uint32_t)((marker_mem.va + 0x10) >> 32);
+    pb[n++] = 0x46464646u; pb[n++] = 0; pb[n++] = 0x1 | (1u << 20);
 
     if (m16_native_submit_methods(&ctx, pb, n) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
     /* Wait long: closing the channel under a running kernel jams the seat. */
     if (m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000) != 0) {
+        m16_native_close(&ctx);
+        return OMEGA_NUMERIC_ERR_DEVICE;
+    }
+    volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
+    if (m16_native_wait_marker(hmarker2, 0x46464646u, 600000) != 0) {
         m16_native_close(&ctx);
         return OMEGA_NUMERIC_ERR_DEVICE;
     }
