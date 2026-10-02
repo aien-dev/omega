@@ -16,8 +16,8 @@ RUN_ARGS="--chip --repeats 3000"
 # only "<0>/<runs>" passes, so "N/M" with N>0 and "NOT_RUN" both fail.
 VERDICT_RE='^OMEGA_UNWRITTEN_TRAP: '
 PASS_LINE='^OMEGA_UNWRITTEN_TRAP: 0/[0-9]+$'
-# Evidence receipts go outside both candidate trees.
-EVIDENCE_DIR="$HOME/workspace/evidence/unwritten_trap"
+# Evidence receipts go outside both candidate trees; convention is ~/workspace/evidence-out/<GATE>.
+EVIDENCE_DIR="$HOME/workspace/evidence-out/OMEGA-UNWRITTEN-TRAP"
 # Old script exit codes kept: 2 = refused / NOT_RUN, with its refusal text line.
 REFUSE_EXIT=2
 REFUSE_VERDICT_LINE="OMEGA_UNWRITTEN_TRAP: NOT_RUN"
@@ -29,3 +29,8 @@ TAKE_GPU_LOCK=1
 # script is run from the forge queue on a clean checkout, so this costs nothing there and
 # makes the receipt's omega_commit trustworthy.
 REFUSE_DIRTY_OMEGA=1
+# REQUIRE_ALL_PASS stays 0 (the default, set here so it is explicit). The harness prints exactly
+# one OMEGA_UNWRITTEN_TRAP line per run, so "last matching line must pass" and "every matching
+# line must pass" are the same test; keeping 0 means a future extra tagged line (for example a
+# NOT_RUN note before a completed line) is judged by the last line, as the old script did.
+REQUIRE_ALL_PASS=0

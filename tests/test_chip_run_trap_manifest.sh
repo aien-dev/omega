@@ -20,6 +20,7 @@ check_vars() { ( PHYSICS=$FAKE_PHYS; . "$1" 2>/dev/null || exit 1
     for v in GATE OWNER TEST_SOURCE SOURCES EXTRA_BUILD_SOURCES RUN_ARGS VERDICT_RE PASS_LINE EVIDENCE_DIR REFUSE_VERDICT_LINE REFUSE_EXIT REFUSE_DIRTY_OMEGA; do
         [ -n "${!v:-}" ] || { echo "unset $v"; exit 1; }; done
     [ "$REFUSE_EXIT" = 2 ] && [ "$REFUSE_VERDICT_LINE" = "OMEGA_UNWRITTEN_TRAP: NOT_RUN" ] && [ "$RUN_ARGS" = "--chip --repeats 3000" ] || { echo "old exit/line/args not kept"; exit 1; }
+    [ "$EVIDENCE_DIR" = "$HOME/workspace/evidence-out/OMEGA-UNWRITTEN-TRAP" ] && [ "${REQUIRE_ALL_PASS:-}" = 0 ] || { echo "evidence dir or REQUIRE_ALL_PASS wrong"; exit 1; }
     for s in $TEST_SOURCE $SOURCES; do [ -f "$HERE/$s" ] || { echo "missing $s"; exit 1; }; done ); }
 check_list_matches_old() {
     git -C "$HERE" show origin/main:tools/run_unwritten_trap.sh > "$T/old.sh" 2>/dev/null || { echo "cannot read old script"; return 1; }
@@ -33,11 +34,12 @@ sed 's#^SOURCES="src/omega_unwritten_trap.c #SOURCES="#' "$MAN" > "$T/m_dropsrc"
 sed 's#src/sha256.c#src/sha256_nope.c#' "$MAN" > "$T/m_badfile"
 sed '/^PASS_LINE=/d' "$MAN" > "$T/m_novar"
 sed 's#^REFUSE_EXIT=2#REFUSE_EXIT=1#' "$MAN" > "$T/m_exit"
+sed "s#evidence-out/OMEGA-UNWRITTEN-TRAP#evidence/unwritten_trap#" "$MAN" > "$T/m_evid"
 
 check_vars "$MAN" > "$T/o" 2>&1 && ok "1 manifest variables and source files" || { bad "1 manifest variables and source files: $(cat "$T/o")"; }
 check_list_matches_old "$MAN" > "$T/o" 2>&1 && ok "2 source list identical to old script" || bad "2 source list identical to old script: $(cat "$T/o")"
 
-for m in m_novar m_badfile m_exit; do check_vars "$T/$m" > /dev/null 2>&1 && bad "mutant $m passed check 1" || ok "mutant $m fails check 1"; done
+for m in m_novar m_badfile m_exit m_evid; do check_vars "$T/$m" > /dev/null 2>&1 && bad "mutant $m passed check 1" || ok "mutant $m fails check 1"; done
 for m in m_dropsrc m_badfile; do check_list_matches_old "$T/$m" > /dev/null 2>&1 && bad "mutant $m passed check 2" || ok "mutant $m fails check 2"; done
 
 OUT=$(env -u PHYSICS_DIR PHYSICS=$FAKE_PHYS bash "$HERE/tools/run_unwritten_trap.sh" 2>&1); RC=$?
