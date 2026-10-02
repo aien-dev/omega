@@ -1530,7 +1530,7 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
         nvrm_alloc(&ctx.rm, bytes, &a_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &b_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &out_mem) != 0 ||
-        nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0 ||
+        nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem) != 0 ||
         nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
         return GB10_FAIL("alloc_buffers", 1, -1);
     }

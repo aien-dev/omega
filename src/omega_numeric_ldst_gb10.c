@@ -276,7 +276,7 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
     NvrmMem code_mem, cbank_mem, a_mem, out_mem, marker_mem, qmd_mem;
     if ((drc = nvrm_alloc(&ctx.rm, OMEGA_DS_MAX_CODE_BYTES, &code_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem)) != 0 ||
         (drc = nvrm_alloc(&ctx.rm, in_bytes, &a_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, out_bytes, &out_mem)) != 0 ||
-        (drc = nvrm_alloc(&ctx.rm, 0x1000, &marker_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem)) != 0) {
+        (drc = nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem)) != 0) {
         omega_numeric_native_close(&ctx);
         return LDST_DEVERR("alloc", drc);
     }

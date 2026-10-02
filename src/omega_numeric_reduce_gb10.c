@@ -338,7 +338,7 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     if (nvrm_alloc(&ctx.rm, 0x1000, &code_mem) != 0 || nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &a_mem) != 0 || nvrm_alloc(&ctx.rm, bytes, &b_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &c_mem) != 0 || nvrm_alloc(&ctx.rm, bytes, &out_mem) != 0 ||
-        nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0 || nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
+        nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem) != 0 || nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
         return GB10_FAIL("alloc_buffers", 1, -1);
     }
     memcpy(a_mem.cpu, in, count * sizeof(float));
