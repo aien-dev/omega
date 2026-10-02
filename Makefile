@@ -414,9 +414,7 @@ test-r10: $(RX_R10_TEST)
 
 # R8: AEGIS resident authority. Capability slots in the world; AEGIS decides,
 # only root.install mints, through the native AIENOS authority.
-RX_R8_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
-	tests/runtime/rx_r8_aegis.c
+RX_R8_SRCS = $(RX_RT_CORE_SRCS) tests/runtime/rx_r8_aegis.c
 RX_R8_TEST = $(OUT_DIR)/rx_r8_aegis_test
 
 $(RX_R8_TEST): $(RX_R8_SRCS) src/runtime/rx_aegis.h src/runtime/rx_caproot.h \
@@ -851,9 +849,7 @@ test-r16-surface: $(TARGET)
 # resident reactions by readiness alone. rx_graph.o is built alone first and
 # must not reference any AIENOS admin operation: compilation can find that
 # authority is missing, never create it.
-RX_GRAPH_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
-	src/omega_core.c src/omega_canonical.c tests/runtime/rx_action_graph.c
+RX_GRAPH_SRCS = $(RX_RT_CORE_SRCS) $(RX_RT_OMEGA_SRCS) tests/runtime/rx_action_graph.c
 RX_GRAPH_TEST = $(OUT_DIR)/rx_action_graph_test
 RX_GRAPH_OBJ = $(OUT_DIR)/rx_graph.o
 
@@ -876,9 +872,7 @@ test-action-graph: $(RX_GRAPH_TEST)
 # ranked on explicit dimensions. rx_capq.o is built alone first and must not
 # reference any AIENOS admin operation: a query can learn that authority is
 # held or missing, never create it.
-RX_CAPQ_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
-	src/omega_core.c src/omega_canonical.c src/runtime/aien_machine_id.c \
+RX_CAPQ_SRCS = $(RX_RT_CORE_SRCS) $(RX_RT_OMEGA_SRCS) src/runtime/aien_machine_id.c \
 	tests/runtime/rx_capability_query.c
 RX_CAPQ_TEST = $(OUT_DIR)/rx_capability_query_test
 RX_CAPQ_OBJ = $(OUT_DIR)/rx_capq.o
@@ -902,9 +896,7 @@ test-capability-query: $(RX_CAPQ_TEST)
 # update/withdraw, canonical machine identity, wire form) plus rx_skillroute.
 # Like rx_capq.o, rx_skillroute.o must not reference an authority admin
 # operation: routing discovers, it never authorizes.
-RX_CAPGRAPH_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
-	src/omega_core.c src/omega_canonical.c src/runtime/aien_machine_id.c \
+RX_CAPGRAPH_SRCS = $(RX_RT_CORE_SRCS) $(RX_RT_OMEGA_SRCS) src/runtime/aien_machine_id.c \
 	tests/runtime/rx_capability_graph.c
 RX_CAPGRAPH_TEST = $(OUT_DIR)/rx_capability_graph_test
 RX_SKILLROUTE_OBJ = $(OUT_DIR)/rx_skillroute.o
@@ -927,9 +919,7 @@ test-capability-graph: $(RX_CAPGRAPH_TEST)
 # COMPOSITION-2 WP-D: Skill Router end to end (requirement -> graph -> Skill
 # -> bound action-graph node -> World run) and each failure mode failing
 # closed. Repeats the no-mint symbol check on the router object it links.
-RX_SRCOMPOSE_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
-	src/omega_core.c src/omega_canonical.c src/runtime/aien_machine_id.c \
+RX_SRCOMPOSE_SRCS = $(RX_RT_CORE_SRCS) $(RX_RT_OMEGA_SRCS) src/runtime/aien_machine_id.c \
 	tests/runtime/rx_skillroute_compose_test.c
 RX_SRCOMPOSE_TEST = $(OUT_DIR)/rx_skillroute_compose_test
 
@@ -947,9 +937,7 @@ test-skillroute-compose: $(RX_SRCOMPOSE_TEST)
 # OMEGA_PLAN_REUSE: plan IR and verified plan cache. rx_plan.o must not
 # reference any AIENOS admin operation (the cache checks authority, never
 # creates it); rx_plan_arrange.o (AIEN's planner) must only read the World.
-RX_PLAN_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
-	src/omega_core.c src/omega_canonical.c tests/runtime/rx_plan_reuse.c
+RX_PLAN_SRCS = $(RX_RT_CORE_SRCS) $(RX_RT_OMEGA_SRCS) tests/runtime/rx_plan_reuse.c
 RX_PLAN_TEST = $(OUT_DIR)/rx_plan_reuse_test
 RX_PLAN_OBJS = $(OUT_DIR)/rx_plan.o $(OUT_DIR)/rx_plan_arrange.o
 
@@ -1089,9 +1077,7 @@ test-workflow-fusion: $(RX_FUSION_TEST)
 # published. rx_contract.o is built alone first and must not reference any
 # AIENOS admin operation: a contract can find that authority is missing, never
 # create it.
-RX_TYPED_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
-	src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c \
-	src/omega_core.c src/omega_canonical.c tests/runtime/rx_typed_results.c
+RX_TYPED_SRCS = $(RX_RT_CORE_SRCS) $(RX_RT_OMEGA_SRCS) tests/runtime/rx_typed_results.c
 RX_TYPED_TEST = $(OUT_DIR)/rx_typed_results_test
 RX_CONTRACT_OBJ = $(OUT_DIR)/rx_contract.o
 TYPED_RESULTS_N ?= 400
