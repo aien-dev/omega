@@ -103,7 +103,7 @@ typedef struct {
     const char *inputs[4]; int n_in;
     const char *deps[4]; int n_dep;
     char root[65];
-    int assert_pass, extra_key, dup_key, lease, no_assertion;
+    int assert_pass, extra_key, dup_key, lease, no_assertion, dirty;
     const char *authority;
 } RJ;
 static void rj_default(RJ *j) {
@@ -122,7 +122,7 @@ static char *rj_emit(const RJ *j, const char *idhex, size_t *len) {
     if (j->dup_key) PF("\"kind\": \"%s\",\n", j->kind);
     if (j->extra_key) PF("\"surprise\": 1,\n");
     PF("\"tier\": \"%s\",\n\"result\": \"%s\",\n\"timestamp\": 1786000000,\n", j->tier, j->result);
-    PF("\"repo\": \"fixture\",\n\"commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n\"dirty\": false,\n");
+    PF("\"repo\": \"fixture\",\n\"commit\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\n\"dirty\": %s,\n", j->dirty ? "true" : "false");
     PF("\"toolchain\": \"fixture\",\n\"procedure\": \"%s\",\n\"machine\": \"host\",\n\"env_class\": \"%s\",\n", j->procedure, j->env_class ? j->env_class : j->tier);
     PF("\"input_artifacts\": [");
     for (int i = 0; i < j->n_in; i++) PF("%s\"%s\"", i ? ", " : "", j->inputs[i]);
@@ -203,7 +203,7 @@ static void w_free(W *w) {
 
 typedef struct {
     const char *prof, *ver, *tier, *result;
-    int assert_fail, skip_sid, stale_src, wrong_root, extra_rdep, wrong_kind, no_store, swap, taint, boot, lease;
+    int assert_fail, skip_sid, stale_src, wrong_root, extra_rdep, wrong_kind, no_store, swap, taint, boot, lease, dirty;
 } Opt;
 static Opt opt0(void) {
     Opt o; memset(&o, 0, sizeof o);
@@ -250,6 +250,7 @@ static int add_comp(W *w, uint8_t b0, const uint8_t (*deps)[32], uint32_t nd, co
     hx(root, root_h);
     RJ j; rj_default(&j);
     j.kind = o->wrong_kind ? "some-other-kind" : o->prof;
+    j.dirty = o->dirty;
     j.tier = o->tier; j.result = o->result; j.assert_pass = !o->assert_fail; j.lease = o->lease;
     memcpy(j.root, root_h, 65);
     if (!o->skip_sid) { snprintf(inp[j.n_in], 80, "sha256:%s", sid_h); j.inputs[j.n_in] = inp[j.n_in]; j.n_in++; }
@@ -689,6 +690,18 @@ static void t_refusals(void) {
     check("resolve-accepts-verified-record", r.rc == 0 && r.h.resolved && r.h.closure.n == 1 && r.h.n_imports == 1);
     run_free(&r); w_free(&w);
 
+    o = opt0(); o.dirty = 1;
+    one_foo(&o, OMEGA_DOMAIN_BUILD, &r, &w);
+    check("refuse-dirty-receipt-in-build", refused(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY));
+    run_free(&r); w_free(&w);
+    one_foo(&o, OMEGA_DOMAIN_DEV, &r, &w);
+    check("allow-dirty-receipt-in-dev", r.rc == 0);
+    { uint8_t ir[32]; OmegaArtifactMeta meta;
+      check("dirty-dev-ir-digest", ir_of(&r, ir) == 0);
+      omega_artifact_meta_make(&meta, OMEGA_DOMAIN_DEV, ir, r.h.closure.digest);
+      check("dirty-dev-output-remains-tainted", meta.tainted == 1); }
+    run_free(&r); w_free(&w);
+
     /* UNVERIFIED_DEPENDENCY: the pinned id is not in the store */
     w_init(&w);
     { Opt a = opt0(); add_comp(&w, 0x51, NULL, 0, &a); }
@@ -701,6 +714,10 @@ static void t_refusals(void) {
     o = opt0(); o.no_store = 1;
     one_foo(&o, OMEGA_DOMAIN_BUILD, &r, &w);
     check("refuse-missing-receipt", refused(&r, "MISSING_RECEIPT", OMEGA_RES_MISSING_RECEIPT));
+    { const char *names[] = { "foo" }; OmegaClosure out = {0};
+      int rc = omega_resolve_imports(&r.h.resolver, &r.lock, names, 1, &out, NULL);
+      check("missing-receipt-null-error-safe", rc == OMEGA_RES_MISSING_RECEIPT && out.n == 0);
+      omega_closure_free(&out); }
     run_free(&r); w_free(&w);
 
     /* RECEIPT_HASH_MISMATCH, one cause per check */
@@ -1493,6 +1510,7 @@ static const struct { const char *mutant, *check; } MUTANTS[] = {
     { "lock-order-sorted", "lock-refuses-unsorted" },
     { "missing-receipt", "refuse-missing-receipt" },
     { "rule1-name", "refuse-receipt-file-holds-another-receipt" },
+    { "rule-clean", "refuse-dirty-receipt-in-build" },
     { "rule4-semantic", "refuse-receipt-does-not-name-program" },
     { "rule4-source", "refuse-stale-receipt" },
     { "rule3", "refuse-receipt-output-digest-is-not-evidence-root" },
