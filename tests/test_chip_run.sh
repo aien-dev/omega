@@ -328,6 +328,16 @@ reset_world; echo other > "$FLAG"; exec 8> "$LOCK"; flock -x 8; CRMAN=$T/m-off.s
 expect optional_off 0 '^CHIP_RUN: PASS'
 assert optional_off "a flag we never raised is untouched" flag_is_other
 
+# seam: RECEIPT_EXTRA_JQ can read the whole HOST_TIER_CMD output as $hostlog (empty without one)
+mkman "$T/m-hostlog.sh" "HOST_TIER_CMD='echo AAA; echo BBB'; RECEIPT_EXTRA_JQ='. + {hl: \$hostlog}'"
+reset_world; CRMAN=$T/m-hostlog.sh cr hostlog -- "${PD[@]}"
+expect hostlog 0 '^CHIP_RUN: PASS'
+assert hostlog "receipt carries the whole host tier output" jq -e '.hl == "AAA\nBBB\n" and .host_tier == "BBB"' "$T"/ev-hostlog/*.json
+mkman "$T/m-hostlog0.sh" "HOST_TIER_CMD=''; RECEIPT_EXTRA_JQ='. + {hl: \$hostlog}'"
+reset_world; CRMAN=$T/m-hostlog0.sh cr hostlog_none -- "${PD[@]}"
+expect hostlog_none 0 '^CHIP_RUN: PASS'
+assert hostlog_none "no host tier gives an empty \$hostlog" jq -e '.hl == ""' "$T"/ev-hostlog_none/*.json
+
 # happy path and receipt
 reset_world; cr happy -- "${PD[@]}" -- --x 1
 expect happy 0 '^VERDICT PASS$'

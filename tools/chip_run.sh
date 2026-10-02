@@ -12,7 +12,7 @@
 #   (default 0; 0 or 1; when 1 and the binary exited nonzero, this module exits with the binary's
 #   exit code, receipt and verdict still written; exit 0 with a non-PASS verdict still gives 1), hooks
 #   HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
-#   $log = chip log). The manifest cannot change the test seam variables below, QUIET_FLAG,
+#   $log = chip log, $hostlog = the whole HOST_TIER_CMD output, empty if none). The manifest cannot change the test seam variables below, QUIET_FLAG,
 #   GPU_LOCK or EST_LOAD_CMD (checked and restored after it is sourced). That is an accident guard,
 #   not a boundary: the manifest is sourced into this shell and could still set any other variable.
 # Gate args after "--" REPLACE the manifest RUN_ARGS (not appended); RUN_ARGS is split on whitespace.
@@ -157,6 +157,7 @@ if [ -n "$HOST_TIER_CMD" ]; then
     tail -n 3 "$RUN/host.log"
     [ "$HRC" = 0 ] || refuse "host tier failed (exit $HRC); no chip run" # REFUSAL:host_tier
 fi
+[ -e "$RUN/host.log" ] || : > "$RUN/host.log"   # seam: $hostlog is always readable by RECEIPT_EXTRA_JQ
 HOST_TIER=$(tail -n 1 "$RUN/host.log" 2>/dev/null)
 
 START=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -233,7 +234,7 @@ BODY=$(jq -n --arg gate "$GATE" --arg owner "$OWNER" --arg omega "$OMEGA_COMMIT"
   physics_tree_clean_after: $pafter, physics_commit_unchanged_after: $psame, binary_sha256: $bin, chip_log_sha256: $log,
   run_args: $run_args, host_tier: $host, verdict_lines: $vlines, chip_exit_status: $rc, started_utc: $start,
   finished_utc: $end, verdict: $verdict, reason: $reason }') || fatal "receipt JSON could not be built"
-if [ -n "$RECEIPT_EXTRA_JQ" ]; then BODY=$(printf '%s' "$BODY" | jq --rawfile log "$RUN/chip.log" "$RECEIPT_EXTRA_JQ") || fatal "RECEIPT_EXTRA_JQ failed"; fi
+if [ -n "$RECEIPT_EXTRA_JQ" ]; then BODY=$(printf '%s' "$BODY" | jq --rawfile log "$RUN/chip.log" --rawfile hostlog "$RUN/host.log" "$RECEIPT_EXTRA_JQ") || fatal "RECEIPT_EXTRA_JQ failed"; fi
 printf '%s\n' "$BODY" > "$RUN/receipt.json"
 jq -e '.gate and .verdict and .binary_sha256' "$RUN/receipt.json" > /dev/null || fatal "receipt lost its required fields"
 RSHA=$(sha "$RUN/receipt.json"); OUT=$EVID/$RSHA.json
