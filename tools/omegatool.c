@@ -15,6 +15,7 @@
 #include "omega_synthesis.h"
 #include "omega_library.h"
 #include "omega_discovery.h"
+#include "omega_vc_bridge.h"
 #include "omega_machine.h"
 #include "omega_realize_synth.h"
 #include "omega_matvec.h"
@@ -2082,13 +2083,16 @@ static bool test_m11_library_admission(void) {
     if (res.best_candidate_index >= 0) {
         OmegaLibrary lib;
         omega_library_init(&lib);
+        OmegaVcBridge br;
+        omega_vc_bridge_init(&br);
 
-        uint8_t dummy_receipt[32] = { 0xBB };
-        int rc = omega_discovery_admit_to_library(&lib, &res.candidates[res.best_candidate_index], dummy_receipt);
+        uint8_t evidence[32] = { 0xBB };
+        int rc = omega_vc_bridge_admit_abstraction(&br, &lib, &res.candidates[res.best_candidate_index], evidence);
         const OmegaLibraryEntry *e = omega_library_find_by_name(&lib, "discovered_abs_2x_plus_1");
 
         ok = (rc == 0 && lib.count == 1 && e != NULL);
         omega_library_destroy(&lib);
+        omega_vc_bridge_destroy(&br);
     }
 
     omega_corpus_destroy(&corpus);
@@ -2198,10 +2202,13 @@ static void run_demonstration_discovery(void) {
         printf("\n  [5] Library Admission:\n");
         OmegaLibrary lib;
         omega_library_init(&lib);
-        uint8_t dummy_receipt[32] = { 0xDE, 0xAD };
-        omega_discovery_admit_to_library(&lib, cand, dummy_receipt);
+        OmegaVcBridge br;
+        omega_vc_bridge_init(&br);
+        uint8_t evidence[32] = { 0xDE, 0xAD };
+        omega_vc_bridge_admit_abstraction(&br, &lib, cand, evidence);
         printf("      Library Catalog Updated: Count = %zu, Version = %u\n", lib.count, lib.version);
         omega_library_destroy(&lib);
+        omega_vc_bridge_destroy(&br);
 
         /* Search Acceleration */
         printf("\n  [6] Search Acceleration on Held-Out Task (g(x) = 2x + 6):\n");

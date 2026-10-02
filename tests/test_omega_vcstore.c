@@ -18,7 +18,9 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "omega_genesis.h"
 #include "omega_vcstore.h"
+#include "omega_vcstore_priv.h"
 #include "sha256.h"
 
 #define GOLDEN "tests/vcstore/golden"
@@ -59,7 +61,9 @@ static const struct { const char *mutant, *check; } MUTANTS[] = {
     { "dep-contract",            "dep-contract-mismatch-refused" },
     { "no-cap",                  "store-grows-past-old-caps" },
     { "sorted-insert",           "digest-independent-of-insert-order" },
-    { "kind-bootstrap",          "bootstrap-kind-recorded" },
+    { "kind-bootstrap",          "insert-bootstrap-unlisted-refused" },
+    { "insert-genesis",          "insert-bootstrap-unlisted-refused" },
+    { "load-genesis",            "load-bootstrap-unlisted-refused" },
     /* get, receipt */
     { "get-recompute",           "get-detects-corrupt-bytes" },
     { "get-key",                 "get-detects-key-mismatch" },
@@ -172,12 +176,22 @@ static void encode(B *o, const Spec *s) {
     bu32(o, s->n_exp); for (uint32_t i = 0; i < s->n_exp; i++) bstr(o, s->exp[i]);
     bu32(o, s->n_cap); for (uint32_t i = 0; i < s->n_cap; i++) bstr(o, s->cap[i]);
 }
+/* VC-GENESIS-1 is EMPTY in the real source, so no BOOTSTRAP record can be inserted here. A test
+ * that needs a BOOTSTRAP-kind object (digest and persistence checks) inserts it as VERIFIED and
+ * then flips the kind byte in the store, which the header declares public for exactly this
+ * (tamper) purpose. Real BOOTSTRAP admission, with a non-empty list, is test_omega_genesis_set. */
+static void flip_to_bootstrap(OmegaVcStore *st, const uint8_t sid[32]) {
+    for (size_t i = 0; i < st->count; i++)
+        if (memcmp(st->objs[i].semantic_id, sid, 32) == 0) { st->objs[i].admission_kind = OMEGA_VCS_ADMISSION_BOOTSTRAP; return; }
+    setup_fail("flip_to_bootstrap: no such object");
+}
 static int ins_kind(OmegaVcStore *st, const Spec *sp, int bootstrap) {
     B b = { 0, 0, 0 };
     encode(&b, sp);
     uint8_t id[32];
     omega_vc_compute_id(b.p, b.n, id);
-    int rc = bootstrap ? omega_vcstore_insert_bootstrap(st, b.p, b.n, id) : omega_vcstore_insert(st, b.p, b.n, id);
+    int rc = omega_vcstore_insert(st, b.p, b.n, id);
+    if (rc == 0 && bootstrap) flip_to_bootstrap(st, sp->sem);
     free(b.p);
     return rc;
 }
@@ -361,11 +375,30 @@ static void insert_checks(void) {
           rc == OMEGA_VCS_VCSTORE_IMMUTABLE_CONFLICT && g == 0 && memcmp(rec->vc_id, id, 32) == 0 &&
           memcmp(d1, d2, 32) == 0 && omega_vcstore_count(s) == 1);
     free(rec);
-    /* same bytes, other admission kind: also a conflict, never a silent relabel */
+    /* same bytes, other admission kind: also a conflict, never a silent relabel (the stored
+     * record is flipped to BOOTSTRAP, then the identical bytes are offered as VERIFIED) */
+    flip_to_bootstrap(s, sem);
     uint8_t kind = 0;
-    rc = omega_vcstore_insert_bootstrap(s, b.p, b.n, id);
+    rc = omega_vcstore_insert(s, b.p, b.n, id);
     int g2 = omega_vcstore_admission_kind(s, sem, &kind);
-    check("kind-switch-refused", rc == OMEGA_VCS_VCSTORE_IMMUTABLE_CONFLICT && g2 == 0 && kind == OMEGA_VCS_ADMISSION_VERIFIED);
+    check("kind-switch-refused", rc == OMEGA_VCS_VCSTORE_IMMUTABLE_CONFLICT && g2 == 0 && kind == OMEGA_VCS_ADMISSION_BOOTSTRAP);
+    free_store(s);
+
+    /* VC-GENESIS-1 gate: a BOOTSTRAP record whose id is not on the list is refused with its own
+     * code and leaves the store untouched; the list is the only thing that decides */
+    s = new_store();
+    uint8_t g0[32]; dig(s, g0);
+    uint8_t ug[32]; mkid(ug, 0x12);
+    Spec spg; spec_default(&spg, ug);
+    B bg = { 0, 0, 0 };
+    encode(&bg, &spg);
+    uint8_t gid[32]; omega_vc_compute_id(bg.p, bg.n, gid);
+    int rg = omega_vcstore_insert_bootstrap(s, bg.p, bg.n, gid), rv = omega_vcstore_insert(s, bg.p, bg.n, gid);
+    uint8_t g1[32]; dig(s, g1);
+    check("insert-bootstrap-unlisted-refused",
+          !omega_genesis_contains(ug) && rg == OMEGA_VCS_GENESIS_NOT_LISTED && strcmp(omega_vcstore_code_name(rg), "GENESIS_NOT_LISTED") == 0 &&
+          rv == 0 && omega_vcstore_count(s) == 1 && memcmp(g0, g1, 32) != 0);
+    free(bg.p);
     free_store(s);
 
     /* receipt_of: the record's receipt_id, nothing else; absent id is refused */
@@ -629,7 +662,7 @@ static void digest_checks(void) {
     /* reference digest equals the library digest (verified and bootstrap mixed) */
     OmegaVcStore *s = new_store();
     uint8_t dD[1][32], dR[2][32]; memcpy(dD[0], D, 32); memcpy(dR[0], Bn, 32); memcpy(dR[1], C, 32);
-    int rc = node_kind(s, D, NULL, 0, 1);
+    int rc = node_kind(s, D, NULL, 0, 1);   /* D is flipped to BOOTSTRAP (see flip_to_bootstrap) */
     rc |= node(s, Bn, dD, 1); rc |= node(s, C, dD, 1); rc |= node(s, R, dR, 2);
     if (rc) setup_fail("digest store");
     FObj objs[4]; Spec sp; B enc[4] = { {0,0,0}, {0,0,0}, {0,0,0}, {0,0,0} };
@@ -665,7 +698,7 @@ static void digest_checks(void) {
     int rv = node_kind(v, D, NULL, 0, 0), rb = node_kind(bo, D, NULL, 0, 1);
     uint8_t kv = 0, kb = 0;
     omega_vcstore_admission_kind(v, D, &kv); omega_vcstore_admission_kind(bo, D, &kb);
-    check("bootstrap-kind-recorded", rv == 0 && rb == 0 && kv == OMEGA_VCS_ADMISSION_VERIFIED && kb == OMEGA_VCS_ADMISSION_BOOTSTRAP);
+    check("bootstrap-kind-reported", rv == 0 && rb == 0 && kv == OMEGA_VCS_ADMISSION_VERIFIED && kb == OMEGA_VCS_ADMISSION_BOOTSTRAP);
     check("bootstrap-vs-verified-digest-differ", rv == 0 && rb == 0 && !same_digest(v, bo));
     free_store(v); free_store(bo);
 
@@ -749,7 +782,7 @@ static void persistence_checks(void) {
     OmegaVcStore *s = new_store();
     uint8_t dD[1][32]; memcpy(dD[0], D, 32);
     uint8_t dR[2][32]; memcpy(dR[0], Bn, 32); memcpy(dR[1], C, 32);
-    int rc = node_kind(s, D, NULL, 0, 1);
+    int rc = node(s, D, NULL, 0);
     rc |= node(s, Bn, dD, 1); rc |= node(s, C, dD, 1); rc |= node(s, R, dR, 2);
     rc |= omega_vcstore_name_bind(s, "root", R); rc |= omega_vcstore_name_bind(s, "leaf", D);
     if (rc) setup_fail("persist store");
@@ -770,7 +803,7 @@ static void persistence_checks(void) {
     int a5 = omega_vcstore_closure(t, R, cl, 4, &ncl);
     check("save-load-round-trip", sv == 0 && ld == 0 && omega_vcstore_count(t) == 4 && memcmp(o1, o2, 32) == 0 && memcmp(n1, n2, 32) == 0 &&
           a1 == 0 && a2 == 0 && memcmp(rc1, rc2, 32) == 0 && a3 == 0 && memcmp(res, R, 32) == 0 &&
-          a4 == 0 && kind == OMEGA_VCS_ADMISSION_BOOTSTRAP && a5 == 0 && ncl == 4 && memcmp(cl, D, 32) == 0);
+          a4 == 0 && kind == OMEGA_VCS_ADMISSION_VERIFIED && a5 == 0 && ncl == 4 && memcmp(cl, D, 32) == 0);
     free_store(t);
 
     size_t fn; uint8_t *file = slurp(g_path, &fn);
@@ -873,10 +906,16 @@ static void persistence_checks(void) {
       t = new_store(); int r = omega_vcstore_load(t, g_path2);
       check("load-name-unknown-id-refused", r == OMEGA_VCS_UNVERIFIED_DEPENDENCY); free_store(t); }
     /* and a valid hand-built file does load (the reference writer and the loader agree) */
-    { FObj o[2] = { { ba.p, ba.n, 1 }, { bb.p, bb.n, 2 } };
+    { FObj o[2] = { { ba.p, ba.n, 1 }, { bb.p, bb.n, 1 } };
       write_file(g_path2, o, 2, NULL, 0);
       t = new_store(); int r = omega_vcstore_load(t, g_path2);
       check("load-reference-written-file", r == 0 && omega_vcstore_count(t) == 2); free_store(t); }
+    /* a file that labels an unlisted record BOOTSTRAP is refused whole, and the target store keeps what it had */
+    { FObj o[2] = { { ba.p, ba.n, 1 }, { bb.p, bb.n, 2 } };
+      write_file(g_path2, o, 2, NULL, 0);
+      t = new_store(); node(t, other, NULL, 0); uint8_t t1[32], t2[32]; dig(t, t1);
+      int r = omega_vcstore_load(t, g_path2); dig(t, t2);
+      check("load-bootstrap-unlisted-refused", !omega_genesis_contains(other2) && r == OMEGA_VCS_GENESIS_NOT_LISTED && memcmp(t1, t2, 32) == 0 && omega_vcstore_count(t) == 1); free_store(t); }
     free(bx.p); free(by.p); free(byc.p); free(ba.p); free(bb.p);
 
     remove(g_path); remove(g_path2);

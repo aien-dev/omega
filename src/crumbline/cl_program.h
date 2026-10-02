@@ -18,6 +18,7 @@
 #include "cl_common.h"
 #include "omega_program.h"
 #include "omega_library.h"
+#include "omega_vc_bridge.h"
 
 #define CL_MAX_STEPS 24
 #define CL_BANK_MAX 96
@@ -91,6 +92,7 @@ void cl_bank_digest(const ClBank *bank, uint8_t out[CL_DIGEST_BYTES]);
 
 typedef struct {
     OmegaLibrary lib;                          /* the canonical semantic-object store */
+    OmegaVcBridge bridge;                      /* the Verified Crumb Store and receipts behind lib */
     ClSteps steps[OMEGA_LIB_MAX_PROGRAMS];     /* step chain of lib.entries[i] */
     uint8_t scope_bits[OMEGA_LIB_MAX_PROGRAMS]; /* widest input magnitude (bits) it was verified over */
     uint32_t op_ref[OMEGA_LIB_MAX_PROGRAMS];   /* sealed-side admission reference */
@@ -99,8 +101,10 @@ typedef struct {
 int cl_library_init(ClLearnerLibrary *l);
 void cl_library_destroy(ClLearnerLibrary *l);
 
-/* Build, verify (V0+V2 + differential) and insert via omega_library_insert.
- * The library receipt hash binds the admission reference and the program. */
+/* Build, verify (V0+V2 + differential), then admit through omega_vc_bridge_admit: the program
+ * enters the Verified Crumb Store through omega_resolve_admit with a (self-minted HOST_TEST)
+ * receipt, and the library entry carries that receipt id (ADR 0029 Decision 11). The evidence
+ * digest binds the admission reference and the program. */
 int cl_library_admit(ClLearnerLibrary *l, const ClSteps *steps, uint8_t scope_bits, uint32_t op_ref);
 
 /* Add every entry whose verified scope covers inputs of `input_bits` bits.
