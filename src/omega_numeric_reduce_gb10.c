@@ -473,7 +473,20 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
 #ifndef OMEGA_C3_PROTECT_OFF
     volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
     if ((drc_ = m16_native_wait_marker(hmarker2, 0x46464646u, 5000)) != 0) {
-        return GB10_FAIL_WAIT("marker2_wait", drc_, 5000, hmarker2, 0x46464646u);
+        /* E1 diagnostics only: record the failure as before (channel kept open), then keep the
+         * same submission alive and watch for a late second release before closing. The return
+         * code is unchanged. */
+        int fail_rc = gb10_devfail(__func__, "marker2_wait", &ctx, 0, drc_, errno, 5000, hmarker2, 0x46464646u, &t0);
+        int late_rc = m16_native_wait_marker(hmarker2, 0x46464646u, 595000);
+        uint32_t observed = *hmarker2;
+        fprintf(stderr,
+                "GB10_MARKER2_LATE probe_ms=595000 rc=%d exact=%u marker=0x%08x marker2=0x%08x sem=0x%08x "
+                "elapsed_ms=%.3f\n",
+                late_rc, (unsigned)(observed == 0x46464646u), (unsigned)*hmarker, (unsigned)observed,
+                (unsigned)*hsem, gb10_ms_since(&t0));
+        fflush(stderr);
+        m16_native_close(&ctx);
+        return fail_rc;
     }
 #endif
     /* The host marker can land before the last CTAs' stores are visible (seen

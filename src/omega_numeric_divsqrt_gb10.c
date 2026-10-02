@@ -1619,9 +1619,8 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
         return GB10_FAIL_WAIT("marker_wait", drc_, 600000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
     volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
-    if (m16_native_wait_marker(hmarker2, 0x46464646u, 600000) != 0) {
-        m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+    if ((drc_ = m16_native_wait_marker(hmarker2, 0x46464646u, 600000)) != 0) {
+        return GB10_FAIL_WAIT("marker2_wait", drc_, 600000, hmarker2, 0x46464646u);
     }
     /* The host marker can land before the last CTAs' stores are visible: the
      * first chip run (receipt 88930d2f...) read the 0x55 fill pattern for

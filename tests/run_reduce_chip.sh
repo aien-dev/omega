@@ -119,10 +119,11 @@ store_blob() {
     fi
     echo "$d"
 }
-BIN_SHA=""; LOG_SHA=""
+BIN_SHA=""; LOG_SHA=""; STDERR_SHA=""
 if [ -f "$BIN" ]; then BIN_SHA=$(store_blob "$BIN" bin) || exit 2; fi
 [ -z "$BIN_SHA_BUILT" ] || [ "$BIN_SHA" = "$BIN_SHA_BUILT" ] || FAIL_REASON="${FAIL_REASON:-binary changed between build and receipt}"
 if [ -f "$OUT/reduce.log" ]; then LOG_SHA=$(store_blob "$OUT/reduce.log" log) || exit 2; fi
+if [ -f "$OUT/reduce.stderr" ]; then STDERR_SHA=$(store_blob "$OUT/reduce.stderr" stderr) || exit 2; fi
 VERDICT=PASS; [ -n "$FAIL_REASON" ] && VERDICT=FAIL
 PARITY=$(grep '^RED_GB10_PARITY:' "$OUT/reduce.log" 2>/dev/null | head -1)
 PSUM=$(grep '^RED_GB10_PARITY_SUM:' "$OUT/reduce.log" 2>/dev/null | head -1)
@@ -133,11 +134,11 @@ TMP=$OUT/receipt.json
 jq -n --arg suite E1_REDUCE_GB10_PARITY --arg status "$VERDICT" --arg reason "$FAIL_REASON" \
     --arg run_id "$RUN_ID" --arg commit "$COMMIT" --arg physics "$PHEAD" --argjson clean_after "$CLEAN_AFTER" \
     --arg order "RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL" \
-    --arg bin "$BIN_SHA" --arg log "$LOG_SHA" --arg parity "$PARITY" --arg psum "$PSUM" --arg pmax "$PMAX" --arg pmin "$PMIN" --arg pmean "$PMEAN" --arg exit_status "$STATUS" \
+    --arg bin "$BIN_SHA" --arg log "$LOG_SHA" --arg stderr_sha "$STDERR_SHA" --arg parity "$PARITY" --arg psum "$PSUM" --arg pmax "$PMAX" --arg pmin "$PMIN" --arg pmean "$PMEAN" --arg exit_status "$STATUS" \
     --arg host "$(uname -n)" --arg kernel "$(uname -r)" \
     '{suite:$suite,status:$status,reason:$reason,run_id:$run_id,omega_commit:$commit,omega_clean_before:true,
       omega_clean_after:$clean_after,physics_commit:$physics,declared_order:$order,binary_sha256:$bin,
-      log_sha256:$log,exit_status:$exit_status,parity_line:$parity,
+      log_sha256:$log,stderr_sha256:$stderr_sha,exit_status:$exit_status,parity_line:$parity,
       ops:["SUM","MAX","MIN","MEAN"],parity_by_op:{SUM:$psum,MAX:$pmax,MIN:$pmin,MEAN:$pmean},
       chip_kernels:{SUM:"REDUCE_SUM (WP-C patch, SHFL.DOWN+FADD)",MAX:"reduce minmax patch SHFL.DOWN+FMNMX !PT",MIN:"reduce minmax patch SHFL.DOWN+FMNMX PT",MEAN:"chip SUM levels + chip DIV (omega_ds_gb10_run)"},
       mean_final_division:"GB10_DIV omega_ds_gb10_run(DIV, sum, u2f(n)); no host step",host:$host,kernel:$kernel}' > "$TMP" || die "receipt json (jq) failed, no receipt written"
