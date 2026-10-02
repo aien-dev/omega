@@ -1,0 +1,97 @@
+gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -fno-fast-math -pthread -Isrc -o build/test_omega_transc tests/test_omega_transc.c src/omega_numeric_transc.c src/sha256.c
+./build/test_omega_transc fast
+E1 WP-B transcendental CPU tier: mode fast, 8 threads, FPCR 0x0
+oracle self-checks: PASS
+special values: PASS
+SIGMOID  sampled    n=1063032 max_ulp=2 (bound 3) at x=0xbfff88c1 seq=0x3df4e941 cr=0x3df4e943  d0=1029210 d1=33760 d2=62 d3+=0 over=0  PASS
+SIGMOID  determinism: two runs bit-identical, sample digest 24fe262cffb66982
+TANH     sampled    n=1063032 max_ulp=1 (bound 3) at x=0xc02cfc3f seq=0xbf7db60e cr=0xbf7db60d  d0=1061126 d1=1906 d2=0 d3+=0 over=0  PASS
+TANH     determinism: two runs bit-identical, sample digest ee80488a4381620e
+RSQRT    sampled    n=1063032 max_ulp=0 (bound 0) at x=0x4cecdc15 seq=0x38bc30f4 cr=0x38bc30f4  d0=1063032 d1=0 d2=0 d3+=0 over=0  PASS
+RSQRT    determinism: two runs bit-identical, sample digest 129131a5c8e39fc2
+EXP2     sampled    n=1063032 max_ulp=1 (bound 2) at x=0x3fdd4eb5 seq=0x40542749 cr=0x4054274a  d0=1060548 d1=2484 d2=0 d3+=0 over=0  PASS
+EXP2     determinism: two runs bit-identical, sample digest 91522965d9d396cc
+LOG2     sampled    n=1063032 max_ulp=1 (bound 2) at x=0x3f566378 seq=0xbe83076a cr=0xbe83076b  d0=1062972 d1=60 d2=0 d3+=0 over=0  PASS
+LOG2     determinism: two runs bit-identical, sample digest 460faf7de2d209c1
+ERF      sampled    n=1063032 max_ulp=1 (bound 3) at x=0x002b5307 seq=0x0030e2e3 cr=0x0030e2e2  d0=1056930 d1=6102 d2=0 d3+=0 over=0  PASS
+ERF      determinism: two runs bit-identical, sample digest dec236880efde9fb
+SIN      sampled    n=1063032 max_ulp=1 (bound 2) at x=0xc96efccb seq=0x3f232560 cr=0x3f232561  d0=1061368 d1=1664 d2=0 d3+=0 over=0  PASS
+SIN      determinism: two runs bit-identical, sample digest f9777619c34efc1e
+COS      sampled    n=1063032 max_ulp=1 (bound 2) at x=0xc9a6ae74 seq=0x3effbee6 cr=0x3effbee7  d0=1061472 d1=1560 d2=0 d3+=0 over=0  PASS
+COS      determinism: two runs bit-identical, sample digest 92b289d745d10654
+GELU     sampled    n=1063032 max_ulp=2 (bound 3) at x=0xbf3504f3 seq=0xbe2d98fd cr=0xbe2d98fb  d0=1060329 d1=2702 d2=1 d3+=0 over=0  PASS
+GELU     determinism: two runs bit-identical, sample digest 7d296cb77bc48e85
+E1 WP-B verdict: PASS
+mutant 1 killed: FAIL: EXP2 sampled: 46954 inputs exceed the declared bound
+mutant 2 killed: FAIL: LOG2 sampled: 7777 inputs exceed the declared bound
+mutant 3 killed: FAIL: SIGMOID sampled: 15050 inputs exceed the declared bound
+mutant 4 killed: FAIL: TANH sampled: 4823 inputs exceed the declared bound
+mutant 5 killed: FAIL: RSQRT sampled: 138379 inputs exceed the declared bound
+mutant 6 killed: FAIL: ERF sampled: 3170 inputs exceed the declared bound
+mutant 7 killed: FAIL: ERF sampled: 1281 inputs exceed the declared bound
+mutant 8 killed: FAIL: SIN sampled: 24618 inputs exceed the declared bound
+mutant 9 killed: FAIL: SIN sampled: 31094 inputs exceed the declared bound
+mutant 10 killed: FAIL: GELU sampled: 57178 inputs exceed the declared bound
+test-numeric-transc: PASS (all 10 mutants killed)
+./build/test_omega_transc digest
+E1 WP-B transcendental CPU tier: mode digest, 8 threads, FPCR 0x0
+SIGMOID  full-domain digest b4e43cb75fb625314aa464a4b4cffd7bc398d75cb7a50ff23af786025af1886d
+SIGMOID  matches frozen digest
+TANH     full-domain digest 932c09ffe7f02125dc302bfe9c3666a4866b109627fd89cfca0827cf3b1e5daa
+TANH     matches frozen digest
+RSQRT    full-domain digest 454fc9d5fb2e640acc8ba48422c3ae5e61d17fcee8cec20091cfb4a044ec51e4
+RSQRT    matches frozen digest
+EXP2     full-domain digest 227cb65782077d8224121eca527f8beba5d9fc80648ee57c38895466a8345bd8
+EXP2     matches frozen digest
+LOG2     full-domain digest fdf21ee2f13fa4ffec0c5c5ea1af4e1650ff9dbd91b138a608a68b43670a07f3
+LOG2     matches frozen digest
+ERF      full-domain digest aef63f62db823726c45f88b6605263d614854595679edcb17c3a4492abc74aba
+ERF      matches frozen digest
+SIN      full-domain digest 9e4debc75f832121cea47e9fad2e008329ccc62b291c3b68e6f60bb3f908cddc
+SIN      matches frozen digest
+COS      full-domain digest 28d580ee2efe1256397cc8a3b2dcd4bfe397100a0f9663e1c010baa136dcceb3
+COS      matches frozen digest
+GELU     full-domain digest bda4da73a44f4b06cd1ebebe13dec56b91c7e87b826253380e922b3ba38689db
+GELU     matches frozen digest
+E1 WP-B verdict: PASS
+./build/test_omega_transc full
+E1 WP-B transcendental CPU tier: mode full, 8 threads, FPCR 0x0
+oracle self-checks: PASS
+special values: PASS
+SIGMOID  exhaustive n=4294967296 max_ulp=2 (bound 3) at x=0xbf8dc097 seq=0x3e7e4f0f cr=0x3e7e4f11  d0=4169482250 d1=125288299 d2=196747 d3+=0 over=0  PASS
+SIGMOID  determinism: two full passes bit-identical
+SIGMOID  full-domain digest b4e43cb75fb625314aa464a4b4cffd7bc398d75cb7a50ff23af786025af1886d
+SIGMOID  matches frozen digest
+TANH     exhaustive n=4294967296 max_ulp=2 (bound 3) at x=0xbf10f6d4 seq=0xbf033a88 cr=0xbf033a8a  d0=4288850464 d1=6116818 d2=14 d3+=0 over=0  PASS
+TANH     determinism: two full passes bit-identical
+TANH     full-domain digest 932c09ffe7f02125dc302bfe9c3666a4866b109627fd89cfca0827cf3b1e5daa
+TANH     matches frozen digest
+RSQRT    exhaustive n=4294967296 max_ulp=0 (bound 0) at x=0x00014000 seq=0x60a1e89b cr=0x60a1e89b  d0=4294967296 d1=0 d2=0 d3+=0 over=0  PASS
+RSQRT    determinism: two full passes bit-identical
+RSQRT    full-domain digest 454fc9d5fb2e640acc8ba48422c3ae5e61d17fcee8cec20091cfb4a044ec51e4
+RSQRT    matches frozen digest
+EXP2     exhaustive n=4294967296 max_ulp=1 (bound 2) at x=0x354fbf7f seq=0x3f800004 cr=0x3f800005  d0=4286213259 d1=8754037 d2=0 d3+=0 over=0  PASS
+EXP2     determinism: two full passes bit-identical
+EXP2     full-domain digest 227cb65782077d8224121eca527f8beba5d9fc80648ee57c38895466a8345bd8
+EXP2     matches frozen digest
+LOG2     exhaustive n=4294967296 max_ulp=1 (bound 2) at x=0x0005a977 seq=0xc3027faa cr=0xc3027fab  d0=4294770232 d1=197064 d2=0 d3+=0 over=0  PASS
+LOG2     determinism: two full passes bit-identical
+LOG2     full-domain digest fdf21ee2f13fa4ffec0c5c5ea1af4e1650ff9dbd91b138a608a68b43670a07f3
+LOG2     matches frozen digest
+ERF      exhaustive n=4294967296 max_ulp=2 (bound 3) at x=0x3f010508 seq=0x3f062468 cr=0x3f06246a  d0=4272049566 d1=22915440 d2=2290 d3+=0 over=0  PASS
+ERF      determinism: two full passes bit-identical
+ERF      full-domain digest aef63f62db823726c45f88b6605263d614854595679edcb17c3a4492abc74aba
+ERF      matches frozen digest
+SIN      exhaustive n=4294967296 max_ulp=1 (bound 2) at x=0x3a1285ff seq=0x3a1285fe cr=0x3a1285ff  d0=4288642844 d1=6324452 d2=0 d3+=0 over=0  PASS
+SIN      determinism: two full passes bit-identical
+SIN      full-domain digest 9e4debc75f832121cea47e9fad2e008329ccc62b291c3b68e6f60bb3f908cddc
+SIN      matches frozen digest
+COS      exhaustive n=4294967296 max_ulp=1 (bound 2) at x=0x3cfcfbff seq=0x3f7fe0c0 cr=0x3f7fe0c1  d0=4289285706 d1=5681590 d2=0 d3+=0 over=0  PASS
+COS      determinism: two full passes bit-identical
+COS      full-domain digest 28d580ee2efe1256397cc8a3b2dcd4bfe397100a0f9663e1c010baa136dcceb3
+COS      matches frozen digest
+GELU     exhaustive n=4294967296 max_ulp=2 (bound 3) at x=0xbf2e4066 seq=0xbe2ce2b2 cr=0xbe2ce2b0  d0=4285758481 d1=9206822 d2=1993 d3+=0 over=0  PASS
+GELU     determinism: two full passes bit-identical
+GELU     full-domain digest bda4da73a44f4b06cd1ebebe13dec56b91c7e87b826253380e922b3ba38689db
+GELU     matches frozen digest
+E1 WP-B verdict: PASS

@@ -1,0 +1,37 @@
+{
+  "suite": "E1_REDUCE_GB10_PARITY",
+  "status": "PASS",
+  "reason": "",
+  "run_id": "20261002T211720Z-fb36109d39bd.rcpLPw",
+  "omega_commit": "fb36109d39bdf0ad55d5b683643c9a4a7b19b0fc",
+  "omega_clean_before": true,
+  "omega_clean_after": true,
+  "physics_commit": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "declared_order": "RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL",
+  "binary_sha256": "c56eaa50f73717c8b9e3a4944aca2e77e37ea39ff832d44ede337e7d8f835128",
+  "log_sha256": "ef49dd062aa47df084edc2d47a983746b7c3d97b11229e9e328814d69da84751",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "exit_status": "0",
+  "parity_line": "RED_GB10_PARITY: PASS ops=SUM,MAX,MIN,MEAN cases=380 mismatches=0",
+  "ops": [
+    "SUM",
+    "MAX",
+    "MIN",
+    "MEAN"
+  ],
+  "parity_by_op": {
+    "SUM": "RED_GB10_PARITY_SUM: PASS op=SUM order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=97 launches=283 mismatches=0 chip_nan_bits=0x7fffffff ",
+    "MAX": "RED_GB10_PARITY_MAX: PASS op=MAX order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=94 launches=278 mismatches=0 chip_nan_bits=0x7fc00000 ",
+    "MIN": "RED_GB10_PARITY_MIN: PASS op=MIN order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=94 launches=278 mismatches=0 chip_nan_bits=0x7fc00000 ",
+    "MEAN": "RED_GB10_PARITY_MEAN: PASS op=MEAN order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=95 launches=280 mismatches=0 chip_nan_bits=0x7fc00000 final_division=GB10_DIV "
+  },
+  "chip_kernels": {
+    "SUM": "REDUCE_SUM (WP-C patch, SHFL.DOWN+FADD)",
+    "MAX": "reduce minmax patch SHFL.DOWN+FMNMX !PT",
+    "MIN": "reduce minmax patch SHFL.DOWN+FMNMX PT",
+    "MEAN": "chip SUM levels + chip DIV (omega_ds_gb10_run)"
+  },
+  "mean_final_division": "GB10_DIV omega_ds_gb10_run(DIV, sum, u2f(n)); no host step",
+  "host": "spark-b87b",
+  "kernel": "7.0.0-1019-nvidia"
+}

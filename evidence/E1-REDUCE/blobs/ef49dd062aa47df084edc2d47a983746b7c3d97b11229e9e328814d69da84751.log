@@ -1,0 +1,397 @@
+RED_RUN seed=0x9e3779b97f4a7c15 order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL
+RED_ORDER_DECLARED: PASS order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL 
+RED_EMPTY_IDENTITY_SPECIAL_VALUES: PASS
+RED_CPU_EQUALS_REFERENCE: PASS cases=3168 elements=28713455 mismatches=0 
+RED_INDEPENDENT_ORACLE: PASS cases=432 bad=0 
+RED_DIFFERENT_ORDER_CAUGHT: PASS sequential/reverse/flat mutants all differ on crafted inputs; random n=4097 sequential differs 45/50 
+RED_DETERMINISM: PASS n=1000003, 4 ops, two runs, two alignments, identical bits
+RED_CRAFTED_TABLE: PASS 14 vectors x 4 ops, hand-written bits on reference and CPU tiers, bad=0 
+RED_GB10_PRESUBMIT_CHECKS: PASS
+RED_GB10_MINMAX_PATCH: PASS patch accepted; mutants caught 30/30; host model of decoded words = reference 110/110
+RED_WRONG_PAD_CAUGHT: PASS
+RED_GB10_CASE op=SUM n=0 dist=cancel ref=0x00000000 gb10=0x00000000 launches=0 rc=0
+RED_GB10_CASE op=SUM n=0 dist=special ref=0x00000000 gb10=0x00000000 launches=0 rc=0
+RED_GB10_CASE op=SUM n=0 dist=subnormal ref=0x00000000 gb10=0x00000000 launches=0 rc=0
+RED_GB10_CASE op=SUM n=0 dist=bits ref=0x00000000 gb10=0x00000000 launches=0 rc=0
+RED_GB10_CASE op=SUM n=1 dist=cancel ref=0x4ca09e36 gb10=0x4ca09e36 launches=1 rc=0
+RED_GB10_CASE op=SUM n=1 dist=special ref=0xcde4928a gb10=0xcde4928a launches=1 rc=0
+RED_GB10_CASE op=SUM n=1 dist=subnormal ref=0x8076b92f gb10=0x8076b92f launches=1 rc=0
+RED_GB10_CASE op=SUM n=1 dist=bits ref=0x6c2bff9d gb10=0x6c2bff9d launches=1 rc=0
+RED_GB10_CASE op=SUM n=2 dist=cancel ref=0x4d3bef22 gb10=0x4d3bef22 launches=1 rc=0
+RED_GB10_CASE op=SUM n=2 dist=special ref=0x45b4f15c gb10=0x45b4f15c launches=1 rc=0
+RED_GB10_CASE op=SUM n=2 dist=subnormal ref=0x8009fd65 gb10=0x8009fd65 launches=1 rc=0
+RED_GB10_CASE op=SUM n=2 dist=bits ref=0xf533bdde gb10=0xf533bdde launches=1 rc=0
+RED_GB10_CASE op=SUM n=31 dist=cancel ref=0x4d6ce7ed gb10=0x4d6ce7ed launches=1 rc=0
+RED_GB10_CASE op=SUM n=31 dist=special ref=0x7fc00000 gb10=0x7fffffff launches=1 rc=0
+RED_GB10_CASE op=SUM n=31 dist=subnormal ref=0x00ddacf6 gb10=0x00ddacf6 launches=1 rc=0
+RED_GB10_CASE op=SUM n=31 dist=bits ref=0x7ffabc58 gb10=0x7fffffff launches=1 rc=0
+RED_GB10_CASE op=SUM n=32 dist=cancel ref=0x4d01f9e8 gb10=0x4d01f9e8 launches=1 rc=0
+RED_GB10_CASE op=SUM n=32 dist=special ref=0x7fe00001 gb10=0x7fffffff launches=1 rc=0
+RED_GB10_CASE op=SUM n=32 dist=subnormal ref=0x012bdc7d gb10=0x012bdc7d launches=1 rc=0
+RED_GB10_CASE op=SUM n=32 dist=bits ref=0xfdae938d gb10=0xfdae938d launches=1 rc=0
+RED_GB10_CASE op=SUM n=33 dist=cancel ref=0xcde565e2 gb10=0xcde565e2 launches=2 rc=0
+RED_GB10_CASE op=SUM n=33 dist=special ref=0x7fe00001 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=33 dist=subnormal ref=0x00161b41 gb10=0x00161b41 launches=2 rc=0
+RED_GB10_CASE op=SUM n=33 dist=bits ref=0xfe94958c gb10=0xfe94958c launches=2 rc=0
+RED_GB10_CASE op=SUM n=63 dist=cancel ref=0x4dc22ddf gb10=0x4dc22ddf launches=2 rc=0
+RED_GB10_CASE op=SUM n=63 dist=special ref=0x7fe00001 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=63 dist=subnormal ref=0x02252314 gb10=0x02252314 launches=2 rc=0
+RED_GB10_CASE op=SUM n=63 dist=bits ref=0x77f5de6b gb10=0x77f5de6b launches=2 rc=0
+RED_GB10_CASE op=SUM n=64 dist=cancel ref=0xce66be5a gb10=0xce66be5a launches=2 rc=0
+RED_GB10_CASE op=SUM n=64 dist=special ref=0x7fc00000 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=64 dist=subnormal ref=0x81032e34 gb10=0x81032e34 launches=2 rc=0
+RED_GB10_CASE op=SUM n=64 dist=bits ref=0xfffd404a gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=65 dist=cancel ref=0x4e09af89 gb10=0x4e09af89 launches=2 rc=0
+RED_GB10_CASE op=SUM n=65 dist=special ref=0xffc00123 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=65 dist=subnormal ref=0x00e4803c gb10=0x00e4803c launches=2 rc=0
+RED_GB10_CASE op=SUM n=65 dist=bits ref=0xfff0ef2f gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=97 dist=cancel ref=0x4dd97d1d gb10=0x4dd97d1d launches=2 rc=0
+RED_GB10_CASE op=SUM n=97 dist=special ref=0x7fc00000 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=97 dist=subnormal ref=0x01d1739a gb10=0x01d1739a launches=2 rc=0
+RED_GB10_CASE op=SUM n=97 dist=bits ref=0xfd7949b5 gb10=0xfd7949b5 launches=2 rc=0
+RED_GB10_CASE op=SUM n=1000 dist=cancel ref=0x4f1fa787 gb10=0x4f1fa787 launches=2 rc=0
+RED_GB10_CASE op=SUM n=1000 dist=special ref=0xffc00123 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=1000 dist=subnormal ref=0x0246cb88 gb10=0x0246cb88 launches=2 rc=0
+RED_GB10_CASE op=SUM n=1000 dist=bits ref=0xfff10240 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=1023 dist=cancel ref=0x4bc62b10 gb10=0x4bc62b10 launches=2 rc=0
+RED_GB10_CASE op=SUM n=1023 dist=special ref=0x7fc00000 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=1023 dist=subnormal ref=0x81cb6a30 gb10=0x81cb6a30 launches=2 rc=0
+RED_GB10_CASE op=SUM n=1023 dist=bits ref=0x7ff60620 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=1024 dist=cancel ref=0xcf05fde2 gb10=0xcf05fde2 launches=2 rc=0
+RED_GB10_CASE op=SUM n=1024 dist=special ref=0xffc00123 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=1024 dist=subnormal ref=0x8339ce37 gb10=0x8339ce37 launches=2 rc=0
+RED_GB10_CASE op=SUM n=1024 dist=bits ref=0xffdb7db1 gb10=0x7fffffff launches=2 rc=0
+RED_GB10_CASE op=SUM n=1025 dist=cancel ref=0xcda006c8 gb10=0xcda006c8 launches=3 rc=0
+RED_GB10_CASE op=SUM n=1025 dist=special ref=0xffc00123 gb10=0x7fffffff launches=3 rc=0
+RED_GB10_CASE op=SUM n=1025 dist=subnormal ref=0x823ad512 gb10=0x823ad512 launches=3 rc=0
+RED_GB10_CASE op=SUM n=1025 dist=bits ref=0x7fd00e03 gb10=0x7fffffff launches=3 rc=0
+RED_GB10_CASE op=SUM n=4097 dist=cancel ref=0x4f801ca2 gb10=0x4f801ca2 launches=3 rc=0
+RED_GB10_CASE op=SUM n=4097 dist=special ref=0x7fc00000 gb10=0x7fffffff launches=3 rc=0
+RED_GB10_CASE op=SUM n=4097 dist=subnormal ref=0x83693ccb gb10=0x83693ccb launches=3 rc=0
+RED_GB10_CASE op=SUM n=4097 dist=bits ref=0x7fce6ff5 gb10=0x7fffffff launches=3 rc=0
+RED_GB10_CASE op=SUM n=32768 dist=cancel ref=0xcf2385d6 gb10=0xcf2385d6 launches=3 rc=0
+RED_GB10_CASE op=SUM n=32768 dist=special ref=0x7fc00000 gb10=0x7fffffff launches=3 rc=0
+RED_GB10_CASE op=SUM n=32768 dist=subnormal ref=0x8356b5f4 gb10=0x8356b5f4 launches=3 rc=0
+RED_GB10_CASE op=SUM n=32768 dist=bits ref=0xffed8d13 gb10=0x7fffffff launches=3 rc=0
+RED_GB10_CASE op=SUM n=32769 dist=cancel ref=0x501b3d48 gb10=0x501b3d48 launches=4 rc=0
+RED_GB10_CASE op=SUM n=32769 dist=special ref=0xffc00123 gb10=0x7fffffff launches=4 rc=0
+RED_GB10_CASE op=SUM n=32769 dist=subnormal ref=0x839e1cc4 gb10=0x839e1cc4 launches=4 rc=0
+RED_GB10_CASE op=SUM n=32769 dist=bits ref=0x7fd2a55b gb10=0x7fffffff launches=4 rc=0
+RED_GB10_CASE op=SUM n=65536 dist=cancel ref=0xcf2e74aa gb10=0xcf2e74aa launches=4 rc=0
+RED_GB10_CASE op=SUM n=65536 dist=special ref=0x7fc00000 gb10=0x7fffffff launches=4 rc=0
+RED_GB10_CASE op=SUM n=65536 dist=subnormal ref=0x844d5a28 gb10=0x844d5a28 launches=4 rc=0
+RED_GB10_CASE op=SUM n=65536 dist=bits ref=0xffeb5957 gb10=0x7fffffff launches=4 rc=0
+RED_GB10_CASE op=SUM n=65537 dist=cancel ref=0xd00a9e6e gb10=0xd00a9e6e launches=5 rc=0
+RED_GB10_CASE op=SUM n=65537 dist=special ref=0xffc00123 gb10=0x7fffffff launches=5 rc=0
+RED_GB10_CASE op=SUM n=65537 dist=subnormal ref=0x8318da77 gb10=0x8318da77 launches=5 rc=0
+RED_GB10_CASE op=SUM n=65537 dist=bits ref=0x7fe20bb5 gb10=0x7fffffff launches=5 rc=0
+RED_GB10_CASE op=SUM n=1000003 dist=cancel ref=0x5208001c gb10=0x5208001c launches=19 rc=0
+RED_GB10_CASE op=SUM n=1000003 dist=special ref=0xffc00123 gb10=0x7fffffff launches=19 rc=0
+RED_GB10_CASE op=SUM n=1000000 dist=cancel ref=0x51ba799c gb10=0x51ba799c launches=19 rc=0
+RED_GB10_CASE op=SUM n=1000000 dist=special ref=0x7fc00000 gb10=0x7fffffff launches=19 rc=0
+RED_GB10_CASE op=MAX n=0 dist=cancel ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MAX n=0 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MAX n=0 dist=subnormal ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MAX n=0 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MAX n=1 dist=cancel ref=0x40e7e738 gb10=0x40e7e738 launches=1 rc=0
+RED_GB10_CASE op=MAX n=1 dist=special ref=0x3b33e6f6 gb10=0x3b33e6f6 launches=1 rc=0
+RED_GB10_CASE op=MAX n=1 dist=subnormal ref=0x8057fcbb gb10=0x8057fcbb launches=1 rc=0
+RED_GB10_CASE op=MAX n=1 dist=bits ref=0x19a61d82 gb10=0x19a61d82 launches=1 rc=0
+RED_GB10_CASE op=MAX n=2 dist=cancel ref=0x407abf9b gb10=0x407abf9b launches=1 rc=0
+RED_GB10_CASE op=MAX n=2 dist=special ref=0x489bf4bc gb10=0x489bf4bc launches=1 rc=0
+RED_GB10_CASE op=MAX n=2 dist=subnormal ref=0x005b2fcd gb10=0x005b2fcd launches=1 rc=0
+RED_GB10_CASE op=MAX n=2 dist=bits ref=0x1965cad2 gb10=0x1965cad2 launches=1 rc=0
+RED_GB10_CASE op=MAX n=31 dist=cancel ref=0x4ce6cac8 gb10=0x4ce6cac8 launches=1 rc=0
+RED_GB10_CASE op=MAX n=31 dist=special ref=0x7f7fffff gb10=0x7f7fffff launches=1 rc=0
+RED_GB10_CASE op=MAX n=31 dist=subnormal ref=0x00ea89c8 gb10=0x00ea89c8 launches=1 rc=0
+RED_GB10_CASE op=MAX n=31 dist=bits ref=0x7e20dfea gb10=0x7e20dfea launches=1 rc=0
+RED_GB10_CASE op=MAX n=32 dist=cancel ref=0x4d79bb45 gb10=0x4d79bb45 launches=1 rc=0
+RED_GB10_CASE op=MAX n=32 dist=special ref=0x7f800000 gb10=0x7f800000 launches=1 rc=0
+RED_GB10_CASE op=MAX n=32 dist=subnormal ref=0x008313bf gb10=0x008313bf launches=1 rc=0
+RED_GB10_CASE op=MAX n=32 dist=bits ref=0x781840d9 gb10=0x781840d9 launches=1 rc=0
+RED_GB10_CASE op=MAX n=33 dist=cancel ref=0x4ce85bfd gb10=0x4ce85bfd launches=2 rc=0
+RED_GB10_CASE op=MAX n=33 dist=special ref=0x4ea602fe gb10=0x4ea602fe launches=2 rc=0
+RED_GB10_CASE op=MAX n=33 dist=subnormal ref=0x00cfbb23 gb10=0x00cfbb23 launches=2 rc=0
+RED_GB10_CASE op=MAX n=33 dist=bits ref=0x7de70a71 gb10=0x7de70a71 launches=2 rc=0
+RED_GB10_CASE op=MAX n=63 dist=cancel ref=0x4d73a121 gb10=0x4d73a121 launches=2 rc=0
+RED_GB10_CASE op=MAX n=63 dist=special ref=0x7f800000 gb10=0x7f800000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=63 dist=subnormal ref=0x00fd1963 gb10=0x00fd1963 launches=2 rc=0
+RED_GB10_CASE op=MAX n=63 dist=bits ref=0x79e963cd gb10=0x79e963cd launches=2 rc=0
+RED_GB10_CASE op=MAX n=64 dist=cancel ref=0x4d78f70e gb10=0x4d78f70e launches=2 rc=0
+RED_GB10_CASE op=MAX n=64 dist=special ref=0x7f7fffff gb10=0x7f7fffff launches=2 rc=0
+RED_GB10_CASE op=MAX n=64 dist=subnormal ref=0x00e557f3 gb10=0x00e557f3 launches=2 rc=0
+RED_GB10_CASE op=MAX n=64 dist=bits ref=0x7e178b29 gb10=0x7e178b29 launches=2 rc=0
+RED_GB10_CASE op=MAX n=65 dist=cancel ref=0x4d7e537b gb10=0x4d7e537b launches=2 rc=0
+RED_GB10_CASE op=MAX n=65 dist=special ref=0x7f800000 gb10=0x7f800000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=65 dist=subnormal ref=0x00ff204b gb10=0x00ff204b launches=2 rc=0
+RED_GB10_CASE op=MAX n=65 dist=bits ref=0x7f7ecf79 gb10=0x7f7ecf79 launches=2 rc=0
+RED_GB10_CASE op=MAX n=97 dist=cancel ref=0x4d7ae322 gb10=0x4d7ae322 launches=2 rc=0
+RED_GB10_CASE op=MAX n=97 dist=special ref=0x7f800000 gb10=0x7f800000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=97 dist=subnormal ref=0x00efb81e gb10=0x00efb81e launches=2 rc=0
+RED_GB10_CASE op=MAX n=97 dist=bits ref=0x7ca57f4a gb10=0x7ca57f4a launches=2 rc=0
+RED_GB10_CASE op=MAX n=1000 dist=cancel ref=0x4d7fb85b gb10=0x4d7fb85b launches=2 rc=0
+RED_GB10_CASE op=MAX n=1000 dist=special ref=0x7f800000 gb10=0x7f800000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1000 dist=subnormal ref=0x00fe73fc gb10=0x00fe73fc launches=2 rc=0
+RED_GB10_CASE op=MAX n=1000 dist=bits ref=0x7f4d0abd gb10=0x7f4d0abd launches=2 rc=0
+RED_GB10_CASE op=MAX n=1023 dist=cancel ref=0x4d7f9388 gb10=0x4d7f9388 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1023 dist=special ref=0x7f800000 gb10=0x7f800000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1023 dist=subnormal ref=0x00fdb1f0 gb10=0x00fdb1f0 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1023 dist=bits ref=0x7f798609 gb10=0x7f798609 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1024 dist=cancel ref=0x4d7facb7 gb10=0x4d7facb7 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1024 dist=special ref=0x7f800000 gb10=0x7f800000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1024 dist=subnormal ref=0x00ff20e9 gb10=0x00ff20e9 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1024 dist=bits ref=0x7f3c091b gb10=0x7f3c091b launches=2 rc=0
+RED_GB10_CASE op=MAX n=1025 dist=cancel ref=0x4d7ffba1 gb10=0x4d7ffba1 launches=3 rc=0
+RED_GB10_CASE op=MAX n=1025 dist=special ref=0x7f800000 gb10=0x7f800000 launches=3 rc=0
+RED_GB10_CASE op=MAX n=1025 dist=subnormal ref=0x00ff3740 gb10=0x00ff3740 launches=3 rc=0
+RED_GB10_CASE op=MAX n=1025 dist=bits ref=0x7f68f988 gb10=0x7f68f988 launches=3 rc=0
+RED_GB10_CASE op=MAX n=4097 dist=cancel ref=0x4d7fd47e gb10=0x4d7fd47e launches=3 rc=0
+RED_GB10_CASE op=MAX n=4097 dist=special ref=0x7f800000 gb10=0x7f800000 launches=3 rc=0
+RED_GB10_CASE op=MAX n=4097 dist=subnormal ref=0x00fff828 gb10=0x00fff828 launches=3 rc=0
+RED_GB10_CASE op=MAX n=4097 dist=bits ref=0x7f6c4a0f gb10=0x7f6c4a0f launches=3 rc=0
+RED_GB10_CASE op=MAX n=32768 dist=cancel ref=0x4d7fee81 gb10=0x4d7fee81 launches=3 rc=0
+RED_GB10_CASE op=MAX n=32768 dist=special ref=0x7f800000 gb10=0x7f800000 launches=3 rc=0
+RED_GB10_CASE op=MAX n=32768 dist=subnormal ref=0x00ffeb99 gb10=0x00ffeb99 launches=3 rc=0
+RED_GB10_CASE op=MAX n=32768 dist=bits ref=0x7f7a04ee gb10=0x7f7a04ee launches=3 rc=0
+RED_GB10_CASE op=MAX n=32769 dist=cancel ref=0x4d7ff98c gb10=0x4d7ff98c launches=4 rc=0
+RED_GB10_CASE op=MAX n=32769 dist=special ref=0x7f800000 gb10=0x7f800000 launches=4 rc=0
+RED_GB10_CASE op=MAX n=32769 dist=subnormal ref=0x00ffef5d gb10=0x00ffef5d launches=4 rc=0
+RED_GB10_CASE op=MAX n=32769 dist=bits ref=0x7f7ebefe gb10=0x7f7ebefe launches=4 rc=0
+RED_GB10_CASE op=MAX n=65536 dist=cancel ref=0x4d7ffd91 gb10=0x4d7ffd91 launches=4 rc=0
+RED_GB10_CASE op=MAX n=65536 dist=special ref=0x7f800000 gb10=0x7f800000 launches=4 rc=0
+RED_GB10_CASE op=MAX n=65536 dist=subnormal ref=0x00ffff13 gb10=0x00ffff13 launches=4 rc=0
+RED_GB10_CASE op=MAX n=65536 dist=bits ref=0x7f7eb843 gb10=0x7f7eb843 launches=4 rc=0
+RED_GB10_CASE op=MAX n=65537 dist=cancel ref=0x4d7fff08 gb10=0x4d7fff08 launches=5 rc=0
+RED_GB10_CASE op=MAX n=65537 dist=special ref=0x7f800000 gb10=0x7f800000 launches=5 rc=0
+RED_GB10_CASE op=MAX n=65537 dist=subnormal ref=0x00fffce0 gb10=0x00fffce0 launches=5 rc=0
+RED_GB10_CASE op=MAX n=65537 dist=bits ref=0x7f7ff99f gb10=0x7f7ff99f launches=5 rc=0
+RED_GB10_CASE op=MAX n=1000003 dist=cancel ref=0x4d7fffd7 gb10=0x4d7fffd7 launches=19 rc=0
+RED_GB10_CASE op=MAX n=1000003 dist=special ref=0x7f800000 gb10=0x7f800000 launches=19 rc=0
+RED_GB10_CASE op=MAX n=1000000 dist=cancel ref=0x4d7fffdb gb10=0x4d7fffdb launches=19 rc=0
+RED_GB10_CASE op=MAX n=1000000 dist=special ref=0x7f800000 gb10=0x7f800000 launches=19 rc=0
+RED_GB10_CASE op=MIN n=0 dist=cancel ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MIN n=0 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MIN n=0 dist=subnormal ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MIN n=0 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MIN n=1 dist=cancel ref=0x4c1a8fda gb10=0x4c1a8fda launches=1 rc=0
+RED_GB10_CASE op=MIN n=1 dist=special ref=0x48fd0c45 gb10=0x48fd0c45 launches=1 rc=0
+RED_GB10_CASE op=MIN n=1 dist=subnormal ref=0x807c471d gb10=0x807c471d launches=1 rc=0
+RED_GB10_CASE op=MIN n=1 dist=bits ref=0xcfb5d8d3 gb10=0xcfb5d8d3 launches=1 rc=0
+RED_GB10_CASE op=MIN n=2 dist=cancel ref=0x3f82e7a2 gb10=0x3f82e7a2 launches=1 rc=0
+RED_GB10_CASE op=MIN n=2 dist=special ref=0x479722d6 gb10=0x479722d6 launches=1 rc=0
+RED_GB10_CASE op=MIN n=2 dist=subnormal ref=0x80df0121 gb10=0x80df0121 launches=1 rc=0
+RED_GB10_CASE op=MIN n=2 dist=bits ref=0xccfad763 gb10=0xccfad763 launches=1 rc=0
+RED_GB10_CASE op=MIN n=31 dist=cancel ref=0xcd3bc870 gb10=0xcd3bc870 launches=1 rc=0
+RED_GB10_CASE op=MIN n=31 dist=special ref=0xff800000 gb10=0xff800000 launches=1 rc=0
+RED_GB10_CASE op=MIN n=31 dist=subnormal ref=0x80fe1289 gb10=0x80fe1289 launches=1 rc=0
+RED_GB10_CASE op=MIN n=31 dist=bits ref=0xe929830c gb10=0xe929830c launches=1 rc=0
+RED_GB10_CASE op=MIN n=32 dist=cancel ref=0xcd309797 gb10=0xcd309797 launches=1 rc=0
+RED_GB10_CASE op=MIN n=32 dist=special ref=0xff800000 gb10=0xff800000 launches=1 rc=0
+RED_GB10_CASE op=MIN n=32 dist=subnormal ref=0x80e89bf3 gb10=0x80e89bf3 launches=1 rc=0
+RED_GB10_CASE op=MIN n=32 dist=bits ref=0xfd3eac85 gb10=0xfd3eac85 launches=1 rc=0
+RED_GB10_CASE op=MIN n=33 dist=cancel ref=0xcd31eb05 gb10=0xcd31eb05 launches=2 rc=0
+RED_GB10_CASE op=MIN n=33 dist=special ref=0xff800000 gb10=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=33 dist=subnormal ref=0x80dede39 gb10=0x80dede39 launches=2 rc=0
+RED_GB10_CASE op=MIN n=33 dist=bits ref=0xfcd66280 gb10=0xfcd66280 launches=2 rc=0
+RED_GB10_CASE op=MIN n=63 dist=cancel ref=0xcd3e6c31 gb10=0xcd3e6c31 launches=2 rc=0
+RED_GB10_CASE op=MIN n=63 dist=special ref=0xff7fffff gb10=0xff7fffff launches=2 rc=0
+RED_GB10_CASE op=MIN n=63 dist=subnormal ref=0x80f29eb7 gb10=0x80f29eb7 launches=2 rc=0
+RED_GB10_CASE op=MIN n=63 dist=bits ref=0xe8795d95 gb10=0xe8795d95 launches=2 rc=0
+RED_GB10_CASE op=MIN n=64 dist=cancel ref=0xcd7f7bc1 gb10=0xcd7f7bc1 launches=2 rc=0
+RED_GB10_CASE op=MIN n=64 dist=special ref=0xff800000 gb10=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=64 dist=subnormal ref=0x80f97e55 gb10=0x80f97e55 launches=2 rc=0
+RED_GB10_CASE op=MIN n=64 dist=bits ref=0xfd39ce55 gb10=0xfd39ce55 launches=2 rc=0
+RED_GB10_CASE op=MIN n=65 dist=cancel ref=0xcd796540 gb10=0xcd796540 launches=2 rc=0
+RED_GB10_CASE op=MIN n=65 dist=special ref=0xff800000 gb10=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=65 dist=subnormal ref=0x80fc1222 gb10=0x80fc1222 launches=2 rc=0
+RED_GB10_CASE op=MIN n=65 dist=bits ref=0xfd8cafea gb10=0xfd8cafea launches=2 rc=0
+RED_GB10_CASE op=MIN n=97 dist=cancel ref=0xcd7e048c gb10=0xcd7e048c launches=2 rc=0
+RED_GB10_CASE op=MIN n=97 dist=special ref=0xff7fffff gb10=0xff7fffff launches=2 rc=0
+RED_GB10_CASE op=MIN n=97 dist=subnormal ref=0x80bc25dc gb10=0x80bc25dc launches=2 rc=0
+RED_GB10_CASE op=MIN n=97 dist=bits ref=0xfe59a475 gb10=0xfe59a475 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1000 dist=cancel ref=0xcd7f7c1b gb10=0xcd7f7c1b launches=2 rc=0
+RED_GB10_CASE op=MIN n=1000 dist=special ref=0xff800000 gb10=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1000 dist=subnormal ref=0x80ff5790 gb10=0x80ff5790 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1000 dist=bits ref=0xff5eed56 gb10=0xff5eed56 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1023 dist=cancel ref=0xcd7e2d8e gb10=0xcd7e2d8e launches=2 rc=0
+RED_GB10_CASE op=MIN n=1023 dist=special ref=0xff800000 gb10=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1023 dist=subnormal ref=0x80ff61f2 gb10=0x80ff61f2 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1023 dist=bits ref=0xfedef4cf gb10=0xfedef4cf launches=2 rc=0
+RED_GB10_CASE op=MIN n=1024 dist=cancel ref=0xcd7f3995 gb10=0xcd7f3995 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1024 dist=special ref=0xff800000 gb10=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1024 dist=subnormal ref=0x80ffaaca gb10=0x80ffaaca launches=2 rc=0
+RED_GB10_CASE op=MIN n=1024 dist=bits ref=0xff43a7ee gb10=0xff43a7ee launches=2 rc=0
+RED_GB10_CASE op=MIN n=1025 dist=cancel ref=0xcd7e60b9 gb10=0xcd7e60b9 launches=3 rc=0
+RED_GB10_CASE op=MIN n=1025 dist=special ref=0xff800000 gb10=0xff800000 launches=3 rc=0
+RED_GB10_CASE op=MIN n=1025 dist=subnormal ref=0x80ffefab gb10=0x80ffefab launches=3 rc=0
+RED_GB10_CASE op=MIN n=1025 dist=bits ref=0xff6d402d gb10=0xff6d402d launches=3 rc=0
+RED_GB10_CASE op=MIN n=4097 dist=cancel ref=0xcd7fb7df gb10=0xcd7fb7df launches=3 rc=0
+RED_GB10_CASE op=MIN n=4097 dist=special ref=0xff800000 gb10=0xff800000 launches=3 rc=0
+RED_GB10_CASE op=MIN n=4097 dist=subnormal ref=0x80ff8a87 gb10=0x80ff8a87 launches=3 rc=0
+RED_GB10_CASE op=MIN n=4097 dist=bits ref=0xff77e800 gb10=0xff77e800 launches=3 rc=0
+RED_GB10_CASE op=MIN n=32768 dist=cancel ref=0xcd7ff3f6 gb10=0xcd7ff3f6 launches=3 rc=0
+RED_GB10_CASE op=MIN n=32768 dist=special ref=0xff800000 gb10=0xff800000 launches=3 rc=0
+RED_GB10_CASE op=MIN n=32768 dist=subnormal ref=0x80fff4f6 gb10=0x80fff4f6 launches=3 rc=0
+RED_GB10_CASE op=MIN n=32768 dist=bits ref=0xff7f35b4 gb10=0xff7f35b4 launches=3 rc=0
+RED_GB10_CASE op=MIN n=32769 dist=cancel ref=0xcd7ff4bd gb10=0xcd7ff4bd launches=4 rc=0
+RED_GB10_CASE op=MIN n=32769 dist=special ref=0xff800000 gb10=0xff800000 launches=4 rc=0
+RED_GB10_CASE op=MIN n=32769 dist=subnormal ref=0x80ffef9d gb10=0x80ffef9d launches=4 rc=0
+RED_GB10_CASE op=MIN n=32769 dist=bits ref=0xff7f666c gb10=0xff7f666c launches=4 rc=0
+RED_GB10_CASE op=MIN n=65536 dist=cancel ref=0xcd7ffecf gb10=0xcd7ffecf launches=4 rc=0
+RED_GB10_CASE op=MIN n=65536 dist=special ref=0xff800000 gb10=0xff800000 launches=4 rc=0
+RED_GB10_CASE op=MIN n=65536 dist=subnormal ref=0x80fff79a gb10=0x80fff79a launches=4 rc=0
+RED_GB10_CASE op=MIN n=65536 dist=bits ref=0xff7fdd1f gb10=0xff7fdd1f launches=4 rc=0
+RED_GB10_CASE op=MIN n=65537 dist=cancel ref=0xcd7ffe5d gb10=0xcd7ffe5d launches=5 rc=0
+RED_GB10_CASE op=MIN n=65537 dist=special ref=0xff800000 gb10=0xff800000 launches=5 rc=0
+RED_GB10_CASE op=MIN n=65537 dist=subnormal ref=0x80ffff5f gb10=0x80ffff5f launches=5 rc=0
+RED_GB10_CASE op=MIN n=65537 dist=bits ref=0xff7fbefe gb10=0xff7fbefe launches=5 rc=0
+RED_GB10_CASE op=MIN n=1000003 dist=cancel ref=0xcd7fff97 gb10=0xcd7fff97 launches=19 rc=0
+RED_GB10_CASE op=MIN n=1000003 dist=special ref=0xff800000 gb10=0xff800000 launches=19 rc=0
+RED_GB10_CASE op=MIN n=1000000 dist=cancel ref=0xcd7ffff2 gb10=0xcd7ffff2 launches=19 rc=0
+RED_GB10_CASE op=MIN n=1000000 dist=special ref=0xff800000 gb10=0xff800000 launches=19 rc=0
+RED_GB10_CASE op=MEAN n=0 dist=cancel ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MEAN n=0 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MEAN n=0 dist=subnormal ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MEAN n=0 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=0 rc=0
+RED_GB10_CASE op=MEAN n=1 dist=cancel ref=0xc09bdaa6 gb10=0xc09bdaa6 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=1 dist=special ref=0x42b28493 gb10=0x42b28493 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=1 dist=subnormal ref=0x8030a55a gb10=0x8030a55a launches=1 rc=0
+RED_GB10_CASE op=MEAN n=1 dist=bits ref=0x0a3ed290 gb10=0x0a3ed290 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=2 dist=cancel ref=0x4bdf2a64 gb10=0x4bdf2a64 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=2 dist=special ref=0xc4f39c24 gb10=0xc4f39c24 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=2 dist=subnormal ref=0x00266a44 gb10=0x00266a44 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=2 dist=bits ref=0xa58279ca gb10=0xa58279ca launches=1 rc=0
+RED_GB10_CASE op=MEAN n=31 dist=cancel ref=0x4a03cdc6 gb10=0x4a03cdc6 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=31 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=31 dist=subnormal ref=0x000a4422 gb10=0x000a4422 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=31 dist=bits ref=0xfc51d1b7 gb10=0xfc51d1b7 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=32 dist=cancel ref=0xc9703870 gb10=0xc9703870 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=32 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=32 dist=subnormal ref=0x801d1134 gb10=0x801d1134 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=32 dist=bits ref=0x741a7e86 gb10=0x741a7e86 launches=1 rc=0
+RED_GB10_CASE op=MEAN n=33 dist=cancel ref=0x4867c09d gb10=0x4867c09d launches=2 rc=0
+RED_GB10_CASE op=MEAN n=33 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=33 dist=subnormal ref=0x000d398e gb10=0x000d398e launches=2 rc=0
+RED_GB10_CASE op=MEAN n=33 dist=bits ref=0xf38b5ded gb10=0xf38b5ded launches=2 rc=0
+RED_GB10_CASE op=MEAN n=63 dist=cancel ref=0x4b155f3b gb10=0x4b155f3b launches=2 rc=0
+RED_GB10_CASE op=MEAN n=63 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=63 dist=subnormal ref=0x80161d8a gb10=0x80161d8a launches=2 rc=0
+RED_GB10_CASE op=MEAN n=63 dist=bits ref=0xfbb3f11a gb10=0xfbb3f11a launches=2 rc=0
+RED_GB10_CASE op=MEAN n=64 dist=cancel ref=0xc9cfa9bc gb10=0xc9cfa9bc launches=2 rc=0
+RED_GB10_CASE op=MEAN n=64 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=64 dist=subnormal ref=0x00133047 gb10=0x00133047 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=64 dist=bits ref=0xfb390b3a gb10=0xfb390b3a launches=2 rc=0
+RED_GB10_CASE op=MEAN n=65 dist=cancel ref=0x4a13b5b1 gb10=0x4a13b5b1 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=65 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=65 dist=subnormal ref=0x801254e1 gb10=0x801254e1 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=65 dist=bits ref=0xf702d561 gb10=0xf702d561 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=97 dist=cancel ref=0x4b100fb5 gb10=0x4b100fb5 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=97 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=97 dist=subnormal ref=0x800da115 gb10=0x800da115 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=97 dist=bits ref=0xfa4f8681 gb10=0xfa4f8681 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1000 dist=cancel ref=0xc997363b gb10=0xc997363b launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1000 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1000 dist=subnormal ref=0x8000cb42 gb10=0x8000cb42 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1000 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1023 dist=cancel ref=0x4a18781c gb10=0x4a18781c launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1023 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1023 dist=subnormal ref=0x00025cdc gb10=0x00025cdc launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1023 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1024 dist=cancel ref=0x49d714b6 gb10=0x49d714b6 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1024 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1024 dist=subnormal ref=0x0005600e gb10=0x0005600e launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1024 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1025 dist=cancel ref=0xca417ee8 gb10=0xca417ee8 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=1025 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=1025 dist=subnormal ref=0x80019443 gb10=0x80019443 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=1025 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=4097 dist=cancel ref=0xc90c03d6 gb10=0xc90c03d6 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=4097 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=4097 dist=subnormal ref=0x800149d5 gb10=0x800149d5 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=4097 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=32768 dist=cancel ref=0xc8382baf gb10=0xc8382baf launches=3 rc=0
+RED_GB10_CASE op=MEAN n=32768 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=32768 dist=subnormal ref=0x00008f77 gb10=0x00008f77 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=32768 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=32769 dist=cancel ref=0xc8027c2a gb10=0xc8027c2a launches=4 rc=0
+RED_GB10_CASE op=MEAN n=32769 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=4 rc=0
+RED_GB10_CASE op=MEAN n=32769 dist=subnormal ref=0x8000cdea gb10=0x8000cdea launches=4 rc=0
+RED_GB10_CASE op=MEAN n=32769 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=4 rc=0
+RED_GB10_CASE op=MEAN n=65536 dist=cancel ref=0x48895759 gb10=0x48895759 launches=4 rc=0
+RED_GB10_CASE op=MEAN n=65536 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=4 rc=0
+RED_GB10_CASE op=MEAN n=65536 dist=subnormal ref=0x80001825 gb10=0x80001825 launches=4 rc=0
+RED_GB10_CASE op=MEAN n=65536 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=4 rc=0
+RED_GB10_CASE op=MEAN n=65537 dist=cancel ref=0x48a509b2 gb10=0x48a509b2 launches=5 rc=0
+RED_GB10_CASE op=MEAN n=65537 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=5 rc=0
+RED_GB10_CASE op=MEAN n=65537 dist=subnormal ref=0x000040bd gb10=0x000040bd launches=5 rc=0
+RED_GB10_CASE op=MEAN n=65537 dist=bits ref=0x7fc00000 gb10=0x7fc00000 launches=5 rc=0
+RED_GB10_CASE op=MEAN n=1000003 dist=cancel ref=0x470ba483 gb10=0x470ba483 launches=19 rc=0
+RED_GB10_CASE op=MEAN n=1000003 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=19 rc=0
+RED_GB10_CASE op=MEAN n=1000000 dist=cancel ref=0xc6872928 gb10=0xc6872928 launches=19 rc=0
+RED_GB10_CASE op=MEAN n=1000000 dist=special ref=0x7fc00000 gb10=0x7fc00000 launches=19 rc=0
+RED_GB10_CASE op=SUM n=33 dist=crafted0 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=2 rc=0
+RED_GB10_CASE op=SUM n=65537 dist=crafted1 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=5 rc=0
+RED_GB10_CASE op=SUM n=1025 dist=crafted2 ref=0x00000000 gb10=0x00000000 want=0x00000000 launches=3 rc=0
+RED_GB10_CASE op=SUM n=1025 dist=crafted3 ref=0x00000000 gb10=0x00000000 want=0x00000000 launches=3 rc=0
+RED_GB10_CASE op=SUM n=40 dist=crafted4 ref=0x7f800000 gb10=0x7f800000 want=0x7f800000 launches=2 rc=0
+RED_GB10_CASE op=SUM n=40 dist=crafted5 ref=0x7fc00000 gb10=0x7fffffff want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=SUM n=40 dist=crafted6 ref=0xff800000 gb10=0xff800000 want=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=SUM n=100 dist=crafted7 ref=0x00000064 gb10=0x00000064 want=0x00000064 launches=2 rc=0
+RED_GB10_CASE op=SUM n=100 dist=crafted8 ref=0x00000061 gb10=0x00000061 want=0x00000061 launches=2 rc=0
+RED_GB10_CASE op=SUM n=33 dist=crafted9 ref=0x7fc00000 gb10=0x7fffffff want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=SUM n=1025 dist=crafted10 ref=0x7fc00000 gb10=0x7fffffff want=0x7fc00000 launches=3 rc=0
+RED_GB10_CASE op=SUM n=33 dist=crafted11 ref=0x7fe00001 gb10=0x7fffffff want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=SUM n=65 dist=crafted12 ref=0xffc00123 gb10=0x7fffffff want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=SUM n=1024 dist=crafted13 ref=0x00000000 gb10=0x00000000 want=0x00000000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=33 dist=crafted0 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=65537 dist=crafted1 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=5 rc=0
+RED_GB10_CASE op=MAX n=1025 dist=crafted2 ref=0x00000000 gb10=0x00000000 want=0x00000000 launches=3 rc=0
+RED_GB10_CASE op=MAX n=1025 dist=crafted3 ref=0x00000000 gb10=0x00000000 want=0x00000000 launches=3 rc=0
+RED_GB10_CASE op=MAX n=40 dist=crafted4 ref=0x7f7fffff gb10=0x7f7fffff want=0x7f7fffff launches=2 rc=0
+RED_GB10_CASE op=MAX n=40 dist=crafted5 ref=0x7f800000 gb10=0x7f800000 want=0x7f800000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=40 dist=crafted6 ref=0x3f800000 gb10=0x3f800000 want=0x3f800000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=100 dist=crafted7 ref=0x00000001 gb10=0x00000001 want=0x00000001 launches=2 rc=0
+RED_GB10_CASE op=MAX n=100 dist=crafted8 ref=0x00000001 gb10=0x00000001 want=0x00000001 launches=2 rc=0
+RED_GB10_CASE op=MAX n=33 dist=crafted9 ref=0x7fc00000 gb10=0x7fffffff want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1025 dist=crafted10 ref=0x40a00000 gb10=0x40a00000 want=0x40a00000 launches=3 rc=0
+RED_GB10_CASE op=MAX n=33 dist=crafted11 ref=0xc0400000 gb10=0xc0400000 want=0xc0400000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=65 dist=crafted12 ref=0xff800000 gb10=0xff800000 want=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MAX n=1024 dist=crafted13 ref=0x7f7fffff gb10=0x7f7fffff want=0x7f7fffff launches=2 rc=0
+RED_GB10_CASE op=MIN n=33 dist=crafted0 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=65537 dist=crafted1 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=5 rc=0
+RED_GB10_CASE op=MIN n=1025 dist=crafted2 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=3 rc=0
+RED_GB10_CASE op=MIN n=1025 dist=crafted3 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=3 rc=0
+RED_GB10_CASE op=MIN n=40 dist=crafted4 ref=0x7f7fffff gb10=0x7f7fffff want=0x7f7fffff launches=2 rc=0
+RED_GB10_CASE op=MIN n=40 dist=crafted5 ref=0xff800000 gb10=0xff800000 want=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=40 dist=crafted6 ref=0xff800000 gb10=0xff800000 want=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=100 dist=crafted7 ref=0x00000001 gb10=0x00000001 want=0x00000001 launches=2 rc=0
+RED_GB10_CASE op=MIN n=100 dist=crafted8 ref=0x80000002 gb10=0x80000002 want=0x80000002 launches=2 rc=0
+RED_GB10_CASE op=MIN n=33 dist=crafted9 ref=0x7fc00000 gb10=0x7fffffff want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1025 dist=crafted10 ref=0x40a00000 gb10=0x40a00000 want=0x40a00000 launches=3 rc=0
+RED_GB10_CASE op=MIN n=33 dist=crafted11 ref=0xc0400000 gb10=0xc0400000 want=0xc0400000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=65 dist=crafted12 ref=0xff800000 gb10=0xff800000 want=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MIN n=1024 dist=crafted13 ref=0xff7fffff gb10=0xff7fffff want=0xff7fffff launches=2 rc=0
+RED_GB10_CASE op=MEAN n=33 dist=crafted0 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=65537 dist=crafted1 ref=0x80000000 gb10=0x80000000 want=0x80000000 launches=5 rc=0
+RED_GB10_CASE op=MEAN n=1025 dist=crafted2 ref=0x00000000 gb10=0x00000000 want=0x00000000 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=1025 dist=crafted3 ref=0x00000000 gb10=0x00000000 want=0x00000000 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=40 dist=crafted4 ref=0x7f800000 gb10=0x7f800000 want=0x7f800000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=40 dist=crafted5 ref=0x7fc00000 gb10=0x7fc00000 want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=40 dist=crafted6 ref=0xff800000 gb10=0xff800000 want=0xff800000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=100 dist=crafted7 ref=0x00000001 gb10=0x00000001 want=0x00000001 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=100 dist=crafted8 ref=0x00000001 gb10=0x00000001 want=0x00000001 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=33 dist=crafted9 ref=0x7fc00000 gb10=0x7fc00000 want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1025 dist=crafted10 ref=0x7fc00000 gb10=0x7fc00000 want=0x7fc00000 launches=3 rc=0
+RED_GB10_CASE op=MEAN n=33 dist=crafted11 ref=0x7fc00000 gb10=0x7fc00000 want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=65 dist=crafted12 ref=0x7fc00000 gb10=0x7fc00000 want=0x7fc00000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=1024 dist=crafted13 ref=0x00000000 gb10=0x00000000 want=0x00000000 launches=2 rc=0
+RED_GB10_CASE op=SUM n=33 dist=worked0 ref=0x4b800010 gb10=0x4b800010 want=0x4b800010 launches=2 rc=0
+RED_GB10_CASE op=SUM n=32 dist=worked1 ref=0x4b800001 gb10=0x4b800001 want=0x4b800001 launches=1 rc=0
+RED_GB10_CASE op=SUM n=64 dist=worked2 ref=0x4b800000 gb10=0x4b800000 want=0x4b800000 launches=2 rc=0
+RED_GB10_CASE op=MEAN n=33 dist=worked_mean ref=0x48f83e2f gb10=0x48f83e2f want=0x48f83e2f launches=2 rc=0
+RED_GB10_PARITY_SUM: PASS op=SUM order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=97 launches=283 mismatches=0 chip_nan_bits=0x7fffffff 
+RED_GB10_PARITY_MAX: PASS op=MAX order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=94 launches=278 mismatches=0 chip_nan_bits=0x7fc00000 
+RED_GB10_PARITY_MIN: PASS op=MIN order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=94 launches=278 mismatches=0 chip_nan_bits=0x7fc00000 
+RED_GB10_PARITY_MEAN: PASS op=MEAN order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=95 launches=280 mismatches=0 chip_nan_bits=0x7fc00000 final_division=GB10_DIV 
+RED_GB10_PARITY: PASS ops=SUM,MAX,MIN,MEAN cases=380 mismatches=0
+E1 Reduce Verdict: PASS

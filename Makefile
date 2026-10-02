@@ -166,6 +166,12 @@ test-m19r-qualify:
 test-gate14-combine:
 	tools/test_gate14_combine.sh
 
+# Host-only self-test of the E1 closure combiner (tools/e1_combine.sh): good
+# synthetic constituent set accepted, every hostile mutant refused. No GPU.
+.PHONY: test-e1-combine
+test-e1-combine:
+	tools/test_e1_combine.sh
+
 # Host-only self-test of the shared chip-run module (tools/chip_run.sh): every
 # refusal path with fake binaries. No GPU.
 .PHONY: test-chip-run

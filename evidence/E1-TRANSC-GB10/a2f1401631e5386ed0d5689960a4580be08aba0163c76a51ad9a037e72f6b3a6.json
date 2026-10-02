@@ -1,0 +1,118 @@
+{
+  "gate": "E1-TRANSC-GB10",
+  "row": "E1 gap table row 10: GB10 transcendentals bit-identical to the frozen CPU sequences",
+  "reference": "omega_math_<op> of src/omega_numeric_transc.c (CPU tier), every 32-bit input, bits compared exactly",
+  "omega_commit": "fb36109d39bdf0ad55d5b683643c9a4a7b19b0fc",
+  "omega_tree_clean_before": true,
+  "omega_tree_clean_after": true,
+  "omega_commit_unchanged_after": true,
+  "physics_commit": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "physics_lock_pin": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "physics_tree_clean_before": true,
+  "physics_tree_clean_after": true,
+  "physics_commit_unchanged_after": true,
+  "binary_sha256": "9cdea45899af90449d4be00ca8d396dffea48928ba9cb2c0f4c5492b19e1d37f",
+  "chip_log_sha256": "bb7531300676daedcb3c10c91a708daa0c7f16c669dc62bb8e2218f3dcddf636",
+  "kernels": [
+    {
+      "op": "EXP2",
+      "instructions": 72,
+      "sha256": "e72d5cbf556dce39c83ce7e76335a7eef7eda3ebccd36f250bdddb272db7474c"
+    },
+    {
+      "op": "LOG2",
+      "instructions": 576,
+      "sha256": "14e461ec628b685ea23d197c060f7d35a302c88e794934628eacd6098a44f394"
+    },
+    {
+      "op": "SIGMOID",
+      "instructions": 344,
+      "sha256": "8607f5659b4d42a57fdb4ba2f26427a28d8e6e1497f3daa8529ae5da1f629b70"
+    },
+    {
+      "op": "TANH",
+      "instructions": 352,
+      "sha256": "4edc065511340d58d26ed8ef7c1464341b279caccd7abc18b62d2a9880694494"
+    },
+    {
+      "op": "SIN",
+      "instructions": 120,
+      "sha256": "0fe5484675cca0667c95a286b65560f204013683aee4e9ad001dbcf1d78cfc10"
+    },
+    {
+      "op": "COS",
+      "instructions": 120,
+      "sha256": "ed7cde5ac1dd3ddccc1b78885a2227600cf1bc4a7d775f27cceb110ed37a2ac4"
+    },
+    {
+      "op": "ERF",
+      "instructions": 360,
+      "sha256": "db3a51ff06cc24dc749d98dbf91485f0ceb86ba2bfc8cc55e554f62e6f7edff5"
+    },
+    {
+      "op": "GELU",
+      "instructions": 424,
+      "sha256": "94992a5fdbe00a7943dac997d6a59ddd6096ac2fec35d4ff286b6552e8cea36d"
+    },
+    {
+      "op": "RSQRT",
+      "instructions": 344,
+      "sha256": "adb2864a0842a36fb9abf144d6654a69668506e2f8e98ac1c7ecb40ca4a1ff85"
+    }
+  ],
+  "nvdisasm_check": "nvdisasm: release 13.0, V13.0.85",
+  "host_tier": "SUMMARY passed=72 failed=0",
+  "ops_requested": [
+    "SIN",
+    "COS",
+    "ERF",
+    "GELU",
+    "RSQRT"
+  ],
+  "ops": [
+    {
+      "op": "SIN",
+      "checked": 4294967296,
+      "exhaustive": true,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "PASS"
+    },
+    {
+      "op": "COS",
+      "checked": 4294967296,
+      "exhaustive": true,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "PASS"
+    },
+    {
+      "op": "ERF",
+      "checked": 4294967296,
+      "exhaustive": true,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "PASS"
+    },
+    {
+      "op": "GELU",
+      "checked": 4294967296,
+      "exhaustive": true,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "PASS"
+    },
+    {
+      "op": "RSQRT",
+      "checked": 4294967296,
+      "exhaustive": true,
+      "mismatches": 0,
+      "unwritten": 0,
+      "verdict": "PASS"
+    }
+  ],
+  "chip_exit_status": 0,
+  "started_utc": "2026-10-02T21:23:05Z",
+  "finished_utc": "2026-10-02T21:26:59Z",
+  "verdict": "PASS"
+}

@@ -1,0 +1,43 @@
+omega fb36109d39bdf0ad55d5b683643c9a4a7b19b0fc physics e95e3ed2a86fe4bffe4d954fa94c27dfb5284280
+== host tier
+Gate LDST host: PASSED=33 FAILED=0
+VERDICT PASS_HOST
+== nvdisasm provenance
+nvdisasm: release 13.0, V13.0.85
+[PASS] ldst: 148 of 148 kernels decode, every word, to the encoder's text
+VERDICT PASS
+== chip build
+== chip run (not killed, not timed out)
+specs passed: 148
+VERDICT PASS
+log: /tmp/ldst-chip.DbIxwT/chip.log
+Gate 5 PASS: receipt digest 3b8f599518bd5f686a4b7b1ae97369f1f3930cc5734b76ac507d262c2a7a927f
+Permanent PASS receipt: /home/drakestapleton/workspace/evidence-out/OMEGA-NUMERIC-0/3b8f599518bd5f686a4b7b1ae97369f1f3930cc5734b76ac507d262c2a7a927f.json
+Gate 5 run evidence: /home/drakestapleton/workspace/hive/E1-SIMT-C3/omega/build/qual-runs/gate5-20261002T211707Z-fb8a41f881be/run.json
+receipt: /home/drakestapleton/workspace/evidence-out/E1-REDUCE/3faff6c5e763223d9b1388b2e9120000145b205e5d424d5995b54b50aa3c95b0.json status=PASS 
+omega commit: fb36109d39bdf0ad55d5b683643c9a4a7b19b0fc
+physics commit: e95e3ed2a86fe4bffe4d954fa94c27dfb5284280
+mutant binary sha256: fbaed6b58b6c8fa7f059292ef33a1910c5bf6c530ba9fda54abeb00e58a8317e
+binary exit status: 1
+log: /tmp/e1-mean-mutant.31tEhD/mutant.log
+log sha256: 6718c615bbea67ea135679606a020c8ce9474b2eacd7dbae560e1c1a8bc438c6
+stderr: /tmp/e1-mean-mutant.31tEhD/mutant.stderr
+evidence: /home/drakestapleton/workspace/evidence-out/E1-REDUCE-MUTANT/6718c615bbea67ea135679606a020c8ce9474b2eacd7dbae560e1c1a8bc438c6.log
+RED_GB10_PARITY_MEAN: FAIL op=MEAN order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=95 launches=280 mismatches=49 chip_nan_bits=0x7fc00000 final_division=GB10_DIV first: op=MEAN n=1 dist=cancel ref=0xc09bdaa6 gb10=0xc01bdaa6 rc=0
+RED_GB10_PARITY_SUM: PASS op=SUM order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=97 launches=283 mismatches=0 chip_nan_bits=0x7fffffff 
+RED_GB10_PARITY_MAX: PASS op=MAX order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=94 launches=278 mismatches=0 chip_nan_bits=0x7fc00000 
+RED_GB10_PARITY_MIN: PASS op=MIN order=RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL cases=94 launches=278 mismatches=0 chip_nan_bits=0x7fc00000 
+E1 MEAN MUTANT: KILLED
+[PASS] TG_RSQRT_HOST_MODEL_STRIDE_4093 (1049345 inputs)
+[PASS] TG_RSQRT_HOST_MODEL_RANDOM_1M
+SUMMARY passed=72 failed=0
+== chip build
+== chip run (not killed, not timed out): --chip SIN COS ERF GELU RSQRT
+RESULT chip SIN checked=4294967296 exhaustive=true mismatches=0 unwritten=0 verdict=PASS
+RESULT chip COS checked=4294967296 exhaustive=true mismatches=0 unwritten=0 verdict=PASS
+RESULT chip ERF checked=4294967296 exhaustive=true mismatches=0 unwritten=0 verdict=PASS
+RESULT chip GELU checked=4294967296 exhaustive=true mismatches=0 unwritten=0 verdict=PASS
+RESULT chip RSQRT checked=4294967296 exhaustive=true mismatches=0 unwritten=0 verdict=PASS
+VERDICT PASS
+RECEIPT /home/drakestapleton/workspace/evidence-out/E1-TRANSC-GB10/a2f1401631e5386ed0d5689960a4580be08aba0163c76a51ad9a037e72f6b3a6.json
+VERDICT PASS

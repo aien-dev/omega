@@ -1,0 +1,531 @@
+{
+  "schema": "AIEN_E1_EQUIVALENCE_MANIFEST_V1",
+  "candidate_git_commit": "fb36109d39bdf0ad55d5b683643c9a4a7b19b0fc",
+  "main_git_commit": "40d1ea378617403727f35868742dc4dd3d60515b",
+  "whole_tree_identical": false,
+  "files_equal": 70,
+  "files_differ": 1,
+  "chip_files_differ": 0,
+  "files": [
+    {
+      "path": "Makefile",
+      "class": "host",
+      "sha256_candidate": "ad0c784cf481897745fa2e4c530084fde8340a86d3236ffe6d2592694e7075e8",
+      "sha256_main": "30382492673ad079ecef32ccc2ff4b02219dfe5482cb6297f4078fceacabef55",
+      "equal": false
+    },
+    {
+      "path": "mk/numeric-lifecycle.mk",
+      "class": "host",
+      "sha256_candidate": "2bb47ccc20183179adaef5c336cbce6963e95db1ec095706106ee35895c12aa0",
+      "sha256_main": "2bb47ccc20183179adaef5c336cbce6963e95db1ec095706106ee35895c12aa0",
+      "equal": true
+    },
+    {
+      "path": "mk/numeric-slices.mk",
+      "class": "host",
+      "sha256_candidate": "2c9c34606fb138a08c64b4245b86df961849e421530b0e31598def83772f40e0",
+      "sha256_main": "2c9c34606fb138a08c64b4245b86df961849e421530b0e31598def83772f40e0",
+      "equal": true
+    },
+    {
+      "path": "mk/program-fp32.mk",
+      "class": "host",
+      "sha256_candidate": "0a349d93819502ab39618ad87a73f12b3bf9c449f1f47d04e78ffcef34fb90ac",
+      "sha256_main": "0a349d93819502ab39618ad87a73f12b3bf9c449f1f47d04e78ffcef34fb90ac",
+      "equal": true
+    },
+    {
+      "path": "physics.lock",
+      "class": "chip",
+      "sha256_candidate": "82dd4c53313e2ad837c483c51df358a814bd76a3c5cb7610b97baef230b144ad",
+      "sha256_main": "82dd4c53313e2ad837c483c51df358a814bd76a3c5cb7610b97baef230b144ad",
+      "equal": true
+    },
+    {
+      "path": "src/aegis_verification.c",
+      "class": "chip",
+      "sha256_candidate": "6599262e86bf1f909d6fc9b8ed7a6de099c93404694b0bfca15f098783502275",
+      "sha256_main": "6599262e86bf1f909d6fc9b8ed7a6de099c93404694b0bfca15f098783502275",
+      "equal": true
+    },
+    {
+      "path": "src/aegis_verification.h",
+      "class": "chip",
+      "sha256_candidate": "40cc8640f3d6059dfd3d69bcda8adcfdd494311ccdac02409a5d16e55de5595e",
+      "sha256_main": "40cc8640f3d6059dfd3d69bcda8adcfdd494311ccdac02409a5d16e55de5595e",
+      "equal": true
+    },
+    {
+      "path": "src/forge_realization.c",
+      "class": "chip",
+      "sha256_candidate": "7a5758ae3cfe61efd59a144730fd3108dabaab3c4be2c44fde79731ae841e798",
+      "sha256_main": "7a5758ae3cfe61efd59a144730fd3108dabaab3c4be2c44fde79731ae841e798",
+      "equal": true
+    },
+    {
+      "path": "src/forge_realization.h",
+      "class": "chip",
+      "sha256_candidate": "53934a32f8e321fb83500f27fb60c64e9a7c174cbeb35560dce52151d24389b7",
+      "sha256_main": "53934a32f8e321fb83500f27fb60c64e9a7c174cbeb35560dce52151d24389b7",
+      "equal": true
+    },
+    {
+      "path": "src/omega_blackwell_codegen.c",
+      "class": "chip",
+      "sha256_candidate": "683b3c57709eaa28ad4d16f1c8637022f8148cd97632baead471986eda4613c4",
+      "sha256_main": "683b3c57709eaa28ad4d16f1c8637022f8148cd97632baead471986eda4613c4",
+      "equal": true
+    },
+    {
+      "path": "src/omega_blackwell_codegen.h",
+      "class": "chip",
+      "sha256_candidate": "960e962dae8161b0e0768cb3f050c116c8515d8120789347fbddd227b49041c3",
+      "sha256_main": "960e962dae8161b0e0768cb3f050c116c8515d8120789347fbddd227b49041c3",
+      "equal": true
+    },
+    {
+      "path": "src/omega_blackwell_encoder.c",
+      "class": "chip",
+      "sha256_candidate": "07246381b752ca92cc2d027302a01cdf5eee7c12d5754ee368b42185f49bd784",
+      "sha256_main": "07246381b752ca92cc2d027302a01cdf5eee7c12d5754ee368b42185f49bd784",
+      "equal": true
+    },
+    {
+      "path": "src/omega_blackwell_encoder.h",
+      "class": "chip",
+      "sha256_candidate": "c1117f24d3a146ffb9ed9ece80ec6a5d248da64ca5a2f1aaed73b84133372f40",
+      "sha256_main": "c1117f24d3a146ffb9ed9ece80ec6a5d248da64ca5a2f1aaed73b84133372f40",
+      "equal": true
+    },
+    {
+      "path": "src/omega_blackwell_matmul.c",
+      "class": "chip",
+      "sha256_candidate": "353e48b29e4f0e1902d653b8494c5f124c4ba9cc681583df945881ce16d6ed67",
+      "sha256_main": "353e48b29e4f0e1902d653b8494c5f124c4ba9cc681583df945881ce16d6ed67",
+      "equal": true
+    },
+    {
+      "path": "src/omega_blackwell_matmul.h",
+      "class": "chip",
+      "sha256_candidate": "e524a6c845dfdf505e0967c197e2bde38a6d7414729c67e8f41faaa1c0b36fbd",
+      "sha256_main": "e524a6c845dfdf505e0967c197e2bde38a6d7414729c67e8f41faaa1c0b36fbd",
+      "equal": true
+    },
+    {
+      "path": "src/omega_blackwell_qmd.c",
+      "class": "chip",
+      "sha256_candidate": "6da0548556daa75008c10594fccd1de459f578b0b0306e217ce9cdb75cdf90ae",
+      "sha256_main": "6da0548556daa75008c10594fccd1de459f578b0b0306e217ce9cdb75cdf90ae",
+      "equal": true
+    },
+    {
+      "path": "src/omega_blackwell_qmd.h",
+      "class": "chip",
+      "sha256_candidate": "d9cbf0b5096f9505008823676879a4ee329a7f27d716785d25485f03906484ae",
+      "sha256_main": "d9cbf0b5096f9505008823676879a4ee329a7f27d716785d25485f03906484ae",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric.c",
+      "class": "chip",
+      "sha256_candidate": "1d8eb3584b9be300a83e11815c3dbb4f53c03614791a8980740d443defbca02f",
+      "sha256_main": "1d8eb3584b9be300a83e11815c3dbb4f53c03614791a8980740d443defbca02f",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_divsqrt_gb10.c",
+      "class": "chip",
+      "sha256_candidate": "a3c52923ce802e314bce46342137992de635fcc51418736d6c7a3de072823da7",
+      "sha256_main": "a3c52923ce802e314bce46342137992de635fcc51418736d6c7a3de072823da7",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_divsqrt_gb10.h",
+      "class": "chip",
+      "sha256_candidate": "25e577bd05e7953b820ce55a5f0a02dab21a490f947d3338930760038e31b08e",
+      "sha256_main": "25e577bd05e7953b820ce55a5f0a02dab21a490f947d3338930760038e31b08e",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_gb10.c",
+      "class": "chip",
+      "sha256_candidate": "ba894266724f52c6f9f409ae5d1b6221ecaa1f345862df672610cca7689ce39b",
+      "sha256_main": "ba894266724f52c6f9f409ae5d1b6221ecaa1f345862df672610cca7689ce39b",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric.h",
+      "class": "chip",
+      "sha256_candidate": "05a7512f26783f7204fb8b436b23ae05d0e03777a301c194b9581ce62682f8cc",
+      "sha256_main": "05a7512f26783f7204fb8b436b23ae05d0e03777a301c194b9581ce62682f8cc",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_ldst_gb10.c",
+      "class": "chip",
+      "sha256_candidate": "9c8c96cbbee957a51050e336c13c69b036e5190b825671a92ce34e6a77603edf",
+      "sha256_main": "9c8c96cbbee957a51050e336c13c69b036e5190b825671a92ce34e6a77603edf",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_ldst_gb10.h",
+      "class": "chip",
+      "sha256_candidate": "9078ee2cfe7e13905888bf4d9a8fb60b60ac143bf5e5e04832b326a093cc7bca",
+      "sha256_main": "9078ee2cfe7e13905888bf4d9a8fb60b60ac143bf5e5e04832b326a093cc7bca",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_lifecycle.h",
+      "class": "chip",
+      "sha256_candidate": "32675b59f17fdfe5e1ddd1db3518a3968ae9b34884002785733998ad216ba14d",
+      "sha256_main": "32675b59f17fdfe5e1ddd1db3518a3968ae9b34884002785733998ad216ba14d",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_native.h",
+      "class": "chip",
+      "sha256_candidate": "8da3e846cc82f01fd23b60eec80060109442da313f54d732ed7a2a4f0b39c9a5",
+      "sha256_main": "8da3e846cc82f01fd23b60eec80060109442da313f54d732ed7a2a4f0b39c9a5",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_provenance.c",
+      "class": "chip",
+      "sha256_candidate": "69806b7fc2d10c9eec30f3711ef36478d9259bc5e68f32261bf5a8243e58f9d4",
+      "sha256_main": "69806b7fc2d10c9eec30f3711ef36478d9259bc5e68f32261bf5a8243e58f9d4",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_provenance.h",
+      "class": "chip",
+      "sha256_candidate": "b9660cb955df007457c5163b7749b1476761e7d6f71cc428c072f541eade6694",
+      "sha256_main": "b9660cb955df007457c5163b7749b1476761e7d6f71cc428c072f541eade6694",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_reduce.c",
+      "class": "chip",
+      "sha256_candidate": "0022998e4686827b317d7484f769ff004f8985daec8e37bdd4bb7982f79a8d84",
+      "sha256_main": "0022998e4686827b317d7484f769ff004f8985daec8e37bdd4bb7982f79a8d84",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_reduce_gb10.c",
+      "class": "chip",
+      "sha256_candidate": "08596f274a94871d57110987af73db2aa4cffb60acb7479b460c77a58560032c",
+      "sha256_main": "08596f274a94871d57110987af73db2aa4cffb60acb7479b460c77a58560032c",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_reduce.h",
+      "class": "chip",
+      "sha256_candidate": "e1519286c6367af1b7a02110465619d188564f053ddd206282f392a5f882d4e8",
+      "sha256_main": "e1519286c6367af1b7a02110465619d188564f053ddd206282f392a5f882d4e8",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_transc.c",
+      "class": "chip",
+      "sha256_candidate": "c5d3878a43eb9982eafba4ce7756793c8b8972fa5b489f2a5e30d2a428b7908a",
+      "sha256_main": "c5d3878a43eb9982eafba4ce7756793c8b8972fa5b489f2a5e30d2a428b7908a",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_transc.h",
+      "class": "chip",
+      "sha256_candidate": "5ef4e432fe5f710df9571a1cd24e7b77cc75df0423dc8d696c287b7c951313a8",
+      "sha256_main": "5ef4e432fe5f710df9571a1cd24e7b77cc75df0423dc8d696c287b7c951313a8",
+      "equal": true
+    },
+    {
+      "path": "src/omega_numeric_transc_tables.h",
+      "class": "chip",
+      "sha256_candidate": "aa4221ea696cd83817f3beb41aefa861adc9d9d6d6ebb6128a592d35f4c2c85d",
+      "sha256_main": "aa4221ea696cd83817f3beb41aefa861adc9d9d6d6ebb6128a592d35f4c2c85d",
+      "equal": true
+    },
+    {
+      "path": "src/omega_program_fp32.c",
+      "class": "chip",
+      "sha256_candidate": "8f739cf22e76011bd185ef897218e51d1a9b4b245c99091beaa264df4ac2837e",
+      "sha256_main": "8f739cf22e76011bd185ef897218e51d1a9b4b245c99091beaa264df4ac2837e",
+      "equal": true
+    },
+    {
+      "path": "src/omega_program_fp32.h",
+      "class": "chip",
+      "sha256_candidate": "bee4deb5b9884c67c960113fa69f8b85794ca9419a8d7d6ef352a03bb8af785d",
+      "sha256_main": "bee4deb5b9884c67c960113fa69f8b85794ca9419a8d7d6ef352a03bb8af785d",
+      "equal": true
+    },
+    {
+      "path": "src/omega_unwritten_trap.c",
+      "class": "chip",
+      "sha256_candidate": "2edaf6d8e08d320b1729d76460aa82050bf505f2926a2217ab63591eed77e3f4",
+      "sha256_main": "2edaf6d8e08d320b1729d76460aa82050bf505f2926a2217ab63591eed77e3f4",
+      "equal": true
+    },
+    {
+      "path": "src/omega_unwritten_trap.h",
+      "class": "chip",
+      "sha256_candidate": "a42ea745a0bcf87c4c3c1384fe7b5c85bfa420f5479c2414f85c2c0ce5992627",
+      "sha256_main": "a42ea745a0bcf87c4c3c1384fe7b5c85bfa420f5479c2414f85c2c0ce5992627",
+      "equal": true
+    },
+    {
+      "path": "src/sha256.c",
+      "class": "chip",
+      "sha256_candidate": "84d418f4e2c663b74698fe94012040282bcfc2f263d2417adaa41a05bdbb86e4",
+      "sha256_main": "84d418f4e2c663b74698fe94012040282bcfc2f263d2417adaa41a05bdbb86e4",
+      "equal": true
+    },
+    {
+      "path": "src/sha256.h",
+      "class": "chip",
+      "sha256_candidate": "f4ae8b01061a4fa352c1013d649ee4045e98aef83ff4d586d7b11801d8365660",
+      "sha256_main": "f4ae8b01061a4fa352c1013d649ee4045e98aef83ff4d586d7b11801d8365660",
+      "equal": true
+    },
+    {
+      "path": "tests/chip_run_transc_receipt_allowlist.txt",
+      "class": "chip",
+      "sha256_candidate": "9bd61c41e433a0935e8a006aaaa29302a9c3680486dc9d36fdc5a3d0c6b4529e",
+      "sha256_main": "9bd61c41e433a0935e8a006aaaa29302a9c3680486dc9d36fdc5a3d0c6b4529e",
+      "equal": true
+    },
+    {
+      "path": "tests/numeric_native/.crumb",
+      "class": "chip",
+      "sha256_candidate": "b15692c656b0e1952ce730fb2e636ba7e763f10541dc35edcabc55e47046ec11",
+      "sha256_main": "b15692c656b0e1952ce730fb2e636ba7e763f10541dc35edcabc55e47046ec11",
+      "equal": true
+    },
+    {
+      "path": "tests/numeric_native/m16_native.h",
+      "class": "chip",
+      "sha256_candidate": "6d87ef7533205affc01f3d2d66a9d9ab70bd8a98cff5411a7a409136a246d59c",
+      "sha256_main": "6d87ef7533205affc01f3d2d66a9d9ab70bd8a98cff5411a7a409136a246d59c",
+      "equal": true
+    },
+    {
+      "path": "tests/numeric_native/mutants.sh",
+      "class": "chip",
+      "sha256_candidate": "2530fa676115555fdca9bb46c836f2ce5c5e1e7f1c618066fea85c849f3ef243",
+      "sha256_main": "2530fa676115555fdca9bb46c836f2ce5c5e1e7f1c618066fea85c849f3ef243",
+      "equal": true
+    },
+    {
+      "path": "tests/numeric_native/other_launcher.c",
+      "class": "chip",
+      "sha256_candidate": "3fb1f6d00681c0c024170777460e89dcfe68b44dcd780aede6ae0cf6e926b46e",
+      "sha256_main": "3fb1f6d00681c0c024170777460e89dcfe68b44dcd780aede6ae0cf6e926b46e",
+      "equal": true
+    },
+    {
+      "path": "tests/numeric_oracle.h",
+      "class": "chip",
+      "sha256_candidate": "f9d94e0b9e0d7931dd34f88316c7df34ca2a353b68b64d6c5c24e636a0d43f18",
+      "sha256_main": "f9d94e0b9e0d7931dd34f88316c7df34ca2a353b68b64d6c5c24e636a0d43f18",
+      "equal": true
+    },
+    {
+      "path": "tests/run_numeric_gates.sh",
+      "class": "chip",
+      "sha256_candidate": "b35815390a768930c766309874dd65bb3c5930fed8c071212e4b33aedb1a0ac1",
+      "sha256_main": "b35815390a768930c766309874dd65bb3c5930fed8c071212e4b33aedb1a0ac1",
+      "equal": true
+    },
+    {
+      "path": "tests/run_reduce_chip.sh",
+      "class": "chip",
+      "sha256_candidate": "dfdccfba68897e442211c3b9b7ca0b4705c80afca83e2f7a327b119a3aacb9fa",
+      "sha256_main": "dfdccfba68897e442211c3b9b7ca0b4705c80afca83e2f7a327b119a3aacb9fa",
+      "equal": true
+    },
+    {
+      "path": "tests/tensor_reduce_multi_tests.inc",
+      "class": "chip",
+      "sha256_candidate": "22861b1873e68226d729820f212efa490200e5fc8f77a28432204b6dd0a7807d",
+      "sha256_main": "22861b1873e68226d729820f212efa490200e5fc8f77a28432204b6dd0a7807d",
+      "equal": true
+    },
+    {
+      "path": "tests/test_chip_run.sh",
+      "class": "host",
+      "sha256_candidate": "71a26953defa521e41992a1226551e52ec649a0fff71dff8dbbaa8e9d26cbe56",
+      "sha256_main": "71a26953defa521e41992a1226551e52ec649a0fff71dff8dbbaa8e9d26cbe56",
+      "equal": true
+    },
+    {
+      "path": "tests/test_chip_run_transc_manifest.sh",
+      "class": "host",
+      "sha256_candidate": "09d51cc68a88055ce84ee4e7454d904f58409cafe234b688ce1316e13022bf25",
+      "sha256_main": "09d51cc68a88055ce84ee4e7454d904f58409cafe234b688ce1316e13022bf25",
+      "equal": true
+    },
+    {
+      "path": "tests/test_chip_run_trap_manifest.sh",
+      "class": "host",
+      "sha256_candidate": "1b7f8343e81635da9dd4f7fc722c43a852684b395fcc1cd1955dd864e2b1c82f",
+      "sha256_main": "1b7f8343e81635da9dd4f7fc722c43a852684b395fcc1cd1955dd864e2b1c82f",
+      "equal": true
+    },
+    {
+      "path": "tests/test_numeric_lifecycle.c",
+      "class": "host",
+      "sha256_candidate": "d2432f150f40949c610ab4671ea90d1b9a5f2587b4be0f40d1b4254f4f1d6ed2",
+      "sha256_main": "d2432f150f40949c610ab4671ea90d1b9a5f2587b4be0f40d1b4254f4f1d6ed2",
+      "equal": true
+    },
+    {
+      "path": "tests/test_omega_divsqrt_gb10.c",
+      "class": "chip",
+      "sha256_candidate": "52ec9af447f854eee63057e53650030f8d9ac9642c86f1f7c3559dbba25ddc1f",
+      "sha256_main": "52ec9af447f854eee63057e53650030f8d9ac9642c86f1f7c3559dbba25ddc1f",
+      "equal": true
+    },
+    {
+      "path": "tests/test_omega_ldst_gb10.c",
+      "class": "chip",
+      "sha256_candidate": "b192c02ad5cd85f91f7b78e734ad208503a0f1cb6cb917dcf4460eb691d5c80d",
+      "sha256_main": "b192c02ad5cd85f91f7b78e734ad208503a0f1cb6cb917dcf4460eb691d5c80d",
+      "equal": true
+    },
+    {
+      "path": "tests/test_omega_numeric.c",
+      "class": "chip",
+      "sha256_candidate": "22b16fb3cc1675803012839251081bbda4e005dc546a3c678eba275e9befe1fe",
+      "sha256_main": "22b16fb3cc1675803012839251081bbda4e005dc546a3c678eba275e9befe1fe",
+      "equal": true
+    },
+    {
+      "path": "tests/test_omega_numeric_transc_gb10.c",
+      "class": "chip",
+      "sha256_candidate": "ffceab4dbbf43ae803b20842dde03abae3bf0357f2cbd752aaa53bc6264cd246",
+      "sha256_main": "ffceab4dbbf43ae803b20842dde03abae3bf0357f2cbd752aaa53bc6264cd246",
+      "equal": true
+    },
+    {
+      "path": "tests/test_omega_reduce.c",
+      "class": "chip",
+      "sha256_candidate": "70916024ad1d7a339860ed920817f2e99ae4a32a8ab5ee15bcb506525b3c915f",
+      "sha256_main": "70916024ad1d7a339860ed920817f2e99ae4a32a8ab5ee15bcb506525b3c915f",
+      "equal": true
+    },
+    {
+      "path": "tests/test_omega_transc.c",
+      "class": "host",
+      "sha256_candidate": "5ace27861501261d31a2494c3f863eb93cb4a72fa0e5f9e6efcc04d479c15eb8",
+      "sha256_main": "5ace27861501261d31a2494c3f863eb93cb4a72fa0e5f9e6efcc04d479c15eb8",
+      "equal": true
+    },
+    {
+      "path": "tests/test_omega_unwritten_trap.c",
+      "class": "host",
+      "sha256_candidate": "73cd2c8ffc0f78a088b54aaaeadc601de71458679d5df40da6ff5f35ccb00872",
+      "sha256_main": "73cd2c8ffc0f78a088b54aaaeadc601de71458679d5df40da6ff5f35ccb00872",
+      "equal": true
+    },
+    {
+      "path": "tools/chip_run.sh",
+      "class": "chip",
+      "sha256_candidate": "618addd5a747fc96268da0ad04dc69191f093335d8284005ac8066096b0630c9",
+      "sha256_main": "618addd5a747fc96268da0ad04dc69191f093335d8284005ac8066096b0630c9",
+      "equal": true
+    },
+    {
+      "path": "tools/divsqrt_check_sweep.sh",
+      "class": "host",
+      "sha256_candidate": "21e3ef6efebf8f307d51e7b74b94bf229dd660d0b6d6e8284649b6a7e8cfa460",
+      "sha256_main": "21e3ef6efebf8f307d51e7b74b94bf229dd660d0b6d6e8284649b6a7e8cfa460",
+      "equal": true
+    },
+    {
+      "path": "tools/divsqrt_nvdisasm_check.sh",
+      "class": "chip",
+      "sha256_candidate": "486e8a1bb82751b5ef34b6a3137b72ade66db47152a9f18ec3315be6d40e11be",
+      "sha256_main": "486e8a1bb82751b5ef34b6a3137b72ade66db47152a9f18ec3315be6d40e11be",
+      "equal": true
+    },
+    {
+      "path": "tools/ldst_nvdisasm_check.sh",
+      "class": "chip",
+      "sha256_candidate": "d23633755e3ed9933a0707284ab4310476f3f1b8a1d88d00ddaea834558f3c49",
+      "sha256_main": "d23633755e3ed9933a0707284ab4310476f3f1b8a1d88d00ddaea834558f3c49",
+      "equal": true
+    },
+    {
+      "path": "tools/manifests/numeric_transc.chiprun",
+      "class": "chip",
+      "sha256_candidate": "ae7d1d7dc632c43420dab8f799fdc56e825df04476fce3ca859958543c6a903e",
+      "sha256_main": "ae7d1d7dc632c43420dab8f799fdc56e825df04476fce3ca859958543c6a903e",
+      "equal": true
+    },
+    {
+      "path": "tools/manifests/unwritten_trap.chiprun",
+      "class": "chip",
+      "sha256_candidate": "1f6f0f566fd6d18d569462a4a3629495825142641e1fcb84fea505bf9b748b0b",
+      "sha256_main": "1f6f0f566fd6d18d569462a4a3629495825142641e1fcb84fea505bf9b748b0b",
+      "equal": true
+    },
+    {
+      "path": "tools/numeric_check_sweep.sh",
+      "class": "host",
+      "sha256_candidate": "a3b028d9cad3d62b24567726fe2bd356c1c9b5aadc12594fab590498801cfb21",
+      "sha256_main": "a3b028d9cad3d62b24567726fe2bd356c1c9b5aadc12594fab590498801cfb21",
+      "equal": true
+    },
+    {
+      "path": "tools/run_divsqrt_gate.sh",
+      "class": "chip",
+      "sha256_candidate": "b6b7d2a6e417544d3ec71f7b454d675d3c468f057494e6bc3cad7a13783cb863",
+      "sha256_main": "b6b7d2a6e417544d3ec71f7b454d675d3c468f057494e6bc3cad7a13783cb863",
+      "equal": true
+    },
+    {
+      "path": "tools/run_numeric_ldst_chip.sh",
+      "class": "chip",
+      "sha256_candidate": "0ef56ccb9576b49c232d1b4f161a1b7e3b96df3e7aaf6d3d477f1664f69f0014",
+      "sha256_main": "0ef56ccb9576b49c232d1b4f161a1b7e3b96df3e7aaf6d3d477f1664f69f0014",
+      "equal": true
+    },
+    {
+      "path": "tools/run_numeric_transc_gate.sh",
+      "class": "chip",
+      "sha256_candidate": "79bbb8f22b4fbfba4ea22de8c3f7e2057a19ad49cd36e710e3daf36e1ba90fcc",
+      "sha256_main": "79bbb8f22b4fbfba4ea22de8c3f7e2057a19ad49cd36e710e3daf36e1ba90fcc",
+      "equal": true
+    },
+    {
+      "path": "tools/run_unwritten_trap.sh",
+      "class": "chip",
+      "sha256_candidate": "696c3e7e5aeebc2f2605fbf5058e2ba879a5f5daea18d7e7cfa7dfd372b2b83a",
+      "sha256_main": "696c3e7e5aeebc2f2605fbf5058e2ba879a5f5daea18d7e7cfa7dfd372b2b83a",
+      "equal": true
+    }
+  ],
+  "rebuilt_chip_binaries": [
+    {
+      "gate": "GATE5",
+      "build_line_of": "tests/run_numeric_gates.sh",
+      "sha256_main": "ac5a6bcac4148cba6b80052146926745d3c06688cb247705aa10b6479e747974"
+    },
+    {
+      "gate": "REDUCE",
+      "build_line_of": "tests/run_reduce_chip.sh",
+      "sha256_main": "c56eaa50f73717c8b9e3a4944aca2e77e37ea39ff832d44ede337e7d8f835128"
+    },
+    {
+      "gate": "LDST",
+      "build_line_of": "tools/run_numeric_ldst_chip.sh",
+      "sha256_main": "78df5ae39bd862d3a600d20ceac950f63d5b0e7465204441b37926c51b81dbdf"
+    },
+    {
+      "gate": "TRANSC",
+      "build_line_of": "tools/chip_run.sh+tools/manifests/numeric_transc.chiprun",
+      "sha256_main": "9cdea45899af90449d4be00ca8d396dffea48928ba9cb2c0f4c5492b19e1d37f"
+    }
+  ],
+  "timestamp_utc": "2026-10-02T22:05:15Z"
+}

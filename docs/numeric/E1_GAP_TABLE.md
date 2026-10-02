@@ -1,5 +1,7 @@
 # E1 Numerical Closure: Gap Table
 
+Status 2026-10-02: E1 CLOSED on the fb36109 chip campaign, receipt `evidence/E1-CLOSURE/e7851c69d34ac777a9436af16d0bdd5d69264c8528c62d562b600f5d89153061.json`; see the closure section at the end. Everything between here and there is dated history and is kept as written.
+
 Status: research note, 2026-09-30, read-only survey of `origin/main` at `529ebfa`; rows refreshed 2026-10-01 (see the status summary below).
 The 2026-10-01 rows were built and run; see the update section below.
 
@@ -11,7 +13,7 @@ Plan source: `aien-architecture/CURRENT_EXECUTION_PLAN.md`, section 8, "E1. Nume
 
 ## Status summary, 2026-10-01 (reconciled at omega `07004a8`)
 
-**E1 is NOT closed. Verdict: PARTIAL, 2 of 6 exit requirements met.** Rows 1 to 10 below were refreshed on
+**E1 is NOT closed. Verdict: PARTIAL, 2 of 6 exit requirements met.** (This was true on 2026-10-01. Superseded 2026-10-02: see "Closure, 2026-10-02" at the end of this file.) Rows 1 to 10 below were refreshed on
 this date; sections 1 and 4 and the "Existing evidence (file:line)" figures for rows 2 and 6 to 8 are the
 original 2026-09-30 survey and are kept as history. Merges: #124 `d3194f6`, #127 `7a5a13c`, #134 `c54d492`,
 #147 `2d8cd68`, #152 `07004a8` (all verified).
@@ -180,3 +182,63 @@ C3 hardening (branch `e1-gap-close`): the reduce launcher (`run_chunk`) and the 
 pre-fix pattern as `omega_ds_gb10_run` and now take its L2 flush plus second release marker, waited on before every readback (step
 `marker2_wait`). A/B script: `~/workspace/scripts/lt-e1-c3-ab.sh` (control arm `-DOMEGA_C3_PROTECT_OFF`, compiles out only the new
 reduce and ldst protection). Round 1 result: bug not reproduced / comparison inconclusive (round 1 complete, rounds 2-5 not started); record `docs/numeric/E1_C3_REDUCE_LDST_AB_ROUND1.md`. No claim is made that this fixes the observed rc=-4.
+
+## Closure, 2026-10-02 (campaign on omega `fb36109`, merged as `40d1ea37` by #225)
+
+**E1 numerical closure receipt: `evidence/E1-CLOSURE/e7851c69d34ac777a9436af16d0bdd5d69264c8528c62d562b600f5d89153061.json`** (schema
+`AIEN_E1_CLOSURE_V1`, written by `tools/e1_combine.sh`, self-test `make test-e1-combine`). The receipt binds, and
+refuses to exist unless every one of these holds; the chip ran on candidate `fb36109d39bdf0ad55d5b683643c9a4a7b19b0fc`
+with Physics `e95e3ed2a86fe4bffe4d954fa94c27dfb5284280` (the `physics.lock` pin), both trees clean. The receipt says
+`chip_ran_on: candidate`; it never says the chip ran on main.
+
+| Constituent | Evidence | Result |
+|---|---|---|
+| Gate 5 (OMEGA-NUMERIC-0) | `evidence/OMEGA-NUMERIC-0/3b8f599518bd5f686a4b7b1ae97369f1f3930cc5734b76ac507d262c2a7a927f.json` | PASS 26/26 tests, 47 GB10 parity lines (FADD..FFMA_V, 13 FSETP_*_SEL, conversions, DIV, SQRT, REDUCE_SUM), 0 mismatches, hardware descriptor `91684948...` |
+| Reductions on GB10 | `evidence/E1-REDUCE/3faff6c5e763223d9b1388b2e9120000145b205e5d424d5995b54b50aa3c95b0.json` | SUM, MAX, MIN, MEAN: 380 cases, 0 mismatches; the MEAN division runs on the GB10 DIV kernel (no host step) |
+| MEAN mutant | `evidence/E1-REDUCE-MUTANT/6718c615bbea67ea135679606a020c8ce9474b2eacd7dbae560e1c1a8bc438c6.log` | `-DOMEGA_REDUCE_MUTATE_MEAN_DIV` build: MEAN FAIL (95 of 95 mismatches), SUM/MAX/MIN PASS; campaign line `E1 MEAN MUTANT: KILLED` |
+| Transcendentals on GB10, new ops | `evidence/E1-TRANSC-GB10/a2f1401631e5386ed0d5689960a4580be08aba0163c76a51ad9a037e72f6b3a6.json` | SIN, COS, ERF, GELU, RSQRT: every one of the 2^32 inputs each, 0 mismatches, 0 unwritten, bit-identical to the CPU tier |
+| Transcendentals on GB10, earlier ops | `evidence/E1-TRANSC-GB10/96fbc78df41fb62244e9d16cd59531182f64a01fb8c5ef1e02c8dadb8be6f556.json` (omega `4863803`, #165) | EXP2, LOG2, SIGMOID, TANH: all 2^32 inputs each, 0 mismatches. Not rerun on `fb36109`; the combiner requires the four kernel digests in this receipt to equal the same four kernels listed in the `a2f14016...` receipt, so the words that ran then are the words the candidate carries |
+| General load/store on GB10 | `evidence/E1-SIMT-C3/20261002T211613Z/ldst/chip.log` (sha256 `d246700b...`) | 148 of 148 table kernels PASS on chip (1000 elements each, 0 mismatches, 0 unwritten); host oracle 33/33; nvdisasm 148/148 decode |
+| Campaign log | `evidence/E1-SIMT-C3/20261002T211613Z/campaign.log` (sha256 `0b3b8399...`) | five steps, `VERDICT PASS`, zero `GB10_COMPLETION_UNCERTAIN` |
+| Candidate = main equivalence | `evidence/E1-SIMT-C3/e1-equivalence-fb36109-40d1ea37.json` (`tools/e1_manifest.sh`) | 71 E1 files: 70 byte-identical, 1 differs (`Makefile`, host class; the squash merge picked up VC1 Makefile rules). Every chip-class file identical. The four chip binaries rebuilt from main with the gate scripts' own compiler lines equal the binaries named in the Gate 5, reduce and transc receipts byte for byte |
+| Host tier rerun on main | `evidence/E1-HOST-RERUN/e2206f44234f49dc741711f7d565c37addb65aa48833c2585e5d3f8afd9720cb.json` (`tools/e1_host_rerun.sh`) | the six host lines of the campaign (GB10 compile both arms, numeric host suites, program FP32/realize/id/visor, transcendental sampled+digest+full-domain, chip-run manifest tests, all-input host model of SIN/COS/ERF/GELU/RSQRT) PASS on `40d1ea37`, tracked tree clean before and after |
+
+Why the host rerun: the only file that differs between the qualified candidate and main is `Makefile`. A chip rerun on
+main would re-prove nothing the binaries do not already prove (they are byte-identical), but the host-class Makefile
+difference is covered by evidence, not by assertion.
+
+The six exit requirements of aien-architecture `CURRENT_EXECUTION_PLAN.md` section 8, E1, after this campaign:
+
+| Req | Subject | State 2026-10-02 | Evidence |
+|---|---|---|---|
+| 1 | General load/store | Met | LDST 148 chip specs PASS (row 2) |
+| 2 | Scalar FP32 ops | Met | Gate 5 `3b8f5995...` on the candidate; rebuilt-from-main binary identical |
+| 3 | Reductions incl. MAX/MIN/MEAN on GB10 | Met | reduce `3faff6c5...`, MEAN divides on the chip, mutant killed (row 5) |
+| 4 | Defined DIV and SQRT | Met | Gate 5 parity lines DIV and SQRT, 0 mismatches (rows 6, 7) |
+| 5 | Transcendentals, declared bounds (owner decision aien-architecture #76) | Met for the nine declared ops | EXP2, LOG2, SIGMOID, TANH, SIN, COS, ERF, GELU, RSQRT bit-identical CPU/GB10 over all 2^32 inputs each. These are bounded-parity sequences (declared ulp bounds against a binary128 oracle), not correctly rounded, except RSQRT, DIV and SQRT which are correctly rounded |
+| 6 | CPU/GB10 parity under frozen contracts | Met for every op that has a GB10 kernel | Gate 5 + the two transc receipts + reduce + LDST |
+
+**Verdict 2026-10-02: E1 campaign PASS; E1 is closed on the evidence set above, with the exclusions below recorded.**
+The 2026-10-01 summary ("NOT closed, 2 of 6") stands as history of that date.
+
+Exclusions and remaining work (recorded, not hidden):
+
+- EXP and LOG (natural base, the 40 ulp / 4 ulp bounded `OP_TABLE` sequences) have no GB10 kernel and are refused
+  on the GB10 path (`src/omega_numeric_gb10.c` header). EXP2 and LOG2 are on the chip. Nothing in the plan's six
+  bullets names natural-base EXP/LOG; if a consumer needs them on the chip, that is a new row.
+- Gate 5's expected-ID list was not extended with the transcendental ops (row 11 as written on 2026-10-01). Their
+  chip parity is established by the two `E1-TRANSC-GB10` receipts, not by Gate 5 parity lines.
+- Row 12 (FP32 in the program IR, `spec/program-fp32.md`) is merged and its tests ran in the host rerun
+  (`test-program-fp32`); the visor carrying FP32 values is not part of E1.
+- The C3 unwritten-output event is explained and fixed on this candidate (GPU-uncached completion marker page plus an
+  L2 flush and a second marker in all four launchers, #225); the campaign shows zero uncertain completions and zero
+  `OMEGA_DEVERR`. Older A/B records (`docs/numeric/E1_C3_REDUCE_LDST_AB_ROUND1.md`) stay as history.
+- Rows 2, 5, 10 and 11 of the "e1-gap-close" update tables above said "chip receipt pending" or "queued"; those
+  receipts are the ones in the constituent table. PR #198 (`e1-gap-close`, the same code before the C3 completion
+  hardening) is superseded by #225 and this receipt.
+
+Receipt naming: `tools/e1_combine.sh` writes `evidence/E1-CLOSURE/<receipt_digest>.json`, where `receipt_digest` is the
+SHA-256 of the canonical body without that field (`tools/json_canon.c`), the same rule as Gate 5 and Gate 14. The
+reduce, transc, host-rerun and mutant files are named for the SHA-256 of the file itself. Digests make alteration
+detectable; they are not signatures. To re-verify, run the combiner again on the same inputs with
+`E1_TIMESTAMP_UTC` set to the receipt's `timestamp_utc`: it must print the same digest.
