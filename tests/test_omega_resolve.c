@@ -722,6 +722,7 @@ static void t_refusals(void) {
     o = opt0(); o.dirty = 1;
     one_foo(&o, OMEGA_DOMAIN_BUILD, &r, &w);
     check("refuse-dirty-receipt-in-build", refused(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY));
+    check("refuse-dirty-receipt-in-build-says-dirty", refused_msg(&r, "UNVERIFIED_DEPENDENCY", OMEGA_RES_UNVERIFIED_DEPENDENCY, "dirty checkout"));
     run_free(&r); w_free(&w);
     one_foo(&o, OMEGA_DOMAIN_DEV, &r, &w);
     check("allow-dirty-receipt-in-dev", r.rc == 0);
@@ -1099,6 +1100,27 @@ static void t_admit(void) {
         rc = omega_resolve_admit(&r2, dst2.st, b, n, id, &m, &e);
         check("admit-accepts-record-from-build-origin", rc == 0 && omega_vcstore_count(dst2.st) == 1);
         free(b); w_free(&dst2); w_free(&dst); w_free(&src);
+    }
+    {   /* a dirty-checkout receipt is refused at admission in BUILD (#226); a clean receipt on the same fixture admits (control) */
+        W src, dst; Opt o = opt0(); o.dirty = 1;
+        w_init(&src); w_init(&dst);
+        add_comp(&src, 0x54, NULL, 0, &o);
+        uint8_t *b; size_t n; uint8_t id[32];
+        if (take(&src, 0x54, &b, &n, id)) setup_fail("take");
+        OmegaResolver r = resolver_of(&dst, &src.rt);
+        int rc = omega_resolve_admit(&r, dst.st, b, n, id, NULL, &e);
+        check("admit-refuses-dirty-receipt-in-build", rc == OMEGA_RES_UNVERIFIED_DEPENDENCY && omega_vcstore_count(dst.st) == 0 &&
+              strstr(e.message, "dirty checkout") != NULL);
+        Opt c = opt0();
+        W src2, dst2; w_init(&src2); w_init(&dst2);
+        add_comp(&src2, 0x54, NULL, 0, &c);
+        uint8_t *b2; size_t n2; uint8_t id2[32];
+        if (take(&src2, 0x54, &b2, &n2, id2)) setup_fail("take");
+        OmegaResolver r2 = resolver_of(&dst2, &src2.rt);
+        rc = omega_resolve_admit(&r2, dst2.st, b2, n2, id2, NULL, &e);
+        check("admit-accepts-clean-receipt-same-fixture", rc == 0 && omega_vcstore_count(dst2.st) == 1);
+        free(b2); w_free(&dst2); w_free(&src2);
+        free(b); w_free(&dst); w_free(&src);
     }
     {   /* a record carrying the dev taint capability never enters */
         W src, dst; Opt o = opt0(); o.taint = 1;
@@ -1643,6 +1665,7 @@ static const struct { const char *mutant, *check; } MUTANTS[] = {
     { "missing-receipt", "refuse-missing-receipt" },
     { "rule1-name", "refuse-receipt-file-holds-another-receipt" },
     { "rule-clean", "refuse-dirty-receipt-in-build" },
+    { "rule-clean-admit", "admit-refuses-dirty-receipt-in-build" },
     { "rule4-semantic", "refuse-receipt-does-not-name-program" },
     { "rule4-source", "refuse-stale-receipt" },
     { "rule3", "refuse-receipt-output-digest-is-not-evidence-root" },
