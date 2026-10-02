@@ -59,6 +59,7 @@ total=0
 # run_block ROWSFILE BUILDCMD TESTCMD: run the shared runner (marker reader,
 # baseline check on) and print one legacy "MUTATION <name>: ..." line per
 # mutant, in row order. Returns 3 if the unmutated baseline does not pass.
+# Sets fail=1 if the runner reported fewer or more verdict lines than rows.
 # Legacy notes that need no mapping beyond the verdict: KILLED note
 # "<N> failing case(s), first: ..." becomes "caught (<N> failing checks)",
 # "harness exit" (nonzero exit, no FAIL line) becomes "caught (0 failing
@@ -71,10 +72,11 @@ run_block() {
     if grep -q 'unmutated baseline does not pass' "$SCRATCH/rb.out"; then
         cat "$SCRATCH/rb.err"; return 3
     fi
+    rb_seen=0
     while IFS= read -r rb_l; do
         rb_id=${rb_l%% *}; rb_r=${rb_l#* }; rb_st=${rb_r%% *}
         rb_note=${rb_l#*\(}; rb_note=${rb_note%)}
-        total=$((total + 1))
+        total=$((total + 1)); rb_seen=$((rb_seen + 1))
         case $rb_st in
             KILLED)
                 rb_n=$(printf '%s\n' "$rb_note" | sed -n 's/^\([0-9][0-9]*\) failing case.*/\1/p')
@@ -88,6 +90,14 @@ run_block() {
                 fail=1 ;;
         esac
     done < "$SCRATCH/rb.err"
+    # The legacy sweep walked the rows itself, so a row could not be skipped.
+    # A runner that died, was killed or reported nothing must not pass silently:
+    # one verdict line per row is required.
+    rb_want=$(grep -c '|' "$rb_rows")
+    if [ "$rb_seen" -ne "$rb_want" ]; then
+        echo "MUTATION $rb_rows: runner reported $rb_seen verdicts for $rb_want rows (runner died or reported nothing)"
+        fail=1
+    fi
 }
 
 # Main block. Rows are name|file|sed expression; the file column is relative
