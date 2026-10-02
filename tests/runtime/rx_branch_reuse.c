@@ -47,6 +47,7 @@ static unsigned g_branches = 128, g_prefix = 512, g_diverge = 16;
 /* Branch k and k + g_choices take the same steps (96 of 128 by default). */
 static unsigned g_choices = 96;
 static int g_fail;
+static int g_energy_not_run; /* counters unreadable: energy leg not run, never a pass */
 
 #define CHECK(c, ...) do { if (!(c)) { g_fail++; printf("  FAIL: " __VA_ARGS__); printf("\n"); } } while (0)
 
@@ -675,8 +676,12 @@ int main(int argc, char **argv) {
         CHECK(o->beats_memory, "%s: shared realization did not use less memory", rz->name);
         CHECK(o->beats_compute, "%s: shared realization did not use less compute", rz->name);
         CHECK(o->beats_latency, "%s: shared realization was not faster", rz->name);
-        CHECK(o->beats_energy, "%s: energy not measured lower (counters %s)", rz->name,
-              I->energy_ok && S->energy_ok ? "ok" : "unavailable");
+        if (!(I->energy_ok && S->energy_ok)) {
+            /* Label only: memory, compute, latency and correctness stay hard checks. */
+            g_energy_not_run++;
+            printf("  NOT_RUN: %s: energy leg (counters unavailable)\n", rz->name);
+        } else
+            CHECK(o->beats_energy, "%s: energy not measured lower (counters ok)", rz->name);
 
         printf("  measured costs: derive %.1f us/unit, copy %.3f ns/B, compress %.3f ns/B (delta ratio %.3f),"
                " spill w/r %.3f/%.3f ns/B, retain %.3f ns/B\n",
@@ -747,7 +752,8 @@ int main(int argc, char **argv) {
     if (!omega_evidence_run_commit(commit)) strcpy(commit, "unknown");
     if (!omega_evidence_physics_commit(physics, sizeof physics)) strcpy(physics, "unknown");
     int dirty = omega_evidence_tree_dirty();
-    const char *gate = !pass ? "FAIL" : dirty ? "PASS_UNBOUND_DIRTY_TREE" : "PASS";
+    const char *gate = !pass ? "FAIL" : dirty ? "PASS_UNBOUND_DIRTY_TREE"
+                       : g_energy_not_run ? "PASS_ENERGY_NOT_RUN" : "PASS";
 
     strcpy(path, "(not written)");
     {
@@ -831,7 +837,7 @@ int main(int argc, char **argv) {
     }
     printf("\nrepresentation-independent identity: %s; all eight actions exercised: %s\n",
            rep_indep ? "yes" : "NO", all_actions ? "yes" : "NO");
-    if (pass && !dirty) printf("OMEGA_BRANCH_STATE_REUSE_PASS\n");
+    if (pass && !dirty && !g_energy_not_run) printf("OMEGA_BRANCH_STATE_REUSE_PASS\n");
     printf("gate: OMEGA_BRANCH_STATE_REUSE=%s\nreceipt: %s\n", gate, path);
     return pass ? 0 : 1;
 }
