@@ -311,6 +311,38 @@ static void gb10_note_slow(const char *step, const struct timespec *t0) {
     double ms = gb10_ms_since(t0);
     if (ms > 1000.0) fprintf(stderr, "GB10_SLOW_WAIT step=%s elapsed_ms=%.3f\n", step, ms);
 }
+/* Diagnostic probe for the E1 stall (default build: none of this exists; every wait cap stays the
+ * literal 600000 ms and marker_mem is a plain nvrm_alloc).
+ *   -DOMEGA_STALL_PROBE        one stderr line per launch: GB10_PROBE n= inner= marker_ms= marker2_ms= sem_ms=
+ *                              (ms from launch start to each wait success, -1 = not reached), a timeout
+ *                              prints GB10_PROBE_TIMEOUT with all three words; the wait cap becomes the
+ *                              env var OMEGA_PROBE_WAIT_MS (default 600000).
+ *   -DOMEGA_MARKER_UNCACHED    marker_mem is allocated with nvrm_alloc_gpu_uncached (not cached in GPU L2). */
+#ifdef OMEGA_STALL_PROBE
+static unsigned long gb10_probe_wait_ms(void) {
+    const char *e = getenv("OMEGA_PROBE_WAIT_MS");
+    if (e && *e) {
+        char *end = NULL;
+        unsigned long v = strtoul(e, &end, 10);
+        if (end && *end == 0 && v > 0) return v;
+    }
+    return 600000ul;
+}
+#define GB10_WAIT_MS gb10_probe_wait_ms()
+static void gb10_probe_timeout(const char *step, size_t count, const volatile uint32_t *m1, const volatile uint32_t *m2,
+                               const volatile uint32_t *sem, const struct timespec *t0) {
+    fprintf(stderr, "GB10_PROBE_TIMEOUT step=%s n=%zu inner=%u marker=0x%08x marker2=0x%08x sem=0x%08x elapsed_ms=%.3f\n",
+            step, count, g_last_launches + 1u, (unsigned)*m1, (unsigned)*m2, (unsigned)*sem, gb10_ms_since(t0));
+}
+#else
+#define GB10_WAIT_MS 600000
+#endif
+#ifdef OMEGA_MARKER_UNCACHED
+#define GB10_MARKER_ALLOC(rm_, size_, out_) nvrm_alloc_gpu_uncached((rm_), (size_), (out_))
+#else
+#define GB10_MARKER_ALLOC(rm_, size_, out_) nvrm_alloc((rm_), (size_), (out_))
+#endif
+
 /* Plain step: drv_rc is the value the call returned. */
 #define GB10_FAIL(step, close_, rc_) gb10_devfail(__func__, (step), &ctx, (close_), (rc_), errno, -1, NULL, 0u, &t0)
 /* Wait step: also log the wait value and the word read. */
@@ -338,7 +370,7 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     if (nvrm_alloc(&ctx.rm, 0x1000, &code_mem) != 0 || nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &a_mem) != 0 || nvrm_alloc(&ctx.rm, bytes, &b_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &c_mem) != 0 || nvrm_alloc(&ctx.rm, bytes, &out_mem) != 0 ||
-        nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0 || nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
+        GB10_MARKER_ALLOC(&ctx.rm, 0x1000, &marker_mem) != 0 || nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
         return GB10_FAIL("alloc_buffers", 1, -1);
     }
     memcpy(a_mem.cpu, in, count * sizeof(float));
@@ -470,24 +502,45 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
 #endif
 
     if ((drc_ = m16_native_submit_methods(&ctx, pb, pb_len)) != 0) return GB10_FAIL("submit", 1, drc_);
-    if ((drc_ = omega_numeric_native_wait(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) {
-        return GB10_FAIL_WAIT("marker_wait", drc_, 600000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
+#ifdef OMEGA_STALL_PROBE
+    volatile uint32_t *pmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
+    double probe_m1 = -1.0, probe_m2 = -1.0, probe_sem = -1.0;
+#define GB10_PROBE_TMO(step_) gb10_probe_timeout((step_), count, hmarker, pmarker2, hsem, &t0)
+#else
+#define GB10_PROBE_TMO(step_) ((void)0)
+#endif
+    if ((drc_ = omega_numeric_native_wait(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, GB10_WAIT_MS)) != 0) {
+        GB10_PROBE_TMO("marker_wait");
+        return GB10_FAIL_WAIT("marker_wait", drc_, GB10_WAIT_MS, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
     gb10_note_slow("marker", &t0);
+#ifdef OMEGA_STALL_PROBE
+    probe_m1 = gb10_ms_since(&t0);
+#endif
 #ifndef OMEGA_C3_PROTECT_OFF
     volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
-    if ((drc_ = omega_numeric_native_wait(hmarker2, 0x46464646u, 600000)) != 0) {
-        return GB10_FAIL_WAIT("marker2_wait", drc_, 600000, hmarker2, 0x46464646u);
+    if ((drc_ = omega_numeric_native_wait(hmarker2, 0x46464646u, GB10_WAIT_MS)) != 0) {
+        GB10_PROBE_TMO("marker2_wait");
+        return GB10_FAIL_WAIT("marker2_wait", drc_, GB10_WAIT_MS, hmarker2, 0x46464646u);
     }
     gb10_note_slow("marker2", &t0);
+#ifdef OMEGA_STALL_PROBE
+    probe_m2 = gb10_ms_since(&t0);
+#endif
 #endif
     /* The host marker can land before the last CTAs' stores are visible (seen
      * by the DIV/SQRT gate, PR #141). Read only after the QMD's own release
      * semaphore, written after the grid completes, is DONE. */
-    if ((drc_ = omega_numeric_native_wait(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) {
-        return GB10_FAIL_WAIT("sem_wait", drc_, 600000, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
+    if ((drc_ = omega_numeric_native_wait(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, GB10_WAIT_MS)) != 0) {
+        GB10_PROBE_TMO("sem_wait");
+        return GB10_FAIL_WAIT("sem_wait", drc_, GB10_WAIT_MS, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
     }
     gb10_note_slow("sem", &t0);
+#ifdef OMEGA_STALL_PROBE
+    probe_sem = gb10_ms_since(&t0);
+    fprintf(stderr, "GB10_PROBE n=%zu inner=%u marker_ms=%.3f marker2_ms=%.3f sem_ms=%.3f\n", count,
+            g_last_launches + 1u, probe_m1, probe_m2, probe_sem);
+#endif
     __asm__ volatile("dsb sy" ::: "memory");
     memcpy(out_res, out_mem.cpu, count * sizeof(float));
     if (omega_numeric_native_close(&ctx) != 0) return OMEGA_NUMERIC_ERR_DEVICE;
