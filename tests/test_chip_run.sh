@@ -338,6 +338,20 @@ reset_world; CRMAN=$T/m-hostlog0.sh cr hostlog_none -- "${PD[@]}"
 expect hostlog_none 0 '^CHIP_RUN: PASS'
 assert hostlog_none "no host tier gives an empty \$hostlog" jq -e '.hl == ""' "$T"/ev-hostlog_none/*.json
 
+# seam: RECEIPT_EXTRA_JQ may replace a FAIL verdict with another upper-case word; PASS is never forged or removed
+mkman "$T/m-vw.sh" "RECEIPT_EXTRA_JQ='.verdict = \"NOT_RUN\"'"
+reset_world; CRMAN=$T/m-vw.sh cr verdict_word_ok FAKE_MODE=fail -- "${PD[@]}"
+expect verdict_word_ok 1 '^CHIP_RUN: NOT_RUN last verdict line'
+assert verdict_word_ok "receipt verdict is the rewritten word" receipt_verdict verdict_word_ok NOT_RUN
+reset_world; CRMAN=$T/m-vw.sh cr verdict_pass_changed -- "${PD[@]}"
+expect verdict_pass_changed 1 '^CHIP_RUN: FAIL RECEIPT_EXTRA_JQ changed a PASS verdict'
+mkman "$T/m-vf.sh" "RECEIPT_EXTRA_JQ='.verdict = \"PASS\"'"
+reset_world; CRMAN=$T/m-vf.sh cr verdict_forged FAKE_MODE=fail -- "${PD[@]}"
+expect verdict_forged 1 '^CHIP_RUN: FAIL RECEIPT_EXTRA_JQ forged a PASS verdict'
+mkman "$T/m-vb.sh" "RECEIPT_EXTRA_JQ='.verdict = \"not run\"'"
+reset_world; CRMAN=$T/m-vb.sh cr verdict_word FAKE_MODE=fail -- "${PD[@]}"
+expect verdict_word 1 '^CHIP_RUN: FAIL receipt verdict is not an upper-case word'
+
 # happy path and receipt
 reset_world; cr happy -- "${PD[@]}" -- --x 1
 expect happy 0 '^VERDICT PASS$'

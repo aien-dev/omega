@@ -12,7 +12,8 @@
 #   (default 0; 0 or 1; when 1 and the binary exited nonzero, this module exits with the binary's
 #   exit code, receipt and verdict still written; exit 0 with a non-PASS verdict still gives 1), hooks
 #   HOST_TIER_CMD (run first; nonzero refuses) and RECEIPT_EXTRA_JQ (jq filter on the receipt,
-#   $log = chip log, $hostlog = the whole HOST_TIER_CMD output, empty if none). The manifest cannot change the test seam variables below, QUIET_FLAG,
+#   $log = chip log, $hostlog = the whole HOST_TIER_CMD output, empty if none; it may replace a FAIL
+#   verdict with another upper-case word such as NOT_RUN, never create or remove a PASS). The manifest cannot change the test seam variables below, QUIET_FLAG,
 #   GPU_LOCK or EST_LOAD_CMD (checked and restored after it is sourced). That is an accident guard,
 #   not a boundary: the manifest is sourced into this shell and could still set any other variable.
 # Gate args after "--" REPLACE the manifest RUN_ARGS (not appended); RUN_ARGS is split on whitespace.
@@ -237,6 +238,11 @@ BODY=$(jq -n --arg gate "$GATE" --arg owner "$OWNER" --arg omega "$OMEGA_COMMIT"
 if [ -n "$RECEIPT_EXTRA_JQ" ]; then BODY=$(printf '%s' "$BODY" | jq --rawfile log "$RUN/chip.log" --rawfile hostlog "$RUN/host.log" "$RECEIPT_EXTRA_JQ") || fatal "RECEIPT_EXTRA_JQ failed"; fi
 printf '%s\n' "$BODY" > "$RUN/receipt.json"
 jq -e '.gate and .verdict and .binary_sha256' "$RUN/receipt.json" > /dev/null || fatal "receipt lost its required fields"
+RVERDICT=$(jq -r ".verdict | strings" "$RUN/receipt.json" 2>/dev/null)
+case $RVERDICT in ""|*[!A-Z_]*) fatal "receipt verdict is not an upper-case word" ;; esac # REFUSAL:verdict_word
+[ "$VERDICT" != PASS ] || [ "$RVERDICT" = PASS ] || fatal "RECEIPT_EXTRA_JQ changed a PASS verdict" # REFUSAL:verdict_pass_changed
+[ "$VERDICT" = PASS ] || [ "$RVERDICT" != PASS ] || fatal "RECEIPT_EXTRA_JQ forged a PASS verdict" # REFUSAL:verdict_forged
+VERDICT=$RVERDICT   # seam: RECEIPT_EXTRA_JQ may replace a FAIL with another non-PASS word (for example NOT_RUN); PASS cannot be forged
 RSHA=$(sha "$RUN/receipt.json"); OUT=$EVID/$RSHA.json
 if [ ! -e "$OUT" ]; then
     set -o noclobber; { cat "$RUN/receipt.json" > "$OUT" && chmod 0444 "$OUT"; } || { set +o noclobber; fatal "could not write receipt $OUT"; }; set +o noclobber
