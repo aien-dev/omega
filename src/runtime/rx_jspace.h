@@ -306,6 +306,8 @@ typedef struct {
     bool durable;
     char *dir;
     uint64_t commit_seq;
+    uint8_t anchor[48];             /* opaque client anchor (v3 checkpoint) */
+    bool anchor_set;
     JsHome local_home;              /* home given to locally created branches */
 } JsSpace;
 
@@ -327,13 +329,23 @@ void js_limits_default(JsLimits *lim);
  * (matched by type and unit_bytes). A torn or corrupt checkpoint fails with
  * JS_ERR_CORRUPT and leaves no state; a leftover temporary file is ignored.
  * A version-1 checkpoint (32-bit realization generations) fails with
- * JS_ERR_VERSION and leaves no state: it is refused, never reinterpreted. */
+ * JS_ERR_VERSION and leaves no state: it is refused, never reinterpreted.
+ * A version-2 checkpoint (no client anchor) still loads, with the anchor absent
+ * (js_space_anchor returns 0). Commits write version 3. */
 int  js_space_open(JsSpace *s, const char *dir, const JsRealizer *const *realizers,
                    uint32_t n_realizers, const JsLimits *lim, const JsHome *local_home);
 /* Make the current non-staged state the durable checkpoint: data first
  * (fdatasync), then metadata to a temporary file, fsync, atomic rename,
  * directory fsync. Only then are quarantined extents reusable. */
 int  js_space_commit(JsSpace *s);
+/* Opaque 48-byte client anchor stored in the checkpoint (format v3), covered
+ * by the body digest. js_space_set_anchor copies it into the space; the next
+ * js_space_commit writes it. js_space_anchor copies it out and returns 1 if one
+ * is loaded or set, 0 if absent (a version-2 checkpoint, never set, or an
+ * all-zero section: clients must make a real anchor non-zero). J-Space
+ * never interprets the bytes. */
+void js_space_set_anchor(JsSpace *s, const uint8_t anchor[48]);
+int  js_space_anchor(const JsSpace *s, uint8_t out[48]);
 
 /* Stable references. */
 int  js_branch_ref(JsSpace *s, uint32_t id, JsBranchRef *out);
