@@ -161,7 +161,7 @@ run_one() {
     echo "$id $status  $what ($note)" >&2
     [ $first -eq 1 ] || printf ',\n' >> "$out"
     first=0
-    printf '    {"id": "%s", "file": "%s", "checks": "%s", "status": "%s", "note": "%s"}' "$id" "$files" "$what" "$status" "$(echo "$note" | tr -d '"\\')" >> "$out"
+    printf '    {"id": "%s", "file": "%s", "checks": "%s", "status": "%s", "note": "%s"}' "$id" "$files" "$what" "$status" "$(printf '%s\n' "$note" | tr -d '"\\')" >> "$out"
     n=$((n + 1))
     case $status in KILLED) k=$((k + 1));; SURVIVED_REDUNDANT) r=$((r + 1));; SURVIVED_GAP) g=$((g + 1));; esac
     rm -rf "$dir"
