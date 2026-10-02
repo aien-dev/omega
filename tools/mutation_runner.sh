@@ -34,10 +34,13 @@
 #
 # USAGE
 #   tools/mutation_runner.sh -k table|marker -m ROWS|- -t TESTCMD
-#        [-d SRCDIR] [-b BUILDCMD] [-c "PATH ..."] [-o out.json] [-f PREFIX] [-B]
+#        [-d SRCDIR] [-b BUILDCMD] [-e TEXT] [-c "PATH ..."] [-o out.json] [-f PREFIX] [-B]
 #   -k reader kind. -m rows file, or - for stdin. -t test command (sh -c, run
 #   in the scratch tree). -d source tree (default .). -b build command run in
-#   the scratch tree before the test. -c paths (relative to SRCDIR) to copy
+#   the scratch tree before the test. -e TEXT optional: when the build step
+#   fails and its log is empty (make killed or never started) the row note
+#   is "build failed: TEXT" instead of "build failed: <first error line>";
+#   without -e nothing changes. -c paths (relative to SRCDIR) to copy
 #   (default: whole tree). -o JSON receipt path. -f line prefix that marks a
 #   failing case in test output, used only for the KILLED note. -B run build
 #   and test on the unmutated tree first; if that fails the sweep FAILS.
@@ -54,17 +57,17 @@
 #   justified-survived; 2 on bad usage.
 set -u
 
-kind=; rows=; test_cmd=; src=.; build_cmd=; copy=.; out=; fprefix=; baseline=0
-while getopts k:m:t:d:b:c:o:f:B opt; do
+kind=; rows=; test_cmd=; src=.; build_cmd=; copy=.; out=; fprefix=; baseline=0; empty_note=
+while getopts k:m:t:d:b:e:c:o:f:B opt; do
     case $opt in
         k) kind=$OPTARG;; m) rows=$OPTARG;; t) test_cmd=$OPTARG;; d) src=$OPTARG;;
-        b) build_cmd=$OPTARG;; c) copy=$OPTARG;; o) out=$OPTARG;; f) fprefix=$OPTARG;;
+        b) build_cmd=$OPTARG;; e) empty_note=$OPTARG;; c) copy=$OPTARG;; o) out=$OPTARG;; f) fprefix=$OPTARG;;
         B) baseline=1;; *) kind=;;
     esac
 done
 case $kind in table|marker) ;; *) kind=;; esac
 if [ -z "$kind" ] || [ -z "$rows" ] || [ -z "$test_cmd" ]; then
-    echo "usage: mutation_runner.sh -k table|marker -m ROWS|- -t TESTCMD [-d SRCDIR] [-b BUILDCMD] [-c PATHS] [-o out.json] [-f PREFIX] [-B]" >&2
+    echo "usage: mutation_runner.sh -k table|marker -m ROWS|- -t TESTCMD [-d SRCDIR] [-b BUILDCMD] [-e TEXT] [-c PATHS] [-o out.json] [-f PREFIX] [-B]" >&2
     exit 2
 fi
 src=$(cd "$src" 2>/dev/null && pwd) || { echo "mutation_runner: no such source dir" >&2; exit 2; }
@@ -140,6 +143,7 @@ run_one() {
         log=$work/$id.log
         if [ -n "$build_cmd" ] && ! (cd "$dir" && sh -c "$build_cmd") </dev/null >"$log" 2>&1; then
             status=ERROR; note="build failed: $(grep -m1 -E "error:|Error " "$log" | cut -c1-120)"
+            [ -z "$empty_note" ] || [ -s "$log" ] || note="build failed: $empty_note"
         else
             (cd "$dir" && sh -c "$test_cmd") </dev/null >"$log.run" 2>&1
             rc=$?
