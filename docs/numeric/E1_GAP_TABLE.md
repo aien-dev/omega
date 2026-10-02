@@ -179,4 +179,4 @@ block-aligned unwritten spans is the unwritten-output bug C3 (branch `c3-h1-fenc
 C3 hardening (branch `e1-gap-close`): the reduce launcher (`run_chunk`) and the ldst launcher (`omega_ldst_gb10_run`) had the same
 pre-fix pattern as `omega_ds_gb10_run` and now take its L2 flush plus second release marker, waited on before every readback (step
 `marker2_wait`). A/B script: `~/workspace/scripts/lt-e1-c3-ab.sh` (control arm `-DOMEGA_C3_PROTECT_OFF`, compiles out only the new
-reduce and ldst protection). Results: NOT_RUN until the forge reports. No claim is made that this fixes the observed rc=-4.
+reduce and ldst protection). Round 1 result: bug not reproduced / comparison inconclusive (round 1 complete, rounds 2-5 not started); record `docs/numeric/E1_C3_REDUCE_LDST_AB_ROUND1.md`. No claim is made that this fixes the observed rc=-4.
