@@ -14,7 +14,9 @@
      "receipt": null,
      "failed_gates": ["OMEGA_ACCEL_RESIDENT_1000_OP_PASS", "OMEGA_ACCEL_RESIDENT_MEMORY_BOUND_PASS", "OMEGA_ACCEL_RESIDENT_STATE_DIGEST_PASS", "OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS", "OMEGA_ACCEL_RESIDENT_RECEIPT_PASS"],
      "observed": "M19 13/18 gates, 157/157 regression gates, sustained_dispatches 0 (the 1000-op sustained loop returned failure), omegatool exit 1; the qualifier wrote no receipt",
-     "raw": "evidence/GATE14-FOUNDATION/legs-1720a8d/m19r-run/ (run.json, m19.log and the other suite logs)"}
+     "raw": "evidence/GATE14-FOUNDATION/legs-1720a8d/m19r-run/ (run.json, m19.log and the other suite logs)",
+     "endurance_status": "NOT_ESTABLISHED", "endurance_note": "the 1000-job workload exited before submitting the first GPU job, so endurance was not exercised"}
   ],
+  "m19_status": {"accuracy": "PASS", "build_tooling": "PASS", "endurance": "NOT_ESTABLISHED", "overall": "NOT_QUALIFIED", "next": "after E1 chip campaign: endurance leg alone on current main; if main passes, rerun on the #225 combined branch"},
   "not_determined": "Whether the Gates 1/2 failure comes from the candidate or from the machine is UNVERIFIED. The 8024e9a run of the same leg passed 230/0 with 100000 soak cycles. This diff of 1720a8d vs main a06f484 does not touch src/omega_world_gates.c or the world code. A control run of the same leg on a06f484 (not done) would separate the two."
 }
