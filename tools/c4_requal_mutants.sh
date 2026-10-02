@@ -58,6 +58,7 @@ echo "$MUTANTS" | while IFS="~" read -r id file expr what redund; do
         log="$work/$id.log"
         if ! (cd "$dir" && nice -n 10 make PHYSICS_DIR="$phys" ${MAKE_ARGS:-} c4-requal-bin >"$log" 2>&1); then
             status=ERROR; note="build failed: $(grep -m1 -E "error:|Error " "$log" | cut -c1-120)"
+            [ -s "$log" ] || note="build failed: empty make log (make killed or never started)"
         else
             (cd "$dir" && ./build/rx_c4_requal "$dir/r.json") >"$log.run" 2>&1
             rc=$?
