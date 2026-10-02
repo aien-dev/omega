@@ -172,10 +172,9 @@ test-gate14-combine:
 # item fails.
 .PHONY: test-numeric-cpu test-numeric-qualify
 NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c \
-                   src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
-                   src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+                   $(NUMERIC_BW_SRCS)
 NUMERIC_CPU_HDRS = src/omega_numeric.h src/omega_numeric_provenance.h src/omega_numeric_divsqrt_gb10.h tests/numeric_oracle.h \
-                   src/omega_blackwell_qmd.h src/omega_blackwell_codegen.h src/omega_blackwell_encoder.h src/sha256.h
+                   $(NUMERIC_BW_HDRS)
 build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) $(NUMERIC_CPU_HDRS)
 	@mkdir -p build
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(NUMERIC_CPU_SRCS)
@@ -215,8 +214,7 @@ test-numeric-e1-exhaustive: build/test_omega_numeric_cpu
 .PHONY: test-numeric-reduce-cpu
 REDUCE_CPU_SRCS = tests/test_omega_reduce.c src/omega_numeric_reduce.c src/omega_numeric_reduce_gb10.c \
                   src/omega_numeric.c src/omega_numeric_provenance.c \
-                  src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
-                  src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+                  $(NUMERIC_BW_SRCS)
 build/test_omega_reduce_cpu: $(REDUCE_CPU_SRCS) src/omega_numeric_reduce.h $(NUMERIC_CPU_HDRS)
 	@mkdir -p build
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(REDUCE_CPU_SRCS)
@@ -1617,8 +1615,7 @@ print-composition-gate-gpu-bin:
 # and the CHECK mutation sweep need no device; the chip run is
 # tools/run_divsqrt_gate.sh only (quiet flag, detached, receipt).
 DIVSQRT_SRCS = tests/test_omega_divsqrt_gb10.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric.c \
-               src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
-               src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+               src/omega_numeric_provenance.c $(NUMERIC_BW_SRCS)
 DIVSQRT_HDRS = src/omega_numeric_divsqrt_gb10.h src/omega_numeric.h src/omega_blackwell_encoder.h \
                src/omega_blackwell_qmd.h src/sha256.h
 .PHONY: test-divsqrt-host test-divsqrt-nvdisasm test-divsqrt-sweep
@@ -1639,8 +1636,7 @@ test-divsqrt-sweep:
 # run (all 2^32 inputs per op) is tools/run_numeric_transc_gate.sh only.
 TRANSC_GB10_SRCS = tests/test_omega_numeric_transc_gb10.c src/omega_numeric_divsqrt_gb10.c \
                    src/omega_numeric_transc.c src/omega_numeric.c src/omega_numeric_provenance.c \
-                   src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c \
-                   src/omega_blackwell_qmd.c src/sha256.c
+                   $(NUMERIC_BW_SRCS)
 .PHONY: test-numeric-transc-gb10-host
 build/test_omega_numeric_transc_gb10_cpu: $(TRANSC_GB10_SRCS) $(DIVSQRT_HDRS) src/omega_numeric_transc.h
 	@mkdir -p build
