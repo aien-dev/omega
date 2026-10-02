@@ -11,13 +11,16 @@
  * omega_program_ir.h), writes an evidence receipt for it, and lets the resolver run SPEC 5.1 on
  * that receipt. Only then is the library entry inserted, with the RECEIPT ID as its evidence hash.
  *
- * WHAT THE RECEIPT IS (stated, not hidden): the caller has just run omega_program_verify and a
- * differential check on this very program in this very process, and the bridge records that as an
- * EvidenceReceiptV1 of kind host-v1, tier HOST_TEST, with the evidence digest the caller supplies
- * as its output_digest (the evidence_root). It is a SELF-MINTED HOST_TEST receipt: it proves the
- * record is well formed and that the resolver chain accepted it, not that an independent verifier
- * re-ran anything. It satisfies the host-v1 profile only. Sealed-side or hardware receipts are not
- * available to the learner (the sealed protocol cannot supply them), so this is the honest ceiling.
+ * WHAT THE RECEIPT IS (stated, not hidden): the bridge itself runs omega_program_verify on a private
+ * copy of the program and recomputes the program id from the IR it stores, and refuses (-1) when
+ * either fails. It does NOT trust the caller's is_verified flag or program_id. It then records that
+ * as an EvidenceReceiptV1 of kind host-v1, tier HOST_TEST, with the evidence digest the caller
+ * supplies as its output_digest (the evidence_root). It is still a SELF-MINTED HOST_TEST receipt:
+ * the same code that asks for admission writes it, and no independent verifier re-ran anything.
+ * So the record it makes lists the capability OMEGA_BRIDGE_SELFMINTED_CAPABILITY, which the
+ * build-domain resolver refuses: a bridge record can sit in a store, but it can never satisfy a
+ * build import (oscv --domain build). The dev domain accepts it. Real aien-test receipts for
+ * Crumbline and discovery programs are owed (ADR 0029 Decision 5 and 11) and are not here.
  *
  * NOT A GENESIS PATH: the bridge never calls omega_resolve_admit_genesis. Nothing here can create
  * a BOOTSTRAP record. */
@@ -48,7 +51,7 @@ void omega_vc_bridge_destroy(OmegaVcBridge *b);
 int omega_vc_bridge_fetch_receipt(void *ctx, const uint8_t id[32], uint8_t **bytes, size_t *len);
 int omega_vc_bridge_fetch_blob(void *ctx, const uint8_t digest[32], uint8_t **bytes, size_t *len);
 
-/* Admit prog (verified and realized by the caller) into the store through omega_resolve_admit,
+/* Admit prog (realized by the caller; verified and id-recomputed here) into the store through omega_resolve_admit,
  * then into lib with the receipt id as its evidence hash. deps/dep_count are library
  * dependencies; each must already be admitted through this bridge. evidence is the caller's
  * non-zero evidence digest (it becomes the record's evidence_root). 0 on success; -1 and nothing

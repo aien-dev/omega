@@ -2,7 +2,7 @@
 
 Authority: ADR 0029 Decision 8 (BOOTSTRAP admission) and Decision 11 (no direct library insert).
 Code: `src/omega_genesis.h` (the pinned table, nothing else), enforced in `src/omega_vcstore.c` and
-`src/omega_resolve.c`. Tests: `make test-genesis-real test-genesis test-vcstore test-resolve`.
+`src/omega_resolve.c`. Tests: `make test-genesis-real test-genesis test-vcstore test-resolve test-vc-bridge`.
 
 Members: 0
 
@@ -57,13 +57,12 @@ Findings:
 
 1. `src/crumbline/cl_program.c` (the Crumbline learner) admits programs it has just synthesized and
    checked with `omega_program_verify`. Before stage 6 it called `omega_library_insert` with a bare hash.
-   It never calls a bootstrap function. It starts with an EMPTY library and builds up. Every program it
-   admits carries evidence, so it goes through `omega_resolve_admit` with a receipt (stage 6 migrates it
-   through `src/omega_vc_bridge.c`). It needs no unreceipted program.
+   It never calls a bootstrap function. It starts with an EMPTY library and builds up. Stage 6 migrates it
+   through `src/omega_vc_bridge.c`, which now runs `omega_program_verify` and recomputes the program id
+   itself, and then writes a SELF-MINTED receipt (see the next paragraph). It needs no BOOTSTRAP record.
 2. `src/omega_discovery.c` mines abstractions from a corpus of programs the caller already holds. It
    admitted a discovered abstraction with a bare hash. A discovered abstraction is a program with a
-   verification result, so it too goes through `omega_resolve_admit` (the bridge). It needs no unreceipted
-   program.
+   verification result, so it too goes through the bridge. It needs no BOOTSTRAP record.
 3. Nothing in `src/`, `tools/` or the test drivers calls `omega_library_insert_bootstrap`,
    `omega_vcstore_insert_bootstrap` (outside the store and the resolver) or `omega_resolve_admit_genesis`.
    The only users of the BOOTSTRAP kind before stage 6 were unit tests that exercised the kind itself.
@@ -74,9 +73,20 @@ Findings:
    body, a contract and evidence. There is no record that the language needs in order to compile its
    first program.
 
-Decision: the minimum that bootstraps Crumbline and discovery is nothing. The set is EMPTY. An empty set
-is the strongest form of the rule: no record is trusted without a receipt, and a BOOTSTRAP record in any
-store is refused by every door.
+WHY THE SET IS EMPTY, stated plainly: it is empty because the bridge supplies Crumbline and discovery
+programs with a receipt that the bridge writes itself (kind host-v1, tier HOST_TEST). That receipt is
+SELF-MINTED: the code asking for admission writes it, and no independent run (aien-test) backs it.
+Without the bridge those programs would have needed either a real receipt, which does not exist yet, or
+BOOTSTRAP status, which would have made them audited Genesis members. So the empty set is honest only
+together with these two facts, both enforced by tests (`make test-vc-bridge`): the bridge verifies the
+program and recomputes its id before it mints anything, and every record the bridge mints lists the
+capability `omega-bridge.selfminted`, which the build domain refuses. A bridge record can sit in a
+store and satisfy a dev import, but it can never satisfy `oscv --domain build`. Real aien-test receipts
+for these programs are owed (ADR 0029 Decisions 5 and 11); until they exist, the store admission of
+Crumbline and discovery programs is a dev-grade fact, not a build-grade one.
+
+Decision: the minimum that bootstraps Crumbline and discovery is nothing. The set is EMPTY. No BOOTSTRAP
+record is trusted without being listed, and a BOOTSTRAP record in any store is refused by every door.
 
 What an empty set costs: the BOOTSTRAP admission path exists and is tested (with a one member variant
 build, `make test-genesis`) but nothing uses it. The day a real member is needed it is added by an ADR
@@ -88,6 +98,10 @@ in its `receipt_id` field is the SHA-256 of that member's audit entry text in th
 
 ## What is NOT claimed
 
+- The empty set does not mean the learner's programs are independently qualified. The bridge is a named
+  trust root: it mints self-attested HOST_TEST receipts that the build domain refuses. Removing the
+  bridge from the store path, or replacing its receipts with real aien-test receipts, is the carry item
+  that would make the claim stronger.
 - The empty set does not make the library's own `omega_library_insert_bootstrap` safe: that function
   works on the in-memory library, not on the Verified Crumb Store, and no caller uses it. It is listed as
   an open item in OSC-VC1-IMPORT.md.

@@ -69,7 +69,7 @@ static int emit_receipt(char *o, size_t cap, const char *idhex, const char *sid,
     PF("{\n\"schema\": \"EvidenceReceiptV1\",\n\"version\": 1,\n\"id\": \"%s\",\n\"kind\": \"" PROFILE "\",\n", idhex);
     PF("\"tier\": \"HOST_TEST\",\n\"result\": \"PASS\",\n\"timestamp\": 1,\n");
     PF("\"repo\": \"omega-vc-bridge\",\n\"commit\": \"0000000000000000000000000000000000000000\",\n\"dirty\": false,\n");
-    PF("\"toolchain\": \"omega-vc-bridge\",\n\"procedure\": \"in-process omega_program_verify and differential check (self-minted HOST_TEST receipt)\",\n");
+    PF("\"toolchain\": \"omega-vc-bridge\",\n\"procedure\": \"in-process omega_program_verify and program id recompute (self-minted HOST_TEST receipt, not an independent run)\",\n");
     PF("\"machine\": \"host\",\n\"env_class\": \"HOST_TEST\",\n");
     PF("\"input_artifacts\": [\"sha256:%s\", \"sha256:%s\"],\n\"output_artifacts\": [],\n", sid, dig);
     PF("\"assertions\": [{\"id\": \"omega_program_verify\", \"expected\": \"pass\", \"observed\": \"pass\", \"pass\": true, \"source\": \"omega_vc_bridge\", \"note\": \"\"}],\n");
@@ -147,7 +147,7 @@ int omega_vc_bridge_admit(OmegaVcBridge *b, OmegaLibrary *lib, const OmegaProgra
 {
     static const uint8_t zero[32] = { 0 };
     if (!b || !lib || !prog || !evidence || memcmp(evidence, zero, 32) == 0 || dep_count > OMEGA_LIB_MAX_DEPS || (dep_count && !deps)) return -1;
-    if (!prog->is_verified || !prog->is_realized || !prog->body.has_body || memcmp(prog->program_id.bytes, zero, 32) == 0) return -1;
+    if (!prog->is_realized || !prog->body.has_body || memcmp(prog->program_id.bytes, zero, 32) == 0) return -1;
     int rc = -1;
     uint8_t *ir = NULL, *vc = NULL;
     size_t ir_len = 0;
@@ -157,8 +157,21 @@ int omega_vc_bridge_admit(OmegaVcBridge *b, OmegaLibrary *lib, const OmegaProgra
     char *json = NULL;
     Out o = { NULL, 0, 0, 0 };
     OmegaVcRecord *rec = NULL;
+    OmegaProgram *cp = NULL;
 
+    /* The bridge checks for itself; it never trusts the caller's is_verified flag or program_id. It
+     * verifies a private copy (omega_program_verify writes is_verified) and recomputes the id from the
+     * IR it is about to store. */
+    cp = malloc(sizeof *cp);
+    if (!cp) goto done;
+    *cp = *prog;
+    {   VerifyReport rep;
+        if (omega_program_verify(cp, &rep) != 0) goto done; /* VC1B:verify */
+    }
     if (omega_program_ir_encode(prog, &ir, &ir_len) != 0) goto done;
+    {   uint8_t rid_[32];
+        if (omega_program_ir_recompute_id(ir, ir_len, rid_) != 0 || memcmp(rid_, prog->program_id.bytes, 32) != 0) goto done; /* VC1B:id */
+    }
     sha256_hash(ir, ir_len, digest);
     if (omega_program_contract_id(prog, contract) != 0) goto done;
     {   /* evidence root binds the caller's evidence digest to this program */
@@ -223,7 +236,7 @@ int omega_vc_bridge_admit(OmegaVcBridge *b, OmegaLibrary *lib, const OmegaProgra
     ostr(&o, PROFILE_VERSION);
     oput(&o, evid, 32);
     ou32(&o, 0);                                   /* exports */
-    ou32(&o, 0);                                   /* capabilities */
+    ou32(&o, 1); ostr(&o, OMEGA_BRIDGE_SELFMINTED_CAPABILITY);   /* capabilities: one, so the build domain refuses this record */ /* VC1B:cap */
     if (o.bad) goto done;
     vc = o.p;
     uint8_t vcid[32];
@@ -247,6 +260,7 @@ done:
     free(dep_sorted); free(dep_con); free(dep_rcpt); free(dep_hex);
     free(json);
     free(rec);
+    free(cp);
     return rc;
 }
 

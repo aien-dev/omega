@@ -428,6 +428,14 @@ static long wfind(const Walk *w, const uint8_t id[32])
     return -1;
 }
 
+static int lists_selfminted_cap(const OmegaVcView *v)
+{
+    for (uint32_t i = 0; i < v->n_capabilities; i++)
+        if (v->capabilities[i].len == sizeof OMEGA_BRIDGE_SELFMINTED_CAPABILITY - 1 &&
+            memcmp(v->capabilities[i].p, OMEGA_BRIDGE_SELFMINTED_CAPABILITY, sizeof OMEGA_BRIDGE_SELFMINTED_CAPABILITY - 1) == 0) return 1;
+    return 0;
+}
+
 static int resolve_node(Walk *w, const uint8_t id[32], const uint8_t *lock_receipt, const char *name, size_t depth)
 {
     const OmegaResolver *r = w->r;
@@ -500,6 +508,7 @@ static int resolve_node(Walk *w, const uint8_t id[32], const uint8_t *lock_recei
             rc = fail(w->err, OMEGA_RES_TAINTED_ARTIFACT, 0, subj, "%s lists the capability %s: an omega-dev output can never satisfy an import", sid, OMEGA_TAINT_CAPABILITY);
             goto out;
         }
+    if (r->domain == OMEGA_DOMAIN_BUILD && lists_selfminted_cap(vc)) { rc = fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, subj, "%s was minted by the in-process bridge (capability %s) with no independent qualification run, so it cannot satisfy a build import", sid, OMEGA_BRIDGE_SELFMINTED_CAPABILITY); goto out; } /* VC1B:build-refuses-selfminted */
     if (rec->admission_kind == OMEGA_VCS_ADMISSION_VERIFIED) { /* VC1R:verified-needs-receipt */
         rc = omega_resolve_check_record_receipt(r, vc, w->err);
         if (rc) { if (name && w->err) snprintf(w->err->subject, sizeof w->err->subject, "%s", name); goto out; }

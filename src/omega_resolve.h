@@ -193,5 +193,9 @@ int omega_resolve_admit_genesis(OmegaVcStore *s, const uint8_t *canonical, size_
                                 const uint8_t claimed_vc_id[32], const OmegaArtifactMeta *origin, OmegaResolveError *err);
 
 #define OMEGA_TAINT_CAPABILITY "omega-dev.taint"
+/* A record minted by omega_vc_bridge (no independent qualification run) lists this capability. The
+ * build-domain resolver refuses it, so a bridge record can sit in a store but can never satisfy a
+ * build import (VC1 stage 6 fix). The dev domain accepts it (the artifact is tainted anyway). */
+#define OMEGA_BRIDGE_SELFMINTED_CAPABILITY "omega-bridge.selfminted"
 
 #endif /* OMEGA_RESOLVE_H */
