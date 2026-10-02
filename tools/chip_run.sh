@@ -199,7 +199,7 @@ echo "== chip run (not killed, not timed out): ${GATE_ARGS[*]}"
 END=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 exec 9>&-
 mapfile -t VLINES < <(grep -E -- "$VERDICT_RE" "$RUN/chip.log")
-printf '%s\n' "${VLINES[@]}"
+cat "$RUN/chip.log"   # the full chip log goes to stdout, as the old trap script did (HIT and DEVERR lines included)
 
 OMEGA_CLEAN_AFTER=$(clean "$HERE"); PHYS_CLEAN_AFTER=$(clean "$PHYSICS")
 OMEGA_SAME=$([ "$(head_of "$HERE")" = "$OMEGA_COMMIT" ] && echo true || echo false)
