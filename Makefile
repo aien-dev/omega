@@ -1818,3 +1818,106 @@ test-vcstore: tests/test_omega_vcstore.c src/omega_vcstore.c src/omega_vcstore.h
 	  build_mutant load-name-id             load-name-id           '        (void)vcs_find(t, id, &di);'; \
 	  build_mutant save-verify              save-verify            '        int rc = 0;'
 	@echo "test-vcstore: PASS (all checks, all mutants killed)"
+
+# VC1-RESOLVE (VC1 stage 4): import resolution in the Omega OSC compiler. `import NAME;` resolves
+# only through omega.lock -> semantic id -> Verified Crumb Store -> receipt check -> transitive
+# verified closure (src/omega_resolve.c), with a C reader of the aien-proof receipt wire contract
+# (src/omega_receipt.c, BLAKE3 in src/omega_blake3.c). oscv is the verified driver. Test inputs:
+# tests/resolve/ (official BLAKE3 vectors, three receipts written by the Rust implementation).
+# Mutation proof: each mutant is a copy of ONE source file with one tagged line (VC1R:<tag> in
+# omega_resolve.c / omega_receipt.c, B3M:<tag> in omega_blake3.c) replaced; the test must exit 1
+# with "MUTANT <name> KILLED by <check>" for the check named here, every time. A mutant whose sed
+# changed nothing, did not compile, or survived fails the build. CPU only; no physics; no chip.
+.PHONY: test-resolve oscv
+RESOLVE_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc -Isrc/compiler -Isrc/compiler/model
+RESOLVE_DIR = $(OUT_DIR)/resolve-test
+RESOLVE_OSC_LIB = $(filter-out src/compiler/oscc_main.c,$(wildcard src/compiler/*.c))
+RESOLVE_SRC = src/omega_resolve.c src/omega_receipt.c src/omega_blake3.c
+RESOLVE_REST = src/omega_resolve_osc.c src/omega_vcstore.c $(RESOLVE_OSC_LIB) src/sha256.c
+RESOLVE_HDRS = $(wildcard src/compiler/*.h) src/omega_resolve.h src/omega_receipt.h src/omega_blake3.h src/omega_resolve_osc.h src/omega_vcstore.h src/sha256.h
+$(OUT_DIR)/compiler/oscv: src/oscv_main.c $(RESOLVE_SRC) $(RESOLVE_REST) $(RESOLVE_HDRS)
+	@mkdir -p $(OUT_DIR)/compiler
+	$(CC) $(RESOLVE_FLAGS) -o $@ src/oscv_main.c $(RESOLVE_SRC) $(RESOLVE_REST)
+oscv: $(OUT_DIR)/compiler/oscv
+test-resolve: tests/test_omega_resolve.c $(OUT_DIR)/compiler/oscv $(RESOLVE_SRC) $(RESOLVE_REST) $(RESOLVE_HDRS)
+	@mkdir -p $(RESOLVE_DIR)
+	$(CC) $(RESOLVE_FLAGS) -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -o $(RESOLVE_DIR)/test_omega_resolve tests/test_omega_resolve.c $(RESOLVE_SRC) $(RESOLVE_REST)
+	$(RESOLVE_DIR)/test_omega_resolve
+	$(CC) $(RESOLVE_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -o $(RESOLVE_DIR)/test_omega_resolve_asan tests/test_omega_resolve.c $(RESOLVE_SRC) $(RESOLVE_REST)
+	$(RESOLVE_DIR)/test_omega_resolve_asan
+	@set -eu; build_mutant() { name=$$1; tag=$$2; which=$$3; chk=$$4; repl=$$5; \
+	  case $$which in blake3) f=src/omega_blake3.c; pfx=B3M;; resolve) f=src/omega_resolve.c; pfx=VC1R;; receipt) f=src/omega_receipt.c; pfx=VC1R;; *) echo "bad mutant file $$which"; exit 1;; esac; \
+	  sed "/$$pfx:$$tag/c\\$$repl" $$f > $(RESOLVE_DIR)/mut_$$name.c; \
+	  if cmp -s $$f $(RESOLVE_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  srcs=""; for s in $(RESOLVE_SRC); do if [ "$$s" = "$$f" ]; then srcs="$$srcs $(RESOLVE_DIR)/mut_$$name.c"; else srcs="$$srcs $$s"; fi; done; \
+	  $(CC) $(RESOLVE_FLAGS) -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -o $(RESOLVE_DIR)/mut_$$name tests/test_omega_resolve.c $$srcs $(RESOLVE_REST); \
+	  rc=0; $(RESOLVE_DIR)/mut_$$name $$name > $(RESOLVE_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -ne 1 ] || ! grep -q "^MUTANT $$name KILLED by $$chk\$$" $(RESOLVE_DIR)/mut_$$name.out; then \
+	    echo "mutant $$name NOT killed by $$chk (exit $$rc)"; tail -5 $(RESOLVE_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed by $$chk (exit 1)"; }; \
+	  build_mutant b3-merge                 merge                  blake3   b3-official-vectors                              '        while ((total & 1) == 0 && sp > 1) {'; \
+	  build_mutant b3-root                  root                    blake3  b3-official-vectors                          '    cur.flags |= 0;'; \
+	  build_mutant profile-known            profile-known          resolve  profile-unknown-refused                          '    if (!p) p = table;'; \
+	  build_mutant profile-version          profile-version        resolve profile-version-too-old-refused              '    if (cmp < -1)'; \
+	  build_mutant lock-bytes-tab           lock-bytes             resolve  lock-refuses-tab-in-comment                      '        if (text[i] == 13 || text[i] == 0) return lock_bad(err, 1, "CR or NUL byte");'; \
+	  build_mutant lock-bytes-cr            lock-bytes             resolve  lock-refuses-cr-in-comment                       '        if (text[i] == 9 || text[i] == 0) return lock_bad(err, 1, "tab or NUL byte");'; \
+	  build_mutant lock-bytes-nul           lock-bytes             resolve  lock-refuses-nul-in-comment                      '        if (text[i] == 9 || text[i] == 13) return lock_bad(err, 1, "tab or CR byte");'; \
+	  build_mutant lock-header              lock-header            resolve lock-refuses-wrong-header                    '            if (ll != 13) { free(ents); return lock_bad(err, line, "header"); }'; \
+	  build_mutant lock-unknown-line        lock-unknown-line      resolve lock-refuses-bad-name-start                  '        if (0) { free(ents); return lock_bad(err, line, "unknown line"); }'; \
+	  build_mutant lock-hex                 lock-hex               resolve  lock-refuses-uppercase-hex                   '        if (unhex32(h1, en.semantic) || unhex32(h2, en.receipt)) { memset(en.semantic, 1, 32); memset(en.receipt, 1, 32); }'; \
+	  build_mutant lock-order-duplicate     lock-order             resolve lock-refuses-duplicate-name                  '        if (n > 0 && strcmp(ents[n - 1].name, en.name) > 0) {'; \
+	  build_mutant lock-order-sorted        lock-order             resolve lock-refuses-unsorted                        '        if (n > 0 && strcmp(ents[n - 1].name, en.name) == 0) {'; \
+	  build_mutant missing-receipt          missing-receipt        resolve refuse-missing-receipt                       '    if (fr != 0) return fail(err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "receipt unavailable");'; \
+	  build_mutant rule1-name               rule1-name             resolve refuse-receipt-file-holds-another-receipt    '    if (0) {'; \
+	  build_mutant rule-clean               rule-clean             resolve refuse-dirty-receipt-in-build                '    if (0) {'; \
+	  build_mutant rule4-semantic           rule4-semantic         resolve refuse-receipt-does-not-name-program         '    if (0) {'; \
+	  build_mutant rule4-source             rule4-source           resolve refuse-stale-receipt                         '        if (0) {'; \
+	  build_mutant rule3                    rule3                  resolve refuse-receipt-output-digest-is-not-evidence-root '    if (0) {'; \
+	  build_mutant rule5                    rule5                  resolve refuse-receipt-kind-is-not-profile           '    if (0) {'; \
+	  build_mutant rule6                    rule6                  resolve  refuse-receipt-has-extra-dependency              '        if ((a != nrd || (a && memcmp(deps, rdeps, a * 32) != 0)) && 0) {'; \
+	  build_mutant rule2-pass               rule2-pass             resolve refuse-receipt-result-is-not-pass            '    if (0) {'; \
+	  build_mutant rule2-assert             rule2-assert           resolve refuse-receipt-assertion-failed              '        if (0) {'; \
+	  build_mutant rule2-testonly           rule2-testonly         resolve refuse-receipt-test-only-trust               '    if (0) {'; \
+	  build_mutant rule2-tier               rule2-tier             resolve  refuse-receipt-tier-below-profile                '    if (!omega_tier_satisfies(need_rank, rcpt.tier_rank) && 0) {'; \
+	  build_mutant closure-receipt          closure-receipt        resolve closure-digest-matches-reference             '        (void)e[i].receipt_id;'; \
+	  build_mutant cycle                    cycle                  resolve refuse-dependency-cycle                      '        if (0) return 0;'; \
+	  build_mutant lock-receipt             lock-receipt           resolve refuse-lock-pins-another-receipt             '    if (0) {'; \
+	  build_mutant lock-receipt-visited     visited-lock-receipt  resolve refuse-lock-pins-another-receipt-for-visited-node '        if (0)'; \
+	  build_mutant genesis-gate             genesis-gate           resolve refuse-genesis-record-without-permission     '    if (0) {'; \
+	  build_mutant taint-cap                taint-cap              resolve refuse-tainted-record-in-build-domain        '            0) {'; \
+	  build_mutant verified-needs-receipt   verified-needs-receipt resolve refuse-missing-receipt                       '    if (0) {'; \
+	  build_mutant edge-contract            edge-contract          resolve  refuse-edge-contract-mismatch                    '        if (memcmp(w->nodes[di].contract, req, 32) != 0 && 0) {'; \
+	  build_mutant boot-dep-verified        boot-dep-verified      resolve refuse-genesis-record-depending-on-verified  '        if (0) {'; \
+	  build_mutant not-pinned               not-pinned             resolve  refuse-not-pinned-without-lock                   '        if (0 && !omega_lock_find(lock, names[i]))'; \
+	  build_mutant undeclared               undeclared             resolve  refuse-undeclared-lock-line-without-import       '        if (!used && 0)'; \
+	  build_mutant closure-sort             closure-sort           resolve closure-sorted-ascending-by-semantic-id      '    (void)cmp_entry;'; \
+	  build_mutant build-domain             build-domain           resolve  build-id-matches-reference                       '    uint8_t db = (uint8_t)d & 0;'; \
+	  build_mutant build-closure            build-closure          resolve build-id-matches-reference                   '    (void)closure_digest;'; \
+	  build_mutant taint-mark               taint-mark             resolve artifact-dev-is-tainted-build-is-not         '    m->tainted = 0;'; \
+	  build_mutant meta-taint-consistent    meta-taint-consistent  resolve artifact-refuses-dev-header-marked-untainted '    if (0)'; \
+	  build_mutant meta-build-id            meta-build-id          resolve artifact-refuses-edited-build-id             '    if (0)'; \
+	  build_mutant admit-origin             admit-origin           resolve  admit-refuses-record-from-tainted-origin         '    if (origin && (origin->tainted || origin->domain == OMEGA_DOMAIN_DEV) && 0)'; \
+	  build_mutant admit-cap                admit-cap              resolve admit-refuses-taint-capability               '    if (0) {'; \
+	  build_mutant admit-receipt            admit-receipt          resolve  admit-refuses-mismatched-receipt                 '    rc = 0; (void)rr;'; \
+	  build_mutant genesis-dep              genesis-dep            resolve  admit-genesis-refuses-verified-dependency        '        if ((omega_vcstore_admission_kind(s, view->dependencies + 64 * (size_t)i, &k) != 0 || k != OMEGA_VCS_ADMISSION_BOOTSTRAP) && 0) {'; \
+	  build_mutant blob-digest              blob-digest            resolve refuse-blob-does-not-hash-to-digest          '        if (0) {'; \
+	  build_mutant json-dup-key             json-dup-key           receipt receipt-refuses-duplicate-key                '                if (0) { free(key); jfree(j); return jfail(p, "duplicate key"); }'; \
+	  build_mutant deny-unknown             deny-unknown           receipt receipt-refuses-unknown-field                '    if (!all_known_key(root) && 0) { ef(&e, "receipt: unknown field%s", ""); goto done; }'; \
+	  build_mutant schema                   schema                 receipt receipt-refuses-unknown-schema               '    if (strcmp(schema, SCHEMA) != 0 && 0) { ef(&e, "receipt: unknown receipt schema%s", ""); goto done; }'; \
+	  build_mutant version                  version                receipt receipt-refuses-unknown-version              '    if (r->version != 1 && 0) { ef(&e, "receipt: unsupported receipt version%s", ""); goto done; }'; \
+	  build_mutant feature                  feature                receipt receipt-refuses-unknown-feature              '        if (0) { ef(&e, "receipt: unknown required receipt feature%s", ""); goto done; }'; \
+	  build_mutant reserved                 reserved               receipt receipt-refuses-reserved-field               '    if (reserved[0] && 0) { ef(&e, "receipt: reserved field must be empty%s", ""); goto done; }'; \
+	  build_mutant env-class                env-class              receipt receipt-refuses-env-class-mismatch           '    if (strcmp(r->env_class, r->tier) != 0 && 0) { ef(&e, "receipt: env_class contradicts tier%s", ""); goto done; }'; \
+	  build_mutant mutation-order           mutation-order         receipt receipt-refuses-observed-over-declared       '    if (MUTS[r->observed_mutation].sev > MUTS[r->declared_mutation].sev && 0) { ef(&e, "receipt: observed mutation exceeds declared mutation%s", ""); goto done; }'; \
+	  build_mutant canon-sort               canon-sort             receipt receipt-canon-order-independent              '    (void)cmp_str;'; \
+	  build_mutant id-compare               id-compare             receipt receipt-refuses-wrong-id                     '    if (0) {'; \
+	  build_mutant max-depth-removed        max-depth              resolve  refuse-dependency-chain-too-deep                 '    if (0 && depth >= MAX_DEPTH) return fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "dependency chain deeper than %d", MAX_DEPTH);'; \
+	  build_mutant max-depth-one-too-many   max-depth              resolve  refuse-dependency-chain-too-deep                 '    if (depth > MAX_DEPTH) return fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "dependency chain deeper than %d", MAX_DEPTH);'; \
+	  build_mutant max-depth-one-too-few    max-depth              resolve  accept-dependency-chain-at-the-limit             '    if (depth >= MAX_DEPTH - 1) return fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "dependency chain deeper than %d", MAX_DEPTH);'; \
+	  build_mutant dup-import               dup-import             resolve  refuse-duplicate-import-names-through-the-api    '            if (0) return fail(err, OMEGA_RES_BAD_ARGUMENT, 0, names[i], "import listed twice");'; \
+	  build_mutant pass-needs-assertion     pass-needs-assertion   receipt  receipt-refuses-pass-without-assertion           '    if (r->n_assertions == 0 && r->result == OMEGA_RECEIPT_PASS && 0) { ef(&e, "receipt: PASS receipts must carry at least one assertion%s", ""); goto done; }'; \
+	  build_mutant prod-authority-empty     prod-authority         receipt  receipt-refuses-production-blank-authority       '        if (a == b && 0) { ef(&e, "receipt: PRODUCTION receipts require an authority reference%s", ""); goto done; }'; \
+	  build_mutant prod-authority-trim      prod-authority         receipt  receipt-refuses-production-blank-authority       '        if (b == 0) { ef(&e, "receipt: PRODUCTION receipts require an authority reference%s", ""); goto done; }'; \
+	  build_mutant prod-spelling            prod-spelling          receipt  receipt-refuses-production-test-only-authority   '        int bad = strstr(low, "test-only") || strstr(low, "testonly");'; \
+	  build_mutant prod-bad-refused         prod-bad-refused       receipt  receipt-refuses-production-test-only-authority   '        if (bad && 0) { ef(&e, "receipt: a TEST_ONLY signer cannot produce a PRODUCTION receipt%s", ""); goto done; }'
+	@echo "test-resolve: PASS (all checks, ASan/UBSan clean, all 65 mutants killed)"

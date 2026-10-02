@@ -12,7 +12,7 @@
 
 #ifndef OMEGA_NUMERIC_CPU_ONLY
 #include "omega_blackwell_submit.h"
-#include "m16_native.h"
+#include "omega_numeric_native.h"
 #endif
 
 #define NINSN 24u
@@ -238,7 +238,7 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
         fprintf(stderr, "omega_ldst_gb10_run: refused: access outside the buffers\n");
         return OMEGA_NUMERIC_ERR_OPERANDS;
     }
-    static uint8_t code[OMEGA_LDST_CODE_BYTES];
+    uint8_t code[OMEGA_LDST_CODE_BYTES]; /* per call: built before the numeric owner is acquired */
     size_t code_len = 0;
     if (omega_ldst_build_kernel(s, code, sizeof code, &code_len) != 0 || omega_ldst_check_kernel(s, code, code_len, err, sizeof err) != 0) {
         fprintf(stderr, "omega_ldst_gb10_run: refused: %s\n", err);
@@ -265,10 +265,10 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
     };
     M16NativeContext ctx;
     int drc;
-    if ((drc = m16_native_open(&ctx)) != 0) return LDST_DEVERR("open", drc);
-    if ((drc = m16_native_create_channel(&ctx)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("open", drc); }
+    if ((drc = omega_numeric_native_open(&ctx)) != 0) return LDST_DEVERR("open", drc);
+    if ((drc = m16_native_create_channel(&ctx)) != 0) { omega_numeric_native_close(&ctx); return LDST_DEVERR("open", drc); }
     NvrmMem large_pb;
-    if ((drc = nvrm_alloc(&ctx.rm, 0x10000, &large_pb)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("alloc", drc); }
+    if ((drc = nvrm_alloc(&ctx.rm, 0x10000, &large_pb)) != 0) { omega_numeric_native_close(&ctx); return LDST_DEVERR("alloc", drc); }
     ctx.pb_mem = large_pb;
     /* the prologue also reads 4 bytes at index i of the "b" buffer: give it the input, zero padded to 4*count */
     size_t in_dev = in_len > count * 4 ? in_len : count * 4;
@@ -277,7 +277,7 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
     if ((drc = nvrm_alloc(&ctx.rm, OMEGA_DS_MAX_CODE_BYTES, &code_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem)) != 0 ||
         (drc = nvrm_alloc(&ctx.rm, in_bytes, &a_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, out_bytes, &out_mem)) != 0 ||
         (drc = nvrm_alloc(&ctx.rm, 0x1000, &marker_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem)) != 0) {
-        m16_native_close(&ctx);
+        omega_numeric_native_close(&ctx);
         return LDST_DEVERR("alloc", drc);
     }
     memset(a_mem.cpu, 0, in_bytes);
@@ -304,7 +304,7 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
         omega_ds_check_qmd(qmd1, code_mem.va, err, sizeof err) != OMEGA_NUMERIC_OK ||
         omega_ldst_check_kernel(s, code_mem.cpu, code_len, err, sizeof err) != 0) {
         fprintf(stderr, "omega_ldst_gb10_run: %s\n", err);
-        m16_native_close(&ctx);
+        omega_numeric_native_close(&ctx);
         return OMEGA_NUMERIC_ERR_OPERANDS;
     }
     memcpy(qmd_mem.cpu, qmd0, sizeof(qmd0));
@@ -357,17 +357,17 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
     pb[n++] = 0x46464646u; pb[n++] = 0; pb[n++] = 0x1 | (1u << 20);
 #endif
 
-    if ((drc = m16_native_submit_methods(&ctx, pb, n)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("submit", drc); }
+    if ((drc = m16_native_submit_methods(&ctx, pb, n)) != 0) { omega_numeric_native_close(&ctx); return LDST_DEVERR("submit", drc); }
     /* Wait long: closing the channel under a running kernel jams the seat. */
-    if ((drc = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("wait", drc); }
+    if ((drc = omega_numeric_native_wait(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) return LDST_DEVERR("wait", drc);
 #ifndef OMEGA_C3_PROTECT_OFF
     volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
-    if ((drc = m16_native_wait_marker(hmarker2, 0x46464646u, 600000)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("marker2_wait", drc); }
+    if ((drc = omega_numeric_native_wait(hmarker2, 0x46464646u, 600000)) != 0) return LDST_DEVERR("marker2_wait", drc);
 #endif
-    if ((drc = m16_native_wait_marker(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) { m16_native_close(&ctx); return LDST_DEVERR("wait", drc); }
+    if ((drc = omega_numeric_native_wait(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) return LDST_DEVERR("sem_wait", drc);
     __asm__ volatile("dsb sy" ::: "memory");
     memcpy(out_buf, out_mem.cpu, out_len);
-    m16_native_close(&ctx);
+    if ((drc = omega_numeric_native_close(&ctx)) != 0) return LDST_DEVERR("close", drc);
     return OMEGA_NUMERIC_OK;
 #endif
 }

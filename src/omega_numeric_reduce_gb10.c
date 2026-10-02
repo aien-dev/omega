@@ -39,7 +39,7 @@
 #include "omega_blackwell_qmd.h"
 #ifndef OMEGA_NUMERIC_CPU_ONLY
 #include "omega_blackwell_submit.h"
-#include "m16_native.h"
+#include "omega_numeric_native.h"
 #endif
 
 #include <stdarg.h>
@@ -279,17 +279,15 @@ static int chunk_check(OmegaReduceOp op, const OmegaNumericPatchInsn *patch, int
     return omega_numeric_check_patch(OMEGA_NOP_REDUCE_SUM, patch, np, qmd1, err, err_len);
 }
 
-/* One level chunk on GB10, every op. A copy of the vecadd launch of
- * omega_numeric_gb10.c (not edited by this lane) that also waits for the QMD
- * release semaphore before reading results; the shared executor reads after
- * the host marker only. */
+/* One level chunk on GB10, every op. Like the SIMT launcher, require both
+ * the host marker and the QMD release semaphore before reading results. */
 /* Device-failure diagnostics (M20 GB10 instrumentation). Every
  * OMEGA_NUMERIC_ERR_DEVICE return below goes through gb10_devfail, which
  * prints one GB10_DEVFAIL line to stderr: the step that failed, the driver
  * return code, errno, the nvrm error text, the wait value and the marker word
- * for waits, and the elapsed ms since the launch began. It only reports: the
- * return code stays OMEGA_NUMERIC_ERR_DEVICE, there is no retry and no wait
- * value changes. */
+ * for waits, and the elapsed ms since the launch began. The lifecycle wrapper
+ * retains resources after uncertain completion and refuses later numeric
+ * launches. There is no retry and no wait value changes. */
 static double gb10_ms_since(const struct timespec *t0) {
     struct timespec t;
     timespec_get(&t, TIME_UTC); /* C11; no feature macro needed */
@@ -305,7 +303,7 @@ static int gb10_devfail(const char *fn, const char *step, M16NativeContext *ctx,
     if (wait_ms >= 0)
         fprintf(stderr, " wait_ms=%ld word=0x%08x want=0x%08x", wait_ms, word ? (unsigned)*word : 0u, (unsigned)want);
     fprintf(stderr, " elapsed_ms=%.3f\n", ms);
-    if (do_close) m16_native_close(ctx);
+    if (do_close) omega_numeric_native_close(ctx);
     return OMEGA_NUMERIC_ERR_DEVICE;
 }
 /* Slow-wait note: one stderr line when a successful wait finished more than 1000 ms after launch began. */
@@ -328,7 +326,7 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     timespec_get(&t0, TIME_UTC);
     M16NativeContext ctx;
     int drc_;
-    if ((drc_ = m16_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
+    if ((drc_ = omega_numeric_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
     if ((drc_ = m16_native_create_channel(&ctx)) != 0) return GB10_FAIL("channel", 1, drc_);
     NvrmMem large_pb;
     if ((drc_ = nvrm_alloc(&ctx.rm, 0x10000, &large_pb)) != 0) return GB10_FAIL("alloc_pb", 1, drc_);
@@ -380,13 +378,13 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
         char perr[256];
         if (chunk_check(op, patch, np, qmd1_words, perr, sizeof(perr)) != OMEGA_NUMERIC_OK) {
             fprintf(stderr, "omega_reduce_gb10: %s\n", perr);
-            m16_native_close(&ctx);
+            omega_numeric_native_close(&ctx);
             return OMEGA_NUMERIC_ERR_OPERANDS;
         }
         for (int i = 0; i < np; i++)
             if (memcmp((uint8_t *)code_mem.cpu + OMEGA_NUMERIC_PATCH_OFFSET + (size_t)i * 16u, patch[i].w, 16) != 0) {
                 fprintf(stderr, "omega_reduce_gb10: code image differs from the checked patch at %d\n", i);
-                m16_native_close(&ctx);
+                omega_numeric_native_close(&ctx);
                 return OMEGA_NUMERIC_ERR_OPERANDS;
             }
     }
@@ -472,13 +470,13 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
 #endif
 
     if ((drc_ = m16_native_submit_methods(&ctx, pb, pb_len)) != 0) return GB10_FAIL("submit", 1, drc_);
-    if ((drc_ = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) {
+    if ((drc_ = omega_numeric_native_wait(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) {
         return GB10_FAIL_WAIT("marker_wait", drc_, 600000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
     gb10_note_slow("marker", &t0);
 #ifndef OMEGA_C3_PROTECT_OFF
     volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
-    if ((drc_ = m16_native_wait_marker(hmarker2, 0x46464646u, 600000)) != 0) {
+    if ((drc_ = omega_numeric_native_wait(hmarker2, 0x46464646u, 600000)) != 0) {
         return GB10_FAIL_WAIT("marker2_wait", drc_, 600000, hmarker2, 0x46464646u);
     }
     gb10_note_slow("marker2", &t0);
@@ -486,13 +484,13 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     /* The host marker can land before the last CTAs' stores are visible (seen
      * by the DIV/SQRT gate, PR #141). Read only after the QMD's own release
      * semaphore, written after the grid completes, is DONE. */
-    if ((drc_ = m16_native_wait_marker(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) {
+    if ((drc_ = omega_numeric_native_wait(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) {
         return GB10_FAIL_WAIT("sem_wait", drc_, 600000, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
     }
     gb10_note_slow("sem", &t0);
     __asm__ volatile("dsb sy" ::: "memory");
     memcpy(out_res, out_mem.cpu, count * sizeof(float));
-    m16_native_close(&ctx);
+    if (omega_numeric_native_close(&ctx) != 0) return OMEGA_NUMERIC_ERR_DEVICE;
     return OMEGA_NUMERIC_OK;
 }
 #endif

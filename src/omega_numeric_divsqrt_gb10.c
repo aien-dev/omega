@@ -22,7 +22,7 @@
 
 #ifndef OMEGA_NUMERIC_CPU_ONLY
 #include "omega_blackwell_submit.h"
-#include "m16_native.h"
+#include "omega_numeric_native.h"
 #endif
 
 /* Recorded after tools/divsqrt_nvdisasm_check.sh matched every word of the
@@ -1452,9 +1452,9 @@ int omega_ds_check_qmd(const uint32_t *qmd1, uint64_t code_va, char *err, size_t
  * OMEGA_NUMERIC_ERR_DEVICE return below goes through gb10_devfail, which
  * prints one GB10_DEVFAIL line to stderr: the step that failed, the driver
  * return code, errno, the nvrm error text, the wait value and the marker word
- * for waits, and the elapsed ms since the launch began. It only reports: the
- * return code stays OMEGA_NUMERIC_ERR_DEVICE, there is no retry and no wait
- * value changes. */
+ * for waits, and the elapsed ms since the launch began. The lifecycle wrapper
+ * retains resources after uncertain completion and refuses later numeric
+ * launches. There is no retry and no wait value changes. */
 static double gb10_ms_since(const struct timespec *t0) {
     struct timespec t;
     timespec_get(&t, TIME_UTC); /* C11; no feature macro needed */
@@ -1470,7 +1470,7 @@ static int gb10_devfail(const char *fn, const char *step, M16NativeContext *ctx,
     if (wait_ms >= 0)
         fprintf(stderr, " wait_ms=%ld word=0x%08x want=0x%08x", wait_ms, word ? (unsigned)*word : 0u, (unsigned)want);
     fprintf(stderr, " elapsed_ms=%.3f\n", ms);
-    if (do_close) m16_native_close(ctx);
+    if (do_close) omega_numeric_native_close(ctx);
     return OMEGA_NUMERIC_ERR_DEVICE;
 }
 /* Plain step: drv_rc is the value the call returned. */
@@ -1484,7 +1484,7 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
     char err[256];
     int rc = omega_ds_check_args(op, a, b, out, count, err, sizeof(err));
     if (rc != OMEGA_NUMERIC_OK) { fprintf(stderr, "omega_ds_gb10_run: refused: %s\n", err); return rc; }
-    static uint8_t code[OMEGA_DS_MAX_CODE_BYTES];
+    uint8_t code[OMEGA_DS_MAX_CODE_BYTES];
     size_t code_len = 0;
     if (omega_ds_build_kernel(op, code, sizeof(code), &code_len) != 0) return OMEGA_NUMERIC_ERR_OPERANDS;
     if ((rc = omega_ds_check_kernel(op, code, code_len, OMEGA_DS_GPR_COUNT, err, sizeof(err))) != OMEGA_NUMERIC_OK ||
@@ -1518,7 +1518,7 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
     timespec_get(&t0, TIME_UTC);
     M16NativeContext ctx;
     int drc_;
-    if ((drc_ = m16_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
+    if ((drc_ = omega_numeric_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
     if ((drc_ = m16_native_create_channel(&ctx)) != 0) return GB10_FAIL("channel", 1, drc_);
     NvrmMem large_pb;
     if ((drc_ = nvrm_alloc(&ctx.rm, 0x10000, &large_pb)) != 0) return GB10_FAIL("alloc_pb", 1, drc_);
@@ -1556,14 +1556,14 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
     if (omega_blackwell_build_qmd0(qmd0, qmd0_va, qmd1_va) != 0 || omega_blackwell_build_qmd1(qmd1, &cfg) != 0 ||
         omega_ds_check_qmd(qmd1, code_mem.va, err, sizeof(err)) != OMEGA_NUMERIC_OK) {
         fprintf(stderr, "omega_ds_gb10_run: %s\n", err);
-        m16_native_close(&ctx);
+        omega_numeric_native_close(&ctx);
         return OMEGA_NUMERIC_ERR_OPERANDS;
     }
     /* the exact bytes in device memory pass the structural check again */
     if (omega_ds_check_kernel(op, code_mem.cpu, code_len, (qmd1[35] >> 8) & 0x1ffu, err, sizeof(err)) != OMEGA_NUMERIC_OK ||
         omega_ds_check_digest(op, code_mem.cpu, code_len, err, sizeof(err)) != OMEGA_NUMERIC_OK) {
         fprintf(stderr, "omega_ds_gb10_run: %s\n", err);
-        m16_native_close(&ctx);
+        omega_numeric_native_close(&ctx);
         return OMEGA_NUMERIC_ERR_OPERANDS;
     }
     memcpy(qmd_mem.cpu, qmd0, sizeof(qmd0));
@@ -1614,24 +1614,24 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
     pb[n++] = 0x46464646u; pb[n++] = 0; pb[n++] = 0x1 | (1u << 20);
 
     if ((drc_ = m16_native_submit_methods(&ctx, pb, n)) != 0) return GB10_FAIL("submit", 1, drc_);
-    /* Wait long: closing the channel under a running kernel jams the seat. */
-    if ((drc_ = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) {
+    /* A timeout is uncertain completion, even after a long wait. */
+    if ((drc_ = omega_numeric_native_wait(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 600000)) != 0) {
         return GB10_FAIL_WAIT("marker_wait", drc_, 600000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
     volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
-    if ((drc_ = m16_native_wait_marker(hmarker2, 0x46464646u, 600000)) != 0) {
+    if ((drc_ = omega_numeric_native_wait(hmarker2, 0x46464646u, 600000)) != 0) {
         return GB10_FAIL_WAIT("marker2_wait", drc_, 600000, hmarker2, 0x46464646u);
     }
     /* The host marker can land before the last CTAs' stores are visible: the
      * first chip run (receipt 88930d2f...) read the 0x55 fill pattern for
      * 49,359,680 SQRT outputs. Read only after the QMD's own release
      * semaphore (written after the grid completes, with its membar) is 6. */
-    if ((drc_ = m16_native_wait_marker(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) {
+    if ((drc_ = omega_numeric_native_wait(hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, 600000)) != 0) {
         return GB10_FAIL_WAIT("sem_wait", drc_, 600000, hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE);
     }
     __asm__ volatile("dsb sy" ::: "memory");
     memcpy(out, out_mem.cpu, count * 4);
-    m16_native_close(&ctx);
+    if (omega_numeric_native_close(&ctx) != 0) return OMEGA_NUMERIC_ERR_DEVICE;
     return OMEGA_NUMERIC_OK;
 #endif
 }

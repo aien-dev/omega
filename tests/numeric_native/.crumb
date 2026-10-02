@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0.0",
+  "name": "numeric_native",
+  "purpose": "Simulated M16 driver for numeric resource-lifecycle tests. No device execution or numeric parity evidence.",
+  "above": {"name": "tests", "path": ".."},
+  "invariants": ["Never link this driver into production executables."]
+}

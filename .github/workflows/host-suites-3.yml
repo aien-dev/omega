@@ -31,11 +31,22 @@ on:
       - 'src/**'
       - 'tools/omegatool.c'
       - 'tests/test_omega_transc.c'
+      - 'tests/test_numeric_lifecycle.c'
+      - 'tests/numeric_native/**'
       - 'tests/language/**'
       - 'tests/run_m*_gates.sh'
       - 'docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md'
 
 jobs:
+  numeric-lifecycle:
+    # Simulated driver only. No device-parity or hardware qualification claim.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Numeric completion ownership, ASan and UBSan
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-lifecycle
+
   numeric-transc:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
