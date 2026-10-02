@@ -71,4 +71,8 @@ int omega_ldst_host_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
 int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in_len, uint8_t *out_buf, size_t out_len,
                         size_t pad, size_t count);
 
+
+/* Label printed in the OMEGA_DEVERR stderr line (spec=<id>); the chip harness sets the table index. Default -1. */
+void omega_ldst_gb10_set_spec_id(int id);
+
 #endif

@@ -40,8 +40,10 @@ BIN=$RUN/test_omega_ldst_gb10
     src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c \
     "$PHYSICS/nvrm/nvrm.c" "$PHYSICS/m16/m16_native.c") > "$RUN/chip-build.log" 2>&1 || { cat "$RUN/chip-build.log"; refuse "chip build failed"; }
 echo "== chip run (not killed, not timed out)"
-"$BIN" --chip > "$RUN/chip.log" 2>&1; RC=$?
+# LDST_CHIP_ARGS (optional) e.g. "--spec 129 --repeats 500" reruns one spec; default is the whole table.
+"$BIN" --chip ${LDST_CHIP_ARGS:-} > "$RUN/chip.log" 2>&1; RC=$?
 exec 9>&-
+grep -h OMEGA_DEVERR "$RUN/chip.log" | sort | uniq -c | head -20
 grep -c '^RESULT chip .*verdict=PASS' "$RUN/chip.log" | sed 's/^/specs passed: /'
 grep '^RESULT chip .*verdict=FAIL' "$RUN/chip.log" | head -20
 UNW=$(sed -n 's/.* unwritten=\([0-9]*\) .*/\1/p' "$RUN/chip.log" | awk '{s+=$1} END {print s+0}')
