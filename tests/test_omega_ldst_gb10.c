@@ -250,6 +250,14 @@ static int chip(size_t first, size_t last, unsigned repeats) {
     return bad_specs ? 1 : 0;
 }
 
+/* whole token must be decimal digits; false otherwise */
+static int parse_num(const char *s, unsigned long *out) {
+    char *end;
+    if (!*s || *s < '0' || *s > '9') return 0;
+    *out = strtoul(s, &end, 10);
+    return *end == '\0';
+}
+
 /* --chip [--spec N] [--repeats R]: all specs once by default; with --spec only spec N, R times (default 1). */
 int main(int argc, char **argv) {
     build_table();
@@ -259,10 +267,14 @@ int main(int argc, char **argv) {
         unsigned repeats = 1;
         for (int i = 2; i < argc; i++) {
             if (!strcmp(argv[i], "--spec") && i + 1 < argc) {
-                first = last = (size_t)strtoul(argv[++i], NULL, 10);
+                unsigned long v;
+                if (!parse_num(argv[++i], &v)) { fprintf(stderr, "--spec needs a whole number, got '%s'\n", argv[i]); return 2; }
+                first = last = (size_t)v;
                 if (first >= g_nspecs) { fprintf(stderr, "--spec %zu out of range (0..%zu)\n", first, g_nspecs - 1); return 2; }
             } else if (!strcmp(argv[i], "--repeats") && i + 1 < argc) {
-                repeats = (unsigned)strtoul(argv[++i], NULL, 10);
+                unsigned long v;
+                if (!parse_num(argv[++i], &v)) { fprintf(stderr, "--repeats needs a whole number, got '%s'\n", argv[i]); return 2; }
+                repeats = (unsigned)v;
                 if (repeats == 0) { fprintf(stderr, "--repeats must be >= 1\n"); return 2; }
             } else { fprintf(stderr, "unknown chip argument: %s\n", argv[i]); return 2; }
         }

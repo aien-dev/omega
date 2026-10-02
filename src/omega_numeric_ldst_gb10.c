@@ -256,7 +256,7 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
         }
     }
 #ifdef OMEGA_NUMERIC_CPU_ONLY
-    return OMEGA_NUMERIC_ERR_DEVICE;
+    return LDST_DEVERR("cpu_only", OMEGA_NUMERIC_ERR_DEVICE);
 #else
     static const uint32_t SETUP[18] = {
         0x20012061, 0x0000cec0, 0x20012092, 0x00000001, 0x200120a8, 0x0000000f, 0x2001255d, 0x00000003,
