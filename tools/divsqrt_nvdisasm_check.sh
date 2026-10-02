@@ -16,7 +16,7 @@ make -s -C "$HERE" build/test_omega_divsqrt_gb10_cpu >/dev/null || { echo "VERDI
 "$HERE/build/test_omega_divsqrt_gb10_cpu" --dump "$TMP" || { echo "VERDICT FAIL: dump"; exit 1; }
 echo "nvdisasm: $("$NVDISASM" --version | grep -o "release [0-9.]*, V[0-9.]*")"
 rc=0
-for op in div sqrt exp2 log2 sigmoid tanh sin cos erf gelu; do
+for op in div sqrt exp2 log2 sigmoid tanh sin cos erf gelu rsqrt; do
     "$NVDISASM" -b SM121 "$TMP/$op.bin" > "$TMP/$op.raw" 2> "$TMP/$op.err" || { echo "[FAIL] $op: nvdisasm error"; cat "$TMP/$op.err"; rc=1; continue; }
     # keep "/*addr*/ text ;" lines, normalise spacing, drop the hex comments
     sed -n 's|^[[:space:]]*/\*\([0-9a-f]\{4\}\)\*/[[:space:]]*\(.*;\).*$|\1 \2|p' "$TMP/$op.raw" \

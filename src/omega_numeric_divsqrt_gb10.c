@@ -38,10 +38,11 @@ const char *const OMEGA_DS_KERNEL_SHA256[OMEGA_DS_OP_COUNT] = {
     "ed7cde5ac1dd3ddccc1b78885a2227600cf1bc4a7d775f27cceb110ed37a2ac4", /* COS, 120 words */
     "db3a51ff06cc24dc749d98dbf91485f0ceb86ba2bfc8cc55e554f62e6f7edff5", /* ERF, 360 words */
     "94992a5fdbe00a7943dac997d6a59ddd6096ac2fec35d4ff286b6552e8cea36d", /* GELU, 424 words */
+    "adb2864a0842a36fb9abf144d6654a69668506e2f8e98ac1c7ecb40ca4a1ff85", /* RSQRT, 344 words */
 };
 
 const char *omega_ds_op_name(OmegaDsOp op) {
-    return op == OMEGA_DS_DIV ? "DIV" : op == OMEGA_DS_SQRT ? "SQRT" : op == OMEGA_DS_EXP2 ? "EXP2" : op == OMEGA_DS_LOG2 ? "LOG2" : op == OMEGA_DS_SIGMOID ? "SIGMOID" : op == OMEGA_DS_TANH ? "TANH" : op == OMEGA_DS_SIN ? "SIN" : op == OMEGA_DS_COS ? "COS" : op == OMEGA_DS_ERF ? "ERF" : op == OMEGA_DS_GELU ? "GELU" : "?";
+    return op == OMEGA_DS_DIV ? "DIV" : op == OMEGA_DS_SQRT ? "SQRT" : op == OMEGA_DS_EXP2 ? "EXP2" : op == OMEGA_DS_LOG2 ? "LOG2" : op == OMEGA_DS_SIGMOID ? "SIGMOID" : op == OMEGA_DS_TANH ? "TANH" : op == OMEGA_DS_SIN ? "SIN" : op == OMEGA_DS_COS ? "COS" : op == OMEGA_DS_ERF ? "ERF" : op == OMEGA_DS_GELU ? "GELU" : op == OMEGA_DS_RSQRT ? "RSQRT" : "?";
 }
 
 /* ---- Forms ---------------------------------------------------------------
@@ -994,6 +995,152 @@ static void body_gelu(Bld *B) {
     setpi(B, 0, DS_CMP_GT, 0, AXR, 0x7f800000u);
     seli(B, RES, RES, 0x7fc00000u, 0, 1);   /* NaN                          */
 }
+
+/* ---- RSQRT (E1 row 10) ---------------------------------------------------------
+ * Correctly rounded 1/sqrt(x), bit-identical to omega_math_rsqrt. The CPU tier
+ * decides the final rounding with a 128-bit integer midpoint test (mid_below);
+ * this frame has no integer multiply, so the same decision is made with
+ * binary32 FMA error-free transforms.
+ *
+ * |x| (positive, finite, nonzero) is normalized to x' in [1,4) (a subnormal by
+ * an exact x 2^24, the parity of the exponent folded into x') so that
+ * y = 1/sqrt(x') lies in (0.5, 1]; the result is y 2^k (2^-12 more for a
+ * subnormal input), both exact FMULs.
+ *   1. y0: magic-number seed, three FMA Newton steps, one FMA residual
+ *      correction. y0 is within one ulp of the correctly rounded y.
+ *   2. mu = y0 + 2^-25 and ml = y0 - 2^-25 are at most the midpoints to the
+ *      neighbours of y0 (the gap on either side of y0 in [0.5, 1] is 2^-24 or
+ *      2^-23 above 1... never below 2^-24), and 1/sqrt(x') = 1 only for x' = 1.
+ *      The correctly rounded result is y0 + [mu^2 x' < 1] + [ml^2 x' < 1] - 1.
+ *   3. The sign of m^2 x' - 1 is exact. For m = y0 + s 2^-25 it is the sign of
+ *        (x' y0^2 - 1) + s x' y0 2^-24 + x' 2^-50.
+ *      Products are split by FMA into (hi, lo) with no rounding error, the
+ *      terms are summed exactly into a nonoverlapping expansion (Shewchuk
+ *      GROW-EXPANSION over Knuth TwoSum) and the sign of an expansion is the
+ *      sign of its highest nonzero component. No midpoint equals 1/sqrt(x'),
+ *      so no expansion is zero.
+ * The host model equals the CPU tier on every 32-bit input
+ * (test_omega_numeric_transc_gb10 --host-all RSQRT). */
+static void grow_expansion(Bld *B, const int *e, int n, int b, int qa, int qb, int t1, int t2) {
+    /* e[0..n-1] += b exactly; e[0..n] on return (e[n] the highest component).
+     * b is read but never written. */
+    int q = b;
+    for (int i = 0; i < n; i++) {
+        int s = (i == n - 1) ? e[n] : (q == qa ? qb : qa);
+        two_sum_b(B, s, e[i], q, e[i], t1, t2);
+        q = s;
+    }
+}
+
+/* out := the highest nonzero component of e[0..n-1] (its sign bit is the sign). */
+static void expansion_sign(Bld *B, const int *e, int n, int out, int t) {
+    mov(B, out, e[0]);
+    for (int i = 1; i < n; i++) {
+        shli(B, t, e[i], 1);
+        setpi(B, 0, DS_CMP_NE, 0, t, 0);
+        sel(B, out, e[i], out, 0, 0);
+    }
+}
+
+static void body_rsqrt(Bld *B) {
+    enum { AXR = 8, XB = 10, BE = 11, PAR = 12, X = 13, NX = 14, SC = 15, POST = 16, Y = 17,
+           T = 18, NTS = 19, NTL = 20, E = 21, H = 22, ONE = 23, HALF = 24, P = 25, PL = 26, HH = 27,
+           HL = 28, GG = 29, GL = 30, Q = 31, QL = 32, G = 33, TS = 34, TL = 35, W = 36,
+           SU = 44, SL = 45 };
+    const int SH[5] = { 37, 38, 39, 40, 41 };
+    const int WK[7] = { 25, 26, 27, 28, 29, 30, 31 };
+    const int T1 = 10, T2 = 11, QA = 12, QB = 14;   /* TwoSum temps, free after the setup */
+    lopi(B, AXR, A_, 0x7fffffffu, LUT_AND);
+    /* subnormal: x 2^24 exact; XB = normal float bits */
+    movi(B, T, 0x4b800000u);
+    ffmul(B, E, AXR, T);
+    setpi(B, 0, DS_CMP_LT, 0, AXR, 0x00800000u);
+    sel(B, XB, E, AXR, 0, 0);
+    movi(B, T, 0x45800000u);
+    seli(B, POST, T, 0x3f800000u, 0, 0);    /* 2^12 for a subnormal, else 1 */
+    shri(B, BE, XB, 23);
+    iaddi(B, T, BE, 1, RZ);
+    lopi(B, PAR, T, 1, LUT_AND);            /* 1 when the exponent is even  */
+    lopi(B, X, XB, 0x007fffffu, LUT_AND);
+    lopi(B, X, X, 0x3f800000u, LUT_OR);
+    shli(B, T, PAR, 23);
+    iadd(B, X, X, T, RZ);                   /* x' in [1,4)                  */
+    isub(B, T, BE, PAR);
+    iaddi(B, T, T, 129, RZ);
+    shri(B, T, T, 1);
+    rsubi(B, T, T, 255);
+    shli(B, SC, T, 23);                     /* 2^-(e' / 2)                  */
+    lopi(B, NX, X, 0x80000000u, LUT_XOR);
+    movf(B, ONE, 1.0f);
+    movf(B, HALF, 0.5f);
+    /* y0 */
+    shri(B, T, X, 1);
+    rsubi(B, Y, T, 0x5f3759dfu);
+    for (int k = 0; k < 3; k++) {
+        ffmul(B, T, Y, Y);
+        fffma(B, E, NX, T, ONE);            /* 1 - x y^2                    */
+        ffmul(B, H, Y, HALF);
+        fffma(B, Y, H, E, Y);
+    }
+    ffmul(B, G, X, Y);
+    ffmul(B, H, Y, HALF);
+    lopi(B, T, G, 0x80000000u, LUT_XOR);
+    fffma(B, E, T, H, HALF);                /* 1/2 - g h                    */
+    fffma(B, G, G, E, G);
+    fffma(B, H, H, E, H);
+    ffadd(B, Y, H, H);
+    /* error-free terms of x' (y0 + s 2^-25)^2 - 1 */
+    ffmul(B, P, Y, Y);
+    lopi(B, T, P, 0x80000000u, LUT_XOR);
+    fffma(B, PL, Y, Y, T);                  /* y0^2 = P + PL                */
+    ffmul(B, HH, X, P);
+    lopi(B, T, HH, 0x80000000u, LUT_XOR);
+    fffma(B, HL, X, P, T);
+    ffmul(B, GG, X, PL);
+    lopi(B, T, GG, 0x80000000u, LUT_XOR);
+    fffma(B, GL, X, PL, T);
+    ffsub(B, SH[0], HH, ONE);               /* HH - 1, exact (Sterbenz)     */
+    ffmul(B, Q, X, Y);
+    lopi(B, T, Q, 0x80000000u, LUT_XOR);
+    fffma(B, QL, X, Y, T);                  /* x y0 = Q + QL                */
+    movf(B, T, 0x1p-24f);
+    ffmul(B, TS, Q, T);
+    ffmul(B, TL, QL, T);
+    movf(B, T, 0x1p-50f);
+    ffmul(B, W, X, T);
+    lopi(B, NTS, TS, 0x80000000u, LUT_XOR);
+    lopi(B, NTL, TL, 0x80000000u, LUT_XOR);
+    grow_expansion(B, SH, 1, HL, QA, QB, T1, T2);
+    grow_expansion(B, SH, 2, GG, QA, QB, T1, T2);
+    grow_expansion(B, SH, 3, GL, QA, QB, T1, T2);
+    grow_expansion(B, SH, 4, W, QA, QB, T1, T2);
+    /* mu: + s x y0 2^-24 with s = +1; r > mu exactly when the sum is negative */
+    for (int i = 0; i < 5; i++) mov(B, WK[i], SH[i]);
+    grow_expansion(B, WK, 5, TS, QA, QB, T1, T2);
+    grow_expansion(B, WK, 6, TL, QA, QB, T1, T2);
+    expansion_sign(B, WK, 7, SU, T);
+    shri(B, SU, SU, 31);                    /* 1: round up                  */
+    /* ml: s = -1; r < ml exactly when the sum is positive */
+    for (int i = 0; i < 5; i++) mov(B, WK[i], SH[i]);
+    grow_expansion(B, WK, 5, NTS, QA, QB, T1, T2);
+    grow_expansion(B, WK, 6, NTL, QA, QB, T1, T2);
+    expansion_sign(B, WK, 7, SL, T);
+    shri(B, SL, SL, 31);                    /* 1: ml is not below r         */
+    iadd(B, T, Y, SU, SL);
+    iaddi(B, T, T, -1, RZ);                 /* y0 + up + (1 - down) - 1     */
+    ffmul(B, T, T, SC);
+    ffmul(B, RES, T, POST);
+    /* special inputs, lowest priority first */
+    setpi(B, 0, DS_CMP_GE, 0, A_, 0x80000000u);
+    seli(B, RES, RES, 0x7fc00000u, 0, 1);   /* x < 0: NaN                   */
+    lopi(B, T, A_, 0x7f800000u, LUT_OR);
+    setp(B, 0, DS_CMP_EQ, 0, AXR, RZ);
+    sel(B, RES, T, RES, 0, 0);              /* +-0: +-inf                   */
+    setpi(B, 0, DS_CMP_EQ, 0, A_, 0x7f800000u);
+    sel(B, RES, RZ, RES, 0, 0);             /* +inf: +0                     */
+    setpi(B, 0, DS_CMP_GT, 0, AXR, 0x7f800000u);
+    seli(B, RES, RES, 0x7fc00000u, 0, 1);   /* NaN                          */
+}
 size_t omega_ds_body(OmegaDsOp op, OmegaDsInsn *out, size_t max) {
     Bld B = { out, 0, max, 0 };
     if (!out) return 0;
@@ -1007,6 +1154,7 @@ size_t omega_ds_body(OmegaDsOp op, OmegaDsInsn *out, size_t max) {
     else if (op == OMEGA_DS_COS) body_cos(&B);
     else if (op == OMEGA_DS_ERF) body_erf(&B);
     else if (op == OMEGA_DS_GELU) body_gelu(&B);
+    else if (op == OMEGA_DS_RSQRT) body_rsqrt(&B);
     else return 0;
     return B.bad ? 0 : B.n;
 }
