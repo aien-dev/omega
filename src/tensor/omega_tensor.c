@@ -640,8 +640,8 @@ static bool binary_is_cmp(OmegaTensorBinaryOp op) {
  * data only. */
 static int gather_broadcast(OmegaTensorCtx *ctx, unsigned arity, const OmegaTensor *ops, uint32_t *rank,
                             uint64_t *shape, float **in, size_t *count) {
-    TensorSlot *x[3];
-    StorageSlot *s[3];
+    TensorSlot *x[3] = {NULL, NULL, NULL};
+    StorageSlot *s[3] = {NULL, NULL, NULL};
     for (unsigned i = 0; i < arity; i++) {
         int rc = tensor_get(ctx, ops[i], &x[i], &s[i]);
         if (rc) return rc;
@@ -654,7 +654,7 @@ static int gather_broadcast(OmegaTensorCtx *ctx, unsigned arity, const OmegaTens
         int rc = omega_tensor_broadcast_shape(r, shape, x[i]->info.rank, x[i]->info.shape, &r, shape);
         if (rc) return rc;
     }
-    OmegaTensorInfo bi[3];
+    OmegaTensorInfo bi[3] = {0};
     for (unsigned i = 0; i < arity; i++) {
         int rc = broadcast_info(&x[i]->info, r, shape, &bi[i]);
         if (rc) return rc;
