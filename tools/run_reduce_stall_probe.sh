@@ -11,7 +11,9 @@
 # each under flock /tmp/aien-gb10.lock (waits for the lock, never times out or kills the chip test), with
 # OMEGA_PROBE_WAIT_MS=5000 so a stall costs 5 s instead of 10 minutes, and writes stdout/stderr per arm to
 # ~/workspace/evidence-out/E1-STALL-PROBE/<UTC>/ and prints a summary per arm:
-#   launches, median / p99 / max marker2_ms, count of marker2_ms > 1000, timeouts.
+#   launches, median / p99 / max marker2_ms and sem_ms, count > 1000 ms, timeouts, parity verdict.
+# marker2_ms is the discriminator (marker_mem is the only memory the arms change); the QMD release
+# semaphore lives in qmd_mem, still GPU-cacheable in both arms, and is waited on after marker2.
 # The physics checkout must be at the commit in physics.lock. The omega tree may be dirty (a probe, not a receipt).
 # Shell + coreutils + git + gcc + awk. No Python. Exit 0 on success, 2 on refusal or build failure.
 set -u
@@ -76,15 +78,21 @@ summarize() { # summarize ARM
     local tmo=$(grep -c '^GB10_PROBE_TIMEOUT' "$err")
     local rf=$(grep -c '^GB10_REDUCE_FAIL' "$err")
     local st=$(cat "$EVID/arm_$arm.status")
-    grep '^GB10_PROBE n=' "$err" | sed -n 's/.* marker2_ms=\([-0-9.]*\) .*/\1/p' | sort -g > "$EVID/arm_$arm.marker2_ms.sorted"
-    awk -v arm="$arm" -v nl="$nl" -v tmo="$tmo" -v rf="$rf" -v st="$st" '
-        { v[NR]=$1; if ($1>1000) slow++ }
-        END {
-            if (NR==0) { printf "arm %s: exit=%s launches=%d marker2 samples=0 timeouts=%d reduce_fail_lines=%d\n", arm, st, nl, tmo, rf; exit }
-            m=(NR%2)?v[(NR+1)/2]:(v[NR/2]+v[NR/2+1])/2
-            p=int(0.99*NR); if (p<0.99*NR) p++; if (p<1) p=1
-            printf "arm %s: exit=%s launches=%d median_marker2_ms=%.3f p99_marker2_ms=%.3f max_marker2_ms=%.3f count_gt_1000ms=%d timeouts=%d reduce_fail_lines=%d\n", arm, st, nl, m, v[p], v[NR], slow+0, tmo, rf
-        }' "$EVID/arm_$arm.marker2_ms.sorted"
+    # Parity verdict: a fast arm that returns wrong values is not a fix.
+    local par=$(grep -m1 '^RED_GB10_PARITY:' "$EVID/arm_$arm.stdout" | cut -d' ' -f2-)
+    local f
+    for f in marker2 sem; do
+        grep '^GB10_PROBE n=' "$err" | sed -n "s/.* ${f}_ms=\([-0-9.]*\).*/\1/p" | sort -g > "$EVID/arm_$arm.${f}_ms.sorted"
+        awk -v arm="$arm" -v f="$f" -v nl="$nl" -v tmo="$tmo" -v rf="$rf" -v st="$st" '
+            { v[NR]=$1; if ($1>1000) slow++ }
+            END {
+                if (NR==0) { printf "arm %s %s: exit=%s launches=%d samples=0 timeouts=%d reduce_fail_lines=%d\n", arm, f, st, nl, tmo, rf; exit }
+                m=(NR%2)?v[(NR+1)/2]:(v[NR/2]+v[NR/2+1])/2
+                p=int(0.99*NR); if (p<0.99*NR) p++; if (p<1) p=1
+                printf "arm %s %s: exit=%s launches=%d median_ms=%.3f p99_ms=%.3f max_ms=%.3f count_gt_1000ms=%d timeouts=%d reduce_fail_lines=%d\n", arm, f, st, nl, m, v[p], v[NR], slow+0, tmo, rf
+            }' "$EVID/arm_$arm.${f}_ms.sorted"
+    done
+    echo "arm $arm parity: ${par:-MISSING}"
 }
 
 for arm in A B; do
