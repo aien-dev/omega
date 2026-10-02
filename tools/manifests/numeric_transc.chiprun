@@ -44,7 +44,8 @@ echo "== nvdisasm provenance"
 tools/divsqrt_nvdisasm_check.sh > "$CHIPRUN_RUN_DIR/nvdisasm.log" 2>&1; NVD_RC=$?
 grep -E "^\[|^VERDICT|^nvdisasm" "$CHIPRUN_RUN_DIR/nvdisasm.log"
 grep "^nvdisasm" "$CHIPRUN_RUN_DIR/nvdisasm.log" | sed "s/^/HOSTTIER_NVD:/"
-build/test_omega_numeric_transc_gb10_cpu --digest | sed "s/^/HOSTTIER_KDIG:/"
+build/test_omega_numeric_transc_gb10_cpu --digest > "$CHIPRUN_RUN_DIR/kdig.txt" || { echo "kernel digest failed"; exit 1; }
+sed "s/^/HOSTTIER_KDIG:/" "$CHIPRUN_RUN_DIR/kdig.txt"
 build/test_omega_numeric_transc_gb10_cpu; HOST_RC=$?
 [ "$HOST_RC" = 0 ] && [ "$NVD_RC" = 0 ] || { echo "host tier ($HOST_RC) or nvdisasm check ($NVD_RC) failed"; exit 1; }
 '

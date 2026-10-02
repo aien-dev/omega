@@ -71,7 +71,7 @@ build_world() { # MANIFEST
     cp "$1" "$OM/tools/manifests/numeric_transc.chiprun"
     git -C "$PHYS" rev-parse HEAD > "$OM/physics.lock"
     echo "build/" > "$OM/.gitignore"
-    printf '#!/bin/sh\nif [ "$1" = --digest ]; then printf "EXP2 12 aaaa\\nLOG2 34 bbbb\\n"; exit 0; fi\necho "[PASS] fake host check"; echo "FAKE_HOST_LAST"; exit ${FAKE_HOST_RC:-0}\n' > "$OM/tools/fakehost.sh"
+    printf '#!/bin/sh\nif [ "$1" = --digest ]; then printf "EXP2 12 aaaa\\nLOG2 34 bbbb\\n"; exit ${FAKE_DIGEST_RC:-0}; fi\necho "[PASS] fake host check"; echo "FAKE_HOST_LAST"; exit ${FAKE_HOST_RC:-0}\n' > "$OM/tools/fakehost.sh"
     printf '#!/bin/sh\necho "[PASS] fake nvd"\necho "nvdisasm fake provenance line"\necho "VERDICT PASS"\nexit ${FAKE_NVD_RC:-0}\n' > "$OM/tools/divsqrt_nvdisasm_check.sh"
     printf 'build/test_omega_numeric_transc_gb10_cpu:\n\tmkdir -p build && cp tools/fakehost.sh $@ && chmod +x $@\n' > "$OM/Makefile"
     chmod +x "$OM/tools/"*.sh "$OM/tools/run_numeric_transc_gate.sh"
@@ -166,6 +166,9 @@ suite() {
     runw nvdfail FAKE_NVD_RC=1 -- EXP2
     ck nvdfail_refusal test "$RC" = 1 -a "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
     ck nvdfail_no_chip lacks '^== chip run'
+    runw digfail FAKE_DIGEST_RC=1 -- EXP2
+    ck digfail_refusal test "$RC" = 1 -a "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
+    ck digfail_no_chip lacks '^== chip run'
     # fuser: any open handle on the lock file refuses, even without flock
     exec 8> "$LOCK"; runw fuser -- EXP2; exec 8>&-
     ck fuser_refusal test "$RC" = 1 -a "$(tail -n 1 "$OUT")" = "VERDICT NOT_RUN"
@@ -222,7 +225,8 @@ mutant gate 's/^GATE=E1-TRANSC-GB10/GATE=E1-TRANSC/' happy_gate_fields
 mutant nohost "/^HOST_TIER_CMD=/,/^'\$/c\\HOST_TIER_CMD=true" hostfail_refusal
 mutant dirtyok 's/^REFUSE_DIRTY_OMEGA=1/REFUSE_DIRTY_OMEGA=0/' dirty_refusal
 mutant nonvd 's#^tools/divsqrt_nvdisasm_check.sh > #true > #' nvdfail_refusal
-mutant nokdig 's#^build/test_omega_numeric_transc_gb10_cpu --digest | sed "s/^/HOSTTIER_KDIG:/"#true#' happy_kernels
+mutant nokdig 's#^build/test_omega_numeric_transc_gb10_cpu --digest > .*#true#' happy_kernels
+mutant nokdigcheck 's#^build/test_omega_numeric_transc_gb10_cpu --digest > \(.*\) || { echo "kernel digest failed"; exit 1; }$#build/test_omega_numeric_transc_gb10_cpu --digest > \1#' digfail_refusal
 mutant pass_loose "s/^PASS_LINE=.*/PASS_LINE='^VERDICT'/" notrun0_receipt
 sed 's#^SOURCES="src/omega_numeric_divsqrt_gb10.c #SOURCES="#' "$MAN" > "$T/m_dropsrc"
 sed 's#src/sha256.c#src/sha256_nope.c#' "$MAN" > "$T/m_badfile"
