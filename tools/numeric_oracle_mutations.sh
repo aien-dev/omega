@@ -20,9 +20,9 @@ set -u
 HERE=$(cd -P "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-SRCS="tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c
-      src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c
-      src/omega_blackwell_qmd.c src/sha256.c"
+# One line on purpose: $SRCS is interpolated into the runner's -b string, which
+# the runner executes with sh -c, so a newline here would split the gcc command.
+SRCS="tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c"
 
 # id ~ file ~ edit ~ test ID that must FAIL (or UNDECLARED_SKIP)
 cat > "$TMP/rows" <<'ROWS_EOF'
