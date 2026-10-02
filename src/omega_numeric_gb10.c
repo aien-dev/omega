@@ -18,8 +18,41 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <time.h>
 
 #define OMEGA_BW_SETUP_WORDS_COUNT 18
+/* Device-failure diagnostics (M20 GB10 instrumentation). Every
+ * OMEGA_NUMERIC_ERR_DEVICE return below goes through gb10_devfail, which
+ * prints one GB10_DEVFAIL line to stderr: the step that failed, the driver
+ * return code, errno, the nvrm error text, the wait value and the marker word
+ * for waits, and the elapsed ms since the launch began. It only reports: the
+ * return code stays OMEGA_NUMERIC_ERR_DEVICE, there is no retry and no wait
+ * value changes. */
+static double gb10_ms_since(const struct timespec *t0) {
+    struct timespec t;
+    timespec_get(&t, TIME_UTC); /* C11; no feature macro needed */
+    return (double)(t.tv_sec - t0->tv_sec) * 1e3 + (double)(t.tv_nsec - t0->tv_nsec) / 1e6;
+}
+
+static int gb10_devfail(const char *fn, const char *step, M16NativeContext *ctx, int do_close, int drv_rc,
+                        int saved_errno, long wait_ms, const volatile uint32_t *word, uint32_t want,
+                        const struct timespec *t0) {
+    double ms = gb10_ms_since(t0);
+    fprintf(stderr, "GB10_DEVFAIL fn=%s step=%s drv_rc=%d errno=%d rm_err=\"%s\" live_allocs=%u faulted=%u",
+            fn, step, drv_rc, saved_errno, ctx->rm.err, (unsigned)ctx->rm.live_count, (unsigned)ctx->rm.faulted);
+    if (wait_ms >= 0)
+        fprintf(stderr, " wait_ms=%ld word=0x%08x want=0x%08x", wait_ms, word ? (unsigned)*word : 0u, (unsigned)want);
+    fprintf(stderr, " elapsed_ms=%.3f\n", ms);
+    if (do_close) m16_native_close(ctx);
+    return OMEGA_NUMERIC_ERR_DEVICE;
+}
+/* Plain step: drv_rc is the value the call returned. */
+#define GB10_FAIL(step, close_, rc_) gb10_devfail(__func__, (step), &ctx, (close_), (rc_), errno, -1, NULL, 0u, &t0)
+/* Wait step: also log the wait value and the word read. */
+#define GB10_FAIL_WAIT(step, rc_, ms_, w_, want_) \
+    gb10_devfail(__func__, (step), &ctx, 1, (rc_), errno, (long)(ms_), (w_), (want_), &t0)
+
 static const uint32_t NUMERIC_SETUP_WORDS[OMEGA_BW_SETUP_WORDS_COUNT] = {
     0x20012061, 0x0000cec0, 0x20012092, 0x00000001, 0x200120a8, 0x0000000f, 0x2001255d, 0x00000003,
     0x2001255e, 0x20000000, 0x2001255f, 0x000fffff, 0x20012557, 0x00000003, 0x20012558, 0x22000000,
@@ -63,12 +96,15 @@ int omega_gb10_execute_simt_op(const char *op_name,
         return drc;
     }
 
+    struct timespec t0;
+    timespec_get(&t0, TIME_UTC);
     M16NativeContext ctx;
-    if (m16_native_open(&ctx) != 0) return OMEGA_NUMERIC_ERR_DEVICE;
-    if (m16_native_create_channel(&ctx) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
+    int drc_;
+    if ((drc_ = m16_native_open(&ctx)) != 0) return GB10_FAIL("open", 0, drc_);
+    if ((drc_ = m16_native_create_channel(&ctx)) != 0) return GB10_FAIL("channel", 1, drc_);
 
     NvrmMem large_pb;
-    if (nvrm_alloc(&ctx.rm, 0x10000, &large_pb) != 0) { m16_native_close(&ctx); return OMEGA_NUMERIC_ERR_DEVICE; }
+    if ((drc_ = nvrm_alloc(&ctx.rm, 0x10000, &large_pb)) != 0) return GB10_FAIL("alloc_pb", 1, drc_);
     ctx.pb_mem = large_pb;
 
     size_t bytes = (count * sizeof(float) + 0xfffULL) & ~0xfffULL;
@@ -83,8 +119,7 @@ int omega_gb10_execute_simt_op(const char *op_name,
         nvrm_alloc(&ctx.rm, bytes, &out_mem) != 0 ||
         nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0 ||
         nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
-        m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+        return GB10_FAIL("alloc_buffers", 1, -1);
     }
 
     memcpy(a_mem.cpu, in_a, count * sizeof(float));
@@ -96,8 +131,7 @@ int omega_gb10_execute_simt_op(const char *op_name,
     /* Calibrated sm_121 vecadd with this op's patch; no default instruction. */
     size_t out_code_len = 0;
     if (omega_numeric_build_kernel(info->op, code_mem.cpu, code_mem.size, &out_code_len) != OMEGA_NUMERIC_OK) {
-        m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+        return GB10_FAIL("build_kernel", 1, -1);
     }
 
     /* Driver constant bank. Word 223 (c[0x0][0x37c]) is loaded into R1 at
@@ -143,8 +177,7 @@ int omega_gb10_execute_simt_op(const char *op_name,
     if (omega_blackwell_build_qmd0(qmd0_words, qmd0_va, qmd1_va) != 0 ||
         omega_blackwell_build_qmd1(qmd1_words, &qmd_cfg) != 0 ||
         omega_blackwell_verify_qmd_invariants(qmd1_words) != 0) {
-        m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+        return GB10_FAIL("qmd", 1, -1);
     }
     {
         /* same structural check as submit_check, on the QMD actually submitted */
@@ -227,14 +260,12 @@ int omega_gb10_execute_simt_op(const char *op_name,
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20);
 
-    if (m16_native_submit_methods(&ctx, pb, pb_len) != 0) {
-        m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+    if ((drc_ = m16_native_submit_methods(&ctx, pb, pb_len)) != 0) {
+        return GB10_FAIL("submit", 1, drc_);
     }
 
-    if (m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000) != 0) {
-        m16_native_close(&ctx);
-        return OMEGA_NUMERIC_ERR_DEVICE;
+    if ((drc_ = m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000)) != 0) {
+        return GB10_FAIL_WAIT("marker_wait", drc_, 5000, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD);
     }
 
     memcpy(out_res, out_mem.cpu, count * sizeof(float));
