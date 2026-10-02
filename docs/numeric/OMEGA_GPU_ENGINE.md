@@ -356,8 +356,8 @@ header at all.
 
 This commit changes no gate measurement, no kernel, no launcher and no
 evidence file. It changes only: this document, `src/omega_gpu_engine.h`,
-`src/omega_gpu_engine.c` (still a stub) and
-`tests/test_omega_gpu_engine_compile.c`. `mk/omega-gpu-engine.mk` is unchanged.
+`src/omega_gpu_engine.c` (still a stub; superseded by section 13) and
+`tests/test_omega_gpu_engine_compile.c`. `mk/omega-gpu-engine.mk` is unchanged (superseded by section 13).
 The top-level Makefile is not edited (omega#198 edits it). No launcher file and
 not `src/omega_blackwell_submit.c` is edited in this cut. None of the files in
 the omega#198 list is touched (A1b section 6).
@@ -453,7 +453,7 @@ Carried from A1 and A1b, plus new ones from this cut:
    The wrapper must pick poison guaranteed to differ from the expected output;
    the engine cannot check that. Likelihood unmeasured.
 10. The numeric code -6 for "unwritten" is a proposal only.
-11. The clock used for `waited_ms` is left to A3.
+11. The clock used for `waited_ms` is left to A3 (superseded by section 13: an injectable test clock was added).
 12. Whether a failed SUBMIT can leave work queued on the GPU is unknown (no
     evidence read). This cut treats SUBMIT as a known failure and runs cleanup;
     the queen may want SUBMIT to count as uncertain too. UNVERIFIED, 50%.
@@ -473,3 +473,118 @@ Carried from A1 and A1b, plus new ones from this cut:
 | flag NO_POISON | removed: poison is always on |
 | Phase A may not edit `omega_blackwell_submit.c` | Phase A may edit it as a DRAFT that cannot merge before the M17/M18 gates and the vector chip test |
 | mutation tool: unspecified | shared shell runner `tools/mutation_runner.sh` |
+
+## 13. Host tests and mutants (A3a engine core)
+
+Status: host NOT_RUN, chip NOT_RUN. Nothing in this section has been compiled
+or executed by its author. The queue lines `DEEP2-A3a-host`, `DEEP2-A3a-mut`
+and `DEEP2-A3a-compile` carry the first runs.
+
+What A3a adds: the real `omega_gpu_execute` in `src/omega_gpu_engine.c`
+(replacing the stub when a backend is set), a fake-backend host test, and a
+mutation sweep. Build targets in `mk/omega-gpu-engine.mk`: `test-gpu-engine`,
+`test-gpu-engine-mutants`, `test-gpu-engine-compile`. No physics header, no
+device. The Blackwell backend and `omega_blackwell_submit.c` are untouched
+(A3b).
+
+Core details the doc did not fix before (choices of this cut):
+- Order of backend calls: open, channel, alloc of SCRATCH, PROGRAM, INPUT_A,
+  INPUT_B, OUTPUT (in that order; SCRATCH gets `bytes == 0`, the backend sizes
+  it, UNVERIFIED: the A3b backend may need a different rule), copy-in of
+  PROGRAM, INPUT_A, INPUT_B, poison fill, build, submit, marker wait, marker2
+  wait (skipped with NO_C3), release semaphore wait, barrier, copy-out, then
+  free in reverse allocation order and close.
+- Diagnostics (driver code, text, observed marker, marker2 and semaphore words)
+  are captured with one `diagnostics` call at the FIRST failure of a run,
+  including OUTPUT_UNCHANGED, and are not captured on success. `errno` is read
+  immediately after the failing callback. A later cleanup fault never
+  overwrites them.
+- `waited_ms` is measured by the engine around each wait callback using
+  CLOCK_MONOTONIC. A small additive test hook,
+  `omega_gpu_engine_test_set_clock`, lets the host test supply a fake clock so
+  `waited_ms` is asserted exactly.
+- The header has one output only (`OMEGA_GPU_ENGINE_JOB_OUTPUTS` is 1, no
+  buffer counts), so the "two outputs" and "buffer count out of range" cases
+  of the A3a brief do not exist yet. The unchanged-word count is per output
+  and the test checks output 0.
+- With no backend set, the defined stub result (INTERNAL_INVARIANT at step
+  NOT_IMPLEMENTED) is kept, as section 6 says. A NULL job or result is
+  INVALID_ARGS.
+- SUBMIT failure is a known failure (section 11, item 12): cleanup runs, no
+  block. A barrier or copy-out failure also runs cleanup (completion is known).
+
+Test cases in `tests/test_omega_gpu_engine.c` (id: what it guards):
+- SUCCESS_FULL_RUN: a good run is SUCCESS with every result field defined,
+  output bytes copied back, balanced open/close.
+- CALL_ORDER_FULL_RUN: the exact backend call order of the whole run.
+- STATE_ADVANCES_STEP_BY_STEP: `last_state` at each backend call (INITIAL until
+  build, PREPARED at submit, SUBMITTED during the waits, GPU_COMPLETE at barrier
+  and copy-out, OUTPUT_PRODUCED during cleanup).
+- ROLES_BYTES_AND_REVERSE_FREE_ORDER: alloc and copy-in roles and byte counts,
+  free in reverse order.
+- PER_STEP_TIMEOUTS_FROM_JOB: each wait gets its own timeout from the job.
+- POISON_WRITTEN_BEFORE_SUBMIT: the fake device output holds the wrapper poison
+  words at submit.
+- NO_C3_SKIPS_MARKER2_ONLY: the NO_C3 flag drops only the marker2 wait.
+- FAIL_DEVICE_OPEN, FAIL_CHANNEL_CREATE, FAIL_ALLOC (third buffer, partial
+  cleanup), FAIL_PREPARE_COPY_IN, FAIL_PREPARE_FILL_POISON, FAIL_PREPARE_BUILD:
+  failure name, failing step, last state INITIAL, driver code, errno and text
+  passthrough, cleanup, host output untouched.
+- FAIL_SUBMIT_IS_NOT_UNCERTAIN: SUBMIT cleans up and does not block.
+- FAIL_VISIBILITY_BARRIER, FAIL_VISIBILITY_COPY_OUT: VISIBILITY_WAIT at the
+  right step, cleanup, no block.
+- UNCERTAIN_MARKER_TIMEOUT, UNCERTAIN_MARKER2_UNKNOWN_STATE,
+  UNCERTAIN_RELEASE_DRIVER_FAULT: COMPLETION_WAIT or RELEASE_WAIT, which wait,
+  configured limit, exact `waited_ms`, observed sync words, retained = 1,
+  nothing freed or closed, process blocked.
+- UNCERTAIN_BLOCKS_NEXT_JOB_NO_BACKEND_CALL, UNCERTAIN_TEST_RESET_CLEARS_BLOCK.
+- UNCHANGED_NOTHING_WRITTEN, UNCHANGED_PARTIAL_EXACT_COUNT,
+  UNCHANGED_LAST_WORD_ONLY, UNCHANGED_FIRST_WORD_ONLY,
+  UNCHANGED_ALL_WRITTEN_IS_SUCCESS, UNCHANGED_NEEDS_POISON_FILL:
+  OUTPUT_UNCHANGED with the exact count, SUCCESS when every word changed.
+- CLEANUP_FREE_FAILS_AFTER_GOOD_RUN, CLEANUP_CLOSE_FAILS_AFTER_GOOD_RUN:
+  CLEANUP failure, last state stays OUTPUT_PRODUCED, remaining frees and close
+  still run. CLEANUP_FIRST_CLEANUP_FAULT_KEPT,
+  CLEANUP_FAULT_NEVER_OVERWRITES_FIRST_FAILURE,
+  CLEANUP_FAULT_AFTER_UNCHANGED_KEEPS_UNCHANGED: first failure is kept,
+  `cleanup_failed` set.
+- INVALID_ARGS_PROGRAM, _LAYOUT, _ZERO_ELEMENTS, _BUFFERS, _OUTPUT_ALIGNMENT,
+  _POISON, _UNKNOWN_FLAG, _ZERO_MARKER_TIMEOUT, _ZERO_RELEASE_TIMEOUT,
+  _ZERO_VISIBILITY_TIMEOUT, _ZERO_MARKER2_TIMEOUT_WITH_C3, _NULL_JOB,
+  _NULL_RESULT: INVALID_ARGS at VALIDATE with no backend call.
+- BLOCKED_REFUSES_BEFORE_ANY_CHECK_OR_CALL, BLOCK_RESET_ALLOWS_JOBS_AGAIN,
+  NO_BACKEND_NOT_IMPLEMENTED, BACKEND_TABLE_INCOMPLETE_REFUSED (each of the 15
+  callbacks missing in turn): the refusals that come before any backend call.
+
+Mutants in `tools/gpu_engine_mutations.sh` (each is a `MUT:<name>` marker in
+`src/omega_gpu_engine.c`; each must be KILLED by the host test; none is
+currently marked redundant):
+- VALIDATE_SKIPPED, VALID_PROGRAM, VALID_LAYOUT, VALID_COUNT_ZERO, VALID_ALIGN,
+  VALID_POISON_COUNT, VALID_FLAGS, VALID_TIMEOUT_MARKER1,
+  VALID_TIMEOUT_MARKER2: argument validation, whole and one check at a time.
+- BLOCK_CHECK_SKIPPED: the blocked refusal. BACKEND_CHECK_SKIPPED: the table
+  completeness check.
+- OPEN_NOT_TRACKED, ALLOC_NOT_TRACKED: cleanup bookkeeping (close, free).
+- CLEANUP_SKIPPED_CHANNEL, _ALLOC, _COPY_IN, _SUBMIT: cleanup on one early
+  failure path each. FREE_UNALLOCATED, FREE_SKIPPED, CLOSE_SKIPPED: what
+  cleanup frees and closes.
+- CLEANUP_OVERWRITES_FIRST, CLEANUP_FLAG_NOT_SET, SUCCESS_AFTER_CLEANUP_FAIL:
+  cleanup fault precedence and the SUCCESS rule.
+- POISON_FILL_SKIPPED, POISON_INDEX_FIXED, UNCHANGED_COUNT_SATURATES,
+  UNCHANGED_CHECK_SKIPPED: the poison write and the unchanged-word check.
+- STATE_PREPARED_SKIPPED, STATE_SUBMITTED_SKIPPED, STATE_GPU_COMPLETE_SKIPPED,
+  STATE_OUTPUT_VISIBLE_SKIPPED, STATE_OUTPUT_PRODUCED_SKIPPED,
+  STATE_SUCCESS_SKIPPED: each transition's `last_state` update.
+- MARKER1_WAIT_SKIPPED, MARKER1_TIMEOUT_WRONG, MARKER1_RESULT_IGNORED,
+  MARKER2_WAIT_SKIPPED, C3_FLAG_IGNORED, MARKER2_RESULT_IGNORED,
+  RELEASE_WAIT_SKIPPED, RELEASE_RESULT_IGNORED, BARRIER_SKIPPED,
+  BARRIER_RESULT_IGNORED: the completion rule, per wait: skipping the call,
+  ignoring its result, the NO_C3 flag, the timeout wiring.
+- UNCERTAIN_FREES_MARKER1, UNCERTAIN_FREES_MARKER2, UNCERTAIN_FREES_RELEASE
+  (free and close on uncertain completion), RETAINED_FLAG_NOT_SET, NO_BLOCK
+  (do not block afterwards): the uncertain-completion rule.
+- WAITED_NOT_A_DIFFERENCE: `waited_ms` is end minus start.
+
+Not covered by any host test (needs the chip, see section 10): whether the
+sequence is sufficient on real hardware, cache visibility under faults,
+recovery after an uncertain completion, persistent kernels.
