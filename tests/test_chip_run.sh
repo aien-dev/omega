@@ -374,6 +374,7 @@ mkman "$T/m-fs3.sh" "FINAL_LINE_STYLE=verdict; RECEIPT_EXTRA_JQ='.verdict = \"PA
 reset_world; CRMAN=$T/m-fs3.sh cr final_style_fatal FAKE_MODE=fail -- "${PD[@]}"
 expect final_style_fatal 1 '^RECEIPT_EXTRA_JQ forged a PASS verdict$'
 assert final_style_fatal "fatal ends with VERDICT FAIL" test "$(tail -n 1 "$OUT")" = "VERDICT FAIL"
+assert fatal_verdict_style "fatal prints a VERDICT FAIL line and no CHIP_RUN: FAIL line" bash -c 'grep -q "^VERDICT FAIL$" "$1" && ! grep -q "^CHIP_RUN: FAIL" "$1"' _ "$OUT"
 mkman "$T/m-fs4.sh" "FINAL_LINE_STYLE=bogus"
 reset_world; CRMAN=$T/m-fs4.sh cr final_style_value -- "${PD[@]}"
 expect final_style_value 1 '^CHIP_RUN: BAD_MANIFEST FINAL_LINE_STYLE='
@@ -390,6 +391,10 @@ expect gpu_fuser_free 0 '^CHIP_RUN: PASS'
 mkman "$T/m-fu2.sh" "GPU_LOCK_MODE=bogus"
 reset_world; CRMAN=$T/m-fu2.sh cr gpu_mode_value -- "${PD[@]}"
 expect gpu_mode_value 1 '^CHIP_RUN: BAD_MANIFEST GPU_LOCK_MODE='
+# regression (PR 213 review): a bad manifest value must stop the run (fail-open if bad_manifest is undefined), with no receipt and no shell error
+assert bad_manifest_def "bad manifest exits nonzero, no 'command not found'" bash -c '! grep -q "command not found" "$1"' _ "$OUT"
+assert final_style_value "bad manifest wrote no receipt" test -z "$(ls "$T"/ev-final_style_value/*.json 2>/dev/null)"
+assert gpu_mode_value "bad GPU_LOCK_MODE wrote no receipt" test -z "$(ls "$T"/ev-gpu_mode_value/*.json 2>/dev/null)"
 
 # happy path and receipt
 reset_world; cr happy -- "${PD[@]}" -- --x 1

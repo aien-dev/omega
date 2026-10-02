@@ -77,9 +77,9 @@ EST_LOAD_CMD=${CHIPRUN_EST_LOAD_CMD:-pgrep est_load}
 FLAG_MINE=0; FLAG_TEXT=""; FAIL_REASON=""
 REFUSE_EXIT=2; REFUSE_VERDICT_LINE="CHIP_RUN: NOT_RUN"
 refuse() { echo "REFUSED: $*"; echo "$REFUSE_VERDICT_LINE"; exit "$REFUSE_EXIT"; }
+bad_manifest() { echo "CHIP_RUN: BAD_MANIFEST $*"; exit 1; } # REFUSAL:bad_manifest_def
 FINAL_LINE_STYLE=chip_run   # manifest may set "verdict": the last line is "VERDICT <word>" (old transc style)
-fatal() { if [ "$FINAL_LINE_STYLE" = verdict ]; then echo "$*"; echo "VERDICT FAIL"; else echo "CHIP_RUN: FAIL $*"; fi; exit 1; }
-fatal() { echo "CHIP_RUN: FAIL $*"; exit 1; }
+fatal() { if [ "$FINAL_LINE_STYLE" = verdict ]; then echo "$*"; echo "VERDICT FAIL"; else echo "CHIP_RUN: FAIL $*"; fi; exit 1; } # REFUSAL:fatal_verdict_style
 fail() { FAIL_REASON=${FAIL_REASON:-$*}; }
 cleanup() {
     [ "$FLAG_MINE" = 1 ] || return 0
