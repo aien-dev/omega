@@ -172,6 +172,11 @@ test-gate14-combine:
 test-chip-run:
 	tests/test_chip_run.sh
 
+# Host-only check of the unwritten-trap manifest and its wrapper. No GPU.
+.PHONY: test-chip-run-trap-manifest
+test-chip-run-trap-manifest:
+	tests/test_chip_run_trap_manifest.sh
+
 # Gate 5 (OMEGA-NUMERIC-0), CPU tiers only: reference, CPU parity, provenance
 # and negative tests. Opens no device. The GB10 tier and the receipt come
 # from tests/run_numeric_gates.sh on the chip. Exits nonzero while any gate
