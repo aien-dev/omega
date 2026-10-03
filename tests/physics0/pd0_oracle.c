@@ -20,6 +20,7 @@
 #include "pd0_calib.h"
 #include "pd0_sparse.h"
 
+
 #define SEEDS 5
 
 static const double BOUND_IN[PD0_LEVELS] = {0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.03, 0};
@@ -27,11 +28,84 @@ static const double BOUND_EX[PD0_LEVELS] = {0.06, 0.06, 0.06, 0.06, 0.06, 0.06, 
 static const double BOUND_ONE[PD0_LEVELS] = {0.01, 0.01, 0.01, 0.01, 0.01, 0.01, -1, 0};
 static const int64_t COEF_PPM[PD0_LEVELS] = {50000, 50000, 50000, 50000, 50000, 100000, -1, 0};
 
+/* L6 latent estimator. The oracle knows the generator FORM (spec 4.1):
+ *   ds1 = (-k s0 + m h + u) dt,   dh = (-w h + q s0) dt,   h = 0 at every reset.
+ * The scale of h is not identifiable, so h is fixed to the q = 1 convention
+ * (h_hat = h / q) and the product m*q is what is fitted. Given a = 1 - w dt the
+ * latent trajectory is a linear recursion of observed s0 alone,
+ *   g' = a g + dt s0, g = 0 at the first step of every episode,
+ * and (ds1 - u dt) = (-k dt) s0 + (m q dt) g is linear in (k, m q). So: for each
+ * candidate w solve a 2-parameter least squares, keep the w with least squared
+ * residual (coarse grid over a wide w range, then golden-section refinement).
+ * Exact and deterministic; no alternation needed. FIT/SELECT data only. */
+typedef struct { double k, mq, w, sse; } l6_est;
+
+static double l6_eval(const pd0_gather *g, double w, double dt, double *k_out, double *mq_out) {
+    int n = g->n;
+    double a = 1.0 - w * dt, hh = 0, sxx = 0, sxg = 0, sgg = 0, sxy = 0, sgy = 0, syy = 0;
+    uint32_t ep = 0;
+    for (int i = 0; i < n; i++) {
+        const pd0_transition *t = &g->t[i];
+        if (i == 0 || t->episode != ep) { hh = 0; ep = t->episode; }
+        double s0 = (double)t->before[0] / 1e6;
+        double y = (double)(t->after[1] - t->before[1]) / 1e6 - dt * ((double)t->u[0] / 1e6);
+        sxx += s0 * s0; sxg += s0 * hh; sgg += hh * hh; sxy += s0 * y; sgy += hh * y; syy += y * y;
+        hh = a * hh + dt * s0;
+    }
+    double det = sxx * sgg - sxg * sxg;
+    if (fabs(det) < 1e-18) return -1;
+    double bx = (sxy * sgg - sgy * sxg) / det, bg = (sgy * sxx - sxy * sxg) / det;
+    if (k_out) *k_out = -bx / dt;
+    if (mq_out) *mq_out = bg / dt;
+    return syy - 2 * (bx * sxy + bg * sgy) + bx * bx * sxx + 2 * bx * bg * sxg + bg * bg * sgg;
+}
+
+static int l6_estimate(const pd0_gather *g, double dt, l6_est *e) {
+    double best = -1, bw = 0;
+    for (double w = 0.2; w <= 4.0001; w += 0.05) {
+        double s = l6_eval(g, w, dt, NULL, NULL);
+        if (s >= 0 && (best < 0 || s < best)) { best = s; bw = w; }
+    }
+    if (best < 0) return -1;
+    double lo = bw - 0.05, hi = bw + 0.05, gr = 0.6180339887498949;
+    for (int it = 0; it < 60; it++) {
+        double c = hi - gr * (hi - lo), d = lo + gr * (hi - lo);
+        if (l6_eval(g, c, dt, NULL, NULL) < l6_eval(g, d, dt, NULL, NULL)) hi = d; else lo = c;
+    }
+    e->w = 0.5 * (lo + hi);
+    e->sse = l6_eval(g, e->w, dt, &e->k, &e->mq);
+    return e->sse < 0 ? -1 : 0;
+}
+
+/* per-coefficient errors in ppm vs truth (k, w directly; m*q as the identifiable product) */
+static l6_est g_l6_est;
+static int64_t g_l6_err[3];
+static int g_l6_in_range;
+static int64_t l6_ppm(double est, double tru) { return (int64_t)llround(fabs(est - tru) / fabs(tru) * 1e6); }
+
+static int oracle_fit_l6(const pd0_relation *truth, const pd0_gather *g, pd0_relation *out) {
+    *out = *truth;
+    double dt = (double)truth->eq[0].t[0].coef / 1e6, ktr = -(double)truth->eq[1].t[0].coef / 1e6 / dt;
+    double m = (double)truth->eq[1].t[1].coef / 1e6 / dt, w_tr = -(double)truth->eq[2].t[0].coef / 1e6 / dt;
+    double q = (double)truth->eq[2].t[1].coef / 1e6 / dt;
+    l6_est e;
+    if (l6_estimate(g, dt, &e)) return -1;
+    g_l6_est = e;
+    g_l6_err[0] = l6_ppm(e.k, ktr); g_l6_err[1] = l6_ppm(e.w, w_tr); g_l6_err[2] = l6_ppm(e.mq, m * q);
+    /* the form's declared constant ranges (spec 4.1): k [2,5], w [1,2], m*q [0.25,1] */
+    g_l6_in_range = e.k >= 2.0 && e.k <= 5.0 && e.w >= 1.0 && e.w <= 2.0 && e.mq >= 0.25 && e.mq <= 1.0;
+    out->eq[1].t[0].coef = -(int64_t)llround(e.k * dt * 1e6);
+    out->eq[1].t[1].coef = (int64_t)llround(e.mq * dt * 1e6);   /* h scale: q = 1 */
+    out->eq[2].t[0].coef = -(int64_t)llround(e.w * dt * 1e6);
+    out->eq[2].t[1].coef = (int64_t)llround(dt * 1e6);
+    return 0;
+}
+
 /* fit only the constants of the true form: per equation, least squares of
  * D target on the true monomials over FIT transitions (observed vars only) */
 static int oracle_fit(const pd0_relation *truth, const pd0_gather *g, pd0_relation *out) {
     *out = *truth;
-    if (truth->n_latent) return -1; /* latent estimation not implemented in this cut */
+    if (truth->n_latent) return oracle_fit_l6(truth, g, out);
     for (int e = 0; e < truth->n_eq; e++) {
         const pd0_eq *te = &truth->eq[e];
         int p = te->n_terms, n = g->n;
@@ -61,7 +135,9 @@ static void emit_result(FILE *f, const char *name, const pd0_calib_result *r, co
     int ok_coef = COEF_PPM[level] < 0 || (ppm >= 0 && ppm <= COEF_PPM[level]);
     int ok_size = pd0_relation_size(rel) <= pd0_gen_true_size(level) + 2;
     int ok_support = pd0_relation_supports(rel, truth);
-    int ok = ok_in && ok_ex && ok_one && ok_coef && ok_size && ok_support;
+    int is_l6fit = level == PD0_L6 && strcmp(name, "oracle_fit") == 0;
+    int ok_range = !is_l6fit || g_l6_in_range;
+    int ok = ok_in && ok_ex && ok_one && ok_coef && ok_size && ok_support && ok_range;
     if (all_ok) *all_ok &= ok;
     fprintf(f, "      \"%s\": {\"nrmse_inbox\": %.6f, \"nrmse_extrap\": %.6f, \"nrmse_onestep\": %.6f, "
                "\"truth_oob_episodes\": %d, \"coef_err_ppm\": %lld, \"size\": %d, \"description_bits\": %u, "
@@ -71,6 +147,10 @@ static void emit_result(FILE *f, const char *name, const pd0_calib_result *r, co
             pd0_relation_size(rel), pd0_relation_description_bits(rel), ok_support ? "true" : "false", pf(ok_in),
             pf(ok_ex), BOUND_ONE[level] < 0 ? "NOT_SCORED" : pf(ok_one), COEF_PPM[level] < 0 ? "NOT_SCORED" : pf(ok_coef),
             pf(ok_size), pf(ok_support), pf(ok));
+    if (is_l6fit)
+        fprintf(f, ", \n        \"oracle_fit_l6_estimate\": {\"k\": %.6f, \"w\": %.6f, \"m_times_q\": %.6f, \"h_scale\": \"q=1 convention\", \"fit_sse\": %.3e, "
+                   "\"err_ppm\": {\"k\": %lld, \"w\": %lld, \"m_times_q\": %lld}, \"in_declared_ranges\": \"%s\"}",
+                g_l6_est.k, g_l6_est.w, g_l6_est.mq, g_l6_est.sse, (long long)g_l6_err[0], (long long)g_l6_err[1], (long long)g_l6_err[2], pf(ok_range));
 }
 
 int main(int argc, char **argv) {
@@ -111,7 +191,7 @@ int main(int argc, char **argv) {
             emit_result(f, "oracle_exact", &r_exact, &truth, &truth, level, &v1_exact);
             fprintf(f, ",\n");
             if (have_fit) emit_result(f, "oracle_fit", &r_fit, &fit, &truth, level, &v1_fit);
-            else fprintf(f, "      \"oracle_fit\": \"NOT_RUN (latent estimation not in this cut)\"");
+            else fprintf(f, "      \"oracle_fit\": \"NOT_RUN\"");
             fprintf(f, ",\n");
             if (have_sparse) emit_result(f, "sparse_ref", &r_sparse, &sparse, &truth, level, NULL);
             else fprintf(f, "      \"sparse_ref\": \"NOT_RUN\"");
@@ -130,10 +210,10 @@ int main(int argc, char **argv) {
             free(gg.t);
         }
         fprintf(f, "],\n  \"v3_worst_rate\": %.4f,\n  \"verdicts\": {\"V1_oracle_exact\": \"%s\", \"V1_oracle_fit\": \"%s\", \"V3\": \"%s\"}\n}\n",
-                worst_breach, pf(v1_exact), level == PD0_L6 ? "NOT_RUN" : pf(v1_fit), pf(v3));
+                worst_breach, pf(v1_exact), pf(v1_fit), pf(v3));
         fclose(f);
         printf("PHYSICS0_G1_V1_%s%s: %s (oracle_exact %s, oracle_fit %s)\n", pd0_gen_level_name(level), tag,
-               pf(v1_exact && (level == PD0_L6 || v1_fit)), pf(v1_exact), level == PD0_L6 ? "NOT_RUN" : pf(v1_fit));
+               pf(v1_exact && v1_fit), pf(v1_exact), pf(v1_fit));
         printf("PHYSICS0_G1_V3_%s%s: %s (worst breach rate %.4f over seeds 1..20)\n", pd0_gen_level_name(level), tag, pf(v3), worst_breach);
         overall &= v1_exact;
     }

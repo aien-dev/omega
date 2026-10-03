@@ -61,6 +61,11 @@ $(P0_DIR)/pd0-oracle-mutant: tests/physics0/pd0_oracle.c $(P0_CALIB) $(P0_SRCS) 
 	@mkdir -p $(P0_DIR)
 	$(CC) $(P0_CFLAGS) -DPD0_MUTANT_SIGN -o $@ tests/physics0/pd0_oracle.c $(P0_CALIB) $(P0_SRCS) -lm
 
+# wrong-latent-sign mutant: L6 generator uses -m*h; oracle_fit must FAIL (its fitted m*q leaves the declared range)
+$(P0_DIR)/pd0-oracle-mutant-latent: tests/physics0/pd0_oracle.c $(P0_CALIB) $(P0_SRCS) $(P0_HDRS) $(P0_CALIB_HDRS)
+	@mkdir -p $(P0_DIR)
+	$(CC) $(P0_CFLAGS) -DPD0_MUTANT_LATENT_SIGN -o $@ tests/physics0/pd0_oracle.c $(P0_CALIB) $(P0_SRCS) -lm
+
 $(P0_DIR)/test_pd0_osc: tests/physics0/test_pd0_osc.c $(P0_OSC_LIB) $(P0_LEARNER_SRCS) src/sha256.c $(P0_HDRS)
 	@mkdir -p $(P0_DIR)
 	$(CC) $(P0_OSC_CFLAGS) -o $@ tests/physics0/test_pd0_osc.c $(P0_OSC_LIB) $(P0_LEARNER_SRCS) src/sha256.c -lm
@@ -69,7 +74,7 @@ $(P0_DIR)/test_pd0_osc_asan: tests/physics0/test_pd0_osc.c $(P0_OSC_LIB) $(P0_LE
 	$(CC) $(P0_OSC_CFLAGS) $(P0_ASAN) -o $@ tests/physics0/test_pd0_osc.c $(P0_OSC_LIB) $(P0_LEARNER_SRCS) src/sha256.c -lm
 
 physics0-test: $(P0_DIR)/test_pd0_world $(P0_DIR)/test_pd0_world_asan $(P0_LEARNER_OBJS) $(P0_DIR)/learner/pd0_gen.o \
-		$(P0_DIR)/pd0-oracle $(P0_DIR)/pd0-oracle_asan $(P0_DIR)/pd0-oracle-mutant \
+		$(P0_DIR)/pd0-oracle $(P0_DIR)/pd0-oracle_asan $(P0_DIR)/pd0-oracle-mutant $(P0_DIR)/pd0-oracle-mutant-latent \
 		$(P0_DIR)/test_pd0_osc $(P0_DIR)/test_pd0_osc_asan $(P0_DIR)/pd0-world
 	@mkdir -p $(P0_DIR)/receipts
 	./$(P0_DIR)/test_pd0_world > $(P0_DIR)/g0.out; tail -1 $(P0_DIR)/g0.out; grep -q '^PHYSICS0_G0: PASS$$' $(P0_DIR)/g0.out
@@ -80,6 +85,8 @@ physics0-test: $(P0_DIR)/test_pd0_world $(P0_DIR)/test_pd0_world_asan $(P0_LEARN
 	cmp $(P0_DIR)/receipts/pd0-oracle-L1.json $(P0_DIR)/pd0-oracle-L1-asan.json
 	-./$(P0_DIR)/pd0-oracle-mutant 1 $(P0_DIR) -mutant > $(P0_DIR)/mutant.out
 	@grep -q '^PHYSICS0_G1_V1_L1-mutant: FAIL' $(P0_DIR)/mutant.out && echo "PHYSICS0_MUTANT_SIGN: PASS (wrong generator sign is caught by the oracle check)" || { echo "PHYSICS0_MUTANT_SIGN: FAIL"; exit 1; }
+	-./$(P0_DIR)/pd0-oracle-mutant-latent 6 $(P0_DIR) -mutlat > $(P0_DIR)/mutant_latent.out
+	@grep -q "^PHYSICS0_G1_V1_L6-mutlat: FAIL (oracle_exact FAIL, oracle_fit FAIL)" $(P0_DIR)/mutant_latent.out && echo "PHYSICS0_MUTANT_LATENT_SIGN: PASS (wrong latent sign makes oracle_fit FAIL)" || { echo "PHYSICS0_MUTANT_LATENT_SIGN: FAIL"; exit 1; }
 	./$(P0_DIR)/test_pd0_osc tests/physics0/osc/pd0_helpers.osc 20000 > $(P0_DIR)/osc.out; tail -2 $(P0_DIR)/osc.out; grep -q '^PHYSICS0_OSC_DIFF: PASS$$' $(P0_DIR)/osc.out
 	./$(P0_DIR)/test_pd0_osc_asan tests/physics0/osc/pd0_helpers.osc 2000 > $(P0_DIR)/osc_asan.out; tail -1 $(P0_DIR)/osc_asan.out; grep -q '^PHYSICS0_OSC_DIFF: PASS$$' $(P0_DIR)/osc_asan.out
 	@echo "physics0-test: PASS (G0, G5 isolation, G1 V1 oracle all levels, V3 breach rates recorded, mutant caught, OSC differential; substrate only, no learner)"
@@ -88,5 +95,5 @@ physics0-evidence: physics0-test
 	cp $(P0_DIR)/receipts/pd0-oracle-*.json evidence/physics0/
 	{ echo "receipt: PD0_G0"; echo "spec: aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 2f881b1 (rev 2)"; echo "recorder: STAND_IN"; echo "range_guard: STAND_IN"; \
 	  echo "commit: $$(git rev-parse HEAD)"; echo "date_utc: $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "--- test_pd0_world"; cat $(P0_DIR)/g0.out; \
-	  echo "--- isolation"; cat $(P0_DIR)/isolation.out; echo "--- osc differential"; cat $(P0_DIR)/osc.out; echo "--- mutant"; cat $(P0_DIR)/mutant.out; } > evidence/physics0/pd0-g0-receipt.txt
+	  echo "--- isolation"; cat $(P0_DIR)/isolation.out; echo "--- osc differential"; cat $(P0_DIR)/osc.out; echo "--- mutant"; cat $(P0_DIR)/mutant.out; echo "--- mutant latent sign"; cat $(P0_DIR)/mutant_latent.out; } > evidence/physics0/pd0-g0-receipt.txt
 endif
