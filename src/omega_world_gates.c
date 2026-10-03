@@ -515,6 +515,12 @@ static bool test_m19_gate6_mixed_workload(void) {
     return true;
 }
 
+/* CHIPWAIT-1c: second completion word (same layout as the world dispatch path, see
+ * WORLD_MARKER2_OFFSET in omega_accelerator_world.c) and the sentinel the last entry
+ * of each batch writes after an L2 flush (value from src/omega_numeric_gb10.c). */
+#define M19_WRAP_MARKER2_OFFSET 0x10
+#define M19_WRAP_MARKER2_SENTINEL 0x46464646u
+
 /* Every QUEUE_WRAP failure exit prints one named reason (init, ring_discovery,
  * enqueue, completion_timeout, wrap_count, channel_state, output_parity) so a
  * failed run says which exit fired. Pass/fail decisions are unchanged. */
@@ -666,6 +672,26 @@ static bool test_m19_gate7_queue_wrap(void) {
     pb[pb_len++] = 0;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20);
+    /* CHIPWAIT-1c, the same block as src/omega_numeric_gb10.c (#225): after the WFI
+     * release of dispatch_id, flush GPU L2 dirty lines to memory (NVC96F_MEM_OP_A..D =
+     * 0x28..0x34, D bits 31:27 OPERATION = L2_FLUSH_DIRTY 0x10), then a second WFI
+     * release to an uncached word (completion page +0x10, GPU-uncached via
+     * nvrm_alloc_gpu_uncached in omega_accelerator_world.c). The marker2 payload is
+     * patched per entry: only the last entry of a batch writes the sentinel
+     * 0x46464646, so the host sentinel wait proves the last flush landed; earlier
+     * entries write their dispatch_id (never equal to the sentinel). */
+    pb[pb_len++] = nvrm_mthd(0, 0x0028, 4);
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = (0x10u << 27);
+    pb[pb_len++] = nvrm_mthd(0, 0x005c, 5);
+    pb[pb_len++] = (uint32_t)(world.completion.gpu_va + M19_WRAP_MARKER2_OFFSET);
+    pb[pb_len++] = (uint32_t)((world.completion.gpu_va + M19_WRAP_MARKER2_OFFSET) >> 32);
+    size_t marker2_idx = pb_len;
+    pb[pb_len++] = M19_WRAP_MARKER2_SENTINEL;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0x1 | (1u << 20);
 
     /* The pushbuffer pool holds exactly PB_SLOTS 4 KiB slots (0x10000 bytes).
      * A slot must not be rewritten until every GPFIFO entry that references it
@@ -681,10 +707,15 @@ static bool test_m19_gate7_queue_wrap(void) {
     while (submitted < stress_count) {
         uint32_t batch = stress_count - submitted;
         if (batch > pb_slots) batch = pb_slots;
+        /* Every earlier entry has retired (its marker2 was waited for), so the GPU is idle
+         * on this channel: clear marker2 so the sentinel wait cannot see a stale value. */
+        *(volatile uint32_t *)((uint8_t *)world.completion.cpu_marker + M19_WRAP_MARKER2_OFFSET) = 0;
+        __asm__ volatile("dsb sy" ::: "memory");
 
         for (uint32_t k = 0; k < batch; k++) {
             dispatch_id++;
             pb[release_idx + 3] = dispatch_id;
+            pb[marker2_idx] = (k + 1 == batch) ? M19_WRAP_MARKER2_SENTINEL : dispatch_id;
             uint32_t off = (submitted % pb_slots) * 0x1000;
             memcpy((uint8_t *)world.m16.pb_mem.cpu + off, pb, pb_len * 4);
             __asm__ volatile("dsb sy" ::: "memory");
@@ -703,29 +734,46 @@ static bool test_m19_gate7_queue_wrap(void) {
         __asm__ volatile("dsb sy" ::: "memory");
 
         /* Same effective budget as the old spin (about 5 s with no progress),
-         * but the clock is monotonic nanoseconds and any marker change restarts
-         * it. The hard cap is generous so a slow-but-moving batch is not cut. */
-        omega_gpu_wait_cfg_t wait_cfg;
-        memset(&wait_cfg, 0, sizeof(wait_cfg));
-        wait_cfg.progress_timeout_ms = 5000;
-        wait_cfg.total_timeout_ms = 600000;
-        omega_gpu_wait_report_t wrpt;
-        /* Dispatch ids are a free-running counter: sequence semantics. */
-        if (!omega_gpu_wait_sequence(world.completion.cpu_marker, dispatch_id, &wrpt, &wait_cfg)) {
-            snprintf(detail, sizeof(detail),
-                     "wait_kind=%s result=%s dispatch_id=%u submitted=%u expected=%u observed=%u "
-                     "rm.put=%u ring_capacity=%u channel_generation=%u channel_reconstructions=%u "
-                     "elapsed_ns=%llu last_progress_ns=%llu progress_count=%llu polls=%llu",
-                     omega_gpu_wait_kind_name(wrpt.wait_kind), omega_gpu_wait_result_name(wrpt.result),
-                     dispatch_id, submitted, wrpt.expected, wrpt.last_observed,
-                     (unsigned)world.m16.rm.put, ring_cap,
-                     (unsigned)world.channel_generation, (unsigned)world.channel_reconstructions,
-                     (unsigned long long)wrpt.elapsed_ns,
-                     (unsigned long long)(wrpt.last_progress_ns - wrpt.start_ns),
-                     (unsigned long long)wrpt.progress_count, (unsigned long long)wrpt.polls);
-            m19_wrap_exit("completion_timeout", detail);
-            omega_world_destroy(&world);
-            return false;
+         * but the clock is monotonic nanoseconds and any word change restarts
+         * it. The hard cap is generous so a slow-but-moving batch is not cut;
+         * the marker wait and the marker2 wait share one hard cap. Dispatch ids
+         * are a free-running counter: sequence semantics for the marker; marker2
+         * is awaited for its sentinel (reset to 0 before the batch, written
+         * non-sentinel by every entry but the last). Both go through the shared
+         * primitive in src/omega_gpu_wait.c. */
+        volatile uint32_t *marker2_word = (volatile uint32_t *)
+            ((uint8_t *)world.completion.cpu_marker + M19_WRAP_MARKER2_OFFSET);
+        uint32_t budget_ms = 600000;
+        for (int stage = 0; stage < 2; stage++) {
+            omega_gpu_wait_cfg_t wait_cfg;
+            memset(&wait_cfg, 0, sizeof(wait_cfg));
+            wait_cfg.progress_timeout_ms = 5000;
+            wait_cfg.total_timeout_ms = budget_ms;
+            omega_gpu_wait_report_t wrpt;
+            bool reached = stage == 0
+                ? omega_gpu_wait_sequence(world.completion.cpu_marker, dispatch_id, &wrpt, &wait_cfg)
+                : omega_gpu_wait_sequence(marker2_word, M19_WRAP_MARKER2_SENTINEL, &wrpt, &wait_cfg);
+            if (!reached) {
+                snprintf(detail, sizeof(detail),
+                         "wait=%s wait_kind=%s result=%s dispatch_id=%u submitted=%u expected=%u observed=%u "
+                         "marker2=%u marker2_expected=%u "
+                         "rm.put=%u ring_capacity=%u channel_generation=%u channel_reconstructions=%u "
+                         "elapsed_ns=%llu last_progress_ns=%llu progress_count=%llu polls=%llu",
+                         stage == 0 ? "marker" : "marker2",
+                         omega_gpu_wait_kind_name(wrpt.wait_kind), omega_gpu_wait_result_name(wrpt.result),
+                         dispatch_id, submitted, wrpt.expected, wrpt.last_observed,
+                         (unsigned)*marker2_word, M19_WRAP_MARKER2_SENTINEL,
+                         (unsigned)world.m16.rm.put, ring_cap,
+                         (unsigned)world.channel_generation, (unsigned)world.channel_reconstructions,
+                         (unsigned long long)wrpt.elapsed_ns,
+                         (unsigned long long)(wrpt.last_progress_ns - wrpt.start_ns),
+                         (unsigned long long)wrpt.progress_count, (unsigned long long)wrpt.polls);
+                m19_wrap_exit("completion_timeout", detail);
+                omega_world_destroy(&world);
+                return false;
+            }
+            uint64_t spent_ms = wrpt.elapsed_ns / 1000000ull;
+            budget_ms = spent_ms < budget_ms ? budget_ms - (uint32_t)spent_ms : 1u;
         }
         /* Only now are this batch's pushbuffer slots safe to reuse. */
         nvrm_retire(&world.m16.rm, dispatch_id);
