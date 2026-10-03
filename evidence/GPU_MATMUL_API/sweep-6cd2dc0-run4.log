@@ -1,0 +1,16 @@
+PASS 16x16x16 rc=OK chip_ns=124305 wall_ms=52.3 max_abs=2.38419e-07 max_rel=3.0714e-06 mismatches=0 e2e_rel=4.51833e-08 slices=1 calls=1 rows_per_call=16 cache_hit2=1
+PASS 32x32x32 rc=OK chip_ns=217138 wall_ms=89.6 max_abs=2.38419e-07 max_rel=2.17111e-05 mismatches=0 e2e_rel=4.77202e-08 slices=2 calls=2 rows_per_call=32 cache_hit2=1
+PASS 64x64x64 rc=OK chip_ns=509635 wall_ms=172.4 max_abs=4.76837e-07 max_rel=9.56023e-06 mismatches=0 e2e_rel=4.69721e-08 slices=4 calls=4 rows_per_call=64 cache_hit2=1
+PASS 128x128x128 rc=OK chip_ns=971939 wall_ms=355.5 max_abs=4.76837e-07 max_rel=0.000153941 mismatches=0 e2e_rel=5.41535e-08 slices=8 calls=8 rows_per_call=128 cache_hit2=1
+PASS 256x256x256 rc=OK chip_ns=7443288 wall_ms=2898.6 max_abs=9.53674e-07 max_rel=0.0178571 mismatches=0 e2e_rel=5.87267e-08 slices=16 calls=64 rows_per_call=64 cache_hit2=1
+PASS 512x512x512 rc=OK chip_ns=58674645 wall_ms=22791.2 max_abs=9.53674e-07 max_rel=0.04375 mismatches=0 e2e_rel=6.86441e-08 slices=32 calls=512 rows_per_call=32 cache_hit2=1
+PASS 1x1024x1024 rc=OK chip_ns=7209244 wall_ms=2923.3 max_abs=4.76837e-07 max_rel=6.47836e-05 mismatches=0 e2e_rel=4.95366e-08 slices=64 calls=64 rows_per_call=16 cache_hit2=1
+PASS 1x256x1024 rc=OK chip_ns=1795639 wall_ms=720.0 max_abs=4.76837e-07 max_rel=0.000146028 mismatches=0 e2e_rel=3.87896e-08 slices=16 calls=16 rows_per_call=16 cache_hit2=1
+PASS 16x1024x256 rc=OK chip_ns=7398287 wall_ms=2833.1 max_abs=4.76837e-07 max_rel=0.00181159 mismatches=0 e2e_rel=3.94155e-08 slices=64 calls=64 rows_per_call=16 cache_hit2=1
+PASS 8x1024x8 rc=OK chip_ns=7489873 wall_ms=2831.0 max_abs=4.76837e-07 max_rel=8.33806e-06 mismatches=0 e2e_rel=2.04752e-08 slices=64 calls=64 rows_per_call=16 cache_hit2=1
+PASS 1024x16x128 rc=OK chip_ns=873043 wall_ms=360.7 max_abs=4.76837e-07 max_rel=0.01 mismatches=0 e2e_rel=9.37062e-08 slices=1 calls=8 rows_per_call=128 cache_hit2=1
+PASS 192x16x192 rc=OK chip_ns=323521 wall_ms=134.4 max_abs=4.76837e-07 max_rel=4.77373e-05 mismatches=0 e2e_rel=1.0078e-07 slices=1 calls=3 rows_per_call=80 cache_hit2=1
+PASS 512x16x64 rc=OK chip_ns=300753 wall_ms=93.7 max_abs=4.76837e-07 max_rel=0.00213068 mismatches=0 e2e_rel=7.64946e-08 slices=1 calls=2 rows_per_call=256 cache_hit2=1
+PASS 256x16x256 rc=OK chip_ns=435872 wall_ms=180.8 max_abs=4.76837e-07 max_rel=2.54298e-05 mismatches=0 e2e_rel=9.74134e-08 slices=1 calls=4 rows_per_call=64 cache_hit2=1
+PASS 128x16x512 rc=OK chip_ns=441265 wall_ms=186.5 max_abs=4.76837e-07 max_rel=5.449e-05 mismatches=0 e2e_rel=8.99603e-08 slices=1 calls=4 rows_per_call=32 cache_hit2=1
+PASS: 15 checks, 0 failed
