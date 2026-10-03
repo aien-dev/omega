@@ -45,17 +45,22 @@ static uint64_t current_time_ns(void) {
 
 /* Exact-value (fixed) waits on the marker (with marker2 required) and then the
  * QMD semaphore. Progress stall 5000 ms (the old budget), hard total 600000 ms
- * (the omega_numeric_*_gb10.c cap). Prints one tagged line on failure. */
+ * (the omega_numeric_*_gb10.c cap) shared by the whole completion: each wait
+ * spends from *budget_ms. Prints one tagged line on failure. */
 static int bw_wait_one(const char *site, const char *what, volatile uint32_t *w, uint32_t want,
-                       volatile uint32_t *m2, uint32_t m2want) {
+                       volatile uint32_t *m2, uint32_t m2want, uint32_t *budget_ms) {
     omega_gpu_wait_cfg_t cfg;
     memset(&cfg, 0, sizeof(cfg));
     cfg.progress_timeout_ms = 5000;
-    cfg.total_timeout_ms = 600000;
+    cfg.total_timeout_ms = *budget_ms;
     cfg.marker2 = m2;
     cfg.marker2_want = m2want;
     omega_gpu_wait_report_t r;
-    if (omega_gpu_wait_fixed(w, want, &r, &cfg)) return 0;
+    if (omega_gpu_wait_fixed(w, want, &r, &cfg)) {
+        uint64_t spent_ms = r.elapsed_ns / 1000000ull;
+        *budget_ms = spent_ms < *budget_ms ? *budget_ms - (uint32_t)spent_ms : 1u;
+        return 0;
+    }
     fprintf(stderr,
             "BW_WAIT_FAIL site=%s wait=%s kind=%s result=%s expected=0x%x observed=0x%x "
             "marker2_observed=0x%x elapsed_ns=%llu progress_count=%llu polls=%llu\n",
@@ -67,9 +72,10 @@ static int bw_wait_one(const char *site, const char *what, volatile uint32_t *w,
 
 static int bw_wait_completion(const char *site, volatile uint32_t *hmarker,
                               volatile uint32_t *hmarker2, volatile uint32_t *hsem) {
+    uint32_t budget_ms = 600000;
     if (bw_wait_one(site, "marker", hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD,
-                    hmarker2, BW_MARKER2_PAYLOAD) != 0) return -1;
-    return bw_wait_one(site, "semaphore", hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, NULL, 0);
+                    hmarker2, BW_MARKER2_PAYLOAD, &budget_ms) != 0) return -1;
+    return bw_wait_one(site, "semaphore", hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, NULL, 0, &budget_ms);
 }
 
 int omega_blackwell_execute_vector(const OmegaVectorSpec *spec,
