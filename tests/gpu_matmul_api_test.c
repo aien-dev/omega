@@ -79,15 +79,20 @@ static int chip_sweep(const char *out_path) {
         double e2e_max_rel = 0.0;
         if (rc == OMEGA_GPU_MATMUL_OK) {
             for (size_t i = 0; i < m; i++) for (size_t j = 0; j < n; j++) {
-                double acc = 0.0;
-                for (size_t t = 0; t < k; t++) acc += (double)bf16r(a[i * k + t]) * (double)bf16r(b[t * n + j]);
+                double acc = 0.0, scale = 0.0;
+                for (size_t t = 0; t < k; t++) {
+                    double p = (double)bf16r(a[i * k + t]) * (double)bf16r(b[t * n + j]);
+                    acc += p; scale += fabs(p);
+                }
+                /* error relative to the accumulation scale (sum of |terms|), not to a
+                 * result that may cancel to near zero: f32 accumulation over k terms */
                 double d = fabs(acc - (double)c[i * n + j]);
-                double rel = d / (fabs(acc) > 1e-6 ? fabs(acc) : 1e-6);
+                double rel = d / (scale > 1e-6 ? scale : 1e-6);
                 if (rel > e2e_max_rel) e2e_max_rel = rel;
             }
         }
         double wall_ms = (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
-        int pass = rc == OMEGA_GPU_MATMUL_OK && info.parity_verified && e2e_max_rel < 1e-3
+        int pass = rc == OMEGA_GPU_MATMUL_OK && info.parity_verified && e2e_max_rel < 1e-5
                    && rc2 == OMEGA_GPU_MATMUL_OK && info2.kernel_cache_hit && repeat_mismatch == 0;
         CHECK(pass, "shape %ux%ux%u rc=%s parity=%d max_rel=%g e2e_rel=%g rc2=%s hit=%d repeat_mismatch=%zu",
               m, k, n, omega_gpu_matmul_rc_name(rc), info.parity_verified, info.max_rel_err, e2e_max_rel,
