@@ -4,7 +4,7 @@
  *   ./gpu_matmul_api_test --out receipt.json     chip sweep over shapes, JSON receipt
  *
  * Shapes come from OMEGA_GPU_MATMUL_SHAPES ("m,k,n;m,k,n;..."), default below.
- * Pass rule per shape: rc OK, parity verified, max_rel_err < 1e-3 (bf16 inputs
+ * Pass rule per shape: rc OK, parity verified, end-to-end error < 1e-5 relative to the accumulation scale (bf16 inputs
  * against the host bf16 oracle, f32 accumulate; only summation order differs).
  */
 #include "omega_gpu_matmul_api.h"
