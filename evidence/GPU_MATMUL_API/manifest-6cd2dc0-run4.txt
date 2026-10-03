@@ -1,0 +1,8 @@
+omega_sha=6cd2dc01663ba059f54c5946688eb6d7b7958aec
+physics_sha=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+binary_sha256=ed5ebf36c82b5d3bd354b31c4f030c3dc81a91d3a291906cffc088a59f13017e
+tree_clean=0
+start=2026-10-03T22:08:32Z
+rc=0 end=2026-10-03T22:09:47Z
+6ae7abe1d63835e394fbd83a7858acd07724402cdadffadec67b53da05a14372  /home/drakestapleton/workspace/evidence-out/GPU-MATMUL-API-6cd2dc0/receipt-run4.json
+094f7c1e1001b34da3812f08e7a8658227249f037333ee54bce551b9a4a46d2a  /home/drakestapleton/workspace/evidence-out/GPU-MATMUL-API-6cd2dc0/sweep-run4.log
