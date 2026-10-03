@@ -1,0 +1,38 @@
+{
+  "receipt": "PD0_G1",
+  "level": "L3",
+  "spec": "aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 2f881b1 (rev 2)",
+  "recorder": "STAND_IN",
+  "range_guard": "STAND_IN",
+  "bounds": {"inbox": 0.020, "extrap": 0.060, "onestep": 0.010, "coef_ppm": 50000, "size": 10},
+  "instances": [
+    {"seed": 1, "constants_micro": [1553302, 1716710, 0, 0], "fit_transitions": 3000, "fit_episodes": 30,
+      "oracle_exact": {"nrmse_inbox": 0.000005, "nrmse_extrap": 0.000004, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 0, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "oracle_fit": {"nrmse_inbox": 0.000005, "nrmse_extrap": 0.000004, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 0, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "sparse_ref": {"nrmse_inbox": 0.000005, "nrmse_extrap": 0.000004, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 0, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"}
+    },
+    {"seed": 2, "constants_micro": [2692588, 1657698, 0, 0], "fit_transitions": 3000, "fit_episodes": 30,
+      "oracle_exact": {"nrmse_inbox": 0.000005, "nrmse_extrap": 0.000004, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 0, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "oracle_fit": {"nrmse_inbox": 0.000002, "nrmse_extrap": 0.000001, "nrmse_onestep": 0.000000, "truth_oob_episodes": 0, "coef_err_ppm": 12, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "sparse_ref": {"nrmse_inbox": 0.000002, "nrmse_extrap": 0.000001, "nrmse_onestep": 0.000000, "truth_oob_episodes": 0, "coef_err_ppm": 12, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"}
+    },
+    {"seed": 3, "constants_micro": [2191717, 1057917, 0, 0], "fit_transitions": 3000, "fit_episodes": 30,
+      "oracle_exact": {"nrmse_inbox": 0.000008, "nrmse_extrap": 0.000005, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 0, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "oracle_fit": {"nrmse_inbox": 0.000004, "nrmse_extrap": 0.000004, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 18, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "sparse_ref": {"nrmse_inbox": 0.000004, "nrmse_extrap": 0.000004, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 18, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"}
+    },
+    {"seed": 4, "constants_micro": [3104743, 568472, 0, 0], "fit_transitions": 3000, "fit_episodes": 30,
+      "oracle_exact": {"nrmse_inbox": 0.000007, "nrmse_extrap": 0.000005, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 0, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "oracle_fit": {"nrmse_inbox": 0.000003, "nrmse_extrap": 0.000004, "nrmse_onestep": 0.000000, "truth_oob_episodes": 0, "coef_err_ppm": 35, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "sparse_ref": {"nrmse_inbox": 0.000003, "nrmse_extrap": 0.000004, "nrmse_onestep": 0.000000, "truth_oob_episodes": 0, "coef_err_ppm": 35, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"}
+    },
+    {"seed": 5, "constants_micro": [1438672, 1972043, 0, 0], "fit_transitions": 3000, "fit_episodes": 30,
+      "oracle_exact": {"nrmse_inbox": 0.000004, "nrmse_extrap": 0.000003, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 0, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "oracle_fit": {"nrmse_inbox": 0.000004, "nrmse_extrap": 0.000003, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 0, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"},
+      "sparse_ref": {"nrmse_inbox": 0.000004, "nrmse_extrap": 0.000003, "nrmse_onestep": 0.000001, "truth_oob_episodes": 0, "coef_err_ppm": 0, "size": 8, "description_bits": 576, "support": true, "checks": {"inbox": "PASS", "extrap": "PASS", "onestep": "PASS", "coef": "PASS", "size": "PASS", "support": "PASS"}, "verdict": "PASS"}
+    }
+  ],
+  "v3_breach": [{"seed": 1, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 2, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 3, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 4, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 5, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 6, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 7, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 8, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 9, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 10, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 11, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 12, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 13, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 14, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 15, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 16, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 17, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 18, "episodes": 31, "oob": 1, "rate": 0.0323}, {"seed": 19, "episodes": 30, "oob": 0, "rate": 0.0000}, {"seed": 20, "episodes": 30, "oob": 0, "rate": 0.0000}],
+  "v3_worst_rate": 0.0323,
+  "verdicts": {"V1_oracle_exact": "PASS", "V1_oracle_fit": "PASS", "V3": "PASS"}
+}
