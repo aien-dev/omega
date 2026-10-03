@@ -19,7 +19,7 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 	src/omega_library.c src/omega_discovery.c src/omega_machine.c src/omega_realize_synth.c \
 	src/omega_matvec.c src/omega_accelerator.c src/omega_accelerator_world.c \
 	src/omega_vector.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
-	src/omega_blackwell_realize.c src/omega_blackwell_submit.c src/omega_blackwell_engine.c src/omega_gpu_engine.c src/omega_blackwell_gates.c src/omega_blackwell_matmul.c src/omega_blackwell_codegen.c src/omega_world_gates.c \
+	src/omega_blackwell_realize.c src/omega_blackwell_submit.c src/omega_blackwell_engine.c src/omega_gpu_engine.c src/omega_blackwell_gates.c src/omega_blackwell_matmul.c src/omega_blackwell_codegen.c src/omega_gpu_matmul_api.c src/omega_world_gates.c \
 	src/omega_evidence.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
 	tools/omegatool.c
@@ -2128,3 +2128,18 @@ test-vc-bridge: tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_vc_
 	  vmut cap                       omega_vc_bridge refuse-bridge-record-in-build-domain         '    ou32(&o, 0);'; \
 	  vmut build-refuses-selfminted  omega_resolve   refuse-bridge-record-in-build-domain         '    (void)lists_selfminted_cap;'
 	@echo "test-vc-bridge: PASS (bridge verifies and recomputes the id, bridge records refused in build, ASan/UBSan clean, 4 mutants killed)"
+
+# FB-1 cut 1: native (no CUDA) matmul entry point for the inference stack.
+# libomega_gpu.a = everything the tool links except its main; the Rust FFI crate
+# (cut 2) links it. test-gpu-matmul-api runs the host-only refusals; the chip
+# sweep is `./build/gpu_matmul_api_test --out receipt.json` through the heavy queue.
+.PHONY: libomega_gpu test-gpu-matmul-api
+GPU_API_OBJS = $(filter-out $(OUT_DIR)/omegatool.o,$(OBJS))
+GPU_API_TEST = $(OUT_DIR)/gpu_matmul_api_test
+$(OUT_DIR)/libomega_gpu.a: check-physics-lock $(GPU_API_OBJS)
+	ar rcs $@ $(GPU_API_OBJS)
+libomega_gpu: $(OUT_DIR)/libomega_gpu.a
+$(GPU_API_TEST): tests/gpu_matmul_api_test.c src/omega_gpu_matmul_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -o $@ tests/gpu_matmul_api_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-matmul-api: $(GPU_API_TEST)
+	./$(GPU_API_TEST) --host-only
