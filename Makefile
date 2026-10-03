@@ -161,6 +161,12 @@ test-m19: $(TARGET)
 test-m19r-qualify:
 	tools/test_m19r_qualify.sh
 
+# Host-only tests of the chipwait campaign runner (tools/chipwait_campaign.sh)
+# against a stub qualifier. No GPU.
+.PHONY: test-chipwait-campaign
+test-chipwait-campaign:
+	tools/test_chipwait_campaign.sh
+
 # Host-only tests of the Gate 14 combiner (tools/gate14_combine.sh). No GPU.
 .PHONY: test-gate14-combine
 test-gate14-combine:
