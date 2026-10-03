@@ -1,0 +1,14 @@
+kind: score-oracle
+verifier_commit: 3c72895857c3
+input_sha256: c6d5e25894e6d55d11f9ad280909ec769a916f1d579e60f1a1f234b3ae735cbb
+code: 0
+name: PD0V_OK
+recorder: STAND_IN
+range_check: STAND_IN
+fail_mask: 0x0
+inbox_nrmse_micro: 7
+extrap_nrmse_micro: 23
+onestep_nrmse_micro: 2
+size: 4
+bits: 192
+ref_nrmse_micro: 0

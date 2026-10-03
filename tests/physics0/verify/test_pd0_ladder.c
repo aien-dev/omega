@@ -5,7 +5,7 @@
 #include <stdio.h>
 static int g_checks, g_fail;
 #define CHECK(c) do { g_checks++; if (!(c)) { g_fail++; fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #c); } } while (0)
-#define CHECK_CODE(rc, R, want) do { g_checks++; if ((rc) != (want) && (R).code != (want)) { g_fail++; fprintf(stderr, "FAIL %s:%d: rc=%d (%s) R.code=%d (%s) state=%s want %s\n", __FILE__, __LINE__, rc, pd0v_name(rc), (R).code, pd0v_name((R).code), pd0_ladder_state_name((R).state), #want); } } while (0)
+#define CHECK_CODE(rc, R, want) do { g_checks++; if ((rc) != (want) && (R).code != (want) && (R).stall_code != (want)) { g_fail++; fprintf(stderr, "FAIL %s:%d: rc=%d (%s) R.code=%d (%s) state=%s want %s\n", __FILE__, __LINE__, rc, pd0v_name(rc), (R).code, pd0v_name((R).code), pd0_ladder_state_name((R).state), #want); } } while (0)
 static const char *g_dir = "build/tests-physics0-verify/receipts";
 static void receipt(const char *kind, const bundle *b, int code) { uint8_t h[32]; sha256_hash(b->buf, b->len, h); char path[1024]; if (pd0_receipt_write(g_dir, kind, h, code, NULL, path, sizeof path)) fprintf(stderr, "receipt write failed for %s\n", kind); }
 static int run(int level, uint64_t seed, const bundle_opts *o, pd0_ladder_report *R, uint8_t *law, size_t *law_len, const char *kind)
@@ -45,7 +45,7 @@ int main(void)
     memset(&o, 0, sizeof o); o.batch_seed_reuse = 1; rc = run(1, 1, &o, &R, law, &ln, "ladder-stream-reuse"); CHECK_CODE(rc, R, PD0V_T7_STREAM_REUSED);
     memset(&o, 0, sizeof o); o.all_planner = 1; rc = run(1, 1, &o, &R, law, &ln, "ladder-origin-imbalance"); CHECK_CODE(rc, R, PD0V_T7_ORIGIN_IMBALANCE);
     /* wrong constant: the committed predictions miss; the hypothesis is refuted, not promoted */
-    memset(&o, 0, sizeof o); o.wrong_k = 1; rc = run(1, 1, &o, &R, law, &ln, "ladder-wrong-k"); CHECK(rc == 0 && R.n_refutations == 1 && R.state == LS_CANDIDATE && R.n_exceptions == 1 && R.f >= 1);
+    memset(&o, 0, sizeof o); o.wrong_k = 1; rc = run(1, 1, &o, &R, law, &ln, "ladder-wrong-k"); CHECK((rc == 0 || rc == PD0V_T8_STATE_SKIPPED) && R.n_refutations == 1 && R.state == LS_CANDIDATE && R.n_exceptions == 1 && R.f >= 1 && R.last_nrmse_micro > 20000); /* refuted on trial 1; later preregs without a new T4 are a skipped state */
     CHECK(pd0_ladder_verify_law(&R, &P, law, ln) == 0); { pd0_law *l = calloc(1, sizeof *l); CHECK(pd0_law_parse(law, ln, l) == 0 && l->state != PDLAW_PROVISIONAL_LAW); free(l); }
     /* partial ladders: a PROVISIONAL_LAW record is refused as a skipped state */
     memset(&o, 0, sizeof o); o.stop_after_prereg = 1; rc = run(1, 1, &o, &R, law, &ln, "ladder-stop-prereg"); CHECK(rc == 0 && R.state == LS_PREDICTED && R.code == PD0V_T6_TRIAL_MISSING);

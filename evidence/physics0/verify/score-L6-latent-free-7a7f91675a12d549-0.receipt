@@ -1,0 +1,14 @@
+kind: score-L6-latent-free
+verifier_commit: 3c72895857c3
+input_sha256: 7a7f91675a12d5495e92a7996785613422a06d8c57498a39d203a647dc829bc7
+code: 307
+name: PD0V_SCORE_L6_LATENT_MISSING
+recorder: STAND_IN
+range_check: STAND_IN
+fail_mask: 0x181
+inbox_nrmse_micro: 40599
+extrap_nrmse_micro: 56458
+onestep_nrmse_micro: 0
+size: 3
+bits: 144
+ref_nrmse_micro: 39544

@@ -17,16 +17,16 @@ typedef struct {
     truth_world w; pd0_ladder_params P; pd0_rng g;
     pd0_rec *recs; uint32_t nrec;
 } bundle;
-static void b_append(bundle *b, uint8_t kind, const uint8_t *p, uint32_t n) { b->len = pd0_ledg_append(b->buf, b->len, LCAP, kind, p, n, b->last); }
-static void b_record(bundle *b, pd0_rec *r)
+static inline void b_append(bundle *b, uint8_t kind, const uint8_t *p, uint32_t n) { b->len = pd0_ledg_append(b->buf, b->len, LCAP, kind, p, n, b->last); }
+static inline void b_record(bundle *b, pd0_rec *r)
 {
     uint8_t tmp[512]; memcpy(r->prev_hash, b->rec_prev, PD0_HASH); r->seq = b->seq++; r->n_obs = b->P.n_obs;
     size_t n = pd0_rec_write(r, tmp, sizeof tmp); memcpy(b->rec_prev, r->record_hash, PD0_HASH); b_append(b, LEDG_OBS, tmp, (uint32_t)n);
     if (b->recs && b->nrec < 65536) b->recs[b->nrec++] = *r;
 }
-static void b_tag(bundle *b, uint32_t ep, uint8_t tag, uint32_t batch, uint8_t origin) { pd0_tag t = { ep, tag, batch, origin }; uint8_t p[16]; b_append(b, LEDG_TAG, p, (uint32_t)pd0_tag_write(&t, p)); }
+static inline void b_tag(bundle *b, uint32_t ep, uint8_t tag, uint32_t batch, uint8_t origin) { pd0_tag t = { ep, tag, batch, origin }; uint8_t p[16]; b_append(b, LEDG_TAG, p, (uint32_t)pd0_tag_write(&t, p)); }
 /* run one episode of the truth world (or the null world) with the given reset and schedule; returns the episode number */
-static uint32_t b_episode(bundle *b, const int64_t *reset, const pd0_step *steps, uint32_t n, const truth_world *w)
+static inline uint32_t b_episode(bundle *b, const int64_t *reset, const pd0_step *steps, uint32_t n, const truth_world *w)
 {
     uint32_t ep = b->episode++; int64_t st[PD0_MAX_VARS] = { 0 }, nx[PD0_MAX_VARS] = { 0 }; pd0_rec r; memset(&r, 0, sizeof r);
     r.kind = PD0_KIND_RESET; r.channel = PD0_CHAN_NONE; r.episode = ep; for (int j = 0; j < 2; j++) { st[j] = reset[j]; r.before[j] = r.after[j] = reset[j]; } b_record(b, &r);
@@ -34,15 +34,15 @@ static uint32_t b_episode(bundle *b, const int64_t *reset, const pd0_step *steps
         r.before[0] = st[0]; r.before[1] = st[1]; truth_step(w, st, steps[s].value, nx); memcpy(st, nx, sizeof st); r.after[0] = st[0]; r.after[1] = st[1]; b_record(b, &r); }
     return ep;
 }
-static void b_random_schedule(bundle *b, int64_t *reset, pd0_step *steps, uint32_t n) { for (int j = 0; j < 2; j++) reset[j] = draw_const(&b->g, -2000000, 2000000); for (uint32_t s = 0; s < n; s++) { steps[s].channel = 0; steps[s].value = draw_const(&b->g, -2000000, 2000000); } }
-static void b_init(bundle *b, int level, uint64_t seed)
+static inline void b_random_schedule(bundle *b, int64_t *reset, pd0_step *steps, uint32_t n) { for (int j = 0; j < 2; j++) reset[j] = draw_const(&b->g, -2000000, 2000000); for (uint32_t s = 0; s < n; s++) { steps[s].channel = 0; steps[s].value = draw_const(&b->g, -2000000, 2000000); } }
+static inline void b_init(bundle *b, int level, uint64_t seed)
 {
     memset(b, 0, sizeof *b); b->buf = malloc(LCAP); b->recs = malloc(sizeof(pd0_rec) * 65536); truth_init(&b->w, level, seed); pd0_rng_stream(&b->g, seed, "bundle");
     pd0_ladder_params_default(&b->P, 2, 1); b->P.size_bound = 6; b->P.eps_bound_micro = 20000;
 }
-static void b_free(bundle *b) { free(b->buf); free(b->recs); }
+static inline void b_free(bundle *b) { free(b->buf); free(b->recs); }
 /* Build the whole honest ladder (or a mutant). Returns the law bytes length via *law_len after running the checker. */
-static int b_build(bundle *b, const bundle_opts *o, pd0_ladder_report *R)
+static inline int b_build(bundle *b, const bundle_opts *o, pd0_ladder_report *R)
 {
     int64_t reset[2]; pd0_step steps[100]; const truth_world *w = &b->w; truth_world null_w = b->w;
     /* 1. collect 10 episodes of 100 steps */
@@ -74,7 +74,7 @@ static int b_build(bundle *b, const bundle_opts *o, pd0_ladder_report *R)
     for (int t = 0; t < 5; t++) { memset(x, 0, sizeof *x); x->n_obs = 2; x->n_hyp = 2; x->n_steps = 20;
         if (o->reuse_schedule && t == 0) { const pd0_rec *r0 = &b->recs[0]; x->reset[0] = r0->after[0]; x->reset[1] = r0->after[1]; for (int s = 0; s < 20; s++) { x->steps[s].channel = b->recs[1 + s].channel; x->steps[s].value = b->recs[1 + s].applied; } }
         else b_random_schedule(b, x->reset, x->steps, 20);
-        pd0_rel_rollout_fn(&cand, x->reset, x->steps, 20, &x->expected[0][0][0]); pd0_rel_rollout_fn(&nullr, x->reset, x->steps, 20, &x->expected[1][0][0]); x->divergence_micro = 5000000;
+        { int64_t tmp[40]; pd0_rel_rollout_fn(&cand, x->reset, x->steps, 20, tmp); for (int s = 0; s < 20; s++) for (int j = 0; j < 2; j++) x->expected[0][s][j] = tmp[s * 2 + j]; pd0_rel_rollout_fn(&nullr, x->reset, x->steps, 20, tmp); for (int s = 0; s < 20; s++) for (int j = 0; j < 2; j++) x->expected[1][s][j] = tmp[s * 2 + j]; } x->divergence_micro = 5000000;
         size_t xn = pd0_exp_write(x, xb, 16384);
         if (!(o->trial_without_prereg && t == 4)) b_append(b, LEDG_PREREG, xb, (uint32_t)xn);
         if (o->stop_after_prereg) continue;
@@ -84,7 +84,7 @@ static int b_build(bundle *b, const bundle_opts *o, pd0_ladder_report *R)
     /* 7. three replication batches of 10 episodes */
     for (uint32_t bt = 0; bt < 3; bt++) { pd0_batch bb = { bt + 1, o->batch_seed_reuse ? 1000u : 1000u + bt, 10 }; b_append(b, LEDG_BATCH, pl, (uint32_t)pd0_batch_write(&bb, pl));
         for (int e = 0; e < 10; e++) { b_tag(b, b->episode, TAG_REP, bt + 1, o->all_planner ? ORIGIN_PLANNER : (e & 1) ? ORIGIN_RANDOM : ORIGIN_PLANNER); b_random_schedule(b, reset, steps, 20); b_episode(b, reset, steps, 20, w); } }
-    if (o->demote_after_law) { null_w.k = w->k * 2; b_tag(b, b->episode, TAG_TRIAL, 0, 0); b_random_schedule(b, reset, steps, 20); b_episode(b, reset, steps, 20, &null_w); }
+    if (o->demote_after_law) { null_w.k = w->k * 2; pd0_batch bb = { 9, 7777, 1 }; b_append(b, LEDG_BATCH, pl, (uint32_t)pd0_batch_write(&bb, pl)); b_tag(b, b->episode, TAG_REP, 9, ORIGIN_RANDOM); b_random_schedule(b, reset, steps, 20); b_episode(b, reset, steps, 20, &null_w); }
 done:
     return pd0_ladder_check(b->buf, b->len, &b->P, R);
 }

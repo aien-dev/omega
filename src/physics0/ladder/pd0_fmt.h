@@ -62,7 +62,7 @@ int pd0_rel_max_degree(const pd0_rel *r);
 /* one tick: state has n_vars entries (observed then latent); chan/value applied */
 void pd0_rel_step(const pd0_rel *r, const int64_t *state, uint8_t chan, int64_t value, int64_t *next);
 
-/* ---- PDLAW1 ---- */
+/* ---- PDLAW1 (list counts and claim length are u16, per the substrate lane amendment in omega PR #243) ---- */
 enum { PDLAW_REJECTED = 0, PDLAW_REFUTED = 1, PDLAW_HYPOTHESIS = 2, PDLAW_PROVISIONAL_LAW = 3 };
 typedef struct { uint64_t record_seq; uint8_t record_hash[PD0_HASH]; int64_t predicted, observed, error_micro; } pd0_exception;
 typedef struct { uint8_t experiment_id[PD0_HASH]; uint8_t kind; uint8_t prereg_hash[PD0_HASH]; uint8_t outcome_hash[PD0_HASH]; uint8_t result; uint64_t first_seq, last_seq; } pd0_experiment;

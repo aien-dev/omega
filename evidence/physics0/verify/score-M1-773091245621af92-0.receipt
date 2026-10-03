@@ -1,0 +1,14 @@
+kind: score-M1
+verifier_commit: 3c72895857c3
+input_sha256: 773091245621af929ea7c3a98d3a448e86f7243caf5cd0a2a802bda434235d06
+code: 305
+name: PD0V_SCORE_CONSTANT_OFF
+recorder: STAND_IN
+range_check: STAND_IN
+fail_mask: 0x21
+inbox_nrmse_micro: 42127
+extrap_nrmse_micro: 45655
+onestep_nrmse_micro: 4141
+size: 4
+bits: 192
+ref_nrmse_micro: 0

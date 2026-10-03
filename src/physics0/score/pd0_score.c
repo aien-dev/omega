@@ -62,7 +62,7 @@ int pd0_score(const pd0_score_params *P, const pd0_rel *rel, uint32_t stored, pd
     if (aex.n && out->extrap_nrmse > P->extrap_bound) set_fail(out, PD0V_SCORE_EXTRAP_NRMSE);
     if (P->onestep_bound && a1.n && out->onestep_nrmse > P->onestep_bound) set_fail(out, PD0V_SCORE_ONESTEP_NRMSE);
     /* L6: harness-fitted latent-free reference must fail by the factor */
-    if (P->require_latent && n_fit) { pd0_rel ref; if (pd0_reference_fit(no, P->n_channels, P->size_bound, fit, n_fit, &ref) == 0) { acc ar; memset(&ar, 0, sizeof ar);
+    if (P->require_latent && n_fit) { pd0_rel ref; if (pd0_reference_fit(no, P->n_channels, P->size_bound / no ? P->size_bound / no : 1, fit, n_fit, &ref) == 0) { acc ar; memset(&ar, 0, sizeof ar);
             for (uint32_t i = 0; i < n_eps; i++) if (eps[i].in_box) { pd0_rel_rollout_fn(&ref, eps[i].init, eps[i].steps, PD0_MAX_STEPS, pr); for (uint32_t s = 0; s < PD0_MAX_STEPS; s++) acc_add(&ar, pr + s * no, eps[i].truth[s], no); }
             out->ref_nrmse = acc_nrmse(&ar, no); if (out->ref_nrmse < P->latent_ref_factor * P->inbox_bound) set_fail(out, PD0V_SCORE_L6_REFERENCE_TOO_GOOD); } }
     return out->code;

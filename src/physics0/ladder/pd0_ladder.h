@@ -20,6 +20,7 @@ void pd0_ladder_params_default(pd0_ladder_params *P, uint8_t n_obs, uint8_t n_ch
 
 typedef struct {
     int state, code, transition, demoted;
+    int stall_code;               /* first non-OK reason since the last successful transition */
     uint32_t n_refutations, p, f, confidence_ppm;
     int have_candidate; pd0_rel candidate; uint8_t candidate_hash[PD0_HASH];
     int64_t eps_micro;

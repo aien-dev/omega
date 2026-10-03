@@ -70,7 +70,7 @@ size_t pd0_rel_write(const pd0_rel *r, uint8_t *out, size_t cap)
 {
     size_t o = 0; unsigned ne = r->n_vars + r->n_channels;
     if (r->n_vars == 0 || r->n_vars > PD0_MAX_VARS || r->n_channels > PD0_MAX_CHAN || r->n_latent >= r->n_vars || r->n_equations > PD0_MAX_EQ) return 0;
-    if (cap < 11) return 0;
+    if (cap < 10) return 0;
     out[o++] = r->n_vars; out[o++] = r->n_latent; out[o++] = r->n_channels;
     pd0_put_u32(out + o, r->description_bits); o += 4;
     pd0_put_u16(out + o, r->n_refutations); o += 2;
@@ -91,7 +91,7 @@ size_t pd0_rel_write(const pd0_rel *r, uint8_t *out, size_t cap)
 int pd0_rel_parse(const uint8_t *in, size_t len, pd0_rel *r, size_t *used)
 {
     size_t o = 0;
-    if (len < 11) return PD0V_TRUNCATED;
+    if (len < 10) return PD0V_TRUNCATED;
     memset(r, 0, sizeof *r);
     r->n_vars = in[o++]; r->n_latent = in[o++]; r->n_channels = in[o++];
     r->description_bits = pd0_get_u32(in + o); o += 4;
@@ -196,14 +196,14 @@ size_t pd0_law_write(pd0_law *l, uint8_t *out, size_t cap)
     if (cap < o + 400) return 0;
     o += pd0_dom_write(&l->dom, out + o);
     pd0_put_u32(out + o, l->confidence_ppm); o += 4;
-    pd0_put_u32(out + o, l->n_exceptions); o += 4;
+    pd0_put_u16(out + o, (uint16_t)l->n_exceptions); o += 2;
     if (cap < o + (size_t)l->n_exceptions * 64 + (size_t)l->n_experiments * 115 + 40 + l->claim_len) return 0;
     for (uint32_t k = 0; k < l->n_exceptions; k++) {
         const pd0_exception *x = &l->exc[k];
         pd0_put_u64(out + o, x->record_seq); o += 8; memcpy(out + o, x->record_hash, PD0_HASH); o += PD0_HASH;
         put_i64(out + o, x->predicted); o += 8; put_i64(out + o, x->observed); o += 8; put_i64(out + o, x->error_micro); o += 8;
     }
-    pd0_put_u32(out + o, l->n_experiments); o += 4;
+    pd0_put_u16(out + o, (uint16_t)l->n_experiments); o += 2;
     for (uint32_t k = 0; k < l->n_experiments; k++) {
         const pd0_experiment *x = &l->exp[k];
         memcpy(out + o, x->experiment_id, PD0_HASH); o += PD0_HASH; out[o++] = x->kind;
@@ -211,7 +211,7 @@ size_t pd0_law_write(pd0_law *l, uint8_t *out, size_t cap)
         out[o++] = x->result; pd0_put_u64(out + o, x->first_seq); o += 8; pd0_put_u64(out + o, x->last_seq); o += 8;
     }
     memcpy(out + o, l->chain_root, PD0_HASH); o += PD0_HASH;
-    pd0_put_u32(out + o, l->claim_len); o += 4; memcpy(out + o, l->claim, l->claim_len); o += l->claim_len;
+    pd0_put_u16(out + o, (uint16_t)l->claim_len); o += 2; memcpy(out + o, l->claim, l->claim_len); o += l->claim_len;
     sha256_hash(out, o, l->law_id); memcpy(out + id_off, l->law_id, PD0_HASH);
     return o;
 }
@@ -229,19 +229,19 @@ int pd0_law_parse(const uint8_t *in, size_t len, pd0_law *l)
     o += u;
     if ((rc = dom_parse(in + o, len - o, &l->dom, &u)) != 0) return rc;
     o += u;
-    if (len < o + 8) return PD0V_TRUNCATED;
-    l->confidence_ppm = pd0_get_u32(in + o); o += 4; l->n_exceptions = pd0_get_u32(in + o); o += 4;
+    if (len < o + 6) return PD0V_TRUNCATED;
+    l->confidence_ppm = pd0_get_u32(in + o); o += 4; l->n_exceptions = pd0_get_u16(in + o); o += 2;
     if (l->confidence_ppm > 1000000u) return PD0V_BAD_FIELD;
     if (l->n_exceptions > PD0_MAX_EXC) return PD0V_TOO_LARGE;
-    if (len < o + (size_t)l->n_exceptions * 64 + 4) return PD0V_TRUNCATED;
+    if (len < o + (size_t)l->n_exceptions * 64 + 2) return PD0V_TRUNCATED;
     for (uint32_t k = 0; k < l->n_exceptions; k++) {
         pd0_exception *x = &l->exc[k];
         x->record_seq = pd0_get_u64(in + o); o += 8; memcpy(x->record_hash, in + o, PD0_HASH); o += PD0_HASH;
         x->predicted = get_i64(in + o); o += 8; x->observed = get_i64(in + o); o += 8; x->error_micro = get_i64(in + o); o += 8;
     }
-    l->n_experiments = pd0_get_u32(in + o); o += 4;
+    l->n_experiments = pd0_get_u16(in + o); o += 2;
     if (l->n_experiments > PD0_MAX_EXP) return PD0V_TOO_LARGE;
-    if (len < o + (size_t)l->n_experiments * 115 + PD0_HASH + 4) return PD0V_TRUNCATED;
+    if (len < o + (size_t)l->n_experiments * 115 + PD0_HASH + 2) return PD0V_TRUNCATED;
     for (uint32_t k = 0; k < l->n_experiments; k++) {
         pd0_experiment *x = &l->exp[k];
         memcpy(x->experiment_id, in + o, PD0_HASH); o += PD0_HASH; x->kind = in[o++];
@@ -250,7 +250,7 @@ int pd0_law_parse(const uint8_t *in, size_t len, pd0_law *l)
         if (x->kind > 1 || x->result > 1) return PD0V_BAD_FIELD;
     }
     memcpy(l->chain_root, in + o, PD0_HASH); o += PD0_HASH;
-    l->claim_len = pd0_get_u32(in + o); o += 4;
+    l->claim_len = pd0_get_u16(in + o); o += 2;
     if (l->claim_len > PD0_MAX_CLAIM) return PD0V_TOO_LARGE;
     if (len < o + l->claim_len) return PD0V_TRUNCATED;
     memcpy(l->claim, in + o, l->claim_len); o += l->claim_len;

@@ -7,8 +7,8 @@
 #include "pd0_score.h"
 #include <string.h>
 typedef struct { int level; int64_t dt, k, c, b, m, w, q; uint8_t n_obs, n_hidden; } truth_world;
-static int64_t draw_const(pd0_rng *g, int64_t lo, int64_t hi) { return lo + ((hi - lo) * pd0_rng_unit(g)) / PD0_MICRO; }
-static void truth_init(truth_world *w, int level, uint64_t seed)
+static inline int64_t draw_const(pd0_rng *g, int64_t lo, int64_t hi) { return lo + ((hi - lo) * pd0_rng_unit(g)) / PD0_MICRO; }
+static inline void truth_init(truth_world *w, int level, uint64_t seed)
 {
     pd0_rng g; pd0_rng_stream(&g, seed, "const"); memset(w, 0, sizeof *w); w->level = level; w->dt = 50000; w->n_obs = 2;
     switch (level) {
@@ -20,7 +20,7 @@ static void truth_init(truth_world *w, int level, uint64_t seed)
     }
 }
 /* state = observed then hidden */
-static void truth_step(const truth_world *w, const int64_t *s, int64_t u, int64_t *n)
+static inline void truth_step(const truth_world *w, const int64_t *s, int64_t u, int64_t *n)
 {
     int64_t dt = w->dt; n[0] = s[0] + pd0_mul(s[1], dt);
     switch (w->level) {
@@ -32,11 +32,11 @@ static void truth_step(const truth_world *w, const int64_t *s, int64_t u, int64_
     }
 }
 /* the exact discrete-map relation (what an oracle handed the form would recover) */
-static void add_term(pd0_eq *q, int64_t coef, int i0, int e0, int i1, int e1)
+static inline void add_term(pd0_eq *q, int64_t coef, int i0, int e0, int i1, int e1)
 {
     int t = q->n_terms++; q->coef[t] = coef; memset(q->expo[t], 0, sizeof q->expo[t]); if (i0 >= 0) q->expo[t][i0] = (uint8_t)e0; if (i1 >= 0) q->expo[t][i1] = (uint8_t)e1;
 }
-static void truth_oracle_rel(const truth_world *w, pd0_rel *r)
+static inline void truth_oracle_rel(const truth_world *w, pd0_rel *r)
 {
     memset(r, 0, sizeof *r); r->n_vars = (uint8_t)(w->n_obs + w->n_hidden); r->n_latent = w->n_hidden; r->n_channels = 1; r->n_equations = r->n_vars;
     int U = r->n_vars; int64_t dt = w->dt;
@@ -47,7 +47,7 @@ static void truth_oracle_rel(const truth_world *w, pd0_rel *r)
     if (w->level == 6) { add_term(&r->eq[1], pd0_mul(w->m, dt), 2, 1, -1, 0); r->eq[2].target = 2; add_term(&r->eq[2], -pd0_mul(w->w, dt), 2, 1, -1, 0); add_term(&r->eq[2], pd0_mul(w->q, dt), 0, 1, -1, 0); }
     r->description_bits = pd0_rel_bits(r);
 }
-static void truth_score_params(const truth_world *w, pd0_score_params *P)
+static inline void truth_score_params(const truth_world *w, pd0_score_params *P)
 {
     memset(P, 0, sizeof *P); P->n_obs = 2; P->n_channels = 1; P->const_tol_ppm = 50000; P->score_constants = 1;
     P->inbox_bound = 20000; P->extrap_bound = 60000; P->onestep_bound = 10000; P->latent_ref_factor = 3;
@@ -56,7 +56,7 @@ static void truth_score_params(const truth_world *w, pd0_score_params *P)
     for (int e = 0; e < r.n_equations; e++) for (int t = 0; t < r.eq[e].n_terms; t++) { pd0_true_term *tt = &P->true_terms[P->n_true_terms++]; tt->target = r.eq[e].target; memcpy(tt->expo, r.eq[e].expo[t], sizeof tt->expo); tt->coef = r.eq[e].coef[t]; }
 }
 /* scoring episodes: n_in inside [-2,2], n_ex in [-3,3]; schedules from the "score" stream */
-static void truth_score_episodes(const truth_world *w, uint64_t seed, uint32_t n_in, uint32_t n_ex, pd0_score_episode *eps)
+static inline void truth_score_episodes(const truth_world *w, uint64_t seed, uint32_t n_in, uint32_t n_ex, pd0_score_episode *eps)
 {
     pd0_rng g; pd0_rng_stream(&g, seed, "score");
     for (uint32_t i = 0; i < n_in + n_ex; i++) { pd0_score_episode *e = &eps[i]; memset(e, 0, sizeof *e); e->in_box = i < n_in; int64_t box = e->in_box ? 2000000 : 3000000;
@@ -64,7 +64,7 @@ static void truth_score_episodes(const truth_world *w, uint64_t seed, uint32_t n
         for (int j = 0; j < 2; j++) { e->init[j] = draw_const(&g, -box, box); st[j] = e->init[j]; }
         for (uint32_t s = 0; s < PD0_MAX_STEPS; s++) { e->steps[s].channel = 0; e->steps[s].value = draw_const(&g, -2000000, 2000000); truth_step(w, st, e->steps[s].value, nx); memcpy(st, nx, sizeof st); e->truth[s][0] = st[0]; e->truth[s][1] = st[1]; } }
 }
-static uint32_t truth_fit_transitions(const truth_world *w, uint64_t seed, uint32_t n_ep, uint32_t steps, pd0_transition *out, uint32_t cap)
+static inline uint32_t truth_fit_transitions(const truth_world *w, uint64_t seed, uint32_t n_ep, uint32_t steps, pd0_transition *out, uint32_t cap)
 {
     pd0_rng g; pd0_rng_stream(&g, seed, "fit"); uint32_t n = 0;
     for (uint32_t e = 0; e < n_ep; e++) { int64_t st[PD0_MAX_VARS] = { 0 }, nx[PD0_MAX_VARS] = { 0 }; st[0] = draw_const(&g, -2000000, 2000000); st[1] = draw_const(&g, -2000000, 2000000);
