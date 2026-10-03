@@ -118,7 +118,10 @@ static int alloc_checked(BeCtx *c, uint64_t bytes, NvrmMem *m)
 {
     int rc;
     memset(m, 0, sizeof *m);
-    rc = nvrm_alloc(&c->m.rm, bytes, m);
+    /* GB10: the CPU rewrites pushbuffers and reads markers/outputs; GPU-cacheable system memory is not
+     * coherent with CPU mappings (nvos.h:1117-1118). All engine buffers are GPU-uncached until the
+     * allocator default is flipped (hive idea I36). */
+    rc = nvrm_alloc_gpu_uncached(&c->m.rm, bytes, m);
     if (rc != 0) {
         c->last_rc = rc;
         memset(m, 0, sizeof *m);

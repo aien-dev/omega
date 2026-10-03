@@ -302,6 +302,7 @@ static void case_success(void)
     check("sim_success_driver_counts",
           fk.open_calls == 1 && fk.channel_calls == 1 && fk.alloc_calls == 8 &&
           fk.submit_calls == 1 && fk.close_calls == 1 && fk.wait_calls == 3);
+    check("sim_success_all_allocs_gpu_uncached", fk.uncached_calls == fk.alloc_calls && fk.uncached_calls == 8);
     ok = fake_count(FK_EV_ALLOC) == 8;
     for (i = 0; ok && i < 8; i++)
         if (fk.ev[fake_nth(FK_EV_ALLOC, i + 1)].a != k_sizes[i]) ok = 0;

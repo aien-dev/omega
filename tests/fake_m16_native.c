@@ -339,6 +339,13 @@ int nvrm_alloc(Nvrm *rm, uint64_t size, NvrmMem *out)
     return 0;
 }
 
+/* Same as nvrm_alloc (the fake has no GPU cache); only counts the uncached request. */
+int nvrm_alloc_gpu_uncached(Nvrm *rm, uint64_t size, NvrmMem *out)
+{
+    fk.uncached_calls++;
+    return nvrm_alloc(rm, size, out);
+}
+
 int nvrm_free(Nvrm *rm, NvrmMem *m)
 {
     if (!m || m->handle == 0) return 0; /* a zeroed NvrmMem is a no-op (nvrm.h) */

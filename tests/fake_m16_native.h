@@ -93,6 +93,7 @@ typedef struct {
     int open_calls;
     int channel_calls;
     int alloc_calls;
+    int uncached_calls;   /* allocations made through nvrm_alloc_gpu_uncached (also counted in alloc_calls) */
     int free_calls;       /* real frees only (a zeroed NvrmMem is not counted) */
     int close_calls;
     int submit_calls;
