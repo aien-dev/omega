@@ -1,0 +1,41 @@
+### rep=3 cmd=build/omegatool --run-m18-gates
+  [PASS] OMEGA_BW_MATMUL_SEMANTIC_CONTRACT_PASS        : Formal mathematical contract & CPU oracle parity
+  [PASS] OMEGA_BW_MATMUL_MACHINE_GRAPH_PASS            : Grace Blackwell GB10 sm_121 machine target binding
+  [PASS] OMEGA_BW_MATMUL_ENCODER_UNIT_PASS             : Dynamic sm_121 instruction encoder bitfield programmatic unit tests
+  [PASS] OMEGA_BW_MATMUL_BOUNDED_REGALLOC_PASS         : Bounded deterministic live-interval register allocation & conflict rejection
+  [PASS] OMEGA_BW_MATMUL_INSTRUCTION_SEQUENCING_PASS   : Dynamic instruction sequencer & 128-byte bundle alignment
+  [PASS] OMEGA_BW_MATMUL_CODE_TRUTH_PASS               : Code truth invariant: zero static precompiled instruction tables in codegen core
+  [PASS] OMEGA_BW_MATMUL_CODEGEN_VARIATION_PASS        : Stage-1 dynamic code variation: distinct code digests & realization IDs
+  [PASS] OMEGA_BW_MATMUL_REALIZATION_ID_PASS           : Dynamic code digest & 4-tuple realization identity binding
+  [PASS] OMEGA_BW_MATMUL_QMD_2D_PASS                   : Queue Meta Data Version 05_00 2D grid launch descriptor synthesis
+  [PASS] OMEGA_BW_MATMUL_NATIVE_SUBMIT_PASS            : Native M16 submission path & GPFIFO pushbuffer integration
+  [PASS] OMEGA_BW_MATMUL_INT32_INTERMEDIATE_PASS       : Intermediate INT32 execution on physical GB10 with exact bit-for-bit parity
+  [PASS] OMEGA_BW_MATMUL_TENSOR_CORE_EXECUTION_PASS    : Mandatory physical GB10 Tensor Core MMA execution & 9-point proof bundle
+  [PASS] OMEGA_BW_MATMUL_NUMERICAL_BOUND_PASS          : Bounded numerical parity against oracle (< 10^-4) across canonical shapes
+  [PASS] OMEGA_BW_MATMUL_BOUNDARY_ANNIHILATION_PASS    : Boundary and annihilation matrix tests (zero, identity, dynamic range, cancellation)
+  [PASS] OMEGA_BW_MATMUL_ZERO_LIBCUDA_PASS             : Zero foreign userspace runtime verification (linkage, symbols, maps)
+  [PASS] OMEGA_BW_MATMUL_CLEAN_CLONE_PASS              : Clean-clone isolated reproduction on DGX Spark
+  [PASS] OMEGA_BW_VECTOR_SEMANTIC_PASS            : Machine-independent semantic definition C[i] = (A[i] + B[i]) mod 2^32
+  [PASS] OMEGA_BW_VECTOR_MACHINE_BINDING_PASS     : Grace Blackwell GB10 sm_121 machine target binding
+  [PASS] OMEGA_BW_VECTOR_REALIZATION_PASS         : Cryptographic triple identity (spec || machine || code)
+  [PASS] OMEGA_BW_VECTOR_ENCODER_FIXTURE_PASS     : Blackwell 128-bit instruction encoding fixtures
+  [PASS] OMEGA_BW_VECTOR_NATIVE_ENCODING_PASS     : Dynamic native sm_121 vecadd code emission (512 bytes)
+  [PASS] OMEGA_BW_VECTOR_QMD_PASS                 : Queue Meta Data Version 05_00 launch descriptor generation
+  [PASS] OMEGA_BW_VECTOR_PHYSICS_AUTHORITY_PASS   : M16 frozen dependency authority and clean interface
+  [PASS] OMEGA_BW_VECTOR_NATIVE_SUBMIT_PASS       : Unified pushbuffer submission via M16 GPFIFO ring
+  [PASS] OMEGA_BW_VECTOR_DEVICE_OUTPUT_PASS       : Physical SM execution and unpoisoned output buffer
+  [PASS] OMEGA_BW_VECTOR_COMPLETION_PASS          : WFI completion marker 0x44444444 and semaphore state 6
+  [PASS] OMEGA_BW_VECTOR_V1_PARITY_PASS           : Bit-for-bit exact parity against semantic oracle (N=64)
+  [PASS] OMEGA_BW_VECTOR_BOUNDARY_PASS            : Boundary sweep across N in {1,15,63,64,65,127,128,256,1024}
+  [PASS] OMEGA_BW_VECTOR_MUTATION_REFUSAL_PASS    : Tamper resistance: bit flips and corruptions rejected
+  [PASS] OMEGA_BW_VECTOR_ZERO_LIBCUDA_LINK_PASS   : Zero dynamic linkage to libcuda.so or libcudart.so
+  [PASS] OMEGA_BW_VECTOR_ZERO_CUDA_SYMBOL_PASS    : Zero undefined dynamic CUDA symbols
+  [PASS] OMEGA_BW_VECTOR_ZERO_LIBCUDA_RUNTIME_PASS : Zero runtime libcuda mappings in /proc/self/maps
+  [PASS] OMEGA_BW_VECTOR_EVIDENCE_DURABILITY_PASS : Durable machine code and QMD hex dumps recorded
+  [PASS] OMEGA_BW_VECTOR_RECEIPT_PASS             : Cryptographic qualification receipt generated
+  TOTAL GATES: 18 | PASSED: 18 | FAILED: 0
+  [PASS] OMEGA_BW_MATMUL_REGRESSION_PASS               : Cumulative regression parity: 18 / 18 prior milestone gates passing
+  [PASS] OMEGA_BW_MATMUL_RECEIPT_PASS                  : Milestone 18 qualification receipt and cryptographic manifest generated
+  STAGE 2 / FULL QUALIFICATION: 18 / 18 M18 GATES PASSED
+  TOTAL GATES EVALUATED: 36 (18 M18 Gates + 18 Prior Regression Gates)
+### exit=0

@@ -1,0 +1,9 @@
+make-test rc=0
+test-language rc=0
+test-numeric-transc rc=0
+test-gpu-engine-compile rc=0
+test-gpu-engine rc=0
+test-gpu-engine-backend-compile rc=0
+test-gpu-engine-prod-build rc=0
+test-gpu-engine-sim rc=0
+test-gpu-engine-gb10-compile rc=0
