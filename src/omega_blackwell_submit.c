@@ -3,6 +3,7 @@
 #include "omega_blackwell_qmd.h"
 #include "omega_blackwell_encoder.h"
 #include "m16_native.h"
+#include "omega_gpu_wait.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,6 +20,62 @@ static uint64_t current_time_ns(void) {
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (uint64_t)t.tv_sec * 1000000000ULL + (uint64_t)t.tv_nsec;
+}
+
+/* CHIPWAIT-2: completion memory and wait for the vector and matmul launchers.
+ * Same pattern as omega_numeric_gb10.c (727dc03 + C3 hardening): the marker page
+ * is GPU-uncached, and after the WFI marker the stream flushes GPU L2 dirty
+ * lines (NVC96F_MEM_OP_A..D = 0x28..0x34, D bits 31:27 OPERATION = L2_FLUSH_DIRTY
+ * 0x10) and releases a second marker at marker page + 0x10. The host waits for
+ * both markers and the QMD semaphore, then reads outputs. */
+#define BW_MARKER2_PAYLOAD 0x46464646u
+#define BW_EMIT_FLUSH_MARKER2(pb_, len_, mk_) do { \
+    (pb_)[(len_)++] = nvrm_mthd(0, 0x0028, 4); \
+    (pb_)[(len_)++] = 0; \
+    (pb_)[(len_)++] = 0; \
+    (pb_)[(len_)++] = 0; \
+    (pb_)[(len_)++] = (0x10u << 27); \
+    (pb_)[(len_)++] = nvrm_mthd(0, 0x005c, 5); \
+    (pb_)[(len_)++] = (uint32_t)((mk_).va + 0x10); \
+    (pb_)[(len_)++] = (uint32_t)(((mk_).va + 0x10) >> 32); \
+    (pb_)[(len_)++] = BW_MARKER2_PAYLOAD; \
+    (pb_)[(len_)++] = 0; \
+    (pb_)[(len_)++] = 0x1 | (1u << 20); \
+} while (0)
+
+/* Exact-value (fixed) waits on the marker (with marker2 required) and then the
+ * QMD semaphore. Progress stall 5000 ms (the old budget), hard total 600000 ms
+ * (the omega_numeric_*_gb10.c cap) shared by the whole completion: each wait
+ * spends from *budget_ms. Prints one tagged line on failure. */
+static int bw_wait_one(const char *site, const char *what, volatile uint32_t *w, uint32_t want,
+                       volatile uint32_t *m2, uint32_t m2want, uint32_t *budget_ms) {
+    omega_gpu_wait_cfg_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.progress_timeout_ms = 5000;
+    cfg.total_timeout_ms = *budget_ms;
+    cfg.marker2 = m2;
+    cfg.marker2_want = m2want;
+    omega_gpu_wait_report_t r;
+    if (omega_gpu_wait_fixed(w, want, &r, &cfg)) {
+        uint64_t spent_ms = r.elapsed_ns / 1000000ull;
+        *budget_ms = spent_ms < *budget_ms ? *budget_ms - (uint32_t)spent_ms : 1u;
+        return 0;
+    }
+    fprintf(stderr,
+            "BW_WAIT_FAIL site=%s wait=%s kind=%s result=%s expected=0x%x observed=0x%x "
+            "marker2_observed=0x%x elapsed_ns=%llu progress_count=%llu polls=%llu\n",
+            site, what, omega_gpu_wait_kind_name(r.wait_kind), omega_gpu_wait_result_name(r.result),
+            r.expected, r.last_observed, r.last_marker2, (unsigned long long)r.elapsed_ns,
+            (unsigned long long)r.progress_count, (unsigned long long)r.polls);
+    return -1;
+}
+
+static int bw_wait_completion(const char *site, volatile uint32_t *hmarker,
+                              volatile uint32_t *hmarker2, volatile uint32_t *hsem) {
+    uint32_t budget_ms = 600000;
+    if (bw_wait_one(site, "marker", hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD,
+                    hmarker2, BW_MARKER2_PAYLOAD, &budget_ms) != 0) return -1;
+    return bw_wait_one(site, "semaphore", hsem, OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE, NULL, 0, &budget_ms);
 }
 
 int omega_blackwell_execute_vector(const OmegaVectorSpec *spec,
@@ -60,7 +117,7 @@ int omega_blackwell_execute_vector(const OmegaVectorSpec *spec,
     if (nvrm_alloc(&ctx.rm, vector_bytes, &a_mem) != 0) { m16_native_close(&ctx); return -1; }
     if (nvrm_alloc(&ctx.rm, vector_bytes, &b_mem) != 0) { m16_native_close(&ctx); return -1; }
     if (nvrm_alloc(&ctx.rm, vector_bytes, &c_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0) { m16_native_close(&ctx); return -1; }
+    if (nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem) != 0) { m16_native_close(&ctx); return -1; }
     if (nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) { m16_native_close(&ctx); return -1; }
     
 
@@ -125,6 +182,8 @@ int omega_blackwell_execute_vector(const OmegaVectorSpec *spec,
     volatile uint32_t *hmarker = (volatile uint32_t *)marker_mem.cpu;
     *hsem = 0;
     *hmarker = 0;
+    volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
+    *hmarker2 = 0;
     __asm__ volatile("dsb sy" ::: "memory");
 
     /* Assemble unified pushbuffer (481 words) */
@@ -194,17 +253,16 @@ int omega_blackwell_execute_vector(const OmegaVectorSpec *spec,
     pb[pb_len++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20); // RELEASE | WFI
+    BW_EMIT_FLUSH_MARKER2(pb, pb_len, marker_mem);
 
     /* Record timestamp and submit methods to hardware GPFIFO ring */
     uint64_t t_start = current_time_ns();
     if (m16_native_submit_methods(&ctx, pb, pb_len) != 0) { m16_native_close(&ctx); return -1; }
 
     /* Wait for hardware completion marker */
-    if (m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000) != 0) { m16_native_close(&ctx); return -1; }
+    if (bw_wait_completion(__func__, hmarker, hmarker2, hsem) != 0) { m16_native_close(&ctx); return -1; }
     uint64_t t_end = current_time_ns();
 
-    /* Validate intermediate semaphore updated to 6 */
-    if (*hsem != OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE) { m16_native_close(&ctx); return -1; }
 
     /* Copy device output back to host */
     memcpy(h_c_out, c_mem.cpu, n * sizeof(uint32_t));
@@ -272,7 +330,7 @@ int omega_blackwell_execute_matmul(const OmegaMatMulSpec *spec,
     if (nvrm_alloc(&ctx.rm, a_bytes, &a_mem) != 0) { m16_native_close(&ctx); return -1; }
     if (nvrm_alloc(&ctx.rm, b_bytes, &b_mem) != 0) { m16_native_close(&ctx); return -1; }
     if (nvrm_alloc(&ctx.rm, c_bytes, &c_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0) { m16_native_close(&ctx); return -1; }
+    if (nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem) != 0) { m16_native_close(&ctx); return -1; }
     if (nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) { m16_native_close(&ctx); return -1; }
 
     /* Copy dynamic machine code into code_mem */
@@ -337,6 +395,8 @@ int omega_blackwell_execute_matmul(const OmegaMatMulSpec *spec,
     volatile uint32_t *hmarker = (volatile uint32_t *)marker_mem.cpu;
     *hsem = 0;
     *hmarker = 0;
+    volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
+    *hmarker2 = 0;
     __asm__ volatile("dsb sy" ::: "memory");
 
     /* Assemble unified pushbuffer */
@@ -406,17 +466,17 @@ int omega_blackwell_execute_matmul(const OmegaMatMulSpec *spec,
     pb[pb_len++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20); // RELEASE | WFI
+    BW_EMIT_FLUSH_MARKER2(pb, pb_len, marker_mem);
 
     /* Submit methods to hardware GPFIFO ring */
     uint64_t t_start = current_time_ns();
     if (m16_native_submit_methods(&ctx, pb, pb_len) != 0) { m16_native_close(&ctx); return -1; }
 
     /* Wait for hardware completion marker */
-    if (m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000) != 0) { m16_native_close(&ctx); return -1; }
+    if (bw_wait_completion(__func__, hmarker, hmarker2, hsem) != 0) { m16_native_close(&ctx); return -1; }
     uint64_t t_end = current_time_ns();
 
     /* Validate intermediate semaphore updated to 6 */
-    if (*hsem != OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE) { m16_native_close(&ctx); return -1; }
 
     /* Copy device output back to host */
     memcpy(h_c_out, c_mem.cpu, (size_t)spec->m * spec->n * sizeof(uint32_t));
@@ -502,7 +562,7 @@ int omega_blackwell_execute_matmul_tensor(const OmegaMatMulSpec *spec,
     if (nvrm_alloc(&ctx.rm, a_bytes, &a_mem) != 0) { m16_native_close(&ctx); return -1; }
     if (nvrm_alloc(&ctx.rm, b_bytes, &b_mem) != 0) { m16_native_close(&ctx); return -1; }
     if (nvrm_alloc(&ctx.rm, c_bytes, &c_mem) != 0) { m16_native_close(&ctx); return -1; }
-    if (nvrm_alloc(&ctx.rm, 0x1000, &marker_mem) != 0) { m16_native_close(&ctx); return -1; }
+    if (nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem) != 0) { m16_native_close(&ctx); return -1; }
     if (nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) { m16_native_close(&ctx); return -1; }
 
     /* Copy dynamic machine code into code_mem */
@@ -568,6 +628,8 @@ int omega_blackwell_execute_matmul_tensor(const OmegaMatMulSpec *spec,
     volatile uint32_t *hmarker = (volatile uint32_t *)marker_mem.cpu;
     *hsem = 0;
     *hmarker = 0;
+    volatile uint32_t *hmarker2 = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x10);
+    *hmarker2 = 0;
     __asm__ volatile("dsb sy" ::: "memory");
 
     uint32_t pb[1024];
@@ -629,14 +691,14 @@ int omega_blackwell_execute_matmul_tensor(const OmegaMatMulSpec *spec,
     pb[pb_len++] = OMEGA_BW_MARKER_COMPLETION_PAYLOAD;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20);
+    BW_EMIT_FLUSH_MARKER2(pb, pb_len, marker_mem);
 
     uint64_t t_start = current_time_ns();
     if (m16_native_submit_methods(&ctx, pb, pb_len) != 0) { m16_native_close(&ctx); return -1; }
 
-    if (m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 5000) != 0) { m16_native_close(&ctx); return -1; }
+    if (bw_wait_completion(__func__, hmarker, hmarker2, hsem) != 0) { m16_native_close(&ctx); return -1; }
     uint64_t t_end = current_time_ns();
 
-    if (*hsem != OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE) { m16_native_close(&ctx); return -1; }
 
     memcpy(h_c_out, c_mem.cpu, c_elems * sizeof(float));
 

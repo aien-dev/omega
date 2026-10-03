@@ -3,6 +3,7 @@
 #include "omega_blackwell_encoder.h"
 #include "omega_blackwell_codegen.h"
 #include "omega_blackwell_submit.h"
+#include "omega_gpu_wait.h"
 #include "sha256.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +38,67 @@ static const uint32_t WORLD_SETUP_WORDS[18] = {
  * passed its payload (serial-number arithmetic, correct across 2^32 wrap). */
 static bool payload_reached(uint32_t payload, uint32_t upto) {
     return (int32_t)(payload - upto) <= 0;
+}
+
+/* CHIPWAIT-2: completion memory and waits for the world's completion page.
+ * The page is GPU-uncached. Each synchronous dispatch (execute and the matmul
+ * variant) releases its payload at +0 and, after an L2_FLUSH_DIRTY mem-op
+ * (NVC96F_MEM_OP_A..D = 0x28..0x34, D bits 31:27 OPERATION = 0x10, as in
+ * omega_numeric_gb10.c), the same payload at +0x10; the host waits for both with
+ * the wrap-safe sequence wait. The same payload sequence is used so the check is
+ * "reached or passed", never exact equality. */
+#define WORLD_MARKER2_OFFSET 0x10
+
+static volatile uint32_t *world_marker2(const OmegaAcceleratorWorld *world) {
+    return (volatile uint32_t *)((uint8_t *)world->completion.cpu_marker + WORLD_MARKER2_OFFSET);
+}
+
+#define WORLD_EMIT_FLUSH_MARKER2(world_, pb_, len_, payload_) do { \
+    (pb_)[(len_)++] = nvrm_mthd(0, 0x0028, 4); \
+    (pb_)[(len_)++] = 0; \
+    (pb_)[(len_)++] = 0; \
+    (pb_)[(len_)++] = 0; \
+    (pb_)[(len_)++] = (0x10u << 27); \
+    (pb_)[(len_)++] = nvrm_mthd(0, 0x005c, 5); \
+    (pb_)[(len_)++] = (uint32_t)((world_)->completion.gpu_va + WORLD_MARKER2_OFFSET); \
+    (pb_)[(len_)++] = (uint32_t)(((world_)->completion.gpu_va + WORLD_MARKER2_OFFSET) >> 32); \
+    (pb_)[(len_)++] = (payload_); \
+    (pb_)[(len_)++] = 0; \
+    (pb_)[(len_)++] = 0x1 | (1u << 20); \
+} while (0)
+
+/* Wait until word has reached `payload` (sequence wait). Returns 0 on PASS;
+ * otherwise prints one tagged line with the report and returns -1. The caller
+ * keeps its own fault handling. The hard total is *budget_ms; time spent is
+ * deducted so chained waits share one budget. */
+static int world_wait_seq(const char *site, const char *what, volatile uint32_t *word,
+                          uint32_t payload, uint32_t progress_ms, uint32_t *budget_ms) {
+    uint32_t total_ms = *budget_ms;
+    omega_gpu_wait_cfg_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.progress_timeout_ms = progress_ms;
+    cfg.total_timeout_ms = total_ms;
+    omega_gpu_wait_report_t r;
+    if (omega_gpu_wait_sequence(word, payload, &r, &cfg)) {
+        uint64_t spent_ms = r.elapsed_ns / 1000000ull;
+        *budget_ms = spent_ms < total_ms ? total_ms - (uint32_t)spent_ms : 1u;
+        return 0;
+    }
+    fprintf(stderr,
+            "WORLD_WAIT_FAIL site=%s wait=%s kind=%s result=%s expected=%u observed=%u "
+            "elapsed_ns=%llu progress_count=%llu polls=%llu\n",
+            site, what, omega_gpu_wait_kind_name(r.wait_kind), omega_gpu_wait_result_name(r.result),
+            r.expected, r.last_observed, (unsigned long long)r.elapsed_ns,
+            (unsigned long long)r.progress_count, (unsigned long long)r.polls);
+    return -1;
+}
+
+/* Synchronous dispatch: marker, then marker2 (progress stall 5000 ms, one hard
+ * total of 600000 ms shared by both waits). */
+static int world_wait_dispatch(const OmegaAcceleratorWorld *world, const char *site, uint32_t payload) {
+    uint32_t budget_ms = 600000;
+    if (world_wait_seq(site, "marker", world->completion.cpu_marker, payload, 5000, &budget_ms) != 0) return -1;
+    return world_wait_seq(site, "marker2", world_marker2(world), payload, 5000, &budget_ms);
 }
 
 static bool buffer_referenced_in_flight(const OmegaAcceleratorWorld *world, uint32_t id) {
@@ -128,13 +190,15 @@ int omega_world_init(OmegaAcceleratorWorld *world) {
     world->scratch.allocated_bytes = 0;
 
     /* Allocate persistent completion marker */
-    if (nvrm_alloc(&world->m16.rm, 0x1000, &world->completion.mem) != 0) {
+    if (nvrm_alloc_gpu_uncached(&world->m16.rm, 0x1000, &world->completion.mem) != 0) {
         m16_native_close(&world->m16);
         return OMEGA_WORLD_ERR_NO_MEM;
     }
     world->completion.cpu_marker = (volatile uint32_t *)world->completion.mem.cpu;
     world->completion.gpu_va = world->completion.mem.va;
     *world->completion.cpu_marker = 0;
+    *world_marker2(world) = 0;
+    __asm__ volatile("dsb sy" ::: "memory");
     world->completion.last_payload = 0;
 
     /* Initialize rolling state digest D_0 */
@@ -701,8 +765,14 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
     if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
     if (timeout_ms < 0) return OMEGA_WORLD_ERR_INVALID_ARG;
 
-    if (m16_native_wait_marker_ge(world->completion.cpu_marker, upto_payload,
-                                  (uint64_t)timeout_ms) != 0) {
+    /* Caller-supplied budget (API contract, gates pass 0..10000 ms): hard total = timeout_ms
+     * (0 becomes 1 ms because the primitive maps 0 to its 600 s default), stall = total, so the
+     * caller keeps its full budget as before.
+     * Waits on the marker only: pushbuffers built by callers (omega_world_gates.c) release
+     * the marker without a flush or marker2. */
+    uint32_t drain_total = timeout_ms ? (uint32_t)timeout_ms : 1u;
+    if (world_wait_seq(__func__, "marker", world->completion.cpu_marker, upto_payload,
+                       drain_total, &drain_total) != 0) {
         world->faulted = true;
         return OMEGA_WORLD_ERR_HARDWARE;
     }
@@ -968,6 +1038,7 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
     pb[pb_len++] = payload;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20); // RELEASE | WFI
+    WORLD_EMIT_FLUSH_MARKER2(world, pb, pb_len, payload);
 
     /* Submit to persistent GPFIFO ring */
     if (m16_native_submit_methods(&world->m16, pb, pb_len) != 0) {
@@ -975,7 +1046,7 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
         return OMEGA_WORLD_ERR_HARDWARE;
     }
 
-    if (m16_native_wait_marker_ge(world->completion.cpu_marker, payload, 5000) != 0) {
+    if (world_wait_dispatch(world, __func__, payload) != 0) {
         world->faulted = true;
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_HARDWARE;
@@ -1188,6 +1259,7 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     pb[pb_len++] = payload;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20); // RELEASE | WFI
+    WORLD_EMIT_FLUSH_MARKER2(world, pb, pb_len, payload);
 
     /* Submit to persistent GPFIFO ring */
     if (m16_native_submit_methods(&world->m16, pb, pb_len) != 0) {
@@ -1195,7 +1267,7 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
         return OMEGA_WORLD_ERR_HARDWARE;
     }
 
-    if (m16_native_wait_marker_ge(world->completion.cpu_marker, payload, 5000) != 0) {
+    if (world_wait_dispatch(world, __func__, payload) != 0) {
         world->faulted = true;
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_HARDWARE;
