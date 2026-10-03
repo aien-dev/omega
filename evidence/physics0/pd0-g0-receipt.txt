@@ -2,8 +2,8 @@ receipt: PD0_G0
 spec: aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 2f881b1 (rev 2)
 recorder: STAND_IN
 range_guard: STAND_IN
-commit: 32db69624f3ad1398e9d1bf871c64da95fe3ee01
-date_utc: 2026-10-03T23:41:15Z
+commit: 8175896ef323367adebd74f6b558ae0d96d1a3ba
+date_utc: 2026-10-03T23:47:58Z
 --- test_pd0_world
 checks=1094 failures=0
 PHYSICS0_G0: PASS
@@ -16,3 +16,7 @@ PHYSICS0_OSC_DIFF: PASS
 PHYSICS0_G1_V1_L1-mutant: FAIL (oracle_exact FAIL, oracle_fit FAIL)
 PHYSICS0_G1_V3_L1-mutant: FAIL (worst breach rate 0.9907 over seeds 1..20)
 PHYSICS0_ORACLE-mutant: FAIL
+--- mutant latent sign
+PHYSICS0_G1_V1_L6-mutlat: FAIL (oracle_exact FAIL, oracle_fit FAIL)
+PHYSICS0_G1_V3_L6-mutlat: PASS (worst breach rate 0.0370 over seeds 1..20)
+PHYSICS0_ORACLE-mutlat: FAIL
