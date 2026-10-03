@@ -91,9 +91,11 @@ physics0-test: $(P0_DIR)/test_pd0_world $(P0_DIR)/test_pd0_world_asan $(P0_LEARN
 	./$(P0_DIR)/test_pd0_osc_asan tests/physics0/osc/pd0_helpers.osc 2000 > $(P0_DIR)/osc_asan.out; tail -1 $(P0_DIR)/osc_asan.out; grep -q '^PHYSICS0_OSC_DIFF: PASS$$' $(P0_DIR)/osc_asan.out
 	@echo "physics0-test: PASS (G0, G5 isolation, G1 V1 oracle all levels, V3 breach rates recorded, mutant caught, OSC differential; substrate only, no learner)"
 
+# Receipts are immutable: existing evidence files are never rewritten (cp -n); each cut adds new files.
 physics0-evidence: physics0-test
-	cp $(P0_DIR)/receipts/pd0-oracle-*.json evidence/physics0/
+	for f in $(P0_DIR)/receipts/pd0-oracle-*.json; do cp -n "$$f" evidence/physics0/; done
+	cp $(P0_DIR)/receipts/pd0-oracle-L6.json evidence/physics0/pd0-oracle-L6-fit.json
 	{ echo "receipt: PD0_G0"; echo "spec: aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 2f881b1 (rev 2)"; echo "recorder: STAND_IN"; echo "range_guard: STAND_IN"; \
 	  echo "commit: $$(git rev-parse HEAD)"; echo "date_utc: $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "--- test_pd0_world"; cat $(P0_DIR)/g0.out; \
-	  echo "--- isolation"; cat $(P0_DIR)/isolation.out; echo "--- osc differential"; cat $(P0_DIR)/osc.out; echo "--- mutant"; cat $(P0_DIR)/mutant.out; echo "--- mutant latent sign"; cat $(P0_DIR)/mutant_latent.out; } > evidence/physics0/pd0-g0-receipt.txt
+	  echo "--- isolation"; cat $(P0_DIR)/isolation.out; echo "--- osc differential"; cat $(P0_DIR)/osc.out; echo "--- mutant"; cat $(P0_DIR)/mutant.out; echo "--- mutant latent sign"; cat $(P0_DIR)/mutant_latent.out; } > evidence/physics0/pd0-g0-receipt-cut2.txt
 endif
