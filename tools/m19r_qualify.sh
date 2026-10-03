@@ -18,7 +18,11 @@
 # (passed, >= 100000 cycles, bytes churned > 2x physical memory, snapshots
 # start/end/post_destroy); candidates re-checked at the end.
 #
-# Output: build/qual-runs/<run-id>/run.json always (plus per-command logs);
+# Output: <evidence-root>/<run-id>/run.json always (plus per-command logs,
+# command.txt, environment.json, stdout.log, stderr.log, verdict.json and a
+# final hashes.sha256); evidence root defaults to $OMEGA/qual-runs, outside
+# build/ which `make clean` removes (--evidence-root DIR to change); the run
+# directory must not exist yet (exit 2) and is never deleted by this script;
 # receipt-preview.json on a full run; with --record the permanent receipt
 # evidence/M19R/<receipt_digest>.json (created exclusively, mode 0444).
 # Exit 0 on PASS or QUICK_PASS, 1 on failure, 2 on bad arguments.
@@ -383,7 +387,7 @@ m19r_locked_section() {
 }
 
 m19r_usage() {
-    echo "usage: $M19R_PROG [-h] --omega-candidate OMEGA_CANDIDATE --physics-candidate PHYSICS_CANDIDATE [--physics-dir PHYSICS_DIR] [--record] [--quick]"
+    echo "usage: $M19R_PROG [-h] --omega-candidate OMEGA_CANDIDATE --physics-candidate PHYSICS_CANDIDATE [--physics-dir PHYSICS_DIR] [--evidence-root DIR] [--run-id ID] [--record] [--quick]"
 }
 
 m19r_argerror() {
@@ -392,8 +396,49 @@ m19r_argerror() {
     exit 2
 }
 
+# m19r_write_environment FILE -- who/where/what ran (environment.json).
+m19r_write_environment() {
+    local pshal
+    pshal=$(git -C "$M19R_PHYSICS" rev-parse HEAD 2> /dev/null) || pshal=unknown
+    jq -n --arg host "$(hostname)" --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg omega "$(git -C "$M19R_OMEGA" rev-parse HEAD 2> /dev/null || echo unknown)" \
+        --arg physics "$pshal" --arg kernel "$(uname -r)" --arg user "$(id -un)" \
+        '{hostname: $host, date_utc: $date, omega_sha: $omega, physics_sha: $physics, uname_r: $kernel, user: $user}' > "$1"
+}
+
+# m19r_write_verdict RUN_DIR EXIT_CODE -- verdict.json from run.json and the
+# suite logs. failing_step is run.json's error text; failing_gate_or_exit is
+# the first observed FAIL gate (suite:id) in the logs, else "exit:<code>" for
+# a failed run, else null.
+m19r_write_verdict() {
+    local dir=$1 code=$2 status step= gate= log name
+    status=$(jq -r '.status' "$dir/run.json" 2> /dev/null) || status=
+    [ -n "$status" ] || status=UNKNOWN
+    step=$(jq -r '.error // empty' "$dir/run.json" 2> /dev/null)
+    for log in "$dir"/*.log; do
+        name=$(basename "$log" .log)
+        case $name in stdout|stderr|build) continue;; esac
+        gate=$(m19r_events "$log" "$name" | awk -F'\t' '$3 == "FAIL" { print $1 ":" $2; exit }')
+        [ -z "$gate" ] || break
+    done
+    [ -n "$gate" ] || { [ "$code" -eq 0 ] || gate="exit:$code"; }
+    jq -n --arg id "$(basename "$dir")" --arg status "$status" --arg step "$step" \
+        --arg gate "$gate" --argjson code "$code" \
+        '{run_id: $id, status: $status, failing_step: (if $step == "" then null else $step end),
+          failing_gate_or_exit: (if $gate == "" then null else $gate end), exit_code: $code}' > "$dir/verdict.json"
+}
+
+# m19r_seal RUN_DIR -- hashes.sha256 over every file except itself; files made
+# read-only.
+m19r_seal() {
+    (cd "$1" && find . -type f ! -name hashes.sha256 -print0 | LC_ALL=C sort -z |
+        xargs -0 sha256sum -- > hashes.sha256) || return 1
+    find "$1" -type f -exec chmod a-w {} +
+}
+
 m19r_main() {
-    local physics_dir= missing=() run_json
+    local physics_dir= missing=() run_json evidence_root= run_id= argv
+    printf -v argv '%q ' "$M19R_PROG" "$@"
     M19R_OMEGA_CAND= M19R_PHYSICS_CAND= M19R_RECORD=0 M19R_QUICK=0
     local have_o=0 have_p=0
     while [ $# -gt 0 ]; do
@@ -402,12 +447,16 @@ m19r_main() {
             --omega-candidate=*) M19R_OMEGA_CAND=${1#*=}; have_o=1;;
             --physics-candidate=*) M19R_PHYSICS_CAND=${1#*=}; have_p=1;;
             --physics-dir=*) physics_dir=${1#*=};;
-            --omega-candidate|--physics-candidate|--physics-dir)
+            --evidence-root=*) evidence_root=${1#*=};;
+            --run-id=*) run_id=${1#*=};;
+            --omega-candidate|--physics-candidate|--physics-dir|--evidence-root|--run-id)
                 [ $# -ge 2 ] || m19r_argerror "argument $1: expected one argument"
                 case $1 in
                     --omega-candidate) M19R_OMEGA_CAND=$2; have_o=1;;
                     --physics-candidate) M19R_PHYSICS_CAND=$2; have_p=1;;
                     --physics-dir) physics_dir=$2;;
+                    --evidence-root) evidence_root=$2;;
+                    --run-id) run_id=$2;;
                 esac
                 shift;;
             --record) M19R_RECORD=1;;
@@ -427,12 +476,38 @@ m19r_main() {
     fi
     M19R_PHYSICS=$(realpath -m "${physics_dir:-$(dirname "$M19R_OMEGA")/physics}")
 
+    # Evidence lives outside what `make clean` removes ($OUT_DIR, default build/).
+    evidence_root=$(realpath -m "${evidence_root:-$M19R_OMEGA/qual-runs}")
+    local out_dir
+    out_dir=$(realpath -m "$M19R_OMEGA/${OUT_DIR:-build}")
+    case $evidence_root/ in
+        "$out_dir"/*|"$M19R_OMEGA"/build/*) m19r_argerror "evidence root $evidence_root is inside the cleaned build directory";;
+    esac
+    case $out_dir/ in
+        "$evidence_root"/*) m19r_argerror "evidence root $evidence_root would be removed by make clean";;
+    esac
+    case $run_id in */*|.|..) m19r_argerror "invalid --run-id";; esac
+
     m19r_build_canon || { echo "M19R qualification failed: cannot build tools/json_canon.c" >&2; exit 1; }
     trap 'rm -rf "$M19R_TMP"' EXIT
 
-    M19R_RUN_ID=$(date -u +%Y%m%dT%H%M%SZ)-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')
-    M19R_RUN_DIR=$M19R_OMEGA/build/qual-runs/$M19R_RUN_ID
-    mkdir -p "$(dirname "$M19R_RUN_DIR")" && mkdir "$M19R_RUN_DIR" || exit 1
+    M19R_RUN_ID=${run_id:-$(date -u +%Y%m%dT%H%M%SZ)-$(od -An -N6 -tx1 /dev/urandom | tr -d ' \n')}
+    M19R_RUN_DIR=$evidence_root/$M19R_RUN_ID
+    mkdir -p "$evidence_root" || exit 1
+    if ! mkdir "$M19R_RUN_DIR" 2> /dev/null; then
+        echo "$M19R_PROG: error: run directory $M19R_RUN_DIR already exists or cannot be created; run directories are never reused" >&2
+        exit 2
+    fi
+    printf '%s\n' "$argv" > "$M19R_RUN_DIR/command.txt"
+    m19r_write_environment "$M19R_RUN_DIR/environment.json" || exit 1
+
+    # Whole-run stdout/stderr go to the console and to the run directory.
+    local p1 p2
+    exec 3>&1 4>&2
+    exec > >(tee "$M19R_RUN_DIR/stdout.log" >&3)
+    p1=$!
+    exec 2> >(tee "$M19R_RUN_DIR/stderr.log" >&4)
+    p2=$!
 
     R_STATUS=FAILED R_ERROR= R_PERMANENT= R_DIGEST= R_EVENTS= R_M19= R_SOAK= R_SAMPLES=
     local rc=0
@@ -444,7 +519,6 @@ m19r_main() {
         R_ERROR=$M19R_ERR
         echo "M19R qualification failed: $M19R_ERR" >&2
     fi
-    mkdir -p "$M19R_RUN_DIR"
     run_json="{\"run_id\":$(m19r_jstr "$M19R_RUN_ID"),\"commands\":[],\"status\":\"$R_STATUS\""
     [ "$rc" = 0 ] || run_json+=",\"error\":$(m19r_jstr "$R_ERROR")"
     [ -z "$R_PERMANENT" ] || run_json+=",\"permanent_receipt\":$(m19r_jstr "$R_PERMANENT")"
@@ -456,6 +530,10 @@ m19r_main() {
     run_json+="}"
     printf '%s' "$run_json" | "$JSON_CANON" --pretty > "$M19R_RUN_DIR/run.json" || rc=1
     echo "M19R run evidence: $M19R_RUN_DIR/run.json"
+    exec 1>&3 2>&4 3>&- 4>&-
+    wait "$p1" "$p2" 2> /dev/null
+    m19r_write_verdict "$M19R_RUN_DIR" "$rc" || rc=1
+    m19r_seal "$M19R_RUN_DIR" || rc=1
     exit "$rc"
 }
 
