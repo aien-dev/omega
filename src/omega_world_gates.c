@@ -2206,6 +2206,53 @@ static bool test_lc_faulted_world_refuses_register(void) {
     return ok;
 }
 
+/* STALEGEN-RECOVER: a completion wait on a healthy channel must return in
+ * milliseconds with the output already visible. With a GPU-cached marker page
+ * on GB10 each wait took about 1039 ms (and 2.8% timed out at 5 s). Arm 1:
+ * the call (build, submit, completion wait, commit) takes under 50 ms.
+ * Arm 2: every output element is correct the instant the call returns.
+ * Negative control: the output held the poison value before dispatch. */
+static bool test_lc_completion_wait_bounded(void) {
+    OmegaAcceleratorWorld world;
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    uint8_t code_buf[1024];
+    size_t code_len = 0;
+    OmegaHandle code, a, b, c;
+    bool ok = omega_blackwell_encode_vecadd(code_buf, sizeof(code_buf), &code_len) == 0 &&
+              omega_world_register_code(&world, code_buf, code_len, NULL, &code) == OMEGA_WORLD_OK &&
+              omega_world_register_buffer(&world, 4096, OMEGA_PERM_READ, &a) == OMEGA_WORLD_OK &&
+              omega_world_register_buffer(&world, 4096, OMEGA_PERM_READ, &b) == OMEGA_WORLD_OK &&
+              omega_world_register_buffer(&world, 4096, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &c) == OMEGA_WORLD_OK;
+    uint32_t *pa = NULL, *pb = NULL, *pc = NULL;
+    uint64_t va;
+    ok = ok && omega_world_resolve_buffer(&world, &a, OMEGA_PERM_READ, 0, 256, (void **)&pa, &va) == OMEGA_WORLD_OK &&
+         omega_world_resolve_buffer(&world, &b, OMEGA_PERM_READ, 0, 256, (void **)&pb, &va) == OMEGA_WORLD_OK &&
+         omega_world_resolve_buffer(&world, &c, OMEGA_PERM_WRITE, 0, 256, (void **)&pc, &va) == OMEGA_WORLD_OK;
+    if (!ok) {
+        omega_world_destroy(&world);
+        return false;
+    }
+    const uint32_t n = 64, poison = 0xdeadbeefu;
+    for (uint32_t i = 0; i < n; i++) { pa[i] = i * 3u; pb[i] = 7u; pc[i] = poison; }
+    uint32_t poison_seen = 0;
+    for (uint32_t i = 0; i < n; i++) if (pc[i] == poison) poison_seen++;
+    printf("    negative control: output held poison 0x%08x in %u/%u elements before dispatch\n",
+           poison, poison_seen, n);
+    struct timespec t0, t1;
+    uint32_t done = 0;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    int rc = omega_world_dispatch_vector(&world, &code, &a, &b, &c, n, &done);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    double wait_ms = (double)(t1.tv_sec - t0.tv_sec) * 1e3 + (double)(t1.tv_nsec - t0.tv_nsec) / 1e6;
+    uint32_t wrong = 0;
+    for (uint32_t i = 0; i < n; i++) if (pc[i] != i * 3u + 7u) wrong++;
+    bool output_ok = (rc == OMEGA_WORLD_OK) && wrong == 0;
+    printf("    WORLD_WAIT_BOUNDED wait_ms=%.3f output_ok=%d (rc=%d wrong=%u/%u)\n",
+           wait_ms, output_ok ? 1 : 0, rc, wrong, n);
+    omega_world_destroy(&world);
+    return poison_seen == n && wait_ms <= 50.0 && output_ok;
+}
+
 int run_world_lifecycle_gates(void) {
     printf("================================================================================\n");
     printf("    AIEN OMEGA M19R: WORLD LIFECYCLE GATES\n");
@@ -2223,6 +2270,7 @@ int run_world_lifecycle_gates(void) {
     report_lc_gate("WORLD_BATCHED_RESULT_IDENTITY", test_lc_batched_result_identity());
     report_lc_gate("WORLD_STALE_HANDLE_AFTER_RESTART", test_lc_stale_handle_after_world_restart());
     report_lc_gate("WORLD_FAULTED_REFUSES_REGISTER", test_lc_faulted_world_refuses_register());
+    report_lc_gate("WORLD_COMPLETION_WAIT_BOUNDED", test_lc_completion_wait_bounded());
     printf("  TOTAL: %d | PASSED: %d | FAILED: %d\n", lc_gate_count, lc_gate_passed, lc_gate_count - lc_gate_passed);
     return (lc_gate_passed == lc_gate_count) ? 0 : 1;
 }
