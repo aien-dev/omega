@@ -1,0 +1,21 @@
+EXP-002D Stage A, receipt 3 of 4: EXECUTION
+run: 2026-10-03T23:34:15Z on spark-b87b, cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+tree: fdc31c38494585ba5deaab233cf3ee073944eb90 (clean build, build/tests-turing-prd2 removed first)
+command: make test-turing-prd2
+exit code: 0
+log: evidence/EXP-002D/03_execution.log sha256 d0d2e18d0944e89591c9d950c59129192c8684739db04e21bbb681f289264e67
+summary lines:
+R28-v2 1 sum 0.9 -> WEIGHT_SUM: ok
+R28-v2 4b no renormalization: scorer refuses, no number: ok
+R28-v2 2 sum 1.1 -> WEIGHT_SUM: ok
+R28-v2 3 negative weight -> WEIGHT_RANGE: ok
+R28-v2 4a well-formed mixture accepted and scored: ok
+R28-v2 5 K=1 pi=1 mixture bit-identical to Gaussian: ok
+R28-v2 6 eight identical components within 1e-12 of one: ok
+N1 PRD1 bytes to PRD2 reader: refused (MAGIC)
+N1 PRD2 bytes to PRD1 reader: refused
+bits/point honest 17.7270 constant 145.5141 shuffled 276.1282 padded 18.7270
+N2 constant predictor loses to honest: yes
+N3 shuffled predictions lose to honest: yes
+N4 padded mixture costs 1.0000 bits/point (>= 0.9 required): yes
+test_ty_prd2: 74 checks, 0 failed
