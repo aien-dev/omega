@@ -161,3 +161,28 @@ jobs:
       - name: OSC-0B model sweep, back end, compiler golden/negative/model agreement, determinism, legacy writer (full, plain + ASan/UBSan)
         if: steps.guard.outputs.run == 'true' && steps.guard.outputs.full == 'true'
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-compiler-full
+
+  physics0:
+    # PD-0 hidden-equation benchmark substrate (docs/physics0/README.md): G0 self-test,
+    # G5 isolation, G1 oracle calibration, mutant check, Omega-language differential.
+    # Runs only when its own files (or this workflow / the shared sha256 / the OSC
+    # compiler the differential test links) change.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changed-path guard (physics0 files only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          CHANGED=$(git diff --name-only HEAD^1 HEAD)
+          if echo "$CHANGED" | grep -Eq '^(src/physics0/|tests/physics0/|mk/physics0\.mk$|src/compiler/|src/sha256\.|src/turing/history_selector\.c$|\.github/workflows/host-suites\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no physics0 files changed; skipping"
+          fi
+      - name: PD-0 substrate gates (plain + ASan/UBSan; V3 breach rates are recorded, not gated)
+        if: steps.guard.outputs.run == 'true'
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 physics0-test
