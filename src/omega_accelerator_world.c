@@ -112,8 +112,9 @@ int omega_world_init(OmegaAcceleratorWorld *world) {
     world->ring_capacity = world->m16.rm.entries;
     world->channel_active = true;
 
-    /* Allocate persistent pushbuffer ring */
-    if (nvrm_alloc(&world->m16.rm, 0x10000, &world->pb_mem) != 0) {
+    /* The CPU rewrites retired command slots. GPU-cached slots can replay
+     * earlier commands despite CPU store barriers, so bypass that cache. */
+    if (nvrm_alloc_gpu_uncached(&world->m16.rm, 0x10000, &world->pb_mem) != 0) {
         m16_native_close(&world->m16);
         return OMEGA_WORLD_ERR_NO_MEM;
     }

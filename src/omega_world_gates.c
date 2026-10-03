@@ -816,7 +816,9 @@ static bool test_m19_gate8_1000_op(void) {
     omega_world_register_buffer(&world, mat_bytes_out, OMEGA_PERM_READ | OMEGA_PERM_WRITE, &m_c_bf16);
 
     NvrmMem pb_pool;
-    if (nvrm_alloc(&world.m16.rm, 0x40000, &pb_pool) != 0) {
+    /* The CPU reuses these 64 command slots; a GPU-cached slot can replay old
+     * commands on GB10 despite CPU store barriers, so bypass the GPU cache. */
+    if (nvrm_alloc_gpu_uncached(&world.m16.rm, 0x40000, &pb_pool) != 0) {
         omega_world_destroy(&world);
         return false;
     }
