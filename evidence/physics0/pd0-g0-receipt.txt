@@ -2,8 +2,8 @@ receipt: PD0_G0
 spec: aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 2f881b1 (rev 2)
 recorder: STAND_IN
 range_guard: STAND_IN
-commit: 8175896ef323367adebd74f6b558ae0d96d1a3ba
-date_utc: 2026-10-03T23:47:58Z
+commit: d3bf2b8f817731269406d5b3b65bf5d57b114492
+date_utc: 2026-10-03T23:53:43Z
 --- test_pd0_world
 checks=1094 failures=0
 PHYSICS0_G0: PASS
