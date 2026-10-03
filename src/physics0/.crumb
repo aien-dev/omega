@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/physics0",
+  "layer": "src",
+  "purpose": "PD-0 hidden-equation benchmark (Physics-0 Discovery Engine cut 1): world, oracle, scorer, ladder checker, planner, learner. Generators live only in pd0_gen.c; learner objects must never link it."
+}

@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/physics0",
+  "layer": "tests",
+  "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential, isolation check."
+}
