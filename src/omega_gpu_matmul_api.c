@@ -99,56 +99,76 @@ int omega_gpu_matmul_bf16(uint32_t m, uint32_t k, uint32_t n,
     const uint32_t np = round_up(n, OMEGA_GPU_MATMUL_TILE_N);
     const uint32_t tk = OMEGA_GPU_MATMUL_TILE_K;
     const uint32_t slices = (k + tk - 1) / tk;
-    if (info) { info->m = m; info->k = k; info->n = n; info->padded_m = mp; info->padded_n = np; info->k_slices = slices; }
+    /* CTA envelope: the kernel rasters 16x16 tiles (grid_x = np/16 rounded up,
+     * grid_y = rows/16). Keep grid_x * grid_y <= OMEGA_GPU_MATMUL_MAX_CTAS by
+     * limiting the rows handed to one launch. */
+    const uint32_t grid_x = (np + 15) / 16;
+    uint32_t rows_per_call = (OMEGA_GPU_MATMUL_MAX_CTAS / grid_x) * OMEGA_GPU_MATMUL_TILE_M;
+    if (rows_per_call < OMEGA_GPU_MATMUL_TILE_M) rows_per_call = OMEGA_GPU_MATMUL_TILE_M; /* grid_x alone exceeds: 1024 cols = 64 CTAs, still inside */
+    if (rows_per_call > mp) rows_per_call = mp;
+    const uint32_t row_blocks = (mp + rows_per_call - 1) / rows_per_call;
+    if (info) {
+        info->m = m; info->k = k; info->n = n; info->padded_m = mp; info->padded_n = np;
+        info->k_slices = slices; info->rows_per_call = rows_per_call;
+    }
 
-    OmegaMatMulSpec spec;
-    OmegaBlackwellKernel kernel;
-    bool hit = false;
-    int rc = kernel_for_shape(mp, tk, np, &spec, &kernel, &hit);
-    if (rc != OMEGA_GPU_MATMUL_OK) return rc;
-    if (info) info->kernel_cache_hit = hit;
-
-    uint16_t *ap = calloc((size_t)mp * tk, sizeof *ap);
+    uint16_t *ap = calloc((size_t)rows_per_call * tk, sizeof *ap);
     uint16_t *bp = calloc((size_t)tk * np, sizeof *bp);
-    float *cp = malloc((size_t)mp * np * sizeof *cp);
+    float *cp = malloc((size_t)rows_per_call * np * sizeof *cp);
     if (!ap || !bp || !cp) { free(ap); free(bp); free(cp); return OMEGA_GPU_MATMUL_BAD_ARGS; }
     for (size_t i = 0; i < (size_t)m * n; i++) c[i] = 0.0f;
 
-    bool all_parity = true;
-    rc = OMEGA_GPU_MATMUL_OK;
+    bool all_parity = true, any_miss = false;
+    int rc = OMEGA_GPU_MATMUL_OK;
     for (uint32_t s = 0; s < slices && rc == OMEGA_GPU_MATMUL_OK; s++) {
         const uint32_t k0 = s * tk;
         const uint32_t kw = (k - k0 < tk) ? (k - k0) : tk;
-        /* A slice: rows 0..m of columns k0..k0+kw, zero elsewhere (row-major mp x 16) */
-        memset(ap, 0, (size_t)mp * tk * sizeof *ap);
-        for (uint32_t i = 0; i < m; i++)
-            memcpy(&ap[(size_t)i * tk], &a[(size_t)i * k + k0], kw * sizeof *ap);
         /* B slice: rows k0..k0+kw of columns 0..n, zero elsewhere (row-major 16 x np) */
         memset(bp, 0, (size_t)tk * np * sizeof *bp);
         for (uint32_t j = 0; j < kw; j++)
             memcpy(&bp[(size_t)j * np], &b[(size_t)(k0 + j) * n], n * sizeof *bp);
+        for (uint32_t rb = 0; rb < row_blocks && rc == OMEGA_GPU_MATMUL_OK; rb++) {
+            const uint32_t r0 = rb * rows_per_call;
+            uint32_t rows = mp - r0 < rows_per_call ? mp - r0 : rows_per_call;
+            rows = round_up(rows, OMEGA_GPU_MATMUL_TILE_M);
+            const uint32_t rows_real = (m > r0) ? ((m - r0 < rows) ? (m - r0) : rows) : 0;
+            OmegaMatMulSpec spec;
+            OmegaBlackwellKernel kernel;
+            bool hit = false;
+            rc = kernel_for_shape(rows, tk, np, &spec, &kernel, &hit);
+            if (rc != OMEGA_GPU_MATMUL_OK) break;
+            if (info) { if (hit) info->kernel_cache_hit = true; else any_miss = true; }
+            /* A slice: rows r0..r0+rows_real of columns k0..k0+kw, zero elsewhere (row-major rows x 16) */
+            memset(ap, 0, (size_t)rows * tk * sizeof *ap);
+            for (uint32_t i = 0; i < rows_real; i++)
+                memcpy(&ap[(size_t)i * tk], &a[(size_t)(r0 + i) * k + k0], kw * sizeof *ap);
 
-        OmegaBlackwellMatMulExecution exec;
-        memset(&exec, 0, sizeof exec);
-        float max_abs = 0.0f, max_rel = 0.0f;
-        int r = omega_blackwell_execute_matmul_tensor(&spec, &kernel, ap, bp, cp, &exec, &max_abs, &max_rel);
-        if (info) {
-            info->elapsed_ns += exec.elapsed_ns;
-            if (max_abs > info->max_abs_err) info->max_abs_err = max_abs;
-            if (max_rel > info->max_rel_err) info->max_rel_err = max_rel;
-            info->mismatch_count += exec.mismatch_count;
-            info->completion_marker = exec.completion_marker;
-            info->sm_architecture = exec.sm_architecture;
-            memcpy(info->target_chip, exec.target_chip, sizeof info->target_chip);
+            OmegaBlackwellMatMulExecution exec;
+            memset(&exec, 0, sizeof exec);
+            float max_abs = 0.0f, max_rel = 0.0f;
+            int r = omega_blackwell_execute_matmul_tensor(&spec, &kernel, ap, bp, cp, &exec, &max_abs, &max_rel);
+            if (info) {
+                info->chip_calls++;
+                info->elapsed_ns += exec.elapsed_ns;
+                if (max_abs > info->max_abs_err) info->max_abs_err = max_abs;
+                if (max_rel > info->max_rel_err) info->max_rel_err = max_rel;
+                info->mismatch_count += exec.mismatch_count;
+                info->completion_marker = exec.completion_marker;
+                info->sm_architecture = exec.sm_architecture;
+                memcpy(info->target_chip, exec.target_chip, sizeof info->target_chip);
+            }
+            if (r != 0 || exec.completion_marker != OMEGA_BW_MARKER_COMPLETION_PAYLOAD) { rc = OMEGA_GPU_MATMUL_CHIP_FAIL; break; }
+            if (!exec.parity_verified) all_parity = false;
+            for (uint32_t i = 0; i < rows_real; i++)
+                for (uint32_t j = 0; j < n; j++)
+                    c[(size_t)(r0 + i) * n + j] += cp[(size_t)i * np + j];
         }
-        if (r != 0 || exec.completion_marker != OMEGA_BW_MARKER_COMPLETION_PAYLOAD) { rc = OMEGA_GPU_MATMUL_CHIP_FAIL; break; }
-        if (!exec.parity_verified) all_parity = false;
-        for (uint32_t i = 0; i < m; i++)
-            for (uint32_t j = 0; j < n; j++)
-                c[(size_t)i * n + j] += cp[(size_t)i * np + j];
     }
     free(ap); free(bp); free(cp);
-    if (info) info->parity_verified = all_parity && rc == OMEGA_GPU_MATMUL_OK;
+    if (info) {
+        info->parity_verified = all_parity && rc == OMEGA_GPU_MATMUL_OK;
+        if (any_miss) info->kernel_cache_hit = false; /* hit only when every launch found its kernel */
+    }
     if (rc != OMEGA_GPU_MATMUL_OK) return rc;
     if (!all_parity) return OMEGA_GPU_MATMUL_PARITY_FAIL;
     return OMEGA_GPU_MATMUL_OK;

@@ -39,11 +39,18 @@ enum {
 #define OMEGA_GPU_MATMUL_TILE_M 16
 #define OMEGA_GPU_MATMUL_TILE_N 8
 #define OMEGA_GPU_MATMUL_TILE_K 16
+/* Chip-proven launch envelope (2026-10-03 sweep, evidence GPU-MATMUL-API-2ea8e67):
+ * grids of <= 100 CTAs return correct tiles, 128 and above lose whole tiles
+ * (investigation I42). The API never launches more than this many CTAs per
+ * call and splits rows on the host above it. */
+#define OMEGA_GPU_MATMUL_MAX_CTAS 64
 
 typedef struct {
     uint32_t m, k, n;
     uint32_t padded_m, padded_n;/* shape handed to the kernel */
-    uint32_t k_slices;          /* chip calls made: ceil(k / 16) */
+    uint32_t k_slices;          /* 16-wide K slices: ceil(k / 16) */
+    uint32_t chip_calls;        /* launches made (slices x row blocks) */
+    uint32_t rows_per_call;     /* row block height chosen for the CTA envelope */
     uint64_t elapsed_ns;        /* sum of chip launch-to-completion over the slices */
     float max_abs_err;          /* vs host bf16 oracle */
     float max_rel_err;

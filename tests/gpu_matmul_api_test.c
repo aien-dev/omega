@@ -23,8 +23,9 @@ static int g_checks, g_failed;
 #define CHECK(cond, ...) do { g_checks++; if (!(cond)) { g_failed++; printf("FAIL: "); printf(__VA_ARGS__); printf("\n"); } } while (0)
 
 static const char *DEFAULT_SHAPES =
-    "16,16,16;32,32,32;64,64,64;128,128,128;256,256,256;512,512,512;1024,1024,1024;"
-    "1,1024,1024;1,256,1024;16,1024,256;8,1024,8";
+    "16,16,16;32,32,32;64,64,64;128,128,128;256,256,256;512,512,512;"
+    "1,1024,1024;1,256,1024;16,1024,256;8,1024,8;"
+    "1024,16,128;192,16,192;512,16,64;256,16,256;128,16,512";
 
 static uint32_t lcg(uint32_t *s) { *s = *s * 1664525u + 1013904223u; return *s; }
 
@@ -91,19 +92,19 @@ static int chip_sweep(const char *out_path) {
         CHECK(pass, "shape %ux%ux%u rc=%s parity=%d max_rel=%g e2e_rel=%g rc2=%s hit=%d repeat_mismatch=%zu",
               m, k, n, omega_gpu_matmul_rc_name(rc), info.parity_verified, info.max_rel_err, e2e_max_rel,
               omega_gpu_matmul_rc_name(rc2), info2.kernel_cache_hit, repeat_mismatch);
-        printf("%s %ux%ux%u rc=%s chip_ns=%" PRIu64 " wall_ms=%.1f max_abs=%g max_rel=%g mismatches=%zu e2e_rel=%g slices=%u cache_hit2=%d\n",
+        printf("%s %ux%ux%u rc=%s chip_ns=%" PRIu64 " wall_ms=%.1f max_abs=%g max_rel=%g mismatches=%zu e2e_rel=%g slices=%u calls=%u rows_per_call=%u cache_hit2=%d\n",
                pass ? "PASS" : "FAIL", m, k, n, omega_gpu_matmul_rc_name(rc), info.elapsed_ns, wall_ms,
-               info.max_abs_err, info.max_rel_err, info.mismatch_count, e2e_max_rel, info.k_slices, info2.kernel_cache_hit);
+               info.max_abs_err, info.max_rel_err, info.mismatch_count, e2e_max_rel, info.k_slices, info.chip_calls, info.rows_per_call, info2.kernel_cache_hit);
         if (out) {
             fprintf(out, "%s{\"m\":%u,\"k\":%u,\"n\":%u,\"rc\":\"%s\",\"pass\":%s,\"chip_elapsed_ns\":%" PRIu64
                     ",\"wall_ms\":%.3f,\"max_abs_err\":%g,\"max_rel_err\":%g,\"mismatch_count\":%zu,"
                     "\"parity_verified\":%s,\"completion_marker\":%u,\"repeat_rc\":\"%s\",\"repeat_cache_hit\":%s,"
-                    "\"repeat_mismatch\":%zu,\"e2e_max_rel\":%g,\"k_slices\":%u,\"padded_m\":%u,\"padded_n\":%u,\"target_chip\":\"%s\",\"sm_architecture\":%u}",
+                    "\"repeat_mismatch\":%zu,\"e2e_max_rel\":%g,\"k_slices\":%u,\"chip_calls\":%u,\"rows_per_call\":%u,\"padded_m\":%u,\"padded_n\":%u,\"target_chip\":\"%s\",\"sm_architecture\":%u}",
                     first ? "" : ",", m, k, n, omega_gpu_matmul_rc_name(rc), pass ? "true" : "false",
                     info.elapsed_ns, wall_ms, info.max_abs_err, info.max_rel_err, info.mismatch_count,
                     info.parity_verified ? "true" : "false", info.completion_marker,
                     omega_gpu_matmul_rc_name(rc2), info2.kernel_cache_hit ? "true" : "false",
-                    repeat_mismatch, e2e_max_rel, info.k_slices, info.padded_m, info.padded_n, info.target_chip, info.sm_architecture);
+                    repeat_mismatch, e2e_max_rel, info.k_slices, info.chip_calls, info.rows_per_call, info.padded_m, info.padded_n, info.target_chip, info.sm_architecture);
             first = 0;
         }
         free(a); free(b); free(c); free(c2);
