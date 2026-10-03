@@ -1,0 +1,27 @@
+{
+  "gate": "gpu_engine",
+  "owner": "gpu_engine",
+  "omega_commit": "2eb912d0e4854b4e11d6b3b54754c5f53c2240b5",
+  "omega_tree_clean_before": true,
+  "omega_tree_clean_after": true,
+  "omega_commit_unchanged_after": true,
+  "physics_commit": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf",
+  "physics_lock_pin": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf",
+  "physics_tree_clean_before": true,
+  "physics_tree_clean_after": true,
+  "physics_commit_unchanged_after": true,
+  "binary_sha256": "b09a83340eabb9228f35cb5a68f2d5a8f1c7eff81050a9073272ec1f14c92803",
+  "chip_log_sha256": "9213ec554ae09d44f2224926b818331c817de08bd8bcf222d2a3017abb6c2905",
+  "run_args": [
+    "--chip"
+  ],
+  "host_tier": "mutants: 120 total, 107 killed, 13 survived as redundant, 0 survived as test gaps (receipt /tmp/mutrun.tzBEF0/out.json)",
+  "verdict_lines": [
+    "GPU_ENGINE: PASS"
+  ],
+  "chip_exit_status": 0,
+  "started_utc": "2026-10-03T14:01:20Z",
+  "finished_utc": "2026-10-03T14:01:39Z",
+  "verdict": "PASS",
+  "reason": ""
+}

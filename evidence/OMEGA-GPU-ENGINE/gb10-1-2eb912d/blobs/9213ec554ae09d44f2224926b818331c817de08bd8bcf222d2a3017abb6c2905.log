@@ -1,0 +1,2 @@
+GPU_ENGINE_CASES vector_runs=120 no_store_control=detected
+GPU_ENGINE: PASS
