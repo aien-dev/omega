@@ -121,7 +121,8 @@ int omega_world_init(OmegaAcceleratorWorld *world) {
     world->m16.pb_mem = world->pb_mem;
 
     /* Allocate persistent scratch arena */
-    if (nvrm_alloc(&world->m16.rm, OMEGA_WORLD_SCRATCH_SIZE, &world->scratch.mem) != 0) {
+    /* GB10: GPU-cacheable system memory is not coherent with CPU mappings (nvos.h:1115-1118, hive-phases I37). */
+    if (nvrm_alloc_gpu_uncached(&world->m16.rm, OMEGA_WORLD_SCRATCH_SIZE, &world->scratch.mem) != 0) {
         m16_native_close(&world->m16);
         return OMEGA_WORLD_ERR_NO_MEM;
     }
@@ -129,13 +130,18 @@ int omega_world_init(OmegaAcceleratorWorld *world) {
     world->scratch.allocated_bytes = 0;
 
     /* Allocate persistent completion marker */
-    if (nvrm_alloc(&world->m16.rm, 0x1000, &world->completion.mem) != 0) {
+    /* GB10: GPU-cacheable system memory is not coherent with CPU mappings (nvos.h:1115-1118, hive-phases I37). */
+    if (nvrm_alloc_gpu_uncached(&world->m16.rm, 0x1000, &world->completion.mem) != 0) {
         m16_native_close(&world->m16);
         return OMEGA_WORLD_ERR_NO_MEM;
     }
     world->completion.cpu_marker = (volatile uint32_t *)world->completion.mem.cpu;
     world->completion.gpu_va = world->completion.mem.va;
     *world->completion.cpu_marker = 0;
+    world->completion.cpu_marker2 = (volatile uint32_t *)((uint8_t *)world->completion.mem.cpu + 0x10);
+    world->completion.gpu_va2 = world->completion.mem.va + 0x10;
+    *world->completion.cpu_marker2 = 0;
+    __asm__ volatile("dsb sy" ::: "memory");
     world->completion.last_payload = 0;
 
     /* Initialize rolling state digest D_0 */
@@ -164,6 +170,8 @@ int omega_world_destroy(OmegaAcceleratorWorld *world) {
     world->scratch.allocated_bytes = 0;
     world->completion.cpu_marker = NULL;
     world->completion.gpu_va = 0;
+    world->completion.cpu_marker2 = NULL;
+    world->completion.gpu_va2 = 0;
     memset(&world->pb_mem, 0, sizeof world->pb_mem);
     world->channel_active = false;
     world->initialized = false;
@@ -208,7 +216,8 @@ int omega_world_register_buffer(OmegaAcceleratorWorld *world,
     size_t alloc_bytes = (size_bytes + 0xfffULL) & ~0xfffULL;
     if (alloc_bytes < 0x1000) alloc_bytes = 0x1000;
 
-    if (nvrm_alloc(&world->m16.rm, alloc_bytes, &entry->mem) != 0) {
+    /* GB10: GPU-cacheable system memory is not coherent with CPU mappings (nvos.h:1115-1118, hive-phases I37). */
+    if (nvrm_alloc_gpu_uncached(&world->m16.rm, alloc_bytes, &entry->mem) != 0) {
         return OMEGA_WORLD_ERR_NO_MEM;
     }
 
@@ -314,7 +323,8 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
     size_t alloc_bytes = (code_size + 0xfffULL) & ~0xfffULL;
     if (alloc_bytes < 0x1000) alloc_bytes = 0x1000;
 
-    if (nvrm_alloc(&world->m16.rm, alloc_bytes, &entry->mem) != 0) {
+    /* GB10: GPU-cacheable system memory is not coherent with CPU mappings (nvos.h:1115-1118, hive-phases I37). */
+    if (nvrm_alloc_gpu_uncached(&world->m16.rm, alloc_bytes, &entry->mem) != 0) {
         return OMEGA_WORLD_ERR_NO_MEM;
     }
 
@@ -702,6 +712,8 @@ int omega_world_drain(OmegaAcceleratorWorld *world,
     if (!world->channel_active) return OMEGA_WORLD_ERR_HARDWARE;
     if (timeout_ms < 0) return OMEGA_WORLD_ERR_INVALID_ARG;
 
+    /* Caller-built pushbuffers carry only the first release, so drain waits on
+     * marker 1; dispatch_vector/dispatch_matmul build the C3 tail and wait on marker 2. */
     if (m16_native_wait_marker_ge(world->completion.cpu_marker, upto_payload,
                                   (uint64_t)timeout_ms) != 0) {
         world->faulted = true;
@@ -970,13 +982,29 @@ int omega_world_dispatch_vector(OmegaAcceleratorWorld *world,
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20); // RELEASE | WFI
 
+    /* C3 tail, copied from omega_blackwell_engine.c:461-472 (MEM_OP_A..D =
+     * 0x28..0x34, L2_FLUSH_DIRTY 0x10 in bits 31:27, clc96f.h:36-73): flush the
+     * L2, then a second WFI release of the same payload at marker page + 0x10.
+     * Dispatch waits for this one before it reads any output. */
+    pb[pb_len++] = nvrm_mthd(0, 0x0028, 4);
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0x10u << 27;
+    pb[pb_len++] = nvrm_mthd(0, 0x005c, 5);
+    pb[pb_len++] = (uint32_t)world->completion.gpu_va2;
+    pb[pb_len++] = (uint32_t)(world->completion.gpu_va2 >> 32);
+    pb[pb_len++] = payload;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0x1 | (1u << 20); // RELEASE | WFI
+
     /* Submit to persistent GPFIFO ring */
     if (m16_native_submit_methods(&world->m16, pb, pb_len) != 0) {
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_HARDWARE;
     }
 
-    if (m16_native_wait_marker_ge(world->completion.cpu_marker, payload, 5000) != 0) {
+    if (m16_native_wait_marker_ge(world->completion.cpu_marker2, payload, 5000) != 0) {
         world->faulted = true;
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_HARDWARE;
@@ -1190,13 +1218,29 @@ int omega_world_dispatch_matmul(OmegaAcceleratorWorld *world,
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20); // RELEASE | WFI
 
+    /* C3 tail, copied from omega_blackwell_engine.c:461-472 (MEM_OP_A..D =
+     * 0x28..0x34, L2_FLUSH_DIRTY 0x10 in bits 31:27, clc96f.h:36-73): flush the
+     * L2, then a second WFI release of the same payload at marker page + 0x10.
+     * Dispatch waits for this one before it reads any output. */
+    pb[pb_len++] = nvrm_mthd(0, 0x0028, 4);
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0x10u << 27;
+    pb[pb_len++] = nvrm_mthd(0, 0x005c, 5);
+    pb[pb_len++] = (uint32_t)world->completion.gpu_va2;
+    pb[pb_len++] = (uint32_t)(world->completion.gpu_va2 >> 32);
+    pb[pb_len++] = payload;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0x1 | (1u << 20); // RELEASE | WFI
+
     /* Submit to persistent GPFIFO ring */
     if (m16_native_submit_methods(&world->m16, pb, pb_len) != 0) {
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_HARDWARE;
     }
 
-    if (m16_native_wait_marker_ge(world->completion.cpu_marker, payload, 5000) != 0) {
+    if (m16_native_wait_marker_ge(world->completion.cpu_marker2, payload, 5000) != 0) {
         world->faulted = true;
         omega_world_scratch_reset(world);
         return OMEGA_WORLD_ERR_HARDWARE;

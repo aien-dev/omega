@@ -91,6 +91,10 @@ typedef struct {
 typedef struct {
     NvrmMem mem;
     volatile uint32_t *cpu_marker;
+    /* Second release at page + 0x10, written after the L2 flush (C3). Dispatch
+     * waits on this; its payload sequence matches cpu_marker. */
+    volatile uint32_t *cpu_marker2;
+    uint64_t gpu_va2;
     uint64_t gpu_va;
     uint32_t last_payload;
 } OmegaCompletionTracker;
