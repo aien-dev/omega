@@ -10,6 +10,7 @@
 #include "omega_vector.h"
 #include "sha256.h"
 #include "omega_evidence.h"
+#include "omega_gpu_wait.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -514,16 +515,32 @@ static bool test_m19_gate6_mixed_workload(void) {
     return true;
 }
 
+/* Every QUEUE_WRAP failure exit prints one named reason (init, ring_discovery,
+ * enqueue, completion_timeout, wrap_count, channel_state, output_parity) so a
+ * failed run says which exit fired. Pass/fail decisions are unchanged. */
+static void m19_wrap_exit(const char *reason, const char *detail) {
+    printf("QUEUE_WRAP_FAIL reason=%s %s\n", reason, detail);
+}
+
 /* Gate 7: OMEGA_ACCEL_RESIDENT_QUEUE_WRAP_PASS */
 static bool test_m19_gate7_queue_wrap(void) {
     OmegaAcceleratorWorld world;
-    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    char detail[256];
+    if (omega_world_init(&world) != OMEGA_WORLD_OK) {
+        m19_wrap_exit("init", "omega_world_init failed");
+        return false;
+    }
 
     uint32_t ring_cap = 0;
-    if (omega_world_discover_ring_capacity(&world, &ring_cap) != OMEGA_WORLD_OK || ring_cap == 0) {
+    int ring_rc = omega_world_discover_ring_capacity(&world, &ring_cap);
+    if (ring_rc != OMEGA_WORLD_OK || ring_cap == 0) {
+        snprintf(detail, sizeof(detail), "rc=%d ring_capacity=%u", ring_rc, ring_cap);
+        m19_wrap_exit("ring_discovery", detail);
         omega_world_destroy(&world);
         return false;
     }
+    /* Observed facts: a failure after discovery still reports the capacity. */
+    m19_ring_capacity = ring_cap;
 
     uint32_t stress_count = 3 * ring_cap; /* 3072 dispatches */
 
@@ -671,7 +688,12 @@ static bool test_m19_gate7_queue_wrap(void) {
             uint32_t off = (submitted % pb_slots) * 0x1000;
             memcpy((uint8_t *)world.m16.pb_mem.cpu + off, pb, pb_len * 4);
             __asm__ volatile("dsb sy" ::: "memory");
-            if (nvrm_enqueue(&world.m16.rm, &world.m16.pb_mem, off, (uint32_t)pb_len) != 0) {
+            int enq_rc = nvrm_enqueue(&world.m16.rm, &world.m16.pb_mem, off, (uint32_t)pb_len);
+            if (enq_rc != 0) {
+                snprintf(detail, sizeof(detail),
+                         "dispatch_id=%u submitted=%u rc=%d rm.put=%u ring_capacity=%u",
+                         dispatch_id, submitted, enq_rc, (unsigned)world.m16.rm.put, ring_cap);
+                m19_wrap_exit("enqueue", detail);
                 omega_world_destroy(&world);
                 return false;
             }
@@ -680,29 +702,54 @@ static bool test_m19_gate7_queue_wrap(void) {
         *world.m16.rm.doorbell = world.m16.rm.token;
         __asm__ volatile("dsb sy" ::: "memory");
 
-        struct timespec start_ts, cur_ts;
-        clock_gettime(CLOCK_MONOTONIC, &start_ts);
-        while (*world.completion.cpu_marker < dispatch_id) {
-            __asm__ volatile("yield");
-            clock_gettime(CLOCK_MONOTONIC, &cur_ts);
-            if ((cur_ts.tv_sec - start_ts.tv_sec) > 5) {
-                omega_world_destroy(&world);
-                return false;
-            }
+        /* Same effective budget as the old spin (about 5 s with no progress),
+         * but the clock is monotonic nanoseconds and any marker change restarts
+         * it. The hard cap is generous so a slow-but-moving batch is not cut. */
+        omega_gpu_wait_cfg_t wait_cfg;
+        memset(&wait_cfg, 0, sizeof(wait_cfg));
+        wait_cfg.progress_timeout_ms = 5000;
+        wait_cfg.total_timeout_ms = 600000;
+        omega_gpu_wait_report_t wrpt;
+        /* Dispatch ids are a free-running counter: sequence semantics. */
+        if (!omega_gpu_wait_sequence(world.completion.cpu_marker, dispatch_id, &wrpt, &wait_cfg)) {
+            snprintf(detail, sizeof(detail),
+                     "wait_kind=%s result=%s dispatch_id=%u submitted=%u expected=%u observed=%u "
+                     "rm.put=%u ring_capacity=%u channel_generation=%u channel_reconstructions=%u "
+                     "elapsed_ns=%llu last_progress_ns=%llu progress_count=%llu polls=%llu",
+                     omega_gpu_wait_kind_name(wrpt.wait_kind), omega_gpu_wait_result_name(wrpt.result),
+                     dispatch_id, submitted, wrpt.expected, wrpt.last_observed,
+                     (unsigned)world.m16.rm.put, ring_cap,
+                     (unsigned)world.channel_generation, (unsigned)world.channel_reconstructions,
+                     (unsigned long long)wrpt.elapsed_ns,
+                     (unsigned long long)(wrpt.last_progress_ns - wrpt.start_ns),
+                     (unsigned long long)wrpt.progress_count, (unsigned long long)wrpt.polls);
+            m19_wrap_exit("completion_timeout", detail);
+            omega_world_destroy(&world);
+            return false;
         }
         /* Only now are this batch's pushbuffer slots safe to reuse. */
         nvrm_retire(&world.m16.rm, dispatch_id);
+        m19_wrap_dispatches = dispatch_id; /* observed so far; stress_count on success */
     }
 
     if (world.m16.rm.put < stress_count || (world.m16.rm.put / ring_cap) < 3) {
+        snprintf(detail, sizeof(detail), "rm.put=%u stress_count=%u ring_capacity=%u",
+                 (unsigned)world.m16.rm.put, stress_count, ring_cap);
+        m19_wrap_exit("wrap_count", detail);
         omega_world_destroy(&world);
         return false;
     }
     if (world.channel_generation != 1 || world.channel_reconstructions != 0) {
+        snprintf(detail, sizeof(detail), "channel_generation=%u channel_reconstructions=%u",
+                 (unsigned)world.channel_generation, (unsigned)world.channel_reconstructions);
+        m19_wrap_exit("channel_state", detail);
         omega_world_destroy(&world);
         return false;
     }
     if (c_cpu[0] != 10 || c_cpu[n - 1] != (n - 1 + 10)) {
+        snprintf(detail, sizeof(detail), "c[0]=%u c[n-1]=%u want %u and %u",
+                 c_cpu[0], c_cpu[n - 1], 10u, n - 1 + 10);
+        m19_wrap_exit("output_parity", detail);
         omega_world_destroy(&world);
         return false;
     }
