@@ -359,6 +359,18 @@ static uint32_t in_flight(void) {
     return n;
 }
 
+/* Admitted activations parked behind a running writer of their inputs (I11:
+ * that writer's wake merges into them instead of a second commit). They count
+ * in in_flight but nothing of theirs runs. */
+static uint32_t upstream_held(void) {
+    pthread_mutex_lock(&g_w.mu);
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < g_w.n_reactions; i++)
+        if (g_w.reactions[i].upstream_held) n++;
+    pthread_mutex_unlock(&g_w.mu);
+    return n;
+}
+
 static void t_close_waits(void) {
     printf("[*] close: revoke first, wait for the held step, its late write refused\n");
     char d[256];
@@ -384,9 +396,14 @@ static void t_close_waits(void) {
     int waited = 0;
     while (!__atomic_load_n(&c->test.held, __ATOMIC_ACQUIRE) && waited++ < 10000) sleep_us(1000);
     CHECK(c->test.held, "candidate 0 is held mid-run");
-    /* Everything else of this goal settles; only the held step is in flight. */
-    for (waited = 0; in_flight() != 1 && waited < 10000; waited++) sleep_us(1000);
-    CHECK(in_flight() == 1, "only the held step in flight (%u)", in_flight());
+    /* Everything else of this goal settles: the held step is the only one
+     * running. The step that reads its proposal is woken by the other
+     * candidate and (I11) waits parked behind the held writer instead of
+     * committing on the stale value; it is admitted, so in_flight counts it. */
+    for (waited = 0; in_flight() != 1 + upstream_held() && waited < 10000; waited++) sleep_us(1000);
+    CHECK(in_flight() == 1 + upstream_held(), "only the held step running (in_flight %u, held behind it %u)",
+          in_flight(), upstream_held());
+    CHECK(upstream_held() == 1, "exactly one step parked behind the held writer (%u)", upstream_held());
 
     uint32_t rid = c->rx_cand[0];
     uint64_t cx_before = c->cx.n;
