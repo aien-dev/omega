@@ -88,6 +88,33 @@ mutant's. Names come from `omega_gpu_attention_mutant_name` (table checked again
 Negative control: the comparison must reject the oracle with kv heads swapped. Repeat run
 on a cache hit must be bit-identical.
 
+## Staging dedupe per launch (OM-2)
+
+The paged path stages the referenced blocks' layer slice into a GPU-uncached staging buffer.
+Within one batched launch the staged slot is now keyed by the physical block id: a block that
+several sequences reference (a shared prompt prefix) is copied once and every row of the
+renumbered block table points at the same slot. `OmegaGpuAttnInfo` reports the effect:
+`kv_blocks_logical` (table entries walked), `kv_blocks_unique` (slices actually copied),
+`kv_bytes_staged` (bytes copied) and `kv_bytes_naive` (what per-reference staging would have
+copied); `kv_source` is `OMEGA_GPU_ATTN_KV_STAGED` (0) in this cut, there is no resident KV
+(see "Limits"). `omega_gpu_attention_test_set_dedupe(false)` restores per-reference staging
+as a negative control; the test proves the legacy counters equal the naive numbers and that the
+deduped output is bit-identical to the legacy output. Simulator evidence, 4 sequences sharing
+10 scattered prefix blocks with private tails {1,2,3,3}: 8q/2kv (one launch) 19 unique of 49
+logical, 155648 of 401408 bytes; 32q/8kv (two launches, dedupe is per launch) 29 of 49,
+950272 of 1605632 bytes.
+
+## Head and kv-head scaling sweep (`gpu_attention_test --sweep --out <json>`)
+
+q heads {1,2,4,8,16,24,32,64} x every divisor as kv heads x context {256, 2048}, bs 16,
+scattered block ids with a shared prefix across 4 sequences. Non power-of-two ratios (the 24-head
+rows) must be refused with `BAD_ARGS` and are recorded as `unsupported_by_kernel_envelope`.
+Supported points: oracle parity on the first call, then N timed calls (20 on chip, 1 under
+`--sim`), recording median/p90 call and kernel milliseconds, launches, CTAs, threads per CTA,
+q/out widths and the staging counters above. Schema `OMEGA_GPU_ATTENTION_SWEEP_V1`; the file
+says `host_simulator` and that hardware counters are unavailable (no invented counters). The
+sweep asserts no timing thresholds; the 3 ms gate stays in `--timing`.
+
 ## Host IR simulator (`gpu_attention_test --sim`)
 
 Executes the allocated IR program (physical registers, so the register allocator's loop
@@ -103,8 +130,11 @@ of that CTA instruction by instruction.
 
 - head_dim 64 only (TinyLlama, Llama-3.2-1B). Larger heads need a bigger shared-memory
   declaration in the QMD (word 36) and a second thread-per-token tiling.
-- Staging copy of q, the referenced KV blocks and the tables per call; the device is opened
-  per call (cut 1b's resident handle API is the path to remove both).
+- Staging copy of q, the referenced KV blocks (once per physical block per launch, OM-2) and
+  the tables per call. No resident KV: the pool lives in an anonymous CPU mmap whose
+  "device address" is the CPU virtual address, not a GPU VA this channel can address, and
+  GPU-cached system memory is not coherent with CPU mappings (nvos.h), so a resident copy
+  needs an Omega-owned GPU-uncached mirror plus exact block generations from the pool.
 - Serialising instruction schedule (every instruction waits on everything pending), as in
   cut 4: correctness first, throughput later.
 - Context <= 4096 on the contiguous gqa path.
