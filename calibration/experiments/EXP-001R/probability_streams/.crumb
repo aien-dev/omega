@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "calibration/experiments/EXP-001R/probability_streams",
-  "layer": "calibration/experiments/EXP-001R/probability_streams",
-  "purpose": "Directory calibration/experiments/EXP-001R/probability_streams. Purpose not yet described by a human.",
   "above": {
     "name": "calibration/experiments/EXP-001R",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory calibration/experiments/EXP-001R/probability_streams. Purpose not yet described by a human.",
-      "files": [
-        "INDEX"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:56199804e563624a8f636d5c10b84912b550d0fd9953894733c6b06daa9adbee",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:6ac627f061b5981857a3eec94bdba9fd1425569c05d2efddb10a88f108f0161f"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "806a9d6",
-          "timestamp": "2026-09-29T23:12:32-05:00",
           "author": "aien-dev",
+          "pr": 99,
+          "sha": "806a9d6",
+          "source": "backfill-git",
           "subject": "Merge pull request #99 from aien-dev/feat/turing-exp001r-publish",
-          "pr": 99
+          "timestamp": "2026-09-29T23:12:32-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "INDEX"
+      ],
+      "purpose_auto": "Directory calibration/experiments/EXP-001R/probability_streams. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "calibration/experiments/EXP-001R/probability_streams",
+  "name": "calibration/experiments/EXP-001R/probability_streams",
+  "purpose": "Directory calibration/experiments/EXP-001R/probability_streams. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

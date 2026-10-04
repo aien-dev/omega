@@ -1,67 +1,79 @@
 {
-  "schema_version": "1.0.0",
-  "name": "docs/brownian",
-  "layer": "docs/brownian",
-  "purpose": "Directory docs/brownian. Purpose not yet described by a human.",
   "above": {
     "name": "docs",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory docs/brownian. Purpose not yet described by a human.",
-      "files": [
-        "PROFILE_COMMITMENT.txt",
-        "PROFILE_COMMITMENT_HISTORY.txt"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:d6212e49d394eddb0ee2df40bc9d203dcdb02072526bc6aa14e361b895874011",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:7c4c4429d2d45e430ea4cb876e81bb78fb64d3ae77d2298a6c846ad47d2c312d"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 5,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
+          "author": "aien-dev",
+          "pr": 104,
           "sha": "b608dff",
-          "timestamp": "2026-09-30T06:56:11-05:00",
-          "author": "aien-dev",
+          "source": "backfill-git",
           "subject": "Merge pull request #104 from aien-dev/docs/brn-commit-history",
-          "pr": 104
+          "timestamp": "2026-09-30T06:56:11-05:00"
         },
         {
-          "source": "backfill-git",
+          "author": "aien-dev",
+          "pr": 103,
           "sha": "6b9d4b7",
-          "timestamp": "2026-09-30T06:35:54-05:00",
-          "author": "aien-dev",
+          "source": "backfill-git",
           "subject": "Merge pull request #103 from aien-dev/docs/brn-commit-v13",
-          "pr": 103
+          "timestamp": "2026-09-30T06:35:54-05:00"
         },
         {
-          "source": "backfill-git",
+          "author": "aien-dev",
+          "pr": 102,
           "sha": "be55354",
-          "timestamp": "2026-09-30T01:02:28-05:00",
-          "author": "aien-dev",
+          "source": "backfill-git",
           "subject": "Merge pull request #102 from aien-dev/docs/brownian-commitment-3",
-          "pr": 102
+          "timestamp": "2026-09-30T01:02:28-05:00"
         },
         {
-          "source": "backfill-git",
+          "author": "aien-dev",
+          "pr": 101,
           "sha": "6014187",
-          "timestamp": "2026-09-30T00:58:32-05:00",
-          "author": "aien-dev",
+          "source": "backfill-git",
           "subject": "Merge pull request #101 from aien-dev/docs/brownian-commitment-2",
-          "pr": 101
+          "timestamp": "2026-09-30T00:58:32-05:00"
         },
         {
-          "source": "backfill-git",
-          "sha": "c7687ea",
-          "timestamp": "2026-09-30T00:49:27-05:00",
           "author": "aien-dev",
+          "pr": 100,
+          "sha": "c7687ea",
+          "source": "backfill-git",
           "subject": "Merge pull request #100 from aien-dev/docs/brownian-profile-commitment",
-          "pr": 100
+          "timestamp": "2026-09-30T00:49:27-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 5
+    },
+    "seed": {
+      "files": [
+        "PROFILE_COMMITMENT.txt",
+        "PROFILE_COMMITMENT_HISTORY.txt"
+      ],
+      "purpose_auto": "Directory docs/brownian. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "docs/brownian",
+  "name": "docs/brownian",
+  "purpose": "Directory docs/brownian. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

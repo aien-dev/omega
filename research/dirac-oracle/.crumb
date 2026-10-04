@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "research/dirac-oracle",
-  "layer": "research/dirac-oracle",
-  "purpose": "Directory research/dirac-oracle. Purpose not yet described by a human.",
   "above": {
     "name": "research",
     "path": ".."
@@ -14,45 +10,68 @@
     }
   ],
   "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "044d04925f1b7dcdfffad8c9a27bc5deae44156ce95ece9a59fc72eee0d720b1",
+          "last_commit": "458c57f",
+          "name": "src",
+          "purpose": "Directory research/dirac-oracle/src. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:ffedba41cd02b58b4f9fa78c44ded26531b14511d5c21e3c49b063710e99babc",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:7597531ca9a2cdce9e840dda55ce639f86c4237eda3f2e3d1d5b10c599966a33",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 5,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:7696adf8d2158808f1858ca03c3cb0e8c66e0867f047d58b43246317445fab76"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 158,
+          "sha": "458c57f",
+          "source": "backfill-git",
+          "subject": "research(dirac-oracle): independent oracle spec + KAT corpus format (DIRAC-0 D-02, NOT_RUN) (#158)",
+          "timestamp": "2026-10-01T07:45:33-05:00"
+        },
+        {
+          "lane": "lane35",
+          "note": "D-02 omega PR #158 MERGED 458c57f: research/dirac-oracle/ (ORACLE-SPEC.md, CORPUS-FORMAT.md with 3 hand-checked records, src/oracle_clifford.c, src/oracle_kat_verify.sh, README-NOT-BUILT.md). NOT_RUN",
+          "pr": 158,
+          "ref": "2026-10-01-push-lane35-report.md",
+          "sha": "458c57f",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane35",
+          "note": "12:53Z Lane 35 DONE: arch #83 6ebd2fe (DIRAC-0 spec + ADR 0023, C2S ladder D-1..D3, status proposed, DIRAC_PREP_FROZEN not passed) + omega #158 458c57f (oracle plan, public fixtures only; sealed keys",
+          "pr": 158,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "458c57f",
+          "source": "backfill-lane-report"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory research/dirac-oracle. Purpose not yet described by a human.",
       "files": [
         "CORPUS-FORMAT.md",
         "ORACLE-SPEC.md",
         "README-NOT-BUILT.md"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "458c57f",
-          "timestamp": "2026-10-01T07:45:33-05:00",
-          "author": "aien-dev",
-          "subject": "research(dirac-oracle): independent oracle spec + KAT corpus format (DIRAC-0 D-02, NOT_RUN) (#158)",
-          "pr": 158
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane35",
-          "sha": "458c57f",
-          "pr": 158,
-          "note": "D-02 omega PR #158 MERGED 458c57f: research/dirac-oracle/ (ORACLE-SPEC.md, CORPUS-FORMAT.md with 3 hand-checked records, src/oracle_clifford.c, src/oracle_kat_verify.sh, README-NOT-BUILT.md). NOT_RUN",
-          "ref": "2026-10-01-push-lane35-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane35",
-          "sha": "458c57f",
-          "pr": 158,
-          "note": "12:53Z Lane 35 DONE: arch #83 6ebd2fe (DIRAC-0 spec + ADR 0023, C2S ladder D-1..D3, status proposed, DIRAC_PREP_FROZEN not passed) + omega #158 458c57f (oracle plan, public fixtures only; sealed keys",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        }
-      ]
+      ],
+      "purpose_auto": "Directory research/dirac-oracle. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "research/dirac-oracle",
+  "name": "research/dirac-oracle",
+  "purpose": "Directory research/dirac-oracle. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

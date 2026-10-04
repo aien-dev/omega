@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "polyglot/mojo",
-  "layer": "polyglot/mojo",
-  "purpose": "Directory polyglot/mojo. Purpose not yet described by a human.",
   "above": {
     "name": "polyglot",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory polyglot/mojo. Purpose not yet described by a human.",
-      "files": [
-        "omx_mojo.mojo"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:815a5596e1619a3ff7fff069b07a48907737e72b5e59a1d0306f5fbf92036dcf",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:260cb30e8585642df427dd8502e2b954daad7a04aec385e9f6950817847c8c37"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "87938dc",
-          "timestamp": "2026-09-29T14:16:52-05:00",
           "author": "aien-dev",
+          "pr": 80,
+          "sha": "87938dc",
+          "source": "backfill-git",
           "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
-          "pr": 80
+          "timestamp": "2026-09-29T14:16:52-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "omx_mojo.mojo"
+      ],
+      "purpose_auto": "Directory polyglot/mojo. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "polyglot/mojo",
+  "name": "polyglot/mojo",
+  "purpose": "Directory polyglot/mojo. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

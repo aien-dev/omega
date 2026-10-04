@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "polyglot",
-  "layer": "polyglot",
-  "purpose": "Directory polyglot. Purpose not yet described by a human.",
   "above": {
     "name": "cs-omega",
     "path": ".."
@@ -14,25 +10,48 @@
     }
   ],
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory polyglot. Purpose not yet described by a human.",
-      "files": []
+    "generated": {
+      "children": [
+        {
+          "digest": "815a5596e1619a3ff7fff069b07a48907737e72b5e59a1d0306f5fbf92036dcf",
+          "last_commit": "ae8c7c5",
+          "name": "mojo",
+          "purpose": "Directory polyglot/mojo. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:cadc329bf69f9d98442f42514c68a97126da50bf2859c37c18ffe6d0a53517e1",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:69cbb8ef13ccce47ccc21f159e95f1eac58679319e2cc25937065f95c4eb9207",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:260cb30e8585642df427dd8502e2b954daad7a04aec385e9f6950817847c8c37"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "87938dc",
-          "timestamp": "2026-09-29T14:16:52-05:00",
           "author": "aien-dev",
+          "pr": 80,
+          "sha": "87938dc",
+          "source": "backfill-git",
           "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
-          "pr": 80
+          "timestamp": "2026-09-29T14:16:52-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [],
+      "purpose_auto": "Directory polyglot. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "polyglot",
+  "name": "polyglot",
+  "purpose": "Directory polyglot. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

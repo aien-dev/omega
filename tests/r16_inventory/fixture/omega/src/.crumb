@@ -1,35 +1,47 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/r16_inventory/fixture/omega/src",
-  "layer": "tests/r16_inventory/fixture/omega/src",
-  "purpose": "Directory tests/r16_inventory/fixture/omega/src. Purpose not yet described by a human.",
   "above": {
     "name": "tests/r16_inventory/fixture",
     "path": "../.."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/r16_inventory/fixture/omega/src. Purpose not yet described by a human.",
-      "files": [
-        "legacy_oracle_demo.c",
-        "world.c"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:a2e33609182947dc2854c5c9f6f1cbf42b6c72173e1e9030c4d7775de98a348b",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:49c11d43a99e9a68ad27840d9c981816b4bd758ae9321d709d5173a1df1f446a"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "6fdc4c3",
-          "timestamp": "2026-09-29T11:49:54-05:00",
           "author": "aien-dev",
+          "pr": 68,
+          "sha": "6fdc4c3",
+          "source": "backfill-git",
           "subject": "R16 spec: orchestrator retirement (pre-registration) (#68)",
-          "pr": 68
+          "timestamp": "2026-09-29T11:49:54-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "legacy_oracle_demo.c",
+        "world.c"
+      ],
+      "purpose_auto": "Directory tests/r16_inventory/fixture/omega/src. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/r16_inventory/fixture/omega/src",
+  "name": "tests/r16_inventory/fixture/omega/src",
+  "purpose": "Directory tests/r16_inventory/fixture/omega/src. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

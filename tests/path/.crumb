@@ -1,36 +1,48 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/path",
-  "layer": "tests/path",
-  "purpose": "Directory tests/path. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:a4d320b3203650a28c43ea954957d8902d1cc25cbdc8aecd15628c01a92f68f8",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 3,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:8c3dcff02cd8d5c7391ace9834d6c110863828a9f61792abd1f51abf512f6bd3"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 109,
+          "sha": "3875223",
+          "source": "backfill-git",
+          "subject": "Merge pull request #109 from aien-dev/feat/path1-reference",
+          "timestamp": "2026-09-30T16:32:26-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory tests/path. Purpose not yet described by a human.",
       "files": [
         "check_path_boundary.sh",
         "mutate.sh",
         "test_path_identity.c"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "3875223",
-          "timestamp": "2026-09-30T16:32:26-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #109 from aien-dev/feat/path1-reference",
-          "pr": 109
-        }
-      ]
+      ],
+      "purpose_auto": "Directory tests/path. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/path",
+  "name": "tests/path",
+  "purpose": "Directory tests/path. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

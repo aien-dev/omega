@@ -1,15 +1,54 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/algebra",
-  "layer": "tests/algebra",
-  "purpose": "Directory tests/algebra. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:e7498eca87fe5ca8dc27d92f2d99be0de3e4c804711f9d8cba5bb1e47ca95f74",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 9,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:e71d3074d09897dadb6f6f093a892c6dec2e81506b4e4ea61970ea3d0bfd1185"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 87,
+          "sha": "bafa0be",
+          "source": "backfill-git",
+          "subject": "Merge pull request #87 from aien-dev/feat/mixed-algebra-digital-v1",
+          "timestamp": "2026-09-29T17:07:48-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 84,
+          "sha": "7350a61",
+          "source": "backfill-git",
+          "subject": "Merge pull request #84 from aien-dev/feat/mixed-algebra-phase-twin",
+          "timestamp": "2026-09-29T14:46:35-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 78,
+          "sha": "4b217aa",
+          "source": "backfill-git",
+          "subject": "Merge pull request #78 from aien-dev/feat/mixed-algebra",
+          "timestamp": "2026-09-29T12:59:58-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 3
+    },
     "seed": {
-      "purpose_auto": "Directory tests/algebra. Purpose not yet described by a human.",
       "files": [
         "bench_mixed_algebra.c",
         "bench_select.c",
@@ -20,39 +59,12 @@
         "test_oma.c",
         "test_phase_twin.c",
         "test_realize.c"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 3,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "bafa0be",
-          "timestamp": "2026-09-29T17:07:48-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #87 from aien-dev/feat/mixed-algebra-digital-v1",
-          "pr": 87
-        },
-        {
-          "source": "backfill-git",
-          "sha": "7350a61",
-          "timestamp": "2026-09-29T14:46:35-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #84 from aien-dev/feat/mixed-algebra-phase-twin",
-          "pr": 84
-        },
-        {
-          "source": "backfill-git",
-          "sha": "4b217aa",
-          "timestamp": "2026-09-29T12:59:58-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #78 from aien-dev/feat/mixed-algebra",
-          "pr": 78
-        }
-      ]
+      ],
+      "purpose_auto": "Directory tests/algebra. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/algebra",
+  "name": "tests/algebra",
+  "purpose": "Directory tests/algebra. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/visor/sessions",
-  "layer": "tests/visor/sessions",
-  "purpose": "Directory tests/visor/sessions. Purpose not yet described by a human.",
   "above": {
     "name": "tests/visor",
     "path": ".."
@@ -14,46 +10,69 @@
     }
   ],
   "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "9297678f87bea12624aed25eee6a8213c83315456657e170c2f4389d79b4e028",
+          "last_commit": "4fab549",
+          "name": "evidence-root",
+          "purpose": "Directory tests/visor/sessions/evidence-root. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:fb74fdb3d7cd9d1bbd91e121343dd95737b1598237c85f43d09455d35ee3f03d",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:19402f2edf2008cb5b961c4a369f9b962d18ebe2076a102b0e30aba7f6cda306",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 5,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:f489ee21922d9aca1c3726d00fe3ee0fcb7b262c841c73983773171c745ad17b"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 81,
+          "sha": "f7f60dd",
+          "source": "backfill-git",
+          "subject": "Merge pull request #81 from aien-dev/feat/program-realize",
+          "timestamp": "2026-09-29T16:21:48-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 75,
+          "sha": "805a3a6",
+          "source": "backfill-git",
+          "subject": "Merge pull request #75 from aien-dev/fix/program-id-body",
+          "timestamp": "2026-09-29T07:41:31-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 69,
+          "sha": "193a7e7",
+          "source": "backfill-git",
+          "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
+          "timestamp": "2026-09-29T06:27:22-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 3
+    },
     "seed": {
-      "purpose_auto": "Directory tests/visor/sessions. Purpose not yet described by a human.",
       "files": [
         "basic.expected",
         "basic.omega-session",
         "e2e.expected",
         "e2e.omega-session"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 3,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "f7f60dd",
-          "timestamp": "2026-09-29T16:21:48-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #81 from aien-dev/feat/program-realize",
-          "pr": 81
-        },
-        {
-          "source": "backfill-git",
-          "sha": "805a3a6",
-          "timestamp": "2026-09-29T07:41:31-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #75 from aien-dev/fix/program-id-body",
-          "pr": 75
-        },
-        {
-          "source": "backfill-git",
-          "sha": "193a7e7",
-          "timestamp": "2026-09-29T06:27:22-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
-          "pr": 69
-        }
-      ]
+      ],
+      "purpose_auto": "Directory tests/visor/sessions. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/visor/sessions",
+  "name": "tests/visor/sessions",
+  "purpose": "Directory tests/visor/sessions. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,15 +1,126 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/compiler/progs",
-  "layer": "tests/compiler/progs",
-  "purpose": "Directory tests/compiler/progs. Purpose not yet described by a human.",
   "above": {
     "name": "tests/compiler",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:44128e1034bd4f570667a4a57f5d058b09b127f6e203e2173e2b07c533c45b57",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 47,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:87862690dad770356b5d66d8d7b794c231c8b2d35823f04720fe81757fe2d1ff"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 150,
+          "sha": "c773622",
+          "source": "backfill-git",
+          "subject": "OSC-2 item 3: arenas wired to the OSC-0B memory model (Lane 27) (#150)",
+          "timestamp": "2026-10-01T05:48:25-05:00"
+        },
+        {
+          "lane": "lane27",
+          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "pr": 150,
+          "ref": "2026-10-01-push-lane27-report.md",
+          "sha": "c773622",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane27",
+          "note": "10:50Z Lane 27 interim: omega #150 c773622 (OSC-2 item 3 arenas wired to OSC-0B model, receipt osc2-arenas-d32a589a); item 4 strict writer next. Running: 2,15,27,29.",
+          "pr": 150,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "c773622",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 149,
+          "sha": "845dce4",
+          "source": "backfill-git",
+          "subject": "OSC-2 item 2: fixed-layout structs (Lane 27) (#149)",
+          "timestamp": "2026-10-01T04:53:49-05:00"
+        },
+        {
+          "lane": "lane27",
+          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "pr": 149,
+          "ref": "2026-10-01-push-lane27-report.md",
+          "sha": "845dce4",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane27",
+          "note": "09:55Z Lane 27 interim: omega #149 845dce4 (OSC-2 item 2 fixed-layout structs, receipt osc2-structs-9ed6766b); continues arena<->memory model + strict writer. Running: 2,15,25,26,27.",
+          "pr": 149,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "845dce4",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 148,
+          "sha": "0abdb08",
+          "source": "backfill-git",
+          "subject": "OSC-2 item 1: enforce requires/ensures contracts (Lane 27) (#148)",
+          "timestamp": "2026-10-01T04:10:43-05:00"
+        },
+        {
+          "lane": "lane27",
+          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "pr": 148,
+          "ref": "2026-10-01-push-lane27-report.md",
+          "sha": "0abdb08",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane27",
+          "note": "09:13Z Lane 27 interim: omega #148 0abdb08 (OSC-2 item 1 requires/ensures; golden 27/27, neg 46/46); continues with structs/arena/writer. Running: 2,15,25,26,27.",
+          "pr": 148,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "0abdb08",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 144,
+          "sha": "b81f850",
+          "source": "backfill-git",
+          "subject": "OSC-1: first compiler slice (parse -> typed IR -> AArch64) + OSC-0B memory model gate (#144)",
+          "timestamp": "2026-10-01T03:35:26-05:00"
+        },
+        {
+          "lane": "lane22",
+          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "pr": 144,
+          "ref": "2026-10-01-push-lane22-report.md",
+          "sha": "b81f850",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane22",
+          "note": "~16:20Z Lane 22 DONE: omega #144 b81f850 (OSC-1 compiler slice: ints 8-64, let/if/bounded loops/calls/arrays+ownership; ~784k fuzz runs 0 mismatch; 24 golden byte-identical; 34 negatives; OSC-0B memo",
+          "pr": 144,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "b81f850",
+          "source": "backfill-lane-report"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 4
+    },
     "seed": {
-      "purpose_auto": "Directory tests/compiler/progs. Purpose not yet described by a human.",
       "files": [
         "arena_basic.osc",
         "arena_borrows.osc",
@@ -48,111 +159,12 @@
         "structs_fields.osc",
         "structs_owner.osc",
         "types.osc"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 4,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "c773622",
-          "timestamp": "2026-10-01T05:48:25-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-2 item 3: arenas wired to the OSC-0B memory model (Lane 27) (#150)",
-          "pr": 150
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "c773622",
-          "pr": 150,
-          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
-          "ref": "2026-10-01-push-lane27-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "c773622",
-          "pr": 150,
-          "note": "10:50Z Lane 27 interim: omega #150 c773622 (OSC-2 item 3 arenas wired to OSC-0B model, receipt osc2-arenas-d32a589a); item 4 strict writer next. Running: 2,15,27,29.",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "845dce4",
-          "timestamp": "2026-10-01T04:53:49-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-2 item 2: fixed-layout structs (Lane 27) (#149)",
-          "pr": 149
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "845dce4",
-          "pr": 149,
-          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
-          "ref": "2026-10-01-push-lane27-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "845dce4",
-          "pr": 149,
-          "note": "09:55Z Lane 27 interim: omega #149 845dce4 (OSC-2 item 2 fixed-layout structs, receipt osc2-structs-9ed6766b); continues arena<->memory model + strict writer. Running: 2,15,25,26,27.",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "0abdb08",
-          "timestamp": "2026-10-01T04:10:43-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-2 item 1: enforce requires/ensures contracts (Lane 27) (#148)",
-          "pr": 148
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "0abdb08",
-          "pr": 148,
-          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
-          "ref": "2026-10-01-push-lane27-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "0abdb08",
-          "pr": 148,
-          "note": "09:13Z Lane 27 interim: omega #148 0abdb08 (OSC-2 item 1 requires/ensures; golden 27/27, neg 46/46); continues with structs/arena/writer. Running: 2,15,25,26,27.",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "b81f850",
-          "timestamp": "2026-10-01T03:35:26-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-1: first compiler slice (parse -> typed IR -> AArch64) + OSC-0B memory model gate (#144)",
-          "pr": 144
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane22",
-          "sha": "b81f850",
-          "pr": 144,
-          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
-          "ref": "2026-10-01-push-lane22-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane22",
-          "sha": "b81f850",
-          "pr": 144,
-          "note": "~16:20Z Lane 22 DONE: omega #144 b81f850 (OSC-1 compiler slice: ints 8-64, let/if/bounded loops/calls/arrays+ownership; ~784k fuzz runs 0 mismatch; 24 golden byte-identical; 34 negatives; OSC-0B memo",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        }
-      ]
+      ],
+      "purpose_auto": "Directory tests/compiler/progs. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/compiler/progs",
+  "name": "tests/compiler/progs",
+  "purpose": "Directory tests/compiler/progs. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

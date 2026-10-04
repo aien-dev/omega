@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/turing",
-  "layer": "tests/turing",
-  "purpose": "Directory tests/turing. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
@@ -14,8 +10,90 @@
     }
   ],
   "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "9d36c14a9123dab52eeb62b71e5b455fcc1d88f8bb788f8aed354df9ca842ec3",
+          "last_commit": "487de8d",
+          "name": "fixtures",
+          "purpose": "Directory tests/turing/fixtures. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:2951d4a9ef3d92d064df34b295620ac4e0acfabe033a98cddf2f3da349e365a5",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:75d5e576c38a0497a55e9f5ee79550cb94f9b75008f3e4e126312802704b3f86",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 18,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:c40ab2d3b223a3bb197ba79eed510ed427db0689c8d46d18b798abbe39c44e84"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 96,
+          "sha": "c7a1077",
+          "source": "backfill-git",
+          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
+          "timestamp": "2026-09-29T22:58:17-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 92,
+          "sha": "81a7eee",
+          "source": "backfill-git",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "timestamp": "2026-09-29T21:40:13-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 90,
+          "sha": "23aab4e",
+          "source": "backfill-git",
+          "subject": "Merge pull request #90 from aien-dev/feat/qrecords",
+          "timestamp": "2026-09-29T18:13:33-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 89,
+          "sha": "3633030",
+          "source": "backfill-git",
+          "subject": "Merge pull request #89 from aien-dev/feat/qcont-scorer",
+          "timestamp": "2026-09-29T18:08:02-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 86,
+          "sha": "071a1e1",
+          "source": "backfill-git",
+          "subject": "Merge pull request #86 from aien-dev/fix/turing-energy-closeout",
+          "timestamp": "2026-09-29T17:13:56-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 85,
+          "sha": "f0dc0af",
+          "source": "backfill-git",
+          "subject": "Merge pull request #85 from aien-dev/feat/turing-yield-ty12",
+          "timestamp": "2026-09-29T16:05:27-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 79,
+          "sha": "dbfb474",
+          "source": "backfill-git",
+          "subject": "Merge pull request #79 from aien-dev/feat/turing-w1",
+          "timestamp": "2026-09-29T14:13:22-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 7
+    },
     "seed": {
-      "purpose_auto": "Directory tests/turing. Purpose not yet described by a human.",
       "files": [
         "qcont_kat_gen.c",
         "test_tc.c",
@@ -31,71 +109,12 @@
         "ty_energy_fixture.c",
         "ty_energy_window.c",
         "ty_workload.c"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 7,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "c7a1077",
-          "timestamp": "2026-09-29T22:58:17-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
-          "pr": 96
-        },
-        {
-          "source": "backfill-git",
-          "sha": "81a7eee",
-          "timestamp": "2026-09-29T21:40:13-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
-          "pr": 92
-        },
-        {
-          "source": "backfill-git",
-          "sha": "23aab4e",
-          "timestamp": "2026-09-29T18:13:33-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #90 from aien-dev/feat/qrecords",
-          "pr": 90
-        },
-        {
-          "source": "backfill-git",
-          "sha": "3633030",
-          "timestamp": "2026-09-29T18:08:02-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #89 from aien-dev/feat/qcont-scorer",
-          "pr": 89
-        },
-        {
-          "source": "backfill-git",
-          "sha": "071a1e1",
-          "timestamp": "2026-09-29T17:13:56-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #86 from aien-dev/fix/turing-energy-closeout",
-          "pr": 86
-        },
-        {
-          "source": "backfill-git",
-          "sha": "f0dc0af",
-          "timestamp": "2026-09-29T16:05:27-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #85 from aien-dev/feat/turing-yield-ty12",
-          "pr": 85
-        },
-        {
-          "source": "backfill-git",
-          "sha": "dbfb474",
-          "timestamp": "2026-09-29T14:13:22-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #79 from aien-dev/feat/turing-w1",
-          "pr": 79
-        }
-      ]
+      ],
+      "purpose_auto": "Directory tests/turing. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/turing",
+  "name": "tests/turing",
+  "purpose": "Directory tests/turing. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/visor",
-  "layer": "src/visor",
-  "purpose": "Directory src/visor. Purpose not yet described by a human.",
   "above": {
     "name": "src",
     "path": ".."
@@ -14,8 +10,58 @@
     }
   ],
   "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "698c7acaafd2fdfc36c30117f7cda86aaacb21a3333d6a6f737a3bed1c990761",
+          "last_commit": "a56d21c",
+          "name": "rx",
+          "purpose": "Directory src/visor/rx. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:426a1b15679ed802080b03079613c322df3821181536f0f66596d50c63a2f7cb",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:daf5e5e90c1ccb4c089220a6545844dbe4078a233f1777e8145b74f1bf5dd5fe",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 21,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:a1963f6ba709fb4f1c6175371d26b0f5a8de6d51809035b7320204c2908c2d08"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 81,
+          "sha": "f7f60dd",
+          "source": "backfill-git",
+          "subject": "Merge pull request #81 from aien-dev/feat/program-realize",
+          "timestamp": "2026-09-29T16:21:48-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 71,
+          "sha": "8e7a445",
+          "source": "backfill-git",
+          "subject": "Merge pull request #71 from aien-dev/fix/effect-cap64",
+          "timestamp": "2026-09-29T06:52:59-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 69,
+          "sha": "193a7e7",
+          "source": "backfill-git",
+          "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
+          "timestamp": "2026-09-29T06:27:22-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 3
+    },
     "seed": {
-      "purpose_auto": "Directory src/visor. Purpose not yet described by a human.",
       "files": [
         "visor.c",
         "visor.h",
@@ -37,39 +83,12 @@
         "visor_verify.h",
         "visor_world.c",
         "visor_world.h"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 3,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "f7f60dd",
-          "timestamp": "2026-09-29T16:21:48-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #81 from aien-dev/feat/program-realize",
-          "pr": 81
-        },
-        {
-          "source": "backfill-git",
-          "sha": "8e7a445",
-          "timestamp": "2026-09-29T06:52:59-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #71 from aien-dev/fix/effect-cap64",
-          "pr": 71
-        },
-        {
-          "source": "backfill-git",
-          "sha": "193a7e7",
-          "timestamp": "2026-09-29T06:27:22-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
-          "pr": 69
-        }
-      ]
+      ],
+      "purpose_auto": "Directory src/visor. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "src/visor",
+  "name": "src/visor",
+  "purpose": "Directory src/visor. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/visor/rx",
-  "layer": "src/visor/rx",
-  "purpose": "Directory src/visor/rx. Purpose not yet described by a human.",
   "above": {
     "name": "src/visor",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory src/visor/rx. Purpose not yet described by a human.",
-      "files": [
-        "visor_world_rx.c"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:698c7acaafd2fdfc36c30117f7cda86aaacb21a3333d6a6f737a3bed1c990761",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:0d6243794b902913444f48bb0a2cdceb08c95db2bb001190543e7089f5088d03"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "193a7e7",
-          "timestamp": "2026-09-29T06:27:22-05:00",
           "author": "aien-dev",
+          "pr": 69,
+          "sha": "193a7e7",
+          "source": "backfill-git",
           "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
-          "pr": 69
+          "timestamp": "2026-09-29T06:27:22-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "visor_world_rx.c"
+      ],
+      "purpose_auto": "Directory src/visor/rx. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "src/visor/rx",
+  "name": "src/visor/rx",
+  "purpose": "Directory src/visor/rx. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

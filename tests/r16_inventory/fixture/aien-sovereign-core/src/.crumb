@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/r16_inventory/fixture/aien-sovereign-core/src",
-  "layer": "tests/r16_inventory/fixture/aien-sovereign-core/src",
-  "purpose": "Directory tests/r16_inventory/fixture/aien-sovereign-core/src. Purpose not yet described by a human.",
   "above": {
     "name": "tests/r16_inventory/fixture",
     "path": "../.."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/r16_inventory/fixture/aien-sovereign-core/src. Purpose not yet described by a human.",
-      "files": [
-        "spine.rs"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:dd502fb6702ceeee2e94f977b468c6aad84ed3be8c84270e99bd2c0d8d0e458a",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:707262db85ce9852bea2d51e3e5fa7a960b3692809d3a2a89aa655ae298b57d2"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "6fdc4c3",
-          "timestamp": "2026-09-29T11:49:54-05:00",
           "author": "aien-dev",
+          "pr": 68,
+          "sha": "6fdc4c3",
+          "source": "backfill-git",
           "subject": "R16 spec: orchestrator retirement (pre-registration) (#68)",
-          "pr": 68
+          "timestamp": "2026-09-29T11:49:54-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "spine.rs"
+      ],
+      "purpose_auto": "Directory tests/r16_inventory/fixture/aien-sovereign-core/src. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/r16_inventory/fixture/aien-sovereign-core/src",
+  "name": "tests/r16_inventory/fixture/aien-sovereign-core/src",
+  "purpose": "Directory tests/r16_inventory/fixture/aien-sovereign-core/src. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,6 +1,20 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/tensor",
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:ae63793b7b13442e349e438229fccf6a859a5be55343cdd997e35f2966c1157c",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 8,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:3be8415799d6730f6b84ed93c3f57eda56156a8164f1bff36c7896d23222d0a6"
+    }
+  },
   "layer": "src/tensor",
-  "purpose": "M20 OMEGA_TENSOR: immutable tensor semantic layer, views, generation-checked storage, CPU realization over E1 (not qualified)"
+  "name": "src/tensor",
+  "purpose": "M20 OMEGA_TENSOR: immutable tensor semantic layer, views, generation-checked storage, CPU realization over E1 (not qualified)",
+  "schema_version": "1.0.0"
 }

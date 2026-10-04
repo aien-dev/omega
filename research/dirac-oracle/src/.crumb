@@ -1,51 +1,63 @@
 {
-  "schema_version": "1.0.0",
-  "name": "research/dirac-oracle/src",
-  "layer": "research/dirac-oracle/src",
-  "purpose": "Directory research/dirac-oracle/src. Purpose not yet described by a human.",
   "above": {
     "name": "research/dirac-oracle",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory research/dirac-oracle/src. Purpose not yet described by a human.",
-      "files": [
-        "oracle_clifford.c",
-        "oracle_kat_verify.sh"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:044d04925f1b7dcdfffad8c9a27bc5deae44156ce95ece9a59fc72eee0d720b1",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:fedf1eb06eff0e6382d2d6d476b27085f6e2427db8e6094e9ba3a249fdb8acfa"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "458c57f",
-          "timestamp": "2026-10-01T07:45:33-05:00",
           "author": "aien-dev",
+          "pr": 158,
+          "sha": "458c57f",
+          "source": "backfill-git",
           "subject": "research(dirac-oracle): independent oracle spec + KAT corpus format (DIRAC-0 D-02, NOT_RUN) (#158)",
-          "pr": 158
+          "timestamp": "2026-10-01T07:45:33-05:00"
         },
         {
-          "source": "backfill-lane-report",
           "lane": "lane35",
-          "sha": "458c57f",
-          "pr": 158,
           "note": "D-02 omega PR #158 MERGED 458c57f: research/dirac-oracle/ (ORACLE-SPEC.md, CORPUS-FORMAT.md with 3 hand-checked records, src/oracle_clifford.c, src/oracle_kat_verify.sh, README-NOT-BUILT.md). NOT_RUN",
-          "ref": "2026-10-01-push-lane35-report.md"
+          "pr": 158,
+          "ref": "2026-10-01-push-lane35-report.md",
+          "sha": "458c57f",
+          "source": "backfill-lane-report"
         },
         {
-          "source": "backfill-lane-report",
           "lane": "lane35",
-          "sha": "458c57f",
-          "pr": 158,
           "note": "12:53Z Lane 35 DONE: arch #83 6ebd2fe (DIRAC-0 spec + ADR 0023, C2S ladder D-1..D3, status proposed, DIRAC_PREP_FROZEN not passed) + omega #158 458c57f (oracle plan, public fixtures only; sealed keys",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
+          "pr": 158,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "458c57f",
+          "source": "backfill-lane-report"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "oracle_clifford.c",
+        "oracle_kat_verify.sh"
+      ],
+      "purpose_auto": "Directory research/dirac-oracle/src. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "research/dirac-oracle/src",
+  "name": "research/dirac-oracle/src",
+  "purpose": "Directory research/dirac-oracle/src. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

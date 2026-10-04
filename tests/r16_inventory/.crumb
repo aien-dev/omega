@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/r16_inventory",
-  "layer": "tests/r16_inventory",
-  "purpose": "Directory tests/r16_inventory. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
@@ -14,27 +10,50 @@
     }
   ],
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/r16_inventory. Purpose not yet described by a human.",
-      "files": [
-        "run.sh"
-      ]
+    "generated": {
+      "children": [
+        {
+          "digest": "3b8ee545f13c1a168892b617671eebf2ee65413994332269f5d2f2dcf492aba7",
+          "last_commit": "6fdc4c3",
+          "name": "fixture",
+          "purpose": "Directory tests/r16_inventory/fixture. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:36bda09ce85e797adb7f7712504802354c0adb1e1fc65e0d2ebf6a252f6ee1f0",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:ba0c09f67d12b5d7de906129bdbe2f6e0a228e1a34236ecc4b779c523cb2061e",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 9,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:c5359714281d3aee892eff6e268df24c436e97d07a5ac36ca452894067359808"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "6fdc4c3",
-          "timestamp": "2026-09-29T11:49:54-05:00",
           "author": "aien-dev",
+          "pr": 68,
+          "sha": "6fdc4c3",
+          "source": "backfill-git",
           "subject": "R16 spec: orchestrator retirement (pre-registration) (#68)",
-          "pr": 68
+          "timestamp": "2026-09-29T11:49:54-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "run.sh"
+      ],
+      "purpose_auto": "Directory tests/r16_inventory. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/r16_inventory",
+  "name": "tests/r16_inventory",
+  "purpose": "Directory tests/r16_inventory. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

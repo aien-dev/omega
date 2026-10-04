@@ -1,42 +1,54 @@
 {
-  "schema_version": "1.0.0",
-  "name": "docs/estimation/receipts/est23-v2",
-  "layer": "docs/estimation/receipts/est23-v2",
-  "purpose": "Directory docs/estimation/receipts/est23-v2. Purpose not yet described by a human.",
   "above": {
     "name": "docs/estimation",
     "path": "../.."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory docs/estimation/receipts/est23-v2. Purpose not yet described by a human.",
-      "files": [
-        "RESULT.md"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:67bc1848d22db1ef3a2db67a370ea75cd826da2788312f91419dcff93b222d92",
+      "evidence_files": 1,
+      "evidence_root": "sha256:2a1685ddefdc10614d993da6fc4d42e5d2591b65a3b6158061e1d84d5e153955",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:2c60aab31c6599c06dfe152a5503b3e978223c1e306f6553c89656546720f3ac"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "8a56ace",
-          "timestamp": "2026-09-30T21:43:42-05:00",
           "author": "aien-dev",
+          "pr": 118,
+          "sha": "8a56ace",
+          "source": "backfill-git",
           "subject": "estimation: EST-3b protocol v2 Phase A record (M2 tools, C1 pre-check FAIL, no promotion) (#118)",
-          "pr": 118
+          "timestamp": "2026-09-30T21:43:42-05:00"
         },
         {
-          "source": "backfill-lane-report",
           "lane": "lane4",
-          "sha": "8a56ace",
-          "pr": 118,
           "note": "Premise corrections vs the pasted plan: estimation v2 Phase A already FAILED (omega #118, quantization class), so Lane 4 designs v3 with a declared loaded period; aien-dev/forge does not exist (FORGE",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
+          "pr": 118,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "8a56ace",
+          "source": "backfill-lane-report"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "RESULT.md"
+      ],
+      "purpose_auto": "Directory docs/estimation/receipts/est23-v2. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "docs/estimation/receipts/est23-v2",
+  "name": "docs/estimation/receipts/est23-v2",
+  "purpose": "Directory docs/estimation/receipts/est23-v2. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }
