@@ -71,3 +71,24 @@ test-dual-update: $(DUAL_DIR)/test_dual_update $(DUAL_DIR)/test_dual_update_asan
 	./$(DUAL_DIR)/test_dual_update_asan
 	@echo "test-dual-update: DUAL-1a reference update passes analytic, property and refusal checks in plain and ASan/UBSan builds"
 endif
+
+# DUAL-1b replay (appended; same fragment)
+ifndef DUAL_MK_3
+DUAL_MK_3 := 1
+.PHONY: test-dual-replay
+DUAL_REPLAY_SRCS = $(DUAL_SRCS) src/dual/rx_dual_replay.c tests/dual/dual_traces.c
+DUAL_REPLAY_HDRS = $(DUAL_HDRS) src/dual/rx_dual_replay.h tests/dual/dual_traces.h tests/dual/dual_fixtures.h
+$(DUAL_DIR)/test_dual_replay: tests/dual/test_dual_replay.c $(DUAL_REPLAY_SRCS) $(DUAL_REPLAY_HDRS)
+	@mkdir -p $(DUAL_DIR)
+	$(CC) $(DUAL_CFLAGS) -o $@ tests/dual/test_dual_replay.c $(DUAL_REPLAY_SRCS) -lm
+$(DUAL_DIR)/test_dual_replay_asan: tests/dual/test_dual_replay.c $(DUAL_REPLAY_SRCS) $(DUAL_REPLAY_HDRS)
+	@mkdir -p $(DUAL_DIR)
+	$(CC) $(DUAL_CFLAGS) $(EST_ASAN) -o $@ tests/dual/test_dual_replay.c $(DUAL_REPLAY_SRCS) -lm
+# Run from the repository root: the recorded traces are evidence/R15/raw/*/{machine,preflight}-perf.csv.
+test-dual-replay: $(DUAL_DIR)/test_dual_replay $(DUAL_DIR)/test_dual_replay_asan
+	./$(DUAL_DIR)/test_dual_replay
+	./$(DUAL_DIR)/test_dual_replay_asan > /dev/null
+	@echo "test-dual-replay: DUAL-1b replay, pre-registered measures and negative control pass in plain and ASan/UBSan builds (all inputs UNCALIBRATED)"
+dual-purity: $(DUAL_DIR)/rx_dual_replay.o
+test-dual: test-dual-replay
+endif
