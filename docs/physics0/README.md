@@ -1,6 +1,6 @@
 # physics0: PD-0 hidden-equation benchmark substrate
 
-Spec: aien-dev/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` and `docs/PHYSICS0_DISCOVERY_ENGINE.md` at `2f881b1` (revision 2). Program note: mind map `2026-10-03-physics-0-discovery-engine`.
+Spec: aien-dev/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` and `docs/PHYSICS0_DISCOVERY_ENGINE.md` at `5bd2b04` (revision 3). Program note: mind map `2026-10-03-physics-0-discovery-engine`.
 
 This directory implements **Direction 2 only** (the substrate). Other lanes own the ladder checker, scorer, negative-control harness and learner (`src/physics0/ladder`, `src/physics0/score`, `src/physics0/controls` are reserved for them and do not exist here).
 

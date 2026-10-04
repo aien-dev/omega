@@ -30,7 +30,7 @@ typedef struct {
     uint8_t n_obs, n_channels;
     int64_t dt_micro;
     int64_t chan_min[PD0_MAX_CH], chan_max[PD0_MAX_CH];
-    int64_t reset_min, reset_max;
+    int64_t reset_min[PD0_MAX_OBS], reset_max[PD0_MAX_OBS]; /* per observed variable (PD0DESC2) */
     uint32_t episode_max_steps, budget_steps, budget_episodes;
 } pd0_desc;
 
@@ -43,7 +43,8 @@ typedef struct {
     uint8_t prev_hash[PD0_HASH], hash[PD0_HASH];
 } pd0_rec;
 
-#define PD0_DESC_MAX (8 + 2 + 8 + 16 * PD0_MAX_CH + 16 + 12)
+#define PD0_DESC_MAX (8 + 2 + 8 + 16 * PD0_MAX_CH + 16 * PD0_MAX_OBS + 12)
+#define PD0_DESC_REFUSED_V1 (-2)   /* pd0_desc_decode: a PD0DESC1 record (single reset pair) is refused explicitly */
 #define PD0_REC_SIZE(n_obs) (56u + 16u * (unsigned)(n_obs) + 2u * PD0_HASH)
 #define PD0_REC_MAX PD0_REC_SIZE(PD0_MAX_OBS)
 #define PD0_REQ_MAX (2 + 8 * PD0_MAX_OBS)

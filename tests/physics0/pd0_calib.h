@@ -16,8 +16,8 @@
 #define PD0_GATHER_MAX 8192
 
 typedef struct {
-    double nrmse_inbox;       /* 20-step rollout, 10 episodes reset in [-2, 2] */
-    double nrmse_extrap;      /* 20-step rollout, 10 episodes reset in [-3, 3] */
+    double nrmse_inbox;       /* 20-step rollout, 10 episodes reset in the reset box (spec 6.1 rev 3) */
+    double nrmse_extrap;      /* 20-step rollout, 10 episodes reset in 1.5 x the reset box */
     double nrmse_onestep;     /* one-step from the true state, all 20 episodes */
     int truth_oob_episodes;   /* truth left +-10 inside a scoring episode (steps after that dropped) */
 } pd0_calib_result;

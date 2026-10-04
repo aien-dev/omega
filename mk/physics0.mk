@@ -1,5 +1,5 @@
 # PD-0 hidden-equation benchmark substrate (Physics-0 Discovery Engine,
-# spec aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 2f881b1).
+# spec aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 5bd2b04, revision 3).
 # Files under src/physics0/ and tests/physics0/. Picked up by `-include mk/*.mk`;
 # not part of `all` or `test`. Direction 2 lane only: wire records, world
 # process (generators), STAND_IN recorder and range guard, oracle + reference
@@ -8,7 +8,7 @@
 #
 # physics0-test      G0 self-test (plain + ASan/UBSan), G5 isolation, G1 oracle
 #                    calibration (V1 + V3 per level), mutant check, OSC differential
-# physics0-evidence  copy the G0/G1 receipts into evidence/physics0/
+# physics0-evidence  copy the G0/G1 receipts into evidence/physics0/ (new names per cut, never overwritten)
 # pd0-world          build/physics0/pd0-world <level|null> <seed>: the world process
 ifndef PHYSICS0_MK
 PHYSICS0_MK := 1
@@ -93,9 +93,10 @@ physics0-test: $(P0_DIR)/test_pd0_world $(P0_DIR)/test_pd0_world_asan $(P0_LEARN
 
 # Receipts are immutable: existing evidence files are never rewritten (cp -n); each cut adds new files.
 physics0-evidence: physics0-test
-	for f in $(P0_DIR)/receipts/pd0-oracle-*.json; do cp -n "$$f" evidence/physics0/; done
-	cp $(P0_DIR)/receipts/pd0-oracle-L6.json evidence/physics0/pd0-oracle-L6-fit.json
-	{ echo "receipt: PD0_G0"; echo "spec: aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 2f881b1 (rev 2)"; echo "recorder: STAND_IN"; echo "range_guard: STAND_IN"; \
+	mkdir -p evidence/physics0
+	for f in $(P0_DIR)/receipts/pd0-oracle-*.json; do b=$$(basename "$$f" .json); cp -n "$$f" "evidence/physics0/$$b-rev3b.json"; done
+	{ echo "receipt: PD0_G0"; echo "spec: aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 5bd2b04 (rev 3, PD0DESC2)"; echo "recorder: STAND_IN"; echo "range_guard: STAND_IN"; \
 	  echo "commit: $$(git rev-parse HEAD)"; echo "date_utc: $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "--- test_pd0_world"; cat $(P0_DIR)/g0.out; \
-	  echo "--- isolation"; cat $(P0_DIR)/isolation.out; echo "--- osc differential"; cat $(P0_DIR)/osc.out; echo "--- mutant"; cat $(P0_DIR)/mutant.out; echo "--- mutant latent sign"; cat $(P0_DIR)/mutant_latent.out; } > evidence/physics0/pd0-g0-receipt-cut2.txt
+	  echo "--- isolation"; cat $(P0_DIR)/isolation.out; echo "--- G1 oracle"; cat $(P0_DIR)/g1.out; echo "--- osc differential"; cat $(P0_DIR)/osc.out; \
+	  echo "--- mutant"; cat $(P0_DIR)/mutant.out; echo "--- mutant latent sign"; cat $(P0_DIR)/mutant_latent.out; } > evidence/physics0/pd0-g0-receipt-cut3b.txt
 endif

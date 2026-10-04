@@ -7,7 +7,7 @@
  *    record bytes, in-process and through a forked world process over pipes;
  *  - STAND_IN guard: out-of-range step or reset -> REFUSED_RANGE, state kept,
  *    still charged; OUT_OF_BOUNDS hides the post-step state and ends the
- *    episode; EPISODE_END at episode_max_steps (50 for L0, 100 otherwise);
+ *    episode; EPISODE_END at episode_max_steps (20 for L0, 100 otherwise);
  *    BUDGET_EXHAUSTED once either budget is spent; one channel per step;
  *  - pd0_splitmix64 equals turing_splitmix64 (src/turing/history_selector.c)
  *    for 10^5 outputs from 16 seeds: the "record the check" of section 3;
@@ -39,7 +39,7 @@ static void t_wire(void) {
     pd0_gen_desc(PD0_L3, &d);
     uint8_t buf[PD0_DESC_MAX];
     size_t n = pd0_desc_encode(&d, buf, sizeof buf);
-    CHECK(n == 8 + 2 + 8 + 32 + 16 + 12, "desc size %zu", n);
+    CHECK(n == 8 + 2 + 8 + 32 + 16 * 4 + 12 && memcmp(buf, "PD0DESC2", 8) == 0, "desc size %zu, magic PD0DESC2", n);
     CHECK(pd0_desc_decode(buf, n, &d2) == 0 && memcmp(&d, &d2, sizeof d) == 0, "desc round trip");
     CHECK(pd0_desc_decode(buf, n - 1, &d2) != 0, "short desc refused");
     pd0_rec r, r2;
@@ -104,7 +104,11 @@ static size_t script(pd0_chan *c, int level, uint8_t *out, size_t cap, pd0_rec *
     pd0_rec rec;
     for (int ep = 0; ep < 3; ep++) {
         int64_t reset[PD0_MAX_OBS];
-        for (int v = 0; v < d.n_obs; v++) reset[v] = pd0_const(&r, d.reset_min, d.reset_max);
+        for (int v = 0; v < d.n_obs; v++) {
+            int64_t lo, hi;
+            pd0_gen_reset_box(level, v, &lo, &hi); /* per-variable reset box (spec 4 rev 3) */
+            reset[v] = pd0_const(&r, lo, hi);
+        }
         if (pd0_chan_reset(c, d.n_obs, reset, &rec) != 0) return 0;
         n += pd0_rec_encode(&rec, out + n, cap - n);
         for (int i = 0; i < 25; i++) {
@@ -114,7 +118,6 @@ static size_t script(pd0_chan *c, int level, uint8_t *out, size_t cap, pd0_rec *
             if (rec.status != PD0_OK) break;
         }
     }
-    (void)level;
     *last = rec;
     return n;
 }
@@ -212,11 +215,12 @@ static void t_rules(void) {
     pd0_world_init(&w0, PD0_L0, 1);
     int64_t z[2] = {0, 0};
     pd0_world_reset(&w0, z, 2, &r);
-    for (int i = 0; i < 50; i++) pd0_world_step(&w0, PD0_CH_NONE, 0, &r);
-    CHECK(r.status == PD0_EPISODE_END && w0.desc.episode_max_steps == 50 && w0.desc.chan_max[0] == 100000 && w0.desc.budget_episodes == 60,
-          "L0 rev 2 describe: 50 steps, pushes 0.1, 60 episodes");
+    for (int i = 0; i < 20; i++) pd0_world_step(&w0, PD0_CH_NONE, 0, &r);
+    CHECK(r.status == PD0_EPISODE_END && w0.desc.episode_max_steps == 20 && w0.desc.chan_max[0] == 100000 && w0.desc.budget_episodes == 150 &&
+              w0.desc.budget_steps == 3000,
+          "L0 rev 3 describe: 20 steps, pushes 0.1, 3000 steps = 150 episodes");
     /* OUT_OF_BOUNDS hides the post-step state */
-    int64_t fast[2] = {2000000, 2000000};
+    int64_t fast[2] = {2000000, 200000}; /* corner of the L0 reset box (s0 [-2,2], s1 [-0.2,0.2]) */
     pd0_world_reset(&w0, fast, 2, &r);
     int saw_oob = 0;
     for (int i = 0; i < 20 && !saw_oob; i++) {
@@ -228,13 +232,13 @@ static void t_rules(void) {
             CHECK(r.status == PD0_BUDGET_EXHAUSTED, "episode closed after OOB");
         }
     }
-    CHECK(saw_oob, "L0 from (2,2) with +0.1 pushes leaves +-10 within 20 steps");
-    /* budget: L0 60 episodes */
+    CHECK(saw_oob, "L0 from (2, 0.2) with +0.1 pushes leaves +-10 within 20 steps");
+    /* budget: L0 150 episodes */
     pd0_world wb;
     pd0_world_init(&wb, PD0_L0, 2);
     int exhausted = 0;
-    for (int e = 0; e < 70; e++) { pd0_world_reset(&wb, z, 2, &r); exhausted += r.status == PD0_BUDGET_EXHAUSTED; }
-    CHECK(exhausted == 10, "episode budget: %d exhausted of 70 resets", exhausted);
+    for (int e = 0; e < 160; e++) { pd0_world_reset(&wb, z, 2, &r); exhausted += r.status == PD0_BUDGET_EXHAUSTED; }
+    CHECK(exhausted == 10, "episode budget: %d exhausted of 160 resets", exhausted);
     /* guard functions directly */
     CHECK(pd0_guard_in_box(PD0_BOUND) && !pd0_guard_in_box(PD0_BOUND + 1) && pd0_guard_in_box(-PD0_BOUND), "box edges");
 }
@@ -281,11 +285,133 @@ static void t_null_world(void) {
     CHECK(a.desc.budget_steps == 3000 && a.desc.n_obs == 2, "NULL world has the L2 interface and budget");
 }
 
+/* revision 3 (physics 5bd2b04): per-variable boxes, L0 s1 box, L4 box, L6 order and redraw rule */
+static void t_rev3(void) {
+    pd0_rec r;
+    int64_t lo, hi;
+    /* reset boxes: spec 4 table notes */
+    pd0_gen_reset_box(PD0_L0, 0, &lo, &hi); CHECK(lo == -2000000 && hi == 2000000, "L0 s0 box [-2,2]");
+    pd0_gen_reset_box(PD0_L0, 1, &lo, &hi); CHECK(lo == -200000 && hi == 200000, "L0 s1 box [-0.2,0.2]");
+    pd0_gen_reset_box(PD0_L4, 0, &lo, &hi); CHECK(lo == -1000000 && hi == 1000000, "L4 s0 box [-1,1]");
+    pd0_gen_reset_box(PD0_L4, 1, &lo, &hi); CHECK(lo == -1000000 && hi == 1000000, "L4 s1 box [-1,1]");
+    pd0_gen_reset_box(PD0_L2, 1, &lo, &hi); CHECK(lo == -2000000 && hi == 2000000, "L2 box [-2,2]");
+    /* scoring boxes: in = reset box, extrap = 1.5 x */
+    pd0_gen_score_box(PD0_L0, 1, 1, &lo, &hi); CHECK(lo == -300000 && hi == 300000, "L0 s1 extrap 1.5x = 0.3");
+    pd0_gen_score_box(PD0_L4, 0, 1, &lo, &hi); CHECK(lo == -1500000 && hi == 1500000, "L4 extrap 1.5x = 1.5");
+    pd0_gen_score_box(PD0_L1, 0, 1, &lo, &hi); CHECK(lo == -3000000 && hi == 3000000, "L1 extrap 3");
+    pd0_gen_score_box(PD0_L1, 0, 0, &lo, &hi); CHECK(lo == -2000000 && hi == 2000000, "L1 in-box 2");
+    /* the world enforces the per-variable box: L0 s1 = 0.3 refused, charged, no episode open */
+    pd0_world w;
+    pd0_world_init(&w, PD0_L0, 1);
+    int64_t bad[2] = {0, 300000}, ok[2] = {1999999, -200000};
+    pd0_world_reset(&w, bad, 2, &r);
+    CHECK(r.status == PD0_REFUSED_RANGE && w.episodes_used == 1 && !w.in_episode, "L0 s1 outside [-0.2,0.2]: refused, charged, no episode");
+    pd0_world_step(&w, PD0_CH_NONE, 0, &r);
+    CHECK(r.status == PD0_BUDGET_EXHAUSTED, "step after a refused reset has no open episode");
+    pd0_world_reset(&w, ok, 2, &r);
+    CHECK(r.status == PD0_OK && w.in_episode, "box edge accepted");
+    pd0_world w4;
+    pd0_world_init(&w4, PD0_L4, 1);
+    int64_t b4[2] = {1000001, 0}, g4[2] = {-1000000, 1000000};
+    pd0_world_reset(&w4, b4, 2, &r);
+    CHECK(r.status == PD0_REFUSED_RANGE, "L4 s0 = 1.000001 refused");
+    pd0_world_reset(&w4, g4, 2, &r);
+    CHECK(r.status == PD0_OK, "L4 corner (-1, 1) accepted");
+    CHECK(w4.desc.reset_min[0] == -1000000 && w4.desc.reset_max[1] == 1000000, "L4 describe box [-1,1]");
+    /* L6 declared ranges and draw order k, w, m, q */
+    const pd0_crange *t;
+    CHECK(pd0_gen_const_table(PD0_L6, &t) == 4 && !strcmp(t[0].name, "k") && !strcmp(t[1].name, "w") && !strcmp(t[2].name, "m") && !strcmp(t[3].name, "q") &&
+              t[0].lo == 3000000 && t[0].hi == 5000000 && t[1].lo == 500000 && t[1].hi == 1000000 && t[2].lo == 1000000 && t[2].hi == 2000000 &&
+              t[3].lo == 1000000 && t[3].hi == 2000000, "L6 table k[3,5] w[0.5,1] m[1,2] q[1,2] in draw order");
+    int saw_redraw = 0, max_redraw = 0;
+    for (uint64_t seed = 1; seed <= 200; seed++) {
+        pd0_gen g;
+        CHECK(pd0_gen_init(&g, PD0_L6, seed) == 0 && !g.invalid, "L6 seed %llu valid", (unsigned long long)seed);
+        int in = 1;
+        for (int i = 0; i < 4; i++) in &= g.k[i] >= t[i].lo && g.k[i] <= t[i].hi;
+        CHECK(in, "L6 seed %llu constants inside the table", (unsigned long long)seed);
+        CHECK(10 * g.k[2] * g.k[3] <= 7 * g.k[0] * g.k[1], "L6 seed %llu satisfies m*q/w <= 0.7 k", (unsigned long long)seed);
+        saw_redraw |= g.redraws > 0;
+        if (g.redraws > max_redraw) max_redraw = g.redraws;
+        /* replay by hand: draw k, w, m, q, then redraw m then q while the rule fails */
+        pd0_rng c;
+        pd0_stream(&c, seed, "const");
+        int64_t k = pd0_const(&c, t[0].lo, t[0].hi), ww = pd0_const(&c, t[1].lo, t[1].hi), m = pd0_const(&c, t[2].lo, t[2].hi), q = pd0_const(&c, t[3].lo, t[3].hi);
+        int n = 0;
+        while (10 * m * q > 7 * k * ww) { m = pd0_const(&c, t[2].lo, t[2].hi); q = pd0_const(&c, t[3].lo, t[3].hi); n++; }
+        CHECK(g.k[0] == k && g.k[1] == ww && g.k[2] == m && g.k[3] == q && g.redraws == n, "L6 seed %llu follows the spec draw order and redraw rule", (unsigned long long)seed);
+    }
+    CHECK(saw_redraw, "some development seed exercises the redraw rule (max redraws %d)", max_redraw);
+    /* cap: a seed that needs a redraw is invalid with cap 0, recorded as such; valid with the spec cap */
+    for (uint64_t seed = 1; seed <= 200; seed++) {
+        pd0_gen g, g0;
+        pd0_gen_init(&g, PD0_L6, seed);
+        if (!g.redraws) continue;
+        CHECK(pd0_gen_init_cap(&g0, PD0_L6, seed, 0) != 0 && g0.invalid && g0.redraws == 0, "redraw cap reached: seed invalid");
+        pd0_world wi;
+        CHECK(pd0_world_init(&wi, PD0_L6, seed) == 0, "same seed valid at the spec cap 1000");
+        break;
+    }
+    /* the true relation reads the new draw order: m in eq s1, w and q in eq h */
+    pd0_gen g;
+    pd0_relation rel;
+    pd0_gen_init(&g, PD0_L6, 3);
+    pd0_gen_true_relation(&g, 50000, &rel);
+    CHECK(rel.eq[1].t[1].coef == pd0_mul(g.k[2], 50000) && rel.eq[2].t[0].coef == -pd0_mul(g.k[1], 50000) && rel.eq[2].t[1].coef == pd0_mul(g.k[3], 50000),
+          "L6 relation: m = 3rd draw, w = 2nd, q = 4th");
+}
+
+/* PD0DESC2: per-variable reset bounds, PD0DESC1 refused, golden bytes, per-variable guard (spec amendment pending, lead drafting) */
+static void t_desc2(void) {
+    pd0_desc d, d2;
+    uint8_t buf[PD0_DESC_MAX], v1[PD0_DESC_MAX];
+    pd0_gen_desc(PD0_L0, &d);
+    size_t n = pd0_desc_encode(&d, buf, sizeof buf);
+    /* golden bytes of the L0 describe record: magic, n_obs 2, n_channels 1, dt 1.0, chan -0.1/0.1, reset_min s0 s1, reset_max s0 s1, 20, 3000, 150 */
+    static const uint8_t gold[] = {
+        'P','D','0','D','E','S','C','2', 2, 1,
+        0x40,0x42,0x0F,0,0,0,0,0,                 /* dt 1000000 */
+        0x60,0x79,0xFE,0xFF,0xFF,0xFF,0xFF,0xFF,  /* chan_min -100000 */
+        0xA0,0x86,0x01,0,0,0,0,0,                 /* chan_max 100000 */
+        0x80,0x7B,0xE1,0xFF,0xFF,0xFF,0xFF,0xFF,  /* reset_min s0 -2000000 */
+        0xC0,0xF2,0xFC,0xFF,0xFF,0xFF,0xFF,0xFF,  /* reset_min s1 -200000 */
+        0x80,0x84,0x1E,0,0,0,0,0,                 /* reset_max s0 2000000 */
+        0x40,0x0D,0x03,0,0,0,0,0,                 /* reset_max s1 200000 */
+        20,0,0,0, 0xB8,0x0B,0,0, 150,0,0,0};
+    CHECK(n == sizeof gold, "L0 describe length %zu", n);
+    CHECK(n == sizeof gold && memcmp(buf, gold, n) == 0, "L0 describe golden bytes");
+    CHECK(pd0_desc_decode(buf, n, &d2) == 0 && memcmp(&d, &d2, sizeof d) == 0 && d2.reset_min[1] == -200000 && d2.reset_max[0] == 2000000 &&
+              d2.reset_max[1] == 200000, "PD0DESC2 round trip keeps per-variable bounds");
+    /* mutation: the old magic is refused with the explicit code, and nothing is decoded */
+    memcpy(v1, buf, n);
+    v1[7] = '1';
+    memset(&d2, 0xAA, sizeof d2);
+    CHECK(pd0_desc_decode(v1, n, &d2) == PD0_DESC_REFUSED_V1, "PD0DESC1 refused with PD0_DESC_REFUSED_V1");
+    CHECK(pd0_desc_decode(v1, 8 + 2 + 8 + 16 + 16 + 12, &d2) == PD0_DESC_REFUSED_V1, "PD0DESC1 of the old length also refused");
+    buf[7] = '3';
+    CHECK(pd0_desc_decode(buf, n, &d2) == -1, "unknown magic refused");
+    buf[7] = '2';
+    CHECK(pd0_desc_decode(buf, n - 1, &d2) != 0, "short PD0DESC2 refused");
+    /* guard mutation: L0 s1 = 0.3 refused, s0 anywhere in [-2,2] accepted */
+    int64_t ok[2] = {-2000000, 200000}, ok2[2] = {2000000, -200000}, bad1[2] = {0, 300000}, bad0[2] = {2000001, 0};
+    CHECK(pd0_guard_reset_ok(&d, ok, 2) && pd0_guard_reset_ok(&d, ok2, 2), "s0 in [-2,2] with s1 in [-0.2,0.2] accepted");
+    CHECK(!pd0_guard_reset_ok(&d, bad1, 2), "s1 = 0.3 refused (per-variable violation on L0)");
+    CHECK(!pd0_guard_reset_ok(&d, bad0, 2), "s0 = 2.000001 refused");
+    /* the same through a world over the channel: the describe the learner reads carries the s1 box */
+    pd0_world w;
+    pd0_chan c = {pd0_world_chan, &w, -1, -1};
+    pd0_world_init(&w, PD0_L0, 1);
+    CHECK(pd0_chan_describe(&c, &d2) == 0 && d2.reset_min[1] == -200000 && d2.reset_max[1] == 200000 && d2.reset_max[0] == 2000000,
+          "learner-side describe shows both boxes");
+}
+
 int main(void) {
     t_wire();
     t_rules();
     t_splitmix();
     t_null_world();
+    t_rev3();
+    t_desc2();
     t_repro_and_process();
     printf("checks=%lu failures=%lu\n", checks, failures);
     printf("PHYSICS0_G0: %s\n", failures ? "FAIL" : "PASS");

@@ -19,12 +19,13 @@ uint64_t pd0_get_u64(const uint8_t *p) {
     return v;
 }
 
-static const uint8_t DESC_MAGIC[8] = {'P', 'D', '0', 'D', 'E', 'S', 'C', '1'};
+static const uint8_t DESC_MAGIC[8] = {'P', 'D', '0', 'D', 'E', 'S', 'C', '2'};
+static const uint8_t DESC_MAGIC_V1[8] = {'P', 'D', '0', 'D', 'E', 'S', 'C', '1'}; /* refused */
 static const uint8_t REC_MAGIC[8] = {'P', 'D', '0', 'R', 'E', 'C', '1', 0};
 
 size_t pd0_desc_encode(const pd0_desc *d, uint8_t *out, size_t cap) {
     if (!d || d->n_obs < 1 || d->n_obs > PD0_MAX_OBS || d->n_channels < 1 || d->n_channels > PD0_MAX_CH) return 0;
-    size_t need = 8 + 2 + 8 + 16u * d->n_channels + 16 + 12;
+    size_t need = 8 + 2 + 8 + 16u * d->n_channels + 16u * d->n_obs + 12;
     if (cap < need) return 0;
     uint8_t *p = out;
     memcpy(p, DESC_MAGIC, 8); p += 8;
@@ -32,8 +33,8 @@ size_t pd0_desc_encode(const pd0_desc *d, uint8_t *out, size_t cap) {
     pd0_put_u64(p, (uint64_t)d->dt_micro); p += 8;
     for (unsigned i = 0; i < d->n_channels; i++) { pd0_put_u64(p, (uint64_t)d->chan_min[i]); p += 8; }
     for (unsigned i = 0; i < d->n_channels; i++) { pd0_put_u64(p, (uint64_t)d->chan_max[i]); p += 8; }
-    pd0_put_u64(p, (uint64_t)d->reset_min); p += 8;
-    pd0_put_u64(p, (uint64_t)d->reset_max); p += 8;
+    for (unsigned i = 0; i < d->n_obs; i++) { pd0_put_u64(p, (uint64_t)d->reset_min[i]); p += 8; }
+    for (unsigned i = 0; i < d->n_obs; i++) { pd0_put_u64(p, (uint64_t)d->reset_max[i]); p += 8; }
     pd0_put_u32(p, d->episode_max_steps); p += 4;
     pd0_put_u32(p, d->budget_steps); p += 4;
     pd0_put_u32(p, d->budget_episodes); p += 4;
@@ -41,18 +42,19 @@ size_t pd0_desc_encode(const pd0_desc *d, uint8_t *out, size_t cap) {
 }
 
 int pd0_desc_decode(const uint8_t *in, size_t len, pd0_desc *d) {
+    if (len >= 8 && memcmp(in, DESC_MAGIC_V1, 8) == 0) return PD0_DESC_REFUSED_V1;
     if (len < 10 || memcmp(in, DESC_MAGIC, 8) != 0) return -1;
     memset(d, 0, sizeof *d);
     d->n_obs = in[8]; d->n_channels = in[9];
     if (d->n_obs < 1 || d->n_obs > PD0_MAX_OBS || d->n_channels < 1 || d->n_channels > PD0_MAX_CH) return -1;
-    size_t need = 8 + 2 + 8 + 16u * d->n_channels + 16 + 12;
+    size_t need = 8 + 2 + 8 + 16u * d->n_channels + 16u * d->n_obs + 12;
     if (len != need) return -1;
     const uint8_t *p = in + 10;
     d->dt_micro = (int64_t)pd0_get_u64(p); p += 8;
     for (unsigned i = 0; i < d->n_channels; i++) { d->chan_min[i] = (int64_t)pd0_get_u64(p); p += 8; }
     for (unsigned i = 0; i < d->n_channels; i++) { d->chan_max[i] = (int64_t)pd0_get_u64(p); p += 8; }
-    d->reset_min = (int64_t)pd0_get_u64(p); p += 8;
-    d->reset_max = (int64_t)pd0_get_u64(p); p += 8;
+    for (unsigned i = 0; i < d->n_obs; i++) { d->reset_min[i] = (int64_t)pd0_get_u64(p); p += 8; }
+    for (unsigned i = 0; i < d->n_obs; i++) { d->reset_max[i] = (int64_t)pd0_get_u64(p); p += 8; }
     d->episode_max_steps = pd0_get_u32(p); p += 4;
     d->budget_steps = pd0_get_u32(p); p += 4;
     d->budget_episodes = pd0_get_u32(p);

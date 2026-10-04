@@ -92,8 +92,13 @@ static int oracle_fit_l6(const pd0_relation *truth, const pd0_gather *g, pd0_rel
     if (l6_estimate(g, dt, &e)) return -1;
     g_l6_est = e;
     g_l6_err[0] = l6_ppm(e.k, ktr); g_l6_err[1] = l6_ppm(e.w, w_tr); g_l6_err[2] = l6_ppm(e.mq, m * q);
-    /* the form's declared constant ranges (spec 4.1): k [2,5], w [1,2], m*q [0.25,1] */
-    g_l6_in_range = e.k >= 2.0 && e.k <= 5.0 && e.w >= 1.0 && e.w <= 2.0 && e.mq >= 0.25 && e.mq <= 1.0;
+    /* the declared constant ranges come from the generator's own table (pd0_gen_const_table), never hard-coded here:
+     * k, w as declared, and m*q over [m_lo*q_lo, m_hi*q_hi] */
+    const pd0_crange *rt;
+    pd0_gen_const_table(PD0_L6, &rt); /* draw order k, w, m, q */
+    const double mq_lo = (double)rt[2].lo / 1e6 * ((double)rt[3].lo / 1e6), mq_hi = (double)rt[2].hi / 1e6 * ((double)rt[3].hi / 1e6);
+    g_l6_in_range = e.k >= (double)rt[0].lo / 1e6 && e.k <= (double)rt[0].hi / 1e6 && e.w >= (double)rt[1].lo / 1e6 &&
+                    e.w <= (double)rt[1].hi / 1e6 && e.mq >= mq_lo && e.mq <= mq_hi;
     out->eq[1].t[0].coef = -(int64_t)llround(e.k * dt * 1e6);
     out->eq[1].t[1].coef = (int64_t)llround(e.mq * dt * 1e6);   /* h scale: q = 1 */
     out->eq[2].t[0].coef = -(int64_t)llround(e.w * dt * 1e6);
@@ -166,15 +171,35 @@ int main(int argc, char **argv) {
         if (!f) { perror(path); return 2; }
         int v1_exact = 1, v1_fit = 1, v3 = 1;
         double worst_breach = 0;
-        fprintf(f, "{\n  \"receipt\": \"PD0_G1\",\n  \"level\": \"%s\",\n  \"spec\": \"aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 2f881b1 (rev 2)\",\n"
+        fprintf(f, "{\n  \"receipt\": \"PD0_G1\",\n  \"level\": \"%s\",\n  \"spec\": \"aien-dev/physics docs/PD0_HIDDEN_EQUATION_BENCHMARK.md @ 5bd2b04 (rev 3)\",\n"
                    "  \"recorder\": \"%s\",\n  \"range_guard\": \"%s\",\n  \"bounds\": {\"inbox\": %.3f, \"extrap\": %.3f, \"onestep\": %.3f, \"coef_ppm\": %lld, \"size\": %d},\n"
-                   "  \"instances\": [\n",
+                   "  \"scoring_box_rule\": \"spec 6.1 rev 3: in-box = reset box, extrapolation box = 1.5 x reset box, per observed variable\",\n",
                 pd0_gen_level_name(level), "STAND_IN", "STAND_IN", BOUND_IN[level], BOUND_EX[level], BOUND_ONE[level],
                 (long long)COEF_PPM[level], pd0_gen_true_size(level) + 2);
+        {
+            pd0_desc dd;
+            pd0_gen_desc(level, &dd);
+            fprintf(f, "  \"episode_max_steps\": %u, \"budget_steps\": %u, \"budget_episodes\": %u,\n  \"boxes_micro\": [", dd.episode_max_steps, dd.budget_steps, dd.budget_episodes);
+            for (int v = 0; v < dd.n_obs; v++) {
+                int64_t rl, rh, el, eh;
+                pd0_gen_score_box(level, v, 0, &rl, &rh);
+                pd0_gen_score_box(level, v, 1, &el, &eh);
+                fprintf(f, "%s{\"var\": \"s%d\", \"reset_and_inbox\": [%lld, %lld], \"extrap\": [%lld, %lld]}", v ? ", " : "", v, (long long)rl, (long long)rh, (long long)el, (long long)eh);
+            }
+            fprintf(f, "],\n  \"constant_ranges_micro\": [");
+            const pd0_crange *ct;
+            int nc = pd0_gen_const_table(level, &ct);
+            for (int i = 0; i < nc; i++) fprintf(f, "%s{\"name\": \"%s\", \"lo\": %lld, \"hi\": %lld}", i ? ", " : "", ct[i].name, (long long)ct[i].lo, (long long)ct[i].hi);
+            fprintf(f, "],\n  \"instances\": [\n");
+        }
         for (int si = 0; si < SEEDS; si++) {
             uint64_t seed = (uint64_t)(si + 1);
             pd0_gen g; pd0_desc d;
-            pd0_gen_init(&g, level, seed);
+            if (pd0_gen_init(&g, level, seed) != 0) { /* L6 redraw cap reached: invalid seed, recorded and skipped (spec 4.1) */
+                fprintf(f, "    {\"seed\": %llu, \"invalid\": true, \"redraws\": %d}%s\n", (unsigned long long)seed, g.redraws, si + 1 < SEEDS ? "," : "");
+                v1_exact = 0;
+                continue;
+            }
             pd0_gen_desc(level, &d);
             pd0_relation truth, fit, sparse;
             pd0_gen_true_relation(&g, d.dt_micro, &truth);
@@ -186,8 +211,8 @@ int main(int argc, char **argv) {
             if (have_fit) pd0_calib_heldout(&g, &d, seed, &fit, &r_fit);
             int have_sparse = pd0_sparse_fit(&gather, d.n_obs, d.n_channels, &sparse) == 0;
             if (have_sparse) pd0_calib_heldout(&g, &d, seed, &sparse, &r_sparse);
-            fprintf(f, "    {\"seed\": %llu, \"constants_micro\": [%lld, %lld, %lld, %lld], \"fit_transitions\": %d, \"fit_episodes\": %d,\n",
-                    (unsigned long long)seed, (long long)g.k[0], (long long)g.k[1], (long long)g.k[2], (long long)g.k[3], gather.n, gather.episodes);
+            fprintf(f, "    {\"seed\": %llu, \"constants_draw_order\": \"%s\", \"redraws\": %d, \"constants_micro\": [%lld, %lld, %lld, %lld], \"fit_transitions\": %d, \"fit_episodes\": %d,\n",
+                    (unsigned long long)seed, level == PD0_L6 ? "k,w,m,q" : "table order", g.redraws, (long long)g.k[0], (long long)g.k[1], (long long)g.k[2], (long long)g.k[3], gather.n, gather.episodes);
             emit_result(f, "oracle_exact", &r_exact, &truth, &truth, level, &v1_exact);
             fprintf(f, ",\n");
             if (have_fit) emit_result(f, "oracle_fit", &r_fit, &fit, &truth, level, &v1_fit);
@@ -201,7 +226,7 @@ int main(int argc, char **argv) {
         fprintf(f, "  ],\n  \"v3_breach\": [");
         for (uint64_t seed = 1; seed <= 20; seed++) {
             pd0_gather gg;
-            pd0_calib_gather(level, seed, &gg);
+            if (pd0_calib_gather(level, seed, &gg) != 0) continue; /* invalid seed */
             double rate = gg.episodes ? (double)gg.oob_episodes / gg.episodes : 0;
             if (rate > worst_breach) worst_breach = rate;
             if (rate > 0.05) v3 = 0;
