@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T18:11:13Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:64fe22fe57fab7e61e65cb7652e73dbde613c260cb8677b05d8b98a067231e83",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "cb7cc216147664549484fcca8e8ceadbd6f6cdbf",
+      "source_tree": "sha256:6514192d9fefd25f1cec3e777928306220967c0cbf10d3241ae059037e5d2cd3"
+    }
+  },
+  "name": "dual_experiment",
+  "purpose": "Runner for the DUAL applicability experiment: runs the pre-registered campaign and writes results.csv, params.txt and results.md under evidence/DUAL/applicability/. make dual-applic-run.",
+  "schema_version": "1.0.0"
+}
