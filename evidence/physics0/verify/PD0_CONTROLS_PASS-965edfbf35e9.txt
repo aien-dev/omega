@@ -1,0 +1,74 @@
+receipt: PD0_CONTROLS_PASS
+harness_commit: 965edfbf35e90edf01abbaba6a5ef39d97b583f3
+frozen_learner_commit: f9a17970ea00c4ead5bbb18dbf5e5509ad2977d0 (ladder, score, controls trees identical at both commits)
+tree src/physics0/ladder 1a1d1dc61f0cfe4bedc2afacc228aa7c5e2e795d
+tree src/physics0/score 288882ae723da6a2659d74f27ddc58527a8c6660
+tree src/physics0/controls ab6235f40ab056a655ded45594c36b01cbbff69b
+date_utc: 2026-10-04T02:05:41Z
+command: make test-physics0-verify (p0v-purity + formats + ladder + scorer/controls, plain and ASan/UBSan)
+exit_code: 0
+scorer_checks: test_pd0_score: 103 checks, 0 failed
+ladder_checks: test_pd0_ladder: 148 checks, 0 failed
+fmt_checks: test_pd0_fmt: 25 checks, 0 failed
+receipts_written: 880
+receipt_manifest: evidence/physics0/verify/PD0_CONTROLS_PASS-965edfbf35e9.manifest.txt (sha256 of each control receipt, sorted by name)
+receipt_manifest_sha256: c5e3274f2e369d6282972a1874f5aeb51badc37954ba0b4c2b105d2e77384e90
+purpose: PD0B_VERDICT seal-1 condition 'controls passed' for the frozen harness; earlier verify receipts (verifier 3c72895) predate the last ladder and scorer changes
+note: the L6 seed-3 calibration line (latent-free reference NRMSE below the factor-3 margin) is informational; the margin decision is open with Drake and no threshold was changed
+--- kinds (count by name)
+     80 NC1-null
+     40 NC2-shuffled
+      8 ladder-demotion
+      6 ladder-episode-end
+      8 ladder-eps-above-bound
+      8 ladder-fake-corr
+     72 ladder-honest
+      8 ladder-no-rival
+      8 ladder-origin-imbalance
+      6 ladder-quiet-noisy-trials
+      8 ladder-rep-in-fit
+      8 ladder-reused-schedule
+      8 ladder-skip-state
+      8 ladder-stop-prereg
+      8 ladder-stop-trials
+      8 ladder-stream-reuse
+      8 ladder-trial-not-prereg
+      4 ladder-void-batch
+      4 ladder-void-rep
+      4 ladder-void-trial
+      8 ladder-wrong-k
+      8 score-L6-latent-free
+     72 score-M1
+     72 score-M2
+     72 score-M3
+     72 score-M5-M1
+     72 score-M5-M2
+     72 score-M5-M3
+     96 score-oracle
+     24 score-reference
+--- suite log tail
+./build/tests-physics0-verify/test_pd0_fmt_asan
+test_pd0_fmt: 25 checks, 0 failed
+./build/tests-physics0-verify/test_pd0_ladder
+claim: Across 913 observations under s0 in [-2.411838, 2.829365]; s1 in [-2.781996, 3.334460], this relation predicts within 0.020000 (rollout NRMSE, 20 steps). Confidence 972972 ppm. 0 exceptions recorded.
+test_pd0_ladder: 148 checks, 0 failed
+./build/tests-physics0-verify/test_pd0_ladder_asan
+claim: Across 913 observations under s0 in [-2.411838, 2.829365]; s1 in [-2.781996, 3.334460], this relation predicts within 0.020000 (rollout NRMSE, 20 steps). Confidence 972972 ppm. 0 exceptions recorded.
+test_pd0_ladder: 148 checks, 0 failed
+./build/tests-physics0-verify/test_pd0_score
+L1 reference solver: code PD0V_OK mask 0x0 inbox 2 one-step 0 size 3
+L2 reference solver: code PD0V_OK mask 0x0 inbox 11 one-step 1 size 4
+L4 reference solver: code PD0V_OK mask 0x0 inbox 3 one-step 0 size 4
+L6 seed 1 calibration: oracle inbox 2 extrap 2; latent-free reference inbox 39544 (needs >= 90000 for the 6.3 L6 condition) -> SPEC CONDITION NOT MET
+L6 seed 2 calibration: oracle inbox 2 extrap 1; latent-free reference inbox 46776 (needs >= 90000 for the 6.3 L6 condition) -> SPEC CONDITION NOT MET
+L6 seed 3 calibration: oracle inbox 2 extrap 3; latent-free reference inbox 18093 (needs >= 90000 for the 6.3 L6 condition) -> SPEC CONDITION NOT MET
+test_pd0_score: 103 checks, 0 failed
+./build/tests-physics0-verify/test_pd0_score_asan
+L1 reference solver: code PD0V_OK mask 0x0 inbox 2 one-step 0 size 3
+L2 reference solver: code PD0V_OK mask 0x0 inbox 11 one-step 1 size 4
+L4 reference solver: code PD0V_OK mask 0x0 inbox 3 one-step 0 size 4
+L6 seed 1 calibration: oracle inbox 2 extrap 2; latent-free reference inbox 39544 (needs >= 90000 for the 6.3 L6 condition) -> SPEC CONDITION NOT MET
+L6 seed 2 calibration: oracle inbox 2 extrap 1; latent-free reference inbox 46776 (needs >= 90000 for the 6.3 L6 condition) -> SPEC CONDITION NOT MET
+L6 seed 3 calibration: oracle inbox 2 extrap 3; latent-free reference inbox 18093 (needs >= 90000 for the 6.3 L6 condition) -> SPEC CONDITION NOT MET
+test_pd0_score: 103 checks, 0 failed
+test-physics0-verify: PD-0 verifier formats, ladder, scorer and negative controls pass (plain + ASan/UBSan); receipts in build/tests-physics0-verify/receipts
