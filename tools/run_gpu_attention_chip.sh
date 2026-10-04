@@ -7,6 +7,8 @@
 # negative control and a cache-hit repeat. Sealed receipt folder
 # OUT_ROOT/FB1-CUT5-<sha>/ (default ~/workspace/evidence-out):
 #   receipt.json  machine-readable verdict per case      run.log    test output
+#   sweep.json    head-scaling sweep (q/kv heads x ctx)  sweep.log  its output
+#   timing.json   cut 4b timing gate (median < 3 ms)      timing.log its output
 #   device.txt    kernel, driver, omega and physics shas  build.log  compiler output
 #   sim.log       the same battery through the host IR simulator, run first
 #   copies of the three source files the verdict depends on, SHA256SUMS over all
@@ -35,8 +37,15 @@ if [ "$sim_rc" -ne 0 ]; then
 fi
 ./build/gpu_attention_test --out "$OUT/receipt.json" > "$OUT/run.log" 2>&1
 rc=$?
+# head-scaling sweep (attention hardening cut) and the cut 4b timing gate, same session rules
+./build/gpu_attention_test --sweep --out "$OUT/sweep.json" > "$OUT/sweep.log" 2>&1
+sweep_rc=$?
+./build/gpu_attention_test --timing --out "$OUT/timing.json" > "$OUT/timing.log" 2>&1
+timing_rc=$?
+[ "$rc" -eq 0 ] && rc=$sweep_rc
+[ "$rc" -eq 0 ] && rc=$timing_rc
 cp src/omega_gpu_attention_api.c src/omega_gpu_attention_api.h tests/gpu_attention_test.c "$OUT/"
 (cd "$OUT" && sha256sum -- * > SHA256SUMS)
-tail -1 "$OUT/run.log"
-echo "FB1-CUT5 chip gate rc=$rc receipt=$OUT/receipt.json"
+tail -1 "$OUT/run.log"; tail -1 "$OUT/sweep.log"; tail -1 "$OUT/timing.log"
+echo "FB1-CUT5 chip gate rc=$rc (sweep rc=$sweep_rc timing rc=$timing_rc) receipt=$OUT/receipt.json sweep=$OUT/sweep.json"
 exit $rc

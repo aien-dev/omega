@@ -2173,6 +2173,7 @@ $(GPU_ATTN_TEST): tests/gpu_attention_test.c src/omega_gpu_attention_api.h $(OUT
 test-gpu-attention: $(GPU_ATTN_TEST)
 	./$(GPU_ATTN_TEST) --host-only
 	./$(GPU_ATTN_TEST) --sim
+	./$(GPU_ATTN_TEST) --sweep --sim --out $(OUT_DIR)/gpu_attention_sweep_sim.json
 
 # FB-1 cut 4b: fresh-process device-open probe (flake investigation, tools/probe_gpu_open.sh)
 $(OUT_DIR)/gpu_session_probe: tests/gpu_session_probe.c src/omega_gpu_session.h $(OUT_DIR)/libomega_gpu.a
