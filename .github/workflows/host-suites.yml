@@ -119,6 +119,8 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-qualify
       - name: E1 closure combiner (host-only, synthetic constituents, every hostile mutant refused)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-e1-combine
+      - name: GPU completion wait primitive (host-only, fake memory and clock, mutants must die)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-wait
 
   train:
     runs-on: ubuntu-24.04-arm
