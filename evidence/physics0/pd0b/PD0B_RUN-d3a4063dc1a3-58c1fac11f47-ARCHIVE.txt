@@ -1,0 +1,6 @@
+receipt: PD0B_RUN_ARCHIVE_NOTE
+for_receipt: PD0B_RUN-d3a4063dc1a3-58c1fac11f47.txt (unchanged)
+note: the 35 ledgers of this run are too large for git; they live outside the repo and are listed by hash in the laws directory
+ledger_archive: /home/drakestapleton/workspace/evidence-archive/omega/physics0/pd0b/PD0B_RUN-d3a4063dc1a3-58c1fac11f47-ledgers
+ledgers_manifest: evidence/physics0/pd0b/PD0B_RUN-d3a4063dc1a3-58c1fac11f47-laws/LEDGERS.sha256
+ledgers_manifest_sha256: 25513a59825e1727776d463a63ce7edd0700a983b1b1f422cafe1d45bf74fc59

@@ -63,6 +63,7 @@ test-physics0-learner: p0l-isolation $(P0L_DIR)/test_pd0_learner $(P0L_DIR)/test
 	./$(P0L_DIR)/test_pd0_learner
 	./$(P0L_DIR)/test_pd0_learner_asan
 	./$(P0L_DIR)/test_pd0_protocol_v2
+	sh tests/physics0/learner/test_pd0b_run.sh
 	@echo "test-physics0-learner: PASS (isolation, unit tests plain + ASan/UBSan, protocol v2 world ops)"
 
 # development run on the world process; results in $(P0L_DIR)/dev/ (one line per instance + ledger/law/json per instance)
