@@ -8,9 +8,10 @@ learner refuses them if offered), and it emits evidence for the independent
 ladder checker of `src/physics0/ladder`. It never declares a ladder state.
 
 Spec: aien-dev/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` rev 2
-(2f881b1); world parameters follow rev 3 (omega #248, merged); the two rev 5
-rules (requested-reset preregistration hash, no T2 self pairs) are
-implemented in the checker and the learner ahead of the spec text.
+(2f881b1); world parameters follow rev 3 (omega #248, merged); the rev 5 rules
+(requested-reset preregistration hash, no T2 self pairs) and the rev 6 rules
+(rollout error over the pooled FIT sd, EPISODE_END records count as
+observations) are implemented in the checker and the learner.
 
 ## Layout
 
@@ -72,33 +73,30 @@ learner refits (at most three attempts). The checker runs after each stage;
 the harness never proceeds to trials without a HYPOTHESIS state. The scorer
 runs on 20 noise-free truth episodes (10 in the reset box, 10 at 1.5x).
 
-## Development results (seeds 1..5, rev 3 world, rev 5 checker rules)
+## Development results (seeds 1..5, rev 3 world, rev 6 checker rules)
 
 Learner never saw HOLDOUT/TRIAL/REP. "state" is the checker's verdict;
-"scorer" is `pd0_score` against the truth. The previous receipt (rev 2
-world, DESC1) is kept beside the new one.
+"scorer" is `pd0_score` against the truth. Earlier receipts (rev 2 world;
+rev 5 rules) are kept beside the new one.
 
 | level | state reached (seeds) | scorer | size / bound | bits | notes |
 |---|---|---|---|---|---|
-| L0 | PREDICTED 5/5 | PASS 5/5 (exact) | 2 / 4 | 96 | T6 "trial missing": the rev 3 L0 episode is 20 steps, the 20th record is EPISODE_END not OK, so no trial has 20 OK steps; see spec item 2 |
+| L0 | PROVISIONAL_LAW 4/5, INTERVENED 1/5 | PASS 5/5 (exact) | 2 / 4 | 96 | seed 5: one replication episode left the box, batch short by one (code 261) |
 | L1 | PROVISIONAL_LAW 5/5 | PASS 5/5 | 3 / 5 | 144 | exact, one-step error 0 |
 | L2 | PROVISIONAL_LAW 5/5 | PASS 5/5 | 4 / 6 | 192 | exact |
 | L3 | PROVISIONAL_LAW 5/5 | PASS 5/5 | 8 / 10 | 576 | four variables, two channels, exact |
-| L4 | PROVISIONAL_LAW 5/5 | PASS 5/5 (in-box 0.008 to 0.023 on the rev 3 box) | 4 / 6 | 192 | cubic term found |
-| L5 | INTERVENED 1/5, CANDIDATE 4/5 (1 to 3 refutations) | PASS 5/5 (in-box 0.004 to 0.015, constants within 10%) | 4 / 6 | 192 | preregistration now matches (rev 5 rule); trials fail on in-trial NRMSE, see spec item 1 |
-| L6 | CANDIDATE 5/5 (3 refutations each) | FAIL 5/5 (307 latent missing, 308 reference too good) | 5 to 6 / 9 | 240 to 288 | reported, not claimed: no latent mechanism; rev 3 constants make the hidden variable matter more (in-box 0.05 to 0.08) |
-| null | OBSERVATION 5/5 | not scored | 2 / 6 | 96 | no correlation evidence once self pairs are excluded; no candidate admitted; NC-1 holds |
+| L4 | PROVISIONAL_LAW 5/5 | PASS 5/5 (in-box 0.008 to 0.023) | 4 / 6 | 192 | cubic term found |
+| L5 | PROVISIONAL_LAW 5/5 | PASS 5/5 (in-box 0.004 to 0.018, constants within 10%) | 4 / 6 | 192 | no refutations once the trial error is pooled-sd normalised |
+| L6 | CANDIDATE 5/5 (3 refutations each) | FAIL 5/5 (307 latent missing, 308 reference too good) | 5 to 6 / 9 | 240 to 288 | reported, not claimed: no latent mechanism |
+| null | OBSERVATION 5/5 | not scored | 2 / 6 | 96 | no correlation evidence, no candidate; NC-1 holds |
 
 Numbers per instance: `evidence/physics0/learner/pd0-learner-dev-<commit>.txt`.
 
 ## Failure analysis
 
-- **L5 (noise).** The relation is right (scorer PASS on all seeds, constants
-  within 10%) and trials now match their preregistration. They fail T6 because
-  the trial error is an NRMSE normalised by the within-trial spread of the
-  observed trajectory: a quiet 20-step trial has a small spread, so 0.02
-  observation noise alone exceeds the 0.05 bound. Same mechanism refutes
-  REP episodes (code 266). Not a learner defect; see spec item 1.
+- **L5 (noise).** Reaches PROVISIONAL_LAW on every seed with the rev 6
+  normalisation; the rev 5 failure (quiet trials judged against their own
+  spread) is gone.
 - **L6 (hidden variable).** Candidates are latent-free fits; on 1 of 5
   seeds the ladder still replicates one (the checker has no latent
   requirement; the scorer does and rejects all five). On the other seeds the
@@ -106,8 +104,9 @@ Numbers per instance: `evidence/physics0/learner/pd0-learner-dev-<commit>.txt`.
   model class. `hidden_state_suspected` did not fire on L6 because the
   latent-free fit's one-step residuals are small (0.001 to 0.005); the flag
   needs a rollout-based test, left for the next cut.
-- **L0.** Exact relation on every seed; blocked at T6 because a 20-step
-  episode yields 19 OK records plus one EPISODE_END record (spec item 2).
+- **L0.** PROVISIONAL_LAW on four seeds. Seed 5 lost one replication
+  episode to an out-of-bounds step from a random schedule, leaving that batch
+  at nine episodes; the harness does not top batches up (next cut).
 - **Null world.** With self pairs excluded (rev 5) no correlation evidence
   exists and the ladder stays at OBSERVATION. The MDL ranking still puts
   "pull to the mean" above the empty relation, which is the correct
@@ -115,23 +114,20 @@ Numbers per instance: `evidence/physics0/learner/pd0-learner-dev-<commit>.txt`.
 
 ## Spec items that proved unimplementable or ambiguous as written
 
-1. **Noisy-level trial error.** T6/T7 normalise the trial error by the
-   within-trial spread of the observed trajectory. On L5 (sigma 0.02) any
-   trial whose trajectory spread is below about 0.4 units fails the 0.05
-   bound even for the true relation. The spec should normalise by the
-   declared reset-box scale, or set the noisy eps relative to sigma. Spec
-   owner decision needed; the learner claims nothing on L5.
-2. **L0 episode length.** With rev 3 the L0 episode is exactly 20 steps and
-   the world marks the 20th step EPISODE_END, so no episode has the 20 OK
-   steps T5/T6/T7 require. Either the world returns OK on step 20 and
-   refuses step 21, or the checker counts an EPISODE_END step as observed.
-3. **L6 pass rule** (factor-3 reference margin) is still open with Drake;
+1. **L6 pass rule** (factor-3 reference margin) is still open with Drake;
    the learner reports L6 and claims nothing.
-4. **Requested reset on noisy levels** (rev 5 rule as implemented): the
+2. **Requested reset on noisy levels** (rev 5 rule as implemented): the
    ledger record does not carry the requested reset vector, so on noisy
    levels the checker binds the reset through the PD0EXP1 entry and the
    steps only; the trial error bound covers a mismatched reset. A reset
    record that carries the requested values would close this.
+3. **Replication batches and out-of-bounds episodes.** A random replication
+   schedule can leave the box; the episode then has fewer than 20 outcomes
+   and the batch falls short (L0 seed 5). The spec should say whether the
+   harness may run a replacement episode in the same batch.
+
+Resolved by rev 5 and rev 6: noisy-reset preregistration hash, T2 self
+pairs, within-trial error normalisation, EPISODE_END outcomes.
 
 ## Not implemented
 
