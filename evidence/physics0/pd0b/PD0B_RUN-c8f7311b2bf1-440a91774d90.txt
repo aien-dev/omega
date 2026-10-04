@@ -1,0 +1,168 @@
+receipt: PD0B_RUN
+note: STAND-IN VERIFICATION with the omega pd0-world. NOT a PD-0b result.
+date_utc: 2026-10-04T01:14:11Z
+harness_commit: c8f7311b2bf163fe1e4d6fabf5fa6bfc164e6675
+world_binary: build/physics0/pd0-world
+world_binary_sha256: 440a91774d9006855b68d61ed8fc967da6fa267a659c3c9a679bb484df0e9332
+seeds_file_sha256: e8a3814010b9a0d631b239bf04d0f8fe6aa7325dfe205753e4f211a768619c7f
+mode: external world, PD0 protocol v2 (play and truth from the one world binary; no pd0-truth)
+--- freeze (learner, ladder, scorer, controls)
+freeze_head: c8f7311b2bf163fe1e4d6fabf5fa6bfc164e6675
+tree src/physics0/learner 1dceff1be806e5a87959c72afa1a127ef9ceec14
+tree src/physics0/ladder 1a1d1dc61f0cfe4bedc2afacc228aa7c5e2e795d
+tree src/physics0/score 288882ae723da6a2659d74f27ddc58527a8c6660
+tree src/physics0/controls ab6235f40ab056a655ded45594c36b01cbbff69b
+frozen_dirs_modified_in_worktree: 0
+file 98287309c8a2414bd68c7cf38a0f513ccefa14b126c310e30eac7b7e939904f0 src/physics0/controls/.crumb
+file 6b38bad721d1e4293425d1678425f71841c2b850aeffc2db0791f78be70d9989 src/physics0/controls/pd0_controls.c
+file 0a4c3ea6a938b5885feb528dfbb349ee3d8495c79adb3b97b543cd0848626dce src/physics0/controls/pd0_controls.h
+file acd4c63f54eee33c26b1799ea8ee61de8e1c945dd183872932459221c532d370 src/physics0/controls/pd0_receipt.c
+file 0f5b5fd39ab1b9f0722946f806aaeb33faea0b8a944f43e8a88da1b1af813812 src/physics0/controls/pd0_receipt.h
+file 4b95ac11781d4f081a90f80e1feb02fd2ceaa5843d91663a3753b22942f95c27 src/physics0/ladder/.crumb
+file cd409166cfd54b08a39f52fa786b5609acae85112171c5b25e7ddb124f103262 src/physics0/ladder/pd0_codes.c
+file 709be1faaaf250dd5c163e16c4a513cfea4e709aa7fe33a40be5afaf811a2de9 src/physics0/ladder/pd0_codes.h
+file f3ab621c5c88a9c6a109a127a0f916fc3d582e1425bdf6401b93a2bc78e0dca6 src/physics0/ladder/pd0_fmt.c
+file 2c78cae21851e75c5e65530f391ce6d8fad346387de149ff61ca75263788bc14 src/physics0/ladder/pd0_fmt.h
+file 3ba32a8f2eb36f8c7bf023d02445e9795b7dcee3e84a0ead25923eb495c950ae src/physics0/ladder/pd0_ladder.c
+file cae754beb21d65f178c70437e3a8b88209b4c503d5d69227d549e5590d7dbcd5 src/physics0/ladder/pd0_ladder.h
+file 07989a0378c10f11f6549450866d1bb2947f8a9bcef4ed57540f13ecc395093a src/physics0/ladder/pd0_rng.h
+file d419296e9b472dd3bd516fe2570c1eb4e849a854821efeb2ed00772109b84cad src/physics0/learner/.crumb
+file 480c9f950968fc13cf206cfe0701c404086fba2cdc7bd616bd553ccd8e6b5690 src/physics0/learner/pd0_learner.c
+file 41fe375015c68e9b2e26b481e439b84ca481303d6115ddea5c9c25b9defbd4dd src/physics0/learner/pd0_learner.h
+file 620a28e324ddbc314ed4e77927192baa989ade83062d144d361904a76d0f6e3c src/physics0/learner/pd0_learner_main.c
+file 970e36b380a5170ca406934c8a70ec5aef209b1a043d6658b062bb1815cf938a src/physics0/score/.crumb
+file dc86f525ff719c882df2ef90f6c3ff204c1b04a8ff7488283769cb733db4f553 src/physics0/score/pd0_score.c
+file 4e52477f74a45a9a9a5da5d19eeae7ca4d56e49136943fd8766007947ae44fd9 src/physics0/score/pd0_score.h
+harness_binary_sha256: 1dea642b32a93849c58b196c3154e41d42d23fac184bc22feb6111c1d9124103
+--- seeds file
+0 1
+0 2
+0 3
+0 4
+0 5
+1 1
+1 2
+1 3
+1 4
+1 5
+2 1
+2 2
+2 3
+2 4
+2 5
+3 1
+3 2
+3 3
+3 4
+3 5
+4 1
+4 2
+4 3
+4 4
+4 5
+5 1
+5 2
+5 3
+5 4
+5 5
+6 1
+6 2
+6 3
+6 4
+6 5
+null 1
+null 2
+null 3
+null 4
+null 5
+--- per instance: level seed ladder_state checker_code scorer_verdict scorer_code
+level=L0 seed=1 state=REPLICATED code=0 score=PASS score_code=0
+level=L0 seed=2 state=REPLICATED code=0 score=PASS score_code=0
+level=L0 seed=3 state=REPLICATED code=0 score=PASS score_code=0
+level=L0 seed=4 state=REPLICATED code=0 score=PASS score_code=0
+level=L0 seed=5 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=1 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=2 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=3 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=4 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=5 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=1 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=2 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=3 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=4 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=5 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=1 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=2 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=3 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=4 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=5 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=1 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=2 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=3 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=4 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=5 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=1 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=2 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=3 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=4 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=5 state=REPLICATED code=0 score=PASS score_code=0
+level=L6 seed=1 state=CANDIDATE code=251 score=FAIL score_code=307
+level=L6 seed=2 state=CANDIDATE code=251 score=FAIL score_code=307
+level=L6 seed=3 state=CANDIDATE code=251 score=FAIL score_code=307
+level=L6 seed=4 state=CANDIDATE code=251 score=FAIL score_code=307
+level=L6 seed=5 state=CANDIDATE code=251 score=FAIL score_code=307
+level=null seed=1 state=OBSERVATION code=270 score=NOT_SCORED score_code=-1
+level=null seed=2 state=OBSERVATION code=270 score=NOT_SCORED score_code=-1
+level=null seed=3 state=OBSERVATION code=270 score=NOT_SCORED score_code=-1
+level=null seed=4 state=OBSERVATION code=270 score=NOT_SCORED score_code=-1
+level=null seed=5 state=OBSERVATION code=270 score=NOT_SCORED score_code=-1
+--- state count per level
+L0 REPLICATED score=PASS x5
+L1 REPLICATED score=PASS x5
+L2 REPLICATED score=PASS x5
+L3 REPLICATED score=PASS x5
+L4 REPLICATED score=PASS x5
+L5 REPLICATED score=PASS x5
+L6 CANDIDATE score=FAIL x5
+null OBSERVATION score=NOT_SCORED x5
+--- raw harness lines
+PD0L level=L0 seed=1 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=4 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L0 seed=2 desc=v2 episodes=145 steps=2898 fit=1317 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=4 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=1 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L0 seed=3 desc=v2 episodes=145 steps=2899 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=4 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=1 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L0 seed=4 desc=v2 episodes=145 steps=2899 fit=1320 select=437 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=4 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=2 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L0 seed=5 desc=v2 episodes=146 steps=2919 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=4 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=1 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=1 void_batch=0
+PD0L level=L1 seed=1 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=3 cand_bits=144 size_bound=5 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=1 extrap=1 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L1 seed=2 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=3 cand_bits=144 size_bound=5 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=2 extrap=2 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L1 seed=3 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=3 cand_bits=144 size_bound=5 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=6 extrap=6 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L1 seed=4 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=3 cand_bits=144 size_bound=5 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=1 extrap=1 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L1 seed=5 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=3 cand_bits=144 size_bound=5 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=8 extrap=4 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=1 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=0 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=2 extrap=2 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=2 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=1 extrap=1 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=3 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=1 extrap=2 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=4 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=4 extrap=3 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=5 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=3 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=1 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=8 cand_bits=576 size_bound=10 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=4 extrap=3 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=2 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=8 cand_bits=576 size_bound=10 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=1 extrap=1 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=3 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=8 cand_bits=576 size_bound=10 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=3 extrap=4 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=4 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=8 cand_bits=576 size_bound=10 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=4 extrap=3 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=5 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=8 cand_bits=576 size_bound=10 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=3 extrap=2 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=1 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=2 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=23 extrap=28 onestep=2 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=2 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=9 extrap=8 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=3 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=8 extrap=6 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=4 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=9 extrap=6 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=5 desc=v2 episodes=145 steps=2900 fit=1320 select=440 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=15 extrap=6 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=1 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=30248 select_nrmse=32375 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=3903 extrap=4164 onestep=497 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=2 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=38039 select_nrmse=42991 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=10846 extrap=9891 onestep=1088 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=3 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=32341 select_nrmse=34964 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=17789 extrap=18118 onestep=2176 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=4 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=33607 select_nrmse=33926 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=9881 extrap=10085 onestep=1294 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=5 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=31997 select_nrmse=32532 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=6186 extrap=6864 onestep=685 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=1 desc=v2 episodes=275 steps=5500 fit=3420 select=1040 state=CANDIDATE code=251 stall=250 refutations=3 attempts=3 cand_size=6 cand_bits=288 size_bound=9 fit_nrmse=10622 select_nrmse=10781 hidden_state=1 score=FAIL score_code=307 mask=0x183 inbox=83238 extrap=170182 onestep=0 ref=66472 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=2 desc=v2 episodes=275 steps=5500 fit=3420 select=1040 state=CANDIDATE code=251 stall=250 refutations=3 attempts=3 cand_size=5 cand_bits=240 size_bound=9 fit_nrmse=6758 select_nrmse=6819 hidden_state=1 score=FAIL score_code=307 mask=0x181 inbox=67405 extrap=74489 onestep=0 ref=63828 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=3 desc=v2 episodes=275 steps=5500 fit=3420 select=1040 state=CANDIDATE code=251 stall=250 refutations=3 attempts=3 cand_size=5 cand_bits=240 size_bound=9 fit_nrmse=8389 select_nrmse=8490 hidden_state=1 score=FAIL score_code=307 mask=0x181 inbox=60855 extrap=75487 onestep=0 ref=58964 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=4 desc=v2 episodes=275 steps=5500 fit=3420 select=1040 state=CANDIDATE code=251 stall=250 refutations=3 attempts=3 cand_size=5 cand_bits=240 size_bound=9 fit_nrmse=6525 select_nrmse=6878 hidden_state=1 score=FAIL score_code=307 mask=0x181 inbox=54335 extrap=73008 onestep=0 ref=59366 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=5 desc=v2 episodes=275 steps=5500 fit=3420 select=1040 state=CANDIDATE code=251 stall=250 refutations=3 attempts=3 cand_size=5 cand_bits=240 size_bound=9 fit_nrmse=7792 select_nrmse=7646 hidden_state=1 score=FAIL score_code=307 mask=0x181 inbox=72836 extrap=69814 onestep=0 ref=68627 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=null seed=1 desc=v2 episodes=110 steps=2200 fit=1320 select=440 state=OBSERVATION code=270 stall=211 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=6 fit_nrmse=1000700 select_nrmse=1000751 hidden_state=0 score=NOT_SCORED score_code=-1 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=0 law=-1 checker_rc=270 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=null seed=2 desc=v2 episodes=110 steps=2200 fit=1320 select=440 state=OBSERVATION code=270 stall=211 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=6 fit_nrmse=1000709 select_nrmse=1001724 hidden_state=0 score=NOT_SCORED score_code=-1 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=0 law=-1 checker_rc=270 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=null seed=3 desc=v2 episodes=110 steps=2200 fit=1320 select=440 state=OBSERVATION code=270 stall=211 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=6 fit_nrmse=999896 select_nrmse=1007210 hidden_state=0 score=NOT_SCORED score_code=-1 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=0 law=-1 checker_rc=270 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=null seed=4 desc=v2 episodes=110 steps=2200 fit=1320 select=440 state=OBSERVATION code=270 stall=211 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=6 fit_nrmse=1000521 select_nrmse=1000384 hidden_state=0 score=NOT_SCORED score_code=-1 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=0 law=-1 checker_rc=270 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=null seed=5 desc=v2 episodes=110 steps=2200 fit=1320 select=440 state=OBSERVATION code=270 stall=211 refutations=0 attempts=1 cand_size=2 cand_bits=96 size_bound=6 fit_nrmse=1000243 select_nrmse=1000843 hidden_state=0 score=NOT_SCORED score_code=-1 mask=0x0 inbox=0 extrap=0 onestep=0 ref=0 score_eps=0 law=-1 checker_rc=270 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
