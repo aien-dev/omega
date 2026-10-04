@@ -60,7 +60,7 @@ static int parse_describe(const uint8_t *b, size_t n, describe *D)
 
 /* ---- run state ---- */
 typedef struct {
-    describe D; int level; uint64_t seed; proc world, truth; int ext; pd0_learner *L;
+    describe D; int level; uint64_t seed; proc world, truth; int ext, sealed, dims_ok; int dims[4]; pd0_learner *L;
     uint8_t *ledger; size_t llen; uint8_t last[PD0_HASH];
     pd0_ladder_params P;
     uint32_t next_episode, n_episodes, steps_used, episodes_used;
@@ -176,7 +176,12 @@ int main(int argc, char **argv)
     uint8_t req[128], resp[1024]; req[0] = 0; size_t rn = world_call(&R.world, req, 1, resp, sizeof resp);
     if (!rn || parse_describe(resp, rn, &R.D)) { fprintf(stderr, "world: bad describe\n"); return 3; }
     const pd0l_desc *d = &R.D.d;
-    if (R.ext) { static const int pub0[8] = { 2, 3, 4, 8, 4, 4, 7, 0 }; R.truth_size = R.level >= 0 && R.level < 8 ? pub0[R.level] : 0; }   /* ext mode: shape is refused until `final`, so the size bound comes from the public spec table */
+    { const char *e = getenv("PD0B"); const char *bn = strrchr(argv[1], '/'); bn = bn ? bn + 1 : argv[1]; R.sealed = (e && !strcmp(e, "1")) || strcmp(bn, "pd0-world") != 0; }   /* PD-0 mode = the omega world; anything else (or PD0B=1) is sealed mode */
+    if (R.ext) {   /* shape before final answers dimensions only (n_vars, n_latent, n_channels, S*); the size bound S*+2 comes from it */
+        if (ext_rel(&R)) { fprintf(stderr, "world: bad pre-final shape\n"); return 3; }
+        R.dims[0] = R.truth_rel.n_vars; R.dims[1] = R.truth_rel.n_latent; R.dims[2] = R.truth_rel.n_channels; R.dims[3] = R.truth_size; R.have_truth = 0; R.dims_ok = 1;
+        if (!R.sealed) { static const int pub0[8] = { 2, 3, 4, 8, 4, 4, 7, 0 }; if (R.level >= 0 && R.level < 8 && R.truth_size != pub0[R.level]) R.dims_ok = 0; }
+    }
     else if (truth_rel(&R)) { fprintf(stderr, "truth: bad relation\n"); return 3; }
     /* ladder parameters: spec section 6 bounds for the level; harness knowledge, never the learner's */
     pd0_ladder_params_default(&R.P, d->n_obs, d->n_channels);
@@ -253,8 +258,9 @@ int main(int argc, char **argv)
         uint8_t fq[1 + PD0_HASH], fr[16]; fq[0] = 5; memcpy(fq + 1, fhash, PD0_HASH);
         size_t frn = world_call(&R.world, fq, sizeof fq, fr, sizeof fr); fin_status = frn == 1 ? fr[0] : -1; if (fin_status != 0) fin_ok = 0;
         if (fin_ok && ext_rel(&R)) { fprintf(stderr, "world: bad shape after final\n"); fin_ok = 0; }
+        if (fin_ok && (R.dims[0] != R.truth_rel.n_vars || R.dims[1] != R.truth_rel.n_latent || R.dims[2] != R.truth_rel.n_channels || R.dims[3] != R.truth_size)) { fprintf(stderr, "world: shape dimensions changed across final\n"); fin_ok = 0; }
         static const int pub_s[8] = { 2, 3, 4, 8, 4, 4, 7, 0 };   /* S* per level, public spec table (6.2); shape must agree */
-        if (fin_ok && R.level >= 0 && R.level < 8 && R.truth_size != pub_s[R.level]) { fprintf(stderr, "world: shape S* %d differs from the public table %d\n", R.truth_size, pub_s[R.level]); fin_ok = 0; }
+        if (fin_ok && (!R.dims_ok || (!R.sealed && R.level >= 0 && R.level < 8 && R.truth_size != pub_s[R.level]))) { fprintf(stderr, "world: shape S* %d differs from the public table %d\n", R.truth_size, pub_s[R.level]); fin_ok = 0; }
         if (!fin_ok) R.have_truth = 0;
     }
     if (scored && R.have_truth && R.level >= 0) {
@@ -289,8 +295,8 @@ int main(int argc, char **argv)
         for (int i = 0; i < PD0_HASH; i++) snprintf(hx + 2 * i, 3, "%02x", fhash[i]);
         if (arn == 57 && !memcmp(ar, "PD0AUDT1", 8)) { audit_ok = 1; for (int i = 0; i < 4; i++) cnt[i] = pd0_get_u32(ar + 9 + 4 * i); audit_ok = ar[8] == 1 && !memcmp(ar + 25, fhash, PD0_HASH); }
         valid = fin_ok && audit_ok && !cnt[0] && !cnt[1] && !cnt[2] && !cnt[3];
-        printf("PD0F level=%s seed=%llu final=%s final_status=%d score_before_final=%u shape_before_final=%u play_after_final=%u dup_final=%u audit_ok=%d valid=%s\n",
-               lvl_name(R.level), (unsigned long long)R.seed, hx, fin_status, cnt[0], cnt[1], cnt[2], cnt[3], audit_ok, valid ? "VALID" : "INVALID");
+        printf("PD0F level=%s seed=%llu final=%s final_status=%d score_before_final=%u shape_before_final=%u play_after_final=%u dup_final=%u audit_ok=%d mode=%s s_star=%d n_vars=%d n_latent=%d n_channels=%d valid=%s\n",
+               lvl_name(R.level), (unsigned long long)R.seed, hx, fin_status, cnt[0], cnt[1], cnt[2], cnt[3], audit_ok, R.sealed ? "SEALED" : "PD0", R.dims[3], R.dims[0], R.dims[1], R.dims[2], valid ? "VALID" : "INVALID");
     }
     if (!R.ext) { fprintf(R.truth.wr, "quit\n"); fflush(R.truth.wr); fclose(R.truth.wr); }
     fclose(R.world.wr); waitpid(R.world.pid, NULL, 0); if (!R.ext) waitpid(R.truth.pid, NULL, 0);

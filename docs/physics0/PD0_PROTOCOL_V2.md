@@ -29,13 +29,13 @@ relation bundle, as defined by the harness. Response, 1 byte: `0` accepted (firs
 (the first hash is kept). A request of any other length gets a zero-length refusal and is not counted.
 
 Op 6 `audit`: request `[6]`. Response (57 bytes): `PD0AUDT1`, `final_done u8`, then four u32 counters
-`score_before_final`, `shape_before_final`, `play_after_final`, `dup_final`, then the 32-byte final hash (zeros if none).
+`score_before_final`, `shape_before_final` (reserved, always 0 since shape-before-final is not a refusal), `play_after_final`, `dup_final`, then the 32-byte final hash (zeros if none).
 Free at all times and never counted.
 
 ## State machine
 
-- OPEN (start): ops 0, 1, 2, 6 served. ops 3 and 4 are refused with a zero-length answer and counted (`score_before_final`, `shape_before_final`). Op 5 moves to FINAL.
-- FINAL: ops 0, 3, 4, 6 served. ops 1 and 2 are refused (zero-length) and counted (`play_after_final`). A second op 5 is refused (status 1) and counted (`dup_final`).
+- OPEN (start): ops 0, 1, 2, 4 (dimensions only), 6 served. Op 3 is refused with a zero-length answer and counted (`score_before_final`). Op 5 moves to FINAL.
+- FINAL: ops 0, 3, 4 (full), 6 served. ops 1 and 2 are refused (zero-length) and counted (`play_after_final`). A second op 5 is refused (status 1) and counted (`dup_final`).
 - Op 0 describe is free in both states. No refusal charges budgets or extends the hash chain.
 - A run is VALID only if the final was accepted once, the audit echoes the same hash, and all four counters are 0.
 
@@ -56,9 +56,12 @@ Semantics: stateless. Starts from the given reset vector (not range-checked: the
 noise-free update, and does not touch the budgets, the episode counter, the hash chain or the
 noise streams. Revision 2: refused until `final` has been accepted (see the state machine).
 
-## Op 4: shape (relation shape and true terms)
+## Op 4: shape (dimensions before final, full after)
 
-Request: `[4]` (length 1). Response (`PD0SHAP1`):
+Request: `[4]` (length 1). Response (`PD0SHAP1`). Revision 2 split: BEFORE `final` the response carries the dimension
+fields only (n_vars, n_latent, n_channels, S*) with n_equations = 0, relation size = 0 and n_terms = 0 (length 22); this is
+not a refusal and is not counted. AFTER `final` the response is full, with the true terms. The dimensions are public per
+level; the terms are the secret and stay locked until `final`. The dimension fields must be identical before and after.
 
 | bytes | field |
 |---|---|
@@ -88,8 +91,8 @@ Implement exactly this (the omega world is a stand-in, nothing here is a PD-0b r
 
 1. Ops 0, 1, 2 are the rev 7 bytes, unchanged. New ops: 3 score, 4 shape, 5 final, 6 audit; same framing (u32 LE length, zero-length frame = refusal).
 2. State: one flag `final_done` (starts 0) and four u32 counters plus the 32-byte first final hash. Refusal rules are in the state machine above; count every refused op 3 or 4 before final, every op 1 or 2 after final (regardless of well-formedness), and every second `final`.
-3. `describe` may reveal only the PD0DESC2 record, in both states, always. It must not reveal terms, constants, S* or latent counts.
-4. `shape` and `score` may be served only after `final`; `score` is stateless (no budget, chain or noise-stream effect).
+3. `describe` may reveal only the PD0DESC2 record, in both states, always. It must not reveal terms, constants, S* or latent counts. S*, n_vars, n_latent and n_channels come only from `shape`.
+4. `score` and the terms of `shape` may be served only after `final`; before it `shape` answers dimensions only (n_equations, relation size and n_terms zero) and is not counted. `score` is stateless (no budget, chain or noise-stream effect).
 5. `final` binds the SHA-256 of the harness-defined bundle: the emitted PDLAW1 record, or if none the candidate relation bytes, or if none the empty string. The world only records it and echoes it in `audit`; it does not interpret it.
-6. The harness sends `final` once per instance, only after the learner has submitted to the ladder checker, and calls `audit` at the end. The harness cross-checks shape S* against the public per-level table (2, 3, 4, 8, 4, 4, 7, null 0) and marks the instance INVALID on a mismatch.
+6. The harness reads the dimensions (S*, n_vars, n_latent, n_channels) with `shape` BEFORE the run and takes the size bound S*+2 from them; it sends `final` once per instance, only after the learner has submitted to the ladder checker, and calls `audit` at the end. After `final` it re-reads `shape` in full and marks the instance INVALID if the dimensions changed. In PD0 mode (the omega world, binary named pd0-world and PD0B not 1) it also checks S* against the public per-level table (2, 3, 4, 8, 4, 4, 7, null 0), a self-consistency check of the omega world only. In sealed mode (any other binary, or PD0B=1) the table check is skipped and S*, n_vars, n_latent, n_channels from `shape` are recorded per instance in the PD0B_RUN receipt so the reveal can verify them against the revealed families.
 7. Op 4 reveals the true terms to the harness (the scorer needs them for constants). The harness never forwards them to the learner.

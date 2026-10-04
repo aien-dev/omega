@@ -39,7 +39,7 @@ VALID=VALID
 {
   echo "receipt: PD0B_RUN"
   echo "run_validity: $VALID"
-  echo "validity_rule: VALID needs, per instance, a final accepted once, shape S* equal to the public table, an audit echoing the final hash, and every refusal counter 0"
+  echo "validity_rule: VALID needs, per instance, a final accepted once, shape dimensions unchanged across final (and, in PD0 mode with the omega world, S* equal to the public table), an audit echoing the final hash, and every refusal counter 0"
   [ -z "$NOTE" ] || echo "note: $NOTE"
   echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "harness_commit: $HEAD_FULL"

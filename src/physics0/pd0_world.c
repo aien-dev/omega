@@ -131,21 +131,22 @@ static size_t handle_score(const pd0_world *w, const uint8_t *req, size_t len, u
 }
 
 /* shape: the relation shape and the true terms, in PD0SHAP1 form */
-static size_t handle_shape(const pd0_world *w, uint8_t *resp, size_t cap) {
+static size_t handle_shape(const pd0_world *w, uint8_t *resp, size_t cap, int full) {
     pd0_relation r;
     memset(&r, 0, sizeof r);
     if (pd0_gen_true_relation(&w->gen, w->desc.dt_micro, &r) < 0 || r.n_vars > PD0_MAX_VARS) return 0;
     unsigned nx = r.n_vars + r.n_channels, nt = 0;
     for (int e = 0; e < r.n_eq; e++) nt += r.eq[e].n_terms;
+    if (!full) nt = 0;   /* before final: dimensions only, zero terms */
     size_t need = 8 + 4 + 8 + 2 + (size_t)nt * (1 + 8 + nx);
     if (cap < need) return 0;
     uint8_t *p = resp;
     memcpy(p, "PD0SHAP1", 8); p += 8;
-    *p++ = r.n_vars; *p++ = r.n_latent; *p++ = r.n_channels; *p++ = r.n_eq;
+    *p++ = r.n_vars; *p++ = r.n_latent; *p++ = r.n_channels; *p++ = full ? r.n_eq : 0;   /* n_eq and relation size are withheld until final */
     pd0_put_u32(p, (uint32_t)pd0_gen_true_size(w->gen.level)); p += 4;
-    pd0_put_u32(p, (uint32_t)pd0_relation_size(&r)); p += 4;
+    pd0_put_u32(p, full ? (uint32_t)pd0_relation_size(&r) : 0u); p += 4;
     pd0_put_u16(p, (uint16_t)nt); p += 2;
-    for (int e = 0; e < r.n_eq; e++) for (int t = 0; t < r.eq[e].n_terms; t++) {
+    for (int e = 0; full && e < r.n_eq; e++) for (int t = 0; t < r.eq[e].n_terms; t++) {
         *p++ = r.eq[e].target;
         pd0_put_u64(p, (uint64_t)r.eq[e].t[t].coef); p += 8;
         for (int i = 0; i < r.n_vars; i++) *p++ = r.eq[e].t[t].ex[i];
@@ -193,8 +194,7 @@ size_t pd0_world_handle(pd0_world *w, const uint8_t *req, size_t len, uint8_t *r
         if (!w->final_done) { w->n_score_before_final++; return 0; }
         return handle_score(w, req, len, resp, cap);
     case PD0_OP_SHAPE:
-        if (!w->final_done) { w->n_shape_before_final++; return 0; }
-        return len == 1 ? handle_shape(w, resp, cap) : 0;
+        return len == 1 ? handle_shape(w, resp, cap, w->final_done) : 0;   /* before final: dimensions only, not a refusal */
     case PD0_OP_FINAL:
         if (len != 1 + PD0_HASH || cap < 1) return 0;
         if (w->final_done) { w->n_dup_final++; resp[0] = 1; return 1; }   /* duplicate: refused, first hash kept */

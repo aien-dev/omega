@@ -30,8 +30,10 @@ static void run_level(int level) {
     /* before final: score and shape refused and counted; play allowed; describe free */
     int64_t reset[PD0_MAX_OBS] = { 1000000, 0, 0, 0 }; uint8_t ch[2] = { 0, PD0_CH_NONE }; int64_t val[2] = { 100000, 0 };
     CHECK(do_score(&w, reset, d.n_obs, 2, ch, val) == 0);
-    uint8_t sq[1] = { 4 }; CHECK(call(&w, sq, 1) == 0); CHECK(call(&w, sq, 1) == 0);
-    audit(&w, c, &fin); CHECK(!fin && c[0] == 1 && c[1] == 2 && c[2] == 0 && c[3] == 0);
+    uint8_t sq[1] = { 4 };   /* shape before final: dimensions only, zero terms, not a refusal */
+    for (int k = 0; k < 2; k++) { n = call(&w, sq, 1); CHECK(n == 22 && !memcmp(resp, "PD0SHAP1", 8) && resp[11] == 0 && pd0_get_u16(resp + 20) == 0 && (int)pd0_get_u32(resp + 12) == pd0_gen_true_size(level) && pd0_get_u32(resp + 16) == 0); }
+    { pd0_gen g0; pd0_relation r0; CHECK(pd0_gen_init(&g0, level, 1) == 0); pd0_gen_true_relation(&g0, d.dt_micro, &r0); CHECK(resp[8] == r0.n_vars && resp[9] == r0.n_latent && resp[10] == r0.n_channels); }
+    audit(&w, c, &fin); CHECK(!fin && c[0] == 1 && c[1] == 0 && c[2] == 0 && c[3] == 0);
     uint8_t rq[2 + 8 * PD0_MAX_OBS]; size_t ro = 0; rq[ro++] = 1; rq[ro++] = d.n_obs; for (int j = 0; j < d.n_obs; j++, ro += 8) pd0_put_u64(rq + ro, (uint64_t)reset[j]);
     pd0_rec r; n = call(&w, rq, ro); CHECK(n > 0 && pd0_rec_decode(resp, n, &r) == 0 && r.status == PD0_OK);
     uint8_t tq[10] = { 2, 0 }; pd0_put_u64(tq + 2, 100000); n = call(&w, tq, 10); CHECK(n > 0 && pd0_rec_decode(resp, n, &r) == 0);
@@ -48,7 +50,7 @@ static void run_level(int level) {
     CHECK(call(&w, rq, ro) == 0); CHECK(call(&w, tq, 10) == 0);
     /* shape now correct */
     pd0_gen g; pd0_relation rel; CHECK(pd0_gen_init(&g, level, 1) == 0); pd0_gen_true_relation(&g, d.dt_micro, &rel);
-    n = call(&w, sq, 1); unsigned nt = 0; for (int e = 0; e < rel.n_eq; e++) nt += rel.eq[e].n_terms;
+    n = call(&w, sq, 1); unsigned nt = 0; CHECK(resp[11] == rel.n_eq); for (int e = 0; e < rel.n_eq; e++) nt += rel.eq[e].n_terms;
     CHECK(n == 22 + (size_t)nt * (9 + rel.n_vars + rel.n_channels) && !memcmp(resp, "PD0SHAP1", 8));
     CHECK(resp[8] == rel.n_vars && resp[9] == rel.n_latent && resp[10] == rel.n_channels && resp[11] == rel.n_eq);
     CHECK((int)pd0_get_u32(resp + 12) == pd0_gen_true_size(level) && pd0_get_u16(resp + 20) == nt);
@@ -63,7 +65,7 @@ static void run_level(int level) {
     { uint8_t bad[1] = { 7 }; int64_t vz[1] = { 0 }; CHECK(do_score(&w, reset, d.n_obs, 1, bad, vz) == 0); CHECK(do_score(&w, reset, d.n_obs + 1, 1, bad, vz) == 0); }
     /* describe free after final; final counters */
     n = call(&w, dq, 1); CHECK(n == dn && !memcmp(resp, dd, dn));
-    audit(&w, c, &fin); CHECK(fin && c[0] == 1 && c[1] == 2 && c[2] == 2 && c[3] == 1);
+    audit(&w, c, &fin); CHECK(fin && c[0] == 1 && c[1] == 0 && c[2] == 2 && c[3] == 1);
     /* ops 0..2 unchanged: unknown op refused */
     uint8_t uq[1] = { 9 }; CHECK(call(&w, uq, 1) == 0);
 }
