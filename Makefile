@@ -19,7 +19,7 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 	src/omega_library.c src/omega_discovery.c src/omega_machine.c src/omega_realize_synth.c \
 	src/omega_matvec.c src/omega_accelerator.c src/omega_accelerator_world.c \
 	src/omega_vector.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
-	src/omega_blackwell_realize.c src/omega_blackwell_submit.c src/omega_blackwell_engine.c src/omega_gpu_engine.c src/omega_blackwell_gates.c src/omega_blackwell_matmul.c src/omega_blackwell_codegen.c src/omega_gpu_matmul_api.c src/omega_world_gates.c src/omega_gpu_wait.c \
+	src/omega_blackwell_realize.c src/omega_blackwell_submit.c src/omega_blackwell_engine.c src/omega_gpu_engine.c src/omega_blackwell_gates.c src/omega_blackwell_matmul.c src/omega_blackwell_codegen.c src/omega_gpu_matmul_api.c src/omega_gpu_elementwise_api.c src/omega_world_gates.c src/omega_gpu_wait.c \
 	src/omega_evidence.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
 	tools/omegatool.c
@@ -2143,3 +2143,14 @@ $(GPU_API_TEST): tests/gpu_matmul_api_test.c src/omega_gpu_matmul_api.h $(OUT_DI
 	$(CC) $(CFLAGS) -o $@ tests/gpu_matmul_api_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
 test-gpu-matmul-api: $(GPU_API_TEST)
 	./$(GPU_API_TEST) --host-only
+
+# FB-1 cut 4: native rmsnorm / rope / swiglu (+ EX2 and shared-exchange probes).
+# test-gpu-elementwise is host-only (refusals, codegen, word fixtures, nvdisasm
+# listing); the chip gate is `./build/gpu_elementwise_test --out receipt.json`
+# through the heavy queue. -ffp-contract=off keeps the f32 oracle free of FMA.
+.PHONY: test-gpu-elementwise
+GPU_EW_TEST = $(OUT_DIR)/gpu_elementwise_test
+$(GPU_EW_TEST): tests/gpu_elementwise_test.c src/omega_gpu_elementwise_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -o $@ tests/gpu_elementwise_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-elementwise: $(GPU_EW_TEST)
+	./$(GPU_EW_TEST) --host-only
