@@ -38,7 +38,7 @@
         },
         {
           "digest": "64fe22fe57fab7e61e65cb7652e73dbde613c260cb8677b05d8b98a067231e83",
-          "last_commit": "",
+          "last_commit": "00f54b6",
           "name": "dual_experiment",
           "purpose": "Runner for the DUAL applicability experiment: runs the pre-registered campaign and writes result"
         },
@@ -56,14 +56,14 @@
         }
       ],
       "children_root": "sha256:0920c282c31e3be9b4745fab718ceb60dbfe2ea90dda2108986f60fc2ac53e23",
-      "compiled_at": "2026-10-04T18:11:13Z",
+      "compiled_at": "2026-10-04T19:07:57Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:49be2149359521a3a0f87c12aa31e565c6575309bd099aff8daa216b25052ed6",
+      "digest": "sha256:9e08561d488a03e636cb8622b6667636230ac21cce1711e0ff6a45cf7f5c5761",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 120,
-      "generated_at_commit": "cb7cc216147664549484fcca8e8ceadbd6f6cdbf",
-      "source_tree": "sha256:c4f08a23f53d0fee5dccc1efe157efdf0275735fbb68200875e19d63f0c5ada9"
+      "generated_at_commit": "3a3144d4a2cbc4fd55a60da85fe94bd7ed5a9a39",
+      "source_tree": "sha256:172b5a4666f700959782e204a6278eaf02307c5fe94fcf6f9441ae5bd8918412"
     },
     "owner_lane": "",
     "provenance": {

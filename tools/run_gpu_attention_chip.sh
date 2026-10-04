@@ -3,7 +3,7 @@
 # FB-1 cut 5 chip gate: gqa_attention (f32 KV) and paged_attention (+ batch, bf16 KV)
 # for the TinyLlama (32q/4kv) and Llama-3.2-1B (32q/8kv) head shapes at context
 # 1, 17, 256 and 2048, each against the host oracle (the ReferenceCpuBackend math),
-# then against the mutant kernels (NO_MAX, KV_HEAD, SLOT, NO_RESCALE), with a
+# then against every mutant kernel (NO_MAX, KV_HEAD, SLOT, NO_RESCALE, Q_ROW, OUT_ROW), with a
 # negative control and a cache-hit repeat. Sealed receipt folder
 # OUT_ROOT/FB1-CUT5-<sha>/ (default ~/workspace/evidence-out):
 #   receipt.json  machine-readable verdict per case      run.log    test output

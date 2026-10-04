@@ -76,6 +76,14 @@ kernel itself walks the (renumbered) block table.
 | KV_HEAD | reads kv head `(h / ratio) ^ 1` | every context length including 1 |
 | SLOT | K read from slot `(t + 1) % block_size`, V from slot t | every context >= 2 (with one token the softmax weight is 1 whatever K says). Shifting both K and V would only permute matched pairs inside a full block, which softmax cannot see, so the mutant is K-only |
 | NO_RESCALE | accumulator not multiplied by alpha when the max moves | context > 64 (more than one chunk) |
+| Q_ROW | q loaded from query-head row `h ^ 1` (kv head and output row stay `h`): a wrong query-head-row address | every context (heads h and h^1 come out swapped); needs num_q_heads even |
+| OUT_ROW | the correct result for head `h` stored in flattened output row `h ^ 1`: a wrong output-head slot (merge order) | every context; needs num_q_heads even |
+
+The enum ends in `OMEGA_GPU_ATTN_MUTANT_COUNT`; every battery (host-only digests, simulator,
+chip, JSON `mutants` summary) enumerates `1 .. COUNT-1` and fails if any mutant never ran or
+was ever missed, so a mutant added to the enum without a battery entry fails the gate. Host-only
+also checks that every mutant's kernel digest differs from the baseline and from every other
+mutant's. Names come from `omega_gpu_attention_mutant_name` (table checked against COUNT).
 
 Negative control: the comparison must reject the oracle with kv heads swapped. Repeat run
 on a cache hit must be bit-identical.
