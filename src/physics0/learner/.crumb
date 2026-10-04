@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/physics0/learner",
+  "layer": "src",
+  "purpose": "PD-0 learner (Physics-0 Discovery Engine D4): fits compact one-step relations over a bounded monomial vocabulary from FIT/SELECT records only; emits candidates, correlation evidence and preregistered experiments for the independent ladder checker. Links only ladder/pd0_fmt.c and sha256; never the generators, the world, file I/O or a level identity (p0l-isolation)."
+}
