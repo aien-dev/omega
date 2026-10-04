@@ -57,7 +57,7 @@ VALID=VALID
   echo "--- per instance: final bundle hash and the world refusal counters (protocol v2 rev 2)"
   sed "s/^PD0F //" "$WORK/pd0f.txt"
   echo "--- state count per level"
-  awk '{ for (i = 1; i <= NF; i++) { split($i, kv, "="); v[kv[1]] = kv[2] } c[v["level"] " " v["state"] " score=" v["score"]]++ } END { for (k in c) printf "%s x%d\n", k, c[k] }' "$WORK/results.txt" | sort
+  awk '{ for (i = 1; i <= NF; i++) { split($i, kv, "="); v[kv[1]] = kv[2] } c[v["level"] " " v["state"] " score=" v["score"]]++ } END { for (k in c) printf "%s x%d\n", k, c[k] }' "$WORK/pd0l.txt" | sort
   echo "--- raw harness lines"
   cat "$WORK/pd0l.txt"
 } > "$WORK/receipt.txt"
