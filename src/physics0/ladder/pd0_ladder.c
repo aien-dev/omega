@@ -114,6 +114,21 @@ static int ep_schedule_hash(const ctx *c, const episode *e, uint8_t n_steps, uin
     pd0_schedule_hash(r0->n_obs, r0->after, n_steps, st, out);
     return 1;
 }
+/* spec rev 5: a preregistered schedule binds the REQUESTED reset values and the applied (channel, value)
+ * steps, never the observed reset (which carries noise on noisy levels). The requested reset is the one
+ * in the PD0EXP1 entry; the episode matches when the hash of that reset with the episode's applied steps
+ * equals the preregistered hash and, on noise-free levels, the observed reset equals the requested one.
+ * On noisy levels the observed reset is not compared (limit: the trial error bound covers it). */
+static int ep_matches_prereg(const ctx *c, const episode *ep, const pd0_exp *e)
+{
+    const pd0_rec *r0 = &c->rec[ep->first]; if (r0->kind != PD0_KIND_RESET || r0->n_obs != e->n_obs) return 0;
+    pd0_step st[PD0_MAX_STEPS]; uint8_t k = 0;
+    for (uint32_t i = 1; i < ep->n && k < e->n_steps; i++) { const pd0_rec *r = &c->rec[ep->first + i]; if (r->kind == PD0_KIND_STEP && r->status == PD0_ST_OK) { st[k].channel = r->channel; st[k].value = r->applied; k++; } }
+    if (k < e->n_steps) return 0;
+    uint8_t h[PD0_HASH]; pd0_schedule_hash(e->n_obs, e->reset, e->n_steps, st, h); if (memcmp(h, e->schedule_hash, PD0_HASH)) return 0;
+    if (!c->P->noisy) for (int j = 0; j < e->n_obs; j++) if (r0->after[j] != e->reset[j]) return 0;
+    return 1;
+}
 static void set_code(ctx *c, int t, int code) { c->R->transition = t; c->R->code = code; if (code == PD0V_OK) c->R->stall_code = 0; else if (!c->R->stall_code) c->R->stall_code = code; }
 static void refute(ctx *c, const pd0_rec *bad, int64_t predicted, int64_t observed)
 {
@@ -161,6 +176,7 @@ static void try_t1(ctx *c)
 static int try_t2(ctx *c, const pd0_corr *k)
 {
     uint8_t no = c->P->n_obs; if (k->var_b >= no || (k->var_a >= no && k->var_a != PD0_CHAN_NONE)) return PD0V_BAD_FIELD;
+    if (k->var_a == k->var_b) { set_code(c, 2, PD0V_T2_NO_EVIDENCE); return 0; }   /* spec rev 5: a variable against its own one-step change is regression to the mean, not evidence */
     if (k->n_shuffles < 2000) { set_code(c, 2, PD0V_T2_TOO_FEW_SHUFFLES); return 0; }
     double *x = malloc(sizeof(double) * MAX_REC), *y = malloc(sizeof(double) * MAX_REC); uint32_t n = 0;
     if (!x || !y) { free(x); free(y); return PD0V_TOO_LARGE; }
@@ -227,9 +243,8 @@ static int try_t5(ctx *c, const pd0_exp *e, const uint8_t *entry_hash)
     if (e->n_hyp != 1u + c->fals.n_rivals) { set_code(c, 5, PD0V_T5_MISSING_RIVAL_PREDICTION); return PD0V_T5_MISSING_RIVAL_PREDICTION; }
     for (int j = 0; j < e->n_obs; j++) if (e->reset[j] < P->reset_min || e->reset[j] > P->reset_max) { set_code(c, 5, PD0V_T5_OUT_OF_BOUNDS); return PD0V_T5_OUT_OF_BOUNDS; }
     for (int s = 0; s < e->n_steps; s++) { uint8_t ch = e->steps[s].channel; if (ch != PD0_CHAN_NONE && (ch >= P->n_channels || e->steps[s].value < P->chan_min[ch] || e->steps[s].value > P->chan_max[ch])) { set_code(c, 5, PD0V_T5_OUT_OF_BOUNDS); return PD0V_T5_OUT_OF_BOUNDS; } }
-    uint8_t h[PD0_HASH];
     for (uint32_t i = 0; i < c->nep; i++) { const episode *ep = &c->ep[i]; if (!ep->has_tag || ep->tag > TAG_HOLDOUT || ep->n == 0) continue;
-        if (ep_schedule_hash(c, ep, e->n_steps, h) && !memcmp(h, e->schedule_hash, PD0_HASH)) { set_code(c, 5, PD0V_T5_SCHEDULE_REUSED); return PD0V_T5_SCHEDULE_REUSED; } }
+        if (ep_matches_prereg(c, ep, e)) { set_code(c, 5, PD0V_T5_SCHEDULE_REUSED); return PD0V_T5_SCHEDULE_REUSED; } }
     for (uint32_t i = 0; i < c->npre; i++) if (!memcmp(c->pre[i].e.schedule_hash, e->schedule_hash, PD0_HASH)) { set_code(c, 5, PD0V_T5_SCHEDULE_REUSED); return PD0V_T5_SCHEDULE_REUSED; }
     if (c->npre >= MAX_PREREG) return PD0V_TOO_LARGE;
     prereg *p = &c->pre[c->npre++]; p->e = *e; memcpy(p->hash, entry_hash, PD0_HASH); p->entry = c->entry_idx; p->matched_ep = -1;
@@ -240,12 +255,12 @@ static int try_t5(ctx *c, const pd0_exp *e, const uint8_t *entry_hash)
 /* ---------- T6 ---------- */
 static int try_t6(ctx *c)
 {
-    const pd0_ladder_params *P = c->P; uint8_t no = P->n_obs, h[PD0_HASH]; uint32_t n = P->rollout_steps;
+    const pd0_ladder_params *P = c->P; uint8_t no = P->n_obs; uint32_t n = P->rollout_steps;
     /* match complete TRIAL episodes to preregistrations */
     for (uint32_t i = 0; i < c->nep; i++) { episode *ep = &c->ep[i]; if (!ep->has_tag || ep->tag != TAG_TRIAL || ep->n == 0) continue;
-        if (ep_ok_steps(c, ep) < n) continue; if (!ep_schedule_hash(c, ep, (uint8_t)n, h)) continue;
+        if (ep_ok_steps(c, ep) < n) continue;
         int found = 0;
-        for (uint32_t k = 0; k < c->npre; k++) if (!memcmp(c->pre[k].e.schedule_hash, h, PD0_HASH) && c->pre[k].entry < ep->first_entry) { c->pre[k].matched_ep = (int)i; found = 1; break; }
+        for (uint32_t k = 0; k < c->npre; k++) if (c->pre[k].entry < ep->first_entry && ep_matches_prereg(c, ep, &c->pre[k].e)) { c->pre[k].matched_ep = (int)i; found = 1; break; }
         if (!found) { set_code(c, 6, PD0V_T6_TRIAL_NOT_PREREGISTERED); return PD0V_T6_TRIAL_NOT_PREREGISTERED; } }
     for (uint32_t k = 0; k < c->npre; k++) if (c->pre[k].matched_ep < 0) { set_code(c, 6, PD0V_T6_TRIAL_MISSING); return 0; }
     /* evaluate every trial against the committed prediction (hypothesis index 0) */
@@ -331,7 +346,7 @@ int pd0_ladder_check(const uint8_t *ledger, size_t len, const pd0_ladder_params 
             if (ep->first == UINT32_MAX) { ep->first = c->nrec; ep->first_entry = c->entry_idx; if (r->kind != PD0_KIND_RESET) { rc = PD0V_BAD_FIELD; break; } }
             else if (ep->first + ep->n != c->nrec) { rc = PD0V_BAD_FIELD; break; } /* episodes are contiguous */
             ep->n++; c->nrec++; R->n_records++;
-            if (ep->has_tag && ep->tag == TAG_TRIAL && ep_ok_steps(c, ep) == P->rollout_steps) { uint8_t sh[PD0_HASH]; int found = 0; if (ep_schedule_hash(c, ep, (uint8_t)P->rollout_steps, sh)) for (uint32_t k = 0; k < c->npre; k++) if (!memcmp(c->pre[k].e.schedule_hash, sh, PD0_HASH) && c->pre[k].entry < ep->first_entry) found = 1;
+            if (ep->has_tag && ep->tag == TAG_TRIAL && ep_ok_steps(c, ep) == P->rollout_steps) { int found = 0; for (uint32_t k = 0; k < c->npre; k++) if (c->pre[k].entry < ep->first_entry && ep_matches_prereg(c, ep, &c->pre[k].e)) found = 1;
                 if (!found) { rc = PD0V_T6_TRIAL_NOT_PREREGISTERED; set_code(c, 6, rc); break; } }
             if (ep->has_tag && (ep->tag == TAG_TRIAL || ep->tag == TAG_REP) && ep->tag_entry > ep->first_entry) { rc = PD0V_T6_TRIAL_NOT_PREREGISTERED; break; }
             if (R->state == LS_START) try_t1(c);
