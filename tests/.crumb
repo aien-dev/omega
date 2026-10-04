@@ -152,7 +152,7 @@
         },
         {
           "digest": "d57833fb3f63ef6475cf25e2e16319d818a0a407b825d5b4c5cbdd3cc0e06492",
-          "last_commit": "",
+          "last_commit": "00f54b6",
           "name": "dual_experiment",
           "purpose": "Tests for the DUAL applicability experiment: determinism (same seed, byte-identical results dige"
         },
@@ -253,7 +253,7 @@
           "purpose": "Directory tests/relations. Purpose not yet described by a human."
         },
         {
-          "digest": "646c5c0b1c7160f73031fe4aebaae5558abe4e26fb6d54f925df311f9e648e1b",
+          "digest": "f49db08f5e2f8ad20c9e10f7eaaa27e7f264b6bfc17e4d4fad16e60eb1495f1d",
           "last_commit": "f523edd",
           "name": "runtime",
           "purpose": "Directory tests/runtime. Purpose not yet described by a human."
@@ -283,15 +283,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:bcae6f913b37bfcb59d06e2942acc649d5803a2521f4d50beb450a04e6f24b81",
-      "compiled_at": "2026-10-04T18:38:56Z",
+      "children_root": "sha256:0a4e348cf355e1fa5924f9c76a460d1d49bc285687b134365ef0fb9dab4f0855",
+      "compiled_at": "2026-10-04T18:45:18Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:e9bfa25f9d911bbcb636a73ecedea1df90b2a7e0ff9782fb43cf794d8aecdb4c",
+      "digest": "sha256:e96dec62800dc6dae755ebe10eacfedcb0959e29e00a3540284cb585f8f9716f",
       "evidence_files": 11,
       "evidence_root": "sha256:d5c1bceb4d57ef0eb42797c58801b5926509711614c3e38bb7105b6efa3942f2",
-      "files": 785,
-      "generated_at_commit": "3bebcc68321fcc876b88df129f41d6190411a926",
-      "source_tree": "sha256:e3fa566d5c75465dd85467a30bc713269c6e125280fdaef48b1a0f196e20d79f"
+      "files": 787,
+      "generated_at_commit": "00f54b6b19e5e64e8947aea2890e688511d897a8",
+      "source_tree": "sha256:1a35905c6c7254bc66bf0519cac4d23e5b1c2d7722356a0e06401faec581448f"
     },
     "owner_lane": "",
     "provenance": {

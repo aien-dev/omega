@@ -268,6 +268,10 @@ typedef struct {
     uint64_t corrupt_restores;
 } JsStats;
 
+/* DUAL-3a observer (declared in full after the policy section below). */
+typedef struct JsDualObservation_ JsDualObservation;
+typedef void (*JsDualObserver)(const JsDualObservation *obs, const void *ctx);
+
 #define JS_MAX_BRANCHES 4096u
 #define JS_INDEX_BUCKETS 65536u
 
@@ -309,6 +313,10 @@ typedef struct {
     uint8_t anchor[48];             /* opaque client anchor (v3 checkpoint) */
     bool anchor_set;
     JsHome local_home;              /* home given to locally created branches */
+    /* DUAL-3a decision-site observer; NULL = no observation (default) */
+    JsDualObserver dual_observer;
+    const void *dual_ctx;
+    uint64_t dual_seq;
 } JsSpace;
 
 #define JS_SLAB_CHUNK 1024u
@@ -418,6 +426,83 @@ typedef struct {
 } JsPolicyReport;
 JsAction js_forge_choose(const JsSpace *s, const JsReal *r, double pressure);
 int  js_forge_enforce(JsSpace *s, uint64_t budget_bytes, JsPolicyReport *rep);
+
+/* ---- DUAL decision site "jspace.residency" (ADR 0031 section 7.3, DUAL-3a) --
+ *
+ * A read-only observation tap on the residency decision inside
+ * js_forge_enforce. When an observer is set, each candidate the chooser
+ * decides on emits one JsDualObservation: the alternatives it priced (every
+ * action with the cost inputs and the score the chooser computed, and whether
+ * the action was admissible), the chosen action, the pressure value and which
+ * case produced it (over total budget: CAPACITY, stays hard; hot arena over
+ * half the budget: SOFT), the realization's identity, and the budget and
+ * residency bytes at that instant. The observer receives a const record and
+ * returns nothing: it cannot alter the decision by type. With no observer (the
+ * default) the policy runs exactly as before and no record is built. The
+ * observer runs under the space lock and must not mutate the space or any
+ * realization. There is no wall-clock field: seq is a per-space logical
+ * counter that only advances while an observer is set.
+ *
+ * Canonical encoding (js_dual_observation_encode): fixed little-endian layout
+ * of every field but digest, JS_DUAL_OBS_BYTES long, kind byte and version
+ * first so the record is self-describing. digest = SHA-256 over
+ * JS_DUAL_OBS_DOMAIN, one zero byte, then the canonical bytes. */
+#define JS_DUAL_SITE_ID      "jspace.residency"
+#define JS_DUAL_SITE_ID_LEN  16u
+#define JS_DUAL_OBS_KIND     0xD3u  /* kind byte: DUAL decision-site observation */
+#define JS_DUAL_OBS_VERSION  1u
+#define JS_DUAL_OBS_DOMAIN   "omega.dual.site.jspace_residency.v1"
+#define JS_DUAL_OBS_N_ALT    4u     /* MOVE, COMPRESS, SPILL, EVICT: the chooser's order */
+#define JS_DUAL_OBS_BYTES    302u   /* canonical encoding length (version 1) */
+
+typedef enum {
+    JS_DUAL_PRESSURE_CAPACITY = 1,  /* total residency over budget: pressure 1e9, MOVE not allowed */
+    JS_DUAL_PRESSURE_SOFT = 2       /* only the hot arena over half the budget: pressure 1e3 */
+} JsDualPressureCase;
+
+typedef enum {
+    JS_DUAL_ALT_INADMISSIBLE = 0,   /* not built: MOVE without allow_move or not HOT; COMPRESS of a
+                                       compressed realization or one predicted not to shrink */
+    JS_DUAL_ALT_UNPRICED = 1,       /* built but frees no bytes: skipped by the chooser */
+    JS_DUAL_ALT_PRICED = 2          /* scored: (now + expected_reads * later) / freed */
+} JsDualAltStatus;
+
+typedef struct {
+    uint8_t action;                 /* JsAction */
+    uint8_t status;                 /* JsDualAltStatus */
+    double now_ns, later_ns, freed_bytes;   /* chooser inputs; 0 when inadmissible */
+    double score;                   /* nanoseconds per byte given back; 0 unless PRICED */
+} JsDualAlternative;
+
+struct JsDualObservation_ {
+    uint8_t kind, version;
+    uint64_t seq;                   /* monotonically increasing per space */
+    double pressure;                /* the value the chooser used */
+    uint8_t pressure_case;          /* JsDualPressureCase */
+    uint8_t allow_move;
+    uint8_t chosen;                 /* JsAction; JS_ACT_COUNT = keep */
+    uint8_t n_priced;
+    JsDualAlternative alt[JS_DUAL_OBS_N_ALT];
+    double best_score;              /* cheapest priced score; 0 when none was priced */
+    double keep_threshold;          /* pressure * retain_ns_per_byte: keep when best >= this */
+    double expected_reads;
+    /* realization identity and state at the instant of the decision */
+    uint32_t real_slot;
+    uint64_t real_gen;
+    uint8_t real_type, placement, recipe;
+    uint64_t unit_bytes, held_bytes;
+    uint32_t holders, refs;
+    uint64_t last_use;
+    uint8_t semantic_state_id[32];
+    /* the instant */
+    uint64_t budget_bytes, resident_bytes, hot_bytes;
+    uint8_t digest[32];
+};
+
+/* NULL fn restores the default (no observation). */
+void js_dual_set_observer(JsSpace *s, JsDualObserver fn, const void *ctx);
+/* Canonical bytes of obs (all fields but digest). Returns JS_DUAL_OBS_BYTES. */
+size_t js_dual_observation_encode(const JsDualObservation *obs, uint8_t out[JS_DUAL_OBS_BYTES]);
 
 const char *js_action_name(JsAction a);
 const char *js_placement_name(JsPlacement p);
