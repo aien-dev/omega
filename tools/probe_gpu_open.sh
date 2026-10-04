@@ -9,7 +9,7 @@
 #   overlap       a holder keeps a device open (hold 300 ms) while the probe opens its own
 #   after_latch   NOT RUN (would need a deliberate stall; never leave the chip uncertain)
 # Negative control first: the probe must report a failure when it cannot open the
-# control nodes (file-descriptor limit 3 -> open() fails), with the stage named.
+# control nodes (file-descriptor limit 4 -> open() fails; limit 3 stops the dynamic loader itself, exit 127, which proves nothing), with the stage named.
 # Run through the heavy queue only (lanes.sh queue --heavy); never kill it.
 set -u
 OUT=${1:?out dir}; N=${2:-30}
@@ -20,8 +20,8 @@ make PHYSICS_DIR="$P" build/gpu_session_probe > "$OUT/build.log" 2>&1 || { echo 
 PR=./build/gpu_session_probe
 LOG="$OUT/probe.log"; : > "$LOG"
 { uname -a; nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null; echo "omega $(git rev-parse HEAD) physics $(git -C "$P" rev-parse HEAD)"; date -u +%FT%TZ; } > "$OUT/device.txt"
-echo "## negative_control (fd limit 3: /dev/nvidiactl cannot be opened)" | tee -a "$LOG"
-( ulimit -n 3; $PR --label negative_control ) 2>&1 | tee -a "$LOG"
+echo "## negative_control (fd limit 4: the loader runs, /dev/nvidiactl cannot be opened)" | tee -a "$LOG"
+( ulimit -n 4; $PR --label negative_control ) 2>&1 | tee -a "$LOG"
 neg_rc=${PIPESTATUS[0]}
 echo "negative_control exit=$neg_rc (must be non-zero with a named stage)" | tee -a "$LOG"
 fails=0; total=0
