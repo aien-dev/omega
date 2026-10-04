@@ -25,6 +25,8 @@ WSHA=$(sha256sum "$W" | cut -d' ' -f1); SSHA=$(sha256sum "$S" | cut -d' ' -f1)
 OUTDIR=evidence/physics0/pd0b; mkdir -p "$OUTDIR"
 OUT=$OUTDIR/PD0B_RUN-$HEAD_SHORT-$(echo "$WSHA" | cut -c1-12).txt
 [ ! -e "$OUT" ] || die "receipt already exists, refusing to overwrite: $OUT"
+LAWDIR=${OUT%.txt}-laws
+[ ! -e "$LAWDIR" ] || die "laws directory already exists, refusing to overwrite: $LAWDIR"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/out"; : > "$WORK/results.txt"
 echo "$lines" | while read -r lvl seed; do
@@ -36,10 +38,19 @@ NINST=$(echo "$lines" | wc -l)
 [ "$(wc -l < "$WORK/pd0l.txt")" -eq "$NINST" ] || die "result count does not match instance count"
 VALID=VALID
 [ "$(wc -l < "$WORK/pd0f.txt")" -eq "$NINST" ] && [ "$(grep -c " valid=VALID$" "$WORK/pd0f.txt")" -eq "$NINST" ] || VALID=INVALID
+# per-instance summary with the retained law record: law=1 iff pd0_ladder_emit_law produced bytes and pd0_ladder_verify_law accepted them
+fld() { printf '%s\n' "$1" | tr ' ' '\n' | sed -n "s/^$2=//p" | head -1; }
+: > "$WORK/summary.txt"
+while read -r pl; do
+  lv=$(fld "$pl" level); sd=$(fld "$pl" seed); st=$(fld "$pl" state); lrc=$(fld "$pl" law); lf="$WORK/out/pd0l-$lv-s$sd.law"
+  if [ "$lrc" = 0 ] && [ -f "$lf" ]; then law=1; lsha=$(sha256sum "$lf" | cut -d' ' -f1); else law=0; lsha=-; fi
+  [ "$st" != REPLICATED ] || [ "$law" = 1 ] || VALID=INVALID
+  printf 'level=%s seed=%s state=%s code=%s score=%s score_code=%s law=%s law_sha256=%s\n' "$lv" "$sd" "$st" "$(fld "$pl" code)" "$(fld "$pl" score)" "$(fld "$pl" score_code)" "$law" "$lsha" >> "$WORK/summary.txt"
+done < "$WORK/pd0l.txt"
 {
   echo "receipt: PD0B_RUN"
   echo "run_validity: $VALID"
-  echo "validity_rule: VALID needs, per instance, a final accepted once, shape dimensions unchanged across final (and, in PD0 mode with the omega world, S* equal to the public table), an audit echoing the final hash, and every refusal counter 0"
+  echo "validity_rule: VALID needs, per instance, a final accepted once, shape dimensions unchanged across final (and, in PD0 mode with the omega world, S* equal to the public table), an audit echoing the final hash, and every refusal counter 0; and law=1 (a law record emitted and accepted by the verifier) for every instance whose ladder_state is REPLICATED"
   [ -z "$NOTE" ] || echo "note: $NOTE"
   echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "harness_commit: $HEAD_FULL"
@@ -51,9 +62,8 @@ VALID=VALID
   sh tests/physics0/learner/pd0b_freeze.sh "$H"
   echo "--- seeds file"
   echo "$lines"
-  echo "--- per instance: level seed ladder_state checker_code scorer_verdict scorer_code"
-  awk '{ for (i = 1; i <= NF; i++) { split($i, kv, "="); v[kv[1]] = kv[2] }
-         printf "level=%s seed=%s state=%s code=%s score=%s score_code=%s\n", v["level"], v["seed"], v["state"], v["code"], v["score"], v["score_code"] }' "$WORK/pd0l.txt"
+  echo "--- per instance: level seed ladder_state checker_code scorer_verdict scorer_code law law_sha256"
+  cat "$WORK/summary.txt"
   echo "--- per instance: final bundle hash and the world refusal counters (protocol v2 rev 2)"
   sed "s/^PD0F //" "$WORK/pd0f.txt"
   echo "--- state count per level"
@@ -62,5 +72,6 @@ VALID=VALID
   cat "$WORK/pd0l.txt"
 } > "$WORK/receipt.txt"
 ln "$WORK/receipt.txt" "$OUT" || die "could not create $OUT without overwriting"
-echo "pd0b-run: wrote $OUT"
+mkdir "$LAWDIR" && cp "$WORK"/out/* "$LAWDIR"/ || die "could not retain the evidence bundles in $LAWDIR"
+echo "pd0b-run: wrote $OUT (bundles in $LAWDIR)"
 [ "$VALID" = VALID ] || { echo "pd0b-run: run is INVALID (see receipt)" >&2; exit 4; }
