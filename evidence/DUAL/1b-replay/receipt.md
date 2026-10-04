@@ -10,7 +10,7 @@ exact counts but are not calibrated estimates of any resource pressure; they are
 | Field | Value |
 |---|---|
 | repository | aien-dev/omega |
-| base commit | 0b3dcc0efe4210e533fd5cfcc675aada371c9fc9 (branch dual/0b-1a-binding-controller, PR #267, on dual/0a-records PR #266, on main cb7cc216147664549484fcca8e8ceadbd6f6cdbf) |
+| base commit | 0899c412c33eb37a0012170de7604e4dbd4bf963 (branch dual/0b-1a-binding-controller, PR #267, on dual/0a-records PR #266, on main after the AGPL relicense 559f6e5; the pre-registration was first committed on the pre-rebase base 0b3dcc0efe4210e533fd5cfcc675aada371c9fc9 and rebased unchanged) |
 | pre-registration commit | the commit that adds this file with the sections "Pre-registered" filled and "Results" empty |
 | candidate commit | filled in the Results section |
 | compiler | cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0 |
@@ -104,7 +104,7 @@ after this commit; a surprise is recorded as FAIL.
 
 | Field | Value |
 |---|---|
-| pre-registration commit | b0626246f3b6a03326420fafba502c3b5398c4c8 (receipt sections above, no replay code) |
+| pre-registration commit | d51d418577d14f5f8d1e922051597bfb089461d4 (receipt sections above, no replay code; b0626246f3b6a03326420fafba502c3b5398c4c8 before the base rebase, same content) |
 | candidate commit | this commit (branch dual/1b-replay) |
 | compiler | cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, aarch64 |
 | reference controller_id | bcf4285a4830663a1c9f0548a0bd9fe1c96ca9852a8c90d7e45b13f56d820ec4 (eta 0.1, rho 0.05, k_sigma 2, max_age 4, cadence 1, n 1, lambda_max 10) |
