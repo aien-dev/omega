@@ -67,6 +67,9 @@ on:
       - 'tools/test_numeric_qualify.sh'
       - 'tools/numeric_*'
       - 'tools/m19r_qualify.sh'
+      - 'tools/m19r_campaign.sh'
+      - 'tools/chipwait_campaign.sh'
+      - 'tools/test_chipwait_campaign.sh'
       - 'tools/json_canon.c'
       - 'tools/e1_*'
       # train (M22 optimizer substrate + E5 provenance)
@@ -119,6 +122,8 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-qualify
       - name: E1 closure combiner (host-only, synthetic constituents, every hostile mutant refused)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-e1-combine
+      - name: Chipwait campaign runner (host-only, stub qualifier, no GPU)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-chipwait-campaign
       - name: GPU completion wait primitive (host-only, fake memory and clock, mutants must die)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-wait
       - name: GPU completion wait real-code mutants (each flagged build of the real code must fail)

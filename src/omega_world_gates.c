@@ -118,12 +118,17 @@ static bool test_m19_gate1_world_create(void) {
 /* Gate 2: OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS */
 static bool test_m19_gate2_context_reuse(void) {
     OmegaAcceleratorWorld world;
-    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    int rc = omega_world_init(&world);
+    if (rc != OMEGA_WORLD_OK) {
+        fprintf(stderr, "GATE_DIAG gate=OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS exit=init_failed rc=%d x=%d\n", (int)(rc), 0);
+        return false;
+    }
 
     const uint32_t root = world.m16.rm.root;
     const uint32_t device = world.m16.rm.device;
     const uint32_t vaspace = world.m16.rm.vaspace;
     if (!root || !device || !vaspace) {
+        fprintf(stderr, "GATE_DIAG gate=OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS exit=rm_handle_zero rc=%d root=%u device=%u vaspace=%u\n", (int)(-1), (unsigned)root, (unsigned)device, (unsigned)vaspace);
         omega_world_destroy(&world);
         return false;
     }
@@ -132,7 +137,9 @@ static bool test_m19_gate2_context_reuse(void) {
     size_t vecadd_len = 0;
     omega_blackwell_encode_vecadd(vecadd_buf, sizeof(vecadd_buf), &vecadd_len);
     OmegaHandle code_vecadd;
-    if (omega_world_register_code(&world, vecadd_buf, vecadd_len, NULL, &code_vecadd) != OMEGA_WORLD_OK) {
+    rc = omega_world_register_code(&world, vecadd_buf, vecadd_len, NULL, &code_vecadd);
+    if (rc != OMEGA_WORLD_OK) {
+        fprintf(stderr, "GATE_DIAG gate=OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS exit=register_code_vecadd_failed rc=%d vecadd_len=%zu\n", (int)(rc), vecadd_len);
         omega_world_destroy(&world);
         return false;
     }
@@ -153,8 +160,10 @@ static bool test_m19_gate2_context_reuse(void) {
     }
 
     uint32_t completion = 0;
-    if (omega_world_dispatch_vector(&world, &code_vecadd, &v_a, &v_b, &v_c, 64, &completion) != OMEGA_WORLD_OK ||
+    rc = omega_world_dispatch_vector(&world, &code_vecadd, &v_a, &v_b, &v_c, 64, &completion);
+    if (rc != OMEGA_WORLD_OK ||
         vc_cpu[0] != 10 || vc_cpu[63] != 73) {
+        fprintf(stderr, "GATE_DIAG gate=OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS exit=dispatch_vector_failed rc=%d vc0=%u(want 10) vc63=%u(want 73) faulted=%d total_dispatches=%llu\n", (int)(rc), (unsigned)vc_cpu[0], (unsigned)vc_cpu[63], (int)world.faulted, (unsigned long long)world.total_dispatches);
         omega_world_destroy(&world);
         return false;
     }
@@ -164,7 +173,9 @@ static bool test_m19_gate2_context_reuse(void) {
     OmegaBlackwellKernel k_i32;
     omega_blackwell_codegen_matmul(&spec_i32, &k_i32);
     OmegaHandle code_i32;
-    if (omega_world_register_code(&world, k_i32.code, k_i32.code_size, NULL, &code_i32) != OMEGA_WORLD_OK) {
+    rc = omega_world_register_code(&world, k_i32.code, k_i32.code_size, NULL, &code_i32);
+    if (rc != OMEGA_WORLD_OK) {
+        fprintf(stderr, "GATE_DIAG gate=OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS exit=register_code_i32_failed rc=%d code_size=%zu\n", (int)(rc), (size_t)k_i32.code_size);
         omega_blackwell_kernel_free(&k_i32);
         omega_world_destroy(&world);
         return false;
@@ -183,8 +194,10 @@ static bool test_m19_gate2_context_reuse(void) {
         mc_cpu[i] = 0;
     }
 
-    if (omega_world_dispatch_matmul(&world, &spec_i32, &code_i32, &m_a, &m_b, &m_c, &completion) != OMEGA_WORLD_OK ||
+    rc = omega_world_dispatch_matmul(&world, &spec_i32, &code_i32, &m_a, &m_b, &m_c, &completion);
+    if (rc != OMEGA_WORLD_OK ||
         mc_cpu[0] != 1 || mc_cpu[255] != 1) {
+        fprintf(stderr, "GATE_DIAG gate=OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS exit=dispatch_matmul_failed rc=%d mc0=%u(want 1) mc255=%u(want 1) faulted=%d total_dispatches=%llu\n", (int)(rc), (unsigned)mc_cpu[0], (unsigned)mc_cpu[255], (int)world.faulted, (unsigned long long)world.total_dispatches);
         omega_blackwell_kernel_free(&k_i32);
         omega_world_destroy(&world);
         return false;
@@ -195,6 +208,9 @@ static bool test_m19_gate2_context_reuse(void) {
                world.m16.rm.device == device &&
                world.m16.rm.vaspace == vaspace &&
                world.total_dispatches == 2);
+    if (!ok) {
+        fprintf(stderr, "GATE_DIAG gate=OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS exit=identity_mismatch rc=%d root_same=%d(%u/%u) device_same=%d(%u/%u) vaspace_same=%d(%u/%u) total_dispatches=%llu(want 2)\n", (int)(-1), (int)(world.m16.rm.root == root), (unsigned)world.m16.rm.root, (unsigned)root, (int)(world.m16.rm.device == device), (unsigned)world.m16.rm.device, (unsigned)device, (int)(world.m16.rm.vaspace == vaspace), (unsigned)world.m16.rm.vaspace, (unsigned)vaspace, (unsigned long long)world.total_dispatches);
+    }
     omega_world_destroy(&world);
     return ok;
 }
@@ -515,6 +531,12 @@ static bool test_m19_gate6_mixed_workload(void) {
     return true;
 }
 
+/* CHIPWAIT-1c: second completion word (same layout as the world dispatch path, see
+ * WORLD_MARKER2_OFFSET in omega_accelerator_world.c) and the sentinel the last entry
+ * of each batch writes after an L2 flush (value from src/omega_numeric_gb10.c). */
+#define M19_WRAP_MARKER2_OFFSET 0x10
+#define M19_WRAP_MARKER2_SENTINEL 0x46464646u
+
 /* Every QUEUE_WRAP failure exit prints one named reason (init, ring_discovery,
  * enqueue, completion_timeout, wrap_count, channel_state, output_parity) so a
  * failed run says which exit fired. Pass/fail decisions are unchanged. */
@@ -666,6 +688,26 @@ static bool test_m19_gate7_queue_wrap(void) {
     pb[pb_len++] = 0;
     pb[pb_len++] = 0;
     pb[pb_len++] = 0x1 | (1u << 20);
+    /* CHIPWAIT-1c, the same block as src/omega_numeric_gb10.c (#225): after the WFI
+     * release of dispatch_id, flush GPU L2 dirty lines to memory (NVC96F_MEM_OP_A..D =
+     * 0x28..0x34, D bits 31:27 OPERATION = L2_FLUSH_DIRTY 0x10), then a second WFI
+     * release to an uncached word (completion page +0x10, GPU-uncached via
+     * nvrm_alloc_gpu_uncached in omega_accelerator_world.c). The marker2 payload is
+     * patched per entry: only the last entry of a batch writes the sentinel
+     * 0x46464646, so the host sentinel wait proves the last flush landed; earlier
+     * entries write their dispatch_id (never equal to the sentinel). */
+    pb[pb_len++] = nvrm_mthd(0, 0x0028, 4);
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = (0x10u << 27);
+    pb[pb_len++] = nvrm_mthd(0, 0x005c, 5);
+    pb[pb_len++] = (uint32_t)(world.completion.gpu_va + M19_WRAP_MARKER2_OFFSET);
+    pb[pb_len++] = (uint32_t)((world.completion.gpu_va + M19_WRAP_MARKER2_OFFSET) >> 32);
+    size_t marker2_idx = pb_len;
+    pb[pb_len++] = M19_WRAP_MARKER2_SENTINEL;
+    pb[pb_len++] = 0;
+    pb[pb_len++] = 0x1 | (1u << 20);
 
     /* The pushbuffer pool holds exactly PB_SLOTS 4 KiB slots (0x10000 bytes).
      * A slot must not be rewritten until every GPFIFO entry that references it
@@ -681,10 +723,15 @@ static bool test_m19_gate7_queue_wrap(void) {
     while (submitted < stress_count) {
         uint32_t batch = stress_count - submitted;
         if (batch > pb_slots) batch = pb_slots;
+        /* Every earlier entry has retired (its marker2 was waited for), so the GPU is idle
+         * on this channel: clear marker2 so the sentinel wait cannot see a stale value. */
+        *(volatile uint32_t *)((uint8_t *)world.completion.cpu_marker + M19_WRAP_MARKER2_OFFSET) = 0;
+        __asm__ volatile("dsb sy" ::: "memory");
 
         for (uint32_t k = 0; k < batch; k++) {
             dispatch_id++;
             pb[release_idx + 3] = dispatch_id;
+            pb[marker2_idx] = (k + 1 == batch) ? M19_WRAP_MARKER2_SENTINEL : dispatch_id;
             uint32_t off = (submitted % pb_slots) * 0x1000;
             memcpy((uint8_t *)world.m16.pb_mem.cpu + off, pb, pb_len * 4);
             __asm__ volatile("dsb sy" ::: "memory");
@@ -703,29 +750,46 @@ static bool test_m19_gate7_queue_wrap(void) {
         __asm__ volatile("dsb sy" ::: "memory");
 
         /* Same effective budget as the old spin (about 5 s with no progress),
-         * but the clock is monotonic nanoseconds and any marker change restarts
-         * it. The hard cap is generous so a slow-but-moving batch is not cut. */
-        omega_gpu_wait_cfg_t wait_cfg;
-        memset(&wait_cfg, 0, sizeof(wait_cfg));
-        wait_cfg.progress_timeout_ms = 5000;
-        wait_cfg.total_timeout_ms = 600000;
-        omega_gpu_wait_report_t wrpt;
-        /* Dispatch ids are a free-running counter: sequence semantics. */
-        if (!omega_gpu_wait_sequence(world.completion.cpu_marker, dispatch_id, &wrpt, &wait_cfg)) {
-            snprintf(detail, sizeof(detail),
-                     "wait_kind=%s result=%s dispatch_id=%u submitted=%u expected=%u observed=%u "
-                     "rm.put=%u ring_capacity=%u channel_generation=%u channel_reconstructions=%u "
-                     "elapsed_ns=%llu last_progress_ns=%llu progress_count=%llu polls=%llu",
-                     omega_gpu_wait_kind_name(wrpt.wait_kind), omega_gpu_wait_result_name(wrpt.result),
-                     dispatch_id, submitted, wrpt.expected, wrpt.last_observed,
-                     (unsigned)world.m16.rm.put, ring_cap,
-                     (unsigned)world.channel_generation, (unsigned)world.channel_reconstructions,
-                     (unsigned long long)wrpt.elapsed_ns,
-                     (unsigned long long)(wrpt.last_progress_ns - wrpt.start_ns),
-                     (unsigned long long)wrpt.progress_count, (unsigned long long)wrpt.polls);
-            m19_wrap_exit("completion_timeout", detail);
-            omega_world_destroy(&world);
-            return false;
+         * but the clock is monotonic nanoseconds and any word change restarts
+         * it. The hard cap is generous so a slow-but-moving batch is not cut;
+         * the marker wait and the marker2 wait share one hard cap. Dispatch ids
+         * are a free-running counter: sequence semantics for the marker; marker2
+         * is awaited for its sentinel (reset to 0 before the batch, written
+         * non-sentinel by every entry but the last). Both go through the shared
+         * primitive in src/omega_gpu_wait.c. */
+        volatile uint32_t *marker2_word = (volatile uint32_t *)
+            ((uint8_t *)world.completion.cpu_marker + M19_WRAP_MARKER2_OFFSET);
+        uint32_t budget_ms = 600000;
+        for (int stage = 0; stage < 2; stage++) {
+            omega_gpu_wait_cfg_t wait_cfg;
+            memset(&wait_cfg, 0, sizeof(wait_cfg));
+            wait_cfg.progress_timeout_ms = 5000;
+            wait_cfg.total_timeout_ms = budget_ms;
+            omega_gpu_wait_report_t wrpt;
+            bool reached = stage == 0
+                ? omega_gpu_wait_sequence(world.completion.cpu_marker, dispatch_id, &wrpt, &wait_cfg)
+                : omega_gpu_wait_sequence(marker2_word, M19_WRAP_MARKER2_SENTINEL, &wrpt, &wait_cfg);
+            if (!reached) {
+                snprintf(detail, sizeof(detail),
+                         "wait=%s wait_kind=%s result=%s dispatch_id=%u submitted=%u expected=%u observed=%u "
+                         "marker2=%u marker2_expected=%u "
+                         "rm.put=%u ring_capacity=%u channel_generation=%u channel_reconstructions=%u "
+                         "elapsed_ns=%llu last_progress_ns=%llu progress_count=%llu polls=%llu",
+                         stage == 0 ? "marker" : "marker2",
+                         omega_gpu_wait_kind_name(wrpt.wait_kind), omega_gpu_wait_result_name(wrpt.result),
+                         dispatch_id, submitted, wrpt.expected, wrpt.last_observed,
+                         (unsigned)*marker2_word, M19_WRAP_MARKER2_SENTINEL,
+                         (unsigned)world.m16.rm.put, ring_cap,
+                         (unsigned)world.channel_generation, (unsigned)world.channel_reconstructions,
+                         (unsigned long long)wrpt.elapsed_ns,
+                         (unsigned long long)(wrpt.last_progress_ns - wrpt.start_ns),
+                         (unsigned long long)wrpt.progress_count, (unsigned long long)wrpt.polls);
+                m19_wrap_exit("completion_timeout", detail);
+                omega_world_destroy(&world);
+                return false;
+            }
+            uint64_t spent_ms = wrpt.elapsed_ns / 1000000ull;
+            budget_ms = spent_ms < budget_ms ? budget_ms - (uint32_t)spent_ms : 1u;
         }
         /* Only now are this batch's pushbuffer slots safe to reuse. */
         nvrm_retire(&world.m16.rm, dispatch_id);
@@ -2005,29 +2069,108 @@ static bool test_lc_revoke_waits_for_queued_job(void) {
     return ok;
 }
 
+/* CHIPWAIT-1c diagnostics: one tagged stderr line per silent failure exit.
+ * Reads already-computed values only. */
+#define LC_DIAG(gate, tag, rc, fmt, ...) \
+    fprintf(stderr, "GATE_DIAG gate=%s exit=%s rc=%d " fmt "\n", gate, tag, (int)(rc), __VA_ARGS__)
+
 /* A drain failure latches the world; nothing already committed is committed
  * again, and recovery clears the latch. */
 static bool test_lc_error_latch_counts_once(void) {
     OmegaAcceleratorWorld world;
-    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    int rc = omega_world_init(&world);
+    if (rc != OMEGA_WORLD_OK) {
+        LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "init_failed", rc, "x=%d", 0);
+        return false;
+    }
     OmegaHandle code, a, b, c;
     bool ok = lc_setup(&world, &code, &a, &b, &c);
-    for (uint32_t i = 0; ok && i < 3; i++) ok = lc_submit_release(&world, i, i + 1, &code, &a, &b, &c) == OMEGA_WORLD_OK;
-    ok = ok && omega_world_ring(&world) == OMEGA_WORLD_OK &&
-         omega_world_drain(&world, 3, 5000) == 3 && world.total_dispatches == 3;
+    if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "setup_failed", -1, "world_faulted=%d total_dispatches=%llu", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    for (uint32_t i = 0; ok && i < 3; i++) {
+        rc = lc_submit_release(&world, i, i + 1, &code, &a, &b, &c);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "submit_initial_failed", rc, "i=%u world_faulted=%d total_dispatches=%llu", (unsigned)i, (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        rc = omega_world_ring(&world);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "ring_initial_failed", rc, "world_faulted=%d total_dispatches=%llu", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        rc = omega_world_drain(&world, 3, 5000);
+        ok = rc == 3;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "drain_initial_failed", rc, "world_faulted=%d total_dispatches=%llu (want drain 3)", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        ok = world.total_dispatches == 3;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "total_dispatches_after_initial", -1, "world_faulted=%d total_dispatches=%llu (want 3)", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
     uint64_t seq_before = world.sequence_number;
     /* Payload 4 completes, but the drain waits for payload 100: timeout. */
-    ok = ok && lc_submit_release(&world, 3, 4, &code, &a, &b, &c) == OMEGA_WORLD_OK &&
-         omega_world_ring(&world) == OMEGA_WORLD_OK &&
-         omega_world_drain(&world, 100, 200) == OMEGA_WORLD_ERR_HARDWARE && world.faulted;
-    ok = ok && lc_submit_release(&world, 4, 5, &code, &a, &b, &c) == OMEGA_WORLD_ERR_FAULTED &&
-         omega_world_drain(&world, 4, 100) == OMEGA_WORLD_ERR_FAULTED &&
-         omega_world_ring(&world) == OMEGA_WORLD_ERR_FAULTED;
-    ok = ok && world.total_dispatches == 3 && world.sequence_number == seq_before;
-    ok = ok && omega_world_recover_channel_fault(&world) == OMEGA_WORLD_OK && !world.faulted &&
-         world.in_flight_count == 0 && world.abandoned_dispatches == 1 &&
-         omega_world_drain(&world, 4, 100) == 0 && world.total_dispatches == 3;
-    ok = ok && lc_vecadd_ok(&world, &code) && world.total_dispatches == 4;
+    if (ok) {
+        rc = lc_submit_release(&world, 3, 4, &code, &a, &b, &c);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "submit_timeout_job_failed", rc, "world_faulted=%d total_dispatches=%llu", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        rc = omega_world_ring(&world);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "ring_timeout_job_failed", rc, "world_faulted=%d total_dispatches=%llu", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        rc = omega_world_drain(&world, 100, 200);
+        ok = rc == OMEGA_WORLD_ERR_HARDWARE;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "drain_timeout_not_hardware_err", rc, "world_faulted=%d total_dispatches=%llu (want ERR_HARDWARE=%d)", (int)world.faulted, (unsigned long long)world.total_dispatches, (int)OMEGA_WORLD_ERR_HARDWARE); }
+    }
+    if (ok) {
+        ok = world.faulted;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "not_faulted_after_timeout", -1, "world_faulted=%d total_dispatches=%llu", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        rc = lc_submit_release(&world, 4, 5, &code, &a, &b, &c);
+        ok = rc == OMEGA_WORLD_ERR_FAULTED;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "submit_while_faulted_not_refused", rc, "world_faulted=%d total_dispatches=%llu (want ERR_FAULTED=%d)", (int)world.faulted, (unsigned long long)world.total_dispatches, (int)OMEGA_WORLD_ERR_FAULTED); }
+    }
+    if (ok) {
+        rc = omega_world_drain(&world, 4, 100);
+        ok = rc == OMEGA_WORLD_ERR_FAULTED;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "drain_while_faulted_not_refused", rc, "world_faulted=%d total_dispatches=%llu (want ERR_FAULTED=%d)", (int)world.faulted, (unsigned long long)world.total_dispatches, (int)OMEGA_WORLD_ERR_FAULTED); }
+    }
+    if (ok) {
+        rc = omega_world_ring(&world);
+        ok = rc == OMEGA_WORLD_ERR_FAULTED;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "ring_while_faulted_not_refused", rc, "world_faulted=%d total_dispatches=%llu (want ERR_FAULTED=%d)", (int)world.faulted, (unsigned long long)world.total_dispatches, (int)OMEGA_WORLD_ERR_FAULTED); }
+    }
+    if (ok) {
+        ok = world.total_dispatches == 3 && world.sequence_number == seq_before;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "counts_moved_while_faulted", -1, "world_faulted=%d total_dispatches=%llu (want 3) seq=%llu seq_before=%llu", (int)world.faulted, (unsigned long long)world.total_dispatches, (unsigned long long)world.sequence_number, (unsigned long long)seq_before); }
+    }
+    if (ok) {
+        rc = omega_world_recover_channel_fault(&world);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "recover_failed", rc, "world_faulted=%d total_dispatches=%llu", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        ok = !world.faulted && world.in_flight_count == 0 && world.abandoned_dispatches == 1;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "post_recover_state_bad", -1, "world_faulted=%d total_dispatches=%llu in_flight=%llu(want 0) abandoned=%llu(want 1)", (int)world.faulted, (unsigned long long)world.total_dispatches, (unsigned long long)world.in_flight_count, (unsigned long long)world.abandoned_dispatches); }
+    }
+    if (ok) {
+        rc = omega_world_drain(&world, 4, 100);
+        ok = rc == 0;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "drain_after_recover_nonzero", rc, "world_faulted=%d total_dispatches=%llu (want drain 0)", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        ok = world.total_dispatches == 3;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "total_dispatches_after_recover", -1, "world_faulted=%d total_dispatches=%llu (want 3)", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        ok = lc_vecadd_ok(&world, &code);
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "vecadd_after_recover_failed", -1, "world_faulted=%d total_dispatches=%llu", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        ok = world.total_dispatches == 4;
+        if (!ok) { LC_DIAG("WORLD_ERROR_LATCH_COUNTS_ONCE", "total_dispatches_final", -1, "world_faulted=%d total_dispatches=%llu (want 4)", (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
     omega_world_destroy(&world);
     return ok;
 }
@@ -2155,16 +2298,33 @@ static bool test_lc_stale_generation_marker(void) {
 
 static bool lc_provenance_run(uint8_t mutation, uint8_t digest[32]) {
     OmegaAcceleratorWorld world;
-    if (omega_world_init(&world) != OMEGA_WORLD_OK) return false;
+    int rc = omega_world_init(&world);
+    if (rc != OMEGA_WORLD_OK) {
+        LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "init_failed", rc, "mutation=0x%02x x=%d", (unsigned)mutation, 0);
+        return false;
+    }
     OmegaHandle code, a, b, c1, c2;
-    bool ok = lc_setup(&world, &code, &a, &b, &c1) &&
-              omega_world_register_buffer(&world, 256,
-                  OMEGA_PERM_READ | OMEGA_PERM_WRITE, &c2) == OMEGA_WORLD_OK;
+    bool ok = lc_setup(&world, &code, &a, &b, &c1);
+    if (!ok) { LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "setup_failed", -1, "mutation=0x%02x faulted=%d total_dispatches=%llu", (unsigned)mutation, (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    if (ok) {
+        rc = omega_world_register_buffer(&world, 256,
+                  OMEGA_PERM_READ | OMEGA_PERM_WRITE, &c2);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "register_c2_failed", rc, "mutation=0x%02x faulted=%d total_dispatches=%llu", (unsigned)mutation, (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
     void *p1 = NULL, *p2 = NULL;
-    ok = ok && omega_world_resolve_buffer(&world, &c1, OMEGA_PERM_WRITE,
-                  0, 256, &p1, NULL) == OMEGA_WORLD_OK &&
-              omega_world_resolve_buffer(&world, &c2, OMEGA_PERM_WRITE,
-                  0, 256, &p2, NULL) == OMEGA_WORLD_OK;
+    if (ok) {
+        rc = omega_world_resolve_buffer(&world, &c1, OMEGA_PERM_WRITE,
+                  0, 256, &p1, NULL);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "resolve_c1_failed", rc, "mutation=0x%02x faulted=%d total_dispatches=%llu", (unsigned)mutation, (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        rc = omega_world_resolve_buffer(&world, &c2, OMEGA_PERM_WRITE,
+                  0, 256, &p2, NULL);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "resolve_c2_failed", rc, "mutation=0x%02x faulted=%d total_dispatches=%llu", (unsigned)mutation, (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
     if (ok) { memset(p1, 0x11, 256); memset(p2, 0x22, 256); }
     const uint32_t semantic[5] = {7, 0, 0, 0, 0};
     for (uint32_t i = 0; ok && i < 2; i++) {
@@ -2182,12 +2342,30 @@ static bool lc_provenance_run(uint8_t mutation, uint8_t digest[32]) {
         OmegaWorldSubmission sub;
         m19_make_submission(&sub, semantic, &code, &a, &b, i ? &c2 : &c1,
                             256, 256, 256, i + 1);
-        ok = omega_world_submit(&world, &world.m16.pb_mem, off, len, &sub) == OMEGA_WORLD_OK;
+        rc = omega_world_submit(&world, &world.m16.pb_mem, off, len, &sub);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "submit_failed", rc, "mutation=0x%02x i=%u faulted=%d total_dispatches=%llu", (unsigned)mutation, (unsigned)i, (int)world.faulted, (unsigned long long)world.total_dispatches); }
     }
-    ok = ok && omega_world_ring(&world) == OMEGA_WORLD_OK &&
-         omega_world_drain(&world, 1, 5000) == 1;
+    if (ok) {
+        rc = omega_world_ring(&world);
+        ok = rc == OMEGA_WORLD_OK;
+        if (!ok) { LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "ring_failed", rc, "mutation=0x%02x faulted=%d total_dispatches=%llu", (unsigned)mutation, (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        rc = omega_world_drain(&world, 1, 5000);
+        ok = rc == 1;
+        if (!ok) { LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "drain1_failed", rc, "mutation=0x%02x faulted=%d total_dispatches=%llu (want drain 1)", (unsigned)mutation, (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
     if (ok) memset(p1, mutation, 256);
-    ok = ok && omega_world_drain(&world, 2, 5000) == 1 && world.total_dispatches == 2;
+    if (ok) {
+        rc = omega_world_drain(&world, 2, 5000);
+        ok = rc == 1;
+        if (!ok) { LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "drain2_failed", rc, "mutation=0x%02x faulted=%d total_dispatches=%llu (want drain 1)", (unsigned)mutation, (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
+    if (ok) {
+        ok = world.total_dispatches == 2;
+        if (!ok) { LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "total_dispatches_not_2", -1, "mutation=0x%02x faulted=%d total_dispatches=%llu", (unsigned)mutation, (int)world.faulted, (unsigned long long)world.total_dispatches); }
+    }
     if (ok) memcpy(digest, world.rolling_state_digest, 32);
     omega_world_destroy(&world);
     return ok;
@@ -2195,8 +2373,19 @@ static bool lc_provenance_run(uint8_t mutation, uint8_t digest[32]) {
 
 static bool test_lc_batched_result_identity(void) {
     uint8_t a[32], b[32];
-    return lc_provenance_run(0x33, a) && lc_provenance_run(0x44, b) &&
-           memcmp(a, b, sizeof a) == 0;
+    if (!lc_provenance_run(0x33, a)) {
+        LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "run1_failed", -1, "mutation=0x%02x x=%d", 0x33, 0);
+        return false;
+    }
+    if (!lc_provenance_run(0x44, b)) {
+        LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "run2_failed", -1, "mutation=0x%02x x=%d", 0x44, 0);
+        return false;
+    }
+    if (memcmp(a, b, sizeof a) != 0) {
+        LC_DIAG("WORLD_BATCHED_RESULT_IDENTITY", "digest_mismatch", -1, "digest_a=%02x%02x%02x%02x.. digest_b=%02x%02x%02x%02x..", a[0], a[1], a[2], a[3], b[0], b[1], b[2], b[3]);
+        return false;
+    }
+    return true;
 }
 
 static bool test_lc_stale_handle_after_world_restart(void) {
