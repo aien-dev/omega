@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/ans",
+  "layer": "tests/ans",
+  "purpose": "Tests 1-10 for ANS (docs/ans/INERTIAL_ALIGNMENT_SPEC_V1.md): freeze/digest, hostile reference mutation, drift growth, FIX restore, IMU limit, disagreement, refusals, promotion gate, encodings with golden digests, self-modification. Run with make test-ans (plain + ASan/UBSan)."
+}

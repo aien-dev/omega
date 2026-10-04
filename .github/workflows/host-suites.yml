@@ -21,6 +21,7 @@ name: Host suites
 #       (test-numeric-transc-full and test-m17 are listed there as skipped jobs;
 #       test-tensor and test-m16 have no Makefile target on main: NOT wired)
 #   this file : searchtrace, estimation est-tools estimation-v3 est3c-tools,
+#       ans (test-inertial-alignment: ANS Inertial Alignment v1, ARCH-0032),
 #       numeric-cpu numeric-qualify, train (M22 substrate, Lane 21),
 #       compiler (OSC-1, own path guard)
 #
@@ -57,6 +58,11 @@ on:
       - 'tests/estimation/**'
       - 'tools/estimation/**'
       - 'mk/estimation*.mk'
+      # ans (Inertial Alignment v1, ARCH-0032)
+      - 'src/ans/**'
+      - 'tests/ans/**'
+      - 'mk/ans.mk'
+      - 'docs/ans/**'
       - 'docs/estimation/EST3C_PROTOCOL_V3.md'
       - 'docs/estimation/receipts/est3c-v3/**'
       - 'evidence/R15/raw/**'
@@ -105,6 +111,16 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-estimation-v3
       - name: EST-3c v3 tools (synthetic data; no sealed run)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-est3c-tools
+
+  ans:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: ANS Inertial Alignment v1 (plain + ASan/UBSan, purity)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-inertial-alignment
 
   numeric-cpu:
     runs-on: ubuntu-24.04-arm

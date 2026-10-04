@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "src/ans",
+  "layer": "src/ans",
+  "purpose": "ANS (Alignment Navigation System), Inertial Alignment v1: frozen reference atoms, drift filter over EST-1, three sensor classes, autonomy tiers, promotion gate. Advisory only: measures and recommends, never grants, revokes or promotes (ARCH-0017 shape); the candidate never receives a mutable reference. No allocation, globals or I/O."
+}
