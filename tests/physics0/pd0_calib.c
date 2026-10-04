@@ -82,7 +82,7 @@ int pd0_calib_gather(int level, uint64_t seed, pd0_gather *out) {
     pd0_rec r;
     for (;;) {
         int64_t reset[PD0_MAX_OBS];
-        for (int v = 0; v < w.desc.n_obs; v++) reset[v] = pd0_const(&rr, w.reset_lo[v], w.reset_hi[v]);
+        for (int v = 0; v < w.desc.n_obs; v++) reset[v] = pd0_const(&rr, w.desc.reset_min[v], w.desc.reset_max[v]);
         pd0_world_reset(&w, reset, w.desc.n_obs, &r);
         if (r.status == PD0_BUDGET_EXHAUSTED) break;
         if (r.status == PD0_REFUSED_RANGE) { out->refused++; continue; }

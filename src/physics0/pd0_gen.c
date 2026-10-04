@@ -52,7 +52,7 @@ void pd0_gen_score_box(int level, int var, int extrap, int64_t *lo, int64_t *hi)
 int pd0_gen_desc(int level, pd0_desc *d) {
     memset(d, 0, sizeof *d);
     d->n_obs = 2; d->n_channels = 1;
-    pd0_gen_reset_box(level, 0, &d->reset_min, &d->reset_max); /* describe carries one pair: variable 0's box */
+    for (int v = 0; v < PD0_MAX_OBS; v++) pd0_gen_reset_box(level, v, &d->reset_min[v], &d->reset_max[v]); /* trimmed to n_obs below */
     d->episode_max_steps = PD0_EPISODE_STEPS;
     d->budget_steps = 3000; d->budget_episodes = 300;
     d->dt_micro = U(0.05);
@@ -68,6 +68,7 @@ int pd0_gen_desc(int level, pd0_desc *d) {
     case PD0_LEVEL_NULL: break; /* same interface and budget as L2 (NC-1) */
     default: return -1;
     }
+    for (int v = d->n_obs; v < PD0_MAX_OBS; v++) d->reset_min[v] = d->reset_max[v] = 0; /* unused slots stay zero (round trip) */
     return 0;
 }
 

@@ -39,7 +39,7 @@ static void t_wire(void) {
     pd0_gen_desc(PD0_L3, &d);
     uint8_t buf[PD0_DESC_MAX];
     size_t n = pd0_desc_encode(&d, buf, sizeof buf);
-    CHECK(n == 8 + 2 + 8 + 32 + 16 + 12, "desc size %zu", n);
+    CHECK(n == 8 + 2 + 8 + 32 + 16 * 4 + 12 && memcmp(buf, "PD0DESC2", 8) == 0, "desc size %zu, magic PD0DESC2", n);
     CHECK(pd0_desc_decode(buf, n, &d2) == 0 && memcmp(&d, &d2, sizeof d) == 0, "desc round trip");
     CHECK(pd0_desc_decode(buf, n - 1, &d2) != 0, "short desc refused");
     pd0_rec r, r2;
@@ -317,7 +317,7 @@ static void t_rev3(void) {
     CHECK(r.status == PD0_REFUSED_RANGE, "L4 s0 = 1.000001 refused");
     pd0_world_reset(&w4, g4, 2, &r);
     CHECK(r.status == PD0_OK, "L4 corner (-1, 1) accepted");
-    CHECK(w4.desc.reset_min == -1000000 && w4.desc.reset_max == 1000000, "L4 describe box [-1,1]");
+    CHECK(w4.desc.reset_min[0] == -1000000 && w4.desc.reset_max[1] == 1000000, "L4 describe box [-1,1]");
     /* L6 declared ranges and draw order k, w, m, q */
     const pd0_crange *t;
     CHECK(pd0_gen_const_table(PD0_L6, &t) == 4 && !strcmp(t[0].name, "k") && !strcmp(t[1].name, "w") && !strcmp(t[2].name, "m") && !strcmp(t[3].name, "q") &&
@@ -361,12 +361,57 @@ static void t_rev3(void) {
           "L6 relation: m = 3rd draw, w = 2nd, q = 4th");
 }
 
+/* PD0DESC2: per-variable reset bounds, PD0DESC1 refused, golden bytes, per-variable guard (spec amendment pending, lead drafting) */
+static void t_desc2(void) {
+    pd0_desc d, d2;
+    uint8_t buf[PD0_DESC_MAX], v1[PD0_DESC_MAX];
+    pd0_gen_desc(PD0_L0, &d);
+    size_t n = pd0_desc_encode(&d, buf, sizeof buf);
+    /* golden bytes of the L0 describe record: magic, n_obs 2, n_channels 1, dt 1.0, chan -0.1/0.1, reset_min s0 s1, reset_max s0 s1, 20, 3000, 150 */
+    static const uint8_t gold[] = {
+        'P','D','0','D','E','S','C','2', 2, 1,
+        0x40,0x42,0x0F,0,0,0,0,0,                 /* dt 1000000 */
+        0x60,0x79,0xFE,0xFF,0xFF,0xFF,0xFF,0xFF,  /* chan_min -100000 */
+        0xA0,0x86,0x01,0,0,0,0,0,                 /* chan_max 100000 */
+        0x80,0x7B,0xE1,0xFF,0xFF,0xFF,0xFF,0xFF,  /* reset_min s0 -2000000 */
+        0xC0,0xF2,0xFC,0xFF,0xFF,0xFF,0xFF,0xFF,  /* reset_min s1 -200000 */
+        0x80,0x84,0x1E,0,0,0,0,0,                 /* reset_max s0 2000000 */
+        0x40,0x0D,0x03,0,0,0,0,0,                 /* reset_max s1 200000 */
+        20,0,0,0, 0xB8,0x0B,0,0, 150,0,0,0};
+    CHECK(n == sizeof gold, "L0 describe length %zu", n);
+    CHECK(n == sizeof gold && memcmp(buf, gold, n) == 0, "L0 describe golden bytes");
+    CHECK(pd0_desc_decode(buf, n, &d2) == 0 && memcmp(&d, &d2, sizeof d) == 0 && d2.reset_min[1] == -200000 && d2.reset_max[0] == 2000000 &&
+              d2.reset_max[1] == 200000, "PD0DESC2 round trip keeps per-variable bounds");
+    /* mutation: the old magic is refused with the explicit code, and nothing is decoded */
+    memcpy(v1, buf, n);
+    v1[7] = '1';
+    memset(&d2, 0xAA, sizeof d2);
+    CHECK(pd0_desc_decode(v1, n, &d2) == PD0_DESC_REFUSED_V1, "PD0DESC1 refused with PD0_DESC_REFUSED_V1");
+    CHECK(pd0_desc_decode(v1, 8 + 2 + 8 + 16 + 16 + 12, &d2) == PD0_DESC_REFUSED_V1, "PD0DESC1 of the old length also refused");
+    buf[7] = '3';
+    CHECK(pd0_desc_decode(buf, n, &d2) == -1, "unknown magic refused");
+    buf[7] = '2';
+    CHECK(pd0_desc_decode(buf, n - 1, &d2) != 0, "short PD0DESC2 refused");
+    /* guard mutation: L0 s1 = 0.3 refused, s0 anywhere in [-2,2] accepted */
+    int64_t ok[2] = {-2000000, 200000}, ok2[2] = {2000000, -200000}, bad1[2] = {0, 300000}, bad0[2] = {2000001, 0};
+    CHECK(pd0_guard_reset_ok(&d, ok, 2) && pd0_guard_reset_ok(&d, ok2, 2), "s0 in [-2,2] with s1 in [-0.2,0.2] accepted");
+    CHECK(!pd0_guard_reset_ok(&d, bad1, 2), "s1 = 0.3 refused (per-variable violation on L0)");
+    CHECK(!pd0_guard_reset_ok(&d, bad0, 2), "s0 = 2.000001 refused");
+    /* the same through a world over the channel: the describe the learner reads carries the s1 box */
+    pd0_world w;
+    pd0_chan c = {pd0_world_chan, &w, -1, -1};
+    pd0_world_init(&w, PD0_L0, 1);
+    CHECK(pd0_chan_describe(&c, &d2) == 0 && d2.reset_min[1] == -200000 && d2.reset_max[1] == 200000 && d2.reset_max[0] == 2000000,
+          "learner-side describe shows both boxes");
+}
+
 int main(void) {
     t_wire();
     t_rules();
     t_splitmix();
     t_null_world();
     t_rev3();
+    t_desc2();
     t_repro_and_process();
     printf("checks=%lu failures=%lu\n", checks, failures);
     printf("PHYSICS0_G0: %s\n", failures ? "FAIL" : "PASS");

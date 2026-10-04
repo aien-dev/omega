@@ -35,8 +35,8 @@ const char *pd0_gen_level_name(int level);
 int pd0_gen_desc(int level, pd0_desc *d);
 /* declared constant ranges of a level in draw order; returns the count (0: none) */
 int pd0_gen_const_table(int level, const pd0_crange **t);
-/* reset box of observed variable var (spec 4 rev 3) and scoring boxes (spec 6.1 rev 3:
- * in-box = reset box, extrap = 1.5 x it); the describe record carries variable 0 only */
+/* reset box of observed variable var (spec 4 rev 3; the describe record carries all of them) and scoring boxes (spec 6.1 rev 3:
+ * in-box = reset box, extrap = 1.5 x it) */
 void pd0_gen_reset_box(int level, int var, int64_t *lo, int64_t *hi);
 void pd0_gen_score_box(int level, int var, int extrap, int64_t *lo, int64_t *hi);
 /* draw the level's constants from the "const" stream of seed; returns -1 for an invalid

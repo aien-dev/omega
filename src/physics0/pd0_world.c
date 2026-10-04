@@ -12,7 +12,6 @@ int pd0_world_init(pd0_world *w, int level, uint64_t seed) {
     memset(w, 0, sizeof *w);
     if (pd0_gen_desc(level, &w->desc) != 0 || pd0_gen_init(&w->gen, level, seed) != 0) return -1;
     w->seed = seed;
-    for (int i = 0; i < w->desc.n_obs; i++) pd0_gen_reset_box(level, i, &w->reset_lo[i], &w->reset_hi[i]);
     pd0_stream(&w->noise, seed, "noise");
     pd0_stream(&w->null, seed, "null");
     return 0;
@@ -51,7 +50,7 @@ void pd0_world_reset(pd0_world *w, const int64_t *vals, uint8_t n_vals, pd0_rec 
     w->episodes_used++;
     if (w->in_episode || w->seq) w->episode++;
     r->episode = w->episode;
-    if (!pd0_guard_reset_ok_box(w->reset_lo, w->reset_hi, w->desc.n_obs, vals, n_vals)) { /* STAND_IN guard: refused, still charged */
+    if (!pd0_guard_reset_ok(&w->desc, vals, n_vals)) { /* STAND_IN guard: refused, still charged */
         r->status = PD0_REFUSED_RANGE;
         w->in_episode = 0;
         seal(w, r);
