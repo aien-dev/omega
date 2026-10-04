@@ -7,6 +7,7 @@
 # test-physics0-learner     isolation + unit tests (plain + ASan/UBSan)
 # physics0-learner-dev      development run: levels L0..L6 + null, seeds 1..5
 # physics0-learner-evidence copy new receipts into evidence/physics0/learner/ (cp -n)
+# physics0-pd0b-run / physics0-pd0b-freeze  PD-0b harness against an external world (see the end of this file)
 ifndef PHYSICS0_LEARNER_MK
 PHYSICS0_LEARNER_MK := 1
 .PHONY: test-physics0-learner physics0-learner-dev physics0-learner-evidence p0l-isolation
@@ -54,10 +55,15 @@ $(P0L_DIR)/pd0-truth: tests/physics0/learner/pd0_truth_main.c $(P0L_TRUTH_SRCS) 
 	@mkdir -p $(P0L_DIR)
 	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -Isrc -o $@ $< $(P0L_TRUTH_SRCS) -lm
 
-test-physics0-learner: p0l-isolation $(P0L_DIR)/test_pd0_learner $(P0L_DIR)/test_pd0_learner_asan $(P0L_DIR)/pd0-learner
+$(P0L_DIR)/test_pd0_protocol_v2: tests/physics0/learner/test_pd0_protocol_v2.c $(P0L_TRUTH_SRCS) $(wildcard src/physics0/*.h)
+	@mkdir -p $(P0L_DIR)
+	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -Isrc -o $@ $< $(P0L_TRUTH_SRCS) -lm
+
+test-physics0-learner: p0l-isolation $(P0L_DIR)/test_pd0_learner $(P0L_DIR)/test_pd0_learner_asan $(P0L_DIR)/pd0-learner $(P0L_DIR)/test_pd0_protocol_v2
 	./$(P0L_DIR)/test_pd0_learner
 	./$(P0L_DIR)/test_pd0_learner_asan
-	@echo "test-physics0-learner: PASS (isolation, unit tests plain + ASan/UBSan)"
+	./$(P0L_DIR)/test_pd0_protocol_v2
+	@echo "test-physics0-learner: PASS (isolation, unit tests plain + ASan/UBSan, protocol v2 world ops)"
 
 # development run on the world process; results in $(P0L_DIR)/dev/ (one line per instance + ledger/law/json per instance)
 physics0-learner-dev: $(P0L_DIR)/pd0-harness $(P0L_DIR)/pd0-truth $(OUT_DIR)/physics0/pd0-world
@@ -71,4 +77,16 @@ physics0-learner-evidence: physics0-learner-dev test-physics0-learner
 	@mkdir -p evidence/physics0/learner
 	{ echo "receipt: PD0_LEARNER_DEV"; echo "commit: $$(git rev-parse HEAD)"; echo "date_utc: $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "levels: $(P0L_LEVELS)"; echo "seeds: $(P0L_SEEDS) (development seeds; HOLDOUT/TRIAL/REP withheld by the harness)"; echo "--- isolation"; cat $(P0L_DIR)/isolation.out; echo "--- results"; cat $(P0L_DIR)/dev/results.txt; } > $(P0L_DIR)/dev/receipt.txt
 	cp -n $(P0L_DIR)/dev/receipt.txt evidence/physics0/learner/pd0-learner-dev-$$(git rev-parse --short=12 HEAD).txt
+
+# PD-0b run harness (docs/physics0/PD0_PROTOCOL_V2.md): the frozen learner against an EXTERNAL world binary.
+# physics0-pd0b-run     PD0_WORLD_BIN=<world> PD0B_SEEDS=<file of "level_index seed", five per level>
+#                       writes one NEW receipt evidence/physics0/pd0b/PD0B_RUN-<commit>-<world sha12>.txt (never overwrites)
+# physics0-pd0b-freeze  prints the frozen-directory tree hashes, file hashes and harness digest (print only)
+.PHONY: physics0-pd0b-run physics0-pd0b-freeze
+physics0-pd0b-run: $(P0L_DIR)/pd0-harness
+	@test -n "$(PD0_WORLD_BIN)" || { echo "physics0-pd0b-run: set PD0_WORLD_BIN=<world binary>"; exit 2; }
+	@test -n "$(PD0B_SEEDS)" || { echo "physics0-pd0b-run: set PD0B_SEEDS=<seeds file>"; exit 2; }
+	sh tests/physics0/learner/pd0b_run.sh $(P0L_DIR)/pd0-harness "$(PD0_WORLD_BIN)" "$(PD0B_SEEDS)" "$(PD0B_NOTE)"
+physics0-pd0b-freeze: $(P0L_DIR)/pd0-harness
+	@sh tests/physics0/learner/pd0b_freeze.sh $(P0L_DIR)/pd0-harness
 endif
