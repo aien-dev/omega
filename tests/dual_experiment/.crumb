@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T18:11:13Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:d57833fb3f63ef6475cf25e2e16319d818a0a407b825d5b4c5cbdd3cc0e06492",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "cb7cc216147664549484fcca8e8ceadbd6f6cdbf",
+      "source_tree": "sha256:e67b406ebe17cd276a80a85cbcc604f287a544bbd855ae0e14b23d67b4bf6621"
+    }
+  },
+  "name": "dual_experiment",
+  "purpose": "Tests for the DUAL applicability experiment: determinism (same seed, byte-identical results digest), exact ledger at every step, predictor finite and bounded, shuffled and constant negative controls, pinned parameter digest. Run with make test-dual-applicability (plain + ASan/UBSan + purity).",
+  "schema_version": "1.0.0"
+}

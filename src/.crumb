@@ -91,6 +91,12 @@
           "purpose": "Directory src/crumbline. Purpose not yet described by a human."
         },
         {
+          "digest": "945ae745a338467614bee287efb628f38f53ad83e4842c1a7fbf7d0b91a8da57",
+          "last_commit": "",
+          "name": "dual_experiment",
+          "purpose": "DUAL applicability experiment library (ARCH-0031 offline evidence lane): deterministic discrete "
+        },
+        {
           "digest": "62a0884e7f075eb3c92b22fc400234a06bd8c3020fc75e55a9b0c0f0f6a26d7e",
           "last_commit": "1a147e4",
           "name": "estimation",
@@ -163,15 +169,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:342b19861dd2ee471546469278de0fa357eed3720995ee57366bbaaf75cf4f49",
-      "compiled_at": "2026-10-04T18:16:52Z",
+      "children_root": "sha256:012a29562eacfedf192c3784423554a0e6bb28432e32d1c4b36b24dd9d7884f0",
+      "compiled_at": "2026-10-04T18:38:56Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:4507760d5412654a2c14457a0a900a76a54dd99729acb54d764925bc6dad4d2b",
+      "digest": "sha256:0f3a63e432e9beed1a353d1570bc416f0bae07e99a45be15b0b885cbbedfb8ea",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 396,
-      "generated_at_commit": "41dcb768a955c1027d60d8b86d4ff6629118b9e6",
-      "source_tree": "sha256:ae9262b9e9d06668b482e95027148f7c5df9a94c6a276adaf19e02588f09c29e"
+      "files": 401,
+      "generated_at_commit": "3bebcc68321fcc876b88df129f41d6190411a926",
+      "source_tree": "sha256:e2650d5adf6e6892199cd649097d7c347bf6240a1b743c79431d744358ede5a0"
     },
     "owner_lane": "",
     "provenance": {
