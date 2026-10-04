@@ -1,0 +1,1 @@
+m19r_qualify.sh --omega-candidate 7ea5c4ad671d3edbc51999d2f0ec5ab1ec2e2cb1 --physics-candidate 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf --physics-dir ../physics --evidence-root qual-runs/chipwait-2026-10-04 --run-id run-002 
