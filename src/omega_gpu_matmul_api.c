@@ -239,6 +239,16 @@ static int launch(const CacheSlot *ks, uint64_t a_va, uint64_t b_va, uint64_t c_
     uint32_t pb[1024];
     size_t n = 0;
     memcpy(&pb[n], SETUP_WORDS, sizeof SETUP_WORDS); n += sizeof SETUP_WORDS / 4;
+    /* Invalidate the SM instruction, constant and data caches before this launch.
+     * Kernel code lives in GPU-uncached memory, but the SM instruction cache is
+     * not coherent with host writes: when a cache slot is evicted and its code
+     * address is reused for a different kernel, the chip ran stale instructions
+     * (FB1-CUT1B-f629798 sweep: 8x1024x8, 192x16x192, 512x16x64 unwritten,
+     * 128x16x512 hung, all after the eighth distinct kernel). Method and bits
+     * from NVIDIA open-gpu-doc classes/compute/clcec0.h (BLACKWELL_COMPUTE_B):
+     * NVCEC0_INVALIDATE_SHADER_CACHES 0x021c, INSTRUCTION 0:0, DATA 4:4,
+     * CONSTANT 12:12 (the 0x021c form waits for idle first). */
+    pb[n++] = nvrm_mthd(1, 0x021c, 1); pb[n++] = (1u << 0) | (1u << 4) | (1u << 12);
     /* constant bank 0: driver words then our arguments at 0x380 (inline upload, same as cut 1) */
     pb[n++] = nvrm_mthd(1, 0x0188, 2); pb[n++] = (uint32_t)(g.cbank.va >> 32); pb[n++] = (uint32_t)g.cbank.va;
     pb[n++] = nvrm_mthd(1, 0x0180, 2); pb[n++] = 0x00000380; pb[n++] = 0x00000001;
