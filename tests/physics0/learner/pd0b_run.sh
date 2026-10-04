@@ -31,9 +31,15 @@ echo "$lines" | while read -r lvl seed; do
   line=$("$H" "$W" - "$lvl" "$seed" "$WORK/out") || { echo "pd0b-run: harness failed on level $lvl seed $seed" >&2; exit 3; }
   echo "$line" >> "$WORK/results.txt"
 done
-[ "$(wc -l < "$WORK/results.txt")" -eq "$(echo "$lines" | wc -l)" ] || die "result count does not match instance count"
+grep "^PD0L " "$WORK/results.txt" > "$WORK/pd0l.txt" || true; grep "^PD0F " "$WORK/results.txt" > "$WORK/pd0f.txt" || true
+NINST=$(echo "$lines" | wc -l)
+[ "$(wc -l < "$WORK/pd0l.txt")" -eq "$NINST" ] || die "result count does not match instance count"
+VALID=VALID
+[ "$(wc -l < "$WORK/pd0f.txt")" -eq "$NINST" ] && [ "$(grep -c " valid=VALID$" "$WORK/pd0f.txt")" -eq "$NINST" ] || VALID=INVALID
 {
   echo "receipt: PD0B_RUN"
+  echo "run_validity: $VALID"
+  echo "validity_rule: VALID needs, per instance, a final accepted once, shape S* equal to the public table, an audit echoing the final hash, and every refusal counter 0"
   [ -z "$NOTE" ] || echo "note: $NOTE"
   echo "date_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "harness_commit: $HEAD_FULL"
@@ -47,11 +53,14 @@ done
   echo "$lines"
   echo "--- per instance: level seed ladder_state checker_code scorer_verdict scorer_code"
   awk '{ for (i = 1; i <= NF; i++) { split($i, kv, "="); v[kv[1]] = kv[2] }
-         printf "level=%s seed=%s state=%s code=%s score=%s score_code=%s\n", v["level"], v["seed"], v["state"], v["code"], v["score"], v["score_code"] }' "$WORK/results.txt"
+         printf "level=%s seed=%s state=%s code=%s score=%s score_code=%s\n", v["level"], v["seed"], v["state"], v["code"], v["score"], v["score_code"] }' "$WORK/pd0l.txt"
+  echo "--- per instance: final bundle hash and the world refusal counters (protocol v2 rev 2)"
+  sed "s/^PD0F //" "$WORK/pd0f.txt"
   echo "--- state count per level"
   awk '{ for (i = 1; i <= NF; i++) { split($i, kv, "="); v[kv[1]] = kv[2] } c[v["level"] " " v["state"] " score=" v["score"]]++ } END { for (k in c) printf "%s x%d\n", k, c[k] }' "$WORK/results.txt" | sort
   echo "--- raw harness lines"
-  cat "$WORK/results.txt"
+  cat "$WORK/pd0l.txt"
 } > "$WORK/receipt.txt"
 ln "$WORK/receipt.txt" "$OUT" || die "could not create $OUT without overwriting"
 echo "pd0b-run: wrote $OUT"
+[ "$VALID" = VALID ] || { echo "pd0b-run: run is INVALID (see receipt)" >&2; exit 4; }

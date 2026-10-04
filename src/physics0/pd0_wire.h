@@ -25,7 +25,8 @@
 enum { PD0_OK = 0, PD0_REFUSED_RANGE = 1, PD0_OUT_OF_BOUNDS = 2, PD0_EPISODE_END = 3, PD0_BUDGET_EXHAUSTED = 4 };
 enum { PD0_KIND_RESET = 0, PD0_KIND_STEP = 1 };
 enum { PD0_OP_DESCRIBE = 0, PD0_OP_RESET = 1, PD0_OP_STEP = 2,
-       PD0_OP_SCORE = 3, PD0_OP_SHAPE = 4 };   /* protocol v2 (docs/physics0/PD0_PROTOCOL_V2.md) */
+       PD0_OP_SCORE = 3, PD0_OP_SHAPE = 4,
+       PD0_OP_FINAL = 5, PD0_OP_AUDIT = 6 };   /* protocol v2 rev 2 (docs/physics0/PD0_PROTOCOL_V2.md) */
 
 typedef struct {
     uint8_t n_obs, n_channels;
@@ -53,6 +54,7 @@ typedef struct {
 #define PD0_REQ_MAX_V2 (3 + 8 * PD0_MAX_OBS + 9 * PD0_SCORE_STEPS_MAX)
 #define PD0_SCORE_RESP_MAX (2 + 8 * PD0_MAX_OBS * PD0_SCORE_STEPS_MAX)
 #define PD0_SHAPE_RESP_MAX 1024u
+#define PD0_AUDIT_RESP_SIZE 57u
 
 /* encode returns bytes written, 0 on bad input; decode returns 0 ok, -1 refused */
 size_t pd0_desc_encode(const pd0_desc *d, uint8_t *out, size_t cap);

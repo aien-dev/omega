@@ -55,10 +55,15 @@ $(P0L_DIR)/pd0-truth: tests/physics0/learner/pd0_truth_main.c $(P0L_TRUTH_SRCS) 
 	@mkdir -p $(P0L_DIR)
 	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -Isrc -o $@ $< $(P0L_TRUTH_SRCS) -lm
 
-test-physics0-learner: p0l-isolation $(P0L_DIR)/test_pd0_learner $(P0L_DIR)/test_pd0_learner_asan $(P0L_DIR)/pd0-learner
+$(P0L_DIR)/test_pd0_protocol_v2: tests/physics0/learner/test_pd0_protocol_v2.c $(P0L_TRUTH_SRCS) $(wildcard src/physics0/*.h)
+	@mkdir -p $(P0L_DIR)
+	$(CC) -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -Isrc -o $@ $< $(P0L_TRUTH_SRCS) -lm
+
+test-physics0-learner: p0l-isolation $(P0L_DIR)/test_pd0_learner $(P0L_DIR)/test_pd0_learner_asan $(P0L_DIR)/pd0-learner $(P0L_DIR)/test_pd0_protocol_v2
 	./$(P0L_DIR)/test_pd0_learner
 	./$(P0L_DIR)/test_pd0_learner_asan
-	@echo "test-physics0-learner: PASS (isolation, unit tests plain + ASan/UBSan)"
+	./$(P0L_DIR)/test_pd0_protocol_v2
+	@echo "test-physics0-learner: PASS (isolation, unit tests plain + ASan/UBSan, protocol v2 world ops)"
 
 # development run on the world process; results in $(P0L_DIR)/dev/ (one line per instance + ledger/law/json per instance)
 physics0-learner-dev: $(P0L_DIR)/pd0-harness $(P0L_DIR)/pd0-truth $(OUT_DIR)/physics0/pd0-world

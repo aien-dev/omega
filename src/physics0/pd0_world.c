@@ -154,6 +154,20 @@ static size_t handle_shape(const pd0_world *w, uint8_t *resp, size_t cap) {
     return (size_t)(p - resp);
 }
 
+/* audit: final gate state and refusal counters; free at all times, never counted */
+static size_t handle_audit(const pd0_world *w, uint8_t *resp, size_t cap) {
+    if (cap < PD0_AUDIT_RESP_SIZE) return 0;
+    uint8_t *p = resp;
+    memcpy(p, "PD0AUDT1", 8); p += 8;
+    *p++ = (uint8_t)(w->final_done ? 1 : 0);
+    pd0_put_u32(p, w->n_score_before_final); p += 4;
+    pd0_put_u32(p, w->n_shape_before_final); p += 4;
+    pd0_put_u32(p, w->n_play_after_final); p += 4;
+    pd0_put_u32(p, w->n_dup_final); p += 4;
+    memcpy(p, w->final_hash, PD0_HASH); p += PD0_HASH;
+    return (size_t)(p - resp);
+}
+
 size_t pd0_world_handle(pd0_world *w, const uint8_t *req, size_t len, uint8_t *resp, size_t cap) {
     if (len < 1) return 0;
     pd0_rec r;
@@ -161,6 +175,7 @@ size_t pd0_world_handle(pd0_world *w, const uint8_t *req, size_t len, uint8_t *r
     case PD0_OP_DESCRIBE:
         return len == 1 ? pd0_desc_encode(&w->desc, resp, cap) : 0;
     case PD0_OP_RESET: {
+        if (w->final_done) { w->n_play_after_final++; return 0; }
         if (len < 2) return 0;
         uint8_t n = req[1];
         if (n > PD0_MAX_OBS || len != 2 + 8u * n) return 0;
@@ -170,11 +185,22 @@ size_t pd0_world_handle(pd0_world *w, const uint8_t *req, size_t len, uint8_t *r
         return pd0_rec_encode(&r, resp, cap);
     }
     case PD0_OP_STEP:
+        if (w->final_done) { w->n_play_after_final++; return 0; }
         if (len != 10) return 0;
         pd0_world_step(w, req[1], (int64_t)pd0_get_u64(req + 2), &r);
         return pd0_rec_encode(&r, resp, cap);
-    case PD0_OP_SCORE: return handle_score(w, req, len, resp, cap);
-    case PD0_OP_SHAPE: return len == 1 ? handle_shape(w, resp, cap) : 0;
+    case PD0_OP_SCORE:
+        if (!w->final_done) { w->n_score_before_final++; return 0; }
+        return handle_score(w, req, len, resp, cap);
+    case PD0_OP_SHAPE:
+        if (!w->final_done) { w->n_shape_before_final++; return 0; }
+        return len == 1 ? handle_shape(w, resp, cap) : 0;
+    case PD0_OP_FINAL:
+        if (len != 1 + PD0_HASH || cap < 1) return 0;
+        if (w->final_done) { w->n_dup_final++; resp[0] = 1; return 1; }   /* duplicate: refused, first hash kept */
+        memcpy(w->final_hash, req + 1, PD0_HASH); w->final_done = 1; resp[0] = 0;
+        return 1;
+    case PD0_OP_AUDIT: return len == 1 ? handle_audit(w, resp, cap) : 0;
     default: return 0;
     }
 }

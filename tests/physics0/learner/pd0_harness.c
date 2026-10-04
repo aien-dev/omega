@@ -12,6 +12,7 @@
 #include "pd0_score.h"
 #include "pd0_controls.h"
 #include "pd0_rng.h"
+#include "sha256.h"
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -175,7 +176,8 @@ int main(int argc, char **argv)
     uint8_t req[128], resp[1024]; req[0] = 0; size_t rn = world_call(&R.world, req, 1, resp, sizeof resp);
     if (!rn || parse_describe(resp, rn, &R.D)) { fprintf(stderr, "world: bad describe\n"); return 3; }
     const pd0l_desc *d = &R.D.d;
-    if (truth_rel(&R)) { fprintf(stderr, "truth: bad relation\n"); return 3; }
+    if (R.ext) { static const int pub0[8] = { 2, 3, 4, 8, 4, 4, 7, 0 }; R.truth_size = R.level >= 0 && R.level < 8 ? pub0[R.level] : 0; }   /* ext mode: shape is refused until `final`, so the size bound comes from the public spec table */
+    else if (truth_rel(&R)) { fprintf(stderr, "truth: bad relation\n"); return 3; }
     /* ladder parameters: spec section 6 bounds for the level; harness knowledge, never the learner's */
     pd0_ladder_params_default(&R.P, d->n_obs, d->n_channels);
     for (int c = 0; c < d->n_channels; c++) { R.P.chan_min[c] = d->chan_min[c]; R.P.chan_max[c] = d->chan_max[c]; }
@@ -241,6 +243,20 @@ int main(int argc, char **argv)
     static uint8_t law[65536]; size_t law_len = pd0_ladder_emit_law(&rep, &R.P, law, sizeof law); int law_rc = law_len ? pd0_ladder_verify_law(&rep, &R.P, law, law_len) : -1;
     /* 5. scoring against the truth: 10 in-box + 10 extrapolation (1.5x box) episodes from the "score" stream */
     pd0_score_result S; memset(&S, 0, sizeof S); S.code = -1; const pd0_rel *scored = rep.have_candidate ? &rep.candidate : best ? &best->rel : NULL; int n_score_eps = 0;
+    /* 5a. external world (protocol v2 rev 2): the learner has submitted to the checker; bind the final relation bundle with `final`,
+     * and only then ask for shape and score. The bundle is the emitted PDLAW1 record, else the candidate bytes, else nothing. */
+    uint8_t fhash[PD0_HASH]; int fin_status = -1, fin_ok = 1; uint32_t cnt[4] = { 0, 0, 0, 0 }; int audit_ok = 0;
+    if (R.ext) {
+        static uint8_t cb[16384]; const uint8_t *fb = law; size_t fn = law_len;
+        if (!fn && scored) { fn = pd0_rel_write(scored, cb, sizeof cb); fb = cb; }
+        sha256_hash(fb, fn, fhash);
+        uint8_t fq[1 + PD0_HASH], fr[16]; fq[0] = 5; memcpy(fq + 1, fhash, PD0_HASH);
+        size_t frn = world_call(&R.world, fq, sizeof fq, fr, sizeof fr); fin_status = frn == 1 ? fr[0] : -1; if (fin_status != 0) fin_ok = 0;
+        if (fin_ok && ext_rel(&R)) { fprintf(stderr, "world: bad shape after final\n"); fin_ok = 0; }
+        static const int pub_s[8] = { 2, 3, 4, 8, 4, 4, 7, 0 };   /* S* per level, public spec table (6.2); shape must agree */
+        if (fin_ok && R.level >= 0 && R.level < 8 && R.truth_size != pub_s[R.level]) { fprintf(stderr, "world: shape S* %d differs from the public table %d\n", R.truth_size, pub_s[R.level]); fin_ok = 0; }
+        if (!fin_ok) R.have_truth = 0;
+    }
     if (scored && R.have_truth && R.level >= 0) {
         static pd0_score_episode eps[20]; pd0_rng g; pd0_rng_stream(&g, R.seed + 500, "score"); pd0l_desc box = *d;
         for (int i = 0; i < 20 && n_score_eps < 20; ) { pd0_score_episode *e = &eps[n_score_eps]; memset(e, 0, sizeof *e); e->in_box = i < 10;
@@ -268,6 +284,14 @@ int main(int argc, char **argv)
            csize, cbits, R.P.size_bound, (long long)(best ? best->fit_nrmse_micro : -1), (long long)(best ? best->select_nrmse_micro : -1), hidden,
            !scored ? "NO_CANDIDATE" : S.code == 0 ? "PASS" : S.code < 0 ? "NOT_SCORED" : "FAIL", S.code, S.fail_mask, (long long)S.inbox_nrmse, (long long)S.extrap_nrmse, (long long)S.onestep_nrmse, (long long)S.ref_nrmse, n_score_eps, law_rc, checker_rc,
            R.n_oob, R.n_refused, R.n_budget, R.n_propose_fail, R.n_trial_random, R.n_void_ep, R.n_void_batch);
+    if (R.ext) {   /* audit: the world's own account of the final gate; a valid instance has every refusal counter at 0 */
+        uint8_t aq[1] = { 6 }, ar[128]; size_t arn = world_call(&R.world, aq, 1, ar, sizeof ar); char hx[2 * PD0_HASH + 1]; int valid = 0;
+        for (int i = 0; i < PD0_HASH; i++) snprintf(hx + 2 * i, 3, "%02x", fhash[i]);
+        if (arn == 57 && !memcmp(ar, "PD0AUDT1", 8)) { audit_ok = 1; for (int i = 0; i < 4; i++) cnt[i] = pd0_get_u32(ar + 9 + 4 * i); audit_ok = ar[8] == 1 && !memcmp(ar + 25, fhash, PD0_HASH); }
+        valid = fin_ok && audit_ok && !cnt[0] && !cnt[1] && !cnt[2] && !cnt[3];
+        printf("PD0F level=%s seed=%llu final=%s final_status=%d score_before_final=%u shape_before_final=%u play_after_final=%u dup_final=%u audit_ok=%d valid=%s\n",
+               lvl_name(R.level), (unsigned long long)R.seed, hx, fin_status, cnt[0], cnt[1], cnt[2], cnt[3], audit_ok, valid ? "VALID" : "INVALID");
+    }
     if (!R.ext) { fprintf(R.truth.wr, "quit\n"); fflush(R.truth.wr); fclose(R.truth.wr); }
     fclose(R.world.wr); waitpid(R.world.pid, NULL, 0); if (!R.ext) waitpid(R.truth.pid, NULL, 0);
     pd0_learner_free(R.L); free(R.ledger); free(R.recs); free(R.fit);

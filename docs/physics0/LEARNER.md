@@ -145,7 +145,7 @@ binary over protocol v2; no `pd0-truth` process. Protocol: `docs/physics0/PD0_PR
 - `make physics0-pd0b-run PD0_WORLD_BIN=<world> PD0B_SEEDS=<file>`: seeds file has lines
   `level_index seed` (0..6 or `null`), exactly five per level listed. Runs the real ladder
   checker and scorer, writes one new receipt `evidence/physics0/pd0b/PD0B_RUN-<commit>-<world sha12>.txt`
-  and refuses to overwrite. A dirty worktree is refused.
+  and refuses to overwrite. A dirty worktree is refused. Revision 2: the harness sends `final` before it asks for shape or score; the receipt records the final hash and the world's refusal counters per instance and says VALID or INVALID.
 - `make physics0-pd0b-freeze`: prints the git tree hash of the four frozen directories, the
   sha256 of every file under them and of the harness binary (print only).
 

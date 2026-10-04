@@ -45,6 +45,10 @@ typedef struct {
     uint32_t step_in_episode, episodes_used, steps_used, episode;
     uint64_t seq;
     uint8_t last_hash[PD0_HASH];
+    /* protocol v2 rev 2: final gate and refusal counters */
+    int final_done;
+    uint8_t final_hash[PD0_HASH];
+    uint32_t n_score_before_final, n_shape_before_final, n_play_after_final, n_dup_final;
 } pd0_world;
 
 int  pd0_world_init(pd0_world *w, int level, uint64_t seed);
