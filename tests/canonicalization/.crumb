@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/canonicalization",
-  "layer": "tests/canonicalization",
-  "purpose": "Directory tests/canonicalization. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/canonicalization. Purpose not yet described by a human.",
-      "files": [
-        "run_canon_tests.sh"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:1cbe9561b87b394e200f67996ce1407c377025d07ad033b27cdd542625e277d4",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:798a30b52e830708c06c9fc5c4c30835180374d43b05126ae38cc0aca53d652c"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "30bb116",
-          "timestamp": "2026-09-26T02:47:10-05:00",
           "author": "Drake Stapleton",
+          "pr": 1,
+          "sha": "30bb116",
+          "source": "backfill-git",
           "subject": "feat(omega): Milestone 4 — OMEGA_SEMANTICS canonical semantic substrate and qualification (#1, #2, #3, #4)",
-          "pr": 1
+          "timestamp": "2026-09-26T02:47:10-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "run_canon_tests.sh"
+      ],
+      "purpose_auto": "Directory tests/canonicalization. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/canonicalization",
+  "name": "tests/canonicalization",
+  "purpose": "Directory tests/canonicalization. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

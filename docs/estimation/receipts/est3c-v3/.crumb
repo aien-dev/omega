@@ -1,59 +1,71 @@
 {
-  "schema_version": "1.0.0",
-  "name": "docs/estimation/receipts/est3c-v3",
-  "layer": "docs/estimation/receipts/est3c-v3",
-  "purpose": "Directory docs/estimation/receipts/est3c-v3. Purpose not yet described by a human.",
   "above": {
     "name": "docs/estimation",
     "path": "../.."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory docs/estimation/receipts/est3c-v3. Purpose not yet described by a human.",
-      "files": [
-        "RESULT.md",
-        "params.txt"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:fbbca721bf11b2fcf5727fab4d703c908e8b6835bce7c749645f0af42db15da9",
+      "evidence_files": 2,
+      "evidence_root": "sha256:3124ef02710af3ad82e7cf514994dbcdd687cbf5a9d7940a80845e096b893c92",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:442bf9fc7c906dc30d35f900b8a7da2830201adb23ff0beb8fc833f3c0348a44"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "d78fd11",
-          "timestamp": "2026-09-30T23:43:21-05:00",
           "author": "aien-dev",
+          "pr": 129,
+          "sha": "d78fd11",
+          "source": "backfill-git",
           "subject": "Merge pull request #129 from aien-dev/feat/est-v3",
-          "pr": 129
+          "timestamp": "2026-09-30T23:43:21-05:00"
         },
         {
-          "source": "backfill-lane-report",
           "lane": "lane23",
-          "sha": "d78fd11",
-          "pr": 129,
           "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
-          "ref": "2026-10-01-push-lane23-report.md"
+          "pr": 129,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "d78fd11",
+          "source": "backfill-lane-report"
         },
         {
-          "source": "backfill-lane-report",
           "lane": "lane4",
-          "sha": "d78fd11",
-          "pr": 129,
           "note": "omega #129: MERGED d78fd11 (merge commit, so 93b3579 stays in history).",
-          "ref": "2026-10-01-push-lane4-report.md"
+          "pr": 129,
+          "ref": "2026-10-01-push-lane4-report.md",
+          "sha": "d78fd11",
+          "source": "backfill-lane-report"
         },
         {
-          "source": "backfill-lane-report",
           "lane": "lane4",
-          "sha": "d78fd11",
-          "pr": 129,
           "note": "~08:40Z Lane 4 DONE: EST v3 PHASE_A_FAIL recorded, omega#129 d78fd11, arch#80 ac83f0d; finding: 10-step variance ratio 2.137 (thermal ramp persists), F5 closest; EST-4/5 blocked. Launching Lane 15 (v",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
+          "pr": 129,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "d78fd11",
+          "source": "backfill-lane-report"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "RESULT.md",
+        "params.txt"
+      ],
+      "purpose_auto": "Directory docs/estimation/receipts/est3c-v3. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "docs/estimation/receipts/est3c-v3",
+  "name": "docs/estimation/receipts/est3c-v3",
+  "purpose": "Directory docs/estimation/receipts/est3c-v3. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

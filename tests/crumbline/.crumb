@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/crumbline",
-  "layer": "tests/crumbline",
-  "purpose": "Directory tests/crumbline. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
@@ -14,27 +10,50 @@
     }
   ],
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/crumbline. Purpose not yet described by a human.",
-      "files": [
-        "run_conformance.sh"
-      ]
+    "generated": {
+      "children": [
+        {
+          "digest": "20dbb5467962a441371fc9d8837f55d50d1bf1619e7efb145f4d889a92c8928f",
+          "last_commit": "b4547c5",
+          "name": "vectors",
+          "purpose": "Directory tests/crumbline/vectors. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:50d177d216a08bf0155d95023bea7fa07bc2ece2b326dbeea327244c0765b3bd",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:95b2041562face1ba7baa6c57456bf07d77a0f44e093b989ec18f559064e22d9",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 300,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:5b2798072ee5fd4e34ffdae9a7991410fe2ff3475ce78908248aba74c2c2b98c"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "b4547c5",
-          "timestamp": "2026-09-27T12:07:03-05:00",
           "author": "aien-dev",
+          "pr": 34,
+          "sha": "b4547c5",
+          "source": "backfill-git",
           "subject": "feat(crumbline): Omega learner adapter for Crumb v1 (#34)",
-          "pr": 34
+          "timestamp": "2026-09-27T12:07:03-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "run_conformance.sh"
+      ],
+      "purpose_auto": "Directory tests/crumbline. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/crumbline",
+  "name": "tests/crumbline",
+  "purpose": "Directory tests/crumbline. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

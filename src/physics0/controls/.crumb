@@ -1,5 +1,19 @@
 {
-  "schema_version": "1.0.0",
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:66209b2667bbc2c74e507f89819a0370152e8ef212d4469510d90d3a61690ae0",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 4,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:df398f52599989bb6b31a15de07fadb165ca4c64c64b400cc67995243497a8d1"
+    }
+  },
   "name": "controls",
-  "purpose": "PD-0 controls: see docs on physics main"
+  "purpose": "PD-0 controls: see docs on physics main",
+  "schema_version": "1.0.0"
 }

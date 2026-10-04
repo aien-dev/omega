@@ -1,11 +1,25 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/autodiff",
-  "layer": "src/autodiff",
-  "purpose": "M21 OMEGA_AUTODIFF: reverse-mode tape over M20 tensor CPU ops, caller-owned nodes and scratch, per-op error contract, flat float32 gradients for M22 (not qualified)",
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:5b110f4a6136ebd3d6703590962b7beed9f8cec034c2d12944b1590434e3c747",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:503c367a59697747371660bf68617df2fc9d52ac72628ec36f97e8b8446a0750"
+    }
+  },
   "invariants": [
     "never edit src/tensor or src/train from here; tensor API needs are filed as change requests in docs/autodiff/M21_OMEGA_AUTODIFF.md",
     "no heap allocation and no global state in src/autodiff",
     "every MUT: marker must stay in tools/autodiff_mutations.sh"
-  ]
+  ],
+  "layer": "src/autodiff",
+  "name": "src/autodiff",
+  "purpose": "M21 OMEGA_AUTODIFF: reverse-mode tape over M20 tensor CPU ops, caller-owned nodes and scratch, per-op error contract, flat float32 gradients for M22 (not qualified)",
+  "schema_version": "1.0.0"
 }

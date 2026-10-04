@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/realize",
-  "layer": "tests/realize",
-  "purpose": "Directory tests/realize. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/realize. Purpose not yet described by a human.",
-      "files": [
-        "test_program_realize.c"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:9106f2ea57e8f453322f0a988b61cfcbd06631573c9ff32a777903d27d7741e1",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:5a2a7421b6ae20f7917678970707997e7b9994b83a73889fce9ae79b7fe807bf"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "f7f60dd",
-          "timestamp": "2026-09-29T16:21:48-05:00",
           "author": "aien-dev",
+          "pr": 81,
+          "sha": "f7f60dd",
+          "source": "backfill-git",
           "subject": "Merge pull request #81 from aien-dev/feat/program-realize",
-          "pr": 81
+          "timestamp": "2026-09-29T16:21:48-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "test_program_realize.c"
+      ],
+      "purpose_auto": "Directory tests/realize. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/realize",
+  "name": "tests/realize",
+  "purpose": "Directory tests/realize. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

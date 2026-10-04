@@ -1,44 +1,56 @@
 {
-  "schema_version": "1.0.0",
-  "name": "docs/turing/protocols",
-  "layer": "docs/turing/protocols",
-  "purpose": "Directory docs/turing/protocols. Purpose not yet described by a human.",
   "above": {
     "name": "docs/turing",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:b89d63e1e54100fab00e608e20b7c0de1497d64dcd28e2580046b9235b1d2782",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 5,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:4fd4d02a42a06d444cff92912e31f4c536803fae521e6a8f769a73fad0621eb3"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "Aien",
+          "sha": "2d52219",
+          "source": "backfill-git",
+          "subject": "docs(turing): calibration protocol references public paper Version 1.0",
+          "timestamp": "2026-09-29T18:10:40-05:00"
+        },
+        {
+          "author": "Aien",
+          "sha": "737f8b3",
+          "source": "backfill-git",
+          "subject": "docs(turing): publish Turing calibration and laboratory execution protocols v1.0",
+          "timestamp": "2026-09-29T17:53:45-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 2
+    },
     "seed": {
-      "purpose_auto": "Directory docs/turing/protocols. Purpose not yet described by a human.",
       "files": [
         "README.md",
         "turing-instrument-calibration-validation-protocol-v1-0.pdf",
         "turing-instrument-calibration-validation-protocol-v1-0.tex",
         "turing-laboratory-execution-protocol-v1-0.pdf",
         "turing-laboratory-execution-protocol-v1-0.tex"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 2,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "2d52219",
-          "timestamp": "2026-09-29T18:10:40-05:00",
-          "author": "Aien",
-          "subject": "docs(turing): calibration protocol references public paper Version 1.0"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "737f8b3",
-          "timestamp": "2026-09-29T17:53:45-05:00",
-          "author": "Aien",
-          "subject": "docs(turing): publish Turing calibration and laboratory execution protocols v1.0"
-        }
-      ]
+      ],
+      "purpose_auto": "Directory docs/turing/protocols. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "docs/turing/protocols",
+  "name": "docs/turing/protocols",
+  "purpose": "Directory docs/turing/protocols. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

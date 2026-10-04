@@ -1,38 +1,50 @@
 {
-  "schema_version": "1.0.0",
-  "name": "docs/polyglot",
-  "layer": "docs/polyglot",
-  "purpose": "Directory docs/polyglot. Purpose not yet described by a human.",
   "above": {
     "name": "docs",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:0d858e0a20456e8380c530e4c77f523985f95657bf66b7418f341e84c6e9ec49",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 5,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:02ec07a0b2364c76cdc49255857eda521fecbda51a63cc7fc1aad6eac4ab11c0"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 80,
+          "sha": "87938dc",
+          "source": "backfill-git",
+          "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
+          "timestamp": "2026-09-29T14:16:52-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory docs/polyglot. Purpose not yet described by a human.",
       "files": [
         "OMEGA_LANGUAGE_EVIDENCE_LEDGER.md",
         "OMEGA_POLYGLOT_CURRENT_STATE.md",
         "POLYGLOT_AGENT_OWNERSHIP.md",
         "evidence-rust-vs-c-capability.md",
         "review-polyglot-0.md"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "87938dc",
-          "timestamp": "2026-09-29T14:16:52-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
-          "pr": 80
-        }
-      ]
+      ],
+      "purpose_auto": "Directory docs/polyglot. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "docs/polyglot",
+  "name": "docs/polyglot",
+  "purpose": "Directory docs/polyglot. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

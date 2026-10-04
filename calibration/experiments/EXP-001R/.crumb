@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "calibration/experiments/EXP-001R",
-  "layer": "calibration/experiments/EXP-001R",
-  "purpose": "Directory calibration/experiments/EXP-001R. Purpose not yet described by a human.",
   "above": {
     "name": "calibration",
     "path": "../.."
@@ -30,8 +26,82 @@
     }
   ],
   "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "02b7e986a0ed4ab8bb9c38c8f3c6e67dfbcf0ff31f32f7e228e72ceae27467ff",
+          "last_commit": "190ff89",
+          "name": "ans",
+          "purpose": "Directory calibration/experiments/EXP-001R/ans. Purpose not yet described by a human."
+        },
+        {
+          "digest": "8d648a7eedc8c571db7218ea3c1f6244a6cbb13bdb26170911c3963d0ae9570b",
+          "last_commit": "190ff89",
+          "name": "arithmetic",
+          "purpose": "Directory calibration/experiments/EXP-001R/arithmetic. Purpose not yet described by a human."
+        },
+        {
+          "digest": "dffbbefb2e2e84bdd29b3f022e772d656cca8b44fd42749f0785f5316a772e35",
+          "last_commit": "190ff89",
+          "name": "decoder_receipts",
+          "purpose": "Directory calibration/experiments/EXP-001R/decoder_receipts. Purpose not yet described by a huma"
+        },
+        {
+          "digest": "ae01c8b822204585f5a9a37875b87774c73591c810a4be32f325a44c96450628",
+          "last_commit": "190ff89",
+          "name": "encoded_artifacts",
+          "purpose": "Directory calibration/experiments/EXP-001R/encoded_artifacts. Purpose not yet described by a hum"
+        },
+        {
+          "digest": "56199804e563624a8f636d5c10b84912b550d0fd9953894733c6b06daa9adbee",
+          "last_commit": "190ff89",
+          "name": "probability_streams",
+          "purpose": "Directory calibration/experiments/EXP-001R/probability_streams. Purpose not yet described by a h"
+        }
+      ],
+      "children_root": "sha256:78f422e7239d376fe3395044f7f909ccf5eb6040b79ad162712fdf0535dd5b1e",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:9c1f1bbe230c6ecdac42dbcaa60c5d757470499349dd7cb1124baa45be183ae8",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 60,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:f9f80f139cc9fd2fbe0928758c37060f0f52111ed6aa61a6d6ece7c1764f1216"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 99,
+          "sha": "806a9d6",
+          "source": "backfill-git",
+          "subject": "Merge pull request #99 from aien-dev/feat/turing-exp001r-publish",
+          "timestamp": "2026-09-29T23:12:32-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 98,
+          "sha": "990ba32",
+          "source": "backfill-git",
+          "subject": "Merge pull request #98 from aien-dev/feat/turing-exp001r-receipt",
+          "timestamp": "2026-09-29T23:02:07-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 97,
+          "sha": "45be6c8",
+          "source": "backfill-git",
+          "subject": "Merge pull request #97 from aien-dev/feat/turing-exp001r-freeze",
+          "timestamp": "2026-09-29T23:01:46-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 3
+    },
     "seed": {
-      "purpose_auto": "Directory calibration/experiments/EXP-001R. Purpose not yet described by a human.",
       "files": [
         "REPORT.md",
         "candidate_manifest.json",
@@ -47,39 +117,12 @@
         "scorer_independent.json",
         "scorer_primary.json",
         "uncertainty.json"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 3,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "806a9d6",
-          "timestamp": "2026-09-29T23:12:32-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #99 from aien-dev/feat/turing-exp001r-publish",
-          "pr": 99
-        },
-        {
-          "source": "backfill-git",
-          "sha": "990ba32",
-          "timestamp": "2026-09-29T23:02:07-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #98 from aien-dev/feat/turing-exp001r-receipt",
-          "pr": 98
-        },
-        {
-          "source": "backfill-git",
-          "sha": "45be6c8",
-          "timestamp": "2026-09-29T23:01:46-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #97 from aien-dev/feat/turing-exp001r-freeze",
-          "pr": 97
-        }
-      ]
+      ],
+      "purpose_auto": "Directory calibration/experiments/EXP-001R. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "calibration/experiments/EXP-001R",
+  "name": "calibration/experiments/EXP-001R",
+  "purpose": "Directory calibration/experiments/EXP-001R. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "research/m15/spbm",
-  "layer": "research/m15/spbm",
-  "purpose": "Directory research/m15/spbm. Purpose not yet described by a human.",
   "above": {
     "name": "research",
     "path": "../.."
@@ -14,8 +10,35 @@
     }
   ],
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:a73d003b1c58caf0aa3b778d7cfddb86a927b61f43c53aeb7c1cf1c2df219feb",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 128,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:fd404b80f7c31eba9b08895844a80dddd17ddeaf187cfdaab23ba326b61153f1"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 67,
+          "sha": "bba3bd3",
+          "source": "backfill-git",
+          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
+          "timestamp": "2026-09-28T22:36:09-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory research/m15/spbm. Purpose not yet described by a human.",
       "files": [
         "Makefile",
         "README.md",
@@ -27,23 +50,12 @@
         "load.c",
         "reduce.c",
         "sample.c"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "bba3bd3",
-          "timestamp": "2026-09-28T22:36:09-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
-          "pr": 67
-        }
-      ]
+      ],
+      "purpose_auto": "Directory research/m15/spbm. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "research/m15/spbm",
+  "name": "research/m15/spbm",
+  "purpose": "Directory research/m15/spbm. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

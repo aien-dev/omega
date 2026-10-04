@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/r16_inventory/fixture",
-  "layer": "tests/r16_inventory/fixture",
-  "purpose": "Directory tests/r16_inventory/fixture. Purpose not yet described by a human.",
   "above": {
     "name": "tests/r16_inventory",
     "path": ".."
@@ -30,27 +26,50 @@
     }
   ],
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/r16_inventory/fixture. Purpose not yet described by a human.",
-      "files": [
-        "map.md"
-      ]
+    "generated": {
+      "children": [
+        {
+          "digest": "9bfb0d9ca42bc56414db9d1842488e657e7163a3804e9c82c4c5a6629cf94399",
+          "last_commit": "6fdc4c3",
+          "name": "physics",
+          "purpose": "Directory tests/r16_inventory/fixture/physics. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:a7d5f146d5c99c75701c8f384732dbdf7158a8fcd7295d0c0761c1e84d2c4e9d",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:3b8ee545f13c1a168892b617671eebf2ee65413994332269f5d2f2dcf492aba7",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 8,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:be8537e95e5ed29a32f2e6267c290f8b999a1537c3dd5c7e4f691791eabb74b6"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "6fdc4c3",
-          "timestamp": "2026-09-29T11:49:54-05:00",
           "author": "aien-dev",
+          "pr": 68,
+          "sha": "6fdc4c3",
+          "source": "backfill-git",
           "subject": "R16 spec: orchestrator retirement (pre-registration) (#68)",
-          "pr": 68
+          "timestamp": "2026-09-29T11:49:54-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "map.md"
+      ],
+      "purpose_auto": "Directory tests/r16_inventory/fixture. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/r16_inventory/fixture",
+  "name": "tests/r16_inventory/fixture",
+  "purpose": "Directory tests/r16_inventory/fixture. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

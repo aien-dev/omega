@@ -1,15 +1,38 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/crumbline/vectors",
-  "layer": "tests/crumbline/vectors",
-  "purpose": "Directory tests/crumbline/vectors. Purpose not yet described by a human.",
   "above": {
     "name": "tests/crumbline",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:20dbb5467962a441371fc9d8837f55d50d1bf1619e7efb145f4d889a92c8928f",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 123,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:3eee894cc1084392a4fbcab98db42c587990fc114df67f242a074699fb4f0ac4"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 34,
+          "sha": "b4547c5",
+          "source": "backfill-git",
+          "subject": "feat(crumbline): Omega learner adapter for Crumb v1 (#34)",
+          "timestamp": "2026-09-27T12:07:03-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory tests/crumbline/vectors. Purpose not yet described by a human.",
       "files": [
         "expected.txt",
         "v001.crb",
@@ -61,23 +84,12 @@
         "v047.crb",
         "v048.crb",
         "v049.crb"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "b4547c5",
-          "timestamp": "2026-09-27T12:07:03-05:00",
-          "author": "aien-dev",
-          "subject": "feat(crumbline): Omega learner adapter for Crumb v1 (#34)",
-          "pr": 34
-        }
-      ]
+      ],
+      "purpose_auto": "Directory tests/crumbline/vectors. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/crumbline/vectors",
+  "name": "tests/crumbline/vectors",
+  "purpose": "Directory tests/crumbline/vectors. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

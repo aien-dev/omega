@@ -1,43 +1,55 @@
 {
-  "schema_version": "1.0.0",
-  "name": "calibration/preregistration",
-  "layer": "calibration/preregistration",
-  "purpose": "Directory calibration/preregistration. Purpose not yet described by a human.",
   "above": {
     "name": "calibration",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory calibration/preregistration. Purpose not yet described by a human.",
-      "files": [
-        "EXP-001.md",
-        "EXP-001R.md"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:6b36741c5f34a363b7e8cd3c29f8b3f0d43acbb3c2cddd3f5b9ebbade3f85d25",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:fd2eabd73924f2bd648c8280cb3f814bed4b560bb60a9f2d32d16f74abb28ca1"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 2,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "c7a1077",
-          "timestamp": "2026-09-29T22:58:17-05:00",
           "author": "aien-dev",
+          "pr": 96,
+          "sha": "c7a1077",
+          "source": "backfill-git",
           "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
-          "pr": 96
+          "timestamp": "2026-09-29T22:58:17-05:00"
         },
         {
-          "source": "backfill-git",
-          "sha": "81a7eee",
-          "timestamp": "2026-09-29T21:40:13-05:00",
           "author": "aien-dev",
+          "pr": 92,
+          "sha": "81a7eee",
+          "source": "backfill-git",
           "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
-          "pr": 92
+          "timestamp": "2026-09-29T21:40:13-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 2
+    },
+    "seed": {
+      "files": [
+        "EXP-001.md",
+        "EXP-001R.md"
+      ],
+      "purpose_auto": "Directory calibration/preregistration. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "calibration/preregistration",
+  "name": "calibration/preregistration",
+  "purpose": "Directory calibration/preregistration. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

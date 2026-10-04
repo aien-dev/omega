@@ -1,15 +1,38 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tools/argus",
-  "layer": "tools/argus",
-  "purpose": "Directory tools/argus. Purpose not yet described by a human.",
   "above": {
     "name": "tools",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:9cd3943087595dd868914a23a9fef7bebda3d78b773762c287ac4b7a6c2e2f40",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 9,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:fcdf766389753dd98ea505d8834977f53ed46d557de0882083f5ed26213ee575"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 70,
+          "sha": "470dcae",
+          "source": "backfill-git",
+          "subject": "Merge pull request #70: ARGUS producer v1.1 (emit on transition, use summaries), re-pinned to aienos d39dd5b",
+          "timestamp": "2026-09-29T07:33:40-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory tools/argus. Purpose not yet described by a human.",
       "files": [
         "bench_micro.sh",
         "micro_stats.sh",
@@ -20,23 +43,12 @@
         "r8_stats.sh",
         "r8_wall.sh",
         "r8_wall_ab.sh"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "470dcae",
-          "timestamp": "2026-09-29T07:33:40-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #70: ARGUS producer v1.1 (emit on transition, use summaries), re-pinned to aienos d39dd5b",
-          "pr": 70
-        }
-      ]
+      ],
+      "purpose_auto": "Directory tools/argus. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tools/argus",
+  "name": "tools/argus",
+  "purpose": "Directory tools/argus. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

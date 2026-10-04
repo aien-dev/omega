@@ -1,6 +1,33 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/physics0",
+  "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "62d7fb6a9ef393196990035afe943a384315bcd96a2e7646fe4bc2fc62706e1c",
+          "last_commit": "8a2e268",
+          "name": "learner",
+          "purpose": "Learner gates: unit tests (determinism, PDLAW1 round trip, memoriser vs compact theory, null wor"
+        },
+        {
+          "digest": "267199e8d5f72e12649a8f608abb42ab82ef85c6e3b4531ce1812f7e5e491644",
+          "last_commit": "f9a1797",
+          "name": "verify",
+          "purpose": "PD-0 verify: see docs on physics main"
+        }
+      ],
+      "children_root": "sha256:ed1db7624d62ba73dd08f4127e0162b34180e4911a743c953d3e8fc5bb634548",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:1fd5f914f326a1a51fc343ab633ac411e86bea22beee718b1460db066807f292",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 27,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:b6be6f0fbf17e7b96f303485e4d3cbe09e0e454e11a9fa2b176dd5ca5c5e3779"
+    }
+  },
   "layer": "tests",
-  "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential, isolation check."
+  "name": "tests/physics0",
+  "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential, isolation check.",
+  "schema_version": "1.0.0"
 }

@@ -1,5 +1,19 @@
 {
-  "schema_version": "1.0.0",
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:c8f1252406bb1bd1a708833a77da8b0f40bf94559ed5218b78d1eeae1f71bfc8",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:a53f4390b1c3eada28fd9691c73ee38fef4d9ea70134f0a52f8bbac03e0c43ee"
+    }
+  },
   "name": "score",
-  "purpose": "PD-0 score: see docs on physics main"
+  "purpose": "PD-0 score: see docs on physics main",
+  "schema_version": "1.0.0"
 }

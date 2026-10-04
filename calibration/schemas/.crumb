@@ -1,36 +1,48 @@
 {
-  "schema_version": "1.0.0",
-  "name": "calibration/schemas",
-  "layer": "calibration/schemas",
-  "purpose": "Directory calibration/schemas. Purpose not yet described by a human.",
   "above": {
     "name": "calibration",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:d3e110eae40e5c48b4242c0a3e3d595178cd822cc0510bdb09ce2bfc29146ba3",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 3,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:297f04af68412d74588441007c646a0a2d1db565354026ed6430b3796cdc2401"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 92,
+          "sha": "81a7eee",
+          "source": "backfill-git",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "timestamp": "2026-09-29T21:40:13-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory calibration/schemas. Purpose not yet described by a human.",
       "files": [
         "measurement_receipt.schema.json",
         "terminal_receipt.schema.json",
         "void_receipt.schema.json"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "81a7eee",
-          "timestamp": "2026-09-29T21:40:13-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
-          "pr": 92
-        }
-      ]
+      ],
+      "purpose_auto": "Directory calibration/schemas. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "calibration/schemas",
+  "name": "calibration/schemas",
+  "purpose": "Directory calibration/schemas. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

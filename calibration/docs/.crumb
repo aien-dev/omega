@@ -1,15 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "calibration/docs",
-  "layer": "calibration/docs",
-  "purpose": "Directory calibration/docs. Purpose not yet described by a human.",
   "above": {
     "name": "calibration",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:e2e9d7d77533c89d8cc919746832ad00529cb86d65c996217bc5348e521dabc7",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 9,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:cedaeda49ef76e907e0ac69cf624b9d910775f0380d96dc1d629efbb8d0b6eea"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 96,
+          "sha": "c7a1077",
+          "source": "backfill-git",
+          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
+          "timestamp": "2026-09-29T22:58:17-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 92,
+          "sha": "81a7eee",
+          "source": "backfill-git",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "timestamp": "2026-09-29T21:40:13-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 2
+    },
     "seed": {
-      "purpose_auto": "Directory calibration/docs. Purpose not yet described by a human.",
       "files": [
         "BLINDING_PROTOCOL.md",
         "CAL0_REVIEW_RESOLUTION.md",
@@ -20,31 +51,12 @@
         "MODEL_DESCRIPTION_ENCODING.md",
         "PROTOCOL_CONFORMANCE.md",
         "UNCERTAINTY_PROTOCOL.md"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 2,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "c7a1077",
-          "timestamp": "2026-09-29T22:58:17-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
-          "pr": 96
-        },
-        {
-          "source": "backfill-git",
-          "sha": "81a7eee",
-          "timestamp": "2026-09-29T21:40:13-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
-          "pr": 92
-        }
-      ]
+      ],
+      "purpose_auto": "Directory calibration/docs. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "calibration/docs",
+  "name": "calibration/docs",
+  "purpose": "Directory calibration/docs. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

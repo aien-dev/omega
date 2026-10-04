@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/program",
-  "layer": "tests/program",
-  "purpose": "Directory tests/program. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/program. Purpose not yet described by a human.",
-      "files": [
-        "test_program_id.c"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:16bea65aa50f0b3ab8b90cb286de048639fa8e635ff84e517e138c6f9f26a059",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:3379dee87c00d6b8b1f6230f2b0635176df26e16e259f89a912950e3eded3861"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "805a3a6",
-          "timestamp": "2026-09-29T07:41:31-05:00",
           "author": "aien-dev",
+          "pr": 75,
+          "sha": "805a3a6",
+          "source": "backfill-git",
           "subject": "Merge pull request #75 from aien-dev/fix/program-id-body",
-          "pr": 75
+          "timestamp": "2026-09-29T07:41:31-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "test_program_id.c"
+      ],
+      "purpose_auto": "Directory tests/program. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/program",
+  "name": "tests/program",
+  "purpose": "Directory tests/program. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/searchtrace",
-  "layer": "src/searchtrace",
-  "purpose": "Directory src/searchtrace. Purpose not yet described by a human.",
   "above": {
     "name": "src",
     "path": ".."
@@ -14,8 +10,98 @@
     }
   ],
   "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "e629b98843f5225f114577273e616609bb0b1c792d2f23ed44f00c0808e65f69",
+          "last_commit": "f3467db",
+          "name": "sig",
+          "purpose": "Directory src/searchtrace/sig. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:59f1e5326fc1e40982ba203f1dd7b7df685e36cbb575a90da42ffadb32e2a3f6",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:9f6d98a6d9b0020aa56df481a5ab3aa301533cb85173f96a851d1d779fca2d3a",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 12,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:4380f8c7c34bedd64766521bf5417462a05fe22aa257c3773d7b638c21472055"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 130,
+          "sha": "7fb59d3",
+          "source": "backfill-git",
+          "subject": "Merge pull request #130 from aien-dev/lane12/g3-commitment-sig",
+          "timestamp": "2026-10-01T00:10:19-05:00"
+        },
+        {
+          "lane": "lane12",
+          "note": "PR omega #130 MERGED, merge commit 7fb59d3 (no GitHub checks configured for these paths).",
+          "pr": 130,
+          "ref": "2026-10-01-push-lane12-report.md",
+          "sha": "7fb59d3",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane23",
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "pr": 130,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "7fb59d3",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane12",
+          "note": "~09:20Z Lane 12 DONE: aienos#189 6bcef8a (M5 migration sig, TEST keys; receipt f21f2c03… NOT_QUALIFIED pass15 blocked11 missing5 not_run0; QEMU checks ran), omega#130 7fb59d3 (G3 commitment signing",
+          "pr": 130,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "7fb59d3",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 122,
+          "sha": "ce7821d",
+          "source": "backfill-git",
+          "subject": "Merge pull request #122 from aien-dev/feat/m23-searchtrace-corpus",
+          "timestamp": "2026-09-30T22:50:18-05:00"
+        },
+        {
+          "lane": "lane2",
+          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "pr": 122,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "ce7821d",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane7",
+          "note": "omega #122, merged as ce7821d84c2d837644323f795b9f6352d670e9f7 (merge commit, so receipt commit 12b4d6e stays in history)",
+          "pr": 122,
+          "ref": "2026-10-01-push-lane7-report.md",
+          "sha": "ce7821d",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane7",
+          "note": "~05:20Z Lane 7 (M23 corpus G1 + G3 commitment format) PASS, omega#122 merged ce7821d, receipt evidence/M23/receipts/m23-corpus-ee49821…json; G3 secret salt + sealed-set storage BLOCKED_OPERATOR (Dr",
+          "pr": 122,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "ce7821d",
+          "source": "backfill-lane-report"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 2
+    },
     "seed": {
-      "purpose_auto": "Directory src/searchtrace. Purpose not yet described by a human.",
       "files": [
         "st_corpus.c",
         "st_corpus.h",
@@ -23,79 +109,12 @@
         "st_holdout.h",
         "st_hook.h",
         "st_tool.c"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 2,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "7fb59d3",
-          "timestamp": "2026-10-01T00:10:19-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #130 from aien-dev/lane12/g3-commitment-sig",
-          "pr": 130
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane12",
-          "sha": "7fb59d3",
-          "pr": 130,
-          "note": "PR omega #130 MERGED, merge commit 7fb59d3 (no GitHub checks configured for these paths).",
-          "ref": "2026-10-01-push-lane12-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane23",
-          "sha": "7fb59d3",
-          "pr": 130,
-          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
-          "ref": "2026-10-01-push-lane23-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane12",
-          "sha": "7fb59d3",
-          "pr": 130,
-          "note": "~09:20Z Lane 12 DONE: aienos#189 6bcef8a (M5 migration sig, TEST keys; receipt f21f2c03… NOT_QUALIFIED pass15 blocked11 missing5 not_run0; QEMU checks ran), omega#130 7fb59d3 (G3 commitment signing",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "ce7821d",
-          "timestamp": "2026-09-30T22:50:18-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #122 from aien-dev/feat/m23-searchtrace-corpus",
-          "pr": 122
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "ce7821d",
-          "pr": 122,
-          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
-          "ref": "2026-10-01-push-lane2-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane7",
-          "sha": "ce7821d",
-          "pr": 122,
-          "note": "omega #122, merged as ce7821d84c2d837644323f795b9f6352d670e9f7 (merge commit, so receipt commit 12b4d6e stays in history)",
-          "ref": "2026-10-01-push-lane7-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane7",
-          "sha": "ce7821d",
-          "pr": 122,
-          "note": "~05:20Z Lane 7 (M23 corpus G1 + G3 commitment format) PASS, omega#122 merged ce7821d, receipt evidence/M23/receipts/m23-corpus-ee49821…json; G3 secret salt + sealed-set storage BLOCKED_OPERATOR (Dr",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        }
-      ]
+      ],
+      "purpose_auto": "Directory src/searchtrace. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "src/searchtrace",
+  "name": "src/searchtrace",
+  "purpose": "Directory src/searchtrace. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

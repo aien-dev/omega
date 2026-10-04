@@ -1,6 +1,20 @@
 {
-  "schema_version": "1.0.0",
-  "name": "docs/autodiff",
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:e7ac2460455a35b96b01dab649dcdc2cdf5bb4657bf230b91272c64fe1bf82cf",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:0b00497d4a3d04c457930e6d37d260a4dac470d9cb2e90955878d5d184920435"
+    }
+  },
   "layer": "docs",
-  "purpose": "M21 OMEGA_AUTODIFF scope, op and error-contract table, status (not qualified)"
+  "name": "docs/autodiff",
+  "purpose": "M21 OMEGA_AUTODIFF scope, op and error-contract table, status (not qualified)",
+  "schema_version": "1.0.0"
 }

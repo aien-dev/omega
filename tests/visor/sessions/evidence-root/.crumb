@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/visor/sessions/evidence-root",
-  "layer": "tests/visor/sessions/evidence-root",
-  "purpose": "Directory tests/visor/sessions/evidence-root. Purpose not yet described by a human.",
   "above": {
     "name": "tests/visor/sessions",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/visor/sessions/evidence-root. Purpose not yet described by a human.",
-      "files": [
-        "empty.omega-session"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:9297678f87bea12624aed25eee6a8213c83315456657e170c2f4389d79b4e028",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:dc9b17e9779e12bf2a2b2509260a2818dfd2fa61966c51eb5f19a756b3b62ba7"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "193a7e7",
-          "timestamp": "2026-09-29T06:27:22-05:00",
           "author": "aien-dev",
+          "pr": 69,
+          "sha": "193a7e7",
+          "source": "backfill-git",
           "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
-          "pr": 69
+          "timestamp": "2026-09-29T06:27:22-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "empty.omega-session"
+      ],
+      "purpose_auto": "Directory tests/visor/sessions/evidence-root. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/visor/sessions/evidence-root",
+  "name": "tests/visor/sessions/evidence-root",
+  "purpose": "Directory tests/visor/sessions/evidence-root. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

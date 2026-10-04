@@ -1,15 +1,54 @@
 {
-  "schema_version": "1.0.0",
-  "name": "calibration/scripts",
-  "layer": "calibration/scripts",
-  "purpose": "Directory calibration/scripts. Purpose not yet described by a human.",
   "above": {
     "name": "calibration",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:7da9b50a75b326141d535cf9e56e31d51437da93d85bf0556e6f61720810a430",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 18,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:febb5477e664fde09fef96bcffbab9708ff231b06c0cb7536607b2ca991dc10c"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 97,
+          "sha": "45be6c8",
+          "source": "backfill-git",
+          "subject": "Merge pull request #97 from aien-dev/feat/turing-exp001r-freeze",
+          "timestamp": "2026-09-29T23:01:46-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 96,
+          "sha": "c7a1077",
+          "source": "backfill-git",
+          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
+          "timestamp": "2026-09-29T22:58:17-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 92,
+          "sha": "81a7eee",
+          "source": "backfill-git",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "timestamp": "2026-09-29T21:40:13-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 3
+    },
     "seed": {
-      "purpose_auto": "Directory calibration/scripts. Purpose not yet described by a human.",
       "files": [
         "burned_seeds_exp001.txt",
         "candidate_env.sh",
@@ -29,39 +68,12 @@
         "tc_void_lib.sh",
         "test_blinding.sh",
         "verify_holdout_separation.sh"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 3,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "45be6c8",
-          "timestamp": "2026-09-29T23:01:46-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #97 from aien-dev/feat/turing-exp001r-freeze",
-          "pr": 97
-        },
-        {
-          "source": "backfill-git",
-          "sha": "c7a1077",
-          "timestamp": "2026-09-29T22:58:17-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #96 from aien-dev/feat/turing-exp001r",
-          "pr": 96
-        },
-        {
-          "source": "backfill-git",
-          "sha": "81a7eee",
-          "timestamp": "2026-09-29T21:40:13-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
-          "pr": 92
-        }
-      ]
+      ],
+      "purpose_auto": "Directory calibration/scripts. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "calibration/scripts",
+  "name": "calibration/scripts",
+  "purpose": "Directory calibration/scripts. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,6 +1,20 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/ans",
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:d484ca176e9932b098df5664d01bdd679c78f5b89f4d15a77eb30f43d235f570",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:59b33733824001fed778e053f19b8097e586d38ef3703fb3fcd68a9bcd74d968"
+    }
+  },
   "layer": "tests/ans",
-  "purpose": "Tests 1-10 for ANS (docs/ans/INERTIAL_ALIGNMENT_SPEC_V1.md): freeze/digest, hostile reference mutation, drift growth, FIX restore, IMU limit, disagreement, refusals, promotion gate, encodings with golden digests, self-modification. Run with make test-ans (plain + ASan/UBSan)."
+  "name": "tests/ans",
+  "purpose": "Tests 1-10 for ANS (docs/ans/INERTIAL_ALIGNMENT_SPEC_V1.md): freeze/digest, hostile reference mutation, drift growth, FIX restore, IMU limit, disagreement, refusals, promotion gate, encodings with golden digests, self-modification. Run with make test-ans (plain + ASan/UBSan).",
+  "schema_version": "1.0.0"
 }

@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "docs/adr",
-  "layer": "docs/adr",
-  "purpose": "Directory docs/adr. Purpose not yet described by a human.",
   "above": {
     "name": "docs",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory docs/adr. Purpose not yet described by a human.",
-      "files": [
-        "OMEGA-SYSTEMS-CORE-0000.md"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:640f6b7b818c769ab0dcd91437d58dd3251044084d2ae3785f000d30d2bb768a",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:0ece06312221d01c1b9b1b35fc9533d661fa5bed21636dac5cb1a30061185435"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "a927bd6",
-          "timestamp": "2026-09-29T14:35:32-05:00",
           "author": "aien-dev",
+          "pr": 76,
+          "sha": "a927bd6",
+          "source": "backfill-git",
           "subject": "OSC-0/OSC-0B: Omega Systems Core audit and machine semantics freeze (Accepted 2026-09-29) (#76)",
-          "pr": 76
+          "timestamp": "2026-09-29T14:35:32-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "OMEGA-SYSTEMS-CORE-0000.md"
+      ],
+      "purpose_auto": "Directory docs/adr. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "docs/adr",
+  "name": "docs/adr",
+  "purpose": "Directory docs/adr. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

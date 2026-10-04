@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/polyglot",
-  "layer": "src/polyglot",
-  "purpose": "Directory src/polyglot. Purpose not yet described by a human.",
   "above": {
     "name": "src",
     "path": ".."
@@ -14,8 +10,42 @@
     }
   ],
   "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "9c523b2dcdf5dfe9e10846d30ed0ea16e308ac9a65e7e453c0b0bcf4b147f371",
+          "last_commit": "f9966ec",
+          "name": "asm",
+          "purpose": "Directory src/polyglot/asm. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:ceab06a8c19a5c6a04ceda3ff0d00ea6c959ed0598aae11132eef09d0b655a80",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:c43b60db4a5183a3ca59c2e24a0978f463e8ac3aa7a2ed0c54947eb085c4eb9e",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 12,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:008c2ddc323d23173f5aaddbeedb40d300edd2235dd15f09701133b51d3dd289"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 80,
+          "sha": "87938dc",
+          "source": "backfill-git",
+          "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
+          "timestamp": "2026-09-29T14:16:52-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory src/polyglot. Purpose not yet described by a human.",
       "files": [
         "omx_asm.c",
         "omx_bench.c",
@@ -27,23 +57,12 @@
         "omx_lang.c",
         "omx_lang.h",
         "omx_mojo.c"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "87938dc",
-          "timestamp": "2026-09-29T14:16:52-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
-          "pr": 80
-        }
-      ]
+      ],
+      "purpose_auto": "Directory src/polyglot. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "src/polyglot",
+  "name": "src/polyglot",
+  "purpose": "Directory src/polyglot. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

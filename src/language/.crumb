@@ -1,15 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/language",
-  "layer": "src/language",
-  "purpose": "Directory src/language. Purpose not yet described by a human.",
   "above": {
     "name": "src",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:3bdcb211108a4fdc33550b2c54df3167dd15d4a5fe004eefbcef11b489d0e27a",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 6,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:ee64e621b25afb08cdeec1a6102915c1f030d3fbd2f60f5f7e56561a8a753b4b"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 75,
+          "sha": "805a3a6",
+          "source": "backfill-git",
+          "subject": "Merge pull request #75 from aien-dev/fix/program-id-body",
+          "timestamp": "2026-09-29T07:41:31-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 69,
+          "sha": "193a7e7",
+          "source": "backfill-git",
+          "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
+          "timestamp": "2026-09-29T06:27:22-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 2
+    },
     "seed": {
-      "purpose_auto": "Directory src/language. Purpose not yet described by a human.",
       "files": [
         "omega_lex.c",
         "omega_lex.h",
@@ -17,31 +48,12 @@
         "omega_lower.h",
         "omega_parse.c",
         "omega_parse.h"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 2,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "805a3a6",
-          "timestamp": "2026-09-29T07:41:31-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #75 from aien-dev/fix/program-id-body",
-          "pr": 75
-        },
-        {
-          "source": "backfill-git",
-          "sha": "193a7e7",
-          "timestamp": "2026-09-29T06:27:22-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #69 from aien-dev/feat/omega-visor-v1",
-          "pr": 69
-        }
-      ]
+      ],
+      "purpose_auto": "Directory src/language. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "src/language",
+  "name": "src/language",
+  "purpose": "Directory src/language. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }
