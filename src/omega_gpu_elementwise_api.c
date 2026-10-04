@@ -493,6 +493,10 @@ static int run_abc(const OmegaBlackwellKernel *kernel,
     uint32_t pb[1024];
     size_t n = 0;
     memcpy(&pb[n], SETUP_WORDS, sizeof(SETUP_WORDS)); n += sizeof(SETUP_WORDS) / 4;
+    /* Every launch uploads fresh code into a freshly allocated page, so the code address
+     * of the previous (different) kernel is routinely reused: exactly the stale-SM-icache
+     * case cut 1b hit. Invalidate before the kernel (constants in omega_blackwell_submit.h). */
+    pb[n++] = nvrm_mthd(1, OMEGA_BW_MTHD_INVALIDATE_SHADER_CACHES, 1); pb[n++] = OMEGA_BW_INVALIDATE_SHADER_CACHES_ALL;
     pb[n++] = nvrm_mthd(1, 0x0188, 2); pb[n++] = (uint32_t)(cbank_mem.va >> 32); pb[n++] = (uint32_t)cbank_mem.va;
     pb[n++] = nvrm_mthd(1, 0x0180, 2); pb[n++] = 0x00000380; pb[n++] = 0x00000001;
     pb[n++] = nvrm_mthd(1, 0x01b0, 1); pb[n++] = 0x00000041;

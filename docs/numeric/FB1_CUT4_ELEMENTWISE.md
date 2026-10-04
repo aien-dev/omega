@@ -49,6 +49,8 @@ The IR allocator is a linear scan over textual intervals and knows nothing about
 it without redefining it first. Both are in `omega_gpu_elementwise_api.c`.
 
 ## Status
+Shader-cache invalidate: every launch emits `INVALIDATE_SHADER_CACHES` (instruction, data, constant) right after the channel setup words, shared constants `OMEGA_BW_MTHD_INVALIDATE_SHADER_CACHES` / `OMEGA_BW_INVALIDATE_SHADER_CACHES_ALL` in `omega_blackwell_submit.h` used by the matmul launcher too (cut 1b finding: stale SM instruction cache after code-address reuse; local driver clcec0.h is a stub, bits from NVIDIA open-gpu-doc, chip-proven FB1-CUT1B-4345406). Test case `icache_reuse_rotation` cycles 10 distinct kernels twice as a guard (red seen by cut 1b on matmul, not re-observed here: one chip run rule).
+
 Host: `make test-gpu-elementwise` (fixtures, refusals, codegen, register budget, nvdisasm listing of
 all five kernels) PASS at this head. Chip: see the PR title tags and the receipt folder
 `~/workspace/evidence-out/FB1-CUT4-<sha>/` (receipt.json, device.txt, run.log, SHA256SUMS).

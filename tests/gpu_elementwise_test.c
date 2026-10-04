@@ -258,6 +258,57 @@ static int chip(const char *out_path) {
         omega_gpu_elementwise_test_set_mutant(0);
         record(c, out); free(g); free(u); free(got); free(want);
       } }
+    /* 6. stale-SM-instruction-cache guard (cut 1b finding, omega #256): 10 distinct kernels
+     * (5 ops + 5 mutants) in rotation, two rounds. Every launch uploads code into a freshly
+     * allocated page, so a kernel routinely lands on the code address its predecessor used,
+     * and 10 keys evict the 8-slot kernel cache. Each clean launch must match the oracle and
+     * each mutant must still be caught; a stale icache would make a mutant pass or a clean
+     * kernel fail. Red was observed by cut 1b on matmul before its invalidate (receipt
+     * FB1-CUT1B-f629798); this build carries the invalidate, so the case is a guard. */
+    {
+        enum { RN = 256, RH = 4, RD = 64 };
+        float *x = malloc(RN * 4), *w = malloc(RN * 4), *u = malloc(RN * 4), *got = malloc(RN * 4), *want = malloc(RN * 4);
+        float *ch = malloc(RD / 2 * 4), *sh = malloc(RD / 2 * 4);
+        uint32_t *xu = malloc(RN * 4), *gu = malloc(RN * 4);
+        for (size_t i = 0; i < RN; i++) { x[i] = frand(&seed, -3.0f, 3.0f); w[i] = frand(&seed, 0.5f, 1.5f); u[i] = frand(&seed, -2.0f, 2.0f); xu[i] = lcg(&seed); }
+        oracle_rope_tables(RD, 17, 10000.0f, ch, sh);
+        Case c = { .name = "icache_reuse_rotation", .n = 20 };
+        c.rc = OMEGA_GPU_EW_OK; c.mutant_rc = OMEGA_GPU_EW_OK; c.mutant_caught = 1;
+        const int order[10] = { OMEGA_GPU_EW_EX2, -OMEGA_GPU_EW_SWIGLU, OMEGA_GPU_EW_XCHG, -OMEGA_GPU_EW_EX2, OMEGA_GPU_EW_RMSNORM,
+                                -OMEGA_GPU_EW_XCHG, OMEGA_GPU_EW_SWIGLU, -OMEGA_GPU_EW_ROPE, OMEGA_GPU_EW_ROPE, -OMEGA_GPU_EW_RMSNORM };
+        for (int step = 0; step < 20; step++) {
+            int round = step / 10, k = step % 10;
+            int mut = order[k] < 0, op = mut ? -order[k] : order[k];
+            omega_gpu_elementwise_test_set_mutant(mut ? op : 0);
+            int rc; size_t bad = 0; double wst;
+            switch (op) {
+            case OMEGA_GPU_EW_EX2:
+                for (size_t i = 0; i < RN; i++) want[i] = (float)exp2((double)x[i]);
+                rc = omega_gpu_ex2_f32(RN, x, got, &info); bad = compare(got, want, RN, 1e-6, 0.0, &wst); break;
+            case OMEGA_GPU_EW_XCHG:
+                rc = omega_gpu_shared_xchg_u32(RN, xu, gu, &info);
+                for (size_t i = 0; i < RN; i++) { if (gu[i] != xu[i ^ (OMEGA_GPU_EW_THREADS - 1)]) bad++; }
+                break;
+            case OMEGA_GPU_EW_RMSNORM:
+                oracle_rmsnorm(x, w, 1e-5f, want, RN);
+                rc = omega_gpu_rmsnorm_f32(1, RN, x, w, 1e-5f, got, &info); bad = compare(got, want, RN, 1e-5, 1e-6, &wst); break;
+            case OMEGA_GPU_EW_ROPE:
+                oracle_rope(x, RH, RD, ch, sh, want);
+                rc = omega_gpu_rope_f32(RH, RD, x, ch, sh, got, &info); bad = compare(got, want, RH * RD, 0.0, 0.0, &wst); break;
+            default:
+                oracle_swiglu(x, u, want, RN);
+                rc = omega_gpu_swiglu_f32(RN, x, u, got, &info); bad = compare(got, want, RN, 1e-5, 1e-6, &wst); break;
+            }
+            omega_gpu_elementwise_test_set_mutant(0);
+            int ok = rc == OMEGA_GPU_EW_OK && bad == 0;
+            if (!mut && !ok) { c.bad++; if (rc != OMEGA_GPU_EW_OK) c.rc = rc; printf("  rotation %d/%d: clean op %d FAILED rc=%s violations=%zu\n", round, k, op, omega_gpu_elementwise_rc_name(rc), bad); }
+            if (mut && ok) { c.mutant_bad++; c.mutant_caught = 0; printf("  rotation %d/%d: mutant op %d NOT caught\n", round, k, op); }
+            c.chip_ns += info.elapsed_ns; c.calls += info.chip_calls; c.unwritten += info.unwritten_words;
+        }
+        c.pass = c.bad == 0 && c.rc == OMEGA_GPU_EW_OK;
+        record(c, out);
+        free(x); free(w); free(u); free(got); free(want); free(ch); free(sh); free(xu); free(gu);
+    }
     if (out) {
         fprintf(out, "],\"checks\":%d,\"failed\":%d,\"verdict\":\"%s\"}\n", g_checks, g_failed, g_failed == 0 ? "OMEGA_GPU_ELEMENTWISE_PASS" : "OMEGA_GPU_ELEMENTWISE_FAIL");
         fclose(out);
