@@ -2,7 +2,7 @@
 # and the information-efficiency comparison (development evidence, not EXP-003).
 ifndef PHYSICS0_PLANNER_MK
 PHYSICS0_PLANNER_MK := 1
-.PHONY: test-physics0-planner p0p-purity physics0-planner-eff
+.PHONY: test-physics0-planner p0p-purity physics0-planner-eff physics0-planner-eff2
 
 P0P_COMMIT := $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
 P0P_CFLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -ffp-contract=off -fno-fast-math \
@@ -42,6 +42,9 @@ $(P0P_DIR)/bridge.o: $(P0P_BRIDGE_OBJS)
 $(P0P_DIR)/pd0_plan_eff: tests/physics0/planner/pd0_plan_eff.c $(P0P_SRCS) $(P0P_HDRS) $(P0P_DIR)/bridge.o
 	@mkdir -p $(P0P_DIR)
 	$(CC) $(P0P_CFLAGS) -o $@ $< $(P0P_SRCS) $(P0P_DIR)/bridge.o -lm
+$(P0P_DIR)/pd0_plan_eff2: tests/physics0/planner/pd0_plan_eff2.c $(P0P_SRCS) $(P0P_HDRS) $(P0P_DIR)/bridge.o
+	@mkdir -p $(P0P_DIR)
+	$(CC) $(P0P_CFLAGS) -o $@ $< $(P0P_SRCS) $(P0P_DIR)/bridge.o -lm
 
 p0p-purity:
 	@mkdir -p $(P0P_DIR)/purity
@@ -54,7 +57,12 @@ physics0-planner-eff: $(P0P_DIR)/pd0_plan_eff
 	./$(P0P_DIR)/pd0_plan_eff $(P0P_DIR)/pd0-planner-eff.json $(P0P_COMMIT) | tee $(P0P_DIR)/eff.out | tail -3
 	@grep -q '^PD0_PLANNER_EFF: PASS$$' $(P0P_DIR)/eff.out
 
-test-physics0-planner: p0p-purity $(P0P_DIR)/test_pd0_planner $(P0P_DIR)/test_pd0_planner_asan physics0-planner-eff
+physics0-planner-eff2: $(P0P_DIR)/pd0_plan_eff2
+	@rm -f $(P0P_DIR)/pd0-planner-eff2.json
+	./$(P0P_DIR)/pd0_plan_eff2 $(P0P_DIR)/pd0-planner-eff2.json $(P0P_COMMIT) | tee $(P0P_DIR)/eff2.out | tail -6
+	@grep -q '^PD0_PLANNER_EFF2: PASS' $(P0P_DIR)/eff2.out
+
+test-physics0-planner: p0p-purity $(P0P_DIR)/test_pd0_planner $(P0P_DIR)/test_pd0_planner_asan physics0-planner-eff physics0-planner-eff2
 	./$(P0P_DIR)/test_pd0_planner
 	./$(P0P_DIR)/test_pd0_planner_asan
 	@echo "test-physics0-planner: PD-0 planner contract (behaviours 1-6), mutants, passive baseline and efficiency comparison pass; receipt in $(P0P_DIR)/pd0-planner-eff.json"
