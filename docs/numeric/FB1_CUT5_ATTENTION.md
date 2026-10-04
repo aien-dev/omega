@@ -1,6 +1,6 @@
 # FB-1 cut 5: native gqa + paged attention (no CUDA)
 
-Status: host battery PASS, host IR simulator PASS (45 checks), chip gate pending / see PR.
+Status: host battery PASS, host IR simulator PASS (45/45), chip gate PASS (45/45, receipt ~/workspace/evidence-out/FB1-CUT5-b016322, PR #261).
 Files: `src/omega_gpu_attention_api.{h,c}`, `tests/gpu_attention_test.c`,
 `tools/run_gpu_attention_chip.sh`. Library: `libomega_gpu.a`.
 
