@@ -29,5 +29,4 @@ truncation and trailing bytes, then run the same validation as the constructor. 
 - Recommendation: `authority` must be `NONE`; indices in range; consequences in ascending resource order; `error` must equal the recomputed `(measured - predicted) / predicted_sd`; an unmeasured row carries zero.
 - Controller: eta >= 0, rho in [0,1], k_sigma >= 0, max_age >= 1, cadence >= 1, per-resource lambda_max > 0, ascending ids. Any parameter change changes `controller_id`.
 
-Status of this slice: DUAL-0a IMPLEMENTED (records, registry, encoding, digests). `DUAL_CONSTRAINT_CONTRACT` is not yet claimed:
-it needs DUAL-0b (binding to ESTIMATION records, staleness).
+Status: DUAL-0a, DUAL-0b (rx_dual_bind.h: binding to est_* records, evidence verification, FRESH/STALE/FROZEN/UNCALIBRATED/REFUSED) and DUAL-1a (rx_dual_update.h: reference update) IMPLEMENTED; `DUAL_CONSTRAINT_CONTRACT = PASS` on host (evidence/DUAL/0b-1a-binding-controller); `DUAL_PRICE_REFERENCE` waits for DUAL-1b replay.
