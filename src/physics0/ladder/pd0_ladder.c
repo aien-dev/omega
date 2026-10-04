@@ -262,6 +262,30 @@ static int try_t4(ctx *c, const pd0_falsifier *f, const uint8_t *entry_hash)
     c->have_fals = 1; c->fals = *f; memcpy(c->fals_hash, entry_hash, PD0_HASH); c->R->eps_micro = f->eps_micro;
     c->R->state = LS_HYPOTHESIS; set_code(c, 4, PD0V_OK); return 0;
 }
+/* spec rev 7: a TRIAL or REP episode the world ends with OUT_OF_BOUNDS before the rollout horizon is void:
+ * not a failed prediction, never counted toward p or f, replaced from the same fresh stream. */
+static int ep_void(const ctx *c, const episode *e)
+{
+    if (!e->has_tag || (e->tag != TAG_TRIAL && e->tag != TAG_REP) || ep_ok_steps(c, e) >= c->P->rollout_steps) return 0;
+    for (uint32_t i = 0; i < e->n; i++) if (c->rec[e->first + i].kind == PD0_KIND_STEP && c->rec[e->first + i].status == PD0_ST_OUT_OF_BOUNDS) return 1;
+    return 0;
+}
+/* a void episode matches a preregistration on the requested reset and the applied steps it did run */
+static int ep_matches_prereg_prefix(const ctx *c, const episode *ep, const pd0_exp *e)
+{
+    const pd0_rec *r0 = &c->rec[ep->first]; if (r0->kind != PD0_KIND_RESET || r0->n_obs != e->n_obs) return 0;
+    if (!c->P->noisy) for (int j = 0; j < e->n_obs; j++) if (r0->after[j] != e->reset[j]) return 0;
+    uint8_t k = 0;
+    for (uint32_t i = 1; i < ep->n && k < e->n_steps; i++) { const pd0_rec *r = &c->rec[ep->first + i]; if (r->kind != PD0_KIND_STEP || r->status == PD0_ST_REFUSED_RANGE) continue;
+        if (r->channel != e->steps[k].channel || r->applied != e->steps[k].value) return 0; k++; }
+    return k > 0;
+}
+/* voids in a replication batch; more than 3 void the batch itself (spec rev 7) */
+static uint32_t batch_voids(const ctx *c, uint32_t b)
+{
+    uint32_t v = 0; for (uint32_t i = 0; i < c->nep; i++) { const episode *ep = &c->ep[i]; if (ep->has_tag && ep->tag == TAG_REP && ep->batch_id == c->bat[b].b.batch_id && ep_void(c, ep)) v++; }
+    return v;
+}
 /* ---------- T5 ---------- */
 static int try_t5(ctx *c, const pd0_exp *e, const uint8_t *entry_hash)
 {
@@ -284,15 +308,20 @@ static int try_t6(ctx *c)
 {
     const pd0_ladder_params *P = c->P; uint8_t no = P->n_obs; uint32_t n = P->rollout_steps;
     /* match complete TRIAL episodes to preregistrations */
+    uint32_t voided = 0;
     for (uint32_t i = 0; i < c->nep; i++) { episode *ep = &c->ep[i]; if (!ep->has_tag || ep->tag != TAG_TRIAL || ep->n == 0) continue;
+        if (ep_void(c, ep)) { for (uint32_t k = 0; k < c->npre; k++) if (c->pre[k].matched_ep == -1 && c->pre[k].entry < ep->first_entry && ep_matches_prereg_prefix(c, ep, &c->pre[k].e)) { c->pre[k].matched_ep = -2; break; } continue; }
         if (ep_ok_steps(c, ep) < n) continue;
         int found = 0;
         for (uint32_t k = 0; k < c->npre; k++) if (c->pre[k].entry < ep->first_entry && ep_matches_prereg(c, ep, &c->pre[k].e)) { c->pre[k].matched_ep = (int)i; found = 1; break; }
         if (!found) { set_code(c, 6, PD0V_T6_TRIAL_NOT_PREREGISTERED); return PD0V_T6_TRIAL_NOT_PREREGISTERED; } }
-    for (uint32_t k = 0; k < c->npre; k++) if (c->pre[k].matched_ep < 0) { set_code(c, 6, PD0V_T6_TRIAL_MISSING); return 0; }
+    for (uint32_t k = 0; k < c->npre; k++) if (c->pre[k].matched_ep == -2) voided++;   /* void marks persist across passes */
+    { uint32_t need = c->fals.min_trials > P->min_prereg ? c->fals.min_trials : P->min_prereg;
+      for (uint32_t k = 0; k < c->npre; k++) if (c->pre[k].matched_ep == -1) { set_code(c, 6, PD0V_T6_TRIAL_MISSING); return 0; }
+      if (c->npre - voided < need) { set_code(c, 6, PD0V_T6_TRIAL_MISSING); return 0; } }
     /* evaluate every trial against the committed prediction (hypothesis index 0) */
     int64_t obs[PD0_MAX_STEPS * PD0_MAX_OBS], pk[PD0_MAX_STEPS * PD0_MAX_OBS];
-    for (uint32_t k = 0; k < c->npre; k++) { prereg *p = &c->pre[k]; const episode *ep = &c->ep[p->matched_ep]; uint32_t m = 0; const pd0_rec *last = NULL, *worst_rec = NULL; int64_t wp = 0, wo = 0, wd = -1;
+    for (uint32_t k = 0; k < c->npre; k++) { prereg *p = &c->pre[k]; if (p->matched_ep < 0) continue; const episode *ep = &c->ep[p->matched_ep]; uint32_t m = 0; const pd0_rec *last = NULL, *worst_rec = NULL; int64_t wp = 0, wo = 0, wd = -1;
         for (uint32_t i = 1; i < ep->n && m < n; i++) { const pd0_rec *r = &c->rec[ep->first + i]; if (r->kind != PD0_KIND_STEP || !rec_has_outcome(r)) continue;
             for (int j = 0; j < no; j++) { obs[m * no + j] = r->after[j]; int64_t d = llabs(p->e.expected[0][m][j] - r->after[j]); if (d > wd) { wd = d; worst_rec = r; wp = p->e.expected[0][m][j]; wo = r->after[j]; } }
             m++; last = r; }
@@ -308,12 +337,12 @@ static int try_t7(ctx *c)
 {
     const pd0_ladder_params *P = c->P; uint8_t no = P->n_obs; uint32_t n = P->rollout_steps; uint32_t ready = 0;
     int64_t pred[PD0_MAX_STEPS * PD0_MAX_OBS], obs[PD0_MAX_STEPS * PD0_MAX_OBS];
-    for (uint32_t b = 0; b < c->nbat; b++) { uint32_t cnt = 0, planner = 0, random = 0; for (uint32_t i = 0; i < c->nep; i++) { const episode *ep = &c->ep[i]; if (ep->has_tag && ep->tag == TAG_REP && ep->batch_id == c->bat[b].b.batch_id && ep_ok_steps(c, ep) >= n) { cnt++; if (ep->origin == ORIGIN_PLANNER) planner++; else random++; } }
+    for (uint32_t b = 0; b < c->nbat; b++) { uint32_t cnt = 0, planner = 0, random = 0; if (batch_voids(c, b) > 3) continue; for (uint32_t i = 0; i < c->nep; i++) { const episode *ep = &c->ep[i]; if (ep->has_tag && ep->tag == TAG_REP && ep->batch_id == c->bat[b].b.batch_id && ep_ok_steps(c, ep) >= n) { cnt++; if (ep->origin == ORIGIN_PLANNER) planner++; else random++; } }
         if (cnt < P->min_batch_episodes || cnt < c->bat[b].b.n_episodes) continue;
         if (planner + 1 < random || random + 1 < planner) { set_code(c, 7, PD0V_T7_ORIGIN_IMBALANCE); return PD0V_T7_ORIGIN_IMBALANCE; }
         ready++; }
     if (ready < P->min_batches) { set_code(c, 7, ready || c->nbat ? PD0V_T7_BATCH_TOO_SMALL : PD0V_T7_TOO_FEW_BATCHES); return 0; }
-    for (uint32_t b = 0; b < c->nbat; b++) { nrmse_acc a; memset(&a, 0, sizeof a); const pd0_rec *first = NULL, *last = NULL;
+    for (uint32_t b = 0; b < c->nbat; b++) { nrmse_acc a; memset(&a, 0, sizeof a); const pd0_rec *first = NULL, *last = NULL; if (batch_voids(c, b) > 3) continue;
         for (uint32_t i = 0; i < c->nep; i++) { const episode *ep = &c->ep[i]; if (!(ep->has_tag && ep->tag == TAG_REP && ep->batch_id == c->bat[b].b.batch_id && ep_ok_steps(c, ep) >= n)) continue;
             /* freshness: schedule must not equal any other episode's schedule */
             uint8_t h1[PD0_HASH], h2[PD0_HASH]; ep_schedule_hash(c, ep, (uint8_t)n, h1);
@@ -418,6 +447,9 @@ int pd0_ladder_check(const uint8_t *ledger, size_t len, const pd0_ladder_params 
     if (!rc && R->state == LS_INTERVENED) { int r2 = try_t7(c); if (r2) rc = r2; }
     compute_domain(c);
     R->confidence_ppm = pd0_confidence_ppm(R->p, R->f);
+    R->n_void_episodes = 0; R->n_void_batches = 0;   /* spec rev 7 diagnostics, counted once */
+    for (uint32_t i = 0; i < c->nep; i++) if (ep_void(c, &c->ep[i])) R->n_void_episodes++;
+    for (uint32_t b = 0; b < c->nbat; b++) if (batch_voids(c, b) > 3) R->n_void_batches++;
     if (rc) R->code = rc;
     free(c->rec); free(c);
     return rc;

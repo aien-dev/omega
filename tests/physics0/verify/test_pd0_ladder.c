@@ -65,6 +65,10 @@ int main(void)
       CHECK(pd0_nrmse_micro(pred, obs, 3, 2) > 10000000);                  /* within-trial spread 0.0008: error reads as 12 sd */
       CHECK(pd0_nrmse_pooled_micro(pred, obs, 3, 2, sd) == 10000);          /* pooled sd 1.0: the same error is 0.01 */
       int64_t sd0[2] = { 0, 0 }; CHECK(pd0_nrmse_pooled_micro(pred, obs, 3, 2, sd0) == 10000); }   /* sd 0 falls back to the RMSE */
+    /* spec rev 7: void TRIAL/REP episodes (OUT_OF_BOUNDS before the horizon) are replaced and never count toward p or f */
+    memset(&o, 0, sizeof o); o.void_rep = 1; rc = run(1, 1, &o, &R, law, &ln, "ladder-void-rep"); CHECK(rc == 0 && R.state == LS_REPLICATED && R.n_void_episodes == 1 && R.n_void_batches == 0 && R.p == 35 && R.f == 0);
+    memset(&o, 0, sizeof o); o.void_rep_four = 1; rc = run(1, 1, &o, &R, law, &ln, "ladder-void-batch"); CHECK(rc == 0 && R.state == LS_REPLICATED && R.n_void_batches == 1 && R.n_void_episodes == 4 && R.p == 35 && R.f == 0);
+    memset(&o, 0, sizeof o); o.void_trial = 1; rc = run(1, 1, &o, &R, law, &ln, "ladder-void-trial"); CHECK(rc == 0 && R.state == LS_REPLICATED && R.n_void_episodes == 1 && R.p == 35 && R.f == 0 && R.n_experiments == 8);
     memset(&o, 0, sizeof o); o.demote_after_law = 1; rc = run(1, 1, &o, &R, law, &ln, "ladder-demotion"); CHECK(rc == 0 && R.demoted && R.state == LS_HYPOTHESIS && R.n_refutations == 1);
     { bundle b; b_init(&b, 1, 1); bundle_opts h; memset(&h, 0, sizeof h); pd0_ladder_report Rh; b_build(&b, &h, &Rh); size_t n = pd0_ladder_emit_law(&Rh, &b.P, law2, sizeof law2); b_free(&b);
       CHECK(pd0_ladder_verify_law(&R, &P, law2, n) == PD0V_LAW_DEMOTED); }

@@ -13,13 +13,14 @@ typedef struct {
     int end_last;          /* rev 6 (b): the last step of every episode is EPISODE_END */
     int quiet_trials;      /* rev 6 (a): trials start near rest with tiny pushes */
     int64_t obs_noise;     /* observation noise sd (micro) on every recorded value */
+    int void_rep, void_rep_four, void_trial;   /* rev 7: void episodes with replacements */
 } bundle_opts;
 typedef struct {
     uint8_t *buf; size_t len; uint8_t last[PD0_HASH];
     uint8_t rec_prev[PD0_HASH]; uint64_t seq; uint32_t episode;
     truth_world w; pd0_ladder_params P; pd0_rng g;
     pd0_rec *recs; uint32_t nrec;
-    int end_last; int64_t obs_noise; pd0_rng nz;
+    int end_last; int64_t obs_noise; pd0_rng nz; uint32_t oob_at;   /* oob_at > 0: step index at which the world reports OUT_OF_BOUNDS */
 } bundle;
 static inline void b_append(bundle *b, uint8_t kind, const uint8_t *p, uint32_t n) { b->len = pd0_ledg_append(b->buf, b->len, LCAP, kind, p, n, b->last); }
 static inline void b_record(bundle *b, pd0_rec *r)
@@ -37,6 +38,7 @@ static inline uint32_t b_episode(bundle *b, const int64_t *reset, const pd0_step
     r.kind = PD0_KIND_RESET; r.channel = PD0_CHAN_NONE; r.episode = ep; for (int j = 0; j < 2; j++) { st[j] = reset[j]; ob[j] = b_obs(b, reset[j]); r.before[j] = r.after[j] = ob[j]; } b_record(b, &r);
     for (uint32_t s = 0; s < n; s++) { memset(&r, 0, sizeof r); r.kind = PD0_KIND_STEP; r.episode = ep; r.step_in_episode = s + 1; r.time_micro = (int64_t)(s + 1) * b->P.dt_micro; r.channel = steps[s].channel; r.requested = r.applied = steps[s].value;
         r.before[0] = b_obs(b, st[0]); r.before[1] = b_obs(b, st[1]); /* fresh observation of the state, as pd0_world_step does */ truth_step(w, st, steps[s].value, nx); memcpy(st, nx, sizeof st); ob[0] = b_obs(b, st[0]); ob[1] = b_obs(b, st[1]); r.after[0] = ob[0]; r.after[1] = ob[1];
+        if (b->oob_at && s + 1 == b->oob_at) { r.status = PD0_ST_OUT_OF_BOUNDS; r.after[0] = r.before[0]; r.after[1] = r.before[1]; b_record(b, &r); break; }
         if (b->end_last && s + 1 == n) r.status = PD0_ST_EPISODE_END; b_record(b, &r); }
     return ep;
 }
@@ -78,7 +80,8 @@ static inline int b_build(bundle *b, const bundle_opts *o, pd0_ladder_report *R)
     b_append(b, LEDG_FALSIFIER, pl, (uint32_t)pd0_fals_write(&f, pl));
     /* 6. five preregistered experiments, each followed by its trial */
     pd0_exp *x = calloc(1, sizeof *x); uint8_t *xb = malloc(16384);
-    for (int t = 0; t < 5; t++) { memset(x, 0, sizeof *x); x->n_obs = 2; x->n_hyp = 2; x->n_steps = 20;
+    int n_trials = o->void_trial ? 6 : 5;
+    for (int t = 0; t < n_trials; t++) { memset(x, 0, sizeof *x); x->n_obs = 2; x->n_hyp = 2; x->n_steps = 20; b->oob_at = (o->void_trial && t == 2) ? 5 : 0;
         if (o->reuse_schedule && t == 0) { const pd0_rec *r0 = &b->recs[0]; x->reset[0] = r0->after[0]; x->reset[1] = r0->after[1]; for (int s = 0; s < 20; s++) { x->steps[s].channel = b->recs[1 + s].channel; x->steps[s].value = b->recs[1 + s].applied; } }
         else if (o->quiet_trials) { for (int j = 0; j < 2; j++) x->reset[j] = draw_const(&b->g, -50000, 50000); for (int s = 0; s < 20; s++) { x->steps[s].channel = 0; x->steps[s].value = draw_const(&b->g, -50000, 50000); } }
         else b_random_schedule(b, x->reset, x->steps, 20);
@@ -87,11 +90,14 @@ static inline int b_build(bundle *b, const bundle_opts *o, pd0_ladder_report *R)
         if (!(o->trial_without_prereg && t == 4)) b_append(b, LEDG_PREREG, xb, (uint32_t)xn);
         if (o->stop_after_prereg) continue;
         b_tag(b, b->episode, TAG_TRIAL, 0, 0); b_episode(b, x->reset, x->steps, 20, w); }
-    free(x); free(xb);
+    free(x); free(xb); b->oob_at = 0;
     if (o->stop_after_prereg || o->stop_after_trials) goto done;
     /* 7. three replication batches of 10 episodes */
-    for (uint32_t bt = 0; bt < 3; bt++) { pd0_batch bb = { bt + 1, o->batch_seed_reuse ? 1000u : 1000u + bt, 10 }; b_append(b, LEDG_BATCH, pl, (uint32_t)pd0_batch_write(&bb, pl));
-        for (int e = 0; e < 10; e++) { b_tag(b, b->episode, TAG_REP, bt + 1, o->all_planner ? ORIGIN_PLANNER : (e & 1) ? ORIGIN_RANDOM : ORIGIN_PLANNER); b_random_schedule(b, reset, steps, 20); b_episode(b, reset, steps, 20, w); } }
+    uint32_t n_batches = o->void_rep_four ? 4 : 3;
+    for (uint32_t bt = 0; bt < n_batches; bt++) { pd0_batch bb = { bt + 1, o->batch_seed_reuse ? 1000u : 1000u + bt, 10 }; b_append(b, LEDG_BATCH, pl, (uint32_t)pd0_batch_write(&bb, pl));
+        int n_void = (bt == 0) ? (o->void_rep ? 1 : o->void_rep_four ? 4 : 0) : 0; int n_run = 10 + n_void; if (o->void_rep_four && bt == 0) n_run = n_void;   /* a voided batch: nothing but voids */
+        for (int e = 0, good = 0; e < n_run; e++) { int is_void = e < n_void; b->oob_at = is_void ? 5 : 0; int idx = is_void ? e : good; b_tag(b, b->episode, TAG_REP, bt + 1, o->all_planner ? ORIGIN_PLANNER : (idx & 1) ? ORIGIN_RANDOM : ORIGIN_PLANNER); b_random_schedule(b, reset, steps, 20); b_episode(b, reset, steps, 20, w); if (!is_void) good++; }
+        b->oob_at = 0; }
     if (o->demote_after_law) { null_w.k = w->k * 2; pd0_batch bb = { 9, 7777, 1 }; b_append(b, LEDG_BATCH, pl, (uint32_t)pd0_batch_write(&bb, pl)); b_tag(b, b->episode, TAG_REP, 9, ORIGIN_RANDOM); b_random_schedule(b, reset, steps, 20); b_episode(b, reset, steps, 20, &null_w); }
 done:
     return pd0_ladder_check(b->buf, b->len, &b->P, R);
