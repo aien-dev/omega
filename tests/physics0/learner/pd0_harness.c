@@ -63,13 +63,13 @@ typedef struct {
     pd0_ladder_params P;
     uint32_t next_episode, n_episodes, steps_used, episodes_used;
     /* per episode bookkeeping: tag, schedule hash, record range */
-    uint8_t ep_tag[MAX_EP]; uint8_t ep_hash[MAX_EP][PD0_HASH]; uint32_t ep_first[MAX_EP], ep_n[MAX_EP]; int ep_ok[MAX_EP];
+    uint8_t ep_tag[MAX_EP]; uint8_t ep_hash[MAX_EP][PD0_HASH]; uint32_t ep_first[MAX_EP], ep_n[MAX_EP]; int ep_ok[MAX_EP]; int ep_void[MAX_EP];   /* spec rev 7: TRIAL/REP ended OUT_OF_BOUNDS before the horizon */
     pd0_rec *recs; uint32_t nrec;
     pd0_transition *fit; uint32_t nfit;
     /* truth */
     pd0_rel truth_rel; int truth_size, truth_n_latent; int have_truth;
     /* counters for the report */
-    uint32_t n_oob, n_refused, n_propose_fail, n_trial_random, n_attempts, n_budget;
+    uint32_t n_oob, n_refused, n_propose_fail, n_trial_random, n_attempts, n_budget, n_void_ep, n_void_batch;
 } run;
 
 static void append(run *R, uint8_t kind, const uint8_t *p, uint32_t n) { R->llen = pd0_ledg_append(R->ledger, R->llen, LCAP, kind, p, n, R->last); }
@@ -88,7 +88,7 @@ static int episode(run *R, uint8_t t, uint32_t batch, uint8_t origin, const int6
     if (r.status == PD0_ST_BUDGET_EXHAUSTED) { R->n_budget++; return -1; }
     if (r.episode != ep) { fprintf(stderr, "harness: episode numbering drift (%u vs %u)\n", r.episode, ep); exit(3); }
     R->next_episode = ep + 1; R->episodes_used++;
-    R->ep_tag[slot] = t; R->ep_first[slot] = R->nrec; R->ep_n[slot] = 0; R->ep_ok[slot] = 0; R->n_episodes++;
+    R->ep_tag[slot] = t; R->ep_first[slot] = R->nrec; R->ep_n[slot] = 0; R->ep_ok[slot] = 0; R->ep_void[slot] = 0; R->n_episodes++;
     append(R, LEDG_OBS, resp, (uint32_t)rn); R->recs[R->nrec++] = r; R->ep_n[slot]++;
     if (t == TAG_FIT || t == TAG_SELECT) pd0_learner_observe(R->L, &r, t);
     if (r.status != PD0_ST_OK) { R->n_refused++; memset(R->ep_hash[slot], 0, PD0_HASH); return (int)slot; }
@@ -103,7 +103,7 @@ static int episode(run *R, uint8_t t, uint32_t batch, uint8_t origin, const int6
         R->steps_used++;
         if (r.status == PD0_ST_OK || r.status == PD0_ST_EPISODE_END) { if (n_ok < PD0_MAX_STEPS) { applied[n_ok].channel = r.channel; applied[n_ok].value = r.applied; } n_ok++;
             if (t == TAG_FIT && R->nfit < 65536) { pd0_transition *f = &R->fit[R->nfit++]; memcpy(f->before, r.before, sizeof f->before); f->chan = r.channel; f->value = r.applied; memcpy(f->after, r.after, sizeof f->after); } }
-        if (r.status == PD0_ST_OUT_OF_BOUNDS) { R->n_oob++; break; }
+        if (r.status == PD0_ST_OUT_OF_BOUNDS) { R->n_oob++; if (t == TAG_TRIAL || t == TAG_REP) { R->ep_void[slot] = 1; R->n_void_ep++; } break; }
         if (r.status == PD0_ST_REFUSED_RANGE) { R->n_refused++; continue; }
         if (r.status == PD0_ST_EPISODE_END) break;
     }
@@ -179,14 +179,15 @@ int main(int argc, char **argv)
         append(&R, LEDG_FALSIFIER, pl, (uint32_t)pd0_fals_write(&f, pl));
         checker_rc = pd0_ladder_check(R.ledger, R.llen, &R.P, &rep); if (rep.state < LS_HYPOTHESIS) break;   /* no admissible candidate: no trials */
         n_forb = 0; for (uint32_t s = 0; s < R.n_episodes && n_forb < PD0L_MAX_FORBID; s++) memcpy(forbidden[n_forb++], R.ep_hash[s], PD0_HASH);
-        for (int t = 0; t < 5; t++) { static pd0_exp x; memset(&x, 0, sizeof x);
+        for (int t = 0, voids = 0; t < 5 + voids; t++) { static pd0_exp x; memset(&x, 0, sizeof x);
             int64_t div = pd0_learner_propose(R.L, hyps, n_hyp, R.seed * 1000 + a * 10 + (uint64_t)t, 256, (const uint8_t (*)[PD0_HASH])forbidden, n_forb, &x);
             if (div < 0) { R.n_propose_fail++; R.n_trial_random++; x.n_obs = d->n_obs; x.n_hyp = (uint8_t)n_hyp; x.n_steps = PD0_MAX_STEPS;
                 pd0_learner_random_schedule(d, R.seed * 7919 + a, "trial", (uint32_t)t, x.reset, x.steps, PD0_MAX_STEPS);
                 for (int h = 0; h < n_hyp; h++) { int64_t tmp[PD0_MAX_STEPS * PD0_MAX_OBS]; pd0_learner_rollout(&hyps[h], x.reset, x.steps, PD0_MAX_STEPS, tmp); for (int s = 0; s < PD0_MAX_STEPS; s++) for (int j = 0; j < d->n_obs; j++) x.expected[h][s][j] = tmp[s * d->n_obs + j]; }
                 x.divergence_micro = 0; }
             size_t xn = pd0_exp_write(&x, pl, sizeof pl); append(&R, LEDG_PREREG, pl, (uint32_t)xn);
-            int slot = episode(&R, TAG_TRIAL, 0, 0, x.reset, x.steps, PD0_MAX_STEPS); if (slot >= 0 && n_forb < PD0L_MAX_FORBID) memcpy(forbidden[n_forb++], R.ep_hash[slot], PD0_HASH); }
+            int slot = episode(&R, TAG_TRIAL, 0, 0, x.reset, x.steps, PD0_MAX_STEPS); if (slot >= 0 && n_forb < PD0L_MAX_FORBID) memcpy(forbidden[n_forb++], R.ep_hash[slot], PD0_HASH);
+            if (slot >= 0 && R.ep_void[slot] && voids < 3) voids++; }
         checker_rc = pd0_ladder_check(R.ledger, R.llen, &R.P, &rep);
         if (rep.state >= LS_INTERVENED) break;
         if (rep.code == PD0V_T6_TRIAL_FAILED) { /* refuted: the trial records are FIT from now on */
@@ -196,11 +197,15 @@ int main(int argc, char **argv)
     }
     /* 3. replication: three batches of ten episodes, planner and random halves */
     if (rep.state >= LS_INTERVENED) {
-        for (uint32_t bt = 0; bt < 3; bt++) { pd0_batch bb = { bt + 1, R.seed * 100 + bt + 1, 10 }; append(&R, LEDG_BATCH, pl, (uint32_t)pd0_batch_write(&bb, pl));
-            for (uint32_t e = 0; e < 10; e++) { uint8_t origin = (e & 1) ? ORIGIN_RANDOM : ORIGIN_PLANNER; static pd0_exp x;
+        for (uint32_t bt = 0; bt < 3; bt++) for (uint32_t redraw = 0; redraw <= 3; redraw++) { pd0_batch bb = { bt + 1 + 10 * redraw, R.seed * 100 + bt + 1 + 50 * redraw, 10 }; append(&R, LEDG_BATCH, pl, (uint32_t)pd0_batch_write(&bb, pl));
+            uint32_t good = 0, voids = 0;
+            for (uint32_t e = 0; good < 10 && voids <= 3; e++) { uint8_t origin = (good & 1) ? ORIGIN_RANDOM : ORIGIN_PLANNER; static pd0_exp x;
                 if (origin == ORIGIN_PLANNER && pd0_learner_propose(R.L, hyps, n_hyp, bb.stream_seed * 31 + e, 128, (const uint8_t (*)[PD0_HASH])forbidden, n_forb, &x) >= 0) { memcpy(reset, x.reset, sizeof reset); memcpy(steps, x.steps, sizeof steps); }
                 else { if (origin == ORIGIN_PLANNER) R.n_propose_fail++; pd0_learner_random_schedule(d, bb.stream_seed, "rep", e, reset, steps, PD0_MAX_STEPS); }
-                int slot = episode(&R, TAG_REP, bb.batch_id, origin, reset, steps, PD0_MAX_STEPS); if (slot >= 0 && n_forb < PD0L_MAX_FORBID) memcpy(forbidden[n_forb++], R.ep_hash[slot], PD0_HASH); } }
+                int slot = episode(&R, TAG_REP, bb.batch_id, origin, reset, steps, PD0_MAX_STEPS); if (slot >= 0 && n_forb < PD0L_MAX_FORBID) memcpy(forbidden[n_forb++], R.ep_hash[slot], PD0_HASH);
+                if (slot >= 0 && R.ep_void[slot]) voids++; else good++; }
+            if (voids <= 3) break;   /* batch complete */
+            R.n_void_batch++; }
         checker_rc = pd0_ladder_check(R.ledger, R.llen, &R.P, &rep);
     }
     /* 4. law record + independent re-verification */
@@ -228,12 +233,12 @@ int main(int argc, char **argv)
     printf("PD0L level=%s seed=%llu desc=v%d episodes=%u steps=%u fit=%u select=%u state=%s code=%d stall=%d refutations=%u attempts=%u "
            "cand_size=%u cand_bits=%u size_bound=%u fit_nrmse=%lld select_nrmse=%lld hidden_state=%d "
            "score=%s score_code=%d mask=0x%x inbox=%lld extrap=%lld onestep=%lld ref=%lld score_eps=%d law=%d checker_rc=%d "
-           "oob=%u refused=%u budget_hits=%u propose_fail=%u trial_random=%u\n",
+           "oob=%u refused=%u budget_hits=%u propose_fail=%u trial_random=%u void_ep=%u void_batch=%u\n",
            lvl_name(R.level), (unsigned long long)R.seed, R.D.version, R.n_episodes, R.steps_used, pd0_learner_n_transitions(R.L, TAG_FIT), pd0_learner_n_transitions(R.L, TAG_SELECT),
            pd0_ladder_state_name(rep.state), rep.code, rep.stall_code, rep.n_refutations, R.n_attempts,
            csize, cbits, R.P.size_bound, (long long)(best ? best->fit_nrmse_micro : -1), (long long)(best ? best->select_nrmse_micro : -1), hidden,
            !scored ? "NO_CANDIDATE" : S.code == 0 ? "PASS" : S.code < 0 ? "NOT_SCORED" : "FAIL", S.code, S.fail_mask, (long long)S.inbox_nrmse, (long long)S.extrap_nrmse, (long long)S.onestep_nrmse, (long long)S.ref_nrmse, n_score_eps, law_rc, checker_rc,
-           R.n_oob, R.n_refused, R.n_budget, R.n_propose_fail, R.n_trial_random);
+           R.n_oob, R.n_refused, R.n_budget, R.n_propose_fail, R.n_trial_random, R.n_void_ep, R.n_void_batch);
     fprintf(R.truth.wr, "quit\n"); fflush(R.truth.wr); fclose(R.world.wr); fclose(R.truth.wr); waitpid(R.world.pid, NULL, 0); waitpid(R.truth.pid, NULL, 0);
     pd0_learner_free(R.L); free(R.ledger); free(R.recs); free(R.fit);
     return 0;

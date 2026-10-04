@@ -11,7 +11,10 @@ Spec: aien-dev/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` rev 2
 (2f881b1); world parameters follow rev 3 (omega #248, merged); the rev 5 rules
 (requested-reset preregistration hash, no T2 self pairs) and the rev 6 rules
 (rollout error over the pooled FIT sd, EPISODE_END records count as
-observations) are implemented in the checker and the learner.
+observations) and the rev 7 rule (a TRIAL or REP episode ended OUT_OF_BOUNDS
+before the horizon is void, replaced from the same stream, never in p or f;
+a fourth void in a batch voids the batch) are implemented in the checker
+and the harness.
 
 ## Layout
 
@@ -73,7 +76,7 @@ learner refits (at most three attempts). The checker runs after each stage;
 the harness never proceeds to trials without a HYPOTHESIS state. The scorer
 runs on 20 noise-free truth episodes (10 in the reset box, 10 at 1.5x).
 
-## Development results (seeds 1..5, rev 3 world, rev 6 checker rules)
+## Development results (seeds 1..5, rev 3 world, rev 7 checker rules)
 
 Learner never saw HOLDOUT/TRIAL/REP. "state" is the checker's verdict;
 "scorer" is `pd0_score` against the truth. Earlier receipts (rev 2 world;
@@ -81,7 +84,7 @@ rev 5 rules) are kept beside the new one.
 
 | level | state reached (seeds) | scorer | size / bound | bits | notes |
 |---|---|---|---|---|---|
-| L0 | PROVISIONAL_LAW 4/5, INTERVENED 1/5 | PASS 5/5 (exact) | 2 / 4 | 96 | seed 5: one replication episode left the box, batch short by one (code 261) |
+| L0 | PROVISIONAL_LAW 5/5 | PASS 5/5 (exact) | 2 / 4 | 96 | seed 5: one replication episode left the box, void and replaced (rev 7) |
 | L1 | PROVISIONAL_LAW 5/5 | PASS 5/5 | 3 / 5 | 144 | exact, one-step error 0 |
 | L2 | PROVISIONAL_LAW 5/5 | PASS 5/5 | 4 / 6 | 192 | exact |
 | L3 | PROVISIONAL_LAW 5/5 | PASS 5/5 | 8 / 10 | 576 | four variables, two channels, exact |
@@ -121,13 +124,11 @@ Numbers per instance: `evidence/physics0/learner/pd0-learner-dev-<commit>.txt`.
    levels the checker binds the reset through the PD0EXP1 entry and the
    steps only; the trial error bound covers a mismatched reset. A reset
    record that carries the requested values would close this.
-3. **Replication batches and out-of-bounds episodes.** A random replication
-   schedule can leave the box; the episode then has fewer than 20 outcomes
-   and the batch falls short (L0 seed 5). The spec should say whether the
-   harness may run a replacement episode in the same batch.
-
-Resolved by rev 5 and rev 6: noisy-reset preregistration hash, T2 self
-pairs, within-trial error normalisation, EPISODE_END outcomes.
+Resolved by rev 5, rev 6 and rev 7: noisy-reset preregistration hash, T2
+self pairs, within-trial error normalisation, EPISODE_END outcomes, void
+out-of-bounds trial and replication episodes (replaced from the same
+stream; at most three voids per batch, a fourth voids and redraws the
+batch; voids never count toward p or f).
 
 ## Not implemented
 
