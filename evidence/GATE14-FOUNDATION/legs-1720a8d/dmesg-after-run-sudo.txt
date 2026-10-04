@@ -1,0 +1,200 @@
+[   10.713867] Bluetooth: hci0: HW/SW Version: 0x00000000, Build Time: 20260605184935
+[   10.990162] Bluetooth: hci0: Device setup in 270759 usecs
+[   10.990172] Bluetooth: hci0: HCI Enhanced Setup Synchronous Connection command is advertised, but not supported.
+[   11.046668] NET: Registered PF_QIPCRTR protocol family
+[   11.067772] workqueue: tpm_dev_async_work hogged CPU for >20000us 4 times, consider switching to WQ_UNBOUND
+[   11.078531] Bluetooth: hci0: AOSP extensions version v1.00
+[   11.078539] Bluetooth: hci0: AOSP quality report is supported
+[   11.168050] workqueue: tpm_dev_async_work hogged CPU for >20000us 5 times, consider switching to WQ_UNBOUND
+[   11.299701] set_capacity_and_notify: 12 callbacks suppressed
+[   11.299716] loop22: detected capacity change from 0 to 8
+[   11.480279] workqueue: tpm_dev_async_work hogged CPU for >20000us 7 times, consider switching to WQ_UNBOUND
+[   12.299810] workqueue: tpm_dev_async_work hogged CPU for >20000us 11 times, consider switching to WQ_UNBOUND
+[   12.587810] workqueue: bpf_prog_free_deferred hogged CPU for >20000us 4 times, consider switching to WQ_UNBOUND
+[   12.610809] workqueue: bpf_prog_free_deferred hogged CPU for >20000us 5 times, consider switching to WQ_UNBOUND
+[   12.856153] mlx5_core 0002:01:00.0 enP2p1s0f0np0: Link down
+[   13.049824] mlx5_core 0000:01:00.1: E-Switch: Disable: mode(LEGACY), nvfs(0), necvfs(0), active vports(0)
+[   13.344493] mlx5_core 0002:01:00.1 enP2p1s0f1np1: Link down
+[   13.359859] enP7s7: 0xffff800086240000, 4c:bb:47:2b:b8:7b, IRQ 284
+[   13.540336] kauditd_printk_skb: 164 callbacks suppressed
+[   13.540339] audit: type=1400 audit(1790892675.711:176): apparmor="DENIED" operation="capable" class="cap" profile="/usr/sbin/cupsd" pid=2273 comm="cupsd" capability=12  capname="net_admin"
+[   13.560354] systemd-journald[622]: /var/log/journal/7af66f30966a49b6886e00e2fce4b42f/user-1000.journal: Journal file uses a different sequence number ID, rotating.
+[   13.629943] warning: `lldpd' uses wireless extensions which will stop working for Wi-Fi 7 hardware; use nl80211
+[   13.646973] workqueue: tpm_dev_async_work hogged CPU for >20000us 19 times, consider switching to WQ_UNBOUND
+[   14.083631] audit: type=1400 audit(1790892676.254:177): apparmor="STATUS" operation="profile_load" profile="unconfined" name="docker-default" pid=3477 comm="apparmor_parser"
+[   14.192846] evm: overlay not supported
+[   14.912020] workqueue: tpm_dev_async_work hogged CPU for >20000us 35 times, consider switching to WQ_UNBOUND
+[   15.532489] Initializing XFRM netlink socket
+[   15.663998] mlx5_core 0000:01:00.1: E-Switch: cleanup
+[   15.821737] fbcon: Taking over console
+[   15.822211] Console: switching to colour frame buffer device 240x67
+[   16.067075] mlx5_core 0002:01:00.0: E-Switch: Unload vfs: mode(LEGACY), nvfs(0), necvfs(0), active vports(0)
+[   16.143133] mlx5_core 0002:01:00.0: E-Switch: Disable: mode(LEGACY), nvfs(0), necvfs(0), active vports(0)
+[   17.570809] workqueue: bpf_prog_free_deferred hogged CPU for >20000us 7 times, consider switching to WQ_UNBOUND
+[   17.705972] docker0: port 1(vethc7eff44) entered blocking state
+[   17.705980] docker0: port 1(vethc7eff44) entered disabled state
+[   17.705993] vethc7eff44: entered allmulticast mode
+[   17.706035] vethc7eff44: entered promiscuous mode
+[   17.730326] br-0c02a93594d1: port 1(veth39aab60) entered blocking state
+[   17.730339] br-0c02a93594d1: port 1(veth39aab60) entered disabled state
+[   17.730361] veth39aab60: entered allmulticast mode
+[   17.730458] veth39aab60: entered promiscuous mode
+[   17.766296] eth0: renamed from veth5365c2b
+[   17.766711] docker0: port 2(veth5ba358b) entered blocking state
+[   17.766717] docker0: port 2(veth5ba358b) entered disabled state
+[   17.766727] veth5ba358b: entered allmulticast mode
+[   17.766779] veth5ba358b: entered promiscuous mode
+[   17.767159] docker0: port 1(vethc7eff44) entered blocking state
+[   17.767169] docker0: port 1(vethc7eff44) entered forwarding state
+[   17.777819] eth0: renamed from vethbecf92f
+[   17.840826] docker0: port 2(veth5ba358b) entered blocking state
+[   17.840835] docker0: port 2(veth5ba358b) entered forwarding state
+[   17.841097] docker0: port 3(veth72c97a5) entered blocking state
+[   17.841107] docker0: port 3(veth72c97a5) entered disabled state
+[   17.841127] veth72c97a5: entered allmulticast mode
+[   17.841203] veth72c97a5: entered promiscuous mode
+[   17.851183] eth0: renamed from veth4055925
+[   17.884175] docker0: port 3(veth72c97a5) entered blocking state
+[   17.884183] docker0: port 3(veth72c97a5) entered forwarding state
+[   17.884284] docker0: port 4(veth83634ba) entered blocking state
+[   17.884297] docker0: port 4(veth83634ba) entered disabled state
+[   17.884320] veth83634ba: entered allmulticast mode
+[   17.884404] veth83634ba: entered promiscuous mode
+[   17.885796] eth0: renamed from vethcd918a8
+[   17.919088] br-0c02a93594d1: port 1(veth39aab60) entered blocking state
+[   17.919095] br-0c02a93594d1: port 1(veth39aab60) entered forwarding state
+[   17.926430] eth0: renamed from vethf611938
+[   17.940315] docker0: port 4(veth83634ba) entered blocking state
+[   17.940325] docker0: port 4(veth83634ba) entered forwarding state
+[   17.984982] r8127: enP7s7: link up
+[   17.985195] br-0c02a93594d1: port 2(veth377296a) entered blocking state
+[   17.985209] br-0c02a93594d1: port 2(veth377296a) entered disabled state
+[   17.985232] veth377296a: entered allmulticast mode
+[   17.985304] veth377296a: entered promiscuous mode
+[   18.001792] eth1: renamed from veth3a69f1d
+[   18.007410] br-0c02a93594d1: port 2(veth377296a) entered blocking state
+[   18.007417] br-0c02a93594d1: port 2(veth377296a) entered forwarding state
+[   18.068230] docker0: port 5(vethdabac0c) entered blocking state
+[   18.068236] docker0: port 5(vethdabac0c) entered disabled state
+[   18.068244] vethdabac0c: entered allmulticast mode
+[   18.068302] vethdabac0c: entered promiscuous mode
+[   18.076988] eth1: renamed from veth58fbc7f
+[   18.090327] docker0: port 5(vethdabac0c) entered blocking state
+[   18.090332] docker0: port 5(vethdabac0c) entered forwarding state
+[   19.100822] mlx5_core 0002:01:00.0: E-Switch: Disable: mode(LEGACY), nvfs(0), necvfs(0), active vports(0)
+[   19.575931] mlx5_core 0002:01:00.0: E-Switch: cleanup
+[   19.905212] mlx5_core 0002:01:00.1: E-Switch: Unload vfs: mode(LEGACY), nvfs(0), necvfs(0), active vports(0)
+[   19.911818] mlx5_core 0002:01:00.1: E-Switch: Disable: mode(LEGACY), nvfs(0), necvfs(0), active vports(0)
+[   21.611815] workqueue: tpm_dev_async_work hogged CPU for >20000us 67 times, consider switching to WQ_UNBOUND
+[   24.991825] mlx5_core 0002:01:00.1: E-Switch: Disable: mode(LEGACY), nvfs(0), necvfs(0), active vports(0)
+[   25.419810] workqueue: bpf_prog_free_deferred hogged CPU for >20000us 11 times, consider switching to WQ_UNBOUND
+[   26.092586] mlx5_core 0002:01:00.1: E-Switch: cleanup
+[   26.531176] cx7-pcie-hotplug MTKP0001:00: Cable removal
+[   26.531227] pcieport 0000:00:00.0: AER: Multiple Correctable error message received from 0000:00:00.0
+[   26.531252] pcieport 0000:00:00.0: PCIe Bus Error: severity=Correctable, type=Physical Layer, (Receiver ID)
+[   26.531256] pcieport 0000:00:00.0:   device [10de:22ce] error status/mask=00000001/0000e000
+[   26.531259] pcieport 0000:00:00.0:    [ 0] RxErr                  (First)
+[   26.531308] pcieport 0002:00:00.0: AER: Multiple Correctable error message received from 0002:00:00.0
+[   26.531324] pcieport 0002:00:00.0: PCIe Bus Error: severity=Correctable, type=Physical Layer, (Receiver ID)
+[   26.531329] pcieport 0002:00:00.0:   device [10de:22ce] error status/mask=00000001/0000e000
+[   26.531331] pcieport 0002:00:00.0:    [ 0] RxErr                  (First)
+[   31.101125] audit: type=1400 audit(1790892693.269:178): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=5509 comm="systemd-detect-" capability=38  capname="perfmon"
+[   31.102345] audit: type=1400 audit(1790892693.269:179): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=5327 comm="cloud-id" capability=38  capname="perfmon"
+[   31.161506] Bluetooth: RFCOMM TTY layer initialized
+[   31.161518] Bluetooth: RFCOMM socket layer initialized
+[   31.161527] Bluetooth: RFCOMM ver 1.11
+[   32.920480] workqueue: tpm_dev_async_work hogged CPU for >20000us 131 times, consider switching to WQ_UNBOUND
+[   52.698482] workqueue: tpm_dev_async_work hogged CPU for >20000us 259 times, consider switching to WQ_UNBOUND
+[   73.334504] usb 5-1: USB disconnect, device number 2
+[   73.334517] usb 5-1.1: USB disconnect, device number 3
+[   73.378270] usb 6-1: USB disconnect, device number 2
+[   73.378281] usb 6-1.3: USB disconnect, device number 3
+[   73.378379] cdc_ncm 6-1.3:2.0 enx6c1ff7cdf7bf: unregister 'cdc_ncm' usb-NVDA8000:02-1.3, CDC NCM (NO ZLP)
+[   73.430762] usb 5-1.4: USB disconnect, device number 4
+[   75.817518] workqueue: bpf_prog_free_deferred hogged CPU for >20000us 19 times, consider switching to WQ_UNBOUND
+[   85.311673] workqueue: tpm_dev_async_work hogged CPU for >20000us 515 times, consider switching to WQ_UNBOUND
+[  138.196481] nvidia 000f:01:00.0: Using 40-bit DMA addresses
+[  354.676640] loop22: detected capacity change from 0 to 514960
+[  355.139155] audit: type=1400 audit(1790893017.587:180): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="/snap/snapd/28255/usr/lib/snapd/snap-confine" pid=46902 comm="apparmor_parser"
+[  355.195019] audit: type=1400 audit(1790893017.642:181): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.firefox.hook.post-refresh" pid=46910 comm="apparmor_parser"
+[  355.197616] audit: type=1400 audit(1790893017.645:182): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.firefox.hook.disconnect-plug-host-hunspell" pid=46908 comm="apparmor_parser"
+[  355.211577] audit: type=1400 audit(1790893017.659:183): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.firefox.hook.install" pid=46909 comm="apparmor_parser"
+[  355.231562] audit: type=1400 audit(1790893017.679:184): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.firefox.hook.configure" pid=46907 comm="apparmor_parser"
+[  355.347398] audit: type=1400 audit(1790893017.795:185): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap-update-ns.firefox" pid=46904 comm="apparmor_parser"
+[  355.447587] audit: type=1400 audit(1790893017.895:186): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.firefox.firefox" pid=46905 comm="apparmor_parser"
+[  355.494120] audit: type=1400 audit(1790893017.942:187): apparmor="STATUS" operation="profile_replace" profile="unconfined" name="snap.firefox.geckodriver" pid=46906 comm="apparmor_parser"
+[  355.501197] audit: type=1400 audit(1790893017.949:188): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap-update-ns.mesa-2404" pid=46932 comm="apparmor_parser"
+[  355.501856] audit: type=1400 audit(1790893017.949:189): apparmor="STATUS" operation="profile_replace" info="same as current profile, skipping" profile="unconfined" name="snap.mesa-2404.hook.disconnect-plug-kernel-gpu-2404" pid=46935 comm="apparmor_parser"
+[  617.436282] workqueue: tpm_dev_async_work hogged CPU for >20000us 1027 times, consider switching to WQ_UNBOUND
+[ 1747.063475] workqueue: tpm_dev_async_work hogged CPU for >20000us 2051 times, consider switching to WQ_UNBOUND
+[ 2938.437671] kauditd_printk_skb: 4 callbacks suppressed
+[ 2938.437696] audit: type=1400 audit(1790895600.913:194): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=193888 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1001 ouid=0
+[ 2938.439699] audit: type=1400 audit(1790895600.915:195): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=193886 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[ 3593.593372] workqueue: mmput_async_fn hogged CPU for >20000us 4 times, consider switching to WQ_UNBOUND
+[ 3594.028370] workqueue: mmput_async_fn hogged CPU for >20000us 5 times, consider switching to WQ_UNBOUND
+[ 3595.092362] workqueue: mmput_async_fn hogged CPU for >20000us 7 times, consider switching to WQ_UNBOUND
+[ 3610.747210] audit: type=1400 audit(1790896273.224:196): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=253942 comm="systemd-detect-" capability=38  capname="perfmon"
+[ 3610.749173] audit: type=1400 audit(1790896273.226:197): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=253925 comm="cloud-id" capability=38  capname="perfmon"
+[ 3676.813417] workqueue: mmput_async_fn hogged CPU for >20000us 11 times, consider switching to WQ_UNBOUND
+[ 3699.595123] workqueue: mmput_async_fn hogged CPU for >20000us 19 times, consider switching to WQ_UNBOUND
+[ 7210.642773] audit: type=1400 audit(1790899873.145:198): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=439289 comm="systemd-detect-" capability=38  capname="perfmon"
+[ 7210.644472] audit: type=1400 audit(1790899873.146:199): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=439288 comm="cloud-id" capability=38  capname="perfmon"
+[10810.551299] audit: type=1400 audit(1790903473.071:200): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=599979 comm="systemd-detect-" capability=38  capname="perfmon"
+[10810.553051] audit: type=1400 audit(1790903473.072:201): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=599977 comm="cloud-id" capability=38  capname="perfmon"
+[13737.627167] audit: type=1400 audit(1790906400.164:202): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=695179 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[13780.727528] audit: type=1400 audit(1790906443.265:203): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=695798 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1001 ouid=0
+[14410.689843] audit: type=1400 audit(1790907073.230:204): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=701881 comm="systemd-detect-" capability=38  capname="perfmon"
+[14410.691524] audit: type=1400 audit(1790907073.232:205): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=701877 comm="cloud-id" capability=38  capname="perfmon"
+[15070.216486] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1359
+[15070.216499] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from status @ kernel_graphics_context.c:1178
+[15070.216508] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxAllocMainCtxBuffer(pGpu, pKernelGraphicsContext, pKernelGraphics, pKernelChannel) @ kernel_graphics_context.c:1387
+[15070.216511] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxAllocCtxBuffers(pGpu, pKernelGraphicsObject->pKernelGraphicsContext, pKernelGraphics, pKernelGraphicsObject) @ kernel_graphics_object.c:215
+[18010.658773] audit: type=1400 audit(1790910673.219:206): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=826439 comm="systemd-detect-" capability=38  capname="perfmon"
+[18010.660003] audit: type=1400 audit(1790910673.220:207): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=826400 comm="cloud-id" capability=38  capname="perfmon"
+[21610.715549] audit: type=1400 audit(1790914273.295:208): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=1113453 comm="systemd-detect-" capability=38  capname="perfmon"
+[21610.717334] audit: type=1400 audit(1790914273.297:209): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=1113274 comm="cloud-id" capability=38  capname="perfmon"
+[24537.650276] audit: type=1400 audit(1790917200.250:210): apparmor="DENIED" operation="capable" class="cap" profile="/usr/sbin/cupsd" pid=2317799 comm="cupsd" capability=12  capname="net_admin"
+[24542.635764] audit: type=1400 audit(1790917205.236:211): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=2317894 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[24580.690480] audit: type=1400 audit(1790917243.291:212): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=2318265 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1001 ouid=0
+[25210.589595] audit: type=1400 audit(1790917873.194:213): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=2326651 comm="systemd-detect-" capability=38  capname="perfmon"
+[25210.590919] audit: type=1400 audit(1790917873.195:214): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=2326645 comm="cloud-id" capability=38  capname="perfmon"
+[28810.667194] audit: type=1400 audit(1790921473.298:215): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=2590934 comm="systemd-detect-" capability=38  capname="perfmon"
+[28810.669320] audit: type=1400 audit(1790921473.300:216): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=2590856 comm="cloud-id" capability=38  capname="perfmon"
+[32295.578101] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1359
+[32295.578116] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from status @ kernel_graphics_context.c:1178
+[32295.578128] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxAllocMainCtxBuffer(pGpu, pKernelGraphicsContext, pKernelGraphics, pKernelChannel) @ kernel_graphics_context.c:1387
+[32295.578130] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxAllocCtxBuffers(pGpu, pKernelGraphicsObject->pKernelGraphicsContext, pKernelGraphics, pKernelGraphicsObject) @ kernel_graphics_object.c:215
+[32410.732983] audit: type=1400 audit(1790925073.390:217): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=3165585 comm="systemd-detect-" capability=38  capname="perfmon"
+[32410.735433] audit: type=1400 audit(1790925073.392:218): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=3165535 comm="cloud-id" capability=38  capname="perfmon"
+[35341.742309] audit: type=1400 audit(1790928004.423:219): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=3597751 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[35380.580127] audit: type=1400 audit(1790928043.260:220): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=3598196 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1001 ouid=0
+[36010.640675] audit: type=1400 audit(1790928673.326:221): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=3606886 comm="systemd-detect-" capability=38  capname="perfmon"
+[36010.642001] audit: type=1400 audit(1790928673.328:222): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=3606824 comm="cloud-id" capability=38  capname="perfmon"
+[39612.494886] audit: type=1400 audit(1790932275.199:223): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=157091 comm="systemd-detect-" capability=38  capname="perfmon"
+[39612.496521] audit: type=1400 audit(1790932275.200:224): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=157032 comm="cloud-id" capability=38  capname="perfmon"
+[43210.404588] audit: type=1400 audit(1790935873.134:225): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=258799 comm="systemd-detect-" capability=38  capname="perfmon"
+[43210.406074] audit: type=1400 audit(1790935873.136:226): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=258796 comm="cloud-id" capability=38  capname="perfmon"
+[46140.728581] audit: type=1400 audit(1790938803.479:227): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=773377 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[46180.550085] audit: type=1400 audit(1790938843.300:228): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=773954 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1001 ouid=0
+[46811.597885] audit: type=1400 audit(1790939474.353:229): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=782673 comm="systemd-detect-" capability=38  capname="perfmon"
+[46811.600025] audit: type=1400 audit(1790939474.355:230): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=782626 comm="cloud-id" capability=38  capname="perfmon"
+[50410.450506] audit: type=1400 audit(1790943073.235:231): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=1058048 comm="systemd-detect-" capability=38  capname="perfmon"
+[50410.451941] audit: type=1400 audit(1790943073.237:232): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=1058003 comm="cloud-id" capability=38  capname="perfmon"
+[50981.534082] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from _memdescAllocInternal(pMemDesc) @ mem_desc.c:1359
+[50981.534094] NVRM: nvAssertOkFailedNoLog: Assertion failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from status @ kernel_graphics_context.c:1178
+[50981.534101] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxAllocMainCtxBuffer(pGpu, pKernelGraphicsContext, pKernelGraphics, pKernelChannel) @ kernel_graphics_context.c:1387
+[50981.534104] NVRM: nvCheckOkFailedNoLog: Check failed: Out of memory [NV_ERR_NO_MEMORY] (0x00000051) returned from kgrctxAllocCtxBuffers(pGpu, pKernelGraphicsObject->pKernelGraphicsContext, pKernelGraphics, pKernelGraphicsObject) @ kernel_graphics_object.c:215
+[54010.431900] audit: type=1400 audit(1790946673.243:233): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=1840963 comm="systemd-detect-" capability=38  capname="perfmon"
+[54010.433286] audit: type=1400 audit(1790946673.245:234): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=1840895 comm="cloud-id" capability=38  capname="perfmon"
+[56940.365674] audit: type=1400 audit(1790949603.193:235): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=1968403 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[56980.450020] audit: type=1400 audit(1790949643.277:236): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=1969565 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1001 ouid=0
+[57610.290075] audit: type=1400 audit(1790950273.123:237): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=1989141 comm="systemd-detect-" capability=38  capname="perfmon"
+[57610.291703] audit: type=1400 audit(1790950273.124:238): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=1989136 comm="cloud-id" capability=38  capname="perfmon"
+[61210.506134] audit: type=1400 audit(1790953873.360:239): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=2224248 comm="systemd-detect-" capability=38  capname="perfmon"
+[61210.509624] audit: type=1400 audit(1790953873.364:240): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=2224047 comm="cloud-id" capability=38  capname="perfmon"
+[64810.285990] audit: type=1400 audit(1790957473.166:241): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=2415935 comm="systemd-detect-" capability=38  capname="perfmon"
+[64810.287247] audit: type=1400 audit(1790957473.167:242): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=2415927 comm="cloud-id" capability=38  capname="perfmon"
+[67739.440470] audit: type=1400 audit(1790960402.345:243): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=2550517 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1000 ouid=0
+[67780.387783] audit: type=1400 audit(1790960443.292:244): apparmor="DENIED" operation="open" class="file" profile="snap.firmware-updater.firmware-notifier" name="/proc/sys/vm/max_map_count" pid=2551056 comm="firmware-notifi" requested_mask="r" denied_mask="r" fsuid=1001 ouid=0
+[68412.146586] audit: type=1400 audit(1790961075.056:245): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache_systemd_detect_virt" pid=2557136 comm="systemd-detect-" capability=38  capname="perfmon"
+[68412.147940] audit: type=1400 audit(1790961075.057:246): apparmor="DENIED" operation="capable" class="cap" profile="ubuntu_pro_esm_cache//cloud_id" pid=2557132 comm="cloud-id" capability=38  capname="perfmon"

@@ -5,6 +5,8 @@ Status 2026-10-02: E1 CLOSED on the fb36109 chip campaign, receipt `evidence/E1-
 Status: research note, 2026-09-30, read-only survey of `origin/main` at `529ebfa`; rows refreshed 2026-10-01 (see the status summary below).
 The 2026-10-01 rows were built and run; see the update section below.
 
+Update 2026-10-02: Gate 5 chip PASS on the corrected #225 candidate 1720a8d + physics e95e3ed, receipt `evidence/OMEGA-NUMERIC-0/3bb806d2...e5bab8.json`. M19 on that pair is INCOMPLETE: accuracy and build/tooling PASS; endurance NOT ESTABLISHED (the 1,000-job loop exited before its first GPU job), so M19 is not qualified and #225 is neither qualified nor disqualified by it. Endurance reruns on current main after E1. See `evidence/GATE14-FOUNDATION/legs-1720a8d/README.md`.
+
 Plan source: `aien-architecture/CURRENT_EXECUTION_PLAN.md`, section 8, "E1. Numerical closure"
 (must close before M20 tensor training). Evidence source: the merged M19R Gate 5
 (OMEGA-NUMERIC-0, omega#107, merge `62f5ba5`), canonical receipt

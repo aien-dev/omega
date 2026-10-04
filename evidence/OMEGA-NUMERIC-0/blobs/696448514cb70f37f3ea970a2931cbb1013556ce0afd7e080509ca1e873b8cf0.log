@@ -1,0 +1,316 @@
+============================================================
+        GATE 5: OMEGA-NUMERIC-0 QUALIFICATION SUITE         
+        mode: GB10 + CPU tiers
+============================================================
+
+OMEGA_NUMERIC_HWDESC_JSON:{"source":"FORGE_PROBE","descriptor_digest":"91684948286bd0f1e34caca4cb2d8f9b43d45d0f7ede39ba1a26e32559e53ce4","derived_alias":"sm_121"}
+OMEGA_NUMERIC_RUN_JSON:{"run_id":"20261002T172125Z-5c0ae51e0781","binary_sha256":"df983c2f96ada6689f84710f5225c9dc15f9757417d5a612507d5b65f039dd65"}
+[*] FPCR 0x0000000000000000, required-clear mask 0x0000000007c80007
+[PASS] FPCR_RNE_NO_FTZ_REQUIRED
+[*] Op registry:
+    FADD        encoded    BIT_EXACT  a + b (RNE, subnormals kept)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FADD","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FSUB        encoded    BIT_EXACT  a - b (RNE, subnormals kept)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSUB","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FMUL        encoded    BIT_EXACT  a * b (RNE, subnormals kept)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FMUL","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FFMA        encoded    BIT_EXACT  fma(a, b, c), c uniform per launch
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FFMA","encoded":true,"compare":"BIT_EXACT","launches":8}
+    FSETP_SEL   encoded    INT_EXACT  (a >= b, false if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSEL        encoded    INT_EXACT  (a >= 0, false if a is NaN) ? b : a, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FMNMX_MIN   encoded    BIT_EXACT  minNum(a, b), NaN yields the other operand, -0 < +0
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FMNMX_MIN","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FMNMX_MAX   encoded    BIT_EXACT  maxNum(a, b), NaN yields the other operand, -0 < +0
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FMNMX_MAX","encoded":true,"compare":"BIT_EXACT","launches":1}
+    I2FP        encoded    BIT_EXACT  (float)(int32 bits of a), RNE
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"I2FP","encoded":true,"compare":"BIT_EXACT","launches":1}
+    F2I         encoded    INT_EXACT  int32 truncate of a, NaN -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2I","encoded":true,"compare":"INT_EXACT","launches":1}
+    MUFU_RCP    encoded    SEED_BOUND seed for 1/a: relative error bound only
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"MUFU_RCP","encoded":true,"compare":"SEED_BOUND","launches":1}
+    MUFU_RSQ    encoded    SEED_BOUND seed for 1/sqrt(a): relative error bound only
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"MUFU_RSQ","encoded":true,"compare":"SEED_BOUND","launches":1}
+    LDS_STS     encoded    INT_EXACT  a[i ^ 63]: each thread stores a[i] to shared word tid, BAR.SYNC, then loads word tid ^ 63 (mirror exchange inside each 64-thread CTA), bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"LDS_STS","encoded":true,"compare":"INT_EXACT","launches":1}
+    SHFL_DOWN   encoded    INT_EXACT  a[lane+1] within each 32-lane warp, lane 31 keeps its own value
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"SHFL_DOWN","encoded":true,"compare":"INT_EXACT","launches":1}
+    DIV         encoded    BIT_EXACT  correctly rounded a / b (integer long division, RNE)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"DIV","encoded":true,"compare":"BIT_EXACT","launches":1}
+    SQRT        encoded    BIT_EXACT  correctly rounded sqrt(a) (integer square root, RNE)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"SQRT","encoded":true,"compare":"BIT_EXACT","launches":1}
+    EXP         REFUSED    BIT_EXACT  omega_math_exp(a)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"EXP","encoded":false,"compare":"BIT_EXACT","launches":1}
+    LOG         REFUSED    BIT_EXACT  omega_math_log(a)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"LOG","encoded":false,"compare":"BIT_EXACT","launches":1}
+    REDUCE_SUM  encoded    BIT_EXACT  declared pairwise-tree warp sum (PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1), lane 0 of each warp
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"REDUCE_SUM","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FSETP_LT_SEL encoded    INT_EXACT  (a < b, false if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_LT_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_LE_SEL encoded    INT_EXACT  (a <= b, false if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_LE_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_GT_SEL encoded    INT_EXACT  (a > b, false if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_GT_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_EQ_SEL encoded    INT_EXACT  (a == b, false if either is NaN, -0 == +0) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_EQ_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_NE_SEL encoded    INT_EXACT  (a != b, false if either is NaN, -0 == +0) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_NE_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_NUM_SEL encoded    INT_EXACT  (neither a nor b is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_NUM_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_NAN_SEL encoded    INT_EXACT  (a or b is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_NAN_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_LTU_SEL encoded    INT_EXACT  (a < b, true if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_LTU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_LEU_SEL encoded    INT_EXACT  (a <= b, true if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_LEU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_GTU_SEL encoded    INT_EXACT  (a > b, true if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_GTU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_GEU_SEL encoded    INT_EXACT  (a >= b, true if either is NaN) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_GEU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_EQU_SEL encoded    INT_EXACT  (a == b, true if either is NaN, -0 == +0) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_EQU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    FSETP_NEU_SEL encoded    INT_EXACT  (a != b, true if either is NaN, -0 == +0) ? a : b, bits moved unchanged
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FSETP_NEU_SEL","encoded":true,"compare":"INT_EXACT","launches":1}
+    F2I_FLOOR   encoded    INT_EXACT  int32 floor of a, NaN -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2I_FLOOR","encoded":true,"compare":"INT_EXACT","launches":1}
+    F2I_CEIL    encoded    INT_EXACT  int32 ceiling of a, NaN -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2I_CEIL","encoded":true,"compare":"INT_EXACT","launches":1}
+    F2I_RNI     encoded    INT_EXACT  int32 round-to-nearest-even of a, NaN -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2I_RNI","encoded":true,"compare":"INT_EXACT","launches":1}
+    F2U         encoded    INT_EXACT  uint32 truncate of a, NaN -> 0, negatives -> 0, saturating
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F2U","encoded":true,"compare":"INT_EXACT","launches":1}
+    I2FP_U32    encoded    BIT_EXACT  (float)(uint32 bits of a), RNE
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"I2FP_U32","encoded":true,"compare":"BIT_EXACT","launches":1}
+    F32_TO_F16  encoded    F16_BITS   binary16 of a in bits [15:0] (RNE, overflow to inf, subnormals kept, NaN stays NaN), bits [31:16] zero
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F32_TO_F16","encoded":true,"compare":"F16_BITS","launches":1}
+    F32_TO_BF16 encoded    BF16_BITS  bfloat16 of a in bits [15:0] (RNE, overflow to inf, subnormals kept, NaN stays NaN), bits [31:16] zero
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F32_TO_BF16","encoded":true,"compare":"BF16_BITS","launches":1}
+    F16_TO_F32  encoded    BIT_EXACT  exact FP32 of the binary16 in bits [15:0] of a (bits [31:16] ignored)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"F16_TO_F32","encoded":true,"compare":"BIT_EXACT","launches":1}
+    BF16_TO_F32 encoded    BIT_EXACT  exact FP32 of the bfloat16 in bits [15:0] of a (bits [31:16] ignored)
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"BF16_TO_F32","encoded":true,"compare":"BIT_EXACT","launches":1}
+    FFMA_V      encoded    BIT_EXACT  fma(a, b, c), c read per element
+OMEGA_NUMERIC_REGISTRY_JSON:{"op":"FFMA_V","encoded":true,"compare":"BIT_EXACT","launches":1}
+[*] Provenance entries: 52, encoded ops: 40
+[PASS] PROVENANCE_MATCHES_EXECUTOR
+    refused EXP            rc=-2: op EXP is not encoded for GB10: no GB10 kernel for the Omega exp polynomial exists (the old path ran FADD)
+    refused LOG            rc=-2: op LOG is not encoded for GB10: no GB10 kernel for the Omega log polynomial exists (the old path ran FADD)
+    refused FFMA non-uniform c: op FFMA: c must be the same value in every element (it is carried in the constant bank)
+    refused SHFL_DOWN count 33: op SHFL_DOWN: count must be a multiple of 32 (whole warps only)
+    refused 15 unencoded variants (LDS.U8 ... REDUCE_SUM_BLOCK) by name
+[PASS] NOT_ENCODED_OPS_REFUSED_BEFORE_SUBMISSION
+    refused LDS_STS    count 32    rc=-3: op LDS_STS: count must be a multiple of the CTA size 64 (whole CTAs: every thread must reach BAR.SYNC)
+    refused LDS_STS    count 96    rc=-3: op LDS_STS: count must be a multiple of the CTA size 64 (whole CTAs: every thread must reach BAR.SYNC)
+    refused LDS_STS    count 4097  rc=-3: op LDS_STS: count must be a multiple of the CTA size 64 (whole CTAs: every thread must reach BAR.SYNC)
+    refused REDUCE_SUM count 33    rc=-3: op REDUCE_SUM: count must be a multiple of 32 (whole warps only)
+    refused REDUCE_SUM count 4080  rc=-3: op REDUCE_SUM: count must be a multiple of 32 (whole warps only)
+    refused SHFL_DOWN  count 33    rc=-3: op SHFL_DOWN: count must be a multiple of 32 (whole warps only)
+[PASS] NEG_BAD_SHARED_AND_WARP_SHAPES_REFUSED
+    patch corruptions refused with the right reason: 55 of 55; clean patches accepted: yes
+[PASS] NEG_PATCH_STRUCTURE_CHECKED_BEFORE_SUBMISSION
+[PASS] FP32_SIMT_OPCODES_ENCODED
+OMEGA_NUMERIC_PARITY_JSON:{"op":"DIV","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":115,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"SQRT","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_FINDING_JSON:{"id":"DIV_SQRT_CORRECT_ROUNDING","corpus":4096,"div_mismatches":0,"sqrt_mismatches":0,"hard_case_mismatches":0}
+[*] exp/log edge and consistency checks: ok
+[PASS] OMEGA_MATH_SEQUENCES_QUALIFIED
+OMEGA_NUMERIC_PARITY_JSON:{"op":"REDUCE_SUM","tier":"cpu","compare":"BIT_EXACT","reduction_order":"PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1","n":4096,"checked":128,"mismatches":0,"subnormal_expected":12,"first_mismatch":null,"by_input_class":{"zero":{"n":0,"mismatches":0},"inf":{"n":0,"mismatches":0},"nan":{"n":0,"mismatches":0},"subnormal":{"n":0,"mismatches":0},"normal":{"n":0,"mismatches":0}}}
+[*] Declared Reduction Order: PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1
+[PASS] WARP_REDUCTION_ORDER_DECLARED
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FADD","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":609,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSUB","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":614,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FMUL","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":565,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x3f800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x80000000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":565,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x00800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":372,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0xbf800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x7fc00000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x7f800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x00000003","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":1439,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"cpu","compare":"BIT_EXACT","c_bits":"0x80800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":269,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FMNMX_MIN","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":876,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FMNMX_MAX","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":731,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"I2FP","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"MUFU_RCP","tier":"cpu","compare":"SELF_CONSISTENT_HOST_FDIV","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":0,"mismatches":0},"inf":{"n":0,"mismatches":0},"nan":{"n":0,"mismatches":0},"subnormal":{"n":0,"mismatches":0},"normal":{"n":0,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"MUFU_RSQ","tier":"cpu","compare":"SELF_CONSISTENT_HOST_FDIV","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":0,"mismatches":0},"inf":{"n":0,"mismatches":0},"nan":{"n":0,"mismatches":0},"subnormal":{"n":0,"mismatches":0},"normal":{"n":0,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"LDS_STS","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"SHFL_DOWN","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"EXP","tier":"cpu","compare":"SELF_CONSISTENT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"LOG","tier":"cpu","compare":"SELF_CONSISTENT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LT_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LE_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_GT_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_EQ_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NE_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NUM_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NAN_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LTU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LEU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_GTU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_GEU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_EQU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NEU_SEL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I_FLOOR","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I_CEIL","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I_RNI","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2U","tier":"cpu","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"I2FP_U32","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F32_TO_F16","tier":"cpu","compare":"F16_BITS","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F32_TO_BF16","tier":"cpu","compare":"BF16_BITS","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F16_TO_F32","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"BF16_TO_F32","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":250,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA_V","tier":"cpu","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":69,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+[PASS] CPU_TIER_EQUALS_REFERENCE
+[PASS] CPU_TIER_SUBNORMALS_PRESERVED
+
+[*] Independent oracle: integer soft-float, binary128 EXP/LOG, tagged LDS_STS
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FADD","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FADD","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FSUB","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FSUB","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FMUL","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FMUL","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x3f800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x3f800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x80000000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x80000000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x00800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x00800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0xbf800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0xbf800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x7fc00000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x7fc00000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x7f800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x7f800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x00000003","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x00000003","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"reference","c_bits":"0x80800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"FFMA","oracle":"integer_softfloat_rne","against":"cpu","c_bits":"0x80800000","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"I2FP","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"I2FP","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"DIV","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"DIV","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"SQRT","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"SQRT","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"MUFU_RCP","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"MUFU_RCP","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"MUFU_RSQ","oracle":"integer_softfloat_rne","against":"reference","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"MUFU_RSQ","oracle":"integer_softfloat_rne","against":"cpu","n":4096,"mismatches":0,"first_mismatch":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"EXP","oracle":"binary128_series_rounded_once","against":"reference","compare":"ULP_BOUND","bound_ulp":40,"n":4096,"normal_or_inf_results":3459,"max_ulp_normal_or_inf":37,"subnormal_or_zero_results":488,"max_ulp_subnormal_or_zero":0,"nan_class_mismatches":0,"over_bound":0,"first_violation":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"LOG","oracle":"binary128_series_rounded_once","against":"reference","compare":"ULP_BOUND","bound_ulp":4,"n":4096,"normal_or_inf_results":2161,"max_ulp_normal_or_inf":1,"subnormal_or_zero_results":32,"max_ulp_subnormal_or_zero":0,"nan_class_mismatches":0,"over_bound":0,"first_violation":null}
+OMEGA_NUMERIC_ORACLE_JSON:{"op":"LDS_STS","oracle":"index_tagged_mirror","n":4096,"wrong_source":0,"fixed_points":0,"not_involution":0}
+[PASS] CPU_TIER_INDEPENDENT_ORACLE
+
+[*] E1 scalar contract: 4194304 random inputs per op, 23 ops, three derivations
+OMEGA_NUMERIC_E1_JSON:{"set":"boundary","cases":209,"bad":0}
+[PASS] E1_SCALAR_BOUNDARY_VALUES
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_LT_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_LE_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_GT_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_EQ_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_NE_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_NUM_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_NAN_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_LTU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_LEU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_GTU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_GEU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_EQU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FSETP_NEU_SEL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F2I_FLOOR","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F2I_CEIL","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F2I_RNI","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F2U","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"I2FP_U32","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F32_TO_F16","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F32_TO_BF16","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F16_TO_F32","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"BF16_TO_F32","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"FFMA_V","set":"random","n":4194304,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"F16_TO_F32","set":"exhaustive16","n":65536,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+OMEGA_NUMERIC_E1_JSON:{"op":"BF16_TO_F32","set":"exhaustive16","n":65536,"cpu_vs_ref":0,"oracle_vs_ref":0,"oracle_vs_cpu":0,"refused":0,"first":null}
+[PASS] E1_SCALAR_CPU_EQUALS_REFERENCE
+[PASS] E1_SCALAR_INDEPENDENT_ORACLE
+
+[*] GB10 tier: 4096 elements per launch
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FADD","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":609,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSUB","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":614,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FMUL","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":565,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"gb10","compare":"BIT_EXACT","c_bits":"0x3f800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"gb10","compare":"BIT_EXACT","c_bits":"0x80000000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":565,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"gb10","compare":"BIT_EXACT","c_bits":"0x00800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":372,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"gb10","compare":"BIT_EXACT","c_bits":"0xbf800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"gb10","compare":"BIT_EXACT","c_bits":"0x7fc00000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"gb10","compare":"BIT_EXACT","c_bits":"0x7f800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"gb10","compare":"BIT_EXACT","c_bits":"0x00000003","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":1439,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA","tier":"gb10","compare":"BIT_EXACT","c_bits":"0x80800000","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":269,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FMNMX_MIN","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":876,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FMNMX_MAX","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":731,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"I2FP","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"MUFU_RCP","tier":"gb10","compare":"SEED_BOUND","bound":"rel<=2^-20 vs IEEE, finite normal in and out","n":4096,"checked":2976,"out_of_bound":0,"skipped":1120,"first_violation":null}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"MUFU_RSQ","tier":"gb10","compare":"SEED_BOUND","bound":"rel<=2^-20 vs IEEE, finite normal in and out","n":4096,"checked":1638,"out_of_bound":0,"skipped":2458,"first_violation":null}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"LDS_STS","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"SHFL_DOWN","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"DIV","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":115,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"SQRT","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"REDUCE_SUM","tier":"gb10","compare":"BIT_EXACT","reduction_order":"PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1","n":4096,"checked":128,"mismatches":0,"subnormal_expected":12,"first_mismatch":null,"by_input_class":{"zero":{"n":2,"mismatches":0},"inf":{"n":2,"mismatches":0},"nan":{"n":5,"mismatches":0},"subnormal":{"n":24,"mismatches":0},"normal":{"n":95,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LT_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LE_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_GT_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_EQ_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NE_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NUM_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NAN_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LTU_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_LEU_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_GTU_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_GEU_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_EQU_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FSETP_NEU_SEL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I_FLOOR","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I_CEIL","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2I_RNI","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F2U","tier":"gb10","compare":"INT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"I2FP_U32","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F32_TO_F16","tier":"gb10","compare":"F16_BITS","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F32_TO_BF16","tier":"gb10","compare":"BF16_BITS","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"F16_TO_F32","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":0,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"BF16_TO_F32","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":250,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+OMEGA_NUMERIC_PARITY_JSON:{"op":"FFMA_V","tier":"gb10","compare":"BIT_EXACT","n":4096,"checked":4096,"mismatches":0,"subnormal_expected":69,"first_mismatch":null,"by_input_class":{"zero":{"n":64,"mismatches":0},"inf":{"n":64,"mismatches":0},"nan":{"n":149,"mismatches":0},"subnormal":{"n":770,"mismatches":0},"normal":{"n":3049,"mismatches":0}}}
+[PASS] CPU_GB10_BIT_PARITY
+[PASS] SUBNORMALS_PRESERVED_NO_FTZ
+[PASS] MUFU_SEED_ONLY_NOT_COMPARED
+[PASS] EDGE_CLASS_BEHAVIOR_VERIFIED
+[PASS] HARDWARE_DESCRIPTOR_PROBED
+
+[*] Negative tests
+    FTZ model vs reference, FADD     : 654 mismatches
+    FTZ model vs reference, FSUB     : 650 mismatches
+    FTZ model vs reference, FMUL     : 695 mismatches
+    FTZ model vs reference, FFMA     : 554 mismatches
+    FTZ model vs reference, FMNMX_MIN: 876 mismatches
+    FTZ model vs reference, FMNMX_MAX: 731 mismatches
+    FTZ model vs reference, FFMA_V   : 163 mismatches
+[PASS] NEG_FTZ_DETECTED_AND_REJECTED
+    sequential 16777216.0 vs declared tree 16777246.0
+[PASS] NEG_UNORDERED_REDUCTION_DIVERGENCE_CAUGHT
+    raw seed vs IEEE reciprocal: 640 of 640 differ; MUFU bit compare refused: yes
+[PASS] NEG_RAW_MUFU_APPROX_REJECTED_WITHOUT_REFINEMENT
+[PASS] NEG_UNKNOWN_OPCODE_FAILS_CLOSED
+    corrupted provenance copies rejected: 5 of 5; clean copy accepted: yes
+[PASS] NEG_OPCODE_PROVENANCE_INTEGRITY_VERIFIED
+    FPCR round-up     : environment changed yes, tiers refused yes (rc -5 -5 -5 -5)
+    FPCR round-to-zero: environment changed yes, tiers refused yes (rc -5 -5 -5 -5)
+    FPCR flush-to-zero: environment changed yes, tiers refused yes (rc -5 -5 -5 -5)
+[PASS] NEG_NONDEFAULT_FPCR_REFUSED
+[PASS] NEG_COMPARATOR_CATCHES_ONE_BIT
+
+Gate 5 Results: TOTAL=26 PASSED=26 FAILED=0 SKIPPED=0
+Gate 5 Verdict: PASS (build chip, declared chip-only skips 0 of 5, undeclared skips 0)
