@@ -27,7 +27,7 @@ Bounds (section 6.1 to 6.3): in-box 0.02 (L6 0.03), extrapolation 0.06 (L6 0.08)
 | L3 | PASS, <= 5e-6 | PASS, coef <= 35 ppm | PASS, size 8, exact support | 0.032 (one seed, 1 of 31 episodes) | PASS |
 | L4 | PASS, <= 5e-6 | PASS, coef <= 35 ppm | PASS, size 4 | **0.57** (0.00 to 0.57; 14 of 20 seeds above 5 %) | **FAIL** |
 | L5 | PASS | PASS: in-box 0.002 to 0.010, extrap 0.002 to 0.007, one-step 0.0002 to 0.0013, coef 0.9 % to 1.9 % | in-box 0.002 to 0.014, coef 0.6 % to 2.4 %, size 4 (one seed 5) | 0.000 | PASS |
-| L6 | PASS: in-box <= 3e-6, extrap <= 3e-6 | NOT_RUN (latent estimation not in this cut) | latent-free: in-box 0.021, 0.028, 0.033, 0.035, 0.072 | 0.000 | PASS |
+| L6 | PASS: in-box <= 3e-6, extrap <= 3e-6 | PASS (latent estimator, see L6 detail below): in-box <= 3e-6, extrap <= 4e-6 | latent-free: in-box 0.021, 0.028, 0.033, 0.035, 0.072 | 0.000 | PASS |
 
 Mutant control: with the L1 spring sign flipped in the generator (`-DPD0_MUTANT_SIGN`) the oracle check reports `PHYSICS0_G1_V1_L1-mutant: FAIL`, so the check bites (`build/physics0/mutant.out`, copied into the G0 receipt).
 
@@ -51,7 +51,21 @@ Mutant control: with the L1 spring sign flipped in the generator (`-DPD0_MUTANT_
 ## 4. Limits of this calibration
 
 - Seeds 1..5 for V1, 1..20 for V3 (as the spec's development set). No scored-seed commitments were made.
-- `oracle_fit` for L6 is NOT_RUN: fitting constants with a hidden state needs a latent estimator, not written in this cut. `oracle_exact` covers the "is the bound reachable by the true map" question for L6.
+- `oracle_fit` for L6 uses the latent estimator of substrate cut 2 (detail below). The h scale is not identifiable (spec 4.1), so it is fixed to q = 1 and only the product m*q is compared; the oracle also checks that the fitted k, w, m*q lie in the generator ranges, which is what catches a wrong latent sign.
 - The sparse reference solver is deterministic and has no tuning knobs beyond the spec's `description_bits` rule; it is a reference, not a learner.
 - Nothing here ran a ladder, a planner, a negative control over the ladder or a learner. `PD0_CONTROLS_PASS` is not claimed.
 - Floating point enters only in the calibration code (least squares, NRMSE); every world value, record byte and relation coefficient is an integer.
+
+## L6 latent estimator (substrate cut 2)
+
+Method: the generator form is known to the oracle. With a = 1 - w*dt the latent is g' = a*g + dt*s0 (g = 0 at the first step of every episode, h = q*g), so (ds1 - u*dt) = (-k*dt)*s0 + (m*q*dt)*g is linear in (k, m*q) for each candidate w. The estimator solves that 2-parameter least squares over a w grid (0.2 to 4.0, step 0.05) and refines the best w by golden section. FIT and SELECT data only; thresholds untouched; scored by the section 6.1 rule (20 episodes of 20 steps, half in-box, half extrapolation, h = 0 at start).
+
+| seed | in-box NRMSE | extrap NRMSE | k err (ppm) | w err (ppm) | m*q err (ppm) |
+| --- | --- | --- | --- | --- | --- |
+| 1 | 2e-6 | 2e-6 | 2 | 16 | 15 |
+| 2 | 2e-6 | 1e-6 | 0 | 3 | 28 |
+| 3 | 3e-6 | 4e-6 | 3 | 9 | 6 |
+| 4 | 2e-6 | 2e-6 | 1 | 17 | 12 |
+| 5 | 2e-6 | 2e-6 | 2 | 6 | 6 |
+
+Bounds 0.03 in-box and 0.08 extrapolation: met by a wide margin; `oracle_fit` L6 PASS on 5 of 5 seeds. Mutant: with the sign of m*h flipped in the generator (`PD0_MUTANT_LATENT_SIGN`), `oracle_fit` FAILs on 5 of 5 seeds because the fitted m*q comes out negative (about -0.4 to -0.9, declared range 0.25 to 1). Note the refitted model still predicts the mutant world well; it is the declared-range check that fails, not the prediction bound. Numbers above come from evidence/physics0/pd0-oracle-L6-fit.json (cut 2; the cut 1 file pd0-oracle-L6.json is immutable and keeps oracle_fit NOT_RUN). Cut 2 G0 receipt: evidence/physics0/pd0-g0-receipt-cut2.txt.

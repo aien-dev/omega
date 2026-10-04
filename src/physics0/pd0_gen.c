@@ -2,7 +2,7 @@
  * revision 2) verbatim in integer micro-units. Discrete maps: the law is the
  * map written here, not the differential equation it resembles.
  * Build with -DPD0_MUTANT_SIGN to flip the sign of the spring term in L1
- * (NC-3 style mutation: the oracle check must then FAIL). */
+ * (NC-3 style mutation: the oracle check must then FAIL). -DPD0_MUTANT_LATENT_SIGN flips the sign of m*h in L6. */
 #include "physics0/pd0_gen.h"
 #include "physics0/pd0_guard.h"
 
@@ -107,7 +107,12 @@ int pd0_gen_step(const pd0_gen *g, const int64_t *s, int64_t h, const int64_t *u
     case PD0_L6: {
         const int64_t m = g->k[1], w = g->k[2], q = g->k[3];
         o[0] = s[0] + pd0_mul(s[1], dt);
-        o[1] = s[1] + pd0_mul(-pd0_mul(k, s[0]) + pd0_mul(m, h) + u[0], dt);
+#ifdef PD0_MUTANT_LATENT_SIGN
+        const int64_t lat = -pd0_mul(m, h); /* wrong latent sign: the spec says +m*h */
+#else
+        const int64_t lat = pd0_mul(m, h);
+#endif
+        o[1] = s[1] + pd0_mul(-pd0_mul(k, s[0]) + lat + u[0], dt);
         hn = h + pd0_mul(-pd0_mul(w, h) + pd0_mul(q, s[0]), dt);
         break;
     }
