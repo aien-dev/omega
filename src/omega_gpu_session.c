@@ -108,14 +108,12 @@ OmegaGpuSession *omega_gpu_session_open(void) {
     return &g_s;
 }
 
-int omega_gpu_session_on_close(void (*hook)(void)) {
+int omega_gpu_session_on_close(void (*hook)(void)) { /* caller holds the lock (the APIs register from their open path) */
     if (!hook) return -1;
-    pthread_mutex_lock(&g_mu);
     int rc = 0;
     bool seen = false;
     for (unsigned i = 0; i < g_nhooks; i++) if (g_hooks[i] == hook) seen = true;
     if (!seen) { if (g_nhooks < sizeof g_hooks / sizeof g_hooks[0]) g_hooks[g_nhooks++] = hook; else rc = -1; }
-    pthread_mutex_unlock(&g_mu);
     return rc;
 }
 

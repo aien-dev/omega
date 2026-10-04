@@ -105,9 +105,11 @@ int omega_gpu_session_launch(const OmegaGpuLaunch *L, uint64_t *elapsed_ns, uint
 const char *omega_gpu_session_last_error(void);
 void omega_gpu_session_set_error(const char *stage);
 
-/* Register a function the session calls (lock held, device still open) right
- * before it closes, so an API can drop its resident kernels and scratch.
- * Up to 8; the same function is registered once. */
+/* Caller holds the lock. Register a function the session calls (lock held, device
+ * still open) right before it closes, so an API can drop its resident kernels and
+ * scratch. Up to 8; the same function is registered once. (Taking the lock inside
+ * deadlocked the first call of every API on 2026-10-04: the APIs register from
+ * their open path, which already holds it.) */
 int omega_gpu_session_on_close(void (*hook)(void));
 
 /* Close the device and free every session buffer. Takes the lock itself.
