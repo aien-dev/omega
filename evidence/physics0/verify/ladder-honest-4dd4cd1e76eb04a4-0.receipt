@@ -1,0 +1,7 @@
+kind: ladder-honest
+verifier_commit: 3c72895857c3
+input_sha256: 4dd4cd1e76eb04a43c2ca1c894a8294ccfb3ff19a3926e893b184f934af7ebcb
+code: 0
+name: PD0V_OK
+recorder: STAND_IN
+range_check: STAND_IN

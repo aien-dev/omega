@@ -1,0 +1,14 @@
+kind: score-M2
+verifier_commit: 3c72895857c3
+input_sha256: 316ce63295382e6cd3005e9c8e82e5138eada2cbcda59c4279f3429d2448d502
+code: 303
+name: PD0V_SCORE_SIZE
+recorder: STAND_IN
+range_check: STAND_IN
+fail_mask: 0x8
+inbox_nrmse_micro: 16
+extrap_nrmse_micro: 29
+onestep_nrmse_micro: 2
+size: 9
+bits: 432
+ref_nrmse_micro: 0

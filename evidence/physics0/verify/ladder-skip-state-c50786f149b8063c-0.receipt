@@ -1,0 +1,7 @@
+kind: ladder-skip-state
+verifier_commit: 3c72895857c3
+input_sha256: c50786f149b8063c8c3f601cef9ce68744eb32eef1f23868c72c6b1cf0919512
+code: 270
+name: PD0V_T8_STATE_SKIPPED
+recorder: STAND_IN
+range_check: STAND_IN

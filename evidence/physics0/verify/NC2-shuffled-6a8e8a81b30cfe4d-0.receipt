@@ -1,0 +1,8 @@
+kind: NC2-shuffled
+verifier_commit: 3c72895857c3
+input_sha256: 6a8e8a81b30cfe4d3ca61e06dc5fdf93d83a6247640224d2d8875f792204c308
+code: 270
+name: PD0V_T8_STATE_SKIPPED
+recorder: STAND_IN
+range_check: STAND_IN
+highest_state: OBSERVATION
