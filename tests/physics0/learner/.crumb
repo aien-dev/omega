@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "tests/physics0/learner",
+  "layer": "tests",
+  "purpose": "Learner gates: unit tests (determinism, PDLAW1 round trip, memoriser vs compact theory, null world, withholding), the development harness that drives pd0-world and the test-only truth process over pipes, tags the split, builds the PD0LEDG1 ledger and scores against the truth. The truth process is the only binary here that links the generators."
+}
