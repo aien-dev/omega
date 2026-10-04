@@ -73,6 +73,6 @@ int main(void)
        * refuses it, NC-1). The strongest correlation is regression to the mean (var_a == var_b), which T2 accepts. */
       printf("null world: best rank is %s (mdl %.0f bits, select NRMSE %lld micro), %d candidates\n", c0->is_null ? "the null" : "a relation", c0->mdl_bits, (long long)c0->select_nrmse_micro, pd0_learner_n_candidates(A));
       for (int i = 0; i < pd0_learner_n_candidates(A); i++) CHECK(pd0_learner_candidate(A, i)->select_nrmse_micro > 500000, "null world: no candidate predicts within 0.5 sd");
-      pd0_corr c; int rc = pd0_learner_correlation(A, 5, 2000, &c); CHECK(rc != 0 || c.var_a == c.var_b, "null world: the only correlation is regression to the mean"); pd0_learner_free(A); }
+      pd0_corr c; int rc = pd0_learner_correlation(A, 5, 2000, &c); CHECK(rc != 0 || (c.var_a != c.var_b && c.p_micro > 10000), "null world: no significant cross-variable correlation (self pairs excluded, spec rev 5)"); pd0_learner_free(A); }
     printf("checks %d, failures %d\n", checks, fails); printf("PHYSICS0_LEARNER_UNIT: %s\n", fails ? "FAIL" : "PASS"); return fails ? 1 : 0;
 }

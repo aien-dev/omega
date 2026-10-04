@@ -42,9 +42,9 @@ typedef struct { int version; pd0l_desc d; } describe;
 static int parse_describe(const uint8_t *b, size_t n, describe *D)
 {
     memset(D, 0, sizeof *D); if (n < 10) return -1;
-    if (!memcmp(b, "PD0DESC1", 8)) D->version = 1; else if (!memcmp(b, "PD0DESC2", 8)) D->version = 2; else return -1;
+    if (!memcmp(b, "PD0DESC2", 8)) D->version = 2; else return -1;   /* PD0DESC1 (one reset pair) is refused */
     pd0l_desc *d = &D->d; d->n_obs = b[8]; d->n_channels = b[9]; size_t o = 10; if (d->n_obs == 0 || d->n_obs > PD0_MAX_OBS || d->n_channels > PD0_MAX_CHAN) return -1;
-    size_t nr = D->version == 2 ? d->n_obs : 1; if (n < o + 8 + 16u * d->n_channels + 16u * nr + 12) return -1;
+    size_t nr = d->n_obs; if (n < o + 8 + 16u * d->n_channels + 16u * nr + 12) return -1;
     d->dt_micro = (int64_t)pd0_get_u64(b + o); o += 8;
     for (int c = 0; c < d->n_channels; c++, o += 8) d->chan_min[c] = (int64_t)pd0_get_u64(b + o);
     for (int c = 0; c < d->n_channels; c++, o += 8) d->chan_max[c] = (int64_t)pd0_get_u64(b + o);
@@ -92,7 +92,7 @@ static int episode(run *R, uint8_t t, uint32_t batch, uint8_t origin, const int6
     append(R, LEDG_OBS, resp, (uint32_t)rn); R->recs[R->nrec++] = r; R->ep_n[slot]++;
     if (t == TAG_FIT || t == TAG_SELECT) pd0_learner_observe(R->L, &r, t);
     if (r.status != PD0_ST_OK) { R->n_refused++; memset(R->ep_hash[slot], 0, PD0_HASH); return (int)slot; }
-    int64_t reset_seen[PD0_MAX_OBS]; memcpy(reset_seen, r.after, sizeof reset_seen); pd0_step applied[PD0_MAX_STEPS]; uint32_t n_ok = 0;
+    pd0_step applied[PD0_MAX_STEPS]; uint32_t n_ok = 0;
     for (uint32_t s = 0; s < n; s++) {
         req[0] = 2; req[1] = steps[s].channel; pd0_put_u64(req + 2, (uint64_t)steps[s].value);
         rn = world_call(&R->world, req, 10, resp, sizeof resp); if (!rn) { fprintf(stderr, "world: step call failed\n"); exit(3); }
@@ -108,7 +108,7 @@ static int episode(run *R, uint8_t t, uint32_t batch, uint8_t origin, const int6
         if (r.status == PD0_ST_EPISODE_END) break;
     }
     R->ep_ok[slot] = n_ok >= EP_LEN;
-    pd0_schedule_hash(R->D.d.n_obs, reset_seen, (uint8_t)(n_ok < PD0_MAX_STEPS ? n_ok : PD0_MAX_STEPS), applied, R->ep_hash[slot]);
+    pd0_schedule_hash(R->D.d.n_obs, reset, (uint8_t)(n_ok < PD0_MAX_STEPS ? n_ok : PD0_MAX_STEPS), applied, R->ep_hash[slot]);
     return (int)slot;
 }
 

@@ -225,8 +225,8 @@ int pd0_learner_correlation(const pd0_learner *L, uint64_t shuffle_seed, uint32_
     uint8_t no = L->d.n_obs; uint32_t n = 0; for (uint32_t i = 0; i < L->nt; i++) if (!L->t[i].is_reset) n++;
     if (n < 100) return -1;
     double *x = malloc(sizeof(double) * n), *y = malloc(sizeof(double) * n), *yp = malloc(sizeof(double) * n); if (!x || !y || !yp) { free(x); free(y); free(yp); return -1; }
-    double best_r = 0; int ba = -1, bb = -1; uint32_t n_pairs = (uint32_t)(no + 1) * no;
-    for (int a = -1; a < (int)no; a++) for (int b = 0; b < no; b++) { uint32_t k = 0;
+    double best_r = 0; int ba = -1, bb = -1; uint32_t n_pairs = (uint32_t)no * no;
+    for (int a = -1; a < (int)no; a++) for (int b = 0; b < no; b++) { uint32_t k = 0; if (a == b) continue;   /* spec rev 5: no self pairs */
         for (uint32_t i = 0; i < L->nt; i++) { const trans *t = &L->t[i]; if (t->is_reset) continue; x[k] = a < 0 ? (double)t->value : (double)t->before[a]; y[k] = (double)(t->after[b] - t->before[b]); k++; }
         double r = pearson(x, y, n); if (fabs(r) > fabs(best_r)) { best_r = r; ba = a; bb = b; } }
     if (bb < 0) { free(x); free(y); free(yp); return -1; }
