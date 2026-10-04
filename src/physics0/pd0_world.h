@@ -38,6 +38,7 @@ int pd0_chan_step(pd0_chan *c, uint8_t channel, int64_t value, pd0_rec *r);
 typedef struct {
     pd0_gen gen;
     pd0_desc desc;
+    int64_t reset_lo[PD0_MAX_OBS], reset_hi[PD0_MAX_OBS]; /* per-variable reset box (the describe record carries variable 0) */
     uint64_t seed;
     pd0_rng noise, null;
     int64_t s[PD0_MAX_OBS], h;

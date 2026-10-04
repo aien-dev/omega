@@ -37,8 +37,13 @@ void pd0_calib_heldout(const pd0_gen *g, const pd0_desc *d, uint64_t seed, const
         memset(&s, 0, sizeof s);
         s.n_obs = d->n_obs;
         s.n_steps = PD0_CALIB_STEPS;
-        int64_t box = e < PD0_CALIB_EPISODES / 2 ? 2000000 : 3000000;
-        for (int v = 0; v < d->n_obs; v++) s.reset[v] = pd0_const(&sc, -box, box);
+        /* spec 6.1 rev 3: first half in-box = the reset box of each variable, second half the 1.5x extrapolation box */
+        const int extrap = e >= PD0_CALIB_EPISODES / 2;
+        for (int v = 0; v < d->n_obs; v++) {
+            int64_t lo, hi;
+            pd0_gen_score_box(g->level, v, extrap, &lo, &hi);
+            s.reset[v] = pd0_const(&sc, lo, hi);
+        }
         for (int i = 0; i < s.n_steps; i++) {
             s.channel[i] = (uint8_t)(pd0_next(&sc) % d->n_channels);
             s.value[i] = pd0_const(&sc, d->chan_min[s.channel[i]], d->chan_max[s.channel[i]]);
@@ -77,7 +82,7 @@ int pd0_calib_gather(int level, uint64_t seed, pd0_gather *out) {
     pd0_rec r;
     for (;;) {
         int64_t reset[PD0_MAX_OBS];
-        for (int v = 0; v < w.desc.n_obs; v++) reset[v] = pd0_const(&rr, w.desc.reset_min, w.desc.reset_max);
+        for (int v = 0; v < w.desc.n_obs; v++) reset[v] = pd0_const(&rr, w.reset_lo[v], w.reset_hi[v]);
         pd0_world_reset(&w, reset, w.desc.n_obs, &r);
         if (r.status == PD0_BUDGET_EXHAUSTED) break;
         if (r.status == PD0_REFUSED_RANGE) { out->refused++; continue; }

@@ -1,6 +1,6 @@
-/* PD-0 hidden generators: spec section 4.1 (physics hive/pd0-spec @ 80d7808,
- * revision 2) verbatim in integer micro-units. Discrete maps: the law is the
- * map written here, not the differential equation it resembles.
+/* PD-0 hidden generators: spec section 4.1 (physics main @ 5bd2b04, revision 3)
+ * verbatim in integer micro-units. Discrete maps: the law is the map written
+ * here, not the differential equation it resembles.
  * Build with -DPD0_MUTANT_SIGN to flip the sign of the spring term in L1
  * (NC-3 style mutation: the oracle check must then FAIL). -DPD0_MUTANT_LATENT_SIGN flips the sign of m*h in L6. */
 #include "physics0/pd0_gen.h"
@@ -14,18 +14,53 @@
 static const char *NAMES[PD0_LEVELS] = {"L0", "L1", "L2", "L3", "L4", "L5", "L6", "NULL"};
 const char *pd0_gen_level_name(int level) { return (level >= 0 && level < PD0_LEVELS) ? NAMES[level] : "?"; }
 
+/* THE one table of declared constant ranges (spec 4.1), in DRAW ORDER. The
+ * generator draws from it and the oracle's declared-range check reads it. */
+static const pd0_crange T_L1[] = {{"k", U(1.0), U(4.0)}};
+static const pd0_crange T_L2[] = {{"k", U(1.0), U(9.0)}, {"c", U(0.2), U(2.0)}};
+static const pd0_crange T_L3[] = {{"k", U(1.0), U(4.0)}, {"g", U(0.5), U(2.0)}};
+static const pd0_crange T_L4[] = {{"k", U(1.0), U(4.0)}, {"b", U(0.5), U(2.0)}};
+/* rev 3: order k, w, m, q */
+static const pd0_crange T_L6[] = {{"k", U(3.0), U(5.0)}, {"w", U(0.5), U(1.0)}, {"m", U(1.0), U(2.0)}, {"q", U(1.0), U(2.0)}};
+
+int pd0_gen_const_table(int level, const pd0_crange **t) {
+    switch (level) {
+    case PD0_L1: *t = T_L1; return 1;
+    case PD0_L2: case PD0_L5: *t = T_L2; return 2;
+    case PD0_L3: *t = T_L3; return 2;
+    case PD0_L4: *t = T_L4; return 2;
+    case PD0_L6: *t = T_L6; return 4;
+    default: *t = NULL; return 0;
+    }
+}
+
+/* reset box per observed variable (spec 4 table notes, rev 3): [-2, 2] except
+ * L0 s1 [-0.2, 0.2] and L4 both [-1, 1]. */
+void pd0_gen_reset_box(int level, int var, int64_t *lo, int64_t *hi) {
+    int64_t b = U(2.0);
+    if (level == PD0_L0 && var == 1) b = U(0.2);
+    if (level == PD0_L4) b = U(1.0);
+    *lo = -b; *hi = b;
+}
+
+/* scoring boxes (spec 6.1, rev 3): in-box = the reset box, extrapolation = 1.5 x it */
+void pd0_gen_score_box(int level, int var, int extrap, int64_t *lo, int64_t *hi) {
+    pd0_gen_reset_box(level, var, lo, hi);
+    if (extrap) { *lo = (*lo * 3) / 2; *hi = (*hi * 3) / 2; }
+}
+
 int pd0_gen_desc(int level, pd0_desc *d) {
     memset(d, 0, sizeof *d);
     d->n_obs = 2; d->n_channels = 1;
-    d->reset_min = -U(2.0); d->reset_max = U(2.0);
+    pd0_gen_reset_box(level, 0, &d->reset_min, &d->reset_max); /* describe carries one pair: variable 0's box */
     d->episode_max_steps = PD0_EPISODE_STEPS;
     d->budget_steps = 3000; d->budget_episodes = 300;
     d->dt_micro = U(0.05);
     d->chan_min[0] = -U(2.0); d->chan_max[0] = U(2.0);
     switch (level) {
-    case PD0_L0: /* rev 2 (80d7808): pushes [-0.1, 0.1], 60 episodes of 50 steps */
+    case PD0_L0: /* rev 3: 20 steps per episode, 3000 steps = 150 episodes, pushes [-0.1, 0.1] */
         d->dt_micro = U(1.0); d->chan_min[0] = -U(0.1); d->chan_max[0] = U(0.1);
-        d->episode_max_steps = 50; d->budget_episodes = 60;
+        d->episode_max_steps = 20; d->budget_episodes = 150;
         break;
     case PD0_L1: case PD0_L2: case PD0_L4: break;
     case PD0_L3: d->n_obs = 4; d->n_channels = 2; d->chan_min[1] = -U(2.0); d->chan_max[1] = U(2.0); break;
@@ -36,31 +71,35 @@ int pd0_gen_desc(int level, pd0_desc *d) {
     return 0;
 }
 
-int pd0_gen_init(pd0_gen *g, int level, uint64_t seed) {
+int pd0_gen_init_cap(pd0_gen *g, int level, uint64_t seed, int redraw_cap) {
     memset(g, 0, sizeof *g);
     g->level = level;
     pd0_rng c;
     pd0_stream(&c, seed, "const");
+    const pd0_crange *t;
+    int n = pd0_gen_const_table(level, &t);
+    for (int i = 0; i < n; i++) g->k[i] = pd0_const(&c, t[i].lo, t[i].hi); /* draw order = table order */
     switch (level) {
-    case PD0_L0: break;
-    case PD0_L1: g->k[0] = pd0_const(&c, U(1.0), U(4.0)); break; /* rev 2: [1.0, 4.0] */
-    case PD0_L2: g->k[0] = pd0_const(&c, U(1.0), U(9.0)); g->k[1] = pd0_const(&c, U(0.2), U(2.0)); break;
-    case PD0_L3: g->k[0] = pd0_const(&c, U(1.0), U(4.0)); g->k[1] = pd0_const(&c, U(0.5), U(2.0)); break;
-    case PD0_L4: g->k[0] = pd0_const(&c, U(1.0), U(4.0)); g->k[1] = pd0_const(&c, U(0.5), U(2.0)); break;
-    case PD0_L5:
-        g->k[0] = pd0_const(&c, U(1.0), U(9.0)); g->k[1] = pd0_const(&c, U(0.2), U(2.0));
-        g->sigma_obs = U(0.02);
-        break;
+    case PD0_L0: case PD0_L1: case PD0_L2: case PD0_L3: case PD0_L4: break;
+    case PD0_L5: g->sigma_obs = U(0.02); break;
     case PD0_L6:
-        g->k[0] = pd0_const(&c, U(2.0), U(5.0)); g->k[1] = pd0_const(&c, U(0.5), U(1.0));
-        g->k[2] = pd0_const(&c, U(1.0), U(2.0)); g->k[3] = pd0_const(&c, U(0.5), U(1.0));
         g->n_hidden = 1;
+        /* spec 4.1 rev 3: while m*q/w > 0.7*k redraw m then q from the same stream.
+         * Exact integer test (no rounding): m*q/w > 0.7*k  <=>  10*M*Q > 7*K*W in micro units. */
+        while (10 * g->k[2] * g->k[3] > 7 * g->k[0] * g->k[1]) {
+            if (g->redraws >= redraw_cap) { g->invalid = 1; return -1; } /* reached the cap: invalid seed */
+            g->k[2] = pd0_const(&c, t[2].lo, t[2].hi);
+            g->k[3] = pd0_const(&c, t[3].lo, t[3].hi);
+            g->redraws++;
+        }
         break;
     case PD0_LEVEL_NULL: g->sigma_null = U(0.5); break;
     default: return -1;
     }
     return 0;
 }
+
+int pd0_gen_init(pd0_gen *g, int level, uint64_t seed) { return pd0_gen_init_cap(g, level, seed, PD0_L6_REDRAW_CAP); }
 
 static int oob(int64_t v) { return !pd0_guard_in_box(v); }
 
@@ -105,7 +144,7 @@ int pd0_gen_step(const pd0_gen *g, const int64_t *s, int64_t h, const int64_t *u
         break;
     }
     case PD0_L6: {
-        const int64_t m = g->k[1], w = g->k[2], q = g->k[3];
+        const int64_t w = g->k[1], m = g->k[2], q = g->k[3]; /* draw order k, w, m, q */
         o[0] = s[0] + pd0_mul(s[1], dt);
 #ifdef PD0_MUTANT_LATENT_SIGN
         const int64_t lat = -pd0_mul(m, h); /* wrong latent sign: the spec says +m*h */
@@ -189,8 +228,8 @@ int pd0_gen_true_relation(const pd0_gen *g, int64_t dt, pd0_relation *r) {
         pd0_eq *eh = &r->eq[2];
         eh->target = 2; r->n_eq = 3;
         add_var(e0, dt, 1);
-        add_var(e1, -pd0_mul(k, dt), 0); add_var(e1, pd0_mul(g->k[1], dt), 2); add_ch(e1, dt, 0, nv);
-        add_var(eh, -pd0_mul(g->k[2], dt), 2); add_var(eh, pd0_mul(g->k[3], dt), 0);
+        add_var(e1, -pd0_mul(k, dt), 0); add_var(e1, pd0_mul(g->k[2], dt), 2); add_ch(e1, dt, 0, nv); /* m = k[2] */
+        add_var(eh, -pd0_mul(g->k[1], dt), 2); add_var(eh, pd0_mul(g->k[3], dt), 0); /* w = k[1], q = k[3] */
         break;
     }
     default: return -1;
