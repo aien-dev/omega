@@ -65,6 +65,9 @@ static struct {
 } g = { .cta_budget = OMEGA_GPU_MATMUL_MAX_CTAS, .oracle = 1 };
 
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
+static const char *g_err = "";
+#define FAILAT(s) (g_err = (s))
+const char *omega_gpu_matmul_last_error(void) { return g_err; }
 
 static uint64_t now_ns(void) {
     struct timespec t;
@@ -115,9 +118,10 @@ static int dev_open_locked(void) {
     if (g.blocked) return -1;
     if (g.open) return 0;
     memset(&g.ctx, 0, sizeof g.ctx);
-    if (m16_native_open(&g.ctx) != 0) return -1;
-    if (m16_native_create_channel(&g.ctx) != 0) { m16_native_close(&g.ctx); return -1; }
+    if (m16_native_open(&g.ctx) != 0) { FAILAT("m16_native_open"); return -1; }
+    if (m16_native_create_channel(&g.ctx) != 0) { FAILAT("m16_native_create_channel"); m16_native_close(&g.ctx); return -1; }
     if (dev_alloc(0x10000, &g.pb) || dev_alloc(PAGE, &g.cbank) || dev_alloc(PAGE, &g.marker) || dev_alloc(0x10000, &g.qmd)) {
+        FAILAT("device scratch alloc");
         m16_native_close(&g.ctx);
         memset(&g.pb, 0, sizeof g.pb); memset(&g.cbank, 0, sizeof g.cbank);
         memset(&g.marker, 0, sizeof g.marker); memset(&g.qmd, 0, sizeof g.qmd);
@@ -192,7 +196,7 @@ static int kernel_for(uint32_t kp, uint32_t np, uint32_t grid_x, CacheSlot **out
     if (omega_blackwell_codegen_matmul_tensor_loop(&spec, grid_x, g.mutant, &kernel) != 0 || !kernel.code || kernel.code_size == 0)
         return OMEGA_GPU_MATMUL_CODEGEN_FAIL;
     NvrmMem code;
-    if (dev_alloc(kernel.code_size, &code) != 0) { omega_blackwell_kernel_free(&kernel); return OMEGA_GPU_MATMUL_CHIP_FAIL; }
+    if (dev_alloc(kernel.code_size, &code) != 0) { FAILAT("kernel code alloc"); omega_blackwell_kernel_free(&kernel); return OMEGA_GPU_MATMUL_CHIP_FAIL; }
     memcpy(code.cpu, kernel.code, kernel.code_size);
     CacheSlot *s = &g.cache[g.cache_next];
     g.cache_next = (g.cache_next + 1) % CACHE_SLOTS;
@@ -226,7 +230,7 @@ static int launch(const CacheSlot *ks, uint64_t a_va, uint64_t b_va, uint64_t c_
     uint32_t qmd0_words[OMEGA_BW_QMD_WORDS], qmd1_words[OMEGA_BW_QMD_WORDS];
     omega_blackwell_build_qmd0(qmd0_words, qmd0_va, qmd1_va);
     omega_blackwell_build_qmd1(qmd1_words, &cfg);
-    if (omega_blackwell_verify_qmd_invariants(qmd1_words) != 0) return OMEGA_GPU_MATMUL_CHIP_FAIL;
+    if (omega_blackwell_verify_qmd_invariants(qmd1_words) != 0) { FAILAT("qmd invariants"); return OMEGA_GPU_MATMUL_CHIP_FAIL; }
     memcpy(g.qmd.cpu, qmd0_words, sizeof qmd0_words);
     memcpy((uint8_t *)g.qmd.cpu + 0x1000, qmd1_words, sizeof qmd1_words);
 
@@ -285,16 +289,16 @@ static int launch(const CacheSlot *ks, uint64_t a_va, uint64_t b_va, uint64_t c_
     pb[n++] = OMEGA_BW_MARKER2_PAYLOAD; pb[n++] = 0; pb[n++] = 0x1 | (1u << 20);
 
     uint64_t t0 = now_ns();
-    if (m16_native_submit_methods(&g.ctx, pb, n) != 0) return OMEGA_GPU_MATMUL_CHIP_FAIL;
+    if (m16_native_submit_methods(&g.ctx, pb, n) != 0) { FAILAT("submit_methods"); return OMEGA_GPU_MATMUL_CHIP_FAIL; }
     if (m16_native_wait_marker(hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, MARKER_TIMEOUT_MS) != 0 ||
         m16_native_wait_marker(hmarker2, OMEGA_BW_MARKER2_PAYLOAD, MARKER_TIMEOUT_MS) != 0) {
-        g.blocked = true; /* uncertain completion: keep everything, refuse every later call */
+        g.blocked = true; (void)FAILAT("marker wait timed out (latched)"); /* uncertain completion: keep everything, refuse every later call */
         return OMEGA_GPU_MATMUL_CHIP_FAIL;
     }
     __asm__ volatile("dsb sy" ::: "memory");
     uint64_t t1 = now_ns();
     nvrm_retire(&g.ctx.rm, g.ctx.rm.put); /* both releases landed: the GPFIFO entry is consumed */
-    if (*hsem != OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE) return OMEGA_GPU_MATMUL_CHIP_FAIL;
+    if (*hsem != OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE) { FAILAT("intermediate semaphore not DONE"); return OMEGA_GPU_MATMUL_CHIP_FAIL; }
     if (elapsed_ns) *elapsed_ns += t1 - t0;
     if (marker_out) *marker_out = *hmarker;
     return OMEGA_GPU_MATMUL_OK;
@@ -316,7 +320,7 @@ int omega_gpu_tensor_upload_bf16(uint32_t k, uint32_t n, const uint16_t *b, Omeg
     t->k = k; t->n = n; t->kp = round_up(k, OMEGA_GPU_MATMUL_TILE_K); t->np = round_up(n, OMEGA_GPU_MATMUL_TILE_N);
     int rc = OMEGA_GPU_MATMUL_OK;
     pthread_mutex_lock(&g_mu);
-    if (dev_open_locked() != 0 || dev_alloc((size_t)t->kp * t->np * 2u, &t->mem) != 0) rc = OMEGA_GPU_MATMUL_CHIP_FAIL;
+    if (dev_open_locked() != 0 || (FAILAT("tensor alloc"), dev_alloc((size_t)t->kp * t->np * 2u, &t->mem) != 0)) rc = OMEGA_GPU_MATMUL_CHIP_FAIL;
     pthread_mutex_unlock(&g_mu);
     if (rc != OMEGA_GPU_MATMUL_OK) { free(t); return rc; }
     uint16_t *d = t->mem.cpu;
@@ -355,7 +359,8 @@ static int matmul_core(uint32_t m, const uint16_t *a, const OmegaGpuTensor *b, f
     const uint32_t mp = round_up(m, OMEGA_GPU_MATMUL_TILE_M), mt = mp / 16, nt = np / 8;
     pthread_mutex_lock(&g_mu);
     int rc = OMEGA_GPU_MATMUL_OK;
-    if (g.blocked || dev_open_locked() != 0) { pthread_mutex_unlock(&g_mu); return OMEGA_GPU_MATMUL_CHIP_FAIL; }
+    if (g.blocked && FAILAT("process latched")) { pthread_mutex_unlock(&g_mu); return OMEGA_GPU_MATMUL_CHIP_FAIL; }
+    if (dev_open_locked() != 0) { pthread_mutex_unlock(&g_mu); return OMEGA_GPU_MATMUL_CHIP_FAIL; }
     const uint32_t budget = g.cta_budget ? g.cta_budget : OMEGA_GPU_MATMUL_MAX_CTAS;
     /* rows per launch: all of them unless the row tiles alone exceed the budget */
     uint32_t rows_per_launch = mt <= budget ? mp : budget * 16u;
@@ -398,7 +403,7 @@ static int matmul_core(uint32_t m, const uint16_t *a, const OmegaGpuTensor *b, f
             for (uint32_t j = 0; j < n; j++) if (row[j] == POISON_F32) unchanged++;
             memcpy(&c[(size_t)r * n], row, (size_t)n * sizeof *c);
         }
-        if (unchanged) rc = OMEGA_GPU_MATMUL_CHIP_FAIL;
+        if (unchanged) { FAILAT("output poison survived"); rc = OMEGA_GPU_MATMUL_CHIP_FAIL; }
     }
     pthread_mutex_unlock(&g_mu);
     return rc;

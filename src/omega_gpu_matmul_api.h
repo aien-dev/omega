@@ -124,6 +124,9 @@ void omega_gpu_device_close(void);
 /* 1 once an uncertain completion has latched this process. */
 int omega_gpu_matmul_is_blocked(void);
 
+/* Stage name of the most recent CHIP_FAIL ("" if none), for logs and receipts. */
+const char *omega_gpu_matmul_last_error(void);
+
 /* CTA budget per launch (default OMEGA_GPU_MATMUL_MAX_CTAS; 0 restores it).
  * Clears the kernel cache (kernels bake in grid_x). Test and measurement knob. */
 void omega_gpu_matmul_set_cta_budget(uint32_t ctas);

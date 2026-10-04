@@ -138,9 +138,9 @@ static int chip_sweep(const char *shapes, const char *out_path, int mutant) {
                   m, k, n, omega_gpu_matmul_rc_name(rc), info.parity_verified, info.max_rel_err, e2e,
                   omega_gpu_matmul_rc_name(rc2), info2.kernel_cache_hit, repeat_mismatch);
         }
-        printf("%s %ux%ux%u rc=%s chip_ns=%" PRIu64 " call_ms=%.3f wall_ms=%.1f max_abs=%g max_rel=%g mismatches=%zu e2e_rel=%g e2e_bad=%zu grid=%ux%u calls=%u rows_per_call=%u cache_hit2=%d\n",
+        printf("%s %ux%ux%u rc=%s chip_ns=%" PRIu64 " call_ms=%.3f wall_ms=%.1f max_abs=%g max_rel=%g mismatches=%zu e2e_rel=%g e2e_bad=%zu grid=%ux%u calls=%u rows_per_call=%u cache_hit2=%d err=\"%s\"\n",
                pass ? (mutant ? "KILLED" : "PASS") : (mutant ? "SURVIVED" : "FAIL"), m, k, n, omega_gpu_matmul_rc_name(rc), info.elapsed_ns, info.call_ns / 1e6, wall_ms,
-               info.max_abs_err, info.max_rel_err, info.mismatch_count, e2e, e2e_bad, info.grid_x, info.grid_y, info.chip_calls, info.rows_per_call, info2.kernel_cache_hit);
+               info.max_abs_err, info.max_rel_err, info.mismatch_count, e2e, e2e_bad, info.grid_x, info.grid_y, info.chip_calls, info.rows_per_call, info2.kernel_cache_hit, rc == OMEGA_GPU_MATMUL_CHIP_FAIL ? omega_gpu_matmul_last_error() : "");
         if (out) {
             fprintf(out, "%s{\"m\":%u,\"k\":%u,\"n\":%u,\"rc\":\"%s\",\"pass\":%s,\"chip_elapsed_ns\":%" PRIu64
                     ",\"call_ms\":%.3f,\"wall_ms\":%.3f,\"max_abs_err\":%g,\"max_rel_err\":%g,\"mismatch_count\":%zu,"
