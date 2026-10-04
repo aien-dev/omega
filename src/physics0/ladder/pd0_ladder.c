@@ -72,6 +72,23 @@ int64_t pd0_nrmse_micro(const int64_t *pred, const int64_t *obs, uint32_t n, uin
     for (uint32_t i = 0; i < n; i++) acc_add(&a, pred + (size_t)i * n_obs, obs + (size_t)i * n_obs, n_obs);
     return acc_nrmse(&a, n_obs);
 }
+/* spec rev 6 (b): a step record carries an outcome (valid vars_after) when it is OK or EPISODE_END;
+ * only REFUSED_RANGE, OUT_OF_BOUNDS and BUDGET_EXHAUSTED carry none. */
+static int rec_has_outcome(const pd0_rec *r) { return r->status == PD0_ST_OK || r->status == PD0_ST_EPISODE_END; }
+/* spec rev 6 (a): rollout error per variable = RMSE / pooled sd of that variable over the FIT records,
+ * never the within-trial spread (sd_micro[j] == 0 falls back to the plain RMSE) */
+static int64_t acc_nrmse_sd(const nrmse_acc *a, uint8_t n_obs, const int64_t *sd_micro)
+{
+    if (a->n == 0) return INT64_MAX; double worst = 0;
+    for (int j = 0; j < n_obs; j++) { double rmse = sqrt(a->se[j] / a->n), sd = (double)sd_micro[j] / 1e6; double v = sd > 1e-9 ? rmse / sd : rmse; if (v > worst) worst = v; }
+    return worst > 9e12 ? INT64_MAX : (int64_t)(worst * 1e6);
+}
+int64_t pd0_nrmse_pooled_micro(const int64_t *pred, const int64_t *obs, uint32_t n, uint8_t n_obs, const int64_t *sd_micro)
+{
+    nrmse_acc a; memset(&a, 0, sizeof a);
+    for (uint32_t i = 0; i < n; i++) acc_add(&a, pred + (size_t)i * n_obs, obs + (size_t)i * n_obs, n_obs);
+    return acc_nrmse_sd(&a, n_obs, sd_micro);
+}
 uint32_t pd0_confidence_ppm(uint32_t p, uint32_t f) { return (uint32_t)((1000000ull * (p + 1)) / (p + f + 2)); }
 
 /* ---------- internal model ---------- */
@@ -101,7 +118,7 @@ static int ep_visible(const episode *e) { return e->has_tag && (e->tag == TAG_FI
 static int ep_fit(const episode *e) { return e->has_tag && e->tag == TAG_FIT; }
 static uint32_t ep_ok_steps(const ctx *c, const episode *e)
 {
-    uint32_t k = 0; for (uint32_t i = 0; i < e->n; i++) { const pd0_rec *r = &c->rec[e->first + i]; if (r->kind == PD0_KIND_STEP && r->status == PD0_ST_OK) k++; }
+    uint32_t k = 0; for (uint32_t i = 0; i < e->n; i++) { const pd0_rec *r = &c->rec[e->first + i]; if (r->kind == PD0_KIND_STEP && rec_has_outcome(r)) k++; }
     return k;
 }
 /* schedule hash over the reset record and the first n_steps OK steps */
@@ -109,7 +126,7 @@ static int ep_schedule_hash(const ctx *c, const episode *e, uint8_t n_steps, uin
 {
     const pd0_rec *r0 = &c->rec[e->first]; if (r0->kind != PD0_KIND_RESET) return 0;
     pd0_step st[PD0_MAX_STEPS]; uint8_t k = 0;
-    for (uint32_t i = 1; i < e->n && k < n_steps; i++) { const pd0_rec *r = &c->rec[e->first + i]; if (r->kind == PD0_KIND_STEP && r->status == PD0_ST_OK) { st[k].channel = r->channel; st[k].value = r->applied; k++; } }
+    for (uint32_t i = 1; i < e->n && k < n_steps; i++) { const pd0_rec *r = &c->rec[e->first + i]; if (r->kind == PD0_KIND_STEP && rec_has_outcome(r)) { st[k].channel = r->channel; st[k].value = r->applied; k++; } }
     if (k < n_steps) return 0;
     pd0_schedule_hash(r0->n_obs, r0->after, n_steps, st, out);
     return 1;
@@ -123,7 +140,7 @@ static int ep_matches_prereg(const ctx *c, const episode *ep, const pd0_exp *e)
 {
     const pd0_rec *r0 = &c->rec[ep->first]; if (r0->kind != PD0_KIND_RESET || r0->n_obs != e->n_obs) return 0;
     pd0_step st[PD0_MAX_STEPS]; uint8_t k = 0;
-    for (uint32_t i = 1; i < ep->n && k < e->n_steps; i++) { const pd0_rec *r = &c->rec[ep->first + i]; if (r->kind == PD0_KIND_STEP && r->status == PD0_ST_OK) { st[k].channel = r->channel; st[k].value = r->applied; k++; } }
+    for (uint32_t i = 1; i < ep->n && k < e->n_steps; i++) { const pd0_rec *r = &c->rec[ep->first + i]; if (r->kind == PD0_KIND_STEP && rec_has_outcome(r)) { st[k].channel = r->channel; st[k].value = r->applied; k++; } }
     if (k < e->n_steps) return 0;
     uint8_t h[PD0_HASH]; pd0_schedule_hash(e->n_obs, e->reset, e->n_steps, st, h); if (memcmp(h, e->schedule_hash, PD0_HASH)) return 0;
     if (!c->P->noisy) for (int j = 0; j < e->n_obs; j++) if (r0->after[j] != e->reset[j]) return 0;
@@ -149,13 +166,23 @@ static void add_experiment(ctx *c, const uint8_t *id, uint8_t kind, const uint8_
     memcpy(x->prereg_hash, prereg_hash, PD0_HASH); memcpy(x->outcome_hash, outcome, PD0_HASH); x->result = result; x->first_seq = first; x->last_seq = last;
 }
 
+/* pooled sd per observed variable over the outcomes of FIT records (spec rev 6 a) */
+static void fit_sd(const ctx *c, int64_t *sd_micro)
+{
+    uint8_t no = c->P->n_obs; double s[PD0_MAX_OBS] = { 0 }, ss[PD0_MAX_OBS] = { 0 }; uint32_t n = 0;
+    for (uint32_t i = 0; i < c->nep; i++) { const episode *e = &c->ep[i]; if (!ep_fit(e)) continue;
+        for (uint32_t j = 0; j < e->n; j++) { const pd0_rec *r = &c->rec[e->first + j]; if (r->kind != PD0_KIND_STEP || !rec_has_outcome(r)) continue;
+            for (int v = 0; v < no; v++) { double x = (double)r->after[v] / 1e6; s[v] += x; ss[v] += x * x; } n++; } }
+    for (int v = 0; v < no; v++) { double m = n ? s[v] / n : 0, var = n ? ss[v] / n - m * m : 0; sd_micro[v] = var > 0 ? (int64_t)(sqrt(var) * 1e6) : 0; }
+}
+static int64_t nrmse_pooled(const ctx *c, const int64_t *pred, const int64_t *obs, uint32_t m, uint8_t no) { int64_t sd[PD0_MAX_OBS]; fit_sd(c, sd); return pd0_nrmse_pooled_micro(pred, obs, m, no, sd); }
 /* rollout of relation along an episode's recorded applied schedule; fills pred[n][n_obs] for the first n OK steps */
 static uint32_t rollout_episode(const ctx *c, const pd0_rel *rel, const episode *e, uint32_t n, int64_t *pred, int64_t *obs, const pd0_rec **last)
 {
     const pd0_rec *r0 = &c->rec[e->first]; int64_t st[PD0_MAX_VARS], nx[PD0_MAX_VARS]; uint32_t k = 0; uint8_t no = c->P->n_obs;
     memset(st, 0, sizeof st); for (int j = 0; j < no; j++) st[j] = r0->after[j];
     for (uint32_t i = 1; i < e->n && k < n; i++) {
-        const pd0_rec *r = &c->rec[e->first + i]; if (r->kind != PD0_KIND_STEP || r->status != PD0_ST_OK) continue;
+        const pd0_rec *r = &c->rec[e->first + i]; if (r->kind != PD0_KIND_STEP || !rec_has_outcome(r)) continue;
         pd0_rel_step(rel, st, r->channel, r->applied, nx);
         for (int j = 0; j < no; j++) { pred[k * no + j] = nx[j]; obs[k * no + j] = r->after[j]; }
         memcpy(st, nx, sizeof st); k++; if (last) *last = r;
@@ -181,7 +208,7 @@ static int try_t2(ctx *c, const pd0_corr *k)
     double *x = malloc(sizeof(double) * MAX_REC), *y = malloc(sizeof(double) * MAX_REC); uint32_t n = 0;
     if (!x || !y) { free(x); free(y); return PD0V_TOO_LARGE; }
     for (uint32_t i = 0; i < c->nep; i++) { const episode *e = &c->ep[i]; if (!ep_visible(e)) continue;
-        for (uint32_t j = 0; j < e->n; j++) { const pd0_rec *r = &c->rec[e->first + j]; if (r->kind != PD0_KIND_STEP || r->status != PD0_ST_OK) continue;
+        for (uint32_t j = 0; j < e->n; j++) { const pd0_rec *r = &c->rec[e->first + j]; if (r->kind != PD0_KIND_STEP || !rec_has_outcome(r)) continue;
             x[n] = (k->var_a == PD0_CHAN_NONE) ? (double)r->applied : (double)r->before[k->var_a]; y[n] = (double)(r->after[k->var_b] - r->before[k->var_b]); n++; } }
     int rc = 0;
     if (n < 100 || n != k->n) { set_code(c, 2, PD0V_T2_TOO_FEW_RECORDS); }
@@ -211,7 +238,7 @@ static void try_t3(ctx *c, const relent *re)
         int64_t st[PD0_MAX_VARS], nx[PD0_MAX_VARS]; memset(st, 0, sizeof st); double prev_res[PD0_MAX_OBS] = { 0 }; int have_prev = 0;
         for (uint32_t j = 0; j < e->n; j++) { const pd0_rec *r = &c->rec[e->first + j];
             if (r->kind == PD0_KIND_RESET) { memset(st, 0, sizeof st); for (int v = 0; v < no; v++) st[v] = r->after[v]; have_prev = 0; continue; }
-            if (r->status != PD0_ST_OK) continue;
+            if (!rec_has_outcome(r)) continue;
             for (int v = 0; v < no; v++) st[v] = r->before[v];
             pd0_rel_step(rel, st, r->channel, r->applied, nx);
             acc_add(&a, nx, r->after, no);
@@ -266,11 +293,11 @@ static int try_t6(ctx *c)
     /* evaluate every trial against the committed prediction (hypothesis index 0) */
     int64_t obs[PD0_MAX_STEPS * PD0_MAX_OBS], pk[PD0_MAX_STEPS * PD0_MAX_OBS];
     for (uint32_t k = 0; k < c->npre; k++) { prereg *p = &c->pre[k]; const episode *ep = &c->ep[p->matched_ep]; uint32_t m = 0; const pd0_rec *last = NULL, *worst_rec = NULL; int64_t wp = 0, wo = 0, wd = -1;
-        for (uint32_t i = 1; i < ep->n && m < n; i++) { const pd0_rec *r = &c->rec[ep->first + i]; if (r->kind != PD0_KIND_STEP || r->status != PD0_ST_OK) continue;
+        for (uint32_t i = 1; i < ep->n && m < n; i++) { const pd0_rec *r = &c->rec[ep->first + i]; if (r->kind != PD0_KIND_STEP || !rec_has_outcome(r)) continue;
             for (int j = 0; j < no; j++) { obs[m * no + j] = r->after[j]; int64_t d = llabs(p->e.expected[0][m][j] - r->after[j]); if (d > wd) { wd = d; worst_rec = r; wp = p->e.expected[0][m][j]; wo = r->after[j]; } }
             m++; last = r; }
         for (uint32_t s = 0; s < m; s++) for (int j = 0; j < no; j++) pk[s * no + j] = p->e.expected[0][s][j];
-        int64_t err = pd0_nrmse_micro(pk, obs, m, no); c->R->last_nrmse_micro = err;
+        int64_t err = nrmse_pooled(c, pk, obs, m, no); c->R->last_nrmse_micro = err;
         uint8_t id[PD0_HASH]; sha256_hash(p->hash, PD0_HASH, id);
         if (err > c->R->eps_micro) { c->R->f++; add_experiment(c, id, 0, p->hash, last->record_hash, 1, c->rec[ep->first].seq, last->seq); refute(c, worst_rec, wp, wo); set_code(c, 6, PD0V_T6_TRIAL_FAILED); return 0; }
         c->R->p++; add_experiment(c, id, 0, p->hash, last->record_hash, 0, c->rec[ep->first].seq, last->seq); }
@@ -292,10 +319,10 @@ static int try_t7(ctx *c)
             uint8_t h1[PD0_HASH], h2[PD0_HASH]; ep_schedule_hash(c, ep, (uint8_t)n, h1);
             for (uint32_t j = 0; j < c->nep; j++) if (j != i && c->ep[j].n && ep_schedule_hash(c, &c->ep[j], (uint8_t)n, h2) && !memcmp(h1, h2, PD0_HASH)) { set_code(c, 7, PD0V_T7_STREAM_REUSED); return PD0V_T7_STREAM_REUSED; }
             const pd0_rec *l = NULL; uint32_t m = rollout_episode(c, &c->R->candidate, ep, n, pred, obs, &l); if (!first) first = &c->rec[ep->first]; last = l;
-            int64_t e1 = pd0_nrmse_micro(pred, obs, m, no);
+            int64_t e1 = nrmse_pooled(c, pred, obs, m, no);
             if (e1 > 3 * c->R->eps_micro) { c->R->f++; uint8_t id[PD0_HASH]; sha256_hash(c->bat[b].hash, PD0_HASH, id); add_experiment(c, id, 1, c->bat[b].hash, l->record_hash, 1, first->seq, l->seq); refute(c, l, pred[(m - 1) * no], obs[(m - 1) * no]); set_code(c, 7, PD0V_T7_EPISODE_ABOVE_3EPS); return 0; }
             for (uint32_t s = 0; s < m; s++) acc_add(&a, pred + s * no, obs + s * no, no); c->R->p++; }
-        int64_t eb = acc_nrmse(&a, no); c->R->last_nrmse_micro = eb; uint8_t id[PD0_HASH]; sha256_hash(c->bat[b].hash, PD0_HASH, id);
+        int64_t sdv[PD0_MAX_OBS]; fit_sd(c, sdv); int64_t eb = acc_nrmse_sd(&a, no, sdv); c->R->last_nrmse_micro = eb; uint8_t id[PD0_HASH]; sha256_hash(c->bat[b].hash, PD0_HASH, id);
         if (eb > c->R->eps_micro) { c->R->f++; add_experiment(c, id, 1, c->bat[b].hash, last->record_hash, 1, first->seq, last->seq); refute(c, last, pred[(n - 1) * no], obs[(n - 1) * no]); set_code(c, 7, PD0V_T7_BATCH_FAILED); return 0; }
         add_experiment(c, id, 1, c->bat[b].hash, last->record_hash, 0, first->seq, last->seq); }
     c->R->state = LS_REPLICATED; set_code(c, 7, PD0V_OK); return 0;
@@ -307,7 +334,7 @@ static void check_demotion(ctx *c, episode *ep)
     uint32_t n = c->P->rollout_steps; if (ep_ok_steps(c, ep) < n) return; ep->complete = 1;
     int64_t pred[PD0_MAX_STEPS * PD0_MAX_OBS], obs[PD0_MAX_STEPS * PD0_MAX_OBS]; const pd0_rec *l = NULL;
     uint32_t m = rollout_episode(c, &c->R->candidate, ep, n, pred, obs, &l);
-    if (pd0_nrmse_micro(pred, obs, m, c->P->n_obs) > c->R->eps_micro) { c->R->f++; refute(c, l, pred[(m - 1) * c->P->n_obs], obs[(m - 1) * c->P->n_obs]); c->R->state = LS_HYPOTHESIS; c->R->demoted = 1; c->R->have_candidate = 1; set_code(c, 8, PD0V_LAW_DEMOTED); }
+    if (nrmse_pooled(c, pred, obs, m, c->P->n_obs) > c->R->eps_micro) { c->R->f++; refute(c, l, pred[(m - 1) * c->P->n_obs], obs[(m - 1) * c->P->n_obs]); c->R->state = LS_HYPOTHESIS; c->R->demoted = 1; c->R->have_candidate = 1; set_code(c, 8, PD0V_LAW_DEMOTED); }
     else c->R->p++;
 }
 
@@ -317,7 +344,7 @@ static void compute_domain(ctx *c)
     d->n_obs = P->n_obs; d->n_channels = P->n_channels; d->dt_micro = P->dt_micro; d->reset_min = P->reset_min; d->reset_max = P->reset_max; d->episode_len = P->episode_len;
     d->latent_reset = 0; int first = 1;
     for (uint32_t i = 0; i < c->nep; i++) { const episode *e = &c->ep[i]; if (!e->has_tag || e->tag == TAG_HOLDOUT || e->tag == TAG_REP || e->n == 0) continue; int used = 0;
-        for (uint32_t j = 0; j < e->n; j++) { const pd0_rec *r = &c->rec[e->first + j]; if (r->status != PD0_ST_OK) continue; used = 1; d->n_observations++;
+        for (uint32_t j = 0; j < e->n; j++) { const pd0_rec *r = &c->rec[e->first + j]; if (!rec_has_outcome(r)) continue; used = 1; d->n_observations++;
             for (int v = 0; v < P->n_obs; v++) { int64_t lo = r->before[v] < r->after[v] ? r->before[v] : r->after[v], hi = r->before[v] > r->after[v] ? r->before[v] : r->after[v];
                 if (first || lo < d->var_min[v]) d->var_min[v] = lo; if (first || hi > d->var_max[v]) d->var_max[v] = hi; }
             if (r->kind == PD0_KIND_STEP && r->channel < P->n_channels) { uint8_t ch = r->channel; if (d->chan_min[ch] == 0 && d->chan_max[ch] == 0) { d->chan_min[ch] = d->chan_max[ch] = r->applied; } if (r->applied < d->chan_min[ch]) d->chan_min[ch] = r->applied; if (r->applied > d->chan_max[ch]) d->chan_max[ch] = r->applied; }

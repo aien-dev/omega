@@ -43,7 +43,7 @@ int pd0_learner_observe(pd0_learner *L, const pd0_rec *r, uint8_t tag)
 {
     if (tag != TAG_FIT && tag != TAG_SELECT) return -1;              /* I10: nothing else may reach the learner */
     if (r->n_obs != L->d.n_obs || L->nt >= PD0L_MAX_TRANS) return -1;
-    if (r->kind == PD0_KIND_STEP && r->status != PD0_ST_OK) return 0;  /* refused / ended steps carry no transition */
+    if (r->kind == PD0_KIND_STEP && r->status != PD0_ST_OK && r->status != PD0_ST_EPISODE_END) return 0;  /* spec rev 6: EPISODE_END carries an outcome; refused/out-of-bounds/budget steps do not */
     trans *t = &L->t[L->nt++]; memset(t, 0, sizeof *t);
     memcpy(t->before, r->before, sizeof(int64_t) * r->n_obs); memcpy(t->after, r->after, sizeof(int64_t) * r->n_obs);
     t->chan = r->channel; t->value = r->applied; t->tag = tag; t->episode = r->episode; t->is_reset = r->kind == PD0_KIND_RESET;

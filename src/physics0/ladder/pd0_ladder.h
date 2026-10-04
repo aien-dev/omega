@@ -50,4 +50,6 @@ double pd0_pearson(const double *x, const double *y, uint32_t n);
 double pd0_perm_p(const double *x, const double *y, uint32_t n, uint32_t n_shuffles, uint64_t seed);
 /* NRMSE over pooled steps: pred/obs are [n][n_obs] in micro; returns micro (1e6 = 1.0) */
 int64_t pd0_nrmse_micro(const int64_t *pred, const int64_t *obs, uint32_t n, uint8_t n_obs);
+/* spec rev 6 (a): per-variable RMSE over the pooled FIT sd (micro); sd 0 falls back to the RMSE */
+int64_t pd0_nrmse_pooled_micro(const int64_t *pred, const int64_t *obs, uint32_t n, uint8_t n_obs, const int64_t *sd_micro);
 #endif
