@@ -123,6 +123,6 @@ Result: V2 PASS on 5 of 5 (a latent-free model fails 0.03 everywhere). The facto
 
 ### Limits
 
-- The describe record (spec 2.2) carries one `reset_min`/`reset_max` pair. For L0 it holds the s0 box [-2, 2], so a learner is not told that s1 is limited to [-0.2, 0.2] and a reset with larger s1 is refused and charged (spec 2.3 "probing the bounds is not free"). The spec table does not say how to describe a per-variable box; the wire format was left unchanged. Spec owner: decide whether describe needs per-variable bounds.
+- Follow-up (PD0DESC2): the describe record now carries per-variable reset bounds (magic `PD0DESC2`, `reset_min[n_obs]`, `reset_max[n_obs]`); `PD0DESC1` is refused with an explicit error (tested), so a learner reads the L0 s1 box [-0.2, 0.2] and the guard enforces it per variable. Spec amendment: pending (lead drafting). Code commit `13fd9df15a0210e2c82378be62c51960ee08ede5`; new receipts `evidence/physics0/pd0-oracle-L0-rev3b.json` to `L6-rev3b.json` and `pd0-g0-receipt-cut3b.txt` (same numbers as the rev3 files; the rev3 files keep the single-pair describe).
 - The scoring-box rule is implemented in `tests/physics0/pd0_calib.c` and written into the receipts. `src/physics0/score` (another lane) is not changed and must apply the same per-variable rule.
 - The G0 receipt records the commit of the tree it ran on; this document and the receipts were added in the commit after `9e5ea8b`.
