@@ -135,3 +135,18 @@ batch; voids never count toward p or f).
 Latent-variable fitting, local refinement in the planner (Direction 5),
 multi-step consistency in candidate ranking, PD0DESC2 parsing beyond the
 assumed per-variable layout.
+
+## Running against an external world (PD-0b harness)
+
+The harness has an external-world mode: `pd0-harness <world> - <level|null> <seed> <out-dir>`
+takes play AND truth (relation shape, noise-free scoring trajectories) from the one world
+binary over protocol v2; no `pd0-truth` process. Protocol: `docs/physics0/PD0_PROTOCOL_V2.md`.
+
+- `make physics0-pd0b-run PD0_WORLD_BIN=<world> PD0B_SEEDS=<file>`: seeds file has lines
+  `level_index seed` (0..6 or `null`), exactly five per level listed. Runs the real ladder
+  checker and scorer, writes one new receipt `evidence/physics0/pd0b/PD0B_RUN-<commit>-<world sha12>.txt`
+  and refuses to overwrite. A dirty worktree is refused.
+- `make physics0-pd0b-freeze`: prints the git tree hash of the four frozen directories, the
+  sha256 of every file under them and of the harness binary (print only).
+
+Runs with the omega `pd0-world` are stand-in verification, not PD-0b results.

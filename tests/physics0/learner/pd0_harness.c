@@ -3,7 +3,8 @@
  * FIT/SELECT records). Verifier-side build: links pd0_fmt/pd0_ladder/pd0_score/
  * pd0_controls and the learner library, never the generators. The world and the
  * truth are separate processes (build/physics0/pd0-world, pd0-truth).
- * Usage: pd0-harness <world-bin> <truth-bin> <level|null> <seed> <out-dir>
+ * Usage: pd0-harness <world-bin> <truth-bin|-> <level|null> <seed> <out-dir>
+ * With "-" for the truth binary the world binary also answers the protocol v2 score and shape ops (external-world mode).
  * Prints one PD0L result line; writes <out-dir>/pd0l-L<level>-s<seed>.{ledger,law,json}. */
 #include "pd0_learner.h"
 #include "pd0_ladder.h"
@@ -58,7 +59,7 @@ static int parse_describe(const uint8_t *b, size_t n, describe *D)
 
 /* ---- run state ---- */
 typedef struct {
-    describe D; int level; uint64_t seed; proc world, truth; pd0_learner *L;
+    describe D; int level; uint64_t seed; proc world, truth; int ext; pd0_learner *L;
     uint8_t *ledger; size_t llen; uint8_t last[PD0_HASH];
     pd0_ladder_params P;
     uint32_t next_episode, n_episodes, steps_used, episodes_used;
@@ -113,8 +114,11 @@ static int episode(run *R, uint8_t t, uint32_t batch, uint8_t origin, const int6
 }
 
 /* ---- truth process ---- */
+static int ext_rel(run *R);
+static int ext_episode(run *R, const int64_t *reset, const pd0_step *steps, uint32_t n, int64_t out[][PD0_MAX_OBS]);
 static int truth_rel(run *R)
 {
+    if (R->ext) return ext_rel(R);
     fprintf(R->truth.wr, "rel\n"); fflush(R->truth.wr); char line[1024]; unsigned nv, nl, nc, ne; int sz, tsz;
     if (!fgets(line, sizeof line, R->truth.rd) || sscanf(line, "rel %u %u %u %u %d %d", &nv, &nl, &nc, &ne, &sz, &tsz) != 6) return -1;
     pd0_rel *t = &R->truth_rel; memset(t, 0, sizeof *t); t->n_vars = (uint8_t)nv; t->n_latent = (uint8_t)nl; t->n_channels = (uint8_t)nc; R->truth_size = tsz; R->truth_n_latent = (int)nl;
@@ -126,11 +130,35 @@ static int truth_rel(run *R)
 /* noise-free truth trajectory; returns 1 if it stayed in bounds */
 static int truth_episode(run *R, const int64_t *reset, const pd0_step *steps, uint32_t n, int64_t out[][PD0_MAX_OBS])
 {
+    if (R->ext) return ext_episode(R, reset, steps, n, out);
     fprintf(R->truth.wr, "ep %u", R->D.d.n_obs); for (int j = 0; j < R->D.d.n_obs; j++) fprintf(R->truth.wr, " %lld", (long long)reset[j]); fprintf(R->truth.wr, " %u", n);
     for (uint32_t s = 0; s < n; s++) fprintf(R->truth.wr, " %d %lld", steps[s].channel == PD0_CHAN_NONE ? -1 : steps[s].channel, (long long)steps[s].value); fprintf(R->truth.wr, "\n"); fflush(R->truth.wr);
     char line[1024]; if (!fgets(line, sizeof line, R->truth.rd)) return 0; uint32_t got = 0; int ok = 1;
     while (fgets(line, sizeof line, R->truth.rd) && strncmp(line, "end", 3)) { if (!strncmp(line, "oob", 3)) { ok = 0; continue; } char *p = line; for (int j = 0; j < R->D.d.n_obs; j++) out[got][j] = strtoll(p, &p, 10); got++; }
     return ok && got == n;
+}
+
+/* ---- external-world mode (PD0 protocol v2, docs/physics0/PD0_PROTOCOL_V2.md): truth comes from the same world binary ---- */
+static int ext_rel(run *R)
+{
+    uint8_t req[1] = { 4 }, b[2048]; size_t n = world_call(&R->world, req, 1, b, sizeof b);
+    if (n < 8 + 4 + 8 + 2 || memcmp(b, "PD0SHAP1", 8)) return -1;
+    unsigned nv = b[8], nl = b[9], nc = b[10], ne = b[11]; uint32_t tsz = pd0_get_u32(b + 12); unsigned nt = pd0_get_u16(b + 20); size_t o = 22;
+    if (nv > PD0_MAX_VARS || nc > PD0_MAX_CHAN || n != o + (size_t)nt * (9 + nv + nc)) return -1;
+    pd0_rel *t = &R->truth_rel; memset(t, 0, sizeof *t); t->n_vars = (uint8_t)nv; t->n_latent = (uint8_t)nl; t->n_channels = (uint8_t)nc; R->truth_size = (int)tsz; R->truth_n_latent = (int)nl; (void)ne;
+    for (unsigned k = 0; k < nt; k++) { unsigned tg = b[o++]; long long coef = (long long)pd0_get_u64(b + o); o += 8;
+        int e; for (e = 0; e < t->n_equations; e++) if (t->eq[e].target == tg) break; if (e == t->n_equations) { t->eq[t->n_equations++].target = (uint8_t)tg; }
+        pd0_eq *q = &t->eq[e]; int kk = q->n_terms++; q->coef[kk] = coef; for (unsigned i = 0; i < nv + nc; i++) q->expo[kk][i] = b[o++]; }
+    t->description_bits = pd0_rel_bits(t); R->have_truth = 1; return 0;
+}
+static int ext_episode(run *R, const int64_t *reset, const pd0_step *steps, uint32_t n, int64_t out[][PD0_MAX_OBS])
+{
+    uint8_t req[3 + 8 * PD0_MAX_OBS + 9 * PD0_MAX_STEPS], resp[2 + 8 * PD0_MAX_OBS * PD0_MAX_STEPS]; unsigned no = R->D.d.n_obs; size_t o = 0;
+    req[o++] = 3; req[o++] = (uint8_t)no; for (unsigned j = 0; j < no; j++, o += 8) pd0_put_u64(req + o, (uint64_t)reset[j]); req[o++] = (uint8_t)n;
+    for (uint32_t s = 0; s < n; s++, o += 8) { req[o++] = steps[s].channel; pd0_put_u64(req + o, (uint64_t)steps[s].value); }
+    size_t rn = world_call(&R->world, req, o, resp, sizeof resp); if (rn < 2) return 0; unsigned got = resp[1]; if (rn != 2 + 8u * no * got || got > n) return 0;
+    for (unsigned s = 0; s < got; s++) for (unsigned j = 0; j < no; j++) out[s][j] = (int64_t)pd0_get_u64(resp + 2 + 8 * (s * no + j));
+    return resp[0] == 0 && got == n;
 }
 
 static const char *lvl_name(int level) { static char b[8]; if (level < 0) return "null"; snprintf(b, sizeof b, "L%d", level); return b; }
@@ -140,7 +168,8 @@ int main(int argc, char **argv)
     if (argc < 6) { fprintf(stderr, "usage: pd0-harness <world> <truth> <level|null> <seed> <out-dir>\n"); return 2; }
     static run R; memset(&R, 0, sizeof R); R.level = strcmp(argv[3], "null") == 0 ? -1 : atoi(argv[3]); R.seed = strtoull(argv[4], NULL, 0);
     char *wargv[] = { argv[1], argv[3], argv[4], NULL }, *targv[] = { argv[2], argv[3], argv[4], NULL };
-    if (spawn(&R.world, wargv) || spawn(&R.truth, targv)) { perror("spawn"); return 3; }
+    R.ext = strcmp(argv[2], "-") == 0;   /* "-": external-world mode, truth over protocol v2 from the world binary */
+    if (spawn(&R.world, wargv) || (!R.ext && spawn(&R.truth, targv))) { perror("spawn"); return 3; }
     R.ledger = malloc(LCAP); R.recs = malloc(sizeof(pd0_rec) * 65536); R.fit = malloc(sizeof(pd0_transition) * 65536);
     /* describe */
     uint8_t req[128], resp[1024]; req[0] = 0; size_t rn = world_call(&R.world, req, 1, resp, sizeof resp);
@@ -239,7 +268,8 @@ int main(int argc, char **argv)
            csize, cbits, R.P.size_bound, (long long)(best ? best->fit_nrmse_micro : -1), (long long)(best ? best->select_nrmse_micro : -1), hidden,
            !scored ? "NO_CANDIDATE" : S.code == 0 ? "PASS" : S.code < 0 ? "NOT_SCORED" : "FAIL", S.code, S.fail_mask, (long long)S.inbox_nrmse, (long long)S.extrap_nrmse, (long long)S.onestep_nrmse, (long long)S.ref_nrmse, n_score_eps, law_rc, checker_rc,
            R.n_oob, R.n_refused, R.n_budget, R.n_propose_fail, R.n_trial_random, R.n_void_ep, R.n_void_batch);
-    fprintf(R.truth.wr, "quit\n"); fflush(R.truth.wr); fclose(R.world.wr); fclose(R.truth.wr); waitpid(R.world.pid, NULL, 0); waitpid(R.truth.pid, NULL, 0);
+    if (!R.ext) { fprintf(R.truth.wr, "quit\n"); fflush(R.truth.wr); fclose(R.truth.wr); }
+    fclose(R.world.wr); waitpid(R.world.pid, NULL, 0); if (!R.ext) waitpid(R.truth.pid, NULL, 0);
     pd0_learner_free(R.L); free(R.ledger); free(R.recs); free(R.fit);
     return 0;
 }
