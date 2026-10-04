@@ -27,6 +27,9 @@ OUT=$OUTDIR/PD0B_RUN-$HEAD_SHORT-$(echo "$WSHA" | cut -c1-12).txt
 [ ! -e "$OUT" ] || die "receipt already exists, refusing to overwrite: $OUT"
 LAWDIR=${OUT%.txt}-laws
 [ ! -e "$LAWDIR" ] || die "laws directory already exists, refusing to overwrite: $LAWDIR"
+LEDGER_ARCHIVE=${PD0B_LEDGER_ARCHIVE:-$HOME/workspace/evidence-archive/omega/physics0/pd0b}
+LDIR=$LEDGER_ARCHIVE/$(basename "${OUT%.txt}")-ledgers   # ledgers are large: kept outside the repo, listed by hash in LEDGERS.sha256
+[ ! -e "$LDIR" ] || die "ledger archive directory already exists, refusing to overwrite: $LDIR"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/out"; : > "$WORK/results.txt"
 echo "$lines" | while read -r lvl seed; do
@@ -47,6 +50,7 @@ while read -r pl; do
   [ "$st" != REPLICATED ] || [ "$law" = 1 ] || VALID=INVALID
   printf 'level=%s seed=%s state=%s code=%s score=%s score_code=%s law=%s law_sha256=%s\n' "$lv" "$sd" "$st" "$(fld "$pl" code)" "$(fld "$pl" score)" "$(fld "$pl" score_code)" "$law" "$lsha" >> "$WORK/summary.txt"
 done < "$WORK/pd0l.txt"
+( cd "$WORK/out" && for x in *.ledger; do [ -f "$x" ] && sha256sum "$x"; done ) > "$WORK/LEDGERS.sha256" || true
 {
   echo "receipt: PD0B_RUN"
   echo "run_validity: $VALID"
@@ -57,6 +61,8 @@ done < "$WORK/pd0l.txt"
   echo "world_binary: $W"
   echo "world_binary_sha256: $WSHA"
   echo "seeds_file_sha256: $SSHA"
+  echo "ledger_archive: $LDIR"
+  echo "ledgers_manifest_sha256: $(sha256sum "$WORK/LEDGERS.sha256" | cut -d' ' -f1)  (LEDGERS.sha256 in the laws directory)"
   echo "mode: external world, PD0 protocol v2 (play and truth from the one world binary; no pd0-truth)"
   echo "--- freeze (learner, ladder, scorer, controls)"
   sh tests/physics0/learner/pd0b_freeze.sh "$H"
@@ -72,6 +78,7 @@ done < "$WORK/pd0l.txt"
   cat "$WORK/pd0l.txt"
 } > "$WORK/receipt.txt"
 ln "$WORK/receipt.txt" "$OUT" || die "could not create $OUT without overwriting"
-mkdir "$LAWDIR" && cp "$WORK"/out/* "$LAWDIR"/ || die "could not retain the evidence bundles in $LAWDIR"
-echo "pd0b-run: wrote $OUT (bundles in $LAWDIR)"
+mkdir "$LAWDIR" && for x in "$WORK"/out/*; do case "$x" in *.ledger) ;; *) cp "$x" "$LAWDIR"/ ;; esac; done && cp "$WORK/LEDGERS.sha256" "$LAWDIR/LEDGERS.sha256" || die "could not retain the law and json files in $LAWDIR"
+mkdir -p "$LDIR" && cp "$WORK"/out/*.ledger "$LDIR"/ || die "could not archive the ledgers in $LDIR"
+echo "pd0b-run: wrote $OUT (law and json in $LAWDIR, ledgers in $LDIR)"
 [ "$VALID" = VALID ] || { echo "pd0b-run: run is INVALID (see receipt)" >&2; exit 4; }

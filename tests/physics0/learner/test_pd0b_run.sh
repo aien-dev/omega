@@ -21,25 +21,32 @@ EOS
 chmod +x "$T/harness"; printf '#!/bin/sh\nexit 0\n' > "$T/world"; chmod +x "$T/world"
 for s in 1 2 3 4 5; do echo "0 $s"; done > "$T/seeds.txt"
 ( cd "$T" && git init -q && git add -A && git -c user.email=t@t -c user.name=t commit -q -m t )
-run() { ( cd "$T" && env "$@" sh tests/physics0/learner/pd0b_run.sh ./harness ./world seeds.txt note ) > "$T/out.txt" 2>&1; }
+run() { ( cd "$T" && env PD0B_LEDGER_ARCHIVE="$T/archive" "$@" sh tests/physics0/learner/pd0b_run.sh ./harness ./world seeds.txt note ) > "$T/out.txt" 2>&1; }
 # good run
 run FAKE=none; rc=$?; R=$(ls "$T"/evidence/physics0/pd0b/PD0B_RUN-*.txt | head -1)
 check "[ -f '$R' ]"; check "grep -q '^run_validity: VALID' '$R'"
 check "grep -q '^validity_rule:.*law=1' '$R'"
 D="${R%.txt}-laws"; check "[ -d '$D' ]"
-check "[ -f '$D/pd0l-L0-s1.law' ] && [ -f '$D/pd0l-L0-s1.ledger' ]"
+check "[ -f '$D/pd0l-L0-s1.law' ] && [ ! -e '$D/pd0l-L0-s1.ledger' ]"
+A="$T/archive/$(basename "${R%.txt}")-ledgers"; check "[ -f '$A/pd0l-L0-s1.ledger' ]"
+nled=$(ls "$A" | wc -l); nman=$(wc -l < "$D/LEDGERS.sha256")
+check "[ $nled -eq 5 ] && [ $nman -eq 5 ]"
+check "(cd '$A' && sha256sum -c '$D/LEDGERS.sha256' >/dev/null)"
+check "grep -q '^ledger_archive: $A\$' '$R'"
+msha=$(sha256sum "$D/LEDGERS.sha256" | cut -d' ' -f1)
+check "grep -q '^ledgers_manifest_sha256: $msha' '$R'"
 sha=$(sha256sum "$D/pd0l-L0-s1.law" | cut -d' ' -f1)
 check "grep -q '^level=L0 seed=1 state=REPLICATED code=0 score=PASS score_code=0 law=1 law_sha256=$sha\$' '$R'"
 check "[ \$(grep -c ' law=1 law_sha256=' '$R') -eq 5 ]"
 # the laws directory is never overwritten, nor the receipt
 run FAKE=none && { echo "FAIL: second run succeeded"; fail=1; } || true
 check "grep -q 'refusing to overwrite' '$T/out.txt'"
-rm -rf "$T/evidence"
+rm -rf "$T/evidence" "$T/archive"
 # REPLICATED without a law record: INVALID, law=0, law_sha256=-
 run FAKE=nolaw && { echo "FAIL: nolaw run succeeded"; fail=1; } || true
 R=$(ls "$T"/evidence/physics0/pd0b/PD0B_RUN-*.txt | head -1)
 check "grep -q '^run_validity: INVALID' '$R'"; check "grep -q 'seed=1 state=REPLICATED code=0 score=PASS score_code=0 law=0 law_sha256=-\$' '$R'"
-rm -rf "$T/evidence"
+rm -rf "$T/evidence" "$T/archive"
 # law bytes present but the verifier rejected them: law=0, INVALID
 run FAKE=reject && { echo "FAIL: reject run succeeded"; fail=1; } || true
 R=$(ls "$T"/evidence/physics0/pd0b/PD0B_RUN-*.txt | head -1)
