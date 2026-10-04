@@ -2,6 +2,8 @@
 
 **Spec:** aien-dev/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` at `2f881b1` (revision 2; byte-identical to branch commit `80d7808`). Nothing in that file is edited here. Every number below was produced by `make physics0-test` on this commit (receipts `evidence/physics0/pd0-oracle-L<n>.json`, `evidence/physics0/pd0-g0-receipt.txt`); the generators are `src/physics0/pd0_gen.c`, the calibration code `tests/physics0/pd0_calib.c`, `pd0_oracle.c`, `pd0_sparse.c`.
 
+> **Revision 3 supersedes the numbers below.** Sections 1 to 4 and the L6 estimator note record the revision 2 runs and stay as history. The revision 3 numbers are in the last section ("Revision 3, substrate cut 3"); old receipts in `evidence/physics0/` are untouched.
+
 **Scope (Direction 2, substrate):** this is the oracle solver and the reference sparse solver scored against the frozen section 6 bounds. No learner was scored, no ladder was run. Scoring here is the calibration code of a test binary, not the scorer component (another lane).
 
 ## 1. Method
@@ -69,3 +71,58 @@ Method: the generator form is known to the oracle. With a = 1 - w*dt the latent 
 | 5 | 2e-6 | 2e-6 | 2 | 6 | 6 |
 
 Bounds 0.03 in-box and 0.08 extrapolation: met by a wide margin; `oracle_fit` L6 PASS on 5 of 5 seeds. Mutant: with the sign of m*h flipped in the generator (`PD0_MUTANT_LATENT_SIGN`), `oracle_fit` FAILs on 5 of 5 seeds because the fitted m*q comes out negative (about -0.4 to -0.9, declared range 0.25 to 1). Note the refitted model still predicts the mutant world well; it is the declared-range check that fails, not the prediction bound. Numbers above come from evidence/physics0/pd0-oracle-L6-fit.json (cut 2; the cut 1 file pd0-oracle-L6.json is immutable and keeps oracle_fit NOT_RUN). Cut 2 G0 receipt: evidence/physics0/pd0-g0-receipt-cut2.txt.
+
+## Revision 3, substrate cut 3
+
+**Spec:** aien-dev/physics `docs/PD0_HIDDEN_EQUATION_BENCHMARK.md` at `5bd2b04` (revision 3). **Omega commit that produced every number and receipt below:** `9e5ea8b5b5c1afa7a28cbcb0b2c463e51c96b538` (branch `hive/pd0-rev3`, on main `d0ca8ce`, which already contains #243, #246 and the L6 latent estimator #247). Run with `make physics0-test` and `make physics0-evidence` on a clean tree. No threshold was changed; the L6 range check and the generator read one table (`pd0_gen_const_table` in `src/physics0/pd0_gen.c`).
+
+New receipts (old ones untouched): `evidence/physics0/pd0-oracle-L0-rev3.json` to `pd0-oracle-L6-rev3.json` and `evidence/physics0/pd0-g0-receipt-cut3.txt`. Each G1 receipt now lists the reset box, the scoring boxes (in-box = reset box, extrapolation = 1.5x it, spec 6.1), the declared constant ranges and, per instance, the L6 redraw count.
+
+### What the code does now (spec lines)
+
+| Item | Value in code | Spec |
+| --- | --- | --- |
+| L0 episode length, budget | 20 steps, 3000 steps = 150 episodes | 2.2 table, 4 table, 4.1 L0 |
+| L0 reset box | s0 [-2, 2], s1 [-0.2, 0.2]; push [-0.1, 0.1] | 4 (box notes), 4.1 L0 |
+| L4 reset box | [-1, 1] both variables (k [1,4], b [0.5,2] unchanged) | 4 (box notes), 4.1 L4 |
+| L6 ranges, draw order | k [3,5], w [0.5,1], m [1,2], q [1,2]; order k, w, m, q | 4.1 L6, 3 |
+| L6 stability rule | while m*q/w > 0.7*k redraw m then q from the same stream; exact integer test `10*M*Q > 7*K*W` in micro-units; cap 1000 redraws, then the seed is invalid (`g.invalid`, `pd0_gen_init` returns -1, the oracle receipt records `"invalid": true`) | 4.1 L6 |
+| Scoring boxes | in-box = reset box per variable, extrapolation = 1.5x (L0 s1 0.3, L4 1.5, others 3) | 6.1 last paragraph |
+| Refused reset | status `REFUSED_RANGE`, costs one episode, no episode opened (a later step reports `BUDGET_EXHAUSTED`) | 2.3 |
+| L6 `in_declared_ranges` | k, w and m*q (over [m_lo*q_lo, m_hi*q_hi] = [1, 4]) read from the same table the generator draws from | 4.1, task rule |
+
+### Results (seeds 1..5 for V1/V2, seeds 1..20 for V3)
+
+| Level | oracle_exact worst in-box / extrap | oracle_fit worst in-box / extrap | sparse_ref in-box range | V3 worst breach (seeds 1..20) | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| L0 | 0 / 0 (truth leaves the box in at most 1 of 20 scoring episodes) | 0 / 0 | 0 | 0.0200 | V1 PASS, V3 PASS |
+| L1 | 6e-6 / 5e-6 | 6e-6 / 5e-6 | 1e-6 to 1.7e-5 | 0.0000 | PASS |
+| L2 | 5e-6 / 5e-6 | 1.3e-5 / 1.0e-5 | 3e-6 to 1.9e-5 | 0.0000 | PASS |
+| L3 | 8e-6 / 5e-6 | 5e-6 / 4e-6 | 2e-6 to 5e-6 | 0.0323 | PASS |
+| L4 | 1.2e-5 / 1.0e-5 | 1.3e-5 / 8e-6 | 6e-6 to 2.4e-5 | 0.0000 | PASS |
+| L5 | 5e-6 / 5e-6 | 0.0104 / 0.0061 | 0.0018 to 0.0137 | 0.0000 | PASS |
+| L6 (oracle_fit with the latent estimator) | 3e-6 / 4e-6 | 2e-6 / 3e-6 | latent-free, see below | 0.0000 | V1 PASS, V3 PASS |
+
+V3 matches the table in spec section 4.2 (L0 0.020, L3 0.032, the rest 0).
+
+### L6: V2 and the factor-3 condition (measured, not assumed)
+
+Draws (micro, order k, w, m, q) and redraws: seed 1 (3368868, 905570, 1643841, 1169109) 0 redraws; seed 2 4128392, 885899, 1150045, 1388809 with 1; seed 3 3794478, 685972, 1193802, 1388242 with 1; seed 4 4403162, 522824, 1163776, 1276070 with 7; seed 5 3292448, 990681, 1016836, 1491901 with 3. No invalid seed.
+
+| seed | latent-free in-box NRMSE (sparse_ref) | extrap | fails the 0.03 bound (V2) | >= 0.09 (factor 3, spec 6.3) |
+| --- | --- | --- | --- | --- |
+| 1 | 0.1422 | 0.0990 | yes | yes |
+| 2 | 0.0740 | 0.0670 | yes | **no** |
+| 3 | 0.1196 | 0.1001 | yes | yes |
+| 4 | 0.0631 | 0.0671 | yes | **no** |
+| 5 | 0.0941 | 0.1033 | yes | yes |
+
+Result: V2 PASS on 5 of 5 (a latent-free model fails 0.03 everywhere). The factor-3 condition (>= 0.09) is **met on 3 of 5 seeds (1, 3, 5) and NOT met on seeds 2 and 4**, so the L6 additional condition of spec 6.3 FAILS as the thresholds stand and L6 cannot pass; nothing was changed to hide this. These values (range 0.063 to 0.142) differ slightly from the figures quoted in spec 6.3 (0.069 to 0.138); the pass/fail picture (3 of 5) is the same. UNVERIFIED why the quoted figures differ (the sweep ran with local override macros, this run uses the generator directly; confidence: medium that it is only a difference in how the sweep drew its ranges).
+
+`oracle_fit` L6 PASS on 5 of 5, in declared ranges on all five; errors: k at most 2 ppm, w at most 16 ppm, m*q at most 11 ppm. Latent-sign mutant: `oracle_fit` FAILs on 5 of 5 (fitted m*q about -1.5 to -1.9, below the declared 1.0). Sign mutant (L1): caught.
+
+### Limits
+
+- The describe record (spec 2.2) carries one `reset_min`/`reset_max` pair. For L0 it holds the s0 box [-2, 2], so a learner is not told that s1 is limited to [-0.2, 0.2] and a reset with larger s1 is refused and charged (spec 2.3 "probing the bounds is not free"). The spec table does not say how to describe a per-variable box; the wire format was left unchanged. Spec owner: decide whether describe needs per-variable bounds.
+- The scoring-box rule is implemented in `tests/physics0/pd0_calib.c` and written into the receipts. `src/physics0/score` (another lane) is not changed and must apply the same per-variable rule.
+- The G0 receipt records the commit of the tree it ran on; this document and the receipts were added in the commit after `9e5ea8b`.
