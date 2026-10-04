@@ -30,6 +30,7 @@ typedef struct {
     uint8_t chain_root[PD0_HASH];
     uint64_t n_entries, n_records;
     int64_t last_nrmse_micro;     /* diagnostics */
+    uint32_t n_void_episodes, n_void_batches;   /* spec rev 7: void TRIAL/REP episodes and batches (never in p or f) */
     double last_r, last_p;
 } pd0_ladder_report;
 
