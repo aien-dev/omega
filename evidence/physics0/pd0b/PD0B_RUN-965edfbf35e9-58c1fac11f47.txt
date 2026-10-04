@@ -1,0 +1,191 @@
+receipt: PD0B_RUN
+run_validity: VALID
+validity_rule: VALID needs, per instance, a final accepted once, shape dimensions unchanged across final (and, in PD0 mode with the omega world, S* equal to the public table), an audit echoing the final hash, and every refusal counter 0
+note: PD0B_RUN seal-1: frozen learner f9a1797 trees, sealed commit 74bdba3, world sha 58c1fac1, seeds sha b22c9712; sealed source unread by the runner
+date_utc: 2026-10-04T01:57:28Z
+harness_commit: 965edfbf35e90edf01abbaba6a5ef39d97b583f3
+world_binary: /home/drakestapleton/.claude/jobs/5f5faea3/tmp/sealedw/pd0b/build/pd0b-world
+world_binary_sha256: 58c1fac11f474e15efc883b32aa44b54387a923fd172896ba10753023064eacd
+seeds_file_sha256: b22c9712e1bdd3a7e836cff73774dcf6c1e8cbc5335652c175a5e5c75cbb7038
+mode: external world, PD0 protocol v2 (play and truth from the one world binary; no pd0-truth)
+--- freeze (learner, ladder, scorer, controls)
+freeze_head: 965edfbf35e90edf01abbaba6a5ef39d97b583f3
+tree src/physics0/learner 1dceff1be806e5a87959c72afa1a127ef9ceec14
+tree src/physics0/ladder 1a1d1dc61f0cfe4bedc2afacc228aa7c5e2e795d
+tree src/physics0/score 288882ae723da6a2659d74f27ddc58527a8c6660
+tree src/physics0/controls ab6235f40ab056a655ded45594c36b01cbbff69b
+frozen_dirs_modified_in_worktree: 0
+file 98287309c8a2414bd68c7cf38a0f513ccefa14b126c310e30eac7b7e939904f0 src/physics0/controls/.crumb
+file 6b38bad721d1e4293425d1678425f71841c2b850aeffc2db0791f78be70d9989 src/physics0/controls/pd0_controls.c
+file 0a4c3ea6a938b5885feb528dfbb349ee3d8495c79adb3b97b543cd0848626dce src/physics0/controls/pd0_controls.h
+file acd4c63f54eee33c26b1799ea8ee61de8e1c945dd183872932459221c532d370 src/physics0/controls/pd0_receipt.c
+file 0f5b5fd39ab1b9f0722946f806aaeb33faea0b8a944f43e8a88da1b1af813812 src/physics0/controls/pd0_receipt.h
+file 4b95ac11781d4f081a90f80e1feb02fd2ceaa5843d91663a3753b22942f95c27 src/physics0/ladder/.crumb
+file cd409166cfd54b08a39f52fa786b5609acae85112171c5b25e7ddb124f103262 src/physics0/ladder/pd0_codes.c
+file 709be1faaaf250dd5c163e16c4a513cfea4e709aa7fe33a40be5afaf811a2de9 src/physics0/ladder/pd0_codes.h
+file f3ab621c5c88a9c6a109a127a0f916fc3d582e1425bdf6401b93a2bc78e0dca6 src/physics0/ladder/pd0_fmt.c
+file 2c78cae21851e75c5e65530f391ce6d8fad346387de149ff61ca75263788bc14 src/physics0/ladder/pd0_fmt.h
+file 3ba32a8f2eb36f8c7bf023d02445e9795b7dcee3e84a0ead25923eb495c950ae src/physics0/ladder/pd0_ladder.c
+file cae754beb21d65f178c70437e3a8b88209b4c503d5d69227d549e5590d7dbcd5 src/physics0/ladder/pd0_ladder.h
+file 07989a0378c10f11f6549450866d1bb2947f8a9bcef4ed57540f13ecc395093a src/physics0/ladder/pd0_rng.h
+file d419296e9b472dd3bd516fe2570c1eb4e849a854821efeb2ed00772109b84cad src/physics0/learner/.crumb
+file 480c9f950968fc13cf206cfe0701c404086fba2cdc7bd616bd553ccd8e6b5690 src/physics0/learner/pd0_learner.c
+file 41fe375015c68e9b2e26b481e439b84ca481303d6115ddea5c9c25b9defbd4dd src/physics0/learner/pd0_learner.h
+file 620a28e324ddbc314ed4e77927192baa989ade83062d144d361904a76d0f6e3c src/physics0/learner/pd0_learner_main.c
+file 970e36b380a5170ca406934c8a70ec5aef209b1a043d6658b062bb1815cf938a src/physics0/score/.crumb
+file dc86f525ff719c882df2ef90f6c3ff204c1b04a8ff7488283769cb733db4f553 src/physics0/score/pd0_score.c
+file 4e52477f74a45a9a9a5da5d19eeae7ca4d56e49136943fd8766007947ae44fd9 src/physics0/score/pd0_score.h
+harness_binary_sha256: ee8223221abbefdfcbc432097e447f3eecf4b3d9f8e7bd4177713644f1e72520
+--- seeds file
+0 3805880523082547226
+0 235508311307785957
+0 18312050611174561106
+0 16511293387220008450
+0 11397248607486400836
+1 548282629650328736
+1 12845857623862829518
+1 2429033877760000723
+1 7386991670370128520
+1 11257043301485738071
+2 1461922243055705434
+2 11838280311094422111
+2 12284037429341434373
+2 948548271972545479
+2 6239850740883331219
+3 13931014643317617473
+3 6004454343461746321
+3 17871040322435263578
+3 94322809810217602
+3 10723829633174173778
+4 2291193045104633537
+4 14774132568219453931
+4 11931953102606280095
+4 13177984827601324164
+4 11093503406181667014
+5 13558639775972880708
+5 13780885953786367927
+5 15803771502613751917
+5 2881482411759195170
+5 8439250286447154462
+6 13609070777765353661
+6 8986529720061306947
+6 13773677259096908619
+6 1877449266134644612
+6 3408673337925413302
+--- per instance: level seed ladder_state checker_code scorer_verdict scorer_code
+level=L0 seed=3805880523082547226 state=REPLICATED code=0 score=PASS score_code=0
+level=L0 seed=235508311307785957 state=REPLICATED code=0 score=PASS score_code=0
+level=L0 seed=18312050611174561106 state=REPLICATED code=0 score=PASS score_code=0
+level=L0 seed=16511293387220008450 state=REPLICATED code=0 score=PASS score_code=0
+level=L0 seed=11397248607486400836 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=548282629650328736 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=12845857623862829518 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=2429033877760000723 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=7386991670370128520 state=REPLICATED code=0 score=PASS score_code=0
+level=L1 seed=11257043301485738071 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=1461922243055705434 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=11838280311094422111 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=12284037429341434373 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=948548271972545479 state=REPLICATED code=0 score=PASS score_code=0
+level=L2 seed=6239850740883331219 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=13931014643317617473 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=6004454343461746321 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=17871040322435263578 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=94322809810217602 state=REPLICATED code=0 score=PASS score_code=0
+level=L3 seed=10723829633174173778 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=2291193045104633537 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=14774132568219453931 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=11931953102606280095 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=13177984827601324164 state=REPLICATED code=0 score=PASS score_code=0
+level=L4 seed=11093503406181667014 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=13558639775972880708 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=13780885953786367927 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=15803771502613751917 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=2881482411759195170 state=REPLICATED code=0 score=PASS score_code=0
+level=L5 seed=8439250286447154462 state=REPLICATED code=0 score=PASS score_code=0
+level=L6 seed=13609070777765353661 state=INTERVENED code=261 score=FAIL score_code=307
+level=L6 seed=8986529720061306947 state=INTERVENED code=261 score=FAIL score_code=307
+level=L6 seed=13773677259096908619 state=CANDIDATE code=251 score=FAIL score_code=307
+level=L6 seed=1877449266134644612 state=CANDIDATE code=251 score=FAIL score_code=307
+level=L6 seed=3408673337925413302 state=INTERVENED code=261 score=FAIL score_code=307
+--- per instance: final bundle hash and the world refusal counters (protocol v2 rev 2)
+level=L0 seed=3805880523082547226 final=7e5b5395bfeff3aa37a8b4b9d5dd18160ff9fdde37412146a018e3a62237e855 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L0 seed=235508311307785957 final=9d04f1b9b50aa6ccd2d814c5f91ff1d77c6f3688b4a4cf947f031e460c5c5903 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L0 seed=18312050611174561106 final=af30eb938211222b2a9ef84d7449724009defc3dda8137a55306555f9ee2779e final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L0 seed=16511293387220008450 final=1703df111e442a07f870f583274670a069280a20f06376808bc77beb8652fd54 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L0 seed=11397248607486400836 final=7aeb8c03e414d7fa5a2920179e76e000996dabfa476c35bdb47348b0c1a475f9 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L1 seed=548282629650328736 final=8121a2fbc9613448cbb54e3b1d031b14c75bf4d1b291364bf42ee0b321af93bf final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L1 seed=12845857623862829518 final=329de78821c43444f8888a30be61750ad2d542b649cf3ef2371ed78925c6a794 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L1 seed=2429033877760000723 final=98195b83f4ae21b3afd3e681303d3fac8f8c14f973fa4450a25f828747153a47 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L1 seed=7386991670370128520 final=394937129c7497ea96afbc78f89dc6f4b02b49f067bdc319eada558e9bd0f7a6 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L1 seed=11257043301485738071 final=72bb0c111015a8698ab06a5335ec9664a0f1a520968fdfd43d4c4e6681a9b9d7 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L2 seed=1461922243055705434 final=c0cd1a46a5aae7e1dbc03010164b3e40b3cf95a24d7d1db5e55643bda652f337 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L2 seed=11838280311094422111 final=05595252dfe3d73b6289f689ab67c9cf54728c532d825d1a6566556b69a4f231 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L2 seed=12284037429341434373 final=57998d8aed082634e8c9246cc6c8a1fcb634863393d023d9e34c44e395fa024c final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L2 seed=948548271972545479 final=166b4bd85a0960d1105d6128382541208359779d8ae163237e77d1028a044dac final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L2 seed=6239850740883331219 final=421744630491d8ab5fbc5436224e98b67db2747383056ff773703563441a348d final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=4 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L3 seed=13931014643317617473 final=cb75c8db5a6ac015fe91d1be1aeeaa6000f10894d0dd080862b251bb902941a3 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=0 n_channels=2 valid=VALID
+level=L3 seed=6004454343461746321 final=4ce21e8777108c9c29319a448b35065a9b00ada16d229a9b8e30e8897c2758fa final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=0 n_channels=2 valid=VALID
+level=L3 seed=17871040322435263578 final=e3c1381c6d5211731a9d2b0384c3d6168b124deb9cc713c8d855a6bf1721cf50 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=0 n_channels=2 valid=VALID
+level=L3 seed=94322809810217602 final=5a0b41cb1fa95e1017c1296149d92cf8bd71e78fd89b451d12762d361767ea6d final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=0 n_channels=2 valid=VALID
+level=L3 seed=10723829633174173778 final=e61621bb793c7cb4d0dc2a98d1d2e9c5a5e328df91e15a509723b8f663b66407 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=0 n_channels=2 valid=VALID
+level=L4 seed=2291193045104633537 final=5dbff431a56cddb5ec6566fa17e4fe5280301a567ab3ae0d4c456749389184f5 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L4 seed=14774132568219453931 final=cd3da71c44b4ecdf3bff7f2c9c827828392b9827ee0a522341c7477b385b8ec2 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L4 seed=11931953102606280095 final=ff972b54aa8a787de99359389d77957d589dd9474dcce7f217651c696783e375 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L4 seed=13177984827601324164 final=202718a63e0b0beb92f19e1dec0b0e595d77a1e072318a69cfebc46e251bd8c9 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L4 seed=11093503406181667014 final=63a0b5168a749d291da3e12c088a295fa58e26cc2a2f5b46e9ed7118c3a5499e final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L5 seed=13558639775972880708 final=ad1f3eea1f7571fd7e8476b3f0aabb4acd588bb3325c5daf23a72ee45f207ad0 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L5 seed=13780885953786367927 final=d5531eb4e202806e1ad1cb809150d5ae8e2a028f6bc950ec7c5ca79ea3ce8ee9 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L5 seed=15803771502613751917 final=adcfc5283a224d914c3eab01e38b36a9a4a0add907cf8324a7c763ec2ac9753d final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L5 seed=2881482411759195170 final=f7ee7795cfbd64430fc9abceb6d793ceb736e81d4014a12733dea0f285e967b4 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L5 seed=8439250286447154462 final=70afb2462457a8d15d906aa932807acbc2f2b12a9eebf1fb6f81e42b7ceb0fea final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=5 n_vars=2 n_latent=0 n_channels=1 valid=VALID
+level=L6 seed=13609070777765353661 final=d28753c53f54e61f8396e1b8225630cea7f18fbd7fd88afa51a4b3e4fddd9ecc final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=1 n_channels=1 valid=VALID
+level=L6 seed=8986529720061306947 final=822133524b66bfbcffe7cb93e159615ed60156393149da074dd75ad2260c5443 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=1 n_channels=1 valid=VALID
+level=L6 seed=13773677259096908619 final=56a7fba2b3a28de83589e66f874cb80c8d6c22989e40c4fa6ebd8e9a99736c65 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=1 n_channels=1 valid=VALID
+level=L6 seed=1877449266134644612 final=573b5f17e8c8defdca60141b2cdfb86e79d3038c0149f54db5edbd24b86385e2 final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=1 n_channels=1 valid=VALID
+level=L6 seed=3408673337925413302 final=7c1af3715e9855bc9894964d28b735ab82dce0497a28ddef03bde40537526f2d final_status=0 score_before_final=0 shape_before_final=0 play_after_final=0 dup_final=0 audit_ok=1 mode=SEALED s_star=7 n_vars=3 n_latent=1 n_channels=1 valid=VALID
+--- state count per level
+L0 REPLICATED score=PASS x5
+L1 REPLICATED score=PASS x5
+L2 REPLICATED score=PASS x5
+L3 REPLICATED score=PASS x5
+L4 REPLICATED score=PASS x5
+L5 REPLICATED score=PASS x5
+L6 CANDIDATE score=FAIL x2
+L6 INTERVENED score=FAIL x3
+--- raw harness lines
+PD0L level=L0 seed=3805880523082547226 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=5 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L0 seed=235508311307785957 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=7 extrap=3 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L0 seed=18312050611174561106 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=12 extrap=10 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L0 seed=16511293387220008450 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=7 extrap=5 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L0 seed=11397248607486400836 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=7 extrap=5 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L1 seed=548282629650328736 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=3 extrap=3 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L1 seed=12845857623862829518 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=6 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L1 seed=2429033877760000723 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=1 select_nrmse=2 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=5 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L1 seed=7386991670370128520 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=3 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L1 seed=11257043301485738071 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=0 select_nrmse=0 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=3 onestep=0 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=1461922243055705434 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=16 extrap=12 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=11838280311094422111 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=2 select_nrmse=2 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=16 extrap=16 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=12284037429341434373 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=15 extrap=14 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=948548271972545479 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=14 extrap=13 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L2 seed=6239850740883331219 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=4 cand_bits=192 size_bound=6 fit_nrmse=2 select_nrmse=2 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=17 extrap=16 onestep=2 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=13931014643317617473 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=7 cand_bits=448 size_bound=9 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=4 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=6004454343461746321 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=7 cand_bits=448 size_bound=9 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=3 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=17871040322435263578 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=7 cand_bits=448 size_bound=9 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=2 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=94322809810217602 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=7 cand_bits=448 size_bound=9 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=5 extrap=7 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L3 seed=10723829633174173778 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=7 cand_bits=448 size_bound=9 fit_nrmse=1 select_nrmse=1 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=4 extrap=6 onestep=1 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=2291193045104633537 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=2 select_nrmse=2 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=20 extrap=15 onestep=2 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=14774132568219453931 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=2 select_nrmse=2 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=23 extrap=18 onestep=2 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=11931953102606280095 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=2 select_nrmse=2 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=14 extrap=13 onestep=2 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=13177984827601324164 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=3 select_nrmse=3 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=30 extrap=17 onestep=2 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L4 seed=11093503406181667014 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=2 select_nrmse=2 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=21 extrap=22 onestep=2 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=13558639775972880708 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=26846 select_nrmse=28972 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=11619 extrap=11915 onestep=1243 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=13780885953786367927 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=29992 select_nrmse=31747 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=3946 extrap=5129 onestep=568 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=15803771502613751917 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=27277 select_nrmse=29721 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=6244 extrap=7234 onestep=715 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=2881482411759195170 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=34614 select_nrmse=35235 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=7069 extrap=4549 onestep=1107 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L5 seed=8439250286447154462 desc=v2 episodes=295 steps=5900 fit=3120 select=1040 state=REPLICATED code=0 stall=0 refutations=0 attempts=1 cand_size=5 cand_bits=240 size_bound=7 fit_nrmse=26894 select_nrmse=30096 hidden_state=0 score=PASS score_code=0 mask=0x0 inbox=10763 extrap=9637 onestep=1476 ref=0 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=13609070777765353661 desc=v2 episodes=300 steps=5980 fit=3220 select=1040 state=INTERVENED code=261 stall=261 refutations=1 attempts=2 cand_size=6 cand_bits=288 size_bound=9 fit_nrmse=6598 select_nrmse=6859 hidden_state=1 score=FAIL score_code=307 mask=0x183 inbox=32458 extrap=93857 onestep=0 ref=39017 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=1 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=8986529720061306947 desc=v2 episodes=300 steps=5980 fit=3220 select=1040 state=INTERVENED code=261 stall=261 refutations=1 attempts=2 cand_size=6 cand_bits=288 size_bound=9 fit_nrmse=9478 select_nrmse=9737 hidden_state=1 score=FAIL score_code=307 mask=0x181 inbox=65495 extrap=66651 onestep=0 ref=64229 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=1 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=13773677259096908619 desc=v2 episodes=275 steps=5500 fit=3420 select=1040 state=CANDIDATE code=251 stall=250 refutations=3 attempts=3 cand_size=5 cand_bits=240 size_bound=9 fit_nrmse=8433 select_nrmse=8422 hidden_state=1 score=FAIL score_code=307 mask=0x183 inbox=47106 extrap=108166 onestep=0 ref=46125 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=1877449266134644612 desc=v2 episodes=275 steps=5500 fit=3420 select=1040 state=CANDIDATE code=251 stall=250 refutations=3 attempts=3 cand_size=5 cand_bits=240 size_bound=9 fit_nrmse=12067 select_nrmse=11737 hidden_state=1 score=FAIL score_code=307 mask=0x183 inbox=73402 extrap=116458 onestep=0 ref=72604 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=0 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
+PD0L level=L6 seed=3408673337925413302 desc=v2 episodes=300 steps=5980 fit=3220 select=1040 state=INTERVENED code=261 stall=261 refutations=1 attempts=2 cand_size=6 cand_bits=288 size_bound=9 fit_nrmse=5094 select_nrmse=5054 hidden_state=1 score=FAIL score_code=307 mask=0x180 inbox=23731 extrap=42158 onestep=0 ref=23392 score_eps=20 law=0 checker_rc=0 oob=0 refused=0 budget_hits=1 propose_fail=0 trial_random=0 void_ep=0 void_batch=0
