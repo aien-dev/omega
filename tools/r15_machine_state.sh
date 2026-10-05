@@ -16,12 +16,32 @@
 # cycle counter (perf, system-wide, read from outside the measured processes)
 # divided by the core's busy time from /proc/stat.
 set -u
+CUT_GHZ=3.75                # the preflight fails below this sustained median
+
+# preflight_ghz <perf csv>: effective GHz per second while the core was fully
+# busy (1 s intervals); exit 0 if the median of seconds 13-20 reaches CUT_GHZ,
+# 3 below it, 4 with no samples. Counts only the CPU PMU cycles event: newer
+# kernels also list SMMU PMUs (smmuv3_pmcg_*/cycles/) in the same interval,
+# which are not core clocks.
+preflight_ghz() {
+    awk -F, -v cut="$CUT_GHZ" '
+        $5 == "cycles" || $5 ~ /^armv8_pmuv3(_[0-9]+)?\/cycles\/$/ { n++; g = $3 / ($1 - last) / 1e9; last = $1; if (n > 12 && n <= 20) s[++m] = g; all = all sprintf(" %.3f", g) }
+        END {
+            if (m == 0) { print "preflight: no samples"; exit 4 }
+            asort(s); med = (m % 2) ? s[(m + 1) / 2] : (s[m / 2] + s[m / 2 + 1]) / 2
+            printf "per-second GHz:%s\nmedian seconds 13-20: %.3f GHz (cut-off %.2f)\n", all, med, cut
+            exit (med < cut) ? 3 : 0
+        }' "$1"
+}
+
+# preflight-parse <perf csv>: the preflight verdict on a recorded file (tests).
+if [ "${1:-}" = preflight-parse ]; then preflight_ghz "${2:?perf csv}"; exit $?; fi
+
 CMD=${1:?preflight, start, mark or stop}
 OUT=${2:?out dir}
 mkdir -p "$OUT"
 X925=7                      # the preflight core (a Cortex-X925)
 SAMPLER_CPU=${R15_STATE_CPU:-0}
-CUT_GHZ=3.75                # the preflight fails below this sustained median
 
 spbm_energy() {
     for h in /sys/class/hwmon/hwmon*; do
@@ -41,15 +61,7 @@ preflight)
     sudo -n perf stat -a -A -C "$X925" -e cycles -I 1000 -x, -o "$OUT/preflight-perf.csv" -- \
         taskset -c "$X925" timeout 20 sha256sum /dev/zero >/dev/null 2>&1
     busy >> "$F"
-    # effective GHz per second while the core was fully busy (1 s intervals)
-    awk -F, -v cut="$CUT_GHZ" '
-        /cycles/ { n++; g = $3 / ($1 - last) / 1e9; last = $1; if (n > 12 && n <= 20) s[++m] = g; all = all sprintf(" %.3f", g) }
-        END {
-            if (m == 0) { print "preflight: no samples"; exit 4 }
-            asort(s); med = (m % 2) ? s[(m + 1) / 2] : (s[m / 2] + s[m / 2 + 1]) / 2
-            printf "per-second GHz:%s\nmedian seconds 13-20: %.3f GHz (cut-off %.2f)\n", all, med, cut
-            exit (med < cut) ? 3 : 0
-        }' "$OUT/preflight-perf.csv" >> "$F"
+    preflight_ghz "$OUT/preflight-perf.csv" >> "$F"
     rc=$?
     [ $rc = 0 ] && echo "result: X925 sustains its clock" >> "$F" || echo "result: MACHINE-STATE FAILURE (rc $rc)" >> "$F"
     exit $rc
@@ -96,7 +108,7 @@ stop)
     # cycles of each X925 core (cpus 5-9, 15-19) as GHz. A fully busy second
     # reads as the effective clock; a partly idle second reads lower, so the
     # busy jiffies in machine-state.ndjson decide individual seconds.
-    awk -F, '/cycles/ { split($2, c, "CPU"); cpu = c[2] + 0
+    awk -F, '$5 == "cycles" || $5 ~ /^armv8_pmuv3(_[0-9]+)?\/cycles\/$/ { split($2, c, "CPU"); cpu = c[2] + 0
         if ((cpu >= 5 && cpu <= 9) || (cpu >= 15 && cpu <= 19)) { g = $3 / 1e9; if (g >= 1.0) v[++n] = g } }
         END {
             if (!n) { print "X925: no second above 1 GHz of cycles"; exit }

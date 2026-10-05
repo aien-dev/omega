@@ -503,6 +503,11 @@ $(RX_R11_TEST): $(RX_R11_SRCS) $(RX_AIEN_OBJ) src/runtime/rx_omega.h src/runtime
 test-r11: $(RX_R11_TEST)
 	./$(RX_R11_TEST)
 
+# R11 living run allowed inside its own quietlock hold, refused under any other.
+.PHONY: test-r11-own-hold
+test-r11-own-hold: $(RX_R11_TEST)
+	sh tests/runtime/r11_own_hold_test.sh ./$(RX_R11_TEST)
+
 # OMEGA_STATE_PROJECTION: cognition gets a compiled state projection from
 # Cortex, not everything Cortex knows. Part B drives the real R11 AIEN faculty
 # under the native AIENOS authority. The projection objects are built alone
@@ -807,6 +812,12 @@ r15-receipt:
 .PHONY: r15-receipt test-r15-receipt
 test-r15-receipt:
 	tests/r15_receipt_test.sh
+
+# R15 preflight parser: counts only the CPU PMU cycles event (SMMU PMUs list
+# "cycles" too on newer kernels). Host-only, fixtures, seconds.
+.PHONY: test-r15-preflight
+test-r15-preflight:
+	sh tests/r15_preflight_test.sh
 
 # R16-G2 code-search gate (spec/r16-orchestrator-retirement.md). Host-only C tool,
 # seconds, no network. Scans the five repos (paths from R16_REPO_OMEGA,

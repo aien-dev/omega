@@ -44,7 +44,7 @@
         },
         {
           "digest": "5bf3209bf3f715b5a3059c845b62bbe74e24b04968d3de4ae5ef35ff493a83b2",
-          "last_commit": "b37e34b",
+          "last_commit": "30c65a3",
           "name": "estimation",
           "purpose": "Directory tools/estimation. Purpose not yet described by a human."
         },
@@ -56,14 +56,14 @@
         }
       ],
       "children_root": "sha256:6ed09e33b610372de30ea2d6372b94240127e9acb4d178879cbd5448faab6909",
-      "compiled_at": "2026-10-05T12:20:02Z",
+      "compiled_at": "2026-10-05T12:57:09Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:58b5c63f4c60baa5317f02058e05faf6e5880a4b934a5322ce4ba0e78c286da6",
+      "digest": "sha256:a73d0d57e85ad3212a677ae5bfca5b7ff187e871e01f198039a7b4cb275a3a83",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 127,
-      "generated_at_commit": "85a3fc2488650bde3cebfc67ed71cb87fcbc3163",
-      "source_tree": "sha256:f72d9a96e4f83ec3c9ccf8be060917a415dc126cef7de62b4de7c95457c9502e"
+      "generated_at_commit": "30c65a33c8f7523fa1e0dbe752cb47667d6bf9b2",
+      "source_tree": "sha256:3867d4b3de9dbfe7a8bf2906b03e78e2633a11054860a385d1c0178907f5eece"
     },
     "owner_lane": "",
     "provenance": {
