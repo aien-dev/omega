@@ -4,12 +4,13 @@
 #
 # test-est5-tools     tool tests on synthetic data (held-out refusal, open trace, binding refusals)
 # test-est5-window    collector and window-check tests (no data, no load)
+# test-est-json       strict-JSON receipt rules (est-json-1): unit checks + strict parse of emitted receipts
 # test-estimation-v5  v4 library tests (reused, unchanged) + the two above
 # est5                the binding tool (identity compiled in)
 ifndef ESTIMATION_V5_MK
 ESTIMATION_V5_MK := 1
 include mk/estimation_v4.mk
-.PHONY: test-est5-tools test-est5-window test-estimation-v5 est5 est5-force
+.PHONY: test-est-json test-est5-tools test-est5-window test-estimation-v5 est5 est5-force
 ESTV5_DIR = $(OUT_DIR)/estimation-v5
 ESTV5_CFLAGS = $(EST_CFLAGS) -Itools/estimation
 ESTV5_TOOL_SRCS = tools/estimation/est5.c tools/estimation/est3c_common.c tools/estimation/est_replay.c \
@@ -54,14 +55,27 @@ $(ESTV5_DIR)/est5_test: $(ESTV5_TOOL_SRCS) $(ESTV5_TOOL_HDRS)
 $(ESTV5_DIR)/est5_test_asan: $(ESTV5_TOOL_SRCS) $(ESTV5_TOOL_HDRS)
 	@mkdir -p $(ESTV5_DIR)
 	$(CC) $(ESTV5_CFLAGS) $(EST_ASAN) -Wno-format-truncation -DE5_TEST_BUILD -DTOOL_COMMIT='"test-build"' -DTOOL_DIRTY=1 -o $@ $(ESTV5_TOOL_SRCS) -lm
-test-est5-tools: $(ESTV5_DIR)/est5 $(ESTV5_DIR)/est5_test $(ESTV5_DIR)/est5_test_asan
-	sh tools/estimation/test_est5_tools.sh ./$(ESTV5_DIR)/est5_test $(ESTV5_DIR)/work
-	sh tools/estimation/test_est5_tools.sh ./$(ESTV5_DIR)/est5_test_asan $(ESTV5_DIR)/work-asan
+test-est5-tools: $(ESTV5_DIR)/test_est_json $(ESTV5_DIR)/est5 $(ESTV5_DIR)/est5_test $(ESTV5_DIR)/est5_test_asan
+	sh tools/estimation/test_est5_tools.sh ./$(ESTV5_DIR)/est5_test $(ESTV5_DIR)/work ./$(ESTV5_DIR)/test_est_json
+	sh tools/estimation/test_est5_tools.sh ./$(ESTV5_DIR)/est5_test_asan $(ESTV5_DIR)/work-asan ./$(ESTV5_DIR)/test_est_json
 	@echo "test-est5-tools: fit, held-out refusal, open-trace purity, binding refusals and receipt path pass (synthetic data)"
+
+ESTJ_SRCS = tools/estimation/test_est_json.c tools/estimation/est3c_common.c tools/estimation/est_replay.c \
+	src/estimation/est_v4.c src/estimation/est_pred.c src/estimation/est_mix.c $(EST_KF_SRCS)
+$(ESTV5_DIR)/test_est_json: $(ESTJ_SRCS) $(ESTV5_TOOL_HDRS)
+	@mkdir -p $(ESTV5_DIR)
+	$(CC) $(ESTV5_CFLAGS) -Wno-format-truncation -o $@ $(ESTJ_SRCS) -lm
+$(ESTV5_DIR)/test_est_json_asan: $(ESTJ_SRCS) $(ESTV5_TOOL_HDRS)
+	@mkdir -p $(ESTV5_DIR)
+	$(CC) $(ESTV5_CFLAGS) $(EST_ASAN) -Wno-format-truncation -o $@ $(ESTJ_SRCS) -lm
+test-est-json: $(ESTV5_DIR)/test_est_json $(ESTV5_DIR)/test_est_json_asan
+	./$(ESTV5_DIR)/test_est_json .
+	./$(ESTV5_DIR)/test_est_json_asan .
+	@echo "test-est-json: strict-JSON receipt rules pass (plain and ASan/UBSan)"
 
 test-est5-window:
 	sh tools/estimation/test_est5_window.sh
 
-test-estimation-v5: est-v4-purity test-est-v4 test-est5-tools test-est5-window
+test-estimation-v5: est-v4-purity test-est-v4 test-est-json test-est5-tools test-est5-window
 	@echo "test-estimation-v5: ESTIMATION v5 passes"
 endif

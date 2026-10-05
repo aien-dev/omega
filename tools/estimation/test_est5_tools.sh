@@ -6,6 +6,7 @@
 set -u
 T=${1:?test build}
 W=${2:?workdir}
+JV=${3:-}   # optional strict-JSON validator (test_est_json --validate FILE)
 pass=0; fail=0
 ok()  { pass=$((pass + 1)); }
 bad() { fail=$((fail + 1)); echo "FAIL: $*" >&2; }
@@ -93,6 +94,13 @@ n=$(ls "$W/rc" | grep -c '^receipt-.*\.json$'); [ "$n" -eq 1 ] && ok || bad "wan
 r=$(ls "$W/rc"/receipt-*.json | head -1); h=$(sha256sum "$r" | cut -c1-64)
 case "$r" in *"receipt-$h.json") ok ;; *) bad "receipt name is not its SHA-256" ;; esac
 grep -q '"same_steps": true' "$r" && ok || bad "S, F1, E0 not on the same steps"
+# est-json-1: the receipt is strict JSON; unbounded and unavailable values are explicit
+if [ -n "$JV" ]; then "$JV" --validate "$r" && ok || bad "synthetic receipt is not strict JSON"; else bad "no strict-JSON validator given (the check is never skipped)"; fi
+if grep -Eq '(^|[^A-Za-z"])(inf|nan)([^A-Za-z"]|$)' "$r"; then bad "receipt holds a bare inf or nan token"; else ok; fi
+grep -q '"json_rules": "est-json-1"' "$r" && ok || bad "receipt lacks json_rules"
+grep -q '"invalid_measurements": 0' "$r" && ok || bad "invalid_measurements not 0 on a finite run"
+grep -q '"n_scored": {"value": [0-9]*, "value_status": "ok", "lo": [0-9]*, "lo_unbounded": false, "hi": null, "hi_unbounded": true' "$r" && ok || bad "n_scored threshold not null + hi_unbounded"
+n=$(grep -c '"ten_log_score": null, "ten_log_score_status": "unavailable"' "$r"); [ "$n" -eq 2 ] && ok || bad "want 2 unavailable baseline ten-step scores, have $n"
 expect 2 "already holds a receipt" "$T" recorded --dir "$S2" --params "$W/pp.txt" --outdir "$W/rc" --synthetic-test
 # selection mismatch is refused
 sed -e 's/^selected .*/selected G3/' "$W/pp.txt" > "$W/pm.txt"; mkdir -p "$W/rc2"
@@ -119,6 +127,7 @@ if [ -n "$PS" ]; then
     expect 0 "EST5_RECORDED" rec "$W/pb.txt"
     n=$(ls "$RO" | grep -c '^receipt-.*\.json$'); [ "$n" -eq 1 ] && ok || bad "binding: want one receipt, have $n"
     grep -q "\"protocol_sha256\": \"$PS\"" "$RO"/receipt-*.json && ok || bad "binding receipt lacks the protocol SHA"
+    if [ -n "$JV" ]; then for br in "$RO"/receipt-*.json; do "$JV" --validate "$br" && ok || bad "binding receipt is not strict JSON"; done; fi
     expect 2 "already holds a receipt" rec "$W/pb.txt"
     mkdir -p "$W/rc3"
     expect 2 "(D2 bytes)" env E5_TEST_D2_RAW_SHA="$R2" "$T" recorded --dir "$S2" --params "$W/pp.txt" --outdir "$W/rc3" --synthetic-test

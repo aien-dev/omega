@@ -602,19 +602,6 @@ static int has_receipt(const char *dir)
     return found;
 }
 
-static void js_stats(FILE *o, const char *name, const c3_stats *st, double ls10)
-{
-    fprintf(o, "    \"%s\": {\"n\": %zu, \"unscorable\": %zu, \"mean_log_score\": %.17g, \"ten_log_score\": %.17g, \"calibrated\": %s, \"first_fail\": ",
-            name, st->n, st->unscorable, st->logscore, ls10, st->calibrated ? "true" : "false");
-    if (st->calibrated) fprintf(o, "null"); else c3_json_str(o, c3_stat_name(st->first_fail));
-    fprintf(o, ", \"width80_mean_mc\": %.17g, \"width80_median_mc\": %.17g, \"stats\": {", st->width_mean, st->width_median);
-    for (int i = 0; i < C3_ST_COUNT; i++)
-        fprintf(o, "%s\"%s\": {\"value\": %.17g, \"lo\": %.17g, \"hi\": %.17g, \"n\": %zu, \"gated\": %s, \"pass\": %s}", i ? ", " : "",
-                c3_stat_name(i), isfinite(st->value[i]) ? st->value[i] : -1.0, st->band_lo[i], st->band_hi[i],
-                (i >= C3_ST_Q0 && i <= C3_ST_TEN) ? st->sub_n[i] : st->n, st->gated[i] ? "true" : "false", st->pass[i] ? "true" : "false");
-    fprintf(o, "}}");
-}
-
 static int cmd_recorded(int argc, char **argv)
 {
     const char *dir = NULL, *ppath = NULL, *outdir = NULL;
@@ -692,9 +679,11 @@ static int cmd_recorded(int argc, char **argv)
         fprintf(stderr, "scoring error: %s %s %s\n", sS.errmsg, s1.errmsg, s0.errmsg); return 1; }
     int same = sS.n == s1.n && sS.n == s0.n && sS.unscorable == s1.unscorable && sS.unscorable == s0.unscorable;
     int beat1 = sS.logscore >= s1.logscore - C3_TIE_NATS, beat0 = sS.logscore >= s0.logscore - C3_TIE_NATS;
-    int pass = same && sS.calibrated && beat1 && beat0;
+    /* est-json-1: a non-finite measured value is recorded as invalid and can never pass */
+    size_t inv = c3_stats_invalid(&sS, C3_TEN_MEASURED, l10S) + c3_stats_invalid(&s1, C3_TEN_UNAVAILABLE, NAN) + c3_stats_invalid(&s0, C3_TEN_UNAVAILABLE, NAN);
+    int pass = inv == 0 && same && sS.calibrated && beat1 && beat0;
     const char *verdict = pass ? "PASS" : "HELD_OUT_FAIL";
-    const char *reason = !same ? "S, F1 and E0 were not scored on the same steps" : !sS.calibrated ? "S not calibrated"
+    const char *reason = inv ? "non-finite measured value (marked invalid in the receipt)" : !same ? "S, F1 and E0 were not scored on the same steps" : !sS.calibrated ? "S not calibrated"
                        : (!beat1 || !beat0) ? "calibrated but not better than a baseline" : "calibrated and no worse than F1 and E0";
     char *buf = NULL; size_t blen = 0;
     FILE *o = open_memstream(&buf, &blen);
@@ -708,10 +697,11 @@ static int cmd_recorded(int argc, char **argv)
     fprintf(o, ", \"raw_sha256\": \"%s\", \"marks_sha256\": \"%s\", \"schedule_sha256\": \"%s\", \"lines\": %zu},\n", pre.raw_sha, pre.marks_sha, pre.sched_sha, pre.lines);
     fprintf(o, "  \"selected\": \"%s\",\n  \"comparisons\": {\"same_steps\": %s, \"no_worse_than_F1\": %s, \"no_worse_than_E0\": %s, \"tie_nats\": %.2f},\n",
             gname(P.selected), same ? "true" : "false", beat1 ? "true" : "false", beat0 ? "true" : "false", C3_TIE_NATS);
+    fprintf(o, "  \"json_rules\": \"est-json-1\",\n  \"invalid_measurements\": %zu,\n", inv);
     fprintf(o, "  \"scores\": {\n");
-    js_stats(o, gname(P.selected), &sS, l10S); fprintf(o, ",\n");
-    js_stats(o, "F1", &s1, NAN); fprintf(o, ",\n");
-    js_stats(o, "E0", &s0, NAN); fprintf(o, "\n  }\n}\n");
+    c3_json_stats(o, gname(P.selected), &sS, C3_TEN_MEASURED, l10S); fprintf(o, ",\n");
+    c3_json_stats(o, "F1", &s1, C3_TEN_UNAVAILABLE, NAN); fprintf(o, ",\n");
+    c3_json_stats(o, "E0", &s0, C3_TEN_UNAVAILABLE, NAN); fprintf(o, "\n  }\n}\n");
     fclose(o);
     uint8_t dg[32]; char hex[65];
     sha256_ctx c; sha256_init(&c); sha256_update(&c, (const uint8_t *)buf, blen); sha256_final(&c, dg);

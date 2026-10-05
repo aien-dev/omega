@@ -161,19 +161,6 @@ static const char *class_hint(int s)
     return "sensor fault";
 }
 
-static void js_stats(FILE *o, const char *name, const c3_stats *st)
-{
-    fprintf(o, "    \"%s\": {\"n\": %zu, \"unscorable\": %zu, \"mean_log_score\": %.17g, \"calibrated\": %s, \"first_fail\": ",
-            name, st->n, st->unscorable, st->logscore, st->calibrated ? "true" : "false");
-    if (st->calibrated) fprintf(o, "null"); else c3_json_str(o, c3_stat_name(st->first_fail));
-    fprintf(o, ", \"width80_mean_mc\": %.17g, \"width80_median_mc\": %.17g, \"stats\": {", st->width_mean, st->width_median);
-    for (int i = 0; i < C3_ST_COUNT; i++)
-        fprintf(o, "%s\"%s\": {\"value\": %.17g, \"lo\": %.17g, \"hi\": %.17g, \"n\": %zu, \"gated\": %s, \"pass\": %s}", i ? ", " : "",
-                c3_stat_name(i), isfinite(st->value[i]) ? st->value[i] : -1.0, st->band_lo[i], st->band_hi[i],
-                (i >= C3_ST_Q0 && i <= C3_ST_TEN) ? st->sub_n[i] : st->n, st->gated[i] ? "true" : "false", st->pass[i] ? "true" : "false");
-    fprintf(o, "}}");
-}
-
 static int load_run(const char *dir, c3_ticks *tk, c3_marks *mk, char *raw_sha, char *err, size_t cap)
 {
     char path[1200];
@@ -249,9 +236,11 @@ static int recorded(const char *dir, const char *ppath, const char *outdir, int 
         fprintf(stderr, "scoring error: %s%s%s\n", sS.errmsg, s1.errmsg, s0.errmsg); c3_ticks_free(&tk); return 1; }
     int same = sS.n == s1.n && sS.n == s0.n && sS.unscorable == s1.unscorable && sS.unscorable == s0.unscorable;
     int beat1 = sS.logscore >= s1.logscore - C3_TIE_NATS, beat0 = sS.logscore >= s0.logscore - C3_TIE_NATS;
-    int pass = same && sS.calibrated && beat1 && beat0;
+    /* est-json-1: a non-finite measured value is recorded as invalid and can never pass */
+    size_t inv = c3_stats_invalid(&sS, C3_TEN_ABSENT, 0) + c3_stats_invalid(&s1, C3_TEN_ABSENT, 0) + c3_stats_invalid(&s0, C3_TEN_ABSENT, 0);
+    int pass = inv == 0 && same && sS.calibrated && beat1 && beat0;
     const char *verdict = pass ? "PASS" : "FAIL";
-    const char *reason = !same ? "S, F1 and E0 were not scored on the same steps"
+    const char *reason = inv ? "non-finite measured value (marked invalid in the receipt)" : !same ? "S, F1 and E0 were not scored on the same steps"
                        : !sS.calibrated ? "S not calibrated"
                        : (!beat1 || !beat0) ? "calibrated but not better than a baseline" : "calibrated and no worse than F1 and E0";
 
@@ -283,21 +272,28 @@ static int recorded(const char *dir, const char *ppath, const char *outdir, int 
     fprintf(o, "  \"d2_dir\": "); c3_json_str(o, dir);
     fprintf(o, ",\n  \"d2_raw_sha256\": \"%s\",\n  \"d2_marks_sha256\": \"%s\",\n  \"d2_schedule_sha256\": \"%s\",\n", pre.raw_sha, pre.marks_sha, pre.sched_sha);
     fprintf(o, "  \"d2_compiled_raw_sha256\": \"%s\",\n  \"d2_compiled_marks_sha256\": \"%s\",\n  \"d2_compiled_schedule_sha256\": \"%s\",\n  \"params_compiled_sha256\": \"%s\",\n", d2_raw_sha(), d2_marks_sha(), d2_sched_sha(), params_sha());
-    fprintf(o, "  \"precheck\": {\"verdict\": \"VALID\", \"lines\": %zu, \"gap_big_frac\": %.17g, \"foreign_mean\": %.17g, \"foreign_over3_frac\": %.17g, \"foreign_unmeasured\": %zu, \"sched_trials\": %zu, \"loadavg1_mean\": %.17g},\n",
-            pre.lines, pre.gap_big_frac, pre.foreign_mean, pre.foreign_over3_frac, pre.foreign_unmeasured, pre.sched_trials, pre.loadavg1_mean);
+    fprintf(o, "  \"precheck\": {\"verdict\": \"VALID\", \"lines\": %zu, \"gap_big_frac\": ", pre.lines); c3_json_num(o, pre.gap_big_frac);
+    fprintf(o, ", \"foreign_mean\": "); c3_json_num(o, pre.foreign_mean);
+    fprintf(o, ", \"foreign_over3_frac\": "); c3_json_num(o, pre.foreign_over3_frac);
+    fprintf(o, ", \"foreign_unmeasured\": %zu, \"sched_trials\": %zu, \"loadavg1_mean\": ", pre.foreign_unmeasured, pre.sched_trials); c3_json_num(o, pre.loadavg1_mean);
+    fprintf(o, "},\n");
     fprintf(o, "  \"ticks\": {\"total\": %zu, \"inserted\": %zu, \"bad_t\": %zu, \"absent_value\": %zu, \"unparsable_value\": %zu},\n",
             tk.n, tk.inserted, tk.bad_t, tk.absent_value, tk.unparsable_value);
     fprintf(o, "  \"selected\": \"%s\",\n  \"same_steps\": %s,\n  \"scores\": {\n", c3_name(P.selected), same ? "true" : "false");
-    js_stats(o, "S", &sS); fprintf(o, ",\n"); js_stats(o, "F1", &s1); fprintf(o, ",\n"); js_stats(o, "E0", &s0);
-    fprintf(o, "\n  },\n  \"comparison\": {\"S_minus_F1\": %.17g, \"S_minus_E0\": %.17g, \"tolerance_nats\": %.2f, \"no_worse_than_F1\": %s, \"no_worse_than_E0\": %s},\n",
-            sS.logscore - s1.logscore, sS.logscore - s0.logscore, C3_TIE_NATS, beat1 ? "true" : "false", beat0 ? "true" : "false");
+    c3_json_stats(o, "S", &sS, C3_TEN_ABSENT, 0); fprintf(o, ",\n"); c3_json_stats(o, "F1", &s1, C3_TEN_ABSENT, 0); fprintf(o, ",\n"); c3_json_stats(o, "E0", &s0, C3_TEN_ABSENT, 0);
+    fprintf(o, "\n  },\n  \"json_rules\": \"est-json-1\",\n  \"invalid_measurements\": %zu,\n  \"comparison\": {\"S_minus_F1\": ", inv);
+    c3_json_num(o, sS.logscore - s1.logscore); fprintf(o, ", \"S_minus_E0\": "); c3_json_num(o, sS.logscore - s0.logscore);
+    fprintf(o, ", \"tolerance_nats\": %.2f, \"no_worse_than_F1\": %s, \"no_worse_than_E0\": %s},\n", C3_TIE_NATS, beat1 ? "true" : "false", beat0 ? "true" : "false");
     fprintf(o, "  \"informational\": {");
     if (synth) fprintf(o, "\"skipped\": \"synthetic test\"");
     else for (int i = 0; i < 3; i++) {
         fprintf(o, "%s\n    \"%s\": {\"dir\": \"%s\", \"raw_sha256\": \"%s\", ", i ? "," : "", devn[i], dev[i], si_sha[i]);
-        if (si_ok[i]) fprintf(o, "\"n\": %zu, \"mean_log_score\": %.17g, \"calibrated\": %s, \"first_fail\": \"%s\", \"cov95\": %.17g}",
-                              si[i].n, si[i].logscore, si[i].calibrated ? "true" : "false",
-                              si[i].calibrated ? "none" : c3_stat_name(si[i].first_fail), si[i].value[C3_ST_COV95]);
+        if (si_ok[i]) {
+            fprintf(o, "\"n\": %zu, \"mean_log_score\": ", si[i].n); c3_json_num(o, si[i].logscore);
+            fprintf(o, ", \"calibrated\": %s, \"first_fail\": \"%s\", \"cov95\": ", si[i].calibrated ? "true" : "false",
+                    si[i].calibrated ? "none" : c3_stat_name(si[i].first_fail));
+            c3_json_num(o, si[i].value[C3_ST_COV95]); fprintf(o, "}");
+        }
         else { fprintf(o, "\"error\": "); c3_json_str(o, si_err[i]); fprintf(o, "}"); }
     }
     fprintf(o, "},\n  \"verdict\": \"%s\",\n  \"verdict_reason\": \"%s\",\n", verdict, reason);
