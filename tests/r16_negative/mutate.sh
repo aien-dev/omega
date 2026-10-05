@@ -169,10 +169,9 @@ mutant id_revoke_needs_credential $W 1 'if (rc == RX_CALLER_OK) {' 'if (rc == RX
 mutant id_enroll_closed $W 1 \
     'if (w->callers_bound) { rc = RX_CALLER_ERR_CLOSED; goto out; }' '(void)0;'
 mutant id_promote $G 1 \
-    'if (store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_CHECK) != 0)' 'if (0)'
+    'int crc = store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_CHECK);' 'int crc = 0;'
 mutant id_propose $G 1 \
-    'if (store_bound(store) && store->caller(store->caller_ctx, proposer, cred, RX_CALLER_OP_CHECK) != 0)' \
-    'if (0 && store_bound(store) && store->caller(store->caller_ctx, proposer, cred, RX_CALLER_OP_CHECK) != 0)'
+    'int crc = store->caller(store->caller_ctx, proposer, cred, RX_CALLER_OP_CHECK);' 'int crc = 0; (void)proposer; (void)cred;'
 mutant id_bound_authority $G 1 'auth = store->bound_auth;' '(void)0;'
 
 # R16 C7: outside review of C5/C6. Each removes one fix; spec C7 names the probe.
@@ -188,11 +187,9 @@ mutant c7_mutate_object_bound $G 1 \
 mutant c7_set_evidence_bound $G 2 \
     'if (store_bound(store)) return RX_GEN_ERR_IDENTITY;' '(void)0;'
 mutant c7_add_work_credential $G 1 \
-    'if (store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)' \
-    'if (0 && store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)'
+    'int crc = store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK);' 'int crc = 0; (void)subject; (void)cred;'
 mutant c7_finish_work_credential $G 2 \
-    'if (store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)' \
-    'if (0 && store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)'
+    'int crc = store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK);' 'int crc = 0; (void)subject; (void)cred;'
 mutant c7_add_work_state $G 1 'if (!starts_open) return RX_GEN_ERR_ARG;' '(void)starts_open;'
 
 echo "R16 G4 mutants: $total total, $killed killed, $survived survived, $broken broken"
