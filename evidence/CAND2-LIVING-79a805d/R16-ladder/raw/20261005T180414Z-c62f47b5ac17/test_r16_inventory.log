@@ -1,0 +1,16 @@
+sh tests/r16_inventory/run.sh build/r16_loop_inventory
+ok   clean-fixture-passes (exit 0)
+ok   json-byte-stable
+ok   planted-run-until-complete-fails (exit 1)
+ok   planted-while-1-fails (exit 1)
+ok   planted-rust-tick-loop-fails (exit 1)
+ok   question-row-fails (exit 1)
+ok   omega-class-a-reachable-fails (exit 1)
+ok   stale-row-fails (exit 1)
+ok   missing-repo-skipped-fails (exit 1)
+ok   manual-row-gone-fails (exit 1)
+ok   bad-class-fails (exit 1)
+ok   class-n-passes (exit 0)
+ok   class-n-no-idiom-fails (exit 1)
+ok   class-n-wait-word-fails (exit 1)
+R16 inventory self-test: PASS

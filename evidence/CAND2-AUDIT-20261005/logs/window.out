@@ -1,0 +1,11 @@
+R16-ladder rc=3 secs=594
+R13-testbuild-silicon rc=0 secs=17
+prod-hygiene-silicon rc=0 secs=0
+COMPOSITION-2-GPU rc=0 secs=5
+R11-build rc=0 secs=0
+R11-living rc=0 secs=0
+CHIPWAIT rc=0 secs=466
+M18-build rc=0 secs=0
+M18 rc=0 secs=5
+R15-silicon rc=2 secs=0
+omega tree dirty

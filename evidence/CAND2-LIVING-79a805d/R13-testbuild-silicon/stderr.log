@@ -1,0 +1,19 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand2/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34818 passes in 50 ms, budget 1392720 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33943 passes in 50 ms, budget 1357720 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34695 passes in 50 ms, budget 1387800 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34722 passes in 50 ms, budget 1388880 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33973 passes in 50 ms, budget 1358920 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 30574 passes in 50 ms, budget 1222960 (2000 ms window)

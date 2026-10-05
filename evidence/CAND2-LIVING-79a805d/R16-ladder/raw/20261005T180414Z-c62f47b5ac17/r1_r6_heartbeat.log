@@ -1,0 +1,74 @@
+cc -std=gnu11 -Wall -Wextra -Werror -MMD -MP -D_GNU_SOURCE -O2 -Isrc -I/home/drakestapleton/workspace/cand3-campaign/cand2/wt-physics-chip/m16 -I/home/drakestapleton/workspace/cand3-campaign/cand2/wt-physics-chip/nvrm -I/home/drakestapleton/workspace/cand3-campaign/cand2/wt-physics-chip/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc -I/home/drakestapleton/workspace/cand3-campaign/cand2/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/common/inc -I/home/drakestapleton/workspace/cand3-campaign/cand2/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/nvidia-uvm -I/home/drakestapleton/workspace/cand3-campaign/cand2/wt-physics-chip/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include -pthread -o build/rx_heartbeat_test src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c src/sha256.c src/omega_evidence.c tests/runtime/rx_heartbeat_test.c
+./build/rx_heartbeat_test
+AIEN resident reaction runtime -- heartbeat qualification (ADR 0016, R3/R4 host)
+[*] heartbeat_chain
+[*] single_dependency_field_granularity
+[*] multiple_dependency_fan_in_two_triggers
+[*] fan_out_64
+[*] fan_in_8
+    fan-in: 40 stimuli -> 4 activations (36 wakes coalesced)
+[*] invalidation_stale_snapshot
+[*] invalidation_by_read_only_input_reruns
+[*] concurrent_publication_no_torn_no_lost
+    concurrent: 2000 ticks -> 185 increments committed, 50 invalidations, a=b=185
+[*] stale_generation_rejected
+[*] write_outside_declared_set_rejected
+[*] duplicate_wake_coalesced
+    duplicate wake: 1000 wakes -> 3 activations, 1 commits
+[*] capability_attacks_all_fail
+[*] revocation_during_run_rejected
+[*] capability_table_unforgeable_by_runtime
+[*] causal_record_tamper_detected
+[*] causal_record_binds_64bit_cap_generation
+[*] schedule_independent_result
+    48 runs across 1..8 workers, identical committed world
+[*] authority_office_required
+[*] counters_fail_closed
+[*] root_death_and_restart
+[*] resource_admission_1000
+[*] zero_resource_budget_is_zero
+[*] background_not_starved
+[*] priority_ladder
+[*] stability_containment
+[*] periodic_versus_oscillation
+[*] episode_activation_budget
+[*] semantic_commit_without_transport
+[*] canonical_object_one_identity
+[*] identity_space_is_closed
+[*] physical_realization
+[*] cross_engine_descriptor_cpu
+  heartbeat_chain                               PASS (38 checks)
+  single_dependency_field_granularity           PASS (34 checks)
+  multiple_dependency_fan_in_two_triggers       PASS (32 checks)
+  fan_out_64                                    PASS (397 checks)
+  fan_in_8                                      PASS (33 checks)
+  invalidation_stale_snapshot                   PASS (27 checks)
+  invalidation_by_read_only_input_reruns        PASS (27 checks)
+  concurrent_publication_no_torn_no_lost        PASS (1346 checks)
+  stale_generation_rejected                     PASS (30 checks)
+  write_outside_declared_set_rejected           PASS (28 checks)
+  duplicate_wake_coalesced                      PASS (30 checks)
+  capability_attacks_all_fail                   PASS (144 checks)
+  revocation_during_run_rejected                PASS (20 checks)
+  capability_table_unforgeable_by_runtime       PASS (8 checks)
+  causal_record_tamper_detected                 PASS (32 checks)
+  causal_record_binds_64bit_cap_generation      PASS (13 checks)
+  schedule_independent_result                   PASS (4125 checks)
+  authority_office_required                     PASS (29 checks)
+  counters_fail_closed                          PASS (21 checks)
+  root_death_and_restart                        PASS (9 checks)
+  resource_admission_1000                       PASS (2019 checks)
+  zero_resource_budget_is_zero                  PASS (21 checks)
+  background_not_starved                        PASS (93 checks)
+  priority_ladder                               PASS (24 checks)
+  stability_containment                         PASS (498 checks)
+  periodic_versus_oscillation                   PASS (150 checks)
+  episode_activation_budget                     PASS (319 checks)
+  semantic_commit_without_transport             PASS (27 checks)
+  canonical_object_one_identity                 PASS (65 checks)
+  identity_space_is_closed                      PASS (12 checks)
+  physical_realization                          PASS (48 checks)
+  cross_engine_descriptor_cpu                   PASS (52 checks)
+TOTAL: 32 tests, 9751 checks, 0 failures; 6949 crumbs verified, 1328 reaction crumbs audited, 0 illegal transitions
+[*] receipt: build/qual-runs/20261005T181028Z-c62f47b5ac17/R3/rx_heartbeat_receipt.json
+R1_CANONICAL_WORLD: PASS (host CPU, not silicon)  R2_CROSS_ENGINE_ABI: PASS (host CPU, not silicon)  R3_REACTION_CORE: PASS (host)  R4_CAUSAL_TRACE: PASS (host)  R5_RESOURCE_ARBITRATION: PASS (host)  R6_REACTION_STABILITY: PASS (host)  R7: NOT CLAIMED

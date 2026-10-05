@@ -1,0 +1,32 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand2/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r13_living_silicon
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 31831 passes in 50 ms, budget 1273240 (2000 ms window)
+R13 costs: incumbent 6932 ns, target 3812 ns, selected 2998325 ps, reference on new cores 4577139 ps, AIEN now expects 2811 ns, goal status 2
+R13 positive: generation 1 -> 2, recovered 2; served 2560 (128 after promotion), crumbs 5616, GPU claims 16, durable links 11
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34418 passes in 50 ms, budget 1376720 (2000 ms window)
+R13 control A: no AIEN -> no plan, no GPU experiment, no candidate, generation stays 1
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33652 passes in 50 ms, budget 1346080 (2000 ms window)
+R13 control B: verified candidate 2 refused (RX_GEN_ERR_AUTHORITY); never in force, production stayed on the reference
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33915 passes in 50 ms, budget 1356600 (2000 ms window)
+R13 control C: revoked grant -> seat blocked on authority, no claim, no evidence; 770 requests served meanwhile
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33791 passes in 50 ms, budget 1351640 (2000 ms window)
+R13 control D: output generation changed mid-claim -> result refused, no evidence, no candidate
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34595 passes in 50 ms, budget 1383800 (2000 ms window)
+R13 control E: crashing candidate refused by the verifier; the promoted generation holds a verified one
+R13 costs: incumbent 6802 ns, target 3741 ns, selected 2688744 ps, reference on new cores 4570069 ps, AIEN now expects 3027 ns, goal status 2
+R13 control E episode: generation 1 -> 2, recovered 2; served 17746 (145 after promotion), crumbs 38491, GPU claims 16, durable links 11
+R13 ARGUS: observing; observe and record, received 110324 events, 415 authority observations, 0 findings, 0 ingest errors
+R13 gate: R13_LIVING_SYSTEM=PASS
+R13 receipt: build/qual-runs/20261005T181125Z-c62f47b5ac17/R13/rx_living_receipt.json
