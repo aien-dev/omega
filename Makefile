@@ -392,10 +392,12 @@ aienos-authority-capability:
 
 # Built out of tree from the proven source into a fresh directory on every build; the
 # library is replaced only when its bytes change (ar is deterministic), so nothing relinks
-# when nothing changed and no stale or planted object is ever reused.
+# when nothing changed and no stale or planted object is ever reused. The inner make is
+# called by name with MAKEFLAGS cleared: the outer command line (CFLAGS=..., -n, -W)
+# never reaches the authority build, and a dry run (make -n) only prints this recipe.
 $(AIENOS_CAP_LIB): aienos-authority-capability
 	@t=$$(mktemp -d "$${TMPDIR:-/tmp}/aienos-cap.XXXXXX") && \
-	$(MAKE) -s -C $(AIENOS_R7_DIR)/native/capability OUT=$$t $$t/libaienos_capability.a >/dev/null && \
+	env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL make -s -C $(AIENOS_R7_DIR)/native/capability OUT=$$t $$t/libaienos_capability.a >/dev/null && \
 	mkdir -p $(dir $@) && { cmp -s $$t/libaienos_capability.a $@ || cp $$t/libaienos_capability.a $@; }; \
 	rc=$$?; rm -rf $$t; exit $$rc
 
@@ -405,7 +407,7 @@ $(AIENOS_CAP_LIB): aienos-authority-capability
 # (aienos.lock) used directly. Prints OMEGA_EFFECT_CAP64_{ROUNDTRIP,IDENTITY,
 # STALE_REJECT,AUTHORITY}_PASS gate lines.
 EFFECT_CAP64_CAP_LIB ?= $(AIENOS_CAP_LIB)
-EFFECT_CAP64_CAP_INC ?= $(patsubst %/,%,$(dir $(EFFECT_CAP64_CAP_LIB)))/..
+EFFECT_CAP64_CAP_INC ?= $(AIENOS_R7_DIR)/native/capability
 EFFECT_CAP64_TEST = $(OUT_DIR)/tests-effect/test_effect_cap64
 EFFECT_CAP64_OBJS = $(addprefix $(OUT_DIR)/,sha256.o omega_canonical.o omega_validate.o omega_core.o omega_codec.o)
 
