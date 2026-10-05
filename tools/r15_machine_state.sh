@@ -71,7 +71,13 @@ start)
     for c in /sys/devices/system/cpu/cpu[0-9]*; do
         echo "${c##*/} $(cat "$c/cpufreq/scaling_governor" 2>/dev/null) max=$(cat "$c/cpufreq/cpuinfo_max_freq" 2>/dev/null)"
     done >> "$OUT/machine-state-start.txt"
-    sudo -n perf stat -a -A -e cycles -I 1000 -x, -o "$OUT/machine-perf.csv" -- sleep 86400 >/dev/null 2>&1 &
+    # perf's workload ends by itself when stop drops .perf.stop (cap 24 h). A
+    # bare `sleep 86400` outlived pkill of perf (root, reparented to init) and
+    # kept the caller's quietlock hold alive for a day (2026-10-05 13:35Z).
+    rm -f "$OUT/.perf.stop"
+    sudo -n perf stat -a -A -e cycles -I 1000 -x, -o "$OUT/machine-perf.csv" -- \
+        sh -c 'i=0; while [ ! -e "$1/.perf.stop" ] && [ $i -lt 86400 ]; do sleep 1; i=$((i + 1)); done' \
+        r15-sampler "$OUT" >/dev/null 2>&1 &
     echo $! > "$OUT/.perf.pid"
     (
         n=0
@@ -96,6 +102,12 @@ mark)
     echo "$(date +%s.%N) ${3:-}" >> "$OUT/machine-state-marks.txt"
     ;;
 stop)
+    # Let perf's workload end on its own so perf exits and flushes its last
+    # interval; the pkill below is only the fallback.
+    touch "$OUT/.perf.stop"
+    if [ -f "$OUT/.perf.pid" ]; then
+        w=0; while [ -d "/proc/$(cat "$OUT/.perf.pid")" ] && [ $w -lt 5 ]; do sleep 1; w=$((w + 1)); done
+    fi
     for p in .sampler.pid .perf.pid; do
         [ -f "$OUT/$p" ] || continue
         pid=$(cat "$OUT/$p")
