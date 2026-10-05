@@ -14,6 +14,10 @@
  * table, one launch (<= OMEGA_GPU_EW_MAX_CTAS CTAs, grid-stride over words), wait for
  * both markers. Persistent buffers => faithful=no.
  *
+ * CTA budget (optimization campaign C1, 2026-10-05): PR_GB10_CTA_BUDGET=N (1..4096) in the
+ * environment lifts or lowers the launch cap; unset keeps OMEGA_GPU_EW_MAX_CTAS (the proven
+ * I42 envelope). Any other value fails setup. The budget used is reported in the detail JSON.
+ *
  * Labels (handoff 2026-10-05 DESIGN): algorithm=other, faithful=no, bits=1,
  * environment linux-hosted-gb10-native. Build with -DPR_GB10_MUTANT=1 only for the chip
  * test's negative control (the r == 0 fix is dropped; the oracle must catch it).
@@ -37,10 +41,21 @@
 #define GB_WAIT_MS 600000ull    /* same marker wait as the elementwise launcher (omega#198) */
 #define GB_POISON 0xffbadbadu
 #define GB_MAX_LIMIT 0xffffffffull /* kernel range: base, k0 < 2^31 */
+#define GB_BUDGET_MAX 4096u
+
+/* PR_GB10_CTA_BUDGET or the I42 default; 0 on a malformed or out-of-range value. */
+static uint32_t gb_cta_budget(void) {
+    const char *v = getenv("PR_GB10_CTA_BUDGET");
+    if (!v) return GB_MAX_CTAS;
+    char *end = NULL;
+    unsigned long n = strtoul(v, &end, 10);
+    if (end == v || *end != 0 || v[0] == '-' || n == 0 || n > GB_BUDGET_MAX) return 0;
+    return (uint32_t)n;
+}
 
 typedef struct {
     uint64_t limit, odd;
-    uint32_t nwords, ctas, stride, lastw, tailinv;
+    uint32_t nwords, ctas, budget, stride, lastw, tailinv;
     uint32_t root;          /* isqrt(limit) */
     uint32_t nprimes;       /* odd primes in the table of the last pass (sentinel excluded) */
     size_t table_cap;       /* entries, sentinel included */
@@ -80,8 +95,10 @@ static int gb_setup(void **state, uint64_t limit) {
     s->limit = limit;
     s->odd = pr_odd_count(limit);
     s->nwords = (uint32_t)((s->odd + 31) / 32);
+    s->budget = gb_cta_budget();
+    if (s->budget == 0) { fprintf(stderr, "gb10-native: PR_GB10_CTA_BUDGET must be 1..%u\n", GB_BUDGET_MAX); return -1; }
     uint32_t blocks = (s->nwords + GB_THREADS - 1) / GB_THREADS;
-    s->ctas = blocks == 0 ? 1 : (blocks > GB_MAX_CTAS ? GB_MAX_CTAS : blocks);
+    s->ctas = blocks == 0 ? 1 : (blocks > s->budget ? s->budget : blocks);
     s->stride = s->ctas * GB_THREADS;
     s->lastw = s->nwords ? s->nwords - 1 : 0;
     uint32_t valid = s->nwords ? (uint32_t)(s->odd - 32ull * s->lastw) : 32; /* 1..32 */
@@ -171,8 +188,8 @@ static uint64_t gb_threads(void *state) { gb_state *s = state; return s ? s->str
 static int gb_detail(void *state, FILE *f) {
     gb_state *s = state;
     if (!s) return -1;
-    fprintf(f, "{\"grid\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"kernel_code_sha256\": \"",
-            s->ctas, GB_THREADS, s->nwords, s->nprimes);
+    fprintf(f, "{\"grid\": %u, \"cta_budget\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"kernel_code_sha256\": \"",
+            s->ctas, s->budget, GB_THREADS, s->nwords, s->nprimes);
     for (int i = 0; i < 32; i++) fprintf(f, "%02x", s->k.code_digest[i]);
     fprintf(f, "\", \"kernel_insns\": %zu, \"kernel_gpr\": %u, \"mutant\": %d, \"launches\": %" PRIu64
                ", \"diag_kernel_ns_total\": %" PRIu64
