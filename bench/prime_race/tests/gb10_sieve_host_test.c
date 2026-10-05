@@ -235,6 +235,132 @@ static int sb_hazards(const BlackwellIRProgram *p, int verbose) {
     return bad;
 }
 
+/* Fixed RAW checks use ENCODED delays, allocated registers and both successors
+ * of conditional branches, including back-edges. No credit is taken for extra
+ * scoreboard/memory delays. This covers the scalar ALU/FMA and predicate classes
+ * changed by the emitter; wide producers and variable latency remain the job
+ * of the existing schedule and scoreboard checker.
+ * Independent reference: NAK sm100/reg_raw.csv (reader rows, writer columns)
+ * plus sm120_instr_latencies.rs's +1. ALU/dual-ALU -> ALU/dual-ALU and FMA ->
+ * FMA are 5, mixed and address consumers at most 6 for these producers.
+ * ISETP -> guard is 14 via sm70.rs paw_latency, NOT the 5-cycle ISETP operand
+ * predicate latency. WAW/WAR for these scalar classes are <= 2, below our floor.
+ */
+static int latency_class(BlackwellIROpcode op) {
+    switch (op) {
+    case BW_IR_ISETP_GE_U32: case BW_IR_ISETP_GE: case BW_IR_FSETP: return 3;
+    case BW_IR_IMAD: case BW_IR_IMAD_HI_U32:
+    case BW_IR_FADD: case BW_IR_FSUB: case BW_IR_FMUL: case BW_IR_FFMA: return 2;
+    case BW_IR_MOV_IMM: case BW_IR_MOV_RZ: case BW_IR_IADD3:
+    case BW_IR_LOP3_LUT: case BW_IR_LOP3_XOR:
+    case BW_IR_SHF_R: case BW_IR_SHF_L_U32: return 1;
+    default: return 0;
+    }
+}
+
+static uint32_t encoded_control(const OmegaBlackwellKernel *k, size_t i) {
+    uint32_t c;
+    memcpy(&c, k->code + i * 16 + 12, sizeof c);
+    return c;
+}
+
+static int reg_contains(const BlackwellIRProgram *p, int v, unsigned sub, int phys) {
+    if (v < 0) return 0;
+    int first = p->regalloc.vreg_to_phys[v] + (int)sub;
+    /* Conservatively count the rest of a bundle as read/written. The changed
+     * producers are scalar; this includes both halves of address consumers. */
+    return phys >= first && phys < p->regalloc.vreg_to_phys[v] +
+           (int)p->regalloc.intervals[v].bundle_size;
+}
+
+static int relax_successors(const BlackwellIRProgram *p, size_t i, unsigned a,
+                            unsigned *age) {
+    const BlackwellIRInsn *in = &p->insns[i];
+    int next[2], n = 0, changed = 0;
+    if (in->op == BW_IR_BRA) next[n++] = (int)i + (int32_t)in->imm;
+    if ((in->op != BW_IR_BRA && in->op != BW_IR_EXIT) || in->predicate_p0)
+        next[n++] = (int)i + 1;
+    for (int s = 0; s < n; s++) {
+        if (next[s] < 0 || (size_t)next[s] >= p->count) return -1;
+        if (a < age[next[s]]) { age[next[s]] = a; changed = 1; }
+    }
+    return changed;
+}
+
+static int fixed_hazards(const BlackwellIRProgram *p, const OmegaBlackwellKernel *k) {
+    /* The encoder pads short programs to 32 instructions. */
+    if (p->count > BW_MAX_IR_INSNS || k->code_size < p->count * 16) return 1;
+    int bad = 0;
+    for (size_t w = 0; w < p->count; w++) {
+        const BlackwellIRInsn *writer = &p->insns[w];
+        int cls = latency_class(writer->op), pred = cls == 3;
+        if (!cls || (!pred && (writer->dst_vreg < 0 || writer->is_uniform))) continue;
+        int phys = pred ? -1 : p->regalloc.vreg_to_phys[writer->dst_vreg] + writer->dst_subreg;
+        unsigned age[BW_MAX_IR_INSNS], bound = pred ? 14 : 6;
+        for (size_t i = 0; i < p->count; i++) age[i] = 255;
+        unsigned delay = (encoded_control(k, w) >> 9) & 15u;
+        if (delay == 0) { bad++; continue; } /* zero-delay/co-issue is outside this model */
+        if (relax_successors(p, w, delay, age) < 0) return 1;
+        int changed;
+        do {
+            changed = 0;
+            for (size_t i = 0; i < p->count; i++) {
+                if (age[i] >= bound) continue;
+                const BlackwellIRInsn *in = &p->insns[i];
+                int kills = pred ? latency_class(in->op) == 3 :
+                    (!in->is_uniform && reg_contains(p, in->dst_vreg, in->dst_subreg, phys));
+                if (kills && !in->predicate_p0) continue;
+                unsigned d = (encoded_control(k, i) >> 9) & 15u;
+                int r = relax_successors(p, i, age[i] + d, age);
+                if (r < 0) return 1;
+                changed |= r;
+            }
+        } while (changed);
+        for (size_t i = 0; i < p->count; i++) {
+            if (age[i] >= bound) continue;
+            const BlackwellIRInsn *in = &p->insns[i];
+            int reads = pred ? (in->predicate_p0 || in->op == BW_IR_FSEL) :
+                (reg_contains(p, in->src1_vreg, in->src1_subreg, phys) ||
+                 reg_contains(p, in->src2_vreg, in->src2_subreg, phys) ||
+                 reg_contains(p, in->src3_vreg, in->src3_subreg, phys));
+            int reader_cls = latency_class(in->op);
+            unsigned need = pred ? 14 :
+                ((cls == 2 && reader_cls == 2) ||
+                 (cls == 1 && (reader_cls == 1 || reader_cls == 3)) ? 5 : 6);
+            if (reads && age[i] < need) bad++;
+        }
+    }
+    return bad;
+}
+
+static void fixed_schedule_check(const BlackwellIRProgram *p, const OmegaBlackwellKernel *k) {
+    int hz = fixed_hazards(p, k);
+    CHECK(hz == 0, "encoded fixed RAW hazards: %d", hz);
+    OmegaBlackwellKernel bad = *k;
+    bad.code = malloc(k->code_size);
+    CHECK(bad.code != NULL, "fixed schedule negative-control allocation");
+    if (!bad.code) return;
+    int shortened_alu = 0, shortened_pred = 0, alu_hz = 0, pred_hz = 0;
+    for (size_t i = 0; i < p->count; i++) {
+        uint32_t c = encoded_control(k, i);
+        int cls = latency_class(p->insns[i].op);
+        if ((!shortened_alu && cls > 0 && cls < 3 && ((c >> 9) & 15u) == 5) ||
+            (!shortened_pred && cls == 3)) {
+            memcpy(bad.code, k->code, k->code_size);
+            uint32_t short_c = (c & ~(15u << 9)) | ((cls == 3 ? 13u : 4u) << 9);
+            memcpy(bad.code + i * 16 + 12, &short_c, sizeof short_c);
+            int h = fixed_hazards(p, &bad);
+            if (h > hz) {
+                if (cls == 3) { shortened_pred = 1; pred_hz = h; }
+                else { shortened_alu = 1; alu_hz = h; }
+            }
+        }
+    }
+    CHECK(shortened_alu && shortened_pred, "fixed RAW checker missed a short ALU/predicate delay");
+    printf("fixed RAW: %d hazards; negative controls ALU=4: %d, predicate=13: %d\n", hz, alu_hz, pred_hz);
+    free(bad.code);
+}
+
 /* ------------------------------------------------------------- nvdisasm */
 /* every word decodes, the new ops appear, and every BRA lands where the IR says */
 static const char *const MUST_GLOBAL[] = { "LOP3.LUT", "SHF.L.U32", "IMAD.HI.U32", "@P0 BRA", "@!P0 BRA", "@P0 EXIT", "STG.E", "LDG.E" };
@@ -335,6 +461,22 @@ int main(int argc, char **argv) {
     int fx = omega_blackwell_verify_codegen_fixtures_intops();
     CHECK(fx == 0, "golden words LOP3_LUT / SHF_L_U32 / IMAD_HI_U32 (rc %d)", fx);
 
+    /* The scheduling pass is shared by every elementwise family. This is
+     * codegen only: no public launcher or device session is called. */
+    for (int op = OMEGA_GPU_EW_EX2; op <= OMEGA_GPU_EW_PRIME_SIEVE_SHARED; op++) {
+        for (int mutant = 0; mutant <= 1; mutant++) {
+            BlackwellIRProgram *p = calloc(1, sizeof *p);
+            OmegaBlackwellKernel code = {0};
+            int rc = p ? omega_gpu_elementwise_codegen_ir((OmegaGpuEwOp)op, mutant, p, &code) : -1;
+            CHECK(rc == OMEGA_GPU_EW_OK, "schedule codegen op %d mutant %d rc %d", op, mutant, rc);
+            if (rc == OMEGA_GPU_EW_OK) {
+                CHECK(sb_hazards(p, 0) == 0, "schedule scoreboard op %d mutant %d", op, mutant);
+                CHECK(fixed_hazards(p, &code) == 0, "schedule fixed RAW op %d mutant %d", op, mutant);
+            }
+            free(code.code); free(p);
+        }
+    }
+
     /* 2. oracle self-check against pi(x) */
     static const struct { uint64_t x, pi; } pis[] = { {10, 4}, {100, 25}, {1000, 168}, {10000, 1229}, {100000, 9592}, {1000000, 78498} };
     for (size_t i = 0; i < sizeof pis / sizeof pis[0]; i++) {
@@ -357,6 +499,7 @@ int main(int argc, char **argv) {
     CHECK(k.gpr_count <= 64, "GPR budget %u > 64", k.gpr_count);
     CHECK(memcmp(k.code_digest, mk.code_digest, 32) != 0, "mutant kernel differs from production");
     nvdisasm_check(&k, prog, MUST_GLOBAL, "global table");
+    fixed_schedule_check(prog, &k);
     {
         int hz = sb_hazards(prog, 1);
         CHECK(hz == 0, "scoreboard hazards in the sieve kernel: %d", hz);
@@ -445,6 +588,7 @@ int main(int argc, char **argv) {
             printf("\n");
             CHECK(sk.gpr_count <= 64, "staged GPR budget %u > 64", sk.gpr_count);
             nvdisasm_check(&sk, sp, MUST_STAGED, "staged");
+            fixed_schedule_check(sp, &sk);
             int hz = sb_hazards(sp, 1);
             CHECK(hz == 0, "scoreboard hazards in the staged kernel: %d", hz);
             int sfail = 0, sn = 0;
