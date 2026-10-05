@@ -403,6 +403,8 @@ static void gen_prime_sieve(Em *e, int mutant, int staged) {
     int p = V(e), magic = V(e), k0 = V(e), negp = V(e), d = V(e), neg = V(e), nd = V(e), dpos = V(e), jadd = V(e);
     int q = V(e), r = V(e), j = V(e), t = V(e), z = V(e), bit = V(e);
     int e1 = V(e), m = V(e), word = V(e), oaddr = V64(e);
+    int tt = V(e), jj = V(e), sh = V(e), c31 = V(e), cm32 = V(e);
+    movi(e, c31, 31); movi(e, cm32, 0xffffffe0u);
 
     loop_begin(e); /* word loop */
     int lw = here(e);
@@ -440,13 +442,23 @@ static void gen_prime_sieve(Em *e, int mutant, int staged) {
     }
     iadd3(e, j, j, jadd);
 
-    loop_begin(e); /* mark loop */
+    /* mark loop (campaign C5): the trip count depends only on p, so every active lane runs the
+     * same ceil(32/p) steps and the warp never splits here (all active lanes are on the same
+     * prime). Bits past this word are masked out instead of branched around. The old loop ran
+     * "while j < 32", a lane-dependent branch with no reconvergence point. */
+    movrz(e, tt);
+    loop_begin(e);
     int li = here(e);
-    isetp_ge_u32(e, j, c32);
+    isetp_ge_u32(e, tt, c32);
     int done = bra_fwd_if_p0(e);
-    shl_r(e, bit, one, j);
-    lop3lut(e, acc, acc, bit, NOREG, 0xfc);      /* acc | bit */
-    iadd3(e, j, j, p);
+    iadd3(e, jj, j, tt);
+    lop3lut(e, sh, jj, c31, NOREG, 0xc0);        /* jj & 31 */
+    shl_r(e, bit, one, sh);
+    iadd3(e, t, jj, cm32);
+    shr_i(e, z, t, 31);                          /* jj < 32 (j <= p + 31, far below 2^31) */
+    imadi(e, m, z, 0xffffffffu, NOREG);          /* all ones when jj < 32, else 0 */
+    lop3lut(e, acc, acc, bit, m, 0xf8);          /* acc | (bit & m) */
+    iadd3(e, tt, tt, p);
     bra_always(e, li);
     loop_end(e);
     bra_patch_here(e, done);
