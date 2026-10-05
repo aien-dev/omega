@@ -68,6 +68,9 @@ R15_MEASURE_C=$(cd "$(dirname "$0")/.." && pwd)/tests/runtime/r15_measure.c
 energy_preflight() {
     local root=${R15_HWMON_ROOT:-/sys/class/hwmon} nap=${R15_ENERGY_PREFLIGHT_SLEEP:-0.1}
     local hs=${R15_ENERGY_HEADROOM_SECONDS:-300}
+    local run_s=${R15_PLANNED_RUN_SECONDS:-2400} run_w=${R15_RUN_BOUND_WATTS:-100} min_w=${R15_ENERGY_MIN_WATTS:-10}
+    local up_file=${R15_UPTIME_FILE:-/proc/uptime} up up_s
+    declare -a last=()
     local h="" d s v prev="" first="" n=0 i lab want
     local el pl
     el=$(sed -n 's/^static const char \*const k_elabel\[[A-Z_0-9]*\] = {\(.*\)};/\1/p' "$R15_MEASURE_C" | tr -d '" ')
@@ -89,6 +92,8 @@ energy_preflight() {
         want=$(printf '%s' "$pl" | cut -d, -f$i); lab=$(cat "$h/power${i}_label" 2>/dev/null)
         [ "$lab" = "$want" ] || { echo "INSTRUMENT_UNAVAILABLE reason=invalid: power${i}_label is '$lab', not $want"; return 5; }
     done
+    up=$(cut -d" " -f1 "$up_file" 2>/dev/null); up_s=${up%%.*}
+    case "$up_s" in ''|*[!0-9]*) echo "INSTRUMENT_UNAVAILABLE reason=invalid: cannot read uptime from $up_file, so a wrapped or reset counter cannot be ruled out"; return 5;; esac
     for s in 1 2 3; do
         for i in 1 2 3 4 5; do
             v=$(cat "$h/energy${i}_overflow_raw" 2>/dev/null)
@@ -104,9 +109,20 @@ energy_preflight() {
                 [ -z "$first" ] && first=$v
                 prev=$v; n=$((n + 1))
             fi
+            # every channel is a monotonic counter: a decrease on any of them (not only package) invalidates the reader
+            if [ -n "${last[$i]:-}" ] && [ "$v" -lt "${last[$i]}" ]; then echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy${i} counter went backwards (${last[$i]} -> $v uJ)"; return 5; fi
+            last[$i]=$v
+            # a counter that counts from boot cannot sit below a floor power times the uptime unless it wrapped or was reset
+            if [ "$i" = 1 ] && [ "$v" -lt $((up_s * min_w * 1000000)) ]; then
+                echo "INSTRUMENT_UNAVAILABLE reason=invalid: package counter $v uJ is below ${min_w} W x ${up_s} s of uptime: the counter wrapped or was reset (spec §17 does not unwrap)"; return 5
+            fi
             # headroom to the 32-bit mJ wrap (as uJ) at a 600 W bound over the window
             if [ $((4294967295 * 1000 - v)) -lt $((hs * 600000000)) ]; then
                 echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy${i} has less than ${hs} s of headroom before the counter wraps at 600 W (spec §17)"; return 5
+            fi
+            # and enough for the whole planned run, so the counter cannot wrap between trials
+            if [ $((4294967295 * 1000 - v)) -lt $((run_s * run_w * 1000000)) ]; then
+                echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy${i} has less headroom than the planned run (${run_s} s at ${run_w} W) before the counter wraps"; return 5
             fi
         done
         [ "$s" -lt 3 ] && sleep "$nap"

@@ -114,6 +114,9 @@ ps -eo pid,pcpu,rss,comm --sort=-pcpu > "$OUT/processes-before.txt"
 # reader is absent or returns invalid samples, the run cannot PASS, so stop
 # before consuming an acceptance window. This is BLOCKED_INSTRUMENT, not a
 # measured FAIL: no trial runs, no summary and no receipt is written.
+# planned run length for the counter-headroom check: the full default run (12/5/5) took 2068 s (CAND-1 window 2),
+# 2400 s with margin; scaled by the number of rounds and level runs. Override with R15_PLANNED_RUN_SECONDS.
+export R15_PLANNED_RUN_SECONDS=${R15_PLANNED_RUN_SECONDS:-$(( 2400 * (ROUNDS + L1RUNS + L2RUNS) / 22 + 1 ))}
 if [ "$MODE" = silicon ]; then
     if ! ENERGY_MSG=$("$STATE" energy-preflight); then
         say "BLOCKED_INSTRUMENT: $ENERGY_MSG"
