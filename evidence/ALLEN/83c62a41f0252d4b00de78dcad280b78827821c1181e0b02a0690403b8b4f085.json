@@ -1,0 +1,48 @@
+{
+  "schema": "AIEN_ALLEN_V0_HOST_GATES_V0",
+  "program": "ALLEN v0 (ARCH-0035 PROPOSED, OS-0018 PROPOSED)",
+  "run_id": "20261005T005513Z-cda7609d07b3-host",
+  "outcome": "PASS",
+  "candidate_commit": "cda7609d07b3871242f7f8c2e81ffec033d87735",
+  "candidate_bound": true,
+  "tree_dirty": false,
+  "aienos_commit": "cd4b0892768def4be6417075f0443e78745a6c28",
+  "aienos_lock": "cd4b0892768def4be6417075f0443e78745a6c28",
+  "aienos_pr": "https://github.com/aien-dev/aienos/pull/259",
+  "gates": {
+    "G1_identity_binding": "PASS",
+    "G2_restart_persistence_process": "PASS",
+    "G3_memory_binding": "PASS",
+    "G4_model_independence": "PASS",
+    "G5_no_authority_no_orchestrator": "PASS",
+    "G6_negative_control": "PASS",
+    "FORMAT_refusals": "PASS",
+    "REPLAY": "PASS",
+    "SUPERSEDE": "PASS",
+    "MISMATCH": "PASS"
+  },
+  "aienos_gates_recorded_not_rerun": {
+    "test_continuity_subject": "PASS (150 checks) at aienos cd4b0892768def4be6417075f0443e78745a6c28",
+    "CK_CONTINUITY_SUBJECT_RESTART": "PASS (two processes, one sealed Store image)",
+    "CK_CONTINUITY_SUBJECT_MUTANTS": "PASS (4 mutants red; refused under CK_HARDWARE_STAGING)"
+  },
+  "subject_id": "47a2bdffce0ce6d0fc05d248cfb09eb7dc672b2a246e51adf73ae555f0656127",
+  "intent_id": "a12e4b24f3857e8d49ba3c01babe968de898579d86c2a6e8ddc8fe6bfdb49dbf",
+  "lineage": "e3f241da5ea18408653a70e3691653db216b5dcc51169b799827cf4f2699731b",
+  "negative_control": {
+    "journal_records_after_publish": 15,
+    "goals_in_restarted_world_without_allen": 0,
+    "goals_after_publish_with_allen": 1,
+    "verdict": "the standing intent does NOT survive a restart through Cortex alone; ALLEN is load-bearing"
+  },
+  "r16_loop_inventory": {
+    "omega_sites_main": 256,
+    "omega_sites_branch": 256,
+    "new_sites_from_allen": 0,
+    "note": "tools/r16_loop_inventory.sh on this host reports FAIL for pre-existing reasons identical on main (76 unclassified sites in the local survey checkouts, 2 stale rows); ALLEN adds no site"
+  },
+  "not_run": ["QEMU cold restart", "hardware qualification", "OS reboot", "machine migration"],
+  "scope": "host processes and files on one machine; not hardware qualification, not an OS reboot, not a machine migration",
+  "test_binary_sha256": "8b05208a74691cb23f05dde76282967e60fde6e7eb667dabdaf9b09382e1e48d",
+  "host": "Linux 7.0.0-1019-nvidia aarch64"
+}

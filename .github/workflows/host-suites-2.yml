@@ -23,7 +23,7 @@ name: Host suites 2
 #               test-ma-digital-bottom 3.5 min
 #   path      : test-path 30 s;  crumbline : test-crumbline 1 s
 #   runtime   : test-r15-instr test-r15-receipt test-r16-inventory
-#               test-r16-negative test-r16-surface test-r16-qualify-selftest
+#               test-r16-negative test-r16-surface test-r16-qualify-selftest test-allen
 #               test-r16-negative-mutants 5 min (Spark: 4.3 min)
 #   argus     : test-argus-runtime test-machine-identity-argus
 #   numeric2  : test-numeric-reduce-cpu test-divsqrt-host 6 s
@@ -144,7 +144,7 @@ jobs:
           sel algebra   "^src/(algebra|turing)/|^tests/algebra/|^src/(omega_canonical|omega_types|sha256)\.|^evidence/MIXED_ALGEBRA/"
           sel path      "^src/path/|^tests/path/|^src/(omega_types|sha256)\."
           sel crumbline "$core|^src/crumbline/|^tests/crumbline/|^tools/crumbline_learner\.c$|^data/crumbline/|^tests/(test_omega_[a-z_]+\.c|vc_fixture\.h|genesis_variant/)|^docs/osc/VC-GENESIS-1\.md$"
-          sel runtime   "$core|^src/(runtime|fabric)/|^tests/runtime/|^mk/fabric\.mk$|^tests/(r15_receipt_test\.sh|r16_[a-z_]+/)|^tools/(r15_|r16_|omegatool\.c)|^spec/r16-|^docs/r16-|^evidence/R15/|^(physics|aienos)\.lock$"
+          sel runtime   "$core|^src/(runtime|fabric)/|^tests/runtime/|^mk/fabric\.mk$|^tests/(r15_receipt_test\.sh|r16_[a-z_]+/)|^tools/(r15_|r16_|omegatool\.c|allen\.c)|^spec/(r16-|allen\.md)|^docs/r16-|^evidence/(R15|ALLEN)/|^src/allen/|^tests/allen/|^mk/allen\.mk$|^(physics|aienos)\.lock$"
           sel argus     "^src/runtime/|^tests/runtime/|^tests/bench_rx_argus\.c$|^mk/machine-identity\.mk$|^src/(sha256|omega_evidence)\.|^(physics|aienos|argus)\.lock$"
           sel numeric2  "^tests/(test_omega_reduce|test_omega_divsqrt_gb10)\.c$|^tests/numeric_oracle\.h$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
           sel tensor    "^tools/m20_receipt(_mutations)?\.sh$|^tests/test_m20_receipt\.sh$|^tests/fixtures/m20_receipt/|^src/tensor/|^tests/test_omega_tensor(_store)?\.c$|^tools/tensor_mutations\.sh$|^mk/tensor\.mk$|^src/(omega_numeric|omega_blackwell_(encoder|codegen|matmul|qmd)|sha256)"
@@ -334,6 +334,12 @@ jobs:
       - name: R16 qualify script self-test (dirty tree refused, NOT_RUN honest, failing check exits non-zero)
         if: ${{ !cancelled() }}
         run: make test-r16-qualify-selftest
+      - name: ALLEN v0 host gates (identity, restart, memory, model independence, no authority, negative control)
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-allen
 
   argus:
     needs: changes
