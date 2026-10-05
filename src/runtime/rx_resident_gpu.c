@@ -53,6 +53,8 @@ struct RxGpuSeat {
     volatile int abort;     /* stop waiting for the launch marker */
     volatile int marker_ok;
     volatile int sem_ok;
+    volatile uint32_t marker_value; /* words the host read when the wait ended (diagnostic) */
+    volatile uint32_t sem_value;
     char err[160];
     LaunchJob *job;
     volatile uint32_t *hb_watch;
@@ -723,7 +725,7 @@ static void *launch_main(void *arg) {
         if (nvrm_alloc(&ctx->rm, 0x4000, &job->code_mem) != 0 ||
             nvrm_alloc(&ctx->rm, 0x1000, &job->cbank_mem) != 0 ||
             nvrm_alloc(&ctx->rm, 0x10000, &job->qmd_mem) != 0 ||
-            nvrm_alloc(&ctx->rm, 0x1000, &job->marker_mem) != 0 ||
+            nvrm_alloc_gpu_uncached(&ctx->rm, 0x1000, &job->marker_mem) != 0 ||
             nvrm_alloc(&ctx->rm, 0x10000, &job->large_pb) != 0) {
             snprintf(s->err, sizeof s->err, "graphics memory was not allocated");
             job->submit_rc = -1;
@@ -743,7 +745,11 @@ static void *launch_main(void *arg) {
 
     uint64_t qmd0_va = qmd_mem.va;
     uint64_t qmd1_va = qmd_mem.va + 0x1000;
-    uint64_t sem_va = qmd_mem.va + 0x2000;
+    /* The semaphore the host reads after the marker lives on the GPU-uncached marker
+     * page (nvos.h NVOS32_ATTR2_GPU_CACHEABLE_YES: "For system memory this will not be
+     * coherent with direct CPU mappings"). On the cached QMD page the host could read a
+     * stale word once the marker arrived promptly. Offset 0x20 keeps clear of the marker. */
+    uint64_t sem_va = marker_mem.va + 0x20;
     uint64_t scratch_va = qmd_mem.va + 0x4000;
     /* The chip keeps the top two registers of a thread's allocation for
      * itself. On GB10 a value placed in R46 of a 48-register launch read back
@@ -772,7 +778,7 @@ static void *launch_main(void *arg) {
     }
     memcpy(qmd_mem.cpu, qmd0, sizeof(qmd0));
     memcpy((uint8_t *)qmd_mem.cpu + 0x1000, qmd1, sizeof(qmd1));
-    volatile uint32_t *hsem = (volatile uint32_t *)((uint8_t *)qmd_mem.cpu + 0x2000);
+    volatile uint32_t *hsem = (volatile uint32_t *)((uint8_t *)marker_mem.cpu + 0x20);
     volatile uint32_t *hmarker = (volatile uint32_t *)marker_mem.cpu;
     *hsem = 0;
     *hmarker = 0;
@@ -848,7 +854,9 @@ static void *launch_main(void *arg) {
     }
     int wait = wait_marker_or_abort(s, hmarker, OMEGA_BW_MARKER_COMPLETION_PAYLOAD, 60000);
     s->marker_ok = wait == 0 && *hmarker == OMEGA_BW_MARKER_COMPLETION_PAYLOAD;
-    s->sem_ok = *hsem == OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE;
+    s->marker_value = *hmarker;
+    s->sem_value = *hsem;
+    s->sem_ok = s->sem_value == OMEGA_BW_SEMAPHORE_INTERMEDIATE_DONE;
     if (!s->marker_ok && !s->abort)
         snprintf(s->err, sizeof s->err, "the graphics seat did not finish");
     return NULL;
@@ -977,6 +985,8 @@ int rx_gpu_seat_relaunch(RxGpuSeat *s) {
     s->abort = 0;
     s->marker_ok = 0;
     s->sem_ok = 0;
+    s->marker_value = 0;
+    s->sem_value = 0;
     s->err[0] = 0;
     s->job->submit_rc = 0;
     s->job->args.seat_gen = current_seat_gen(s->world);
@@ -1086,7 +1096,9 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
     return lease_start(s);
 }
 
-int rx_gpu_seat_finish(RxGpuSeat *seat) {
+int rx_gpu_seat_finish(RxGpuSeat *seat) { return rx_gpu_seat_finish_ex(seat, NULL); }
+
+int rx_gpu_seat_finish_ex(RxGpuSeat *seat, RxGpuSeatLeave *leave) {
     if (!seat) return -1;
     /* The shutdown notice was posted before this; stopping the lease only
      * bounds how long a seat that missed it keeps running. */
@@ -1094,6 +1106,12 @@ int rx_gpu_seat_finish(RxGpuSeat *seat) {
     if (seat->thread_live) {
         pthread_join(seat->thread, NULL);
         seat->thread_live = 0;
+    }
+    if (leave) {
+        leave->marker_ok = seat->marker_ok;
+        leave->sem_ok = seat->sem_ok;
+        leave->marker_value = seat->marker_value;
+        leave->sem_value = seat->sem_value;
     }
     /* A killed seat never reaches its marker; leaving is then only the image
      * going back to the world and the device closing. */

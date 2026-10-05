@@ -22,7 +22,7 @@ name: Host suites 2
 #   algebra   : test-algebra test-algebra-asan test-realize test-phase-twin
 #               test-ma-digital-bottom 3.5 min
 #   path      : test-path 30 s;  crumbline : test-crumbline 1 s
-#   runtime   : test-r15-instr test-r15-receipt test-r16-inventory
+#   runtime   : test-r15-instr test-r15-receipt test-r15-preflight test-r15-g15-diag test-r16-inventory
 #               test-r16-negative test-r16-surface test-r16-qualify-selftest test-allen
 #               test-r16-negative-mutants 5 min (Spark: 4.3 min)
 #   argus     : test-argus-runtime test-machine-identity-argus
@@ -307,6 +307,12 @@ jobs:
           PHYSICS_DIR: ${{ github.workspace }}/physics-src
           AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
         run: make test-r15-receipt
+      - name: R15 preflight, energy-instrument preflight and G15 diagnostics
+        if: ${{ !cancelled() }}
+        env:
+          PHYSICS_DIR: ${{ github.workspace }}/physics-src
+          AIENOS_R7_DIR: ${{ github.workspace }}/aienos-src
+        run: make test-r15-preflight test-r15-g15-diag
       - name: R16 G2 loop inventory
         if: ${{ !cancelled() }}
         env:

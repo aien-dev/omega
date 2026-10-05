@@ -841,31 +841,46 @@ uint64_t r15_lost_triggers(R15Rig *r, char *first, size_t n) {
 }
 
 void r15_stop(R15Rig *r) {
+    R15StageClock *sc = &r->stop_clock;
+    memset(sc, 0, sizeof *sc);
+    r15_stage_mark(sc, "begin");
     stop_producer(r);
+    r15_stage_mark(sc, "producer");
     if (r->transport_live) {
         atomic_store(&r->transport_stop, 1);
         pthread_join(r->transport, NULL);
         r->transport_live = 0;
     }
+    r15_stage_mark(sc, "transport");
     if (r->orch_live) {
         atomic_store(&r->orch_stop, 1);
         pthread_join(r->orchestrator, NULL);
         r->orch_live = 0;
     }
+    r15_stage_mark(sc, "orchestrator");
 #ifdef R15_SILICON
     if (r->seat) {
         (void)rx_resident_shutdown(&r->w);
-        (void)rx_gpu_seat_finish(r->seat);
+        r15_stage_mark(sc, "seat_shutdown_post");
+        RxGpuSeatLeave lv = {0};
+        r->leave_rc = rx_gpu_seat_finish_ex(r->seat, &lv);
+        r->leave_marker = lv.marker_value;
+        r->leave_sem = lv.sem_value;
+        r->leave_valid = 1;
+        r15_stage_mark(sc, "seat_finish");
     }
 #endif
     rx_world_destroy(&r->w);
+    r15_stage_mark(sc, "world_destroy");
     rx_aegis_destroy(&r->aegis);
     rx_omega_destroy(&r->omega);
     if (r->gen) rx_gen_close(r->gen);
     if (r->admin) aienos_cap_stop(r->admin, r->view);
+    r15_stage_mark(sc, "faculties_admin");
     if (r->generation_dir[0]) {
         char cmd[200];
         snprintf(cmd, sizeof cmd, "rm -rf '%s'", r->generation_dir);
         if (system(cmd) != 0) fprintf(stderr, "note: could not remove %s\n", r->generation_dir);
     }
+    r15_stage_mark(sc, "generation_dir");
 }

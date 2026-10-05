@@ -857,6 +857,7 @@ test-r15-g15-diag: $(R15_REDUCE) | $(OUT_DIR)
 	$(CC) -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Itests/runtime -o $(OUT_DIR)/r15_seat_diag_test tests/runtime/r15_seat_diag_test.c
 	$(OUT_DIR)/r15_seat_diag_test
 	R15_REDUCE=$(R15_REDUCE) sh tests/r15_g15_diag_test.sh
+	sh tests/seat_marker_uncached_test.sh
 
 # R16-G2 code-search gate (spec/r16-orchestrator-retirement.md). Host-only C tool,
 # seconds, no network. Scans the five repos (paths from R16_REPO_OMEGA,

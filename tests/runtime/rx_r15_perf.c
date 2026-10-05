@@ -716,6 +716,12 @@ static int run_trial(R15Config cfg) {
     int complete = rc == 0 && tw.idle_ok && tw.before_ok && tw.after_ok && goal && promo && inforce;
     r15_rec_begin(&g_out, "result");
     rec_i("complete", complete);
+    {   /* where the teardown spent its time (CAND-1 window 2: SEQ-06 and RES4-11 waited ~102 s here); reported only */
+        char tb[768];
+        if (r15_stage_json(&r->stop_clock, tb, sizeof tb) > 0) fputs(tb, g_out.f);
+        if (r->leave_valid)
+            fprintf(g_out.f, ",\"seat_leave\":{\"rc\":%d,\"marker\":%u,\"sem\":%u}", r->leave_rc, r->leave_marker, r->leave_sem);
+    }
     r15_rec_end(&g_out);
     return complete ? 0 : 1;
 }
