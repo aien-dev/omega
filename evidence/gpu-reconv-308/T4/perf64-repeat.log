@@ -1,0 +1,15 @@
+r4 uniform aien-gb10-native;31768;5.000056;8192;algorithm=other,faithful=no,bits=1
+r4 divergent aien-gb10-native;45633;5.000031;8192;algorithm=other,faithful=no,bits=1
+r4 divergent2 aien-gb10-native;46313;5.000040;8192;algorithm=other,faithful=no,bits=1
+r5 uniform aien-gb10-native;34572;5.000099;8192;algorithm=other,faithful=no,bits=1
+r5 divergent aien-gb10-native;45790;5.000100;8192;algorithm=other,faithful=no,bits=1
+r5 divergent2 aien-gb10-native;45021;5.000062;8192;algorithm=other,faithful=no,bits=1
+r6 uniform aien-gb10-native;37426;5.000090;8192;algorithm=other,faithful=no,bits=1
+r6 divergent aien-gb10-native;45537;5.000076;8192;algorithm=other,faithful=no,bits=1
+r6 divergent2 aien-gb10-native;45407;5.000013;8192;algorithm=other,faithful=no,bits=1
+r7 uniform aien-gb10-native;39680;5.000104;8192;algorithm=other,faithful=no,bits=1
+r7 divergent aien-gb10-native;45564;5.000073;8192;algorithm=other,faithful=no,bits=1
+r7 divergent2 aien-gb10-native;45628;5.000022;8192;algorithm=other,faithful=no,bits=1
+r8 uniform aien-gb10-native;34800;5.000028;8192;algorithm=other,faithful=no,bits=1
+r8 divergent aien-gb10-native;45808;5.000046;8192;algorithm=other,faithful=no,bits=1
+r8 divergent2 aien-gb10-native;45913;5.000037;8192;algorithm=other,faithful=no,bits=1
