@@ -229,7 +229,8 @@ static void test_original_untouched(const char *root)
     static const char *name = "receipt-7f0bb7018d066bc438e7a8a9bf87c0d45615f60be2d029b6ab5194168e3db3d1.json";
     char path[1400]; snprintf(path, sizeof path, "%s/docs/estimation/receipts/est-v5/%s", root, name);
     size_t n; char *b = slurp(path, &n);
-    if (!b) { fprintf(stderr, "test_est_json: committed v5 receipt not found, skipped\n"); return; }
+    CHECK(b != NULL, "committed v5 receipt not found at %s (a missing input fails, it is never skipped)", path);
+    if (!b) return;
     uint8_t dg[32]; char hex[65];
     sha256_hash((const uint8_t *)b, n, dg); est_hex(dg, 32, hex);
     CHECK(!strncmp(name + 8, hex, 64), "the committed v5 receipt no longer matches its digest name (%s)", hex);

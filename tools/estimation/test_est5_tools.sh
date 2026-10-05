@@ -95,7 +95,7 @@ r=$(ls "$W/rc"/receipt-*.json | head -1); h=$(sha256sum "$r" | cut -c1-64)
 case "$r" in *"receipt-$h.json") ok ;; *) bad "receipt name is not its SHA-256" ;; esac
 grep -q '"same_steps": true' "$r" && ok || bad "S, F1, E0 not on the same steps"
 # est-json-1: the receipt is strict JSON; unbounded and unavailable values are explicit
-if [ -n "$JV" ]; then "$JV" --validate "$r" && ok || bad "synthetic receipt is not strict JSON"; else echo "test_est5_tools: no validator given, strict-JSON check skipped" >&2; fi
+if [ -n "$JV" ]; then "$JV" --validate "$r" && ok || bad "synthetic receipt is not strict JSON"; else bad "no strict-JSON validator given (the check is never skipped)"; fi
 if grep -Eq '(^|[^A-Za-z"])(inf|nan)([^A-Za-z"]|$)' "$r"; then bad "receipt holds a bare inf or nan token"; else ok; fi
 grep -q '"json_rules": "est-json-1"' "$r" && ok || bad "receipt lacks json_rules"
 grep -q '"invalid_measurements": 0' "$r" && ok || bad "invalid_measurements not 0 on a finite run"
