@@ -18,6 +18,10 @@
  * environment lifts or lowers the launch cap; unset keeps OMEGA_GPU_EW_MAX_CTAS (the proven
  * I42 envelope). Any other value fails setup. The budget used is reported in the detail JSON.
  *
+ * Marker wait (campaign C4): PR_GB10_SPIN_US=N (0..1000000) polls the completion marker without
+ * sleeping for up to N us before the session's usual 50 us sleep-poll; unset or 0 keeps the old
+ * wait. Any other value fails setup. Reported in the detail JSON as spin_us.
+ *
  * Labels (handoff 2026-10-05 DESIGN): algorithm=other, faithful=no, bits=1,
  * environment linux-hosted-gb10-native. Build with -DPR_GB10_MUTANT=1 only for the chip
  * test's negative control (the r == 0 fix is dropped; the oracle must catch it).
@@ -44,6 +48,16 @@
 #define GB_BUDGET_MAX 4096u
 #define GB_ARGS 11u /* a, b, c (64-bit each) then P0..P4 */
 
+/* PR_GB10_SPIN_US or 0; UINT32_MAX on a malformed or out-of-range value. */
+static uint32_t gb_spin_us(void) {
+    const char *v = getenv("PR_GB10_SPIN_US");
+    if (!v) return 0;
+    char *end = NULL;
+    unsigned long n = strtoul(v, &end, 10);
+    if (end == v || *end != 0 || v[0] == '-' || n > OMEGA_GPU_SESSION_MAX_SPIN_US) return UINT32_MAX;
+    return (uint32_t)n;
+}
+
 /* PR_GB10_CTA_BUDGET or the I42 default; 0 on a malformed or out-of-range value. */
 static uint32_t gb_cta_budget(void) {
     const char *v = getenv("PR_GB10_CTA_BUDGET");
@@ -57,6 +71,7 @@ static uint32_t gb_cta_budget(void) {
 typedef struct {
     uint64_t limit, odd;
     uint32_t nwords, ctas, budget, stride, lastw, tailinv;
+    uint32_t spin_us;       /* marker wait spin window (campaign C4) */
     uint32_t root;          /* isqrt(limit) */
     uint32_t nprimes;       /* odd primes in the table of the last pass (sentinel excluded) */
     size_t table_cap;       /* entries, sentinel included */
@@ -116,6 +131,8 @@ static int gb_setup(void **state, uint64_t limit) {
     s->nwords = (uint32_t)((s->odd + 31) / 32);
     s->budget = gb_cta_budget();
     if (s->budget == 0) { fprintf(stderr, "gb10-native: PR_GB10_CTA_BUDGET must be 1..%u\n", GB_BUDGET_MAX); return -1; }
+    s->spin_us = gb_spin_us();
+    if (s->spin_us == UINT32_MAX) { fprintf(stderr, "gb10-native: PR_GB10_SPIN_US must be 0..%u\n", OMEGA_GPU_SESSION_MAX_SPIN_US); return -1; }
     uint32_t blocks = (s->nwords + GB_THREADS - 1) / GB_THREADS;
     s->ctas = blocks == 0 ? 1 : (blocks > s->budget ? s->budget : blocks);
     s->stride = s->ctas * GB_THREADS;
@@ -186,7 +203,7 @@ static int gb_pass(void *state, uint64_t limit) {
     OmegaGpuLaunch L = {
         .code_va = s->code.va, .gpr_count = GB_GPR, .threads_x = GB_THREADS, .threads_y = 1,
         .grid_x = s->ctas, .grid_y = 1, .num_elements = s->nwords ? s->nwords : 1,
-        .args = args, .n_args = GB_ARGS, .timeout_ms = GB_WAIT_MS, .shared_bytes = s->shared_bytes,
+        .args = args, .n_args = GB_ARGS, .timeout_ms = GB_WAIT_MS, .shared_bytes = s->shared_bytes, .spin_us = s->spin_us,
     };
     uint64_t ns = 0; uint32_t marker = 0;
     if (omega_gpu_session_launch(&L, &ns, &marker) != 0) {
@@ -213,8 +230,8 @@ static uint64_t gb_threads(void *state) { gb_state *s = state; return s ? s->str
 static int gb_detail(void *state, FILE *f) {
     gb_state *s = state;
     if (!s) return -1;
-    fprintf(f, "{\"grid\": %u, \"cta_budget\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"table\": \"%s\", \"shared_bytes\": %u, \"kernel_code_sha256\": \"",
-            s->ctas, s->budget, GB_THREADS, s->nwords, s->nprimes, s->shared_bytes ? "shared" : "global", s->shared_bytes);
+    fprintf(f, "{\"grid\": %u, \"cta_budget\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"table\": \"%s\", \"shared_bytes\": %u, \"spin_us\": %u, \"kernel_code_sha256\": \"",
+            s->ctas, s->budget, GB_THREADS, s->nwords, s->nprimes, s->shared_bytes ? "shared" : "global", s->shared_bytes, s->spin_us);
     for (int i = 0; i < 32; i++) fprintf(f, "%02x", s->k.code_digest[i]);
     fprintf(f, "\", \"kernel_insns\": %zu, \"kernel_gpr\": %u, \"mutant\": %d, \"launches\": %" PRIu64
                ", \"diag_kernel_ns_total\": %" PRIu64
