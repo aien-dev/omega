@@ -147,6 +147,52 @@ used, in which case H2 becomes the next passing seed after 0xD6E6CB, which is **
 L6 810, L12 569, L18 681; `est6dev pick 0xD6E6CC 2700`). Alternatively choose declared seeds that pass. The
 schedule alone decides either way; no data is needed.
 
+## 3b. Schedule rule SR-1 (proposed replacement for the seed rule of v6 section 3; v6 stays NOT FROZEN)
+
+Cause of the collision, from the code and the text, not from data: `est-v6.md` section 3 (lines 117 to 125) says a seed
+that fails the balance rule is replaced by "the next seed (+1)". That chain starts at each declared seed and ignores
+which run it is for, and H1 and H2 are declared one apart (0xD6E6C7, 0xD6E6C8), so their chains meet. Reproduced with
+`est6dev plan6 --rule old 2700 F=0xE6C6D1 H1=0xD6E6C7 H2=0xD6E6C8`: H1 takes k = 4 and H2 takes k = 3, both ending
+at 0xD6E6CB (41 segments; idle 522, L6 572, L12 857, L18 749). The 0xD6E6CD "skip used seeds" patch of section 3 would
+work but makes H2 depend on what H1 happened to draw.
+
+Rule SR-1 (implemented in `est6dev plan6`, default rule):
+1. Derivation input is the pair (run label, declared seed). `base = splitmix64( declared XOR fnv1a64("est6-sched-v1/" label) )`,
+   one output of the same splitmix64 used by `est_load.c`.
+2. Candidate k is the `est_load` schedule of seed `base + k`, k = 0, 1, 2, ...; the effective seed is the first k whose
+   schedule passes the balance rule. The only test is the schedule's own balance (idle, L6, L12, L18 each 400 to 900 s);
+   no data and no score enter. The search is bounded at k = 255 and fails closed (`NO_PASSING_SEED`).
+3. Labels are `F`, `H1`, `H2`; a recollection after an INCONCLUSIVE window uses the labels `F.r1`, `H1.r1`, `H2.r1`, `H1.r2`, ...
+   with the same declared seed (this replaces "seed + 0x10 x n").
+4. A plan is refused (exit 1, `COLLISION`) if any two labels have the same effective seed or the same segment list. This is a
+   refusal, not a trigger for more searching: a refused plan is fixed by changing the declared text before freeze.
+5. The effective seed (64 bit) is what is passed to `est_load` (it reads it with `strtoull`, `est_load.c:73`), and the
+   whole segment list is written into the frozen file.
+
+Required properties (checked by `make test-est6dev`, 35 checks in total, of which the schedule ones are in the block
+"2b"): the segments of each label sum to exactly 2700 s; every segment is 20 to 120 s except that the last may be
+clipped; each level totals 400 to 900 s; H1 and H2 (and F) have different effective seeds and different segment lists;
+the same declared seed under two labels gives two schedules; the same input gives byte-identical output; a label's
+schedule does not depend on the other labels in the plan. Red/green: the old rule reproduces the collision
+(`--rule old` exits 1 with `COLLISION H1 H2 effective 0xd6e6cb`, asserted by the test), SR-1 exits 0 with `distinct PASS`.
+A deliberately broken SR-1 (label removed from the derivation) fails the test "same declared seed, two labels".
+
+No schedule was chosen by trying alternatives: SR-1 was written down above and run once on the declared seeds, and its
+output is the one recorded here. The v5 schedule tools (`sched`, `pick`) and `est_load.c` are unchanged.
+
+Result of SR-1 on the declared seeds (`est6dev plan6 2700 F=0xE6C6D1 H1=0xD6E6C7 H2=0xD6E6C8`; segment list
+level/seconds is printed by the same command):
+
+| label | declared | k | effective seed | segments | idle | L6 | L12 | L18 |
+|---|---|---|---|---|---|---|---|---|
+| F | 0xE6C6D1 | 1 | 0xc6165660a97249c0 | 46 | 622 | 620 | 669 | 789 |
+| H1 | 0xD6E6C7 | 1 | 0x0fe5afc2c2177267 | 36 | 452 | 732 | 634 | 882 |
+| H2 | 0xD6E6C8 | 0 | 0xb47c8fc0335c4b5f | 40 | 891 | 676 | 473 | 660 |
+
+Whether these three are the schedules at freeze is a freeze decision; they are listed so the rule's output is auditable.
+The balance rule is a property of the schedule only. It does not remove the section 2 finding that load level
+matters to calibration, and it does not claim any schedule is representative.
+
 ## 4. Item 2: G1S fit with block cross-validation (REDUCED, not the full item)
 
 Size assessment of the full item. The protocol's G1S fit is a new model plus the whole fit machinery with
