@@ -44,8 +44,9 @@ M16~src/runtime/rx_compose.c~s/if (pp \&\& state_ref_promoted(s, pp\[CX_WREC_FIE
 M17~src/runtime/rx_compose.c~s/if (c->cx.n < cnt || (cnt > 0 && (!head || memcmp(head->digest, an + 8, 32) != 0))) {/(void)head; if (0) {/~refuse a Cortex journal cut behind the checkpoint anchor
 '
 # Same copy list as before: the source dirs plus the one authority library.
-copy="src tests tools Makefile mk aienos.lock physics.lock build/aienos-authority/$(basename "$auth")"
-build="nice -n 10 make PHYSICS_DIR=\"$phys\" ${MAKE_ARGS:-} c4-requal-bin"
+copy="src tests tools Makefile mk aienos.lock physics.lock build/aienos-authority/$lock build/aienos-cap/$lock"
+lockrepo=$(AIENOS_R7_DIR= bash "$root/tools/aienos_lock_source.sh" identity | sed -n 's/.*"repo": "\([^"]*\)".*/\1/p')
+build="nice -n 10 make PHYSICS_DIR=\"$phys\" AIENOS_LOCK_REPO=\"$lockrepo\" ${MAKE_ARGS:-} c4-requal-bin"
 test_cmd='./build/rx_c4_requal "$PWD/r.json"'
 
 # The runner prints the per-mutant lines on stderr as before. -e keeps the old

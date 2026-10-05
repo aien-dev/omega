@@ -348,7 +348,7 @@ CLONE=$SCR/clean-other; git clone -q "$LK" "$CLONE"; git -C "$CLONE" checkout -q
 out=$(Q R16_RUN_ID=g6 AIENOS_R7_DIR="$CLONE" 2>&1)
 check "G6 lock A + clean checkout of a different commit that has mint: MISSING_IMPLEMENTATION" '[ "$(g6_item trusted_capability_root_present)" = MISSING_IMPLEMENTATION ]'
 out=$(Q R16_RUN_ID=g6 AIENOS_R7_DIR="$CLONE" AIENOS_LOCK_REPO=/nonexistent 2>&1)
-check "G6 lock A, no lock repo, only that other-commit checkout supplied: NOT_RUN (not PASS)" '[ "$(g6_item trusted_capability_root_present)" = NOT_RUN ]'
+check "G6 lock A, no lock repo, other-commit checkout whose repo holds A: MISSING_IMPLEMENTATION (A read, not the files)" '[ "$(g6_item trusted_capability_root_present)" = MISSING_IMPLEMENTATION ]'
 for c in "$ALOCK" "${ALOCK:0:7}"; do
     mkdir -p "$W/build/aienos-authority/$c/native/capability"
     cp "$UNREL/native/capability/aienos_capability.c" "$W/build/aienos-authority/$c/native/capability/"

@@ -311,11 +311,12 @@ echo "[*] R16-G6: protected things kept..."
 # l = function definition in the aienos source at the FULL aienos.lock commit (the trusted
 # capability root). Kind l reads immutable blobs through tools/aienos_lock_source.sh: the
 # repository must hold the locked commit object, every object read is re-hashed, replace
-# refs are off. AIENOS_R7_DIR, a build cache or a directory name is never read for it.
+# refs are off. Files in AIENOS_R7_DIR, a build cache or a directory name are never read
+# for it; the repository around AIENOS_R7_DIR may serve objects, which prove themselves.
 # Returns 0 defined, 1 absent (the locked commit was read: file or symbol not there),
 # 2 cannot look (no repository holds the locked commit, or the lock is malformed).
 G6_LOCK_COMMIT=$(head -n 1 "$HERE/aienos.lock" 2>/dev/null || true)
-g6_lock() { AIENOS_LOCK=$G6_LOCK_COMMIT AIENOS_R7_DIR= bash "$HERE/tools/aienos_lock_source.sh" "$@"; }
+g6_lock() { AIENOS_LOCK=$G6_LOCK_COMMIT bash "$HERE/tools/aienos_lock_source.sh" "$@"; }
 G6_LOCK_IDENTITY=$(g6_lock identity 2>/dev/null) || true
 [ -n "$G6_LOCK_IDENTITY" ] || G6_LOCK_IDENTITY="{\"aienos_lock\": \"$G6_LOCK_COMMIT\", \"source\": \"none\", \"status\": \"malformed_lock\"}"
 declare -A G6BLOB

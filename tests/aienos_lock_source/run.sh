@@ -11,6 +11,7 @@ trap 'rm -rf "$SCR"' EXIT INT TERM
 FAILS=0
 check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; FAILS=$((FAILS + 1)); fi; }
 T="$HERE/tools/aienos_lock_source.sh"
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=advice.detachedHead GIT_CONFIG_VALUE_0=false
 
 # Fixture aienos: commit GOOD has a buildable native/capability; commit A lacks aienos_cap_mint.
 LK=$SCR/aienos
@@ -18,7 +19,7 @@ lkg() { git -C "$LK" -c user.name=t -c user.email=t@invalid -c commit.gpgsign=fa
 mkdir -p "$LK/native/capability" "$LK/native/store"
 printf 'out/\n' > "$LK/native/capability/.gitignore"
 printf 'int aienos_cap_validate(int v)\n{ return v; }\nint aienos_cap_mint(int a)\n{ return a; }\n' > "$LK/native/capability/aienos_capability.c"
-printf 'all:\n\tmkdir -p out && $(CC) -c -o out/aienos_capability.o aienos_capability.c && ar rcs out/libaienos_capability.a out/aienos_capability.o\n' > "$LK/native/capability/Makefile"
+printf 'OUT ?= out\n$(OUT)/libaienos_capability.a: aienos_capability.c\n\tmkdir -p $(OUT) && $(CC) -c -o $(OUT)/aienos_capability.o aienos_capability.c && ar rcs $@ $(OUT)/aienos_capability.o\n' > "$LK/native/capability/Makefile"
 printf 'int store_v1;\n' > "$LK/native/store/store_v1.c"
 lkg init -q && lkg add -A && lkg commit -qm good
 GOOD=$(git -C "$LK" rev-parse HEAD)
@@ -53,8 +54,16 @@ check "altered object bytes: refused (exit 2), never read as content" '[ "$(rc e
 # 2. directories: proven only against the locked commit
 D=$SCR/cache
 check "materialize into an empty cache: exit 0" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" materialize "$D" native/capability)" = 0 ]'
+check "proven cache verifies: exit 0" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 0 ]'
 make -s -C "$D/native/capability" >/dev/null 2>&1
-check "build outputs under an ignored dir do not break the proof" '[ -f "$D/native/capability/out/libaienos_capability.a" ] && [ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 0 ]'
+check "in-tree build outputs (ignored out/, could hold planted objects) refused: exit 1" '[ -f "$D/native/capability/out/libaienos_capability.a" ] && [ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 1 ]'
+rm -rf "$D/native/capability/out"
+echo 'int evil;' > "$D/native/capability/evil.c"; printf '*.c\n' > "$D/.gitignore"; printf 'evil.c\n' > "$D/native/.gitignore"
+check "extra file hidden by ignore files above the checked subpath: exit 1" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 1 ]'
+rm -f "$D/native/capability/evil.c" "$D/.gitignore" "$D/native/.gitignore"
+chmod +x "$D/native/capability/aienos_capability.c"
+check "file mode changed: exit 1" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 1 ]'
+chmod -x "$D/native/capability/aienos_capability.c"
 echo 'int injected;' >> "$D/native/capability/aienos_capability.c"
 check "modified cached source: exit 1" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 1 ]'
 check "materialize does not re-extract over a modified cache: exit 1" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" materialize "$D" native/capability)" = 1 ]'
@@ -78,15 +87,22 @@ cp -r "$HERE/Makefile" "$HERE/mk" "$HERE/tools" "$W/"
 cp "$HERE/physics.lock" "$W/" 2>/dev/null || true
 echo "$GOOD" > "$W/aienos.lock"
 M() { make -s -C "$W" AIENOS_LOCK_REPO="$LK" "$@" >"$SCR/make.log" 2>&1; echo $?; }
-check "make: default cache materialized and library built" '[ "$(M build/aienos-authority/$GOOD/native/capability/out/libaienos_capability.a)" = 0 ] && [ -f "$W/build/aienos-authority/$GOOD/native/capability/out/libaienos_capability.a" ]'
+check "make: default cache materialized and library built" '[ "$(M build/aienos-cap/$GOOD/libaienos_capability.a)" = 0 ] && [ -f "$W/build/aienos-cap/$GOOD/libaienos_capability.a" ] && [ ! -e "$W/build/aienos-authority/$GOOD/native/capability/out" ]'
+L1=$(stat -c %Y.%s "$W/build/aienos-cap/$GOOD/libaienos_capability.a"); sleep 1
+check "make: second build replaces nothing (no relink)" '[ "$(M build/aienos-cap/$GOOD/libaienos_capability.a)" = 0 ] && [ "$(stat -c %Y.%s "$W/build/aienos-cap/$GOOD/libaienos_capability.a")" = "$L1" ]'
+printf 'junk' > "$W/build/aienos-cap/$GOOD/libaienos_capability.a"
+check "make: planted library replaced by the fresh build from the proven source" '[ "$(M build/aienos-cap/$GOOD/libaienos_capability.a)" = 0 ] && ar t "$W/build/aienos-cap/$GOOD/libaienos_capability.a" | grep -q aienos_capability.o'
 echo 'int injected;' >> "$W/build/aienos-authority/$GOOD/native/capability/aienos_capability.c"
-check "make: cache edited after extraction stops the next build" '[ "$(M build/aienos-authority/$GOOD/native/capability/out/libaienos_capability.a)" != 0 ] && grep -q "not the aienos.lock commit" "$SCR/make.log"'
-check "make: unrelated AIENOS_R7_DIR override refused" '[ "$(M AIENOS_R7_DIR="$UNREL" "$UNREL/native/capability/out/libaienos_capability.a")" != 0 ]'
+check "make: cache edited after extraction stops the next build" '[ "$(M build/aienos-cap/$GOOD/libaienos_capability.a)" != 0 ] && grep -q "not the aienos.lock commit" "$SCR/make.log"'
+check "make: unrelated AIENOS_R7_DIR override refused" '[ "$(M AIENOS_R7_DIR="$UNREL" build/aienos-cap/$GOOD/libaienos_capability.a)" != 0 ]'
 git -C "$CL" checkout -q -- .
-check "make: clean checkout of a different commit as override refused" '[ "$(cd "$CL" && git checkout -q "$A"; M AIENOS_R7_DIR="$CL" "$CL/native/capability/out/libaienos_capability.a")" != 0 ]'
+check "make: clean checkout of a different commit as override refused" '[ "$(cd "$CL" && git -c advice.detachedHead=false checkout -q "$A"; M AIENOS_R7_DIR="$CL" build/aienos-cap/$GOOD/libaienos_capability.a)" != 0 ]'
 git -C "$CL" checkout -q "$GOOD"
-check "make: clean checkout of the locked commit as override builds" '[ "$(M AIENOS_R7_DIR="$CL" "$CL/native/capability/out/libaienos_capability.a")" = 0 ]'
-check "make: lock repository missing the commit refused" '[ "$(make -s -C "$W" AIENOS_LOCK_REPO=/nonexistent AIENOS_R7_DIR="$UNREL" "$UNREL/native/capability/out/libaienos_capability.a" >/dev/null 2>&1; echo $?)" != 0 ]'
+mkdir -p "$CL/native/capability/out"; echo planted > "$CL/native/capability/out/aienos_capability.o"
+check "make: locked checkout with a planted out/ object refused" '[ "$(M AIENOS_R7_DIR="$CL" build/aienos-cap/$GOOD/libaienos_capability.a)" != 0 ]'
+rm -rf "$CL/native/capability/out"
+check "make: clean checkout of the locked commit as override builds" '[ "$(M AIENOS_R7_DIR="$CL" build/aienos-cap/$GOOD/libaienos_capability.a)" = 0 ]'
+check "make: lock repository missing the commit refused" '[ "$(make -s -C "$W" AIENOS_LOCK_REPO=/nonexistent AIENOS_R7_DIR="$UNREL" build/aienos-cap/$GOOD/libaienos_capability.a >/dev/null 2>&1; echo $?)" != 0 ]'
 
 if [ "$FAILS" -ne 0 ]; then echo "aienos lock source test: $FAILS FAILED"; exit 1; fi
 echo "aienos lock source test: PASS"

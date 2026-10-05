@@ -9,7 +9,8 @@
 #     are disabled (GIT_NO_REPLACE_OBJECTS) and every object read is re-hashed, so the
 #     content returned is the content the commit id names;
 #   * a directory counts only if every tracked file under the asked subpaths has the
-#     blob of the locked commit and no untracked, unignored file sits beside them.
+#     blob and mode of the locked commit and no other file (ignored or not, build
+#     outputs included) sits beside them.
 #
 # Usage:
 #   aienos_lock_source.sh identity                 one JSON object: lock, repo, tree, status
@@ -108,13 +109,16 @@ verify-dir|materialize)
     trap 'rm -f "$idx"' EXIT
     gitdir=$(git -C "$REPO" rev-parse --absolute-git-dir)
     gw() { (cd "$dir" && GIT_INDEX_FILE=$idx git --git-dir="$gitdir" --work-tree="$dir" \
-           -c core.fileMode=false -c core.autocrlf=false -c core.excludesFile=/dev/null "$@"); }
+           -c core.fileMode=true -c core.autocrlf=false -c core.excludesFile=/dev/null "$@"); }
     gw read-tree "$LOCK" || die2 "read-tree $LOCK failed"
     gw update-index -q --refresh >/dev/null 2>&1
     changed=$(gw diff-files --name-status -- "$@")
     [ -z "$changed" ] || die1 "$dir differs from $LOCK: $(echo "$changed" | head -5 | tr '\n' ' ')"
-    extra=$(gw ls-files --others --exclude-per-directory=.gitignore -- "$@")
-    [ -z "$extra" ] || die1 "$dir has files not in $LOCK: $(echo "$extra" | head -5 | tr '\n' ' ')"
+    # No ignore rules: an ignore file outside the checked subpaths is not proven, and an
+    # ignored build directory (out/) could hold prebuilt objects that get linked. The
+    # authority is built out of tree, so the subpaths hold exactly the locked files.
+    extra=$(gw ls-files --others -- "$@")
+    [ -z "$extra" ] || die1 "$dir has files not in $LOCK (build outputs included; build out of tree): $(echo "$extra" | head -5 | tr '\n' ' ')"
     echo "aienos_lock_source: $dir matches $LOCK for $*" >&2 ;;
 *)
     die2 "unknown command '$cmd' (identity | show | blob | verify-dir | materialize)" ;;

@@ -372,7 +372,7 @@ AIENOS_LOCK_REPO ?= ../aienos-argus-cap
 AIENOS_LOCK = $(shell head -n 1 aienos.lock)
 AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(AIENOS_LOCK)
 AIENOS_R7_DIR ?= $(AIENOS_R7_DEFAULT)
-AIENOS_CAP_LIB ?= $(AIENOS_R7_DIR)/native/capability/out/libaienos_capability.a
+AIENOS_CAP_LIB ?= $(OUT_DIR)/aienos-cap/$(AIENOS_LOCK)/libaienos_capability.a
 # $(call aienos_source,<subpaths>): materialize into the default cache, or prove the override.
 aienos_source = if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ]; then \
 		AIENOS_LOCK_REPO="$(AIENOS_LOCK_REPO)" AIENOS_R7_DIR= bash tools/aienos_lock_source.sh materialize "$(AIENOS_R7_DIR)" $(1); \
@@ -390,8 +390,14 @@ RX_R7_TEST = $(OUT_DIR)/rx_r7_native_test
 aienos-authority-capability:
 	@$(call aienos_source,native/capability)
 
+# Built out of tree from the proven source into a fresh directory on every build; the
+# library is replaced only when its bytes change (ar is deterministic), so nothing relinks
+# when nothing changed and no stale or planted object is ever reused.
 $(AIENOS_CAP_LIB): aienos-authority-capability
-	$(MAKE) -C $(AIENOS_R7_DIR)/native/capability
+	@t=$$(mktemp -d "$${TMPDIR:-/tmp}/aienos-cap.XXXXXX") && \
+	$(MAKE) -s -C $(AIENOS_R7_DIR)/native/capability OUT=$$t $$t/libaienos_capability.a >/dev/null && \
+	mkdir -p $(dir $@) && { cmp -s $$t/libaienos_capability.a $@ || cp $$t/libaienos_capability.a $@; }; \
+	rc=$$?; rm -rf $$t; exit $$rc
 
 # OMEGA_EFFECT_CAP64 (spec/effect-cap64-migration.md): effect objects carry the
 # full 64-bit AIENOS capability generation. Physics-free: the Omega core, the
@@ -909,7 +915,7 @@ test-r16-negative: $(RX_R16_NEGATIVE)
 # "Removing any one guard turns the test red": rebuilds the G4 test against
 # scratch copies with one guard removed at a time; each must FAIL. Minutes.
 test-r16-negative-mutants: $(RX_R16_NEGATIVE)
-	sh tests/r16_negative/mutate.sh "$(CC)" "$(CFLAGS)" "$(AIENOS_R7_DIR)" \
+	R16_CAP_LIB="$(AIENOS_CAP_LIB)" sh tests/r16_negative/mutate.sh "$(CC)" "$(CFLAGS)" "$(AIENOS_R7_DIR)" \
 		$(RX_R15_RIG_SRCS) tests/runtime/rx_r16_negative.c
 
 # R16-G5 API/build surface: legacy modes only under explicit names, the SEQ
