@@ -75,8 +75,8 @@
           "purpose": "DUAL (ARCH-0031) documents in omega: applicability experiment method and findings (APPLICABILITY"
         },
         {
-          "digest": "15c85e0bc41f6e3934e81753d361dea468177df79cb01b233e6a788af2a1dfb5",
-          "last_commit": "e9c2829",
+          "digest": "309099a51e1b169e9efddeec6aaf6003f130181e9d6087d9a2a64f62ed793cf9",
+          "last_commit": "ca12ad5",
           "name": "estimation",
           "purpose": "Directory docs/estimation. Purpose not yet described by a human."
         },
@@ -117,15 +117,15 @@
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:eb93b138839b7bcbe693b0e315a1af8df7f1b82ea1bc7e313bfa606a893e7f6a",
-      "compiled_at": "2026-10-05T13:53:36Z",
+      "children_root": "sha256:bfed325d083303b9d78a04fe90d4c99d6feb960cf3059b0fc29828699de70803",
+      "compiled_at": "2026-10-05T14:17:15Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:2b90281fb966737f5cfca02ad640c02326422b4146bca69cdbae095785ce2939",
+      "digest": "sha256:6e14289e56c71da98a060589cfd4c23818169b62a9d030c8f76dc4c3c933bac5",
       "evidence_files": 31,
       "evidence_root": "sha256:3f4d8ab7c723c9fddacc5a872541933a4b87d1bb39868b8ec376320db6c929af",
-      "files": 108,
-      "generated_at_commit": "e9c28294247e2add87335d615c762db9bbc0e48d",
-      "source_tree": "sha256:b2fab0ee7afbb68b3228f7830c4245a45c681aeaee3f60a88e65fbfccbd4de15"
+      "files": 109,
+      "generated_at_commit": "ca12ad5bb771d41056b9c99571d736171a64b78d",
+      "source_tree": "sha256:8d260d4f48b5fd2d0fe40289fc801b19e02749ef29ad7a7fcf2be7a9777d4e89"
     },
     "owner_lane": "",
     "provenance": {
