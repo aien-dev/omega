@@ -43,8 +43,13 @@
           "purpose": "Runner for the DUAL applicability experiment: runs the pre-registered campaign and writes result"
         },
         {
+<<<<<<< HEAD
           "digest": "a2a3e0f17b6cc6719fb15112608ce7e52c44233492cdd9b7a8e6a105127e569f",
           "last_commit": "c8b09d0",
+=======
+          "digest": "5bf3209bf3f715b5a3059c845b62bbe74e24b04968d3de4ae5ef35ff493a83b2",
+          "last_commit": "30c65a3",
+>>>>>>> f9c1628 (qualification harness: R11 runs inside its own quiet hold; R15 preflight counts CPU cycles only)
           "name": "estimation",
           "purpose": "Directory tools/estimation. Purpose not yet described by a human."
         },
@@ -55,6 +60,7 @@
           "purpose": "Directory tools/turing_verify_indep. Purpose not yet described by a human."
         }
       ],
+<<<<<<< HEAD
       "children_root": "sha256:0920c282c31e3be9b4745fab718ceb60dbfe2ea90dda2108986f60fc2ac53e23",
       "compiled_at": "2026-10-05T04:30:49Z",
       "compiler": "crumb-compile/1",
@@ -64,6 +70,17 @@
       "files": 121,
       "generated_at_commit": "93191b4138e4b5df8fe72ac357816870d3a1f495",
       "source_tree": "sha256:5a146de9d1c47d15d663abd03a2f7b5f54d2b76a10393d3fd0f91ca5a3c4210e"
+=======
+      "children_root": "sha256:6ed09e33b610372de30ea2d6372b94240127e9acb4d178879cbd5448faab6909",
+      "compiled_at": "2026-10-05T12:57:09Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:a73d0d57e85ad3212a677ae5bfca5b7ff187e871e01f198039a7b4cb275a3a83",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 127,
+      "generated_at_commit": "30c65a33c8f7523fa1e0dbe752cb47667d6bf9b2",
+      "source_tree": "sha256:3867d4b3de9dbfe7a8bf2906b03e78e2633a11054860a385d1c0178907f5eece"
+>>>>>>> f9c1628 (qualification harness: R11 runs inside its own quiet hold; R15 preflight counts CPU cycles only)
     },
     "owner_lane": "",
     "provenance": {

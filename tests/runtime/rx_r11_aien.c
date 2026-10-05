@@ -649,6 +649,25 @@ static int envB_start(Env *e, int with_aien) {
 }
 
 
+/* The quiet flag belongs to this run when quietlock started it under that
+ * hold: the flag line carries hold=<id> and QUIETLOCK_HOLD=<id> is set in this
+ * process (tools/quietlock). Any other flag is someone else's measurement. */
+static int quiet_flag_is_mine(const char *flag) {
+    const char *mine = getenv("QUIETLOCK_HOLD");
+    if (!mine || !mine[0]) return 0;
+    FILE *f = fopen(flag, "r");
+    if (!f) return 0;
+    char line[1024] = { 0 }, tok[300];
+    int ok = fgets(line, sizeof line, f) != NULL;
+    fclose(f);
+    if (!ok) return 0;
+    snprintf(tok, sizeof tok, "hold=%s", mine);
+    size_t tn = strlen(tok);
+    for (char *p = strstr(line, tok); p; p = strstr(p + 1, tok))
+        if ((p == line || p[-1] == ' ') && (p[tn] == ' ' || p[tn] == '\n' || p[tn] == '\0')) return 1;
+    return 0;
+}
+
 /* A timed phase measures this host. When an R15 timed measurement is
  * running (its quiet flag exists or an R15 program is alive) or the machine
  * is already loaded, the numbers would describe the other work, so the
@@ -657,7 +676,7 @@ static int other_load(char *why, size_t n) {
     const char *home = getenv("HOME");
     char flag[512];
     snprintf(flag, sizeof flag, "%s/workspace/.spark-quiet", home ? home : "");
-    if (access(flag, F_OK) == 0) {
+    if (access(flag, F_OK) == 0 && !quiet_flag_is_mine(flag)) {
         snprintf(why, n, "an R15 timed measurement holds ~/workspace/.spark-quiet");
         return 1;
     }
