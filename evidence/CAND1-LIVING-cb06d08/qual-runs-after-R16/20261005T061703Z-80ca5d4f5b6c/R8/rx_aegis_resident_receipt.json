@@ -1,0 +1,24 @@
+{
+  "schema": "AIEN_RX_R8_AEGIS_RESIDENT_V1",
+  "run_id": "20261005T061703Z-80ca5d4f5b6c",
+  "candidate_commit": "80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4",
+  "candidate_bound": true,
+  "run_commit": "80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4",
+  "tree_dirty": false,
+  "aienos_commit": null,
+  "checks": 116,
+  "failures": 0,
+  "test_binary_sha256": "6937525fce02a4a891a6e53cb1c780e00e08921d2691002172aff17303488a47",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64"},
+  "scope": "host processor; the native AIENOS authority library is the root",
+  "fast_path": {"actions": 2000, "aegis_activations": 0, "root_activations": 0,
+                "synchronous_policy_round_trips_saved": 2000},
+  "cost_ns": {"fast_path_authority_check": 19, "in_process_policy_evaluation": 1,
+              "process_spawn_floor_for_shell_out": 481109,
+              "slow_path_intent_to_work": 182065},
+  "root": {"mints": 1, "revokes": 1},
+  "gates": {
+    "R8_CONSTITUTIONAL_AEGIS": "PASS",
+    "not_claimed": ["AIENOS kernel (the authority runs as a host library)", "policy learned or changed at run time", "R13"]
+  }
+}

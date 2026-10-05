@@ -1,0 +1,612 @@
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 512-boot1: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10064 avg 10288 max 10583)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  SMMUv3 enabled from the IORT
+PASS  NVMe DMA window mapped through the SMMU
+PASS  NVMe DMA granted confined
+PASS  no unsafe DMA bypass in this image
+PASS  no unconfined grant
+PASS  DMA outside the window faulted, page intact, controller still usable (differs)
+PASS  NVMe stream returned to abort after the revoke (differs)
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  GPT parsed, AIENOS partition found where the image tool wrote it (C only)
+PASS  partition LBA 0 translates to the partition start (C only)
+PASS  write past the partition end refused by the translation layer (C only)
+PASS  no AIENOS-partition refusal on the good disk (C only)
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical (C only)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  stage store ok (differs)
+PASS  Store not refused (differs)
+PASS  blank disk formatted as a TEST store (differs)
+      store boot 1: opened gen=1 boot_count=0 prev_commit=none anchor=valid-resume; committed gen=2 boot_count=1
+PASS  boot_count 1
+PASS  commit advanced the generation by one
+PASS  prev_commit none on the first boot
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 512-boot2: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10028 avg 10207 max 10475)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  SMMUv3 enabled from the IORT
+PASS  NVMe DMA window mapped through the SMMU
+PASS  NVMe DMA granted confined
+PASS  no unsafe DMA bypass in this image
+PASS  no unconfined grant
+PASS  DMA outside the window faulted, page intact, controller still usable (differs)
+PASS  NVMe stream returned to abort after the revoke (differs)
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  GPT parsed, AIENOS partition found where the image tool wrote it (C only)
+PASS  partition LBA 0 translates to the partition start (C only)
+PASS  write past the partition end refused by the translation layer (C only)
+PASS  no AIENOS-partition refusal on the good disk (C only)
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical (C only)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  stage store ok (differs)
+PASS  Store not refused (differs)
+PASS  existing Store not reformatted (differs)
+      store boot 2: opened gen=2 boot_count=1 prev_commit=bbad5e4250e5 anchor=valid-resume; committed gen=3 boot_count=2
+PASS  boot_count 2
+PASS  commit advanced the generation by one
+PASS  generation strictly increasing and opened at the previous boot's commit (2 -> 3)
+PASS  prev_commit is this commit
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 512-boot3: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10055 avg 10122 max 10412)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  SMMUv3 enabled from the IORT
+PASS  NVMe DMA window mapped through the SMMU
+PASS  NVMe DMA granted confined
+PASS  no unsafe DMA bypass in this image
+PASS  no unconfined grant
+PASS  DMA outside the window faulted, page intact, controller still usable (differs)
+PASS  NVMe stream returned to abort after the revoke (differs)
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  GPT parsed, AIENOS partition found where the image tool wrote it (C only)
+PASS  partition LBA 0 translates to the partition start (C only)
+PASS  write past the partition end refused by the translation layer (C only)
+PASS  no AIENOS-partition refusal on the good disk (C only)
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical (C only)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  stage store ok (differs)
+PASS  Store not refused (differs)
+PASS  existing Store not reformatted (differs)
+      store boot 3: opened gen=3 boot_count=2 prev_commit=bbad5e4250e5 anchor=valid-resume; committed gen=4 boot_count=3
+PASS  boot_count 3
+PASS  commit advanced the generation by one
+PASS  generation strictly increasing and opened at the previous boot's commit (3 -> 4)
+PASS  prev_commit is this commit
+PASS  host corrupted the Store superblock (8192 bytes at 9453568)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 512-boot4-corrupt: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10163 avg 10597 max 12319)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  SMMUv3 enabled from the IORT
+PASS  NVMe DMA window mapped through the SMMU
+PASS  NVMe DMA granted confined
+PASS  no unsafe DMA bypass in this image
+PASS  no unconfined grant
+PASS  DMA outside the window faulted, page intact, controller still usable (differs)
+PASS  NVMe stream returned to abort after the revoke (differs)
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  corrupt Store refused as structural (differs)
+PASS  corrupt Store left as found, not reformatted (differs)
+PASS  stage store failed (differs)
+PASS  nothing committed on the corrupt Store (differs)
+PASS  corrupt Store not reformatted (differs)
+PASS  image sha256 unchanged by the refused boot (1cf4d06996c64879)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 512-boot5-safe: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10088 avg 10549 max 12561)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  discovery found the device before the DMA gate (differs)
+PASS  NVMe DMA denied without an SMMU
+PASS  NVMe controller fail-closed without an SMMU
+PASS  NVMe controller never granted DMA
+PASS  no unsafe DMA bypass in this image
+PASS  NVMe controller never identified (differs)
+PASS  no NVMe shutdown without a bound controller (differs)
+PASS  reset quiesce hook found nothing live (differs)
+PASS  NVMe left unbound (differs)
+PASS  Store refused without a disk (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  image sha256 unchanged by the fail-closed boot
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 512-boot6-bypass: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10020 avg 10123 max 10687)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  TEST-ONLY bypass build announced on serial
+PASS  TEST-ONLY bypass grant announced on serial
+PASS  NVMe DMA granted through the TEST-ONLY bypass
+PASS  no SMMU window claimed by the bypass
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  corrupt Store refused under the bypass image too (differs)
+PASS  nothing committed under the bypass image (differs)
+PASS  image sha256 unchanged by the bypass boot
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 4096-boot1: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10073 avg 10178 max 11285)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  SMMUv3 enabled from the IORT
+PASS  NVMe DMA window mapped through the SMMU
+PASS  NVMe DMA granted confined
+PASS  no unsafe DMA bypass in this image
+PASS  no unconfined grant
+PASS  DMA outside the window faulted, page intact, controller still usable (differs)
+PASS  NVMe stream returned to abort after the revoke (differs)
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  GPT parsed, AIENOS partition found where the image tool wrote it (C only)
+PASS  partition LBA 0 translates to the partition start (C only)
+PASS  write past the partition end refused by the translation layer (C only)
+PASS  no AIENOS-partition refusal on the good disk (C only)
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical (C only)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  stage store ok (differs)
+PASS  Store not refused (differs)
+PASS  blank disk formatted as a TEST store (differs)
+      store boot 1: opened gen=1 boot_count=0 prev_commit=none anchor=valid-resume; committed gen=2 boot_count=1
+PASS  boot_count 1
+PASS  commit advanced the generation by one
+PASS  prev_commit none on the first boot
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 4096-boot2: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10049 avg 10273 max 12780)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  SMMUv3 enabled from the IORT
+PASS  NVMe DMA window mapped through the SMMU
+PASS  NVMe DMA granted confined
+PASS  no unsafe DMA bypass in this image
+PASS  no unconfined grant
+PASS  DMA outside the window faulted, page intact, controller still usable (differs)
+PASS  NVMe stream returned to abort after the revoke (differs)
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  GPT parsed, AIENOS partition found where the image tool wrote it (C only)
+PASS  partition LBA 0 translates to the partition start (C only)
+PASS  write past the partition end refused by the translation layer (C only)
+PASS  no AIENOS-partition refusal on the good disk (C only)
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical (C only)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  stage store ok (differs)
+PASS  Store not refused (differs)
+PASS  existing Store not reformatted (differs)
+      store boot 2: opened gen=2 boot_count=1 prev_commit=bbad5e4250e5 anchor=valid-resume; committed gen=3 boot_count=2
+PASS  boot_count 2
+PASS  commit advanced the generation by one
+PASS  generation strictly increasing and opened at the previous boot's commit (2 -> 3)
+PASS  prev_commit is this commit
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 4096-boot3: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10030 avg 10299 max 11760)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  SMMUv3 enabled from the IORT
+PASS  NVMe DMA window mapped through the SMMU
+PASS  NVMe DMA granted confined
+PASS  no unsafe DMA bypass in this image
+PASS  no unconfined grant
+PASS  DMA outside the window faulted, page intact, controller still usable (differs)
+PASS  NVMe stream returned to abort after the revoke (differs)
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  GPT parsed, AIENOS partition found where the image tool wrote it (C only)
+PASS  partition LBA 0 translates to the partition start (C only)
+PASS  write past the partition end refused by the translation layer (C only)
+PASS  no AIENOS-partition refusal on the good disk (C only)
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical (C only)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  stage store ok (differs)
+PASS  Store not refused (differs)
+PASS  existing Store not reformatted (differs)
+      store boot 3: opened gen=3 boot_count=2 prev_commit=bbad5e4250e5 anchor=valid-resume; committed gen=4 boot_count=3
+PASS  boot_count 3
+PASS  commit advanced the generation by one
+PASS  generation strictly increasing and opened at the previous boot's commit (3 -> 4)
+PASS  prev_commit is this commit
+PASS  host corrupted the Store superblock (8192 bytes at 9453568)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 4096-boot4-corrupt: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10044 avg 10358 max 11333)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  SMMUv3 enabled from the IORT
+PASS  NVMe DMA window mapped through the SMMU
+PASS  NVMe DMA granted confined
+PASS  no unsafe DMA bypass in this image
+PASS  no unconfined grant
+PASS  DMA outside the window faulted, page intact, controller still usable (differs)
+PASS  NVMe stream returned to abort after the revoke (differs)
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  corrupt Store refused as structural (differs)
+PASS  corrupt Store left as found, not reformatted (differs)
+PASS  stage store failed (differs)
+PASS  nothing committed on the corrupt Store (differs)
+PASS  corrupt Store not reformatted (differs)
+PASS  image sha256 unchanged by the refused boot (319bb4757feb95a2)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 4096-boot5-safe: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10047 avg 10279 max 11027)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  discovery found the device before the DMA gate (differs)
+PASS  NVMe DMA denied without an SMMU
+PASS  NVMe controller fail-closed without an SMMU
+PASS  NVMe controller never granted DMA
+PASS  no unsafe DMA bypass in this image
+PASS  NVMe controller never identified (differs)
+PASS  no NVMe shutdown without a bound controller (differs)
+PASS  reset quiesce hook found nothing live (differs)
+PASS  NVMe left unbound (differs)
+PASS  Store refused without a disk (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  image sha256 unchanged by the fail-closed boot
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot 4096-boot6-bypass: qemu exit 0 (-cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10037 avg 10173 max 10498)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  TEST-ONLY bypass build announced on serial
+PASS  TEST-ONLY bypass grant announced on serial
+PASS  NVMe DMA granted through the TEST-ONLY bypass
+PASS  no SMMU window claimed by the bypass
+PASS  ECAM discovery found the NVMe class device (differs)
+PASS  controller and namespace identify completed (differs)
+PASS  namespace geometry matches the image (differs)
+PASS  read past the namespace end is rejected before any command (differs)
+PASS  LBA 0 read (differs)
+PASS  scratch unit (last unit of the AIENOS partition) write+flush+readback matched (differs)
+PASS  NVMe bound by the devices stage (differs)
+PASS  stage devices ok (differs)
+PASS  NVMe bus master revoked after the read phase
+PASS  no bus master revoke failure (differs)
+PASS  CC.SHN read back as 01b (normal shutdown requested)
+PASS  CSTS.SHST read back as 10b (shutdown complete, waited 0 us)
+PASS  shutdown reported before the bus-master revoke (serial order)
+PASS  QEMU device trace: shutdown set while BME on, then BME cleared
+PASS  no fallback disable needed (normal shutdown completed)
+PASS  reset quiesce hook ran after the release (differs)
+PASS  capabilities: grant, attenuate, deny amplify/forged/revoked, RNDR token (differs)
+PASS  ARGUS narrow revoke: revoked denied, unrelated granted, authority unchanged (differs)
+PASS  stage security ok (differs)
+PASS  corrupt Store refused under the bypass image too (differs)
+PASS  nothing committed under the bypass image (differs)
+PASS  image sha256 unchanged by the bypass boot
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot boot7-no-rndr: qemu exit 0 (-cpu neoverse-n1)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10061 avg 10473 max 12569)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy refused without FEAT_RNG (negative boot, C kernel addition)
+PASS  no RNDR entropy claimed without FEAT_RNG (negative boot)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  office token read refused without RNDR, service fails closed (C only)
+PASS  security stage refuses without kernel entropy (C only)
+PASS  capabilities not started, no office token (C only)
+PASS  ARGUS not started: capability office refused (C only)
+PASS  stage security failed (C only)
+PASS  no capability grant without entropy (C only)
+PASS  no ARGUS narrow revoke without entropy (C only)
+PASS  Store still opens without RNDR: its nonces are keyed, not random (C only)
+AIENOS_CK_M4_NVME: PASS
+AIENOS_CK_M4_STORE: PASS
+AIENOS_CK_ARGUS1_REVOKE: PASS
+AIENOS_CK_SMMU: PASS
+AIENOS_CK_NVME_SHUTDOWN: PASS

@@ -1,0 +1,13 @@
+make: Entering directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/disk'
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/disk.o disk.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/disk_nvme.o disk_nvme.c
+rm -f ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/libaienos_disk.a
+ar rcs ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/libaienos_disk.a ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/disk.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/disk_nvme.o
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/disk_file.o disk_file.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/disk_test tests/disk_test.c ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/disk_file.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/libaienos_disk.a
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/nvme_test tests/nvme_test.c ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/disk/libaienos_disk.a
+lib-checks PASS (no heap, clock or direct I/O in libaienos_disk objects)
+disk_test: 421 checks, 0 failures
+nvme_test: 346 checks, 0 failures
+AIENOS_DISK_NATIVE: PASS
+make: Leaving directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/disk'

@@ -1,0 +1,30 @@
+    PID USER     %CPU %MEM     ELAPSED COMMAND
+1250721 drakest+  398  7.5    05:19:36 llama-server
+1463296 drakest+  6.6  0.4    04:46:07 2.1.289
+3962099 drakest+  5.7  0.4    09:06:57 2.1.289
+ 625426 drakest+  4.1  0.4    06:51:35 2.1.289
+   6478 drakest+  2.5  1.1  1-11:56:48 python
+3874076 root      1.5  0.0       00:14 kworker/19:2-events
+3859822 root      1.4  0.0       01:32 kworker/17:3-events
+   4255 472       1.1  0.1  1-11:57:06 grafana
+3843372 root      1.1  0.0       06:21 kworker/9:2-mm_percpu_wq
+3746473 root      1.0  0.0       19:12 kworker/7:2-events
+3952606 drakest+  1.0  0.0    09:09:09 agent-archive
+3851862 root      0.8  0.0       04:23 kworker/16:1-events
+3847076 root      0.8  0.0       05:39 kworker/18:0-events
+3692178 root      0.8  0.0       27:41 kworker/5:1-events
+3799773 root      0.8  0.0       11:19 kworker/8:3-events
+3773162 root      0.7  0.0       15:03 kworker/16:0-mm_percpu_wq
+3652315 root      0.7  0.0       34:31 kworker/9:1-events
+3802396 root      0.7  0.0       10:54 kworker/5:2-cgroup_release
+3660135 root      0.6  0.0       32:34 kworker/7:0-events
+3722483 root      0.6  0.0       20:43 kworker/16:3-mm_percpu_wq
+3398861 drakest+  0.6  0.0    09:51:50 ollama
+3579815 root      0.6  0.0       49:40 kworker/6:2-events
+3711120 drakest+  0.5  0.0       23:28 python
+3798225 root      0.5  0.0       11:57 kworker/9:0-events
+ 994240 drakest+  0.5  0.1  1-06:59:00 claude
+3717243 root      0.5  0.0       22:43 kworker/15:0-events
+3752337 root      0.5  0.0       17:54 kworker/17:1-events
+3666844 root      0.4  0.0       30:47 kworker/19:0-cgroup_free
+3847464 root      0.4  0.0       05:38 kworker/6:0-cgroup_release

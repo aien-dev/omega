@@ -1,0 +1,17 @@
+
+running 1 test
+OMEGA_GATE ref backend: ReferenceCpuBackend
+OMEGA_GATE ref tokens=32 secs=23.997 tok/s=1.333 text="amountofprocessingpower.Itisdesignedforuseindatacentersandotherhigh-performancecomputingenvironments.TheDGXSparkisequippedwith"
+test omega_vs_reference_real_model has been running for over 60 seconds
+OMEGA_GATE omega backend: OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+OMEGA_GATE omega warm-up (weight upload + 1 token) secs=13.748
+OMEGA_GATE flip step=2 ref_tok=9068 omega_tok=3370 ref_margin=0.0005 max_abs_dlogit=0.0314
+OMEGA_GATE teacher_forced steps=32 worst_max_abs_dlogit=0.0594 bound=0.15 judge=Ok(1)
+OMEGA_GATE omega tokens=32 secs=26.527 tok/s=1.206 text="amountofmemoryandprocessingpower.Itisdesignedforuseindataanalysisandmachinelearningapplications.TheDGXSparkisapowerfulmachinethatcanhandle"
+OMEGA_GATE OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+OMEGA_GATE tokens_match=false
+OMEGA_GATE verdict: PASS (receipt /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/receipt-omega-vs-ref.json)
+test omega_vs_reference_real_model ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 148.76s
+

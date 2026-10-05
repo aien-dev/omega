@@ -1,0 +1,15 @@
+make: Entering directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/crypto'
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/aes.o aes.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/polyval.o polyval.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/gcm_siv.o gcm_siv.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/hmac.o hmac.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/ct.o ct.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/sha256.o ../argus/sha256.c
+ar rcs ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/libaienos_crypto.a ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/aes.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/polyval.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/gcm_siv.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/hmac.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/ct.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/sha256.o
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/crypto_test tests/crypto_test.c ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/libaienos_crypto.a
+lib-checks PASS (no heap, clock or direct I/O in libaienos_crypto objects)
+./../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/crypto/crypto_test
+vectors: AES/FIPS-197 2, POLYVAL RFC 8452 2, GCM-SIV RFC 8452 C.2+C.3 26, aienos-crypto crate tests 10, SHA-256/HMAC 5, negative cases 276
+checks: 1820, failures: 0
+AIENOS_CRYPTO_NATIVE: PASS
+make: Leaving directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/crypto'

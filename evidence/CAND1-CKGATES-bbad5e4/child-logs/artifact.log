@@ -1,0 +1,215 @@
+PASS  default image target/native-kernel: no fw_cfg artifact strings or symbols
+PASS  default image target/native-kernel/full: no fw_cfg artifact strings or symbols
+PASS  default image target/native-kernel-seed0b-test: no fw_cfg artifact strings or symbols
+PASS  default image target/native-kernel-seed0b-test/full: no fw_cfg artifact strings or symbols
+PASS  the check sees fw_cfg code in a CK_TEST_FWCFG_ARTIFACTS=1 image, which announces TEST-ONLY (not booted, never counted)
+PASS  boot disk built: ck_store_image: /tmp/tmp.tZLthm756X/nvme.img artifacts=35 store_generation=8 (TEST identity, TEST keys)
+PASS  host read-back: all 34 artifacts byte-identical in the Store, D01-DISK-MISSING.AIEN absent
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+qemu exit 0 after 6 s (commit bbad5e4250e5)
+PASS  left firmware and entered the kernel
+PASS  M3 cooperative threads unchanged
+PASS  M3 EL0 isolation proof unchanged
+PASS  M3 typed IPC proof unchanged
+PASS  kernel read all 35 artifact candidates
+PASS  no kernel report line was truncated
+PASS  final report reached the console
+PASS  no TEST-ONLY fw_cfg source in a counted boot
+PASS  every frame returned after all candidates (496740 free before and after)
+PASS  SMMUv3 enabled; NVMe confined
+PASS  store stage committed this boot
+PASS  artifact index read from the boot disk Store
+PASS  artifact_source=nvme_store with every candidate
+PASS  kernel read all 34 artifacts from NVMe, each SHA-256 equal to the host file
+PASS  D01-DISK-MISSING.AIEN named on disk without bytes: reported missing, not used
+PASS  D01-DISK-MISSING.AIEN refused cleanly at received (FirmwareRead), reclaimed
+PASS  kernel heap copies of the disk artifacts released after the loader
+PASS  disk read finished before the NVMe DMA revoke; verification ran after it
+PASS  D01-DISK-MISSING.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  qualification build is labelled TEST ONLY
+PASS  receipts carry the SEED-0B-QEMU tier
+PASS  P26SEED read through its grant, WRITE and forged authority denied, exit 0, reclaimed
+PASS  P26SEED granted exactly its READ request
+PASS  P26SEED holds exactly one capability
+PASS  P26SEED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  P25EXEC executed its exact authenticated bytes, exit 0, caps revoked, reclaimed
+PASS  P25WX killed by a W^X fault on its code page, reclaimed
+PASS  P25SPIN killed at its time budget, reclaimed
+PASS  P25TAMP (payload byte flipped after signing) rejected BadSignature, reclaimed
+PASS  P25EXEC.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  P25WX.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  P25SPIN.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  P25TAMP.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H01-BAD-MAGIC.AIEN refused at verified (BadMagic), never ran, reclaimed
+PASS  H01-BAD-MAGIC.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H02-VERSION.AIEN refused at verified (UnsupportedVersion), never ran, reclaimed
+PASS  H02-VERSION.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H03-TARGET.AIEN refused at verified (WrongTarget), never ran, reclaimed
+PASS  H03-TARGET.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H04-ABI.AIEN refused at verified (WrongAbi), never ran, reclaimed
+PASS  H04-ABI.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H05-TRUNCATED.AIEN refused at verified (WrongLength), never ran, reclaimed
+PASS  H05-TRUNCATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H06-TRAILING.AIEN refused at verified (WrongLength), never ran, reclaimed
+PASS  H06-TRAILING.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H07-TOTAL-LENGTH.AIEN refused at verified (WrongLength), never ran, reclaimed
+PASS  H07-TOTAL-LENGTH.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H08-OFFSET-OVERFLOW.AIEN refused at verified (ResourceLimit), never ran, reclaimed
+PASS  H08-OFFSET-OVERFLOW.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H09-SECTION-OVERLAP.AIEN refused at verified (BadSection), never ran, reclaimed
+PASS  H09-SECTION-OVERLAP.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H10-ENTRY-OUTSIDE.AIEN refused at verified (BadEntryPoint), never ran, reclaimed
+PASS  H10-ENTRY-OUTSIDE.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H11-PAYLOAD-MUTATED.AIEN refused at verified (BadSignature), never ran, reclaimed
+PASS  H11-PAYLOAD-MUTATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H12-CAPS-MUTATED.AIEN refused at verified (BadSignature), never ran, reclaimed
+PASS  H12-CAPS-MUTATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H13-ENVELOPE-MUTATED.AIEN refused at verified (BadSignature), never ran, reclaimed
+PASS  H13-ENVELOPE-MUTATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H14-SIGNATURE-MUTATED.AIEN refused at verified (BadSignature), never ran, reclaimed
+PASS  H14-SIGNATURE-MUTATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H15-UNKNOWN-SIGNER.AIEN refused at verified (UntrustedSigner), never ran, reclaimed
+PASS  H15-UNKNOWN-SIGNER.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H16-SIG-FORMAT.AIEN refused at verified (BadSignatureFormat), never ran, reclaimed
+PASS  H16-SIG-FORMAT.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H17-RESERVED-HEADER.AIEN refused at verified (ReservedNonZero), never ran, reclaimed
+PASS  H17-RESERVED-HEADER.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H18-RIGHTS-UNKNOWN.AIEN refused at verified (MalformedCapability), never ran, reclaimed
+PASS  H18-RIGHTS-UNKNOWN.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H19-CAP-COUNT.AIEN refused at verified (ResourceLimit), never ran, reclaimed
+PASS  H19-CAP-COUNT.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H20-ENVELOPE-LIMIT.AIEN refused at verified (ResourceLimit), never ran, reclaimed
+PASS  H20-ENVELOPE-LIMIT.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H21-LARGEST-ENVELOPE.AIEN admitted and contained (exited:0x0), reclaimed
+PASS  H21-LARGEST-ENVELOPE.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H22-WX-SECTION.AIEN refused at verified (BadSection), never ran, reclaimed
+PASS  H22-WX-SECTION.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H23-EXEC-DATA.AIEN admitted and contained (fault:exec-nx), reclaimed
+PASS  H23-EXEC-DATA.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H24-EXEC-STACK.AIEN admitted and contained (fault:exec-nx), reclaimed
+PASS  H24-EXEC-STACK.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H25-BAD-SYSCALL.AIEN admitted and contained (bad-syscall:99), reclaimed
+PASS  H25-BAD-SYSCALL.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H26-SYSCALL-BUDGET.AIEN admitted and contained (resource-overrun), reclaimed
+PASS  H26-SYSCALL-BUDGET.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H27-POLICY-IPC.AIEN refused at authorized (ResourceLimit), never ran, reclaimed
+PASS  H27-POLICY-IPC.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H28-WRITE-ONLY-REQUEST.AIEN admitted and contained (exited:0x0), reclaimed
+PASS  H28-WRITE-ONLY-REQUEST.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  H29-READ-WRITE-REQUEST.AIEN admitted and contained (exited:0x0), reclaimed
+PASS  H29-READ-WRITE-REQUEST.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  hostile matrix has 29 cases
+PASS  H29 requested READ|WRITE and was granted READ only
+PASS  H28 requested only WRITE and received no capability
+PASS  final report summarises every admission decision
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+qemu exit 0 after 6 s (commit bbad5e4250e5)
+PASS  left firmware and entered the kernel
+PASS  M3 cooperative threads unchanged
+PASS  M3 EL0 isolation proof unchanged
+PASS  M3 typed IPC proof unchanged
+PASS  kernel read all 35 artifact candidates
+PASS  no kernel report line was truncated
+PASS  final report reached the console
+PASS  no TEST-ONLY fw_cfg source in a counted boot
+PASS  every frame returned after all candidates (496740 free before and after)
+PASS  SMMUv3 enabled; NVMe confined
+PASS  store stage committed this boot
+PASS  artifact index read from the boot disk Store
+PASS  artifact_source=nvme_store with every candidate
+PASS  kernel read all 34 artifacts from NVMe, each SHA-256 equal to the host file
+PASS  D01-DISK-MISSING.AIEN named on disk without bytes: reported missing, not used
+PASS  D01-DISK-MISSING.AIEN refused cleanly at received (FirmwareRead), reclaimed
+PASS  kernel heap copies of the disk artifacts released after the loader
+PASS  disk read finished before the NVMe DMA revoke; verification ran after it
+PASS  ordinary build admitted nothing
+PASS  ordinary build refuses H01-BAD-MAGIC.AIEN (BadMagic), reclaimed
+PASS  H01-BAD-MAGIC.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H02-VERSION.AIEN (UnsupportedVersion), reclaimed
+PASS  H02-VERSION.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H03-TARGET.AIEN (WrongTarget), reclaimed
+PASS  H03-TARGET.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H04-ABI.AIEN (WrongAbi), reclaimed
+PASS  H04-ABI.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H05-TRUNCATED.AIEN (WrongLength), reclaimed
+PASS  H05-TRUNCATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H06-TRAILING.AIEN (WrongLength), reclaimed
+PASS  H06-TRAILING.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H07-TOTAL-LENGTH.AIEN (WrongLength), reclaimed
+PASS  H07-TOTAL-LENGTH.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H08-OFFSET-OVERFLOW.AIEN (ResourceLimit), reclaimed
+PASS  H08-OFFSET-OVERFLOW.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H09-SECTION-OVERLAP.AIEN (BadSection), reclaimed
+PASS  H09-SECTION-OVERLAP.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H10-ENTRY-OUTSIDE.AIEN (BadEntryPoint), reclaimed
+PASS  H10-ENTRY-OUTSIDE.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H11-PAYLOAD-MUTATED.AIEN (UntrustedSigner), reclaimed
+PASS  H11-PAYLOAD-MUTATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H12-CAPS-MUTATED.AIEN (UntrustedSigner), reclaimed
+PASS  H12-CAPS-MUTATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H13-ENVELOPE-MUTATED.AIEN (UntrustedSigner), reclaimed
+PASS  H13-ENVELOPE-MUTATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H14-SIGNATURE-MUTATED.AIEN (UntrustedSigner), reclaimed
+PASS  H14-SIGNATURE-MUTATED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H15-UNKNOWN-SIGNER.AIEN (UntrustedSigner), reclaimed
+PASS  H15-UNKNOWN-SIGNER.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H16-SIG-FORMAT.AIEN (BadSignatureFormat), reclaimed
+PASS  H16-SIG-FORMAT.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H17-RESERVED-HEADER.AIEN (ReservedNonZero), reclaimed
+PASS  H17-RESERVED-HEADER.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H18-RIGHTS-UNKNOWN.AIEN (MalformedCapability), reclaimed
+PASS  H18-RIGHTS-UNKNOWN.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H19-CAP-COUNT.AIEN (ResourceLimit), reclaimed
+PASS  H19-CAP-COUNT.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H20-ENVELOPE-LIMIT.AIEN (ResourceLimit), reclaimed
+PASS  H20-ENVELOPE-LIMIT.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H21-LARGEST-ENVELOPE.AIEN (UntrustedSigner), reclaimed
+PASS  H21-LARGEST-ENVELOPE.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H22-WX-SECTION.AIEN (BadSection), reclaimed
+PASS  H22-WX-SECTION.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H23-EXEC-DATA.AIEN (UntrustedSigner), reclaimed
+PASS  H23-EXEC-DATA.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H24-EXEC-STACK.AIEN (UntrustedSigner), reclaimed
+PASS  H24-EXEC-STACK.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H25-BAD-SYSCALL.AIEN (UntrustedSigner), reclaimed
+PASS  H25-BAD-SYSCALL.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H26-SYSCALL-BUDGET.AIEN (UntrustedSigner), reclaimed
+PASS  H26-SYSCALL-BUDGET.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H27-POLICY-IPC.AIEN (UntrustedSigner), reclaimed
+PASS  H27-POLICY-IPC.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H28-WRITE-ONLY-REQUEST.AIEN (UntrustedSigner), reclaimed
+PASS  H28-WRITE-ONLY-REQUEST.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses H29-READ-WRITE-REQUEST.AIEN (UntrustedSigner), reclaimed
+PASS  H29-READ-WRITE-REQUEST.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses P25EXEC.AIEN (UntrustedSigner), reclaimed
+PASS  P25EXEC.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses P25SPIN.AIEN (UntrustedSigner), reclaimed
+PASS  P25SPIN.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses P25TAMP.AIEN (UntrustedSigner), reclaimed
+PASS  P25TAMP.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses P25WX.AIEN (UntrustedSigner), reclaimed
+PASS  P25WX.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses P26SEED.AIEN (UntrustedSigner), reclaimed
+PASS  P26SEED.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  ordinary build refuses D01-DISK-MISSING.AIEN (FirmwareRead), reclaimed
+PASS  D01-DISK-MISSING.AIEN receipt: bound, host digest match, observed outcome, TEST ONLY signature verifies
+PASS  final report summarises zero admitted
+PASS  corrupted one byte of P26SEED's sealed envelope on the disk copy (offset 9671114)
+PASS  host Store open refuses the corrupted disk
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+qemu exit 0 after 6 s (commit bbad5e4250e5)
+PASS  left firmware and entered the kernel
+PASS  M3 cooperative threads unchanged
+PASS  M3 EL0 isolation proof unchanged
+PASS  M3 typed IPC proof unchanged
+PASS  kernel read all 0 artifact candidates
+PASS  no kernel report line was truncated
+PASS  final report reached the console
+PASS  no TEST-ONLY fw_cfg source in a counted boot
+PASS  every frame returned after all candidates (496740 free before and after)
+PASS  kernel refuses the corrupted boot disk Store
+PASS  no artifact byte read from a refused Store
+PASS  loader reports no source, clean refusal
+PASS  no artifact named or loaded from the corrupted disk
+PASS  final report: zero candidates, nothing admitted
+AIENOS_CK_P2_ARTIFACT: PASS

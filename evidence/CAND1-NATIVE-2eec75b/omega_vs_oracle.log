@@ -1,0 +1,16 @@
+
+running 1 test
+ORACLE_GATE checkpoint /home/drakestapleton/.cache/huggingface/hub/models--TinyLlama--TinyLlama-1.1B-Chat-v1.0/snapshots/fe8a4ea1ffedaf415f4da2f062534de366a451e6/model.safetensors sha256=6e6001da2106d4757498752a021df6c2bdc332c650aae4bae6b0c004dcf14933
+ORACLE_GATE tokenizer /home/drakestapleton/.cache/huggingface/hub/models--TinyLlama--TinyLlama-1.1B-Chat-v1.0/snapshots/fe8a4ea1ffedaf415f4da2f062534de366a451e6/tokenizer.json sha256=bcd04f0eadf90287bd26e1a183ac487d8a141b09b06aecb7725bbdd343640f2e
+ORACLE_GATE backend: OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+ORACLE_GATE dev_fallback_active=false
+ORACLE_GATE step0 max_abs_dlogit=0.0435 oracle_tok=2744 omega_tok=2744 oracle_margin=2.2165 bound=0.15
+ORACLE_GATE teacher_forced steps=16 flips=0 oracle_text="An operating system (OS) is a software that manages the hardware and software" fed_text="An operating system (OS) is a software that manages the hardware and software"
+ORACLE_GATE NATIVE_CALLS rmsnorm:2700/2700,apply_rope:1342/1342,matmul_vec:2310/2310,matmul_batch:154/154,swiglu:1342/1342,gqa_attention:1012/1012,paged_attention:330/330,paged_attention_batch:0/0,compute_logits:16/16 native_engine=true
+ORACLE_GATE OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+ORACLE_GATE receipt verdict: PASS (receipt /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/receipt-omega-vs-oracle.json)
+ORACLE_GATE verdict: PASS
+test omega_vs_hf_oracle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 52.78s
+

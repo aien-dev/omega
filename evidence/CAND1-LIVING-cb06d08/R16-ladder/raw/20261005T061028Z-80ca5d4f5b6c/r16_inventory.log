@@ -1,0 +1,9 @@
+cc -std=gnu11 -Wall -Wextra -Werror -MMD -MP -D_GNU_SOURCE -O2 -Isrc -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/m16 -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/nvrm -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/common/inc -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/nvidia-uvm -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include -DOMEGA_PHYSICS_DIR=\"/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip\" -o build/r16_loop_inventory tools/r16_loop_inventory.c
+build/r16_loop_inventory --map spec/r16-orchestrator-retirement-map.md --json build/r16-inventory.json
+SCANNED omega HEAD 80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4 (/home/drakestapleton/workspace/overnight-1005/wt-CAND1-omega-chip)
+WARN omega: scanned HEAD 80ca5d4f5b6c differs from map SHA cb06d081901c03063945a99ffed1c58d33397e9c
+SCANNED aien-sovereign-core HEAD 2eec75b08aeb8f9d11f950070e13f6c2c046cf24 (/home/drakestapleton/workspace/overnight-1005/cand1-survey/aien-sovereign-core)
+SCANNED aegis-runtime HEAD f4e870953a466bb1cf68f1d88285929024cf1ba9 (/home/drakestapleton/workspace/overnight-1005/cand1-survey/aegis-runtime)
+SCANNED aienos HEAD bbad5e4250e57f8cbd1be4cf1390109aa65ef92c (/home/drakestapleton/workspace/overnight-1005/cand1-survey/aienos)
+SCANNED physics HEAD 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf (/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip)
+R16 loop inventory: sites=513 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS

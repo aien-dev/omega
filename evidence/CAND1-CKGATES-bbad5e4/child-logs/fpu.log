@@ -1,0 +1,13 @@
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+qemu exit 0 after 6 s (commit bbad5e4250e5)
+PASS  probe returned 0
+PASS  f32 dot product = 68.0 exactly (0x42880000)
+PASS  NEON vaddq_f32 lanes = 11,22,33,44
+PASS  exp(1) bits 0x402df854 within 1e-4 of e
+PASS  CPACR_EL1.FPEN = 0b11 at EL1
+PASS  kernel reported AIENOS_CK_FPU: PASS
+PASS  kernel alive
+PASS  no panic or fault
+PASS  QEMU exit 0 (PSCI reset)
+fpu: el1_cpacr=0x300000 rc=0 dot_bits=0x42880000 exp1_bits=0x402df854 neon_bits=0x41300000,0x41b00000,0x42040000,0x42300000
+AIENOS_CK_FPU: PASS

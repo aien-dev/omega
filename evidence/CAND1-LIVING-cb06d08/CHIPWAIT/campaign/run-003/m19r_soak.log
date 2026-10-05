@@ -1,0 +1,18 @@
+M19R_RESOURCE_JSON:{"phase":"start","driver_handle_count_available":false,"driver_acknowledged_rm_balance":17,"internal_live_allocations":7,"va_high_water":68794068992,"free_ranges":1,"free_bytes":4194304,"nvidia_process_mapping_count":8,"nvidia_process_mapping_bytes":3354624,"process_virtual_pages":1676,"process_resident_pages":1341,"world_buffers":0,"world_code":1}
+M19R soak: 10000 cycles, 41943040000 bytes
+M19R soak: 20000 cycles, 83886080000 bytes
+WORLD_WAIT_FAIL site=omega_world_drain wait=marker kind=sequence result=TIMEOUT expected=100 observed=4 elapsed_ns=200000025 progress_count=1 polls=3896763
+M19R soak: 30000 cycles, 125829120000 bytes
+M19R soak: 40000 cycles, 167772160000 bytes
+WORLD_WAIT_FAIL site=omega_world_drain wait=marker kind=sequence result=TIMEOUT expected=100 observed=4 elapsed_ns=200000041 progress_count=1 polls=3705305
+M19R soak: 50000 cycles, 209715200000 bytes
+M19R soak: 60000 cycles, 251658240000 bytes
+M19R soak: 70000 cycles, 293601280000 bytes
+WORLD_WAIT_FAIL site=omega_world_drain wait=marker kind=sequence result=TIMEOUT expected=100 observed=4 elapsed_ns=200000009 progress_count=1 polls=3900972
+M19R soak: 80000 cycles, 335544320000 bytes
+M19R soak: 90000 cycles, 377487360000 bytes
+WORLD_WAIT_FAIL site=omega_world_drain wait=marker kind=sequence result=TIMEOUT expected=100 observed=4 elapsed_ns=200000041 progress_count=1 polls=3907894
+M19R soak: 100000 cycles, 419430400000 bytes
+M19R_RESOURCE_JSON:{"phase":"end","driver_handle_count_available":false,"driver_acknowledged_rm_balance":17,"internal_live_allocations":7,"va_high_water":68794068992,"free_ranges":1,"free_bytes":4194304,"nvidia_process_mapping_count":8,"nvidia_process_mapping_bytes":3354624,"process_virtual_pages":1747,"process_resident_pages":1413,"world_buffers":0,"world_code":1}
+M19R_RESOURCE_JSON:{"phase":"post_destroy","driver_handle_count_available":false,"driver_acknowledged_rm_balance":0,"internal_live_allocations":0,"va_high_water":68794068992,"free_ranges":1,"free_bytes":74592256,"nvidia_process_mapping_count":0,"nvidia_process_mapping_bytes":0,"process_virtual_pages":928,"process_resident_pages":610,"world_buffers":0,"world_code":0}
+M19R_SOAK_JSON:{"passed":true,"duration_seconds":60.196,"cycles":100000,"bytes_churned":419430400000,"physical_memory_bytes":130660892672,"channel_recoveries":10,"world_rebuilds":4}

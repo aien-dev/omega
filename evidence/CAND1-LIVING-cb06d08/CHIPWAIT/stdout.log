@@ -1,0 +1,17 @@
+== run-001 of 3 ==
+M19R run evidence: /home/drakestapleton/workspace/evidence-out/CAND1-LIVING-cb06d08/CHIPWAIT/campaign/run-001/run.json
+== run-001 exit 0 ==
+== run-002 of 3 ==
+M19R run evidence: /home/drakestapleton/workspace/evidence-out/CAND1-LIVING-cb06d08/CHIPWAIT/campaign/run-002/run.json
+== run-002 exit 0 ==
+== run-003 of 3 ==
+M19R run evidence: /home/drakestapleton/workspace/evidence-out/CAND1-LIVING-cb06d08/CHIPWAIT/campaign/run-003/run.json
+== run-003 exit 0 ==
+== mechanical verdict ==
+{
+  "verdict": "PASS",
+  "runs_required": 3,
+  "usable_runs": 3,
+  "invalid": [],
+  "failed": []
+}

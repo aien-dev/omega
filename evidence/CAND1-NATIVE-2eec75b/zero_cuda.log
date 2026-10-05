@@ -1,0 +1,37 @@
+ZERO_CUDA FAIL /tmp/tmp.ouxLY3Vhck/probe.so needs: libcudart.so.13
+ZERO_CUDA FAIL /tmp/tmp.ouxLY3Vhck/probe.so imports: cudaMalloc
+ZERO_CUDA SELF-TEST PASS (CUDA probe rejected, clean library accepted)
+ZERO_CUDA PASS /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/bin/aien-cli needs=[libm.so.6 libssl.so.3 libcrypto.so.3 libgcc_s.so.1 libc.so.6 ld-linux-aarch64.so.1]
+ZERO_CUDA PASS /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/bin/runtime_end_to_end_tests needs=[libm.so.6 libgcc_s.so.1 libc.so.6 ld-linux-aarch64.so.1]
+ZERO_CUDA PASS /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/bin/strict_real_model needs=[libm.so.6 libgcc_s.so.1 libc.so.6 ld-linux-aarch64.so.1]
+## /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/bin/aien-cli
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libssl.so.3]
+ 0x0000000000000001 (NEEDED)             Shared library: [libcrypto.so.3]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]
+undefined CUDA-like dynamic symbols:
+  none
+CUDA library names in strings:
+  none
+## /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/bin/runtime_end_to_end_tests
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]
+undefined CUDA-like dynamic symbols:
+  none
+CUDA library names in strings:
+  none
+## /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/bin/strict_real_model
+ 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [libgcc_s.so.1]
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]
+undefined CUDA-like dynamic symbols:
+  none
+CUDA library names in strings:
+  none
+## static archive libomega_gpu.a
+  none

@@ -1,0 +1,50 @@
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling libc v0.2.189
+   Compiling semver v1.0.28
+   Compiling cfg-if v1.0.5
+   Compiling subtle v2.6.1
+   Compiling signature v2.2.0
+   Compiling zmij v1.0.23
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling aienos-accel v0.1.0 (/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/crates/aienos-accel)
+   Compiling aienos-capability v0.1.0 (/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/crates/aienos-capability)
+   Compiling ed25519 v2.2.3
+   Compiling rustc_version v0.4.1
+   Compiling generic-array v0.14.7
+   Compiling curve25519-dalek v4.1.3
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling cpufeatures v0.2.17
+   Compiling sha2 v0.10.9
+   Compiling ed25519-dalek v2.2.0
+   Compiling aienos-artifact v0.1.0 (/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/crates/aienos-artifact)
+   Compiling aienos-kernel v0.1.0 (/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/crates/aienos-kernel)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.99s
+     Running unittests src/lib.rs (target/debug/deps/aienos_kernel-c19eefd3db0dd907)
+
+running 17 tests
+test crypto::hmac::tests::compare_tags ... ok
+test crypto::envelope::tests::test_envelope_roundtrip_empty ... ok
+test crypto::hkdf::tests::rfc5869_cases_1_to_3 ... ok
+test crypto::envelope::tests::test_expected_envelope_len_overflow_is_error ... ok
+test crypto::envelope::tests::test_hostile_header_chunk_size_one_huge_count_rejected ... ok
+test crypto::hmac::tests::rfc4231_cases_1_to_7 ... ok
+test crypto::envelope::tests::test_hostile_header_at_bound_hits_length_check ... ok
+test security::tests::test_anti_rollback_decision_matrix ... ok
+test security::tests::test_subkey_derivation_separation ... ok
+test crypto::envelope::tests::test_envelope_roundtrip_small ... ok
+test security::tests::test_security_manifest_roundtrip_and_mac ... ok
+test crypto::envelope::tests::test_hostile_header_huge_total_rejected_before_alloc ... ok
+test crypto::envelope::tests::test_envelope_cross_store_and_kind_binding ... ok
+test security::tests::test_keyslot_manifest_roundtrip_and_unwrap ... ok
+test crypto::hkdf::tests::length_limit_and_compare ... ok
+test crypto::envelope::tests::tampered_late_chunk_rejects_the_entire_plaintext ... ok
+test crypto::envelope::tests::test_envelope_roundtrip_multi_chunk ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 396 filtered out; finished in 0.41s
+

@@ -1,0 +1,113 @@
+make: Entering directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/store'
+lib-checks PASS (no heap, clock or direct I/O in torn_slot.o, store_v1.o, store_engine.o, store_disk.o, store_sealed.o)
+TORN_SLOT_RULES: PASS (129 checks)
+  naive bs=512: mixed subset=254 torn_prefix=4088 torn_words=512
+  naive bs=4096: mixed subset=0 torn_prefix=4095 torn_words=64
+NAIVE_IN_PLACE_CONTROL: mixed records found bs=512: 4854, bs=4096: 4159 (expected > 0)
+TORN_INJECTOR_DETECTS_MIXES: PASS
+  bs=512 base_lba=0 gens=6: cases=60000 (prefix=108 subset=3072 torn_prefix=49056 torn_words=6144 nested=1620 nested_after_keep=720) as_old=33114 as_new=26886 mixed=0 error=0 relive_fail=0
+  bs=512 base_lba=3 gens=6: cases=60000 (prefix=108 subset=3072 torn_prefix=49056 torn_words=6144 nested=1620 nested_after_keep=720) as_old=33080 as_new=26920 mixed=0 error=0 relive_fail=0
+  bs=512 base_lba=8 gens=6: cases=60000 (prefix=108 subset=3072 torn_prefix=49056 torn_words=6144 nested=1620 nested_after_keep=720) as_old=33128 as_new=26872 mixed=0 error=0 relive_fail=0
+  bs=4096 base_lba=0 gens=6: cases=50036 (prefix=24 subset=24 torn_prefix=49140 torn_words=768 nested=80 nested_after_keep=20) as_old=25956 as_new=24080 mixed=0 error=0 relive_fail=0
+  bs=4096 base_lba=1 gens=6: cases=50036 (prefix=24 subset=24 torn_prefix=49140 torn_words=768 nested=80 nested_after_keep=20) as_old=25955 as_new=24081 mixed=0 error=0 relive_fail=0
+TORN_SLOT_FAULT_INJECTION_512: PASS
+TORN_SLOT_FAULT_INJECTION_4096: PASS
+  barrier lost bs=512 gens=3: cases=244992 (subset=196608 torn_header=48384) as_old=244449 as_new=543 mixed=0 error=0 relive_fail=0
+  barrier lost bs=4096 gens=6: cases=6156 (subset=24 torn_header=6132) as_old=3144 as_new=3012 mixed=0 error=0 relive_fail=0
+TORN_SLOT_BARRIER_LOST_512_4096: PASS (device ignores FLUSH ordering; outside the device contract)
+checks=1064018 failures=0
+TORN_SLOT_HOST_EMULATION: PASS (host block-device emulation, not QEMU, not hardware)
+golden vectors: 89 of 89 JSON rows covered
+store_v1_test: 4343 checks, 0 failed
+STORE_V1_FORMAT: PASS
+store_engine_test: 183 checks, 0 failed
+STORE_ENGINE: PASS
+sealed store, 512-byte blocks: ok
+sealed store, 4096-byte blocks: ok
+store sealed: 2017 checks, 0 failed
+STORE_SEALED: PASS
+power cut, plain,   512-byte blocks: 57 block boundaries, 49 old, 8 new (0 of them read-only degraded)
+power cut, sealed,  512-byte blocks: 81 block boundaries, 57 old, 24 new (16 anchor one behind), 0 read-only degraded, 81 follow-ups ok
+power cut, plain,  4096-byte blocks: 8 block boundaries, 7 old, 1 new (0 of them read-only degraded)
+power cut, sealed, 4096-byte blocks: 11 block boundaries, 8 old, 3 new (2 anchor one behind), 0 read-only degraded, 11 follow-ups ok
+store power cut: 1097 checks, 0 failed
+STORE_POWERCUT: PASS
+rust cross-check: tool /home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/target/release/aienos-store-tool
+geometry 512-byte blocks, store at byte 8192:
+  ok   C reads its own gen 3: MOUNT state=Valid peer=Valid gen=3 objects_ok=3/3
+  ok   Rust mounts the C image: MOUNT
+    STORE_ROOT_TEAR_CLOSURE: PASS (slot=0 old=gen1 new=gen3 sector_bytes=512 differing_sectors=[0] combinations=256 as_old=128 as_new=128)
+  ok   tear-closure sector 512: PASS
+    STORE_ROOT_TEAR_CLOSURE: PASS (slot=0 old=gen1 new=gen3 sector_bytes=4096 differing_sectors=[0] combinations=2 as_old=1 as_new=1)
+  ok   tear-closure sector 4096: PASS
+    corrupt kind=7 unit=5 byte=20
+  ok   corrupt kind 7 (both roots): C: REFUSE MountError::CorruptRecoveryRequired
+  ok   corrupt kind 7 (both roots): Rust: REFUSE MountError::CorruptRecoveryRequired
+    corrupt kind=9 unit=9 byte=20
+  ok   corrupt kind 9 (newest only): C: MOUNT state=DegradedRecovery peer=GraphBadNewer gen=2 objects_ok=2/2
+  ok   corrupt kind 9 (newest only): Rust: MOUNT
+    inject case=bad_crc slot=1 decode=BadSuperblockCrc
+  ok   inject bad_crc: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject bad_crc: Rust agrees: MOUNT
+    inject case=wrong_magic slot=1 decode=BadSuperblockMagic
+  ok   inject wrong_magic: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject wrong_magic: Rust agrees: MOUNT
+    inject case=nonzero_reserved slot=1 decode=NonzeroReserved
+  ok   inject nonzero_reserved: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject nonzero_reserved: Rust agrees: MOUNT
+    inject case=wrong_slot_id slot=1 decode=WrongSuperblockSlot
+  ok   inject wrong_slot_id: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject wrong_slot_id: Rust agrees: MOUNT
+    inject case=region_mismatch slot=1 decode=Ok
+  ok   inject region_mismatch: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject region_mismatch: Rust agrees: MOUNT
+    inject case=unsupported_version slot=1 decode=UnsupportedVersion
+  ok   inject unsupported_version: C: REFUSE MountError::UnsupportedVersion
+  ok   inject unsupported_version: Rust agrees: REFUSE MountError::UnsupportedVersion
+    inject case=seeded_garbage slot=1 decode=BadSuperblockMagic
+  ok   inject seeded_garbage: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject seeded_garbage: Rust agrees: MOUNT
+    inject case=new_root slot=1 decode=Ok
+  ok   inject new_root: C: MOUNT state=DegradedRecovery peer=GraphBadNewer gen=3 objects_ok=3/3
+  ok   inject new_root: Rust agrees: MOUNT
+geometry 4096-byte blocks, store at byte 8192:
+  ok   C reads its own gen 3: MOUNT state=Valid peer=Valid gen=3 objects_ok=3/3
+  ok   Rust mounts the C image: MOUNT
+    STORE_ROOT_TEAR_CLOSURE: PASS (slot=0 old=gen1 new=gen3 sector_bytes=512 differing_sectors=[0] combinations=256 as_old=128 as_new=128)
+  ok   tear-closure sector 512: PASS
+    STORE_ROOT_TEAR_CLOSURE: PASS (slot=0 old=gen1 new=gen3 sector_bytes=4096 differing_sectors=[0] combinations=2 as_old=1 as_new=1)
+  ok   tear-closure sector 4096: PASS
+    corrupt kind=7 unit=5 byte=20
+  ok   corrupt kind 7 (both roots): C: REFUSE MountError::CorruptRecoveryRequired
+  ok   corrupt kind 7 (both roots): Rust: REFUSE MountError::CorruptRecoveryRequired
+    corrupt kind=9 unit=9 byte=20
+  ok   corrupt kind 9 (newest only): C: MOUNT state=DegradedRecovery peer=GraphBadNewer gen=2 objects_ok=2/2
+  ok   corrupt kind 9 (newest only): Rust: MOUNT
+    inject case=bad_crc slot=1 decode=BadSuperblockCrc
+  ok   inject bad_crc: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject bad_crc: Rust agrees: MOUNT
+    inject case=wrong_magic slot=1 decode=BadSuperblockMagic
+  ok   inject wrong_magic: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject wrong_magic: Rust agrees: MOUNT
+    inject case=nonzero_reserved slot=1 decode=NonzeroReserved
+  ok   inject nonzero_reserved: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject nonzero_reserved: Rust agrees: MOUNT
+    inject case=wrong_slot_id slot=1 decode=WrongSuperblockSlot
+  ok   inject wrong_slot_id: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject wrong_slot_id: Rust agrees: MOUNT
+    inject case=region_mismatch slot=1 decode=Ok
+  ok   inject region_mismatch: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject region_mismatch: Rust agrees: MOUNT
+    inject case=unsupported_version slot=1 decode=UnsupportedVersion
+  ok   inject unsupported_version: C: REFUSE MountError::UnsupportedVersion
+  ok   inject unsupported_version: Rust agrees: REFUSE MountError::UnsupportedVersion
+    inject case=seeded_garbage slot=1 decode=BadSuperblockMagic
+  ok   inject seeded_garbage: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject seeded_garbage: Rust agrees: MOUNT
+    inject case=new_root slot=1 decode=Ok
+  ok   inject new_root: C: MOUNT state=DegradedRecovery peer=GraphBadNewer gen=3 objects_ok=3/3
+  ok   inject new_root: Rust agrees: MOUNT
+rust cross-check: 48 checks
+STORE_RUST_CROSSCHECK: PASS
+AIENOS_STORE_NATIVE: PASS
+make: Leaving directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/store'

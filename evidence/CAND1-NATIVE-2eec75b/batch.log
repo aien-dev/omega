@@ -1,0 +1,76 @@
+L5-NATIVE CAND-1 batch sha=2eec75b08aeb8f9d11f950070e13f6c2c046cf24 2026-10-05T06:01:14Z
+=== STEP prepare start 2026-10-05T06:01:14Z
+=== STEP prepare rc=0 end 2026-10-05T06:05:16Z
+BUILD_CLI scripts/repro-build.sh -p aien-cli
+BUILD_OK sovereign-core=2eec75b08aeb8f9d11f950070e13f6c2c046cf24 omega=cb06d081901c03063945a99ffed1c58d33397e9c physics=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+=== STEP identity start 2026-10-05T06:05:16Z
+=== STEP identity rc=0 end 2026-10-05T06:05:19Z
+=== STEP zero_cuda start 2026-10-05T06:05:19Z
+=== STEP zero_cuda rc=0 end 2026-10-05T06:05:19Z
+ZERO_CUDA FAIL /tmp/tmp.ouxLY3Vhck/probe.so needs: libcudart.so.13
+ZERO_CUDA FAIL /tmp/tmp.ouxLY3Vhck/probe.so imports: cudaMalloc
+ZERO_CUDA SELF-TEST PASS (CUDA probe rejected, clean library accepted)
+ZERO_CUDA PASS /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/bin/aien-cli needs=[libm.so.6 libssl.so.3 libcrypto.so.3 libgcc_s.so.1 libc.so.6 ld-linux-aarch64.so.1]
+ZERO_CUDA PASS /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/bin/runtime_end_to_end_tests needs=[libm.so.6 libgcc_s.so.1 libc.so.6 ld-linux-aarch64.so.1]
+ZERO_CUDA PASS /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/bin/strict_real_model needs=[libm.so.6 libgcc_s.so.1 libc.so.6 ld-linux-aarch64.so.1]
+=== STEP strict_gate start 2026-10-05T06:05:19Z
+=== STEP strict_gate rc=0 end 2026-10-05T06:06:00Z
+STRICT_GATE verdict: PASS (receipt /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/receipt-strict-gate.json)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 40.66s
+=== STEP omega_vs_ref start 2026-10-05T06:06:00Z
+=== STEP omega_vs_ref rc=0 end 2026-10-05T06:08:29Z
+OMEGA_GATE teacher_forced steps=32 worst_max_abs_dlogit=0.0594 bound=0.15 judge=Ok(1)
+OMEGA_GATE tokens_match=false
+OMEGA_GATE verdict: PASS (receipt /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/receipt-omega-vs-ref.json)
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 148.76s
+=== STEP omega_vs_oracle start 2026-10-05T06:08:29Z
+=== STEP omega_vs_oracle rc=0 end 2026-10-05T06:09:22Z
+ORACLE_GATE step0 max_abs_dlogit=0.0435 oracle_tok=2744 omega_tok=2744 oracle_margin=2.2165 bound=0.15
+ORACLE_GATE teacher_forced steps=16 flips=0 oracle_text="An operating system (OS) is a software that manages the hardware and software" fed_text="An operating system (OS) is a software that manages the hardware and software"
+ORACLE_GATE NATIVE_CALLS rmsnorm:2700/2700,apply_rope:1342/1342,matmul_vec:2310/2310,matmul_batch:154/154,swiglu:1342/1342,gqa_attention:1012/1012,paged_attention:330/330,paged_attention_batch:0/0,compute_logits:16/16 native_engine=true
+ORACLE_GATE receipt verdict: PASS (receipt /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/receipt-omega-vs-oracle.json)
+ORACLE_GATE verdict: PASS
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 52.78s
+=== STEP runtime_e2e_gb10 start 2026-10-05T06:09:22Z
+=== STEP runtime_e2e_gb10 rc=101 end 2026-10-05T06:09:29Z
+thread 'release_golden_path_records_whether_gb10_ran' (3861249) panicked at crates/aien-runtime/tests/runtime_end_to_end_tests.rs:822:9:
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 6.71s
+=== STEP paged_batch_gb10 start 2026-10-05T06:09:29Z
+=== STEP paged_batch_gb10 rc=0 end 2026-10-05T06:09:29Z
+test decode_batch_reaches_paged_attention_batch_on_reference ... OP_CALLS rmsnorm:126,apply_rope:54,matmul_vec:0,matmul_batch:117,swiglu:54,gqa_attention:24,paged_attention:0,paged_attention_batch:10,compute_logits:3 max_batch_seqs=3 emitted=[6, 6, 6]
+test gb10_decode_batch_runs_paged_attention_batch_natively ... GB10_PAGED_BATCH OP_CALLS rmsnorm:126,apply_rope:54,matmul_vec:0,matmul_batch:117,swiglu:54,gqa_attention:24,paged_attention:0,paged_attention_batch:10,compute_logits:3 max_batch_seqs=3 emitted=[6, 6, 6] chip_calls=408 chip_errors=0 fallback_count=0 report=OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[] last_error=""
+GB10_PAGED_BATCH verdict: PASS
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.78s
+=== STEP gb10_bodies_ran start 2026-10-05T06:09:29Z
+=== STEP gb10_bodies_ran rc=0 end 2026-10-05T06:09:29Z
+=== STEP paged_batch_verdict start 2026-10-05T06:09:29Z
+=== STEP paged_batch_verdict rc=0 end 2026-10-05T06:09:29Z
+=== STEP daemon_positive start 2026-10-05T06:09:29Z
+=== STEP daemon_positive rc=0 end 2026-10-05T06:10:26Z
+DAEMON_PID 3861380
+DAEMON_TURN_SOCAT rc=0
+DAEMON_CUDA_MAPPED no
+DAEMON_EXIT rc=0
+DAEMON_TURN_FINISHED yes
+DAEMON_BACKEND omega-native
+DAEMON_STRICT_VIOLATION no
+=== STEP daemon_missing_checkpoint start 2026-10-05T06:10:26Z
+=== STEP daemon_missing_checkpoint rc=0 end 2026-10-05T06:10:26Z
+DAEMON_MISSING_CHECKPOINT rc=1
+=== STEP identity_after start 2026-10-05T06:10:26Z
+=== STEP identity_after rc=0 end 2026-10-05T06:10:27Z
+## results
+prepare rc=0
+identity rc=0
+zero_cuda rc=0
+strict_gate rc=0
+omega_vs_ref rc=0
+omega_vs_oracle rc=0
+runtime_e2e_gb10 rc=101
+paged_batch_gb10 rc=0
+gb10_bodies_ran rc=0
+paged_batch_verdict rc=0
+daemon_positive rc=0
+daemon_missing_checkpoint rc=0
+identity_after rc=0
+L5-NATIVE CAND-1 batch done 2026-10-05T06:10:27Z

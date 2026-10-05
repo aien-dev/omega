@@ -1,0 +1,44 @@
+NOTE: swTPM SIMULATION. This is never Machine 1 qualification.
+NOTE: throwaway test keys only; no real TPM is touched.
+INFO  release floor N=1, signer A epoch=1, signer B epoch=2
+== current
+PASS  current: approved {N}, boot N: unsealed, secret byte-exact
+== next (transition N -> N+1)
+PASS  next: boot N+1 under old set {N}: refused by TPM at tpm2_policyauthorize
+PASS  next: approved {N,N+1}, boot N+1: unsealed, secret byte-exact
+PASS  next: approved {N,N+1}, boot N still accepted: unsealed, secret byte-exact
+== invalid
+PASS  invalid: unseal without any policy session: refused by TPM at tpm2_unseal
+PASS  invalid: manifest not in approved set: refused by TPM at tpm2_policyor
+PASS  invalid: Secure Boot off: refused by TPM at tpm2_policyor
+PASS  invalid: non-owner boot chain: refused by TPM at tpm2_policyor
+PASS  invalid: release set signed by undelegated key: refused by TPM at tpm2_policyauthorize
+PASS  invalid: tampered release-set signature: refused by TPM at tpm2_verifysignature
+PASS  invalid: control, restored signature accepted again: unsealed, secret byte-exact
+== retire N (N+1 healthy)
+PASS  retire: raising the floor without operator authorization refused by TPM
+PASS  retire: release floor now N+1
+PASS  retire: boot N+1 after retirement: unsealed, secret byte-exact
+== rollback
+PASS  rollback: boot retired N under {N,N+1}: refused by TPM at tpm2_policynv
+PASS  rollback: boot retired N under old signed {N}: refused by TPM at tpm2_policynv
+PASS  rollback: floor counter cannot be written back (monotonic)
+== rotation (signer A -> B: add, verify, exercise recovery, revoke)
+PASS  rotation: add, new signer B accepted: unsealed, secret byte-exact
+PASS  rotation: overlap, old signer A still accepted: unsealed, secret byte-exact
+PASS  rotation: B set with A delegation refused: refused by TPM at tpm2_policyauthorize
+PASS  rotation: recovery exercised before revoke: unsealed, secret byte-exact
+PASS  rotation: raising the signer floor without operator authorization refused by TPM
+PASS  rotation: revoked signer A refused: refused by TPM at tpm2_policynv
+PASS  rotation: signer B accepted after revoke: unsealed, secret byte-exact
+== recovery (operator control only)
+PASS  recovery: operator-approved unseal of emergency-only state: unsealed, secret byte-exact
+PASS  recovery: replayed operator signature (stale nonce): refused by TPM at tpm2_policysigned
+PASS  recovery: signature by non-operator key: refused by TPM at tpm2_policyor
+PASS  recovery: normal path in emergency-only state: refused by TPM at tpm2_policynv
+== negative controls (the harness can fail)
+PASS  control: object sealed to mutated policy refused by TPM
+PASS  control: mutated object refused on recovery path too
+PASS  control: allow() reports FAIL when the TPM refuses
+SUMMARY  pass=31 fail=0 (swTPM simulation, not Machine 1)
+TRUST1_GATE5_POLICY_SIM: PASS

@@ -1,0 +1,36 @@
+{
+  "schema": "AIEN_RX_R9_GENERATION_BARRIER_V1",
+  "run_id": "20261005T061708Z-80ca5d4f5b6c",
+  "candidate_commit": "80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4",
+  "candidate_bound": true,
+  "run_commit": "80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4",
+  "tree_dirty": false,
+  "aienos_commit": null,
+  "checks": 210,
+  "failures": 0,
+  "test_binary_sha256": "d4751d0739b2480fb73ded84edd2280635d2049b4f3a190bc2a30c1ee8b9f0a8",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64"},
+  "hardware_scope": "host CPU only; no graphics processor; Linux authority checker retained",
+  "gates": {
+    "R9_GENERATION_BARRIER": "PASS (host; one coherent generation after every injected stop)",
+    "not_claimed": ["R8", "R10", "R11", "R12 silicon", "R13"]
+  },
+  "differential": [
+    {"name": "promote right validates", "linux": 0, "native": 0},
+    {"name": "promote cannot be combined with hand-off", "linux": -11, "native": -11},
+    {"name": "promote right cannot be handed on", "linux": -11, "native": -11},
+    {"name": "revoke promotion right", "linux": 0, "native": 0},
+    {"name": "revoked promotion right", "linux": -3, "native": -3},
+    {"name": "reaction cannot mint a promotion", "linux": -15, "native": -15}
+  ],
+  "crashes": [
+    {"step": 1, "coherent": true, "lineage": 1, "evidence": "GENESIS", "receipt": false},
+    {"step": 2, "coherent": true, "lineage": 1, "evidence": "GENESIS", "receipt": false},
+    {"step": 3, "coherent": true, "lineage": 1, "evidence": "GENESIS", "receipt": false},
+    {"step": 4, "coherent": true, "lineage": 1, "evidence": "GENESIS", "receipt": false},
+    {"step": 5, "coherent": true, "lineage": 1, "evidence": "GENESIS", "receipt": false},
+    {"step": 6, "coherent": true, "lineage": 2, "evidence": "CANDIDATE", "receipt": true},
+    {"step": 7, "coherent": true, "lineage": 2, "evidence": "CANDIDATE", "receipt": true},
+    {"step": 8, "coherent": true, "lineage": 2, "evidence": "CANDIDATE", "receipt": true}
+  ]
+}

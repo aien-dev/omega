@@ -1,0 +1,24 @@
+   Compiling aienos-crypto v0.1.0 (/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/crates/aienos-crypto)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/aienos_crypto-5af790ab185ac4fb)
+
+running 10 tests
+test aes::tests::test_aes_256_fips_197_c2 ... ok
+test aes_gcm_siv::tests::public_derived_keys_are_guarded_and_redacted ... ok
+test polyval::tests::test_polyval_rfc8452_appendix_a_worked_example ... ok
+test sha256::tests::test_sha256_empty ... ok
+test polyval::tests::test_polyval_rfc8452_section_7_dot ... ok
+test sha256::tests::test_hmac_sha256_rfc4231_case_1 ... ok
+test aes::tests::test_constant_time_sbox_matches_fips197_table ... ok
+test aes_gcm_siv::tests::test_rfc8452_appendix_c_aes256_16byte_pt_0byte_aad ... ok
+test sha256::tests::test_sha256_abc ... ok
+test aes_gcm_siv::tests::test_rfc8452_appendix_c_aes256_8byte_pt_1byte_aad ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aienos_crypto
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

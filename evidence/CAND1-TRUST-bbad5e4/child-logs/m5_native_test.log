@@ -1,0 +1,144 @@
+make: Entering directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/m5'
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_keys.o m5_keys.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_envelope.o m5_envelope.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_state.o m5_state.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_owner_sig.o m5_owner_sig.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_aes.o ../crypto/aes.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_polyval.o ../crypto/polyval.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_gcm_siv.o ../crypto/gcm_siv.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_hmac.o ../crypto/hmac.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_ct.o ../crypto/ct.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/sig_sha512.o ../sig/sha512.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/sig_ed25519.o ../sig/ed25519.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/sig_ct.o ../sig/ct.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/sha256.o ../argus/sha256.c
+rm -f ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/libaienos_m5.a
+ar rcs ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/libaienos_m5.a ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_keys.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_envelope.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_state.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_owner_sig.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_aes.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_polyval.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_gcm_siv.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_hmac.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/crypto_ct.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/sig_sha512.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/sig_ed25519.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/sig_ct.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/sha256.o
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_test tests/m5_test.c ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/libaienos_m5.a
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_migsig_test tests/m5_migsig_test.c ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/libaienos_m5.a
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_migsig tools/m5_migsig.c ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/libaienos_m5.a
+lib-checks PASS (no heap, clock or direct I/O in libaienos_m5 objects)
+./../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_migsig_test
+ok   t_roundtrip
+ok   t_layout_pinned
+ok   t_wrong_key_refused
+ok   t_unsigned_refused
+ok   t_every_byte_flip_refused
+ok   t_field_mismatch_refused
+ok   t_format_refused_even_when_signed
+ok   t_replay_refused
+ok   t_truncated_and_extended_refused
+ok   t_sign_body_refusals
+ok   t_test_class_refused_in_production
+ok   t_envelope_set_digest
+ok   t_authorize_owner
+13 tests, 0 failed
+AIENOS_M5_MIGRATION_SIG: PASS
+bash tests/m5_migsig_tool_test.sh ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_migsig ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/migsig_tool_work
+ok   pubkey (TEST key 1)
+ok   pubkey (TEST key 2)
+ok   public key file is 64 hex + newline
+ok   body from spec
+ok   body is 272 bytes
+ok   sign with TEST key 1
+ok   verify (last counter 3)
+ok   verify output
+ok   wrong public key refused
+ok   wrong key reported as AUTH
+ok   replayed counter (last 4) refused
+ok   replay reported as REPLAY
+ok   older counter (last 9) refused
+ok   unsigned body refused
+ok   tampered byte 0 refused
+ok   tampered byte 12 refused
+ok   tampered byte 20 refused
+ok   tampered byte 90 refused
+ok   tampered byte 100 refused
+ok   tampered byte 112 refused
+ok   tampered byte 124 refused
+ok   tampered byte 140 refused
+ok   tampered byte 170 refused
+ok   tampered byte 195 refused
+ok   tampered byte 205 refused
+ok   tampered byte 210 refused
+ok   tampered byte 271 refused
+ok   truncated to 0 bytes refused
+ok   truncated to 1 bytes refused
+ok   truncated to 207 bytes refused
+ok   truncated to 208 bytes refused
+ok   truncated to 271 bytes refused
+ok   extended record refused
+ok   verifier expecting another store generation refuses
+ok   verifier expecting another envelope set refuses
+ok   TEST-class record refused in production mode
+ok   signing a body that names another key refused
+ok   no output after refused signing
+ok   re-signing a signed record refused
+ok   existing output not overwritten
+ok   group/world-readable secret key refused
+ok   31-byte secret key refused
+ok   duplicate envelope in spec refused
+ok   spec missing a key refused
+ok   spec key given twice refused
+ok   hex secret key accepted
+ok   hex key gives the identical record
+ok   PKCS#8 DER secret key accepted
+ok   DER key gives the identical record
+ok   public key matches openssl
+ok   SPKI DER public key accepted
+ok   openssl verifies the record signature
+ok   openssl refuses the tampered message
+M5_MIGSIG_TOOL: PASS
+./../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/m5/m5_test
+ok   t_hkdf_rfc5869_case1
+ok   t_subkeys_deterministic_and_separated
+ok   t_object_key_binds_every_field
+ok   t_keyslot_wrap_unwrap
+ok   t_keyslot_refusals
+ok   t_secman_roundtrip_rust_v1_layout
+ok   t_secman_wrong_root_auth_key_refused
+ok   t_secman_every_byte_tamper_refused
+ok   t_env_roundtrip_sizes
+ok   t_env_header_bounds_each_field
+ok   t_env_rust_v1_header_and_standard_aad
+ok   t_env_hostile_header_fuzz
+ok   t_all_or_nothing_late_chunk_failure_zeroes_output
+ok   t_corrupt_header
+ok   t_corrupt_first_chunk
+ok   t_corrupt_middle_chunk
+ok   t_corrupt_last_chunk
+ok   t_corrupt_commit_record
+ok   t_corrupt_rollback_anchor
+ok   t_corrupt_key_generation
+ok   t_corrupt_store_generation
+ok   t_commit_check_object
+ok   t_truncate_drop_last_chunk
+ok   t_extend_append_chunk
+ok   t_reorder_chunks
+ok   t_splice_cross_object
+ok   t_anchor_caller_buffer_roundtrip
+ok   t_rb_valid_resume_and_advance
+ok   t_rb_older_store_generation_refused
+ok   t_rb_older_key_generation_refused
+ok   t_rb_lower_counter_refused
+ok   t_rb_fork_at_same_counter_refused
+ok   t_rb_counter_jump_inconsistent
+ok   t_rb_forged_anchor_refused
+ok   t_rb_missing_anchor_and_genesis
+ok   t_rb_anchor_other_store_refused
+ok   t_identity_production_refuses_test
+ok   t_identity_test_refuses_production
+ok   t_identity_relabel_breaks_mac
+ok   t_mig_authorized
+ok   t_mig_wrong_key_refused
+ok   t_mig_replay_refused
+ok   t_mig_binding_refusals
+ok   t_mig_test_identity_refused_in_production
+ok   t_recovery_deterministic
+ok   t_recovery_torn_refused
+ok   t_recovery_ambiguous_refused
+ok   t_recovery_old_commit_is_rollback
+ok   t_recovery_store_binding
+49 tests, 0 failed
+M5_NATIVE: PASS
+make: Leaving directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/m5'

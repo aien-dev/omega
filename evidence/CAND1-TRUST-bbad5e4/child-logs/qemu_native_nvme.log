@@ -1,0 +1,9 @@
+AIENOS native NVMe payload (C driver, QEMU virt)
+pci: NVMe at 00:2.0 id 0x0000000000101b36
+pci: BAR0 size 0x0000000000004000 64-bit
+ns 1: block_size 512 blocks 131072 max_xfer 131072 vwc 1 vs 0x0000000000010400
+ns 2: block_size 4096 blocks 16384 max_xfer 131072 vwc 1 vs 0x0000000000010400
+payload checks 52, failures 0
+NVME_QEMU_PAYLOAD: PASS
+(QEMU emulated NVMe only; not a physical-hardware qualification)
+AIENOS_STORE_NVME_QEMU: PASS

@@ -1,0 +1,98 @@
+prerequisite: building aienos-store-tool at bbad5e4 into /tmp/trust1-m5-work.Mz0W4q/build/cargo-store-tool
+make: Entering directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/store'
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -I. -I../argus -I../disk -Itests -I../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/store_v1.o store_v1.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -I. -I../argus -I../disk -Itests -I../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/store_engine.o store_engine.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -I. -I../argus -I../disk -Itests -I../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/store_disk.o store_disk.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -I. -I../argus -I../disk -Itests -I../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/store_sealed.o store_sealed.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/torn_slot.o torn_slot.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/sha256.o ../argus/sha256.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_disk.o ../disk/disk.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_m5_keys.o ../m5/m5_keys.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_m5_envelope.o ../m5/m5_envelope.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_m5_state.o ../m5/m5_state.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_aes.o ../crypto/aes.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_polyval.o ../crypto/polyval.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_gcm_siv.o ../crypto/gcm_siv.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_hmac.o ../crypto/hmac.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_ct.o ../crypto/ct.c
+ar rcs ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/libaienos_store.a ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/store_v1.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/store_engine.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/store_disk.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/store_sealed.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/torn_slot.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/sha256.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_disk.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_m5_keys.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_m5_envelope.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_m5_state.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_aes.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_polyval.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_gcm_siv.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_hmac.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/dep_ct.o
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -c -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/disk_file.o ../disk/disk_file.c
+cc -std=gnu11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -I. -I../argus -I../disk -Itests -I../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck -o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/store_xcheck tests/store_xcheck.c ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/disk_file.o ../../../../../../../tmp/trust1-m5-work.Mz0W4q/build/store-xcheck/libaienos_store.a
+make: Leaving directory '/home/drakestapleton/workspace/overnight-1005/wt-CAND1-aienos/native/store'
+rust cross-check: tool /tmp/trust1-m5-work.Mz0W4q/build/cargo-store-tool/release/aienos-store-tool
+geometry 512-byte blocks, store at byte 8192:
+  ok   C reads its own gen 3: MOUNT state=Valid peer=Valid gen=3 objects_ok=3/3
+  ok   Rust mounts the C image: MOUNT
+    STORE_ROOT_TEAR_CLOSURE: PASS (slot=0 old=gen1 new=gen3 sector_bytes=512 differing_sectors=[0] combinations=256 as_old=128 as_new=128)
+  ok   tear-closure sector 512: PASS
+    STORE_ROOT_TEAR_CLOSURE: PASS (slot=0 old=gen1 new=gen3 sector_bytes=4096 differing_sectors=[0] combinations=2 as_old=1 as_new=1)
+  ok   tear-closure sector 4096: PASS
+    corrupt kind=7 unit=5 byte=20
+  ok   corrupt kind 7 (both roots): C: REFUSE MountError::CorruptRecoveryRequired
+  ok   corrupt kind 7 (both roots): Rust: REFUSE MountError::CorruptRecoveryRequired
+    corrupt kind=9 unit=9 byte=20
+  ok   corrupt kind 9 (newest only): C: MOUNT state=DegradedRecovery peer=GraphBadNewer gen=2 objects_ok=2/2
+  ok   corrupt kind 9 (newest only): Rust: MOUNT
+    inject case=bad_crc slot=1 decode=BadSuperblockCrc
+  ok   inject bad_crc: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject bad_crc: Rust agrees: MOUNT
+    inject case=wrong_magic slot=1 decode=BadSuperblockMagic
+  ok   inject wrong_magic: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject wrong_magic: Rust agrees: MOUNT
+    inject case=nonzero_reserved slot=1 decode=NonzeroReserved
+  ok   inject nonzero_reserved: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject nonzero_reserved: Rust agrees: MOUNT
+    inject case=wrong_slot_id slot=1 decode=WrongSuperblockSlot
+  ok   inject wrong_slot_id: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject wrong_slot_id: Rust agrees: MOUNT
+    inject case=region_mismatch slot=1 decode=Ok
+  ok   inject region_mismatch: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject region_mismatch: Rust agrees: MOUNT
+    inject case=unsupported_version slot=1 decode=UnsupportedVersion
+  ok   inject unsupported_version: C: REFUSE MountError::UnsupportedVersion
+  ok   inject unsupported_version: Rust agrees: REFUSE MountError::UnsupportedVersion
+    inject case=seeded_garbage slot=1 decode=BadSuperblockMagic
+  ok   inject seeded_garbage: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject seeded_garbage: Rust agrees: MOUNT
+    inject case=new_root slot=1 decode=Ok
+  ok   inject new_root: C: MOUNT state=DegradedRecovery peer=GraphBadNewer gen=3 objects_ok=3/3
+  ok   inject new_root: Rust agrees: MOUNT
+geometry 4096-byte blocks, store at byte 8192:
+  ok   C reads its own gen 3: MOUNT state=Valid peer=Valid gen=3 objects_ok=3/3
+  ok   Rust mounts the C image: MOUNT
+    STORE_ROOT_TEAR_CLOSURE: PASS (slot=0 old=gen1 new=gen3 sector_bytes=512 differing_sectors=[0] combinations=256 as_old=128 as_new=128)
+  ok   tear-closure sector 512: PASS
+    STORE_ROOT_TEAR_CLOSURE: PASS (slot=0 old=gen1 new=gen3 sector_bytes=4096 differing_sectors=[0] combinations=2 as_old=1 as_new=1)
+  ok   tear-closure sector 4096: PASS
+    corrupt kind=7 unit=5 byte=20
+  ok   corrupt kind 7 (both roots): C: REFUSE MountError::CorruptRecoveryRequired
+  ok   corrupt kind 7 (both roots): Rust: REFUSE MountError::CorruptRecoveryRequired
+    corrupt kind=9 unit=9 byte=20
+  ok   corrupt kind 9 (newest only): C: MOUNT state=DegradedRecovery peer=GraphBadNewer gen=2 objects_ok=2/2
+  ok   corrupt kind 9 (newest only): Rust: MOUNT
+    inject case=bad_crc slot=1 decode=BadSuperblockCrc
+  ok   inject bad_crc: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject bad_crc: Rust agrees: MOUNT
+    inject case=wrong_magic slot=1 decode=BadSuperblockMagic
+  ok   inject wrong_magic: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject wrong_magic: Rust agrees: MOUNT
+    inject case=nonzero_reserved slot=1 decode=NonzeroReserved
+  ok   inject nonzero_reserved: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject nonzero_reserved: Rust agrees: MOUNT
+    inject case=wrong_slot_id slot=1 decode=WrongSuperblockSlot
+  ok   inject wrong_slot_id: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject wrong_slot_id: Rust agrees: MOUNT
+    inject case=region_mismatch slot=1 decode=Ok
+  ok   inject region_mismatch: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject region_mismatch: Rust agrees: MOUNT
+    inject case=unsupported_version slot=1 decode=UnsupportedVersion
+  ok   inject unsupported_version: C: REFUSE MountError::UnsupportedVersion
+  ok   inject unsupported_version: Rust agrees: REFUSE MountError::UnsupportedVersion
+    inject case=seeded_garbage slot=1 decode=BadSuperblockMagic
+  ok   inject seeded_garbage: C: MOUNT state=DegradedRecovery peer=Malformed gen=3 objects_ok=3/3
+  ok   inject seeded_garbage: Rust agrees: MOUNT
+    inject case=new_root slot=1 decode=Ok
+  ok   inject new_root: C: MOUNT state=DegradedRecovery peer=GraphBadNewer gen=3 objects_ok=3/3
+  ok   inject new_root: Rust agrees: MOUNT
+rust cross-check: 48 checks
+STORE_RUST_CROSSCHECK: PASS

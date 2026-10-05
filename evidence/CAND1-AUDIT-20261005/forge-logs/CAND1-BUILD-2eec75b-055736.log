@@ -1,0 +1,18 @@
+CAND-1 build 2026-10-05T05:57:38Z sc=2eec75b08aeb8f9d11f950070e13f6c2c046cf24 omega=cb06d081901c03063945a99ffed1c58d33397e9c aienos=bbad5e4250e57f8cbd1be4cf1390109aa65ef92c physics=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf host=Linux 7.0.0-1019-nvidia aarch64
+SAME physics-boot-bin 4b22a08cd408b5cf90258af13b833b97a5211b4d2480fa74be357228f4aed3bd
+SAME atlas-m2-boot-bin 1d6d75a6881bb9d9b17a777ec7dee885780386c4699d776adc7cc1c277b09012
+physics boot bins equal committed files
+SAME omega-runtime f96bdb7cd65e21bfed04532525ca424a810604b441d1cb1de70dbe1f6c0b6f30
+SAME omega-gpu-engine-lib a4af088104203c9ce1b92b6787f140d822a8039ac86349a0438fb7a379c0fc5c
+libomega_gpu.a carries no gate objects (G6)
+SAME aien-cli-native-release 3a17ee79a238ad223fd59f4436d98906a0144b8d5ac47809da194a9ac1d493db
+SAME aien-proof a37247a121eb96f56a637d5edf0712a636b341b9c02478dce5c119b559db5430
+SAME aien-test 34ae31e5b16b078c6e41ca219c12e7895269542480c1b3509618ea3cd2c576ef
+native engine linked (has_omega_gpu)
+aien-cli carries the native backend string
+aien-cli has no cargo registry paths (G13)
+NOTE aien-cli lines containing the home directory: 0
+PASS zero-cuda aien-cli
+SAME aienos-ck-core-image a21218dc1df890274e1b90f9f8e4a3f3d374fd161b274836abcd462e3a195a82
+SAME aienos-boot-image 8b1595cc8e6729d7531a08f2ff19ceb9cddc6eba731f4efb1543a2ee37da5a07
+VERDICT PASS

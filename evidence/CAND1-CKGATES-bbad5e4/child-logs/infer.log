@@ -1,0 +1,35 @@
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+qemu exit 0 after 865 s (commit bbad5e4250e5)
+PASS  fw_cfg file size 807694368 = host file size
+PASS  kernel ingested 807694368 bytes = host file size
+PASS  kernel SHA-256 of the ingested bytes = host sha256sum
+PASS  SHA-256 = pinned model hash
+PASS  probe returned 0
+PASS  tensor count 147
+PASS  vocab size 128256
+PASS  layers 16
+PASS  first four prompt ids 128000 128006 882 128007
+PASS  prompt length 17 tokens
+PASS  allocator peak 24695 KiB within the 256 MiB region
+PASS  generated ids '791 6864 315 9822 374 12366 13 128009' = llama.cpp greedy sequence
+PASS  decode timing: 7 forwards, mean 41216836 us per token (QEMU TCG, not hardware)
+PASS  decoded text contains 'Paris': The capital of France is Paris.
+PASS  unload returned every frame (free frames 1021068 = 1021068 before ingest), kernel heap live 0 KiB
+PASS  kernel reported AIENOS_CK_INFER: PASS
+PASS  kernel alive
+PASS  no panic or fault
+PASS  kernel reached its final report
+PASS  kernel continued to its final report after the unload
+PASS  QEMU exit 0 (PSCI reset)
+infer: fw_cfg base=0x9020000 dma=yes file=opt/aienos/model size=807694368
+infer: ingest bytes=807694368 dma_us=201976
+infer: sha256=3f5a22426976ab26cfe84dba63c1d08391717abb1af893e10f1b2968d862dcc1 sha_us=8761980
+infer: probe rc=0 tensors=147 vocab=128256 ids=128000,128006,882,128007 prompt_len=17 layers=16 heap_peak_kib=24695 probe_us=849502512
+infer: prefill_us=560000681 prompt_len=17
+infer: tokens=791 6864 315 9822 374 12366 13 128009
+infer: tok_us=41253189,41242193,41161943,41188963,41250242,41208997,41212327
+infer: decode_tokens=7 mean_tok_us=41216836
+infer: text=The capital of France is Paris.
+infer: unloaded heap_live_kib=0 frames_free_before=1021068 frames_free_after=1021068 frames_returned=262728 rc=0,0
+PASS  control: mutated expected ids (791 6864 315 9822 374 12366 14 128009) make the token check FAIL
+AIENOS_CK_INFER: PASS

@@ -1,0 +1,3 @@
+pid, process_name, used_gpu_memory [MiB]
+3456, /home/atlas/atlas-runtime-setup-20260905/image-venv/bin/python, 18408 MiB
+1250721, /usr/local/lib/ollama/llama-server, 15781 MiB

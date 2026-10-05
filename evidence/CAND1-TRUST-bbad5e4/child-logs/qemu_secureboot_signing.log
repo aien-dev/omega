@@ -1,0 +1,6 @@
+Building aienos-handoff binary for the Secure Boot test...
+PASS  signed with enrolled test key: booted to kernel alive (Secure Boot on)
+PASS  unsigned image refused by firmware signature check (Access Denied)
+PASS  tampered image refused by firmware signature check (Access Denied)
+PASS  wrongkey image refused by firmware signature check (Access Denied)
+TRUST-1 Gate 4 Secure Boot signing test: ALL PASS

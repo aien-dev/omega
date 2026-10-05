@@ -1,0 +1,73 @@
+PASS  make refuses the continuity test mode with CK_HARDWARE_STAGING
+PASS  make refuses the continuity test mode with CK_QEMU_UNSAFE_DMA
+PASS  make refuses the continuity test mode with the Store crash hook
+PASS  make refuses a continuity mutant without the TEST mode
+PASS  make refuses an unknown continuity mutant
+PASS  default image carries no continuity test strings
+PASS  TEST continuity image announces itself
+PASS  default image carries no ALLEN TEST markers
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G7 native genesis: blank image (store=Refused) -> kernel provisioning created subject 037f253e6475f7aa.. sequence 1 for agent de664b1318d7f57e.., lineage bound
+PASS  G7 standing intent: sequence 2 050254c6a42f507b.. holds intent ecf780b1e9612cd6.. (regime 7, 1000 ns)
+PASS  G7 host reader: the image holds one genesis and one successor, head 050254c6a42f507b.. (no host tool created them)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G8 second provisioning refused: no genesis, image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G9 cold restart 1: new QEMU process (previous exited 0), same subject 050254c6a42f507b.., same intent, same lineage, incarnation 2
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G9 cold restart 2: new QEMU process (previous exited 0), same subject 050254c6a42f507b.., same intent, same lineage, incarnation 3
+PASS  G9 after two restores: still one genesis, two subject objects, head object byte-identical
+PASS  G10 restore plan carries no subject, lineage or intent ('AIENCONT v1 mode=6')
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G10 a second image restores its own subject a99beff840f2d34d.. (agent 92d7f08a0dc06bdb..), not 050254c6a42f507b..: the subject comes from the disk
+PASS  G10 host reader decoded the head object from the sealed Store on the image (050254c6a42f507b..)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G11a forked chain, boot 1: CORRUPT, nothing restored, nothing minted, image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G11a forked chain, boot 2: CORRUPT, nothing restored, nothing minted, image unchanged
+PASS  G11a image still holds exactly the planted objects (3), no replacement
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G11b corrupted subject envelope: refused ('CONTINUITY: STOP (store Refused(-105))'), nothing restored or minted, image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G11c missing subject, boot 1: ABSENT reported, none minted
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G11c missing subject, boot 2: ABSENT reported, none minted
+PASS  G11c host reader: still no subject object on the image
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G12a foreign chain beside our own: CORRUPT (another agent), nothing restored or minted, image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  G12b foreign chain on a subjectless identity: refused, never adopted, nothing minted, image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.1 SIGKILL at before_first_write: cold boot finds the old state (unprovisioned, no subject)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.1b interrupted provisioning that committed nothing can be provisioned again
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.2 SIGKILL at after_payload_objects: cold boot finds the old state (unprovisioned, no subject)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.3 SIGKILL at after_catalog: cold boot finds the old state (unprovisioned, no subject)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.4 SIGKILL at after_commit_record: cold boot finds the old state (unprovisioned, no subject)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.5 SIGKILL at after_first_flush: cold boot finds the old state (unprovisioned, no subject)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.6 SIGKILL at after_inactive_superblock: cold boot finds the new state (identity with its genesis subject)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.7 SIGKILL at after_final_flush: cold boot finds the new state (identity with its genesis subject)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.8 SIGKILL at before_anchor: cold boot finds the new state (identity with its genesis subject)
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  FI.9 SIGKILL at after_anchor: cold boot finds the new state (identity with its genesis subject)
+ALLEN_FACTS agent=de664b1318d7f57e0fd8f2faf24e93657dbb502e8142926b1c2e79ccf4a5515f genesis=037f253e6475f7aac3569755843cbee85b8195d564c42072c2ea71581e14b436 subject=050254c6a42f507b30e382dc428fdec6cb870339e5d35d04bc097c1988a7a85c intent=ecf780b1e9612cd66c66b5f29658f9359164fc52e2385b550754f980ac3082bc lineage=e3f241da5ea18408653a70e3691653db216b5dcc51169b799827cf4f2699731b regime=7 target_ns=1000 prov_image_sha256=74fbf03bd21b9b5431690430503d292306f46aba07b4f7f8f1471d7d380b5790 head_object_sha256=8b6a040e01c834c895cd765ea6bfb8cf29c956459816a8222570fa8b9a3d57fc
+rows 30/30; M1 failures: 0
+AIENOS_CK_M4_ALLEN: PASS
