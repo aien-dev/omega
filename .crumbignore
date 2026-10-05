@@ -1,2 +1,5 @@
 # evidence/ is additions-only (evidence-immutable.yml); its seeded .crumb must never be rewritten
 evidence
+# build/ holds extracted aienos sources proven against aienos.lock byte for byte; a
+# rewritten .crumb there makes the authority build refuse its own cache
+build
