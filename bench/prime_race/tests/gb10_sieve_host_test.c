@@ -178,6 +178,27 @@ static int sim_sieve(const BlackwellIRProgram *p, uint64_t limit, uint32_t budge
     return g_sim_err ? -1 : 0;
 }
 
+/* ------------------------------------------------------------- scoreboard hazards */
+/* Campaign C2a: loads may now be in flight together, so check the waits the emitter wrote.
+ * Walking the IR in order, a destination of an instruction that sets write scoreboard 0
+ * (control bits 14..16, the emitter's SB_GPR) stays in flight until an instruction whose wait
+ * mask (bits 20..25) includes scoreboard 0; reading it earlier is a hazard. Straight-line walk:
+ * every branch the emitter writes waits on what is pending, so no value crosses one in flight. */
+static int sb_hazards(const BlackwellIRProgram *p, int verbose) {
+    int inflight[64], n = 0, bad = 0;
+    for (size_t i = 0; i < p->count; i++) {
+        const BlackwellIRInsn *in = &p->insns[i];
+        uint32_t c = in->control;
+        if ((c >> 20) & 1u) n = 0;
+        const int src[3] = { in->src1_vreg, in->src2_vreg, in->src3_vreg };
+        for (int s = 0; s < 3; s++)
+            for (int k = 0; src[s] >= 0 && k < n; k++)
+                if (inflight[k] == src[s]) { bad++; if (verbose) printf("  hazard: insn %zu reads vreg %d still in flight\n", i, src[s]); }
+        if (c != 0 && ((c >> 14) & 7u) == 0 && in->dst_vreg >= 0 && n < 64) inflight[n++] = in->dst_vreg;
+    }
+    return bad;
+}
+
 /* ------------------------------------------------------------- nvdisasm */
 /* every word decodes, the new ops appear, and every BRA lands where the IR says */
 static void nvdisasm_check(const OmegaBlackwellKernel *k, const BlackwellIRProgram *p) {
@@ -299,6 +320,24 @@ int main(int argc, char **argv) {
     CHECK(k.gpr_count <= 64, "GPR budget %u > 64", k.gpr_count);
     CHECK(memcmp(k.code_digest, mk.code_digest, 32) != 0, "mutant kernel differs from production");
     nvdisasm_check(&k, prog);
+    {
+        int hz = sb_hazards(prog, 1);
+        CHECK(hz == 0, "scoreboard hazards in the sieve kernel: %d", hz);
+        /* negative control: drop the first wait that follows a group of loads; must be caught */
+        BlackwellIRProgram *bad = malloc(sizeof *bad);
+        int dropped = 0;
+        if (bad) {
+            memcpy(bad, prog, sizeof *bad);
+            for (size_t i = 1; i < bad->count && !dropped; i++)
+                if (bad->insns[i - 1].op == BW_IR_LDG_E && ((bad->insns[i].control >> 20) & 1u)) {
+                    bad->insns[i].control &= ~(1u << 20); dropped = 1;
+                }
+        }
+        int bhz = bad && dropped ? sb_hazards(bad, 0) : 0;
+        CHECK(dropped && bhz > 0, "hazard check missed a dropped wait (dropped %d, found %d)", dropped, bhz);
+        printf("scoreboard: %d hazards; negative control (one wait dropped) found %d\n", hz, bhz);
+        free(bad);
+    }
 
     /* 4. simulator sweep */
     static uint64_t lims[4096];

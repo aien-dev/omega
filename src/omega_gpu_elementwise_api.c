@@ -95,6 +95,22 @@ static void lop3xor(Em *e, int dst, int a, int b) { BlackwellIRInsn i = I0(BW_IR
 /* dst64 = idx * 4 + ptr64 (byte address of element idx) */
 static void addr4(Em *e, int dst64, int idx, int ptr64) { BlackwellIRInsn i = I0(BW_IR_IMAD_WIDE); i.dst_vreg = dst64; i.src1_vreg = idx; i.imm = 4; i.src3_vreg = ptr64; emit(e, i, K_FIXED); }
 static void ldg(Em *e, int dst, int addr64, int udesc) { BlackwellIRInsn i = I0(BW_IR_LDG_E); i.dst_vreg = dst; i.src1_vreg = addr64; i.ureg = udesc; emit(e, i, K_VAR); }
+/* Independent global loads issued back to back (campaign C2a, 2026-10-05). The first load
+ * waits on whatever is pending; the others wait on nothing, so all n are in flight together.
+ * Every load sets SB_GPR (a counting scoreboard), so the next instruction waits once for all
+ * of them instead of once per load. Fails the build if a load address is a destination of the
+ * group or a destination repeats (the later loads would read an operand still in flight). */
+static void ldg_group(Em *e, int n, const int *dst, const int *addr64, int udesc) {
+    for (int i = 0; i < n; i++)
+        for (int k = 0; k < n; k++)
+            if (addr64[i] == dst[k] || (k != i && dst[i] == dst[k])) { e->err = -1; return; }
+    for (int i = 0; i < n; i++) {
+        BlackwellIRInsn in = I0(BW_IR_LDG_E); in.dst_vreg = dst[i]; in.src1_vreg = addr64[i]; in.ureg = udesc;
+        if (i == 0) { emit(e, in, K_VAR); continue; }
+        in.control = CW(4, SB_GPR, SB_NONE, 0) | CW_YIELD; /* nonzero, so the encoder keeps it */
+        if (omega_bw_ir_append(e->p, &in) < 0) e->err = -1;
+    }
+}
 static void stg(Em *e, int addr64, int val, int udesc) { BlackwellIRInsn i = I0(BW_IR_STG_E); i.src1_vreg = addr64; i.src2_vreg = val; i.ureg = udesc; emit(e, i, K_STORE); }
 static void fadd(Em *e, int d, int a, int b) { BlackwellIRInsn i = I0(BW_IR_FADD); i.dst_vreg = d; i.src1_vreg = a; i.src2_vreg = b; emit(e, i, K_FIXED); }
 static void fsub(Em *e, int d, int a, int b) { BlackwellIRInsn i = I0(BW_IR_FSUB); i.dst_vreg = d; i.src1_vreg = a; i.src2_vreg = b; emit(e, i, K_FIXED); }
@@ -351,7 +367,7 @@ static void gen_prime_sieve(Em *e, int mutant) {
     isetp_ge_u32(e, w, nwords);
     exit_if_p0(e);
 
-    int base = V(e), basep32 = V(e), acc = V(e), ptr = V64(e), a64 = V64(e);
+    int base = V(e), basep32 = V(e), acc = V(e), ptr = V64(e), a64 = V64(e), a64m = V64(e);
     int p = V(e), magic = V(e), k0 = V(e), negp = V(e), d = V(e), neg = V(e), nd = V(e), dpos = V(e), jadd = V(e);
     int q = V(e), r = V(e), j = V(e), t = V(e), z = V(e), bit = V(e);
     int e1 = V(e), m = V(e), word = V(e), oaddr = V64(e);
@@ -365,13 +381,16 @@ static void gen_prime_sieve(Em *e, int mutant) {
 
     loop_begin(e); /* prime loop */
     int lp = here(e);
+    /* one memory round trip per prime: all three entry words load together (C2a). The
+     * sentinel entry is a whole entry, so loading p and magic before the k0 test is in bounds. */
     widei(e, a64, one, 8, ptr);
-    ldg(e, k0, a64, pr.udesc);
+    widei(e, a64m, one, 4, ptr);
+    {
+        const int dsts[3] = { k0, p, magic }, adrs[3] = { a64, ptr, a64m };
+        ldg_group(e, 3, dsts, adrs, pr.udesc);
+    }
     isetp_ge_u32(e, k0, basep32);
     int brk = bra_fwd_if_p0(e);
-    ldg(e, p, ptr, pr.udesc);
-    widei(e, a64, one, 4, ptr);
-    ldg(e, magic, a64, pr.udesc);
     imadi(e, negp, p, 0xffffffffu, NOREG);       /* -p */
     imadi(e, d, k0, 0xffffffffu, base);          /* base - k0 */
     shr_i(e, neg, d, 31);
