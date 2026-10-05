@@ -334,6 +334,9 @@ jobs:
       - name: R16 qualify script self-test (dirty tree refused, NOT_RUN honest, failing check exits non-zero)
         if: ${{ !cancelled() }}
         run: make test-r16-qualify-selftest
+      - name: aienos.lock source proof (blobs of the full locked commit; modified, unrelated or other-commit trees refused)
+        if: ${{ !cancelled() }}
+        run: make test-aienos-lock-source
       - name: ALLEN v0 host gates (identity, restart, memory, model independence, no authority, negative control)
         if: ${{ !cancelled() }}
         env:

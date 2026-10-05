@@ -16,7 +16,7 @@
 # Makefile's pinned default for every authority target (R7 to R16).
 AIENOS_LOCK_REPO ?= ../aienos-argus-cap
 AIENOS_LOCK = $(shell head -n 1 aienos.lock)
-AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(shell echo $(AIENOS_LOCK) | cut -c1-7)
+AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(AIENOS_LOCK)
 AIENOS_R7_DIR ?= $(AIENOS_R7_DEFAULT)
 AIENOS_CAP_LIB ?= $(AIENOS_R7_DIR)/native/capability/out/libaienos_capability.a
 VISOR_AUTH_CAP_LIB ?= $(AIENOS_CAP_LIB)

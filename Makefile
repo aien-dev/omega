@@ -360,33 +360,37 @@ test-sem-incremental: $(RX_SEM_TEST)
 	./$(RX_SEM_TEST)
 
 # R7: native AIENOS authority versus the Linux oracle, then the world view.
-# Default: the authority pinned by aienos.lock, extracted with `git archive` from
-# AIENOS_LOCK_REPO (a clone that has the commit) into $(OUT_DIR). An override must point
-# at a tree with native/capability; the build stops if it does not (the old default
-# ../aienos-r9 silently had none on the Spark).
+# The authority source is the FULL commit in aienos.lock, proven by
+# tools/aienos_lock_source.sh from git objects (a directory name, a short SHA or an
+# override is not proof). Default: extracted with `git archive` from a repository holding
+# that commit (AIENOS_LOCK_REPO, or the repository around AIENOS_R7_DIR) into
+# $(OUT_DIR)/aienos-authority/<full lock>. An AIENOS_R7_DIR override is used only after
+# the same proof: every tracked file under the subpaths built from has the locked blob
+# and no unignored extra file sits beside them. The proof runs on every build (phony
+# prerequisite), so a source edited after extraction stops the build.
 AIENOS_LOCK_REPO ?= ../aienos-argus-cap
 AIENOS_LOCK = $(shell head -n 1 aienos.lock)
-AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(shell echo $(AIENOS_LOCK) | cut -c1-7)
+AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(AIENOS_LOCK)
 AIENOS_R7_DIR ?= $(AIENOS_R7_DEFAULT)
 AIENOS_CAP_LIB ?= $(AIENOS_R7_DIR)/native/capability/out/libaienos_capability.a
+# $(call aienos_source,<subpaths>): materialize into the default cache, or prove the override.
+aienos_source = if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ]; then \
+		AIENOS_LOCK_REPO="$(AIENOS_LOCK_REPO)" AIENOS_R7_DIR= bash tools/aienos_lock_source.sh materialize "$(AIENOS_R7_DIR)" $(1); \
+	else \
+		AIENOS_LOCK_REPO="$(AIENOS_LOCK_REPO)" AIENOS_R7_DIR="$(AIENOS_R7_DIR)" bash tools/aienos_lock_source.sh verify-dir "$(AIENOS_R7_DIR)" $(1); \
+	fi || { echo "error: the aienos authority source is not the aienos.lock commit $(AIENOS_LOCK) (see above)."; \
+		echo "  pass AIENOS_LOCK_REPO=<an aienos clone holding that commit>, or AIENOS_R7_DIR=<a clean tree of it inside such a clone>;"; \
+		echo "  a modified default cache under $(OUT_DIR)/aienos-authority must be deleted, not reused."; exit 1; }
 RX_R7_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
 	tests/runtime/rx_r7_native.c
 RX_R7_TEST = $(OUT_DIR)/rx_r7_native_test
 
-$(AIENOS_CAP_LIB):
-	@if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ] && [ ! -d "$(AIENOS_R7_DIR)/native/capability" ]; then \
-		test -n "$(AIENOS_LOCK)" || { echo "aienos.lock is empty"; exit 1; }; \
-		git -C "$(AIENOS_LOCK_REPO)" cat-file -e "$(AIENOS_LOCK)^{commit}" 2>/dev/null || { \
-			echo "error: AIENOS_LOCK_REPO=$(AIENOS_LOCK_REPO) is not an aienos clone with commit $(AIENOS_LOCK) (aienos.lock)."; \
-			echo "  pass AIENOS_LOCK_REPO=<path to an aienos clone that has it>, e.g. make AIENOS_LOCK_REPO=$$HOME/workspace/aienos-argus-cap <target>,"; \
-			echo "  or AIENOS_R7_DIR=<an aienos tree at that commit>."; exit 1; }; \
-		mkdir -p "$(AIENOS_R7_DIR)" && \
-		git -C $(AIENOS_LOCK_REPO) archive $(AIENOS_LOCK) native/capability | tar -x -C "$(AIENOS_R7_DIR)"; \
-	fi
-	@test -f "$(AIENOS_R7_DIR)/native/capability/Makefile" || { \
-		echo "AIENOS_R7_DIR=$(AIENOS_R7_DIR) has no native/capability:"; \
-		echo "  set AIENOS_R7_DIR to an aienos tree at aienos.lock, or AIENOS_LOCK_REPO to a clone with it"; exit 1; }
+.PHONY: aienos-authority-capability
+aienos-authority-capability:
+	@$(call aienos_source,native/capability)
+
+$(AIENOS_CAP_LIB): aienos-authority-capability
 	$(MAKE) -C $(AIENOS_R7_DIR)/native/capability
 
 # OMEGA_EFFECT_CAP64 (spec/effect-cap64-migration.md): effect objects carry the
@@ -842,6 +846,12 @@ test-r16-inventory: $(R16_INVENTORY)
 .PHONY: test-r16-qualify-selftest
 test-r16-qualify-selftest:
 	bash tests/r16_qualify/run.sh
+
+# The aienos.lock source proof (tools/aienos_lock_source.sh) and the authority build rule
+# that uses it: fixture repositories, host only.
+.PHONY: test-aienos-lock-source
+test-aienos-lock-source:
+	bash tests/aienos_lock_source/run.sh
 
 # R16-G3: the authoritative path with the legacy orchestrators unavailable.
 # Link map, shared libraries, embedded names and an exec trace of the R13

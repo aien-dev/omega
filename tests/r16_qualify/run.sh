@@ -16,7 +16,7 @@ check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; FAILS=$((FAILS
 
 W=$SCR/w
 mkdir -p "$W/tools"
-cp "$HERE/tools/r16_qualify.sh" "$W/tools/"
+cp "$HERE/tools/r16_qualify.sh" "$HERE/tools/aienos_lock_source.sh" "$W/tools/"
 G6FILES="src/omega_accelerator_world.c src/runtime/rx_generation.c src/omega_world_gates.c tools/omegatool.c src/runtime/rx_native_bind.c src/omega_evidence.c src/omega_verify.c src/runtime/rx_resident_gpu.c src/runtime/rx_seq_reference.c src/runtime/rx_world.c src/runtime/rx_living.c"
 for p in $G6FILES; do mkdir -p "$W/$(dirname "$p")"; cp "$HERE/$p" "$W/$p"; done
 printf 'build/\n' > "$W/.gitignore"
@@ -240,7 +240,7 @@ check "G6 all good: G6 is MISSING_IMPLEMENTATION (operator emergency controls na
 check "G6 all good: eleven items PASS, operator emergency controls MISSING_IMPLEMENTATION" '[ "$(grep -c "\"item\": \"[a-z0-9_]*\", \"status\": \"PASS\"" "$R")" = 11 ] && [ "$(g6_item operator_emergency_controls_passing)" = MISSING_IMPLEMENTATION ]'
 check "G6 all good: protected_surfaces_kept six presence flags true" '[ "$(grep -c "_present\": true" "$R")" = 6 ]'
 check "G6 all good: no FAIL anywhere and G6 alone does not make the run pass (exit 3)" '[ $rc = 3 ] && ! echo "$out" | grep -q "G6=FAIL"'
-check "G6 all good: receipt names file and symbol per item" 'grep -q "\"file\": \"src/runtime/rx_generation.c\", \"symbol\": \"rx_gen_recover\", \"defined\": true" "$R"'
+check "G6 all good: receipt names file and symbol per item" 'grep -q "\"file\": \"src/runtime/rx_generation.c\", \"symbol\": \"rx_gen_recover\", \"source\": \"omega_tree\", \"defined\": true" "$R"'
 check "G6 operated checks cite the test and its status" 'grep -q "{\"name\": \"R9\", \"target\": \"test-r9\", \"status\": \"PASS\"}" "$R"'
 
 # presence without operation: symbols all defined, tests never ran -> NOT_RUN, never PASS
@@ -328,6 +328,47 @@ out=$(Q R16_RUN_ID=g6 AIENOS_LOCK_REPO=/nonexistent 2>&1)
 check "G6 pinned tree unreadable: trusted_capability_root NOT_RUN (not MISSING, not PASS)" '[ "$(g6_item trusted_capability_root_present)" = NOT_RUN ]'
 out=$(G6Q)
 check "G6 pinned tree readable again: trusted_capability_root PASS" '[ "$(g6_item trusted_capability_root_present)" = PASS ]'
+
+# 8c. capability-root source identity (the locked commit, never a directory). Lock A lacks
+# aienos_cap_mint; every place that has it must not turn the item PASS.
+GOODLOCK=$(cat "$W/aienos.lock")
+lkg() { git -C "$LK" -c user.name=r16 -c user.email=r16@invalid -c commit.gpgsign=false "$@"; }
+lkg checkout -q -b lacks-mint "$GOODLOCK"
+sed -i 's/aienos_cap_mint(/aienos_cap_other(/' "$LK/native/capability/aienos_capability.c"; lkg commit -qam "lock A: no mint"
+ALOCK=$(git -C "$LK" rev-parse HEAD); lkg checkout -q -
+printf '%s\n' "$ALOCK" > "$W/aienos.lock"; g add -A; g commit -qm "lock A"
+UNREL=$SCR/unrelated; mkdir -p "$UNREL/native/capability"
+printf 'int aienos_cap_validate(const void *v)\n{ return 0; }\nint aienos_cap_mint(void *a)\n{ return 0; }\n' > "$UNREL/native/capability/aienos_capability.c"
+out=$(Q R16_RUN_ID=g6 AIENOS_R7_DIR="$UNREL" 2>&1)
+check "G6 lock A + unrelated dir with plausible functions: MISSING_IMPLEMENTATION (dir not read)" '[ "$(g6_item trusted_capability_root_present)" = MISSING_IMPLEMENTATION ]'
+out=$(Q R16_RUN_ID=g6 AIENOS_R7_DIR="$UNREL" AIENOS_LOCK_REPO=/nonexistent 2>&1)
+check "G6 lock A unavailable + unrelated dir supplied: NOT_RUN (not PASS)" '[ "$(g6_item trusted_capability_root_present)" = NOT_RUN ]'
+check "G6 unavailable: receipt g6_lock_source status unavailable" '[ "$(jq -r .g6_lock_source.status "$R")" = unavailable ]'
+CLONE=$SCR/clean-other; git clone -q "$LK" "$CLONE"; git -C "$CLONE" checkout -q "$GOODLOCK"
+out=$(Q R16_RUN_ID=g6 AIENOS_R7_DIR="$CLONE" 2>&1)
+check "G6 lock A + clean checkout of a different commit that has mint: MISSING_IMPLEMENTATION" '[ "$(g6_item trusted_capability_root_present)" = MISSING_IMPLEMENTATION ]'
+out=$(Q R16_RUN_ID=g6 AIENOS_R7_DIR="$CLONE" AIENOS_LOCK_REPO=/nonexistent 2>&1)
+check "G6 lock A, no lock repo, only that other-commit checkout supplied: NOT_RUN (not PASS)" '[ "$(g6_item trusted_capability_root_present)" = NOT_RUN ]'
+for c in "$ALOCK" "${ALOCK:0:7}"; do
+    mkdir -p "$W/build/aienos-authority/$c/native/capability"
+    cp "$UNREL/native/capability/aienos_capability.c" "$W/build/aienos-authority/$c/native/capability/"
+done
+out=$(Q R16_RUN_ID=g6 2>&1)
+check "G6 lock A + modified cache dirs (full and short name) with mint: MISSING_IMPLEMENTATION" '[ "$(g6_item trusted_capability_root_present)" = MISSING_IMPLEMENTATION ]'
+rm -rf "$W/build/aienos-authority"
+lkg replace "$ALOCK" "$GOODLOCK"
+out=$(Q R16_RUN_ID=g6 2>&1)
+check "G6 lock A with a git replace ref onto a commit that has mint: MISSING_IMPLEMENTATION" '[ "$(g6_item trusted_capability_root_present)" = MISSING_IMPLEMENTATION ]'
+lkg replace -d "$ALOCK" >/dev/null
+printf '%s\n' "${GOODLOCK:0:7}" > "$W/aienos.lock"; g add -A; g commit -qm "short lock"
+out=$(Q R16_RUN_ID=g6 2>&1)
+check "G6 abbreviated aienos.lock: NOT_RUN, g6_lock_source malformed_lock" '[ "$(g6_item trusted_capability_root_present)" = NOT_RUN ] && [ "$(jq -r .g6_lock_source.status "$R")" = malformed_lock ]'
+printf '%s\n' "$GOODLOCK" > "$W/aienos.lock"; g add -A; g commit -qm "good lock again"
+out=$(G6Q)
+check "G6 valid locked source: PASS" '[ "$(g6_item trusted_capability_root_present)" = PASS ]'
+check "G6 valid: receipt records the full lock, its tree and the blob read" '[ "$(jq -r .g6_lock_source.aienos_lock "$R")" = "$GOODLOCK" ] && [ "$(jq -r .g6_lock_source.commit_tree "$R")" = "$(git -C "$LK" rev-parse "$GOODLOCK^{tree}")" ] && [ "$(jq -r "[.g6_items[] | select(.item==\"trusted_capability_root_present\") | .implementation[] | select(.source==\"aienos_lock_commit\") | .blob] | unique | .[0]" "$R")" = "$(git -C "$LK" rev-parse "$GOODLOCK:native/capability/aienos_capability.c")" ]'
+out=$(Q R16_RUN_ID=g6 AIENOS_CAP_LIB=/tmp/prebuilt.a 2>&1); rc=$?
+check "prebuilt AIENOS_CAP_LIB override refused (exit 2)" '[ $rc = 2 ] && echo "$out" | grep -q "no source proof"'
 
 # receipt is valid JSON; each item says plainly what its mapping is (no shared boilerplate)
 check "G6 receipt is valid JSON (jq)" 'jq -e . "$R" >/dev/null'

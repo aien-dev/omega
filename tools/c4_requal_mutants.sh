@@ -12,8 +12,13 @@
 set -u
 root=$(git rev-parse --show-toplevel)
 out=${1:-"$root/build/c4_mutants.json"}
-auth=$(ls -d "$root"/build/aienos-authority/*/ 2>/dev/null | head -n 1)
-[ -n "$auth" ] || { echo "run 'make test-c4-requal' first (builds the authority library)" >&2; exit 2; }
+# The authority cache for the FULL aienos.lock commit, proven to hold that commit's
+# native/capability (tools/aienos_lock_source.sh); never "the first directory found".
+lock=$(head -n 1 "$root/aienos.lock")
+auth="$root/build/aienos-authority/$lock"
+[ -d "$auth" ] || { echo "run 'make test-c4-requal' first (builds the authority library for $lock)" >&2; exit 2; }
+AIENOS_R7_DIR= bash "$root/tools/aienos_lock_source.sh" verify-dir "$auth" native/capability || {
+    echo "build/aienos-authority/$lock is not the aienos.lock source; delete it and rebuild" >&2; exit 2; }
 phys=${PHYSICS_DIR:-$(cd "$root/../physics" && pwd)}
 
 # M03 retired: cx_open is the single integrity seam; rx_compose no longer re-walks the chain.

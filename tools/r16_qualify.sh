@@ -49,6 +49,9 @@ if [ -n "${R16_EXPECT_COMMIT:-}" ] && [ "$R16_EXPECT_COMMIT" != "$CANDIDATE_COMM
     refuse "HEAD $CANDIDATE_COMMIT is not the expected candidate $R16_EXPECT_COMMIT"
 fi
 export OMEGA_CANDIDATE_COMMIT="$CANDIDATE_COMMIT"
+for v in AIENOS_CAP_LIB VISOR_AUTH_CAP_LIB EFFECT_CAP64_CAP_LIB; do
+    [ -z "${!v:-}" ] || refuse "$v is set: a prebuilt authority library has no source proof; build it from aienos.lock (AIENOS_LOCK_REPO / AIENOS_R7_DIR)"
+done
 if [ -n "${PHYSICS_DIR:-}" ]; then export PHYSICS_DIR; fi
 if [ -n "${AIENOS_LOCK_REPO:-}" ]; then export AIENOS_LOCK_REPO; fi
 
@@ -305,21 +308,24 @@ echo "    G7=$G7 (R15 acceptance receipt: $R15ACC)"
 # what the spec itself names or a mapping chosen here (PROXY), and what the tests do not cover.
 echo "[*] R16-G6: protected things kept..."
 # g6_defined <file> <symbol> <f|t|l>: f = C function definition line, t = fixed text,
-# l = function definition in the tree pinned by aienos.lock (the trusted capability
-# root source). Returns 0 defined, 1 absent, 2 cannot look (lock tree unavailable).
+# l = function definition in the aienos source at the FULL aienos.lock commit (the trusted
+# capability root). Kind l reads immutable blobs through tools/aienos_lock_source.sh: the
+# repository must hold the locked commit object, every object read is re-hashed, replace
+# refs are off. AIENOS_R7_DIR, a build cache or a directory name is never read for it.
+# Returns 0 defined, 1 absent (the locked commit was read: file or symbol not there),
+# 2 cannot look (no repository holds the locked commit, or the lock is malformed).
 G6_LOCK_COMMIT=$(head -n 1 "$HERE/aienos.lock" 2>/dev/null || true)
-g6_lock_source() {   # prints the file from the aienos.lock tree, or returns 2
-    local rel=$1 d
-    for d in "${AIENOS_R7_DIR:-}" "$HERE/build/aienos-authority/${G6_LOCK_COMMIT:0:7}"; do
-        if [ -n "$d" ] && [ -f "$d/$rel" ]; then cat "$d/$rel"; return 0; fi
-    done
-    if [ -n "$G6_LOCK_COMMIT" ] && git -C "${AIENOS_LOCK_REPO:-$HERE/../aienos-argus-cap}" show "$G6_LOCK_COMMIT:$rel" 2>/dev/null; then return 0; fi
-    return 2
-}
+g6_lock() { AIENOS_LOCK=$G6_LOCK_COMMIT AIENOS_R7_DIR= bash "$HERE/tools/aienos_lock_source.sh" "$@"; }
+G6_LOCK_IDENTITY=$(g6_lock identity 2>/dev/null) || true
+[ -n "$G6_LOCK_IDENTITY" ] || G6_LOCK_IDENTITY="{\"aienos_lock\": \"$G6_LOCK_COMMIT\", \"source\": \"none\", \"status\": \"malformed_lock\"}"
+declare -A G6BLOB
 g6_defined() {
     local re="^[A-Za-z_][^;]*[ *]$2\\([^;]*\$"
     if [ "$3" = l ]; then
-        local src; src=$(g6_lock_source "$1") || return 2
+        local src rc
+        src=$(g6_lock show "$1" 2>/dev/null); rc=$?
+        [ "$rc" = 0 ] || return "$rc"
+        G6BLOB[$1]=$(g6_lock blob "$1" 2>/dev/null)
         printf '%s\n' "$src" | grep -Eq -- "$re"; return $?
     fi
     [ -f "$HERE/$1" ] || return 1
@@ -346,7 +352,7 @@ g6_test() {
 G6_ITEMS='known_good_fallback_present|src/omega_accelerator_world.c:omega_world_drain:f;src/omega_accelerator_world.c:omega_world_init:f|M19|Spec lines 182-183 name M19 omega_world_* as the known-good fallback (class C): the spec own mapping, not a proxy. Exercised by test-m19 (silicon, N/N gates). Does not test falling back from the reaction world to the M19 world.
 recovery_path_present|src/runtime/rx_generation.c:rx_gen_recover:f|R9,R14_host|PROXY: the spec names no single recovery symbol; rx_gen_recover is the generation-store crash recovery chosen here. R9 stops after each persistence step and R14 host recovers; boot or repair recovery outside omega is not covered.
 deterministic_maintenance_controls_present|src/omega_world_gates.c:run_m19_gates:f;tools/omegatool.c:--run-m19-gates:t|M19|Spec line 182 classes omegatool --run-*-gates as B (deterministic maintenance). PARTIAL: only the M19 runner is exercised (by test-m19); the other --run-*-gates entries are not.
-trusted_capability_root_present|src/runtime/rx_native_bind.c:rx_world_init_native:f;native/capability/aienos_capability.c:aienos_cap_validate:l;native/capability/aienos_capability.c:aienos_cap_mint:l|R7,R12_host|Spec C3: the native C library at aienos.lock is the sole authoritative root. Checks that source (lock tree) plus omega binding; NOT_RUN if the lock tree cannot be read. R7 compares native authority with the Linux oracle.
+trusted_capability_root_present|src/runtime/rx_native_bind.c:rx_world_init_native:f;native/capability/aienos_capability.c:aienos_cap_validate:l;native/capability/aienos_capability.c:aienos_cap_mint:l|R7,R12_host|Spec C3: the native C library at aienos.lock is the sole authoritative root. Checks that source as immutable blobs of the FULL locked commit (tools/aienos_lock_source.sh; identity in g6_lock_source) plus the omega binding; NOT_RUN if no repository holds the locked commit, MISSING_IMPLEMENTATION if the locked commit was read and lacks a symbol. R7 compares native authority with the Linux oracle.
 generation_mechanism_present|src/runtime/rx_generation.c:rx_gen_propose:f|R9,R13_host|Map row OM-022 and spec line 659 name rx_generation.c as the protected generation mechanism; rx_gen_propose is the entry chosen here (PROXY for the symbol). R9 barrier and R13 host promote.
 evidence_present|src/omega_evidence.c:omega_evidence_write_digest:f|R15_receipt,R9|PROXY: the spec names no evidence symbol; omega_evidence_write_digest (content-addressed evidence writer) chosen here. R15 receipt test and R9 evidence blob exercise it indirectly.
 r9_crash_recovery_passing|src/runtime/rx_generation.c:rx_gen_recover:f|R9|PROXY: R9 exercises rx_gen_recover (same routine as recovery_path_present, not independent). PASS means the R9 barrier test passed in this run.
@@ -368,7 +374,9 @@ while IFS='|' read -r key pairs tests basis; do
         if [ "$dr" = 0 ]; then d=true
         elif [ "$dr" = 2 ]; then d='"unreadable"'; if [ "$present" = true ]; then present=unknown; fi
         else d=false; present=false; fi
-        implj="$implj{\"file\": \"$pf\", \"symbol\": \"$sym\", \"defined\": $d}, "
+        src_kind=omega_tree; blobj=""
+        if [ "$kind" = l ]; then src_kind=aienos_lock_commit; blobj=", \"blob\": \"${G6BLOB[$pf]:-}\""; fi
+        implj="$implj{\"file\": \"$pf\", \"symbol\": \"$sym\", \"source\": \"$src_kind\", \"defined\": $d$blobj}, "
     done
     implj=${implj%, }
     tj=""; ts=PASS; IFS=',' read -ra TA <<< "$tests"
@@ -468,6 +476,7 @@ cat > "$OUT_RECEIPT_TMP" <<RECOBJ
     "operator_emergency_controls_passing": $(g6j operator_emergency_controls_passing),
     "benchmark_reference_paths_seq_passing": $(g6j benchmark_reference_paths_seq_passing)
   },
+  "g6_lock_source": $G6_LOCK_IDENTITY,
   "g6_items": [
 $G6LIST
   ],

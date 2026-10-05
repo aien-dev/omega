@@ -38,20 +38,18 @@ ALLEN_RX_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_c
 ALLEN_HDRS = src/allen/allen_bind.h src/runtime/rx_aien.h src/runtime/rx_world.h \
 	src/runtime/rx_cortex.h src/runtime/rx_cortex_record.h src/runtime/aienos_cap.h
 
-# The aienos trees the codec needs, at aienos.lock (same shape as the
-# $(AIENOS_CAP_LIB) rule). The stamp records the lock it was made for.
-$(ALLEN_STAMP): aienos.lock
+# The aienos trees the codec needs, at aienos.lock, proven like the $(AIENOS_CAP_LIB)
+# source (Makefile R7 block) on every build. The stamp records the lock and is rewritten
+# only when it changes, so a passing proof does not rebuild the objects.
+.PHONY: aienos-authority-allen
+aienos-authority-allen:
+	@$(call aienos_source,native/kernel/svc native/kernel/core native/argus native/store)
+
+$(ALLEN_STAMP): aienos.lock aienos-authority-allen
 	@mkdir -p $(ALLEN_DIR)
-	@if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ] && [ ! -f "$(ALLEN_AIENOS_SVC)/continuity_subject.h" ]; then \
-		git -C $(AIENOS_LOCK_REPO) cat-file -e $(AIENOS_LOCK)^{commit} 2>/dev/null || { \
-			echo "aienos.lock commit $(AIENOS_LOCK) is not in AIENOS_LOCK_REPO=$(AIENOS_LOCK_REPO)"; exit 1; }; \
-		mkdir -p "$(AIENOS_R7_DIR)" && \
-		git -C $(AIENOS_LOCK_REPO) archive $(AIENOS_LOCK) native/kernel/svc native/kernel/core native/argus native/store \
-			| tar -x -C "$(AIENOS_R7_DIR)"; \
-	fi
 	@test -f "$(ALLEN_AIENOS_SVC)/continuity_subject.h" || { \
 		echo "AIENOS_R7_DIR=$(AIENOS_R7_DIR) has no native/kernel/svc/continuity_subject.h (aienos.lock too old?)"; exit 1; }
-	@echo "$(AIENOS_LOCK)" > $@
+	@echo "$(AIENOS_LOCK)" | cmp -s - $@ || echo "$(AIENOS_LOCK)" > $@
 
 $(ALLEN_BIND_OBJ): src/allen/allen_bind.c $(ALLEN_HDRS) $(ALLEN_STAMP)
 	$(CC) $(CFLAGS) $(ALLEN_AIENOS_INC) -c -o $@ src/allen/allen_bind.c
