@@ -1,0 +1,21 @@
+PASS 16x16x16 rc=OK chip_ns=208545 call_ms=30.307 wall_ms=30.3 max_abs=2.08616e-07 max_rel=4.51833e-08 mismatches=0 e2e_rel=4.51833e-08 e2e_bad=0 grid=2x1 calls=1 rows_per_call=16 cache_hit2=1
+PASS 32x32x32 rc=OK chip_ns=103536 call_ms=0.298 wall_ms=0.3 max_abs=4.47035e-07 max_rel=5.60462e-08 mismatches=0 e2e_rel=5.60462e-08 e2e_bad=0 grid=4x2 calls=1 rows_per_call=32 cache_hit2=1
+PASS 64x64x64 rc=OK chip_ns=103728 call_ms=0.661 wall_ms=0.7 max_abs=1.00583e-06 max_rel=6.11591e-08 mismatches=0 e2e_rel=6.11591e-08 e2e_bad=0 grid=8x4 calls=1 rows_per_call=64 cache_hit2=1
+PASS 128x128x128 rc=OK chip_ns=103745 call_ms=2.508 wall_ms=2.7 max_abs=2.89083e-06 max_rel=9.41787e-08 mismatches=0 e2e_rel=9.41787e-08 e2e_bad=0 grid=8x8 calls=1 rows_per_call=128 cache_hit2=1
+PASS 256x256x256 rc=OK chip_ns=206625 call_ms=17.023 wall_ms=17.7 max_abs=8.43406e-06 max_rel=1.30669e-07 mismatches=0 e2e_rel=1.30669e-07 e2e_bad=0 grid=4x16 calls=1 rows_per_call=256 cache_hit2=1
+PASS 512x512x512 rc=OK chip_ns=1198005 call_ms=132.441 wall_ms=135.4 max_abs=2.39611e-05 max_rel=1.82928e-07 mismatches=0 e2e_rel=1.82928e-07 e2e_bad=0 grid=2x32 calls=1 rows_per_call=512 cache_hit2=1
+PASS 1x1024x1024 rc=OK chip_ns=214449 call_ms=1.887 wall_ms=7.7 max_abs=3.67463e-05 max_rel=1.48922e-07 mismatches=0 e2e_rel=1.48922e-07 e2e_bad=0 grid=64x1 calls=1 rows_per_call=16 cache_hit2=1
+PASS 1x256x1024 rc=OK chip_ns=107536 call_ms=0.639 wall_ms=1.9 max_abs=4.94719e-06 max_rel=7.52664e-08 mismatches=0 e2e_rel=7.52664e-08 e2e_bad=0 grid=64x1 calls=1 rows_per_call=16 cache_hit2=1
+PASS 16x1024x256 rc=OK chip_ns=105777 call_ms=4.427 wall_ms=5.8 max_abs=3.72902e-05 max_rel=1.45806e-07 mismatches=0 e2e_rel=1.45806e-07 e2e_bad=0 grid=32x1 calls=1 rows_per_call=16 cache_hit2=1
+FAIL: shape 8x1024x8 rc=CHIP_FAIL parity=0 max_rel=0 e2e_rel=0 rc2=CHIP_FAIL hit=1 repeat_mismatch=0
+FAIL 8x1024x8 rc=CHIP_FAIL chip_ns=105713 call_ms=0.331 wall_ms=0.4 max_abs=0 max_rel=0 mismatches=0 e2e_rel=0 e2e_bad=0 grid=1x1 calls=1 rows_per_call=16 cache_hit2=1
+PASS 1024x16x128 rc=OK chip_ns=103777 call_ms=2.689 wall_ms=2.8 max_abs=4.39584e-07 max_rel=9.37062e-08 mismatches=0 e2e_rel=9.37062e-08 e2e_bad=0 grid=1x64 calls=1 rows_per_call=1024 cache_hit2=1
+FAIL: shape 192x16x192 rc=CHIP_FAIL parity=0 max_rel=0 e2e_rel=0 rc2=CHIP_FAIL hit=1 repeat_mismatch=0
+FAIL 192x16x192 rc=CHIP_FAIL chip_ns=104688 call_ms=0.330 wall_ms=0.4 max_abs=0 max_rel=0 mismatches=0 e2e_rel=0 e2e_bad=0 grid=5x12 calls=1 rows_per_call=192 cache_hit2=1
+FAIL: shape 512x16x64 rc=CHIP_FAIL parity=0 max_rel=0 e2e_rel=0 rc2=CHIP_FAIL hit=1 repeat_mismatch=0
+FAIL 512x16x64 rc=CHIP_FAIL chip_ns=103953 call_ms=0.302 wall_ms=0.3 max_abs=0 max_rel=0 mismatches=0 e2e_rel=0 e2e_bad=0 grid=2x32 calls=1 rows_per_call=512 cache_hit2=1
+PASS 256x16x256 rc=OK chip_ns=103136 call_ms=1.484 wall_ms=1.5 max_abs=4.47035e-07 max_rel=9.74134e-08 mismatches=0 e2e_rel=9.74134e-08 e2e_bad=0 grid=4x16 calls=1 rows_per_call=256 cache_hit2=1
+FAIL: shape 128x16x512 rc=CHIP_FAIL parity=0 max_rel=0 e2e_rel=0 rc2=CHIP_FAIL hit=0 repeat_mismatch=65536
+FAIL 128x16x512 rc=CHIP_FAIL chip_ns=0 call_ms=20000.177 wall_ms=20000.2 max_abs=0 max_rel=0 mismatches=0 e2e_rel=0 e2e_bad=0 grid=8x8 calls=1 rows_per_call=128 cache_hit2=0
+device latched after an uncertain completion; stopping the sweep
+FAIL: 15 checks, 4 failed

@@ -1,0 +1,48 @@
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-omega-gpu)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-scheduler)
+   Compiling aien-inference-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-inference-runtime)
+    Finished `release` profile [optimized] target(s) in 24.69s
+     Running tests/logit_drift.rs (target/release/deps/logit_drift-65a1c4ae35788182)
+
+running 1 test
+test teacher_forced_logit_drift ... DRIFT omega backend: OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+DRIFT OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+DRIFT step= 0 ref_tok= 5253 "amount" ref_margin=0.3559 omega_tok= 5253 omega_margin=0.3481 max_abs_dlogit=0.0405 ref2=1353 "number" omega2=1353
+DRIFT step= 1 ref_tok=  310 "of" ref_margin=8.6432 omega_tok=  310 omega_margin=8.6462 max_abs_dlogit=0.0360 ref2=313 "(" omega2=313
+DRIFT step= 2 ref_tok= 9068 "processing" ref_margin=0.0005 omega_tok= 3370 omega_margin=0.0109 max_abs_dlogit=0.0314 ref2=3370 "memory" omega2=9068  <-- FLIP
+DRIFT step= 3 ref_tok= 3081 "power" ref_margin=4.3451 omega_tok= 3081 omega_margin=4.3204 max_abs_dlogit=0.0294 ref2=322 "and" omega2=322
+DRIFT step= 4 ref_tok=29889 "." ref_margin=0.6057 omega_tok=29889 omega_margin=0.6032 max_abs_dlogit=0.0374 ref2=29892 "," omega2=29892
+DRIFT step= 5 ref_tok=  739 "It" ref_margin=1.8958 omega_tok=  739 omega_margin=1.9061 max_abs_dlogit=0.0552 ref2=450 "The" omega2=450
+DRIFT step= 6 ref_tok=  338 "is" ref_margin=0.6017 omega_tok=  338 omega_margin=0.6043 max_abs_dlogit=0.0321 ref2=508 "can" omega2=508
+DRIFT step= 7 ref_tok= 8688 "designed" ref_margin=1.0599 omega_tok= 8688 omega_margin=1.0592 max_abs_dlogit=0.0307 ref2=10839 "ideal" omega2=10839
+DRIFT step= 8 ref_tok=  363 "for" ref_margin=0.6592 omega_tok=  363 omega_margin=0.6619 max_abs_dlogit=0.0380 ref2=304 "to" omega2=304
+DRIFT step= 9 ref_tok=  671 "use" ref_margin=0.2601 omega_tok=  671 omega_margin=0.2553 max_abs_dlogit=0.0478 ref2=848 "data" omega2=848
+DRIFT step=10 ref_tok=  297 "in" ref_margin=1.3438 omega_tok=  297 omega_margin=1.3358 max_abs_dlogit=0.0350 ref2=411 "with" omega2=411
+DRIFT step=11 ref_tok=  848 "data" ref_margin=1.0414 omega_tok=  848 omega_margin=1.0433 max_abs_dlogit=0.0455 ref2=16021 "scientific" omega2=16021
+DRIFT step=12 ref_tok= 1644 "cent" ref_margin=0.2187 omega_tok= 1644 omega_margin=0.2127 max_abs_dlogit=0.0452 ref2=7418 "analysis" omega2=7418
+DRIFT step=13 ref_tok=  414 "ers" ref_margin=4.1933 omega_tok=  414 omega_margin=4.2058 max_abs_dlogit=0.0482 ref2=690 "res" omega2=690
+DRIFT step=14 ref_tok=  322 "and" ref_margin=0.1636 omega_tok=  322 omega_margin=0.1655 max_abs_dlogit=0.0353 ref2=29892 "," omega2=29892
+DRIFT step=15 ref_tok=  916 "other" ref_margin=0.2406 omega_tok=  916 omega_margin=0.2266 max_abs_dlogit=0.0359 ref2=9570 "cloud" omega2=9570
+DRIFT step=16 ref_tok= 1880 "high" ref_margin=2.1495 omega_tok= 1880 omega_margin=2.1554 max_abs_dlogit=0.0294 ref2=23136 "environments" omega2=23136
+DRIFT step=17 ref_tok=29899 "-" ref_margin=4.9749 omega_tok=29899 omega_margin=4.9881 max_abs_dlogit=0.0328 ref2=4180 "performance" omega2=4180
+DRIFT step=18 ref_tok=  546 "per" ref_margin=2.8714 omega_tok=  546 omega_margin=2.8750 max_abs_dlogit=0.0379 ref2=2310 "dem" omega2=2310
+DRIFT step=19 ref_tok=13390 "formance" ref_margin=7.7574 omega_tok=13390 omega_margin=7.7408 max_abs_dlogit=0.0445 ref2=29888 "f" omega2=29888
+DRIFT step=20 ref_tok=20602 "computing" ref_margin=2.2848 omega_tok=20602 omega_margin=2.2969 max_abs_dlogit=0.0369 ref2=23136 "environments" omega2=23136
+DRIFT step=21 ref_tok=23136 "environments" ref_margin=1.8679 omega_tok=23136 omega_margin=1.8562 max_abs_dlogit=0.0439 ref2=8324 "applications" omega2=8324
+DRIFT step=22 ref_tok=29889 "." ref_margin=2.0514 omega_tok=29889 omega_margin=2.0371 max_abs_dlogit=0.0310 ref2=29892 "," omega2=29892
+DRIFT step=23 ref_tok=  450 "The" ref_margin=0.7405 omega_tok=  450 omega_margin=0.7512 max_abs_dlogit=0.0298 ref2=739 "It" omega2=739
+DRIFT step=24 ref_tok=  360 "D" ref_margin=1.5345 omega_tok=  360 omega_margin=1.5228 max_abs_dlogit=0.0369 ref2=20814 "Spark" omega2=20814
+DRIFT step=25 ref_tok=29954 "G" ref_margin=8.5581 omega_tok=29954 omega_margin=8.5726 max_abs_dlogit=0.0415 ref2=29990 "X" omega2=29990
+DRIFT step=26 ref_tok=29990 "X" ref_margin=11.0887 omega_tok=29990 omega_margin=11.0854 max_abs_dlogit=0.0594 ref2=29896 "1" omega2=29896
+DRIFT step=27 ref_tok=20814 "Spark" ref_margin=4.7139 omega_tok=20814 omega_margin=4.6767 max_abs_dlogit=0.0438 ref2=29899 "-" omega2=29899
+DRIFT step=28 ref_tok=  338 "is" ref_margin=0.9652 omega_tok=  338 omega_margin=0.9795 max_abs_dlogit=0.0387 ref2=756 "has" omega2=756
+DRIFT step=29 ref_tok= 1592 "equ" ref_margin=0.5200 omega_tok= 1592 omega_margin=0.5143 max_abs_dlogit=0.0326 ref2=15390 "capable" omega2=15390
+DRIFT step=30 ref_tok=16242 "ipped" ref_margin=12.6129 omega_tok=16242 omega_margin=12.6204 max_abs_dlogit=0.0415 ref2=2986 "pped" omega2=2986
+DRIFT step=31 ref_tok=  411 "with" ref_margin=9.5653 omega_tok=  411 omega_margin=9.5724 max_abs_dlogit=0.0322 ref2=304 "to" omega2=304
+DRIFT summary steps=32 flips=1 worst_max_abs_dlogit=0.0594
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 44.34s
+
+drift exit 0

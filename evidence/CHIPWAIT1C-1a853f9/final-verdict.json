@@ -1,0 +1,12 @@
+{
+  "campaign": "CHIPWAIT1C-1a853f9",
+  "omega_candidate": "1a853f98fbe9bd267cd134e8d1c2a9278f88f406",
+  "physics_candidate": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "rule_predeclared": "3/3 PASS",
+  "verdict": "FAIL",
+  "reason": "Runs 1 and 2 completed with provenance intact and both FAILED mandatory step world_lifecycle (same 3 gates, same tagged exits). Run 3 was stopped by the operator (Drake, 2026-10-03 12:02Z) during its build stage before any chip process started; it is INCOMPLETE and carries no verdict. Campaign cannot reach 3/3; verdict FAIL (not INVALID: all retained evidence is intact and hashed).",
+  "first_failing_run": "run-001",
+  "first_mandatory_failing_gate": "world_lifecycle: WORLD_ERROR_LATCH_COUNTS_ONCE (also WORLD_WAIT_REACHED_OR_PASSED, WORLD_TIMEOUT_COMPLETION_RACE)",
+  "first_tagged_failure": "GATE_DIAG gate=WORLD_ERROR_LATCH_COUNTS_ONCE exit=drain_after_recover_nonzero rc=-8(OMEGA_WORLD_ERR_HARDWARE) world_faulted=1 total_dispatches=3 (want drain 0)",
+  "written_by": "queen 2026-10-03T12:10Z after operator stop"
+}

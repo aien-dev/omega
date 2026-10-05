@@ -1,0 +1,6 @@
+{
+  "commands": [],
+  "error": "/home/drakestapleton/workspace/hive-worktrees/omega-m19-main/build/omegatool exited 1; see /home/drakestapleton/workspace/hive-worktrees/omega-m19-main/build/qual-runs/20261002T231810Z-cff3cba92208/m19.log",
+  "run_id": "20261002T231810Z-cff3cba92208",
+  "status": "FAILED"
+}

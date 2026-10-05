@@ -1,0 +1,104 @@
+simulator error 7
+FAIL: gqa_f32_tinyllama_32q4kv_ctx1 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_tinyllama_32q4kv_ctx1 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=72912 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: gqa_f32_tinyllama_32q4kv_ctx17 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_tinyllama_32q4kv_ctx17 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=46592 calls=1 unwritten=2048 | mutants 0/0 
+PASS gqa_f32_tinyllama_32q4kv_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.00183169 chip_ns=0 call_ns=30552396 calls=1 unwritten=0 | mutants 0/0 
+PASS gqa_f32_tinyllama_32q4kv_ctx2048 n=2048 rc=OK violations=0 worst_scaled_err=0.00274869 chip_ns=0 call_ns=242315088 calls=1 unwritten=0 | mutants 2/2 SLOT:CAUGHT(rc=OK,bad=2041) NO_RESCALE:CAUGHT(rc=OK,bad=1959)
+simulator error 7
+FAIL: gqa_f32_tinyllama_32q4kv_ctx65 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_tinyllama_32q4kv_ctx65 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=276049 calls=1 unwritten=2048 | mutants 0/0 
+PASS gqa_f32_tinyllama_32q4kv_ctx128 n=2048 rc=OK violations=0 worst_scaled_err=0.00206007 chip_ns=0 call_ns=15329358 calls=1 unwritten=0 | mutants 0/0 
+simulator error 7
+FAIL: gqa_f32_tinyllama_32q4kv_ctx129 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_tinyllama_32q4kv_ctx129 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=484883 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: gqa_f32_tinyllama_32q4kv_ctx300 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_tinyllama_32q4kv_ctx300 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=1012885 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: gqa_f32_tinyllama_32q4kv_ctx1000 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_tinyllama_32q4kv_ctx1000 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=3613123 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: gqa_f32_llama32_1b_32q8kv_ctx1 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_llama32_1b_32q8kv_ctx1 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=37360 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+simulator error 7
+FAIL: gqa_f32_llama32_1b_32q8kv_ctx17 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_llama32_1b_32q8kv_ctx17 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=33424 calls=1 unwritten=2048 | mutants 1/1 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=2048)
+PASS gqa_f32_llama32_1b_32q8kv_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.00201723 chip_ns=0 call_ns=30441371 calls=1 unwritten=0 | mutants 0/0 
+PASS gqa_f32_llama32_1b_32q8kv_ctx2048 n=2048 rc=OK violations=0 worst_scaled_err=0.0029454 chip_ns=0 call_ns=243348710 calls=1 unwritten=0 | mutants 2/2 SLOT:CAUGHT(rc=OK,bad=2045) NO_RESCALE:CAUGHT(rc=OK,bad=1904)
+simulator error 7
+FAIL: gqa_f32_llama32_1b_32q8kv_ctx65 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_llama32_1b_32q8kv_ctx65 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=335490 calls=1 unwritten=2048 | mutants 0/0 
+PASS gqa_f32_llama32_1b_32q8kv_ctx128 n=2048 rc=OK violations=0 worst_scaled_err=0.00170583 chip_ns=0 call_ns=15446399 calls=1 unwritten=0 | mutants 0/0 
+simulator error 7
+FAIL: gqa_f32_llama32_1b_32q8kv_ctx129 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_llama32_1b_32q8kv_ctx129 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=489555 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: gqa_f32_llama32_1b_32q8kv_ctx300 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_llama32_1b_32q8kv_ctx300 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=1241398 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: gqa_f32_llama32_1b_32q8kv_ctx1000 rc=CHIP_FAIL violations=2048 worst=0
+FAIL gqa_f32_llama32_1b_32q8kv_ctx1000 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=4342695 calls=1 unwritten=2048 | mutants 0/0 
+PASS gqa_f32_large_scores_32q4kv_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.105626 chip_ns=0 call_ns=30415899 calls=1 unwritten=0 | mutants 1/1 NO_MAX:CAUGHT(rc=OK,bad=2048)
+simulator error 7
+simulator error 7
+FAIL: paged_bf16_tinyllama_32q4kv_bs16_ctx1 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_tinyllama_32q4kv_bs16_ctx1 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=38048 calls=1 unwritten=2048 | mutants 1/1 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=2048)
+simulator error 7
+simulator error 7
+simulator error 7
+FAIL: paged_bf16_tinyllama_32q4kv_bs16_ctx17 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_tinyllama_32q4kv_bs16_ctx17 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=55600 calls=1 unwritten=2048 | mutants 2/2 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=2048) SLOT:CAUGHT(rc=CHIP_FAIL,bad=2048)
+PASS paged_bf16_tinyllama_32q4kv_bs16_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.00189413 chip_ns=0 call_ns=31356048 calls=1 unwritten=0 | mutants 0/0 
+PASS paged_bf16_tinyllama_32q4kv_bs16_ctx2048 n=2048 rc=OK violations=0 worst_scaled_err=0.00291208 chip_ns=0 call_ns=248494880 calls=1 unwritten=0 | mutants 3/3 KV_HEAD:CAUGHT(rc=OK,bad=2046) SLOT:CAUGHT(rc=OK,bad=2040) NO_RESCALE:CAUGHT(rc=OK,bad=1967)
+simulator error 7
+FAIL: paged_bf16_tinyllama_32q4kv_bs16_ctx65 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_tinyllama_32q4kv_bs16_ctx65 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=283873 calls=1 unwritten=2048 | mutants 0/0 
+PASS paged_bf16_tinyllama_32q4kv_bs16_ctx128 n=2048 rc=OK violations=0 worst_scaled_err=0.00157778 chip_ns=0 call_ns=15791153 calls=1 unwritten=0 | mutants 0/0 
+simulator error 7
+FAIL: paged_bf16_tinyllama_32q4kv_bs16_ctx129 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_tinyllama_32q4kv_bs16_ctx129 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=498467 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: paged_bf16_tinyllama_32q4kv_bs16_ctx300 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_tinyllama_32q4kv_bs16_ctx300 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=1035573 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: paged_bf16_tinyllama_32q4kv_bs16_ctx1000 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_tinyllama_32q4kv_bs16_ctx1000 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=3706003 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+simulator error 7
+FAIL: paged_bf16_llama32_1b_32q8kv_bs16_ctx1 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_llama32_1b_32q8kv_bs16_ctx1 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=43680 calls=1 unwritten=2048 | mutants 1/1 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=2048)
+simulator error 7
+simulator error 7
+simulator error 7
+FAIL: paged_bf16_llama32_1b_32q8kv_bs16_ctx17 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_llama32_1b_32q8kv_bs16_ctx17 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=56192 calls=1 unwritten=2048 | mutants 2/2 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=2048) SLOT:CAUGHT(rc=CHIP_FAIL,bad=2048)
+PASS paged_bf16_llama32_1b_32q8kv_bs16_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.00221906 chip_ns=0 call_ns=31421024 calls=1 unwritten=0 | mutants 0/0 
+PASS paged_bf16_llama32_1b_32q8kv_bs16_ctx2048 n=2048 rc=OK violations=0 worst_scaled_err=0.00301937 chip_ns=0 call_ns=248622944 calls=1 unwritten=0 | mutants 3/3 KV_HEAD:CAUGHT(rc=OK,bad=2046) SLOT:CAUGHT(rc=OK,bad=2043) NO_RESCALE:CAUGHT(rc=OK,bad=2026)
+simulator error 7
+FAIL: paged_bf16_llama32_1b_32q8kv_bs16_ctx65 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_llama32_1b_32q8kv_bs16_ctx65 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=285169 calls=1 unwritten=2048 | mutants 0/0 
+PASS paged_bf16_llama32_1b_32q8kv_bs16_ctx128 n=2048 rc=OK violations=0 worst_scaled_err=0.00178518 chip_ns=0 call_ns=15776449 calls=1 unwritten=0 | mutants 0/0 
+simulator error 7
+FAIL: paged_bf16_llama32_1b_32q8kv_bs16_ctx129 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_llama32_1b_32q8kv_bs16_ctx129 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=498483 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: paged_bf16_llama32_1b_32q8kv_bs16_ctx300 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_llama32_1b_32q8kv_bs16_ctx300 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=1036374 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: paged_bf16_llama32_1b_32q8kv_bs16_ctx1000 rc=CHIP_FAIL violations=2048 worst=0
+FAIL paged_bf16_llama32_1b_32q8kv_bs16_ctx1000 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=0 chip_ns=0 call_ns=3714051 calls=1 unwritten=2048 | mutants 0/0 
+simulator error 7
+FAIL: batch: the empty sequence is all zeros
+simulator error 7
+simulator error 7
+FAIL: paged_bf16_batch_3seq_32q8kv_ctx40_0_100 rc=CHIP_FAIL violations=6143 worst=48884.7
+FAIL paged_bf16_batch_3seq_32q8kv_ctx40_0_100 n=6144 rc=CHIP_FAIL violations=6143 worst_scaled_err=48884.7 chip_ns=0 call_ns=62609 calls=1 unwritten=4096 | mutants 2/2 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=6143) SLOT:CAUGHT(rc=CHIP_FAIL,bad=6143)
+mutant NO_MAX: caught 1 of 1
+mutant KV_HEAD: caught 8 of 8
+mutant SLOT: caught 7 of 7
+mutant NO_RESCALE: caught 4 of 4
+device_opens=0
+FAIL: 86 checks, 26 failed

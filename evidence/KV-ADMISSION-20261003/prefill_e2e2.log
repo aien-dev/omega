@@ -1,0 +1,74 @@
+
+AIEN-OBS fmt_rc 0
+    Checking getrandom v0.3.4
+    Checking tokio v1.53.1
+    Checking ring v0.17.14
+    Checking openssl-sys v0.9.117
+    Checking uuid v1.26.1
+    Checking cpufeatures v0.2.17
+    Checking aien-platform-linux v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-platform-linux)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-inference-abi)
+    Checking tempfile v3.27.0
+    Checking sha2 v0.10.9
+    Checking ahash v0.8.12
+    Checking rand_core v0.9.5
+    Checking aien-kv-cache v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-kv-cache)
+    Checking hashbrown v0.14.5
+    Checking spark-crumbs v0.1.0 (https://github.com/aien-dev/spark-crumbs?rev=9355a92bc9adfe95a6ec5f8ac926f38a0b6e7db2#9355a92b)
+    Checking crumb-spec v1.0.0 (https://github.com/aien-dev/crumb-spec?rev=24194d1b7917ef19244aae6bcaff510686b75fef#24194d1b)
+    Checking rand_chacha v0.9.0
+    Checking openssl v0.10.81
+    Checking rand v0.9.5
+    Checking hashlink v0.9.1
+    Checking rustls-webpki v0.103.15
+    Checking tokenizers v0.21.4
+    Checking rusqlite v0.31.0
+    Checking rustls v0.23.45
+    Checking native-tls v0.2.18
+    Checking tokio-util v0.7.19
+    Checking tower v0.5.3
+    Checking tokio-native-tls v0.3.1
+    Checking tokio-rustls v0.26.5
+    Checking tower-http v0.6.11
+    Checking h2 v0.4.19
+    Checking hyper v1.11.1
+    Checking hyper-util v0.1.20
+    Checking hyper-rustls v0.27.9
+    Checking hyper-tls v0.6.0
+    Checking axum v0.7.9
+    Checking reqwest v0.12.28
+    Checking aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-scheduler)
+    Checking cortex-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/cortex-rs)
+    Checking aien-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-runtime)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.97s
+
+AIEN-OBS clippy_rc 0
+   Compiling aien-platform-linux v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-platform-linux)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-inference-abi)
+   Compiling spark-max-cabi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/spark-max-cabi)
+   Compiling spark-max-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/spark-max-rs)
+   Compiling aien-kv-cache v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-kv-cache)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-scheduler)
+   Compiling aien-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-kv-admission/crates/aien-runtime)
+    Finished `release` profile [optimized] target(s) in 31.37s
+     Running tests/prefill_e2e2.rs (target/release/deps/prefill_e2e2-034a6b51b75361c2)
+
+running 1 test
+PREFILL_E2E2 prompt 217 tokens, appended 24 tokens, pool 22 blocks (needs 19)
+PREFILL_E2E2 append took 1756.2 ms for 24 tokens; one-shot controls took 17828.0 ms
+PREFILL_E2E2 check a_kv_equals_control PASS
+PREFILL_E2E2 check b_logits_and_tokens PASS
+PREFILL_E2E2 check c_blocks PASS
+PREFILL_E2E2 check d_only_new_computed PASS
+PREFILL_E2E2 check e_isolation PASS
+PREFILL_E2E2 check e_cow_witness PASS
+PREFILL_E2E2 check f_no_pool_exhaustion PASS
+PREFILL_E2E2 check g_reclaimed PASS
+PREFILL_E2E2 check h_fence PASS
+test prefill_e2e2_real_checkpoint_append_gate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 52.18s
+
+
+AIEN-OBS test_rc 0
+E2E2_RC=0

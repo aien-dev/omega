@@ -1,0 +1,187 @@
+   Compiling libc v0.2.189
+   Compiling cfg-if v1.0.5
+   Compiling syn v2.0.119
+   Compiling stable_deref_trait v1.2.1
+   Compiling smallvec v1.16.1
+   Compiling serde_core v1.0.229
+   Compiling itoa v1.0.18
+   Compiling pin-project-lite v0.2.17
+   Compiling bytes v1.12.1
+   Compiling futures-core v0.3.34
+   Compiling once_cell v1.21.4
+   Compiling writeable v0.6.4
+   Compiling litemap v0.8.3
+   Compiling slab v0.4.12
+   Compiling zerofrom v0.1.8
+   Compiling memchr v2.8.3
+   Compiling bitflags v2.13.2
+   Compiling utf8_iter v1.0.4
+   Compiling percent-encoding v2.3.2
+   Compiling icu_properties_data v2.3.0
+   Compiling icu_normalizer_data v2.3.0
+   Compiling crossbeam-utils v0.8.23
+   Compiling equivalent v1.0.2
+   Compiling yoke v0.8.3
+   Compiling futures-sink v0.3.34
+   Compiling foreign-types-shared v0.1.1
+   Compiling scopeguard v1.2.0
+   Compiling hashbrown v0.17.1
+   Compiling futures-task v0.3.34
+   Compiling zerocopy v0.8.57
+   Compiling foreign-types v0.3.2
+   Compiling try-lock v0.2.5
+   Compiling log v0.4.34
+   Compiling atomic-waker v1.1.2
+   Compiling tower-service v0.3.3
+   Compiling fnv v1.0.7
+   Compiling tracing-core v0.1.36
+   Compiling zerovec v0.11.8
+   Compiling zerotrie v0.2.5
+   Compiling futures-util v0.3.34
+   Compiling typenum v1.20.1
+   Compiling want v0.3.1
+   Compiling form_urlencoded v1.2.2
+   Compiling httparse v1.10.1
+   Compiling futures-channel v0.3.34
+   Compiling ryu v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling either v1.18.0
+   Compiling crossbeam-epoch v0.9.21
+   Compiling http v1.5.0
+   Compiling openssl-probe v0.2.1
+   Compiling tracing v0.1.44
+   Compiling aho-corasick v1.1.5
+   Compiling zmij v1.0.23
+   Compiling lock_api v0.4.14
+   Compiling sync_wrapper v1.0.2
+   Compiling minimal-lexical v0.2.1
+   Compiling tower-layer v0.3.3
+   Compiling base64 v0.22.1
+   Compiling regex-syntax v0.8.11
+   Compiling generic-array v0.14.7
+   Compiling indexmap v2.14.2
+   Compiling crossbeam-deque v0.8.8
+   Compiling ipnet v2.12.2
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling itertools v0.14.0
+   Compiling onig_sys v69.9.3
+   Compiling castaway v0.2.4
+   Compiling simdutf8 v0.1.5
+   Compiling socket2 v0.6.5
+   Compiling mio v1.2.3
+   Compiling icu_collections v2.3.0
+   Compiling icu_locale_core v2.3.0
+   Compiling getrandom v0.3.4
+   Compiling openssl-sys v0.9.117
+   Compiling rayon-core v1.13.0
+   Compiling parking_lot_core v0.9.12
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling http-body v1.1.0
+   Compiling rand_core v0.9.5
+   Compiling nom v7.1.3
+   Compiling http-body-util v0.1.5
+   Compiling parking_lot v0.12.5
+   Compiling aien-platform v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-platform)
+   Compiling tokio v1.53.1
+   Compiling rayon v1.12.0
+   Compiling zeroize v1.9.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling static_assertions v1.1.0
+   Compiling base64 v0.13.1
+   Compiling macro_rules_attribute v0.2.3
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-omega-gpu)
+   Compiling rustls-pki-types v1.15.1
+   Compiling encoding_rs v0.8.41
+   Compiling aien-platform-linux v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-platform-linux)
+   Compiling digest v0.10.7
+   Compiling serde v1.0.229
+   Compiling icu_provider v2.3.1
+   Compiling onig v6.5.3
+   Compiling darling_core v0.20.11
+   Compiling regex-automata v0.4.18
+   Compiling cpufeatures v0.2.17
+   Compiling thiserror v2.0.20
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling esaxx-rs v0.1.10
+   Compiling unicode-normalization-alignments v0.1.12
+   Compiling unicode_categories v0.1.1
+   Compiling dary_heap v0.3.9
+   Compiling serde_urlencoded v0.7.1
+   Compiling compact_str v0.9.1
+   Compiling mime v0.3.17
+   Compiling spm_precompiled v0.1.4
+   Compiling aien-abi-core v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-abi-core)
+   Compiling aien-kv-cache v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-kv-cache)
+   Compiling sha2 v0.10.9
+   Compiling ppv-lite86 v0.2.21
+   Compiling ahash v0.8.12
+   Compiling libloading v0.8.9
+   Compiling rand_chacha v0.9.0
+   Compiling openssl-macros v0.1.1
+   Compiling monostate-impl v0.1.18
+   Compiling rand v0.9.5
+   Compiling idna_adapter v1.2.2
+   Compiling darling_macro v0.20.11
+   Compiling idna v1.1.0
+   Compiling openssl v0.10.81
+   Compiling monostate v0.1.18
+   Compiling url v2.5.8
+   Compiling rayon-cond v0.4.0
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+   Compiling regex v1.13.1
+   Compiling tokio-util v0.7.19
+   Compiling tower v0.5.3
+   Compiling derive_builder_macro v0.20.2
+   Compiling tower-http v0.6.11
+   Compiling h2 v0.4.19
+   Compiling derive_builder v0.20.2
+   Compiling tokenizers v0.21.4
+   Compiling native-tls v0.2.18
+   Compiling tokio-native-tls v0.3.1
+   Compiling hyper v1.11.1
+   Compiling hyper-util v0.1.20
+   Compiling hyper-tls v0.6.0
+   Compiling reqwest v0.12.28
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-abi)
+    Finished `release` profile [optimized] target(s) in 18.85s
+     Running tests/omega_backend_parity.rs (target/release/deps/omega_backend_parity-9e970a1d5ed9ea59)
+
+running 4 tests
+test chip_attention_parity_on_tinyllama_shapes ... PARITY gqa seq=1 err/tol=0.000e0 worst at 0 got=-0.7203437 want=-0.7203437
+PARITY gqa seq=7 err/tol=2.119e-3 worst at 1796 got=-0.65524656 want=-0.65524644
+PARITY gqa seq=64 err/tol=1.637e-3 worst at 311 got=-0.13870107 want=-0.13870099
+PARITY gqa seq=300 err/tol=2.772e-3 worst at 911 got=0.06129198 want=0.061291892
+PARITY gqa seq=2048 err/tol=3.388e-3 worst at 37 got=0.03746087 want=0.037460778
+PARITY gqa_attention seq 1..2048 worst err/tolerance = 3.388e-3 (must be <= 1)
+PARITY paged_attention Fp32 worst err/tolerance = 2.033e-3 (must be <= 1)
+PARITY paged_attention_batch Fp32 worst err/tolerance = 1.712e-3 (must be <= 1)
+PARITY paged_attention Bf16 worst err/tolerance = 2.572e-3 (must be <= 1)
+PARITY paged_attention_batch Bf16 worst err/tolerance = 1.816e-3 (must be <= 1)
+PARITY attention OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+ok
+test chip_elementwise_parity_on_tinyllama_shapes ... PARITY rmsnorm 2048 worst err/tolerance = 2.891e-2 (must be <= 1)
+PARITY rope 32+4 heads x 64, 7 positions: bit mismatches = 0
+PARITY swiglu 5632 worst err/tolerance = 2.149e-2 (must be <= 1)
+PARITY elementwise OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+ok
+test chip_mixed_matmul_then_elementwise ... MIXED rmsnorm before matmul: chip_errors=0
+MIXED matmul: chip_errors=0
+MIXED rmsnorm after matmul: chip_errors=0 last_error=
+ok
+test chip_parity_on_tinyllama_shapes ... PARITY q_proj/o_proj 2048x2048: vec max_err/scale=2.440e-4 batch7 max_err/scale=2.612e-4
+PARITY k_proj/v_proj 256x2048: vec max_err/scale=1.970e-4 batch7 max_err/scale=2.087e-4
+PARITY gate/up_proj 5632x2048: vec max_err/scale=2.335e-4 batch7 max_err/scale=2.650e-4
+PARITY down_proj 2048x5632: vec max_err/scale=1.547e-4 batch7 max_err/scale=1.647e-4
+PARITY lm_head 32000x2048: vec max_err/scale=2.608e-4 batch7 max_err/scale=2.998e-4
+PARITY overall worst max_err/scale = 2.998e-4
+PARITY resident weights = 5
+PARITY OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.75s
+
+parity exit 0

@@ -1,0 +1,18 @@
+omega_gb10_execute_simt_op: refused before submission: op EXP is not encoded for GB10: no GB10 kernel for the Omega exp polynomial exists (the old path ran FADD)
+omega_gb10_execute_simt_op: refused before submission: op LOG is not encoded for GB10: no GB10 kernel for the Omega log polynomial exists (the old path ran FADD)
+omega_gb10_execute_simt_op: refused before submission: variant LDS.U8 is not encoded for GB10: only the 32-bit LDS form is encoded (the old byte-wide words were never a round trip)
+omega_gb10_execute_simt_op: refused before submission: variant STS.U8 is not encoded for GB10: only the 32-bit STS form is encoded (the old byte-wide words were never a round trip)
+omega_gb10_execute_simt_op: refused before submission: variant LDS.S8 is not encoded for GB10: only the 32-bit LDS form is encoded
+omega_gb10_execute_simt_op: refused before submission: variant LDS.U16 is not encoded for GB10: only the 32-bit LDS form is encoded
+omega_gb10_execute_simt_op: refused before submission: variant STS.U16 is not encoded for GB10: only the 32-bit STS form is encoded
+omega_gb10_execute_simt_op: refused before submission: variant LDS.64 is not encoded for GB10: only the 32-bit LDS form is encoded (no 64-bit register pair form)
+omega_gb10_execute_simt_op: refused before submission: variant STS.64 is not encoded for GB10: only the 32-bit STS form is encoded (no 64-bit register pair form)
+omega_gb10_execute_simt_op: refused before submission: variant LDS.128 is not encoded for GB10: only the 32-bit LDS form is encoded (no 128-bit form)
+omega_gb10_execute_simt_op: refused before submission: variant STS.128 is not encoded for GB10: only the 32-bit STS form is encoded (no 128-bit form)
+omega_gb10_execute_simt_op: refused before submission: variant SHFL_UP is not encoded for GB10: only SHFL.DOWN is encoded
+omega_gb10_execute_simt_op: refused before submission: variant SHFL_BFLY is not encoded for GB10: only SHFL.DOWN is encoded
+omega_gb10_execute_simt_op: refused before submission: variant SHFL_IDX is not encoded for GB10: only SHFL.DOWN is encoded
+omega_gb10_execute_simt_op: refused before submission: variant REDUCE_MAX is not encoded for GB10: only the declared-order FP32 sum is encoded
+omega_gb10_execute_simt_op: refused before submission: variant REDUCE_MIN is not encoded for GB10: only the declared-order FP32 sum is encoded
+omega_gb10_execute_simt_op: refused before submission: variant REDUCE_SUM_BLOCK is not encoded for GB10: only the per-warp (32-lane) sum is encoded, not a CTA-wide one
+omega_gb10_execute_simt_op: refused before submission: unknown numeric op 'FDIV_TYPO'

@@ -1,0 +1,18 @@
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-omega-gpu)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-scheduler)
+   Compiling aien-inference-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-runtime)
+    Finished `release` profile [optimized] target(s) in 24.91s
+     Running tests/strict_real_model.rs (target/release/deps/strict_real_model-ce3ae7a80f01a44b)
+
+running 1 test
+test strict_real_model_gate ... STRICT_GATE surface: NVIDIA GB10 (121 GB Unified Memory)
+STRICT_GATE backend: OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+STRICT_GATE output: "amount of memory and processing power. It"
+STRICT_GATE OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+STRICT_GATE verdict: PASS (receipt /home/drakestapleton/workspace/evidence-out/FB1-CUT6A/strict-receipt.json)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 22.39s
+
+default exit 0

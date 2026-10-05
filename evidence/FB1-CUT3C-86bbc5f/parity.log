@@ -1,0 +1,28 @@
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-omega-gpu)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-inference-abi)
+    Finished `release` profile [optimized] target(s) in 17.76s
+     Running tests/omega_backend_parity.rs (target/release/deps/omega_backend_parity-3e125ba87c6f1c4d)
+
+running 3 tests
+test chip_elementwise_parity_on_tinyllama_shapes ... PARITY rmsnorm 2048 worst err/tolerance = 2.891e-2 (must be <= 1)
+PARITY rope 32+4 heads x 64, 7 positions: bit mismatches = 0
+PARITY swiglu 5632 worst err/tolerance = 2.149e-2 (must be <= 1)
+PARITY elementwise OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,compute_logits] reference=[gqa_attention,paged_attention,paged_attention_batch] native_fallbacks=[] reference_runs=[]
+ok
+test chip_mixed_matmul_then_elementwise ... MIXED rmsnorm before matmul: chip_errors=0
+MIXED matmul: chip_errors=0
+MIXED rmsnorm after matmul: chip_errors=0 last_error=
+ok
+test chip_parity_on_tinyllama_shapes ... PARITY q_proj/o_proj 2048x2048: vec max_err/scale=2.440e-4 batch7 max_err/scale=2.612e-4
+PARITY k_proj/v_proj 256x2048: vec max_err/scale=1.970e-4 batch7 max_err/scale=2.087e-4
+PARITY gate/up_proj 5632x2048: vec max_err/scale=2.335e-4 batch7 max_err/scale=2.650e-4
+PARITY down_proj 2048x5632: vec max_err/scale=1.547e-4 batch7 max_err/scale=1.647e-4
+PARITY lm_head 32000x2048: vec max_err/scale=2.608e-4 batch7 max_err/scale=2.998e-4
+PARITY overall worst max_err/scale = 2.998e-4
+PARITY resident weights = 5
+PARITY OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,compute_logits] reference=[gqa_attention,paged_attention,paged_attention_batch] native_fallbacks=[] reference_runs=[]
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.52s
+
+parity exit 0

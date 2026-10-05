@@ -1,0 +1,2585 @@
+============================================================
+    AIEN Sovereign Agent Preflight Verification Harness     
+============================================================
+[1/5] Verifying Branch Isolation... PASSED (Branch: feat/fb1-cut6-zero-cuda)
+[2/5] Auditing Zero Disk Secrets... PASSED (Zero disk secrets detected)
+[3/5] Verifying Unslop & Anti-Slop Discipline... PASSED (Zero em/en dashes in diff)
+[4/5] Running Workspace Test Suite...
+   Compiling syn v3.0.6
+   Compiling serde_core v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling async-trait v0.1.92
+   Compiling serde v1.0.229
+   Compiling aien-abi-core v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-abi-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.37s
+     Running unittests src/lib.rs (target/debug/deps/aien_abi_core-1800de31b2495ff8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_abi_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-abi-core                    ran      pass     2441 ms
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+   Compiling serde_json v1.0.151
+   Compiling syn v3.0.6
+   Compiling cpufeatures v0.2.17
+   Compiling sha2 v0.10.9
+   Compiling serde_derive v1.0.229
+   Compiling serde v1.0.229
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling toml_edit v0.22.27
+   Compiling toml v0.8.23
+   Compiling aien-campaign-verifier v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-campaign-verifier)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.83s
+     Running unittests src/lib.rs (target/debug/deps/aien_campaign_verifier-adc61f72e4988f93)
+
+running 17 tests
+test kv::tests::double_release_is_a_violation_without_underflow ... ok
+test kv::tests::duplicate_fork_is_a_violation_and_changes_nothing ... ok
+test kv::tests::cow_of_private_block_is_flagged ... ok
+test kv::tests::reported_metrics_must_match_replay ... ok
+test kv::tests::fork_diverge_release_conserves ... ok
+test kv::tests::referenced_block_in_free_set_breaks_conservation ... ok
+test placement::tests::glob ... ok
+test placement::tests::backend_claiming_gpu_without_kernel_fails ... ok
+test placement::tests::fallback_fails ... ok
+test placement::tests::honest_hybrid_run_passes ... ok
+test kv::tests::journal_omitting_a_release_disagrees_with_census ... ok
+test kv::tests::write_to_shared_block_is_an_isolation_violation ... ok
+test placement::tests::kernel_under_cpu_report_fails ... ok
+test placement::tests::required_gpu_op_on_cpu_fails ... ok
+test placement::tests::wrong_kernel_symbol_fails ... ok
+test placement::tests::pending_allowlist_never_passes ... ok
+test placement::tests::orphan_witness_kernel_fails ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/aien_campaign_verifier-3d5f0ed909169cf6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/independence.rs (target/debug/deps/independence-2d68ac69a6b8f8f6)
+
+running 1 test
+test verifier_has_no_dependency_on_code_under_test ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_campaign_verifier
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-campaign-verifier           ran      pass     3899 ms
+   Compiling aien-capability v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-capability)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/aien_capability-e7d9564a2e9cbb7b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/effects.rs (target/debug/deps/effects-b06304cf39a218a7)
+
+running 2 tests
+test highest_declared_bit_wins ... ok
+test speculation_is_safe_only_for_reversible_classes ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_capability
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-capability                  ran      pass      339 ms
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-omega-gpu)
+warning: aien-omega-gpu@0.1.0: aien-omega-gpu: no AIEN_OMEGA_DIR or AIEN_OMEGA_GPU_LIB, building the CPU stub
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-scheduler)
+   Compiling aien-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-runtime)
+   Compiling aien-cli v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.31s
+     Running unittests src/lib.rs (target/debug/deps/aien_cli-00e620cb4c6d52a0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/aien_cli-c6131a25fdde2492)
+
+running 47 tests
+test commands::tests::strict_checkpoint_real_tinyllama_loads ... ignored, needs AIEN_E2E_CHECKPOINT (TinyLlama dir or model.safetensors); forge runs it
+test commands::tests::verify_daemon_checkpoint_resolution_probe ... ok
+test context7::tests::error_text_does_not_keep_a_key ... ok
+test context7::tests::library_ids_match_context7_shape ... ok
+test compaction::tests::test_context_compactor_pruning ... ok
+test context7::tests::sync_catalog_covers_the_stack_in_use ... ok
+test safety::tests::test_path_confinement_validation ... ok
+test commands::tests::checkpoint_explicit_path_beats_directory_scan ... ok
+test safety::tests::test_unmasked_secret_patterns ... ok
+test safety::tests::test_secret_leak_paths ... ok
+test context7::tests::preferred_library_id_beats_the_first_hit ... ok
+test sandbox::tests::test_sandbox_dispatch_unknown ... ok
+test commands::tests::checkpoint_policy_reads_explicit_paths_and_flag ... ok
+test science_context::tests::query_terms_drop_common_words ... ok
+test commands::tests::strict_checkpoint_refuses_empty_scan ... ok
+test context7::tests::rendered_reference_names_the_library_and_clips ... ok
+test science_context::tests::parses_seed_notes ... ok
+test commands::tests::strict_checkpoint_refuses_missing_file ... ok
+test skills::tests::frontmatter_is_not_returned_as_body ... ok
+test skills::tests::preview_stops_at_the_first_paragraph ... ok
+test context7::tests::query_payload_clips_code_and_keeps_the_library_id ... ok
+test subagents::tests::test_subagent_root_spec ... ok
+test subagents::tests::test_subagent_depth_guard ... ok
+test sandbox::tests::test_sandbox_constants ... ok
+test safety::tests::test_policy_precedence_and_fail_closed ... ok
+test skills::tests::preview_uses_first_body_paragraph_and_budget ... ok
+test skills::tests::search_returns_one_matching_paragraph ... ok
+test context7::tests::resolve_payload_keeps_five_ids_and_drops_the_rest ... ok
+test tools::tests::test_safety_engine_allows_adapter_and_socratic ... ok
+test tools::tests::test_adapter_tool_dispatch_evaluate ... ok
+test tools::tests::test_adapter_tool_dispatch_plan ... ok
+test tools::tests::test_path_confinement_in_tool_dispatch ... ok
+test tools::tests::test_adapter_tool_dispatch_list ... ok
+test subagents::tests::test_subagent_spec_serialization ... ok
+test subagents::tests::test_subagents_list_and_view ... ok
+test tools::tests::effect_receipt_is_hashed_and_secret_free ... ok
+test commands::tests::strict_checkpoint_refuses_scan_mismatch ... ok
+test commands::tests::strict_checkpoint_refuses_shape_mismatch ... ok
+test hooks::tests::test_unslop_hook ... ok
+test sandbox::tests::test_sandbox_status_serialization ... ok
+test hooks::tests::test_vault_redactor_hook ... ok
+test vault::tests::test_secret_redaction_patterns ... ok
+test client::tests::test_extract_tool_calls_robustness ... ok
+test commands::tests::test_slash_command_adapter_suite ... ok
+test client::tests::native_chat_uses_the_runtime_socket_not_http ... ok
+test commands::tests::checkpoint_fallback_without_flag_is_reported ... ok
+test tools::tests::test_policy_approved_write_reaches_effect_handler ... ok
+
+test result: ok. 46 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 1.92s
+
+     Running tests/test_cli_runtime_ipc.rs (target/debug/deps/test_cli_runtime_ipc-7fde3014b2620dea)
+
+running 1 test
+test test_cli_runtime_ipc_lifecycle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests aien_cli
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-cli                         ran      pass     5323 ms
+   Compiling aien-proof v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-proof)
+   Compiling aien-closure v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-closure)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.56s
+     Running unittests src/lib.rs (target/debug/deps/aien_closure-f74aa6ff3893ca78)
+
+running 12 tests
+test declare::tests::agreement_has_no_findings ... ok
+test declare::tests::row_actual_not_declared_is_undeclared_import ... ok
+test declare::tests::row_declared_not_actual_is_unverified_dependency ... ok
+test declare::tests::extra_needs_finds_only_unknown_pairs ... ok
+test declare::tests::step8_stored_source_imports_against_dependencies ... ok
+test graph::tests::closure_is_transitive ... ok
+test graph::tests::cycle_found_and_absent ... ok
+test graph::tests::c_scanner_on_fixture_dir ... ok
+test graph::tests::c_scanner_sees_header_cycle ... ok
+test graph::tests::include_line_parsing ... ok
+test manifest::tests::rejects_malformed ... ok
+test manifest::tests::round_trips ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/verify_closure-a322f7cf3c6f62a7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/closure.rs (target/debug/deps/closure-b52e4e3aa6c3bdf3)
+
+running 18 tests
+test regenerate_committed_fixture ... ignored
+test nine_codes_have_distinct_exit_codes_and_names ... ok
+test usage_error_is_exit_2 ... ok
+test committed_seeded_fixture_passes ... ok
+test no_manifests_fails_closed ... ok
+test unverified_dependency ... ok
+test tainted_artifact_test_only_trust ... ok
+test pass_case ... ok
+test receipt_hash_mismatch ... ok
+test stale_receipt_when_receipt_records_other_source ... ok
+test dependency_cycle ... ok
+test stale_receipt ... ok
+test dependency_not_pinned ... ok
+test missing_receipt ... ok
+test unknown_verifier_profile ... ok
+test undeclared_import ... ok
+test tainted_artifact_dirty ... ok
+test dependency_not_pinned_when_lock_is_stale ... ok
+
+test result: ok. 17 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/declaration_codes.rs (target/debug/deps/declaration_codes-eaf1b90373b2c195)
+
+running 13 tests
+test rows_1_to_4_map_to_four_distinct_exit_codes ... ok
+test row1_not_undeclared_and_not_unverified_twin ... ok
+test row2_not_undeclared_and_not_not_pinned_twin ... ok
+test row3_not_undeclared_twin ... ok
+test row4_not_unverified_and_not_not_pinned_twin ... ok
+test row1_pin_that_is_not_the_dependencys_receipt_is_not_pinned ... ok
+test row2_extra_pin_and_missing_pin_together_report_both ... ok
+test row3_declared_dep_that_is_not_an_edge_is_unverified_dependency ... ok
+test row2_lock_line_with_no_edge_is_unverified_dependency ... ok
+test row1_edge_without_receipt_pin_is_not_pinned ... ok
+test row3_declared_dep_without_pin_that_is_not_an_edge_is_still_unverified ... ok
+test row4_actual_edge_not_declared_is_undeclared_import ... ok
+test row2_wrong_id_and_missing_line_stay_not_pinned ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/receipt_crosscheck.rs (target/debug/deps/receipt_crosscheck-a7515e81cb288872)
+
+running 7 tests
+test regenerate_receipt_fixtures ... ignored
+test cases_cover_what_the_c_fixtures_do_not ... ok
+test committed_files_verify_by_their_own_file_name ... ok
+test store_bound_cases_are_refused_without_a_store_and_the_rest_are_not ... ok
+test every_case_is_decided_as_the_table_says ... ok
+test committed_fixtures_are_exactly_what_is_minted ... ok
+test changing_any_bound_field_breaks_the_id ... ok
+
+test result: ok. 6 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests aien_closure
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-closure                     ran      pass     1812 ms
+   Compiling syn v2.0.119
+   Compiling tokio v1.53.1
+   Compiling futures-task v0.3.34
+   Compiling tracing v0.1.44
+   Compiling aien-platform-linux v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-platform-linux)
+warning: aien-omega-gpu@0.1.0: aien-omega-gpu: no AIEN_OMEGA_DIR or AIEN_OMEGA_GPU_LIB, building the CPU stub
+   Compiling futures-util v0.3.34
+   Compiling aien-kv-cache v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-kv-cache)
+   Compiling darling_core v0.20.11
+   Compiling openssl-macros v0.1.1
+   Compiling monostate-impl v0.1.18
+   Compiling tokio-util v0.7.19
+   Compiling tower v0.5.3
+   Compiling monostate v0.1.18
+   Compiling openssl v0.10.81
+   Compiling tower-http v0.6.11
+   Compiling h2 v0.4.19
+   Compiling darling_macro v0.20.11
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+   Compiling derive_builder_macro v0.20.2
+   Compiling hyper v1.11.1
+   Compiling native-tls v0.2.18
+   Compiling tokio-native-tls v0.3.1
+   Compiling derive_builder v0.20.2
+   Compiling tokenizers v0.21.4
+   Compiling hyper-util v0.1.20
+   Compiling hyper-tls v0.6.0
+   Compiling reqwest v0.12.28
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-abi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.82s
+     Running unittests src/lib.rs (target/debug/deps/aien_inference_abi-d40063aca9c96125)
+
+running 88 tests
+test backend::tests::test_reference_backend_name ... ok
+test backend::tests::test_reference_compute_logits ... ok
+test capsule::tests::row_major_strides_match_c_order ... ok
+test backend::tests::test_reference_rmsnorm_matches_tensor ... ok
+test backend::tests::test_reference_swiglu ... ok
+test backend::tests::test_reference_rope_matches_tensor ... ok
+test checkpoint::tests::test_bf16_fp32_codec_roundtrip ... ok
+test checkpoint::tests::test_tinyllama_catalog_size_and_shapes ... ok
+test backend::tests::test_reference_gqa_attention ... ok
+test backend::tests::test_reference_matmul_matches_tensor ... ok
+test capsule::tests::source_digest_of_abc_matches_well_known_sha256 ... ok
+test checkpoint::tests::test_invalid_header_truncated_buffer ... ok
+test checkpoint::tests::test_dtype_mismatch_loud_error ... ok
+test checkpoint::tests::test_offset_out_of_bounds_loud_error ... ok
+test moe_plan::tests::weighted_inverse_permutation_preserves_token_values ... ok
+test checkpoint::tests::test_valid_custom_catalog_parsing ... ok
+test capsule::tests::decode_fp32_bf16_one_and_owned_len_and_missing_tensor ... ok
+test checkpoint::tests::test_missing_tensor_loud_error ... ok
+test checkpoint::tests::test_shape_mismatch_loud_error ... ok
+test checkpoint::tests::test_capsule_owns_file_bytes_and_byte_range_points_at_payload ... ok
+test moe_plan::tests::qwen_routing_groups_and_restores_all_assignments ... ok
+test capsule::tests::capsule_digest_is_stable_across_hashmap_insertion_order ... ok
+test native_ops::tests::default_mask_is_all_native ... ok
+test native_ops::tests::default_report_is_all_native ... ok
+test native_ops::tests::mask_with_without_and_lists ... ok
+test native_ops::tests::op_names_unique_and_match_indices ... ok
+test checkpoint::tests::test_from_bf16_tensors_one_buffer ... ok
+test native_ops::tests::reference_op_outside_mask_does_not_count_as_fallback ... ok
+test checkpoint::tests::test_header_len_arithmetic_overflow ... ok
+test moe_plan::tests::rejects_corrupt_router_values_and_shape ... ok
+test omega_backend::tests::attention_chip_error_is_a_counted_fallback ... ok
+test omega_backend::tests::chip_error_is_a_counted_fallback ... ok
+test omega_backend::tests::elementwise_chip_errors_are_counted_fallbacks ... ok
+test omega_backend::tests::fingerprint_changes_with_content ... ok
+test qwen3_coder::tests::coder_constants_match_official_config ... ok
+test native_ops::tests::claimed_native_op_falling_back_is_counted_and_trips_strict ... ok
+test qwen3_moe::tests::bf16_rounds_to_nearest_even ... ok
+test native_ops::tests::report_lists_native_and_reference_and_counters ... ok
+test qwen3_coder::tests::bf16_words_reads_aligned_payload ... ok
+test omega_backend::tests::rope_table_reproduces_reference_rope ... ok
+test omega_backend::tests::mask_is_all_nine_ops ... ok
+test qwen3_coder::tests::bf16_words_rejects_misaligned_payload - should panic ... ok
+test omega_backend::tests::chip_error_trips_strict_in_production - should panic ... ok
+test qwen3_coder::tests::bf16_words_rejects_odd_length - should panic ... ok
+test qwen3_moe::tests::shard_names_cannot_escape_the_checkpoint_directory ... ok
+test qwen3_moe::tests::fp8_e4m3fn_decodes_known_values ... ok
+test mojo_backend::tests::test_mojo_backend_creation_and_name ... ok
+test mojo_backend::tests::test_mojo_backend_fallback_or_accelerated_parity ... ok
+test tensor::tests::test_matmul_exact ... ok
+test tensor::tests::test_rmsnorm_invariance ... ok
+test tensor::tests::test_rope_norm_preservation ... ok
+test tensor_abi::tests::c_abi_layout_is_stable ... ok
+test tensor::tests::test_rope_rotate_half ... ok
+test tensor::tests::test_sample_argmax ... ok
+test qwen3_moe::tests::fp8_encode_rounds_to_nearest_even_and_saturates ... ok
+test strict::tests::reference_ops_by_design_pass_the_receipt_gate ... ok
+test strict::tests::claimed_native_fallback_fails_the_receipt_gate ... ok
+test tensor::tests::test_swiglu_activation ... ok
+test qwen3_coder::tests::fp8_block128_roundtrip_spot_check ... ok
+test tensor_abi::tests::capsule_views_preserve_typed_payload_and_quantization ... ok
+test tests::test_mock_inference_backend ... ok
+test tokenizer::tests::test_chat_template_with_empty_system ... ok
+test tokenizer::tests::test_chat_template_with_system ... ok
+test tokenizer::tests::test_chat_template_without_system ... ok
+test tokenizer::tests::test_pinned_special_tokens ... ok
+test tensor_abi::tests::f32_view_records_shape_stride_and_host_residency ... ok
+test tokenizer::tests::test_stop_and_eos_token_checks ... ok
+test tests::test_blackwell_inference_backend ... FAILED
+test tests::test_mojo_inference_backend ... ok
+test transformer_backend::tests::test_native_transformer_generate_tokens ... ok
+test weights::tests::test_reference_weights_initialization ... ok
+test transformer_backend::tests::test_forward_token_and_logits_execution ... ok
+test transformer_backend::tests::test_backend_constructors ... ok
+test tests::test_embedded_inference_backend_execution ... ok
+test transformer_backend::tests::test_native_transformer_generate_tokens_streaming ... ok
+test transformer_backend::tests::test_paged_cow_context_and_branch_fork ... ok
+test moe_plan::tests::five_hundred_branch_batch_exposes_expert_histogram ... ok
+test tokenizer::tests::test_synthetic_tokenizer_roundtrip ... ok
+test weights::tests::test_from_loaded_checkpoint_success_and_missing_key ... ok
+test tests::test_max_serving_backend ... ok
+test tests::test_native_cpu_inference_backend ... ok
+test transformer_backend::tests::c3_chunked_prefill_execute_step_paged ... ok
+test transformer_backend::tests::c3_chunked_prefill_logits_match_one_shot_unpaged ... ok
+test transformer_backend::tests::c3_chunked_prefill_execute_step_unpaged ... ok
+test transformer_backend::tests::c3_chunked_prefill_logits_match_one_shot_paged ... ok
+test qwen3_moe::tests::oracle_matches_hand_computed_identity_expert ... ok
+test qwen3_moe::tests::loader_reads_one_layer_from_a_sharded_checkpoint_and_rejects_bad_contracts ... ok
+test qwen3_moe::tests::capsule_views_round_trip_and_digest_covers_payload ... ok
+
+failures:
+
+---- tests::test_blackwell_inference_backend stdout ----
+OMEGA_BACKEND chip error: rmsnorm dim=64: omega gpu unavailable (stub build)
+
+thread 'tests::test_blackwell_inference_backend' (3672022) panicked at crates/aien-inference-abi/src/strict.rs:52:9:
+STRICT_REAL_MODEL_VIOLATION: OmegaGb10Backend fell back to CPU in rmsnorm; this production build refuses to fall back (a dev/test run sets AIEN_DEV_FALLBACK=1 or builds with --features dev-fallback)
+
+
+failures:
+    tests::test_blackwell_inference_backend
+
+test result: FAILED. 87 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+
+error: test failed, to rerun pass `-p aien-inference-abi --lib`
+[aien-proof] aien-inference-abi               ran      FAIL    10040 ms
+    Blocking waiting for file lock on build directory
+warning: aien-omega-gpu@0.1.0: aien-omega-gpu: no AIEN_OMEGA_DIR or AIEN_OMEGA_GPU_LIB, building the CPU stub
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-scheduler)
+   Compiling aien-inference-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.08s
+     Running unittests src/lib.rs (target/debug/deps/aien_inference_runtime-8a737d0bf32e16a9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/logit_drift.rs (target/debug/deps/logit_drift-d75febd9f2cf80f9)
+
+running 5 tests
+test teacher_forced_logit_drift ... ignored, needs the real checkpoint and the GB10 with a native Omega build; heavy queue only
+test judge_accepts_agreement_and_explained_near_tie ... ok
+test judge_rejects_unexplained_flip_and_large_drift ... ok
+test compare_finds_flip_margin_and_difference ... ok
+test compare_keeps_nan_so_the_judge_fails_it ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime_tests.rs (target/debug/deps/runtime_tests-274426e2269573e2)
+
+running 1 test
+test test_embedded_inference_service_reference_weights ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 37.36s
+
+     Running tests/strict_real_model.rs (target/debug/deps/strict_real_model-c0abbbe44d4838a2)
+
+running 5 tests
+test omega_vs_reference_real_model ... ignored, needs the real checkpoint and the GB10 with a native Omega build; heavy queue only
+test strict_real_model_gate ... ignored, needs the real checkpoint on the Spark: AIEN_E2E_CHECKPOINT + AIEN_STRICT_RECEIPT
+test production_build_is_strict_unless_opted_in ... ok
+test missing_checkpoint_is_refused_not_faked ... ok
+test receipt_rejects_fallbacks_and_dev_builds ... ok
+
+test result: ok. 3 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_inference_runtime
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-inference-runtime           ran      pass    43539 ms
+   Compiling futures-core v0.3.34
+   Compiling slab v0.4.12
+   Compiling syn v3.0.6
+   Compiling tokio v1.53.1
+   Compiling futures-macro v0.3.34
+   Compiling serde_derive v1.0.229
+   Compiling async-trait v0.1.92
+   Compiling futures-util v0.3.34
+   Compiling serde v1.0.229
+   Compiling aien-inference-service v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-service)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.44s
+     Running unittests src/lib.rs (target/debug/deps/aien_inference_service-975f2e6b8a0777c0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/protocol_tests.rs (target/debug/deps/protocol_tests-90b561bc21de3da7)
+
+running 2 tests
+test test_inference_event_variants ... ok
+test test_inference_request_builder_and_defaults ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_inference_service
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-inference-service           ran      pass     2487 ms
+   Compiling smallvec v1.16.1
+   Compiling parking_lot_core v0.9.12
+   Compiling parking_lot v0.12.5
+   Compiling aien-platform-linux v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-platform-linux)
+   Compiling aien-kv-cache v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-kv-cache)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.82s
+     Running unittests src/lib.rs (target/debug/deps/aien_kv_cache-bb52059b6fd2e1f3)
+
+running 12 tests
+test tests::test_kv_layout_independent_address_parity ... ok
+test tests::test_kv_layout_rejects_total_bytes_overflow ... ok
+test tests::test_bf16_pool_roundtrip ... ok
+test tests::test_kv_layout_stride_invariants ... ok
+test tests::test_kv_pool_device_copy_and_zero ... ok
+test tests::test_physical_byte_pattern ... ok
+test tests::test_prefill_gate_allocation_is_not_ready ... ok
+test tests::test_prefill_gate_fence_requires_pending_then_shares_frozen ... ok
+test tests::test_prefill_gate_fork_refuses_unready_root ... ok
+test tests::test_prefill_gate_plain_fork_of_unready_parent_stays_unready ... ok
+test tests::test_cow_manager_fork_and_divergence ... ok
+test tests::test_kv_transaction_commit_and_rollback ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cow_branching_tests.rs (target/debug/deps/cow_branching_tests-a1a0a2736ba5cd22)
+
+running 5 tests
+test test_parent_drop_before_children ... ok
+test test_reclamation_zero_leak ... ok
+test test_tensor_pool_read_write_cow_parity ... ok
+test test_tail_divergence_cow ... ok
+test test_prefix_refcount_32_branches ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.95s
+
+     Running tests/incremental_blocks_tests.rs (target/debug/deps/incremental_blocks_tests-a190b4da0bfab4a9)
+
+running 6 tests
+test fork_child_of_a_full_prefix_needs_one_fresh_block ... ok
+test no_table_needs_a_fresh_allocation_at_the_pool_block_size ... ok
+test fork_child_of_a_partial_prefix_needs_one_copy_on_write_block ... ok
+test private_partial_tail_absorbs_the_first_token ... ok
+test unready_table_counts_a_fresh_allocation_minus_blocks_the_drop_returns ... ok
+test prediction_matches_real_appends_across_shapes ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_kv_cache
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-kv-cache                    ran      pass     1858 ms
+   Compiling serde_core v1.0.229
+   Compiling futures-channel v0.3.34
+   Compiling serde_json v1.0.151
+   Compiling syn v3.0.6
+   Compiling aien-capability v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-capability)
+   Compiling indexmap v2.14.2
+   Compiling darling_core v0.24.1
+   Compiling serde_derive_internals v0.30.0
+   Compiling futures-macro v0.3.34
+   Compiling tokio-macros v2.7.2
+   Compiling serde_derive v1.0.229
+   Compiling ref-cast-impl v1.0.27
+   Compiling thiserror-impl v2.0.20
+   Compiling async-trait v0.1.92
+   Compiling schemars_derive v1.2.2
+   Compiling ref-cast v1.0.27
+   Compiling futures-util v0.3.34
+   Compiling tokio v1.53.1
+   Compiling thiserror v2.0.20
+   Compiling darling_macro v0.24.1
+   Compiling darling v0.24.1
+   Compiling rmcp-macros v3.4.0
+   Compiling serde v1.0.229
+   Compiling chrono v0.4.45
+   Compiling futures-executor v0.3.34
+   Compiling futures v0.3.34
+   Compiling tokio-stream v0.1.19
+   Compiling tokio-util v0.7.19
+   Compiling schemars v1.2.2
+   Compiling rmcp v3.4.0
+   Compiling aien-mcp v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-mcp)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.92s
+     Running unittests src/lib.rs (target/debug/deps/aien_mcp-6bb9cd0d100906b7)
+
+running 15 tests
+test lane_tests::unadmitted_provider_cannot_be_discovered ... ok
+test transport_tests::an_unenrolled_server_is_not_visible_to_the_speculative_lane ... ok
+test lane_tests::irreversible_work_is_staged_and_the_session_is_not_called ... ok
+test lane_tests::speculation_safe_tool_is_not_staged_as_an_external_effect ... ok
+test lane_tests::read_only_tool_call_runs_on_the_speculative_lane ... ok
+test lane_tests::irreversible_tool_call_is_rejected_before_the_session_is_used ... ok
+test lane_tests::discovery_returns_a_snapshot_and_does_not_call_a_tool ... ok
+test lane_tests::an_uncertain_call_is_reconciled_instead_of_retried ... ok
+test lane_tests::local_ephemeral_requires_a_sandbox ... ok
+test lane_tests::stale_catalog_digest_does_not_call_the_tool ... ok
+test lane_tests::a_completed_effect_is_not_sent_twice ... ok
+test lane_tests::effect_lane_calls_the_warm_session_when_the_catalog_digest_matches ... ok
+test transport_tests::irreversible_calls_stay_on_the_effect_lane ... ok
+test transport_tests::a_tool_without_an_enrolled_class_does_not_enter_the_snapshot ... ok
+test transport_tests::discovery_refreshes_an_admitted_provider_over_the_duplex ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests aien_mcp
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-mcp                         ran      pass     9984 ms
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-omega-gpu)
+warning: aien-omega-gpu@0.1.0: aien-omega-gpu: no AIEN_OMEGA_DIR or AIEN_OMEGA_GPU_LIB, building the CPU stub
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.25s
+     Running unittests src/lib.rs (target/debug/deps/aien_omega_gpu-9973371d41c1e612)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/parity.rs (target/debug/deps/parity-94b97ab1e2a4813e)
+
+running 6 tests
+test chip_parity_f32_and_bf16 ... ignored, needs the GB10 chip: run through lanes.sh queue --heavy with a native build
+test lock_is_full_sha ... ok
+test native_refuses_bad_args_without_chip ... ok
+test shape_mismatch_is_caught_before_ffi ... ok
+test rc_names ... ok
+test stub_reports_unavailable ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_omega_gpu
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-omega-gpu                   ran      pass      294 ms
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (target/debug/deps/aien_platform-a7af40e347e659e9)
+
+running 5 tests
+test runtime::tests::test_statically_dispatched_runtime ... ok
+test tests::test_buffer_layout ... ok
+test tests::test_telemetry_snapshot ... ok
+test tests::test_platform_error_display ... ok
+test tests::test_queue_priority_ordering ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_platform
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-platform                    ran      pass      120 ms
+   Compiling aien-platform-linux v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-platform-linux)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+     Running unittests src/lib.rs (target/debug/deps/aien_platform_linux-8e6ddf3397c5afb2)
+
+running 6 tests
+test tests::test_linux_unified_buffer_allocation_and_read_write ... ok
+test tests::test_linux_work_queue_priority_and_deadline ... ok
+test tests::test_linux_device_allocates_plain_system_memory ... ok
+test tests::test_linux_telemetry_source_snapshot ... ok
+test tests::test_linux_compute_device_allocation ... ok
+test tests::test_linux_memory_device_copy_and_zero ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_platform_linux
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-platform-linux              ran      pass      323 ms
+   Compiling aien-proof v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-proof)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.52s
+     Running unittests src/lib.rs (target/debug/deps/aien_proof-34355af0e7660973)
+
+running 100 tests
+test chain::tests::mutation_import_used ... ok
+test chain::tests::tier_satisfaction_matrix ... ok
+test evidence::tests::canonical_rejects_nonzero_reserved ... ok
+test chain::tests::cyclic_dependencies_rejected ... ok
+test evidence::tests::changed_artifact_hash_changes_identity ... ok
+test evidence::tests::altered_bytes_fail_closed ... ok
+test evidence::tests::changed_assertion_result_fails_pass_claim ... ok
+test evidence::tests::canonical_roundtrip ... ok
+test evidence::tests::changed_commit_changes_identity ... ok
+test evidence::tests::env_tier_contradiction_rejected ... ok
+test evidence::tests::hardware_receipt_without_lease_is_incomplete ... ok
+test evidence::tests::duplicate_id_with_different_bytes_fails ... ok
+test evidence::tests::identity_is_stable_and_order_independent ... ok
+test evidence::tests::malformed_canonical_inputs_fail ... ok
+test evidence::tests::pass_without_assertions_is_rejected ... ok
+test evidence::tests::malformed_canonical_encoding_fails ... ok
+test evidence::tests::reserved_content_fails_closed ... ok
+test evidence::tests::read_only_run_cannot_claim_mutation ... ok
+test evidence::tests::test_only_signer_cannot_mint_production ... ok
+test evidence::tests::unknown_required_feature_fails_closed ... ok
+test evidence::tests::observed_beyond_declared_fails ... ok
+test chain::tests::missing_dependency_is_incomplete_never_pass ... ok
+test chain::tests::empty_chain_passes ... ok
+test board::tests::rejects_unsafe_key_names_and_holds_without_a_key ... ok
+test chain::tests::blocked_dependency_blocks_chain_never_passes ... ok
+test chain::tests::failed_dependency_fails_chain ... ok
+test fingerprint::tests::content_change_changes_key_and_build_output_does_not ... ok
+test formal::tests::manifest_identity_reads_top_level_only ... ok
+test board::tests::holder_is_visible_during_the_run_and_the_run_is_audited ... ok
+test chain::tests::illegal_tier_escalation_fails ... ok
+test chain::tests::tampered_dependency_file_fails_closed ... ok
+test formal::tests::result_line_must_match_the_oracle_prefix ... ok
+test formal::tests::lake_build_output_does_not_change_the_key ... ok
+test fingerprint::tests::command_and_toolchain_are_part_of_the_key ... ok
+test fingerprint::tests::same_code_in_two_worktrees_shares_a_key ... ok
+test gate::tests::blocked_receipt_cannot_satisfy_a_requirement ... ok
+test formal::tests::output_from_another_input_set_is_refused ... ok
+test gate::tests::blocked_receipt_cannot_satisfy_a_gate ... ok
+test gate::tests::checked_in_gate_cannot_be_substituted_by_store_copy ... ok
+test gate::tests::gate_reports_missing ... ok
+test gate::tests::gate_rejects_receipt_with_missing_chain_dependency ... ok
+test gate::tests::failed_assertion_fails_gate ... ok
+test gate::tests::malformed_manifests_rejected_at_load ... ok
+test gate::tests::hardware_gate_requires_the_machine1_hold ... ok
+test gate::tests::manifest_cycles_fail_closed ... ok
+test formal::tests::failing_result_is_never_sealed_and_theorems_are_not_passing ... ok
+test gate::tests::dirty_tree_fails_clean_requirement ... ok
+test formal::tests::profile_refuses_incomplete_or_authoritative_bindings ... ok
+test formal::tests::tampered_artifacts_fail_binding_parse ... ok
+test gate::tests::nested_gate_cycle_fails_closed ... ok
+test gate::tests::machine1_gate_names_its_blockers_on_an_empty_store ... ok
+test gate::tests::p3_gates_preserve_qemu_and_machine1_distinction ... ok
+test gate::tests::mutation_class_mismatch_fails_gate ... ok
+test gate::tests::qemu_bootnext_mock_source_cannot_prove_firmware_variable_behavior ... ok
+test gate::tests::shipped_examples_parse ... ok
+test import::tests::claimed_pass_with_failed_assertion_refused ... ok
+test fingerprint::tests::git_ignored_files_do_not_change_the_key ... ok
+test formal::tests::receipt_round_trips_and_verifies ... ok
+test import::tests::prose_is_never_parsed ... ok
+test import::tests::store_destructive_mutation_refused ... ok
+test import::tests::store_empty_source_refused ... ok
+test import::tests::store_format_missing_required_refused ... ok
+test import::tests::hardware_import_needs_mutation_and_lease ... ok
+test import::tests::store_future_unknown_subkind_has_no_required_set ... ok
+test import::tests::store_format_valid_passes_profile ... ok
+test import::tests::store_host_machine1_tier_refused ... ok
+test gate::tests::qemu_receipt_cannot_satisfy_machine1_requirement ... ok
+test board::tests::a_second_worktree_with_the_same_code_reuses_the_stamp ... ok
+test import::tests::unknown_tier_and_mutation_refused ... ok
+test lease::tests::hardware_receipt_without_hold_is_incomplete ... ok
+test lease::tests::resource_names_follow_the_board_rule ... ok
+test gate::tests::qemu_receipt_cannot_pose_as_machine1_rollback ... ok
+test lease::tests::missing_hold_record_fails_closed ... ok
+test import::tests::import_roundtrip ... ok
+test gate::tests::narrow_store_format_merge_gate_does_not_require_seed_or_rollback ... ok
+test fingerprint::tests::edits_behind_a_tracked_directory_symlink_change_the_key ... ok
+test ledger_bind::tests::tier_and_verdict_reexports_used ... ok
+test gate::tests::mock_source_cannot_prove_firmware_bootnext ... ok
+test store_assert::tests::ids_are_non_empty_unique_and_stable ... ok
+test store_assert::tests::rejects_non_store_ids ... ok
+test workspace::tests::inputs_follow_local_dependencies_transitively ... ok
+test formal::tests::each_slice_digest_moves_only_with_its_own_files ... ok
+test board::tests::pass_is_stamped_then_replayed_without_running ... ok
+test gate::tests::qemu_gate_passes_while_machine1_gate_stays_blocked ... ok
+test ledger_bind::tests::missing_event_fails_closed ... ok
+test ledger_bind::tests::matching_ledger_ref_passes ... ok
+test lease::tests::lease_binding_verifies_end_to_end ... ok
+test ledger_bind::tests::output_digest_mismatch_fails_closed ... ok
+test lease::tests::wrong_resource_fails_binding ... ok
+test lease::tests::output_digest_mismatch_fails_binding ... ok
+test ledger::tests::genesis_parent_is_zero_and_events_link ... ok
+test lock::tests::second_holder_is_refused_until_release ... ok
+test ledger::tests::chain_verifies_and_tampering_is_caught ... ok
+test formal::tests::changed_implementation_model_proof_or_manifest_changes_key_digest_and_receipt ... ok
+test board::tests::different_keys_run_in_parallel ... ok
+test board::tests::holds_on_the_same_key_never_overlap_and_are_never_reused ... ok
+test board::tests::identical_concurrent_requests_run_once ... ok
+test board::tests::run_honors_named_keys ... ok
+test board::tests::gpu_jobs_never_overlap ... ok
+test board::tests::failures_are_not_stamped_but_are_shared_with_joiners ... ok
+
+test result: ok. 100 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.10s
+
+     Running unittests src/main.rs (target/debug/deps/aien_proof-71f29e15278cc42f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/store_qualification_adversarial.rs (target/debug/deps/store_qualification_adversarial-f6b640a7276d6034)
+
+running 10 tests
+test machine1_claim_without_hold_is_incomplete ... ok
+test mutating_claim_with_wrong_mutation_class_fails ... ok
+test host_receipt_substituted_for_qemu_is_blocked ... ok
+test different_commit_substituted_fails_identity ... ok
+test assertion_from_wrong_source_fails ... ok
+test blocked_receipt_used_as_pass_prerequisite_is_blocked ... ok
+test incomplete_crash_matrix_does_not_pass ... ok
+test dirty_source_substituted_is_blocked ... ok
+test missing_dependency_yields_incomplete_chain ... ok
+test altered_output_digest_against_ledger_ref_fails ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_proof
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-proof                       ran      pass     3732 ms
+   Compiling getrandom v0.2.17
+   Compiling h2 v0.4.19
+   Compiling ahash v0.8.12
+   Compiling openssl v0.10.81
+   Compiling tower v0.5.3
+   Compiling uuid v1.26.1
+warning: aien-omega-gpu@0.1.0: aien-omega-gpu: no AIEN_OMEGA_DIR or AIEN_OMEGA_GPU_LIB, building the CPU stub
+   Compiling aien-kv-cache v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-kv-cache)
+   Compiling tempfile v3.27.0
+   Compiling ring v0.17.14
+   Compiling hashbrown v0.14.5
+   Compiling tokenizers v0.21.4
+   Compiling spark-crumbs v0.1.0 (https://github.com/aien-dev/spark-crumbs?rev=9355a92bc9adfe95a6ec5f8ac926f38a0b6e7db2#9355a92b)
+   Compiling crumb-spec v1.0.0 (https://github.com/aien-dev/crumb-spec?rev=24194d1b7917ef19244aae6bcaff510686b75fef#24194d1b)
+   Compiling tower-http v0.6.11
+   Compiling hashlink v0.9.1
+   Compiling rusqlite v0.31.0
+   Compiling rustls-webpki v0.103.15
+   Compiling rustls v0.23.45
+   Compiling native-tls v0.2.18
+   Compiling tokio-native-tls v0.3.1
+   Compiling hyper v1.11.1
+   Compiling hyper-util v0.1.20
+   Compiling tokio-rustls v0.26.5
+   Compiling hyper-rustls v0.27.9
+   Compiling hyper-tls v0.6.0
+   Compiling axum v0.7.9
+   Compiling reqwest v0.12.28
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-abi)
+   Compiling cortex-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/cortex-rs)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-scheduler)
+   Compiling aien-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.03s
+     Running unittests src/lib.rs (target/debug/deps/aien_runtime-2c44719b66882011)
+
+running 8 tests
+test control::tests::chat_template_opens_an_assistant_turn ... ok
+test sequence::tests::retired_only_slot_exhausts_capacity ... ok
+test swarm::tests::cancel_drops_branch_worlds_after_natural_completion ... ok
+test sequence::tests::free_below_max_advances_generation_and_reuses_slot ... ok
+test control::tests::idempotency_survives_restart ... ok
+test swarm::tests::natural_completion_reclaims_root_and_branch_worlds ... ok
+test swarm::tests::prefill_gate_branches_do_not_share_uncomputed_root_blocks ... ok
+test sequence::tests::free_at_max_retires_slot_and_never_resurrects_stale_id ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/prefill_e2e0.rs (target/debug/deps/prefill_e2e0-0cbb410508f2f9c4)
+
+running 1 test
+test prefill_e2e0_real_checkpoint_swarm_gate ... ignored, PREFILL-E2E-0 real-checkpoint gate: run with --ignored and AIEN_E2E_CHECKPOINT + AIEN_E2E_RECEIPT set (forge on the Spark)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/prefill_e2e1.rs (target/debug/deps/prefill_e2e1-348b5f969be677e0)
+
+running 1 test
+test prefill_e2e1_real_checkpoint_n_branch_gate ... ignored, PREFILL-E2E-1 real-checkpoint gate at N = 1/8/32/128/500: run with --ignored and AIEN_E2E_CHECKPOINT + AIEN_E2E1_RECEIPT set (forge on the Spark)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/prefill_e2e2.rs (target/debug/deps/prefill_e2e2-dc98aafdf11de9e9)
+
+running 1 test
+test prefill_e2e2_real_checkpoint_append_gate ... ignored, PREFILL-E2E-2 real-checkpoint gate (append 24 tokens to a shared prefilled context): run with --ignored and AIEN_E2E_CHECKPOINT + AIEN_E2E2_RECEIPT set (forge on the Spark)
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime_500_branch_benchmark.rs (target/debug/deps/runtime_500_branch_benchmark-beb9c7868a223bd6)
+
+running 1 test
+test test_runtime_spine_500_branch_benchmark ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+
+     Running tests/runtime_end_to_end_tests.rs (target/debug/deps/runtime_end_to_end_tests-1931128f6557cc12)
+
+running 4 tests
+test test_end_to_end_gb10_hardware_execution_if_available ... ok
+test test_end_to_end_ticket_submission_and_channel_streaming_cpu ... ok
+test test_end_to_end_subagent_branching_with_independent_sinks ... ok
+test release_golden_path_records_whether_gb10_ran has been running for over 60 seconds
+test release_golden_path_records_whether_gb10_ran ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 133.15s
+
+     Running tests/runtime_ipc_test.rs (target/debug/deps/runtime_ipc_test-f52d0b75bac461a8)
+
+running 1 test
+test test_runtime_server_client_ipc_lifecycle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/runtime_socket_permissions_test.rs (target/debug/deps/runtime_socket_permissions_test-d83a02a98e62e22e)
+
+running 1 test
+test runtime_socket_is_owner_only ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/runtime_spine_integration.rs (target/debug/deps/runtime_spine_integration-18e838d2460d53b4)
+
+running 4 tests
+test test_sequence_arena_generational_invalidation ... ok
+test test_context_composition_and_missing_prefill ... ok
+test test_world_forking_and_effect_staging ... ok
+test test_swarm_launch_and_step_execution ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/shared_kv_runtime_test.rs (target/debug/deps/shared_kv_runtime_test-f04aa8e6e7c12e89)
+
+running 2 tests
+test shared_kv_decode_slot_exhaustion_preempts_instead_of_decoding_without_kv ... ok
+test shared_kv_root_prefill_lands_in_spine_pool_and_matches_unpaged_backend ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/swarm_cancel_readmit_test.rs (target/debug/deps/swarm_cancel_readmit_test-b8ea3a69152e5a8c)
+
+running 1 test
+test cancelled_swarm_branches_are_never_readmitted ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/swarm_completion_test.rs (target/debug/deps/swarm_completion_test-979d428e346d7240)
+
+running 1 test
+test swarm_natural_completion_reclaims_everything ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/swarm_inspect_scoping_test.rs (target/debug/deps/swarm_inspect_scoping_test-0785350fc1f721f9)
+
+running 1 test
+test inspect_swarm_is_scoped_to_the_requested_swarm ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/swarm_prefill_gate_test.rs (target/debug/deps/swarm_prefill_gate_test-9497499d26284f1f)
+
+running 6 tests
+test prefill_gate_swarm_branches_never_decode_before_root_prompt_prefill ... ok
+test backend_decode_of_unknown_request_id_is_an_error ... ok
+test backend_fork_before_prefill_fence_is_refused ... ok
+test backend_fork_carries_parent_pending_prefill_token ... ok
+test branch_first_decode_logits_equal_root_continuation_logits ... ok
+test sampled_branches_diverge_and_each_matches_its_own_teacher_forced_control ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/swarm_reclaim_test.rs (target/debug/deps/swarm_reclaim_test-46ab0272602f3231)
+
+running 2 tests
+test swarm_cancel_midway_reclaims_backend_kv_arena_and_worlds ... ok
+test swarm_completion_reclaims_backend_kv_arena_and_worlds ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests aien_runtime
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-runtime                     ran      pass   143377 ms
+warning: aien-omega-gpu@0.1.0: aien-omega-gpu: no AIEN_OMEGA_DIR or AIEN_OMEGA_GPU_LIB, building the CPU stub
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-scheduler)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.02s
+     Running unittests src/lib.rs (target/debug/deps/aien_scheduler-78f559d363aafc44)
+
+running 12 tests
+test sequence::tests::test_prompt_handle_sharing_and_zero_copy_fork ... ok
+test sequence::tests::test_slot_retirement_on_generation_wrap ... ok
+test sequence::tests::test_generation_boundary_below_max_reuses_then_retires_at_max ... ok
+test sequence::tests::test_completion_router_registration_and_dispatch ... ok
+test sequence::tests::test_sequence_id_generation_zero_invalid ... ok
+test sequence::tests::test_stale_work_rejection ... ok
+test tests::test_prefill_gate_ready_fork_enters_decode_directly ... ok
+test tests::test_prefill_gate_running_sequence_with_unready_table_is_reprefilled ... ok
+test tests::test_chunked_prefill_segmentation ... ok
+test tests::test_watermark_pressure_preemption ... ok
+test tests::test_prefill_gate_scheduler_fence_marks_ready_only_after_last_chunk ... ok
+test tests::test_scheduler_lifecycle_and_stale_work_rejection ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/bench_inference_stack.rs (target/debug/deps/bench_inference_stack-75cbfd7b5b55c7a9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/stress_aien_live.rs (target/debug/deps/stress_aien_live-cd815c1989bf8daa)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/kv_incremental_admission_test.rs (target/debug/deps/kv_incremental_admission_test-ade465c55d2b0e32)
+
+running 5 tests
+test admission_uses_the_pool_block_size_not_a_literal_16 ... ok
+test shortfall_while_others_run_waits_without_error ... ok
+test fork_child_is_admitted_on_incremental_blocks_only ... ok
+test same_step_fork_admissions_reserve_their_copy_on_write_blocks ... ok
+test exhausted_pool_with_nothing_running_fails_loud ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/prefill_gate_test.rs (target/debug/deps/prefill_gate_test-2219084dca555b8d)
+
+running 1 test
+test prefill_gate_allocated_but_unprefilled_table_is_prefilled_not_decoded ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_scheduler
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-scheduler                   ran      pass     2093 ms
+   Compiling syn v3.0.6
+   Compiling tracing v0.1.44
+   Compiling serde_derive v1.0.229
+   Compiling serde v1.0.229
+   Compiling aien-security v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-security)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.94s
+     Running unittests src/lib.rs (target/debug/deps/aien_security-97b2693dbad4eb43)
+
+running 5 tests
+test tests::test_memory_secret_provider_lifecycle ... ok
+test tests::test_permitted_purposes_succeed ... ok
+test tests::test_rejected_forbidden_network_purpose ... ok
+test tests::test_tpm2_secret_provider_capabilities ... ok
+test tests::test_unslop_invariants_in_crate ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_security
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-security                    ran      pass     1996 ms
+   Compiling aien-switchboard v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-switchboard)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.66s
+     Running unittests src/lib.rs (target/debug/deps/aien_switchboard-765a20d7cfaafdb4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/router.rs (target/debug/deps/router-bf1681725ec0321b)
+
+running 15 tests
+test missing_file_is_a_read_error ... ok
+test local_listed_early_is_moved_last ... ok
+test cooldown_expires ... ok
+test reset_time_in_the_past_falls_back_to_default_backoff_and_longer_cooldown_is_kept ... ok
+test everything_exhausted_goes_to_local ... ok
+test cooled_down_account_is_skipped_with_a_plain_reason ... ok
+test local_limit_hit_is_a_clear_error_not_a_loop ... ok
+test parse_errors_are_clear ... ok
+test all_outside_accounts_hit_limits_then_local_answers ... ok
+test failover_on_limit_hit_then_cooldown_sticks ... ok
+test routing_is_deterministic ... ok
+test account_over_the_ceiling_is_skipped_and_stale_window_is_not ... ok
+test unlisted_kind_uses_default_and_local_is_appended ... ok
+test rule_order_is_respected ... ok
+test rule_mistakes_name_the_problem ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_switchboard
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-switchboard                 ran      pass      735 ms
+   Compiling serde_core v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling aien-test v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/tools/aien-test)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.72s
+     Running unittests src/lib.rs (target/debug/deps/aien_test-4fd3b8f95c68cac9)
+
+running 185 tests
+test cache::tests::every_key_member_changes_the_key ... ok
+test cache::tests::a_machine_descriptor_that_does_not_match_its_digest_is_not_trusted ... ok
+test cache::tests::policy_cache_never_beats_everything ... ok
+test cache::tests::miss_when_the_machine_differs ... ok
+test cache::tests::identical_experiment_is_reused_and_not_rerun ... ok
+test cache::tests::the_key_is_deterministic ... ok
+test cache::tests::a_different_captured_environment_is_not_the_same_experiment ... ok
+test cache::tests::a_failed_result_is_reused_too_and_still_fails ... ok
+test cache::tests::miss_on_a_dirty_tree_even_when_the_run_is_allowed ... ok
+test cache::tests::a_dirty_tree_is_refused_not_answered_from_the_cache ... ok
+test cache::tests::a_stored_key_that_its_own_contents_do_not_hash_to_is_not_trusted ... ok
+test cli::tests::bad_jobs_are_refused ... ok
+test cli::tests::empty_override_args_are_kept ... ok
+test cli::tests::errors ... ok
+test cli::tests::full ... ok
+test cli::tests::jobs_and_wait_gpu ... ok
+test cli::tests::minimal ... ok
+test cli::tests::no_cache_flag ... ok
+test cli::tests::override_args_only_for_run ... ok
+test cli::tests::test_selections ... ok
+test cli::tests::unsupported_selections_are_refused ... ok
+test cli::tests::why_and_list ... ok
+test cache::tests::miss_when_there_is_no_receipt_or_the_receipt_is_gone ... ok
+test cache::tests::miss_when_a_log_the_receipt_names_is_missing ... ok
+test evidence::tests::canonical_digest_is_stable_across_key_order ... ok
+test evidence::tests::canonical_escapes_per_c4 ... ok
+test evidence::tests::canonical_rejects_floats ... ok
+test evidence::tests::canonical_sorts_keys_and_is_compact ... ok
+test cache::tests::miss_when_the_manifest_changes_even_by_a_comment ... ok
+test cache::tests::a_gate_that_says_cache_never_always_runs ... ok
+test evidence::tests::blob_is_content_addressed_and_idempotent ... ok
+test evidence::tests::blob_collision_detected ... ok
+test evidence::tests::identical_blobs_stored_at_the_same_moment_do_not_collide ... ok
+test cache::tests::miss_when_the_program_changes ... ok
+test evidence::tests::sha256_known_vectors ... ok
+test evidence::tests::utc_formatting ... ok
+test cache::tests::a_receipt_that_is_itself_a_reuse_is_not_a_source ... ok
+test graph::tests::cycle_behind_an_acyclic_prefix_is_found ... ok
+test graph::tests::cycle_is_named ... ok
+test graph::tests::error_messages_are_plain ... ok
+test graph::tests::duplicate_gate_ids_name_both_files ... ok
+test graph::tests::load_fails_closed_on_a_bad_manifest ... ok
+test cache::tests::a_receipt_from_a_dirty_tree_is_never_a_source ... ok
+test graph::tests::lookup_and_size ... ok
+test graph::tests::order_is_independent_of_input_order ... ok
+test graph::tests::load_finds_gates_and_skips_build_dirs ... ok
+test graph::tests::order_puts_dependencies_first ... ok
+test graph::tests::repeated_depends_on_entries_collapse ... ok
+test graph::tests::self_dependency_is_a_cycle ... ok
+test graph::tests::unknown_dependency_names_both_gates ... ok
+test manifest::tests::comment_inside_bare_value ... ok
+test manifest::tests::deep_indent_rejected ... ok
+test graph::tests::transitive_queries ... ok
+test manifest::tests::duplicate_child_key_rejected ... ok
+test manifest::tests::durations ... ok
+test manifest::tests::duplicate_top_level_key_rejected ... ok
+test manifest::tests::digest_covers_comments ... ok
+test manifest::tests::missing_required_and_bad_version ... ok
+test manifest::tests::good_manifest_parses ... ok
+test manifest::tests::mixed_shapes_rejected ... ok
+test manifest::tests::paths_must_be_relative ... ok
+test manifest::tests::pool_is_scarcest ... ok
+test manifest::tests::requires_needs_a_pool ... ok
+test manifest::tests::rules_parse_and_reject_floats ... ok
+test manifest::tests::size_limits ... ok
+test manifest::tests::tab_crlf_bom_rejected ... ok
+test manifest::tests::trailing_garbage_rejected ... ok
+test manifest::tests::unknown_child_key_rejected ... ok
+test manifest::tests::unknown_top_level_key_rejected ... ok
+test evidence::tests::identical_receipt_twice_is_success ... ok
+test process::tests::missing_program_is_an_error ... ok
+test process::tests::captures_output_and_exit_code ... ok
+test cache::tests::no_cache_forces_a_fresh_run_and_says_so_in_the_receipt ... ok
+test process::tests::orphans_do_not_outlive_a_normal_exit ... ok
+test evidence::tests::receipt_roundtrip_mode_and_name ... ok
+test evidence::tests::receipt_overwrite_is_refused ... ok
+test evidence::tests::index_skips_files_that_are_not_trustworthy_receipts ... ok
+test resources::tests::default_sizes_follow_the_adr ... ok
+test resources::tests::acquire_many_uses_one_order ... ok
+test resources::tests::detect_builds_a_config_without_touching_anything ... ok
+test process::tests::within_the_limit_is_not_exceeded ... ok
+test resources::tests::gb10_pool_is_serialized ... ok
+test resources::tests::est_load_process_refuses ... ok
+test resources::tests::gpu_lock_is_exclusive_and_released_on_drop ... ok
+test cache::tests::not_run_and_blocked_receipts_are_never_sources ... ok
+test resources::tests::jobs_option_parses_and_overrides ... ok
+test resources::tests::pool_names_round_trip ... ok
+test cache::tests::miss_when_a_declared_input_changes ... ok
+test resources::tests::quiet_flag_refuses_and_is_left_alone ... ok
+test resources::tests::semaphore_counts_slots ... ok
+test cache::tests::a_whole_graph_is_reused_including_gates_that_rest_on_a_reused_gate ... ok
+test resources::tests::zero_size_is_one_slot ... ok
+test evidence::tests::index_finds_the_newest_receipt_per_gate_and_commit ... ok
+test cache::tests::the_unedited_copy_is_a_hit_so_the_forgery_tests_mean_something ... ok
+test cache::tests::unclean_moved_or_timed_out_receipts_are_never_sources ... ok
+test resources::tests::acquire_waits_for_a_release ... ok
+test resources::tests::held_lock_reason_is_gpu_lock ... ok
+test resources::tests::open_handle_without_flock_does_not_block ... ok
+test resources::tests::proof_lock_is_second_and_blocks_the_whole_acquire ... ok
+test resources::tests::wait_mode_blocks_until_the_holder_releases ... ok
+test process::tests::timeout_kills_and_flags ... ok
+test process::tests::timeout_kills_the_whole_group ... ok
+test resources::tests::gpu_lock_release_waits_for_a_child_between_fork_and_exec ... ok
+test runner::tests::an_empty_selection_is_an_empty_campaign ... ok
+test runner::tests::default_evidence_dir_is_named_after_the_repository ... ok
+test cache::tests::why_says_so_when_a_receipt_was_reused_and_when_the_tree_is_dirty ... ok
+test runner::tests::bad_manifest_writes_no_receipt ... ok
+test cache::tests::why_explains_a_hit_and_then_a_miss_and_what_changed ... ok
+test cache::tests::reuse_across_commits_records_the_commit_that_was_checked ... ok
+test runner::tests::convention_inputs_are_found ... ok
+test runner::tests::a_fatal_error_stops_the_campaign_instead_of_hanging ... ok
+test runner::tests::evidence_dir_inside_repo_is_refused ... ok
+test runner::tests::a_held_gpu_lock_refuses_the_gb10_gate_and_its_dependents_do_not_run ... ok
+test runner::tests::dirty_tree_is_refused_and_nothing_runs ... ok
+test runner::tests::args_after_double_dash_replace_manifest_args ... ok
+test runner::tests::allow_dirty_runs_and_records_it ... ok
+test cache::tests::why_for_a_dependent_follows_a_reused_dependency ... ok
+test runner::tests::a_blocked_dependency_blocks_its_dependents_the_same_way ... ok
+test runner::tests::a_failed_dependency_makes_dependents_not_run_with_the_reason_recorded ... ok
+test runner::tests::exit_status_must_match ... ok
+test runner::tests::gb10_gate_is_refused_while_the_quiet_flag_exists ... ok
+test runner::tests::gb10_and_host_gates_run_together_and_record_their_pools ... ok
+test runner::tests::ignore_marker_hides_a_directory ... ok
+test runner::tests::resolve_handles_missing_dirs_and_dotdot ... ok
+test runner::tests::a_dependency_outside_the_selection_comes_from_the_store ... ok
+test runner::tests::inputs_digest_tracks_input_bytes ... ok
+test runner::tests::a_chain_runs_in_order_and_each_receipt_names_its_dependencies ... ok
+test runner::tests::gb10_gate_without_the_hardware_is_blocked ... ok
+test cache::tests::a_change_under_a_dependency_reruns_it_and_everything_that_rests_on_it ... ok
+test runner::tests::gb10_gate_runs_under_the_gpu_lock_and_records_its_pool ... ok
+test verdict::tests::a_blocked_dependency_passes_its_verdict_on ... ok
+test verdict::tests::a_dependency_that_is_not_pass_makes_not_run ... ok
+test runner::tests::locate_by_path_name_and_duplicates ... ok
+test verdict::tests::a_passing_dependency_lets_the_gate_run ... ok
+test verdict::tests::all_expectations_met_is_pass ... ok
+test verdict::tests::blocked_beats_failed_across_dependencies ... ok
+test verdict::tests::build_and_checks_are_not_run ... ok
+test verdict::tests::campaign_verdict_follows_the_exit_code_rule ... ok
+test verdict::tests::build_none_and_clean_tree_check_are_fine ... ok
+test verdict::tests::exit_codes_and_names_are_fixed ... ok
+test verdict::tests::first_reason_wins ... ok
+test verdict::tests::exit_status_must_match_expectation ... ok
+test verdict::tests::missing_exec_is_missing_implementation ... ok
+test verdict::tests::missing_hardware_blocks_the_gate ... ok
+test verdict::tests::missing_observation_does_not_hold ... ok
+test verdict::tests::observation_parsing ... ok
+test verdict::tests::operator_gate_is_blocked_operator ... ok
+test verdict::tests::printing_pass_cannot_make_a_pass ... ok
+test verdict::tests::quantifiers_and_ordering ... ok
+test verdict::tests::refusal_is_not_run ... ok
+test verdict::tests::rule_mismatch_is_fail_with_index ... ok
+test verdict::tests::rows_are_checked_in_order ... ok
+test verdict::tests::timeout_beats_everything_after_run ... ok
+test verdict::tests::the_first_dependency_that_is_not_pass_is_named ... ok
+test verdict::tests::verdict_names_parse_back ... ok
+test verdict::tests::tree_and_head_changes_fail ... ok
+test why::tests::a_gate_is_found_by_id_or_by_file ... ok
+test cache::tests::replacement_args_never_use_or_feed_the_cache ... ok
+test runner::tests::gb10_gate_is_refused_while_another_holder_has_the_lock ... ok
+test runner::tests::head_moving_during_the_run_fails ... ok
+test why::tests::a_chain_shows_each_gate_with_its_state ... ok
+test runner::tests::independent_gates_run_at_the_same_time_when_the_pool_allows ... ok
+test why::tests::an_exceeded_gb10_timeout_is_reported ... ok
+test why::tests::a_receipt_that_ran_on_a_dirty_tree_says_so ... ok
+test why::tests::short_never_splits_a_character ... ok
+test why::tests::the_report_says_what_it_checks_and_how_the_cache_decides ... ok
+test runner::tests::missing_exec_is_missing_implementation ... ok
+test why::tests::a_pass_resting_on_a_failure_needs_a_rerun ... ok
+test why::tests::receipts_for_other_commits_are_stale ... ok
+test runner::tests::nonzero_expected_exit_passes ... ok
+test runner::tests::untracked_file_counts_as_dirty ... ok
+test runner::tests::rule_mismatch_fails_even_if_the_script_prints_pass ... ok
+test runner::tests::tree_dirtied_by_the_run_fails ... ok
+test runner::tests::pass_writes_a_bound_receipt ... ok
+test why::tests::a_gate_reached_twice_is_expanded_once ... ok
+test why::tests::blocked_and_missing_implementation_have_their_own_states ... ok
+test why::tests::the_newest_receipt_for_the_commit_wins ... ok
+test runner::tests::operator_and_missing_hardware_gates_do_not_run ... ok
+test runner::tests::unfinished_receipts_are_never_modified_by_a_second_run ... ok
+test runner::tests::run_gate_reads_dependency_receipts_from_the_store ... ok
+test process::tests::term_ignored_gets_killed_after_grace ... ok
+test runner::tests::timeout_is_enforced_with_fail ... ok
+test process::tests::advisory_timeout_never_signals_the_job ... ok
+test runner::tests::a_pool_of_one_runs_gates_one_at_a_time ... ok
+test runner::tests::gb10_timeout_is_advisory_and_never_kills_the_job ... ok
+
+test result: ok. 185 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.64s
+
+     Running unittests src/main.rs (target/debug/deps/aien_test-8f121d48c0394a20)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/committed_gates.rs (target/debug/deps/committed_gates-31e63972c3a38cc7)
+
+running 5 tests
+test a_typo_in_a_child_key_is_reported ... ok
+test a_duplicate_gate_id_is_reported_for_both_files ... ok
+test build_and_ignored_directories_are_not_scanned ... ok
+test a_typo_in_a_top_level_key_is_reported ... ok
+test every_committed_gate_parses ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_test
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] aien-test                        ran      pass     4445 ms
+   Compiling openssl-sys v0.9.117
+   Compiling tracing v0.1.44
+   Compiling serde v1.0.229
+   Compiling darling_core v0.20.11
+   Compiling socks v0.3.4
+   Compiling tokio-macros v2.7.2
+   Compiling slab v0.4.12
+   Compiling sync_wrapper v1.0.2
+   Compiling serde_json v1.0.151
+   Compiling num-integer v0.1.47
+   Compiling num-complex v0.4.6
+   Compiling thiserror-impl v2.0.20
+   Compiling clap_derive v4.6.7
+   Compiling serde_path_to_error v0.1.20
+   Compiling openssl v0.10.81
+   Compiling native-tls v0.2.18
+   Compiling futures-util v0.3.34
+   Compiling tower-http v0.6.11
+   Compiling tracing-subscriber v0.3.23
+   Compiling ndarray v0.17.2
+   Compiling serde_urlencoded v0.7.1
+   Compiling dary_heap v0.3.9
+   Compiling spm_precompiled v0.1.4
+   Compiling ahash v0.8.12
+   Compiling compact_str v0.9.1
+   Compiling tokio v1.53.1
+   Compiling thiserror v2.0.20
+   Compiling axum-core v0.4.5
+   Compiling darling_macro v0.20.11
+   Compiling clap v4.6.7
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+   Compiling derive_builder_macro v0.20.2
+   Compiling ureq v3.4.2
+   Compiling derive_builder v0.20.2
+   Compiling tokenizers v0.21.4
+   Compiling ort-sys v2.0.0-rc.13
+   Compiling hyper v1.11.1
+   Compiling tower v0.5.3
+   Compiling hyper-util v0.1.20
+   Compiling ort v2.0.0-rc.13
+   Compiling axum v0.7.9
+   Compiling cortex-encoder-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/cortex-encoder-rs)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.30s
+     Running unittests src/main.rs (target/debug/deps/cortex_encoder_rs-78cc8be469c7bf37)
+
+running 4 tests
+test tests::test_l2_normalize_zero ... ok
+test tests::test_l2_normalize ... ok
+test tests::test_sigmoid_calculation ... ok
+test tests::test_model_constants ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] cortex-encoder-rs                ran      pass     5323 ms
+   Compiling serde v1.0.229
+   Compiling rustls-webpki v0.103.15
+   Compiling hyper v1.11.1
+   Compiling regex-automata v0.4.18
+   Compiling tower v0.5.3
+   Compiling axum-core v0.4.5
+   Compiling axum-macros v0.4.2
+   Compiling tower-http v0.5.2
+   Compiling tower-http v0.6.11
+   Compiling rustls v0.23.45
+   Compiling serde_urlencoded v0.7.1
+   Compiling chrono v0.4.45
+   Compiling bincode v1.3.3
+   Compiling crumb-spec v1.0.0 (https://github.com/aien-dev/crumb-spec?rev=24194d1b7917ef19244aae6bcaff510686b75fef#24194d1b)
+   Compiling hyper-util v0.1.20
+   Compiling spark-crumbs v0.1.0 (https://github.com/aien-dev/spark-crumbs?rev=9355a92bc9adfe95a6ec5f8ac926f38a0b6e7db2#9355a92b)
+   Compiling rusqlite v0.31.0
+   Compiling axum v0.7.9
+   Compiling matchers v0.2.0
+   Compiling regex v1.13.1
+   Compiling tracing-subscriber v0.3.23
+   Compiling tokio-rustls v0.26.5
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling cortex-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/cortex-rs)
+   Compiling cortex-path-m1 v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/cortex-path-m1)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.23s
+     Running unittests src/lib.rs (target/debug/deps/cortex_path_m1-2a627c2c1b15bb8c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/cortex_path_m1-a26141efb2a41343)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/m1.rs (target/debug/deps/m1-6f2cd51606524acc)
+
+running 8 tests
+test admission_keeps_active_same_space_entity_edges ... ok
+test edge_weight_uses_tier_evidence_and_age ... ok
+test zero_graph_fusion_keeps_baseline_order_and_breaks_ties_by_id ... ok
+test two_hops_score_and_the_third_does_not ... ok
+test example_fixture_is_not_a_scientific_verdict ... ok
+test ndcg_recall_and_bootstrap_match_the_contract ... ok
+test indirect_anchor_pair_is_a_suggestion_until_a_direct_edge_exists ... ok
+test scoring_does_not_insert_a_candidate_and_leaves_the_source_hash ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+   Doc-tests cortex_path_m1
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] cortex-path-m1                   ran      pass     5395 ms
+   Compiling cortex-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/cortex-rs)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.00s
+     Running unittests src/lib.rs (target/debug/deps/cortex_rs-64dade0705e3f2e1)
+
+running 38 tests
+test auth::tests::test_validate_auth_header_unauthenticated ... ok
+test auth::tests::test_validate_auth_header_invalid_token ... ok
+test auth::tests::test_validate_auth_header_unconfigured_host ... ok
+test auth::tests::test_validate_auth_header_success ... ok
+test bench::tests::test_benchmark_zero_records_safe_exit ... ok
+test auth::tests::test_load_cortex_token_env_override ... ok
+test embeddings::tests::test_cosine_distance_and_empty_handling ... ok
+test evidence::tests::ephemeral_retention_is_shorter_than_standard ... ok
+test embeddings::tests::test_cosine_similarity ... ok
+test embeddings::tests::test_embedding_bytes_roundtrip ... ok
+test evidence::tests::merkle_root_changes_when_a_leaf_changes ... ok
+test handlers::tests::test_health_handler_structure ... ok
+test promotion::tests::test_promotion_policy_evaluation_tiers ... ok
+test security::tests::test_credential_masking_and_fingerprint ... ok
+test security::tests::test_do_not_remember_directive ... ok
+test security::tests::test_health_and_pii_classification ... ok
+test security::tests::test_hmac_sha256_rfc4231_case1 ... ok
+test security::tests::test_safe_event_view_quarantine ... ok
+test handlers::tests::test_get_handler_not_found ... ok
+test db::tests::test_seal_segment_and_retention_purge ... ok
+test handlers::tests::test_v2_session_and_events_api_lifecycle ... ok
+test handlers::tests::test_get_handler_success_and_unknown_space ... ok
+test handlers::tests::test_search_unknown_space_returns_empty ... ok
+test handlers::tests::test_get_handler_missing_parameter ... ok
+test db::tests::test_in_memory_db_crud ... ok
+test db::tests::test_episodic_plane_full_lifecycle_and_branches ... ok
+test db::tests::test_vector_similarity_and_nearest_neighbor_ranking ... ok
+test handlers::tests::test_write_entity_and_retract_lifecycle ... ok
+test compiler::tests::test_memory_compiler_knapsack_and_quarantine ... ok
+test promotion::tests::test_atomic_promotion_and_temporal_supersession ... ok
+test handlers::tests::test_v2_compiler_and_process_api_e2e ... ok
+test db::tests::test_schema_integrity_metadata_indexing_and_deduplication ... ok
+test workers::tests::test_summary_and_extraction_workers ... ok
+test db::tests::test_fts5_exact_prefix_boolean_and_ranking ... ok
+test db::tests::test_schema_migration_backward_compatibility ... ok
+test db::tests::test_episodic_concurrency_and_writer_throughput ... ok
+test db::tests::test_sqlite_wal_persistence_under_concurrency ... ok
+test bench::tests::test_benchmark_minimal_records ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running unittests src/main.rs (target/debug/deps/cortex_rs-fb31108de0acba39)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cortex_rs
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] cortex-rs                        ran      pass     3362 ms
+   Compiling getrandom v0.4.3
+   Compiling uuid v1.26.1
+   Compiling crumbs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/crumbs)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.21s
+     Running unittests src/lib.rs (target/debug/deps/crumbs-4a4a06ab96b3327f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/crumbs.rs (target/debug/deps/crumbs-728b194e6ffe9b16)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/crumbs-probe-learner.rs (target/debug/deps/crumbs_probe_learner-da08c4fabe953d91)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/boundary.rs (target/debug/deps/boundary-7355e1031d759418)
+
+running 7 tests
+test crumb_v1_format_pass ... ok
+test no_hidden_access_hostile_learner ... ok
+test no_hidden_access_oracle_budget ... ok
+test sealed_boundary_pass_debug_display_errors ... ok
+test sealed_boundary_pass_protocol_transcript ... ok
+test crumb_determinism_golden_pass ... ok
+test sealed_boundary_pass_visible_bytes ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+     Running tests/curriculum.rs (target/debug/deps/curriculum-ba462849ad4a9250)
+
+running 6 tests
+test ledger_chain_detects_tampering ... ok
+test crumb_operation_promotion_pass ... ok
+test clean_room_provenance_pass ... ok
+test crumb_curriculum_pass ... ok
+test crumb_trace_and_sample_pass ... ok
+test crumb_no_category_leak_pass ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+
+     Running tests/generators.rs (target/debug/deps/generators-c48b6340b497369e)
+
+running 4 tests
+test crumb_ambiguity_pass ... ok
+test crumb_determinism_pass ... ok
+test crumb_adversarial_pass ... ok
+test crumb_generators_pass ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s
+
+     Running tests/visible_conformance.rs (target/debug/deps/visible_conformance-c1834e4277e00854)
+
+running 1 test
+test crumb_visible_v1_conformance ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests crumbs
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] crumbs                           ran      pass     4625 ms
+   Compiling syn v3.0.6
+   Compiling getrandom v0.2.17
+   Compiling syn v2.0.119
+   Compiling zeroize v1.9.0
+   Compiling uuid v1.26.1
+   Compiling curve25519-dalek v4.1.3
+   Compiling rand_core v0.6.4
+   Compiling rand_chacha v0.3.1
+   Compiling rand v0.8.8
+   Compiling ed25519-dalek v2.2.0
+   Compiling thiserror-impl v1.0.69
+   Compiling serde_derive v1.0.229
+   Compiling clap_derive v4.6.7
+   Compiling thiserror v1.0.69
+   Compiling clap v4.6.7
+   Compiling serde v1.0.229
+   Compiling bincode v1.3.3
+   Compiling chrono v0.4.45
+   Compiling crumb-spec v1.0.0 (https://github.com/aien-dev/crumb-spec?rev=24194d1b7917ef19244aae6bcaff510686b75fef#24194d1b)
+   Compiling spark-crumbs v0.1.0 (https://github.com/aien-dev/spark-crumbs?rev=9355a92bc9adfe95a6ec5f8ac926f38a0b6e7db2#9355a92b)
+   Compiling rad-id-sync v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/rad-id-sync)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.15s
+     Running unittests src/lib.rs (target/debug/deps/rad_id_sync-8360c0f22a487e34)
+
+running 3 tests
+test keys::tests::test_sha256_fingerprint_deterministic ... ok
+test keys::tests::test_sync_report_serialization ... ok
+test keys::tests::test_validate_public_key_format ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/rad_id_sync-83d056ea2bb8f3fd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests rad_id_sync
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] rad-id-sync                      ran      pass     3197 ms
+   Compiling tokio v1.53.1
+   Compiling serde v1.0.229
+   Compiling futures-util v0.3.34
+   Compiling uuid v1.26.1
+   Compiling aho-corasick v1.1.5
+   Compiling chrono v0.4.45
+   Compiling serde_urlencoded v0.7.1
+   Compiling bincode v1.3.3
+   Compiling crumb-spec v1.0.0 (https://github.com/aien-dev/crumb-spec?rev=24194d1b7917ef19244aae6bcaff510686b75fef#24194d1b)
+   Compiling regex-automata v0.4.18
+   Compiling spark-crumbs v0.1.0 (https://github.com/aien-dev/spark-crumbs?rev=9355a92bc9adfe95a6ec5f8ac926f38a0b6e7db2#9355a92b)
+   Compiling regex v1.13.1
+   Compiling hyper v1.11.1
+   Compiling tokio-rustls v0.26.5
+   Compiling tower v0.5.3
+   Compiling tokio-util v0.7.19
+   Compiling tower-http v0.6.11
+   Compiling hyper-util v0.1.20
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling spark-adapters v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-adapters)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.25s
+     Running unittests src/lib.rs (target/debug/deps/spark_adapters-77d622dc5493b0f8)
+
+running 29 tests
+test curriculum::tests::test_track_parsing_aliases ... ok
+test curriculum::tests::test_track_parsing ... ok
+test router::tests::test_web_subscription_aliases ... ok
+test providers::openai::tests::test_format_openai_payload_default_max_tokens ... ok
+test curriculum::tests::test_task_generation ... ok
+test providers::openai::tests::test_format_openai_payload_reasoning_models_use_completion_tokens ... ok
+test providers::openai::tests::test_format_openai_payload_custom_bound ... ok
+test tests::test_distill_task_serialization ... ok
+test verifier::tests::test_clean_response_passes ... ok
+test verifier::tests::test_banned_cliche_detected ... ok
+test tests::test_unslop_verification ... ok
+test verifier::tests::test_em_dash_detected ... ok
+test verifier::tests::test_empty_completion_rejected ... ok
+test verifier::tests::test_hybrid_consensus_scoring ... ok
+test providers::tests::test_embedded_native_rejects_http_transport ... ok
+test verifier::tests::test_rustc_compilation_verification ... ok
+test tests::test_router_resolution ... ok
+test tests::test_catalog_discovery ... ok
+test distill::tests::test_commit_to_cortex_requires_token ... ok
+test vault::tests::test_sanitize_operator_negative_cases ... ok
+test vault::tests::test_short_secrets_not_scrubbed ... ok
+test vault::tests::test_sanitize_paths_and_ips ... ok
+test vault::tests::test_preserve_crate_and_binary_names ... ok
+test vault::tests::test_dynamic_vault_secret_scrubbing ... ok
+test vault::tests::test_sanitize_operator_and_secrets ... ok
+test vault::tests::test_complex_multimodal_sanitization ... ok
+test vault::tests::test_sanitize_hostnames ... ok
+test vault::tests::test_sanitize_operator_variants ... ok
+test vault::tests::test_sanitize_secrets ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.14s
+
+     Running unittests src/bin/spark_distill.rs (target/debug/deps/spark_distill-e736a9b05f5b05e3)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/challenger_m1_concurrency_bounds.rs (target/debug/deps/challenger_m1_concurrency_bounds-f3b3185bb207d140)
+
+running 7 tests
+test test_challenge3_openai_payload_bounds_never_unconstrained ... ok
+test test_challenge2_fallback_graceful_missing_and_empty_keys ... ok
+test test_challenge2_fallback_physical_tpm_or_cached_keys ... ok
+test test_challenge4_cortex_dynamic_auth_and_zero_disk_touches ... ok
+test test_challenge4_cortex_commit_missing_token_fails_gracefully ... ok
+test test_challenge1_concurrency_50_threads_mixed_read_write_invalidation ... ok
+test test_challenge1_concurrency_50_threads_sub_millisecond_reads ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.12s
+
+     Running tests/challenger_m1_sanitizer_adversarial.rs (target/debug/deps/challenger_m1_sanitizer_adversarial-0d259fe5d0d7710e)
+
+running 10 tests
+test test_challenge2_private_ip_and_path_scrubbing ... ok
+test test_challenge3_dynamic_vault_secret_registration ... ok
+test test_challenge2_preserve_compound_identifiers ... ok
+test test_challenge4_system_prompt_sanitization_in_distill_messages ... ok
+test test_challenge1_operator_negative_preservation ... ok
+test test_challenge4_distill_task_struct_scrubbing_simulation ... ok
+test test_challenge2_hostname_and_url_variations ... ok
+test test_challenge3_multiline_pem_and_signature_patterns ... ok
+test test_challenge1_operator_punctuation_and_delimiter_wrapping ... ok
+test test_challenge1_operator_case_and_whitespace_variants ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.15s
+
+     Running tests/reviewer2_m1_adversarial_edge_cases.rs (target/debug/deps/reviewer2_m1_adversarial_edge_cases-6c37fedb08c5d012)
+
+running 5 tests
+test test_edge_case_escaped_characters ... ok
+test test_edge_case_mixed_unicodes ... ok
+test test_edge_case_nested_whitespace ... ok
+test test_edge_case_multiline_pem_blocks ... ok
+test test_edge_case_only_secrets ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 22.38s
+
+     Running tests/tier1_features.rs (target/debug/deps/tier1_features-d2c886a090c4d806)
+
+running 69 tests
+test test_t1_f02_vault_secret_presence_check ... ok
+test test_t1_f13_cortex_bearer_header_format ... ok
+test test_t1_f14_cortex_endpoint_resolution_default ... ok
+test test_t1_f21_crawler_track_flag_parsing_long ... ok
+test test_t1_f03_vault_secret_resolution_non_empty ... ok
+test test_t1_f24_crawler_curriculum_tracks_enumeration ... ok
+test test_t1_f04_vault_env_variable_resolution ... ok
+test test_t1_f24b_crawler_curriculum_tracks_aliases ... ok
+test test_t1_f25_crawler_task_generation_limit_respect ... ok
+test test_t1_f19_resident_format_openai_payload ... ok
+test test_t1_f20_resident_live_model_availability ... ok
+test test_t1_f15_cortex_live_service_connectivity ... ok
+test test_t1_f26b_cli_interactive_subcommand_schema ... ok
+test test_t1_f30_cli_task_type_parsing_coverage ... ok
+test test_t1_f27_cli_single_subcommand_schema ... ok
+test test_t1_f23_crawler_track_short_flag_distinct_from_teacher ... ok
+test test_t1_f26_cli_help_invocation ... ok
+test test_t1_f28_cli_crawl_subcommand_schema ... ok
+test test_t1_f29_cli_verify_keys_subcommand_schema ... ok
+test test_t1_f35b_web_session_token_aliases ... ok
+test test_t1_f36_axum_workshop_static_html_content ... ok
+test test_t1_f37_axum_workshop_html_contains_model_options ... ok
+test test_t1_f38_axum_workshop_html_unslop_compliance ... ok
+test test_t1_f39_axum_workshop_distill_task_deserialization ... ok
+test test_t1_f40_axum_workshop_response_json_serialization ... ok
+test test_t1_f41_cortex_payload_entity_kind ... ok
+test test_t1_f42_cortex_payload_canonical_name_format ... ok
+test test_t1_f43_cortex_payload_metadata_contains_task_id ... ok
+test test_t1_f44_cortex_receipt_target_id_extraction ... ok
+test test_t1_f45_cortex_qualification_gate_score_threshold ... ok
+test test_t1_f46_sft_dataset_chatml_structure ... ok
+test test_t1_f47_sft_dataset_contains_iso_timestamp ... ok
+test test_t1_f48_sft_dataset_assistant_reasoning_field ... ok
+test test_t1_f49_dpo_dataset_pair_structure ... ok
+test test_t1_f12_cortex_token_presence_without_disk_file ... ok
+test test_t1_f01_vault_keys_listing ... ok
+test test_t1_f05_vault_keys_caching_invariant ... ok
+test test_t1_f22_crawler_teacher_flag_parsing_long ... ok
+test test_t1_f18_resident_model_endpoint_resolution ... ok
+test test_t1_f34_verify_keys_cloud_models_require_key ... ok
+test test_t1_f35_verify_keys_web_sessions_require_key ... ok
+test test_t1_f17_resident_context_length_bounds ... ok
+test test_t1_f31_verify_keys_discovers_all_catalog_adapters ... ok
+test test_t1_f32_verify_keys_resident_models_ready_without_key ... ok
+test test_t1_f33_verify_keys_local_engine_ready_without_key ... ok
+test test_t1_f16_resident_adapter_catalog_spec ... ok
+test test_t1_f52_verifier_unslop_passes_clean_response ... ok
+test test_t1_f53_verifier_token_jaccard_identical ... ok
+test test_t1_f56_e2e_harness_test_count_verification ... ok
+test test_t1_f54_verifier_normalized_levenshtein_identical ... ok
+test test_t1_f50_dpo_dataset_preference_delta_strictly_positive ... ok
+test test_t1_f55_verifier_hybrid_consensus_weighting ... ok
+test test_t1_f65_git_license_file_declares_apache ... ok
+test test_t1_f58_e2e_harness_isolated_temp_directories ... ok
+test test_t1_f62_git_origin_remote_configured ... ok
+test test_t1_f61_git_current_branch_is_feature_branch ... ok
+test test_t1_f64_git_commit_messages_unslop_compliant ... ok
+test test_t1_f63_git_forgejo_remote_configured ... ok
+test test_t1_f60_e2e_harness_unslop_output_formatting ... ok
+test test_t1_f51_verifier_rustc_compiles_clean_code ... ok
+test test_t1_f59_e2e_harness_zero_disk_secrets_invariant ... ok
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.45
+    Checking rustls-webpki v0.103.15
+    Checking tokio-rustls v0.26.5
+    Checking hyper-rustls v0.27.9
+    Checking reqwest v0.12.28
+    Checking spark-adapters v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-adapters)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.71s
+test test_t1_f57_e2e_harness_cargo_test_invocation ... ok
+test test_t1_f11_cortex_token_resolves_from_vault ... ok
+test test_t1_f06_sanitizer_scrubs_workspace_paths ... ok
+test test_t1_f07_sanitizer_scrubs_private_ips ... ok
+test test_t1_f10b_sanitizer_persisted_dataset_contains_no_raw_paths_or_ips ... ok
+test test_t1_f08_sanitizer_scrubs_local_hostnames ... ok
+test test_t1_f09_sanitizer_scrubs_operator_names ... ok
+test test_t1_f10_sanitizer_scrubs_vault_secret_signatures ... ok
+
+test result: ok. 69 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.05s
+
+     Running tests/tier2_boundary.rs (target/debug/deps/tier2_boundary-dcdc6be9511832d7)
+
+running 65 tests
+test test_t2_f17_resident_context_length_exceeded_handling ... ok
+test test_t2_f11_cortex_commit_without_token_fails_gracefully ... ok
+test test_t2_f14_cortex_malformed_json_response_handled ... ok
+test test_t2_f22_crawler_unknown_track_returns_none ... ok
+test test_t2_f23_crawler_zero_task_limit_returns_empty ... ok
+test test_t2_f19_resident_empty_messages_payload_safety ... ok
+test test_t2_f20_resident_unicode_preservation ... ok
+test test_t2_f16_resident_zero_or_negative_temperature_handling ... ok
+test test_t2_f15_cortex_missing_target_id_fallback ... ok
+test test_t2_f24_crawler_large_limit_safe_bounded_tasks ... ok
+test test_t2_f18_resident_large_prompt_payload_safety ... ok
+test test_t2_f28_cli_invalid_strategy_defaults_to_compiler ... ok
+test test_t2_f29_cli_invalid_task_type_defaults_to_code ... ok
+test test_t2_f30_cli_dataset_dir_auto_created ... ok
+test test_t2_f25_crawler_dynamic_track_fallback_without_git ... ok
+test test_t2_f35_verify_keys_adapter_status_string_representation ... ok
+test test_t2_f21_crawler_short_flag_t_collision_rejection ... ok
+test test_t2_f37_axum_distill_empty_json_error ... ok
+test test_t2_f38_axum_distill_missing_teacher_error ... ok
+test test_t2_f39_axum_commit_empty_json_error ... ok
+test test_t2_f40_axum_distill_invalid_track_caught ... ok
+test test_t2_f41_cortex_sub_threshold_score_rejected ... ok
+test test_t2_f12_cortex_unreachable_endpoint_handled ... ok
+test test_t2_f42_cortex_failed_verification_rejected ... ok
+test test_t2_f43_cortex_commit_false_flag_respected ... ok
+test test_t2_f44_cortex_canonical_name_hyphen_sanitization ... ok
+test test_t2_f45_cortex_content_summary_includes_verified_solution ... ok
+test test_t2_f26_cli_empty_args_shows_error ... ok
+test test_t2_f13_cortex_http_401_unauthorized_handled ... ok
+test test_t2_f27_cli_unknown_subcommand_exits_nonzero ... ok
+test test_t2_f50_dataset_permission_denied_handled_gracefully ... ok
+test test_t2_f36_axum_nonexistent_route_404 ... FAILED
+test test_t2_f52_verifier_em_dash_detected_and_penalized ... ok
+test test_t2_f53_verifier_en_dash_detected_and_penalized ... ok
+test test_t2_f54_verifier_banned_cliche_detected_and_penalized ... ok
+test test_t2_f55_verifier_secret_signature_resets_score_to_zero ... ok
+test test_t2_f56_verifier_unclosed_delimiter_detected ... ok
+test test_t2_f51_verifier_rustc_compilation_failure_deducts_score ... ok
+test test_t2_f57_verifier_mismatched_delimiter_detected ... ok
+test test_t2_f59_verifier_malformed_json_schema_detected ... ok
+test test_t2_f60_verifier_incomplete_json_brackets_detected ... ok
+test test_t2_f61_git_no_uncommitted_env_secrets ... ok
+test test_t2_f62_git_log_zero_em_or_en_dashes ... ok
+test test_t2_f63_git_covenant_is_nonbinding_values_statement ... ok
+test test_t2_f64_git_readme_contains_apache_badge ... ok
+test test_t2_f58_verifier_string_literal_delimiters_ignored ... ok
+test test_t2_f65_git_worktree_clean_no_confidential_files ... ok
+test test_t2_f05_vault_missing_daemon_handled_gracefully ... ok
+test test_t2_f01_vault_nonexistent_key_returns_none ... ok
+test test_t2_f04_vault_key_case_sensitivity ... ok
+test test_t2_f03_vault_whitespace_secret_rejected ... ok
+test test_t2_f02_vault_empty_env_var_treated_as_absent ... ok
+test test_t2_f34_verify_keys_all_context_lengths_positive ... ok
+test test_t2_f31_verify_keys_zero_keys_handling ... ok
+test test_t2_f33_verify_keys_all_endpoints_valid_urls ... ok
+test test_t2_f32_verify_keys_catalog_no_duplicate_ids ... ok
+test test_t2_f48_dpo_identical_outputs_rejected ... ok
+test test_t2_f49_dpo_missing_student_rollout_no_dpo_file ... ok
+test test_t2_f47_dpo_negative_delta_rejected ... ok
+test test_t2_f46_dpo_zero_delta_rejected ... ok
+test test_t2_f06_sanitizer_empty_prompt ... ok
+test test_t2_f08_sanitizer_prompt_only_ips ... ok
+test test_t2_f07_sanitizer_prompt_only_paths ... ok
+test test_t2_f10_sanitizer_system_prompt_scrubbing ... ok
+test test_t2_f09_sanitizer_multiple_mixed_secrets ... ok
+
+failures:
+
+---- test_t2_f36_axum_nonexistent_route_404 stdout ----
+
+thread 'test_t2_f36_axum_nonexistent_route_404' (3710432) panicked at crates/spark-adapters/tests/tier2_boundary.rs:434:5:
+assertion `left == right` failed
+  left: "401"
+ right: "404"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    test_t2_f36_axum_nonexistent_route_404
+
+test result: FAILED. 64 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.13s
+
+error: test failed, to rerun pass `-p spark-adapters --test tier2_boundary`
+[aien-proof] spark-adapters                   ran      FAIL   148264 ms
+   Compiling ring v0.17.14
+   Compiling tower v0.5.3
+   Compiling getrandom v0.3.4
+   Compiling hyper-util v0.1.20
+   Compiling tower-http v0.6.11
+   Compiling tempfile v3.27.0
+   Compiling rustls v0.23.45
+   Compiling rustls-webpki v0.103.15
+   Compiling tokio-rustls v0.26.5
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling spark-aegis v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-aegis)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.04s
+     Running unittests src/lib.rs (target/debug/deps/spark_aegis-7f967dd0c9be548d)
+
+running 18 tests
+test doctrine::tests::test_all_invariants_present ... ok
+test doctrine::tests::test_doctrine_statement ... ok
+test audit::tests::test_workspace_audit_empty_tmp ... ok
+test containment::tests::test_incident_blake3_computation ... ok
+test doctrine::tests::test_containment_action_kinds ... ok
+test audit::tests::test_workspace_audit_flags_dotenv ... ok
+test containment::tests::test_isolate_host_generation ... ok
+test containment::tests::test_close_door_quarantine ... ok
+test mojo_bridge::tests::test_engine_reporting ... ok
+test containment::tests::test_cut_session_generation ... ok
+test mojo_bridge::tests::test_byte_scan_and_pattern_search ... ok
+test scanner::tests::test_dangerous_command_detection ... ok
+test scanner::tests::test_secret_detection ... ok
+test pr_triage::tests::test_secret_pr_diff_rejects ... ok
+test pr_triage::tests::test_slop_pr_diff_rejects ... ok
+test pr_triage::tests::test_clean_pr_diff_passes ... ok
+test scanner::tests::test_prohibited_env_file ... ok
+test scanner::tests::test_slop_detection_em_dash ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/main.rs (target/debug/deps/spark_aegis-221462ff77d6afcb)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/integration_tests.rs (target/debug/deps/integration_tests-3db0152f8db7315d)
+
+running 8 tests
+test test_doctrine_invariants ... ok
+test test_mojo_simd_bridge_integration ... ok
+test test_containment_lifecycle ... ok
+test test_scanner_flags_slop ... ok
+test test_scanner_clean_directory ... ok
+test test_scanner_flags_dangerous_command ... ok
+test test_pr_triage_diff_verdict ... ok
+test test_audit_system_execution ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+   Doc-tests spark_aegis
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-aegis                      ran      pass     5182 ms
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.12s
+     Running unittests src/main.rs (target/debug/deps/spark_cockpit_rs-8dfbf9f9c1c19801)
+
+running 31 tests
+test tests::terminal_rejects_non_loopback_peer ... ok
+test tests::terminal_rejects_missing_or_foreign_origin ... ok
+test tests::terminal_allows_loopback_origin_and_peer ... ok
+test access::tests::refuses_empty_credentials_and_invalid_origins ... ok
+test tests::test_cockpit_hive_adapters_endpoint ... ok
+test tests::test_cockpit_operator_profile_sanitization ... ok
+test tests::test_cockpit_subagents_endpoint_response_structure ... ok
+test tests::skill_index_omits_bodies_and_preview_is_one_paragraph ... ok
+test tests::test_cockpit_services_list_endpoint ... ok
+test tests::test_cockpit_services_action_invalid_action ... ok
+test tests::test_cockpit_workshop_html_route ... ok
+test tests::test_cockpit_rsi_ledger_endpoint ... ok
+test tests::test_cockpit_telemetry_live_endpoint ... ok
+test access::tests::health_reads_stay_open_on_loopback_only ... ok
+test access::tests::boundary_rejects_missing_tokens_and_cross_origin_sessions ... ok
+test tests::test_cockpit_approvals_lifecycle ... ok
+test tests::test_cockpit_swarm_lifecycle_registry ... ok
+test tests::test_cockpit_hive_bounds_endpoint ... ok
+test tests::test_cockpit_hive_adapter_chains_endpoint ... ok
+test tests::test_cockpit_status_endpoint_schema_and_offline_backend ... ok
+test tests::test_cockpit_hive_cells_endpoint ... ok
+test tests::test_cockpit_submillisecond_latency_assertions ... ok
+test tests::test_cockpit_hive_comb_endpoint_placement_and_collision ... ok
+test tests::test_cockpit_forge_lifecycle_endpoints ... ok
+test tests::test_cockpit_pulse_endpoint_schema_and_offline_backends ... ok
+test tests::test_cockpit_workshop_distill_validation ... ok
+test tests::test_cockpit_workshop_commit_validation ... ok
+test tests::test_cockpit_workshop_models_endpoint ... ok
+test tests::test_cockpit_feed_endpoint ... ok
+test tests::test_cockpit_cortex_search_endpoint_unreachable_fallback ... ok
+test tests::test_cockpit_cortex_write_endpoint_error_handling ... ok
+
+test result: ok. 31 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.29s
+
+[aien-proof] spark-cockpit-rs                 ran      pass     6437 ms
+   Compiling uuid v1.26.1
+   Compiling spark-crumbs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-crumbs)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.69s
+     Running unittests src/lib.rs (target/debug/deps/spark_crumbs-45df13aaff5df676)
+
+running 3 tests
+test tests::test_format_tui_card ... ok
+test tests::test_seed_directory_tree ... ok
+test tests::test_crumb_lifecycle_and_whisper ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/spark_crumbs-e1d428d0b10e5300)
+   Doc-tests spark_crumbs
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-crumbs                     ran      pass      766 ms
+   Compiling tracing v0.1.44
+   Compiling libsqlite3-sys v0.28.0
+   Compiling regex-syntax v0.8.11
+   Compiling hyper-util v0.1.20
+   Compiling regex-automata v0.4.18
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling matchers v0.2.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling rusqlite v0.31.0
+   Compiling spark-debugger v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-debugger)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.67s
+     Running unittests src/main.rs (target/debug/deps/spark_debugger-21a005edbf7ae5b1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-debugger                   ran      pass     4701 ms
+   Compiling getrandom v0.2.17
+   Compiling futures-sink v0.3.34
+   Compiling sha1 v0.10.7
+   Compiling webpki-roots v0.26.11
+   Compiling futures-util v0.3.34
+   Compiling ring v0.17.14
+   Compiling rand_core v0.6.4
+   Compiling rand_chacha v0.3.1
+   Compiling rand v0.8.8
+   Compiling rustls-webpki v0.103.15
+   Compiling rustls v0.23.45
+   Compiling hyper-util v0.1.20
+   Compiling tower v0.5.3
+   Compiling tower-http v0.6.11
+   Compiling tokio-rustls v0.26.5
+   Compiling tungstenite v0.24.0
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling tokio-tungstenite v0.24.0
+   Compiling spark-discord-hub v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-discord-hub)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.32s
+     Running unittests src/main.rs (target/debug/deps/spark_discord_hub-be59625e3417c712)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-discord-hub                ran      pass     3350 ms
+   Compiling serde v1.0.229
+   Compiling uuid v1.26.1
+   Compiling tokio-rustls v0.26.5
+   Compiling hyper-rustls v0.27.9
+   Compiling serde_urlencoded v0.7.1
+   Compiling chrono v0.4.45
+   Compiling bincode v1.3.3
+   Compiling reqwest v0.12.28
+   Compiling axum v0.7.9
+   Compiling crumb-spec v1.0.0 (https://github.com/aien-dev/crumb-spec?rev=24194d1b7917ef19244aae6bcaff510686b75fef#24194d1b)
+   Compiling spark-crumbs v0.1.0 (https://github.com/aien-dev/spark-crumbs?rev=9355a92bc9adfe95a6ec5f8ac926f38a0b6e7db2#9355a92b)
+   Compiling spark-dream v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-dream)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.36s
+     Running unittests src/lib.rs (target/debug/deps/spark_dream-28b022e1dbcc00a3)
+
+running 9 tests
+test tests::test_idle_cycle_detection_gpu_and_operator_thresholds ... ok
+test tests::test_scanner_ignores_non_markdown_and_zero_byte_files ... ok
+test tests::test_extract_discovery_from_raw_unstructured_layout ... ok
+test tests::test_extract_discovery_from_heading_layout ... ok
+test tests::test_extract_discovery_malformed_frontmatter_recovery ... ok
+test tests::test_extract_discovery_from_bullet_layout ... ok
+test tests::test_extract_discovery_from_frontmatter_layout ... ok
+test tests::test_last_session_activity_detection ... ok
+test tests::test_deduplication_and_simulated_dream_consolidation_cycle ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/spark_dream-16a18a9e7ef05a7e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests spark_dream
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-dream                      ran      pass     3427 ms
+   Compiling serde_json v1.0.151
+   Compiling time-macros v0.2.32
+   Compiling nom v8.0.0
+   Compiling chrono v0.4.45
+   Compiling fancy-regex v0.11.0
+   Compiling ahash v0.8.12
+   Compiling tracing-subscriber v0.3.23
+   Compiling tower-http v0.6.11
+   Compiling crumb-spec v1.0.0 (https://github.com/aien-dev/crumb-spec?rev=24194d1b7917ef19244aae6bcaff510686b75fef#24194d1b)
+   Compiling reqwest v0.12.28
+   Compiling spark-crumbs v0.1.0 (https://github.com/aien-dev/spark-crumbs?rev=9355a92bc9adfe95a6ec5f8ac926f38a0b6e7db2#9355a92b)
+   Compiling time v0.3.55
+   Compiling iso8601 v0.6.6
+   Compiling jsonschema v0.17.1
+   Compiling spark-harness v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-harness)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.88s
+     Running unittests src/lib.rs (target/debug/deps/spark_harness-58a6c1ea09551aab)
+
+running 5 tests
+test tests::test_reproduction_present ... ok
+test tests::test_required_evidence ... ok
+test tests::test_workflow_transitions ... ok
+test tests::test_slop_gate ... ok
+test tests::test_schema_validation ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/spark_harness-7edc180d16990450)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests spark_harness
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-harness                    ran      pass     2946 ms
+   Compiling hybrid-array v0.4.15
+   Compiling getrandom v0.4.3
+   Compiling der v0.8.2
+   Compiling bitflags v2.13.2
+   Compiling cpufeatures v0.3.1
+   Compiling rustls v0.23.45
+   Compiling regex-automata v0.4.18
+   Compiling sha2 v0.10.9
+   Compiling uuid v1.26.1
+   Compiling tower-http v0.6.11
+   Compiling rustix v1.1.5
+   Compiling aien-protocol-types v0.1.0 (https://github.com/aien-dev/aien-protocols?rev=7ac6facb630ca7e9a6ab4125b292203fe2bb6687#7ac6facb)
+   Compiling crypto-common v0.2.2
+   Compiling block-buffer v0.12.1
+   Compiling crypto-bigint v0.7.5
+   Compiling spki v0.8.0
+   Compiling sec1 v0.8.1
+   Compiling digest v0.11.3
+   Compiling pkcs8 v0.11.0
+   Compiling hmac v0.13.0
+   Compiling signature v3.0.0
+   Compiling sha2 v0.11.0
+   Compiling tempfile v3.27.0
+   Compiling matchers v0.2.0
+   Compiling regex v1.13.1
+   Compiling primefield v0.14.0
+   Compiling elliptic-curve v0.14.1
+   Compiling rfc6979 v0.6.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling wnaf v0.14.1
+   Compiling ecdsa v0.17.0
+   Compiling primeorder v0.14.0
+   Compiling tokio-rustls v0.26.5
+   Compiling p256 v0.14.0
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.12.28
+   Compiling aien-provenance v0.1.0 (https://github.com/aien-dev/aien-protocols?rev=7ac6facb630ca7e9a6ab4125b292203fe2bb6687#7ac6facb)
+   Compiling spark-harvester v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-harvester)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.10s
+     Running unittests src/lib.rs (target/debug/deps/spark_harvester-8e19c765ca34149e)
+
+running 3 tests
+test export::tests::test_sharegpt_format ... ok
+test filter::tests::test_dedup_filter ... ok
+test extractor::tests::test_extract_think_tags ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/spark_harvester-706f4e45d2a6efa8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/rights_gating_tests.rs (target/debug/deps/rights_gating_tests-be01b02d6c96a5c3)
+
+running 7 tests
+test test_unsigned_grant_rejected_fails_closed ... ok
+test test_expired_grant_rejected ... ok
+test test_missing_permission_rejected ... ok
+test test_unapproved_license_rejected ... ok
+test test_rights_gated_training_bundle_admitted_with_valid_grant ... ok
+test test_evidence_bundle_quarantine_enforced ... ok
+test test_cryptographic_signature_verification ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests spark_harvester
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-harvester                  ran      pass     4212 ms
+   Compiling serde_core v1.0.229
+   Compiling once_cell v1.21.4
+   Compiling smallvec v1.16.1
+   Compiling percent-encoding v2.3.2
+   Compiling csv-core v0.1.13
+   Compiling getrandom v0.3.4
+   Compiling form_urlencoded v1.2.2
+   Compiling icu_normalizer v2.3.0
+   Compiling ahash v0.8.12
+   Compiling tempfile v3.27.0
+   Compiling hashbrown v0.14.5
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling hashlink v0.9.1
+   Compiling url v2.5.8
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling uuid v1.26.1
+   Compiling csv v1.4.0
+   Compiling chrono v0.4.45
+   Compiling bincode v1.3.3
+   Compiling crumb-spec v1.0.0 (https://github.com/aien-dev/crumb-spec?rev=24194d1b7917ef19244aae6bcaff510686b75fef#24194d1b)
+   Compiling rusqlite v0.31.0
+   Compiling spark-crumbs v0.1.0 (https://github.com/aien-dev/spark-crumbs?rev=9355a92bc9adfe95a6ec5f8ac926f38a0b6e7db2#9355a92b)
+   Compiling spark-hive v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-hive)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.25s
+     Running unittests src/lib.rs (target/debug/deps/spark_hive-6e7570844d43b0bf)
+
+running 22 tests
+test adapter_engine::tests::test_benchmark_telemetry_calculations ... ok
+test adapter_engine::tests::test_consumer_models_and_slugs ... ok
+test adapter_engine::tests::test_socratic_evaluation_approval ... ok
+test adapter_engine::tests::test_find_or_create_adapter_and_engine_overrides ... ok
+test adapter_engine::tests::test_telemetry_estimate_for_model_scaling ... ok
+test adapter_engine::tests::test_pr_plan_generation_sovereign_voice ... ok
+test adapter_engine::tests::test_honeycomb_lattice_pipeline_emission_and_tracing ... ok
+test adapter_engine::tests::test_upstream_engines ... ok
+test geometry::tests::test_neighbors ... ok
+test geometry::tests::test_hex_directions ... ok
+test emission::tests::test_subagent_and_socratic_emission ... ok
+test geometry::tests::test_axial_to_pixel_and_back_roundtrip ... ok
+test geometry::tests::test_hex_distance ... ok
+test geometry::tests::test_detail_tiers ... ok
+test store::tests::test_place_comb_with_neighbors_linking ... ok
+test geometry::tests::test_placement_intents ... ok
+test store::tests::test_forge_task_lease_heartbeat_and_reclaim ... ok
+test store::tests::test_place_comb_collision_check ... ok
+test store::tests::test_auto_place_comb_around_parent ... ok
+test store::tests::test_forge_project_genesis_and_tasks ... ok
+test store::tests::test_in_memory_store_genesis_and_get_cells ... ok
+test store::tests::test_concurrent_auto_place_comb ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests spark_hive
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-hive                       ran      pass     3375 ms
+   Compiling spark-inquisitor v0.2.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-inquisitor)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.94s
+     Running unittests src/lib.rs (target/debug/deps/spark_inquisitor-4a956978f0bd5a79)
+
+running 17 tests
+test eval::tests::test_valid_testimony ... ok
+test eval::tests::test_commercial_red_flag ... ok
+test eval::tests::test_get_rich_quick_red_flag ... ok
+test interview::tests::test_generate_interview ... ok
+test triage::tests::test_complaint ... ok
+test triage::tests::test_bug_with_repro ... ok
+test triage::tests::test_bug_without_repro ... ok
+test triage::tests::test_label_deduplication ... ok
+test triage::tests::test_feature_proposal ... ok
+test triage::tests::test_empty_strings_and_whitespace ... ok
+test audit::tests::test_env_file_flagged ... ok
+test audit::tests::test_unslop_flagged ... ok
+test audit::tests::test_secret_flagged ... ok
+test review::tests::test_clean_pr_review ... ok
+test review::tests::test_violating_pr_review ... ok
+test audit::tests::test_telemetry_flagged ... ok
+test audit::tests::test_clean_diff ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/debug/deps/spark_inquisitor-8a300a6c0f9eede9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli_exit_code_contracts.rs (target/debug/deps/cli_exit_code_contracts-f8a218a130184219)
+
+running 11 tests
+test test_cli_doctor_exit_zero ... ok
+test test_cli_evaluate_invalid_testimony_exit_nonzero ... ok
+test test_cli_evaluate_valid_testimony_exit_zero ... ok
+test test_cli_review_clean_diff_exit_zero ... ok
+test test_cli_audit_clean_diff_exit_zero ... ok
+test test_cli_audit_em_dash_with_advisory_style_exit_zero ... ok
+test test_cli_audit_secret_diff_exit_nonzero ... ok
+test test_cli_fix_command_sanitizes_file ... ok
+     Running tests/constitutional_rules.rs (target/debug/deps/constitutional_rules-8bce903ffc6eee3d)
+test test_cli_audit_telemetry_diff_exit_nonzero ... ok
+test test_cli_audit_em_dash_diff_exit_nonzero ... ok
+test test_cli_review_violating_diff_exit_nonzero ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 33 tests
+test test_banned_buzzword_tapestry ... ok
+test test_banned_buzzword_harness_verb ... ok
+test test_banned_buzzword_delve ... ok
+test test_elevate_flag_allowed ... ok
+test test_en_dash_detected_in_code_comments ... ok
+test test_banned_buzzword_elevate ... ok
+test test_beacon_hardware_term_allowed ... ok
+test test_banned_buzzword_game_changer ... ok
+test test_banned_buzzword_pivotal ... ok
+test test_em_dash_detected_in_markdown ... ok
+test test_banned_buzzword_crucial ... ok
+test test_allowed_word_seamlessly ... ok
+test test_banned_buzzword_testament ... ok
+test test_em_dash_detected_in_code_comments ... ok
+test test_banned_buzzword_beacon_trope ... ok
+test test_en_dash_detected_in_markdown ... ok
+test test_em_dash_detected_in_string_literals ... ok
+test test_banned_buzzword_unleash ... ok
+test test_antithesis_trope_not_x_but_y ... ok
+test test_env_file_addition_root ... ok
+test test_antithesis_trope_not_only_x_but_y ... ok
+test test_false_positive_markdown_lists ... ok
+test test_false_positive_negative_numbers_and_subtraction ... ok
+test test_env_file_addition_nested ... ok
+test test_en_dash_detected_in_string_literals ... ok
+test test_harness_noun_and_test_harness_allowed ... ok
+test test_false_positive_standard_hyphenated_words ... ok
+test test_unleash_flag_allowed ... ok
+test test_plaintext_secret_rsa_private_key ... ok
+test test_plaintext_secret_generic_private_key ... ok
+test test_plaintext_secret_github_pat ... ok
+test test_plaintext_secret_aws_access_key ... ok
+test test_plaintext_secret_github_fine_grained_pat ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/diff_auditor_edge_cases.rs (target/debug/deps/diff_auditor_edge_cases-9823983c96435b7b)
+
+running 17 tests
+test test_empty_diff_returns_clean ... ok
+test test_git_binary_patch_clean ... ok
+test test_binary_file_addition_clean ... ok
+test test_binary_file_modification_clean ... ok
+test test_binary_file_env_detected ... ok
+test test_binary_file_deletion_clean ... ok
+test test_whitespace_only_diff_returns_clean ... ok
+test test_hidden_directory_paths ... ok
+test test_filenames_with_spaces ... ok
+test test_diff_without_plus_minus_headers ... ok
+test test_malformed_chunk_headers ... ok
+test test_filenames_with_unusual_paths ... ok
+test test_filenames_with_unicode ... ok
+test test_malformed_diff_headers_no_panic ... ok
+test test_large_diff_over_5000_lines_clean ... ok
+test test_large_diff_with_telemetry_violation ... ok
+test test_large_diff_with_unslop_violation ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/issue_triage_evaluator.rs (target/debug/deps/issue_triage_evaluator-8147a3e1eebf494f)
+
+running 11 tests
+test test_evaluator_empty_testimony ... ok
+test test_evaluator_whitespace_testimony ... ok
+test test_evaluator_valid_testimony_approved ... ok
+test test_triage_empty_string_body_and_title ... ok
+test test_evaluator_prompt_injection_rejected ... ok
+test test_evaluator_commercial_monetization_red_flag ... ok
+test test_triage_label_deduplication_and_ordering ... ok
+test test_triage_markdown_injection ... ok
+test test_triage_prompt_injection ... ok
+test test_triage_script_tag_injection ... ok
+test test_triage_whitespace_only_body ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests spark_inquisitor
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-inquisitor                 ran      pass     1113 ms
+   Compiling bitflags v2.13.2
+   Compiling futures-util v0.3.34
+   Compiling serde_json v1.0.151
+   Compiling uuid v1.26.1
+   Compiling aho-corasick v1.1.5
+   Compiling tokio-rustls v0.26.5
+   Compiling csv v1.4.0
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling axum-core v0.5.6
+   Compiling hostname v0.4.2
+   Compiling tokio-util v0.7.19
+   Compiling openssl v0.10.81
+   Compiling tower-http v0.5.2
+   Compiling tower-http v0.7.1
+   Compiling toml_edit v0.22.27
+   Compiling aien-protocol-types v0.1.0 (https://github.com/aien-dev/aien-protocols?rev=7ac6facb630ca7e9a6ab4125b292203fe2bb6687#7ac6facb)
+   Compiling crumb-spec v1.0.0 (https://github.com/aien-dev/crumb-spec?rev=24194d1b7917ef19244aae6bcaff510686b75fef#24194d1b)
+   Compiling spark-crumbs v0.1.0 (https://github.com/aien-dev/spark-crumbs?rev=9355a92bc9adfe95a6ec5f8ac926f38a0b6e7db2#9355a92b)
+   Compiling rusqlite v0.31.0
+   Compiling regex-automata v0.4.18
+   Compiling aien-provenance v0.1.0 (https://github.com/aien-dev/aien-protocols?rev=7ac6facb630ca7e9a6ab4125b292203fe2bb6687#7ac6facb)
+   Compiling aien-evaluation-protocol v0.1.0 (https://github.com/aien-dev/aien-protocols?rev=7ac6facb630ca7e9a6ab4125b292203fe2bb6687#7ac6facb)
+   Compiling hyper-util v0.1.20
+   Compiling tower v0.5.3
+   Compiling axum-core v0.4.5
+   Compiling toml v0.8.23
+   Compiling tower-http v0.6.11
+   Compiling native-tls v0.2.18
+   Compiling lettre v0.11.23
+   Compiling hyper-rustls v0.27.9
+   Compiling axum v0.8.9
+   Compiling reqwest v0.13.5
+   Compiling axum v0.7.9
+   Compiling reqwest v0.12.28
+   Compiling regex v1.13.1
+   Compiling matchers v0.2.0
+   Compiling tracing-subscriber v0.3.23
+   Compiling imap v2.4.1
+   Compiling aien-probe v0.1.0 (https://github.com/aien-dev/aien-protocols?rev=7ac6facb630ca7e9a6ab4125b292203fe2bb6687#7ac6facb)
+   Compiling cortex-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/cortex-rs)
+   Compiling spark-mail-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-mail-rs)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.48s
+warning: the following packages contain code that will be rejected by a future version of Rust: imap-proto v0.10.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/lib.rs (target/debug/deps/spark_mail-7d6860ba3f41211b)
+
+running 18 tests
+test effect::tests::aegis_membrane_rejects_an_empty_effect_name ... ok
+test effect::tests::mail_actions_have_settled_effect_classes ... ok
+test effect::tests::inbound_body_cannot_become_instructions_or_tool_calls ... ok
+test effect::tests::deny_switch_blocks_before_any_network ... ok
+test gandi::tests::identities_have_separate_vault_keys ... ok
+test api::access_tests::mail_access_fails_closed ... ok
+test gandi::tests::empty_mail_is_rejected_before_vault_access ... ok
+test effect::tests::membrane_blocks_destructive_payload ... ok
+test gandi::tests::inbound_detail_stays_untrusted_data ... ok
+test store::tests::test_mail_store_roundtrip ... ok
+test effect::tests::probe_opinion_is_deterministic_for_one_payload ... ok
+test relay::tests::line_breaks_in_sender_recipient_or_subject_are_refused ... ok
+test relay::tests::unavailable_bridge_cannot_report_success ... ok
+test effect::tests::allow_returns_a_receipt_without_touching_smtp ... ok
+test effect::tests::deny_path_records_denial_and_does_not_call_the_provider ... ok
+test effect::tests::allow_path_calls_provider_only_after_policy_allows ... ok
+test relay::tests::transport_requires_final_smtp_acceptance ... ok
+test relay::tests::sent_is_recorded_only_after_final_acceptance ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running unittests src/main.rs (target/debug/deps/spark_mail-2130731fb58b15be)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests spark_mail
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-mail-rs                    ran      pass     7676 ms
+   Compiling syn v2.0.119
+   Compiling tempfile v3.27.0
+   Compiling tracing-attributes v0.1.31
+   Compiling tracing v0.1.44
+   Compiling spark-max-cabi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-max-cabi)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.90s
+     Running unittests src/lib.rs (target/debug/deps/spark_max_cabi-8a776e518d1427ed)
+
+running 1 test
+test tests::test_load_and_execute_mojo_c_abi ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+   Doc-tests spark_max_cabi
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-max-cabi                   ran      pass     2243 ms
+   Compiling tokio v1.53.1
+   Compiling aien-abi-core v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-abi-core)
+   Compiling spark-max-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-max-rs)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.39s
+     Running unittests src/lib.rs (target/debug/deps/spark_max_rs-34e88dbd64afe735)
+
+running 2 tests
+test tests::test_spark_max_session_always_succeeds ... ok
+test tests::test_mojo_max_inference_backend ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+   Doc-tests spark_max_rs
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-max-rs                     ran      pass     2762 ms
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling reqwest v0.12.28
+   Compiling toml_edit v0.22.27
+   Compiling toml v0.8.23
+   Compiling spark-supervisor v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-supervisor)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.38s
+     Running unittests src/main.rs (target/debug/deps/spark_supervisor-815294a5b311f75d)
+
+running 3 tests
+test supervisor::tests::test_compute_restart_delay_backoff ... ok
+test config::tests::test_empty_config_defaults ... ok
+test config::tests::test_parse_supervisor_config ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[aien-proof] spark-supervisor                 ran      pass     2413 ms
+[aien-proof] 39 crates in 460.7s: 39 ran, 0 stamped, 0 joined, 2 failed
+[aien-proof] failed: aien-inference-abi, spark-adapters
+FAILED (Test suite failed)
+[5/5] Checking RustSec Vulnerability Advisories...     Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1290 security advisories (from /home/drakestapleton/.cargo/advisory-db)
+    Updating crates.io index
+    Scanning Cargo.lock for vulnerabilities (532 crate dependencies)
+Crate:     bincode
+Version:   1.3.3
+Warning:   unmaintained
+Title:     Bincode is unmaintained
+Date:      2025-12-16
+ID:        RUSTSEC-2025-0141
+URL:       https://rustsec.org/advisories/RUSTSEC-2025-0141
+
+Crate:     paste
+Version:   1.0.15
+Warning:   unmaintained
+Title:     paste - no longer maintained
+Date:      2024-10-07
+ID:        RUSTSEC-2024-0436
+URL:       https://rustsec.org/advisories/RUSTSEC-2024-0436
+
+Crate:     lexical-core
+Version:   0.7.6
+Warning:   unsound
+Title:     Multiple soundness issues
+Date:      2023-09-03
+ID:        RUSTSEC-2023-0086
+URL:       https://rustsec.org/advisories/RUSTSEC-2023-0086
+
+Crate:     yoke-derive
+Version:   0.8.3
+Warning:   yanked
+
+warning: 4 allowed warnings found
+PASSED (No vulnerabilities; review any warnings above)
+============================================================
+ ✗ PREFLIGHT FAILED: Resolve defects before opening PR
+============================================================

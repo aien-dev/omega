@@ -1,0 +1,13 @@
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+crw-rw-rw- 1 root root 195,   0 Oct  1 17:11 /dev/nvidia0
+crw-rw-rw- 1 root root 195, 255 Oct  1 17:11 /dev/nvidiactl
+crw-rw-rw- 1 root root 195, 254 Oct  1 17:11 /dev/nvidia-modeset
+crw-rw-rw- 1 root root 498,   0 Oct  1 17:11 /dev/nvidia-uvm
+crw-rw-rw- 1 root root 498,   1 Oct  1 17:11 /dev/nvidia-uvm-tools
+
+/dev/nvidia-caps:
+total 0
+drwxr-xr-x  2 root root     80 Oct  1 17:11 .
+drwxr-xr-x 19 root root   4620 Oct  1 17:12 ..
+cr--------  1 root root 501, 1 Oct  1 17:11 nvidia-cap1
+cr--r--r--  1 root root 501, 2 Oct  1 17:11 nvidia-cap2

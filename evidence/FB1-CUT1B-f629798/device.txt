@@ -1,0 +1,4 @@
+start 2026-10-04T00:49:04Z omega=f6297982fc179f1ec603cb3a02bc94c3a2351b95 dirty=0 physics=/home/drakestapleton/workspace/hive-worktrees/qual-physics-6d7cf0d
+Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux
+NVIDIA GB10, 580.173.02
+end 2026-10-04T00:49:44Z

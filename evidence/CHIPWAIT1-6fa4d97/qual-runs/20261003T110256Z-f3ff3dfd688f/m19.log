@@ -1,0 +1,206 @@
+================================================================================
+    AIEN OMEGA SUBSTRATE: MILESTONE 19: ACCELERATOR WORLD QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_ACCEL_RESIDENT_WORLD_CREATE_PASS        : Creation and deterministic initialization of persistent substrate
+  [FAIL] OMEGA_ACCEL_RESIDENT_CONTEXT_REUSE_PASS       : Reuse of persistent RM client, GPU device, and VAS aperture
+  [PASS] OMEGA_ACCEL_RESIDENT_CHANNEL_REUSE_PASS       : Reuse of GPFIFO channel, USERD, and doorbell mapping across dispatches
+  [PASS] OMEGA_ACCEL_RESIDENT_CODE_REGISTRY_PASS       : Resident code registry registration, lookup, deduplication, and execution
+  [PASS] OMEGA_ACCEL_RESIDENT_BUFFER_REGISTRY_PASS     : Resident buffer registry allocation, permissions, and bounds checking
+  [PASS] OMEGA_ACCEL_RESIDENT_MIXED_WORKLOAD_PASS      : Alternating execution of mixed workloads with CPU oracle verification
+QUEUE_WRAP_FAIL reason=completion_timeout wait_kind=sequence result=STALLED dispatch_id=48 submitted=48 expected=48 observed=32 rm.put=48 ring_capacity=1024 channel_generation=1 channel_reconstructions=0 elapsed_ns=5000000040 last_progress_ns=0 progress_count=0 polls=97608400
+  [FAIL] OMEGA_ACCEL_RESIDENT_QUEUE_WRAP_PASS          : GPFIFO pushbuffer ring wraparound verified under continuous dispatch
+  [PASS] OMEGA_ACCEL_RESIDENT_1000_OP_PASS             : Sustained continuous execution of >= 1,000 heterogeneous operations on GB10
+  [PASS] OMEGA_ACCEL_RESIDENT_GENERATION_PASS          : Monotonic generation counters and two-level ABA handle validation
+  [PASS] OMEGA_ACCEL_RESIDENT_STALE_HANDLE_REFUSAL_PASS : Fail-closed refusal when attempting dispatch with expired/stale handles
+  [PASS] OMEGA_ACCEL_RESIDENT_REVOCATION_PASS          : Deterministic capability revocation immediately invalidating handles
+  [FAIL] OMEGA_ACCEL_RESIDENT_FAULT_RECOVERY_PASS      : Bounded channel fault recovery & channel generation advance
+  [PASS] OMEGA_ACCEL_RESIDENT_MEMORY_BOUND_PASS        : Flat bounded resident memory consumption measured across 1,000 operations
+  [PASS] OMEGA_ACCEL_RESIDENT_STATE_DIGEST_PASS        : Deterministic rolling SHA-256 state digest verifying execution integrity
+  [PASS] OMEGA_ACCEL_RESIDENT_ZERO_LIBCUDA_PASS        : Zero foreign userspace runtime verification (linkage, symbols, maps)
+  [FAIL] OMEGA_ACCEL_RESIDENT_CLEAN_CLONE_PASS         : Clean-clone isolated reproduction on DGX Spark silicon from scratch
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 4: OMEGA_SEMANTICS QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_OBJECT_MODEL_PASS                  : 11 first-class categories instantiated and typed
+  [PASS] OMEGA_TYPE_SYSTEM_PASS                   : Bounded widths enforced, invalid widths refused
+  [PASS] OMEGA_GRAPH_VALIDATION_PASS              : DAG validation and dangling reference refusal
+  [PASS] OMEGA_CANONICAL_ENCODING_PASS            : OMG0 wire header and lexicographical attribute sorting
+  [PASS] OMEGA_SEMANTIC_ID_DETERMINISM_PASS       : Cross-allocation bit-for-bit SHA-256 identity
+  [PASS] OMEGA_REPRESENTATION_INDEPENDENCE_PASS   : 4 independent representations collapse to identical ID
+  [PASS] OMEGA_SEMANTIC_DIFFERENCE_PASS           : ADD -> SUB produces distinct SEMANTIC_ID
+  [PASS] OMEGA_RELATION_PASS                      : Relation ordering independence confirmed
+  [PASS] OMEGA_CONSTRAINT_PASS                    : Constraint ordering independence confirmed
+  [PASS] OMEGA_PURE_EFFECT_SEPARATION_PASS        : Pure computation decoupled from physical effect tokens
+  [PASS] OMEGA_MALFORMED_OBJECT_REFUSAL_PASS      : Structural cycles and corrupt wire packets rejected
+  [PASS] OMEGA_CROSS_BUILD_DETERMINISM_PASS       : Known-answer test evaluation matches specification
+================================================================================
+  TOTAL GATES: 12 | PASSED: 12 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 5: OMEGA_AARCH64 QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_AARCH64_PROFILE_PASS               : AArch64 bare-metal target profile and registers valid
+  [PASS] OMEGA_AARCH64_ENCODER_PASS               : Direct instruction encoder synthesized expected machine words
+  [PASS] OMEGA_AARCH64_DECODER_SEAM_PASS          : Independent decoder Seam 1 validated instructions and refused corrupt opcode
+  [PASS] OMEGA_AARCH64_LOWERING_PASS              : G_S pure operations lowered to AArch64 code buffer
+  [PASS] OMEGA_AARCH64_REALIZATION_ID_PASS        : REALIZATION_ID deterministically binds machine code to SEMANTIC_ID
+  [PASS] OMEGA_AARCH64_NATIVE_EXECUTION_PASS      : Native in-memory execution observed result 15 matches semantic evaluation
+  [PASS] OMEGA_AARCH64_QEMU_EXECUTION_PASS        : Bare-metal QEMU execution observed result 15 on PL011 UART
+  [PASS] OMEGA_AARCH64_ADVERSARIAL_MUTATION_PASS  : Single-bit machine code mutation detected and refused fail-closed
+  [PASS] OMEGA_AARCH64_CROSS_BUILD_DETERMINISM_PASS : Byte-for-byte deterministic realization across runs
+================================================================================
+  TOTAL GATES: 9 | PASSED: 9 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 6: OMEGA_SELF_HOST QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_SELF_HOST_GRAPH_PASS               : Semantic compiler graph G_C constructed and validated
+  [PASS] OMEGA_SELF_HOST_C1_EMISSION_PASS         : Reference lowering C0(G_C) -> C1 emitted machine bytes
+  [PASS] OMEGA_SELF_HOST_DECODER_SEAM_PASS        : Independent decoder verified all C1 instructions
+  [PASS] OMEGA_SELF_HOST_C2_REPRODUCTION_PASS     : Native compiler C1(G_C) -> C2 emitted machine bytes
+  [PASS] OMEGA_SELF_HOST_C3_REPRODUCTION_PASS     : Native compiler C2(G_C) -> C3 emitted machine bytes
+  [PASS] OMEGA_SELF_HOST_FIXED_POINT_PASS         : Exact bit-for-bit identity C1 == C2 == C3 verified
+  [PASS] OMEGA_SELF_HOST_REALIZATION_ID_PASS      : REALIZATION_ID matching across C1, C2, and C3
+  [PASS] OMEGA_SELF_HOST_M5_PARITY_PASS           : Reproduced compiler reproduces exact M5 machine code bytes
+  [PASS] OMEGA_SELF_HOST_NATIVE_EXECUTION_PASS    : Reproduced compiler output executes natively to 15
+  [PASS] OMEGA_SELF_HOST_ADVERSARIAL_MUTATION_PASS : Single-bit mutations in G_C wire or C1 refused fail-closed
+================================================================================
+  TOTAL GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 7: OMEGA_VERIFY QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_VERIFY_V0_TYPE_PASS                : V0 accepted well-typed graph and rejected ill-typed graph
+  [PASS] OMEGA_VERIFY_V0_DAG_PASS                 : V0 rejected graph with dangling reference
+  [PASS] OMEGA_VERIFY_V0_CODE_BOUNDS_PASS         : V0 enforced 4-byte alignment and buffer length bounds
+  [PASS] OMEGA_VERIFY_V0_INSN_DECODE_PASS         : V0 validated instruction opcodes and refused illegal instruction
+  [PASS] OMEGA_VERIFY_V0_TERMINAL_RET_PASS        : V0 rejected non-terminating / non-RET execution buffer
+  [PASS] OMEGA_VERIFY_V1_DIFFERENTIAL_PASS        : V1 confirmed exact bit-for-bit parity across test corpus
+  [PASS] OMEGA_VERIFY_V1_DIVERGENCE_REFUSAL_PASS  : V1 detected and refused mutated realization divergence
+  [PASS] OMEGA_VERIFY_V2_COMMUTATIVITY_PASS       : V2 proved commutativity on declared commutative ops
+  [PASS] OMEGA_VERIFY_V2_IDENTITY_PASS            : V2 proved identity elements on ADD, MUL, AND, OR
+  [PASS] OMEGA_VERIFY_V2_OVERFLOW_PASS            : V2 validated modular overflow wrapping semantics
+================================================================================
+  TOTAL GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 8: OMEGA_PROGRAM_CORE QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_PROGRAM_OBJECT_PASS                : OMEGA_PROGRAM created with contracts, cost, and realization
+  [PASS] OMEGA_PROGRAM_CONTRACT_VALIDATION_PASS   : Contract validation enforced, invalid types rejected
+  [PASS] OMEGA_PROGRAM_COMPOSITION_PASS           : Algebraic composition C = A o B with contract propagation
+  [PASS] OMEGA_PROGRAM_TYPE_MISMATCH_REFUSAL_PASS : Incompatible composition refused fail-closed
+  [PASS] OMEGA_PROGRAM_COST_ACCOUNTING_PASS       : Composite cost monotonically verified (insns, latency)
+  [PASS] OMEGA_PROGRAM_REALIZATION_PASS           : Composite program lowered to native AArch64 machine bytes
+  [PASS] OMEGA_PROGRAM_V0_STRUCTURAL_PASS         : Composite program passes M7 V0 structural verification
+  [PASS] OMEGA_PROGRAM_V1_DIFFERENTIAL_PASS       : Composite program passes M7 V1 differential evaluation (2x+1)
+  [PASS] OMEGA_PROGRAM_V2_PROPERTY_PASS           : Composite program passes M7 V2 property verification
+  [PASS] OMEGA_PROGRAM_SYNTHESIS_TASK_PASS        : SYNTHESIS_TASK evaluation harness ready for M9 search
+================================================================================
+  TOTAL GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 9: OMEGA_SYNTHESIS_V0 QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_SYNTHESIS_PRIMITIVES_PASS          : Base primitive program bank constructed and verified
+  [PASS] OMEGA_SYNTHESIS_SEARCH_ORDERING_PASS     : Deterministic search generates multi-level candidates
+  [PASS] OMEGA_SYNTHESIS_TYPE_PRUNING_PASS        : Incompatible typed candidates pruned fail-closed
+  [PASS] OMEGA_SYNTHESIS_EQUIV_PRUNING_PASS       : Observational equivalence table detects duplicate functions
+  [PASS] OMEGA_SYNTHESIS_V0_STRUCTURAL_PASS       : Synthesized candidate passes M7 V0 structural verification
+  [PASS] OMEGA_SYNTHESIS_V1_IO_FILTERING_PASS     : Non-conforming candidate rejected by test suite filter
+  [PASS] OMEGA_SYNTHESIS_V2_PROPERTY_PASS         : Synthesized candidate passes M7 V2 property verification
+  [PASS] OMEGA_SYNTHESIS_TARGET_AFFINE_PASS       : Synthesized 2x + 1 passes holdout tests on native hardware
+  [PASS] OMEGA_SYNTHESIS_TARGET_COMPOSED_PASS     : Synthesized 3x - 2 passes holdout tests on native hardware
+  [PASS] OMEGA_SYNTHESIS_RECEIPT_PASS             : Cryptographic identity binding Task, Program, and Realization
+================================================================================
+  TOTAL GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 10: OMEGA_LIBRARY_V1 QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_LIBRARY_INIT_PASS                  : Catalog initialization and capacity management
+  [PASS] OMEGA_LIBRARY_INSERT_PASS                : Content-addressed program insertion and state digest update
+  [PASS] OMEGA_LIBRARY_INDEXING_PASS              : Retrieval by SEMANTIC_ID, REALIZATION_ID, and name
+  [PASS] OMEGA_LIBRARY_QUERY_PASS                 : Semantic type query filtering (U64 -> U64)
+  [PASS] OMEGA_LIBRARY_DEP_DAG_PASS               : Direct and transitive dependency DAG tracking
+  [PASS] OMEGA_LIBRARY_IMMUTABILITY_PASS          : Version advancement and cryptographic digest evolution
+  [PASS] OMEGA_LIBRARY_UNVERIFIED_REFUSAL_PASS    : Unverified program insertion rejected fail-closed
+  [PASS] OMEGA_LIBRARY_DUPLICATE_REFUSAL_PASS     : Duplicate SEMANTIC_ID insertion rejected fail-closed
+  [PASS] OMEGA_LIBRARY_SYNTHESIS_REUSE_PASS       : Synthesis engine discovering composite by reusing verified library component
+  [PASS] OMEGA_LIBRARY_RECEIPT_PASS               : Cryptographic state digest and provenance accounting
+================================================================================
+  TOTAL GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 11: OMEGA_LIBRARY_DISCOVERY QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_DISCOVERY_CORPUS_MINING_PASS       : Common sub-expression slices mined across corpus
+  [PASS] OMEGA_DISCOVERY_NONTRIVIAL_PASS          : Candidate abstraction is non-trivial and composite
+  [PASS] OMEGA_DISCOVERY_COMPRESSION_PASS         : Positive description length reduction and instruction savings across corpus
+  [PASS] OMEGA_DISCOVERY_SEMANTIC_PRESERVATION_PASS : Behavioral equivalence strictly preserved after program refactoring
+  [PASS] OMEGA_DISCOVERY_V0_STRUCTURAL_PASS       : M7 V0 structural verification passed on discovered abstraction
+  [PASS] OMEGA_DISCOVERY_V1_DIFFERENTIAL_PASS     : M7 V1 differential evaluation passed on native hardware
+  [PASS] OMEGA_DISCOVERY_V2_PROPERTY_PASS         : M7 V2 property verification passed on discovered abstraction
+  [PASS] OMEGA_DISCOVERY_LIBRARY_ADMISSION_PASS   : Discovered abstraction admitted into OmegaLibrary catalog
+  [PASS] OMEGA_DISCOVERY_SEARCH_ACCELERATION_PASS : Held-out synthesis task solved with reduced search candidates
+  [PASS] OMEGA_DISCOVERY_RECEIPT_PASS             : Full cryptographic evidence receipt accounting for discovery and acceleration
+================================================================================
+  TOTAL GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 12: OMEGA_LIVING_MATVEC QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_MATVEC_SEMANTIC_SPEC_PASS          : Pure mathematical MatVec specification instantiated with canonical SemanticId
+  [PASS] OMEGA_MATVEC_MULTI_REALIZATION_PASS      : Synthesis engine generates 3 distinct machine-code realizations
+  [PASS] OMEGA_MATVEC_TRIPLE_ID_PASS              : Cryptographic triple identity binding SEMANTIC_ID, MACHINE_ID, and code bytes
+  [PASS] OMEGA_MATVEC_V0_STRUCTURAL_PASS          : M7 V0 structural verification passed on all realizations with mutation refusal
+  [PASS] OMEGA_MATVEC_V1_NUMERICAL_PARITY_PASS    : Exact bit-for-bit numerical parity against mathematical Oracle across dimensions
+  [PASS] OMEGA_MATVEC_REGIME_INFLECTION_PASS      : Empirical benchmark measures execution latency across small and medium regimes
+  [PASS] OMEGA_MATVEC_ADAPTIVE_DISPATCH_PASS      : Living kernel dynamically adapts and dispatches optimal realization
+  [PASS] OMEGA_MATVEC_SPEEDUP_PASS                : Multi-accumulator unrolled schedule achieves measured hardware speedup
+  [PASS] OMEGA_MATVEC_ZERO_TOOLCHAIN_PASS         : All realizations emitted via direct AArch64 machine byte encoders without foreign toolchain
+  [PASS] OMEGA_MATVEC_RECEIPT_PASS                : Full qualification receipt generated and verified
+================================================================================
+  TOTAL GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 13: OMEGA_MACHINE_GRAPH QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_MACHINE_INIT_PASS                  : Machine graph initialized with profile and name
+  [PASS] OMEGA_MACHINE_PIPELINE_PASS              : Execution pipeline, issue width, and compute units modeled
+  [PASS] OMEGA_MACHINE_REGISTER_FILE_PASS         : Register file capacities (GPR, Vector) validated
+  [PASS] OMEGA_MACHINE_MEMORY_HIERARCHY_PASS      : Multi-tier cache hierarchy (L1I, L1D, L2, L3) and DRAM modeled
+  [PASS] OMEGA_MACHINE_PHYSICS_INGRESS_PASS       : Physical machine descriptor ingested and bound to Physics seal
+  [PASS] OMEGA_MACHINE_CANONICAL_ID_PASS          : Deterministic MACHINE_ID bit-for-bit identity verified
+  [PASS] OMEGA_MACHINE_TOPOLOGY_DIFFERENCE_PASS   : Distinct machine topologies yield distinct MACHINE_IDs
+  [PASS] OMEGA_MACHINE_CYCLE_PREVENTION_PASS      : Topological cache ordering and line size validation enforced fail-closed
+  [PASS] OMEGA_MACHINE_COST_EVALUATION_PASS       : Latency estimation grounded in physical execution unit latencies
+  [PASS] OMEGA_MACHINE_RECEIPT_PASS               : Physical machine graph certified with Physics authority accounting
+================================================================================
+  TOTAL GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 14: OMEGA_REALIZATION_SYNTHESIS QUALIFICATION GATES
+================================================================================
+  [PASS] OMEGA_REAL_SYNTH_INIT_PASS               : Realization synthesis task initialization and configuration
+  [PASS] OMEGA_REAL_SYNTH_TRIPLE_ID_PASS          : Cryptographic triple identity incorporates SEMANTIC_ID, MACHINE_ID, and code bytes
+  [PASS] OMEGA_REAL_SYNTH_SCHEDULE_OPT_PASS       : Machine-aware instruction schedules differ between DGX Spark and QEMU virt
+  [PASS] OMEGA_REAL_SYNTH_DGX_SPARK_PASS          : Synthesis specialized for DGX Spark Grace Neoverse V2 4-wide dispatch
+  [PASS] OMEGA_REAL_SYNTH_QEMU_VIRT_PASS          : Synthesis specialized for QEMU virt generic AArch64 baseline
+  [PASS] OMEGA_REAL_SYNTH_SEMANTIC_PARITY_PASS    : Native execution of synthesized realization matches semantic evaluation
+  [PASS] OMEGA_REAL_SYNTH_V0_STRUCTURAL_PASS      : M7 V0 structural verification passed on synthesized realization
+  [PASS] OMEGA_REAL_SYNTH_V1_DIFFERENTIAL_PASS    : M7 V1 differential evaluation passed across holdout test inputs
+  [PASS] OMEGA_REAL_SYNTH_V2_PROPERTY_PASS        : M7 V2 property verification passed on synthesized realization
+  [PASS] OMEGA_REAL_SYNTH_RECEIPT_PASS            : Full qualification receipt generated and verified
+================================================================================
+  TOTAL GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+================================================================================
+    AIEN OMEGA SUBSTRATE — MILESTONE 15: PHYSICS_ACCELERATOR_LINK GATES
+================================================================================
+  [PASS] PHYSICS_ACCEL_MEM_BOUNDS_PASS            : Coherent DRAM boundaries and kernel isolation
+  [PASS] PHYSICS_ACCEL_SMMU_TRANSLATION_PASS      : SMMUv3 Stage 1 IOVA-to-PA translation mapping
+  [PASS] PHYSICS_ACCEL_DMA_SANDBOX_PASS           : Unmapped and permission violation DMA sandboxing
+  [PASS] PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS       : Bounded queue authority and doorbell mediation
+  [PASS] PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS      : Deterministic monotonic device lifecycle transitions
+  [PASS] PHYSICS_A
