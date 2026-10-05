@@ -1,0 +1,14 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand2/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r13_living_host
+R13 costs: incumbent 7029 ns, target 3865 ns, selected 2692860 ps, reference on new cores 4573046 ps, AIEN now expects 2816 ns, goal status 2
+R13 positive: generation 1 -> 2, recovered 2; served 2240 (139 after promotion), crumbs 4934, GPU claims 16, durable links 11
+R13 control A: no AIEN -> no plan, no GPU experiment, no candidate, generation stays 1
+R13 control B: verified candidate 2 refused (RX_GEN_ERR_AUTHORITY); never in force, production stayed on the reference
+R13 control C: revoked grant -> seat blocked on authority, no claim, no evidence; 772 requests served meanwhile
+R13 control D: output generation changed mid-claim -> result refused, no evidence, no candidate
+R13 control E: crashing candidate refused by the verifier; the promoted generation holds a verified one
+R13 costs: incumbent 7029 ns, target 3865 ns, selected 2691744 ps, reference on new cores 4567837 ps, AIEN now expects 2828 ns, goal status 2
+R13 control E episode: generation 1 -> 2, recovered 2; served 18209 (145 after promotion), crumbs 39469, GPU claims 16, durable links 11
+R13 ARGUS: observing; observe and record, received 110257 events, 415 authority observations, 0 findings, 0 ingest errors
+R13 gate: R13_LIVING_SYSTEM=HOST_PASS_NON_SILICON
+R13 receipt: build/qual-runs/20261005T181115Z-c62f47b5ac17/R13/rx_living_receipt.json

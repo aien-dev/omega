@@ -1,0 +1,2 @@
+13:26:04 WARNING: a model server looks resident: max ollama  (spec §9 says nothing heavy may run)
+13:26:04 BLOCKED_INSTRUMENT: INSTRUMENT_UNAVAILABLE reason=absent: no hwmon named aien_spbm (the signed SPBM reader is not loaded); package energy cannot be read, R15 cannot PASS (spec §7)
