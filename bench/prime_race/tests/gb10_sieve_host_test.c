@@ -101,15 +101,30 @@ static uint32_t lut3(uint32_t lut, uint32_t a, uint32_t b, uint32_t c) {
 }
 
 static uint64_t g_steps;
-static void sim_thread(const BlackwellIRProgram *p, uint32_t tid, uint32_t cta) {
-    Thr t; memset(&t, 0, sizeof t);
+/* Shared memory of the CTA being simulated (campaign C3). g_smem_bytes is what the launch
+ * declares; an access past it is an error. Race check: a word written in barrier phase k may
+ * not be read by a different thread in the same phase (no BAR_SYNC between them). */
+#define SIM_SMEM_WORDS 4096
+static uint32_t g_smem[SIM_SMEM_WORDS], g_smem_wphase[SIM_SMEM_WORDS], g_smem_wtid[SIM_SMEM_WORDS];
+static uint32_t g_smem_bytes, g_phase, g_smem_short; /* g_smem_short: negative control only */
+static uint64_t g_races;
+static uint32_t *smem_at(uint32_t a, uint32_t tid, int write) {
+    if ((a & 3) || a + 4 > g_smem_bytes || a / 4 >= SIM_SMEM_WORDS) { g_sim_err = 5; return NULL; }
+    uint32_t w = a / 4;
+    if (write) { g_smem_wphase[w] = g_phase + 1; g_smem_wtid[w] = tid; }
+    else if (g_smem_wphase[w] == g_phase + 1 && g_smem_wtid[w] != tid) { g_races++; g_sim_err = 6; return NULL; }
+    return &g_smem[w];
+}
+/* Runs one thread until EXIT (t->done = 1) or a BAR_SYNC (returns with pc past it). */
+static void sim_thread(const BlackwellIRProgram *p, Thr *tp, uint32_t tid, uint32_t cta) {
+    Thr t = *tp;
     for (uint64_t guard = 0; guard < 400000000ull; guard++) {
         if (t.pc < 0 || (size_t)t.pc >= p->count) { g_sim_err = 1; return; }
         const BlackwellIRInsn *in = &p->insns[t.pc];
         uint32_t a = rd(&t, in->src1_vreg, p), b = rd(&t, in->src2_vreg, p), c = rd(&t, in->src3_vreg, p);
         g_steps++;
         switch (in->op) {
-        case BW_IR_EXIT: if (!in->predicate_p0 || t.p0) return; break;
+        case BW_IR_EXIT: if (!in->predicate_p0 || t.p0) { t.done = 1; *tp = t; return; } break;
         case BW_IR_BRA: {
             int take = !in->predicate_p0 || (in->predicate_not ? !t.p0 : t.p0);
             if (take) { if ((int32_t)in->imm == 0) { g_sim_err = 2; return; } t.pc += (int32_t)in->imm; continue; }
@@ -131,6 +146,9 @@ static void sim_thread(const BlackwellIRProgram *p, uint32_t tid, uint32_t cta) 
         case BW_IR_ISETP_GE_U32: t.p0 = a >= b; break;
         case BW_IR_LDG_E: { uint32_t *m = mem_at(rd64(&t, in->src1_vreg, p)); if (!m) return; wr(&t, in->dst_vreg, *m, p); break; }
         case BW_IR_STG_E: { uint32_t *m = mem_at(rd64(&t, in->src1_vreg, p)); if (!m) return; *m = b; break; }
+        case BW_IR_LDS32: { uint32_t *m = smem_at(a, tid, 0); if (!m) return; wr(&t, in->dst_vreg, *m, p); break; }
+        case BW_IR_STS32: { uint32_t *m = smem_at(a, tid, 1); if (!m) return; *m = b; break; }
+        case BW_IR_BAR_SYNC: t.pc++; *tp = t; return;
         default: g_sim_err = 100 + (int)in->op; return;
         }
         t.pc++;
@@ -138,9 +156,25 @@ static void sim_thread(const BlackwellIRProgram *p, uint32_t tid, uint32_t cta) 
     g_sim_err = 4;
 }
 
+/* One CTA: every thread runs to its next BAR_SYNC or EXIT, then the next barrier phase starts.
+ * Exited threads do not hold up a barrier (they are no longer counted). Shared memory starts
+ * poisoned, so a read of a word nobody staged gives a wrong answer the oracle sees. */
+static void sim_cta(const BlackwellIRProgram *p, uint32_t cta) {
+    static Thr th[OMEGA_GPU_EW_THREADS];
+    memset(th, 0, sizeof th);
+    for (int i = 0; i < SIM_SMEM_WORDS; i++) { g_smem[i] = 0xfeedfaceu; g_smem_wphase[i] = 0; }
+    for (g_phase = 0; !g_sim_err; g_phase++) {
+        int live = 0;
+        for (uint32_t tid = 0; tid < OMEGA_GPU_EW_THREADS && !g_sim_err; tid++)
+            if (!th[tid].done) { sim_thread(p, &th[tid], tid, cta); live += !th[tid].done; }
+        if (!live) return;
+        if (g_phase > 1000) { g_sim_err = 7; return; }
+    }
+}
+
 /* Mirrors gb10_native.c's pass on the host: same table, same argument words; `budget`
  * is the CTA cap (PR_GB10_CTA_BUDGET, default OMEGA_GPU_EW_MAX_CTAS). */
-static int sim_sieve(const BlackwellIRProgram *p, uint64_t limit, uint32_t budget, uint64_t *words) {
+static int sim_sieve(const BlackwellIRProgram *p, uint64_t limit, uint32_t budget, int staged, uint64_t *words) {
     uint64_t odd = pr_odd_count(limit);
     uint32_t nwords = (uint32_t)((odd + 31) / 32);
     uint32_t blocks = (nwords + OMEGA_GPU_EW_THREADS - 1) / OMEGA_GPU_EW_THREADS;
@@ -166,11 +200,13 @@ static int sim_sieve(const BlackwellIRProgram *p, uint64_t limit, uint32_t budge
     g_cb[0x380 / 4] = (uint32_t)ta; g_cb[0x380 / 4 + 1] = (uint32_t)(ta >> 32);
     g_cb[0x390 / 4] = (uint32_t)oa; g_cb[0x390 / 4 + 1] = (uint32_t)(oa >> 32);
     g_cb[0x398 / 4] = nwords; g_cb[0x39c / 4] = stride; g_cb[0x3a0 / 4] = lastw; g_cb[0x3a4 / 4] = tailinv;
+    g_cb[0x3a8 / 4] = (n + 1) * 3;                       /* P4: table words (staged kernel) */
+    g_smem_bytes = staged ? (n + 1) * 12 - g_smem_short : 0; /* what gb10_native.c declares */
     g_ranges[0] = (Range){ (uintptr_t)tab, (uintptr_t)tab + cap * 12 };
     g_ranges[1] = (Range){ (uintptr_t)out, (uintptr_t)out + (size_t)nwords * 4 };
     g_sim_err = 0;
     for (uint32_t cta = 0; cta < ctas && !g_sim_err; cta++)
-        for (uint32_t tid = 0; tid < OMEGA_GPU_EW_THREADS && !g_sim_err; tid++) sim_thread(p, tid, cta);
+        sim_cta(p, cta);
     size_t nw64 = pr_words64(limit);
     memset(words, 0, nw64 * 8);
     memcpy(words, out, (size_t)nwords * 4);
@@ -201,7 +237,9 @@ static int sb_hazards(const BlackwellIRProgram *p, int verbose) {
 
 /* ------------------------------------------------------------- nvdisasm */
 /* every word decodes, the new ops appear, and every BRA lands where the IR says */
-static void nvdisasm_check(const OmegaBlackwellKernel *k, const BlackwellIRProgram *p) {
+static const char *const MUST_GLOBAL[] = { "LOP3.LUT", "SHF.L.U32", "IMAD.HI.U32", "@P0 BRA", "@!P0 BRA", "@P0 EXIT", "STG.E", "LDG.E" };
+static const char *const MUST_STAGED[] = { "LDS", "STS", "BAR.SYNC", "LDG.E", "STG.E", "IMAD.HI.U32", "@P0 BRA", "@!P0 BRA" };
+static void nvdisasm_check(const OmegaBlackwellKernel *k, const BlackwellIRProgram *p, const char *const *must, const char *tag) {
     const char *nv = "/usr/local/cuda/bin/nvdisasm";
     if (access(nv, X_OK) != 0) { printf("nvdisasm: not present, listing check SKIPPED\n"); return; }
     char bin[64], lst[64], cmd[256];
@@ -216,7 +254,6 @@ static void nvdisasm_check(const OmegaBlackwellKernel *k, const BlackwellIRProgr
     CHECK(rc == 0, "nvdisasm rc %d", rc);
     FILE *l = fopen(lst, "r");
     if (!l) { CHECK(0, "cannot read %s", lst); return; }
-    static const char *must[] = { "LOP3.LUT", "SHF.L.U32", "IMAD.HI.U32", "@P0 BRA", "@!P0 BRA", "@P0 EXIT", "STG.E", "LDG.E" };
     int seen[8] = {0}, insns = 0, bad = 0, bra_ok = 0, bra_bad = 0;
     char line[512];
     while (fgets(line, sizeof line, l)) {
@@ -240,7 +277,7 @@ static void nvdisasm_check(const OmegaBlackwellKernel *k, const BlackwellIRProgr
     for (int i = 0; i < 8; i++) CHECK(seen[i], "nvdisasm listing lacks %s (%s)", must[i], lst);
     CHECK(bad == 0, "%d undecodable words (%s)", bad, lst);
     CHECK(bra_bad == 0 && bra_ok >= 6, "branch targets: %d match, %d differ", bra_ok, bra_bad);
-    printf("nvdisasm: %d words, %d undecodable, %d branch targets checked (%s)\n", insns, bad, bra_ok, lst);
+    printf("nvdisasm (%s): %d words, %d undecodable, %d branch targets checked (%s)\n", tag, insns, bad, bra_ok, lst);
     if (g_failed == 0) unlink(lst);
 }
 
@@ -319,7 +356,7 @@ int main(int argc, char **argv) {
     printf("\n");
     CHECK(k.gpr_count <= 64, "GPR budget %u > 64", k.gpr_count);
     CHECK(memcmp(k.code_digest, mk.code_digest, 32) != 0, "mutant kernel differs from production");
-    nvdisasm_check(&k, prog);
+    nvdisasm_check(&k, prog, MUST_GLOBAL, "global table");
     {
         int hz = sb_hazards(prog, 1);
         CHECK(hz == 0, "scoreboard hazards in the sieve kernel: %d", hz);
@@ -347,7 +384,7 @@ int main(int argc, char **argv) {
         uint64_t L = i < nl ? lims[i] : 10000000ull;
         uint64_t *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
         if (!want || !got) { CHECK(0, "alloc"); break; }
-        int src = sim_sieve(prog, L, OMEGA_GPU_EW_MAX_CTAS, got);
+        int src = sim_sieve(prog, L, OMEGA_GPU_EW_MAX_CTAS, 0, got);
         size_t nw = pr_words64(L), bad = nw;
         for (size_t j = 0; j < nw; j++) if (got[j] != want[j]) { bad = j; break; }
         if (src != 0 || bad != nw) {
@@ -372,7 +409,7 @@ int main(int argc, char **argv) {
             for (size_t i = 0; i < 4; i++, bn++) {
                 uint64_t L = ls[i], *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
                 if (!want || !got) { CHECK(0, "alloc"); free(want); free(got); break; }
-                int src = sim_sieve(prog, L, budgets[b], got);
+                int src = sim_sieve(prog, L, budgets[b], 0, got);
                 if (src != 0 || memcmp(got, want, pr_words64(L) * 8) != 0) {
                     bfail++;
                     printf("  budget %u limit %" PRIu64 ": sim rc %d err %d, differs\n", budgets[b], L, src, g_sim_err);
@@ -387,9 +424,84 @@ int main(int argc, char **argv) {
     /* 5. mutant must be caught */
     {
         uint64_t L = 100000, *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
-        int src = want && got ? sim_sieve(mprog, L, OMEGA_GPU_EW_MAX_CTAS, got) : -1;
+        int src = want && got ? sim_sieve(mprog, L, OMEGA_GPU_EW_MAX_CTAS, 0, got) : -1;
         CHECK(src == 0 && want && memcmp(got, want, pr_words64(L) * 8) != 0, "mutant kernel not caught at 1e5 (sim rc %d)", src);
         free(want); free(got);
+    }
+
+    /* 5b. staged kernel (campaign C3): table copied to shared memory, then LDS. Same sweeps as the
+     * global kernel, the hazard walk, the mutant, and two negative controls on the new machinery:
+     * the barrier removed (the race check must fire) and too little shared memory declared. */
+    {
+        BlackwellIRProgram *sp = calloc(1, sizeof *sp), *smp = calloc(1, sizeof *smp), *nobar = malloc(sizeof *nobar);
+        OmegaBlackwellKernel sk, smk;
+        memset(&sk, 0, sizeof sk); memset(&smk, 0, sizeof smk);
+        int src1 = sp ? omega_gpu_elementwise_codegen_ir(OMEGA_GPU_EW_PRIME_SIEVE_SHARED, 0, sp, &sk) : -1;
+        int src2 = smp ? omega_gpu_elementwise_codegen_ir(OMEGA_GPU_EW_PRIME_SIEVE_SHARED, 1, smp, &smk) : -1;
+        CHECK(src1 == OMEGA_GPU_EW_OK && src2 == OMEGA_GPU_EW_OK && nobar, "staged codegen rc %d mutant rc %d", src1, src2);
+        if (src1 == OMEGA_GPU_EW_OK && src2 == OMEGA_GPU_EW_OK && nobar) {
+            printf("staged kernel: %zu IR insns, %u GPRs, sha256 ", sp->count, sk.gpr_count);
+            for (int i = 0; i < 32; i++) printf("%02x", sk.code_digest[i]);
+            printf("\n");
+            CHECK(sk.gpr_count <= 64, "staged GPR budget %u > 64", sk.gpr_count);
+            nvdisasm_check(&sk, sp, MUST_STAGED, "staged");
+            int hz = sb_hazards(sp, 1);
+            CHECK(hz == 0, "scoreboard hazards in the staged kernel: %d", hz);
+            int sfail = 0, sn = 0;
+            for (size_t i = 0; i < nl; i++, sn++) {
+                uint64_t L = lims[i], *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
+                if (!want || !got) { CHECK(0, "alloc"); free(want); free(got); break; }
+                int r = sim_sieve(sp, L, OMEGA_GPU_EW_MAX_CTAS, 1, got);
+                if (r != 0 || memcmp(got, want, pr_words64(L) * 8) != 0) {
+                    if (!sfail++) printf("  staged limit %" PRIu64 ": sim rc %d err %d, differs\n", L, r, g_sim_err);
+                }
+                if (L == 1000000) CHECK(count_primes(got, L) == 78498, "staged pi(1e6) = %" PRIu64, count_primes(got, L));
+                free(want); free(got);
+            }
+            static const uint32_t budgets[] = { 1, 2, 128, 256 };
+            for (size_t b = 0; b < sizeof budgets / sizeof budgets[0]; b++) {
+                uint64_t edge = 64ull * budgets[b] * OMEGA_GPU_EW_THREADS;
+                const uint64_t ls[] = { edge - 1, edge, edge + 1 };
+                for (size_t i = 0; i < 3; i++, sn++) {
+                    uint64_t L = ls[i], *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
+                    if (!want || !got) { CHECK(0, "alloc"); free(want); free(got); break; }
+                    int r = sim_sieve(sp, L, budgets[b], 1, got);
+                    if (r != 0 || memcmp(got, want, pr_words64(L) * 8) != 0) {
+                        if (!sfail++) printf("  staged budget %u limit %" PRIu64 ": sim rc %d err %d\n", budgets[b], L, r, g_sim_err);
+                    }
+                    free(want); free(got);
+                }
+            }
+            CHECK(sfail == 0, "staged kernel differs from the oracle in %d of %d cases", sfail, sn);
+            printf("staged simulator: %d cases, %d differ, races seen %" PRIu64 "\n", sn, sfail, g_races);
+            CHECK(g_races == 0, "staged kernel: %" PRIu64 " shared-memory races", g_races);
+
+            uint64_t L = 100000, *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
+            int r = want && got ? sim_sieve(smp, L, OMEGA_GPU_EW_MAX_CTAS, 1, got) : -1;
+            CHECK(r == 0 && want && memcmp(got, want, pr_words64(L) * 8) != 0, "staged mutant not caught at 1e5 (sim rc %d)", r);
+
+            /* negative control 1: BAR_SYNC turned into a no-op -> a thread reads a word another
+             * thread staged in the same phase; the race check must stop the run */
+            memcpy(nobar, sp, sizeof *nobar);
+            int bars = 0;
+            for (size_t i = 0; i < nobar->count; i++)
+                if (nobar->insns[i].op == BW_IR_BAR_SYNC) { nobar->insns[i].op = BW_IR_MOV_RZ; nobar->insns[i].dst_vreg = -1; bars++; }
+            uint64_t races0 = g_races;
+            r = got ? sim_sieve(nobar, L, OMEGA_GPU_EW_MAX_CTAS, 1, got) : -1;
+            CHECK(bars == 1 && r != 0 && g_sim_err == 6 && g_races > races0,
+                  "barrier removed: race not caught (bars %d, rc %d, err %d)", bars, r, g_sim_err);
+            printf("negative control, barrier removed: rc %d err %d (6 = race)\n", r, g_sim_err);
+
+            /* negative control 2: declare 12 bytes (one entry) too little shared memory; the
+             * staging copy must run off the end and stop */
+            g_smem_short = 12;
+            r = got ? sim_sieve(sp, L, OMEGA_GPU_EW_MAX_CTAS, 1, got) : -1;
+            g_smem_short = 0;
+            CHECK(r != 0 && g_sim_err == 5, "short shared declaration not caught (rc %d, err %d)", r, g_sim_err);
+            printf("negative control, shared memory one entry short: rc %d err %d (5 = out of bounds)\n", r, g_sim_err);
+            free(want); free(got);
+        }
+        free(sk.code); free(smk.code); free(sp); free(smp); free(nobar);
     }
 
     /* 6. division model */
