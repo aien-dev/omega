@@ -141,7 +141,8 @@ verify-dir|materialize)
     fi
     [ -z "$bad" ] || die1 "$dir differs from $LOCK: $(echo "$bad" | cut -c1-300)"
     # Every non-directory entry under the subpaths must be a locked path.
-    (cd "$dir" && find "$@" ! -type d -print0 2>/dev/null) | tr '\0' '\n' | sort > "$tmpd/have"
+    (cd "$dir" && find "$@" ! -type d -print0) > "$tmpd/have0" 2>/dev/null || die1 "cannot list every entry under $dir (unreadable directory?)"
+    tr '\0' '\n' < "$tmpd/have0" | sort > "$tmpd/have"
     sort -o "$tmpd/want" "$tmpd/want"
     extra=$(comm -13 "$tmpd/want" "$tmpd/have")
     [ -z "$extra" ] || die1 "$dir has files not in $LOCK (build outputs included; build out of tree): $(echo "$extra" | head -5 | tr '\n' ' ')"
