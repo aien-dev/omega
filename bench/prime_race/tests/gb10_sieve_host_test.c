@@ -138,12 +138,13 @@ static void sim_thread(const BlackwellIRProgram *p, uint32_t tid, uint32_t cta) 
     g_sim_err = 4;
 }
 
-/* Mirrors gb10_native.c's pass on the host: same table, same argument words. */
-static int sim_sieve(const BlackwellIRProgram *p, uint64_t limit, uint64_t *words) {
+/* Mirrors gb10_native.c's pass on the host: same table, same argument words; `budget`
+ * is the CTA cap (PR_GB10_CTA_BUDGET, default OMEGA_GPU_EW_MAX_CTAS). */
+static int sim_sieve(const BlackwellIRProgram *p, uint64_t limit, uint32_t budget, uint64_t *words) {
     uint64_t odd = pr_odd_count(limit);
     uint32_t nwords = (uint32_t)((odd + 31) / 32);
     uint32_t blocks = (nwords + OMEGA_GPU_EW_THREADS - 1) / OMEGA_GPU_EW_THREADS;
-    uint32_t ctas = blocks == 0 ? 1 : (blocks > OMEGA_GPU_EW_MAX_CTAS ? OMEGA_GPU_EW_MAX_CTAS : blocks);
+    uint32_t ctas = blocks == 0 ? 1 : (blocks > budget ? budget : blocks);
     uint32_t stride = ctas * OMEGA_GPU_EW_THREADS, lastw = nwords ? nwords - 1 : 0;
     uint32_t valid = nwords ? (uint32_t)(odd - 32ull * lastw) : 32;
     uint32_t tailinv = ~(valid >= 32 ? 0xffffffffu : ((1u << valid) - 1u));
@@ -307,7 +308,7 @@ int main(int argc, char **argv) {
         uint64_t L = i < nl ? lims[i] : 10000000ull;
         uint64_t *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
         if (!want || !got) { CHECK(0, "alloc"); break; }
-        int src = sim_sieve(prog, L, got);
+        int src = sim_sieve(prog, L, OMEGA_GPU_EW_MAX_CTAS, got);
         size_t nw = pr_words64(L), bad = nw;
         for (size_t j = 0; j < nw; j++) if (got[j] != want[j]) { bad = j; break; }
         if (src != 0 || bad != nw) {
@@ -321,10 +322,33 @@ int main(int argc, char **argv) {
     CHECK(sim_fail == 0, "simulator differs from the oracle at %d limits (first %" PRIu64 ")", sim_fail, first_bad);
     printf("simulator: %zu limits%s, %d differ, %" PRIu64 " IR steps\n", nl + (size_t)big, big ? " (+1e7)" : "", sim_fail, g_steps);
 
+    /* 4b. other CTA budgets (campaign C1): each budget at its own grid-stride boundaries
+     * (limit 64 * budget * 128 +-1: the word count crosses one full round of threads) and at 1e6. */
+    {
+        static const uint32_t budgets[] = { 1, 2, 128, 256 };
+        int bfail = 0, bn = 0;
+        for (size_t b = 0; b < sizeof budgets / sizeof budgets[0]; b++) {
+            uint64_t edge = 64ull * budgets[b] * OMEGA_GPU_EW_THREADS;
+            const uint64_t ls[] = { edge - 1, edge, edge + 1, 1000000 };
+            for (size_t i = 0; i < 4; i++, bn++) {
+                uint64_t L = ls[i], *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
+                if (!want || !got) { CHECK(0, "alloc"); free(want); free(got); break; }
+                int src = sim_sieve(prog, L, budgets[b], got);
+                if (src != 0 || memcmp(got, want, pr_words64(L) * 8) != 0) {
+                    bfail++;
+                    printf("  budget %u limit %" PRIu64 ": sim rc %d err %d, differs\n", budgets[b], L, src, g_sim_err);
+                }
+                free(want); free(got);
+            }
+        }
+        CHECK(bfail == 0, "CTA budget sweep: %d of %d differ", bfail, bn);
+        printf("budget sweep: %d cases (budgets 1, 2, 128, 256), %d differ\n", bn, bfail);
+    }
+
     /* 5. mutant must be caught */
     {
         uint64_t L = 100000, *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
-        int src = want && got ? sim_sieve(mprog, L, got) : -1;
+        int src = want && got ? sim_sieve(mprog, L, OMEGA_GPU_EW_MAX_CTAS, got) : -1;
         CHECK(src == 0 && want && memcmp(got, want, pr_words64(L) * 8) != 0, "mutant kernel not caught at 1e5 (sim rc %d)", src);
         free(want); free(got);
     }
