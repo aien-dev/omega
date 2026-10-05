@@ -14,15 +14,15 @@ Each at its `origin/main` commit on 2026-09-29. omega was scanned in the R16 wor
 at branch commit `d6c8630` (= omega main `193a7e7` plus the R16 spec only, before this map and tool; no code
 differences). Rescanned 2026-09-30 for the G3-G5 branch on omega main `6d1ff1d` (the
 R16 work rebased onto current main); the omega row below is that base. The tool prints a WARN when a scanned tree differs from this table,
-which is expected for omega on the R16 candidate. Since 2026-10-05 (§8.3) the table holds the CAND-0 commits (aegis-runtime, not in CAND-0, unchanged).
+which is expected for omega on the R16 candidate. Since 2026-10-05 (§8.3) the table holds the CAND-0 commits (aegis-runtime, not in CAND-0, unchanged); since §8.4 it holds the CAND-1 scan set.
 
 <!-- r16-inventory:shas -->
 | repo | sha |
 |---|---|
-| omega | e5593ae488fcb9038557a4317a07faa7625649a3 |
-| aien-sovereign-core | 0c1d249f2d119c7c2d726a2d252dc913e6185d28 |
-| aegis-runtime | 2bbce76b056d39dfdf6c2417d4ffc7919a76749c |
-| aienos | 9d41efc9d1bea31be0640ca70eeeec9d1d000fad |
+| omega | ddf200ddece95a6461a13239f15c5af290c31d35 |
+| aien-sovereign-core | 69340c7320e177fe21a40086a23c1a50c990ff6c |
+| aegis-runtime | f4e870953a466bb1cf68f1d88285929024cf1ba9 |
+| aienos | bbad5e4250e57f8cbd1be4cf1390109aa65ef92c |
 | physics | 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf |
 <!-- /r16-inventory:shas -->
 
@@ -520,6 +520,10 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | AR-018 | aegis-runtime | `src/orchestration/budget.rs` | 14 | `default` | RunBudget default max_steps 25 | retired by non-use | A | false | step budget of the legacy orchestration module. LEGACY / NOT-IN-CHARGE | `max_steps: 25,` |
 | AR-019 | aegis-runtime | `src/persistence/legacy.rs` | 135 | `list_recent_turns` | DB rows to turn records | - | N | false | N: read: database row iterator read without wait or hand-off | `for r in rows {` |
 | AR-020 | aegis-runtime | `tests/stage2_primitives_tests.rs` | 103 | `test_orchestration_run_and_budget` | test/benchmark loop (named:max_steps) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `max_steps: 10,` |
+| AR-021 | aegis-runtime | `src/enforcement.rs` | 90 | `destructive_shell_refused` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | `#[cfg(test)] mod tests`: walks a fixed list of 10 refused shell commands through pre_dispatch_check; not built into any production binary (aegis-runtime 7288fa6, #35) | `for cmd in [` |
+| AR-022 | aegis-runtime | `src/enforcement.rs` | 114 | `catalogued_shell_allowed` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | `#[cfg(test)] mod tests`: walks a fixed list of 4 allowed commands; not built into any production binary (aegis-runtime 7288fa6, #35) | `for cmd in ["git status", "git diff", "git log -1 --oneline", "ls"] {` |
+| AR-023 | aegis-runtime | `src/enforcement.rs` | 121 | `unknown_or_disguised_skill_names_refused` | test/benchmark loop (for:body:dispatch) | test / reference path | D | false | `#[cfg(test)] mod tests`: walks a fixed list of refused skill names; not built into any production binary (aegis-runtime 7288fa6, #35) | `for name in [` |
+| AR-024 | aegis-runtime | `tests/gateway_auth_tests.rs` | 325 | `serve_must_refuse` | test/benchmark loop (loop:unbounded+sleep) | test / reference path | D | false | test file: waits for a spawned `aegis serve` to exit, 50 ms polls, panics after a 30 s deadline; not built into any production binary (aegis-runtime 7288fa6, #35) | `let status = loop {` |
 | AO-001 | aienos | `crates/aienos-boot/src/handoff.rs` | 128 | `alloc` | bump-allocator CAS retry | - | N | false | N: CAS retry: bump allocator atomic CAS retry without wait or hand-off | `loop {` |
 | AO-002 | aienos | `crates/aienos-boot/src/rollback_mock.rs` | 295 | `run_candidate` | mock candidate hang spin | rollback test mock | D | false | deliberate hang in the rollback mock candidate (timeout mode) used to test rollback; test path | `loop {` |
 | AO-003 | aienos | `crates/aienos-boot/src/usb_keyboard.rs` | 393 | `run` | USB keyboard poll until deadline | boot keyboard hardware poll | E | true | polls the xHCI keyboard for operator input until a deadline; hardware polling | `while !exit && counter_ticks().wrapping_sub(start) < deadline && !keyboard.is_halted() {` |
@@ -823,3 +827,27 @@ on omega `e5593ae` (no WARN: every scanned head equals §1) and on omega main `b
 (256); sovereign-core A14 B5 D71 E14 F18 N3 (125); aegis-runtime A18 D1 N1 (20);
 aienos D59 E16 F1 N20 (96); physics B1 D2 E1 N1 (5). This is the G1/G2 inventory for
 CAND-0, not an R16 qualification receipt.
+
+### 8.4 Update 2026-10-05 (overnight C1): scan set re-pinned to CAND-1 prep
+
+The §1 table now holds omega `ddf200d` (main after #283), aien-sovereign-core `69340c7`
+(main), aegis-runtime `f4e8709` (main), aienos `bbad5e4` (main after #263, the CAND-1
+aienos pin) and physics `6d7cf0d` (omega `physics.lock`). aegis-runtime moved from
+`2bbce76` (gateway hardening #35, relicense #36), so this is the first scan of it since §8.3.
+OM-274 to OM-276 (class D, immutable evidence copies of `gpu_attention_test.c`) came in
+with #283.
+
+Before, same command with each repo pointed at a clean checkout of those commits:
+`sites=509 unclassified=4 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> FAIL`
+(all 4 in aegis-runtime #35).
+
+Reconciliation, each row from reading the loop (no tool, pattern, threshold or class
+rule changed): AR-021 to AR-024, class D. Three are `#[cfg(test)]` walks over fixed
+lists of shell commands and skill names in `src/enforcement.rs`; one is a test helper in
+`tests/gateway_auth_tests.rs` that waits up to 30 s for a spawned `aegis serve` to exit.
+None runs in a production binary.
+
+After:
+`sites=509 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`.
+aien-sovereign-core still has open changes before the CAND-1 pin; the CAND-1 R16 receipt
+reruns this scan on the final commits.
