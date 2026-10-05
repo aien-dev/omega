@@ -1202,6 +1202,24 @@ static int revoke_cap(Rig *r, RxCapRef cap) {
     return aienos_cap_revoke(r->admin, office, (AienosCapRef){cap.cap_id, cap.generation});
 }
 
+/* Cleanup after a run inside the living World, checked before any close
+ * (L7-LIVING): every candidate branch the run forked and did not commit is
+ * reclaimed, no staged branch survives, and exactly one branch is live (the
+ * superseded one is released after a commit; nothing new after a refusal). */
+static int compose_cleanup_ok(RxCompose *c, const RxcResult *o) {
+    JsBranchRef s = rx_compose_state(c);
+    for (uint32_t k = 0; k < RXC_K; k++) {
+        JsBranchRef b = o->cand_ref[k];
+        if (!b.id && !b.gen) continue;
+        if (b.id == s.id && b.gen == s.gen) continue;
+        if (js_branch_check(&c->js, b) != JS_ERR_STALE) return 0;
+    }
+    uint32_t staged = 0;
+    for (uint32_t i = 0; i < c->js.n_branches; i++)
+        staged += c->js.branches[i] && c->js.branches[i]->staged;
+    return staged == 0 && fx_live_branches(&c->js) == 1;
+}
+
 #define CFAIL(...) do { fprintf(stderr, "R13 composition: "); fprintf(stderr, __VA_ARGS__); \
                         fputc('\n', stderr); goto out; } while (0)
 
@@ -1244,6 +1262,8 @@ static int composition_phase(Rig *r) {
     if (js_branch_check(&c->js, o.cand_ref[1]) != JS_ERR_STALE) CFAIL("loser not reclaimed");
     JsBranchInfo bi;
     if (js_branch_info(&c->js, o.new_ref, &bi) != JS_OK || bi.staged) CFAIL("winner not sealed");
+    if (!compose_cleanup_ok(c, &o))
+        CFAIL("cleanup after commit: branch left (live %u)", fx_live_branches(&c->js));
     if (!o.cx_candidate[0] || !o.cx_candidate[1] || !o.cx_evidence || !o.cx_promotion ||
         !o.cx_admission[1]) CFAIL("composition record incomplete");
     g->alternatives = o.n_alternatives;
@@ -1290,7 +1310,8 @@ static int composition_phase(Rig *r) {
     c->test.rogue_candidate = 0;
     now = rx_compose_state(c);
     g->rogue_refused = rc == RX_OK && o.outcome == RXC_OUT_NOT_COMMITTED &&
-                       now.id == first.id && now.gen == first.gen;
+                       now.id == first.id && now.gen == first.gen &&
+                       compose_cleanup_ok(c, &o);   /* cleanup after a refusal */
     if (!g->rogue_refused) CFAIL("rogue candidate (rc %d outcome %d)", rc, o.outcome);
 
     /* Replay: close (the living World stays up), attach again on the same
@@ -1323,7 +1344,8 @@ static int composition_phase(Rig *r) {
     now = rx_compose_state(c);
     g->stale_commit_outcome = rc == RX_OK ? o.outcome : rc;
     g->stale_commit_refused = rc == RX_OK && o.outcome != RXC_OUT_COMMITTED &&
-                              now.id == second.id && now.gen == second.gen;
+                              now.id == second.id && now.gen == second.gen &&
+                              compose_cleanup_ok(c, &o);   /* cleanup after a refusal */
     if (!g->stale_commit_refused) CFAIL("revoked commit right still wrote (rc %d outcome %d)", rc,
                                         o.outcome);
     /* Outside input under a revoked capability is refused at the World. */

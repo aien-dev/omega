@@ -59,6 +59,35 @@ static void reset_c(void) {
 static int ref_eq(JsBranchRef a, JsBranchRef b) { return a.id == b.id && a.gen == b.gen; }
 static int noop_fn(RxCtx *x) { (void)x; return 0; }
 
+/* Staged (never-committed) J-Space branches still held in memory. */
+static uint32_t staged_branches(const JsSpace *s) {
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < s->n_branches; i++) n += s->branches[i] && s->branches[i]->staged;
+    return n;
+}
+
+/* Cleanup in process, before any close or reopen (L7-LIVING): every
+ * candidate branch the run forked and did not commit is reclaimed and no
+ * staged branch survives. A run that did not move the World also leaves
+ * exactly one live branch (the state's) and promotes nothing. */
+static void check_cleanup(const char *what, const RxcResult *o, uint32_t promotions_before) {
+    int moved = !ref_eq(rx_compose_state(&g_c), o->old_ref);
+    for (uint32_t k = 0; k < RXC_K; k++) {
+        if (!o->cand_ref[k].id && !o->cand_ref[k].gen) continue;
+        if (moved && ref_eq(o->cand_ref[k], rx_compose_state(&g_c))) continue;
+        CHECK(js_branch_check(&g_c.js, o->cand_ref[k]) == JS_ERR_STALE,
+              "%s: candidate %u reclaimed in process", what, k);
+    }
+    CHECK(staged_branches(&g_c.js) == 0, "%s: no staged branch survives (%u)", what,
+          staged_branches(&g_c.js));
+    if (!moved) {
+        CHECK(fx_live_branches(&g_c.js) == 1, "%s: one live branch in process (%u)", what,
+              fx_live_branches(&g_c.js));
+        CHECK(fx_count(&g_c.cx, CX_K_PROMOTION, UINT64_MAX) == promotions_before,
+              "%s: nothing promoted", what);
+    }
+}
+
 /* Reference run: what OLD and NEW are for input 5 in a fresh directory. */
 static struct {
     JsBranchRef old_ref, new_ref, cand[RXC_K];
@@ -91,6 +120,7 @@ static void t_reference(void) {
     CHECK(js_branch_info(&g_c.js, o.new_ref, &bi) == JS_OK && !bi.staged && bi.owner == 0,
           "winner sealed, no owner");
     CHECK(fx_live_branches(&g_c.js) == 1, "one live branch");
+    check_cleanup("reference", &o, 0);   /* cleanup after success */
     R.old_ref = s0;
     R.new_ref = o.new_ref;
     R.cand[0] = o.cand_ref[0];
@@ -179,6 +209,7 @@ static void fault_case(int point, int crash, uint32_t k) {
                  : point == RXC_FP_CORTEX  ? RXC_OUT_RECORD_FAILED : RXC_OUT_NOT_COMMITTED;
         CHECK(o.outcome == want, "%s: outcome %d want %d", what, o.outcome, want);
         CHECK(g_c.test.fault_hit, "%s: fault fired", what);
+        check_cleanup(what, &o, 0);
         fx_close(&g_fx, &g_c);
     }
     reset_c();
@@ -232,6 +263,7 @@ static void t_no_winner(void) {
           cx_payload(&g_c.cx, ev)[RXC_EP_PASSMASK] == 0, "evidence: no winner, nothing passed");
     for (uint32_t k = 0; k < RXC_K; k++)
         CHECK(js_branch_check(&g_c.js, o.cand_ref[k]) == JS_ERR_STALE, "candidate %u reclaimed", k);
+    check_cleanup("no winner", &o, 0);
     fx_close(&g_fx, &g_c);
     reset_c();
     CHECK(fx_open(&g_fx, &g_c, d, 1) == RX_OK, "reopen");
@@ -251,6 +283,7 @@ static void t_authority(void) {
     CHECK(fx_run(&g_fx, &g_c, 5, &o) == RX_OK && o.outcome == RXC_OUT_NOT_COMMITTED,
           "rogue run not committed (%d)", o.outcome);
     CHECK(ref_eq(rx_compose_state(&g_c), R.old_ref), "state untouched");
+    check_cleanup("rogue", &o, 0);   /* cleanup after a refusal */
     /* The refusal is on the record. */
     uint32_t refused = 0;
     for (uint64_t id = 1; id <= g_c.cx.n; id++) {
