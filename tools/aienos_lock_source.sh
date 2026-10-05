@@ -8,8 +8,8 @@
 #   * a repository counts only if it holds that commit object; replace refs and grafts
 #     are disabled (GIT_NO_REPLACE_OBJECTS) and every object read is re-hashed, so the
 #     content returned is the content the commit id names;
-#   * a directory counts only if every tracked file under the asked subpaths has the
-#     blob and mode of the locked commit and no other file (ignored or not, build
+#   * a directory counts only if every file under the asked subpaths has the raw bytes
+#     (no filters, no attributes) and mode of the locked commit and no other file (build
 #     outputs included) sits beside them.
 #
 # Usage:
@@ -105,19 +105,45 @@ verify-dir|materialize)
     fi
     [ -d "$dir" ] || die1 "$dir does not exist"
     dir=$(cd "$dir" && pwd)
-    idx=$(mktemp "${TMPDIR:-/tmp}/aienos-lock-idx.XXXXXX") || die2 "mktemp failed"
-    trap 'rm -f "$idx"' EXIT
-    gitdir=$(git -C "$REPO" rev-parse --absolute-git-dir)
-    gw() { (cd "$dir" && GIT_INDEX_FILE=$idx git --git-dir="$gitdir" --work-tree="$dir" \
-           -c core.fileMode=true -c core.autocrlf=false -c core.excludesFile=/dev/null "$@"); }
-    gw read-tree "$LOCK" || die2 "read-tree $LOCK failed"
-    gw update-index -q --refresh >/dev/null 2>&1
-    changed=$(gw diff-files --name-status -- "$@")
-    [ -z "$changed" ] || die1 "$dir differs from $LOCK: $(echo "$changed" | head -5 | tr '\n' ' ')"
-    # No ignore rules: an ignore file outside the checked subpaths is not proven, and an
-    # ignored build directory (out/) could hold prebuilt objects that get linked. The
-    # authority is built out of tree, so the subpaths hold exactly the locked files.
-    extra=$(gw ls-files --others -- "$@")
+    # Compare raw bytes, outside git's checkout machinery: no index, no ignore rules,
+    # no .gitattributes (a planted "* text eol=lf" would hide CRLF edits), no config
+    # filters. Each file is hashed with --no-filters and must equal the locked blob;
+    # its type and executable bit must equal the locked mode; and the subpaths must
+    # hold no other file (build outputs included: the authority is built out of tree).
+    tmpd=$(mktemp -d "${TMPDIR:-/tmp}/aienos-lock-vd.XXXXXX") || die2 "mktemp failed"
+    trap 'rm -rf "$tmpd"' EXIT
+    git -C "$REPO" ls-tree -r -z --full-tree "$LOCK" -- "$@" > "$tmpd/tree" || die2 "ls-tree $LOCK failed"
+    : > "$tmpd/want"; : > "$tmpd/regular"; : > "$tmpd/regular.ids"; bad=""
+    while IFS= read -r -d '' ent; do
+        meta=${ent%%$'\t'*}; path=${ent#*$'\t'}
+        read -r mode type id <<< "$meta"
+        case "$path" in *$'\n'*) die2 "path with a newline at $LOCK: refusing" ;; esac
+        printf '%s\n' "$path" >> "$tmpd/want"
+        f=$dir/$path
+        case "$mode" in
+        120000)
+            if [ -L "$f" ] && [ "$(readlink "$f" | tr -d '\n' | git -C "$REPO" hash-object --no-filters --stdin)" = "$id" ]; then :
+            else bad+="$path(symlink) "; fi ;;
+        100644|100755)
+            if [ -L "$f" ] || [ ! -f "$f" ]; then bad+="$path(not a file) "; continue; fi
+            if [ "$mode" = 100755 ] && [ ! -x "$f" ]; then bad+="$path(mode) "; continue; fi
+            if [ "$mode" = 100644 ] && [ -x "$f" ]; then bad+="$path(mode) "; continue; fi
+            printf '%s\n' "$f" >> "$tmpd/regular"; printf '%s\n' "$id" >> "$tmpd/regular.ids" ;;
+        *) die2 "$path has unsupported mode $mode ($type) at $LOCK" ;;
+        esac
+    done < "$tmpd/tree"
+    [ -s "$tmpd/want" ] || die1 "no files under $* at $LOCK"
+    if [ -s "$tmpd/regular" ]; then
+        git -C "$REPO" hash-object --no-filters --stdin-paths < "$tmpd/regular" > "$tmpd/regular.got" 2>/dev/null \
+            || die1 "cannot hash the files under $dir"
+        bad+=$(paste -d ' ' "$tmpd/regular.ids" "$tmpd/regular.got" "$tmpd/regular" \
+               | awk -v d="$dir/" '$1 != $2 { p = substr($0, length($1) + length($2) + 3); sub("^" d, "", p); printf "%s(content) ", p }')
+    fi
+    [ -z "$bad" ] || die1 "$dir differs from $LOCK: $(echo "$bad" | cut -c1-300)"
+    # Every non-directory entry under the subpaths must be a locked path.
+    (cd "$dir" && find "$@" ! -type d -print0 2>/dev/null) | tr '\0' '\n' | sort > "$tmpd/have"
+    sort -o "$tmpd/want" "$tmpd/want"
+    extra=$(comm -13 "$tmpd/want" "$tmpd/have")
     [ -z "$extra" ] || die1 "$dir has files not in $LOCK (build outputs included; build out of tree): $(echo "$extra" | head -5 | tr '\n' ' ')"
     echo "aienos_lock_source: $dir matches $LOCK for $*" >&2 ;;
 *)

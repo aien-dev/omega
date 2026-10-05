@@ -64,6 +64,20 @@ rm -f "$D/native/capability/evil.c" "$D/.gitignore" "$D/native/.gitignore"
 chmod +x "$D/native/capability/aienos_capability.c"
 check "file mode changed: exit 1" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 1 ]'
 chmod -x "$D/native/capability/aienos_capability.c"
+# Attribute and config filters must not decide what "matches" means: a planted
+# "* text eol=lf" (root, above the subpath, or in the lock repo's info/attributes)
+# plus core.autocrlf would make git normalize CRLF edits away.
+sed -i 's/$/\r/' "$D/native/capability/aienos_capability.c"
+printf '* text eol=lf\n' > "$D/.gitattributes"; printf '* text eol=lf\n' > "$D/native/.gitattributes"
+mkdir -p "$(git -C "$LK" rev-parse --absolute-git-dir)/info"; printf '* text eol=lf\n' > "$(git -C "$LK" rev-parse --absolute-git-dir)/info/attributes"
+check "CRLF edit hidden by planted .gitattributes and info/attributes: exit 1" '[ "$(rc L GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.autocrlf GIT_CONFIG_VALUE_0=input AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 1 ]'
+rm -f "$D/.gitattributes" "$D/native/.gitattributes" "$(git -C "$LK" rev-parse --absolute-git-dir)/info/attributes"
+git -C "$LK" show "$GOOD:native/capability/aienos_capability.c" > "$D/native/capability/aienos_capability.c"
+check "restored file verifies again: exit 0" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 0 ]'
+cp "$D/native/capability/aienos_capability.c" "$SCR/same-bytes.c"; rm "$D/native/capability/aienos_capability.c"
+ln -s "$SCR/same-bytes.c" "$D/native/capability/aienos_capability.c"
+check "file replaced by a symlink to identical bytes: exit 1" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 1 ]'
+rm "$D/native/capability/aienos_capability.c"; cp "$SCR/same-bytes.c" "$D/native/capability/aienos_capability.c"
 echo 'int injected;' >> "$D/native/capability/aienos_capability.c"
 check "modified cached source: exit 1" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" verify-dir "$D" native/capability)" = 1 ]'
 check "materialize does not re-extract over a modified cache: exit 1" '[ "$(rc L AIENOS_LOCK=$GOOD bash "$T" materialize "$D" native/capability)" = 1 ]'
