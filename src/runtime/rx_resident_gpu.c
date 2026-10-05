@@ -723,7 +723,7 @@ static void *launch_main(void *arg) {
         if (nvrm_alloc(&ctx->rm, 0x4000, &job->code_mem) != 0 ||
             nvrm_alloc(&ctx->rm, 0x1000, &job->cbank_mem) != 0 ||
             nvrm_alloc(&ctx->rm, 0x10000, &job->qmd_mem) != 0 ||
-            nvrm_alloc(&ctx->rm, 0x1000, &job->marker_mem) != 0 ||
+            nvrm_alloc_gpu_uncached(&ctx->rm, 0x1000, &job->marker_mem) != 0 ||
             nvrm_alloc(&ctx->rm, 0x10000, &job->large_pb) != 0) {
             snprintf(s->err, sizeof s->err, "graphics memory was not allocated");
             job->submit_rc = -1;
