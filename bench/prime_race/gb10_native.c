@@ -50,9 +50,12 @@ typedef struct {
     int locked, opened;
 } gb_state;
 
+/* floor(sqrt(n)). The root of any u64 is below 2^32, so the top trial bit is 2^31: with that start
+ * (r + bit) <= 2^32 - 1 and its square cannot wrap. (A 2^32 start squared to 2^64 = 0 on the first
+ * step and returned 0 for every n, so no base primes were ever sieved; caught on chip at limit 9.) */
 static uint32_t isqrt_u64(uint64_t n) {
     uint64_t r = 0;
-    for (uint64_t bit = 1ull << 32; bit; bit >>= 1)
+    for (uint64_t bit = 1ull << 31; bit; bit >>= 1)
         if ((r + bit) * (r + bit) <= n) r += bit;
     return (uint32_t)r;
 }
@@ -85,6 +88,9 @@ static int gb_setup(void **state, uint64_t limit) {
     uint32_t tailmask = valid >= 32 ? 0xffffffffu : ((1u << valid) - 1u);
     s->tailinv = ~tailmask;
     s->root = isqrt_u64(limit);
+    if ((uint64_t)s->root * s->root > limit || ((uint64_t)s->root + 1) * ((uint64_t)s->root + 1) <= limit) {
+        fprintf(stderr, "gb10-native: isqrt(%" PRIu64 ") = %u is wrong\n", limit, s->root); return -1; /* fail closed */
+    }
     s->table_cap = (size_t)s->root / 2 + 2; /* every odd number <= root, plus the sentinel */
 
     if (omega_gpu_elementwise_codegen_ir(OMEGA_GPU_EW_PRIME_SIEVE, PR_GB10_MUTANT, NULL, &s->k) != OMEGA_GPU_EW_OK) {
