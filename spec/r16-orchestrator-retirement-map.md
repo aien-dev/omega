@@ -14,12 +14,12 @@ Each at its `origin/main` commit on 2026-09-29. omega was scanned in the R16 wor
 at branch commit `d6c8630` (= omega main `193a7e7` plus the R16 spec only, before this map and tool; no code
 differences). Rescanned 2026-09-30 for the G3-G5 branch on omega main `6d1ff1d` (the
 R16 work rebased onto current main); the omega row below is that base. The tool prints a WARN when a scanned tree differs from this table,
-which is expected for omega on the R16 candidate. Since 2026-10-05 (§8.3) the table holds the CAND-0 commits (aegis-runtime, not in CAND-0, unchanged); since §8.5 it holds the frozen CAND-1 commits.
+which is expected for omega on the R16 candidate. Since 2026-10-05 (§8.3) the table holds the CAND-0 commits (aegis-runtime, not in CAND-0, unchanged); since §8.5 it held the frozen CAND-1 commits; since §8.6 it holds the CAND-2 commits (omega `79a805d`, the rest unchanged from CAND-1).
 
 <!-- r16-inventory:shas -->
 | repo | sha |
 |---|---|
-| omega | cb06d081901c03063945a99ffed1c58d33397e9c |
+| omega | 79a805d162bfded8c5ce5a4c14f7c29e79025f39 |
 | aien-sovereign-core | 2eec75b08aeb8f9d11f950070e13f6c2c046cf24 |
 | aegis-runtime | f4e870953a466bb1cf68f1d88285929024cf1ba9 |
 | aienos | bbad5e4250e57f8cbd1be4cf1390109aa65ef92c |
@@ -375,6 +375,14 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | OM-274 | omega | `evidence/FB1-CUT4B-0396844/gpu_attention_test.c` | 467 | `sim_launch` | test/benchmark loop (for:unbounded) | test / reference path | D | false | immutable evidence copy (ADR 0028) of the FB-1 cut 4b attention test source at 0396844, kept beside its receipt; never compiled by any build; same loop as OM-233 | `for (;;) {` |
 | OM-275 | omega | `evidence/FB1-CUT5-b016322/gpu_attention_test.c` | 461 | `sim_launch` | test/benchmark loop (for:unbounded) | test / reference path | D | false | immutable evidence copy (ADR 0028) of the FB-1 cut 5 attention test source at b016322, kept beside its receipt; never compiled by any build; same loop as OM-233 | `for (;;) {` |
 | OM-276 | omega | `evidence/FB1-CUT5-cd80bf4/gpu_attention_test.c` | 573 | `sim_launch` | test/benchmark loop (for:unbounded) | test / reference path | D | false | immutable evidence copy (ADR 0028) of the FB-1 cut 5 attention test source at cd80bf4, kept beside its receipt; never compiled by any build; same loop as OM-233 | `for (;;) {` |
+| OM-277 | omega | `tests/runtime/rx_emergency.c` | 250 | `wait_inside` | test/benchmark loop (for:body:usleep) | test / reference path | D | false | R16 G6 emergency-stop host test: bounded wait (5 s) until the gated reaction is inside its function; not built into any production binary | `for (int i = 0; i < 5000; i++) {` |
+| OM-278 | omega | `tests/runtime/rx_emergency.c` | 269 | `wait_commits` | test/benchmark loop (for:body:usleep) | test / reference path | D | false | R16 G6 emergency-stop host test: bounded wait (5 s) for a reaction's commit count; not built into any production binary | `for (int i = 0; i < 5000; i++) {` |
+| OM-279 | omega | `tests/runtime/rx_emergency.c` | 372 | `e2_e3` | test/benchmark loop (for:body:usleep) | test / reference path | D | false | R16 G6 emergency-stop host test: bounded wait (5 s) for the CANCELLED crumb of the activation refused under the stop; not built into any production binary | `for (int i = 0; i < 5000 && !cancelled; i++) {` |
+| OM-280 | omega | `tests/runtime/rx_emergency.c` | 437 | `operator_thread` | test/benchmark loop (for:body:usleep) | test / reference path | D | false | R16 G6 emergency-stop host test: a test operator issues a fixed number of stop/resume pairs to race publishers (E4); not built into any production binary | `for (int i = 0; i < o->n; i++) {` |
+| OM-281 | omega | `tools/estimation/est5.c` | 267 | `e4_score` | EST v5 scoring walk | - | N | false | N: walk: scores recorded ticks in order (data ticks, not a scheduler tick), without wait or hand-off; offline evidence tool, not on the production path; same walk as OM-195 | `for (size_t t = 0; t < tk->n && !rc; t++) {` |
+| OM-282 | omega | `tools/estimation/est6dev.c` | 251 | `run_g1` | EST v6 development G1 scoring walk | - | N | false | N: walk: scores recorded ticks in order (data ticks, not a scheduler tick), without wait or hand-off; offline development tool, not on the production path | `for (size_t t = 0; t < tk->n; t++) {` |
+| OM-283 | omega | `tools/estimation/test_est_json.c` | 62,74 | `jvalue` | JSON object/array parse in the strict-JSON test validator | test / reference path | D | false | test of the EST strict-JSON receipt rules: recursive JSON parse without wait or hand-off; not built into any production binary | `else for (;;) {` |
+| OM-284 | omega | `tools/estimation/test_est_json.c` | 101 | `slurp` | whole-file read in the strict-JSON test validator | test / reference path | D | false | test of the EST strict-JSON receipt rules: file read into a growing buffer until end of file, without wait or hand-off; not built into any production binary | `for (;;) {` |
 | SC-001 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/engine_max.rs` | 55 | `start` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < timeout {` |
 | SC-002 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 96 | `start` | test/benchmark loop (while:body:tick) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while !stop_clone.load(Ordering::Relaxed) {` |
 | SC-003 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 168 | `enforce_thermal_cooldown` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < max_wait {` |
@@ -875,3 +883,34 @@ helper of the native `paged_attention_batch` test (#213): a spine run capped at
 After:
 `sites=513 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
 (omega code `cb06d08`; this map change touches no code, so the CAND-1 omega commit stays `cb06d08`).
+
+### 8.6 Update 2026-10-05 (cand3 campaign): scan set re-pinned to CAND-2 prep
+
+The §1 table now holds omega `79a805d` (main after #300, the CAND-2 code), and the CAND-1 commits
+for the other repos, which CAND-2 does not change: aien-sovereign-core `2eec75b` (its only CAND-2
+change is the omega.lock bump, no code), aegis-runtime `f4e8709`, aienos `bbad5e4` (omega
+`aienos.lock`), physics `6d7cf0d` (omega `physics.lock`).
+
+A note on the scan set: `~/workspace/r16-survey/*` is not at these commits (on 2026-10-05 it held
+sovereign-core `63fe7a7`, aienos `8706fb8`, physics `fecbedb`), so a run with no `R16_REPO_*`
+overrides reports about 109 STALE rows and 2 UNCLASSIFIED sovereign-core rows that are artefacts of
+those checkouts, not of the candidate. Every candidate scan points each `R16_REPO_*` at a clean
+checkout of the pinned commit, as §8.3 says.
+
+Before, the same command on omega `79a805d` with clean checkouts of the commits above:
+`sites=521 unclassified=8 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> FAIL`
+(all 8 in omega).
+
+Reconciliation, each row from reading the loop (no tool, pattern, threshold or class rule changed):
+- OM-277 to OM-280, class D: bounded waits and the racing test operator in
+  `tests/runtime/rx_emergency.c`, the R16 G6 emergency-stop host test (omega #300).
+- OM-281 and OM-282, class N: the EST v5 and v6-development scoring walks over recorded data
+  ticks (`tools/estimation/est5.c`, `est6dev.c`), the same walk as OM-195.
+- OM-283 and OM-284, class D: the JSON parse and file read of the strict-JSON receipt test
+  (`tools/estimation/test_est_json.c`).
+No new site sequences faculties on the omega production path; no code change.
+
+After:
+`sites=521 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`.
+(omega code `79a805d`; this map change touches no code, so the CAND-2 omega commit is `79a805d`.)
+This is the G1/G2 inventory for the CAND-2 code, not an R16 qualification receipt.
