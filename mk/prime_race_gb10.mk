@@ -1,7 +1,3 @@
-# The label carries +dirty when the code that goes into the binary has uncommitted changes, and
-# the stamp below changes whenever the label does, so a binary can never carry a stale commit.
-GB_SRC_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)$(shell git status --porcelain -- src bench/prime_race mk 2>/dev/null | grep -v ' bench/prime_race/build/' | head -c1 | sed 's/.\+/+dirty/')
-GB_LABEL_STAMP = $(GB_BUILD)/.gb_source_label
 # AIEN Prime Drag Race: native GB10 implementation (bench/prime_race/gb10_native.c) on Omega's
 # own Blackwell codegen + session (libomega_gpu.a, no CUDA). Picked up by `-include mk/*.mk`;
 # not part of `all` or `test`. Needs PHYSICS_DIR at the physics.lock commit (libomega_gpu).
