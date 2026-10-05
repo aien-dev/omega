@@ -1,0 +1,20 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:2ab37838f8694e5060a3789f08a16146996050af949fba329ed805429d85f695",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:d1cd0e5cfd4362b2cac302bc29ef03d5625d23e940586fd5a41a056f8ff43726"
+    }
+  },
+  "layer": "docs/tensor",
+  "name": "docs/tensor",
+  "purpose": "M20 OMEGA_TENSOR spec and qualification checklist",
+  "schema_version": "1.0.0"
+}

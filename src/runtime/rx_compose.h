@@ -182,6 +182,7 @@ typedef struct RxCompose {
     /* recovery report of the last open */
     JsBranchRef recovered;
     uint64_t recovered_record;         /* Cortex id naming it */
+    int anchor_unknown;                /* 1: opened from a checkpoint with no Cortex anchor (version 2): cut check is audit only */
     uint32_t rolled_back;              /* newer records refused (rollback admissions) */
     uint32_t recovered_completed;      /* composition records completed at open (0 = none missing) */
     /* in-process state after RECORD_FAILED / NOT_DURABLE (cleared at open) */

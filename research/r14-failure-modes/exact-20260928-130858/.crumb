@@ -1,15 +1,38 @@
 {
-  "schema_version": "1.0.0",
-  "name": "research/r14-failure-modes/exact-20260928-130858",
-  "layer": "research/r14-failure-modes/exact-20260928-130858",
-  "purpose": "Directory research/r14-failure-modes/exact-20260928-130858. Purpose not yet described by a human.",
   "above": {
     "name": "research",
     "path": "../.."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:db23aeba4580239d67e68e3fadc064d5bd06570da99c3e97ac6b0d3347ae24a3",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 10,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:48dd2cf4699d92558b8f2065aa7b8cb07cc1c168cb0ca9dec258d6c26471b934"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 67,
+          "sha": "bba3bd3",
+          "source": "backfill-git",
+          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
+          "timestamp": "2026-09-28T22:36:09-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory research/r14-failure-modes/exact-20260928-130858. Purpose not yet described by a human.",
       "files": [
         "binary.sha256",
         "candidate.txt",
@@ -21,23 +44,12 @@
         "run-4.log",
         "run-5.log",
         "runs.txt"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "bba3bd3",
-          "timestamp": "2026-09-28T22:36:09-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
-          "pr": 67
-        }
-      ]
+      ],
+      "purpose_auto": "Directory research/r14-failure-modes/exact-20260928-130858. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "research/r14-failure-modes/exact-20260928-130858",
+  "name": "research/r14-failure-modes/exact-20260928-130858",
+  "purpose": "Directory research/r14-failure-modes/exact-20260928-130858. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,0 +1,9 @@
+// expect: USE_AFTER_MOVE object=a line=7
+// transition: use after maybe-move
+fn take(x: own [u8; 2]) -> u8 { return x[0]; }
+fn f(k: u8) -> u8 {
+    let a: own [u8; 2] = alloc(3);
+    if k > 1 { let m: own [u8; 2] = a; }
+    if k > 5 { return take(a); }
+    return 0;
+}

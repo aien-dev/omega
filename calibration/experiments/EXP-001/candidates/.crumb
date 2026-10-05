@@ -1,38 +1,50 @@
 {
-  "schema_version": "1.0.0",
-  "name": "calibration/experiments/EXP-001/candidates",
-  "layer": "calibration/experiments/EXP-001/candidates",
-  "purpose": "Directory calibration/experiments/EXP-001/candidates. Purpose not yet described by a human.",
   "above": {
     "name": "calibration/experiments/EXP-001",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:05d6cb5f1d71caadba8553c7cf080b230e812606d65765dd0c953ddf8791599d",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 5,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:caafe24333ee2c55ce317e42c58a8516270f9b54e0af888dbfbd74fa9e90fc93"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 92,
+          "sha": "81a7eee",
+          "source": "backfill-git",
+          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
+          "timestamp": "2026-09-29T21:40:13-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory calibration/experiments/EXP-001/candidates. Purpose not yet described by a human.",
       "files": [
         "B0_uniform.tym",
         "B1_order0.tym",
         "B2_order1.tym",
         "B3_heuristic.tym",
         "M_candidate.tym"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "81a7eee",
-          "timestamp": "2026-09-29T21:40:13-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #92 from aien-dev/feat/turing-exp001",
-          "pr": 92
-        }
-      ]
+      ],
+      "purpose_auto": "Directory calibration/experiments/EXP-001/candidates. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "calibration/experiments/EXP-001/candidates",
+  "name": "calibration/experiments/EXP-001/candidates",
+  "purpose": "Directory calibration/experiments/EXP-001/candidates. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

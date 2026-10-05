@@ -1,0 +1,10 @@
+campaign start 2026-10-03T15:16:42Z baseline=4cca032 fix=b20ff9e loops=16
+ 10:16:42 up 1 day, 17:05,  7 users,  load average: 15.97, 6.68, 5.25
+ 10:17:02 up 1 day, 17:06,  7 users,  load average: 21.63, 8.58, 5.91
+ 10:21:31 up 1 day, 17:10,  7 users,  load average: 37.53, 24.70, 13.30
+ 10:26:08 up 1 day, 17:15,  7 users,  load average: 37.33, 31.56, 19.16
+ 10:30:33 up 1 day, 17:19,  7 users,  load average: 34.88, 33.26, 22.97
+ 10:35:00 up 1 day, 17:23,  7 users,  load average: 34.84, 33.77, 25.70
+campaign end 2026-10-03T15:35:00Z
+baseline: 1/20 runs failed; gates:       1 NATIVE_SUBMIT_PASS;
+fix: 0/20 runs failed; gates: 

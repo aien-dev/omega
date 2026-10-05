@@ -1,0 +1,475 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+    Checking cfg-if v1.0.5
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.13
+    Checking stable_deref_trait v1.2.1
+   Compiling pkg-config v0.3.34
+    Checking smallvec v1.16.1
+   Compiling serde_core v1.0.229
+    Checking itoa v1.0.18
+    Checking pin-project-lite v0.2.17
+    Checking bytes v1.12.1
+    Checking futures-core v0.3.34
+   Compiling version_check v0.9.5
+   Compiling serde v1.0.229
+   Compiling vcpkg v0.2.15
+    Checking once_cell v1.21.4
+    Checking litemap v0.8.3
+    Checking writeable v0.6.4
+   Compiling rustversion v1.0.23
+    Checking utf8_iter v1.0.4
+    Checking memchr v2.8.3
+   Compiling crossbeam-utils v0.8.23
+   Compiling cc v1.4.7
+   Compiling icu_normalizer_data v2.3.0
+    Checking bitflags v2.13.2
+    Checking slab v0.4.12
+   Compiling icu_properties_data v2.3.0
+   Compiling crossbeam-epoch v0.9.21
+    Checking percent-encoding v2.3.2
+   Compiling ident_case v1.0.1
+   Compiling strsim v0.11.1
+   Compiling zerocopy v0.8.57
+   Compiling getrandom v0.3.4
+   Compiling fnv v1.0.7
+   Compiling generic-array v0.14.7
+    Checking tracing-core v0.1.36
+    Checking futures-sink v0.3.34
+    Checking foreign-types-shared v0.1.1
+   Compiling httparse v1.10.1
+    Checking http v1.5.0
+    Checking equivalent v1.0.2
+   Compiling crossbeam-deque v0.8.8
+   Compiling openssl v0.10.81
+    Checking scopeguard v1.2.0
+    Checking hashbrown v0.17.1
+    Checking futures-task v0.3.34
+    Checking foreign-types v0.3.2
+    Checking typenum v1.20.1
+    Checking tracing v0.1.44
+    Checking futures-util v0.3.34
+   Compiling native-tls v0.2.18
+   Compiling parking_lot_core v0.9.12
+   Compiling zmij v1.0.23
+    Checking log v0.4.34
+    Checking try-lock v0.2.5
+   Compiling rayon-core v1.13.0
+    Checking tower-service v0.3.3
+    Checking atomic-waker v1.1.2
+    Checking want v0.3.1
+    Checking form_urlencoded v1.2.2
+    Checking futures-channel v0.3.34
+    Checking openssl-probe v0.2.1
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-omega-gpu)
+    Checking ryu v1.0.23
+    Checking either v1.18.0
+    Checking http-body v1.1.0
+    Checking indexmap v2.14.2
+   Compiling serde_json v1.0.151
+    Checking lock_api v0.4.14
+    Checking aho-corasick v1.1.5
+   Compiling syn v3.0.6
+   Compiling syn v2.0.119
+   Compiling ahash v0.8.12
+    Checking sync_wrapper v1.0.2
+    Checking ipnet v2.12.2
+    Checking mio v1.2.3
+    Checking socket2 v0.6.5
+   Compiling encoding_rs v0.8.41
+    Checking base64 v0.22.1
+    Checking minimal-lexical v0.2.1
+    Checking rand_core v0.9.5
+   Compiling esaxx-rs v0.1.10
+    Checking regex-syntax v0.8.11
+   Compiling paste v1.0.15
+   Compiling thiserror v2.0.20
+   Compiling aien-platform-linux v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-platform-linux)
+    Checking tower-layer v0.3.3
+    Checking nom v7.1.3
+    Checking crypto-common v0.1.7
+    Checking block-buffer v0.10.4
+    Checking parking_lot v0.12.5
+    Checking castaway v0.2.4
+    Checking itertools v0.14.0
+    Checking http-body-util v0.1.5
+   Compiling macro_rules_attribute-proc_macro v0.2.3
+    Checking zeroize v1.9.0
+    Checking base64 v0.13.1
+    Checking rayon v1.12.0
+   Compiling pastey v0.2.3
+    Checking unicode-segmentation v1.13.3
+    Checking aien-platform v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-platform)
+   Compiling openssl-sys v0.9.117
+   Compiling onig_sys v69.9.3
+   Compiling multiversion_no_op v1.0.0
+    Checking static_assertions v1.1.0
+    Checking simdutf8 v0.1.5
+    Checking rustls-pki-types v1.15.1
+    Checking digest v0.10.7
+    Checking cpufeatures v0.2.17
+    Checking unicode-normalization-alignments v0.1.12
+    Checking unicode_categories v0.1.1
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-inference-abi)
+    Checking mime v0.3.17
+    Checking sha2 v0.10.9
+    Checking libloading v0.8.9
+    Checking macro_rules_attribute v0.2.3
+    Checking regex-automata v0.4.18
+warning: aien-inference-abi@0.1.0: nvcc not found or AIEN_FORCE_CPU_STUB set; Blackwell CUDA backend disabled.
+   Compiling darling_core v0.20.11
+    Checking ppv-lite86 v0.2.21
+    Checking rayon-cond v0.4.0
+    Checking rand_chacha v0.9.0
+   Compiling openssl-macros v0.1.1
+   Compiling monostate-impl v0.1.18
+    Checking rand v0.9.5
+   Compiling synstructure v0.14.0
+    Checking regex v1.13.1
+    Checking monostate v0.1.18
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.3
+   Compiling zerovec-derive v0.11.6
+   Compiling displaydoc v0.2.7
+   Compiling tokio-macros v2.7.2
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.20
+   Compiling async-trait v0.1.92
+   Compiling darling_macro v0.20.11
+    Checking tokio v1.53.1
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+    Checking zerofrom v0.1.8
+    Checking yoke v0.8.3
+    Checking zerovec v0.11.8
+    Checking zerotrie v0.2.5
+   Compiling derive_builder_macro v0.20.2
+    Checking tinystr v0.8.4
+    Checking potential_utf v0.1.6
+    Checking icu_collections v2.3.0
+    Checking icu_locale_core v2.3.0
+    Checking derive_builder v0.20.2
+    Checking onig v6.5.3
+    Checking icu_provider v2.3.1
+    Checking icu_normalizer v2.3.0
+    Checking icu_properties v2.3.0
+    Checking spm_precompiled v0.1.4
+    Checking compact_str v0.9.1
+    Checking dary_heap v0.3.9
+    Checking serde_urlencoded v0.7.1
+    Checking aien-abi-core v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-abi-core)
+    Checking aien-kv-cache v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-kv-cache)
+    Checking tokenizers v0.21.4
+    Checking idna_adapter v1.2.2
+    Checking idna v1.1.0
+    Checking tokio-util v0.7.19
+    Checking tower v0.5.3
+    Checking tokio-native-tls v0.3.1
+    Checking url v2.5.8
+    Checking h2 v0.4.19
+    Checking tower-http v0.6.11
+    Checking hyper v1.11.1
+    Checking hyper-util v0.1.20
+    Checking hyper-tls v0.6.0
+    Checking reqwest v0.12.28
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.62s
+   Compiling cfg-if v1.0.5
+   Compiling stable_deref_trait v1.2.1
+   Compiling smallvec v1.16.1
+   Compiling itoa v1.0.18
+   Compiling pin-project-lite v0.2.17
+   Compiling bytes v1.12.1
+   Compiling futures-core v0.3.34
+   Compiling fnv v1.0.7
+   Compiling once_cell v1.21.4
+   Compiling writeable v0.6.4
+   Compiling litemap v0.8.3
+   Compiling bitflags v2.13.2
+   Compiling libc v0.2.189
+   Compiling serde_core v1.0.229
+   Compiling memchr v2.8.3
+   Compiling utf8_iter v1.0.4
+   Compiling slab v0.4.12
+   Compiling percent-encoding v2.3.2
+   Compiling zerofrom v0.1.8
+   Compiling icu_normalizer_data v2.3.0
+   Compiling darling_core v0.20.11
+   Compiling crossbeam-utils v0.8.23
+   Compiling icu_properties_data v2.3.0
+   Compiling scopeguard v1.2.0
+   Compiling tracing-core v0.1.36
+   Compiling futures-task v0.3.34
+   Compiling futures-sink v0.3.34
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling foreign-types-shared v0.1.1
+   Compiling yoke v0.8.3
+   Compiling zerocopy v0.8.57
+   Compiling log v0.4.34
+   Compiling tower-service v0.3.3
+   Compiling atomic-waker v1.1.2
+   Compiling typenum v1.20.1
+   Compiling foreign-types v0.3.2
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-omega-gpu)
+   Compiling futures-util v0.3.34
+   Compiling try-lock v0.2.5
+   Compiling httparse v1.10.1
+   Compiling form_urlencoded v1.2.2
+   Compiling futures-channel v0.3.34
+   Compiling either v1.18.0
+   Compiling zerovec v0.11.8
+   Compiling zerotrie v0.2.5
+   Compiling want v0.3.1
+   Compiling http v1.5.0
+   Compiling crossbeam-epoch v0.9.21
+   Compiling tracing v0.1.44
+   Compiling openssl-probe v0.2.1
+   Compiling ryu v1.0.23
+   Compiling aho-corasick v1.1.5
+   Compiling zmij v1.0.23
+   Compiling indexmap v2.14.2
+   Compiling crossbeam-deque v0.8.8
+   Compiling mio v1.2.3
+   Compiling socket2 v0.6.5
+   Compiling getrandom v0.3.4
+   Compiling openssl-sys v0.9.117
+   Compiling parking_lot_core v0.9.12
+   Compiling lock_api v0.4.14
+   Compiling sync_wrapper v1.0.2
+   Compiling rayon-core v1.13.0
+   Compiling tower-layer v0.3.3
+   Compiling minimal-lexical v0.2.1
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling rand_core v0.9.5
+   Compiling base64 v0.22.1
+   Compiling icu_collections v2.3.0
+   Compiling http-body v1.1.0
+   Compiling regex-syntax v0.8.11
+   Compiling aien-platform-linux v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-platform-linux)
+   Compiling tokio v1.53.1
+   Compiling icu_locale_core v2.3.0
+   Compiling openssl v0.10.81
+   Compiling generic-array v0.14.7
+   Compiling ipnet v2.12.2
+   Compiling rayon v1.12.0
+   Compiling http-body-util v0.1.5
+   Compiling nom v7.1.3
+   Compiling parking_lot v0.12.5
+   Compiling onig_sys v69.9.3
+   Compiling itertools v0.14.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling castaway v0.2.4
+   Compiling aien-platform v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-platform)
+   Compiling zeroize v1.9.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling simdutf8 v0.1.5
+   Compiling static_assertions v1.1.0
+   Compiling base64 v0.13.1
+   Compiling macro_rules_attribute v0.2.3
+   Compiling digest v0.10.7
+   Compiling thiserror v2.0.20
+   Compiling rustls-pki-types v1.15.1
+   Compiling onig v6.5.3
+   Compiling esaxx-rs v0.1.10
+   Compiling cpufeatures v0.2.17
+   Compiling icu_provider v2.3.1
+   Compiling encoding_rs v0.8.41
+   Compiling unicode-normalization-alignments v0.1.12
+   Compiling unicode_categories v0.1.1
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling monostate v0.1.18
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-inference-abi)
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling regex-automata v0.4.18
+   Compiling mime v0.3.17
+   Compiling sha2 v0.10.9
+   Compiling libloading v0.8.9
+   Compiling darling_macro v0.20.11
+   Compiling ppv-lite86 v0.2.21
+   Compiling rayon-cond v0.4.0
+   Compiling ahash v0.8.12
+   Compiling spm_precompiled v0.1.4
+   Compiling dary_heap v0.3.9
+   Compiling serde_urlencoded v0.7.1
+   Compiling compact_str v0.9.1
+warning: aien-inference-abi@0.1.0: nvcc not found or AIEN_FORCE_CPU_STUB set; Blackwell CUDA backend disabled.
+   Compiling aien-kv-cache v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-kv-cache)
+   Compiling aien-abi-core v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-abi-core)
+   Compiling rand_chacha v0.9.0
+   Compiling darling v0.20.11
+   Compiling idna_adapter v1.2.2
+   Compiling derive_builder_core v0.20.2
+   Compiling rand v0.9.5
+   Compiling idna v1.1.0
+   Compiling native-tls v0.2.18
+   Compiling url v2.5.8
+   Compiling derive_builder_macro v0.20.2
+   Compiling tokio-util v0.7.19
+   Compiling tower v0.5.3
+   Compiling tokio-native-tls v0.3.1
+   Compiling regex v1.13.1
+   Compiling tower-http v0.6.11
+   Compiling h2 v0.4.19
+   Compiling derive_builder v0.20.2
+   Compiling tokenizers v0.21.4
+   Compiling hyper v1.11.1
+   Compiling hyper-util v0.1.20
+   Compiling hyper-tls v0.6.0
+   Compiling reqwest v0.12.28
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.66s
+     Running unittests src/lib.rs (target/debug/deps/aien_inference_abi-f11fcabf2643faf2)
+
+running 92 tests
+test backend::tests::test_reference_matmul_matches_tensor ... ok
+test backend::tests::test_reference_backend_name ... ok
+test backend::tests::test_reference_compute_logits ... ok
+test backend::tests::test_reference_rope_matches_tensor ... ok
+test blackwell_backend::tests::test_blackwell_gemm_parity_with_cpu ... ok
+test blackwell_backend::tests::test_blackwell_backend_creation ... ok
+test blackwell_backend::tests::test_blackwell_paged_attention_kernel ... ok
+test backend::tests::test_reference_swiglu ... ok
+test capsule::tests::row_major_strides_match_c_order ... ok
+test checkpoint::tests::test_bf16_fp32_codec_roundtrip ... ok
+test backend::tests::test_reference_rmsnorm_matches_tensor ... ok
+test checkpoint::tests::test_dtype_mismatch_loud_error ... ok
+test backend::tests::test_reference_gqa_attention ... ok
+test capsule::tests::source_digest_of_abc_matches_well_known_sha256 ... ok
+test checkpoint::tests::test_header_len_arithmetic_overflow ... ok
+test capsule::tests::decode_fp32_bf16_one_and_owned_len_and_missing_tensor ... ok
+test capsule::tests::capsule_digest_is_stable_across_hashmap_insertion_order ... ok
+test checkpoint::tests::test_capsule_owns_file_bytes_and_byte_range_points_at_payload ... ok
+test checkpoint::tests::test_missing_tensor_loud_error ... ok
+test checkpoint::tests::test_from_bf16_tensors_one_buffer ... ok
+test checkpoint::tests::test_shape_mismatch_loud_error ... ok
+test blackwell_batch::tests::test_batch_plan_construction_and_terminal_row_indices ... ok
+test checkpoint::tests::test_offset_out_of_bounds_loud_error ... ok
+test moe_plan::tests::weighted_inverse_permutation_preserves_token_values ... ok
+test checkpoint::tests::test_invalid_header_truncated_buffer ... ok
+test omega_backend::tests::mask_is_all_nine_ops ... ok
+test checkpoint::tests::test_tinyllama_catalog_size_and_shapes ... ok
+test native_ops::tests::default_mask_is_all_native ... ok
+test native_ops::tests::mask_with_without_and_lists ... ok
+test native_ops::tests::op_names_unique_and_match_indices ... ok
+test native_ops::tests::claimed_native_op_falling_back_is_counted_and_trips_strict ... ok
+test moe_plan::tests::rejects_corrupt_router_values_and_shape ... ok
+test omega_backend::tests::fingerprint_changes_with_content ... ok
+test moe_plan::tests::qwen_routing_groups_and_restores_all_assignments ... ok
+test mojo_backend::tests::test_mojo_backend_creation_and_name ... ok
+test mojo_backend::tests::test_mojo_backend_fallback_or_accelerated_parity ... ok
+test checkpoint::tests::test_valid_custom_catalog_parsing ... ok
+test qwen3_coder::tests::coder_constants_match_official_config ... ok
+test native_ops::tests::default_report_is_all_native ... ok
+test native_ops::tests::reference_op_outside_mask_does_not_count_as_fallback ... ok
+test qwen3_coder::tests::bf16_words_reads_aligned_payload ... ok
+test native_ops::tests::report_lists_native_and_reference_and_counters ... ok
+test omega_backend::tests::attention_chip_error_is_a_counted_fallback ... ok
+test omega_backend::tests::rope_table_reproduces_reference_rope ... ok
+test qwen3_moe::tests::fp8_e4m3fn_decodes_known_values ... ok
+test omega_backend::tests::elementwise_chip_errors_are_counted_fallbacks ... ok
+test qwen3_moe::tests::bf16_rounds_to_nearest_even ... ok
+test qwen3_moe::tests::fp8_encode_rounds_to_nearest_even_and_saturates ... ok
+test tensor::tests::test_rope_norm_preservation ... ok
+test qwen3_moe::tests::shard_names_cannot_escape_the_checkpoint_directory ... ok
+test tensor::tests::test_sample_argmax ... ok
+test omega_backend::tests::chip_error_trips_strict_in_production - should panic ... ok
+test qwen3_coder::tests::bf16_words_rejects_misaligned_payload - should panic ... ok
+test strict::tests::reference_ops_by_design_pass_the_receipt_gate ... ok
+test qwen3_coder::tests::bf16_words_rejects_odd_length - should panic ... ok
+test strict::tests::claimed_native_fallback_fails_the_receipt_gate ... ok
+test tensor_abi::tests::f32_view_records_shape_stride_and_host_residency ... ok
+test tensor::tests::test_rmsnorm_invariance ... ok
+test tensor::tests::test_matmul_exact ... ok
+test tensor::tests::test_swiglu_activation ... ok
+test tensor_abi::tests::c_abi_layout_matches_cuda_header ... ok
+test tests::test_mock_inference_backend ... ok
+test tensor::tests::test_rope_rotate_half ... ok
+test tensor_abi::tests::capsule_views_preserve_typed_payload_and_quantization ... ok
+test tokenizer::tests::test_chat_template_with_empty_system ... ok
+test tokenizer::tests::test_chat_template_with_system ... ok
+test tokenizer::tests::test_pinned_special_tokens ... ok
+test tokenizer::tests::test_chat_template_without_system ... ok
+test tokenizer::tests::test_stop_and_eos_token_checks ... ok
+test omega_backend::tests::chip_error_is_a_counted_fallback ... ok
+test transformer_backend::tests::test_forward_token_and_logits_execution ... ok
+test tests::test_mojo_inference_backend ... ok
+test transformer_backend::tests::test_backend_constructors ... ok
+test qwen3_coder::tests::fp8_block128_roundtrip_spot_check ... ok
+test tests::test_blackwell_inference_backend ... ok
+test weights::tests::test_reference_weights_initialization ... ok
+test tests::test_embedded_inference_backend_execution ... ok
+test transformer_backend::tests::test_native_transformer_generate_tokens_streaming ... ok
+test transformer_backend::tests::test_native_transformer_generate_tokens ... ok
+test tokenizer::tests::test_synthetic_tokenizer_roundtrip ... ok
+test moe_plan::tests::five_hundred_branch_batch_exposes_expert_histogram ... ok
+test weights::tests::test_from_loaded_checkpoint_success_and_missing_key ... ok
+test tests::test_native_cpu_inference_backend ... ok
+test tests::test_max_serving_backend ... ok
+test transformer_backend::tests::test_paged_cow_context_and_branch_fork ... ok
+test transformer_backend::tests::c3_chunked_prefill_execute_step_unpaged ... ok
+test transformer_backend::tests::c3_chunked_prefill_logits_match_one_shot_unpaged ... ok
+test transformer_backend::tests::c3_chunked_prefill_execute_step_paged ... ok
+test transformer_backend::tests::c3_chunked_prefill_logits_match_one_shot_paged ... ok
+test qwen3_moe::tests::oracle_matches_hand_computed_identity_expert ... ok
+test qwen3_moe::tests::capsule_views_round_trip_and_digest_covers_payload ... ok
+test qwen3_moe::tests::loader_reads_one_layer_from_a_sharded_checkpoint_and_rejects_bad_contracts ... ok
+
+test result: ok. 92 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.15s
+
+     Running tests/bf16_paged_attention.rs (target/debug/deps/bf16_paged_attention-a1c55b361e60b765)
+
+running 1 test
+test cpu_paged_attention_matches_decoded_bf16 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running tests/blackwell_batch_executor_parity.rs (target/debug/deps/blackwell_batch_executor_parity-d4b46c4531cae206)
+
+running 5 tests
+test test_fused_gqa_qkv_dimension_invariants ... ok
+test test_blackwell_executor_lifecycle_and_workspace ... ok
+test test_strict_kv_transactional_rollback_on_failure ... ok
+test test_blackwell_executor_backend_trait_async ... ok
+test test_blackwell_batched_step_ragged_prefill_and_decode ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/branch_client_harness.rs (target/debug/deps/branch_client_harness-267586d2735a8be7)
+
+running 1 test
+test test_aegis_branch_client_2_8_32_fork_lifecycle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/omega_backend_parity.rs (target/debug/deps/omega_backend_parity-fcb558221f002e4d)
+
+running 5 tests
+test chip_attention_parity_on_tinyllama_shapes ... ignored, chip test: needs a native build and the GB10; run through the heavy queue
+test chip_elementwise_parity_on_tinyllama_shapes ... ignored, chip test: needs a native build and the GB10; run through the heavy queue
+test chip_mixed_matmul_then_elementwise ... ignored, chip diagnostic: heavy queue only
+test chip_parity_on_tinyllama_shapes ... ignored, chip test: needs a native build and the GB10; run through the heavy queue
+test stub_backend_reports_unavailable ... FAILED
+
+failures:
+
+---- stub_backend_reports_unavailable stdout ----
+
+thread 'stub_backend_reports_unavailable' (3323378) panicked at crates/aien-inference-abi/tests/omega_backend_parity.rs:48:5:
+assertion `left == right` failed
+  left: 9
+ right: 6
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    stub_backend_reports_unavailable
+
+test result: FAILED. 0 passed; 1 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p aien-inference-abi --test omega_backend_parity`
+host exit 101

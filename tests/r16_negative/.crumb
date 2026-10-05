@@ -1,66 +1,78 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/r16_negative",
-  "layer": "tests/r16_negative",
-  "purpose": "Directory tests/r16_negative. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/r16_negative. Purpose not yet described by a human.",
-      "files": [
-        "mutate.sh"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:ee440289b52f009835a35b384e086872b04cecb15665b9682a0d27a5dfee30c9",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:b7bb5b50a10aaa649879256e511dfb341419203635fa8568e8112808cda4fb63"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 2,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "520c895",
-          "timestamp": "2026-10-01T03:53:15-05:00",
           "author": "aien-dev",
+          "pr": 146,
+          "sha": "520c895",
+          "source": "backfill-git",
           "subject": "r16: retarget mutant c7_bind_refuses_unauthenticated; run mutants in CI (Lane 28) (#146)",
-          "pr": 146
+          "timestamp": "2026-10-01T03:53:15-05:00"
         },
         {
-          "source": "backfill-lane-report",
           "lane": "lane2",
-          "sha": "520c895",
-          "pr": 146,
           "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
-          "ref": "2026-10-01-push-lane2-report.md"
+          "pr": 146,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "520c895",
+          "source": "backfill-lane-report"
         },
         {
-          "source": "backfill-lane-report",
           "lane": "lane28",
-          "sha": "520c895",
-          "pr": 146,
           "note": "Verdict: PASS. PR aien-dev/omega#146, squash-merged 520c895 (520c8956e6614877b0795e2581c8ed2c0113121e).",
-          "ref": "2026-10-01-push-lane28-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane28",
-          "sha": "520c895",
           "pr": 146,
-          "note": "08:53Z Lane 28 DONE: omega #146 520c895 (mutant c7_bind_refuses_unauthenticated retargeted, 36/36 caught, added to runtime CI job; no regression in src/runtime). Lane 2 opened #147 WP-C batch 1. Runn",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
+          "ref": "2026-10-01-push-lane28-report.md",
+          "sha": "520c895",
+          "source": "backfill-lane-report"
         },
         {
-          "source": "backfill-git",
-          "sha": "8b719ff",
-          "timestamp": "2026-09-30T15:52:29-05:00",
+          "lane": "lane28",
+          "note": "08:53Z Lane 28 DONE: omega #146 520c895 (mutant c7_bind_refuses_unauthenticated retargeted, 36/36 caught, added to runtime CI job; no regression in src/runtime). Lane 2 opened #147 WP-C batch 1. Runn",
+          "pr": 146,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "520c895",
+          "source": "backfill-lane-report"
+        },
+        {
           "author": "aien-dev",
+          "pr": 106,
+          "sha": "8b719ff",
+          "source": "backfill-git",
           "subject": "Merge pull request #106 from aien-dev/feat/r16-g3-g5-host",
-          "pr": 106
+          "timestamp": "2026-09-30T15:52:29-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 2
+    },
+    "seed": {
+      "files": [
+        "mutate.sh"
+      ],
+      "purpose_auto": "Directory tests/r16_negative. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/r16_negative",
+  "name": "tests/r16_negative",
+  "purpose": "Directory tests/r16_negative. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -305,6 +305,22 @@ static uint64_t latest_before(CxStore *s, uint32_t slot, uint32_t cls, uint32_t 
     return cx_latest(s, RXC_CX_SUBJECT(slot), before > 1 ? before - 1 : 0, &f);
 }
 
+/* C4: 1 if a Cortex promotion names a winner claim whose branch is `packed_ref`.
+ * A promotion is written only after its state is durable (settle order), so a
+ * promoted state that J-Space no longer holds is a regressed checkpoint, not a
+ * crash window: recovery must refuse it rather than roll it back. */
+static int state_ref_promoted(const CxStore *s, uint64_t packed_ref) {
+    for (uint64_t id = 1; id <= s->n; id++) {
+        const CxObject *o = cx_get(s, id);
+        if (!o || o->kind != CX_K_PROMOTION) continue;
+        const CxObject *claim = cx_get(s, o->links[0]);
+        if (!claim || claim->kind != CX_K_CANDIDATE) continue;
+        const uint64_t *pl = payload_of(s, claim->id, RXC_CP_WORDS);
+        if (pl && pl[RXC_CP_REF] == packed_ref) return 1;
+    }
+    return 0;
+}
+
 static int has_admission(CxStore *s, uint64_t tag, uint64_t link0) {
     const CxIdList *l = &s->by_subject[RXC_STATE_SUBJECT];
     for (uint32_t i = 0; i < l->n; i++) {
@@ -485,6 +501,20 @@ static int compose_records(RxCompose *c, uint64_t S, uint64_t V, const uint8_t (
 
 /* ---- recovery (OLD-or-NEW), before the World exists ----------------------- */
 
+/* Checkpoint the J-Space state together with an anchor naming the Cortex store:
+ * u64 record count (LE) | digest of the newest record (32 zero bytes if none) |
+ * u64 flags = 1 (non-zero, so the section reads as present). open_home refuses a
+ * journal that is shorter than, or disagrees with, the anchor. */
+static int commit_js(RxCompose *c) {
+    uint8_t a[48] = { 0 };
+    uint64_t n = c->cx.n;
+    for (int i = 0; i < 8; i++) a[i] = (uint8_t)(n >> (8 * i));
+    if (n) memcpy(a + 8, c->cx.obj[n - 1].digest, 32);
+    a[40] = 1;
+    js_space_set_anchor(&c->js, a);
+    return js_space_commit(&c->js);
+}
+
 static int recover(RxCompose *c) {
     CxStore *s = &c->cx;
     const CxIdList *l = &s->by_subject[RXC_STATE_SUBJECT];
@@ -519,6 +549,10 @@ static int recover(RxCompose *c) {
         if (!o || o->id <= chosen) continue;
         if (o->kind != CX_K_ENTITY_CREATED && o->kind != CX_K_EXEC_COMMIT) continue;
         if (has_admission(s, RXC_ADMIT_ROLLBACK, o->id)) continue;
+        {
+            const uint64_t *pp = payload_of(s, o->id, CX_WREC_WORDS);
+            if (pp && state_ref_promoted(s, pp[CX_WREC_FIELD0 + RXC_S_REF])) return RX_ERR_REPLAY;
+        }
         const uint64_t *p = payload_of(s, o->id, CX_WREC_WORDS);
         uint64_t ap[RXC_AP_WORDS] = { p ? p[CX_WREC_FIELD0 + RXC_S_REF] : 0,
                                       p ? p[CX_WREC_FIELD0 + RXC_S_GOAL] : 0, RXC_NONE };
@@ -535,6 +569,12 @@ static int recover(RxCompose *c) {
     }
     if (!chosen) {
         /* Genesis: drop anything durable, root seeded by the machine identity. */
+        /* C4: a lost or emptied Cortex journal must not silently reset a World
+         * whose J-Space holds committed history. The genesis root is one unit;
+         * every committed goal derives more. Durable history with no state
+         * record is refused, never overwritten with a fresh genesis. */
+        for (uint32_t b = 0; b < c->js.n_branches; b++)
+            if (c->js.branches[b] && c->js.branches[b]->n_units > 1) return RX_ERR_REPLAY;
         for (uint32_t b = 0; b < c->js.n_branches; b++)
             if (c->js.branches[b]) js_branch_release(&c->js, b);
         uint32_t root;
@@ -545,7 +585,7 @@ static int recover(RxCompose *c) {
         for (uint32_t b = 0; b < c->js.n_branches; b++)
             if (c->js.branches[b] && b != ref.id) js_branch_release(&c->js, b);
     }
-    if (js_space_commit(&c->js) != JS_OK) return RX_ERR_REPLAY;
+    if (commit_js(c) != JS_OK) return RX_ERR_REPLAY;
     c->recovered = ref;
     c->recovered_record = chosen;
 
@@ -830,7 +870,7 @@ static int open_home(RxCompose *c, const char *dir, const AienMachineId *self, u
     path_in(p, sizeof p, dir, "cortex.cx");
     if (cx_open(&c->cx, p, RX_CORTEX_SUBJECTS, CX_OPEN_SYNC | CX_OPEN_REPAIR_TAIL) != CX_OK)
         return RX_ERR_REPLAY;
-    if (cx_verify_chain(&c->cx) != CX_OK) { cx_close(&c->cx); return RX_ERR_REPLAY; }
+    /* cx_open already verified every record and rebuilt the chain (see rx_cortex.h). */
 
     JsHome home;
     memset(&home, 0, sizeof home);
@@ -841,6 +881,29 @@ static int open_home(RxCompose *c, const char *dir, const AienMachineId *self, u
     if (js_space_open(&c->js, p, rz, 1, NULL, &home) != JS_OK) {
         cx_close(&c->cx);
         return RX_ERR_REPLAY;
+    }
+    /* A Cortex journal cut exactly at a record boundary opens cleanly in cx_open
+     * (the journal header carries no count or head). The checkpoint anchor
+     * (count + head digest) is the cross-check: a journal shorter than the
+     * anchor, or whose record at the anchored count differs, is refused. Records
+     * appended after the last commit only make the journal longer: lower bound.
+     * KNOWN LIMIT: if both the journal and the checkpoint roll back together,
+     * nothing local detects it (an external anchor problem). A version-2
+     * checkpoint has no anchor: the check is audit only (anchor_unknown) until
+     * the next commit writes one. */
+    c->anchor_unknown = 0;
+    uint8_t an[48];
+    if (js_space_anchor(&c->js, an)) {
+        uint64_t cnt = 0;
+        for (int i = 0; i < 8; i++) cnt |= (uint64_t)an[i] << (8 * i);
+        const CxObject *head = cnt ? cx_get(&c->cx, cnt) : NULL;
+        if (c->cx.n < cnt || (cnt > 0 && (!head || memcmp(head->digest, an + 8, 32) != 0))) {
+            js_space_destroy(&c->js);
+            cx_close(&c->cx);
+            return RX_ERR_REPLAY;
+        }
+    } else {
+        c->anchor_unknown = 1;
     }
     int rc = recover(c);
     if (rc != RX_OK) {
@@ -1096,7 +1159,7 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
             js_branch_release_ref(&c->js, c->pend_old, 0);
             c->pend_released = 1;
         }
-        if (c->pend_S && js_space_commit(&c->js) != JS_OK) return RX_ERR_REPLAY;
+        if (c->pend_S && commit_js(c) != JS_OK) return RX_ERR_REPLAY;
         out->prior_completed = m > 0 ? (uint32_t)m : 0;
         c->pending = 0;
     }
@@ -1152,7 +1215,7 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
     if (committed) {
         out->new_ref = nw;
         out->result = so.field[RXC_S_RESULT];
-        if (fault(c, RXC_FP_RECLAIM, 0) || js_space_commit(&c->js) != JS_OK) {
+        if (fault(c, RXC_FP_RECLAIM, 0) || commit_js(c) != JS_OK) {
             c->pending = 2;
             out->outcome = RXC_OUT_NOT_DURABLE;
             return RX_OK;
@@ -1166,7 +1229,7 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
             return RX_OK;
         }
         js_branch_release_ref(&c->js, old, 0);   /* the superseded branch */
-        if (js_space_commit(&c->js) != JS_OK) {
+        if (commit_js(c) != JS_OK) {
             set_pending(c, S, V, 1, old, 1, (const uint8_t (*)[32])cdig);
             out->outcome = RXC_OUT_RECORD_FAILED;
             return RX_OK;

@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:28e98322bb2afe9d289b2779ef19db1aa8a96daa7472ba40cc90df364f9d1e72",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 7,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:76831829aeae9f8434024c8bfb1a4b726e7549fcf8a150404be0f0335f1252f6"
+    }
+  },
+  "name": "ladder",
+  "purpose": "PD-0 ladder: see docs on physics main",
+  "schema_version": "1.0.0"
+}

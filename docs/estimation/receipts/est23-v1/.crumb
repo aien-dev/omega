@@ -1,46 +1,58 @@
 {
-  "schema_version": "1.0.0",
-  "name": "docs/estimation/receipts/est23-v1",
-  "layer": "docs/estimation/receipts/est23-v1",
-  "purpose": "Directory docs/estimation/receipts/est23-v1. Purpose not yet described by a human.",
   "above": {
     "name": "docs/estimation",
     "path": "../.."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:544a350adaaed15c87a8006c1ac1be87eda1b7f4493e07bf1e6a0d88b4ab65de",
+      "evidence_files": 5,
+      "evidence_root": "sha256:00a66265424c482f34579936357ab59ea085d88236f1622d0f606d5682d71bef",
+      "files": 5,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:f3f436e1d933f9cfb625e226c8acc1eb9eb9a9ea42c9b6051dbbf36b4379fa93"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 105,
+          "sha": "6d1ff1d",
+          "source": "backfill-git",
+          "subject": "Merge pull request #105 from aien-dev/feat/est-0-1",
+          "timestamp": "2026-09-30T09:20:35-05:00"
+        },
+        {
+          "lane": "lane23",
+          "note": "ADR 0020 EST table: EST-0/1/2 evidence omega#105 6d1ff1d (EST-2 \"exit not claimed\"); EST-3 \"FAIL recorded (v1 #105, v2 #118, v3 #129); v4 in progress\" (branch feat/est-v4, no PR); EST-4/5 \"blocked on",
+          "pr": 105,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "6d1ff1d",
+          "source": "backfill-lane-report"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory docs/estimation/receipts/est23-v1. Purpose not yet described by a human.",
       "files": [
         "RESULT.md",
         "params.txt",
         "receipt.json",
         "receipt.json.M0.stream",
         "receipt.json.M1.stream"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "6d1ff1d",
-          "timestamp": "2026-09-30T09:20:35-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #105 from aien-dev/feat/est-0-1",
-          "pr": 105
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane23",
-          "sha": "6d1ff1d",
-          "pr": 105,
-          "note": "ADR 0020 EST table: EST-0/1/2 evidence omega#105 6d1ff1d (EST-2 \"exit not claimed\"); EST-3 \"FAIL recorded (v1 #105, v2 #118, v3 #129); v4 in progress\" (branch feat/est-v4, no PR); EST-4/5 \"blocked on",
-          "ref": "2026-10-01-push-lane23-report.md"
-        }
-      ]
+      ],
+      "purpose_auto": "Directory docs/estimation/receipts/est23-v1. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "docs/estimation/receipts/est23-v1",
+  "name": "docs/estimation/receipts/est23-v1",
+  "purpose": "Directory docs/estimation/receipts/est23-v1. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

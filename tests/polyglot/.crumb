@@ -1,15 +1,38 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/polyglot",
-  "layer": "tests/polyglot",
-  "purpose": "Directory tests/polyglot. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:4619a90a957e77cd3d5680132ab4d1a5ef65f43419ddcc089743ca5b7a7719ee",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 7,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:daa71e59849c7450e4b0ac94a11bdeba354b5a2469f2a46cecb06a83f32c6b66"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 80,
+          "sha": "87938dc",
+          "source": "backfill-git",
+          "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
+          "timestamp": "2026-09-29T14:16:52-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory tests/polyglot. Purpose not yet described by a human.",
       "files": [
         "bench_polyglot.c",
         "cs_call.S",
@@ -18,23 +41,12 @@
         "test_encoder.c",
         "test_mojo.c",
         "verify_polyglot.c"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "87938dc",
-          "timestamp": "2026-09-29T14:16:52-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
-          "pr": 80
-        }
-      ]
+      ],
+      "purpose_auto": "Directory tests/polyglot. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/polyglot",
+  "name": "tests/polyglot",
+  "purpose": "Directory tests/polyglot. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

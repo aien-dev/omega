@@ -1,0 +1,1986 @@
+/*
+ * M20 OMEGA_TENSOR CPU tests (docs/tensor/M20_OMEGA_TENSOR.md).
+ *
+ * The expected values come from an independent naive reference written in
+ * this file straight from the definitions: logical row-major arrays, index
+ * arithmetic on shapes only (never on the tensor's strides), the E1 scalar
+ * reference functions (omega_ref_*, omega_ieee_div/sqrt, omega_ref_ffma_int),
+ * and its own copy of the frozen reduction tree. Every comparison is bit
+ * exact (any NaN equals any NaN: NaN payload is not semantic).
+ * No GPU, no device, no libm.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifndef OMEGA_TENSOR_TEST_HOOKS
+#error "test_omega_tensor.c needs -DOMEGA_TENSOR_TEST_HOOKS (set by mk/tensor.mk test build)"
+#endif
+#include "omega_numeric.h"
+#include "omega_tensor.h"
+#include "omega_tensor_reduce_seam.h"
+
+static int g_pass, g_fail;
+#define CHECK(cond, ...) do { if (cond) g_pass++; else { g_fail++; \
+    printf("FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
+
+static uint64_t g_rng = 0x9e3779b97f4a7c15ULL;
+static uint64_t rnd(void) { g_rng ^= g_rng << 13; g_rng ^= g_rng >> 7; g_rng ^= g_rng << 17; return g_rng; }
+
+static const uint32_t SPECIALS[] = {
+    0x00000000U, 0x80000000U, 0x7f800000U, 0xff800000U, 0x7fc00000U, 0x7fa00001U, 0xffc00123U,
+    0x00000001U, 0x80000001U, 0x007fffffU, 0x00800000U, 0x7f7fffffU, 0xff7fffffU, 0x3f800000U,
+    0xbf800000U, 0x3f000000U, 0x4b800000U, 0x33800000U, 0x3effffffU, 0x7f000000U,
+};
+#define NSPECIAL (sizeof(SPECIALS) / sizeof(SPECIALS[0]))
+
+/* Random FP32: 1/4 specials, 1/4 small-range normals, 1/2 raw bit patterns. */
+static float rand_f32(void) {
+    uint64_t r = rnd();
+    switch (r & 3u) {
+    case 0: return omega_bits_to_float(SPECIALS[(r >> 8) % NSPECIAL]);
+    case 1: return omega_bits_to_float((uint32_t)((r >> 32) & 0x807fffffU) | ((uint32_t)(120 + ((r >> 8) % 16)) << 23));
+    default: return omega_bits_to_float((uint32_t)(r >> 16));
+    }
+}
+/* Finite moderate values (for matmul / sums so results are not all NaN). */
+static float rand_mod(void) {
+    uint64_t r = rnd();
+    if ((r & 63u) == 0) return omega_bits_to_float(SPECIALS[(r >> 8) % NSPECIAL]);
+    return omega_bits_to_float((uint32_t)((r >> 32) & 0x807fffffU) | ((uint32_t)(110 + ((r >> 8) % 30)) << 23));
+}
+static void fill(float *x, size_t n, float (*g)(void)) { for (size_t i = 0; i < n; i++) x[i] = g(); }
+
+static bool same(float a, float b) { return omega_numeric_bits_equal(a, b); }
+static size_t mismatches(const float *a, const float *b, size_t n) {
+    size_t m = 0;
+    for (size_t i = 0; i < n; i++) m += !same(a[i], b[i]);
+    return m;
+}
+static uint64_t prod(uint32_t r, const uint64_t *s) { uint64_t n = 1; for (uint32_t i = 0; i < r; i++) n *= s[i]; return n; }
+
+/* ---- independent reference ------------------------------------------------ */
+
+typedef float (*Bin)(float, float);
+static int g_selop;
+static float r_add(float a, float b) { return omega_ref_fadd(a, b); }
+static float r_sub(float a, float b) { return omega_ref_fsub(a, b); }
+static float r_mul(float a, float b) { return omega_ref_fmul(a, b); }
+static float r_div(float a, float b) { return omega_ieee_div(a, b); }
+static float r_min(float a, float b) { return omega_ref_fmin(a, b); }
+static float r_max(float a, float b) { return omega_ref_fmax(a, b); }
+static float r_sel(float a, float b) { return omega_ref_fsetp_pred(g_selop, a, b) == 1 ? a : b; }
+
+typedef struct { OmegaTensorBinaryOp op; Bin f; int selop; const char *name; } BinCase;
+static const BinCase BIN_CASES[] = {
+    {OMEGA_TB_ADD, r_add, 0, "ADD"}, {OMEGA_TB_SUB, r_sub, 0, "SUB"}, {OMEGA_TB_MUL, r_mul, 0, "MUL"},
+    {OMEGA_TB_DIV, r_div, 0, "DIV"}, {OMEGA_TB_MIN, r_min, 0, "MIN"}, {OMEGA_TB_MAX, r_max, 0, "MAX"},
+    {OMEGA_TB_SEL_GE, r_sel, OMEGA_NOP_FSETP_SEL, "SEL_GE"}, {OMEGA_TB_SEL_LT, r_sel, OMEGA_NOP_FSETP_LT_SEL, "SEL_LT"},
+    {OMEGA_TB_SEL_LE, r_sel, OMEGA_NOP_FSETP_LE_SEL, "SEL_LE"}, {OMEGA_TB_SEL_GT, r_sel, OMEGA_NOP_FSETP_GT_SEL, "SEL_GT"},
+    {OMEGA_TB_SEL_EQ, r_sel, OMEGA_NOP_FSETP_EQ_SEL, "SEL_EQ"}, {OMEGA_TB_SEL_NE, r_sel, OMEGA_NOP_FSETP_NE_SEL, "SEL_NE"},
+    {OMEGA_TB_SEL_NUM, r_sel, OMEGA_NOP_FSETP_NUM_SEL, "SEL_NUM"}, {OMEGA_TB_SEL_NAN, r_sel, OMEGA_NOP_FSETP_NAN_SEL, "SEL_NAN"},
+    {OMEGA_TB_SEL_LTU, r_sel, OMEGA_NOP_FSETP_LTU_SEL, "SEL_LTU"}, {OMEGA_TB_SEL_LEU, r_sel, OMEGA_NOP_FSETP_LEU_SEL, "SEL_LEU"},
+    {OMEGA_TB_SEL_GTU, r_sel, OMEGA_NOP_FSETP_GTU_SEL, "SEL_GTU"}, {OMEGA_TB_SEL_GEU, r_sel, OMEGA_NOP_FSETP_GEU_SEL, "SEL_GEU"},
+    {OMEGA_TB_SEL_EQU, r_sel, OMEGA_NOP_FSETP_EQU_SEL, "SEL_EQU"}, {OMEGA_TB_SEL_NEU, r_sel, OMEGA_NOP_FSETP_NEU_SEL, "SEL_NEU"},
+};
+#define NBIN (sizeof(BIN_CASES) / sizeof(BIN_CASES[0]))
+
+/* Index of logical element `flat` of out shape (ro, so) inside an operand of
+ * shape (ra, sa) under numpy broadcasting (dense row-major operand). */
+static uint64_t bcast_src(uint64_t flat, uint32_t ro, const uint64_t *so, uint32_t ra, const uint64_t *sa) {
+    uint64_t idx[8];
+    for (uint32_t d = ro; d-- > 0;) { idx[d] = flat % so[d]; flat /= so[d]; }
+    uint64_t src = 0;
+    for (uint32_t d = 0; d < ra; d++) {
+        uint64_t i = idx[ro - ra + d];
+        src = src * sa[d] + (sa[d] == 1 ? 0 : i);
+    }
+    return src;
+}
+
+static float ref_tree(OmegaTensorReduceOp op, const float *x, size_t n) {
+    float pad = omega_bits_to_float(op == OMEGA_TR_SUM || op == OMEGA_TR_MEAN ? 0x80000000U : 0x7fc00000U);
+    float *lvl = malloc(n * sizeof(float));
+    memcpy(lvl, x, n * sizeof(float));
+    size_t len = n;
+    int levels = 0;
+    while (levels == 0 || len > 1) {
+        size_t out = 0;
+        for (size_t base = 0; base < len; base += 32) {
+            float v[32];
+            for (int l = 0; l < 32; l++) v[l] = base + (size_t)l < len ? lvl[base + (size_t)l] : pad;
+            static const int deltas[5] = {16, 8, 4, 2, 1};
+            for (int k = 0; k < 5; k++)
+                for (int i = 0; i < deltas[k]; i++) {
+                    float a = v[i], b = v[i + deltas[k]];
+                    v[i] = op == OMEGA_TR_MAX ? omega_ref_fmax(a, b)
+                         : op == OMEGA_TR_MIN ? omega_ref_fmin(a, b) : omega_ref_fadd(a, b);
+                }
+            lvl[out++] = v[0];
+        }
+        len = out;
+        levels++;
+    }
+    float r = lvl[0];
+    free(lvl);
+    if (op == OMEGA_TR_MEAN) r = omega_ieee_div(r, (float)n);
+    return r;
+}
+
+/* Reference matmul on dense row-major [M,K] x [K,N]. */
+static void ref_matmul(const float *a, const float *b, float *o, size_t M, size_t K, size_t N) {
+    float *p = malloc(K * sizeof(float));
+    for (size_t i = 0; i < M; i++)
+        for (size_t j = 0; j < N; j++) {
+            for (size_t k = 0; k < K; k++) p[k] = omega_ref_fmul(a[i * K + k], b[k * N + j]);
+            o[i * N + j] = ref_tree(OMEGA_TR_SUM, p, K);
+        }
+    free(p);
+}
+
+/* ---- helpers -------------------------------------------------------------- */
+
+static OmegaTensorCtx *g;
+static OmegaTensor mk(uint32_t rank, const uint64_t *shape, const float *data) {
+    OmegaTensor t;
+    int rc = omega_tensor_from_f32(g, rank, shape, data, &t);
+    if (rc) { printf("FATAL create rc=%d\n", rc); exit(2); }
+    return t;
+}
+static float *rd(OmegaTensor t) {
+    OmegaTensorInfo in;
+    if (omega_tensor_info(g, t, &in)) return NULL;
+    float *o = malloc((size_t)in.elements * sizeof(float));
+    if (omega_tensor_read_f32(g, t, o, (size_t)in.elements)) { free(o); return NULL; }
+    return o;
+}
+static void vid(OmegaTensor t, uint8_t id[32]) { if (omega_tensor_value_id(g, t, id)) memset(id, 0xee, 32); }
+
+/* ---- 1. shape / type errors ------------------------------------------------ */
+static void test_shape_type(void) {
+    float d[64] = {0};
+    uint64_t s9[9] = {1, 1, 1, 1, 1, 1, 1, 1, 1}, s0[2] = {2, 0}, big[2] = {1u << 20, 1u << 11};
+    OmegaTensor t;
+    CHECK(omega_tensor_from_f32(g, 9, s9, d, &t) == OMEGA_TENSOR_ERR_RANK, "rank 9 refused");
+    CHECK(omega_tensor_from_f32(g, 2, s0, d, &t) == OMEGA_TENSOR_ERR_SHAPE, "zero dim refused");
+    CHECK(omega_tensor_from_f32(g, 2, big, d, &t) == OMEGA_TENSOR_ERR_CAPACITY, "2^31 elements refused");
+    CHECK(omega_tensor_from_data(g, (OmegaDType)9, 1, s9, d, &t) == OMEGA_TENSOR_ERR_DTYPE, "unknown dtype");
+    uint64_t s23[2] = {2, 3}, s34[2] = {3, 4}, s4[1] = {4}, s32[2] = {3, 2};
+    OmegaTensor a = mk(2, s23, d), b = mk(2, s34, d), c = mk(1, s4, d), e = mk(2, s32, d), o;
+    uint16_t h[6] = {0};
+    OmegaTensor f16;
+    CHECK(omega_tensor_from_data(g, OMEGA_DT_F16, 2, s23, h, &f16) == 0, "f16 create");
+    CHECK(omega_tensor_binary(g, OMEGA_TB_ADD, a, f16, &o) == OMEGA_TENSOR_ERR_DTYPE, "f16 arithmetic refused");
+    CHECK(omega_tensor_reduce(g, OMEGA_TR_SUM, f16, 0, false, &o) == OMEGA_TENSOR_ERR_DTYPE, "f16 reduce refused");
+    CHECK(omega_tensor_matmul(g, f16, e, &o) == OMEGA_TENSOR_ERR_DTYPE, "f16 matmul refused");
+    CHECK(omega_tensor_cast(g, f16, OMEGA_DT_BF16, &o) == OMEGA_TENSOR_ERR_DTYPE, "f16->bf16 refused");
+    CHECK(omega_tensor_binary(g, OMEGA_TB_ADD, a, b, &o) == OMEGA_TENSOR_ERR_SHAPE, "[2,3]+[3,4] refused");
+    CHECK(omega_tensor_matmul(g, a, a, &o) == OMEGA_TENSOR_ERR_SHAPE, "matmul K mismatch");
+    CHECK(omega_tensor_matmul(g, c, b, &o) == OMEGA_TENSOR_ERR_RANK, "matmul rank 1 refused");
+    CHECK(omega_tensor_reduce(g, OMEGA_TR_SUM, a, 2, false, &o) == OMEGA_TENSOR_ERR_AXIS, "axis 2 of rank 2");
+    CHECK(omega_tensor_binary(g, (OmegaTensorBinaryOp)99, a, a, &o) == OMEGA_TENSOR_ERR_BAD_ARGS, "unknown op");
+    CHECK(omega_tensor_reduce(g, (OmegaTensorReduceOp)7, a, 0, false, &o) == OMEGA_TENSOR_ERR_BAD_ARGS, "unknown reduce");
+    uint32_t bad_perm[2] = {0, 0};
+    CHECK(omega_tensor_permute(g, a, bad_perm, &o) == OMEGA_TENSOR_ERR_AXIS, "duplicate perm axis");
+    OmegaTensor sc = mk(0, NULL, d);
+    CHECK(omega_tensor_transpose(g, sc, &o) == OMEGA_TENSOR_ERR_RANK, "transpose of scalar");
+    CHECK(omega_tensor_reduce(g, OMEGA_TR_SUM, sc, 0, false, &o) == OMEGA_TENSOR_ERR_RANK, "reduce of scalar");
+    OmegaTensor ts[] = {a, b, c, e, f16, sc};
+    for (size_t i = 0; i < sizeof(ts) / sizeof(ts[0]); i++) omega_tensor_release(g, ts[i]);
+    /* bad realization tables */
+    OmegaTensorRealization bad = *omega_tensor_cpu_realization();
+    OmegaTensorCtx *x;
+    bad.reduce_order = "SEQUENTIAL_LEFT_TO_RIGHT";
+    CHECK(omega_tensor_ctx_create(4, &bad, &x) == OMEGA_TENSOR_ERR_REALIZATION, "wrong order string refused");
+    bad = *omega_tensor_cpu_realization();
+    bad.reduce = NULL;
+    CHECK(omega_tensor_ctx_create(4, &bad, &x) == OMEGA_TENSOR_ERR_REALIZATION, "missing reduce refused");
+}
+
+/* ---- 2. broadcasting -------------------------------------------------------- */
+static void bcase(uint32_t ra, const uint64_t *sa, uint32_t rb, const uint64_t *sb, int expect_rc,
+                  uint32_t er, const uint64_t *es, const char *name) {
+    uint32_t r = 0;
+    uint64_t s[8];
+    int rc = omega_tensor_broadcast_shape(ra, sa, rb, sb, &r, s);
+    bool ok = rc == expect_rc;
+    if (ok && rc == 0) ok = r == er && (er == 0 || memcmp(s, es, er * 8) == 0);
+    CHECK(ok, "broadcast shape %s rc=%d", name, rc);
+}
+
+static void test_broadcast(void) {
+    uint64_t s31[] = {3, 1}, s14[] = {1, 4}, s34[] = {3, 4}, s4[] = {4}, s234[] = {2, 3, 4};
+    uint64_t s23[] = {2, 3}, s32[] = {3, 2}, s54[] = {5, 4}, s41[] = {4, 1}, s1[] = {1};
+    uint64_t s5114[] = {5, 1, 1, 4}, s736[] = {7, 3, 1}, s5734[] = {5, 7, 3, 4};
+    bcase(2, s31, 2, s14, 0, 2, s34, "[3,1]x[1,4]");
+    bcase(1, s4, 3, s234, 0, 3, s234, "[4]x[2,3,4]");
+    bcase(0, NULL, 2, s23, 0, 2, s23, "scalar x [2,3]");
+    bcase(1, s1, 1, s4, 0, 1, s4, "[1]x[4]");
+    bcase(4, s5114, 3, s736, 0, 4, s5734, "[5,1,1,4]x[7,3,1]");
+    bcase(2, s23, 2, s32, OMEGA_TENSOR_ERR_SHAPE, 0, NULL, "[2,3]x[3,2]");
+    bcase(2, s54, 2, s41, OMEGA_TENSOR_ERR_SHAPE, 0, NULL, "[5,4]x[4,1]");
+    bcase(1, s4, 2, s23, OMEGA_TENSOR_ERR_SHAPE, 0, NULL, "[4]x[2,3]");
+
+    /* value parity of broadcast ops against bcast_src index arithmetic */
+    struct { uint32_t ra; uint64_t sa[4]; uint32_t rb; uint64_t sb[4]; } cs[] = {
+        {2, {3, 1}, 2, {1, 4}}, {1, {4}, 3, {2, 3, 4}}, {0, {0}, 2, {2, 3}},
+        {4, {5, 1, 1, 4}, 3, {7, 3, 1}}, {3, {2, 1, 6}, 3, {2, 5, 1}},
+    };
+    for (size_t c = 0; c < sizeof(cs) / sizeof(cs[0]); c++) {
+        uint64_t na = prod(cs[c].ra, cs[c].sa), nb = prod(cs[c].rb, cs[c].sb);
+        float *da = malloc(na * 4), *db = malloc(nb * 4);
+        fill(da, na, rand_f32);
+        fill(db, nb, rand_f32);
+        OmegaTensor A = mk(cs[c].ra, cs[c].sa, da), B = mk(cs[c].rb, cs[c].sb, db);
+        uint32_t ro;
+        uint64_t so[8];
+        omega_tensor_broadcast_shape(cs[c].ra, cs[c].sa, cs[c].rb, cs[c].sb, &ro, so);
+        uint64_t no = prod(ro, so);
+        float *ex = malloc(no * 4);
+        for (size_t k = 0; k < NBIN; k++) {
+            g_selop = BIN_CASES[k].selop;
+            for (uint64_t i = 0; i < no; i++)
+                ex[i] = BIN_CASES[k].f(da[bcast_src(i, ro, so, cs[c].ra, cs[c].sa)],
+                                       db[bcast_src(i, ro, so, cs[c].rb, cs[c].sb)]);
+            OmegaTensor O;
+            int rc = omega_tensor_binary(g, BIN_CASES[k].op, A, B, &O);
+            float *got = rc ? NULL : rd(O);
+            CHECK(got && mismatches(ex, got, no) == 0, "broadcast case %zu op %s rc=%d", c, BIN_CASES[k].name, rc);
+            free(got);
+            if (!rc) omega_tensor_release(g, O);
+        }
+        /* broadcast_to view: zero strides, values */
+        OmegaTensor V;
+        CHECK(omega_tensor_broadcast_to(g, A, ro, so, &V) == 0, "broadcast_to case %zu", c);
+        OmegaTensorInfo vi;
+        omega_tensor_info(g, V, &vi);
+        bool zs = true;
+        for (uint32_t d = 0; d < ro; d++) {
+            bool expanded = d < ro - cs[c].ra || cs[c].sa[d - (ro - cs[c].ra)] == 1;
+            if (expanded && so[d] > 1 && vi.strides[d] != 0) zs = false;
+        }
+        CHECK(zs && vi.is_view, "broadcast_to zero strides case %zu", c);
+        float *gv = rd(V);
+        for (uint64_t i = 0; i < no; i++) ex[i] = da[bcast_src(i, ro, so, cs[c].ra, cs[c].sa)];
+        CHECK(gv && mismatches(ex, gv, no) == 0, "broadcast_to values case %zu", c);
+        free(gv);
+        omega_tensor_release(g, V);
+        omega_tensor_release(g, A);
+        omega_tensor_release(g, B);
+        free(da); free(db); free(ex);
+    }
+    float d6[6] = {1, 2, 3, 4, 5, 6};
+    uint64_t s3[] = {3};
+    OmegaTensor A = mk(2, s23, d6), O;
+    CHECK(omega_tensor_broadcast_to(g, A, 1, s3, &O) == OMEGA_TENSOR_ERR_SHAPE, "broadcast_to lower rank refused");
+    CHECK(omega_tensor_broadcast_to(g, A, 2, s32, &O) == OMEGA_TENSOR_ERR_SHAPE, "broadcast_to [2,3]->[3,2] refused");
+    omega_tensor_release(g, A);
+}
+
+/* ---- 3. views and strides ------------------------------------------------- */
+static void test_views(void) {
+    uint64_t s[3] = {4, 5, 6};
+    float d[120];
+    for (int i = 0; i < 120; i++) d[i] = (float)i;
+    OmegaTensor T = mk(3, s, d), P, S, TS, ST, V2, R, C, Z;
+    uint8_t before[32], after[32];
+    vid(T, before);
+    /* permute (2,0,1): out[i][j][k] = T[j][k][i] */
+    uint32_t perm[3] = {2, 0, 1};
+    CHECK(omega_tensor_permute(g, T, perm, &P) == 0, "permute");
+    float *gp = rd(P);
+    bool ok = gp != NULL;
+    for (int i = 0; ok && i < 6; i++) for (int j = 0; j < 4; j++) for (int k = 0; k < 5; k++)
+        ok = ok && (gp[(i * 4 + j) * 5 + k] == d[(j * 5 + k) * 6 + i]);
+    CHECK(ok, "permute values");
+    free(gp);
+    /* slice [1:4:2, 0:5:2, 2:6] then transpose last two */
+    uint64_t st[3] = {1, 0, 2}, sp[3] = {4, 5, 6}, sz[3] = {2, 2, 1};
+    CHECK(omega_tensor_slice(g, T, st, sp, sz, &S) == 0, "slice");
+    OmegaTensorInfo si;
+    omega_tensor_info(g, S, &si);
+    CHECK(si.shape[0] == 2 && si.shape[1] == 3 && si.shape[2] == 4 && si.offset == 1 * 30 + 2, "slice shape/offset");
+    CHECK(omega_tensor_transpose(g, S, &TS) == 0, "transpose of slice");
+    float *gts = rd(TS);
+    ok = gts != NULL;
+    for (int a = 0; ok && a < 2; a++) for (int k = 0; k < 4; k++) for (int j = 0; j < 3; j++)
+        ok = ok && (gts[(a * 4 + k) * 3 + j] == d[((1 + 2 * a) * 5 + 2 * j) * 6 + 2 + k]);
+    CHECK(ok, "transpose of slice values");
+    free(gts);
+    /* slice of transpose == transpose of slice */
+    OmegaTensor TT;
+    omega_tensor_transpose(g, T, &TT);
+    uint64_t st2[3] = {1, 2, 0}, sp2[3] = {4, 6, 5}, sz2[3] = {2, 1, 2};
+    CHECK(omega_tensor_slice(g, TT, st2, sp2, sz2, &ST) == 0, "slice of transpose");
+    bool eq = false;
+    omega_tensor_value_equal(g, ST, TS, &eq);
+    CHECK(eq, "slice(transpose) == transpose(slice)");
+    /* view of a view of a view */
+    uint64_t st3[3] = {1, 1, 1}, sp3[3] = {2, 3, 3};
+    CHECK(omega_tensor_slice(g, TS, st3, sp3, NULL, &V2) == 0, "slice of transposed slice");
+    float *gv2 = rd(V2);
+    ok = gv2 != NULL;
+    for (int k = 0; ok && k < 2; k++) for (int j = 0; j < 2; j++)  /* a=1, k+1, j+1 */
+        ok = ok && (gv2[k * 2 + j] == d[((1 + 2 * 1) * 5 + 2 * (j + 1)) * 6 + 2 + (k + 1)]);
+    CHECK(ok, "view of view of view values");
+    free(gv2);
+    OmegaTensorInfo i2;
+    omega_tensor_info(g, V2, &i2);
+    CHECK(i2.storage.slot == si.storage.slot && i2.storage.generation == si.storage.generation, "views share storage");
+    /* reshape: contiguous ok, transposed refused, copy then ok */
+    uint64_t rs[2] = {20, 6};
+    CHECK(omega_tensor_reshape(g, T, 2, rs, &R) == 0, "reshape contiguous");
+    CHECK(omega_tensor_reshape(g, TT, 2, rs, &Z) == OMEGA_TENSOR_ERR_NOT_CONTIGUOUS, "reshape transposed refused");
+    uint64_t rbad[2] = {7, 6};
+    CHECK(omega_tensor_reshape(g, T, 2, rbad, &Z) == OMEGA_TENSOR_ERR_SHAPE, "reshape count mismatch");
+    CHECK(omega_tensor_contiguous(g, TT, &C) == 0, "contiguous copy");
+    uint64_t rs2[2] = {4, 30};
+    OmegaTensor RC;
+    CHECK(omega_tensor_reshape(g, C, 2, rs2, &RC) == 0, "reshape of contiguous copy");
+    OmegaTensorInfo ci;
+    omega_tensor_info(g, C, &ci);
+    CHECK(!ci.is_view && ci.storage.slot != si.storage.slot, "contiguous has own storage");
+    eq = false;
+    omega_tensor_value_equal(g, C, TT, &eq);
+    CHECK(eq, "contiguous copy value-equal to its view");
+    uint8_t id1[32], id2[32];
+    vid(C, id1); vid(TT, id2);
+    CHECK(memcmp(id1, id2, 32) == 0, "layout is not identity: value ids equal");
+    omega_tensor_view_id(g, C, id1); omega_tensor_view_id(g, TT, id2);
+    CHECK(memcmp(id1, id2, 32) != 0, "view ids differ");
+    /* zero-stride: broadcast of a column, then slice and transpose of it */
+    uint64_t c1[2] = {4, 1}, c46[2] = {4, 6};
+    float col[4] = {10, 20, 30, 40};
+    OmegaTensor K = mk(2, c1, col), KB, KBT;
+    omega_tensor_broadcast_to(g, K, 2, c46, &KB);
+    omega_tensor_transpose(g, KB, &KBT);
+    float *gk = rd(KBT);
+    ok = gk != NULL;
+    for (int i = 0; ok && i < 6; i++) for (int j = 0; j < 4; j++) ok = ok && (gk[i * 4 + j] == col[j]);
+    CHECK(ok, "transpose of zero-stride view");
+    free(gk);
+    CHECK(omega_tensor_reshape(g, KB, 1, (uint64_t[]){24}, &Z) == OMEGA_TENSOR_ERR_NOT_CONTIGUOUS,
+          "reshape of zero-stride refused");
+    /* bounds */
+    uint64_t bs[3] = {0, 0, 0}, be[3] = {5, 5, 6};
+    CHECK(omega_tensor_slice(g, T, bs, be, NULL, &Z) == OMEGA_TENSOR_ERR_BOUNDS, "slice past end");
+    uint64_t ee[3] = {0, 5, 6};
+    CHECK(omega_tensor_slice(g, T, bs, ee, NULL, &Z) == OMEGA_TENSOR_ERR_SHAPE, "empty slice refused");
+    CHECK(omega_tensor_slice(g, T, bs, sp, (uint64_t[]){1, 0, 1}, &Z) == OMEGA_TENSOR_ERR_BAD_ARGS, "step 0");
+    {   /* step near 2^64: one element per axis, no overflow, value T[0][0][0] */
+        OmegaTensor H;
+        uint64_t huge[3] = {UINT64_MAX, UINT64_MAX, UINT64_MAX / 3};
+        float hv = -1;
+        CHECK(omega_tensor_slice(g, T, bs, sp, huge, &H) == 0 && omega_tensor_read_f32(g, H, &hv, 1) == 0 &&
+              hv == d[0], "huge step slice");
+        omega_tensor_release(g, H);
+    }
+    /* parent unchanged by all of the above */
+    vid(T, after);
+    CHECK(memcmp(before, after, 32) == 0, "parent value id unchanged by views");
+    OmegaTensor all[] = {RC, C, R, V2, ST, TT, TS, S, P, KBT, KB, K, T};
+    for (size_t i = 0; i < sizeof(all) / sizeof(all[0]); i++)
+        CHECK(omega_tensor_release(g, all[i]) == 0, "release %zu", i);
+}
+
+/* ---- 4. generation safety ------------------------------------------------- */
+static void test_generations(void) {
+    float d[6] = {1, 2, 3, 4, 5, 6}, o[6];
+    uint64_t s[2] = {2, 3};
+    OmegaTensor A = mk(2, s, d), V, W, O;
+    omega_tensor_transpose(g, A, &V);
+    OmegaTensorInfo ai;
+    omega_tensor_info(g, A, &ai);
+    /* releasing a view leaves the parent alive */
+    omega_tensor_transpose(g, A, &W);
+    CHECK(omega_tensor_release(g, W) == 0, "release view");
+    CHECK(omega_tensor_read_f32(g, W, o, 6) == OMEGA_TENSOR_ERR_STALE, "released view stale");
+    CHECK(omega_tensor_read_f32(g, A, o, 6) == 0, "parent still valid after view release");
+    /* releasing the owner makes every view stale */
+    CHECK(omega_tensor_release(g, A) == 0, "release owner");
+    CHECK(omega_tensor_read_f32(g, A, o, 6) == OMEGA_TENSOR_ERR_STALE, "use after release");
+    CHECK(omega_tensor_release(g, A) == OMEGA_TENSOR_ERR_STALE, "double release");
+    CHECK(!omega_tensor_storage_valid(g, ai.storage), "storage handle stale");
+    CHECK(omega_tensor_read_f32(g, V, o, 6) == OMEGA_TENSOR_ERR_STALE, "stale view read");
+    OmegaTensorInfo vi;
+    CHECK(omega_tensor_info(g, V, &vi) == OMEGA_TENSOR_ERR_STALE, "stale view info");
+    CHECK(omega_tensor_binary(g, OMEGA_TB_ADD, V, V, &O) == OMEGA_TENSOR_ERR_STALE, "stale view op");
+    CHECK(omega_tensor_matmul(g, V, V, &O) == OMEGA_TENSOR_ERR_STALE, "stale view matmul");
+    CHECK(omega_tensor_transpose(g, V, &O) == OMEGA_TENSOR_ERR_STALE, "view of stale view");
+    uint8_t id[32];
+    CHECK(omega_tensor_value_id(g, V, id) == OMEGA_TENSOR_ERR_STALE, "stale value id");
+    CHECK(omega_tensor_release(g, V) == 0, "stale view descriptor can still be released");
+    /* no ABA: the reused slot gets a new generation */
+    OmegaTensor B = mk(2, s, d);
+    OmegaTensorInfo bi;
+    omega_tensor_info(g, B, &bi);
+    CHECK(bi.storage.slot == ai.storage.slot && bi.storage.generation != ai.storage.generation,
+          "slot reused with new generation (slot %u gen %llu vs %llu)", bi.storage.slot,
+          (unsigned long long)bi.storage.generation, (unsigned long long)ai.storage.generation);
+    CHECK(omega_tensor_read_f32(g, A, o, 6) == OMEGA_TENSOR_ERR_STALE, "old handle not revived");
+    CHECK(!omega_tensor_storage_valid(g, ai.storage), "old storage handle not revived");
+    omega_tensor_release(g, B);
+    OmegaTensor bogus = {.slot = 999999, .generation = 1};
+    CHECK(omega_tensor_read_f32(g, bogus, o, 6) == OMEGA_TENSOR_ERR_STALE, "out of range handle");
+
+    /* generation never wraps: slot retired at UINT64_MAX */
+    OmegaTensorCtx *c1;
+    CHECK(omega_tensor_ctx_create(1, omega_tensor_cpu_realization(), &c1) == 0, "ctx cap 1");
+    CHECK(omega_tensor_test_set_storage_generation(c1, 0, UINT64_MAX - 1) == 0, "set gen");
+    CHECK(omega_tensor_test_set_storage_generation(c1, 0, 5) == OMEGA_TENSOR_ERR_BAD_ARGS, "set gen rollback refused (free slot)");
+    CHECK(omega_tensor_test_set_storage_generation(c1, 0, UINT64_MAX - 1) == OMEGA_TENSOR_ERR_BAD_ARGS, "set gen same value refused");
+    OmegaTensor t1, t2, t3;
+    omega_tensor_from_f32(c1, 2, s, d, &t1);
+    OmegaTensorInfo i1;
+    omega_tensor_info(c1, t1, &i1);
+    CHECK(i1.storage.generation == UINT64_MAX - 1, "gen max-1");
+    CHECK(omega_tensor_test_set_storage_generation(c1, 0, 5) == OMEGA_TENSOR_ERR_BAD_ARGS, "set gen refused on live slot");
+    omega_tensor_release(c1, t1);
+    CHECK(omega_tensor_from_f32(c1, 2, s, d, &t2) == 0, "alloc at gen max");
+    omega_tensor_info(c1, t2, &i1);
+    CHECK(i1.storage.generation == UINT64_MAX, "gen max");
+    omega_tensor_release(c1, t2);
+    CHECK(omega_tensor_from_f32(c1, 2, s, d, &t3) == OMEGA_TENSOR_ERR_CAPACITY, "retired slot never reused");
+    CHECK(omega_tensor_read_f32(c1, t2, o, 6) == OMEGA_TENSOR_ERR_STALE, "handle at gen max stale after release");
+    omega_tensor_ctx_destroy(c1);
+}
+
+/* ---- 5. immutability ------------------------------------------------------ */
+static void test_immutability(void) {
+    float da[12], db[12];
+    fill(da, 12, rand_f32);
+    fill(db, 12, rand_f32);
+    uint64_t s[2] = {3, 4}, s43[2] = {4, 3};
+    OmegaTensor A = mk(2, s, da), B = mk(2, s, db), B2 = mk(2, s43, db), O;
+    uint8_t ia[32], ib[32], ib2[32], x[32];
+    vid(A, ia); vid(B, ib); vid(B2, ib2);
+    for (size_t k = 0; k < NBIN; k++) { omega_tensor_binary(g, BIN_CASES[k].op, A, B, &O); omega_tensor_release(g, O); }
+    omega_tensor_fma(g, A, B, A, &O); omega_tensor_release(g, O);
+    omega_tensor_unary(g, OMEGA_TU_SQRT, A, &O); omega_tensor_release(g, O);
+    omega_tensor_reduce(g, OMEGA_TR_SUM, A, 1, false, &O); omega_tensor_release(g, O);
+    omega_tensor_matmul(g, A, B2, &O); omega_tensor_release(g, O);
+    omega_tensor_cast(g, A, OMEGA_DT_F16, &O); omega_tensor_release(g, O);
+    vid(A, x); CHECK(memcmp(ia, x, 32) == 0, "A unchanged by ops");
+    vid(B, x); CHECK(memcmp(ib, x, 32) == 0, "B unchanged by ops");
+    vid(B2, x); CHECK(memcmp(ib2, x, 32) == 0, "B2 unchanged by ops");
+    /* outputs never alias inputs */
+    omega_tensor_binary(g, OMEGA_TB_ADD, A, B, &O);
+    OmegaTensorInfo io, iA;
+    omega_tensor_info(g, O, &io); omega_tensor_info(g, A, &iA);
+    CHECK(!io.is_view && io.storage.slot != iA.storage.slot, "op output has its own storage");
+    omega_tensor_release(g, O);
+    /* NaN payload is not semantic; -0 and +0 are */
+    float n1[1] = {omega_bits_to_float(0x7fc00000U)}, n2[1] = {omega_bits_to_float(0xffa12345U)};
+    float z1[1] = {0.0f}, z2[1] = {omega_bits_to_float(0x80000000U)};
+    uint64_t s1[1] = {1};
+    OmegaTensor N1 = mk(1, s1, n1), N2 = mk(1, s1, n2), Z1 = mk(1, s1, z1), Z2 = mk(1, s1, z2);
+    uint8_t a1[32], a2[32];
+    vid(N1, a1); vid(N2, a2);
+    CHECK(memcmp(a1, a2, 32) == 0, "NaN payloads share a value id");
+    vid(Z1, a1); vid(Z2, a2);
+    CHECK(memcmp(a1, a2, 32) != 0, "+0 and -0 differ");
+    vid(A, a1); vid(B2, a2);
+    OmegaTensor AR;
+    omega_tensor_reshape(g, A, 2, s43, &AR);
+    vid(AR, a1);
+    CHECK(memcmp(a1, ia, 32) != 0, "shape is part of value identity");
+    OmegaTensor all[] = {AR, A, B, B2, N1, N2, Z1, Z2};
+    for (size_t i = 0; i < sizeof(all) / sizeof(all[0]); i++) omega_tensor_release(g, all[i]);
+}
+
+/* ---- 6. CPU parity -------------------------------------------------------- */
+static void test_elementwise_parity(void) {
+    const size_t n = 4099;
+    float *a = malloc(n * 4), *b = malloc(n * 4), *c = malloc(n * 4), *ex = malloc(n * 4);
+    fill(a, n, rand_f32); fill(b, n, rand_f32); fill(c, n, rand_f32);
+    for (size_t i = 0; i < NSPECIAL * NSPECIAL && i < n; i++) {  /* every special pair */
+        a[i] = omega_bits_to_float(SPECIALS[i / NSPECIAL]);
+        b[i] = omega_bits_to_float(SPECIALS[i % NSPECIAL]);
+    }
+    uint64_t s[1] = {n};
+    OmegaTensor A = mk(1, s, a), B = mk(1, s, b), Cc = mk(1, s, c), O;
+    for (size_t k = 0; k < NBIN; k++) {
+        g_selop = BIN_CASES[k].selop;
+        for (size_t i = 0; i < n; i++) ex[i] = BIN_CASES[k].f(a[i], b[i]);
+        int rc = omega_tensor_binary(g, BIN_CASES[k].op, A, B, &O);
+        float *got = rc ? NULL : rd(O);
+        CHECK(got && mismatches(ex, got, n) == 0, "parity %s rc=%d", BIN_CASES[k].name, rc);
+        free(got);
+        if (!rc) omega_tensor_release(g, O);
+    }
+    for (size_t i = 0; i < n; i++) ex[i] = omega_ieee_sqrt(a[i]);
+    int rc = omega_tensor_unary(g, OMEGA_TU_SQRT, A, &O);
+    float *got = rc ? NULL : rd(O);
+    CHECK(got && mismatches(ex, got, n) == 0, "parity SQRT");
+    free(got); if (!rc) omega_tensor_release(g, O);
+    for (size_t i = 0; i < n; i++) ex[i] = omega_ref_ffma_int(a[i], b[i], c[i]);
+    rc = omega_tensor_fma(g, A, B, Cc, &O);
+    got = rc ? NULL : rd(O);
+    CHECK(got && mismatches(ex, got, n) == 0, "parity FMA");
+    free(got); if (!rc) omega_tensor_release(g, O);
+    /* FMA with broadcast scalar c */
+    float c0[1] = {c[7]};
+    OmegaTensor C0 = mk(0, NULL, c0);
+    for (size_t i = 0; i < n; i++) ex[i] = omega_ref_ffma_int(a[i], b[i], c0[0]);
+    rc = omega_tensor_fma(g, A, B, C0, &O);
+    got = rc ? NULL : rd(O);
+    CHECK(got && mismatches(ex, got, n) == 0, "parity FMA broadcast c");
+    free(got); if (!rc) omega_tensor_release(g, O);
+    /* casts */
+    uint16_t *h = malloc(n * 2), *hg = malloc(n * 2);
+    for (size_t i = 0; i < n; i++) h[i] = omega_ref_f32_to_f16(a[i]);
+    rc = omega_tensor_cast(g, A, OMEGA_DT_F16, &O);
+    size_t mm = 0;
+    if (!rc) { omega_tensor_read(g, O, hg, n * 2);
+        for (size_t i = 0; i < n; i++) mm += !omega_numeric_compare_equal(OMEGA_CMP_F16_BITS, h[i], hg[i]); }
+    CHECK(!rc && mm == 0, "parity F32->F16 rc=%d mm=%zu", rc, mm);
+    if (!rc) {
+        OmegaTensor W;
+        int rc2 = omega_tensor_cast(g, O, OMEGA_DT_F32, &W);
+        for (size_t i = 0; i < n; i++) ex[i] = omega_ref_f16_to_f32(h[i]);
+        got = rc2 ? NULL : rd(W);
+        CHECK(got && mismatches(ex, got, n) == 0, "parity F16->F32");
+        free(got); if (!rc2) omega_tensor_release(g, W);
+        omega_tensor_release(g, O);
+    }
+    rc = omega_tensor_cast(g, A, OMEGA_DT_BF16, &O);
+    if (omega_numeric_cpu_has_bf16()) {
+        for (size_t i = 0; i < n; i++) h[i] = omega_ref_f32_to_bf16(a[i]);
+        mm = 0;
+        if (!rc) { omega_tensor_read(g, O, hg, n * 2);
+            for (size_t i = 0; i < n; i++) mm += !omega_numeric_compare_equal(OMEGA_CMP_BF16_BITS, h[i], hg[i]); }
+        CHECK(!rc && mm == 0, "parity F32->BF16 rc=%d mm=%zu", rc, mm);
+        if (!rc) {
+            OmegaTensor W;
+            int rc2 = omega_tensor_cast(g, O, OMEGA_DT_F32, &W);
+            for (size_t i = 0; i < n; i++) ex[i] = omega_ref_bf16_to_f32(h[i]);
+            got = rc2 ? NULL : rd(W);
+            CHECK(got && mismatches(ex, got, n) == 0, "parity BF16->F32");
+            free(got); if (!rc2) omega_tensor_release(g, W);
+            omega_tensor_release(g, O);
+        }
+    } else {
+        CHECK(rc == OMEGA_TENSOR_ERR_NUMERIC && omega_tensor_last_numeric_error(g) == OMEGA_NUMERIC_ERR_NOT_ENCODED,
+              "BF16 refused without FEAT_BF16");
+    }
+    OmegaTensor all[] = {A, B, Cc, C0};
+    for (size_t i = 0; i < 4; i++) omega_tensor_release(g, all[i]);
+    free(a); free(b); free(c); free(ex); free(h); free(hg);
+}
+
+static void test_reduce_parity(void) {
+    /* 1-D lengths around the tile and level boundaries */
+    static const size_t lens[] = {1, 2, 31, 32, 33, 63, 64, 1000, 1023, 1024, 1025, 32769};
+    for (size_t li = 0; li < sizeof(lens) / sizeof(lens[0]); li++) {
+        size_t n = lens[li];
+        float *x = malloc(n * 4);
+        fill(x, n, li % 2 ? rand_mod : rand_f32);
+        uint64_t s[1] = {n};
+        OmegaTensor X = mk(1, s, x), O;
+        for (int op = 0; op < OMEGA_TR_COUNT; op++) {
+            float ex = ref_tree((OmegaTensorReduceOp)op, x, n), got = 0;
+            int rc = omega_tensor_reduce(g, (OmegaTensorReduceOp)op, X, 0, false, &O);
+            if (!rc) { omega_tensor_read_f32(g, O, &got, 1); omega_tensor_release(g, O); }
+            CHECK(!rc && same(ex, got), "reduce op %d n=%zu", op, n);
+        }
+        omega_tensor_release(g, X);
+        free(x);
+    }
+    /* signed zero: SUM of all -0 is -0 (pad is -0, not +0) */
+    {
+        float nz[3] = {omega_bits_to_float(0x80000000U), omega_bits_to_float(0x80000000U),
+                       omega_bits_to_float(0x80000000U)}, got = 0;
+        uint64_t s3[1] = {3};
+        OmegaTensor Z = mk(1, s3, nz), O;
+        int rc = omega_tensor_reduce(g, OMEGA_TR_SUM, Z, 0, false, &O);
+        if (!rc) { omega_tensor_read_f32(g, O, &got, 1); omega_tensor_release(g, O); }
+        CHECK(!rc && omega_float_to_bits(got) == 0x80000000U, "SUM of -0s is -0");
+        omega_tensor_release(g, Z);
+    }
+    /* every axis of a [3,37,5] tensor, plus keepdims and a strided view */
+    uint64_t s[3] = {3, 37, 5};
+    float x[555], ex[185], row[37];
+    fill(x, 555, rand_mod);
+    OmegaTensor X = mk(3, s, x), XT, O;
+    for (uint32_t ax = 0; ax < 3; ax++)
+        for (int op = 0; op < OMEGA_TR_COUNT; op++) {
+            uint64_t n = s[ax], cnt = 0;
+            for (uint64_t i = 0; i < (ax == 0 ? 1 : 3); i++)
+                for (uint64_t j = 0; j < (ax == 1 ? 1 : 37); j++)
+                    for (uint64_t k = 0; k < (ax == 2 ? 1 : 5); k++) {
+                        for (uint64_t r = 0; r < n; r++) {
+                            uint64_t ii = ax == 0 ? r : i, jj = ax == 1 ? r : j, kk = ax == 2 ? r : k;
+                            row[r] = x[(ii * 37 + jj) * 5 + kk];
+                        }
+                        ex[cnt++] = ref_tree((OmegaTensorReduceOp)op, row, n);
+                    }
+            int rc = omega_tensor_reduce(g, (OmegaTensorReduceOp)op, X, ax, ax == 1, &O);
+            float *got = rc ? NULL : rd(O);
+            OmegaTensorInfo oi;
+            if (!rc) omega_tensor_info(g, O, &oi);
+            CHECK(got && mismatches(ex, got, cnt) == 0 && oi.rank == (ax == 1 ? 3u : 2u),
+                  "reduce axis %u op %d", ax, op);
+            free(got);
+            if (!rc) omega_tensor_release(g, O);
+        }
+    /* reduce of a permuted view equals reduce of its contiguous copy */
+    uint32_t perm[3] = {1, 2, 0};
+    omega_tensor_permute(g, X, perm, &XT);
+    OmegaTensor XC, O1, O2;
+    omega_tensor_contiguous(g, XT, &XC);
+    omega_tensor_reduce(g, OMEGA_TR_SUM, XT, 0, false, &O1);
+    omega_tensor_reduce(g, OMEGA_TR_SUM, XC, 0, false, &O2);
+    bool eq = false;
+    omega_tensor_value_equal(g, O1, O2, &eq);
+    CHECK(eq, "reduce of view == reduce of copy");
+    OmegaTensor all[] = {O1, O2, XC, XT, X};
+    for (size_t i = 0; i < 5; i++) omega_tensor_release(g, all[i]);
+    CHECK(strcmp(omega_tensor_cpu_realization()->reduce_order,
+                 "RECURSIVE_TILE32_PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1_PAD_IDENTITY_MIN_ONE_LEVEL") == 0,
+          "reduce order string equals the E1 WP-D order");
+}
+
+static void check_matmul(size_t M, size_t K, size_t N, float (*gen)(void)) {
+    float *a = malloc(M * K * 4), *b = malloc(K * N * 4), *ex = malloc(M * N * 4);
+    fill(a, M * K, gen);
+    fill(b, K * N, gen);
+    ref_matmul(a, b, ex, M, K, N);
+    uint64_t sa[2] = {M, K}, sb[2] = {K, N};
+    OmegaTensor A = mk(2, sa, a), B = mk(2, sb, b), O;
+    int rc = omega_tensor_matmul(g, A, B, &O);
+    float *got = rc ? NULL : rd(O);
+    size_t mm = got ? mismatches(ex, got, M * N) : M * N;
+    CHECK(mm == 0, "matmul %zux%zux%zu rc=%d mismatches=%zu", M, K, N, rc, mm);
+    free(got);
+    if (!rc) omega_tensor_release(g, O);
+    omega_tensor_release(g, A);
+    omega_tensor_release(g, B);
+    free(a); free(b); free(ex);
+}
+
+static void test_matmul_parity(void) {
+    check_matmul(1, 1, 1, rand_mod);
+    check_matmul(1, 1, 1, rand_f32);
+    check_matmul(7, 13, 5, rand_mod);
+    check_matmul(7, 13, 5, rand_f32);
+    check_matmul(64, 64, 64, rand_mod);
+    check_matmul(129, 3, 257, rand_mod);
+    check_matmul(3, 1025, 2, rand_mod);   /* K across two reduction levels */
+    check_matmul(1, 33, 1, rand_mod);
+    /* strided operands: A^T as a view of a [K,M] tensor, B a slice */
+    size_t M = 9, K = 40, N = 6;
+    float *at = malloc(K * M * 4), *bb = malloc(K * 2 * N * 4), *a = malloc(M * K * 4), *b = malloc(K * N * 4);
+    float *ex = malloc(M * N * 4);
+    fill(at, K * M, rand_mod);
+    fill(bb, K * 2 * N, rand_mod);
+    for (size_t i = 0; i < M; i++) for (size_t k = 0; k < K; k++) a[i * K + k] = at[k * M + i];
+    for (size_t k = 0; k < K; k++) for (size_t j = 0; j < N; j++) b[k * N + j] = bb[k * 2 * N + 2 * j + 1];
+    ref_matmul(a, b, ex, M, K, N);
+    uint64_t sat[2] = {K, M}, sbb[2] = {K, 2 * N};
+    OmegaTensor AT = mk(2, sat, at), BB = mk(2, sbb, bb), AV, BV, O;
+    omega_tensor_transpose(g, AT, &AV);
+    omega_tensor_slice(g, BB, (uint64_t[]){0, 1}, (uint64_t[]){K, 2 * N}, (uint64_t[]){1, 2}, &BV);
+    int rc = omega_tensor_matmul(g, AV, BV, &O);
+    float *got = rc ? NULL : rd(O);
+    CHECK(got && mismatches(ex, got, M * N) == 0, "matmul of strided views");
+    free(got); if (!rc) omega_tensor_release(g, O);
+    OmegaTensor vs[] = {AV, BV, AT, BB};
+    for (size_t i = 0; i < 4; i++) omega_tensor_release(g, vs[i]);
+    free(at); free(bb); free(a); free(b); free(ex);
+    /* batched with broadcast batch axes: [2,1,3,4] x [5,4,6] -> [2,5,3,6] */
+    uint64_t s1[4] = {2, 1, 3, 4}, s2[3] = {5, 4, 6};
+    float x1[24], x2[120], e[180], o1[12], o2[24], r[18];
+    fill(x1, 24, rand_mod);
+    fill(x2, 120, rand_mod);
+    for (int p = 0; p < 2; p++) for (int q = 0; q < 5; q++) {
+        memcpy(o1, x1 + p * 12, 48);
+        memcpy(o2, x2 + q * 24, 96);
+        ref_matmul(o1, o2, r, 3, 4, 6);
+        memcpy(e + (p * 5 + q) * 18, r, 72);
+    }
+    OmegaTensor X1 = mk(4, s1, x1), X2 = mk(3, s2, x2);
+    rc = omega_tensor_matmul(g, X1, X2, &O);
+    OmegaTensorInfo oi;
+    if (!rc) omega_tensor_info(g, O, &oi);
+    got = rc ? NULL : rd(O);
+    CHECK(got && oi.rank == 4 && oi.shape[0] == 2 && oi.shape[1] == 5 && oi.shape[2] == 3 && oi.shape[3] == 6 &&
+          mismatches(e, got, 180) == 0, "batched broadcast matmul rc=%d", rc);
+    free(got); if (!rc) omega_tensor_release(g, O);
+    uint64_t s3[4] = {3, 1, 4, 6};
+    OmegaTensor X3 = mk(4, s3, x2);
+    CHECK(omega_tensor_matmul(g, X1, X3, &O) == OMEGA_TENSOR_ERR_SHAPE, "batch axes [2,1] vs [3,1] refused");
+    omega_tensor_release(g, X1); omega_tensor_release(g, X2); omega_tensor_release(g, X3);
+    CHECK(strstr(OMEGA_TENSOR_MATMUL_DECLARED_ORDER, OMEGA_TENSOR_REDUCE_DECLARED_ORDER) != NULL,
+          "matmul order names the reduce order");
+}
+
+/* ---- 7. mutation: a different order or fusion is caught ------------------ */
+static int seq_reduce(OmegaTensorReduceOp op, const float *x, size_t n, float *out) {
+    float acc = x[0];
+    for (size_t i = 1; i < n; i++) acc = op == OMEGA_TR_MAX ? omega_ref_fmax(acc, x[i]) : omega_ref_fadd(acc, x[i]);
+    *out = acc;
+    return 0;
+}
+static int fma_chain_elementwise(OmegaNumericOp op, const float *a, const float *b, const float *c,
+                                 float *out, size_t n) {
+    if (op != OMEGA_NOP_FMUL) return omega_numeric_cpu_realize(op, a, b, c, out, n);
+    /* "fused" products: keep a*b exact-ish by folding into an FFMA chain in out[0] */
+    float acc = 0.0f;
+    for (size_t i = 0; i < n; i++) { acc = omega_ref_ffma_int(a[i], b[i], acc); out[i] = 0.0f; }
+    out[0] = acc;
+    return 0;
+}
+static void test_mutations(void) {
+    const size_t M = 16, K = 300, N = 16;
+    float *a = malloc(M * K * 4), *b = malloc(K * N * 4), *ex = malloc(M * N * 4);
+    fill(a, M * K, rand_mod);
+    fill(b, K * N, rand_mod);
+    ref_matmul(a, b, ex, M, K, N);
+    uint64_t sa[2] = {M, K}, sb[2] = {K, N};
+    OmegaTensorRealization mut[2];
+    mut[0] = *omega_tensor_cpu_realization();
+    mut[0].name = "MUTANT_SEQUENTIAL_SUM";  /* lies about its order string */
+    mut[0].reduce = seq_reduce;
+    mut[1] = *omega_tensor_cpu_realization();
+    mut[1].name = "MUTANT_FFMA_CHAIN";
+    mut[1].elementwise = fma_chain_elementwise;
+    for (int m = 0; m < 2; m++) {
+        OmegaTensorCtx *c;
+        omega_tensor_ctx_create(16, &mut[m], &c);
+        OmegaTensor A, B, O;
+        omega_tensor_from_f32(c, 2, sa, a, &A);
+        omega_tensor_from_f32(c, 2, sb, b, &B);
+        float *got = malloc(M * N * 4);
+        int rc = omega_tensor_matmul(c, A, B, &O);
+        if (!rc) omega_tensor_read_f32(c, O, got, M * N);
+        size_t mm = rc ? M * N : mismatches(ex, got, M * N);
+        CHECK(mm > 0, "mutant %s caught (%zu of %zu outputs differ)", mut[m].name, mm, M * N);
+        free(got);
+        omega_tensor_ctx_destroy(c);
+    }
+    free(a); free(b); free(ex);
+}
+
+/* ---- 7b. bounded-contract transcendentals (E1 WP-B) ----------------------
+ * EXP2 / LOG2 / SIGMOID / TANH carry the E1 bounded contract (not correctly
+ * rounded). The tensor layer adds no arithmetic, so its output must be
+ * bit-identical (raw bits, NaN included) to calling the E1 function directly
+ * on the logical element, whatever the view: dense, transposed, strided
+ * slice with offset, broadcast. Expected indices come from shape arithmetic
+ * only, never from the tensor's strides. */
+#include "omega_numeric_transc.h"
+
+typedef struct { OmegaTensorUnaryOp op; float (*f)(float); const char *name; } TranscCase;
+static const TranscCase TRANSC_CASES[] = {
+    {OMEGA_TU_EXP2, omega_math_exp2, "EXP2"},
+    {OMEGA_TU_LOG2, omega_math_log2, "LOG2"},
+    {OMEGA_TU_SIGMOID, omega_math_sigmoid, "SIGMOID"},
+    {OMEGA_TU_TANH, omega_math_tanh, "TANH"},
+    /* M20 cut ops: the E1 Omega-defined polynomials (src/omega_numeric.c:458,
+     * :501), not correctly rounded, bit-exact with the direct call. */
+    {OMEGA_TU_EXP, omega_math_exp, "EXP"},
+    {OMEGA_TU_LOG, omega_math_log, "LOG"},
+    {OMEGA_TU_RSQRT, omega_math_rsqrt, "RSQRT"},
+    {OMEGA_TU_ERF, omega_math_erf, "ERF"},
+    {OMEGA_TU_GELU, omega_math_gelu, "GELU"},
+    {OMEGA_TU_SIN, omega_math_sin, "SIN"},
+    {OMEGA_TU_COS, omega_math_cos, "COS"},
+};
+#define NTRANSC (sizeof(TRANSC_CASES) / sizeof(TRANSC_CASES[0]))
+
+/* Extra special inputs for the transcendental ranges (exp2 overflow and
+ * underflow edges, log2 of negatives and subnormals, saturation of sigmoid
+ * and tanh). */
+static const uint32_t TRANSC_SPECIALS[] = {
+    0x43000000U /* 128 */, 0x42fffffeU, 0xc3150000U /* -149 */, 0xc3160000U /* -150 */,
+    0xc2fc0000U /* -126 */, 0x41100000U /* 9 */, 0xc1100000U /* -9 */, 0x42c80000U /* 100 */,
+    0xc2c80000U /* -100 */, 0x3f800001U, 0x3f7fffffU, 0x40000000U, 0x3e800000U, 0xbf000000U,
+    0x00400000U, 0x80400000U, 0x7fffffffU, 0xffffffffU,
+    /* EXP / LOG edges (omega_numeric.c:460-461): ~88.7228 cutoff and next float
+     * above it, -104 cutoff and its neighbours, -88 (subnormal result),
+     * ~ln2/2 (worst-ulp region), large +-, smallest +-subnormal, NaN payloads */
+    0x42b17218U, 0x42b17219U, 0xc2d00000U, 0xc2cfffffU, 0xc2d00001U, 0xc2b00000U,
+    0x3eb17218U, 0xbeb17218U, 0x4f000000U, 0xcf000000U, 0x00000002U, 0x80000002U,
+    0x7f800001U, 0xff800001U, 0x7fc00001U,
+};
+#define NTSPECIAL (sizeof(TRANSC_SPECIALS) / sizeof(TRANSC_SPECIALS[0]))
+
+static size_t bit_mismatches(const float *a, const float *b, size_t n) {
+    size_t m = 0;
+    for (size_t i = 0; i < n; i++) m += omega_float_to_bits(a[i]) != omega_float_to_bits(b[i]);
+    return m;
+}
+
+/* Run op on view V (logical size n) and compare with f(src[idx[i]]). */
+static void transc_check(const TranscCase *tc, OmegaTensor V, const float *src, const size_t *idx, size_t n,
+                         const char *what) {
+    float *ex = malloc(n * 4);
+    for (size_t i = 0; i < n; i++) ex[i] = tc->f(src[idx[i]]);
+    OmegaTensor O = {0, 0};
+    int rc = omega_tensor_unary(g, tc->op, V, &O);
+    float *got = rc ? NULL : rd(O);
+    size_t mm = got ? bit_mismatches(ex, got, n) : n;
+    CHECK(!rc && got && mm == 0, "transc %s %s bit-exact vs direct E1 (rc=%d, %zu of %zu differ)",
+          tc->name, what, rc, mm, n);
+    free(got);
+    free(ex);
+    if (!rc) omega_tensor_release(g, O);
+}
+
+/* Independent RELU reference, written from the rule in omega_tensor.h (not
+ * from omega_tensor.c): classify the FP32 pattern by its fields. */
+static float ref_relu(float x) {
+    uint32_t u = omega_float_to_bits(x);
+    uint32_t sign = u >> 31, expo = (u >> 23) & 0xffU, mant = u & 0x007fffffU;
+    if (expo == 0xffU && mant != 0) return omega_bits_to_float(0x7fc00000U); /* NaN -> canonical qNaN */
+    if (sign) return omega_bits_to_float(0x00000000U);                      /* -0, < 0, -inf -> +0 */
+    return x;                                                               /* +0, > 0, +inf */
+}
+static const TranscCase RELU_CASE = {OMEGA_TU_RELU, ref_relu, "RELU"};
+
+static void test_transc_unary(void) {
+    const size_t n = 4096;
+    float *a = malloc(n * 4);
+    size_t *idx = malloc(n * sizeof(size_t));
+    fill(a, n, rand_f32);
+    for (size_t i = 0; i < NSPECIAL; i++) a[i] = omega_bits_to_float(SPECIALS[i]);
+    for (size_t i = 0; i < NTSPECIAL; i++) a[NSPECIAL + i] = omega_bits_to_float(TRANSC_SPECIALS[i]);
+    for (size_t i = NSPECIAL + NTSPECIAL; i < 1024; i++)  /* dense in-range sweep */
+        a[i] = omega_bits_to_float((uint32_t)((rnd() >> 32) & 0x807fffffU) | ((uint32_t)(118 + (i % 18)) << 23));
+    uint64_t s1[1] = {n}, s2[2] = {64, 64}, s3[3] = {8, 16, 32};
+    OmegaTensor A1 = mk(1, s1, a), A2 = mk(2, s2, a), A3 = mk(3, s3, a);
+    uint8_t id_before[32], id_after[32];
+    vid(A2, id_before);
+
+    /* transposed view of [64,64]: out[i][j] = f(a[j*64 + i]) */
+    OmegaTensor T = {0, 0};
+    int rct = omega_tensor_transpose(g, A2, &T);
+    CHECK(rct == 0, "transc: transpose view rc=%d", rct);
+    /* strided slice of [8,16,32] with offset: start {1,2,3} stop {8,15,32} step {2,3,5} -> [4,5,6] */
+    uint64_t st[3] = {1, 2, 3}, sp[3] = {8, 15, 32}, se[3] = {2, 3, 5};
+    OmegaTensor S = {0, 0};
+    int rcs = omega_tensor_slice(g, A3, st, sp, se, &S);
+    CHECK(rcs == 0, "transc: slice view rc=%d", rcs);
+    /* transpose of the slice: [4,6,5], strides all non-unit and non-row-major */
+    OmegaTensor ST = {0, 0};
+    int rcst = rcs ? -1 : omega_tensor_transpose(g, S, &ST);
+    CHECK(rcst == 0, "transc: transpose of slice rc=%d", rcst);
+    /* broadcast of a row [1,32] (first 32 elements) to [7,32], and a scalar to [3,5] */
+    uint64_t srow[2] = {1, 32}, sb[2] = {7, 32}, ssc[2] = {3, 5};
+    OmegaTensor R = mk(2, srow, a + 100), B = {0, 0}, C0, BC = {0, 0};
+    int rcb = omega_tensor_broadcast_to(g, R, 2, sb, &B);
+    CHECK(rcb == 0, "transc: broadcast row rc=%d", rcb);
+    C0 = mk(0, NULL, a + 5);
+    int rcc = omega_tensor_broadcast_to(g, C0, 2, ssc, &BC);
+    CHECK(rcc == 0, "transc: broadcast scalar rc=%d", rcc);
+
+    /* k == NTRANSC: RELU through the same views (tensor-layer bit select) */
+    for (size_t k = 0; k <= NTRANSC; k++) {
+        const TranscCase *tc = k < NTRANSC ? &TRANSC_CASES[k] : &RELU_CASE;
+        for (size_t i = 0; i < n; i++) idx[i] = i;
+        transc_check(tc, A1, a, idx, n, "dense [4096]");
+        if (!rct) {
+            for (size_t i = 0; i < 64; i++)
+                for (size_t j = 0; j < 64; j++) idx[i * 64 + j] = j * 64 + i;
+            transc_check(tc, T, a, idx, 64 * 64, "transpose [64,64]");
+        }
+        if (!rcs) {
+            for (size_t i = 0; i < 4; i++)
+                for (size_t j = 0; j < 5; j++)
+                    for (size_t l = 0; l < 6; l++)
+                        idx[(i * 5 + j) * 6 + l] = ((1 + 2 * i) * 16 + (2 + 3 * j)) * 32 + (3 + 5 * l);
+            transc_check(tc, S, a, idx, 4 * 5 * 6, "strided slice [4,5,6]");
+        }
+        if (!rcst) {
+            for (size_t i = 0; i < 4; i++)
+                for (size_t l = 0; l < 6; l++)
+                    for (size_t j = 0; j < 5; j++)
+                        idx[(i * 6 + l) * 5 + j] = ((1 + 2 * i) * 16 + (2 + 3 * j)) * 32 + (3 + 5 * l);
+            transc_check(tc, ST, a, idx, 4 * 6 * 5, "transpose of slice [4,6,5]");
+        }
+        if (!rcb) {
+            for (size_t i = 0; i < 7; i++)
+                for (size_t j = 0; j < 32; j++) idx[i * 32 + j] = 100 + j;
+            transc_check(tc, B, a, idx, 7 * 32, "broadcast [1,32]->[7,32]");
+        }
+        if (!rcc) {
+            for (size_t i = 0; i < 15; i++) idx[i] = 5;
+            transc_check(tc, BC, a, idx, 15, "broadcast scalar->[3,5]");
+        }
+        idx[0] = 5;
+        transc_check(tc, C0, a, idx, 1, "rank 0");
+    }
+    vid(A2, id_after);
+    CHECK(memcmp(id_before, id_after, 32) == 0, "transc: input value id unchanged");
+
+    /* NaN results are the canonical quiet NaN (E1 contract), kept bit-exact */
+    float neg[1] = {-1.0f};
+    OmegaTensor NG = mk(0, NULL, neg), O = {0, 0};
+    int rc = omega_tensor_unary(g, OMEGA_TU_LOG2, NG, &O);
+    float *got = rc ? NULL : rd(O);
+    CHECK(got && omega_float_to_bits(got[0]) == 0x7fc00000U, "transc: LOG2(-1) is canonical qNaN 0x%08x",
+          got ? omega_float_to_bits(got[0]) : 0U);
+    free(got);
+    if (!rc) omega_tensor_release(g, O);
+
+    /* refusals: unknown op, wrong dtype, stale handle, missing transc entry */
+    uint32_t lt0, ls0, lt1, ls1;
+    omega_tensor_live_counts(g, &lt0, &ls0);
+    const int bad_ops[] = {OMEGA_TU_COUNT, OMEGA_TU_COUNT + 1, 99, -1};
+    for (size_t i = 0; i < sizeof(bad_ops) / sizeof(bad_ops[0]); i++) {
+        rc = omega_tensor_unary(g, (OmegaTensorUnaryOp)bad_ops[i], A1, &O);
+        CHECK(rc == OMEGA_TENSOR_ERR_BAD_ARGS, "unknown unary op %d refused (rc=%d)", bad_ops[i], rc);
+    }
+    OmegaTensor H = {0, 0};
+    if (!omega_tensor_cast(g, A1, OMEGA_DT_F16, &H)) {
+        for (size_t k = 0; k < NTRANSC; k++) {
+            rc = omega_tensor_unary(g, TRANSC_CASES[k].op, H, &O);
+            CHECK(rc == OMEGA_TENSOR_ERR_DTYPE, "transc %s on F16 refused (rc=%d)", TRANSC_CASES[k].name, rc);
+        }
+        omega_tensor_release(g, H);
+    } else {
+        CHECK(0, "transc: F32->F16 cast for dtype refusal");
+    }
+    omega_tensor_live_counts(g, &lt1, &ls1);
+    CHECK(lt0 == lt1 && ls0 == ls1, "refused unary ops made no tensors (%u/%u -> %u/%u)", lt0, ls0, lt1, ls1);
+    OmegaTensor DEAD = mk(1, s1, a);
+    omega_tensor_release(g, DEAD);
+    for (size_t k = 0; k < NTRANSC; k++) {
+        rc = omega_tensor_unary(g, TRANSC_CASES[k].op, DEAD, &O);
+        CHECK(rc == OMEGA_TENSOR_ERR_STALE, "transc %s on released tensor refused (rc=%d)", TRANSC_CASES[k].name, rc);
+    }
+    OmegaTensorRealization notransc = *omega_tensor_cpu_realization();
+    notransc.name = "NO_TRANSC_ENTRY";
+    notransc.transc = NULL;
+    OmegaTensorCtx *c = NULL;
+    rc = omega_tensor_ctx_create(8, &notransc, &c);
+    CHECK(rc == 0, "realization without transc entry accepted for other ops (rc=%d)", rc);
+    if (!rc) {
+        OmegaTensor X = {0, 0}, Y = {0, 0};
+        omega_tensor_from_f32(c, 1, s1, a, &X);
+        for (size_t k = 0; k < NTRANSC; k++) {
+            rc = omega_tensor_unary(c, TRANSC_CASES[k].op, X, &Y);
+            CHECK(rc == OMEGA_TENSOR_ERR_REALIZATION, "transc %s refused without transc entry (rc=%d)",
+                  TRANSC_CASES[k].name, rc);
+        }
+        rc = omega_tensor_unary(c, OMEGA_TU_SQRT, X, &Y);
+        CHECK(rc == 0, "SQRT still served without transc entry (rc=%d)", rc);
+        omega_tensor_ctx_destroy(c);
+    }
+
+    OmegaTensor all[] = {A1, A2, A3, R, C0, NG};
+    for (size_t i = 0; i < sizeof(all) / sizeof(all[0]); i++) omega_tensor_release(g, all[i]);
+    if (!rct) omega_tensor_release(g, T);
+    if (!rcs) omega_tensor_release(g, S);
+    if (!rcst) omega_tensor_release(g, ST);
+    if (!rcb) omega_tensor_release(g, B);
+    if (!rcc) omega_tensor_release(g, BC);
+    free(a);
+    free(idx);
+}
+
+/* ---- 7c. RELU (M20 cut ops) ----------------------------------------------
+ * Rule (omega_tensor.h): x > +0 -> x; +0, -0, negative, -inf -> +0.0; any NaN
+ * -> canonical qNaN 0x7fc00000. Explicit input -> output bit table, checked
+ * on raw bits (NaN payload and the sign of zero are semantic here). Also served
+ * by a realization without a transc entry, and refused like other unary ops. */
+static void test_relu_unary(void) {
+    static const uint32_t TABLE[][2] = {
+        {0x00000000U, 0x00000000U}, /* +0 -> +0 */
+        {0x80000000U, 0x00000000U}, /* -0 -> +0 */
+        {0x7f800000U, 0x7f800000U}, /* +inf -> +inf */
+        {0xff800000U, 0x00000000U}, /* -inf -> +0 */
+        {0x00000001U, 0x00000001U}, /* smallest +subnormal kept */
+        {0x007fffffU, 0x007fffffU}, /* largest +subnormal kept */
+        {0x80000001U, 0x00000000U}, /* -subnormal -> +0 */
+        {0x807fffffU, 0x00000000U},
+        {0x00800000U, 0x00800000U}, /* smallest +normal */
+        {0x7f7fffffU, 0x7f7fffffU}, /* largest +normal */
+        {0xff7fffffU, 0x00000000U}, /* most negative normal -> +0 */
+        {0x3f800000U, 0x3f800000U}, /* 1 */
+        {0xbf800000U, 0x00000000U}, /* -1 */
+        {0x7fc00000U, 0x7fc00000U}, /* canonical qNaN */
+        {0xffc00000U, 0x7fc00000U}, /* negative qNaN -> canonical */
+        {0x7fc00001U, 0x7fc00000U}, /* qNaN payloads -> canonical */
+        {0x7fa00001U, 0x7fc00000U}, /* sNaN -> canonical */
+        {0x7f800001U, 0x7fc00000U},
+        {0xff800001U, 0x7fc00000U},
+        {0xffc00123U, 0x7fc00000U},
+        {0x7fffffffU, 0x7fc00000U},
+        {0xffffffffU, 0x7fc00000U},
+    };
+    enum { NT = sizeof(TABLE) / sizeof(TABLE[0]) };
+    float in[NT];
+    for (size_t i = 0; i < NT; i++) in[i] = omega_bits_to_float(TABLE[i][0]);
+    uint64_t sh[1] = {NT};
+    OmegaTensor X = mk(1, sh, in), O = {0, 0};
+    uint8_t id_before[32], id_after[32];
+    vid(X, id_before);
+    int rc = omega_tensor_unary(g, OMEGA_TU_RELU, X, &O);
+    float *got = rc ? NULL : rd(O);
+    CHECK(!rc && got, "relu: dense special table rc=%d", rc);
+    for (size_t i = 0; got && i < NT; i++) {
+        uint32_t gb = omega_float_to_bits(got[i]);
+        CHECK(gb == TABLE[i][1], "relu(0x%08x) = 0x%08x, rule says 0x%08x", TABLE[i][0], gb, TABLE[i][1]);
+    }
+    free(got);
+    if (!rc) omega_tensor_release(g, O);
+    vid(X, id_after);
+    CHECK(memcmp(id_before, id_after, 32) == 0, "relu: input value id unchanged");
+
+    /* rank 0, -0 and a NaN payload: the two easiest bits to get wrong */
+    const uint32_t r0[2] = {0x80000000U, 0xffc00123U};
+    for (size_t i = 0; i < 2; i++) {
+        float v = omega_bits_to_float(r0[i]);
+        OmegaTensor S = mk(0, NULL, &v), R = {0, 0};
+        rc = omega_tensor_unary(g, OMEGA_TU_RELU, S, &R);
+        float *r = rc ? NULL : rd(R);
+        uint32_t want = i == 0 ? 0x00000000U : 0x7fc00000U;
+        CHECK(r && omega_float_to_bits(r[0]) == want, "relu rank0 0x%08x -> 0x%08x (want 0x%08x)", r0[i],
+              r ? omega_float_to_bits(r[0]) : 0U, want);
+        free(r);
+        if (!rc) omega_tensor_release(g, R);
+        omega_tensor_release(g, S);
+    }
+
+    /* refusals: F16 operand, stale handle */
+    OmegaTensor H = {0, 0};
+    if (!omega_tensor_cast(g, X, OMEGA_DT_F16, &H)) {
+        rc = omega_tensor_unary(g, OMEGA_TU_RELU, H, &O);
+        CHECK(rc == OMEGA_TENSOR_ERR_DTYPE, "relu on F16 refused (rc=%d)", rc);
+        omega_tensor_release(g, H);
+    } else {
+        CHECK(0, "relu: F32->F16 cast for dtype refusal");
+    }
+    omega_tensor_release(g, X);
+    rc = omega_tensor_unary(g, OMEGA_TU_RELU, X, &O);
+    CHECK(rc == OMEGA_TENSOR_ERR_STALE, "relu on released tensor refused (rc=%d)", rc);
+
+    /* served without a transc entry: RELU is not a realization op */
+    OmegaTensorRealization notransc = *omega_tensor_cpu_realization();
+    notransc.name = "NO_TRANSC_ENTRY";
+    notransc.transc = NULL;
+    OmegaTensorCtx *c = NULL;
+    rc = omega_tensor_ctx_create(8, &notransc, &c);
+    CHECK(rc == 0, "relu: realization without transc entry accepted (rc=%d)", rc);
+    if (!rc) {
+        OmegaTensor Y = {0, 0}, Z = {0, 0};
+        omega_tensor_from_f32(c, 1, sh, in, &Y);
+        rc = omega_tensor_unary(c, OMEGA_TU_RELU, Y, &Z);
+        float *z = NULL;
+        if (!rc) {
+            z = malloc(NT * sizeof(float));
+            if (z && omega_tensor_read_f32(c, Z, z, NT)) { free(z); z = NULL; }
+        }
+        size_t bad = 0;
+        for (size_t i = 0; z && i < NT; i++) bad += omega_float_to_bits(z[i]) != TABLE[i][1];
+        CHECK(!rc && z && bad == 0, "relu served without transc entry, same bits (rc=%d, %zu differ)", rc, bad);
+        free(z);
+        omega_tensor_ctx_destroy(c);
+    }
+}
+
+/* ---- 7c. RSQRT / ERF / GELU special values (LT-M21 CR-1, unary2) ---------
+ * Edge inputs from docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md (RSQRT row 45:
+ * +0 -> +inf, -0 -> -inf, x < 0 -> NaN, +inf -> +0, subnormals; ERF row 48:
+ * |x| >= 4 -> +-1, +-0 -> +-0, seam at 0.5; GELU row 50: x >= 8 -> x,
+ * x < -15.5 -> -0, +-0 -> +-0). Every op runs on a dense tensor and on a
+ * step-2 strided slice with offset 1 (odd positions only hold the specials),
+ * compared bit for bit with direct E1 calls; then the contract-stated values
+ * are checked on the tensor output. */
+static const uint32_t U2_SPECIALS[] = {
+    0x00000000U, 0x80000000U, 0x7f800000U, 0xff800000U, 0x7fc00000U, 0xffc00123U, 0x7fa00001U,
+    0x00000001U, 0x80000001U, 0x007fffffU, 0x00800000U, 0x7f7fffffU, 0xbf800000U, 0x40800000U,
+    0x40800000U ^ 0x80000000U, 0x407fffffU, 0xc07fffffU, 0x3f000000U, 0xbf000000U, 0x3effffffU,
+    0x41000000U, 0x40ffffffU, 0xc1780000U, 0xc1780001U, 0xc177ffffU, 0x40000000U, 0x40800001U,
+    0x3f800000U, 0x3fb504f3U, 0xc0000000U,
+};
+#define NU2 (sizeof(U2_SPECIALS) / sizeof(U2_SPECIALS[0]))
+
+static uint32_t u2_out(OmegaTensorUnaryOp op, uint32_t xbits) {
+    float x = omega_bits_to_float(xbits);
+    OmegaTensor X = mk(0, NULL, &x), O = {0, 0};
+    uint32_t r = 0xdeadbeefU;
+    if (!omega_tensor_unary(g, op, X, &O)) {
+        float *got = rd(O);
+        if (got) r = omega_float_to_bits(got[0]);
+        free(got);
+        omega_tensor_release(g, O);
+    }
+    omega_tensor_release(g, X);
+    return r;
+}
+
+static void test_unary2_specials(void) {
+    float dense[NU2], wide[2 * NU2 + 1];
+    size_t idx[NU2];
+    for (size_t i = 0; i < NU2; i++) dense[i] = omega_bits_to_float(U2_SPECIALS[i]);
+    for (size_t i = 0; i < 2 * NU2 + 1; i++) wide[i] = 1234.5f;  /* filler at even positions */
+    for (size_t i = 0; i < NU2; i++) wide[1 + 2 * i] = dense[i];
+    uint64_t sd[1] = {NU2}, sw[1] = {2 * NU2 + 1}, st[1] = {1}, sp[1] = {2 * NU2 + 1}, se[1] = {2};
+    OmegaTensor D = mk(1, sd, dense), W = mk(1, sw, wide), S = {0, 0};
+    int rcs = omega_tensor_slice(g, W, st, sp, se, &S);
+    CHECK(rcs == 0, "unary2: step-2 slice rc=%d", rcs);
+    for (size_t k = 0; k < NTRANSC; k++) {
+        const TranscCase *tc = &TRANSC_CASES[k];
+        if (tc->op != OMEGA_TU_RSQRT && tc->op != OMEGA_TU_ERF && tc->op != OMEGA_TU_GELU) continue;
+        for (size_t i = 0; i < NU2; i++) idx[i] = i;
+        transc_check(tc, D, dense, idx, NU2, "special values dense");
+        for (size_t i = 0; i < NU2; i++) idx[i] = 1 + 2 * i;
+        if (!rcs) transc_check(tc, S, wide, idx, NU2, "special values step-2 slice");
+    }
+    struct { OmegaTensorUnaryOp op; uint32_t x, y; const char *what; } want[] = {
+        {OMEGA_TU_RSQRT, 0x00000000U, 0x7f800000U, "RSQRT(+0) = +inf"},
+        {OMEGA_TU_RSQRT, 0x80000000U, 0xff800000U, "RSQRT(-0) = -inf"},
+        {OMEGA_TU_RSQRT, 0xbf800000U, 0x7fc00000U, "RSQRT(-1) = canonical qNaN"},
+        {OMEGA_TU_RSQRT, 0x7f800000U, 0x00000000U, "RSQRT(+inf) = +0"},
+        {OMEGA_TU_RSQRT, 0x40800000U, 0x3f000000U, "RSQRT(4) = 0.5 exact"},
+        {OMEGA_TU_ERF, 0x80000000U, 0x80000000U, "ERF(-0) = -0"},
+        {OMEGA_TU_ERF, 0x40800000U, 0x3f800000U, "ERF(4) = +1"},
+        {OMEGA_TU_ERF, 0xff800000U, 0xbf800000U, "ERF(-inf) = -1"},
+        {OMEGA_TU_ERF, 0x7fa00001U, 0x7fc00000U, "ERF(sNaN) = canonical qNaN"},
+        {OMEGA_TU_GELU, 0x80000000U, 0x80000000U, "GELU(-0) = -0"},
+        {OMEGA_TU_GELU, 0x41000000U, 0x41000000U, "GELU(8) = 8"},
+        {OMEGA_TU_GELU, 0x7f800000U, 0x7f800000U, "GELU(+inf) = +inf"},
+        {OMEGA_TU_GELU, 0xff800000U, 0x80000000U, "GELU(-inf) = -0"},
+        {OMEGA_TU_GELU, 0xc1780001U, 0x80000000U, "GELU(just below -15.5) = -0"},
+    };
+    for (size_t i = 0; i < sizeof(want) / sizeof(want[0]); i++) {
+        uint32_t y = u2_out(want[i].op, want[i].x);
+        CHECK(y == want[i].y, "unary2 contract value %s (got 0x%08x)", want[i].what, y);
+    }
+    omega_tensor_release(g, D);
+    omega_tensor_release(g, W);
+    if (!rcs) omega_tensor_release(g, S);
+}
+
+/* ---- 7c. trig domain (E1 SIN / COS) ---------------------------------------
+ * E1 admits |x| <= 2^22 (OMEGA_TRANSC_TRIG_MAX_ABS, inclusive,
+ * omega_numeric_transc.c sincos_core); outside it, +-inf and NaN give the
+ * canonical qNaN 0x7fc00000; sin(+-0) = +-0 and cos(+-0) = +1
+ * (docs/numeric/E1_TRANSCENDENTAL_CONTRACT.md SIN/COS row). Each element is
+ * checked two ways: raw bits equal the direct E1 call on the logical element,
+ * and the declared domain rule holds on its own (in-domain finite input never
+ * gives NaN, out-of-domain input always gives exactly 0x7fc00000). The grid
+ * also goes through a broadcast and a reversed-order strided slice. */
+static const uint32_t TRIG_GRID[] = {
+    0x00000000U /* +0 */, 0x80000000U /* -0 */, 0x4a800000U /* 2^22 */, 0xca800000U /* -2^22 */,
+    0x4a7fffffU /* just below 2^22 */, 0xca7fffffU, 0x4a800001U /* just above 2^22 */, 0xca800001U,
+    0x4b000000U /* 2^23 */, 0x7f7fffffU /* FLT_MAX */, 0xff7fffffU, 0x7f800000U /* +inf */,
+    0xff800000U /* -inf */, 0x7fc00000U, 0x7fa00001U /* sNaN */, 0xffc00123U, 0x00000001U, 0x80000001U,
+    0x3f490fdbU /* pi/4 */, 0x3f490fdcU, 0x3fc90fdbU /* pi/2 */, 0x40490fdbU /* pi */, 0xc0490fdbU,
+    0x3f800000U, 0xbf800000U, 0x447a0000U /* 1000 */, 0x49742400U /* 1e6 */, 0x33800000U,
+};
+#define NTRIG (sizeof(TRIG_GRID) / sizeof(TRIG_GRID[0]))
+
+static int trig_in_domain(uint32_t b) { return (b & 0x7fffffffU) <= 0x4a800000U; } /* |x| <= 2^22, not inf/NaN */
+
+/* Check op on V (logical n) against E1 and the domain rule; src[idx[i]]. */
+static void trig_check(const TranscCase *tc, OmegaTensor V, const float *src, const size_t *idx, size_t n,
+                       const char *what) {
+    OmegaTensor O = {0, 0};
+    int rc = omega_tensor_unary(g, tc->op, V, &O);
+    float *got = rc ? NULL : rd(O);
+    size_t bad_e1 = got ? 0 : n, bad_dom = got ? 0 : n;
+    for (size_t i = 0; got && i < n; i++) {
+        uint32_t xb = omega_float_to_bits(src[idx[i]]), gb = omega_float_to_bits(got[i]);
+        bad_e1 += gb != omega_float_to_bits(tc->f(src[idx[i]]));
+        int is_nan = (gb & 0x7fffffffU) > 0x7f800000U;
+        bad_dom += trig_in_domain(xb) ? is_nan : gb != 0x7fc00000U;
+    }
+    CHECK(!rc && bad_e1 == 0, "trig %s %s bit-exact vs direct E1 (rc=%d, %zu of %zu differ)", tc->name, what, rc,
+          bad_e1, n);
+    CHECK(!rc && bad_dom == 0, "trig %s %s domain rule |x|<=2^22 else qNaN 0x7fc00000 (%zu of %zu violate)",
+          tc->name, what, bad_dom, n);
+    free(got);
+    if (!rc) omega_tensor_release(g, O);
+}
+
+static void test_trig_domain(void) {
+    float x[NTRIG];
+    size_t idx[3 * NTRIG];
+    for (size_t i = 0; i < NTRIG; i++) x[i] = omega_bits_to_float(TRIG_GRID[i]);
+    uint64_t s1[1] = {NTRIG}, srow[2] = {1, NTRIG}, sb[2] = {3, NTRIG};
+    OmegaTensor D = mk(1, s1, x), R = mk(2, srow, x), B = {0, 0}, S = {0, 0};
+    int rcb = omega_tensor_broadcast_to(g, R, 2, sb, &B);
+    CHECK(rcb == 0, "trig: broadcast [1,%zu]->[3,%zu] rc=%d", (size_t)NTRIG, (size_t)NTRIG, rcb);
+    /* odd positions of the grid: start 1, step 2 -> a strided view with offset */
+    uint64_t st[1] = {1}, sp[1] = {NTRIG}, se[1] = {2};
+    int rcs = omega_tensor_slice(g, D, st, sp, se, &S);
+    CHECK(rcs == 0, "trig: strided slice rc=%d", rcs);
+    const TranscCase trig[2] = {{OMEGA_TU_SIN, omega_math_sin, "SIN"}, {OMEGA_TU_COS, omega_math_cos, "COS"}};
+    for (size_t k = 0; k < 2; k++) {
+        for (size_t i = 0; i < NTRIG; i++) idx[i] = i;
+        trig_check(&trig[k], D, x, idx, NTRIG, "grid dense");
+        if (!rcb) {
+            for (size_t i = 0; i < 3 * NTRIG; i++) idx[i] = i % NTRIG;
+            trig_check(&trig[k], B, x, idx, 3 * NTRIG, "grid broadcast");
+        }
+        if (!rcs) {
+            for (size_t i = 0; i < NTRIG / 2; i++) idx[i] = 1 + 2 * i;
+            trig_check(&trig[k], S, x, idx, NTRIG / 2, "grid strided slice");
+        }
+    }
+    /* Declared values that do not depend on E1 internals. */
+    OmegaTensor O = {0, 0};
+    float *gs = omega_tensor_unary(g, OMEGA_TU_SIN, D, &O) ? NULL : rd(O);
+    if (gs) omega_tensor_release(g, O);
+    float *gc = omega_tensor_unary(g, OMEGA_TU_COS, D, &O) ? NULL : rd(O);
+    if (gc) omega_tensor_release(g, O);
+    CHECK(gs && omega_float_to_bits(gs[0]) == 0x00000000U && omega_float_to_bits(gs[1]) == 0x80000000U,
+          "trig: sin(+0) = +0, sin(-0) = -0 (0x%08x 0x%08x)", gs ? omega_float_to_bits(gs[0]) : 0U,
+          gs ? omega_float_to_bits(gs[1]) : 0U);
+    CHECK(gc && omega_float_to_bits(gc[0]) == 0x3f800000U && omega_float_to_bits(gc[1]) == 0x3f800000U,
+          "trig: cos(+0) = cos(-0) = +1 (0x%08x 0x%08x)", gc ? omega_float_to_bits(gc[0]) : 0U,
+          gc ? omega_float_to_bits(gc[1]) : 0U);
+    /* exactly 2^22 is admitted (a finite value in [-1, 1]); the next float up is not (qNaN) */
+    for (int k = 0; k < 2; k++) {
+        float *gv = k ? gc : gs;
+        const char *nm = k ? "cos" : "sin";
+        for (int j = 2; j <= 3; j++) {
+            float v = gv ? gv[j] : 2.0f;
+            CHECK(gv && v >= -1.0f && v <= 1.0f, "trig: %s(%s2^22) admitted, in [-1,1] (0x%08x)", nm,
+                  j == 3 ? "-" : "", gv ? omega_float_to_bits(gv[j]) : 0U);
+        }
+        for (int j = 6; j <= 7; j++)
+            CHECK(gv && omega_float_to_bits(gv[j]) == 0x7fc00000U, "trig: %s(%snextup(2^22)) is qNaN (0x%08x)", nm,
+                  j == 7 ? "-" : "", gv ? omega_float_to_bits(gv[j]) : 0U);
+    }
+    free(gs);
+    free(gc);
+    omega_tensor_release(g, D);
+    omega_tensor_release(g, R);
+    if (!rcb) omega_tensor_release(g, B);
+    if (!rcs) omega_tensor_release(g, S);
+}
+
+/* ---- 7c. constants and NEG (LT-M21 CR-2) ----------------------------------
+ * Expected bits come from the definitions written in this test: a fill of the
+ * given bit pattern; NEG = flip bit 31, any NaN -> 0x7fc00000. Comparisons are
+ * raw bits (NOT same(): that would treat every NaN as equal). */
+static uint32_t neg_expect(uint32_t u) {
+    if ((u & 0x7f800000U) == 0x7f800000U && (u & 0x007fffffU)) return 0x7fc00000U;
+    return u ^ 0x80000000U;
+}
+static size_t all_bits_eq(OmegaTensor t, uint32_t want) {
+    float *v = rd(t);
+    if (!v) return (size_t)-1;
+    OmegaTensorInfo in;
+    omega_tensor_info(g, t, &in);
+    size_t m = 0;
+    for (size_t i = 0; i < (size_t)in.elements; i++) m += omega_float_to_bits(v[i]) != want;
+    free(v);
+    return m;
+}
+static void test_const_neg(void) {
+    uint64_t s2[2] = {3, 5}, s8[8] = {2, 2, 2, 2, 2, 2, 2, 2}, s9[9] = {1, 1, 1, 1, 1, 1, 1, 1, 1};
+    uint64_t sbig[2] = {OMEGA_TENSOR_MAX_ELEMS, 2}, sone[1] = {OMEGA_TENSOR_MAX_ELEMS + 1};
+    uint64_t szero[2] = {3, 0};
+    OmegaTensor t;
+    OmegaTensorInfo in;
+
+    CHECK(omega_tensor_zeros(g, 2, s2, &t) == 0 && all_bits_eq(t, 0x00000000U) == 0, "zeros are +0.0 bits");
+    omega_tensor_release(g, t);
+    CHECK(omega_tensor_ones(g, 2, s2, &t) == 0 && all_bits_eq(t, 0x3f800000U) == 0, "ones are 1.0f bits");
+    omega_tensor_release(g, t);
+    /* full keeps every bit pattern, -0.0 and NaN payloads included */
+    for (size_t k = 0; k < NSPECIAL; k++) {
+        int rc = omega_tensor_full(g, 2, s2, omega_bits_to_float(SPECIALS[k]), &t);
+        CHECK(rc == 0, "full special %08x rc=%d", SPECIALS[k], rc);
+        if (rc) continue;
+        CHECK(all_bits_eq(t, SPECIALS[k]) == 0, "full keeps exact bits %08x", SPECIALS[k]);
+        CHECK(omega_tensor_info(g, t, &in) == 0 && in.dtype == OMEGA_DT_F32 && in.rank == 2 &&
+                  in.shape[0] == 3 && in.shape[1] == 5 && in.elements == 15 && !in.is_view,
+              "full info %08x", SPECIALS[k]);
+        omega_tensor_release(g, t);
+    }
+    /* rank 0 and rank 8 (the limit) */
+    CHECK(omega_tensor_full(g, 0, NULL, 2.5f, &t) == 0 && all_bits_eq(t, 0x40200000U) == 0, "rank-0 full");
+    omega_tensor_release(g, t);
+    CHECK(omega_tensor_full(g, 8, s8, -1.0f, &t) == 0 && omega_tensor_info(g, t, &in) == 0 &&
+              in.elements == 256 && all_bits_eq(t, 0xbf800000U) == 0, "rank-8 full");
+    omega_tensor_release(g, t);
+    /* refusals */
+    CHECK(omega_tensor_full(g, 9, s9, 0.0f, &t) == OMEGA_TENSOR_ERR_RANK, "rank 9 refused");
+    CHECK(omega_tensor_full(g, 2, sbig, 0.0f, &t) == OMEGA_TENSOR_ERR_CAPACITY, "2^31 elements refused");
+    CHECK(omega_tensor_full(g, 1, sone, 0.0f, &t) == OMEGA_TENSOR_ERR_CAPACITY, "MAX_ELEMS+1 refused");
+    CHECK(omega_tensor_zeros(g, 2, szero, &t) == OMEGA_TENSOR_ERR_SHAPE, "zero dim refused (zeros)");
+    CHECK(omega_tensor_ones(g, 1, NULL, &t) == OMEGA_TENSOR_ERR_BAD_ARGS, "NULL shape refused (ones)");
+    CHECK(omega_tensor_full(g, 0, NULL, 0.0f, NULL) == OMEGA_TENSOR_ERR_BAD_ARGS, "NULL out refused");
+    CHECK(omega_tensor_full(NULL, 0, NULL, 0.0f, &t) == OMEGA_TENSOR_ERR_BAD_ARGS, "NULL ctx refused");
+
+    /* NEG on the special-value grid, dense */
+    float sv[NSPECIAL];
+    for (size_t i = 0; i < NSPECIAL; i++) sv[i] = omega_bits_to_float(SPECIALS[i]);
+    uint64_t sn[1] = {NSPECIAL};
+    OmegaTensor A = mk(1, sn, sv), N;
+    int rc = omega_tensor_unary(g, OMEGA_TU_NEG, A, &N);
+    CHECK(rc == 0, "neg rc=%d", rc);
+    if (!rc) {
+        float *v = rd(N);
+        for (size_t i = 0; v && i < NSPECIAL; i++)
+            CHECK(omega_float_to_bits(v[i]) == neg_expect(SPECIALS[i]), "neg(%08x) = %08x want %08x",
+                  SPECIALS[i], omega_float_to_bits(v[i]), neg_expect(SPECIALS[i]));
+        free(v);
+        omega_tensor_release(g, N);
+    }
+    /* explicit pins: +0 -> -0 and -0 -> +0 (0 - x gets +0 wrong), NaN canonical */
+    float pins[3] = {omega_bits_to_float(0x00000000U), omega_bits_to_float(0x80000000U),
+                     omega_bits_to_float(0x7fa00001U)};
+    uint64_t s3[1] = {3};
+    OmegaTensor P = mk(1, s3, pins);
+    rc = omega_tensor_unary(g, OMEGA_TU_NEG, P, &N);
+    if (!rc) {
+        float *v = rd(N);
+        CHECK(v && omega_float_to_bits(v[0]) == 0x80000000U, "neg(+0) = -0");
+        CHECK(v && omega_float_to_bits(v[1]) == 0x00000000U, "neg(-0) = +0");
+        CHECK(v && omega_float_to_bits(v[2]) == 0x7fc00000U, "neg(sNaN payload) = canonical qNaN");
+        free(v);
+        omega_tensor_release(g, N);
+    } else CHECK(0, "neg pins rc=%d", rc);
+    omega_tensor_release(g, P);
+
+    /* NEG through views: transpose, strided slice, broadcast */
+    float m[3 * 4];
+    for (size_t i = 0; i < 12; i++) m[i] = omega_bits_to_float(SPECIALS[(i * 7) % NSPECIAL]);
+    uint64_t s34[2] = {3, 4};
+    OmegaTensor M = mk(2, s34, m), T, S, B;
+    CHECK(omega_tensor_transpose(g, M, &T) == 0, "transpose");
+    rc = omega_tensor_unary(g, OMEGA_TU_NEG, T, &N);
+    if (!rc) {
+        float *v = rd(N);
+        size_t bad = 0;
+        for (size_t r = 0; v && r < 4; r++)
+            for (size_t c = 0; c < 3; c++)
+                bad += omega_float_to_bits(v[r * 3 + c]) != neg_expect(omega_float_to_bits(m[c * 4 + r]));
+        CHECK(v && bad == 0, "neg of transposed view (%zu bad)", bad);
+        free(v);
+        omega_tensor_release(g, N);
+    } else CHECK(0, "neg transpose rc=%d", rc);
+    uint64_t st1[2] = {0, 1}, sp1[2] = {3, 4}, stp[2] = {2, 2};
+    CHECK(omega_tensor_slice(g, M, st1, sp1, stp, &S) == 0, "slice");  /* rows 0,2 ; cols 1,3 */
+    rc = omega_tensor_unary(g, OMEGA_TU_NEG, S, &N);
+    if (!rc) {
+        float *v = rd(N);
+        size_t bad = 0;
+        for (size_t r = 0; v && r < 2; r++)
+            for (size_t c = 0; c < 2; c++)
+                bad += omega_float_to_bits(v[r * 2 + c]) != neg_expect(omega_float_to_bits(m[(2 * r) * 4 + 1 + 2 * c]));
+        CHECK(v && bad == 0, "neg of strided slice (%zu bad)", bad);
+        free(v);
+        omega_tensor_release(g, N);
+    } else CHECK(0, "neg slice rc=%d", rc);
+    uint64_t sb[2] = {2, NSPECIAL};
+    CHECK(omega_tensor_broadcast_to(g, A, 2, sb, &B) == 0, "broadcast_to");
+    rc = omega_tensor_unary(g, OMEGA_TU_NEG, B, &N);
+    if (!rc) {
+        float *v = rd(N);
+        size_t bad = 0;
+        for (size_t r = 0; v && r < 2; r++)
+            for (size_t c = 0; c < NSPECIAL; c++)
+                bad += omega_float_to_bits(v[r * NSPECIAL + c]) != neg_expect(SPECIALS[c]);
+        CHECK(v && bad == 0, "neg of broadcast view (%zu bad)", bad);
+        free(v);
+        omega_tensor_release(g, N);
+    } else CHECK(0, "neg broadcast rc=%d", rc);
+    /* F16 refused; NEG works with no transc entry in the realization */
+    uint16_t hh[2] = {0x3c00, 0x0000};
+    uint64_t s2h[1] = {2};
+    OmegaTensor H;
+    CHECK(omega_tensor_from_data(g, OMEGA_DT_F16, 1, s2h, hh, &H) == 0, "f16 create");
+    CHECK(omega_tensor_unary(g, OMEGA_TU_NEG, H, &N) == OMEGA_TENSOR_ERR_DTYPE, "neg of F16 refused");
+    omega_tensor_release(g, H);
+    {
+        OmegaTensorRealization nt = *omega_tensor_cpu_realization();
+        nt.transc = NULL;
+        OmegaTensorCtx *c;
+        CHECK(omega_tensor_ctx_create(8, &nt, &c) == 0, "ctx without transc");
+        OmegaTensor X, Y;
+        float one[1] = {3.0f};
+        uint64_t s1[1] = {1};
+        CHECK(omega_tensor_from_f32(c, 1, s1, one, &X) == 0, "x");
+        rc = omega_tensor_unary(c, OMEGA_TU_NEG, X, &Y);
+        float r1 = 0.0f;
+        CHECK(rc == 0 && omega_tensor_read_f32(c, Y, &r1, 1) == 0 && omega_float_to_bits(r1) == 0xc0400000U,
+              "NEG served without transc entry (rc=%d)", rc);
+        omega_tensor_ctx_destroy(c);
+    }
+    /* sources are immutable: NEG made a new tensor */
+    CHECK(all_bits_eq(A, SPECIALS[0]) != (size_t)-1, "source readable after neg");
+    OmegaTensor all[] = {A, M, T, S, B};
+    for (size_t i = 0; i < sizeof(all) / sizeof(all[0]); i++) omega_tensor_release(g, all[i]);
+}
+
+/* ---- placement (CR-4): embed + concat ------------------------------------- *
+ * Reference: zero-filled row-major array; each source element's position is
+ * computed from shapes, start and step only (never from tensor strides).
+ * Every comparison is on raw bits (NaN payloads included: pure copies). */
+static uint32_t *rdbits(OmegaTensor t, uint64_t n) {
+    uint32_t *o = malloc((size_t)n * 4 + 4);
+    if (o && omega_tensor_read(g, t, o, (size_t)n * 4)) { free(o); return NULL; }
+    return o;
+}
+static void row_strides(uint32_t r, const uint64_t *s, uint64_t *st) {
+    uint64_t m = 1;
+    for (uint32_t d = r; d-- > 0;) { st[d] = m; m *= s[d]; }
+}
+static void ref_embed(uint32_t r, const uint64_t *xs, const uint32_t *x, const uint64_t *os,
+                      const uint64_t *start, const uint64_t *step, uint32_t *o) {
+    uint64_t ost[OMEGA_TENSOR_MAX_RANK];
+    row_strides(r, os, ost);
+    memset(o, 0, (size_t)prod(r, os) * 4);
+    for (uint64_t e = 0; e < prod(r, xs); e++) {
+        uint64_t rem = e, pos = 0;
+        for (uint32_t d = r; d-- > 0;) {
+            uint64_t i = rem % xs[d];
+            rem /= xs[d];
+            pos += (start[d] + i * (step ? step[d] : 1)) * ost[d];
+        }
+        o[pos] = x[e];
+    }
+}
+static size_t bits_diff(const uint32_t *a, const uint32_t *b, uint64_t n) {
+    size_t m = 0;
+    for (uint64_t i = 0; i < n; i++) m += a[i] != b[i];
+    return m;
+}
+static uint32_t live_tensors(void) { uint32_t t, s; omega_tensor_live_counts(g, &t, &s); return t; }
+
+static void test_placement(void) {
+    /* 1. slice(embed(x)) == x and embed == reference, random small shapes */
+    size_t bad_ref = 0, bad_rt = 0, bad_inv = 0;
+    int rcs = 0;
+    for (int trial = 0; trial < 60; trial++) {
+        uint32_t r = 1 + (uint32_t)(rnd() % 4);
+        uint64_t xs[4], os[4], st[4], sp[4], stop[4];
+        for (uint32_t d = 0; d < r; d++) {
+            xs[d] = 1 + rnd() % 4;
+            st[d] = rnd() % 3;
+            sp[d] = 1 + rnd() % 3;
+            stop[d] = st[d] + (xs[d] - 1) * sp[d] + 1;
+            os[d] = stop[d] + rnd() % 3;
+        }
+        uint64_t n = prod(r, xs), on = prod(r, os);
+        float *x = malloc((size_t)n * 4);
+        fill(x, (size_t)n, rand_f32);
+        OmegaTensor X = mk(r, xs, x), Y = {0, 0}, Z = {0, 0}, W = {0, 0};
+        uint32_t *want = malloc((size_t)on * 4), *xb = malloc((size_t)n * 4);
+        memcpy(xb, x, (size_t)n * 4);
+        ref_embed(r, xs, xb, os, st, sp, want);
+        int rc = omega_tensor_embed(g, X, r, os, st, sp, &Y);
+        rcs |= rc;
+        if (!rc) {
+            uint32_t *y = rdbits(Y, on);
+            bad_ref += y ? bits_diff(y, want, on) : 1;
+            if (!omega_tensor_slice(g, Y, st, stop, sp, &Z)) {
+                uint32_t *z = rdbits(Z, n);
+                bad_rt += z ? bits_diff(z, xb, n) : 1;
+                free(z);
+                /* embed(slice(y)) is y again here (y is zero off the placed set) */
+                if (!omega_tensor_embed(g, Z, r, os, st, sp, &W)) {
+                    uint32_t *w = rdbits(W, on);
+                    bad_inv += w ? bits_diff(w, want, on) : 1;
+                    free(w);
+                    omega_tensor_release(g, W);
+                } else bad_inv++;
+                omega_tensor_release(g, Z);
+            } else bad_rt++;
+            free(y);
+            omega_tensor_release(g, Y);
+        }
+        omega_tensor_release(g, X);
+        free(x); free(want); free(xb);
+    }
+    CHECK(rcs == 0, "embed: random trials all accepted");
+    CHECK(bad_ref == 0, "embed == independent reference (%zu bad elements)", bad_ref);
+    CHECK(bad_rt == 0, "slice(embed(x)) == x bit exact (%zu bad)", bad_rt);
+    CHECK(bad_inv == 0, "embed(slice(embed(x))) == embed(x) (%zu bad)", bad_inv);
+
+    /* 2. embed(slice(y)) keeps only the sliced positions, y full of non-zero bits */
+    {
+        uint64_t ys[3] = {5, 6, 7}, st[3] = {1, 0, 2}, stop[3] = {5, 6, 7}, sp[3] = {2, 3, 2};
+        uint64_t n = prod(3, ys);
+        uint32_t yb[210];
+        for (uint64_t i = 0; i < n; i++) yb[i] = 0x3f800000U + (uint32_t)i; /* never zero bits */
+        OmegaTensor Yt = mk(3, ys, (const float *)(const void *)yb), S, E;
+        CHECK(omega_tensor_slice(g, Yt, st, stop, sp, &S) == 0, "embed: slice of y");
+        CHECK(omega_tensor_embed(g, S, 3, ys, st, sp, &E) == 0, "embed(slice(y))");
+        uint32_t *e = rdbits(E, n);
+        size_t wrong = e ? 0 : 1, placed = 0;
+        for (uint64_t i = 0; e && i < n; i++) {
+            uint64_t a = i / 42, b = (i / 7) % 6, c = i % 7;
+            bool in = a >= 1 && (a - 1) % 2 == 0 && b % 3 == 0 && c >= 2 && (c - 2) % 2 == 0;
+            placed += in;
+            wrong += in ? e[i] != yb[i] : e[i] != 0;
+        }
+        CHECK(wrong == 0 && placed == 2 * 2 * 3, "embed(slice(y)): sliced positions = y, rest +0.0 (%zu wrong, %zu placed)",
+              wrong, placed);
+        free(e);
+        omega_tensor_release(g, E); omega_tensor_release(g, S); omega_tensor_release(g, Yt);
+    }
+
+    /* 3. strided and broadcast sources: expected from index arithmetic on the parent */
+    {
+        float d[12];
+        for (int i = 0; i < 12; i++) d[i] = (float)(i + 1);
+        OmegaTensor T = mk(2, (uint64_t[]){3, 4}, d), TT, E1, R, RB, E2;
+        CHECK(omega_tensor_transpose(g, T, &TT) == 0, "embed: transpose view");  /* [4,3], (i,j) = d[j*4+i] */
+        uint64_t os[2] = {9, 7}, st[2] = {1, 2}, sp[2] = {2, 2};
+        CHECK(omega_tensor_embed(g, TT, 2, os, st, sp, &E1) == 0, "embed of strided view");
+        uint32_t *e = rdbits(E1, 63);
+        size_t wrong = e ? 0 : 1;
+        for (uint64_t p = 0; e && p < 63; p++) {
+            uint64_t a = p / 7, b = p % 7;
+            float want = 0.0f;
+            if (a >= 1 && (a - 1) % 2 == 0 && (a - 1) / 2 < 4 && b >= 2 && (b - 2) % 2 == 0 && (b - 2) / 2 < 3)
+                want = d[((b - 2) / 2) * 4 + (a - 1) / 2];
+            uint32_t wb; memcpy(&wb, &want, 4);
+            wrong += e[p] != wb;
+        }
+        CHECK(wrong == 0, "embed of transposed view (%zu wrong)", wrong);
+        free(e);
+        R = mk(2, (uint64_t[]){1, 3}, (float[]){-0.0f, 2.5f, -7.0f});
+        CHECK(omega_tensor_broadcast_to(g, R, 2, (uint64_t[]){2, 3}, &RB) == 0, "embed: broadcast view");
+        CHECK(omega_tensor_embed(g, RB, 2, (uint64_t[]){3, 4}, (uint64_t[]){1, 1}, NULL, &E2) == 0,
+              "embed of broadcast view, step NULL");
+        uint32_t *f = rdbits(E2, 12);
+        static const float want2[12] = {0, 0, 0, 0, 0, -0.0f, 2.5f, -7.0f, 0, -0.0f, 2.5f, -7.0f};
+        uint32_t wb2[12];
+        memcpy(wb2, want2, sizeof(wb2));
+        CHECK(f && bits_diff(f, wb2, 12) == 0, "embed of broadcast: values, -0.0 kept, fill +0.0");
+        free(f);
+        /* F16 storage dtype: pure bit copy, no arithmetic dtype needed */
+        uint16_t h[2] = {0x7e01U, 0x8000U}, hb[4] = {1, 1, 1, 1};
+        OmegaTensor H, HE;
+        CHECK(omega_tensor_from_data(g, OMEGA_DT_F16, 1, (uint64_t[]){2}, h, &H) == 0, "f16 source");
+        CHECK(omega_tensor_embed(g, H, 1, (uint64_t[]){4}, (uint64_t[]){1}, (uint64_t[]){2}, &HE) == 0 &&
+              omega_tensor_read(g, HE, hb, sizeof(hb)) == 0 && hb[0] == 0 && hb[1] == 0x7e01U && hb[2] == 0 &&
+              hb[3] == 0x8000U, "embed F16 bit copy (NaN payload, -0)");
+        OmegaTensor rel[] = {HE, H, E2, RB, R, E1, TT, T};
+        for (size_t i = 0; i < sizeof(rel) / sizeof(rel[0]); i++) omega_tensor_release(g, rel[i]);
+    }
+
+    /* 4. concat: reference loop, slice recovers parts, views as parts */
+    {
+        size_t bad = 0, badrt = 0;
+        int crc = 0;
+        for (int trial = 0; trial < 40; trial++) {
+            uint32_t r = 1 + (uint32_t)(rnd() % 4), ax = (uint32_t)(rnd() % r), np = 1 + (uint32_t)(rnd() % 4);
+            uint64_t base[4];
+            for (uint32_t d = 0; d < r; d++) base[d] = 1 + rnd() % 3;
+            OmegaTensor P[4], C = {0, 0};
+            uint32_t *pb[4];
+            uint64_t ps[4][4], tot = 0;
+            for (uint32_t k = 0; k < np; k++) {
+                memcpy(ps[k], base, sizeof(base));
+                ps[k][ax] = 1 + rnd() % 3;
+                tot += ps[k][ax];
+                uint64_t n = prod(r, ps[k]);
+                float *x = malloc((size_t)n * 4);
+                fill(x, (size_t)n, rand_f32);
+                P[k] = mk(r, ps[k], x);
+                pb[k] = malloc((size_t)n * 4);
+                memcpy(pb[k], x, (size_t)n * 4);
+                free(x);
+            }
+            uint64_t cs[4];
+            memcpy(cs, base, sizeof(base));
+            cs[ax] = tot;
+            uint64_t cn = prod(r, cs), off = 0;
+            uint32_t *want = calloc((size_t)cn, 4);
+            for (uint32_t k = 0; k < np; k++) {  /* reference: embed each part at its axis offset */
+                uint64_t st[4] = {0, 0, 0, 0};
+                st[ax] = off;
+                uint64_t cst[4];
+                row_strides(r, cs, cst);
+                for (uint64_t e = 0; e < prod(r, ps[k]); e++) {
+                    uint64_t pos = 0, rem = e;
+                    for (uint32_t d = r; d-- > 0;) { pos += (rem % ps[k][d] + st[d]) * cst[d]; rem /= ps[k][d]; }
+                    want[pos] = pb[k][e];
+                }
+                off += ps[k][ax];
+            }
+            int rc = omega_tensor_concat(g, np, P, ax, &C);
+            crc |= rc;
+            if (!rc) {
+                uint32_t *c = rdbits(C, cn);
+                bad += c ? bits_diff(c, want, cn) : 1;
+                free(c);
+                off = 0;
+                for (uint32_t k = 0; k < np; k++) {
+                    uint64_t st[4] = {0, 0, 0, 0}, stop[4];
+                    memcpy(stop, cs, sizeof(cs));
+                    st[ax] = off;
+                    stop[ax] = off + ps[k][ax];
+                    OmegaTensor S;
+                    if (omega_tensor_slice(g, C, st, stop, NULL, &S) == 0) {
+                        uint32_t *sb = rdbits(S, prod(r, ps[k]));
+                        badrt += sb ? bits_diff(sb, pb[k], prod(r, ps[k])) : 1;
+                        free(sb);
+                        omega_tensor_release(g, S);
+                    } else badrt++;
+                    off += ps[k][ax];
+                }
+                omega_tensor_release(g, C);
+            }
+            for (uint32_t k = 0; k < np; k++) { omega_tensor_release(g, P[k]); free(pb[k]); }
+            free(want);
+        }
+        CHECK(crc == 0, "concat: random trials all accepted");
+        CHECK(bad == 0, "concat == independent reference (%zu bad)", bad);
+        CHECK(badrt == 0, "slice(concat(parts)) recovers each part (%zu bad)", badrt);
+    }
+    {   /* view parts: transpose [2,3]->[3,2] and broadcast [1,2]->[2,2], concat on axis 0 */
+        OmegaTensor A = mk(2, (uint64_t[]){2, 3}, (float[]){1, 2, 3, 4, 5, 6}), AT, B, BB, C;
+        omega_tensor_transpose(g, A, &AT);
+        B = mk(2, (uint64_t[]){1, 2}, (float[]){-0.0f, 9});
+        omega_tensor_broadcast_to(g, B, 2, (uint64_t[]){2, 2}, &BB);
+        OmegaTensor parts[2] = {AT, BB};
+        CHECK(omega_tensor_concat(g, 2, parts, 0, &C) == 0, "concat of views");
+        uint32_t *c = rdbits(C, 10);
+        static const float want[10] = {1, 4, 2, 5, 3, 6, -0.0f, 9, -0.0f, 9};
+        uint32_t wb[10];
+        memcpy(wb, want, sizeof(wb));
+        CHECK(c && bits_diff(c, wb, 10) == 0, "concat of transposed + broadcast views");
+        free(c);
+        OmegaTensor parts1[2] = {BB, AT};  /* axis 1: [2,2] ++ [3,2] mismatch on axis 0 */
+        CHECK(omega_tensor_concat(g, 2, parts1, 1, &C) == OMEGA_TENSOR_ERR_SHAPE, "concat: other axis mismatch");
+        OmegaTensor rel[] = {BB, B, AT, A};
+        for (size_t i = 0; i < 4; i++) omega_tensor_release(g, rel[i]);
+        omega_tensor_release(g, C);
+    }
+
+    /* 5. refusal paths: typed error, nothing created */
+    {
+        uint32_t live0 = live_tensors();
+        OmegaTensor X = mk(2, (uint64_t[]){2, 3}, (float[]){1, 2, 3, 4, 5, 6}), O;
+        uint32_t live1 = live_tensors();
+        uint64_t os[2] = {4, 6}, z2[2] = {0, 0};
+        CHECK(omega_tensor_embed(g, X, 1, os, z2, NULL, &O) == OMEGA_TENSOR_ERR_RANK, "embed: rank mismatch");
+        CHECK(omega_tensor_embed(g, X, 2, os, z2, (uint64_t[]){1, 0}, &O) == OMEGA_TENSOR_ERR_BAD_ARGS, "embed: step 0");
+        OmegaTensor tmp;
+        CHECK(omega_tensor_embed(g, X, 2, os, (uint64_t[]){2, 3}, NULL, &tmp) == 0, "embed: last position at edge ok");
+        omega_tensor_release(g, tmp);
+        CHECK(omega_tensor_embed(g, X, 2, os, (uint64_t[]){3, 3}, NULL, &O) == OMEGA_TENSOR_ERR_BOUNDS,
+              "embed: start one past the edge");
+        CHECK(omega_tensor_embed(g, X, 2, os, z2, (uint64_t[]){4, 1}, &O) == OMEGA_TENSOR_ERR_BOUNDS,
+              "embed: step pushes last position out (1*4 >= 4)");
+        CHECK(omega_tensor_embed(g, X, 2, os, (uint64_t[]){UINT64_MAX, 0}, NULL, &O) == OMEGA_TENSOR_ERR_BOUNDS,
+              "embed: start overflow");
+        CHECK(omega_tensor_embed(g, X, 2, os, z2, (uint64_t[]){UINT64_MAX, 1}, &O) == OMEGA_TENSOR_ERR_BOUNDS,
+              "embed: step overflow");
+        CHECK(omega_tensor_embed(g, X, 2, (uint64_t[]){4, 0}, z2, NULL, &O) == OMEGA_TENSOR_ERR_SHAPE,
+              "embed: zero dim");
+        CHECK(omega_tensor_embed(g, X, 2, (uint64_t[]){(1u << 15) + 1, 1u << 15}, z2, NULL, &O) ==
+              OMEGA_TENSOR_ERR_CAPACITY, "embed: result > MAX_ELEMS");
+        CHECK(omega_tensor_embed(g, X, 2, os, NULL, NULL, &O) == OMEGA_TENSOR_ERR_BAD_ARGS, "embed: NULL start");
+        CHECK(omega_tensor_embed(g, X, 2, os, z2, NULL, NULL) == OMEGA_TENSOR_ERR_BAD_ARGS, "embed: NULL out");
+        OmegaTensor S0 = mk(0, NULL, (float[]){1});
+        CHECK(omega_tensor_embed(g, S0, 0, NULL, NULL, NULL, &O) == OMEGA_TENSOR_ERR_RANK, "embed: rank 0");
+        CHECK(live_tensors() == live1 + 1, "embed refusals created nothing");
+        /* concat refusals */
+        OmegaTensor Y = mk(2, (uint64_t[]){2, 3}, (float[]){1, 2, 3, 4, 5, 6}), V = mk(1, (uint64_t[]){3}, (float[]){1, 2, 3});
+        OmegaTensor H;
+        uint16_t hv[6] = {0};
+        omega_tensor_from_data(g, OMEGA_DT_F16, 2, (uint64_t[]){2, 3}, hv, &H);
+        uint32_t live2 = live_tensors();
+        CHECK(omega_tensor_concat(g, 0, (OmegaTensor[]){X}, 0, &O) == OMEGA_TENSOR_ERR_BAD_ARGS, "concat: n = 0");
+        CHECK(omega_tensor_concat(g, 1, NULL, 0, &O) == OMEGA_TENSOR_ERR_BAD_ARGS, "concat: NULL list");
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){X, H}, 0, &O) == OMEGA_TENSOR_ERR_DTYPE, "concat: dtype mismatch");
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){X, V}, 0, &O) == OMEGA_TENSOR_ERR_RANK, "concat: rank mismatch");
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){X, Y}, 2, &O) == OMEGA_TENSOR_ERR_AXIS, "concat: axis >= rank");
+        CHECK(omega_tensor_concat(g, 1, (OmegaTensor[]){S0}, 0, &O) == OMEGA_TENSOR_ERR_RANK, "concat: rank 0");
+        OmegaTensor one = mk(1, (uint64_t[]){1}, (float[]){1}), big;
+        CHECK(omega_tensor_broadcast_to(g, one, 1, (uint64_t[]){((uint64_t)1 << 29) + 1}, &big) == 0, "big bcast view");
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){big, big}, 0, &O) == OMEGA_TENSOR_ERR_CAPACITY,
+              "concat: result > MAX_ELEMS");
+        OmegaTensor dead = mk(1, (uint64_t[]){3}, (float[]){1, 2, 3});
+        omega_tensor_release(g, dead);
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){V, dead}, 0, &O) == OMEGA_TENSOR_ERR_STALE, "concat: stale part");
+        CHECK(omega_tensor_embed(g, dead, 1, (uint64_t[]){4}, (uint64_t[]){0}, NULL, &O) == OMEGA_TENSOR_ERR_STALE,
+              "embed: stale source");
+        CHECK(live_tensors() == live2 + 2, "concat refusals created nothing");
+        OmegaTensor ok2;
+        CHECK(omega_tensor_concat(g, 2, (OmegaTensor[]){X, Y}, 1, &ok2) == 0, "concat axis 1 accepted");
+        omega_tensor_release(g, ok2);
+        OmegaTensor rel[] = {big, one, H, V, Y, S0, X};
+        for (size_t i = 0; i < sizeof(rel) / sizeof(rel[0]); i++) omega_tensor_release(g, rel[i]);
+        CHECK(live_tensors() == live0, "placement refusals: all released");
+    }
+}
+
+/* ---- 8. determinism ------------------------------------------------------- */
+static void kat_digest(uint8_t out[32]) {
+    uint64_t save = g_rng;
+    g_rng = 0x0123456789abcdefULL;
+    float a[7 * 13], b[13 * 5];
+    fill(a, 91, rand_mod);
+    fill(b, 65, rand_mod);
+    uint64_t sa[2] = {7, 13}, sb[2] = {13, 5};
+    OmegaTensor A = mk(2, sa, a), B = mk(2, sb, b), P, R, Q;
+    omega_tensor_matmul(g, A, B, &P);
+    omega_tensor_reduce(g, OMEGA_TR_SUM, A, 1, true, &R);
+    omega_tensor_binary(g, OMEGA_TB_DIV, P, R, &Q);  /* [7,5] / [7,1] */
+    vid(Q, out);
+    OmegaTensor all[] = {A, B, P, R, Q};
+    for (int i = 0; i < 5; i++) omega_tensor_release(g, all[i]);
+    g_rng = save;
+}
+
+/* ---- CR-3 mask compare + where ------------------------------------------- */
+/* Strict bit comparison (NaN payload and sign included): the mask ops and
+ * where() promise exact bits, not just value identity. Uses the shared
+ * bit_mismatches() helper defined with the transcendental tests above. */
+/* Independent reference: the E1 scalar predicate, then the two mask bit
+ * patterns written as literals (not the header macros). */
+static float ref_mask(int selop, float a, float b) {
+    return omega_bits_to_float(omega_ref_fsetp_pred(selop, a, b) == 1 ? 0x3f800000U : 0x00000000U);
+}
+typedef struct { OmegaTensorBinaryOp cmp; OmegaTensorBinaryOp sel; int selop; const char *name; } CmpCase;
+static const CmpCase CMP_CASES[] = {
+    {OMEGA_TB_CMP_EQ, OMEGA_TB_SEL_EQ, OMEGA_NOP_FSETP_EQ_SEL, "CMP_EQ"},
+    {OMEGA_TB_CMP_NE, OMEGA_TB_SEL_NE, OMEGA_NOP_FSETP_NE_SEL, "CMP_NE"},
+    {OMEGA_TB_CMP_LT, OMEGA_TB_SEL_LT, OMEGA_NOP_FSETP_LT_SEL, "CMP_LT"},
+    {OMEGA_TB_CMP_LE, OMEGA_TB_SEL_LE, OMEGA_NOP_FSETP_LE_SEL, "CMP_LE"},
+    {OMEGA_TB_CMP_GT, OMEGA_TB_SEL_GT, OMEGA_NOP_FSETP_GT_SEL, "CMP_GT"},
+    {OMEGA_TB_CMP_GE, OMEGA_TB_SEL_GE, OMEGA_NOP_FSETP_SEL,    "CMP_GE"},
+};
+#define NCMP (sizeof(CMP_CASES) / sizeof(CMP_CASES[0]))
+
+static void test_mask(void) {
+    uint32_t lt0, ls0;
+    omega_tensor_live_counts(g, &lt0, &ls0);
+    /* (a) every predicate on the full special-value grid (400 pairs) plus
+     * random pairs, against the independent loop, strict bits. */
+    const size_t n = 4099;
+    float *a = malloc(n * 4), *b = malloc(n * 4), *ex = malloc(n * 4);
+    fill(a, n, rand_f32); fill(b, n, rand_f32);
+    for (size_t i = 0; i < NSPECIAL * NSPECIAL; i++) {
+        a[i] = omega_bits_to_float(SPECIALS[i / NSPECIAL]);
+        b[i] = omega_bits_to_float(SPECIALS[i % NSPECIAL]);
+    }
+    for (size_t i = NSPECIAL * NSPECIAL; i < NSPECIAL * NSPECIAL + 64; i++) b[i] = a[i]; /* equal bits */
+    uint64_t s[1] = {n};
+    OmegaTensor A = mk(1, s, a), B = mk(1, s, b), O, W, S;
+    for (size_t k = 0; k < NCMP; k++) {
+        const CmpCase *cc = &CMP_CASES[k];
+        for (size_t i = 0; i < n; i++) ex[i] = ref_mask(cc->selop, a[i], b[i]);
+        int rc = omega_tensor_binary(g, cc->cmp, A, B, &O);
+        float *got = rc ? NULL : rd(O);
+        CHECK(got && bit_mismatches(ex, got, n) == 0, "mask %s grid parity rc=%d", cc->name, rc);
+        size_t bad = 0;
+        for (size_t i = 0; got && i < n; i++) {
+            uint32_t u = omega_float_to_bits(got[i]);
+            bad += u != 0x3f800000U && u != 0x00000000U;
+        }
+        CHECK(got && bad == 0, "mask %s: only +1.0 / +0.0 bits (bad=%zu)", cc->name, bad);
+        free(got);
+        /* (b) consistency with the existing SEL op: where(CMP_P(a,b), a, b)
+         * equals SEL_P(a, b) bit for bit. */
+        if (!rc) {
+            int rw = omega_tensor_where(g, O, A, B, &W);
+            int rs = omega_tensor_binary(g, cc->sel, A, B, &S);
+            float *gw = rw ? NULL : rd(W), *gs = rs ? NULL : rd(S);
+            CHECK(gw && gs && bit_mismatches(gw, gs, n) == 0, "where(%s) == SEL rc=%d/%d", cc->name, rw, rs);
+            free(gw); free(gs);
+            if (!rw) omega_tensor_release(g, W);
+            if (!rs) omega_tensor_release(g, S);
+            omega_tensor_release(g, O);
+        }
+    }
+    /* (c) named corner cases: NaN never equal (ordered), -0 == +0, NE ordered. */
+    {
+        const uint32_t qn = 0x7fc00000U, pz = 0x00000000U, nz = 0x80000000U, one = 0x3f800000U;
+        struct { OmegaTensorBinaryOp op; uint32_t x, y, want; const char *what; } cs[] = {
+            {OMEGA_TB_CMP_EQ, qn, qn, 0x00000000U, "EQ(NaN,NaN)=+0"},
+            {OMEGA_TB_CMP_EQ, nz, pz, 0x3f800000U, "EQ(-0,+0)=+1"},
+            {OMEGA_TB_CMP_NE, qn, one, 0x00000000U, "NE(NaN,1)=+0 (ordered)"},
+            {OMEGA_TB_CMP_NE, nz, pz, 0x00000000U, "NE(-0,+0)=+0"},
+            {OMEGA_TB_CMP_LT, nz, pz, 0x00000000U, "LT(-0,+0)=+0"},
+            {OMEGA_TB_CMP_GE, qn, one, 0x00000000U, "GE(NaN,1)=+0"},
+            {OMEGA_TB_CMP_LE, one, one, 0x3f800000U, "LE(1,1)=+1"},
+        };
+        for (size_t i = 0; i < sizeof(cs) / sizeof(cs[0]); i++) {
+            float x = omega_bits_to_float(cs[i].x), y = omega_bits_to_float(cs[i].y), r = -1.0f;
+            OmegaTensor X = mk(0, NULL, &x), Y = mk(0, NULL, &y);
+            int rc = omega_tensor_binary(g, cs[i].op, X, Y, &O);
+            if (!rc) { omega_tensor_read_f32(g, O, &r, 1); omega_tensor_release(g, O); }
+            CHECK(!rc && omega_float_to_bits(r) == cs[i].want, "mask corner %s (got 0x%08x rc=%d)",
+                  cs[i].what, omega_float_to_bits(r), rc);
+            omega_tensor_release(g, X); omega_tensor_release(g, Y);
+        }
+    }
+    /* (d) broadcasting + a transposed view operand: a [3,1,4] vs b^T where
+     * b is [5,1] stored as [1,5] transposed -> out [3,5,4]. */
+    {
+        uint64_t sa[3] = {3, 1, 4}, sbr[2] = {1, 5}, sb[2] = {5, 1}, so[3] = {3, 5, 4};
+        float va[12], vb[5], exb[60];
+        for (int i = 0; i < 12; i++) va[i] = a[i * 31];
+        for (int i = 0; i < 5; i++) vb[i] = b[i * 37 + 1];
+        vb[2] = va[5];  /* guarantee some equal pairs */
+        OmegaTensor BA = mk(3, sa, va), BR = mk(2, sbr, vb), BT = {0, 0};
+        int rt = omega_tensor_transpose(g, BR, &BT);
+        CHECK(rt == 0, "mask: transpose view rc=%d", rt);
+        for (size_t k = 0; !rt && k < NCMP; k++) {
+            for (uint64_t f = 0; f < 60; f++)
+                exb[f] = ref_mask(CMP_CASES[k].selop, va[bcast_src(f, 3, so, 3, sa)], vb[bcast_src(f, 3, so, 2, sb)]);
+            int rc = omega_tensor_binary(g, CMP_CASES[k].cmp, BA, BT, &O);
+            OmegaTensorInfo oi;
+            float *got = rc ? NULL : rd(O);
+            bool shape_ok = !rc && !omega_tensor_info(g, O, &oi) && oi.rank == 3 &&
+                            oi.shape[0] == 3 && oi.shape[1] == 5 && oi.shape[2] == 4;
+            CHECK(got && shape_ok && bit_mismatches(exb, got, 60) == 0, "mask %s broadcast+view rc=%d",
+                  CMP_CASES[k].name, rc);
+            free(got);
+            if (!rc) omega_tensor_release(g, O);
+        }
+        if (!rt) omega_tensor_release(g, BT);
+        omega_tensor_release(g, BA); omega_tensor_release(g, BR);
+    }
+    /* (e) where(): bit copy with broadcasting across all three operands.
+     * cond [3,1], a [1,4], b scalar -> [3,4]. a and b carry -0.0, a NaN
+     * payload and a signalling NaN; the output must carry them unchanged. */
+    {
+        uint32_t cbits[3] = {0x3f800000U, 0x00000000U, 0x3f800000U};
+        uint32_t abits[4] = {0x80000000U, 0x7fa00001U, 0xffc00123U, 0x3f000000U};
+        uint32_t bbits = 0x7fc0beefU;
+        float cv[3], av[4], bv, exw[12];
+        for (int i = 0; i < 3; i++) cv[i] = omega_bits_to_float(cbits[i]);
+        for (int i = 0; i < 4; i++) av[i] = omega_bits_to_float(abits[i]);
+        bv = omega_bits_to_float(bbits);
+        uint64_t sc[2] = {3, 1}, sa[2] = {1, 4};
+        OmegaTensor C = mk(2, sc, cv), WA = mk(2, sa, av), WB = mk(0, NULL, &bv);
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 4; j++) exw[i * 4 + j] = cbits[i] == 0x3f800000U ? av[j] : bv;
+        int rc = omega_tensor_where(g, C, WA, WB, &O);
+        float *got = rc ? NULL : rd(O);
+        OmegaTensorInfo oi;
+        bool shape_ok = !rc && !omega_tensor_info(g, O, &oi) && oi.rank == 2 && oi.shape[0] == 3 && oi.shape[1] == 4;
+        CHECK(got && shape_ok && bit_mismatches(exw, got, 12) == 0, "where broadcast bit copy rc=%d", rc);
+        free(got);
+        if (!rc) omega_tensor_release(g, O);
+        /* where() over a strided slice view of cond: rows 0 and 2 of C. */
+        uint64_t st[2] = {0, 0}, sp[2] = {3, 1}, se[2] = {2, 1};
+        OmegaTensor CS = {0, 0};
+        int rs = omega_tensor_slice(g, C, st, sp, se, &CS);
+        CHECK(rs == 0, "where: slice of cond rc=%d", rs);
+        if (!rs) {
+            rc = omega_tensor_where(g, CS, WA, WB, &O);
+            got = rc ? NULL : rd(O);
+            CHECK(got && bit_mismatches(exw, got, 4) == 0 && bit_mismatches(exw + 8, got + 4, 4) == 0,
+                  "where over sliced cond rc=%d", rc);
+            free(got);
+            if (!rc) omega_tensor_release(g, O);
+            omega_tensor_release(g, CS);
+        }
+        /* (f) refusals: any cond element other than +1.0 / +0.0 bits. */
+        static const uint32_t BAD[] = {0x3f000000U /* 0.5 */, 0x80000000U /* -0.0 */, 0x7fc00000U /* NaN */,
+                                       0x40000000U /* 2.0 */, 0x3f800001U, 0xbf800000U /* -1.0 */,
+                                       0x00000001U /* subnormal */, 0x7f800000U /* +inf */};
+        uint32_t lt1, ls1, lt2, ls2;
+        for (size_t k = 0; k < sizeof(BAD) / sizeof(BAD[0]); k++) {
+            float cb[3] = {cv[0], omega_bits_to_float(BAD[k]), cv[2]};
+            OmegaTensor CB = mk(2, sc, cb), Z = {0, 0};
+            omega_tensor_live_counts(g, &lt1, &ls1);
+            rc = omega_tensor_where(g, CB, WA, WB, &Z);
+            omega_tensor_live_counts(g, &lt2, &ls2);
+            CHECK(rc == OMEGA_TENSOR_ERR_MASK && lt1 == lt2 && ls1 == ls2,
+                  "where refuses cond 0x%08x (rc=%d, nothing made)", BAD[k], rc);
+            if (!rc) omega_tensor_release(g, Z);
+            omega_tensor_release(g, CB);
+        }
+        /* shape, dtype, stale refusals */
+        uint64_t s5[1] = {5};
+        float f5[5] = {1, 0, 1, 0, 1};
+        OmegaTensor C5 = mk(1, s5, f5);
+        CHECK(omega_tensor_where(g, C5, WA, WB, &O) == OMEGA_TENSOR_ERR_SHAPE, "where [5] vs [1,4] refused");
+        uint16_t h4[4] = {0x3c00, 0, 0x3c00, 0};
+        uint64_t s4[1] = {4};
+        OmegaTensor H = {0, 0};
+        CHECK(omega_tensor_from_data(g, OMEGA_DT_F16, 1, s4, h4, &H) == 0, "where: f16 create");
+        CHECK(omega_tensor_where(g, H, WA, WB, &O) == OMEGA_TENSOR_ERR_DTYPE, "where f16 cond refused");
+        CHECK(omega_tensor_where(g, C, H, WB, &O) == OMEGA_TENSOR_ERR_DTYPE, "where f16 a refused");
+        CHECK(omega_tensor_binary(g, OMEGA_TB_CMP_EQ, H, WA, &O) == OMEGA_TENSOR_ERR_DTYPE, "CMP f16 refused");
+        CHECK(omega_tensor_where(g, C, WA, WB, NULL) == OMEGA_TENSOR_ERR_BAD_ARGS, "where NULL out refused");
+        omega_tensor_release(g, H);
+        omega_tensor_release(g, C5);
+        OmegaTensor stale = WB;
+        omega_tensor_release(g, WB);
+        CHECK(omega_tensor_where(g, C, WA, stale, &O) == OMEGA_TENSOR_ERR_STALE, "where stale b refused");
+        CHECK(omega_tensor_binary(g, OMEGA_TB_CMP_LT, WA, stale, &O) == OMEGA_TENSOR_ERR_STALE, "CMP stale refused");
+        omega_tensor_release(g, C); omega_tensor_release(g, WA);
+    }
+    /* (g) a realization without the compare entry refuses CMP_* (no silent
+     * fallback), while the other binary ops keep working. */
+    {
+        OmegaTensorRealization nr = *omega_tensor_cpu_realization();
+        nr.compare = NULL;
+        OmegaTensorCtx *c2 = NULL;
+        int rc = omega_tensor_ctx_create(8, &nr, &c2);
+        CHECK(rc == 0, "ctx without compare rc=%d", rc);
+        if (!rc) {
+            float one = 1.0f;
+            OmegaTensor X = {0, 0}, Y = {0, 0};
+            CHECK(omega_tensor_from_f32(c2, 0, NULL, &one, &X) == 0, "c2 create");
+            CHECK(omega_tensor_binary(c2, OMEGA_TB_CMP_EQ, X, X, &Y) == OMEGA_TENSOR_ERR_REALIZATION,
+                  "CMP without compare entry refused");
+            CHECK(omega_tensor_binary(c2, OMEGA_TB_ADD, X, X, &Y) == 0, "ADD still works without compare");
+            omega_tensor_ctx_destroy(c2);
+        }
+    }
+    omega_tensor_release(g, A); omega_tensor_release(g, B);
+    free(a); free(b); free(ex);
+    uint32_t lt9, ls9;
+    omega_tensor_live_counts(g, &lt9, &ls9);
+    CHECK(lt9 == lt0 && ls9 == ls0, "mask tests leak nothing (%u/%u vs %u/%u)", lt9, ls9, lt0, ls0);
+}
+
+static void test_determinism(void) {
+    uint8_t d1[32], d2[32];
+    kat_digest(d1);
+    kat_digest(d2);
+    CHECK(memcmp(d1, d2, 32) == 0, "same inputs, same value id");
+    char hex[65];
+    for (int i = 0; i < 32; i++) sprintf(hex + 2 * i, "%02x", d1[i]);
+    printf("KAT value id (matmul 7x13x5, row-sum, div): %s\n", hex);
+    /* Frozen on 2026-10-01 from the first CPU run; any change to an op, the
+     * order or the value-id encoding changes it. */
+    static const char frozen[] = "9efaa4bc9826cce169ae8da3796a188a48ca6ac0bbb7f71f7ba7f11cca46f991";
+    CHECK(strcmp(frozen, hex) == 0, "KAT matches frozen %s", frozen);
+}
+
+/* CR-5: multi-axis reduce and sum_to_shape (uses the helpers above). */
+#include "tensor_reduce_multi_tests.inc"
+
+int main(void) {
+    if (!omega_numeric_fpenv_ok()) { printf("FPCR not RNE/no-FTZ: refusing to run\n"); return 2; }
+    if (omega_tensor_ctx_create(4096, omega_tensor_cpu_realization(), &g)) { printf("ctx\n"); return 2; }
+    printf("reduce seam: %s\n", omega_tensor_seam_reduce_source());
+    test_shape_type();
+    test_broadcast();
+    test_views();
+    test_generations();
+    test_immutability();
+    test_elementwise_parity();
+    test_reduce_parity();
+    test_matmul_parity();
+    test_mutations();
+    test_transc_unary();
+    test_relu_unary();
+    test_unary2_specials();
+    test_trig_domain();
+    test_const_neg();
+    test_placement();
+    test_determinism();
+    test_mask();
+    test_reduce_axes();   /* CR-5, last: does not shift earlier random data */
+    test_sum_to_shape();
+    /* every test released what it made */
+    uint32_t lt, ls;
+    omega_tensor_live_counts(g, &lt, &ls);
+    CHECK(lt == 0 && ls == 0, "no leaked tensors (%u) or storage (%u)", lt, ls);
+    omega_tensor_ctx_destroy(g);
+    printf("M20 OMEGA_TENSOR CPU tests: %d pass, %d fail\n", g_pass, g_fail);
+    printf("M20 verdict: NOT QUALIFIED (CPU tier only; GB10 parity NOT_RUN)\n");
+    return g_fail ? 1 : 0;
+}

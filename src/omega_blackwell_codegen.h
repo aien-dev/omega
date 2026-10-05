@@ -64,7 +64,14 @@ typedef enum {
     BW_IR_LDS,          /* LDS Rd, [Ra] */
     BW_IR_STS,          /* STS [Ra], Rb */
     BW_IR_EXIT,         /* EXIT */
-    BW_IR_BRA           /* BRA. imm = signed instruction delta; predicate_p0 / predicate_not select @P0 or @!P0 */
+    BW_IR_BRA,          /* BRA. imm = signed instruction delta; predicate_p0 / predicate_not select @P0 or @!P0 */
+    /* FB-1 cut 4 (2026-10-04), additive. Encodings decoded with nvdisasm 13.0 -b SM121
+     * (tools/divsqrt_nvdisasm_check.sh method); the BAR/LDS/STS words are the ones
+     * src/omega_numeric.c:884-886 runs on the chip (LDS_STS op, 148/148 specs PASS). */
+    BW_IR_MUFU_EX2,     /* MUFU.EX2 Rd, Ra (2^x, approximate: PTX ex2.approx.f32 bound 2^-22.5 rel) */
+    BW_IR_BAR_SYNC,     /* BAR.SYNC.DEFER_BLOCKING 0x0 (CTA barrier 0; the QMD declares 1 barrier) */
+    BW_IR_LDS32,        /* LDS Rd, [Ra+URZ]  32-bit shared load  (BW_IR_LDS encodes LDS.U8: byte) */
+    BW_IR_STS32         /* STS [Ra+URZ], Rb  32-bit shared store (BW_IR_STS encodes STS.U8: byte) */
 } BlackwellIROpcode;
 
 /* Special Register Identifiers */
@@ -161,8 +168,26 @@ int omega_blackwell_codegen_matmul_i32(const OmegaMatMulSpec *spec, OmegaBlackwe
 int omega_blackwell_codegen_matmul_tensor_prog(const OmegaMatMulSpec *spec, BlackwellIRProgram *prog);
 int omega_blackwell_codegen_matmul_tensor(const OmegaMatMulSpec *spec, OmegaBlackwellKernel *kernel);
 
+/* FB-1 cut 1b: looped Tensor Core matmul. One warp per CTA. CTA (x, y) owns row
+ * tile y (16 rows) and column tiles x, x + grid_x, x + 2 grid_x, ... (8 columns
+ * each); the whole K dimension is accumulated in the HMMA accumulator on the
+ * chip (no host K slicing). Requires M % 16 == 0, N % 8 == 0, K % 16 == 0 and
+ * 1 <= grid_x <= N / 8. The kernel does not depend on M (rows come from
+ * CTAID.Y), so one kernel serves every row count of a (K, N, grid_x) triple.
+ * Uses only instructions already present in the chip-proven single-tile kernel
+ * plus the predicated backward BRA and ISETP.GE this IR already encodes.
+ * mutant != 0 drops the last K step (test oracle: the wrong kernel must be
+ * caught by the parity test; never set in production). */
+int omega_blackwell_codegen_matmul_tensor_loop_prog(const OmegaMatMulSpec *spec, uint32_t grid_x,
+                                                    int mutant, BlackwellIRProgram *prog);
+int omega_blackwell_codegen_matmul_tensor_loop(const OmegaMatMulSpec *spec, uint32_t grid_x,
+                                               int mutant, OmegaBlackwellKernel *kernel);
+
 /* Unit test for instruction encoding bitfield fixtures (Gate 3) */
 int omega_blackwell_verify_codegen_fixtures(void);
+
+/* FB-1 cut 4: fixtures for MUFU_EX2, BAR_SYNC, LDS32, STS32 (0 = pass) */
+int omega_blackwell_verify_codegen_fixtures_fb1cut4(void);
 
 /* Unit test for bounded register allocation live intervals and bounds enforcement (Gate 4) */
 int omega_blackwell_test_regalloc_bounds(void);

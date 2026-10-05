@@ -28,6 +28,11 @@ typedef struct {
      * vreg r is its slot and r + 1 its generation. */
     uint8_t ispool[OSC_CHECK_MAX_SYMS];
     uint8_t ishandle[OSC_CHECK_MAX_SYMS];
+    /* OSC-3 item 3: drop-flag vreg (bool) of an owner symbol whose
+     * declaration the checker marked (dflag), -1 otherwise. 1 = live,
+     * 0 = moved. Set at the declaration, cleared at every move, tested by
+     * the owner's scope-end release (CBR around RELEASE). */
+    int16_t dfv[OSC_CHECK_MAX_SYMS];
 } L;
 
 #define NODE(i) (&l->ast->nodes[(i)])
@@ -101,14 +106,43 @@ static int kconst(L *l, OscScalar s, uint64_t v, uint32_t line)
     return r;
 }
 
+/* OSC-3 item 3 drop flags: write imm (1 live / 0 moved) into owner s's flag */
+static void dflag_set(L *l, int s, uint64_t imm, uint32_t line)
+{
+    if (s < 0 || l->dfv[s] < 0) return;
+    OscInsn *x = emit(l, OSC_I_CONST, line);
+    x->dst = l->dfv[s];
+    x->imm = imm;
+}
+/* owner s just declared by node n: give it a flag (set live) if marked */
+static void dflag_decl(L *l, int s, const OscNode *n)
+{
+    if (!n->dflag) return;
+    l->dfv[s] = (int16_t)newvs(l, OSC_T_BOOL, n->line);
+    dflag_set(l, s, 1, n->line);
+}
+
 static void releases(L *l, const OscNode *n)
 {
+    if (l->cur < 0) return; /* dead code: nothing to release (emit would drop it) */
     for (uint32_t k = 0; k < n->rel_count; k++) {
         int s = l->ast->rel[n->rel_start + k];
         /* OSC-2 arenas: an arena symbol's vreg is its u64 handle (owners are REFs) */
         int arena = l->f->vtype[l->vreg[s]].s != OSC_T_REF;
+        int guard = !l->ispool[s] && !arena && l->dfv[s] >= 0 ? l->dfv[s] : -1;
+        int rb = -1, jb = -1;
+        if (guard >= 0) { /* OSC-3 item 3: release only if the drop flag says live */
+            rb = newblk(l, n->line);
+            jb = newblk(l, n->line);
+            cbr(l, guard, rb, jb, n->line);
+            l->cur = rb;
+        }
         OscInsn *x = emit(l, l->ispool[s] ? OSC_I_PCLOSE : arena ? OSC_I_ADESTROY : OSC_I_RELEASE, n->line);
         x->a = l->vreg[s];
+        if (guard >= 0) {
+            br(l, jb, n->line);
+            l->cur = jb;
+        }
     }
 }
 
@@ -153,6 +187,12 @@ static int call(L *l, int i, int want_value)
         else if (an->kind == ON_NAME && an->sym >= 0 && l->f->vtype[l->vreg[an->sym]].s == OSC_T_REF)
             args[na++] = l->vreg[an->sym];  /* own argument: moves the owner */
         else args[na++] = expr(l, a);
+    }
+    /* OSC-3 item 3: an owner passed to an own parameter is moved here */
+    for (int a = n->a; a >= 0; a = NODE(a)->next) {
+        const OscNode *an = NODE(a);
+        if (an->kind == ON_NAME && an->sym >= 0 && an->sym < OSC_CHECK_MAX_SYMS && l->dfv[an->sym] >= 0)
+            dflag_set(l, an->sym, 0, n->line);
     }
     const OscNode *g = NODE(l->ast->fns[n->sym]);
     int dst = -1;
@@ -367,6 +407,7 @@ static void stmt(L *l, int i)
                     x->imm = (uint64_t)fn->hi;
                 }
             }
+            dflag_decl(l, n->sym, n); /* OSC-3 item 3 */
             break;
         }
         int v = expr(l, n->a);
@@ -376,6 +417,7 @@ static void stmt(L *l, int i)
         if (ah >= 0) x->b = (int16_t)ah;
         x->dst = (int16_t)r;
         x->a = (int16_t)v;
+        dflag_decl(l, n->sym, n); /* OSC-3 item 3 */
         break;
     }
     case ON_LET_MOVE:
@@ -385,6 +427,10 @@ static void stmt(L *l, int i)
         OscInsn *x = emit(l, OSC_I_MOV, n->line);
         x->dst = (int16_t)r;
         x->a = l->vreg[n->sym2];
+        if (n->kind == ON_LET_MOVE) { /* OSC-3 item 3: the source is moved; the new owner starts live */
+            dflag_set(l, n->sym2, 0, n->line);
+            dflag_decl(l, n->sym, n);
+        }
         break;
     }
     case ON_ASSIGN: {
@@ -604,6 +650,7 @@ static int lower_fn(L *l, int fi)
     l->nblk = 0;
     memset(l->ispool, 0, sizeof l->ispool);
     memset(l->ishandle, 0, sizeof l->ishandle);
+    memset(l->dfv, 0xff, sizeof l->dfv); /* OSC-3 item 3: no drop flags */
     for (int p = fn->a; p >= 0; p = NODE(p)->next) {
         const OscNode *pn = NODE(p);
         int r = newv(l, &pn->ty, pn->line);
@@ -611,6 +658,9 @@ static int lower_fn(L *l, int fi)
         f->nparams++;
     }
     l->cur = newblk(l, fn->line);
+    /* OSC-3 item 3: own parameters that may be moved on only some paths get
+     * their drop flag (vregs after the parameters), set live at entry */
+    for (int p = fn->a; p >= 0; p = NODE(p)->next) dflag_decl(l, NODE(p)->sym, NODE(p));
     l->fi = fi;
     if (a->reqn[fi] >= 0 && !a->req_elide[fi]) contract_check(l, a->reqn[fi], OSC_TRAP_REQUIRES);
     /* body block inlined (same emission as block()) so a void function's

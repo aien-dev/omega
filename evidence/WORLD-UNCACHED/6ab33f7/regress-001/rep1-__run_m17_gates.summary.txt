@@ -1,0 +1,21 @@
+### rep=1 cmd=build/omegatool --run-m17-gates
+  [PASS] OMEGA_BW_VECTOR_SEMANTIC_PASS            : Machine-independent semantic definition C[i] = (A[i] + B[i]) mod 2^32
+  [PASS] OMEGA_BW_VECTOR_MACHINE_BINDING_PASS     : Grace Blackwell GB10 sm_121 machine target binding
+  [PASS] OMEGA_BW_VECTOR_REALIZATION_PASS         : Cryptographic triple identity (spec || machine || code)
+  [PASS] OMEGA_BW_VECTOR_ENCODER_FIXTURE_PASS     : Blackwell 128-bit instruction encoding fixtures
+  [PASS] OMEGA_BW_VECTOR_NATIVE_ENCODING_PASS     : Dynamic native sm_121 vecadd code emission (512 bytes)
+  [PASS] OMEGA_BW_VECTOR_QMD_PASS                 : Queue Meta Data Version 05_00 launch descriptor generation
+  [PASS] OMEGA_BW_VECTOR_PHYSICS_AUTHORITY_PASS   : M16 frozen dependency authority and clean interface
+  [PASS] OMEGA_BW_VECTOR_NATIVE_SUBMIT_PASS       : Unified pushbuffer submission via M16 GPFIFO ring
+  [PASS] OMEGA_BW_VECTOR_DEVICE_OUTPUT_PASS       : Physical SM execution and unpoisoned output buffer
+  [PASS] OMEGA_BW_VECTOR_COMPLETION_PASS          : WFI completion marker 0x44444444 and semaphore state 6
+  [PASS] OMEGA_BW_VECTOR_V1_PARITY_PASS           : Bit-for-bit exact parity against semantic oracle (N=64)
+  [PASS] OMEGA_BW_VECTOR_BOUNDARY_PASS            : Boundary sweep across N in {1,15,63,64,65,127,128,256,1024}
+  [PASS] OMEGA_BW_VECTOR_MUTATION_REFUSAL_PASS    : Tamper resistance: bit flips and corruptions rejected
+  [PASS] OMEGA_BW_VECTOR_ZERO_LIBCUDA_LINK_PASS   : Zero dynamic linkage to libcuda.so or libcudart.so
+  [PASS] OMEGA_BW_VECTOR_ZERO_CUDA_SYMBOL_PASS    : Zero undefined dynamic CUDA symbols
+  [PASS] OMEGA_BW_VECTOR_ZERO_LIBCUDA_RUNTIME_PASS : Zero runtime libcuda mappings in /proc/self/maps
+  [PASS] OMEGA_BW_VECTOR_EVIDENCE_DURABILITY_PASS : Durable machine code and QMD hex dumps recorded
+  [PASS] OMEGA_BW_VECTOR_RECEIPT_PASS             : Cryptographic qualification receipt generated
+  TOTAL GATES: 18 | PASSED: 18 | FAILED: 0
+### exit=0

@@ -1,35 +1,47 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/polyglot/asm",
-  "layer": "src/polyglot/asm",
-  "purpose": "Directory src/polyglot/asm. Purpose not yet described by a human.",
   "above": {
     "name": "src/polyglot",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory src/polyglot/asm. Purpose not yet described by a human.",
-      "files": [
-        "omx_crumb.S",
-        "omx_sdot.S"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:9c523b2dcdf5dfe9e10846d30ed0ea16e308ac9a65e7e453c0b0bcf4b147f371",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:5df7ff899886c6e17b917a9c2b2352e1c2ced2c7859ad1af8321edaab5c26310"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "87938dc",
-          "timestamp": "2026-09-29T14:16:52-05:00",
           "author": "aien-dev",
+          "pr": 80,
+          "sha": "87938dc",
+          "source": "backfill-git",
           "subject": "Merge pull request #80 from aien-dev/feat/polyglot-0",
-          "pr": 80
+          "timestamp": "2026-09-29T14:16:52-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "omx_crumb.S",
+        "omx_sdot.S"
+      ],
+      "purpose_auto": "Directory src/polyglot/asm. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "src/polyglot/asm",
+  "name": "src/polyglot/asm",
+  "purpose": "Directory src/polyglot/asm. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

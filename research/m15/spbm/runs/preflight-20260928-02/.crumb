@@ -1,15 +1,38 @@
 {
-  "schema_version": "1.0.0",
-  "name": "research/m15/spbm/runs/preflight-20260928-02",
-  "layer": "research/m15/spbm/runs/preflight-20260928-02",
-  "purpose": "Directory research/m15/spbm/runs/preflight-20260928-02. Purpose not yet described by a human.",
   "above": {
     "name": "research/m15/spbm",
     "path": "../.."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:c9831d891a21dbc200e3296746d4e4c1aa49134c5cc5e37cb0fd651fd4d6f7c0",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 15,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:233e50cfaf02ff98b6eba69482679249d99bb2a0006c07cfeed977d1bfdc30a2"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 67,
+          "sha": "bba3bd3",
+          "source": "backfill-git",
+          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
+          "timestamp": "2026-09-28T22:36:09-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory research/m15/spbm/runs/preflight-20260928-02. Purpose not yet described by a human.",
       "files": [
         "DSDT.dat",
         "base-commit.txt",
@@ -26,23 +49,12 @@
         "source-binary.sha256",
         "uname.txt",
         "worktree.txt"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "bba3bd3",
-          "timestamp": "2026-09-28T22:36:09-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #67 from aien-dev/feat/r15-performance-proof",
-          "pr": 67
-        }
-      ]
+      ],
+      "purpose_auto": "Directory research/m15/spbm/runs/preflight-20260928-02. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "research/m15/spbm/runs/preflight-20260928-02",
+  "name": "research/m15/spbm/runs/preflight-20260928-02",
+  "purpose": "Directory research/m15/spbm/runs/preflight-20260928-02. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

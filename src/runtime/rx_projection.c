@@ -272,6 +272,9 @@ int pj_feature_compute(CxStore *s, uint64_t subject, uint32_t cls, uint32_t kind
     return PJ_OK;
 }
 
+/* Per-read cx_verify stays here: a store may be memory-only (never through cx_open),
+ * and a projection binds to exact object digests, so a source edited after the build
+ * must be caught (tests/runtime/rx_state_projection.c tamper case, lines 390-408). */
 /* The subject's newest realization whose linked evidence verifies. */
 static const CxObject *verified_anchor(Ctx *c) {
     const CognitiveNeed *n = c->need;

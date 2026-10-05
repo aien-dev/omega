@@ -21,6 +21,7 @@ name: Host suites
 #       (test-numeric-transc-full and test-m17 are listed there as skipped jobs;
 #       test-tensor and test-m16 have no Makefile target on main: NOT wired)
 #   this file : searchtrace, estimation est-tools estimation-v3 est3c-tools,
+#       ans (test-inertial-alignment: ANS Inertial Alignment v1, ARCH-0032),
 #       numeric-cpu numeric-qualify, train (M22 substrate, Lane 21),
 #       compiler (OSC-1, own path guard)
 #
@@ -57,6 +58,11 @@ on:
       - 'tests/estimation/**'
       - 'tools/estimation/**'
       - 'mk/estimation*.mk'
+      # ans (Inertial Alignment v1, ARCH-0032)
+      - 'src/ans/**'
+      - 'tests/ans/**'
+      - 'mk/ans.mk'
+      - 'docs/ans/**'
       - 'docs/estimation/EST3C_PROTOCOL_V3.md'
       - 'docs/estimation/receipts/est3c-v3/**'
       - 'evidence/R15/raw/**'
@@ -67,7 +73,11 @@ on:
       - 'tools/test_numeric_qualify.sh'
       - 'tools/numeric_*'
       - 'tools/m19r_qualify.sh'
+      - 'tools/m19r_campaign.sh'
+      - 'tools/chipwait_campaign.sh'
+      - 'tools/test_chipwait_campaign.sh'
       - 'tools/json_canon.c'
+      - 'tools/e1_*'
       # train (M22 optimizer substrate + E5 provenance)
       - 'src/train/**'
       - 'tests/train/**'
@@ -105,6 +115,16 @@ jobs:
       - name: EST-3c v3 tools (synthetic data; no sealed run)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-est3c-tools
 
+  ans:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: ANS Inertial Alignment v1 (plain + ASan/UBSan, purity)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-inertial-alignment
+
   numeric-cpu:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
@@ -116,6 +136,14 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-cpu
       - name: Gate 5 qualifier and receipt writer (host-only, fake descriptors)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-numeric-qualify
+      - name: E1 closure combiner (host-only, synthetic constituents, every hostile mutant refused)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-e1-combine
+      - name: Chipwait campaign runner (host-only, stub qualifier, no GPU)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-chipwait-campaign
+      - name: GPU completion wait primitive (host-only, fake memory and clock, mutants must die)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-wait
+      - name: GPU completion wait real-code mutants (each flagged build of the real code must fail)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-wait-mutants
 
   train:
     runs-on: ubuntu-24.04-arm
@@ -158,3 +186,28 @@ jobs:
       - name: OSC-0B model sweep, back end, compiler golden/negative/model agreement, determinism, legacy writer (full, plain + ASan/UBSan)
         if: steps.guard.outputs.run == 'true' && steps.guard.outputs.full == 'true'
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-compiler-full
+
+  physics0:
+    # PD-0 hidden-equation benchmark substrate (docs/physics0/README.md): G0 self-test,
+    # G5 isolation, G1 oracle calibration, mutant check, Omega-language differential.
+    # Runs only when its own files (or this workflow / the shared sha256 / the OSC
+    # compiler the differential test links) change.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Changed-path guard (physics0 files only)
+        id: guard
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          CHANGED=$(git diff --name-only HEAD^1 HEAD)
+          if echo "$CHANGED" | grep -Eq '^(src/physics0/|tests/physics0/|mk/physics0\.mk$|src/compiler/|src/sha256\.|src/turing/history_selector\.c$|\.github/workflows/host-suites\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"; echo "no physics0 files changed; skipping"
+          fi
+      - name: PD-0 substrate gates (plain + ASan/UBSan; V3 breach rates are recorded, not gated)
+        if: steps.guard.outputs.run == 'true'
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 physics0-test

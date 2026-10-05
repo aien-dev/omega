@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0",
+  "name": "evidence/physics0/learner",
+  "layer": "evidence",
+  "purpose": "Immutable receipts of learner development runs (seeds 1..5 per level, HOLDOUT/TRIAL/REP withheld by the harness). New files per cut, never rewritten."
+}

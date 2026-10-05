@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/r16_surface",
-  "layer": "tests/r16_surface",
-  "purpose": "Directory tests/r16_surface. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/r16_surface. Purpose not yet described by a human.",
-      "files": [
-        "run.sh"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:25cabf47d18353539db28146434d246a2f81bf9c323471566451aca56806f279",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:e9271c4b726075431f60509d7d0229ec5b2d6afc7fe0d687afe321f60d45ca29"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "8b719ff",
-          "timestamp": "2026-09-30T15:52:29-05:00",
           "author": "aien-dev",
+          "pr": 106,
+          "sha": "8b719ff",
+          "source": "backfill-git",
           "subject": "Merge pull request #106 from aien-dev/feat/r16-g3-g5-host",
-          "pr": 106
+          "timestamp": "2026-09-30T15:52:29-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "run.sh"
+      ],
+      "purpose_auto": "Directory tests/r16_surface. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/r16_surface",
+  "name": "tests/r16_surface",
+  "purpose": "Directory tests/r16_surface. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

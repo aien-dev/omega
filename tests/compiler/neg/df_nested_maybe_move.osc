@@ -1,0 +1,12 @@
+// expect: USE_AFTER_MOVE object=p line=11
+// transition: use after maybe-move
+struct P { x: u32, y: u32 }
+fn eat(p: own P) -> u32 { return p.x; }
+fn f(k: u32) -> u32 {
+    let p: own P = P { x: 1, y: 2 };
+    let mut r: u32 = 0;
+    if k > 1 {
+        if k > 4 { r = eat(p); } else { r = 2; }
+    } else { r = p.y; }
+    return r + p.x;
+}

@@ -1,0 +1,15 @@
+{
+  "campaign": "CHIPWAIT1-6fa4d97",
+  "omega_candidate": "6fa4d971ca4d6317a13ddd2211bbe7277b8f6966",
+  "physics_candidate": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "rule_predeclared": "3 consecutive M19R runs must all PASS",
+  "verdict": "INVALID",
+  "reason": "Run 1 reported failure but its per-gate evidence was destroyed by the harness (make clean at next run start) before preservation; campaign cannot satisfy 3/3 and cannot establish run 1's cause. Runs 2 and 3 retained for diagnosis only.",
+  "runs": [
+    {"n": 1, "run_id": "20261003T104512Z-9c66ad9d8767", "status": "FAIL", "failing_step": "omega/m19", "evidence": "LOST (partial: nested clean-clone log recovered from /tmp, QUEUE_WRAP id=224 observed=208 stall)"},
+    {"n": 2, "run_id": "20261003T110256Z-f3ff3dfd688f", "status": "FAIL", "failing_step": "omega/m19", "failing_gates": ["CONTEXT_REUSE", "QUEUE_WRAP (completion_timeout STALLED id=48 observed=32 progress_count=0 elapsed_ns=5000000040)", "FAULT_RECOVERY", "CLEAN_CLONE"], "evidence": "per-gate logs preserved; run.json lost to copier race"},
+    {"n": 3, "run_id": "20261003T112252Z-42b27ce0af82", "status": "FAIL", "failing_step": "world_lifecycle", "failing_gates": ["WORLD_ERROR_LATCH_COUNTS_ONCE", "WORLD_BATCHED_RESULT_IDENTITY"], "evidence": "complete incl. run.json"}
+  ],
+  "wait_routine_verdict": "Slice 1 (omega#232) NOT qualified; NOT contradicted as an observer: it produced a tagged, bounded exit. Failure class observed: no completion observed on cached completion memory with no L2 flush/marker2 (recorded open gap).",
+  "written_by": "queen 2026-10-03T12:15Z, by hand (campaign predates tools/m19r_campaign.sh)"
+}

@@ -819,6 +819,70 @@ static void test_gen_durable(void) {
     rmdir(dir);
 }
 
+/* Client anchor: set -> commit -> reopen returns the same 48 bytes; a commit
+ * with no anchor set reopens absent; a version-2 checkpoint (no anchor section,
+ * made from a v3 one by dropping the section, patching the version and
+ * recomputing the body and header digests) still loads with the anchor absent. */
+static void test_anchor(void) {
+    char dir[64], meta[128], data[128];
+    snprintf(dir, sizeof dir, "/tmp/jspace_anc_XXXXXX");
+    if (!mkdtemp(dir)) { CHECK(0, "mkdtemp"); return; }
+    snprintf(meta, sizeof meta, "%s/jspace.meta", dir);
+    snprintf(data, sizeof data, "%s/jspace.data", dir);
+    static JsSpace s;
+    JsHome me = { .locality = JS_HOME_LOCAL };
+    memset(me.machine, 0x22, sizeof me.machine);
+    uint8_t want[48], got[48];
+    for (int i = 0; i < 48; i++) want[i] = (uint8_t)(i * 7 + 1);
+    CHECK(js_space_open(&s, dir, RZS, 2, NULL, &me) == JS_OK, "fresh open");
+    CHECK(js_space_anchor(&s, got) == 0, "fresh space reports an anchor");
+    uint32_t a;
+    js_branch_root(&s, &RZ, 91, &a);
+    CHECK(js_space_commit(&s) == JS_OK, "commit without anchor");
+    js_space_destroy(&s);
+    CHECK(js_space_open(&s, dir, RZS, 2, NULL, &me) == JS_OK, "reopen no-anchor");
+    CHECK(js_space_anchor(&s, got) == 0, "never-set anchor reads as present after reopen");
+    js_space_set_anchor(&s, want);
+    CHECK(js_space_anchor(&s, got) == 1 && !memcmp(got, want, 48), "set anchor not visible before commit");
+    CHECK(js_space_commit(&s) == JS_OK, "commit with anchor");
+    js_space_destroy(&s);
+    CHECK(js_space_open(&s, dir, RZS, 2, NULL, &me) == JS_OK, "reopen with anchor");
+    memset(got, 0, sizeof got);
+    CHECK(js_space_anchor(&s, got) == 1 && !memcmp(got, want, 48), "anchor did not round-trip");
+    js_space_destroy(&s);
+
+    /* Version-2 fixture from the v3 file. */
+    int fd = open(meta, O_RDONLY);
+    struct stat st;
+    CHECK(fd >= 0 && !fstat(fd, &st) && st.st_size > 128 + 48, "stat checkpoint");
+    if (fd < 0 || st.st_size <= 128 + 48) { if (fd >= 0) close(fd); goto done; }
+    size_t n = (size_t)st.st_size;
+    uint8_t *f = malloc(n);
+    CHECK(f && pread(fd, f, n, 0) == (ssize_t)n, "read checkpoint");
+    close(fd);
+    if (!f) goto done;
+    CHECK(f[8] == 3, "checkpoint version %u, want 3", f[8]);
+    size_t nn = n - 48;
+    uint64_t bl = (uint64_t)nn - 128;
+    for (int i = 0; i < 8; i++) f[24 + i] = (uint8_t)(bl >> (8 * i));
+    f[8] = 2;
+    sha256_hash(f + 128, bl, f + 64);
+    sha256_hash(f, 96, f + 96);
+    fd = open(meta, O_WRONLY | O_TRUNC);
+    CHECK(fd >= 0 && write(fd, f, nn) == (ssize_t)nn, "write v2 checkpoint");
+    if (fd >= 0) close(fd);
+    free(f);
+    int rc = js_space_open(&s, dir, RZS, 2, NULL, &me);
+    CHECK(rc == JS_OK, "version-2 checkpoint: open rc %d, want JS_OK", rc);
+    if (rc == JS_OK) {
+        CHECK(js_space_anchor(&s, got) == 0, "version-2 checkpoint reports an anchor");
+        js_space_destroy(&s);
+    }
+done:
+    unlink(meta); unlink(data);
+    rmdir(dir);
+}
+
 int main(void) {
     struct { const char *name; void (*fn)(void); } t[] = {
         { "alloc_reclaim", test_alloc_reclaim },
@@ -830,6 +894,7 @@ int main(void) {
         { "world_commit", test_world },
         { "gen_exhaustion", test_gen_exhaustion },
         { "gen_durable", test_gen_durable },
+        { "anchor", test_anchor },
     };
     for (size_t i = 0; i < sizeof t / sizeof *t; i++) {
         int before = g_fail;

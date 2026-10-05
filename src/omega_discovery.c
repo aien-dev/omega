@@ -291,14 +291,6 @@ bool omega_verify_semantic_preservation(const OmegaProgram *orig, const OmegaPro
     return true;
 }
 
-int omega_discovery_admit_to_library(OmegaLibrary *lib, const OmegaAbstractionCandidate *cand,
-                                     const uint8_t receipt_hash[32]) {
-    if (!lib || !cand) return -1;
-    if (!cand->is_verified || !cand->is_nontrivial || cand->compression_score <= 0) return -1;
-
-    return omega_library_insert(lib, &cand->abstraction, NULL, 0, receipt_hash);
-}
-
 int omega_demonstrate_search_acceleration(const OmegaProgram *discovered_abstraction,
                                           size_t *out_candidates_without,
                                           size_t *out_candidates_with) {

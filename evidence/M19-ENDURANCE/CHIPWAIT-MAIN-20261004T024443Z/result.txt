@@ -1,0 +1,6 @@
+omega=4e82e50b70f3c0287b1fa50e940083f8b29e6aa9 physics=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf label=CHIPWAIT-MAIN
+START 2026-10-04T02:44:46Z
+END 2026-10-04T02:44:58Z rc=0
+  [PASS] OMEGA_ACCEL_RESIDENT_1000_OP_PASS             : Sustained continuous execution of >= 1,000 heterogeneous operations on GB10
+M19_OBSERVED_JSON:{"m19_gates_completed":18,"m19_gates_passed":18,"regression_gates_completed":157,"regression_gates_passed":157,"sustained_dispatches":1000,"ring_capacity":1024,"wrap_dispatches":3072,"rolling_state_digest":"6872f1c30184a66036bd78f61e12c15e22d3dc968daa4b55f6e646c7db55bd17","channel_generation_advanced":true,"vas_preserved":true}
+porcelain after: omega[] physics[]

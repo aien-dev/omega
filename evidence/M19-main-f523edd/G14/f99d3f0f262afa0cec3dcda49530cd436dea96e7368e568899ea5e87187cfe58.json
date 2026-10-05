@@ -1,0 +1,63 @@
+{
+  "candidate_git_commit": "f523edd547d8c43a919df1be5ecbf746d25fc2b4",
+  "candidate_trees_clean": {
+    "omega": true,
+    "physics": true
+  },
+  "constituent_receipts": [
+    {
+      "receipt_digest": "b1f6fa3de5a62f25a26788a5fc215b9fab4e69f1dd070e8de6eca7433adadf8c",
+      "schema": "AIEN_M19R_QUALIFICATION_V1"
+    },
+    {
+      "receipt_digest": "b64aac4156c8eeac13f5fb9b17cc6108ec210a409166e58f020c68f19ac74d96",
+      "schema": "AIEN_M19R_FORGE_GATES_V1"
+    },
+    {
+      "receipt_digest": "2b97ea1b962bc15523acd3bb5bf369c3bd5b4efce16e1b166959b89440e3766e",
+      "schema": "AIEN_OMEGA_NUMERIC_0_V1"
+    }
+  ],
+  "criteria": {
+    "COMPLETION_EXACTLY_ONCE": {
+      "receipt_digest": "b1f6fa3de5a62f25a26788a5fc215b9fab4e69f1dd070e8de6eca7433adadf8c",
+      "status": "PASS"
+    },
+    "DEVICE_MEMORY_LIFECYCLE": {
+      "receipt_digest": "b1f6fa3de5a62f25a26788a5fc215b9fab4e69f1dd070e8de6eca7433adadf8c",
+      "status": "PASS"
+    },
+    "EVIDENCE_IMMUTABLE": {
+      "receipt_digest": "b1f6fa3de5a62f25a26788a5fc215b9fab4e69f1dd070e8de6eca7433adadf8c",
+      "status": "PASS"
+    },
+    "FORGE_BOUNDARY": {
+      "receipt_digest": "b64aac4156c8eeac13f5fb9b17cc6108ec210a409166e58f020c68f19ac74d96",
+      "status": "PASS"
+    },
+    "FP32_CPU_GB10_PARITY": {
+      "receipt_digest": "2b97ea1b962bc15523acd3bb5bf369c3bd5b4efce16e1b166959b89440e3766e",
+      "status": "PASS"
+    },
+    "HARDWARE_ID_OBSERVED": {
+      "receipt_digest": "b64aac4156c8eeac13f5fb9b17cc6108ec210a409166e58f020c68f19ac74d96",
+      "status": "PASS"
+    },
+    "LONG_RUNNING_GPU_SOAK": {
+      "receipt_digest": "b1f6fa3de5a62f25a26788a5fc215b9fab4e69f1dd070e8de6eca7433adadf8c",
+      "status": "PASS"
+    },
+    "RECEIPTS_OBSERVED_NOT_ASSERTED": {
+      "receipt_digest": "b1f6fa3de5a62f25a26788a5fc215b9fab4e69f1dd070e8de6eca7433adadf8c",
+      "status": "PASS"
+    }
+  },
+  "digest_meaning": "integrity only, not authenticity: re-hash the constituent receipts named here",
+  "gate": "M19R_GATE14_COMBINED_FOUNDATION_ADMISSION",
+  "hardware_descriptor_digest": "91684948286bd0f1e34caca4cb2d8f9b43d45d0f7ede39ba1a26e32559e53ce4",
+  "physics_candidate_git_commit": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf",
+  "receipt_digest": "f99d3f0f262afa0cec3dcda49530cd436dea96e7368e568899ea5e87187cfe58",
+  "schema": "AIEN_M19R_GATE14_FOUNDATION_V1",
+  "status": "PASS",
+  "timestamp_utc": "2026-10-03T16:48:22.804975Z"
+}

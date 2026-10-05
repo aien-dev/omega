@@ -1,0 +1,23 @@
+PASS gqa_f32_tinyllama_32q4kv_ctx1 n=2048 rc=OK violations=0 worst_scaled_err=0 chip_ns=0 call_ns=767364 calls=1 unwritten=0 | mutants 0/0 
+PASS gqa_f32_tinyllama_32q4kv_ctx17 n=2048 rc=OK violations=0 worst_scaled_err=0.00189313 chip_ns=0 call_ns=2476667 calls=1 unwritten=0 | mutants 0/0 
+PASS gqa_f32_tinyllama_32q4kv_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.00183169 chip_ns=0 call_ns=29483059 calls=1 unwritten=0 | mutants 0/0 
+PASS gqa_f32_tinyllama_32q4kv_ctx2048 n=2048 rc=OK violations=0 worst_scaled_err=0.00274869 chip_ns=0 call_ns=233364795 calls=1 unwritten=0 | mutants 2/2 SLOT:CAUGHT(rc=OK,bad=2041) NO_RESCALE:CAUGHT(rc=OK,bad=1959)
+PASS gqa_f32_llama32_1b_32q8kv_ctx1 n=2048 rc=OK violations=0 worst_scaled_err=0 chip_ns=0 call_ns=741923 calls=1 unwritten=0 | mutants 0/0 
+PASS gqa_f32_llama32_1b_32q8kv_ctx17 n=2048 rc=OK violations=0 worst_scaled_err=0.00230968 chip_ns=0 call_ns=2464971 calls=1 unwritten=0 | mutants 1/1 KV_HEAD:CAUGHT(rc=OK,bad=2047)
+PASS gqa_f32_llama32_1b_32q8kv_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.00185644 chip_ns=0 call_ns=29340451 calls=1 unwritten=0 | mutants 0/0 
+PASS gqa_f32_llama32_1b_32q8kv_ctx2048 n=2048 rc=OK violations=0 worst_scaled_err=0.00318634 chip_ns=0 call_ns=234547984 calls=1 unwritten=0 | mutants 2/2 SLOT:CAUGHT(rc=OK,bad=2041) NO_RESCALE:CAUGHT(rc=OK,bad=1963)
+PASS gqa_f32_large_scores_32q4kv_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.040813 chip_ns=0 call_ns=29431666 calls=1 unwritten=0 | mutants 1/1 NO_MAX:CAUGHT(rc=OK,bad=2048)
+PASS paged_bf16_tinyllama_32q4kv_bs16_ctx1 n=2048 rc=OK violations=0 worst_scaled_err=0 chip_ns=0 call_ns=738195 calls=1 unwritten=0 | mutants 1/1 KV_HEAD:CAUGHT(rc=OK,bad=2048)
+PASS paged_bf16_tinyllama_32q4kv_bs16_ctx17 n=2048 rc=OK violations=0 worst_scaled_err=0.00205509 chip_ns=0 call_ns=2543707 calls=1 unwritten=0 | mutants 2/2 KV_HEAD:CAUGHT(rc=OK,bad=2048) SLOT:CAUGHT(rc=OK,bad=2044)
+PASS paged_bf16_tinyllama_32q4kv_bs16_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.00184311 chip_ns=0 call_ns=30136166 calls=1 unwritten=0 | mutants 0/0 
+PASS paged_bf16_tinyllama_32q4kv_bs16_ctx2048 n=2048 rc=OK violations=0 worst_scaled_err=0.00211268 chip_ns=0 call_ns=239467528 calls=1 unwritten=0 | mutants 3/3 KV_HEAD:CAUGHT(rc=OK,bad=2046) SLOT:CAUGHT(rc=OK,bad=2040) NO_RESCALE:CAUGHT(rc=OK,bad=1960)
+PASS paged_bf16_llama32_1b_32q8kv_bs16_ctx1 n=2048 rc=OK violations=0 worst_scaled_err=0 chip_ns=0 call_ns=741348 calls=1 unwritten=0 | mutants 1/1 KV_HEAD:CAUGHT(rc=OK,bad=2048)
+PASS paged_bf16_llama32_1b_32q8kv_bs16_ctx17 n=2048 rc=OK violations=0 worst_scaled_err=0.00244084 chip_ns=0 call_ns=2546412 calls=1 unwritten=0 | mutants 2/2 KV_HEAD:CAUGHT(rc=OK,bad=2048) SLOT:CAUGHT(rc=OK,bad=2047)
+PASS paged_bf16_llama32_1b_32q8kv_bs16_ctx256 n=2048 rc=OK violations=0 worst_scaled_err=0.00196433 chip_ns=0 call_ns=30168646 calls=1 unwritten=0 | mutants 0/0 
+PASS paged_bf16_llama32_1b_32q8kv_bs16_ctx2048 n=2048 rc=OK violations=0 worst_scaled_err=0.00328333 chip_ns=0 call_ns=239022374 calls=1 unwritten=0 | mutants 3/3 KV_HEAD:CAUGHT(rc=OK,bad=2044) SLOT:CAUGHT(rc=OK,bad=2041) NO_RESCALE:CAUGHT(rc=OK,bad=1953)
+PASS paged_bf16_batch_3seq_32q8kv_ctx40_0_100 n=6144 rc=OK violations=0 worst_scaled_err=0.00233975 chip_ns=0 call_ns=13163867 calls=2 unwritten=0 | mutants 2/2 KV_HEAD:CAUGHT(rc=OK,bad=4096) SLOT:CAUGHT(rc=OK,bad=4093)
+mutant NO_MAX: caught 1 of 1
+mutant KV_HEAD: caught 8 of 8
+mutant SLOT: caught 7 of 7
+mutant NO_RESCALE: caught 4 of 4
+PASS: 45 checks, 0 failed

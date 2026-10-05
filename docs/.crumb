@@ -1,8 +1,4 @@
 {
-  "schema_version": "1.0.0",
-  "name": "docs",
-  "layer": "docs",
-  "purpose": "Directory docs. Purpose not yet described by a human.",
   "above": {
     "name": "cs-omega",
     "path": ".."
@@ -46,527 +42,616 @@
     }
   ],
   "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "640f6b7b818c769ab0dcd91437d58dd3251044084d2ae3785f000d30d2bb768a",
+          "last_commit": "a927bd6",
+          "name": "adr",
+          "purpose": "Directory docs/adr. Purpose not yet described by a human."
+        },
+        {
+          "digest": "e7ac2460455a35b96b01dab649dcdc2cdf5bb4657bf230b91272c64fe1bf82cf",
+          "last_commit": "d48ab89",
+          "name": "autodiff",
+          "purpose": "M21 OMEGA_AUTODIFF scope, op and error-contract table, status (not qualified)"
+        },
+        {
+          "digest": "d6212e49d394eddb0ee2df40bc9d203dcdb02072526bc6aa14e361b895874011",
+          "last_commit": "a6ba245",
+          "name": "brownian",
+          "purpose": "Directory docs/brownian. Purpose not yet described by a human."
+        },
+        {
+          "digest": "bffa3f51dd1982c179ba28f52971c38cb9592c795be0e93b958005e55190be5e",
+          "last_commit": "a0e59f4",
+          "name": "crumbs",
+          "purpose": "Directory docs/crumbs. Purpose not yet described by a human."
+        },
+        {
+          "digest": "e9baaaeec04be41a57c4a2d6a540b01a682c70d4db96cb4af4e1a9912a133aa9",
+          "last_commit": "55d05d6",
+          "name": "dual",
+          "purpose": "DUAL (ARCH-0031) documents in omega: applicability experiment method and findings (APPLICABILITY"
+        },
+        {
+          "digest": "f6591139efe8ceba03c23a5dd78510b4d990fe0fcade7382082180c74d3faa3e",
+          "last_commit": "85ca49a",
+          "name": "estimation",
+          "purpose": "Directory docs/estimation. Purpose not yet described by a human."
+        },
+        {
+          "digest": "ed0c4e7b8e7ba3b7ef4acee3c7d7d4d0c013529d514626339899d3862df052ea",
+          "last_commit": "e5593ae",
+          "name": "numeric",
+          "purpose": "Directory docs/numeric. Purpose not yet described by a human."
+        },
+        {
+          "digest": "7383bd26aacece7a9a1c17acc08b672873718a519ee5872e1bb552ce6df7baab",
+          "last_commit": "3c82389",
+          "name": "osc",
+          "purpose": "Directory docs/osc. Purpose not yet described by a human."
+        },
+        {
+          "digest": "0d858e0a20456e8380c530e4c77f523985f95657bf66b7418f341e84c6e9ec49",
+          "last_commit": "32ad8a5",
+          "name": "polyglot",
+          "purpose": "Directory docs/polyglot. Purpose not yet described by a human."
+        },
+        {
+          "digest": "2ab37838f8694e5060a3789f08a16146996050af949fba329ed805429d85f695",
+          "last_commit": "f633e34",
+          "name": "tensor",
+          "purpose": "M20 OMEGA_TENSOR spec and qualification checklist"
+        },
+        {
+          "digest": "41ab5cf8617e9583dcda75292e1e851e1ec4187b69d5d00b5eb354f1ee55c9d5",
+          "last_commit": "54826a3",
+          "name": "train",
+          "purpose": "Directory docs/train. Purpose not yet described by a human."
+        },
+        {
+          "digest": "ffa867828f99320f04160e9bddec89669e9e7cfec9ca9c0316e947d80c9c3617",
+          "last_commit": "6d85a16",
+          "name": "turing",
+          "purpose": "Directory docs/turing. Purpose not yet described by a human."
+        }
+      ],
+      "children_root": "sha256:fce9617f5526572d088e1aa791b05e09064083acd701bcf1b816f544367769d5",
+      "compiled_at": "2026-10-05T03:24:21Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:e4131510711c62d46378596fc17892088d9fe5724dc37f63eee3993e19070a2e",
+      "evidence_files": 26,
+      "evidence_root": "sha256:f58236184eadc5f8c8f95499127a9f43c2f4dc702ddca267853d8c3dee0690f1",
+      "files": 100,
+      "generated_at_commit": "b544d81db1f8d576685a8de19add13c7c59b052a",
+      "source_tree": "sha256:591c886445ea08315c7f4505339175112ac1474e4be86a360b57a6ca4afee19f"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 156,
+          "sha": "38a6dea",
+          "source": "backfill-git",
+          "subject": "OSC-3 items 0+1: owed OSC-2 review (NO FINDINGS); quick/full compiler suites (Lane 30) (#156)",
+          "timestamp": "2026-10-01T08:18:50-05:00"
+        },
+        {
+          "lane": "lane30",
+          "note": "## Item 0 + 1 (one PR, omega#156, MERGED 38a6dea)",
+          "pr": 156,
+          "ref": "2026-10-01-push-lane30-report.md",
+          "sha": "38a6dea",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 157,
+          "sha": "bab761c",
+          "source": "backfill-git",
+          "subject": "Merge pull request #157 from aien-dev/feat/e1-gb10-reduce-minmax",
+          "timestamp": "2026-10-01T08:13:57-05:00"
+        },
+        {
+          "lane": "lane2",
+          "note": "13:2xZ: omega#157 GB10 MAX/MIN/MEAN MERGED bab761c (chip PASS 380 cases 0 mismatches, receipt evidence/E1-REDUCE/a04f4f7f...json on 689ad4d pre-rebase). #136 M20 rebased (77e055c), CI job `tensor` gr",
+          "pr": 157,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "bab761c",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane2",
+          "note": "13:14Z Lane 2 interim: omega #157 MERGED bab761c (GB10 MAX/MIN/MEAN chip PASS 380/0, receipt evidence/E1-REDUCE/a04f4f7f on pre-rebase 689ad4d, so still no E1 receipt on merged main; consolidated chi",
+          "pr": 157,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "bab761c",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 155,
+          "sha": "56f5244",
+          "source": "backfill-git",
+          "subject": "Merge pull request #155 from aien-dev/docs/lane33-reconcile",
+          "timestamp": "2026-10-01T07:45:54-05:00"
+        },
+        {
+          "lane": "lane33",
+          "note": "| omega | #155 (Sonnet worker) | 56f5244 | Codex: no findings | evidence-immutable pass |",
+          "pr": 155,
+          "ref": "2026-10-01-push-lane33-report.md",
+          "sha": "56f5244",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane33",
+          "note": "omega #155:**",
+          "pr": 155,
+          "ref": "2026-10-01-push-lane33-report.md",
+          "sha": "56f5244",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane33",
+          "note": "12:51Z Lane 33 DONE: arch #82, omega #155, aienos #206 MERGED (docs truthful: E1 2/6, kernel 9/14 QEMU, TRUST-1 not qualified, R16 merged-with-failing-check noted; Gate 5 failed receipt added to omeg",
+          "pr": 155,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "56f5244",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 152,
+          "sha": "07004a8",
+          "source": "backfill-git",
+          "subject": "Merge pull request #152 from aien-dev/feat/e1-c2-gb10-divsqrt-transc",
+          "timestamp": "2026-10-01T07:30:32-05:00"
+        },
+        {
+          "lane": "lane2",
+          "note": "(1) #147 overflow (copy[32] vs 52 rows): fixed by #152, MERGED 07004a8 (by W8). Receipt OMEGA-NUMERIC-0/f4f6d362 is UNTRUSTED (made while broken). Fresh Gate 5 chip run on merged main pending.",
+          "pr": 152,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "07004a8",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane30",
+          "note": "Push-to-main trigger: done via #154 + #156 guard. Branch pushed. Crumbline set as the item after effects. 32-bit generation sites listed with fix plan in docs/osc/OSC-3-DESIGN.md (\"Generation width\" ",
+          "pr": 152,
+          "ref": "2026-10-01-push-lane30-report.md",
+          "sha": "07004a8",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane32",
+          "note": "Lead: Claude Opus 5.5 (Lane 32 lead). Started 2026-10-01. Base: omega origin/main 07004a8.",
+          "pr": 152,
+          "ref": "2026-10-01-push-lane32-report.md",
+          "sha": "07004a8",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane35",
+          "note": "Reviews: Codex on both PRs plus the C2S delta. Fixed: C overflow bounds; verifier LF/end-marker check; oracle-in-readable-repo leakage (placement rule: public fixtures in omega, sealed keys in privat",
+          "pr": 152,
+          "ref": "2026-10-01-push-lane35-report.md",
+          "sha": "07004a8",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane2",
+          "note": "12:35Z Lane 2 interim: #152 MERGED 07004a8 (overflow fix + DIV/SQRT main path), #143 0580ef8 committed SUM receipt be9d61ce; f4f6d362 marked UNTRUSTED, fresh Gate 5 run on merged main pending; #136 r",
+          "pr": 152,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "07004a8",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 151,
+          "sha": "7e713e3",
+          "source": "backfill-git",
+          "subject": "OSC-2 item 4: legacy AArch64 writer refuses out-of-range fields (Lane 27) (#151)",
+          "timestamp": "2026-10-01T06:29:06-05:00"
+        },
+        {
+          "lane": "lane27",
+          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
+          "pr": 151,
+          "ref": "2026-10-01-push-lane27-report.md",
+          "sha": "7e713e3",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane27",
+          "note": "11:29Z Lane 27 DONE: omega #151 7e713e3 (strict writer; 71.3M words identical in-range). OSC-2 complete: #148,#149,#150,#151; Codex re-review owed; test-compiler 2m23/3m. Running: 2,15,29.",
+          "pr": 151,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "7e713e3",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane33",
+          "note": "12:33Z Review track 1 DONE (track1-repos-drift.md): omega 7e713e3, aienos c3878bb, arch 921797b, physics 006e426, sovereign-core 7011f2b; #152 green, #153 red for stale head, #136 never ran checks; h",
+          "pr": 151,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "7e713e3",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 150,
+          "sha": "c773622",
+          "source": "backfill-git",
+          "subject": "OSC-2 item 3: arenas wired to the OSC-0B memory model (Lane 27) (#150)",
+          "timestamp": "2026-10-01T05:48:25-05:00"
+        },
+        {
+          "lane": "lane27",
+          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
+          "pr": 150,
+          "ref": "2026-10-01-push-lane27-report.md",
+          "sha": "c773622",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane27",
+          "note": "10:50Z Lane 27 interim: omega #150 c773622 (OSC-2 item 3 arenas wired to OSC-0B model, receipt osc2-arenas-d32a589a); item 4 strict writer next. Running: 2,15,27,29.",
+          "pr": 150,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "c773622",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 147,
+          "sha": "2d8cd68",
+          "source": "backfill-git",
+          "subject": "Merge pull request #147 from aien-dev/feat/e1-c-gb10-scalar",
+          "timestamp": "2026-10-01T05:36:00-05:00"
+        },
+        {
+          "lane": "lane2",
+          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
+          "pr": 147,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "2d8cd68",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane2",
+          "note": "DIV/SQRT GB10: standalone kernels merged #141 (6b14354), receipt evidence/E1-DIVSQRT/de7b2dd6...json PASS; wiring into the main GB10 path and GB10 EXP2/LOG2/other transcendentals: W8 running (feat/e1",
+          "pr": 147,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "2d8cd68",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane2",
+          "note": "10:38Z Lane 2 interim: omega #147 2d8cd68 (WP-C batch 1: 23 E1 scalar ops encoded on GB10, Gate 5 chip PASS receipt f4f6d362; first chip run FAIL kept d40f37f9, FFMA_V wait fixed). EXP/LOG next; #127",
+          "pr": 147,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "2d8cd68",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 149,
+          "sha": "845dce4",
+          "source": "backfill-git",
+          "subject": "OSC-2 item 2: fixed-layout structs (Lane 27) (#149)",
+          "timestamp": "2026-10-01T04:53:49-05:00"
+        },
+        {
+          "lane": "lane27",
+          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
+          "pr": 149,
+          "ref": "2026-10-01-push-lane27-report.md",
+          "sha": "845dce4",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane27",
+          "note": "09:55Z Lane 27 interim: omega #149 845dce4 (OSC-2 item 2 fixed-layout structs, receipt osc2-structs-9ed6766b); continues arena<->memory model + strict writer. Running: 2,15,25,26,27.",
+          "pr": 149,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "845dce4",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 148,
+          "sha": "0abdb08",
+          "source": "backfill-git",
+          "subject": "OSC-2 item 1: enforce requires/ensures contracts (Lane 27) (#148)",
+          "timestamp": "2026-10-01T04:10:43-05:00"
+        },
+        {
+          "lane": "lane27",
+          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
+          "pr": 148,
+          "ref": "2026-10-01-push-lane27-report.md",
+          "sha": "0abdb08",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane27",
+          "note": "09:13Z Lane 27 interim: omega #148 0abdb08 (OSC-2 item 1 requires/ensures; golden 27/27, neg 46/46); continues with structs/arena/writer. Running: 2,15,25,26,27.",
+          "pr": 148,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "0abdb08",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 127,
+          "sha": "7a5a13c",
+          "source": "backfill-git",
+          "subject": "Merge pull request #127 from aien-dev/feat/e1-b-transcendental",
+          "timestamp": "2026-10-01T03:47:11-05:00"
+        },
+        {
+          "lane": "lane2",
+          "note": "DIV/SQRT GB10: standalone kernels merged #141 (6b14354), receipt evidence/E1-DIVSQRT/de7b2dd6...json PASS; wiring into the main GB10 path and GB10 EXP2/LOG2/other transcendentals: W8 running (feat/e1",
+          "pr": 127,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "7a5a13c",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane23",
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "pr": 127,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "7a5a13c",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane9",
+          "note": "~08:00Z Lane 9 DONE: omega#128 ee89461 merged (test-empirical flake fix, test-only, Gemini review). omega#127 open: check owner.",
+          "pr": 127,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "7a5a13c",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 144,
+          "sha": "b81f850",
+          "source": "backfill-git",
+          "subject": "OSC-1: first compiler slice (parse -> typed IR -> AArch64) + OSC-0B memory model gate (#144)",
+          "timestamp": "2026-10-01T03:35:26-05:00"
+        },
+        {
+          "lane": "lane22",
+          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
+          "pr": 144,
+          "ref": "2026-10-01-push-lane22-report.md",
+          "sha": "b81f850",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane22",
+          "note": "~16:20Z Lane 22 DONE: omega #144 b81f850 (OSC-1 compiler slice: ints 8-64, let/if/bounded loops/calls/arrays+ownership; ~784k fuzz runs 0 mismatch; 24 golden byte-identical; 34 negatives; OSC-0B memo",
+          "pr": 144,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "b81f850",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 141,
+          "sha": "6b14354",
+          "source": "backfill-git",
+          "subject": "Merge pull request #141 from aien-dev/feat/e1-gb10-divsqrt",
+          "timestamp": "2026-10-01T02:35:52-05:00"
+        },
+        {
+          "lane": "lane2",
+          "note": "DIV/SQRT GB10: standalone kernels merged #141 (6b14354), receipt evidence/E1-DIVSQRT/de7b2dd6...json PASS; wiring into the main GB10 path and GB10 EXP2/LOG2/other transcendentals: W8 running (feat/e1",
+          "pr": 141,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "6b14354",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane2",
+          "note": "~15:15Z Lane 2 progress: omega #141 DIV/SQRT MERGED 6b14354; open #136 M20, #127 WP-B. Launched Lane 24 (omega host-suites-2.yml: remaining host suites into CI). Told Lane 2 to commit the #134 GB10 r",
+          "pr": 141,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "6b14354",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 140,
+          "sha": "54826a3",
+          "source": "backfill-git",
+          "subject": "M22 substrate: transactional generation store, E5 two-tier provenance, SGD first (NOT QUALIFIED) (#140)",
+          "timestamp": "2026-10-01T02:33:10-05:00"
+        },
+        {
+          "lane": "lane21",
+          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
+          "pr": 140,
+          "ref": "2026-10-01-push-lane21-report.md",
+          "sha": "54826a3",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane23",
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "pr": 140,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "54826a3",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane21",
+          "note": "~14:55Z Lane 21 DONE: omega #140 54826a3 (M22 substrate: shadow+atomic generation switch, 8-point crash tests OLD/NEW, E5 two-tier provenance, SGD path; M22 NOT QUALIFIED, waits M20/M21). Running: 2,",
+          "pr": 140,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "54826a3",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 134,
+          "sha": "c54d492",
+          "source": "backfill-git",
+          "subject": "Merge pull request #134 from aien-dev/feat/e1-d-reductions",
+          "timestamp": "2026-10-01T02:20:55-05:00"
+        },
+        {
+          "lane": "lane2",
+          "note": "MAX/MIN/MEAN on GB10: W7 branch feat/e1-gb10-reduce-minmax, chip run on the post-Codex-fix commit in progress; verdict pending. CPU tier merged (#134 c54d492).",
+          "pr": 134,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "c54d492",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane23",
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "pr": 134,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "c54d492",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane23",
+          "note": "2. omega #134 GB10 reduction receipt be9d61ce... is outside the repo (~/workspace/evidence-out/E1-REDUCE/ on the Spark), so it cannot be checked via gh; cited as such.",
+          "pr": 134,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "c54d492",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 129,
+          "sha": "d78fd11",
+          "source": "backfill-git",
+          "subject": "Merge pull request #129 from aien-dev/feat/est-v3",
+          "timestamp": "2026-09-30T23:43:21-05:00"
+        },
+        {
+          "lane": "lane23",
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "pr": 129,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "d78fd11",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane4",
+          "note": "omega #129: MERGED d78fd11 (merge commit, so 93b3579 stays in history).",
+          "pr": 129,
+          "ref": "2026-10-01-push-lane4-report.md",
+          "sha": "d78fd11",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane4",
+          "note": "~08:40Z Lane 4 DONE: EST v3 PHASE_A_FAIL recorded, omega#129 d78fd11, arch#80 ac83f0d; finding: 10-step variance ratio 2.137 (thermal ramp persists), F5 closest; EST-4/5 blocked. Launching Lane 15 (v",
+          "pr": 129,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "d78fd11",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 124,
+          "sha": "d3194f6",
+          "source": "backfill-git",
+          "subject": "Merge pull request #124 from aien-dev/feat/e1-a-scalar-contract",
+          "timestamp": "2026-09-30T22:52:26-05:00"
+        },
+        {
+          "lane": "lane2",
+          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
+          "pr": 124,
+          "ref": "2026-10-01-push-lane2-report.md",
+          "sha": "d3194f6",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane2",
+          "note": "~05:50Z Lane 2 WP-A (E1 scalar contract CPU tier) MERGED omega#124 d3194f6; test-numeric-cpu 21 PASS + 5 declared chip-only SKIP; env note: shared ../physics at 006e426 vs lock e95e3ed (second lane t",
+          "pr": 124,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "d3194f6",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 120,
+          "sha": "43089c2",
+          "source": "backfill-git",
+          "subject": "docs/turing: Grok and Gemini review fixes for #119 (#120)",
+          "timestamp": "2026-09-30T22:07:26-05:00"
+        },
+        {
+          "lane": "lane5",
+          "note": "~04:20Z Lane 5 DONE: aienos #184 999b5aa M6-A hosted C net stack PASS (host only; receipt native/net/receipts/m6a_net_host_30de56f0...). Deferred: native NIC binding (needs C kernel, Drake port order",
+          "pr": 120,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "43089c2",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 119,
+          "sha": "a6def0c",
+          "source": "backfill-git",
+          "subject": "docs/turing: reconcile qualification state with Brownian Wave 1 (#119)",
+          "timestamp": "2026-09-30T21:52:32-05:00"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 118,
+          "sha": "8a56ace",
+          "source": "backfill-git",
+          "subject": "estimation: EST-3b protocol v2 Phase A record (M2 tools, C1 pre-check FAIL, no promotion) (#118)",
+          "timestamp": "2026-09-30T21:43:42-05:00"
+        },
+        {
+          "lane": "lane4",
+          "note": "Premise corrections vs the pasted plan: estimation v2 Phase A already FAILED (omega #118, quantization class), so Lane 4 designs v3 with a declared loaded period; aien-dev/forge does not exist (FORGE",
+          "pr": 118,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "8a56ace",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 117,
+          "sha": "c2160f5",
+          "source": "backfill-git",
+          "subject": "docs: E1 numeric closure gap table (#117)",
+          "timestamp": "2026-09-30T21:30:59-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 42
+    },
     "seed": {
-      "purpose_auto": "Directory docs. Purpose not yet described by a human.",
       "files": [
         "r15-handoff.md",
         "r16-operator-brief.md",
         "r16-production-entry-point.md",
         "rx-r1-world-unification.md",
         "rx-r7-captable-map.md"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 42,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "38a6dea",
-          "timestamp": "2026-10-01T08:18:50-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-3 items 0+1: owed OSC-2 review (NO FINDINGS); quick/full compiler suites (Lane 30) (#156)",
-          "pr": 156
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane30",
-          "sha": "38a6dea",
-          "pr": 156,
-          "note": "## Item 0 + 1 (one PR, omega#156, MERGED 38a6dea)",
-          "ref": "2026-10-01-push-lane30-report.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "bab761c",
-          "timestamp": "2026-10-01T08:13:57-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #157 from aien-dev/feat/e1-gb10-reduce-minmax",
-          "pr": 157
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "bab761c",
-          "pr": 157,
-          "note": "13:2xZ: omega#157 GB10 MAX/MIN/MEAN MERGED bab761c (chip PASS 380 cases 0 mismatches, receipt evidence/E1-REDUCE/a04f4f7f...json on 689ad4d pre-rebase). #136 M20 rebased (77e055c), CI job `tensor` gr",
-          "ref": "2026-10-01-push-lane2-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "bab761c",
-          "pr": 157,
-          "note": "13:14Z Lane 2 interim: omega #157 MERGED bab761c (GB10 MAX/MIN/MEAN chip PASS 380/0, receipt evidence/E1-REDUCE/a04f4f7f on pre-rebase 689ad4d, so still no E1 receipt on merged main; consolidated chi",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "56f5244",
-          "timestamp": "2026-10-01T07:45:54-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #155 from aien-dev/docs/lane33-reconcile",
-          "pr": 155
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane33",
-          "sha": "56f5244",
-          "pr": 155,
-          "note": "| omega | #155 (Sonnet worker) | 56f5244 | Codex: no findings | evidence-immutable pass |",
-          "ref": "2026-10-01-push-lane33-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane33",
-          "sha": "56f5244",
-          "pr": 155,
-          "note": "omega #155:**",
-          "ref": "2026-10-01-push-lane33-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane33",
-          "sha": "56f5244",
-          "pr": 155,
-          "note": "12:51Z Lane 33 DONE: arch #82, omega #155, aienos #206 MERGED (docs truthful: E1 2/6, kernel 9/14 QEMU, TRUST-1 not qualified, R16 merged-with-failing-check noted; Gate 5 failed receipt added to omeg",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "07004a8",
-          "timestamp": "2026-10-01T07:30:32-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #152 from aien-dev/feat/e1-c2-gb10-divsqrt-transc",
-          "pr": 152
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "07004a8",
-          "pr": 152,
-          "note": "(1) #147 overflow (copy[32] vs 52 rows): fixed by #152, MERGED 07004a8 (by W8). Receipt OMEGA-NUMERIC-0/f4f6d362 is UNTRUSTED (made while broken). Fresh Gate 5 chip run on merged main pending.",
-          "ref": "2026-10-01-push-lane2-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane30",
-          "sha": "07004a8",
-          "pr": 152,
-          "note": "Push-to-main trigger: done via #154 + #156 guard. Branch pushed. Crumbline set as the item after effects. 32-bit generation sites listed with fix plan in docs/osc/OSC-3-DESIGN.md (\"Generation width\" ",
-          "ref": "2026-10-01-push-lane30-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane32",
-          "sha": "07004a8",
-          "pr": 152,
-          "note": "Lead: Claude Opus 5.5 (Lane 32 lead). Started 2026-10-01. Base: omega origin/main 07004a8.",
-          "ref": "2026-10-01-push-lane32-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane35",
-          "sha": "07004a8",
-          "pr": 152,
-          "note": "Reviews: Codex on both PRs plus the C2S delta. Fixed: C overflow bounds; verifier LF/end-marker check; oracle-in-readable-repo leakage (placement rule: public fixtures in omega, sealed keys in privat",
-          "ref": "2026-10-01-push-lane35-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "07004a8",
-          "pr": 152,
-          "note": "12:35Z Lane 2 interim: #152 MERGED 07004a8 (overflow fix + DIV/SQRT main path), #143 0580ef8 committed SUM receipt be9d61ce; f4f6d362 marked UNTRUSTED, fresh Gate 5 run on merged main pending; #136 r",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "7e713e3",
-          "timestamp": "2026-10-01T06:29:06-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-2 item 4: legacy AArch64 writer refuses out-of-range fields (Lane 27) (#151)",
-          "pr": 151
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "7e713e3",
-          "pr": 151,
-          "note": "PR aien-dev/omega#151, squash merge 7e713e301a6733a679f82f6892beda57b313908c",
-          "ref": "2026-10-01-push-lane27-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "7e713e3",
-          "pr": 151,
-          "note": "11:29Z Lane 27 DONE: omega #151 7e713e3 (strict writer; 71.3M words identical in-range). OSC-2 complete: #148,#149,#150,#151; Codex re-review owed; test-compiler 2m23/3m. Running: 2,15,29.",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane33",
-          "sha": "7e713e3",
-          "pr": 151,
-          "note": "12:33Z Review track 1 DONE (track1-repos-drift.md): omega 7e713e3, aienos c3878bb, arch 921797b, physics 006e426, sovereign-core 7011f2b; #152 green, #153 red for stale head, #136 never ran checks; h",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "c773622",
-          "timestamp": "2026-10-01T05:48:25-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-2 item 3: arenas wired to the OSC-0B memory model (Lane 27) (#150)",
-          "pr": 150
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "c773622",
-          "pr": 150,
-          "note": "PR aien-dev/omega#150, squash merge c77362242b13d7df127eeabec9eda75119f934cc",
-          "ref": "2026-10-01-push-lane27-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "c773622",
-          "pr": 150,
-          "note": "10:50Z Lane 27 interim: omega #150 c773622 (OSC-2 item 3 arenas wired to OSC-0B model, receipt osc2-arenas-d32a589a); item 4 strict writer next. Running: 2,15,27,29.",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "2d8cd68",
-          "timestamp": "2026-10-01T05:36:00-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #147 from aien-dev/feat/e1-c-gb10-scalar",
-          "pr": 147
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "2d8cd68",
-          "pr": 147,
-          "note": "PR aien-dev/omega#147 MERGED with merge commit 2d8cd68 (head abe923c, rebased on 520c895).",
-          "ref": "2026-10-01-push-lane2-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "2d8cd68",
-          "pr": 147,
-          "note": "DIV/SQRT GB10: standalone kernels merged #141 (6b14354), receipt evidence/E1-DIVSQRT/de7b2dd6...json PASS; wiring into the main GB10 path and GB10 EXP2/LOG2/other transcendentals: W8 running (feat/e1",
-          "ref": "2026-10-01-push-lane2-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "2d8cd68",
-          "pr": 147,
-          "note": "10:38Z Lane 2 interim: omega #147 2d8cd68 (WP-C batch 1: 23 E1 scalar ops encoded on GB10, Gate 5 chip PASS receipt f4f6d362; first chip run FAIL kept d40f37f9, FFMA_V wait fixed). EXP/LOG next; #127",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "845dce4",
-          "timestamp": "2026-10-01T04:53:49-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-2 item 2: fixed-layout structs (Lane 27) (#149)",
-          "pr": 149
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "845dce4",
-          "pr": 149,
-          "note": "PR aien-dev/omega#149, squash merge 845dce4d53f04bb929b83ebc5cf59c064f16d731",
-          "ref": "2026-10-01-push-lane27-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "845dce4",
-          "pr": 149,
-          "note": "09:55Z Lane 27 interim: omega #149 845dce4 (OSC-2 item 2 fixed-layout structs, receipt osc2-structs-9ed6766b); continues arena<->memory model + strict writer. Running: 2,15,25,26,27.",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "0abdb08",
-          "timestamp": "2026-10-01T04:10:43-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-2 item 1: enforce requires/ensures contracts (Lane 27) (#148)",
-          "pr": 148
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "0abdb08",
-          "pr": 148,
-          "note": "PR aien-dev/omega#148, squash merge 0abdb08aec443cad3b66cf17afee6b713b7af271",
-          "ref": "2026-10-01-push-lane27-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane27",
-          "sha": "0abdb08",
-          "pr": 148,
-          "note": "09:13Z Lane 27 interim: omega #148 0abdb08 (OSC-2 item 1 requires/ensures; golden 27/27, neg 46/46); continues with structs/arena/writer. Running: 2,15,25,26,27.",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "7a5a13c",
-          "timestamp": "2026-10-01T03:47:11-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #127 from aien-dev/feat/e1-b-transcendental",
-          "pr": 127
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "7a5a13c",
-          "pr": 127,
-          "note": "DIV/SQRT GB10: standalone kernels merged #141 (6b14354), receipt evidence/E1-DIVSQRT/de7b2dd6...json PASS; wiring into the main GB10 path and GB10 EXP2/LOG2/other transcendentals: W8 running (feat/e1",
-          "ref": "2026-10-01-push-lane2-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane23",
-          "sha": "7a5a13c",
-          "pr": 127,
-          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
-          "ref": "2026-10-01-push-lane23-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane9",
-          "sha": "7a5a13c",
-          "pr": 127,
-          "note": "~08:00Z Lane 9 DONE: omega#128 ee89461 merged (test-empirical flake fix, test-only, Gemini review). omega#127 open: check owner.",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "b81f850",
-          "timestamp": "2026-10-01T03:35:26-05:00",
-          "author": "aien-dev",
-          "subject": "OSC-1: first compiler slice (parse -> typed IR -> AArch64) + OSC-0B memory model gate (#144)",
-          "pr": 144
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane22",
-          "sha": "b81f850",
-          "pr": 144,
-          "note": "PR: aien-dev/omega#144, squash-merged, merge commit b81f8500a25ee543ce55750d17aa1fa517fe94a8",
-          "ref": "2026-10-01-push-lane22-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane22",
-          "sha": "b81f850",
-          "pr": 144,
-          "note": "~16:20Z Lane 22 DONE: omega #144 b81f850 (OSC-1 compiler slice: ints 8-64, let/if/bounded loops/calls/arrays+ownership; ~784k fuzz runs 0 mismatch; 24 golden byte-identical; 34 negatives; OSC-0B memo",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "6b14354",
-          "timestamp": "2026-10-01T02:35:52-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #141 from aien-dev/feat/e1-gb10-divsqrt",
-          "pr": 141
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "6b14354",
-          "pr": 141,
-          "note": "DIV/SQRT GB10: standalone kernels merged #141 (6b14354), receipt evidence/E1-DIVSQRT/de7b2dd6...json PASS; wiring into the main GB10 path and GB10 EXP2/LOG2/other transcendentals: W8 running (feat/e1",
-          "ref": "2026-10-01-push-lane2-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "6b14354",
-          "pr": 141,
-          "note": "~15:15Z Lane 2 progress: omega #141 DIV/SQRT MERGED 6b14354; open #136 M20, #127 WP-B. Launched Lane 24 (omega host-suites-2.yml: remaining host suites into CI). Told Lane 2 to commit the #134 GB10 r",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "54826a3",
-          "timestamp": "2026-10-01T02:33:10-05:00",
-          "author": "aien-dev",
-          "subject": "M22 substrate: transactional generation store, E5 two-tier provenance, SGD first (NOT QUALIFIED) (#140)",
-          "pr": 140
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane21",
-          "sha": "54826a3",
-          "pr": 140,
-          "note": "PR: aien-dev/omega #140, squash-merged, merge commit 54826a37f54465ceec26b4f6b1ea96942130513e.",
-          "ref": "2026-10-01-push-lane21-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane23",
-          "sha": "54826a3",
-          "pr": 140,
-          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
-          "ref": "2026-10-01-push-lane23-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane21",
-          "sha": "54826a3",
-          "pr": 140,
-          "note": "~14:55Z Lane 21 DONE: omega #140 54826a3 (M22 substrate: shadow+atomic generation switch, 8-point crash tests OLD/NEW, E5 two-tier provenance, SGD path; M22 NOT QUALIFIED, waits M20/M21). Running: 2,",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "c54d492",
-          "timestamp": "2026-10-01T02:20:55-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #134 from aien-dev/feat/e1-d-reductions",
-          "pr": 134
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "c54d492",
-          "pr": 134,
-          "note": "MAX/MIN/MEAN on GB10: W7 branch feat/e1-gb10-reduce-minmax, chip run on the post-Codex-fix commit in progress; verdict pending. CPU tier merged (#134 c54d492).",
-          "ref": "2026-10-01-push-lane2-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane23",
-          "sha": "c54d492",
-          "pr": 134,
-          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
-          "ref": "2026-10-01-push-lane23-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane23",
-          "sha": "c54d492",
-          "pr": 134,
-          "note": "2. omega #134 GB10 reduction receipt be9d61ce... is outside the repo (~/workspace/evidence-out/E1-REDUCE/ on the Spark), so it cannot be checked via gh; cited as such.",
-          "ref": "2026-10-01-push-lane23-report.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "d78fd11",
-          "timestamp": "2026-09-30T23:43:21-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #129 from aien-dev/feat/est-v3",
-          "pr": 129
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane23",
-          "sha": "d78fd11",
-          "pr": 129,
-          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
-          "ref": "2026-10-01-push-lane23-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane4",
-          "sha": "d78fd11",
-          "pr": 129,
-          "note": "omega #129: MERGED d78fd11 (merge commit, so 93b3579 stays in history).",
-          "ref": "2026-10-01-push-lane4-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane4",
-          "sha": "d78fd11",
-          "pr": 129,
-          "note": "~08:40Z Lane 4 DONE: EST v3 PHASE_A_FAIL recorded, omega#129 d78fd11, arch#80 ac83f0d; finding: 10-step variance ratio 2.137 (thermal ramp persists), F5 closest; EST-4/5 blocked. Launching Lane 15 (v",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "d3194f6",
-          "timestamp": "2026-09-30T22:52:26-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #124 from aien-dev/feat/e1-a-scalar-contract",
-          "pr": 124
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "d3194f6",
-          "pr": 124,
-          "note": "PR aien-dev/omega#124, merged as d3194f6 (merge commit, matching the repo's habit). Merged on top of #122 (ce7821d), which touched different files; the CPU numeric test was rerun on the merged main: ",
-          "ref": "2026-10-01-push-lane2-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane2",
-          "sha": "d3194f6",
-          "pr": 124,
-          "note": "~05:50Z Lane 2 WP-A (E1 scalar contract CPU tier) MERGED omega#124 d3194f6; test-numeric-cpu 21 PASS + 5 declared chip-only SKIP; env note: shared ../physics at 006e426 vs lock e95e3ed (second lane t",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "43089c2",
-          "timestamp": "2026-09-30T22:07:26-05:00",
-          "author": "aien-dev",
-          "subject": "docs/turing: Grok and Gemini review fixes for #119 (#120)",
-          "pr": 120
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane5",
-          "sha": "43089c2",
-          "pr": 120,
-          "note": "~04:20Z Lane 5 DONE: aienos #184 999b5aa M6-A hosted C net stack PASS (host only; receipt native/net/receipts/m6a_net_host_30de56f0...). Deferred: native NIC binding (needs C kernel, Drake port order",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "a6def0c",
-          "timestamp": "2026-09-30T21:52:32-05:00",
-          "author": "aien-dev",
-          "subject": "docs/turing: reconcile qualification state with Brownian Wave 1 (#119)",
-          "pr": 119
-        },
-        {
-          "source": "backfill-git",
-          "sha": "8a56ace",
-          "timestamp": "2026-09-30T21:43:42-05:00",
-          "author": "aien-dev",
-          "subject": "estimation: EST-3b protocol v2 Phase A record (M2 tools, C1 pre-check FAIL, no promotion) (#118)",
-          "pr": 118
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane4",
-          "sha": "8a56ace",
-          "pr": 118,
-          "note": "Premise corrections vs the pasted plan: estimation v2 Phase A already FAILED (omega #118, quantization class), so Lane 4 designs v3 with a declared loaded period; aien-dev/forge does not exist (FORGE",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "c2160f5",
-          "timestamp": "2026-09-30T21:30:59-05:00",
-          "author": "aien-dev",
-          "subject": "docs: E1 numeric closure gap table (#117)",
-          "pr": 117
-        }
-      ]
+      ],
+      "purpose_auto": "Directory docs. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "docs",
+  "name": "docs",
+  "purpose": "Directory docs. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

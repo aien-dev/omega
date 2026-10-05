@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T18:54:28Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:e9baaaeec04be41a57c4a2d6a540b01a682c70d4db96cb4af4e1a9912a133aa9",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "500a510f818ce4b973f4862c96e9361b9c450890",
+      "source_tree": "sha256:4920e1c6a40a59b4a821be52bcfffd40a7b179228517de9afa28f78126089da7"
+    }
+  },
+  "name": "dual",
+  "purpose": "DUAL (ARCH-0031) documents in omega: applicability experiment method and findings (APPLICABILITY_EXPERIMENT.md). Experimental; no production gate.",
+  "schema_version": "1.0.0"
+}

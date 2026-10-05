@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/effect",
-  "layer": "tests/effect",
-  "purpose": "Directory tests/effect. Purpose not yet described by a human.",
   "above": {
     "name": "tests",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tests/effect. Purpose not yet described by a human.",
-      "files": [
-        "test_effect_cap64.c"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:fb0a9296a93d065d5e016ad0a950fc6b9691f8ddca12ad0111cee2e35791cdb4",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:43b5152e5505a0b077db08f0182ec466534fa4f663b8b861a4df2b338ccbea9d"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "8e7a445",
-          "timestamp": "2026-09-29T06:52:59-05:00",
           "author": "aien-dev",
+          "pr": 71,
+          "sha": "8e7a445",
+          "source": "backfill-git",
           "subject": "Merge pull request #71 from aien-dev/fix/effect-cap64",
-          "pr": 71
+          "timestamp": "2026-09-29T06:52:59-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "test_effect_cap64.c"
+      ],
+      "purpose_auto": "Directory tests/effect. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/effect",
+  "name": "tests/effect",
+  "purpose": "Directory tests/effect. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

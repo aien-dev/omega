@@ -1,15 +1,94 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/estimation",
-  "layer": "src/estimation",
-  "purpose": "Directory src/estimation. Purpose not yet described by a human.",
   "above": {
     "name": "src",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:62a0884e7f075eb3c92b22fc400234a06bd8c3020fc75e55a9b0c0f0f6a26d7e",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 10,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:8354d309b9735cae9a5e2f895b325891b7b2020e6add0aa2167a712902f85236"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 129,
+          "sha": "d78fd11",
+          "source": "backfill-git",
+          "subject": "Merge pull request #129 from aien-dev/feat/est-v3",
+          "timestamp": "2026-09-30T23:43:21-05:00"
+        },
+        {
+          "lane": "lane23",
+          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
+          "pr": 129,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "d78fd11",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane4",
+          "note": "omega #129: MERGED d78fd11 (merge commit, so 93b3579 stays in history).",
+          "pr": 129,
+          "ref": "2026-10-01-push-lane4-report.md",
+          "sha": "d78fd11",
+          "source": "backfill-lane-report"
+        },
+        {
+          "lane": "lane4",
+          "note": "~08:40Z Lane 4 DONE: EST v3 PHASE_A_FAIL recorded, omega#129 d78fd11, arch#80 ac83f0d; finding: 10-step variance ratio 2.137 (thermal ramp persists), F5 closest; EST-4/5 blocked. Launching Lane 15 (v",
+          "pr": 129,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "d78fd11",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 118,
+          "sha": "8a56ace",
+          "source": "backfill-git",
+          "subject": "estimation: EST-3b protocol v2 Phase A record (M2 tools, C1 pre-check FAIL, no promotion) (#118)",
+          "timestamp": "2026-09-30T21:43:42-05:00"
+        },
+        {
+          "lane": "lane4",
+          "note": "Premise corrections vs the pasted plan: estimation v2 Phase A already FAILED (omega #118, quantization class), so Lane 4 designs v3 with a declared loaded period; aien-dev/forge does not exist (FORGE",
+          "pr": 118,
+          "ref": "2026-10-01-next-major-push-orchestrator.md",
+          "sha": "8a56ace",
+          "source": "backfill-lane-report"
+        },
+        {
+          "author": "aien-dev",
+          "pr": 105,
+          "sha": "6d1ff1d",
+          "source": "backfill-git",
+          "subject": "Merge pull request #105 from aien-dev/feat/est-0-1",
+          "timestamp": "2026-09-30T09:20:35-05:00"
+        },
+        {
+          "lane": "lane23",
+          "note": "ADR 0020 EST table: EST-0/1/2 evidence omega#105 6d1ff1d (EST-2 \"exit not claimed\"); EST-3 \"FAIL recorded (v1 #105, v2 #118, v3 #129); v4 in progress\" (branch feat/est-v4, no PR); EST-4/5 \"blocked on",
+          "pr": 105,
+          "ref": "2026-10-01-push-lane23-report.md",
+          "sha": "6d1ff1d",
+          "source": "backfill-lane-report"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 3
+    },
     "seed": {
-      "purpose_auto": "Directory src/estimation. Purpose not yet described by a human.",
       "files": [
         "est_kf.c",
         "est_kf.h",
@@ -19,79 +98,12 @@
         "est_pred.h",
         "est_types.c",
         "est_types.h"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 3,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "d78fd11",
-          "timestamp": "2026-09-30T23:43:21-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #129 from aien-dev/feat/est-v3",
-          "pr": 129
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane23",
-          "sha": "d78fd11",
-          "pr": 129,
-          "note": "§2 new \"later merges\" addendum: aienos #189 6bcef8a, #190 811bbc0, #191 697391f, #192 08cb905, #193 8d511d6; omega #128 ee89461, #129 d78fd11, #130 7fb59d3, #131 f7b22f1, #132 ff2af05, #133 c6cf052,",
-          "ref": "2026-10-01-push-lane23-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane4",
-          "sha": "d78fd11",
-          "pr": 129,
-          "note": "omega #129: MERGED d78fd11 (merge commit, so 93b3579 stays in history).",
-          "ref": "2026-10-01-push-lane4-report.md"
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane4",
-          "sha": "d78fd11",
-          "pr": 129,
-          "note": "~08:40Z Lane 4 DONE: EST v3 PHASE_A_FAIL recorded, omega#129 d78fd11, arch#80 ac83f0d; finding: 10-step variance ratio 2.137 (thermal ramp persists), F5 closest; EST-4/5 blocked. Launching Lane 15 (v",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "8a56ace",
-          "timestamp": "2026-09-30T21:43:42-05:00",
-          "author": "aien-dev",
-          "subject": "estimation: EST-3b protocol v2 Phase A record (M2 tools, C1 pre-check FAIL, no promotion) (#118)",
-          "pr": 118
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane4",
-          "sha": "8a56ace",
-          "pr": 118,
-          "note": "Premise corrections vs the pasted plan: estimation v2 Phase A already FAILED (omega #118, quantization class), so Lane 4 designs v3 with a declared loaded period; aien-dev/forge does not exist (FORGE",
-          "ref": "2026-10-01-next-major-push-orchestrator.md"
-        },
-        {
-          "source": "backfill-git",
-          "sha": "6d1ff1d",
-          "timestamp": "2026-09-30T09:20:35-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #105 from aien-dev/feat/est-0-1",
-          "pr": 105
-        },
-        {
-          "source": "backfill-lane-report",
-          "lane": "lane23",
-          "sha": "6d1ff1d",
-          "pr": 105,
-          "note": "ADR 0020 EST table: EST-0/1/2 evidence omega#105 6d1ff1d (EST-2 \"exit not claimed\"); EST-3 \"FAIL recorded (v1 #105, v2 #118, v3 #129); v4 in progress\" (branch feat/est-v4, no PR); EST-4/5 \"blocked on",
-          "ref": "2026-10-01-push-lane23-report.md"
-        }
-      ]
+      ],
+      "purpose_auto": "Directory src/estimation. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "src/estimation",
+  "name": "src/estimation",
+  "purpose": "Directory src/estimation. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

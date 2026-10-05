@@ -1,0 +1,6 @@
+{
+  "commands": [],
+  "error": "/home/drakestapleton/workspace/hive-worktrees/omega-chipwait1/build/omegatool exited 1; see /home/drakestapleton/workspace/hive-worktrees/omega-chipwait1/build/qual-runs/20261003T112252Z-42b27ce0af82/world_lifecycle.log",
+  "run_id": "20261003T112252Z-42b27ce0af82",
+  "status": "FAILED"
+}

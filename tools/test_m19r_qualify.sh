@@ -105,6 +105,82 @@ name=$(basename "$rec" .json)
 check "recorded M19R receipt digest reproduced" '[ "$(jq "del(.receipt_digest)" "$rec" | "$JSON_CANON" --sha256)" = "$name" ]'
 check "recorded M19R receipt pretty form reproduced" '"$JSON_CANON" --pretty < "$rec" | cmp -s - "$rec"'
 
+echo "evidence retention across runs (stubbed qualification, no hardware)"
+check "make clean removes only the build directory" '[ "$(make --no-print-directory -C "$HERE" -n clean | tr -d "\n")" = "rm -rf build" ]'
+fake=$TMP/fakeomega
+mkdir -p "$fake/tools" "$fake/build"
+ln -s "$HERE/src" "$fake/src"; cp "$HERE/tools/json_canon.c" "$fake/tools/"
+printf "/qual-runs/\nsrc\n" > "$fake/.gitignore"
+printf 'clean:\n\trm -rf build\n' > "$fake/Makefile"
+git init -q "$fake"
+fake_run() { # fake_run EXTRA_ARGS... ; runs m19r_main with a stubbed qualify
+    (
+        M19R_OMEGA=$fake
+        m19r_qualify() { # like the real flow: make clean, then write evidence into the run dir
+            m19r_cmd "$M19R_OMEGA" - make clean || return 1
+            mkdir -p "$M19R_OMEGA/build"; echo product > "$M19R_OMEGA/build/omegatool"
+            printf '  [PASS] GATE_A\n' > "$M19R_RUN_DIR/m19.log"
+            echo "stub stdout line"; echo "stub stderr line" >&2
+            R_STATUS=$STUB_STATUS R_EVENTS='[]' R_M19='{}'
+            [ "$STUB_STATUS" = PASS ] || { m19r_fail "stub failure"; return 1; }
+        }
+        m19r_main --omega-candidate "$(printf 'a%.0s' {1..40})" --physics-candidate "$(printf 'b%.0s' {1..40})" \
+            --physics-dir "$TMP/nophysics" "$@"
+    ) > "$TMP/fake.out" 2> "$TMP/fake.err"
+}
+STUB_STATUS=PASS fake_run --run-id run1; rc1=$?
+r1=$fake/qual-runs/run1
+check "run 1 exits 0 and writes under <omega>/qual-runs (default root)" '[ "$rc1" = 0 ] && [ -f "$r1/run.json" ]'
+check "run 1 has command, environment, logs, verdict, hashes" 'for f in command.txt environment.json stdout.log stderr.log verdict.json hashes.sha256 m19.log; do [ -f "$r1/$f" ] || exit 1; done'
+check "stdout.log/stderr.log captured the run" 'grep -q "stub stdout line" "$r1/stdout.log" && grep -q "stub stderr line" "$r1/stderr.log"'
+check "environment.json has the six fields" '[ "$(jq -r "[.hostname,.date_utc,.omega_sha,.physics_sha,.uname_r,.user] | map(length > 0) | all" "$r1/environment.json")" = true ]'
+check "verdict.json says PASS, exit 0" '[ "$(jq -r "[.status,.exit_code,.run_id] | @tsv" "$r1/verdict.json")" = "$(printf "PASS\t0\trun1")" ]'
+check "hashes.sha256 verifies and omits itself" '(cd "$r1" && sha256sum -c --quiet hashes.sha256) && ! grep -q hashes.sha256 "$r1/hashes.sha256"'
+count1=$(find "$r1" -type f | wc -l)
+sums1=$(cd "$r1" && find . -type f -print0 | sort -z | xargs -0 sha256sum)
+STUB_STATUS=PASS fake_run --run-id run2; rc2=$?
+check "run 2 (which runs make clean) exits 0" '[ "$rc2" = 0 ] && [ -f "$fake/qual-runs/run2/run.json" ]'
+check "run 2 cleanup removed build products but not run 1" '[ -d "$r1" ] && [ -f "$fake/build/omegatool" ]'
+check "run 1 hashes still verify after run 2" '(cd "$r1" && sha256sum -c --quiet hashes.sha256)'
+check "run 1 file count unchanged" '[ "$(find "$r1" -type f | wc -l)" = "$count1" ]'
+check "run 1 bytes identical (every file)" '[ "$(cd "$r1" && find . -type f -print0 | sort -z | xargs -0 sha256sum)" = "$sums1" ]'
+STUB_STATUS=PASS fake_run --run-id run1; rcx=$?
+check "reusing an existing run id exits 2" '[ "$rcx" = 2 ] && grep -q "never reused" "$TMP/fake.err"'
+check "  and leaves run 1 untouched" '(cd "$r1" && sha256sum -c --quiet hashes.sha256) && [ "$(find "$r1" -type f | wc -l)" = "$count1" ]'
+STUB_STATUS=PASS fake_run --run-id inbuild --evidence-root "$fake/build/qual"; rcb=$?
+check "evidence root inside build/ refused (exit 2)" '[ "$rcb" = 2 ]'
+STUB_STATUS=FAILED fake_run --run-id run3; rc3=$?
+check "failed run exits 1 with FAILED verdict and exit code" '[ "$rc3" = 1 ] && [ "$(jq -r "[.status,.exit_code,.failing_step,.failing_gate_or_exit] | @tsv" "$fake/qual-runs/run3/verdict.json")" = "$(printf "FAILED\t1\tstub failure\texit:1")" ]'
+check "command.txt records the exact argv" 'grep -q -- "--run-id run3" "$fake/qual-runs/run3/command.txt"'
+
+echo "campaign verdicts (tools/m19r_campaign.sh)"
+CAMP=$HERE/tools/m19r_campaign.sh
+mkrun() { # mkrun DIR ID STATUS -- a sealed run directory
+    local d=$1/$2
+    mkdir -p "$d"
+    printf '{"status":"%s"}' "$3" > "$d/run.json"
+    printf '{"run_id":"%s","status":"%s","exit_code":0}' "$2" "$3" > "$d/verdict.json"
+    echo "log $2" > "$d/m19.log"
+    m19r_seal "$d"
+}
+verdict() { "$CAMP" --campaign-dir "$1" --runs "$2" > /dev/null 2>&1; jq -r .verdict "$1/final-verdict.json"; }
+c=$TMP/c_pass; mkdir "$c"; mkrun "$c" r1 PASS; mkrun "$c" r2 PASS
+check "PASS: 2 of 2 runs PASS" '[ "$(verdict "$c" 2)" = PASS ]'
+check "  campaign.json written with sha, rule, created_at" '[ "$(jq -r "[.sha,.rule,.created_at] | map(length > 0) | all" "$c/campaign.json")" = true ]'
+check "  exits 0" '"$CAMP" --campaign-dir "$c" --runs 2 > /dev/null'
+check "INCOMPLETE: 2 usable runs but 3 required" '[ "$(verdict "$c" 3)" = INCOMPLETE ]'
+check "  exits 1" '! "$CAMP" --campaign-dir "$c" --runs 3 > /dev/null'
+c=$TMP/c_fail; mkdir "$c"; mkrun "$c" r1 PASS; mkrun "$c" r2 FAILED
+check "FAIL: one run FAILED" '[ "$(verdict "$c" 2)" = FAIL ]'
+c=$TMP/c_inv; mkdir "$c"; mkrun "$c" r1 PASS; mkrun "$c" r2 PASS
+chmod u+w "$c/r2/m19.log"; printf 'log r3' > "$c/r2/m19.log"
+check "INVALID: one altered byte in a run file" '[ "$(verdict "$c" 2)" = INVALID ]'
+c=$TMP/c_inv2; mkdir "$c"; mkrun "$c" r1 PASS; mkrun "$c" r2 PASS; rm "$c/r2/verdict.json"
+check "INVALID: run lacks verdict.json" '[ "$(verdict "$c" 2)" = INVALID ]'
+c=$TMP/c_inv3; mkdir "$c"; mkrun "$c" r1 PASS; mkrun "$c" r2 FAILED; chmod u+w "$c/r1/m19.log"; echo x >> "$c/r1/m19.log"
+check "INVALID takes precedence over FAIL" '[ "$(verdict "$c" 2)" = INVALID ]'
+check "bad arguments exit 2" '"$CAMP" --campaign-dir "$TMP/nonexistent" --runs 2 > /dev/null 2>&1; [ $? = 2 ]'
+
 if [ "$fails" -ne 0 ]; then
     echo "M19R qualifier tests: $fails FAILED"
     exit 1

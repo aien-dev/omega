@@ -202,7 +202,24 @@ enum {
 /* Open (creating if absent and writable) a journal-backed store. A writable
  * open takes an exclusive lock; a second writable open of the same file,
  * from this or any process, gets CX_ERR_WRITER. n_subjects must match a
- * nonempty journal's. On error the store is left freed. */
+ * nonempty journal's. On error the store is left freed.
+ *
+ * cx_open is the single seam where integrity is established. At open, for
+ * every record: the magic word, the id equal to its position (1, 2, 3, ...),
+ * and the per-record digest recomputed from header plus payload and compared
+ * to the stored one (rx_cortex.c replay). The chain is rebuilt from those
+ * digests, not read from disk. Also checked: the subject count against the
+ * file header, an incomplete trailing record (CX_ERR_TORN, or truncated when
+ * CX_OPEN_REPAIR_TAIL is set), and the writer lock.
+ * After a CX_OK open, callers may assume the objects in memory equal the
+ * journal, and that cx_verify on an object read from this store cannot fail
+ * except through memory corruption or a later in-memory edit.
+ * NOT checked by cx_open: a journal cut exactly at a record boundary looks like a
+ * shorter valid journal (the file holds no record count or head marker). That
+ * cut is detected by rx_compose, which records the Cortex record count and head
+ * record digest in the J-Space checkpoint anchor and cross-checks it at open.
+ * KNOWN LIMIT: if both the Cortex journal and the J-Space checkpoint roll back
+ * together, nothing local detects it (an external anchor problem). */
 int  cx_open(CxStore *s, const char *path, uint64_t n_subjects, uint32_t flags);
 void cx_close(CxStore *s);   /* = cx_free */
 
@@ -212,7 +229,10 @@ const uint64_t *cx_payload(const CxStore *s, const CxObject *o);
 /* Recompute an object's digest and compare: CX_OK or CX_ERR_DIGEST. */
 int  cx_verify(const CxStore *s, uint64_t id);
 
-/* Replay the running hash from the objects: CX_OK if it matches `chain`. */
+/* AUDIT entry point, not needed after cx_open (which already verified every
+ * record). Re-hashes every in-memory object, compares each to its stored
+ * digest, replays the running hash and compares it to `chain`: CX_OK if all
+ * match. For audits and tests. */
 int  cx_verify_chain(const CxStore *s);
 
 /* Canonical digest of a header plus payload. */

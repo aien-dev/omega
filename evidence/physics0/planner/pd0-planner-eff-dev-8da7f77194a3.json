@@ -1,0 +1,27 @@
+{
+  "receipt": "PD0_PLANNER_EFFICIENCY_DEV",
+  "claim": "PD-0 development evidence only; NOT an EXP-003 claim",
+  "commit": "8da7f77194a3",
+  "eps_ppm": 20000,
+  "episode_cap": 40,
+  "residual_sd_micro": 10000,
+  "recorder": "STAND_IN",
+  "rows": [
+    {"level": 1, "seed": 1, "active_episodes": 1, "active_cost_micro": 24694052, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 1, "seed": 2, "active_episodes": 1, "active_cost_micro": 19850772, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 1, "seed": 3, "active_episodes": 1, "active_cost_micro": 19850772, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 1, "seed": 4, "active_episodes": 1, "active_cost_micro": 21826716, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 1, "seed": 5, "active_episodes": 1, "active_cost_micro": 24694052, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 2, "seed": 1, "active_episodes": 1, "active_cost_micro": 21615428, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 2, "seed": 2, "active_episodes": 1, "active_cost_micro": 18829432, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 2, "seed": 3, "active_episodes": 1, "active_cost_micro": 21615428, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 2, "seed": 4, "active_episodes": 1, "active_cost_micro": 23011364, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 2, "seed": 5, "active_episodes": 1, "active_cost_micro": 21615428, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 4, "seed": 1, "active_episodes": 1, "active_cost_micro": 24694052, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 4, "seed": 2, "active_episodes": 1, "active_cost_micro": 22221484, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 4, "seed": 3, "active_episodes": 1, "active_cost_micro": 23325040, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 4, "seed": 4, "active_episodes": 1, "active_cost_micro": 18594356, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false},
+    {"level": 4, "seed": 5, "active_episodes": 1, "active_cost_micro": 24694052, "passive_episodes": 1, "passive_cost_micro": 20107052, "active_refuted_at": [1, 1], "passive_refuted_at": [1, 1], "valid": true, "no_discriminating": false}
+  ],
+  "summary": {"active_fewer": 0, "ties": 15, "passive_fewer": 0, "invalid": 0, "total_active_episodes": 15, "total_passive_episodes": 15}
+}

@@ -86,6 +86,12 @@ void omega_program_destroy(OmegaProgram *prog);
  * Returns -1 and zeroes program_id when the program has no body (no identity). */
 int omega_program_compute_id(OmegaProgram *prog);
 
+/* Verified Crumb contract_id (aien-protocols specs/verified-crumb/SPEC.md 4.2):
+ *   SHA256("aien.vc1.contract.v1" 0x00 || in_type_id || out_type_id || pre_id || post_id)
+ * the same four components the program id hashes, with the same type ids. 0 or -1. */
+int omega_program_contract_id(const OmegaProgram *prog, uint8_t out[32]);
+
+
 /* The canonical body root id alone (the SemanticId of the body's root object). */
 int omega_program_body_root_id(const OmegaProgram *prog, SemanticId *out_root);
 

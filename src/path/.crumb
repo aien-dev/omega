@@ -1,35 +1,47 @@
 {
-  "schema_version": "1.0.0",
-  "name": "src/path",
-  "layer": "src/path",
-  "purpose": "Directory src/path. Purpose not yet described by a human.",
   "above": {
     "name": "src",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory src/path. Purpose not yet described by a human.",
-      "files": [
-        "rx_path.c",
-        "rx_path.h"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:8383106b5d1b3adbc44b8e837a5d1f5ff6699a6d54070068e36716b2a32390d5",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:94bd17cb43da3d31ebc4678a6c4271e9e89c1682500a4808769590af289d0a4a"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "3875223",
-          "timestamp": "2026-09-30T16:32:26-05:00",
           "author": "aien-dev",
+          "pr": 109,
+          "sha": "3875223",
+          "source": "backfill-git",
           "subject": "Merge pull request #109 from aien-dev/feat/path1-reference",
-          "pr": 109
+          "timestamp": "2026-09-30T16:32:26-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "rx_path.c",
+        "rx_path.h"
+      ],
+      "purpose_auto": "Directory src/path. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "src/path",
+  "name": "src/path",
+  "purpose": "Directory src/path. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,0 +1,34 @@
+// entry: f g
+// OSC-3 item 3 (drop flags): moves at different depths of nested ifs and an
+// else-if chain; returns inside branches while another owner is maybe-moved
+// (the return's release of that owner is guarded by its flag).
+fn take(x: own [u32; 2]) -> u32 { return x[0] + x[1]; }
+
+fn f(k: u32) -> u32 {
+    let a: own [u32; 2] = alloc(1);
+    let b: own [u32; 2] = alloc(2);
+    let mut r: u32 = 0;
+    if k > 2 {
+        if k > 5 { r = take(a); } else { r = take(b); }
+    } else if k == 1 {
+        r = take(a) + take(b);
+    }
+    return r + 100;
+}
+
+fn g(k: u32) -> u32 {
+    let a: own [u32; 2] = alloc(k & 7);
+    let b: own [u32; 2] = alloc(3);
+    if k > 4 { let m: own [u32; 2] = a; b[0] = m[0]; }
+    if k > 6 { return b[0] + 1; }
+    if k == 2 { let n: own [u32; 2] = b; return n[1]; }
+    return b[1] + 10;
+}
+// expect-run: f 7 -> 102
+// expect-run: f 4 -> 104
+// expect-run: f 1 -> 106
+// expect-run: f 0 -> 100
+// expect-run: g 7 -> 8
+// expect-run: g 5 -> 13
+// expect-run: g 2 -> 3
+// expect-run: g 0 -> 13

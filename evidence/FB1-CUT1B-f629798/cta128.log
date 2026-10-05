@@ -1,0 +1,5 @@
+PASS 256x256x256 rc=OK chip_ns=226545 call_ms=41.851 wall_ms=42.6 max_abs=8.43406e-06 max_rel=1.30669e-07 mismatches=0 e2e_rel=1.30669e-07 e2e_bad=0 grid=8x16 calls=1 rows_per_call=256 cache_hit2=1
+PASS 1x2048x8192 rc=OK chip_ns=1642279 call_ms=40.493 wall_ms=133.6 max_abs=0.000129104 max_rel=2.62102e-07 mismatches=0 e2e_rel=2.62102e-07 e2e_bad=0 grid=128x1 calls=1 rows_per_call=16 cache_hit2=1
+PASS 1x2048x128256 rc=OK chip_ns=21473799 call_ms=406.151 wall_ms=1847.7 max_abs=0.000163585 max_rel=3.1728e-07 mismatches=0 e2e_rel=3.1728e-07 e2e_bad=0 grid=128x1 calls=1 rows_per_call=16 cache_hit2=1
+PASS: 3 checks, 0 failed
+cta budget 128 exit 0 (informational)

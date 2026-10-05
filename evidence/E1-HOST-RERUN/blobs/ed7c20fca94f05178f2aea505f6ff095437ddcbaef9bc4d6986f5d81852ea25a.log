@@ -1,0 +1,230 @@
+NOTE 0 origin/main no longer has the old script; the pinned lists are the reference
+PASS happy_exit
+PASS happy_last_line
+PASS happy_results_echoed
+PASS happy_noise_not_echoed
+PASS happy_receipt_line
+PASS happy_no_chiprun_line
+PASS happy_default_ops
+PASS happy_ops_typed
+PASS happy_kernels
+PASS happy_nvd
+PASS happy_host_tier
+PASS happy_gate_fields
+PASS happy_flag_dropped
+PASS happy_flag_owner
+PASS happy_mode_0444
+PASS keys_ordered
+PASS keys_allowlist
+PASS notrun_exit
+PASS notrun_last_line
+PASS notrun_receipt
+PASS fail_exit
+PASS fail_last_line
+PASS fail_receipt
+PASS silent_exit
+PASS silent_last_line
+PASS silent_receipt
+PASS notrun0_exit
+PASS notrun0_last_line
+PASS notrun0_receipt
+PASS passrc_exit
+PASS passrc_last_line
+PASS passrc_receipt
+PASS badop_refusal
+PASS badop_nothing_written
+PASS nophys_refusal
+PASS nophys_lines
+PASS default_physics_dir
+PASS hostfail_refusal
+PASS hostfail_text
+PASS hostfail_no_chip
+PASS hostfail_no_flag
+PASS nvdfail_refusal
+PASS nvdfail_no_chip
+PASS nvdfail_text
+PASS digfail_refusal
+PASS digfail_no_chip
+PASS digfail_text
+PASS fuser_refusal
+PASS fuser_text
+PASS fuser_no_host_tier
+PASS dirty_refusal
+PASS flagup_refusal
+PASS flagup_left_alone
+PASS 2 source list identical to old script
+PASS 2b sources exist
+PASS mutant nokernels fails keys_ordered
+PASS mutant renamekey fails keys_ordered
+PASS mutant extrakey fails keys_allowlist
+PASS mutant dropkey fails keys_allowlist
+PASS mutant verdictword fails silent_receipt
+PASS mutant failword fails passrc_receipt
+PASS mutant refuseexit fails nophys_refusal
+PASS mutant refuseline fails nophys_lines
+PASS mutant style fails happy_last_line
+PASS mutant echore fails happy_noise_not_echoed
+PASS mutant nofuser fails fuser_refusal
+PASS mutant noquiet fails happy_flag_owner
+PASS mutant owner fails happy_flag_owner
+PASS mutant gate fails happy_gate_fields
+PASS mutant nohost fails hostfail_refusal
+PASS mutant dirtyok fails dirty_refusal
+PASS mutant nonvd fails nvdfail_refusal
+PASS mutant nokdig fails happy_kernels
+PASS mutant nokdigcheck fails digfail_refusal
+PASS mutant pass_loose fails notrun0_receipt
+PASS mutant m_dropsrc fails check 2
+PASS mutant m_badfile fails check 2
+PASS mutant badfile fails 2b
+CHIP_RUN_TRANSC_MANIFEST: PASS
+ok   selftest_override (exit 2)
+ok   no_physics (exit 2)
+ok   refuse_map (exit 1)
+ok   physics_pin (exit 2)
+ok   physics_dirty (exit 2)
+ok   omega_dirty (exit 2)
+ok   evidence_inside (exit 2)
+ok   evidence_inside_physics (exit 2)
+ok   quiet_flag (exit 2)
+ok   quiet_flag: a flag that is not ours is left alone
+ok   est_load (exit 2)
+ok   gpu_lock (exit 2)
+ok   gpu_lock: the quiet flag we raised is dropped on refusal
+ok   host_tier (exit 2)
+ok   nm_unreadable (exit 2)
+ok   libm (exit 2)
+ok   cuda (exit 2)
+ok   rc_nonzero (exit 1)
+ok   no_verdict (exit 1)
+ok   fail_verdict (exit 1)
+ok   fail_verdict: a FAIL receipt is still written
+ok   omega_dirty_after (exit 1)
+ok   physics_dirty_after (exit 1)
+ok   head_moved (exit 1)
+ok   seam_prebuilt (exit 2)
+ok   seam_quiet (exit 2)
+ok   seam_gpu (exit 2)
+ok   seam_est (exit 2)
+ok   seam_before (exit 2)
+ok   seam_after (exit 2)
+ok   seam_changed (exit 2)
+ok   seam_selftest (exit 2)
+ok   restore_vars (exit 0)
+ok   restore_vars: the flag is dropped at the seam path after the run
+ok   restore_vars: the manifest's flag path is left alone
+ok   restore_vars: the GPU lock was opened at the seam path
+ok   usage (exit 2)
+ok   bad_arg (exit 2)
+ok   arg_value (exit 2)
+ok   no_manifest (exit 2)
+ok   manifest_load (exit 2)
+ok   manifest_vars (exit 2)
+ok   gate_chars (exit 2)
+ok   no_evidence (exit 2)
+ok   refuse_exit (exit 1)
+ok   refuse_exit_text (exit 1)
+ok   refuse_exit_big (exit 1)
+ok   refuse_exit_empty (exit 1)
+ok   refuse_exit_125 (exit 125)
+ok   require_all_value (exit 1)
+ok   omega_head (exit 2)
+ok   physics_lock (exit 2)
+ok   physics_head (exit 2)
+ok   mktemp (exit 2)
+ok   flag_create (exit 2)
+ok   flag_create: a flag created by someone else in the race is left alone
+ok   gpu_open (exit 2)
+ok   gpu_open: the quiet flag we raised is dropped on refusal
+ok   prebuilt_not_exec (exit 2)
+ok   missing_source (exit 2)
+ok   build_failed (exit 2)
+ok   build_ok (exit 0)
+ok   flag_not_ours (exit 0)
+ok   flag_not_ours: a flag someone else rewrote during the run is left alone
+ok   last_line_default (exit 0)
+ok   fail_any_verdict (exit 1)
+ok   fail_any_verdict: a FAIL receipt is still written
+ok   all_pass_ok (exit 0)
+ok   child_exit_pass0 (exit 0)
+ok   child_exit_pass1 (exit 1)
+ok   child_exit_passthrough (exit 2)
+true
+ok   child_exit_passthrough: receipt still written with chip_exit_status 2
+ok   child_exit_zero_fail (exit 1)
+ok   child_exit_default (exit 1)
+ok   child_exit_value (exit 1)
+ok   reuse (exit 0)
+ok   reuse: one log blob for two identical logs
+ok   blob_tamper (exit 1)
+ok   order_env_dir (exit 0)
+ok   order_flag (exit 0)
+ok   order_env_physics (exit 0)
+ok   optional_off (exit 0)
+ok   optional_off: a flag we never raised is untouched
+ok   hostlog (exit 0)
+true
+ok   hostlog: receipt carries the whole host tier output
+ok   hostlog_none (exit 0)
+true
+ok   hostlog_none: no host tier gives an empty $hostlog
+ok   verdict_word_ok (exit 1)
+ok   verdict_word_ok: receipt verdict is the rewritten word
+ok   verdict_pass_changed (exit 1)
+ok   verdict_forged (exit 1)
+ok   verdict_word (exit 1)
+ok   echo_re (exit 0)
+ok   echo_re: default-echoed noise line is not shown with ECHO_RE
+ok   echo_re: the log blob still holds the whole log
+ok   echo_default: without ECHO_RE the whole chip log is echoed
+ok   final_style (exit 1)
+ok   final_style: no CHIP_RUN: line in verdict style
+ok   final_style: the last line is the verdict line
+ok   final_style_pass (exit 0)
+ok   final_style_fatal (exit 1)
+ok   final_style_fatal: fatal ends with VERDICT FAIL
+ok   fatal_verdict_style: fatal prints a VERDICT FAIL line and no CHIP_RUN: FAIL line
+ok   final_style_value (exit 1)
+ok   gpu_fuser (exit 2)
+ok   gpu_fuser: refused before the host tier and the quiet flag
+ok   gpu_fuser_ctl (exit 0)
+ok   gpu_fuser_free (exit 0)
+ok   gpu_mode_value (exit 1)
+ok   bad_manifest_def: bad manifest exits nonzero, no 'command not found'
+ok   final_style_value: bad manifest wrote no receipt
+ok   gpu_mode_value: bad GPU_LOCK_MODE wrote no receipt
+ok   happy (exit 0)
+ok   happy: quiet flag dropped after the run
+ok   happy: exactly one receipt
+ok   happy: receipt mode is 0444
+ok   happy: receipt name is the sha256 of its content
+ok   happy: receipt has field gate
+ok   happy: receipt has field owner
+ok   happy: receipt has field omega_commit
+ok   happy: receipt has field omega_tree_clean_before
+ok   happy: receipt has field omega_tree_clean_after
+ok   happy: receipt has field omega_commit_unchanged_after
+ok   happy: receipt has field physics_commit
+ok   happy: receipt has field physics_lock_pin
+ok   happy: receipt has field physics_tree_clean_before
+ok   happy: receipt has field physics_tree_clean_after
+ok   happy: receipt has field physics_commit_unchanged_after
+ok   happy: receipt has field binary_sha256
+ok   happy: receipt has field chip_log_sha256
+ok   happy: receipt has field run_args
+ok   happy: receipt has field host_tier
+ok   happy: receipt has field verdict_lines
+ok   happy: receipt has field chip_exit_status
+ok   happy: receipt has field started_utc
+ok   happy: receipt has field finished_utc
+ok   happy: receipt has field verdict
+ok   happy: receipt has field reason
+ok   happy: receipt has field extra_marker
+ok   happy: receipt verdict PASS, run_args from the command line
+ok   happy: log blob exists, mode 0444, named by its sha256
+ok   dash_verdict (exit 0)
+ok   dash_verdict: receipt verdict_lines is the dash line, unchanged
+ok   empty_args (exit 0)
+ok   empty_args: receipt run_args is the empty list
+ok   empty_args: the binary was started with no arguments
+CHIP_RUN_SELFTEST: PASS

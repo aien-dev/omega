@@ -1,0 +1,7 @@
+# Receipt-key differences allowed between the old tools/run_numeric_transc_gate.sh receipt and the
+# receipt of tools/run_numeric_transc_gate.sh + tools/manifests/numeric_transc.chiprun.
+# One entry per line: "+key reason" (new receipt has a key the old one lacked) or
+# "-key reason" (old key missing from the new receipt). Blank lines and # lines are ignored.
+# tests/test_chip_run_transc_manifest.sh fails on a difference that is not listed here AND on a
+# listed entry that is not a real difference. The manifest rebuilds the old object in the old
+# key order, so the list is empty on purpose: no receipt field was added, removed or renamed.

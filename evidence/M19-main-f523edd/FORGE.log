@@ -1,0 +1,65 @@
+=== M19R FORGE Gates (Gate 3 & Gate 4) ===
+Timestamp: 2026-10-03T16:43:46Z
+Host: spark-b87b (aarch64)
+Run: 20261003T164346Z-3da234874d6e
+
+[*] Compiling test_forge_hwid...
+[*] Compiling test_forge_seam...
+
+[*] Running Gate 4: FORGE-HWID under GPU lock...
+============================================================
+           GATE 4: FORGE-HWID QUALIFICATION SUITE           
+============================================================
+
+[*] forge_probe_hardware() result: 0
+    PCI BDF:           000f:01:00.0
+    PCI Vendor:Device: 10de:2e12
+    PCI Subsystem:     10de:0000
+    RM Compute Class:  0xcec0
+    RM SM Version:     0xa04
+    Driver Version:    580.173.02
+    VBIOS Version:     9a.0b.2d.00.00
+    Total Memory:      130660892672 bytes (121.69 GiB)
+    DMA Mask:          0x1ffffffffff
+    Features:          0x1f
+[PASS] RAW_HARDWARE_PROBE_CAPTURED
+[PASS] FORGE_DESCRIPTOR_NORMALIZED
+[*] Observed Descriptor Digest: 91684948286bd0f1e34caca4cb2d8f9b43d45d0f7ede39ba1a26e32559e53ce4
+[PASS] DESCRIPTOR_DIGEST_BOUND
+[*] Derived Display Alias: sm_121
+[PASS] RECEIPT_HARDWARE_DERIVED
+[PASS] SERIALIZATION_KAT_VERIFIED
+
+[*] Running Gate 4 Negative Tests...
+[PASS] NEG_MISSING_REQUIRED_FIELD_REJECTED
+[PASS] NEG_MALFORMED_PCI_REJECTED
+[PASS] NEG_UNSUPPORTED_COMPUTE_CLASS_REJECTED
+[PASS] NEG_DESCRIPTOR_MUTATION_CAUSES_DIGEST_MISMATCH
+[PASS] NEG_UNBOUND_ALIAS_REJECTED
+
+Gate 4 Results: TOTAL=10 PASSED=10 FAILED=0
+
+[*] Running Gate 3: FORGE-0 Seam under GPU lock...
+============================================================
+            GATE 3: FORGE-0 SEAM QUALIFICATION SUITE        
+============================================================
+
+[PASS] FORGE_REALIZE_API_NAMED
+[PASS] AEGIS_VERIFY_API_NAMED
+[PASS] FORGE_TYPED_BOUNDARY_ENFORCED
+[PASS] HISTORICAL_NAMES_PRESERVED
+[PASS] NO_EXISTING_FILE_RENAMED
+
+[*] Running Gate 3 Negative Tests...
+[PASS] NEG_NULL_NVRM_REJECTED
+[PASS] NEG_UNVERIFIED_REALIZATION_REJECTED
+[PASS] NEG_DESCRIPTOR_MISMATCH_REJECTED
+[PASS] NEG_STALE_REALIZATION_IDENTITY_REJECTED
+[PASS] NEG_VERIFICATION_FAILURE_PREVENTS_SUBMISSION
+[PASS] NEG_POST_VERIFICATION_MUTATION_REFUSED
+
+Gate 3 Results: TOTAL=11 PASSED=11 FAILED=0
+
+=== M19R FORGE Gates Complete (gate3 exit 0, gate4 exit 0) ===
+Receipt status PASS, digest b64aac4156c8eeac13f5fb9b17cc6108ec210a409166e58f020c68f19ac74d96 (preview /home/drakestapleton/workspace/hive-worktrees/qual-physics-6d7cf0d/build/forge-runs/20261003T164346Z-3da234874d6e/receipt-preview.json)
+Permanent receipt: /home/drakestapleton/workspace/evidence-out/M19-main-f523edd/FORGE/b64aac4156c8eeac13f5fb9b17cc6108ec210a409166e58f020c68f19ac74d96.json

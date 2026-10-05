@@ -31,6 +31,8 @@ typedef enum {
     OT_ARENA,
     /* OSC-3 item 2 (versioned handles), appended */
     OT_POOL, OT_HANDLE,
+    /* VC1 stage 4: `import NAME;` (resolved only by the verified driver, src/omega_resolve.h), appended */
+    OT_IMPORT,
     OT__COUNT
 } OscTokKind;
 

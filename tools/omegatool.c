@@ -15,6 +15,7 @@
 #include "omega_synthesis.h"
 #include "omega_library.h"
 #include "omega_discovery.h"
+#include "omega_vc_bridge.h"
 #include "omega_machine.h"
 #include "omega_realize_synth.h"
 #include "omega_matvec.h"
@@ -1600,6 +1601,9 @@ static void run_demonstration_synthesis(void) {
     printf("================================================================================\n");
 }
 
+/* Non-zero evidence hash for the gate programs: omega_library_insert refuses NULL or all-zero. */
+static const uint8_t OMEGA_TEST_LIB_RECEIPT[32] = { 0xA5, 0x5A, 0xC3, 0x3C };
+
 /* =========================================================================
  * MILESTONE 10 GATES: OMEGA_LIBRARY_V1
  * ========================================================================= */
@@ -1638,7 +1642,7 @@ static bool test_m10_lookup_id(void) {
     VerifyReport rep;
     omega_program_verify(&p, &rep);
 
-    omega_library_insert(&lib, &p, NULL, 0, NULL);
+    omega_library_insert(&lib, &p, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     const OmegaLibraryEntry *e = omega_library_find_by_id(&lib, &p.program_id);
     bool ok = (e != NULL && omega_compare_semantic_id(&e->program.program_id, &p.program_id) == 0);
@@ -1659,14 +1663,14 @@ static bool test_m10_lookup_type(void) {
     omega_program_build_unary_op(&p1, "u64_add3", OP_ADD, 3);
     VerifyReport rep;
     omega_program_verify(&p1, &rep);
-    omega_library_insert(&lib, &p1, NULL, 0, NULL);
+    omega_library_insert(&lib, &p1, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     omega_program_build_unary_op(&p2, "u32_sub1", OP_SUB, 1);
     p2.contract.input_width = 32;
     p2.contract.output_width = 32;
     omega_program_compute_id(&p2);
     omega_program_verify(&p2, &rep);
-    omega_library_insert(&lib, &p2, NULL, 0, NULL);
+    omega_library_insert(&lib, &p2, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     const OmegaLibraryEntry *results[4];
     size_t found = omega_library_query_by_type(&lib, TYPE_UNSIGNED_INT, 64, TYPE_UNSIGNED_INT, 64, results, 4);
@@ -1686,15 +1690,15 @@ static bool test_m10_dependency_dag(void) {
     VerifyReport rep;
     omega_program_verify(&p1, &rep);
     omega_program_verify(&p2, &rep);
-    omega_library_insert(&lib, &p1, NULL, 0, NULL);
-    omega_library_insert(&lib, &p2, NULL, 0, NULL);
+    omega_library_insert(&lib, &p1, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
+    omega_library_insert(&lib, &p2, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     char err[256];
     omega_program_compose(&p1, &p2, &c, err, sizeof(err));
     omega_program_verify(&c, &rep);
 
     SemanticId deps[2] = { p1.program_id, p2.program_id };
-    int rc = omega_library_insert(&lib, &c, deps, 2, NULL);
+    int rc = omega_library_insert(&lib, &c, deps, 2, OMEGA_TEST_LIB_RECEIPT);
     if (rc != 0) { omega_library_destroy(&lib); return false; }
 
     const OmegaLibraryEntry *e = omega_library_find_by_id(&lib, &c.program_id);
@@ -1718,7 +1722,7 @@ static bool test_m10_immutability(void) {
     omega_program_build_unary_op(&p, "mul3", OP_MUL, 3);
     VerifyReport rep;
     omega_program_verify(&p, &rep);
-    omega_library_insert(&lib, &p, NULL, 0, NULL);
+    omega_library_insert(&lib, &p, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     uint8_t digest1[32];
     memcpy(digest1, lib.state_digest, 32);
@@ -1741,7 +1745,7 @@ static bool test_m10_unverified_refusal(void) {
     omega_program_build_unary_op(&unverified, "unverified_prog", OP_ADD, 10);
     unverified.is_verified = false;
 
-    int rc = omega_library_insert(&lib, &unverified, NULL, 0, NULL);
+    int rc = omega_library_insert(&lib, &unverified, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
     bool ok = (rc != 0 && lib.count == 0);
 
     omega_program_destroy(&unverified);
@@ -1758,8 +1762,8 @@ static bool test_m10_duplicate_refusal(void) {
     VerifyReport rep;
     omega_program_verify(&p, &rep);
 
-    int rc1 = omega_library_insert(&lib, &p, NULL, 0, NULL);
-    int rc2 = omega_library_insert(&lib, &p, NULL, 0, NULL);
+    int rc1 = omega_library_insert(&lib, &p, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
+    int rc2 = omega_library_insert(&lib, &p, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     bool ok = (rc1 == 0 && rc2 != 0 && lib.count == 1);
 
@@ -1779,13 +1783,13 @@ static bool test_m10_synthesis_reuse(void) {
     omega_program_compose(&m2, &a1, &comp_2x1, err, sizeof(err));
     VerifyReport rep;
     omega_program_verify(&comp_2x1, &rep);
-    omega_library_insert(&lib, &comp_2x1, NULL, 0, NULL);
+    omega_library_insert(&lib, &comp_2x1, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     /* Insert base primitive B = add_5 */
     OmegaProgram a5;
     omega_program_build_unary_op(&a5, "add5", OP_ADD, 5);
     omega_program_verify(&a5, &rep);
-    omega_library_insert(&lib, &a5, NULL, 0, NULL);
+    omega_library_insert(&lib, &a5, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     /* Export library as primitive bank */
     SynthPrimitiveBank bank;
@@ -1829,7 +1833,7 @@ static bool test_m10_receipt(void) {
     omega_program_build_unary_op(&p, "test_receipt_p", OP_ADD, 1);
     VerifyReport rep;
     omega_program_verify(&p, &rep);
-    omega_library_insert(&lib, &p, NULL, 0, NULL);
+    omega_library_insert(&lib, &p, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     bool ok = (lib.count == 1 && lib.version >= 1);
     omega_library_destroy(&lib);
@@ -1857,15 +1861,15 @@ static void run_demonstration_library(void) {
     omega_program_verify(&a1, &rep);
     omega_program_verify(&a5, &rep);
 
-    omega_library_insert(&lib, &m2, NULL, 0, NULL);
-    omega_library_insert(&lib, &a1, NULL, 0, NULL);
-    omega_library_insert(&lib, &a5, NULL, 0, NULL);
+    omega_library_insert(&lib, &m2, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
+    omega_library_insert(&lib, &a1, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
+    omega_library_insert(&lib, &a5, NULL, 0, OMEGA_TEST_LIB_RECEIPT);
 
     char err[256];
     omega_program_compose(&m2, &a1, &c_2x1, err, sizeof(err));
     omega_program_verify(&c_2x1, &rep);
     SemanticId deps[2] = { m2.program_id, a1.program_id };
-    omega_library_insert(&lib, &c_2x1, deps, 2, NULL);
+    omega_library_insert(&lib, &c_2x1, deps, 2, OMEGA_TEST_LIB_RECEIPT);
 
     printf("  [2] Components Inserted with Dependency Tracking:\n");
     for (size_t i = 0; i < lib.count; ++i) {
@@ -2079,13 +2083,16 @@ static bool test_m11_library_admission(void) {
     if (res.best_candidate_index >= 0) {
         OmegaLibrary lib;
         omega_library_init(&lib);
+        OmegaVcBridge br;
+        omega_vc_bridge_init(&br);
 
-        uint8_t dummy_receipt[32] = { 0xBB };
-        int rc = omega_discovery_admit_to_library(&lib, &res.candidates[res.best_candidate_index], dummy_receipt);
+        uint8_t evidence[32] = { 0xBB };
+        int rc = omega_vc_bridge_admit_abstraction(&br, &lib, &res.candidates[res.best_candidate_index], evidence);
         const OmegaLibraryEntry *e = omega_library_find_by_name(&lib, "discovered_abs_2x_plus_1");
 
         ok = (rc == 0 && lib.count == 1 && e != NULL);
         omega_library_destroy(&lib);
+        omega_vc_bridge_destroy(&br);
     }
 
     omega_corpus_destroy(&corpus);
@@ -2195,10 +2202,13 @@ static void run_demonstration_discovery(void) {
         printf("\n  [5] Library Admission:\n");
         OmegaLibrary lib;
         omega_library_init(&lib);
-        uint8_t dummy_receipt[32] = { 0xDE, 0xAD };
-        omega_discovery_admit_to_library(&lib, cand, dummy_receipt);
+        OmegaVcBridge br;
+        omega_vc_bridge_init(&br);
+        uint8_t evidence[32] = { 0xDE, 0xAD };
+        omega_vc_bridge_admit_abstraction(&br, &lib, cand, evidence);
         printf("      Library Catalog Updated: Count = %zu, Version = %u\n", lib.count, lib.version);
         omega_library_destroy(&lib);
+        omega_vc_bridge_destroy(&br);
 
         /* Search Acceleration */
         printf("\n  [6] Search Acceleration on Held-Out Task (g(x) = 2x + 6):\n");

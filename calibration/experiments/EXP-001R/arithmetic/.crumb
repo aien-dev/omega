@@ -1,34 +1,46 @@
 {
-  "schema_version": "1.0.0",
-  "name": "calibration/experiments/EXP-001R/arithmetic",
-  "layer": "calibration/experiments/EXP-001R/arithmetic",
-  "purpose": "Directory calibration/experiments/EXP-001R/arithmetic. Purpose not yet described by a human.",
   "above": {
     "name": "calibration/experiments/EXP-001R",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory calibration/experiments/EXP-001R/arithmetic. Purpose not yet described by a human.",
-      "files": [
-        "results.json"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:8d648a7eedc8c571db7218ea3c1f6244a6cbb13bdb26170911c3963d0ae9570b",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:7f82a8b15ef156afbe804d0e7e39134205cabae3ba043da986c169e8b074ce61"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "806a9d6",
-          "timestamp": "2026-09-29T23:12:32-05:00",
           "author": "aien-dev",
+          "pr": 99,
+          "sha": "806a9d6",
+          "source": "backfill-git",
           "subject": "Merge pull request #99 from aien-dev/feat/turing-exp001r-publish",
-          "pr": 99
+          "timestamp": "2026-09-29T23:12:32-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "results.json"
+      ],
+      "purpose_auto": "Directory calibration/experiments/EXP-001R/arithmetic. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "calibration/experiments/EXP-001R/arithmetic",
+  "name": "calibration/experiments/EXP-001R/arithmetic",
+  "purpose": "Directory calibration/experiments/EXP-001R/arithmetic. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

@@ -1,35 +1,47 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tools/brownian",
-  "layer": "tools/brownian",
-  "purpose": "Directory tools/brownian. Purpose not yet described by a human.",
   "above": {
     "name": "tools",
     "path": ".."
   },
   "extensions": {
-    "seed": {
-      "purpose_auto": "Directory tools/brownian. Purpose not yet described by a human.",
-      "files": [
-        "brw_tps_adapter.c",
-        "brw_tps_adapter.h"
-      ]
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:1ccbb2bd2ac34a90fdd96376bcca759d4a2c0262ac43aa41839c0cc6e48f0693",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:e2e28b929e88f643fc2d4757abfcbd2d0c25b16552c8ff2dbf5594bb79889346"
     },
     "owner_lane": "",
     "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
       "entries": [
         {
-          "source": "backfill-git",
-          "sha": "008c5eb",
-          "timestamp": "2026-09-29T21:50:44-05:00",
           "author": "aien-dev",
+          "pr": 91,
+          "sha": "008c5eb",
+          "source": "backfill-git",
           "subject": "Merge pull request #91 from aien-dev/feat/turing-tps-adapter",
-          "pr": 91
+          "timestamp": "2026-09-29T21:50:44-05:00"
         }
-      ]
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
+    "seed": {
+      "files": [
+        "brw_tps_adapter.c",
+        "brw_tps_adapter.h"
+      ],
+      "purpose_auto": "Directory tools/brownian. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tools/brownian",
+  "name": "tools/brownian",
+  "purpose": "Directory tools/brownian. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

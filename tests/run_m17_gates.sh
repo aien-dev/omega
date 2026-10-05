@@ -53,7 +53,7 @@ echo ""
 # Step 5: Compute artifact digests
 echo "[*] Step 5: Computing artifact digests..."
 mkdir -p "$EVIDENCE_DIR/m17_blackwell_vector"
-sha256sum "$OMEGA_ROOT/src/omega_vector."*           "$OMEGA_ROOT/src/omega_blackwell_encoder."*           "$OMEGA_ROOT/src/omega_blackwell_qmd."*           "$OMEGA_ROOT/src/omega_blackwell_realize."*           "$OMEGA_ROOT/src/omega_blackwell_submit."*           "$OMEGA_ROOT/src/omega_blackwell_gates."*           "$TOOL" > "$EVIDENCE_DIR/m17_corpus_digests.txt"
+sha256sum "$OMEGA_ROOT/src/omega_vector."*           "$OMEGA_ROOT/src/omega_blackwell_encoder."*           "$OMEGA_ROOT/src/omega_blackwell_qmd."*           "$OMEGA_ROOT/src/omega_blackwell_realize."*           "$OMEGA_ROOT/src/omega_blackwell_submit."*           "$OMEGA_ROOT/src/omega_blackwell_engine."*           "$OMEGA_ROOT/src/omega_blackwell_gates."*           "$TOOL" > "$EVIDENCE_DIR/m17_corpus_digests.txt"
 
 DIGEST_VEC_C=$(sha256sum "$OMEGA_ROOT/src/omega_vector.c" | cut -d' ' -f1)
 DIGEST_VEC_H=$(sha256sum "$OMEGA_ROOT/src/omega_vector.h" | cut -d' ' -f1)
@@ -65,6 +65,8 @@ DIGEST_REAL_C=$(sha256sum "$OMEGA_ROOT/src/omega_blackwell_realize.c" | cut -d' 
 DIGEST_REAL_H=$(sha256sum "$OMEGA_ROOT/src/omega_blackwell_realize.h" | cut -d' ' -f1)
 DIGEST_SUB_C=$(sha256sum "$OMEGA_ROOT/src/omega_blackwell_submit.c" | cut -d' ' -f1)
 DIGEST_SUB_H=$(sha256sum "$OMEGA_ROOT/src/omega_blackwell_submit.h" | cut -d' ' -f1)
+DIGEST_ENGINE_C=$(sha256sum "$OMEGA_ROOT/src/omega_blackwell_engine.c" | cut -d' ' -f1)
+DIGEST_ENGINE_H=$(sha256sum "$OMEGA_ROOT/src/omega_blackwell_engine.h" | cut -d' ' -f1)
 DIGEST_TOOL=$(sha256sum "$TOOL" | cut -d' ' -f1)
 
 QUALIFIED_COMMIT="$(git -C "$OMEGA_ROOT" rev-parse HEAD)"
@@ -128,6 +130,8 @@ cat <<RECEIPT_EOF > "$RECEIPT"
     "src/omega_blackwell_realize.h": { "sha256": "$DIGEST_REAL_H" },
     "src/omega_blackwell_submit.c": { "sha256": "$DIGEST_SUB_C" },
     "src/omega_blackwell_submit.h": { "sha256": "$DIGEST_SUB_H" },
+    "src/omega_blackwell_engine.c": { "sha256": "$DIGEST_ENGINE_C" },
+    "src/omega_blackwell_engine.h": { "sha256": "$DIGEST_ENGINE_H" },
     "build/omegatool": { "sha256": "$DIGEST_TOOL" }
   },
   "qualification_gates": {

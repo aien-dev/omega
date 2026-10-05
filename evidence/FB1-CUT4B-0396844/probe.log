@@ -1,0 +1,1 @@
+./tools/run_gpu_cut4b_chip.sh: 47: ./tools/probe_gpu_open.sh: Permission denied

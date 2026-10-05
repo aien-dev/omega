@@ -111,7 +111,7 @@ int omega_validate_object(const OmegaGraph *graph, const OmegaObject *obj, char 
                 return -1;
             }
             const TypePayload *tp = (const TypePayload*)obj->payload;
-            if (tp->tag == TYPE_INVALID || tp->tag > TYPE_EFFECT_RECEIPT_REF) {
+            if (tp->tag == TYPE_INVALID || tp->tag > TYPE_FP32) {
                 snprintf(err_msg, err_msg_len, "Invalid type tag 0x%02x", tp->tag);
                 return -1;
             }
@@ -123,6 +123,11 @@ int omega_validate_object(const OmegaGraph *graph, const OmegaObject *obj, char 
             } else if (tp->tag == TYPE_SIGNED_INT) {
                 if (tp->width < 2 || tp->width > 256) {
                     snprintf(err_msg, err_msg_len, "Signed integer width %u out of bounds [2..256]", tp->width);
+                    return -1;
+                }
+            } else if (tp->tag == TYPE_FP32) {
+                if (tp->width != 32) {
+                    snprintf(err_msg, err_msg_len, "FP32 width %u is not 32", tp->width);
                     return -1;
                 }
             } else if (tp->tag == TYPE_BITVECTOR) {
@@ -172,7 +177,7 @@ int omega_validate_object(const OmegaGraph *graph, const OmegaObject *obj, char 
         case KIND_OPERATION: {
             if (obj->payload_len >= sizeof(OperationPayload)) {
                 const OperationPayload *op = (const OperationPayload*)obj->payload;
-                if (op->opcode == OP_INVALID || op->opcode > OP_COMPILE) {
+                if (op->opcode == OP_INVALID || op->opcode > OP_CONVERT) {
                     snprintf(err_msg, err_msg_len, "Invalid opcode 0x%02x", op->opcode);
                     return -1;
                 }

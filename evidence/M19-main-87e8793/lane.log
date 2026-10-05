@@ -1,0 +1,10 @@
+M19 start 2026-10-03T13:38:26Z omega=87e8793c9b4e790412b37be83600b8c6ba5db8d3 physics.lock=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf physics_dir_head=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+== NUM start 2026-10-03T13:38:26Z
+== NUM PASS (13s)
+== FORGE start 2026-10-03T13:38:39Z
+== FORGE PASS (3s)
+== M19R start 2026-10-03T13:38:42Z
+== M19R FAIL rc=1 (164s); tail:
+M19R qualification failed: /home/drakestapleton/workspace/hive-worktrees/omega-m19-main-87e8793/build/omegatool exited 1; see /home/drakestapleton/workspace/hive-worktrees/omega-m19-main-87e8793/qual-runs/20261003T133842Z-6472fe07f26f/world_lifecycle.log
+M19R run evidence: /home/drakestapleton/workspace/hive-worktrees/omega-m19-main-87e8793/qual-runs/20261003T133842Z-6472fe07f26f/run.json
+M19 ABORT at M19R 2026-10-03T13:41:26Z

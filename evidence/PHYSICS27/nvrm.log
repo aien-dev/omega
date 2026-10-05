@@ -1,0 +1,33 @@
+=== M19R NVRM Lifecycle Gates ===
+Timestamp: 2026-10-04T02:23:12Z
+Host: spark-b87b (aarch64)
+
+[*] Building lifecycle_gates...
+    lifecycle_gates built cleanly.
+
+[*] Running lifecycle_gates under GPU lock (/tmp/aien-gb10.lock)...
+  churn: cycle 0/20000, 4096 bytes so far
+  churn: cycle 2000/20000, 47465476096 bytes so far
+  churn: cycle 4000/20000, 94930948096 bytes so far
+  churn: cycle 6000/20000, 142396420096 bytes so far
+  churn: cycle 8000/20000, 189861892096 bytes so far
+  churn: cycle 10000/20000, 237327364096 bytes so far
+  churn: cycle 12000/20000, 284792836096 bytes so far
+  churn: cycle 14000/20000, 332258308096 bytes so far
+  churn: cycle 16000/20000, 379723780096 bytes so far
+  churn: cycle 18000/20000, 427189252096 bytes so far
+=== M19R NVRM LIFECYCLE GATES ===
+[PASS] M16_WAIT_GE_SERIAL
+  churn: bytes=474654720000 (442.06 GiB) high_water_delta=122753024 (117.07 MiB)
+[PASS] NVRM_FREE_CHURN
+[PASS] NVRM_FREE_UNMAPS
+[PASS] NVRM_FREE_IDEMPOTENT_AND_STALE
+[PASS] NVRM_ALLOC_AFTER_FREE_REUSES_VA
+[PASS] NVRM_ALLOCATION_OVERFLOW_REFUSED
+[PASS] GPU_SUBMIT_AFTER_CHURN
+[PASS] UVM_FREE_FAILURE_QUARANTINES
+[PASS] RM_FREE_FAILURE_QUARANTINES
+[PASS] CORRUPT_TABLE_REFUSED
+TOTAL: 10 PASSED: 10 FAILED: 0
+
+=== M19R NVRM Lifecycle Gates: done ===

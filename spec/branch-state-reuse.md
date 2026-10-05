@@ -148,3 +148,8 @@ the reads that followed. The forced placement cycle in check 5 is not counted.
 - The policy's reuse estimate (expected reads = holders) is a simple prior, not
   a learned one. The spill file is never compacted.
 - Energy isolation. Package energy includes whatever else the machine was doing.
+
+If the `aien_spbm` counters cannot be read, the energy leg is reported as
+`NOT_RUN` and the gate result is `PASS_ENERGY_NOT_RUN`, which never prints
+`OMEGA_BRANCH_STATE_REUSE_PASS`. Memory, compute, latency and correctness stay
+hard checks. When the counters are readable, energy must still measure lower.

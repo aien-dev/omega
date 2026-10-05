@@ -1,0 +1,1 @@
+fixture stand-in for a test binary (hashed and stored as a .bin blob)

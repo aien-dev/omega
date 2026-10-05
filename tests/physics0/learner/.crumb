@@ -1,0 +1,20 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:62d7fb6a9ef393196990035afe943a384315bcd96a2e7646fe4bc2fc62706e1c",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 7,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:6f4d1e16c5bd7b11c00bcbd4474447c4533cdd09a95a8f15ee5bf02d10fac15a"
+    }
+  },
+  "layer": "tests",
+  "name": "tests/physics0/learner",
+  "purpose": "Learner gates: unit tests (determinism, PDLAW1 round trip, memoriser vs compact theory, null world, withholding), the development harness that drives pd0-world and the test-only truth process over pipes, tags the split, builds the PD0LEDG1 ledger and scores against the truth. The truth process is the only binary here that links the generators.",
+  "schema_version": "1.0.0"
+}

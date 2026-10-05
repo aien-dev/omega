@@ -1,36 +1,48 @@
 {
-  "schema_version": "1.0.0",
-  "name": "tests/turing/fixtures",
-  "layer": "tests/turing/fixtures",
-  "purpose": "Directory tests/turing/fixtures. Purpose not yet described by a human.",
   "above": {
     "name": "tests/turing",
     "path": ".."
   },
   "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:9d36c14a9123dab52eeb62b71e5b455fcc1d88f8bb788f8aed354df9ca842ec3",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 3,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:a5f55add92b1d80256ce7623e42b4f0d0d9d2a4588e1d25a969e5bc6804ab159"
+    },
+    "owner_lane": "",
+    "provenance": {
+      "entries": [
+        {
+          "author": "aien-dev",
+          "pr": 85,
+          "sha": "f0dc0af",
+          "source": "backfill-git",
+          "subject": "Merge pull request #85 from aien-dev/feat/turing-yield-ty12",
+          "timestamp": "2026-09-29T16:05:27-05:00"
+        }
+      ],
+      "ledger_cap": 20,
+      "source": "backfill",
+      "total_commits": 1
+    },
     "seed": {
-      "purpose_auto": "Directory tests/turing/fixtures. Purpose not yet described by a human.",
       "files": [
         "PROVENANCE.md",
         "ctr1_seed1_crumbs05-07.ctr",
         "ctr1_seed1_crumbs10-12.ctr"
-      ]
-    },
-    "owner_lane": "",
-    "provenance": {
-      "source": "backfill",
-      "total_commits": 1,
-      "ledger_cap": 20,
-      "entries": [
-        {
-          "source": "backfill-git",
-          "sha": "f0dc0af",
-          "timestamp": "2026-09-29T16:05:27-05:00",
-          "author": "aien-dev",
-          "subject": "Merge pull request #85 from aien-dev/feat/turing-yield-ty12",
-          "pr": 85
-        }
-      ]
+      ],
+      "purpose_auto": "Directory tests/turing/fixtures. Purpose not yet described by a human."
     }
-  }
+  },
+  "layer": "tests/turing/fixtures",
+  "name": "tests/turing/fixtures",
+  "purpose": "Directory tests/turing/fixtures. Purpose not yet described by a human.",
+  "schema_version": "1.0.0"
 }

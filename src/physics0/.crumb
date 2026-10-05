@@ -1,0 +1,45 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "66209b2667bbc2c74e507f89819a0370152e8ef212d4469510d90d3a61690ae0",
+          "last_commit": "d0ca8ce",
+          "name": "controls",
+          "purpose": "PD-0 controls: see docs on physics main"
+        },
+        {
+          "digest": "28e98322bb2afe9d289b2779ef19db1aa8a96daa7472ba40cc90df364f9d1e72",
+          "last_commit": "f9a1797",
+          "name": "ladder",
+          "purpose": "PD-0 ladder: see docs on physics main"
+        },
+        {
+          "digest": "0d39d751811b71571c3eda963d7c129f12a6e55f6da70ec001fe36129c631247",
+          "last_commit": "5790b1b",
+          "name": "learner",
+          "purpose": "PD-0 learner (Physics-0 Discovery Engine D4): fits compact one-step relations over a bounded mon"
+        },
+        {
+          "digest": "c8f1252406bb1bd1a708833a77da8b0f40bf94559ed5218b78d1eeae1f71bfc8",
+          "last_commit": "d0ca8ce",
+          "name": "score",
+          "purpose": "PD-0 score: see docs on physics main"
+        }
+      ],
+      "children_root": "sha256:3c618db617aa6f51b549703da9334f2d8bf50a70c7258523085a6cffd9abe556",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:6974fb2a6051d3a1b07153ced8cddc6a81d04a79d229b5c9a18e00f7d2c55d25",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 32,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:8aba6934ebec641cffe686574349f19db98da22d73e76a8f3620571c16d4487c"
+    }
+  },
+  "layer": "src",
+  "name": "src/physics0",
+  "purpose": "PD-0 hidden-equation benchmark (Physics-0 Discovery Engine cut 1): world, oracle, scorer, ladder checker, planner, learner. Generators live only in pd0_gen.c; learner objects must never link it.",
+  "schema_version": "1.0.0"
+}

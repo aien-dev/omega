@@ -1,0 +1,228 @@
+# Raw gate lines, Lane 32 item 4 re-qualification, candidate 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4 (lane32 worker D, 2026-10-01)
+== r12-silicon
+GATE r12-silicon start 2026-10-01T14:07:52Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+checks 210 failures 0 silicon 1
+GATE r12-silicon exit 0 end 2026-10-01T14:08:11Z
+porcelain after: []
+== r13-prod-silicon
+GATE r13-prod-silicon start 2026-10-01T14:11:10Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R13 ARGUS: observing; observe and record, received 131364 events, 415 authority observations, 0 findings, 0 ingest errors
+R13 gate: R13_LIVING_SYSTEM=PASS
+GATE r13-prod-silicon exit 0 end 2026-10-01T14:11:28Z
+porcelain after: []
+== r13-prod-host
+GATE r13-prod-host start 2026-10-01T14:11:28Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R13 ARGUS: observing; observe and record, received 98242 events, 415 authority observations, 0 findings, 0 ingest errors
+R13 gate: R13_LIVING_SYSTEM=HOST_PASS_NON_SILICON
+GATE r13-prod-host exit 0 end 2026-10-01T14:11:47Z
+porcelain after: []
+== r13-testbuild-silicon
+GATE r13-testbuild-silicon start 2026-10-01T14:09:00Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R13 gate: R13_LIVING_SYSTEM_TEST_BUILD=PASS
+GATE r13-testbuild-silicon exit 0 end 2026-10-01T14:09:19Z
+porcelain after: []
+== r13-testbuild-host
+GATE r13-testbuild-host start 2026-10-01T14:09:19Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R13 gate: R13_LIVING_SYSTEM_TEST_BUILD=HOST_PASS_NON_SILICON
+GATE r13-testbuild-host exit 0 end 2026-10-01T14:09:39Z
+porcelain after: []
+== r14-silicon
+GATE r14-silicon start 2026-10-01T14:09:39Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R14 gate: R14_LIVING_RECOVERY=PASS
+GATE r14-silicon exit 0 end 2026-10-01T14:10:33Z
+porcelain after: []
+== r14-host
+GATE r14-host start 2026-10-01T14:10:33Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R14 gate: R14_LIVING_RECOVERY=HOST_PASS_NON_SILICON
+GATE r14-host exit 0 end 2026-10-01T14:10:47Z
+porcelain after: []
+== prod-hygiene-silicon
+GATE prod-hygiene-silicon start 2026-10-01T14:11:47Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R16 prod   R13 ARGUS: observing; observe and record, received 2 events, 1 authority observations, 0 findings, 0 ingest errors
+R16 prod   R13 ARGUS probe: ARGUS_OBSERVING=PASS
+R16 prod: PROD_HYGIENE=PASS mode=silicon binary=rx_r13_living_silicon
+GATE prod-hygiene-silicon exit 0 end 2026-10-01T14:11:47Z
+porcelain after: []
+== test-r3
+GATE test-r3 start 2026-10-01T14:16:17Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+TOTAL: 32 tests, 10022 checks, 0 failures; 7051 crumbs verified, 1430 reaction crumbs audited, 0 illegal transitions
+R1_CANONICAL_WORLD: PASS (host CPU, not silicon)  R2_CROSS_ENGINE_ABI: PASS (host CPU, not silicon)  R3_REACTION_CORE: PASS (host)  R4_CAUSAL_TRACE: PASS (host)  R5_RESOURCE_ARBITRATION: PASS (host)  
+GATE test-r3 exit 0 end 2026-10-01T14:16:21Z
+porcelain after: []
+== test-r7
+GATE test-r7 start 2026-10-01T14:16:21Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+native authority matched the linux oracle, and the world checks the native view
+GATE test-r7 exit 0 end 2026-10-01T14:16:22Z
+porcelain after: []
+== test-r8
+GATE test-r8 start 2026-10-01T14:16:22Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+checks 116 failures 0
+GATE test-r8 exit 0 end 2026-10-01T14:16:24Z
+porcelain after: []
+== test-r9
+GATE test-r9 start 2026-10-01T14:16:24Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+generation barrier kept a single coherent generation through every injected stop
+GATE test-r9 exit 0 end 2026-10-01T14:16:28Z
+porcelain after: []
+== test-r10
+GATE test-r10 start 2026-10-01T14:16:28Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+checks 198 failures 0
+GATE test-r10 exit 0 end 2026-10-01T14:16:32Z
+porcelain after: []
+== test-r11
+GATE test-r11 start 2026-10-01T14:16:32Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+checks 400 failures 0
+GATE test-r11 exit 0 end 2026-10-01T14:16:35Z
+porcelain after: []
+== test-r12
+GATE test-r12 start 2026-10-01T14:16:35Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+checks 193 failures 0
+GATE test-r12 exit 0 end 2026-10-01T14:16:36Z
+porcelain after: []
+== test-r15-instr
+GATE test-r15-instr start 2026-10-01T14:16:36Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+GATE test-r15-instr exit 0 end 2026-10-01T14:16:40Z
+porcelain after: []
+== test-r15-g7-host
+GATE test-r15-g7-host start 2026-10-01T14:16:40Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R15 G7 worker split: 57 checks, 0 failures
+GATE test-r15-g7-host exit 0 end 2026-10-01T14:16:46Z
+porcelain after: []
+== test-r15-parity-host
+GATE test-r15-parity-host start 2026-10-01T14:16:46Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+SEQ_SEMANTIC_PARITY=PASS
+GATE test-r15-parity-host exit 0 end 2026-10-01T14:16:54Z
+porcelain after: []
+== test-r15-parity-silicon
+GATE test-r15-parity-silicon start 2026-10-01T14:16:54Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+SEQ_SEMANTIC_PARITY=PASS
+GATE test-r15-parity-silicon exit 0 end 2026-10-01T14:17:19Z
+porcelain after: []
+== test-r15-receipt
+GATE test-r15-receipt start 2026-10-01T14:17:19Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+r15 receipt test: 0 failure(s)
+GATE test-r15-receipt exit 0 end 2026-10-01T14:17:21Z
+porcelain after: []
+== r16-inventory
+GATE r16-inventory start 2026-10-01T16:17:27Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R16 loop inventory: sites=328 unclassified=47 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> FAIL
+GATE r16-inventory exit 2 end 2026-10-01T16:17:28Z
+porcelain after: []
+== test-r16-inventory
+GATE test-r16-inventory start 2026-10-01T16:17:28Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R16 inventory self-test: PASS
+GATE test-r16-inventory exit 0 end 2026-10-01T16:17:29Z
+porcelain after: []
+== test-r16-authpath
+GATE test-r16-authpath start 2026-10-01T16:17:29Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R16-G3   R13 ARGUS: observing; observe and record, received 82293 events, 415 authority observations, 0 findings, 0 ingest errors
+R16-G3   R13 gate: R13_LIVING_SYSTEM=HOST_PASS_NON_SILICON
+R16-G3   R14 gate: R14_LIVING_RECOVERY=HOST_PASS_NON_SILICON
+R16 gate: R16_G3_AUTHPATH=HOST_PASS_NON_SILICON (host stand-in seat; the gate needs the silicon run)
+GATE test-r16-authpath exit 0 end 2026-10-01T16:17:52Z
+porcelain after: []
+== test-r16-authpath-silicon
+GATE test-r16-authpath-silicon start 2026-10-01T16:17:52Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R16-G3   R13 ARGUS: observing; observe and record, received 111298 events, 415 authority observations, 0 findings, 0 ingest errors
+R16-G3   R13 gate: R13_LIVING_SYSTEM=PASS
+R16-G3   R14 gate: R14_LIVING_RECOVERY=PASS
+R16 gate: R16_G3_AUTHPATH=PASS
+GATE test-r16-authpath-silicon exit 0 end 2026-10-01T16:18:57Z
+porcelain after: []
+== test-r16-negative
+GATE test-r16-negative start 2026-10-01T16:18:57Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R16 gate: R16_G4_LEGACY_REFUSED=PASS
+GATE test-r16-negative exit 0 end 2026-10-01T16:19:04Z
+porcelain after: []
+== test-r16-negative-mutants
+GATE test-r16-negative-mutants start 2026-10-01T16:19:04Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R16 gate: R16_G4_GUARDS_LOAD_BEARING=PASS
+GATE test-r16-negative-mutants exit 0 end 2026-10-01T16:23:11Z
+porcelain after: []
+== test-r16-surface
+GATE test-r16-surface start 2026-10-01T16:23:11Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R16 gate: R16_G5_SURFACE=PASS
+GATE test-r16-surface exit 0 end 2026-10-01T16:23:14Z
+porcelain after: []
+== test-prod-refuses-test-pieces
+GATE test-prod-refuses-test-pieces start 2026-10-01T16:23:15Z head 3108fc2f5d499a76d6ed72f53681c3e2ba9281a4
+porcelain: []
+R16 prod: PROD_REFUSES_TEST_PIECES=PASS (10 cases: 6 refusals, 3 controls, 1 make guard)
+GATE test-prod-refuses-test-pieces exit 0 end 2026-10-01T16:23:16Z
+porcelain after: []
+== r15-qualify-silicon (build/r15raw/20261001T142413Z-3108fc2f5d49-silicon)
+G1   FAIL RES-4 round 12: trial did not complete (exit 1)
+G2   PASS 12 valid pairs (need >= 10)
+G3   PASS 
+G4   PASS 
+G5   PASS p50 7456 ns, p99 9968 ns, n 50000
+G6   PASS p50 19 ns, p99 19 ns per check (batch mean)
+G7   PASS 347 barriers, 0 failed, p99 104923529 ns
+G8   PASS 12 valid pairs
+G9   PASS 12 valid pairs
+G10  PASS RES-1 3.000, SEQ 4.000 sync events per result (host spin, not gated: RES-1 55.9, SEQ 122.2 empty polls per result)
+G11  PASS 
+G12  PASS RES-4 1.188, SEQ 1193.385 per consequential stimulus
+G13  PASS 
+G14  PASS 
+G15  FAIL 58 silicon processes (trials + L2); 48 silicon trials
+G16  PASS 
+all gates: FAIL
+09:40:44 round 12 RES-1-NODIGEST trial ok (20 s)
+09:42:47 round 12 RES4 trial FAILED (exit 1); recorded, not rerun
+09:43:09 round 12 SEQ trial ok (22 s)
+09:43:31 round 12 RES1 trial ok (22 s)
+seat finish: the graphics seat did not finish
+trial RES-4 20261001T142413Z-3108fc2f5d49-silicon round 12: FAILED
+kernel log: [230773.947824] NVRM: Xid (PCI:000f:01:00): 109, pid=1943788, name=rx_r15_perf_sil, channel 0x00000002, errorString CTX SWITCH TIMEOUT, Info 0x2c001  (= 2026-10-01T14:40:47Z, 3 s into trial RES-4 round 12, trial began 14:40:44Z)
+== r16 unclassified sites (G2), file:count
+      1 src/compiler/model/osc_model_gen.c
+      1 src/compiler/oscc_main.c
+      1 src/compiler/osc_interp.c
+      1 src/compiler/osc_lex.c
+      3 src/compiler/osc_parse.c
+      1 src/estimation/est_mix.c
+      1 src/fabric/fab_dispatch.c
+      1 src/omega_numeric_reduce.c
+      1 src/omega_numeric_reduce_gb10.c
+      1 src/runtime/aien_machine_id.c
+      5 src/runtime/rx_compose.c
+      1 src/runtime/rx_cortex.c
+      2 src/searchtrace/st_holdout.c
+      1 src/searchtrace/st_tool.c
+      2 src/train/tg_store.c
+      1 tests/fabric/fab_living_phase.h
+      3 tests/fabric/fabric_test.c
+      4 tests/runtime/rx_compose_attach_test.c
+      2 tests/runtime/rx_jspace_prod.c
+      1 tests/test_omega_transc.c
+      6 tests/train/test_train.c
+      4 tools/estimation/est3c_common.c
+      3 tools/estimation/est_load.c

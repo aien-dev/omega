@@ -1,0 +1,26 @@
+{
+  "above": {
+    "name": "tests",
+    "path": ".."
+  },
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:adba9b5ea1c000db36078fca7d1bfef0b2769b73c8fb474024d9409bd48bdbc1",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 3,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:6d5b6dbedae8829952e3f5b80f2e48cb113e774f986ad97d12ee46da530578ac"
+    }
+  },
+  "invariants": [
+    "Never link this driver into production executables."
+  ],
+  "name": "numeric_native",
+  "purpose": "Simulated M16 driver for numeric resource-lifecycle tests. No device execution or numeric parity evidence.",
+  "schema_version": "1.0.0"
+}

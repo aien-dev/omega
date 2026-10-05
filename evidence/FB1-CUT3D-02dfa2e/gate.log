@@ -1,0 +1,33 @@
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-omega-gpu)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-scheduler)
+   Compiling aien-inference-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-inference-runtime)
+    Finished `release` profile [optimized] target(s) in 24.83s
+     Running tests/strict_real_model.rs (target/release/deps/strict_real_model-bfbe49f47cf02508)
+
+running 1 test
+test omega_vs_reference_real_model ... OMEGA_GATE ref backend: ReferenceCpuBackend
+OMEGA_GATE ref tokens=32 secs=12.215 tok/s=2.620 text="amountofprocessingpower.Itisdesignedforuseindatacentersandotherhigh-performancecomputingenvironments.TheDGXSparkisequippedwith"
+OMEGA_GATE omega backend: OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+OMEGA_GATE omega warm-up (weight upload + 1 token) secs=6.060
+OMEGA_GATE omega tokens=32 secs=5.391 tok/s=5.936 text="amountofmemoryandprocessingpower.Itisdesignedforuseindataanalysisandmachinelearningapplications.TheDGXSparkisapowerfulmachinethatcanhandle"
+OMEGA_GATE OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+OMEGA_GATE tokens_match=false
+OMEGA_GATE verdict: PASS (receipt /home/drakestapleton/workspace/evidence-out/FB1-CUT3D-02dfa2e/strict-receipt.json)
+
+thread 'omega_vs_reference_real_model' (3445297) panicked at crates/aien-inference-runtime/tests/strict_real_model.rs:271:5:
+assertion `left == right` failed: Omega backend changed the greedy output
+  left: "amountofprocessingpower.Itisdesignedforuseindatacentersandotherhigh-performancecomputingenvironments.TheDGXSparkisequippedwith"
+ right: "amountofmemoryandprocessingpower.Itisdesignedforuseindataanalysisandmachinelearningapplications.TheDGXSparkisapowerfulmachinethatcanhandle"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    omega_vs_reference_real_model
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 49.79s
+
+error: test failed, to rerun pass `-p aien-inference-runtime --test strict_real_model`
+gate exit 101

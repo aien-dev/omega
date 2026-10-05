@@ -1,0 +1,7 @@
+kind: ladder-wrong-k
+verifier_commit: 3c72895857c3
+input_sha256: 1e282428d4ce290b4048bf722ace12b17725996c0ce0deb56fc0b6a39f020e70
+code: 270
+name: PD0V_T8_STATE_SKIPPED
+recorder: STAND_IN
+range_check: STAND_IN

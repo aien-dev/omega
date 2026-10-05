@@ -40,6 +40,7 @@ typedef struct {
     uint16_t dlive;
     uint8_t cap_off;
     int pool, prov;
+    int decl;  /* OSC-3 item 3: declaring AST node (owners: carries the drop-flag mark) */
 } Sym;
 
 /* OSC-3 item 2: handle state saved around branches and loop bodies */
@@ -49,8 +50,13 @@ typedef struct {
     int nprov, nsym;
 } HSave;
 
+/* Obj.moved. OSC-3 item 3 (drop flags) adds OM_MAYBE: moved on some but not
+ * all paths that reach the current point. Such an owner cannot be used,
+ * borrowed or moved; at scope end its release is guarded by a drop flag. */
+enum { OM_LIVE = 0, OM_MOVED = 1, OM_GONE = 2 /* released (scope gone) */, OM_MAYBE = 3 };
+
 typedef struct {
-    uint8_t moved;
+    uint8_t moved;   /* OM_* */
     uint16_t n_shared, n_mut;
     uint32_t move_line;
     int sym;   /* owning symbol or -1 (stand-in / dummy) */
@@ -248,6 +254,17 @@ static int diag_own(C *c, OscDiagKind k, uint32_t line, uint32_t col, int s, con
     return -1;
 }
 
+/* OSC-3 item 3: a maybe-moved owner (OM_MAYBE) is refused exactly like a
+ * moved one. Its trace records the path on which it was moved (MOVE obj -> 0,
+ * accepted) before the refused event, so the refusal replays through the
+ * model as use-after-move. Returns 1 for a maybe-moved owner. */
+static int maybe_path(C *c, const Sym *y)
+{
+    if (c->obj[y->obj].moved != OM_MAYBE) return 0;
+    tr_ev(c, OSC_EV_MOVE, y->obj, -1, -1, -1, c->obj[y->obj].move_line, 0);
+    return 1;
+}
+
 /* direct or via-borrow access of symbol s (owner or borrow binding). wr: write. */
 static int access(C *c, int s, int wr, uint32_t line, uint32_t col)
 {
@@ -257,9 +274,10 @@ static int access(C *c, int s, int wr, uint32_t line, uint32_t col)
         Obj *o = &c->obj[y->obj];
         uint32_t k = wr ? OSC_EV_USE_WRITE : OSC_EV_USE_READ;
         if (o->moved) {
+            int mb = maybe_path(c, y);
             tr_ev(c, k, y->obj, -1, -1, -1, line, 1);
-            snprintf(msg, sizeof msg, "'%s' used after it was moved at line %u", y->name, o->move_line);
-            return diag_own(c, OSC_DIAG_USE_AFTER_MOVE, line, col, s, NULL, "use after move", msg);
+            snprintf(msg, sizeof msg, mb ? "'%s' used after it may have been moved at line %u (moved on some path of an 'if')" : "'%s' used after it was moved at line %u", y->name, o->move_line);
+            return diag_own(c, OSC_DIAG_USE_AFTER_MOVE, line, col, s, NULL, mb ? "use after maybe-move" : "use after move", msg);
         }
         if (o->n_mut || (wr && o->n_shared)) {
             conflict_name(c, y->obj, -1, !wr, other, sizeof other);
@@ -300,9 +318,10 @@ static int take_borrow(C *c, int s, int mut, uint32_t line, uint32_t col)
     if (y->kind == SK_OWNER) {
         Obj *o = &c->obj[y->obj];
         if (o->moved) {
+            int mb = maybe_path(c, y);
             tr_ev(c, k, y->obj, -1, c->nbor, -1, line, 1);
-            snprintf(msg, sizeof msg, "borrow of '%s' after it was moved at line %u", y->name, o->move_line);
-            return diag_own(c, OSC_DIAG_USE_AFTER_MOVE, line, col, s, NULL, "use after move", msg);
+            snprintf(msg, sizeof msg, mb ? "borrow of '%s' after it may have been moved at line %u (moved on some path of an 'if')" : "borrow of '%s' after it was moved at line %u", y->name, o->move_line);
+            return diag_own(c, OSC_DIAG_USE_AFTER_MOVE, line, col, s, NULL, mb ? "use after maybe-move" : "use after move", msg);
         }
         if (o->n_mut || (mut && o->n_shared)) {
             conflict_name(c, y->obj, -1, !mut, other, sizeof other);
@@ -344,9 +363,10 @@ static int do_move(C *c, int s, int dest, uint32_t line, uint32_t col)
     Obj *o = &c->obj[y->obj];
     char other[64], msg[160];
     if (o->moved) {
+        int mb = maybe_path(c, y);
         tr_ev(c, OSC_EV_MOVE, y->obj, dest, -1, -1, line, 1);
-        snprintf(msg, sizeof msg, "'%s' moved again after it was moved at line %u", y->name, o->move_line);
-        return diag_own(c, OSC_DIAG_USE_AFTER_MOVE, line, col, s, NULL, "use after move", msg);
+        snprintf(msg, sizeof msg, mb ? "'%s' moved again after it may have been moved at line %u (moved on some path of an 'if')" : "'%s' moved again after it was moved at line %u", y->name, o->move_line);
+        return diag_own(c, OSC_DIAG_USE_AFTER_MOVE, line, col, s, NULL, mb ? "use after maybe-move" : "use after move", msg);
     }
     if (o->n_shared || o->n_mut) {
         conflict_name(c, y->obj, -1, 0, other, sizeof other);
@@ -400,6 +420,7 @@ static int declare(C *c, const OscNode *n, uint8_t kind, const OscType *ty, int 
     y->ty = *ty;
     y->loop_depth = c->loop_depth;
     y->obj = y->bor = -1;
+    y->decl = (int)(n - c->ast->nodes);
     c->vis[c->nvis++] = s;
     return s;
 }
@@ -447,7 +468,9 @@ static int scope_exit_events(C *c, int levels, uint32_t line, OscNode *rec)
                 if (y->bor >= 0 && c->bor[y->bor].live) end_bor(c, y->bor, line);
             } else if (y->kind == SK_OWNER) {
                 Obj *o = &c->obj[y->obj];
-                if (!o->moved && !o->arena1) {
+                /* OSC-3 item 3: a maybe-moved owner is listed too; the lowerer
+                 * guards its release with the owner's drop flag */
+                if ((o->moved == OM_LIVE || o->moved == OM_MAYBE) && !o->arena1) {
                     tr_ev(c, OSC_EV_RELEASE, y->obj, -1, -1, -1, line, 0);
                     o->moved = 2; /* released (scope gone) */
                     if (a->nrel < OSC_AST_MAX_REL) { a->rel[a->nrel++] = (int16_t)s; rec->rel_count++; }
@@ -1690,18 +1713,19 @@ static int chk_if(C *c, int i)
     } else if (!t1) {
         /* OSC-3 item 2: freed only if freed on both paths */
         for (int p = 0; p < h0->nprov; p++) c->pfreed[p] = (uint8_t)(c->pfreed[p] && h1->pfreed[p]);
+        /* OSC-3 item 3 (drop flags): an owner moved on one path and not (or
+         * only maybe) on the other is maybe-moved after the `if`. Its
+         * declaration gets a drop flag: set at the declaration, cleared at
+         * every move, tested by its scope-end release. Both paths moved:
+         * definitely moved (no flag). Neither: unchanged. Pre-existing
+         * objects are never OM_GONE on a path that falls through. */
         for (int o = 0; o < nobj0; o++) {
-            int m1 = s1->obj[o].moved == 1, m2 = c->obj[o].moved == 1;
-            if (m1 != m2) {
-                int sym = c->obj[o].sym;
-                uint32_t ml = m1 ? s1->obj[o].move_line : c->obj[o].move_line;
-                char msg[320];
-                snprintf(msg, sizeof msg, "'%s' is moved on only one path of the 'if' at line %u (no drop flags)",
-                         sym >= 0 ? c->sym[sym].name : "?", n->line);
-                osc_diag_set(c->d, OSC_DIAG_CONDITIONAL_MOVE, ml, 0, sym >= 0 ? c->sym[sym].name : "?",
-                             sym >= 0 ? c->sym[sym].line : 0, "if", "conditional move", "%s", msg);
-                goto out;
-            }
+            int m1 = s1->obj[o].moved, m2 = c->obj[o].moved;
+            if (m1 == m2) continue;
+            if (m2 == OM_LIVE || (m2 == OM_MOVED && m1 == OM_MAYBE)) c->obj[o].move_line = s1->obj[o].move_line;
+            c->obj[o].moved = OM_MAYBE;
+            int sym = c->obj[o].sym;
+            if (sym >= 0) NODE(c->sym[sym].decl)->dflag = 1;
         }
     }
     c->term = 0;

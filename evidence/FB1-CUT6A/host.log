@@ -1,0 +1,334 @@
+    Blocking waiting for file lock on build directory
+    Checking serde_core v1.0.229
+   Compiling darling_core v0.20.11
+    Checking indexmap v2.14.2
+    Checking getrandom v0.3.4
+    Checking openssl-sys v0.9.117
+    Checking tokio v1.53.1
+    Checking futures-util v0.3.34
+    Checking typenum v1.20.1
+    Checking aho-corasick v1.1.5
+    Checking onig_sys v69.9.3
+    Checking nom v7.1.3
+    Checking aien-platform-linux v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-platform-linux)
+    Checking cpufeatures v0.2.17
+    Checking idna v1.1.0
+    Checking spark-max-cabi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-max-cabi)
+    Checking uuid v1.26.1
+    Checking rand_core v0.9.5
+    Checking onig v6.5.3
+    Checking rand_chacha v0.9.0
+    Checking url v2.5.8
+    Checking rand v0.9.5
+    Checking openssl v0.10.81
+    Checking regex-automata v0.4.18
+    Checking generic-array v0.14.7
+    Checking serde v1.0.229
+    Checking serde_json v1.0.151
+    Checking monostate v0.1.18
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking digest v0.10.7
+   Compiling darling_macro v0.20.11
+    Checking sha2 v0.10.9
+    Checking dary_heap v0.3.9
+    Checking serde_urlencoded v0.7.1
+    Checking compact_str v0.9.1
+    Checking aien-abi-core v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-abi-core)
+    Checking spm_precompiled v0.1.4
+    Checking ahash v0.8.12
+    Checking aien-kv-cache v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-kv-cache)
+    Checking chrono v0.4.45
+    Checking regex v1.13.1
+   Compiling darling v0.20.11
+    Checking spark-max-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/spark-max-rs)
+   Compiling derive_builder_core v0.20.2
+    Checking native-tls v0.2.18
+   Compiling derive_builder_macro v0.20.2
+    Checking tokio-util v0.7.19
+    Checking tokio-native-tls v0.3.1
+    Checking tower v0.5.3
+    Checking aien-inference-service v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-service)
+    Checking derive_builder v0.20.2
+    Checking tokenizers v0.21.4
+    Checking h2 v0.4.19
+    Checking tower-http v0.6.11
+    Checking hyper v1.11.1
+    Checking hyper-util v0.1.20
+    Checking hyper-tls v0.6.0
+    Checking reqwest v0.12.28
+    Checking aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-abi)
+    Checking aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-scheduler)
+    Checking aien-inference-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-runtime)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.16s
+    Blocking waiting for file lock on build directory
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-omega-gpu)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-scheduler)
+   Compiling aien-inference-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut6/crates/aien-inference-runtime)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.33s
+     Running unittests src/lib.rs (target/debug/deps/aien_inference_abi-1df9a3891a331e2d)
+
+running 88 tests
+test backend::tests::test_reference_backend_name ... ok
+test backend::tests::test_reference_compute_logits ... ok
+test backend::tests::test_reference_matmul_matches_tensor ... ok
+test backend::tests::test_reference_rmsnorm_matches_tensor ... ok
+test backend::tests::test_reference_swiglu ... ok
+test backend::tests::test_reference_rope_matches_tensor ... ok
+test checkpoint::tests::test_bf16_fp32_codec_roundtrip ... ok
+test backend::tests::test_reference_gqa_attention ... ok
+test capsule::tests::row_major_strides_match_c_order ... ok
+test checkpoint::tests::test_invalid_header_truncated_buffer ... ok
+test checkpoint::tests::test_header_len_arithmetic_overflow ... ok
+test checkpoint::tests::test_tinyllama_catalog_size_and_shapes ... ok
+test checkpoint::tests::test_shape_mismatch_loud_error ... ok
+test moe_plan::tests::rejects_corrupt_router_values_and_shape ... ok
+test checkpoint::tests::test_offset_out_of_bounds_loud_error ... ok
+test moe_plan::tests::weighted_inverse_permutation_preserves_token_values ... ok
+test capsule::tests::source_digest_of_abc_matches_well_known_sha256 ... ok
+test checkpoint::tests::test_missing_tensor_loud_error ... ok
+test checkpoint::tests::test_valid_custom_catalog_parsing ... ok
+test capsule::tests::decode_fp32_bf16_one_and_owned_len_and_missing_tensor ... ok
+test checkpoint::tests::test_dtype_mismatch_loud_error ... ok
+test moe_plan::tests::qwen_routing_groups_and_restores_all_assignments ... ok
+test checkpoint::tests::test_capsule_owns_file_bytes_and_byte_range_points_at_payload ... ok
+test checkpoint::tests::test_from_bf16_tensors_one_buffer ... ok
+test capsule::tests::capsule_digest_is_stable_across_hashmap_insertion_order ... ok
+test native_ops::tests::claimed_native_op_falling_back_is_counted_and_trips_strict ... ok
+test mojo_backend::tests::test_mojo_backend_creation_and_name ... ok
+test mojo_backend::tests::test_mojo_backend_fallback_or_accelerated_parity ... ok
+test native_ops::tests::mask_with_without_and_lists ... ok
+test native_ops::tests::reference_op_outside_mask_does_not_count_as_fallback ... ok
+test qwen3_coder::tests::bf16_words_reads_aligned_payload ... ok
+test omega_backend::tests::fingerprint_changes_with_content ... ok
+test native_ops::tests::default_mask_is_all_native ... ok
+test omega_backend::tests::rope_table_reproduces_reference_rope ... ok
+test native_ops::tests::op_names_unique_and_match_indices ... ok
+test qwen3_coder::tests::coder_constants_match_official_config ... ok
+test omega_backend::tests::attention_chip_error_is_a_counted_fallback ... ok
+test native_ops::tests::default_report_is_all_native ... ok
+test qwen3_moe::tests::bf16_rounds_to_nearest_even ... ok
+test omega_backend::tests::mask_is_all_nine_ops ... ok
+test omega_backend::tests::elementwise_chip_errors_are_counted_fallbacks ... ok
+test qwen3_moe::tests::fp8_encode_rounds_to_nearest_even_and_saturates ... ok
+test qwen3_moe::tests::shard_names_cannot_escape_the_checkpoint_directory ... ok
+test strict::tests::claimed_native_fallback_fails_the_receipt_gate ... ok
+test tensor::tests::test_matmul_exact ... ok
+test tensor::tests::test_rmsnorm_invariance ... ok
+test strict::tests::reference_ops_by_design_pass_the_receipt_gate ... ok
+test native_ops::tests::report_lists_native_and_reference_and_counters ... ok
+test omega_backend::tests::chip_error_trips_strict_in_production - should panic ... ok
+test qwen3_coder::tests::bf16_words_rejects_odd_length - should panic ... ok
+test qwen3_coder::tests::bf16_words_rejects_misaligned_payload - should panic ... ok
+test qwen3_moe::tests::fp8_e4m3fn_decodes_known_values ... ok
+test tensor::tests::test_rope_norm_preservation ... ok
+test tensor::tests::test_rope_rotate_half ... ok
+test tensor::tests::test_sample_argmax ... ok
+test tensor::tests::test_swiglu_activation ... ok
+test tensor_abi::tests::c_abi_layout_is_stable ... ok
+test tensor_abi::tests::f32_view_records_shape_stride_and_host_residency ... ok
+test tokenizer::tests::test_chat_template_with_empty_system ... ok
+test tokenizer::tests::test_chat_template_without_system ... ok
+test tokenizer::tests::test_chat_template_with_system ... ok
+test tensor_abi::tests::capsule_views_preserve_typed_payload_and_quantization ... ok
+test tokenizer::tests::test_stop_and_eos_token_checks ... ok
+test tests::test_mock_inference_backend ... ok
+test tokenizer::tests::test_pinned_special_tokens ... ok
+test qwen3_coder::tests::fp8_block128_roundtrip_spot_check ... ok
+test omega_backend::tests::chip_error_is_a_counted_fallback ... ok
+test tests::test_embedded_inference_backend_execution ... ok
+test weights::tests::test_reference_weights_initialization ... ok
+test transformer_backend::tests::test_backend_constructors ... ok
+test tokenizer::tests::test_synthetic_tokenizer_roundtrip ... ok
+test transformer_backend::tests::test_forward_token_and_logits_execution ... ok
+test tests::test_blackwell_inference_backend ... ok
+test tests::test_mojo_inference_backend ... ok
+test transformer_backend::tests::test_native_transformer_generate_tokens ... ok
+test transformer_backend::tests::test_native_transformer_generate_tokens_streaming ... ok
+test moe_plan::tests::five_hundred_branch_batch_exposes_expert_histogram ... ok
+test transformer_backend::tests::test_paged_cow_context_and_branch_fork ... ok
+test tests::test_native_cpu_inference_backend ... ok
+test weights::tests::test_from_loaded_checkpoint_success_and_missing_key ... ok
+test tests::test_max_serving_backend ... ok
+test transformer_backend::tests::c3_chunked_prefill_logits_match_one_shot_unpaged ... ok
+test transformer_backend::tests::c3_chunked_prefill_logits_match_one_shot_paged ... ok
+test transformer_backend::tests::c3_chunked_prefill_execute_step_unpaged ... ok
+test transformer_backend::tests::c3_chunked_prefill_execute_step_paged ... ok
+test qwen3_moe::tests::oracle_matches_hand_computed_identity_expert ... ok
+test qwen3_moe::tests::capsule_views_round_trip_and_digest_covers_payload ... ok
+test qwen3_moe::tests::loader_reads_one_layer_from_a_sharded_checkpoint_and_rejects_bad_contracts ... ok
+
+test result: ok. 88 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s
+
+     Running tests/bf16_paged_attention.rs (target/debug/deps/bf16_paged_attention-b62ef9c934ce7d3c)
+
+running 1 test
+test cpu_paged_attention_matches_decoded_bf16 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/branch_client_harness.rs (target/debug/deps/branch_client_harness-c6bbe2120d753341)
+
+running 1 test
+test test_aegis_branch_client_2_8_32_fork_lifecycle ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/omega_backend_parity.rs (target/debug/deps/omega_backend_parity-8c7f3a693bb2b162)
+
+running 5 tests
+test chip_attention_parity_on_tinyllama_shapes ... ignored, chip test: needs a native build and the GB10; run through the heavy queue
+test chip_elementwise_parity_on_tinyllama_shapes ... ignored, chip test: needs a native build and the GB10; run through the heavy queue
+test chip_mixed_matmul_then_elementwise ... ignored, chip diagnostic: heavy queue only
+test chip_parity_on_tinyllama_shapes ... ignored, chip test: needs a native build and the GB10; run through the heavy queue
+test stub_backend_reports_unavailable ... ok
+
+test result: ok. 1 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/paged_attention_parity.rs (target/debug/deps/paged_attention_parity-c7669d14729f1d4d)
+
+running 2 tests
+test test_layer1_layout_strides_independent ... ok
+test test_layer2_physical_coordinate_byte_pattern ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/paged_transformer_parity.rs (target/debug/deps/paged_transformer_parity-718e7eb741eacde5)
+
+running 2 tests
+test test_paged_vs_contiguous_numerical_parity ... ok
+test test_32_branch_fork_and_cow_acceptance ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/prefill_pool_exhaustion.rs (target/debug/deps/prefill_pool_exhaustion-3edf1fda0d413219)
+
+running 1 test
+test prefill_pool_exhaustion_is_loud_atomic_and_retryable ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/qwen3_moe_gpu.rs (target/debug/deps/qwen3_moe_gpu-9e3d2b8bc90cd4ca)
+
+running 8 tests
+test official_checkpoint_layers_match_fp32_oracle ... ok
+test device_router_fails_closed_on_non_finite_logits ... ok
+test device_routing_matches_moe_batch_plan_exactly ... ok
+test grouped_fp8_gemm_matches_block_scaled_reference ... ok
+test grouped_fp8_gemm_rejects_out_of_range_groups ... ok
+test layer_rejects_non_finite_input_without_output ... ok
+test synthetic_layer_with_distinct_experts_matches_fp32_oracle ... ok
+test e4m3_test_generator_stays_finite_and_bounded ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tinyllama_noise_floor.rs (target/debug/deps/tinyllama_noise_floor-87aec449211649d6)
+
+running 4 tests
+test tinyllama_noise_floor_cpu_reference ... ignored, needs AIEN_E2E_CHECKPOINT (real TinyLlama); run by the forge with --ignored
+test expected_minimum_rejects_small_floor ... ok
+test compare_sees_injected_perturbation ... ok
+test sanity_rejects_constant_and_nonfinite_logits ... ok
+
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/tinyllama_parity.rs (target/debug/deps/tinyllama_parity-aee9a26eef7f5598)
+
+running 6 tests
+test test_stage1_tokenizer_parity ... ok
+test test_stage2_shape_parity ... ok
+test test_all_5_stages_parity_suite has been running for over 60 seconds
+test test_stage3_numerical_activation_parity has been running for over 60 seconds
+test test_stage4_logit_and_greedy_parity has been running for over 60 seconds
+test test_stage5_multi_step_generation_parity has been running for over 60 seconds
+test test_stage5_multi_step_generation_parity ... ok
+test test_stage4_logit_and_greedy_parity ... ok
+test test_stage3_numerical_activation_parity ... ok
+test test_all_5_stages_parity_suite ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 398.59s
+
+     Running tests/transformer_parity.rs (target/debug/deps/transformer_parity-19d9db5c0faee255)
+
+running 5 tests
+test test_safetensors_bytes_parser ... ok
+test test_native_transformer_prefill_and_decode_step ... ok
+test test_multi_step_autoregressive_generation ... ok
+test test_blackwell_vs_reference_cpu_autoregressive_parity ... ok
+test test_multi_sequence_batched_decode_parity_with_sequential ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/lib.rs (target/debug/deps/aien_inference_runtime-8a737d0bf32e16a9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/logit_drift.rs (target/debug/deps/logit_drift-d75febd9f2cf80f9)
+
+running 5 tests
+test judge_accepts_agreement_and_explained_near_tie ... ok
+test teacher_forced_logit_drift ... ignored, needs the real checkpoint and the GB10 with a native Omega build; heavy queue only
+test judge_rejects_unexplained_flip_and_large_drift ... ok
+test compare_keeps_nan_so_the_judge_fails_it ... ok
+test compare_finds_flip_margin_and_difference ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/runtime_tests.rs (target/debug/deps/runtime_tests-274426e2269573e2)
+
+running 1 test
+test test_embedded_inference_service_reference_weights ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.02s
+
+     Running tests/strict_real_model.rs (target/debug/deps/strict_real_model-c0abbbe44d4838a2)
+
+running 5 tests
+test omega_vs_reference_real_model ... ignored, needs the real checkpoint and the GB10 with a native Omega build; heavy queue only
+test strict_real_model_gate ... ignored, needs the real checkpoint on the Spark: AIEN_E2E_CHECKPOINT + AIEN_STRICT_RECEIPT
+test production_build_is_strict_unless_opted_in ... ok
+test missing_checkpoint_is_refused_not_faked ... ok
+test receipt_rejects_fallbacks_and_dev_builds ... ok
+
+test result: ok. 3 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/aien_omega_gpu-9973371d41c1e612)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/parity.rs (target/debug/deps/parity-94b97ab1e2a4813e)
+
+running 6 tests
+test chip_parity_f32_and_bf16 ... ignored, needs the GB10 chip: run through lanes.sh queue --heavy with a native build
+test native_refuses_bad_args_without_chip ... ok
+test lock_is_full_sha ... ok
+test rc_names ... ok
+test shape_mismatch_is_caught_before_ffi ... ok
+test stub_reports_unavailable ... ok
+
+test result: ok. 5 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_inference_abi
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_inference_runtime
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests aien_omega_gpu
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+host exit 0

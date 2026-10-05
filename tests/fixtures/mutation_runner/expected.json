@@ -1,0 +1,9 @@
+{
+  "mutants": [
+    {"id": "K1", "file": "add.c", "checks": "addition is computed", "status": "KILLED", "note": "1 failing case(s), first: add"},
+    {"id": "S1", "file": "add.c", "checks": "clamp upper bound", "status": "SURVIVED", "note": "harness still PASS, no justification recorded"},
+    {"id": "S2", "file": "add.c", "checks": "clamp upper bound again", "status": "SURVIVED_REDUNDANT", "note": "redundant: covered by the caller, UNVERIFIED"},
+    {"id": "L1", "file": "add.c", "checks": "legacy gap row", "status": "SURVIVED_GAP", "note": "gap: legacy prose with quotes and back"},
+    {"id": "E1", "file": "add.c", "checks": "no-op edit", "status": "ERROR", "note": "edit did not apply"}
+  ]
+}

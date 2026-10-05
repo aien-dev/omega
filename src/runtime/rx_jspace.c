@@ -954,16 +954,28 @@ static double expected_reads(const JsReal *r) {
     return (double)(r->holders ? r->holders : 1);
 }
 
-static JsAction choose(const JsSpace *s, const JsReal *r, double pressure, bool allow_move) {
+/* One alternative the residency chooser builds: its cost inputs. Its score
+ * (nanoseconds of expected work per byte given back) goes to score[] below. */
+typedef struct { JsAction a; double now, later, freed; } Alt;
+
+/* The residency decision for one candidate, with its working set exposed:
+ * opt[0..*k_out) are the alternatives in build order (MOVE, COMPRESS, SPILL,
+ * EVICT), score[i] the score of opt[i] when it frees bytes (untouched when it
+ * does not); *best_out is the cheapest score (0 when none). choose() is this
+ * decision with the working set dropped.
+ * DUAL-3a observation reads the working set; nothing else does. */
+static JsAction decide(const JsSpace *s, const JsReal *r, double pressure, bool allow_move,
+                       Alt opt[4], double score[4], int *k_out, double *best_out) {
     const JsCosts *c = &s->costs;
     double n = (double)r->realizer->unit_bytes;
     double e = expected_reads(r);
     double best = 0;
     JsAction act = JS_ACT_COUNT;   /* keep */
+    *k_out = 0;
+    *best_out = 0;
     if (r->placement != JS_PLACE_HOT && r->placement != JS_PLACE_COLD &&
         r->placement != JS_PLACE_COMPRESSED) return JS_ACT_COUNT;
     double held = r->placement == JS_PLACE_COMPRESSED ? (double)r->packed_len : n;
-    struct { JsAction a; double now, later, freed; } opt[4];
     int k = 0;
     if (r->placement == JS_PLACE_HOT && allow_move) {
         /* MOVE frees hot-arena bytes, not total residency. */
@@ -986,11 +998,147 @@ static JsAction choose(const JsSpace *s, const JsReal *r, double pressure, bool 
         if (opt[i].freed <= 0) continue;
         /* nanoseconds of expected work per byte of residency given back */
         double cost = (opt[i].now + e * opt[i].later) / opt[i].freed;
+        score[i] = cost;
         if (act == JS_ACT_COUNT || cost < best) { best = cost; act = opt[i].a; }
     }
+    *k_out = k;
+    *best_out = best;
     /* Keep when holding the bytes is cheaper than the best way to give them up. */
     if (act != JS_ACT_COUNT && best >= pressure * c->retain_ns_per_byte) return JS_ACT_COUNT;
     return act;
+}
+
+static JsAction choose(const JsSpace *s, const JsReal *r, double pressure, bool allow_move) {
+    Alt opt[4];
+    double score[4];
+    int k;
+    double best;
+    return decide(s, r, pressure, allow_move, opt, score, &k, &best);
+}
+
+/* ---- DUAL-3a decision-site observation ("jspace.residency", rx_jspace.h) -- */
+
+static uint8_t *put_u8(uint8_t *p, uint64_t v)  { *p = (uint8_t)v; return p + 1; }
+static uint8_t *put_u32(uint8_t *p, uint32_t v) {
+    for (int i = 0; i < 4; i++) p[i] = (uint8_t)(v >> (8 * i));
+    return p + 4;
+}
+static uint8_t *put_u64(uint8_t *p, uint64_t v) {
+    for (int i = 0; i < 8; i++) p[i] = (uint8_t)(v >> (8 * i));
+    return p + 8;
+}
+static uint8_t *put_f64(uint8_t *p, double d) {
+    uint64_t v;
+    memcpy(&v, &d, 8);
+    return put_u64(p, v);
+}
+
+size_t js_dual_observation_encode(const JsDualObservation *o, uint8_t out[JS_DUAL_OBS_BYTES]) {
+    uint8_t *p = out;
+    p = put_u8(p, o->kind);
+    p = put_u8(p, o->version);
+    p = put_u8(p, JS_DUAL_SITE_ID_LEN);
+    memcpy(p, JS_DUAL_SITE_ID, JS_DUAL_SITE_ID_LEN); p += JS_DUAL_SITE_ID_LEN;
+    p = put_u64(p, o->seq);
+    p = put_f64(p, o->pressure);
+    p = put_u8(p, o->pressure_case);
+    p = put_u8(p, o->allow_move);
+    p = put_u8(p, o->chosen);
+    p = put_u8(p, o->n_priced);
+    for (unsigned i = 0; i < JS_DUAL_OBS_N_ALT; i++) {
+        p = put_u8(p, o->alt[i].action);
+        p = put_u8(p, o->alt[i].status);
+        p = put_f64(p, o->alt[i].now_ns);
+        p = put_f64(p, o->alt[i].later_ns);
+        p = put_f64(p, o->alt[i].freed_bytes);
+        p = put_f64(p, o->alt[i].score);
+    }
+    p = put_f64(p, o->best_score);
+    p = put_f64(p, o->keep_threshold);
+    p = put_f64(p, o->expected_reads);
+    p = put_u32(p, o->real_slot);
+    p = put_u64(p, o->real_gen);
+    p = put_u8(p, o->real_type);
+    p = put_u8(p, o->placement);
+    p = put_u8(p, o->recipe);
+    p = put_u64(p, o->unit_bytes);
+    p = put_u64(p, o->held_bytes);
+    p = put_u32(p, o->holders);
+    p = put_u32(p, o->refs);
+    p = put_u64(p, o->last_use);
+    memcpy(p, o->semantic_state_id, 32); p += 32;
+    p = put_u64(p, o->budget_bytes);
+    p = put_u64(p, o->resident_bytes);
+    p = put_u64(p, o->hot_bytes);
+    return (size_t)(p - out);
+}
+
+void js_dual_set_observer(JsSpace *s, JsDualObserver fn, const void *ctx) {
+    LOCK(s);
+    s->dual_observer = fn;
+    s->dual_ctx = fn ? ctx : NULL;
+    UNLOCK(s);
+}
+
+/* The same decision as choose(), followed by one observation record handed to
+ * the observer. The returned action is the chooser's own local result; the
+ * record is a copy the observer cannot act through. */
+static JsAction observed_u(JsSpace *s, const JsReal *r, double pressure, bool over_total,
+                           uint64_t budget_bytes, uint64_t hot) {
+    Alt opt[4];
+    double score[4] = { 0, 0, 0, 0 };
+    int k;
+    double best;
+    JsAction a = decide(s, r, pressure, !over_total, opt, score, &k, &best);
+    JsDualObservation o;
+    memset(&o, 0, sizeof o);
+    o.kind = JS_DUAL_OBS_KIND;
+    o.version = JS_DUAL_OBS_VERSION;
+    o.seq = ++s->dual_seq;
+    o.pressure = pressure;
+    o.pressure_case = over_total ? JS_DUAL_PRESSURE_CAPACITY : JS_DUAL_PRESSURE_SOFT;
+    o.allow_move = !over_total;
+    o.chosen = (uint8_t)a;
+    for (unsigned i = 0; i < JS_DUAL_OBS_N_ALT; i++) {
+        o.alt[i].action = (uint8_t)(JS_ACT_MOVE + i);
+        o.alt[i].status = JS_DUAL_ALT_INADMISSIBLE;
+    }
+    for (int i = 0; i < k; i++) {
+        JsDualAlternative *d = &o.alt[opt[i].a - JS_ACT_MOVE];
+        d->status = opt[i].freed > 0 ? JS_DUAL_ALT_PRICED : JS_DUAL_ALT_UNPRICED;
+        d->now_ns = opt[i].now;
+        d->later_ns = opt[i].later;
+        d->freed_bytes = opt[i].freed;
+        d->score = score[i];
+        if (opt[i].freed > 0) o.n_priced++;
+    }
+    o.best_score = best;
+    o.keep_threshold = pressure * s->costs.retain_ns_per_byte;
+    o.expected_reads = expected_reads(r);
+    o.real_slot = r->slot;
+    o.real_gen = r->gen;
+    o.real_type = (uint8_t)r->realization_type;
+    o.placement = (uint8_t)r->placement;
+    o.recipe = (uint8_t)r->recipe;
+    o.unit_bytes = r->realizer->unit_bytes;
+    o.held_bytes = resident_of(r);
+    o.holders = r->holders;
+    o.refs = r->refs;
+    o.last_use = r->last_use;
+    memcpy(o.semantic_state_id, r->semantic_state_id.b, 32);
+    o.budget_bytes = budget_bytes;
+    o.resident_bytes = s->stats.resident_bytes;
+    o.hot_bytes = hot;
+    uint8_t enc[JS_DUAL_OBS_BYTES];
+    size_t len = js_dual_observation_encode(&o, enc);
+    sha256_ctx h;
+    sha256_init(&h);
+    /* domain string including its terminating zero byte */
+    sha256_update(&h, (const uint8_t *)JS_DUAL_OBS_DOMAIN, sizeof JS_DUAL_OBS_DOMAIN);
+    sha256_update(&h, enc, len);
+    sha256_final(&h, o.digest);
+    s->dual_observer(&o, s->dual_ctx);
+    return a;
 }
 
 JsAction js_forge_choose(const JsSpace *s, const JsReal *r, double pressure) {
@@ -1051,7 +1199,8 @@ static int enforce_u(JsSpace *s, uint64_t budget_bytes, JsPolicyReport *rep) {
         JsReal *r = cs[i].r;
         double pressure = over_total ? 1e9 : 1e3;
         /* A move lowers hot-arena bytes, not total residency. */
-        JsAction a = choose(s, r, pressure, !over_total);
+        JsAction a = s->dual_observer ? observed_u(s, r, pressure, over_total, budget_bytes, hot)
+                                      : choose(s, r, pressure, !over_total);
         if (rep) rep->considered++;
         if (a == JS_ACT_COUNT) { if (rep) rep->kept++; continue; }
         uint64_t before_hot = r->placement == JS_PLACE_HOT ? r->realizer->unit_bytes : 0;
@@ -1307,7 +1456,7 @@ int js_branch_home(JsSpace *s, JsBranchRef ref, JsHome *out) {
 /* ---- durable checkpoint ------------------------------------------------------
  *
  * jspace.meta, little-endian, all fixed-width fields:
- *   header (128 B): "OMJSPC01" | u32 version=2 | u32 header_bytes=128 |
+ *   header (128 B): "OMJSPC01" | u32 version=3 | u32 header_bytes=128 |
  *     u64 commit_seq | u64 body_len | u32 n_types | u32 n_reals |
  *     u32 n_branch_slots | u32 n_branches | u64 spill_end |
  *     u64 real_gen_floor | sha256(body) | sha256(header[0..96))
@@ -1322,6 +1471,10 @@ int js_branch_home(JsSpace *s, JsBranchRef ref, JsHome *out) {
  *                    u32 divergence | u32 frozen | u32 owner | u32 locality |
  *                    u32 type | u32 n_units | machine[32] |
  *                    n_units x { u32 slot | u64 gen } }
+ * Version 3 appends a fixed 48-byte opaque client anchor (u64 count | digest[32] |
+ * u64 reserved, little-endian) as the last bytes of the body, after the branches,
+ * covered by the body digest. A version-2 checkpoint (no anchor section) still
+ * loads with the anchor absent; the next commit writes version 3.
  * Version 2 widened realization generations to 64 bits (Lane 32). Version 1
  * (32-bit realization generations) is refused with JS_ERR_VERSION, never
  * reinterpreted. No pointer is stored. Placement is SPILLED (bytes at spill_off in
@@ -1330,7 +1483,9 @@ int js_branch_home(JsSpace *s, JsBranchRef ref, JsHome *out) {
  * are left out. */
 
 #define JS_META_MAGIC   "OMJSPC01"
-#define JS_META_VERSION 2u
+#define JS_META_VERSION 3u
+#define JS_META_VERSION_V2 2u
+#define JS_META_ANCHOR  48u
 #define JS_META_VERSION_V1 1u
 #define JS_META_HDR     128u
 #define JS_META_REAL    136u
@@ -1466,6 +1621,7 @@ static int commit_u(JsSpace *s) {
             put32(&body, b->units[u]->slot); put64(&body, b->units[u]->gen);
         }
     }
+    buf_put(&body, s->anchor_set ? s->anchor : (const uint8_t[JS_META_ANCHOR]){ 0 }, JS_META_ANCHOR);
     if (body.oom) { free(body.p); return JS_ERR_NOMEM; }
 
     /* 3. Header. */
@@ -1515,6 +1671,21 @@ static int commit_u(JsSpace *s) {
 
 int js_space_commit(JsSpace *s) { LOCKED_INT(commit_u(s)); }
 
+void js_space_set_anchor(JsSpace *s, const uint8_t anchor[48]) {
+    LOCK(s);
+    memcpy(s->anchor, anchor, JS_META_ANCHOR);
+    s->anchor_set = true;
+    UNLOCK(s);
+}
+
+int js_space_anchor(const JsSpace *s, uint8_t out[48]) {
+    LOCK(s);
+    int set = s->anchor_set ? 1 : 0;
+    if (set) memcpy(out, s->anchor, JS_META_ANCHOR);
+    UNLOCK(s);
+    return set;
+}
+
 static int ext_cmp(const void *a, const void *b) {
     const JsExtent *x = a, *y = b;
     return (x->off > y->off) - (x->off < y->off);
@@ -1530,7 +1701,9 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
     if (memcmp(d, f + 96, 32)) return JS_ERR_CORRUPT;
     /* Version 1 had 32-bit realization generations: refused, never reinterpreted. */
     if (rd32(f + 8) == JS_META_VERSION_V1) return JS_ERR_VERSION;
-    if (rd32(f + 8) != JS_META_VERSION || rd32(f + 12) != JS_META_HDR) return JS_ERR_CORRUPT;
+    uint32_t ver = rd32(f + 8);
+    if ((ver != JS_META_VERSION && ver != JS_META_VERSION_V2) || rd32(f + 12) != JS_META_HDR)
+        return JS_ERR_CORRUPT;
     uint64_t body_len = rd64(f + 24);
     if (body_len != fn - JS_META_HDR) return JS_ERR_CORRUPT;
     const uint8_t *p = f + JS_META_HDR, *end = p + body_len;
@@ -1687,6 +1860,16 @@ static int load_u(JsSpace *s, const uint8_t *f, size_t fn,
             r->refs++; r->holders++;
         }
         p = u;
+    }
+    if (rc == JS_OK && ver == JS_META_VERSION) {
+        if ((size_t)(end - p) != JS_META_ANCHOR) rc = JS_ERR_CORRUPT;
+        else {
+            /* An all-zero section is "never set": absent, like version 2. */
+            static const uint8_t zero[JS_META_ANCHOR];
+            memcpy(s->anchor, p, JS_META_ANCHOR);
+            s->anchor_set = memcmp(p, zero, JS_META_ANCHOR) != 0;
+            p = end;
+        }
     }
     if (rc == JS_OK && p != end) rc = JS_ERR_CORRUPT;
     /* Every persisted realization is held by something; nothing dangles. */

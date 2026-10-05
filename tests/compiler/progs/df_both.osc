@@ -1,0 +1,15 @@
+// entry: f
+// OSC-3 item 3 (drop flags): an owner moved on both paths is definitely
+// moved after the `if`: no drop flag, no release (code as in OSC-2).
+fn take(x: own [u16; 3]) -> u16 { return x[0] + x[2]; }
+
+fn f(k: u16) -> u16 {
+    let a: own [u16; 3] = alloc(k & 255);
+    let b: own [u16; 3] = alloc(2);
+    let mut r: u16 = 0;
+    if k > 100 { r = take(a); } else { let m: own [u16; 3] = a; r = m[1] + 1; }
+    return r + take(b);
+}
+// expect-run: f 200 -> 404
+// expect-run: f 7 -> 12
+// expect-run: f 300 -> 92

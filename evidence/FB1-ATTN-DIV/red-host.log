@@ -1,0 +1,5 @@
+codegen paged_bf16: 152 insns, 42 gprs, 6 ugprs
+nvdisasm paged_bf16: rc=0 insns=152 undecodable=0 missing=0 (/tmp/omega_attn_paged_bf16_3364300.sass)
+codegen gqa_f32: 152 insns, 42 gprs, 6 ugprs
+nvdisasm gqa_f32: rc=0 insns=152 undecodable=0 missing=0 (/tmp/omega_attn_gqa_f32_3364300.sass)
+PASS: 25 checks, 0 failed

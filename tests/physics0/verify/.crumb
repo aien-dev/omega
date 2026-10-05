@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T13:47:05Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:267199e8d5f72e12649a8f608abb42ab82ef85c6e3b4531ce1812f7e5e491644",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 6,
+      "generated_at_commit": "834ee93e4314a42c1127a2fcda8b29cf3b511245",
+      "source_tree": "sha256:a32c539ccbe1a27b2d8300559ebb3855570e87717e2e15391038a61f707eaba8"
+    }
+  },
+  "name": "verify",
+  "purpose": "PD-0 verify: see docs on physics main",
+  "schema_version": "1.0.0"
+}

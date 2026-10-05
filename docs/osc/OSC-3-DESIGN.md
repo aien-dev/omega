@@ -185,6 +185,106 @@ runtime model replay: ... rejected=0
   checked by the item 2 receipt against the OSC-2 baseline).
 - The exact receipt is under `evidence/OSC-3/receipts/osc3-handles-*.json`.
 
+## Item 3: drop flags (conditional moves)
+
+OSC-1 and OSC-2 refused any move of an owner inside an `if`
+(`CONDITIONAL_MOVE`, OSC-1-DESIGN "no drop flags"). Item 3 accepts it: an
+owner that is moved on some paths and not on others gets a hidden drop flag,
+and its scope-end release runs only when the flag says live. This supersedes
+the OSC-1 rule; `CONDITIONAL_MOVE` keeps its number but is no longer emitted.
+
+### Subset
+
+- Owners are unique array owners (`own [T; N]`) and unique struct owners
+  (`own S`), declared by `let` (alloc, struct literal or let-move) or as an
+  `own` parameter. Arena owners (`in r`) are unchanged: they cannot be moved
+  (`ARENA_MOVE`), so they never need a flag. Handles (item 2) own nothing
+  and are out of scope.
+- A move is a let-move (`let b: own T = a;`) or passing the owner as an
+  `own` argument. Either may now sit inside one branch of `if` / `else` /
+  `else if`, at any nesting depth.
+- After an `if`, each owner declared before it is in one of three states:
+  live (moved on no path that falls through), moved (moved on every path
+  that falls through) or maybe-moved (moved on some). A branch that ends in
+  `return` does not count: its state never reaches the join.
+- Only maybe-moved owners get a flag. Programs without a conditional move
+  compile to byte-identical IR and code (no `OSC3_CODE_CHANGE_OK`).
+
+### Grammar
+
+No new syntax. The grammar of OSC-2 is unchanged; programs that OSC-2
+refused with `CONDITIONAL_MOVE` are now accepted when the rules below hold.
+
+### Semantics
+
+- Merge rule at the end of an `if` (both arms falling through): equal
+  states stay; any difference (live vs moved, live vs maybe, moved vs maybe)
+  becomes maybe-moved. If one arm returns, the other arm's state is taken.
+- Flag: one `bool` virtual register per flagged declaration, allocated by
+  the lowerer when the checker marks the declaration (`OscNode.dflag`). It
+  is set to 1 (`CONST 1`) right after the declaration (for an `own`
+  parameter: first thing in the entry block), and set to 0 (`CONST 0`) at
+  every move of that owner (before the `CALL` for an own argument, before
+  the new binding for a let-move), on every path.
+- Release: every scope-end release of a flagged owner (block end and every
+  `return` it is live or maybe-moved at) becomes
+  `CBR flag -> release, join; release: RELEASE owner; BR join`. Owners that
+  are definitely moved are not released (as in OSC-2); live owners without
+  a flag are released unconditionally (as in OSC-2). Release order stays
+  reverse declaration order; a skipped release simply drops out.
+- Loop-local owners: an owner declared inside a loop body may be moved on
+  one path of that body; its declaration sets the flag again each
+  iteration, so each iteration's object is released at most once.
+- Frame layout: the flag is an ordinary vreg, so it has the ordinary stack
+  slot of the native frame, `[sp, #8*(v+1)]` (`osc_cg.c slot()`), holding
+  0 or 1 in a 64-bit cell; non-parameter slots are zeroed by the prologue
+  and the declaration's `CONST 1` sets it. No new IR op, no interpreter or
+  backend change: `CONST`, `CBR`, `BR` and `RELEASE` already exist, so both
+  engines run the same IR and agree by construction.
+- Static model trace: around the `if` the checker emits `SAVE`/`RESTORE`
+  as before. A definitely moved owner gets its `MOVE obj -> 0` re-emitted
+  after the `if` (unchanged). A maybe-moved owner emits nothing after the
+  `if`: on the straight-line trace it stays live and its guarded scope-end
+  `RELEASE` replays as a plain release (the trace follows the path on which
+  the flag is set). Each run's runtime log replays exactly (a release that
+  did not run is simply absent).
+- Soundness argument: the flag equals "this owner's object has not been
+  moved" on every executed path, because it is set at the (re)declaration
+  and cleared at each move, and every release of a flagged owner tests it.
+  So no path releases twice (no `RUNTIME` double-release trap) and no path
+  leaks (live count 0 after a normal return); both are checked on every
+  fuzz run in both engines.
+
+### Static refusals (named)
+
+| Diagnostic | Transition | When |
+|---|---|---|
+| `USE_AFTER_MOVE` | use after maybe-move | read, write, field access or call use of a maybe-moved owner ("used after it may have been moved at line N (moved on some path of an 'if')") |
+| `USE_AFTER_MOVE` | use after maybe-move | borrow (`&` / `&mut`) of a maybe-moved owner |
+| `USE_AFTER_MOVE` | use after maybe-move | moving a maybe-moved owner again (double move across branches / two ifs) |
+| `USE_AFTER_MOVE` | use after move (move inside loop) | an owner declared outside a loop moved inside it, also inside an `if` in the loop (unchanged from OSC-1) |
+| `IMMUTABLE_ASSIGN` | assign to immutable binding | re-assigning an owner, maybe-moved or not ("owners are never reassigned"); item 3 does not add a set-live rule |
+
+For the model the maybe-move refusals are use-after-move: the checker emits
+an accepted `MOVE obj -> 0` (the path that moved it) right before the refused
+event, so the negative harness replays them as `use-after-move`.
+
+### Limits
+
+- Flags exist only for owners moved inside `if` arms; moves of an outer
+  owner inside a loop stay refused (no re-initialisation rule).
+- No reassignment of owners (refused), so a flag only goes live -> moved
+  within one declaration's lifetime.
+- One flag per declaration (up to the checker's symbol limit); flags are not
+  packed into bits.
+- The static trace checks the path on which each maybe-moved owner is still
+  live; the moved path is checked by every executed run's runtime replay
+  (fuzz and goldens), not statically.
+
+### Evidence
+
+EVIDENCE_PLACEHOLDER
+
 ## Generation width: remaining 32-bit sites and fix plan
 
 ADR OMEGA-SYSTEMS-CORE-0000 decision 1 fixes capability and object generations

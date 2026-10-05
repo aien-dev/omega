@@ -1,0 +1,11 @@
+EXP-002D Stage A, receipt 4 of 4: VERDICT
+written: 2026-10-03T23:34:15Z
+rule: R28-v2 as frozen in receipt 1 (docs/turing/PRD2_PREDICTION_FORMAT.md, sha256 2199e24680e9ec62b6808ec56990a6fa6588049a161a90f8a2bc4534f0802db9)
+row 28 (mixture weight rule), omega side, under PRD2: MATCH
+negative controls N1-N4: all hold (v2 does not make everything pass)
+EXP-002D overall: INCOMPLETE (unchanged). Reason changed from "rule not evaluable under the Wave 1 prediction format"
+to "sealed harness re-run owed": the evaluator-side test (hostile_leak.c #28 in the private repository) still reads PRD1
+and prints PENDING; it must be re-pointed at PRD2 and the EXP-002D development runner re-run under a new omega pin, with
+its own receipt, before row 28 counts. Also still open from the last runner record: HC-meas-lag1-control block 0 edge
+mismatch (0.00313 vs null upper 0.00308) and the stop-27 TPS1-adapter gate PENDING; both outside this receipt.
+No sealed outcome of EXP-002A/B/C/AR was touched. No PRD1 byte or receipt was rewritten. No threshold changed.

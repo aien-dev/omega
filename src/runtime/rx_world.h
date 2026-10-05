@@ -98,7 +98,9 @@ typedef enum {
     RX_CRUMB_FAILED,
     RX_CRUMB_NOOP,             /* ran, proposed no change: fixed point */
     RX_CRUMB_RETIRE,
-    RX_CRUMB_QUARANTINE        /* an R6 limit stopped this reaction; reason names it */
+    RX_CRUMB_QUARANTINE,       /* an R6 limit stopped this reaction; reason names it */
+    RX_CRUMB_CANCELLED         /* HD-09: ran past its declared deadline; nothing
+                                  published; reason RX_ERR_DEADLINE */
 } RxCrumbKind;
 
 /* Which R6 limit engaged (reason of a QUARANTINE crumb). */
@@ -124,6 +126,7 @@ enum { RX_CONTAIN_BUDGET = 1, RX_CONTAIN_OSCILLATION, RX_CONTAIN_LIVELOCK,
 #define RX_ERR_IDENTITY    -27   /* caller credential absent, forged, stale or revoked */
 #define RX_ERR_BINDING     -28   /* a bound field's external reference was refused (COMPOSITION-2) */
 #define RX_ERR_BUSY        -29   /* the reaction still has work pending (rx_world_remove_reaction) */
+#define RX_ERR_DEADLINE    -30   /* the logical tick passed the declared deadline (RX_CRUMB_CANCELLED) */
 
 /* Reaction notices carried in the frozen 128-byte descriptor.
  * The older transform request/result values stay in the frozen layout and
@@ -386,6 +389,11 @@ typedef struct {
     bool resident_seat;         /* handed to the graphics seat; fn is not called */
     bool deferred;              /* fn returned RX_FN_DEFER; waits for rx_world_resume */
     bool resume_pending;        /* resumed before the deferring run returned */
+    /* I11: popped while a running writer of one of its inputs had not yet
+     * published. Admitted (charged, in in_flight), state READY, not on a
+     * ready ring; released when no such writer is running, so the writer's
+     * wake merges into this activation instead of causing a second one. */
+    bool upstream_held;
     /* Taken out by rx_world_remove_reaction: no subscriptions, never woken
      * or run; the slot may be reused by a registration with the same subject
      * and faculty. */
@@ -469,6 +477,11 @@ typedef struct {
     uint64_t seq_pulses;        /* sequential reference only: pulses run */
     uint64_t seq_polls;         /* sequential reference only: readiness polls */
     uint64_t seq_runs;          /* sequential reference only: stages run */
+    /* HD-09 resource contract v0, first enforcement cut: activations whose
+     * function returned after the logical tick passed need.deadline (strictly
+     * greater). Each was cancelled before publishing; its charge was refunded
+     * once by end_activation. */
+    uint64_t deadline_cancelled;
 } RxStats;
 
 /* R15 timing sample, recorded only when a timing buffer is installed

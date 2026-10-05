@@ -7,7 +7,12 @@
 #include <stddef.h>
 
 #define OMEGA_LIB_MAX_PROGRAMS 128
-#define OMEGA_LIB_MAX_DEPS 8
+#define OMEGA_LIB_MAX_DEPS 32
+
+/* How an entry was admitted. Part of the state digest, so a bootstrap entry and a verified
+ * entry with identical bytes never share a digest. 0 is never a valid kind. */
+#define OMEGA_LIB_ADMISSION_VERIFIED  1u   /* omega_library_insert: verified + receipt */
+#define OMEGA_LIB_ADMISSION_BOOTSTRAP 2u   /* omega_library_insert_bootstrap: genesis set only */
 
 typedef struct {
     OmegaProgram program;
@@ -15,7 +20,8 @@ typedef struct {
     uint64_t timestamp_added;
     size_t dep_count;
     SemanticId dependency_ids[OMEGA_LIB_MAX_DEPS];
-    uint8_t evidence_receipt_hash[32];
+    uint8_t evidence_receipt_hash[32];  /* verified: receipt hash; bootstrap: audit hash */
+    uint8_t admission_kind;             /* OMEGA_LIB_ADMISSION_* */
 } OmegaLibraryEntry;
 
 typedef struct {
@@ -31,16 +37,32 @@ int omega_library_init(OmegaLibrary *lib);
 /* Free all resources owned by the library */
 void omega_library_destroy(OmegaLibrary *lib);
 
-/* Insert a verified program into the library.
- * Fails if:
- * - prog is NULL or not verified (prog->is_verified == false)
+/* Insert a verified program into the library (admission kind VERIFIED).
+ * Returns -1 and leaves the library unchanged if:
+ * - lib or prog is NULL, or prog is not verified and realized
+ * - receipt_hash is NULL or all zero (a verified admission needs evidence)
+ * - prog has no identity (all-zero program_id)
  * - duplicate SemanticId already exists
  * - capacity exceeded
+ * - dep_count > OMEGA_LIB_MAX_DEPS (never truncated), or deps is NULL with dep_count > 0
+ * - any dependency id is not already in the library
  * - dependency cycle detected
  */
 int omega_library_insert(OmegaLibrary *lib, const OmegaProgram *prog,
                          const SemanticId *deps, size_t dep_count,
                          const uint8_t receipt_hash[32]);
+
+/* Insert one program of the manually audited GENESIS set (admission kind BOOTSTRAP).
+ * Same refusals as omega_library_insert, with audit_hash (NULL or all zero refused) in
+ * place of the receipt hash.
+ *
+ * MUST NEVER be called outside genesis loading. There is no runtime flag, environment
+ * variable or build option that unlocks it: reviewers must reject any caller that is not
+ * the genesis loader (VC1 stage 6). The admission kind is recorded in the entry and in the
+ * state digest, so bootstrap entries are always distinguishable from verified ones. */
+int omega_library_insert_bootstrap(OmegaLibrary *lib, const OmegaProgram *prog,
+                                   const SemanticId *deps, size_t dep_count,
+                                   const uint8_t audit_hash[32]);
 
 /* Content-addressed lookup by program SemanticId */
 const OmegaLibraryEntry* omega_library_find_by_id(const OmegaLibrary *lib, const SemanticId *prog_id);

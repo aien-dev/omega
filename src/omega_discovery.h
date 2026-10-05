@@ -61,9 +61,8 @@ int omega_refactor_program(const OmegaProgram *orig, const OmegaProgram *abstrac
 bool omega_verify_semantic_preservation(const OmegaProgram *orig, const OmegaProgram *refactored,
                                         const uint64_t *test_inputs, size_t input_count);
 
-/* Admit discovered abstraction into library */
-int omega_discovery_admit_to_library(OmegaLibrary *lib, const OmegaAbstractionCandidate *cand,
-                                     const uint8_t receipt_hash[32]);
+/* Admitting a discovered abstraction into a library goes through omega_vc_bridge_admit_abstraction
+ * (src/omega_vc_bridge.h): the Verified Crumb Store admit path with a receipt (VC1 stage 6). */
 
 /* Demonstrate search acceleration on held-out task */
 int omega_demonstrate_search_acceleration(const OmegaProgram *discovered_abstraction,

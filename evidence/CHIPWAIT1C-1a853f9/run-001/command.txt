@@ -1,0 +1,1 @@
+m19r_qualify.sh --omega-candidate 1a853f98fbe9bd267cd134e8d1c2a9278f88f406 --physics-candidate e95e3ed2a86fe4bffe4d954fa94c27dfb5284280 --physics-dir /home/drakestapleton/workspace/hive-worktrees/physics-pin-e95e3ed --evidence-root /home/drakestapleton/workspace/evidence-out/CHIPWAIT1C-1a853f9 --run-id run-001 

@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-04T18:11:13Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:945ae745a338467614bee287efb628f38f53ad83e4842c1a7fbf7d0b91a8da57",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 5,
+      "generated_at_commit": "cb7cc216147664549484fcca8e8ceadbd6f6cdbf",
+      "source_tree": "sha256:4db0b6ac2d69acee18b953ab7d5fe77bafb2c577c30ce33bb79a25ed088944ea"
+    }
+  },
+  "name": "dual_experiment",
+  "purpose": "DUAL applicability experiment library (ARCH-0031 offline evidence lane): deterministic discrete workload simulator with exact ledger, aggregate flow-balance predictor, heterogeneity measurements, campaign driver, digests. Pure calculator: no I/O, no allocation, no globals; nm -u purity check. EXPERIMENT ONLY, never linked by src/runtime/.",
+  "schema_version": "1.0.0"
+}

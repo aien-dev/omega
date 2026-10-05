@@ -19,7 +19,7 @@ SRCS = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c 
 	src/omega_library.c src/omega_discovery.c src/omega_machine.c src/omega_realize_synth.c \
 	src/omega_matvec.c src/omega_accelerator.c src/omega_accelerator_world.c \
 	src/omega_vector.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
-	src/omega_blackwell_realize.c src/omega_blackwell_submit.c src/omega_blackwell_gates.c src/omega_blackwell_matmul.c src/omega_blackwell_codegen.c src/omega_world_gates.c \
+	src/omega_blackwell_realize.c src/omega_blackwell_submit.c src/omega_blackwell_engine.c src/omega_gpu_engine.c src/omega_blackwell_gates.c src/omega_blackwell_matmul.c src/omega_blackwell_codegen.c src/omega_gpu_session.c src/omega_gpu_matmul_api.c src/omega_gpu_elementwise_api.c src/omega_gpu_attention_api.c src/omega_world_gates.c src/omega_gpu_wait.c \
 	src/omega_evidence.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c \
 	tools/omegatool.c
@@ -40,7 +40,7 @@ LEARNER_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(LEARNER_CORE))) \
 	$(patsubst src/crumbline/%.c,$(OUT_DIR)/crumbline/%.o,$(CL_SRCS)) $(OUT_DIR)/crumbline_learner.o
 LEARNER = $(OUT_DIR)/crumbline-learner
 
-.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-action-graph test-state-projection test-capability-query test-capability-graph test-skillroute-compose test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-jspace-prod test-plan-reuse test-cortex
+.PHONY: all clean check-physics-lock crumbline-learner test-crumbline test-m19 test test-m5 test-m6 test-m7 test-m8 test-m9 test-m10 test-m11 test-m12 test-m13 test-m14 test-m15 test-m17 test-r3 test-i11-wake-merge test-action-graph test-state-projection test-capability-query test-capability-graph test-skillroute-compose test-semantic-comm test-cognitive-routing test-sem-incremental test-branch-reuse test-jspace-prod test-plan-reuse test-cortex
 
 all: $(TARGET)
 
@@ -85,6 +85,7 @@ crumbline-learner: $(LEARNER)
 
 test-crumbline: $(LEARNER)
 	./tests/crumbline/run_conformance.sh $(LEARNER) tests/crumbline/vectors
+	./tests/crumbline/run_crb1_conformance.sh $(LEARNER) tests/crumbline/crb1 tests/crumbline/crb1_findings.txt
 
 $(LEARNER): $(LEARNER_OBJS)
 	$(CC) $(CFLAGS) -o $@ $(LEARNER_OBJS)
@@ -160,10 +161,38 @@ test-m19: $(TARGET)
 test-m19r-qualify:
 	tools/test_m19r_qualify.sh
 
+# Host-only tests of the chipwait campaign runner (tools/chipwait_campaign.sh)
+# against a stub qualifier. No GPU.
+.PHONY: test-chipwait-campaign
+test-chipwait-campaign:
+	tools/test_chipwait_campaign.sh
+
 # Host-only tests of the Gate 14 combiner (tools/gate14_combine.sh). No GPU.
 .PHONY: test-gate14-combine
 test-gate14-combine:
 	tools/test_gate14_combine.sh
+
+# Host-only self-test of the E1 closure combiner (tools/e1_combine.sh): good
+# synthetic constituent set accepted, every hostile mutant refused. No GPU.
+.PHONY: test-e1-combine
+test-e1-combine:
+	tools/test_e1_combine.sh
+
+# Host-only self-test of the shared chip-run module (tools/chip_run.sh): every
+# refusal path with fake binaries. No GPU.
+.PHONY: test-chip-run
+test-chip-run:
+	tests/test_chip_run.sh
+
+# Host-only check of the unwritten-trap manifest and its wrapper. No GPU.
+.PHONY: test-chip-run-trap-manifest
+test-chip-run-trap-manifest:
+	tests/test_chip_run_trap_manifest.sh
+
+# Host-only check of the transcendental-gate manifest and its wrapper (fake chip, old-vs-new receipt keys). No GPU.
+.PHONY: test-chip-run-transc-manifest
+test-chip-run-transc-manifest:
+	tests/test_chip_run_transc_manifest.sh
 
 # Gate 5 (OMEGA-NUMERIC-0), CPU tiers only: reference, CPU parity, provenance
 # and negative tests. Opens no device. The GB10 tier and the receipt come
@@ -171,10 +200,9 @@ test-gate14-combine:
 # item fails.
 .PHONY: test-numeric-cpu test-numeric-qualify
 NUMERIC_CPU_SRCS = tests/test_omega_numeric.c src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c \
-                   src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
-                   src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+                   $(NUMERIC_BW_SRCS)
 NUMERIC_CPU_HDRS = src/omega_numeric.h src/omega_numeric_provenance.h src/omega_numeric_divsqrt_gb10.h tests/numeric_oracle.h \
-                   src/omega_blackwell_qmd.h src/omega_blackwell_codegen.h src/omega_blackwell_encoder.h src/sha256.h
+                   $(NUMERIC_BW_HDRS)
 build/test_omega_numeric_cpu: $(NUMERIC_CPU_SRCS) $(NUMERIC_CPU_HDRS)
 	@mkdir -p build
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(NUMERIC_CPU_SRCS)
@@ -213,9 +241,8 @@ test-numeric-e1-exhaustive: build/test_omega_numeric_cpu
 # tests/run_reduce_chip.sh. Last line: "E1 Reduce Verdict: PASS_EXCEPT_DECLARED_CHIP_ONLY".
 .PHONY: test-numeric-reduce-cpu
 REDUCE_CPU_SRCS = tests/test_omega_reduce.c src/omega_numeric_reduce.c src/omega_numeric_reduce_gb10.c \
-                  src/omega_numeric.c src/omega_numeric_provenance.c \
-                  src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
-                  src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+                  src/omega_numeric.c src/omega_numeric_provenance.c src/omega_numeric_divsqrt_gb10.c \
+                  $(NUMERIC_BW_SRCS)
 build/test_omega_reduce_cpu: $(REDUCE_CPU_SRCS) src/omega_numeric_reduce.h $(NUMERIC_CPU_HDRS)
 	@mkdir -p build
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -o $@ $(REDUCE_CPU_SRCS)
@@ -279,6 +306,44 @@ $(RX_TEST): $(RX_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 
 test-r3: $(RX_TEST)
 	./$(RX_TEST)
+
+# HD-09 resource contract v0, first enforcement cut: a declared deadline is
+# enforced before publishing (late reaction cancelled, nothing published,
+# charge refunded once). CPU only, same links as R3 minus the heartbeat test.
+RX_DEADLINE_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/sha256.c src/omega_evidence.c tests/runtime/rx_deadline_cancel.c
+RX_DEADLINE_TEST = $(OUT_DIR)/rx_deadline_cancel
+
+$(RX_DEADLINE_TEST): $(RX_DEADLINE_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
+	src/runtime/omega_shared_world_abi.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_DEADLINE_SRCS)
+
+.PHONY: test-rx-deadline-cancel
+test-rx-deadline-cancel: $(RX_DEADLINE_TEST)
+	./$(RX_DEADLINE_TEST)
+
+# I11: a dependent popped while a writer of its inputs is still computing is
+# held so the writer's wake merges into it (one commit per stimulus, as with
+# one worker). Deterministic forced interleaving; the mutant build has no hold
+# and must FAIL. CPU only, same links as R3.
+RX_I11_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/sha256.c src/omega_evidence.c tests/runtime/rx_i11_wake_merge.c
+RX_I11_TEST = $(OUT_DIR)/rx_i11_wake_merge
+RX_I11_MUTANT = $(OUT_DIR)/rx_i11_wake_merge_mutant
+
+$(RX_I11_TEST): $(RX_I11_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
+	src/runtime/omega_shared_world_abi.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_I11_SRCS)
+
+$(RX_I11_MUTANT): $(RX_I11_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
+	src/runtime/omega_shared_world_abi.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -DRX_WORLD_MUTATE_NO_UPSTREAM_HOLD -pthread -o $@ $(RX_I11_SRCS)
+
+test-i11-wake-merge: $(RX_I11_TEST) $(RX_I11_MUTANT)
+	./$(RX_I11_TEST)
+	@if ./$(RX_I11_MUTANT); then \
+	  echo "MUTANT SURVIVED (no upstream hold, test still passed)"; exit 1; \
+	else echo "test-i11-wake-merge: PASS (mutant killed)"; fi
 
 # Omega semantic variables and incremental recomputation
 # (gate OMEGA_INCREMENTAL_SEMANTICS_PASS). CPU only, same links as R3.
@@ -760,6 +825,11 @@ r16-inventory: $(R16_INVENTORY)
 
 test-r16-inventory: $(R16_INVENTORY)
 	sh tests/r16_inventory/run.sh $(R16_INVENTORY)
+
+# Lane 32 follow-up: dry-mode self-test of tools/r16_qualify.sh (no chip, no build).
+.PHONY: test-r16-qualify-selftest
+test-r16-qualify-selftest:
+	bash tests/r16_qualify/run.sh
 
 # R16-G3: the authoritative path with the legacy orchestrators unavailable.
 # Link map, shared libraries, embedded names and an exec trace of the R13
@@ -1547,14 +1617,33 @@ print-composition-gate-bin:
 
 .PHONY: test-composition test-composition-gate test-composition-attach-asan composition-gate-bin print-composition-gate-bin
 
+# C4 (Convergence plan item 4): requalification of the local runtime with
+# interruption and recovery (crash at every stage boundary, SIGKILL sweep, on-disk
+# corruption). Test build only (crash points). Receipt: tools/c4_requal.sh.
+RX_C4_REQUAL = $(OUT_DIR)/rx_c4_requal
+
+$(RX_C4_REQUAL): $(RX_COMPOSE_DEPS) tests/runtime/rx_c4_requal.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) $(AIEN_TEST_FLAGS) -pthread -o $@ $(RX_COMPOSE_SRCS) tests/runtime/rx_c4_requal.c \
+		$(RX_COMPOSE_LINK)
+
+test-c4-requal: $(RX_C4_REQUAL)
+	./$(RX_C4_REQUAL) $(OUT_DIR)/c4_requal_receipt.json
+
+c4-requal-bin: $(RX_C4_REQUAL)
+
+print-c4-requal-bin:
+	@echo $(RX_C4_REQUAL)
+
+.PHONY: test-c4-requal c4-requal-bin print-c4-requal-bin
+
 # COMPOSITION-2 GPU tier: the same 14-step gate with both Skills executed on
 # the GB10 through the sovereign M16 native path (no CUDA); see
 # tests/runtime/rx_compose_gpu_skill.h. A chip run: take the quiet flag and
 # use tools/composition_gate.sh --gpu (clean tree, content-addressed receipt).
 RX_COMPOSE_GATE_GPU = $(OUT_DIR)/rx_composition_gate_gpu
-RX_COMPOSE_GPU_SRCS = src/omega_blackwell_submit.c src/omega_blackwell_matmul.c \
+RX_COMPOSE_GPU_SRCS = src/omega_blackwell_submit.c src/omega_blackwell_engine.c src/omega_gpu_engine.c src/omega_blackwell_matmul.c \
 	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
-	src/omega_blackwell_realize.c src/omega_vector.c src/omega_validate.c \
+	src/omega_blackwell_realize.c src/omega_vector.c src/omega_validate.c src/omega_gpu_wait.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c
 
 $(RX_COMPOSE_GATE_GPU): $(RX_COMPOSE_DEPS) $(RX_COMPOSE_GPU_SRCS) tests/runtime/rx_composition_gate.c \
@@ -1577,8 +1666,7 @@ print-composition-gate-gpu-bin:
 # and the CHECK mutation sweep need no device; the chip run is
 # tools/run_divsqrt_gate.sh only (quiet flag, detached, receipt).
 DIVSQRT_SRCS = tests/test_omega_divsqrt_gb10.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric.c \
-               src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
-               src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+               src/omega_numeric_provenance.c $(NUMERIC_BW_SRCS)
 DIVSQRT_HDRS = src/omega_numeric_divsqrt_gb10.h src/omega_numeric.h src/omega_blackwell_encoder.h \
                src/omega_blackwell_qmd.h src/sha256.h
 .PHONY: test-divsqrt-host test-divsqrt-nvdisasm test-divsqrt-sweep
@@ -1599,11 +1687,499 @@ test-divsqrt-sweep:
 # run (all 2^32 inputs per op) is tools/run_numeric_transc_gate.sh only.
 TRANSC_GB10_SRCS = tests/test_omega_numeric_transc_gb10.c src/omega_numeric_divsqrt_gb10.c \
                    src/omega_numeric_transc.c src/omega_numeric.c src/omega_numeric_provenance.c \
-                   src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c src/omega_blackwell_matmul.c \
-                   src/omega_blackwell_qmd.c src/sha256.c
+                   $(NUMERIC_BW_SRCS)
 .PHONY: test-numeric-transc-gb10-host
 build/test_omega_numeric_transc_gb10_cpu: $(TRANSC_GB10_SRCS) $(DIVSQRT_HDRS) src/omega_numeric_transc.h
 	@mkdir -p build
 	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -fno-fast-math -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o $@ $(TRANSC_GB10_SRCS)
 test-numeric-transc-gb10-host: build/test_omega_numeric_transc_gb10_cpu
 	./build/test_omega_numeric_transc_gb10_cpu
+
+# C3: host-only detector for the intermittent unwritten-output event, with its
+# own unit test on synthetic buffers. The GB10 harness is
+# tests/test_omega_unwritten_trap_gb10.c (chip: forge queue only, see
+# tools/run_unwritten_trap.sh).
+.PHONY: test-unwritten-trap-host
+build/test_omega_unwritten_trap: tests/test_omega_unwritten_trap.c src/omega_unwritten_trap.c src/omega_unwritten_trap.h
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -Isrc -o $@ tests/test_omega_unwritten_trap.c src/omega_unwritten_trap.c
+test-unwritten-trap-host: build/test_omega_unwritten_trap
+	./build/test_omega_unwritten_trap
+
+# E1 row 2: general global load/store on the GB10 (src/omega_numeric_ldst_gb10.h,
+# docs/numeric/E1_LDST_GB10.md). test-ldst-host needs no device; test-ldst-nvdisasm
+# decodes every table kernel offline; the chip run is tools/run_numeric_ldst_chip.sh.
+LDST_SRCS = tests/test_omega_ldst_gb10.c src/omega_numeric_ldst_gb10.c src/omega_numeric_divsqrt_gb10.c src/omega_numeric.c \
+            src/omega_numeric_provenance.c src/omega_blackwell_encoder.c src/omega_blackwell_codegen.c \
+            src/omega_blackwell_matmul.c src/omega_blackwell_qmd.c src/sha256.c
+LDST_HDRS = src/omega_numeric_ldst_gb10.h src/omega_numeric_divsqrt_gb10.h src/omega_numeric.h src/omega_blackwell_encoder.h \
+            src/omega_blackwell_qmd.h src/sha256.h
+.PHONY: test-ldst-host test-ldst-nvdisasm
+build/test_omega_ldst_gb10_cpu: $(LDST_SRCS) $(LDST_HDRS)
+	@mkdir -p build
+	gcc -std=gnu11 -O2 -Wall -Wextra -Werror -ffp-contract=off -Isrc -DOMEGA_NUMERIC_CPU_ONLY -pthread -o $@ $(LDST_SRCS)
+test-ldst-host: build/test_omega_ldst_gb10_cpu
+	./build/test_omega_ldst_gb10_cpu
+test-ldst-nvdisasm:
+	tools/ldst_nvdisasm_check.sh
+
+# VC1-LIB: unit test for the library admission gate (receipt required, bootstrap kind,
+# dependencies must exist, no truncation) plus mutation proof. Each mutant is a copy of
+# src/omega_library.c with one tagged guard line (VC1:<tag>) deleted or weakened; the test
+# must exit 1 (KILLED) for every one. A mutant whose sed did not change the file fails the build.
+# Physics-free; CPU only.
+.PHONY: test-library
+LIBTEST_CORE = src/sha256.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c \
+	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c \
+	src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_program.c src/omega_synthesis.c
+LIBTEST_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc
+LIBTEST_DIR = $(OUT_DIR)/library-test
+test-library: tests/test_omega_library.c src/omega_library.c src/omega_library.h
+	@mkdir -p $(LIBTEST_DIR)
+	$(CC) $(LIBTEST_FLAGS) -o $(LIBTEST_DIR)/test_omega_library tests/test_omega_library.c src/omega_library.c $(LIBTEST_CORE)
+	$(LIBTEST_DIR)/test_omega_library
+	@set -eu; build_mutant() { name=$$1; tag=$$2; repl=$$3; \
+	  sed "/VC1:$$tag/c\\$$repl" src/omega_library.c > $(LIBTEST_DIR)/mut_$$name.c; \
+	  if cmp -s src/omega_library.c $(LIBTEST_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  $(CC) $(LIBTEST_FLAGS) -o $(LIBTEST_DIR)/mut_$$name tests/test_omega_library.c $(LIBTEST_DIR)/mut_$$name.c $(LIBTEST_CORE); \
+	  rc=0; $(LIBTEST_DIR)/mut_$$name $$name > $(LIBTEST_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -ne 1 ] || ! grep -q "^MUTANT $$name KILLED" $(LIBTEST_DIR)/mut_$$name.out; then \
+	    echo "mutant $$name NOT killed (exit $$rc)"; cat $(LIBTEST_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed (exit 1)"; }; \
+	  build_mutant allow-null-receipt    null-receipt         '    if (!receipt_hash) receipt_hash = (const uint8_t *)"0123456789abcdef0123456789abcdef";'; \
+	  build_mutant allow-zero-receipt    zero-receipt         '    ;'; \
+	  build_mutant bootstrap-null-audit  bootstrap-null-audit '    if (!audit_hash) audit_hash = (const uint8_t *)"0123456789abcdef0123456789abcdef";'; \
+	  build_mutant bootstrap-zero-audit  bootstrap-zero-audit '    ;'; \
+	  build_mutant allow-unverified      verified-gate        '    ;'; \
+	  build_mutant allow-duplicate       duplicate            '    ;'; \
+	  build_mutant allow-unknown-dep     dep-unknown          '        ;'; \
+	  build_mutant truncate-deps         dep-overflow         '    if (dep_count > OMEGA_LIB_MAX_DEPS) dep_count = OMEGA_LIB_MAX_DEPS;'; \
+	  build_mutant max-deps-off-by-one   dep-overflow         '    if (dep_count >= OMEGA_LIB_MAX_DEPS) return -1;'; \
+	  build_mutant digest-ignores-kind   digest-kind          '            uint8_t kind = 0;'; \
+	  build_mutant bootstrap-as-verified kind-bootstrap       '    return lib_admit(lib, prog, deps, dep_count, audit_hash, OMEGA_LIB_ADMISSION_VERIFIED);'; \
+	  build_mutant refuse-valid          capacity             '    if (prog->name[3] == (char)55) return -1;'; \
+	  build_mutant refuse-deps           dep-null             '    if (dep_count > 0) return -1;'
+	@echo "test-library: PASS (all checks, all mutants killed)"
+
+# VC1-STORE (VC1 stage 3): unit test for the Verified Crumb Store (omega_vcstore): golden
+# vectors from aien-protocols (tests/vcstore/golden, PIN names the commit), immutability,
+# dependency closure, insert-order-independent digest, name index, save/load. Plus a mutation
+# proof: each mutant is a copy of src/omega_vcstore.c with one tagged line (VC1S:<tag>) deleted or
+# weakened; the test must exit 1 (KILLED) for every one. A mutant whose sed changed nothing
+# fails the build. Physics-free; CPU only; needs only src/sha256.c.
+.PHONY: test-vcstore
+VCSTEST_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc
+VCSTEST_DIR = $(OUT_DIR)/vcstore-test
+test-vcstore: tests/test_omega_vcstore.c src/omega_vcstore.c src/omega_vcstore.h src/sha256.c
+	@mkdir -p $(VCSTEST_DIR)
+	$(CC) $(VCSTEST_FLAGS) -o $(VCSTEST_DIR)/test_omega_vcstore tests/test_omega_vcstore.c src/omega_vcstore.c src/sha256.c
+	$(VCSTEST_DIR)/test_omega_vcstore
+	@set -eu; build_mutant() { name=$$1; tag=$$2; repl=$$3; \
+	  sed "/VC1S:$$tag/c\\$$repl" src/omega_vcstore.c > $(VCSTEST_DIR)/mut_$$name.c; \
+	  if cmp -s src/omega_vcstore.c $(VCSTEST_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  $(CC) $(VCSTEST_FLAGS) -o $(VCSTEST_DIR)/mut_$$name tests/test_omega_vcstore.c $(VCSTEST_DIR)/mut_$$name.c src/sha256.c; \
+	  rc=0; $(VCSTEST_DIR)/mut_$$name $$name > $(VCSTEST_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -ne 1 ] || ! grep -q "^MUTANT $$name KILLED by " $(VCSTEST_DIR)/mut_$$name.out; then \
+	    echo "mutant $$name NOT killed (exit $$rc)"; tail -5 $(VCSTEST_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed (exit 1)"; }; \
+	  build_mutant refuse-valid             dec-trailing           '    if (!c.err && c.pos == c.n) cfail(&c, OMEGA_VCS_TRAILING_BYTES);'; \
+	  build_mutant refuse-existing-dep      dep-exists             '        if (vcs_find(s, dep, &di)) { rc = OMEGA_VCS_UNVERIFIED_DEPENDENCY; break; } else continue;'; \
+	  build_mutant caps-reversed            dec-caps-order         '        if (!c.err && i > 0 && str_cmp(&v->capabilities[i - 1], &v->capabilities[i]) <= 0) cfail(&c, OMEGA_VCS_NONCANONICAL_SET);'; \
+	  build_mutant kind-source-only         dec-kind               '        if (v->digest_kind != OMEGA_VC_DIGEST_SOURCE) cfail(&c, OMEGA_VCS_BAD_DIGEST_KIND);'; \
+	  build_mutant id-hash                  id-hash                '    sha256_hash(bytes + (len >= 22 ? 22 : 0), len >= 22 ? len - 22 : len, out);'; \
+	  build_mutant dec-dep-dup              dec-dep-dup            '        ;'; \
+	  build_mutant dec-dep-order            dec-dep-order          '        ;'; \
+	  build_mutant dec-receipt              dec-receipt            '    ;'; \
+	  build_mutant dec-dep-self             dec-dep-self           '        ;'; \
+	  build_mutant dec-trailing             dec-trailing           '    ;'; \
+	  build_mutant dec-version              dec-version            '    ;'; \
+	  build_mutant dec-truncated            dec-truncated          '    if (c->n - c->pos < k) return 0;'; \
+	  build_mutant dec-tag                  dec-tag                '    ;'; \
+	  build_mutant dec-exports-order        dec-exports-order      '        ;'; \
+	  build_mutant dec-kind                 dec-kind               '        ;'; \
+	  build_mutant dec-zero-ids             dec-zero-ids           '    ;'; \
+	  build_mutant dec-string-char          dec-string-char        '        (void)ch;'; \
+	  build_mutant dec-count                dec-count              '    ;'; \
+	  build_mutant dec-real-order           dec-real-order         '        (void)prev;'; \
+	  build_mutant dec-caps-order           dec-caps-order         '        ;'; \
+	  build_mutant dec-dep-zero             dec-dep-zero           '        (void)req;'; \
+	  build_mutant dec-evroot               dec-evroot             '    ;'; \
+	  build_mutant dec-string-empty         dec-string-len         '    if (len > OMEGA_VC_MAX_STRING) { cfail(c, OMEGA_VCS_BAD_STRING); return; }'; \
+	  build_mutant dec-string-max           dec-string-len         '    if (len == 0) { cfail(c, OMEGA_VCS_BAD_STRING); return; }'; \
+	  build_mutant claimed-required         claimed-required       '    if (!claimed) { static uint8_t zz[32]; omega_vc_compute_id(canon, len, zz); claimed = zz; }'; \
+	  build_mutant insert-idcheck           insert-idcheck         '    if (0) { free(rec); return OMEGA_VCS_VCSTORE_ID_MISMATCH; }'; \
+	  build_mutant idempotent               idempotent             '        (void)o;'; \
+	  build_mutant idempotent-ignores-kind  idempotent             '        if (o->len == len && memcmp(o->bytes, canon, len) == 0) return OMEGA_VCS_OK;'; \
+	  build_mutant immutable                immutable              '        return OMEGA_VCS_OK;'; \
+	  build_mutant dep-exists               dep-exists             '        if (!vcs_find(s, dep, &di)) continue;'; \
+	  build_mutant dep-contract             dep-contract           '        ;'; \
+	  build_mutant no-cap                   no-cap                 '    if (s->count >= 128) return OMEGA_VCS_VCSTORE_CAPACITY;'; \
+	  build_mutant sorted-insert            sorted-insert          '    size_t at = s->count;'; \
+	  build_mutant kind-bootstrap           kind-bootstrap         '    return vcs_insert(s, canonical, len, claimed_vc_id, OMEGA_VCS_ADMISSION_VERIFIED);'; \
+	  build_mutant get-recompute            get-recompute          '    ;'; \
+	  build_mutant get-key                  get-key                '    ;'; \
+	  build_mutant receipt-of               receipt-of             '    if (rc == OMEGA_VCS_OK) memcpy(out_receipt, rec->vc.evidence_root, 32);'; \
+	  build_mutant walk-order               walk-order             '            const uint8_t *dep = f->deps + 64 * (size_t)(f->n_dep - 1 - f->next++);'; \
+	  build_mutant walk-visited             walk-visited           '            ;'; \
+	  build_mutant walk-capacity            walk-capacity          '    ;'; \
+	  build_mutant walk-dep-exists          walk-dep-exists        '            if (!vcs_find(s, dep, &di)) continue;'; \
+	  build_mutant walk-contract            walk-contract          '            ;'; \
+	  build_mutant walk-cycle               walk-cycle             '            if (state[di] == 1) continue;'; \
+	  build_mutant walk-names               walk-names             '    if (s->n_names) return OMEGA_VCS_UNVERIFIED_DEPENDENCY;'; \
+	  build_mutant digest-magic             digest-magic           '    sha256_update(&ctx, (const uint8_t *)"VCS2", 4);'; \
+	  build_mutant digest-kind              digest-kind            '        uint8_t kind = 0;'; \
+	  build_mutant digest-bytes             digest-bytes           '        sha256_update(&ctx, o->bytes, 0);'; \
+	  build_mutant digest-names             digest-names           '    u64be(&ctx, (uint64_t)s->n_names);'; \
+	  build_mutant namedigest-id            namedigest-id          '        sha256_update(&ctx, nm->id, 0);'; \
+	  build_mutant name-sorted              name-sorted            '    return name_insert_at(s, s->n_names, name, id);'; \
+	  build_mutant name-many                name-many              '    for (size_t k = 0; k < s->n_names; k++) if (memcmp(s->names[k].id, id, 32) == 0) return OMEGA_VCS_VCSTORE_NAME_EXISTS;'; \
+	  build_mutant name-no-silent-rebind    name-no-silent-rebind  '        { memcpy(s->names[np].id, id, 32); return OMEGA_VCS_OK; }'; \
+	  build_mutant rebind-write             rebind-write           '    ;'; \
+	  build_mutant rebind-exists            rebind-exists          '    if (!name_find(s, name, &np)) np = 0;'; \
+	  build_mutant rebind-id-exists         rebind-id-exists       '    (void)vcs_find(s, id, &di);'; \
+	  build_mutant name-id-exists           name-id-exists         '    (void)vcs_find(s, id, &di);'; \
+	  build_mutant name-valid               name-valid             '    ;'; \
+	  build_mutant resolve                  resolve                '    memset(out_id, 0, 32);'; \
+	  build_mutant load-names               load-names             '        ;'; \
+	  build_mutant load-fail                load-fail              '        omega_vcstore_destroy(s);'; \
+	  build_mutant load-magic               load-magic             '    if (!m) return OMEGA_VCS_VCSTORE_MALFORMED;'; \
+	  build_mutant load-digest-obj          load-digest-obj        '    ;'; \
+	  build_mutant load-digest-names        load-digest-names      '    ;'; \
+	  build_mutant load-trailing            load-trailing          '    ;'; \
+	  build_mutant load-kind                load-kind              '        ;'; \
+	  build_mutant load-order               load-order             '        ;'; \
+	  build_mutant load-graph               load-graph             '    (void)vcs_graph_check;'; \
+	  build_mutant load-graph-missing       load-graph             '    (void)vcs_graph_check;'; \
+	  build_mutant load-name-id             load-name-id           '        (void)vcs_find(t, id, &di);'; \
+	  build_mutant save-verify              save-verify            '        int rc = 0;'
+	@echo "test-vcstore: PASS (all checks, all mutants killed)"
+
+# VC1-RESOLVE (VC1 stage 4): import resolution in the Omega OSC compiler. `import NAME;` resolves
+# only through omega.lock -> semantic id -> Verified Crumb Store -> receipt check -> transitive
+# verified closure (src/omega_resolve.c), with a C reader of the aien-proof receipt wire contract
+# (src/omega_receipt.c, BLAKE3 in src/omega_blake3.c). oscv is the verified driver. Test inputs:
+# tests/resolve/ (official BLAKE3 vectors, three receipts written by the Rust implementation).
+# Mutation proof: each mutant is a copy of ONE source file with one tagged line (VC1R:<tag> in
+# omega_resolve.c / omega_receipt.c, B3M:<tag> in omega_blake3.c) replaced; the test must exit 1
+# with "MUTANT <name> KILLED by <check>" for the check named here, every time. A mutant whose sed
+# changed nothing, did not compile, or survived fails the build. CPU only; no physics; no chip.
+.PHONY: test-resolve oscv
+RESOLVE_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -Isrc -Isrc/compiler -Isrc/compiler/model
+RESOLVE_DIR = $(OUT_DIR)/resolve-test
+RESOLVE_OSC_LIB = $(filter-out src/compiler/oscc_main.c,$(wildcard src/compiler/*.c))
+RESOLVE_SRC = src/omega_resolve.c src/omega_receipt.c src/omega_blake3.c
+RESOLVE_REST = src/omega_resolve_osc.c src/omega_vcstore.c $(RESOLVE_OSC_LIB) src/sha256.c
+RESOLVE_HDRS = $(wildcard src/compiler/*.h) src/omega_resolve.h src/omega_receipt.h src/omega_blake3.h src/omega_resolve_osc.h src/omega_vcstore.h src/sha256.h
+$(OUT_DIR)/compiler/oscv: src/oscv_main.c $(RESOLVE_SRC) $(RESOLVE_REST) $(RESOLVE_HDRS)
+	@mkdir -p $(OUT_DIR)/compiler
+	$(CC) $(RESOLVE_FLAGS) -o $@ src/oscv_main.c $(RESOLVE_SRC) $(RESOLVE_REST)
+oscv: $(OUT_DIR)/compiler/oscv
+test-resolve: tests/test_omega_resolve.c $(OUT_DIR)/compiler/oscv $(RESOLVE_SRC) $(RESOLVE_REST) $(RESOLVE_HDRS)
+	@mkdir -p $(RESOLVE_DIR)
+	$(CC) $(RESOLVE_FLAGS) -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -o $(RESOLVE_DIR)/test_omega_resolve tests/test_omega_resolve.c $(RESOLVE_SRC) $(RESOLVE_REST)
+	$(RESOLVE_DIR)/test_omega_resolve
+	$(CC) $(RESOLVE_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -o $(RESOLVE_DIR)/test_omega_resolve_asan tests/test_omega_resolve.c $(RESOLVE_SRC) $(RESOLVE_REST)
+	$(RESOLVE_DIR)/test_omega_resolve_asan
+	@set -eu; build_mutant() { name=$$1; tag=$$2; which=$$3; chk=$$4; repl=$$5; \
+	  case $$which in blake3) f=src/omega_blake3.c; pfx=B3M;; resolve) f=src/omega_resolve.c; pfx=VC1R;; receipt) f=src/omega_receipt.c; pfx=VC1R;; *) echo "bad mutant file $$which"; exit 1;; esac; \
+	  sed "/$$pfx:$$tag/c\\$$repl" $$f > $(RESOLVE_DIR)/mut_$$name.c; \
+	  if cmp -s $$f $(RESOLVE_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  srcs=""; for s in $(RESOLVE_SRC); do if [ "$$s" = "$$f" ]; then srcs="$$srcs $(RESOLVE_DIR)/mut_$$name.c"; else srcs="$$srcs $$s"; fi; done; \
+	  $(CC) $(RESOLVE_FLAGS) -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -o $(RESOLVE_DIR)/mut_$$name tests/test_omega_resolve.c $$srcs $(RESOLVE_REST); \
+	  rc=0; $(RESOLVE_DIR)/mut_$$name $$name > $(RESOLVE_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -ne 1 ] || ! grep -q "^MUTANT $$name KILLED by $$chk\$$" $(RESOLVE_DIR)/mut_$$name.out; then \
+	    echo "mutant $$name NOT killed by $$chk (exit $$rc)"; tail -5 $(RESOLVE_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed by $$chk (exit 1)"; }; \
+	  build_mutant b3-merge                 merge                  blake3   b3-official-vectors                              '        while ((total & 1) == 0 && sp > 1) {'; \
+	  build_mutant b3-root                  root                    blake3  b3-official-vectors                          '    cur.flags |= 0;'; \
+	  build_mutant profile-known            profile-known          resolve  profile-unknown-refused                          '    if (!p) p = table;'; \
+	  build_mutant profile-version          profile-version        resolve profile-version-too-old-refused              '    if (cmp < -1)'; \
+	  build_mutant lock-bytes-tab           lock-bytes             resolve  lock-refuses-tab-in-comment                      '        if (text[i] == 13 || text[i] == 0) return lock_bad(err, 1, "CR or NUL byte");'; \
+	  build_mutant lock-bytes-cr            lock-bytes             resolve  lock-refuses-cr-in-comment                       '        if (text[i] == 9 || text[i] == 0) return lock_bad(err, 1, "tab or NUL byte");'; \
+	  build_mutant lock-bytes-nul           lock-bytes             resolve  lock-refuses-nul-in-comment                      '        if (text[i] == 9 || text[i] == 13) return lock_bad(err, 1, "tab or CR byte");'; \
+	  build_mutant lock-header              lock-header            resolve lock-refuses-wrong-header                    '            if (ll != 13) { free(ents); return lock_bad(err, line, "header"); }'; \
+	  build_mutant lock-unknown-line        lock-unknown-line      resolve lock-refuses-bad-name-start                  '        if (0) { free(ents); return lock_bad(err, line, "unknown line"); }'; \
+	  build_mutant lock-hex                 lock-hex               resolve  lock-refuses-uppercase-hex                   '        if (unhex32(h1, en.semantic) || unhex32(h2, en.receipt)) { memset(en.semantic, 1, 32); memset(en.receipt, 1, 32); }'; \
+	  build_mutant lock-order-duplicate     lock-order             resolve lock-refuses-duplicate-name                  '        if (n > 0 && strcmp(ents[n - 1].name, en.name) > 0) {'; \
+	  build_mutant lock-order-sorted        lock-order             resolve lock-refuses-unsorted                        '        if (n > 0 && strcmp(ents[n - 1].name, en.name) == 0) {'; \
+	  build_mutant missing-receipt          missing-receipt        resolve refuse-missing-receipt                       '    if (fr != 0) return fail(err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "receipt unavailable");'; \
+	  build_mutant rule1-name               rule1-name             resolve refuse-receipt-file-holds-another-receipt    '    if (0) {'; \
+	  build_mutant rule-clean               rule-clean             resolve refuse-dirty-receipt-in-build                '    if (0) {'; \
+	  build_mutant rule-clean-admit         rule-clean             resolve admit-refuses-dirty-receipt-in-build         '    if (0) {'; \
+	  build_mutant rule4-semantic           rule4-semantic         resolve refuse-receipt-does-not-name-program         '    if (0) {'; \
+	  build_mutant rule4-source             rule4-source           resolve refuse-stale-receipt                         '        if (0) {'; \
+	  build_mutant rule3                    rule3                  resolve refuse-receipt-output-digest-is-not-evidence-root '    if (0) {'; \
+	  build_mutant rule5                    rule5                  resolve refuse-receipt-kind-is-not-profile           '    if (0) {'; \
+	  build_mutant rule6                    rule6                  resolve  refuse-receipt-has-extra-dependency              '        if ((a != nrd || (a && memcmp(deps, rdeps, a * 32) != 0)) && 0) {'; \
+	  build_mutant rule2-pass               rule2-pass             resolve refuse-receipt-result-is-not-pass            '    if (0) {'; \
+	  build_mutant rule2-assert             rule2-assert           resolve refuse-receipt-assertion-failed              '        if (0) {'; \
+	  build_mutant rule2-testonly           rule2-testonly         resolve refuse-receipt-test-only-trust               '    if (0) {'; \
+	  build_mutant rule2-tier               rule2-tier             resolve  refuse-receipt-tier-below-profile                '    if (!omega_tier_satisfies(need_rank, rcpt.tier_rank) && 0) {'; \
+	  build_mutant closure-receipt          closure-receipt        resolve closure-digest-matches-reference             '        (void)e[i].receipt_id;'; \
+	  build_mutant cycle                    cycle                  resolve refuse-dependency-cycle                      '        if (0) return 0;'; \
+	  build_mutant lock-receipt             lock-receipt           resolve refuse-lock-pins-another-receipt             '    if (0) {'; \
+	  build_mutant lock-receipt-visited     visited-lock-receipt  resolve refuse-lock-pins-another-receipt-for-visited-node '        if (0)'; \
+	  build_mutant genesis-gate             genesis-gate           resolve refuse-genesis-record-without-permission     '    if (0) {'; \
+	  build_mutant taint-cap                taint-cap              resolve refuse-tainted-record-in-build-domain        '            0) {'; \
+	  build_mutant verified-needs-receipt   verified-needs-receipt resolve refuse-missing-receipt                       '    if (0) {'; \
+	  build_mutant edge-contract            edge-contract          resolve  refuse-edge-contract-mismatch                    '        if (memcmp(w->nodes[di].contract, req, 32) != 0 && 0) {'; \
+	  build_mutant boot-dep-verified        boot-dep-verified      resolve refuse-genesis-record-depending-on-verified  '        if (0) {'; \
+	  build_mutant not-pinned               not-pinned             resolve  refuse-not-pinned-without-lock                   '        if (0 && !omega_lock_find(lock, names[i]))'; \
+	  build_mutant undeclared               undeclared             resolve  refuse-undeclared-lock-line-without-import       '        if (!used && 0)'; \
+	  build_mutant closure-sort             closure-sort           resolve closure-sorted-ascending-by-semantic-id      '    (void)cmp_entry;'; \
+	  build_mutant build-domain             build-domain           resolve  build-id-matches-reference                       '    uint8_t db = (uint8_t)d & 0;'; \
+	  build_mutant build-closure            build-closure          resolve build-id-matches-reference                   '    (void)closure_digest;'; \
+	  build_mutant taint-mark               taint-mark             resolve artifact-dev-is-tainted-build-is-not         '    m->tainted = 0;'; \
+	  build_mutant meta-taint-consistent    meta-taint-consistent  resolve artifact-refuses-dev-header-marked-untainted '    if (0)'; \
+	  build_mutant meta-build-id            meta-build-id          resolve artifact-refuses-edited-build-id             '    if (0)'; \
+	  build_mutant admit-origin             admit-origin           resolve  admit-refuses-record-from-tainted-origin         '    if (origin && (origin->tainted || origin->domain == OMEGA_DOMAIN_DEV) && 0)'; \
+	  build_mutant admit-cap                admit-cap              resolve admit-refuses-taint-capability               '    if (0) {'; \
+	  build_mutant admit-receipt            admit-receipt          resolve  admit-refuses-mismatched-receipt                 '    rc = 0; (void)rr;'; \
+	  build_mutant genesis-dep              genesis-dep            resolve  admit-genesis-refuses-verified-dependency        '        if ((omega_vcstore_admission_kind(s, view->dependencies + 64 * (size_t)i, &k) != 0 || k != OMEGA_VCS_ADMISSION_BOOTSTRAP) && 0) {'; \
+	  build_mutant blob-digest              blob-digest            resolve refuse-blob-does-not-hash-to-digest          '        if (0) {'; \
+	  build_mutant json-dup-key             json-dup-key           receipt receipt-refuses-duplicate-key                '                if (0) { free(key); jfree(j); return jfail(p, "duplicate key"); }'; \
+	  build_mutant deny-unknown             deny-unknown           receipt receipt-refuses-unknown-field                '    if (!all_known_key(root) && 0) { ef(&e, "receipt: unknown field%s", ""); goto done; }'; \
+	  build_mutant schema                   schema                 receipt receipt-refuses-unknown-schema               '    if (strcmp(schema, SCHEMA) != 0 && 0) { ef(&e, "receipt: unknown receipt schema%s", ""); goto done; }'; \
+	  build_mutant version                  version                receipt receipt-refuses-unknown-version              '    if (r->version != 1 && 0) { ef(&e, "receipt: unsupported receipt version%s", ""); goto done; }'; \
+	  build_mutant feature                  feature                receipt receipt-refuses-unknown-feature              '        if (0) { ef(&e, "receipt: unknown required receipt feature%s", ""); goto done; }'; \
+	  build_mutant reserved                 reserved               receipt receipt-refuses-reserved-field               '    if (reserved[0] && 0) { ef(&e, "receipt: reserved field must be empty%s", ""); goto done; }'; \
+	  build_mutant env-class                env-class              receipt receipt-refuses-env-class-mismatch           '    if (strcmp(r->env_class, r->tier) != 0 && 0) { ef(&e, "receipt: env_class contradicts tier%s", ""); goto done; }'; \
+	  build_mutant mutation-order           mutation-order         receipt receipt-refuses-observed-over-declared       '    if (MUTS[r->observed_mutation].sev > MUTS[r->declared_mutation].sev && 0) { ef(&e, "receipt: observed mutation exceeds declared mutation%s", ""); goto done; }'; \
+	  build_mutant canon-sort               canon-sort             receipt receipt-canon-order-independent              '    (void)cmp_str;'; \
+	  build_mutant id-compare               id-compare             receipt receipt-refuses-wrong-id                     '    if (0) {'; \
+	  build_mutant max-depth-removed        max-depth              resolve  refuse-dependency-chain-too-deep                 '    if (0 && depth >= MAX_DEPTH) return fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "dependency chain deeper than %d", MAX_DEPTH);'; \
+	  build_mutant max-depth-one-too-many   max-depth              resolve  refuse-dependency-chain-too-deep                 '    if (depth > MAX_DEPTH) return fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "dependency chain deeper than %d", MAX_DEPTH);'; \
+	  build_mutant max-depth-one-too-few    max-depth              resolve  accept-dependency-chain-at-the-limit             '    if (depth >= MAX_DEPTH - 1) return fail(w->err, OMEGA_RES_UNVERIFIED_DEPENDENCY, 0, sid, "dependency chain deeper than %d", MAX_DEPTH);'; \
+	  build_mutant dup-import               dup-import             resolve  refuse-duplicate-import-names-through-the-api    '            if (0) return fail(err, OMEGA_RES_BAD_ARGUMENT, 0, names[i], "import listed twice");'; \
+	  build_mutant pass-needs-assertion     pass-needs-assertion   receipt  receipt-refuses-pass-without-assertion           '    if (r->n_assertions == 0 && r->result == OMEGA_RECEIPT_PASS && 0) { ef(&e, "receipt: PASS receipts must carry at least one assertion%s", ""); goto done; }'; \
+	  build_mutant prod-authority-empty     prod-authority         receipt  receipt-refuses-production-blank-authority       '        if (a == b && 0) { ef(&e, "receipt: PRODUCTION receipts require an authority reference%s", ""); goto done; }'; \
+	  build_mutant prod-authority-trim      prod-authority         receipt  receipt-refuses-production-blank-authority       '        if (b == 0) { ef(&e, "receipt: PRODUCTION receipts require an authority reference%s", ""); goto done; }'; \
+	  build_mutant prod-spelling            prod-spelling          receipt  receipt-refuses-production-test-only-authority   '        int bad = strstr(low, "test-only") || strstr(low, "testonly");'; \
+	  build_mutant prod-bad-refused         prod-bad-refused       receipt  receipt-refuses-production-test-only-authority   '        if (bad && 0) { ef(&e, "receipt: a TEST_ONLY signer cannot produce a PRODUCTION receipt%s", ""); goto done; }'
+	@echo "test-resolve: PASS (all checks, ASan/UBSan clean, all 66 mutants killed)"
+
+# VC1-GENESIS (VC1 stage 6): the pinned Genesis Set, the private store doors, the mandatory
+# source/IR recheck in the build domain. The resolver and the store now rebuild the program from
+# its IR (src/omega_program_ir.c), so the resolver link set grows by the program stack. These
+# additions are at the end on purpose: `+=` on a recursive variable is read by every recipe above.
+RESOLVE_PROGRAM_STACK = src/omega_program_ir.c src/omega_program.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_exec.c src/omega_verify.c src/omega_realize_synth.c src/omega_machine.c
+RESOLVE_REST += $(RESOLVE_PROGRAM_STACK)
+RESOLVE_HDRS += src/omega_genesis.h src/omega_vcstore_priv.h src/omega_program_ir.h tests/vc_fixture.h
+
+# test-genesis: the LISTED-member behavior of VC-GENESIS-1, which the empty real set cannot show.
+# The variant header is GENERATED from src/omega_genesis.h (same functions, byte for byte; only the
+# count, the set name and one table row differ), and omega_vcstore.c and omega_resolve.c are copied
+# with ONE rewritten include line so they read it. A quote include looks in the including file's own
+# directory first, which is why -I cannot swap the real header and why the copy is made. Nothing in
+# production source can select the variant. Mutants below break one guard each in the copies.
+.PHONY: test-genesis
+GENESIS_DIR = $(OUT_DIR)/genesis-test
+GENESIS_STACK = src/omega_receipt.c src/omega_blake3.c src/sha256.c $(RESOLVE_PROGRAM_STACK)
+GENESIS_CFLAGS = $(RESOLVE_FLAGS) -I$(GENESIS_DIR) -Itests
+test-genesis: tests/test_omega_genesis_set.c tests/genesis_variant/member.inc src/omega_vcstore.c src/omega_resolve.c src/omega_genesis.h $(RESOLVE_HDRS)
+	@set -eu; mkdir -p $(GENESIS_DIR)/genesis_variant; \
+	sed -e 's|^#define OMEGA_GENESIS_1_COUNT 0u|#define OMEGA_GENESIS_1_COUNT 1u|' -e 's|^#define OMEGA_GENESIS_SET_NAME "VC-GENESIS-1"|#define OMEGA_GENESIS_SET_NAME "VC-GENESIS-1-TEST-VARIANT"|' src/omega_genesis.h \
+	  | awk -v f=tests/genesis_variant/member.inc '/^    \{ 0 \}$$/ { while ((getline l < f) > 0) print l } { print }' > $(GENESIS_DIR)/genesis_variant/omega_genesis.h; \
+	grep -q '^#define OMEGA_GENESIS_1_COUNT 1u' $(GENESIS_DIR)/genesis_variant/omega_genesis.h; \
+	grep -q 'TEST-VARIANT' $(GENESIS_DIR)/genesis_variant/omega_genesis.h; \
+	[ "$$(grep -c '0x8f, 0x0b' $(GENESIS_DIR)/genesis_variant/omega_genesis.h)" = 1 ]; \
+	for f in omega_vcstore omega_resolve; do \
+	  sed 's|#include "omega_genesis.h"|#include "genesis_variant/omega_genesis.h"|' src/$$f.c > $(GENESIS_DIR)/$$f.c; \
+	  if cmp -s src/$$f.c $(GENESIS_DIR)/$$f.c; then echo "test-genesis: include line not found in $$f.c"; exit 1; fi; done
+	$(CC) $(GENESIS_CFLAGS) -o $(GENESIS_DIR)/test_omega_genesis_set tests/test_omega_genesis_set.c $(GENESIS_DIR)/omega_vcstore.c $(GENESIS_DIR)/omega_resolve.c $(GENESIS_STACK)
+	$(GENESIS_DIR)/test_omega_genesis_set
+	$(CC) $(GENESIS_CFLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o $(GENESIS_DIR)/test_omega_genesis_set_asan tests/test_omega_genesis_set.c $(GENESIS_DIR)/omega_vcstore.c $(GENESIS_DIR)/omega_resolve.c $(GENESIS_STACK)
+	$(GENESIS_DIR)/test_omega_genesis_set_asan
+	@set -eu; gmut() { name=$$1; which=$$2; tag=$$3; chk=$$4; repl=$$5; \
+	  f=$(GENESIS_DIR)/$$which.c; sed "/$$tag/c\\$$repl" $$f > $(GENESIS_DIR)/mut_$$name.c; \
+	  if cmp -s $$f $(GENESIS_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  if [ $$which = omega_vcstore ]; then a=$(GENESIS_DIR)/mut_$$name.c; b=$(GENESIS_DIR)/omega_resolve.c; else a=$(GENESIS_DIR)/omega_vcstore.c; b=$(GENESIS_DIR)/mut_$$name.c; fi; \
+	  $(CC) $(GENESIS_CFLAGS) -o $(GENESIS_DIR)/mut_$$name tests/test_omega_genesis_set.c $$a $$b $(GENESIS_STACK); \
+	  rc=0; $(GENESIS_DIR)/mut_$$name > $(GENESIS_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -eq 0 ] || ! grep -q "^FAIL $$chk\$$" $(GENESIS_DIR)/mut_$$name.out; then echo "mutant $$name NOT killed by $$chk (exit $$rc)"; tail -5 $(GENESIS_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed by $$chk (exit $$rc)"; }; \
+	  gmut gv-insert-refuses-listed   omega_vcstore VC1S:insert-genesis      store-inserts-a-listed-bootstrap-record  '    if (kind == OMEGA_VCS_ADMISSION_BOOTSTRAP) { free(rec); return OMEGA_VCS_GENESIS_NOT_LISTED; }'; \
+	  gmut gv-insert-accepts-unlisted omega_vcstore VC1S:insert-genesis      store-refuses-an-unlisted-bootstrap-record '    if (0) { free(rec); return OMEGA_VCS_GENESIS_NOT_LISTED; }'; \
+	  gmut gv-load-refuses-listed     omega_vcstore VC1S:load-genesis        store-saves-listed-bootstrap-and-verified-and-loads-them '        if (kind == OMEGA_VCS_ADMISSION_BOOTSTRAP) { rc = OMEGA_VCS_GENESIS_NOT_LISTED; break; }'; \
+	  gmut gv-load-accepts-unlisted   omega_vcstore VC1S:load-genesis        store-load-refuses-a-file-with-an-unlisted-bootstrap-record '        if (0) { rc = OMEGA_VCS_GENESIS_NOT_LISTED; break; }'; \
+	  gmut gv-gate-refuses-listed     omega_resolve VC1R:genesis-gate        resolver-lets-a-listed-bootstrap-record-satisfy-an-import-in-the-build-domain '    if (rec->admission_kind == OMEGA_VCS_ADMISSION_BOOTSTRAP) {'; \
+	  gmut gv-gate-accepts-unlisted   omega_resolve VC1R:genesis-gate        resolver-refuses-an-unlisted-bootstrap-record-even-with-the-list-non-empty '    if (0) {'; \
+	  gmut gv-admit-refuses-listed    omega_resolve VC1R:admit-genesis-list  admit-genesis-admits-a-listed-member '    if (1) {'; \
+	  gmut gv-admit-accepts-unlisted  omega_resolve VC1R:admit-genesis-list  admit-genesis-refuses-a-record-that-is-not-a-member '    if (0) {'
+	@echo "test-genesis: PASS (listed and unlisted at every door, ASan/UBSan clean, 8 mutants killed)"
+
+# test-program-ir: the canonical program IR (src/omega_program_ir.c). Each VC1I-tagged guard is
+# broken in a copy and the named check must FAIL.
+.PHONY: test-program-ir
+PIR_DIR = $(OUT_DIR)/program-ir-test
+PIR_STACK = src/sha256.c $(filter-out src/omega_program_ir.c,$(RESOLVE_PROGRAM_STACK))
+test-program-ir: tests/test_omega_program_ir.c src/omega_program_ir.c src/omega_program_ir.h
+	@mkdir -p $(PIR_DIR)
+	$(CC) $(RESOLVE_FLAGS) -Wno-pedantic -o $(PIR_DIR)/test_omega_program_ir tests/test_omega_program_ir.c src/omega_program_ir.c $(PIR_STACK)
+	$(PIR_DIR)/test_omega_program_ir
+	$(CC) $(RESOLVE_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o $(PIR_DIR)/test_omega_program_ir_asan tests/test_omega_program_ir.c src/omega_program_ir.c $(PIR_STACK)
+	$(PIR_DIR)/test_omega_program_ir_asan
+	@set -eu; pmut() { name=$$1; tag=$$2; chk=$$3; repl=$$4; \
+	  sed "/VC1I:$$tag/c\\$$repl" src/omega_program_ir.c > $(PIR_DIR)/mut_$$name.c; \
+	  if cmp -s src/omega_program_ir.c $(PIR_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  $(CC) $(RESOLVE_FLAGS) -Isrc -o $(PIR_DIR)/mut_$$name tests/test_omega_program_ir.c $(PIR_DIR)/mut_$$name.c $(PIR_STACK); \
+	  rc=0; $(PIR_DIR)/mut_$$name > $(PIR_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -eq 0 ] || ! grep -q "^FAIL $$chk\$$" $(PIR_DIR)/mut_$$name.out; then echo "mutant $$name NOT killed by $$chk (exit $$rc)"; tail -5 $(PIR_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed by $$chk (exit $$rc)"; }; \
+	  pmut ir-tag       tag       ir-refuses-wrong-tag                  '    if (!tag) return -1;'; \
+	  pmut ir-trailing  trailing  ir-refuses-trailing-bytes             '    if (r.bad) { memset(out, 0, sizeof *out); return -1; }'; \
+	  pmut ir-id        id        ir-refuses-a-type-the-program-id-cannot-take '    (void)0;'
+	@set -eu; sed '/VC1I:truncated/c\    if (r->bad) { r->bad = 1; return NULL; }' src/omega_program_ir.c > $(PIR_DIR)/mut_ir-truncated.c; \
+	  if cmp -s src/omega_program_ir.c $(PIR_DIR)/mut_ir-truncated.c; then echo "mutant ir-truncated: sed changed nothing"; exit 1; fi; \
+	  $(CC) $(RESOLVE_FLAGS) -Isrc -O1 -g -fsanitize=address -o $(PIR_DIR)/mut_ir-truncated tests/test_omega_program_ir.c $(PIR_DIR)/mut_ir-truncated.c $(PIR_STACK); \
+	  rc=0; $(PIR_DIR)/mut_ir-truncated > $(PIR_DIR)/mut_ir-truncated.out 2>&1 || rc=$$?; \
+	  if [ $$rc -eq 0 ] || ! grep -q 'AddressSanitizer: heap-buffer-overflow' $(PIR_DIR)/mut_ir-truncated.out; then echo "mutant ir-truncated NOT killed (exit $$rc)"; tail -5 $(PIR_DIR)/mut_ir-truncated.out; exit 1; fi; \
+	  echo "mutant ir-truncated: killed by AddressSanitizer heap-buffer-overflow on a truncated blob (exit $$rc)"
+	@set -eu; sed '/VC1I:steps/c\    if (r.bad) { memset(out, 0, sizeof *out); return -1; }' src/omega_program_ir.c > $(PIR_DIR)/mut_ir-steps.c; \
+	  if cmp -s src/omega_program_ir.c $(PIR_DIR)/mut_ir-steps.c; then echo "mutant ir-steps: sed changed nothing"; exit 1; fi; \
+	  $(CC) $(RESOLVE_FLAGS) -Isrc -O1 -g -fsanitize=address -o $(PIR_DIR)/mut_ir-steps tests/test_omega_program_ir.c $(PIR_DIR)/mut_ir-steps.c $(PIR_STACK); \
+	  rc=0; $(PIR_DIR)/mut_ir-steps > $(PIR_DIR)/mut_ir-steps.out 2>&1 || rc=$$?; \
+	  if [ $$rc -eq 0 ] || ! grep -q 'AddressSanitizer: heap-buffer-overflow' $(PIR_DIR)/mut_ir-steps.out; then echo "mutant ir-steps NOT killed (exit $$rc)"; tail -5 $(PIR_DIR)/mut_ir-steps.out; exit 1; fi; \
+	  echo "mutant ir-steps: killed by AddressSanitizer heap-buffer-overflow on a huge step count (exit $$rc)"
+	@echo "test-program-ir: PASS (round trip, refusals, ASan/UBSan clean, 5 mutants killed)"
+
+# The resolver mutants for the VC1 stage 6 guards (genesis list at admission, mandatory blob store
+# in the build domain, program-id recompute, IR-only digest kind in the build domain), plus the two
+# genesis guards in the store. Same method as test-resolve and test-vcstore: copy ONE source file,
+# break ONE tagged line, require the named check to fail. Run after the two main targets.
+.PHONY: test-resolve-genesis test-vcstore-genesis
+test-resolve-genesis: test-resolve
+	@set -eu; build_mutant() { name=$$1; tag=$$2; chk=$$3; repl=$$4; f=src/omega_resolve.c; \
+	  sed "/VC1R:$$tag/c\\$$repl" $$f > $(RESOLVE_DIR)/mut_$$name.c; \
+	  if cmp -s $$f $(RESOLVE_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  srcs=""; for s in $(RESOLVE_SRC); do if [ "$$s" = "$$f" ]; then srcs="$$srcs $(RESOLVE_DIR)/mut_$$name.c"; else srcs="$$srcs $$s"; fi; done; \
+	  $(CC) $(RESOLVE_FLAGS) -DOSCV_PATH='"$(OUT_DIR)/compiler/oscv"' -o $(RESOLVE_DIR)/mut_$$name tests/test_omega_resolve.c $$srcs $(RESOLVE_REST); \
+	  rc=0; $(RESOLVE_DIR)/mut_$$name $$name > $(RESOLVE_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -ne 1 ] || ! grep -q "^MUTANT $$name KILLED by $$chk\$$" $(RESOLVE_DIR)/mut_$$name.out; then \
+	    echo "mutant $$name NOT killed by $$chk (exit $$rc)"; tail -5 $(RESOLVE_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed by $$chk (exit 1)"; }; \
+	  build_mutant admit-genesis-list   admit-genesis-list   admit-genesis-refuses-unlisted-record                    '    if (0) { /* VC1R:admit-genesis-list */'; \
+	  build_mutant build-needs-blobs    build-needs-blobs    refuse-build-domain-without-blob-store                    '    if (0 && !r->fetch_blob) { /* VC1R:build-needs-blobs */'; \
+	  build_mutant program-id           program-id           refuse-ir-that-does-not-recompute-to-semantic-id          '            if (omega_program_ir_recompute_id(bb, bl, pid) != 0) { /* VC1R:program-id */'; \
+	  build_mutant ir-kind              ir-kind              refuse-source-digest-record-in-build-domain               '        } else if (0) { /* VC1R:ir-kind */'
+	@echo "test-resolve-genesis: PASS (4 mutants killed)"
+test-vcstore-genesis: test-vcstore
+	@set -eu; build_mutant() { name=$$1; tag=$$2; chk=$$3; repl=$$4; \
+	  sed "/VC1S:$$tag/c\\$$repl" src/omega_vcstore.c > $(VCSTEST_DIR)/mut_$$name.c; \
+	  if cmp -s src/omega_vcstore.c $(VCSTEST_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  $(CC) $(VCSTEST_FLAGS) -o $(VCSTEST_DIR)/mut_$$name tests/test_omega_vcstore.c $(VCSTEST_DIR)/mut_$$name.c src/sha256.c; \
+	  rc=0; $(VCSTEST_DIR)/mut_$$name $$name > $(VCSTEST_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -ne 1 ] || ! grep -q "^MUTANT $$name KILLED by $$chk\$$" $(VCSTEST_DIR)/mut_$$name.out; then \
+	    echo "mutant $$name NOT killed by $$chk (exit $$rc)"; tail -5 $(VCSTEST_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed by $$chk (exit 1)"; }; \
+	  build_mutant insert-genesis       insert-genesis       insert-bootstrap-unlisted-refused  '    if (0) { free(rec); return OMEGA_VCS_GENESIS_NOT_LISTED; }'; \
+	  build_mutant load-genesis         load-genesis         load-bootstrap-unlisted-refused    '        if (0) { rc = OMEGA_VCS_GENESIS_NOT_LISTED; break; }'
+	@echo "test-vcstore-genesis: PASS (2 mutants killed)"
+
+# VC1 stage 6: library admissions in Crumbline and in omegatool go through the Verified Crumb bridge
+# (src/omega_vc_bridge.c), so both link the bridge, the resolver, the receipt reader and the store.
+# `+=` at the end is read by the recipes above (they use the variables lazily); the extra
+# prerequisite rules below make sure the new objects are built first.
+VC_BRIDGE_CORE = omega_program_ir omega_vc_bridge omega_resolve omega_receipt omega_blake3 omega_vcstore
+VC_BRIDGE_OBJS = $(addprefix $(OUT_DIR)/,$(addsuffix .o,$(VC_BRIDGE_CORE)))
+LEARNER_CORE += $(VC_BRIDGE_CORE)
+$(LEARNER): $(VC_BRIDGE_OBJS)
+SRCS += $(patsubst %,src/%.c,$(VC_BRIDGE_CORE))
+$(TARGET): $(VC_BRIDGE_OBJS)
+-include $(VC_BRIDGE_OBJS:.o=.d)
+
+# test-genesis-real: the REAL VC-GENESIS-1 (src/omega_genesis.h) pinned against its audit record
+# docs/osc/VC-GENESIS-1.md. Two mutants of the real header must be caught.
+.PHONY: test-genesis-real
+GENREAL_DIR = $(OUT_DIR)/genesis-real-test
+GENREAL_STACK = src/sha256.c $(RESOLVE_PROGRAM_STACK)
+test-genesis-real: tests/test_omega_genesis.c src/omega_genesis.h docs/osc/VC-GENESIS-1.md tests/vc_fixture.h
+	@mkdir -p $(GENREAL_DIR)
+	$(CC) $(RESOLVE_FLAGS) -o $(GENREAL_DIR)/test_omega_genesis tests/test_omega_genesis.c $(GENREAL_STACK)
+	$(GENREAL_DIR)/test_omega_genesis
+	@set -eu; gmut() { name=$$1; chk=$$2; expr=$$3; \
+	  mkdir -p $(GENREAL_DIR)/$$name; sed "$$expr" src/omega_genesis.h > $(GENREAL_DIR)/$$name/omega_genesis.h; \
+	  if cmp -s src/omega_genesis.h $(GENREAL_DIR)/$$name/omega_genesis.h; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  $(CC) -I$(GENREAL_DIR)/$$name $(RESOLVE_FLAGS) -o $(GENREAL_DIR)/mut_$$name tests/test_omega_genesis.c $(GENREAL_STACK); \
+	  rc=0; $(GENREAL_DIR)/mut_$$name > $(GENREAL_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -ne 1 ] || ! grep -q "^FAIL $$chk\$$" $(GENREAL_DIR)/mut_$$name.out; then echo "mutant $$name NOT killed by $$chk (exit $$rc)"; tail -5 $(GENREAL_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed by $$chk (exit 1)"; }; \
+	  gmut gr-count-one          member-count-is-the-pinned-audit-result 's|^#define OMEGA_GENESIS_1_COUNT 0u|#define OMEGA_GENESIS_1_COUNT 1u|'; \
+	  gmut gr-contains-everything no-program-we-know-and-no-junk-id-is-a-member 's|if (!id \|\| memcmp(id, zero, 32) == 0) return 0;|(void)zero; return 1;|'; \
+	  gmut gr-name-changed       set-name-is-vc-genesis-1 's|#define OMEGA_GENESIS_SET_NAME "VC-GENESIS-1"|#define OMEGA_GENESIS_SET_NAME "VC-GENESIS-2"|'
+	@echo "test-genesis-real: PASS (pinned set and audit record agree, 3 mutants killed)"
+
+# test-vc-bridge (VC1 stage 6 fix): the bridge verifies and recomputes the id itself, and what it
+# mints cannot satisfy a build import. Each VC1B-tagged guard is broken in a copy and the named
+# check must FAIL. The tag lines are single lines, so sed replaces whole lines.
+.PHONY: test-vc-bridge
+VCB_DIR = $(OUT_DIR)/vc-bridge-test
+VCB_STACK = src/omega_library.c src/omega_receipt.c src/omega_blake3.c src/sha256.c src/omega_vcstore.c $(RESOLVE_PROGRAM_STACK)
+test-vc-bridge: tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_vc_bridge.h src/omega_resolve.c src/omega_resolve.h
+	@mkdir -p $(VCB_DIR)
+	$(CC) $(RESOLVE_FLAGS) -o $(VCB_DIR)/test_omega_vc_bridge tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_resolve.c $(VCB_STACK)
+	$(VCB_DIR)/test_omega_vc_bridge
+	$(CC) $(RESOLVE_FLAGS) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -o $(VCB_DIR)/test_omega_vc_bridge_asan tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_resolve.c $(VCB_STACK)
+	$(VCB_DIR)/test_omega_vc_bridge_asan
+	@set -eu; vmut() { name=$$1; which=$$2; chk=$$3; repl=$$4; \
+	  sed "/VC1B:$$name/c\\$$repl" src/$$which.c > $(VCB_DIR)/mut_$$name.c; \
+	  if cmp -s src/$$which.c $(VCB_DIR)/mut_$$name.c; then echo "mutant $$name: sed changed nothing"; exit 1; fi; \
+	  if [ $$which = omega_vc_bridge ]; then a=$(VCB_DIR)/mut_$$name.c; b=src/omega_resolve.c; else a=src/omega_vc_bridge.c; b=$(VCB_DIR)/mut_$$name.c; fi; \
+	  $(CC) $(RESOLVE_FLAGS) -o $(VCB_DIR)/mut_$$name tests/test_omega_vc_bridge.c $$a $$b $(VCB_STACK); \
+	  rc=0; $(VCB_DIR)/mut_$$name > $(VCB_DIR)/mut_$$name.out 2>&1 || rc=$$?; \
+	  if [ $$rc -eq 0 ] || ! grep -q "^FAIL $$chk\$$" $(VCB_DIR)/mut_$$name.out; then echo "mutant $$name NOT killed by $$chk (exit $$rc)"; tail -5 $(VCB_DIR)/mut_$$name.out; exit 1; fi; \
+	  echo "mutant $$name: killed by $$chk (exit $$rc)"; }; \
+	  vmut verify                    omega_vc_bridge refuse-corrupted-program-even-with-flags-set '        (void)rep;'; \
+	  vmut id                        omega_vc_bridge refuse-forged-program-id-at-admit            '        (void)rid_;'; \
+	  vmut cap                       omega_vc_bridge refuse-bridge-record-in-build-domain         '    ou32(&o, 0);'; \
+	  vmut build-refuses-selfminted  omega_resolve   refuse-bridge-record-in-build-domain         '    (void)lists_selfminted_cap;'
+	@echo "test-vc-bridge: PASS (bridge verifies and recomputes the id, bridge records refused in build, ASan/UBSan clean, 4 mutants killed)"
+
+# FB-1 cut 1: native (no CUDA) matmul entry point for the inference stack.
+# libomega_gpu.a = everything the tool links except its main; the Rust FFI crate
+# (cut 2) links it. test-gpu-matmul-api runs the host-only refusals; the chip
+# sweep is `./build/gpu_matmul_api_test --out receipt.json` through the heavy queue.
+.PHONY: libomega_gpu test-gpu-matmul-api
+# The two gate-runner objects (omegatool's M17/M18/M19 and World gates) are NOT part of the
+# library: nothing in the library or in the Rust FFI crate calls them (checked with nm), and
+# they compile the physics checkout path into the object (-DOMEGA_PHYSICS_DIR), which made the
+# archive digest depend on where physics was checked out. Without them libomega_gpu.a is
+# byte-identical for any PHYSICS_DIR and any omega checkout directory.
+GPU_API_OBJS = $(filter-out $(OUT_DIR)/omegatool.o $(OUT_DIR)/omega_blackwell_gates.o $(OUT_DIR)/omega_world_gates.o,$(OBJS))
+GPU_API_TEST = $(OUT_DIR)/gpu_matmul_api_test
+$(OUT_DIR)/libomega_gpu.a: check-physics-lock $(GPU_API_OBJS)
+	ar rcs $@ $(GPU_API_OBJS)
+libomega_gpu: $(OUT_DIR)/libomega_gpu.a
+$(GPU_API_TEST): tests/gpu_matmul_api_test.c src/omega_gpu_matmul_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -o $@ tests/gpu_matmul_api_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-matmul-api: $(GPU_API_TEST)
+	./$(GPU_API_TEST) --host-only
+
+# FB-1 cut 4: native rmsnorm / rope / swiglu (+ EX2 and shared-exchange probes).
+# test-gpu-elementwise is host-only (refusals, codegen, word fixtures, nvdisasm
+# listing); the chip gate is `./build/gpu_elementwise_test --out receipt.json`
+# through the heavy queue. -ffp-contract=off keeps the f32 oracle free of FMA.
+.PHONY: test-gpu-elementwise
+GPU_EW_TEST = $(OUT_DIR)/gpu_elementwise_test
+$(GPU_EW_TEST): tests/gpu_elementwise_test.c src/omega_gpu_elementwise_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -o $@ tests/gpu_elementwise_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-elementwise: $(GPU_EW_TEST)
+	./$(GPU_EW_TEST) --host-only
+
+# FB-1 cut 5: native gqa_attention (f32 KV) and paged_attention (bf16 KV, + batch).
+# test-gpu-attention runs host-only (refusals, codegen, nvdisasm listing) and then the
+# whole parity battery through the host IR simulator (--sim, no chip); the chip
+# gate is `./build/gpu_attention_test --out receipt.json` through the heavy queue
+# (tools/run_gpu_attention_chip.sh). -ffp-contract=off keeps the oracle free of FMA.
+.PHONY: test-gpu-attention
+GPU_ATTN_TEST = $(OUT_DIR)/gpu_attention_test
+$(GPU_ATTN_TEST): tests/gpu_attention_test.c src/omega_gpu_attention_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -o $@ tests/gpu_attention_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-attention: $(GPU_ATTN_TEST)
+	./$(GPU_ATTN_TEST) --host-only
+	./$(GPU_ATTN_TEST) --sim
+	./$(GPU_ATTN_TEST) --sweep --sim --out $(OUT_DIR)/gpu_attention_sweep_sim.json
+
+# FB-1 cut 4b: fresh-process device-open probe (flake investigation, tools/probe_gpu_open.sh)
+$(OUT_DIR)/gpu_session_probe: tests/gpu_session_probe.c src/omega_gpu_session.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -o $@ tests/gpu_session_probe.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
