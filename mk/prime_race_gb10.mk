@@ -1,3 +1,7 @@
+# The label carries +dirty when the code that goes into the binary has uncommitted changes, and
+# the stamp below changes whenever the label does, so a binary can never carry a stale commit.
+GB_SRC_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)$(shell git status --porcelain -- src bench/prime_race mk 2>/dev/null | grep -v ' bench/prime_race/build/' | head -c1 | sed 's/.\+/+dirty/')
+GB_LABEL_STAMP = $(GB_BUILD)/.gb_source_label
 # AIEN Prime Drag Race: native GB10 implementation (bench/prime_race/gb10_native.c) on Omega's
 # own Blackwell codegen + session (libomega_gpu.a, no CUDA). Picked up by `-include mk/*.mk`;
 # not part of `all` or `test`. Needs PHYSICS_DIR at the physics.lock commit (libomega_gpu).
@@ -10,14 +14,18 @@
 #                            chip launches need GB10_CHIP_RUN=1 and the GPU lock)
 ifndef PRIME_RACE_GB10_MK
 PRIME_RACE_GB10_MK := 1
-.PHONY: prime-race-gb10 prime-race-gb10-host-test prime-race-gb10-launch-cost
+.PHONY: prime-race-gb10 prime-race-gb10-host-test prime-race-gb10-launch-cost PRIME_RACE_FORCE
+PRIME_RACE_FORCE:
 GB_DIR = bench/prime_race
 GB_BUILD = $(GB_DIR)/build
 GB_OPT = -O3 -mcpu=native
-GB_SRC_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)
+# The label carries +dirty when code that goes into the binary has uncommitted changes, and the
+# stamp below changes whenever the label does, so a binary never carries a stale commit.
+GB_SRC_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo unknown)$(shell git status --porcelain -- src bench/prime_race mk 2>/dev/null | head -c1 | sed 's/.\+/+dirty/')
+GB_LABEL_STAMP = $(GB_BUILD)/.gb_source_label
 GB_DEFS = -DPR_SOURCE_COMMIT='"$(GB_SRC_COMMIT)"' -DPR_CC='"$(CC)"' \
 	-DPR_CFLAGS='"$(GB_OPT) -I$(GB_DIR) + omega CFLAGS; libomega_gpu.a built with omega CFLAGS"'
-GB_DEPS = $(GB_DIR)/gb10_native.c $(GB_DIR)/prime_race_impl.c $(GB_DIR)/prime_race_impl.h \
+GB_DEPS = $(GB_DIR)/gb10_native.c $(GB_LABEL_STAMP) $(GB_DIR)/prime_race_impl.c $(GB_DIR)/prime_race_impl.h \
 	src/omega_gpu_elementwise_api.h src/omega_gpu_session.h $(OUT_DIR)/libomega_gpu.a
 # Same pattern as tools/chip_run.sh REFUSAL:cuda
 GB_NM_CHECK = if nm -u $@ | grep -Eiq 'cuda|cuInit|cuLaunch|nvrtc|cublas'; then echo "CUDA symbols in $@"; rm -f $@; exit 1; fi
@@ -31,6 +39,9 @@ $(GB_BUILD)/gb10_native_mutant: $(GB_DEPS)
 	$(CC) $(CFLAGS) $(GB_OPT) -I$(GB_DIR) $(GB_DEFS) -DPR_GB10_MUTANT=1 -o $@ $(GB_DIR)/gb10_native.c $(GB_DIR)/prime_race_impl.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
 	@$(GB_NM_CHECK)
 prime-race-gb10: $(GB_BUILD)/gb10_native $(GB_BUILD)/gb10_native_mutant
+$(GB_LABEL_STAMP): PRIME_RACE_FORCE
+	@mkdir -p $(GB_BUILD)
+	@echo '$(GB_SRC_COMMIT)' > $@.tmp; cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
 
 $(GB_BUILD)/gb10_sieve_host_test: $(GB_DIR)/tests/gb10_sieve_host_test.c $(GB_DIR)/prime_race_impl.h src/omega_blackwell_codegen.h src/omega_gpu_elementwise_api.h $(OUT_DIR)/libomega_gpu.a
 	@mkdir -p $(GB_BUILD)
