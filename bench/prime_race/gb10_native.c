@@ -22,6 +22,10 @@
  * sleeping for up to N us before the session's usual 50 us sleep-poll; unset or 0 keeps the old
  * wait. Any other value fails setup. Reported in the detail JSON as spin_us.
  *
+ * Mark loop (omega #308): PR_GB10_MARK=uniform (default, campaign C5), divergent (the original
+ * lane-dependent mark loop inside a BSSY/BSYNC reconvergence region, regression R1) or divergent2
+ * (the prime loop in a region as well, nested). Any other value fails setup. Reported as mark.
+ *
  * Labels (handoff 2026-10-05 DESIGN): algorithm=other, faithful=no, bits=1,
  * environment linux-hosted-gb10-native. Build with -DPR_GB10_MUTANT=1 only for the chip
  * test's negative control (the r == 0 fix is dropped; the oracle must catch it).
@@ -77,11 +81,24 @@ static int gb_table_global(void) {
     return -1;
 }
 
+/* PR_GB10_MARK (omega #308): "uniform" or unset = the C5 warp-uniform mark loop; "divergent" =
+ * the original lane-dependent mark loop inside a BSSY/BSYNC region (regression R1); "divergent2" =
+ * the prime loop in a region as well (nested). -1 on any other value. */
+static int gb_mark_mode(void) {
+    const char *v = getenv("PR_GB10_MARK");
+    if (!v || strcmp(v, "uniform") == 0) return 0;
+    if (strcmp(v, "divergent") == 0) return 1;
+    if (strcmp(v, "divergent2") == 0) return 2;
+    return -1;
+}
+static const char *const GB_MARK_NAMES[3] = { "uniform", "divergent", "divergent2" };
+
 typedef struct {
     uint64_t limit, odd;
     uint32_t nwords, ctas, budget, stride, lastw, tailinv;
     uint32_t spin_us;       /* marker wait spin window (campaign C4) */
     int table_global;       /* PR_GB10_TABLE=global: never stage the table (campaign C6) */
+    int mark;               /* PR_GB10_MARK: 0 uniform (C5), 1 regioned mark loop, 2 nested regions (omega #308) */
     uint32_t root;          /* isqrt(limit) */
     uint32_t nprimes;       /* odd primes in the table of the last pass (sentinel excluded) */
     size_t table_cap;       /* entries, sentinel included */
@@ -145,6 +162,8 @@ static int gb_setup(void **state, uint64_t limit) {
     if (s->spin_us == UINT32_MAX) { fprintf(stderr, "gb10-native: PR_GB10_SPIN_US must be 0..%u\n", OMEGA_GPU_SESSION_MAX_SPIN_US); return -1; }
     s->table_global = gb_table_global();
     if (s->table_global < 0) { fprintf(stderr, "gb10-native: PR_GB10_TABLE must be auto or global\n"); return -1; }
+    s->mark = gb_mark_mode();
+    if (s->mark < 0) { fprintf(stderr, "gb10-native: PR_GB10_MARK must be uniform, divergent or divergent2\n"); return -1; }
     uint32_t blocks = (s->nwords + GB_THREADS - 1) / GB_THREADS;
     s->ctas = blocks == 0 ? 1 : (blocks > s->budget ? s->budget : blocks);
     s->stride = s->ctas * GB_THREADS;
@@ -161,6 +180,8 @@ static int gb_setup(void **state, uint64_t limit) {
     /* campaign C3: stage the table in shared memory whenever it fits the QMD bound */
     if (!s->table_global && (uint64_t)s->entries * 12 <= OMEGA_BW_QMD_MAX_SHARED_BYTES) s->shared_bytes = s->entries * 12;
     OmegaGpuEwOp op = s->shared_bytes ? OMEGA_GPU_EW_PRIME_SIEVE_SHARED : OMEGA_GPU_EW_PRIME_SIEVE;
+    if (s->mark == 1) op = s->shared_bytes ? OMEGA_GPU_EW_PRIME_SIEVE_SHARED_DIV1 : OMEGA_GPU_EW_PRIME_SIEVE_DIV1;
+    if (s->mark == 2) op = s->shared_bytes ? OMEGA_GPU_EW_PRIME_SIEVE_SHARED_DIV2 : OMEGA_GPU_EW_PRIME_SIEVE_DIV2;
 
     if (omega_gpu_elementwise_codegen_ir(op, PR_GB10_MUTANT, NULL, &s->k) != OMEGA_GPU_EW_OK) {
         fprintf(stderr, "gb10-native: kernel codegen failed\n"); return -1;
@@ -242,8 +263,8 @@ static uint64_t gb_threads(void *state) { gb_state *s = state; return s ? s->str
 static int gb_detail(void *state, FILE *f) {
     gb_state *s = state;
     if (!s) return -1;
-    fprintf(f, "{\"grid\": %u, \"cta_budget\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"table\": \"%s\", \"shared_bytes\": %u, \"spin_us\": %u, \"kernel_code_sha256\": \"",
-            s->ctas, s->budget, GB_THREADS, s->nwords, s->nprimes, s->shared_bytes ? "shared" : "global", s->shared_bytes, s->spin_us);
+    fprintf(f, "{\"grid\": %u, \"cta_budget\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"table\": \"%s\", \"shared_bytes\": %u, \"spin_us\": %u, \"mark\": \"%s\", \"kernel_code_sha256\": \"",
+            s->ctas, s->budget, GB_THREADS, s->nwords, s->nprimes, s->shared_bytes ? "shared" : "global", s->shared_bytes, s->spin_us, GB_MARK_NAMES[s->mark]);
     for (int i = 0; i < 32; i++) fprintf(f, "%02x", s->k.code_digest[i]);
     fprintf(f, "\", \"kernel_insns\": %zu, \"kernel_gpr\": %u, \"mutant\": %d, \"launches\": %" PRIu64
                ", \"diag_kernel_ns_total\": %" PRIu64

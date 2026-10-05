@@ -17,6 +17,7 @@
 #include "prime_race_impl.h"
 #include "omega_blackwell_codegen.h"
 #include "omega_gpu_elementwise_api.h"
+#include "bw_warp_sim.h" /* SIMT warp simulator (omega #308): the regioned sieves run through it */
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -172,6 +173,24 @@ static void sim_cta(const BlackwellIRProgram *p, uint32_t cta) {
     }
 }
 
+/* omega #308: when g_ws_order >= 0, sim_sieve runs the CTAs through the SIMT warp simulator
+ * (tests/bw_warp_sim.h: lane masks, divergence, BSSY/BSYNC) in that fragment order instead of
+ * the per-thread simulator above; a simulator error lands in g_sim_err as 200 + its code. */
+static int g_ws_order = -1;
+static WsSim g_ws_last;
+static uint8_t g_ws_smem[65536];
+static void ws_sieve_run(const BlackwellIRProgram *p, uint32_t ctas) {
+    WsSim s; memset(&s, 0, sizeof s);
+    s.p = p; s.threads = OMEGA_GPU_EW_THREADS; s.order = g_ws_order;
+    memcpy(s.cbank, g_cb, sizeof s.cbank);
+    s.smem = g_ws_smem; s.smem_bytes = g_smem_bytes > sizeof g_ws_smem ? (uint32_t)sizeof g_ws_smem : g_smem_bytes;
+    s.ranges[0] = (WsRange){ g_ranges[0].lo, g_ranges[0].hi }; s.ranges[1] = (WsRange){ g_ranges[1].lo, g_ranges[1].hi }; s.nranges = 2;
+    int err = ws_run(&s, ctas, 1);
+    g_ws_last = s;
+    g_steps += s.warp_issues;
+    if (err) g_sim_err = 200 + err;
+}
+
 /* Mirrors gb10_native.c's pass on the host: same table, same argument words; `budget`
  * is the CTA cap (PR_GB10_CTA_BUDGET, default OMEGA_GPU_EW_MAX_CTAS). */
 static int sim_sieve(const BlackwellIRProgram *p, uint64_t limit, uint32_t budget, int staged, uint64_t *words) {
@@ -205,8 +224,8 @@ static int sim_sieve(const BlackwellIRProgram *p, uint64_t limit, uint32_t budge
     g_ranges[0] = (Range){ (uintptr_t)tab, (uintptr_t)tab + cap * 12 };
     g_ranges[1] = (Range){ (uintptr_t)out, (uintptr_t)out + (size_t)nwords * 4 };
     g_sim_err = 0;
-    for (uint32_t cta = 0; cta < ctas && !g_sim_err; cta++)
-        sim_cta(p, cta);
+    if (g_ws_order >= 0) ws_sieve_run(p, ctas);
+    else for (uint32_t cta = 0; cta < ctas && !g_sim_err; cta++) sim_cta(p, cta);
     size_t nw64 = pr_words64(limit);
     memset(words, 0, nw64 * 8);
     memcpy(words, out, (size_t)nwords * 4);
@@ -648,7 +667,115 @@ int main(int argc, char **argv) {
         free(sk.code); free(smk.code); free(sp); free(smp); free(nobar);
     }
 
-    /* 6. division model */
+    /* 6. structured reconvergence (omega #308, regression R1): the sieve with its lane-dependent
+     * loops put back inside BSSY/BSYNC regions. DIV1 = the 888a011 mark loop in a region, DIV2 =
+     * the prime loop in an outer region too (nested). Each variant: codegen, hazard walks,
+     * listing, the oracle sweep through the warp simulator in both fragment orders, the math
+     * mutant caught, and the dropped-join / corrupted-target mutants rejected by the simulator.
+     * Then the warp-issue model of the C5 kernel against the regioned ones (a host model, not
+     * a measurement: the chip number comes from gb10_native PR_GB10_MARK=divergent). */
+    {
+        static const struct { OmegaGpuEwOp op; int staged; const char *name; int regions; } dv[] = {
+            { OMEGA_GPU_EW_PRIME_SIEVE_DIV1, 0, "div1", 1 }, { OMEGA_GPU_EW_PRIME_SIEVE_SHARED_DIV1, 1, "shared_div1", 2 },
+            { OMEGA_GPU_EW_PRIME_SIEVE_DIV2, 0, "div2", 2 }, { OMEGA_GPU_EW_PRIME_SIEVE_SHARED_DIV2, 1, "shared_div2", 3 },
+        }; /* the staged variants also put the staging loop (lane-dependent trip count) in a region */
+        static const char *const MUST_DIV[] = { "BSSY", "BSYNC", "IMAD.HI.U32", "@P0 BRA", "@!P0 BRA", "@P0 EXIT", "STG.E", "LDG.E" };
+        /* positive control for the adapter: the production (C5) kernel through the warp simulator */
+        {
+            uint64_t L = 1000000, *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
+            g_ws_order = 0;
+            int r = want && got ? sim_sieve(prog, L, OMEGA_GPU_EW_MAX_CTAS, 0, got) : -1;
+            g_ws_order = -1;
+            CHECK(r == 0 && want && memcmp(got, want, pr_words64(L) * 8) == 0, "C5 kernel through the warp simulator at 1e6 (rc %d err %d)", r, g_sim_err);
+            printf("warp-sim model C5 (global) 1e6: warp_issues=%" PRIu64 " lane_util=%.3f splits=%" PRIu64 " max_frags=%d\n",
+                   g_ws_last.warp_issues, g_ws_last.warp_issues ? (double)g_ws_last.lane_issues / (32.0 * (double)g_ws_last.warp_issues) : 0.0, g_ws_last.splits, g_ws_last.max_frags);
+            /* the production staged kernel too: its staging loop splits the warp before BAR.SYNC
+             * (allowed on the chip since Volta; counted here, and the fragments stay split) */
+            BlackwellIRProgram *cp = calloc(1, sizeof *cp); OmegaBlackwellKernel ck; memset(&ck, 0, sizeof ck);
+            if (cp && omega_gpu_elementwise_codegen_ir(OMEGA_GPU_EW_PRIME_SIEVE_SHARED, 0, cp, &ck) == OMEGA_GPU_EW_OK) {
+                want = oracle_bitmap(L); got = calloc(pr_words64(L) + 1, 8);
+                g_ws_order = 0;
+                r = want && got ? sim_sieve(cp, L, OMEGA_GPU_EW_MAX_CTAS, 1, got) : -1;
+                g_ws_order = -1;
+                CHECK(r == 0 && want && memcmp(got, want, pr_words64(L) * 8) == 0, "C5 staged kernel through the warp simulator at 1e6 (rc %d err %d)", r, g_sim_err);
+                printf("warp-sim model C5 (staged) 1e6: warp_issues=%" PRIu64 " lane_util=%.3f splits=%" PRIu64 " max_frags=%d bar_split_arrivals=%" PRIu64 "\n",
+                       g_ws_last.warp_issues, g_ws_last.warp_issues ? (double)g_ws_last.lane_issues / (32.0 * (double)g_ws_last.warp_issues) : 0.0, g_ws_last.splits, g_ws_last.max_frags, g_ws_last.bar_split_arrivals);
+                free(ck.code);
+            } else CHECK(0, "C5 staged codegen for the warp-sim control");
+            free(cp);
+            free(want); free(got);
+        }
+        for (size_t v = 0; v < sizeof dv / sizeof dv[0]; v++) {
+            BlackwellIRProgram *dp = calloc(1, sizeof *dp);
+            OmegaBlackwellKernel dk; memset(&dk, 0, sizeof dk);
+            int drc = dp ? omega_gpu_elementwise_codegen_ir(dv[v].op, 0, dp, &dk) : -1;
+            CHECK(drc == OMEGA_GPU_EW_OK && dk.gpr_count <= 64, "%s codegen rc %d gprs %u", dv[v].name, drc, dk.gpr_count);
+            if (drc != OMEGA_GPU_EW_OK) { free(dp); continue; }
+            int nbssy = 0, nbsync = 0;
+            for (size_t i = 0; i < dp->count; i++) { nbssy += dp->insns[i].op == BW_IR_BSSY; nbsync += dp->insns[i].op == BW_IR_BSYNC; }
+            CHECK(nbssy == dv[v].regions && nbsync == dv[v].regions, "%s has %d BSSY / %d BSYNC (want %d)", dv[v].name, nbssy, nbsync, dv[v].regions);
+            printf("%s kernel: %zu IR insns, %u GPRs, %d regions, sha256 ", dv[v].name, dp->count, dk.gpr_count, nbssy);
+            for (int i = 0; i < 32; i++) printf("%02x", dk.code_digest[i]);
+            printf("\n");
+            CHECK(sb_hazards(dp, 1) == 0, "%s scoreboard hazards", dv[v].name);
+            CHECK(fixed_hazards(dp, &dk) == 0, "%s encoded fixed RAW hazards", dv[v].name);
+            if (!dv[v].staged) nvdisasm_check(&dk, dp, MUST_DIV, dv[v].name);
+            int dfail = 0, dn = 0;
+            for (int order = 0; order < 2; order++) for (size_t i = 0; i < nl; i++, dn++) {
+                uint64_t L = lims[i], *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
+                if (!want || !got) { CHECK(0, "alloc"); free(want); free(got); break; }
+                g_ws_order = order;
+                int r = sim_sieve(dp, L, OMEGA_GPU_EW_MAX_CTAS, dv[v].staged, got);
+                g_ws_order = -1;
+                if (r != 0 || memcmp(got, want, pr_words64(L) * 8) != 0) {
+                    if (!dfail++) printf("  %s order %d limit %" PRIu64 ": sim rc %d err %d (%s), differs\n", dv[v].name, order, L, r, g_sim_err, g_sim_err >= 200 ? ws_err_name(g_sim_err - 200) : "-");
+                }
+                if (L == 1000000 && order == 0) {
+                    CHECK(count_primes(got, L) == 78498, "%s pi(1e6) = %" PRIu64, dv[v].name, count_primes(got, L));
+                    printf("warp-sim model %s 1e6: warp_issues=%" PRIu64 " lane_util=%.3f splits=%" PRIu64 " max_frags=%d peak_bars=%d bar_split_arrivals=%" PRIu64 "\n", dv[v].name,
+                           g_ws_last.warp_issues, g_ws_last.warp_issues ? (double)g_ws_last.lane_issues / (32.0 * (double)g_ws_last.warp_issues) : 0.0, g_ws_last.splits, g_ws_last.max_frags, g_ws_last.peak_bars, g_ws_last.bar_split_arrivals);
+                    CHECK(g_ws_last.bar_split_arrivals == 0, "%s reaches BAR.SYNC as a whole warp", dv[v].name);
+                }
+                free(want); free(got);
+            }
+            static const uint32_t budgets[] = { 1, 2, 128, 256 };
+            for (size_t b = 0; b < sizeof budgets / sizeof budgets[0]; b++) {
+                uint64_t edge = 64ull * budgets[b] * OMEGA_GPU_EW_THREADS;
+                const uint64_t ls[] = { edge - 1, edge, edge + 1 };
+                for (size_t i = 0; i < 3; i++, dn++) {
+                    uint64_t L = ls[i], *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
+                    if (!want || !got) { CHECK(0, "alloc"); free(want); free(got); break; }
+                    g_ws_order = (int)(i & 1);
+                    int r = sim_sieve(dp, L, budgets[b], dv[v].staged, got);
+                    g_ws_order = -1;
+                    if (r != 0 || memcmp(got, want, pr_words64(L) * 8) != 0) { if (!dfail++) printf("  %s budget %u limit %" PRIu64 ": sim rc %d err %d\n", dv[v].name, budgets[b], L, r, g_sim_err); }
+                    free(want); free(got);
+                }
+            }
+            CHECK(dfail == 0, "%s differs from the oracle in %d of %d warp-sim cases", dv[v].name, dfail, dn);
+            printf("%s warp simulator: %d cases (both orders), %d differ\n", dv[v].name, dn, dfail);
+            /* mutants: 1 math (caught by the oracle), 2 join dropped and 3 target corrupted (rejected by the simulator) */
+            for (int m = 1; m <= 3; m++) {
+                BlackwellIRProgram *mp2 = calloc(1, sizeof *mp2); OmegaBlackwellKernel mk2; memset(&mk2, 0, sizeof mk2);
+                int mrc = mp2 ? omega_gpu_elementwise_codegen_ir(dv[v].op, m, mp2, &mk2) : -1;
+                CHECK(mrc == OMEGA_GPU_EW_OK && memcmp(mk2.code_digest, dk.code_digest, 32) != 0, "%s mutant %d builds and differs (rc %d)", dv[v].name, m, mrc);
+                if (mrc == OMEGA_GPU_EW_OK) {
+                    uint64_t L = 100000, *want = oracle_bitmap(L), *got = calloc(pr_words64(L) + 1, 8);
+                    g_ws_order = 0;
+                    int r = want && got ? sim_sieve(mp2, L, OMEGA_GPU_EW_MAX_CTAS, dv[v].staged, got) : -1;
+                    g_ws_order = -1;
+                    if (m == 1) CHECK(r == 0 && want && memcmp(got, want, pr_words64(L) * 8) != 0, "%s math mutant not caught at 1e5 (rc %d err %d)", dv[v].name, r, g_sim_err);
+                    else CHECK(r != 0 && g_sim_err >= 200, "%s mutant %d (%s) not rejected by the warp simulator (rc %d err %d)", dv[v].name, m, m == 2 ? "BSYNC dropped" : "BSSY target corrupted", r, g_sim_err);
+                    if (m > 1) printf("%s mutant %d: warp simulator says %s\n", dv[v].name, m, g_sim_err >= 200 ? ws_err_name(g_sim_err - 200) : "nothing");
+                    free(want); free(got); free(mk2.code);
+                }
+                free(mp2);
+            }
+            free(dk.code); free(dp);
+        }
+    }
+
+    /* 7. division model */
     magic_model(1000000);
     if (big) magic_model(10000000);
 
