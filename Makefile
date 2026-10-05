@@ -1643,7 +1643,7 @@ print-c4-requal-bin:
 RX_COMPOSE_GATE_GPU = $(OUT_DIR)/rx_composition_gate_gpu
 RX_COMPOSE_GPU_SRCS = src/omega_blackwell_submit.c src/omega_blackwell_engine.c src/omega_gpu_engine.c src/omega_blackwell_matmul.c \
 	src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c \
-	src/omega_blackwell_realize.c src/omega_vector.c src/omega_validate.c \
+	src/omega_blackwell_realize.c src/omega_vector.c src/omega_validate.c src/omega_gpu_wait.c \
 	$(PHYSICS_DIR)/m16/m16_native.c $(PHYSICS_DIR)/nvrm/nvrm.c
 
 $(RX_COMPOSE_GATE_GPU): $(RX_COMPOSE_DEPS) $(RX_COMPOSE_GPU_SRCS) tests/runtime/rx_composition_gate.c \

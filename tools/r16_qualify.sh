@@ -257,6 +257,11 @@ while IFS='|' read -r name target log pat sil; do
     else
         run_target "$RAW_DIR/$log" "$target"
         LV[$name]=$(verdict "$RC" "$RAW_DIR/$log" "$pat")
+        # A rung whose living part did not run (R11 refuses to start above load 2 and still
+        # exits 0 with "failures 0") is NOT_RUN, never PASS.
+        if [ "${LV[$name]}" = PASS ] && grep -Fq -- "[-] living run not exercised" "$RAW_DIR/$log"; then
+            LV[$name]=NOT_RUN
+        fi
     fi
     echo "    $name: ${LV[$name]}"
 done <<< "$LADDER"

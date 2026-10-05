@@ -79,6 +79,15 @@ out=$(Q R16_RUN_ID=fx 2>&1); rc=$?
 check "good G4/G5 fixtures: those gates PASS" 'echo "$out" | grep -q "G4=PASS" && echo "$out" | grep -q "G5=PASS"'
 check "all-good G4/G5 still exit 3 (G6 has no check)" '[ $rc = 3 ] && echo "$out" | grep -q "G6=NOT_RUN"'
 
+# 6b. R11 that skipped its living run (load > 2) exits 0 with "failures 0": NOT_RUN, never PASS
+printf 'checks 400 failures 0\n' > "$F/r11_aien.log"; echo 0 > "$F/r11_aien.log.rc"
+out=$(Q R16_RUN_ID=fx 2>&1)
+check "R11 rules-only log with living run: PASS" 'echo "$out" | grep -q "^    R11: PASS$"'
+printf '[-] SKIPPED-LOADED: living run not started: load average 15.85 is above 2\n[-] living run not exercised: SKIPPED-LOADED: load average 15.85 is above 2\nchecks 400 failures 0\n' > "$F/r11_aien.log"
+out=$(Q R16_RUN_ID=fx 2>&1)
+check "R11 living run skipped under load: NOT_RUN" 'echo "$out" | grep -q "^    R11: NOT_RUN$"'
+rm -f "$F/r11_aien.log" "$F/r11_aien.log.rc"
+
 
 # 7. G1/G2 from the inventory JSON. A good fixture passes first (so each failure below is
 # caused by the one value changed), then every G1/G2 check is broken on its own.
