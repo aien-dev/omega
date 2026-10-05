@@ -170,7 +170,7 @@ static void test_formatting(void) {
 
     void *st = NULL;
     im->setup(&st, 100);
-    pr_report r = {im, st, 1, 100, 5.0, "timed", 7, 5.25, "OK", NULL};
+    pr_report r = {im, st, 1, 100, 5.0, "timed", 7, 5.25, "COMPLETE", NULL};
     f = open_memstream(&mem, &sz);
     CHECK(pr_write_report(f, &r) == 0, "report write");
     fclose(f);

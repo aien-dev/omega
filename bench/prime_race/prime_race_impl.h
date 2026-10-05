@@ -62,7 +62,7 @@ typedef struct pr_report {
     const char *mode;       /* "timed" | "audit" */
     uint64_t passes;
     double elapsed_s;
-    const char *status;     /* "OK" | "EXEC_FAILED" */
+    const char *status;     /* "COMPLETE" | "EXEC_FAILED" */
     const char *error;      /* NULL when ok */
 } pr_report;
 
