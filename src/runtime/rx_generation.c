@@ -775,6 +775,23 @@ int rx_gen_read_blob(const RxGenStore *store, uint64_t id, const char *name, uin
     return RX_GEN_OK;
 }
 
+/* A bound caller check that refused: an operator stop (R16 G6) is reported as
+ * such, every other refusal is an identity fault. */
+static int caller_refusal(int crc) {
+    return crc == RX_CALLER_ERR_HALTED ? RX_GEN_ERR_HALTED : RX_GEN_ERR_IDENTITY;
+}
+
+/* R16 G6: the durable mark of an operator stop in the store directory. 0 none,
+ * RX_GEN_ERR_HALTED present, RX_GEN_ERR_IO when it cannot be told (refuse). */
+static int halt_marked(const RxGenStore *store) {
+    char p[512];
+    if (snprintf(p, sizeof p, "%s/%s", store->dir, RX_GEN_HALT_MARK) >= (int)sizeof p)
+        return RX_GEN_ERR_IO;
+    struct stat st;
+    if (lstat(p, &st) == 0) return RX_GEN_ERR_HALTED;
+    return errno == ENOENT ? 0 : RX_GEN_ERR_IO;
+}
+
 int rx_gen_bind_authority(RxGenStore *store, RxGenCallerFn caller, void *caller_ctx,
                           RxGenAuthFn auth, void *auth_ctx) {
     if (!store || !caller || !auth) return RX_GEN_ERR_ARG;
@@ -796,8 +813,10 @@ int rx_gen_propose_as(RxGenStore *store, uint32_t proposer, const RxCallerCred *
                       const RxGenDraft *draft, uint64_t *out_id) {
     if (!store || !draft || !out_id) return RX_GEN_ERR_ARG;
     /* R16 C5: the proposer is who the credential says, or nobody. */
-    if (store_bound(store) && store->caller(store->caller_ctx, proposer, cred, RX_CALLER_OP_CHECK) != 0)
-        return RX_GEN_ERR_IDENTITY;
+    if (store_bound(store)) {
+        int crc = store->caller(store->caller_ctx, proposer, cred, RX_CALLER_OP_CHECK);
+        if (crc != 0) return caller_refusal(crc);
+    }
     if (draft->n_objects > RX_GEN_MAX_OBJECTS) return RX_GEN_ERR_ARG;
     if (draft->n_objects && !draft->objects) return RX_GEN_ERR_ARG;
     Candidate *slot = NULL;
@@ -895,8 +914,10 @@ int rx_gen_add_work_as(RxGenStore *store, uint32_t subject, const RxCallerCred *
                        uint64_t candidate, const RxGenWork *work) {
     if (!store || !work) return RX_GEN_ERR_ARG;
     /* R16 C7: on a bound store the caller is who the credential says. */
-    if (store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)
-        return RX_GEN_ERR_IDENTITY;
+    if (store_bound(store)) {
+        int crc = store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK);
+        if (crc != 0) return caller_refusal(crc);
+    }
     Candidate *c = find_cand(store, candidate);
     if (!c) return RX_GEN_ERR_ARG;
     if (c->closing) return RX_GEN_ERR_CLOSING;
@@ -920,8 +941,10 @@ int rx_gen_finish_work(RxGenStore *store, uint64_t candidate, uint64_t work_id) 
 int rx_gen_finish_work_as(RxGenStore *store, uint32_t subject, const RxCallerCred *cred,
                           uint64_t candidate, uint64_t work_id) {
     if (!store) return RX_GEN_ERR_ARG;
-    if (store_bound(store) && store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK) != 0)
-        return RX_GEN_ERR_IDENTITY;
+    if (store_bound(store)) {
+        int crc = store->caller(store->caller_ctx, subject, cred, RX_CALLER_OP_CHECK);
+        if (crc != 0) return caller_refusal(crc);
+    }
     Candidate *c = find_cand(store, candidate);
     if (!c) return RX_GEN_ERR_ARG;
     for (uint32_t i = 0; i < c->n_work; i++) {
@@ -1016,11 +1039,14 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
      * the runtime issued for it; and a bound store validates the promotion
      * right with its own authority, never the caller's callback. */
     if (store_bound(store)) {
-        if (store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_CHECK) != 0)
-            return RX_GEN_ERR_IDENTITY;
+        int crc = store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_CHECK);
+        if (crc != 0) return caller_refusal(crc);
         auth = store->bound_auth;
         auth_ctx = store->bound_auth_ctx;
     }
+    /* R16 G6: no promotion while an operator stop is in force, bound or not. */
+    int halted = halt_marked(store);
+    if (halted != 0) return halted;
     if (!auth) return RX_GEN_ERR_ARG;
     Candidate *c = find_cand(store, request->candidate_id);
     if (!c) return RX_GEN_ERR_ARG;
@@ -1156,12 +1182,17 @@ int rx_gen_promote(RxGenStore *store, const RxPromotionRequest *request, RxGenAu
      * and lock-free: by contract no bind races an in-flight promotion. */
     int recheck = store_bound(store);
     if (recheck) {
-        if (store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_HOLD) != 0) {
-            rc = RX_GEN_ERR_IDENTITY;
+        int crc = store->caller(store->caller_ctx, request->subject, &request->caller, RX_CALLER_OP_HOLD);
+        if (crc != 0) {
+            rc = caller_refusal(crc);
             goto done;
         }
         held = 1;
     }
+    /* R16 G6: a stop taken during the disk writes. A bound store holds the
+     * caller check, so no world stop lands between here and the flip. */
+    rc = halt_marked(store);
+    if (rc != RX_GEN_OK) goto done;
     rc = commit_file(store, active_path, pointer, sizeof pointer, RX_CRASH_DURING_ROOT_FLIP);
     if (rc == RX_GEN_OK) {
         store->phases.flip_ns = monotonic_ns();

@@ -27,7 +27,7 @@
 #define X 40u
 #define Y 2u
 
-enum { SUBJ_SEAT = 3, SUBJ_DEPEND = 4, SUBJ_EXTERNAL = 100, ISSUER = 3 };
+enum { SUBJ_SEAT = 3, SUBJ_DEPEND = 4, SUBJ_OPERATOR = 7, SUBJ_EXTERNAL = 100, ISSUER = 3 };
 
 static int g_checks;
 static int g_fail;
@@ -745,6 +745,52 @@ static void t_slot_renewal(void) {
     env_stop(&e);
 }
 
+/* R16 G6 operator emergency stop (spec/r16-operator-emergency-stop.md) on the
+ * resident seat, with the native AIENOS authority: the seat's result lands
+ * after the stop. It is not published (canonical B and B's window keep the
+ * world's value, the dependent does not run, the claim closes); after resume
+ * the seat runs again and the chain completes with the right values. */
+static void t_emergency_stop(void) {
+    printf("[*] operator emergency stop: a seat result under a stop is refused, resume reruns it\n");
+    Rig r;
+    CHECK(rig_start(&r, 1) == 0, "setup");
+    if (g_fail && r.e.w.n_workers == 0) return;
+    RxCallerCred op;
+    CHECK(rx_world_enroll_caller(&r.e.w, SUBJ_OPERATOR, &op) == RX_OK, "enroll the operator");
+    RxCapRef halt = mint(&r.e, SUBJ_OPERATOR, RX_WORLD_RES_CONTROL, RX_WORLD_RIGHT_HALT);
+    CHECK(halt.cap_id != UINT32_MAX, "the native authority refused the operator halt capability");
+    offer(&r.e.w, RX_ACCEL_BLACKWELL);
+    CHECK(poke(&r, X, Y) > 0, "stimulus");
+    CHECK(wait_seat(&r.e.w, r.seat) == 0, "admitted seat did not reach the claim");
+    CHECK(rx_resident_seat_step(&r.e.w) == 1, "stand-in step");
+    CHECK(window_field(&r.e.w, r.ch.b.id, 0) == X + Y, "B's window does not hold the sum");
+
+    RxHaltStatus h;
+    CHECK(rx_world_emergency_stop(&r.e.w, SUBJ_OPERATOR, &op, halt, 12, &h) == RX_OK && h.halted,
+          "operator stop");
+    CHECK(rx_resident_accept(&r.e.w) == RX_ERR_HALTED, "a seat result was published under the stop");
+    CHECK(field_of(&r.e.w, r.ch.b, 0) == 0, "canonical B changed under the stop");
+    CHECK(window_field(&r.e.w, r.ch.b.id, 0) == 0, "B's window was not re-projected from the world");
+    CHECK(r.e.w.reactions[r.seat].resident_seat == false, "the seat claim stayed open");
+    CHECK(poke(&r, X + 1, Y) == RX_ERR_HALTED, "outside publication under the stop");
+    sleep_ms(50);
+    CHECK(field_of(&r.e.w, r.ch.c, 0) == 0, "the dependent ran under the stop");
+    CHECK(rx_resident_seat_step(&r.e.w) == 0, "a claim was posted under the stop");
+    rx_world_halt_status(&r.e.w, &h);
+    CHECK(h.halted && h.refused >= 2, "stop status (halted %d, refused %llu)", (int)h.halted,
+          (unsigned long long)h.refused);
+
+    CHECK(rx_world_emergency_resume(&r.e.w, SUBJ_OPERATOR, &op, halt, &h) == RX_OK && !h.halted,
+          "operator resume");
+    CHECK(wait_seat(&r.e.w, r.seat) == 0, "the seat did not run again after resume");
+    CHECK(rx_resident_seat_step(&r.e.w) == 1, "stand-in step after resume");
+    CHECK(rx_resident_accept(&r.e.w) == RX_OK, "accept after resume");
+    CHECK(rx_world_wait_quiescent(&r.e.w, 3000) == RX_OK, "dependent did not finish");
+    CHECK(field_of(&r.e.w, r.ch.b, 0) == X + Y, "canonical B after resume");
+    CHECK(field_of(&r.e.w, r.ch.c, 0) == X + Y + 1, "dependent after resume");
+    env_stop(&r.e);
+}
+
 int main(void) {
     signal(SIGPIPE, SIG_IGN);
     t_shape();
@@ -760,6 +806,7 @@ int main(void) {
     t_seat_lost_retry();
     t_seat_lost_final();
     t_slot_renewal();
+    t_emergency_stop();
     printf("checks %d failures %d\n", g_checks, g_fail);
     write_receipt();
     return g_fail ? 1 : 0;

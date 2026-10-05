@@ -99,8 +99,13 @@ typedef enum {
     RX_CRUMB_NOOP,             /* ran, proposed no change: fixed point */
     RX_CRUMB_RETIRE,
     RX_CRUMB_QUARANTINE,       /* an R6 limit stopped this reaction; reason names it */
-    RX_CRUMB_CANCELLED         /* HD-09: ran past its declared deadline; nothing
-                                  published; reason RX_ERR_DEADLINE */
+    RX_CRUMB_CANCELLED,        /* HD-09: ran past its declared deadline; nothing
+                                  published; reason RX_ERR_DEADLINE, or
+                                  RX_ERR_HALTED when an operator stop refused it */
+    /* R16 G6 operator emergency control (spec/r16-operator-emergency-stop.md):
+     * reaction UINT32_MAX, caps[0] the operator's control capability. */
+    RX_CRUMB_OPERATOR_STOP,    /* a stop took effect; reason = the operator's code */
+    RX_CRUMB_OPERATOR_RESUME   /* a stopped world resumed; parent = its stop */
 } RxCrumbKind;
 
 /* Which R6 limit engaged (reason of a QUARANTINE crumb). */
@@ -127,6 +132,8 @@ enum { RX_CONTAIN_BUDGET = 1, RX_CONTAIN_OSCILLATION, RX_CONTAIN_LIVELOCK,
 #define RX_ERR_BINDING     -28   /* a bound field's external reference was refused (COMPOSITION-2) */
 #define RX_ERR_BUSY        -29   /* the reaction still has work pending (rx_world_remove_reaction) */
 #define RX_ERR_DEADLINE    -30   /* the logical tick passed the declared deadline (RX_CRUMB_CANCELLED) */
+#define RX_ERR_HALTED      -31   /* operator emergency stop in force (RX_CRUMB_CANCELLED) */
+#define RX_ERR_IO          -32   /* an operator-stop mark could not be read or retired */
 
 /* Reaction notices carried in the frozen 128-byte descriptor.
  * The older transform request/result values stay in the frozen layout and
@@ -510,6 +517,20 @@ typedef int (*RxAuthValidateFn)(const void *ctx, RxCapRef ref, uint32_t subject,
                                  uint64_t resource, uint32_t rights, RxCapEntry *out);
 typedef int (*RxAuthInspectFn)(const void *ctx, RxCapRef ref, RxCapEntry *out);
 
+/* State of the R16 G6 operator emergency stop (rx_world_halt_status). */
+typedef struct {
+    bool halted;
+    bool restored;          /* this stop was read back from the durable mark */
+    uint64_t seq;           /* stops taken (a restored stop keeps its number) */
+    uint32_t subject;       /* operator of the stop in force or last lifted */
+    RxCapRef cap;           /* the control capability that operator presented */
+    int32_t reason;         /* the operator's reason code */
+    uint64_t crumb;         /* its OPERATOR_STOP crumb (0 if the log was full) */
+    uint64_t t_ns;          /* CLOCK_REALTIME of the stop */
+    int durable;            /* 1 mark on disk; 0 no halt dir; < 0 -errno of the write */
+    uint64_t refused;       /* activations, publications, seat results, creates and retires refused */
+} RxHaltStatus;
+
 /* Durable recorder (M20 Cortex). Called with the world mutex held, once per
  * crumb, after the crumb is in the log; it reads the world and must not call
  * back into it. It cannot veto or fail the commit it records. The one
@@ -641,6 +662,13 @@ typedef struct RxWorld {
     uint64_t caller_generation;      /* last generation issued */
     bool callers_bound;              /* one way: set once, never cleared */
 
+    /* R16 G6 operator emergency stop (spec/r16-operator-emergency-stop.md).
+     * Written under mu and callers_mu together, so either lock reads it.
+     * No worker takes work and nothing publishes while it is set. */
+    bool halted;
+    RxHaltStatus halt;
+    char halt_dir[384];              /* durable mark directory; "" = none */
+
     /* M20 durable recorder (rx_world_set_recorder); at most one. */
     RxRecordFn recorder;
     RxRecordReleaseFn recorder_release;
@@ -771,6 +799,31 @@ int  rx_world_bind_callers(RxWorld *w);
 int  rx_world_revoke_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred);
 int  rx_world_check_caller(RxWorld *w, uint32_t subject, const RxCallerCred *cred);
 int  rx_world_caller_check_fn(void *world, uint32_t subject, const RxCallerCred *cred, int op);
+
+/* ---- R16 G6 operator emergency stop (spec/r16-operator-emergency-stop.md) ----
+ * Authority: the caller credential of `subject` (rx_world_enroll_caller) AND a
+ * capability for `subject` on RX_WORLD_RES_CONTROL carrying RX_WORLD_RIGHT_HALT,
+ * validated by the world's authority. A subject any registered reaction runs
+ * under is refused: no reaction can stop or resume the world it runs in.
+ * Stop: no worker takes work, a computed activation is refused at its commit
+ * (CANCELLED, RX_ERR_HALTED) and re-run on resume, outside publications and
+ * seat results are refused, object create and retire are refused, and the
+ * caller check refuses so a bound generation store neither proposes nor
+ * promotes. A refused activation does not count toward the episode budget. Work already committing
+ * finishes first (the stop waits for the world lock). A durable mark is
+ * written when a halt directory is set; the stop takes effect even if that
+ * write fails (`durable` < 0 says so). Never call with mu held. */
+#define RX_WORLD_RES_CONTROL  0x906ull   /* the world's control resource */
+#define RX_WORLD_RIGHT_HALT   RX_RIGHT_EPOCH /* the right that may void every
+                                           capability may also pause the world */
+#define RX_HALT_ALREADY       1   /* stop: already stopped, nothing changed */
+#define RX_HALT_NOT_STOPPED   2   /* resume: not stopped, nothing changed */
+int  rx_world_set_halt_dir(RxWorld *w, const char *dir);
+int  rx_world_emergency_stop(RxWorld *w, uint32_t subject, const RxCallerCred *cred,
+                             RxCapRef cap, int32_t reason, RxHaltStatus *out);
+int  rx_world_emergency_resume(RxWorld *w, uint32_t subject, const RxCallerCred *cred,
+                               RxCapRef cap, RxHaltStatus *out);
+void rx_world_halt_status(RxWorld *w, RxHaltStatus *out);
 
 /* A stimulus from outside the organism (sensor, human input). Requires a
  * capability for (external_subject, object resource, WRITE). Returns the

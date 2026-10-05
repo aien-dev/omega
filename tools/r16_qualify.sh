@@ -343,6 +343,14 @@ if [ "${LV[M19]}" = PASS ]; then
         LV[M19]=FAIL
     fi
 fi
+# R16 G6 operator emergency stop runtime (spec/r16-operator-emergency-stop.md): host test
+# plus the guard mutants. PASS needs exit 0 and both pass lines.
+run_target "$RAW_DIR/rx_emergency.log" test-rx-emergency
+LV[RX_EMERGENCY]=$(verdict "$RC" "$RAW_DIR/rx_emergency.log" "RX_EMERGENCY_MUTANTS: PASS")
+if [ "${LV[RX_EMERGENCY]}" = PASS ] && ! grep -Fq -- "RX_EMERGENCY_STOP: PASS" "$RAW_DIR/rx_emergency.log"; then
+    LV[RX_EMERGENCY]=FAIL
+fi
+TG[RX_EMERGENCY]=test-rx-emergency; LOGF[RX_EMERGENCY]="$RAW_DIR/rx_emergency.log"
 # g6_test <name>: status of one exercising test; a skipped or unexercised log is NOT_RUN.
 g6_test() {
     local s=${LV[$1]:-NOT_RUN}
@@ -360,7 +368,7 @@ r9_crash_recovery_passing|src/runtime/rx_generation.c:rx_gen_recover:f|R9|PROXY:
 r10_verifier_passing|src/omega_verify.c:omega_verify_v0_structural:f|R10|PROXY: omega_verify_v0_structural is the verifier R10 reaches through rx_omega.c; R10 pass in this run is the evidence.
 r12_seat_loss_handling_passing|src/runtime/rx_world.c:rx_resident_seat_lost:f|R12_host,R12_silicon|rx_resident_seat_lost is the seat-loss handler (spec/r12-resident-seat.md, Seat loss). R12 host and silicon exercise it; rx_gpu_seat_kill is only the test hook and is not counted here.
 r14_recovery_paths_passing|src/runtime/rx_living.c:fn_restore:f|R14_host,R14_silicon|PROXY: fn_restore (generation.restore reaction) is one R14 recovery path chosen here; R14 host and silicon exercise the recovery runs.
-operator_emergency_controls_passing||R12_silicon|MISSING_IMPLEMENTATION: the spec and brief only list operator emergency controls (docs/r16-operator-brief.md:245) and name no implementation. A search of omega, sovereign-core, aegis-runtime, aienos and physics found none with a test (aegis-runtime EmergencyStop is an unused enum variant). rx_gpu_seat_kill is a test hook, not an operator control, and is not a proxy PASS.
+operator_emergency_controls_passing|src/runtime/rx_world.c:rx_world_emergency_stop:f;src/runtime/rx_world.c:rx_world_emergency_resume:f;src/runtime/rx_generation.c:rx_gen_promote:f;tests/runtime/rx_r13_living.c:rx_world_set_halt_dir:t|RX_EMERGENCY,R12_host|MISSING_IMPLEMENTATION: the runtime control exists (spec/r16-operator-emergency-stop.md: rx_world_emergency_stop / _resume; authority = enrolled caller credential plus an RX_WORLD_RES_CONTROL capability with the privileged RX_RIGHT_EPOCH right, never a reaction subject; a durable sealed OPERATOR_HALT mark that the generation store obeys and a restarted world restores). RX_EMERGENCY (host, real caproot: refusals, in-flight and racing stops, store under a stop, restart, resume, nine guard mutants) and R12_host t_emergency_stop (resident seat stand-in, native AIENOS authority) exercise it. Missing: the production R13 program does not wire it (no rx_world_set_halt_dir, no operator entry point), so no operator can reach it on the candidate; no silicon run exercises a stop.
 benchmark_reference_paths_seq_passing|src/runtime/rx_seq_reference.c:rx_seq_pulse:f|R15_parity_host,R15_parity_silicon|Spec line 183 names rx_seq_reference as class D reference oracle. R15 parity host and silicon compare the reaction path with it.'
 declare -A G6S
 G6LIST=""; G6ALL=""; G6MISSING=0

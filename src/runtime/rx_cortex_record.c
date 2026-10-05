@@ -64,6 +64,9 @@ static uint64_t subject_in(const CortexLink *l, const RxObjRef *ref) {
 
 /* One crumb into one link. Called with the world mutex held. */
 static void record_link(CortexLink *l, const RxWorld *w, const RxCrumb *k) {
+    /* An operator stop or resume (R16 G6) is about no World object and has no
+     * Cortex kind; its evidence is the crumb log and the durable halt mark. */
+    if (k->kind == RX_CRUMB_OPERATOR_STOP || k->kind == RX_CRUMB_OPERATOR_RESUME) return;
     const RxObjRef *ref = k->n_outputs ? &k->outputs[0].obj
                         : k->n_inputs ? &k->inputs[0].obj : NULL;
     uint64_t subject = subject_in(l, ref);

@@ -456,6 +456,25 @@ $(RX_R12_TEST): $(RX_R12_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 test-r12: $(RX_R12_TEST)
 	./$(RX_R12_TEST)
 
+# R16 G6 operator emergency stop (spec/r16-operator-emergency-stop.md). Host only,
+# real capability root: authority refusals, in-flight and racing stops, the
+# generation store under a stop, the durable mark across a restart, and resume.
+# The mutant script then removes each guard in turn from a temporary copy and
+# requires the test to fail against every one. The resident-seat case lives in
+# test-r12 (t_emergency_stop, native AIENOS authority).
+RX_EMERGENCY_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_generation.c src/sha256.c tests/runtime/rx_emergency.c
+RX_EMERGENCY_TEST = $(OUT_DIR)/rx_emergency_test
+
+$(RX_EMERGENCY_TEST): $(RX_EMERGENCY_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
+	src/runtime/rx_generation.h src/runtime/rx_caller.h | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_EMERGENCY_SRCS) -lm
+
+.PHONY: test-rx-emergency
+test-rx-emergency: $(RX_EMERGENCY_TEST)
+	./$(RX_EMERGENCY_TEST)
+	CC="$(CC)" bash tests/runtime/rx_emergency_mutants.sh
+
 # R10: Omega as a resident realization faculty. Omega's native AArch64 matvec
 # realizations become ready from cost evidence, are verified in a sandbox,
 # measured, and recorded; production picks the record up. AArch64 hosts only.

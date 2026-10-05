@@ -224,6 +224,8 @@ g6_good_logs() {
     g6log r7_native.log "native authority matched the linux oracle"
     g6log r12_host.log "checks 40 failures 0"
     g6log r12_silicon.log "checks 40 failures 0 silicon 1"
+    g6log rx_emergency.log "RX_EMERGENCY_STOP: PASS (0 failures; host CPU, real caproot authority)
+RX_EMERGENCY_MUTANTS: PASS"
     g6log r13_host.log "R13 gate: R13_LIVING_SYSTEM=HOST_PASS_NON_SILICON"
     g6log r14_host.log "R14 gate: R14_LIVING_RECOVERY=HOST_PASS_NON_SILICON"
     g6log r14_silicon.log "R14 gate: R14_LIVING_RECOVERY=PASS"
@@ -375,6 +377,20 @@ check "G6 receipt is valid JSON (jq)" 'jq -e . "$R" >/dev/null'
 check "G6 receipt: twelve items, twelve different basis texts" '[ "$(jq "[.g6_items[].basis] | unique | length" "$R")" = 12 ] && [ "$(jq ".g6_items | length" "$R")" = 12 ]'
 check "G6 receipt: proxy mappings say PROXY, emergency item says MISSING_IMPLEMENTATION" '[ "$(jq "[.g6_items[] | select(.basis | startswith(\"PROXY\"))] | length" "$R")" -ge 5 ] && jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .basis | startswith(\"MISSING_IMPLEMENTATION\")" "$R" >/dev/null'
 check "G6 receipt: seat kill hook is not an item symbol" '! jq -e ".g6_items[].implementation[] | select(.symbol==\"rx_gpu_seat_kill\")" "$R" >/dev/null'
+check "G6 emergency item: runtime symbols defined, production wiring absent, RX_EMERGENCY cited" 'jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | (.implementation[] | select(.symbol==\"rx_world_emergency_stop\") | .defined == true) and (.implementation[] | select(.symbol==\"rx_world_set_halt_dir\") | .defined == false) and (.tests[] | select(.name==\"RX_EMERGENCY\") | .status == \"PASS\" and .target == \"test-rx-emergency\")" "$R" >/dev/null'
+g6log rx_emergency.log "RX_EMERGENCY_STOP: PASS (0 failures; host CPU, real caproot authority)"
+out=$(G6Q)
+check "G6 emergency test without the mutant pass line: test FAIL in the receipt, item still MISSING_IMPLEMENTATION, G6 never PASS" '! echo "$out" | grep -q "G6=PASS" && [ "$(g6_item operator_emergency_controls_passing)" = MISSING_IMPLEMENTATION ] && jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .tests[] | select(.name==\"RX_EMERGENCY\") | .status == \"FAIL\"" "$R" >/dev/null'
+g6log rx_emergency.log "RX_EMERGENCY_MUTANTS: PASS"
+out=$(G6Q)
+check "G6 emergency test without the stop pass line: test FAIL in the receipt" 'jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .tests[] | select(.name==\"RX_EMERGENCY\") | .status == \"FAIL\"" "$R" >/dev/null'
+g6log rx_emergency.log "RX_EMERGENCY_STOP: PASS (0 failures; host CPU, real caproot authority)
+RX_EMERGENCY_MUTANTS: PASS" 1
+out=$(G6Q)
+check "G6 emergency test exit 1 with both pass lines: test FAIL in the receipt" 'jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .tests[] | select(.name==\"RX_EMERGENCY\") | .status == \"FAIL\"" "$R" >/dev/null'
+g6log rx_emergency.log "RX_EMERGENCY_STOP: PASS (0 failures; host CPU, real caproot authority)
+RX_EMERGENCY_MUTANTS: PASS"
+out=$(G6Q)
 rm -rf "$G"
 
 # 9. the script holds no literal for observed fields and does not touch tracked evidence
