@@ -18,6 +18,7 @@ campaign: every fix below is harness, test or tool code, so no CAND-2 exists and
 | `CAND1-WINDOW-20261005T1252Z` | quiet window 1: R11 living, R15 silicon acceptance, attention timing x3 | omega 80ca5d4 (map-only descendant of cb06d08) | yes, quietlock hold from 12:52:56Z | qualifying for attention timing only |
 | `CAND1-WINDOW2-20261005T1259Z` | quiet window 2: R11 living, R15 silicon acceptance | omega 81efb09 = cb06d08 plus the omega #286 harness fixes | yes, quietlock hold from 12:59Z | qualifying for R11 and R15 (R15 declared binding before its result, 13:03Z) |
 | `CAND1-PATH2-2eec75b` | second-path build of every CAND-1 executable, plus a control build of omegatool | CAND-1 commits, checked out under a different directory | host build | path independence |
+| `CAND1-RECON-2eec75b` | clean reconstruction: fresh `git clone` of all four repos from GitHub at the CAND-1 commits, fresh CARGO_HOME filled by `cargo fetch --locked`, then the same double build and recipe (`cand1_recon_build.sh`, `run_recon.sh`) | CAND-1 commits | host build, 2026\-10\-05T13\:56\:19Z to 2026-10-05T13:58:43Z | reconstruction |
 | `DIAG-G15-SEQ30-20261005T1339Z` | 30 R15 SEQ trials with the CAND-1 R15 executables, seat liveness only | omega 81efb09 | yes, 20 min hold, but see contamination note | DIAGNOSTIC, never qualifying |
 
 ## Claim to artifact
@@ -32,6 +33,7 @@ campaign: every fix below is harness, test or tool code, so no CAND-2 exists and
 | Source equivalence of 81efb09 and cb06d08 | `git diff --quiet cb06d08 81efb09 -- src physics.lock aienos.lock` (branch `cand2/cand1-harness-overlay`) | exit 0, also checked by the window-2 guard before each step (`00-identity`) | YES |
 | G9 and G16 instrument absent | `CAND1-WINDOW2-20261005T1259Z/R15-silicon/raw/machine-state.ndjson` | `spbm_uj` is -1 on every line (energy reader not loaded) | YES |
 | Path independence: 8 of 9 SAME, omegatool DIFFERENT | `CAND1-PATH2-2eec75b/compare.txt`, `summary.txt`, `SHA256SUMS` | `omega-runtime orig=f96bdb7c... path2=47816667...`; all others SAME | YES |
+| Clean reconstruction from GitHub: 8 of 9 SAME, omegatool DIFFERENT for the same reason | `CAND1-RECON-2eec75b/compare.txt`, `summary.txt` (VERDICT PASS: each item built twice identically; zero-cuda PASS; no registry or home paths in aien-cli) | `omega-runtime orig=f96bdb7c... recon=b431836e...` (a third physics path gives a third digest, as expected); the other 8 equal the CAND-1 digests | YES |
 | omegatool difference is the embedded physics path | `CAND1-PATH2-2eec75b/control/{command.txt,digest.txt,cmp-ranges.txt}` | control: second-path omega checkout, physics path set to the original, digest f96bdb7c... = CAND-1 | YES |
 | R11 test binary differs between windows | `00-identity/executables.sha256` (c9f3c5df... vs 8090d108...) | expected: omega #286 changed `tests/runtime/rx_r11_aien.c` (test code, not a candidate executable) | YES |
 
