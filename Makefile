@@ -832,6 +832,14 @@ test-r15-preflight:
 	sh tests/r15_preflight_test.sh
 	sh tests/r15_energy_preflight_test.sh
 
+# G15 diagnostics: sampler lateness / not-live-run record, its reducer report,
+# and the readable-kernel-log Xid scan. Host-only, no chip.
+.PHONY: test-r15-g15-diag
+test-r15-g15-diag: $(R15_REDUCE) | $(OUT_DIR)
+	$(CC) -std=c11 -Wall -Wextra -Werror -fsanitize=address,undefined -Itests/runtime -o $(OUT_DIR)/r15_seat_diag_test tests/runtime/r15_seat_diag_test.c
+	$(OUT_DIR)/r15_seat_diag_test
+	R15_REDUCE=$(R15_REDUCE) sh tests/r15_g15_diag_test.sh
+
 # R16-G2 code-search gate (spec/r16-orchestrator-retirement.md). Host-only C tool,
 # seconds, no network. Scans the five repos (paths from R16_REPO_OMEGA,
 # R16_REPO_SOVEREIGN_CORE, R16_REPO_AEGIS_RUNTIME, R16_REPO_AIENOS,

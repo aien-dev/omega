@@ -10,7 +10,8 @@
 #                                               reader gives valid samples, 5 if not
 #   tools/r15_machine_state.sh start <out>      begin 1 s sampling
 #   tools/r15_machine_state.sh mark <out> <text>
-#   tools/r15_machine_state.sh stop <out>       end sampling, write summary
+#   tools/r15_machine_state.sh stop <out>       end sampling, write summary  (+ kernel-xid.txt)
+#   tools/r15_machine_state.sh xid-scan <since> <until>  Xid lines from the kernel log
 #
 # The operating system's reported frequency does not show the sustained X925
 # clock cut seen on 2026-09-28 (scaling_cur_freq stayed at 3.9 GHz while the
@@ -118,6 +119,25 @@ energy_preflight() {
     return 0
 }
 if [ "${1:-}" = energy-preflight ]; then energy_preflight; exit $?; fi
+
+# xid-scan <since-epoch> <until-epoch>: NVRM Xid lines from the kernel log in
+# that span. Window 2 of CAND-1 had a GPU fault (Xid 109, CTX SWITCH TIMEOUT,
+# 08:08:16 CDT) that the runner's xid-count.txt reported as 0, because it used
+# `dmesg`, which this account may not read; the failed read was hidden and
+# counted as "none". journalctl -k is readable here. A failed read is reported
+# as XID_LOG_UNREADABLE (exit 4), never as zero. Observability only.
+# R15_KLOG_FILE=<file> reads a saved log instead of journalctl (tests).
+xid_scan() {
+    local out rc
+    if [ -n "${R15_KLOG_FILE:-}" ]; then out=$(cat "$R15_KLOG_FILE" 2>&1); rc=$?
+    else out=$(journalctl -k --no-pager -o short-iso --since "@$1" --until "@$2" 2>&1); rc=$?; fi
+    if [ $rc -ne 0 ]; then echo "XID_LOG_UNREADABLE: $(printf '%s' "$out" | head -1)"; return 4; fi
+    printf '%s\n' "$out" | grep -i 'NVRM: Xid'
+    echo "xid lines: $(printf '%s\n' "$out" | grep -ci 'NVRM: Xid')"
+    return 0
+}
+if [ "${1:-}" = xid-scan ]; then xid_scan "${2:?since epoch}" "${3:?until epoch}"; exit $?; fi
+
 CMD=${1:?preflight, start, mark or stop}
 OUT=${2:?out dir}
 mkdir -p "$OUT"
@@ -149,6 +169,7 @@ preflight)
     ;;
 start)
     date -u +%FT%TZ > "$OUT/machine-state-start.txt"
+    date +%s > "$OUT/.start.epoch"
     for c in /sys/devices/system/cpu/cpu[0-9]*; do
         echo "${c##*/} $(cat "$c/cpufreq/scaling_governor" 2>/dev/null) max=$(cat "$c/cpufreq/cpuinfo_max_freq" 2>/dev/null)"
     done >> "$OUT/machine-state-start.txt"
@@ -197,6 +218,8 @@ stop)
         sudo -n pkill -f "perf stat -a -A -e cycles -I 1000 -x, -o $OUT/machine-perf.csv" 2>/dev/null
         rm -f "$OUT/$p"
     done
+    # Kernel GPU faults (Xid) during the run, from the readable kernel log.
+    [ -f "$OUT/.start.epoch" ] && xid_scan "$(cat "$OUT/.start.epoch")" "$(date +%s)" > "$OUT/kernel-xid.txt" 2>&1
     # Summary (informative; the raw files are authoritative): per-second
     # cycles of each X925 core (cpus 5-9, 15-19) as GHz. A fully busy second
     # reads as the effective clock; a partly idle second reads lower, so the
