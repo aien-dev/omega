@@ -1,16 +1,15 @@
-# ESTIMATION v5: interim result (D1 fit complete, D2 deferred)
+# ESTIMATION v5: result HELD_OUT_FAIL (selected G1 not calibrated on D2)
 
-**Status: D1 fit complete, D2 deferred.** There is no calibration verdict yet.
-`ESTIMATION_CALIBRATION (v5)` is NOT_RUN until the sealed held-out run D2 is
-collected and scored once. EST-3 stays FAILED (v1 to v3) and v4 stays
-INCONCLUSIVE; EST-4 and EST-5 stay blocked. Drake deferred D2 so that the machine
-is not held for a further 45-minute window while other lanes wait; D2 will be run
-when the machine is idle (resume steps in `~/handoffs/est/RESUME-D2.md`).
+**Verdict: `ESTIMATION_CALIBRATION (v5) = HELD_OUT_FAIL`**, reason "S not calibrated",
+first failing statistic `pit_bin0`. Receipt: `receipt-7f0bb7018d066bc438e7a8a9bf87c0d45615f60be2d029b6ab5194168e3db3d1.json`
+(tool commit `eec20d2`, tool_dirty 0, synthetic_test false). Scored once on
+2026-10-05; the tool refuses a second receipt. EST-3 stays FAILED (v1 to v3), v4 stays
+INCONCLUSIVE, and EST-4 and EST-5 stay blocked.
 
 Protocol: `docs/estimation/protocols/est-v5.md`, sha256
 `275cd5b72570d5182ef73d635e16775026e9d911e818b8e12f8300a701187af5`, frozen at
-`b37e34b`, unchanged. The v4 model (`src/estimation/est_v4.c`) and every v4 rule are
-unchanged; v5 changes window protection only.
+`b37e34b`, unchanged. Params sha256 `6be2b579980f22b48d8224b36dec39b6154cc82c15a85979291672b2c5c2aa3a`,
+unchanged since D1. No threshold, rule, tool or parameter was changed after D2 was collected.
 
 ## D1 collection
 
@@ -27,6 +26,37 @@ FOREIGN lines; `WINDOW` file; both in `SHA256SUMS`). The v3 pre-check on D1 is
 VALID (2682 lines, 0 of 2681 gaps above 1.5 s, marks ok, foreign mean 0.2787 busy
 cores, 0 samples above 3.0, 0 unmeasured). The only informational HIGHCPU lines
 were other sessions' interpreters, not builds or tests.
+
+## D2 collection (sealed held-out)
+
+| Attempt | Seed | Window | Outcome |
+|---|---|---|---|
+| 1 | 0xD2E5C6 | `WINDOW_CLEAN samples=1312 foreign=0`, 11:28:38 to about 12:14Z on 2026-10-05 | used as D2 (`evidence/EST5/raw/20261005T112838Z-est5-heldout-silicon/`) |
+
+Before collection every other session on the machine confirmed it had stopped builds,
+tests, QEMU and GPU work, and both idle `clangd` language servers were stopped (the
+collector refused its first start because of them; that refusal collected nothing).
+Quiet flag held by L10-EST5D2 for the window. Raw files committed with `d2.sha256` in
+`eec20d2` before scoring. Pre-check: VALID (2681 lines, 0 of 2680 gaps above 1.5 s,
+marks ok, foreign mean 0.4138 busy cores, 0 samples above 3.0, 0 unmeasured).
+
+## D2 score (the one binding run, `est5 recorded`)
+
+| Family | D2 one-step mean log score | Calibrated on D2 |
+|---|---|---|
+| G1 lag (selected) | -1.80307 | no (first fail `pit_bin0`) |
+| E0 baseline | -2.10541 | no |
+| F1 baseline | -2.97852 | no |
+
+G1 beat both baselines (same steps, tie allowance 0.01 nats) and passed 22 of its 23
+gated statistics on 2651 scored steps: coverage50 0.533 (band 0.46 to 0.54), coverage80
+0.822 (0.76 to 0.84), coverage95 0.953 (0.93 to 0.97), PIT bins 1 to 9 inside 0.07 to
+0.13, and the quarter, regime, ten-step, bias and lag-1 checks. It failed one:
+**PIT bin 0 = 0.0681, below the lower bound 0.07**. That bin holds steps where the real
+temperature fell in the lowest tenth of the forecast range; too few of them means the
+forecast puts slightly too much weight on low temperatures (a low tail a little too wide, or forecasts a little low; the run does not say which). Under section 7 a single failed gated
+statistic means not calibrated, so the verdict is HELD_OUT_FAIL. The margin is small
+and is recorded here only as description; it does not change the verdict.
 
 ## Phase A (the one binding fit, `est5 fit`, params sha256 `6be2b579980f22b48d8224b36dec39b6154cc82c15a85979291672b2c5c2aa3a`)
 
@@ -72,4 +102,5 @@ workloads, ambient conditions, boards or horizons beyond 1 and 10 s).
 ## Downstream
 
 Nothing downstream may treat any estimator output as calibrated. EST-4 and EST-5
-stay blocked until a v5 PASS on a clean D2.
+stay blocked. v5 is closed: a further attempt needs a new protocol version (v6) with
+its own freeze, fit and sealed held-out run; nothing in v5 may be re-scored or retuned.
