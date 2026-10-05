@@ -11,11 +11,11 @@
  *     a scoreboard; the producer stalls >= 2 and the consumer waits on that SB;
  *   - a fixed-latency result (FADD FMUL FFMA IMAD IADD3 MOV LOP3 SHF) has no
  *     scoreboard: the producer stalls >= 5 before its consumer (we use 6);
- *   - a predicate producer (ISETP) stalls 13 before @P0 use (the codegen default);
+ *   - a predicate producer (ISETP) stalls 14 before @P0 use (NAK SM120 padding);
  *   - stores (STG, STS) set a read barrier so the next instruction cannot overwrite
  *     the source register early.
  * The emitter below serialises: every instruction waits on everything still
- * pending. Slow and safe; speed is a later cut.
+ * pending. A final local pass tightens supported adjacent ALU pairs to 5 cycles.
  */
 #include "omega_gpu_elementwise_api.h"
 #include "omega_blackwell_codegen.h"
@@ -55,7 +55,7 @@ static void emit(Em *e, BlackwellIRInsn in, int kind) {
     uint32_t wait = e->pending;
     switch (kind) {
     case K_FIXED: in.control = CW(6, SB_NONE, SB_NONE, wait); e->pending = 0; break;
-    case K_PRED:  in.control = CW(13, SB_NONE, SB_NONE, wait); e->pending = 0; break;
+    case K_PRED:  in.control = CW(14, SB_NONE, SB_NONE, wait); e->pending = 0; break;
     case K_VAR:   in.control = CW(4, SB_GPR, SB_NONE, wait) | CW_YIELD; e->pending = 1u << SB_GPR; break;
     case K_UVAR:  in.control = CW(4, SB_UGPR, SB_NONE, wait) | CW_YIELD; e->pending = 1u << SB_UGPR; break;
     case K_STORE: in.control = CW(4, SB_NONE, SB_RD, wait) | CW_YIELD; e->pending = 1u << SB_RD; break;
@@ -495,6 +495,45 @@ static int check_loop_invariant(const Em *e) {
 
 #define EW_GPR_BUDGET 64u /* the QMD declares 64 registers, as the matmul launcher does */
 
+/* Mesa NAK sm120_instr_latencies.rs + sm100/reg_raw.csv: ALU/dual-ALU pairs
+ * and FMA/FMA pairs need 4 + 1 cycles; mixed pairs need 5 + 1. CSV rows are
+ * READERS, columns WRITERS (see lat_rs_gen.py), not the reverse. IMAD.WIDE
+ * has operand-specific latencies and is deliberately excluded here.
+ *
+ * Retain at least 5 cycles after every fixed producer. Thus the next reader
+ * uses the pair-specific bound and later readers are >= 9 cycles away (the
+ * next instruction in a tightened pair is itself fixed). No instruction,
+ * branch target, wait, barrier assignment or register allocation is changed.
+ * IADD3's encoder still supplies its historical control word; do not pretend
+ * to schedule that producer here. Its existing 5-cycle delay is unchanged.
+ *
+ * Predicate-to-guard uses NAK paw_latency -> raw(write, None): reader
+ * RedirectedFp64, writer Dualalu = 13, plus SM120's 1 = 14, in emit above.
+ * NVIDIA's public ISA docs are silent about SASS control-word semantics.
+ */
+static int fixed_pair_class(BlackwellIROpcode op) {
+    switch (op) {
+    case BW_IR_MOV_RZ: case BW_IR_MOV_IMM: case BW_IR_IADD3:
+    case BW_IR_LOP3_XOR: case BW_IR_LOP3_LUT:
+    case BW_IR_SHF_R: case BW_IR_SHF_L_U32: return 1;
+    case BW_IR_IMAD: case BW_IR_IMAD_HI_U32:
+    case BW_IR_FADD: case BW_IR_FSUB: case BW_IR_FMUL: case BW_IR_FFMA: return 2;
+    default: return 0;
+    }
+}
+
+static void schedule_fixed_pairs(BlackwellIRProgram *p) {
+    for (size_t i = 0; i + 1 < p->count; i++) {
+        BlackwellIRInsn *a = &p->insns[i];
+        const BlackwellIRInsn *b = &p->insns[i + 1];
+        int cls = fixed_pair_class(a->op);
+        if (!cls || cls != fixed_pair_class(b->op) || a->op == BW_IR_IADD3 ||
+            a->predicate_p0 || b->predicate_p0 || ((a->control >> 9) & 15u) != 6)
+            continue;
+        a->control = (a->control & ~(15u << 9)) | (5u << 9);
+    }
+}
+
 static int build_kernel(OmegaGpuEwOp op, int mutant, OmegaBlackwellKernel *kernel, BlackwellIRProgram *prog_out) {
     BlackwellIRProgram *prog = calloc(1, sizeof *prog);
     if (!prog) return OMEGA_GPU_EW_CODEGEN_FAIL;
@@ -510,6 +549,7 @@ static int build_kernel(OmegaGpuEwOp op, int mutant, OmegaBlackwellKernel *kerne
     case OMEGA_GPU_EW_PRIME_SIEVE_SHARED: gen_prime_sieve(&e, mutant, 1); break;
     default: e.err = -1; break;
     }
+    schedule_fixed_pairs(prog);
     int rc = OMEGA_GPU_EW_CODEGEN_FAIL;
     int ra_rc = (e.err == 0) ? omega_bw_regalloc_solve(prog) : -1;
     int loop_rc = (ra_rc == 0) ? check_loop_invariant(&e) : -1;
