@@ -122,6 +122,15 @@ The warp-simulator model predicts divergent warp issues 2.53M (util .656) and di
 (util .830) against C5 global 2.89M (util .774) at 1e6 (model only, not chip time).
 Correctness was the objective; this section is reported for completeness.
 
+## 7a. Invariant for new GPU code (Drake, 2026-10-05)
+
+Any new lane-divergent code emitted for the Blackwell backend must either
+
+1. wrap the divergent stretch in `region_begin` -> `region_exit` -> `region_join` and pass the host warp simulator (`build/gpu_reconv_test` plus the suite that exercises the kernel), or
+2. show in the kernel comment why every branch is provably warp-uniform (all 32 lanes take the same path), as the C5 sieve mark loop does.
+
+A SHFL or BAR.SYNC that depends on a lane-divergent branch without an enclosing region is a defect, not a style choice: on the chip the dropped-BSYNC mutant returned 466 of 1000 words wrong with no error (evidence/gpu-reconv-308/T1b-*). The emitter refuses the cases it can see (section 3); the simulator catches the rest. Reviewers should ask for one of the two proofs on every PR that adds a predicated branch.
+
 ## 8. What was not changed
 
 Production C5 sieve, branch-free attention, test thresholds, omega main. Divergent kernels are
