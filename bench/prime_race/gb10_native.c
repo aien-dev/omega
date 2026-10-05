@@ -68,10 +68,20 @@ static uint32_t gb_cta_budget(void) {
     return (uint32_t)n;
 }
 
+/* PR_GB10_TABLE: "auto" or unset (shared-memory table when it fits), "global" (never staged);
+ * -1 on any other value. The A/B switch for the staged table (campaign C6). */
+static int gb_table_global(void) {
+    const char *v = getenv("PR_GB10_TABLE");
+    if (!v || strcmp(v, "auto") == 0) return 0;
+    if (strcmp(v, "global") == 0) return 1;
+    return -1;
+}
+
 typedef struct {
     uint64_t limit, odd;
     uint32_t nwords, ctas, budget, stride, lastw, tailinv;
     uint32_t spin_us;       /* marker wait spin window (campaign C4) */
+    int table_global;       /* PR_GB10_TABLE=global: never stage the table (campaign C6) */
     uint32_t root;          /* isqrt(limit) */
     uint32_t nprimes;       /* odd primes in the table of the last pass (sentinel excluded) */
     size_t table_cap;       /* entries, sentinel included */
@@ -133,6 +143,8 @@ static int gb_setup(void **state, uint64_t limit) {
     if (s->budget == 0) { fprintf(stderr, "gb10-native: PR_GB10_CTA_BUDGET must be 1..%u\n", GB_BUDGET_MAX); return -1; }
     s->spin_us = gb_spin_us();
     if (s->spin_us == UINT32_MAX) { fprintf(stderr, "gb10-native: PR_GB10_SPIN_US must be 0..%u\n", OMEGA_GPU_SESSION_MAX_SPIN_US); return -1; }
+    s->table_global = gb_table_global();
+    if (s->table_global < 0) { fprintf(stderr, "gb10-native: PR_GB10_TABLE must be auto or global\n"); return -1; }
     uint32_t blocks = (s->nwords + GB_THREADS - 1) / GB_THREADS;
     s->ctas = blocks == 0 ? 1 : (blocks > s->budget ? s->budget : blocks);
     s->stride = s->ctas * GB_THREADS;
@@ -147,7 +159,7 @@ static int gb_setup(void **state, uint64_t limit) {
     s->table_cap = (size_t)s->root / 2 + 2; /* every odd number <= root, plus the sentinel */
     s->entries = gb_count_odd_primes(s->root) + 1;
     /* campaign C3: stage the table in shared memory whenever it fits the QMD bound */
-    if ((uint64_t)s->entries * 12 <= OMEGA_BW_QMD_MAX_SHARED_BYTES) s->shared_bytes = s->entries * 12;
+    if (!s->table_global && (uint64_t)s->entries * 12 <= OMEGA_BW_QMD_MAX_SHARED_BYTES) s->shared_bytes = s->entries * 12;
     OmegaGpuEwOp op = s->shared_bytes ? OMEGA_GPU_EW_PRIME_SIEVE_SHARED : OMEGA_GPU_EW_PRIME_SIEVE;
 
     if (omega_gpu_elementwise_codegen_ir(op, PR_GB10_MUTANT, NULL, &s->k) != OMEGA_GPU_EW_OK) {
