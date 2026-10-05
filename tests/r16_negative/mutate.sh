@@ -23,7 +23,7 @@ set -u
 [ $# -ge 4 ] || { echo "usage: $0 <cc> <cflags> <aienos-r7-dir> <sources...>" >&2; exit 2; }
 cc=$1; cflags=$2; r7=$3; shift 3
 srcs="$*"
-lib="$r7/native/capability/out/libaienos_capability.a"
+lib=${R16_CAP_LIB:-$r7/native/capability/out/libaienos_capability.a}   # make passes $(AIENOS_CAP_LIB)
 [ -f "$lib" ] || { echo "R16-G4 mutants: missing $lib" >&2; exit 2; }
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/r16-mutants.XXXXXX") || exit 2
 trap 'rm -rf "$tmp"' EXIT INT TERM

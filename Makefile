@@ -360,34 +360,46 @@ test-sem-incremental: $(RX_SEM_TEST)
 	./$(RX_SEM_TEST)
 
 # R7: native AIENOS authority versus the Linux oracle, then the world view.
-# Default: the authority pinned by aienos.lock, extracted with `git archive` from
-# AIENOS_LOCK_REPO (a clone that has the commit) into $(OUT_DIR). An override must point
-# at a tree with native/capability; the build stops if it does not (the old default
-# ../aienos-r9 silently had none on the Spark).
+# The authority source is the FULL commit in aienos.lock, proven by
+# tools/aienos_lock_source.sh from git objects (a directory name, a short SHA or an
+# override is not proof). Default: extracted with `git archive` from a repository holding
+# that commit (AIENOS_LOCK_REPO, or the repository around AIENOS_R7_DIR) into
+# $(OUT_DIR)/aienos-authority/<full lock>. An AIENOS_R7_DIR override is used only after
+# the same proof: every tracked file under the subpaths built from has the locked blob
+# and no unignored extra file sits beside them. The proof runs on every build (phony
+# prerequisite), so a source edited after extraction stops the build.
 AIENOS_LOCK_REPO ?= ../aienos-argus-cap
 AIENOS_LOCK = $(shell head -n 1 aienos.lock)
-AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(shell echo $(AIENOS_LOCK) | cut -c1-7)
+AIENOS_R7_DEFAULT = $(OUT_DIR)/aienos-authority/$(AIENOS_LOCK)
 AIENOS_R7_DIR ?= $(AIENOS_R7_DEFAULT)
-AIENOS_CAP_LIB ?= $(AIENOS_R7_DIR)/native/capability/out/libaienos_capability.a
+AIENOS_CAP_LIB ?= $(OUT_DIR)/aienos-cap/$(AIENOS_LOCK)/libaienos_capability.a
+# $(call aienos_source,<subpaths>): materialize into the default cache, or prove the override.
+aienos_source = if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ]; then \
+		AIENOS_LOCK_REPO="$(AIENOS_LOCK_REPO)" AIENOS_R7_DIR= bash tools/aienos_lock_source.sh materialize "$(AIENOS_R7_DIR)" $(1); \
+	else \
+		AIENOS_LOCK_REPO="$(AIENOS_LOCK_REPO)" AIENOS_R7_DIR="$(AIENOS_R7_DIR)" bash tools/aienos_lock_source.sh verify-dir "$(AIENOS_R7_DIR)" $(1); \
+	fi || { echo "error: the aienos authority source is not the aienos.lock commit $(AIENOS_LOCK) (see above)."; \
+		echo "  pass AIENOS_LOCK_REPO=<an aienos clone holding that commit>, or AIENOS_R7_DIR=<a clean tree of it inside such a clone>;"; \
+		echo "  a modified default cache under $(OUT_DIR)/aienos-authority must be deleted, not reused."; exit 1; }
 RX_R7_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
 	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
 	tests/runtime/rx_r7_native.c
 RX_R7_TEST = $(OUT_DIR)/rx_r7_native_test
 
-$(AIENOS_CAP_LIB):
-	@if [ "$(AIENOS_R7_DIR)" = "$(AIENOS_R7_DEFAULT)" ] && [ ! -d "$(AIENOS_R7_DIR)/native/capability" ]; then \
-		test -n "$(AIENOS_LOCK)" || { echo "aienos.lock is empty"; exit 1; }; \
-		git -C "$(AIENOS_LOCK_REPO)" cat-file -e "$(AIENOS_LOCK)^{commit}" 2>/dev/null || { \
-			echo "error: AIENOS_LOCK_REPO=$(AIENOS_LOCK_REPO) is not an aienos clone with commit $(AIENOS_LOCK) (aienos.lock)."; \
-			echo "  pass AIENOS_LOCK_REPO=<path to an aienos clone that has it>, e.g. make AIENOS_LOCK_REPO=$$HOME/workspace/aienos-argus-cap <target>,"; \
-			echo "  or AIENOS_R7_DIR=<an aienos tree at that commit>."; exit 1; }; \
-		mkdir -p "$(AIENOS_R7_DIR)" && \
-		git -C $(AIENOS_LOCK_REPO) archive $(AIENOS_LOCK) native/capability | tar -x -C "$(AIENOS_R7_DIR)"; \
-	fi
-	@test -f "$(AIENOS_R7_DIR)/native/capability/Makefile" || { \
-		echo "AIENOS_R7_DIR=$(AIENOS_R7_DIR) has no native/capability:"; \
-		echo "  set AIENOS_R7_DIR to an aienos tree at aienos.lock, or AIENOS_LOCK_REPO to a clone with it"; exit 1; }
-	$(MAKE) -C $(AIENOS_R7_DIR)/native/capability
+.PHONY: aienos-authority-capability
+aienos-authority-capability:
+	@$(call aienos_source,native/capability)
+
+# Built out of tree from the proven source into a fresh directory on every build; the
+# library is replaced only when its bytes change (ar is deterministic), so nothing relinks
+# when nothing changed and no stale or planted object is ever reused. The inner make is
+# called by name with MAKEFLAGS cleared: the outer command line (CFLAGS=..., -n, -W)
+# never reaches the authority build, and a dry run (make -n) only prints this recipe.
+$(AIENOS_CAP_LIB): aienos-authority-capability
+	@t=$$(mktemp -d "$${TMPDIR:-/tmp}/aienos-cap.XXXXXX") && \
+	env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL make -s -C $(AIENOS_R7_DIR)/native/capability OUT=$$t $$t/libaienos_capability.a >/dev/null && \
+	mkdir -p $(dir $@) && { cmp -s $$t/libaienos_capability.a $@ || cp $$t/libaienos_capability.a $@; }; \
+	rc=$$?; rm -rf $$t; exit $$rc
 
 # OMEGA_EFFECT_CAP64 (spec/effect-cap64-migration.md): effect objects carry the
 # full 64-bit AIENOS capability generation. Physics-free: the Omega core, the
@@ -395,7 +407,7 @@ $(AIENOS_CAP_LIB):
 # (aienos.lock) used directly. Prints OMEGA_EFFECT_CAP64_{ROUNDTRIP,IDENTITY,
 # STALE_REJECT,AUTHORITY}_PASS gate lines.
 EFFECT_CAP64_CAP_LIB ?= $(AIENOS_CAP_LIB)
-EFFECT_CAP64_CAP_INC ?= $(patsubst %/,%,$(dir $(EFFECT_CAP64_CAP_LIB)))/..
+EFFECT_CAP64_CAP_INC ?= $(AIENOS_R7_DIR)/native/capability
 EFFECT_CAP64_TEST = $(OUT_DIR)/tests-effect/test_effect_cap64
 EFFECT_CAP64_OBJS = $(addprefix $(OUT_DIR)/,sha256.o omega_canonical.o omega_validate.o omega_core.o omega_codec.o)
 
@@ -843,6 +855,12 @@ test-r16-inventory: $(R16_INVENTORY)
 test-r16-qualify-selftest:
 	bash tests/r16_qualify/run.sh
 
+# The aienos.lock source proof (tools/aienos_lock_source.sh) and the authority build rule
+# that uses it: fixture repositories, host only.
+.PHONY: test-aienos-lock-source
+test-aienos-lock-source:
+	bash tests/aienos_lock_source/run.sh
+
 # R16-G3: the authoritative path with the legacy orchestrators unavailable.
 # Link map, shared libraries, embedded names and an exec trace of the R13
 # living system and the R14 recovery run, legacy programs stubbed on PATH.
@@ -899,7 +917,7 @@ test-r16-negative: $(RX_R16_NEGATIVE)
 # "Removing any one guard turns the test red": rebuilds the G4 test against
 # scratch copies with one guard removed at a time; each must FAIL. Minutes.
 test-r16-negative-mutants: $(RX_R16_NEGATIVE)
-	sh tests/r16_negative/mutate.sh "$(CC)" "$(CFLAGS)" "$(AIENOS_R7_DIR)" \
+	R16_CAP_LIB="$(AIENOS_CAP_LIB)" sh tests/r16_negative/mutate.sh "$(CC)" "$(CFLAGS)" "$(AIENOS_R7_DIR)" \
 		$(RX_R15_RIG_SRCS) tests/runtime/rx_r16_negative.c
 
 # R16-G5 API/build surface: legacy modes only under explicit names, the SEQ

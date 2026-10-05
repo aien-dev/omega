@@ -12,8 +12,13 @@
 set -u
 root=$(git rev-parse --show-toplevel)
 out=${1:-"$root/build/c4_mutants.json"}
-auth=$(ls -d "$root"/build/aienos-authority/*/ 2>/dev/null | head -n 1)
-[ -n "$auth" ] || { echo "run 'make test-c4-requal' first (builds the authority library)" >&2; exit 2; }
+# The authority cache for the FULL aienos.lock commit, proven to hold that commit's
+# native/capability (tools/aienos_lock_source.sh); never "the first directory found".
+lock=$(head -n 1 "$root/aienos.lock")
+auth="$root/build/aienos-authority/$lock"
+[ -d "$auth" ] || { echo "run 'make test-c4-requal' first (builds the authority library for $lock)" >&2; exit 2; }
+AIENOS_R7_DIR= bash "$root/tools/aienos_lock_source.sh" verify-dir "$auth" native/capability || {
+    echo "build/aienos-authority/$lock is not the aienos.lock source; delete it and rebuild" >&2; exit 2; }
 phys=${PHYSICS_DIR:-$(cd "$root/../physics" && pwd)}
 
 # M03 retired: cx_open is the single integrity seam; rx_compose no longer re-walks the chain.
@@ -39,8 +44,9 @@ M16~src/runtime/rx_compose.c~s/if (pp \&\& state_ref_promoted(s, pp\[CX_WREC_FIE
 M17~src/runtime/rx_compose.c~s/if (c->cx.n < cnt || (cnt > 0 && (!head || memcmp(head->digest, an + 8, 32) != 0))) {/(void)head; if (0) {/~refuse a Cortex journal cut behind the checkpoint anchor
 '
 # Same copy list as before: the source dirs plus the one authority library.
-copy="src tests tools Makefile mk aienos.lock physics.lock build/aienos-authority/$(basename "$auth")"
-build="nice -n 10 make PHYSICS_DIR=\"$phys\" ${MAKE_ARGS:-} c4-requal-bin"
+copy="src tests tools Makefile mk aienos.lock physics.lock build/aienos-authority/$lock build/aienos-cap/$lock"
+lockrepo=$(AIENOS_R7_DIR= bash "$root/tools/aienos_lock_source.sh" identity | sed -n 's/.*"repo": "\([^"]*\)".*/\1/p')
+build="nice -n 10 make PHYSICS_DIR=\"$phys\" AIENOS_LOCK_REPO=\"$lockrepo\" ${MAKE_ARGS:-} c4-requal-bin"
 test_cmd='./build/rx_c4_requal "$PWD/r.json"'
 
 # The runner prints the per-mutant lines on stderr as before. -e keeps the old
