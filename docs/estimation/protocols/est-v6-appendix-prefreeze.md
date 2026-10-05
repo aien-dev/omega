@@ -169,7 +169,7 @@ Rule SR-1 (implemented in `est6dev plan6`, default rule):
 5. The effective seed (64 bit) is what is passed to `est_load` (it reads it with `strtoull`, `est_load.c:73`), and the
    whole segment list is written into the frozen file.
 
-Required properties (checked by `make test-est6dev`, 35 checks in total, of which the schedule ones are in the block
+Required properties (checked by `make test-est6dev`, 43 checks in total, of which the schedule ones are in the block
 "2b"): the segments of each label sum to exactly 2700 s; every segment is 20 to 120 s except that the last may be
 clipped; each level totals 400 to 900 s; H1 and H2 (and F) have different effective seeds and different segment lists;
 the same declared seed under two labels gives two schedules; the same input gives byte-identical output; a label's
@@ -194,6 +194,8 @@ The balance rule is a property of the schedule only. It does not remove the sect
 matters to calibration, and it does not claim any schedule is representative.
 
 ## 4. Item 2: G1S fit with block cross-validation (REDUCED, not the full item)
+
+(Superseded in part: the full item was done afterwards, section 4b. This section is kept as the record of the reduced check.)
 
 Size assessment of the full item. The protocol's G1S fit is a new model plus the whole fit machinery with
 block CV: a two-piece Student-t discretiser that must equal `est_v4.c` bit for bit at kappa 1.0 (a new
@@ -253,6 +255,121 @@ Reading (PROVEN as numbers, interpretation LIKELY):
   bias) still unexplained by kappa. The main-hypothesis rejection test ("kappa stays at 1.0 and bin 0 stays low") is not
   met cleanly: kappa 0.9 was chosen in 2 of 5 folds and bin 0 rose. A decision on G1S versus a regime-aware remedy
   (v6 section 5 excluded regime-conditioned scale) needs the full item and belongs to the freeze lane.
+
+## 4b. Item 2 completed: full G1S fit with block cross-validation (DEVELOPMENT RESULT)
+
+Everything in this section is a DEVELOPMENT RESULT on v5 D1 (and, separately, v3 D1). It is not a held-out result, it
+changes no v5 file and no v6 protocol text, and v6 stays NOT FROZEN. Raw outputs are committed unedited:
+`docs/estimation/receipts/est-v6-dev/g1sfull-v5d1.txt` and `g1sfull-v3d1.txt`. Command (about 6 minutes each):
+
+```
+est6dev g1sfull --raw <D1>/machine-state.ndjson --marks <D1>/machine-state-marks.txt
+```
+
+What it does, as `est-v6.md` section 5 specifies. Stage 1: the whole G1 grid (dyn 6 x q 9 x lam 7 x nu 7 x c 21) times kappa
+in {0.6, 0.7, 0.8, 0.9, 1.0}: 55566 (dyn, q, lam, nu, c) points, each scored at five kappa values. The lam grid is extended
+downwards by 0.05 as v6 section 5 item 5 says (v5 had 0.1 to 0.9). Folds: the rank of each block (whole load segment, or idle
+stretch between marked segments) modulo 5; the grid is searched on 4 folds and the held-out fold is scored. Selection key: the
+pooled out-of-fold one-step mean log score. Stage 2, per fold on the training folds with that fold's stage 1 frozen:
+(phi, nu_h, c_h, kappa_h) over 5 x 10 x 31 x 5, scored on the ten-step log score. A control with kappa fixed at 1.0 (G1 exactly)
+is fitted under the same folds, grid and rules. The final whole-pool refit is also printed.
+
+Implementation notes and checks (each from `make test-est6dev`).
+- The two-piece Student-t has side masses 1/(1+kappa) and kappa/(1+kappa), scale c on the upper side and c kappa on the lower
+  side, so the density is continuous at the location. `est6dev twopiece-selfcheck` checks, over 5 kappa x 3 nu x 3 scale x
+  3 location, that the bin probabilities sum to 1 (max error 1.1e-14), that the floored CDF has no jump between bins (0) and is
+  monotone, and that the two-piece formula at kappa 1.0 agrees with `est4_fast_logp` to 1.2e-11.
+- At kappa = 1.0 the code path calls the unchanged `est4_fast_logp`, so the control is G1 exactly (bit for bit by construction).
+  The formula check above is therefore only to rounding (1.2e-11), not bit for bit. A bit-for-bit `est_v6.c` library is still OPEN.
+- Whole-pool refit on v5 D1 returns dyn 1, q 10000, lam 0.1, nu 1.25, c 0.70, kappa 1.0 with mean log score -1.962811: the v5 G1
+  selection and score of `receipts/est-v5/params.txt`, now found by a grid that also contains the new lam value and all kappa.
+  The extended lam value 0.05 and kappa below 1 do not win in sample on v5 D1.
+- Same 2652 steps as `est6dev g1pit` (grid line `steps 2652`); a test asserts it.
+
+Out-of-fold result, pooled over the 5 folds (DEVELOPMENT RESULT, v5 D1, n 2652):
+
+| quantity | G1S (kappa free) | control G1 (kappa 1.0) |
+|---|---|---|
+| out-of-fold one-step mean log score | -1.969622 | -1.968162 |
+| kappa chosen in folds 0 to 4 | 1.0, 1.0, 0.9, 0.9, 1.0 | 1.0 in all |
+| pit_bin0 / pit_bin9 | 0.0853 / 0.1199 | 0.0766 / 0.1233 |
+| lower / upper miss 2.5 % | 0.0138 / 0.0340 | 0.0126 / 0.0356 |
+| coverage 50 / 80 / 95 | 0.4943 / 0.7947 / 0.9522 | 0.5003 / 0.8001 / 0.9518 |
+| mean z (mid-PIT) / lag-1 z | 0.022 / -0.021 | 0.047 / -0.024 |
+| ten-step coverage 95 (stage 2 per fold) | 0.9410 | 0.9402 |
+
+Same procedure on v3 D1 (separate development data, n 2651, not pooled with v5 D1):
+
+| quantity | G1S | control G1 |
+|---|---|---|
+| out-of-fold one-step mean log score | -1.593744 | -1.596005 |
+| kappa chosen in folds | 0.9 in all 5 | 1.0 in all |
+| pit_bin0 / pit_bin9 | 0.0929 / 0.1041 | 0.0830 / 0.1190 |
+| lower / upper miss | 0.0179 / 0.0304 | 0.0166 / 0.0344 |
+| ten-step coverage 95 | 0.9551 | 0.9684 |
+
+Readings, each from the numbers above (no tuning to them was done: grids and rules were fixed by the proposal before the run).
+- PROVEN as numbers: G1S is worse than G1 by 0.0015 nats out of fold on v5 D1 and better by 0.0023 nats on v3 D1. Both gaps are
+  far below the 0.01 nat tie rule of v6 section 5 item 3, so that rule keeps G1 on both sets. The log score does not support G1S.
+- PROVEN as numbers: G1S moves bin 0 up (0.0766 to 0.0853 on v5 D1, 0.0830 to 0.0929 on v3 D1, about +0.009 and +0.010) and bin 9 down
+  (0.1233 to 0.1199, and 0.1190 to 0.1041), as hypothesised.
+  This is a calibration-shape effect that costs no log score, not evidence of better forecasting. G2 and G3 were not run here.
+- Inner-band screen of v6 section 5 item 2 (each outcome is in the raw files; the `gate` lines). Read literally, the screen
+  cannot be passed by any model, which is a **defect in the proposal to fix before freeze**: (i) P3 coverage 95 has band
+  [0.93, 0.97] shrunk by 0.02 on both sides, a zero-width band at exactly 0.95; (ii) P4 and P5, if the 0.01 shrink applies to the
+  miss rates, become [0.020, 0.030], which rejects a lower miss of 0.0126 to 0.0179 and an upper miss of 0.030 to 0.036 on every
+  fit here, G1 and G1S alike. If the shrink is read as applying only to P1, P2, P6 and P7: on v5 D1 G1S passes P6 bin 0 (0.0853)
+  and bin 9 (0.1199, margin 0.0001) and G1 fails both (0.0766, 0.1233); on v3 D1 both pass P6 and G1 fails the inner P7 (0.9684
+  against 0.96). So under that reading G1S would pass the screen where G1 does not, on v5 D1, and the 0.01 nat rule applies only
+  among screen passers (v6 section 5 item 3), so G1S would then be selected on v5 D1. That outcome rests on a bin 9 margin of 0.0001.
+- Whether to adopt G1S is therefore OPEN and depends on the freeze lane's reading of the inner-band rule.
+
+### Load-dependent calibration bias (DEVELOPMENT RESULT; v5 D1 and v3 D1, out of fold)
+
+Out-of-fold PIT by declared load level. Block bootstrap within each level (whole blocks, 2000 draws, seed 0xE6B007 + level index),
+standard errors in brackets (few blocks per level, so the standard errors are themselves rough). `m` is the mean of (u - 0.5): zero
+for an unbiased forecaster, negative when outcomes land below the forecast median (forecast too warm), positive when above.
+
+v5 D1:
+
+| level | steps | blocks | G1S bin0 | G1S bin9 | G1S m | G1 bin0 | G1 bin9 | G1 m |
+|---|---|---|---|---|---|---|---|---|
+| idle | 818 | 8 | 0.129 (0.007) | 0.075 | -0.070 (0.008) | 0.115 (0.010) | 0.077 | -0.061 (0.010) |
+| L6 | 739 | 10 | 0.129 (0.009) | 0.109 | -0.027 (0.010) | 0.114 (0.007) | 0.118 | -0.016 (0.009) |
+| L12 | 970 | 14 | 0.026 (0.007) | 0.158 | +0.063 (0.010) | 0.025 (0.007) | 0.159 | +0.065 (0.011) |
+| L18 | 125 | 3 | 0.001 (0.001) | 0.183 | +0.121 (0.016) | 0.000 (0.000) | 0.184 | +0.127 (0.018) |
+
+v3 D1:
+
+| level | steps | blocks | G1S bin0 | G1S bin9 | G1S m | G1 bin0 | G1 bin9 | G1 m |
+|---|---|---|---|---|---|---|---|---|
+| idle | 235 | 4 | 0.160 (0.017) | 0.084 | -0.088 (0.015) | 0.149 (0.020) | 0.089 | -0.070 (0.015) |
+| L6 | 672 | 12 | 0.175 (0.015) | 0.116 | -0.046 (0.015) | 0.158 (0.013) | 0.134 | -0.030 (0.015) |
+| L12 | 1079 | 16 | 0.056 (0.008) | 0.101 | +0.029 (0.008) | 0.049 (0.007) | 0.117 | +0.041 (0.009) |
+| L18 | 665 | 7 | 0.046 (0.005) | 0.105 | +0.033 (0.009) | 0.040 (0.005) | 0.118 | +0.046 (0.010) |
+
+Findings.
+- PROVEN as numbers, on both development sets: the bias is monotone in load. The forecast is too warm when idle (m -0.06 to -0.09)
+  and too cool at L12 and L18 (m +0.03 to +0.13). Idle against L12, in units of the larger of the two bootstrap standard errors:
+  v5 D1 G1S (0.063 + 0.070) / 0.010 is about 13; v3 D1 G1S (0.029 + 0.088) / 0.015 is about 8. Even allowing for rough standard
+  errors, this is not noise. Bin 0 is over-filled at idle and L6 (0.11 to 0.18) and under-filled at L12 and L18 (0.00 to 0.06).
+- PROVEN as numbers: it is not stable in size across runs. L18 bin 0 is 0.001 on v5 D1 (125 steps, 3 blocks) and 0.046 on v3 D1
+  (665 steps, 7 blocks). So per-level shares measured on one run cannot be assumed on the next.
+- PROVEN as numbers: G1S does **not** remove it. It has the same sign at every level and the same order of size as G1. On v5 D1
+  idle m is -0.070 against -0.061 and L12 is +0.063 against +0.065; on v3 D1 it trims the high levels (L12 +0.029 against +0.041,
+  L18 +0.033 against +0.046) and enlarges the low ones (idle -0.088 against -0.070, L6 -0.046 against -0.030). Bin 0 stays
+  above 0.11 at idle and L6 and below 0.06 at L12 and L18 in both. The pooled m of G1S on v5 D1 (-0.0006, G1 +0.0064) is closer to
+  zero only because the opposite per-level biases cancel in the pool.
+- No load covariate is permitted by the proposal (v6 section 5 "Not adopted": regime-conditioned scale and anything that feeds the
+  declared schedule to the estimator), so none was fitted here. The bias is therefore **not resolved** by anything v6 proposes. It
+  is LIKELY a model-structure limit (the filter lags load steps; not tested here) and would need a v7-class remedy or a changed claim.
+- Consequence for the pooled held-out gates (a projection, UNVERIFIED, assuming each level's shares transfer from D1). Weight the
+  per-level bin shares by the level seconds that rule SR-1 gives H1 + H2 (idle 1343, L6 1408, L12 1107, L18 1542 of 5400;
+  weights 0.249, 0.261, 0.205, 0.286). With the v5 D1 per-level numbers the pooled expectation is bin 0 0.0713 (G1S) and 0.0637 (G1),
+  bin 9 0.1318 (G1S) and 0.1350 (G1): bin 9 above 0.13 for both, bin 0 below 0.07 for G1. With the v3 D1 per-level numbers it is bin 0
+  0.110 (G1S) and 0.100 (G1), bin 9 0.102 and 0.115: no gate broken. The two disagree, which is the instability above. The pooled
+  held-out result depends on the realised level mix and on per-level shares nobody can predict from D1, so the balance rule alone
+  does not make the pooled test insensitive to the regime bias.
 
 ## 5. Item 3: operating characteristics of the v6 verdict
 
@@ -316,11 +433,81 @@ Limits of the simulation: the data-generating model is a Gaussian copula with a 
 forecaster; real clustering is partly a regime bias (section 2) that is not noise and not random across replicates;
 P7 is crude; the baseline comparison and the real est_load level structure are not simulated.
 
+## 5b. Item 3 extended: operating characteristics, SIMULATION only (not forecasting performance)
+
+Everything here is SIMULATION. No data file is read (`est6opchar` has no input path), so no held-out file can be touched. The numbers
+describe how the proposed three-way verdict of v6 section 6 behaves on synthetic PIT sequences under the stated assumptions, not how
+any forecaster performs. Raw rows: `docs/estimation/receipts/est-v6-dev/opchar-table2.txt`; command `make est6-opchar-table2`
+(20000 replicates per row, 1000 bootstrap draws, Monte Carlo standard error at most 0.0035 on every rate).
+
+Definitions used below. False accept: the verdict is PASS although the simulated forecaster truly breaks a gated limit. False reject:
+the verdict is not PASS although the forecaster is truly calibrated (reported both as not PASS and as HELD_OUT_FAIL). NOT_ESTABLISHED
+is neither accept nor reject.
+
+Assumptions (explicit, all as in section 5 unless new): two pooled 2700 s runs (n about 5300, P10 met); segments 20 to 120 s with a
+uniformly random level; Gaussian copula with per-segment share w (0.08 and 0.12, the measured design-effect range 3.3 to 4.5) and
+within-segment AR(1) 0.02; ten-step sequence with within-segment AR(1) 0.9; baseline comparison assumed met; lag-1 z, P9 quarters and
+regimes use the point value (this can only increase HELD_OUT_FAIL). New in 5b: case (d), a forecaster whose PIT depends on the
+declared load level, with the per-level shares measured for G1 on v5 D1 (section 2: bin 0 0.116, 0.111, 0.025, 0.000; bin 9 0.077,
+0.114, 0.159, 0.184; lower miss 0.030, 0.010, 0.000, 0.000; upper miss 0.036, 0.017, 0.041, 0.085 for idle, L6, L12, L18) with bins 1
+to 8 sharing the rest equally (ASSUMPTION: per-level middle bins were not tabulated) and random segment levels, so the level mix is
+about equal (the "bin0 0.0760" in the printed header of a case d row is a default that case d does not use).
+
+Results (SIMULATION, two runs unless stated; PASS / NOT_ESTABLISHED / HELD_OUT_FAIL):
+
+| scenario | w | runs | PASS | NOT_EST | HELD_OUT_FAIL |
+|---|---|---|---|---|---|
+| (a) calibrated, replication seed 0xE6A777 | 0.08 | 2 | 0.9931 | 0.0069 | 0.0000 |
+| (a) calibrated | 0.08 | 3 | 0.9988 | 0.0013 | 0.0000 |
+| (b) nominal 95 % covers 92 %, replication | 0.08 | 2 | 0.0017 | 0.5644 | 0.4339 |
+| (b) | 0.08 | 3 | 0.0003 | 0.3752 | 0.6244 |
+| (d) regime-dependent PIT (D1 per-level shares) | 0.08 | 2 | 0.0656 | 0.8536 | 0.0809 |
+| (d) | 0.08 | 3 | 0.0475 | 0.8518 | 0.1007 |
+| (d) | 0.12 | 2 | 0.0726 | 0.8061 | 0.1214 |
+| (d) | 0.12 | 3 | 0.0592 | 0.8327 | 0.1081 |
+
+The replication under another seed agrees with table 5 (a: 0.9931 against 0.9928; b: PASS 0.0017 against 0.0025), so the
+table-5 numbers are not seed luck.
+
+False accept for a forecaster whose true bin 0 is below the 0.07 limit (case c cells, w 0.08; other cells scaled pro rata):
+
+| true bin 0 | runs 2: PASS / NOT_EST / HELD_OUT_FAIL | runs 3: PASS / NOT_EST / HELD_OUT_FAIL |
+|---|---|---|
+| 0.070 (at the limit) | 0.403 / 0.587 / 0.010 | 0.442 / 0.552 / 0.007 |
+| 0.068 | 0.294 / 0.685 / 0.021 | 0.300 / 0.682 / 0.019 |
+| 0.065 | 0.152 / 0.793 / 0.055 | 0.125 / 0.807 / 0.068 |
+| 0.060 | 0.027 / 0.761 / 0.212 | 0.012 / 0.677 / 0.311 |
+| 0.055 | 0.0015 / 0.470 / 0.528 | 0.0004 / 0.282 / 0.718 |
+
+Readings (each from the tables; interpretation labelled).
+- Requirements of v6 section 6 are met by the SIMULATION at w 0.08 and 0.12 with two runs: false reject under (a) is 0.7 % (not PASS) and
+  0 % (HELD_OUT_FAIL) at w 0.08 (table 5: 2.7 % and 0.4 % at w 0.12); pass under (b) is 0.2 %. This is conditional on the assumptions
+  above; w 0.20 (table 5) still fails, and real clustering structure is not a Gaussian copula.
+- False accept is controlled only for shortfalls that are not small: a forecaster 0.005 under the limit (bin 0 0.065) is accepted
+  15 % of the time with two runs and 13 % with three, and one 0.002 under (0.068) 29 to 30 %. This is inherent to a point-value PASS
+  at a hard edge: PASS needs only the point value inside the band, and an edge-sitting forecaster lands on either side by chance.
+  The simulation says nothing that would make the PASS rule safer than a coin flip at the edge, and three runs do not help there.
+- Definite rejection is slow: HELD_OUT_FAIL needs the 99.5 % interval entirely below the edge. A bin 0 of 0.060 is called a definite
+  fail 21 % (two runs) or 31 % (three) of the time, and mostly reported NOT_ESTABLISHED. A 92 % forecaster is a definite fail 43 %
+  (two runs) or 62 % (three) of the time.
+- Regime-biased forecaster (d): it passes only 5 to 7 % of the time, is called a definite fail only 8 to 12 %, and is reported
+  NOT_ESTABLISHED about 81 to 85 % of the time. So a forecaster with the D1 regime bias would very probably be neither accepted nor
+  refuted. LIKELY reason (not decomposed here): several gates (bin 0, bin 9, the P9 regime coverages) each sit near or past an edge at once.
+- Three runs lower false accept at moderately bad cells (0.060: 2.7 % to 1.2 %) and raise definite-fail power (0.21 to 0.31), at the
+  cost of another quiet window of about 45 minutes. They do not help at the edge (0.070: 40 % to 44 %).
+- Limits (INCONCLUSIVE where stated): the data-generating model is a Gaussian copula with a segment effect; the level structure
+  matters (section 4b shows per-level shares are unstable across runs) and is only partly simulated in (d) with one set of D1 shares;
+  P7 is crude; the baseline comparison is not simulated; whether a v6 PASS licenses the section 7 claim at stated operating
+  characteristics is therefore **INCONCLUSIVE** from this simulation alone, since the required table has been produced but the
+  simulation's assumptions have not been shown to hold for the real forecaster.
+
 ## 6. What this appendix does not do
 
-Item 5 is not done (hashes, `est_v6.c`, freeze commit). The full G1S fit (item 2) is not done; the design note is in
-section 4. No v6 text was changed, so the findings above (seed collision, balance rule applied by chaining, regime
-dependence, the G1S inner-band outcome, the weak definite-fail power of the verdict) are for the freeze lane to act on.
+Item 5 is not done (hashes, `est_v6.c`, freeze commit). The full G1S fit (item 2) is now done as a DEVELOPMENT RESULT (section 4b)
+and its load-bias finding is unresolved; the operating-characteristics extension is section 5b (SIMULATION); the schedule defect has
+rule SR-1 (section 3b). `est-v6.md` itself was not changed (it is a PROPOSAL; the freeze text must absorb 3b and the inner-band
+fix of 4b), so the findings of this appendix (regime dependence, the G1S outcome, the weak definite-fail power of the verdict, the
+inner-band definition) are for the freeze lane to act on. The checklist of what is still open is section 8.
 Nothing here uses or concerns held-out data.
 
 ## 7. Reproduction, hashes
@@ -329,9 +516,45 @@ Nothing here uses or concerns held-out data.
 make test-est6dev            # tools tests, D1 and synthetic data only
 make est6dev est6opchar
 make est6-opchar-table       # section 5 table
+make est6-opchar-table2      # section 5b SIMULATION table (20000 replicates per row, a few minutes)
+est6dev plan6 2700 F=0xE6C6D1 H1=0xD6E6C7 H2=0xD6E6C8     # section 3b
+est6dev g1sfull --raw <D1>/machine-state.ndjson --marks <D1>/machine-state-marks.txt   # section 4b (about 6 minutes)
 ```
 - `docs/estimation/protocols/est-v6.md` sha256 `4fee44c729130cb37e5588b105077f4d8c17ea8c160dbfb310fdec720ff6316f` (commit e9c2829).
-- `tools/estimation/est6dev.c` sha256 `c020ee872be90f7cdd62a56a8bd0c8f09e20f3ae4cdd659ccbb2b18b90e81c4d`;
+- Sections 1 to 5 hashes (tools as merged in #293): `tools/estimation/est6dev.c` sha256 `c020ee872be90f7cdd62a56a8bd0c8f09e20f3ae4cdd659ccbb2b18b90e81c4d`;
   `tools/estimation/est6opchar.c` sha256 `bab7a55043065ed689478f96420de6a698763c4eb4589881438562aff126f0c1`.
 - `est5` rerun: tool commit e9c2829, protocol sha256 `275cd5b72570d5182ef73d635e16775026e9d911e818b8e12f8300a701187af5`;
   params.txt of the rerun differs from the committed one only by the tool_commit line.
+- Sections 3b, 4b, 5b tools (this change): `tools/estimation/est6dev.c` sha256 `3b18c7d211bf7d34b9ea18b1f78adf42d7292569d46f86d42c44db9d962a6230` (adds `plan6`, `g1sfull`, `twopiece-selfcheck`;
+  `g1sfull` was run from a binary built from exactly this file, sha256 of the binary `48251debc1680320ce2e79b933dfd04caba1881128168fa9c8592974c578a25b`),
+  `est6opchar.c` sha256 `3baf2cc2011e5a17726260ea89f7b241ad69ac263a276e8a5893279b267d8fbc` (adds case d), `est6opchar_table2.sh` sha256 `09ff006d69658a56f735132d25f00295bcb3f8d51221facbf52f2cc90658c823`. Estimation suites on this change (counts in the PR):
+  `make test-est6dev` 43 checks, PASS.
+- Raw outputs: `docs/estimation/receipts/est-v6-dev/g1sfull-v5d1.txt` sha256 `d92b729dd439b064fa5a05438a26e1cae577d96f50b765eb4e5f174b4327ae23`,
+  `g1sfull-v3d1.txt` sha256 `ef258d6d05c86902c6007594a3547ae2c6c427b4a3461b0969119567cf970529`,
+  `opchar-table2.txt` sha256 `6749dc0eb14f9f79d618d9cce1377d75bd4f444dd026eb8511a13f04eb58aaef`.
+
+## 8. Freeze-readiness checklist (v6 NOT FROZEN)
+
+Status as of the commit that adds this section. DONE means the item exists and was checked as stated; OPEN means it does not exist
+or is not decided. Nothing below is a freeze.
+
+| # | item | status | evidence |
+|---|---|---|---|
+| 1 | Model family decided (G1S adopted or dropped) | OPEN | development fit done (section 4b): G1S not preferred by the 0.01 nat rule on v5 D1 (-0.0015) or v3 D1 (+0.0023); outcome of the inner-band screen depends on how the ambiguous shrink rule is read (4b); load bias unresolved |
+| 2 | Estimator library for the model (`est_v6.c`) with kappa 1.0 bit for bit equal to `est_v4.c` | OPEN | no `src/estimation/est_v6.c`; `est6dev g1sfull` holds a development two-piece (`twopiece-selfcheck` PASS; equals `est4_fast_logp` to 1.2e-11; kappa 1.0 path calls it unchanged) |
+| 3 | Protocol text (`est-v6.md`) corrected and frozen | OPEN | proposal sha256 in section 7; known text defects to fix: seed rule (section 3 and 3b), inner band of P3 is zero width and the shrink of P4/P5 is ambiguous (4b), schedule lists |
+| 4 | Parameter fit rules defined and implemented in development | DONE (development) | `est6dev g1sfull`: 55566 grid points, 5 kappa, 5-fold block CV, stage 2 with kappa_h, control; final refit equals the v5 G1 (-1.962811); raw outputs in `receipts/est-v6-dev/`. The final v6 parameters need v6 F data, which does not exist |
+| 5 | Parameter fit on v6 F and committed | OPEN | F not collected (correctly: collection only after freeze) |
+| 6 | Schedule identity rule (H1 differs from H2, deterministic, balanced) | DONE | rule SR-1, `est6dev plan6`, `make test-est6dev` (old rule collision reproduced, SR-1 distinct, determinism, balance, structure); PR #297 |
+| 7 | Schedule identities written into the frozen file (F, H1, H2 segment lists, effective seeds) | OPEN | section 3b lists the SR-1 output for the declared seeds; adoption into the frozen file is a freeze edit |
+| 8 | Tool identity: `est6` binary, `tool_commit`, source and protocol hashes, binding modes | OPEN | only development tools `est6dev` and `est6opchar` exist; they have no binding mode and no receipt writer; no `mk/estimation_v6.mk` |
+| 9 | Scoring implementation: randomised PIT with a declared generator seed, bin and miss-rate gates, 99.5 % block bootstrap, three-way verdict, P1 to P10, baseline comparison | OPEN | `est6dev g1pit` computes descriptive statistics and a block bootstrap; `est6opchar` simulates the verdict logic on synthetic PIT; neither is the scorer |
+| 10 | Operating-characteristics table required by v6 section 6 | DONE (as SIMULATION) | section 5 and 5b; false reject under (a) 0.7 % and pass under (b) 0.2 % at w 0.08, two runs; but conditional on assumptions (5b), so claim adequacy INCONCLUSIVE |
+| 11 | Load-dependent calibration bias remedy | OPEN | quantified, not removed by G1S (4b); no remedy within the proposal |
+| 12 | Collector and window protocol changes (section 4: /proc/stat foreign-CPU count, WINDOW_VOID, 300 s idle start) | OPEN | no `est6_collect.sh` |
+| 13 | Data identities: D1 hashes recorded; v6 F, H1, H2 hash files | DONE (D1) / OPEN (F, H1, H2) | section 1 hashes; v6 raw data does not exist yet |
+| 14 | D2 never read; refusal guard and its test | DONE | `forbidden_path` and the two SHA backstops in `est6dev.c`; tests `1`, `1b`, `g1sfull` refusals in `test_est6dev.sh`; `strace -f -e trace=openat` of a `g1sfull` run (stride 6) opened only the v5 D1 raw, marks and SHA256SUMS files and 0 paths containing the D2 date tag or "heldout"; the full runs and v3 D1 runs were given D1 and v3 D1 paths only and were not traced (UNVERIFIED beyond that) |
+| 15 | Freeze commit, hashes recorded, receipts directory | OPEN | none |
+
+Not done by this appendix: items 1, 2, 3, 5, 7, 8, 9, 11, 12, 13 (F, H1, H2), 15.
+

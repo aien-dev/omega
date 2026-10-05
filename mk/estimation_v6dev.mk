@@ -6,10 +6,11 @@
 # est6opchar         operating-characteristics simulation (reads no data file)
 # test-est6dev       tests for both (D1 development data and synthetic only; held-out refusals)
 # est6-opchar-table  prints the appendix operating-characteristics table (about 3 minutes)
+# est6-opchar-table2 prints the appendix section 5b SIMULATION table (regime case, replication, false accept)
 ifndef ESTIMATION_V6DEV_MK
 ESTIMATION_V6DEV_MK := 1
 include mk/estimation_v4.mk
-.PHONY: est6dev est6opchar test-est6dev est6-opchar-table
+.PHONY: est6dev est6opchar test-est6dev est6-opchar-table est6-opchar-table2
 ESTV6D_DIR = $(OUT_DIR)/estimation-v6dev
 ESTV6D_SRCS = tools/estimation/est6dev.c tools/estimation/est3c_common.c tools/estimation/est_replay.c \
 	src/estimation/est_v4.c src/estimation/est_pred.c src/estimation/est_mix.c $(EST_KF_SRCS)
@@ -26,4 +27,6 @@ test-est6dev: $(ESTV6D_DIR)/est6dev $(ESTV6D_DIR)/est6opchar
 	sh tools/estimation/test_est6dev.sh $(ESTV6D_DIR)/est6dev $(ESTV6D_DIR)/est6opchar
 est6-opchar-table: $(ESTV6D_DIR)/est6opchar
 	sh tools/estimation/est6opchar_table.sh $(ESTV6D_DIR)/est6opchar 4000
+est6-opchar-table2: $(ESTV6D_DIR)/est6opchar
+	sh tools/estimation/est6opchar_table2.sh $(ESTV6D_DIR)/est6opchar 20000
 endif

@@ -1,0 +1,69 @@
+input raw_sha256 7da6e4950c333bae65e5663c32c9cfe9de6657f0ff88c55e9b9e767152634465 marks_sha256 6cd7fda33d877a07e6fd21423f0ebc425c616c4d029f3575165ed6e32a02f748
+label DEVELOPMENT RESULT (v5 D1 only; not a held-out result; v6 NOT FROZEN)
+grid dyn 6 q 9 lam 7 nu 7 c 21 kappa 5 stride 1 points 55566 filter_failed 0 steps 2652 folds 5
+== G1S kappa free in {0.6..1.0} selection by 5-fold block CV, then stage 2 (ten-step) per fold
+fold 0 steps 470 stage1 dyn 1 q 10000 lam 0.1 nu 1.25 c 0.70 kappa 1.0 train_mean_logscore -2.016391 oof_mean_logscore -1.714066 | stage2 phi 0.95 nu_h 0.8 c_h 0.20 kappa_h 1.0
+fold 1 steps 692 stage1 dyn 1 q 31622.8 lam 0.1 nu 1.25 c 0.70 kappa 1.0 train_mean_logscore -1.961478 oof_mean_logscore -1.984311 | stage2 phi 0.95 nu_h 0.8 c_h 0.20 kappa_h 1.0
+fold 2 steps 845 stage1 dyn 1 q 10000 lam 0.1 nu 1.25 c 0.70 kappa 0.9 train_mean_logscore -1.938085 oof_mean_logscore -2.016194 | stage2 phi 0.95 nu_h 0.8 c_h 0.25 kappa_h 0.8
+fold 3 steps 299 stage1 dyn 1 q 10000 lam 0.1 nu 1.25 c 0.70 kappa 0.9 train_mean_logscore -1.930429 oof_mean_logscore -2.219070 | stage2 phi 0.95 nu_h 0.8 c_h 0.20 kappa_h 1.0
+fold 4 steps 346 stage1 dyn 1 q 10000 lam 0.1 nu 1.25 c 0.70 kappa 1.0 train_mean_logscore -1.963521 oof_mean_logscore -1.958083 | stage2 phi 0.95 nu_h 0.8 c_h 0.20 kappa_h 1.0
+oof_pooled G1S mean_logscore -1.969622
+oof_pooled n 2652 pit_bin0 0.0853 pit_bin9 0.1199 lower_miss 0.0138 upper_miss 0.0340 cov50 0.4943 cov80 0.7947 cov95 0.9522 mean_u_minus_half -0.0006 mean_z_mid 0.0224
+oof_pooled_ten_step G1S n 2642 coverage95 0.9410 mean_logscore -3.740472
+oof_bins G1S 0.0853 0.1221 0.0988 0.0962 0.1059 0.1091 0.0948 0.0809 0.0870 0.1199
+oof_lag1_z_uncentred G1S -0.0211 over 2651 consecutive pairs
+gate P1 cov50 value 0.4943 outer [0.460,0.540] PASS inner [0.470,0.530] PASS
+gate P2 cov80 value 0.7947 outer [0.760,0.840] PASS inner [0.770,0.830] PASS
+gate P3 cov95 value 0.9522 outer [0.930,0.970] PASS inner [0.950,0.950] FAIL
+gate P4 lower_miss value 0.0138 outer [0.010,0.040] PASS inner [0.020,0.030] FAIL
+gate P5 upper_miss value 0.0340 outer [0.010,0.040] PASS inner [0.020,0.030] FAIL
+gate P6 bin0 value 0.0853 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin1 value 0.1221 outer [0.070,0.130] PASS inner [0.080,0.120] FAIL
+gate P6 bin2 value 0.0988 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin3 value 0.0962 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin4 value 0.1059 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin5 value 0.1091 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin6 value 0.0948 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin7 value 0.0809 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin8 value 0.0870 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin9 value 0.1199 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P7 ten_cov95 value 0.9410 outer [0.900,0.990] PASS inner [0.930,0.960] PASS
+stratum G1S L0 blocks 8 steps 818 pit_bin0 0.1286(se 0.0067) pit_bin9 0.0754(se 0.0082) lower_miss 0.0323(se 0.0079) upper_miss 0.0354(se 0.0044) cov95 0.9323(se 0.0083) mean_u_minus_half -0.0704(se 0.0081) mean_z_mid -0.2152(se 0.0339)
+stratum G1S L6 blocks 10 steps 739 pit_bin0 0.1293(se 0.0089) pit_bin9 0.1087(se 0.0065) lower_miss 0.0136(se 0.0040) upper_miss 0.0164(se 0.0057) cov95 0.9700(se 0.0080) mean_u_minus_half -0.0271(se 0.0102) mean_z_mid -0.0784(se 0.0341)
+stratum G1S L12 blocks 14 steps 970 pit_bin0 0.0263(se 0.0067) pit_bin9 0.1578(se 0.0138) lower_miss 0.0002(se 0.0002) upper_miss 0.0399(se 0.0058) cov95 0.9599(se 0.0058) mean_u_minus_half 0.0627(se 0.0103) mean_z_mid 0.2423(se 0.0363)
+stratum G1S L18 blocks 3 steps 125 pit_bin0 0.0009(se 0.0008) pit_bin9 0.1834(se 0.0253) lower_miss 0.0000(se 0.0000) upper_miss 0.0828(se 0.0201) cov95 0.9172(se 0.0201) mean_u_minus_half 0.1211(se 0.0158) mean_z_mid 0.4662(se 0.0652)
+== control kappa=1.0 (G1 exactly) selection by 5-fold block CV, then stage 2 (ten-step) per fold
+fold 0 steps 470 stage1 dyn 1 q 10000 lam 0.1 nu 1.25 c 0.70 kappa 1.0 train_mean_logscore -2.016391 oof_mean_logscore -1.714066 | stage2 phi 0.95 nu_h 0.8 c_h 0.20 kappa_h 1.0
+fold 1 steps 692 stage1 dyn 1 q 31622.8 lam 0.1 nu 1.25 c 0.70 kappa 1.0 train_mean_logscore -1.961478 oof_mean_logscore -1.984311 | stage2 phi 0.95 nu_h 0.8 c_h 0.20 kappa_h 1.0
+fold 2 steps 845 stage1 dyn 1 q 10000 lam 0.1 nu 1.25 c 0.70 kappa 1.0 train_mean_logscore -1.940261 oof_mean_logscore -2.011034 | stage2 phi 0.95 nu_h 0.8 c_h 0.20 kappa_h 1.0
+fold 3 steps 299 stage1 dyn 1 q 10000 lam 0.1 nu 1.25 c 0.65 kappa 1.0 train_mean_logscore -1.930450 oof_mean_logscore -2.220702 | stage2 phi 0.95 nu_h 0.8 c_h 0.20 kappa_h 1.0
+fold 4 steps 346 stage1 dyn 1 q 10000 lam 0.1 nu 1.25 c 0.70 kappa 1.0 train_mean_logscore -1.963521 oof_mean_logscore -1.958083 | stage2 phi 0.95 nu_h 0.8 c_h 0.20 kappa_h 1.0
+oof_pooled G1ctl mean_logscore -1.968162
+oof_pooled n 2652 pit_bin0 0.0766 pit_bin9 0.1233 lower_miss 0.0126 upper_miss 0.0356 cov50 0.5003 cov80 0.8001 cov95 0.9518 mean_u_minus_half 0.0064 mean_z_mid 0.0467
+oof_pooled_ten_step G1ctl n 2642 coverage95 0.9402 mean_logscore -3.728084
+oof_bins G1ctl 0.0766 0.1190 0.1005 0.0973 0.1058 0.1095 0.0979 0.0823 0.0878 0.1233
+oof_lag1_z_uncentred G1ctl -0.0240 over 2651 consecutive pairs
+gate P1 cov50 value 0.5003 outer [0.460,0.540] PASS inner [0.470,0.530] PASS
+gate P2 cov80 value 0.8001 outer [0.760,0.840] PASS inner [0.770,0.830] PASS
+gate P3 cov95 value 0.9518 outer [0.930,0.970] PASS inner [0.950,0.950] FAIL
+gate P4 lower_miss value 0.0126 outer [0.010,0.040] PASS inner [0.020,0.030] FAIL
+gate P5 upper_miss value 0.0356 outer [0.010,0.040] PASS inner [0.020,0.030] FAIL
+gate P6 bin0 value 0.0766 outer [0.070,0.130] PASS inner [0.080,0.120] FAIL
+gate P6 bin1 value 0.1190 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin2 value 0.1005 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin3 value 0.0973 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin4 value 0.1058 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin5 value 0.1095 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin6 value 0.0979 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin7 value 0.0823 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin8 value 0.0878 outer [0.070,0.130] PASS inner [0.080,0.120] PASS
+gate P6 bin9 value 0.1233 outer [0.070,0.130] PASS inner [0.080,0.120] FAIL
+gate P7 ten_cov95 value 0.9402 outer [0.900,0.990] PASS inner [0.930,0.960] PASS
+stratum G1ctl L0 blocks 8 steps 818 pit_bin0 0.1149(se 0.0096) pit_bin9 0.0766(se 0.0083) lower_miss 0.0309(se 0.0083) upper_miss 0.0359(se 0.0043) cov95 0.9331(se 0.0087) mean_u_minus_half -0.0611(se 0.0096) mean_z_mid -0.1839(se 0.0400)
+stratum G1ctl L6 blocks 10 steps 739 pit_bin0 0.1144(se 0.0072) pit_bin9 0.1181(se 0.0074) lower_miss 0.0106(se 0.0032) upper_miss 0.0192(se 0.0061) cov95 0.9702(se 0.0069) mean_u_minus_half -0.0156(se 0.0086) mean_z_mid -0.0366(se 0.0288)
+stratum G1ctl L12 blocks 14 steps 970 pit_bin0 0.0252(se 0.0070) pit_bin9 0.1589(se 0.0140) lower_miss 0.0002(se 0.0002) upper_miss 0.0406(se 0.0061) cov95 0.9592(se 0.0061) mean_u_minus_half 0.0647(se 0.0111) mean_z_mid 0.2481(se 0.0386)
+stratum G1ctl L18 blocks 3 steps 125 pit_bin0 0.0003(se 0.0003) pit_bin9 0.1843(se 0.0255) lower_miss 0.0000(se 0.0000) upper_miss 0.0913(se 0.0259) cov95 0.9087(se 0.0259) mean_u_minus_half 0.1268(se 0.0181) mean_z_mid 0.4854(se 0.0743)
+== final whole-pool refit (stage 1; same grid)
+final G1S dyn 1 q 10000 lam 0.1 nu 1.25 c 0.70 kappa 1.0 in_sample_mean_logscore -1.962811
+final control dyn 1 q 10000 lam 0.1 nu 1.25 c 0.70 kappa 1.0 in_sample_mean_logscore -1.962811
+tie_rule G1S preferred over G1 only if out-of-fold log score exceeds the control by more than 0.01 nats
