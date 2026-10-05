@@ -20,6 +20,7 @@
  */
 #include "rx_r15_rig.h"
 #include "r15_measure.h"
+#include "r15_seat_diag.h"
 #include "runtime/rx_generation.h"
 
 #include <dirent.h>
@@ -128,7 +129,10 @@ static void thermal_wait(void) {
 
 /* One accumulator per open window (windows may overlap), plus whole-process
  * residency totals that are never reset. */
-typedef struct { uint64_t samples, live, slot_sum, slot_max, inflight_sum, inflight_max, claims_max; } SampSnap;
+typedef struct {
+    uint64_t samples, live, slot_sum, slot_max, inflight_sum, inflight_max, claims_max;
+    SeatDiag d;   /* sampler lateness and not-live runs (r15_seat_diag.h); does not feed G15 */
+} SampSnap;
 #define SAMP_ACC 4
 
 typedef struct {
@@ -164,6 +168,7 @@ static void *sampler_main(void *arg) {
         int counted = s->have_last;
         s->last = hb;
         s->have_last = 1;
+        uint64_t t_now = r15_now_ns();
         if (!counted) continue;
         pthread_mutex_lock(&s->mu);
         for (int i = 0; i <= SAMP_ACC; i++) {
@@ -171,6 +176,7 @@ static void *sampler_main(void *arg) {
             if (i < SAMP_ACC && !s->active[i]) continue;
             a->samples++;
             a->live += (uint64_t)live;
+            seat_diag_sample(&a->d, t_now, live, (uint32_t)hb);
             a->slot_sum += slots;
             if (slots > a->slot_max) a->slot_max = slots;
             a->inflight_sum += infl;
@@ -205,9 +211,15 @@ static SampSnap samp_close(int k) {
 static void rec_samp(const char *key, const SampSnap *x) {
     fprintf(g_out.f, ",\"%s\":{\"silicon\":%d,\"intervals\":%" PRIu64 ",\"seat_live\":%" PRIu64
                      ",\"slot_sum\":%" PRIu64 ",\"slot_max\":%" PRIu64 ",\"inflight_sum\":%" PRIu64
-                     ",\"inflight_max\":%" PRIu64 ",\"claims_max\":%" PRIu64 "}",
+                     ",\"inflight_max\":%" PRIu64 ",\"claims_max\":%" PRIu64
+                     ",\"diag\":{\"late_2ms\":%" PRIu64 ",\"late_10ms\":%" PRIu64 ",\"max_gap_ns\":%" PRIu64
+                     ",\"dead_runs\":%" PRIu64 ",\"dead_longest\":%" PRIu64 ",\"dead_at_end\":%" PRIu64
+                     ",\"t_first\":%" PRIu64 ",\"t_last\":%" PRIu64 ",\"first_dead_t\":%" PRIu64
+                     ",\"last_live_t\":%" PRIu64 ",\"stale_max_ns\":%" PRIu64 "}}",
             key, g_samp.silicon, x->samples, x->live, x->slot_sum, x->slot_max, x->inflight_sum,
-            x->inflight_max, x->claims_max);
+            x->inflight_max, x->claims_max, x->d.late_2ms, x->d.late_10ms, x->d.max_gap_ns, x->d.dead_runs,
+            x->d.dead_longest, x->d.dead_cur, x->d.t_first, x->d.last_t, x->d.first_dead_t, x->d.last_live_t,
+            x->d.stale_max_ns);
 }
 
 static void rec_residency(void) {

@@ -586,6 +586,40 @@ static Cmp paired(const char *num, const char *den, TrialVal f, int need_same) {
     return c;
 }
 
+/* G15 diagnostic (observability only; G15 itself is min seat_live/intervals and
+ * is not touched). For the process with the lowest live fraction, say what the
+ * sampler's own record can tell: whether the lost samples are one long run of
+ * not-live samples (the seat stopped advancing its heartbeat) or scattered,
+ * and whether the sampler itself ran late. Data recorded before the sampler
+ * carried diag fields reports UNMEASURED; nothing is inferred. */
+static void o_residency_diagnostic(const J *tot, const char *name) {
+    if (!tot) return;
+    uint64_t lost = ju(tot, "intervals") - ju(tot, "seat_live");
+    const J *d = jget(tot, "diag");
+    o_open("worst_process_diagnostic", '{');
+    o_str("process", name);
+    o_u("lost_samples", lost);
+    if (!lost) {
+        o_str("class", "no_loss");
+    } else if (!d) {
+        o_str("class", "UNMEASURED");
+        o_str("why", "raw evidence has no sampler diag fields; starvation, residency loss and stale reads are not distinguishable");
+    } else {
+        uint64_t longest = ju(d, "dead_longest");
+        o_str("class", longest >= 100 ? "seat_stopped_long_run" : "scattered_not_live");
+        o_u("dead_runs", ju(d, "dead_runs"));
+        o_u("dead_longest", longest);
+        o_u("dead_at_end", ju(d, "dead_at_end"));
+        o_u("late_2ms", ju(d, "late_2ms"));
+        o_u("late_10ms", ju(d, "late_10ms"));
+        o_bool("sampler_late_observed", ju(d, "late_10ms") > 0);
+        o_u("max_gap_ns", ju(d, "max_gap_ns"));
+        o_u("stale_max_ns", ju(d, "stale_max_ns"));
+        if (ju(d, "first_dead_t") && ju(d, "t_first")) o_u("first_dead_after_ns", ju(d, "first_dead_t") - ju(d, "t_first"));
+    }
+    o_close('}');
+}
+
 static void o_cmp(const char *k, const Cmp *c) {
     o_open(k, '{');
     o_num("median_ratio", c->med);
@@ -1051,23 +1085,32 @@ int main(int argc, char **argv) {
     /* m10 residency */
     double res_min = NAN;
     size_t res_n = 0;
+    J *res_worst = NULL;   /* the process behind res_min; used only for the diagnostic below */
+    char res_worst_name[300] = "";
     for (int i = 0; i < g_nt; i++) {
         J *tot = jget(g_trials[i].residency, "total");
         if (!g_trials[i].silicon || !(jd(tot, "intervals") > 0)) continue;
         double r = jd(tot, "seat_live") / jd(tot, "intervals");
-        if (isnan(res_min) || r < res_min) res_min = r;
+        if (isnan(res_min) || r < res_min) {
+            res_min = r; res_worst = tot;
+            snprintf(res_worst_name, sizeof res_worst_name, "%.250s", g_trials[i].file);
+        }
         res_n++;
     }
     for (int i = 0; i < g_nl2; i++) {
         J *tot = jget(g_l2[i].residency, "total");
         if (!g_l2[i].silicon || !(jd(tot, "intervals") > 0)) continue;
         double r = jd(tot, "seat_live") / jd(tot, "intervals");
-        if (isnan(res_min) || r < res_min) res_min = r;
+        if (isnan(res_min) || r < res_min) {
+            res_min = r; res_worst = tot;
+            snprintf(res_worst_name, sizeof res_worst_name, "l2-%.20s-%d", g_l2[i].config, i);
+        }
         res_n++;
     }
     o_open("m10_gpu_residency", '{');
     o_num("min_fraction_live", res_min);
     o_u("silicon_processes", res_n);
+    o_residency_diagnostic(res_worst, res_worst_name);
     o_close('}');
     have[10] = res_n > 0;
     /* m11 resource utilization */
