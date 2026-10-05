@@ -1,0 +1,2 @@
+X925 seconds with >= 1 G cycles: 2514; p10 1.116, median 1.737, max 4.098 GHz
+package energy: SPBM reader not loaded

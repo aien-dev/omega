@@ -1,0 +1,2 @@
+name, driver_version, pci.bus_id, uuid, temperature.gpu, utilization.gpu [%], clocks.current.sm [MHz], power.draw [W]
+NVIDIA GB10, 580.173.02, 0000000F:01:00.0, GPU-fb8e53f0-3207-e89b-d02f-acdfe2695b59, 38, 0 %, 2489 MHz, 12.53 W

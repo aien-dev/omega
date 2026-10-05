@@ -1,0 +1,25 @@
+    PID USER     %CPU     ELAPSED COMMAND
+2296730 drakest+  102       00:07 /home/drakestapleton/workspace/cand2-campaign/wt-ip-offline/rust/target/debug/deps/session_limits-e5daa4a2ba26a6af
+2284941 drakest+ 99.8       01:00 ./build/est-tools/est_fit --synthetic-test build/est-tools/work/synth-fit/machine-state.ndjson build/est-tools/work/synth-fit/params.txt
+2292535 root     10.3       00:13 [kworker/11:3-mm_percpu_wq]
+2292540 drakest+  4.4       00:13 /home/drakestapleton/.rustup/toolchains/1.99.0-aarch64-unknown-linux-gnu/bin/cargo test --all
+1463296 drakest+  3.7    12:14:52 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/49214b66.claim.sock
+   6478 drakest+  2.5  1-19:25:33 /home/drakestapleton/max-env/bin/python -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=38, pipe_handle=42) --multiprocessi
+1276306 drakest+  1.7    02:12:43 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/a0890d26.claim.sock
+2142959 root      1.2       23:23 [kworker/5:1-events]
+   4255 472       1.1  1-19:25:50 grafana server --homepath=/usr/share/grafana --config=/etc/grafana/grafana.ini --packaging=docker cfg:default.log.mode=console cfg:default.paths.d
+2198693 root      0.9       14:36 [kworker/16:2-events]
+2039017 root      0.9       33:38 [kworker/7:1-events]
+2154624 root      0.8       21:01 [kworker/9:1-mm_percpu_wq]
+2259821 root      0.8       04:07 [kworker/8:1-cgroup_release]
+3952606 drakest+  0.7    16:37:54 /home/drakestapleton/.local/bin/agent-archive collect
+2188397 root      0.7       17:01 [kworker/15:1-cgroup_free]
+2180515 root      0.7       18:47 [kworker/17:1-events]
+2238105 root      0.7       08:57 [kworker/18:0-mm_percpu_wq]
+2149010 root      0.6       22:21 [kworker/15:2-cgroup_free]
+2221265 root      0.6       09:22 [kworker/9:0-mm_percpu_wq]
+2220892 root      0.6       09:24 [kworker/8:2-mm_percpu_wq]
+2244936 root      0.6       07:49 [kworker/5:0-mm_percpu_wq]
+2045348 root      0.6       32:19 [kworker/6:3-mm_percpu_wq]
+2222117 root      0.5       09:09 [kworker/12:3-mm_percpu_wq]
+ 994240 drakest+  0.5  1-14:27:44 /home/drakestapleton/.local/bin/claude daemon run --json-path /home/drakestapleton/.claude/daemon.json --log-file /home/drakestapleton/.claude/dae
