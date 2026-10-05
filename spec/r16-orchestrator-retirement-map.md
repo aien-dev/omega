@@ -14,13 +14,13 @@ Each at its `origin/main` commit on 2026-09-29. omega was scanned in the R16 wor
 at branch commit `d6c8630` (= omega main `193a7e7` plus the R16 spec only, before this map and tool; no code
 differences). Rescanned 2026-09-30 for the G3-G5 branch on omega main `6d1ff1d` (the
 R16 work rebased onto current main); the omega row below is that base. The tool prints a WARN when a scanned tree differs from this table,
-which is expected for omega on the R16 candidate. Since 2026-10-05 (§8.3) the table holds the CAND-0 commits (aegis-runtime, not in CAND-0, unchanged); since §8.4 it holds the CAND-1 scan set.
+which is expected for omega on the R16 candidate. Since 2026-10-05 (§8.3) the table holds the CAND-0 commits (aegis-runtime, not in CAND-0, unchanged); since §8.5 it holds the frozen CAND-1 commits.
 
 <!-- r16-inventory:shas -->
 | repo | sha |
 |---|---|
-| omega | ddf200ddece95a6461a13239f15c5af290c31d35 |
-| aien-sovereign-core | 69340c7320e177fe21a40086a23c1a50c990ff6c |
+| omega | cb06d081901c03063945a99ffed1c58d33397e9c |
+| aien-sovereign-core | 2eec75b08aeb8f9d11f950070e13f6c2c046cf24 |
 | aegis-runtime | f4e870953a466bb1cf68f1d88285929024cf1ba9 |
 | aienos | bbad5e4250e57f8cbd1be4cf1390109aa65ef92c |
 | physics | 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf |
@@ -500,6 +500,10 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | SC-123 | aien-sovereign-core | `tools/aien-test/src/resources.rs` | 633 | `gpu_lock_release_waits_for_a_child_between_fork_and_exec` | test/benchmark loop (for:body:poll) | test / reference path | D | false | inside the module's `#[cfg(test)]` tests (from line 474): GPU-lock release test rounds; test code, not built into any production binary | `for round in 0..3 {` |
 | SC-124 | aien-sovereign-core | `tools/aien-test/src/runner.rs` | 872 | `worker` | gate runner worker thread | aien-test gate runner (ADR 0028) tooling | D | false | test infrastructure: worker thread runs ready test gates (dependencies first, resource pools honoured) until none remain; orders test gates, not faculties | `loop {` |
 | SC-125 | aien-sovereign-core | `tools/aien-test/src/runner.rs` | 875 | `worker` | gate runner worker pick wait | aien-test gate runner (ADR 0028) tooling | D | false | test infrastructure: worker waits on a condvar until a test gate is ready; orders test gates, not faculties | `let pick = loop {` |
+| SC-126 | aien-sovereign-core | `crates/aien-runtime/tests/runtime_end_to_end_tests.rs` | 347 | `run_decode_batch` | test/benchmark loop (named:run_until_complete) | test / reference path | D | false | test helper (sovereign-core #213): drives a multi-sequence decode through the spine, at most 4 * (max_tokens + 4) steps; not built into any production binary | `.run_until_complete(&mut runner, 4 * (max_tokens + 4))` |
+| SC-127 | aien-sovereign-core | `crates/aien-runtime/tests/runtime_end_to_end_tests.rs` | 351 | `run_decode_batch` | test/benchmark loop (for:body:recv) | test / reference path | D | false | test helper (sovereign-core #213): walks the per-sequence completion channels after the run; not built into any production binary | `for mut rx in sinks {` |
+| SC-128 | aien-sovereign-core | `crates/aien-runtime/tests/runtime_end_to_end_tests.rs` | 353 | `run_decode_batch` | test/benchmark loop (while:body:recv) | test / reference path | D | false | test helper (sovereign-core #213): drains already-sent events with try_recv, no wait; not built into any production binary | `while let Ok(event) = rx.try_recv() {` |
+| SC-129 | aien-sovereign-core | `crates/aien-runtime/tests/swarm_prefill_gate_test.rs` | 912 | `sampled_swarm_run` | test/benchmark loop (while:body:scheduler) | test / reference path | D | false | test helper (sovereign-core #209): steps the spine until the swarm finishes, capped at 100 steps; not built into any production binary | `while (spine.scheduler.running_count() > 0 \|\| spine.scheduler.waiting_count() > 0)` |
 | AR-001 | aegis-runtime | `src/agent.rs` | 99 | `execute_task` | execute_task max_turns parameter | retired by non-use | A | false | AgentEngine::execute_task tool-turn loop bound; migration map 'Oracle -> retire'; spec §3.1 class A, retired by non-use (Q2=A, no Rust edit). LEGACY / NOT-IN-CHARGE | `max_turns: usize,` |
 | AR-002 | aegis-runtime | `src/agent.rs` | 130 | `execute_task` | LLM agent tool-turn loop | retired by non-use | A | false | migration map agent.rs:130 tool-turn loop; spec §3.1 class A, retired by non-use; omega links/execs nothing from aegis-runtime. LEGACY / NOT-IN-CHARGE | `for turn in 1..=max_turns {` |
 | AR-003 | aegis-runtime | `src/agent.rs` | 132 | `execute_task` | tool-turn loop log line | retired by non-use | A | false | inside the agent.rs:130 loop. LEGACY / NOT-IN-CHARGE | `info!("Agent loop turn {}/{}", turn, max_turns);` |
@@ -851,3 +855,23 @@ After:
 `sites=509 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`.
 aien-sovereign-core still has open changes before the CAND-1 pin; the CAND-1 R16 receipt
 reruns this scan on the final commits.
+
+### 8.5 Update 2026-10-05 (overnight C1): CAND-1 frozen
+
+The §1 table now holds the frozen CAND-1 commits: omega `cb06d08`, aien-sovereign-core
+`2eec75b`, aegis-runtime `f4e8709`, aienos `bbad5e4`, physics `6d7cf0d`.
+
+Before, omega at `cb06d08` with the map as of `cb06d08`, the other repos at the commits above:
+`sites=513 unclassified=4 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> FAIL`
+(all 4 in sovereign-core test code added by #209 and #213).
+
+Reconciliation, each row from reading the loop (no tool, pattern, threshold or class
+rule changed): SC-126 to SC-129, class D. SC-126 to SC-128 are the multi-sequence decode
+helper of the native `paged_attention_batch` test (#213): a spine run capped at
+4 * (max_tokens + 4) steps, then a walk over the result channels with non-blocking
+`try_recv`. SC-129 is the sampled swarm helper of the KV lifecycle tests (#209), capped at
+100 spine steps. None runs in a production binary.
+
+After:
+`sites=513 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
+(omega code `cb06d08`; this map change touches no code, so the CAND-1 omega commit stays `cb06d08`).
