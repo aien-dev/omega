@@ -126,9 +126,21 @@ if [ "${1:-}" = energy-preflight ]; then energy_preflight; exit $?; fi
 # `dmesg`, which this account may not read; the failed read was hidden and
 # counted as "none". journalctl -k is readable here. A failed read is reported
 # as XID_LOG_UNREADABLE (exit 4), never as zero. Observability only.
+# journalctl answers "-- No entries --" with exit 0 to an account without journal
+# access, so a readable-looking empty window is not proof of no Xid: the kernel
+# log of this boot must itself read non-empty first (it never is, on a real boot).
 # R15_KLOG_FILE=<file> reads a saved log instead of journalctl (tests).
+# R15_KLOG_PROBE_FILE=<file> stands in for that boot-log probe (tests).
 xid_scan() {
     local out rc
+    if [ -z "${R15_KLOG_FILE:-}" ] || [ -n "${R15_KLOG_PROBE_FILE+x}" ]; then
+        local probe
+        if [ -n "${R15_KLOG_PROBE_FILE+x}" ]; then probe=$(cat "$R15_KLOG_PROBE_FILE" 2>/dev/null)
+        else probe=$(journalctl -k -b --no-pager -q -n 1 -o cat 2>/dev/null); fi
+        if [ -z "$probe" ]; then
+            echo "XID_LOG_UNREADABLE: the kernel log of this boot reads empty (no journal access?)"; return 4
+        fi
+    fi
     if [ -n "${R15_KLOG_FILE:-}" ]; then out=$(cat "$R15_KLOG_FILE" 2>&1); rc=$?
     else out=$(journalctl -k --no-pager -o short-iso --since "@$1" --until "@$2" 2>&1); rc=$?; fi
     if [ $rc -ne 0 ]; then echo "XID_LOG_UNREADABLE: $(printf '%s' "$out" | head -1)"; return 4; fi
@@ -219,7 +231,15 @@ stop)
         rm -f "$OUT/$p"
     done
     # Kernel GPU faults (Xid) during the run, from the readable kernel log.
-    [ -f "$OUT/.start.epoch" ] && xid_scan "$(cat "$OUT/.start.epoch")" "$(date +%s)" > "$OUT/kernel-xid.txt" 2>&1
+    # The scan's own verdict is kept: an unreadable log or a missing start time is
+    # written into kernel-xid.txt and warned about, never left as an empty file.
+    if [ -f "$OUT/.start.epoch" ]; then
+        xid_scan "$(cat "$OUT/.start.epoch")" "$(date +%s)" > "$OUT/kernel-xid.txt" 2>&1; xrc=$?
+    else
+        echo "XID_SCAN_NOT_RUN: $OUT/.start.epoch is missing" > "$OUT/kernel-xid.txt"; xrc=5
+    fi
+    echo "xid-scan exit $xrc" >> "$OUT/kernel-xid.txt"
+    [ $xrc = 0 ] || echo "r15_machine_state: warning: kernel Xid scan did not complete (exit $xrc), see $OUT/kernel-xid.txt" >&2
     # Summary (informative; the raw files are authoritative): per-second
     # cycles of each X925 core (cpus 5-9, 15-19) as GHz. A fully busy second
     # reads as the effective clock; a partly idle second reads lower, so the

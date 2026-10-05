@@ -41,4 +41,19 @@ printf '%s\n' '2026-10-05T08:08:16-05:00 spark kernel: NVRM: Xid (PCI:000f:01:00
 xcheck with_xid 0 "xid lines: 1"
 xcheck none 0 "xid lines: 0"
 xcheck missing_file 4 "XID_LOG_UNREADABLE"
+# No journal access: journalctl prints "-- No entries --" and exits 0. The empty
+# boot-log probe must turn that into UNREADABLE, while a readable boot log with an
+# empty window still reads as none.
+printf '%s\n' '-- No entries --' > "$W/no_entries"
+printf '%s\n' 'Linux version 7.0.0' > "$W/probe_ok"
+: > "$W/probe_empty"
+pcheck() { # name probe expected-exit expected-text
+    out=$(R15_KLOG_FILE="$W/$1" R15_KLOG_PROBE_FILE="$W/$2" "$T" xid-scan 0 1 2>&1); rc=$?
+    if [ "$rc" = "$3" ] && printf '%s\n' "$out" | grep -Fq -- "$4"; then echo "[+] xid-scan $1 probe=$2"
+    else echo "[-] xid-scan $1 probe=$2: exit $rc: $out"; fail=$((fail + 1)); fi
+}
+pcheck no_entries probe_empty 4 "XID_LOG_UNREADABLE"
+pcheck no_entries probe_missing 4 "XID_LOG_UNREADABLE"
+pcheck no_entries probe_ok 0 "xid lines: 0"
+pcheck with_xid probe_ok 0 "xid lines: 1"
 echo "failures $fail"; [ "$fail" = 0 ]
