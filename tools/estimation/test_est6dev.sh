@@ -85,4 +85,25 @@ out2=$("$E" g1pit --raw $D1/machine-state.ndjson --marks $D1/machine-state-marks
 a=$("$O" run --case a --reps 50 --boot 300) ; b=$("$O" run --case a --reps 50 --boot 300)
 [ "$a" = "$b" ] && chk ok x || chk bad "est6opchar not deterministic"
 
+
+# 4b. full G1S: two-piece predictive self check, held-out refusals, determinism, label, control is kappa 1.0
+"$E" twopiece-selfcheck | grep -q '^twopiece-selfcheck: PASS$' && chk ok x || chk bad "two-piece self check"
+for p in evidence/EST5/raw/20261005T112838Z-est5-heldout-silicon evidence/X/raw/zz-est6-heldout-silicon; do
+  rc=0
+  "$E" g1sfull --raw "$p/machine-state.ndjson" --marks "$p/machine-state-marks.txt" >/dev/null 2>&1 || rc=$?
+  [ "$rc" = 2 ] && chk ok x || chk bad "g1sfull did not refuse held-out path $p (rc $rc)"
+done
+G1=${TMPDIR:-/tmp}/e6dev.g1sfull.$$
+"$E" g1sfull --raw $D1/machine-state.ndjson --marks $D1/machine-state-marks.txt --grid-stride 6 --boot 200 > $G1.a
+"$E" g1sfull --raw $D1/machine-state.ndjson --marks $D1/machine-state-marks.txt --grid-stride 6 --boot 200 > $G1.b
+cmp -s $G1.a $G1.b && chk ok x || chk bad "g1sfull not deterministic"
+grep -q '^label DEVELOPMENT RESULT' $G1.a && chk ok x || chk bad "g1sfull development label"
+grep -q '^grid .* steps 2652 folds 5$' $G1.a && chk ok x || chk bad "g1sfull step count 2652 (same steps as g1pit)"
+grep -q '^final control .* kappa 1.0 ' $G1.a && chk ok x || chk bad "g1sfull control kappa"
+rm -f $G1.a $G1.b
+
+# 5b. opchar case d (regime-dependent PIT) deterministic
+a=$("$O" run --case d --reps 50 --boot 300) ; b=$("$O" run --case d --reps 50 --boot 300)
+[ "$a" = "$b" ] && chk ok x || chk bad "est6opchar case d not deterministic"
+
 if [ "$fail" = 0 ]; then echo "test-est6dev: PASS ($n checks)"; else exit 1; fi

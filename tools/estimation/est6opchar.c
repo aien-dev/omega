@@ -3,7 +3,7 @@
  * data file at all, so no held-out file can be touched. It simulates the pooled H1 + H2 scoring of the
  * primary gates P1 to P10 and the three-way verdict on synthetic PIT sequences.
  *
- *   est6opchar run --case a|b|c [--bin0 X] [--reps N] [--boot B] [--runs R] [--seconds S]
+ *   est6opchar run --case a|b|c|d [--bin0 X] [--reps N] [--boot B] [--runs R] [--seconds S]
  *                  [--w W] [--rho RHO] [--rho10 RHO10] [--seed SEED]
  *   est6opchar deff [--reps N] [--runs R] [--w W] [--rho RHO] [--seed SEED]
  *   est6opchar selftest
@@ -93,6 +93,36 @@ static double cells_inv(double p)
         }
     return 1.0;
 }
+/* case d: regime-dependent PIT. Per declared load level (idle, L6, L12, L18) a piecewise-uniform PIT built from the
+ * measured v5 D1 per-level G1 shares (appendix section 2: bin 0, bin 9, lower miss, upper miss); bins 1 to 8 share the
+ * remaining mass equally (an ASSUMPTION: per-level middle bins were not tabulated). */
+static const double LV_BIN0[4] = { 0.116, 0.111, 0.025, 0.000 }, LV_BIN9[4] = { 0.077, 0.114, 0.159, 0.184 };
+static const double LV_LOW[4] = { 0.030, 0.010, 0.000, 0.000 }, LV_UP[4] = { 0.036, 0.017, 0.041, 0.085 };
+static double lv_cum[4][NCELL + 1];
+static void make_level_cells(void)
+{
+    for (int l = 0; l < 4; l++) {
+        double m[NCELL], mid = (1.0 - LV_BIN0[l] - LV_BIN9[l]) / 8.0;
+        m[0] = LV_LOW[l]; m[1] = LV_BIN0[l] - LV_LOW[l];
+        for (int j = 1; j < 9; j++) m[j + 1] = mid;
+        m[10] = LV_BIN9[l] - LV_UP[l]; m[11] = LV_UP[l];
+        double cum = 0;
+        for (int i = 0; i <= NCELL; i++) { lv_cum[l][i] = cum; if (i < NCELL) cum += m[i]; }
+        lv_cum[l][NCELL] = 1.0;
+    }
+}
+static double level_inv(int l, double p)
+{
+    static const double cut[NCELL + 1] = { 0, 0.025, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 0.975, 1.0 };
+    for (int i = 0; i < NCELL; i++) {
+        double w = lv_cum[l][i + 1] - lv_cum[l][i];
+        if ((p <= lv_cum[l][i + 1] && w > 0) || i == NCELL - 1) {
+            double f = w > 0 ? (p - lv_cum[l][i]) / w : 0.5;
+            return cut[i] + f * (cut[i + 1] - cut[i]);
+        }
+    }
+    return 1.0;
+}
 /* scale s so that P(|s z| < 1.959964) = cov */
 static double scale_for_cov(double cov)
 {
@@ -136,6 +166,8 @@ static void gen_seq(const cfg_t *g, u64 *rng, int kind, seq_t *sq)
                 if (step >= 30 && n < MAXN) {
                     double u, zz;
                     if (g->cas == 1) { double s = kind ? g->s_b10 : g->s_b; zz = s * z0; u = Phi(zz); }
+                    else if (g->cas == 3 && kind == 0) { u = level_inv(lv, Phi(z0)); zz = probit(u < 1e-12 ? 1e-12 : u > 1 - 1e-12 ? 1 - 1e-12 : u); }
+                    else if (g->cas == 3) { zz = g->s_c10 * z0; u = Phi(zz); }
                     else if (g->cas == 2 && kind == 0) { u = cells_inv(Phi(z0)); zz = probit(u < 1e-12 ? 1e-12 : u > 1 - 1e-12 ? 1 - 1e-12 : u); }
                     else if (g->cas == 2) { zz = g->s_c10 * z0; u = Phi(zz); }
                     else { zz = z0; u = Phi(z0); }
@@ -251,16 +283,17 @@ static int cmd_run(int argc, char **argv)
         else if (!strcmp(argv[i], "--seed") && i + 1 < argc) seed = strtoull(argv[++i], NULL, 0);
         else { fprintf(stderr, "est6opchar run: bad argument %s\n", argv[i]); return 2; }
     }
-    if (cs != 'a' && cs != 'b' && cs != 'c') { fprintf(stderr, "case must be a, b or c\n"); return 2; }
+    if (cs != 'a' && cs != 'b' && cs != 'c' && cs != 'd') { fprintf(stderr, "case must be a, b, c or d\n"); return 2; }
     if (g.nrun < 1 || g.nrun > 4 || g.seconds < 100 || g.seconds > 4000 || reps < 1 || boot < 200 || g.w < 0 || g.w >= 1 || g.rho < 0 || g.rho >= 1 || g.rho10 < 0 || g.rho10 >= 1) { fprintf(stderr, "bad parameter range\n"); return 2; }
-    g.cas = cs == 'a' ? 0 : cs == 'b' ? 1 : 2;
+    g.cas = cs == 'a' ? 0 : cs == 'b' ? 1 : cs == 'c' ? 2 : 3;
     setup(&g);
     make_cells(g.bin0);
+    make_level_cells();
     u64 rng = seed;
     int cnt[3] = { 0, 0, 0 };
     for (int r = 0; r < reps; r++) cnt[one_rep(&g, &rng, boot)]++;
     printf("case %c bin0 %.4f runs %d seconds %ld w %.3f rho %.3f rho10 %.3f reps %d boot %d seed 0x%llx\n", cs, g.bin0, g.nrun, g.seconds, g.w, g.rho, g.rho10, reps, boot, seed);
-    printf("PASS %.4f NOT_ESTABLISHED %.4f HELD_OUT_FAIL %.4f (counts %d %d %d)\n", (double)cnt[0] / reps, (double)cnt[1] / reps, (double)cnt[2] / reps, cnt[0], cnt[1], cnt[2]);
+    printf("PASS %.4f NOT_ESTABLISHED %.4f HELD_OUT_FAIL %.4f (counts %d %d %d; Monte Carlo SE at most %.4f)\n", (double)cnt[0] / reps, (double)cnt[1] / reps, (double)cnt[2] / reps, cnt[0], cnt[1], cnt[2], 0.5 / sqrt((double)reps));
     return 0;
 }
 

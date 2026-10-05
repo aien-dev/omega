@@ -1,0 +1,22 @@
+# (d) regime-dependent PIT (v5 D1 per-level shares), runs 2 and 3
+case d bin0 0.0760 runs 2 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.0656 NOT_ESTABLISHED 0.8536 HELD_OUT_FAIL 0.0809 (counts 1312 17071 1617; Monte Carlo SE at most 0.0035)
+case d bin0 0.0760 runs 3 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.0475 NOT_ESTABLISHED 0.8518 HELD_OUT_FAIL 0.1007 (counts 950 17036 2014; Monte Carlo SE at most 0.0035)
+case d bin0 0.0760 runs 2 w 0.120 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.0726 NOT_ESTABLISHED 0.8061 HELD_OUT_FAIL 0.1214 (counts 1451 16121 2428; Monte Carlo SE at most 0.0035)
+case d bin0 0.0760 runs 3 w 0.120 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.0592 NOT_ESTABLISHED 0.8327 HELD_OUT_FAIL 0.1081 (counts 1185 16653 2162; Monte Carlo SE at most 0.0035)
+# replication of (a) and (b) under seed 0xE6A777 (table 1 used 0xE6A001)
+case a bin0 0.0760 runs 2 w 0.080 rho10 0.900 reps 20000 seed 0xe6a777 PASS 0.9931 NOT_ESTABLISHED 0.0069 HELD_OUT_FAIL 0.0000 (counts 19862 138 0; Monte Carlo SE at most 0.0035)
+case a bin0 0.0760 runs 3 w 0.080 rho10 0.900 reps 20000 seed 0xe6a777 PASS 0.9988 NOT_ESTABLISHED 0.0013 HELD_OUT_FAIL 0.0000 (counts 19975 25 0; Monte Carlo SE at most 0.0035)
+case b bin0 0.0760 runs 2 w 0.080 rho10 0.900 reps 20000 seed 0xe6a777 PASS 0.0017 NOT_ESTABLISHED 0.5644 HELD_OUT_FAIL 0.4339 (counts 34 11288 8678; Monte Carlo SE at most 0.0035)
+case b bin0 0.0760 runs 3 w 0.080 rho10 0.900 reps 20000 seed 0xe6a777 PASS 0.0003 NOT_ESTABLISHED 0.3752 HELD_OUT_FAIL 0.6244 (counts 7 7505 12488; Monte Carlo SE at most 0.0035)
+# false accept: true bin 0 below the 0.07 limit, runs 2 and 3, w 0.08
+case c bin0 0.0700 runs 2 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.4030 NOT_ESTABLISHED 0.5869 HELD_OUT_FAIL 0.0101 (counts 8060 11738 202; Monte Carlo SE at most 0.0035)
+case c bin0 0.0700 runs 3 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.4417 NOT_ESTABLISHED 0.5516 HELD_OUT_FAIL 0.0066 (counts 8835 11032 133; Monte Carlo SE at most 0.0035)
+case c bin0 0.0680 runs 2 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.2939 NOT_ESTABLISHED 0.6851 HELD_OUT_FAIL 0.0210 (counts 5879 13701 420; Monte Carlo SE at most 0.0035)
+case c bin0 0.0680 runs 3 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.2996 NOT_ESTABLISHED 0.6816 HELD_OUT_FAIL 0.0187 (counts 5992 13633 375; Monte Carlo SE at most 0.0035)
+case c bin0 0.0650 runs 2 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.1517 NOT_ESTABLISHED 0.7930 HELD_OUT_FAIL 0.0554 (counts 3033 15860 1107; Monte Carlo SE at most 0.0035)
+case c bin0 0.0650 runs 3 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.1252 NOT_ESTABLISHED 0.8066 HELD_OUT_FAIL 0.0682 (counts 2503 16133 1364; Monte Carlo SE at most 0.0035)
+case c bin0 0.0600 runs 2 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.0271 NOT_ESTABLISHED 0.7607 HELD_OUT_FAIL 0.2122 (counts 541 15214 4245; Monte Carlo SE at most 0.0035)
+case c bin0 0.0600 runs 3 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.0124 NOT_ESTABLISHED 0.6769 HELD_OUT_FAIL 0.3106 (counts 249 13538 6213; Monte Carlo SE at most 0.0035)
+case c bin0 0.0550 runs 2 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.0015 NOT_ESTABLISHED 0.4701 HELD_OUT_FAIL 0.5284 (counts 31 9401 10568; Monte Carlo SE at most 0.0035)
+case c bin0 0.0550 runs 3 w 0.080 rho10 0.900 reps 20000 seed 0xe6a001 PASS 0.0004 NOT_ESTABLISHED 0.2816 HELD_OUT_FAIL 0.7180 (counts 8 5631 14361; Monte Carlo SE at most 0.0035)
+[exited with code 0]
