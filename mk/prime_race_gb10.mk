@@ -6,9 +6,11 @@
 #                            negative control) and refuse them if nm finds a CUDA symbol
 # prime-race-gb10-host-test  golden words, nvdisasm listing, host IR simulator sweep (no device)
 # The chip test is bench/prime_race/tests/run_gb10_chip.sh (holds /tmp/aien-gb10.lock).
+# prime-race-gb10-launch-cost  build the DIAGNOSTIC per-launch cost tool (tests/gb10_launch_cost.c;
+#                            chip launches need GB10_CHIP_RUN=1 and the GPU lock)
 ifndef PRIME_RACE_GB10_MK
 PRIME_RACE_GB10_MK := 1
-.PHONY: prime-race-gb10 prime-race-gb10-host-test
+.PHONY: prime-race-gb10 prime-race-gb10-host-test prime-race-gb10-launch-cost
 GB_DIR = bench/prime_race
 GB_BUILD = $(GB_DIR)/build
 GB_OPT = -O3 -mcpu=native
@@ -35,4 +37,9 @@ $(GB_BUILD)/gb10_sieve_host_test: $(GB_DIR)/tests/gb10_sieve_host_test.c $(GB_DI
 	$(CC) $(CFLAGS) -I$(GB_DIR) -o $@ $(GB_DIR)/tests/gb10_sieve_host_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
 prime-race-gb10-host-test: $(GB_BUILD)/gb10_sieve_host_test
 	./$(GB_BUILD)/gb10_sieve_host_test
+$(GB_BUILD)/gb10_launch_cost: $(GB_DIR)/tests/gb10_launch_cost.c src/omega_blackwell_codegen.h src/omega_gpu_elementwise_api.h src/omega_gpu_session.h $(OUT_DIR)/libomega_gpu.a
+	@mkdir -p $(GB_BUILD)
+	$(CC) $(CFLAGS) $(GB_OPT) -o $@ $(GB_DIR)/tests/gb10_launch_cost.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+	@$(GB_NM_CHECK)
+prime-race-gb10-launch-cost: $(GB_BUILD)/gb10_launch_cost
 endif
