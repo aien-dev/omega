@@ -1,0 +1,25 @@
+[loc1] /home/drakestapleton/workspace/cand3-campaign/build-A CARGO_HOME=/home/drakestapleton/workspace/cand3-campaign/build-A/cargo-home entries_before_fetch=0
+[loc1] built at 2026-10-05T14:52:53Z omega=d70bc4a9a53c542318aa0d6cecd1256e479115e6 sc=2eec75b08aeb8f9d11f950070e13f6c2c046cf24 aienos=bbad5e4250e57f8cbd1be4cf1390109aa65ef92c physics=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+[loc1 run 1] done
+[loc1 run 2] done
+[loc1] aien-cli lines containing its checkout path: 0
+[loc1] omegatool does not contain /home/drakestapleton/workspace/cand3-campaign/build-A
+[loc1] omegatool does not contain /home/drakestapleton/workspace/cand3-campaign/build-A/physics
+[loc1] omegatool does not contain /home/drakestapleton/workspace/cand3-campaign/build-A/omega
+[loc2] /home/drakestapleton/workspace/cand3-campaign/build-B/nested/dir CARGO_HOME=/home/drakestapleton/workspace/cand3-campaign/build-B/nested/dir/cargo-home entries_before_fetch=0
+[loc2] built at 2026-10-05T14:55:29Z omega=d70bc4a9a53c542318aa0d6cecd1256e479115e6 sc=2eec75b08aeb8f9d11f950070e13f6c2c046cf24 aienos=bbad5e4250e57f8cbd1be4cf1390109aa65ef92c physics=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+[loc2 run 1] done
+[loc2] aien-cli lines containing its checkout path: 0
+[loc2] omegatool does not contain /home/drakestapleton/workspace/cand3-campaign/build-B/nested/dir
+[loc2] omegatool does not contain /home/drakestapleton/workspace/cand3-campaign/build-B/nested/dir/physics
+[loc2] omegatool does not contain /home/drakestapleton/workspace/cand3-campaign/build-B/nested/dir/omega
+SAME aien-cli-native-release x3 3a17ee79a238ad223fd59f4436d98906a0144b8d5ac47809da194a9ac1d493db
+SAME aienos-boot-image x3 8b1595cc8e6729d7531a08f2ff19ceb9cddc6eba731f4efb1543a2ee37da5a07
+SAME aienos-ck-core-image x3 a21218dc1df890274e1b90f9f8e4a3f3d374fd161b274836abcd462e3a195a82
+SAME aien-proof x3 a37247a121eb96f56a637d5edf0712a636b341b9c02478dce5c119b559db5430
+SAME aien-test x3 34ae31e5b16b078c6e41ca219c12e7895269542480c1b3509618ea3cd2c576ef
+SAME atlas-m2-boot-bin x3 1d6d75a6881bb9d9b17a777ec7dee885780386c4699d776adc7cc1c277b09012
+SAME omega-gpu-engine-lib x3 a4af088104203c9ce1b92b6787f140d822a8039ac86349a0438fb7a379c0fc5c
+SAME omega-runtime x3 6cd61d1099471f6b69340363f182bb29603faafb103fed918ebc062202294652
+SAME physics-boot-bin x3 4b22a08cd408b5cf90258af13b833b97a5211b4d2480fa74be357228f4aed3bd
+VERDICT PASS
