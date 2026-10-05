@@ -68,6 +68,11 @@ finish() {
     elif [ "$SEAT" = silicon ]; then gate=PASS
     else gate=HOST_PASS_NON_SILICON; fi
     receipt "$gate"
+    if [ "$FAILS" -gt 0 ]; then   # keep the program logs of a failed run for diagnosis
+        local keep="$HERE/build/r16-operator/failed-$SEAT-$(date -u +%Y%m%dT%H%M%SZ)-$$"
+        mkdir -p "$keep" && cp "$W"/*.log "$keep"/ 2>/dev/null
+        echo "R16 operator: program logs kept in $keep"
+    fi
     echo "R16 operator: $CHECKS checks, $FAILS failures, $SKIPS skipped ($SEAT, phases: $PHASES)"
     echo "R16 operator gate: R16_G6_OPERATOR=$gate"
     [ "$FAILS" = 0 ]
@@ -170,19 +175,29 @@ if [[ " $PHASES " == *" control "* ]] || [[ " $PHASES " == *" restart "* ]]; the
     check "control: the positive world opens the operator entry point" 'wait_world "$S" positive'
     C="$S/control"; cp "$C/operator.cred" "$W/cred-positive"
     forge "$W/cred-positive" "$W/forged" 's/^\(cred [0-9]* \)\(.\)\(.*\)$/\1\3\2/'   # rotated secret: right length, wrong bytes
-    op --control "$C" status
-    check "control: authorized status, world running, no stop yet" 'has "OK state=running" && [ "$(kv seq)" = 0 ]'
+    forge "$W/cred-positive" "$W/wrongcap" 's/^cap \([0-9]*\) /cap 1\1 /'
+    forge "$W/cred-positive" "$W/wrongsubj" 's/^subject 70$/subject 61/'
 fi
 if [[ " $PHASES " == *" control "* ]]; then
+    # Authorized stop, sent the moment the world exists: the program answers it as soon
+    # as setup is done, before the episode has done its work, so the promotion is still
+    # ahead and cannot happen under the stop.
+    op --control "$C" stop 7
+    check "stop: authorized stop accepted, durable, the first stop of this world" 'has "OK state=stopped" && [ "$(kv seq)" = 1 ] && [ "$(kv durable)" = 1 ]'
+    M="$S/gen-positive/OPERATOR_HALT"
+    check "stop: sealed mark in the generation store directory" \
+        'head -n 1 "$M" | grep -qx "aien-operator-halt v1" && grep -qx "reason 7" "$M" && grep -qx "subject 70" "$M" && sealed "$M"'
+    op --control "$C" status
+    sv1=$(kv served); pc1=$(kv production_commits); ag1=$(kv active_generation); pr1=$(kv promotion); if1=$(kv inforce)
+    check "stop: status says stopped, the promotion has not happened yet" 'has "state=stopped" && [ "$pr1" = 0 ] && [ "$if1" = 0 ] && [ -n "$sv1" ]'
+
     # Unauthorized requests: each refused, nothing changes, no state revealed.
     op --cred "$W/forged" --control "$C" stop
     check "unauthorized: forged secret, stop REFUSED identity" 'has "REFUSED reason=identity" && ! has state='
     op --cred "$W/forged" --control "$C" status
     check "unauthorized: forged secret, status REFUSED identity (no state revealed)" 'has "REFUSED reason=identity" && ! has state='
-    forge "$W/cred-positive" "$W/wrongcap" 's/^cap \([0-9]*\) /cap 1\1 /'
     op --cred "$W/wrongcap" --control "$C" stop
     check "unauthorized: another capability, stop REFUSED authority" 'has "REFUSED reason=authority"'
-    forge "$W/cred-positive" "$W/wrongsubj" 's/^subject 70$/subject 61/'
     op --cred "$W/wrongsubj" --control "$C" stop
     check "unauthorized: a reaction subject (61) with the operator secret, REFUSED identity" 'has "REFUSED reason=identity"'
     op --control "$C" --raw "aien-operator v1 stop"
@@ -195,29 +210,16 @@ if [[ " $PHASES " == *" control "* ]]; then
     else
         skip "unauthorized: peer of another uid (needs sudo -n)"
     fi
-    op --control "$C" status
-    check "unauthorized: after every refusal the world still runs, no stop taken, no mark" \
-        'has "OK state=running" && [ "$(kv seq)" = 0 ] && [ ! -e "$S/gen-positive/OPERATOR_HALT" ]'
-
-    # Authorized stop: the world freezes; the promotion cannot happen under it.
-    op --control "$C" stop 7
-    check "stop: authorized stop accepted, durable" 'has "OK state=stopped" && [ "$(kv seq)" = 1 ] && [ "$(kv durable)" = 1 ]'
-    M="$S/gen-positive/OPERATOR_HALT"
-    check "stop: sealed mark in the generation store directory" \
-        'head -n 1 "$M" | grep -qx "aien-operator-halt v1" && grep -qx "reason 7" "$M" && grep -qx "subject 70" "$M" && sealed "$M"'
-    op --control "$C" status; S1=$REPLY_
-    sv1=$(kv served); pc1=$(kv production_commits); ag1=$(kv active_generation); pr1=$(kv promotion); if1=$(kv inforce)
-    check "stop: status says stopped, the promotion has not happened yet" 'has "state=stopped" && [ "$pr1" = 0 ] && [ "$if1" = 0 ] && [ -n "$sv1" ]'
+    op --cred "$W/forged" --control "$C" resume
+    check "unauthorized: a forged resume is REFUSED" 'has "REFUSED reason=identity"'
+    op --cred "$W/wrongcap" --control "$C" resume
+    check "unauthorized: a resume with another capability is REFUSED" 'has "REFUSED reason=authority"'
+    op --cred "$W/wrongsubj" --control "$C" resume
+    check "unauthorized: a resume by a reaction subject is REFUSED" 'has "REFUSED reason=identity"'
     sleep 2
     op --control "$C" status
-    check "stop: two seconds later nothing was served, committed or promoted" \
-        '[ "$(kv served)" = "$sv1" ] && [ "$(kv production_commits)" = "$pc1" ] && [ "$(kv active_generation)" = "$ag1" ] && [ "$(kv promotion)" = 0 ] && [ "$(kv inforce)" = 0 ]'
-    op --cred "$W/forged" --control "$C" resume
-    check "stop: a forged resume is REFUSED and the world stays stopped" 'has "REFUSED reason=identity"'
-    op --cred "$W/wrongcap" --control "$C" resume
-    check "stop: a resume with another capability is REFUSED" 'has "REFUSED reason=authority"'
-    op --control "$C" status
-    check "stop: still stopped after the refused resumes" 'has "state=stopped" && [ "$(kv served)" = "$sv1" ]'
+    check "stop: after every refusal and two seconds, still the same stop; nothing served, committed or promoted" \
+        'has "state=stopped" && [ "$(kv seq)" = 1 ] && [ "$(kv served)" = "$sv1" ] && [ "$(kv production_commits)" = "$pc1" ] && [ "$(kv active_generation)" = "$ag1" ] && [ "$(kv promotion)" = 0 ] && [ "$(kv inforce)" = 0 ] && [ -e "$M" ]'
     op --control "$C" stop 8
     check "repeat: a second stop answers ALREADY, same stop" 'has "ALREADY state=stopped" && [ "$(kv seq)" = 1 ]'
     op --control "$C" resume
@@ -231,16 +233,31 @@ if [[ " $PHASES " == *" control "* ]]; then
     ok=0
     for i in $(seq 1 200); do op --control "$C" status; [ "$(kv served)" != "$sv1" ] && { ok=1; break; }; sleep 0.05; done
     check "resume: production serves again after the resume" '[ $ok = 1 ]'
+    op --cred "$W/forged" --control "$C" stop
+    check "unauthorized: a forged stop of the running world is REFUSED identity" 'has "REFUSED reason=identity"'
+    op --cred "$W/wrongcap" --control "$C" stop
+    check "unauthorized: a stop of the running world with another capability is REFUSED authority" 'has "REFUSED reason=authority"'
+    op --control "$C" status
+    check "unauthorized: after the refused stops the world still runs, no new stop, no mark" \
+        'has "OK state=running" && [ "$(kv seq)" = 1 ] && [ ! -e "$M" ]'
 
     # In-flight work under production load: stop and resume while requests run.
-    cycles=0
-    for i in $(seq 1 12); do
-        op --control "$C" stop 9 || break
+    # At least 12 cycles, then on until a stop has caught an activation
+    # computing (status cancelled=, at most 400 cycles). Every request carries
+    # the positive world's own credential, so a stop can never land in the next world:
+    # once the positive world ends, the next request is REFUSED and the loop ends.
+    cycles=0; inflight=0
+    for i in $(seq 1 400); do
+        op --cred "$W/cred-positive" --control "$C" stop 9 || break
         has "OK state=stopped" || break
         sleep 0.05
-        op --control "$C" resume || break
+        op --cred "$W/cred-positive" --control "$C" resume || break
         has "OK state=running" || break
         cycles=$((cycles + 1))
+        if [ $cycles -ge 12 ]; then
+            op --cred "$W/cred-positive" --control "$C" status || break
+            inflight=$(kv cancelled); [ "${inflight:-0}" -ge 1 ] && break
+        fi
     done
     check "in-flight: at least 6 stop/resume cycles while the positive world runs ($cycles)" '[ $cycles -ge 6 ]'
     check "positive world: the promotion happens after the resume (generation advanced)" 'wait_line "$LA" "R13 positive: generation"'

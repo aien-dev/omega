@@ -444,6 +444,7 @@ typedef struct {
     uint64_t desc_rejected;
     uint64_t resident_claims;   /* claims posted to a resident seat */
     uint64_t resident_closed;   /* claims ended: committed, refused, or lost */
+    uint64_t resident_halted;   /* of those closed, results caught by an operator stop (re-run on resume) */
     uint64_t deferrals;         /* activations that handed an effect to a durable executor */
     uint64_t seat_losses;       /* times a seat was declared lost */
     /* R15 instrumentation. Counted, never inferred. */
@@ -529,6 +530,7 @@ typedef struct {
     uint64_t t_ns;          /* CLOCK_REALTIME of the stop */
     int durable;            /* 1 mark on disk; 0 no halt dir; < 0 -errno of the write */
     uint64_t refused;       /* activations, publications, seat results, creates and retires refused */
+    uint64_t cancelled;     /* of those, activations and seat results caught by a stop, re-run on resume */
 } RxHaltStatus;
 
 /* Durable recorder (M20 Cortex). Called with the world mutex held, once per

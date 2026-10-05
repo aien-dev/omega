@@ -105,7 +105,7 @@ same `halt_authorize` the stop and resume use, under the same locks, added to
 
 | command | world call | reply on success |
 |---|---|---|
-| `status` | `rx_world_operator_authorize`, `rx_world_halt_status` | `OK state=running\|stopped restored= seq= durable= refused= crumbs= reactions=` plus program counters `served= production_commits= inforce= active_generation=` |
+| `status` | `rx_world_operator_authorize`, `rx_world_halt_status` | `OK state=running\|stopped restored= seq= durable= refused= cancelled= crumbs= reactions=` plus program counters `served= production_commits= inforce= active_generation=` |
 | `stop [reason]` | `rx_world_emergency_stop` | `OK state=stopped seq= crumb= durable=`; a second stop: `ALREADY` with no new crumb |
 | `resume` | `rx_world_emergency_resume` | `OK state=running seq=`; a running world: `NOT_STOPPED` |
 | `revoke-cap` | authorize, then `aienos_cap_revoke` of the presented control capability by the authority's office | `OK revoked=capability`; afterwards every request with that capability is `REFUSED reason=authority` |
@@ -159,7 +159,12 @@ earlier world or an earlier program start fails the constant-time caller check
   published again after resume, and the end-of-mode checks wait while the world is
   stopped. A durable generation proposal or promotion that the store refuses
   because of the stop (`RX_GEN_ERR_HALTED`) is not an outcome: the activation waits
-  and posts it again after the resume (`halted_wait`, `src/runtime/rx_living.c`). A stop therefore delays the episode; it does not fail it.
+  and posts it again after the resume (`halted_wait`, `src/runtime/rx_living.c`). A world
+  whose episode is done is not torn down while stopped: the program waits for the resume
+  (or `shutdown`) before it audits and ends the mode. A seat result caught by a stop is
+  claimed again after the resume; the world counts those claims (`stats.resident_halted`)
+  and the episode check subtracts them before it compares claims with trials.
+  A stop therefore delays the episode and leaves its outcome unchanged.
 * Evidence: at the end of every mode the program reads its crumb log (the canonical
   evidence, spec §4) and prints `R13 operator <mode-key>: stops S resumes R restored X
   open O; under stop: commits 0 externals 0 cancelled C`. Any COMMIT or EXTERNAL crumb

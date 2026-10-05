@@ -828,14 +828,20 @@ static uint64_t production_between(Rig *r, uint64_t lo, uint64_t hi) {
 
 /* Ring transport only: accept the seat's completion notices into the world.
  * It carries no meaning and decides nothing. */
+/* R16 G6: a seat result refused because an operator stop is in force
+ * (RX_ERR_HALTED) is not a transport fault: the world re-projected the window
+ * and runs the activation again on resume (spec section 3). */
 static int progress(Rig *r) {
 #ifdef R13_SILICON
     int rc = rx_resident_accept(&r->w);
-    return rc == RX_ERR_NOT_FOUND || rc == RX_OK ? 0 : rc;
+    return rc == RX_ERR_NOT_FOUND || rc == RX_OK || rc == RX_ERR_HALTED ? 0 : rc;
 #else
     int rc = rx_resident_seat_step(&r->w);
-    if (rc == 1) return rx_resident_accept(&r->w);
-    return rc < 0 ? rc : 0;
+    if (rc == 1) {
+        rc = rx_resident_accept(&r->w);
+        return rc == RX_ERR_HALTED ? 0 : rc;
+    }
+    return rc < 0 && rc != RX_ERR_HALTED ? rc : 0;
 #endif
 }
 
@@ -1190,12 +1196,14 @@ static int run(Rig *r, int mode) {
         field(r, r->aien.o.experiment_belief, 2) != RX_AIEN_EXP_SUPPORTED ||
         field(r, r->aien.o.experiment_belief, 3) != RX_LIVING_TRIALS ||
         field(r, r->living.o.evidence, 4) != RX_LIVING_TRIALS ||
-        r->w.stats.resident_claims != RX_LIVING_TRIALS ||
+        /* A seat result caught by an operator stop is claimed again on resume. */
+        r->w.stats.resident_claims - r->w.stats.resident_halted != RX_LIVING_TRIALS ||
         r->w.reactions[r->living.r_seat].commits != RX_LIVING_TRIALS ||
         r->w.reactions[r->living.r_candidate].commits != 1 ||
         r->w.reactions[r->promoter.reaction].commits != 1)
-        FAIL("episode shape: claims %llu seat commits %llu trials %llu",
-             U(r->w.stats.resident_claims), U(r->w.reactions[r->living.r_seat].commits),
+        FAIL("episode shape: claims %llu (%llu caught by a stop) seat commits %llu trials %llu",
+             U(r->w.stats.resident_claims), U(r->w.stats.resident_halted),
+             U(r->w.reactions[r->living.r_seat].commits),
              U(field(r, r->living.o.evidence, 4)));
     if (after_lineage != lineage + 1 || active == before_generation ||
         field(r, r->living.o.inforce, 7) != active)
@@ -2107,6 +2115,14 @@ int main(int argc, char **argv) {
         /* Fabric F5-0: host and silicon test builds (Lane 17, Lane 32). */
         if (rc == 0 && mode == POSITIVE) rc = fabric_phase(r);
 #endif
+        /* R16 G6: a world is not torn down under an operator stop. A stop that lands
+         * after the episode keeps the world up until the operator resumes it (or
+         * shuts the program down); only then is the mode audited and ended. */
+        if (rc == 0 && r->ready && world_halted(r)) {
+            printf("R13 operator %s: stopped after its episode; waiting for an operator resume\n",
+                   g_mode_key[mode]);
+            if (wait_running(r) != 0) rc = OP_SHUTDOWN;
+        }
         /* R16 G6: the crumb log shows what operator control did in this world. */
         if (r->ready && (rc == 0 || rc == OP_SHUTDOWN) && operator_audit(r) != 0 && rc == 0) {
             fprintf(stderr, "R13 %s: work committed or published while the operator stop was in force\n",

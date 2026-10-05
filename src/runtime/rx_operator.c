@@ -221,9 +221,10 @@ static void handle(RxOperator *op, Req *q, char *out, size_t n) {
     rx_world_halt_status(w, &h);
     if (status) {
         int used = snprintf(out, n, "OK state=%s restored=%d seq=%llu durable=%d refused=%llu "
-                            "crumbs=%llu reactions=%u",
+                            "cancelled=%llu crumbs=%llu reactions=%u",
                             h.halted ? "stopped" : "running", h.restored ? 1 : 0,
                             (unsigned long long)h.seq, h.durable, (unsigned long long)h.refused,
+                            (unsigned long long)h.cancelled,
                             (unsigned long long)__atomic_load_n(&w->n_crumbs, __ATOMIC_RELAXED),
                             (unsigned)__atomic_load_n(&w->n_reactions, __ATOMIC_RELAXED));
         if (op->cfg.describe && used > 0 && (size_t)used + 2 < n) {
