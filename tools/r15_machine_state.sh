@@ -6,6 +6,8 @@
 #
 #   tools/r15_machine_state.sh preflight <out>  exit 0 if the X925 sustains
 #                                               its clock, 3 if it does not
+#   tools/r15_machine_state.sh energy-preflight exit 0 if the SPBM package-energy
+#                                               reader gives valid samples, 5 if not
 #   tools/r15_machine_state.sh start <out>      begin 1 s sampling
 #   tools/r15_machine_state.sh mark <out> <text>
 #   tools/r15_machine_state.sh stop <out>       end sampling, write summary
@@ -37,6 +39,54 @@ preflight_ghz() {
 # preflight-parse <perf csv>: the preflight verdict on a recorded file (tests).
 if [ "${1:-}" = preflight-parse ]; then preflight_ghz "${2:?perf csv}"; exit $?; fi
 
+
+# energy_preflight: is the spec §7/§17 C2 package-energy reader present and
+# returning valid samples? The binding source is the owner-key signed
+# read-only SPBM reader (hwmon name "aien_spbm", energy1 labelled "pkg", the
+# same match tests/runtime/r15_measure.c uses). Spec §7: "If package energy
+# cannot be read by a physical hardware source at qualification time, metric
+# 17 is incomplete and R15 cannot PASS. GPU-domain energy alone is not
+# accepted", and §17 says GPM and NVML are "never substituted". So no other
+# source is tried here. Exit 0 = reader valid; 5 = INSTRUMENT_UNAVAILABLE
+# (reason=absent or reason=invalid). That is a blocked run, not a measured
+# FAIL: no trial is started, no receipt is written.
+# Env (tests): R15_HWMON_ROOT (default /sys/class/hwmon), R15_ENERGY_PREFLIGHT_SLEEP (0.1 s).
+energy_preflight() {
+    local root=${R15_HWMON_ROOT:-/sys/class/hwmon} nap=${R15_ENERGY_PREFLIGHT_SLEEP:-0.1}
+    local h="" d s v prev="" first="" n=0 ov
+    for d in "$root"/hwmon*; do
+        [ "$(cat "$d/name" 2>/dev/null)" = aien_spbm ] && { h=$d; break; }
+    done
+    if [ -z "$h" ]; then
+        echo "INSTRUMENT_UNAVAILABLE reason=absent: no hwmon named aien_spbm (the signed SPBM reader is not loaded); package energy cannot be read, R15 cannot PASS (spec §7)"
+        return 5
+    fi
+    if [ "$(cat "$h/energy1_label" 2>/dev/null)" != pkg ]; then
+        echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy1_label is not pkg at $h"
+        return 5
+    fi
+    ov=$(cat "$h/energy1_overflow_raw" 2>/dev/null)
+    if [ -n "$ov" ] && [ "$ov" != 0 ]; then
+        echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy1 overflow indicator is $ov"
+        return 5
+    fi
+    for s in 1 2 3; do
+        v=$(cat "$h/energy1_input" 2>/dev/null)
+        case "$v" in ''|*[!0-9]*) echo "INSTRUMENT_UNAVAILABLE reason=invalid: sample $s of energy1_input is not a number ('$v')"; return 5;; esac
+        if [ "$v" -le 0 ]; then echo "INSTRUMENT_UNAVAILABLE reason=invalid: sample $s reads $v uJ (a running package counter is above zero)"; return 5; fi
+        if [ -n "$prev" ] && [ "$v" -lt "$prev" ]; then echo "INSTRUMENT_UNAVAILABLE reason=invalid: counter went backwards ($prev -> $v uJ)"; return 5; fi
+        [ -z "$first" ] && first=$v
+        prev=$v; n=$((n + 1))
+        [ "$s" -lt 3 ] && sleep "$nap"
+    done
+    if [ "$prev" -le "$first" ]; then
+        echo "INSTRUMENT_UNAVAILABLE reason=invalid: counter did not advance over $n samples ($first uJ)"
+        return 5
+    fi
+    echo "energy preflight ok: $h pkg $first -> $prev uJ over $n samples"
+    return 0
+}
+if [ "${1:-}" = energy-preflight ]; then energy_preflight; exit $?; fi
 CMD=${1:?preflight, start, mark or stop}
 OUT=${2:?out dir}
 mkdir -p "$OUT"
