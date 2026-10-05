@@ -1,0 +1,96 @@
+================================================================================
+    AIEN PHYSICS SUBSTRATE — MILESTONE 15 QUALIFICATION RUNNER
+    Target: Bounded Coherent Memory Interface, SMMUv3 DMA Sandboxing & Accelerator Authority
+    Hardware Target: NVIDIA DGX Spark (Grace Neoverse V2 + Blackwell GB10)
+    Authority Principle: M15 establishes who may touch the accelerator
+                         M16 discovers how the accelerator is actually commanded
+================================================================================
+
+[*] Step 1: Building M15 toolchain...
+[*] Building m15tool...
+[*] Build successful: /home/drakestapleton/workspace/hive/CHIPWAIT/physics-27/m15/build/m15tool
+    m15tool built cleanly.
+
+[*] Step 2: Running 10 canonical M15 qualification gates...
+================================================================================
+    AIEN PHYSICS SUBSTRATE — MILESTONE 15: QUALIFICATION RUNNER
+================================================================================
+Timestamp: 1791080647
+Host:      NVIDIA DGX Spark (Grace Neoverse V2 + Blackwell GB10)
+Boundary:  Authority Model & Empirically Grounded Hardware Topology
+
+  [PASS] PHYSICS_ACCEL_MEM_BOUNDS_PASS              : Coherent DRAM boundaries and kernel memory isolation
+  [PASS] PHYSICS_ACCEL_DMA_POLICY_PASS              : SMMUv3 Stage 1 IOVA-to-PA translation policy and DMA sandboxing
+  [PASS] PHYSICS_ACCEL_QUEUE_AUTHORITY_PASS         : Bounded queue authority and doorbell mediation policy
+  [PASS] PHYSICS_ACCEL_DEVICE_LIFECYCLE_PASS        : Deterministic monotonic device lifecycle transitions and fault isolation
+  [PASS] PHYSICS_ACCEL_RECEIPT_CHAIN_PASS           : Immutable 192B receipt with rolling SHA-256 seal chain
+  [PASS] PHYSICS_ACCEL_OMEGA_INGRESS_PASS           : Omega mediated intent ingress and capability gating
+    [Boundary] PCI BDF:        000f:01:00.0
+    [Boundary] Device:         NVIDIA Blackwell GB10 (0x10de:0x2e12)
+    [Boundary] IOMMU Group:    20
+    [Boundary] SMMUv3 Base:    arm-smmu-v3.1.auto @ 0x13000000
+    [Boundary] Stream ID:      0x0100 (256 dec, ACPI IORT Node 29)
+    [Boundary] BAR0 Aperture:  0x24000000 - 0x27ffffff (64 MiB)
+    [Boundary] Subsystems:     6 ownership boundaries documented
+    [Boundary] Sovereign Rule: 0 guessed MMIO writes performed
+  [PASS] PHYSICS_ACCEL_HARDWARE_BOUNDARY_PASS       : Truthful DGX Spark hardware topology observation & ownership recording
+    [Toolchain] Host qualification compiler: GCC (temporary non-lineage scaffold)
+    [Toolchain] Canonical accelerator runtime dependencies: 0 CUDA, 0 LLVM, 0 Python, 0 inline asm
+  [PASS] PHYSICS_ACCEL_ZERO_RUNTIME_DEP_PASS        : Zero foreign runtime dependencies (0 CUDA, 0 LLVM, 0 Python, 0 inline asm)
+  [PASS] PHYSICS_ACCEL_PROVENANCE_PASS              : Capability provenance verification and monotonic attenuation
+  [PASS] PHYSICS_ACCEL_RECEIPT_PASS                 : 192B EffectReceipt certifying observed hardware boundary parameters
+================================================================================
+  QUALIFICATION GATES: 10 | PASSED: 10 | FAILED: 0
+================================================================================
+    All 10 canonical gates passed.
+
+[*] Step 3: Running Hardware Boundary Demonstration and dumping evidence...
+================================================================================
+  AIEN PHYSICS SUBSTRATE — MILESTONE 15: HARDWARE BOUNDARY DEMONSTRATION
+================================================================================
+  OBSERVED HARDWARE TOPOLOGY:
+    PCI BDF:          000f:01:00.0
+    Device:           NVIDIA Blackwell GB10 (0x10de:0x2e12)
+    IOMMU Group:      20
+    SMMUv3 Device:    arm-smmu-v3.1.auto @ 0x13000000
+    Stream ID:        0x0100 (256 decimal, ACPI IORT Node 29)
+    Coherent DRAM:    [0x80000000, 0x2080000000) (128 GiB unified LPDDR5x)
+    BAR0 Aperture:    0x24000000 - 0x27ffffff (64 MiB)
+
+  SUBSYSTEM OWNERSHIP BOUNDARIES:
+    [1] SMMUv3 Hardware Programming  : Linux kernel (arm_smmu_v3) / active device stack
+        Physics Status : Stage 1 policy model implemented; native hardware takeover not yet performed
+        Transfer Plan  : Future milestone / bare-metal isolated environment
+    [2] Device Address / IOVA Mappings : Linux kernel (dma-iommu / uvm)
+        Physics Status : Stage 1 window translation & permission bounds implemented; hardware page-table walk not taken over
+        Transfer Plan  : Future milestone / bare-metal isolated environment
+    [3] GPU BAR Mappings             : Linux kernel PCI subsystem & nvidia.ko (0x24000000-0x27ffffff)
+        Physics Status : Aperture bounds observed; direct userspace mmap restricted by CONFIG_IO_STRICT_DEVMEM
+        Transfer Plan  : M16 (Blackwell native submission characterization)
+    [4] GPU Submission Queues        : nvidia.ko / user channel pushbuffers
+        Physics Status : Circular ring queue authority model implemented; native Blackwell channel format unknown
+        Transfer Plan  : M16 (empirical discovery of command packet & queue structure)
+    [5] GPU Completion Handling      : nvidia.ko interrupt handler & semaphores
+        Physics Status : Completion receipt model implemented; native Blackwell completion protocol unknown
+        Transfer Plan  : M16 (empirical discovery of completion signaling & fences)
+    [6] Device Reset                 : Linux kernel PCI core / GPU driver reset handler
+        Physics Status : Monotonic device state machine implemented; raw control register reset not executed to preserve running host
+        Transfer Plan  : Future milestone / bare-metal isolated environment
+
+  CANONICAL BOUNDARY PRINCIPLE:
+    M15 ESTABLISHES WHO MAY TOUCH THE ACCELERATOR (Authority & Topology Grounding)
+    M16 DISCOVERS HOW THE ACCELERATOR IS ACTUALLY COMMANDED (Empirical Path Discovery)
+================================================================================
+    [Evidence] Boundary evidence artifacts dumped to evidence/m15-boundary/
+
+[*] Step 4: Running regression checks on foundational physics...
+    M3 regression check OK (physics.bin 18432 bytes).
+
+[*] Step 5: Computing artifact digests...
+[*] Step 6: Generating formal qualification receipt: /home/drakestapleton/workspace/hive/CHIPWAIT/physics-27/evidence/physics_accelerator_link_qualification_receipt.json...
+    Receipt written to /home/drakestapleton/workspace/hive/CHIPWAIT/physics-27/evidence/physics_accelerator_link_qualification_receipt.json.
+
+================================================================================
+    MILESTONE 15 QUALIFICATION RESULT: ALL 10 GATES PASSED
+    STATUS: COMPLETE / HARDWARE BOUNDARY QUALIFIED
+================================================================================

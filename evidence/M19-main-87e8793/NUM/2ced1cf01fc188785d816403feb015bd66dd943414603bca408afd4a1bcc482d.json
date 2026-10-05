@@ -1,0 +1,1772 @@
+{
+  "candidate_binary_sha256": "73254f8c286cc9dbfb5e1aa1054e8a8bba0c14435ee95f632c98847badbe0188",
+  "candidate_git_commit": "87e8793c9b4e790412b37be83600b8c6ba5db8d3",
+  "candidate_trees_clean": {
+    "omega": true,
+    "physics": true
+  },
+  "digest_meaning": "integrity only, not authenticity: re-hash blobs/<sha256>.{log,stderr,bin} named here",
+  "gate": "M19R_GATE5_OMEGA_NUMERIC_0",
+  "gate_binary_exit_status": 0,
+  "gate_log_sha256": "560d0c177392aa51a5a14d57b08f565e13d840f85d171bcc6cc4b2a7d4589d4f",
+  "gate_stderr_sha256": "8f7d8e48e2d74db944670fc3679c0b9c88800bdd4ae572fd3c7608561daa7388",
+  "gb10_parity": [
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FADD",
+      "subnormal_expected": 609,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSUB",
+      "subnormal_expected": 614,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FMUL",
+      "subnormal_expected": 565,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "c_bits": "0x3f800000",
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FFMA",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "c_bits": "0x80000000",
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FFMA",
+      "subnormal_expected": 565,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "c_bits": "0x00800000",
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FFMA",
+      "subnormal_expected": 372,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "c_bits": "0xbf800000",
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FFMA",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "c_bits": "0x7fc00000",
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FFMA",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "c_bits": "0x7f800000",
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FFMA",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "c_bits": "0x00000003",
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FFMA",
+      "subnormal_expected": 1439,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "c_bits": "0x80800000",
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FFMA",
+      "subnormal_expected": 269,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FMNMX_MIN",
+      "subnormal_expected": 876,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FMNMX_MAX",
+      "subnormal_expected": 731,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "I2FP",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "F2I",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "bound": "rel<=2^-20 vs IEEE, finite normal in and out",
+      "checked": 2976,
+      "compare": "SEED_BOUND",
+      "first_violation": null,
+      "n": 4096,
+      "op": "MUFU_RCP",
+      "out_of_bound": 0,
+      "skipped": 1120,
+      "tier": "gb10"
+    },
+    {
+      "bound": "rel<=2^-20 vs IEEE, finite normal in and out",
+      "checked": 1638,
+      "compare": "SEED_BOUND",
+      "first_violation": null,
+      "n": 4096,
+      "op": "MUFU_RSQ",
+      "out_of_bound": 0,
+      "skipped": 2458,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "LDS_STS",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "SHFL_DOWN",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "DIV",
+      "subnormal_expected": 115,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "SQRT",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 2
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 5
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 95
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 24
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 2
+        }
+      },
+      "checked": 128,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "REDUCE_SUM",
+      "reduction_order": "PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1",
+      "subnormal_expected": 12,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_LT_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_LE_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_GT_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_EQ_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_NE_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_NUM_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_NAN_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_LTU_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_LEU_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_GTU_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_GEU_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_EQU_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FSETP_NEU_SEL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "F2I_FLOOR",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "F2I_CEIL",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "F2I_RNI",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "INT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "F2U",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "I2FP_U32",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "F16_BITS",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "F32_TO_F16",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BF16_BITS",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "F32_TO_BF16",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "F16_TO_F32",
+      "subnormal_expected": 0,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "BF16_TO_F32",
+      "subnormal_expected": 250,
+      "tier": "gb10"
+    },
+    {
+      "by_input_class": {
+        "inf": {
+          "mismatches": 0,
+          "n": 64
+        },
+        "nan": {
+          "mismatches": 0,
+          "n": 149
+        },
+        "normal": {
+          "mismatches": 0,
+          "n": 3049
+        },
+        "subnormal": {
+          "mismatches": 0,
+          "n": 770
+        },
+        "zero": {
+          "mismatches": 0,
+          "n": 64
+        }
+      },
+      "checked": 4096,
+      "compare": "BIT_EXACT",
+      "first_mismatch": null,
+      "mismatches": 0,
+      "n": 4096,
+      "op": "FFMA_V",
+      "subnormal_expected": 69,
+      "tier": "gb10"
+    }
+  ],
+  "hardware_descriptor": {
+    "derived_alias": "sm_121",
+    "descriptor_digest": "91684948286bd0f1e34caca4cb2d8f9b43d45d0f7ede39ba1a26e32559e53ce4",
+    "source": "FORGE_PROBE"
+  },
+  "hardware_descriptor_digest": "91684948286bd0f1e34caca4cb2d8f9b43d45d0f7ede39ba1a26e32559e53ce4",
+  "observed_fail_count": 0,
+  "observed_pass_count": 26,
+  "observed_test_count": 26,
+  "physics_candidate_git_commit": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf",
+  "physics_lock": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf",
+  "predecessor_historical_gate5_sha256": "a78ffe05c6f9dd057640baeaa3f8565589fab9c6582a6dd96dad7d376a3d77a0",
+  "receipt_digest": "2ced1cf01fc188785d816403feb015bd66dd943414603bca408afd4a1bcc482d",
+  "run_git_commit": "87e8793c9b4e790412b37be83600b8c6ba5db8d3",
+  "run_id": "20261003T133826Z-3e13098bea98",
+  "schema": "AIEN_OMEGA_NUMERIC_0_V1",
+  "status": "PASS",
+  "test_manifest": {
+    "command": "tests/test_omega_numeric",
+    "encoded_ops": [
+      "FADD",
+      "FSUB",
+      "FMUL",
+      "FFMA",
+      "FSETP_SEL",
+      "FSEL",
+      "FMNMX_MIN",
+      "FMNMX_MAX",
+      "I2FP",
+      "F2I",
+      "MUFU_RCP",
+      "MUFU_RSQ",
+      "SHFL_DOWN",
+      "LDS_STS",
+      "REDUCE_SUM",
+      "FSETP_LT_SEL",
+      "FSETP_LE_SEL",
+      "FSETP_GT_SEL",
+      "FSETP_EQ_SEL",
+      "FSETP_NE_SEL",
+      "FSETP_NUM_SEL",
+      "FSETP_NAN_SEL",
+      "FSETP_LTU_SEL",
+      "FSETP_LEU_SEL",
+      "FSETP_GTU_SEL",
+      "FSETP_GEU_SEL",
+      "FSETP_EQU_SEL",
+      "FSETP_NEU_SEL",
+      "F2I_FLOOR",
+      "F2I_CEIL",
+      "F2I_RNI",
+      "F2U",
+      "I2FP_U32",
+      "F32_TO_F16",
+      "F32_TO_BF16",
+      "F16_TO_F32",
+      "BF16_TO_F32",
+      "FFMA_V",
+      "DIV",
+      "SQRT"
+    ],
+    "expected_test_ids": [
+      "FPCR_RNE_NO_FTZ_REQUIRED",
+      "PROVENANCE_MATCHES_EXECUTOR",
+      "NOT_ENCODED_OPS_REFUSED_BEFORE_SUBMISSION",
+      "FP32_SIMT_OPCODES_ENCODED",
+      "OMEGA_MATH_SEQUENCES_QUALIFIED",
+      "WARP_REDUCTION_ORDER_DECLARED",
+      "CPU_TIER_EQUALS_REFERENCE",
+      "CPU_TIER_SUBNORMALS_PRESERVED",
+      "CPU_TIER_INDEPENDENT_ORACLE",
+      "CPU_GB10_BIT_PARITY",
+      "SUBNORMALS_PRESERVED_NO_FTZ",
+      "MUFU_SEED_ONLY_NOT_COMPARED",
+      "EDGE_CLASS_BEHAVIOR_VERIFIED",
+      "HARDWARE_DESCRIPTOR_PROBED",
+      "NEG_FTZ_DETECTED_AND_REJECTED",
+      "NEG_UNORDERED_REDUCTION_DIVERGENCE_CAUGHT",
+      "NEG_RAW_MUFU_APPROX_REJECTED_WITHOUT_REFINEMENT",
+      "NEG_UNKNOWN_OPCODE_FAILS_CLOSED",
+      "NEG_OPCODE_PROVENANCE_INTEGRITY_VERIFIED",
+      "NEG_NONDEFAULT_FPCR_REFUSED",
+      "NEG_COMPARATOR_CATCHES_ONE_BIT",
+      "NEG_BAD_SHARED_AND_WARP_SHAPES_REFUSED",
+      "NEG_PATCH_STRUCTURE_CHECKED_BEFORE_SUBMISSION",
+      "E1_SCALAR_BOUNDARY_VALUES",
+      "E1_SCALAR_CPU_EQUALS_REFERENCE",
+      "E1_SCALAR_INDEPENDENT_ORACLE"
+    ],
+    "operation_manifest": {
+      "checked": {
+        "REDUCE_SUM": 128
+      },
+      "ffma_c": [
+        "0x3f800000",
+        "0x80000000",
+        "0x00800000",
+        "0xbf800000",
+        "0x7fc00000",
+        "0x7f800000",
+        "0x00000003",
+        "0x80800000"
+      ],
+      "n": 4096,
+      "ops": {
+        "BF16_TO_F32": "BIT_EXACT",
+        "DIV": "BIT_EXACT",
+        "F16_TO_F32": "BIT_EXACT",
+        "F2I": "INT_EXACT",
+        "F2I_CEIL": "INT_EXACT",
+        "F2I_FLOOR": "INT_EXACT",
+        "F2I_RNI": "INT_EXACT",
+        "F2U": "INT_EXACT",
+        "F32_TO_BF16": "BF16_BITS",
+        "F32_TO_F16": "F16_BITS",
+        "FADD": "BIT_EXACT",
+        "FFMA": "BIT_EXACT",
+        "FFMA_V": "BIT_EXACT",
+        "FMNMX_MAX": "BIT_EXACT",
+        "FMNMX_MIN": "BIT_EXACT",
+        "FMUL": "BIT_EXACT",
+        "FSEL": "INT_EXACT",
+        "FSETP_EQU_SEL": "INT_EXACT",
+        "FSETP_EQ_SEL": "INT_EXACT",
+        "FSETP_GEU_SEL": "INT_EXACT",
+        "FSETP_GTU_SEL": "INT_EXACT",
+        "FSETP_GT_SEL": "INT_EXACT",
+        "FSETP_LEU_SEL": "INT_EXACT",
+        "FSETP_LE_SEL": "INT_EXACT",
+        "FSETP_LTU_SEL": "INT_EXACT",
+        "FSETP_LT_SEL": "INT_EXACT",
+        "FSETP_NAN_SEL": "INT_EXACT",
+        "FSETP_NEU_SEL": "INT_EXACT",
+        "FSETP_NE_SEL": "INT_EXACT",
+        "FSETP_NUM_SEL": "INT_EXACT",
+        "FSETP_SEL": "INT_EXACT",
+        "FSUB": "BIT_EXACT",
+        "I2FP": "BIT_EXACT",
+        "I2FP_U32": "BIT_EXACT",
+        "LDS_STS": "INT_EXACT",
+        "MUFU_RCP": "SEED_BOUND",
+        "MUFU_RSQ": "SEED_BOUND",
+        "REDUCE_SUM": "BIT_EXACT",
+        "SHFL_DOWN": "INT_EXACT",
+        "SQRT": "BIT_EXACT"
+      },
+      "reduction_order": {
+        "REDUCE_SUM": "PAIRWISE_TREE_LANE_DELTA_16_8_4_2_1"
+      }
+    }
+  },
+  "test_manifest_sha256": "91d148da85dc70b17937a5d1a8069477e03cfebabddfab4db2ee15c0338bc14d",
+  "test_results": [
+    {
+      "id": "FPCR_RNE_NO_FTZ_REQUIRED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "PROVENANCE_MATCHES_EXECUTOR",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NOT_ENCODED_OPS_REFUSED_BEFORE_SUBMISSION",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NEG_BAD_SHARED_AND_WARP_SHAPES_REFUSED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NEG_PATCH_STRUCTURE_CHECKED_BEFORE_SUBMISSION",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "FP32_SIMT_OPCODES_ENCODED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "OMEGA_MATH_SEQUENCES_QUALIFIED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "WARP_REDUCTION_ORDER_DECLARED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "CPU_TIER_EQUALS_REFERENCE",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "CPU_TIER_SUBNORMALS_PRESERVED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "CPU_TIER_INDEPENDENT_ORACLE",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "E1_SCALAR_BOUNDARY_VALUES",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "E1_SCALAR_CPU_EQUALS_REFERENCE",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "E1_SCALAR_INDEPENDENT_ORACLE",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "CPU_GB10_BIT_PARITY",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "SUBNORMALS_PRESERVED_NO_FTZ",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "MUFU_SEED_ONLY_NOT_COMPARED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "EDGE_CLASS_BEHAVIOR_VERIFIED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "HARDWARE_DESCRIPTOR_PROBED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NEG_FTZ_DETECTED_AND_REJECTED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NEG_UNORDERED_REDUCTION_DIVERGENCE_CAUGHT",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NEG_RAW_MUFU_APPROX_REJECTED_WITHOUT_REFINEMENT",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NEG_UNKNOWN_OPCODE_FAILS_CLOSED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NEG_OPCODE_PROVENANCE_INTEGRITY_VERIFIED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NEG_NONDEFAULT_FPCR_REFUSED",
+      "status": "PASS",
+      "suite": "gate5"
+    },
+    {
+      "id": "NEG_COMPARATOR_CATCHES_ONE_BIT",
+      "status": "PASS",
+      "suite": "gate5"
+    }
+  ],
+  "timestamp_utc": "2026-10-03T13:38:29.176122Z",
+  "zero_libm_zero_libcuda": true
+}

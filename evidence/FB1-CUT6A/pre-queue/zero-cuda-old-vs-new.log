@@ -1,0 +1,7 @@
+OLD binary sc-fb1-cut3d e319ee0 (pre cut 6):
+ZERO_CUDA FAIL /home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/target/release/aien-cli needs: libcublas.so.13 libcudart.so.13
+ZERO_CUDA FAIL /home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/target/release/aien-cli imports: cublasCreate_v2@libcublas.so.13 cublasDestroy_v2@libcublas.so.13 cublasSetStream_v2@libcublas.so.13 cublasSgemm_v2@libcublas.so.13 cudaDeviceGetAttribute@libcudart.so.13 cudaDeviceSynchronize@libcudart.so.13 cudaFree@libcudart.so.13 cudaGetDeviceProperties@libcudart.so.13 cudaGetErrorString@libcudart.so.13 __cudaGetKernel@libcudart.so.13 cudaGetLastError@libcudart.so.13 __cudaLaunchKernel@libcudar
+rc=1
+NEW binary cut 6 working tree, Omega linked:
+ZERO_CUDA PASS target/release/aien-cli needs=[libm.so.6 libssl.so.3 libcrypto.so.3 libgcc_s.so.1 libc.so.6 ld-linux-aarch64.so.1]
+rc=0

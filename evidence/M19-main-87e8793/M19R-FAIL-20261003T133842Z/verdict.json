@@ -1,0 +1,7 @@
+{
+  "run_id": "20261003T133842Z-6472fe07f26f",
+  "status": "FAILED",
+  "failing_step": "/home/drakestapleton/workspace/hive-worktrees/omega-m19-main-87e8793/build/omegatool exited 1; see /home/drakestapleton/workspace/hive-worktrees/omega-m19-main-87e8793/qual-runs/20261003T133842Z-6472fe07f26f/world_lifecycle.log",
+  "failing_gate_or_exit": "world_lifecycle:WORLD_STALE_GENERATION_MARKER_REFUSED",
+  "exit_code": 1
+}

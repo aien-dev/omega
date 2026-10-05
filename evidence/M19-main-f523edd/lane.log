@@ -1,0 +1,8 @@
+M19 start 2026-10-03T16:43:32Z omega=f523edd547d8c43a919df1be5ecbf746d25fc2b4 physics.lock=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf physics_dir_head=6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+== NUM start 2026-10-03T16:43:32Z
+== NUM PASS (14s)
+== FORGE start 2026-10-03T16:43:46Z
+== FORGE PASS (2s)
+== M19R start 2026-10-03T16:43:48Z
+== M19R PASS (228s)
+no receipt-preview.json from M19R

@@ -1,0 +1,45 @@
+   Compiling syn v2.0.119
+   Compiling tokio v1.53.1
+   Compiling futures-task v0.3.34
+   Compiling tracing v0.1.44
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3b/crates/aien-omega-gpu)
+   Compiling futures-util v0.3.34
+   Compiling darling_core v0.20.11
+   Compiling openssl-macros v0.1.1
+   Compiling monostate-impl v0.1.18
+   Compiling monostate v0.1.18
+   Compiling openssl v0.10.81
+   Compiling tokio-util v0.7.19
+   Compiling tower v0.5.3
+   Compiling tower-http v0.6.11
+   Compiling darling_macro v0.20.11
+   Compiling h2 v0.4.19
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+   Compiling derive_builder_macro v0.20.2
+   Compiling derive_builder v0.20.2
+   Compiling tokenizers v0.21.4
+   Compiling native-tls v0.2.18
+   Compiling tokio-native-tls v0.3.1
+   Compiling hyper v1.11.1
+   Compiling hyper-util v0.1.20
+   Compiling hyper-tls v0.6.0
+   Compiling reqwest v0.12.28
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3b/crates/aien-inference-abi)
+    Finished `release` profile [optimized] target(s) in 17.88s
+     Running tests/omega_backend_parity.rs (target/release/deps/omega_backend_parity-3e125ba87c6f1c4d)
+
+running 1 test
+test chip_parity_on_tinyllama_shapes ... PARITY q_proj/o_proj 2048x2048: vec max_err/scale=2.440e-4 batch7 max_err/scale=2.612e-4
+PARITY k_proj/v_proj 256x2048: vec max_err/scale=1.970e-4 batch7 max_err/scale=2.087e-4
+PARITY gate/up_proj 5632x2048: vec max_err/scale=2.335e-4 batch7 max_err/scale=2.650e-4
+PARITY down_proj 2048x5632: vec max_err/scale=1.547e-4 batch7 max_err/scale=1.647e-4
+PARITY lm_head 32000x2048: vec max_err/scale=2.608e-4 batch7 max_err/scale=2.998e-4
+PARITY overall worst max_err/scale = 2.998e-4
+PARITY resident weights = 5
+PARITY OP_REPORT native=[matmul_vec,matmul_batch,compute_logits] reference=[rmsnorm,apply_rope,swiglu,gqa_attention,paged_attention,paged_attention_batch] native_fallbacks=[] reference_runs=[]
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 1.44s
+
+parity exit 0

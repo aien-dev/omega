@@ -1,0 +1,66 @@
+   Compiling futures-task v0.3.34
+   Compiling syn v2.0.119
+   Compiling errno v0.3.14
+   Compiling futures-macro v0.3.34
+   Compiling spark-max-cabi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/spark-max-cabi)
+   Compiling autocfg v1.5.1
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-omega-gpu)
+   Compiling getrandom v0.4.3
+   Compiling anyhow v1.0.104
+   Compiling iana-time-zone v0.1.65
+   Compiling signal-hook-registry v1.4.8
+   Compiling tokio v1.53.1
+   Compiling num-traits v0.2.19
+   Compiling uuid v1.26.1
+   Compiling futures-util v0.3.34
+   Compiling chrono v0.4.45
+   Compiling darling_core v0.20.11
+   Compiling tracing-attributes v0.1.31
+   Compiling openssl-macros v0.1.1
+   Compiling monostate-impl v0.1.18
+   Compiling openssl v0.10.81
+   Compiling monostate v0.1.18
+   Compiling darling_macro v0.20.11
+   Compiling tracing v0.1.44
+   Compiling spark-max-rs v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/spark-max-rs)
+   Compiling darling v0.20.11
+   Compiling derive_builder_core v0.20.2
+   Compiling tokio-util v0.7.19
+   Compiling tower v0.5.3
+   Compiling aien-inference-service v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-inference-service)
+   Compiling derive_builder_macro v0.20.2
+   Compiling tower-http v0.6.11
+   Compiling h2 v0.4.19
+   Compiling derive_builder v0.20.2
+   Compiling tokenizers v0.21.4
+   Compiling native-tls v0.2.18
+   Compiling tokio-native-tls v0.3.1
+   Compiling hyper v1.11.1
+   Compiling hyper-util v0.1.20
+   Compiling hyper-tls v0.6.0
+   Compiling reqwest v0.12.28
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-scheduler)
+   Compiling aien-inference-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-inference-runtime)
+    Finished `release` profile [optimized] target(s) in 31.97s
+     Running tests/strict_real_model.rs (target/release/deps/strict_real_model-bfbe49f47cf02508)
+
+running 1 test
+test omega_vs_reference_real_model ... OMEGA_GATE ref backend: ReferenceCpuBackend
+OMEGA_GATE ref tokens=32 secs=12.215 tok/s=2.620 text="amountofprocessingpower.Itisdesignedforuseindatacentersandotherhigh-performancecomputingenvironments.TheDGXSparkisequippedwith"
+OMEGA_GATE omega backend: OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+
+thread 'omega_vs_reference_real_model' (1893054) panicked at crates/aien-inference-abi/src/strict.rs:52:9:
+STRICT_REAL_MODEL_VIOLATION: OmegaGb10Backend fell back to CPU in apply_rope; this production build refuses to fall back (a dev/test run sets AIEN_DEV_FALLBACK=1 or builds with --features dev-fallback)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    omega_vs_reference_real_model
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 43.16s
+
+error: test failed, to rerun pass `-p aien-inference-runtime --test strict_real_model`
+gate exit 101

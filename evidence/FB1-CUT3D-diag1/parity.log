@@ -1,0 +1,26 @@
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-omega-gpu)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-inference-abi)
+    Finished `release` profile [optimized] target(s) in 12.51s
+     Running tests/omega_backend_parity.rs (target/release/deps/omega_backend_parity-3e125ba87c6f1c4d)
+
+running 1 test
+test chip_attention_parity_on_tinyllama_shapes ... PARITY gqa seq=1 err/tol=6.124e-4 worst at 820 got=0.9634247 want=0.96342456
+PARITY gqa seq=7 err/tol=2.119e-3 worst at 1796 got=-0.65524656 want=-0.65524644
+PARITY gqa seq=64 err/tol=1.637e-3 worst at 311 got=-0.13870107 want=-0.13870099
+PARITY gqa seq=300 err/tol=9.846e3 worst at 1400 got=-0.28901854 want=-0.031020055
+PARITY gqa seq=2048 err/tol=3.388e-3 worst at 37 got=0.03746087 want=0.037460778
+PARITY gqa_attention seq 1..2048 worst err/tolerance = 9.846e3 (must be <= 1)
+
+thread 'chip_attention_parity_on_tinyllama_shapes' (3332428) panicked at crates/aien-inference-abi/tests/omega_backend_parity.rs:279:5:
+gqa_attention outside tolerance
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    chip_attention_parity_on_tinyllama_shapes
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p aien-inference-abi --test omega_backend_parity`

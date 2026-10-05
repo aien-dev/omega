@@ -1,0 +1,7 @@
+variant=red(569c204 test, 6b940fa kernel) rc=1 FAIL: 86 checks, 13 failed
+variant=green(f8d0aca) run=1 rc=0 PASS: 86 checks, 0 failed
+variant=green(f8d0aca) run=2 rc=0 PASS: 86 checks, 0 failed
+variant=green(f8d0aca) run=3 rc=0 PASS: 86 checks, 0 failed
+variant=green(f8d0aca) run=4 rc=0 PASS: 86 checks, 0 failed
+variant=green(f8d0aca) run=5 rc=0 PASS: 86 checks, 0 failed
+variant=green timing rc=0 PASS: 2 checks, 0 failed

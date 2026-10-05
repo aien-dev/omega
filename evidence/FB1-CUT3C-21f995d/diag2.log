@@ -1,0 +1,31 @@
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-omega-gpu)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-scheduler)
+   Compiling aien-inference-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-inference-runtime)
+    Finished `release` profile [optimized] target(s) in 25.90s
+     Running tests/strict_real_model.rs (target/release/deps/strict_real_model-bfbe49f47cf02508)
+
+running 1 test
+test omega_vs_reference_real_model ... OMEGA_GATE ref backend: ReferenceCpuBackend
+OMEGA_GATE ref tokens=32 secs=12.267 tok/s=2.609 text="amountofprocessingpower.Itisdesignedforuseindatacentersandotherhigh-performancecomputingenvironments.TheDGXSparkisequippedwith"
+OMEGA_GATE omega backend: OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+OMEGA_GATE omega warm-up (weight upload + 1 token) secs=49.656
+OMEGA_GATE omega tokens=32 secs=153.387 tok/s=0.209 text="amountofprocessingpower.Itisdesignedforuseindatacentersandotherhigh-performancecomputingenvironments.TheDGXSparkisequippedwith"
+OMEGA_GATE OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,compute_logits] reference=[gqa_attention,paged_attention,paged_attention_batch] native_fallbacks=[] reference_runs=[gqa_attention:572,paged_attention:682]
+OMEGA_GATE tokens_match=true
+OMEGA_GATE verdict: FAIL: built with dev-fallback (receipt /home/drakestapleton/workspace/evidence-out/FB1-CUT3C-21f995d/diag2-receipt.json)
+
+thread 'omega_vs_reference_real_model' (1901518) panicked at crates/aien-inference-runtime/tests/strict_real_model.rs:272:32:
+STRICT_REAL_MODEL_VIOLATION: built with dev-fallback; this production build refuses to fall back (a dev/test run sets AIEN_DEV_FALLBACK=1 or builds with --features dev-fallback)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+
+failures:
+
+failures:
+    omega_vs_reference_real_model
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 241.38s
+
+error: test failed, to rerun pass `-p aien-inference-runtime --test strict_real_model`
+diag2 exit 101

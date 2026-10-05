@@ -1,0 +1,23 @@
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-omega-gpu)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-inference-abi)
+   Compiling aien-scheduler v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-scheduler)
+   Compiling aien-inference-runtime v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3d/crates/aien-inference-runtime)
+    Finished `release` profile [optimized] target(s) in 25.84s
+     Running tests/strict_real_model.rs (target/release/deps/strict_real_model-bfbe49f47cf02508)
+
+running 1 test
+test omega_vs_reference_real_model ... OMEGA_GATE ref backend: ReferenceCpuBackend
+OMEGA_GATE ref tokens=32 secs=12.100 tok/s=2.645 text="amountofprocessingpower.Itisdesignedforuseindatacentersandotherhigh-performancecomputingenvironments.TheDGXSparkisequippedwith"
+OMEGA_GATE omega backend: OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+OMEGA_GATE omega warm-up (weight upload + 1 token) secs=5.520
+OMEGA_GATE flip step=2 ref_tok=9068 omega_tok=3370 ref_margin=0.0005 max_abs_dlogit=0.0314
+OMEGA_GATE teacher_forced steps=32 worst_max_abs_dlogit=0.0594 bound=0.15 judge=Ok(1)
+OMEGA_GATE omega tokens=32 secs=5.422 tok/s=5.902 text="amountofmemoryandprocessingpower.Itisdesignedforuseindataanalysisandmachinelearningapplications.TheDGXSparkisapowerfulmachinethatcanhandle"
+OMEGA_GATE OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+OMEGA_GATE tokens_match=false
+OMEGA_GATE verdict: PASS (receipt /home/drakestapleton/workspace/evidence-out/FB1-CUT3D-e319ee0/strict-receipt.json)
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 66.61s
+
+gate exit 0

@@ -1,0 +1,91 @@
+TR02 start 2026-10-03T17:02:32Z aienos=130aa20b2bc2c9151d3231df354dfd8a3a3fc6cb
+TRUST-1 + M5 qualification at 130aa20b2bc2c9151d3231df354dfd8a3a3fc6cb (test(argus): make SPSC ring refusal deterministic (consumer held phase) (#244))
+Machine: spark-b87b | NVIDIA_DGX_Spark | firmware 5.36_0ACUM018 (08/06/2025) | SecureBoot=0 SetupMode=0 | TPM yes NTC | boot disk nvme0n1 LBS 512
+--- [t1_measurement_tools] running ...
+--- [t1_measurement_tools] PASS (exit 0, marker found)
+--- [t1_key_ceremony] running ...
+--- [t1_key_ceremony] PASS (exit 0, marker found)
+--- [t1_gate7_preflight] running ...
+--- [t1_gate7_preflight] FAIL (exit 1)
+--- [t1_recovery_tools] running ...
+--- [t1_recovery_tools] PASS (exit 0, marker found)
+--- [store_torn_slot_c] running ...
+--- [store_torn_slot_c] PASS (exit 0, marker found)
+--- [store_native_c] running ...
+--- [store_native_c] PASS (exit 0, marker found)
+--- [store_rust_crosscheck] running ...
+--- [store_rust_crosscheck] PASS (exit 0, marker found)
+--- [m5_crypto_crate] running ...
+--- [m5_crypto_crate] PASS (10 tests passed, 0 failed)
+--- [m5_kernel_crypto_security] running ...
+--- [m5_kernel_crypto_security] PASS (17 tests passed, 0 failed)
+--- [t1_gate5_policy_sim] running ...
+--- [t1_gate5_policy_sim] PASS (exit 0, marker found)
+--- [m5_native_test] running ...
+--- [m5_native_test] PASS (exit 0, marker found)
+--- [crypto_native_test] running ...
+--- [crypto_native_test] PASS (exit 0, marker found)
+--- [disk_native_test] running ...
+--- [disk_native_test] PASS (exit 0, marker found)
+--- [qemu_secureboot_signing] running ...
+--- [qemu_secureboot_signing] PASS (exit 0, marker found)
+--- [qemu_store_512b_crash] running ...
+--- [qemu_store_512b_crash] PASS (exit 0, marker found)
+--- [qemu_native_nvme] running ...
+--- [qemu_native_nvme] PASS (exit 0, marker found)
+--- [ck_m1_boot_qemu] running ...
+--- [ck_m1_boot_qemu] PASS (exit 0, marker found)
+--- [ck_store_kernel_qemu] running ...
+--- [ck_store_kernel_qemu] PASS (exit 0, marker found)
+--- [ck_argus1_revoke_qemu] running ...
+--- [ck_argus1_revoke_qemu] PASS (exit 0, marker found)
+--- [m5_store_encrypted_objects] running ...
+--- [m5_store_encrypted_objects] PASS (exit 0, marker found)
+--- [m5_migration_sig_test_key] running ...
+--- [m5_migration_sig_test_key] PASS (exit 0, marker found)
+
+GATE                                 KIND      VERDICT                  REASON
+t1_measurement_tools                 software  PASS                     exit 0, marker found
+t1_key_ceremony                      software  PASS                     exit 0, marker found
+t1_gate7_preflight                   software  FAIL                     exit 1
+t1_recovery_tools                    software  PASS                     exit 0, marker found
+store_torn_slot_c                    software  PASS                     exit 0, marker found
+store_native_c                       software  PASS                     exit 0, marker found
+store_rust_crosscheck                software  PASS                     exit 0, marker found
+m5_crypto_crate                      cargo     PASS                     10 tests passed, 0 failed
+m5_kernel_crypto_security            cargo     PASS                     17 tests passed, 0 failed
+t1_gate5_policy_sim                  auto      PASS                     exit 0, marker found
+m5_native_test                       auto      PASS                     exit 0, marker found
+crypto_native_test                   auto      PASS                     exit 0, marker found
+disk_native_test                     auto      PASS                     exit 0, marker found
+qemu_secureboot_signing              qemu      PASS                     exit 0, marker found
+qemu_store_512b_crash                qemu      PASS                     exit 0, marker found
+qemu_native_nvme                     qemu      PASS                     exit 0, marker found
+ck_m1_boot_qemu                      qemu      PASS                     exit 0, marker found
+ck_store_kernel_qemu                 qemu      PASS                     exit 0, marker found
+ck_argus1_revoke_qemu                qemu      PASS                     exit 0, marker found
+t1_gate0_second_offline_location     operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate0_cold_boot_pcr_stability     hardware  NOT_RUN                  BLOCKED_HARDWARE: needs attended hardware boots on Machine 1; this script cannot check it
+t1_gate0_firmware_refresh_pause      operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate1_attended_recovery_boot      operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate2_reboot_campaign             hardware  NOT_RUN                  BLOCKED_HARDWARE: needs attended hardware boots on Machine 1; this script cannot check it
+t1_gate3_offline_key_ceremony        operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate6                             operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate7                             hardware  NOT_RUN                  BLOCKED_HARDWARE: needs attended hardware boots on Machine 1; this script cannot check it
+t1_gate8                             operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate9                             operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+m5_sealed_volume_keys_real_tpm       missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+m5_store_encrypted_objects           software  PASS                     exit 0, marker found
+m5_store_kernel_binding              missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+m5_owner_signed_chain_machine1       missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+m5_production_store_512b             missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+t1_gate4_manifest_ab                 missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+m5_migration_sig_test_key            auto      PASS                     exit 0, marker found
+m5_migration_owner_signature         operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+
+Counts: total=37 pass=20 fail=1 not_run=0 blocked=11 missing=5
+Verdict: NOT_QUALIFIED
+Logs: /tmp/trust1-m5-work.uR2j9d/logs
+Receipt: /home/drakestapleton/workspace/evidence-out/TRUST1-M5-20261003-130aa20/trust1_m5_qualification_c992277b5396191ba6fe74d6022b8c3bbbceb7588fe01def99c1d7a493317540.json
+TRUST1_M5_QUALIFICATION: NOT_QUALIFIED (pass=20 fail=1 not_run=0 blocked=11 missing=5)
+TR02 rc=1 2026-10-03T17:14:31Z

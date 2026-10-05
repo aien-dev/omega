@@ -1,0 +1,10 @@
+{
+  "omega_candidate_sha": "1a853f98fbe9bd267cd134e8d1c2a9278f88f406",
+  "physics_candidate_sha": "e95e3ed2a86fe4bffe4d954fa94c27dfb5284280",
+  "rule": "3/3 PASS, predeclared",
+  "runs_required": 3,
+  "created_at": "2026-10-03T11:56:18Z",
+  "host": "spark-b87b",
+  "uname": "Linux spark-b87b 7.0.0-1019-nvidia #19~24.04.2-Ubuntu SMP PREEMPT_DYNAMIC Sun Sep  6 18:35:11 UTC 2 aarch64 aarch64 aarch64 GNU/Linux",
+  "runner_sha": "1a853f98fbe9bd267cd134e8d1c2a9278f88f406"
+}

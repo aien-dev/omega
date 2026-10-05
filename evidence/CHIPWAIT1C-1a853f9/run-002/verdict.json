@@ -1,0 +1,7 @@
+{
+  "run_id": "run-002",
+  "status": "FAILED",
+  "failing_step": "/home/drakestapleton/workspace/hive-worktrees/omega-cw1c-campaign/build/omegatool exited 1; see /home/drakestapleton/workspace/evidence-out/CHIPWAIT1C-1a853f9/run-002/world_lifecycle.log",
+  "failing_gate_or_exit": "world_lifecycle:WORLD_ERROR_LATCH_COUNTS_ONCE",
+  "exit_code": 1
+}

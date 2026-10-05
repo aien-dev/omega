@@ -1,0 +1,14 @@
+   Compiling aien-omega-gpu v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-omega-gpu)
+   Compiling aien-inference-abi v0.1.0 (/home/drakestapleton/workspace/hive-worktrees/sc-fb1-cut3c/crates/aien-inference-abi)
+    Finished `release` profile [optimized] target(s) in 12.19s
+     Running tests/omega_backend_parity.rs (target/release/deps/omega_backend_parity-3e125ba87c6f1c4d)
+
+running 1 test
+test chip_mixed_matmul_then_elementwise ... MIXED rmsnorm before matmul: chip_errors=0
+MIXED matmul: chip_errors=0
+MIXED rmsnorm after matmul: chip_errors=0 last_error=
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.11s
+
+diag exit 0

@@ -1,0 +1,10 @@
+## ulimit -n 4
+PROBE label=negctl_n4 pid=2080416 rc=CHIP_FAIL stage="nvrm_open: open control nodes errno 24" first_call_ms=0.1 chip_us=0.0 calls_ok=0/1 opens=0
+exit=1
+## ulimit -n 5
+PROBE label=negctl_n5 pid=2080417 rc=CHIP_FAIL stage="nvrm_open: open control nodes errno 24" first_call_ms=0.1 chip_us=0.0 calls_ok=0/1 opens=0
+exit=1
+## ulimit -n 6
+PROBE label=negctl_n6 pid=2080418 rc=CHIP_FAIL stage="nvrm_open: open /dev/nvidia0 errno 24" first_call_ms=0.3 chip_us=0.0 calls_ok=0/1 opens=0
+exit=1
+PROBE label=positive_after pid=2080419 rc=OK stage="-" first_call_ms=27.7 chip_us=112.5 calls_ok=1/1 opens=1
