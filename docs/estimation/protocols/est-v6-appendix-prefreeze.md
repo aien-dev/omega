@@ -169,7 +169,7 @@ Rule SR-1 (implemented in `est6dev plan6`, default rule):
 5. The effective seed (64 bit) is what is passed to `est_load` (it reads it with `strtoull`, `est_load.c:73`), and the
    whole segment list is written into the frozen file.
 
-Required properties (checked by `make test-est6dev`, 35 checks in total, of which the schedule ones are in the block
+Required properties (checked by `make test-est6dev`, 43 checks in total, of which the schedule ones are in the block
 "2b"): the segments of each label sum to exactly 2700 s; every segment is 20 to 120 s except that the last may be
 clipped; each level totals 400 to 900 s; H1 and H2 (and F) have different effective seeds and different segment lists;
 the same declared seed under two labels gives two schedules; the same input gives byte-identical output; a label's

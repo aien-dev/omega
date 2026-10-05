@@ -25,6 +25,15 @@
 #include "est3c_common.h"
 #include "est_v4.h"
 
+/* Allocation failure stops the tool with a message (no partial result is written). */
+static void *xalloc(void *p, const char *what)
+{
+    if (!p) { fprintf(stderr, "est6dev: out of memory (%s)\n", what); exit(2); }
+    return p;
+}
+#define XMALLOC(n) xalloc(malloc(n), __func__)
+#define XCALLOC(n, s) xalloc(calloc((n), (s)), __func__)
+
 #define D2_DATE_TAG "20261005T112838Z"
 #define D2_RAW_SHA "7dda21f664587c4401326c3082f28039e133ba5627c8564678f259e2d7036ff0"
 #define D2_MARKS_SHA "95879ed909b8fec1207695dc1093b24be56f00563cd364c62bd30007b0dc26bb"
@@ -233,8 +242,8 @@ static est_obs_class classify(const c3_tick *t, est_pobs *ob)
 static int run_g1(const c3_ticks *tk, const est4_params *p, step_t **out, size_t *nout, size_t *unscorable)
 {
     est4_state s;
-    est_dpred *dp = malloc(sizeof *dp);
-    step_t *st = malloc((tk->n ? tk->n : 1) * sizeof *st);
+    est_dpred *dp = XMALLOC(sizeof *dp);
+    step_t *st = XMALLOC((tk->n ? tk->n : 1) * sizeof *st);
     size_t n = 0; *unscorable = 0;
     if (!dp || !st) return 1;
     if (est4_init(p, &s) != EST_OK) return 1;
@@ -348,8 +357,8 @@ static int cmd_g1pit(int argc, char **argv)
 
     /* per-step contributions, per-block sums */
     size_t nb_max = 2 * mk.n + 2;
-    double (*bs)[NSTAT] = calloc(nb_max, sizeof *bs);
-    double *bn = calloc(nb_max, sizeof *bn);
+    double (*bs)[NSTAT] = XCALLOC(nb_max, sizeof *bs);
+    double *bn = XCALLOC(nb_max, sizeof *bn);
     double tot[NSTAT] = { 0 };
     double zsum = 0;
     if (!bs || !bn) return 1;
@@ -367,7 +376,7 @@ static int cmd_g1pit(int argc, char **argv)
     printf("mean_z_midpit %.6f\n", zm);
 
     /* blocks that have steps */
-    size_t nb = 0, nload = 0, *idx = malloc(nb_max * sizeof *idx);
+    size_t nb = 0, nload = 0, *idx = XMALLOC(nb_max * sizeof *idx);
     for (size_t b = 0; b < nb_max; b++) if (bn[b] > 0) { idx[nb++] = b; nload += (b & 1u); }
     printf("blocks %zu (loaded %zu, idle %zu) mean_steps_per_block %.1f\n", nb, nload, nb - nload, (double)n / (double)nb);
     if (show_blocks)
@@ -390,7 +399,7 @@ static int cmd_g1pit(int argc, char **argv)
             if (ln[li] > 0) printf("by_level L%d steps %.0f pit_bin0 %.4f pit_bin9 %.4f lower_miss %.4f upper_miss %.4f\n", lvn[li], ln[li], ls[li][0] / ln[li], ls[li][9] / ln[li], ls[li][10] / ln[li], ls[li][11] / ln[li]);
     }
     /* bootstrap: resample whole blocks with replacement; ratio estimator */
-    double *draw = malloc((size_t)boot * NSTAT * sizeof(double));
+    double *draw = XMALLOC((size_t)boot * NSTAT * sizeof(double));
     if (!draw) return 1;
     uint64_t rng = seed;
     for (int r = 0; r < boot; r++) {
@@ -404,7 +413,7 @@ static int cmd_g1pit(int argc, char **argv)
     }
     printf("bootstrap draws %d seed 0x%llx unit whole_blocks\n", boot, (unsigned long long)seed);
     printf("# stat value iid_se boot_se design_effect ci95_lo ci95_hi ci995_lo ci995_hi\n");
-    double *col = malloc((size_t)boot * sizeof *col);
+    double *col = XMALLOC((size_t)boot * sizeof *col);
     for (int k = 0; k < NSTAT; k++) {
         double val = tot[k] / (double)n, mean = 0, var = 0;
         for (int r = 0; r < boot; r++) { col[r] = draw[(size_t)r * NSTAT + k]; mean += col[r]; }
@@ -432,7 +441,7 @@ typedef struct { int64_t t; double y, m, b, anchor; } trace_t;
 static int run_g1_trace(const c3_ticks *tk, const est4_params *p, trace_t **out, size_t *nout)
 {
     est4_state s;
-    trace_t *tr = malloc((tk->n ? tk->n : 1) * sizeof *tr);
+    trace_t *tr = XMALLOC((tk->n ? tk->n : 1) * sizeof *tr);
     size_t n = 0;
     if (!tr || est4_init(p, &s) != EST_OK) return 1;
     long first = -1;
@@ -525,16 +534,16 @@ static int cmd_g1s(int argc, char **argv)
     if (run_g1_trace(&tk, &p, &tr, &n) || n == 0) { fprintf(stderr, "g1 trace failed\n"); return 1; }
     /* fold of a step = rank of its block among blocks that have steps, modulo nfold */
     size_t nb_max = 2 * mk.n + 2;
-    int *rank = malloc(nb_max * sizeof *rank), *seen = calloc(nb_max, sizeof *seen);
-    size_t *blk = malloc(n * sizeof *blk);
+    int *rank = XMALLOC(nb_max * sizeof *rank), *seen = XCALLOC(nb_max, sizeof *seen);
+    size_t *blk = XMALLOC(n * sizeof *blk);
     for (size_t i = 0; i < n; i++) { blk[i] = block_of(&mk, tr[i].t); seen[blk[i]] = 1; }
     int nr = 0;
     for (size_t b = 0; b < nb_max; b++) rank[b] = seen[b] ? nr++ : -1;
-    int *fold = malloc(n * sizeof *fold);
+    int *fold = XMALLOC(n * sizeof *fold);
     for (size_t i = 0; i < n; i++) fold[i] = rank[blk[i]] % nfold;
     /* per grid point, per step: logp, F_lo, F_hi */
     size_t G = (size_t)NK * NCG;
-    double *lp = malloc(G * n * sizeof *lp), *Flo = malloc(G * n * sizeof *Flo), *Fhi = malloc(G * n * sizeof *Fhi);
+    double *lp = XMALLOC(G * n * sizeof *lp), *Flo = XMALLOC(G * n * sizeof *Flo), *Fhi = XMALLOC(G * n * sizeof *Fhi);
     if (!lp || !Flo || !Fhi) return 1;
     for (int ki = 0; ki < NK; ki++)
         for (int ci = 0; ci < NCG; ci++) {
@@ -636,7 +645,7 @@ static int tr2_alloc(tr2_t *r, size_t cap)
     cap = cap ? cap : 1;
     double **f[10] = { &r->y1, &r->m1, &r->b1, &r->a1, &r->y10, &r->m10, &r->v10, &r->g10, &r->gl10, &r->a10 };
     for (int i = 0; i < 10; i++) if (!(*f[i] = malloc(cap * sizeof(double)))) return 1;
-    r->t1 = malloc(cap * sizeof(int64_t)); r->t10 = malloc(cap * sizeof(int64_t));
+    r->t1 = XMALLOC(cap * sizeof(int64_t)); r->t10 = XMALLOC(cap * sizeof(int64_t));
     return !(r->t1 && r->t10);
 }
 static void tr2_free(tr2_t *r)
@@ -867,7 +876,7 @@ static int cmd_g1sfull(int argc, char **argv)
     tr2_t tr;
     if (tr2_alloc(&tr, tk.n)) return 1;
     size_t nb_max = 2 * mk.n + 2;
-    int *rank = malloc(nb_max * sizeof *rank), *seen = calloc(nb_max, sizeof *seen);
+    int *rank = XMALLOC(nb_max * sizeof *rank), *seen = XCALLOC(nb_max, sizeof *seen);
     int *fold1 = NULL;
     size_t n1 = 0;
     double bestf[10][2];              /* unused placeholder keeps layout simple */
@@ -886,9 +895,9 @@ static int cmd_g1sfull(int argc, char **argv)
                 if (tr2_run(&tk, &p, &tr)) { skipped++; continue; }
                 if (!fold1) {
                     n1 = tr.n1;
-                    fold1 = malloc(n1 * sizeof *fold1);
-                    edlo = malloc(n1 * sizeof *edlo); edhi = malloc(n1 * sizeof *edhi);
-                    size_t *blk = malloc(n1 * sizeof *blk);
+                    fold1 = XMALLOC(n1 * sizeof *fold1);
+                    edlo = XMALLOC(n1 * sizeof *edlo); edhi = XMALLOC(n1 * sizeof *edhi);
+                    size_t *blk = XMALLOC(n1 * sizeof *blk);
                     for (size_t i = 0; i < n1; i++) { blk[i] = block_of(&mk, tr.t1[i]); seen[blk[i]] = 1; }
                     int nr = 0;
                     for (size_t bb = 0; bb < nb_max; bb++) rank[bb] = seen[bb] ? nr++ : -1;
@@ -934,10 +943,10 @@ static int cmd_g1sfull(int argc, char **argv)
     double *flo10[2] = { NULL, NULL }, *fhi10[2] = { NULL, NULL }, *lp10[2] = { NULL, NULL };
     int64_t *t10 = NULL; int *fold10v = NULL;
     for (int w = 0; w < 2; w++) {
-        oo[w].n = n1; oo[w].flo = calloc(n1, sizeof(double)); oo[w].fhi = calloc(n1, sizeof(double)); oo[w].fold = fold1; oo[w].t = NULL;
+        oo[w].n = n1; oo[w].flo = XCALLOC(n1, sizeof(double)); oo[w].fhi = XCALLOC(n1, sizeof(double)); oo[w].fold = fold1; oo[w].t = NULL;
     }
-    double *lp1o[2] = { calloc(n1, sizeof(double)), calloc(n1, sizeof(double)) };
-    int *step_ok1 = calloc(n1, sizeof(int));
+    double *lp1o[2] = { XCALLOC(n1, sizeof(double)), XCALLOC(n1, sizeof(double)) };
+    int *step_ok1 = XCALLOC(n1, sizeof(int));
     (void)step_ok1;
     char tags[2][8] = { "G1S", "G1ctl" };
     for (int w = 0; w < 2; w++) {
@@ -953,14 +962,15 @@ static int cmd_g1sfull(int argc, char **argv)
                 oo[w].flo[i] = fl; oo[w].fhi[i] = fh; lp1o[w][i] = lp; s += lp; nf++;
             }
             if (!fold10v) {
-                n10 = tr.n10; fold10v = malloc(n10 * sizeof *fold10v); t10 = malloc(n10 * sizeof *t10);
+                n10 = tr.n10; fold10v = XMALLOC(n10 * sizeof *fold10v); t10 = XMALLOC(n10 * sizeof *t10);
                 for (size_t j = 0; j < n10; j++) { fold10v[j] = rank[block_of(&mk, tr.t10[j])] % nfold; t10[j] = tr.t10[j]; }
-                for (int ww = 0; ww < 2; ww++) { flo10[ww] = calloc(n10, sizeof(double)); fhi10[ww] = calloc(n10, sizeof(double)); lp10[ww] = calloc(n10, sizeof(double)); }
+                for (int ww = 0; ww < 2; ww++) { flo10[ww] = XCALLOC(n10, sizeof(double)); fhi10[ww] = XCALLOC(n10, sizeof(double)); lp10[ww] = XCALLOC(n10, sizeof(double)); }
             }
-            int *keep = malloc(tr.n10 * sizeof *keep);
+            int *keep = XMALLOC(tr.n10 * sizeof *keep);
             for (size_t j = 0; j < tr.n10; j++) keep[j] = fold10v[j] != fo;
             best2_t b2;
             stage2(&tr, keep, !w, &b2);
+            if (!b2.have) { fprintf(stderr, "est6dev: stage 2 found no finite score (fold %d)\n", fo); return 1; }
             for (size_t j = 0; j < tr.n10; j++) if (fold10v[j] == fo) lp10[w][j] = ten_step(&tr, j, &b2, &flo10[w][j], &fhi10[w][j]);
             free(keep);
             printf("fold %d steps %zu stage1 dyn %g q %g lam %g nu %g c %.2f kappa %.1f train_mean_logscore %.6f oof_mean_logscore %.6f | stage2 phi %g nu_h %g c_h %.2f kappa_h %.1f\n",
@@ -1002,11 +1012,11 @@ static int cmd_g1sfull(int argc, char **argv)
         /* load-stratum analysis of the OOF PIT with block bootstrap within stratum */
         {
             size_t nb = nb_max;
-            double (*bs)[NV] = calloc(nb, sizeof *bs); double *bn = calloc(nb, sizeof *bn);
+            double (*bs)[NV] = XCALLOC(nb, sizeof *bs); double *bn = XCALLOC(nb, sizeof *bn);
             for (size_t i = 0; i < n1; i++) { size_t b = block_of(&mk, tr.t1[i]); accum(bs[b], &bn[b], oo[w].flo[i], oo[w].fhi[i]); }
             const int lvv[4] = { 0, 6, 12, 18 };
             for (int li = 0; li < 4; li++) {
-                size_t *ids = malloc(nb * sizeof *ids); size_t ni = 0;
+                size_t *ids = XMALLOC(nb * sizeof *ids); size_t ni = 0;
                 double tot[NV] = { 0 }, tn = 0;
                 for (size_t b = 0; b < nb; b++) {
                     if (bn[b] <= 0) continue;
@@ -1017,7 +1027,7 @@ static int cmd_g1sfull(int argc, char **argv)
                 }
                 if (ni == 0) { free(ids); continue; }
                 uint64_t rng = 0xE6B007ull + (uint64_t)li;
-                double *dr = malloc((size_t)boot * NV * sizeof *dr);
+                double *dr = XMALLOC((size_t)boot * NV * sizeof *dr);
                 for (int r = 0; r < boot; r++) {
                     double ss[NV] = { 0 }, nn = 0;
                     for (size_t k = 0; k < ni; k++) { size_t b = ids[splitmix64(&rng) % ni]; nn += bn[b]; for (int q = 0; q < NV; q++) ss[q] += bs[b][q]; }
