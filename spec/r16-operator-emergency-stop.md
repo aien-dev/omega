@@ -60,9 +60,16 @@ finishes first, and nothing lands between the check and the state change.
 | An activation computing when the stop lands | its result is refused at commit: CANCELLED, `RX_ERR_HALTED`, crumb; it is re-armed and runs again on resume, committing exactly once | E3, mutant M1 |
 | Outside publication (`rx_world_publish_external`) | refused, `RX_ERR_HALTED`, world unchanged | E2, E4, mutant M3 |
 | Resident seat result (`rx_resident_accept`) | not published: the output window is re-projected from the world, the activation ends CANCELLED and runs again on resume; the claim closes | R12 `t_emergency_stop` (manual mutant: removing the guard fails 5 checks) |
+| Object create and retire (`rx_world_create`, `rx_world_retire`) | refused, `RX_ERR_HALTED`, world unchanged (digest, crumbs) | E7, mutants M11, M12 |
 | Sequential activation (`rx_world_seq_activate_timed_locked`) | refused, `RX_ERR_HALTED` | code review only |
 | Caller check (`rx_world_caller_check_fn`) | refuses with `RX_CALLER_ERR_HALTED` (CHECK and HOLD; RELEASE unaffected) | E5, mutant M4 |
 | Generation store bound to the world | `rx_gen_propose` / `rx_gen_promote` refuse with `RX_GEN_ERR_HALTED`; a promotion is re-checked after its HOLD, right before the flip, so a stop during its live barrier or its disk writes refuses it; active generation unchanged in memory and on disk | E5 |
+
+A refused activation is not spent: it does not count toward the reaction's
+episode activation budget, so a reaction woken by another reaction's commit is
+not quarantined by its own refusal and does run on resume (E7, mutant M10; the
+same correction on the seat-result path is in code, covered by no test that sets
+a budget).
 
 A second stop answers `RX_HALT_ALREADY` and changes nothing (E2). A resume of a
 running world answers `RX_HALT_NOT_STOPPED`, with no crumb (E1).
@@ -87,9 +94,17 @@ directory):
   (`restored`, STOP crumb). A mark that does not verify (one byte changed) or
   cannot be read also starts it stopped (`RX_ERR_TORN` / `RX_ERR_IO`): the mark
   fails closed (E6, mutant M7).
+* A mark that is not a regular file (a symlink, dangling or not, a FIFO, a
+  directory) is never followed or blocked on: it is read with `O_NOFOLLOW |
+  O_NONBLOCK` and reported `RX_ERR_TORN`, so the world starts stopped, and the
+  store (which tests for any entry with `lstat`) agrees. Resume keeps a record and
+  removes the entry, so the store is never blocked for good (E7, mutant M13).
 * A generation store refuses promotion while the mark exists, even when it is
   not bound to any world (`RX_GEN_ERR_HALTED`; an unreadable directory is
-  `RX_GEN_ERR_IO`) (E6, mutant M6).
+  `RX_GEN_ERR_IO`) (E6, mutant M6). It checks its *own* directory, on entry
+  and again right before the flip; an unbound store over a directory other than
+  the world's halt directory does not see the mark. Set the halt directory to the
+  store's directory.
 * Resume first writes the sealed resumed record
   `OPERATOR_HALT.resumed.<seq>.<t_ns>`: the original bytes, then `resumed_by`,
   `resume_cap` and `resume_t_ns`, then a new seal. It is linked in without
@@ -125,9 +140,14 @@ generation store; built with the normal flags; E1 to E6 in the file header):
 * E5 promotion under a stop (live barrier and disk-write windows), proposal
   refused, control promotion after resume.
 * E6 durable mark, restart, torn mark, unbound store, read-only directory resume.
-* `rx_emergency_mutants.sh`: nine single-guard mutants (M1 to M9 above), each
-  applied to a temporary copy; the test must fail against every one and pass
-  against the unmutated copy. A mutant whose pattern no longer matches fails the
+  The read-only case is skipped when the test runs as root (root ignores the
+  permission).
+* E7 budget: a stop while a downstream reaction computes, budget 1; object
+  create and retire under a stop; a dangling symlink mark.
+* `rx_emergency_mutants.sh`: thirteen single-guard mutants (M1 to M13 above),
+  each applied to a temporary copy; the test must fail against every one (at
+  least one failed check, not a crash or a timeout) and pass against the
+  unmutated copy. A mutant whose pattern does not match exactly once fails the
   script.
 
 `make test-r12` `t_emergency_stop` (native AIENOS authority, resident seat
@@ -154,3 +174,7 @@ under the stop; after resume the seat runs again and B = X + Y, C = X + Y + 1.
    performing an effect outside the world. Its result is not published until
    resume, and the effect stays attributable through its crumbs.
 5. **Sequential activation** under a stop is refused in code but has no test.
+6. **Disk work under the locks.** The stop writes its mark (fsync included) while
+   holding the world lock and the caller lock. The stop is already in force in
+   memory; a slow disk delays readers and caller checks for that time, never the
+   stop itself.

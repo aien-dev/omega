@@ -528,7 +528,7 @@ typedef struct {
     uint64_t crumb;         /* its OPERATOR_STOP crumb (0 if the log was full) */
     uint64_t t_ns;          /* CLOCK_REALTIME of the stop */
     int durable;            /* 1 mark on disk; 0 no halt dir; < 0 -errno of the write */
-    uint64_t refused;       /* activations, publications and seat results refused */
+    uint64_t refused;       /* activations, publications, seat results, creates and retires refused */
 } RxHaltStatus;
 
 /* Durable recorder (M20 Cortex). Called with the world mutex held, once per
@@ -807,8 +807,9 @@ int  rx_world_caller_check_fn(void *world, uint32_t subject, const RxCallerCred 
  * under is refused: no reaction can stop or resume the world it runs in.
  * Stop: no worker takes work, a computed activation is refused at its commit
  * (CANCELLED, RX_ERR_HALTED) and re-run on resume, outside publications and
- * seat results are refused, and the caller check refuses so a bound
- * generation store neither proposes nor promotes. Work already committing
+ * seat results are refused, object create and retire are refused, and the
+ * caller check refuses so a bound generation store neither proposes nor
+ * promotes. A refused activation does not count toward the episode budget. Work already committing
  * finishes first (the stop waits for the world lock). A durable mark is
  * written when a halt directory is set; the stop takes effect even if that
  * write fails (`durable` < 0 says so). Never call with mu held. */

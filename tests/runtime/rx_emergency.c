@@ -30,6 +30,12 @@
  *                 promote while the mark exists; resume keeps the stop record in
  *                 a sealed OPERATOR_HALT.resumed.* file and removes the mark; a
  *                 resume that cannot retire the mark leaves the world stopped.
+ *   E7 budget     a stop while R3 (woken by another reaction's commit) computes,
+ *                 with an activation budget of 1: the refused activation does not
+ *                 spend the budget, R3 is not quarantined and runs on resume;
+ *                 object create and retire are refused under the stop and change
+ *                 nothing; a symlink mark stops a new world (TORN) and resume
+ *                 removes it.
  *
  * Host only, CPU only. Exit 0 = PASS.
  */
@@ -58,23 +64,24 @@ static void check(int ok, const char *what) {
 }
 
 enum { RES_E = 0x710, RES_O = 0x711, RES_Q = 0x712 };
-enum { SUBJ_EXT = 9001, SUBJ_R = 9002, SUBJ_R2 = 9003, OP = 9100, OP2 = 9101, INTRUDER = 9102 };
+enum { SUBJ_EXT = 9001, SUBJ_R = 9002, SUBJ_R2 = 9003, SUBJ_R3 = 9004, OP = 9100, OP2 = 9101, INTRUDER = 9102 };
 
 /* ---- gate: R parks in its function until released ------------------------- */
 static struct {
     pthread_mutex_t mu;
     pthread_cond_t cv;
-    int armed, inside, go;
-} g = { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, 0, 0, 0 };
+    int armed, armed3, inside, go;
+} g = { PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER, 0, 0, 0, 0 };
+static int g_with_r3;   /* setup adds R3, a reaction woken by R's commit (E7) */
 
 typedef struct {
     RxCapRoot root;
     RxCapAdmin admin;
     RxWorld w;
     RxObjRef e, o, q;
-    uint32_t id_r, id_r2;
+    uint32_t id_r, id_r2, id_r3;
     RxCapRef c_ext, c_op, c_op2;
-    RxCallerCred cr_op, cr_op2, cr_intr, cr_r, cr_r2;
+    RxCallerCred cr_op, cr_op2, cr_intr, cr_r, cr_r2, cr_r3;
 } Env;
 
 static int fn_r(RxCtx *c) {
@@ -98,6 +105,25 @@ static int fn_r2(RxCtx *c) {
     Env *e = c->user;
     c->n_out = 1;
     c->out[0] = (RxMutation){ e->q, 0, c->in[0].field[1] * 10 };
+    return 0;
+}
+
+/* R3: woken by R's commit on O (an internal cause, so its episode budget is not
+ * reset by the wake), held in its function when armed3 is set. */
+static int fn_r3(RxCtx *c) {
+    Env *e = c->user;
+    pthread_mutex_lock(&g.mu);
+    if (g.armed3) {
+        g.inside = 1;
+        pthread_cond_broadcast(&g.cv);
+        while (!g.go) pthread_cond_wait(&g.cv, &g.mu);
+        g.go = 0;
+        g.inside = 0;
+        g.armed3 = 0;
+    }
+    pthread_mutex_unlock(&g.mu);
+    c->n_out = 1;
+    c->out[0] = (RxMutation){ e->q, 1, c->in[0].field[0] * 100 };
     return 0;
 }
 
@@ -166,6 +192,22 @@ static int setup(Env *e, uint32_t workers, uint64_t crumb_cap) {
     d.caps[d.n_caps++] = (RxCapNeed){ mint(e, SUBJ_R2, RES_E, RX_RIGHT_READ), RES_E, RX_RIGHT_READ };
     d.caps[d.n_caps++] = (RxCapNeed){ mint(e, SUBJ_R2, RES_Q, RX_RIGHT_WRITE), RES_Q, RX_RIGHT_WRITE };
     if (rx_world_add_reaction(&e->w, &d, &e->id_r2) != RX_OK) return -1;
+    if (g_with_r3) {
+        if (rx_world_enroll_caller(&e->w, SUBJ_R3, &e->cr_r3) != RX_CALLER_OK) return -1;
+        memset(&d, 0, sizeof d);
+        d.name = "estop.r3";
+        d.faculty = RX_FACULTY_AIEN;
+        d.subject = SUBJ_R3;
+        d.caller = e->cr_r3;
+        d.priority = RX_PRIO_FOREGROUND;
+        d.fn = fn_r3;
+        d.user = e;
+        d.triggers[d.n_triggers++] = (RxDep){ e->o, RX_FIELD(0) };
+        d.writes[d.n_writes++] = (RxDep){ e->q, RX_FIELD(1) };
+        d.caps[d.n_caps++] = (RxCapNeed){ mint(e, SUBJ_R3, RES_O, RX_RIGHT_READ), RES_O, RX_RIGHT_READ };
+        d.caps[d.n_caps++] = (RxCapNeed){ mint(e, SUBJ_R3, RES_Q, RX_RIGHT_WRITE), RES_Q, RX_RIGHT_WRITE };
+        if (rx_world_add_reaction(&e->w, &d, &e->id_r3) != RX_OK) return -1;
+    }
     if (rx_world_bind_callers(&e->w) != RX_OK) return -1;
     return 0;
 }
@@ -637,10 +679,14 @@ static void e6_durable(void) {
 
     /* Resume through a world: record kept, mark gone, the store promotes. */
     check(setup(&e, 1, 1u << 16) == 0 && rx_world_set_halt_dir(&e.w, dir) == 1, "E6 world restored stopped");
-    check(chmod(dir, 0500) == 0, "E6 setup: halt directory made read-only");
-    check(resume(&e, OP, &e.cr_op, e.c_op) == RX_ERR_IO && halted(&e) && access(mark, F_OK) == 0,
-          "E6 a resume that cannot retire the mark is refused: world stays stopped, mark stays");
-    check(chmod(dir, 0700) == 0, "E6 setup: halt directory writable again");
+    if (geteuid() == 0) {
+        printf("[~] E6 read-only directory case skipped: running as root ignores the permission\n");
+    } else {
+        check(chmod(dir, 0500) == 0, "E6 setup: halt directory made read-only");
+        check(resume(&e, OP, &e.cr_op, e.c_op) == RX_ERR_IO && halted(&e) && access(mark, F_OK) == 0,
+              "E6 a resume that cannot retire the mark is refused: world stays stopped, mark stays");
+        check(chmod(dir, 0700) == 0, "E6 setup: halt directory writable again");
+    }
     check(resume(&e, OP, &e.cr_op, e.c_op) == RX_OK && !halted(&e) && access(mark, F_OK) != 0,
           "E6 resume: world runs, mark removed");
     check(count_resumed(dir, rname, sizeof rname) == 1, "E6 exactly one kept stop record");
@@ -656,6 +702,71 @@ static void e6_durable(void) {
     rx_gen_active(gs, &a1, &l1);
     check(rc == RX_GEN_OK && a1 == cand, "E6 control: with the mark gone the store promotes");
     rx_gen_close(gs);
+    teardown(&e);
+    char cmd[128];
+    snprintf(cmd, sizeof cmd, "rm -rf '%s'", dir);
+    if (system(cmd) != 0) fprintf(stderr, "cleanup of %s failed\n", dir);
+}
+
+/* ---- E7 budget, create/retire, a mark that is not a file -------------------- */
+static void e7_budget_objects(void) {
+    Env e;
+    g_with_r3 = 1;
+    int su = setup(&e, 1, 1u << 16);
+    g_with_r3 = 0;
+    check(su == 0, "E7 setup: world with R3 (woken by R's commit)");
+    if (su != 0) return;
+    RxStabilityBudget sb;
+    memset(&sb, 0, sizeof sb);
+    sb.activation_budget = 1;   /* one activation per reaction per episode */
+    rx_world_set_stability(&e.w, &sb);
+    pthread_mutex_lock(&g.mu);
+    g.armed3 = 1;
+    pthread_mutex_unlock(&g.mu);
+    check(publish(&e, 0, 6) > 0, "E7 setup: publish E.f0 = 6 (R runs, its commit wakes R3)");
+    check(wait_inside() == 0, "E7 setup: R3 is computing, held in its function");
+    check(stop(&e, OP, &e.cr_op, e.c_op, 707) == RX_OK, "E7 operator stop while R3 computes");
+    gate_release();
+    usleep(50 * 1000);
+    pthread_mutex_lock(&e.w.mu);
+    bool quarantined = e.w.reactions[e.id_r3].quarantined;
+    pthread_mutex_unlock(&e.w.mu);
+    check(!quarantined, "E7 the refused activation did not spend R3's episode budget (not quarantined)");
+
+    /* Create and retire are commits too: refused under the stop, nothing changes. */
+    uint8_t d0[32], d1[32];
+    digest(&e, d0);
+    uint64_t n0 = crumbs(&e);
+    uint64_t init[RX_MAX_FIELDS] = { 0 };
+    RxObjRef nr = { UINT32_MAX, 0 };
+    check(rx_world_create(&e.w, 1, RX_PERSIST_RESIDENT, 0x7ff, init, &nr) == RX_ERR_HALTED &&
+              nr.id == UINT32_MAX,
+          "E7 object create under the stop: RX_ERR_HALTED, no object");
+    check(rx_world_retire(&e.w, e.q) == RX_ERR_HALTED, "E7 object retire under the stop: RX_ERR_HALTED");
+    digest(&e, d1);
+    check(memcmp(d0, d1, 32) == 0 && crumbs(&e) == n0 && field(&e, e.q) != UINT64_MAX,
+          "E7 refused create/retire changed nothing (digest, crumbs, Q still live)");
+
+    check(resume(&e, OP, &e.cr_op, e.c_op) == RX_OK, "E7 operator resume");
+    check(wait_commits(&e, e.id_r3, 1) == 0, "E7 R3 ran again after resume and committed");
+    RxObject q;
+    check(rx_world_read(&e.w, e.q, &q) == RX_OK && q.field[1] == 700, "E7 its result: Q.f1 = (6+1)*100");
+    teardown(&e);
+
+    /* A mark that is a symlink (here dangling) is not a mark the world can read:
+     * the world starts stopped (TORN, never "absent, go"), and resume keeps a
+     * record and removes the link, so the store is not blocked for good. */
+    char dir[64], mark[160], rname[260];
+    check(mkdtemp(strcpy(dir, "/tmp/rx-estop-link-XXXXXX")) != NULL, "E7 setup: halt directory");
+    snprintf(mark, sizeof mark, "%s/%s", dir, RX_GEN_HALT_MARK);
+    check(symlink("/nonexistent/rx-estop-target", mark) == 0, "E7 setup: OPERATOR_HALT is a dangling symlink");
+    check(setup(&e, 1, 1u << 16) == 0, "E7 link: new world");
+    int rr = rx_world_set_halt_dir(&e.w, dir);
+    check(rr == RX_ERR_TORN && halted(&e), "E7 a symlink mark stops the world (RX_ERR_TORN)");
+    check(resume(&e, OP, &e.cr_op, e.c_op) == RX_OK && !halted(&e), "E7 resume lifts it");
+    struct stat st;
+    check(lstat(mark, &st) != 0 && count_resumed(dir, rname, sizeof rname) == 1,
+          "E7 the link is removed and a resumed record kept");
     teardown(&e);
     char cmd[128];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", dir);
@@ -680,6 +791,7 @@ int main(void) {
     teardown(&e);
     e5_promotion();
     e6_durable();
+    e7_budget_objects();
     printf("RX_EMERGENCY_STOP: %s (%d failures; host CPU, real caproot authority)\n",
            g_fail ? "FAIL" : "PASS", g_fail);
     return g_fail ? 1 : 0;

@@ -13,6 +13,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/random.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -991,8 +992,18 @@ static int halt_mark_read(const char *dir, RxHaltStatus *h, char *raw, size_t ca
     char path[512];
     if (snprintf(path, sizeof path, "%s/%s", dir, RX_GEN_HALT_MARK) >= (int)sizeof path)
         return RX_ERR_IO;
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) return errno == ENOENT ? 0 : RX_ERR_IO;
+    raw[0] = 0;
+    *raw_len = 0;
+    /* Never follow a link or block on a FIFO under the world locks: a mark that
+     * is not a regular file is damaged (TORN: the world stays stopped, and resume
+     * keeps a record and removes it, so the store is never blocked for good). */
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK);
+    if (fd < 0) return errno == ENOENT ? 0 : errno == ELOOP ? RX_ERR_TORN : RX_ERR_IO;
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode)) {
+        close(fd);
+        return RX_ERR_TORN;
+    }
     ssize_t n = read(fd, raw, cap - 1);
     close(fd);
     if (n < 0) return RX_ERR_IO;
@@ -1826,6 +1837,9 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         k.t_end_ns = now_ns();
         crumb_append(w, &k);
         w->halt.refused++;
+        /* A refused activation is not spent: it must not count toward the
+         * episode budget, or the re-run could be quarantined instead. */
+        if (r->episode_activations) r->episode_activations--;
         r->rearm = true;
         end_activation(w, rid);
         return;
@@ -2154,6 +2168,11 @@ void rx_world_destroy(RxWorld *w) {
 int rx_world_create(RxWorld *w, uint32_t type, RxPersist persist, uint64_t resource,
                     const uint64_t init[RX_MAX_FIELDS], RxObjRef *out) {
     pthread_mutex_lock(&w->mu);
+    if (w->halted) {                     /* R16 G6: nothing new commits under a stop */
+        w->halt.refused++;
+        pthread_mutex_unlock(&w->mu);
+        return RX_ERR_HALTED;
+    }
     for (uint32_t i = 0; i < RX_MAX_OBJECTS; i++) {
         RxObject *o = &w->objects[i];
         if (o->live) continue;
@@ -2201,6 +2220,11 @@ int rx_world_create(RxWorld *w, uint32_t type, RxPersist persist, uint64_t resou
 
 int rx_world_retire(RxWorld *w, RxObjRef ref) {
     pthread_mutex_lock(&w->mu);
+    if (w->halted) {                     /* R16 G6: nothing new commits under a stop */
+        w->halt.refused++;
+        pthread_mutex_unlock(&w->mu);
+        return RX_ERR_HALTED;
+    }
     if (!ref_live(w, ref)) {
         pthread_mutex_unlock(&w->mu);
         return RX_ERR_STALE_GEN;
@@ -2535,6 +2559,7 @@ int rx_resident_accept(RxWorld *w) {
         r->resident_seat = false;
         w->stats.resident_closed++;
         w->halt.refused++;
+        if (r->episode_activations) r->episode_activations--;   /* not spent */
         r->rearm = true;
         end_activation(w, (uint32_t)rid);
         pthread_mutex_unlock(&w->mu);
