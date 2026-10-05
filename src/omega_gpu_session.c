@@ -148,10 +148,11 @@ int omega_gpu_session_launch(const OmegaGpuLaunch *L, uint64_t *elapsed_ns, uint
         .qmd0_va = qmd0_va, .qmd1_va = qmd1_va, .num_elements = L->num_elements,
         .threads_per_block = L->threads_x, .grid_width = L->grid_x * L->grid_y, .threads_x = L->threads_x, .threads_y = threads_y,
         .grid_x = L->grid_x, .grid_y = L->grid_y, .gpr_count = gpr,
+        .shared_bytes = L->shared_bytes,
     };
     uint32_t qmd0_words[OMEGA_BW_QMD_WORDS], qmd1_words[OMEGA_BW_QMD_WORDS];
     omega_blackwell_build_qmd0(qmd0_words, qmd0_va, qmd1_va);
-    omega_blackwell_build_qmd1(qmd1_words, &cfg);
+    if (omega_blackwell_build_qmd1(qmd1_words, &cfg) != 0) { omega_gpu_session_set_error("qmd build (shared_bytes)"); return -1; }
     if (omega_blackwell_verify_qmd_invariants(qmd1_words) != 0) { omega_gpu_session_set_error("qmd invariants"); return -1; }
     memcpy(g_s.qmd.cpu, qmd0_words, sizeof qmd0_words);
     memcpy((uint8_t *)g_s.qmd.cpu + 0x1000, qmd1_words, sizeof qmd1_words);

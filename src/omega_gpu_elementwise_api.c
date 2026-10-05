@@ -95,17 +95,19 @@ static void lop3xor(Em *e, int dst, int a, int b) { BlackwellIRInsn i = I0(BW_IR
 /* dst64 = idx * 4 + ptr64 (byte address of element idx) */
 static void addr4(Em *e, int dst64, int idx, int ptr64) { BlackwellIRInsn i = I0(BW_IR_IMAD_WIDE); i.dst_vreg = dst64; i.src1_vreg = idx; i.imm = 4; i.src3_vreg = ptr64; emit(e, i, K_FIXED); }
 static void ldg(Em *e, int dst, int addr64, int udesc) { BlackwellIRInsn i = I0(BW_IR_LDG_E); i.dst_vreg = dst; i.src1_vreg = addr64; i.ureg = udesc; emit(e, i, K_VAR); }
-/* Independent global loads issued back to back (campaign C2a, 2026-10-05). The first load
+/* Independent loads (LDG_E from global, or LDS32 from shared memory with ureg NOREG) issued
+ * back to back (campaign C2a, 2026-10-05). The first load
  * waits on whatever is pending; the others wait on nothing, so all n are in flight together.
  * Every load sets SB_GPR (a counting scoreboard), so the next instruction waits once for all
  * of them instead of once per load. Fails the build if a load address is a destination of the
  * group or a destination repeats (the later loads would read an operand still in flight). */
-static void ldg_group(Em *e, int n, const int *dst, const int *addr64, int udesc) {
+static void ld_group(Em *e, BlackwellIROpcode op, int n, const int *dst, const int *addr, int ureg) {
     for (int i = 0; i < n; i++)
         for (int k = 0; k < n; k++)
-            if (addr64[i] == dst[k] || (k != i && dst[i] == dst[k])) { e->err = -1; return; }
+            if (addr[i] == dst[k] || (k != i && dst[i] == dst[k])) { e->err = -1; return; }
     for (int i = 0; i < n; i++) {
-        BlackwellIRInsn in = I0(BW_IR_LDG_E); in.dst_vreg = dst[i]; in.src1_vreg = addr64[i]; in.ureg = udesc;
+        if (op != BW_IR_LDG_E && op != BW_IR_LDS32) { e->err = -1; return; }
+        BlackwellIRInsn in = I0(op); in.dst_vreg = dst[i]; in.src1_vreg = addr[i]; in.ureg = ureg;
         if (i == 0) { emit(e, in, K_VAR); continue; }
         in.control = CW(4, SB_GPR, SB_NONE, 0) | CW_YIELD; /* nonzero, so the encoder keeps it */
         if (omega_bw_ir_append(e->p, &in) < 0) e->err = -1;
@@ -161,6 +163,7 @@ static void loop_end(Em *e) {
 #define ARG_P1 0x39cu
 #define ARG_P2 0x3a0u
 #define ARG_P3 0x3a4u
+#define ARG_P4 0x3a8u
 #define DESC_OFF 0x358u
 
 typedef struct { int udesc, pa, pb, pc, tid, cta; } Pro;
@@ -356,18 +359,47 @@ static void bra_always(Em *e, int target) { BlackwellIRInsn i = I0(BW_IR_BRA); i
  *   j += jadd; while j < 32 { acc |= 1 << j; j += p }
  * then acc |= (w == 0) (the number 1), word = ~(acc | (w == last ? ~tailmask : 0)).
  * Branch-free except the loop branches. Mutant: drops the j fix (j = p - r unreduced), so words where
- * base - k0 is a multiple of p (or q overshot) mark the wrong bits. */
-static void gen_prime_sieve(Em *e, int mutant) {
+ * base - k0 is a multiple of p (or q overshot) mark the wrong bits.
+ *
+ * staged = 1 (OMEGA_GPU_EW_PRIME_SIEVE_SHARED, campaign C3): P4 = table words, sentinel included
+ * (3 per entry). The CTA first copies the table into shared memory at offset 0 (thread t copies
+ * words t, t + 128, ...), BAR_SYNC, then the prime loop reads shared memory (LDS) instead of
+ * uncached global memory. Every thread reaches the barrier: the w >= nwords exit comes after
+ * it. The launch must declare at least 4 * P4 bytes of shared memory. */
+static void gen_prime_sieve(Em *e, int mutant, int staged) {
     Pro pr = prologue(e);
     int nwords = V(e), stride = V(e), lastw = V(e), tailinv = V(e);
     int one = V(e), c32 = V(e), cm1 = V(e), w = V(e);
     ldc32(e, nwords, ARG_P0); ldc32(e, stride, ARG_P1); ldc32(e, lastw, ARG_P2); ldc32(e, tailinv, ARG_P3);
     movi(e, one, 1); movi(e, c32, 32); movi(e, cm1, 0xffffffffu);
+    int c4 = -1, c8 = -1, c12 = -1;
+    if (staged) {
+        int twords = V(e), i = V(e), ga = V64(e), val = V(e), sa = V(e);
+        c4 = V(e); c8 = V(e); c12 = V(e);
+        ldc32(e, twords, ARG_P4);
+        movi(e, c4, 4); movi(e, c8, 8); movi(e, c12, 12);
+        imadi(e, i, pr.tid, 1, NOREG);
+        loop_begin(e); /* staging loop */
+        int ls = here(e);
+        isetp_ge_u32(e, i, twords);
+        int sdone = bra_fwd_if_p0(e);
+        addr4(e, ga, i, pr.pa);
+        ldg(e, val, ga, pr.udesc);
+        imadi(e, sa, i, 4, NOREG);
+        sts32(e, sa, val);
+        imadi(e, i, one, OMEGA_GPU_EW_THREADS, i);
+        bra_always(e, ls);
+        loop_end(e);
+        bra_patch_here(e, sdone);
+        bar_sync(e);
+    }
     imadi(e, w, pr.cta, OMEGA_GPU_EW_THREADS, pr.tid);
     isetp_ge_u32(e, w, nwords);
     exit_if_p0(e);
 
-    int base = V(e), basep32 = V(e), acc = V(e), ptr = V64(e), a64 = V64(e), a64m = V64(e);
+    /* ptr, a64, a64m: global addresses, or (staged) 32-bit shared offsets */
+    int base = V(e), basep32 = V(e), acc = V(e);
+    int ptr = staged ? V(e) : V64(e), a64 = staged ? V(e) : V64(e), a64m = staged ? V(e) : V64(e);
     int p = V(e), magic = V(e), k0 = V(e), negp = V(e), d = V(e), neg = V(e), nd = V(e), dpos = V(e), jadd = V(e);
     int q = V(e), r = V(e), j = V(e), t = V(e), z = V(e), bit = V(e);
     int e1 = V(e), m = V(e), word = V(e), oaddr = V64(e);
@@ -377,17 +409,18 @@ static void gen_prime_sieve(Em *e, int mutant) {
     imadi(e, base, w, 32, NOREG);
     iadd3(e, basep32, base, c32);
     movrz(e, acc);
-    widei(e, ptr, one, 0, pr.pa);
+    if (staged) movrz(e, ptr); else widei(e, ptr, one, 0, pr.pa);
 
     loop_begin(e); /* prime loop */
     int lp = here(e);
     /* one memory round trip per prime: all three entry words load together (C2a). The
      * sentinel entry is a whole entry, so loading p and magic before the k0 test is in bounds. */
-    widei(e, a64, one, 8, ptr);
-    widei(e, a64m, one, 4, ptr);
+    if (staged) { iadd3(e, a64, ptr, c8); iadd3(e, a64m, ptr, c4); }
+    else { widei(e, a64, one, 8, ptr); widei(e, a64m, one, 4, ptr); }
     {
         const int dsts[3] = { k0, p, magic }, adrs[3] = { a64, ptr, a64m };
-        ldg_group(e, 3, dsts, adrs, pr.udesc);
+        if (staged) ld_group(e, BW_IR_LDS32, 3, dsts, adrs, NOREG);
+        else ld_group(e, BW_IR_LDG_E, 3, dsts, adrs, pr.udesc);
     }
     isetp_ge_u32(e, k0, basep32);
     int brk = bra_fwd_if_p0(e);
@@ -418,7 +451,7 @@ static void gen_prime_sieve(Em *e, int mutant) {
     loop_end(e);
     bra_patch_here(e, done);
 
-    widei(e, ptr, one, 12, ptr);
+    if (staged) iadd3(e, ptr, ptr, c12); else widei(e, ptr, one, 12, ptr);
     bra_always(e, lp);
     loop_end(e);
     bra_patch_here(e, brk);
@@ -473,7 +506,8 @@ static int build_kernel(OmegaGpuEwOp op, int mutant, OmegaBlackwellKernel *kerne
     case OMEGA_GPU_EW_RMSNORM: gen_rmsnorm(&e, mutant); break;
     case OMEGA_GPU_EW_ROPE: gen_rope(&e, mutant); break;
     case OMEGA_GPU_EW_SWIGLU: gen_swiglu(&e, mutant); break;
-    case OMEGA_GPU_EW_PRIME_SIEVE: gen_prime_sieve(&e, mutant); break;
+    case OMEGA_GPU_EW_PRIME_SIEVE: gen_prime_sieve(&e, mutant, 0); break;
+    case OMEGA_GPU_EW_PRIME_SIEVE_SHARED: gen_prime_sieve(&e, mutant, 1); break;
     default: e.err = -1; break;
     }
     int rc = OMEGA_GPU_EW_CODEGEN_FAIL;

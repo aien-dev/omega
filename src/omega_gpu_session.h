@@ -71,6 +71,7 @@ typedef struct {
     const uint32_t *args;        /* n_args words written at cbank + 0x380 */
     uint32_t n_args;             /* <= OMEGA_GPU_SESSION_MAX_ARGS */
     uint64_t timeout_ms;         /* marker wait; past it the process latches */
+    uint32_t shared_bytes;       /* shared memory per CTA; 0 = the QMD default (1024) */
 } OmegaGpuLaunch;
 #define OMEGA_GPU_SESSION_MAX_ARGS 32u
 

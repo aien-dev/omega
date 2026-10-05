@@ -42,6 +42,7 @@
 #define GB_POISON 0xffbadbadu
 #define GB_MAX_LIMIT 0xffffffffull /* kernel range: base, k0 < 2^31 */
 #define GB_BUDGET_MAX 4096u
+#define GB_ARGS 11u /* a, b, c (64-bit each) then P0..P4 */
 
 /* PR_GB10_CTA_BUDGET or the I42 default; 0 on a malformed or out-of-range value. */
 static uint32_t gb_cta_budget(void) {
@@ -59,6 +60,8 @@ typedef struct {
     uint32_t root;          /* isqrt(limit) */
     uint32_t nprimes;       /* odd primes in the table of the last pass (sentinel excluded) */
     size_t table_cap;       /* entries, sentinel included */
+    uint32_t entries;       /* table entries for this limit, sentinel included (fixed by the limit) */
+    uint32_t shared_bytes;  /* 0: global-table kernel; else the staged kernel's shared memory per CTA */
     OmegaBlackwellKernel k;
     NvrmMem code, out, table;
     uint64_t diag_ns, launches;
@@ -73,6 +76,22 @@ static uint32_t isqrt_u64(uint64_t n) {
     for (uint64_t bit = 1ull << 31; bit; bit >>= 1)
         if ((r + bit) * (r + bit) <= n) r += bit;
     return (uint32_t)r;
+}
+
+/* odd primes <= root (the table the pass builds, without the sentinel) */
+static uint32_t gb_count_odd_primes(uint32_t root) {
+    uint32_t n = 0, half = root / 2 + 1;
+    uint8_t *flags = calloc(half, 1);
+    if (!flags) return 0xfffffffeu; /* makes the per-pass check fail closed */
+    for (uint32_t i = 1; i < half; i++) {
+        uint32_t p = 2 * i + 1;
+        if (p > root) break;
+        if (flags[i]) continue;
+        for (uint64_t c = (uint64_t)p * p; c <= root; c += 2ull * p) flags[c / 2] = 1;
+        n++;
+    }
+    free(flags);
+    return n;
 }
 
 static void gb_release(gb_state *s) {
@@ -109,8 +128,12 @@ static int gb_setup(void **state, uint64_t limit) {
         fprintf(stderr, "gb10-native: isqrt(%" PRIu64 ") = %u is wrong\n", limit, s->root); return -1; /* fail closed */
     }
     s->table_cap = (size_t)s->root / 2 + 2; /* every odd number <= root, plus the sentinel */
+    s->entries = gb_count_odd_primes(s->root) + 1;
+    /* campaign C3: stage the table in shared memory whenever it fits the QMD bound */
+    if ((uint64_t)s->entries * 12 <= OMEGA_BW_QMD_MAX_SHARED_BYTES) s->shared_bytes = s->entries * 12;
+    OmegaGpuEwOp op = s->shared_bytes ? OMEGA_GPU_EW_PRIME_SIEVE_SHARED : OMEGA_GPU_EW_PRIME_SIEVE;
 
-    if (omega_gpu_elementwise_codegen_ir(OMEGA_GPU_EW_PRIME_SIEVE, PR_GB10_MUTANT, NULL, &s->k) != OMEGA_GPU_EW_OK) {
+    if (omega_gpu_elementwise_codegen_ir(op, PR_GB10_MUTANT, NULL, &s->k) != OMEGA_GPU_EW_OK) {
         fprintf(stderr, "gb10-native: kernel codegen failed\n"); return -1;
     }
     omega_gpu_session_lock();
@@ -152,16 +175,18 @@ static int gb_pass(void *state, uint64_t limit) {
     free(flags);
     tab[3 * n + 0] = 1; tab[3 * n + 1] = 0; tab[3 * n + 2] = 0xffffffffu; /* sentinel: ends every scan */
     s->nprimes = n;
+    if (n + 1 != s->entries) { fprintf(stderr, "gb10-native: %u table entries, setup counted %u\n", n + 1, s->entries); return -1; }
     __asm__ volatile("dsb sy" ::: "memory");
 
-    uint32_t args[OMEGA_BW_CBANK_MATMUL_ARGS_WORDS] = {0};
+    uint32_t args[GB_ARGS] = {0};
     args[0] = (uint32_t)s->table.va; args[1] = (uint32_t)(s->table.va >> 32);
     args[4] = (uint32_t)s->out.va;   args[5] = (uint32_t)(s->out.va >> 32);
     args[6] = s->nwords; args[7] = s->stride; args[8] = s->lastw; args[9] = s->tailinv;
+    args[10] = s->entries * 3; /* P4: table words, read by the staged kernel only */
     OmegaGpuLaunch L = {
         .code_va = s->code.va, .gpr_count = GB_GPR, .threads_x = GB_THREADS, .threads_y = 1,
         .grid_x = s->ctas, .grid_y = 1, .num_elements = s->nwords ? s->nwords : 1,
-        .args = args, .n_args = OMEGA_BW_CBANK_MATMUL_ARGS_WORDS, .timeout_ms = GB_WAIT_MS,
+        .args = args, .n_args = GB_ARGS, .timeout_ms = GB_WAIT_MS, .shared_bytes = s->shared_bytes,
     };
     uint64_t ns = 0; uint32_t marker = 0;
     if (omega_gpu_session_launch(&L, &ns, &marker) != 0) {
@@ -188,8 +213,8 @@ static uint64_t gb_threads(void *state) { gb_state *s = state; return s ? s->str
 static int gb_detail(void *state, FILE *f) {
     gb_state *s = state;
     if (!s) return -1;
-    fprintf(f, "{\"grid\": %u, \"cta_budget\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"kernel_code_sha256\": \"",
-            s->ctas, s->budget, GB_THREADS, s->nwords, s->nprimes);
+    fprintf(f, "{\"grid\": %u, \"cta_budget\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"table\": \"%s\", \"shared_bytes\": %u, \"kernel_code_sha256\": \"",
+            s->ctas, s->budget, GB_THREADS, s->nwords, s->nprimes, s->shared_bytes ? "shared" : "global", s->shared_bytes);
     for (int i = 0; i < 32; i++) fprintf(f, "%02x", s->k.code_digest[i]);
     fprintf(f, "\", \"kernel_insns\": %zu, \"kernel_gpr\": %u, \"mutant\": %d, \"launches\": %" PRIu64
                ", \"diag_kernel_ns_total\": %" PRIu64
