@@ -1,7 +1,8 @@
 # R16 G6: operator control of the production program (interface contract)
 
-Status: CONTRACT, written before the code (lane ESTOP, CAND-3). The runtime control it
-wires is `spec/r16-operator-emergency-stop.md` (merged #300); this document says how an
+Status: CONTRACT, written before the code (lane ESTOP, CAND-3), then implemented. Two
+points were corrected from the code: when the socket opens (section 2) and a store
+refusal under a stop (section 6). The runtime control it wires is `spec/r16-operator-emergency-stop.md` (merged #300); this document says how an
 operator outside the running production program reaches that control, and what the
 program does with a request. It adds no authority scheme: every decision is made by the
 existing world authority (`rx_world_emergency_stop` / `_resume`, `halt_authorize` in
@@ -45,9 +46,13 @@ its own world. Every statement below holds for each of those worlds.
 
 ## 2. The outside entry point
 
-* An `AF_UNIX` stream socket `<state>/control/operator.sock`, created when the world is
-  ready for operator requests and removed when the world is torn down. Between worlds
-  there is no socket: a client gets "connection refused" and the request does nothing.
+* An `AF_UNIX` stream socket `<state>/control/operator.sock`, created right after the
+  world's credential, capability and halt directory exist (before its objects are
+  built) and removed when the world is torn down. While the program sets the world
+  up, a request waits (the client allows 60 s) and is answered once setup is done, so
+  a stop never lands inside setup; a world restored stopped answers at once (it does
+  no setup until resumed). Between worlds there is no socket: a client gets
+  "connection refused" and the request does nothing.
 * Two walls before the credential: the directory is 0700 and owned by the program's
   user (validated at startup, §5), and every accepted connection is checked with
   `SO_PEERCRED`: the peer uid must equal the program's effective uid, else the reply
@@ -100,7 +105,7 @@ same `halt_authorize` the stop and resume use, under the same locks, added to
 
 | command | world call | reply on success |
 |---|---|---|
-| `status` | `rx_world_operator_authorize`, `rx_world_halt_status` | `OK state=running\|stopped restored= seq= durable= refused= crumbs= objects=` plus program counters `served= production_commits= inforce= active_generation=` |
+| `status` | `rx_world_operator_authorize`, `rx_world_halt_status` | `OK state=running\|stopped restored= seq= durable= refused= crumbs= reactions=` plus program counters `served= production_commits= inforce= active_generation=` |
 | `stop [reason]` | `rx_world_emergency_stop` | `OK state=stopped seq= crumb= durable=`; a second stop: `ALREADY` with no new crumb |
 | `resume` | `rx_world_emergency_resume` | `OK state=running seq=`; a running world: `NOT_STOPPED` |
 | `revoke-cap` | authorize, then `aienos_cap_revoke` of the presented control capability by the authority's office | `OK revoked=capability`; afterwards every request with that capability is `REFUSED reason=authority` |
@@ -152,7 +157,9 @@ earlier world or an earlier program start fails the constant-time caller check
 * The program keeps its own clocks honest: time spent stopped does not count toward the
   episode's deadlines (`run_clock`), a production request refused by the stop is
   published again after resume, and the end-of-mode checks wait while the world is
-  stopped. A stop therefore delays the episode; it does not fail it.
+  stopped. A durable generation proposal or promotion that the store refuses
+  because of the stop (`RX_GEN_ERR_HALTED`) is not an outcome: the activation waits
+  and posts it again after the resume (`halted_wait`, `src/runtime/rx_living.c`). A stop therefore delays the episode; it does not fail it.
 * Evidence: at the end of every mode the program reads its crumb log (the canonical
   evidence, spec §4) and prints `R13 operator <mode-key>: stops S resumes R restored X
   open O; under stop: commits 0 externals 0 cancelled C`. Any COMMIT or EXTERNAL crumb

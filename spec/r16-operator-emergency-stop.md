@@ -1,10 +1,12 @@
 # R16 G6: operator emergency stop (contract)
 
-Status: runtime control IMPLEMENTED and host-tested. G6 item
-`operator_emergency_controls_passing` stays **MISSING_IMPLEMENTATION**: the
-production R13 program does not wire the control (no `rx_world_set_halt_dir`
-call, no operator entry point), so no operator can reach it on the candidate,
-and no silicon run exercises a stop. See "Not done" at the end.
+Status: runtime control IMPLEMENTED and host-tested; WIRED into the production R13
+program with an outside operator entry point (`docs/r16-operator-control.md`,
+CAND-3 lane ESTOP). G6 item `operator_emergency_controls_passing` is operated
+only by execution: the host integration test `make test-r16-operator-host` and its
+mutants `make test-r16-operator-mutants`, plus the silicon run
+`make test-r16-operator-silicon`. It is not PASS until a silicon receipt from the
+candidate exists. See "Not done" at the end.
 
 Source: `src/runtime/rx_world.c` (`rx_world_emergency_stop`,
 `rx_world_emergency_resume`, `rx_world_set_halt_dir`, `rx_world_halt_status`),
@@ -155,16 +157,23 @@ stand-in): a seat result that lands after the stop is refused, canonical B and
 B's window keep the world's value, the dependent does not run, no claim is posted
 under the stop; after resume the seat runs again and B = X + Y, C = X + Y + 1.
 
-## 7. Not done (why the G6 item stays MISSING_IMPLEMENTATION)
+## 7. Not done
 
-1. **Production wiring.** The production R13 program
-   (`tests/runtime/rx_r13_living.c`) does not set a halt directory and exposes no
-   operator entry point. An operator console needs a design for how the
-   operator's credential and control capability reach a running program; that
-   design is not written. The G6 item names `rx_world_set_halt_dir` in the R13
-   program as a required symbol, so it reads MISSING until that lands.
-2. **Silicon.** No silicon run exercises a stop. The resident-seat case runs on
-   the R12 host stand-in only.
+1. **Production wiring: DONE (CAND-3).** The production R13 program sets the
+   generation store's directory as the halt directory before any object exists,
+   restores a durable stop before it accepts work, and serves an owner-only
+   operator socket (`src/runtime/rx_operator.c`, client `build/rx_operator`). The
+   interface contract is `docs/r16-operator-control.md`. The old string-presence
+   check (`rx_world_set_halt_dir` text in the R13 source) is gone: the G6 item now
+   needs the operator integration test, its mutants and the silicon run to pass.
+   Found by the integration test and fixed with it: a durable promotion or
+   proposal that the store refused because of a stop (`RX_GEN_ERR_HALTED`) was
+   recorded as the final outcome, so the positive episode never promoted after
+   the resume. `src/runtime/rx_living.c` now treats that refusal as "run again
+   after the resume" (`halted_wait`).
+2. **Silicon.** The silicon run of the operator test (`make
+   test-r16-operator-silicon`, resident GB10 seat, no SIGKILL phase) is the only
+   chip evidence; until it has passed on the candidate the item is not PASS.
 3. **Mark authenticity.** The seal is an unkeyed sha256: it detects a damaged
    mark, not a forged one. A forged mark can only stop the world (fail closed).
    Removing the mark while no world runs bypasses the restart restoration;

@@ -824,6 +824,11 @@ int  rx_world_emergency_stop(RxWorld *w, uint32_t subject, const RxCallerCred *c
 int  rx_world_emergency_resume(RxWorld *w, uint32_t subject, const RxCallerCred *cred,
                                RxCapRef cap, RxHaltStatus *out);
 void rx_world_halt_status(RxWorld *w, RxHaltStatus *out);
+/* The same authority check as stop and resume (credential, not a reaction
+ * subject, live control capability), without acting: RX_OK, RX_ERR_IDENTITY
+ * or RX_ERR_AUTHORITY. For operator requests that read or retire the
+ * operator's own authority (docs/r16-operator-control.md). Never call with mu held. */
+int  rx_world_operator_authorize(RxWorld *w, uint32_t subject, const RxCallerCred *cred, RxCapRef cap);
 
 /* A stimulus from outside the organism (sensor, human input). Requires a
  * capability for (external_subject, object resource, WRITE). Returns the

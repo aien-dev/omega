@@ -17,7 +17,7 @@ check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; FAILS=$((FAILS
 W=$SCR/w
 mkdir -p "$W/tools"
 cp "$HERE/tools/r16_qualify.sh" "$HERE/tools/aienos_lock_source.sh" "$W/tools/"
-G6FILES="src/omega_accelerator_world.c src/runtime/rx_generation.c src/omega_world_gates.c tools/omegatool.c src/runtime/rx_native_bind.c src/omega_evidence.c src/omega_verify.c src/runtime/rx_resident_gpu.c src/runtime/rx_seq_reference.c src/runtime/rx_world.c src/runtime/rx_living.c"
+G6FILES="src/omega_accelerator_world.c src/runtime/rx_generation.c src/omega_world_gates.c tools/omegatool.c src/runtime/rx_native_bind.c src/omega_evidence.c src/omega_verify.c src/runtime/rx_resident_gpu.c src/runtime/rx_seq_reference.c src/runtime/rx_world.c src/runtime/rx_living.c src/runtime/rx_operator.c tests/runtime/rx_r13_living.c"
 for p in $G6FILES; do mkdir -p "$W/$(dirname "$p")"; cp "$HERE/$p" "$W/$p"; done
 printf 'build/\n' > "$W/.gitignore"
 g() { git -C "$W" -c user.name=r16 -c user.email=r16@invalid -c commit.gpgsign=false "$@"; }
@@ -49,8 +49,8 @@ check "output under evidence/: exit 2" '[ $rc = 2 ]'
 out=$(Q R16_RUN_ID=none 2>&1); rc=$?
 R=$W/build/r16-raw/none/DRY-RUN-receipt.json
 check "no fixtures: exit 3 (nothing ran)" '[ $rc = 3 ]'
-check "no fixtures: G6 MISSING_IMPLEMENTATION (one item has no implementation; no test ran)" 'echo "$out" | grep -q "G6=MISSING_IMPLEMENTATION (items missing: 1)"'
-check "no fixtures: summary all NOT_RUN" 'echo "$out" | grep -q "^Gates: G1=NOT_RUN G2=NOT_RUN G3=NOT_RUN G4=NOT_RUN G5=NOT_RUN G6=MISSING_IMPLEMENTATION G7=NOT_RUN G8=NOT_RUN$"'
+check "no fixtures: G6 NOT_RUN (every item implemented, no test ran)" 'echo "$out" | grep -q "    G6=NOT_RUN" && ! echo "$out" | grep -q "G6=MISSING_IMPLEMENTATION"'
+check "no fixtures: summary all NOT_RUN" 'echo "$out" | grep -q "^Gates: G1=NOT_RUN G2=NOT_RUN G3=NOT_RUN G4=NOT_RUN G5=NOT_RUN G6=NOT_RUN G7=NOT_RUN G8=NOT_RUN$"'
 check "no fixtures: receipt gate NOT_RUN" 'grep -q "\"gate\": \"NOT_RUN\"" "$R"'
 check "no fixtures: receipt has no PASS value" '! grep -q "\"PASS\"" "$R"'
 check "no fixtures: silicon_observed false (computed)" 'grep -q "\"silicon_observed\": false" "$R"'
@@ -79,7 +79,7 @@ check "bad exit status with pass line: G5 FAIL, exit 1" '[ $rc = 1 ] && echo "$o
 echo 0 > "$F/r16_surface.log.rc"
 out=$(Q R16_RUN_ID=fx 2>&1); rc=$?
 check "good G4/G5 fixtures: those gates PASS" 'echo "$out" | grep -q "G4=PASS" && echo "$out" | grep -q "G5=PASS"'
-check "all-good G4/G5 still exit 3 (G6 tests did not run)" '[ $rc = 3 ] && echo "$out" | grep -q "G6=MISSING_IMPLEMENTATION"'
+check "all-good G4/G5 still exit 3 (G6 tests did not run)" '[ $rc = 3 ] && echo "$out" | grep -q "G6=NOT_RUN"'
 
 # 6b. R11 that skipped its living run (load > 2) exits 0 with "failures 0": NOT_RUN, never PASS
 printf 'checks 400 failures 0\n' > "$F/r11_aien.log"; echo 0 > "$F/r11_aien.log.rc"
@@ -232,14 +232,20 @@ RX_EMERGENCY_MUTANTS: PASS"
     g6log r15_parity_host.log "SEQ_SEMANTIC_PARITY=PASS"
     g6log r15_parity_silicon.log "SEQ_SEMANTIC_PARITY=PASS"
     g6log r15_receipt.log "r15 receipt test: 0 failure(s)"
+    g6log r16_operator_host.log "R16 operator: 120 checks, 0 failures, 0 skipped (host, phases: startup control restart kill)
+R16 operator gate: R16_G6_OPERATOR=HOST_PASS_NON_SILICON"
+    g6log r16_operator_mutants.log "RX_OPERATOR_MUTANTS: 14 mutants, 0 failures, 0 skipped
+RX_OPERATOR_MUTANTS: PASS"
+    g6log r16_operator_silicon.log "R16 operator: 100 checks, 0 failures, 0 skipped (silicon, phases: startup control restart kill)
+R16 operator gate: R16_G6_OPERATOR=PASS"
 }
 G6Q() { Q R16_RUN_ID=g6 2>&1; }
 R=$G/DRY-RUN-receipt.json
 g6_item() { sed -n 's/^.*"item": "'"$1"'", "status": "\([A-Z_]*\)".*$/\1/p' "$R"; }
 g6_good_logs
 out=$(G6Q); rc=$?
-check "G6 all good: G6 is MISSING_IMPLEMENTATION (operator emergency controls named nowhere), never PASS" 'echo "$out" | grep -q "G6=MISSING_IMPLEMENTATION" && ! echo "$out" | grep -q "G6=PASS"'
-check "G6 all good: eleven items PASS, operator emergency controls MISSING_IMPLEMENTATION" '[ "$(grep -c "\"item\": \"[a-z0-9_]*\", \"status\": \"PASS\"" "$R")" = 11 ] && [ "$(g6_item operator_emergency_controls_passing)" = MISSING_IMPLEMENTATION ]'
+check "G6 all good: every item implemented and operated, G6 PASS" 'echo "$out" | grep -q "    G6=PASS"'
+check "G6 all good: twelve items PASS, operator emergency controls among them" '[ "$(grep -c "\"item\": \"[a-z0-9_]*\", \"status\": \"PASS\"" "$R")" = 12 ] && [ "$(g6_item operator_emergency_controls_passing)" = PASS ]'
 check "G6 all good: protected_surfaces_kept six presence flags true" '[ "$(grep -c "_present\": true" "$R")" = 6 ]'
 check "G6 all good: no FAIL anywhere and G6 alone does not make the run pass (exit 3)" '[ $rc = 3 ] && ! echo "$out" | grep -q "G6=FAIL"'
 check "G6 all good: receipt names file and symbol per item" 'grep -q "\"file\": \"src/runtime/rx_generation.c\", \"symbol\": \"rx_gen_recover\", \"source\": \"omega_tree\", \"defined\": true" "$R"'
@@ -283,13 +289,51 @@ check "G6 fake log reporting failures (no pass line): FAIL, exit 1" '[ $rc = 1 ]
 g6log r9_barrier.log "generation barrier kept a single coherent generation through every injected stop"
 g6log r12_silicon.log "checks 40 failures 3 silicon 1" 1
 out=$(G6Q)
-check "G6 operator emergency controls stay MISSING_IMPLEMENTATION even when its mapped test fails or passes" '[ "$(g6_item operator_emergency_controls_passing)" = MISSING_IMPLEMENTATION ] && echo "$out" | grep -q "G6=FAIL"'
+check "G6 a failing silicon seat-loss run: G6 FAIL" 'echo "$out" | grep -q "G6=FAIL" && [ "$(g6_item r12_seat_loss_handling_passing)" = FAIL ]'
 g6log r12_silicon.log "checks 40 failures 0 silicon 1"
 g6log m19_world.log "STAGE 1 / PERSISTENT WORLD QUALIFICATION: 17 / 18 M19 GATES PASSED
   [FAIL] OMEGA_ACCEL_RESIDENT_FAULT_RECOVERY_PASS : x" 0
 out=$(G6Q)
 check "G6 M19 log with a [FAIL] gate line (exit 0): known_good_fallback FAIL" '[ "$(g6_item known_good_fallback_present)" = FAIL ]'
 g6log m19_world.log "STAGE 1 / PERSISTENT WORLD QUALIFICATION: 18 / 18 M19 GATES PASSED"
+
+# operator emergency controls: operated only by execution of the production program,
+# host and silicon apart; the old string-presence check can no longer pass it.
+g6log r16_operator_silicon.log "R16 operator gate: R16_G6_OPERATOR=HOST_PASS_NON_SILICON"
+out=$(G6Q)
+check "G6 operator: a host result in the silicon slot is not a silicon pass: item FAIL" '[ "$(g6_item operator_emergency_controls_passing)" = FAIL ]'
+rm -f "$G/r16_operator_silicon.log" "$G/r16_operator_silicon.log.rc"
+out=$(G6Q)
+check "G6 operator: host test and mutants passed, no silicon receipt: item NOT_RUN, G6 not PASS" '[ "$(g6_item operator_emergency_controls_passing)" = NOT_RUN ] && ! echo "$out" | grep -q "G6=PASS"'
+g6log r16_operator_silicon.log "[SKIPPED] unauthorized: peer of another uid (sudo -n unavailable)
+R16 operator gate: R16_G6_OPERATOR=PASS"
+out=$(G6Q)
+check "G6 operator: silicon log with a SKIPPED case and the pass line: NOT_RUN, never PASS" '[ "$(g6_item operator_emergency_controls_passing)" = NOT_RUN ]'
+g6log r16_operator_silicon.log "[-] stop: authorized stop accepted, durable
+R16 operator gate: R16_G6_OPERATOR=FAIL" 1
+out=$(G6Q)
+check "G6 operator: failed silicon run: item FAIL, G6 FAIL" '[ "$(g6_item operator_emergency_controls_passing)" = FAIL ] && echo "$out" | grep -q "G6=FAIL"'
+g6log r16_operator_silicon.log "R16 operator gate: R16_G6_OPERATOR=PASS"
+g6log r16_operator_host.log "R16 operator gate: R16_G6_OPERATOR=FAIL" 1
+out=$(G6Q)
+check "G6 operator: failed host run with a passing silicon log: item FAIL" '[ "$(g6_item operator_emergency_controls_passing)" = FAIL ]'
+g6log r16_operator_host.log "R16 operator gate: R16_G6_OPERATOR=PASS"
+out=$(G6Q)
+check "G6 operator: a host log carrying the silicon pass line is not the host verdict: FAIL" '[ "$(g6_item operator_emergency_controls_passing)" = FAIL ]'
+g6log r16_operator_host.log "R16 operator gate: R16_G6_OPERATOR=HOST_PASS_NON_SILICON"
+g6log r16_operator_mutants.log "ok   O1 wiring missing: killed
+FAIL O5 success reply without a state transition: SURVIVED (exit 0)
+RX_OPERATOR_MUTANTS: FAIL" 1
+out=$(G6Q)
+check "G6 operator: a surviving mutant: item FAIL" '[ "$(g6_item operator_emergency_controls_passing)" = FAIL ]'
+g6log r16_operator_mutants.log "RX_OPERATOR_MUTANTS: PASS"
+RL=$W/tests/runtime/rx_r13_living.c
+sed -i 's|^static int operator_open(Rig \*r) {|/* static int operator_open(Rig *r) { */ static int operator_0pen(Rig *r) {|' "$RL"; g add -A; g commit -qm "mutation: entry point only in a comment"
+out=$(G6Q)
+check "G6 operator: production wiring present only in a comment (string still in the file), every log passing: MISSING_IMPLEMENTATION" '[ "$(g6_item operator_emergency_controls_passing)" = MISSING_IMPLEMENTATION ] && grep -q "operator_open(Rig" "$RL" && ! echo "$out" | grep -q "G6=PASS"'
+g6_unmut
+out=$(G6Q)
+check "G6 operator: reverted, all logs passing: PASS" '[ "$(g6_item operator_emergency_controls_passing)" = PASS ]'
 
 # skipped tests are never PASS
 g6log r9_barrier.log "[-] living run not exercised: SKIPPED-LOADED
@@ -375,12 +419,12 @@ check "prebuilt AIENOS_CAP_LIB override refused (exit 2)" '[ $rc = 2 ] && echo "
 # receipt is valid JSON; each item says plainly what its mapping is (no shared boilerplate)
 check "G6 receipt is valid JSON (jq)" 'jq -e . "$R" >/dev/null'
 check "G6 receipt: twelve items, twelve different basis texts" '[ "$(jq "[.g6_items[].basis] | unique | length" "$R")" = 12 ] && [ "$(jq ".g6_items | length" "$R")" = 12 ]'
-check "G6 receipt: proxy mappings say PROXY, emergency item says MISSING_IMPLEMENTATION" '[ "$(jq "[.g6_items[] | select(.basis | startswith(\"PROXY\"))] | length" "$R")" -ge 5 ] && jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .basis | startswith(\"MISSING_IMPLEMENTATION\")" "$R" >/dev/null'
+check "G6 receipt: proxy mappings say PROXY, emergency item says it is operated only by execution" '[ "$(jq "[.g6_items[] | select(.basis | startswith(\"PROXY\"))] | length" "$R")" -ge 5 ] && jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .basis | contains(\"operated only by execution\")" "$R" >/dev/null'
 check "G6 receipt: seat kill hook is not an item symbol" '! jq -e ".g6_items[].implementation[] | select(.symbol==\"rx_gpu_seat_kill\")" "$R" >/dev/null'
-check "G6 emergency item: runtime symbols defined, production wiring absent, RX_EMERGENCY cited" 'jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | (.implementation[] | select(.symbol==\"rx_world_emergency_stop\") | .defined == true) and (.implementation[] | select(.symbol==\"rx_world_set_halt_dir\") | .defined == false) and (.tests[] | select(.name==\"RX_EMERGENCY\") | .status == \"PASS\" and .target == \"test-rx-emergency\")" "$R" >/dev/null'
+check "G6 emergency item: runtime and production wiring defined, RX_EMERGENCY cited" 'jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | (.implementation[] | select(.symbol==\"rx_world_emergency_stop\") | .defined == true) and (.implementation[] | select(.symbol==\"operator_open\") | .defined == true) and (.tests[] | select(.name==\"R16_OP_SILICON\") | .target == \"test-r16-operator-silicon\") and (.tests[] | select(.name==\"RX_EMERGENCY\") | .status == \"PASS\" and .target == \"test-rx-emergency\")" "$R" >/dev/null'
 g6log rx_emergency.log "RX_EMERGENCY_STOP: PASS (0 failures; host CPU, real caproot authority)"
 out=$(G6Q)
-check "G6 emergency test without the mutant pass line: test FAIL in the receipt, item still MISSING_IMPLEMENTATION, G6 never PASS" '! echo "$out" | grep -q "G6=PASS" && [ "$(g6_item operator_emergency_controls_passing)" = MISSING_IMPLEMENTATION ] && jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .tests[] | select(.name==\"RX_EMERGENCY\") | .status == \"FAIL\"" "$R" >/dev/null'
+check "G6 emergency test without the mutant pass line: test FAIL in the receipt, item FAIL, G6 never PASS" '! echo "$out" | grep -q "G6=PASS" && [ "$(g6_item operator_emergency_controls_passing)" = FAIL ] && jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .tests[] | select(.name==\"RX_EMERGENCY\") | .status == \"FAIL\"" "$R" >/dev/null'
 g6log rx_emergency.log "RX_EMERGENCY_MUTANTS: PASS"
 out=$(G6Q)
 check "G6 emergency test without the stop pass line: test FAIL in the receipt" 'jq -e ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .tests[] | select(.name==\"RX_EMERGENCY\") | .status == \"FAIL\"" "$R" >/dev/null'

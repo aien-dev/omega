@@ -1153,6 +1153,16 @@ int rx_world_emergency_resume(RxWorld *w, uint32_t subject, const RxCallerCred *
     return rc;
 }
 
+int rx_world_operator_authorize(RxWorld *w, uint32_t subject, const RxCallerCred *cred, RxCapRef cap) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    pthread_mutex_lock(&w->callers_mu);
+    int rc = halt_authorize(w, subject, cred, cap);
+    pthread_mutex_unlock(&w->callers_mu);
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
 void rx_world_halt_status(RxWorld *w, RxHaltStatus *out) {
     if (!w || !out) return;
     pthread_mutex_lock(&w->mu);

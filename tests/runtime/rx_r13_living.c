@@ -2,6 +2,7 @@
 #include "runtime/rx_living.h"
 #include "runtime/rx_resident_gpu.h"
 #include "runtime/aien_machine_id.h"
+#include "runtime/rx_operator.h"
 /* Lane 32: two programs from this file (docs/r16-production-entry-point.md).
  * PRODUCTION (default, no flag): no test pieces. ARGUS is linked and observes
  * (RX_ARGUS=2, authority observer, consumer ingest), pinned by argus.lock; the
@@ -23,6 +24,7 @@
 #include "sha256.h"
 
 #include <dirent.h>
+#include <errno.h>
 #include <ftw.h>
 #include <stdatomic.h>
 #include <sched.h>
@@ -32,6 +34,7 @@
 #include <string.h>
 #include <sys/random.h>
 #include <sys/stat.h>
+#include <sys/un.h>
 #include <sys/utsname.h>
 #include <time.h>
 #include <unistd.h>
@@ -44,6 +47,7 @@ enum { POSITIVE, NO_AIEN, NO_PROMOTION, REVOKED_EXPERIMENT,
 #define CLASS_A725 0xd87u
 #define CLASS_X925 0xd85u
 #define RES_INTENT 0x6130010ull
+#define U(x) ((unsigned long long)(x))
 
 typedef struct {
     AienosCapAdmin *admin;
@@ -78,6 +82,15 @@ typedef struct {
      * composition it runs (home/compose). */
     char home_dir[128];
     AienMachineId machine;
+    /* R16 G6 operator control (docs/r16-operator-control.md): the operator's
+     * credential is handed to its file and wiped; the program keeps no copy. */
+    int mode;
+    RxCallerCred op_cred;
+    RxCapRef op_cap;
+    RxOperator *op;
+    int op_gate_held, op_restored, ready;
+    atomic_ullong op_halt_since, op_halt_total;   /* ns; stopped time is not run time */
+    atomic_int op_shutdown, op_teardown;
 } Rig;
 static int g_stage;
 typedef struct {
@@ -225,10 +238,170 @@ static int living_identity(Rig *r) {
     return aien_mid_store(p, &r->machine) == AIEN_MID_OK ? 0 : -1;
 }
 
+/* ---- R16 G6 operator control (docs/r16-operator-control.md) --------------
+ * The program's durable state: <state>/control (the operator's credential
+ * file and socket) and one generation store per mode, <state>/gen-<key>,
+ * which is also the world's durable halt directory. */
+enum { OP_SHUTDOWN = 2 };
+static const char *const g_mode_key[] = {"positive", "no-aien", "no-promotion",
+    "revoked-experiment", "stale-gpu", "failed-verification"};
+static char g_state_dir[192];
+static char g_control_dir[224];
+static uint64_t g_op_stops, g_op_resumes, g_op_restored, g_op_open, g_op_cancelled;
+
+static int world_halted(Rig *r) {
+    RxHaltStatus h;
+    rx_world_halt_status(&r->w, &h);
+    return h.halted;
+}
+
+/* Run time: wall time minus the time the world spent stopped. Episode
+ * deadlines count run time, so a stop delays the episode and never fails it. */
+static uint64_t run_clock(Rig *r) {
+    uint64_t now = now_ns(), since = atomic_load(&r->op_halt_since);
+    return now - atomic_load(&r->op_halt_total) - (since && since < now ? now - since : 0);
+}
+
+static void op_on_halt(void *ctx, int halted) {
+    Rig *r = ctx;
+    uint64_t now = now_ns(), since = atomic_load(&r->op_halt_since);
+    if (halted && !since) atomic_store(&r->op_halt_since, now);
+    if (!halted && since) {
+        atomic_fetch_add(&r->op_halt_total, now - since);
+        atomic_store(&r->op_halt_since, 0);
+    }
+}
+
+static atomic_int g_op_shutdown;   /* the operator ended this program (FAIL reports it) */
+static void op_on_shutdown(void *ctx) {
+    atomic_store(&((Rig *)ctx)->op_shutdown, 1);
+    atomic_store(&g_op_shutdown, 1);
+}
+
+static void op_describe(void *ctx, char *buf, size_t n) {
+    Rig *r = ctx;
+    if (!r->ready) { snprintf(buf, n, "world=%s setup=pending", g_mode_key[r->mode]); return; }
+    uint64_t active = 0, lineage = 0;
+    rx_gen_active(r->gen, &active, &lineage);
+    snprintf(buf, n, "world=%s served=%llu production_commits=%llu promotion=%llu inforce=%llu "
+             "active_generation=%llu",
+             g_mode_key[r->mode], (unsigned long long)__atomic_load_n(&r->served, __ATOMIC_RELAXED),
+             (unsigned long long)__atomic_load_n(&r->w.reactions[r->omega.r_serve].commits,
+                                                 __ATOMIC_RELAXED),
+             (unsigned long long)field(r, r->living.o.promotion, 0),
+             (unsigned long long)field(r, r->living.o.inforce, 0), (unsigned long long)active);
+}
+
+/* Wait while the world is stopped. -1 when the operator shut the program
+ * down, the program is tearing the world down, or the production thread
+ * is told to stop, 0 when the world runs. */
+static __thread int t_producer;   /* set on the production request thread */
+static int wait_running(Rig *r) {
+    while (world_halted(r)) {
+        if (atomic_load(&r->op_shutdown) || atomic_load(&r->op_teardown) ||
+            (t_producer && atomic_load(&r->producer_stop))) return -1;
+        pause_us(1000);
+    }
+    return atomic_load(&r->op_shutdown) ? -1 : 0;
+}
+
+/* An outside publication refused by an operator stop is published again
+ * after the resume; any other refusal is an error. */
+static int publish(Rig *r, RxCapRef cap, const RxMutation *m, uint32_t n) {
+    for (;;) {
+        int64_t rc = rx_world_publish_external(&r->w, cap, m, n);
+        if (rc != RX_ERR_HALTED) return rc > 0 ? 0 : -1;
+        if (wait_running(r) != 0) return 1;   /* abandoned under a stop, not an error */
+    }
+}
+
+static int operator_open(Rig *r) {
+    RxOperatorConfig oc = {&r->w, r->admin, g_control_dir, g_mode_key[r->mode],
+                           op_describe, op_on_halt, op_on_shutdown, r};
+    if (rx_operator_open(&r->op, &oc, RX_OPERATOR_SUBJ, &r->op_cred, r->op_cap) != 0) return -1;
+    r->op_gate_held = 1;
+    return 0;
+}
+static void operator_release(Rig *r) {
+    if (r->op && r->op_gate_held) { r->op_gate_held = 0; rx_operator_release(r->op); }
+}
+static void operator_hold(Rig *r) {
+    if (r->op && !r->op_gate_held) { rx_operator_hold(r->op); r->op_gate_held = 1; }
+}
+
+/* The canonical evidence of operator control in this world: its crumb log.
+ * Between an OPERATOR_STOP and its OPERATOR_RESUME (or after a stop never
+ * resumed) no COMMIT and no EXTERNAL crumb may appear; each RESUME is caused
+ * by the STOP before it. */
+static int operator_audit(Rig *r) {
+    uint64_t stops = 0, resumes = 0, commits = 0, externals = 0, cancelled = 0, open = 0;
+    int order_ok = 1;
+    for (uint64_t id = 1; id <= r->w.n_crumbs; id++) {
+        const RxCrumb *c = rx_world_crumb(&r->w, id);
+        if (!c) continue;
+        if (c->kind == RX_CRUMB_OPERATOR_STOP) {
+            if (open) order_ok = 0;
+            stops++;
+            open = id;
+        } else if (c->kind == RX_CRUMB_OPERATOR_RESUME) {
+            if (!open || c->n_parents < 1 || c->parents[0] != open) order_ok = 0;
+            resumes++;
+            open = 0;
+        } else if (open) {
+            if (c->kind == RX_CRUMB_COMMIT) commits++;
+            if (c->kind == RX_CRUMB_EXTERNAL) externals++;
+            if (c->kind == RX_CRUMB_CANCELLED && c->reason == RX_ERR_HALTED) cancelled++;
+        }
+    }
+    g_op_stops += stops; g_op_resumes += resumes; g_op_cancelled += cancelled;
+    g_op_restored += (uint64_t)r->op_restored; g_op_open += open ? 1 : 0;
+    printf("R13 operator %s: stops %llu resumes %llu restored %d open %d; under stop: commits %llu "
+           "externals %llu cancelled %llu; order %s\n", g_mode_key[r->mode], U(stops), U(resumes),
+           r->op_restored, open ? 1 : 0, U(commits), U(externals), U(cancelled),
+           order_ok ? "ok" : "BROKEN");
+    return commits || externals || !order_ok ? -1 : 0;
+}
+
+
+/* The program's state directory: --state-dir, or a fresh 0700 scratch
+ * directory. Refused (exit 2, before any world starts) unless it and its
+ * control directory are real directories owned by this uid with no group or
+ * other permission bits, and the socket path fits a socket address. */
+static int operator_state(const char *dir) {
+    char why[320];
+    if (dir) {
+        if ((size_t)snprintf(g_state_dir, sizeof g_state_dir, "%s", dir) >= sizeof g_state_dir) {
+            fprintf(stderr, "R13 operator: state directory refused: path too long\n");
+            return -1;
+        }
+    } else if (scratch_dir(g_state_dir, sizeof g_state_dir, "r13-state") != 0) {
+        fprintf(stderr, "R13 operator: no scratch state directory\n");
+        return -1;
+    }
+    if (rx_operator_dir_check(g_state_dir, 1, why, sizeof why) != 0) {
+        fprintf(stderr, "R13 operator: state directory refused: %s\n", why);
+        return -1;
+    }
+    if ((size_t)snprintf(g_control_dir, sizeof g_control_dir, "%s/control", g_state_dir) >=
+            sizeof g_control_dir ||
+        strlen(g_control_dir) + 1 + strlen(RX_OPERATOR_SOCK) >=
+            sizeof(((struct sockaddr_un *)0)->sun_path)) {
+        fprintf(stderr, "R13 operator: state directory refused: socket path too long\n");
+        return -1;
+    }
+    if (rx_operator_dir_check(g_control_dir, 1, why, sizeof why) != 0) {
+        fprintf(stderr, "R13 operator: control directory refused: %s\n", why);
+        return -1;
+    }
+    printf("R13 operator: state %s, control %s (operator subject %u)\n", g_state_dir,
+           g_control_dir, (unsigned)RX_OPERATOR_SUBJ);
+    return 0;
+}
 static int start(Rig *r, int mode) {
     int with_aien = mode != NO_AIEN;
     int promotion_authority = mode != NO_PROMOTION;
     memset(r, 0, sizeof *r);
+    r->mode = mode;
     g_stage = 1;
     if (aienos_cap_start(&r->admin, &r->view) != 0) return -1;
     if (rx_world_init_native(&r->w, r->view, 4, RX_CRUMBS_LONG_EPISODE) != RX_OK) return -1;
@@ -236,6 +409,9 @@ static int start(Rig *r, int mode) {
     /* R16 C6: every production subject gets a runtime-issued credential,
      * then the world refuses any registration that does not present one. */
     if (rx_living_enroll_callers(&r->w, &r->keys) != RX_OK) return -1;
+    /* R16 G6: the operator, enrolled like every production subject before
+     * enrollment closes. It runs no reaction (docs/r16-operator-control.md). */
+    if (rx_world_enroll_caller(&r->w, RX_OPERATOR_SUBJ, &r->op_cred) != RX_OK) return -1;
     /* Test build only: the composition and Fabric phases run inside this
      * World (rx_compose_attach); their subjects are enrolled here, before
      * enrollment closes. The production program enrolls no test subject. */
@@ -243,12 +419,36 @@ static int start(Rig *r, int mode) {
     if (rx_compose_enroll_callers(&r->w, &r->compose_keys) != RX_OK) return -1;
 #endif
     if (rx_world_bind_callers(&r->w) != RX_OK) return -1;
-    if (scratch_dir(r->generation_dir, sizeof r->generation_dir, "r13-living") != 0) return -1;
+    /* The generation store of this mode lives in the program's validated
+     * state directory; it is also the world's durable halt directory. */
+    char why[320];
+    if ((size_t)snprintf(r->generation_dir, sizeof r->generation_dir, "%s/gen-%s", g_state_dir,
+                         g_mode_key[mode]) >= sizeof r->generation_dir ||
+        rx_operator_dir_check(r->generation_dir, 1, why, sizeof why) != 0) {
+        fprintf(stderr, "R13 operator: generation directory refused: %s\n", why);
+        return -1;
+    }
     if (scratch_dir(r->home_dir, sizeof r->home_dir, "r13-home") != 0 || living_identity(r) != 0)
         return -1;
     if (rx_gen_open(r->generation_dir, &r->gen) != RX_GEN_OK) return -1;
     if (rx_gen_bind_authority(r->gen, rx_world_caller_check_fn, &r->w,
                               rx_living_native_authority, r->view) != RX_GEN_OK) return -1;
+    /* R16 G6: the control capability, the durable halt directory, then the
+     * entry point, all before any object exists or any work is published. A
+     * stop that outlived the last start is in force from here; the program
+     * then serves the operator and does nothing else until it is resumed. */
+    r->op_cap = mint(r, RX_OPERATOR_SUBJ, RX_WORLD_RES_CONTROL, RX_WORLD_RIGHT_HALT);
+    int halt_mark = rx_world_set_halt_dir(&r->w, r->generation_dir);
+    if (operator_open(r) != 0) return -1;
+    if (world_halted(r)) {
+        r->op_restored = 1;
+        atomic_store(&r->op_halt_since, now_ns());
+        printf("R13 operator %s: restored STOPPED from %s (mark %d); no work until an operator "
+               "resume\n", g_mode_key[mode], r->generation_dir, halt_mark);
+        operator_release(r);
+        if (wait_running(r) != 0) return OP_SHUTDOWN;
+        operator_hold(r);
+    }
     g_stage = 2;
     const uint32_t R = RX_RIGHT_READ, RW = RX_RIGHT_READ | RX_RIGHT_WRITE;
     RxOmegaConfig oc;
@@ -458,6 +658,8 @@ static int start(Rig *r, int mode) {
     if (rx_gpu_seat_begin(&r->w, &r->seat) != 0 || !r->seat) return -1;
 #endif
     g_stage = 7;
+    r->ready = 1;
+    operator_release(r);     /* operator requests are served from here */
     return 0;
 }
 
@@ -487,10 +689,17 @@ static int serve(Rig *r) {
     RxMutation m[4] = {{r->omega.o.request, 0, seq},
         {r->omega.o.request, 1, M}, {r->omega.o.request, 2, N},
         {r->omega.o.request, 3, seed}};
-    if (rx_world_publish_external(&r->w, r->ext_request, m, 4) <= 0) return -1;
-    uint64_t t = now_ns();
+    int p = publish(r, r->ext_request, m, 4);
+    if (p != 0) return p;
+    uint64_t t = run_clock(r);   /* a stop pauses this deadline */
     while (field(r, r->omega.o.result, 0) != seq) {
-        if (now_ns() - t > 5000000000ull) return -1;
+        /* Under a stop (seen through the operator clock, no world lock in this
+         * spin) the request is refused or queued: it runs again on resume. */
+        if (atomic_load(&r->op_halt_since) && world_halted(r)) {
+            if (wait_running(r) != 0) return 1;
+            continue;
+        }
+        if (run_clock(r) - t > 5000000000ull) return -1;
         spin_us(5);   /* a workload does not nap between requests */
     }
     if (field(r, r->omega.o.result, 1) != expected_digest(seed)) r->wrong++;
@@ -506,8 +715,12 @@ static int serve(Rig *r) {
 
 static void *producer_main(void *arg) {
     Rig *r = arg;
-    while (!atomic_load(&r->producer_stop))
-        if (serve(r) != 0) { atomic_store(&r->producer_error, 1); break; }
+    t_producer = 1;
+    while (!atomic_load(&r->producer_stop)) {
+        int s = serve(r);
+        if (s < 0) { atomic_store(&r->producer_error, 1); break; }
+        if (s > 0) break;   /* told to stop while the world was stopped */
+    }
     return NULL;
 }
 
@@ -529,14 +742,14 @@ static int publish_placement(Rig *r, uint64_t cls) {
     RxMutation m[2] = {{r->aien.o.placement, 0,
                          field(r, r->aien.o.placement, 0)+1},
                         {r->aien.o.placement, 1, cls}};
-    return rx_world_publish_external(&r->w, r->ext_placement, m, 2) > 0 ? 0 : -1;
+    return publish(r, r->ext_placement, m, 2);
 }
 
 static int publish_goal(Rig *r, uint64_t target) {
     RxMutation m[3] = {{r->aien.o.goal, 0, 1},
         {r->aien.o.goal, 1, rx_omega_regime(M, N)},
         {r->aien.o.goal, 2, target}};
-    return rx_world_publish_external(&r->w, r->ext_goal, m, 3) > 0 ? 0 : -1;
+    return publish(r, r->ext_goal, m, 3);
 }
 
 /* Is `wanted` a causal ancestor of (or equal to) `node`? Iterative, with a
@@ -664,6 +877,12 @@ static int authority_sweep(Rig *r, uint64_t *swept, uint64_t *holders) {
             if (e.subject == RX_LIVING_PROMOTE_SUBJ &&
                 (e.rights & RX_RIGHT_PRIVILEGED & ~RX_RIGHT_PROMOTE))
                 return -3;
+            /* R16 G6: only the operator holds the world's control resource,
+             * with exactly the halt right; the operator holds nothing else. */
+            if ((e.resource == RX_WORLD_RES_CONTROL &&
+                 (e.subject != RX_OPERATOR_SUBJ || e.rights != RX_WORLD_RIGHT_HALT)) ||
+                (e.subject == RX_OPERATOR_SUBJ && e.resource != RX_WORLD_RES_CONTROL))
+                return -5;
         }
     return 0;
 }
@@ -764,24 +983,24 @@ static int seat_blocked(Rig *r, uint64_t after) {
 
 static uint64_t acts(Rig *r, uint32_t id) { return r->w.reactions[id].activations; }
 
-#define FAIL(...) do { fprintf(stderr, "R13 mode %d: ", mode); \
+#define FAIL(...) do { if (atomic_load(&g_op_shutdown)) return OP_SHUTDOWN; \
+                       fprintf(stderr, "R13 mode %d: ", mode); \
                        fprintf(stderr, __VA_ARGS__); fputc('\n', stderr); return -1; } while (0)
 
-#define U(x) ((unsigned long long)(x))
 static int run(Rig *r, int mode) {
     int with_aien = mode != NO_AIEN;
     cpu_set_t a, x;
     if (core_sets(&a, &x) != 0 || move_threads(&a) <= 0) FAIL("needs both core classes");
     if (publish_placement(r, CLASS_A725) != 0) FAIL("placement");
-    uint64_t limit = now_ns() + 60000000000ull;
-    while (field(r, r->omega.o.selection, 0) < 1 && now_ns() < limit)
+    uint64_t limit = run_clock(r) + 60000000000ull;
+    while (field(r, r->omega.o.selection, 0) < 1 && run_clock(r) < limit)
         if (serve(r) != 0) FAIL("serve");
     if (field(r, r->omega.o.selection, 0) != 1) FAIL("no first selection");
     uint64_t incumbent = field(r, r->omega.o.selection, 1);
     uint64_t incumbent_ns = 0;
     if (with_aien) {
         while (field(r, r->aien.o.prediction, 6) != RX_AIEN_PRED_CONFIRMED &&
-               now_ns() < limit)
+               run_clock(r) < limit)
             if (serve(r) != 0) FAIL("serve");
         if (field(r, r->aien.o.prediction, 6) != RX_AIEN_PRED_CONFIRMED)
             FAIL("AIEN never confirmed the incumbent cost");
@@ -818,15 +1037,18 @@ static int run(Rig *r, int mode) {
     }
     /* From here production runs on its own thread, like any workload, and
      * this thread only observes. Nothing below advances a faculty. */
-    limit = now_ns() + 90000000000ull;
+    limit = run_clock(r) + 90000000000ull;
     int stale_injected = 0;
-    while (now_ns() < limit) {
+    while (run_clock(r) < limit) {
         pause_us(20);
         if (atomic_load(&r->producer_error)) FAIL("serve");
         if (mode == STALE_GPU && !stale_injected &&
             r->w.reactions[r->living.r_seat].state == RX_RUNNING) {
             /* The object the seat is writing changes generation mid-claim. */
-            if (rx_world_retire(&r->w, r->living.o.output) != RX_OK) FAIL("retire");
+            int rr;
+            while ((rr = rx_world_retire(&r->w, r->living.o.output)) == RX_ERR_HALTED)
+                if (wait_running(r) != 0) FAIL("retire");
+            if (rr != RX_OK) FAIL("retire");
             stale_injected = 1;
         }
         int step = mode == STALE_GPU ?
@@ -844,10 +1066,10 @@ static int run(Rig *r, int mode) {
     /* The organism keeps working. With a promotion, until AIEN has a
      * confirmed prediction for the promoted record and has assessed the goal
      * on it. Without one, long enough to see production stay put. */
-    uint64_t final_limit = now_ns() + 60000000000ull;
+    uint64_t final_limit = run_clock(r) + 60000000000ull;
     if (promoted) {
         uint64_t epoch = field(r, r->living.o.inforce, 0);
-        while (now_ns() < final_limit && !atomic_load(&r->producer_error) &&
+        while (run_clock(r) < final_limit && !atomic_load(&r->producer_error) &&
                !(field(r, r->aien.o.prediction, 1) == epoch &&
                  field(r, r->aien.o.prediction, 6) == RX_AIEN_PRED_CONFIRMED &&
                  field(r, r->aien.o.prediction, 4) == CLASS_X925 &&
@@ -855,15 +1077,20 @@ static int run(Rig *r, int mode) {
             pause_us(100);
     } else {
         uint64_t until = __atomic_load_n(&r->served, __ATOMIC_RELAXED) + 256;
-        while (now_ns() < final_limit && !atomic_load(&r->producer_error) &&
+        while (run_clock(r) < final_limit && !atomic_load(&r->producer_error) &&
                __atomic_load_n(&r->served, __ATOMIC_RELAXED) < until)
             pause_us(100);
     }
     stop_producer(r);
     if (atomic_load(&r->producer_error)) FAIL("serve");
+    /* The checks below read a settled world: they wait while it is stopped. */
+    if (wait_running(r) != 0) FAIL("operator shutdown");
+    int quiet;
+    while ((quiet = rx_world_wait_quiescent(&r->w, 10000)) != RX_OK && world_halted(r))
+        if (wait_running(r) != 0) FAIL("operator shutdown");
     uint64_t active = 0, after_lineage = 0;
     rx_gen_active(r->gen, &active, &after_lineage);
-    if (rx_world_wait_quiescent(&r->w, 10000) != RX_OK &&
+    if (quiet != RX_OK &&
         mode != REVOKED_EXPERIMENT && mode != STALE_GPU) FAIL("did not quiesce");
     uint64_t checked = 0;
     if (rx_world_verify_crumbs(&r->w, &checked) != 0) FAIL("crumbs do not verify");
@@ -1121,6 +1348,12 @@ static int run(Rig *r, int mode) {
 }
 
 static void stop(Rig *r) {
+    /* The entry point goes first: no operator request reaches a world being
+     * torn down. A stop still in force stays in force (and on disk). */
+    atomic_store(&r->op_teardown, 1);
+    operator_release(r);
+    rx_operator_close(r->op);
+    r->op = NULL;
     stop_producer(r);
     if (r->acceptor_live) {
         atomic_store(&r->acceptor_stop, 1);
@@ -1711,6 +1944,16 @@ static void receipt(int tests_ok) {
     size_t used = strlen(comp);
     if (used < sizeof comp)
         snprintf(comp + used, sizeof comp - used, "  \"build\": \"" R13_BUILD "\",\n%s", g_argus_json);
+    used = strlen(comp);
+    if (used < sizeof comp)
+        snprintf(comp + used, sizeof comp - used,
+                 "  \"operator\": {\"entry_point\": \"owner-only unix socket, SO_PEERCRED, runtime-issued "
+                 "caller credential plus RX_WORLD_RES_CONTROL halt capability "
+                 "(docs/r16-operator-control.md)\", \"subject\": %u, \"stops\": %llu, "
+                 "\"resumes\": %llu, \"restored_stops\": %llu, \"open_stops\": %llu, "
+                 "\"activations_cancelled_under_stop\": %llu},\n",
+                 (unsigned)RX_OPERATOR_SUBJ, U(g_op_stops), U(g_op_resumes), U(g_op_restored),
+                 U(g_op_open), U(g_op_cancelled));
     FILE *f = fopen(path, "w");
     if (!f) return;
     fprintf(f,
@@ -1829,10 +2072,14 @@ int main(int argc, char **argv) {
 #ifndef AIEN_TEST_BUILD
     if (argc == 2 && strcmp(argv[1], "--argus-probe") == 0) return argus_probe();
 #endif
-    if (argc != 1) {
-        fprintf(stderr, "usage: %s [--argus-probe (production program only)]\n", argv[0]);
+    const char *state = NULL;
+    if (argc == 3 && strcmp(argv[1], "--state-dir") == 0) state = argv[2];
+    else if (argc != 1) {
+        fprintf(stderr, "usage: %s [--state-dir <dir>] [--argus-probe (production program only)]\n",
+                argv[0]);
         return 2;
     }
+    if (operator_state(state) != 0) return 2;
     if (seen_fit(1u << 17) != 0) return 1;
     int result = 0;
 #ifndef AIEN_TEST_BUILD
@@ -1848,7 +2095,8 @@ int main(int argc, char **argv) {
         Rig *r = calloc(1, sizeof *r);
         if (!r) return 1;
         int rc = start(r, mode);
-        if (rc != 0) fprintf(stderr, "R13 %s: setup failed at stage %d\n", names[mode], g_stage);
+        if (rc != 0 && rc != OP_SHUTDOWN)
+            fprintf(stderr, "R13 %s: setup failed at stage %d\n", names[mode], g_stage);
         if (rc == 0) rc = run(r, mode);
 #if defined(AIEN_TEST_BUILD) && !defined(R13_SILICON)
         /* COMPOSITION-2 in the living system (host test build only), after the episode,
@@ -1859,7 +2107,13 @@ int main(int argc, char **argv) {
         /* Fabric F5-0: host and silicon test builds (Lane 17, Lane 32). */
         if (rc == 0 && mode == POSITIVE) rc = fabric_phase(r);
 #endif
-        if (rc != 0)
+        /* R16 G6: the crumb log shows what operator control did in this world. */
+        if (r->ready && (rc == 0 || rc == OP_SHUTDOWN) && operator_audit(r) != 0 && rc == 0) {
+            fprintf(stderr, "R13 %s: work committed or published while the operator stop was in force\n",
+                    names[mode]);
+            rc = -1;
+        }
+        if (rc != 0 && rc != OP_SHUTDOWN)
             fprintf(stderr, "R13 %s FAILED: plan %llu search %llu GPU %llu evidence %llu "
                     "belief %llu selection %llu candidate %llu promotion %llu in force %llu "
                     "result %d prepare refusal %d\n", names[mode],
@@ -1871,6 +2125,18 @@ int main(int argc, char **argv) {
                     r->promoter.result, r->living.last_refusal);
         if (r->admin && r->view) stop(r);
         free(r);
+        if (rc == OP_SHUTDOWN) {
+            /* An operator shutdown of a stopped world: the stop stays on disk, the
+             * next start of this mode comes up stopped. No receipt is written. */
+#ifndef AIEN_TEST_BUILD
+            argus_finish();
+#endif
+            printf("R13 operator: shutdown while stopped in %s; the stop stays in %s/gen-%s; "
+                   "no receipt written\n", g_mode_key[mode], g_state_dir, g_mode_key[mode]);
+            free(g_seen);
+            free(g_stack);
+            return 3;
+        }
         if (rc != 0) { result = 1; break; }
     }
 #ifndef AIEN_TEST_BUILD
