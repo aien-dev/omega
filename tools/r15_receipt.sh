@@ -44,6 +44,12 @@ RERUNS=${4:-}
 NOTES=${5:-}
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 
+# A run stopped by the instrument preflight is BLOCKED_INSTRUMENT: the run never
+# measured anything, so there is nothing to receipt. Refuse, write nothing.
+if [ -s "$RAW/instrument-unavailable.txt" ]; then
+    echo "r15_receipt: BLOCKED_INSTRUMENT: this run stopped before any trial (instrument unavailable); no receipt written. $(sed -n 2p "$RAW/instrument-unavailable.txt")" >&2
+    exit 4
+fi
 SUM=$RAW/summary.json
 MACH=$RAW/machine.json
 for f in "$SUM" "$MACH" "$RAW/SHA256SUMS"; do

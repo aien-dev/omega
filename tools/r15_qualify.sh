@@ -109,6 +109,23 @@ ps -eo pid,pcpu,rss,comm --sort=-pcpu > "$OUT/processes-before.txt"
 [ -n "$servers" ] && say "WARNING: a model server looks resident: $servers (spec §9 says nothing heavy may run)"
 [ "$DIRTY" = true ] && say "NOTE: the working tree has uncommitted changes, so this run is not candidate-bound"
 
+# ---- instrument preflight (spec §7, §17 C2) ----------------------------------
+# Package energy is a mandatory metric (17) and G9's input. If the signed SPBM
+# reader is absent or returns invalid samples, the run cannot PASS, so stop
+# before consuming an acceptance window. This is BLOCKED_INSTRUMENT, not a
+# measured FAIL: no trial runs, no summary and no receipt is written.
+if [ "$MODE" = silicon ]; then
+    if ! ENERGY_MSG=$("$STATE" energy-preflight); then
+        say "BLOCKED_INSTRUMENT: $ENERGY_MSG"
+        printf 'BLOCKED_INSTRUMENT\n%s\n' "$ENERGY_MSG" > "$OUT/instrument-unavailable.txt"
+        echo instrument-unavailable > "$OUT/done"
+        # the blocked attempt stays on disk as evidence, never deleted; seal it
+        ( cd "$OUT" && find . -type f ! -name SHA256SUMS -printf "%P\n" | LC_ALL=C sort | xargs sha256sum > SHA256SUMS )
+        exit 4
+    fi
+    say "$ENERGY_MSG"
+fi
+
 # ---- machine physical state (§18 C3, observability only) --------------------
 # The preflight stops the run before any trial if the X925 does not sustain
 # its clock (the power-limited state seen on 2026-09-28). After that nothing

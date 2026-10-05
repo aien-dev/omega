@@ -818,6 +818,7 @@ test-r15-receipt:
 .PHONY: test-r15-preflight
 test-r15-preflight:
 	sh tests/r15_preflight_test.sh
+	sh tests/r15_energy_preflight_test.sh
 
 # R16-G2 code-search gate (spec/r16-orchestrator-retirement.md). Host-only C tool,
 # seconds, no network. Scans the five repos (paths from R16_REPO_OMEGA,

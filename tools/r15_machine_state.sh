@@ -6,6 +6,8 @@
 #
 #   tools/r15_machine_state.sh preflight <out>  exit 0 if the X925 sustains
 #                                               its clock, 3 if it does not
+#   tools/r15_machine_state.sh energy-preflight exit 0 if the SPBM package-energy
+#                                               reader gives valid samples, 5 if not
 #   tools/r15_machine_state.sh start <out>      begin 1 s sampling
 #   tools/r15_machine_state.sh mark <out> <text>
 #   tools/r15_machine_state.sh stop <out>       end sampling, write summary
@@ -37,6 +39,85 @@ preflight_ghz() {
 # preflight-parse <perf csv>: the preflight verdict on a recorded file (tests).
 if [ "${1:-}" = preflight-parse ]; then preflight_ghz "${2:?perf csv}"; exit $?; fi
 
+
+# energy_preflight: is the spec §7/§17 C2 package-energy reader present and
+# returning valid samples? The binding source is the owner-key signed
+# read-only SPBM reader (hwmon name "aien_spbm", energy1 labelled "pkg", the
+# same match tests/runtime/r15_measure.c uses). Spec §7: "If package energy
+# cannot be read by a physical hardware source at qualification time, metric
+# 17 is incomplete and R15 cannot PASS. GPU-domain energy alone is not
+# accepted", and §17 says GPM and NVML are "never substituted". So no other
+# source is tried here. Exit 0 = reader valid; 5 = INSTRUMENT_UNAVAILABLE
+# (reason=absent or reason=invalid). That is a blocked run, not a measured
+# FAIL: no trial is started, no receipt is written.
+# Env (tests): R15_HWMON_ROOT (default /sys/class/hwmon), R15_ENERGY_PREFLIGHT_SLEEP (0.1 s).
+# The reader contract is read from tests/runtime/r15_measure.c itself (its
+# k_elabel / k_plabel tables), so the preflight cannot drift from what
+# r15_energy_open / r15_energy_read require: all 5 energy and 5 power labels
+# exact; every energyN_input, energyN_overflow_raw and powerN_input readable
+# as a non-negative integer. Beyond that the preflight also requires every
+# overflow_raw to be 0 and package energy to advance over three samples.
+# Counter headroom: spec §17 "A window is refused if any overflow flag is set,
+# any counter decreases, or headroom is below the window length at a 600 W
+# bound (sample.c)". The per-window refusal lives in research/m15/spbm/sample.c;
+# the R15 harness and reducer reject overflow flags and decreases (energy_ok).
+# This preflight adds the headroom check for R15_ENERGY_HEADROOM_SECONDS
+# (default 300 s, longer than any single measured process) at 600 W.
+R15_MEASURE_C=$(cd "$(dirname "$0")/.." && pwd)/tests/runtime/r15_measure.c
+energy_preflight() {
+    local root=${R15_HWMON_ROOT:-/sys/class/hwmon} nap=${R15_ENERGY_PREFLIGHT_SLEEP:-0.1}
+    local hs=${R15_ENERGY_HEADROOM_SECONDS:-300}
+    local h="" d s v prev="" first="" n=0 i lab want
+    local el pl
+    el=$(sed -n 's/^static const char \*const k_elabel\[[A-Z_0-9]*\] = {\(.*\)};/\1/p' "$R15_MEASURE_C" | tr -d '" ')
+    pl=$(sed -n 's/^static const char \*const k_plabel\[[A-Z_0-9]*\] = {\(.*\)};/\1/p' "$R15_MEASURE_C" | tr -d '" ')
+    if [ "$(printf "%s" "$el" | awk -F, "{print NF}")" != 5 ] || [ "$(printf "%s" "$pl" | awk -F, "{print NF}")" != 5 ]; then
+        echo "INSTRUMENT_UNAVAILABLE reason=invalid: cannot read the 5+5 label tables from $R15_MEASURE_C"
+        return 5
+    fi
+    for d in "$root"/hwmon*; do
+        [ "$(cat "$d/name" 2>/dev/null)" = aien_spbm ] && { h=$d; break; }
+    done
+    if [ -z "$h" ]; then
+        echo "INSTRUMENT_UNAVAILABLE reason=absent: no hwmon named aien_spbm (the signed SPBM reader is not loaded); package energy cannot be read, R15 cannot PASS (spec §7)"
+        return 5
+    fi
+    for i in 1 2 3 4 5; do
+        want=$(printf '%s' "$el" | cut -d, -f$i); lab=$(cat "$h/energy${i}_label" 2>/dev/null)
+        [ "$lab" = "$want" ] || { echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy${i}_label is '$lab', not $want"; return 5; }
+        want=$(printf '%s' "$pl" | cut -d, -f$i); lab=$(cat "$h/power${i}_label" 2>/dev/null)
+        [ "$lab" = "$want" ] || { echo "INSTRUMENT_UNAVAILABLE reason=invalid: power${i}_label is '$lab', not $want"; return 5; }
+    done
+    for s in 1 2 3; do
+        for i in 1 2 3 4 5; do
+            v=$(cat "$h/energy${i}_overflow_raw" 2>/dev/null)
+            case "$v" in 0) ;; '') echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy${i}_overflow_raw unreadable"; return 5;;
+                *) echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy${i}_overflow_raw is '$v' (must be 0)"; return 5;; esac
+            v=$(cat "$h/power${i}_input" 2>/dev/null)
+            case "$v" in ''|*[!0-9]*) echo "INSTRUMENT_UNAVAILABLE reason=invalid: power${i}_input unreadable or not a number ('$v')"; return 5;; esac
+            v=$(cat "$h/energy${i}_input" 2>/dev/null)
+            case "$v" in ''|*[!0-9]*) echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy${i}_input sample $s unreadable or not a number ('$v')"; return 5;; esac
+            if [ "$i" = 1 ]; then
+                if [ "$v" -le 0 ]; then echo "INSTRUMENT_UNAVAILABLE reason=invalid: package sample $s reads $v uJ (a running counter is above zero)"; return 5; fi
+                if [ -n "$prev" ] && [ "$v" -lt "$prev" ]; then echo "INSTRUMENT_UNAVAILABLE reason=invalid: package counter went backwards ($prev -> $v uJ)"; return 5; fi
+                [ -z "$first" ] && first=$v
+                prev=$v; n=$((n + 1))
+            fi
+            # headroom to the 32-bit mJ wrap (as uJ) at a 600 W bound over the window
+            if [ $((4294967295 * 1000 - v)) -lt $((hs * 600000000)) ]; then
+                echo "INSTRUMENT_UNAVAILABLE reason=invalid: energy${i} has less than ${hs} s of headroom before the counter wraps at 600 W (spec §17)"; return 5
+            fi
+        done
+        [ "$s" -lt 3 ] && sleep "$nap"
+    done
+    if [ "$prev" -le "$first" ]; then
+        echo "INSTRUMENT_UNAVAILABLE reason=invalid: package counter did not advance over $n samples ($first uJ)"
+        return 5
+    fi
+    echo "energy preflight ok: $h pkg $first -> $prev uJ over $n samples, 5 energy + 5 power labels verified"
+    return 0
+}
+if [ "${1:-}" = energy-preflight ]; then energy_preflight; exit $?; fi
 CMD=${1:?preflight, start, mark or stop}
 OUT=${2:?out dir}
 mkdir -p "$OUT"
