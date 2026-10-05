@@ -16,6 +16,8 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <limits.h>
+#include "omega_physics_dir.h"
 
 static int m19_gate_count = 0;
 static int m19_gate_passed = 0;
@@ -1784,20 +1786,14 @@ static bool test_m19_gate16_clean_clone(void) {
     int cl = snprintf(checkout, sizeof(checkout), "%s/checkout", clone);
     if (cl < 0 || (size_t)cl >= sizeof(checkout)) return false;
 
-    /* Resolve the PHYSICS_DIR this process was built/run with, as an
+    /* Resolve the PHYSICS_DIR this process runs with (omega_physics_dir.h), as an
      * absolute path, so the nested build (running from a different cwd)
      * finds the same pinned physics checkout instead of silently falling
      * back to the Makefile's default. */
-    char physics_dir_resolved[4096];
-    {
-        const char *pd = getenv("PHYSICS_DIR");
-#ifdef OMEGA_PHYSICS_DIR
-        if (!pd || pd[0] == '\0') pd = OMEGA_PHYSICS_DIR;
-#endif
-        if (!pd || pd[0] == '\0') pd = "../physics";
-        if (!realpath(pd, physics_dir_resolved)) {
-            snprintf(physics_dir_resolved, sizeof(physics_dir_resolved), "%s", pd);
-        }
+    char physics_dir_resolved[PATH_MAX], physics_err[OMEGA_PHYSICS_ERR_SIZE];
+    if (!omega_physics_dir_resolve_pinned(physics_dir_resolved, sizeof(physics_dir_resolved), 0, physics_err, sizeof(physics_err))) {
+        fprintf(stderr, "%s\n", physics_err);
+        return false;
     }
 
     char command[4608];

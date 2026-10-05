@@ -16,6 +16,8 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#include <limits.h>
+#include "omega_physics_dir.h"
 
 static int m17_gate_count = 0;
 static int m17_gate_passed = 0;
@@ -140,25 +142,15 @@ static bool test_m17_qmd(void) {
     return true;
 }
 
-/* The physics checkout this binary was built against (Makefile passes
- * -DOMEGA_PHYSICS_DIR); fall back to the Makefile default if CFLAGS was
- * overridden without it. */
-#ifndef OMEGA_PHYSICS_DIR
-#define OMEGA_PHYSICS_DIR "../physics"
-#endif
-
+/* Physics checkout is resolved at run time (src/omega_physics_dir.h), never embedded. */
 static bool test_m17_physics_authority(void) {
-    FILE *f = fopen(OMEGA_PHYSICS_DIR "/m16/m16_native.h", "r");
-    if (!f) return false;
-    fclose(f);
-
-    FILE *p = popen("cd '" OMEGA_PHYSICS_DIR "' && git status --porcelain 2>/dev/null", "r");
-    if (!p) return false;
-    char buf[128];
-    size_t lines = 0;
-    while (fgets(buf, sizeof(buf), p)) lines++;
-    pclose(p);
-    return (lines == 0);
+    char pd[PATH_MAX], err[OMEGA_PHYSICS_ERR_SIZE];
+    /* The run-time dir may differ from the one make checked: require the physics.lock commit and a clean tree. */
+    if (!omega_physics_dir_resolve_pinned(pd, sizeof(pd), 1, err, sizeof(err))) {
+        fprintf(stderr, "m17 physics authority: %s\n", err);
+        return false;
+    }
+    return true;
 }
 
 static bool test_m17_native_submit(void) {
@@ -988,19 +980,13 @@ static bool test_m18_gate16_clean_clone(void) {
         return true;
     }
     /* Copy the repo this omegatool runs from (the code under test), not a
-     * hardcoded checkout, and pass the PHYSICS_DIR this process was built
-     * with as an absolute path so the copy in /tmp does not fall back to
+     * hardcoded checkout, and pass the PHYSICS_DIR this process resolves at run time
+     * (omega_physics_dir.h) as an absolute path so the copy in /tmp does not fall back to
      * the Makefile default ../physics (= /tmp/physics). Mirrors M19. */
-    char physics_dir_resolved[4096];
-    {
-        const char *pd = getenv("PHYSICS_DIR");
-#ifdef OMEGA_PHYSICS_DIR
-        if (!pd || pd[0] == '\0') pd = OMEGA_PHYSICS_DIR;
-#endif
-        if (!pd || pd[0] == '\0') pd = "../physics";
-        if (!realpath(pd, physics_dir_resolved)) {
-            snprintf(physics_dir_resolved, sizeof(physics_dir_resolved), "%s", pd);
-        }
+    char physics_dir_resolved[PATH_MAX], physics_err[OMEGA_PHYSICS_ERR_SIZE];
+    if (!omega_physics_dir_resolve_pinned(physics_dir_resolved, sizeof(physics_dir_resolved), 0, physics_err, sizeof(physics_err))) {
+        fprintf(stderr, "%s\n", physics_err);
+        return false;
     }
     char command[4608];
     int len = snprintf(command, sizeof(command),
