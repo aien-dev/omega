@@ -119,6 +119,8 @@ if [ "$MODE" = silicon ]; then
         say "BLOCKED_INSTRUMENT: $ENERGY_MSG"
         printf 'BLOCKED_INSTRUMENT\n%s\n' "$ENERGY_MSG" > "$OUT/instrument-unavailable.txt"
         echo instrument-unavailable > "$OUT/done"
+        # the blocked attempt stays on disk as evidence, never deleted; seal it
+        ( cd "$OUT" && find . -type f ! -name SHA256SUMS -printf "%P\n" | LC_ALL=C sort | xargs sha256sum > SHA256SUMS )
         exit 4
     fi
     say "$ENERGY_MSG"
