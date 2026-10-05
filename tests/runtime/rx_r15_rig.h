@@ -23,6 +23,7 @@
 #include <pthread.h>
 #include <sched.h>
 #include <stdatomic.h>
+#include "r15_stage_clock.h"
 
 typedef enum { R15_RES4, R15_RES1, R15_SEQ } R15Config;
 
@@ -79,6 +80,7 @@ typedef struct {
     RxCallerKeyring keys_omega, keys_aien, keys_aegis, keys_living, keys_promoter;
     RxCallerKeyring keys_rig;   /* the rig's own R8 ask reaction (seat subject) */
     RxCallerKeyring fixtures;   /* r15_start_with fixture subjects */
+    R15StageClock stop_clock;   /* time stamps of each r15_stop step (teardown diagnostics, reported only) */
 } R15Rig;
 
 /* Called on the episode's thread; a nonzero return fails the episode.
