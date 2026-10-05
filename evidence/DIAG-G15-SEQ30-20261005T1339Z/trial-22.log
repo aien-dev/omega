@@ -1,0 +1,4 @@
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34300 passes in 50 ms, budget 1372000 (2000 ms window)
+trial SEQ diag-g15-20261005T133912Z round 22: ok

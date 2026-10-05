@@ -1,0 +1,6 @@
+R11-living rc=0 secs=0
+R15-silicon rc=3 secs=21
+ATTN-timing-1 rc=0 secs=0
+ATTN-timing-2 rc=0 secs=1
+ATTN-timing-3 rc=0 secs=0
+window done

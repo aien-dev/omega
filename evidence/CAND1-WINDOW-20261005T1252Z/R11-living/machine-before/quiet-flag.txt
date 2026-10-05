@@ -1,0 +1,1 @@
+cand2-window quietlock CAND-1_R11_living___R15_silicon_acceptance___attention_timing__D start=2026-10-05T12:52:56Z expected_end=2026-10-05T14:22:56Z pid=1797178 hold=q1797178-1791204776-8874b697 job=1797180 jobgroup=1797180

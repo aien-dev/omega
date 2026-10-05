@@ -1,0 +1,1 @@
+cd /home/drakestapleton/workspace/cand2-campaign/path2/src/wt-CAND1-omega && make -j6 PHYSICS_DIR=/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics OUT_DIR=build-ctl build-ctl/omegatool   (CARGO_HOME irrelevant; PATH/env default; checked physics at 6d7cf0d clean before)

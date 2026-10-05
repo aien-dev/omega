@@ -1,0 +1,40 @@
+    PID USER     %CPU %MEM     ELAPSED COMMAND
+2258347 drakest+  100  0.0       00:00 ps -eo pid,user,pcpu,pmem,etime,args --sort=-pcpu
+2258247 root      8.4  0.0       00:01 (sd-mkdcreds)
+1463296 drakest+  3.7  0.4    12:10:18 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/49214b66.claim.sock
+   6478 drakest+  2.5  1.1  1-19:20:59 /home/drakestapleton/max-env/bin/python -c from multiprocessing.spawn import spawn_main; spawn_main(tracker_fd=38, pipe_handle=42) --multiprocessing-fork
+1276306 drakest+  1.5  0.4    02:08:10 claude bg-spare --bg-spare /tmp/cc-daemon-1000/4d0cec40/spare/a0890d26.claim.sock
+2142959 root      1.4  0.0       18:49 [kworker/5:1-events]
+2154624 root      1.1  0.0       16:27 [kworker/9:1-cgroup_free]
+   4255 472       1.1  0.1  1-19:21:17 grafana server --homepath=/usr/share/grafana --config=/etc/grafana/grafana.ini --packaging=docker cfg:default.log.mode=console cfg:default.paths.data=/var/lib/gr
+2198693 root      1.0  0.0       10:03 [kworker/16:2-mm_percpu_wq]
+2238105 root      1.0  0.0       04:23 [kworker/18:0-tpm_dev_wq]
+2039017 root      0.9  0.0       29:04 [kworker/7:1-events]
+2149010 root      0.8  0.0       17:47 [kworker/15:2-cgroup_free]
+2188397 root      0.8  0.0       12:27 [kworker/15:1-events]
+3952606 drakest+  0.7  0.0    16:33:20 /home/drakestapleton/.local/bin/agent-archive collect
+2158003 root      0.6  0.0       15:35 [kworker/16:1-events]
+2244936 root      0.6  0.0       03:16 [kworker/5:0-events]
+2180515 root      0.5  0.0       14:13 [kworker/17:1-events]
+2045348 root      0.5  0.0       27:46 [kworker/6:3-events]
+2160452 root      0.5  0.0       14:58 [kworker/19:1-events]
+ 994240 drakest+  0.5  0.1  1-14:23:10 /home/drakestapleton/.local/bin/claude daemon run --json-path /home/drakestapleton/.claude/daemon.json --log-file /home/drakestapleton/.claude/daemon.log --origi
+3398861 drakest+  0.4  0.0    17:16:01 ollama serve
+2218070 root      0.4  0.0       05:28 [kworker/7:0-cgroup_release]
+   4468 root      0.4  0.1  1-19:21:16 uptime-kuma
+2203801 root      0.4  0.0       08:46 [kworker/17:2-cgroup_release]
+1276210 drakest+  0.4  0.1    02:08:12 claude
+2157955 root      0.4  0.0       15:36 [kworker/18:1-memcg]
+2204135 root      0.4  0.0       08:36 [kworker/19:3+tpm_dev_wq]
+1563690 drakest+  0.3  0.0  1-12:38:08 ugrep -G --ignore-files --hidden -I --exclude-dir=.git --exclude-dir=.svn --exclude-dir=.hg --exclude-dir=.bzr --exclude-dir=.jj --exclude-dir=.sl -E --line-buff
+1555242 drakest+  0.3  0.0  1-12:40:41 ugrep -G --ignore-files --hidden -I --exclude-dir=.git --exclude-dir=.svn --exclude-dir=.hg --exclude-dir=.bzr --exclude-dir=.jj --exclude-dir=.sl -E --line-buff
+   4254 nobody    0.3  0.0  1-19:21:17 /bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/prometheus
+1635759 drakest+  0.3  0.0    11:50:07 ugrep -G --ignore-files --hidden -I --exclude-dir=.git --exclude-dir=.svn --exclude-dir=.hg --exclude-dir=.bzr --exclude-dir=.jj --exclude-dir=.sl --line-buffere
+2220892 root      0.3  0.0       04:51 [kworker/8:2-events]
+      1 root      0.3  0.0  1-19:21:31 /sbin/init splash
+   3456 atlas     0.3  0.7  1-19:21:20 /home/atlas/atlas-runtime-setup-20260905/image-venv/bin/python /home/atlas/atlas-runtime-setup-20260905/dedicated-image_server.py
+2221265 root      0.3  0.0       04:48 [kworker/9:0-events]
+2156180 root      0.3  0.0       15:58 [kworker/8:0-cgroup_free]
+2203756 root      0.2  0.0       08:47 [kworker/19:2-mm_percpu_wq]
+2161917 root      0.2  0.0       14:40 [kworker/0:2-cgroup_free]
+   2249 root      0.2  0.0  1-19:21:21 /usr/sbin/tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/run/tailscale/tailscaled.sock --port=41641

@@ -1,0 +1,1 @@
+./build/gpu_attention_test --timing --out /home/drakestapleton/workspace/evidence-out/CAND1-WINDOW-20261005T1252Z/ATTN-timing-1/timing.json
