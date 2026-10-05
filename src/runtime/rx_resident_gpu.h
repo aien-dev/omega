@@ -24,6 +24,10 @@ typedef struct RxGpuSeat RxGpuSeat;
 int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out);
 int rx_gpu_seat_finish(RxGpuSeat *seat);
 
+/* What the host read when the seat left: both words, so a stale or missing read is visible. */
+typedef struct { int marker_ok, sem_ok; uint32_t marker_value, sem_value; } RxGpuSeatLeave;
+int rx_gpu_seat_finish_ex(RxGpuSeat *seat, RxGpuSeatLeave *leave);
+
 /* Destroy the seat's channel while it runs, as a fault would. When this
  * returns the chip no longer writes the image; the image stays mapped and
  * bound. The caller then declares the seat lost to the world. */

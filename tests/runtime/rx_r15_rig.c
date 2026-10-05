@@ -862,7 +862,11 @@ void r15_stop(R15Rig *r) {
     if (r->seat) {
         (void)rx_resident_shutdown(&r->w);
         r15_stage_mark(sc, "seat_shutdown_post");
-        (void)rx_gpu_seat_finish(r->seat);
+        RxGpuSeatLeave lv = {0};
+        r->leave_rc = rx_gpu_seat_finish_ex(r->seat, &lv);
+        r->leave_marker = lv.marker_value;
+        r->leave_sem = lv.sem_value;
+        r->leave_valid = 1;
         r15_stage_mark(sc, "seat_finish");
     }
 #endif
