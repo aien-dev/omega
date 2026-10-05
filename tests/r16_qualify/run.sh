@@ -17,6 +17,8 @@ check() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; FAILS=$((FAILS
 W=$SCR/w
 mkdir -p "$W/tools"
 cp "$HERE/tools/r16_qualify.sh" "$W/tools/"
+G6FILES="src/omega_accelerator_world.c src/runtime/rx_generation.c src/omega_world_gates.c tools/omegatool.c src/runtime/rx_native_bind.c src/omega_evidence.c src/omega_verify.c src/runtime/rx_resident_gpu.c src/runtime/rx_seq_reference.c"
+for p in $G6FILES; do mkdir -p "$W/$(dirname "$p")"; cp "$HERE/$p" "$W/$p"; done
 printf 'build/\n' > "$W/.gitignore"
 g() { git -C "$W" -c user.name=r16 -c user.email=r16@invalid -c commit.gpgsign=false "$@"; }
 g init -q && g add -A && g commit -qm fixture || exit 2
@@ -47,7 +49,7 @@ check "output under evidence/: exit 2" '[ $rc = 2 ]'
 out=$(Q R16_RUN_ID=none 2>&1); rc=$?
 R=$W/build/r16-raw/none/DRY-RUN-receipt.json
 check "no fixtures: exit 3 (nothing ran)" '[ $rc = 3 ]'
-check "no fixtures: G6 prints NOT_RUN" 'echo "$out" | grep -q "R16-G6: NOT_RUN"'
+check "no fixtures: G6 prints NOT_RUN (sources present, no test ran)" 'echo "$out" | grep -q "G6=NOT_RUN (items missing: 0)"'
 check "no fixtures: summary all NOT_RUN" 'echo "$out" | grep -q "^Gates: G1=NOT_RUN G2=NOT_RUN G3=NOT_RUN G4=NOT_RUN G5=NOT_RUN G6=NOT_RUN G7=NOT_RUN G8=NOT_RUN$"'
 check "no fixtures: receipt gate NOT_RUN" 'grep -q "\"gate\": \"NOT_RUN\"" "$R"'
 check "no fixtures: receipt has no PASS value" '! grep -q "\"PASS\"" "$R"'
@@ -77,7 +79,7 @@ check "bad exit status with pass line: G5 FAIL, exit 1" '[ $rc = 1 ] && echo "$o
 echo 0 > "$F/r16_surface.log.rc"
 out=$(Q R16_RUN_ID=fx 2>&1); rc=$?
 check "good G4/G5 fixtures: those gates PASS" 'echo "$out" | grep -q "G4=PASS" && echo "$out" | grep -q "G5=PASS"'
-check "all-good G4/G5 still exit 3 (G6 has no check)" '[ $rc = 3 ] && echo "$out" | grep -q "G6=NOT_RUN"'
+check "all-good G4/G5 still exit 3 (G6 tests did not run)" '[ $rc = 3 ] && echo "$out" | grep -q "G6=NOT_RUN"'
 
 # 6b. R11 that skipped its living run (load > 2) exits 0 with "failures 0": NOT_RUN, never PASS
 printf 'checks 400 failures 0\n' > "$F/r11_aien.log"; echo 0 > "$F/r11_aien.log.rc"
@@ -199,6 +201,97 @@ r15_bad "outcome FAIL" "$(r15_receipt outcome=FAIL)"
 r15_bad "candidate_bound false" "$(r15_receipt candidate_bound=false)"
 r15_bad "tree_dirty true" "$(r15_receipt tree_dirty=true)"
 r15_bad "silicon_observed false" "$(r15_receipt silicon_observed=false)"
+
+# 8b. G6 protected things kept. Presence (symbol defined) and operation (test ran and
+# passed in this run) are separate. All good first, then one control at a time.
+G=$W/build/r16-raw/g6
+mkdir -p "$G"
+# g6log <file> <pattern> [rc]: fixture log + exit status for one exercising test
+g6log() { printf '%s\n' "$2" > "$G/$1"; echo "${3:-0}" > "$G/$1.rc"; }
+g6_good_logs() {
+    g6log m19_world.log "STAGE 1 / PERSISTENT WORLD QUALIFICATION: 18 / 18 M19 GATES PASSED"
+    g6log r9_barrier.log "generation barrier kept a single coherent generation through every injected stop"
+    g6log r10_omega.log "checks 40 failures 0"
+    g6log r7_native.log "native authority matched the linux oracle"
+    g6log r12_host.log "checks 40 failures 0"
+    g6log r12_silicon.log "checks 40 failures 0 silicon 1"
+    g6log r13_host.log "R13 gate: R13_LIVING_SYSTEM=HOST_PASS_NON_SILICON"
+    g6log r14_host.log "R14 gate: R14_LIVING_RECOVERY=HOST_PASS_NON_SILICON"
+    g6log r14_silicon.log "R14 gate: R14_LIVING_RECOVERY=PASS"
+    g6log r15_parity_host.log "SEQ_SEMANTIC_PARITY=PASS"
+    g6log r15_parity_silicon.log "SEQ_SEMANTIC_PARITY=PASS"
+    g6log r15_receipt.log "r15 receipt test: 0 failure(s)"
+}
+G6Q() { Q R16_RUN_ID=g6 2>&1; }
+R=$G/DRY-RUN-receipt.json
+g6_item() { sed -n 's/^.*"item": "'"$1"'", "status": "\([A-Z_]*\)".*$/\1/p' "$R"; }
+g6_good_logs
+out=$(G6Q); rc=$?
+check "G6 all good: G6=PASS" 'echo "$out" | grep -q "G6=PASS"'
+check "G6 all good: all twelve items PASS in the receipt" '[ "$(grep -c "\"item\": \"[a-z0-9_]*\", \"status\": \"PASS\"" "$R")" = 12 ]'
+check "G6 all good: protected_surfaces_kept six presence flags true" '[ "$(grep -c "_present\": true" "$R")" = 6 ]'
+check "G6 all good: no FAIL anywhere and G6 alone does not make the run pass (exit 3)" '[ $rc = 3 ] && ! echo "$out" | grep -q "G6=FAIL"'
+check "G6 all good: receipt names file and symbol per item" 'grep -q "\"file\": \"src/runtime/rx_generation.c\", \"symbol\": \"rx_gen_recover\", \"defined\": true" "$R"'
+check "G6 operated checks cite the test and its status" 'grep -q "{\"name\": \"R9\", \"target\": \"test-r9\", \"status\": \"PASS\"}" "$R"'
+
+# presence without operation: symbols all defined, tests never ran -> NOT_RUN, never PASS
+rm -f "$G"/*.log "$G"/*.rc
+out=$(G6Q)
+check "G6 presence alone (no test ran): NOT_RUN, not PASS" 'echo "$out" | grep -q "G6=NOT_RUN" && [ "$(g6_item recovery_path_present)" = NOT_RUN ]'
+g6_good_logs
+
+# symbol removed / commented out / reduced to a prototype -> MISSING_IMPLEMENTATION
+RG=$W/src/runtime/rx_generation.c
+g6_mut() {   # g6_mut <label> <sed expression>: mutate the fixture source, commit, run, report, revert
+    sed -i "$2" "$RG"; g add -A; g commit -qm "mutation: $1"
+    out=$(G6Q); rc=$?
+}
+g6_unmut() { g reset -q --hard HEAD~1; }
+g6_mut "symbol removed" 's/rx_gen_recover/rx_gen_rec0ver/'
+check "G6 symbol removed: recovery_path MISSING_IMPLEMENTATION" '[ "$(g6_item recovery_path_present)" = MISSING_IMPLEMENTATION ]'
+check "G6 symbol removed: r14 item also MISSING_IMPLEMENTATION" '[ "$(g6_item r14_recovery_paths_passing)" = MISSING_IMPLEMENTATION ]'
+check "G6 symbol removed: G6 is not PASS even though every test passed" 'echo "$out" | grep -q "G6=MISSING_IMPLEMENTATION" && [ $rc = 3 ]'
+check "G6 symbol removed: receipt flag is not true" 'grep -q "\"recovery_path_present\": \"MISSING_IMPLEMENTATION\"" "$R"'
+g6_unmut
+g6_mut "definition commented out (disabled)" 's|^int rx_gen_recover(|// int rx_gen_recover(|'
+check "G6 definition commented out: MISSING_IMPLEMENTATION" '[ "$(g6_item recovery_path_present)" = MISSING_IMPLEMENTATION ]'
+g6_unmut
+g6_mut "definition reduced to a prototype" 's|^int rx_gen_recover(const char \*dir, RxRecoveryRecord \*out) {|int rx_gen_recover(const char *dir, RxRecoveryRecord *out);|'
+check "G6 prototype only: MISSING_IMPLEMENTATION" '[ "$(g6_item recovery_path_present)" = MISSING_IMPLEMENTATION ]'
+g6_unmut
+out=$(G6Q)
+check "G6 mutations reverted: back to PASS" 'echo "$out" | grep -q "G6=PASS"'
+
+# failing tests -> FAIL
+g6log r9_barrier.log "generation barrier kept a single coherent generation through every injected stop" 1
+out=$(G6Q); rc=$?
+check "G6 test exits 1 with its pass line present: item FAIL, G6 FAIL, exit 1" '[ $rc = 1 ] && echo "$out" | grep -q "G6=FAIL" && [ "$(g6_item recovery_path_present)" = FAIL ] && [ "$(g6_item generation_mechanism_present)" = FAIL ]'
+g6log r9_barrier.log "2 generation-barrier failures"
+out=$(G6Q); rc=$?
+check "G6 fake log reporting failures (no pass line): FAIL, exit 1" '[ $rc = 1 ] && echo "$out" | grep -q "G6=FAIL"'
+g6log r9_barrier.log "generation barrier kept a single coherent generation through every injected stop"
+g6log r12_silicon.log "checks 40 failures 3 silicon 1" 1
+out=$(G6Q)
+check "G6 operator emergency control test fails: that item FAIL" '[ "$(g6_item operator_emergency_controls_passing)" = FAIL ] && echo "$out" | grep -q "G6=FAIL"'
+g6log r12_silicon.log "checks 40 failures 0 silicon 1"
+g6log m19_world.log "STAGE 1 / PERSISTENT WORLD QUALIFICATION: 17 / 18 M19 GATES PASSED
+  [FAIL] OMEGA_ACCEL_RESIDENT_FAULT_RECOVERY_PASS : x" 0
+out=$(G6Q)
+check "G6 M19 log with a [FAIL] gate line (exit 0): known_good_fallback FAIL" '[ "$(g6_item known_good_fallback_present)" = FAIL ]'
+g6log m19_world.log "STAGE 1 / PERSISTENT WORLD QUALIFICATION: 18 / 18 M19 GATES PASSED"
+
+# skipped tests are never PASS
+g6log r9_barrier.log "[-] living run not exercised: SKIPPED-LOADED
+generation barrier kept a single coherent generation through every injected stop"
+out=$(G6Q); rc=$?
+check "G6 skipped test with pass line and exit 0: item NOT_RUN, never PASS" '[ "$(g6_item recovery_path_present)" = NOT_RUN ] && ! echo "$out" | grep -q "G6=PASS" && [ $rc = 3 ]'
+g6log r9_barrier.log "generation barrier kept a single coherent generation through every injected stop"
+
+# a test that never ran (log absent) -> NOT_RUN for exactly the items that need it
+rm -f "$G/r10_omega.log" "$G/r10_omega.log.rc"
+out=$(G6Q)
+check "G6 one test absent: only its item NOT_RUN, G6 NOT_RUN" '[ "$(g6_item r10_verifier_passing)" = NOT_RUN ] && [ "$(g6_item r9_crash_recovery_passing)" = PASS ] && echo "$out" | grep -q "G6=NOT_RUN"'
+rm -rf "$G"
 
 # 9. the script holds no literal for observed fields and does not touch tracked evidence
 check "no literal tree_dirty/candidate_bound/silicon_observed values" \

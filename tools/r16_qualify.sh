@@ -94,12 +94,12 @@ verdict() {
     if [ "$rc" != 0 ]; then echo FAIL; return; fi
     if [ -s "$log" ] && grep -Fq -- "$pat" "$log"; then echo PASS; else echo FAIL; fi
 }
-# combine <status...>: FAIL beats NOT_RUN beats PASS.
+# combine <status...>: FAIL beats NOT_RUN (or MISSING_IMPLEMENTATION) beats PASS.
 combine() {
     local s r=PASS
     for s in "$@"; do
         if [ "$s" = FAIL ]; then echo FAIL; return; fi
-        if [ "$s" = NOT_RUN ]; then r=NOT_RUN; fi
+        if [ "$s" != PASS ]; then r=NOT_RUN; fi   # NOT_RUN, MISSING_IMPLEMENTATION, anything else
     done
     echo "$r"
 }
@@ -241,14 +241,14 @@ R15_parity_host|test-r15-parity-host|r15_parity_host.log|SEQ_SEMANTIC_PARITY=PAS
 R15_g7_host|test-r15-g7-host|r15_g7_host.log|R15 G7 worker split: 57 checks, 0 failures|0
 R15_parity_silicon|test-r15-parity-silicon|r15_parity_silicon.log|SEQ_SEMANTIC_PARITY=PASS|1
 R15_receipt|test-r15-receipt|r15_receipt.log|r15 receipt test: 0 failure(s)|0'
-declare -A LV TG
+declare -A LV TG LOGF
 SILICON_RAN=0; SILICON_PASS=0
 if [ "$G3S" != NOT_RUN ]; then
     SILICON_RAN=1
     if [ "$G3S" = PASS ]; then SILICON_PASS=1; fi
 fi
 while IFS='|' read -r name target log pat sil; do
-    TG[$name]=$target
+    TG[$name]=$target; LOGF[$name]="$RAW_DIR/$log"
     if [ "$sil" = 1 ]; then
         silicon_run "$name" "$RAW_DIR/$log" "$pat" "$target"
         LV[$name]=$V
@@ -289,11 +289,76 @@ G7=$(combine "${LV[R1_R6]}" "${LV[R7]}" "${LV[R8]}" "${LV[R9]}" "${LV[R10]}" "${
 echo "    G7=$G7 (R15 acceptance receipt: $R15ACC)"
 
 # ---- 7. G6: protected things kept -------------------------------------------
-# The spec asks for the six section-49 items to be shown present with file/symbol and
-# the exercising test. No such check is implemented in this script, so those six items
-# and G6 are NOT_RUN. Items covered by ladder runs are derived from those runs.
-G6=NOT_RUN
-echo "[*] R16-G6: NOT_RUN (presence checks for the six section-49 items are not implemented)"
+# The twelve items of spec R16-G6: the six section-49 items plus R9 crash recovery, R10
+# verifier, R12 seat-loss handling, R14 recovery paths, operator emergency controls and
+# the benchmark reference paths (SEQ). Presence and operation are separate facts:
+#   * present  = every named implementation symbol is DEFINED in its file (a function
+#     definition line; a comment, prototype or call does not count). Absent: MISSING_IMPLEMENTATION.
+#   * operated = every named exercising test ran in THIS invocation and passed (exit
+#     status AND required log line). A log that reports a skipped or unexercised run is
+#     NOT_RUN, never PASS. FAIL if any test ran and failed.
+# Item status: MISSING_IMPLEMENTATION if not present; else FAIL > NOT_RUN > PASS over its
+# tests. G6 combines the items like combine() (FAIL > NOT_RUN/MISSING > PASS); G6 names
+# MISSING_IMPLEMENTATION when an item is missing and nothing failed.
+echo "[*] R16-G6: protected things kept..."
+# g6_defined <file> <symbol> <f|t>: f = C function definition line, t = fixed text.
+g6_defined() {
+    [ -f "$HERE/$1" ] || return 1
+    if [ "$3" = t ]; then grep -Fq -- "$2" "$HERE/$1"
+    else grep -Eq -- "^[A-Za-z_][^;]*[ *]$2\\([^;]*\$" "$HERE/$1"; fi
+}
+# M19 accelerator world (the known-good fallback) and its maintenance entry: one silicon run.
+silicon_run m19 "$RAW_DIR/m19_world.log" "M19 GATES PASSED" test-m19
+LV[M19]=$V; TG[M19]=test-m19; LOGF[M19]="$RAW_DIR/m19_world.log"
+if [ "${LV[M19]}" = PASS ] && grep -Fq -- "[FAIL]" "$RAW_DIR/m19_world.log"; then LV[M19]=FAIL; fi
+# g6_test <name>: status of one exercising test; a skipped or unexercised log is NOT_RUN.
+g6_test() {
+    local s=${LV[$1]:-NOT_RUN}
+    if [ "$s" = PASS ] && [ -s "${LOGF[$1]:-/nonexistent}" ] && grep -Eq -- "SKIPPED|not exercised" "${LOGF[$1]}"; then s=NOT_RUN; fi
+    echo "$s"
+}
+# key|file:symbol:kind;...|tests (comma separated)
+G6_ITEMS='known_good_fallback_present|src/omega_accelerator_world.c:omega_world_drain:f;src/omega_accelerator_world.c:omega_world_init:f|M19
+recovery_path_present|src/runtime/rx_generation.c:rx_gen_recover:f|R9,R14_host
+deterministic_maintenance_controls_present|src/omega_world_gates.c:run_m19_gates:f;tools/omegatool.c:--run-m19-gates:t|M19
+trusted_capability_root_present|src/runtime/rx_native_bind.c:rx_world_init_native:f;src/runtime/rx_native_bind.c:native_validate:f|R7,R12_host
+generation_mechanism_present|src/runtime/rx_generation.c:rx_gen_propose:f|R9,R13_host
+evidence_present|src/omega_evidence.c:omega_evidence_write_digest:f|R15_receipt,R9
+r9_crash_recovery_passing|src/runtime/rx_generation.c:rx_gen_open:f|R9
+r10_verifier_passing|src/omega_verify.c:omega_verify_v0_structural:f|R10
+r12_seat_loss_handling_passing|src/runtime/rx_resident_gpu.c:rx_gpu_seat_kill:f|R12_host,R12_silicon
+r14_recovery_paths_passing|src/runtime/rx_generation.c:rx_gen_recover:f|R14_host,R14_silicon
+operator_emergency_controls_passing|src/runtime/rx_resident_gpu.c:rx_gpu_seat_kill:f|R12_silicon
+benchmark_reference_paths_seq_passing|src/runtime/rx_seq_reference.c:rx_seq_pulse:f|R15_parity_host,R15_parity_silicon'
+declare -A G6S
+G6LIST=""; G6ALL=""; G6MISSING=0
+while IFS='|' read -r key pairs tests; do
+    present=true; implj=""
+    IFS=';' read -ra PA <<< "$pairs"
+    for p in "${PA[@]}"; do
+        pf=${p%%:*}; rest=${p#*:}; kind=${rest##*:}; sym=${rest%:*}
+        if g6_defined "$pf" "$sym" "$kind"; then d=true; else d=false; present=false; fi
+        implj="$implj{\"file\": \"$pf\", \"symbol\": \"$sym\", \"defined\": $d}, "
+    done
+    implj=${implj%, }
+    tj=""; ts=PASS; IFS=',' read -ra TA <<< "$tests"
+    for t in "${TA[@]}"; do
+        s=$(g6_test "$t"); ts=$(combine "$ts" "$s")
+        tj="$tj{\"name\": \"$t\", \"target\": \"${TG[$t]}\", \"status\": \"$s\"}, "
+    done
+    tj=${tj%, }
+    if [ "$present" = false ]; then st=MISSING_IMPLEMENTATION; G6MISSING=$((G6MISSING + 1)); else st=$ts; fi
+    G6S[$key]=$st; G6ALL="$G6ALL $st"
+    G6LIST="$G6LIST    {\"item\": \"$key\", \"status\": \"$st\", \"present\": $present, \"implementation\": [$implj], \"tests\": [$tj], \"basis\": \"present = symbol definition found; status PASS only if every test ran and passed in this run\"},
+"
+    echo "    $key: $st"
+done <<< "$G6_ITEMS"
+G6LIST=${G6LIST%$'\n'}; G6LIST=${G6LIST%,}
+# shellcheck disable=SC2086
+G6=$(combine $G6ALL)
+if [ "$G6" = NOT_RUN ] && [ "$G6MISSING" -gt 0 ] && [[ " $G6ALL " != *" FAIL "* ]]; then G6=MISSING_IMPLEMENTATION; fi
+echo "    G6=$G6 (items missing: $G6MISSING)"
+g6j() { local s=${G6S[$1]}; if [ "$s" = PASS ]; then echo true; elif [ "$s" = FAIL ]; then echo false; else echo "\"$s\""; fi; }
 
 # ---- 8. observed binding ----------------------------------------------------------
 END_COMMIT=$(git rev-parse HEAD)
@@ -358,19 +423,22 @@ cat > "$OUT_RECEIPT_TMP" <<RECOBJ
   "remaining_central_loop_count": $REMAINING_CENTRAL,
   "remaining_unclassified_semantic_loop_count": $REMAINING_UNCLASS,
   "protected_surfaces_kept": {
-    "known_good_fallback_present": "NOT_RUN",
-    "recovery_path_present": "NOT_RUN",
-    "deterministic_maintenance_controls_present": "NOT_RUN",
-    "trusted_capability_root_present": "NOT_RUN",
-    "generation_mechanism_present": "NOT_RUN",
-    "evidence_present": "NOT_RUN",
-    "r9_crash_recovery_passing": $(b2j "${LV[R9]}"),
-    "r10_verifier_passing": $(b2j "${LV[R10]}"),
-    "r12_seat_loss_handling_passing": $(b2j "$(combine "${LV[R12_host]}" "${LV[R12_silicon]}")"),
-    "r14_recovery_paths_passing": $(b2j "$(combine "${LV[R14_host]}" "${LV[R14_silicon]}")"),
-    "operator_emergency_controls_passing": "NOT_RUN",
-    "benchmark_reference_paths_seq_passing": $(b2j "$(combine "${LV[R15_parity_host]}" "${LV[R15_parity_silicon]}")")
+    "known_good_fallback_present": $(g6j known_good_fallback_present),
+    "recovery_path_present": $(g6j recovery_path_present),
+    "deterministic_maintenance_controls_present": $(g6j deterministic_maintenance_controls_present),
+    "trusted_capability_root_present": $(g6j trusted_capability_root_present),
+    "generation_mechanism_present": $(g6j generation_mechanism_present),
+    "evidence_present": $(g6j evidence_present),
+    "r9_crash_recovery_passing": $(g6j r9_crash_recovery_passing),
+    "r10_verifier_passing": $(g6j r10_verifier_passing),
+    "r12_seat_loss_handling_passing": $(g6j r12_seat_loss_handling_passing),
+    "r14_recovery_paths_passing": $(g6j r14_recovery_paths_passing),
+    "operator_emergency_controls_passing": $(g6j operator_emergency_controls_passing),
+    "benchmark_reference_paths_seq_passing": $(g6j benchmark_reference_paths_seq_passing)
   },
+  "g6_items": [
+$G6LIST
+  ],
   "r15_acceptance_still_passing": $(b2j "$R15ACC"),
   "correctness_reruns": {
 $(lr R1 R1_R6),
@@ -413,7 +481,7 @@ $(lr R15_receipt R15_receipt)
     "Retirement of the aien-sovereign-core LLM request loop (section 3.1, Q1)",
     "Removal of any Rust code (section 3.1, Q2); the Rust loops still run if started by hand outside the AIEN production path",
     "Retirement or code removal of the aien-sovereign-core aien-cli operator tool loops (13 rows) and spark-dream idle-time cycle loop (1 row); classified as class A (retired by non-use), their code is not removed under section 3.1 Q2",
-    "Any gate or field written NOT_RUN: no check for it is implemented, or its target was not run in this run"
+    "Any gate or field written NOT_RUN or MISSING_IMPLEMENTATION: no check or implementation was found for it, or its target was not run in this run"
   ],
   "raw_digest_note": "sha256 of SHA256SUMS over the raw directory",
   "raw_directory_digest_sha256": "$RAW_DIGEST",
