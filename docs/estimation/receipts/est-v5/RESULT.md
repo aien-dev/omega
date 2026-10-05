@@ -54,7 +54,7 @@ gated statistics on 2651 scored steps: coverage50 0.533 (band 0.46 to 0.54), cov
 0.13, and the quarter, regime, ten-step, bias and lag-1 checks. It failed one:
 **PIT bin 0 = 0.0681, below the lower bound 0.07**. That bin holds steps where the real
 temperature fell in the lowest tenth of the forecast range; too few of them means the
-forecast puts slightly too much weight on low temperatures (a low tail a little too wide, or forecasts a little low; the run does not say which). Under section 7 a single failed gated
+forecast puts slightly too much weight on low temperatures (a low tail a little too wide, or forecasts a little low; the run does not say which). Under section 6 a single failed gated
 statistic means not calibrated, so the verdict is HELD_OUT_FAIL. The margin is small
 and is recorded here only as description; it does not change the verdict.
 
