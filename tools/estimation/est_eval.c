@@ -251,6 +251,13 @@ static void js(FILE *fp, const char *s)
     }
     fputc('"', fp);
 }
+/* est-json-1: a receipt never holds inf or nan; a non-finite number is written as null */
+static const char *numstr(double v, char *b)
+{
+    if (isfinite(v)) snprintf(b, 40, "%.17g", v); else snprintf(b, 40, "null");
+    return b;
+}
+#define N17(v) numstr((v), (char[40]){ 0 })
 static void jd(FILE *fp, const char *k, double v)
 {
     if (isfinite(v)) fprintf(fp, "\"%s\": %.17g", k, v); else fprintf(fp, "\"%s\": null", k);
@@ -258,19 +265,19 @@ static void jd(FILE *fp, const char *k, double v)
 
 static void emit_model(FILE *fp, int m, double q, double r, double ll, const est_mix *mx, const model_stats *s, int last)
 {
-    fprintf(fp, "    \"M%d\": {\n      \"q\": %.17g, \"r\": %.17g, \"fit_loglik\": %.17g,\n", m, q, r, ll);
+    fprintf(fp, "    \"M%d\": {\n      \"q\": %s, \"r\": %s, \"fit_loglik\": %s,\n", m, N17(q), N17(r), N17(ll));
     if (mx) {
         fprintf(fp, "      \"predictive_shape\": {\"kind\": \"gaussian_scale_mixture\", \"k\": %u, \"w\": [", mx->k);
-        for (uint32_t j = 0; j < mx->k; j++) fprintf(fp, "%s%.17g", j ? ", " : "", mx->w[j]);
+        for (uint32_t j = 0; j < mx->k; j++) fprintf(fp, "%s%s", j ? ", " : "", N17(mx->w[j]));
         fprintf(fp, "], \"v\": [");
-        for (uint32_t j = 0; j < mx->k; j++) fprintf(fp, "%s%.17g", j ? ", " : "", mx->v[j]);
+        for (uint32_t j = 0; j < mx->k; j++) fprintf(fp, "%s%s", j ? ", " : "", N17(mx->v[j]));
         fprintf(fp, "]},\n");
     }
     fprintf(fp, "      \"samples\": %zu, \"included_logical_span_ns\": [%lld, %lld],\n", s->n, (long long)s->tmin_ns, (long long)s->tmax_ns);
     const char *nm[3] = { "50", "80", "95" };
     for (int k = 0; k < 3; k++) {
-        fprintf(fp, "      \"coverage_%s\": {\"value\": %.17g, \"wilson95\": [%.17g, %.17g], \"pass\": %s},\n",
-                nm[k], s->cov[k], s->wlo[k], s->whi[k], b(s->ok_cov[k]));
+        fprintf(fp, "      \"coverage_%s\": {\"value\": %s, \"wilson95\": [%s, %s], \"pass\": %s},\n",
+                nm[k], N17(s->cov[k]), N17(s->wlo[k]), N17(s->whi[k]), b(s->ok_cov[k]));
     }
     fprintf(fp, "      \"mean_nis\": {"); jd(fp, "value", s->mean_nis); fprintf(fp, ", \"pass\": %s},\n", b(s->ok_nis));
     fprintf(fp, "      \"standardized_bias\": {"); jd(fp, "value", s->bias); fprintf(fp, ", \"pass\": %s},\n", b(s->ok_bias));
@@ -278,15 +285,15 @@ static void emit_model(FILE *fp, int m, double q, double r, double ll, const est
     fprintf(fp, "      \"ljung_box_q10_reported_only\": "); if (isfinite(s->ljung_box10)) fprintf(fp, "%.17g", s->ljung_box10); else fprintf(fp, "null");
     fprintf(fp, ",\n      \"quarters_coverage95\": [\n");
     for (int q = 0; q < 4; q++)
-        fprintf(fp, "        {\"n\": %zu, \"value\": %.17g, \"pass\": %s}%s\n", s->qn[q], s->qcov[q], b(s->ok_q[q]), q < 3 ? "," : "");
+        fprintf(fp, "        {\"n\": %zu, \"value\": %s, \"pass\": %s}%s\n", s->qn[q], N17(s->qcov[q]), b(s->ok_q[q]), q < 3 ? "," : "");
     fprintf(fp, "      ],\n      \"regime_coverage95\": {\n");
-    fprintf(fp, "        \"idle\": {\"n\": %zu, \"value\": %.17g, \"gated\": %s, \"pass\": %s},\n", s->regime_n[0], s->regime_cov[0], b(s->regime_n[0] >= 100), b(s->ok_regime[0]));
-    fprintf(fp, "        \"in_trial\": {\"n\": %zu, \"value\": %.17g, \"gated\": %s, \"pass\": %s}\n      },\n", s->regime_n[1], s->regime_cov[1], b(s->regime_n[1] >= 100), b(s->ok_regime[1]));
-    fprintf(fp, "      \"ten_step_coverage95\": {\"n\": %zu, \"value\": %.17g, \"wilson95\": [%.17g, %.17g], \"pass\": %s},\n", s->ten_n, s->ten_cov, s->ten_lo, s->ten_hi, b(s->ok_ten));
+    fprintf(fp, "        \"idle\": {\"n\": %zu, \"value\": %s, \"gated\": %s, \"pass\": %s},\n", s->regime_n[0], N17(s->regime_cov[0]), b(s->regime_n[0] >= 100), b(s->ok_regime[0]));
+    fprintf(fp, "        \"in_trial\": {\"n\": %zu, \"value\": %s, \"gated\": %s, \"pass\": %s}\n      },\n", s->regime_n[1], N17(s->regime_cov[1]), b(s->regime_n[1] >= 100), b(s->ok_regime[1]));
+    fprintf(fp, "      \"ten_step_coverage95\": {\"n\": %zu, \"value\": %s, \"wilson95\": [%s, %s], \"pass\": %s},\n", s->ten_n, N17(s->ten_cov), N17(s->ten_lo), N17(s->ten_hi), b(s->ok_ten));
     fprintf(fp, "      \"log_score_per_step\": "); if (isfinite(s->logscore)) fprintf(fp, "%.17g", s->logscore); else fprintf(fp, "null");
-    fprintf(fp, ",\n      \"rmse_one_step\": %.17g, \"persistence_rmse\": %.17g, \"rmse_no_worse_than_persistence\": %s,\n",
-            s->rmse, s->persist_rmse, b(s->rmse_le_persist));
-    fprintf(fp, "      \"zero_innovation_fraction_extra\": %.17g,\n", s->zero_innov_frac);
+    fprintf(fp, ",\n      \"rmse_one_step\": %s, \"persistence_rmse\": %s, \"rmse_no_worse_than_persistence\": %s,\n",
+            N17(s->rmse), N17(s->persist_rmse), b(s->rmse_le_persist));
+    fprintf(fp, "      \"zero_innovation_fraction_extra\": %s,\n", N17(s->zero_innov_frac));
     fprintf(fp, "      \"calibrated\": %s,\n      \"failed_criteria\": [", b(s->calibrated));
     int first = 1;
 #define FC(cond, name) do { if (!(cond)) { fprintf(fp, "%s\"%s\"", first ? "" : ", ", name); first = 0; } } while (0)

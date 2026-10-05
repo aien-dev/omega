@@ -43,7 +43,7 @@
           "purpose": "Runner for the DUAL applicability experiment: runs the pre-registered campaign and writes result"
         },
         {
-          "digest": "5bf3209bf3f715b5a3059c845b62bbe74e24b04968d3de4ae5ef35ff493a83b2",
+          "digest": "7275d834dca7202ccb816149f1442cb838542f942aae41838dd2dd8c2f986b73",
           "last_commit": "30c65a3",
           "name": "estimation",
           "purpose": "Directory tools/estimation. Purpose not yet described by a human."
@@ -55,15 +55,15 @@
           "purpose": "Directory tools/turing_verify_indep. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:6ed09e33b610372de30ea2d6372b94240127e9acb4d178879cbd5448faab6909",
-      "compiled_at": "2026-10-05T13:50:43Z",
+      "children_root": "sha256:57405fc91be63332c8756bb4a100e272b57e7ed98529228f88480576a334803d",
+      "compiled_at": "2026-10-05T14:00:58Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:59136def1fad3d627f93534c3e5e4a8d93a57c12f10fab5dce0221c6e6c3590b",
+      "digest": "sha256:031db74d83abbabaf8c7f26031f6270c9a5aeaac074039b3d552b45f97ad3682",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 127,
-      "generated_at_commit": "183fdc04306bae459caf82c7370cec0fe96c8887",
-      "source_tree": "sha256:ae4426759c2f3df989c5627665fcdb3461bf45dab9efbf38dfe87c808f340b89"
+      "files": 128,
+      "generated_at_commit": "a81f1ef9ed8349b9ad85f8527fa7b38484b4db75",
+      "source_tree": "sha256:8d367d88fb3f4e4a25a306a75b7ad747a9109955a34954cc0233334820adb0de"
     },
     "owner_lane": "",
     "provenance": {

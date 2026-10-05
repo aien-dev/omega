@@ -855,6 +855,80 @@ void c3_json_str(FILE *fp, const char *s)
     fputc('"', fp);
 }
 
+
+/* ---- strict-JSON receipt numbers (est-json-1) ---- */
+void c3_json_num(FILE *fp, double v)
+{
+    if (isfinite(v)) fprintf(fp, "%.17g", v); else fputs("null", fp);
+}
+
+/* A gated statistic that is not finite is invalid (it also fails its gate: band() sets pass only
+ * for finite values). An ungated one (a regime with too few steps) is merely unmeasured. */
+static int stat_value_state(const c3_stats *st, int i) /* 0 ok, 1 unmeasured, 2 invalid */
+{
+    if (isfinite(st->value[i])) return 0;
+    return st->gated[i] ? 2 : 1;
+}
+
+static int bound_invalid(double b) { return isnan(b); }
+
+/* names (optional) receives the invalid field names; returns how many */
+static size_t stats_invalid_list(const c3_stats *st, int ten_mode, double ls10, char (*names)[56], size_t cap)
+{
+    size_t k = 0;
+#define NOTE(cond, text) do { if (cond) { if (names && k < cap) snprintf(names[k], 56, "%s", text); k++; } } while (0)
+    NOTE(!isfinite(st->logscore), "mean_log_score");
+    NOTE(!isfinite(st->width_mean), "width80_mean_mc");
+    NOTE(!isfinite(st->width_median), "width80_median_mc");
+    NOTE(ten_mode == C3_TEN_MEASURED && !isfinite(ls10), "ten_log_score");
+    for (int i = 0; i < C3_ST_COUNT; i++) {
+        char t[56];
+        snprintf(t, sizeof t, "stats.%s.value", c3_stat_name(i));
+        NOTE(stat_value_state(st, i) == 2, t);
+        snprintf(t, sizeof t, "stats.%s.bound", c3_stat_name(i));
+        NOTE(bound_invalid(st->band_lo[i]) || bound_invalid(st->band_hi[i]), t);
+    }
+#undef NOTE
+    return k;
+}
+
+size_t c3_stats_invalid(const c3_stats *st, int ten_mode, double ls10)
+{
+    return stats_invalid_list(st, ten_mode, ls10, NULL, 0);
+}
+
+size_t c3_json_stats(FILE *o, const char *name, const c3_stats *st, int ten_mode, double ls10)
+{
+    char names[C3_ST_COUNT * 2 + 8][56];
+    size_t bad = stats_invalid_list(st, ten_mode, ls10, names, sizeof names / sizeof names[0]);
+    fprintf(o, "    \"%s\": {\"n\": %zu, \"unscorable\": %zu, \"mean_log_score\": ", name, st->n, st->unscorable);
+    c3_json_num(o, st->logscore);
+    if (ten_mode != C3_TEN_ABSENT) {
+        fputs(", \"ten_log_score\": ", o);
+        c3_json_num(o, ls10);
+        fprintf(o, ", \"ten_log_score_status\": \"%s\"", ten_mode == C3_TEN_UNAVAILABLE ? "unavailable" : isfinite(ls10) ? "ok" : "invalid");
+    }
+    fprintf(o, ", \"calibrated\": %s, \"first_fail\": ", st->calibrated ? "true" : "false");
+    if (st->calibrated) fputs("null", o); else c3_json_str(o, c3_stat_name(st->first_fail));
+    fputs(", \"width80_mean_mc\": ", o); c3_json_num(o, st->width_mean);
+    fputs(", \"width80_median_mc\": ", o); c3_json_num(o, st->width_median);
+    fputs(", \"invalid_fields\": [", o);
+    for (size_t k = 0; k < bad && k < sizeof names / sizeof names[0]; k++) fprintf(o, "%s\"%s\"", k ? ", " : "", names[k]);
+    fputs("], \"stats\": {", o);
+    for (int i = 0; i < C3_ST_COUNT; i++) {
+        static const char *const vs[3] = { "ok", "unmeasured", "invalid" };
+        fprintf(o, "%s\"%s\": {\"value\": ", i ? ", " : "", c3_stat_name(i));
+        c3_json_num(o, st->value[i]);
+        fprintf(o, ", \"value_status\": \"%s\", \"lo\": ", vs[stat_value_state(st, i)]);
+        c3_json_num(o, st->band_lo[i]);
+        fprintf(o, ", \"lo_unbounded\": %s, \"hi\": ", isinf(st->band_lo[i]) ? "true" : "false");
+        c3_json_num(o, st->band_hi[i]);
+        fprintf(o, ", \"hi_unbounded\": %s, \"n\": %zu, \"gated\": %s, \"pass\": %s}", isinf(st->band_hi[i]) ? "true" : "false",
+                (i >= C3_ST_Q0 && i <= C3_ST_TEN) ? st->sub_n[i] : st->n, st->gated[i] ? "true" : "false", st->pass[i] ? "true" : "false");
+    }
+    fputs("}}", o);
+    return bad;
+}
 /* -------------------------------------------------------------- synthetic */
 
 static uint64_t sm64(uint64_t *s)

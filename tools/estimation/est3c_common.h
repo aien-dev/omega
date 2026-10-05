@@ -227,6 +227,18 @@ typedef struct {
 } c3_synth;
 int c3_synth_write(const char *dir, const c3_synth *s);
 void c3_json_str(FILE *fp, const char *s);
+/* Strict-JSON receipt rules (est-json-1, docs/estimation/RECEIPT_JSON.md): a receipt never
+ * contains inf or nan. c3_json_num writes a finite double with %.17g, anything else as null.
+ * c3_json_stats writes one score block: infinite thresholds as null + lo/hi_unbounded true,
+ * unmeasured values as null + a status, and every non-finite MEASURED value as null + listed
+ * in "invalid_fields". c3_stats_invalid counts those invalid fields; a caller must make its
+ * verdict fail when it is non-zero. ten_mode: ABSENT omits the ten-step score field,
+ * UNAVAILABLE writes null + status "unavailable" (a baseline that has none), MEASURED writes
+ * the number, or null + status "invalid" when it is not finite. */
+enum { C3_TEN_ABSENT = 0, C3_TEN_UNAVAILABLE = 1, C3_TEN_MEASURED = 2 };
+void c3_json_num(FILE *fp, double v);
+size_t c3_stats_invalid(const c3_stats *st, int ten_mode, double ls10);
+size_t c3_json_stats(FILE *o, const char *name, const c3_stats *st, int ten_mode, double ls10);
 /* grid search: take a point when it is the first finite one or strictly better
  * (ties keep the earlier point in listed order). */
 int c3_grid_take(int have, double ls, double best);
