@@ -245,7 +245,7 @@ report:;
     rep.mode = audit ? "audit" : "timed";
     rep.passes = passes;
     rep.elapsed_s = elapsed;
-    rep.status = failed ? "EXEC_FAILED" : "OK";
+    rep.status = failed ? "EXEC_FAILED" : "COMPLETE";
     rep.error = failed ? error : NULL;
 
     if (a.report_out) {
