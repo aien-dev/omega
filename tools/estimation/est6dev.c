@@ -106,6 +106,118 @@ static int cmd_pick(int argc, char **argv)
     return 1;
 }
 
+
+/* ------------------------------------------------------------ schedule rule SR-1 (domain separated)
+ * est-v6 section 3 as proposed chains "seed + 1" from each declared seed, which sends H1 (0xD6E6C7) and
+ * H2 (0xD6E6C8) to the same seed 0xD6E6CB (appendix section 3). Rule SR-1 removes that:
+ *   base(label, declared) = splitmix64 output of the state  declared XOR fnv1a64("est6-sched-v1/" label)
+ *   candidate k           = base + k                         (k = 0, 1, 2, ...)
+ *   effective seed        = first candidate whose est_load schedule passes the balance rule, k <= SR1_MAXK
+ * The label is part of the derivation input, so two labels never share a chain. The balance rule is a
+ * property of the schedule alone (no data); the search is bounded and fails closed. A plan with two
+ * identical schedules (or seeds) is refused, never repaired by further search. */
+#define SR1_MAXK 255
+#define SEGMAX 4096
+typedef struct { int level[SEGMAX]; long dur[SEGMAX]; int n; long lv[4]; long total; } sched_t;
+
+static uint64_t fnv1a64(const char *s)
+{
+    uint64_t h = 0xcbf29ce484222325ull;
+    for (; *s; s++) { h ^= (unsigned char)*s; h *= 0x100000001b3ull; }
+    return h;
+}
+
+static void gen_sched(uint64_t seed, long total, sched_t *o)
+{
+    static const int levels[4] = { 0, 6, 12, 18 };
+    uint64_t s = seed; long acc = 0;
+    memset(o, 0, sizeof *o);
+    while (acc < total && o->n < SEGMAX) {
+        int li = (int)(splitmix64(&s) % 4u);
+        long d = 20 + (long)(splitmix64(&s) % 101u);
+        if (acc + d > total) d = total - acc;
+        o->level[o->n] = levels[li]; o->dur[o->n] = d; o->lv[li] += d; acc += d; o->n++;
+    }
+    o->total = acc;
+}
+
+/* required properties: segments sum to the run length; every segment is 20..120 s except a clipped last
+ * one (1..120); each of idle, L6, L12, L18 totals 400..900 s */
+static int sched_props(const sched_t *o, long total, int *balanced)
+{
+    long sum = 0; int ok = 1;
+    for (int i = 0; i < o->n; i++) {
+        sum += o->dur[i];
+        if (o->dur[i] > 120 || o->dur[i] < 1) ok = 0;
+        if (o->dur[i] < 20 && i != o->n - 1) ok = 0;
+    }
+    if (sum != total || o->n >= SEGMAX) ok = 0;
+    *balanced = 1;
+    for (int i = 0; i < 4; i++) if (o->lv[i] < 400 || o->lv[i] > 900) *balanced = 0;
+    return ok;
+}
+
+static uint64_t sr1_base(const char *label, uint64_t declared)
+{
+    char buf[128 + 32];
+    snprintf(buf, sizeof buf, "est6-sched-v1/%.100s", label);
+    uint64_t st = declared ^ fnv1a64(buf);
+    return splitmix64(&st);
+}
+
+/* rule 0 = old (v6 proposal: declared + k), rule 1 = SR-1. Returns k or -1. */
+static int sr_pick(int rule, const char *label, uint64_t declared, long total, uint64_t *eff, sched_t *o)
+{
+    uint64_t base = rule ? sr1_base(label, declared) : declared;
+    for (int k = 0; k <= (rule ? SR1_MAXK : 100000); k++) {
+        int bal;
+        gen_sched(base + (uint64_t)k, total, o);
+        if (sched_props(o, total, &bal) && bal) { *eff = base + (uint64_t)k; return k; }
+    }
+    return -1;
+}
+
+static int same_sched(const sched_t *a, const sched_t *b)
+{
+    if (a->n != b->n) return 0;
+    for (int i = 0; i < a->n; i++) if (a->level[i] != b->level[i] || a->dur[i] != b->dur[i]) return 0;
+    return 1;
+}
+
+/* est6dev plan6 [--rule old|sr1] <seconds> <label>=<declared seed> ... */
+static int cmd_plan6(int argc, char **argv)
+{
+    int rule = 1;
+    if (argc >= 2 && !strcmp(argv[0], "--rule")) {
+        if (!strcmp(argv[1], "old")) rule = 0; else if (!strcmp(argv[1], "sr1")) rule = 1; else { fprintf(stderr, "rule must be old or sr1\n"); return 2; }
+        argc -= 2; argv += 2;
+    }
+    if (argc < 2) { fprintf(stderr, "usage: est6dev plan6 [--rule old|sr1] <seconds> <label>=<seed> ...\n"); return 2; }
+    long total = strtol(argv[0], NULL, 10);
+    if (total <= 0) { fprintf(stderr, "seconds must be > 0\n"); return 2; }
+    int np = argc - 1;
+    static sched_t sc[16]; uint64_t eff[16]; char lab[16][64];
+    if (np > 16) return 2;
+    printf("rule %s seconds %ld\n", rule ? "SR-1" : "OLD(seed+1)", total);
+    for (int i = 0; i < np; i++) {
+        char *eq = strchr(argv[1 + i], '=');
+        if (!eq || eq - argv[1 + i] >= 63) { fprintf(stderr, "bad plan item %s\n", argv[1 + i]); return 2; }
+        memcpy(lab[i], argv[1 + i], (size_t)(eq - argv[1 + i])); lab[i][eq - argv[1 + i]] = 0;
+        uint64_t decl = strtoull(eq + 1, NULL, 0);
+        int k = sr_pick(rule, lab[i], decl, total, &eff[i], &sc[i]);
+        if (k < 0) { printf("label %s declared 0x%llx NO_PASSING_SEED\n", lab[i], (unsigned long long)decl); return 1; }
+        printf("label %s declared 0x%llx effective 0x%llx k %d segments %d idle %ld L6 %ld L12 %ld L18 %ld balance PASS\n",
+               lab[i], (unsigned long long)decl, (unsigned long long)eff[i], k, sc[i].n, sc[i].lv[0], sc[i].lv[1], sc[i].lv[2], sc[i].lv[3]);
+        for (int j = 0; j < sc[i].n; j++) printf("schedule %s %d %d %ld\n", lab[i], j, sc[i].level[j], sc[i].dur[j]);
+    }
+    int bad = 0;
+    for (int i = 0; i < np; i++) for (int j = i + 1; j < np; j++)
+        if (eff[i] == eff[j] || same_sched(&sc[i], &sc[j])) { printf("COLLISION %s %s effective 0x%llx\n", lab[i], lab[j], (unsigned long long)eff[i]); bad = 1; }
+    if (bad) return 1;
+    printf("distinct PASS\n");
+    return 0;
+}
+
 /* ------------------------------------------------------------ one-step G1 PIT trace */
 typedef struct { int64_t t; double flo, fhi, z; } step_t;
 
@@ -493,11 +605,12 @@ static int cmd_g1s(int argc, char **argv)
 
 int main(int argc, char **argv)
 {
-    if (argc < 2) { fprintf(stderr, "usage: est6dev g1pit|g1s|sched|pick ...\n"); return 2; }
+    if (argc < 2) { fprintf(stderr, "usage: est6dev g1pit|g1s|sched|pick|plan6 ...\n"); return 2; }
     if (!strcmp(argv[1], "g1pit")) return cmd_g1pit(argc - 2, argv + 2);
     if (!strcmp(argv[1], "sched")) return cmd_sched(argc - 2, argv + 2);
     if (!strcmp(argv[1], "pick")) return cmd_pick(argc - 2, argv + 2);
+    if (!strcmp(argv[1], "plan6")) return cmd_plan6(argc - 2, argv + 2);
     if (!strcmp(argv[1], "g1s")) return cmd_g1s(argc - 2, argv + 2);
-    fprintf(stderr, "usage: est6dev g1pit|g1s|sched|pick ...\n");
+    fprintf(stderr, "usage: est6dev g1pit|g1s|sched|pick|plan6 ...\n");
     return 2;
 }
