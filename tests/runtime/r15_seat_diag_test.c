@@ -1,7 +1,10 @@
 /* Host-only test of the G15 sampler diagnostics (r15_seat_diag.h). Feeds
  * synthetic sample streams and checks the diagnostics tell a stopped seat
  * from a late sampler from a healthy run. No chip, no threads. */
+#define _POSIX_C_SOURCE 200809L
 #include "r15_seat_diag.h"
+#include "r15_stage_clock.h"
+#include <string.h>
 #include <stdio.h>
 
 static int fails;
@@ -36,6 +39,22 @@ int main(void) {
     d = (SeatDiag){0}; t = 1000000000ull;
     for (int i = 0; i < 1000; i++, t += 1050000u) seat_diag_sample(&d, t, i > 0 && i % 10 != 0, 1u);
     CHECK(d.dead_runs == 100 && d.dead_longest == 1 && d.late_10ms == 0);
+
+    /* stage clock: stamps become per-stage deltas that sum to the total; an unstamped clock writes nothing */
+    {
+        R15StageClock c; char b[512];
+        memset(&c, 0, sizeof c);
+        CHECK(r15_stage_json(&c, b, sizeof b) == 0);
+        c.t[0] = 1000; c.name[0] = "begin"; c.n = 1;
+        CHECK(r15_stage_json(&c, b, sizeof b) == 0);
+        c.t[1] = 1500; c.name[1] = "producers"; c.t[2] = 102000001500ull; c.name[2] = "seat_finish"; c.n = 3;
+        int w = r15_stage_json(&c, b, sizeof b);
+        CHECK(w > 0 && strcmp(b, ",\"teardown\":{\"total_ns\":102000000500,\"stages\":[[\"producers\",500],[\"seat_finish\",102000000000]]}") == 0);
+        R15StageClock f; memset(&f, 0, sizeof f);
+        for (int i = 0; i < R15_STAGE_MAX + 5; i++) r15_stage_mark(&f, "x");
+        CHECK(f.n == R15_STAGE_MAX);
+        CHECK(r15_stage_json(&f, b, 40) == 0);   /* too small a buffer is refused, never truncated */
+    }
 
     printf("failures %d\n", fails);
     return fails != 0;
