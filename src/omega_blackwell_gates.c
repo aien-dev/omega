@@ -144,19 +144,13 @@ static bool test_m17_qmd(void) {
 
 /* Physics checkout is resolved at run time (src/omega_physics_dir.h), never embedded. */
 static bool test_m17_physics_authority(void) {
-    char pd[PATH_MAX], err[OMEGA_PHYSICS_ERR_SIZE], cmd[PATH_MAX + 64];
-    if (!omega_physics_dir_resolve(pd, sizeof(pd), err, sizeof(err))) {
+    char pd[PATH_MAX], err[OMEGA_PHYSICS_ERR_SIZE];
+    /* The run-time dir may differ from the one make checked: require the physics.lock commit and a clean tree. */
+    if (!omega_physics_dir_resolve_pinned(pd, sizeof(pd), 1, err, sizeof(err))) {
         fprintf(stderr, "m17 physics authority: %s\n", err);
         return false;
     }
-    snprintf(cmd, sizeof(cmd), "cd '%s' && git status --porcelain 2>/dev/null", pd);
-    FILE *p = popen(cmd, "r");
-    if (!p) return false;
-    char buf[128];
-    size_t lines = 0;
-    while (fgets(buf, sizeof(buf), p)) lines++;
-    pclose(p);
-    return (lines == 0);
+    return true;
 }
 
 static bool test_m17_native_submit(void) {
@@ -990,7 +984,7 @@ static bool test_m18_gate16_clean_clone(void) {
      * (omega_physics_dir.h) as an absolute path so the copy in /tmp does not fall back to
      * the Makefile default ../physics (= /tmp/physics). Mirrors M19. */
     char physics_dir_resolved[PATH_MAX], physics_err[OMEGA_PHYSICS_ERR_SIZE];
-    if (!omega_physics_dir_resolve(physics_dir_resolved, sizeof(physics_dir_resolved), physics_err, sizeof(physics_err))) {
+    if (!omega_physics_dir_resolve_pinned(physics_dir_resolved, sizeof(physics_dir_resolved), 0, physics_err, sizeof(physics_err))) {
         fprintf(stderr, "%s\n", physics_err);
         return false;
     }

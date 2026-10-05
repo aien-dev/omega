@@ -1791,7 +1791,7 @@ static bool test_m19_gate16_clean_clone(void) {
      * finds the same pinned physics checkout instead of silently falling
      * back to the Makefile's default. */
     char physics_dir_resolved[PATH_MAX], physics_err[OMEGA_PHYSICS_ERR_SIZE];
-    if (!omega_physics_dir_resolve(physics_dir_resolved, sizeof(physics_dir_resolved), physics_err, sizeof(physics_err))) {
+    if (!omega_physics_dir_resolve_pinned(physics_dir_resolved, sizeof(physics_dir_resolved), 0, physics_err, sizeof(physics_err))) {
         fprintf(stderr, "%s\n", physics_err);
         return false;
     }
