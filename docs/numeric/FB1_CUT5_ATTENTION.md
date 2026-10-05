@@ -88,6 +88,14 @@ mutant's. Names come from `omega_gpu_attention_mutant_name` (table checked again
 Negative control: the comparison must reject the oracle with kv heads swapped. Repeat run
 on a cache hit must be bit-identical.
 
+Single vs batched parity and repeat (L6-KV, 2026-10-05): for the 3-sequence batch (padded
+table entries, an empty context, a context truncated by its table) and both shared-prefix
+batches, each sequence is run alone through `omega_gpu_paged_attention_bf16` with the batch's
+rules applied by hand (negatives removed, ctx <= 0 -> 0) and must equal its batched row bit for
+bit; then the batch is called again and must be a kernel cache hit, bit-identical, with the same
+staging counters. A throwaway run comparing each sequence against the neighbouring row failed
+all 11 single-call checks (the check has teeth). Host simulator: 122 checks (was 108).
+
 ## Staging dedupe per launch (OM-2)
 
 The paged path stages the referenced blocks' layer slice into a GPU-uncached staging buffer.
