@@ -1,0 +1,32 @@
+{
+  "schema": "AIEN_RX_R10_OMEGA_FACULTY_V1",
+  "run_id": "20261005T181041Z-c62f47b5ac17",
+  "candidate_commit": "c62f47b5ac178311d7d8f91c4f52a298a1754ec8",
+  "candidate_bound": true,
+  "run_commit": "c62f47b5ac178311d7d8f91c4f52a298a1754ec8",
+  "tree_dirty": false,
+  "aienos_commit": null,
+  "checks": 198,
+  "failures": 0,
+  "test_binary_sha256": "69088809e204b90a421eb1b05a9c7c686cd821ec323d01735c2709c7a6d9993e",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64"},
+  "cpus": {"placed_on": "5,6,7,8,9,15,16,17,18,19", "midr_part": "0xd85"},
+  "hardware_scope": "host processor only: Omega's native AArch64 matvec realizations run on this CPU; no graphics processor is used",
+  "operation": "omega_matvec (M12), uint64 wrap-around, regime 64x256",
+  "threshold": {"calls_at_search": 64, "ns_at_search": 315475},
+  "requests_served_during_optimization": 19,
+  "requests_total": 304,
+  "requests_on_realization_after_selection": 64,
+  "candidates": [
+    {"kind": "matvec_scalar", "verify_checks": 527, "verify_failures": 0, "candidate_ps_per_call": 4733275, "reference_ps_per_call": 4770793},
+    {"kind": "matvec_unroll2", "verify_checks": 527, "verify_failures": 0, "candidate_ps_per_call": 4403146, "reference_ps_per_call": 4767634},
+    {"kind": "matvec_unroll4_dual", "verify_checks": 527, "verify_failures": 0, "candidate_ps_per_call": 4947536, "reference_ps_per_call": 4770756},
+    {"kind": "matvec_quad4", "verify_checks": 527, "verify_failures": 0, "candidate_ps_per_call": 2689585, "reference_ps_per_call": 4765317}
+  ],
+  "selected": {"kind": "matvec_quad4", "ps_per_call": 2689585, "reference_ps_per_call": 4765317},
+  "gates": {
+    "R10_CONTINUOUS_OMEGA": "PASS",
+    "production_adopted_realization": true,
+    "not_claimed": ["R8", "R11", "R13", "R10 on the graphics processor"]
+  }
+}

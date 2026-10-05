@@ -1,0 +1,30 @@
+    PID USER     %CPU %MEM     ELAPSED COMMAND
+2326226 drakest+  3.8  0.5    04:32:22 2.1.289
+1463296 drakest+  2.9  0.4    16:50:12 2.1.289
+   6478 drakest+  2.5  1.1  2-00:00:53 python
+ 208089 root      2.3  0.0       01:08 kworker/6:2-events
+ 222462 root      1.8  0.0       00:53 kworker/5:1-mm_percpu_wq
+ 198183 root      1.5  0.0       01:36 kworker/9:0-events
+ 186925 root      1.5  0.0       03:45 kworker/15:1-events
+  76792 root      1.4  0.0       15:58 kworker/6:0-cgroup_free
+4156361 root      1.2  0.0       33:28 kworker/15:3-events_long
+ 241874 root      1.1  0.0       00:01 (sd-mkdcreds)
+   4255 472       1.1  0.1  2-00:01:11 grafana
+ 237459 drakest+  1.0  0.0       00:27 MainThread
+4072038 root      1.0  0.0       50:18 kworker/16:1-events
+ 141836 root      1.0  0.0       09:24 kworker/19:0-events
+4083090 root      0.8  0.0       46:10 kworker/5:3-events
+ 142742 root      0.8  0.0       09:12 kworker/15:0-cgroup_free
+4133181 root      0.7  0.0       35:24 kworker/7:2-events
+ 237184 drakest+  0.7  0.0       00:32 MainThread
+3952606 drakest+  0.7  0.0    21:13:14 agent-archive
+  21538 root      0.7  0.0       23:59 kworker/9:2-mm_percpu_wq
+ 237407 drakest+  0.6  0.0       00:28 npm exec mcp-re
+ 236989 drakest+  0.6  0.0       00:32 npm exec @upsta
+  48651 root      0.6  0.0       21:20 kworker/8:1-events
+ 236990 drakest+  0.5  0.0       00:32 MainThread
+ 236928 drakest+  0.5  0.1       00:32 2.1.289
+ 153353 root      0.5  0.0       06:48 kworker/5:0-tpm_dev_wq
+3730148 drakest+  0.5  0.1    01:50:30 claude
+ 994240 drakest+  0.5  0.1  1-19:03:05 claude
+   4468 root      0.4  0.1  2-00:01:10 uptime-kuma

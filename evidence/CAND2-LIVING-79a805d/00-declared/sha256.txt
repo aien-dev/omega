@@ -1,0 +1,3 @@
+8a6e06dac775ed2e5c17b3a5c5ba96d80f457654803755f00c840110a56585cf  /home/drakestapleton/workspace/cand3-campaign/cand2/DECLARED-ATTEMPTS.md
+6a12caa6d4b98426c96c7224ab7836f548a5ae4db575088e2af1fb2422150ca2  /home/drakestapleton/workspace/cand3-campaign/cand2/cand2_ladder.sh
+3ca8ef88a5db16ab3a7ead77bcbea5a6eac7c6dafb825396d95d5194239469af  /home/drakestapleton/workspace/cand3-campaign/cand2/run_window.sh

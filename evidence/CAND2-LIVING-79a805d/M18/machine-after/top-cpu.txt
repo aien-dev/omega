@@ -1,0 +1,30 @@
+    PID USER     %CPU %MEM     ELAPSED COMMAND
+2326226 drakest+  3.8  0.5    04:41:15 2.1.289
+1463296 drakest+  2.9  0.4    16:59:05 2.1.289
+   6478 drakest+  2.5  1.1  2-00:09:46 python
+ 198183 root      1.4  0.0       10:28 kworker/9:0-events
+4072038 root      1.1  0.0       59:11 kworker/16:1-mm_percpu_wq
+ 266873 root      1.1  0.0       04:30 kworker/5:2-mm_percpu_wq
+   4255 472       1.1  0.1  2-00:10:03 grafana
+ 141836 root      1.0  0.0       18:16 kworker/19:0-cgroup_release
+ 181600 root      0.8  0.0       13:02 kworker/7:1-mm_percpu_wq
+ 285228 root      0.8  0.0       03:11 kworker/18:0-events
+ 153353 root      0.8  0.0       15:40 kworker/5:0-cgroup_release
+  48651 root      0.7  0.0       30:13 kworker/8:1-events
+ 301444 root      0.7  0.0       00:54 kworker/8:0-events
+3952606 drakest+  0.7  0.0    21:22:07 agent-archive
+ 186925 root      0.7  0.0       12:38 kworker/15:1-cgroup_release
+ 153410 root      0.6  0.0       15:39 kworker/6:1-mm_percpu_wq
+ 208089 root      0.6  0.0       10:01 kworker/6:2-mm_percpu_wq
+  72208 root      0.5  0.0       26:09 kworker/18:1-cgroup_free
+ 260626 root      0.5  0.0       06:03 kworker/15:2-mm_percpu_wq
+3730219 drakest+  0.5  0.4    01:59:20 2.1.289
+ 104355 root      0.5  0.0       22:19 kworker/17:1-events
+3730148 drakest+  0.5  0.1    01:59:23 claude
+ 994240 drakest+  0.5  0.1  1-19:11:57 claude
+ 142742 root      0.5  0.0       18:04 kworker/15:0-cgroup_free
+ 250502 root      0.4  0.0       07:21 kworker/7:0-events
+   4468 root      0.4  0.1  2-00:10:03 uptime-kuma
+ 294305 root      0.4  0.0       02:15 kworker/3:2-events
+1563690 drakest+  0.3  0.0  1-17:26:55 2.1.289
+1555242 drakest+  0.3  0.0  1-17:29:28 2.1.289

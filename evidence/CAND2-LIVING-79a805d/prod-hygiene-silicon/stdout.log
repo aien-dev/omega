@@ -1,0 +1,5 @@
+sh tools/r16_prod_hygiene.sh silicon build/rx_r13_living_silicon
+R16 prod   R13 ARGUS: observing; observe and record, received 2 events, 1 authority observations, 0 findings, 0 ingest errors
+R16 prod   R13 ARGUS probe: ARGUS_OBSERVING=PASS
+R16 prod: link map clean, ARGUS linked (rx_argus, authority observer wrap, argus_core, argus_detect); ARGUS probe observing; refuses to run unobserved
+R16 prod: PROD_HYGIENE=PASS mode=silicon binary=rx_r13_living_silicon
