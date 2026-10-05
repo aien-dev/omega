@@ -1,7 +1,7 @@
 # CAND2-PREP-PATHFIX-20261005: omegatool no longer depends on the checkout path
 
 Host only (CPU), no chip, no QEMU. Branch `cand3/omegatool-path`, omega code commit
-`d70bc4a9a53c542318aa0d6cecd1256e479115e6` (parent a386d65 = main after #293). Later commits on the
+`9384895bdd08e6e8f6944d671fa0e3102b7d037c` (main a386d65 + this branch). Later commits on the
 branch add only this evidence directory and regenerated crumbs (no build input changes).
 
 ## Root cause (source: CAND1-PATH2-2eec75b + baseline build, 2026-10-05)
@@ -34,7 +34,7 @@ Two checkout locations (build-A, build-B/nested/dir), A built twice, B once, fre
 head above), physics 6d7cf0d, aienos bbad5e4, sovereign-core 2eec75b; fresh empty CARGO_HOME per location
 (`find "$CARGO_HOME" -mindepth 1 | wc -l` = 0 before `cargo fetch --locked`, see summary.txt). Same recipe as
 CAND1-RECON. Result: 9/9 artifacts SAME across 3 builds (table in summary.txt, per-build rows in digests.tsv);
-omegatool = 6cd61d1099471f6b69340363f182bb29603faafb103fed918ebc062202294652 in both locations and both repeats,
+omegatool = 5a3084278ce62868b3655978bc161a0c635b368bddc588963849dd2c5cb343cd in both locations and both repeats,
 and contains neither checkout path nor the physics path.
 Deviation: sovereign-core's `omega.lock` pins CAND-1 omega cb06d08 and its build refuses another omega, so the
 three Rust artifacts are linked against a clean clone of the pinned omega (`omega-pinned`); the fixed omega's
@@ -44,3 +44,13 @@ mojo reported by the script but not used by these builds).
 Logs are truncated to the last 40 lines (full logs in scratch, not committed).
 
 CAND-1 records are untouched. This changes a candidate binary: a new candidate (CAND-2) is required.
+
+## Review round 1 (coordinator: M17 authority gap)
+The first version (d70bc4a, omegatool 6cd61d10...) only probed `m16/m16_native.h` and a clean `git status`, so an
+unrelated clean repo or a non-git directory passed. Now `omega_physics_dir_verify` (src/omega_physics_dir.h) requires
+`git -C <dir> rev-parse HEAD` == first line of ./physics.lock (40 hex, cwd-relative like src/omega_evidence.c) and, for
+M17, `git status --porcelain` to succeed and be empty; any git error refuses. M18/M19 check the pin only (their nested
+make re-checks it). Negative tests in test-omegatool-path: unrelated clean repo, non-repo dir, dirty pinned checkout,
+malformed/missing lock refused; correct clean checkout accepted. The old check (emulated in the test as `legacy_m17`)
+accepts the unrelated repo and the non-repo dir (red), the new one refuses both. The digests above are from the re-run
+at 9384895 (omegatool changed, all other 8 unchanged).
