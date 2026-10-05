@@ -176,7 +176,7 @@ static void test_formatting(void) {
     fclose(f);
     CHECK(strstr(mem, "\"schema\": \"aien-prime-race/impl-report/v1\"") != NULL, "schema");
     CHECK(strstr(mem, "\"label\": \"aien-cpu-c-base\"") != NULL, "label");
-    CHECK(strstr(mem, "\"status\": \"OK\"") != NULL && strstr(mem, "\"error\": null") != NULL, "status/error");
+    CHECK(strstr(mem, "\"status\": \"COMPLETE\"") != NULL && strstr(mem, "\"error\": null") != NULL, "status/error");
     CHECK(strstr(mem, "\"passes\": 7") != NULL && strstr(mem, "\"elapsed_s\": 5.250000") != NULL, "passes/elapsed");
     CHECK(strstr(mem, "\"environment\": \"linux-host-cpu\"") != NULL, "environment");
     CHECK(strstr(mem, "\"build\": {\"source_commit\"") != NULL, "build");
