@@ -1,0 +1,2 @@
+name, driver_version, pci.bus_id, uuid, temperature.gpu, utilization.gpu [%], clocks.current.sm [MHz]
+NVIDIA GB10, 580.173.02, 0000000F:01:00.0, GPU-fb8e53f0-3207-e89b-d02f-acdfe2695b59, 73, 93 %, 2463 MHz

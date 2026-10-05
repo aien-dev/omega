@@ -1,0 +1,49 @@
+{
+  "gate": "COMPOSITION-2",
+  "commit": "80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4",
+  "verdict": "PASS",
+  "machine_id": "c7f28246ec8678ea8ad48dee6c5af6950e32dfa9ecdcd50d71045cd0a84c280b",
+  "tier": "GPU",
+  "chip": {"device": "/dev/nvidia0", "target": "GB10 sm_121", "path": "m16_native + nvrm (no CUDA)", "op": "INT32 matmul 16x2x16, C[0][0] = w0*x + w1",
+    "kernel_code_digest": "25aed84c114e823d1e0dc26b155bedf269d350d564368867440793bc2cdd8583", "kernel_insns": 32, "executions_skill_a": 2, "executions_skill_b": 2, "failures": 0, "out_of_range": 0, "elapsed_ns_total": 1285436,
+    "completion_marker": 1145324612, "intermediate_semaphore": 6, "zero_libcuda_linkage": 1, "zero_cuda_symbols": 1, "zero_libcuda_runtime": 1, "chip_ok": 1},
+  "skills": [{"id": 7, "version": 1, "digest": "a701000000000000000000000000000000000000000000000000000000000000"}, {"id": 8, "version": 1, "digest": "b802000000000000000000000000000000000000000000000000000000000000"}],
+  "record_digest": ["1321279f8faf84107505f15c834940c0e254766164ac3109b01a85b4b8491fe0", "1321279f8faf84107505f15c834940c0e254766164ac3109b01a85b4b8491fe0"],
+  "winner_digest": ["0636667cc32f0bc4303af8765a1aca1d2cd74b48e95fcd476457f2989cef65da", "0636667cc32f0bc4303af8765a1aca1d2cd74b48e95fcd476457f2989cef65da"],
+  "runs": [
+    {"run": 0, "old_ref": "0/0", "new_ref": "2/0", "candidate_refs": ["1/0", "2/0"], "goal_crumb": 6, "claims": [16, 17], "evidence": 18, "promotion": 19,
+     "steps": [
+       {"step": 1, "name": "canonical_machine_id", "result": "PASS", "detail": "stored=1 foreign_open=-27"},
+       {"step": 2, "name": "register_capability_and_pinned_skill", "result": "PASS", "detail": "skill_a_caps=1 skill_b_caps=1"},
+       {"step": 3, "name": "create_world", "result": "PASS", "detail": "state_ref=0/0 attached=1"},
+       {"step": 4, "name": "goal_needs_capability", "result": "PASS", "detail": "alternatives=2 skills=7,8 goal_crumb=6"},
+       {"step": 5, "name": "fork_alternatives", "result": "PASS", "detail": "cand0=1/0 cand1=2/0"},
+       {"step": 6, "name": "one_fails_contract", "result": "PASS", "detail": "passmask=2 (bit k = candidate k met the contract)"},
+       {"step": 7, "name": "select_survivor", "result": "PASS", "detail": "winner=1 result=16"},
+       {"step": 8, "name": "commit_world", "result": "PASS", "detail": "outcome=1 new_ref=2/0"},
+       {"step": 9, "name": "loser_not_externalized", "result": "PASS", "detail": "loser_stale=1 loser_promotions=0 loser_admission=20"},
+       {"step": 10, "name": "seal_winner_reclaim_losers", "result": "PASS", "detail": "winner_sealed=1 old_stale=1 reclaimed=1 live=1"},
+       {"step": 11, "name": "recorded_in_cortex", "result": "PASS", "detail": "claims=16,17 evidence=18 promotion=19"},
+       {"step": 12, "name": "close_reopen_replay", "result": "PASS", "detail": "records=25 state=2/0 content_match=1 rolled_back=0"},
+       {"step": 13, "name": "recall_and_provenance", "result": "PASS", "detail": "recalled=1 provenance=13 goal=1 candidate=1"},
+       {"step": 14, "name": "deterministic_rerun", "result": "PASS", "detail": "record_digest_equal=1 winner_digest_equal=1 both_runs_pass=1"}
+     ]},
+    {"run": 1, "old_ref": "0/0", "new_ref": "2/0", "candidate_refs": ["1/0", "2/0"], "goal_crumb": 6, "claims": [16, 17], "evidence": 18, "promotion": 19,
+     "steps": [
+       {"step": 1, "name": "canonical_machine_id", "result": "PASS", "detail": "stored=1 foreign_open=-27"},
+       {"step": 2, "name": "register_capability_and_pinned_skill", "result": "PASS", "detail": "skill_a_caps=1 skill_b_caps=1"},
+       {"step": 3, "name": "create_world", "result": "PASS", "detail": "state_ref=0/0 attached=1"},
+       {"step": 4, "name": "goal_needs_capability", "result": "PASS", "detail": "alternatives=2 skills=7,8 goal_crumb=6"},
+       {"step": 5, "name": "fork_alternatives", "result": "PASS", "detail": "cand0=1/0 cand1=2/0"},
+       {"step": 6, "name": "one_fails_contract", "result": "PASS", "detail": "passmask=2 (bit k = candidate k met the contract)"},
+       {"step": 7, "name": "select_survivor", "result": "PASS", "detail": "winner=1 result=16"},
+       {"step": 8, "name": "commit_world", "result": "PASS", "detail": "outcome=1 new_ref=2/0"},
+       {"step": 9, "name": "loser_not_externalized", "result": "PASS", "detail": "loser_stale=1 loser_promotions=0 loser_admission=20"},
+       {"step": 10, "name": "seal_winner_reclaim_losers", "result": "PASS", "detail": "winner_sealed=1 old_stale=1 reclaimed=1 live=1"},
+       {"step": 11, "name": "recorded_in_cortex", "result": "PASS", "detail": "claims=16,17 evidence=18 promotion=19"},
+       {"step": 12, "name": "close_reopen_replay", "result": "PASS", "detail": "records=25 state=2/0 content_match=1 rolled_back=0"},
+       {"step": 13, "name": "recall_and_provenance", "result": "PASS", "detail": "recalled=1 provenance=13 goal=1 candidate=1"},
+       {"step": 14, "name": "deterministic_rerun", "result": "PASS", "detail": "record_digest_equal=1 winner_digest_equal=1 both_runs_pass=1"}
+     ]}
+  ]
+}

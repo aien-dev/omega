@@ -1,0 +1,12 @@
+SCANNED omega HEAD cb06d081901c03063945a99ffed1c58d33397e9c (.)
+WARN omega: scanned HEAD cb06d081901c differs from map SHA ddf200ddece95a6461a13239f15c5af290c31d35
+SCANNED aien-sovereign-core HEAD 2eec75b08aeb8f9d11f950070e13f6c2c046cf24 (/home/drakestapleton/workspace/overnight-1005/cand1-survey/aien-sovereign-core)
+WARN aien-sovereign-core: scanned HEAD 2eec75b08aeb differs from map SHA 69340c7320e177fe21a40086a23c1a50c990ff6c
+SCANNED aegis-runtime HEAD f4e870953a466bb1cf68f1d88285929024cf1ba9 (/home/drakestapleton/workspace/overnight-1005/cand1-survey/aegis-runtime)
+SCANNED aienos HEAD bbad5e4250e57f8cbd1be4cf1390109aa65ef92c (/home/drakestapleton/workspace/overnight-1005/cand1-survey/aienos)
+SCANNED physics HEAD 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf (/home/drakestapleton/workspace/overnight-1005/cand1-survey/physics)
+UNCLASSIFIED aien-sovereign-core crates/aien-runtime/tests/runtime_end_to_end_tests.rs:347 [run_decode_batch] named:run_until_complete :: .run_until_complete(&mut runner, 4 * (max_tokens + 4))
+UNCLASSIFIED aien-sovereign-core crates/aien-runtime/tests/runtime_end_to_end_tests.rs:351 [run_decode_batch] for:body:recv :: for mut rx in sinks {
+UNCLASSIFIED aien-sovereign-core crates/aien-runtime/tests/runtime_end_to_end_tests.rs:353 [run_decode_batch] while:body:recv :: while let Ok(event) = rx.try_recv() {
+UNCLASSIFIED aien-sovereign-core crates/aien-runtime/tests/swarm_prefill_gate_test.rs:912 [sampled_swarm_run] while:body:scheduler :: while (spine.scheduler.running_count() > 0 || spine.scheduler.waiting_count() > 0)
+R16 loop inventory: sites=513 unclassified=4 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> FAIL

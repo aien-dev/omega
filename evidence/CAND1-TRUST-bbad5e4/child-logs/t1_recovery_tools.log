@@ -1,0 +1,52 @@
+Building standalone recovery initrd...
+Building standalone recovery root in /tmp/recovery-initrd-build.Tn7Uxb...
+Packaged 16 kernel modules for 7.0.0-1019-nvidia
+Packaging standalone initrd to /tmp/tmp.QH4b3wXs9J/aienos-recovery-standalone-initrd.img...
+81696 blocks
+Standalone recovery initrd build complete: 16M	/tmp/tmp.QH4b3wXs9J/aienos-recovery-standalone-initrd.img
+Extracting /tmp/tmp.QH4b3wXs9J/aienos-recovery-standalone-initrd.img...
+
+-- required tools for NVMe root mount --
+PASS  busybox present
+PASS  mount present
+PASS  lsblk present
+PASS  blkid present
+PASS  cryptsetup present
+PASS  nvme kernel module packaged
+PASS  dm-crypt kernel module packaged
+
+-- required tools for /boot/efi repair --
+PASS  fsck.vfat present
+PASS  mkfs.vfat present
+PASS  fsck.ext4 present
+PASS  efibootmgr present
+
+-- required tools for boot-entry restore --
+PASS  efibootmgr present (boot entries)
+PASS  chroot present
+PASS  findmnt present for attended evidence collector
+PASS  attended evidence collector packaged on media
+
+-- TRUST-1 Gate 1 items 8, 10, 11-12: TPM, signatures, recovery unlock --
+PASS  tpm2_pcrread present
+PASS  tpm2 device transport library packaged (dlopen, not seen by ldd)
+PASS  sbverify present
+PASS  age present
+PASS  gocryptfs present
+PASS  fusermount3 present
+PASS  gocryptfs: every shared library it needs is inside the image
+PASS  age: every shared library it needs is inside the image
+PASS  sbverify: every shared library it needs is inside the image
+PASS  tpm2_pcrread: every shared library it needs is inside the image
+PASS  cryptsetup: every shared library it needs is inside the image
+PASS  fusermount3: every shared library it needs is inside the image
+PASS  efibootmgr: every shared library it needs is inside the image
+PASS  tpm2 device transport: its libraries are inside the image
+
+-- init hooks --
+PASS  init is executable
+PASS  init keeps zero-disk test mode (aienos.test=1)
+PASS  init reports EFI boot entries (efibootmgr)
+PASS  init drops into an interactive maintenance shell
+
+RECOVERY_TOOLS: PASS (initrd ships mount, EFI repair, and boot-entry restore capability)

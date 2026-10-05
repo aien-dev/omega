@@ -1,0 +1,24 @@
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+qemu exit 0 after 6 s (commit bbad5e4250e5, -cpu max)
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10075 avg 10183 max 10462)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  cooperative threads interleaved
+PASS  EL0 capability and fault isolation
+PASS  timer-driven preemption across runnable tasks
+PASS  deterministic MADT placement of preempt workers
+PASS  typed IPC with attenuated revocable delegation
+AIENOS_CK_M3: PASS
+AIENOS_CK_M1: PASS

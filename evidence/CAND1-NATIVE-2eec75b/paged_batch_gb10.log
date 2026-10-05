@@ -1,0 +1,10 @@
+
+running 2 tests
+test decode_batch_reaches_paged_attention_batch_on_reference ... OP_CALLS rmsnorm:126,apply_rope:54,matmul_vec:0,matmul_batch:117,swiglu:54,gqa_attention:24,paged_attention:0,paged_attention_batch:10,compute_logits:3 max_batch_seqs=3 emitted=[6, 6, 6]
+ok
+test gb10_decode_batch_runs_paged_attention_batch_natively ... GB10_PAGED_BATCH OP_CALLS rmsnorm:126,apply_rope:54,matmul_vec:0,matmul_batch:117,swiglu:54,gqa_attention:24,paged_attention:0,paged_attention_batch:10,compute_logits:3 max_batch_seqs=3 emitted=[6, 6, 6] chip_calls=408 chip_errors=0 fallback_count=0 report=OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[] last_error=""
+GB10_PAGED_BATCH verdict: PASS
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.78s
+

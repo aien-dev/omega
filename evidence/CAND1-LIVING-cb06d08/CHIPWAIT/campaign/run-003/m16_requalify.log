@@ -1,0 +1,21 @@
+=== M16 CORRECTIVE REQUALIFICATION: CONTROLLED CAUSALITY TRANSACTION ===
+[OBSERVED] RM client opened: GPU minor=0 compute_class=0xcec0 sm_version=0xa04
+[OBSERVED] Channel initialized: token=0x40000012 gpfifo=0xcf00000a fifo_va=0x1000000000 doorbell=0xef683af14090
+[OBSERVED] Coherent marker allocated at VA=0x1004111000 CPU=0x1004111000 (initial=0x00000000)
+
+--- STEP 1: NEGATIVE CONTROL (DOORBELL WITHHELD) ---
+[OBSERVED] Enqueued 8 words to GPFIFO index 0. Withholding doorbell notification...
+[OBSERVED] Marker after 100ms without doorbell: 0x00000000 (expected 0x00000000)
+NEGATIVE_CONTROL_PASS: Marker strictly remained 0x00000000 while doorbell was withheld.
+
+--- STEP 2: POSITIVE STIMULUS (DOORBELL RUNG) ---
+[OBSERVED] Storing work-submit token 0x40000012 to doorbell MMIO at 0xef683af14090...
+[OBSERVED] Marker after doorbell rung: 0x16c0ffee (expected 0x16c0ffee)
+POSITIVE_CONTROL_PASS: Marker successfully updated to 0x16c0ffee upon doorbell store.
+
+--- STEP 3: RUNTIME LIBCUDA AUDIT ---
+[OBSERVED] libcuda.so / libcudart.so present in /proc/self/maps: NO (PASS)
+NO_LIBCUDA_PASS: Zero libcuda / libcudart mappings present in live process.
+
+CAUSALITY_VERIFICATION_PASS: Doorbell causality strictly confirmed.
+M16_REQUALIFICATION_PASS: Milestone 16 native execution verified.

@@ -1,0 +1,3 @@
+-rwxrwxr-x 1 drakestapleton drakestapleton 147192 Oct  5 00:57 build/cand1/gpu_matmul_api_test
+-rw-rw-r-- 1 drakestapleton drakestapleton 613674 Oct  5 00:57 build/cand1/libomega_gpu.a
+-rwxrwxr-x 1 drakestapleton drakestapleton 436128 Oct  5 00:57 build/cand1/rx_composition_gate_gpu

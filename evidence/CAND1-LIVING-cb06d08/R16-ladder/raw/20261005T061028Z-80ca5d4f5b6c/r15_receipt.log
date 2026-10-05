@@ -1,0 +1,77 @@
+tests/r15_receipt_test.sh
+ok   writer exits 1 (FAIL outcome)
+ok   receipt file written
+ok   named by its own SHA-256
+ok   field schema present
+ok   field run_id present
+ok   field outcome present
+ok   field outcome_reasons present
+ok   field candidate_commit present
+ok   field run_commit present
+ok   field candidate_bound present
+ok   field tree_dirty present
+ok   field silicon_observed present
+ok   field aienos_commit present
+ok   field physics_commit present
+ok   field benchmark_binaries_sha256 present
+ok   field raw_digest_sha256 present
+ok   field reducer_source_sha256 present
+ok   field legacy_status present
+ok   field seq_selector_symbol present
+ok   field nodigest_macro present
+ok   field gates present
+ok   field correctness_reruns present
+ok   field regressions present
+ok   field limits present
+ok   field not_claimed present
+ok   field hardware_identity present
+ok   field summary present
+ok   field hostname present
+ok   field machine_id_sha256 present
+ok   field kernel present
+ok   field midr present
+ok   field governor_freq present
+ok   field mem_kb present
+ok   field gpu present
+ok   field secure_boot present
+ok   field lockdown present
+ok   field perf_event_paranoid present
+ok   field thermal_mc present
+ok   field compiler present
+ok   field binaries present
+ok   field metrics present
+ok   field comparisons present
+ok   field all_gates_pass present
+ok   metric m1 present
+ok   metric m2 present
+ok   metric m3 present
+ok   metric m4 present
+ok   metric m5 present
+ok   metric m6 present
+ok   metric m7 present
+ok   metric m8 present
+ok   metric m9 present
+ok   metric m10 present
+ok   metric m11 present
+ok   metric m12_13_14_15 present
+ok   metric m16 present
+ok   metric m17 present
+ok   schema AIEN_RX_R15_REACTION_PERFORMANCE_V1
+ok   outcome == FAIL
+ok   reason names G10
+ok   reason names blank aienos_commit
+ok   reason names missing reruns
+ok   G10 listed under regressions
+ok   run commit ad8e1f2, candidate-bound
+ok   raw digest matches reducer
+ok   16 gates present
+ok   valid JSON (jq)
+ok   all gates PASS but no reruns -> still FAIL
+ok   all gates PASS + reruns PASS -> PASS
+ok   wrong candidate -> FAIL
+ok   nodigest flag checked from raw
+ok   notes: still PASS
+ok   notes: regression listed
+ok   notes: limit listed
+ok   NODIGEST process with digests on -> FAIL
+r15 receipt test: 0 failure(s)

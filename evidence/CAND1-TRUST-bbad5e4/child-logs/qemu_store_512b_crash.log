@@ -1,0 +1,47 @@
+=== Building aienos-handoff (store-qual) and aienos-store-tool ===
+=== Integration Smoke (512-byte LBA) ===
+PASS  integration smoke (provision + transact, 512b non-atomic qualification active)
+PASS  reopen smoke (generation=2 state=Valid peer=Valid)
+
+=== Tier 1: Checkpoint SIGKILL Campaign ===
+settle=0 cp=before_first_write       saw=1 reopen=1 slot=1 gen=1 state=Valid            peer=Zero          expect=N     -> OK
+settle=0 cp=after_payloads           saw=1 reopen=1 slot=1 gen=1 state=Valid            peer=Zero          expect=N     -> OK
+settle=0 cp=after_catalog            saw=1 reopen=1 slot=1 gen=1 state=Valid            peer=Zero          expect=N     -> OK
+settle=0 cp=after_commit_record      saw=1 reopen=1 slot=1 gen=1 state=Valid            peer=Zero          expect=N     -> OK
+settle=0 cp=after_first_flush        saw=1 reopen=1 slot=1 gen=1 state=Valid            peer=Zero          expect=N     -> OK
+settle=0 cp=after_superblock_write   saw=1 reopen=1 slot=1 gen=2 state=Valid            peer=Valid         expect=N_NP1 -> OK
+settle=0 cp=after_final_flush        saw=1 reopen=1 slot=1 gen=2 state=Valid            peer=Valid         expect=NP1   -> OK
+settle=3 cp=before_first_write       saw=1 reopen=1 slot=1 gen=4 state=Valid            peer=Valid         expect=N     -> OK
+settle=3 cp=after_payloads           saw=1 reopen=1 slot=1 gen=4 state=Valid            peer=Valid         expect=N     -> OK
+settle=3 cp=after_catalog            saw=1 reopen=1 slot=1 gen=4 state=Valid            peer=Valid         expect=N     -> OK
+settle=3 cp=after_commit_record      saw=1 reopen=1 slot=1 gen=4 state=Valid            peer=Valid         expect=N     -> OK
+settle=3 cp=after_first_flush        saw=1 reopen=1 slot=1 gen=4 state=Valid            peer=Valid         expect=N     -> OK
+settle=3 cp=after_superblock_write   saw=1 reopen=1 slot=1 gen=5 state=Valid            peer=Valid         expect=N_NP1 -> OK
+settle=3 cp=after_final_flush        saw=1 reopen=1 slot=1 gen=5 state=Valid            peer=Valid         expect=NP1   -> OK
+STORE_512B_CRASH_OBSERVED_QEMU: PASS
+
+=== Tier 2a: Root Tear Closure (host proof over Tier 1 images) ===
+settle=0 STORE_ROOT_TEAR_CLOSURE: PASS (slot=1 old=zero new=gen2 sector_bytes=512 differing_sectors=[0] combinations=256 as_old=128 as_new=128)
+settle=3 STORE_ROOT_TEAR_CLOSURE: PASS (slot=0 old=gen3 new=gen5 sector_bytes=512 differing_sectors=[0] combinations=256 as_old=128 as_new=128)
+STORE_512B_ROOT_TEAR_CLOSURE: PASS
+
+=== Tier 2b: Injected Root Recovery (media corruption, one defect per case) ===
+case=bad_crc              decode=BadSuperblockCrc          gen=1 state=DegradedRecovery peer=Malformed     readonly=1 expect=degraded:Malformed           -> OK
+case=wrong_magic          decode=BadSuperblockMagic        gen=1 state=DegradedRecovery peer=Malformed     readonly=1 expect=degraded:Malformed           -> OK
+case=nonzero_reserved     decode=NonzeroReserved           gen=1 state=DegradedRecovery peer=Malformed     readonly=1 expect=degraded:Malformed           -> OK
+case=wrong_slot_id        decode=WrongSuperblockSlot       gen=1 state=DegradedRecovery peer=Malformed     readonly=1 expect=degraded:Malformed           -> OK
+case=region_mismatch      decode=Ok                        gen=1 state=DegradedRecovery peer=Malformed     readonly=1 expect=degraded:Malformed           -> OK
+case=seeded_garbage       decode=BadSuperblockMagic        gen=1 state=DegradedRecovery peer=Malformed     readonly=1 expect=degraded:Malformed           -> OK
+case=unsupported_version  decode=UnsupportedVersion        gen=none state=none             peer=none          readonly=0 expect=refuse:UnsupportedVersion    -> OK
+case=graph_bad_newer      decode=Ok                        gen=1 state=DegradedRecovery peer=GraphBadNewer readonly=1 expect=degraded:GraphBadNewer       -> OK
+case=control_new_root     decode=Ok                        gen=2 state=Valid            peer=Valid         readonly=0 expect=valid:gen2                   -> OK
+STORE_512B_INJECTED_ROOT_RECOVERY_QEMU: PASS
+
+=== Final Summary (commit bbad5e4250e57f8cbd1be4cf1390109aa65ef92c, tree_dirty=false, evidence level: QEMU only) ===
+STORE_NVME_INTEGRATION_512B_QEMU: PASS
+STORE_512B_CRASH_OBSERVED_QEMU: PASS
+STORE_512B_ROOT_TEAR_CLOSURE: PASS
+STORE_512B_INJECTED_ROOT_RECOVERY_QEMU: PASS
+STORE_512B_CRASH_RECOVERY_QEMU: PASS
+P3_STORE_QEMU: NOT CLAIMED (QEMU campaign; native persistence conditions separate)
+P3_STORE_NATIVE: NOT CLAIMED

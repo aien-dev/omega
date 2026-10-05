@@ -1,0 +1,30 @@
+qemu_secureboot_signing              qemu      PASS                     exit 0, marker found
+qemu_store_512b_crash                qemu      PASS                     exit 0, marker found
+qemu_native_nvme                     qemu      PASS                     exit 0, marker found
+ck_m1_boot_qemu                      qemu      PASS                     exit 0, marker found
+ck_store_kernel_qemu                 qemu      PASS                     exit 0, marker found
+ck_argus1_revoke_qemu                qemu      PASS                     exit 0, marker found
+t1_gate0_second_offline_location     operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate0_cold_boot_pcr_stability     hardware  NOT_RUN                  BLOCKED_HARDWARE: needs attended hardware boots on Machine 1; this script cannot check it
+t1_gate0_firmware_refresh_pause      operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate1_attended_recovery_boot      operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate2_reboot_campaign             hardware  NOT_RUN                  BLOCKED_HARDWARE: needs attended hardware boots on Machine 1; this script cannot check it
+t1_gate3_offline_key_ceremony        operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate6                             operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate7                             hardware  NOT_RUN                  BLOCKED_HARDWARE: needs attended hardware boots on Machine 1; this script cannot check it
+t1_gate8                             operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+t1_gate9                             operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+m5_sealed_volume_keys_real_tpm       missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+m5_store_encrypted_objects           software  PASS                     exit 0, marker found
+m5_store_kernel_binding              missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+m5_owner_signed_chain_machine1       missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+m5_production_store_512b             missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+t1_gate4_manifest_ab                 missing   NOT_RUN                  MISSING_IMPLEMENTATION: the gate table lists no implementation to run
+m5_migration_sig_test_key            auto      PASS                     exit 0, marker found
+m5_migration_owner_signature         operator  NOT_RUN                  BLOCKED_OPERATOR: needs an attended operator step; this script cannot check it
+
+Counts: total=37 pass=20 fail=1 not_run=0 blocked=11 missing=5
+Verdict: NOT_QUALIFIED
+Logs: /tmp/trust1-m5-work.Mz0W4q/logs
+Receipt: /home/drakestapleton/workspace/evidence-out/CAND1-TRUST-bbad5e4/trust1_m5_qualification_37f6a2331241a2cae2a89302df13ceb5c09822f63eca0441d85415aadaf96b95.json
+TRUST1_M5_QUALIFICATION: NOT_QUALIFIED (pass=20 fail=1 not_run=0 blocked=11 missing=5)

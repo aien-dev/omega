@@ -1,0 +1,11 @@
+
+running 1 test
+STRICT_GATE surface: NVIDIA GB10 (121 GB Unified Memory)
+STRICT_GATE backend: OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+STRICT_GATE output: "amount of memory and processing power. It"
+STRICT_GATE OP_REPORT native=[rmsnorm,apply_rope,matmul_vec,matmul_batch,swiglu,gqa_attention,paged_attention,paged_attention_batch,compute_logits] reference=[] native_fallbacks=[] reference_runs=[]
+STRICT_GATE verdict: PASS (receipt /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/receipt-strict-gate.json)
+test strict_real_model_gate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 40.66s
+

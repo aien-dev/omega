@@ -1,0 +1,10 @@
+SCANNED omega HEAD ddf200ddece95a6461a13239f15c5af290c31d35 (.)
+SCANNED aien-sovereign-core HEAD 69340c7320e177fe21a40086a23c1a50c990ff6c (/home/drakestapleton/workspace/overnight-1005/cand1-survey/aien-sovereign-core)
+SCANNED aegis-runtime HEAD f4e870953a466bb1cf68f1d88285929024cf1ba9 (/home/drakestapleton/workspace/overnight-1005/cand1-survey/aegis-runtime)
+SCANNED aienos HEAD bbad5e4250e57f8cbd1be4cf1390109aa65ef92c (/home/drakestapleton/workspace/overnight-1005/cand1-survey/aienos)
+SCANNED physics HEAD 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf (/home/drakestapleton/workspace/overnight-1005/cand1-survey/physics)
+UNCLASSIFIED aegis-runtime src/enforcement.rs:90 [destructive_shell_refused] for:body:dispatch :: for cmd in [
+UNCLASSIFIED aegis-runtime src/enforcement.rs:114 [catalogued_shell_allowed] for:body:dispatch :: for cmd in ["git status", "git diff", "git log -1 --oneline", "ls"] {
+UNCLASSIFIED aegis-runtime src/enforcement.rs:121 [unknown_or_disguised_skill_names_refused] for:body:dispatch :: for name in [
+UNCLASSIFIED aegis-runtime tests/gateway_auth_tests.rs:325 [serve_must_refuse] loop:unbounded+sleep :: let status = loop {
+R16 loop inventory: sites=509 unclassified=4 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> FAIL

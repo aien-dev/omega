@@ -1,0 +1,34 @@
+=== R16 Qualification (schema revision 2): 20261005T061028Z-80ca5d4f5b6c ===
+Candidate commit: 80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4
+[*] Capturing machine identity...
+[*] R16-G1 / R16-G2: loop inventory...
+    G1=PASS G2=PASS (unclassified=0 a_reachable=0)
+[*] R16-G3: authpath host and silicon...
+    G3=PASS (host PASS, silicon PASS)
+[*] R16-G4: negative tests and mutants...
+    G4=PASS
+[*] R16-G5: surface check...
+    G5=PASS
+[*] R16-G7: ladder...
+    R1_R6: PASS
+    R7: PASS
+    R8: PASS
+    R9: PASS
+    R10: PASS
+    R11: NOT_RUN
+    R12_host: PASS
+    R12_silicon: PASS
+    R13_host: PASS
+    R13_silicon: PASS
+    R14_host: PASS
+    R14_silicon: PASS
+    R15_parity_host: PASS
+    R15_g7_host: PASS
+    R15_parity_silicon: PASS
+    R15_receipt: PASS
+    G7=NOT_RUN (R15 acceptance receipt: NOT_RUN)
+[*] R16-G6: NOT_RUN (presence checks for the six section-49 items are not implemented)
+[*] R16-G8: NOT_RUN (merge-commit part is outside this script; receipt preconditions met)
+Gates: G1=PASS G2=PASS G3=PASS G4=PASS G5=PASS G6=NOT_RUN G7=NOT_RUN G8=NOT_RUN
+Receipt (untracked): /home/drakestapleton/workspace/evidence-out/CAND1-LIVING-cb06d08/R16-ladder/raw/receipts/6d843d66a65cf13ec924425b4a89c741cf492c7ca705970fd58a43d597da33fc.json
+R16_QUALIFY_RESULT=NOT_RUN

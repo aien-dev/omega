@@ -1,0 +1,146 @@
+{
+  "R16_ORCHESTRATOR_RETIRED": "NOT_RUN",
+  "aegis_runtime_commit": "f4e870953a466bb1cf68f1d88285929024cf1ba9",
+  "aien_sovereign_core_commit": "2eec75b08aeb8f9d11f950070e13f6c2c046cf24",
+  "aienos_commit": "bbad5e4250e57f8cbd1be4cf1390109aa65ef92c",
+  "aienos_lock": "bbad5e4250e57f8cbd1be4cf1390109aa65ef92c",
+  "candidate_bound": true,
+  "candidate_commit": "80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4",
+  "correctness_reruns": {
+    "R1": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R10": {
+      "status": "PASS",
+      "target": "test-r10"
+    },
+    "R11": {
+      "status": "NOT_RUN",
+      "target": "test-r11"
+    },
+    "R12_host": {
+      "status": "PASS",
+      "target": "test-r12"
+    },
+    "R12_silicon": {
+      "status": "PASS",
+      "target": "test-r12-silicon"
+    },
+    "R13_host": {
+      "status": "PASS",
+      "target": "test-r13-host"
+    },
+    "R13_silicon": {
+      "status": "PASS",
+      "target": "test-r13-silicon"
+    },
+    "R14_host": {
+      "status": "PASS",
+      "target": "test-r14-host"
+    },
+    "R14_silicon": {
+      "status": "PASS",
+      "target": "test-r14-silicon"
+    },
+    "R15_g7_host": {
+      "status": "PASS",
+      "target": "test-r15-g7-host"
+    },
+    "R15_parity_host": {
+      "status": "PASS",
+      "target": "test-r15-parity-host"
+    },
+    "R15_parity_silicon": {
+      "status": "PASS",
+      "target": "test-r15-parity-silicon"
+    },
+    "R15_receipt": {
+      "status": "PASS",
+      "target": "test-r15-receipt"
+    },
+    "R2": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R3": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R4": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R5": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R6": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R7": {
+      "status": "PASS",
+      "target": "test-r7"
+    },
+    "R8": {
+      "status": "PASS",
+      "target": "test-r8"
+    },
+    "R9": {
+      "status": "PASS",
+      "target": "test-r9"
+    }
+  },
+  "dry_run": false,
+  "g8_scope": "receipt bound to the candidate, clean tree, named by its own SHA-256; the merge commit is a separate step not checked here",
+  "gate": "NOT_RUN",
+  "gates": {
+    "R16-G1": "PASS",
+    "R16-G2": "PASS",
+    "R16-G3": "PASS",
+    "R16-G4": "PASS",
+    "R16-G5": "PASS",
+    "R16-G6": "NOT_RUN",
+    "R16-G7": "NOT_RUN",
+    "R16-G8": "NOT_RUN"
+  },
+  "legacy_cannot_bypass_authority_test": "PASS",
+  "legacy_orchestrators_disabled_test": "PASS",
+  "not_claimed": [
+    "Retirement of the aien-sovereign-core LLM request loop (section 3.1, Q1)",
+    "Removal of any Rust code (section 3.1, Q2); the Rust loops still run if started by hand outside the AIEN production path",
+    "Retirement or code removal of the aien-sovereign-core aien-cli operator tool loops (13 rows) and spark-dream idle-time cycle loop (1 row); classified as class A (retired by non-use), their code is not removed under section 3.1 Q2",
+    "Any gate or field written NOT_RUN: no check for it is implemented, or its target was not run in this run"
+  ],
+  "physics_commit": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf",
+  "physics_lock": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf",
+  "production_entry_point": "docs/r16-production-entry-point.md",
+  "protected_surfaces_kept": {
+    "benchmark_reference_paths_seq_passing": true,
+    "deterministic_maintenance_controls_present": "NOT_RUN",
+    "evidence_present": "NOT_RUN",
+    "generation_mechanism_present": "NOT_RUN",
+    "known_good_fallback_present": "NOT_RUN",
+    "operator_emergency_controls_passing": "NOT_RUN",
+    "r10_verifier_passing": true,
+    "r12_seat_loss_handling_passing": true,
+    "r14_recovery_paths_passing": true,
+    "r9_crash_recovery_passing": true,
+    "recovery_path_present": "NOT_RUN",
+    "trusted_capability_root_present": "NOT_RUN"
+  },
+  "r15_acceptance_still_passing": "NOT_RUN",
+  "raw_digest_note": "sha256 of SHA256SUMS over the raw directory",
+  "raw_directory": "/home/drakestapleton/workspace/evidence-out/CAND1-LIVING-cb06d08/R16-ladder/raw/20261005T061028Z-80ca5d4f5b6c",
+  "raw_directory_digest_sha256": "d070a530ffae7512eff125eac085ff3d051e1c6bd6e84b22017ff7cad593acd1",
+  "remaining_central_loop_count": 0,
+  "remaining_unclassified_semantic_loop_count": 0,
+  "run_commit": "80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4",
+  "schema": "AIEN_RX_R16_ORCHESTRATOR_RETIRED_V1",
+  "schema_revision": 2,
+  "scope": "ADR 0016 resident reaction architecture migration; sovereign-core LLM request loop: not retired, still in use",
+  "silicon_observed": true,
+  "timestamp_utc": "2026-10-05T06:18:50Z",
+  "tree_dirty": false
+}

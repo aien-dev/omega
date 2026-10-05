@@ -1,0 +1,264 @@
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot good-512-boot1: qemu exit 0
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10053 avg 10331 max 13033)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  GPT parsed (primary+backup CRC32), AIENOS partition found where the image tool wrote it
+PASS  partition LBA 0 translates to the partition start
+PASS  write past the partition end refused by the translation layer
+PASS  no AIENOS-partition refusal on the good disk
+PASS  rw probe landed inside the AIENOS partition (disk_lba 116728)
+PASS  NVMe bound by the devices stage
+PASS  stage devices ok
+PASS  stage store ok
+PASS  Store not refused
+PASS  Store committed a generation on the partition
+PASS  blank partition formatted as a TEST store
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical
+PASS  the AIENOS partition itself was written
+PASS  no translation-bypass text in this image
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot good-512-boot2: qemu exit 0
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10051 avg 10244 max 12686)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  GPT parsed (primary+backup CRC32), AIENOS partition found where the image tool wrote it
+PASS  partition LBA 0 translates to the partition start
+PASS  write past the partition end refused by the translation layer
+PASS  no AIENOS-partition refusal on the good disk
+PASS  rw probe landed inside the AIENOS partition (disk_lba 116728)
+PASS  NVMe bound by the devices stage
+PASS  stage devices ok
+PASS  stage store ok
+PASS  Store not refused
+PASS  Store committed a generation on the partition
+PASS  existing Store on the partition not reformatted
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical
+PASS  the AIENOS partition itself was written
+PASS  no translation-bypass text in this image
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot good-4096-boot1: qemu exit 0
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10077 avg 10281 max 12967)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  GPT parsed (primary+backup CRC32), AIENOS partition found where the image tool wrote it
+PASS  partition LBA 0 translates to the partition start
+PASS  write past the partition end refused by the translation layer
+PASS  no AIENOS-partition refusal on the good disk
+PASS  rw probe landed inside the AIENOS partition (disk_lba 14591)
+PASS  NVMe bound by the devices stage
+PASS  stage devices ok
+PASS  stage store ok
+PASS  Store not refused
+PASS  Store committed a generation on the partition
+PASS  blank partition formatted as a TEST store
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical
+PASS  the AIENOS partition itself was written
+PASS  no translation-bypass text in this image
+PASS  host parser refuses no-gpt: no protective MBR
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot hostile-no-gpt: qemu exit 0
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10034 avg 11003 max 25413)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  NVMe LBA 0 read before the GPT decision
+PASS  no-gpt: refused, fail closed
+PASS  no-gpt: no partition accepted
+PASS  no-gpt: no rw probe (nothing written)
+PASS  no-gpt: NVMe not bound
+PASS  no-gpt: stage devices fails
+PASS  no-gpt: Store refused without a boot disk
+PASS  no-gpt: nothing committed
+PASS  no-gpt: whole image byte-identical after the boot
+PASS  host parser refuses bad-header-crc: primary header CRC32 mismatch
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot hostile-bad-header-crc: qemu exit 0
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10154 avg 10353 max 10916)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  NVMe LBA 0 read before the GPT decision
+PASS  bad-header-crc: refused, fail closed
+PASS  bad-header-crc: no partition accepted
+PASS  bad-header-crc: no rw probe (nothing written)
+PASS  bad-header-crc: NVMe not bound
+PASS  bad-header-crc: stage devices fails
+PASS  bad-header-crc: Store refused without a boot disk
+PASS  bad-header-crc: nothing committed
+PASS  bad-header-crc: whole image byte-identical after the boot
+PASS  host parser refuses bad-entry-crc: entry array CRC32 mismatch
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot hostile-bad-entry-crc: qemu exit 0
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10020 avg 10705 max 13368)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  NVMe LBA 0 read before the GPT decision
+PASS  bad-entry-crc: refused, fail closed
+PASS  bad-entry-crc: no partition accepted
+PASS  bad-entry-crc: no rw probe (nothing written)
+PASS  bad-entry-crc: NVMe not bound
+PASS  bad-entry-crc: stage devices fails
+PASS  bad-entry-crc: Store refused without a boot disk
+PASS  bad-entry-crc: nothing committed
+PASS  bad-entry-crc: whole image byte-identical after the boot
+PASS  host parser refuses aienos-outside: partition outside the usable range
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot hostile-aienos-outside: qemu exit 0
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10062 avg 10297 max 12028)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  NVMe LBA 0 read before the GPT decision
+PASS  aienos-outside: refused, fail closed
+PASS  aienos-outside: no partition accepted
+PASS  aienos-outside: no rw probe (nothing written)
+PASS  aienos-outside: NVMe not bound
+PASS  aienos-outside: stage devices fails
+PASS  aienos-outside: Store refused without a boot disk
+PASS  aienos-outside: nothing committed
+PASS  aienos-outside: whole image byte-identical after the boot
+PASS  host parser refuses no-aienos: no AIENOS partition type
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot hostile-no-aienos: qemu exit 0
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10033 avg 10403 max 11320)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  NVMe LBA 0 read before the GPT decision
+PASS  no-aienos: refused, fail closed
+PASS  no-aienos: no partition accepted
+PASS  no-aienos: no rw probe (nothing written)
+PASS  no-aienos: NVMe not bound
+PASS  no-aienos: stage devices fails
+PASS  no-aienos: Store refused without a boot disk
+PASS  no-aienos: nothing committed
+PASS  no-aienos: whole image byte-identical after the boot
+PASS  default image has no translation-bypass text
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+== boot mutant-xlate-bypass: qemu exit 0
+PASS  pre-exit report printed
+PASS  image is this commit
+PASS  left firmware and entered the kernel
+PASS  kernel entered EL1h
+PASS  EL1 page tables and caches enabled
+PASS  GICv3 enabled
+PASS  timer IRQ delivered at least five ticks
+PASS  MMU switched from firmware tables (0x47fff000) to AIENOS tables (0x40000000)
+PASS  GIC bases from the ACPI MADT, GICv3 architecture and ICC system registers
+PASS  tick statistics consistent (period 10000 us, min 10050 avg 10220 max 10591)
+PASS  guard pages fault and the fault is contained (C kernel addition)
+PASS  kernel entropy from RNDR: FEAT_RNG present, bounded retry, stuck test (C kernel addition)
+PASS  no kernel entropy refusal (C kernel addition)
+PASS  final report on the SPCR console
+PASS  no panic or fault
+PASS  mutant image announces the TEST-ONLY translation bypass
+-- positive checks against the mutant (must FAIL):
+PASS  GPT parsed (primary+backup CRC32), AIENOS partition found where the image tool wrote it
+FAIL  partition LBA 0 translates to the partition start
+FAIL  write past the partition end refused by the translation layer
+PASS  no AIENOS-partition refusal on the good disk
+FAIL  rw probe not inside [18432,116735] or not matched (no line)
+FAIL  NVMe bound by the devices stage
+FAIL  stage devices ok
+FAIL  stage store ok
+FAIL  Store not refused
+FAIL  Store committed a generation on the partition
+FAIL  blank partition formatted as a TEST store
+PASS  MBR, primary+backup GPT and both sentinel partitions byte-identical
+FAIL  the AIENOS partition is still all zero
+PASS  translation bypass makes DISK_LAYOUT fail (mutant killed)
+
+AIENOS_CK_DISK_LAYOUT: PASS

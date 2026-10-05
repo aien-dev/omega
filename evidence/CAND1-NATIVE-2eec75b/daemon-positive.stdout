@@ -1,0 +1,6 @@
+⚡ Starting AIEN Sovereign Runtime Daemon...
+  Backend: NativeTransformerBackend/OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)
+  Model: checkpoint loaded from /home/drakestapleton/.cache/huggingface/hub/models--TinyLlama--TinyLlama-1.1B-Chat-v1.0/snapshots/fe8a4ea1ffedaf415f4da2f062534de366a451e6/model.safetensors (tokenizer loaded, model_id=fe8a4ea1ffedaf415f4da2f062534de366a451e6, model_sha256=6e6001da2106d4757498752a021df6c2bdc332c650aae4bae6b0c004dcf14933, tokenizer_sha256=bcd04f0eadf90287bd26e1a183ac487d8a141b09b06aecb7725bbdd343640f2e)
+  KV: one pooled KV shared by runtime and backend
+  Tokenizer: TinyLlama chat template
+✓ Binding socket at /home/drakestapleton/workspace/evidence-out/CAND1-NATIVE-2eec75b/daemon.sock

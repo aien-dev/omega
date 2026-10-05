@@ -1,0 +1,59 @@
+cc -std=gnu11 -Wall -Wextra -Werror -MMD -MP -D_GNU_SOURCE -O2 -Isrc -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/m16 -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/nvrm -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/common/inc -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/nvidia-uvm -I/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include -DOMEGA_PHYSICS_DIR=\"/home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip\" -DR15_SILICON -pthread -o build/rx_r15_parity_silicon src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/runtime/rx_aien.c src/runtime/rx_omega.c src/runtime/rx_generation.c src/runtime/rx_living.c src/sha256.c src/omega_evidence.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c src/omega_program.c src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c src/runtime/aien_machine_id.c src/runtime/rx_jspace.c src/runtime/rx_cortex.c src/runtime/rx_cortex_record.c src/runtime/rx_graph.c src/runtime/rx_capq.c src/runtime/rx_skillroute.c src/runtime/rx_compose.c src/runtime/rx_seq_reference.c tests/runtime/rx_r15_rig.c \
+	tests/runtime/rx_r15_parity.c src/runtime/rx_resident_gpu.c src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c /home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/m16/m16_native.c /home/drakestapleton/workspace/overnight-1005/wt-CAND1-physics-chip/nvrm/nvrm.c build/aienos-authority/bbad5e4/native/capability/out/libaienos_capability.a -ldl -lm
+./build/rx_r15_parity_silicon
+R15 SEQ parity: GB10 resident seat
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34378 passes in 50 ms, budget 1375120 (2000 ms window)
+  detector control RES-1: starved 1 (workload.matvec.serve trigger 0: object 0 at version 2, last read 0), after slots restored 0
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34082 passes in 50 ms, budget 1363280 (2000 ms window)
+  detector control SEQ: starved 1 (workload.matvec.serve trigger 0: object 0 at version 2, last read 0), after slots restored 0
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34876 passes in 50 ms, budget 1395040 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33970 passes in 50 ms, budget 1358800 (2000 ms window)
+  pair 0 (RES-1 first, target 3611 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6567 ns, selected 2690365 ps, reference 4770000 ps, served 2625, crumbs 5731
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6624 ns, selected 2683341 ps, reference 4765292 ps, served 369, crumbs 931
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33575 passes in 50 ms, budget 1343000 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33209 passes in 50 ms, budget 1328360 (2000 ms window)
+  pair 1 (SEQ first, target 3554 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6581 ns, selected 2694268 ps, reference 4782097 ps, served 2609, crumbs 5697
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6463 ns, selected 2690365 ps, reference 4782097 ps, served 368, crumbs 930
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33186 passes in 50 ms, budget 1327440 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33835 passes in 50 ms, budget 1353400 (2000 ms window)
+  pair 2 (RES-1 first, target 3703 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6734 ns, selected 2694658 ps, reference 4788317 ps, served 2304, crumbs 5049
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6630 ns, selected 2725625 ps, reference 4840825 ps, served 368, crumbs 930
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32605 passes in 50 ms, budget 1304200 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33144 passes in 50 ms, budget 1325760 (2000 ms window)
+  pair 3 (SEQ first, target 3631 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6656 ns, selected 2684121 ps, reference 4761390 ps, served 2403, crumbs 5254
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6602 ns, selected 2683731 ps, reference 4766853 ps, served 369, crumbs 931
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33608 passes in 50 ms, budget 1344320 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33808 passes in 50 ms, budget 1352320 (2000 ms window)
+  pair 4 (RES-1 first, target 3562 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6477 ns, selected 2690309 ps, reference 4769952 ps, served 2593, crumbs 5663
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6589 ns, selected 2690731 ps, reference 4769609 ps, served 369, crumbs 932
+R15 SEQ parity: 5 pairs, 0 failures
+SEQ_SEMANTIC_PARITY=PASS

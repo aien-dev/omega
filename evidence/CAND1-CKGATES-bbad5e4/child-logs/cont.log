@@ -1,0 +1,57 @@
+PASS  make refuses the continuity test mode with CK_HARDWARE_STAGING
+PASS  make refuses the continuity test mode with CK_QEMU_UNSAFE_DMA
+PASS  make refuses the continuity test mode with the Store crash hook
+PASS  make refuses a continuity mutant without the TEST mode
+PASS  make refuses an unknown continuity mutant
+PASS  default image carries no continuity test strings
+PASS  TEST continuity image announces itself
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  81 blank media resume: CONTINUITY: STOP (store Unformatted), image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  82 formatted store, no root: UNPROVISIONED, image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  83 provision: PROVISIONED agent=6b4533a23cc99d3a.. incarnation=1 sequence=1
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  83a second provision refused, image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  83b second fresh disk gets a different agent
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  84 resume + remember: incarnation=2 sequence=2 then sequence=3 cortex=1 branches=2
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  85 cold restart 1: same agent and memory, incarnation=3 sequence=4
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  85a cold restart 2: incarnation=4 sequence=5
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86 reference: uninterrupted commit gives new memory d684166d39800519
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86.1 kill at before_first_write: marker seen, same agent, old memory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86.2 kill at after_payload_objects: marker seen, same agent, old memory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86.3 kill at after_catalog: marker seen, same agent, old memory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86.4 kill at after_commit_record: marker seen, same agent, old memory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86.5 kill at after_first_flush: marker seen, same agent, old memory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86.6 kill at after_inactive_superblock: marker seen, same agent, either memory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86.7 kill at after_final_flush: marker seen, same agent, new memory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86.8 kill at before_anchor: marker seen, same agent, new memory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  86.9 kill at after_anchor: marker seen, same agent, new memory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  87 malformed peer: RESUMED_READONLY, same agent and memory, image unchanged
+rows 19/19; M1 failures: 0
+AIENOS_CK_M4_CONTINUITY: PASS

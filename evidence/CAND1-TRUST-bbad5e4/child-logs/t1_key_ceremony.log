@@ -1,0 +1,16 @@
+prerequisite: building aienos-handoff.efi at bbad5e4 into /tmp/trust1-m5-work.Mz0W4q/build/cargo-loader
+.+...+...........+....+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.....+...+..+...+.+........+.......+.........+..+....+.....+...+...+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*..+....+..+.........+....+......+...........+...+.+...+......+.....+.+........+.+.....+.+......+............+........+.........+....+.....+.......+.....+...................+........+......+.+...+...........+.......+...+.....+.......+.....+...+.......+........+......+...+.......+...+..+......+...+.+........+......+......+..........+.....+....+..+....+...............+.....+....+..+.........+.............+......+......+...+.....+...+..........+..+.+..............+.+..+...+.+..............+.+...+..+.+........+......+..........+...+...........+.+......+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+....+......+....+..+.............+..+.+..+...+....+...+...........+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*..+............+......+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*...+....+..+...+................+.........+..+.......+............+...+...+..+.......+.....+...+............+.+.....+.......+...+...+.........+..+.+..+.......+.....+......+..........+...+..+............+.+.....+......+....+......+......+..+...+...............+...+....+............+........+.......+...+...........+.+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+PASS  generate: four keys and a root-signed manifest that verifies
+PASS  every private key is stored encrypted
+PASS  generate refuses to overwrite
+PASS  two backups decrypt from their own copies; record has no private material
+PASS  a wrong passphrase cannot open the backup copy
+PASS  a changed manifest is refused
+PASS  a swapped public key is refused
+PASS  rotation add: generation 2 trusts old and new release keys; old signatures still verify
+PASS  rotation revoke: generation 3 trusts only the new key; old key quarantined, not deleted
+PASS  owner_root cannot be rotated by the routine tool (special recovery ceremony only)
+PASS  a validly signed older generation is refused when generation 3 is the minimum
+PASS  Boot Signer cert signs and verifies the EFI loader (sbsign/sbverify)
+TRUST-1 key ceremony self-test (throwaway keys): ALL PASS

@@ -1,0 +1,9 @@
+
+running 2 tests
+test release_golden_path_records_whether_gb10_ran ... {"branch_accepted":true,"branch_error":null,"checkpoint_id":"aien-micro-gb10-v1 reference_test_weights (test fixture, not a release checkpoint)","child_tokens":2,"commit":"local","device":"OmegaGb10Backend (native Omega engine, no CUDA, NVIDIA GB10 sm_121)","discovered_safetensors_sha256":"c1b9b30e907950516ba3c646bdf570d8084c25a6410a0cdca80cf04b11bc13a8","fallback_count":0,"gpu_executions":156,"leaked_kv_blocks":0,"model_id":"aien-micro-gb10-v1","shared_kv_pages":1,"skipped":false,"test":"release_golden_path","tokens":4}
+ok
+test test_end_to_end_gb10_hardware_execution_if_available ... Omega GB10 End-to-End Execution Certified: 4 tokens emitted via GPU kernels (count = 134)
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 9.77s
+

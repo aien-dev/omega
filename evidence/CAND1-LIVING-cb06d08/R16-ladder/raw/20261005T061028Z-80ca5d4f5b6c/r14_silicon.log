@@ -1,0 +1,93 @@
+./build/rx_r14_recovery_silicon
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33650 passes in 50 ms, budget 1346000 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33822 passes in 50 ms, budget 1352880 (2000 ms window)
+R14 F BEFORE_CANDIDATE_WRITE: first process exit 86; recovered OLD generation 1; restore REFERENCE; 200 served after restart, adapted again
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34853 passes in 50 ms, budget 1394120 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33656 passes in 50 ms, budget 1346240 (2000 ms window)
+R14 F DURING_CANDIDATE_WRITE: first process exit 86; recovered OLD generation 1; restore REFERENCE; 202 served after restart, adapted again
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33606 passes in 50 ms, budget 1344240 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33869 passes in 50 ms, budget 1354760 (2000 ms window)
+R14 F AFTER_CANDIDATE_WRITE: first process exit 86; recovered OLD generation 1; restore REFERENCE; 202 served after restart, adapted again
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34126 passes in 50 ms, budget 1365040 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33695 passes in 50 ms, budget 1347800 (2000 ms window)
+R14 F BEFORE_ROOT_FLIP: first process exit 86; recovered OLD generation 1; restore REFERENCE; 200 served after restart, adapted again
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34836 passes in 50 ms, budget 1393440 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 36066 passes in 50 ms, budget 1442640 (2000 ms window)
+R14 F DURING_ROOT_FLIP: first process exit 86; recovered OLD generation 1; restore REFERENCE; 201 served after restart, adapted again
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34297 passes in 50 ms, budget 1371880 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33709 passes in 50 ms, budget 1348360 (2000 ms window)
+R14 F AFTER_ROOT_FLIP: first process exit 86; recovered NEW generation 2; restore RESTORED; 200 served after restart
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33225 passes in 50 ms, budget 1329000 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34408 passes in 50 ms, budget 1376320 (2000 ms window)
+R14 F BEFORE_RECEIPT: first process exit 86; recovered NEW generation 2; restore RESTORED; 200 served after restart
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34156 passes in 50 ms, budget 1366240 (2000 ms window)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34122 passes in 50 ms, budget 1364880 (2000 ms window)
+R14 F AFTER_RECEIPT: first process exit 86; recovered NEW generation 2; restore RESTORED; 201 served after restart
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33178 passes in 50 ms, budget 1327120 (2000 ms window)
+R14 A tamper: verdict REFUSED reason 2; generation 1 -> 2 holds verified quad4; 1495 served during, 104 after
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32477 passes in 50 ms, budget 1299080 (2000 ms window)
+R14 A semantic: verdict REFUSED reason 4; generation 1 -> 2 holds verified quad4; 1760 served during, 102 after
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32293 passes in 50 ms, budget 1291720 (2000 ms window)
+R14 A crash: verdict REFUSED reason 5; generation 1 -> 2 holds verified quad4; 12814 served during, 103 after
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32509 passes in 50 ms, budget 1300360 (2000 ms window)
+R14 B: forged/borrowed/revoked/stale/GPU refused, slot stuffing contained, forged decisions minted nothing, promotion forgery refused; renewed grant, lanes 120 published, production 4414 during, 100 after
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32922 passes in 50 ms, budget 1316880 (2000 ms window)
+R14 C: cycles contained in 7 ms (max 256 activations), 3 containment crumbs, organism untouched; production 5956 during, 100 after
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 32451 passes in 50 ms, budget 1298040 (2000 ms window)
+R14 D: 3200 lane requests, at most 4 claims at once (cap 4), up to 12 waiting; 3200 published once, 0 lost, 0 duplicated; production 1812 during, 101 after
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33717 passes in 50 ms, budget 1348680 (2000 ms window)
+R14 E: seat killed holding lane claim 232; lost once, seat generation 1 -> 2, retry published once, stale claim refused; production 441 during, 102 after
+R14 A_corrupt_candidate    PASS
+R14 B_forged_capability    PASS
+R14 C_reaction_cycle       PASS
+R14 D_gpu_saturation       PASS
+R14 E_gpu_seat_kill        PASS
+R14 F_checkpoint_crash     PASS
+R14 gate: R14_LIVING_RECOVERY=PASS
+R14 receipt: build/qual-runs/20261005T061819Z-80ca5d4f5b6c/R14/rx_recovery_receipt.json

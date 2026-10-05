@@ -1,0 +1,7 @@
+PASS  capture + compare: identical states compare equal
+PASS  capture refuses to overwrite
+PASS  compare names exactly PCR 7 after one extend
+PASS  receipt: restored rollback RECORDED, unrestored STOP, chained
+PASS  tampered captures refused
+PASS  credential decoder: header decoded, --live follows PCR 7
+TRUST-1 measurement tools self-test: ALL PASS

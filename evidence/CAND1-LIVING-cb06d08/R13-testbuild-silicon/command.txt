@@ -1,0 +1,1 @@
+env OMEGA_CANDIDATE_COMMIT=80ca5d4f5b6cc532d660fc0cbfad7d6c8fb96ad4 make test-r13-testbuild-silicon

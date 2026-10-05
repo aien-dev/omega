@@ -1,0 +1,239 @@
+PASS  make refuses the crash hook with CK_HARDWARE_STAGING
+PASS  make refuses the crash hook with CK_QEMU_UNSAFE_DMA
+PASS  make refuses a mutant without the TEST hook
+PASS  make refuses an unknown mutant
+PASS  make accepts the plain TEST crash build (control)
+PASS  default image carries no crash hook strings
+PASS  TEST crash image announces itself
+=== 512-byte LBA ===
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=before_first_write         policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_payload_objects      policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_catalog              policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_commit_record        policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_first_flush          policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_inactive_superblock  policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_final_flush          policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=before_anchor              policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_anchor               policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_commit_record        policy=newest saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_inactive_superblock  policy=drop   saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_inactive_superblock  policy=newest saw=1 N=1  opened=2   expect=N_NP1 -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=0 cp=after_inactive_superblock  policy=torn   saw=1 N=1  opened=2   expect=N_NP1 -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=before_first_write         policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_payload_objects      policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_catalog              policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_commit_record        policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_first_flush          policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_inactive_superblock  policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+PASS  bs=512 root tear closure: only slot 0 changed, inside its first 512 bytes, generation 5
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  bs=512 root with a bad CRC (generation 5) not opened, nothing committed, image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_final_flush          policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=before_anchor              policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_anchor               policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_commit_record        policy=newest saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_inactive_superblock  policy=drop   saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_inactive_superblock  policy=newest saw=1 N=4  opened=5   expect=N_NP1 -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=512  settle=3 cp=after_inactive_superblock  policy=torn   saw=1 N=4  opened=5   expect=N_NP1 -> OK
+=== 4096-byte LBA ===
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=before_first_write         policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_payload_objects      policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_catalog              policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_commit_record        policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_first_flush          policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_inactive_superblock  policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_final_flush          policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=before_anchor              policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_anchor               policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_commit_record        policy=newest saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_inactive_superblock  policy=drop   saw=1 N=1  opened=1   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_inactive_superblock  policy=newest saw=1 N=1  opened=2   expect=N_NP1 -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=0 cp=after_inactive_superblock  policy=torn   saw=1 N=1  opened=1   expect=N_NP1 -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=before_first_write         policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_payload_objects      policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_catalog              policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_commit_record        policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_first_flush          policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_inactive_superblock  policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+PASS  bs=4096 root tear closure: only slot 0 changed, inside its first 512 bytes, generation 5
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+PASS  bs=4096 root with a bad CRC (generation 5) not opened, nothing committed, image unchanged
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_final_flush          policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=before_anchor              policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_anchor               policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_commit_record        policy=newest saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_inactive_superblock  policy=drop   saw=1 N=4  opened=4   expect=N     -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_inactive_superblock  policy=newest saw=1 N=4  opened=5   expect=N_NP1 -> OK
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+bs=4096 settle=3 cp=after_inactive_superblock  policy=torn   saw=1 N=4  opened=4   expect=N_NP1 -> OK
+---- crash campaign results ----
+bs=512  settle=0 cp=before_first_write         policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=512  settle=0 cp=after_payload_objects      policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=512  settle=0 cp=after_catalog              policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=512  settle=0 cp=after_commit_record        policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=512  settle=0 cp=after_first_flush          policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=512  settle=0 cp=after_inactive_superblock  policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+bs=512  settle=0 cp=after_final_flush          policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+bs=512  settle=0 cp=before_anchor              policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+bs=512  settle=0 cp=after_anchor               policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+bs=512  settle=0 cp=after_commit_record        policy=newest saw=1 N=1  opened=1   expect=N     -> OK
+bs=512  settle=0 cp=after_inactive_superblock  policy=drop   saw=1 N=1  opened=1   expect=N     -> OK
+bs=512  settle=0 cp=after_inactive_superblock  policy=newest saw=1 N=1  opened=2   expect=N_NP1 -> OK
+bs=512  settle=0 cp=after_inactive_superblock  policy=torn   saw=1 N=1  opened=2   expect=N_NP1 -> OK
+bs=512  settle=3 cp=before_first_write         policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=512  settle=3 cp=after_payload_objects      policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=512  settle=3 cp=after_catalog              policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=512  settle=3 cp=after_commit_record        policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=512  settle=3 cp=after_first_flush          policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=512  settle=3 cp=after_inactive_superblock  policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+bs=512  settle=3 cp=after_final_flush          policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+bs=512  settle=3 cp=before_anchor              policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+bs=512  settle=3 cp=after_anchor               policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+bs=512  settle=3 cp=after_commit_record        policy=newest saw=1 N=4  opened=4   expect=N     -> OK
+bs=512  settle=3 cp=after_inactive_superblock  policy=drop   saw=1 N=4  opened=4   expect=N     -> OK
+bs=512  settle=3 cp=after_inactive_superblock  policy=newest saw=1 N=4  opened=5   expect=N_NP1 -> OK
+bs=512  settle=3 cp=after_inactive_superblock  policy=torn   saw=1 N=4  opened=5   expect=N_NP1 -> OK
+bs=4096 settle=0 cp=before_first_write         policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=4096 settle=0 cp=after_payload_objects      policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=4096 settle=0 cp=after_catalog              policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=4096 settle=0 cp=after_commit_record        policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=4096 settle=0 cp=after_first_flush          policy=all    saw=1 N=1  opened=1   expect=N     -> OK
+bs=4096 settle=0 cp=after_inactive_superblock  policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+bs=4096 settle=0 cp=after_final_flush          policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+bs=4096 settle=0 cp=before_anchor              policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+bs=4096 settle=0 cp=after_anchor               policy=all    saw=1 N=1  opened=2   expect=NP1   -> OK
+bs=4096 settle=0 cp=after_commit_record        policy=newest saw=1 N=1  opened=1   expect=N     -> OK
+bs=4096 settle=0 cp=after_inactive_superblock  policy=drop   saw=1 N=1  opened=1   expect=N     -> OK
+bs=4096 settle=0 cp=after_inactive_superblock  policy=newest saw=1 N=1  opened=2   expect=N_NP1 -> OK
+bs=4096 settle=0 cp=after_inactive_superblock  policy=torn   saw=1 N=1  opened=1   expect=N_NP1 -> OK
+bs=4096 settle=3 cp=before_first_write         policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=4096 settle=3 cp=after_payload_objects      policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=4096 settle=3 cp=after_catalog              policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=4096 settle=3 cp=after_commit_record        policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=4096 settle=3 cp=after_first_flush          policy=all    saw=1 N=4  opened=4   expect=N     -> OK
+bs=4096 settle=3 cp=after_inactive_superblock  policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+bs=4096 settle=3 cp=after_final_flush          policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+bs=4096 settle=3 cp=before_anchor              policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+bs=4096 settle=3 cp=after_anchor               policy=all    saw=1 N=4  opened=5   expect=NP1   -> OK
+bs=4096 settle=3 cp=after_commit_record        policy=newest saw=1 N=4  opened=4   expect=N     -> OK
+bs=4096 settle=3 cp=after_inactive_superblock  policy=drop   saw=1 N=4  opened=4   expect=N     -> OK
+bs=4096 settle=3 cp=after_inactive_superblock  policy=newest saw=1 N=4  opened=5   expect=N_NP1 -> OK
+bs=4096 settle=3 cp=after_inactive_superblock  policy=torn   saw=1 N=4  opened=4   expect=N_NP1 -> OK
+
+CK_STORE_CRASH_512B_QEMU: PASS
+CK_STORE_CRASH_4096_QEMU: PASS
+CK_STORE_ROOT_TEAR_CLOSURE_QEMU: PASS
+CK_STORE_INJECTED_ROOT_QEMU: PASS
+CK_STORE_CRASH_HOOK_REFUSED_ON_HARDWARE: PASS
+CK_STORE_SLOT_REUSE: NOT_RUN (MISSING_IMPLEMENTATION: the C Store is append-only, no reclaim/slot reuse)
+CK_STORE_CRASH_ROWS: PASS (52 of 52 rows OK)
+AIENOS_CK_M4_STORE_CRASH: PASS

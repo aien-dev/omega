@@ -1,0 +1,16 @@
+Could not open option rom 'vgabios-ramfb.bin': No such file or directory
+qemu exit 0 after 6 s (commit bbad5e4250e5, -smp 4, gate)
+PASS  MADT lists 4 cores (-smp 4)
+PASS  no smp: FAIL line
+PASS  CPU_ON issued for 3 secondary cores
+PASS  PSCI CPU_ON returned SUCCESS for every core
+PASS  3 secondary cores checked in on EL1, MMU on our tables, own stack, parked in WFE
+PASS  each secondary reports the MPIDR it was started for
+PASS  per-core MPIDRs distinct and complete: 0x0,0x1,0x2,0x3
+PASS  summary: all 4 cores, no PSCI error, bounded wait, result=ok
+PASS  kernel alive
+PASS  final report reached
+PASS  no panic or fault
+PASS  QEMU exit 0 (PSCI reset)
+PASS  default image (no TEST-ONLY mutation)
+AIENOS_CK_SMP: PASS

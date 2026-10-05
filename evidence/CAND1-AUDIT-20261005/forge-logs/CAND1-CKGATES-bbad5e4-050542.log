@@ -1,0 +1,22 @@
+AIENOS_CK_SMMU: PASS
+AIENOS_CK_NVME_SHUTDOWN: PASS
+AIENOS_CK_P2_ARTIFACT: PASS
+AIENOS_CK_M0_ROLLBACK: NOT_RUN (MISSING_IMPLEMENTATION: C loader signatures, A/B, BootNext and rollback are parked (native/boot/README.md))
+AIENOS_CK_M4_NVME: PASS (SMMU-confined NVMe DMA in QEMU (iommu=smmuv3, default build); TEST-ONLY bypass build boot-checked separately)
+AIENOS_CK_M4_STORE: PASS
+AIENOS_CK_M4_STORE_CRASH: PASS
+AIENOS_CK_M4_CONTINUITY: PASS
+AIENOS_CK_M4_RECOVERY: PASS
+AIENOS_CK_M4_ALLEN: PASS
+AIENOS_CK_ARGUS1_REVOKE: PASS
+AIENOS_CK_KEYBOARD: NOT_RUN (MISSING_IMPLEMENTATION: no xHCI/USB HID keyboard driver in the C kernel)
+AIENOS_CK_NET: PASS (QEMU user networking (slirp), virtio-net with ACCESS_PLATFORM required behind the smmuv3 vIOMMU; this PASS covers: attach, UDP TX seen by the host helper, UDP reply RX parsed by M6-A, an out-of-window device DMA refused (F_TRANSLATION, page intact) and recovery by reset, as checked by this run only; QEMU, not hardware)
+AIENOS_CK_SMP: PASS
+AIENOS_CK_DISK_LAYOUT: PASS
+AIENOS_CK_FPU: PASS
+AIENOS_CK_INFER: PASS
+AIENOS_CK_SCREEN: PASS
+NVMe DMA mode: Confined (QEMU SMMUv3 stage 1, out-of-window DMA faulted); no-SMMU boot denied (NoSmmu); TEST-ONLY bypass image checked separately
+Child logs: /tmp/ck-gates-work.wIEYth/logs
+Receipt: /home/drakestapleton/workspace/evidence-out/CAND1-CKGATES-bbad5e4/ck_gates_654d444507399a5be27424ab9174896d025855814147ed78635207d5929a8361.json
+AIENOS_CK_GATES: NOT_ALL_GATES_PASS (pass=18 fail=0 not_run=2 of 20; physical NOT_RUN)
