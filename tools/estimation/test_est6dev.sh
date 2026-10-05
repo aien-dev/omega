@@ -19,6 +19,15 @@ for p in evidence/EST5/raw/20261005T112838Z-est5-heldout-silicon evidence/X/raw/
   [ "$rc" = 2 ] && chk ok x || chk bad "g1s did not refuse held-out path $p (rc $rc)"
 done
 
+# 1b. the D2 SHA backstops equal the committed d2.sha256 (hash list only; no D2 file is opened)
+D2S=docs/estimation/receipts/est-v5/d2.sha256
+for pair in "D2_RAW_SHA machine-state.ndjson" "D2_MARKS_SHA machine-state-marks.txt"; do
+  set -- $pair
+  want=$(awk -v n="$2" '$2 == n { print $1 }' "$D2S")
+  got=$(sed -n "s/^#define $1 \"\([0-9a-f]*\)\"$/\1/p" tools/estimation/est6dev.c)
+  [ -n "$want" ] && [ "$want" = "$got" ] && chk ok x || chk bad "$1 in est6dev.c ($got) != d2.sha256 $2 ($want)"
+done
+
 # 2. schedule generator reproduces the v5 protocol text (seed 0xE5C5D1: idle 406, L6 929, L12 655, L18 710)
 "$E" sched 0xE5C5D1 2700 | grep -q '^segments 39 idle 406 L6 929 L12 655 L18 710$' && chk ok x || chk bad "schedule totals for 0xE5C5D1"
 "$E" sched 0xE5C5D1 2700 | grep -q '^schedule 0 0 74$' && chk ok x || chk bad "schedule first segment 0xE5C5D1"

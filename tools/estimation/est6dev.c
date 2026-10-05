@@ -14,7 +14,7 @@
  *       totals and the section 3 balance check (each of idle, L6, L12, L18 within 400..900 s).
  *
  * Refuses, before opening anything, any path that names a held-out run (v3, v4, v5 or v6 held-out
- * tag) or the v5 D2 folder; after loading, refuses an input whose SHA-256 is the v5 D2 raw SHA. */
+ * tag) or the v5 D2 folder; after loading, refuses an input whose SHA-256 is the v5 D2 raw or marks SHA (committed d2.sha256). */
 #include <errno.h>
 #include <limits.h>
 #include <math.h>
@@ -27,6 +27,7 @@
 
 #define D2_DATE_TAG "20261005T112838Z"
 #define D2_RAW_SHA "7dda21f664587c4401326c3082f28039e133ba5627c8564678f259e2d7036ff0"
+#define D2_MARKS_SHA "95879ed909b8fec1207695dc1093b24be56f00563cd364c62bd30007b0dc26bb"
 
 static uint64_t splitmix64(uint64_t *s)
 {
@@ -224,6 +225,7 @@ static int cmd_g1pit(int argc, char **argv)
     if (!strcmp(f.sha_hex, D2_RAW_SHA)) { fprintf(stderr, "refuse: input is the v5 D2 raw data (SHA-256)\n"); est_file_free(&f); return 2; }
     static c3_marks mk;
     if (c3_marks_load(mkp, 1, &mk, err, sizeof err)) { fprintf(stderr, "refuse: marks: %s\n", err); est_file_free(&f); return 1; }
+    if (!strcmp(mk.sha, D2_MARKS_SHA)) { fprintf(stderr, "refuse: marks are the v5 D2 marks (SHA-256)\n"); est_file_free(&f); return 2; }
     c3_ticks tk;
     if (c3_ticks_build(&f, &tk, err, sizeof err)) { fprintf(stderr, "ticks: %s\n", err); est_file_free(&f); return 1; }
     printf("input raw_sha256 %s marks_sha256 %s lines %zu marks_pairs %zu\n", f.sha_hex, mk.sha, tk.lines, mk.n);
@@ -402,6 +404,7 @@ static int cmd_g1s(int argc, char **argv)
     if (!strcmp(f.sha_hex, D2_RAW_SHA)) { fprintf(stderr, "refuse: input is the v5 D2 raw data (SHA-256)\n"); est_file_free(&f); return 2; }
     static c3_marks mk;
     if (c3_marks_load(mkp, 1, &mk, err, sizeof err)) { fprintf(stderr, "refuse: marks: %s\n", err); est_file_free(&f); return 1; }
+    if (!strcmp(mk.sha, D2_MARKS_SHA)) { fprintf(stderr, "refuse: marks are the v5 D2 marks (SHA-256)\n"); est_file_free(&f); return 2; }
     c3_ticks tk;
     if (c3_ticks_build(&f, &tk, err, sizeof err)) { fprintf(stderr, "ticks: %s\n", err); est_file_free(&f); return 1; }
     printf("input raw_sha256 %s marks_sha256 %s\n", f.sha_hex, mk.sha);
