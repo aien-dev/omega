@@ -2140,7 +2140,12 @@ test-vc-bridge: tests/test_omega_vc_bridge.c src/omega_vc_bridge.c src/omega_vc_
 # (cut 2) links it. test-gpu-matmul-api runs the host-only refusals; the chip
 # sweep is `./build/gpu_matmul_api_test --out receipt.json` through the heavy queue.
 .PHONY: libomega_gpu test-gpu-matmul-api
-GPU_API_OBJS = $(filter-out $(OUT_DIR)/omegatool.o,$(OBJS))
+# The two gate-runner objects (omegatool's M17/M18/M19 and World gates) are NOT part of the
+# library: nothing in the library or in the Rust FFI crate calls them (checked with nm), and
+# they compile the physics checkout path into the object (-DOMEGA_PHYSICS_DIR), which made the
+# archive digest depend on where physics was checked out. Without them libomega_gpu.a is
+# byte-identical for any PHYSICS_DIR and any omega checkout directory.
+GPU_API_OBJS = $(filter-out $(OUT_DIR)/omegatool.o $(OUT_DIR)/omega_blackwell_gates.o $(OUT_DIR)/omega_world_gates.o,$(OBJS))
 GPU_API_TEST = $(OUT_DIR)/gpu_matmul_api_test
 $(OUT_DIR)/libomega_gpu.a: check-physics-lock $(GPU_API_OBJS)
 	ar rcs $@ $(GPU_API_OBJS)
