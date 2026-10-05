@@ -294,50 +294,80 @@ echo "    G7=$G7 (R15 acceptance receipt: $R15ACC)"
 # the benchmark reference paths (SEQ). Presence and operation are separate facts:
 #   * present  = every named implementation symbol is DEFINED in its file (a function
 #     definition line; a comment, prototype or call does not count). Absent: MISSING_IMPLEMENTATION.
+#     An item with no implementation named at all is MISSING_IMPLEMENTATION (never a proxy PASS).
 #   * operated = every named exercising test ran in THIS invocation and passed (exit
 #     status AND required log line). A log that reports a skipped or unexercised run is
 #     NOT_RUN, never PASS. FAIL if any test ran and failed.
 # Item status: MISSING_IMPLEMENTATION if not present; else FAIL > NOT_RUN > PASS over its
 # tests. G6 combines the items like combine() (FAIL > NOT_RUN/MISSING > PASS); G6 names
 # MISSING_IMPLEMENTATION when an item is missing and nothing failed.
+# Each item carries its own "basis" text in the receipt: it says whether the file:symbol is
+# what the spec itself names or a mapping chosen here (PROXY), and what the tests do not cover.
 echo "[*] R16-G6: protected things kept..."
-# g6_defined <file> <symbol> <f|t>: f = C function definition line, t = fixed text.
-g6_defined() {
-    [ -f "$HERE/$1" ] || return 1
-    if [ "$3" = t ]; then grep -Fq -- "$2" "$HERE/$1"
-    else grep -Eq -- "^[A-Za-z_][^;]*[ *]$2\\([^;]*\$" "$HERE/$1"; fi
+# g6_defined <file> <symbol> <f|t|l>: f = C function definition line, t = fixed text,
+# l = function definition in the tree pinned by aienos.lock (the trusted capability
+# root source). Returns 0 defined, 1 absent, 2 cannot look (lock tree unavailable).
+G6_LOCK_COMMIT=$(head -n 1 "$HERE/aienos.lock" 2>/dev/null || true)
+g6_lock_source() {   # prints the file from the aienos.lock tree, or returns 2
+    local rel=$1 d
+    for d in "${AIENOS_R7_DIR:-}" "$HERE/build/aienos-authority/${G6_LOCK_COMMIT:0:7}"; do
+        if [ -n "$d" ] && [ -f "$d/$rel" ]; then cat "$d/$rel"; return 0; fi
+    done
+    if [ -n "$G6_LOCK_COMMIT" ] && git -C "${AIENOS_LOCK_REPO:-$HERE/../aienos-argus-cap}" show "$G6_LOCK_COMMIT:$rel" 2>/dev/null; then return 0; fi
+    return 2
 }
-# M19 accelerator world (the known-good fallback) and its maintenance entry: one silicon run.
+g6_defined() {
+    local re="^[A-Za-z_][^;]*[ *]$2\\([^;]*\$"
+    if [ "$3" = l ]; then
+        local src; src=$(g6_lock_source "$1") || return 2
+        printf '%s\n' "$src" | grep -Eq -- "$re"; return $?
+    fi
+    [ -f "$HERE/$1" ] || return 1
+    if [ "$3" = t ]; then grep -Fq -- "$2" "$HERE/$1"; else grep -Eq -- "$re" "$HERE/$1"; fi
+}
+# M19 accelerator world (the known-good fallback, spec lines 182-183) and its maintenance
+# entry: one silicon run. PASS needs exit 0, no [FAIL] gate line and "N / N M19 GATES PASSED"
+# with N equal and nonzero.
 silicon_run m19 "$RAW_DIR/m19_world.log" "M19 GATES PASSED" test-m19
 LV[M19]=$V; TG[M19]=test-m19; LOGF[M19]="$RAW_DIR/m19_world.log"
-if [ "${LV[M19]}" = PASS ] && grep -Fq -- "[FAIL]" "$RAW_DIR/m19_world.log"; then LV[M19]=FAIL; fi
+if [ "${LV[M19]}" = PASS ]; then
+    if grep -Fq -- "[FAIL]" "$RAW_DIR/m19_world.log" || \
+       ! grep -Eq -- "PERSISTENT WORLD QUALIFICATION: ([1-9][0-9]*) / \1 M19 GATES PASSED" "$RAW_DIR/m19_world.log"; then
+        LV[M19]=FAIL
+    fi
+fi
 # g6_test <name>: status of one exercising test; a skipped or unexercised log is NOT_RUN.
 g6_test() {
     local s=${LV[$1]:-NOT_RUN}
     if [ "$s" = PASS ] && [ -s "${LOGF[$1]:-/nonexistent}" ] && grep -Eq -- "SKIPPED|not exercised" "${LOGF[$1]}"; then s=NOT_RUN; fi
     echo "$s"
 }
-# key|file:symbol:kind;...|tests (comma separated)
-G6_ITEMS='known_good_fallback_present|src/omega_accelerator_world.c:omega_world_drain:f;src/omega_accelerator_world.c:omega_world_init:f|M19
-recovery_path_present|src/runtime/rx_generation.c:rx_gen_recover:f|R9,R14_host
-deterministic_maintenance_controls_present|src/omega_world_gates.c:run_m19_gates:f;tools/omegatool.c:--run-m19-gates:t|M19
-trusted_capability_root_present|src/runtime/rx_native_bind.c:rx_world_init_native:f;src/runtime/rx_native_bind.c:native_validate:f|R7,R12_host
-generation_mechanism_present|src/runtime/rx_generation.c:rx_gen_propose:f|R9,R13_host
-evidence_present|src/omega_evidence.c:omega_evidence_write_digest:f|R15_receipt,R9
-r9_crash_recovery_passing|src/runtime/rx_generation.c:rx_gen_open:f|R9
-r10_verifier_passing|src/omega_verify.c:omega_verify_v0_structural:f|R10
-r12_seat_loss_handling_passing|src/runtime/rx_resident_gpu.c:rx_gpu_seat_kill:f|R12_host,R12_silicon
-r14_recovery_paths_passing|src/runtime/rx_generation.c:rx_gen_recover:f|R14_host,R14_silicon
-operator_emergency_controls_passing|src/runtime/rx_resident_gpu.c:rx_gpu_seat_kill:f|R12_silicon
-benchmark_reference_paths_seq_passing|src/runtime/rx_seq_reference.c:rx_seq_pulse:f|R15_parity_host,R15_parity_silicon'
+# key|file:symbol:kind;...|tests (comma separated)|basis
+G6_ITEMS='known_good_fallback_present|src/omega_accelerator_world.c:omega_world_drain:f;src/omega_accelerator_world.c:omega_world_init:f|M19|Spec lines 182-183 name M19 omega_world_* as the known-good fallback (class C): the spec own mapping, not a proxy. Exercised by test-m19 (silicon, N/N gates). Does not test falling back from the reaction world to the M19 world.
+recovery_path_present|src/runtime/rx_generation.c:rx_gen_recover:f|R9,R14_host|PROXY: the spec names no single recovery symbol; rx_gen_recover is the generation-store crash recovery chosen here. R9 stops after each persistence step and R14 host recovers; boot or repair recovery outside omega is not covered.
+deterministic_maintenance_controls_present|src/omega_world_gates.c:run_m19_gates:f;tools/omegatool.c:--run-m19-gates:t|M19|Spec line 182 classes omegatool --run-*-gates as B (deterministic maintenance). PARTIAL: only the M19 runner is exercised (by test-m19); the other --run-*-gates entries are not.
+trusted_capability_root_present|src/runtime/rx_native_bind.c:rx_world_init_native:f;native/capability/aienos_capability.c:aienos_cap_validate:l;native/capability/aienos_capability.c:aienos_cap_mint:l|R7,R12_host|Spec C3: the native C library at aienos.lock is the sole authoritative root. Checks that source (lock tree) plus omega binding; NOT_RUN if the lock tree cannot be read. R7 compares native authority with the Linux oracle.
+generation_mechanism_present|src/runtime/rx_generation.c:rx_gen_propose:f|R9,R13_host|Map row OM-022 and spec line 659 name rx_generation.c as the protected generation mechanism; rx_gen_propose is the entry chosen here (PROXY for the symbol). R9 barrier and R13 host promote.
+evidence_present|src/omega_evidence.c:omega_evidence_write_digest:f|R15_receipt,R9|PROXY: the spec names no evidence symbol; omega_evidence_write_digest (content-addressed evidence writer) chosen here. R15 receipt test and R9 evidence blob exercise it indirectly.
+r9_crash_recovery_passing|src/runtime/rx_generation.c:rx_gen_recover:f|R9|PROXY: R9 exercises rx_gen_recover (same routine as recovery_path_present, not independent). PASS means the R9 barrier test passed in this run.
+r10_verifier_passing|src/omega_verify.c:omega_verify_v0_structural:f|R10|PROXY: omega_verify_v0_structural is the verifier R10 reaches through rx_omega.c; R10 pass in this run is the evidence.
+r12_seat_loss_handling_passing|src/runtime/rx_world.c:rx_resident_seat_lost:f|R12_host,R12_silicon|rx_resident_seat_lost is the seat-loss handler (spec/r12-resident-seat.md, Seat loss). R12 host and silicon exercise it; rx_gpu_seat_kill is only the test hook and is not counted here.
+r14_recovery_paths_passing|src/runtime/rx_living.c:fn_restore:f|R14_host,R14_silicon|PROXY: fn_restore (generation.restore reaction) is one R14 recovery path chosen here; R14 host and silicon exercise the recovery runs.
+operator_emergency_controls_passing||R12_silicon|MISSING_IMPLEMENTATION: the spec and brief only list operator emergency controls (docs/r16-operator-brief.md:245) and name no implementation. A search of omega, sovereign-core, aegis-runtime, aienos and physics found none with a test (aegis-runtime EmergencyStop is an unused enum variant). rx_gpu_seat_kill is a test hook, not an operator control, and is not a proxy PASS.
+benchmark_reference_paths_seq_passing|src/runtime/rx_seq_reference.c:rx_seq_pulse:f|R15_parity_host,R15_parity_silicon|Spec line 183 names rx_seq_reference as class D reference oracle. R15 parity host and silicon compare the reaction path with it.'
 declare -A G6S
 G6LIST=""; G6ALL=""; G6MISSING=0
-while IFS='|' read -r key pairs tests; do
+while IFS='|' read -r key pairs tests basis; do
     present=true; implj=""
+    if [ -z "$pairs" ]; then present=false; fi
     IFS=';' read -ra PA <<< "$pairs"
     for p in "${PA[@]}"; do
+        [ -n "$p" ] || continue
         pf=${p%%:*}; rest=${p#*:}; kind=${rest##*:}; sym=${rest%:*}
-        if g6_defined "$pf" "$sym" "$kind"; then d=true; else d=false; present=false; fi
+        if g6_defined "$pf" "$sym" "$kind"; then dr=0; else dr=$?; fi
+        if [ "$dr" = 0 ]; then d=true
+        elif [ "$dr" = 2 ]; then d='"unreadable"'; if [ "$present" = true ]; then present=unknown; fi
+        else d=false; present=false; fi
         implj="$implj{\"file\": \"$pf\", \"symbol\": \"$sym\", \"defined\": $d}, "
     done
     implj=${implj%, }
@@ -347,9 +377,11 @@ while IFS='|' read -r key pairs tests; do
         tj="$tj{\"name\": \"$t\", \"target\": \"${TG[$t]}\", \"status\": \"$s\"}, "
     done
     tj=${tj%, }
-    if [ "$present" = false ]; then st=MISSING_IMPLEMENTATION; G6MISSING=$((G6MISSING + 1)); else st=$ts; fi
+    if [ "$present" = false ]; then st=MISSING_IMPLEMENTATION; G6MISSING=$((G6MISSING + 1))
+    elif [ "$present" = unknown ]; then st=$(combine "$ts" NOT_RUN)
+    else st=$ts; fi
     G6S[$key]=$st; G6ALL="$G6ALL $st"
-    G6LIST="$G6LIST    {\"item\": \"$key\", \"status\": \"$st\", \"present\": $present, \"implementation\": [$implj], \"tests\": [$tj], \"basis\": \"present = symbol definition found; status PASS only if every test ran and passed in this run\"},
+    G6LIST="$G6LIST    {\"item\": \"$key\", \"status\": \"$st\", \"present\": \"$present\", \"implementation\": [$implj], \"tests\": [$tj], \"basis\": \"$basis\"},
 "
     echo "    $key: $st"
 done <<< "$G6_ITEMS"
