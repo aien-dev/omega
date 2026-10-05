@@ -75,14 +75,14 @@
           "purpose": "DUAL (ARCH-0031) documents in omega: applicability experiment method and findings (APPLICABILITY"
         },
         {
-          "digest": "f6591139efe8ceba03c23a5dd78510b4d990fe0fcade7382082180c74d3faa3e",
-          "last_commit": "85ca49a",
+          "digest": "0cb3def19f3d3746c2356912293c167af50cfaf3fc56421d594349a27a34d12c",
+          "last_commit": "14fc76a",
           "name": "estimation",
           "purpose": "Directory docs/estimation. Purpose not yet described by a human."
         },
         {
           "digest": "ed0c4e7b8e7ba3b7ef4acee3c7d7d4d0c013529d514626339899d3862df052ea",
-          "last_commit": "e5593ae",
+          "last_commit": "b56e89b",
           "name": "numeric",
           "purpose": "Directory docs/numeric. Purpose not yet described by a human."
         },
@@ -117,15 +117,15 @@
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:fce9617f5526572d088e1aa791b05e09064083acd701bcf1b816f544367769d5",
-      "compiled_at": "2026-10-05T03:24:21Z",
+      "children_root": "sha256:eb936a48e083909256775bf56937a020ad103b48827a7c99a1daa02a5ee339af",
+      "compiled_at": "2026-10-05T12:20:02Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:e4131510711c62d46378596fc17892088d9fe5724dc37f63eee3993e19070a2e",
-      "evidence_files": 26,
-      "evidence_root": "sha256:f58236184eadc5f8c8f95499127a9f43c2f4dc702ddca267853d8c3dee0690f1",
-      "files": 100,
-      "generated_at_commit": "b544d81db1f8d576685a8de19add13c7c59b052a",
-      "source_tree": "sha256:591c886445ea08315c7f4505339175112ac1474e4be86a360b57a6ca4afee19f"
+      "digest": "sha256:7821d3c5d462a43d05e35755f3ae9f037a7dacf658913901caed175fba9cea10",
+      "evidence_files": 31,
+      "evidence_root": "sha256:65c800e4606e22ef26dc06882dd4c24e663dd3e2578d9e487e94276cf7c9723f",
+      "files": 106,
+      "generated_at_commit": "85a3fc2488650bde3cebfc67ed71cb87fcbc3163",
+      "source_tree": "sha256:4d9fc0a09896dff9afe8a03725c2e3f334578a5e04f3e30ecf2a7674afd4946f"
     },
     "owner_lane": "",
     "provenance": {
