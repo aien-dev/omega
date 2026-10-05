@@ -51,6 +51,8 @@ typedef struct {
 #define RX_CALLER_ERR_EXISTS   -7   /* subject already enrolled */
 #define RX_CALLER_ERR_ENTROPY  -8   /* getrandom failed */
 #define RX_CALLER_ERR_FULL     -9   /* enrollment table full (RX_CALLER_MAX) */
+#define RX_CALLER_ERR_HALTED  -10   /* operator emergency stop in force (rx_world_caller_check_fn):
+                                       RX_GEN_ERR_HALTED at the R9 boundary, not an identity fault */
 
 /* What a caller check does (RxGenCallerFn, rx_world_caller_check_fn).
  * HOLD is the full check that, when it passes, keeps the enrollment table

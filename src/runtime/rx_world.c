@@ -4,13 +4,17 @@
 #include "rx_world.h"
 #include "rx_argus.h"
 #include "sha256.h"
+#include "rx_generation.h"   /* RX_GEN_HALT_MARK */
 
 #include <errno.h>
+#include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/random.h>
 #include <time.h>
+#include <unistd.h>
 
 /* ---- helpers ------------------------------------------------------------ */
 
@@ -115,6 +119,8 @@ const char *rx_crumb_kind_name(RxCrumbKind k) {
     case RX_CRUMB_RETIRE: return "RETIRE";
     case RX_CRUMB_QUARANTINE: return "QUARANTINE";
     case RX_CRUMB_CANCELLED: return "CANCELLED";
+    case RX_CRUMB_OPERATOR_STOP: return "OPERATOR_STOP";
+    case RX_CRUMB_OPERATOR_RESUME: return "OPERATOR_RESUME";
     default: return "?";
     }
 }
@@ -876,10 +882,272 @@ int rx_world_caller_check_fn(void *world, uint32_t subject, const RxCallerCred *
         return RX_CALLER_OK;
     }
     pthread_mutex_lock(&w->callers_mu);
+    /* R16 G6: under an operator stop a bound generation store neither
+     * proposes nor promotes. halted is written under callers_mu too. */
+    if (w->halted) {
+        pthread_mutex_unlock(&w->callers_mu);
+        return RX_CALLER_ERR_HALTED;
+    }
     int rc = caller_check_locked(w, subject, cred);
     /* HOLD: a pass keeps the table locked until RELEASE (no revocation). */
     if (op != RX_CALLER_OP_HOLD || rc != RX_CALLER_OK) pthread_mutex_unlock(&w->callers_mu);
     return rc;
+}
+
+/* ---- R16 G6 operator emergency stop (spec/r16-operator-emergency-stop.md) ---- */
+
+static void stamp_cap(RxWorld *w, RxCrumb *k, uint32_t i, RxCapRef ref);
+
+static uint64_t realtime_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+/* Caller holds mu and callers_mu. The credential, then the subject (no
+ * reaction ever added to this world runs under it), then the capability. */
+static int halt_authorize(RxWorld *w, uint32_t subject, const RxCallerCred *cred, RxCapRef cap) {
+    if (caller_check_locked(w, subject, cred) != RX_CALLER_OK) return RX_ERR_IDENTITY;
+    for (uint32_t i = 0; i < w->n_reactions; i++)
+        if (w->reactions[i].desc.subject == subject) return RX_ERR_AUTHORITY;
+    if (rx_world_validate_cap(w, cap, subject, RX_WORLD_RES_CONTROL, RX_WORLD_RIGHT_HALT, NULL)
+        != RX_CAP_OK)
+        return RX_ERR_AUTHORITY;
+    return RX_OK;
+}
+
+/* The mark's text: fixed lines, then "sha256 <hex>" over every byte before it. */
+static int halt_record(const RxHaltStatus *h, char *buf, size_t cap) {
+    int n = snprintf(buf, cap,
+                     "aien-operator-halt v1\nseq %llu\nsubject %u\ncap %u %llu\nreason %d\n"
+                     "t_ns %llu\ncrumb %llu\n",
+                     (unsigned long long)h->seq, h->subject, h->cap.cap_id,
+                     (unsigned long long)h->cap.generation,
+                     (int)h->reason, (unsigned long long)h->t_ns, (unsigned long long)h->crumb);
+    return n > 0 && (size_t)n < cap ? n : -1;
+}
+
+static int seal_append(char *buf, size_t len, size_t cap) {
+    uint8_t d[32];
+    sha256_ctx c;
+    sha256_init(&c);
+    sha256_update(&c, (const uint8_t *)buf, len);
+    sha256_final(&c, d);
+    if (len + 8 + 64 + 2 > cap) return -1;
+    memcpy(buf + len, "sha256 ", 7);
+    for (int i = 0; i < 32; i++) snprintf(buf + len + 7 + 2 * i, 3, "%02x", d[i]);
+    buf[len + 71] = '\n';
+    buf[len + 72] = 0;
+    return (int)len + 72;
+}
+
+static int fsync_dir(const char *dir) {
+    int fd = open(dir, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (fd < 0) return -errno;
+    int rc = fsync(fd) == 0 ? 0 : -errno;
+    close(fd);
+    return rc;
+}
+
+/* Write `buf` to dir/name durably (temporary file, fsync, rename, fsync dir).
+ * With excl, an existing dir/name is never replaced (link, not rename). */
+static int durable_write(const char *dir, const char *name, const char *buf, size_t len, bool excl) {
+    char tmp[512], dst[512];
+    if (snprintf(tmp, sizeof tmp, "%s/%s.partial", dir, name) >= (int)sizeof tmp ||
+        snprintf(dst, sizeof dst, "%s/%s", dir, name) >= (int)sizeof dst)
+        return -ENAMETOOLONG;
+    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+    if (fd < 0) return -errno;
+    size_t off = 0;
+    while (off < len) {
+        ssize_t n = write(fd, buf + off, len - off);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) { int e = n < 0 ? errno : EIO; close(fd); unlink(tmp); return -e; }
+        off += (size_t)n;
+    }
+    if (fsync(fd) != 0) { int e = errno; close(fd); unlink(tmp); return -e; }
+    close(fd);
+    if (excl) {
+        if (link(tmp, dst) != 0) { int e = errno; unlink(tmp); return -e; }
+        unlink(tmp);
+    } else if (rename(tmp, dst) != 0) {
+        int e = errno; unlink(tmp); return -e;
+    }
+    return fsync_dir(dir);
+}
+
+static int halt_mark_write(const RxWorld *w) {
+    if (!w->halt_dir[0]) return 0;
+    char buf[512];
+    int n = halt_record(&w->halt, buf, sizeof buf);
+    if (n < 0 || (n = seal_append(buf, (size_t)n, sizeof buf)) < 0) return -EOVERFLOW;
+    int rc = durable_write(w->halt_dir, RX_GEN_HALT_MARK, buf, (size_t)n, false);
+    return rc == 0 ? 1 : rc;
+}
+
+/* Read dir/OPERATOR_HALT. 0 absent, 1 read and its seal holds (h filled),
+ * RX_ERR_TORN present but unreadable as a sealed record, RX_ERR_IO cannot tell. */
+static int halt_mark_read(const char *dir, RxHaltStatus *h, char *raw, size_t cap, size_t *raw_len) {
+    char path[512];
+    if (snprintf(path, sizeof path, "%s/%s", dir, RX_GEN_HALT_MARK) >= (int)sizeof path)
+        return RX_ERR_IO;
+    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return errno == ENOENT ? 0 : RX_ERR_IO;
+    ssize_t n = read(fd, raw, cap - 1);
+    close(fd);
+    if (n < 0) return RX_ERR_IO;
+    raw[n] = 0;
+    *raw_len = (size_t)n;
+    RxHaltStatus r;
+    memset(&r, 0, sizeof r);
+    unsigned long long seq, t, crumb, cgen;
+    unsigned subject, cid;
+    int reason, used = 0;
+    if (sscanf(raw, "aien-operator-halt v1\nseq %llu\nsubject %u\ncap %u %llu\nreason %d\n"
+                    "t_ns %llu\ncrumb %llu\n%n",
+               &seq, &subject, &cid, &cgen, &reason, &t, &crumb, &used) != 7 || used <= 0)
+        return RX_ERR_TORN;
+    char want[600];
+    memcpy(want, raw, (size_t)used);
+    if (seal_append(want, (size_t)used, sizeof want) < 0 || strcmp(want, raw) != 0)
+        return RX_ERR_TORN;
+    r.seq = seq; r.subject = subject; r.cap.cap_id = cid; r.cap.generation = cgen;
+    r.reason = reason; r.t_ns = t; r.crumb = crumb;
+    *h = r;
+    return 1;
+}
+
+static uint64_t halt_crumb(RxWorld *w, RxCrumbKind kind, RxCapRef cap, int32_t reason,
+                           uint64_t parent) {
+    RxCrumb k;
+    memset(&k, 0, sizeof k);
+    k.kind = kind;
+    k.reaction = UINT32_MAX;
+    k.faculty = RX_FACULTY_EXTERNAL;
+    k.worker = UINT32_MAX;
+    k.n_caps = 1;
+    stamp_cap(w, &k, 0, cap);
+    add_parent(&k, parent);
+    k.reason = reason;
+    k.t_start_ns = now_ns();
+    k.t_end_ns = k.t_start_ns;
+    return crumb_append(w, &k);
+}
+
+int rx_world_set_halt_dir(RxWorld *w, const char *dir) {
+    if (!w || !dir || !dir[0] || strlen(dir) >= sizeof w->halt_dir) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    pthread_mutex_lock(&w->callers_mu);
+    snprintf(w->halt_dir, sizeof w->halt_dir, "%s", dir);
+    RxHaltStatus h;
+    char raw[600];
+    size_t raw_len = 0;
+    int rc = halt_mark_read(dir, &h, raw, sizeof raw, &raw_len);
+    if (rc == 0 && w->halted) {
+        w->halt.durable = halt_mark_write(w);   /* a stop taken before the directory was set */
+    } else if (rc != 0 && !w->halted) {
+        /* A stop outlives the process: the world starts stopped. A mark that
+         * cannot be read or verified still stops it (unknown is not "go"). */
+        if (rc != 1) {
+            memset(&h, 0, sizeof h);
+            h.reason = rc;
+        }
+        h.halted = true;
+        h.restored = true;
+        h.durable = 1;
+        h.refused = w->halt.refused;
+        h.crumb = halt_crumb(w, RX_CRUMB_OPERATOR_STOP, h.cap, h.reason, 0);
+        w->halt = h;
+        w->halted = true;
+    }
+    pthread_mutex_unlock(&w->callers_mu);
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_emergency_stop(RxWorld *w, uint32_t subject, const RxCallerCred *cred,
+                            RxCapRef cap, int32_t reason, RxHaltStatus *out) {
+    if (!w) return RX_ERR_ARG;
+    /* mu then callers_mu (R16 C7 order): a commit or seat result holds mu from
+     * its checks to its publish, and a promotion holds callers_mu (HOLD) across
+     * its flip, so each finishes before the stop or sees it. */
+    pthread_mutex_lock(&w->mu);
+    pthread_mutex_lock(&w->callers_mu);
+    int rc = halt_authorize(w, subject, cred, cap);
+    if (rc == RX_OK && w->halted) rc = RX_HALT_ALREADY;
+    if (rc == RX_OK) {
+        RxHaltStatus h;
+        memset(&h, 0, sizeof h);
+        h.halted = true;
+        h.seq = w->halt.seq + 1;
+        h.subject = subject;
+        h.cap = cap;
+        h.reason = reason;
+        h.t_ns = realtime_ns();
+        h.refused = w->halt.refused;
+        h.crumb = halt_crumb(w, RX_CRUMB_OPERATOR_STOP, cap, reason, 0);
+        w->halt = h;
+        w->halted = true;               /* in force before any disk work */
+        w->halt.durable = halt_mark_write(w);
+    }
+    if (out) *out = w->halt;
+    pthread_mutex_unlock(&w->callers_mu);
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_emergency_resume(RxWorld *w, uint32_t subject, const RxCallerCred *cred,
+                              RxCapRef cap, RxHaltStatus *out) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    pthread_mutex_lock(&w->callers_mu);
+    int rc = halt_authorize(w, subject, cred, cap);
+    if (rc == RX_OK && !w->halted) rc = RX_HALT_NOT_STOPPED;
+    if (rc == RX_OK && w->halt_dir[0]) {
+        /* The stop record is kept, never deleted: its bytes, then the resume,
+         * sealed together under a name no later resume can take; only then is
+         * the mark removed. Any failure leaves the world stopped. */
+        RxHaltStatus disk;
+        char raw[600];
+        size_t raw_len = 0;
+        int mr = halt_mark_read(w->halt_dir, &disk, raw, sizeof raw, &raw_len);
+        if (mr == RX_ERR_IO) rc = RX_ERR_IO;
+        else if (mr != 0) {
+            char buf[1200], name[160];
+            uint64_t t = realtime_ns();
+            int n = snprintf(buf, sizeof buf, "%s%sresumed_by %u\nresume_cap %u %llu\nresume_t_ns %llu\n",
+                             raw, raw_len && raw[raw_len - 1] != '\n' ? "\n" : "", subject,
+                             cap.cap_id, (unsigned long long)cap.generation, (unsigned long long)t);
+            if (n < 0 || (size_t)n >= sizeof buf || (n = seal_append(buf, (size_t)n, sizeof buf)) < 0)
+                rc = RX_ERR_IO;
+            snprintf(name, sizeof name, "%s.resumed.%llu.%llu", RX_GEN_HALT_MARK,
+                     (unsigned long long)w->halt.seq, (unsigned long long)t);
+            if (rc == RX_OK && durable_write(w->halt_dir, name, buf, (size_t)n, true) != 0)
+                rc = RX_ERR_IO;
+            char mark[512];
+            snprintf(mark, sizeof mark, "%s/%s", w->halt_dir, RX_GEN_HALT_MARK);
+            if (rc == RX_OK && (unlink(mark) != 0 || fsync_dir(w->halt_dir) != 0)) rc = RX_ERR_IO;
+        }
+    }
+    if (rc == RX_OK) {
+        halt_crumb(w, RX_CRUMB_OPERATOR_RESUME, cap, 0, w->halt.crumb);
+        w->halted = false;
+        w->halt.halted = false;
+        w->halt.restored = false;
+        pthread_cond_broadcast(&w->work_cv);
+    }
+    if (out) *out = w->halt;
+    pthread_mutex_unlock(&w->callers_mu);
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+void rx_world_halt_status(RxWorld *w, RxHaltStatus *out) {
+    if (!w || !out) return;
+    pthread_mutex_lock(&w->mu);
+    *out = w->halt;
+    out->halted = w->halted;
+    pthread_mutex_unlock(&w->mu);
 }
 
 static int validate_caps(const RxWorld *w, const RxReactionDesc *d, int *first_err) {
@@ -1548,6 +1816,21 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         return;
     }
 
+    /* R16 G6 operator emergency stop: the stop was taken while this
+     * activation computed. Nothing it proposed is published; it runs again
+     * on resume, against the state then (rearm keeps its admission path). */
+    if (w->halted) {
+        set_state(w, r, RX_CANCELLED);
+        k.kind = RX_CRUMB_CANCELLED;
+        k.reason = RX_ERR_HALTED;
+        k.t_end_ns = now_ns();
+        crumb_append(w, &k);
+        w->halt.refused++;
+        r->rearm = true;
+        end_activation(w, rid);
+        return;
+    }
+
     set_state(w, r, RX_PUBLISHING);
     /* 1. Versioned reads still valid? */
     bool stale = false;
@@ -1688,7 +1971,8 @@ static void *worker_main(void *arg) {
 #if RX_ARGUS
         int argus_parked = 0;
 #endif
-        while (!w->stopping && !pop_ready(w, &rid)) {
+        /* R16 G6: under an operator stop no work is taken; resume broadcasts. */
+        while (!w->stopping && (w->halted || !pop_ready(w, &rid))) {
 #if RX_ARGUS
             /* ARGUS: before the first wait of a park, flush this worker's use table
              * and publish idle. The flush touches only this thread's own ARGUS slot,
@@ -2120,6 +2404,11 @@ int rx_world_add_reaction_keyed(RxWorld *w, const RxCallerKeyring *keys,
 int64_t rx_world_publish_external(RxWorld *w, RxCapRef cap, const RxMutation *muts, uint32_t n) {
     if (!muts || n == 0 || n > RX_MAX_MUTATIONS) return RX_ERR_ARG;
     pthread_mutex_lock(&w->mu);
+    if (w->halted) {                     /* R16 G6: nothing outside publishes */
+        w->halt.refused++;
+        pthread_mutex_unlock(&w->mu);
+        return RX_ERR_HALTED;
+    }
     for (uint32_t i = 0; i < n; i++) {
         if (!ref_live(w, muts[i].obj)) { pthread_mutex_unlock(&w->mu); return RX_ERR_STALE_GEN; }
         int rc = rx_world_validate_cap(w, cap, w->external_subject,
@@ -2233,6 +2522,24 @@ int rx_resident_accept(RxWorld *w) {
         add_parent(&k, a->field_writer[1]);
     }
 
+    /* R16 G6 operator emergency stop: a seat result that lands while the
+     * world is stopped is not published. The image is re-projected from the
+     * world, the activation ends CANCELLED and runs again on resume. */
+    if (w->halted) {
+        if (o->placed) rx_coherent_project(w, id);
+        if (r->state == RX_RUNNING) set_state(w, r, RX_CANCELLED);
+        k.kind = RX_CRUMB_CANCELLED;
+        k.reason = RX_ERR_HALTED;
+        k.t_end_ns = now_ns();
+        crumb_append(w, &k);
+        r->resident_seat = false;
+        w->stats.resident_closed++;
+        w->halt.refused++;
+        r->rearm = true;
+        end_activation(w, (uint32_t)rid);
+        pthread_mutex_unlock(&w->mu);
+        return RX_ERR_HALTED;
+    }
     if (tr != RX_OK) {
         if (o->placed) rx_coherent_project(w, id);
         seat_fail(w, (uint32_t)rid, &k, RX_CRUMB_REJECTED, tr);
@@ -2432,6 +2739,7 @@ int rx_world_seq_activate_timed_locked(RxWorld *w, uint32_t rid, uint64_t cause,
     if (!w || !w->sequential || rid >= w->n_reactions) return RX_ERR_ARG;
     RxReaction *r = &w->reactions[rid];
     if (r->state != RX_DORMANT || r->removed) return RX_ERR_ARG; /* removed: never demanded */
+    if (w->halted) return RX_ERR_HALTED;  /* R16 G6 operator emergency stop */
     r->seq_pending = false;
     demand(w, rid, cause);          /* R6 budgets and quarantine, unchanged */
     if (!r->seq_pending) return 0;

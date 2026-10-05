@@ -30,6 +30,12 @@
 #define RX_GEN_ERR_VERIFY    -48
 #define RX_GEN_ERR_IO        -49
 #define RX_GEN_ERR_IDENTITY  -50   /* caller credential absent, forged, stale or revoked */
+#define RX_GEN_ERR_HALTED    -51   /* an operator emergency stop is in force (world or durable mark) */
+
+/* Durable mark of an operator emergency stop (R16 G6), written by the world into
+ * its halt directory (rx_world_set_halt_dir), the store directory. While it exists
+ * the store promotes nothing, bound or not. */
+#define RX_GEN_HALT_MARK     "OPERATOR_HALT"
 
 #define RX_GEN_MAX_OBJECTS   32u
 #define RX_GEN_MAX_WORK      16u
