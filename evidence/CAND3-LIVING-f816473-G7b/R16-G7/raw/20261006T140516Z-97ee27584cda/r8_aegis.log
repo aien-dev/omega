@@ -1,0 +1,9 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r8_aegis_test
+[*] no authority: blocked, AEGIS untouched; the worker asks; then the fast path
+[*] a human approves or rejects; privileged and unruled requests are denied
+[*] a leased grant expires on the AIENOS clock; renewal replaces it
+[*] forged decisions, requests written for the worker, slot stuffing, and a policy mistake are refused by the root
+    fast check 17 ns, policy evaluation 1 ns, process spawn 278743 ns, slow path 248337 ns
+checks 116 failures 0
+receipt: build/qual-runs/20261006T141037Z-97ee27584cda/R8/rx_aegis_resident_receipt.json

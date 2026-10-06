@@ -1,0 +1,18 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r15_g7_host
+[*] RES-1: promotion while production runs
+  RES-1: episode 1 reached goal MET (generation 1 -> 2)
+    barrier 109.8 ms (flip at 77.5 ms); production commits during it 1948 (1304 before the flip); hook saw 1833 -> 1836 served in 0.11 ms
+[*] RES-4: promotion while production runs
+  RES-4: episode 1 reached goal MET (generation 1 -> 2)
+    barrier 103.0 ms (flip at 72.8 ms); production commits during it 925 (670 before the flip); hook saw 1106 -> 1109 served in 0.32 ms
+[*] SEQ: the sequential reference is unchanged
+  SEQ: episode 1 reached goal MET (generation 1 -> 2)
+    barrier 107.4 ms; production commits during it 0
+[*] RES-1: stop before the flip
+    recovered generation 1 (lineage 1), rc 0, coherent 1
+[*] RES-1: stop during the flip
+    recovered generation 1 (lineage 1), rc 0, coherent 1
+[*] RES-1: stop after the flip
+    recovered generation 2 (lineage 2), rc 0, coherent 1
+R15 G7 worker split: 57 checks, 0 failures

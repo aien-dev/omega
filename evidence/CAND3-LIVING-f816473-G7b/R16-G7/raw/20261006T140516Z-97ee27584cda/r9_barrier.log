@@ -1,0 +1,5 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r9_barrier_test
+receipt: build/qual-runs/20261006T141040Z-97ee27584cda/R9/rx_generation_barrier_receipt.json
+candidate bound: yes
+generation barrier kept a single coherent generation through every injected stop

@@ -1,0 +1,39 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r13_living_silicon
+R13 operator: state /tmp/r13-state-qWCMrP, control /tmp/r13-state-qWCMrP/control (operator subject 70, pid 1069083)
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34911 passes in 50 ms, budget 1396440 (2000 ms window)
+R13 costs: incumbent 6801 ns, target 3740 ns, selected 2696953 ps, reference on new cores 4571162 ps, AIEN now expects 2954 ns, goal status 2
+R13 positive: generation 1 -> 2, recovered 2; served 1600 (139 after promotion), crumbs 3573, GPU claims 16, durable links 11
+R13 operator positive: stops 0 resumes 0 restored 0 open 0; under stop: commits 0 externals 0 cancelled 0; order ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 34424 passes in 50 ms, budget 1376960 (2000 ms window)
+R13 control A: no AIEN -> no plan, no GPU experiment, no candidate, generation stays 1
+R13 operator no-aien: stops 0 resumes 0 restored 0 open 0; under stop: commits 0 externals 0 cancelled 0; order ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35746 passes in 50 ms, budget 1429840 (2000 ms window)
+R13 control B: verified candidate 2 refused (RX_GEN_ERR_AUTHORITY); never in force, production stayed on the reference
+R13 operator no-promotion: stops 0 resumes 0 restored 0 open 0; under stop: commits 0 externals 0 cancelled 0; order ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 33501 passes in 50 ms, budget 1340040 (2000 ms window)
+R13 control C: revoked grant -> seat blocked on authority, no claim, no evidence; 771 requests served meanwhile
+R13 operator revoked-experiment: stops 0 resumes 0 restored 0 open 0; under stop: commits 0 externals 0 cancelled 0; order ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35522 passes in 50 ms, budget 1420880 (2000 ms window)
+R13 control D: output generation changed mid-claim -> result refused, no evidence, no candidate
+R13 operator stale-gpu: stops 0 resumes 0 restored 0 open 0; under stop: commits 0 externals 0 cancelled 0; order ok
+seat build insns 363 gpr 50
+seat heartbeat 1 instructions 363 gpr 50
+seat lease: 35018 passes in 50 ms, budget 1400720 (2000 ms window)
+R13 control E: crashing candidate refused by the verifier; the promoted generation holds a verified one
+R13 costs: incumbent 6921 ns, target 3806 ns, selected 2692837 ps, reference on new cores 4566348 ps, AIEN now expects 2904 ns, goal status 2
+R13 control E episode: generation 1 -> 2, recovered 2; served 20337 (133 after promotion), crumbs 44085, GPU claims 16, durable links 11
+R13 operator failed-verification: stops 0 resumes 0 restored 0 open 0; under stop: commits 0 externals 0 cancelled 0; order ok
+R13 ARGUS: observing; observe and record, received 117202 events, 421 authority observations, 0 findings, 0 ingest errors
+R13 gate: R13_LIVING_SYSTEM=PASS
+R13 receipt: build/qual-runs/20261006T141105Z-97ee27584cda/R13/rx_living_receipt.json

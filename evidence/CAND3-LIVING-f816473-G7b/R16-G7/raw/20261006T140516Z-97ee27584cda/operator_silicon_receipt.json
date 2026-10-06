@@ -1,0 +1,17 @@
+{
+  "schema": "AIEN_R16_G6_OPERATOR_CONTROL_V1",
+  "seat": "silicon",
+  "seat_description": "production GB10 program, resident Blackwell seat",
+  "candidate_commit": "97ee27584cda0d8eaca136f31a44293cd36c9b02",
+  "candidate_env": "97ee27584cda0d8eaca136f31a44293cd36c9b02",
+  "tree_dirty": false,
+  "binary": "rx_r13_living_silicon",
+  "binary_sha256": "9f48df860344c81f46b90be4ff47956824cc928fe79a8ee20a1a1fd6b892eb86",
+  "phases": "startup control restart kill",
+  "held_by_gdb": false,
+  "checks": 66,
+  "failures": 0,
+  "skipped": 0,
+  "skip_reasons": [],
+  "gate": {"R16_G6_OPERATOR": "PASS"}
+}

@@ -1,0 +1,53 @@
+2c2
+< # CAND-3 A7c / G7 attempt. Declared in DECLARED-ATTEMPT-A7c.md before it ran. Never kills, never retries, runs once.
+---
+> # CAND-3 G7b replacement attempt. Declared in DECLARED-ATTEMPT-G7b.md before it ran. Never kills, never retries, runs once.
+4c4
+< #        cand3_r15c.sh phase2 <final R15 receipt path>   (R16 harness once with R16_R15_RECEIPT set: G7; G8 reported NOT_RUN by the script)
+---
+> #        cand3_g7b.sh phase2 <final R15 receipt path>   (R16 harness once with R16_R15_RECEIPT set: G7; G8 reported NOT_RUN by the script)
+9c9
+< OUT=$EVID/CAND3-LIVING-$(echo "$CODE_SHA" | cut -c1-7)-A7c
+---
+> OUT=$EVID/CAND3-LIVING-$(echo "$CODE_SHA" | cut -c1-7)-G7b
+20,55d19
+< phase1)
+<   mkdir -p "$OUT/00-declared" "$OUT/00-reader"
+<   cp -a "$W/DECLARED-ATTEMPT-A7c.md" "$W/cand3_r15c.sh" "$W/cand3_env.sh" "$W/cand3_ladder.sh" "$OUT/00-declared/"
+<   sha256sum "$W/DECLARED-ATTEMPT-A7c.md" "$W/cand3_r15c.sh" "$W/cand3_env.sh" "$W/cand3_ladder.sh" > "$OUT/00-declared/sha256.txt"
+<   echo "QUIETLOCK_HOLD=${QUIETLOCK_HOLD:-unset} start=$(date -u +%FT%TZ)" > "$OUT/00-declared/window.txt"
+<   snap "$OUT/00-reader" start
+<   { uname -r; cat /sys/devices/system/cpu/../../../proc/cmdline 2>/dev/null | head -1; mokutil --sb-state 2>&1; cat /sys/kernel/security/lockdown 2>&1
+<     lsmod | grep aien_spbm; for h in /sys/class/hwmon/hwmon*; do echo "$h $(cat $h/name)"; done
+<     modinfo aien_spbm_readonly 2>&1 | head -20
+<     sha256sum $HOME/workspace/omega-r15/research/m15/spbm/aien_spbm_readonly.ko
+<     journalctl -k --no-pager 2>/dev/null | grep -i -E "spbm|module verification"; } > "$OUT/00-reader/reader-facts.txt" 2>&1
+<   step 00-reader-preflight tools/r15_machine_state.sh energy-preflight
+<   step R15-build make r15-perf-silicon
+<   hashbins R15-build build/rx_r15_perf_silicon build/rx_r15_perf_silicon_nodigest build/r15_reduce
+<   for x in rx_r15_perf_silicon rx_r15_perf_silicon_nodigest r15_reduce; do
+<     [ -x build/$x ] || { echo "R15-build did not produce build/$x: NOT_RUN (harness defect)" | tee -a "$OUT/LADDER-SUMMARY.txt"; exit 2; }
+<   done
+<   # section 14 correctness reruns on the candidate, sequential, each recorded; none is retried
+<   RD=$OUT/R15-reruns; mkdir -p "$RD"; : > "$RD/rc.txt"
+<   declare -A rc
+<   for t in test-r3 test-r7 test-r8 test-r9 test-r10 test-r11 test-r12 test-r12-silicon test-r13-host test-r13-silicon test-r14-host test-r14-silicon test-r15-parity-host test-r15-parity-silicon; do
+<     step R15-reruns/$t env OMEGA_CANDIDATE_COMMIT=$OMEGA_SHA make $t
+<     rc[$t]=$(cat "$OUT/R15-reruns/$t/exit.txt"); echo "$t ${rc[$t]}" >> "$RD/rc.txt"
+<   done
+<   v() { [ "${rc[$1]:-1}" = 0 ] && echo PASS || echo FAIL; }
+<   printf '{"candidate_commit":"%s","tree_dirty":false,"when":"%s","R3":"%s","R7":"%s","R8":"%s","R9":"%s","R10":"%s","R11":"%s","R12_host":"%s","R12_silicon":"%s","R13_host":"%s","R13_silicon":"%s","R14_host":"%s","R14_silicon":"%s","R15_SEQ_parity":"%s","R15_SEQ_parity_host":"%s","R15_SEQ_parity_silicon":"%s","make_targets":"test-r3 test-r7 test-r8 test-r9 test-r10 test-r11 test-r12 test-r12-silicon test-r13-host test-r13-silicon test-r14-host test-r14-silicon test-r15-parity-host test-r15-parity-silicon, run sequentially under quietlock; R12 host and silicon ran as test-r12 and test-r12-silicon; PASS means exit 0"}\n' \
+<     "$OMEGA_SHA" "$(date -u +%FT%TZ)" "$(v test-r3)" "$(v test-r7)" "$(v test-r8)" "$(v test-r9)" "$(v test-r10)" "$(v test-r11)" "$(v test-r12)" "$(v test-r12-silicon)" "$(v test-r13-host)" "$(v test-r13-silicon)" "$(v test-r14-host)" "$(v test-r14-silicon)" \
+<     "$([ "$(v test-r15-parity-host)$(v test-r15-parity-silicon)" = PASSPASS ] && echo PASS || echo FAIL)" "$(v test-r15-parity-host)" "$(v test-r15-parity-silicon)" > "$RD/reruns.json"
+<   guard
+<   step R15-silicon env R15_OUT_BASE="$OUT/R15-raw" AIENOS_R7_DIR="$W/survey/aienos" PHYSICS_DIR="$P" tools/r15_qualify.sh silicon
+<   RAW=$(ls -td "$OUT"/R15-raw/*-silicon 2>/dev/null | head -1); echo "$RAW" > "$OUT/R15-silicon/run-dir.txt"
+<   if [ -n "$RAW" ] && [ -s "$RAW/summary.json" ]; then
+<     step R15-receipt-A tools/r15_receipt.sh "$RAW" "$OUT/R15-receipt-A" "$OMEGA_SHA" "$RD/reruns.json"
+<   else echo "no summary.json: no receipt (recorded)" | tee -a "$OUT/LADDER-SUMMARY.txt"; fi
+<   echo "post-run reader state: $(cat /sys/class/hwmon/hwmon3/name 2>&1) $(lsmod | grep aien_spbm)" >> "$OUT/LADDER-SUMMARY.txt"
+<   guard; echo "phase1 done $(date -u +%FT%TZ)" >> "$OUT/LADDER-SUMMARY.txt" ;;
+61c25
+< *) echo "usage: $0 phase1 | phase2 <receipt>"; exit 2 ;;
+---
+> *) echo "usage: $0 phase2 <receipt>"; exit 2 ;;

@@ -1,0 +1,11 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r10_omega_test
+[*] placed on 10 Cortex-X925 cores: 5,6,7,8,9,15,16,17,18,19
+[*] cold demand leaves Omega idle; hot demand runs the whole chain unasked
+[*] a new regime becomes hot and gets its own record
+[*] planted candidate (drops N mod 4) is refused, never run by the world, never selected
+[*] planted candidate (faults on first load) is refused, never run by the world, never selected
+[*] planted candidate (bytes differ from its identity) is refused, never run by the world, never selected
+[*] Omega without authority is blocked; production is not
+checks 198 failures 0
+receipt: build/qual-runs/20261006T141042Z-97ee27584cda/R10/rx_omega_faculty_receipt.json

@@ -1,0 +1,49 @@
+=== R16 Qualification (schema revision 2): 20261006T140516Z-97ee27584cda ===
+Candidate commit: 97ee27584cda0d8eaca136f31a44293cd36c9b02
+[*] Capturing machine identity...
+[*] R16-G1 / R16-G2: loop inventory...
+    G1=PASS G2=PASS (unclassified=0 a_reachable=0)
+[*] R16-G3: authpath host and silicon...
+    G3=PASS (host PASS, silicon PASS)
+[*] R16-G4: negative tests and mutants...
+    G4=PASS
+[*] R16-G5: surface check...
+    G5=PASS
+[*] R16-G7: ladder...
+    R1_R6: PASS
+    R7: PASS
+    R8: PASS
+    R9: PASS
+    R10: PASS
+    R11: PASS
+    R12_host: PASS
+    R12_silicon: PASS
+    R13_host: PASS
+    R13_silicon: PASS
+    R14_host: PASS
+    R14_silicon: PASS
+    R15_parity_host: PASS
+    R15_g7_host: PASS
+    R15_parity_silicon: PASS
+    R15_receipt: PASS
+    G7=PASS (R15 acceptance receipt: PASS)
+[*] R16-G6: protected things kept...
+    operator host receipt: bound (binary 605054a7aafa)
+    operator silicon receipt: bound (binary 9f48df860344)
+    known_good_fallback_present: PASS
+    recovery_path_present: PASS
+    deterministic_maintenance_controls_present: PASS
+    trusted_capability_root_present: PASS
+    generation_mechanism_present: PASS
+    evidence_present: PASS
+    r9_crash_recovery_passing: PASS
+    r10_verifier_passing: PASS
+    r12_seat_loss_handling_passing: PASS
+    r14_recovery_paths_passing: PASS
+    operator_emergency_controls_passing: PASS
+    benchmark_reference_paths_seq_passing: PASS
+    G6=PASS (items missing: 0)
+[*] R16-G8: NOT_RUN (merge-commit part is outside this script; receipt preconditions met)
+Gates: G1=PASS G2=PASS G3=PASS G4=PASS G5=PASS G6=PASS G7=PASS G8=NOT_RUN
+Receipt (untracked): /home/drakestapleton/workspace/evidence-out/CAND3-LIVING-f816473-G7b/R16-G7/raw/receipts/9dfb29957368bcc0acd8ac600f55efdd4ec31221d44ea4e52fbcf987b3cc4adc.json
+R16_QUALIFY_RESULT=NOT_RUN
