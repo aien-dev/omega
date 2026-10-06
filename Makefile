@@ -1326,6 +1326,17 @@ test-r16-operator-host: $(RX_R13_HOST) $(RX_OPERATOR_CLI)
 test-r16-operator-silicon: $(RX_R13_SILICON) $(RX_OPERATOR_CLI)
 	bash tests/runtime/rx_operator_host.sh silicon $(RX_R13_SILICON) $(RX_OPERATOR_CLI)
 
+.PHONY: test-r16-operator-mutants-evidence test-r13-first-failure test-window-lane-guard
+test-r16-operator-mutants-evidence:
+	bash tests/runtime/rx_operator_mutants_evidence_test.sh
+
+# Builds the R13 host test build twice into a scratch OUT_DIR and runs it (host only, no GPU).
+test-r13-first-failure:
+	bash tests/runtime/rx_r13_first_failure_test.sh
+
+test-window-lane-guard:
+	bash tests/window_lane_guard_test.sh
+
 test-r16-operator-mutants: $(RX_R13_HOST) $(RX_OPERATOR_CLI)
 	CC="$(CC)" CFLAGS="$(CFLAGS)" RX_PROD_ARGUS_FLAGS="$(RX_PROD_ARGUS_FLAGS)" \
 		RX_R13_SRCS="$(RX_R13_SRCS)" RX_PROD_ARGUS_SRCS="$(RX_PROD_ARGUS_SRCS)" \
