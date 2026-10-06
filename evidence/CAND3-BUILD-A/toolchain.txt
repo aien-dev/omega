@@ -1,0 +1,6 @@
+rustc: rustc 1.98.1 (48a229cea 2026-09-01) binary: rustc commit-hash: 48a229ceaefd4985c50990b14116b6d856af0985 commit-date: 2026-09-01 host: aarch64-unknown-linux-gnu release: 1.98.1 LLVM version: 22.1.8 
+cargo: cargo 1.98.1 (797e8a9bc 2026-08-05)
+cc: cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+make: GNU Make 4.3
+ld: GNU ld (GNU Binutils for Ubuntu) 2.42
+CARGO_HOME=/home/drakestapleton/workspace/cand3-campaign/cand3/rootA/cargo-home

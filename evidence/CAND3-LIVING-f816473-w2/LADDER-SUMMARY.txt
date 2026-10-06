@@ -1,0 +1,13 @@
+R16-ladder rc=3 secs=880
+R13-testbuild-silicon rc=0 secs=12
+prod-hygiene-silicon rc=0 secs=0
+COMPOSITION-2-GPU rc=0 secs=4
+ladder done
+R11-build rc=0 secs=1
+R11-living rc=0 secs=0
+r11 done
+CHIPWAIT rc=0 secs=460
+chipwait done
+M18-build rc=0 secs=0
+M18 rc=0 secs=5
+m18 done

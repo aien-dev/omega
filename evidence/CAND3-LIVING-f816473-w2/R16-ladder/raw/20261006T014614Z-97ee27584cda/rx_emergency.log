@@ -1,0 +1,112 @@
+cc -std=gnu11 -Wall -Wextra -Werror -MMD -MP -D_GNU_SOURCE -O2 -Isrc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/m16 -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/nvrm -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/common/inc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/nvidia-uvm -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include -pthread -o build/rx_emergency_test src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c src/runtime/rx_generation.c src/sha256.c tests/runtime/rx_emergency.c -lm
+./build/rx_emergency_test
+[+] E1 setup: a control capability revoked by the office
+[+] E1 stop refused: no credential (rc -27, want -27)
+[+] E1 stop refused: forged credential (rc -27, want -27)
+[+] E1 stop refused: enrolled intruder presenting the operator's capability (rc -4, want -4)
+[+] E1 stop refused: operator with the wrong right on the control resource (rc -4, want -4)
+[+] E1 stop refused: operator with the halt right on another resource (rc -4, want -4)
+[+] E1 stop refused: operator with a revoked control capability (rc -4, want -4)
+[+] E1 stop refused: a reaction's subject with a valid control capability (rc -4, want -4)
+[+] E1 the world is still running after every refused stop
+[+] E1 refused stops changed neither the world digest nor the crumb log
+[+] E1 a forged resume is refused before 'not stopped' is told
+[+] E1 an authorized resume of a running world answers RX_HALT_NOT_STOPPED
+[+] E1 the not-stopped resume left no crumb
+[+] E1 control: the world still publishes and reacts (R2 wrote 4*10)
+[+] E3 setup: publish E.f0 = 41 (wakes R)
+[+] E3 setup: R is computing, held in its function
+[+] E3 setup: publish E.f1 = 5 (wakes R2, queued: one worker)
+[+] E2 an authorized stop takes effect (seq 1, operator, reason 77)
+[+] E2 OPERATOR_STOP crumb names the control capability and the reason
+[+] E2 no halt directory: durable = 0 (said, not hidden)
+[+] E2 the stop added exactly one crumb
+[+] E2 a second stop (another operator) answers RX_HALT_ALREADY, no crumb
+[+] E2 the second stop changed nothing
+[+] E2 outside publication refused: RX_ERR_HALTED
+[+] E2 the refused publication changed nothing
+[+] E3 the activation computed under the stop ended CANCELLED, RX_ERR_HALTED
+[+] E3 nothing it computed was published (O unchanged, no COMMIT)
+[+] E3 R2's queued wake was not taken while stopped (50 ms)
+[+] E3 refused count = 2 (one publication, one activation)
+[+] E2 another authorized operator resumes
+[+] E2 OPERATOR_RESUME crumb: parent = the stop, cap = the resumer's
+[+] E3 on resume the cancelled activation and the queued wake both ran
+[+] E3 their results: O = 41+1, Q = 5*10
+[+] E3 each committed exactly once
+[+] E4 race: 14004 publications ok, 457092 refused HALTED, 0 other; 373 stops, 373 resumes
+[+] E4 the crumb log did not overflow (every event is in it)
+[+] E4 no EXTERNAL or COMMIT crumb between a STOP and its RESUME
+[+] E4 STOP and RESUME strictly alternate
+[+] E4 one STOP crumb per accepted stop, one RESUME per accepted resume
+[+] E4 every stop/resume answer was OK, ALREADY or NOT_STOPPED
+[+] E4 the crumb chain verifies
+[+] E5 setup: second world
+[+] E5 setup: world with operator, proposer, promoter; bound generation store
+[+] E5 stop during the live barrier: stop rc 0, promote rc -51 (want -51)
+[+] E5 active generation unchanged, in memory and on disk
+[+] E5 a proposal under the stop is refused: RX_GEN_ERR_HALTED
+[+] E5 operator resumes
+[+] E5 stop during the disk writes: stop rc 0, promote rc -51 (want -51)
+[+] E5 active generation unchanged, in memory and on disk
+[+] E5 a proposal under the stop is refused: RX_GEN_ERR_HALTED
+[+] E5 operator resumes
+[+] E5 control: after resume the same promoter promotes
+[+] E6 setup: halt directory
+[+] E6 setup: world
+[+] E6 no mark: set_halt_dir answers 0, world runs
+[+] E6 the stop wrote its mark durably (durable = 1)
+[+] E6 the mark names the operator, the capability and the reason, and is sealed
+[+] E6 restart: new world
+[+] E6 the new world starts stopped, restored from the mark (seq, operator, reason)
+[+] E6 the restored stop refuses publication
+[+] E6 setup: directory with a damaged mark
+[+] E6 torn: new world
+[+] E6 a mark with one byte changed still stops the world (RX_ERR_TORN)
+[+] E6 an authorized resume lifts the torn stop and retires its mark
+[+] E6 the torn record is kept, not deleted
+[+] E6 the kept record starts with the damaged bytes, unchanged
+[+] E6 unbound store opened over the halt directory
+[+] E6 unbound store: promotion refused by the mark
+[+] E6 world restored stopped
+[+] E6 setup: halt directory made read-only
+[+] E6 a resume that cannot retire the mark is refused: world stays stopped, mark stays
+[+] E6 setup: halt directory writable again
+[+] E6 resume: world runs, mark removed
+[+] E6 exactly one kept stop record
+[+] E6 kept record = the stop's bytes + who resumed, sealed
+[+] E6 control: with the mark gone the store promotes
+[+] E7 setup: world with R3 (woken by R's commit)
+[+] E7 setup: publish E.f0 = 6 (R runs, its commit wakes R3)
+[+] E7 setup: R3 is computing, held in its function
+[+] E7 operator stop while R3 computes
+[+] E7 the refused activation did not spend R3's episode budget (not quarantined)
+[+] E7 object create under the stop: RX_ERR_HALTED, no object
+[+] E7 object retire under the stop: RX_ERR_HALTED
+[+] E7 refused create/retire changed nothing (digest, crumbs, Q still live)
+[+] E7 operator resume
+[+] E7 R3 ran again after resume and committed
+[+] E7 its result: Q.f1 = (6+1)*100
+[+] E7 setup: halt directory
+[+] E7 setup: OPERATOR_HALT is a dangling symlink
+[+] E7 link: new world
+[+] E7 a symlink mark stops the world (RX_ERR_TORN)
+[+] E7 resume lifts it
+[+] E7 the link is removed and a resumed record kept
+RX_EMERGENCY_STOP: PASS (0 failures; host CPU, real caproot authority)
+CC="cc" bash tests/runtime/rx_emergency_mutants.sh
+ok   unmutated: PASS
+ok   M1 run_one publishes under a stop: killed (4 checks failed)
+ok   M2 workers take work under a stop: killed (1 checks failed)
+ok   M3 outside publication under a stop: killed (7 checks failed)
+ok   M4 caller check ignores the stop: killed (6 checks failed)
+ok   M5 a reaction subject may stop the world: killed (7 checks failed)
+ok   M6 store ignores the durable mark: killed (2 checks failed)
+ok   M7 a restarted world ignores the mark: killed (14 checks failed)
+ok   M8 resume deletes the mark without keeping the record: killed (5 checks failed)
+ok   M9 the stop is not in force until the disk write returns: killed (28 checks failed)
+ok   M10 a refused activation spends the episode budget: killed (3 checks failed)
+ok   M11 object create under a stop: killed (2 checks failed)
+ok   M12 object retire under a stop: killed (4 checks failed)
+ok   M13 a symlink mark reads as absent: killed (3 checks failed)
+RX_EMERGENCY_MUTANTS: PASS

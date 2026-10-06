@@ -1,0 +1,1 @@
+m19r_qualify.sh --omega-candidate 97ee27584cda0d8eaca136f31a44293cd36c9b02 --physics-candidate 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf --physics-dir /home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip --evidence-root /home/drakestapleton/workspace/evidence-out/CAND3-LIVING-f816473-w2/CHIPWAIT/campaign --run-id run-002 

@@ -1,0 +1,19 @@
+{
+  "schema": "AIEN_RX_R12_RESIDENT_HOST_V1",
+  "run_id": "20261006T015224Z-97ee27584cda",
+  "candidate_commit": "97ee27584cda0d8eaca136f31a44293cd36c9b02",
+  "candidate_bound": true,
+  "run_commit": "97ee27584cda0d8eaca136f31a44293cd36c9b02",
+  "tree_dirty": false,
+  "checks": 216,
+  "failures": 0,
+  "silicon_observed": false,
+  "claimed": false,
+  "test_binary_sha256": "dd482dc5f97a6519e0b5186e1599dcd3ca9f687ccf20445571977f06df957e62",
+  "host": {"sysname": "Linux", "release": "7.0.0-1019-nvidia", "machine": "aarch64"},
+  "hardware_scope": "host CPU only; graphics seat is an in-process stand-in; R12 is not claimed",
+  "gates": {
+    "R12_RESIDENT_SEAT": "HOST_RULES_PASS",
+    "not_claimed": ["R8", "R10", "R11", "R12", "R13"]
+  }
+}
