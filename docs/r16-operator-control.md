@@ -206,7 +206,17 @@ earlier world or an earlier program start fails the constant-time caller check
   does not stop the process, its threads, ARGUS observation or the authority; it is not a
   kill switch and not a rollback.
 
-### 6.1 Known limit: the halt right is the epoch right
+### 6.1 Closed limit: the halt right is the epoch right
+
+**Closed at aienos.lock `b84c0a67590a934f3f3e001b12ec85ebc086a9eb` (aienos#272, closing
+aienos#266).** The native `auth_use` now honors a privileged right only on an entry whose
+resource is `AIENOS_CAP_RES_AUTHORITY`, else `AIENOS_CAP_ERR_RESOURCE`. omega's Linux
+oracle (`src/runtime/rx_caproot.c` `auth_use`) carries the same rule so R7 parity holds.
+Proof: `make test-r16-operator-authority-misuse` mints the operator capability as R13 does and
+requires every authority operation to refuse it (and one holding every privileged right on
+the control resource), the halt check to accept it, and the office to still operate; against
+bbad5e4 the halt capability bumps the epoch and the test fails. `make test-r7` compares the
+two authorities on the same case. The text below is the record at bbad5e4.
 
 The spec gives the stop the privileged epoch right (`spec/r16-operator-emergency-stop.md`
 §2 lines 44-45: "The right is `RX_RIGHT_EPOCH` ... The right that may void every
@@ -246,7 +256,7 @@ What keeps it closed today is omega's own code, shown here and tested:
   `tests/runtime/rx_r7_native.c` 217 only).
 
 A future omega change that hands the control capability to any other authority entry
-point reopens this; it stays a known limit until aienos#266 is closed.
+point reopened this while it was a known limit (until aienos#266 closed; see the note above).
 
 ## 7. Proof (G6 by execution)
 
