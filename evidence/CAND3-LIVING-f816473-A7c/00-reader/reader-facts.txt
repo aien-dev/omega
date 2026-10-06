@@ -1,0 +1,12 @@
+7.0.0-1019-nvidia
+SecureBoot disabled
+[none] integrity confidentiality
+aien_spbm_readonly     20480  0
+/sys/class/hwmon/hwmon0 acpitz
+/sys/class/hwmon/hwmon1 nvme
+/sys/class/hwmon/hwmon2 mt7925_phy0
+/sys/class/hwmon/hwmon3 aien_spbm
+modinfo: ERROR: Module aien_spbm_readonly not found.
+2d37f51a90a74a7af2aae5e0f7171df357cb194d11cef614d37d6b43aa0dd8b0  /home/drakestapleton/workspace/omega-r15/research/m15/spbm/aien_spbm_readonly.ko
+Oct 06 06:32:39 spark-b87b kernel: aien_spbm_readonly: module verification failed: signature and/or required key missing - tainting kernel
+Oct 06 06:32:39 spark-b87b kernel: aien_spbm_readonly NVDA8800:00: firmware contract verified; read-only SPBM telemetry ready

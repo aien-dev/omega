@@ -1,0 +1,32 @@
+cc -std=gnu11 -Wall -Wextra -Werror -MMD -MP -D_GNU_SOURCE -O2 -Isrc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/m16 -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/nvrm -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/common/inc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/nvidia-uvm -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include -pthread -o build/rx_r12_silicon_test src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c src/runtime/rx_native_bind.c src/runtime/rx_resident_gpu.c src/sha256.c src/omega_evidence.c src/omega_blackwell_codegen.c src/omega_blackwell_encoder.c src/omega_blackwell_qmd.c src/omega_blackwell_matmul.c /home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/m16/m16_native.c /home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/nvrm/nvrm.c tests/runtime/rx_r12_silicon.c build/aienos-cap/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c/libaienos_capability.a -ldl -lm
+./build/rx_r12_silicon_test
+[*] R12 resident seat on this machine's graphics chip
+[*] chain A -> chip add -> B -> processor -> C
+    PASS (21 checks)
+[*] duplicate completion is not published twice
+    PASS (4 checks)
+[*] torn result notice is refused and B is restored
+    PASS (9 checks)
+[*] seat restart keeps identity and history
+    PASS (13 checks)
+[*] detached window refuses the publication
+    PASS (11 checks)
+[*] capability revoked after the claim is refused at publication
+    PASS (12 checks)
+[*] generation moved in flight invalidates the chip's work
+    PASS (9 checks)
+[*] stale generation claim is refused on the chip
+    PASS (5 checks)
+[*] seat killed holding a claim: recorded, restored, released once, retried
+    PASS (37 checks)
+[*] channel reset under load
+    resets 8 (held 4), with work in flight 8, claims lost and retried 8,
+    changes 256, published 186, refused as input moved 9, stale refused 0,
+    longest channel teardown 13 ms
+    PASS (57 checks)
+[*] objects past id 64 are claimed on the chip
+    PASS (12 checks)
+[*] seat leaves on request
+    PASS (4 checks)
+checks 210 failures 0 silicon 1
+receipt: build/qual-runs/20261006T113756Z-97ee27584cda/R12/rx_resident_silicon_receipt.json

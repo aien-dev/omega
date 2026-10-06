@@ -1,0 +1,22 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r15_parity_host
+R15 SEQ parity: processor stand-in seat (host)
+  detector control RES-1: starved 1 (workload.matvec.serve trigger 0: object 0 at version 2, last read 0), after slots restored 0
+  detector control SEQ: starved 1 (workload.matvec.serve trigger 0: object 0 at version 2, last read 0), after slots restored 0
+  pair 0 (RES-1 first, target 3608 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6561 ns, selected 2697325 ps, reference 4577511 ps, served 2384, crumbs 5214
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6715 ns, selected 2685395 ps, reference 4565976 ps, served 354, crumbs 899
+  pair 1 (SEQ first, target 3739 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6645 ns, selected 2691000 ps, reference 4599837 ps, served 2146, crumbs 4713
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6799 ns, selected 2692860 ps, reference 4575302 ps, served 354, crumbs 899
+  pair 2 (RES-1 first, target 3620 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6582 ns, selected 2691348 ps, reference 4573418 ps, served 2096, crumbs 4602
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6903 ns, selected 2688744 ps, reference 4573046 ps, served 354, crumbs 899
+  pair 3 (SEQ first, target 3721 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6700 ns, selected 2689883 ps, reference 4573418 ps, served 2208, crumbs 4840
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6766 ns, selected 2685790 ps, reference 4569325 ps, served 384, crumbs 965
+  pair 4 (RES-1 first, target 3628 ns)
+    RES-1 goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6597 ns, selected 2701023 ps, reference 4580488 ps, served 2386, crumbs 5218
+    SEQ   goal status 2, plan action 1 reason 3, epoch 2, selected 3f6db775476a4f99 (verdict 1), evidence 16/1 trials, belief 1, generation 1 -> 2, in force 3f6db775476a4f99; measured: incumbent 6684 ns, selected 2684651 ps, reference 4568209 ps, served 354, crumbs 899
+R15 SEQ parity: 5 pairs, 0 failures
+SEQ_SEMANTIC_PARITY=PASS

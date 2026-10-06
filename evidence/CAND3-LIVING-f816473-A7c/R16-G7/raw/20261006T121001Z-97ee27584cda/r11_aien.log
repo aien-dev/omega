@@ -1,0 +1,13 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r11_aien_test
+[*] no record yet: AIEN watches and publishes nothing
+[*] a steady record is predicted and confirmed; one outlier is not a failure
+[*] a failed prediction after a core-class change becomes a hypothesis and a plan
+[*] a failure with nothing else changed is drift; a second failure refutes it
+[*] a settled failure is relearned, so a later core move is still noticed
+[*] a human goal: unknown, met, unmet -> one plan, then unmet and explored
+[*] AIEN cannot write what it observes; revoked, AIEN stops and the world does not
+[-] SKIPPED-LOADED: living run not started: 1-minute load average 2.11 is above 2
+[-] living run not exercised: SKIPPED-LOADED: 1-minute load average 2.11 is above 2
+checks 400 failures 0
+receipt: build/qual-runs/20261006T121528Z-97ee27584cda/R11/rx_aien_faculty_receipt.json

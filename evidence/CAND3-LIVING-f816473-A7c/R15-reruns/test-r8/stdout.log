@@ -1,0 +1,9 @@
+cc -std=gnu11 -Wall -Wextra -Werror -MMD -MP -D_GNU_SOURCE -O2 -Isrc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/m16 -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/nvrm -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/common/inc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/nvidia-uvm -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include -pthread -o build/rx_r8_aegis_test src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/sha256.c src/omega_evidence.c tests/runtime/rx_r8_aegis.c build/aienos-cap/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c/libaienos_capability.a -lm
+./build/rx_r8_aegis_test
+[*] no authority: blocked, AEGIS untouched; the worker asks; then the fast path
+[*] a human approves or rejects; privileged and unruled requests are denied
+[*] a leased grant expires on the AIENOS clock; renewal replaces it
+[*] forged decisions, requests written for the worker, slot stuffing, and a policy mistake are refused by the root
+    fast check 18 ns, policy evaluation 1 ns, process spawn 309498 ns, slow path 38273 ns
+checks 116 failures 0
+receipt: build/qual-runs/20261006T113736Z-97ee27584cda/R8/rx_aegis_resident_receipt.json

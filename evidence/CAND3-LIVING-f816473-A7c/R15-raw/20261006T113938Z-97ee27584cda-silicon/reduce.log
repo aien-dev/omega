@@ -1,0 +1,17 @@
+G1   PASS 
+G2   PASS 12 valid pairs (need >= 10)
+G3   PASS 
+G4   PASS 
+G5   PASS p50 7392 ns, p99 9952 ns, n 50000
+G6   PASS p50 19 ns, p99 20 ns per check (batch mean)
+G7   PASS 348 barriers, 0 failed, p99 108534709 ns
+G8   PASS 12 valid pairs
+G9   PASS 12 valid pairs
+G10  PASS RES-1 3.000, SEQ 4.000 sync events per result (host spin, not gated: RES-1 38.1, SEQ 122.5 empty polls per result)
+G11  PASS 
+G12  PASS RES-4 1.188, SEQ 1191.964 per consequential stimulus
+G13  PASS 
+G14  PASS 
+G15  PASS 58 silicon processes (trials + L2); 48 silicon trials
+G16  PASS 
+all gates: PASS

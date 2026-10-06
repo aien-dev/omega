@@ -1,0 +1,1 @@
+env R15_OUT_BASE=/home/drakestapleton/workspace/evidence-out/CAND3-LIVING-f816473-A7c/R15-raw AIENOS_R7_DIR=/home/drakestapleton/workspace/cand3-campaign/cand3/survey/aienos PHYSICS_DIR=/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip tools/r15_qualify.sh silicon
