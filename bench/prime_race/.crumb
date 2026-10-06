@@ -1,0 +1,22 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-05T18:58:51Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:e6b80bc9b9e80320eb4e25bd113c090767e5d28c2313a306f71baddf3ca856e0",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 10,
+      "generated_at_commit": "dc7a3d7a8c1997a0821c098fb862107d3fd54b9d",
+      "source_tree": "sha256:51cf8e4ff02a60a62394389bff2fe8d91cb2c936c5d2f5f418f7d91e28a10064"
+    }
+  },
+  "invariants": [
+    "canonical bitmap format is the contract; never reuse previous pass results; no CUDA symbols in AIEN binaries"
+  ],
+  "name": "bench/prime_race",
+  "purpose": "AIEN Prime Drag Race implementation side: the shared protocol helper (command line, timed loop, report, canonical bitmap export) and the conventional CPU baseline sieve that other entries are checked and compared against",
+  "schema_version": "1.0.0"
+}

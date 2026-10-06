@@ -134,7 +134,7 @@
         },
         {
           "digest": "63f3df62adf0a29ee2fdfdc4e170409de18f8a2a33c5644ab8d4009cf1c5246f",
-          "last_commit": "def0a0d",
+          "last_commit": "f816473",
           "name": "runtime",
           "purpose": "Directory src/runtime. Purpose not yet described by a human."
         },
@@ -170,14 +170,14 @@
         }
       ],
       "children_root": "sha256:920218d42490379078986bd65f6d50e8ef9064df20da67bfc0ca50ea0de4b4c0",
-      "compiled_at": "2026-10-06T00:23:42Z",
+      "compiled_at": "2026-10-06T01:31:06Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:bf667679bc7c3494f148e83e9d8f56193a3768c2f7145a614a21e701e3bddabd",
+      "digest": "sha256:c4d0989f06c0bcfd0bd58edabdf147c0894d0882fa12ed69c55c0440302f46dd",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 408,
-      "generated_at_commit": "fa18e58a86a7402de785e07044f5f444a1dcca3c",
-      "source_tree": "sha256:d171d30065cacc0d402c1013b920ad3cf4392e78ed56d71fd0fa4669a2ac865b"
+      "generated_at_commit": "39f93e5e6dbb405fcbaa276f4fc41fd9700d683d",
+      "source_tree": "sha256:dcee4fbb0262400359e7fa3054b55b6d26b98108bf59e0b8353713c1a1be9813"
     },
     "owner_lane": "",
     "provenance": {
