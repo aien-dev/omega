@@ -59,6 +59,14 @@ if [ -e "$cdir/campaign.json" ] || compgen -G "$cdir/run-00*" > /dev/null; then
     echo "chipwait_campaign: $cdir already holds campaign.json or a run-00N entry; refusing to reuse it" >&2
     exit 2
 fi
+# Lane receipt guard (omega #315): m19r_qualify.sh runs `make clean`, which removes
+# build/qual-runs. Refuse while an earlier window lane's receipt (WINDOW_LANE_OUT, the
+# window directory a ladder keeps .lane-guard/ and R11-living/ in) or any R11 receipt in
+# the build directory m19r_qualify.sh cleans is unarchived. Nothing is created first.
+. "$HERE/window_lane_guard.sh" || exit 2
+build_dir=${CHIPWAIT_BUILD_DIR:-$(realpath -m "$HERE/../${OUT_DIR:-build}")}
+wl_guard_build "${WINDOW_LANE_OUT:-}" chipwait "$build_dir" || {
+    echo "chipwait_campaign: lane receipt guard refused (see above); nothing was run" >&2; exit 2; }
 mkdir -p "$cdir" || { echo "chipwait_campaign: cannot create $cdir" >&2; exit 2; }
 
 runner_sha=$(git -C "$HERE" rev-parse HEAD 2> /dev/null || echo unknown)
