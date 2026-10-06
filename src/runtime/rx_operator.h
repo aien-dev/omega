@@ -34,21 +34,35 @@ typedef struct {
     void *ctx;
 } RxOperatorConfig;
 
-/* `dir` must be a real directory (lstat; no symlink), owned by the effective
- * uid, with no group or other permission bits. With `create`, a missing
- * directory is made 0700 first. 0 ok; -1 refused, with the reason in `why`. */
+/* `dir` must be a real directory (opened O_DIRECTORY|O_NOFOLLOW, then
+ * fstat on that descriptor: no symlink, no path re-resolution), owned by the
+ * effective uid, with no group or other permission bits. With `create`, a
+ * missing directory is made 0700 first. 0 ok; -1 refused, with the reason in
+ * `why`. rx_operator_dir_open also hands back the held descriptor. */
 int rx_operator_dir_check(const char *dir, int create, char *why, size_t n);
+int rx_operator_dir_open(const char *dir, int create, int *fd_out, char *why, size_t n);
 
-/* Write the credential file (0600, temporary file, fsync, rename), wipe
- * `cred`, bind the socket and start the listener. The request gate starts
+/* Exclusive lock on `dir` (validated as above): flock(LOCK_EX|LOCK_NB) on
+ * RX_OPERATOR_LOCK, opened with openat(O_CLOEXEC|O_NOFOLLOW) in the held
+ * directory. Held until the returned descriptor is closed (or the process
+ * ends). -1 refused (held by another program: its pid is in `why`). */
+#define RX_OPERATOR_LOCK   "operator.lock"
+int rx_operator_lock_dir(const char *dir, int create, int *lock_fd, char *why, size_t n);
+
+/* Lock the control directory (refused if another program holds it), write
+ * the credential file (0600, temporary file, fsync, rename, all relative to
+ * the held directory descriptor), wipe `cred`, bind the socket inside the
+ * held directory and start the listener. The request gate starts
  * HELD by the caller: no request is served until rx_operator_release. */
 int rx_operator_open(RxOperator **out, const RxOperatorConfig *cfg, uint32_t subject,
                      RxCallerCred *cred, RxCapRef cap);
 /* The request gate: while the program holds it (world setup), requests wait. */
 void rx_operator_hold(RxOperator *op);
 void rx_operator_release(RxOperator *op);
-/* Stop the listener, remove the socket and the credential file. The gate
- * must not be held by the caller. */
+/* Stop the listener and remove the socket and the credential file, each only
+ * if it is still the file this instance created (same device and inode),
+ * then release the control directory lock. The gate must not be held by the
+ * caller. */
 void rx_operator_close(RxOperator *op);
 
 #endif

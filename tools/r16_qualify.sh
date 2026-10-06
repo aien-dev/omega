@@ -244,7 +244,7 @@ R15_parity_host|test-r15-parity-host|r15_parity_host.log|SEQ_SEMANTIC_PARITY=PAS
 R15_g7_host|test-r15-g7-host|r15_g7_host.log|R15 G7 worker split: 57 checks, 0 failures|0
 R15_parity_silicon|test-r15-parity-silicon|r15_parity_silicon.log|SEQ_SEMANTIC_PARITY=PASS|1
 R15_receipt|test-r15-receipt|r15_receipt.log|r15 receipt test: 0 failure(s)|0'
-declare -A LV TG LOGF
+declare -A LV TG LOGF SEATOF   # SEATOF: host or silicon, the seat each test ran on
 SILICON_RAN=0; SILICON_PASS=0
 if [ "$G3S" != NOT_RUN ]; then
     SILICON_RAN=1
@@ -252,6 +252,7 @@ if [ "$G3S" != NOT_RUN ]; then
 fi
 while IFS='|' read -r name target log pat sil; do
     TG[$name]=$target; LOGF[$name]="$RAW_DIR/$log"
+    if [ "$sil" = 1 ]; then SEATOF[$name]=silicon; else SEATOF[$name]=host; fi
     if [ "$sil" = 1 ]; then
         silicon_run "$name" "$RAW_DIR/$log" "$pat" "$target"
         LV[$name]=$V
@@ -336,7 +337,7 @@ g6_defined() {
 # entry: one silicon run. PASS needs exit 0, no [FAIL] gate line and "N / N M19 GATES PASSED"
 # with N equal and nonzero.
 silicon_run m19 "$RAW_DIR/m19_world.log" "M19 GATES PASSED" test-m19
-LV[M19]=$V; TG[M19]=test-m19; LOGF[M19]="$RAW_DIR/m19_world.log"
+LV[M19]=$V; TG[M19]=test-m19; LOGF[M19]="$RAW_DIR/m19_world.log"; SEATOF[M19]=silicon
 if [ "${LV[M19]}" = PASS ]; then
     if grep -Fq -- "[FAIL]" "$RAW_DIR/m19_world.log" || \
        ! grep -Eq -- "PERSISTENT WORLD QUALIFICATION: ([1-9][0-9]*) / \1 M19 GATES PASSED" "$RAW_DIR/m19_world.log"; then
@@ -354,15 +355,63 @@ TG[RX_EMERGENCY]=test-rx-emergency; LOGF[RX_EMERGENCY]="$RAW_DIR/rx_emergency.lo
 # R16 G6 operator control by execution (docs/r16-operator-control.md section 7): the production
 # program driven from outside by the operator client. Host: the integration test plus its
 # mutants, both must pass. Silicon: the same test on the resident seat. Labelled apart.
+# Each seat's test writes its receipt to OP_OUT (beside the raw directory, untracked); the
+# receipt is copied INTO the raw directory, so the raw digest covers it, and a PASS needs
+# the receipt to name this seat, this candidate on a clean tree, no failure or skip, the
+# seat's own gate value, and the SHA-256 of the production binary this run built
+# (build/rx_r13_living_<seat>, file name included). A test that skipped a case (gate
+# NOT_RUN, exit 0) is NOT_RUN, never FAIL and never PASS.
+OP_OUT="$OUT_ROOT/$RUN_ID.operator"
+export RX_OP_OUT="$OP_OUT"
+OPV=NOT_RUN
+# op_receipt <seat> <verdict> <gate value>: sets OPV to the verdict after the receipt check.
+op_receipt() {
+    local seat=$1 want=$3 f="$RAW_DIR/operator_$1_receipt.json" bin="$HERE/build/rx_r13_living_$1" why=""
+    OPV=$2
+    if [ "$DRY" != 1 ]; then
+        rm -f "$f"
+        if [ -f "$OP_OUT/operator_${seat}_receipt.json" ]; then cp "$OP_OUT/operator_${seat}_receipt.json" "$f"; fi
+    fi
+    [ "$OPV" = PASS ] || return 0
+    if [ ! -s "$f" ]; then why="no operator receipt"
+    elif [ "$(jstrv "$f" seat)" != "$seat" ]; then why="receipt seat is not $seat"
+    elif [ "$(jstrv "$f" binary)" != "rx_r13_living_$seat" ]; then why="receipt binary $(jstrv "$f" binary) is not rx_r13_living_$seat"
+    elif [ ! -f "$bin" ] || [ "$(jstrv "$f" binary_sha256)" != "$(sha256sum "$bin" | cut -d' ' -f1)" ]; then why="receipt binary digest is not the production binary built in this run"
+    elif [ "$(jstrv "$f" candidate_commit)" != "$CANDIDATE_COMMIT" ]; then why="receipt candidate commit is not $CANDIDATE_COMMIT"
+    elif [ "$(sed -n 's/^.*"tree_dirty": *\([a-z]*\).*$/\1/p' "$f")" != false ]; then why="receipt tree not clean"
+    elif [ "$(jint "$f" failures)" != 0 ] || [ "$(jint "$f" skipped)" != 0 ]; then why="receipt counts failures or skips"
+    elif [ "$(sed -n 's/^.*"R16_G6_OPERATOR": "\([^"]*\)".*$/\1/p' "$f")" != "$want" ]; then why="receipt gate is not $want"
+    fi
+    if [ -n "$why" ]; then OPV=FAIL; echo "    operator $seat receipt: FAIL ($why)"
+    else echo "    operator $seat receipt: bound (binary $(jstrv "$f" binary_sha256 | cut -c1-12))"; fi
+}
+# op_notrun <verdict> <log> <rc> <ok rc...>: a run that exited with an accepted status and
+# printed a NOT_RUN gate line is NOT_RUN.
+op_notrun() {
+    local v=$1 log=$2 rc=$3 ok; shift 3
+    for ok in "$@"; do
+        if [ "$rc" = "$ok" ] && [ -s "$log" ] && grep -Eq -- "(R16_G6_OPERATOR|RX_OPERATOR_MUTANTS)(=|: )NOT_RUN" "$log"; then echo NOT_RUN; return; fi
+    done
+    echo "$v"
+}
+rm -f "$OP_OUT/operator_host_receipt.json" "$OP_OUT/operator_silicon_receipt.json"
 run_target "$RAW_DIR/r16_operator_host.log" test-r16-operator-host
-LV[R16_OP_HOST]=$(verdict "$RC" "$RAW_DIR/r16_operator_host.log" "R16 operator gate: R16_G6_OPERATOR=HOST_PASS_NON_SILICON")
+LV[R16_OP_HOST]=$(op_notrun "$(verdict "$RC" "$RAW_DIR/r16_operator_host.log" "R16 operator gate: R16_G6_OPERATOR=HOST_PASS_NON_SILICON")" "$RAW_DIR/r16_operator_host.log" "$RC" 0)
+op_receipt host "${LV[R16_OP_HOST]}" HOST_PASS_NON_SILICON; LV[R16_OP_HOST]=$OPV
 TG[R16_OP_HOST]=test-r16-operator-host; LOGF[R16_OP_HOST]="$RAW_DIR/r16_operator_host.log"
 run_target "$RAW_DIR/r16_operator_mutants.log" test-r16-operator-mutants
-LV[R16_OP_MUTANTS]=$(verdict "$RC" "$RAW_DIR/r16_operator_mutants.log" "RX_OPERATOR_MUTANTS: PASS")
+LV[R16_OP_MUTANTS]=$(op_notrun "$(verdict "$RC" "$RAW_DIR/r16_operator_mutants.log" "RX_OPERATOR_MUTANTS: PASS")" "$RAW_DIR/r16_operator_mutants.log" "$RC" 3)
 TG[R16_OP_MUTANTS]=test-r16-operator-mutants; LOGF[R16_OP_MUTANTS]="$RAW_DIR/r16_operator_mutants.log"
 silicon_run r16op "$RAW_DIR/r16_operator_silicon.log" "R16 operator gate: R16_G6_OPERATOR=PASS" test-r16-operator-silicon
-LV[R16_OP_SILICON]=$V
-TG[R16_OP_SILICON]=test-r16-operator-silicon; LOGF[R16_OP_SILICON]="$RAW_DIR/r16_operator_silicon.log"
+if [ "$V" = FAIL ]; then
+    V=$(op_notrun "$V" "$RAW_DIR/r16_operator_silicon.log" "$RC" 0)
+    if [ "$V" = NOT_RUN ]; then SILICON_BROKEN=0; fi   # it skipped a case; nothing failed on the chip
+fi
+op_receipt silicon "$V" PASS; LV[R16_OP_SILICON]=$OPV
+if [ "$OPV" != NOT_RUN ]; then SILICON_RAN=$((SILICON_RAN + 1)); fi
+if [ "$OPV" = PASS ]; then SILICON_PASS=$((SILICON_PASS + 1)); fi
+TG[R16_OP_SILICON]=test-r16-operator-silicon; LOGF[R16_OP_SILICON]="$RAW_DIR/r16_operator_silicon.log"; SEATOF[R16_OP_SILICON]=silicon
+unset RX_OP_OUT
 # g6_test <name>: status of one exercising test; a skipped or unexercised log is NOT_RUN.
 g6_test() {
     local s=${LV[$1]:-NOT_RUN}
@@ -403,7 +452,7 @@ while IFS='|' read -r key pairs tests basis; do
     tj=""; ts=PASS; IFS=',' read -ra TA <<< "$tests"
     for t in "${TA[@]}"; do
         s=$(g6_test "$t"); ts=$(combine "$ts" "$s")
-        tj="$tj{\"name\": \"$t\", \"target\": \"${TG[$t]}\", \"status\": \"$s\"}, "
+        tj="$tj{\"name\": \"$t\", \"target\": \"${TG[$t]}\", \"seat\": \"${SEATOF[$t]:-host}\", \"status\": \"$s\"}, "
     done
     tj=${tj%, }
     if [ "$present" = false ]; then st=MISSING_IMPLEMENTATION; G6MISSING=$((G6MISSING + 1))
@@ -429,8 +478,9 @@ if [ "$END_COMMIT" = "$CANDIDATE_COMMIT" ] && [ "$RUN_COMMIT" = "$CANDIDATE_COMM
 else
     CAND_BOUND=false
 fi
-# silicon_observed: every silicon target (authpath, R12, R13, R14, R15 parity) ran and passed.
-if [ "$SILICON_RAN" -ge 5 ] && [ "$SILICON_PASS" = "$SILICON_RAN" ]; then SIL_OBS=true; else SIL_OBS=false; fi
+# silicon_observed: every silicon target (authpath, R12, R13, R14, R15 parity, R16 G6
+# operator control on the resident seat) ran and passed. Host results never count here.
+if [ "$SILICON_RAN" -ge 6 ] && [ "$SILICON_PASS" = "$SILICON_RAN" ]; then SIL_OBS=true; else SIL_OBS=false; fi
 
 # ---- 9. receipt ---------------------------------------------------------------------
 SC_COMMIT=$(repohead "$INV_JSON" aien-sovereign-core)
@@ -502,6 +552,10 @@ cat > "$OUT_RECEIPT_TMP" <<RECOBJ
 $G6LIST
   ],
   "r15_acceptance_still_passing": $(b2j "$R15ACC"),
+  "operator_control": {
+    "host": {"seat": "host", "status": "${LV[R16_OP_HOST]}", "mutants": "${LV[R16_OP_MUTANTS]}", "receipt": "operator_host_receipt.json"},
+    "silicon": {"seat": "silicon", "status": "${LV[R16_OP_SILICON]}", "receipt": "operator_silicon_receipt.json"}
+  },
   "correctness_reruns": {
 $(lr R1 R1_R6),
 $(lr R2 R1_R6),

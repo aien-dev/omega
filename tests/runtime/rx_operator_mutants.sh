@@ -5,6 +5,8 @@
 # the production flags, and tests/runtime/rx_operator_host.sh must FAIL against it
 # (exit non-zero with at least one failed check). The unmutated copy must PASS.
 # A pattern that does not match exactly once fails this script, never a skip.
+# Every run writes its receipt and failed logs under its own directory in the
+# scratch area (RX_OP_OUT), never over build/r16-operator.
 #
 #   rx_operator_mutants.sh <rx_operator client>
 # Environment from make: CC CFLAGS RX_PROD_ARGUS_FLAGS RX_R13_SRCS RX_PROD_ARGUS_SRCS AIENOS_CAP_LIB
@@ -29,7 +31,19 @@ O10 restart does not wait for the resume|tests/runtime/rx_r13_living.c|restart|s
 O11 startup accepts a group-readable directory|src/runtime/rx_operator.c|startup|s/if \(st\.st_mode & 077\) \{/if (0) {/
 O12 audit does not count stops|tests/runtime/rx_r13_living.c|control|s/            stops\+\+;\n//
 O13 shutdown accepted while running|src/runtime/rx_operator.c|control|s/if \(!h\.halted\) \{ snprintf\(out, n, "NOT_STOPPED state=running"\); return; \}//
-O14 stop reply before the world call (handler answers from the request)|src/runtime/rx_operator.c|control|s/        rc = rx_world_emergency_stop\(w, q->subject, &q->cred, q->cap, q->reason, &h\);\n        if \(rc == RX_OK\) \{/        rc = RX_OK; rx_world_halt_status(w, \&h);\n        if (rc == RX_OK) {/'
+O14 stop reply before the world call (handler answers from the request)|src/runtime/rx_operator.c|control|s/        rc = rx_world_emergency_stop\(w, q->subject, &q->cred, q->cap, q->reason, &h\);\n        if \(rc == RX_OK\) \{/        rc = RX_OK; rx_world_halt_status(w, \&h);\n        if (rc == RX_OK) {/
+O15 end-of-episode wait turned off (G5 M-a)|tests/runtime/rx_r13_living.c|control|s/if \(rc == 0 && r->ready && world_halted\(r\)\) \{/if (0 \&\& rc == 0 \&\& r->ready \&\& world_halted(r)) {/
+O16 episode shape ignores halted seat claims (G5 M-b)|tests/runtime/rx_r13_living.c|control|s/r->w\.stats\.resident_claims - r->w\.stats\.resident_halted != RX_LIVING_TRIALS/r->w.stats.resident_claims != RX_LIVING_TRIALS/
+O17 control directory lock not taken (S1)|src/runtime/rx_operator.c|control|s/if \(flock\(fd, LOCK_EX \| LOCK_NB\) != 0\) \{/if (0) {/
+O18 state directory not locked (S1)|tests/runtime/rx_r13_living.c|control|s/rx_operator_lock_dir\(g_state_dir, 1, &g_state_lock, why, sizeof why\) != 0/(g_state_lock < -1 || rx_operator_dir_check(g_state_dir, 1, why, sizeof why) != 0)/
+O19 generation directory not locked (S1)|tests/runtime/rx_r13_living.c|control|s/\(g_gen_lock\[mode\] < 0 &&\n\s+rx_operator_lock_dir\(r->generation_dir, 1, &g_gen_lock\[mode\], why, sizeof why\) != 0\)/(g_gen_lock[mode] < -1 || rx_operator_dir_check(r->generation_dir, 1, why, sizeof why) != 0)/
+O20 close removes files it did not create (S1)|src/runtime/rx_operator.c|control|s/    if \(fstatat\(op->dir_fd, name, &st, AT_SYMLINK_NOFOLLOW\) == 0 &&\n        st\.st_dev == made->st_dev && st\.st_ino == made->st_ino\)\n        unlinkat/    (void)st; (void)made;\n        unlinkat/
+O21 a stop that is not durable replies OK (S2)|src/runtime/rx_operator.c|control|s/if \(h\.durable == 1\)\n/if (1)\n/
+O22 unknown commands fall through to the authorized commands (S3)|src/runtime/rx_operator.c|control|s/    if \(!status && !shutdown && !revoke && !revoke_cap\) \{ snprintf\(out, n, "BAD_REQUEST"\); return; \}\n/    (void)revoke_cap;\n/
+O23 an expired resume still runs (S4)|src/runtime/rx_operator.c|control|s/if \(strcmp\(q\.cmd, "stop"\) != 0 && monotonic_ns\(\) > q\.deadline_ns\)/if (0)/
+O24 a request without a deadline accepted (S4)|src/runtime/rx_operator.c|control|s/ \|\| !q->have_deadline\)\n        return -1;/)\n        return -1;/
+O25 any deadline accepted (S4)|src/runtime/rx_operator.c|control|s/    if \(q->deadline_ns > monotonic_ns\(\) \+ RX_OPERATOR_DEADLINE_MAX_NS\) return -1;\n//
+'
 
 copy() { mkdir -p "$1"; (cd "$HERE" && tar -cf - src tests/runtime tests/fabric tools) | tar -xf - -C "$1"; ln -s "$HERE/build" "$1/build"; }
 build() { # dir: the production host program, production flags and sources
@@ -56,7 +70,7 @@ export CC CFLAGS RX_PROD_ARGUS_FLAGS RX_R13_SRCS RX_PROD_ARGUS_SRCS AIENOS_CAP_L
 export -f build
 printf '%s\n' base $names | xargs -P "$JOBS" -I{} bash -c 'build "$0/{}" || echo "build failed: {}"' "$W"
 
-if [ -x "$W/base/prog" ] && bash "$HERE/tests/runtime/rx_operator_host.sh" host "$W/base/prog" "$CLI" > "$W/base/run.log" 2>&1; then
+if [ -x "$W/base/prog" ] && RX_OP_OUT="$W/base/out" bash "$HERE/tests/runtime/rx_operator_host.sh" host "$W/base/prog" "$CLI" > "$W/base/run.log" 2>&1; then
     echo "ok   unmutated: PASS ($(grep -c '^\[+\]' "$W/base/run.log") checks)"
 else
     echo "FAIL unmutated: did not pass"; grep -E '^\[-\]|SKIPPED|build failed' "$W/base/run.log" "$W/base/build.log" | head -5
@@ -66,7 +80,7 @@ skipped=$(grep -c '^\[SKIPPED\]' "$W/base/run.log" 2>/dev/null); skipped=${skipp
 for id in $names; do
     d="$W/$id"; name=$(cat "$d/name"); n_mut=$((n_mut + 1))
     if [ ! -x "$d/prog" ]; then echo "FAIL $name: mutant did not build"; tail -3 "$d/build.log"; fails=$((fails + 1)); continue; fi
-    RX_OP_PHASES=$(cat "$d/phases") RX_OP_FAILFAST=1 bash "$HERE/tests/runtime/rx_operator_host.sh" host "$d/prog" "$CLI" > "$d/run.log" 2>&1; rc=$?
+    RX_OP_OUT="$d/out" RX_OP_PHASES=$(cat "$d/phases") RX_OP_FAILFAST=1 bash "$HERE/tests/runtime/rx_operator_host.sh" host "$d/prog" "$CLI" > "$d/run.log" 2>&1; rc=$?
     nf=$(grep -c '^\[-\]' "$d/run.log" 2>/dev/null); nf=${nf:-0}
     first=$(grep -m1 '^\[-\]' "$d/run.log" | cut -c1-110)
     if [ $rc != 0 ] && [ "$nf" -gt 0 ]; then echo "ok   $name: killed by: ${first#\[-\] }"

@@ -215,6 +215,29 @@ git -C "$LK" init -q && git -C "$LK" add -A && git -C "$LK" -c user.name=r16 -c 
 git -C "$LK" rev-parse HEAD > "$W/aienos.lock"
 g add -A; g commit -qm "lock file"
 export AIENOS_LOCK_REPO=$LK
+# Operator receipts (G2): each seat's test writes one; the script copies it into the raw
+# directory and checks it against the production binary of the run. Fixture binaries in
+# build/ (git-ignored); templates filled with the current HEAD and binary digest by G6Q.
+mkdir -p "$W/build"
+printf 'host production binary fixture\n' > "$W/build/rx_r13_living_host"
+printf 'silicon production binary fixture\n' > "$W/build/rx_r13_living_silicon"
+# op_tmpl <seat> [sed expression...]: the receipt template of one seat, then edits.
+op_tmpl() {
+    local seat=$1 gate=HOST_PASS_NON_SILICON e; shift
+    [ "$seat" = silicon ] && gate=PASS
+    printf '{\n  "schema": "AIEN_R16_G6_OPERATOR_CONTROL_V1",\n  "seat": "%s",\n  "candidate_commit": "@HEAD@",\n  "tree_dirty": false,\n  "binary": "rx_r13_living_%s",\n  "binary_sha256": "@SHA@",\n  "checks": 90,\n  "failures": 0,\n  "skipped": 0,\n  "skip_reasons": [],\n  "gate": {"R16_G6_OPERATOR": "%s"}\n}\n' \
+        "$seat" "$seat" "$gate" > "$G/op_$seat.tmpl"
+    for e in "$@"; do sed -i "$e" "$G/op_$seat.tmpl"; done
+}
+op_render() {
+    local s
+    for s in host silicon; do
+        rm -f "$G/operator_${s}_receipt.json"
+        [ -f "$G/op_$s.tmpl" ] || continue
+        sed -e "s/@HEAD@/$(g rev-parse HEAD)/" -e "s/@SHA@/$(sha256sum < "$W/build/rx_r13_living_$s" | cut -d' ' -f1)/" \
+            "$G/op_$s.tmpl" > "$G/operator_${s}_receipt.json"
+    done
+}
 # g6log <file> <pattern> [rc]: fixture log + exit status for one exercising test
 g6log() { printf '%s\n' "$2" > "$G/$1"; echo "${3:-0}" > "$G/$1.rc"; }
 g6_good_logs() {
@@ -238,8 +261,9 @@ R16 operator gate: R16_G6_OPERATOR=HOST_PASS_NON_SILICON"
 RX_OPERATOR_MUTANTS: PASS"
     g6log r16_operator_silicon.log "R16 operator: 100 checks, 0 failures, 0 skipped (silicon, phases: startup control restart kill)
 R16 operator gate: R16_G6_OPERATOR=PASS"
+    op_tmpl host; op_tmpl silicon
 }
-G6Q() { Q R16_RUN_ID=g6 2>&1; }
+G6Q() { op_render; Q R16_RUN_ID=g6 2>&1; }
 R=$G/DRY-RUN-receipt.json
 g6_item() { sed -n 's/^.*"item": "'"$1"'", "status": "\([A-Z_]*\)".*$/\1/p' "$R"; }
 g6_good_logs
@@ -249,7 +273,7 @@ check "G6 all good: twelve items PASS, operator emergency controls among them" '
 check "G6 all good: protected_surfaces_kept six presence flags true" '[ "$(grep -c "_present\": true" "$R")" = 6 ]'
 check "G6 all good: no FAIL anywhere and G6 alone does not make the run pass (exit 3)" '[ $rc = 3 ] && ! echo "$out" | grep -q "G6=FAIL"'
 check "G6 all good: receipt names file and symbol per item" 'grep -q "\"file\": \"src/runtime/rx_generation.c\", \"symbol\": \"rx_gen_recover\", \"source\": \"omega_tree\", \"defined\": true" "$R"'
-check "G6 operated checks cite the test and its status" 'grep -q "{\"name\": \"R9\", \"target\": \"test-r9\", \"status\": \"PASS\"}" "$R"'
+check "G6 operated checks cite the test and its status" 'grep -q "{\"name\": \"R9\", \"target\": \"test-r9\", \"seat\": \"host\", \"status\": \"PASS\"}" "$R"'
 
 # presence without operation: symbols all defined, tests never ran -> NOT_RUN, never PASS
 rm -f "$G"/*.log "$G"/*.rc
@@ -334,6 +358,67 @@ check "G6 operator: production wiring present only in a comment (string still in
 g6_unmut
 out=$(G6Q)
 check "G6 operator: reverted, all logs passing: PASS" '[ "$(g6_item operator_emergency_controls_passing)" = PASS ]'
+# G2: the operator receipt. Good receipts first, then one broken field at a time.
+op_item() { g6_item operator_emergency_controls_passing; }
+op_test() { jq -r ".g6_items[] | select(.item==\"operator_emergency_controls_passing\") | .tests[] | select(.name==\"$1\") | .$2" "$R"; }
+check "G6 operator receipts: both copied into the raw directory and covered by its digest" \
+    'grep -q " operator_host_receipt.json$" "$G/SHA256SUMS" && grep -q " operator_silicon_receipt.json$" "$G/SHA256SUMS" && [ "$(op_item)" = PASS ]'
+check "G6 operator: tests labelled by seat (host test host, silicon test silicon)" \
+    '[ "$(op_test R16_OP_HOST seat)" = host ] && [ "$(op_test R16_OP_MUTANTS seat)" = host ] && [ "$(op_test R16_OP_SILICON seat)" = silicon ] && [ "$(jq -r .operator_control.silicon.seat "$R")" = silicon ]'
+op_bad() {   # op_bad <label> <seat> <sed expression>: that receipt broken: item FAIL
+    OPSEAT=$2; op_tmpl "$2" "$3"; out=$(G6Q)
+    check "G6 operator receipt $1: item FAIL" '[ "$(op_item)" = FAIL ] && echo "$out" | grep -q "operator $OPSEAT receipt: FAIL"'
+    op_tmpl "$2"
+}
+op_bad "binary digest is not the binary built in the run (host)" host 's/@SHA@/0000000000000000000000000000000000000000000000000000000000000000/'
+op_bad "binary digest is not the binary built in the run (silicon)" silicon 's/@SHA@/1111111111111111111111111111111111111111111111111111111111111111/'
+op_bad "written by a mutant run (binary prog)" host 's/"binary": "rx_r13_living_host"/"binary": "prog"/'
+op_bad "another candidate commit" silicon 's/@HEAD@/0123456789abcdef0123456789abcdef01234567/'
+op_bad "dirty tree" host 's/"tree_dirty": false/"tree_dirty": true/'
+op_bad "a skipped case" silicon 's/"skipped": 0/"skipped": 1/'
+op_bad "a failure" host 's/"failures": 0/"failures": 2/'
+op_bad "the host gate in the silicon receipt" silicon 's/"R16_G6_OPERATOR": "PASS"/"R16_G6_OPERATOR": "HOST_PASS_NON_SILICON"/'
+op_bad "the silicon seat in the host slot" host 's/"seat": "host"/"seat": "silicon"/'
+rm -f "$G/op_host.tmpl"; out=$(G6Q)
+check "G6 operator: host log passing but no host receipt: item FAIL" '[ "$(op_item)" = FAIL ]'
+op_tmpl host
+printf 'changed after the test\n' >> "$W/build/rx_r13_living_silicon"
+sed -i "s/@SHA@/$(sha256sum < "$W/build/rx_r13_living_silicon" | cut -d' ' -f1)/" "$G/op_silicon.tmpl"
+printf 'rebuilt\n' >> "$W/build/rx_r13_living_silicon"; out=$(G6Q)
+check "G6 operator: silicon binary rebuilt after its test: item FAIL" '[ "$(op_item)" = FAIL ]'
+op_tmpl silicon; out=$(G6Q)
+check "G6 operator: receipts restored: PASS" '[ "$(op_item)" = PASS ]'
+# G7: a run that only skipped a case (gate NOT_RUN, exit 0) is NOT_RUN, never FAIL.
+g6log r16_operator_host.log "[SKIPPED] unauthorized: a peer of another uid needs sudo -n (no passwordless sudo here)
+R16 operator: 85 checks, 0 failures, 1 skipped (host, phases: startup control restart kill)
+R16 operator gate: R16_G6_OPERATOR=NOT_RUN (1 SKIPPED)"
+op_tmpl host 's/"skipped": 0/"skipped": 1/' 's/"HOST_PASS_NON_SILICON"/"NOT_RUN (1 SKIPPED)"/'; out=$(G6Q)
+check "G6 operator: host run without sudo (NOT_RUN gate, exit 0): test NOT_RUN, not FAIL" '[ "$(op_test R16_OP_HOST status)" = NOT_RUN ] && [ "$(op_item)" = NOT_RUN ]'
+g6log r16_operator_host.log "[SKIPPED] unauthorized: a peer of another uid needs sudo -n (no passwordless sudo here)
+R16 operator gate: R16_G6_OPERATOR=NOT_RUN (1 SKIPPED)" 1
+out=$(G6Q)
+check "G6 operator: the same NOT_RUN line with exit 1: FAIL" '[ "$(op_test R16_OP_HOST status)" = FAIL ]'
+g6log r16_operator_host.log "R16 operator: 120 checks, 0 failures, 0 skipped (host, phases: startup control restart kill)
+R16 operator gate: R16_G6_OPERATOR=HOST_PASS_NON_SILICON"
+op_tmpl host
+g6log r16_operator_mutants.log "SKIPPED O7 peer uid check removed: the test could not run the case that kills it
+RX_OPERATOR_MUTANTS: NOT_RUN (SKIPPED cases)" 3
+out=$(G6Q)
+check "G6 operator: mutants NOT_RUN (exit 3): test NOT_RUN, not FAIL" '[ "$(op_test R16_OP_MUTANTS status)" = NOT_RUN ]'
+g6log r16_operator_mutants.log "RX_OPERATOR_MUTANTS: PASS"
+# G3: silicon_observed needs every silicon run, the operator silicon test included.
+g6log r16_authpath_host.log "R16 gate: R16_G3_AUTHPATH=HOST_PASS_NON_SILICON"
+g6log r16_authpath_silicon.log "R16 gate: R16_G3_AUTHPATH=PASS"
+g6log r13_silicon.log "R13 gate: R13_LIVING_SYSTEM=PASS"
+out=$(G6Q)
+check "G3 silicon_observed: every silicon run passed, the operator silicon run included: true" 'grep -q "\"silicon_observed\": true" "$R"'
+rm -f "$G/r16_operator_silicon.log" "$G/r16_operator_silicon.log.rc"; out=$(G6Q)
+check "G3 silicon_observed: the five other silicon runs passed, operator silicon not run: false" 'grep -q "\"silicon_observed\": false" "$R"'
+g6log r16_operator_silicon.log "R16 operator gate: R16_G6_OPERATOR=PASS"
+op_tmpl silicon 's/@SHA@/2222222222222222222222222222222222222222222222222222222222222222/'; out=$(G6Q)
+check "G3 silicon_observed: operator silicon log passing but its receipt unbound: false" 'grep -q "\"silicon_observed\": false" "$R"'
+op_tmpl silicon
+rm -f "$G"/r16_authpath_*.log* "$G/r13_silicon.log" "$G/r13_silicon.log.rc"
 
 # skipped tests are never PASS
 g6log r9_barrier.log "[-] living run not exercised: SKIPPED-LOADED

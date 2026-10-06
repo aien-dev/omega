@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
@@ -17,7 +18,10 @@
 struct RxOperator {
     RxOperatorConfig cfg;
     char sock_path[sizeof(((struct sockaddr_un *)0)->sun_path)];
-    char cred_path[512];
+    int dir_fd;                  /* the validated control directory, held open */
+    int lock_fd;                 /* flock on RX_OPERATOR_LOCK in it, held until close */
+    struct stat sock_st, cred_st;/* what this instance created (device, inode) */
+    int sock_made, cred_made;
     int listen_fd;
     int wake[2];                 /* a byte on wake[1] ends the listener */
     pthread_t thread;
@@ -25,17 +29,11 @@ struct RxOperator {
     pthread_mutex_t gate;        /* held by the program while it sets the world up */
 };
 
-int rx_operator_dir_check(const char *dir, int create, char *why, size_t n) {
+/* Validate an open directory descriptor: a directory owned by this uid with no
+ * group or other bits. Checks the descriptor itself, not a path. */
+static int dir_fd_ok(int fd, const char *dir, char *why, size_t n) {
     struct stat st;
-    if (!dir || !dir[0]) { snprintf(why, n, "no directory"); return -1; }
-    if (lstat(dir, &st) != 0) {
-        if (errno != ENOENT || !create) { snprintf(why, n, "%s: %s", dir, strerror(errno)); return -1; }
-        if (mkdir(dir, 0700) != 0 || lstat(dir, &st) != 0) {
-            snprintf(why, n, "%s: cannot create: %s", dir, strerror(errno));
-            return -1;
-        }
-    }
-    if (S_ISLNK(st.st_mode)) { snprintf(why, n, "%s is a symlink", dir); return -1; }
+    if (fstat(fd, &st) != 0) { snprintf(why, n, "%s: %s", dir, strerror(errno)); return -1; }
     if (!S_ISDIR(st.st_mode)) { snprintf(why, n, "%s is not a directory", dir); return -1; }
     if (st.st_uid != geteuid()) {
         snprintf(why, n, "%s is owned by uid %u, not by this program's uid %u", dir,
@@ -50,6 +48,85 @@ int rx_operator_dir_check(const char *dir, int create, char *why, size_t n) {
     return 0;
 }
 
+int rx_operator_dir_open(const char *dir, int create, int *fd_out, char *why, size_t n) {
+    *fd_out = -1;
+    if (!dir || !dir[0]) { snprintf(why, n, "no directory"); return -1; }
+    int fd = open(dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0 && errno == ENOENT && create) {
+        if (mkdir(dir, 0700) != 0 && errno != EEXIST) {
+            snprintf(why, n, "%s: cannot create: %s", dir, strerror(errno));
+            return -1;
+        }
+        fd = open(dir, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    }
+    if (fd < 0) {
+        int e = errno;
+        struct stat st;   /* only to name the refusal; the decision is the failed open */
+        int l = lstat(dir, &st) == 0;
+        if (l && S_ISLNK(st.st_mode)) snprintf(why, n, "%s is a symlink", dir);
+        else if (l && st.st_uid != geteuid())
+            snprintf(why, n, "%s is owned by uid %u, not by this program's uid %u (%s)", dir,
+                     (unsigned)st.st_uid, (unsigned)geteuid(), strerror(e));
+        else if (e == ENOTDIR) snprintf(why, n, "%s is not a directory", dir);
+        else snprintf(why, n, "%s: %s", dir, strerror(e));
+        return -1;
+    }
+    if (dir_fd_ok(fd, dir, why, n) != 0) { close(fd); return -1; }
+    *fd_out = fd;
+    return 0;
+}
+
+int rx_operator_dir_check(const char *dir, int create, char *why, size_t n) {
+    int fd;
+    if (rx_operator_dir_open(dir, create, &fd, why, n) != 0) return -1;
+    close(fd);
+    return 0;
+}
+
+/* flock on RX_OPERATOR_LOCK inside the held directory `dfd`. */
+static int lock_at(int dfd, const char *dir, int *lock_fd, char *why, size_t n) {
+    *lock_fd = -1;
+    int fd = openat(dfd, RX_OPERATOR_LOCK, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
+    if (fd < 0) { snprintf(why, n, "%s/%s: %s", dir, RX_OPERATOR_LOCK, strerror(errno)); return -1; }
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != geteuid()) {
+        snprintf(why, n, "%s/%s is not a regular file of this uid", dir, RX_OPERATOR_LOCK);
+        close(fd);
+        return -1;
+    }
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        int e = errno;
+        char held[32] = "";
+        ssize_t r = pread(fd, held, sizeof held - 1, 0);
+        held[r > 0 ? r : 0] = 0;
+        held[strcspn(held, "\n")] = 0;
+        if (e == EWOULDBLOCK)
+            snprintf(why, n, "%s is in use by another program (pid %s)", dir, held[0] ? held : "?");
+        else
+            snprintf(why, n, "%s/%s: lock: %s", dir, RX_OPERATOR_LOCK, strerror(e));
+        close(fd);
+        return -1;
+    }
+    char pid[32];
+    int len = snprintf(pid, sizeof pid, "%ld\n", (long)getpid());
+    if (ftruncate(fd, 0) != 0 || pwrite(fd, pid, (size_t)len, 0) != len) {
+        snprintf(why, n, "%s/%s: %s", dir, RX_OPERATOR_LOCK, strerror(errno));
+        close(fd);
+        return -1;
+    }
+    *lock_fd = fd;
+    return 0;
+}
+
+int rx_operator_lock_dir(const char *dir, int create, int *lock_fd, char *why, size_t n) {
+    int dfd;
+    *lock_fd = -1;
+    if (rx_operator_dir_open(dir, create, &dfd, why, n) != 0) return -1;
+    int rc = lock_at(dfd, dir, lock_fd, why, n);
+    close(dfd);
+    return rc;
+}
+
 static void hex32(const uint8_t *b, char out[65]) {
     for (int i = 0; i < 32; i++) snprintf(out + 2 * i, 3, "%02x", b[i]);
 }
@@ -60,9 +137,17 @@ static uint64_t realtime_ns(void) {
     return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
 }
 
-/* The operator's copy of its credential: 0600, written whole or not at all. */
+static uint64_t monotonic_ns(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
+}
+
+/* The operator's copy of its credential: 0600, written whole or not at all,
+ * every name relative to the held control directory. */
 static int write_cred(RxOperator *op, uint32_t subject, const RxCallerCred *cred, RxCapRef cap) {
-    char tmp[600], secret[65], buf[1024];
+    static const char tmp[] = RX_OPERATOR_CRED ".partial";
+    char secret[65], buf[1024];
     hex32(cred->secret, secret);
     int len = snprintf(buf, sizeof buf,
         "aien-operator-credential v1\nworld %s %ld %llu\nsocket %s\nsubject %u\n"
@@ -73,8 +158,7 @@ static int write_cred(RxOperator *op, uint32_t subject, const RxCallerCred *cred
         (unsigned long long)cap.generation);
     for (size_t i = 0; i < sizeof secret; i++) ((volatile char *)secret)[i] = 0;
     if (len <= 0 || (size_t)len >= sizeof buf) return -1;
-    if ((size_t)snprintf(tmp, sizeof tmp, "%s.partial", op->cred_path) >= sizeof tmp) return -1;
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0600);
+    int fd = openat(op->dir_fd, tmp, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0600);
     int rc = fd < 0 ? -1 : 0;
     if (rc == 0 && fchmod(fd, 0600) != 0) rc = -1;
     for (int off = 0; rc == 0 && off < len;) {
@@ -83,11 +167,25 @@ static int write_cred(RxOperator *op, uint32_t subject, const RxCallerCred *cred
         if (w <= 0) rc = -1; else off += (int)w;
     }
     if (rc == 0 && fsync(fd) != 0) rc = -1;
+    if (rc == 0 && fstat(fd, &op->cred_st) != 0) rc = -1;
     if (fd >= 0) close(fd);
     for (size_t i = 0; i < sizeof buf; i++) ((volatile char *)buf)[i] = 0;
-    if (rc == 0 && rename(tmp, op->cred_path) != 0) rc = -1;
-    if (rc != 0) unlink(tmp);
+    if (rc == 0 && renameat(op->dir_fd, tmp, op->dir_fd, RX_OPERATOR_CRED) != 0) rc = -1;
+    if (rc == 0 && fsync(op->dir_fd) != 0) rc = -1;
+    if (rc != 0) unlinkat(op->dir_fd, tmp, 0);
+    else op->cred_made = 1;
     return rc;
+}
+
+/* Remove `name` from the held directory only if it is still the file this
+ * instance made (same device and inode). */
+static void unlink_own(RxOperator *op, const char *name, const struct stat *made, int *flag) {
+    struct stat st;
+    if (!*flag || op->dir_fd < 0) return;
+    if (fstatat(op->dir_fd, name, &st, AT_SYMLINK_NOFOLLOW) == 0 &&
+        st.st_dev == made->st_dev && st.st_ino == made->st_ino)
+        unlinkat(op->dir_fd, name, 0);
+    *flag = 0;
 }
 
 /* ---- one request ---------------------------------------------------------- */
@@ -98,8 +196,12 @@ typedef struct {
     RxCallerCred cred;
     RxCapRef cap;
     int32_t reason;
-    int have_subject, have_gen, have_secret, have_cap, have_reason;
+    uint64_t deadline_ns;        /* CLOCK_MONOTONIC: the client has given up after this */
+    int have_subject, have_gen, have_secret, have_cap, have_reason, have_deadline;
 } Req;
+
+/* A request deadline further ahead than this is refused (the client waits 60 s). */
+#define RX_OPERATOR_DEADLINE_MAX_NS 120000000000ull
 
 static int hexval(char c) {
     if (c >= '0' && c <= '9') return c - '0';
@@ -161,11 +263,16 @@ static int parse(char *line, Req *q) {
         } else if (strcmp(k, "reason") == 0 && !q->have_reason) {
             if (udec(v, INT32_MAX, &x) != 0) return -1;
             q->reason = (int32_t)x; q->have_reason = 1;
+        } else if (strcmp(k, "deadline") == 0 && !q->have_deadline) {
+            if (udec(v, UINT64_MAX, &x) != 0) return -1;
+            q->deadline_ns = x; q->have_deadline = 1;
         } else {
             return -1;
         }
     }
-    if (!q->have_subject || !q->have_gen || !q->have_secret || !q->have_cap) return -1;
+    if (!q->have_subject || !q->have_gen || !q->have_secret || !q->have_cap || !q->have_deadline)
+        return -1;
+    if (q->deadline_ns > monotonic_ns() + RX_OPERATOR_DEADLINE_MAX_NS) return -1;
     if (q->have_reason && strcmp(q->cmd, "stop") != 0) return -1;
     return 0;
 }
@@ -184,8 +291,14 @@ static void handle(RxOperator *op, Req *q, char *out, size_t n) {
         rc = rx_world_emergency_stop(w, q->subject, &q->cred, q->cap, q->reason, &h);
         if (rc == RX_OK) {
             if (op->cfg.on_halt) op->cfg.on_halt(op->cfg.ctx, 1);
-            snprintf(out, n, "OK state=stopped seq=%llu crumb=%llu durable=%d",
-                     (unsigned long long)h.seq, (unsigned long long)h.crumb, h.durable);
+            if (h.durable == 1)
+                snprintf(out, n, "OK state=stopped seq=%llu crumb=%llu durable=1",
+                         (unsigned long long)h.seq, (unsigned long long)h.crumb);
+            else   /* in force in memory; a restart would NOT come up stopped */
+                snprintf(out, n, "STOPPED_NOT_DURABLE state=stopped seq=%llu crumb=%llu durable=%d "
+                         "errno=%d (%s)", (unsigned long long)h.seq, (unsigned long long)h.crumb,
+                         h.durable, h.durable < 0 ? -h.durable : 0,
+                         h.durable < 0 ? strerror(-h.durable) : "no durable halt directory");
         } else if (rc == RX_HALT_ALREADY) {
             snprintf(out, n, "ALREADY state=stopped seq=%llu", (unsigned long long)h.seq);
         } else if (refusal(rc)) {
@@ -252,7 +365,7 @@ static void handle(RxOperator *op, Req *q, char *out, size_t n) {
     if (revoke) {
         rc = rx_world_revoke_caller(w, q->subject, &q->cred);
         if (rc != RX_CALLER_OK) { snprintf(out, n, "ERROR rc=revoke-credential %d", rc); return; }
-        unlink(op->cred_path);
+        unlink_own(op, RX_OPERATOR_CRED, &op->cred_st, &op->cred_made);
         snprintf(out, n, "OK revoked=capability,credential");
         return;
     }
@@ -264,8 +377,10 @@ static void serve_one(RxOperator *op, int fd) {
     struct ucred pc;
     socklen_t pl = sizeof pc;
     struct timeval tv = {2, 0};
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
-    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv);
+    /* Without both timeouts one client could hold the listener: refused, no reply. */
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) != 0 ||
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof tv) != 0)
+        return;
     if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &pc, &pl) != 0 || pl != sizeof pc ||
         pc.uid != geteuid()) {
         snprintf(body, sizeof body, "REFUSED reason=peer");
@@ -293,7 +408,14 @@ static void serve_one(RxOperator *op, int fd) {
         snprintf(body, sizeof body, "BAD_REQUEST");
     } else {
         pthread_mutex_lock(&op->gate);
-        handle(op, &q, body, sizeof body);
+        /* A request waits here while the program sets a world up. Once its
+         * client has given up (deadline passed) it is dropped, never run late:
+         * a late resume would restart a world nobody is watching. A late stop
+         * is fail-safe and still runs. */
+        if (strcmp(q.cmd, "stop") != 0 && monotonic_ns() > q.deadline_ns)
+            snprintf(body, sizeof body, "EXPIRED (the client deadline passed; nothing done)");
+        else
+            handle(op, &q, body, sizeof body);
         pthread_mutex_unlock(&op->gate);
     }
     for (size_t i = 0; i < sizeof q; i++) ((volatile uint8_t *)&q)[i] = 0;
@@ -309,6 +431,17 @@ reply:;
             if (s <= 0) break;
             sent += (size_t)s;
         }
+    }
+    /* Read what the client still sends (a refusal is answered before its request is
+     * read) until it closes its side, so closing here never resets a client that is
+     * still writing. Bounded: a few reads, each under the 2 s receive timeout. */
+    shutdown(fd, SHUT_WR);
+    char sink[RX_OPERATOR_LINE];
+    for (int i = 0; i < 4;) {
+        ssize_t r = read(fd, sink, sizeof sink);
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) break;
+        i++;
     }
 }
 
@@ -334,37 +467,51 @@ int rx_operator_open(RxOperator **out, const RxOperatorConfig *cfg, uint32_t sub
                      RxCallerCred *cred, RxCapRef cap) {
     if (!out || !cfg || !cfg->world || !cfg->admin || !cfg->control_dir || !cred) return -1;
     *out = NULL;
-    char why[256];
-    if (rx_operator_dir_check(cfg->control_dir, 0, why, sizeof why) != 0) {
-        fprintf(stderr, "R13 operator: control directory refused: %s\n", why);
-        return -1;
-    }
+    char why[320];
     RxOperator *op = calloc(1, sizeof *op);
     if (!op) return -1;
     op->cfg = *cfg;
-    op->listen_fd = -1;
+    op->dir_fd = op->lock_fd = op->listen_fd = -1;
     op->wake[0] = op->wake[1] = -1;
-    if ((size_t)snprintf(op->sock_path, sizeof op->sock_path, "%s/%s", cfg->control_dir,
-                         RX_OPERATOR_SOCK) >= sizeof op->sock_path ||
-        (size_t)snprintf(op->cred_path, sizeof op->cred_path, "%s/%s", cfg->control_dir,
-                         RX_OPERATOR_CRED) >= sizeof op->cred_path) {
-        fprintf(stderr, "R13 operator: control path too long for a socket address\n");
-        free(op);
-        return -1;
-    }
     pthread_mutex_init(&op->gate, NULL);
     pthread_mutex_lock(&op->gate);          /* held until rx_operator_release */
-    unlink(op->sock_path);                  /* a socket left by an earlier start */
+    /* The control directory is held open and locked: from here every name in
+     * it is resolved against this descriptor, and no other program can be
+     * serving or replacing the socket and the credential. */
+    if (rx_operator_dir_open(cfg->control_dir, 0, &op->dir_fd, why, sizeof why) != 0 ||
+        lock_at(op->dir_fd, cfg->control_dir, &op->lock_fd, why, sizeof why) != 0) {
+        fprintf(stderr, "R13 operator: control directory refused: %s\n", why);
+        goto fail;
+    }
+    char bind_path[sizeof(((struct sockaddr_un *)0)->sun_path)];
+    if ((size_t)snprintf(op->sock_path, sizeof op->sock_path, "%s/%s", cfg->control_dir,
+                         RX_OPERATOR_SOCK) >= sizeof op->sock_path ||
+        (size_t)snprintf(bind_path, sizeof bind_path, "/proc/self/fd/%d/%s", op->dir_fd,
+                         RX_OPERATOR_SOCK) >= sizeof bind_path) {
+        fprintf(stderr, "R13 operator: control path too long for a socket address\n");
+        goto fail;
+    }
+    /* A socket left by an earlier start of this program (the lock is ours). */
+    if (unlinkat(op->dir_fd, RX_OPERATOR_SOCK, 0) != 0 && errno != ENOENT) {
+        fprintf(stderr, "R13 operator: stale socket: %s\n", strerror(errno));
+        goto fail;
+    }
     struct sockaddr_un a;
     memset(&a, 0, sizeof a);
     a.sun_family = AF_UNIX;
-    memcpy(a.sun_path, op->sock_path, strlen(op->sock_path) + 1);
+    memcpy(a.sun_path, bind_path, strlen(bind_path) + 1);   /* lands in the held directory */
     op->listen_fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
     mode_t old = umask(077);
     int ok = op->listen_fd >= 0 && bind(op->listen_fd, (struct sockaddr *)&a, sizeof a) == 0;
     umask(old);
-    ok = ok && chmod(op->sock_path, 0600) == 0 && listen(op->listen_fd, 8) == 0 &&
-         pipe2(op->wake, O_CLOEXEC) == 0 && write_cred(op, subject, cred, cap) == 0;
+    if (ok && fstatat(op->dir_fd, RX_OPERATOR_SOCK, &op->sock_st, AT_SYMLINK_NOFOLLOW) == 0 &&
+        S_ISSOCK(op->sock_st.st_mode))
+        op->sock_made = 1;
+    else
+        ok = 0;
+    ok = ok && fchmodat(op->dir_fd, RX_OPERATOR_SOCK, 0600, 0) == 0 &&
+         listen(op->listen_fd, 8) == 0 && pipe2(op->wake, O_CLOEXEC) == 0 &&
+         write_cred(op, subject, cred, cap) == 0;
     for (size_t i = 0; i < sizeof *cred; i++) ((volatile uint8_t *)cred)[i] = 0;
     if (ok && pthread_create(&op->thread, NULL, listener_main, op) == 0) {
         op->thread_live = 1;
@@ -372,6 +519,8 @@ int rx_operator_open(RxOperator **out, const RxOperatorConfig *cfg, uint32_t sub
         return 0;
     }
     fprintf(stderr, "R13 operator: entry point could not start: %s\n", strerror(errno));
+fail:
+    for (size_t i = 0; i < sizeof *cred; i++) ((volatile uint8_t *)cred)[i] = 0;
     pthread_mutex_unlock(&op->gate);
     rx_operator_close(op);
     return -1;
@@ -390,8 +539,11 @@ void rx_operator_close(RxOperator *op) {
     if (op->listen_fd >= 0) close(op->listen_fd);
     if (op->wake[0] >= 0) close(op->wake[0]);
     if (op->wake[1] >= 0) close(op->wake[1]);
-    unlink(op->sock_path);
-    unlink(op->cred_path);
+    /* Only what this instance created, while its lock is still held. */
+    unlink_own(op, RX_OPERATOR_SOCK, &op->sock_st, &op->sock_made);
+    unlink_own(op, RX_OPERATOR_CRED, &op->cred_st, &op->cred_made);
+    if (op->lock_fd >= 0) close(op->lock_fd);   /* releases the flock */
+    if (op->dir_fd >= 0) close(op->dir_fd);
     pthread_mutex_destroy(&op->gate);
     free(op);
 }

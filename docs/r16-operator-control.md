@@ -53,12 +53,25 @@ its own world. Every statement below holds for each of those worlds.
   a stop never lands inside setup; a world restored stopped answers at once (it does
   no setup until resumed). Between worlds there is no socket: a client gets
   "connection refused" and the request does nothing.
+* **One program per state directory.** At startup the program takes an exclusive
+  `flock` on `<dir>/operator.lock` (opened `O_CLOEXEC|O_NOFOLLOW`, a regular file of its
+  uid) and, when a world first uses it, on `<dir>/gen-<mode-key>/operator.lock`; it holds
+  both for its whole life. A second program on the same state directory, or one whose
+  state directory is the first one's generation directory, is refused (exit 2,
+  `... is in use by another program (pid N)`) before it touches a socket or a
+  credential. Each world also locks `control/` the same way while its entry point is
+  open. The control directory is held open as a descriptor: the stale socket is removed,
+  the socket bound (through `/proc/self/fd/<fd>/operator.sock`) and the credential
+  written and renamed relative to that descriptor, never by a path looked up again.
+  Close removes the socket and the credential only if they are still the files this
+  instance created (same device and inode), then releases the lock.
 * Two walls before the credential: the directory is 0700 and owned by the program's
   user (validated at startup, §5), and every accepted connection is checked with
   `SO_PEERCRED`: the peer uid must equal the program's effective uid, else the reply
   is `REFUSED reason=peer` and nothing is read further. Root can pass the directory but
   not the peer check.
-* One request per connection, read with a 2 s receive timeout; at most 511 bytes up to
+* One request per connection, read with a 2 s receive and send timeout (if either
+  cannot be set the connection is closed with no reply); at most 511 bytes up to
   the first newline. One reply line, then the connection is closed. Requests are served
   one at a time by one listener thread (`src/runtime/rx_operator.c`); it never holds the
   world lock across a request.
@@ -83,17 +96,30 @@ cap <cap_id> <cap generation>
 Request (one line):
 
 ```
-aien-operator v1 <command> subject=<u32> gen=<u64> secret=<64 hex> cap=<id>:<gen> [reason=<int>]
+aien-operator v1 <command> subject=<u32> gen=<u64> secret=<64 hex> cap=<id>:<gen> deadline=<u64> [reason=<int>]
 ```
+
+`deadline` is required: the `CLOCK_MONOTONIC` time in nanoseconds after which the client
+has given up (the client sends now + 55 s and waits 60 s). A deadline more than 120 s
+ahead is `BAD_REQUEST`. A request that waited for the world's setup past its deadline is
+answered `EXPIRED` and not run, unless it is a `stop`: a late stop is fail-safe and still
+runs; a late resume would restart a world nobody is watching.
 
 `<command>` is `status`, `stop`, `resume`, `revoke-cap`, `revoke` or `shutdown`. Any other
 token, a missing or repeated field, a secret that is not 64 hex digits, a number out of
 range or extra bytes is `BAD_REQUEST`, decided before any world call.
 
 Reply (one line): `aien-operator v1 <RESULT> key=value ...`. RESULT is one of `OK`,
+`STOPPED_NOT_DURABLE` (the stop is in force in memory but its mark could not be written:
+a restart would NOT come up stopped; carries `durable=<-errno> errno=<n> (<text>)`),
 `ALREADY` (stop of a stopped world), `NOT_STOPPED` (resume or shutdown of a running world),
+`EXPIRED` (the client deadline passed while the request waited; nothing done),
 `REFUSED reason=peer|identity|authority`, `BAD_REQUEST`, `ERROR rc=<n>`.
 A refusal says nothing about the world: no state, no counters.
+
+Client exit status: 0 for `OK`, 3 for `STOPPED_NOT_DURABLE`, 1 for any other reply, 2 for
+a usage error, no credential file, no world serving the socket, or a reply timeout that
+could not be set.
 
 ## 4. Commands
 
@@ -105,8 +131,8 @@ same `halt_authorize` the stop and resume use, under the same locks, added to
 
 | command | world call | reply on success |
 |---|---|---|
-| `status` | `rx_world_operator_authorize`, `rx_world_halt_status` | `OK state=running\|stopped restored= seq= durable= refused= cancelled= crumbs= reactions=` plus program counters `served= production_commits= inforce= active_generation=` |
-| `stop [reason]` | `rx_world_emergency_stop` | `OK state=stopped seq= crumb= durable=`; a second stop: `ALREADY` with no new crumb |
+| `status` | `rx_world_operator_authorize`, `rx_world_halt_status` | `OK state=running\|stopped restored= seq= durable= refused= cancelled= crumbs= reactions=` plus program counters `served= production_commits= promotion= inforce= active_generation= seat_claims= seat_halted=` |
+| `stop [reason]` | `rx_world_emergency_stop` | `OK state=stopped seq= crumb= durable=1`; mark not written: `STOPPED_NOT_DURABLE ... errno=` (client exit 3); a second stop: `ALREADY` with no new crumb |
 | `resume` | `rx_world_emergency_resume` | `OK state=running seq=`; a running world: `NOT_STOPPED` |
 | `revoke-cap` | authorize, then `aienos_cap_revoke` of the presented control capability by the authority's office | `OK revoked=capability`; afterwards every request with that capability is `REFUSED reason=authority` |
 | `revoke` | authorize, then `aienos_cap_revoke` (capability) and `rx_world_revoke_caller` (credential); the credential file is removed | `OK revoked=capability,credential`; afterwards `REFUSED reason=identity` |
@@ -131,7 +157,8 @@ earlier world or an earlier program start fails the constant-time caller check
   `<dir>/gen-<mode-key>/` (`positive`, `no-aien`, `no-promotion`, `revoked-experiment`,
   `stale-gpu`, `failed-verification`).
 * **Validated at startup, refuse if wrong.** `<dir>` and each subdirectory must be a real
-  directory (checked with `lstat`, a symlink is refused), owned by the effective uid, with
+  directory (opened `O_DIRECTORY|O_NOFOLLOW` and checked with `fstat` on that descriptor,
+  so a symlink is refused and nothing can be swapped in between), owned by the effective uid, with
   no group or other permission bits (`mode & 077 == 0`). A missing subdirectory is
   created 0700. A path too long for a socket address is refused. On any refusal the
   program prints the reason and exits 2 before any world starts.
@@ -179,6 +206,48 @@ earlier world or an earlier program start fails the constant-time caller check
   does not stop the process, its threads, ARGUS observation or the authority; it is not a
   kill switch and not a rollback.
 
+### 6.1 Known limit: the halt right is the epoch right
+
+The spec gives the stop the privileged epoch right (`spec/r16-operator-emergency-stop.md`
+§2 lines 44-45: "The right is `RX_RIGHT_EPOCH` ... The right that may void every
+capability may also pause the world"). ADR 0016 (aien-architecture main 014159e) is
+silent on a halt or pause right: neither word occurs in it. Its capability section
+(lines 367-382) lists the resource among what a capability binds, and line 1475 asks
+that a wrong-resource attack fail.
+
+The locked native authority does not check the resource when a capability is used:
+`auth_use` (aienos `native/capability/aienos_capability.c` lines 205-218 at aienos.lock
+bbad5e4) checks delivery, generation, state, epoch, expiry, the delegation chain and
+the rights, not the entry's resource. So the operator's control capability
+(`RX_WORLD_RES_CONTROL` with `RX_RIGHT_EPOCH`) would also pass `aienos_cap_bump_epoch`
+(same file, line 555, through `auth_use(..., AIENOS_CAP_RIGHT_EPOCH, ...)` at line 369)
+if anything handed it there. omega does not change the locked authority; the request
+is aien-dev/aienos#266 (a resource check in `auth_use`, or a dedicated halt right).
+
+What keeps it closed today is omega's own code, shown here and tested:
+
+* The capability is minted once per world (`tests/runtime/rx_r13_living.c` 449,
+  `mint(r, RX_OPERATOR_SUBJ, RX_WORLD_RES_CONTROL, RX_WORLD_RIGHT_HALT)`) and passed only
+  to `rx_operator_open` (line 327), which writes it to the operator's credential file
+  and keeps no other use of it.
+* A presented capability (`q->cap`, parsed at `src/runtime/rx_operator.c` 262) reaches
+  exactly four calls: `rx_world_emergency_stop` (291), `rx_world_emergency_resume`
+  (312), `rx_world_operator_authorize` (328, for status, shutdown, revoke-cap and
+  revoke) and, as the *target* of a revocation authorized by the authority's office,
+  `aienos_cap_revoke` (360). The first three validate it with
+  `rx_world_validate_cap(..., RX_WORLD_RES_CONTROL, RX_WORLD_RIGHT_HALT, ...)` inside
+  `halt_authorize` (`src/runtime/rx_world.c` 914).
+* Every other command, with a full valid credential, is `BAD_REQUEST` before any
+  authority call (`rx_operator.c` 327). The host test sends `explode`, `bump-epoch`,
+  `bump_epoch`, `mint`, `grant`, `epoch`, `STOP`, `Stop`, `stop2`, `resume2` and `halt`
+  and requires `BAD_REQUEST` for each; mutant O22 removes that refusal and the test fails.
+* `aienos_cap_bump_epoch` has no caller in omega's production sources (`git grep`: the
+  declaration in `src/runtime/aienos_cap.h` 56 and the R7 oracle test
+  `tests/runtime/rx_r7_native.c` 217 only).
+
+A future omega change that hands the control capability to any other authority entry
+point reopens this; it stays a known limit until aienos#266 is closed.
+
 ## 7. Proof (G6 by execution)
 
 `make test-r16-operator-host` (`tests/runtime/rx_operator_host.sh`) starts the production
@@ -190,13 +259,36 @@ credential (earlier world, earlier program start); `revoke-cap` and `revoke`; re
 stop and resume; repeated stop and resume cycles under production load (in-flight work
 refused and re-run); promotion blocked while stopped and completed after resume; restart
 while stopped after `shutdown` and after `SIGKILL`; recovery to a passing R13 episode;
-startup refusal of a group-readable, foreign-owned or symlinked state directory.
+startup refusal of a group-readable, foreign-owned or symlinked state directory; a
+second program on the same state directory or on the first one's generation directory
+refused while the first keeps its socket and credential; a stop whose mark cannot be
+written (generation directory made 0500) answering `STOPPED_NOT_DURABLE errno=13` with
+client exit 3; eleven unknown commands with a full credential refused; an expired
+resume answering `EXPIRED` and doing nothing, a missing or too-distant deadline refused.
+On host three checks are made deterministic by holding one thread of the production
+program under gdb in non-stop mode (the socket keeps serving): the seat acceptor held
+with a computed seat result while a stop is accepted, then released, must end that claim
+halted (`seat_halted` in status, so the episode's claim subtraction is exercised on
+host); the positive world held after its episode's work, stopped, then released, must
+stay up and stopped and print that it waits for a resume; the next world's open held
+after the positive world closed must find a credential file planted by someone else
+still in place. Without gdb those checks are SKIPPED (gate NOT_RUN). Silicon runs
+without gdb; its in-flight count is reported, not checked. A host run whose only gap is a
+missing `sudo -n` or gdb is NOT_RUN with the reason in the receipt, never FAIL.
 `tests/runtime/rx_operator_mutants.sh` rebuilds the production program from mutated
 copies and requires the test to fail against each (wiring missing, handler disconnected,
 success reply without a state transition, unauthorized resume accepted, wiring present
 only in a comment, wiring present only as an unused call, and the others it lists).
 `make test-r16-operator-silicon` runs the same test on `build/rx_r13_living_silicon`
 (resident GB10 seat) without the SIGKILL phase (a chip program is never killed). The
-receipt labels host and silicon results separately. The G6 item
+receipt labels host and silicon results separately. The silicon test requires the
+program's own gate `R13_LIVING_SYSTEM=PASS` (bound to the candidate commit on a clean
+tree): the spec allows no `SILICON_PASS_UNBOUND`. Each run writes
+`operator_<seat>_receipt.json` to `RX_OP_OUT` (default `build/r16-operator`); the mutant
+script gives every mutant its own directory, so a mutant never overwrites the real receipt.
+`tools/r16_qualify.sh` copies both receipts into its raw directory (covered by the raw
+digest) and refuses PASS unless each names its seat, the candidate commit on a clean tree,
+no failure or skip, the seat's gate, and the SHA-256 of the production binary built in that
+run; the silicon run counts toward `silicon_observed`. The G6 item
 `operator_emergency_controls_passing` is PASS only when both ran and passed in the same
 qualification run on the candidate.

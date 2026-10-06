@@ -654,6 +654,9 @@ exists in the file (symbol not verified) and applies the same class rules.
 | OM-M01 | omega | `tools/omegatool.c` | manual (2642) | `legacy_oracle_run_demonstration_living_matvec` | body of the hand-sequenced living-matvec demonstration | retire with `--demonstrate-living-matvec` (W5) | A | false | the function the class-A dispatcher row calls; moved behind a `legacy_oracle` name (W5) | `static void legacy_oracle_run_demonstration_living_matvec(void) {` |
 | OM-103 | omega | `tools/omegatool.c` | manual (3749) | `legacy_oracle_demonstrate_living_matvec` | hand-sequenced living matvec demonstration (spec -> machine -> kernel -> benchmark -> select) | retire: legacy oracle only, under the explicit mode `--legacy-oracle-living-matvec` (R16-G5); the old `--demonstrate-living-matvec` mode is gone | A | false | spec 3.1 / 4: the omega hand-sequenced tool path replaced by the R13 living system; retired behind legacy_oracle symbol names (W5) and, for G5, an explicit legacy mode name; moved to the manual rows because the renamed mode no longer matches the cli-mode pattern | `if (strcmp(arg, "--legacy-oracle-living-matvec") == 0) {` |
 | OM-M02 | omega | `tools/omegatool.c` | manual (3821) | `main` | hand-sequenced milestone demonstrations (16 modes: arithmetic, physics, realization, self-host, verify, program, synthesis, library, discovery, machine, realization-synthesis, accelerator, accelerator-world, blackwell-matmul, blackwell-codegen, blackwell-vector) | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstrations; migration map: omegatool = Oracle; not a production entry point; G5: kept only under `--reference-demonstrate-<name>`, dispatched from the one `reference_modes` table that also prints usage; replaces the 16 per-mode cli-mode rows, which the table-driven dispatch no longer shows to the pattern | `int ref_rc = reference_demonstrate(argv[1], 0);` |
+| OM-M03 | omega | `tests/runtime/rx_r13_living.c` | manual (306) | `wait_running` | wait while the world is under an operator stop | R16 G6 operator stop honoured by the production program | B | true | operator emergency stop mechanism: polls the world's halt state (1 ms) until the operator resumes, shuts the program down or the world is torn down; sequences no faculty; listed by hand (the loop pattern does not see a `while` on a call) | `while (world_halted(r)) {` |
+| OM-M04 | omega | `tests/runtime/rx_r13_living.c` | manual (1064) | `run` | stale-GPU retire waits out an operator stop | R16 G6 operator stop honoured by the stale-GPU injection | B | true | operator emergency stop mechanism: a retire refused with RX_ERR_HALTED waits for the resume (`wait_running`) and is tried again; sequences no faculty; listed by hand | `while ((rr = rx_world_retire(&r->w, r->living.o.output)) == RX_ERR_HALTED)` |
+| OM-M05 | omega | `tests/runtime/rx_r13_living.c` | manual (1104) | `run` | end-of-episode quiescence wait under an operator stop | R16 G6 operator stop honoured before the episode checks | B | true | operator emergency stop mechanism: the settled-world wait is repeated only while the world is stopped, each time after waiting for the resume; sequences no faculty; listed by hand | `while ((quiet = rx_world_wait_quiescent(&r->w, 10000)) != RX_OK && world_halted(r))` |
 <!-- /r16-inventory:rows -->
 
 ## 5. Structural findings (non-greppable §4 terms)
@@ -934,3 +937,18 @@ Neither sequences faculties: each waits for the operator or for the world to run
 
 After: `sites=523 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`.
 This is the G1/G2 inventory for the CAND-3 operator-control code, not an R16 qualification receipt.
+
+### 8.8 Update 2026-10-05 (cand3 lane ESTOP, review fixes): operator wait loops listed by hand
+
+Review of omega#309 (gate integrity, G8) asked that the operator-stop wait loops the
+pattern scan does not count be listed by hand with a class. Three manual rows (§4.1),
+each from reading the loop:
+- OM-M03, class B: `wait_running` (`tests/runtime/rx_r13_living.c`), the 1 ms poll while the
+  world is under an operator stop.
+- OM-M04, class B: the stale-GPU retire in `run` that waits out a stop and tries again.
+- OM-M05, class B: the settled-world wait in `run`, repeated only while the world is stopped.
+None sequences faculties: each waits for the operator. The tool checks that each evidence
+line still exists (a changed evidence line was shown to give `stale=1 -> FAIL`).
+
+After: `sites=523 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
+(same scan set as §8.7). Not an R16 qualification receipt.

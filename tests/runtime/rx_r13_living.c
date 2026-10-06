@@ -247,6 +247,10 @@ static const char *const g_mode_key[] = {"positive", "no-aien", "no-promotion",
     "revoked-experiment", "stale-gpu", "failed-verification"};
 static char g_state_dir[192];
 static char g_control_dir[224];
+/* flock descriptors held for the program's life (rx_operator_lock_dir): the
+ * state directory and each generation (halt) directory once a world uses it. */
+static int g_state_lock = -1;
+static int g_gen_lock[] = {-1, -1, -1, -1, -1, -1};
 static uint64_t g_op_stops, g_op_resumes, g_op_restored, g_op_open, g_op_cancelled;
 
 static int world_halted(Rig *r) {
@@ -284,12 +288,14 @@ static void op_describe(void *ctx, char *buf, size_t n) {
     uint64_t active = 0, lineage = 0;
     rx_gen_active(r->gen, &active, &lineage);
     snprintf(buf, n, "world=%s served=%llu production_commits=%llu promotion=%llu inforce=%llu "
-             "active_generation=%llu",
+             "active_generation=%llu seat_claims=%llu seat_halted=%llu",
              g_mode_key[r->mode], (unsigned long long)__atomic_load_n(&r->served, __ATOMIC_RELAXED),
              (unsigned long long)__atomic_load_n(&r->w.reactions[r->omega.r_serve].commits,
                                                  __ATOMIC_RELAXED),
              (unsigned long long)field(r, r->living.o.promotion, 0),
-             (unsigned long long)field(r, r->living.o.inforce, 0), (unsigned long long)active);
+             (unsigned long long)field(r, r->living.o.inforce, 0), (unsigned long long)active,
+             (unsigned long long)__atomic_load_n(&r->w.stats.resident_claims, __ATOMIC_RELAXED),
+             (unsigned long long)__atomic_load_n(&r->w.stats.resident_halted, __ATOMIC_RELAXED));
 }
 
 /* Wait while the world is stopped. -1 when the operator shut the program
@@ -378,7 +384,9 @@ static int operator_state(const char *dir) {
         fprintf(stderr, "R13 operator: no scratch state directory\n");
         return -1;
     }
-    if (rx_operator_dir_check(g_state_dir, 1, why, sizeof why) != 0) {
+    /* Held for the program's life: a second program on the same state
+     * directory is refused here, before it touches a socket or a credential. */
+    if (rx_operator_lock_dir(g_state_dir, 1, &g_state_lock, why, sizeof why) != 0) {
         fprintf(stderr, "R13 operator: state directory refused: %s\n", why);
         return -1;
     }
@@ -393,8 +401,8 @@ static int operator_state(const char *dir) {
         fprintf(stderr, "R13 operator: control directory refused: %s\n", why);
         return -1;
     }
-    printf("R13 operator: state %s, control %s (operator subject %u)\n", g_state_dir,
-           g_control_dir, (unsigned)RX_OPERATOR_SUBJ);
+    printf("R13 operator: state %s, control %s (operator subject %u, pid %ld)\n", g_state_dir,
+           g_control_dir, (unsigned)RX_OPERATOR_SUBJ, (long)getpid());
     return 0;
 }
 static int start(Rig *r, int mode) {
@@ -424,7 +432,8 @@ static int start(Rig *r, int mode) {
     char why[320];
     if ((size_t)snprintf(r->generation_dir, sizeof r->generation_dir, "%s/gen-%s", g_state_dir,
                          g_mode_key[mode]) >= sizeof r->generation_dir ||
-        rx_operator_dir_check(r->generation_dir, 1, why, sizeof why) != 0) {
+        (g_gen_lock[mode] < 0 &&
+         rx_operator_lock_dir(r->generation_dir, 1, &g_gen_lock[mode], why, sizeof why) != 0)) {
         fprintf(stderr, "R13 operator: generation directory refused: %s\n", why);
         return -1;
     }

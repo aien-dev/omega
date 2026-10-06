@@ -8,7 +8,12 @@
  *   rx_operator --control <dir> --raw '<line>'        send a line as is (tests)
  *
  * <command>: status | stop | resume | revoke-cap | revoke | shutdown
- * Exit: 0 reply OK, 1 any other reply, 2 usage, no credential, or no world. */
+ * Every request carries deadline=<CLOCK_MONOTONIC ns>, when this client gives
+ * up (now + 55 s; it waits 60 s); the program drops a late resume unrun. In a
+ * --raw line the text @deadline@ is replaced by that value.
+ * Exit: 0 reply OK, 3 STOPPED_NOT_DURABLE (the stop is in force but would not
+ * survive a restart), 1 any other reply, 2 usage, no credential, no world, or
+ * the socket timeout could not be set. */
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +21,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/un.h>
+#include <time.h>
 #include <unistd.h>
 
 static int usage(void) {
@@ -58,15 +64,26 @@ int main(int argc, char **argv) {
     fclose(f);
     if (have != 15) { fprintf(stderr, "rx_operator: %s is incomplete\n", path); return 2; }
     if (control) snprintf(sock, sizeof sock, "%s/operator.sock", control);
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    unsigned long long deadline = (unsigned long long)ts.tv_sec * 1000000000ull +
+                                  (unsigned long long)ts.tv_nsec + 55000000000ull;
     char req[1024];
     int n;
-    if (raw) n = snprintf(req, sizeof req, "%s\n", raw);
-    else if (reason)
+    if (raw) {
+        const char *at = strstr(raw, "@deadline@");
+        if (at)
+            n = snprintf(req, sizeof req, "%.*s%llu%s\n", (int)(at - raw), raw, deadline,
+                         at + strlen("@deadline@"));
+        else
+            n = snprintf(req, sizeof req, "%s\n", raw);
+    } else if (reason)
         n = snprintf(req, sizeof req, "aien-operator v1 %s subject=%u gen=%llu secret=%s cap=%u:%llu "
-                     "reason=%s\n", cmd, subject, gen, secret, cap_id, cap_gen, reason);
+                     "deadline=%llu reason=%s\n", cmd, subject, gen, secret, cap_id, cap_gen,
+                     deadline, reason);
     else
-        n = snprintf(req, sizeof req, "aien-operator v1 %s subject=%u gen=%llu secret=%s cap=%u:%llu\n",
-                     cmd, subject, gen, secret, cap_id, cap_gen);
+        n = snprintf(req, sizeof req, "aien-operator v1 %s subject=%u gen=%llu secret=%s cap=%u:%llu "
+                     "deadline=%llu\n", cmd, subject, gen, secret, cap_id, cap_gen, deadline);
     memset(secret, 0, sizeof secret);
     if (n <= 0 || (size_t)n >= sizeof req) return usage();
     struct sockaddr_un a;
@@ -81,11 +98,18 @@ int main(int argc, char **argv) {
     }
     /* The program answers a request once the world it is setting up is ready. */
     struct timeval tv = {60, 0};
-    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv);
+    if (setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof tv) != 0) {
+        fprintf(stderr, "rx_operator: cannot set the reply timeout: %s\n", strerror(errno));
+        close(fd);
+        return 2;
+    }
     for (int off = 0; off < n;) {
         ssize_t w = send(fd, req + off, (size_t)(n - off), MSG_NOSIGNAL);
         if (w < 0 && errno == EINTR) continue;
-        if (w <= 0) { fprintf(stderr, "rx_operator: send: %s\n", strerror(errno)); return 2; }
+        if (w <= 0) {   /* the program may have answered (a refusal) before reading it all */
+            fprintf(stderr, "rx_operator: send: %s (reading any reply)\n", strerror(errno));
+            break;
+        }
         off += (int)w;
     }
     memset(req, 0, sizeof req);
@@ -103,5 +127,7 @@ int main(int argc, char **argv) {
     if (!got) { fprintf(stderr, "rx_operator: no reply\n"); return 2; }
     fputs(reply, stdout);
     if (reply[got - 1] != '\n') fputc('\n', stdout);
-    return strncmp(reply, "aien-operator v1 OK", 19) == 0 ? 0 : 1;
+    if (strncmp(reply, "aien-operator v1 OK ", 20) == 0) return 0;
+    if (strncmp(reply, "aien-operator v1 STOPPED_NOT_DURABLE ", 37) == 0) return 3;
+    return 1;
 }
