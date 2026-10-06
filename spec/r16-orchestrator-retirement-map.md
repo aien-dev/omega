@@ -14,13 +14,13 @@ Each at its `origin/main` commit on 2026-09-29. omega was scanned in the R16 wor
 at branch commit `d6c8630` (= omega main `193a7e7` plus the R16 spec only, before this map and tool; no code
 differences). Rescanned 2026-09-30 for the G3-G5 branch on omega main `6d1ff1d` (the
 R16 work rebased onto current main); the omega row below is that base. The tool prints a WARN when a scanned tree differs from this table,
-which is expected for omega on the R16 candidate. Since 2026-10-05 (§8.3) the table holds the CAND-0 commits (aegis-runtime, not in CAND-0, unchanged); since §8.5 it held the frozen CAND-1 commits; since §8.6 it holds the CAND-2 commits (omega `79a805d`, the rest unchanged from CAND-1).
+which is expected for omega on the R16 candidate. Since 2026-10-05 (§8.3) the table holds the CAND-0 commits (aegis-runtime, not in CAND-0, unchanged); since §8.5 it held the frozen CAND-1 commits; since §8.6 it held the CAND-2 commits; since §8.9 it holds the CAND-3 code (omega `f816473`, aien-sovereign-core `286fa9b`; aegis-runtime, aienos and physics unchanged).
 
 <!-- r16-inventory:shas -->
 | repo | sha |
 |---|---|
-| omega | 79a805d162bfded8c5ce5a4c14f7c29e79025f39 |
-| aien-sovereign-core | 2eec75b08aeb8f9d11f950070e13f6c2c046cf24 |
+| omega | f816473df391bc4fbcf99df722edd70ed26ebef1 |
+| aien-sovereign-core | 286fa9b7afbc71f06ed7e1dd29f68f36714fd92a |
 | aegis-runtime | f4e870953a466bb1cf68f1d88285929024cf1ba9 |
 | aienos | bbad5e4250e57f8cbd1be4cf1390109aa65ef92c |
 | physics | 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf |
@@ -952,3 +952,27 @@ line still exists (a changed evidence line was shown to give `stale=1 -> FAIL`).
 
 After: `sites=523 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
 (same scan set as §8.7). Not an R16 qualification receipt.
+
+### 8.9 Update 2026-10-06 (cand3 campaign): scan set re-pinned to CAND-3 code
+
+The §1 table now holds omega `f816473` (main after #309, the CAND-3 code) and aien-sovereign-core
+`286fa9b` (main; it differs from the former `2eec75b` only in `.crumb` and `omega.lock`). The
+sovereign-core commit that CAND-3 freezes will differ from `286fa9b` only by the `omega.lock` bump
+to `f816473` (and, if it merges first, `rust-toolchain.toml`, sovereign-core #216): none of these is
+a source file the scan reads, so no loop site changes. aegis-runtime `f4e8709`, aienos `bbad5e4`
+(omega `aienos.lock`) and physics `6d7cf0d` (omega `physics.lock`) are unchanged.
+
+The loop rows for the operator-control code (OM-285, OM-286, OM-M03 to OM-M05) were classified in
+§8.7 and §8.8 (#309). Omega has no other code change since `79a805d` that adds a loop site (#305
+and #306 are tools, tests and `rx_resident_gpu.c`; the scan found none unclassified).
+
+Every candidate scan points each `R16_REPO_*` at a clean checkout of the pinned commit (§8.3);
+a run with no overrides still scans `~/workspace/r16-survey/*` at other commits and reports STALE rows
+that are artefacts of those checkouts.
+
+Before and after are the same, since §8.7 and §8.8 already reconciled the rows, with clean checkouts of
+sovereign-core `286fa9b`, aegis-runtime `f4e8709`, aienos `bbad5e4`, physics `6d7cf0d` and omega `f816473`:
+`sites=523 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`.
+After the §1 re-pin the only WARN is the omega row, if the scanned omega is the map-only harness
+commit (as for CAND-2). Map only, no code; the CAND-3 omega code commit is `f816473`.
+This is the G1/G2 inventory for the CAND-3 code, not an R16 qualification receipt.
