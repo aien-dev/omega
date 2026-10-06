@@ -1,0 +1,30 @@
+    PID USER     %CPU %MEM     ELAPSED COMMAND
+ 952632 drakest+  3.8  0.4       21:39 2.1.291
+ 952875 drakest+  2.7  0.4       21:38 2.1.291
+1105768 root      1.6  0.0       03:53 kworker/6:1-events
+   8210 drakest+  1.5  0.4    02:47:02 2.1.291
+ 944057 root      1.2  0.0       24:17 kworker/5:1-events
+   4102 472       1.1  0.2    02:47:30 grafana
+1033692 root      1.0  0.0       10:54 kworker/7:0-events
+1143692 root      1.0  0.0       00:37 kworker/16:0-events
+1090655 root      0.8  0.0       05:55 kworker/19:2-events
+1068347 root      0.8  0.0       08:31 kworker/15:0-events
+ 951981 drakest+  0.8  0.1       21:41 claude
+ 844117 root      0.7  0.0       43:12 kworker/16:1-cgroup_free
+ 906889 root      0.6  0.0       29:33 kworker/9:2-events
+ 943397 root      0.6  0.0       24:30 kworker/17:2-events
+1032273 root      0.6  0.0       11:21 kworker/18:0-mm_percpu_wq
+1090716 root      0.6  0.0       05:53 kworker/8:0-events
+   1645 atlas     0.5  0.0    02:47:36 gocryptfs
+1052692 root      0.5  0.0       09:08 kworker/6:2-cgroup_free
+1031316 root      0.5  0.0       11:33 kworker/8:1-cgroup_free
+1030511 root      0.5  0.0       11:41 kworker/5:0-events
+ 933348 drakest+  0.5  0.2       27:41 2.1.291
+ 941104 root      0.5  0.0       25:09 kworker/6:0-mm_percpu_wq
+ 943407 root      0.5  0.0       24:29 kworker/10:1-memcg
+ 867639 root      0.4  0.0       39:08 kworker/15:1-memcg
+1032279 root      0.4  0.0       11:20 kworker/19:0-events
+   4285 root      0.4  0.1    02:47:29 uptime-kuma
+1069275 root      0.4  0.0       08:17 kworker/3:0-events
+1094845 root      0.4  0.0       05:21 kworker/18:1-events
+      1 root      0.3  0.0    02:47:51 systemd

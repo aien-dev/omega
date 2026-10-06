@@ -1,0 +1,32 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+CC="cc" CFLAGS="-std=gnu11 -Wall -Wextra -Werror -MMD -MP -D_GNU_SOURCE -O2 -Isrc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/m16 -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/nvrm -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/src/common/sdk/nvidia/inc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/common/inc -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/kernel-open/nvidia-uvm -I/home/drakestapleton/workspace/cand3-campaign/cand3/wt-physics-chip/third_party/nvidia-open-580.173.02/src/nvidia/arch/nvalloc/unix/include" RX_PROD_ARGUS_FLAGS="-DRX_ARGUS=2 -DRX_ARGUS_AUTHORITY_OBSERVER -Ibuild/argus-src/b375dca/native/argus -Wl,--wrap=aienos_cap_start" \
+	RX_R13_SRCS="src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c src/runtime/rx_native_bind.c src/runtime/rx_aegis.c src/runtime/rx_aien.c src/runtime/rx_omega.c src/runtime/rx_generation.c src/runtime/rx_living.c src/runtime/rx_operator.c src/sha256.c src/omega_evidence.c src/omega_canonical.c src/omega_validate.c src/omega_core.c src/omega_codec.c src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c src/omega_realize_synth.c src/omega_program.c src/omega_machine.c src/omega_exec.c src/omega_verify.c src/omega_matvec.c src/omega_matvec_quad.c src/runtime/aien_machine_id.c src/runtime/rx_jspace.c src/runtime/rx_cortex.c src/runtime/rx_cortex_record.c src/runtime/rx_graph.c src/runtime/rx_capq.c src/runtime/rx_skillroute.c src/runtime/rx_compose.c tests/runtime/rx_r13_living.c" RX_PROD_ARGUS_SRCS="src/runtime/rx_argus.c build/argus-src/b375dca/native/argus/argus_event.c build/argus-src/b375dca/native/argus/argus_ring.c build/argus-src/b375dca/native/argus/argus_core.c build/argus-src/b375dca/native/argus/argus_detect.c" \
+	AIENOS_CAP_LIB="build/aienos-cap/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c/libaienos_capability.a" bash tests/runtime/rx_operator_mutants.sh build/rx_operator
+ok   unmutated: PASS (86 checks)
+ok   O1 wiring missing: no durable halt directory: killed by: stop: authorized stop accepted, durable, the first stop of this world (client exit 0)
+ok   O2 wiring only in a comment: killed by: stop: authorized stop accepted, durable, the first stop of this world (client exit 0)
+ok   O3 entry point referenced, never called: killed by: control: the positive world opens the operator entry point
+ok   O4 command handler disconnected (stop never routed): killed by: stop: authorized stop accepted, durable, the first stop of this world (client exit 0)
+ok   O5 success reply without a state transition: killed by: stop: sealed mark in the generation store directory
+ok   O6 unauthorized resume accepted (check called, result unused): killed by: unauthorized: a forged resume is REFUSED
+ok   O7 peer uid check removed: killed by: unauthorized: a peer of another uid (root) is REFUSED peer, even with the credential
+ok   O8 status without the authority check: killed by: unauthorized: forged secret, status REFUSED identity (no state revealed)
+ok   O9 revoke-cap does not revoke: killed by: revoke-cap: a stop with the revoked capability is REFUSED authority
+ok   O10 restart does not wait for the resume: killed by: restart: world C reopens
+ok   O11 startup accepts a group-readable directory: killed by: startup: a group/other-readable state directory is refused (exit 2) before any world
+ok   O12 audit does not count stops: killed by: positive world: crumb log shows 16 stops, as many resumes, nothing committed or published under a stop
+ok   O13 shutdown accepted while running: killed by: shutdown of a running world answers NOT_STOPPED (the program goes on)
+ok   O14 stop reply before the world call (handler answers from the request): killed by: stop: authorized stop accepted, durable, the first stop of this world (client exit 0)
+ok   O15 end-of-episode wait turned off (G5 M-a): killed by: end of episode: the program says it waits for an operator resume
+ok   O16 episode shape ignores halted seat claims (G5 M-b): killed by: end of episode: the program says it waits for an operator resume
+ok   O17 control directory lock not taken (S1): killed by: lock: a second program on the same state directory is refused (exit 2, names the holder)
+ok   O18 state directory not locked (S1): killed by: lock: a second program on the same state directory is refused (exit 2, names the holder)
+ok   O19 generation directory not locked (S1): killed by: lock: a second program on the first one's generation directory is refused
+ok   O20 close removes files it did not create (S1): killed by: close: the positive world's close left the credential file it did not create
+ok   O21 a stop that is not durable replies OK (S2): killed by: not durable: a stop whose mark cannot be written answers STOPPED_NOT_DURABLE errno=13, client exit 3
+ok   O22 unknown commands fall through to the authorized commands (S3): killed by: unknown commands with a full credential are BAD_REQUEST (11 commands, accepted: explode bump-epoch bump_ep
+ok   O23 an expired resume still runs (S4): killed by: expired: a resume whose client deadline passed answers EXPIRED and does nothing
+ok   O24 a request without a deadline accepted (S4): killed by: expired: a resume without a deadline is BAD_REQUEST
+ok   O25 any deadline accepted (S4): killed by: expired: a deadline beyond the client's wait is BAD_REQUEST
+RX_OPERATOR_MUTANTS: 25 mutants, 0 failures, 0 skipped
+RX_OPERATOR_MUTANTS: PASS

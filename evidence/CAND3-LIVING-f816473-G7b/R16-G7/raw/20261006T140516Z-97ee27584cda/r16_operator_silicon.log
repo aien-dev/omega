@@ -1,0 +1,74 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+bash tests/runtime/rx_operator_host.sh silicon build/rx_r13_living_silicon build/rx_operator
+R16 operator control (silicon): binary /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/rx_r13_living_silicon
+[+] startup: a group/other-readable state directory is refused (exit 2) before any world
+[+] startup: a symlinked state directory is refused
+[+] startup: a group-readable control directory is refused
+[+] startup: a state directory owned by another uid is refused
+[+] control: the positive world opens the operator entry point
+[+] stop: authorized stop accepted, durable, the first stop of this world (client exit 0)
+[+] stop: sealed mark in the generation store directory
+[+] stop: status says stopped, the promotion has not happened yet
+[+] lock: a second program on the same state directory is refused (exit 2, names the holder)
+[+] lock: a second program on the first one's generation directory is refused
+[+] lock: the first program keeps its socket and credential and stays controllable
+[+] unauthorized: forged secret, stop REFUSED identity
+[+] unauthorized: forged secret, status REFUSED identity (no state revealed)
+[+] unauthorized: another capability, stop REFUSED authority
+[+] unauthorized: a reaction subject (61) with the operator secret, REFUSED identity
+[+] unauthorized: request without credential fields is BAD_REQUEST
+[+] unknown commands with a full credential are BAD_REQUEST (11 commands)
+[+] unauthorized: a field the command does not take (resume reason=) is BAD_REQUEST
+[+] unauthorized: a peer of another uid (root) is REFUSED peer, even with the credential
+[+] unauthorized: a forged resume is REFUSED
+[+] unauthorized: a resume with another capability is REFUSED
+[+] unauthorized: a resume by a reaction subject is REFUSED
+[+] expired: a resume whose client deadline passed answers EXPIRED and does nothing
+[+] expired: a deadline beyond the client's wait is BAD_REQUEST
+[+] expired: a resume without a deadline is BAD_REQUEST
+[+] stop: after every refusal and two seconds, still the same stop; nothing served, committed or promoted
+[+] repeat: a second stop answers ALREADY, same stop
+[+] resume: authorized resume accepted
+[+] resume: the mark is gone and the sealed resumed record kept
+[+] repeat: resume of a running world answers NOT_STOPPED
+[+] shutdown of a running world answers NOT_STOPPED (the program goes on)
+[+] not durable: a stop whose mark cannot be written answers STOPPED_NOT_DURABLE errno=13, client exit 3
+[+] not durable: the stop is in force (status stopped, durable -13)
+[+] not durable: resume accepted
+[+] resume: production serves again after the resume
+[+] unauthorized: a forged stop of the running world is REFUSED identity
+[+] unauthorized: a stop of the running world with another capability is REFUSED authority
+[+] unauthorized: after the refused stops the world still runs, no new stop, no mark
+[+] load: at least 6 of 12 stop/resume cycles while the positive world runs (12)
+[+] positive world: the promotion happens after the resume (generation advanced)
+[+] positive world: crumb log shows 14 stops, as many resumes, nothing committed or published under a stop
+in-flight (silicon, informational): activations cancelled by a stop: 6
+[+] rotation: the next world opens with a new credential
+[+] rotation: the new credential differs from the earlier world's
+[+] stale: the earlier world's credential is REFUSED identity
+[+] revoke-cap: the authority revokes the control capability
+[+] revoke-cap: a stop with the revoked capability is REFUSED authority
+[+] revoke-cap: status with it is REFUSED authority
+[+] revoke-cap: the world runs on without operator control (control A passes, no stop)
+[+] revoke: world B opens
+[+] revoke: capability and credential revoked, credential file removed
+[+] revoke: a stop with the revoked credential is REFUSED identity
+[+] revoke: world B completes without a stop
+[+] shutdown: world C opens
+[+] shutdown: stop world C
+[+] shutdown: a forged shutdown is REFUSED
+[+] shutdown: authorized shutdown of the stopped world
+[+] shutdown: the program exits 3, writes no receipt, the stop stays on disk
+[+] restart: world C reopens
+[+] restart: world C comes up STOPPED, restored, before any work (no reaction registered)
+[+] restart: the program says the stop was restored
+[+] stale: the credential of the earlier program start is REFUSED identity
+[+] restart: one second later still stopped, nothing built, no crumb added
+[+] recovery: resume of the restored stop
+[+] recovery: the mark is gone, the resumed record kept
+[+] recovery: the program completes every mode and its R13 gate is R13_LIVING_SYSTEM=PASS (exit 0)
+[+] recovery: crumb log of world C shows the restored stop and its resume, nothing under it
+kill phase: host only by design (a chip program is never killed); restart on silicon is proven by the shutdown phase
+R16 operator receipt: /home/drakestapleton/workspace/evidence-out/CAND3-LIVING-f816473-G7b/R16-G7/raw/20261006T140516Z-97ee27584cda.operator/operator_silicon_receipt.json
+R16 operator: 66 checks, 0 failures, 0 skipped (silicon, phases: startup control restart kill)
+R16 operator gate: R16_G6_OPERATOR=PASS
