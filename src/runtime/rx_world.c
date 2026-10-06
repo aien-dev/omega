@@ -1067,6 +1067,7 @@ int rx_world_set_halt_dir(RxWorld *w, const char *dir) {
         h.restored = true;
         h.durable = 1;
         h.refused = w->halt.refused;
+        h.cancelled = w->halt.cancelled;
         h.crumb = halt_crumb(w, RX_CRUMB_OPERATOR_STOP, h.cap, h.reason, 0);
         w->halt = h;
         w->halted = true;
@@ -1096,6 +1097,7 @@ int rx_world_emergency_stop(RxWorld *w, uint32_t subject, const RxCallerCred *cr
         h.reason = reason;
         h.t_ns = realtime_ns();
         h.refused = w->halt.refused;
+        h.cancelled = w->halt.cancelled;
         h.crumb = halt_crumb(w, RX_CRUMB_OPERATOR_STOP, cap, reason, 0);
         w->halt = h;
         w->halted = true;               /* in force before any disk work */
@@ -1148,6 +1150,16 @@ int rx_world_emergency_resume(RxWorld *w, uint32_t subject, const RxCallerCred *
         pthread_cond_broadcast(&w->work_cv);
     }
     if (out) *out = w->halt;
+    pthread_mutex_unlock(&w->callers_mu);
+    pthread_mutex_unlock(&w->mu);
+    return rc;
+}
+
+int rx_world_operator_authorize(RxWorld *w, uint32_t subject, const RxCallerCred *cred, RxCapRef cap) {
+    if (!w) return RX_ERR_ARG;
+    pthread_mutex_lock(&w->mu);
+    pthread_mutex_lock(&w->callers_mu);
+    int rc = halt_authorize(w, subject, cred, cap);
     pthread_mutex_unlock(&w->callers_mu);
     pthread_mutex_unlock(&w->mu);
     return rc;
@@ -1837,6 +1849,7 @@ static void run_one(RxWorld *w, uint32_t rid, uint32_t worker) {
         k.t_end_ns = now_ns();
         crumb_append(w, &k);
         w->halt.refused++;
+        w->halt.cancelled++;
         /* A refused activation is not spent: it must not count toward the
          * episode budget, or the re-run could be quarantined instead. */
         if (r->episode_activations) r->episode_activations--;
@@ -2558,7 +2571,9 @@ int rx_resident_accept(RxWorld *w) {
         crumb_append(w, &k);
         r->resident_seat = false;
         w->stats.resident_closed++;
+        w->stats.resident_halted++;
         w->halt.refused++;
+        w->halt.cancelled++;
         if (r->episode_activations) r->episode_activations--;   /* not spent */
         r->rearm = true;
         end_activation(w, (uint32_t)rid);

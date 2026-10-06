@@ -51,6 +51,12 @@ name: Host suites 2
 #   rx-host.yml only builds the R13/R14 hosts. Spark -j1: all three PASS.
 #   rx-host.yml runs R16-G3 checks 1-3 (sources, link map, embedded names) on
 #   the host and silicon builds and declares every Spark/chip-only run SKIP;
+#   test-r16-operator-host, test-r16-operator-mutants: environment, same reason.
+#   They start the production R13 host program and drive it through its
+#   operator socket; every world runs an R13 episode ("needs both core
+#   classes", tests/runtime/rx_r13_living.c run()), and the host test holds
+#   threads of that program under gdb (non-stop). Spark -j1: host 34 s,
+#   mutants (25) about 5 min, both PASS; test-r16-operator-silicon is a chip target;
 #   test-polyglot: environment. mk/polyglot.mk builds its -O3 flavor with
 #   -mcpu=native next to -march=armv8.6-a+...; on the runner (Neoverse N2) gcc
 #   resolves native to a CPU that conflicts with that -march and -Werror stops

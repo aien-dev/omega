@@ -638,6 +638,7 @@ RX_R13_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c \
 	src/runtime/rx_coherent.c src/runtime/rx_native_bind.c \
 	src/runtime/rx_aegis.c src/runtime/rx_aien.c src/runtime/rx_omega.c \
 	src/runtime/rx_generation.c src/runtime/rx_living.c \
+	src/runtime/rx_operator.c \
 	src/sha256.c src/omega_evidence.c src/omega_canonical.c \
 	src/omega_validate.c src/omega_core.c src/omega_codec.c \
 	src/aarch64_encoder.c src/aarch64_decoder.c src/omega_realize.c \
@@ -707,7 +708,7 @@ test-jspace-prod: $(RX_JSPACE_PROD_TEST)
 
 # R14: the R13 organism attacked while alive. Host uses the R12 processor
 # stand-in and cannot claim the gate; silicon runs D and E on the GB10 seat.
-RX_R14_SRCS = $(filter-out tests/runtime/rx_r13_living.c,$(RX_R13_SRCS)) \
+RX_R14_SRCS = $(filter-out tests/runtime/rx_r13_living.c src/runtime/rx_operator.c,$(RX_R13_SRCS)) \
 	tests/runtime/rx_r14_recovery.c
 RX_R14_HOST = $(OUT_DIR)/rx_r14_recovery_host
 RX_R14_SILICON = $(OUT_DIR)/rx_r14_recovery_silicon
@@ -748,7 +749,7 @@ test-r15-instr: $(RX_R15_INSTR)
 
 # R15: SEQ semantic parity gate (spec §16 C1 item 9). The R13 body is built
 # by tests/runtime/rx_r15_rig.c for RES-1 and for the sequential reference.
-RX_R15_RIG_SRCS = $(filter-out tests/runtime/rx_r13_living.c,$(RX_R13_SRCS)) \
+RX_R15_RIG_SRCS = $(filter-out tests/runtime/rx_r13_living.c src/runtime/rx_operator.c,$(RX_R13_SRCS)) \
 	src/runtime/rx_seq_reference.c tests/runtime/rx_r15_rig.c
 RX_R15_RIG_HDRS = src/runtime/rx_living.h src/runtime/rx_seq_reference.h \
 	src/runtime/rx_world.h tests/runtime/rx_r15_rig.h
@@ -1307,6 +1308,28 @@ test-prod-hygiene-silicon: $(RX_R13_SILICON)
 test-prod-refuses-test-pieces: $(ARGUS_STAMP) $(AIENOS_CAP_LIB) $(RX_R13_HOST)
 	CC="$(CC)" CFLAGS="$(CFLAGS)" ARGUS_SRC="$(ARGUS_SRC)" OUT="$(OUT_DIR)/prod-refuses" MAKE="$(MAKE)" PROD_BIN="$(RX_R13_HOST)" \
 		sh tools/r16_prod_refuses.sh
+
+# R16 G6 operator control by execution (docs/r16-operator-control.md): the
+# production program driven from outside through its operator entry point.
+# Host: the production host binary (R12 processor stand-in). Silicon: the
+# production GB10 binary on the resident seat, needs the quiet lock, never
+# killed (no SIGKILL phase). The mutants rebuild the production host program
+# from mutated copies; the test must fail against each.
+RX_OPERATOR_CLI = $(OUT_DIR)/rx_operator
+$(RX_OPERATOR_CLI): tools/rx_operator.c | $(OUT_DIR)
+	$(CC) $(CFLAGS) -o $@ tools/rx_operator.c
+
+.PHONY: test-r16-operator-host test-r16-operator-silicon test-r16-operator-mutants
+test-r16-operator-host: $(RX_R13_HOST) $(RX_OPERATOR_CLI)
+	bash tests/runtime/rx_operator_host.sh host $(RX_R13_HOST) $(RX_OPERATOR_CLI)
+
+test-r16-operator-silicon: $(RX_R13_SILICON) $(RX_OPERATOR_CLI)
+	bash tests/runtime/rx_operator_host.sh silicon $(RX_R13_SILICON) $(RX_OPERATOR_CLI)
+
+test-r16-operator-mutants: $(RX_R13_HOST) $(RX_OPERATOR_CLI)
+	CC="$(CC)" CFLAGS="$(CFLAGS)" RX_PROD_ARGUS_FLAGS="$(RX_PROD_ARGUS_FLAGS)" \
+		RX_R13_SRCS="$(RX_R13_SRCS)" RX_PROD_ARGUS_SRCS="$(RX_PROD_ARGUS_SRCS)" \
+		AIENOS_CAP_LIB="$(AIENOS_CAP_LIB)" bash tests/runtime/rx_operator_mutants.sh $(RX_OPERATOR_CLI)
 
 ARGUS_R7 = $(ARGUS_OUT)/rx_r7_native_test
 ARGUS_R8 = $(ARGUS_OUT)/rx_r8_aegis_test

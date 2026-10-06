@@ -444,6 +444,7 @@ typedef struct {
     uint64_t desc_rejected;
     uint64_t resident_claims;   /* claims posted to a resident seat */
     uint64_t resident_closed;   /* claims ended: committed, refused, or lost */
+    uint64_t resident_halted;   /* of those closed, results caught by an operator stop (re-run on resume) */
     uint64_t deferrals;         /* activations that handed an effect to a durable executor */
     uint64_t seat_losses;       /* times a seat was declared lost */
     /* R15 instrumentation. Counted, never inferred. */
@@ -529,6 +530,7 @@ typedef struct {
     uint64_t t_ns;          /* CLOCK_REALTIME of the stop */
     int durable;            /* 1 mark on disk; 0 no halt dir; < 0 -errno of the write */
     uint64_t refused;       /* activations, publications, seat results, creates and retires refused */
+    uint64_t cancelled;     /* of those, activations and seat results caught by a stop, re-run on resume */
 } RxHaltStatus;
 
 /* Durable recorder (M20 Cortex). Called with the world mutex held, once per
@@ -824,6 +826,11 @@ int  rx_world_emergency_stop(RxWorld *w, uint32_t subject, const RxCallerCred *c
 int  rx_world_emergency_resume(RxWorld *w, uint32_t subject, const RxCallerCred *cred,
                                RxCapRef cap, RxHaltStatus *out);
 void rx_world_halt_status(RxWorld *w, RxHaltStatus *out);
+/* The same authority check as stop and resume (credential, not a reaction
+ * subject, live control capability), without acting: RX_OK, RX_ERR_IDENTITY
+ * or RX_ERR_AUTHORITY. For operator requests that read or retire the
+ * operator's own authority (docs/r16-operator-control.md). Never call with mu held. */
+int  rx_world_operator_authorize(RxWorld *w, uint32_t subject, const RxCallerCred *cred, RxCapRef cap);
 
 /* A stimulus from outside the organism (sensor, human input). Requires a
  * capability for (external_subject, object resource, WRITE). Returns the

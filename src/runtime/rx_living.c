@@ -179,6 +179,17 @@ static void resume_promoter(void *ctx) {
     rx_world_resume(p->world, p->reaction);
 }
 
+/* R16 G6: a durable store step refused because an operator stop is in force
+ * (RX_GEN_ERR_HALTED, from the world or the durable mark) is not an outcome.
+ * The activation waits in place: it defers and asks to run again, and no
+ * worker takes work while the world is stopped, so the re-run comes after the
+ * resume and posts the step again (spec section 3: in-flight work runs again
+ * on resume). Recording the refusal instead would make it final. */
+static int halted_wait(RxWorld *w, uint32_t reaction) {
+    rx_world_resume(w, reaction);
+    return RX_FN_DEFER;
+}
+
 static int fn_candidate(RxCtx *c) {
     RxLiving *l = c->user;
     RxWorld *w = l->world;
@@ -302,6 +313,7 @@ static int fn_candidate(RxCtx *c) {
         RxGenJobResult jr;
         if (rx_gen_job_state(l->store, RX_GEN_JOB_PROPOSE, &jr) == RX_GEN_JOB_DONE) {
             rx_gen_job_take(l->store, RX_GEN_JOB_PROPOSE);
+            if (jr.rc == RX_GEN_ERR_HALTED) return halted_wait(w, l->r_candidate);
             if (jr.rc == RX_GEN_OK) {
                 l->proposed_epoch = jr.key;
                 l->candidate_id = jr.id;
@@ -335,10 +347,13 @@ static int fn_candidate(RxCtx *c) {
             /* The store's fsyncs run on the durable executor, not on this
              * worker. A proposal still in flight (this epoch's or an older
              * one's) resumes this activation when it lands. */
-            if (rx_gen_job_state(l->store, RX_GEN_JOB_PROPOSE, NULL) == RX_GEN_JOB_IDLE &&
-                rx_gen_post_propose_as(l->store, epoch, RX_LIVING_PREPARE_SUBJ,
-                                       rx_caller_find(l->keys, RX_LIVING_PREPARE_SUBJ), &draft,
-                                       resume_candidate, l) != RX_GEN_OK) {
+            int prc = RX_GEN_OK;
+            if (rx_gen_job_state(l->store, RX_GEN_JOB_PROPOSE, NULL) == RX_GEN_JOB_IDLE)
+                prc = rx_gen_post_propose_as(l->store, epoch, RX_LIVING_PREPARE_SUBJ,
+                                             rx_caller_find(l->keys, RX_LIVING_PREPARE_SUBJ), &draft,
+                                             resume_candidate, l);
+            if (prc == RX_GEN_ERR_HALTED) return halted_wait(w, l->r_candidate);
+            if (prc != RX_GEN_OK) {
                 decline(l, RX_LIVING_WHY_PROPOSE);
                 return -1;
             }
@@ -462,6 +477,7 @@ static int fn_promote(RxCtx *c) {
     int rc = RX_GEN_OK;
     if (rx_gen_exec_running(p->store)) {
         if (promote_durable(p, id, &rc, &active, &ns)) return RX_FN_DEFER;
+        if (rc == RX_GEN_ERR_HALTED) return halted_wait(p->world, p->reaction);
     } else {
         promote_inline(p, id, &rc, &active, &ns);
     }

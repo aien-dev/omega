@@ -31,6 +31,20 @@ credential, and work can no longer be added already done.
 | recovery | `tests/runtime/rx_r14_recovery.c` on the same sources | `test-r14-host`, `test-r14-silicon` |
 | proof that no legacy orchestrator is in the path (G3) | link map, strings and exec trace of the production binaries above | `test-r16-authpath`, `test-r16-authpath-silicon` |
 
+### Operator control (R16 G6, CAND-3)
+
+The production program takes one optional argument, `--state-dir <dir>`: its
+durable state, validated at startup (a real directory owned by the program's
+user, no group or other permission bits; anything else is refused with exit 2
+before any world starts). Without it the program uses a fresh 0700 scratch
+directory, as before. `<dir>/gen-<mode>/` is each mode's generation store and
+also its durable halt directory; `<dir>/control/` holds the operator credential
+file and the owner-only socket `operator.sock`. The only outside entry point is
+that socket, driven by `build/rx_operator` (`tools/rx_operator.c`): status, stop,
+resume, revoke-cap, revoke, and shutdown while stopped. The contract is
+`docs/r16-operator-control.md`; the proof is `make test-r16-operator-host`,
+`make test-r16-operator-mutants` and `make test-r16-operator-silicon`.
+
 ### Production program and test build (Lane 32)
 
 Test-only pieces build only with one flag, `AIEN_TEST_BUILD` (`-DAIEN_TEST_BUILD=1`,

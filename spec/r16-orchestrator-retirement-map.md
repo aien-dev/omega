@@ -383,6 +383,8 @@ any production binary); in-file Rust `#[cfg(test)]` modules likewise.
 | OM-282 | omega | `tools/estimation/est6dev.c` | 251 | `run_g1` | EST v6 development G1 scoring walk | - | N | false | N: walk: scores recorded ticks in order (data ticks, not a scheduler tick), without wait or hand-off; offline development tool, not on the production path | `for (size_t t = 0; t < tk->n; t++) {` |
 | OM-283 | omega | `tools/estimation/test_est_json.c` | 62,74 | `jvalue` | JSON object/array parse in the strict-JSON test validator | test / reference path | D | false | test of the EST strict-JSON receipt rules: recursive JSON parse without wait or hand-off; not built into any production binary | `else for (;;) {` |
 | OM-284 | omega | `tools/estimation/test_est_json.c` | 101 | `slurp` | whole-file read in the strict-JSON test validator | test / reference path | D | false | test of the EST strict-JSON receipt rules: file read into a growing buffer until end of file, without wait or hand-off; not built into any production binary | `for (;;) {` |
+| OM-285 | omega | `src/runtime/rx_operator.c` | 319 | `listener_main` | operator control socket listener | R16 G6 operator entry point of the production program | B | true | explicit deterministic operator mechanism: waits (poll) for one operator connection on the owner-only socket, answers that one request through the world authority, waits for the next; the operator decides every stop and resume, the loop decides no faculty order (docs/r16-operator-control.md) | `for (;;) {` |
+| OM-286 | omega | `tests/runtime/rx_r13_living.c` | 311 | `publish` | production request publication waits out an operator stop | R16 G6 operator stop honoured by the production request stream | B | true | operator emergency stop mechanism: a publication refused with RX_ERR_HALTED waits until the operator resumes (or shuts the program down) and publishes the same request again; any other result returns at once; decides no faculty order | `for (;;) {` |
 | SC-001 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/engine_max.rs` | 55 | `start` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < timeout {` |
 | SC-002 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 96 | `start` | test/benchmark loop (while:body:tick) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while !stop_clone.load(Ordering::Relaxed) {` |
 | SC-003 | aien-sovereign-core | `benchmarks/crates/bench_apples_to_apples/src/telemetry.rs` | 168 | `enforce_thermal_cooldown` | test/benchmark loop (while:body:sleep) | test / reference path | D | false | test, benchmark or example code; not built into any production binary | `while start.elapsed() < max_wait {` |
@@ -652,6 +654,9 @@ exists in the file (symbol not verified) and applies the same class rules.
 | OM-M01 | omega | `tools/omegatool.c` | manual (2642) | `legacy_oracle_run_demonstration_living_matvec` | body of the hand-sequenced living-matvec demonstration | retire with `--demonstrate-living-matvec` (W5) | A | false | the function the class-A dispatcher row calls; moved behind a `legacy_oracle` name (W5) | `static void legacy_oracle_run_demonstration_living_matvec(void) {` |
 | OM-103 | omega | `tools/omegatool.c` | manual (3749) | `legacy_oracle_demonstrate_living_matvec` | hand-sequenced living matvec demonstration (spec -> machine -> kernel -> benchmark -> select) | retire: legacy oracle only, under the explicit mode `--legacy-oracle-living-matvec` (R16-G5); the old `--demonstrate-living-matvec` mode is gone | A | false | spec 3.1 / 4: the omega hand-sequenced tool path replaced by the R13 living system; retired behind legacy_oracle symbol names (W5) and, for G5, an explicit legacy mode name; moved to the manual rows because the renamed mode no longer matches the cli-mode pattern | `if (strcmp(arg, "--legacy-oracle-living-matvec") == 0) {` |
 | OM-M02 | omega | `tools/omegatool.c` | manual (3821) | `main` | hand-sequenced milestone demonstrations (16 modes: arithmetic, physics, realization, self-host, verify, program, synthesis, library, discovery, machine, realization-synthesis, accelerator, accelerator-world, blackwell-matmul, blackwell-codegen, blackwell-vector) | reference oracle (legacy orchestrated runtime) | D | false | historical milestone demonstrations; migration map: omegatool = Oracle; not a production entry point; G5: kept only under `--reference-demonstrate-<name>`, dispatched from the one `reference_modes` table that also prints usage; replaces the 16 per-mode cli-mode rows, which the table-driven dispatch no longer shows to the pattern | `int ref_rc = reference_demonstrate(argv[1], 0);` |
+| OM-M03 | omega | `tests/runtime/rx_r13_living.c` | manual (306) | `wait_running` | wait while the world is under an operator stop | R16 G6 operator stop honoured by the production program | B | true | operator emergency stop mechanism: polls the world's halt state (1 ms) until the operator resumes, shuts the program down or the world is torn down; sequences no faculty; listed by hand (the loop pattern does not see a `while` on a call) | `while (world_halted(r)) {` |
+| OM-M04 | omega | `tests/runtime/rx_r13_living.c` | manual (1064) | `run` | stale-GPU retire waits out an operator stop | R16 G6 operator stop honoured by the stale-GPU injection | B | true | operator emergency stop mechanism: a retire refused with RX_ERR_HALTED waits for the resume (`wait_running`) and is tried again; sequences no faculty; listed by hand | `while ((rr = rx_world_retire(&r->w, r->living.o.output)) == RX_ERR_HALTED)` |
+| OM-M05 | omega | `tests/runtime/rx_r13_living.c` | manual (1104) | `run` | end-of-episode quiescence wait under an operator stop | R16 G6 operator stop honoured before the episode checks | B | true | operator emergency stop mechanism: the settled-world wait is repeated only while the world is stopped, each time after waiting for the resume; sequences no faculty; listed by hand | `while ((quiet = rx_world_wait_quiescent(&r->w, 10000)) != RX_OK && world_halted(r))` |
 <!-- /r16-inventory:rows -->
 
 ## 5. Structural findings (non-greppable §4 terms)
@@ -914,3 +919,36 @@ After:
 `sites=521 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`.
 (omega code `79a805d`; this map change touches no code, so the CAND-2 omega commit is `79a805d`.)
 This is the G1/G2 inventory for the CAND-2 code, not an R16 qualification receipt.
+
+### 8.7 Update 2026-10-05 (cand3 lane ESTOP): operator control of the production program
+
+The CAND-3 operator-control change (branch `cand3/operator-control`, docs/r16-operator-control.md)
+adds two loop sites. Scan set: this omega tree, and clean checkouts of the §8.6 commits for the
+other repos (aien-sovereign-core at `286fa9b`, which differs from `2eec75b` only in `.crumb` and
+`omega.lock`; aegis-runtime `f4e8709`; aienos `bbad5e4`; physics `6d7cf0d`).
+
+Before: `sites=523 unclassified=2 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> FAIL`.
+
+Reconciliation, each row from reading the loop (no tool, pattern, threshold or class rule changed):
+- OM-285, class B: the operator socket listener (`listener_main`, `src/runtime/rx_operator.c`).
+- OM-286, class B: the production request publication waiting out an operator stop (`publish`,
+  `tests/runtime/rx_r13_living.c`).
+Neither sequences faculties: each waits for the operator or for the world to run again.
+
+After: `sites=523 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`.
+This is the G1/G2 inventory for the CAND-3 operator-control code, not an R16 qualification receipt.
+
+### 8.8 Update 2026-10-05 (cand3 lane ESTOP, review fixes): operator wait loops listed by hand
+
+Review of omega#309 (gate integrity, G8) asked that the operator-stop wait loops the
+pattern scan does not count be listed by hand with a class. Three manual rows (§4.1),
+each from reading the loop:
+- OM-M03, class B: `wait_running` (`tests/runtime/rx_r13_living.c`), the 1 ms poll while the
+  world is under an operator stop.
+- OM-M04, class B: the stale-GPU retire in `run` that waits out a stop and tries again.
+- OM-M05, class B: the settled-world wait in `run`, repeated only while the world is stopped.
+None sequences faculties: each waits for the operator. The tool checks that each evidence
+line still exists (a changed evidence line was shown to give `stale=1 -> FAIL`).
+
+After: `sites=523 unclassified=0 question=0 bad_class=0 a_reachable=0 stale=0 map_errors=0 skipped=0 -> PASS`
+(same scan set as §8.7). Not an R16 qualification receipt.
