@@ -14,7 +14,28 @@ set -u
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 CLI=$(cd "$(dirname "$1")" && pwd)/$(basename "$1")
 W=$(mktemp -d "${TMPDIR:-/tmp}/rx-op-mut.XXXXXX")
-trap 'rm -rf "$W"' EXIT
+# Evidence rule (omega #313 item 2, #314): a run that does not end in PASS keeps its logs.
+# RX_OP_MUT_KEEP (default: a new folder in TMPDIR) receives the logs of every case; the work
+# folder itself (copies of the sources, built programs) is then removed. Nothing is ever kept
+# under build/qual-runs, and an existing folder is never overwritten.
+KEEP=${RX_OP_MUT_KEEP:-${TMPDIR:-/tmp}/rx-op-mut-kept.$(date -u +%Y%m%dT%H%M%SZ).$$}
+keep_logs() {
+    [ "$1" = 0 ] && return 0
+    [ -e "$KEEP" ] && { echo "RX_OPERATOR_MUTANTS: not keeping logs, $KEEP already exists" >&2; return 0; }
+    mkdir -p "$KEEP" || return 0
+    local d; for d in "$W"/*/; do
+        d=${d%/}; mkdir -p "$KEEP/${d##*/}"
+        cp -a "$d"/build.log "$d"/run.log "$d"/name "$d"/phases "$d"/out "$d"/build/qual-runs "$KEEP/${d##*/}/" 2>/dev/null
+    done
+    echo "RX_OPERATOR_MUTANTS: logs kept in $KEEP" >&2
+}
+trap 'rc=$?; keep_logs "$rc"; rm -rf "$W"' EXIT
+
+# Mutant runs write their R13 receipts under their own build/qual-runs inside the work folder
+# (the run directory is the mutant copy, and its build/ is a real folder that links to the real build/ products (argus sources, libraries) but not to qual-runs). A mutant run must never add anything to the real build/qual-runs (#314).
+REAL_RUNS="$HERE/build/qual-runs"
+runs_listing() { [ -d "$REAL_RUNS" ] && find "$REAL_RUNS" -mindepth 1 | LC_ALL=C sort; true; }
+RUNS_BEFORE=$(runs_listing)
 JOBS=${RX_OP_MUT_JOBS:-4}
 
 # name|file|phases the test runs against it|perl substitution (applied with -0, must match once)
@@ -45,7 +66,7 @@ O24 a request without a deadline accepted (S4)|src/runtime/rx_operator.c|control
 O25 any deadline accepted (S4)|src/runtime/rx_operator.c|control|s/    if \(q->deadline_ns > monotonic_ns\(\) \+ RX_OPERATOR_DEADLINE_MAX_NS\) return -1;\n//
 '
 
-copy() { mkdir -p "$1"; (cd "$HERE" && tar -cf - src tests/runtime tests/fabric tools) | tar -xf - -C "$1"; ln -s "$HERE/build" "$1/build"; }
+copy() { mkdir -p "$1"; (cd "$HERE" && tar -cf - src tests/runtime tests/fabric tools) | tar -xf - -C "$1"; mkdir -p "$1/build"; local e; for e in "$HERE"/build/*; do [ -e "$e" ] && [ "${e##*/}" != qual-runs ] && ln -s "$e" "$1/build/${e##*/}"; done; }
 build() { # dir: the production host program, production flags and sources
     (cd "$1" && $CC $CFLAGS $RX_PROD_ARGUS_FLAGS -pthread -o prog $RX_R13_SRCS $RX_PROD_ARGUS_SRCS \
         $AIENOS_CAP_LIB -lm) > "$1/build.log" 2>&1
@@ -70,7 +91,7 @@ export CC CFLAGS RX_PROD_ARGUS_FLAGS RX_R13_SRCS RX_PROD_ARGUS_SRCS AIENOS_CAP_L
 export -f build
 printf '%s\n' base $names | xargs -P "$JOBS" -I{} bash -c 'build "$0/{}" || echo "build failed: {}"' "$W"
 
-if [ -x "$W/base/prog" ] && RX_OP_OUT="$W/base/out" bash "$HERE/tests/runtime/rx_operator_host.sh" host "$W/base/prog" "$CLI" > "$W/base/run.log" 2>&1; then
+if [ -x "$W/base/prog" ] && (cd "$W/base" && RX_OP_OUT="$W/base/out" bash "$HERE/tests/runtime/rx_operator_host.sh" host "$W/base/prog" "$CLI" > "$W/base/run.log" 2>&1); then
     echo "ok   unmutated: PASS ($(grep -c '^\[+\]' "$W/base/run.log") checks)"
 else
     echo "FAIL unmutated: did not pass"; grep -E '^\[-\]|SKIPPED|build failed' "$W/base/run.log" "$W/base/build.log" | head -5
@@ -80,13 +101,18 @@ skipped=$(grep -c '^\[SKIPPED\]' "$W/base/run.log" 2>/dev/null); skipped=${skipp
 for id in $names; do
     d="$W/$id"; name=$(cat "$d/name"); n_mut=$((n_mut + 1))
     if [ ! -x "$d/prog" ]; then echo "FAIL $name: mutant did not build"; tail -3 "$d/build.log"; fails=$((fails + 1)); continue; fi
-    RX_OP_OUT="$d/out" RX_OP_PHASES=$(cat "$d/phases") RX_OP_FAILFAST=1 bash "$HERE/tests/runtime/rx_operator_host.sh" host "$d/prog" "$CLI" > "$d/run.log" 2>&1; rc=$?
+    (cd "$d" && RX_OP_OUT="$d/out" RX_OP_PHASES=$(cat "$d/phases") RX_OP_FAILFAST=1 bash "$HERE/tests/runtime/rx_operator_host.sh" host "$d/prog" "$CLI" > "$d/run.log" 2>&1); rc=$?
     nf=$(grep -c '^\[-\]' "$d/run.log" 2>/dev/null); nf=${nf:-0}
     first=$(grep -m1 '^\[-\]' "$d/run.log" | cut -c1-110)
     if [ $rc != 0 ] && [ "$nf" -gt 0 ]; then echo "ok   $name: killed by: ${first#\[-\] }"
     elif grep -q '^\[SKIPPED\]' "$d/run.log"; then echo "SKIPPED $name: the test could not run the case that kills it"; skipped=$((skipped + 1))
     else echo "FAIL $name: SURVIVED (exit $rc)"; fails=$((fails + 1)); fi
 done
+RUNS_AFTER=$(runs_listing)
+if [ "$RUNS_BEFORE" != "$RUNS_AFTER" ]; then
+    echo "FAIL mutant runs wrote under the real $REAL_RUNS:"; diff <(echo "$RUNS_BEFORE") <(echo "$RUNS_AFTER") | head -5
+    fails=$((fails + 1))
+fi
 echo "RX_OPERATOR_MUTANTS: $n_mut mutants, $fails failures, $skipped skipped"
 if [ "$fails" = 0 ] && [ "$skipped" = 0 ]; then echo "RX_OPERATOR_MUTANTS: PASS"; exit 0; fi
 if [ "$fails" = 0 ]; then echo "RX_OPERATOR_MUTANTS: NOT_RUN (SKIPPED cases)"; exit 3; fi

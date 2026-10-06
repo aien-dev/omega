@@ -1,3 +1,9 @@
+    /* Timing sensitivity (omega #313 item 1): `target` is 55 percent of the incumbent cost AIEN confirmed
+     * on the old core class, and `final_expected` is the cost AIEN later confirmed on the new one. Both
+     * are wall-clock (CLOCK_MONOTONIC) measurements taken at different times, so CPU contention that
+     * slows the second more than the first can miss the goal. The check is deliberately unchanged: a
+     * CPU-time or repeat-and-median variant needs the measurement in src/runtime (rx_omega.c, rx_aien.c)
+     * changed, which is outside this test program and a separate, declared change. */
 /* R13: one world; after the goal, only production requests and observation. */
 #include "runtime/rx_living.h"
 #include "runtime/rx_resident_gpu.h"
@@ -26,6 +32,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <ftw.h>
+#include <stdarg.h>
 #include <stdatomic.h>
 #include <sched.h>
 #include <signal.h>
@@ -998,9 +1005,24 @@ static int seat_blocked(Rig *r, uint64_t after) {
 
 static uint64_t acts(Rig *r, uint32_t id) { return r->w.reactions[id].activations; }
 
+/* Failure evidence (omega #313 item 3): the FIRST failure message is kept for the receipt,
+ * never overwritten by later ones. stderr still gets every message. */
+static char g_first_failure[512];
+static void note_failure(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void note_failure(const char *fmt, ...) {
+    char msg[512];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(msg, sizeof msg, fmt, ap);
+    va_end(ap);
+    fprintf(stderr, "%s\n", msg);
+    if (!g_first_failure[0]) snprintf(g_first_failure, sizeof g_first_failure, "%s", msg);
+}
+
 #define FAIL(...) do { if (atomic_load(&g_op_shutdown)) return OP_SHUTDOWN; \
-                       fprintf(stderr, "R13 mode %d: ", mode); \
-                       fprintf(stderr, __VA_ARGS__); fputc('\n', stderr); return -1; } while (0)
+                       char fail_msg_[400]; \
+                       snprintf(fail_msg_, sizeof fail_msg_, __VA_ARGS__); \
+                       note_failure("R13 mode %d: %s", mode, fail_msg_); return -1; } while (0)
 
 static int run(Rig *r, int mode) {
     int with_aien = mode != NO_AIEN;
@@ -1953,6 +1975,21 @@ static void receipt(int tests_ok) {
         : !tests_ok || !controls || !g_argus_ok ? "FAIL"
         : !g->silicon_observed ? "HOST_PASS_NON_SILICON"
         : "SILICON_PASS_UNBOUND";
+    /* The first failure message as a JSON string, or null when there was none. */
+    char first_failure[1100];
+    if (!g_first_failure[0]) strcpy(first_failure, "null");
+    else {
+        size_t k = 0;
+        first_failure[k++] = '"';
+        for (const char *s = g_first_failure; *s && k + 8 < sizeof first_failure; s++) {
+            unsigned char c = (unsigned char)*s;
+            if (c == '"' || c == '\\') { first_failure[k++] = '\\'; first_failure[k++] = (char)c; }
+            else if (c < 0x20 || c >= 0x7f) k += (size_t)snprintf(first_failure + k, 7, "\\u%04x", c);
+            else first_failure[k++] = (char)c;
+        }
+        first_failure[k++] = '"';
+        first_failure[k] = 0;
+    }
     struct utsname host;
     memset(&host, 0, sizeof host);
     uname(&host);
@@ -1988,6 +2025,7 @@ static void receipt(int tests_ok) {
             "\"release\": \"%s\", \"architecture\": \"%s\"},\n"
         "  \"silicon_observed\": %s,\n"
         "  \"gate\": {\"" R13_GATE_KEY "\": \"%s\"},\n"
+        "  \"first_failure\": %s,\n"
         "  \"scenario\": {\"operation\": \"omega integer matvec 64x256\", "
             "\"goal\": \"cost below %u%% of the confirmed incumbent, semantics preserved\", "
             "\"incumbent_ns\": %llu, \"target_ns\": %llu, "
@@ -2057,6 +2095,7 @@ static void receipt(int tests_ok) {
         aienos ? aienos : "unknown", physics, binary,
         host.nodename, host.sysname, host.release, host.machine,
         g->silicon_observed ? "true" : "false", gate,
+        first_failure,
         TARGET_PCT, U(g->incumbent_ns), U(g->target_ns), U(g->selected_ps), U(g->reference_ps),
         U(g->final_expected_ns), g->final_status == RX_AIEN_GOAL_MET ? "MET" : "NOT_MET",
         U(g->final_prediction_epoch),
@@ -2113,7 +2152,7 @@ int main(int argc, char **argv) {
         if (!r) return 1;
         int rc = start(r, mode);
         if (rc != 0 && rc != OP_SHUTDOWN)
-            fprintf(stderr, "R13 %s: setup failed at stage %d\n", names[mode], g_stage);
+            note_failure("R13 %s: setup failed at stage %d", names[mode], g_stage);
         if (rc == 0) rc = run(r, mode);
 #if defined(AIEN_TEST_BUILD) && !defined(R13_SILICON)
         /* COMPOSITION-2 in the living system (host test build only), after the episode,
@@ -2134,8 +2173,8 @@ int main(int argc, char **argv) {
         }
         /* R16 G6: the crumb log shows what operator control did in this world. */
         if (r->ready && (rc == 0 || rc == OP_SHUTDOWN) && operator_audit(r) != 0 && rc == 0) {
-            fprintf(stderr, "R13 %s: work committed or published while the operator stop was in force\n",
-                    names[mode]);
+            note_failure("R13 %s: work committed or published while the operator stop was in force",
+                         names[mode]);
             rc = -1;
         }
         if (rc != 0 && rc != OP_SHUTDOWN)
