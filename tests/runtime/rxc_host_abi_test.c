@@ -10,10 +10,14 @@
  *   T3 another machine is refused on that home (identity)
  *   T4 containment: only machine.id, cortex.cx and jspace* on disk (staged
  *      J-Space branches leave no file)
- *   T5 torn tail (cortex.cx cut by a few bytes): strict open refuses
- *      explicitly; default open reports tail_torn and either repairs (every
- *      record before the torn one keeps id and digest, run-1 evidence intact)
- *      or refuses explicitly and stably (a second open refuses again)
+ *   T5 torn tail (cut 2): the default open refuses a torn journal
+ *      (RXC_HOST_E_TORN) or one cut behind its anchor (RXC_HOST_E_REPLAY),
+ *      stably and without writing; rxc_host_recover repairs, records the cut
+ *      (byte range, dropped count, cause) and re-anchors; the next open
+ *      succeeds with the old records an unchanged prefix and a goal commits
+ *   T6 recover is refused while a handle holds the home
+ *   T7 host records (constraint, authorization, effect) through the
+ *      composition writer, recalled with the same ids after restart
  */
 #include "runtime/rxc_host_abi.h"
 
@@ -65,10 +69,6 @@ static RxcHost *open_home(const char *dir, uint32_t flags, RxcHostInfo *info, in
     return h;
 }
 
-/* Cut the journal by 5 bytes and reopen. Returns 1 if the default open
- * repaired and ran on, 0 if it refused (explicitly, and again on a second
- * open), -1 on a check failure. Either way: the strict open refuses, the
- * default open reports tail_torn, and nothing is lost while reported fine. */
 static uint32_t collect(RxcHost *h, RxcHostRecord *all, uint32_t max) {
     RxcHostInfo in;
     if (rxc_host_info(h, &in) != RXC_HOST_OK) return 0;
@@ -80,82 +80,126 @@ static uint32_t collect(RxcHost *h, RxcHostRecord *all, uint32_t max) {
     return n;
 }
 
-/* `all[0..nall)`: every record of the closed home, read just before close. */
-static int torn_case(const char *home, const char *label, const RxcHostRecord *all, uint32_t nall,
-                     const uint64_t *cited, const RxcHostRecord *cited_rec, uint64_t next_task) {
-    int f0 = fails, rc;
-    uint64_t n0 = nall;
-    RxcHost *h;
+/* Byte offset where record `id` starts (journal: 32-byte header, then per
+ * record 13 header words + payload + 4 digest words). */
+static uint64_t record_start(const RxcHostRecord *all, uint32_t nall, uint64_t id) {
+    uint64_t off = 32;
+    for (uint32_t i = 0; i < nall && all[i].id < id; i++) off += (17u + all[i].n_payload) * 8u;
+    return off;
+}
 
+static uint64_t word_digest_nonzero(const uint64_t *w) { return w[0] | w[1] | w[2] | w[3]; }
+
+/* `all[0..nall)`: every record of the closed home, read just before close.
+ * Cut the journal to `cut` bytes (torn: inside the last record; boundary:
+ * at a record start), then: the default open refuses with a named reason
+ * and leaves the journal untouched, stably; another machine may not
+ * repair; rxc_host_recover repairs and records the cut; a second recover
+ * is a no-op; the next open succeeds with records 1..kept an unchanged
+ * prefix, the repair record readable, and a goal commits. 0 = all held. */
+static int torn_case(const char *home, const char *label, const RxcHostRecord *all, uint32_t nall,
+                     uint64_t cut, int torn, uint64_t next_task, RxcHostRepair *rep_out) {
+    int f0 = fails, rc;
     char cx[400];
     snprintf(cx, sizeof cx, "%s/cortex.cx", home);
     struct stat st;
-    CHECK(stat(cx, &st) == 0 && st.st_size > 16, "%s: journal size", label);
-    off_t cut = st.st_size - 5;
-    CHECK(truncate(cx, cut) == 0, "%s: truncate by 5 bytes", label);
+    CHECK(stat(cx, &st) == 0 && (uint64_t)st.st_size > cut, "%s: journal size", label);
+    const uint64_t size0 = (uint64_t)st.st_size;
+    CHECK(truncate(cx, (off_t)cut) == 0, "%s: cut %llu -> %llu bytes", label,
+          (unsigned long long)size0, (unsigned long long)cut);
 
-    RxcHostInfo it;
-    RxcHost *s = NULL;
-    int src = rxc_host_open(home, RXC_HOST_ROOT_PROVISIONED, ROOT, sizeof ROOT - 1, 0x5E55ull,
-                            RXC_HOST_OPEN_REFUSE_TORN, &s, &it);
-    CHECK(src == RXC_HOST_E_TORN && s == NULL && it.tail_torn == 1,
-          "%s: strict open refuses the torn tail -> %d", label, src);
-    CHECK(stat(cx, &st) == 0 && st.st_size == cut, "%s: strict refusal left the journal untouched",
+    for (int pass = 0; pass < 2; pass++) {   /* the refusal is stable */
+        RxcHostInfo it, it2;
+        RxcHost *s = NULL;
+        int orc = rxc_host_open(home, RXC_HOST_ROOT_PROVISIONED, ROOT, sizeof ROOT - 1, 0x5E55ull,
+                                0, &s, &it);
+        if (torn) {
+            CHECK(orc == RXC_HOST_E_TORN && s == NULL && it.tail_torn == 1,
+                  "%s: open %d refuses the torn tail -> %d", label, pass, orc);
+        } else {
+            CHECK(orc == RXC_HOST_OK && s && !it.tail_torn, "%s: open %d handle -> %d", label, pass,
+                  orc);
+            CHECK(s && rxc_host_register_skill(s, "np1.echo-proposal", NULL, 10, skill, NULL) == 0,
+                  "%s: register on the refused home", label);
+            int irc = s ? rxc_host_info(s, &it2) : -99;
+            CHECK(irc == RXC_HOST_E_REPLAY && it2.open_rc == -21 && !it2.opened,
+                  "%s: open %d refuses a journal behind its anchor (rc %d open_rc %d)", label, pass,
+                  irc, it2.open_rc);
+            RxcHostResult rq;
+            int qrc = s ? rxc_host_run(s, next_task, 6000000, &rq) : -99;
+            CHECK(qrc == RXC_HOST_E_REPLAY, "%s: no run on a refused home -> %d", label, qrc);
+            rxc_host_close(s);
+        }
+        CHECK(stat(cx, &st) == 0 && (uint64_t)st.st_size == cut,
+              "%s: refusal %d left the journal untouched (%lld bytes)", label, pass,
+              (long long)st.st_size);
+    }
+
+    RxcHostRepair rep, rep2;
+    CHECK(rxc_host_recover(home, RXC_HOST_ROOT_PROVISIONED, OTHER, sizeof OTHER - 1, &rep) ==
+              RXC_HOST_E_IDENTITY && !rep.repaired, "%s: another machine may not repair", label);
+    CHECK(stat(cx, &st) == 0 && (uint64_t)st.st_size == cut, "%s: identity refusal wrote nothing",
           label);
+    rc = rxc_host_recover(home, RXC_HOST_ROOT_PROVISIONED, ROOT, sizeof ROOT - 1, &rep);
+    printf("%s: recover rc %d repaired %u torn %u cause %d cut [%llu,%llu) partial %llu anchor %llu "
+           "kept %llu dropped %llu event %llu cut_bytes_kept %llu rolled_back %u recovered_completed %u\n", label, rc, rep.repaired,
+           rep.tail_torn, rep.cause, (unsigned long long)rep.cut_lo, (unsigned long long)rep.cut_hi,
+           (unsigned long long)rep.partial_records, (unsigned long long)rep.anchor_records,
+           (unsigned long long)rep.records_kept, (unsigned long long)rep.dropped_records,
+           (unsigned long long)rep.event_id, (unsigned long long)rep.cut_bytes_kept, rep.rolled_back,
+           rep.recovered_completed);
+    CHECK(rc == RXC_HOST_OK && rep.repaired == 1 && rep.event_id == rep.records_kept + 1,
+          "%s: recover repaired -> %d", label, rc);
+    CHECK(rep.opens == 1 && rep.open_rc == 0, "%s: recover's trial open succeeded", label);
+    CHECK(rep.tail_torn == (uint32_t)torn && rep.cause == (torn ? -8 : -21), "%s: cause named",
+          label);
+    CHECK(rep.cut_hi == cut && rep.cut_lo <= rep.cut_hi && rep.cut_bytes_kept == rep.cut_hi - rep.cut_lo,
+          "%s: byte range recorded", label);
+    CHECK(rep.dropped_records >= 1 && rep.records_kept < nall, "%s: dropped %llu records", label,
+          (unsigned long long)rep.dropped_records);
+    CHECK(rep.records_kept + rep.dropped_records == nall || rep.anchor_records < nall,
+          "%s: kept + dropped = records before the cut (%llu + %llu vs %u)", label,
+          (unsigned long long)rep.records_kept, (unsigned long long)rep.dropped_records, nall);
+    if (torn) CHECK(rep.cut_lo == record_start(all, nall, rep.records_kept + 1),
+                    "%s: cut starts at record %llu", label, (unsigned long long)rep.records_kept + 1);
+    CHECK(rxc_host_recover(home, RXC_HOST_ROOT_PROVISIONED, ROOT, sizeof ROOT - 1, &rep2) ==
+              RXC_HOST_OK && rep2.repaired == 0, "%s: a second recover is a no-op", label);
 
     RxcHostInfo ir, ir2;
-    h = open_home(home, 0, &ir, &rc);
-    CHECK(h && rc == RXC_HOST_OK && ir.tail_torn == 1, "%s: default open reports tail_torn -> %d",
-          label, rc);
+    RxcHost *h = open_home(home, 0, &ir, &rc);
+    CHECK(h && rc == RXC_HOST_OK && !ir.tail_torn, "%s: open after recover -> %d", label, rc);
     if (!h) return -1;
     int irc = rxc_host_info(h, &ir2);
-    printf("%s: info rc %d open_rc %d records %llu (were %llu) recovered_completed %u "
-           "rolled_back %u\n", label, irc, ir2.open_rc, (unsigned long long)ir2.records,
-           (unsigned long long)n0, ir2.recovered_completed, ir2.rolled_back);
-    int repaired = irc == RXC_HOST_OK;
-    if (repaired) {
-        /* Repaired: everything before the torn record is unchanged and the
-         * torn record (the last one) is gone or re-written; any re-written
-         * record is new history appended after the repair. */
-        int prefix = 1;
-        for (uint32_t i = 0; i + 1 < nall; i++) {
-            RxcHostRecord x;
-            if (rxc_host_record(h, all[i].id, &x) != RXC_HOST_OK ||
-                memcmp(x.digest, all[i].digest, 32) != 0) { prefix = 0; break; }
-        }
-        CHECK(prefix, "%s: records 1..%u keep ids and digests after repair", label, nall - 1);
-        CHECK(ir2.records >= n0 - 1, "%s: at most the torn record is missing", label);
-        for (int i = 0; i < 4; i++) {
-            RxcHostRecord x;
-            CHECK(rxc_host_record(h, cited[i], &x) == RXC_HOST_OK &&
-                  memcmp(x.digest, cited_rec[i].digest, 32) == 0,
-                  "%s: cited record %llu intact", label, (unsigned long long)cited[i]);
-        }
-        RxcHostResult r3;
-        rc = rxc_host_run(h, next_task, 5000000 + next_task % 1000, &r3);
-        CHECK(rc == RXC_HOST_OK && r3.committed, "%s: run after repair -> %d outcome %d", label, rc,
-              r3.outcome);
-        rxc_host_close(h);
-    } else {
-        CHECK(ir2.open_rc != 0 && !ir2.opened, "%s: refusal names its cause", label);
-        rxc_host_close(h);
-        CHECK(stat(cx, &st) == 0, "%s: journal still present", label);
-        printf("%s: refused explicitly (open_rc %d); journal now %lld bytes (cut to %lld)\n", label,
-               ir2.open_rc, (long long)st.st_size, (long long)cut);
-        /* Stable: a second open must not "succeed" now that the first one
-         * may have truncated the torn record (CX_OPEN_REPAIR_TAIL). */
-        RxcHostInfo iq, iq2;
-        h = open_home(home, 0, &iq, &rc);
-        CHECK(h && rc == RXC_HOST_OK, "%s: second open handle -> %d", label, rc);
-        int qrc = h ? rxc_host_info(h, &iq2) : -99;
-        CHECK(qrc == RXC_HOST_E_OPEN && iq2.open_rc != 0 && !iq2.opened,
-              "%s: second open refuses again (rc %d open_rc %d)", label, qrc, iq2.open_rc);
-        RxcHostResult rq;
-        CHECK(h && rxc_host_run(h, next_task, 6000000, &rq) == RXC_HOST_E_OPEN,
-              "%s: no run on a refused home", label);
-        rxc_host_close(h);
+    printf("%s: after recover info rc %d records %llu rolled_back %u recovered_completed %u\n",
+           label, irc, (unsigned long long)ir2.records, ir2.rolled_back, ir2.recovered_completed);
+    CHECK(irc == RXC_HOST_OK && ir2.opened, "%s: the composition opens after recover", label);
+    int prefix = 1;
+    for (uint32_t i = 0; i < rep.records_kept && i < nall; i++) {
+        RxcHostRecord x;
+        if (rxc_host_record(h, all[i].id, &x) != RXC_HOST_OK || x.id != all[i].id ||
+            memcmp(x.digest, all[i].digest, 32) != 0) { prefix = 0; break; }
     }
-    return fails == f0 ? repaired : -1;
+    CHECK(prefix, "%s: records 1..%llu are an unchanged prefix", label,
+          (unsigned long long)rep.records_kept);
+    RxcHostRecord ev;
+    uint64_t w[24];
+    CHECK(rxc_host_record(h, rep.event_id, &ev) == RXC_HOST_OK &&
+              ev.subject == RXC_HOST_SUBJECT_HOST && ev.tag == RXC_HOST_TAG_REPAIR_TAIL &&
+              ev.links[0] == rep.records_kept, "%s: repair record %llu in the journal", label,
+          (unsigned long long)rep.event_id);
+    int pn = rxc_host_payload(h, rep.event_id, w, 24);
+    CHECK(pn >= (int)RXC_HOST_RP_BYTES && w[RXC_HOST_RP_CUT_LO] == rep.cut_lo &&
+              w[RXC_HOST_RP_CUT_HI] == rep.cut_hi && w[RXC_HOST_RP_DROPPED] == rep.dropped_records &&
+              (int64_t)w[RXC_HOST_RP_CAUSE] == rep.cause &&
+              (!rep.cut_bytes_kept || word_digest_nonzero(w + RXC_HOST_RP_CUT_SHA)),
+          "%s: repair payload names range, count, cause", label);
+    RxcHostResult r3;
+    rc = rxc_host_run(h, next_task, 5000000 + next_task % 1000, &r3);
+    CHECK(rc == RXC_HOST_OK && r3.committed, "%s: run after recover -> %d outcome %d", label, rc,
+          r3.outcome);
+    rxc_host_close(h);
+    if (rep_out) *rep_out = rep;
+    return fails == f0 ? 0 : -1;
 }
 
 #define MAXR 64
@@ -167,10 +211,11 @@ int main(void) {
     char home[300];
     snprintf(home, sizeof home, "%s/home", dir);
 
-    uint32_t lay[3];
+    uint32_t lay[4];
     CHECK(rxc_host_abi_layout(lay) == RXC_HOST_ABI_VERSION && lay[0] == sizeof(RxcHostInfo) &&
-          lay[1] == sizeof(RxcHostResult) && lay[2] == sizeof(RxcHostRecord), "abi layout");
-    printf("abi layout: info %u result %u record %u\n", lay[0], lay[1], lay[2]);
+          lay[1] == sizeof(RxcHostResult) && lay[2] == sizeof(RxcHostRecord) &&
+          lay[3] == sizeof(RxcHostRepair), "abi layout");
+    printf("abi layout: info %u result %u record %u repair %u\n", lay[0], lay[1], lay[2], lay[3]);
 
     /* ---- T1 ---- */
     RxcHostInfo i1;
@@ -271,34 +316,173 @@ int main(void) {
     CHECK(stray == 0 && nfiles >= 3, "home holds only machine.id, cortex.cx, jspace* (%d files)",
           nfiles);
 
-    /* ---- T5 torn tail ----
-     * (a) the torn record lies past the J-Space anchor (a reopen appends
-     *     World records after the last commit): repaired, runs on;
-     * (b) a run commits and its own tail is torn: repaired or refused
-     *     explicitly; measured below, never silent. */
+    /* ---- T5 torn tail, strict by default, repaired on request ----
+     * (a) a goal commits and its own tail is torn (the coordinator's case);
+     * (b) the torn record lies past the J-Space anchor (written at reopen);
+     * (c) the journal is cut exactly at a record boundary inside the
+     *     anchored prefix (cx_open sees a shorter valid journal). */
     static RxcHostRecord all[256];
     uint32_t nall;
+    RxcHostRepair rp;
     h = open_home(home, 0, NULL, &rc);
     CHECK(h != NULL, "T5a open -> %d", rc);
     if (!h) return 1;
+    RxcHostResult rb;
+    CHECK(rxc_host_run(h, 0x4E50310000000005ull, 7000000, &rb) == RXC_HOST_OK && rb.committed,
+          "T5a run");
     nall = collect(h, all, 256);
     rxc_host_close(h);
-    int ta_r = torn_case(home, "T5a torn past anchor", all, nall, cited, cited_rec,
-                         0x4E50310000000003ull);
-    CHECK(ta_r == 1, "T5a expected repair, got %d", ta_r);
+    {
+        struct stat s5;
+        char cx5[400];
+        snprintf(cx5, sizeof cx5, "%s/cortex.cx", home);
+        CHECK(stat(cx5, &s5) == 0, "T5a stat");
+        CHECK(torn_case(home, "T5a torn after a run", all, nall, (uint64_t)s5.st_size - 5, 1,
+                        0x4E50310000000006ull, &rp) == 0, "T5a held");
+    }
 
     h = open_home(home, 0, NULL, &rc);
     CHECK(h != NULL, "T5b open -> %d", rc);
     if (!h) return 1;
-    RxcHostResult rb;
-    CHECK(rxc_host_run(h, 0x4E50310000000005ull, 7000000, &rb) == RXC_HOST_OK && rb.committed,
-          "T5b run");
     nall = collect(h, all, 256);
     rxc_host_close(h);
-    int tb_r = torn_case(home, "T5b torn after a run", all, nall, cited, cited_rec,
-                         0x4E50310000000006ull);
-    CHECK(tb_r >= 0, "T5b repaired or refused explicitly (%d)", tb_r);
-    printf("T5b outcome: %s\n", tb_r == 1 ? "repaired" : tb_r == 0 ? "refused" : "check failure");
+    h = open_home(home, 0, NULL, &rc);   /* this reopen appends past the anchor */
+    if (!h) return 1;
+    nall = collect(h, all, 256);
+    rxc_host_close(h);
+    {
+        struct stat s5;
+        char cx5[400];
+        snprintf(cx5, sizeof cx5, "%s/cortex.cx", home);
+        CHECK(stat(cx5, &s5) == 0, "T5b stat");
+        CHECK(torn_case(home, "T5b torn past anchor", all, nall, (uint64_t)s5.st_size - 5, 1,
+                        0x4E50310000000007ull, &rp) == 0, "T5b held");
+    }
+
+    h = open_home(home, 0, NULL, &rc);
+    CHECK(h != NULL, "T5c open -> %d", rc);
+    if (!h) return 1;
+    CHECK(rxc_host_run(h, 0x4E50310000000008ull, 8000000, &rb) == RXC_HOST_OK && rb.committed,
+          "T5c run");
+    nall = collect(h, all, 256);
+    rxc_host_close(h);
+    CHECK(torn_case(home, "T5c cut at a record boundary", all, nall,
+                    record_start(all, nall, all[nall - 1].id), 0, 0x4E50310000000009ull, &rp) == 0,
+          "T5c held");
+
+    /* (d) a whole run's records cut at a boundary (fresh home): everything
+     *     the last goal wrote, its state commit included, is gone while
+     *     J-Space holds NEW. MEASURED limit: recover records the cut and
+     *     reports that the composition still refuses (it neither adopts a
+     *     state no record names nor overwrites committed J-Space history);
+     *     the refusal is named and stable and the kept prefix is unchanged. */
+    {
+        char home2[320];
+        snprintf(home2, sizeof home2, "%s/home2", dir);
+        h = open_home(home2, 0, NULL, &rc);
+        CHECK(h != NULL, "T5d open -> %d", rc);
+        if (!h) return 1;
+        CHECK(rxc_host_run(h, 0x4E5031000000000Bull, 8500000, &rb) == RXC_HOST_OK && rb.committed,
+              "T5d run 1");
+        uint32_t npre = collect(h, all, 256);
+        CHECK(rxc_host_run(h, 0x4E5031000000000Cull, 8600000, &rb) == RXC_HOST_OK && rb.committed,
+              "T5d run 2");
+        nall = collect(h, all, 256);
+        rxc_host_close(h);
+        uint64_t cut = record_start(all, nall, npre + 1);
+        char cx[400];
+        snprintf(cx, sizeof cx, "%s/cortex.cx", home2);
+        static uint8_t keep[1 << 16], now[1 << 16];
+        FILE *f = fopen(cx, "rb");
+        size_t got = f && cut <= sizeof keep ? fread(keep, 1, cut, f) : 0;
+        if (f) fclose(f);
+        CHECK(got == cut && truncate(cx, (off_t)cut) == 0, "T5d cut run 2 (records %u..%u)", npre + 1,
+              nall);
+        rc = rxc_host_recover(home2, RXC_HOST_ROOT_PROVISIONED, ROOT, sizeof ROOT - 1, &rp);
+        printf("T5d whole run cut: recover rc %d repaired %u cause %d anchor %llu kept %llu dropped %llu "
+               "event %llu opens %u open_rc %d\n", rc, rp.repaired, rp.cause,
+               (unsigned long long)rp.anchor_records, (unsigned long long)rp.records_kept,
+               (unsigned long long)rp.dropped_records, (unsigned long long)rp.event_id, rp.opens,
+               rp.open_rc);
+        CHECK(rc == RXC_HOST_E_REPLAY && rp.repaired == 1 && !rp.opens && rp.open_rc == -21 &&
+              rp.event_id == npre + 1 && rp.dropped_records == nall - npre,
+              "T5d recover records the cut and names the refusal");
+        RxcHostInfo i5d;
+        h = open_home(home2, 0, NULL, &rc);
+        int qrc = h ? rxc_host_info(h, &i5d) : -99;
+        CHECK(qrc == RXC_HOST_E_REPLAY, "T5d the refusal is stable and named -> %d", qrc);
+        rxc_host_close(h);
+        f = fopen(cx, "rb");
+        got = f ? fread(now, 1, cut, f) : 0;
+        if (f) fclose(f);
+        CHECK(got == cut && memcmp(keep, now, cut) == 0, "T5d records 1..%u unchanged on disk", npre);
+    }
+
+    /* ---- T6 recover needs the journal: a live handle blocks it ---- */
+    h = open_home(home, 0, NULL, &rc);
+    CHECK(h != NULL, "T6 open -> %d", rc);
+    if (!h) return 1;
+    RxcHostInfo i6;
+    CHECK(rxc_host_info(h, &i6) == RXC_HOST_OK, "T6 info");
+    CHECK(rxc_host_recover(home, RXC_HOST_ROOT_PROVISIONED, ROOT, sizeof ROOT - 1, &rp) ==
+              RXC_HOST_E_OPEN && !rp.repaired, "T6 recover refused while a handle holds the home");
+
+    /* ---- T7 host records through the composition writer, recalled after restart ---- */
+    RxcHostResult r7;
+    CHECK(rxc_host_run(h, 0x4E5031000000000Aull, 9000000, &r7) == RXC_HOST_OK && r7.committed,
+          "T7 run");
+    static const char C7[] = "constraint: change only files under the workspace";
+    static const char A7[] = "authorize: write notes.txt (expected approval 1 of 1)";
+    static const char E7[] = "effect: wrote notes.txt sha256=...";
+    uint64_t c7 = 0, a7 = 0, e7 = 0;
+    uint64_t lk[4] = { r7.cx_promotion, r7.cx_evidence, 0, 0 };
+    CHECK(rxc_host_note(h, RXC_HOST_NOTE_CONSTRAINT, NULL, (const uint8_t *)C7, sizeof C7 - 1, &c7) ==
+              RXC_HOST_OK && c7, "T7 constraint note %llu", (unsigned long long)c7);
+    lk[2] = c7;
+    CHECK(rxc_host_note(h, RXC_HOST_NOTE_AUTHORIZATION, lk, (const uint8_t *)A7, sizeof A7 - 1, &a7) ==
+              RXC_HOST_OK && a7 > c7, "T7 authorization note %llu", (unsigned long long)a7);
+    lk[3] = a7;
+    CHECK(rxc_host_note(h, RXC_HOST_NOTE_EFFECT, lk, (const uint8_t *)E7, sizeof E7 - 1, &e7) ==
+              RXC_HOST_OK && e7 > a7, "T7 effect note %llu", (unsigned long long)e7);
+    uint64_t bad[4] = { 1u << 30, 0, 0, 0 };
+    uint64_t x7 = 0;
+    CHECK(rxc_host_note(h, RXC_HOST_NOTE_EFFECT, bad, (const uint8_t *)E7, 3, &x7) ==
+              RXC_HOST_E_NOT_FOUND && x7 == 0, "T7 a link to a missing record is refused");
+    CHECK(rxc_host_note(h, 99, NULL, (const uint8_t *)E7, 3, &x7) == RXC_HOST_E_ARG,
+          "T7 unknown note kind refused");
+    static RxcHostRecord hb[MAXR], ha[MAXR];
+    uint32_t nhb = 0, nha = 0;
+    uint64_t thb = 0, tha = 0;
+    CHECK(rxc_host_recall(h, RXC_HOST_SUBJECT_HOST, hb, MAXR, &nhb, &thb) == RXC_HOST_OK,
+          "T7 recall host subject");
+    RxcHostInfo i7;
+    rxc_host_info(h, &i7);
+    rxc_host_close(h);
+    h = open_home(home, 0, NULL, &rc);
+    CHECK(h != NULL, "T7 reopen -> %d", rc);
+    if (!h) return 1;
+    RxcHostInfo i7b;
+    CHECK(rxc_host_info(h, &i7b) == RXC_HOST_OK && memcmp(i7b.machine_id, mid, 32) == 0,
+          "T7 same AienMachineId after restart");
+    CHECK(rxc_host_recall(h, RXC_HOST_SUBJECT_HOST, ha, MAXR, &nha, &tha) == RXC_HOST_OK &&
+              nha == nhb, "T7 recall after restart: %u host records (were %u)", nha, nhb);
+    int same7 = nha == nhb;
+    for (uint32_t i = 0; same7 && i < nha; i++)
+        same7 = ha[i].id == hb[i].id && !memcmp(ha[i].digest, hb[i].digest, 32) && ha[i].verified;
+    CHECK(same7, "T7 host records keep ids and digests across restart");
+    uint64_t pw[RXC_HOST_NP_BYTES + 16];
+    int pn = rxc_host_payload(h, c7, pw, RXC_HOST_NP_BYTES + 16);
+    char txt[129] = { 0 };
+    if (pn > (int)RXC_HOST_NP_BYTES && pw[RXC_HOST_NP_LEN] < sizeof txt)
+        for (uint64_t i = 0; i < pw[RXC_HOST_NP_LEN]; i++)
+            txt[i] = (char)(pw[RXC_HOST_NP_BYTES + i / 8] >> (8 * (i % 8)));
+    CHECK(strcmp(txt, C7) == 0, "T7 constraint text round-trips: '%s'", txt);
+    RxcHostRecord ra;
+    CHECK(rxc_host_record(h, a7, &ra) == RXC_HOST_OK && ra.tag == RXC_HOST_NOTE_AUTHORIZATION &&
+              ra.links[0] == r7.cx_promotion && ra.links[2] == c7, "T7 authorization cites its ids");
+    printf("T7 host records: constraint %llu authorization %llu effect %llu; host subject %u\n",
+           (unsigned long long)c7, (unsigned long long)a7, (unsigned long long)e7, nha);
+    rxc_host_close(h);
 
     char m[17];
     hex8(mid, m);

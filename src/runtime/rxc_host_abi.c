@@ -20,6 +20,7 @@
 #include "runtime/rx_skillroute.h"
 #include "sha256.h"
 
+#include <fcntl.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -36,6 +37,7 @@ _Static_assert((int)RXC_HOST_OUT_COMMITTED == (int)RXC_OUT_COMMITTED && (int)RXC
 _Static_assert((int)RXC_HOST_ROOT_PROVISIONED == (int)AIEN_MID_ROOT_PROVISIONED &&
                (int)RXC_HOST_ROOT_HARDWARE == (int)AIEN_MID_ROOT_HARDWARE, "root kinds");
 _Static_assert(RXC_HOST_NONE == RXC_NONE, "no winner");
+_Static_assert(RXC_HOST_SUBJECT_HOST < RXC_CX_SUBJECT(0), "host records stay off composition subjects");
 
 #define RXC_HOST_OP 1u               /* the one semantic operation every host Skill provides */
 #define RXC_HOST_SKILL_ID0 1u        /* Skill ids: RXC_HOST_SKILL_ID0 + index */
@@ -183,7 +185,8 @@ static void refresh_info(RxcHost *h) {
 /* Build the Skill graph, start the authority, open the composition. */
 static int host_seal(RxcHost *h) {
     if (h->opened) return RXC_HOST_OK;
-    if (h->info.open_rc != 0) return RXC_HOST_E_OPEN;   /* a failed open is final */
+    if (h->info.open_rc != 0)                         /* a failed open is final */
+        return h->info.open_rc == RX_ERR_REPLAY ? RXC_HOST_E_REPLAY : RXC_HOST_E_OPEN;
     aien_mid_index_init(&h->ix, h->slots, 8);
     if (cq_catalog_init_canonical(&h->cat, &h->ix, &h->self, 8, 8) != CQ_OK) return RXC_HOST_E_NOMEM;
     h->cat_init = 1;
@@ -216,7 +219,9 @@ static int host_seal(RxcHost *h) {
     if (rc != RX_OK) {
         aienos_cap_stop(h->admin, h->view);
         h->admin = NULL;
-        return rc == RX_ERR_IDENTITY ? RXC_HOST_E_IDENTITY : RXC_HOST_E_OPEN;
+        return rc == RX_ERR_IDENTITY ? RXC_HOST_E_IDENTITY
+             : rc == RX_ERR_REPLAY   ? RXC_HOST_E_REPLAY
+                                     : RXC_HOST_E_OPEN;
     }
     h->opened = 1;
     refresh_info(h);
@@ -230,7 +235,7 @@ int rxc_host_open(const char *dir, uint32_t root_kind, const uint8_t *root, size
     if (out) *out = NULL;
     if (info) memset(info, 0, sizeof *info);
     if (!dir || !*dir || !root || !out || strlen(dir) >= 200 - 16 ||
-        (flags & ~RXC_HOST_OPEN_REFUSE_TORN))
+        flags != 0)
         return RXC_HOST_E_ARG;
     AienMachineId self;
     if (aien_mid_derive((uint8_t)root_kind, root, root_len, &self) != AIEN_MID_OK)
@@ -270,7 +275,8 @@ int rxc_host_open(const char *dir, uint32_t root_kind, const uint8_t *root, size
             return RXC_HOST_E_OPEN;
         }
     }
-    if (inf.tail_torn && (flags & RXC_HOST_OPEN_REFUSE_TORN)) {
+    /* Strict: a torn tail is refused, never cut here (rxc_host_recover). */
+    if (inf.tail_torn) {
         if (info) *info = inf;
         return RXC_HOST_E_TORN;
     }
@@ -440,11 +446,236 @@ void rxc_host_close(RxcHost *h) {
     free(h);
 }
 
-uint32_t rxc_host_abi_layout(uint32_t out[3]) {
+uint32_t rxc_host_abi_layout(uint32_t out[4]) {
     if (out) {
+        out[3] = (uint32_t)sizeof(RxcHostRepair);
         out[0] = (uint32_t)sizeof(RxcHostInfo);
         out[1] = (uint32_t)sizeof(RxcHostResult);
         out[2] = (uint32_t)sizeof(RxcHostRecord);
     }
     return RXC_HOST_ABI_VERSION;
+}
+
+/* ---- host records (cut 2) ---------------------------------------------------- */
+
+static void pack_bytes(uint64_t *w, const uint8_t *b, size_t len) {
+    for (size_t i = 0; i < len; i++) w[i / 8] |= (uint64_t)b[i] << (8 * (i % 8));
+}
+
+static void words_of_digest(const uint8_t d[32], uint64_t *w) {
+    memset(w, 0, 4 * sizeof *w);
+    pack_bytes(w, d, 32);
+}
+
+int rxc_host_note(RxcHost *h, uint32_t note, const uint64_t links[4], const uint8_t *bytes,
+                  size_t len, uint64_t *out_id) {
+    if (out_id) *out_id = 0;
+    if (!h || !bytes || len == 0 || len > RXC_HOST_NOTE_MAX || !out_id) return RXC_HOST_E_ARG;
+    CxHeader hd;
+    memset(&hd, 0, sizeof hd);
+    switch (note) {
+    case RXC_HOST_NOTE_CONSTRAINT:
+        hd.cls = CX_CLAIM; hd.kind = CX_K_CLAIM; break;
+    case RXC_HOST_NOTE_AUTHORIZATION:
+        hd.cls = CX_EVIDENCE; hd.kind = CX_K_ADMISSION; hd.protect = CX_PROT_AUTHORITY; break;
+    case RXC_HOST_NOTE_EFFECT:
+        hd.cls = CX_EVIDENCE; hd.kind = CX_K_EVIDENCE_REF; hd.protect = CX_PROT_EFFECT_RECEIPT; break;
+    default:
+        return RXC_HOST_E_ARG;
+    }
+    int rc = host_seal(h);
+    if (rc != RXC_HOST_OK) return rc;
+    hd.subject = RXC_HOST_SUBJECT_HOST;
+    hd.tag = note;
+    if (links) {
+        for (uint32_t i = 0; i < 4; i++) {
+            if (links[i] > h->c->cx.n) return RXC_HOST_E_NOT_FOUND;   /* provenance must exist */
+            hd.links[i] = links[i];
+        }
+    }
+    uint32_t n = (uint32_t)(RXC_HOST_NP_BYTES + (len + 7) / 8);
+    uint64_t *p = calloc(n, sizeof *p);
+    if (!p) return RXC_HOST_E_NOMEM;
+    uint8_t d[32];
+    sha256_hash(bytes, len, d);
+    p[RXC_HOST_NP_LEN] = len;
+    words_of_digest(d, p + RXC_HOST_NP_SHA);
+    pack_bytes(p + RXC_HOST_NP_BYTES, bytes, len);
+    /* The composition's own writer: the attached single-writer link, under
+     * the World mutex, exactly as rx_compose's cx_put writes its records. */
+    hd.t = rx_cortex_next_t_in(h->c->world, &h->c->cx);
+    uint64_t id = 0;
+    int ar = rx_cortex_append_in(h->c->world, &h->c->cx, &hd, p, n, &id);
+    free(p);
+    refresh_info(h);
+    if (ar != RX_OK || id == 0) return RXC_HOST_E_RUN;
+    *out_id = id;
+    return RXC_HOST_OK;
+}
+
+/* ---- operator repair (cut 2) ------------------------------------------------- */
+
+static int recover_trial_skill(void *ctx, uint64_t task, uint64_t *result) {
+    (void)ctx; (void)task; (void)result;
+    return 1;   /* never runs: the trial only opens */
+}
+
+int rxc_host_recover(const char *dir, uint32_t root_kind, const uint8_t *root, size_t root_len,
+                     RxcHostRepair *out) {
+    if (!out) return RXC_HOST_E_ARG;
+    memset(out, 0, sizeof *out);
+    if (!dir || !*dir || !root || strlen(dir) >= 200 - 16) return RXC_HOST_E_ARG;
+    AienMachineId self;
+    if (aien_mid_derive((uint8_t)root_kind, root, root_len, &self) != AIEN_MID_OK)
+        return RXC_HOST_E_IDENTITY;
+    char p[256];
+    snprintf(p, sizeof p, "%s/machine.id", dir);
+    AienMachineId stored;
+    if (aien_mid_load(p, &stored) != AIEN_MID_OK || !aien_mid_equal(&stored, &self))
+        return RXC_HOST_E_IDENTITY;   /* only the home's own machine repairs it */
+    snprintf(p, sizeof p, "%s/cortex.cx", dir);
+    struct stat st;
+    if (stat(p, &st) != 0) return RXC_HOST_OK;   /* no journal: nothing to repair */
+    const uint64_t old_size = (uint64_t)st.st_size;
+
+    /* Keep the tail bytes before anything is cut (the cut goes into the
+     * repair record, so nothing leaves the journal unrecorded). */
+    uint64_t keep_n = old_size < RXC_HOST_REPAIR_KEEP_MAX ? old_size : RXC_HOST_REPAIR_KEEP_MAX;
+    uint8_t *tail = malloc(keep_n ? keep_n : 1);
+    if (!tail) return RXC_HOST_E_NOMEM;
+    int fd = open(p, O_RDONLY | O_CLOEXEC);
+    if (fd < 0 || pread(fd, tail, keep_n, (off_t)(old_size - keep_n)) != (ssize_t)keep_n) {
+        if (fd >= 0) close(fd);
+        free(tail);
+        return RXC_HOST_E_OPEN;
+    }
+    close(fd);
+
+    CxStore probe;
+    memset(&probe, 0, sizeof probe);
+    int prc = cx_open(&probe, p, RX_CORTEX_SUBJECTS, CX_OPEN_READONLY);
+    if (prc == CX_OK) cx_close(&probe);
+    else if (prc == CX_ERR_TORN) out->tail_torn = 1;
+    else { free(tail); return RXC_HOST_E_OPEN; }
+
+    /* The writer open: takes the journal lock (a live handle on this home
+     * makes it fail: RXC_HOST_E_OPEN) and, if torn, truncates the one
+     * incomplete trailing record. */
+    CxStore cx;
+    memset(&cx, 0, sizeof cx);
+    if (cx_open(&cx, p, RX_CORTEX_SUBJECTS, CX_OPEN_SYNC | CX_OPEN_REPAIR_TAIL) != CX_OK) {
+        free(tail);
+        return RXC_HOST_E_OPEN;
+    }
+    if (stat(p, &st) != 0) { cx_close(&cx); free(tail); return RXC_HOST_E_OPEN; }
+    const uint64_t new_size = (uint64_t)st.st_size;
+    const uint64_t kept = cx.n;
+    out->cut_lo = new_size;
+    out->cut_hi = old_size;
+    out->partial_records = out->tail_torn ? 1u : 0u;
+    out->records_kept = kept;
+
+    JsHome home;
+    memset(&home, 0, sizeof home);
+    aien_mid_to_slot(&self, home.machine);
+    home.locality = JS_HOME_LOCAL;
+    const JsRealizer *rz[1] = { &RXC_REALIZER };
+    JsSpace js;
+    memset(&js, 0, sizeof js);
+    snprintf(p, sizeof p, "%s/jspace", dir);
+    if (js_space_open(&js, p, rz, 1, NULL, &home) != JS_OK) {
+        cx_close(&cx);
+        free(tail);
+        return RXC_HOST_E_OPEN;
+    }
+    uint8_t an[48];
+    uint64_t A = 0;
+    if (js_space_anchor(&js, an)) {
+        out->anchor_present = 1;
+        for (int i = 0; i < 8; i++) A |= (uint64_t)an[i] << (8 * i);
+        memcpy(out->anchor_head, an + 8, 32);
+    }
+    out->anchor_records = A;
+    int rc = RXC_HOST_OK;
+    if (A > 0 && A <= kept) {
+        const CxObject *o = cx_get(&cx, A);
+        if (!o || memcmp(o->digest, an + 8, 32) != 0) {
+            rc = RXC_HOST_E_REPLAY;   /* a different history, not a cut tail */
+            goto done;
+        }
+    }
+    if (!out->tail_torn && A <= kept) goto done;   /* whole and anchored: nothing to do */
+
+    const uint64_t present = kept + out->partial_records;
+    out->dropped_records = (present > A ? present : A) - kept;
+    out->cause = out->tail_torn ? CX_ERR_TORN : RX_ERR_REPLAY;
+    const uint64_t cut = old_size - new_size;
+    if (cut <= keep_n) {
+        out->cut_bytes_kept = cut;
+        sha256_hash(tail + (keep_n - cut), (size_t)cut, out->cut_sha256);
+    }
+    {
+        uint32_t n = (uint32_t)(RXC_HOST_RP_BYTES + (out->cut_bytes_kept + 7) / 8);
+        uint64_t *w = calloc(n, sizeof *w);
+        if (!w) { rc = RXC_HOST_E_NOMEM; goto done; }
+        w[RXC_HOST_RP_CUT_LO] = out->cut_lo;
+        w[RXC_HOST_RP_CUT_HI] = out->cut_hi;
+        w[RXC_HOST_RP_PARTIAL] = out->partial_records;
+        w[RXC_HOST_RP_ANCHOR] = A;
+        w[RXC_HOST_RP_KEPT] = kept;
+        w[RXC_HOST_RP_DROPPED] = out->dropped_records;
+        w[RXC_HOST_RP_CAUSE] = (uint64_t)(int64_t)out->cause;
+        words_of_digest(out->cut_sha256, w + RXC_HOST_RP_CUT_SHA);
+        words_of_digest(out->anchor_head, w + RXC_HOST_RP_ANCHOR_HEAD);
+        w[RXC_HOST_RP_KEPT_BYTES] = out->cut_bytes_kept;
+        if (out->cut_bytes_kept)
+            pack_bytes(w + RXC_HOST_RP_BYTES, tail + (keep_n - out->cut_bytes_kept),
+                       (size_t)out->cut_bytes_kept);
+        CxHeader hd;
+        memset(&hd, 0, sizeof hd);
+        hd.cls = CX_EVIDENCE;
+        hd.kind = CX_K_ADMISSION;
+        hd.subject = RXC_HOST_SUBJECT_HOST;
+        hd.tag = RXC_HOST_TAG_REPAIR_TAIL;
+        hd.protect = CX_PROT_COMMIT_RECEIPT;
+        hd.links[0] = kept;               /* the newest record kept (0 = none) */
+        hd.t = cx.n + 1;                  /* the unattached writer, as rx_compose's cx_put */
+        uint64_t id = 0;
+        int ar = cx_append(&cx, &hd, w, n, &id);
+        free(w);
+        if (ar != CX_OK) { rc = RXC_HOST_E_RUN; goto done; }
+        out->event_id = id;
+    }
+    /* Re-anchor the checkpoint on the repaired journal (rx_compose's
+     * commit_js layout: count LE | head digest | flags = 1). */
+    {
+        uint8_t a[48] = { 0 };
+        uint64_t n = cx.n;
+        for (int i = 0; i < 8; i++) a[i] = (uint8_t)(n >> (8 * i));
+        memcpy(a + 8, cx.obj[n - 1].digest, 32);
+        a[40] = 1;
+        js_space_set_anchor(&js, a);
+        if (js_space_commit(&js) != JS_OK) { rc = RXC_HOST_E_OPEN; goto done; }
+    }
+    out->repaired = 1;
+done:
+    js_space_destroy(&js);
+    cx_close(&cx);
+    free(tail);
+    if (rc == RXC_HOST_OK && out->repaired) {
+        /* Trial open: does the composition accept the repaired home? */
+        RxcHost *t = NULL;
+        RxcHostInfo ti;
+        rc = rxc_host_open(dir, root_kind, root, root_len, 0, 0, &t, &ti);
+        if (rc == RXC_HOST_OK) {
+            rxc_host_register_skill(t, "rxc.recover.trial", NULL, 1, recover_trial_skill, NULL);
+            rc = rxc_host_info(t, &ti);
+            out->open_rc = ti.open_rc;
+            out->opens = rc == RXC_HOST_OK;
+            out->rolled_back = ti.rolled_back;
+            out->recovered_completed = ti.recovered_completed;
+            rxc_host_close(t);
+        }
+    }
+    return rc;
 }
