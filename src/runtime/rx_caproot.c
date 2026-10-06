@@ -140,6 +140,11 @@ static int auth_use(RxCapTable *t, const uint8_t *delivered, RxCapRef a,
     if (e->lease_expiry && clock >= e->lease_expiry) return RX_CAP_ERR_EXPIRED;
     if (chain_ok(t, e) != RX_CAP_OK) return RX_CAP_ERR_CHAIN;
     if ((e->rights & need) != need) return RX_CAP_ERR_UNAUTHORIZED;
+    /* aienos#266/#272 parity: a privileged right is an authority-office right,
+     * honored only on an entry whose resource is RX_CAP_RES_AUTHORITY, as in
+     * the native auth_use at aienos.lock. */
+    if ((need & RX_RIGHT_PRIVILEGED) && e->resource != RX_CAP_RES_AUTHORITY)
+        return RX_CAP_ERR_RESOURCE;
     if (out) *out = e;
     return RX_CAP_OK;
 }

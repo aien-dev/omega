@@ -428,6 +428,22 @@ $(RX_R7_TEST): $(RX_R7_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
 test-r7: $(RX_R7_TEST)
 	./$(RX_R7_TEST)
 
+# aienos#266/#272 at aienos.lock: the R16 operator control capability (the epoch
+# right on RX_WORLD_RES_CONTROL) is refused by every authority operation, the office
+# still operates the authority, and the world still accepts the capability for the halt
+# check. Host only.
+RX_OP_AUTH_MISUSE_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \
+	src/runtime/rx_native_bind.c src/sha256.c src/omega_evidence.c \
+	tests/runtime/rx_operator_authority_misuse.c
+RX_OP_AUTH_MISUSE_TEST = $(OUT_DIR)/rx_operator_authority_misuse_test
+$(RX_OP_AUTH_MISUSE_TEST): $(RX_OP_AUTH_MISUSE_SRCS) src/runtime/rx_caproot.h src/runtime/rx_world.h \
+	src/runtime/rx_operator.h src/runtime/aienos_cap.h $(AIENOS_CAP_LIB) | $(OUT_DIR)
+	$(CC) $(CFLAGS) -pthread -o $@ $(RX_OP_AUTH_MISUSE_SRCS) $(AIENOS_CAP_LIB) -lm
+
+.PHONY: test-r16-operator-authority-misuse
+test-r16-operator-authority-misuse: $(RX_OP_AUTH_MISUSE_TEST)
+	./$(RX_OP_AUTH_MISUSE_TEST)
+
 # R9: generation barrier. The candidate is prepared beside the live world.
 # A stop after each persistence step must recover one whole generation.
 RX_R9_SRCS = src/runtime/rx_caproot.c src/runtime/rx_world.c src/runtime/rx_coherent.c \

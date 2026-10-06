@@ -233,6 +233,21 @@ static int corpus(void) {
               aienos_cap_revoke(p.native_admin, to_native(&p, revoker),
                                 native_office));
     validate_both(&p, "office still live", linux_office, 0, 0, RX_RIGHT_MINT);
+    /* aienos#266/#272: a privileged right on a resource other than the
+     * authority (the R16 operator's epoch right on the control resource) is
+     * refused by every authority operation, in both authorities. */
+    RxCapRef control;
+    mint_both(&p, "control-resource privileged cap", 70, 0x906,
+              RX_RIGHT_EPOCH | RX_RIGHT_CLOCK | RX_RIGHT_REVOKE | RX_RIGHT_RECLAIM | RX_RIGHT_MINT,
+              0, none, 0, &control);
+    expect_eq("control cap bumps the epoch", rx_capadmin_bump_epoch(&p.admin, control),
+              aienos_cap_bump_epoch(p.native_admin, to_native(&p, control)));
+    expect_eq("control cap advances the clock",
+              rx_capadmin_advance_clock(&p.admin, control, 1),
+              aienos_cap_advance_clock(p.native_admin, to_native(&p, control), 1));
+    expect_eq("control cap revokes", rx_capadmin_revoke(&p.admin, control, revoker),
+              aienos_cap_revoke(p.native_admin, to_native(&p, control), to_native(&p, revoker)));
+    validate_both(&p, "control cap still live", control, 70, 0x906, RX_RIGHT_EPOCH);
 
     RxCapRef cur;
     mint_both(&p, "depth base", 1, 0x20, RX_RIGHT_READ | RX_RIGHT_DELEGATE, 0, none, 0, &cur);
