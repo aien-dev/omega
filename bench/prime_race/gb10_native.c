@@ -14,6 +14,14 @@
  * table, one launch (<= OMEGA_GPU_EW_MAX_CTAS CTAs, grid-stride over words), wait for
  * both markers. Persistent buffers => faithful=no.
  *
+ * CTA budget (optimization campaign C1, 2026-10-05): PR_GB10_CTA_BUDGET=N (1..4096) in the
+ * environment lifts or lowers the launch cap; unset keeps OMEGA_GPU_EW_MAX_CTAS (the proven
+ * I42 envelope). Any other value fails setup. The budget used is reported in the detail JSON.
+ *
+ * Marker wait (campaign C4): PR_GB10_SPIN_US=N (0..1000000) polls the completion marker without
+ * sleeping for up to N us before the session's usual 50 us sleep-poll; unset or 0 keeps the old
+ * wait. Any other value fails setup. Reported in the detail JSON as spin_us.
+ *
  * Labels (handoff 2026-10-05 DESIGN): algorithm=other, faithful=no, bits=1,
  * environment linux-hosted-gb10-native. Build with -DPR_GB10_MUTANT=1 only for the chip
  * test's negative control (the r == 0 fix is dropped; the oracle must catch it).
@@ -37,13 +45,48 @@
 #define GB_WAIT_MS 600000ull    /* same marker wait as the elementwise launcher (omega#198) */
 #define GB_POISON 0xffbadbadu
 #define GB_MAX_LIMIT 0xffffffffull /* kernel range: base, k0 < 2^31 */
+#define GB_BUDGET_MAX 4096u
+#define GB_ARGS 11u /* a, b, c (64-bit each) then P0..P4 */
+
+/* PR_GB10_SPIN_US or 0; UINT32_MAX on a malformed or out-of-range value. */
+static uint32_t gb_spin_us(void) {
+    const char *v = getenv("PR_GB10_SPIN_US");
+    if (!v) return 0;
+    char *end = NULL;
+    unsigned long n = strtoul(v, &end, 10);
+    if (end == v || *end != 0 || v[0] == '-' || n > OMEGA_GPU_SESSION_MAX_SPIN_US) return UINT32_MAX;
+    return (uint32_t)n;
+}
+
+/* PR_GB10_CTA_BUDGET or the I42 default; 0 on a malformed or out-of-range value. */
+static uint32_t gb_cta_budget(void) {
+    const char *v = getenv("PR_GB10_CTA_BUDGET");
+    if (!v) return GB_MAX_CTAS;
+    char *end = NULL;
+    unsigned long n = strtoul(v, &end, 10);
+    if (end == v || *end != 0 || v[0] == '-' || n == 0 || n > GB_BUDGET_MAX) return 0;
+    return (uint32_t)n;
+}
+
+/* PR_GB10_TABLE: "auto" or unset (shared-memory table when it fits), "global" (never staged);
+ * -1 on any other value. The A/B switch for the staged table (campaign C6). */
+static int gb_table_global(void) {
+    const char *v = getenv("PR_GB10_TABLE");
+    if (!v || strcmp(v, "auto") == 0) return 0;
+    if (strcmp(v, "global") == 0) return 1;
+    return -1;
+}
 
 typedef struct {
     uint64_t limit, odd;
-    uint32_t nwords, ctas, stride, lastw, tailinv;
+    uint32_t nwords, ctas, budget, stride, lastw, tailinv;
+    uint32_t spin_us;       /* marker wait spin window (campaign C4) */
+    int table_global;       /* PR_GB10_TABLE=global: never stage the table (campaign C6) */
     uint32_t root;          /* isqrt(limit) */
     uint32_t nprimes;       /* odd primes in the table of the last pass (sentinel excluded) */
     size_t table_cap;       /* entries, sentinel included */
+    uint32_t entries;       /* table entries for this limit, sentinel included (fixed by the limit) */
+    uint32_t shared_bytes;  /* 0: global-table kernel; else the staged kernel's shared memory per CTA */
     OmegaBlackwellKernel k;
     NvrmMem code, out, table;
     uint64_t diag_ns, launches;
@@ -58,6 +101,22 @@ static uint32_t isqrt_u64(uint64_t n) {
     for (uint64_t bit = 1ull << 31; bit; bit >>= 1)
         if ((r + bit) * (r + bit) <= n) r += bit;
     return (uint32_t)r;
+}
+
+/* odd primes <= root (the table the pass builds, without the sentinel) */
+static uint32_t gb_count_odd_primes(uint32_t root) {
+    uint32_t n = 0, half = root / 2 + 1;
+    uint8_t *flags = calloc(half, 1);
+    if (!flags) return 0xfffffffeu; /* makes the per-pass check fail closed */
+    for (uint32_t i = 1; i < half; i++) {
+        uint32_t p = 2 * i + 1;
+        if (p > root) break;
+        if (flags[i]) continue;
+        for (uint64_t c = (uint64_t)p * p; c <= root; c += 2ull * p) flags[c / 2] = 1;
+        n++;
+    }
+    free(flags);
+    return n;
 }
 
 static void gb_release(gb_state *s) {
@@ -80,8 +139,14 @@ static int gb_setup(void **state, uint64_t limit) {
     s->limit = limit;
     s->odd = pr_odd_count(limit);
     s->nwords = (uint32_t)((s->odd + 31) / 32);
+    s->budget = gb_cta_budget();
+    if (s->budget == 0) { fprintf(stderr, "gb10-native: PR_GB10_CTA_BUDGET must be 1..%u\n", GB_BUDGET_MAX); return -1; }
+    s->spin_us = gb_spin_us();
+    if (s->spin_us == UINT32_MAX) { fprintf(stderr, "gb10-native: PR_GB10_SPIN_US must be 0..%u\n", OMEGA_GPU_SESSION_MAX_SPIN_US); return -1; }
+    s->table_global = gb_table_global();
+    if (s->table_global < 0) { fprintf(stderr, "gb10-native: PR_GB10_TABLE must be auto or global\n"); return -1; }
     uint32_t blocks = (s->nwords + GB_THREADS - 1) / GB_THREADS;
-    s->ctas = blocks == 0 ? 1 : (blocks > GB_MAX_CTAS ? GB_MAX_CTAS : blocks);
+    s->ctas = blocks == 0 ? 1 : (blocks > s->budget ? s->budget : blocks);
     s->stride = s->ctas * GB_THREADS;
     s->lastw = s->nwords ? s->nwords - 1 : 0;
     uint32_t valid = s->nwords ? (uint32_t)(s->odd - 32ull * s->lastw) : 32; /* 1..32 */
@@ -92,8 +157,12 @@ static int gb_setup(void **state, uint64_t limit) {
         fprintf(stderr, "gb10-native: isqrt(%" PRIu64 ") = %u is wrong\n", limit, s->root); return -1; /* fail closed */
     }
     s->table_cap = (size_t)s->root / 2 + 2; /* every odd number <= root, plus the sentinel */
+    s->entries = gb_count_odd_primes(s->root) + 1;
+    /* campaign C3: stage the table in shared memory whenever it fits the QMD bound */
+    if (!s->table_global && (uint64_t)s->entries * 12 <= OMEGA_BW_QMD_MAX_SHARED_BYTES) s->shared_bytes = s->entries * 12;
+    OmegaGpuEwOp op = s->shared_bytes ? OMEGA_GPU_EW_PRIME_SIEVE_SHARED : OMEGA_GPU_EW_PRIME_SIEVE;
 
-    if (omega_gpu_elementwise_codegen_ir(OMEGA_GPU_EW_PRIME_SIEVE, PR_GB10_MUTANT, NULL, &s->k) != OMEGA_GPU_EW_OK) {
+    if (omega_gpu_elementwise_codegen_ir(op, PR_GB10_MUTANT, NULL, &s->k) != OMEGA_GPU_EW_OK) {
         fprintf(stderr, "gb10-native: kernel codegen failed\n"); return -1;
     }
     omega_gpu_session_lock();
@@ -135,16 +204,18 @@ static int gb_pass(void *state, uint64_t limit) {
     free(flags);
     tab[3 * n + 0] = 1; tab[3 * n + 1] = 0; tab[3 * n + 2] = 0xffffffffu; /* sentinel: ends every scan */
     s->nprimes = n;
+    if (n + 1 != s->entries) { fprintf(stderr, "gb10-native: %u table entries, setup counted %u\n", n + 1, s->entries); return -1; }
     __asm__ volatile("dsb sy" ::: "memory");
 
-    uint32_t args[OMEGA_BW_CBANK_MATMUL_ARGS_WORDS] = {0};
+    uint32_t args[GB_ARGS] = {0};
     args[0] = (uint32_t)s->table.va; args[1] = (uint32_t)(s->table.va >> 32);
     args[4] = (uint32_t)s->out.va;   args[5] = (uint32_t)(s->out.va >> 32);
     args[6] = s->nwords; args[7] = s->stride; args[8] = s->lastw; args[9] = s->tailinv;
+    args[10] = s->entries * 3; /* P4: table words, read by the staged kernel only */
     OmegaGpuLaunch L = {
         .code_va = s->code.va, .gpr_count = GB_GPR, .threads_x = GB_THREADS, .threads_y = 1,
         .grid_x = s->ctas, .grid_y = 1, .num_elements = s->nwords ? s->nwords : 1,
-        .args = args, .n_args = OMEGA_BW_CBANK_MATMUL_ARGS_WORDS, .timeout_ms = GB_WAIT_MS,
+        .args = args, .n_args = GB_ARGS, .timeout_ms = GB_WAIT_MS, .shared_bytes = s->shared_bytes, .spin_us = s->spin_us,
     };
     uint64_t ns = 0; uint32_t marker = 0;
     if (omega_gpu_session_launch(&L, &ns, &marker) != 0) {
@@ -171,8 +242,8 @@ static uint64_t gb_threads(void *state) { gb_state *s = state; return s ? s->str
 static int gb_detail(void *state, FILE *f) {
     gb_state *s = state;
     if (!s) return -1;
-    fprintf(f, "{\"grid\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"kernel_code_sha256\": \"",
-            s->ctas, GB_THREADS, s->nwords, s->nprimes);
+    fprintf(f, "{\"grid\": %u, \"cta_budget\": %u, \"block\": %u, \"words\": %u, \"nprimes\": %u, \"table\": \"%s\", \"shared_bytes\": %u, \"spin_us\": %u, \"kernel_code_sha256\": \"",
+            s->ctas, s->budget, GB_THREADS, s->nwords, s->nprimes, s->shared_bytes ? "shared" : "global", s->shared_bytes, s->spin_us);
     for (int i = 0; i < 32; i++) fprintf(f, "%02x", s->k.code_digest[i]);
     fprintf(f, "\", \"kernel_insns\": %zu, \"kernel_gpr\": %u, \"mutant\": %d, \"launches\": %" PRIu64
                ", \"diag_kernel_ns_total\": %" PRIu64

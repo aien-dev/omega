@@ -100,6 +100,8 @@ int main(int argc, char **argv) {
         .code_va = code.va, .gpr_count = 64, .threads_x = block, .threads_y = 1, .grid_x = grid, .grid_y = 1,
         .num_elements = nwords ? nwords : 1, .args = args, .n_args = OMEGA_BW_CBANK_MATMUL_ARGS_WORDS, .timeout_ms = 600000,
     };
+    /* PR_GB10_SPIN_US: marker wait spin window, as in gb10_native.c (campaign C4) */
+    if (getenv("PR_GB10_SPIN_US")) L.spin_us = (uint32_t)strtoul(getenv("PR_GB10_SPIN_US"), NULL, 10);
     static uint64_t dev[MAXN], wall[MAXN];
     for (int i = 0; i < n; i++) {
         uint64_t ns = 0; uint32_t marker = 0; /* elapsed_ns is added to, so reset per launch */
@@ -109,8 +111,8 @@ int main(int argc, char **argv) {
     }
     long bits = 0;
     if (sieve) { uint32_t *o = out.cpu; for (uint32_t i = 0; i < nwords; i++) bits += __builtin_popcount(o[i]); }
-    printf("DIAGNOSTIC %s launches=%d grid=%u block=%u insns=%zu limit=%" PRIu64 " words=%u base_primes=%u odd_primes_found=%ld\n",
-           argv[1], n, grid, block, k.insn_count, limit, nwords, np, bits);
+    printf("DIAGNOSTIC %s launches=%d grid=%u block=%u insns=%zu limit=%" PRIu64 " words=%u base_primes=%u odd_primes_found=%ld spin_us=%u\n",
+           argv[1], n, grid, block, k.insn_count, limit, nwords, np, bits, L.spin_us);
     stats("submit->marker2", dev, n);
     stats("host wall per launch", wall, n);
     omega_gpu_session_free(&tab); omega_gpu_session_free(&out); omega_gpu_session_free(&code);
