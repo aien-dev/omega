@@ -1,0 +1,9 @@
+CAND-3 window W1, started 2026-10-06T01:44:15Z under quietlock hold q49857-1791251055-b53601a9 (owner cand3-campaign).
+Result: INVALID (DECLARED-ATTEMPTS.md "invalid run": the program under test never started; harness defect before any test).
+Cause: the clean chip worktrees and survey checkouts (cand3_setup_trees.sh) were never created, so every lane stopped at
+cand3_ladder.sh line 25 "cd .../cand3/wt-omega-chip: No such file or directory" with exit 2 (window.out). No build ran,
+no chip work ran, no receipt exists. Lanes ladder, r11, chipwait, m18 all exit 2 at 01:44:15Z. The orchestrator's
+pre-run review read run_window.sh but did not run the setup step; that is the defect.
+This directory is kept as written; nothing in it is changed. The replacement is a new, separately declared attempt
+(DECLARED-ATTEMPTS-W2.md) with its own evidence directory.
+Sealed 2026-10-06T01:44:47Z.

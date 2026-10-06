@@ -1,0 +1,1 @@
+make build/rx_r11_aien_test

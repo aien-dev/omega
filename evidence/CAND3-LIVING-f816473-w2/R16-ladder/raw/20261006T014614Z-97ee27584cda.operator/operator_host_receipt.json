@@ -1,0 +1,17 @@
+{
+  "schema": "AIEN_R16_G6_OPERATOR_CONTROL_V1",
+  "seat": "host",
+  "seat_description": "production host program, R12 processor stand-in (not silicon)",
+  "candidate_commit": "97ee27584cda0d8eaca136f31a44293cd36c9b02",
+  "candidate_env": "97ee27584cda0d8eaca136f31a44293cd36c9b02",
+  "tree_dirty": false,
+  "binary": "rx_r13_living_host",
+  "binary_sha256": "605054a7aafaebb5482340ad8eaa7181649e832852c90eca81872258b4d857b7",
+  "phases": "startup control restart kill",
+  "held_by_gdb": true,
+  "checks": 86,
+  "failures": 0,
+  "skipped": 0,
+  "skip_reasons": [],
+  "gate": {"R16_G6_OPERATOR": "HOST_PASS_NON_SILICON"}
+}
