@@ -167,6 +167,11 @@ int main(void) {
     char home[300];
     snprintf(home, sizeof home, "%s/home", dir);
 
+    uint32_t lay[3];
+    CHECK(rxc_host_abi_layout(lay) == RXC_HOST_ABI_VERSION && lay[0] == sizeof(RxcHostInfo) &&
+          lay[1] == sizeof(RxcHostResult) && lay[2] == sizeof(RxcHostRecord), "abi layout");
+    printf("abi layout: info %u result %u record %u\n", lay[0], lay[1], lay[2]);
+
     /* ---- T1 ---- */
     RxcHostInfo i1;
     int rc;

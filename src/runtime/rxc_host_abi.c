@@ -439,3 +439,12 @@ void rxc_host_close(RxcHost *h) {
     free(h->c);
     free(h);
 }
+
+uint32_t rxc_host_abi_layout(uint32_t out[3]) {
+    if (out) {
+        out[0] = (uint32_t)sizeof(RxcHostInfo);
+        out[1] = (uint32_t)sizeof(RxcHostResult);
+        out[2] = (uint32_t)sizeof(RxcHostRecord);
+    }
+    return RXC_HOST_ABI_VERSION;
+}

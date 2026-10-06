@@ -186,6 +186,10 @@ int rxc_host_payload(RxcHost *h, uint64_t id, uint64_t *out, uint32_t max);
 /* Current state (opens the composition if not yet open). */
 int rxc_host_info(RxcHost *h, RxcHostInfo *info);
 
+/* Layout check for bindings: out[0..3) = sizeof RxcHostInfo, RxcHostResult,
+ * RxcHostRecord; returns RXC_HOST_ABI_VERSION. */
+uint32_t rxc_host_abi_layout(uint32_t out[3]);
+
 /* Close the composition and its authority; frees the handle. NULL is a no-op. */
 void rxc_host_close(RxcHost *h);
 
