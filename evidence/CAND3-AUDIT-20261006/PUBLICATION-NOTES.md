@@ -59,3 +59,13 @@ R15 was not attempted (A7 NOT_RUN, no R15 lane in `00-declared/window.txt`). R16
   and for email addresses other than noreply. Hits: "token=0x..." are GPU work-submit tokens in chip logs; "secret" is in R16 mutant and operator test names; "cortex" is the
   Cortex-X925/A725 CPU names, `rx_cortex.c` and crate names; "password" only in "passwordless" sudo preflight text; "tokenizers" in cargo logs. Email addresses appear only as crate
   author fields in `CAND3-BUILD-A/sc-1.log`, `sc-2.log` and `CAND3-BUILD-B/sc-1.log`, `sc-2.log` (cargo metadata), none from this project's account. No vault value found. Home-directory paths remain, as in earlier evidence.
+
+## Added by the orchestrator after review (2026-10-06): the map-only harness check is in the record
+
+The UNVERIFIED tag above on "97ee275 is a map-only descendant of f816473" can be checked from the published files:
+`CAND3-LIVING-f816473-w2/00-declared/cand3_ladder.sh` defines `guard()`, which stops the lane with exit 2 unless the omega
+worktree is at 97ee275, clean, and `git diff f816473 HEAD` excluding `spec/r16-orchestrator-retirement-map.md` and `.crumb`
+files is empty. Every lane calls `guard` before its first step and again after its last; all four W2 lanes reached their
+last line ("ladder done", "r11 done", "chipwait done", "m18 done" in `LADDER-SUMMARY.txt`) and ended with exit 0
+(`00-declared/window.txt`). The orchestrator also ran the same diff by hand before declaring W2 (empty). The claim rests on
+the script and its exit codes; the diff output itself is not a file here.
