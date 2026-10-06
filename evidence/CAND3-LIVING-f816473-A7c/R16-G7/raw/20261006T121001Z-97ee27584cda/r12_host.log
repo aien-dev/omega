@@ -1,0 +1,18 @@
+aienos_lock_source: /home/drakestapleton/workspace/cand3-campaign/cand3/wt-omega-chip/build/aienos-authority/bbad5e4250e57f8cbd1be4cf1390109aa65ef92c matches bbad5e4250e57f8cbd1be4cf1390109aa65ef92c for native/capability
+./build/rx_r12_resident_test
+[*] registration shape
+[*] admission, then A -> seat add -> B -> processor -> C
+[*] input capability revoked before the seat reads
+[*] output capability revoked after the seat wrote, before publication
+[*] stale generation
+[*] output generation moved after the claim
+[*] hostile input window
+[*] result window that is not the sum
+[*] unplaced objects
+[*] forged capability against the native authority
+[*] seat lost holding a claim: recorded, restored, released once, retried
+[*] seat lost without retry: the activation fails, the next one runs
+[*] R8 slot renewed: the next claim presents the new grant
+[*] operator emergency stop: a seat result under a stop is refused, resume reruns it
+checks 216 failures 0
+receipt: build/qual-runs/20261006T121528Z-97ee27584cda/R12/rx_resident_host_receipt.json

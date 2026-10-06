@@ -1,0 +1,4 @@
+70824bb8b6c116a72a047c61e424169338b7dc8eb0ded9c8b65260e73ecdeec9  /home/drakestapleton/workspace/cand3-campaign/cand3/DECLARED-ATTEMPT-A7c.md
+cdbff59d5ac40acf90da47ada9f4e7d985957db4a6d1a3828f98fdbe14013005  /home/drakestapleton/workspace/cand3-campaign/cand3/cand3_r15c.sh
+0b7d1e6a1d30e62b99980fd005df17030160d049670c7df70e36705553c7a60e  /home/drakestapleton/workspace/cand3-campaign/cand3/cand3_env.sh
+42f56ba74a0f87d56e2442438d44b3e0bba5ca28109edfb2aed10ffdcdb5036b  /home/drakestapleton/workspace/cand3-campaign/cand3/cand3_ladder.sh

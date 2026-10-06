@@ -1,0 +1,44 @@
+== preflight 2026-10-06T11:39:38Z: 20 s sustained on cpu 7
+cpu0 3315
+cpu1 3164
+cpu2 2895
+cpu3 2972
+cpu4 2948
+cpu5 4985
+cpu6 4057
+cpu7 3604
+cpu8 4201
+cpu9 3435
+cpu10 2776
+cpu11 2832
+cpu12 2774
+cpu13 2743
+cpu14 2669
+cpu15 5081
+cpu16 4033
+cpu17 3273
+cpu18 3219
+cpu19 3619
+cpu0 3324
+cpu1 3173
+cpu2 2904
+cpu3 2996
+cpu4 2978
+cpu5 4992
+cpu6 4069
+cpu7 5605
+cpu8 4215
+cpu9 3444
+cpu10 2800
+cpu11 2860
+cpu12 2794
+cpu13 2762
+cpu14 2698
+cpu15 5102
+cpu16 4059
+cpu17 3285
+cpu18 3237
+cpu19 3637
+per-second GHz: 3.895 3.898 3.897 3.897 3.897 3.897 3.898 3.898 3.897 3.897 3.897 3.897 3.898 3.897 3.897 3.897 3.897 3.897 3.897 3.896
+median seconds 13-20: 3.897 GHz (cut-off 3.75)
+result: X925 sustains its clock

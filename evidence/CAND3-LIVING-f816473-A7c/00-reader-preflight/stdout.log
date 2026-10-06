@@ -1,0 +1,1 @@
+energy preflight ok: /sys/class/hwmon/hwmon3 pkg 9877308000 -> 9885644000 uJ over 3 samples, 5 energy + 5 power labels verified

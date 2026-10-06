@@ -1,0 +1,560 @@
+{
+  "R16_ORCHESTRATOR_RETIRED": "NOT_RUN",
+  "aegis_runtime_commit": "f4e870953a466bb1cf68f1d88285929024cf1ba9",
+  "aien_sovereign_core_commit": "80e071a3ef700dbe31b1b081a957eebdcbf5ffc3",
+  "aienos_commit": "bbad5e4250e57f8cbd1be4cf1390109aa65ef92c",
+  "aienos_lock": "bbad5e4250e57f8cbd1be4cf1390109aa65ef92c",
+  "candidate_bound": true,
+  "candidate_commit": "97ee27584cda0d8eaca136f31a44293cd36c9b02",
+  "correctness_reruns": {
+    "R1": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R10": {
+      "status": "PASS",
+      "target": "test-r10"
+    },
+    "R11": {
+      "status": "NOT_RUN",
+      "target": "test-r11"
+    },
+    "R12_host": {
+      "status": "PASS",
+      "target": "test-r12"
+    },
+    "R12_silicon": {
+      "status": "PASS",
+      "target": "test-r12-silicon"
+    },
+    "R13_host": {
+      "status": "PASS",
+      "target": "test-r13-host"
+    },
+    "R13_silicon": {
+      "status": "PASS",
+      "target": "test-r13-silicon"
+    },
+    "R14_host": {
+      "status": "PASS",
+      "target": "test-r14-host"
+    },
+    "R14_silicon": {
+      "status": "PASS",
+      "target": "test-r14-silicon"
+    },
+    "R15_g7_host": {
+      "status": "PASS",
+      "target": "test-r15-g7-host"
+    },
+    "R15_parity_host": {
+      "status": "PASS",
+      "target": "test-r15-parity-host"
+    },
+    "R15_parity_silicon": {
+      "status": "PASS",
+      "target": "test-r15-parity-silicon"
+    },
+    "R15_receipt": {
+      "status": "PASS",
+      "target": "test-r15-receipt"
+    },
+    "R2": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R3": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R4": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R5": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R6": {
+      "status": "PASS",
+      "target": "test-r3"
+    },
+    "R7": {
+      "status": "PASS",
+      "target": "test-r7"
+    },
+    "R8": {
+      "status": "PASS",
+      "target": "test-r8"
+    },
+    "R9": {
+      "status": "PASS",
+      "target": "test-r9"
+    }
+  },
+  "dry_run": false,
+  "g6_items": [
+    {
+      "basis": "Spec lines 182-183 name M19 omega_world_* as the known-good fallback (class C): the spec own mapping, not a proxy. Exercised by test-m19 (silicon, N/N gates). Does not test falling back from the reaction world to the M19 world.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/omega_accelerator_world.c",
+          "source": "omega_tree",
+          "symbol": "omega_world_drain"
+        },
+        {
+          "defined": true,
+          "file": "src/omega_accelerator_world.c",
+          "source": "omega_tree",
+          "symbol": "omega_world_init"
+        }
+      ],
+      "item": "known_good_fallback_present",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "M19",
+          "seat": "silicon",
+          "status": "PASS",
+          "target": "test-m19"
+        }
+      ]
+    },
+    {
+      "basis": "PROXY: the spec names no single recovery symbol; rx_gen_recover is the generation-store crash recovery chosen here. R9 stops after each persistence step and R14 host recovers; boot or repair recovery outside omega is not covered.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/runtime/rx_generation.c",
+          "source": "omega_tree",
+          "symbol": "rx_gen_recover"
+        }
+      ],
+      "item": "recovery_path_present",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "R9",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r9"
+        },
+        {
+          "name": "R14_host",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r14-host"
+        }
+      ]
+    },
+    {
+      "basis": "Spec line 182 classes omegatool --run-*-gates as B (deterministic maintenance). PARTIAL: only the M19 runner is exercised (by test-m19); the other --run-*-gates entries are not.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/omega_world_gates.c",
+          "source": "omega_tree",
+          "symbol": "run_m19_gates"
+        },
+        {
+          "defined": true,
+          "file": "tools/omegatool.c",
+          "source": "omega_tree",
+          "symbol": "--run-m19-gates"
+        }
+      ],
+      "item": "deterministic_maintenance_controls_present",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "M19",
+          "seat": "silicon",
+          "status": "PASS",
+          "target": "test-m19"
+        }
+      ]
+    },
+    {
+      "basis": "Spec C3: the native C library at aienos.lock is the sole authoritative root. Checks that source as immutable blobs of the FULL locked commit (tools/aienos_lock_source.sh; identity in g6_lock_source) plus the omega binding; NOT_RUN if no repository holds the locked commit, MISSING_IMPLEMENTATION if the locked commit was read and lacks a symbol. R7 compares native authority with the Linux oracle.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/runtime/rx_native_bind.c",
+          "source": "omega_tree",
+          "symbol": "rx_world_init_native"
+        },
+        {
+          "blob": "302fb536e7e29c812cba76aa4b432a0a0f93a9e3",
+          "defined": true,
+          "file": "native/capability/aienos_capability.c",
+          "source": "aienos_lock_commit",
+          "symbol": "aienos_cap_validate"
+        },
+        {
+          "blob": "302fb536e7e29c812cba76aa4b432a0a0f93a9e3",
+          "defined": true,
+          "file": "native/capability/aienos_capability.c",
+          "source": "aienos_lock_commit",
+          "symbol": "aienos_cap_mint"
+        }
+      ],
+      "item": "trusted_capability_root_present",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "R7",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r7"
+        },
+        {
+          "name": "R12_host",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r12"
+        }
+      ]
+    },
+    {
+      "basis": "Map row OM-022 and spec line 659 name rx_generation.c as the protected generation mechanism; rx_gen_propose is the entry chosen here (PROXY for the symbol). R9 barrier and R13 host promote.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/runtime/rx_generation.c",
+          "source": "omega_tree",
+          "symbol": "rx_gen_propose"
+        }
+      ],
+      "item": "generation_mechanism_present",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "R9",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r9"
+        },
+        {
+          "name": "R13_host",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r13-host"
+        }
+      ]
+    },
+    {
+      "basis": "PROXY: the spec names no evidence symbol; omega_evidence_write_digest (content-addressed evidence writer) chosen here. R15 receipt test and R9 evidence blob exercise it indirectly.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/omega_evidence.c",
+          "source": "omega_tree",
+          "symbol": "omega_evidence_write_digest"
+        }
+      ],
+      "item": "evidence_present",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "R15_receipt",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r15-receipt"
+        },
+        {
+          "name": "R9",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r9"
+        }
+      ]
+    },
+    {
+      "basis": "PROXY: R9 exercises rx_gen_recover (same routine as recovery_path_present, not independent). PASS means the R9 barrier test passed in this run.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/runtime/rx_generation.c",
+          "source": "omega_tree",
+          "symbol": "rx_gen_recover"
+        }
+      ],
+      "item": "r9_crash_recovery_passing",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "R9",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r9"
+        }
+      ]
+    },
+    {
+      "basis": "PROXY: omega_verify_v0_structural is the verifier R10 reaches through rx_omega.c; R10 pass in this run is the evidence.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/omega_verify.c",
+          "source": "omega_tree",
+          "symbol": "omega_verify_v0_structural"
+        }
+      ],
+      "item": "r10_verifier_passing",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "R10",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r10"
+        }
+      ]
+    },
+    {
+      "basis": "rx_resident_seat_lost is the seat-loss handler (spec/r12-resident-seat.md, Seat loss). R12 host and silicon exercise it; rx_gpu_seat_kill is only the test hook and is not counted here.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/runtime/rx_world.c",
+          "source": "omega_tree",
+          "symbol": "rx_resident_seat_lost"
+        }
+      ],
+      "item": "r12_seat_loss_handling_passing",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "R12_host",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r12"
+        },
+        {
+          "name": "R12_silicon",
+          "seat": "silicon",
+          "status": "PASS",
+          "target": "test-r12-silicon"
+        }
+      ]
+    },
+    {
+      "basis": "PROXY: fn_restore (generation.restore reaction) is one R14 recovery path chosen here; R14 host and silicon exercise the recovery runs.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/runtime/rx_living.c",
+          "source": "omega_tree",
+          "symbol": "fn_restore"
+        }
+      ],
+      "item": "r14_recovery_paths_passing",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "R14_host",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r14-host"
+        },
+        {
+          "name": "R14_silicon",
+          "seat": "silicon",
+          "status": "PASS",
+          "target": "test-r14-silicon"
+        }
+      ]
+    },
+    {
+      "basis": "The runtime control (spec/r16-operator-emergency-stop.md: rx_world_emergency_stop / _resume; authority = enrolled caller credential plus an RX_WORLD_RES_CONTROL capability with the privileged RX_RIGHT_EPOCH right, never a reaction subject; a durable sealed OPERATOR_HALT mark that the generation store obeys and a restarted world restores) and its operator entry point in the production R13 program (docs/r16-operator-control.md: owner-only socket rx_operator_open, per-world credential and capability, generation store directory as the durable halt directory, restored stop before any work). Presence of these definitions proves nothing by itself: the item is operated only by execution. RX_EMERGENCY (host, in-process) and R12_host t_emergency_stop cover the runtime; R16_OP_HOST (test-r16-operator-host) starts the production host program and drives stop, status, resume, revoke and shutdown from outside through build/rx_operator, checking replies, the state directory and the crumb-log audit the program prints (no COMMIT or EXTERNAL under a stop); R16_OP_MUTANTS rebuilds the production program from mutated copies (wiring missing, wiring in a comment, unused call, handler disconnected, success reply without a transition, unauthorized resume accepted, and others) and requires the test to fail on each; R16_OP_SILICON is the same test on build/rx_r13_living_silicon (resident GB10 seat, no SIGKILL phase). Host and silicon are separate tests: the item is not PASS without the silicon run. Not covered: effects already outside the world when the stop lands (spec section 7.4), another process of the same uid deleting the mark while no program runs (spec section 7.3).",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/runtime/rx_world.c",
+          "source": "omega_tree",
+          "symbol": "rx_world_emergency_stop"
+        },
+        {
+          "defined": true,
+          "file": "src/runtime/rx_world.c",
+          "source": "omega_tree",
+          "symbol": "rx_world_emergency_resume"
+        },
+        {
+          "defined": true,
+          "file": "src/runtime/rx_world.c",
+          "source": "omega_tree",
+          "symbol": "rx_world_operator_authorize"
+        },
+        {
+          "defined": true,
+          "file": "src/runtime/rx_generation.c",
+          "source": "omega_tree",
+          "symbol": "rx_gen_promote"
+        },
+        {
+          "defined": true,
+          "file": "src/runtime/rx_operator.c",
+          "source": "omega_tree",
+          "symbol": "rx_operator_open"
+        },
+        {
+          "defined": true,
+          "file": "tests/runtime/rx_r13_living.c",
+          "source": "omega_tree",
+          "symbol": "operator_open"
+        },
+        {
+          "defined": true,
+          "file": "tests/runtime/rx_r13_living.c",
+          "source": "omega_tree",
+          "symbol": "operator_audit"
+        }
+      ],
+      "item": "operator_emergency_controls_passing",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "RX_EMERGENCY",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-rx-emergency"
+        },
+        {
+          "name": "R12_host",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r12"
+        },
+        {
+          "name": "R16_OP_HOST",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r16-operator-host"
+        },
+        {
+          "name": "R16_OP_MUTANTS",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r16-operator-mutants"
+        },
+        {
+          "name": "R16_OP_SILICON",
+          "seat": "silicon",
+          "status": "PASS",
+          "target": "test-r16-operator-silicon"
+        }
+      ]
+    },
+    {
+      "basis": "Spec line 183 names rx_seq_reference as class D reference oracle. R15 parity host and silicon compare the reaction path with it.",
+      "implementation": [
+        {
+          "defined": true,
+          "file": "src/runtime/rx_seq_reference.c",
+          "source": "omega_tree",
+          "symbol": "rx_seq_pulse"
+        }
+      ],
+      "item": "benchmark_reference_paths_seq_passing",
+      "present": "true",
+      "status": "PASS",
+      "tests": [
+        {
+          "name": "R15_parity_host",
+          "seat": "host",
+          "status": "PASS",
+          "target": "test-r15-parity-host"
+        },
+        {
+          "name": "R15_parity_silicon",
+          "seat": "silicon",
+          "status": "PASS",
+          "target": "test-r15-parity-silicon"
+        }
+      ]
+    }
+  ],
+  "g6_lock_source": {
+    "aienos_lock": "bbad5e4250e57f8cbd1be4cf1390109aa65ef92c",
+    "commit_tree": "f15a9ff6430d27f5201ffa296abee15bafc6c2e3",
+    "repo": "/home/drakestapleton/workspace/r16-survey/aienos",
+    "source": "git-object",
+    "status": "available"
+  },
+  "g8_scope": "receipt bound to the candidate, clean tree, named by its own SHA-256; the merge commit is a separate step not checked here",
+  "gate": "NOT_RUN",
+  "gates": {
+    "R16-G1": "PASS",
+    "R16-G2": "PASS",
+    "R16-G3": "PASS",
+    "R16-G4": "PASS",
+    "R16-G5": "PASS",
+    "R16-G6": "PASS",
+    "R16-G7": "NOT_RUN",
+    "R16-G8": "NOT_RUN"
+  },
+  "legacy_cannot_bypass_authority_test": "PASS",
+  "legacy_orchestrators_disabled_test": "PASS",
+  "not_claimed": [
+    "Retirement of the aien-sovereign-core LLM request loop (section 3.1, Q1)",
+    "Removal of any Rust code (section 3.1, Q2); the Rust loops still run if started by hand outside the AIEN production path",
+    "Retirement or code removal of the aien-sovereign-core aien-cli operator tool loops (13 rows) and spark-dream idle-time cycle loop (1 row); classified as class A (retired by non-use), their code is not removed under section 3.1 Q2",
+    "Any gate or field written NOT_RUN or MISSING_IMPLEMENTATION: no check or implementation was found for it, or its target was not run in this run"
+  ],
+  "operator_control": {
+    "host": {
+      "mutants": "PASS",
+      "receipt": "operator_host_receipt.json",
+      "seat": "host",
+      "status": "PASS"
+    },
+    "silicon": {
+      "receipt": "operator_silicon_receipt.json",
+      "seat": "silicon",
+      "status": "PASS"
+    }
+  },
+  "physics_commit": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf",
+  "physics_lock": "6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf",
+  "production_entry_point": "docs/r16-production-entry-point.md",
+  "protected_surfaces_kept": {
+    "benchmark_reference_paths_seq_passing": true,
+    "deterministic_maintenance_controls_present": true,
+    "evidence_present": true,
+    "generation_mechanism_present": true,
+    "known_good_fallback_present": true,
+    "operator_emergency_controls_passing": true,
+    "r10_verifier_passing": true,
+    "r12_seat_loss_handling_passing": true,
+    "r14_recovery_paths_passing": true,
+    "r9_crash_recovery_passing": true,
+    "recovery_path_present": true,
+    "trusted_capability_root_present": true
+  },
+  "r15_acceptance_still_passing": true,
+  "raw_digest_note": "sha256 of SHA256SUMS over the raw directory",
+  "raw_directory": "/home/drakestapleton/workspace/evidence-out/CAND3-LIVING-f816473-A7c/R16-G7/raw/20261006T121001Z-97ee27584cda",
+  "raw_directory_digest_sha256": "a75069239ce24c008ac8429e912a11e3df2741c210fb3b1acdae71208a613ef7",
+  "remaining_central_loop_count": 0,
+  "remaining_unclassified_semantic_loop_count": 0,
+  "run_commit": "97ee27584cda0d8eaca136f31a44293cd36c9b02",
+  "schema": "AIEN_RX_R16_ORCHESTRATOR_RETIRED_V1",
+  "schema_revision": 2,
+  "scope": "ADR 0016 resident reaction architecture migration; sovereign-core LLM request loop: not retired, still in use",
+  "silicon_observed": true,
+  "timestamp_utc": "2026-10-06T12:23:45Z",
+  "tree_dirty": false
+}
