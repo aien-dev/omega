@@ -69,3 +69,15 @@ files is empty. Every lane calls `guard` before its first step and again after i
 last line ("ladder done", "r11 done", "chipwait done", "m18 done" in `LADDER-SUMMARY.txt`) and ended with exit 0
 (`00-declared/window.txt`). The orchestrator also ran the same diff by hand before declaring W2 (empty). The claim rests on
 the script and its exit codes; the diff output itself is not a file here.
+
+## Correction (2026-10-06, after the independent reconstruction): three mutant FAIL receipts, not two
+
+`CAND3-LIVING-f816473-w2/CLAIM-INDEX.md` limit 1 names two R13 receipts with gate FAIL written by mutated copies. The
+independent reconstruction found a third, and the orchestrator confirmed it: `qual-runs-after-R13/20261006T015915Z-97ee27584cda/R13/rx_living_receipt.json`
+(and the same run under `qual-runs-after-R16/`), gate FAIL, argus OBSERVED, test binary 5ff99c0cb0ad..., not a production binary
+(605054a7..., 9f48df86...), written at 01:59:15Z inside the mutant run (01:55:36Z to 02:00:44Z). The full list is therefore
+015915Z (5ff99c0c...), 015956Z (4259b1f7...), 020018Z (1c612eef...). CLAIM-INDEX.md is left as written; this note corrects
+its count. No verdict changes: none of the three is a result of the candidate, and the reconstruction found that none
+contradicts a PASS. Reconstruction result: 13 of 14 rows agree; the one disagreement is this count.
+Also recorded by the reconstruction: `sha256sum -c` of each `CHIPWAIT/campaign/run-00N/hashes.sha256` fails for the three
+CHIPWAIT binaries because those ELF files are not published (`excluded-binaries.txt` lists them with their digests).
