@@ -25,6 +25,8 @@ while [ $# -gt 0 ]; do
     shift
 done
 n=${id#run-}; n=$((10#$n))
+# STUB_CLEAN=1: what m19r_qualify.sh does to build/ (make clean), on CHIPWAIT_BUILD_DIR.
+[ "${STUB_CLEAN:-0}" = 1 ] && rm -rf "$CHIPWAIT_BUILD_DIR"
 [ -e "$root/campaign.json" ] && echo "$id saw campaign.json" >> "$root/../stub-order.log" ||
     echo "$id NO campaign.json" >> "$root/../stub-order.log"
 echo "stub stdout $id"; echo "stub stderr $id" >&2
@@ -38,6 +40,8 @@ printf '{"status":"%s"}\n' "$s" > "$root/$id/verdict.json"
 STUBEOF
 chmod +x "$STUB"
 export CHIPWAIT_QUALIFY=$STUB
+# The build directory the lane receipt guard inspects (never the real build/ here).
+export CHIPWAIT_BUILD_DIR=$TMP/build; unset WINDOW_LANE_OUT
 S40=$(printf 'a%.0s' $(seq 40)); P40=$(printf 'b%.0s' $(seq 40))
 run() { # run <dir> [extra args]; sets rc
     local d=$1; shift
@@ -94,6 +98,34 @@ check "missing candidate" '"$CW" --physics-candidate x --physics-dir y --campaig
 check "unknown flag" '"$CW" --bogus > /dev/null 2>&1; [ $? = 2 ]'
 check "error text on stderr" '"$CW" --runs 0 2>&1 >/dev/null | grep -q usage'
 check "bad usage created no campaign dir" '[ ! -e "$TMP/b1" ] && [ ! -e "$TMP/b2" ]'
+
+echo "lane receipt guard (omega #315): R11 evidence is archived before the make-clean lane"
+B=$CHIPWAIT_BUILD_DIR; WD=$TMP/window
+mkdir -p "$B/qual-runs/r16/R11" "$B/qual-runs/r11/R11"
+printf '{"gate":"PASS","from":"R16 ladder rung"}\n' > "$B/qual-runs/r16/R11/rx_aien_faculty_receipt.json"
+printf '{"gate":"PASS","from":"r11 lane"}\n' > "$B/qual-runs/r11/R11/rx_aien_faculty_receipt.json"
+s16=$(sha256sum "$B/qual-runs/r16/R11/rx_aien_faculty_receipt.json" | cut -c1-64)
+s11=$(sha256sum "$B/qual-runs/r11/R11/rx_aien_faculty_receipt.json" | cut -c1-64)
+c=$TMP/g1; STUB_CLEAN=1 run "$c"
+check "no WINDOW_LANE_OUT, R11 receipts in build: refused (exit 2)" '[ $rc = 2 ]'
+check "refusal names the R11 receipt" 'grep -q "REFUSED: lane chipwait would clean .* R11 receipt" "$TMP/err.log"'
+check "refused before anything ran: no campaign dir, receipts intact" '[ ! -e "$c" ] && [ -s "$B/qual-runs/r16/R11/rx_aien_faculty_receipt.json" ] && [ -s "$B/qual-runs/r11/R11/rx_aien_faculty_receipt.json" ]'
+( . "$HERE/tools/window_lane_guard.sh"; wl_begin "$WD" r11; wl_r11_archive "$WD" "$B" )
+c=$TMP/g2; WINDOW_LANE_OUT=$WD STUB_CLEAN=1 run "$c"
+check "only the newest R11 receipt archived: still refused" '[ $rc = 2 ] && [ ! -e "$c" ] && [ -d "$B" ]'
+( . "$HERE/tools/window_lane_guard.sh"; wl_begin "$WD" ladder )
+( . "$HERE/tools/window_lane_guard.sh"; wl_r11_archive_all "$WD" "$B" )
+c=$TMP/g3; WINDOW_LANE_OUT=$WD STUB_CLEAN=1 run "$c"
+check "a pending ladder lane is refused by name" '[ $rc = 2 ] && grep -q "lane ladder has an unarchived receipt" "$TMP/err.log"'
+( . "$HERE/tools/window_lane_guard.sh"; wl_no_receipt "$WD" ladder )
+c=$TMP/g4; WINDOW_LANE_OUT=$WD STUB_CLEAN=1 run "$c"
+check "everything archived: the campaign runs (exit 0)" '[ $rc = 0 ] && [ "$(verdict "$c")" = PASS ]'
+check "the campaign's clean removed build/" '[ ! -e "$B" ]'
+check "both R11 receipts survive under their sha256 names" 'cmp -s "$WD/R11-living/rx_aien_faculty_receipt.$s16.json" <(printf "{\"gate\":\"PASS\",\"from\":\"R16 ladder rung\"}\n") && cmp -s "$WD/R11-living/rx_aien_faculty_receipt.$s11.json" <(printf "{\"gate\":\"PASS\",\"from\":\"r11 lane\"}\n")'
+mkdir -p "$B/qual-runs/r11/R11"; printf '{"gate":"FAIL","from":"a later r11 run"}\n' > "$B/qual-runs/r11/R11/rx_aien_faculty_receipt.json"
+c=$TMP/g5; WINDOW_LANE_OUT=$WD STUB_CLEAN=1 run "$c"
+check "a new, different R11 receipt is not covered by an old archive: refused" '[ $rc = 2 ] && [ ! -e "$c" ] && [ -s "$B/qual-runs/r11/R11/rx_aien_faculty_receipt.json" ]'
+rm -rf "$B"
 
 echo "nothing deleted"
 find "$TMP" -type f | sort > "$TMP/files.before"
