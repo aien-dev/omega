@@ -1,0 +1,10 @@
+## negative_control (fd limit 4: the loader runs, /dev/nvidiactl cannot be opened)
+PROBE label=negative_control pid=2700688 rc=CHIP_FAIL stage="nvrm_open: open control nodes errno 24" first_call_ms=0.1 chip_us=0.0 calls_ok=0/1 opens=0
+negative_control exit=1 (must be non-zero with a named stage)
+## baseline N=10
+baseline: failures 0 / 10
+## back_to_back N=10
+back_to_back: failures 0 / 10
+## overlap N=10
+overlap: failures 0 / 10
+PROBE_GPU_OPEN: negative_control_exit=1 first_call_failures=0/30 (details /home/drakestapleton/workspace/omega-reconv/evidence/gpu-reconv-308/T3/FB1-CUT4B-0a1812f/probe/failures.txt)

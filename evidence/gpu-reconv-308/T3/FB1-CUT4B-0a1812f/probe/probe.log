@@ -1,0 +1,49 @@
+## negative_control (fd limit 4: the loader runs, /dev/nvidiactl cannot be opened)
+PROBE label=negative_control pid=2700688 rc=CHIP_FAIL stage="nvrm_open: open control nodes errno 24" first_call_ms=0.1 chip_us=0.0 calls_ok=0/1 opens=0
+negative_control exit=1 (must be non-zero with a named stage)
+## baseline N=10
+PROBE label=baseline#1 pid=2700695 rc=OK stage="-" first_call_ms=27.5 chip_us=112.5 calls_ok=1/1 opens=1
+PROBE label=baseline#2 pid=2700699 rc=OK stage="-" first_call_ms=27.6 chip_us=109.8 calls_ok=1/1 opens=1
+PROBE label=baseline#3 pid=2700704 rc=OK stage="-" first_call_ms=29.3 chip_us=110.2 calls_ok=1/1 opens=1
+PROBE label=baseline#4 pid=2700717 rc=OK stage="-" first_call_ms=29.5 chip_us=219.8 calls_ok=1/1 opens=1
+PROBE label=baseline#5 pid=2700723 rc=OK stage="-" first_call_ms=28.4 chip_us=110.7 calls_ok=1/1 opens=1
+PROBE label=baseline#6 pid=2700727 rc=OK stage="-" first_call_ms=27.4 chip_us=112.2 calls_ok=1/1 opens=1
+PROBE label=baseline#7 pid=2700731 rc=OK stage="-" first_call_ms=27.6 chip_us=109.3 calls_ok=1/1 opens=1
+PROBE label=baseline#8 pid=2700735 rc=OK stage="-" first_call_ms=28.1 chip_us=112.3 calls_ok=1/1 opens=1
+PROBE label=baseline#9 pid=2700741 rc=OK stage="-" first_call_ms=28.3 chip_us=113.4 calls_ok=1/1 opens=1
+PROBE label=baseline#10 pid=2700757 rc=OK stage="-" first_call_ms=27.3 chip_us=109.1 calls_ok=1/1 opens=1
+baseline: failures 0 / 10
+## back_to_back N=10
+PROBE label=back_to_back#1 pid=2700766 rc=OK stage="-" first_call_ms=29.6 chip_us=212.7 calls_ok=1/1 opens=1
+PROBE label=back_to_back#2 pid=2700776 rc=OK stage="-" first_call_ms=27.2 chip_us=113.6 calls_ok=1/1 opens=1
+PROBE label=back_to_back#3 pid=2700781 rc=OK stage="-" first_call_ms=27.5 chip_us=111.6 calls_ok=1/1 opens=1
+PROBE label=back_to_back#4 pid=2700784 rc=OK stage="-" first_call_ms=27.3 chip_us=112.9 calls_ok=1/1 opens=1
+PROBE label=back_to_back#5 pid=2700787 rc=OK stage="-" first_call_ms=28.9 chip_us=113.0 calls_ok=1/1 opens=1
+PROBE label=back_to_back#6 pid=2700790 rc=OK stage="-" first_call_ms=27.2 chip_us=113.6 calls_ok=1/1 opens=1
+PROBE label=back_to_back#7 pid=2700793 rc=OK stage="-" first_call_ms=27.7 chip_us=113.8 calls_ok=1/1 opens=1
+PROBE label=back_to_back#8 pid=2700796 rc=OK stage="-" first_call_ms=29.3 chip_us=114.6 calls_ok=1/1 opens=1
+PROBE label=back_to_back#9 pid=2700799 rc=OK stage="-" first_call_ms=26.6 chip_us=111.7 calls_ok=1/1 opens=1
+PROBE label=back_to_back#10 pid=2700802 rc=OK stage="-" first_call_ms=28.4 chip_us=109.6 calls_ok=1/1 opens=1
+back_to_back: failures 0 / 10
+## overlap N=10
+PROBE label=overlap#1 pid=2700814 rc=OK stage="-" first_call_ms=27.8 chip_us=213.1 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700810 rc=OK stage="-" first_call_ms=29.3 chip_us=211.4 calls_ok=1/1 opens=1
+PROBE label=overlap#2 pid=2700819 rc=OK stage="-" first_call_ms=27.4 chip_us=213.2 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700817 rc=OK stage="-" first_call_ms=27.7 chip_us=110.2 calls_ok=1/1 opens=1
+PROBE label=overlap#3 pid=2700826 rc=OK stage="-" first_call_ms=29.6 chip_us=220.7 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700824 rc=OK stage="-" first_call_ms=29.2 chip_us=108.4 calls_ok=1/1 opens=1
+PROBE label=overlap#4 pid=2700834 rc=OK stage="-" first_call_ms=29.5 chip_us=212.2 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700832 rc=OK stage="-" first_call_ms=28.9 chip_us=109.5 calls_ok=1/1 opens=1
+PROBE label=overlap#5 pid=2700839 rc=OK stage="-" first_call_ms=29.8 chip_us=210.7 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700837 rc=OK stage="-" first_call_ms=27.1 chip_us=108.4 calls_ok=1/1 opens=1
+PROBE label=overlap#6 pid=2700844 rc=OK stage="-" first_call_ms=28.3 chip_us=212.8 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700842 rc=OK stage="-" first_call_ms=27.0 chip_us=107.9 calls_ok=1/1 opens=1
+PROBE label=overlap#7 pid=2700851 rc=OK stage="-" first_call_ms=28.2 chip_us=211.1 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700849 rc=OK stage="-" first_call_ms=27.1 chip_us=108.5 calls_ok=1/1 opens=1
+PROBE label=overlap#8 pid=2700865 rc=OK stage="-" first_call_ms=29.8 chip_us=222.2 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700854 rc=OK stage="-" first_call_ms=27.1 chip_us=110.1 calls_ok=1/1 opens=1
+PROBE label=overlap#9 pid=2700870 rc=OK stage="-" first_call_ms=29.4 chip_us=209.6 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700868 rc=OK stage="-" first_call_ms=27.1 chip_us=108.8 calls_ok=1/1 opens=1
+PROBE label=overlap#10 pid=2700887 rc=OK stage="-" first_call_ms=29.5 chip_us=214.8 calls_ok=1/1 opens=1
+PROBE label=holder pid=2700885 rc=OK stage="-" first_call_ms=27.2 chip_us=110.1 calls_ok=1/1 opens=1
+overlap: failures 0 / 10

@@ -2246,6 +2246,17 @@ $(GPU_EW_TEST): tests/gpu_elementwise_test.c src/omega_gpu_elementwise_api.h $(O
 test-gpu-elementwise: $(GPU_EW_TEST)
 	./$(GPU_EW_TEST) --host-only
 
+# omega #308: structured warp reconvergence (BSSY/BSYNC regions). test-gpu-reconv is
+# host-only (encoder goldens, region bookkeeping, refusals, nvdisasm listing, every probe
+# kernel through the SIMT warp simulator tests/bw_warp_sim.h against the oracle, mutation
+# controls); the chip gate is tools/run_gpu_reconv_chip.sh.
+.PHONY: test-gpu-reconv
+GPU_RECONV_TEST = $(OUT_DIR)/gpu_reconv_test
+$(GPU_RECONV_TEST): tests/gpu_reconv_test.c tests/bw_warp_sim.h src/omega_gpu_elementwise_api.h src/omega_bw_reconv.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -Itests -o $@ tests/gpu_reconv_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+test-gpu-reconv: $(GPU_RECONV_TEST)
+	./$(GPU_RECONV_TEST) --host-only
+
 # FB-1 cut 5: native gqa_attention (f32 KV) and paged_attention (bf16 KV, + batch).
 # test-gpu-attention runs host-only (refusals, codegen, nvdisasm listing) and then the
 # whole parity battery through the host IR simulator (--sim, no chip); the chip
@@ -2253,8 +2264,8 @@ test-gpu-elementwise: $(GPU_EW_TEST)
 # (tools/run_gpu_attention_chip.sh). -ffp-contract=off keeps the oracle free of FMA.
 .PHONY: test-gpu-attention
 GPU_ATTN_TEST = $(OUT_DIR)/gpu_attention_test
-$(GPU_ATTN_TEST): tests/gpu_attention_test.c src/omega_gpu_attention_api.h $(OUT_DIR)/libomega_gpu.a
-	$(CC) $(CFLAGS) -ffp-contract=off -o $@ tests/gpu_attention_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+$(GPU_ATTN_TEST): tests/gpu_attention_test.c tests/bw_warp_sim.h src/omega_gpu_attention_api.h $(OUT_DIR)/libomega_gpu.a
+	$(CC) $(CFLAGS) -ffp-contract=off -Itests -o $@ tests/gpu_attention_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
 test-gpu-attention: $(GPU_ATTN_TEST)
 	./$(GPU_ATTN_TEST) --host-only
 	./$(GPU_ATTN_TEST) --sim

@@ -39,9 +39,9 @@ $(GB_LABEL_STAMP): PRIME_RACE_FORCE
 	@mkdir -p $(GB_BUILD)
 	@echo '$(GB_SRC_COMMIT)' > $@.tmp; cmp -s $@.tmp $@ && rm $@.tmp || mv $@.tmp $@
 
-$(GB_BUILD)/gb10_sieve_host_test: $(GB_DIR)/tests/gb10_sieve_host_test.c $(GB_DIR)/prime_race_impl.h src/omega_blackwell_codegen.h src/omega_gpu_elementwise_api.h $(OUT_DIR)/libomega_gpu.a
+$(GB_BUILD)/gb10_sieve_host_test: $(GB_DIR)/tests/gb10_sieve_host_test.c $(GB_DIR)/prime_race_impl.h src/omega_blackwell_codegen.h src/omega_gpu_elementwise_api.h tests/bw_warp_sim.h $(OUT_DIR)/libomega_gpu.a
 	@mkdir -p $(GB_BUILD)
-	$(CC) $(CFLAGS) -I$(GB_DIR) -o $@ $(GB_DIR)/tests/gb10_sieve_host_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
+	$(CC) $(CFLAGS) -I$(GB_DIR) -Itests -o $@ $(GB_DIR)/tests/gb10_sieve_host_test.c $(OUT_DIR)/libomega_gpu.a -lpthread -lm
 prime-race-gb10-host-test: $(GB_BUILD)/gb10_sieve_host_test
 	./$(GB_BUILD)/gb10_sieve_host_test
 $(GB_BUILD)/gb10_launch_cost: $(GB_DIR)/tests/gb10_launch_cost.c src/omega_blackwell_codegen.h src/omega_gpu_elementwise_api.h src/omega_gpu_session.h $(OUT_DIR)/libomega_gpu.a

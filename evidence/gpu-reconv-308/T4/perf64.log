@@ -1,0 +1,18 @@
+== run 1 mark=uniform
+aien-gb10-native;38093;5.000080;8192;algorithm=other,faithful=no,bits=1
+== run 1 mark=divergent
+aien-gb10-native;45775;5.000109;8192;algorithm=other,faithful=no,bits=1
+== run 1 mark=divergent2
+aien-gb10-native;45462;5.000021;8192;algorithm=other,faithful=no,bits=1
+== run 2 mark=uniform
+aien-gb10-native;37653;5.000119;8192;algorithm=other,faithful=no,bits=1
+== run 2 mark=divergent
+aien-gb10-native;45735;5.000087;8192;algorithm=other,faithful=no,bits=1
+== run 2 mark=divergent2
+aien-gb10-native;46237;5.000020;8192;algorithm=other,faithful=no,bits=1
+== run 3 mark=uniform
+aien-gb10-native;26063;5.000009;8192;algorithm=other,faithful=no,bits=1
+== run 3 mark=divergent
+aien-gb10-native;45673;5.000078;8192;algorithm=other,faithful=no,bits=1
+== run 3 mark=divergent2
+aien-gb10-native;45594;5.000067;8192;algorithm=other,faithful=no,bits=1
