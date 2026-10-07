@@ -69,6 +69,7 @@ struct RxcHost {
     AienosCapAdmin *admin;
     AienosCapView *view;
     RxCompose *c;
+    uint32_t wait_ms;               /* 0 = default; applied when the composition opens */
     int opened;
     RxcHostInfo info;
 };
@@ -223,6 +224,7 @@ static int host_seal(RxcHost *h) {
              : rc == RX_ERR_REPLAY   ? RXC_HOST_E_REPLAY
                                      : RXC_HOST_E_OPEN;
     }
+    if (h->wait_ms) rx_compose_set_wait_ms(h->c, h->wait_ms);
     h->opened = 1;
     refresh_info(h);
     return RXC_HOST_OK;
@@ -330,6 +332,13 @@ int rxc_host_set_verify(RxcHost *h, RxcHostVerifyFn fn, void *ctx) {
     h->verify = fn;
     h->verify_ctx = ctx;
     return RXC_HOST_OK;
+}
+
+int rxc_host_set_wait_ms(RxcHost *h, uint32_t wait_ms) {
+    if (!h) return RX_ERR_ARG;
+    if (wait_ms == 0 || wait_ms > RXC_WAIT_MS_MAX) return RX_ERR_ARG;
+    h->wait_ms = wait_ms;
+    return h->opened ? rx_compose_set_wait_ms(h->c, wait_ms) : RX_OK;
 }
 
 int rxc_host_run(RxcHost *h, uint64_t task, uint64_t now_us, RxcHostResult *out) {

@@ -605,6 +605,30 @@ static void t_full_refused(void) {
     rmtree(d);
 }
 
+/* ---- the settle wait is configurable and reset by attach ------------------- */
+
+static void t_wait_ms(void) {
+    printf("[*] wait_ms: default 30000, set 1..600000, reset by attach\n");
+    char d[256];
+    dir_for(d, sizeof d, "waitms");
+    CHECK(attach(&g_c1, d) == RX_OK, "attach");
+    CHECK(g_c1.wait_ms == RXC_WAIT_MS_DEFAULT && RXC_WAIT_MS_DEFAULT == 30000u, "default 30000 (%u)",
+          g_c1.wait_ms);
+    CHECK(rx_compose_set_wait_ms(&g_c1, 0) == RX_ERR_ARG, "0 refused");
+    CHECK(rx_compose_set_wait_ms(&g_c1, RXC_WAIT_MS_MAX + 1u) == RX_ERR_ARG, "600001 refused");
+    CHECK(rx_compose_set_wait_ms(NULL, 1000) == RX_ERR_ARG, "NULL refused");
+    CHECK(g_c1.wait_ms == RXC_WAIT_MS_DEFAULT, "refused calls change nothing");
+    CHECK(rx_compose_set_wait_ms(&g_c1, 45000) == RX_OK && g_c1.wait_ms == 45000u, "45000 set");
+    RxcResult o;
+    CHECK(fx_run(&g_fx, &g_c1, 7, &o) == RX_OK && o.outcome == RXC_OUT_COMMITTED && o.result == 22,
+          "a run still commits with the longer wait");
+    rx_compose_close(&g_c1);
+    CHECK(attach(&g_c1, d) == RX_OK, "reattach");
+    CHECK(g_c1.wait_ms == RXC_WAIT_MS_DEFAULT, "reset to 30000 by attach (%u)", g_c1.wait_ms);
+    rx_compose_close(&g_c1);
+    rmtree(d);
+}
+
 int main(void) {
     snprintf(g_base, sizeof g_base, "/tmp/rx_compose_attach_test.XXXXXX");
     if (!mkdtemp(g_base)) { perror("mkdtemp"); return 1; }
@@ -615,6 +639,7 @@ int main(void) {
     t_close_waits();
     t_reclaim_rounds();
     t_full_refused();
+    t_wait_ms();
     rx_world_destroy(&g_w);
     aienos_cap_stop(g_admin, g_view);
     fx_free(&g_fx);

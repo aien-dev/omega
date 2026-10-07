@@ -849,6 +849,7 @@ static int open_home(RxCompose *c, const char *dir, const AienMachineId *self, u
     hooks.held = hooks.release = hooks.hold_done = 0;
     memset(c, 0, sizeof *c);
     c->test = hooks;
+    c->wait_ms = RXC_WAIT_MS_DEFAULT;
     snprintf(c->dir, sizeof c->dir, "%s", dir);
     c->self = *self;
     c->session = session;
@@ -1116,6 +1117,12 @@ int rx_compose_set_remote(RxCompose *c, RxcRemoteRun run, void *ctx) {
     return RX_OK;
 }
 
+int rx_compose_set_wait_ms(RxCompose *c, uint32_t wait_ms) {
+    if (!c || !c->world || wait_ms == 0 || wait_ms > RXC_WAIT_MS_MAX) return RX_ERR_ARG;
+    c->wait_ms = wait_ms;
+    return RX_OK;
+}
+
 JsBranchRef rx_compose_state(RxCompose *c) {
     RxObject o;
     if (rx_world_read(c->world, c->state, &o) != RX_OK) return (JsBranchRef){ UINT32_MAX, 0 };
@@ -1189,7 +1196,7 @@ int rx_compose_run(RxCompose *c, uint64_t input, const SrRequirement *req, const
     out->goal_crumb = (uint64_t)crumb;
     /* Its own World: wait for all of it. Attached: only for its own steps (the
      * rest of a living World, or another composition, need never be quiet). */
-    int rc = c->owns_world ? rx_world_wait_quiescent(c->world, 30000) : wait_own(c, 30000);
+    int rc = c->owns_world ? rx_world_wait_quiescent(c->world, (int)c->wait_ms) : wait_own(c, (int)c->wait_ms);
     if (rc != RX_OK) return rc;
 
     /* settle */
