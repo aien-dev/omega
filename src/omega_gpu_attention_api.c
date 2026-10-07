@@ -659,14 +659,23 @@ static int launch(const Slot *ks, const Launch *L, OmegaGpuAttnInfo *info) {
 /* ---- opt-in serving reservation (see the header) ---- */
 
 static int check_heads(uint32_t num_q_heads, uint32_t num_kv_heads, uint32_t head_dim, uint32_t *log2gqa);
+static int log2_exact(uint32_t v, uint32_t *out);
 
-int omega_gpu_attention_reserve(uint32_t max_context, uint32_t max_seqs, uint32_t num_q_heads, uint32_t num_kv_heads, uint32_t head_dim) {
-    uint32_t log2gqa;
+int omega_gpu_attention_reserve(uint32_t max_context, uint32_t max_seqs, uint32_t num_q_heads, uint32_t num_kv_heads, uint32_t head_dim, uint32_t kv_block_size) {
+    uint32_t log2gqa, log2bs;
     if (max_context == 0 || max_seqs == 0) { omega_gpu_session_set_error("attention reserve: zero bound"); return OMEGA_GPU_ATTN_BAD_ARGS; }
+    if (kv_block_size && log2_exact(kv_block_size, &log2bs) != 0) { omega_gpu_session_set_error("attention reserve: block size not a power of two"); return OMEGA_GPU_ATTN_BAD_ARGS; }
     int rc = check_heads(num_q_heads, num_kv_heads, head_dim, &log2gqa);
     if (rc != OMEGA_GPU_ATTN_OK) { omega_gpu_session_set_error("attention reserve: bad head shape"); return rc; }
-    /* KV staging holds both planes in f32 (the widest case; the bf16 paged layout needs no more) for max_seqs sequences */
-    const size_t pool = 2u * max_context * (size_t)num_kv_heads * head_dim * 4u * max_seqs;
+    /* KV staging, worst case over the two paths, per sequence: contiguous f32 holds both planes for max_context tokens
+     * (2 * ctx * kvh * hd * 4); paged bf16 stages whole blocks of both planes (round_up(ctx, block) * kvh * hd * 4), which
+     * is the larger one when max_context is under half a block. */
+    size_t per_seq = 2u * max_context * (size_t)num_kv_heads * head_dim * 4u;
+    if (kv_block_size) {
+        size_t paged = ((size_t)max_context + kv_block_size - 1) / kv_block_size * kv_block_size * num_kv_heads * head_dim * 4u;
+        if (paged > per_seq) per_seq = paged;
+    }
+    const size_t pool = per_seq * max_seqs;
     const size_t qo = (size_t)max_seqs * num_q_heads * head_dim * 4u;
     const size_t tab = ((size_t)max_seqs * max_context + max_seqs) * 4u;
     LOCK();
@@ -674,8 +683,12 @@ int omega_gpu_attention_reserve(uint32_t max_context, uint32_t max_seqs, uint32_
     if (g_sim) rc = OMEGA_GPU_ATTN_OK; /* the simulator stages in host memory: nothing to reserve */
     else if (dev_open_locked() != OMEGA_GPU_ATTN_OK) rc = OMEGA_GPU_ATTN_CHIP_FAIL;
     else if (omega_gpu_session_scratch_reserve(&g_pool, pool) || omega_gpu_session_scratch_reserve(&g_q, qo) ||
-             omega_gpu_session_scratch_reserve(&g_out, qo) || omega_gpu_session_scratch_reserve(&g_tab, tab < 8 ? 8 : tab))
+             omega_gpu_session_scratch_reserve(&g_out, qo) || omega_gpu_session_scratch_reserve(&g_tab, tab < 8 ? 8 : tab)) {
+        /* roll back this API's own buffers: a failed reserve leaves nothing flagged (growth allowed as before) */
+        omega_gpu_session_scratch_unreserve(&g_pool); omega_gpu_session_scratch_unreserve(&g_q);
+        omega_gpu_session_scratch_unreserve(&g_out); omega_gpu_session_scratch_unreserve(&g_tab);
         rc = OMEGA_GPU_ATTN_CHIP_FAIL;
+    }
     UNLOCK();
     return rc;
 }

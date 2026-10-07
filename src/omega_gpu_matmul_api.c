@@ -143,7 +143,11 @@ int omega_gpu_matmul_reserve(uint32_t max_rows, uint32_t max_k, uint32_t max_n, 
     omega_gpu_session_lock();
     int rc = OMEGA_GPU_MATMUL_OK;
     if (!dev_open_locked()) rc = OMEGA_GPU_MATMUL_CHIP_FAIL;
-    else if (omega_gpu_session_scratch_reserve(&g.a_buf, mp * kp * 2u) != 0 || omega_gpu_session_scratch_reserve(&g.c_buf, c_bytes) != 0) rc = OMEGA_GPU_MATMUL_CHIP_FAIL;
+    else if (omega_gpu_session_scratch_reserve(&g.a_buf, mp * kp * 2u) != 0 || omega_gpu_session_scratch_reserve(&g.c_buf, c_bytes) != 0) {
+        /* roll back this API's own buffers: a failed reserve leaves nothing flagged */
+        omega_gpu_session_scratch_unreserve(&g.a_buf); omega_gpu_session_scratch_unreserve(&g.c_buf);
+        rc = OMEGA_GPU_MATMUL_CHIP_FAIL;
+    }
     else if (kernel_slots > g.slots) { /* grow only; the cache restarts empty */
         cache_clear_locked();
         g.slots = kernel_slots;

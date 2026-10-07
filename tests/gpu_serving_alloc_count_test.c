@@ -179,11 +179,14 @@ static void end(Phase *p, int sized) {
 }
 
 static const OmegaGpuServingBounds QWEN3_4B_BOUNDS = {
-    .max_context = 4096, .max_seqs = 1, .num_q_heads = QH, .num_kv_heads = KVH, .head_dim = HD,
+    .max_context = 4096, .max_seqs = 1, .num_q_heads = QH, .num_kv_heads = KVH, .head_dim = HD, .kv_block_size = 16,
     .max_rows = CHUNK, .max_k = INTER, .max_n = INTER, .max_n_one_row = VOCAB, .kernel_slots = 32,
 };
 
 /* Bounds mode: a tiny reservation, then calls inside it (no driver traffic) and past it (refused loudly). */
+static int paged_call(uint32_t bs, uint32_t ctx);
+static int attn_ran(int rc);
+
 static int bounds_mode(void) {
     OmegaGpuServingBounds b = QWEN3_4B_BOUNDS;
     b.max_context = 256; b.max_rows = 32; b.max_k = HID; b.max_n = QDIM; b.max_n_one_row = 0;
@@ -206,6 +209,15 @@ static int bounds_mode(void) {
     CHECK(!omega_gpu_matmul_is_blocked() && !omega_gpu_session_is_blocked(), "a refusal latched the session");
     mm(32, W_Q, g_y); attn(256);                                /* still serves after a refusal */
     CHECK(fk.alloc_calls == a0, "serving after a refusal allocated");
+    /* paged bf16 attention (the sovereign-core path): 512 tokens = 32 blocks of 16 = exactly the reserved bytes */
+    (void)paged_call(16, 16);                                   /* build the paged kernel once */
+    const int p0 = fk.alloc_calls, pf0 = fk.free_calls;
+    rc = paged_call(16, 16);  CHECK(attn_ran(rc), "paged 16 tokens in bounds: rc=%d (%s)", rc, omega_gpu_attention_last_error());
+    rc = paged_call(16, 512); CHECK(attn_ran(rc), "paged 512 tokens (exactly the bound) refused: rc=%d (%s)", rc, omega_gpu_attention_last_error());
+    CHECK(fk.alloc_calls == p0 && fk.free_calls == pf0, "in-bounds paged calls touched the driver (%d allocs, %d frees)", fk.alloc_calls - p0, fk.free_calls - pf0);
+    rc = paged_call(16, 513); CHECK(rc == OMEGA_GPU_ATTN_TOO_LARGE, "paged 513 tokens (bound+1): rc=%d", rc);
+    CHECK(strstr(omega_gpu_attention_last_error(), "serving reservation exceeded") != NULL, "paged error text: \"%s\"", omega_gpu_attention_last_error());
+    CHECK(fk.alloc_calls == p0 && fk.free_calls == pf0, "a refused paged call touched the driver");
     omega_gpu_serving_release();                                /* lifted: growth is allowed again */
     rc = omega_gpu_gqa_attention_f32(g_q, g_k, g_v, 257, QH, KVH, HD, g_attn, NULL);
     CHECK(rc == OMEGA_GPU_ATTN_OK || rc == OMEGA_GPU_ATTN_UNWRITTEN, "after release, context 257 rc=%d", rc);
@@ -215,6 +227,91 @@ static int bounds_mode(void) {
     omega_gpu_device_close();
     CHECK(fk.live_at_close == 0, "leak: %d", fk.live_at_close);
     printf("gpu_serving_alloc_count_test bounds: %s (%d failed checks)\n", g_fail ? "FAIL" : "PASS", g_fail);
+    return g_fail ? 1 : 0;
+}
+
+/* Paged bf16 attention call over `ctx` tokens of a one-layer pool of `bs`-token blocks (the path sovereign-core uses). */
+static int paged_call(uint32_t bs, uint32_t ctx) {
+    const uint32_t nb = (ctx + bs - 1) / bs;
+    OmegaGpuKvLayout ly;
+    ly.head_stride_bytes = (uint64_t)HD * 2; ly.token_stride_bytes = ly.head_stride_bytes * KVH;
+    ly.kv_plane_stride_bytes = ly.token_stride_bytes * bs; ly.layer_stride_bytes = 2 * ly.kv_plane_stride_bytes;
+    ly.block_stride_bytes = ly.layer_stride_bytes; ly.pool_bytes = ly.block_stride_bytes * nb;
+    ly.num_blocks = nb; ly.num_layers = 1; ly.block_size = bs;
+    uint8_t *pool = calloc(1, (size_t)ly.pool_bytes);
+    uint32_t *ids = calloc(nb, sizeof *ids);
+    CHECK(pool && ids, "paged host buffers");
+    int rc = OMEGA_GPU_ATTN_BAD_ARGS;
+    if (pool && ids) {
+        for (uint32_t i = 0; i < nb; i++) ids[i] = i;
+        rc = omega_gpu_paged_attention_bf16(g_q, pool, &ly, ids, nb, ctx, 0, QH, KVH, HD, g_attn, NULL);
+    }
+    free(pool); free(ids);
+    return rc;
+}
+static int attn_ran(int rc) { return rc == OMEGA_GPU_ATTN_OK || rc == OMEGA_GPU_ATTN_UNWRITTEN; }
+
+/* Under half a block of context: the paged path stages a whole block, more than the f32 formula (review item 1). */
+static int bounds_block_mode(void) {
+    OmegaGpuServingBounds b = QWEN3_4B_BOUNDS;
+    b.max_context = 16; b.kv_block_size = 64; b.max_rows = 16; b.max_k = HID; b.max_n = QDIM; b.max_n_one_row = 0;
+    Phase ph; begin(&ph, "BOUNDS-BLOCK");
+    W_Q = upload(HID, QDIM);
+    CHECK(omega_gpu_reserve_serving(&b) == 0, "reserve failed: %s", omega_gpu_matmul_last_error());
+    int rc = paged_call(64, 16);                               /* first paged call builds the kernel (one code buffer); no pre-reserve call, it would raise the pool high-water mark */
+    CHECK(attn_ran(rc), "paged call of 16 tokens in one 64-token block refused: rc=%d (%s)", rc, omega_gpu_attention_last_error());
+    const int a0 = fk.alloc_calls, f0 = fk.free_calls;
+    rc = paged_call(64, 64);
+    CHECK(attn_ran(rc), "paged call of exactly one block (the byte bound) refused: rc=%d (%s)", rc, omega_gpu_attention_last_error());
+    CHECK(fk.alloc_calls == a0 && fk.free_calls == f0, "in-bounds paged calls touched the driver");
+    rc = paged_call(64, 65);
+    CHECK(rc == OMEGA_GPU_ATTN_TOO_LARGE, "two blocks past a one-block reservation: rc=%d", rc);
+    CHECK(fk.alloc_calls == a0 && fk.free_calls == f0, "refused paged call touched the driver");
+    printf("MEASURE bounds-block: 16 and 64 tokens (one 64-token block) served with 0 driver traffic; 65 tokens -> TOO_LARGE\n");
+    omega_gpu_tensor_free(W_Q);
+    omega_gpu_device_close();
+    CHECK(fk.live_at_close == 0, "leak: %d", fk.live_at_close);
+    printf("gpu_serving_alloc_count_test bounds-block: %s (%d failed checks)\n", g_fail ? "FAIL" : "PASS", g_fail);
+    return g_fail ? 1 : 0;
+}
+
+/* A reserve that fails part way must leave nothing flagged (review item 2). Sweep the failing driver request over every
+ * allocation the reserve makes (pool, q, out, table, activation, result), on a freshly opened device each time; the
+ * control (no injected failure) must leave the reservation active. */
+static int rollback_mode(void) {
+    OmegaGpuServingBounds b = QWEN3_4B_BOUNDS;
+    b.max_context = 256; b.kv_block_size = 16; b.max_rows = 32; b.max_k = HID; b.max_n = QDIM; b.max_n_one_row = 0; b.kernel_slots = 0;
+    Phase ph; begin(&ph, "ROLLBACK");
+    int failed_reserves = 0;
+    /* n = 100 first: the un-injected control, before the probes of the failing runs raise the buffers' high-water marks */
+    const int sweep[] = { 100, 1, 2, 3, 4, 5, 6 };
+    for (unsigned si = 0; si < sizeof sweep / sizeof sweep[0]; si++) {
+        const int n = sweep[si];
+        W_Q = upload(HID, QDIM);                                /* opens the session (its own allocations come first) */
+        fk.alloc_mode = FK_ALLOC_FAIL;
+        fk.alloc_fail_nth = fk.alloc_calls + n;
+        int rc = omega_gpu_reserve_serving(&b);
+        fk.alloc_fail_nth = 0;
+        /* probes that need more than the reservation: refused only if something is still flagged */
+        /* each probe is larger than every earlier one, so a buffer that is still flagged is refused even though the high-water mark carries over */
+        int ra = omega_gpu_gqa_attention_f32(g_q, g_k, g_v, si ? 300 + 500 * si : 257, QH, KVH, HD, g_attn, NULL);
+        int refused_attn = ra == OMEGA_GPU_ATTN_TOO_LARGE && strstr(omega_gpu_attention_last_error(), "serving reservation exceeded") != NULL;
+        OmegaGpuMatmulInfo info;
+        int rm = omega_gpu_matmul_resident_f32(si ? 32 + 16 * si : 48, g_x, W_Q, g_y, &info);
+        int refused_mm = rm == OMEGA_GPU_MATMUL_TOO_LARGE && strstr(omega_gpu_matmul_last_error(), "serving reservation exceeded") != NULL;
+        if (rc != 0) {
+            failed_reserves++;
+            CHECK(!refused_attn && !refused_mm, "failed reserve (injected fail on its request %d, rc=%d) left a reservation flagged: attention %d matmul %d", n, rc, refused_attn, refused_mm);
+        } else {
+            CHECK(refused_attn && refused_mm, "control (request %d never failed, reserve ok): the reservation should be active, attention %d matmul %d", n, refused_attn, refused_mm);
+        }
+        omega_gpu_tensor_free(W_Q);
+        omega_gpu_device_close();
+    }
+    CHECK(failed_reserves >= 6, "only %d of the sweep's reserves failed (expected the 6 buffer requests)", failed_reserves);
+    CHECK(fk.live_at_close == 0, "leak: %d", fk.live_at_close);
+    printf("MEASURE rollback: %d injected failures during reserve, none left anything flagged; the un-injected control stayed reserved\n", failed_reserves);
+    printf("gpu_serving_alloc_count_test rollback: %s (%d failed checks)\n", g_fail ? "FAIL" : "PASS", g_fail);
     return g_fail ? 1 : 0;
 }
 
@@ -240,6 +337,8 @@ int main(int argc, char **argv) {
     Phase ph[9];
     int np = 0;
     if (strcmp(mode, "bounds") == 0) return bounds_mode();
+    if (strcmp(mode, "bounds-block") == 0) return bounds_block_mode();
+    if (strcmp(mode, "rollback") == 0) return rollback_mode();
 
     begin(&ph[np], "LOAD (session+6 weights)");
     W_Q = upload(HID, QDIM); W_K = upload(HID, KVDIM); W_O = upload(QDIM, HID);
