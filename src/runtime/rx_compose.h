@@ -123,6 +123,10 @@ typedef enum {
 #define RXC_RES_STRIDE 0x100ull
 #define RXC_SUBJ_OF(inst, role) ((uint32_t)(role) + (uint32_t)(inst) * RXC_SUBJ_STRIDE)
 #define RXC_RES_OF(inst, res) ((uint64_t)(res) + (uint64_t)(inst) * RXC_RES_STRIDE)
+/* How long rx_compose_run waits for its steps to settle (rx_compose_set_wait_ms;
+ * reset to the default at open/attach). */
+#define RXC_WAIT_MS_DEFAULT 30000u
+#define RXC_WAIT_MS_MAX 600000u
 
 /* The contract the AEGIS verifier enforces on a candidate's result. */
 typedef int (*RxcContract)(uint64_t input, uint64_t result);
@@ -204,6 +208,7 @@ typedef struct RxCompose {
         uint64_t seq[RXC_K];           /* goal seq of the last remote run of candidate k */
         uint8_t digest[RXC_K][32];     /* the advertised digest it ran */
     } remote;
+    uint32_t wait_ms;                  /* settle wait of rx_compose_run (rx_compose_set_wait_ms) */
     /* authority minted at open (one per step, rights of that step only) */
     RxCapRef cap_ext, cap_cand[RXC_K][3], cap_verify[4], cap_commit[2];
     struct RxcCandUser { struct RxCompose *c; uint32_t k; } cand_user[RXC_K];
@@ -326,6 +331,10 @@ int  rx_compose_attach(RxCompose *c, RxWorld *w, const RxCallerKeyring *keys, co
 /* Install (run != NULL) or remove the Fabric dispatch of remote routes. Call
  * after open/attach (both clear it) and never during rx_compose_run. */
 int  rx_compose_set_remote(RxCompose *c, RxcRemoteRun run, void *ctx);
+/* Set how long rx_compose_run waits for its steps to settle, 1 to
+ * RXC_WAIT_MS_MAX ms (RX_ERR_ARG otherwise). open/attach reset it to
+ * RXC_WAIT_MS_DEFAULT. Call after open/attach and never during rx_compose_run. */
+int  rx_compose_set_wait_ms(RxCompose *c, uint32_t wait_ms);
 /* The branch the World names now. */
 JsBranchRef rx_compose_state(RxCompose *c);
 /* Content digest of the composition record (Cortex objects without timing
