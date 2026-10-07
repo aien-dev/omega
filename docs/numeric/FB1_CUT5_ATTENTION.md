@@ -150,12 +150,18 @@ of that CTA instruction by instruction.
   32-bit pairs (the 16-bit widening itself is cut 4's), one launcher opening the device
   while another API in the same process holds it.
 
-## head_dim 128 (2026-10-07, CPU phase: GB10 parity NOT_RUN)
+## head_dim 128 (2026-10-07)
 
 Qwen3-4B: 32 query heads, 8 KV heads (GQA 4:1), head_dim 128. head_dim is now a kernel
 parameter (`KSpec.hd`, 64 or 128) instead of a constant; the head_dim 64 program is the same
 bytes as before (see Evidence). Status: host battery, host IR simulator and host warp
-simulator PASS at head_dim 128; nothing has run on the chip.
+simulator PASS at head_dim 128.
+
+GB10 (2026-10-07, omega 7dd92dc = omega#323 on main 917e8b9 with the omega#324 code-buffer tail):
+hd128 battery PASS 126/0 including every ctx256 case, hd64 regression 122/0, sweep 73/0, timing 2/0,
+no Xid. Receipts: `evidence/FB1-CUT5-HD128-7dd92dc/`. The first window (pre-omega#324) faulted at
+ctx256 with Xid 31 (`evidence/FB1-CUT5-HD128-5a9f759/`, kept); cause and red/green in omega#324,
+`evidence/CODEPAD-PREFETCH-f1d57c5/`.
 
 ### Where 64 was assumed (omega main c0369e6, before this change) and what changed
 
