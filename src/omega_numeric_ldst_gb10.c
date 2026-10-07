@@ -13,6 +13,7 @@
 #ifndef OMEGA_NUMERIC_CPU_ONLY
 #include "omega_blackwell_submit.h"
 #include "omega_numeric_native.h"
+#include "omega_gpu_code_alloc.h"
 #endif
 
 #define NINSN 24u
@@ -274,7 +275,7 @@ int omega_ldst_gb10_run(const OmegaLdstSpec *s, const uint8_t *in_buf, size_t in
     size_t in_dev = in_len > count * 4 ? in_len : count * 4;
     size_t in_bytes = (in_dev + 0xfffULL) & ~0xfffULL, out_bytes = (out_len + 0xfffULL) & ~0xfffULL;
     NvrmMem code_mem, cbank_mem, a_mem, out_mem, marker_mem, qmd_mem;
-    if ((drc = nvrm_alloc(&ctx.rm, OMEGA_DS_MAX_CODE_BYTES, &code_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem)) != 0 ||
+    if ((drc = nvrm_alloc(&ctx.rm, omega_gpu_code_alloc_bytes(OMEGA_DS_MAX_CODE_BYTES), &code_mem) /* + 2 KB prefetch tail */) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem)) != 0 ||
         (drc = nvrm_alloc(&ctx.rm, in_bytes, &a_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, out_bytes, &out_mem)) != 0 ||
         (drc = nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem)) != 0 || (drc = nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem)) != 0) {
         omega_numeric_native_close(&ctx);

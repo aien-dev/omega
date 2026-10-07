@@ -144,6 +144,8 @@ jobs:
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-wait
       - name: GPU completion wait real-code mutants (each flagged build of the real code must fail)
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-wait-mutants
+      - name: GPU code buffer prefetch tail (host-only, NO_TAIL mutant must die, source scan)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-gpu-code-alloc
 
   train:
     runs-on: ubuntu-24.04-arm

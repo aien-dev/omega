@@ -23,6 +23,7 @@
 #ifndef OMEGA_NUMERIC_CPU_ONLY
 #include "omega_blackwell_submit.h"
 #include "omega_numeric_native.h"
+#include "omega_gpu_code_alloc.h"
 #endif
 
 /* Recorded after tools/divsqrt_nvdisasm_check.sh matched every word of the
@@ -1525,7 +1526,7 @@ int omega_ds_gb10_run(OmegaDsOp op, const uint32_t *a, const uint32_t *b, uint32
     ctx.pb_mem = large_pb;
     size_t bytes = (count * 4 + 0xfffULL) & ~0xfffULL;
     NvrmMem code_mem, cbank_mem, a_mem, b_mem, out_mem, marker_mem, qmd_mem;
-    if (nvrm_alloc(&ctx.rm, OMEGA_DS_MAX_CODE_BYTES, &code_mem) != 0 ||
+    if (nvrm_alloc(&ctx.rm, omega_gpu_code_alloc_bytes(OMEGA_DS_MAX_CODE_BYTES), &code_mem) /* + 2 KB prefetch tail */ != 0 ||
         nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &a_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &b_mem) != 0 ||
