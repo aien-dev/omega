@@ -136,8 +136,8 @@ of that CTA instruction by instruction.
 
 ## Limits of this cut
 
-- head_dim 64 only (TinyLlama, Llama-3.2-1B). Larger heads need a bigger shared-memory
-  declaration in the QMD (word 36) and a second thread-per-token tiling.
+- head_dim 64 (TinyLlama, Llama-3.2-1B) on chip; head_dim 128 (Qwen3-4B) is host-simulator only, see
+  the head_dim 128 section below. Other head dims are refused (TOO_LARGE).
 - Staging copy of q, the referenced KV blocks (once per physical block per launch, OM-2) and
   the tables per call. No resident KV: the pool lives in an anonymous CPU mmap whose
   "device address" is the CPU virtual address, not a GPU VA this channel can address, and
@@ -149,3 +149,63 @@ of that CTA instruction by instruction.
 - UNVERIFIED on chip until the gate run: forward predicated `@P0 BRA`, bf16 K loads as
   32-bit pairs (the 16-bit widening itself is cut 4's), one launcher opening the device
   while another API in the same process holds it.
+
+## head_dim 128 (2026-10-07, CPU phase: GB10 parity NOT_RUN)
+
+Qwen3-4B: 32 query heads, 8 KV heads (GQA 4:1), head_dim 128. head_dim is now a kernel
+parameter (`KSpec.hd`, 64 or 128) instead of a constant; the head_dim 64 program is the same
+bytes as before (see Evidence). Status: host battery, host IR simulator and host warp
+simulator PASS at head_dim 128; nothing has run on the chip.
+
+### Where 64 was assumed (omega main c0369e6, before this change) and what changed
+
+| Assumption | File:line (c0369e6) | head_dim 128 |
+|---|---|---|
+| `HD = 64`, threads per CTA = head_dim | `omega_gpu_attention_api.h:76`, `.c:215`, `.c:612` (launch `threads_x`), `.c:627` | `threads_x = KSpec.hd`; QMD CTA width 128 |
+| head_dim refused unless 64 | `.c:663`, header comments `.h:43`, `.h:70` | 64 and 128 accepted, anything else TOO_LARGE |
+| shared layout 4 x 256 B: q 0, s/p 256, token offsets 512, warp partials 768 | `.c:216-219`, `.c:240-242`, `.c:286` | 4 x 512 B: 0, 512, 1024, 1536 (`4hd`, `8hd`, `12hd`) |
+| QMD shared size 1024 (default) | `omega_blackwell_qmd.c:117` (`shared_bytes == 0` gives 8 x 128 B), session launch `omega_gpu_session.c:167` | launcher passes `shared_bytes = 16 * hd`: 1024 (same QMD word as before) or 2048 |
+| 2 warps: partials read at 768 and 896 (`c768`, `c896`) | `.c:241-242`, `.c:381`, `.c:401` | 4 warps: partials of warps 2 and 3 at +256 and +384, two extra LDS and two extra FMNMX / FADD per reduction (emitted only for hd 128) |
+| chunk = 64 tokens: `base += 64`, phase B loop bound 64 (`c64`) | `.c:241`, `.c:423`, `.c:428` | `c64` holds `hd` (chunk size) |
+| dim-pair inner loop bound 32 (`c32`) | `.c:241`, `.c:361` | `c32` holds `hd / 2` |
+| q / out row stride `HD * 4` | `.c:253`, `.c:261`, `.c:688`, `.c:705`, `.c:730` | `head_dim` argument |
+| score scale log2(e) / sqrt(64) | `.c:658`, `.c:705`, `.c:814` | `score_scale(head_dim)` |
+| paged layout must have head stride `HD * 2` | `.c:726` | `head_dim * 2` |
+| kernel cache key lacks head_dim | `.c:528` | key includes `hd` |
+| per-thread / warp simulators: 64 threads, 1024 B shared | `tests/gpu_attention_test.c:535-536`, `:792` | sized from `--hd`; shared bound is the QMD declaration (16 * hd) |
+| Not 64-dependent, unchanged | 32-lane SHFL tree (`.c:376-378`), 16 argument words, `MAX_CTAS 64`, `MAX_Q_HEADS 64`, GPR budget 64 | Qwen3-4B 32 heads: 2 sequences per launch |
+
+### Limits for one head_dim 128 CTA (GB10, SM 12.1)
+
+| Resource | Need | Limit | Source |
+|---|---|---|---|
+| Shared memory per block | 2048 B | SM 12.x SMEM capacity 0 to 100 KB per SM; 49152 B per block is shown for a CC 10.0 example | CUDA Programming Guide, Compute Capabilities appendix (Context7 `/websites/nvidia_cuda_cuda-programming-guide`): "Compute Capability 12.x has 128 KB of Unified Data Cache and SMEM capacities from 0 KB up to 100 KB"; "sharedMemPerBlock (49152 bytes)" (printed for CC 10.0; the 12.x per-block row was not returned: DOCS SILENT on the exact 12.1 per-block figure) |
+| Registers per block | 128 threads x 64 GPR = 8192 | 64K 32-bit registers per block, 255 per thread | same appendix: "The maximum number of 32-bit registers per thread block is 64K, and per thread is 255" |
+| Threads per block | 128 | DOCS SILENT (the retrieved snippets give 2048 threads per SM, not the per-block cap) | 64 threads already run on the chip (receipt FB1-CUT5-cd80bf4); QMD field is 16 bits wide (`clcec0qmd.h:248`, `NVCEC0_QMDV05_00_CTA_THREAD_DIMENSION0 MW(1103:1088)`) |
+| QMD shared field | 2048 B = 16 units of 128 B | field is 11 bits, `NVCEC0_QMDV05_00_SHARED_MEMORY_SIZE_SHIFTED7 MW(1162:1152)` (`clcec0qmd.h:254`); MIN/MAX/TARGET SM_CONFIG fields (`:255-257`) keep the value omega already sends (word 36) | the header gives field widths only: DOCS SILENT on what SM_CONFIG code 9 allows; UNKNOWN until the chip run (`OMEGA_BW_QMD_MAX_SHARED_BYTES` 16384 is omega's own bound) |
+| BAR.SYNC with 128 threads | one barrier, all CTA threads | QMD declares 1 barrier (`omega_blackwell_qmd.c:112`) | INFERRED: since Volta the barrier counts arriving threads (see `tests/bw_warp_sim.h` header); not chip-verified for sm_121 |
+
+### Evidence (CPU only, 2026-10-07, omega main c0369e6 + this change)
+
+- head_dim 64 byte identity: the SHA-256 of the encoded kernel (and instruction count) for six
+  shapes (bf16 and f32 KV, log2 gqa 3, 2 and 0) was recorded from a build of c0369e6 and is
+  pinned in `tests/gpu_attention_test.c` (`k_pins64`); `--host-only` checks all six. Pin
+  negative control: a flipped digest bit must not match.
+- head_dim 128 encodes: 168 instructions (160 at head_dim 64), 48 GPRs (46), decodes with
+  nvdisasm SM121 with no undecodable instruction and the expected instruction set.
+- `./build/gpu_attention_test --hd 128 --sim` runs the whole battery (f32 contiguous and paged
+  bf16 and batched, Qwen3-4B 32q/8kv and 32q/4kv, contexts 1 to 2048 with 127/128/129 around a
+  chunk, large scores, MHA, shared-prefix dedupe, every mutant) through the per-thread
+  simulator against the f64 oracle at the same tolerance as head_dim 64; `--hd 128 --divergent
+  --sim` runs it through the warp simulator (BSSY/BSYNC regions, both fragment orders).
+- New head_dim 128 checks (`hd128_checks`): uniform scores (sum over four warp partials) and a
+  dominant token above the f32 exponent range in each of the four warps and in later partial
+  chunks (max over four warp partials). Mutation test (not committed): removing the two extra
+  FMNMX fails the dominant-token check (1024 wrong outputs); removing the two extra FADD
+  fails the uniform and the random-data cases.
+- Shared-memory negative control: the simulators run the head_dim 128 kernel under a 1024 byte
+  declaration and must stop (error 3, "shared access past the declared size").
+
+### GB10 parity plan (later, coordinated window; NOT_RUN)
+
+See the pull request body for the commands, shapes, tolerance and hold estimate.
