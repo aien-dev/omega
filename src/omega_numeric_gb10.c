@@ -24,6 +24,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include "omega_gpu_code_alloc.h"
 
 #define OMEGA_BW_SETUP_WORDS_COUNT 18
 /* Device-failure diagnostics (M20 GB10 instrumentation). Every
@@ -115,7 +116,7 @@ int omega_gb10_execute_simt_op(const char *op_name,
     if (bytes < 0x1000) bytes = 0x1000;
 
     NvrmMem code_mem, cbank_mem, a_mem, b_mem, c_mem, out_mem, marker_mem, qmd_mem;
-    if (nvrm_alloc(&ctx.rm, 0x1000, &code_mem) != 0 ||
+    if (nvrm_alloc(&ctx.rm, omega_gpu_code_alloc_bytes(0x1000), &code_mem) != 0 || /* 4 KB of code + 2 KB prefetch tail */
         nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &a_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &b_mem) != 0 ||
@@ -134,7 +135,7 @@ int omega_gb10_execute_simt_op(const char *op_name,
 
     /* Calibrated sm_121 vecadd with this op's patch; no default instruction. */
     size_t out_code_len = 0;
-    if (omega_numeric_build_kernel(info->op, code_mem.cpu, code_mem.size, &out_code_len) != OMEGA_NUMERIC_OK) {
+    if (omega_numeric_build_kernel(info->op, code_mem.cpu, 0x1000, &out_code_len) != OMEGA_NUMERIC_OK) {
         return GB10_FAIL("build_kernel", 1, -1);
     }
 

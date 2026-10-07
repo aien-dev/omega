@@ -8,6 +8,7 @@
 #include "omega_blackwell_codegen.h"
 #include "omega_blackwell_qmd.h"
 #include "omega_blackwell_submit.h"
+#include "omega_gpu_code_alloc.h"
 #include "m16_native.h"
 
 #include <pthread.h>
@@ -16,6 +17,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+/* Code capacity of a seat (the code buffer adds the 2 KB prefetch tail on top). */
+#define RX_GPU_CODE_CAP 0x4000u
 
 #define LDG_CTL 0x001ea800u
 #define CRC_POLY 0x82F63B78u
@@ -722,7 +726,7 @@ static void *launch_main(void *arg) {
     RxGpuSeat *s = job->seat;
     M16NativeContext *ctx = &s->ctx;
     if (!job->have_mem) {
-        if (nvrm_alloc(&ctx->rm, 0x4000, &job->code_mem) != 0 ||
+        if (nvrm_alloc(&ctx->rm, omega_gpu_code_alloc_bytes(RX_GPU_CODE_CAP), &job->code_mem) != 0 || /* + 2 KB prefetch tail */
             nvrm_alloc(&ctx->rm, 0x1000, &job->cbank_mem) != 0 ||
             nvrm_alloc(&ctx->rm, 0x10000, &job->qmd_mem) != 0 ||
             nvrm_alloc_gpu_uncached(&ctx->rm, 0x1000, &job->marker_mem) != 0 ||
@@ -1018,6 +1022,11 @@ int rx_gpu_seat_begin(RxWorld *w, RxGpuSeat **out) {
     if (!code) return -1;
     size_t emitted = 0;
     if (omega_bw_encode_program(&prog, code, bytes, &emitted) != 0) {
+        free(code);
+        return -1;
+    }
+    if (emitted > RX_GPU_CODE_CAP) { /* the seat's code buffer holds RX_GPU_CODE_CAP bytes; refuse rather than overrun it */
+        fprintf(stderr, "seat: program is %zu bytes, the code buffer holds %u\n", emitted, (unsigned)RX_GPU_CODE_CAP);
         free(code);
         return -1;
     }

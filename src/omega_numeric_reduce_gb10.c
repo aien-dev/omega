@@ -48,6 +48,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include "omega_gpu_code_alloc.h"
 
 static unsigned g_last_launches;
 
@@ -335,7 +336,7 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     size_t bytes = (count * sizeof(float) + 0xfffULL) & ~0xfffULL;
     if (bytes < 0x1000) bytes = 0x1000;
     NvrmMem code_mem, cbank_mem, a_mem, b_mem, c_mem, out_mem, marker_mem, qmd_mem;
-    if (nvrm_alloc(&ctx.rm, 0x1000, &code_mem) != 0 || nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem) != 0 ||
+    if (nvrm_alloc(&ctx.rm, omega_gpu_code_alloc_bytes(0x1000), &code_mem) != 0 || nvrm_alloc(&ctx.rm, 0x1000, &cbank_mem) != 0 || /* code: 4 KB + 2 KB prefetch tail */
         nvrm_alloc(&ctx.rm, bytes, &a_mem) != 0 || nvrm_alloc(&ctx.rm, bytes, &b_mem) != 0 ||
         nvrm_alloc(&ctx.rm, bytes, &c_mem) != 0 || nvrm_alloc(&ctx.rm, bytes, &out_mem) != 0 ||
         nvrm_alloc_gpu_uncached(&ctx.rm, 0x1000, &marker_mem) != 0 || nvrm_alloc(&ctx.rm, 0x10000, &qmd_mem) != 0) {
@@ -346,7 +347,7 @@ static int run_chunk(OmegaReduceOp op, const float *in, float *out_res, size_t c
     memset(out_mem.cpu, 0x55, count * sizeof(float));
 
     size_t code_len = 0;
-    if (omega_blackwell_encode_vecadd(code_mem.cpu, code_mem.size, &code_len) != 0 ||
+    if (omega_blackwell_encode_vecadd(code_mem.cpu, 0x1000, &code_len) != 0 ||
         code_len < OMEGA_NUMERIC_PATCH_OFFSET + (size_t)np * 16u) {
         return GB10_FAIL("build_kernel", 1, -1);
     }

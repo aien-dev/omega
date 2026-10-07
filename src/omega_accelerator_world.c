@@ -1,4 +1,5 @@
 #include "omega_accelerator_world.h"
+#include "omega_gpu_code_alloc.h"
 #include "omega_blackwell_qmd.h"
 #include "omega_blackwell_encoder.h"
 #include "omega_blackwell_codegen.h"
@@ -368,9 +369,8 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
     if (free_slot < 0) return OMEGA_WORLD_ERR_NO_MEM;
 
     OmegaCodeEntry *entry = &world->code_entries[free_slot];
-    if (code_size > SIZE_MAX - 0xfffULL) return OMEGA_WORLD_ERR_BOUNDS;
-    size_t alloc_bytes = (code_size + 0xfffULL) & ~0xfffULL;
-    if (alloc_bytes < 0x1000) alloc_bytes = 0x1000;
+    size_t alloc_bytes = omega_gpu_code_alloc_bytes(code_size); /* code + 2 KB prefetch tail, page rounded */
+    if (alloc_bytes == 0) return OMEGA_WORLD_ERR_BOUNDS;
 
     /* GB10: GPU-cacheable system memory is not coherent with CPU mappings (nvos.h:1115-1118, hive-phases I37). */
     if (nvrm_alloc_gpu_uncached(&world->m16.rm, alloc_bytes, &entry->mem) != 0) {
@@ -378,6 +378,7 @@ int omega_world_register_code(OmegaAcceleratorWorld *world,
     }
 
     memcpy(entry->mem.cpu, code_bytes, code_size);
+    memset((uint8_t *)entry->mem.cpu + code_size, 0, alloc_bytes - code_size);
 
     entry->object_id = (uint32_t)free_slot;
     if (entry->generation == 0) {
