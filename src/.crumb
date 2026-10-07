@@ -133,8 +133,8 @@
           "purpose": "Directory src/polyglot. Purpose not yet described by a human."
         },
         {
-          "digest": "232cde4802eb94e5eece9b2ca8f92636559958aa17ce8f24f0ae03bebaf4c176",
-          "last_commit": "62b6a28",
+          "digest": "f10ed6fdd6a931cddda0159cdef1c98ddb3526c58595b3ca60631cc380410799",
+          "last_commit": "e09adff",
           "name": "runtime",
           "purpose": "Directory src/runtime. Purpose not yet described by a human."
         },
@@ -169,15 +169,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:f49f5aa012a5120f4c38a20c4f4db4555b292e7d7cc4f37bc2ff2b7494b550d1",
-      "compiled_at": "2026-10-06T18:55:17Z",
+      "children_root": "sha256:564cf410317a627d546c0c234bd632ba414ca943ecca4fd4c8eccc45d863bb48",
+      "compiled_at": "2026-10-07T02:42:06Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:48c4ef0ed53e3daac0f20dab1d5534e8288398c9d89a6fe4cadb99325372efb3",
+      "digest": "sha256:b029d6586df469b9c198b733749582f7fe724c1a35b62af7583a08c1df67b392",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 411,
-      "generated_at_commit": "a76a010c6414378b1f6abc8020837ae094ebe7ed",
-      "source_tree": "sha256:d9b07fcbab1f66753a569b7671d8a8ab44154a0d8c847437a89d1c4aa25750d0"
+      "files": 412,
+      "generated_at_commit": "e09adff92bf966b6b3471c129f8eb6ba1a211fb7",
+      "source_tree": "sha256:3c0fefc1510f9a906df161fcd778a3464d053ba8a5c7b96814c1970f18de609c"
     },
     "owner_lane": "",
     "provenance": {
