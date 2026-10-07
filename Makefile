@@ -2285,7 +2285,8 @@ test-gpu-reconv: $(GPU_RECONV_TEST)
 	./$(GPU_RECONV_TEST) --host-only
 
 # FB-1 cut 5: native gqa_attention (f32 KV) and paged_attention (bf16 KV, + batch).
-# head_dim 128 (CPU phase, Qwen3-4B): the same battery with --hd 128 through both host simulators; GB10 parity NOT_RUN.
+# head_dim 128 (Qwen3-4B): the same battery with --hd 128 through both host simulators; GB10 parity PASS 126/0
+# at 7dd92dc (evidence/FB1-CUT5-HD128-7dd92dc).
 # test-gpu-attention runs host-only (refusals, codegen, nvdisasm listing) and then the
 # whole parity battery through the host IR simulator (--sim, no chip); the chip
 # gate is `./build/gpu_attention_test --out receipt.json` through the heavy queue
