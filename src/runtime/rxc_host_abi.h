@@ -233,6 +233,9 @@ int rxc_host_register_skill(RxcHost *h, const char *name, const uint8_t *digest3
 /* Set the AEGIS contract callback (before the first run; NULL = result != 0). */
 int rxc_host_set_verify(RxcHost *h, RxcHostVerifyFn fn, void *ctx);
 
+/* Set how long one run waits for its steps to settle, 1..600000 ms (default 30000); RX_ERR_ARG otherwise. */
+int rxc_host_set_wait_ms(RxcHost *h, uint32_t wait_ms);
+
 /* One goal through the whole COMPOSITION-2 path. `task` must be nonzero.
  * `now_us` is the run's clock (route liveness). RXC_HOST_OK with out filled
  * (check out->outcome), or RXC_HOST_E_* (out->run_rc holds the cause). */

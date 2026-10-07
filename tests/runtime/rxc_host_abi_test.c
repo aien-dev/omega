@@ -202,6 +202,27 @@ static int torn_case(const char *home, const char *label, const RxcHostRecord *a
     return fails == f0 ? 0 : -1;
 }
 
+/* rxc_host_set_wait_ms: validated, accepted before and after the first run. */
+static void t_wait_ms(const char *dir) {
+    char home[300];
+    snprintf(home, sizeof home, "%s/home_wait", dir);
+    int rc;
+    RxcHostInfo info;
+    RxcHost *h = open_home(home, 0, &info, &rc);
+    CHECK(h && rc == RXC_HOST_OK, "wait_ms: open -> %d", rc);
+    if (!h) return;
+    CHECK(rxc_host_set_wait_ms(NULL, 1000) == RXC_HOST_E_ARG, "wait_ms: NULL refused");
+    CHECK(rxc_host_set_wait_ms(h, 0) == RXC_HOST_E_ARG, "wait_ms: 0 refused");
+    CHECK(rxc_host_set_wait_ms(h, 600001) == RXC_HOST_E_ARG, "wait_ms: 600001 refused");
+    CHECK(rxc_host_set_wait_ms(h, 45000) == RXC_HOST_OK, "wait_ms: 45000 before first run");
+    RxcHostResult r;
+    rc = rxc_host_run(h, 0x4E50310000000F01ull, 1000000, &r);
+    CHECK(rc == RXC_HOST_OK && r.outcome == RXC_HOST_OUT_COMMITTED, "wait_ms: run -> %d", rc);
+    CHECK(rxc_host_set_wait_ms(h, 60000) == RXC_HOST_OK, "wait_ms: 60000 after the run");
+    CHECK(rxc_host_set_wait_ms(h, 600001) == RXC_HOST_E_ARG, "wait_ms: still validated when open");
+    rxc_host_close(h);
+}
+
 #define MAXR 64
 int main(void) {
     char dir[256];
@@ -216,6 +237,8 @@ int main(void) {
           lay[1] == sizeof(RxcHostResult) && lay[2] == sizeof(RxcHostRecord) &&
           lay[3] == sizeof(RxcHostRepair), "abi layout");
     printf("abi layout: info %u result %u record %u repair %u\n", lay[0], lay[1], lay[2], lay[3]);
+
+    t_wait_ms(dir);
 
     /* ---- T1 ---- */
     RxcHostInfo i1;
