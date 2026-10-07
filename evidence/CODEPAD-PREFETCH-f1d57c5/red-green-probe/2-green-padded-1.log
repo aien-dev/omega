@@ -1,0 +1,69 @@
+VARIANT padded kernel_bytes=2688
+SNAP site=before_ctx1 utc=2026-10-07T02:54:26Z allocations=0 (device not open yet)
+RESULT variant=padded ctx=1 rc=0 utc_after=2026-10-07T02:54:26Z call_ns=133153532 chip_ns=214704 unwritten=0 max_abs_err=0
+SNAP site=after_ctx1 utc=2026-10-07T02:54:26Z allocations=10
+  ALLOC #0 va=0x1004110000 size=0x1000 end=0x1004111000 uncached live
+  ALLOC #1 va=0x1004111000 size=0x10000 end=0x1004121000 uncached live
+  ALLOC #2 va=0x1004121000 size=0x1000 end=0x1004122000 uncached live
+  ALLOC #3 va=0x1004122000 size=0x1000 end=0x1004123000 uncached live
+  ALLOC #4 va=0x1004123000 size=0x10000 end=0x1004133000 uncached live
+  ALLOC #5 va=0x1004133000 size=0x2000 end=0x1004135000 uncached live CODE
+  CODE va=0x1004133000 code_bytes=2688 alloc=0x2000 slack_in_alloc=5504 page_after_alloc=0x1004135000 mapped_by=#6 code_end+2047 mapped=yes
+  ALLOC #6 va=0x1004135000 size=0x2000 end=0x1004137000 uncached live
+  ALLOC #7 va=0x1004137000 size=0x4000 end=0x100413b000 uncached live
+  ALLOC #8 va=0x100413b000 size=0x1000 end=0x100413c000 uncached live
+  ALLOC #9 va=0x100413c000 size=0x4000 end=0x1004140000 uncached live
+SNAP site=before_ctx17 utc=2026-10-07T02:54:26Z allocations=10
+  ALLOC #0 va=0x1004110000 size=0x1000 end=0x1004111000 uncached live
+  ALLOC #1 va=0x1004111000 size=0x10000 end=0x1004121000 uncached live
+  ALLOC #2 va=0x1004121000 size=0x1000 end=0x1004122000 uncached live
+  ALLOC #3 va=0x1004122000 size=0x1000 end=0x1004123000 uncached live
+  ALLOC #4 va=0x1004123000 size=0x10000 end=0x1004133000 uncached live
+  ALLOC #5 va=0x1004133000 size=0x2000 end=0x1004135000 uncached live CODE
+  CODE va=0x1004133000 code_bytes=2688 alloc=0x2000 slack_in_alloc=5504 page_after_alloc=0x1004135000 mapped_by=#6 code_end+2047 mapped=yes
+  ALLOC #6 va=0x1004135000 size=0x2000 end=0x1004137000 uncached live
+  ALLOC #7 va=0x1004137000 size=0x4000 end=0x100413b000 uncached live
+  ALLOC #8 va=0x100413b000 size=0x1000 end=0x100413c000 uncached live
+  ALLOC #9 va=0x100413c000 size=0x4000 end=0x1004140000 uncached live
+RESULT variant=padded ctx=17 rc=0 utc_after=2026-10-07T02:54:26Z call_ns=260528 chip_ns=104208 unwritten=0 max_abs_err=1.58e-07
+SNAP site=after_ctx17 utc=2026-10-07T02:54:26Z allocations=11
+  ALLOC #0 va=0x1004110000 size=0x1000 end=0x1004111000 uncached live
+  ALLOC #1 va=0x1004111000 size=0x10000 end=0x1004121000 uncached live
+  ALLOC #2 va=0x1004121000 size=0x1000 end=0x1004122000 uncached live
+  ALLOC #3 va=0x1004122000 size=0x1000 end=0x1004123000 uncached live
+  ALLOC #4 va=0x1004123000 size=0x10000 end=0x1004133000 uncached live
+  ALLOC #5 va=0x1004133000 size=0x2000 end=0x1004135000 uncached live CODE
+  CODE va=0x1004133000 code_bytes=2688 alloc=0x2000 slack_in_alloc=5504 page_after_alloc=0x1004135000 mapped_by=NONE-1 code_end+2047 mapped=yes
+  ALLOC #6 va=0x1004135000 size=0x2000 end=0x1004137000 uncached freed
+  ALLOC #7 va=0x1004137000 size=0x4000 end=0x100413b000 uncached live
+  ALLOC #8 va=0x100413b000 size=0x1000 end=0x100413c000 uncached live
+  ALLOC #9 va=0x100413c000 size=0x4000 end=0x1004140000 uncached live
+  ALLOC #10 va=0x1004140000 size=0x22000 end=0x1004162000 uncached live
+SNAP site=before_ctx256 utc=2026-10-07T02:54:26Z allocations=11
+  ALLOC #0 va=0x1004110000 size=0x1000 end=0x1004111000 uncached live
+  ALLOC #1 va=0x1004111000 size=0x10000 end=0x1004121000 uncached live
+  ALLOC #2 va=0x1004121000 size=0x1000 end=0x1004122000 uncached live
+  ALLOC #3 va=0x1004122000 size=0x1000 end=0x1004123000 uncached live
+  ALLOC #4 va=0x1004123000 size=0x10000 end=0x1004133000 uncached live
+  ALLOC #5 va=0x1004133000 size=0x2000 end=0x1004135000 uncached live CODE
+  CODE va=0x1004133000 code_bytes=2688 alloc=0x2000 slack_in_alloc=5504 page_after_alloc=0x1004135000 mapped_by=NONE-1 code_end+2047 mapped=yes
+  ALLOC #6 va=0x1004135000 size=0x2000 end=0x1004137000 uncached freed
+  ALLOC #7 va=0x1004137000 size=0x4000 end=0x100413b000 uncached live
+  ALLOC #8 va=0x100413b000 size=0x1000 end=0x100413c000 uncached live
+  ALLOC #9 va=0x100413c000 size=0x4000 end=0x1004140000 uncached live
+  ALLOC #10 va=0x1004140000 size=0x22000 end=0x1004162000 uncached live
+RESULT variant=padded ctx=256 rc=0 utc_after=2026-10-07T02:54:26Z call_ns=648417 chip_ns=309968 unwritten=0 max_abs_err=2.25e-07
+SNAP site=after_ctx256 utc=2026-10-07T02:54:26Z allocations=12
+  ALLOC #0 va=0x1004110000 size=0x1000 end=0x1004111000 uncached live
+  ALLOC #1 va=0x1004111000 size=0x10000 end=0x1004121000 uncached live
+  ALLOC #2 va=0x1004121000 size=0x1000 end=0x1004122000 uncached live
+  ALLOC #3 va=0x1004122000 size=0x1000 end=0x1004123000 uncached live
+  ALLOC #4 va=0x1004123000 size=0x10000 end=0x1004133000 uncached live
+  ALLOC #5 va=0x1004133000 size=0x2000 end=0x1004135000 uncached live CODE
+  CODE va=0x1004133000 code_bytes=2688 alloc=0x2000 slack_in_alloc=5504 page_after_alloc=0x1004135000 mapped_by=NONE-1 code_end+2047 mapped=yes
+  ALLOC #6 va=0x1004135000 size=0x2000 end=0x1004137000 uncached freed
+  ALLOC #7 va=0x1004137000 size=0x4000 end=0x100413b000 uncached live
+  ALLOC #8 va=0x100413b000 size=0x1000 end=0x100413c000 uncached live
+  ALLOC #9 va=0x100413c000 size=0x4000 end=0x1004140000 uncached live
+  ALLOC #10 va=0x1004140000 size=0x22000 end=0x1004162000 uncached freed
+  ALLOC #11 va=0x1004162000 size=0x200000 end=0x1004362000 uncached live

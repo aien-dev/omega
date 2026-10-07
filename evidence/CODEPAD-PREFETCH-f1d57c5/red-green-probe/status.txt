@@ -1,0 +1,7 @@
+red rc=1
+green1 rc=0
+green2 rc=0
+green3 rc=0
+green4 rc=0
+green5 rc=0
+hd128 battery rc=0

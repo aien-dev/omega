@@ -1,0 +1,12 @@
+wt-base 9a20ca8fe6bc85967181afaa8c0a2d81c0ae0027 dirty=0
+wt-pad c7663bbfb9ecc01f03d407d981db5f48b987ed57 dirty=0
+omega f1d57c56c8ff277dfd1fc97b3d01c739e29f9900 dirty=0
+physics 6d7cf0d4d8eb2cda7b512100ff6058e25dbb3ddf
+NVIDIA GB10, 580.173.02, 0 %
+7.0.0-1019-nvidia
+7413297c2366b54aca668020eadb2368df52004c5250f65300229b4c0e50b0a4  /home/drakestapleton/workspace/investigations/2026-10-07-hd128-ctx256-stall/src/va_camera_base
+f2d35f7da7b4b3d9c6be1a38266e98f1eacc639192437758681e06e7c11d1c39  /home/drakestapleton/workspace/investigations/2026-10-07-hd128-ctx256-stall/src/va_camera_pad
+b15a3623ca9966713d543cb40d7df288f49243fed0e1f02daa7e99a7a87bbc77  /home/drakestapleton/workspace/hive/CODEPAD/wt-base/build/libomega_gpu.a
+8248f0dbc1122ca4c1ea0cd5aea70527adc21feb3530347a064aa9c02ab4bf0f  /home/drakestapleton/workspace/hive/CODEPAD/wt-pad/build/libomega_gpu.a
+f60b100cb39fbd68ba06a3d14aeee8c282670ae42e1055919be0378da9af6d8f  /home/drakestapleton/workspace/hive/CODEPAD/wt-pad/build/gpu_attention_test
+xid_lines_before=1
