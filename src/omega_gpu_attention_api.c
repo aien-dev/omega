@@ -668,7 +668,9 @@ static int log2_exact(uint32_t v, uint32_t *out) {
     uint32_t l = 0; while ((1u << l) != v) l++;
     *out = l; return 0;
 }
-static float score_scale(uint32_t hd) { return (float)(1.4426950408889634 / sqrt((double)hd)); }
+/* log2(e) / sqrt(head_dim) with the square roots as literals (8 and 11.313708498984761 = sqrt(128), both exactly what sqrt() returns):
+ * the library must not need libm (omegatool links without -lm; a constant head_dim folded sqrt away, a runtime one does not). */
+static float score_scale(uint32_t hd) { return (float)(1.4426950408889634 / (hd == 128u ? 11.313708498984761 : 8.0)); }
 
 /* Common head-shape checks; returns log2 of the gqa ratio. */
 static int check_heads(uint32_t num_q_heads, uint32_t num_kv_heads, uint32_t head_dim, uint32_t *log2gqa) {
