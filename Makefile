@@ -2285,6 +2285,7 @@ test-gpu-reconv: $(GPU_RECONV_TEST)
 	./$(GPU_RECONV_TEST) --host-only
 
 # FB-1 cut 5: native gqa_attention (f32 KV) and paged_attention (bf16 KV, + batch).
+# head_dim 128 (CPU phase, Qwen3-4B): the same battery with --hd 128 through both host simulators; GB10 parity NOT_RUN.
 # test-gpu-attention runs host-only (refusals, codegen, nvdisasm listing) and then the
 # whole parity battery through the host IR simulator (--sim, no chip); the chip
 # gate is `./build/gpu_attention_test --out receipt.json` through the heavy queue
@@ -2297,6 +2298,9 @@ test-gpu-attention: $(GPU_ATTN_TEST)
 	./$(GPU_ATTN_TEST) --host-only
 	./$(GPU_ATTN_TEST) --sim
 	./$(GPU_ATTN_TEST) --sweep --sim --out $(OUT_DIR)/gpu_attention_sweep_sim.json
+	./$(GPU_ATTN_TEST) --hd 128 --host-only
+	./$(GPU_ATTN_TEST) --hd 128 --sim
+	./$(GPU_ATTN_TEST) --hd 128 --divergent --sim
 
 # FB-1 cut 4b: fresh-process device-open probe (flake investigation, tools/probe_gpu_open.sh)
 $(OUT_DIR)/gpu_session_probe: tests/gpu_session_probe.c src/omega_gpu_session.h $(OUT_DIR)/libomega_gpu.a
