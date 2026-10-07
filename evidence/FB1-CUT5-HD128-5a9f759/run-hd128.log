@@ -1,0 +1,127 @@
+PASS gqa_f32_qwen3_4b_32q8kv_ctx1 n=4096 rc=OK violations=0 worst_scaled_err=0 chip_ns=215826 call_ns=135100772 calls=1 unwritten=0 kv_staged=8192/8192 blocks=1/1 | mutants 0/0 
+PASS gqa_f32_qwen3_4b_32q8kv_ctx17 n=4096 rc=OK violations=0 worst_scaled_err=0.00198312 chip_ns=104481 call_ns=245761 calls=1 unwritten=0 kv_staged=139264/139264 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_qwen3_4b_32q8kv_ctx256 rc=CHIP_FAIL violations=4096 worst=2.7208e+42
+FAIL gqa_f32_qwen3_4b_32q8kv_ctx256 n=4096 rc=CHIP_FAIL violations=4096 worst_scaled_err=2.7208e+42 chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_qwen3_4b_32q8kv_ctx2048 repeat run (cache hit) is bit-identical
+FAIL: gqa_f32_qwen3_4b_32q8kv_ctx2048 rc=CHIP_FAIL violations=4095 worst=3.21028e+42
+FAIL gqa_f32_qwen3_4b_32q8kv_ctx2048 n=4096 rc=CHIP_FAIL violations=4095 worst_scaled_err=3.21028e+42 chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 4/4 SLOT:CAUGHT(rc=CHIP_FAIL,bad=4095) NO_RESCALE:CAUGHT(rc=CHIP_FAIL,bad=4095) Q_ROW:CAUGHT(rc=CHIP_FAIL,bad=4095) OUT_ROW:CAUGHT(rc=CHIP_FAIL,bad=4095)
+FAIL: gqa_f32_qwen3_4b_32q8kv_ctx127 rc=CHIP_FAIL violations=4094 worst=inf
+FAIL gqa_f32_qwen3_4b_32q8kv_ctx127 n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_qwen3_4b_32q8kv_ctx128 rc=CHIP_FAIL violations=4094 worst=inf
+FAIL gqa_f32_qwen3_4b_32q8kv_ctx128 n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_qwen3_4b_32q8kv_ctx129 rc=CHIP_FAIL violations=4096 worst=inf
+FAIL gqa_f32_qwen3_4b_32q8kv_ctx129 n=4096 rc=CHIP_FAIL violations=4096 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_qwen3_4b_32q8kv_ctx300 rc=CHIP_FAIL violations=4094 worst=inf
+FAIL gqa_f32_qwen3_4b_32q8kv_ctx300 n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_qwen3_4b_32q8kv_ctx1000 rc=CHIP_FAIL violations=4091 worst=inf
+FAIL gqa_f32_qwen3_4b_32q8kv_ctx1000 n=4096 rc=CHIP_FAIL violations=4091 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_gqa8_32q4kv_ctx1 rc=CHIP_FAIL violations=4096 worst=inf
+FAIL gqa_f32_gqa8_32q4kv_ctx1 n=4096 rc=CHIP_FAIL violations=4096 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_gqa8_32q4kv_ctx17 rc=CHIP_FAIL violations=4095 worst=inf
+FAIL gqa_f32_gqa8_32q4kv_ctx17 n=4096 rc=CHIP_FAIL violations=4095 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 1/1 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=4095)
+FAIL: gqa_f32_gqa8_32q4kv_ctx256 rc=CHIP_FAIL violations=4095 worst=inf
+FAIL gqa_f32_gqa8_32q4kv_ctx256 n=4096 rc=CHIP_FAIL violations=4095 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_gqa8_32q4kv_ctx2048 repeat run (cache hit) is bit-identical
+FAIL: gqa_f32_gqa8_32q4kv_ctx2048 rc=CHIP_FAIL violations=4093 worst=inf
+FAIL gqa_f32_gqa8_32q4kv_ctx2048 n=4096 rc=CHIP_FAIL violations=4093 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 4/4 SLOT:CAUGHT(rc=CHIP_FAIL,bad=4093) NO_RESCALE:CAUGHT(rc=CHIP_FAIL,bad=4093) Q_ROW:CAUGHT(rc=CHIP_FAIL,bad=4093) OUT_ROW:CAUGHT(rc=CHIP_FAIL,bad=4093)
+FAIL: gqa_f32_gqa8_32q4kv_ctx127 rc=CHIP_FAIL violations=4095 worst=inf
+FAIL gqa_f32_gqa8_32q4kv_ctx127 n=4096 rc=CHIP_FAIL violations=4095 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_gqa8_32q4kv_ctx128 rc=CHIP_FAIL violations=4093 worst=inf
+FAIL gqa_f32_gqa8_32q4kv_ctx128 n=4096 rc=CHIP_FAIL violations=4093 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_gqa8_32q4kv_ctx129 rc=CHIP_FAIL violations=4094 worst=inf
+FAIL gqa_f32_gqa8_32q4kv_ctx129 n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_gqa8_32q4kv_ctx300 rc=CHIP_FAIL violations=4094 worst=inf
+FAIL gqa_f32_gqa8_32q4kv_ctx300 n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_gqa8_32q4kv_ctx1000 rc=CHIP_FAIL violations=4094 worst=inf
+FAIL gqa_f32_gqa8_32q4kv_ctx1000 n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 0/0 
+FAIL: gqa_f32_large_scores_32q4kv_ctx256 rc=CHIP_FAIL violations=4096 worst=inf
+FAIL gqa_f32_large_scores_32q4kv_ctx256 n=4096 rc=CHIP_FAIL violations=4096 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 1/1 NO_MAX:CAUGHT(rc=CHIP_FAIL,bad=4096)
+FAIL: mha: Q_ROW and OUT_ROW outputs are distinct wrong answers (0 of 2048 differ)
+FAIL: gqa_f32_mha_16q16kv_ctx300 rc=CHIP_FAIL violations=2048 worst=3.02771e+42
+FAIL gqa_f32_mha_16q16kv_ctx300 n=2048 rc=CHIP_FAIL violations=2048 worst_scaled_err=3.02771e+42 chip_ns=0 call_ns=600000552302 calls=0 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 3/3 Q_ROW:CAUGHT(rc=CHIP_FAIL,bad=2048) OUT_ROW:CAUGHT(rc=CHIP_FAIL,bad=2048) KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=2048)
+FAIL: paged_bf16_qwen3_4b_32q8kv_bs16_ctx1 rc=CHIP_FAIL violations=4096 worst=inf
+FAIL paged_bf16_qwen3_4b_32q8kv_bs16_ctx1 n=4096 rc=CHIP_FAIL violations=4096 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 1/1 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=4096)
+FAIL: paged_bf16_qwen3_4b_32q8kv_bs16_ctx17 rc=CHIP_FAIL violations=4096 worst=inf
+FAIL paged_bf16_qwen3_4b_32q8kv_bs16_ctx17 n=4096 rc=CHIP_FAIL violations=4096 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 2/2 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=4096) SLOT:CAUGHT(rc=CHIP_FAIL,bad=4096)
+FAIL: paged_bf16_qwen3_4b_32q8kv_bs16_ctx256 rc=CHIP_FAIL violations=4095 worst=inf
+FAIL paged_bf16_qwen3_4b_32q8kv_bs16_ctx256 n=4096 rc=CHIP_FAIL violations=4095 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_qwen3_4b_32q8kv_bs16_ctx2048 rc=CHIP_FAIL violations=4087 worst=inf
+FAIL paged_bf16_qwen3_4b_32q8kv_bs16_ctx2048 n=4096 rc=CHIP_FAIL violations=4087 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 5/5 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=4087) SLOT:CAUGHT(rc=CHIP_FAIL,bad=4087) NO_RESCALE:CAUGHT(rc=CHIP_FAIL,bad=4087) Q_ROW:CAUGHT(rc=CHIP_FAIL,bad=4087) OUT_ROW:CAUGHT(rc=CHIP_FAIL,bad=4087)
+FAIL: paged_bf16_qwen3_4b_32q8kv_bs16_ctx127 rc=CHIP_FAIL violations=4095 worst=inf
+FAIL paged_bf16_qwen3_4b_32q8kv_bs16_ctx127 n=4096 rc=CHIP_FAIL violations=4095 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_qwen3_4b_32q8kv_bs16_ctx128 rc=CHIP_FAIL violations=4095 worst=inf
+FAIL paged_bf16_qwen3_4b_32q8kv_bs16_ctx128 n=4096 rc=CHIP_FAIL violations=4095 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_qwen3_4b_32q8kv_bs16_ctx129 rc=CHIP_FAIL violations=4093 worst=inf
+FAIL paged_bf16_qwen3_4b_32q8kv_bs16_ctx129 n=4096 rc=CHIP_FAIL violations=4093 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_qwen3_4b_32q8kv_bs16_ctx300 rc=CHIP_FAIL violations=4091 worst=inf
+FAIL paged_bf16_qwen3_4b_32q8kv_bs16_ctx300 n=4096 rc=CHIP_FAIL violations=4091 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_qwen3_4b_32q8kv_bs16_ctx1000 rc=CHIP_FAIL violations=4093 worst=inf
+FAIL paged_bf16_qwen3_4b_32q8kv_bs16_ctx1000 n=4096 rc=CHIP_FAIL violations=4093 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_gqa8_32q4kv_bs16_ctx1 rc=CHIP_FAIL violations=4096 worst=inf
+FAIL paged_bf16_gqa8_32q4kv_bs16_ctx1 n=4096 rc=CHIP_FAIL violations=4096 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 1/1 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=4096)
+FAIL: paged_bf16_gqa8_32q4kv_bs16_ctx17 rc=CHIP_FAIL violations=4096 worst=inf
+FAIL paged_bf16_gqa8_32q4kv_bs16_ctx17 n=4096 rc=CHIP_FAIL violations=4096 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 2/2 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=4096) SLOT:CAUGHT(rc=CHIP_FAIL,bad=4096)
+FAIL: paged_bf16_gqa8_32q4kv_bs16_ctx256 rc=CHIP_FAIL violations=4094 worst=inf
+FAIL paged_bf16_gqa8_32q4kv_bs16_ctx256 n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_gqa8_32q4kv_bs16_ctx2048 rc=CHIP_FAIL violations=4091 worst=inf
+FAIL paged_bf16_gqa8_32q4kv_bs16_ctx2048 n=4096 rc=CHIP_FAIL violations=4091 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 5/5 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=4091) SLOT:CAUGHT(rc=CHIP_FAIL,bad=4091) NO_RESCALE:CAUGHT(rc=CHIP_FAIL,bad=4091) Q_ROW:CAUGHT(rc=CHIP_FAIL,bad=4091) OUT_ROW:CAUGHT(rc=CHIP_FAIL,bad=4091)
+FAIL: paged_bf16_gqa8_32q4kv_bs16_ctx127 rc=CHIP_FAIL violations=4095 worst=inf
+FAIL paged_bf16_gqa8_32q4kv_bs16_ctx127 n=4096 rc=CHIP_FAIL violations=4095 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_gqa8_32q4kv_bs16_ctx128 rc=CHIP_FAIL violations=4094 worst=inf
+FAIL paged_bf16_gqa8_32q4kv_bs16_ctx128 n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_gqa8_32q4kv_bs16_ctx129 rc=CHIP_FAIL violations=4091 worst=inf
+FAIL paged_bf16_gqa8_32q4kv_bs16_ctx129 n=4096 rc=CHIP_FAIL violations=4091 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_gqa8_32q4kv_bs16_ctx300 rc=CHIP_FAIL violations=4094 worst=inf
+FAIL paged_bf16_gqa8_32q4kv_bs16_ctx300 n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: paged_bf16_gqa8_32q4kv_bs16_ctx1000 rc=CHIP_FAIL violations=4096 worst=inf
+FAIL paged_bf16_gqa8_32q4kv_bs16_ctx1000 n=4096 rc=CHIP_FAIL violations=4096 worst_scaled_err=inf chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 0/0 
+FAIL: batch: the empty sequence is all zeros
+FAIL: paged_bf16_batch_3seq_32q8kv_ctx40_0_100: sequence 0 alone (single entry point, 3 blocks, ctx 40) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_batch_3seq_32q8kv_ctx40_0_100: sequence 1 alone (single entry point, 1 blocks, ctx 0) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_batch_3seq_32q8kv_ctx40_0_100: sequence 2 alone (single entry point, 4 blocks, ctx 100) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_batch_3seq_32q8kv_ctx40_0_100: repeated batch call is a cache hit, bit-identical, same staging counters (rc=CHIP_FAIL hit=128 staged 35434760061254/280147804740424)
+FAIL: batch: 7 distinct blocks staged once each (65226/4267682060, 280147804740424 bytes)
+FAIL: paged_bf16_batch_3seq_32q8kv_ctx40_0_100 rc=CHIP_FAIL violations=12288 worst=50291.8
+FAIL paged_bf16_batch_3seq_32q8kv_ctx40_0_100 n=12288 rc=CHIP_FAIL violations=12288 worst_scaled_err=50291.8 chip_ns=1026 call_ns=281474386328240 calls=4267627848 unwritten=65535 kv_staged=280147804740424/281474386328368 blocks=65226/4267682060 | mutants 4/4 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=12288) SLOT:CAUGHT(rc=CHIP_FAIL,bad=12288) Q_ROW:CAUGHT(rc=CHIP_FAIL,bad=12288) OUT_ROW:CAUGHT(rc=CHIP_FAIL,bad=12288)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre: 1 logical references, 1 unique staged (expected 49/19)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre: staged 2097152 < naive 2097152 bytes (saved 0)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre legacy staging: parity (rc=CHIP_FAIL bad=4096)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre negative control: duplicated prefix staging is flagged (legacy staged 280147804740424 == naive 281474386328368, dedupe 2097152)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre: dedupe and legacy staging are bit-identical
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre: sequence 0 alone (single entry point, 11 blocks, ctx 165) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre: sequence 1 alone (single entry point, 12 blocks, ctx 180) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre: sequence 2 alone (single entry point, 13 blocks, ctx 193) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre: sequence 3 alone (single entry point, 13 blocks, ctx 207) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre: repeated batch call is a cache hit, bit-identical, same staging counters (rc=CHIP_FAIL hit=128 staged 35434760061254/2097152)
+FAIL: paged_bf16_shared_prefix_4seq_8q2kv_10pre rc=CHIP_FAIL violations=4094 worst=inf
+FAIL paged_bf16_shared_prefix_4seq_8q2kv_10pre n=4096 rc=CHIP_FAIL violations=4094 worst_scaled_err=inf chip_ns=100 call_ns=600000552302 calls=40 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 2/2 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=4094) SLOT:CAUGHT(rc=CHIP_FAIL,bad=4094)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre: 1 logical references, 1 unique staged (expected 49/29)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre: staged 2097152 < naive 2097152 bytes (saved 0)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre: q/out/table traffic accounted (q=16384 out=16384 tab=8)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre legacy staging: parity (rc=CHIP_FAIL bad=16382)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre negative control: duplicated prefix staging is flagged (legacy staged 280147804740424 == naive 281474386328368, dedupe 2097152)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre: dedupe and legacy staging are bit-identical
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre: sequence 0 alone (single entry point, 11 blocks, ctx 165) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre: sequence 1 alone (single entry point, 12 blocks, ctx 180) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre: sequence 2 alone (single entry point, 13 blocks, ctx 193) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre: sequence 3 alone (single entry point, 13 blocks, ctx 207) is bit-identical to its batched row (rc=CHIP_FAIL)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre: repeated batch call is a cache hit, bit-identical, same staging counters (rc=CHIP_FAIL hit=128 staged 35434760061254/2097152)
+FAIL: paged_bf16_shared_prefix_4seq_32q8kv_10pre rc=CHIP_FAIL violations=16383 worst=49709.1
+FAIL paged_bf16_shared_prefix_4seq_32q8kv_10pre n=16384 rc=CHIP_FAIL violations=16383 worst_scaled_err=49709.1 chip_ns=100 call_ns=600000552302 calls=40 unwritten=0 kv_staged=2097152/2097152 blocks=1/1 | mutants 2/2 KV_HEAD:CAUGHT(rc=CHIP_FAIL,bad=16383) SLOT:CAUGHT(rc=CHIP_FAIL,bad=16383)
+mutant NO_MAX: caught 1 of 1
+mutant KV_HEAD: caught 11 of 11
+mutant SLOT: caught 9 of 9
+mutant NO_RESCALE: caught 4 of 4
+mutant Q_ROW: caught 6 of 6
+mutant OUT_ROW: caught 6 of 6
+device_opens=1
+FAIL: hd128 uniform scores: mean of V over 300 tokens (rc CHIP_FAIL, 1024 bad, worst 3.14169e+42, 0 threads)
+  hd128 dominant token 5 (warp 0 of chunk 0): rc CHIP_FAIL, 1024 bad, worst 4.21267e+41
+  hd128 dominant token 40 (warp 1 of chunk 0): rc CHIP_FAIL, 1024 bad, worst 1.16258e+42
+  hd128 dominant token 70 (warp 2 of chunk 0): rc CHIP_FAIL, 1024 bad, worst 8.29127e+41
+  hd128 dominant token 100 (warp 3 of chunk 0): rc CHIP_FAIL, 1024 bad, worst 1.29469e+42
+  hd128 dominant token 127 (warp 3 of chunk 0): rc CHIP_FAIL, 1024 bad, worst 4.7454e+41
+  hd128 dominant token 131 (warp 0 of chunk 1): rc CHIP_FAIL, 1024 bad, worst 1.2533e+42
+  hd128 dominant token 299 (warp 1 of chunk 2): rc CHIP_FAIL, 1024 bad, worst 7.97848e+41
+FAIL: hd128 dominant token in every warp and chunk: exact max/sum over four warp partials (worst bad 1024)
+FAIL: 126 checks, 71 failed
