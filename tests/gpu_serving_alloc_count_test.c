@@ -36,6 +36,7 @@
 #include "fake_m16_native.h"
 #include "omega_gpu_attention_api.h"
 #include "omega_gpu_matmul_api.h"
+#include "omega_gpu_serving.h"
 #include "omega_gpu_session.h"
 
 /* The two driver symbols the session needs that the fake (written for the vector engine) lacks. */
@@ -177,7 +178,52 @@ static void end(Phase *p, int sized) {
     CHECK(a1 <= FK_SIZE_LOG && f1 <= FK_SIZE_LOG, "size log overflow (%d allocs, %d frees)", a1, f1);
 }
 
-int main(void) {
+static const OmegaGpuServingBounds QWEN3_4B_BOUNDS = {
+    .max_context = 4096, .max_seqs = 1, .num_q_heads = QH, .num_kv_heads = KVH, .head_dim = HD,
+    .max_rows = CHUNK, .max_k = INTER, .max_n = INTER, .max_n_one_row = VOCAB, .kernel_slots = 32,
+};
+
+/* Bounds mode: a tiny reservation, then calls inside it (no driver traffic) and past it (refused loudly). */
+static int bounds_mode(void) {
+    OmegaGpuServingBounds b = QWEN3_4B_BOUNDS;
+    b.max_context = 256; b.max_rows = 32; b.max_k = HID; b.max_n = QDIM; b.max_n_one_row = 0;
+    Phase ph; begin(&ph, "BOUNDS"); /* sets P for mm()/attn() */
+    W_Q = upload(HID, QDIM);
+    attn(1); mm(1, W_Q, g_y);                                   /* warm kernels at small size */
+    CHECK(omega_gpu_reserve_serving(&b) == 0, "reserve failed: %s", omega_gpu_matmul_last_error());
+    mm(1, W_Q, g_y); mm(17, W_Q, g_y); mm(32, W_Q, g_y); attn(256); /* warm each shape once (reserving a deeper kernel cache restarts it empty) */
+    const int a0 = fk.alloc_calls, f0 = fk.free_calls;
+    mm(1, W_Q, g_y); mm(17, W_Q, g_y); mm(32, W_Q, g_y); attn(1); attn(100); attn(256);
+    CHECK(fk.alloc_calls == a0 && fk.free_calls == f0, "calls inside the bounds touched the driver (%d allocs, %d frees)", fk.alloc_calls - a0, fk.free_calls - f0);
+    OmegaGpuMatmulInfo info;
+    int rc = omega_gpu_matmul_resident_f32(33, g_x, W_Q, g_y, &info);          /* 33 rows -> 48 padded: past 32 */
+    CHECK(rc == OMEGA_GPU_MATMUL_TOO_LARGE, "33 rows past a 32-row reservation: rc=%d (%s)", rc, omega_gpu_matmul_rc_name(rc));
+    CHECK(strstr(omega_gpu_matmul_last_error(), "serving reservation exceeded") != NULL, "matmul error text: \"%s\"", omega_gpu_matmul_last_error());
+    rc = omega_gpu_gqa_attention_f32(g_q, g_k, g_v, 257, QH, KVH, HD, g_attn, NULL);
+    CHECK(rc == OMEGA_GPU_ATTN_TOO_LARGE, "context 257 past a 256 reservation: rc=%d (%s)", rc, omega_gpu_attention_rc_name(rc));
+    CHECK(strstr(omega_gpu_attention_last_error(), "serving reservation exceeded") != NULL, "attention error text: \"%s\"", omega_gpu_attention_last_error());
+    CHECK(fk.alloc_calls == a0 && fk.free_calls == f0, "a refused call touched the driver (%d allocs, %d frees)", fk.alloc_calls - a0, fk.free_calls - f0);
+    CHECK(!omega_gpu_matmul_is_blocked() && !omega_gpu_session_is_blocked(), "a refusal latched the session");
+    mm(32, W_Q, g_y); attn(256);                                /* still serves after a refusal */
+    CHECK(fk.alloc_calls == a0, "serving after a refusal allocated");
+    omega_gpu_serving_release();                                /* lifted: growth is allowed again */
+    rc = omega_gpu_gqa_attention_f32(g_q, g_k, g_v, 257, QH, KVH, HD, g_attn, NULL);
+    CHECK(rc == OMEGA_GPU_ATTN_OK || rc == OMEGA_GPU_ATTN_UNWRITTEN, "after release, context 257 rc=%d", rc);
+    CHECK(fk.alloc_calls > a0, "after release, growth did not allocate");
+    printf("MEASURE bounds: refused calls made 0 driver allocations; 33 rows -> TOO_LARGE, ctx 257 -> TOO_LARGE; error \"%s\"\n", "serving reservation exceeded: ...");
+    omega_gpu_tensor_free(W_Q);
+    omega_gpu_device_close();
+    CHECK(fk.live_at_close == 0, "leak: %d", fk.live_at_close);
+    printf("gpu_serving_alloc_count_test bounds: %s (%d failed checks)\n", g_fail ? "FAIL" : "PASS", g_fail);
+    return g_fail ? 1 : 0;
+}
+
+/* mode: "plain" (default) = today's measurement, no reservation; "reserve" = reserve after warm-up and
+ * ASSERT zero driver traffic while serving; "reserve-skip" = the same asserts without the call (must FAIL: the red run);
+ * "bounds" = refusal behaviour. */
+int main(int argc, char **argv) {
+    const char *mode = argc > 1 ? argv[1] : "plain";
+    const int do_reserve = strcmp(mode, "reserve") == 0, assert_zero = do_reserve || strcmp(mode, "reserve-skip") == 0;
     fake_reset();
     fk.kernel_mode = FK_KERNEL_SKIP;
     fk.alloc_max = 1ull << 31;
@@ -191,8 +237,9 @@ int main(void) {
     CHECK(g_x && g_y && g_logits && g_k && g_v, "host buffers");
     if (g_fail) return 1;
 
-    Phase ph[8];
+    Phase ph[9];
     int np = 0;
+    if (strcmp(mode, "bounds") == 0) return bounds_mode();
 
     begin(&ph[np], "LOAD (session+6 weights)");
     W_Q = upload(HID, QDIM); W_K = upload(HID, KVDIM); W_O = upload(QDIM, HID);
@@ -204,6 +251,14 @@ int main(void) {
     begin(&ph[np], "WARMUP decode ctx=1");
     step(1, 0);
     end(&ph[np], 1); np++;
+    if (assert_zero) {
+        /* a daemon's startup: reserve once after loading and a first request, then cover each row-count class
+         * (1 decode row, a full chunk, the 100 and 72 row remainders) so every matmul shape has been built once */
+        if (do_reserve) CHECK(omega_gpu_reserve_serving(&QWEN3_4B_BOUNDS) == 0, "reserve failed: %s", omega_gpu_matmul_last_error());
+        begin(&ph[np], "WARMUP row classes");
+        step(128, 0); step(100, 0); step(72, 0); step(1, 0);
+        end(&ph[np], 0); np++;
+    }
     const int after_warm_allocs = fk.alloc_calls, after_warm_frees = fk.free_calls;
 
     uint32_t ctx = 0;
@@ -230,7 +285,7 @@ int main(void) {
     const int serve_allocs = fk.alloc_calls - after_warm_allocs, serve_frees = fk.free_calls - after_warm_frees;
     printf("MEASURE AFTER WARM-UP: %d driver allocations, %d driver frees over %u tokens of context (final ctx %u)\n",
            serve_allocs, serve_frees, ctx, ctx);
-    printf("MEASURE distinct matmul kernel shapes seen (kp,np,grid_x): %d (cache slots: 8)\n", g_nseen);
+    printf("MEASURE distinct matmul kernel shapes seen (kp,np,grid_x): %d (cache slots: %d)\n", g_nseen, do_reserve ? 32 : 8);
     printf("MEASURE live driver buffers at end: %d ; session opens: %u ; launches reaching the fake: %d\n",
            fk.live, omega_gpu_session_open_count(), fk.kernel_ran);
     printf("MEASURE return codes: matmul ok %d, matmul poison-check CHIP_FAIL %d, attention ok %d, attention UNWRITTEN %d, other %d\n",
@@ -241,9 +296,14 @@ int main(void) {
     CHECK(!omega_gpu_matmul_is_blocked() && !omega_gpu_session_is_blocked(), "session latched");
     CHECK(fk.double_free == 0, "double free %d", fk.double_free);
     CHECK(fk.pb_parse_error == 0, "pushbuffer parse error");
-    CHECK(fk.kernel_ran == ph[1].mm_calls + ph[1].at_calls + ph[2].mm_calls + ph[2].at_calls + ph[3].mm_calls + ph[3].at_calls +
-                           ph[4].mm_calls + ph[4].at_calls + ph[5].mm_calls + ph[5].at_calls,
-          "launches %d != calls made", fk.kernel_ran);
+    int calls_made = 0;
+    for (int i = 1; i < np; i++) calls_made += ph[i].mm_calls + ph[i].at_calls;
+    CHECK(fk.kernel_ran == calls_made, "launches %d != calls made %d", fk.kernel_ran, calls_made);
+    if (assert_zero) {
+        /* the point of the reservation: nothing reached the driver while serving inside the bounds */
+        CHECK(serve_allocs == 0 && serve_frees == 0, "serving made %d driver allocations and %d frees after warm-up; the reservation promises none", serve_allocs, serve_frees);
+        for (int i = np - 4; i < np; i++) CHECK(ph[i].allocs == 0 && ph[i].frees == 0, "phase %s: %d allocs, %d frees", ph[i].name, ph[i].allocs, ph[i].frees);
+    }
     CHECK(fk.live < FK_LIVE_MAX, "fake live table full (%d)", fk.live);
     /* every real allocation is either live or was freed */
     CHECK(fk.alloc_calls - fk.free_calls >= fk.live, "alloc/free/live inconsistent: %d - %d < %d", fk.alloc_calls, fk.free_calls, fk.live);
@@ -255,6 +315,6 @@ int main(void) {
     CHECK(fk.live_at_close == 0, "leak: %d driver buffers live at close", fk.live_at_close);
     printf("MEASURE leaked at close: %d\n", fk.live_at_close);
 
-    printf("gpu_serving_alloc_count_test: %s (%d failed checks)\n", g_fail ? "FAIL" : "PASS", g_fail);
+    printf("gpu_serving_alloc_count_test %s: %s (%d failed checks)\n", mode, g_fail ? "FAIL" : "PASS", g_fail);
     return g_fail ? 1 : 0;
 }

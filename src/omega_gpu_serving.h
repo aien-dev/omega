@@ -1,0 +1,42 @@
+/*
+ * omega_gpu_serving.h: OPT-IN up-front reservation of the GB10 serving buffers (sovereign-core design
+ * note docs/design/gb10-weight-ownership.md, sc#277).
+ *
+ * Without this call nothing changes: the attention staging pool, the matmul activation and result
+ * buffers and the matmul kernel cache grow on demand, which on the GB10 means one driver allocation
+ * per new context length and per row-count growth (omega PR #332 measured 458 after warm-up over 428
+ * tokens). With it, a daemon calls omega_gpu_reserve_serving once after loading weights, and every
+ * later call inside the declared bounds reuses the same buffers. A call outside the bounds is refused
+ * with TOO_LARGE and a clear omega_gpu_*_last_error() text ("serving reservation exceeded: need N
+ * bytes, reserved M"); it never asks the driver for more memory, so it cannot fault the session.
+ *
+ * Not covered (documented follow-ups): the elementwise API's scratch (it stops growing after the
+ * first full-size call), the attention kernel cache (8 slots, one kernel per model shape), and the
+ * first build of each distinct matmul shape (one small code buffer per shape, kept for good when
+ * kernel_slots covers the shapes of the model).
+ */
+#ifndef OMEGA_GPU_SERVING_H
+#define OMEGA_GPU_SERVING_H
+
+#include <stdint.h>
+
+typedef struct {
+    uint32_t max_context;    /* longest sequence (tokens) one attention call may cover */
+    uint32_t max_seqs;       /* sequences per attention call; 0 = 1 */
+    uint32_t num_q_heads, num_kv_heads, head_dim; /* the model's attention shape */
+    uint32_t max_rows;       /* most rows one matmul call may carry (prefill chunk) */
+    uint32_t max_k;          /* widest weight input dimension */
+    uint32_t max_n;          /* widest weight output dimension for calls of up to max_rows rows */
+    uint32_t max_n_one_row;  /* widest output dimension for calls of at most 16 rows (lm_head); 0 = max_n */
+    uint32_t kernel_slots;   /* matmul kernel cache slots; 0 = leave at 8; at most 32. Distinct shapes of one model: ~21 for Qwen3-4B */
+} OmegaGpuServingBounds;
+
+/* Opens the device if needed. 0 on success, else the first failing OMEGA_GPU_MATMUL_* / ATTN_* code
+ * (omega_gpu_matmul_last_error() has the text). All-or-nothing in effect: the reservation flags are only
+ * set on buffers that were allocated. */
+int omega_gpu_reserve_serving(const OmegaGpuServingBounds *b);
+
+/* Lift the reservation: buffers stay, growth is allowed again. (Closing the device also ends it.) */
+void omega_gpu_serving_release(void);
+
+#endif

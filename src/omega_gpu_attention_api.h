@@ -141,6 +141,15 @@ int omega_gpu_paged_attention_batch_bf16(const float *q, const void *pool, const
 const char *omega_gpu_attention_rc_name(int rc);
 void omega_gpu_attention_cache_clear(void);
 
+/* OPT-IN serving reservation (omega_gpu_reserve_serving in omega_gpu_serving.h calls this). Allocates the KV staging
+ * pool (2 planes f32, 8 KiB per token at 8 kv heads x 128), q, output and table buffers once for contexts up to
+ * max_context and up to max_seqs sequences per call. A later call that fits never allocates; one that does not
+ * returns OMEGA_GPU_ATTN_TOO_LARGE ("serving reservation exceeded" in omega_gpu_attention_last_error()) and asks the
+ * driver for nothing. Never called = behaviour unchanged. The f32 contiguous path still refuses contexts past
+ * OMEGA_GPU_ATTN_MAX_GQA_CTX on its own. 0 on success, else an OMEGA_GPU_ATTN_* code. */
+int omega_gpu_attention_reserve(uint32_t max_context, uint32_t max_seqs, uint32_t num_q_heads, uint32_t num_kv_heads, uint32_t head_dim);
+void omega_gpu_attention_unreserve(void);
+
 /* Stage name of the most recent CHIP_FAIL ("" if none), shared with the other GPU APIs
  * (omega_gpu_session_last_error); an open failure carries the driver text. */
 const char *omega_gpu_attention_last_error(void);
