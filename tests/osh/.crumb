@@ -16,20 +16,20 @@
         },
         {
           "digest": "27e4840c198f9b3f0d6acdcb5a279124a157199ab42632d4be18c79e9ac1b5cd",
-          "last_commit": "e61de57",
+          "last_commit": "4cc3bdd",
           "name": "trace",
           "purpose": "Core-only step traces of the osh shell units over fixture scripts (OSH-AIENOS-0 differential fix"
         }
       ],
       "children_root": "sha256:bffabbbede587d83286e7d9f0e2c1e197cd822f77d105a7fe02f448b24d67f9c",
-      "compiled_at": "2026-10-08T12:55:47Z",
+      "compiled_at": "2026-10-08T12:58:13Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:ef06ef83a860f6e22964371bd02703c24d826f5a5823859ce53951b4208360ee",
+      "digest": "sha256:cbeed5ed9e19195b442f1bde9cac95f066d4b7037b48f73859573d469240c664",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 92,
-      "generated_at_commit": "c2048cf20612ce71a8660fad291a03cf3225bd36",
-      "source_tree": "sha256:44090ae3a92188f6b53c24ebf903667992cda832598a4674295ae281d0245253"
+      "generated_at_commit": "4cc3bdda4ace926eb2a9a976551dc525279c53b8",
+      "source_tree": "sha256:8f5bcc8408f791b3a0fefb4124df3db6f1adfaf602c278d3913776c22cc23714"
     }
   },
   "name": "osh-tests",

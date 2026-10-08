@@ -128,7 +128,13 @@ static char *pos[MAX_POS];
 static int npos;
 static const char ARG0[] = "osh_trace";
 
-static int next_fake(void) { return fake_i < nfake ? fake[fake_i++] : 0; }
+static int have_status; /* a .status file was given: running out of statuses is a fixture error */
+static int next_fake(void)
+{
+    if (fake_i < nfake) return fake[fake_i++];
+    if (have_status) { printf("event fake_status_exhausted after=%d\n", nfake); fflush(stdout); fprintf(stderr, "osh_trace: .status has too few statuses\n"); exit(2); }
+    return 0;
+}
 
 static void answer(void)
 {
@@ -188,7 +194,10 @@ static int run_list(void)
             continue;
         }
         case ST_COMPLETE: return 0;
-        default: last_status = 2; return 1; /* refused or fault: non-interactive shell stops with 2 */
+        default: /* as osh_shell.c: a refusal stops a non-interactive shell with 2, a unit fault with 70 */
+            if (st == OSH_CORE_FAULT || st < 200) { printf("event internal_error status=%llu\n", (unsigned long long)st); last_status = 70; return 1; }
+            last_status = 2;
+            return 1;
         }
     }
     return 1;
@@ -272,11 +281,13 @@ static void load_fixture(const char *script)
     char *s = slurp(p, &n, 1);
     if (s) {
         char *e;
-        for (char *q = s; nfake < MAX_FAKE;) {
+        have_status = 1;
+        for (char *q = s;;) {
             while (*q == ' ' || *q == '\t' || *q == '\n') q++;
             if (!*q) break;
             long v = strtol(q, &e, 10);
             if (e == q || v < 0 || v > 255) { fprintf(stderr, "osh_trace: bad status in %s\n", p); exit(2); }
+            if (nfake == MAX_FAKE) { fprintf(stderr, "osh_trace: more than %d statuses in %s\n", MAX_FAKE, p); exit(2); }
             fake[nfake++] = (int)v;
             q = e;
         }
@@ -284,7 +295,8 @@ static void load_fixture(const char *script)
     sidecar(script, ".args", p, sizeof p);
     s = slurp(p, &n, 1);
     if (s) {
-        for (char *q = s; *q && npos < MAX_POS;) {
+        for (char *q = s; *q;) {
+            if (npos == MAX_POS) { fprintf(stderr, "osh_trace: more than %d arguments in %s\n", MAX_POS, p); exit(2); }
             char *nl = strchr(q, '\n');
             if (nl) *nl = 0;
             pos[npos++] = q;
