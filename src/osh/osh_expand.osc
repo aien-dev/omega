@@ -50,7 +50,7 @@ fn fail(w: cells, code: u64, off: u64) -> u64 {
 
 // A refusal at the start of the word being expanded.
 fn werr(w: cells, code: u64) -> u64 {
-    return fail(w, code, w[64 + w[40] * 4 + 1]);
+    return fail(w, code, w[64 + w[32] * 4 + 1]);
 }
 
 // ABI header check (OSH_PLATFORM_ABI.md section 3): first failure wins, nothing is written.
@@ -139,7 +139,7 @@ fn dollar(inp: bytes, w: cells, p: u64, e: u64) -> u64 {
 
 // First cell of the request block of the current command.
 fn cbase(w: cells) -> u64 {
-    return 1928 + 8 + w[39] * 164;
+    return 1928 + 8 + w[31] * 164;
 }
 
 // Open a field if none is open.
@@ -162,7 +162,7 @@ fn fclose(w: cells) -> u64 {
     if wm == 1 {
         let n: u64 = w[cb];
         if n >= 32 { return werr(w, 209); }
-        if n == 0 { w[44] = w[64 + w[40] * 4 + 1]; }
+        if n == 0 { w[44] = w[64 + w[32] * 4 + 1]; }
         w[cb + 4 + n * 2] = off;
         w[cb + 5 + n * 2] = ln;
         w[cb] = n + 1;
@@ -195,9 +195,9 @@ fn sbyte(w: cells, c: u64) -> u64 {
 
 // Ask the host for a variable (kind in S_VR_KIND, operands already in S_VR_A and S_VR_LEN).
 fn request(w: cells, kind: u64) -> u64 {
-    let n: u64 = w[41];
+    let n: u64 = w[33];
     if n >= 64 { return werr(w, 212); }
-    w[41] = n + 1;
+    w[33] = n + 1;
     w[8] = kind;
     w[11] = w[11] + 1;
     w[896] = 2;
@@ -208,8 +208,8 @@ fn request(w: cells, kind: u64) -> u64 {
 // Cell of the latest earlier assignment entry of this command named inp[ns..ns+nl), or 0. Only in a command with no
 // command word, so that `A=1 B=$A` sees the new A (a prefix assignment sees the old value).
 fn find_prior(inp: bytes, w: cells, ns: u64, nl: u64) -> u64 {
-    let pb: u64 = 832 + w[31] * 4;
-    if w[576 + (w[pb] + w[39]) * 8 + 3] != 0 { return 0; }
+    let pb: u64 = 832 + w[30] * 4;
+    if w[576 + (w[pb] + w[31]) * 8 + 3] != 0 { return 0; }
     let cb: u64 = cbase(w);
     let na: u64 = w[cb + 1];
     let mut hit: u64 = 0;
@@ -334,13 +334,13 @@ fn wend(w: cells) -> u64 {
     }
     if wm == 3 && w[16] == 0 { return werr(w, 243); }
     w[45] = 0;
-    w[40] = w[40] + 1;
+    w[32] = w[32] + 1;
     return 1;
 }
 
 // One raw byte of the word (or its end). 0 = go on, 1 = word complete, 102 = variable wanted, >= 200 = refusal.
 fn xraw(inp: bytes, w: cells) -> u64 {
-    let tb: u64 = 64 + w[40] * 4;
+    let tb: u64 = 64 + w[32] * 4;
     let e: u64 = w[tb + 1] + w[tb + 2];
     let p: u64 = w[47];
     if p >= e { return wend(w); }
@@ -455,11 +455,11 @@ fn start_redir(inp: bytes, w: cells, t: u64, k: u64) -> u64 {
         let d: u64 = inp[w[ub + 1]];
         if d < 48 || d > 50 { return fail(w, 217, s); }
         w[e + 2] = d - 48;
-        w[40] = t + 2;
+        w[32] = t + 2;
         return 0;
     }
     wset(w, 3, w[ub + 1]);
-    w[40] = t + 1;
+    w[32] = t + 1;
     return 0;
 }
 
@@ -492,14 +492,14 @@ fn classify(v: u64) -> u64 {
 
 // The pipeline is fully expanded: header, state, status.
 fn pipe_ready(w: cells) -> u64 {
-    let pb: u64 = 832 + w[31] * 4;
+    let pb: u64 = 832 + w[30] * 4;
     w[1928] = 1330791761;
     w[1928 + 1] = w[pb + 1];
     w[1928 + 2] = w[pb + 2];
     w[1928 + 3] = 0;
     w[1928 + 4] = w[42];
     w[1928 + 5] = 1;
-    w[30] = 2;
+    w[29] = 2;
     return 103;
 }
 
@@ -511,20 +511,20 @@ fn cmd_end(w: cells) -> u64 {
         if b == 99 { return fail(w, 239, w[44]); }
         w[cb + 3] = b;
     }
-    let pb: u64 = 832 + w[31] * 4;
-    let c: u64 = w[39] + 1;
+    let pb: u64 = 832 + w[30] * 4;
+    let c: u64 = w[31] + 1;
     if c >= w[pb + 1] { return pipe_ready(w); }
-    w[39] = c;
-    w[40] = w[576 + (w[pb] + c) * 8];
+    w[31] = c;
+    w[32] = w[576 + (w[pb] + c) * 8];
     w[43] = 0;
     return 0;
 }
 
 // Between words: classify the next token of the command and start it.
 fn next_task(inp: bytes, w: cells) -> u64 {
-    let pb: u64 = 832 + w[31] * 4;
-    let cmb: u64 = 576 + (w[pb] + w[39]) * 8;
-    let t: u64 = w[40];
+    let pb: u64 = 832 + w[30] * 4;
+    let cmb: u64 = 576 + (w[pb] + w[31]) * 8;
+    let t: u64 = w[32];
     if t >= w[cmb + 1] { return cmd_end(w); }
     let tb: u64 = 64 + t * 4;
     let hdr: u64 = w[tb];
@@ -548,20 +548,20 @@ fn pipe_begin(w: cells, p: u64) {
         w[1928 + i] = 0;
         i = i + 1;
     }
-    w[39] = 0;
-    w[40] = w[576 + w[pb] * 8];
-    w[41] = 0;
+    w[31] = 0;
+    w[32] = w[576 + w[pb] * 8];
+    w[33] = 0;
     w[42] = 0;
     w[43] = 0;
     w[45] = 0;
     w[46] = 0;
-    w[30] = 1;
+    w[29] = 1;
 }
 
 // Pick the next pipeline that runs (connector rules). 0 = begun, 104 = none left.
 fn next_pipe(w: cells) -> u64 {
-    let np: u64 = w[35];
-    let mut p: u64 = w[31];
+    let np: u64 = w[37];
+    let mut p: u64 = w[30];
     let mut go: u64 = 0;
     while p < np && go == 0 bound 16 {
         go = 1;
@@ -573,9 +573,9 @@ fn next_pipe(w: cells) -> u64 {
         }
         if go == 0 { p = p + 1; }
     }
-    w[31] = p;
+    w[30] = p;
     if p >= np {
-        w[30] = 3;
+        w[29] = 3;
         return 104;
     }
     pipe_begin(w, p);
@@ -586,20 +586,23 @@ fn expand_run(inp: bytes, w: cells) -> u64 {
     let ac: u64 = abi_check(w);
     if ac != 0 { return ac; }
     if w[2] == 255 { return w[4]; }
-    if w[32] != 4 { return 217; }
-    if w[29] == 0 {
+    if w[34] != 4 { return 217; }
+    if w[41] == 0 {
+        for j in 29 .. 34 {
+            w[j as u64] = 0;
+        }
         for j in 12 .. 27 {
             if j != 17 && j != 25 { w[j as u64] = 0; }
         }
-        w[29] = 1;
+        w[41] = 1;
     }
-    if w[30] > 3 || w[31] > w[35] { return 217; }
-    if w[30] == 3 { return 104; }
-    if w[30] == 2 {
-        w[31] = w[31] + 1;
-        w[30] = 0;
+    if w[29] > 3 || w[30] > w[37] { return 217; }
+    if w[29] == 3 { return 104; }
+    if w[29] == 2 {
+        w[30] = w[30] + 1;
+        w[29] = 0;
     }
-    if w[30] == 0 {
+    if w[29] == 0 {
         let nr: u64 = next_pipe(w);
         if nr != 0 { return nr; }
     }
