@@ -5,16 +5,19 @@
 // inp: the accumulated command text (append-only). w: the 11456-cell session workspace. All state is in
 // w; the unit stores no pointer. One call lexes at most @LEX_BUDGET@ input bytes, writes a token record
 // first and advances the cursor after, and returns one status:
-//   0 PHASE_DONE        every buffered byte is lexed and the last byte ended a line (newline at rest)
+//   0 PHASE_DONE        every buffered byte is lexed and the last byte ended a line (newline at rest), or the
+//                       host set S_EOI = 1 and the pending word or operator was finished (end of input)
 //   100 NEED_MORE_INPUT the buffer ends inside an incomplete line (open quote, `${`, trailing backslash,
 //                       pending operator or word, no final newline); append and call again
 //   101 BUDGET_EXHAUSTED  budget spent, call again with no new input
 //   201 CAP_LINE (buffer byte @LINE_CAP@ reached)  202 CAP_TOKENS (@TOKEN_CAP@ tokens)
-//   213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH 217 ABI_RESERVED
+//   213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH 217 ABI_RESERVED (also S_EOI above 1)
+//   248 SYNTAX_EOF (S_EOI = 1 and the buffer ends inside a quote or `${`; a final lone backslash is a literal)
 //   220 NUL_BYTE 221 BACKTICK 222 GLOB 223 TILDE 224 PARAM_OP 225 SPECIAL_PARAM 226 CMDSUB 227 BACKGROUND
 //   228 SUBSHELL 229 HEREDOC 230 CASEEND 231 REDIR_OTHER 232 FD_RANGE
 //   236 GROUP (a lone `{` or `}` word at command start) 246 BRACE_EXPANSION 247 POSITIONAL_RANGE (${10}, ${00})
 //   249 APPEND_ASSIGN (a NAME+= word; also `$_` and `${_}` are refused as 225 SPECIAL_PARAM)
+//   250 FD_VARIABLE (a `{NAME}` word directly before a redirection operator: bash allocates a descriptor)
 // Line continuation: a backslash-newline pair is removed before the byte after it is classified, in every state
 // except single quotes and comments (bash rule). A chunk that ends in a lone `\` waits (status 100, the `\`
 // is not consumed) unless the host set S_EOI, when that `\` is a literal byte. Refusal offsets and token spans
@@ -263,6 +266,45 @@ fn iomerge(inp: bytes, w: cells, ws: u64) -> u64 {
     return d + 1;
 }
 
+// bash's `{NAME}` redirection (the shell allocates a descriptor and stores it in NAME): an unquoted word that is
+// exactly `{` NAME `}` (backslash-newline pairs skipped) and ends at ws, directly before a redirection operator.
+// R1 does not implement it, so it is refused (250 FD_VARIABLE) instead of being passed on as a literal word.
+fn fdvar(inp: bytes, w: cells, ws: u64) -> u64 {
+    let t: u64 = w[@LX_NTOK@];
+    if t == 0 { return 0; }
+    let b: u64 = @TOKENS@ + (t - 1) * 4;
+    if (w[b] & 255) != 1 { return 0; }
+    let fl: u64 = (w[b] >> 8) & 65535;
+    if fl != 0 && fl != 32 { return 0; }
+    let s: u64 = w[b + 1];
+    let e: u64 = s + w[b + 2];
+    if e != ws { return 0; }
+    let mut i: u64 = s;
+    let mut n: u64 = 0;
+    let mut ok: u64 = 1;
+    let mut last: u64 = 0;
+    while i < e && ok == 1 bound 4096 {
+        if inp[i] == 92 && i + 1 < e && inp[i + 1] == 10 {
+            i = i + 2;
+        } else {
+            let c: u64 = inp[i];
+            if n == 0 {
+                if c != 123 { ok = 0; }
+            } else {
+                if last == 125 { ok = 0; }
+                let k: u64 = cls(c);
+                if c != 125 && k != 12 && !(k == 16 && n > 1) { ok = 0; }
+                if c == 125 && n < 2 { ok = 0; }
+            }
+            last = c;
+            n = n + 1;
+            i = i + 1;
+        }
+    }
+    if ok == 1 && last == 125 && n >= 3 { return 1; }
+    return 0;
+}
+
 // An operator of `kind` is complete: it starts at LX_WS and its last byte is at oe - 1 (a backslash-newline pair
 // may sit between its bytes, so the span is the raw source).
 fn emit_op(inp: bytes, w: cells, kind: u64, oe: u64) -> u64 {
@@ -273,6 +315,7 @@ fn emit_op(inp: bytes, w: cells, kind: u64, oe: u64) -> u64 {
     if kind == 6 || kind == 7 || kind == 8 || kind == 10 || kind == 11 {
         let m: u64 = iomerge(inp, w, ws);
         if m == 100 { return fail(w, 232, ws); }
+        if m == 0 && fdvar(inp, w, ws) == 1 { return fail(w, 250, w[@TOKENS@ + (w[@LX_NTOK@] - 1) * 4 + 1]); }
         if m != 0 {
             let b: u64 = @TOKENS@ + (w[@LX_NTOK@] - 1) * 4;
             w[b] = w[b] - 1 + kind;
@@ -513,7 +556,32 @@ fn abi_check(w: cells) -> u64 {
     for j in @S_RESERVED@ .. 64 {
         if w[j as u64] != 0 { return 217; }
     }
+    if w[@S_EOI@] > 1 { return 217; }
     return 0;
+}
+
+// End of input (S_EOI = 1, set by the host once no more bytes will be appended): finish the pending word or
+// operator. A final lone `\` is a literal byte (bash), already consumed as one. Anything still open (a quote or
+// `${`) is an unexpected end of input, SYNTAX_EOF. A `$_` that ends the input is the `$_` special parameter.
+fn lex_flush(inp: bytes, w: cells) -> u64 {
+    let st: u64 = w[@LX_STATE@];
+    let n: u64 = inp.len;
+    if st == 0 || st == 10 { return 0; }
+    let usc: u64 = w[@LX_USC@];
+    if usc != 0 && (st == 1 || st == 3) { return fail(w, 225, usc - 1); }
+    if st == 1 || st == 6 {
+        let rc: u64 = emit_word(inp, w, n);
+        if rc != 0 { return rc; }
+        w[@LX_STATE@] = 0;
+        return 0;
+    }
+    if st == 11 {
+        let rc2: u64 = emit_op(inp, w, opkind(w[@LX_PREV@], 0), w[@LX_PO@] + 1);
+        if rc2 != 0 { return rc2; }
+        w[@LX_STATE@] = 0;
+        return 0;
+    }
+    return fail(w, 248, n);
 }
 
 fn lex_run(inp: bytes, w: cells) -> u64 {
@@ -521,10 +589,19 @@ fn lex_run(inp: bytes, w: cells) -> u64 {
     if ac != 0 { return ac; }
     if w[@S_PHASE@] == 255 { return w[@S_ERR_CODE@]; }
     if w[@S_CURSOR@] > inp.len { return 216; }
+    w[@LX_DONE@] = 0;
     let rc: u64 = lex_chunk(inp, w);
     if rc == 99 { return 100; }
     if rc != 0 { return rc; }
     if w[@S_CURSOR@] < inp.len { return 101; }
-    if w[@LX_MID@] == 0 { return 0; }
+    if w[@S_EOI@] == 1 && w[@LX_MID@] != 0 {
+        let fr: u64 = lex_flush(inp, w);
+        if fr != 0 { return fr; }
+        w[@LX_MID@] = 0;
+    }
+    if w[@LX_MID@] == 0 {
+        w[@LX_DONE@] = 1;
+        return 0;
+    }
     return 100;
 }

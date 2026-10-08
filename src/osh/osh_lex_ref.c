@@ -20,7 +20,7 @@
 enum { K_WORD = 1, K_PIPE, K_OR, K_AND, K_SEMI, K_LT, K_GT, K_APPEND, K_NL, K_DUP_OUT, K_DUP_IN };
 enum { E_CAP_LINE = 201, E_CAP_TOKENS = 202, E_NUL = 220, E_BACKTICK, E_GLOB, E_TILDE, E_PARAM_OP, E_SPECIAL_PARAM,
        E_CMDSUB, E_BACKGROUND, E_SUBSHELL, E_HEREDOC, E_CASEEND, E_REDIR_OTHER, E_FD_RANGE, E_GROUP = 236, E_BRACE = 246,
-       E_POSITIONAL = 247, E_APPEND_ASSIGN = 249 };
+       E_POSITIONAL = 247, E_SYNTAX_EOF = 248, E_APPEND_ASSIGN = 249, E_FD_VARIABLE = 250 };
 #define INCOMPLETE (-1)
 #define CAPLINE (-2)
 
@@ -50,7 +50,7 @@ static void refuse(Ref *r, unsigned code, uint64_t off)
 /* a negative peek result becomes the outcome */
 static int stop(Ref *r, int pk)
 {
-    if (pk == INCOMPLETE) r->o->status = 100;
+    if (pk == INCOMPLETE) { if (r->eoi) refuse(r, E_SYNTAX_EOF, r->n); else r->o->status = 100; }
     else refuse(r, E_CAP_LINE, OSH_REF_LINE_CAP);
     return 1;
 }
@@ -112,7 +112,11 @@ static size_t dollar(Ref *r, size_t j, int dq, uint64_t *fl, uint64_t *line)
     int rc = sk(r, &q, &f2, &l2);
     if (rc < 0) { stop(r, rc); return 0; }
     int x = peek(r, q);
-    if (x < 0) { stop(r, x); return 0; }
+    if (x < 0) {
+        if (x == INCOMPLETE && r->eoi) return j + 1; /* a literal `$` at the end of the input */
+        stop(r, x);
+        return 0;
+    }
     if (x == 0) { refuse(r, E_NUL, q); return 0; }
     if (is_alpha_(x) || is_digit(x) || x == '?' || x == '#' || x == '@' || x == '*') {
         if (x == '_') {
@@ -122,6 +126,7 @@ static size_t dollar(Ref *r, size_t j, int dq, uint64_t *fl, uint64_t *line)
             rc = sk(r, &q2, &f3, &l3);
             if (rc < 0) { stop(r, rc); return 0; }
             int nb = peek(r, q2);
+            if (nb == INCOMPLETE && r->eoi) { refuse(r, E_SPECIAL_PARAM, q); return 0; } /* `$_` ends the input */
             if (nb < 0) { stop(r, nb); return 0; }
             if (nb != 0 && !is_alpha_(nb) && !is_digit(nb)) { refuse(r, E_SPECIAL_PARAM, q); return 0; }
         }
@@ -195,7 +200,10 @@ static int word(Ref *r, size_t b, size_t *end, uint64_t *flags, uint64_t *nseg, 
         pdot = 0;
         if (rc < 0) return stopz(r, rc);
         int c = peek(r, j);
-        if (c < 0) return stopz(r, c);
+        if (c < 0) {
+            if (c == INCOMPLETE && r->eoi) break; /* the input ends the word */
+            return stopz(r, c);
+        }
         if (c == 0) { refuse(r, E_NUL, j); return 0; }
         if (c == ' ' || c == '\t' || c == '\n' || is_opch(c)) break;
         if (app && j == app) { refuse(r, E_APPEND_ASSIGN, j); return 0; }
@@ -285,13 +293,13 @@ static int word(Ref *r, size_t b, size_t *end, uint64_t *flags, uint64_t *nseg, 
     return 1;
 }
 
-void osh_lex_ref_eoi(const uint8_t *in, size_t n, int eoi, OshRefLex *out)
+void osh_lex_ref(const uint8_t *in, size_t n, int eoi, OshRefLex *out)
 {
     memset(out, 0, sizeof *out);
     Ref r = { in, n, out, 1, 0, eoi };
     size_t i = 0;
     for (;;) {
-        if (i == n) { out->status = r.last_was_nl || n == 0 ? 0 : 100; return; }
+        if (i == n) { out->status = r.eoi || r.last_was_nl || n == 0 ? 0 : 100; return; }
         int c = peek(&r, i);
         if (c < 0) { stop(&r, c); return; }
         if (c == 0) { refuse(&r, E_NUL, i); return; }
@@ -305,7 +313,11 @@ void osh_lex_ref_eoi(const uint8_t *in, size_t n, int eoi, OshRefLex *out)
             size_t k = i + 1;
             for (;;) {
                 int d = peek(&r, k);
-                if (d < 0) { stop(&r, d); return; }
+                if (d < 0) {
+                    if (d == INCOMPLETE && r.eoi) { k = n; break; } /* a comment ends with the input */
+                    stop(&r, d);
+                    return;
+                }
                 if (d == 0) { refuse(&r, E_NUL, k); return; }
                 if (d == '\n') break;
                 k++;
@@ -326,7 +338,10 @@ void osh_lex_ref_eoi(const uint8_t *in, size_t n, int eoi, OshRefLex *out)
             size_t q = i + 1;
             if (skipc(&r, &q, &np) < 0) { r.o->status = 100; return; }
             int c2 = peek(&r, q);
-            if (c2 < 0) { stop(&r, c2); return; }
+            if (c2 < 0) {
+                if (c2 == INCOMPLETE && r.eoi) c2 = -1; /* the operator is complete at the end of the input */
+                else { stop(&r, c2); return; }
+            }
             if (c2 == 0) { refuse(&r, E_NUL, q); return; }
             unsigned kind = 0;
             int two = 0;
@@ -366,6 +381,17 @@ void osh_lex_ref_eoi(const uint8_t *in, size_t n, int eoi, OshRefLex *out)
                         i = oend;
                         continue;
                     }
+                    /* `{NAME}` directly before the operator: bash's descriptor-variable redirection, refused */
+                    char nb[4096];
+                    size_t nn = 0;
+                    for (uint64_t z = 0; z < pt->len && nn < sizeof nb; z++) {
+                        uint64_t o = pt->start + z;
+                        if (in[o] == '\\' && z + 1 < pt->len && in[o + 1] == '\n') { z++; continue; }
+                        nb[nn++] = (char)in[o];
+                    }
+                    int fdv = nn >= 3 && nb[0] == '{' && nb[nn - 1] == '}' && is_alpha_(nb[1]);
+                    for (size_t z = 2; fdv && z + 1 < nn; z++) fdv = is_alpha_(nb[z]) || is_digit(nb[z]);
+                    if (fdv) { refuse(&r, E_FD_VARIABLE, pt->start); return; }
                 }
             }
             if (add(&r, kind, 0, 0, r.line, i, oend - i, aux)) return;
@@ -399,7 +425,3 @@ void osh_lex_ref_eoi(const uint8_t *in, size_t n, int eoi, OshRefLex *out)
     }
 }
 
-void osh_lex_ref(const uint8_t *in, size_t n, OshRefLex *out)
-{
-    osh_lex_ref_eoi(in, n, 0, out);
-}
