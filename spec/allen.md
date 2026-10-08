@@ -1,9 +1,15 @@
 # ALLEN v0: the durable subject inside the organism (omega side)
 
 Status: SPECIFIED + IMPLEMENTED + TESTED (host). Architecture: ARCH-0035
-(aien-architecture, PROPOSED). Format: aienos ADR 0018 (PROPOSED), continuity
+(aien-architecture, ACCEPTED 2026-10-06; see the dated note below). Format: aienos ADR 0018 (PROPOSED), continuity
 kind 24. Nothing here is QUALIFIED on hardware, and no OS reboot or machine
 migration is claimed.
+
+> Note, 2026-10-08: this file originally read "ARCH-0035 PROPOSED". [ADR 0035](https://github.com/aien-dev/aien-architecture/blob/main/docs/adr/0035-persistent-cognitive-entity-boundary-allen.md)
+> was ACCEPTED on 2026-10-06; only the architecture label changed. Aienos ADR 0018 (the kind-24 format) is still
+> PROPOSED and unfrozen, and nothing here is QUALIFIED on hardware. User-editable personalization (display name, tone,
+> working preferences) is a separate host record, not part of the subject format: see the personalization contract,
+> aien-architecture `docs/plans/allen-personalization/CONTRACT-v1.md` (pending PR, aien-dev/aien-architecture#160).
 
 ## 1. What ALLEN is here
 

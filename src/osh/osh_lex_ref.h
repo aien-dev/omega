@@ -18,12 +18,15 @@ typedef struct {
 typedef struct {
     OshRefTok tok[OSH_REF_TOKEN_CAP];
     unsigned ntok;
-    unsigned status;   /* 0 line complete, 100 incomplete, else a refusal code (201, 202, 220..232) */
+    unsigned status;   /* 0 line complete, 100 incomplete, else a refusal code (201, 202, 220..232, 236, 246..249) */
     uint64_t err_off;  /* byte offset of a refusal */
 } OshRefLex;
 
 /* Tokenize the whole buffer in one pass. Same observable result as running the OSC lexer to completion
  * over the same bytes, however they were split into calls. */
 void osh_lex_ref(const uint8_t *in, size_t n, OshRefLex *out);
+
+/* Same, with the end-of-input flag: eoi != 0 makes a final lone backslash a literal byte (otherwise it is incomplete). */
+void osh_lex_ref_eoi(const uint8_t *in, size_t n, int eoi, OshRefLex *out);
 
 #endif /* OSH_LEX_REF_H */

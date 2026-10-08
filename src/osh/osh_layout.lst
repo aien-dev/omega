@@ -43,3 +43,14 @@ LX_WLINE 19                 # line number (1-based) where the word started
 LX_NSEG 20                  # quoted segments in the word
 LX_ALLDIG 21                # word so far is all digits
 LX_MID 22                   # 1 while the last byte did not complete a line
+LX_BRD 23                   # open unquoted `{` count in the word (brace expansion detector)
+LX_BRM 24                   # bit d set: the open brace at depth d has an unquoted `,` or `..` directly inside
+LX_PDOT 25                  # the last byte was an unquoted plain `.` in the word
+LX_BRN 26                   # ${...} name: 0 none/alpha start, 1 digits so far (one digit)
+# 27 is LX_DONE in the parser unit (osh_parse): kept free here so the two layouts agree
+S_EOI 28                    # host-set: 1 = the input has ended (explicit end-of-input flush); a trailing `\` is then a literal
+LX_CONT 29                  # 1 after a `\` that starts a backslash-newline pair; the next byte (the newline) is swallowed
+LX_PREV 30                  # the last significant byte (a swallowed `\<nl>` pair does not count)
+LX_PO 31                    # offset of LX_PREV
+LX_PLUS 32                  # 1 when the last significant byte was a `+` right after a valid NAME (append-assignment detector)
+LX_USC 33                   # offset+1 of a `_` that is the whole name after `$` or `${` (the `$_` special parameter), else 0
