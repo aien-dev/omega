@@ -67,3 +67,46 @@ CAP_WORDS 32
 CAP_ASSIGNS 16
 CAP_REDIRS 8
 PARSE_BUDGET 64             # tokens per parse_run call
+
+# --- variable request cells (ABI section 6.2 cells 8..11) ---
+S_VR_KIND 8                 # 1 NAME, 2 $?, 3 positional, 4 $#, 5 positional list (npos only)
+S_VR_A 9                    # NAME: offset in inp; positional: k
+S_VR_LEN 10                 # NAME: length
+S_VR_SEQ 11                 # counts requests
+
+# --- expander capacities and constants (E-parser-design.md section 5, ABI 5.3, 7.1) ---
+CAP_FIELDS 32               # argv entries per command after splitting
+CAP_OUT 8192                # expanded bytes per pipeline
+CAP_VALUE 1024              # one variable value
+CAP_VARREQ 64               # variable requests per pipeline
+EXP_BUDGET 1024             # expander steps (one raw byte or one value byte each) per call
+REC_MAGIC 1330791761        # 0x4F524551 "OREQ"
+REQ_CMD_CELLS 164
+
+# --- expander cells (osh_expand.osc.in). 29..31 and 39..47 are fresh; 12..16 and 18..26 are lexer cells that are dead
+# --- once the parser has completed the list (the session is single use after that), so expand_run zeroes and reuses them.
+EX_INIT 29                  # 1 after the first expand_run call zeroed the overlay cells
+EX_ST 30                    # 0 pick next pipeline, 1 expanding, 2 PIPELINE_READY returned, 3 list complete
+EX_PIPE 31                  # pipeline index being expanded
+EX_CMD 39                   # command index inside the pipeline
+EX_TOK 40                   # token cursor (the word token while a word is open)
+EX_NVREQ 41                 # variable requests in this pipeline
+EX_OUT 42                   # OUT bytes used
+EX_ANYW 43                  # a non-assignment word was seen in this command
+EX_A0 44                    # input offset of the word that produced argv[0]
+EX_WM 45                    # word mode: 0 none, 1 argv, 2 assignment value, 3 redirection target
+EX_PH 46                    # 0 raw scan, 1 copying a value, 2 waiting for the host's answer
+EX_POS 47                   # raw cursor in inp
+EX_Q 12                     # 0 unquoted, 1 inside '', 2 inside ""
+EX_FOPEN 13                 # a field is open
+EX_FSTART 14                # OUT offset where the open field began
+EX_DQF 15                   # inside "": bit 0 saw $@, bit 1 saw anything else
+EX_WNF 16                   # fields closed by the redirection target word
+EX_NEXT 18                  # raw cursor after the reference being resolved
+EX_VCUR 19                  # absolute cell of the next value byte
+EX_VEND 20                  # absolute cell after the last value byte
+EX_VM 21                    # 1 split the value at IFS bytes (unquoted), 0 copy it
+EX_RK 22                    # reference: 1 NAME 2 $? 3 positional 4 $# ; lists 5 split 6 joined 7 one field each
+EX_K 23                     # list: positional being copied
+EX_NPOS 24                  # list: positional count
+S_NOSKIP 25                 # host-written before the first expand_run: 1 = emit every pipeline (no connector skipping; conformance vectors)

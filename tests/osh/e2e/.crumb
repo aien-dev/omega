@@ -5,15 +5,15 @@
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "compiled_at": "2026-10-08T02:42:09Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:346afc9230dc72295ca12f42f5786b0ca1b77f1756c2cf426f32fd9e1d5a663c",
+      "digest": "sha256:a362c8efb0442d5133973a7544efb085b630c3db2a24645385c88cf1b4a22d50",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 6,
+      "files": 0,
       "generated_at_commit": "13080ccf8bd1c27e31654e54a741a7c3534273c5",
-      "source_tree": "sha256:dd09306c7c8b6d63dc2ddbe0e1b3dfc1a71460daef6d83204ae31f30fbe4717b"
+      "source_tree": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     }
   },
-  "name": "host",
-  "purpose": "osh Linux host: execution service (request decoder, resolution, builtins, redirections, pipelines), unit loader, driver loop and main for the osh program (arch#158; replaceable scaffolding per ADR 0024)",
+  "name": "osh-e2e",
+  "purpose": "end-to-end tests of the osh program: argprint helper plus a runner comparing native and OSH_INTERP=1 (arch#158)",
   "schema_version": "1.0.0"
 }
