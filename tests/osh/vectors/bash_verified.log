@@ -1,0 +1,55 @@
+bash: GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu)
+file: bash_vectors.tsv
+c01 same out:[a][b]|errmark|out:[x=]|errmark
+c02 same out:[a]|errmark|out:[x=]|errmark
+c03 same out:[a]|errmark|out:[b]|errmark|out:[x=]|errmark
+c04 same errmark|out:[x=]|errmark|file f:out:[a]
+c05 same ./in.sh: line N: syntax error near unexpected token `;;'|out:[x=]|errmark
+c06 same out:[a]|errmark|out:[x=]|errmark
+c07 same out:[]|out:[x=]|errmark|file f:errmark
+c08 same out:[]|errmark|out:[x=]|errmark|file f:
+c09 same errmark|out:[x=]|errmark|file f:out:[]
+c10 same out:[PID]|errmark|out:[x=]|errmark
+c11 same errmark|out:[out:[hi]]|errmark|out:[x=]|errmark
+c12 same out:[/HOMEX]|errmark|out:[x=]|errmark
+c13 same out:[x]|errmark|out:[x=]|errmark
+c14 same out:[]|errmark|out:[x=]|errmark
+c15 same out:[x=a:/HOMEX]|errmark
+c16 same out:[x=/HOMEX]|errmark
+c17 same out:[a=/HOMEX]|errmark|out:[x=]|errmark
+c18 same out:[1][2][3]|errmark|out:[x=]|errmark
+c19 same out:[a][b]|errmark|out:[x=]|errmark
+c20 same out:[1][2][3]|errmark|out:[x=]|errmark
+c21 same out:[ab]|errmark|out:[x=]|errmark
+c22 same out:[a\|b]|errmark|out:[x=]|errmark
+c23 same out:[a\|b]|errmark|out:[x=]|errmark
+c24 same out:[b]|errmark|out:[x=]|errmark
+c25 same errmark|out:[b]|errmark|out:[x=]|errmark
+c26 same out:[a]|errmark|out:[b]|errmark|out:[x=]|errmark
+c27 same out:[a]|errmark|out:[b]|errmark|out:[x=]|errmark
+c28 same out:[a]|errmark|out:[b]|errmark|out:[x=]|errmark
+c29 same out:[a#b]|errmark|out:[x=]|errmark
+c30 same out:[\]|errmark|out:[x=]|errmark
+c31 same out:[x=1]|errmark
+c32 same out:[x=1]|errmark
+c33 same out:[x=/HOMEX]|errmark
+c34 same out:[x=1]|errmark
+c35 same out:[TMP/prel.sh]|errmark|out:[x=]|errmark
+c36 same out:[TMP/prel.sh]|errmark|out:[x=]|errmark
+c37 same out:[]|errmark|out:[x=]|errmark
+c38 same out:[TMP/prel.sh]|errmark|out:[x=]|errmark
+c39 same out:[]|errmark|out:[x=]|errmark
+c40 same out:[TMP/prel.sh]|errmark|out:[x=]|errmark
+c41 same out:[a]|errmark|out:[x=]|errmark
+c42 same out:[a]|out:[x=]|errmark|file f:errmark
+c43 same errmark|out:[x=]|errmark|file f:out:[2]
+c44 same errmark|out:[x=]|errmark|file f:out:[]
+c45 same out:[b]|errmark|out:[x=]|errmark
+c46 same out:[ab]|errmark|out:[x=]|errmark
+c47 same out:[\|]|errmark|out:[x=]|errmark
+c48 same out:[]|errmark|out:[x=]|errmark
+c49 same out:[a][b]|errmark|out:[x=]|errmark
+c50 same out:[TMP/prel.sh]|errmark|out:[x=]|errmark
+c51 same out:[a$]|errmark|out:[x=]|errmark
+c52 same ./in.sh: line N: syntax error near unexpected token `|'|out:[x=]|errmark
+vectors: 52, mismatches: 0 (GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu))

@@ -114,11 +114,11 @@ fn dup_check(inp: bytes, hdr: u64, s: u64, n: u64) -> u64 {
 
 // Start a command at token t (byte offset s). Capacities are checked before anything is written.
 fn new_cmd(w: cells, t: u64, s: u64) -> u64 {
-    let pc: u64 = w[36];
+    let pc: u64 = w[38];
     if pc >= 8 { return fail(w, 205, s); }
-    let np: u64 = w[35];
+    let np: u64 = w[37];
     if pc == 0 && np >= 16 { return fail(w, 204, s); }
-    let c: u64 = w[34];
+    let c: u64 = w[36];
     if c >= 32 { return fail(w, 203, s); }
     let mut p: u64 = np;
     if pc == 0 {
@@ -127,7 +127,7 @@ fn new_cmd(w: cells, t: u64, s: u64) -> u64 {
         w[pb + 1] = 0;
         w[pb + 2] = 0;
         w[pb + 3] = t;
-        w[35] = np + 1;
+        w[37] = np + 1;
     } else {
         p = np - 1;
     }
@@ -141,21 +141,21 @@ fn new_cmd(w: cells, t: u64, s: u64) -> u64 {
     w[cb + 6] = pc;
     w[cb + 7] = 0;
     w[832 + p * 4 + 1] = pc + 1;
-    w[36] = pc + 1;
-    w[34] = c + 1;
-    w[37] = 0;
+    w[38] = pc + 1;
+    w[36] = c + 1;
+    w[39] = 0;
     return 0;
 }
 
 // The current command ends before token te.
 fn end_cmd(w: cells, te: u64) {
-    w[576 + (w[34] - 1) * 8 + 1] = te;
+    w[576 + (w[36] - 1) * 8 + 1] = te;
 }
 
 // The current pipeline ends with connector conn.
 fn end_pipe(w: cells, conn: u64) {
-    w[832 + (w[35] - 1) * 4 + 2] = conn;
-    w[36] = 0;
+    w[832 + (w[37] - 1) * 4 + 2] = conn;
+    w[38] = 0;
 }
 
 // A word token inside a command: prefix assignment, reserved word, or argument.
@@ -163,22 +163,22 @@ fn on_word(inp: bytes, w: cells, t: u64, hdr: u64) -> u64 {
     let b: u64 = 64 + t * 4;
     let f: u64 = (hdr >> 8) & 65535;
     let s: u64 = w[b + 1];
-    let cb: u64 = 576 + (w[34] - 1) * 8;
-    if (f & 16) != 0 && w[37] == 0 {
+    let cb: u64 = 576 + (w[36] - 1) * 8;
+    if (f & 16) != 0 && w[39] == 0 {
         if pack8(inp, s, w[b + 3] - 1) == 0x494653 { return fail(w, 240, s); }
         let na: u64 = w[cb + 2];
         if na >= 16 { return fail(w, 207, s); }
         w[cb + 2] = na + 1;
         return 0;
     }
-    if w[37] == 0 && (f & 65503) == 0 {
+    if w[39] == 0 && (f & 65503) == 0 {
         let rc: u64 = reserved(pack8(inp, s, s + w[b + 2]));
         if rc != 0 { return fail(w, rc, s); }
     }
     let nw: u64 = w[cb + 3];
     if nw >= 32 { return fail(w, 206, s); }
     w[cb + 3] = nw + 1;
-    w[37] = 1;
+    w[39] = 1;
     return 0;
 }
 
@@ -187,12 +187,12 @@ fn on_target(inp: bytes, w: cells, t: u64, hdr: u64) -> u64 {
     let b: u64 = 64 + t * 4;
     let s: u64 = w[b + 1];
     if (hdr & 255) != 1 { return fail(w, 242, s); }
-    let rk: u64 = w[38];
+    let rk: u64 = w[40];
     if rk == 10 || rk == 11 {
         let rc: u64 = dup_check(inp, hdr, s, w[b + 2]);
         if rc != 0 { return fail(w, rc, s); }
     }
-    w[32] = 2;
+    w[34] = 2;
     return 0;
 }
 
@@ -203,17 +203,17 @@ fn parse_step(inp: bytes, w: cells, t: u64) -> u64 {
     let hdr: u64 = w[b];
     let k: u64 = hdr & 255;
     let s: u64 = w[b + 1];
-    let st: u64 = w[32];
+    let st: u64 = w[34];
     if st == 3 { return on_target(inp, w, t, hdr); }
     if k == 9 {
         if st == 2 {
             end_cmd(w, t);
             end_pipe(w, 1);
-            w[32] = 4;
+            w[34] = 4;
             return 1;
         }
         if st == 0 {
-            w[32] = 4;
+            w[34] = 4;
             return 1;
         }
         return 0;
@@ -221,39 +221,39 @@ fn parse_step(inp: bytes, w: cells, t: u64) -> u64 {
     if k >= 2 && k <= 5 {
         if st != 2 { return fail(w, 241, s); }
         end_cmd(w, t);
-        w[32] = 1;
+        w[34] = 1;
         if k == 2 { return 0; }
         let mut conn: u64 = 1;
         if k == 4 { conn = 2; }
         if k == 3 { conn = 3; }
         end_pipe(w, conn);
-        if k == 5 { w[32] = 0; }
+        if k == 5 { w[34] = 0; }
         return 0;
     }
     if st == 0 || st == 1 {
         let rc: u64 = new_cmd(w, t, s);
         if rc != 0 { return rc; }
-        w[32] = 2;
+        w[34] = 2;
     }
     if k == 1 { return on_word(inp, w, t, hdr); }
-    let cb: u64 = 576 + (w[34] - 1) * 8;
+    let cb: u64 = 576 + (w[36] - 1) * 8;
     let nr: u64 = w[cb + 4];
     if nr >= 8 { return fail(w, 208, s); }
     w[cb + 4] = nr + 1;
-    w[38] = k;
-    w[32] = 3;
+    w[40] = k;
+    w[34] = 3;
     return 0;
 }
 
 // Every token is consumed and the list is not complete.
 fn at_end(inp: bytes, w: cells) -> u64 {
-    let st: u64 = w[32];
+    let st: u64 = w[34];
     if st == 0 { return 0; }
     if w[28] == 0 { return 100; }
     if st == 2 {
         end_cmd(w, w[17]);
         end_pipe(w, 0);
-        w[32] = 4;
+        w[34] = 4;
         return 0;
     }
     if st == 3 { return fail(w, 242, inp.len); }
@@ -265,10 +265,10 @@ fn parse_run(inp: bytes, w: cells) -> u64 {
     if ac != 0 { return ac; }
     if w[2] == 255 { return w[4]; }
     if w[27] != 1 { return 217; }
-    if w[32] > 4 { return 217; }
-    if w[32] == 4 { return 0; }
+    if w[34] > 4 { return 217; }
+    if w[34] == 4 { return 0; }
     let ntok: u64 = w[17];
-    let mut t: u64 = w[33];
+    let mut t: u64 = w[35];
     if t > ntok { return 217; }
     let mut n: u64 = 0;
     let mut rc: u64 = 0;
@@ -277,7 +277,7 @@ fn parse_run(inp: bytes, w: cells) -> u64 {
         if rc < 2 {
             t = t + 1;
             n = n + 1;
-            w[33] = t;
+            w[35] = t;
         }
     }
     if rc == 1 { return 0; }
