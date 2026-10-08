@@ -5,7 +5,8 @@
  *   osh script [args...]
  * A leading `--caps POLICYFILE` enforces the launch policy (osh_caps.h): the host starts omega's capability root, mints
  * the grants, seals the admin handle, and every spawn / redirection open / cd is checked at the moment of the effect.
- * Without it osh runs unconfined (the embedder-style self binding in osh_shell.c); it never gates anything by itself.
+ * Without it the policy is a principal with no grants: every such effect is denied (fail closed). Builtins that make
+ * no effect (printf, pwd, export, unset, exit) still run.
  * OSH_INTERP=1 in the environment runs the shell core in the reference interpreter instead of native code.
  * Never runs a command through another shell: programs are started by the host adapter with execve().
  */
@@ -36,22 +37,33 @@ static char *slurp_fd(int fd, size_t *n)
     return b;
 }
 
-/* Read the policy, start the root, mint, bind the session, then seal: nothing in this process can mint or revoke after. */
+/* With no --caps the policy is DEFAULT_POLICY: a principal and no grants, so every spawn, redirection open and cd is
+ * denied (fail closed). Authority comes only from a policy file named on the command line by whoever starts osh. */
+static const char DEFAULT_POLICY[] = "principal 1\n";
+
+/* Read the policy (or take the default), start the root, mint, bind the session, then seal: nothing in this process
+ * can mint or revoke after. */
 static int arm(OshShell *sh, OshCaps *caps, const char *file)
 {
-    int fd = open(file, O_RDONLY | O_CLOEXEC);
-    if (fd < 0) { fprintf(stderr, "osh: --caps %s: cannot open\n", file); return -1; }
-    size_t n = 0;
-    char *text = slurp_fd(fd, &n);
-    close(fd);
-    if (!text || n > (1u << 16)) { fprintf(stderr, "osh: --caps %s: unreadable or too large\n", file); free(text); return -1; }
-    char *z = realloc(text, n + 1);
-    if (!z) { free(text); return -1; }
-    z[n] = 0;
+    char *z = NULL;
+    if (file) {
+        int fd = open(file, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) { fprintf(stderr, "osh: --caps %s: cannot open\n", file); return -1; }
+        size_t n = 0;
+        char *text = slurp_fd(fd, &n);
+        close(fd);
+        if (!text || n > (1u << 16)) { fprintf(stderr, "osh: --caps %s: unreadable or too large\n", file); free(text); return -1; }
+        z = realloc(text, n + 1);
+        if (!z) { free(text); return -1; }
+        z[n] = 0;
+    } else {
+        z = strdup(DEFAULT_POLICY);
+        if (!z) return -1;
+    }
     char err[256];
     int rc = osh_caps_start(caps);
     if (rc != 0) fprintf(stderr, "osh: capability root did not start (%s)\n", rx_cap_strerror(rc));
-    else if (osh_caps_load(caps, z, err, sizeof err) != 0) { fprintf(stderr, "osh: --caps %s: %s\n", file, err); rc = -1; }
+    else if (osh_caps_load(caps, z, err, sizeof err) != 0) { fprintf(stderr, "osh: --caps %s: %s\n", file ? file : "(default)", err); rc = -1; }
     free(z);
     if (rc != 0) return -1;
     osh_caps_attach(caps, &sh->s);
@@ -78,7 +90,7 @@ int main(int argc, char **argv)
         if (argc < 3) { fprintf(stderr, "osh: -c needs a command string\n"); return 2; }
         const char *arg0 = argc > 3 ? argv[3] : "osh";
         if (osh_shell_init(&sh, environ, native, 0, arg0, argc > 4 ? argv + 4 : NULL, argc > 4 ? argc - 4 : 0) != 0) return 70;
-        if (caps_file && arm(&sh, &caps, caps_file) != 0) { osh_shell_free(&sh); osh_caps_stop(&caps); return 70; }
+        if (arm(&sh, &caps, caps_file) != 0) { osh_shell_free(&sh); osh_caps_stop(&caps); return 70; }
         rc = osh_shell_run_string(&sh, argv[2], strlen(argv[2]));
     } else if (argc >= 2) {
         int fd = open(argv[1], O_RDONLY | O_CLOEXEC);
@@ -88,13 +100,13 @@ int main(int argc, char **argv)
         close(fd);
         if (!text) { fprintf(stderr, "osh: %s: cannot read\n", argv[1]); return 127; }
         if (osh_shell_init(&sh, environ, native, 0, argv[1], argc > 2 ? argv + 2 : NULL, argc > 2 ? argc - 2 : 0) != 0) return 70;
-        if (caps_file && arm(&sh, &caps, caps_file) != 0) { osh_shell_free(&sh); osh_caps_stop(&caps); return 70; }
+        if (arm(&sh, &caps, caps_file) != 0) { osh_shell_free(&sh); osh_caps_stop(&caps); return 70; }
         rc = osh_shell_run_string(&sh, text, n);
         free(text);
     } else {
         int tty = isatty(0) && isatty(2);
         if (osh_shell_init(&sh, environ, native, tty, "osh", NULL, 0) != 0) return 70;
-        if (caps_file && arm(&sh, &caps, caps_file) != 0) { osh_shell_free(&sh); osh_caps_stop(&caps); return 70; }
+        if (arm(&sh, &caps, caps_file) != 0) { osh_shell_free(&sh); osh_caps_stop(&caps); return 70; }
         rc = osh_shell_run_fd(&sh, 0);
     }
     osh_shell_free(&sh);

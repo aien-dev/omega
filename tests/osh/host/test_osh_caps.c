@@ -388,6 +388,15 @@ int main(int argc, char **argv)
         P(pol0, "empty-policy");
         put(pol0, "principal 1\n");
         CHECK(run_osh(osh_bin, pol0, "/bin/true", NULL) == 126, "osh --caps with no grants: everything denied");
+        /* fail closed: no --caps at all is the same as a policy with no grants */
+        char dflt[PATH_MAX];
+        P(dflt, "default-denied");
+        CHECK(run_osh(osh_bin, NULL, "/bin/true", NULL) == 126, "osh without --caps: spawn denied (fail closed)");
+        snprintf(cmd, sizeof cmd, "printf x > %s", dflt);
+        CHECK(run_osh(osh_bin, NULL, cmd, NULL) == 1 && !exists(dflt), "osh without --caps: redirection denied, file not created");
+        CHECK(run_osh(osh_bin, NULL, "cd /", NULL) == 1, "osh without --caps: cd denied");
+        CHECK(run_osh(osh_bin, NULL, "printf ''", NULL) == 0, "osh without --caps: a builtin with no effect still runs");
+        CHECK(run_osh(osh_bin, NULL, "OSH_CAPS=/ PATH=/bin true", "OSH_CAPS=/") == 126, "osh without --caps: variables grant nothing");
     }
 
     osh_caps_stop(&caps);
