@@ -175,6 +175,12 @@ static void bounds(Cg *g, int idx, unsigned len) {
     trap_if(g, OSC_A64_HS, OSC_TRAP_BOUNDS);
 }
 
+/* slice access: the length is a register (x13), not an immediate */
+static void bounds_r(Cg *g, int idx, int len) {
+    cmp_rr(g, idx, len);
+    trap_if(g, OSC_A64_HS, OSC_TRAP_BOUNDS);
+}
+
 static void gen_bin(Cg *g, const OscFunc *f, const OscInsn *in) {
     OscScalar t = f->vtype[in->a].s;
     unsigned w = osc_scalar_width(t);
@@ -431,6 +437,28 @@ static void gen_func(Cg *g, const OscUnit *u, int fi) {
                 bounds(g, 10, T[in->a].len);
                 E(g, osc_a64_r3s(OSC_A64_ADD_REG, 12, 9, 10, OSC_A64_LSL, 3));
                 if (in->op == OSC_I_LOAD) {
+                    E(g, osc_a64_mem(OSC_A64_LDR_UOFF, 11, 12, 0));
+                    st(g, 11, in->dst);
+                } else {
+                    E(g, osc_a64_mem(OSC_A64_STR_UOFF, 11, 12, 0));
+                }
+                break;
+            case OSC_I_SLOAD:
+            case OSC_I_SSTORE:
+                /* external byte slice: pointer = vreg a, length = vreg a + 1; unsigned i >= len traps
+                 * (len 0 traps on every index, the pointer is never touched) */
+                ld(g, 9, in->a);
+                ld(g, 10, in->b);
+                ld(g, 13, in->a + 1);
+                if (in->op == OSC_I_SSTORE) ld(g, 11, in->c);
+                bounds_r(g, 10, 13);
+                if (in->op == OSC_I_SLOAD && T[in->a].s == OSC_T_BYTES) {
+                    E(g, osc_a64_r3(OSC_A64_LDRB_REG, 11, 9, 10));
+                    st(g, 11, in->dst);
+                    break;
+                }
+                E(g, osc_a64_r3s(OSC_A64_ADD_REG, 12, 9, 10, OSC_A64_LSL, 3));
+                if (in->op == OSC_I_SLOAD) {
                     E(g, osc_a64_mem(OSC_A64_LDR_UOFF, 11, 12, 0));
                     st(g, 11, in->dst);
                 } else {

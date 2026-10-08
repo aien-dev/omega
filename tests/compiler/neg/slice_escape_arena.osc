@@ -1,0 +1,8 @@
+// expect: SLICE_ESCAPE object=b line=5
+// transition: store or return a slice
+fn f(b: bytes) -> u64 {
+    arena r bound 4 {
+        let a: own [u64; 2] in r = alloc(b);
+    }
+    return 0;
+}

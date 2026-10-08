@@ -1,0 +1,8 @@
+// expect: SLICE_VALUE object=b line=7
+// transition: borrow of a slice
+fn g(a: &[u64; 2]) -> u64 {
+    return a[0];
+}
+fn f(b: bytes) -> u64 {
+    return g(&b);
+}

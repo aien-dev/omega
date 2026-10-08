@@ -1,0 +1,5 @@
+// expect: SLICE_WRITE object=c line=4
+// transition: write to a slice member
+fn f(c: cells) {
+    c.len = 1;
+}

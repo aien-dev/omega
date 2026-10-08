@@ -33,6 +33,8 @@ typedef enum {
     OT_POOL, OT_HANDLE,
     /* VC1 stage 4: `import NAME;` (resolved only by the verified driver, src/omega_resolve.h), appended */
     OT_IMPORT,
+    /* external byte slices (docs/osc/OSC-EXT-BYTES-DESIGN.md): parameter types, appended */
+    OT_BYTES, OT_CELLS,
     OT__COUNT
 } OscTokKind;
 

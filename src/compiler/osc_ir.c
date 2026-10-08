@@ -25,8 +25,8 @@ unsigned osc_scalar_width(OscScalar s) {
 bool osc_scalar_signed(OscScalar s) { return s >= OSC_T_I8 && s <= OSC_T_I64; }
 bool osc_scalar_is_int(OscScalar s) { return s >= OSC_T_U8 && s <= OSC_T_I64; }
 const char *osc_scalar_name(OscScalar s) {
-    static const char *n[] = {"void", "bool", "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "ref"};
-    return ((unsigned)s <= OSC_T_REF) ? n[s] : "?";
+    static const char *n[] = {"void", "bool", "u8", "u16", "u32", "u64", "i8", "i16", "i32", "i64", "ref", "bytes", "cells"};
+    return ((unsigned)s <= OSC_T_CELLS) ? n[s] : "?";
 }
 
 /* ---- validation ------------------------------------------------------- */
@@ -53,6 +53,11 @@ static bool type_is_ref(const OscType *t) {
     if (t->sid == 0) return is_value_scalar(t->elem) && t->len >= 1 && t->len <= OSC_MAX_ARRAY_LEN;
     return g_unit && t->sid <= g_unit->nstructs && t->elem == OSC_T_VOID &&
            t->len == g_unit->structs[t->sid - 1].ncells;
+}
+/* pointer register of an external byte slice parameter (length = next vreg) */
+static bool type_is_slice(const OscType *t) {
+    return (t->s == OSC_T_BYTES || t->s == OSC_T_CELLS) && t->ref == OSC_REF_NONE && t->elem == OSC_T_VOID &&
+           t->len == 0 && t->sid == 0;
 }
 static bool type_is_struct_ref(const OscType *t) { return type_is_ref(t) && t->sid != 0; }
 static bool type_is_array_ref(const OscType *t) { return type_is_ref(t) && t->sid == 0; }
@@ -97,6 +102,8 @@ static int insn_uses(const OscInsn *in, int16_t *u) {
     case OSC_I_HSTORE: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; u[k++] = in->args[0]; break;
     case OSC_I_BIN: case OSC_I_CMP: case OSC_I_LOAD: u[k++] = in->a; u[k++] = in->b; break;
     case OSC_I_STORE: u[k++] = in->a; u[k++] = in->b; u[k++] = in->c; break;
+    case OSC_I_SLOAD: u[k++] = in->a; u[k++] = in->a + 1; u[k++] = in->b; break;
+    case OSC_I_SSTORE: u[k++] = in->a; u[k++] = in->a + 1; u[k++] = in->b; u[k++] = in->c; break;
     case OSC_I_FLOAD: u[k++] = in->a; if (in->b >= 0) u[k++] = in->b; break;
     case OSC_I_FSTORE: u[k++] = in->a; if (in->b >= 0) u[k++] = in->b; u[k++] = in->c; break;
     case OSC_I_CALL: for (int i = 0; i < in->nargs && i < OSC_MAX_PARAMS; i++) u[k++] = in->args[i]; break;
@@ -108,7 +115,7 @@ static int insn_uses(const OscInsn *in, int16_t *u) {
 static int insn_def(const OscInsn *in) {
     switch (in->op) {
     case OSC_I_CONST: case OSC_I_MOV: case OSC_I_BIN: case OSC_I_UN: case OSC_I_CMP:
-    case OSC_I_CAST: case OSC_I_ALLOC: case OSC_I_LOAD: case OSC_I_FLOAD: return in->dst;
+    case OSC_I_CAST: case OSC_I_ALLOC: case OSC_I_LOAD: case OSC_I_FLOAD: case OSC_I_SLOAD: return in->dst;
     case OSC_I_AOPEN: case OSC_I_AALLOC: return in->dst;
     case OSC_I_POPEN: case OSC_I_HALLOC: case OSC_I_HGEN: case OSC_I_HLOAD: return in->dst;
     case OSC_I_CALL: return in->dst;  /* may be -1 */
@@ -242,6 +249,19 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
         NEED(type_is_scalar(&T[in->b]) && osc_scalar_is_int(T[in->b].s), "STORE index not integer", fi, ii);
         NEED(type_is_scalar(&T[in->c]) && T[in->c].s == T[in->a].elem, "STORE value type != elem", fi, ii);
         break;
+    case OSC_I_SLOAD:
+    case OSC_I_SSTORE: {
+        bool ld = in->op == OSC_I_SLOAD;
+        const char *nm = ld ? "SLOAD" : "SSTORE";
+        NEED(VR(in->a) && VR(in->b), "%s bad vreg", fi, ii, nm);
+        NEED(type_is_slice(&T[in->a]) && VR(in->a + 1) && type_is_scalar(&T[in->a + 1]) && T[in->a + 1].s == OSC_T_U64,
+             "%s base not a slice pointer", fi, ii, nm);
+        NEED(type_is_scalar(&T[in->b]) && osc_scalar_is_int(T[in->b].s), "%s index not integer", fi, ii, nm);
+        int v = ld ? in->dst : in->c;
+        NEED(VR(v) && type_is_scalar(&T[v]) && T[v].s == OSC_T_U64, "%s value not u64", fi, ii, nm);
+        if (!ld) NEED(T[in->a].s == OSC_T_CELLS, "SSTORE into a bytes slice", fi, ii);
+        break;
+    }
     case OSC_I_FLOAD: case OSC_I_FSTORE: {
         bool ld = in->op == OSC_I_FLOAD;
         NEED(VR(in->a) && type_is_struct_ref(&T[in->a]), "%s base not a struct ref", fi, ii, ld ? "FLOAD" : "FSTORE");
@@ -266,6 +286,10 @@ static int validate_insn(const OscUnit *u, int fi, const OscFunc *f, uint32_t ii
             int a = in->args[k];
             NEED(VR(a), "CALL bad arg vreg", fi, ii);
             const OscType *p = &g->vtype[k];
+            if (type_is_slice(p)) {
+                NEED(type_eq(p, &T[a]) && k + 1 < in->nargs && in->args[k + 1] == a + 1, "CALL arg %d slice mismatch", fi, ii, k);
+                continue;
+            }
             if (type_is_ref(p)) NEED(ref_bindable(p, &T[a]), "CALL arg %d ref mismatch", fi, ii, k);
             else NEED(type_eq(p, &T[a]), "CALL arg %d type mismatch", fi, ii, k);
         }
@@ -308,8 +332,18 @@ static int validate_func(const OscUnit *u, int fi, char *err, size_t n) {
         !type_is_scalar(&f->ret))
         return vfail(err, n, "func %d: return type must be void or scalar", fi);
     for (int v = 0; v < f->nvregs; v++)
-        if (!type_is_scalar(&f->vtype[v]) && !type_is_ref(&f->vtype[v]))
+        if (!type_is_scalar(&f->vtype[v]) && !type_is_ref(&f->vtype[v]) && !type_is_slice(&f->vtype[v]))
             return vfail(err, n, "func %d: vreg %d has invalid type", fi, v);
+    /* a slice is a parameter pair: pointer register (BYTES/CELLS) then u64 length; no instruction defines either */
+    uint8_t sl[OSC_MAX_VREGS];
+    memset(sl, 0, sizeof sl);
+    for (int v = 0; v < f->nvregs; v++) {
+        if (!type_is_slice(&f->vtype[v])) continue;
+        if (v + 1 >= f->nparams || !type_is_scalar(&f->vtype[v + 1]) || f->vtype[v + 1].s != OSC_T_U64)
+            return vfail(err, n, "func %d: slice vreg %d is not a parameter pair with a u64 length", fi, v);
+        sl[v] = sl[v + 1] = 1;
+        v++;
+    }
     if (f->ninsns < 1 || f->ninsns > OSC_MAX_INSNS) return vfail(err, n, "func %d: bad ninsns", fi);
     if (f->nblocks < 1 || f->nblocks > OSC_MAX_BLOCKS) return vfail(err, n, "func %d: bad nblocks", fi);
 
@@ -333,6 +367,10 @@ static int validate_func(const OscUnit *u, int fi, char *err, size_t n) {
         if (!cover[i]) return vfail(err, n, "func %d: insn %u in no block", fi, i);
     for (uint32_t i = 0; i < f->ninsns; i++)
         if (validate_insn(u, fi, f, i, err, n)) return -1;
+    for (uint32_t i = 0; i < f->ninsns; i++) {
+        int d = insn_def(&f->insns[i]);
+        if (d >= 0 && d < f->nvregs && sl[d]) return vfail(err, n, "func %d insn %u: slice register redefined", fi, i);
+    }
 
     /* OSC-2 arenas: an arena handle vreg is defined by exactly one AOPEN (no
      * other definition, not a parameter) and is used only as the handle of
@@ -549,6 +587,14 @@ static bool unit_has_pool(const OscUnit *u) {
     return false;
 }
 
+/* 1 if any function uses an external byte slice (bytes / cells parameter) */
+static bool unit_has_slice(const OscUnit *u) {
+    for (int fi = 0; fi < u->nfuncs; fi++)
+        for (int v = 0; v < u->funcs[fi].nvregs; v++)
+            if (type_is_slice(&u->funcs[fi].vtype[v])) return true;
+    return false;
+}
+
 static void encode_unit(const OscUnit *u, W *w) {
     /* format version 1 (OSC-1, no structs) / 2 (OSC-2 structs: struct table
      * after the magic) / 3 (OSC-2 arenas: AOPEN/AALLOC/ADESTROY present; the
@@ -561,8 +607,10 @@ static void encode_unit(const OscUnit *u, W *w) {
     if (arena) magic[7] = 3;
     bool pool = unit_has_pool(u); /* OSC-3 item 2: version 4, same layout as 3 */
     if (pool) magic[7] = 4;
+    bool slice = unit_has_slice(u); /* external byte slices: version 5, same layout as 3/4 */
+    if (slice) magic[7] = 5;
     wbytes(w, magic, sizeof magic);
-    if (u->nstructs || arena || pool) {
+    if (u->nstructs || arena || pool || slice) {
         w8(w, u->nstructs);
         for (int k = 0; k < u->nstructs; k++) {
             const OscStruct *s = &u->structs[k];
@@ -610,6 +658,8 @@ static void encode_unit(const OscUnit *u, W *w) {
             case OSC_I_HSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); wvr(w, in->args[0]); break;
             case OSC_I_LOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
             case OSC_I_STORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
+            case OSC_I_SLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); break;
+            case OSC_I_SSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); break;
             case OSC_I_FLOAD: wvr(w, in->dst); wvr(w, in->a); wvr(w, in->b); w8(w, in->imm); break;
             case OSC_I_FSTORE: wvr(w, in->a); wvr(w, in->b); wvr(w, in->c); w8(w, in->imm); break;
             case OSC_I_CALL:
@@ -628,6 +678,29 @@ static void encode_unit(const OscUnit *u, W *w) {
         wtext(w, f->requires_text, sizeof f->requires_text);
         wtext(w, f->ensures_text, sizeof f->ensures_text);
     }
+}
+
+int osc_ir_encoding_version(const uint8_t *buf, size_t len) {
+    static const uint8_t magic[7] = {'O', 'S', 'C', '1', 'I', 'R', 0};
+    if (!buf || len < 8 || memcmp(buf, magic, sizeof magic) != 0) return -1;
+    return (buf[7] >= 1 && buf[7] <= OSC_IR_VERSION_MAX) ? buf[7] : -1;
+}
+
+int osc_ir_slice_args_ok(const OscFunc *f, const uint64_t *args, unsigned nargs) {
+    if (!f || nargs != f->nparams || (nargs && !args)) return -1;
+    for (unsigned p = 0; p + 1 < nargs; p++) {
+        if (!type_is_slice(&f->vtype[p])) continue;
+        uint64_t ptr = args[p], n = args[p + 1], sz = n * (f->vtype[p].s == OSC_T_CELLS ? 8 : 1);
+        if ((f->vtype[p].s == OSC_T_CELLS && n > UINT64_MAX / 8) || (n && !ptr) || sz > UINT64_MAX - ptr) return -1;
+        for (unsigned q = 0; q + 1 < nargs; q++) {
+            if (q == p || !type_is_slice(&f->vtype[q])) continue;
+            if (f->vtype[p].s != OSC_T_CELLS && f->vtype[q].s != OSC_T_CELLS) continue;
+            uint64_t qn = args[q + 1], qsz = qn * (f->vtype[q].s == OSC_T_CELLS ? 8 : 1);
+            if (!sz || !qn || (f->vtype[q].s == OSC_T_CELLS && qn > UINT64_MAX / 8) || qsz > UINT64_MAX - args[q]) continue;
+            if (ptr < args[q] + qsz && args[q] < ptr + sz) return -1;
+        }
+    }
+    return 0;
 }
 
 int osc_ir_encode(const OscUnit *u, uint8_t *buf, size_t cap, size_t *len) {

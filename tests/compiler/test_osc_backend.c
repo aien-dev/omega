@@ -643,6 +643,8 @@ static void test_encoder(void) {
     enc_expect(osc_a64_r3(OSC_A64_SDIV, 0, 1, 2), 0x9AC20C20u, "sdiv x0,x1,x2");
     enc_expect(osc_a64_r3(OSC_A64_UDIV, 0, 1, 2), 0x9AC20820u, "udiv x0,x1,x2");
     enc_expect(osc_a64_r3(OSC_A64_LSLV, 0, 1, 2), 0x9AC22020u, "lsl x0,x1,x2");
+    enc_expect(osc_a64_r3(OSC_A64_LDRB_REG, 11, 9, 10), 0x386A692Bu, "ldrb w11,[x9,x10]");
+    enc_expect(osc_a64_r3(OSC_A64_LDRB_REG, 0, SP, 2), 0x38626BE0u, "ldrb w0,[sp,x2]");
     enc_expect(osc_a64_r3(OSC_A64_LSRV, 0, 1, 2), 0x9AC22420u, "lsr x0,x1,x2");
     enc_expect(osc_a64_r3(OSC_A64_ASRV, 0, 1, 2), 0x9AC22820u, "asr x0,x1,x2");
     enc_expect(osc_a64_csinc(0, ZR, ZR, OSC_A64_NE), 0x9A9F17E0u, "cset x0,eq");
@@ -952,6 +954,57 @@ static void test_validator(void) {
         f0->insns[2] = I0(OSC_I_LOAD); f0->insns[2].dst = 4; f0->insns[2].a = 2; f0->insns[2].b = 3;
         f0->insns[3] = I0(OSC_I_RET); f0->insns[3].a = 4; f0->ninsns = 4; f0->blocks[0].count = 4; });
 #undef CASE
+    /* external byte slices (docs/osc/OSC-EXT-BYTES-DESIGN.md): a slice is a parameter pair (pointer register of
+     * type BYTES / CELLS, then a u64 length); SLOAD / SSTORE index it against the length register */
+    {
+        OscType sp[3] = {TS(OSC_T_BYTES), TS(OSC_T_U64), TS(OSC_T_U64)};
+        OscUnit *x = unit_new();
+        B b;
+        fn(&b, x, "at", TS(OSC_T_U64), 3, sp);
+        int d = V(&b, TS(OSC_T_U64));
+        OscInsn ld = I0(OSC_I_SLOAD);
+        ld.dst = (int16_t)d; ld.a = 0; ld.b = 2;
+        put(&b, ld);
+        k_ret(&b, d);
+        char err[256];
+        check(osc_ir_validate(x, err, sizeof err) == 0, "slice unit invalid: %s", err);
+        uint8_t eb[1024];
+        size_t el = 0;
+        check(osc_ir_encode(x, eb, sizeof eb, &el) == 0 && osc_ir_encoding_version(eb, el) == 5, "slice unit not encoding version 5");
+        OscCode c;
+        check(osc_cg_compile(x, &c, err, sizeof err) == 0, "slice unit codegen: %s", err);
+        OscNative nm;
+        check(osc_native_map(&nm, c.code, c.len) == 0, "slice unit native map");
+        uint8_t *buf = malloc(5);
+        memcpy(buf, "\x01\x02\xff\x04\x05", 5);
+        for (uint64_t i = 0; i < 7; i++) {
+            uint64_t a[3] = {(uint64_t)(uintptr_t)buf, 5, i}, ri = 0, rn = 0;
+            osc_rt_reset(rtI);
+            osc_rt_reset(rtN);
+            int ti = osc_interp_run(x, 0, a, 3, rtI, &ri);
+            int tn = osc_rt_call_native(rtN, osc_native_at(&nm, c.entry[0]), a, 3, &rn);
+            check(ti == tn && ti == (i < 5 ? 0 : OSC_TRAP_BOUNDS) && (ti || (ri == rn && ri == buf[i])), "SLOAD index %llu: interp %d/%llu native %d/%llu",
+                  (unsigned long long)i, ti, (unsigned long long)ri, tn, (unsigned long long)rn);
+        }
+        osc_native_unmap(&nm);
+        osc_cg_free(&c);
+        free(buf);
+        free(x);
+    }
+#define SCASE(what, mutate) do { OscUnit *x = unit_new(); B b; OscType sp[3] = {TS(OSC_T_BYTES), TS(OSC_T_U64), TS(OSC_T_U64)}; \
+        fn(&b, x, "at", TS(OSC_T_U64), 3, sp); int d = V(&b, TS(OSC_T_U64)); OscInsn ld = I0(OSC_I_SLOAD); \
+        ld.dst = (int16_t)d; ld.a = 0; ld.b = 2; put(&b, ld); k_ret(&b, d); OscFunc *f0 = &x->funcs[0]; (void)f0; \
+        mutate; expect_invalid(x, what); free(x); } while (0)
+    SCASE("SLOAD base is a scalar", f0->insns[0].a = 2);
+    SCASE("SLOAD length register not u64", f0->vtype[1] = TS(OSC_T_U32));
+    SCASE("slice pointer is not a parameter", f0->nparams = 0);
+    SCASE("slice length register is not a parameter", f0->nparams = 1);
+    SCASE("SLOAD dst not u64", f0->vtype[3] = TS(OSC_T_U8));
+    SCASE("SLOAD index not integer", f0->vtype[2] = TS(OSC_T_BOOL));
+    SCASE("SSTORE into bytes", { f0->insns[0].op = OSC_I_SSTORE; f0->insns[0].c = 2; f0->insns[0].dst = -1; f0->insns[1].a = 2; });
+    SCASE("slice length redefined", { f0->insns[1] = f0->insns[0]; f0->insns[0] = I0(OSC_I_CONST); f0->insns[0].dst = 1; f0->insns[0].imm = 9;
+                                      f0->ninsns = 3; f0->insns[2] = I0(OSC_I_RET); f0->insns[2].a = 3; f0->blocks[0].count = 3; });
+#undef SCASE
     /* use before def on one path only (definite assignment through a CFG) */
     {
         OscUnit *x = unit_new();

@@ -45,7 +45,11 @@ typedef enum {
     OSC_T_BOOL,
     OSC_T_U8, OSC_T_U16, OSC_T_U32, OSC_T_U64,     /* wrap modulo 2^w (V0 compatible) */
     OSC_T_I8, OSC_T_I16, OSC_T_I32, OSC_T_I64,     /* checked: overflow traps (III.3) */
-    OSC_T_REF                                      /* pointer to array element 0 */
+    OSC_T_REF,                                     /* pointer to array element 0 */
+    /* external byte slices (docs/osc/OSC-EXT-BYTES-DESIGN.md): the type of the POINTER
+     * register of a slice parameter; its length is the next register (u64) */
+    OSC_T_BYTES,                                   /* read-only borrowed bytes */
+    OSC_T_CELLS                                    /* caller-supplied writable u64 cells */
 } OscScalar;
 
 typedef enum {
@@ -113,7 +117,12 @@ typedef enum {
     OSC_I_HFREE,     /* free handle (slot b, gen c) of pool a: stale -> TRAP_STALE;  */
                      /*   gen == 2^64-1 retires the slot, else gen + 1              */
     OSC_I_HLOAD,     /* dst(elem) = value of handle (b, c) of pool a; stale -> STALE */
-    OSC_I_HSTORE     /* value of handle (b, c) of pool a = args[0] (nargs = 1)       */
+    OSC_I_HSTORE,    /* value of handle (b, c) of pool a = args[0] (nargs = 1)       */
+    /* appended for external byte slices (docs/osc/OSC-EXT-BYTES-DESIGN.md) */
+    OSC_I_SLOAD,     /* dst(u64) = a[b] ; a is a slice pointer vreg (BYTES: u8 zero-  */
+                     /*   extended; CELLS: u64), its length is vreg a+1 (u64); b any   */
+                     /*   integer type; unsigned b >= len: TRAP_BOUNDS (len 0 always)  */
+    OSC_I_SSTORE     /* a[b] = c(u64) ; same bounds rule; a is a CELLS pointer vreg   */
 } OscOp;
 
 typedef enum {
@@ -235,6 +244,21 @@ int osc_ir_validate(const OscUnit *u, char *err, size_t n);
  * its SHA-256 digest. Identity of a compiled unit = this digest. */
 int osc_ir_encode(const OscUnit *u, uint8_t *buf, size_t cap, size_t *len);
 int osc_ir_digest(const OscUnit *u, uint8_t out[32]);
+
+/* Encoding format version (byte 7 of the magic) of an encoded unit: 1..5, or -1
+ * if the magic is wrong or the version is unknown (never reinterpreted).
+ * Version 5 = the unit uses external byte slices; units without slices keep
+ * versions 1..4 and their bytes. */
+#define OSC_IR_VERSION_MAX 5
+int osc_ir_encoding_version(const uint8_t *buf, size_t len);
+
+/* Host entry check for slice parameters of function f called with args[0..nargs)
+ * (registers: pointer, length per slice). 0 ok; -1 refused: a non-empty slice
+ * with a NULL pointer, a range that wraps the address space, or a cells range
+ * that overlaps any other slice range (bytes ranges may overlap each other). A
+ * host calls this before osc_interp_run or osc_rt_call_native; the interpreter
+ * entry does it itself. */
+int osc_ir_slice_args_ok(const OscFunc *f, const uint64_t *args, unsigned nargs);
 
 /* Width in bits of an integer scalar (8..64); 1 for bool; 0 otherwise. */
 unsigned osc_scalar_width(OscScalar s);

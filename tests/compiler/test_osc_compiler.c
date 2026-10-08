@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <time.h>
 
 #include "osc_cg.h"
@@ -1763,6 +1764,319 @@ static void dropflags_fuzz(unsigned n)
 }
 #undef DFC
 
+/* ------------------------------------------------------------ external byte slices */
+/* tests/compiler/slices/NAME.osc (docs/osc/OSC-EXT-BYTES-DESIGN.md): functions with `bytes` / `cells`
+ * parameters. Headers: `// slice-entry: f g` (fuzzed entries) and
+ * `// slice-run: ENTRY ARG... -> RESULT [cells=a,b,..]`. ARG: an integer; `bytes:HEX` (HEX may be empty:
+ * length 0, non-NULL pointer); `bytes:NULL`; `cells:N` (N zero cells) or `cells:N=a,b,..`; `cells:NULL`.
+ * RESULT: a value or `trap=NAME`; `cells=` is the final content of the first cells argument. Every buffer is
+ * a separate heap block of exactly its length (ASan redzones catch any access past the end), one set for the
+ * interpreter and one for the native code; trap, value and cells must agree between them. */
+typedef struct {
+    uint8_t *bp[OSC_MAX_PARAMS];   /* buffer per argument register pair (NULL for scalars / NULL slices) */
+    uint64_t n[OSC_MAX_PARAMS];    /* length in elements */
+    int kind[OSC_MAX_PARAMS];      /* 0 scalar, 1 bytes, 2 cells */
+    uint64_t sc[OSC_MAX_PARAMS];   /* scalar value */
+    int is_null[OSC_MAX_PARAMS];
+    void *gbase[OSC_MAX_PARAMS];   /* guard-page mapping behind bp[i], NULL if heap */
+    size_t gsize[OSC_MAX_PARAMS];
+    unsigned nargs;                /* source arguments */
+} SliceCase;
+
+static unsigned long slice_ok, slice_runs, slice_expect, slice_fuzz_runs, slice_neg_overlap;
+
+static void slice_free(SliceCase *s)
+{
+    for (unsigned i = 0; i < s->nargs; i++) {
+        if (s->gbase[i]) munmap(s->gbase[i], s->gsize[i]);
+        else free(s->bp[i]);
+    }
+}
+
+/* a buffer that ends exactly at the end of a mapped page; the next page is PROT_NONE, so the native code
+ * (which ASan cannot see) faults on any access past the last element */
+static uint8_t *guard_alloc(SliceCase *c, unsigned i, size_t bytes)
+{
+    size_t pg = 4096, body = (bytes + pg - 1) / pg * pg + pg;
+    uint8_t *m = mmap(NULL, body + pg, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (m == MAP_FAILED) { CHECK(0, "mmap failed"); exit(1); }
+    mprotect(m + body, pg, PROT_NONE);
+    c->gbase[i] = m;
+    c->gsize[i] = body + pg;
+    return m + body - bytes;
+}
+
+/* heap copy of case s into regs[] (pointer, length per slice); buffers own the copies in *c */
+static unsigned slice_regs(const SliceCase *s, SliceCase *c, uint64_t *regs, int guard)
+{
+    unsigned nr = 0;
+    *c = *s;
+    for (unsigned i = 0; i < s->nargs; i++) {
+        c->bp[i] = NULL;
+        c->gbase[i] = NULL;
+        if (!s->kind[i]) { regs[nr++] = s->sc[i]; continue; }
+        size_t bytes = s->n[i] * (s->kind[i] == 2 ? 8 : 1);
+        if (!s->is_null[i]) {
+            c->bp[i] = guard ? guard_alloc(c, i, bytes) : malloc(bytes ? bytes : 1);
+            if (bytes) memcpy(c->bp[i], s->bp[i], bytes);
+        }
+        regs[nr++] = (uint64_t)(uintptr_t)c->bp[i];
+        regs[nr++] = s->n[i];
+    }
+    return nr;
+}
+
+static int slice_parse_arg(SliceCase *s, char *t)
+{
+    unsigned i = s->nargs++;
+    s->kind[i] = 0;
+    if (strncmp(t, "bytes:", 6) == 0 || strncmp(t, "cells:", 6) == 0) {
+        int cells = t[0] == 'c';
+        char *v = t + 6;
+        s->kind[i] = cells ? 2 : 1;
+        if (strcmp(v, "NULL") == 0) { s->is_null[i] = 1; s->n[i] = 0; return 0; }
+        if (cells) {
+            char *eq = strchr(v, '=');
+            s->n[i] = strtoull(v, NULL, 10);
+            s->bp[i] = calloc(s->n[i] ? s->n[i] : 1, 8);
+            if (eq) {
+                uint64_t *w = (uint64_t *)s->bp[i];
+                char *save = NULL;
+                unsigned k = 0;
+                for (char *x = strtok_r(eq + 1, ",", &save); x && k < s->n[i]; x = strtok_r(NULL, ",", &save)) w[k++] = parse_val(x);
+            }
+        } else {
+            size_t hl = strlen(v);
+            s->n[i] = hl / 2;
+            s->bp[i] = malloc(s->n[i] ? s->n[i] : 1);
+            for (size_t k = 0; k < s->n[i]; k++) {
+                char h[3] = {v[2 * k], v[2 * k + 1], 0};
+                s->bp[i][k] = (uint8_t)strtoul(h, NULL, 16);
+            }
+        }
+        return 0;
+    }
+    s->sc[i] = parse_val(t);
+    return 0;
+}
+
+/* run one case on both engines; returns 0 and fills the outcome, -1 on disagreement */
+static int slice_run(const char *name, const char *what, int fi, const SliceCase *s, void *entry, int *trap_out,
+                     uint64_t *ret_out, const SliceCase *keep_cells)
+{
+    const OscFunc *f = &U1->funcs[fi];
+    SliceCase ci, cn;
+    uint64_t ai[OSC_MAX_PARAMS] = {0}, an[OSC_MAX_PARAMS] = {0}, ri = 0, rn = 0;
+    unsigned nri = slice_regs(s, &ci, ai, 0), nrn = slice_regs(s, &cn, an, 1);
+    CHECK(nri == f->nparams && nrn == f->nparams, "%s: %s: %u registers for %u parameters", name, what, nri, f->nparams);
+    CHECK(osc_ir_slice_args_ok(f, ai, nri) == 0, "%s: %s: host entry refused valid buffers", name, what);
+    osc_rt_reset(RI);
+    osc_rt_reset(RN);
+    int ti = osc_interp_run_prevalidated(U1, fi, ai, nri, RI, &ri);
+    int tn = osc_rt_call_native(RN, entry, an, nrn, &rn);
+    slice_runs++;
+    int same = ti == tn && ti >= 0 && (ti != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
+    for (unsigned i = 0; i < s->nargs && same; i++)
+        if (s->kind[i] == 2 && !s->is_null[i]) same = memcmp(ci.bp[i], cn.bp[i], s->n[i] * 8) == 0;
+    CHECK(same, "%s: %s: interp trap %d ret %llu vs native trap %d ret %llu", name, what, ti, (unsigned long long)ri, tn,
+          (unsigned long long)rn);
+    if (ti >= 0 && ti <= OSC_TRAP_MAX) trap_seen[ti]++;
+    *trap_out = ti;
+    *ret_out = ri;
+    if (keep_cells) /* hand the interpreter's cells back for the expect check */
+        for (unsigned i = 0; i < s->nargs; i++)
+            if (s->kind[i] == 2 && !s->is_null[i]) memcpy(((SliceCase *)keep_cells)->bp[i], ci.bp[i], s->n[i] * 8);
+    slice_free(&ci);
+    slice_free(&cn);
+    return same ? 0 : -1;
+}
+
+static void slice_prog(const char *dir, const char *name, unsigned fuzz)
+{
+    char path[1024], ent[512];
+    snprintf(path, sizeof path, "%s/%s", dir, name);
+    size_t len;
+    char *src = read_file(path, &len);
+    CHECK(src != NULL, "%s: unreadable", name);
+    if (!src) return;
+    unsigned long f0 = failures;
+    OscDiag d;
+    int rc = osc_compile(src, len, U1, &d, TR);
+    CHECK(rc == 0, "%s: refused: %s line %u object=%s: %s", name, osc_diag_kind_name(d.kind), d.line, d.object, d.message);
+    if (rc) { free(src); return; }
+    /* slices make a version 5 unit; determinism of the IR digest and of the code bytes */
+    uint8_t enc[65536];
+    size_t elen = 0;
+    CHECK(osc_ir_encode(U1, enc, sizeof enc, &elen) == 0 && osc_ir_encoding_version(enc, elen) == 5,
+          "%s: slice unit is not encoding version 5", name);
+    OscDiag d2;
+    CHECK(osc_compile(src, len, U2, &d2, NULL) == 0, "%s: second compile refused", name);
+    uint8_t g1[32], g2[32];
+    CHECK(osc_ir_digest(U1, g1) == 0 && osc_ir_digest(U2, g2) == 0 && memcmp(g1, g2, 32) == 0, "%s: IR digest differs", name);
+    OscCode c1;
+    char err[160];
+    memset(&c1, 0, sizeof c1);
+    int cg1 = osc_cg_compile(U1, &c1, err, sizeof err);
+    CHECK(cg1 == 0, "%s: codegen refused: %s", name, err);
+    OscNative nm;
+    if (cg1 || osc_native_map(&nm, c1.code, c1.len)) { if (!cg1) osc_cg_free(&c1); free(src); CHECK(0, "%s: no native code", name); return; }
+
+    /* hand-written runs */
+    const char *key = "// slice-run: ";
+    size_t kl = strlen(key);
+    for (const char *p = src; p && *p;) {
+        const char *eol = strchr(p, '\n');
+        size_t l = eol ? (size_t)(eol - p) : strlen(p);
+        if (l > kl && strncmp(p, key, kl) == 0 && l - kl < 400) {
+            char line[512], *save = NULL, *t, *res = NULL, *cellsx = NULL;
+            memcpy(line, p + kl, l - kl);
+            line[l - kl] = 0;
+            char *en = strtok_r(line, " ", &save);
+            SliceCase s;
+            memset(&s, 0, sizeof s);
+            while ((t = strtok_r(NULL, " ", &save))) {
+                if (strcmp(t, "->") == 0) { res = strtok_r(NULL, " ", &save); cellsx = strtok_r(NULL, " ", &save); break; }
+                if (s.nargs < OSC_MAX_PARAMS) slice_parse_arg(&s, t);
+            }
+            int fi = -1;
+            for (int k = 0; en && k < U1->nfuncs; k++)
+                if (strcmp(U1->funcs[k].name, en) == 0) fi = k;
+            CHECK(fi >= 0 && res, "%s: bad slice-run line '%.*s'", name, (int)l, p);
+            if (fi >= 0 && res) {
+                int want_trap = 0, ti = 0;
+                uint64_t want = 0, ri = 0;
+                if (strncmp(res, "trap=", 5) == 0) {
+                    want_trap = -1;
+                    for (int k = 1; k <= OSC_TRAP_MAX; k++)
+                        if (strcmp(res + 5, trap_names[k]) == 0) want_trap = k;
+                } else {
+                    want = parse_val(res);
+                }
+                SliceCase out = s; /* receives the interpreter's final cells */
+                for (unsigned i = 0; i < s.nargs; i++)
+                    if (s.kind[i] == 2 && !s.is_null[i]) { out.bp[i] = malloc(s.n[i] ? s.n[i] * 8 : 1); }
+                int rr = slice_run(name, line, fi, &s, osc_native_at(&nm, c1.entry[fi]), &ti, &ri, &out);
+                int ok = rr == 0 && ti == want_trap && (want_trap || ri == want);
+                if (ok && cellsx && strncmp(cellsx, "cells=", 6) == 0) {
+                    for (unsigned i = 0; i < s.nargs; i++) {
+                        if (s.kind[i] != 2 || s.is_null[i]) continue;
+                        char *sv = NULL, *w = cellsx + 6;
+                        unsigned k = 0;
+                        for (char *x = strtok_r(w, ",", &sv); x; x = strtok_r(NULL, ",", &sv), k++)
+                            ok = ok && k < s.n[i] && ((uint64_t *)out.bp[i])[k] == parse_val(x);
+                        break;
+                    }
+                }
+                CHECK(ok, "%s: slice-run '%.*s': got trap %d ret %llu", name, (int)l, p, ti, (unsigned long long)ri);
+                for (unsigned i = 0; i < s.nargs; i++) if (s.kind[i] == 2 && !s.is_null[i]) free(out.bp[i]);
+                slice_free(&s);
+                slice_expect++;
+            }
+        }
+        p = eol ? eol + 1 : NULL;
+    }
+
+    /* fuzzed entries: random lengths 0..40 (0 = NULL), random contents, edge-biased scalar arguments */
+    if (header(src, "slice-entry:", ent, sizeof ent) == 0) {
+        char *save = NULL;
+        for (char *tok = strtok_r(ent, " ,", &save); tok; tok = strtok_r(NULL, " ,", &save)) {
+            int fi = -1;
+            for (int k = 0; k < U1->nfuncs; k++)
+                if (strcmp(U1->funcs[k].name, tok) == 0) fi = k;
+            CHECK(fi >= 0, "%s: slice-entry %s not found", name, tok);
+            if (fi < 0) continue;
+            const OscFunc *f = &U1->funcs[fi];
+            void *entry = osc_native_at(&nm, c1.entry[fi]);
+            sm_state = 0x5111CE0000000000ull ^ (uint64_t)(fi * 7919);
+            for (const char *q = name; *q; q++) sm_state = sm_state * 131 + (uint8_t)*q;
+            for (unsigned it = 0; it < fuzz; it++) {
+                SliceCase s;
+                memset(&s, 0, sizeof s);
+                for (int r = 0; r < f->nparams; r++) {
+                    unsigned i = s.nargs++;
+                    OscScalar t = f->vtype[r].s;
+                    if (t == OSC_T_BYTES || t == OSC_T_CELLS) {
+                        int cells = t == OSC_T_CELLS;
+                        s.kind[i] = cells ? 2 : 1;
+                        s.n[i] = sm() % 41;
+                        if (s.n[i] == 0 && sm() % 2) s.is_null[i] = 1;
+                        size_t bytes = s.n[i] * (cells ? 8 : 1);
+                        if (!s.is_null[i]) {
+                            s.bp[i] = malloc(bytes ? bytes : 1);
+                            for (size_t k = 0; k < bytes; k++) s.bp[i][k] = (uint8_t)(sm() % 7 == 0 ? 0xFF : sm() % 4 == 0 ? 0 : sm());
+                        }
+                        r++; /* the length register */
+                    } else {
+                        s.sc[i] = gen_arg(t);
+                        /* indices near the slice length are the interesting ones */
+                        if (osc_scalar_is_int(t) && sm() % 3 == 0) s.sc[i] = canon(t, sm() % 45);
+                    }
+                }
+                int ti, rr;
+                uint64_t ri;
+                rr = slice_run(name, tok, fi, &s, entry, &ti, &ri, NULL);
+                slice_fuzz_runs++;
+                slice_free(&s);
+                if (rr) break;
+            }
+        }
+    }
+    osc_native_unmap(&nm);
+    osc_cg_free(&c1);
+    if (failures == f0) slice_ok++;
+    free(src);
+}
+
+/* host entry check: overlapping bytes / cells, NULL with length, wrapping ranges are refused before any call */
+static void slice_host_checks(void)
+{
+    OscUnit *u = U1;
+    OscDiag d;
+    const char *src = "fn f(b: bytes, c: cells, d: bytes) -> u64 { return b.len + c.len + d.len; }\n";
+    CHECK(osc_compile(src, strlen(src), u, &d, NULL) == 0, "host-check unit refused: %s", d.message);
+    const OscFunc *f = &u->funcs[0];
+    CHECK(f->nparams == 6, "three slices should take six registers, got %u", f->nparams);
+    uint8_t *buf = malloc(64);
+    uint64_t v[6];
+    #define SA(bp, bn, cp, cn, dp, dn) (v[0] = (uint64_t)(uintptr_t)(bp), v[1] = (bn), v[2] = (uint64_t)(uintptr_t)(cp), \
+                                        v[3] = (cn), v[4] = (uint64_t)(uintptr_t)(dp), v[5] = (dn), osc_ir_slice_args_ok(f, v, 6))
+    CHECK(SA(buf, 16, buf + 16, 2, buf + 32, 8) == 0, "disjoint buffers refused");
+    CHECK(SA(buf, 16, buf + 8, 2, buf + 32, 8) == -1, "overlap bytes/cells accepted");
+    slice_neg_overlap++;
+    CHECK(SA(buf, 16, buf + 16, 2, buf + 24, 8) == -1, "overlap cells/bytes(d) accepted");
+    slice_neg_overlap++;
+    CHECK(SA(buf, 16, buf + 16, 2, buf + 16, 0) == 0, "empty slice inside a buffer refused");
+    CHECK(SA(buf, 16, buf, 0, buf, 16) == 0, "bytes over bytes with an empty cells refused");
+    CHECK(SA(NULL, 0, NULL, 0, NULL, 0) == 0, "all-empty NULL slices refused");
+    CHECK(SA(NULL, 1, buf + 16, 1, buf + 32, 1) == -1, "NULL with a length accepted");
+    slice_neg_overlap++;
+    CHECK(SA(buf, UINT64_MAX, buf + 16, 1, buf + 32, 1) == -1, "wrapping bytes range accepted");
+    slice_neg_overlap++;
+    CHECK(SA(buf, 1, buf + 16, UINT64_MAX / 4, buf + 32, 1) == -1, "wrapping cells range accepted");
+    slice_neg_overlap++;
+    #undef SA
+    /* the interpreter entry applies the same check and returns -1 without running */
+    uint64_t ov[6] = {(uint64_t)(uintptr_t)buf, 16, (uint64_t)(uintptr_t)(buf + 8), 2, (uint64_t)(uintptr_t)(buf + 40), 4}, r = 77;
+    osc_rt_reset(RI);
+    CHECK(osc_interp_run(u, 0, ov, 6, RI, &r) == -1 && r == 77, "interpreter ran overlapping buffers");
+    /* encoding versions: plain 1, slices 5, unknown refused, bad magic refused */
+    uint8_t enc[4096];
+    size_t el = 0;
+    CHECK(osc_ir_encode(u, enc, sizeof enc, &el) == 0 && osc_ir_encoding_version(enc, el) == 5, "slice unit not version 5");
+    const char *plain = "fn g(a: u64) -> u64 { return a + 1; }\n";
+    CHECK(osc_compile(plain, strlen(plain), u, &d, NULL) == 0, "plain unit refused");
+    CHECK(osc_ir_encode(u, enc, sizeof enc, &el) == 0 && osc_ir_encoding_version(enc, el) == 1, "plain unit not version 1");
+    enc[7] = 6;
+    CHECK(osc_ir_encoding_version(enc, el) == -1, "unknown version 6 accepted");
+    enc[7] = 0;
+    CHECK(osc_ir_encoding_version(enc, el) == -1, "version 0 accepted");
+    enc[7] = 1;
+    enc[3] = 'X';
+    CHECK(osc_ir_encoding_version(enc, el) == -1, "bad magic accepted");
+    CHECK(osc_ir_encoding_version(enc, 7) == -1 && osc_ir_encoding_version(NULL, 0) == -1, "short buffer accepted");
+    free(buf);
+}
+
 int main(int argc, char **argv)
 {
     unsigned fuzz = argc > 1 ? (unsigned)strtoul(argv[1], NULL, 10) : 1000;
@@ -1800,6 +2114,19 @@ int main(int argc, char **argv)
     handle_fuzz(fuzz / 8 ? fuzz / 8 : 16);
     df_dtor_order(pdir);
     dropflags_fuzz(fuzz / 8 ? fuzz / 8 : 16);
+    {
+        char sdir[512];
+        char **sv;
+        snprintf(sdir, sizeof sdir, "%s/slices", root);
+        int ns = list_osc(sdir, &sv);
+        CHECK(ns >= 4, "need >= 4 slice programs, found %d", ns);
+        for (int i = 0; i < ns; i++) slice_prog(sdir, sv[i], fuzz);
+        slice_host_checks();
+        printf("external byte slices: programs=%lu/%d expect_runs=%lu fuzz_runs=%lu diff_runs=%lu host_refusals=%lu\n", slice_ok, ns,
+               slice_expect, slice_fuzz_runs, slice_runs, slice_neg_overlap);
+        for (int i = 0; i < ns; i++) free(sv[i]);
+        free(sv);
+    }
 
     const char *const *tn = trap_names;
     printf("trap coverage (runs, interpreter == native):\n");

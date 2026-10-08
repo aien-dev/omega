@@ -1,0 +1,7 @@
+// expect: SLICE_ESCAPE object=b line=5
+// transition: store or return a slice
+fn f(b: bytes) -> u64 {
+    let a: own [u64; 2] = alloc(0);
+    a[0] = b;
+    return 0;
+}

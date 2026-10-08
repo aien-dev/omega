@@ -1,0 +1,11 @@
+// slice-entry: head4
+// requires clauses may measure and read a bytes slice: a short buffer fails the clause with TRAP REQUIRES.
+// slice-run: head4 bytes:01020304 -> 1
+// slice-run: head4 bytes:010203 -> trap=REQUIRES
+// slice-run: head4 bytes: -> trap=REQUIRES
+// slice-run: head4 bytes:00020304 -> trap=REQUIRES
+fn head4(b: bytes) -> u64
+    requires b.len >= 4 && b[0] == 1
+{
+    return b[0];
+}

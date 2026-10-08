@@ -1,0 +1,6 @@
+// expect: SLICE_ESCAPE object=cells line=4
+// transition: slice type outside a parameter
+fn f(c: cells) -> u64 {
+    let d: cells = c;
+    return 0;
+}

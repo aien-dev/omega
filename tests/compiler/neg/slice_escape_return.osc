@@ -1,0 +1,5 @@
+// expect: SLICE_ESCAPE object=b line=4
+// transition: store or return a slice
+fn f(b: bytes) -> u64 {
+    return b;
+}

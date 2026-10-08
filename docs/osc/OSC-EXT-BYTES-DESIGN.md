@@ -1,6 +1,6 @@
 # OSC external byte slice: design spec (not implemented)
 
-**Status**: proposal for Lane 30 (owner of `src/compiler`). Spec only; no compiler change in this PR.
+**Status**: implemented on branch osh/osc-ext-bytes (arch#158).
 **Written by**: Lane 42, migration seam 1 (CRB1 crumb reader), 2026-10-01.
 **Why**: prerequisite for an Omega-written reader of crumb lesson files. The reader contract is
 aien-protocols `specs/crumb-visible/CRUMB_READER_CONTRACT.md` 1.0.0 (reader = pure function of a
@@ -88,3 +88,20 @@ using slices is refused by a compiler or loader that does not know the new versi
 
 Writing the Omega reader; any change to `src/runtime`; strings, allocation from slices, pointer
 arithmetic, mutable input, slices in structs; any change to the crumb format.
+
+## 9. Design gaps found while implementing
+
+1. No byte load or store in the assembler. Added `OSC_A64_LDRB_REG` (register offset,
+   `0x38606800 | Rm<<16 | Rn<<5 | Rt`) with its decoder entry, so the self-check in `osc_cg.c`
+   passes. The encoding was cross-checked against GNU `as`/`objdump`.
+2. `bounds()` compared against an immediate. Added `bounds_r()` in `osc_cg.c`: an unsigned
+   register compare (`cmp` then `b.hs` to the BOUNDS trap). Negative signed indices are huge
+   unsigned values, so they trap too. An empty slice never touches its pointer.
+3. The interpreter refuses addresses outside its pool. Slice access is its own checked path
+   (`sload`/`sstore` in `osc_interp.c`: `idx >= len` traps, then reads or writes through the
+   caller pointer). The pool check is unchanged.
+
+Smaller gaps closed on the way: there was no unit loader, so `osc_ir_encoding_version` gives the
+"unknown version refused" rule (plain units stay version 1 to 4, slice units are 5); there was no
+host entry, so `osc_ir_slice_args_ok` refuses overlapping, NULL-with-length or wrapping buffers
+before the call; `b[i]` is typed u64 (u8 zero-extended).

@@ -132,6 +132,20 @@ static uint64_t *fcell(Ctx *c, const OscType *rt_, uint64_t base, unsigned field
     return (uint64_t *)(uintptr_t)base + cell;
 }
 
+/* External byte slice access (docs/osc/OSC-EXT-BYTES-DESIGN.md): its own checked path,
+ * independent of the pool-range check of elem(). The index is unsigned: a negative signed
+ * index is >= 2^63 and fails with every length, len 0 fails for every index (the caller
+ * pointer, possibly NULL, is not touched). The buffer belongs to the caller. */
+static uint64_t sload(Ctx *c, OscScalar kind, uint64_t ptr, uint64_t len, uint64_t idx) {
+    if (idx >= len) trap(c, OSC_TRAP_BOUNDS);
+    if (kind == OSC_T_BYTES) return ((const uint8_t *)(uintptr_t)ptr)[idx];
+    return ((const uint64_t *)(uintptr_t)ptr)[idx];
+}
+static void sstore(Ctx *c, uint64_t ptr, uint64_t len, uint64_t idx, uint64_t val) {
+    if (idx >= len) trap(c, OSC_TRAP_BOUNDS);
+    ((uint64_t *)(uintptr_t)ptr)[idx] = val;
+}
+
 static uint64_t run_func(Ctx *c, int fi, const uint64_t *args) {
     const OscFunc *f = &c->u->funcs[fi];
     const OscType *T = f->vtype;
@@ -166,6 +180,8 @@ static uint64_t run_func(Ctx *c, int fi, const uint64_t *args) {
             case OSC_I_HSTORE: osc_rt_h_store(c->rt, v[in->a], v[in->b], v[in->c], v[in->args[0]]); break;
             case OSC_I_LOAD: v[in->dst] = *elem(c, &T[in->a], v[in->a], T[in->b].s, v[in->b]); break;
             case OSC_I_STORE: *elem(c, &T[in->a], v[in->a], T[in->b].s, v[in->b]) = v[in->c]; break;
+            case OSC_I_SLOAD: v[in->dst] = sload(c, T[in->a].s, v[in->a], v[in->a + 1], v[in->b]); break;
+            case OSC_I_SSTORE: sstore(c, v[in->a], v[in->a + 1], v[in->b], v[in->c]); break;
             case OSC_I_FLOAD:
                 v[in->dst] = *fcell(c, &T[in->a], v[in->a], (unsigned)in->imm, in->b >= 0,
                                     in->b >= 0 ? T[in->b].s : OSC_T_VOID, in->b >= 0 ? v[in->b] : 0);
@@ -199,13 +215,14 @@ static int check_args(const OscUnit *u, int func, const uint64_t *args, unsigned
     if (nargs != f->nparams || (nargs && !args)) return -1;
     for (unsigned p = 0; p < nargs; p++) {
         const OscType *t = &f->vtype[p];
+        if (t->s == OSC_T_BYTES || t->s == OSC_T_CELLS) continue; /* external pointer: checked as a pair below */
         if (t->s == OSC_T_REF) {
             if (!osc_rt_is_live_ref(rt, args[p], t->len)) return -1;
         } else if (canon(t->s, args[p]) != args[p]) {
             return -1;
         }
     }
-    return 0;
+    return osc_ir_slice_args_ok(f, args, nargs); /* NULL with len > 0, wrapping range, overlapping cells */
 }
 
 int osc_interp_run_prevalidated(const OscUnit *u, int func, const uint64_t *args, unsigned nargs, OscRt *rt,

@@ -1,0 +1,5 @@
+// expect: SLICE_ESCAPE object=bytes line=3
+// transition: slice type outside a parameter
+fn f(b: bytes) -> bytes {
+    return b;
+}

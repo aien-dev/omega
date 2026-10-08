@@ -94,6 +94,13 @@ static int scalar_of(int k)
 static int parse_scalar(P *p, OscType *ty)
 {
     int s = scalar_of(cur(p)->kind);
+    if (at(p, OT_BYTES) || at(p, OT_CELLS)) {
+        const OscToken *t = cur(p);
+        osc_diag_set(p->d, OSC_DIAG_SLICE_ESCAPE, t->line, t->col, at(p, OT_BYTES) ? "bytes" : "cells", 0, NULL,
+                     "slice type outside a parameter", "'%s' is a parameter type only: a slice is never a local, field, element or result",
+                     at(p, OT_BYTES) ? "bytes" : "cells");
+        return -1;
+    }
     if (!s) return syntax(p, "a type (u8 u16 u32 u64 i8 i16 i32 i64 bool)");
     memset(ty, 0, sizeof *ty);
     ty->s = (OscScalar)s;
@@ -220,6 +227,12 @@ static int parse_ptype(P *p, OscType *ty)
         return parse_ref_body(p, ty, OSC_REF_SHARED);
     }
     if (at(p, OT_NAME) && find_struct(p, cur(p)) >= 0) return struct_by_value(p, cur(p), "struct by value");
+    if (at(p, OT_BYTES) || at(p, OT_CELLS)) { /* external byte slice: pointer + length registers */
+        memset(ty, 0, sizeof *ty);
+        ty->s = at(p, OT_BYTES) ? OSC_T_BYTES : OSC_T_CELLS;
+        adv(p);
+        return 0;
+    }
     if (at(p, OT_HANDLE) || at(p, OT_POOL)) return local_only(p);
     return parse_scalar(p, ty);
 }
@@ -1044,7 +1057,7 @@ static int parse_fn(P *p)
     char fname[64];
     osc_node_name(a, N(f), fname, sizeof fname);
     if (expect(p, OT_LPAREN)) return -1;
-    int last = -1, np = 0;
+    int last = -1, np = 0, nslice = 0;
     if (!at(p, OT_RPAREN)) {
         for (;;) {
             int pn = new_node(p, ON_PARAM, cur(p));
@@ -1052,7 +1065,16 @@ static int parse_fn(P *p)
             if (parse_name_tok(p, pn)) return -1;
             if (expect(p, OT_COLON)) return -1;
             if (parse_ptype(p, &N(pn)->ty)) return -1;
-            if (++np > OSC_MAX_PARAMS) {
+            int is_slice = N(pn)->ty.s == OSC_T_BYTES || N(pn)->ty.s == OSC_T_CELLS;
+            nslice += is_slice;
+            np += is_slice ? 2 : 1; /* parameter registers: a slice is pointer + length */
+            if (np > OSC_MAX_PARAMS && nslice) {
+                osc_diag_set(p->d, OSC_DIAG_SLICE_PARAMS, N(pn)->line, N(pn)->col, fname, N(f)->line, NULL,
+                             "parameter registers", "function '%s' needs %d parameter registers (a slice takes two); at most %d",
+                             fname, np, OSC_MAX_PARAMS);
+                return -1;
+            }
+            if (np > OSC_MAX_PARAMS) {
                 osc_diag_set(p->d, OSC_DIAG_CAPACITY, N(pn)->line, N(pn)->col, fname, N(f)->line, NULL,
                              "parameter count", "function '%s' has more than %d parameters", fname, OSC_MAX_PARAMS);
                 return -1;

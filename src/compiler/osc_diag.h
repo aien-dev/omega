@@ -47,6 +47,11 @@ typedef enum {
     OSC_DIAG_GENERATION_EXHAUSTED, /* definite alloc/free cycles reuse a retired slot (generation would wrap) */
     /* VC1 stage 4 (docs/osc/OSC-VC1-IMPORT.md), appended */
     OSC_DIAG_IMPORT_REFUSED,       /* an import did not resolve; transition = the resolver refusal code name */
+    /* external byte slices (docs/osc/OSC-EXT-BYTES-DESIGN.md section 4), appended */
+    OSC_DIAG_SLICE_ESCAPE,         /* a slice is returned or stored in a local, field, element, pool, arena */
+    OSC_DIAG_SLICE_VALUE,          /* a slice is used as a value (not .len, indexing, or a slice argument) */
+    OSC_DIAG_SLICE_WRITE,          /* an assignment to an element of a bytes slice */
+    OSC_DIAG_SLICE_PARAMS,         /* slice parameters need more than six registers (a slice counts two) */
     OSC_DIAG__COUNT
 } OscDiagKind;
 

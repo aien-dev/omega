@@ -1,0 +1,46 @@
+// slice-entry: copy fill sum_cells poke
+// cells is the writable side: a caller-supplied u64 output slice; c[i] = e stores, c[i] loads, both checked.
+// slice-run: copy bytes:010203 cells:3 -> 3 cells=1,2,3
+// slice-run: copy bytes:010203 cells:5=9,9,9,9,9 -> 3 cells=1,2,3,9,9
+// slice-run: copy bytes:0102030405 cells:2 -> 2 cells=1,2
+// slice-run: copy bytes: cells:4 -> 0 cells=0,0,0,0
+// slice-run: copy bytes:NULL cells:NULL -> 0
+// slice-run: fill cells:3 7 -> 3 cells=7,7,7
+// slice-run: fill cells:NULL 7 -> 0
+// slice-run: sum_cells cells:3=4,5,6 -> 15
+// slice-run: poke cells:4 3 99 -> 99 cells=0,0,0,99
+// slice-run: poke cells:4 4 99 -> trap=BOUNDS
+// slice-run: poke cells:NULL 0 1 -> trap=BOUNDS
+// slice-run: poke cells:4 18446744073709551615 1 -> trap=BOUNDS
+fn copy(src: bytes, dst: cells) -> u64 {
+    let mut i: u64 = 0;
+    while i < src.len && i < dst.len bound 4096 {
+        dst[i] = src[i];
+        i = i + 1;
+    }
+    return i;
+}
+
+fn fill(dst: cells, v: u64) -> u64 {
+    let mut i: u64 = 0;
+    while i < dst.len bound 4096 {
+        dst[i] = v;
+        i = i + 1;
+    }
+    return i;
+}
+
+fn sum_cells(c: cells) -> u64 {
+    let mut s: u64 = 0;
+    let mut i: u64 = 0;
+    while i < c.len bound 4096 {
+        s = s + c[i];
+        i = i + 1;
+    }
+    return s;
+}
+
+fn poke(c: cells, i: u64, v: u64) -> u64 {
+    c[i] = v;
+    return c[i];
+}
