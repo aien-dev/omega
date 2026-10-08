@@ -105,3 +105,15 @@ Smaller gaps closed on the way: there was no unit loader, so `osc_ir_encoding_ve
 "unknown version refused" rule (plain units stay version 1 to 4, slice units are 5); there was no
 host entry, so `osc_ir_slice_args_ok` refuses overlapping, NULL-with-length or wrapping buffers
 before the call; `b[i]` is typed u64 (u8 zero-extended).
+
+### Review fixes (PR #335 hostile review)
+
+- Native entry was unchecked: `osc_native_call` (osc_native.c) runs `osc_ir_slice_args_ok` and
+  refuses (returns -1, never calls in) before `osc_rt_call_native`, which stays the raw entry.
+  The slice tests' native path goes through it.
+- Static aliasing: passing one `cells` slice to two parameters of one call is refused at compile
+  time as `SLICE_ALIAS` (a cells passed as `bytes` is already a type mismatch). `bytes` twice is
+  harmless and allowed.
+- `osc_ir_slice_args_ok` also refuses a `cells` pointer that is not 8-byte aligned (both paths).
+- `ensures result <= b.len` is now accepted: a slice length is immutable, so contracts may read
+  `.len`. Reading `cells` elements in `ensures` stays refused.

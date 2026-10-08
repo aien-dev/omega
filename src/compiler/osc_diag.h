@@ -52,6 +52,7 @@ typedef enum {
     OSC_DIAG_SLICE_VALUE,          /* a slice is used as a value (not .len, indexing, or a slice argument) */
     OSC_DIAG_SLICE_WRITE,          /* an assignment to an element of a bytes slice */
     OSC_DIAG_SLICE_PARAMS,         /* slice parameters need more than six registers (a slice counts two) */
+    OSC_DIAG_SLICE_ALIAS,          /* one cells slice is passed twice in one call (the callee would see two aliasing params) */
     OSC_DIAG__COUNT
 } OscDiagKind;
 

@@ -1861,7 +1861,7 @@ static int slice_parse_arg(SliceCase *s, char *t)
 }
 
 /* run one case on both engines; returns 0 and fills the outcome, -1 on disagreement */
-static int slice_run(const char *name, const char *what, int fi, const SliceCase *s, void *entry, int *trap_out,
+static int slice_run(const char *name, const char *what, int fi, const SliceCase *s, const OscNative *nm, uint32_t entry_off, int *trap_out,
                      uint64_t *ret_out, const SliceCase *keep_cells)
 {
     const OscFunc *f = &U1->funcs[fi];
@@ -1873,7 +1873,7 @@ static int slice_run(const char *name, const char *what, int fi, const SliceCase
     osc_rt_reset(RI);
     osc_rt_reset(RN);
     int ti = osc_interp_run_prevalidated(U1, fi, ai, nri, RI, &ri);
-    int tn = osc_rt_call_native(RN, entry, an, nrn, &rn);
+    int tn = osc_native_call(U1, fi, nm, entry_off, RN, an, nrn, &rn);
     slice_runs++;
     int same = ti == tn && ti >= 0 && (ti != 0 || ri == rn) && osc_rt_same_outcome(RI, RN);
     for (unsigned i = 0; i < s->nargs && same; i++)
@@ -1955,7 +1955,7 @@ static void slice_prog(const char *dir, const char *name, unsigned fuzz)
                 SliceCase out = s; /* receives the interpreter's final cells */
                 for (unsigned i = 0; i < s.nargs; i++)
                     if (s.kind[i] == 2 && !s.is_null[i]) { out.bp[i] = malloc(s.n[i] ? s.n[i] * 8 : 1); }
-                int rr = slice_run(name, line, fi, &s, osc_native_at(&nm, c1.entry[fi]), &ti, &ri, &out);
+                int rr = slice_run(name, line, fi, &s, &nm, c1.entry[fi], &ti, &ri, &out);
                 int ok = rr == 0 && ti == want_trap && (want_trap || ri == want);
                 if (ok && cellsx && strncmp(cellsx, "cells=", 6) == 0) {
                     for (unsigned i = 0; i < s.nargs; i++) {
@@ -1986,7 +1986,7 @@ static void slice_prog(const char *dir, const char *name, unsigned fuzz)
             CHECK(fi >= 0, "%s: slice-entry %s not found", name, tok);
             if (fi < 0) continue;
             const OscFunc *f = &U1->funcs[fi];
-            void *entry = osc_native_at(&nm, c1.entry[fi]);
+            const uint32_t entry = c1.entry[fi];
             sm_state = 0x5111CE0000000000ull ^ (uint64_t)(fi * 7919);
             for (const char *q = name; *q; q++) sm_state = sm_state * 131 + (uint8_t)*q;
             for (unsigned it = 0; it < fuzz; it++) {
@@ -2014,7 +2014,7 @@ static void slice_prog(const char *dir, const char *name, unsigned fuzz)
                 }
                 int ti, rr;
                 uint64_t ri;
-                rr = slice_run(name, tok, fi, &s, entry, &ti, &ri, NULL);
+                rr = slice_run(name, tok, fi, &s, &nm, entry, &ti, &ri, NULL);
                 slice_fuzz_runs++;
                 slice_free(&s);
                 if (rr) break;
@@ -2054,11 +2054,40 @@ static void slice_host_checks(void)
     slice_neg_overlap++;
     CHECK(SA(buf, 1, buf + 16, UINT64_MAX / 4, buf + 32, 1) == -1, "wrapping cells range accepted");
     slice_neg_overlap++;
+    CHECK(SA(buf, 16, buf + 17, 2, buf + 40, 8) == -1, "misaligned cells pointer accepted");
+    slice_neg_overlap++;
+    CHECK(SA(buf + 1, 15, buf + 16, 2, buf + 40, 8) == 0, "odd bytes pointer refused");
+    CHECK(SA(buf, 16, buf + 17, 0, buf + 40, 8) == 0, "empty misaligned cells refused");
     #undef SA
     /* the interpreter entry applies the same check and returns -1 without running */
     uint64_t ov[6] = {(uint64_t)(uintptr_t)buf, 16, (uint64_t)(uintptr_t)(buf + 8), 2, (uint64_t)(uintptr_t)(buf + 40), 4}, r = 77;
     osc_rt_reset(RI);
     CHECK(osc_interp_run(u, 0, ov, 6, RI, &r) == -1 && r == 77, "interpreter ran overlapping buffers");
+    /* the checked native entry refuses the same inputs without calling in; raw osc_rt_call_native is unchecked */
+    {
+        OscCode hc;
+        OscNative hn;
+        char herr[160];
+        memset(&hc, 0, sizeof hc);
+        CHECK(osc_cg_compile(u, &hc, herr, sizeof herr) == 0, "host-check codegen refused: %s", herr);
+        if (osc_native_map(&hn, hc.code, hc.len) == 0) {
+            uint64_t good[6] = {(uint64_t)(uintptr_t)buf, 16, (uint64_t)(uintptr_t)(buf + 16), 2, (uint64_t)(uintptr_t)(buf + 40), 4}, nr = 77;
+            uint64_t bad[6], mis[6];
+            memcpy(bad, good, sizeof bad);
+            bad[2] = (uint64_t)(uintptr_t)(buf + 8); /* cells over bytes */
+            memcpy(mis, good, sizeof mis);
+            mis[2] = (uint64_t)(uintptr_t)(buf + 17); /* misaligned cells */
+            osc_rt_reset(RN);
+            CHECK(osc_native_call(u, 0, &hn, hc.entry[0], RN, good, 6, &nr) == 0 && nr == 22, "checked native call failed on valid buffers (ret %llu)", (unsigned long long)nr);
+            nr = 77;
+            CHECK(osc_native_call(u, 0, &hn, hc.entry[0], RN, bad, 6, &nr) == -1 && nr == 77, "native entry ran overlapping buffers");
+            CHECK(osc_native_call(u, 0, &hn, hc.entry[0], RN, mis, 6, &nr) == -1 && nr == 77, "native entry ran a misaligned cells pointer");
+            CHECK(osc_native_call(u, 0, &hn, hc.entry[0], RN, good, 5, &nr) == -1, "native entry accepted wrong arity");
+            slice_neg_overlap += 3;
+            osc_native_unmap(&hn);
+        }
+        osc_cg_free(&hc);
+    }
     /* encoding versions: plain 1, slices 5, unknown refused, bad magic refused */
     uint8_t enc[4096];
     size_t el = 0;

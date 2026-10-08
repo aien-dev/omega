@@ -1,0 +1,10 @@
+// expect: SLICE_ALIAS object=c line=9
+// transition: slice passed twice
+fn two(a: cells, b: cells) -> u64 {
+    a[0] = 1;
+    b[0] = b[0] + 7;
+    return a[0];
+}
+fn alias(c: cells) -> u64 {
+    return two(c, c);
+}

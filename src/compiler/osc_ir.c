@@ -691,7 +691,7 @@ int osc_ir_slice_args_ok(const OscFunc *f, const uint64_t *args, unsigned nargs)
     for (unsigned p = 0; p + 1 < nargs; p++) {
         if (!type_is_slice(&f->vtype[p])) continue;
         uint64_t ptr = args[p], n = args[p + 1], sz = n * (f->vtype[p].s == OSC_T_CELLS ? 8 : 1);
-        if ((f->vtype[p].s == OSC_T_CELLS && n > UINT64_MAX / 8) || (n && !ptr) || sz > UINT64_MAX - ptr) return -1;
+        if ((f->vtype[p].s == OSC_T_CELLS && (n > UINT64_MAX / 8 || (n && (ptr & 7)))) || (n && !ptr) || sz > UINT64_MAX - ptr) return -1;
         for (unsigned q = 0; q + 1 < nargs; q++) {
             if (q == p || !type_is_slice(&f->vtype[q])) continue;
             if (f->vtype[p].s != OSC_T_CELLS && f->vtype[q].s != OSC_T_CELLS) continue;

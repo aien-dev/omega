@@ -1268,7 +1268,7 @@ static int chk(C *c, int i, OscScalar want)
         int s = resolve(c, n);
         if (s < 0) return -1;
         n->sym = s;
-        if (c->contract == 2 && c->sym[s].kind != SK_SCALAR &&
+        if (c->contract == 2 && c->sym[s].kind != SK_SCALAR && c->sym[s].kind != SK_SLICE && /* a slice length is immutable */
             !(c->sym[s].kind == SK_BORROW && c->sym[s].ty.ref == OSC_REF_SHARED)) {
             osc_diag_set(c->d, OSC_DIAG_CONTRACT_INVALID, n->line, n->col, c->sym[s].name, c->sym[s].line, NULL,
                          "struct field read in ensures",
@@ -1595,6 +1595,12 @@ static int chk_call(C *c, int i, OscScalar want, int as_stmt)
                          c->sym[ss].ty.s == OSC_T_BYTES ? "bytes" : "cells", name, pt->s == OSC_T_BYTES ? "bytes" : "cells");
                 return tmismatch(c, a, c->sym[ss].name, msg);
             }
+            for (int j = 0; j < k; j++) /* the same cells twice would give the callee two aliasing parameters */
+                if (c->sym[ss].ty.s == OSC_T_CELLS && NODE(args[j])->kind == ON_NAME && NODE(args[j])->sym == ss &&
+                    (NODE(params[j])->ty.s == OSC_T_CELLS || NODE(params[j])->ty.s == OSC_T_BYTES)) {
+                    snprintf(msg, sizeof msg, "cells slice '%s' is passed twice to '%s': the parameters would alias", c->sym[ss].name, name);
+                    return slice_diag(c, a, OSC_DIAG_SLICE_ALIAS, &c->sym[ss], "slice passed twice", msg);
+                }
             continue;
         }
         if (pt->s != OSC_T_REF) {

@@ -1,0 +1,8 @@
+// expect: TYPE_MISMATCH object=return line=7
+// transition: type mismatch
+fn two(a: cells, b: bytes) -> u64 {
+    return a[0] + b[0];
+}
+fn alias(c: cells) -> u64 {
+    return two(c, c);
+}
