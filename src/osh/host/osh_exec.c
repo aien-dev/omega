@@ -215,6 +215,30 @@ static int authorize(const OshSession *s, const OshRequest *r)
     return OSH_E_OK;
 }
 
+/* ---------------- per-effect authority (ABI section 9.2) ---------------- */
+
+static const char *e_name(int e)
+{
+    switch (e) {
+    case OSH_E_DENIED: return "DENIED";
+    case OSH_E_REVOKED: return "REVOKED";
+    case OSH_E_STALE: return "STALE";
+    case OSH_E_CAP_DOMAIN_MISMATCH: return "CAP_DOMAIN_MISMATCH";
+    case OSH_E_CAP_GEN_NARROW: return "CAP_GEN_NARROW";
+    default: return "REFUSED";
+    }
+}
+
+int osh_effect_check(const OshSession *s, int op, const char *path, int diagfd)
+{
+    if (!s->effect_hook) return OSH_E_OK;
+    int rc = s->effect_hook(s->effect_ctx, &s->binding, op, path);
+    if (rc == OSH_E_OK) return OSH_E_OK;
+    const char *what = op == OSH_OP_SPAWN ? "spawn" : op == OSH_OP_CHDIR ? "cd" : op == OSH_OP_OPEN_WRITE ? "write" : "read";
+    osh_diag(diagfd, "%s %s: denied (%s); nothing was done", what, path, e_name(rc));
+    return rc;
+}
+
 /* ---------------- descriptor tables and redirections ---------------- */
 
 typedef struct {
@@ -246,7 +270,7 @@ static int to_high(int fd)
 
 /* Apply redirections in record order on the table. 0 ok; -1 failed (diagnostic written to diagfd, owned fds stay
  * recorded in the table so the caller can close them). Every descriptor opened here is O_CLOEXEC. */
-static int apply_redirs(FdTab *t, const OshCmd *c, int diagfd)
+static int apply_redirs(const OshSession *s, FdTab *t, const OshCmd *c, int diagfd, int *err)
 {
     for (int i = 0; i < c->nredir; i++) {
         const OshRedir *d = &c->redir[i];
@@ -255,6 +279,8 @@ static int apply_redirs(FdTab *t, const OshCmd *c, int diagfd)
             nfd = fcntl(t->fd[d->src_fd], F_DUPFD_CLOEXEC, 10);
             if (nfd < 0) { osh_diag(diagfd, "%d>&%d: %s", d->fd, d->src_fd, strerror(errno)); return -1; }
         } else {
+            int ge = osh_effect_check(s, d->kind == OSH_R_IN ? OSH_OP_OPEN_READ : OSH_OP_OPEN_WRITE, d->path, diagfd);
+            if (ge != OSH_E_OK) { if (err) *err = ge; return -1; }
             int fl = d->kind == OSH_R_IN ? O_RDONLY : O_WRONLY | O_CREAT | (d->kind == OSH_R_APPEND ? O_APPEND : O_TRUNC);
             nfd = open(d->path, fl | O_CLOEXEC, 0666);
             if (nfd >= 0 && nfd < 10) nfd = to_high(nfd);
@@ -316,9 +342,10 @@ static void run_in_parent(OshSession *s, const OshCmd *c, OshResult *res)
     FdTab t;
     tab_init(&t, s);
     int st;
-    if (apply_redirs(&t, c, s->fd[2]) != 0) {
+    int rerr = OSH_E_IO;
+    if (apply_redirs(s, &t, c, s->fd[2], &rerr) != 0) {
         st = 1;
-        set_cmd(&res->cmd[0], st, OSH_OUT_FAILED_NO_EFFECT, OSH_E_IO);
+        set_cmd(&res->cmd[0], st, OSH_OUT_FAILED_NO_EFFECT, rerr);
     } else {
         if (c->builtin_id) st = osh_builtin_run(s, c, t.fd, 1);
         else {
@@ -465,6 +492,16 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
         char path[PATH_MAX];
         char **envp = NULL;
         int external = c->nargv > 0 && c->builtin_id == OSH_B_NONE;
+        int pre = OSH_E_OK;
+        for (int k = 0; k < c->nredir && pre == OSH_E_OK; k++)
+            if (c->redir[k].kind != OSH_R_DUP)
+                pre = osh_effect_check(s, c->redir[k].kind == OSH_R_IN ? OSH_OP_OPEN_READ : OSH_OP_OPEN_WRITE, c->redir[k].path, s->fd[2]);
+        if (pre != OSH_E_OK) { /* denied before any process exists; the child re-checks right before its own open() */
+            set_cmd(&res->cmd[i], 1, OSH_OUT_FAILED_NO_EFFECT, pre);
+            if (rd >= 0) { close(rd); p.pp[i - 1][0] = -1; }
+            if (wr >= 0) { close(wr); p.pp[i][1] = -1; }
+            continue;
+        }
 
         if (external) {
             int why, rc = resolve_in(cmd_path_var(s, c), c->argv[0], path, sizeof path, &why);
@@ -472,6 +509,13 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
                 if (rc == 127 && !strchr(c->argv[0], '/')) osh_diag(s->fd[2], "%s: command not found", c->argv[0]);
                 else osh_diag(s->fd[2], "%s: %s", c->argv[0], strerror(why));
                 set_cmd(&res->cmd[i], rc, OSH_OUT_FAILED_NO_EFFECT, OSH_E_NOT_FOUND);
+                if (rd >= 0) { close(rd); p.pp[i - 1][0] = -1; }
+                if (wr >= 0) { close(wr); p.pp[i][1] = -1; }
+                continue;
+            }
+            int ge = osh_effect_check(s, OSH_OP_SPAWN, path, s->fd[2]);
+            if (ge != OSH_E_OK) {
+                set_cmd(&res->cmd[i], 126, OSH_OUT_FAILED_NO_EFFECT, ge);
                 if (rd >= 0) { close(rd); p.pp[i - 1][0] = -1; }
                 if (wr >= 0) { close(wr); p.pp[i][1] = -1; }
                 continue;
@@ -502,7 +546,7 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
             if (tty && pgid == 0) tcsetpgrp(s->tty_fd, getpid()); /* SIGTTOU is still ignored here */
             child_signals();
             int st = 1;
-            if (apply_redirs(&t, c, s->fd[2]) == 0 && child_install(&t) == 0) {
+            if (apply_redirs(s, &t, c, s->fd[2], NULL) == 0 && child_install(&t) == 0) {
                 /* close every descriptor that is not 0..2, each exactly once (no double close) */
                 int cl[2 * OSH_MAX_CMDS + OSH_MAX_REDIR + 8], ncl = 0;
                 for (int k = 0; k < p.n; k++)
@@ -519,6 +563,7 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
                     if (!dup) close(cl[k]);
                 }
                 if (external) {
+                    if (osh_effect_check(s, OSH_OP_SPAWN, path, 2) != OSH_E_OK) _exit(126); /* defensive: revoked between fork and exec; the osh program seals its policy before the first command, so it cannot trigger there (no test reaches it) */
                     execve(path, (char *const *)c->argv, envp);
                     osh_diag(2, "%s: %s", c->argv[0], strerror(errno));
                     st = (errno == ENOENT || errno == ENOTDIR) ? 127 : 126;

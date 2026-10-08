@@ -18,6 +18,10 @@
 #include <unistd.h>
 
 static const char *OSH, *ARG, *TMP;
+/* osh is fail closed without --caps, so every case runs with this explicit policy (all four effects under /): these
+ * cases test the language and the execution service; enforcement itself is test_osh_caps.c. */
+static char POL[4096];
+static const char E2E_POLICY[] = "principal 1\nallow spawn /\nallow read /\nallow write /\nallow chdir /\n";
 static unsigned long checks, fails;
 
 static void check(int ok, const char *fmt, ...)
@@ -81,6 +85,8 @@ static Run run_osh(int mode, const char *text, char *const *args, int interp)
     char *av[32];
     int n = 0;
     av[n++] = (char *)OSH;
+    av[n++] = "--caps";
+    av[n++] = POL;
     if (mode == 0) { av[n++] = "-c"; av[n++] = (char *)text; }
     if (mode == 1) av[n++] = scr;
     for (; args && *args; args++) av[n++] = *args;
@@ -265,7 +271,7 @@ static void test_prompt_ctrl_c(void)
         close(master);
         if (chdir(TMP) != 0) _exit(126);
         unsetenv("OSH_INTERP");
-        char *av[] = {(char *)OSH, NULL};
+        char *av[] = {(char *)OSH, "--caps", POL, NULL}; /* fail closed without a policy, as in run_osh() */
         execv(OSH, av);
         _exit(127);
     }
@@ -304,6 +310,9 @@ int main(int argc, char **argv)
     ARG = realpath(argv[2], NULL);
     TMP = realpath(tmpl, NULL);
     if (!OSH || !ARG || !TMP) { fprintf(stderr, "bad path\n"); return 2; }
+    snprintf(POL, sizeof POL, "%s.caps", TMP);
+    FILE *pf = fopen(POL, "w");
+    if (!pf || fputs(E2E_POLICY, pf) == EOF || fclose(pf) != 0) { fprintf(stderr, "cannot write %s\n", POL); return 2; }
     unsigned long ncases = 0;
     for (size_t i = 0; i < sizeof CASES / sizeof CASES[0]; i++) {
         const Case *c = &CASES[i];
@@ -348,6 +357,7 @@ int main(int argc, char **argv)
         }
         rmdir(TMP);
     }
+    unlink(POL);
     printf(fails ? "OSH_E2E_FAIL\n" : "OSH_E2E_PASS\n");
     return fails != 0;
 }
