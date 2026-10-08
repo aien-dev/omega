@@ -115,4 +115,30 @@ test-osh-e2e: osh-gen-check $(OSH_DIR)/osh $(OSH_DIR)/argprint $(OSH_DIR)/test_o
 	$(abspath $(OSH_DIR)/test_osh_e2e) $(abspath $(OSH_DIR)/osh) $(abspath $(OSH_DIR)/argprint) > $(OSH_DIR)/e2e.out
 	@tail -3 $(OSH_DIR)/e2e.out; tail -1 $(OSH_DIR)/e2e.out | grep -q '^OSH_E2E_PASS$$'
 	@echo "test-osh-e2e: PASS"
+
+# Core-only step trace (OSH-AIENOS-0): the lexer, parser and expander run over fixture scripts through osh_core_call, nothing
+# is executed. `make osh-trace` runs every tests/osh/trace/*.sh native AND interpreted, requires the two traces to be
+# identical, and requires them to equal the committed .trace file. `make osh-trace-gen` rewrites the .trace files.
+.PHONY: osh-trace osh-trace-gen
+OSH_TRSRCS = tests/osh/osh_trace.c src/osh/host/osh_core.c src/osh/host/osh_codes.c $(OSC_LIB)
+
+$(OSH_DIR)/osh_trace: $(OSH_TRSRCS) $(OSH_XHDRS)
+	@mkdir -p $(OSH_DIR)
+	$(CC) $(OSH_XFLAGS) -O2 -o $@ $(OSH_TRSRCS)
+
+osh-trace-gen: osh-gen-check $(OSH_DIR)/osh_trace
+	@for f in tests/osh/trace/*.sh; do \
+	  $(OSH_DIR)/osh_trace interp $(OSH_UNIT_SRCS) $$f > $(OSH_DIR)/$$(basename $$f .sh).interp || exit 1; \
+	  $(OSH_DIR)/osh_trace native $(OSH_UNIT_SRCS) $$f > $(OSH_DIR)/$$(basename $$f .sh).native || exit 1; \
+	  cmp $(OSH_DIR)/$$(basename $$f .sh).interp $(OSH_DIR)/$$(basename $$f .sh).native || { echo "osh-trace-gen: native and interpreter differ on $$f"; exit 1; }; \
+	  cp $(OSH_DIR)/$$(basename $$f .sh).native tests/osh/trace/$$(basename $$f .sh).trace; \
+	done; echo "osh-trace-gen: wrote traces"
+
+osh-trace: osh-gen-check $(OSH_DIR)/osh_trace
+	@n=0; for f in tests/osh/trace/*.sh; do b=$$(basename $$f .sh); \
+	  $(OSH_DIR)/osh_trace interp $(OSH_UNIT_SRCS) $$f > $(OSH_DIR)/$$b.interp || exit 1; \
+	  $(OSH_DIR)/osh_trace native $(OSH_UNIT_SRCS) $$f > $(OSH_DIR)/$$b.native || exit 1; \
+	  cmp $(OSH_DIR)/$$b.interp $(OSH_DIR)/$$b.native || { echo "osh-trace: native and interpreter differ on $$f"; exit 1; }; \
+	  cmp $(OSH_DIR)/$$b.native tests/osh/trace/$$b.trace || { echo "osh-trace: $$f differs from the committed trace"; exit 1; }; \
+	  n=$$((n+1)); done; echo "osh-trace: PASS ($$n scripts, native == interpreter == committed trace)"
 endif

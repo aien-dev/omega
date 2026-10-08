@@ -13,16 +13,22 @@
           "last_commit": "303829c",
           "name": "host",
           "purpose": "tests for the osh Linux host adapter execution service (hand-built request records, helper-mode "
+        },
+        {
+          "digest": "f397d8fa03868b6c35b63f312996daa80ec102a182b3d67d498132da7381f66d",
+          "last_commit": "",
+          "name": "trace",
+          "purpose": "Core-only step traces of the osh shell units over fixture scripts (OSH-AIENOS-0 differential fix"
         }
       ],
-      "children_root": "sha256:bce053661b20a19d4ecff5b97873515878ea6e8f3bfd0cbc3bbcc6cce4627ef1",
-      "compiled_at": "2026-10-08T03:50:09Z",
+      "children_root": "sha256:b365050a208badb244cc6cdd27f4c671163d1f453e5fec37b63d4ae3c6022183",
+      "compiled_at": "2026-10-08T03:58:01Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:f19f750048353f25a7e2548b079abd87ff81f263fe164cdfaf65a32ff92fb1c6",
+      "digest": "sha256:cbc72ba533bc5109b02ef696edb4d51f50f972cab2abefcea1d177cbbcb0843d",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 48,
-      "generated_at_commit": "7ae98abc2dee480a98d5627c0ff49ade2a558f49",
+      "generated_at_commit": "79a8be6ae6414b456b705e625df2c7f150d1129a",
       "source_tree": "sha256:47e07ed2afc0e3dd07c40f0864ca43025fc49b0194985799200b479d0f9edcc1"
     }
   },
