@@ -1,12 +1,18 @@
 /*
  * osh_trace.c -- core-only step trace of the Omega-native shell (OSH-AIENOS-0 differential fixture).
- * Mirrors the sequencing of src/osh/host/osh_shell.c (run_src / lex_parse / run_list) over osh_core_call, but executes
- * nothing: on PIPELINE_READY it only records the request; NEED_VAR is answered from a fixed table.
+ * Mirrors the sequencing of src/osh/host/osh_shell.c in script-file mode (run_src / lex_parse / run_list) over
+ * osh_core_call, but executes nothing: on PIPELINE_READY it only records the request and takes the next fake status;
+ * NEED_VAR is answered from a fixed variable table and the fixture's positionals.
  * usage: osh_trace interp|native lex.osc parse.osc expand.osc script
+ * Per fixture, optional:  <script minus .sh>.status  whitespace-separated pipeline statuses, used in order (then 0)
+ *                         <script minus .sh>.args    positional parameters $1.., one per line; $0 is "osh_trace"
  * Output, one line per unit call:   step <n> unit=<lex|parse|expand> in_len=<n> ret=<u64> ws_sha256=<hex of WS_CELLS*8 bytes LE>
  * and on each pipeline request:     request <n> sha256=<hex of the request record cells>
- * and for driver-level limits:      event <text>
- * INPUT_MAX models the AIENOS read-only input window (4096 bytes): a list buffer that would exceed it is refused.
+ * and for driver-level events:      event <text>; the last line is always  event exit=<status>  (2 after a refusal)
+ * Not modelled (nothing runs): the exit builtin, exit with too many arguments dropping the list, ^C, -c exact end of
+ * input. INPUT_MAX models the AIENOS read-only input window (4096 bytes): a list buffer that would exceed it is
+ * refused, so above 4096 bytes this is not a reference for the Linux shell (its buffer is 1 MiB). Native mode needs
+ * an AArch64 host, as every osh test does.
  */
 #include <stdint.h>
 #include <stdio.h>
@@ -114,7 +120,15 @@ static const char *var_get(const char *name)
     return NULL;
 }
 
-static const int last_status = 0; /* fixed fake status */
+#define MAX_FAKE 256
+#define MAX_POS 9
+static int last_status;             /* the shell's $?: fake pipeline statuses, 2 after a refusal */
+static int fake[MAX_FAKE], nfake, fake_i;
+static char *pos[MAX_POS];
+static int npos;
+static const char ARG0[] = "osh_trace";
+
+static int next_fake(void) { return fake_i < nfake ? fake[fake_i++] : 0; }
 
 static void answer(void)
 {
@@ -135,13 +149,16 @@ static void answer(void)
         break;
     }
     case 2: found = 1; vl = dec((uint64_t)(unsigned)last_status, num); val = num; break;
-    case 3: break; /* no positional parameters, no $0 */
-    case 4: found = 1; vl = dec(0, num); val = num; break;
+    case 3: /* as osh_shell.c answer() */
+        if (a == 0) { found = 1; val = (const uint8_t *)ARG0; vl = strlen(ARG0); }
+        else if (a >= 1 && a <= (uint64_t)npos) { found = 1; val = (const uint8_t *)pos[a - 1]; vl = strlen(pos[a - 1]); }
+        break;
+    case 4: found = 1; vl = dec((uint64_t)npos, num); val = num; break;
     default: break;
     }
     w[OSH_STAGING + 0] = (uint64_t)found;
     w[OSH_STAGING + 1] = vl;
-    w[OSH_STAGING + 2] = 0; /* npos */
+    w[OSH_STAGING + 2] = (uint64_t)npos;
     w[OSH_STAGING + 3] = 0;
     for (size_t i = 0; i < vl && i < 1024; i++) w[OSH_STAGING + 4 + i] = val[i];
 }
@@ -157,15 +174,21 @@ static int run_list(void)
         case ST_NEED_VAR: answer(); continue;
         case ST_PIPE: {
             uint64_t nc = w[OSH_REQUEST + 1];
+            if (nc > (OSH_OUT - OSH_REQUEST - OSH_REQ_HDR_CELLS) / OSH_CMD_CELLS) { /* never read past REQUEST */
+                printf("event request_ncmds_out_of_range ncmds=%llu\n", (unsigned long long)nc);
+                last_status = 2;
+                return 1;
+            }
             size_t cells = (size_t)(OSH_REQ_HDR_CELLS + nc * OSH_CMD_CELLS);
             char h[65];
             hex((const uint8_t *)(w + OSH_REQUEST), cells * 8, h);
             printf("request %lu sha256=%s\n", ++req_no, h);
-            w[OSH_S_LAST_STATUS] = (uint64_t)(unsigned)last_status; /* fake status, nothing ran */
+            last_status = next_fake(); /* nothing ran: the fixture's next status */
+            w[OSH_S_LAST_STATUS] = (uint64_t)(unsigned)last_status;
             continue;
         }
         case ST_COMPLETE: return 0;
-        default: return 1; /* refused or fault: non-interactive shell stops */
+        default: last_status = 2; return 1; /* refused or fault: non-interactive shell stops with 2 */
         }
     }
     return 1;
@@ -179,7 +202,7 @@ static int run_src(void)
         int eof = 0;
         for (;;) {
             int r = read_line();
-            if (r < 0) return 2;
+            if (r < 0) { last_status = 2; return 2; }
             if (r == 0) {
                 eof = 1;
                 if (blen == 0) return 0;
@@ -194,26 +217,81 @@ static int run_src(void)
         } else if (st == 0) {
             if (run_list()) return 1;
         } else {
+            last_status = 2; /* lexer or parser refusal */
             return 2;
         }
         if (eof) return 0;
     }
 }
 
-static char *slurp(const char *path, size_t *n)
+/* read a whole file; a missing optional file gives NULL */
+static char *slurp(const char *path, size_t *n, int optional)
 {
     FILE *f = fopen(path, "rb");
-    if (!f) { fprintf(stderr, "osh_trace: cannot open %s\n", path); exit(2); }
+    if (!f) {
+        if (optional) return NULL;
+        fprintf(stderr, "osh_trace: cannot open %s\n", path);
+        exit(2);
+    }
     size_t cap = 1 << 16, len = 0;
-    char *b = malloc(cap);
+    char *b = malloc(cap + 1);
     size_t r;
+    if (!b) { fprintf(stderr, "osh_trace: out of memory\n"); exit(2); }
     while ((r = fread(b + len, 1, cap - len, f)) > 0) {
         len += r;
-        if (len == cap) b = realloc(b, cap *= 2);
+        if (len == cap) {
+            char *nb = realloc(b, (cap *= 2) + 1);
+            if (!nb) { fprintf(stderr, "osh_trace: out of memory\n"); exit(2); }
+            b = nb;
+        }
     }
+    if (ferror(f)) { fprintf(stderr, "osh_trace: cannot read %s\n", path); exit(2); }
     fclose(f);
+    b[len] = 0;
     *n = len;
     return b;
+}
+
+/* <script minus .sh> + ext, or exit when the script name does not end in .sh */
+static void sidecar(const char *script, const char *ext, char *out, size_t cap)
+{
+    size_t l = strlen(script);
+    if (l < 3 || strcmp(script + l - 3, ".sh") != 0 || l - 3 + strlen(ext) + 1 > cap) {
+        fprintf(stderr, "osh_trace: script must end in .sh: %s\n", script);
+        exit(2);
+    }
+    memcpy(out, script, l - 3);
+    strcpy(out + l - 3, ext);
+}
+
+static void load_fixture(const char *script)
+{
+    char p[4096];
+    size_t n;
+    sidecar(script, ".status", p, sizeof p);
+    char *s = slurp(p, &n, 1);
+    if (s) {
+        char *e;
+        for (char *q = s; nfake < MAX_FAKE;) {
+            while (*q == ' ' || *q == '\t' || *q == '\n') q++;
+            if (!*q) break;
+            long v = strtol(q, &e, 10);
+            if (e == q || v < 0 || v > 255) { fprintf(stderr, "osh_trace: bad status in %s\n", p); exit(2); }
+            fake[nfake++] = (int)v;
+            q = e;
+        }
+    }
+    sidecar(script, ".args", p, sizeof p);
+    s = slurp(p, &n, 1);
+    if (s) {
+        for (char *q = s; *q && npos < MAX_POS;) {
+            char *nl = strchr(q, '\n');
+            if (nl) *nl = 0;
+            pos[npos++] = q;
+            if (!nl) break;
+            q = nl + 1;
+        }
+    }
 }
 
 int main(int argc, char **argv)
@@ -226,10 +304,12 @@ int main(int argc, char **argv)
     native_mode = strcmp(argv[1], "native") == 0;
     const char *srcs[3];
     size_t lens[3];
-    for (int i = 0; i < 3; i++) srcs[i] = slurp(argv[2 + i], &lens[i]);
+    for (int i = 0; i < 3; i++) srcs[i] = slurp(argv[2 + i], &lens[i], 0);
     char err[300];
     if (osh_core_init(&core, srcs, lens, err, sizeof err) != 0) { fprintf(stderr, "osh_trace: %s\n", err); return 2; }
-    src_text = slurp(argv[5], &src_len);
+    src_text = slurp(argv[5], &src_len, 0);
+    load_fixture(argv[5]);
     run_src();
+    printf("event exit=%d\n", last_status);
     return 0;
 }

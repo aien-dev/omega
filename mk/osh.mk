@@ -119,6 +119,7 @@ test-osh-e2e: osh-gen-check $(OSH_DIR)/osh $(OSH_DIR)/argprint $(OSH_DIR)/test_o
 # Core-only step trace (OSH-AIENOS-0): the lexer, parser and expander run over fixture scripts through osh_core_call, nothing
 # is executed. `make osh-trace` runs every tests/osh/trace/*.sh native AND interpreted, requires the two traces to be
 # identical, and requires them to equal the committed .trace file. `make osh-trace-gen` rewrites the .trace files.
+# Optional per fixture: tNN.status (fake pipeline statuses) and tNN.args (positionals); see tests/osh/osh_trace.c.
 .PHONY: osh-trace osh-trace-gen
 OSH_TRSRCS = tests/osh/osh_trace.c src/osh/host/osh_core.c src/osh/host/osh_codes.c $(OSC_LIB)
 
@@ -126,19 +127,25 @@ $(OSH_DIR)/osh_trace: $(OSH_TRSRCS) $(OSH_XHDRS)
 	@mkdir -p $(OSH_DIR)
 	$(CC) $(OSH_XFLAGS) -O2 -o $@ $(OSH_TRSRCS)
 
+# Each trace must end with "event exit=" (the driver prints it last): an empty or cut-off trace never passes and is
+# never written. osh-trace-gen writes all traces to a scratch directory first and copies only when every script passed.
 osh-trace-gen: osh-gen-check $(OSH_DIR)/osh_trace
-	@for f in tests/osh/trace/*.sh; do \
-	  $(OSH_DIR)/osh_trace interp $(OSH_UNIT_SRCS) $$f > $(OSH_DIR)/$$(basename $$f .sh).interp || exit 1; \
-	  $(OSH_DIR)/osh_trace native $(OSH_UNIT_SRCS) $$f > $(OSH_DIR)/$$(basename $$f .sh).native || exit 1; \
-	  cmp $(OSH_DIR)/$$(basename $$f .sh).interp $(OSH_DIR)/$$(basename $$f .sh).native || { echo "osh-trace-gen: native and interpreter differ on $$f"; exit 1; }; \
-	  cp $(OSH_DIR)/$$(basename $$f .sh).native tests/osh/trace/$$(basename $$f .sh).trace; \
-	done; echo "osh-trace-gen: wrote traces"
+	@g=$(OSH_DIR)/trace-gen; rm -rf $$g; mkdir -p $$g; \
+	for f in tests/osh/trace/*.sh; do b=$$(basename $$f .sh); \
+	  $(OSH_DIR)/osh_trace interp $(OSH_UNIT_SRCS) $$f > $$g/$$b.interp || exit 1; \
+	  $(OSH_DIR)/osh_trace native $(OSH_UNIT_SRCS) $$f > $$g/$$b.native || exit 1; \
+	  cmp $$g/$$b.interp $$g/$$b.native || { echo "osh-trace-gen: native and interpreter differ on $$f"; exit 1; }; \
+	  tail -n 1 $$g/$$b.native | grep -q '^event exit=' || { echo "osh-trace-gen: empty or cut-off trace for $$f"; exit 1; }; \
+	done; \
+	for f in tests/osh/trace/*.sh; do b=$$(basename $$f .sh); cp $$g/$$b.native tests/osh/trace/$$b.trace || exit 1; done; \
+	echo "osh-trace-gen: wrote traces"
 
 osh-trace: osh-gen-check $(OSH_DIR)/osh_trace
 	@n=0; for f in tests/osh/trace/*.sh; do b=$$(basename $$f .sh); \
 	  $(OSH_DIR)/osh_trace interp $(OSH_UNIT_SRCS) $$f > $(OSH_DIR)/$$b.interp || exit 1; \
 	  $(OSH_DIR)/osh_trace native $(OSH_UNIT_SRCS) $$f > $(OSH_DIR)/$$b.native || exit 1; \
 	  cmp $(OSH_DIR)/$$b.interp $(OSH_DIR)/$$b.native || { echo "osh-trace: native and interpreter differ on $$f"; exit 1; }; \
+	  tail -n 1 $(OSH_DIR)/$$b.native | grep -q '^event exit=' || { echo "osh-trace: empty or cut-off trace for $$f"; exit 1; }; \
 	  cmp $(OSH_DIR)/$$b.native tests/osh/trace/$$b.trace || { echo "osh-trace: $$f differs from the committed trace"; exit 1; }; \
 	  n=$$((n+1)); done; echo "osh-trace: PASS ($$n scripts, native == interpreter == committed trace)"
 endif
