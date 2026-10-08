@@ -18,7 +18,7 @@ typedef struct {
     int nvreq;
     /* the command being built */
     uint64_t *blk;
-    int mode;               /* 1 argv, 2 assignment, 3 redirection target */
+    int mode;               /* 1 argv, 2 assignment, 3 redirection target, 4 NAME=v argument of export (argv, not split) */
     size_t fstart;          /* start of the open field in out */
     int exists;             /* a field is open */
     int nfields_word;       /* redirection target fields */
@@ -52,7 +52,7 @@ static void push_field(Cx *c)
     if (c->status || c->mode == 2 || !c->exists) return;
     c->exists = 0;
     size_t len = c->o->out_used - c->fstart;
-    if (c->mode == 1) {
+    if (c->mode == 1 || c->mode == 4) {
         uint64_t n = c->blk[0];
         if (n >= CAP_FIELDS) { err(c, 209); return; }
         if (n == 0) c->a0off = c->woff;
@@ -132,7 +132,7 @@ static void expand_list(Cx *c, int at, int quoted)
     size_t vl;
     uint64_t np = 0;
     if (fetch(c, 5, NULL, 0, 0, 0, val, &vl, &np)) return;
-    int join = c->mode == 2 || (quoted && !at);
+    int join = c->mode == 2 || c->mode == 4 || (quoted && !at);
     for (uint64_t k = 1; k <= np && !c->status; k++) {
         if (fetch(c, 3, NULL, 0, k, k, val, &vl, &np)) return;
         if (k > 1) {
@@ -141,7 +141,7 @@ static void expand_list(Cx *c, int at, int quoted)
             else if (quoted) push_field(c); /* "$@": a field per positional */
             else piece_split(c, (const uint8_t *)" ", 1);
         }
-        if (c->mode == 2) piece_text(c, val, vl);
+        if (c->mode == 2 || c->mode == 4) piece_text(c, val, vl);
         else if (quoted) piece_text(c, val, vl);
         else piece_split(c, val, vl);
     }
@@ -194,8 +194,9 @@ static size_t expand_ref(Cx *c, size_t p, size_t e, int quoted)
             }
     }
     if (fetch(c, kind, nm, nl, k, kind == 1 ? (uint64_t)(nm - in) : kind == 3 ? k : 0, val, &vl, &np)) return used;
-    if (c->mode == 2 || quoted) piece_text(c, val, vl);
-    else piece_split(c, val, vl);
+    /* an empty quoted value adds nothing by itself: the closing quote decides whether "" makes a field */
+    if (c->mode == 2 || c->mode == 4 || (quoted && vl)) piece_text(c, val, vl);
+    else if (!quoted) piece_split(c, val, vl);
     return used;
 }
 
@@ -232,10 +233,14 @@ static void expand_word(Cx *c, size_t s, size_t e)
         if (q == 0 && ch == '"') { q = 2; dq_other = dq_at = 0; p++; continue; }
         if (q == 0 && ch == '\'') { q = 1; p++; continue; }
         if (ch == '$') {
+            size_t before = c->o->out_used;
             size_t used = expand_ref(c, p, e, q == 2);
             if (used) {
+                /* in "": $@ is dq_at; $* always counts as text; a scalar counts only if its value was not empty,
+                 * so "$e$@" with no positionals gives no field (bash 5.2) */
                 if (q == 2) {
-                    if (in[p + 1] == '@') dq_at = 1; else dq_other = 1;
+                    if (in[p + 1] == '@') dq_at = 1;
+                    else if (in[p + 1] == '*' || c->o->out_used > before) dq_other = 1;
                 }
                 p += used;
                 continue;
@@ -262,6 +267,11 @@ static int classify(uint64_t v)
         {"cd", 1}, {"pwd", 2}, {"printf", 3}, {"export", 4}, {"unset", 5}, {"exit", 6},
         {"set", 99}, {"eval", 99}, {"exec", 99}, {".", 99}, {"source", 99}, {"trap", 99}, {"shift", 99}, {"read", 99},
         {"return", 99}, {"break", 99}, {"continue", 99}, {"local", 99}, {"readonly", 99}, {"alias", 99}, {"wait", 99},
+        {":", 99}, {"declare", 99}, {"typeset", 99}, {"let", 99}, {"command", 99}, {"type", 99}, {"umask", 99},
+        {"hash", 99}, {"ulimit", 99}, {"getopts", 99}, {"jobs", 99}, {"pushd", 99}, {"popd", 99}, {"dirs", 99},
+        {"history", 99}, {"unalias", 99}, {"fg", 99}, {"bg", 99}, {"builtin", 99}, {"enable", 99}, {"shopt", 99},
+        {"mapfile", 99}, {"times", 99}, {"caller", 99}, {"disown", 99}, {"suspend", 99}, {"logout", 99},
+        {"bind", 99}, {"help", 99}, {"compgen", 99}, {"complete", 99}, {"fc", 99}, {"compopt", 99},
     };
     for (size_t i = 0; i < sizeof t / sizeof t[0]; i++)
         if (pack_name((const uint8_t *)t[i].n, strlen(t[i].n)) == v) return t[i].id;
@@ -322,8 +332,14 @@ void osh_xr_pipe(const uint8_t *in, size_t n, const OshRefLex *lx, const OshRefP
                         c.nprior++;
                     }
                 } else {
-                    anyw = 1;
                     c.mode = 1;
+                    /* export NAME=v: bash expands the argument as an assignment (no splitting) when the command word
+                     * is the plain word export */
+                    if ((tk->flags & 16) && anyw && c.blk[0] > 0 && c.blk[5] == 6 &&
+                        memcmp(out->out + c.blk[4], "export", 6) == 0 && c.a0off + 6 < n &&
+                        memcmp(in + c.a0off, "export", 6) == 0 && (in[c.a0off + 6] == ' ' || in[c.a0off + 6] == '\t'))
+                        c.mode = 4;
+                    anyw = 1;
                     expand_word(&c, tk->start, tk->start + tk->len);
                 }
                 t++;

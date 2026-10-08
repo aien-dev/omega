@@ -102,7 +102,7 @@ int main(int argc, char **argv)
         if (!text) { fprintf(stderr, "osh: %s: cannot read\n", argv[1]); return 127; }
         if (osh_shell_init(&sh, environ, native, 0, argv[1], argc > 2 ? argv + 2 : NULL, argc > 2 ? argc - 2 : 0) != 0) return 70;
         if (arm(&sh, &caps, caps_file) != 0) { osh_shell_free(&sh); osh_caps_stop(&caps); return 70; }
-        rc = osh_shell_run_string(&sh, text, n);
+        rc = osh_shell_run_script(&sh, text, n);
         free(text);
     } else {
         int tty = isatty(0) && isatty(2);

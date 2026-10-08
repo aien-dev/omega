@@ -3,24 +3,24 @@
     "generated": {
       "children": [
         {
-          "digest": "45c48b1f22521bafc685ebae63439b5411d0b1876c511b046f5ebd8662564a24",
-          "last_commit": "02515da",
+          "digest": "adf85d2d49ef3b7df08d58db4585a9c16e2c185fb04b3b7615349eb8a31f4a91",
+          "last_commit": "6211ebf",
           "name": "host",
           "purpose": "osh Linux host: execution service (request decoder, resolution, builtins, redirections, pipeline"
         }
       ],
-      "children_root": "sha256:cab8a3c8774b89ab2f76cb4cb30117d0a3b0c4791ef6d83c91d0723c71b7bb59",
-      "compiled_at": "2026-10-08T07:55:44Z",
+      "children_root": "sha256:07aa040bee75e295849806e68f6fa3dac2bbd9c57272d07c0e85f6a4058e852b",
+      "compiled_at": "2026-10-08T12:46:55Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:1a3b899cf2304b7457dac9d198ade3aedb1298b4b25e65c5da24fb1b884851fe",
+      "digest": "sha256:e8f706b54de6ee42d3f96b1fc7ab5e94fe8cc132928e213604fe8b247db9fcad",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 29,
-      "generated_at_commit": "02515da243c2f0a43bf4aaf4bbbd1fac326fac85",
-      "source_tree": "sha256:e4c457dff3491d3018da27a037d405df2d2c38bada4e55e26b73e4c4585d898c"
+      "generated_at_commit": "6211ebf08d0d51eafe24d6962fdd22d643612347",
+      "source_tree": "sha256:39cde33d4f7e01045875486e4fb02a244b0876859f148eaa3846a3b6c12f4ca9"
     }
   },
   "name": "osh",
-  "purpose": "osh (Omega-native shell, arch#158) lexer, parser and expander units: layout list, generator, osh_lex/parse/expand.osc, C reference tokenizer, parser and expander",
+  "purpose": "osh (Omega-native shell, arch#158) lexer unit: layout list, generator, osh_lex.osc, C reference tokenizer",
   "schema_version": "1.0.0"
 }

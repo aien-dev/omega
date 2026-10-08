@@ -2,6 +2,7 @@
 #include "osh_shell.h"
 
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,7 @@ typedef struct {
     const char *str;
     size_t len, pos;
     int fd;
+    int exact_end; /* a -c string: a last line with no newline reaches the core as is */
 } LineSrc;
 
 int osh_shell_init(OshShell *sh, char *const *envp, int native, int interactive, const char *arg0, char **pos, int npos)
@@ -106,8 +108,36 @@ static int append(OshShell *sh, const uint8_t *p, size_t n)
     return 0;
 }
 
-/* Append one line (with its newline; one is added at end of input) to the list buffer.
- * 1 got a line, 0 end of input with nothing read, -1 error (too long / read error). */
+/* Interactive only: ^C at the prompt abandons the line being typed (bash prints a new prompt, $? = 130); the shell
+ * itself ignores ^\ ^Z and background tty signals. osh_exec installs its own handling around each pipeline and puts
+ * these back afterwards. The SIGINT handler has no SA_RESTART, so the blocked read() returns EINTR. */
+static volatile sig_atomic_t g_prompt_int;
+
+static void on_prompt_int(int sig)
+{
+    (void)sig;
+    g_prompt_int = 1;
+}
+
+static void prompt_signals(void)
+{
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sigemptyset(&sa.sa_mask);
+    sa.sa_handler = on_prompt_int;
+    sigaction(SIGINT, &sa, NULL);
+    sa.sa_handler = SIG_IGN;
+    sigaction(SIGQUIT, &sa, NULL);
+    sigaction(SIGTSTP, &sa, NULL);
+    sigaction(SIGTTIN, &sa, NULL);
+    sigaction(SIGTTOU, &sa, NULL);
+}
+
+/* Append one line (with its newline) to the list buffer. A last line with no newline gets one, except
+ * from a -c string, where it is appended as is so the core sees the true end of input: bash -c 'echo a\'
+ * prints a\, but the same text as a script or on stdin prints a.
+ * 1 got a line, 2 got a last -c line with no newline, 0 end of input with nothing read,
+ * -1 error (too long / read error), -2 interrupted by ^C at an interactive prompt. */
 static int read_line(OshShell *sh, LineSrc *src)
 {
     size_t got = 0;
@@ -118,14 +148,18 @@ static int read_line(OshShell *sh, LineSrc *src)
         while (src->pos + n < src->len && s[n] != '\n') n++;
         int nl = src->pos + n < src->len;
         if (append(sh, (const uint8_t *)s, n) != 0) return -1;
-        if (append(sh, (const uint8_t *)"\n", 1) != 0) return -1;
+        int add_nl = nl || !src->exact_end;
+        if (add_nl && append(sh, (const uint8_t *)"\n", 1) != 0) return -1;
         src->pos += n + (size_t)nl;
-        return 1;
+        return add_nl ? 1 : 2;
     }
     for (;;) {
         uint8_t c;
         ssize_t r = read(src->fd, &c, 1);
-        if (r < 0 && errno == EINTR) continue;
+        if (r < 0 && errno == EINTR) {
+            if (g_prompt_int) return -2;
+            continue;
+        }
         if (r <= 0) {
             if (got == 0) return 0;
             c = '\n';
@@ -208,6 +242,7 @@ static int run_list(OshShell *sh)
             w[OSH_S_LAST_STATUS] = (uint64_t)(unsigned)sh->s.last_status;
             if (sh->s.exit_requested) return 1;
             if (res.killed_by_int) return 0;
+            if (sh->s.abort_list) { sh->s.abort_list = 0; return 0; }
             continue;
         }
         case ST_COMPLETE: return 0;
@@ -223,17 +258,20 @@ static int run_list(OshShell *sh)
 
 static int run_src(OshShell *sh, LineSrc *src)
 {
+    if (sh->interactive) prompt_signals();
     for (;;) {
         reset_list(sh);
+        g_prompt_int = 0;
         if (sh->interactive) { fputs("osh$ ", stderr); fflush(stderr); }
-        uint64_t st;
-        int eof = 0;
+        uint64_t st = 0;
+        int eof = 0, intr = 0;
         for (;;) {
             int r = read_line(sh, src);
+            if (r == -2) { intr = 1; break; }
             if (r < 0) { fprintf(stderr, "osh: input too long or unreadable\n"); sh->s.last_status = 2; return sh->interactive ? sh->s.last_status : 2; }
-            if (r == 0) {
+            if (r == 0 && sh->blen == 0) return sh->s.last_status;
+            if (r == 0 || r == 2) {
                 eof = 1;
-                if (sh->blen == 0) return sh->s.last_status;
                 sh->w[OSH_S_EOI] = 1;
             }
             st = lex_parse(sh);
@@ -243,6 +281,11 @@ static int run_src(OshShell *sh, LineSrc *src)
                 continue;
             }
             break;
+        }
+        if (intr) {
+            fputc('\n', stderr);
+            sh->s.last_status = 130;
+            continue;
         }
         if (st == ST_COMPLETE) {
             /* an empty list at end of input: nothing to run */
@@ -260,12 +303,18 @@ static int run_src(OshShell *sh, LineSrc *src)
 
 int osh_shell_run_string(OshShell *sh, const char *text, size_t len)
 {
-    LineSrc src = {text, len, 0, -1};
+    LineSrc src = {text, len, 0, -1, 1};
+    return run_src(sh, &src);
+}
+
+int osh_shell_run_script(OshShell *sh, const char *text, size_t len)
+{
+    LineSrc src = {text, len, 0, -1, 0};
     return run_src(sh, &src);
 }
 
 int osh_shell_run_fd(OshShell *sh, int fd)
 {
-    LineSrc src = {NULL, 0, 0, fd};
+    LineSrc src = {NULL, 0, 0, fd, 0};
     return run_src(sh, &src);
 }

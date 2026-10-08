@@ -29,8 +29,11 @@ typedef struct {
 int osh_shell_init(OshShell *sh, char *const *envp, int native, int interactive, const char *arg0, char **pos, int npos);
 void osh_shell_free(OshShell *sh);
 
-/* Run commands from memory (-c and script files). Returns the shell's exit status. */
+/* Run a -c string from memory: a last line with no newline is ended by end of input itself (bash -c
+ * 'echo a\' prints a\). Returns the shell's exit status. */
 int osh_shell_run_string(OshShell *sh, const char *text, size_t len);
+/* Run a script file's text from memory: a last line with no newline gets one, as from a file or pipe. */
+int osh_shell_run_script(OshShell *sh, const char *text, size_t len);
 /* Run commands read from fd, one byte at a time so children inherit the unread rest. Returns the exit status. */
 int osh_shell_run_fd(OshShell *sh, int fd);
 

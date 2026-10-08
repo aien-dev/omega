@@ -17,6 +17,7 @@
 //   228 SUBSHELL 229 HEREDOC 230 CASEEND 231 REDIR_OTHER 232 FD_RANGE
 //   236 GROUP (a lone `{` or `}` word at command start) 246 BRACE_EXPANSION 247 POSITIONAL_RANGE (${10}, ${00})
 //   249 APPEND_ASSIGN (a NAME+= word; also `$_` and `${_}` are refused as 225 SPECIAL_PARAM)
+//   250 FD_VARIABLE (a `{NAME}` word directly before a redirection operator: bash allocates a descriptor)
 // Line continuation: a backslash-newline pair is removed before the byte after it is classified, in every state
 // except single quotes and comments (bash rule). A chunk that ends in a lone `\` waits (status 100, the `\`
 // is not consumed) unless the host set S_EOI, when that `\` is a literal byte. Refusal offsets and token spans
@@ -265,6 +266,45 @@ fn iomerge(inp: bytes, w: cells, ws: u64) -> u64 {
     return d + 1;
 }
 
+// bash's `{NAME}` redirection (the shell allocates a descriptor and stores it in NAME): an unquoted word that is
+// exactly `{` NAME `}` (backslash-newline pairs skipped) and ends at ws, directly before a redirection operator.
+// R1 does not implement it, so it is refused (250 FD_VARIABLE) instead of being passed on as a literal word.
+fn fdvar(inp: bytes, w: cells, ws: u64) -> u64 {
+    let t: u64 = w[@LX_NTOK@];
+    if t == 0 { return 0; }
+    let b: u64 = @TOKENS@ + (t - 1) * 4;
+    if (w[b] & 255) != 1 { return 0; }
+    let fl: u64 = (w[b] >> 8) & 65535;
+    if fl != 0 && fl != 32 { return 0; }
+    let s: u64 = w[b + 1];
+    let e: u64 = s + w[b + 2];
+    if e != ws { return 0; }
+    let mut i: u64 = s;
+    let mut n: u64 = 0;
+    let mut ok: u64 = 1;
+    let mut last: u64 = 0;
+    while i < e && ok == 1 bound 4096 {
+        if inp[i] == 92 && i + 1 < e && inp[i + 1] == 10 {
+            i = i + 2;
+        } else {
+            let c: u64 = inp[i];
+            if n == 0 {
+                if c != 123 { ok = 0; }
+            } else {
+                if last == 125 { ok = 0; }
+                let k: u64 = cls(c);
+                if c != 125 && k != 12 && !(k == 16 && n > 1) { ok = 0; }
+                if c == 125 && n < 2 { ok = 0; }
+            }
+            last = c;
+            n = n + 1;
+            i = i + 1;
+        }
+    }
+    if ok == 1 && last == 125 && n >= 3 { return 1; }
+    return 0;
+}
+
 // An operator of `kind` is complete: it starts at LX_WS and its last byte is at oe - 1 (a backslash-newline pair
 // may sit between its bytes, so the span is the raw source).
 fn emit_op(inp: bytes, w: cells, kind: u64, oe: u64) -> u64 {
@@ -275,6 +315,7 @@ fn emit_op(inp: bytes, w: cells, kind: u64, oe: u64) -> u64 {
     if kind == 6 || kind == 7 || kind == 8 || kind == 10 || kind == 11 {
         let m: u64 = iomerge(inp, w, ws);
         if m == 100 { return fail(w, 232, ws); }
+        if m == 0 && fdvar(inp, w, ws) == 1 { return fail(w, 250, w[@TOKENS@ + (w[@LX_NTOK@] - 1) * 4 + 1]); }
         if m != 0 {
             let b: u64 = @TOKENS@ + (w[@LX_NTOK@] - 1) * 4;
             w[b] = w[b] - 1 + kind;
