@@ -48,16 +48,21 @@ LX_BRM 24                   # bit d set: the open brace at depth d has an unquot
 LX_PDOT 25                  # the last byte was an unquoted plain `.` in the word
 LX_BRN 26                   # ${...} name: 0 none/alpha start, 1 digits so far (one digit)
 LX_DONE 27                  # 1 when the last lex_run returned PHASE_DONE (the parser requires it)
-S_EOI 28                    # end of input: written by the host (0 or 1); 1 = no more bytes will be appended
+S_EOI 28                    # end of input: written by the host (0 or 1); 1 = no more bytes will be appended; a final `\` is then a literal
+LX_CONT 29                  # 1 after a `\` that starts a backslash-newline pair; the next byte (the newline) is swallowed
+LX_PREV 30                  # the last significant byte (a swallowed `\<nl>` pair does not count)
+LX_PO 31                    # offset of LX_PREV
+LX_PLUS 32                  # 1 when the last significant byte was a `+` right after a valid NAME (append-assignment detector)
+LX_USC 33                   # offset+1 of a `_` that is the whole name after `$` or `${` (the `$_` special parameter), else 0
 
 # --- parser-internal session cells (osh_parse.osc.in) ---
-PX_STATE 32                 # 0 FRESH 1 AFTER_OP 2 IN_CMD 3 NEED_TARGET 4 DONE
-PX_TOK 33                   # next token index to parse
-PX_NCMD 34                  # command entries written
-PX_NPIPE 35                 # pipeline entries written
-PX_PCMDS 36                 # commands in the open pipeline
-PX_ANYW 37                  # 1 once the current command has a non-assignment word
-PX_RKIND 38                 # token kind of the redirection operator awaiting its target
+PX_STATE 34                 # 0 FRESH 1 AFTER_OP 2 IN_CMD 3 NEED_TARGET 4 DONE
+PX_TOK 35                   # next token index to parse
+PX_NCMD 36                  # command entries written
+PX_NPIPE 37                 # pipeline entries written
+PX_PCMDS 38                 # commands in the open pipeline
+PX_ANYW 39                  # 1 once the current command has a non-assignment word
+PX_RKIND 40                 # token kind of the redirection operator awaiting its target
 
 # --- parser capacities (E-parser-design.md section 5, ABI 5.3) ---
 CAP_CMDS 32
@@ -83,14 +88,15 @@ EXP_BUDGET 1024             # expander steps (one raw byte or one value byte eac
 REC_MAGIC 1330791761        # 0x4F524551 "OREQ"
 REQ_CMD_CELLS 164
 
-# --- expander cells (osh_expand.osc.in). 29..31 and 39..47 are fresh; 12..16 and 18..26 are lexer cells that are dead
+# --- expander cells (osh_expand.osc.in). 41..47 are fresh; 12..16, 18..26 and 29..33 (the lexer's continuation and
+# --- append-assignment cells) are lexer cells that are dead
 # --- once the parser has completed the list (the session is single use after that), so expand_run zeroes and reuses them.
-EX_INIT 29                  # 1 after the first expand_run call zeroed the overlay cells
-EX_ST 30                    # 0 pick next pipeline, 1 expanding, 2 PIPELINE_READY returned, 3 list complete
-EX_PIPE 31                  # pipeline index being expanded
-EX_CMD 39                   # command index inside the pipeline
-EX_TOK 40                   # token cursor (the word token while a word is open)
-EX_NVREQ 41                 # variable requests in this pipeline
+EX_INIT 41                  # 1 after the first expand_run call zeroed the overlay cells
+EX_ST 29                    # 0 pick next pipeline, 1 expanding, 2 PIPELINE_READY returned, 3 list complete
+EX_PIPE 30                  # pipeline index being expanded
+EX_CMD 31                   # command index inside the pipeline
+EX_TOK 32                   # token cursor (the word token while a word is open)
+EX_NVREQ 33                 # variable requests in this pipeline
 EX_OUT 42                   # OUT bytes used
 EX_ANYW 43                  # a non-assignment word was seen in this command
 EX_A0 44                    # input offset of the word that produced argv[0]

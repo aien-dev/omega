@@ -587,6 +587,9 @@ fn expand_run(inp: bytes, w: cells) -> u64 {
     if w[@S_PHASE@] == 255 { return w[@S_ERR_CODE@]; }
     if w[@PX_STATE@] != 4 { return 217; }
     if w[@EX_INIT@] == 0 {
+        for j in 29 .. 34 {
+            w[j as u64] = 0;
+        }
         for j in 12 .. 27 {
             if j != 17 && j != 25 { w[j as u64] = 0; }
         }
