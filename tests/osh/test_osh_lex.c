@@ -310,7 +310,7 @@ static const Hostile HOSTILE[] = {
     H("brace name", "echo \"a${B}c\" $1 $10 $_a $# $@ $* $?\n", 0, 0, 10),
     H("dollar underscore is the last-argument parameter", "echo $_\n", 225, 6, -1),
     H("dollar underscore name goes on", "echo $_9 $__ ${_a} ${_}x\n", 225, 21, -1),
-    H("append assignment", "echo x+=1\n", 248, 7, -1),
+    H("append assignment", "echo x+=1\n", 249, 7, -1),
     H("plus not after a name", "echo 1+=1 +=1 a-b+=1 x++=1 x+y=1\n", 0, 0, 7),
     H("assignment words", "x=1 y=\"2 3\"\n", 0, 0, 3),
     H("every operator", "a|b||c&&d;e<f>g>>h>&i<&j\n", 0, 0, 20),
@@ -602,7 +602,7 @@ static void run_vectors(const char *dir, uint64_t *rng)
         if (strstr(line, " more")) {
             check(o.status == 100, "vector %s: status %llu, want 100", name, (unsigned long long)o.status);
             n_vec_lex++;
-        } else if ((code >= 201 && code <= 232) || code == 236 || code == 246 || code == 247 || code == 248) {
+        } else if ((code >= 201 && code <= 232) || code == 236 || code == 246 || code == 247 || code == 249) {
             check(o.status == code && o.err_off == off, "vector %s: refusal %llu@%llu, want %u@%u", name, (unsigned long long)o.status,
                   (unsigned long long)o.err_off, code, off);
             n_vec_lex++;

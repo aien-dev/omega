@@ -15,7 +15,7 @@
 //   220 NUL_BYTE 221 BACKTICK 222 GLOB 223 TILDE 224 PARAM_OP 225 SPECIAL_PARAM 226 CMDSUB 227 BACKGROUND
 //   228 SUBSHELL 229 HEREDOC 230 CASEEND 231 REDIR_OTHER 232 FD_RANGE
 //   236 GROUP (a lone `{` or `}` word at command start) 246 BRACE_EXPANSION 247 POSITIONAL_RANGE (${10}, ${00})
-//   248 APPEND_ASSIGN (a NAME+= word; also `$_` and `${_}` are refused as 225 SPECIAL_PARAM)
+//   249 APPEND_ASSIGN (a NAME+= word; also `$_` and `${_}` are refused as 225 SPECIAL_PARAM)
 // Line continuation: a backslash-newline pair is removed before the byte after it is classified, in every state
 // except single quotes and comments (bash rule). A chunk that ends in a lone `\` waits (status 100, the `\`
 // is not consumed) unless the host set S_EOI, when that `\` is a literal byte. Refusal offsets and token spans
@@ -367,8 +367,8 @@ fn bname(w: cells, k: u64, p: u64, i: u64) -> u64 {
 fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
     let c: u64 = inp[i];
     let st: u64 = w[12];
-    if w[28] == 1 {
-        w[28] = 0;
+    if w[29] == 1 {
+        w[29] = 0;
         if st == 1 || st == 3 || st == 6 || st == 7 || st == 8 || st == 9 {
             w[14] = w[14] | 32;
         }
@@ -380,23 +380,23 @@ fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
     if c == 92 && st != 2 && st != 4 && st != 5 && st != 10 && st != 12 {
         if i + 1 < inp.len {
             if inp[i + 1] == 10 {
-                w[28] = 1;
+                w[29] = 1;
                 return 0;
             }
         } else {
-            if w[27] == 0 { return 99; }
+            if w[28] == 0 { return 99; }
             k = 15;
         }
     }
-    let p: u64 = w[29];
+    let p: u64 = w[30];
     let eq: u64 = w[16];
     if st == 1 && k == 17 && eq != 0 {
-        if (p == 61 && eq == w[30] + 1) || p == 58 { k = 18; }
+        if (p == 61 && eq == w[31] + 1) || p == 58 { k = 18; }
     }
-    let usc: u64 = w[32];
+    let usc: u64 = w[33];
     if usc != 0 && c != 0 {
         if (st == 1 || st == 3) {
-            if k == 12 || k == 16 { w[32] = 0; } else { return fail(w, 225, usc - 1); }
+            if k == 12 || k == 16 { w[33] = 0; } else { return fail(w, 225, usc - 1); }
         }
         if (st == 8 || st == 9) && k == 11 { return fail(w, 225, usc - 1); }
     }
@@ -411,7 +411,7 @@ fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
         r = step(0, k, c, p);
     }
     if act == 3 {
-        rc = emit_op(inp, w, opkind(p, 0), w[30] + 1);
+        rc = emit_op(inp, w, opkind(p, 0), w[31] + 1);
         if rc != 0 { return rc; }
         r = step(0, k, c, p);
     }
@@ -447,22 +447,22 @@ fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
         w[23] = 0;
         w[24] = 0;
         w[25] = 0;
-        w[31] = 0;
         w[32] = 0;
+        w[33] = 0;
     }
     if (st == 8 || st == 9) && (k == 12 || k == 16) {
         rc = bname(w, k, p, i);
         if rc != 0 { return rc; }
-        w[32] = 0;
-        if p == 123 && c == 95 { w[32] = i + 1; }
+        w[33] = 0;
+        if p == 123 && c == 95 { w[33] = i + 1; }
     }
     let nst: u64 = r & 255;
-    if (st == 6 || st == 7) && c == 95 { w[32] = i + 1; }
-    let pl: u64 = w[31];
-    w[31] = 0;
+    if (st == 6 || st == 7) && c == 95 { w[33] = i + 1; }
+    let pl: u64 = w[32];
+    w[32] = 0;
     if st == 1 && nst == 1 {
-        if pl == 1 && k == 13 { return fail(w, 248, i); }
-        if c == 43 && w[15] == 1 && i > w[13] { w[31] = 1; }
+        if pl == 1 && k == 13 { return fail(w, 249, i); }
+        if c == 43 && w[15] == 1 && i > w[13] { w[32] = 1; }
     }
     let wfl: u64 = (r >> 24) & 255;
     if wfl != 0 {
@@ -480,8 +480,8 @@ fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
     w[22] = 1;
     if act == 6 { w[22] = 0; }
     if c == 10 { w[18] = w[18] + 1; }
-    w[29] = c;
-    w[30] = i;
+    w[30] = c;
+    w[31] = i;
     return 0;
 }
 

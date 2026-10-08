@@ -18,7 +18,7 @@ typedef struct {
 typedef struct {
     OshRefTok tok[OSH_REF_TOKEN_CAP];
     unsigned ntok;
-    unsigned status;   /* 0 line complete, 100 incomplete, else a refusal code (201, 202, 220..232, 236, 246..248) */
+    unsigned status;   /* 0 line complete, 100 incomplete, else a refusal code (201, 202, 220..232, 236, 246..249) */
     uint64_t err_off;  /* byte offset of a refusal */
 } OshRefLex;
 

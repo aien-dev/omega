@@ -34,9 +34,9 @@ c28	e a \\\n# x\ne b\n	ok W:e W:a NL W:e W:b NL	-
 c29	e a\\\n#b\n	ok W:e W:a#b NL	-
 c30	e \\\\\n	ok W:e W:\\ NL	-
 c31	x\\\n=1\n	ok W:x=1 NL	x=1\n
-c32	x+=1\n	refuse 248@2	x+=1\n
-c33	x+=~\n	refuse 248@2	x+=~\n
-c34	x+\\\n=1\n	refuse 248@4	x+=1\n
+c32	x+=1\n	refuse 249@2	x+=1\n
+c33	x+=~\n	refuse 249@2	x+=~\n
+c34	x+\\\n=1\n	refuse 249@4	x+=1\n
 c35	e $_\n	refuse 225@3	e $_\n
 c36	e "$_"\n	refuse 225@4	e "$_"\n
 c37	e $_x\n	ok W:e W:$_x NL	e $_x\n

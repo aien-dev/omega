@@ -38,10 +38,10 @@
 #define OSH_LX_BRM 24ULL
 #define OSH_LX_PDOT 25ULL
 #define OSH_LX_BRN 26ULL
-#define OSH_S_EOI 27ULL
-#define OSH_LX_CONT 28ULL
-#define OSH_LX_PREV 29ULL
-#define OSH_LX_PO 30ULL
-#define OSH_LX_PLUS 31ULL
-#define OSH_LX_USC 32ULL
+#define OSH_S_EOI 28ULL
+#define OSH_LX_CONT 29ULL
+#define OSH_LX_PREV 30ULL
+#define OSH_LX_PO 31ULL
+#define OSH_LX_PLUS 32ULL
+#define OSH_LX_USC 33ULL
 #endif /* OSH_LAYOUT_H */

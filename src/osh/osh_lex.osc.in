@@ -14,7 +14,7 @@
 //   220 NUL_BYTE 221 BACKTICK 222 GLOB 223 TILDE 224 PARAM_OP 225 SPECIAL_PARAM 226 CMDSUB 227 BACKGROUND
 //   228 SUBSHELL 229 HEREDOC 230 CASEEND 231 REDIR_OTHER 232 FD_RANGE
 //   236 GROUP (a lone `{` or `}` word at command start) 246 BRACE_EXPANSION 247 POSITIONAL_RANGE (${10}, ${00})
-//   248 APPEND_ASSIGN (a NAME+= word; also `$_` and `${_}` are refused as 225 SPECIAL_PARAM)
+//   249 APPEND_ASSIGN (a NAME+= word; also `$_` and `${_}` are refused as 225 SPECIAL_PARAM)
 // Line continuation: a backslash-newline pair is removed before the byte after it is classified, in every state
 // except single quotes and comments (bash rule). A chunk that ends in a lone `\` waits (status 100, the `\`
 // is not consumed) unless the host set S_EOI, when that `\` is a literal byte. Refusal offsets and token spans
@@ -460,7 +460,7 @@ fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
     let pl: u64 = w[@LX_PLUS@];
     w[@LX_PLUS@] = 0;
     if st == 1 && nst == 1 {
-        if pl == 1 && k == 13 { return fail(w, 248, i); }
+        if pl == 1 && k == 13 { return fail(w, 249, i); }
         if c == 43 && w[@LX_NAMEOK@] == 1 && i > w[@LX_WS@] { w[@LX_PLUS@] = 1; }
     }
     let wfl: u64 = (r >> 24) & 255;

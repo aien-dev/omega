@@ -47,9 +47,10 @@ LX_BRD 23                   # open unquoted `{` count in the word (brace expansi
 LX_BRM 24                   # bit d set: the open brace at depth d has an unquoted `,` or `..` directly inside
 LX_PDOT 25                  # the last byte was an unquoted plain `.` in the word
 LX_BRN 26                   # ${...} name: 0 none/alpha start, 1 digits so far (one digit)
-S_EOI 27                    # host-set: 1 = the input has ended (explicit end-of-input flush); a trailing `\` is then a literal
-LX_CONT 28                  # 1 after a `\` that starts a backslash-newline pair; the next byte (the newline) is swallowed
-LX_PREV 29                  # the last significant byte (a swallowed `\<nl>` pair does not count)
-LX_PO 30                    # offset of LX_PREV
-LX_PLUS 31                  # 1 when the last significant byte was a `+` right after a valid NAME (append-assignment detector)
-LX_USC 32                   # offset+1 of a `_` that is the whole name after `$` or `${` (the `$_` special parameter), else 0
+# 27 is LX_DONE in the parser unit (osh_parse): kept free here so the two layouts agree
+S_EOI 28                    # host-set: 1 = the input has ended (explicit end-of-input flush); a trailing `\` is then a literal
+LX_CONT 29                  # 1 after a `\` that starts a backslash-newline pair; the next byte (the newline) is swallowed
+LX_PREV 30                  # the last significant byte (a swallowed `\<nl>` pair does not count)
+LX_PO 31                    # offset of LX_PREV
+LX_PLUS 32                  # 1 when the last significant byte was a `+` right after a valid NAME (append-assignment detector)
+LX_USC 33                   # offset+1 of a `_` that is the whole name after `$` or `${` (the `$_` special parameter), else 0
