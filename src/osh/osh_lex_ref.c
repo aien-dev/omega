@@ -13,7 +13,7 @@
 
 enum { K_WORD = 1, K_PIPE, K_OR, K_AND, K_SEMI, K_LT, K_GT, K_APPEND, K_NL, K_DUP_OUT, K_DUP_IN };
 enum { E_CAP_LINE = 201, E_CAP_TOKENS = 202, E_NUL = 220, E_BACKTICK, E_GLOB, E_TILDE, E_PARAM_OP, E_SPECIAL_PARAM,
-       E_CMDSUB, E_BACKGROUND, E_SUBSHELL, E_HEREDOC, E_CASEEND, E_REDIR_OTHER, E_FD_RANGE, E_GROUP = 236, E_BRACE = 246, E_POSITIONAL = 247 };
+       E_CMDSUB, E_BACKGROUND, E_SUBSHELL, E_HEREDOC, E_CASEEND, E_REDIR_OTHER, E_FD_RANGE, E_GROUP = 236, E_BRACE = 246, E_POSITIONAL = 247, E_SYNTAX_EOF = 248 };
 #define INCOMPLETE (-1)
 #define CAPLINE (-2)
 
@@ -23,6 +23,7 @@ typedef struct {
     OshRefLex *o;
     uint64_t line;      /* 1-based current line */
     int last_was_nl;    /* the last thing consumed was a newline token */
+    int eoi;            /* the host declared end of input: no more bytes will come */
 } Ref;
 
 /* byte at j, or INCOMPLETE past the end of the buffer, or CAPLINE for offset >= 4096 */
@@ -42,7 +43,7 @@ static void refuse(Ref *r, unsigned code, uint64_t off)
 /* a negative peek result becomes the outcome */
 static int stop(Ref *r, int pk)
 {
-    if (pk == INCOMPLETE) r->o->status = 100;
+    if (pk == INCOMPLETE) { if (r->eoi) refuse(r, E_SYNTAX_EOF, r->n); else r->o->status = 100; }
     else refuse(r, E_CAP_LINE, OSH_REF_LINE_CAP);
     return 1;
 }
@@ -69,7 +70,11 @@ static int add(Ref *r, uint64_t kind, uint64_t flags, uint64_t nseg, uint64_t li
 static size_t dollar(Ref *r, size_t j, int dq)
 {
     int x = peek(r, j + 1);
-    if (x < 0) { stop(r, x); return 0; }
+    if (x < 0) {
+        if (x == INCOMPLETE && r->eoi) return j + 1; /* a literal `$` at the end of the input */
+        stop(r, x);
+        return 0;
+    }
     if (x == 0) { refuse(r, E_NUL, j + 1); return 0; }
     if (is_alpha_(x) || is_digit(x) || x == '?' || x == '#' || x == '@' || x == '*') return j + 2;
     if (x == '(') { refuse(r, E_CMDSUB, j + 1); return 0; }
@@ -120,7 +125,10 @@ static int word(Ref *r, size_t b, size_t *end, uint64_t *flags, uint64_t *nseg, 
         int c = peek(r, j);
         int pd = pdot;
         pdot = 0;
-        if (c < 0) return stopz(r, c);
+        if (c < 0) {
+            if (c == INCOMPLETE && r->eoi) break; /* the input ends the word */
+            return stopz(r, c);
+        }
         if (c == 0) { refuse(r, E_NUL, j); return 0; }
         if (c == ' ' || c == '\t' || c == '\n' || is_opch(c)) break;
         if (c == '\'') {
@@ -203,13 +211,13 @@ static int word(Ref *r, size_t b, size_t *end, uint64_t *flags, uint64_t *nseg, 
     return 1;
 }
 
-void osh_lex_ref(const uint8_t *in, size_t n, OshRefLex *out)
+void osh_lex_ref(const uint8_t *in, size_t n, int eoi, OshRefLex *out)
 {
     memset(out, 0, sizeof *out);
-    Ref r = { in, n, out, 1, 0 };
+    Ref r = { in, n, out, 1, 0, eoi };
     size_t i = 0;
     for (;;) {
-        if (i == n) { out->status = r.last_was_nl || n == 0 ? 0 : 100; return; }
+        if (i == n) { out->status = r.eoi || r.last_was_nl || n == 0 ? 0 : 100; return; }
         int c = peek(&r, i);
         if (c < 0) { stop(&r, c); return; }
         if (c == 0) { refuse(&r, E_NUL, i); return; }
@@ -223,7 +231,11 @@ void osh_lex_ref(const uint8_t *in, size_t n, OshRefLex *out)
             size_t k = i + 1;
             for (;;) {
                 int d = peek(&r, k);
-                if (d < 0) { stop(&r, d); return; }
+                if (d < 0) {
+                    if (d == INCOMPLETE && r.eoi) { k = n; break; } /* a comment ends with the input */
+                    stop(&r, d);
+                    return;
+                }
                 if (d == 0) { refuse(&r, E_NUL, k); return; }
                 if (d == '\n') break;
                 k++;
@@ -239,7 +251,10 @@ void osh_lex_ref(const uint8_t *in, size_t n, OshRefLex *out)
         if (c == '~') { refuse(&r, E_TILDE, i); return; }
         if (is_opch(c)) {
             int c2 = peek(&r, i + 1);
-            if (c2 < 0) { stop(&r, c2); return; }
+            if (c2 < 0) {
+                if (c2 == INCOMPLETE && r.eoi) c2 = -1; /* the operator is complete at the end of the input */
+                else { stop(&r, c2); return; }
+            }
             if (c2 == 0) { refuse(&r, E_NUL, i + 1); return; }
             unsigned kind = 0, len = 1;
             uint64_t aux = 0;

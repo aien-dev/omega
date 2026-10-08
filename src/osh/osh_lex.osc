@@ -6,12 +6,14 @@
 // inp: the accumulated command text (append-only). w: the 11456-cell session workspace. All state is in
 // w; the unit stores no pointer. One call lexes at most 1024 input bytes, writes a token record
 // first and advances the cursor after, and returns one status:
-//   0 PHASE_DONE        every buffered byte is lexed and the last byte ended a line (newline at rest)
+//   0 PHASE_DONE        every buffered byte is lexed and the last byte ended a line (newline at rest), or the
+//                       host set S_EOI = 1 and the pending word or operator was finished (end of input)
 //   100 NEED_MORE_INPUT the buffer ends inside an incomplete line (open quote, `${`, trailing backslash,
 //                       pending operator or word, no final newline); append and call again
 //   101 BUDGET_EXHAUSTED  budget spent, call again with no new input
 //   201 CAP_LINE (buffer byte 4096 reached)  202 CAP_TOKENS (128 tokens)
-//   213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH 217 ABI_RESERVED
+//   213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH 217 ABI_RESERVED (also S_EOI above 1)
+//   248 SYNTAX_EOF (S_EOI = 1 and the buffer ends inside a quote, `${` or after a backslash)
 //   220 NUL_BYTE 221 BACKTICK 222 GLOB 223 TILDE 224 PARAM_OP 225 SPECIAL_PARAM 226 CMDSUB 227 BACKGROUND
 //   228 SUBSHELL 229 HEREDOC 230 CASEEND 231 REDIR_OTHER 232 FD_RANGE
 //   236 GROUP (a lone `{` or `}` word at command start) 246 BRACE_EXPANSION 247 POSITIONAL_RANGE (${10}, ${00})
@@ -462,7 +464,30 @@ fn abi_check(w: cells) -> u64 {
     for j in 48 .. 64 {
         if w[j as u64] != 0 { return 217; }
     }
+    if w[28] > 1 { return 217; }
     return 0;
+}
+
+// End of input (S_EOI = 1, set by the host once no more bytes will be appended): finish the pending word or
+// operator. Anything still open (quote, `${`, trailing backslash) is an unexpected end of input, SYNTAX_EOF.
+fn lex_flush(inp: bytes, w: cells) -> u64 {
+    let st: u64 = w[12];
+    let n: u64 = inp.len;
+    if st == 0 || st == 10 { return 0; }
+    if st == 1 || st == 6 {
+        let rc: u64 = emit_word(inp, w, n);
+        if rc != 0 { return rc; }
+        w[12] = 0;
+        return 0;
+    }
+    if st == 11 {
+        let ws: u64 = w[13];
+        let rc2: u64 = emit_op(inp, w, opkind(inp[ws], 0), ws);
+        if rc2 != 0 { return rc2; }
+        w[12] = 0;
+        return 0;
+    }
+    return fail(w, 248, n);
 }
 
 fn lex_run(inp: bytes, w: cells) -> u64 {
@@ -470,9 +495,18 @@ fn lex_run(inp: bytes, w: cells) -> u64 {
     if ac != 0 { return ac; }
     if w[2] == 255 { return w[4]; }
     if w[6] > inp.len { return 216; }
+    w[27] = 0;
     let rc: u64 = lex_chunk(inp, w);
     if rc != 0 { return rc; }
     if w[6] < inp.len { return 101; }
-    if w[22] == 0 { return 0; }
+    if w[28] == 1 && w[22] != 0 {
+        let fr: u64 = lex_flush(inp, w);
+        if fr != 0 { return fr; }
+        w[22] = 0;
+    }
+    if w[22] == 0 {
+        w[27] = 1;
+        return 0;
+    }
     return 100;
 }

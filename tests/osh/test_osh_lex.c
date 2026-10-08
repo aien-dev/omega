@@ -160,10 +160,10 @@ static uint64_t rng_next(uint64_t *s)
 }
 
 /* ---- comparison against the reference ---- */
-static void cmp_ref(const char *tag, const uint8_t *d, size_t n, const Sess *s, uint64_t st)
+static void cmp_ref(const char *tag, const uint8_t *d, size_t n, int eoi, const Sess *s, uint64_t st)
 {
     OshRefLex *r = malloc(sizeof *r);
-    osh_lex_ref(d, n, r);
+    osh_lex_ref(d, n, eoi, r);
     n_ref_cmp++;
     const uint64_t *w = s->w;
     int ok = 1;
@@ -215,19 +215,21 @@ typedef struct {
     uint64_t w[OSH_LX_MID + 1];
 } Outcome;
 
-static void run_all(const char *tag, const uint8_t *d, size_t n, uint64_t *rng, unsigned long iter, Outcome *out)
+static void run_one(const char *tag, const uint8_t *d, size_t n, int eoi, uint64_t *rng, unsigned long iter, Outcome *out)
 {
     Sess a, b, c, e;
     unsigned ra = 0, rb = 0;
     sess_init(&a);
     sess_init(&b);
+    a.w[OSH_S_EOI] = (uint64_t)eoi;
+    b.w[OSH_S_EOI] = (uint64_t)eoi;
     uint64_t sa = lex_all(INTERP, &a, d, n, &ra);
     uint64_t sb = lex_all(NATIVE, &b, d, n, &rb);
     n_cases++;
     n_engine_cmp++;
     check(sa == sb && ra == rb && memcmp(a.w, b.w, WS * 8) == 0, "[%s] interp and native disagree (status %llu vs %llu, resumes %u vs %u, workspace %s)", tag,
           (unsigned long long)sa, (unsigned long long)sb, ra, rb, memcmp(a.w, b.w, WS * 8) == 0 ? "same" : "differs");
-    cmp_ref(tag, d, n, &a, sa);
+    cmp_ref(tag, d, n, eoi, &a, sa);
     /* idempotence of a settled call */
     if (sa == 0 || sa == 100 || sa >= 200) {
         uint64_t sn = call(INTERP, &a, d, n);
@@ -243,11 +245,19 @@ static void run_all(const char *tag, const uint8_t *d, size_t n, uint64_t *rng, 
     Engine ce = (iter & 1) ? INTERP : NATIVE;
     sess_init(&c);
     uint64_t sc = lex_chunked(ce, &c, d, n, mode, rng, rng_next);
+    if (eoi) {
+        c.w[OSH_S_EOI] = 1;
+        sc = lex_all(ce, &c, d, n, NULL);
+    }
     check(sc == sa && memcmp(a.w, c.w, WS * 8) == 0, "[%s] chunked (mode %u) run differs from single shot (status %llu vs %llu)", tag, mode,
           (unsigned long long)sc, (unsigned long long)sa);
     if ((iter & 7) == 0) {
         sess_init(&e);
         uint64_t se = lex_chunked(ce == INTERP ? NATIVE : INTERP, &e, d, n, 1, rng, rng_next);
+        if (eoi) {
+            e.w[OSH_S_EOI] = 1;
+            se = lex_all(ce == INTERP ? NATIVE : INTERP, &e, d, n, NULL);
+        }
         check(se == sa && memcmp(a.w, e.w, WS * 8) == 0, "[%s] chunked run on the other engine differs", tag);
         sess_free(&e);
     }
@@ -261,6 +271,13 @@ static void run_all(const char *tag, const uint8_t *d, size_t n, uint64_t *rng, 
     sess_free(&a);
     sess_free(&b);
     sess_free(&c);
+}
+
+/* each input with the end-of-input flag clear (the outcome returned) and then set */
+static void run_all(const char *tag, const uint8_t *d, size_t n, uint64_t *rng, unsigned long iter, Outcome *out)
+{
+    run_one(tag, d, n, 0, rng, iter, out);
+    run_one(tag, d, n, 1, rng, iter, NULL);
 }
 
 /* ---- hostile cases ---- */
@@ -483,6 +500,41 @@ static void run_brace_depth(uint64_t *rng)
         if (open <= 62) check(o.status == 0, "brace depth %d: status %llu", open, (unsigned long long)o.status);
         else check(o.status == 246 && o.err_off == 67, "brace depth %d: %llu@%llu", open, (unsigned long long)o.status, (unsigned long long)o.err_off);
     }
+}
+
+/* ---- end of input (S_EOI = 1): the pending word or operator is finished, an open construct is SYNTAX_EOF ---- */
+static void run_eoi_cases(uint64_t *rng)
+{
+    static const struct { const char *in; size_t n; uint64_t status; uint64_t off; int ntok; } T[] = {
+        { "ls", 2, 0, 0, 1 }, { "ls -l", 5, 0, 0, 2 }, { "ls ", 3, 0, 0, 1 }, { "   ", 3, 0, 0, 0 }, { "", 0, 0, 0, 0 },
+        { "ls\n", 3, 0, 0, 2 }, { "# c", 3, 0, 0, 0 }, { "ls # c", 6, 0, 0, 1 }, { "a |", 3, 0, 0, 2 }, { "a ||", 4, 0, 0, 2 },
+        { "a &&", 4, 0, 0, 2 }, { "a ;", 3, 0, 0, 2 }, { "a <", 3, 0, 0, 2 }, { "a >", 3, 0, 0, 2 }, { "a >>", 4, 0, 0, 2 },
+        { "a >&", 4, 0, 0, 2 }, { "a 2>", 4, 0, 0, 2 }, { "a 2>&", 5, 0, 0, 2 }, { "echo $", 6, 0, 0, 2 }, { "echo a$", 7, 0, 0, 2 },
+        { "echo \"$", 7, 248, 7, -1 }, { "echo \"abc", 9, 248, 9, -1 }, { "echo 'abc", 9, 248, 9, -1 }, { "echo a\\", 7, 248, 7, -1 },
+        { "\\", 1, 248, 1, -1 }, { "echo ${A", 8, 248, 8, -1 }, { "echo \"${A", 9, 248, 9, -1 }, { "echo \"a\\", 8, 248, 8, -1 },
+        { "a &", 3, 227, 2, -1 }, { "a (", 3, 228, 2, -1 }, { "a ~", 3, 223, 2, -1 }, { "a *", 3, 222, 2, -1 }, { "a `", 3, 221, 2, -1 },
+        { "a $(", 4, 226, 3, -1 }, { "a {", 3, 0, 0, 2 }, { "{", 1, 236, 0, -1 }, { "a ;;", 4, 230, 3, -1 }, { "echo a\\\n", 8, 0, 0, 2 },
+    };
+    for (size_t t = 0; t < sizeof T / sizeof T[0]; t++) {
+        Outcome o;
+        run_one("eoi case", (const uint8_t *)T[t].in, T[t].n, 1, rng, 700 + t, &o);
+        n_hostile++;
+        check(o.status == T[t].status, "eoi case %zu: status %llu, want %llu", t, (unsigned long long)o.status, (unsigned long long)T[t].status);
+        if (T[t].status >= 200) check(o.err_off == T[t].off, "eoi case %zu: offset %llu, want %llu", t, (unsigned long long)o.err_off, (unsigned long long)T[t].off);
+        else check(o.ntok == (uint64_t)T[t].ntok, "eoi case %zu: %llu tokens, want %d", t, (unsigned long long)o.ntok, T[t].ntok);
+    }
+    /* the flag above 1 is refused, and the done flag the parser relies on follows the status */
+    Sess s;
+    sess_init(&s);
+    s.w[OSH_S_EOI] = 2;
+    check(call(INTERP, &s, (const uint8_t *)"ls\n", 3) == 217 && s.w[OSH_LX_DONE] == 0, "eoi flag 2 is ABI_RESERVED");
+    s.w[OSH_S_EOI] = 0;
+    check(call(INTERP, &s, (const uint8_t *)"ls", 2) == 100 && s.w[OSH_LX_DONE] == 0, "pending word: not done");
+    check(call(INTERP, &s, (const uint8_t *)"ls\n", 3) == 0 && s.w[OSH_LX_DONE] == 1, "line complete: done");
+    check(call(INTERP, &s, (const uint8_t *)"ls\nb", 4) == 100 && s.w[OSH_LX_DONE] == 0, "new pending word: not done again");
+    s.w[OSH_S_EOI] = 1;
+    check(call(INTERP, &s, (const uint8_t *)"ls\nb", 4) == 0 && s.w[OSH_LX_DONE] == 1 && s.w[OSH_LX_NTOK] == 3, "flag flushes the word");
+    sess_free(&s);
 }
 
 /* ---- ABI header refusals ---- */
@@ -746,6 +798,7 @@ int main(int argc, char **argv)
     run_abi();
     run_hostile(&rng);
     run_brace_depth(&rng);
+    run_eoi_cases(&rng);
     run_vectors(argv[2], &rng);
     run_fuzz(fuzz, &rng);
 
