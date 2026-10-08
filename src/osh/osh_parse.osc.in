@@ -1,0 +1,286 @@
+// osh parser unit (aien-architecture#158, cut 4b): a bounded, resumable, non-recursive shell parser.
+// Entry: parse_run(inp, w). Contract: aien-protocols specs/osh-platform/OSH_PLATFORM_ABI.md (v1 DRAFT);
+// design: handoffs/osh-audit/E-parser-design.md section 3. Needs the external slices (OSC-EXT-BYTES).
+//
+// It reads the token records the lexer unit (osh_lex.osc) left in the same workspace and builds the command
+// and pipeline tables. It does NOT expand anything and does not write the request record: argv, assignment
+// and redirection lists stay token ranges, the expander (cut 4c) resolves them per pipeline.
+//
+// Grammar (flat; no recursion and no stack are needed in release 1):
+//   list     := pipeline ( ( '&&' | '||' | ';' ) pipeline )* [ ';' ]  terminated by NL (or end of input)
+//   pipeline := command ( '|' command )*
+//   command  := ( assignment | word | redirection )+     assignments only before the first word
+//   redirection := ( '<' | '>' | '>>' ) word  |  ( '>&' | '<&' ) word        word = one digit 0..2 for '>&' '<&'
+// A NL after '|', '&&' or '||' is skipped (the list continues). A NL, or the end of input, after a command or
+// after ';' completes the list. Tokens after the completing NL are not consumed: PX_TOK is the index of the
+// first one, the host starts a new session for them.
+//
+// parse_run returns one status:
+//   0 PHASE_DONE        the list is complete (tables valid; zero pipelines for a blank line)
+//   100 NEED_MORE_INPUT the list ends in '|', '&&' or '||' (host appends a line and calls lex_run, then parse_run)
+//   101 BUDGET_EXHAUSTED  @PARSE_BUDGET@ tokens consumed, call again
+//   203 CAP_CMDS 204 CAP_PIPELINES 205 CAP_PIPE_LEN 206 CAP_WORDS 207 CAP_ASSIGNS 208 CAP_REDIRS
+//   213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH 217 ABI_RESERVED (217 also: the lexer has
+//   not completed, LX_DONE is not 1, or a parser cell is corrupt)
+//   231 REDIR_OTHER (a '>&' '<&' target that is not a plain digit) 232 FD_RANGE (a digit target above 2)
+//   233 IF_COMPOUND 234 LOOP 235 CASE 237 FUNCTION 238 NEGATION 239 UNSUPPORTED_BUILTIN (time, coproc)
+//   240 IFS_ASSIGN 241 SYNTAX_EMPTY_CMD 242 SYNTAX_REDIR_TARGET 248 SYNTAX_EOF (the end of input follows
+//   '|', '&&' or '||')
+// A refusal stores code and byte offset (the start of the offending token; the buffer length for an
+// end-of-input refusal) in the session and makes it terminal (phase 255); a repeated call returns the same code.
+// A reserved word is a flagless word that is the first non-assignment word of a command.
+//
+// Command entry, 8 cells at CMDS + 8*c: {first token, end token (exclusive: the terminator), nassign, nword,
+//   nredir, pipeline index, position in the pipeline, 0}
+// Pipeline entry, 4 cells at PIPES + 4*p: {first command, ncmds, connector_after (0 none, 1 ; or NL, 2 &&,
+//   3 ||), first token}
+
+// Record a refusal: code and byte offset into the session, session terminal. Returns the code.
+fn fail(w: cells, code: u64, off: u64) -> u64 {
+    w[@S_ERR_CODE@] = code;
+    w[@S_ERR_OFF@] = off;
+    w[@S_PHASE@] = 255;
+    return code;
+}
+
+// ABI header check (OSH_PLATFORM_ABI.md section 3): first failure wins, nothing is written.
+fn abi_check(w: cells) -> u64 {
+    if w.len < 2 { return 216; }
+    if w[@S_MAGIC@] != @ABI_MAGIC@ { return 214; }
+    if w[@S_VERSION@] != @ABI_VERSION@ { return 215; }
+    if w.len < @WS_CELLS@ { return 213; }
+    for j in @S_RESERVED@ .. 64 {
+        if w[j as u64] != 0 { return 217; }
+    }
+    if w[@S_EOI@] > 1 { return 217; }
+    return 0;
+}
+
+// The significant bytes of inp[s..e) (backslash-newline pairs removed) packed big-endian into a u64; 0 when
+// there are more than 8 of them.
+fn pack8(inp: bytes, s: u64, e: u64) -> u64 {
+    let mut i: u64 = s;
+    let mut n: u64 = 0;
+    let mut v: u64 = 0;
+    while i < e bound 4096 {
+        if inp[i] == 92 && i + 1 < e && inp[i + 1] == 10 {
+            i = i + 2;
+        } else {
+            n = n + 1;
+            if n <= 8 { v = (v << 8) | inp[i]; }
+            i = i + 1;
+        }
+    }
+    if n > 8 { return 0; }
+    return v;
+}
+
+// A reserved word (packed) is refused by family; 0 for any other word.
+fn reserved(v: u64) -> u64 {
+    if v == 0x6966 || v == 0x7468656e || v == 0x656c6966 || v == 0x656c7365 || v == 0x6669 { return 233; }
+    if v == 0x666f72 || v == 0x7768696c65 || v == 0x756e74696c || v == 0x646f || v == 0x646f6e65 || v == 0x696e { return 234; }
+    if v == 0x73656c656374 { return 234; }
+    if v == 0x63617365 || v == 0x65736163 { return 235; }
+    if v == 0x66756e6374696f6e { return 237; }
+    if v == 0x21 { return 238; }
+    if v == 0x74696d65 || v == 0x636f70726f63 { return 239; }
+    return 0;
+}
+
+// 1 when all n bytes at s are decimal digits.
+fn alldig(inp: bytes, s: u64, n: u64) -> u64 {
+    let mut i: u64 = 0;
+    let mut r: u64 = 1;
+    while i < n && r == 1 bound 4096 {
+        let c: u64 = inp[s + i];
+        if c < 48 || c > 57 { r = 0; }
+        i = i + 1;
+    }
+    return r;
+}
+
+// The word after '>&' or '<&': one flagless digit 0..2 is fine (0); another digit or digits is FD_RANGE; anything
+// else (a name, '-', a quoted or expanding word) is REDIR_OTHER.
+fn dup_check(inp: bytes, hdr: u64, s: u64, n: u64) -> u64 {
+    if ((hdr >> 8) & 65535) != 0 { return 231; }
+    if n == 1 {
+        let c: u64 = inp[s];
+        if c >= 48 && c <= 50 { return 0; }
+    }
+    if alldig(inp, s, n) == 1 { return 232; }
+    return 231;
+}
+
+// Start a command at token t (byte offset s). Capacities are checked before anything is written.
+fn new_cmd(w: cells, t: u64, s: u64) -> u64 {
+    let pc: u64 = w[@PX_PCMDS@];
+    if pc >= @CAP_PIPE_LEN@ { return fail(w, 205, s); }
+    let np: u64 = w[@PX_NPIPE@];
+    if pc == 0 && np >= @CAP_PIPES@ { return fail(w, 204, s); }
+    let c: u64 = w[@PX_NCMD@];
+    if c >= @CAP_CMDS@ { return fail(w, 203, s); }
+    let mut p: u64 = np;
+    if pc == 0 {
+        let pb: u64 = @PIPES@ + np * 4;
+        w[pb] = c;
+        w[pb + 1] = 0;
+        w[pb + 2] = 0;
+        w[pb + 3] = t;
+        w[@PX_NPIPE@] = np + 1;
+    } else {
+        p = np - 1;
+    }
+    let cb: u64 = @CMDS@ + c * 8;
+    w[cb] = t;
+    w[cb + 1] = 0;
+    w[cb + 2] = 0;
+    w[cb + 3] = 0;
+    w[cb + 4] = 0;
+    w[cb + 5] = p;
+    w[cb + 6] = pc;
+    w[cb + 7] = 0;
+    w[@PIPES@ + p * 4 + 1] = pc + 1;
+    w[@PX_PCMDS@] = pc + 1;
+    w[@PX_NCMD@] = c + 1;
+    w[@PX_ANYW@] = 0;
+    return 0;
+}
+
+// The current command ends before token te.
+fn end_cmd(w: cells, te: u64) {
+    w[@CMDS@ + (w[@PX_NCMD@] - 1) * 8 + 1] = te;
+}
+
+// The current pipeline ends with connector conn.
+fn end_pipe(w: cells, conn: u64) {
+    w[@PIPES@ + (w[@PX_NPIPE@] - 1) * 4 + 2] = conn;
+    w[@PX_PCMDS@] = 0;
+}
+
+// A word token inside a command: prefix assignment, reserved word, or argument.
+fn on_word(inp: bytes, w: cells, t: u64, hdr: u64) -> u64 {
+    let b: u64 = @TOKENS@ + t * 4;
+    let f: u64 = (hdr >> 8) & 65535;
+    let s: u64 = w[b + 1];
+    let cb: u64 = @CMDS@ + (w[@PX_NCMD@] - 1) * 8;
+    if (f & 16) != 0 && w[@PX_ANYW@] == 0 {
+        if pack8(inp, s, w[b + 3] - 1) == 0x494653 { return fail(w, 240, s); }
+        let na: u64 = w[cb + 2];
+        if na >= @CAP_ASSIGNS@ { return fail(w, 207, s); }
+        w[cb + 2] = na + 1;
+        return 0;
+    }
+    if w[@PX_ANYW@] == 0 && (f & 65503) == 0 {
+        let rc: u64 = reserved(pack8(inp, s, s + w[b + 2]));
+        if rc != 0 { return fail(w, rc, s); }
+    }
+    let nw: u64 = w[cb + 3];
+    if nw >= @CAP_WORDS@ { return fail(w, 206, s); }
+    w[cb + 3] = nw + 1;
+    w[@PX_ANYW@] = 1;
+    return 0;
+}
+
+// The token after a redirection operator must be a word (and a valid descriptor for '>&' '<&').
+fn on_target(inp: bytes, w: cells, t: u64, hdr: u64) -> u64 {
+    let b: u64 = @TOKENS@ + t * 4;
+    let s: u64 = w[b + 1];
+    if (hdr & 255) != 1 { return fail(w, 242, s); }
+    let rk: u64 = w[@PX_RKIND@];
+    if rk == 10 || rk == 11 {
+        let rc: u64 = dup_check(inp, hdr, s, w[b + 2]);
+        if rc != 0 { return fail(w, rc, s); }
+    }
+    w[@PX_STATE@] = 2;
+    return 0;
+}
+
+// Consume token t. 0 = continue, 1 = the list is complete, >= 200 = refusal (recorded).
+// States: 0 FRESH (start, or after ';')  1 AFTER_OP (after | && ||)  2 IN_CMD  3 NEED_TARGET  4 DONE
+fn parse_step(inp: bytes, w: cells, t: u64) -> u64 {
+    let b: u64 = @TOKENS@ + t * 4;
+    let hdr: u64 = w[b];
+    let k: u64 = hdr & 255;
+    let s: u64 = w[b + 1];
+    let st: u64 = w[@PX_STATE@];
+    if st == 3 { return on_target(inp, w, t, hdr); }
+    if k == 9 {
+        if st == 2 {
+            end_cmd(w, t);
+            end_pipe(w, 1);
+            w[@PX_STATE@] = 4;
+            return 1;
+        }
+        if st == 0 {
+            w[@PX_STATE@] = 4;
+            return 1;
+        }
+        return 0;
+    }
+    if k >= 2 && k <= 5 {
+        if st != 2 { return fail(w, 241, s); }
+        end_cmd(w, t);
+        w[@PX_STATE@] = 1;
+        if k == 2 { return 0; }
+        let mut conn: u64 = 1;
+        if k == 4 { conn = 2; }
+        if k == 3 { conn = 3; }
+        end_pipe(w, conn);
+        if k == 5 { w[@PX_STATE@] = 0; }
+        return 0;
+    }
+    if st == 0 || st == 1 {
+        let rc: u64 = new_cmd(w, t, s);
+        if rc != 0 { return rc; }
+        w[@PX_STATE@] = 2;
+    }
+    if k == 1 { return on_word(inp, w, t, hdr); }
+    let cb: u64 = @CMDS@ + (w[@PX_NCMD@] - 1) * 8;
+    let nr: u64 = w[cb + 4];
+    if nr >= @CAP_REDIRS@ { return fail(w, 208, s); }
+    w[cb + 4] = nr + 1;
+    w[@PX_RKIND@] = k;
+    w[@PX_STATE@] = 3;
+    return 0;
+}
+
+// Every token is consumed and the list is not complete.
+fn at_end(inp: bytes, w: cells) -> u64 {
+    let st: u64 = w[@PX_STATE@];
+    if st == 0 { return 0; }
+    if w[@S_EOI@] == 0 { return 100; }
+    if st == 2 {
+        end_cmd(w, w[@LX_NTOK@]);
+        end_pipe(w, 0);
+        w[@PX_STATE@] = 4;
+        return 0;
+    }
+    if st == 3 { return fail(w, 242, inp.len); }
+    return fail(w, 248, inp.len);
+}
+
+fn parse_run(inp: bytes, w: cells) -> u64 {
+    let ac: u64 = abi_check(w);
+    if ac != 0 { return ac; }
+    if w[@S_PHASE@] == 255 { return w[@S_ERR_CODE@]; }
+    if w[@LX_DONE@] != 1 { return 217; }
+    if w[@PX_STATE@] > 4 { return 217; }
+    if w[@PX_STATE@] == 4 { return 0; }
+    let ntok: u64 = w[@LX_NTOK@];
+    let mut t: u64 = w[@PX_TOK@];
+    if t > ntok { return 217; }
+    let mut n: u64 = 0;
+    let mut rc: u64 = 0;
+    while t < ntok && n < @PARSE_BUDGET@ && rc == 0 bound @PARSE_BUDGET@ {
+        rc = parse_step(inp, w, t);
+        if rc < 2 {
+            t = t + 1;
+            n = n + 1;
+            w[@PX_TOK@] = t;
+        }
+    }
+    if rc == 1 { return 0; }
+    if rc >= 2 { return rc; }
+    if t < ntok { return 101; }
+    return at_end(inp, w);
+}

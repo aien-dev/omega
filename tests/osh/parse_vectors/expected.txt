@@ -1,0 +1,15 @@
+# Local parser-level vectors for omega PR (osh parser). Same grammar as ../vectors/README.md. Not yet in aien-protocols.
+# They use codes the ABI draft names: 231/232/233/240/241/242, and 248 which is a proposed addition (SYNTAX_EOF).
+# `more` lines: the final call returned NEED_MORE_INPUT; with the end-of-input flag set the same input is a refusal.
+v101 more
+v102 refuse 241 SYNTAX_EMPTY_CMD off=4
+v103 refuse 242 SYNTAX_REDIR_TARGET off=5
+v104 refuse 232 FD_RANGE off=7
+v105 refuse 233 IF_COMPOUND off=0
+v106 refuse 240 IFS_ASSIGN off=0
+v107 refuse 241 SYNTAX_EMPTY_CMD off=4
+v108 ok | P0 conn=1 | C0 b=0 argv="echo","hi" as= rd=DUP2:1,OUT1:"o"
+v109 ok | P0 conn=1 | C0 b=0 argv= as= rd=OUT1:"f"
+v110 ok | P0 conn=1 | C0 b=0 argv="cmd","x=3" as=A="1",B="2" rd=OUT1:"o",IN0:"i"
+v111 ok | P0 conn=3 | C0 b=0 argv="a" as= rd= | C1 b=0 argv="b" as= rd= | P1 conn=1 | C0 b=0 argv="c" as= rd=
+v112 ok | P0 conn=1 | C0 b=0 argv="a" as= rd=APPEND1:"log",DUP2:1 | C1 b=0 argv="b" as= rd=DUP0:0 | P1 conn=1 | C0 b=0 argv="c" as= rd=

@@ -47,10 +47,28 @@ LX_BRD 23                   # open unquoted `{` count in the word (brace expansi
 LX_BRM 24                   # bit d set: the open brace at depth d has an unquoted `,` or `..` directly inside
 LX_PDOT 25                  # the last byte was an unquoted plain `.` in the word
 LX_BRN 26                   # ${...} name: 0 none/alpha start, 1 digits so far (one digit)
-# 27 is LX_DONE in the parser unit (osh_parse): kept free here so the two layouts agree
-S_EOI 28                    # host-set: 1 = the input has ended (explicit end-of-input flush); a trailing `\` is then a literal
+LX_DONE 27                  # 1 when the last lex_run returned PHASE_DONE (the parser requires it)
+S_EOI 28                    # end of input: written by the host (0 or 1); 1 = no more bytes will be appended; a final `\` is then a literal
 LX_CONT 29                  # 1 after a `\` that starts a backslash-newline pair; the next byte (the newline) is swallowed
 LX_PREV 30                  # the last significant byte (a swallowed `\<nl>` pair does not count)
 LX_PO 31                    # offset of LX_PREV
 LX_PLUS 32                  # 1 when the last significant byte was a `+` right after a valid NAME (append-assignment detector)
 LX_USC 33                   # offset+1 of a `_` that is the whole name after `$` or `${` (the `$_` special parameter), else 0
+
+# --- parser-internal session cells (osh_parse.osc.in) ---
+PX_STATE 34                 # 0 FRESH 1 AFTER_OP 2 IN_CMD 3 NEED_TARGET 4 DONE
+PX_TOK 35                   # next token index to parse
+PX_NCMD 36                  # command entries written
+PX_NPIPE 37                 # pipeline entries written
+PX_PCMDS 38                 # commands in the open pipeline
+PX_ANYW 39                  # 1 once the current command has a non-assignment word
+PX_RKIND 40                 # token kind of the redirection operator awaiting its target
+
+# --- parser capacities (E-parser-design.md section 5, ABI 5.3) ---
+CAP_CMDS 32
+CAP_PIPES 16
+CAP_PIPE_LEN 8
+CAP_WORDS 32
+CAP_ASSIGNS 16
+CAP_REDIRS 8
+PARSE_BUDGET 64             # tokens per parse_run call
