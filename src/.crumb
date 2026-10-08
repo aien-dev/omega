@@ -80,7 +80,7 @@
         },
         {
           "digest": "18e933f213d7958215bb0ecf09116e5c21d3b335cfdabc1ffbf7a2a4e98b5250",
-          "last_commit": "bcb9751",
+          "last_commit": "f7b4389",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
         },
@@ -113,6 +113,12 @@
           "last_commit": "71c6ff8",
           "name": "language",
           "purpose": "Directory src/language. Purpose not yet described by a human."
+        },
+        {
+          "digest": "8bcd7e96608759f15c8e1190f0afc8eb92da2c6626042d6f69f3d559f23695f9",
+          "last_commit": "",
+          "name": "osh",
+          "purpose": "osh (Omega-native shell, arch#158) lexer unit: layout list, generator, osh_lex.osc, C reference "
         },
         {
           "digest": "8383106b5d1b3adbc44b8e837a5d1f5ff6699a6d54070068e36716b2a32390d5",
@@ -169,15 +175,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:a795e9d99cf847affba566a7e833692dd4aa10e80350bad94e0326c55257aa6f",
-      "compiled_at": "2026-10-08T07:51:40Z",
+      "children_root": "sha256:7a082b1c277535eab858d9bc079a2a8600bbafa2b6c32937a99e65dddecf0764",
+      "compiled_at": "2026-10-08T08:22:48Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:ceac66b569dba90f0eeb4f5f7d9de0c0794f673ae708c365ff265b49c948346d",
+      "digest": "sha256:9b5a92dbe07361460815359d6bc7d90b31ed6c91ac36654555980242eb4e5c39",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 414,
-      "generated_at_commit": "bcb9751a17f9e31115154278b636c8d0950948e3",
-      "source_tree": "sha256:1facb74536ff5790f6fb156e2b8f471e264bd33b683025fcb10d1e0959842062"
+      "files": 421,
+      "generated_at_commit": "f7b4389096a842f3479b0e1f04bbe4ab81b78632",
+      "source_tree": "sha256:6c3eea85345f907ab70be1c80a0735c1f6900e37c5a6fb2e1c7654e735ee8bdc"
     },
     "owner_lane": "",
     "provenance": {
