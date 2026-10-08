@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "osc_cg.h"
 #include "osc_front.h"
@@ -41,8 +42,8 @@ static void remove_outputs(const char *pre)
 {
     char p[4096];
     for (int i = 0; i < 3; i++) {
-        if (out_path(p, sizeof p, pre, k_ext[i], "") == 0) remove(p);
-        if (out_path(p, sizeof p, pre, k_ext[i], ".tmp") == 0) remove(p);
+        if (out_path(p, sizeof p, pre, k_ext[i], "") == 0) unlink(p);
+        if (out_path(p, sizeof p, pre, k_ext[i], ".tmp") == 0) unlink(p);
     }
 }
 
