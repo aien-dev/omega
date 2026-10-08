@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-08T03:02:40Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:8bcd7e96608759f15c8e1190f0afc8eb92da2c6626042d6f69f3d559f23695f9",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 7,
+      "generated_at_commit": "14e4eb881a4a365a1e8c4bd20f5ffb9c78138e0e",
+      "source_tree": "sha256:527246f02d9715f04de79cec775a6c4659ef52cad808dc46ca3369f6b7cb2e47"
+    }
+  },
+  "name": "osh",
+  "purpose": "osh (Omega-native shell, arch#158) lexer unit: layout list, generator, osh_lex.osc, C reference tokenizer",
+  "schema_version": "1.0.0"
+}
