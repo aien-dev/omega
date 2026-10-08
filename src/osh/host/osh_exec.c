@@ -563,7 +563,7 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
                     if (!dup) close(cl[k]);
                 }
                 if (external) {
-                    if (osh_effect_check(s, OSH_OP_SPAWN, path, 2) != OSH_E_OK) _exit(126); /* revoked between fork and exec */
+                    if (osh_effect_check(s, OSH_OP_SPAWN, path, 2) != OSH_E_OK) _exit(126); /* defensive: revoked between fork and exec; the osh program seals its policy before the first command, so it cannot trigger there (no test reaches it) */
                     execve(path, (char *const *)c->argv, envp);
                     osh_diag(2, "%s: %s", c->argv[0], strerror(errno));
                     st = (errno == ENOENT || errno == ENOTDIR) ? 127 : 126;

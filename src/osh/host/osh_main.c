@@ -56,6 +56,7 @@ static int arm(OshShell *sh, OshCaps *caps, const char *file)
         z = realloc(text, n + 1);
         if (!z) { free(text); return -1; }
         z[n] = 0;
+        if (strlen(z) != n) { fprintf(stderr, "osh: --caps %s: contains a NUL byte\n", file); free(z); return -1; }
     } else {
         z = strdup(DEFAULT_POLICY);
         if (!z) return -1;

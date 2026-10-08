@@ -384,6 +384,14 @@ int main(int argc, char **argv)
         P(bad, "bad-policy");
         put(bad, "principal 1\nallow bogus /\n");
         CHECK(run_osh(osh_bin, bad, "true", NULL) == 70, "osh --caps with a bad policy refuses to start");
+        {
+            char nul[PATH_MAX];
+            P(nul, "nul-policy");
+            FILE *nf = fopen(nul, "wb");
+            static const char body[] = "principal 1\nallow spawn /bin\0\nallow spawn /usr\n";
+            if (nf) { fwrite(body, 1, sizeof body - 1, nf); fclose(nf); }
+            CHECK(nf && run_osh(osh_bin, nul, "true", NULL) == 70, "osh --caps with a NUL byte in the policy refuses to start");
+        }
         char pol0[PATH_MAX];
         P(pol0, "empty-policy");
         put(pol0, "principal 1\n");
