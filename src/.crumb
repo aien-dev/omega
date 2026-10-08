@@ -115,8 +115,8 @@
           "purpose": "Directory src/language. Purpose not yet described by a human."
         },
         {
-          "digest": "a66024023ddd6c3aba58bd588e6344f65e55bf9983db62ada47c318eb95c3950",
-          "last_commit": "f0c36a4",
+          "digest": "47329b56fe6bf724cb16c90a92ca76752bbf91fc5fadd7eca887cb5317fd6053",
+          "last_commit": "594fe4a",
           "name": "osh",
           "purpose": "osh (Omega-native shell, arch#158) lexer unit: layout list, generator, osh_lex.osc, C reference "
         },
@@ -175,15 +175,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:693069156572d1fb9fb4d72531dae7c937b284d4a5a8cea85aebd3b063f0856a",
-      "compiled_at": "2026-10-08T01:49:54Z",
+      "children_root": "sha256:b8f20864359e2779dc3dfe32b0a065ae125dee2cbfee780c13867b17348902ab",
+      "compiled_at": "2026-10-08T01:50:06Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:47ffd17698481c7235bbb9b3b340595c8d39925f43d63550d5e06326d5225798",
+      "digest": "sha256:b9078347b26bed1337bbd4130132988d8fd9692ce49d2a418a77f9aa5775498b",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 422,
-      "generated_at_commit": "7aa674a801044a18478b8a1a5fc2b27f10b757ca",
-      "source_tree": "sha256:0e8334a97d97e13300572b6330b1b6116e9179a113315618445a7f3977cb4b50"
+      "files": 425,
+      "generated_at_commit": "594fe4a399b1412f2be9630f0d24fb4ec8259e61",
+      "source_tree": "sha256:4813785f76dd52f4a348bce78b5a079b43b6d00944f4439cef3a58af567efd33"
     },
     "owner_lane": "",
     "provenance": {
