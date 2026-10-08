@@ -161,7 +161,18 @@ AWK_HEAVY='
 		wrap = " env sudo doas nice ionice nohup setsid time timeout stdbuf taskset chrt xargs exec command builtin eval watch "
 		kw = " if then elif else fi do done while until for in case esac ! { } "
 		shells = " sh bash dash zsh ksh "
+		interps = " python python3 node perl ruby "
 	}
+	function interpargs(k, m,   j) { # w[k] is an interpreter (python3, $PY ...): its test file or test module
+		for (j = k + 1; j <= m; j++) {
+			if (w[j] == "-m" && w[j+1] ~ /^(pytest|unittest)$/) return w[k] " -m " w[j+1]
+			if (w[j] ~ /^-[A-Za-z0-9.]*[ecE]/) return ""  # inline program (perl -pi -e, python3 -c): files are data
+			if (w[j] ~ /^[-<>0-9]/) continue
+			return testname(w[j]) ? w[j] " (test program, run by " w[k] ")" : ""
+		}
+		return ""
+	}
+	function isinterp(c) { return index(interps, " " base(c) " ") || c ~ /^\$[A-Za-z_]/ }
 	function base(s) { sub(/.*\//, "", s); return s }
 	function isheavy(c, nxt, notest,   b) {
 		b = base(c)
@@ -174,7 +185,7 @@ AWK_HEAVY='
 	function testname(c,   b) { # a test program or test script, by name
 		b = base(c)
 		if (c ~ /(^|\/)target\/(.*\/)?deps\/[^\/]+$/) return 1
-		if (b ~ /^(test[-_].*|.*[-_]tests?|run[-_]?tests.*)\.(sh|bash)$/) return 1
+		if (b ~ /^(test[-_].*|.*[-_]tests?|run[-_]?tests.*)\.(sh|bash|py)$/) return 1
 		if (index(c, "/") && (c ~ /(^|\/)tests?\/[^\/]/ || b ~ /^tests?[-_]/ || b ~ /[-_]tests?$/)) return 1
 		return 0
 	}
@@ -184,7 +195,9 @@ AWK_HEAVY='
 			if (w[j] ~ /^-[A-Za-z]*n[A-Za-z]*$/) return ""
 			if (w[j] ~ /^[-+]o$/) { j++; continue }
 			if (w[j] ~ /^[-+]/) continue
-			if (w[j] ~ /^[<>0-9]/) return ""
+			if (w[j] == "<") { if (w[j+1] != "") print "SCRIPT " w[j+1]; return "" }  # bash < FILE runs FILE
+			if (w[j] ~ /^<[^<]/) { print "SCRIPT " substr(w[j], 2); return "" }
+			if (w[j] ~ /^[0-9]*[<>]/) { if (w[j] ~ /^[0-9]*[<>]+&?$/) j++; continue }
 			if (testname(w[j])) return w[j] " (test script, run by " base(w[k]) ")"
 			print "SCRIPT " w[j]; return ""
 		}
@@ -203,6 +216,8 @@ AWK_HEAVY='
 		for (i = 1; i <= n; i++) {
 			closed = (substr(seg[i], 1, 1) == "\002"); if (closed) seg[i] = substr(seg[i], 2)
 			m = split(seg[i], w, /[ \t]+/); k = 1
+			# cargo -q test, cargo +nightly test: the subcommand is the first word that is not an option.
+			for (q = 1; q < m; q++) if (base(w[q]) == "cargo") { r = q + 1; while (r <= m && w[r] ~ /^[-+]/) r++; if (r > q + 1 && r <= m) w[q+1] = w[r] }
 			while (k <= m && (w[k] == "" || w[k] ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || index(kw, " " w[k] " "))) k++
 			if (k > m) continue
 			if (closed) { h = isheavy(w[k], w[k+1], 1); if (h != "") { print h; exit }; continue }
@@ -212,13 +227,28 @@ AWK_HEAVY='
 			if (b == "cd" && w[k+1] != "" && w[k+1] !~ /^-/) { print "CD " w[k+1]; continue }
 			if (b == "source" || b == ".") { if (w[k+1] != "") print "SCRIPT " w[k+1]; continue }
 			if (index(wrap, " " b " ")) {
+				# Any later heavy word blocks (as always). The file rules apply only to the wrapped
+				# command itself: the first word that is not an option, an option argument, a
+				# number (timeout 60, taskset 0-3), VAR=value, another wrapper or a redirect, so
+				# `timeout 5 cat tests/a.txt` and `nohup x > tests/out.log` stay allowed.
+				found = 0; skip = 0
 				for (j = k + 1; j <= m; j++) {
-					h = isheavy(w[j], w[j+1]); if (h != "") { print h " (after " b ")"; exit }
-					if (index(shells, " " w[j] " ") || index(shells, " " base(w[j]) " ")) { h = shellargs(j, m); if (h != "") { print h " (after " b ")"; exit }; break }
+					h = isheavy(w[j], w[j+1], 1); if (h != "") { print h " (after " b ")"; exit }
+					if (found) continue
+					if (skip) { skip = 0; continue }  # an option argument or redirect target (still checked above)
+					if (w[j] ~ /^[0-9]*[<>]/) { if (w[j] ~ /^[0-9]*[<>]+&?$/) skip = 1; continue }
+					if (w[j] ~ /^-/) { if (w[j] ~ /^-[ugncskIPLdp]$/) skip = 1; continue }
+					if (w[j] ~ /^[0-9][0-9a-fx.,:-]*[smhd]?$/ || w[j] ~ /^[A-Za-z_][A-Za-z0-9_]*=/ || index(wrap, " " base(w[j]) " ")) continue
+					found = 1
+					if (index(shells, " " base(w[j]) " ")) { h = shellargs(j, m); if (h != "") { print h " (after " b ")"; exit }; continue }
+					if (isinterp(w[j])) { h = interpargs(j, m); if (h != "") { print h " (after " b ")"; exit }; continue }
+					if (testname(w[j])) { print w[j] " (test program) (after " b ")"; exit }
 					if (index(w[j], "/")) print "SCRIPT " w[j]
 				}
 			} else if (index(shells, " " b " ")) {
 				h = shellargs(k, m); if (h != "") { print h; exit }
+			} else if (isinterp(w[k])) {
+				h = interpargs(k, m); if (h != "") { print h; exit }
 			} else if (index(w[k], "/")) {
 				print "SCRIPT " w[k]
 			}
