@@ -271,7 +271,7 @@ static void test_prompt_ctrl_c(void)
         close(master);
         if (chdir(TMP) != 0) _exit(126);
         unsetenv("OSH_INTERP");
-        char *av[] = {(char *)OSH, NULL};
+        char *av[] = {(char *)OSH, "--caps", POL, NULL}; /* fail closed without a policy, as in run_osh() */
         execv(OSH, av);
         _exit(127);
     }
