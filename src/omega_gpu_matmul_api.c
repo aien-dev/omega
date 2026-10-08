@@ -191,6 +191,9 @@ int omega_gpu_matmul_prepare(uint32_t m, uint32_t k, uint32_t n) {
     return rc;
 }
 
+/* Anything that clears the kernel cache while sealed (cache_clear, set_cta_budget, the test knobs, a
+ * reserve that grows the slot count) also drops the pinned kernels; the seal stays, so every later
+ * call is refused by name ("was not prepared") until the server prepares again or releases. */
 void omega_gpu_matmul_seal(int on) {
     omega_gpu_session_lock();
     g.sealed = on ? 1 : 0;
@@ -361,6 +364,13 @@ static int matmul_core(uint32_t m, const uint16_t *a, const OmegaGpuTensor *b, f
         info->resident = true; info->kernel_cache_hit = true;
         strncpy(info->target_chip, "NVIDIA DGX Spark (Grace Blackwell GB10)", sizeof info->target_chip - 1);
         info->sm_architecture = 121;
+    }
+    if (g.sealed && !(g.a_buf.reserved && g.c_buf.reserved)) {
+        /* sealed means no driver allocation on the call path; without a scratch reservation the
+         * buffers below could still grow, so refuse before touching them */
+        omega_gpu_session_set_error("serving reservation exceeded: matmul sealed without a scratch reservation (call omega_gpu_reserve_serving first)");
+        omega_gpu_session_unlock();
+        return OMEGA_GPU_MATMUL_TOO_LARGE;
     }
     int src = omega_gpu_session_scratch(&g.a_buf, (size_t)mp * kp * 2u);
     if (src == 0) src = omega_gpu_session_scratch(&g.c_buf, (size_t)mp * np * 4u);

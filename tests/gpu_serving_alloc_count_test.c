@@ -417,6 +417,30 @@ static int pin_mode(void) {
     return g_fail ? 1 : 0;
 }
 
+
+/* Sealed without a serving reservation: the scratch buffers could still grow, so every matmul call
+ * must be refused by name before any driver allocation (review of omega#338). */
+static int seal_bare_mode(void) {
+    W_Q = upload(HID, QDIM);
+    float *x = calloc((size_t)144 * HID, sizeof *x), *y = calloc((size_t)144 * QDIM, sizeof *y);
+    CHECK(x && y, "seal-bare buffers");
+    if (g_fail) return 1;
+    int rc = omega_gpu_matmul_prepare(16, HID, QDIM);
+    CHECK(rc == OMEGA_GPU_MATMUL_OK, "prepare m=16 rc=%d %s", rc, omega_gpu_matmul_last_error());
+    omega_gpu_matmul_seal(1);
+    int a0 = fk.alloc_calls;
+    OmegaGpuMatmulInfo info;
+    rc = omega_gpu_matmul_resident_f32(144, x, W_Q, y, &info);
+    CHECK(rc == OMEGA_GPU_MATMUL_TOO_LARGE && strstr(omega_gpu_matmul_last_error(), "without a scratch reservation"),
+          "sealed, unreserved, larger call: rc=%d %s", rc, omega_gpu_matmul_last_error());
+    CHECK(fk.alloc_calls == a0, "sealed call without a reservation asked the driver for memory (%d)", fk.alloc_calls - a0);
+    omega_gpu_matmul_seal(0);
+    rc = omega_gpu_matmul_resident_f32(16, x, W_Q, y, &info);
+    CHECK(rc != OMEGA_GPU_MATMUL_TOO_LARGE, "unsealed call still refused: rc=%d %s", rc, omega_gpu_matmul_last_error());
+    free(x); free(y);
+    printf("gpu_serving_alloc_count_test seal-bare: %s (%d failed checks)\n", g_fail ? "FAIL" : "PASS", g_fail);
+    return g_fail ? 1 : 0;
+}
 int main(int argc, char **argv) {
     const char *mode = argc > 1 ? argv[1] : "plain";
     const int do_reserve = strcmp(mode, "reserve") == 0, assert_zero = do_reserve || strcmp(mode, "reserve-skip") == 0;
@@ -440,6 +464,7 @@ int main(int argc, char **argv) {
     if (strcmp(mode, "rollback") == 0) return rollback_mode();
     if (strcmp(mode, "sweep") == 0) return sweep_mode(1);
     if (strcmp(mode, "pin") == 0) return pin_mode();
+    if (strcmp(mode, "seal-bare") == 0) return seal_bare_mode();
     if (strcmp(mode, "sweep-skip") == 0) return sweep_mode(0);
 
     begin(&ph[np], "LOAD (session+6 weights)");
