@@ -447,6 +447,74 @@ expect_block "echo lanes.sh queue X d y; make"
 # H10i `lanes.sh flush` is not a build word: the hook lets it start; the forge itself then waits for a
 # clear flag before every job (I9). Mutation killed: treating flush as heavy would stall the forge.
 expect_allow 'lanes.sh flush'
+# H11 script runs and test programs (2026-10-08 GB10 hold overlaps: `bash scripts/test-linked-compose.sh`,
+# which runs cargo test inside, a directly-run test binary). While someone else holds: a script whose
+# text runs a build/test/QEMU program is blocked however it is started (shell + file, ./path, source,
+# behind a wrapper, quoted path, one script calling another), and test programs are blocked by name.
+# Mutations killed: no script content scan (H11a-H11i); content scan without comment/quote stripping
+# (H11 allowed harmless.sh); no name rule for test scripts / target/*/deps / tests/ (H11j-H11o);
+# no recursion into called scripts (H11h); no cwd resolution (H11c); refusal without the holder (H11a).
+SD=$T/scripts-h11
+mkdir -p "$SD/sub"
+printf '#!/bin/sh\nset -e\nfor t in a b; do\n    cargo test "$@" -- --test-threads=1 2>&1 | tee -a log\ndone\n' > "$SD/heavy.sh"
+printf '#!/bin/sh\n# runs the heavy one\nbash %s/heavy.sh "$@"\n' "$SD" > "$SD/outer.sh"
+printf '#!/bin/bash\ntimeout 60 qemu-system-aarch64 -M virt -nographic\n' > "$SD/qemu.sh"
+printf '#!/bin/sh\ncd x && make -j8 all\n' > "$SD/mk.sh"
+printf "#!/bin/sh\n# make sure the notes exist; don't run make here\necho \"make test later\" >> notes.md\nprintf 'cargo build\\\\n' > todo.txt\ngrep -c make notes.md\n" > "$SD/harmless.sh"
+cp "$SD/heavy.sh" "$SD/sub/run-it.sh"
+chmod +x "$SD"/*.sh "$SD/sub/run-it.sh"
+cwd_json() { jq -n --arg c "$1" --arg d "$2" '{tool_name:"Bash",cwd:$d,tool_input:{command:$c}}'; }
+reset; live_flag
+h11_block() { # $1 name, $2 command, [$3 cwd]
+	if [ -n "${3:-}" ]; then hookrun "$(cwd_json "$2" "$3")"; else hookrun "$(bash_json "$2")"; fi; rc=$?
+	check "H11 blocked ($1): $2" '[ $rc = 2 ] && grep -q QUIETLOCK_REFUSED "$T/hookerr" && grep -q "holder=.OTHER quietlock test" "$T/hookerr"'
+}
+h11_allow() {
+	if [ -n "${3:-}" ]; then hookrun "$(cwd_json "$2" "$3")"; else hookrun "$(bash_json "$2")"; fi; rc=$?
+	check "H11 allowed ($1): $2" '[ $rc = 0 ]'
+}
+h11_block a "bash $SD/heavy.sh"
+h11_block a "sh $SD/heavy.sh --nocapture"
+h11_block b "$SD/heavy.sh"
+h11_block c "./heavy.sh" "$SD"
+h11_block c "bash sub/run-it.sh" "$SD"
+h11_block d "cd $SD && bash heavy.sh"
+h11_block e "timeout 600 bash $SD/heavy.sh"
+h11_block e "nohup bash $SD/heavy.sh > log 2>&1 &"
+h11_block f "source $SD/heavy.sh"
+h11_block f ". $SD/heavy.sh"
+h11_block g "bash \"$SD/heavy.sh\""
+h11_block h "bash $SD/outer.sh"
+h11_block i "bash $SD/qemu.sh"
+h11_block i "sh $SD/mk.sh"
+h11_block j "bash scripts/test-linked-compose.sh /a /b /c" "$T"
+h11_block j "cd ~/w/sc && bash scripts/test-linked-compose.sh" "$T"
+h11_block k "./target/release/deps/aien_daemon-0123abcd --include-ignored" "$T"
+h11_block k "target/aarch64-unknown-linux-gnu/debug/deps/x-1" "$T"
+h11_block l "tests/quietlock/run.sh" "$T"
+h11_block l "sh tests/run.sh" "$T"
+h11_block m "./build/store_test" "$T"
+h11_block n "timeout 900 ./target/release/deps/m19-77aa" "$T"
+h11_block o "bash scripts/run_tests.sh" "$T"
+h11_allow p "bash $SD/harmless.sh"
+h11_allow p "$SD/harmless.sh"
+h11_allow q "cat $SD/heavy.sh"
+h11_allow q "grep -n cargo $SD/heavy.sh tests/x.txt"
+h11_allow q "sed -n 1,5p scripts/test-linked-compose.sh" "$T"
+h11_allow q "ls target/release/deps/ tests/"
+h11_allow q "git diff -- tests/ scripts/test-x.sh"
+h11_allow v "git diff origin/main...pr -- crates ':!**/tests/**' | grep x"
+h11_allow v "cmp <(git show origin/main:specs/keys/k) ~/w/native/tests/fixtures/keys/k"
+h11_allow v "X=\$(cd a && pwd)/tests/runtime/m.c; cat \$X"
+h11_allow v "cat \${HOME}/w/tests/notes.txt"
+h11_block w "bash \${HOME}/w/scripts/test-x.sh"
+h11_allow r "bash -n $SD/heavy.sh"
+h11_allow s "quietlock hold --owner me --minutes 5 -- bash $SD/heavy.sh"
+h11_allow t "QUIETLOCK_HOLD=qOTHER-1-0 bash $SD/heavy.sh"
+h11_allow t "QUIETLOCK_HOLD=qOTHER-1-0 ./target/release/deps/x-1" "$T"
+reset
+h11_allow u "bash $SD/heavy.sh"
+h11_allow u "./target/release/deps/x-1" "$T"
 fi
 
 
