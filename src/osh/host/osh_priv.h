@@ -10,4 +10,7 @@ int osh_write_all(int fd, const char *buf, size_t n);
 /* Run builtin c->builtin_id with io[0..2] as its stdin/out/err. in_parent: effects on the session are real.
  * Returns the builtin's exit status. May set s->exit_requested (parent only). */
 int osh_builtin_run(OshSession *s, const OshCmd *c, const int io[3], int in_parent);
+/* Gate one effect through s->effect_hook (no hook: allowed). Returns OSH_E_OK, or the denial after writing a named
+ * diagnostic to diagfd ("<op> <path>: denied (NAME); nothing was done"). Call immediately before the syscall. */
+int osh_effect_check(const OshSession *s, int op, const char *path, int diagfd);
 #endif

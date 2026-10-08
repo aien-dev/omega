@@ -9,12 +9,13 @@
 #   make test-osh-parse   check + parser driver (lexer + parser units, reference tokenizer + parser), plain and ASan/UBSan
 ifndef OSH_MK
 OSH_MK := 1
-.PHONY: osh-gen osh-gen-check test-osh-lex test-osh-parse osh-bash-verify
+.PHONY: osh-gen osh-gen-check test-osh-lex test-osh-parse test-osh-expand osh test-osh-e2e osh-bash-verify
 OSH_DIR = $(OUT_DIR)/osh
 OSH_FUZZ ?= 100000
 OSH_GEN = src/osh/osh_gen.sh
 OSH_GEN_ARGS = src/osh/osh_layout.lst src/osh/osh_lex.osc.in src/osh/osh_lex.osc src/osh/osh_layout.h
 OSH_GEN_ARGS_P = src/osh/osh_layout.lst src/osh/osh_parse.osc.in src/osh/osh_parse.osc src/osh/osh_layout.h
+OSH_GEN_ARGS_X = src/osh/osh_layout.lst src/osh/osh_expand.osc.in src/osh/osh_expand.osc src/osh/osh_layout.h
 OSH_SRCS = tests/osh/test_osh_lex.c src/osh/osh_lex_ref.c $(OSC_LIB)
 OSH_PSRCS = tests/osh/test_osh_parse.c src/osh/osh_lex_ref.c src/osh/osh_parse_ref.c $(OSC_LIB)
 OSH_HDRS = src/osh/osh_layout.h src/osh/osh_lex_ref.h src/osh/osh_parse_ref.h $(OSC_HDRS)
@@ -23,6 +24,7 @@ OSH_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -Isrc -Isrc/compiler 
 osh-gen:
 	sh $(OSH_GEN) gen $(OSH_GEN_ARGS)
 	sh $(OSH_GEN) gen $(OSH_GEN_ARGS_P)
+	sh $(OSH_GEN) gen $(OSH_GEN_ARGS_X)
 
 osh-bash-verify:
 	bash tests/osh/vectors/bash_verify.sh
@@ -30,6 +32,7 @@ osh-bash-verify:
 osh-gen-check:
 	sh $(OSH_GEN) check $(OSH_GEN_ARGS)
 	sh $(OSH_GEN) check $(OSH_GEN_ARGS_P)
+	sh $(OSH_GEN) check $(OSH_GEN_ARGS_X)
 
 $(OSH_DIR)/test_osh_lex: $(OSH_SRCS) $(OSH_HDRS)
 	@mkdir -p $(OSH_DIR)
@@ -60,4 +63,56 @@ test-osh-parse: osh-gen-check $(OSH_DIR)/test_osh_parse $(OSH_DIR)/test_osh_pars
 	$(abspath $(OSH_DIR)/test_osh_parse_asan) src/osh/osh_lex.osc src/osh/osh_parse.osc tests/osh/vectors tests/osh/parse_vectors $(OSH_FUZZ) > $(OSH_DIR)/parse_asan.out
 	@tail -3 $(OSH_DIR)/parse_asan.out; tail -1 $(OSH_DIR)/parse_asan.out | grep -q '^OSH_PARSE_PASS$$'
 	@echo "test-osh-parse: PASS (lexer + parser units; interp + native + C reference lexer and parser + chunked + vectors + fuzz; plain and ASan/UBSan)"
+
+OSH_XSRCS = tests/osh/test_osh_expand.c src/osh/osh_lex_ref.c src/osh/osh_parse_ref.c src/osh/osh_expand_ref.c src/osh/host/osh_core.c src/osh/host/osh_codes.c src/osh/host/osh_req.c $(OSC_LIB)
+OSH_XHDRS = $(OSH_HDRS) src/osh/osh_expand_ref.h src/osh/host/osh_core.h src/osh/host/osh_host.h
+OSH_XFLAGS = $(OSH_FLAGS) -Isrc/osh/host -Isrc/runtime
+
+$(OSH_DIR)/test_osh_expand: $(OSH_XSRCS) $(OSH_XHDRS)
+	@mkdir -p $(OSH_DIR)
+	$(CC) $(OSH_XFLAGS) -O2 -o $@ $(OSH_XSRCS)
+
+$(OSH_DIR)/test_osh_expand_asan: $(OSH_XSRCS) $(OSH_XHDRS)
+	@mkdir -p $(OSH_DIR)
+	$(CC) $(OSH_XFLAGS) $(OSC_ASAN) -o $@ $(OSH_XSRCS)
+
+test-osh-expand: osh-gen-check $(OSH_DIR)/test_osh_expand $(OSH_DIR)/test_osh_expand_asan
+	$(abspath $(OSH_DIR)/test_osh_expand) src/osh/osh_lex.osc src/osh/osh_parse.osc src/osh/osh_expand.osc tests/osh/vectors $(OSH_FUZZ) > $(OSH_DIR)/expand.out
+	@tail -16 $(OSH_DIR)/expand.out; tail -1 $(OSH_DIR)/expand.out | grep -q '^OSH_EXPAND_PASS$$'
+	$(abspath $(OSH_DIR)/test_osh_expand_asan) src/osh/osh_lex.osc src/osh/osh_parse.osc src/osh/osh_expand.osc tests/osh/vectors $(OSH_FUZZ) > $(OSH_DIR)/expand_asan.out
+	@tail -3 $(OSH_DIR)/expand_asan.out; tail -1 $(OSH_DIR)/expand_asan.out | grep -q '^OSH_EXPAND_PASS$$'
+	@echo "test-osh-expand: PASS"
+
+OSH_UNIT_SRCS = src/osh/osh_lex.osc src/osh/osh_parse.osc src/osh/osh_expand.osc
+OSH_PROG_HOSTSRCS = $(wildcard src/osh/host/osh_*.c)
+OSH_BIN_SRCS = $(OSH_DIR)/osh_units.c $(filter-out src/osh/host/osh_codes.c,$(OSH_PROG_HOSTSRCS)) src/osh/host/osh_codes.c $(OSC_LIB) src/runtime/rx_caproot.c
+
+# the three unit sources become C arrays (od + sed, no scripting language)
+$(OSH_DIR)/osh_units.c: $(OSH_UNIT_SRCS)
+	@mkdir -p $(OSH_DIR)
+	{ echo "#include <stddef.h>"; \
+	  for u in lex parse expand; do \
+	    echo "const unsigned char osh_unit_$$u[] = {"; \
+	    od -An -v -tu1 src/osh/osh_$$u.osc | sed 's/^ *//; s/  */,/g; s/$$/,/'; \
+	    echo "0};"; \
+	    echo "const size_t osh_unit_$${u}_len = sizeof osh_unit_$$u - 1;"; \
+	  done; } > $@
+
+$(OSH_DIR)/osh: $(OSH_BIN_SRCS) $(OSH_XHDRS) src/osh/host/osh_shell.h src/osh/host/osh_priv.h
+	$(CC) $(OSH_XFLAGS) -O2 -o $@ $(OSH_BIN_SRCS)
+
+osh: $(OSH_DIR)/osh
+
+$(OSH_DIR)/argprint: tests/osh/e2e/argprint.c
+	@mkdir -p $(OSH_DIR)
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -O2 -o $@ $<
+
+$(OSH_DIR)/test_osh_e2e: tests/osh/e2e/test_osh_e2e.c
+	@mkdir -p $(OSH_DIR)
+	$(CC) -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -o $@ $<
+
+test-osh-e2e: osh-gen-check $(OSH_DIR)/osh $(OSH_DIR)/argprint $(OSH_DIR)/test_osh_e2e
+	$(abspath $(OSH_DIR)/test_osh_e2e) $(abspath $(OSH_DIR)/osh) $(abspath $(OSH_DIR)/argprint) > $(OSH_DIR)/e2e.out
+	@tail -3 $(OSH_DIR)/e2e.out; tail -1 $(OSH_DIR)/e2e.out | grep -q '^OSH_E2E_PASS$$'
+	@echo "test-osh-e2e: PASS"
 endif

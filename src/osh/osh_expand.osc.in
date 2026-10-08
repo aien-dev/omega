@@ -1,0 +1,665 @@
+// osh expander unit (aien-architecture#158, cut 4c): bounded, resumable parameter expansion, quote removal, field
+// splitting and request-record writer. Entry: expand_run(inp, w). Contract: aien-protocols
+// specs/osh-platform/OSH_PLATFORM_ABI.md (v1 DRAFT) sections 5 to 7; design: handoffs/osh-audit/E-parser-design.md
+// section 4. Needs the external slices (OSC-EXT-BYTES).
+//
+// It reads the token records (lexer) and the command and pipeline tables (parser) the earlier units left in the same
+// workspace, expands ONE pipeline at a time (the host runs it and updates $? before the next call), and writes the
+// request record (ABI 7.1) at REQUEST, with the expanded bytes (1 byte per cell) at OUT.
+//
+// expand_run returns one status:
+//   103 PIPELINE_READY  the request record is valid (header, ncmds blocks of 164 cells, OUT bytes); execute it, write
+//                       the pipeline status to S_LAST_STATUS, then call expand_run again
+//   104 COMPLETE        no pipeline of the list is left (also: a blank list)
+//   102 NEED_VAR        a variable is wanted: S_VR_KIND (1 NAME at S_VR_A/S_VR_LEN in inp, 2 $?, 3 positional S_VR_A,
+//                       4 $#, 5 positional count only) ; the host writes STAGING {found, len, npos, 0, bytes...} and calls
+//                       expand_run again. The core writes STAGING[0] = 2 (unanswered) with the request; a repeated call
+//                       while STAGING[0] is still above 1 returns 102 again and changes nothing (idempotent).
+//   101 BUDGET_EXHAUSTED  @EXP_BUDGET@ steps spent (a step is one raw byte, one value byte or one token), call again
+//   209 CAP_FIELDS 210 CAP_OUT 211 CAP_VALUE 212 CAP_VARREQ 243 AMBIGUOUS_REDIRECT 244 VALUE_NUL 245 VALUE_GLOB
+//   239 UNSUPPORTED_BUILTIN (argv[0] after expansion is set eval exec . source trap shift read return break continue
+//   local readonly alias wait : declare typeset let command type umask hash ulimit getopts jobs pushd popd dirs
+//   history unalias fg bg builtin enable shopt mapfile times caller disown suspend logout bind help compgen complete
+//   fc compopt;
+//   names over 8 bytes such as readarray are not caught)  213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH
+//   217 ABI_RESERVED (also: the parser has not completed the list, or an expander cell is corrupt)
+// A refusal stores code and the byte offset of the word being expanded (the command word start for 239) in the session
+// and makes it terminal (phase 255); a repeated call returns the same code. Pipelines before it were already returned.
+//
+// Pipeline selection (unless the host set S_NOSKIP = 1, which emits every pipeline): pipeline p > 0 runs iff the connector after pipeline p-1 allows it given S_LAST_STATUS (&& needs 0,
+// || needs nonzero, ; always); a skipped pipeline is never expanded and S_LAST_STATUS is unchanged, so the next
+// connector sees the same status (left to right, as a POSIX list).
+//
+// Expansion per word, one pass over the raw token bytes: backslash removal (unquoted: \x gives x; in "": only \$ \" \\
+// \` and backslash-newline are escapes, other backslashes stay), '' and "" removal, backslash-newline removal, and
+// $NAME ${NAME} $0..$9 ${0..9} $? $# $@ $*. Field splitting is by the fixed IFS (space, tab, newline) and only for unquoted
+// expansions in command words and redirection targets. An unquoted expansion result byte * ? [ is VALUE_GLOB.
+// Empty rules: '' and "" and "$X" keep one empty field; an unquoted expansion that is empty or all IFS adds none;
+// "$@" with no positionals adds none; "a$@b" with none is ab. Assignment values (NAME=value before the command word) are
+// expanded without splitting and without the glob check; $@ and $* there join the positionals with one space. In a
+// standalone assignment list (no command word) a later value sees an earlier value of the same name.
+// A redirection target must expand to exactly one field (AMBIGUOUS_REDIRECT otherwise). N>&M copies N and M.
+//
+// Word state lives in the session (EX_* cells); every step is atomic, so any call may be repeated after 101 and 102.
+
+// Record a refusal: code and byte offset into the session, session terminal. Returns the code.
+fn fail(w: cells, code: u64, off: u64) -> u64 {
+    w[@S_ERR_CODE@] = code;
+    w[@S_ERR_OFF@] = off;
+    w[@S_PHASE@] = 255;
+    return code;
+}
+
+// A refusal at the start of the word being expanded.
+fn werr(w: cells, code: u64) -> u64 {
+    return fail(w, code, w[@TOKENS@ + w[@EX_TOK@] * 4 + 1]);
+}
+
+// ABI header check (OSH_PLATFORM_ABI.md section 3): first failure wins, nothing is written.
+fn abi_check(w: cells) -> u64 {
+    if w.len < 2 { return 216; }
+    if w[@S_MAGIC@] != @ABI_MAGIC@ { return 214; }
+    if w[@S_VERSION@] != @ABI_VERSION@ { return 215; }
+    if w.len < @WS_CELLS@ { return 213; }
+    for j in @S_RESERVED@ .. 64 {
+        if w[j as u64] != 0 { return 217; }
+    }
+    if w[@S_EOI@] > 1 { return 217; }
+    return 0;
+}
+
+// 1 when c may be in a NAME (digits only when first is 0).
+fn nch(c: u64, first: u64) -> u64 {
+    if c >= 65 && c <= 90 { return 1; }
+    if c >= 97 && c <= 122 { return 1; }
+    if c == 95 { return 1; }
+    if first == 0 && c >= 48 && c <= 57 { return 1; }
+    return 0;
+}
+
+// End (exclusive) of the NAME that starts at p, below e.
+fn nend(inp: bytes, p: u64, e: u64) -> u64 {
+    let mut i: u64 = p + 1;
+    while i < e && nch(inp[i], 0) == 1 bound 4096 {
+        i = i + 1;
+    }
+    return i;
+}
+
+// The `$` at p (token ends at e): 1 when it starts a reference (EX_RK, S_VR_A, S_VR_LEN, EX_NEXT set), 0 when it is a
+// literal dollar. RK 8 is $@ and 9 is $*; begin_ref turns them into list modes.
+fn dollar(inp: bytes, w: cells, p: u64, e: u64) -> u64 {
+    if p + 1 >= e { return 0; }
+    let c: u64 = inp[p + 1];
+    w[@S_VR_LEN@] = 0;
+    w[@S_VR_A@] = 0;
+    if nch(c, 1) == 1 {
+        let n: u64 = nend(inp, p + 1, e);
+        w[@EX_RK@] = 1;
+        w[@S_VR_A@] = p + 1;
+        w[@S_VR_LEN@] = n - p - 1;
+        w[@EX_NEXT@] = n;
+        return 1;
+    }
+    if c >= 48 && c <= 57 {
+        w[@EX_RK@] = 3;
+        w[@S_VR_A@] = c - 48;
+        w[@EX_NEXT@] = p + 2;
+        return 1;
+    }
+    if c == 63 || c == 35 || c == 64 || c == 42 {
+        let mut rk: u64 = 2;
+        if c == 35 { rk = 4; }
+        if c == 64 { rk = 8; }
+        if c == 42 { rk = 9; }
+        w[@EX_RK@] = rk;
+        w[@EX_NEXT@] = p + 2;
+        return 1;
+    }
+    if c == 123 && p + 3 < e {
+        let d: u64 = inp[p + 2];
+        if d >= 48 && d <= 57 {
+            if inp[p + 3] != 125 { return 0; }
+            w[@EX_RK@] = 3;
+            w[@S_VR_A@] = d - 48;
+            w[@EX_NEXT@] = p + 4;
+            return 1;
+        }
+        if nch(d, 1) == 1 {
+            let n2: u64 = nend(inp, p + 2, e);
+            if n2 < e && inp[n2] == 125 {
+                w[@EX_RK@] = 1;
+                w[@S_VR_A@] = p + 2;
+                w[@S_VR_LEN@] = n2 - p - 2;
+                w[@EX_NEXT@] = n2 + 1;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+// First cell of the request block of the current command.
+fn cbase(w: cells) -> u64 {
+    return @REQUEST@ + 8 + w[@EX_CMD@] * @REQ_CMD_CELLS@;
+}
+
+// Open a field if none is open.
+fn fopen_(w: cells) {
+    if w[@EX_FOPEN@] == 0 {
+        w[@EX_FOPEN@] = 1;
+        w[@EX_FSTART@] = w[@EX_OUT@];
+    }
+}
+
+// Close the open field (if any): argv entry, or the single redirection target.
+fn fclose(w: cells) -> u64 {
+    if w[@EX_FOPEN@] == 0 { return 0; }
+    w[@EX_FOPEN@] = 0;
+    let wm: u64 = w[@EX_WM@];
+    if wm == 2 { return 0; }
+    let off: u64 = w[@EX_FSTART@];
+    let ln: u64 = w[@EX_OUT@] - off;
+    let cb: u64 = cbase(w);
+    if wm == 1 || wm == 4 {
+        let n: u64 = w[cb];
+        if n >= @CAP_FIELDS@ { return werr(w, 209); }
+        if n == 0 { w[@EX_A0@] = w[@TOKENS@ + w[@EX_TOK@] * 4 + 1]; }
+        w[cb + 4 + n * 2] = off;
+        w[cb + 5 + n * 2] = ln;
+        w[cb] = n + 1;
+        return 0;
+    }
+    if w[@EX_WNF@] != 0 { return werr(w, 243); }
+    w[@EX_WNF@] = 1;
+    let e: u64 = cb + 132 + (w[cb + 2] - 1) * 4;
+    w[e + 2] = off;
+    w[e + 3] = ln;
+    return 0;
+}
+
+// Append one byte to the open field (opening one if needed).
+fn lit(w: cells, c: u64) -> u64 {
+    let o: u64 = w[@EX_OUT@];
+    if o >= @CAP_OUT@ { return werr(w, 210); }
+    fopen_(w);
+    w[@OUT@ + o] = c;
+    w[@EX_OUT@] = o + 1;
+    return 0;
+}
+
+// One byte of an unquoted expansion result: an IFS byte ends the field, * ? [ are refused, anything else is literal.
+fn sbyte(w: cells, c: u64) -> u64 {
+    if c == 32 || c == 9 || c == 10 { return fclose(w); }
+    if c == 42 || c == 63 || c == 91 { return werr(w, 245); }
+    return lit(w, c);
+}
+
+// Ask the host for a variable (kind in S_VR_KIND, operands already in S_VR_A and S_VR_LEN).
+fn request(w: cells, kind: u64) -> u64 {
+    let n: u64 = w[@EX_NVREQ@];
+    if n >= @CAP_VARREQ@ { return werr(w, 212); }
+    w[@EX_NVREQ@] = n + 1;
+    w[@S_VR_KIND@] = kind;
+    w[@S_VR_SEQ@] = w[@S_VR_SEQ@] + 1;
+    w[@STAGING@] = 2;
+    w[@EX_PH@] = 2;
+    return 102;
+}
+
+// Cell of the latest earlier assignment entry of this command named inp[ns..ns+nl), or 0. Only in a command with no
+// command word, so that `A=1 B=$A` sees the new A (a prefix assignment sees the old value).
+fn find_prior(inp: bytes, w: cells, ns: u64, nl: u64) -> u64 {
+    let pb: u64 = @PIPES@ + w[@EX_PIPE@] * 4;
+    if w[@CMDS@ + (w[pb] + w[@EX_CMD@]) * 8 + 3] != 0 { return 0; }
+    let cb: u64 = cbase(w);
+    let na: u64 = w[cb + 1];
+    let mut hit: u64 = 0;
+    let mut j: u64 = 0;
+    while j + 1 < na bound 16 {
+        let e: u64 = cb + 68 + j * 4;
+        if w[e + 1] == nl {
+            let mut same: u64 = 1;
+            let mut i: u64 = 0;
+            while i < nl && same == 1 bound 4096 {
+                if inp[ns + i] != w[@OUT@ + w[e] + i] { same = 0; }
+                i = i + 1;
+            }
+            if same == 1 { hit = e; }
+        }
+        j = j + 1;
+    }
+    return hit;
+}
+
+// A reference was parsed (dollar): decide how its value is fetched. q is the quote state.
+fn begin_ref(inp: bytes, w: cells, q: u64) -> u64 {
+    let rk: u64 = w[@EX_RK@];
+    let wm: u64 = w[@EX_WM@];
+    let mut vm: u64 = 0;
+    if q == 0 && wm != 2 && wm != 4 { vm = 1; }
+    w[@EX_VM@] = vm;
+    // In "": $@ marks bit 1 and $* bit 2; a scalar reference marks bit 2 only when a value byte is copied (xval),
+    // so "$e$@" with no positionals gives no field (bash) while "$e" alone still gives one empty field.
+    if q == 2 {
+        if rk == 8 { w[@EX_DQF@] = w[@EX_DQF@] | 1; }
+        if rk == 9 { w[@EX_DQF@] = w[@EX_DQF@] | 2; }
+    }
+    if rk >= 8 {
+        let mut lk: u64 = 6;
+        if vm == 1 { lk = 5; }
+        if rk == 8 && q == 2 && wm != 2 && wm != 4 { lk = 7; }
+        w[@EX_RK@] = lk;
+        return request(w, 5);
+    }
+    if rk == 1 && wm == 2 {
+        let hit: u64 = find_prior(inp, w, w[@S_VR_A@], w[@S_VR_LEN@]);
+        if hit != 0 {
+            w[@EX_VCUR@] = @OUT@ + w[hit + 2];
+            w[@EX_VEND@] = @OUT@ + w[hit + 2] + w[hit + 3];
+            w[@EX_PH@] = 1;
+            return 0;
+        }
+    }
+    return request(w, rk);
+}
+
+// The host answered: STAGING holds the value (kind 1 to 4, or one positional of a list) or the positional count.
+fn answer(w: cells) -> u64 {
+    let f: u64 = w[@STAGING@];
+    if f > 1 { return 102; }
+    if w[@S_VR_KIND@] == 5 {
+        let np: u64 = w[@STAGING@ + 2];
+        w[@EX_NPOS@] = np;
+        w[@EX_K@] = 1;
+        if np == 0 {
+            w[@EX_POS@] = w[@EX_NEXT@];
+            w[@EX_PH@] = 0;
+            return 0;
+        }
+        w[@S_VR_A@] = 1;
+        w[@S_VR_LEN@] = 0;
+        return request(w, 3);
+    }
+    let mut ln: u64 = 0;
+    if f == 1 { ln = w[@STAGING@ + 1]; }
+    if ln > @CAP_VALUE@ { return werr(w, 211); }
+    w[@EX_VCUR@] = @STAGING@ + 4;
+    w[@EX_VEND@] = @STAGING@ + 4 + ln;
+    w[@EX_PH@] = 1;
+    if w[@EX_RK@] == 7 { fopen_(w); }
+    return 0;
+}
+
+// The value was copied completely: next positional of a list (with its separator), or back to the raw bytes.
+fn vdone(w: cells) -> u64 {
+    let rk: u64 = w[@EX_RK@];
+    let k: u64 = w[@EX_K@];
+    if rk >= 5 && k < w[@EX_NPOS@] {
+        let mut r: u64 = 0;
+        if rk == 6 {
+            r = lit(w, 32);
+        } else {
+            r = fclose(w);
+        }
+        if r != 0 { return r; }
+        w[@EX_K@] = k + 1;
+        w[@S_VR_A@] = k + 1;
+        w[@S_VR_LEN@] = 0;
+        return request(w, 3);
+    }
+    w[@EX_POS@] = w[@EX_NEXT@];
+    w[@EX_PH@] = 0;
+    return 0;
+}
+
+// One value byte.
+fn xval(w: cells) -> u64 {
+    let cur: u64 = w[@EX_VCUR@];
+    if cur >= w[@EX_VEND@] { return vdone(w); }
+    let c: u64 = w[cur];
+    if c == 0 || c > 255 { return werr(w, 244); }
+    w[@EX_VCUR@] = cur + 1;
+    if w[@EX_VM@] == 1 { return sbyte(w, c); }
+    if w[@EX_Q@] == 2 { w[@EX_DQF@] = w[@EX_DQF@] | 2; }
+    return lit(w, c);
+}
+
+// The word is complete: close its field, finish the assignment value, check the redirection target.
+fn wend(w: cells) -> u64 {
+    let r: u64 = fclose(w);
+    if r != 0 { return r; }
+    let wm: u64 = w[@EX_WM@];
+    if wm == 2 {
+        let e: u64 = cbase(w) + 4 + 64 + (w[cbase(w) + 1] - 1) * 4;
+        w[e + 3] = w[@EX_OUT@] - w[e + 2];
+    }
+    if wm == 3 && w[@EX_WNF@] == 0 { return werr(w, 243); }
+    w[@EX_WM@] = 0;
+    w[@EX_TOK@] = w[@EX_TOK@] + 1;
+    return 1;
+}
+
+// One raw byte of the word (or its end). 0 = go on, 1 = word complete, 102 = variable wanted, >= 200 = refusal.
+fn xraw(inp: bytes, w: cells) -> u64 {
+    let tb: u64 = @TOKENS@ + w[@EX_TOK@] * 4;
+    let e: u64 = w[tb + 1] + w[tb + 2];
+    let p: u64 = w[@EX_POS@];
+    if p >= e { return wend(w); }
+    let c: u64 = inp[p];
+    let q: u64 = w[@EX_Q@];
+    w[@EX_POS@] = p + 1;
+    if q == 1 {
+        if c == 39 {
+            w[@EX_Q@] = 0;
+            fopen_(w);
+            return 0;
+        }
+        return lit(w, c);
+    }
+    if c == 92 && p + 1 < e {
+        let d: u64 = inp[p + 1];
+        if d == 10 {
+            w[@EX_POS@] = p + 2;
+            return 0;
+        }
+        if q == 0 {
+            w[@EX_POS@] = p + 2;
+            return lit(w, d);
+        }
+        if d == 36 || d == 34 || d == 92 || d == 96 {
+            w[@EX_POS@] = p + 2;
+            w[@EX_DQF@] = w[@EX_DQF@] | 2;
+            return lit(w, d);
+        }
+    }
+    if q == 2 && c == 34 {
+        w[@EX_Q@] = 0;
+        let f: u64 = w[@EX_DQF@];
+        if (f & 2) != 0 || (f & 1) == 0 { fopen_(w); }
+        w[@EX_DQF@] = 0;
+        return 0;
+    }
+    if q == 0 && c == 34 {
+        w[@EX_Q@] = 2;
+        w[@EX_DQF@] = 0;
+        return 0;
+    }
+    if q == 0 && c == 39 {
+        w[@EX_Q@] = 1;
+        return 0;
+    }
+    if c == 36 && dollar(inp, w, p, e) == 1 {
+        w[@EX_POS@] = p;
+        return begin_ref(inp, w, q);
+    }
+    if q == 2 { w[@EX_DQF@] = w[@EX_DQF@] | 2; }
+    return lit(w, c);
+}
+
+// Start a word: mode 1 argv, 2 assignment value, 3 redirection target, 4 argv word NAME=v of export (expanded as
+// an assignment: no splitting, no glob refusal of values, $@ joined); raw cursor at pos.
+fn wset(w: cells, mode: u64, pos: u64) {
+    w[@EX_WM@] = mode;
+    w[@EX_PH@] = 0;
+    w[@EX_POS@] = pos;
+    w[@EX_Q@] = 0;
+    w[@EX_FOPEN@] = 0;
+    w[@EX_DQF@] = 0;
+    w[@EX_WNF@] = 0;
+}
+
+// The assignment word at token tb: copy its name to OUT, record the entry, start its value.
+fn start_assign(inp: bytes, w: cells, tb: u64) -> u64 {
+    let s: u64 = w[tb + 1];
+    let aux: u64 = w[tb + 3];
+    if aux <= s + 1 { return fail(w, 217, s); }
+    let nl: u64 = aux - 1 - s;
+    let cb: u64 = cbase(w);
+    let na: u64 = w[cb + 1];
+    if na >= 16 { return fail(w, 207, s); }
+    let o: u64 = w[@EX_OUT@];
+    if o + nl > @CAP_OUT@ { return fail(w, 210, s); }
+    let mut i: u64 = 0;
+    while i < nl bound 4096 {
+        w[@OUT@ + o + i] = inp[s + i];
+        i = i + 1;
+    }
+    w[@EX_OUT@] = o + nl;
+    let e: u64 = cb + 68 + na * 4;
+    w[e] = o;
+    w[e + 1] = nl;
+    w[e + 2] = o + nl;
+    w[e + 3] = 0;
+    w[cb + 1] = na + 1;
+    wset(w, 2, aux);
+    return 0;
+}
+
+// The redirection operator at token t (kind k): record the entry; N>&M is complete, others start the target word.
+fn start_redir(inp: bytes, w: cells, t: u64, k: u64) -> u64 {
+    let tb: u64 = @TOKENS@ + t * 4;
+    let s: u64 = w[tb + 1];
+    let cb: u64 = cbase(w);
+    let r: u64 = w[cb + 2];
+    if r >= 8 { return fail(w, 208, s); }
+    if t + 1 >= w[@LX_NTOK@] { return fail(w, 217, s); }
+    let ub: u64 = tb + 4;
+    if (w[ub] & 255) != 1 { return fail(w, 217, s); }
+    w[cb + 2] = r + 1;
+    let e: u64 = cb + 132 + r * 4;
+    let mut kind: u64 = 1;
+    if k == 7 { kind = 2; }
+    if k == 8 { kind = 3; }
+    if k == 10 || k == 11 { kind = 4; }
+    w[e] = kind;
+    w[e + 1] = w[tb + 3];
+    if kind == 4 {
+        let d: u64 = inp[w[ub + 1]];
+        if d < 48 || d > 50 { return fail(w, 217, s); }
+        w[e + 2] = d - 48;
+        w[@EX_TOK@] = t + 2;
+        return 0;
+    }
+    wset(w, 3, w[ub + 1]);
+    w[@EX_TOK@] = t + 1;
+    return 0;
+}
+
+// The first bytes of an OUT field packed big-endian; 0 for an empty field or one longer than 8 bytes.
+fn pack8o(w: cells, off: u64, n: u64) -> u64 {
+    if n == 0 || n > 8 { return 0; }
+    let mut v: u64 = 0;
+    let mut i: u64 = 0;
+    while i < n bound 8 {
+        v = (v << 8) | w[@OUT@ + off + i];
+        i = i + 1;
+    }
+    return v;
+}
+
+// 1 to 6 builtin id (cd pwd printf export unset exit), 99 unsupported builtin, 0 external.
+fn classify(v: u64) -> u64 {
+    if v == 0x6364 { return 1; }
+    if v == 0x707764 { return 2; }
+    if v == 0x7072696e7466 { return 3; }
+    if v == 0x6578706f7274 { return 4; }
+    if v == 0x756e736574 { return 5; }
+    if v == 0x65786974 { return 6; }
+    if v == 0x736574 || v == 0x6576616c || v == 0x65786563 || v == 0x2e || v == 0x736f75726365 { return 99; }
+    if v == 0x74726170 || v == 0x7368696674 || v == 0x72656164 || v == 0x72657475726e { return 99; }
+    if v == 0x627265616b || v == 0x636f6e74696e7565 || v == 0x6c6f63616c { return 99; }
+    if v == 0x726561646f6e6c79 || v == 0x616c696173 || v == 0x77616974 { return 99; }
+    // more bash builtins: : declare typeset let command type umask hash ulimit getopts jobs pushd popd dirs history
+    // unalias fg bg builtin enable shopt mapfile times caller disown suspend logout bind help compgen complete fc compopt
+    if v == 0x3a || v == 0x6465636c617265 || v == 0x74797065736574 || v == 0x6c6574 || v == 0x636f6d6d616e64 { return 99; }
+    if v == 0x74797065 || v == 0x756d61736b || v == 0x68617368 || v == 0x756c696d6974 || v == 0x6765746f707473 { return 99; }
+    if v == 0x6a6f6273 || v == 0x7075736864 || v == 0x706f7064 || v == 0x64697273 || v == 0x686973746f7279 { return 99; }
+    if v == 0x756e616c696173 || v == 0x6667 || v == 0x6267 || v == 0x6275696c74696e || v == 0x656e61626c65 { return 99; }
+    if v == 0x73686f7074 || v == 0x6d617066696c65 || v == 0x74696d6573 || v == 0x63616c6c6572 || v == 0x6469736f776e { return 99; }
+    if v == 0x73757370656e64 || v == 0x6c6f676f7574 || v == 0x62696e64 || v == 0x68656c70 || v == 0x636f6d7067656e { return 99; }
+    if v == 0x636f6d706c657465 || v == 0x6663 || v == 0x636f6d706f7074 { return 99; }
+    return 0;
+}
+
+// The pipeline is fully expanded: header, state, status.
+fn pipe_ready(w: cells) -> u64 {
+    let pb: u64 = @PIPES@ + w[@EX_PIPE@] * 4;
+    w[@REQUEST@] = @REC_MAGIC@;
+    w[@REQUEST@ + 1] = w[pb + 1];
+    w[@REQUEST@ + 2] = w[pb + 2];
+    w[@REQUEST@ + 3] = 0;
+    w[@REQUEST@ + 4] = w[@EX_OUT@];
+    w[@REQUEST@ + 5] = @ABI_VERSION@;
+    w[@EX_ST@] = 2;
+    return 103;
+}
+
+// All tokens of the command are expanded: classify argv[0], go to the next command or finish the pipeline.
+fn cmd_end(w: cells) -> u64 {
+    let cb: u64 = cbase(w);
+    if w[cb] > 0 {
+        let b: u64 = classify(pack8o(w, w[cb + 4], w[cb + 5]));
+        if b == 99 { return fail(w, 239, w[@EX_A0@]); }
+        w[cb + 3] = b;
+    }
+    let pb: u64 = @PIPES@ + w[@EX_PIPE@] * 4;
+    let c: u64 = w[@EX_CMD@] + 1;
+    if c >= w[pb + 1] { return pipe_ready(w); }
+    w[@EX_CMD@] = c;
+    w[@EX_TOK@] = w[@CMDS@ + (w[pb] + c) * 8];
+    w[@EX_ANYW@] = 0;
+    return 0;
+}
+
+// 1 when argv[0] of this command is the plain word `export` (raw bytes `export` then a blank, value `export`): bash
+// expands its NAME=value arguments as assignments, so their values are not split (mode 4).
+fn is_export(inp: bytes, w: cells) -> u64 {
+    let cb: u64 = cbase(w);
+    if w[cb] == 0 { return 0; }
+    if pack8o(w, w[cb + 4], w[cb + 5]) != 0x6578706f7274 { return 0; }
+    let a: u64 = w[@EX_A0@];
+    if a + 6 >= inp.len { return 0; }
+    let mut v: u64 = 0;
+    let mut i: u64 = 0;
+    while i < 6 bound 6 {
+        v = (v << 8) | inp[a + i];
+        i = i + 1;
+    }
+    if v != 0x6578706f7274 { return 0; }
+    let d: u64 = inp[a + 6];
+    if d == 32 || d == 9 { return 1; }
+    return 0;
+}
+
+// Between words: classify the next token of the command and start it.
+fn next_task(inp: bytes, w: cells) -> u64 {
+    let pb: u64 = @PIPES@ + w[@EX_PIPE@] * 4;
+    let cmb: u64 = @CMDS@ + (w[pb] + w[@EX_CMD@]) * 8;
+    let t: u64 = w[@EX_TOK@];
+    if t >= w[cmb + 1] { return cmd_end(w); }
+    let tb: u64 = @TOKENS@ + t * 4;
+    let hdr: u64 = w[tb];
+    let k: u64 = hdr & 255;
+    if k == 1 {
+        if ((hdr >> 8) & 16) != 0 && w[@EX_ANYW@] == 0 { return start_assign(inp, w, tb); }
+        let mut m: u64 = 1;
+        if ((hdr >> 8) & 16) != 0 && is_export(inp, w) == 1 { m = 4; }
+        w[@EX_ANYW@] = 1;
+        wset(w, m, w[tb + 1]);
+        return 0;
+    }
+    if k == 6 || k == 7 || k == 8 || k == 10 || k == 11 { return start_redir(inp, w, t, k); }
+    return fail(w, 217, w[tb + 1]);
+}
+
+// Begin pipeline p: clear its request block and the per-pipeline state.
+fn pipe_begin(w: cells, p: u64) {
+    let pb: u64 = @PIPES@ + p * 4;
+    let n: u64 = 8 + w[pb + 1] * @REQ_CMD_CELLS@;
+    let mut i: u64 = 0;
+    while i < n bound 1320 {
+        w[@REQUEST@ + i] = 0;
+        i = i + 1;
+    }
+    w[@EX_CMD@] = 0;
+    w[@EX_TOK@] = w[@CMDS@ + w[pb] * 8];
+    w[@EX_NVREQ@] = 0;
+    w[@EX_OUT@] = 0;
+    w[@EX_ANYW@] = 0;
+    w[@EX_WM@] = 0;
+    w[@EX_PH@] = 0;
+    w[@EX_ST@] = 1;
+}
+
+// Pick the next pipeline that runs (connector rules). 0 = begun, 104 = none left.
+fn next_pipe(w: cells) -> u64 {
+    let np: u64 = w[@PX_NPIPE@];
+    let mut p: u64 = w[@EX_PIPE@];
+    let mut go: u64 = 0;
+    while p < np && go == 0 bound 16 {
+        go = 1;
+        if p > 0 && w[@S_NOSKIP@] == 0 {
+            let cn: u64 = w[@PIPES@ + (p - 1) * 4 + 2];
+            let ls: u64 = w[@S_LAST_STATUS@];
+            if cn == 2 && ls != 0 { go = 0; }
+            if cn == 3 && ls == 0 { go = 0; }
+        }
+        if go == 0 { p = p + 1; }
+    }
+    w[@EX_PIPE@] = p;
+    if p >= np {
+        w[@EX_ST@] = 3;
+        return 104;
+    }
+    pipe_begin(w, p);
+    return 0;
+}
+
+fn expand_run(inp: bytes, w: cells) -> u64 {
+    let ac: u64 = abi_check(w);
+    if ac != 0 { return ac; }
+    if w[@S_PHASE@] == 255 { return w[@S_ERR_CODE@]; }
+    if w[@PX_STATE@] != 4 { return 217; }
+    if w[@EX_INIT@] == 0 {
+        for j in 29 .. 34 {
+            w[j as u64] = 0;
+        }
+        for j in 12 .. 27 {
+            if j != 17 && j != 25 { w[j as u64] = 0; }
+        }
+        w[@EX_INIT@] = 1;
+    }
+    if w[@EX_ST@] > 3 || w[@EX_PIPE@] > w[@PX_NPIPE@] { return 217; }
+    if w[@EX_ST@] == 3 { return 104; }
+    if w[@EX_ST@] == 2 {
+        w[@EX_PIPE@] = w[@EX_PIPE@] + 1;
+        w[@EX_ST@] = 0;
+    }
+    if w[@EX_ST@] == 0 {
+        let nr: u64 = next_pipe(w);
+        if nr != 0 { return nr; }
+    }
+    let mut n: u64 = 0;
+    let mut rc: u64 = 0;
+    while rc == 0 && n < @EXP_BUDGET@ bound @EXP_BUDGET@ {
+        if w[@EX_WM@] == 0 {
+            rc = next_task(inp, w);
+        } else {
+            let ph: u64 = w[@EX_PH@];
+            if ph == 1 {
+                rc = xval(w);
+            } else {
+                if ph == 2 {
+                    rc = answer(w);
+                } else {
+                    rc = xraw(inp, w);
+                }
+            }
+            if rc == 1 { rc = 0; }
+        }
+        n = n + 1;
+    }
+    if rc != 0 { return rc; }
+    return 101;
+}

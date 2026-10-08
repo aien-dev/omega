@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-08T12:48:01Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:97c53eecc61307ddcd838ba005820fa8091ea06d97ad6427776a141a0616c1a1",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 2,
+      "generated_at_commit": "d7d05accee768664b8ea131a7bf90addec549d81",
+      "source_tree": "sha256:56c143bfad03bfd9c946907c1c1a9484a9f96d725a53d89a42857a6e25064619"
+    }
+  },
+  "name": "osh-e2e",
+  "purpose": "end-to-end tests of the osh program: argprint helper plus a runner comparing native and OSH_INTERP=1 (arch#158)",
+  "schema_version": "1.0.0"
+}
