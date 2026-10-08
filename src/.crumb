@@ -79,8 +79,8 @@
           "purpose": "M21 OMEGA_AUTODIFF: reverse-mode tape over M20 tensor CPU ops, caller-owned nodes and scratch, p"
         },
         {
-          "digest": "ef29fa8b90425887606c78d29543ee0bfb81fb211c9c6daf231d235373cf9c0c",
-          "last_commit": "6eaac64",
+          "digest": "18e933f213d7958215bb0ecf09116e5c21d3b335cfdabc1ffbf7a2a4e98b5250",
+          "last_commit": "f7b4389",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
         },
@@ -115,10 +115,10 @@
           "purpose": "Directory src/language. Purpose not yet described by a human."
         },
         {
-          "digest": "986220974c320f3715426ea78d8d36a715ee925960a14fa631dafc9409b280b8",
-          "last_commit": "468174d",
+          "digest": "6b81c4377289e3f6bbc60b5a4e743cf365ba9ab9f733fd540dc2d0f50accd104",
+          "last_commit": "1a07c65",
           "name": "osh",
-          "purpose": "osh (Omega-native shell, arch#158) lexer, parser and expander units: layout list, generator, osh"
+          "purpose": "osh (Omega-native shell, arch#158) lexer unit: layout list, generator, osh_lex.osc, C reference "
         },
         {
           "digest": "8383106b5d1b3adbc44b8e837a5d1f5ff6699a6d54070068e36716b2a32390d5",
@@ -175,15 +175,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:e3cf8a5a1a04096ec2f41ef76fa74d528adea1048b62374cb46ea6c654240674",
-      "compiled_at": "2026-10-08T03:58:01Z",
+      "children_root": "sha256:572c382da3eea1916448b423a7932e9cdef76621af2102c012a9c6169fb1107b",
+      "compiled_at": "2026-10-08T12:37:53Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:4cfd93dbf50d5525f415b3f1a7e7a52f3157ce11869227e75aea52608b4b5109",
+      "digest": "sha256:8e7d71ad494e8bd7c21cbc98b4ee8f1d065790416a1ec14575cd9191d78320f8",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 441,
-      "generated_at_commit": "79a8be6ae6414b456b705e625df2c7f150d1129a",
-      "source_tree": "sha256:49935d93c1aceb224f134dc97f4cf1c4f57f6e8f2190a38928d1fe9f49ec014c"
+      "generated_at_commit": "1a07c651c0e0e4a743c86a920e43496c0ad54513",
+      "source_tree": "sha256:6eff782422f7c3b90de66638616e6063e135de922555451bab4b533c288e9fe5"
     },
     "owner_lane": "",
     "provenance": {

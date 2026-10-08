@@ -52,4 +52,12 @@ c49 same out:[a][b]|errmark|out:[x=]|errmark
 c50 same out:[TMP/prel.sh]|errmark|out:[x=]|errmark
 c51 same out:[a$]|errmark|out:[x=]|errmark
 c52 same ./in.sh: line N: syntax error near unexpected token `|'|out:[x=]|errmark
-vectors: 52, mismatches: 0 (GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu))
+c53 same out:[]|errmark|out:[x=]|errmark|file f:
+c54 same out:[]|errmark|out:[x=]|errmark|file f:
+c55 same ./in.sh: line N: f: No such file or directory|out:[x=]|errmark
+c56 same errmark|out:[x=]|errmark|file f:out:[{fd}]
+c57 same errmark|out:[x=]|errmark|file f:out:[x{fd}]
+c58 same errmark|out:[x=]|errmark|file f:out:[{1x}]
+c59 same out:[]|errmark|out:[x=]|errmark
+c60 same errmark|out:[x=]|errmark|file f:out:[{a-b}]
+vectors: 60, mismatches: 0 (GNU bash, version 5.2.21(1)-release (aarch64-unknown-linux-gnu))

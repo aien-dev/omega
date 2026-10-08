@@ -1,4 +1,4 @@
-/* osh_codes.c -- names of the refusal codes (OSH_PLATFORM_ABI.md section 5.3, plus the local 236, 246 to 249). */
+/* osh_codes.c -- names of the refusal codes (OSH_PLATFORM_ABI.md section 5.3, plus the local 236, 246 to 250). */
 #include "osh_core.h"
 
 const char *osh_code_name(unsigned code)
@@ -13,7 +13,7 @@ const char *osh_code_name(unsigned code)
         [232] = "FD_RANGE", [233] = "IF_COMPOUND", [234] = "LOOP", [235] = "CASE", [236] = "GROUP",
         [237] = "FUNCTION", [238] = "NEGATION", [239] = "UNSUPPORTED_BUILTIN", [240] = "IFS_ASSIGN",
         [241] = "SYNTAX_EMPTY_CMD", [242] = "SYNTAX_REDIR_TARGET", [243] = "AMBIGUOUS_REDIRECT", [244] = "VALUE_NUL",
-        [245] = "VALUE_GLOB", [246] = "BRACE_EXPANSION", [247] = "POSITIONAL_RANGE", [248] = "SYNTAX_EOF", [249] = "APPEND_ASSIGN",
+        [245] = "VALUE_GLOB", [246] = "BRACE_EXPANSION", [247] = "POSITIONAL_RANGE", [248] = "SYNTAX_EOF", [249] = "APPEND_ASSIGN", [250] = "FD_VARIABLE",
     };
     if (code >= sizeof t / sizeof t[0]) return NULL;
     return t[code];

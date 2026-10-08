@@ -18,7 +18,10 @@
 //   101 BUDGET_EXHAUSTED  @EXP_BUDGET@ steps spent (a step is one raw byte, one value byte or one token), call again
 //   209 CAP_FIELDS 210 CAP_OUT 211 CAP_VALUE 212 CAP_VARREQ 243 AMBIGUOUS_REDIRECT 244 VALUE_NUL 245 VALUE_GLOB
 //   239 UNSUPPORTED_BUILTIN (argv[0] after expansion is set eval exec . source trap shift read return break continue
-//   local readonly alias wait)  213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH
+//   local readonly alias wait : declare typeset let command type umask hash ulimit getopts jobs pushd popd dirs
+//   history unalias fg bg builtin enable shopt mapfile times caller disown suspend logout bind help compgen complete
+//   fc compopt;
+//   names over 8 bytes such as readarray are not caught)  213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH
 //   217 ABI_RESERVED (also: the parser has not completed the list, or an expander cell is corrupt)
 // A refusal stores code and the byte offset of the word being expanded (the command word start for 239) in the session
 // and makes it terminal (phase 255); a repeated call returns the same code. Pipelines before it were already returned.
@@ -158,7 +161,7 @@ fn fclose(w: cells) -> u64 {
     let off: u64 = w[@EX_FSTART@];
     let ln: u64 = w[@EX_OUT@] - off;
     let cb: u64 = cbase(w);
-    if wm == 1 {
+    if wm == 1 || wm == 4 {
         let n: u64 = w[cb];
         if n >= @CAP_FIELDS@ { return werr(w, 209); }
         if n == 0 { w[@EX_A0@] = w[@TOKENS@ + w[@EX_TOK@] * 4 + 1]; }
@@ -234,19 +237,18 @@ fn begin_ref(inp: bytes, w: cells, q: u64) -> u64 {
     let rk: u64 = w[@EX_RK@];
     let wm: u64 = w[@EX_WM@];
     let mut vm: u64 = 0;
-    if q == 0 && wm != 2 { vm = 1; }
+    if q == 0 && wm != 2 && wm != 4 { vm = 1; }
     w[@EX_VM@] = vm;
+    // In "": $@ marks bit 1 and $* bit 2; a scalar reference marks bit 2 only when a value byte is copied (xval),
+    // so "$e$@" with no positionals gives no field (bash) while "$e" alone still gives one empty field.
     if q == 2 {
-        if rk == 8 {
-            w[@EX_DQF@] = w[@EX_DQF@] | 1;
-        } else {
-            w[@EX_DQF@] = w[@EX_DQF@] | 2;
-        }
+        if rk == 8 { w[@EX_DQF@] = w[@EX_DQF@] | 1; }
+        if rk == 9 { w[@EX_DQF@] = w[@EX_DQF@] | 2; }
     }
     if rk >= 8 {
         let mut lk: u64 = 6;
         if vm == 1 { lk = 5; }
-        if rk == 8 && q == 2 && wm != 2 { lk = 7; }
+        if rk == 8 && q == 2 && wm != 2 && wm != 4 { lk = 7; }
         w[@EX_RK@] = lk;
         return request(w, 5);
     }
@@ -319,6 +321,7 @@ fn xval(w: cells) -> u64 {
     if c == 0 || c > 255 { return werr(w, 244); }
     w[@EX_VCUR@] = cur + 1;
     if w[@EX_VM@] == 1 { return sbyte(w, c); }
+    if w[@EX_Q@] == 2 { w[@EX_DQF@] = w[@EX_DQF@] | 2; }
     return lit(w, c);
 }
 
@@ -394,7 +397,8 @@ fn xraw(inp: bytes, w: cells) -> u64 {
     return lit(w, c);
 }
 
-// Start a word: mode 1 argv, 2 assignment value, 3 redirection target; raw cursor at pos.
+// Start a word: mode 1 argv, 2 assignment value, 3 redirection target, 4 argv word NAME=v of export (expanded as
+// an assignment: no splitting, no glob refusal of values, $@ joined); raw cursor at pos.
 fn wset(w: cells, mode: u64, pos: u64) {
     w[@EX_WM@] = mode;
     w[@EX_PH@] = 0;
@@ -486,6 +490,15 @@ fn classify(v: u64) -> u64 {
     if v == 0x74726170 || v == 0x7368696674 || v == 0x72656164 || v == 0x72657475726e { return 99; }
     if v == 0x627265616b || v == 0x636f6e74696e7565 || v == 0x6c6f63616c { return 99; }
     if v == 0x726561646f6e6c79 || v == 0x616c696173 || v == 0x77616974 { return 99; }
+    // more bash builtins: : declare typeset let command type umask hash ulimit getopts jobs pushd popd dirs history
+    // unalias fg bg builtin enable shopt mapfile times caller disown suspend logout bind help compgen complete fc compopt
+    if v == 0x3a || v == 0x6465636c617265 || v == 0x74797065736574 || v == 0x6c6574 || v == 0x636f6d6d616e64 { return 99; }
+    if v == 0x74797065 || v == 0x756d61736b || v == 0x68617368 || v == 0x756c696d6974 || v == 0x6765746f707473 { return 99; }
+    if v == 0x6a6f6273 || v == 0x7075736864 || v == 0x706f7064 || v == 0x64697273 || v == 0x686973746f7279 { return 99; }
+    if v == 0x756e616c696173 || v == 0x6667 || v == 0x6267 || v == 0x6275696c74696e || v == 0x656e61626c65 { return 99; }
+    if v == 0x73686f7074 || v == 0x6d617066696c65 || v == 0x74696d6573 || v == 0x63616c6c6572 || v == 0x6469736f776e { return 99; }
+    if v == 0x73757370656e64 || v == 0x6c6f676f7574 || v == 0x62696e64 || v == 0x68656c70 || v == 0x636f6d7067656e { return 99; }
+    if v == 0x636f6d706c657465 || v == 0x6663 || v == 0x636f6d706f7074 { return 99; }
     return 0;
 }
 
@@ -519,6 +532,26 @@ fn cmd_end(w: cells) -> u64 {
     return 0;
 }
 
+// 1 when argv[0] of this command is the plain word `export` (raw bytes `export` then a blank, value `export`): bash
+// expands its NAME=value arguments as assignments, so their values are not split (mode 4).
+fn is_export(inp: bytes, w: cells) -> u64 {
+    let cb: u64 = cbase(w);
+    if w[cb] == 0 { return 0; }
+    if pack8o(w, w[cb + 4], w[cb + 5]) != 0x6578706f7274 { return 0; }
+    let a: u64 = w[@EX_A0@];
+    if a + 6 >= inp.len { return 0; }
+    let mut v: u64 = 0;
+    let mut i: u64 = 0;
+    while i < 6 bound 6 {
+        v = (v << 8) | inp[a + i];
+        i = i + 1;
+    }
+    if v != 0x6578706f7274 { return 0; }
+    let d: u64 = inp[a + 6];
+    if d == 32 || d == 9 { return 1; }
+    return 0;
+}
+
 // Between words: classify the next token of the command and start it.
 fn next_task(inp: bytes, w: cells) -> u64 {
     let pb: u64 = @PIPES@ + w[@EX_PIPE@] * 4;
@@ -530,8 +563,10 @@ fn next_task(inp: bytes, w: cells) -> u64 {
     let k: u64 = hdr & 255;
     if k == 1 {
         if ((hdr >> 8) & 16) != 0 && w[@EX_ANYW@] == 0 { return start_assign(inp, w, tb); }
+        let mut m: u64 = 1;
+        if ((hdr >> 8) & 16) != 0 && is_export(inp, w) == 1 { m = 4; }
         w[@EX_ANYW@] = 1;
-        wset(w, 1, w[tb + 1]);
+        wset(w, m, w[tb + 1]);
         return 0;
     }
     if k == 6 || k == 7 || k == 8 || k == 10 || k == 11 { return start_redir(inp, w, t, k); }

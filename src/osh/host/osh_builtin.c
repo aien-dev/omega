@@ -197,7 +197,12 @@ static int bi_printf(const OshCmd *c, const int io[3])
 {
     int ai = 1;
     if (ai < c->nargv && strcmp(c->argv[ai], "--") == 0) ai++;
-    if (ai >= c->nargv) { osh_diag(io[2], "printf: usage: printf format [arguments]"); return 1; }
+    /* bash takes any other leading -x as an option (-v sets a variable); none is supported, so none is printed */
+    else if (ai < c->nargv && c->argv[ai][0] == '-' && c->argv[ai][1]) {
+        osh_diag(io[2], "printf: %s: option not supported", c->argv[ai]);
+        return 2;
+    }
+    if (ai >= c->nargv) { osh_diag(io[2], "printf: usage: printf format [arguments]"); return 2; } /* bash: 2 */
     const char *fmt = c->argv[ai++];
     int first = ai, nspec = 0;
     /* Validate EVERY conversion before anything is printed. The scan and the print loop below agree on what a
@@ -362,7 +367,11 @@ static int bi_unset(OshSession *s, const OshCmd *c, const int io[3])
 static int bi_exit(OshSession *s, const OshCmd *c, const int io[3], int in_parent)
 {
     int st = s->last_status & 0xff;
-    if (c->nargv > 2) { osh_diag(io[2], "exit: too many arguments"); return 1; }
+    if (c->nargv > 2) {
+        osh_diag(io[2], "exit: too many arguments");
+        if (in_parent) s->abort_list = 1; /* bash: no exit, status 1, the rest of this list is not run */
+        return 1;
+    }
     if (c->nargv == 2) {
         char *end;
         errno = 0;

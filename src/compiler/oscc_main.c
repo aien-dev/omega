@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "osc_cg.h"
 #include "osc_front.h"
@@ -26,37 +27,72 @@ static void hex(const uint8_t *d, char *out)
  * OUT.code = the AArch64 bytes, OUT.entries = one line per function in index order:
  *   fn_index nregs ret_kind k0 k1 k2 k3 k4 k5 code_offset name
  * where the kinds are the OscScalar values of the argument registers (a slice is its kind then 5 for the
- * length register) and unused registers are 0. Nothing is signed or packed here. */
-static int write_file(const char *pre, const char *ext, const void *p, size_t n)
+ * length register) and unused registers are 0. Nothing is signed or packed here.
+ * The three files are valid only together and only when oscc exits 0: any earlier OUT.* is removed first,
+ * each file is written under OUT.*.tmp and renamed at the end, and on any failure none of them is left.
+ * A parameter kind the container refuses (10, an array reference) is refused here, before anything is written. */
+static const char *const k_ext[3] = {".ir", ".code", ".entries"};
+
+static int out_path(char *buf, size_t n, const char *pre, const char *ext, const char *tmp)
+{
+    return (size_t)snprintf(buf, n, "%s%s%s", pre, ext, tmp) >= n ? -1 : 0;
+}
+
+static void remove_outputs(const char *pre)
+{
+    char p[4096];
+    for (int i = 0; i < 3; i++) {
+        if (out_path(p, sizeof p, pre, k_ext[i], "") == 0) unlink(p);
+        if (out_path(p, sizeof p, pre, k_ext[i], ".tmp") == 0) unlink(p);
+    }
+}
+
+static int write_tmp(const char *pre, int i, const void *p, size_t n, const char *text)
 {
     char path[4096];
-    if ((size_t)snprintf(path, sizeof path, "%s%s", pre, ext) >= sizeof path) return -1;
+    if (out_path(path, sizeof path, pre, k_ext[i], ".tmp")) return -1;
     FILE *f = fopen(path, "wb");
     if (!f) return -1;
-    int bad = fwrite(p, 1, n, f) != n;
+    int bad = text ? fputs(text, f) == EOF : fwrite(p, 1, n, f) != n;
     return (fclose(f) != 0 || bad) ? -1 : 0;
 }
 
-static int emit_files(const char *pre, const OscUnit *u, const OscCode *code)
+/* 1..9 scalars, 11 bytes, 12 cells (OSC_UNIT_ARTIFACT.md section 6.1); 0 and 10 are refused. */
+static int kind_ok(unsigned k) { return (k >= 1 && k <= 9) || k == 11 || k == 12; }
+
+/* 0 written; 1 refused (message in err); -1 cannot write. */
+static int emit_files(const char *pre, const OscUnit *u, const OscCode *code, char *err, size_t errn)
 {
+    static char ent[OSC_MAX_FUNCS * 128];
+    size_t at = 0;
+    for (unsigned fi = 0; fi < u->nfuncs; fi++) {
+        const OscFunc *fn = &u->funcs[fi];
+        for (unsigned r = 0; r < fn->nparams; r++)
+            if (!kind_ok((unsigned)fn->vtype[r].s)) {
+                snprintf(err, errn, "function %s parameter register %u has kind %u, which a unit container refuses",
+                         fn->name, r, (unsigned)fn->vtype[r].s);
+                return 1;
+            }
+        int w = snprintf(ent + at, sizeof ent - at, "%u %u %u", fi, (unsigned)fn->nparams, (unsigned)fn->ret.s);
+        for (unsigned r = 0; r < 6 && w > 0 && (size_t)w < sizeof ent - at; r++)
+            w += snprintf(ent + at + w, sizeof ent - at - w, " %u", r < fn->nparams ? (unsigned)fn->vtype[r].s : 0u);
+        if (w > 0 && (size_t)w < sizeof ent - at)
+            w += snprintf(ent + at + w, sizeof ent - at - w, " %u %s\n", (unsigned)code->entry[fi], fn->name);
+        if (w <= 0 || (size_t)w >= sizeof ent - at) return -1;
+        at += (size_t)w;
+    }
     size_t n = 0;
     if (osc_ir_encode(u, NULL, 0, &n)) return -1;
     uint8_t *ir = malloc(n ? n : 1);
     if (!ir) return -1;
-    int rc = osc_ir_encode(u, ir, n, &n) || write_file(pre, ".ir", ir, n) || write_file(pre, ".code", code->code, code->len);
+    int rc = osc_ir_encode(u, ir, n, &n) || write_tmp(pre, 0, ir, n, NULL) ||
+             write_tmp(pre, 1, code->code, code->len, NULL) || write_tmp(pre, 2, NULL, 0, ent);
     free(ir);
-    if (rc) return -1;
-    char path[4096];
-    if ((size_t)snprintf(path, sizeof path, "%s.entries", pre) >= sizeof path) return -1;
-    FILE *f = fopen(path, "w");
-    if (!f) return -1;
-    for (unsigned fi = 0; fi < u->nfuncs; fi++) {
-        const OscFunc *fn = &u->funcs[fi];
-        fprintf(f, "%u %u %u", fi, (unsigned)fn->nparams, (unsigned)fn->ret.s);
-        for (unsigned r = 0; r < 6; r++) fprintf(f, " %u", r < fn->nparams ? (unsigned)fn->vtype[r].s : 0u);
-        fprintf(f, " %u %s\n", (unsigned)code->entry[fi], fn->name);
-    }
-    return fclose(f) != 0 ? -1 : 0;
+    char from[4096], to[4096];
+    for (int i = 0; !rc && i < 3; i++)
+        rc = out_path(from, sizeof from, pre, k_ext[i], ".tmp") || out_path(to, sizeof to, pre, k_ext[i], "") ||
+             rename(from, to) != 0;
+    return rc ? -1 : 0;
 }
 
 int main(int argc, char **argv)
@@ -65,6 +101,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "usage: oscc <file.osc> [OUT]\n");
         return 2;
     }
+    if (argc == 3) remove_outputs(argv[2]); /* a stale triple from an earlier source never survives a run */
     FILE *fp = fopen(argv[1], "rb");
     if (!fp) { fprintf(stderr, "oscc: cannot open %s\n", argv[1]); return 2; }
     size_t cap = 1 << 16, len = 0;
@@ -102,19 +139,22 @@ int main(int argc, char **argv)
         free(src);
         return 1;
     }
+    int erc = argc == 3 ? emit_files(argv[2], u, &code, err, sizeof err) : 0;
+    if (erc) {
+        remove_outputs(argv[2]);
+        if (erc > 0) printf("error kind=unit_container message=%s\n", err);
+        else fprintf(stderr, "oscc: cannot write %s.{ir,code,entries}\n", argv[2]);
+        osc_cg_free(&code);
+        free(u);
+        free(src);
+        return erc > 0 ? 1 : 2;
+    }
     hex(dig, hx);
     printf("ir_sha256=%s\n", hx);
     sha256_hash(code.code, code.len, dig);
     hex(dig, hx);
     printf("code_sha256=%s\n", hx);
     printf("funcs=%u\n", (unsigned)u->nfuncs);
-    if (argc == 3 && emit_files(argv[2], u, &code)) {
-        fprintf(stderr, "oscc: cannot write %s.{ir,code,entries}\n", argv[2]);
-        osc_cg_free(&code);
-        free(u);
-        free(src);
-        return 2;
-    }
     osc_cg_free(&code);
     free(u);
     free(src);

@@ -55,3 +55,11 @@ c49	e a\\\n b\n	ok W:e W:a W:b NL	-
 c50	e $\\\n1\n	ok W:e W:$1 NL	e $1\n
 c51	e "a$\\\n"\n	ok W:e W:a$ NL	-
 c52	e a|\\\n  |e b\n	ok W:e W:a PIPE PIPE W:e W:b NL	-
+c53	e {fd}>f\n	refuse 250@2	e {fd}>f\n
+c54	e {f\\\nd}>f\n	refuse 250@2	e {fd}>f\n
+c55	{fd}<f e\n	refuse 250@0	{fd}<f e\n
+c56	e {fd} >f\n	ok W:e W:{fd} GT:1 W:f NL	-
+c57	e x{fd}>f\n	ok W:e W:x{fd} GT:1 W:f NL	-
+c58	e {1x}>f\n	ok W:e W:{1x} GT:1 W:f NL	-
+c59	e {fd}>&2\n	refuse 250@2	e {fd}>&2\n
+c60	e {a-b}>f\n	ok W:e W:{a-b} GT:1 W:f NL	-

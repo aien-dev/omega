@@ -3,14 +3,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-08T03:58:01Z",
+      "compiled_at": "2026-10-08T12:50:33Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:f397d8fa03868b6c35b63f312996daa80ec102a182b3d67d498132da7381f66d",
+      "digest": "sha256:691c2d824715bd3e747ba130fc302f6e0e5e0f21b04f69d8dd8e537626bc78c4",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 0,
-      "generated_at_commit": "79a8be6ae6414b456b705e625df2c7f150d1129a",
-      "source_tree": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "files": 32,
+      "generated_at_commit": "d96dd8310a3a877ad0123679ac563bd939e2e072",
+      "source_tree": "sha256:aaff2a0e825f5f5647d8c01ec28ff78fda83b6dd1c20aef742db3a10ef2971cb"
     }
   },
   "name": "trace",
