@@ -200,7 +200,7 @@
         },
         {
           "digest": "8688137c1de8cc588e208a7dd3388faadb1c2ef294b2e6847b5f2191522f774b",
-          "last_commit": "14e4eb8",
+          "last_commit": "2ebeb33",
           "name": "osh",
           "purpose": "osh lexer host driver, vendored aien-protocols PR#16 draft vectors (5ae5292)"
         },
@@ -290,14 +290,14 @@
         }
       ],
       "children_root": "sha256:2b56cf79fff8c3496e6c48c24bb2bd7b61552a5418f3e57df10389b45fbe58d8",
-      "compiled_at": "2026-10-08T03:02:40Z",
+      "compiled_at": "2026-10-08T03:51:36Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:cc223f1fd3d3850004aeb9a3ac6d426ac1a5c2e6b65c33245694318e351624e0",
+      "digest": "sha256:c170746fae0a64a66f33f96d04bf33c9117eec0f2b34bf141139ded81cbe1dbb",
       "evidence_files": 11,
       "evidence_root": "sha256:d5c1bceb4d57ef0eb42797c58801b5926509711614c3e38bb7105b6efa3942f2",
       "files": 879,
-      "generated_at_commit": "14e4eb881a4a365a1e8c4bd20f5ffb9c78138e0e",
-      "source_tree": "sha256:6ca6605bf9fa64c16f4870631423382ee85802a5599d8654494a283b34f39cb0"
+      "generated_at_commit": "2ebeb33d3b6246045c51c496913e1364e371d6bc",
+      "source_tree": "sha256:5cde7ea356c80afdb93d4e1e1e14a764c2b24a255a13c702079c8ea5ac2d1e55"
     },
     "owner_lane": "",
     "provenance": {
