@@ -79,8 +79,8 @@
           "purpose": "M21 OMEGA_AUTODIFF: reverse-mode tape over M20 tensor CPU ops, caller-owned nodes and scratch, p"
         },
         {
-          "digest": "ef29fa8b90425887606c78d29543ee0bfb81fb211c9c6daf231d235373cf9c0c",
-          "last_commit": "eb8dedf",
+          "digest": "b03b70bac39e9ff80a5a05a860f65c224be57eee59bb7780295c0f97aee3f7c2",
+          "last_commit": "6eaac64",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
         },
@@ -169,15 +169,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:27614a2026f414c0bd25a047ad678e29dd4e5599bbcafdf73ec1c7688c17f4ea",
-      "compiled_at": "2026-10-08T03:46:11Z",
+      "children_root": "sha256:862260847dadf5ffa7e5a9693c595657f809afa8070ef6dc2436052ced5b4533",
+      "compiled_at": "2026-10-08T07:47:44Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:e2cfbe1198e33467e6c177220f7ef320e3d8d96d0d2b1fe8e026312ea790634b",
+      "digest": "sha256:cb2fa1986cac9a7c464ec3244fd52b42776b60debc81179db40ce9d6f6c87658",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 414,
-      "generated_at_commit": "5227b88972eea33f7b524f34abfc314e3375bd52",
-      "source_tree": "sha256:9a532e41bc0e869593b994a79c16a6a33b1410940b8b0df6193998a2020bcaf9"
+      "generated_at_commit": "6eaac6425e1f95d95d794c2beb7729cea36a4842",
+      "source_tree": "sha256:b6b531bd174e0ef850450179a45ac9b4410a09987b43381ec84bdfe9174a4a02"
     },
     "owner_lane": "",
     "provenance": {
