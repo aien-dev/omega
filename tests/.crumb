@@ -199,8 +199,8 @@
           "purpose": "Simulated M16 driver for numeric resource-lifecycle tests. No device execution or numeric parity"
         },
         {
-          "digest": "92c5ad35522183ff6e14fc2d4e30e5c5a944ddc14d5fc6fac721514838272e7d",
-          "last_commit": "594fe4a",
+          "digest": "8b53a3efcd10f28199413870a06a467c43907da0ca4ab8c9fe6b5f8c11e62b7a",
+          "last_commit": "5ae9884",
           "name": "osh",
           "purpose": "osh lexer host driver, vendored aien-protocols PR#16 draft vectors (5ae5292)"
         },
@@ -289,15 +289,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:c2cc7c71a6dd58b81cd9b5e4a8d82a80094d966005ff78015f6e34b7958c4099",
-      "compiled_at": "2026-10-08T03:21:44Z",
+      "children_root": "sha256:cf4c017d3c0ceff51f3f7b89e7504aa4bb213eaad86846f4141c9081f4e499ac",
+      "compiled_at": "2026-10-08T03:21:45Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:28f88c2e43b6204941b83df279b625c9b60cee2cbab07fc2d7b33c5c1292c24c",
+      "digest": "sha256:647158dbe9575d2248010776eef6d7c4396a56a6487cd5e93363c7f0d72e4479",
       "evidence_files": 11,
       "evidence_root": "sha256:d5c1bceb4d57ef0eb42797c58801b5926509711614c3e38bb7105b6efa3942f2",
-      "files": 895,
-      "generated_at_commit": "3d8ac711363b6ab4d2c272f24c74281d4b594f12",
-      "source_tree": "sha256:22dfd921dbcd0ec88fba9438e803c0b5e50d1b5652d40dbd480cac013919ca6d"
+      "files": 893,
+      "generated_at_commit": "5ae9884a27b9d922c50bebd723860ed8c3c6218d",
+      "source_tree": "sha256:9589287618c46758871b2dfe7ede5da8e4f96ff192505c1b0599abcdb32d48b1"
     },
     "owner_lane": "",
     "provenance": {
