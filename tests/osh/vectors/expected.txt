@@ -16,3 +16,8 @@ v012 refuse 245 VALUE_GLOB off=5
 v013 refuse 220 NUL_BYTE off=6
 v014 ok | P0 conn=1 | C0 b=0 argv="echo","ab" as= rd=
 v015 ok lex_resumes=1 | P0 conn=1 | C0 b=0 argv="echo","a"*1100 as= rd=
+v016 refuse 246 BRACE_EXPANSION off=9
+v017 refuse 246 BRACE_EXPANSION off=10
+v018 refuse 247 POSITIONAL_RANGE off=8
+v019 refuse 236 GROUP off=0
+v020 ok | P0 conn=1 | C0 b=0 argv="echo","{a}","{","}","{}" as= rd=

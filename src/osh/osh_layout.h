@@ -34,4 +34,8 @@
 #define OSH_LX_NSEG 20ULL
 #define OSH_LX_ALLDIG 21ULL
 #define OSH_LX_MID 22ULL
+#define OSH_LX_BRD 23ULL
+#define OSH_LX_BRM 24ULL
+#define OSH_LX_PDOT 25ULL
+#define OSH_LX_BRN 26ULL
 #endif /* OSH_LAYOUT_H */

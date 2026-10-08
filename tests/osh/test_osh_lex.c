@@ -359,6 +359,48 @@ static const Hostile HOSTILE[] = {
     H("nul after dollar", "echo $\0", 220, 6, -1),
     H("nul in braces", "echo ${A\0}\n", 220, 8, -1),
     H("nul after word before newline", "echo a\0\n", 220, 6, -1),
+    H("brace expansion list", "echo {a,b}\n", 246, 9, -1),
+    H("brace expansion sequence", "echo {1..3}\n", 246, 10, -1),
+    H("brace expansion char sequence", "echo {a..c}\n", 246, 10, -1),
+    H("brace expansion with prefix and suffix", "echo a{b,c}d\n", 246, 10, -1),
+    H("brace expansion empty items", "echo {,}\n", 246, 7, -1),
+    H("brace expansion after assignment equals", "echo x={a,b}\n", 246, 11, -1),
+    H("brace expansion with a quoted item", "echo {a,\"b\"}\n", 246, 11, -1),
+    H("brace expansion nested outer", "echo {{a},b}\n", 246, 11, -1),
+    H("brace expansion nested inner", "echo {{a,b}\n", 246, 10, -1),
+    H("brace expansion at command start", "{a,b}\n", 246, 4, -1),
+    H("brace expansion is decided before a later glob", "echo {a,b}*\n", 246, 9, -1),
+    H("glob before a brace expansion", "echo *{a,b}\n", 222, 5, -1),
+    H("lone open brace stays literal", "echo {\n", 0, 0, 3),
+    H("lone close brace stays literal", "echo }\n", 0, 0, 3),
+    H("braces around a blank stay literal", "echo { } {} }{\n", 0, 0, 6),
+    H("unclosed brace with comma stays literal", "echo {a,b\n", 0, 0, 3),
+    H("closing brace without opening stays literal", "echo a,b}\n", 0, 0, 3),
+    H("braces without comma or dots stay literal", "echo {a} {a.b} {1.2} a{b}c\n", 0, 0, 6),
+    H("quoted brace expansion stays literal", "echo '{a,b}' \"{a,b}\" {\"a,b\"} {'1..3'}\n", 0, 0, 6),
+    H("escaped brace expansion stays literal", "echo \\{a,b\\} {a\\,b} {1.\\.3}\n", 0, 0, 5),
+    H("parameter braces are not brace expansion", "echo ${A},{b} ${A}{b}\n", 0, 0, 4),
+    H("dollar before a brace pair", "echo $,{b}\n", 0, 0, 3),
+    H("lone group open at command start", "{ echo hi; }\n", 236, 0, -1),
+    H("lone group close after semicolon", "echo hi; }\n", 236, 9, -1),
+    H("group after and", "a && { b; }\n", 236, 5, -1),
+    H("group after pipe", "a | }\n", 236, 4, -1),
+    H("group after newline", "a\n{\n", 236, 2, -1),
+    H("group with continuation", "{\\\n x\n", 236, 0, -1),
+    H("group as an argument is a word", "echo {\n", 0, 0, 3),
+    H("group after an assignment is a word", "A=1 {\n", 0, 0, 3),
+    H("group-like word", "{a }b\n", 0, 0, 3),
+    H("quoted group is a word", "'{' x\n", 0, 0, 3),
+    H("escaped group is a word", "\\{ x\n", 0, 0, 3),
+    H("group open pending", "{", 100, 0, -1),
+    H("group before subshell paren", "{(\n", 236, 0, -1),
+    H("positional ten", "echo ${10}\n", 247, 8, -1),
+    H("positional double zero", "echo ${00}\n", 247, 8, -1),
+    H("positional in double quotes", "echo \"${10}\"\n", 247, 9, -1),
+    H("positional decided at the second digit", "echo ${12", 247, 8, -1),
+    H("positional digit then letter", "echo ${1a}\n", 224, 8, -1),
+    H("positional single digits", "echo ${1}${0}${9}\n", 0, 0, 3),
+    H("name with digits", "echo ${a1} ${a12} ${_9}\n", 0, 0, 5),
 };
 
 static void run_hostile(uint64_t *rng)
@@ -422,6 +464,24 @@ static void run_hostile(uint64_t *rng)
         check(o.status == want, "hostile '%s': status %llu, want %llu", nm, (unsigned long long)o.status, (unsigned long long)want);
         if (want >= 200) check(o.err_off == want_off, "hostile '%s': offset %llu, want %llu", nm, (unsigned long long)o.err_off, (unsigned long long)want_off);
         free(b);
+    }
+}
+
+static void run_brace_depth(uint64_t *rng)
+{
+    /* 62 nested braces with no comma are literal; the 63rd open brace is refused (the detector's depth cap) */
+    for (int open = 61; open <= 64; open++) {
+        uint8_t b[256];
+        size_t n = 0;
+        memcpy(b, "echo ", 5); n = 5;
+        for (int q = 0; q < open; q++) b[n++] = '{';
+        if (open <= 62) for (int q = 0; q < open; q++) b[n++] = '}';
+        b[n++] = '\n';
+        Outcome o;
+        run_all("brace depth", b, n, rng, 300 + (unsigned long)open, &o);
+        n_hostile++;
+        if (open <= 62) check(o.status == 0, "brace depth %d: status %llu", open, (unsigned long long)o.status);
+        else check(o.status == 246 && o.err_off == 67, "brace depth %d: %llu@%llu", open, (unsigned long long)o.status, (unsigned long long)o.err_off);
     }
 }
 
@@ -536,7 +596,7 @@ static void run_vectors(const char *dir, uint64_t *rng)
         if (strstr(line, " more")) {
             check(o.status == 100, "vector %s: status %llu, want 100", name, (unsigned long long)o.status);
             n_vec_lex++;
-        } else if (code >= 201 && code <= 232) {
+        } else if ((code >= 201 && code <= 232) || code == 236 || code == 246 || code == 247) {
             check(o.status == code && o.err_off == off, "vector %s: refusal %llu@%llu, want %u@%u", name, (unsigned long long)o.status,
                   (unsigned long long)o.err_off, code, off);
             n_vec_lex++;
@@ -557,11 +617,12 @@ static const char *FRAG[] = {
     "${V}", "${", "}", "${A:-b}", "$(", "$((", ")", "(", "`", "*", "?", "[", "]", "~", "~/x", "{a,b}", "!", "#", "# c\n", "a#b",
     "|", "||", "&&", "&", ";", ";;", "<", ">", ">>", ">&", "<&", "<<", "<<<", ">|", "<>", "&>", "|&", "2>", "2>&1", "1>>", "0<", "5>", "12>", "<(", ">(",
     "=", ":", ":~", "\r", "\xff", "\x80", "\xc3\xa9", "\xe2\x82", "\x01", "\x7f",
+    "{1..3}", "${10}", "${1a}", "${0}", "${a1}", "{ }", "{}", ",", ".", "..", "{x}", "a{b,c}d", "x={a,b}", "\\{", "\\,", "{\\\n",
 };
 
 /* fragments that mostly lex clean, so the token records get exercised */
 static const char *SAFE[] = {
-    "ls", "echo", " ", " ", "  ", "\t", "\n", "-l", "/tmp", "a", "x=1", "A=", "_n", "0", "1", "2", "10", "'x y'", "\"a b\"", "\"$B c\"",
+    "ls", "echo", " ", " ", "  ", "\t", "\n", "-l", "/tmp", "a", "x=1", "A=", "_n", "0", "1", "2", "10", "{", "}", "{x}", ",", ".", "a.b", "${0}", "\\{", "'x y'", "\"a b\"", "\"$B c\"",
     "\\\n", "\\\"", "$1", "$?", "$#", "$@", "${V}", "#", "# c\n", "a#b", "|", "||", "&&", ";", "<", ">", ">>", ">&", "<&", "2>", "2>&1", "1>>", "0<", "=", ":", "\xff", "\xc3\xa9",
 };
 
@@ -684,6 +745,7 @@ int main(int argc, char **argv)
     uint64_t rng = 0x05a1e0c0ffee0004ULL;
     run_abi();
     run_hostile(&rng);
+    run_brace_depth(&rng);
     run_vectors(argv[2], &rng);
     run_fuzz(fuzz, &rng);
 

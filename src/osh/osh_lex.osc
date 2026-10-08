@@ -14,6 +14,7 @@
 //   213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH 217 ABI_RESERVED
 //   220 NUL_BYTE 221 BACKTICK 222 GLOB 223 TILDE 224 PARAM_OP 225 SPECIAL_PARAM 226 CMDSUB 227 BACKGROUND
 //   228 SUBSHELL 229 HEREDOC 230 CASEEND 231 REDIR_OTHER 232 FD_RANGE
+//   236 GROUP (a lone `{` or `}` word at command start) 246 BRACE_EXPANSION 247 POSITIONAL_RANGE (${10}, ${00})
 // A refusal stores code and byte offset in the session and makes it terminal (phase 255); a repeated call
 // returns the same code. ABI header refusals write nothing.
 //
@@ -189,9 +190,46 @@ fn emit_tok(w: cells, hdr: u64, s: u64, n: u64, aux: u64) -> u64 {
     return 0;
 }
 
+// The single significant byte of the word inp[s..e) after removing backslash-newline pairs, else 0.
+fn lone(inp: bytes, s: u64, e: u64) -> u64 {
+    let mut i: u64 = s;
+    let mut n: u64 = 0;
+    let mut v: u64 = 0;
+    while i < e && n < 2 bound 4096 {
+        if inp[i] == 92 && i + 1 < e && inp[i + 1] == 10 {
+            i = i + 2;
+        } else {
+            n = n + 1;
+            v = inp[i];
+            i = i + 1;
+        }
+    }
+    if n != 1 { return 0; }
+    return v;
+}
+
+// A lone `{` or `}` word where a command may start (start of input, or after NL | || && ;) is the reserved
+// group syntax (release 1.2): refused GROUP. Elsewhere it is an ordinary word, as in bash.
+fn group_check(inp: bytes, w: cells, s: u64, end: u64) -> u64 {
+    if (w[14] & 65503) != 0 || w[16] != 0 { return 0; }
+    let t: u64 = w[17];
+    let mut cs: u64 = 0;
+    if t == 0 { cs = 1; }
+    if t > 0 {
+        let pk: u64 = w[64 + (t - 1) * 4] & 255;
+        if pk == 9 || pk == 2 || pk == 3 || pk == 4 || pk == 5 { cs = 1; }
+    }
+    if cs == 0 { return 0; }
+    let v: u64 = lone(inp, s, end);
+    if v == 123 || v == 125 { return fail(w, 236, s); }
+    return 0;
+}
+
 // The word in progress ends before offset `end`.
-fn emit_word(w: cells, end: u64) -> u64 {
+fn emit_word(inp: bytes, w: cells, end: u64) -> u64 {
     let s: u64 = w[13];
+    let gc: u64 = group_check(inp, w, s, end);
+    if gc != 0 { return gc; }
     let mut f: u64 = w[14];
     let eq: u64 = w[16];
     if eq != 0 { f = f | 16; }
@@ -261,6 +299,60 @@ fn track(w: cells, st: u64, nst: u64, k: u64, i: u64) {
     }
 }
 
+// Unquoted brace expansion detector. Called for each byte that is a plain (unquoted, unescaped) part of a
+// word. bash expands a word with an unquoted `{ ... }` pair that has an unquoted `,` or `..` directly inside;
+// that expansion is refused by name (BRACE_EXPANSION). Braces without either stay literal, as in bash. This
+// over-refuses a few shapes bash leaves literal (`{a..bb}`); it never lets an expansion through.
+fn brace(w: cells, c: u64, i: u64) -> u64 {
+    let d: u64 = w[23];
+    let pd: u64 = w[25];
+    w[25] = 0;
+    if c == 123 {
+        if d >= 62 { return fail(w, 246, i); }
+        let bit: u64 = 1 << d;
+        w[24] = w[24] & ~bit;
+        w[23] = d + 1;
+        return 0;
+    }
+    if d == 0 { return 0; }
+    if c == 125 {
+        let nd: u64 = d - 1;
+        w[23] = nd;
+        let bit: u64 = 1 << nd;
+        if (w[24] & bit) != 0 { return fail(w, 246, i); }
+        return 0;
+    }
+    if c == 44 {
+        let bit: u64 = 1 << (d - 1);
+        w[24] = w[24] | bit;
+        return 0;
+    }
+    if c == 46 {
+        if pd == 1 {
+            let bit: u64 = 1 << (d - 1);
+            w[24] = w[24] | bit;
+        } else {
+            w[25] = 1;
+        }
+    }
+    return 0;
+}
+
+// Byte k (class) of a ${...} name. The name is NAME or one digit ($0..$9 only): a second digit is
+// POSITIONAL_RANGE, a letter after a leading digit is PARAM_OP.
+fn bname(w: cells, k: u64, p: u64, i: u64) -> u64 {
+    if p == 123 {
+        w[26] = 0;
+        if k == 16 { w[26] = 1; }
+        return 0;
+    }
+    if w[26] == 1 {
+        if k == 16 { return fail(w, 247, i); }
+        if k == 12 { return fail(w, 224, i); }
+    }
+    return 0;
+}
+
 // Lex the byte at offset i.
 fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
     let c: u64 = inp[i];
@@ -278,7 +370,7 @@ fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
     if err != 0 { return fail(w, err, i); }
     let mut rc: u64 = 0;
     if act == 2 {
-        rc = emit_word(w, i);
+        rc = emit_word(inp, w, i);
         if rc != 0 { return rc; }
         r = step(0, k, c, p);
     }
@@ -313,6 +405,13 @@ fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
         w[16] = 0;
         w[20] = 0;
         w[21] = nm;
+        w[23] = 0;
+        w[24] = 0;
+        w[25] = 0;
+    }
+    if (st == 8 || st == 9) && (k == 12 || k == 16) {
+        rc = bname(w, k, p, i);
+        if rc != 0 { return rc; }
     }
     let nst: u64 = r & 255;
     let wfl: u64 = (r >> 24) & 255;
@@ -321,6 +420,12 @@ fn lex_byte(inp: bytes, w: cells, i: u64) -> u64 {
         if (wfl & 3) != 0 { w[20] = w[20] + 1; }
     }
     if nst >= 1 && nst <= 9 { track(w, st, nst, k, i); }
+    if nst == 1 && (st == 0 || st == 1 || st == 6 || st == 11) {
+        rc = brace(w, c, i);
+        if rc != 0 { return rc; }
+    } else {
+        w[25] = 0;
+    }
     w[12] = nst;
     w[22] = 1;
     if act == 6 { w[22] = 0; }

@@ -23,3 +23,7 @@ The harness never executes pipelines. After each `PIPELINE_READY` it records the
 - `more` means the final call returned `NEED_MORE_INPUT` with no further input available.
 - `lex_resumes=N` is the exact number of `BUDGET_EXHAUSTED` returns the lexer gave before `PHASE_DONE`.
 - A core conforms when every line matches byte for byte. Refusal offsets follow spec section 5.4.
+
+## Local additions (not yet in aien-protocols)
+
+v016 to v020 were added in omega PR #336 for the codes 236 `GROUP`, 246 `BRACE_EXPANSION` and 247 `POSITIONAL_RANGE`, which the ABI draft does not number yet (it reserves 246 to 255). They should go upstream with the ABI amendment.

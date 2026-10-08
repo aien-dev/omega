@@ -43,3 +43,7 @@ LX_WLINE 19                 # line number (1-based) where the word started
 LX_NSEG 20                  # quoted segments in the word
 LX_ALLDIG 21                # word so far is all digits
 LX_MID 22                   # 1 while the last byte did not complete a line
+LX_BRD 23                   # open unquoted `{` count in the word (brace expansion detector)
+LX_BRM 24                   # bit d set: the open brace at depth d has an unquoted `,` or `..` directly inside
+LX_PDOT 25                  # the last byte was an unquoted plain `.` in the word
+LX_BRN 26                   # ${...} name: 0 none/alpha start, 1 digits so far (one digit)

@@ -13,7 +13,7 @@
 
 enum { K_WORD = 1, K_PIPE, K_OR, K_AND, K_SEMI, K_LT, K_GT, K_APPEND, K_NL, K_DUP_OUT, K_DUP_IN };
 enum { E_CAP_LINE = 201, E_CAP_TOKENS = 202, E_NUL = 220, E_BACKTICK, E_GLOB, E_TILDE, E_PARAM_OP, E_SPECIAL_PARAM,
-       E_CMDSUB, E_BACKGROUND, E_SUBSHELL, E_HEREDOC, E_CASEEND, E_REDIR_OTHER, E_FD_RANGE };
+       E_CMDSUB, E_BACKGROUND, E_SUBSHELL, E_HEREDOC, E_CASEEND, E_REDIR_OTHER, E_FD_RANGE, E_GROUP = 236, E_BRACE = 246, E_POSITIONAL = 247 };
 #define INCOMPLETE (-1)
 #define CAPLINE (-2)
 
@@ -77,11 +77,17 @@ static size_t dollar(Ref *r, size_t j, int dq)
     if (!dq && (x == '\'' || x == '"')) { refuse(r, E_SPECIAL_PARAM, j + 1); return 0; }
     if (x != '{') return j + 1; /* a literal `$` */
     size_t k = j + 2;
+    int numeric = 0; /* the name began with a digit: it must be that one digit ($0..$9 only) */
     for (;;) {
         int b = peek(r, k);
         if (b < 0) { stop(r, b); return 0; }
         if (b == 0) { refuse(r, E_NUL, k); return 0; }
-        if (is_alpha_(b) || is_digit(b)) { k++; continue; }
+        if (is_alpha_(b) || is_digit(b)) {
+            if (k == j + 2) numeric = is_digit(b);
+            else if (numeric) { refuse(r, is_digit(b) ? E_POSITIONAL : E_PARAM_OP, k); return 0; }
+            k++;
+            continue;
+        }
         if (b == '}' && k > j + 2) return k + 1;
         refuse(r, E_PARAM_OP, k);
         return 0;
@@ -106,8 +112,14 @@ static int word(Ref *r, size_t b, size_t *end, uint64_t *flags, uint64_t *nseg, 
         }
     }
     size_t j = b;
+    /* unquoted brace expansion detector: depth, a bit per open depth for "has an unquoted , or .. directly inside" */
+    unsigned bd = 0;
+    uint64_t bm = 0;
+    int pdot = 0;
     for (;;) {
         int c = peek(r, j);
+        int pd = pdot;
+        pdot = 0;
         if (c < 0) return stopz(r, c);
         if (c == 0) { refuse(r, E_NUL, j); return 0; }
         if (c == ' ' || c == '\t' || c == '\n' || is_opch(c)) break;
@@ -165,6 +177,21 @@ static int word(Ref *r, size_t b, size_t *end, uint64_t *flags, uint64_t *nseg, 
         } else if (is_glob(c)) { refuse(r, E_GLOB, j); return 0;
         } else if (c == '~' && eq && j > eq && (j == eq + 1 || r->in[j - 1] == ':')) { refuse(r, E_TILDE, j); return 0;
         } else {
+            if (c == '{') {
+                if (bd >= 62) { refuse(r, E_BRACE, j); return 0; }
+                bm &= ~(1ULL << bd);
+                bd++;
+            } else if (bd > 0) {
+                if (c == '}') {
+                    bd--;
+                    if (bm & (1ULL << bd)) { refuse(r, E_BRACE, j); return 0; }
+                } else if (c == ',') {
+                    bm |= 1ULL << (bd - 1);
+                } else if (c == '.') {
+                    if (pd) bm |= 1ULL << (bd - 1);
+                    else pdot = 1;
+                }
+            }
             j++;
         }
     }
@@ -251,6 +278,22 @@ void osh_lex_ref(const uint8_t *in, size_t n, OshRefLex *out)
         size_t end;
         uint64_t fl, ns, aux, wl;
         if (!word(&r, i, &end, &fl, &ns, &aux, &wl)) return;
+        if ((fl & ~32ULL) == 0 && !aux) { /* a lone `{` or `}` where a command may start is the reserved group syntax */
+            int cs = out->ntok == 0;
+            if (!cs) {
+                uint64_t pk = out->tok[out->ntok - 1].kind;
+                cs = pk == K_NL || pk == K_PIPE || pk == K_OR || pk == K_AND || pk == K_SEMI;
+            }
+            if (cs) {
+                unsigned sig = 0;
+                int v = 0;
+                for (size_t q = i; q < end; q++) {
+                    if (in[q] == '\\' && q + 1 < end && in[q + 1] == '\n') { q++; continue; }
+                    sig++; v = in[q];
+                }
+                if (sig == 1 && (v == '{' || v == '}')) { refuse(&r, E_GROUP, i); return; }
+            }
+        }
         if (aux) fl |= 16;
         if (add(&r, K_WORD, fl, ns, r.line, i, end - i, aux)) return;
         r.line = wl;
