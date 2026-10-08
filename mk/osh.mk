@@ -4,11 +4,12 @@
 # interpreter and as native AArch64.
 #   make osh-gen          regenerate src/osh/osh_lex.osc, osh_parse.osc and osh_layout.h
 #   make osh-gen-check    regenerating gives byte-identical files
-#   make test-osh-lex     check + lexer driver, plain and ASan/UBSan (exact-size buffers); OSH_FUZZ=N (default 100000)
+#   make test-osh-lex     check + lexer driver, plain and ASan/UBSan (exact-size buffers); OSH_FUZZ=N (default 100000), OSH_FUZZ_SEED=S
+#   make osh-bash-verify  prove tests/osh/vectors/bash_vectors.tsv against real bash 5.2 (needs bash, not part of test-osh-lex)
 #   make test-osh-parse   check + parser driver (lexer + parser units, reference tokenizer + parser), plain and ASan/UBSan
 ifndef OSH_MK
 OSH_MK := 1
-.PHONY: osh-gen osh-gen-check test-osh-lex test-osh-parse
+.PHONY: osh-gen osh-gen-check test-osh-lex test-osh-parse osh-bash-verify
 OSH_DIR = $(OUT_DIR)/osh
 OSH_FUZZ ?= 100000
 OSH_GEN = src/osh/osh_gen.sh
@@ -22,6 +23,9 @@ OSH_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -Isrc -Isrc/compiler 
 osh-gen:
 	sh $(OSH_GEN) gen $(OSH_GEN_ARGS)
 	sh $(OSH_GEN) gen $(OSH_GEN_ARGS_P)
+
+osh-bash-verify:
+	bash tests/osh/vectors/bash_verify.sh
 
 osh-gen-check:
 	sh $(OSH_GEN) check $(OSH_GEN_ARGS)
