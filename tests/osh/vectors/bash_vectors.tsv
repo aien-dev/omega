@@ -1,0 +1,57 @@
+# BASH-VERIFIED lexer vectors (omega PR #336 review fixes). Columns, TAB separated: id, input, expect, equiv.
+# input/equiv escapes: \n \t \\ \xHH. expect: "ok" then space separated tokens (W:<text> with \x20 for a space;
+# PIPE OR AND SEMI NL; LT:fd GT:fd APPEND:fd DUPO:fd DUPI:fd) or "refuse CODE@OFFSET". Word text is the bash view:
+# backslash-newline removed, quotes removed. equiv: "-" means the script rendered from the ok tokens; otherwise the
+# continuation-free script bash must treat identically to the input. bash_verify.sh runs real bash 5.2 on both.
+c01	e a b\n	ok W:e W:a W:b NL	-
+c02	e a|\\\n|e b\n	ok W:e W:a OR W:e W:b NL	-
+c03	e a&\\\n&e b\n	ok W:e W:a AND W:e W:b NL	-
+c04	e a>\\\n>f\n	ok W:e W:a APPEND:1 W:f NL	-
+c05	e a;\\\n;e b\n	refuse 230@6	e a;;e b\n
+c06	e a<\\\n&0\n	ok W:e W:a DUPI:0 W:0 NL	-
+c07	e 2\\\n>f\n	ok W:e GT:2 W:f NL	-
+c08	e 1\\\n2>f\n	refuse 232@6	e 12>f\n
+c09	e 1\\\n>f\n	ok W:e GT:1 W:f NL	-
+c10	e $\\\n$\n	refuse 225@5	e $$\n
+c11	e "$\\\n(e hi)"\n	refuse 226@6	e "$(e hi)"\n
+c12	e $\\\n{HOME:-q}\n	refuse 224@10	e ${HOME:-q}\n
+c13	e "$\\\n{A:-x}"\n	refuse 224@8	e "${A:-x}"\n
+c14	e $\\\n!\n	refuse 225@5	e $!\n
+c15	x=a:\\\n~\n	refuse 223@6	x=a:~\n
+c16	x=\\\n~\n	refuse 223@4	x=~\n
+c17	e a=\\\n~\n	refuse 223@6	e a=~\n
+c18	e {1.\\\n.3}\n	refuse 246@9	e {1..3}\n
+c19	e {a,\\\nb}\n	refuse 246@8	e {a,b}\n
+c20	e {1\\\n..3}\n	refuse 246@9	e {1..3}\n
+c21	e "a\\\nb"\n	ok W:e W:ab NL	-
+c22	e 'a\\\nb'\n	ok W:e W:a\\\nb NL	-
+c23	e "a\\\\\nb"\n	ok W:e W:a\\\nb NL	-
+c24	e \\\n  b\n	ok W:e W:b NL	-
+c25	e a|\\\ne b\n	ok W:e W:a PIPE W:e W:b NL	-
+c26	e a # c\\\ne b\n	ok W:e W:a NL W:e W:b NL	-
+c27	e a #c\\\n\ne b\n	ok W:e W:a NL NL W:e W:b NL	-
+c28	e a \\\n# x\ne b\n	ok W:e W:a NL W:e W:b NL	-
+c29	e a\\\n#b\n	ok W:e W:a#b NL	-
+c30	e \\\\\n	ok W:e W:\\ NL	-
+c31	x\\\n=1\n	ok W:x=1 NL	x=1\n
+c32	x+=1\n	refuse 248@2	x+=1\n
+c33	x+=~\n	refuse 248@2	x+=~\n
+c34	x+\\\n=1\n	refuse 248@4	x+=1\n
+c35	e $_\n	refuse 225@3	e $_\n
+c36	e "$_"\n	refuse 225@4	e "$_"\n
+c37	e $_x\n	ok W:e W:$_x NL	e $_x\n
+c38	e ${_}\n	refuse 225@4	e ${_}\n
+c39	e $_\\\nx\n	ok W:e W:$_x NL	e $_x\n
+c40	e $\\\n_\n	refuse 225@5	e $_\n
+c41	e a 2>&1\n	ok W:e W:a DUPO:2 W:1 NL	-
+c42	e a \\\n2>f\n	ok W:e W:a GT:2 W:f NL	-
+c43	e 2 \\\n>f\n	ok W:e W:2 GT:1 W:f NL	-
+c44	e 1\\\n\\\n>f\n	ok W:e GT:1 W:f NL	-
+c45	e \\\n\\\nb\n	ok W:e W:b NL	-
+c46	e a\\\n\\\nb\n	ok W:e W:ab NL	-
+c47	e '\\\n'\n	ok W:e W:\\\n NL	-
+c48	e "\\\n"\n	ok W:e W: NL	-
+c49	e a\\\n b\n	ok W:e W:a W:b NL	-
+c50	e $\\\n1\n	ok W:e W:$1 NL	e $1\n
+c51	e "a$\\\n"\n	ok W:e W:a$ NL	-
+c52	e a|\\\n  |e b\n	ok W:e W:a PIPE PIPE W:e W:b NL	-

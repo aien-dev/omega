@@ -27,3 +27,11 @@ The harness never executes pipelines. After each `PIPELINE_READY` it records the
 ## Local additions (not yet in aien-protocols)
 
 v016 to v020 were added in omega PR #336 for the codes 236 `GROUP`, 246 `BRACE_EXPANSION` and 247 `POSITIONAL_RANGE`, which the ABI draft does not number yet (it reserves 246 to 255). They should go upstream with the ABI amendment.
+
+## Bash-verified vectors (omega PR #336 review fixes)
+
+`bash_vectors.tsv` holds 52 lexer vectors whose expectations come from real GNU bash 5.2, not from the reference tokenizer. Columns (TAB separated): id, input, expect, equiv. `bash_verify.sh` runs both the input and its continuation-free equivalent (or, when equiv is `-`, the script rendered from the expected tokens) under bash and requires identical transcripts (stdout, stderr, files written); the result is recorded in `bash_verified.log` (first line: the bash version, 5.2.21 when written). `make osh-bash-verify` runs it. The lexer driver then checks the lexer against the same expect column and also lexes the equivalent script, so the OSC lexer, the C reference and bash are three separate oracles for backslash-newline handling.
+
+Findings pinned here: backslash-newline is removed before the next byte is classified, mid-operator (`|\<nl>|` is `||`, `a>\<nl>>f` is `>>`, `2\<nl>>f` redirects fd 2, `1\<nl>2>f` is fd 12), after `$` (`$\<nl>$`, `"$\<nl>(`, `$\<nl>{`), in tilde and brace detection, inside double quotes, and not inside single quotes. A backslash in a comment is literal: `# c\<nl>e b` runs `e b`. `x+=1` is an append assignment and `$_` the last-argument parameter; both are refused (248 `APPEND_ASSIGN`, 225 `SPECIAL_PARAM`).
+
+New local code 248 `APPEND_ASSIGN` is not in the ABI draft yet (it reserves 246 to 255); it goes upstream with 236, 246 and 247. A final lone backslash waits for the next byte (status 100, the backslash is not consumed) unless the host sets the lexer cell S_EOI (27), when it is a literal backslash.

@@ -29,7 +29,8 @@
 static unsigned long n_checks, n_fail;
 static unsigned long n_interp_calls, n_native_calls;
 static unsigned long n_cases, n_ref_cmp, n_ref_tok, n_chunk_runs, n_engine_cmp, n_traps;
-static unsigned long n_vec, n_vec_lex, n_hostile, n_fuzz, n_abi;
+static unsigned long n_vec, n_vec_lex, n_hostile, n_fuzz, n_abi, n_bvec;
+static int EOI; /* sessions are created with S_EOI = this */
 static unsigned long n_status[4]; /* fuzz outcomes: done, more, refused, other */
 static unsigned long n_code[256];
 
@@ -70,6 +71,7 @@ static void sess_init(Sess *s)
     s->w[OSH_S_MAGIC] = OSH_ABI_MAGIC;
     s->w[OSH_S_VERSION] = OSH_ABI_VERSION;
     s->w[OSH_S_WS_CELLS] = OSH_WS_CELLS;
+    s->w[OSH_S_EOI] = (uint64_t)EOI;
 }
 
 static void sess_free(Sess *s) { free(s->w); s->w = NULL; }
@@ -163,7 +165,7 @@ static uint64_t rng_next(uint64_t *s)
 static void cmp_ref(const char *tag, const uint8_t *d, size_t n, const Sess *s, uint64_t st)
 {
     OshRefLex *r = malloc(sizeof *r);
-    osh_lex_ref(d, n, r);
+    osh_lex_ref_eoi(d, n, EOI, r);
     n_ref_cmp++;
     const uint64_t *w = s->w;
     int ok = 1;
@@ -171,7 +173,7 @@ static void cmp_ref(const char *tag, const uint8_t *d, size_t n, const Sess *s, 
     if (w[OSH_LX_NTOK] != r->ntok) ok = 0;
     if (r->status >= 200) {
         if (w[OSH_S_ERR_CODE] != r->status || w[OSH_S_ERR_OFF] != r->err_off || w[OSH_S_PHASE] != 255) ok = 0;
-    } else if (w[OSH_S_PHASE] != 0 || w[OSH_S_CURSOR] != n) {
+    } else if (w[OSH_S_PHASE] != 0 || (w[OSH_S_CURSOR] != n && !(st == 100 && n > 0 && d[n - 1] == 0x5c && w[OSH_S_CURSOR] == n - 1))) {
         ok = 0;
     }
     unsigned m = r->ntok < w[OSH_LX_NTOK] ? r->ntok : (unsigned)w[OSH_LX_NTOK];
@@ -305,7 +307,11 @@ static const Hostile HOSTILE[] = {
     H("tilde in quotes", "echo \"~\" '~'\n", 0, 0, 4),
     H("dollar before blank", "echo $ x\n", 0, 0, 4),
     H("dollar in double quotes at end of quote", "echo \"$\"\n", 0, 0, 3),
-    H("brace name", "echo \"a${B}c\" $1 $10 $_ $# $@ $* $?\n", 0, 0, 10),
+    H("brace name", "echo \"a${B}c\" $1 $10 $_a $# $@ $* $?\n", 0, 0, 10),
+    H("dollar underscore is the last-argument parameter", "echo $_\n", 225, 6, -1),
+    H("dollar underscore name goes on", "echo $_9 $__ ${_a} ${_}x\n", 225, 21, -1),
+    H("append assignment", "echo x+=1\n", 248, 7, -1),
+    H("plus not after a name", "echo 1+=1 +=1 a-b+=1 x++=1 x+y=1\n", 0, 0, 7),
     H("assignment words", "x=1 y=\"2 3\"\n", 0, 0, 3),
     H("every operator", "a|b||c&&d;e<f>g>>h>&i<&j\n", 0, 0, 20),
     H("io numbers", "ls nofile >o 2>&1\n", 0, 0, 7),
@@ -596,7 +602,7 @@ static void run_vectors(const char *dir, uint64_t *rng)
         if (strstr(line, " more")) {
             check(o.status == 100, "vector %s: status %llu, want 100", name, (unsigned long long)o.status);
             n_vec_lex++;
-        } else if ((code >= 201 && code <= 232) || code == 236 || code == 246 || code == 247) {
+        } else if ((code >= 201 && code <= 232) || code == 236 || code == 246 || code == 247 || code == 248) {
             check(o.status == code && o.err_off == off, "vector %s: refusal %llu@%llu, want %u@%u", name, (unsigned long long)o.status,
                   (unsigned long long)o.err_off, code, off);
             n_vec_lex++;
@@ -608,6 +614,169 @@ static void run_vectors(const char *dir, uint64_t *rng)
         free(in);
     }
     free(exp);
+    check(n_vec >= 20, "only %lu conformance vectors ran (an empty or missing list must fail)", n_vec);
+}
+
+
+/* ---- bash-verified vectors (tests/osh/vectors/bash_vectors.tsv; bash_verify.sh proves them against real bash) ---- */
+/* decode \n \t \\ \xHH; returns the length */
+static size_t unesc(const char *s, size_t sl, char *out)
+{
+    size_t n = 0;
+    for (size_t i = 0; i < sl; i++) {
+        if (s[i] != '\\' || i + 1 >= sl) { out[n++] = s[i]; continue; }
+        i++;
+        if (s[i] == 'n') out[n++] = '\n';
+        else if (s[i] == 't') out[n++] = '\t';
+        else if (s[i] == 'x' && i + 2 < sl + 0) { out[n++] = (char)strtoul((char[]){ s[i + 1], s[i + 2], 0 }, NULL, 16); i += 2; }
+        else out[n++] = s[i];
+    }
+    return n;
+}
+
+/* append the escaped form of byte c (the canonical spelling used in the expect column) */
+static void esc_put(char *o, size_t *n, uint8_t c)
+{
+    if (c == '\\') { o[(*n)++] = '\\'; o[(*n)++] = '\\'; }
+    else if (c == '\n') { o[(*n)++] = '\\'; o[(*n)++] = 'n'; }
+    else if (c == '\t') { o[(*n)++] = '\\'; o[(*n)++] = 't'; }
+    else if (c <= 0x20 || c >= 0x7f) *n += (size_t)sprintf(o + *n, "\\x%02x", c);
+    else o[(*n)++] = (char)c;
+}
+
+/* the bash view of one word: backslash-newline removed, quotes removed */
+static void word_text(const uint8_t *in, size_t s, size_t e, char *o, size_t *n)
+{
+    size_t i = s;
+    while (i < e) {
+        uint8_t c = in[i];
+        if (c == '\\' && i + 1 < e) {
+            if (in[i + 1] == '\n') { i += 2; continue; }
+            esc_put(o, n, in[i + 1]);
+            i += 2;
+        } else if (c == '\'') {
+            i++;
+            while (i < e && in[i] != '\'') esc_put(o, n, in[i++]);
+            i++;
+        } else if (c == '"') {
+            i++;
+            while (i < e && in[i] != '"') {
+                if (in[i] == '\\' && i + 1 < e) {
+                    uint8_t d = in[i + 1];
+                    if (d == '\n') { i += 2; continue; }
+                    if (d == '\\' || d == '"' || d == '$' || d == '`') { esc_put(o, n, d); i += 2; continue; }
+                }
+                esc_put(o, n, in[i++]);
+            }
+            i++;
+        } else {
+            esc_put(o, n, c);
+            i++;
+        }
+    }
+}
+
+/* the lexer result of d as the expect-column text: "ok <tokens>", "more" or "refuse CODE@OFF" */
+static void render(const uint8_t *d, size_t n, char *o, size_t ocap)
+{
+    Sess s;
+    sess_init(&s);
+    uint64_t st = lex_all(INTERP, &s, d, n, NULL);
+    size_t k = 0;
+    static const char *const NAME[] = { "", "W", "PIPE", "OR", "AND", "SEMI", "LT", "GT", "APPEND", "NL", "DUPO", "DUPI" };
+    if (st >= 200) k = (size_t)sprintf(o, "refuse %llu@%llu", (unsigned long long)st, (unsigned long long)s.w[OSH_S_ERR_OFF]);
+    else if (st == 100) k = (size_t)sprintf(o, "more");
+    else {
+        k = (size_t)sprintf(o, "ok");
+        for (uint64_t t = 0; t < s.w[OSH_LX_NTOK] && k + 2048 < ocap; t++) {
+            const uint64_t *c = &s.w[OSH_TOKENS + 4 * t];
+            unsigned kind = (unsigned)(c[0] & 255);
+            o[k++] = ' ';
+            if (kind == 1) {
+                o[k++] = 'W'; o[k++] = ':';
+                word_text(d, c[1], c[1] + c[2], o, &k);
+            } else if (kind >= 2 && kind <= 11) {
+                k += (size_t)sprintf(o + k, "%s", NAME[kind]);
+                if (kind == 6 || kind == 7 || kind == 8 || kind == 10 || kind == 11) k += (size_t)sprintf(o + k, ":%llu", (unsigned long long)c[3]);
+            } else k += (size_t)sprintf(o + k, "?%u", kind);
+        }
+    }
+    o[k] = 0;
+    sess_free(&s);
+}
+
+static void run_bash_vectors(const char *dir, uint64_t *rng)
+{
+    char path[1024];
+    snprintf(path, sizeof path, "%s/bash_vectors.tsv", dir);
+    size_t el;
+    char *txt = slurp(path, &el);
+    check(txt != NULL, "cannot read %s", path);
+    if (!txt) return;
+    txt = realloc(txt, el + 1);
+    txt[el] = 0;
+    char *sp = NULL;
+    for (char *line = strtok_r(txt, "\n", &sp); line; line = strtok_r(NULL, "\n", &sp)) {
+        if (line[0] != 'c') continue;
+        char *f[4] = { 0 };
+        char *p = line;
+        for (int q = 0; q < 4; q++) {
+            f[q] = p;
+            char *t = strchr(p, '\t');
+            if (!t) { if (q < 3) check(0, "bash vector line has %d fields: %.20s", q + 1, line); break; }
+            *t = 0;
+            p = t + 1;
+        }
+        if (!f[3]) continue;
+        char *inb = malloc(strlen(f[1]) + 1), *eqb = malloc(strlen(f[3]) + 1);
+        size_t inl = unesc(f[1], strlen(f[1]), inb);
+        char got[8192], want[8192];
+        /* the expect column keeps its own escapes, so compare against the raw text */
+        snprintf(want, sizeof want, "%s", f[2]);
+        Outcome o;
+        run_all(f[0], (const uint8_t *)inb, inl, rng, n_bvec, &o);
+        render((const uint8_t *)inb, inl, got, sizeof got);
+        n_bvec++;
+        check(strcmp(got, want) == 0, "bash vector %s: got '%s', want '%s'", f[0], got, want);
+        /* the continuation-free form lexes the same way (offsets of a refusal may differ) */
+        if (strcmp(f[3], "-") != 0) {
+            size_t eql = unesc(f[3], strlen(f[3]), eqb);
+            char got2[8192];
+            run_all(f[0], (const uint8_t *)eqb, eql, rng, n_bvec, NULL);
+            render((const uint8_t *)eqb, eql, got2, sizeof got2);
+            if (strncmp(want, "refuse ", 7) == 0) {
+                char *at = strchr(want, '@');
+                check(at && strncmp(got2, want, (size_t)(at - want)) == 0, "bash vector %s: equiv script gave '%s', want the code of '%s'", f[0], got2, want);
+            } else {
+                check(strcmp(got2, want) == 0, "bash vector %s: equiv script gave '%s', want '%s'", f[0], got2, want);
+            }
+        }
+        free(inb);
+        free(eqb);
+    }
+    free(txt);
+}
+/* ---- end of input flag (S_EOI): a trailing backslash is a literal; without it the lexer waits for the next byte ---- */
+static void run_eoi(uint64_t *rng)
+{
+    static const struct { const char *in; size_t n; uint64_t ntok_wait, ntok_eoi, state_wait, state_eoi; } T[] = {
+        { "echo a|\\", 8, 2, 3, 11, 1 },   /* `|` then `\`: waiting keeps the operator pending; EOI ends it and starts a word */
+        { "\\", 1, 0, 0, 0, 1 },            /* a lone `\`: waiting leaves the start state; EOI starts a word */
+        { "echo \"a\\", 8, 1, 1, 3, 3 },    /* inside double quotes both stay in the quote */
+        { "echo a\\", 7, 1, 1, 4, 1 },      /* the word already started */
+    };
+    for (size_t t = 0; t < sizeof T / sizeof T[0]; t++) {
+        for (int eoi = 0; eoi <= 1; eoi++) {
+            EOI = eoi;
+            Outcome o;
+            run_all("eoi", (const uint8_t *)T[t].in, T[t].n, rng, 700 + t, &o);
+            n_hostile++;
+            check(o.status == 100, "eoi %d case %zu: status %llu, want 100", eoi, t, (unsigned long long)o.status);
+            check(o.ntok == (eoi ? T[t].ntok_eoi : T[t].ntok_wait), "eoi %d case %zu: %llu tokens", eoi, t, (unsigned long long)o.ntok);
+            (void)T[t].state_wait; (void)T[t].state_eoi;
+        }
+    }
+    EOI = 0;
 }
 
 /* ---- fuzz ---- */
@@ -617,13 +786,14 @@ static const char *FRAG[] = {
     "${V}", "${", "}", "${A:-b}", "$(", "$((", ")", "(", "`", "*", "?", "[", "]", "~", "~/x", "{a,b}", "!", "#", "# c\n", "a#b",
     "|", "||", "&&", "&", ";", ";;", "<", ">", ">>", ">&", "<&", "<<", "<<<", ">|", "<>", "&>", "|&", "2>", "2>&1", "1>>", "0<", "5>", "12>", "<(", ">(",
     "=", ":", ":~", "\r", "\xff", "\x80", "\xc3\xa9", "\xe2\x82", "\x01", "\x7f",
+    "|\\\n", "2\\\n", "$\\\n", ">\\\n", "&\\\n", "x+=1", "x+", "$_", "${_}", "_", "+", "\\\n#", "~\\\n~",
     "{1..3}", "${10}", "${1a}", "${0}", "${a1}", "{ }", "{}", ",", ".", "..", "{x}", "a{b,c}d", "x={a,b}", "\\{", "\\,", "{\\\n",
 };
 
 /* fragments that mostly lex clean, so the token records get exercised */
 static const char *SAFE[] = {
     "ls", "echo", " ", " ", "  ", "\t", "\n", "-l", "/tmp", "a", "x=1", "A=", "_n", "0", "1", "2", "10", "{", "}", "{x}", ",", ".", "a.b", "${0}", "\\{", "'x y'", "\"a b\"", "\"$B c\"",
-    "\\\n", "\\\"", "$1", "$?", "$#", "$@", "${V}", "#", "# c\n", "a#b", "|", "||", "&&", ";", "<", ">", ">>", ">&", "<&", "2>", "2>&1", "1>>", "0<", "=", ":", "\xff", "\xc3\xa9",
+    "\\\n", "|\\\n", "2\\\n", ">\\\n", "\\\"", "$1", "$?", "$#", "$@", "${V}", "#", "# c\n", "a#b", "|", "||", "&&", ";", "<", ">", ">>", ">&", "<&", "2>", "2>&1", "1>>", "0<", "=", ":", "\xff", "\xc3\xa9",
 };
 
 static size_t gen(uint8_t *buf, size_t cap, uint64_t *rng)
@@ -742,17 +912,25 @@ int main(int argc, char **argv)
     osc_rt_init(RN);
     unit_stats();
 
-    uint64_t rng = 0x05a1e0c0ffee0004ULL;
+    uint64_t seed = 0x05a1e0c0ffee0004ULL;
+    const char *se = getenv("OSH_FUZZ_SEED");
+    if (se && *se) seed = strtoull(se, NULL, 0);
+    if (seed == 0) seed = 1;
+    printf("fuzz seed: 0x%016llx (override with OSH_FUZZ_SEED)\n", (unsigned long long)seed);
+    uint64_t rng = seed;
     run_abi();
     run_hostile(&rng);
     run_brace_depth(&rng);
     run_vectors(argv[2], &rng);
+    run_bash_vectors(argv[2], &rng);
+    check(n_bvec >= 40, "only %lu bash-verified vectors ran, want at least 40", n_bvec);
+    run_eoi(&rng);
     run_fuzz(fuzz, &rng);
 
     printf("abi header cases: %lu\n", n_abi);
     printf("hostile cases: %lu (each: interp, native, reference, chunked)\n", n_hostile);
-    printf("vectors: %lu run, %lu lexer-level checks\n", n_vec, n_vec_lex);
-    printf("fuzz: %lu inputs (seed fixed): done=%lu more=%lu refused=%lu\n", n_fuzz, n_status[0], n_status[1], n_status[2]);
+    printf("vectors: %lu run, %lu lexer-level checks; bash-verified vectors: %lu\n", n_vec, n_vec_lex, n_bvec);
+    printf("fuzz: %lu inputs (seed above): done=%lu more=%lu refused=%lu\n", n_fuzz, n_status[0], n_status[1], n_status[2]);
     printf("refusal codes seen in fuzz:");
     for (int c = 0; c < 256; c++) if (n_code[c]) printf(" %d:%lu", c, n_code[c]);
     printf("\n");
