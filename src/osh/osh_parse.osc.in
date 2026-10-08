@@ -244,10 +244,14 @@ fn parse_step(inp: bytes, w: cells, t: u64) -> u64 {
     return 0;
 }
 
-// Every token is consumed and the list is not complete.
+// Every token is consumed and the list is not complete. At end of input a list that ends in `;`
+// (state 0 with a command parsed) is done.
 fn at_end(inp: bytes, w: cells) -> u64 {
     let st: u64 = w[@PX_STATE@];
-    if st == 0 { return 0; }
+    if st == 0 {
+        if w[@S_EOI@] == 1 && w[@PX_NCMD@] > 0 { w[@PX_STATE@] = 4; }
+        return 0;
+    }
     if w[@S_EOI@] == 0 { return 100; }
     if st == 2 {
         end_cmd(w, w[@LX_NTOK@]);

@@ -3,17 +3,17 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-08T01:38:19Z",
+      "compiled_at": "2026-10-08T12:37:53Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:c37e953d2a75c8885caf4285a5fed69250a754440bec620c5aeb530bdc7ad7b3",
+      "digest": "sha256:caaad616b09245ad2b7251e353e89173897acac877d69e6daef26d9dbe4f7339",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 6,
-      "generated_at_commit": "303829c96f77000b5e4152fa2d84f7acd335bfda",
-      "source_tree": "sha256:dd09306c7c8b6d63dc2ddbe0e1b3dfc1a71460daef6d83204ae31f30fbe4717b"
+      "files": 12,
+      "generated_at_commit": "1a07c651c0e0e4a743c86a920e43496c0ad54513",
+      "source_tree": "sha256:4afa3ff1d94ec719b89c8e55c585466cc994b9547454bc93f220110d089bd918"
     }
   },
   "name": "host",
-  "purpose": "osh Linux host adapter execution service: request decoder, resolution, builtins, redirections, pipelines (arch#158; replaceable scaffolding per ADR 0024)",
+  "purpose": "osh Linux host: execution service (request decoder, resolution, builtins, redirections, pipelines), unit loader, driver loop and main for the osh program (arch#158; replaceable scaffolding per ADR 0024)",
   "schema_version": "1.0.0"
 }
