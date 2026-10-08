@@ -20,7 +20,7 @@
 enum { K_WORD = 1, K_PIPE, K_OR, K_AND, K_SEMI, K_LT, K_GT, K_APPEND, K_NL, K_DUP_OUT, K_DUP_IN };
 enum { E_CAP_LINE = 201, E_CAP_TOKENS = 202, E_NUL = 220, E_BACKTICK, E_GLOB, E_TILDE, E_PARAM_OP, E_SPECIAL_PARAM,
        E_CMDSUB, E_BACKGROUND, E_SUBSHELL, E_HEREDOC, E_CASEEND, E_REDIR_OTHER, E_FD_RANGE, E_GROUP = 236, E_BRACE = 246,
-       E_POSITIONAL = 247, E_SYNTAX_EOF = 248, E_APPEND_ASSIGN = 249 };
+       E_POSITIONAL = 247, E_SYNTAX_EOF = 248, E_APPEND_ASSIGN = 249, E_FD_VARIABLE = 250 };
 #define INCOMPLETE (-1)
 #define CAPLINE (-2)
 
@@ -381,6 +381,17 @@ void osh_lex_ref(const uint8_t *in, size_t n, int eoi, OshRefLex *out)
                         i = oend;
                         continue;
                     }
+                    /* `{NAME}` directly before the operator: bash's descriptor-variable redirection, refused */
+                    char nb[4096];
+                    size_t nn = 0;
+                    for (uint64_t z = 0; z < pt->len && nn < sizeof nb; z++) {
+                        uint64_t o = pt->start + z;
+                        if (in[o] == '\\' && z + 1 < pt->len && in[o + 1] == '\n') { z++; continue; }
+                        nb[nn++] = (char)in[o];
+                    }
+                    int fdv = nn >= 3 && nb[0] == '{' && nb[nn - 1] == '}' && is_alpha_(nb[1]);
+                    for (size_t z = 2; fdv && z + 1 < nn; z++) fdv = is_alpha_(nb[z]) || is_digit(nb[z]);
+                    if (fdv) { refuse(&r, E_FD_VARIABLE, pt->start); return; }
                 }
             }
             if (add(&r, kind, 0, 0, r.line, i, oend - i, aux)) return;

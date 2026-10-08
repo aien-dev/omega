@@ -79,7 +79,7 @@
           "purpose": "M21 OMEGA_AUTODIFF: reverse-mode tape over M20 tensor CPU ops, caller-owned nodes and scratch, p"
         },
         {
-          "digest": "a11fd8a3511953b26cca220f1ce3cd674de786aa6df7b34b8b08ee48be673223",
+          "digest": "18e933f213d7958215bb0ecf09116e5c21d3b335cfdabc1ffbf7a2a4e98b5250",
           "last_commit": "eb8dedf",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
@@ -115,10 +115,10 @@
           "purpose": "Directory src/language. Purpose not yet described by a human."
         },
         {
-          "digest": "986220974c320f3715426ea78d8d36a715ee925960a14fa631dafc9409b280b8",
-          "last_commit": "7ae98ab",
+          "digest": "e5b7c04cf57f1637ebeb8b1be76abd5cd690c17b3d346420cbcd81ade9c001a1",
+          "last_commit": "468174d",
           "name": "osh",
-          "purpose": "osh (Omega-native shell, arch#158) lexer, parser and expander units: layout list, generator, osh"
+          "purpose": "osh (Omega-native shell, arch#158) lexer unit: layout list, generator, osh_lex.osc, C reference "
         },
         {
           "digest": "8383106b5d1b3adbc44b8e837a5d1f5ff6699a6d54070068e36716b2a32390d5",
@@ -175,15 +175,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:e25bc45c22044165c12005c1fdfec01c89256297ef1f2ca68abb672f6711b221",
-      "compiled_at": "2026-10-08T03:50:09Z",
+      "children_root": "sha256:c9f287c18725f0692cee1390920a2fb400f996b15fc8af6ddc346dae03b145c2",
+      "compiled_at": "2026-10-08T12:03:11Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:4ea5510ba65cfa4c42b777c2246cd45c2993cd8f52ebf79e0324a9434abbd9be",
+      "digest": "sha256:8a31ee815b86c61ec1a2ac9079d874c19e3be4387a415e07a28411d606bb0308",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 441,
-      "generated_at_commit": "7ae98abc2dee480a98d5627c0ff49ade2a558f49",
-      "source_tree": "sha256:39e1e7819aac530b704ca4fcf40b55b0c7f3aacda0b2c3eea739fe7bc78fc78f"
+      "generated_at_commit": "468174d410435480f45097f2e93215dc06c50d47",
+      "source_tree": "sha256:3e06acb8206d1e45aefdd431593876a7b5b4f3b327de4c3ac6aaadfcb723c9f9"
     },
     "owner_lane": "",
     "provenance": {
