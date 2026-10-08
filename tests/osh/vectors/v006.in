@@ -1,0 +1,1 @@
+ls nofile >o 2>&1

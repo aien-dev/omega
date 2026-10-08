@@ -1,0 +1,259 @@
+/*
+ * osh_lex_ref.c -- independent reference tokenizer (see osh_lex_ref.h). Direct scanning with lookahead,
+ * deliberately not a state machine. Rules, all from the spec:
+ *  - a word is emitted when the byte after it is seen; an operator when its last byte is known (a one-byte
+ *    operator needs the next byte); a buffer ending earlier is incomplete (status 100)
+ *  - status 0 only when the last thing consumed was a newline token at the end of the buffer
+ *  - refusals are decided at the first byte that decides them (offsets per ABI section 5.4)
+ *  - reading a byte at offset >= 4096 is CAP_LINE at offset 4096; a 129th token is CAP_TOKENS at its start
+ */
+#include "osh_lex_ref.h"
+
+#include <string.h>
+
+enum { K_WORD = 1, K_PIPE, K_OR, K_AND, K_SEMI, K_LT, K_GT, K_APPEND, K_NL, K_DUP_OUT, K_DUP_IN };
+enum { E_CAP_LINE = 201, E_CAP_TOKENS = 202, E_NUL = 220, E_BACKTICK, E_GLOB, E_TILDE, E_PARAM_OP, E_SPECIAL_PARAM,
+       E_CMDSUB, E_BACKGROUND, E_SUBSHELL, E_HEREDOC, E_CASEEND, E_REDIR_OTHER, E_FD_RANGE };
+#define INCOMPLETE (-1)
+#define CAPLINE (-2)
+
+typedef struct {
+    const uint8_t *in;
+    size_t n;
+    OshRefLex *o;
+    uint64_t line;      /* 1-based current line */
+    int last_was_nl;    /* the last thing consumed was a newline token */
+} Ref;
+
+/* byte at j, or INCOMPLETE past the end of the buffer, or CAPLINE for offset >= 4096 */
+static int peek(const Ref *r, size_t j)
+{
+    if (j >= OSH_REF_LINE_CAP && r->n > OSH_REF_LINE_CAP) return CAPLINE;
+    if (j >= r->n) return INCOMPLETE;
+    return r->in[j];
+}
+
+static void refuse(Ref *r, unsigned code, uint64_t off)
+{
+    r->o->status = code;
+    r->o->err_off = off;
+}
+
+/* a negative peek result becomes the outcome */
+static int stop(Ref *r, int pk)
+{
+    if (pk == INCOMPLETE) r->o->status = 100;
+    else refuse(r, E_CAP_LINE, OSH_REF_LINE_CAP);
+    return 1;
+}
+
+/* same as stop, for the functions that return 0 on an outcome */
+static int stopz(Ref *r, int pk) { stop(r, pk); return 0; }
+
+static int is_alpha_(int c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_'; }
+static int is_digit(int c) { return c >= '0' && c <= '9'; }
+static int is_glob(int c) { return c == '*' || c == '?' || c == '['; }
+static int is_opch(int c) { return c == '|' || c == '&' || c == ';' || c == '<' || c == '>' || c == '(' || c == ')'; }
+
+/* append a token; 1 and CAP_TOKENS if full */
+static int add(Ref *r, uint64_t kind, uint64_t flags, uint64_t nseg, uint64_t line, uint64_t start, uint64_t len, uint64_t aux)
+{
+    if (r->o->ntok >= OSH_REF_TOKEN_CAP) { refuse(r, E_CAP_TOKENS, start); return 1; }
+    OshRefTok *t = &r->o->tok[r->o->ntok++];
+    t->kind = kind; t->flags = flags; t->nseg = nseg; t->line = line; t->start = start; t->len = len; t->aux = aux;
+    return 0;
+}
+
+/* parameter expansion after a `$` at j (inside double quotes when dq); returns the offset after the
+ * construct, or 0 with the outcome set */
+static size_t dollar(Ref *r, size_t j, int dq)
+{
+    int x = peek(r, j + 1);
+    if (x < 0) { stop(r, x); return 0; }
+    if (x == 0) { refuse(r, E_NUL, j + 1); return 0; }
+    if (is_alpha_(x) || is_digit(x) || x == '?' || x == '#' || x == '@' || x == '*') return j + 2;
+    if (x == '(') { refuse(r, E_CMDSUB, j + 1); return 0; }
+    if (x == '$' || x == '!' || x == '-') { refuse(r, E_SPECIAL_PARAM, j + 1); return 0; }
+    if (!dq && (x == '\'' || x == '"')) { refuse(r, E_SPECIAL_PARAM, j + 1); return 0; }
+    if (x != '{') return j + 1; /* a literal `$` */
+    size_t k = j + 2;
+    for (;;) {
+        int b = peek(r, k);
+        if (b < 0) { stop(r, b); return 0; }
+        if (b == 0) { refuse(r, E_NUL, k); return 0; }
+        if (is_alpha_(b) || is_digit(b)) { k++; continue; }
+        if (b == '}' && k > j + 2) return k + 1;
+        refuse(r, E_PARAM_OP, k);
+        return 0;
+    }
+}
+
+/* Scan the word that starts at b. On a normal end returns 1 with *end set; else 0 (outcome set). */
+static int word(Ref *r, size_t b, size_t *end, uint64_t *flags, uint64_t *nseg, uint64_t *aux, uint64_t *line_out)
+{
+    uint64_t fl = 0, ns = 0, line = r->line;
+    size_t eq = 0; /* offset of the `=` of a leading NAME=, 0 if none */
+    {
+        size_t j = b;
+        int first = 1;
+        for (;;) {
+            while (j + 1 < r->n && r->in[j] == '\\' && r->in[j + 1] == '\n') j += 2;
+            if (j >= r->n) break;
+            int c = r->in[j];
+            if (c == '=' && !first) { eq = j; break; }
+            if (first ? is_alpha_(c) : (is_alpha_(c) || is_digit(c))) { first = 0; j++; continue; }
+            break;
+        }
+    }
+    size_t j = b;
+    for (;;) {
+        int c = peek(r, j);
+        if (c < 0) return stopz(r, c);
+        if (c == 0) { refuse(r, E_NUL, j); return 0; }
+        if (c == ' ' || c == '\t' || c == '\n' || is_opch(c)) break;
+        if (c == '\'') {
+            ns++; fl |= 1;
+            size_t k = j + 1;
+            for (;;) {
+                int d = peek(r, k);
+                if (d < 0) return stopz(r, d);
+                if (d == 0) { refuse(r, E_NUL, k); return 0; }
+                if (d == '\n') line++;
+                k++;
+                if (d == '\'') break;
+            }
+            j = k;
+        } else if (c == '"') {
+            ns++; fl |= 2;
+            size_t k = j + 1;
+            for (;;) {
+                int d = peek(r, k);
+                if (d < 0) return stopz(r, d);
+                if (d == 0) { refuse(r, E_NUL, k); return 0; }
+                if (d == '"') { k++; break; }
+                if (d == '`') { refuse(r, E_BACKTICK, k); return 0; }
+                if (d == '\\') {
+                    int e = peek(r, k + 1);
+                    if (e < 0) return stopz(r, e);
+                    if (e == 0) { refuse(r, E_NUL, k + 1); return 0; }
+                    if (e == '\n') { fl |= 32; line++; } else fl |= 4;
+                    k += 2;
+                } else if (d == '$') {
+                    fl |= 8;
+                    size_t nk = dollar(r, k, 1);
+                    if (!nk) return 0;
+                    /* the construct's bytes may hold newlines only as a brace name, which cannot */
+                    k = nk;
+                } else {
+                    if (d == '\n') line++;
+                    k++;
+                }
+            }
+            j = k;
+        } else if (c == '\\') {
+            int e = peek(r, j + 1);
+            if (e < 0) return stopz(r, e);
+            if (e == 0) { refuse(r, E_NUL, j + 1); return 0; }
+            if (e == '\n') { fl |= 32; line++; } else fl |= 4;
+            j += 2;
+        } else if (c == '$') {
+            fl |= 8;
+            size_t nk = dollar(r, j, 0);
+            if (!nk) return 0;
+            j = nk;
+        } else if (c == '`') { refuse(r, E_BACKTICK, j); return 0;
+        } else if (is_glob(c)) { refuse(r, E_GLOB, j); return 0;
+        } else if (c == '~' && eq && j > eq && (j == eq + 1 || r->in[j - 1] == ':')) { refuse(r, E_TILDE, j); return 0;
+        } else {
+            j++;
+        }
+    }
+    *end = j;
+    *flags = fl;
+    *nseg = ns;
+    *aux = eq ? (uint64_t)eq + 1 : 0;
+    *line_out = line;
+    return 1;
+}
+
+void osh_lex_ref(const uint8_t *in, size_t n, OshRefLex *out)
+{
+    memset(out, 0, sizeof *out);
+    Ref r = { in, n, out, 1, 0 };
+    size_t i = 0;
+    for (;;) {
+        if (i == n) { out->status = r.last_was_nl || n == 0 ? 0 : 100; return; }
+        int c = peek(&r, i);
+        if (c < 0) { stop(&r, c); return; }
+        if (c == 0) { refuse(&r, E_NUL, i); return; }
+        if (c == ' ' || c == '\t') { r.last_was_nl = 0; i++; continue; }
+        if (c == '\n') {
+            if (add(&r, K_NL, 0, 0, r.line, i, 1, 0)) return;
+            r.line++; r.last_was_nl = 1; i++; continue;
+        }
+        r.last_was_nl = 0;
+        if (c == '#') {
+            size_t k = i + 1;
+            for (;;) {
+                int d = peek(&r, k);
+                if (d < 0) { stop(&r, d); return; }
+                if (d == 0) { refuse(&r, E_NUL, k); return; }
+                if (d == '\n') break;
+                k++;
+            }
+            i = k; /* the newline is handled by the loop head */
+            continue;
+        }
+        if (c == '\\') { /* a continuation between words is only white space */
+            int e = peek(&r, i + 1);
+            if (e == '\n') { r.line++; i += 2; continue; }
+        }
+        if (c == '(' || c == ')') { refuse(&r, E_SUBSHELL, i); return; }
+        if (c == '~') { refuse(&r, E_TILDE, i); return; }
+        if (is_opch(c)) {
+            int c2 = peek(&r, i + 1);
+            if (c2 < 0) { stop(&r, c2); return; }
+            if (c2 == 0) { refuse(&r, E_NUL, i + 1); return; }
+            unsigned kind = 0, len = 1;
+            uint64_t aux = 0;
+            if (c == '|') { if (c2 == '|') { kind = K_OR; len = 2; } else kind = K_PIPE; }
+            else if (c == '&') {
+                if (c2 == '&') { kind = K_AND; len = 2; } else { refuse(&r, E_BACKGROUND, i); return; }
+            }
+            else if (c == ';') { if (c2 == ';') { refuse(&r, E_CASEEND, i + 1); return; } kind = K_SEMI; }
+            else if (c == '<') {
+                if (c2 == '<') { refuse(&r, E_HEREDOC, i + 1); return; }
+                if (c2 == '>') { refuse(&r, E_REDIR_OTHER, i + 1); return; }
+                if (c2 == '&') { kind = K_DUP_IN; len = 2; } else kind = K_LT;
+            } else { /* '>' */
+                aux = 1;
+                if (c2 == '|') { refuse(&r, E_REDIR_OTHER, i + 1); return; }
+                if (c2 == '>') { kind = K_APPEND; len = 2; } else if (c2 == '&') { kind = K_DUP_OUT; len = 2; } else kind = K_GT;
+            }
+            if (kind == K_LT || kind == K_DUP_IN || kind == K_GT || kind == K_APPEND || kind == K_DUP_OUT) {
+                OshRefTok *pt = out->ntok ? &out->tok[out->ntok - 1] : NULL;
+                int adjacent = pt && pt->kind == K_WORD && pt->flags == 0 && pt->start + pt->len == i;
+                if (adjacent) {
+                    int digits = 1;
+                    for (uint64_t q = 0; q < pt->len; q++) if (!is_digit(in[pt->start + q])) digits = 0;
+                    if (digits && (pt->len != 1 || in[pt->start] > '2')) { refuse(&r, E_FD_RANGE, i); return; }
+                    if (digits) { /* IO number: becomes the operator */
+                        pt->kind = kind; pt->len += len; pt->aux = (uint64_t)(in[pt->start] - '0');
+                        i += len;
+                        continue;
+                    }
+                }
+            }
+            if (add(&r, kind, 0, 0, r.line, i, len, aux)) return;
+            i += len;
+            continue;
+        }
+        size_t end;
+        uint64_t fl, ns, aux, wl;
+        if (!word(&r, i, &end, &fl, &ns, &aux, &wl)) return;
+        if (aux) fl |= 16;
+        if (add(&r, K_WORD, fl, ns, r.line, i, end - i, aux)) return;
+        r.line = wl;
+        i = end;
+    }
+}

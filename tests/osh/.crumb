@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-08T00:59:57Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:cb625efda4ca83261fa6ccef821060645385c243796e776637ec889b8c4b47d3",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 0,
+      "generated_at_commit": "d64ccb3a83ad9689585092cfce91e94a4691c9d1",
+      "source_tree": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "name": "osh-tests",
+  "purpose": "osh lexer host driver, vendored aien-protocols PR#16 draft vectors (5ae5292)",
+  "schema_version": "1.0.0"
+}

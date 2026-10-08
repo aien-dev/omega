@@ -1,0 +1,18 @@
+# OSH shared conformance corpus. Contract: ../OSH_PLATFORM_ABI.md (ABI v1 DRAFT). Format: README.md.
+# Authored from the spec; no implementation has produced these lines yet. Inputs: tools/make-vectors.sh.
+# Argv boundaries of v003, v005, v011 and v014 were cross-checked once against GNU bash (not a pinned reference).
+v001 ok | P0 conn=1 | C0 b=0 argv="ls","-l","/tmp" as= rd=
+v002 ok | P0 conn=2 | C0 b=0 argv="a" as= rd= | P1 conn=3 | C0 b=0 argv="b" as= rd= | P2 conn=1 | C0 b=0 argv="c" as= rd= | P3 conn=1 | C0 b=0 argv="d" as= rd= | C1 b=0 argv="e" as= rd=
+v003 ok | P0 conn=1 | C0 b=0 argv="echo","3","2","x","y z" as= rd=
+v004 ok | P0 conn=1 | C0 b=0 argv= as=x="1",y="2 3" rd=
+v005 ok | P0 conn=1 | C0 b=0 argv="echo","aQc","hello" as= rd=
+v006 ok | P0 conn=1 | C0 b=0 argv="ls","nofile" as= rd=OUT1:"o",DUP2:1
+v007 refuse 222 GLOB off=5
+v008 refuse 226 CMDSUB off=6
+v009 more
+v010 refuse 227 BACKGROUND off=2
+v011 ok | P0 conn=1 | C0 b=0 argv="echo","a","b"," a  b ","" as= rd=
+v012 refuse 245 VALUE_GLOB off=5
+v013 refuse 220 NUL_BYTE off=6
+v014 ok | P0 conn=1 | C0 b=0 argv="echo","ab" as= rd=
+v015 ok lex_resumes=1 | P0 conn=1 | C0 b=0 argv="echo","a"*1100 as= rd=
