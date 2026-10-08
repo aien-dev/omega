@@ -3,21 +3,21 @@
     "generated": {
       "children": [
         {
-          "digest": "19f6c09a062a6261f446e96e2f9076ce0e5a573c90797519d9182e56ff7451e7",
-          "last_commit": "",
+          "digest": "c7ddbc2a318a522024cc18e91870b628229320e9f2a7a26d1977342f3bf90a70",
+          "last_commit": "303829c",
           "name": "host",
           "purpose": "tests for the osh Linux host adapter execution service (hand-built request records, helper-mode "
         }
       ],
-      "children_root": "sha256:e8fcc63f899602468f801da9049c6a30095d82662a358aa8337991cb64a98948",
-      "compiled_at": "2026-10-08T01:17:14Z",
+      "children_root": "sha256:38ac9bd8b940666827074690f697c3bb8ac7a4fb18ea324c21b6f1467749618f",
+      "compiled_at": "2026-10-08T01:38:19Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:0b71985f0d529e8932fae2135a79741f4420002b5b7bf0b8348386ef8126f8bd",
+      "digest": "sha256:53004c1986b9e156ee32ad8e496d7e9673032ae71ebbc1ad3221e77cb347924a",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 22,
-      "generated_at_commit": "ac4aef8d4f1ccc3968451ff03aa9373965910d1c",
-      "source_tree": "sha256:182d37e3691fa7525b100866c17815f26eb5398210978bc6f2e264f8ff827b82"
+      "files": 23,
+      "generated_at_commit": "303829c96f77000b5e4152fa2d84f7acd335bfda",
+      "source_tree": "sha256:2ba5c15dfb4e1056bc8327fabdbb2b9294104f48cc651705f65c4597b77f54d1"
     }
   },
   "name": "osh-tests",
