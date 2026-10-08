@@ -202,7 +202,7 @@ static int bi_printf(const OshCmd *c, const int io[3])
         osh_diag(io[2], "printf: %s: option not supported", c->argv[ai]);
         return 2;
     }
-    if (ai >= c->nargv) { osh_diag(io[2], "printf: usage: printf format [arguments]"); return 1; }
+    if (ai >= c->nargv) { osh_diag(io[2], "printf: usage: printf format [arguments]"); return 2; } /* bash: 2 */
     const char *fmt = c->argv[ai++];
     int first = ai, nspec = 0;
     /* Validate EVERY conversion before anything is printed. The scan and the print loop below agree on what a

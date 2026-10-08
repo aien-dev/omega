@@ -19,7 +19,8 @@
 //   209 CAP_FIELDS 210 CAP_OUT 211 CAP_VALUE 212 CAP_VARREQ 243 AMBIGUOUS_REDIRECT 244 VALUE_NUL 245 VALUE_GLOB
 //   239 UNSUPPORTED_BUILTIN (argv[0] after expansion is set eval exec . source trap shift read return break continue
 //   local readonly alias wait : declare typeset let command type umask hash ulimit getopts jobs pushd popd dirs
-//   history unalias fg bg builtin enable shopt mapfile times caller disown suspend logout bind help compgen complete;
+//   history unalias fg bg builtin enable shopt mapfile times caller disown suspend logout bind help compgen complete
+//   fc compopt;
 //   names over 8 bytes such as readarray are not caught)  213 WORKSPACE_SIZE 214 ABI_MAGIC 215 ABI_VERSION 216 ABI_LENGTH
 //   217 ABI_RESERVED (also: the parser has not completed the list, or an expander cell is corrupt)
 // A refusal stores code and the byte offset of the word being expanded (the command word start for 239) in the session
@@ -490,14 +491,14 @@ fn classify(v: u64) -> u64 {
     if v == 0x627265616b || v == 0x636f6e74696e7565 || v == 0x6c6f63616c { return 99; }
     if v == 0x726561646f6e6c79 || v == 0x616c696173 || v == 0x77616974 { return 99; }
     // more bash builtins: : declare typeset let command type umask hash ulimit getopts jobs pushd popd dirs history
-    // unalias fg bg builtin enable shopt mapfile times caller disown suspend logout bind help compgen complete
+    // unalias fg bg builtin enable shopt mapfile times caller disown suspend logout bind help compgen complete fc compopt
     if v == 0x3a || v == 0x6465636c617265 || v == 0x74797065736574 || v == 0x6c6574 || v == 0x636f6d6d616e64 { return 99; }
     if v == 0x74797065 || v == 0x756d61736b || v == 0x68617368 || v == 0x756c696d6974 || v == 0x6765746f707473 { return 99; }
     if v == 0x6a6f6273 || v == 0x7075736864 || v == 0x706f7064 || v == 0x64697273 || v == 0x686973746f7279 { return 99; }
     if v == 0x756e616c696173 || v == 0x6667 || v == 0x6267 || v == 0x6275696c74696e || v == 0x656e61626c65 { return 99; }
     if v == 0x73686f7074 || v == 0x6d617066696c65 || v == 0x74696d6573 || v == 0x63616c6c6572 || v == 0x6469736f776e { return 99; }
     if v == 0x73757370656e64 || v == 0x6c6f676f7574 || v == 0x62696e64 || v == 0x68656c70 || v == 0x636f6d7067656e { return 99; }
-    if v == 0x636f6d706c657465 { return 99; }
+    if v == 0x636f6d706c657465 || v == 0x6663 || v == 0x636f6d706f7074 { return 99; }
     return 0;
 }
 

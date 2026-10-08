@@ -632,7 +632,7 @@ static void test_printf(void)
     free(o);
     b = nb(0, 0);
     cmd(b, OSH_B_PRINTF, "printf", NULL);
-    CHECK(go(&t, b, &r) == 1, "printf with no format");
+    CHECK(go(&t, b, &r) == 2, "printf with no format (bash: 2)");
     t_end(&t);
 }
 

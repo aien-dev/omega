@@ -271,7 +271,7 @@ static int classify(uint64_t v)
         {"hash", 99}, {"ulimit", 99}, {"getopts", 99}, {"jobs", 99}, {"pushd", 99}, {"popd", 99}, {"dirs", 99},
         {"history", 99}, {"unalias", 99}, {"fg", 99}, {"bg", 99}, {"builtin", 99}, {"enable", 99}, {"shopt", 99},
         {"mapfile", 99}, {"times", 99}, {"caller", 99}, {"disown", 99}, {"suspend", 99}, {"logout", 99},
-        {"bind", 99}, {"help", 99}, {"compgen", 99}, {"complete", 99},
+        {"bind", 99}, {"help", 99}, {"compgen", 99}, {"complete", 99}, {"fc", 99}, {"compopt", 99},
     };
     for (size_t i = 0; i < sizeof t / sizeof t[0]; i++)
         if (pack_name((const uint8_t *)t[i].n, strlen(t[i].n)) == v) return t[i].id;
