@@ -1,0 +1,48 @@
+// slice-entry: sum at at_i64 first_or_zero length_of
+// External byte slice (docs/osc/OSC-EXT-BYTES-DESIGN.md): a bytes parameter is a read-only borrowed
+// buffer passed as pointer + length; b[i] is a u8 zero-extended to u64 and is checked against b.len.
+// slice-run: sum bytes:0102030405 -> 15
+// slice-run: sum bytes:ff -> 255
+// slice-run: sum bytes: -> 0
+// slice-run: sum bytes:NULL -> 0
+// slice-run: at bytes:0a141e 0 -> 10
+// slice-run: at bytes:0a141e 2 -> 30
+// slice-run: at bytes:0a141e 3 -> trap=BOUNDS
+// slice-run: at bytes:0a141e 18446744073709551615 -> trap=BOUNDS
+// slice-run: at bytes: 0 -> trap=BOUNDS
+// slice-run: at bytes:NULL 0 -> trap=BOUNDS
+// slice-run: at_i64 bytes:0a141e -1 -> trap=BOUNDS
+// slice-run: at_i64 bytes:0a141e -9223372036854775808 -> trap=BOUNDS
+// slice-run: at_i64 bytes:0a141e 1 -> 20
+// slice-run: first_or_zero bytes:80 -> 128
+// slice-run: first_or_zero bytes: -> 0
+// slice-run: length_of bytes:010203 -> 3
+// slice-run: length_of bytes:NULL -> 0
+fn sum(b: bytes) -> u64 {
+    let mut s: u64 = 0;
+    let mut i: u64 = 0;
+    while i < b.len bound 4096 {
+        s = s + b[i];
+        i = i + 1;
+    }
+    return s;
+}
+
+fn at(b: bytes, i: u64) -> u64 {
+    return b[i];
+}
+
+fn at_i64(b: bytes, i: i64) -> u64 {
+    return b[i];
+}
+
+fn first_or_zero(b: bytes) -> u64 {
+    if b.len == 0 {
+        return 0;
+    }
+    return b[0];
+}
+
+fn length_of(b: bytes) -> u64 {
+    return b.len;
+}

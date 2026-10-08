@@ -1,0 +1,8 @@
+// expect: SLICE_ESCAPE object=b line=5
+// transition: store or return a slice
+fn f(b: bytes) -> u64 {
+    pool p: [u64; 2] {
+        let h: handle p = p.alloc(b);
+    }
+    return 0;
+}

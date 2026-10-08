@@ -1,0 +1,17 @@
+// Slice value as another slice's index, empty slices, recursion passing a slice down.
+// slice-run: pick bytes:0305 cells:4 -> 5 cells=0,0,0,5
+// slice-run: pick bytes:0905 cells:4 -> trap=BOUNDS
+// slice-run: pick bytes:09 cells:4 -> trap=BOUNDS
+// slice-run: pick bytes: cells:NULL -> trap=BOUNDS
+// slice-run: sumc cells:3=1,2,3 -> 6
+// slice-run: sumc cells:0 -> 0
+fn pick(b: bytes, c: cells) -> u64 {
+    c[b[0]] = b[1];
+    return c[3];
+}
+fn sumc(c: cells) -> u64 {
+    let mut s: u64 = 0;
+    let mut i: u64 = 0;
+    while i < c.len bound 64 { s = s + c[i]; i = i + 1; }
+    return s;
+}

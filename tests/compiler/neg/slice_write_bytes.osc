@@ -1,0 +1,5 @@
+// expect: SLICE_WRITE object=b line=4
+// transition: write to a bytes slice
+fn f(b: bytes) {
+    b[0] = 1;
+}

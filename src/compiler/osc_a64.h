@@ -58,6 +58,8 @@ typedef enum {
     OSC_A64_BLR, OSC_A64_RET,
     /* imm = imm16 */
     OSC_A64_BRK,
+    /* external byte slices: rd = Rt (zero-extended byte), rn = base (SP kind), rm = index (LDRB Wt, [Xn, Xm]) */
+    OSC_A64_LDRB_REG,
     OSC_A64_NOPS
 } OscA64Op;
 

@@ -1,0 +1,40 @@
+// slice-entry: find count_eq last_index
+// Search a caller buffer: the loop index stays below b.len, so the access never traps; a miss returns the length.
+// slice-run: find bytes:0102030405 3 -> 2
+// slice-run: find bytes:0102030405 9 -> 5
+// slice-run: find bytes: 1 -> 0
+// slice-run: find bytes:NULL 1 -> 0
+// slice-run: count_eq bytes:0701070107 7 -> 3
+// slice-run: last_index bytes:0102 2 -> 0
+// slice-run: last_index bytes: 2 -> trap=BOUNDS
+fn find(b: bytes, want: u64) -> u64 {
+    let mut i: u64 = 0;
+    while i < b.len bound 4096 {
+        if b[i] == want {
+            return i;
+        }
+        i = i + 1;
+    }
+    return b.len;
+}
+
+fn count_eq(b: bytes, want: u64) -> u64 {
+    let mut n: u64 = 0;
+    let mut i: u64 = 0;
+    while i < b.len bound 4096 {
+        if b[i] == want {
+            n = n + 1;
+        }
+        i = i + 1;
+    }
+    return n;
+}
+
+// the element at b.len - 1: an empty slice makes the index wrap and traps BOUNDS
+fn last_index(b: bytes, want: u64) -> u64 {
+    let k: u64 = b.len - 1;
+    if b[k] == want {
+        return 0;
+    }
+    return 1;
+}

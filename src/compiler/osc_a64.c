@@ -69,6 +69,7 @@ static const OpInfo OPS[OSC_A64_NOPS] = {
     [OSC_A64_BLR]      = {"blr",   0xD63F0000u, CLS_BREG,   K_NONE, K_X, K_NONE, K_NONE},
     [OSC_A64_RET]      = {"ret",   0xD65F0000u, CLS_BREG,   K_NONE, K_X, K_NONE, K_NONE},
     [OSC_A64_BRK]      = {"brk",   0xD4200000u, CLS_BRK,    K_NONE, K_NONE, K_NONE, K_NONE},
+    [OSC_A64_LDRB_REG] = {"ldrb",  0x38606800u, CLS_R3,     K_ZR, K_SP, K_ZR, K_NONE},
 };
 
 /* variable-field mask per class (bits not fixed by the opcode) */

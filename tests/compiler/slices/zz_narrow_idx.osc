@@ -1,0 +1,20 @@
+// slice-entry: w8 w32 w64 neg mul shl
+// Narrow and wrapping index arithmetic: unsigned types wrap modulo 2^w, so w8(i) reads b[(i+255) mod 256].
+// slice-run: w8 bytes:aabb 1 -> 170
+// slice-run: w8 bytes:aabb 0 -> trap=BOUNDS
+// slice-run: w32 bytes:aabb 1 -> 170
+// slice-run: w32 bytes:aabb 0 -> trap=BOUNDS
+// slice-run: w64 bytes:aabb 1 -> 170
+// slice-run: w64 bytes:aabb 0 -> trap=BOUNDS
+// slice-run: neg bytes:aabb 1 -> 170
+// slice-run: neg bytes:aabb 0 -> trap=BOUNDS
+// slice-run: mul bytes:aabbccdd 1 -> 204
+// slice-run: mul bytes:aabbccdd 2 -> trap=BOUNDS
+// slice-run: shl bytes:aabb 0 -> 170
+// slice-run: shl bytes:aabb 1 -> trap=BOUNDS
+fn w8(b: bytes, i: u8) -> u64 { return b[i + 255]; }
+fn w32(b: bytes, i: u32) -> u64 { return b[i + 4294967295]; }
+fn w64(b: bytes, i: u64) -> u64 { return b[i + 18446744073709551615]; }
+fn neg(b: bytes, i: i32) -> u64 { return b[i - 1]; }
+fn mul(b: bytes, i: u64) -> u64 { return b[i * 2]; }
+fn shl(b: bytes, i: u64) -> u64 { return b[i << 63]; }

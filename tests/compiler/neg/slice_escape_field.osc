@@ -1,0 +1,6 @@
+// expect: SLICE_ESCAPE object=bytes line=3
+// transition: slice type outside a parameter
+struct S { f: bytes }
+fn g() -> u64 {
+    return 0;
+}

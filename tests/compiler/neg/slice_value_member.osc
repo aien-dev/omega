@@ -1,0 +1,5 @@
+// expect: SLICE_VALUE object=b line=4
+// transition: slice member
+fn f(b: bytes) -> u64 {
+    return b.size;
+}

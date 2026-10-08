@@ -1,0 +1,8 @@
+// expect: SLICE_VALUE object=b line=7
+// transition: slice used as a value
+fn g(n: u64) -> u64 {
+    return n;
+}
+fn f(b: bytes) -> u64 {
+    return g(b);
+}

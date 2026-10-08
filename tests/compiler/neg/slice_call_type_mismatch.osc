@@ -1,0 +1,8 @@
+// expect: TYPE_MISMATCH object=return line=7
+// transition: type mismatch
+fn g(b: bytes) -> u64 {
+    return b.len;
+}
+fn f(c: cells) -> u64 {
+    return g(c);
+}

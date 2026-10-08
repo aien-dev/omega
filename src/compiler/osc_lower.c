@@ -175,6 +175,13 @@ static int cop(int tok)
     }
 }
 
+/* symbol s is an external byte slice (its vreg is the pointer register) */
+static int is_slice(L *l, int s)
+{
+    OscScalar t = l->f->vtype[l->vreg[s]].s;
+    return t == OSC_T_BYTES || t == OSC_T_CELLS;
+}
+
 static int expr(L *l, int i);
 
 static int call(L *l, int i, int want_value)
@@ -183,6 +190,13 @@ static int call(L *l, int i, int want_value)
     int args[OSC_MAX_PARAMS], na = 0;
     for (int a = n->a; a >= 0 && na < OSC_MAX_PARAMS; a = NODE(a)->next) {
         const OscNode *an = NODE(a);
+        if (an->kind == ON_NAME && an->sym >= 0 && (l->f->vtype[l->vreg[an->sym]].s == OSC_T_BYTES ||
+                                                  l->f->vtype[l->vreg[an->sym]].s == OSC_T_CELLS)) {
+            if (na + 2 > OSC_MAX_PARAMS) { lcap(l, n->line, "call argument registers"); break; }
+            args[na++] = l->vreg[an->sym];  /* slice argument: pointer, then length */
+            args[na++] = (int16_t)(l->vreg[an->sym] + 1);
+            continue;
+        }
         if (an->kind == ON_BORROW) args[na++] = l->vreg[an->sym];
         else if (an->kind == ON_NAME && an->sym >= 0 && l->f->vtype[l->vreg[an->sym]].s == OSC_T_REF)
             args[na++] = l->vreg[an->sym];  /* own argument: moves the owner */
@@ -226,13 +240,14 @@ static int expr(L *l, int i)
     case ON_INDEX: {
         int ix = expr(l, n->a);
         int r = newvs(l, n->ty.s, n->line);
-        OscInsn *x = emit(l, OSC_I_LOAD, n->line);
+        OscInsn *x = emit(l, is_slice(l, n->sym) ? OSC_I_SLOAD : OSC_I_LOAD, n->line);
         x->dst = (int16_t)r;
         x->a = l->vreg[n->sym];
         x->b = (int16_t)ix;
         return r;
     }
     case ON_FIELD: {
+        if (is_slice(l, n->sym)) return l->vreg[n->sym] + 1; /* NAME.len: the length register */
         int ix = n->a >= 0 ? expr(l, n->a) : -1;
         int r = newvs(l, n->ty.s, n->line);
         OscInsn *x = emit(l, OSC_I_FLOAD, n->line);
@@ -445,7 +460,7 @@ static void stmt(L *l, int i)
     case ON_STORE: {
         int ix = expr(l, n->a);
         int v = expr(l, n->b);
-        OscInsn *x = emit(l, OSC_I_STORE, n->line);
+        OscInsn *x = emit(l, is_slice(l, n->sym) ? OSC_I_SSTORE : OSC_I_STORE, n->line);
         x->a = l->vreg[n->sym];
         x->b = (int16_t)ix;
         x->c = (int16_t)v;
@@ -656,6 +671,10 @@ static int lower_fn(L *l, int fi)
         int r = newv(l, &pn->ty, pn->line);
         l->vreg[pn->sym] = (int16_t)r;
         f->nparams++;
+        if (pn->ty.s == OSC_T_BYTES || pn->ty.s == OSC_T_CELLS) { /* slice: pointer register, then its u64 length */
+            newvs(l, OSC_T_U64, pn->line);
+            f->nparams++;
+        }
     }
     l->cur = newblk(l, fn->line);
     /* OSC-3 item 3: own parameters that may be moved on only some paths get

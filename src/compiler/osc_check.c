@@ -11,7 +11,8 @@
 #include <string.h>
 
 enum { SK_SCALAR = 1, SK_OWNER, SK_BORROW, SK_ARENA /* OSC-2 arenas */,
-       SK_POOL, SK_HANDLE /* OSC-3 item 2: versioned handles */ };
+       SK_POOL, SK_HANDLE /* OSC-3 item 2: versioned handles */,
+       SK_SLICE /* external byte slice parameter (docs/osc/OSC-EXT-BYTES-DESIGN.md) */ };
 
 /* OSC-3 item 2: static provenances (one per checked `P.alloc` evaluation) */
 #define MAX_PROV 1024
@@ -876,6 +877,35 @@ static int chk(C *c, int i, OscScalar want);
 static int chk_call(C *c, int i, OscScalar want, int as_stmt);
 static int arena_move_refused(C *c, const OscNode *at, int s, const char *transition);
 
+/* external byte slices: a slice parameter may only be indexed, measured with
+ * .len, or passed whole to a slice parameter of the same type */
+static int slice_diag(C *c, const OscNode *at, OscDiagKind k, const Sym *y, const char *tr, const char *msg)
+{
+    osc_diag_set(c->d, k, at->line, at->col, y->name, y->line, NULL, tr, "%s", msg);
+    return -1;
+}
+
+/* node i is the bare name of a slice parameter: its symbol, else -1 (silent) */
+static int slice_name(C *c, int i)
+{
+    const OscNode *n = NODE(i);
+    char name[64];
+    if (n->kind != ON_NAME) return -1;
+    osc_node_name(c->ast, n, name, sizeof name);
+    int s = lookup(c, name);
+    return s >= 0 && c->sym[s].kind == SK_SLICE ? s : -1;
+}
+
+/* a value stored anywhere (let, assignment, element, field, return) must not be a slice */
+static int slice_noescape(C *c, int i)
+{
+    int s = i >= 0 ? slice_name(c, i) : -1;
+    if (s < 0) return 0;
+    char msg[160];
+    snprintf(msg, sizeof msg, "'%s' is a borrowed slice: it is never returned or stored (not even in a local)", c->sym[s].name);
+    return slice_diag(c, NODE(i), OSC_DIAG_SLICE_ESCAPE, &c->sym[s], "store or return a slice", msg);
+}
+
 static int want_ok(C *c, const OscNode *n, OscScalar got, OscScalar want)
 {
     if (want && got != want) {
@@ -1012,7 +1042,7 @@ static int handle_alloc(C *c, OscNode *an, int ps)
         return -1;
     }
     an->sym = ps;
-    if (chk(c, an->a, p->ty.s) < 0) return -1;
+    if (slice_noescape(c, an->a) || chk(c, an->a, p->ty.s) < 0) return -1;
     if (c->loop_depth == p->loop_depth && c->cond_depth == p->cond_depth) {
         if (!p->cap_off && p->dlive + 1u > p->cap) {
             osc_diag_set(c->d, OSC_DIAG_POOL_CAPACITY, an->line, an->col, p->name, p->line, NULL, "pool full",
@@ -1175,6 +1205,9 @@ static int chk(C *c, int i, OscScalar want)
         int s = resolve(c, n);
         if (s < 0) return -1;
         n->sym = s;
+        if (c->sym[s].kind == SK_SLICE)
+            return slice_diag(c, n, OSC_DIAG_SLICE_VALUE, &c->sym[s], "slice used as a value",
+                              "a slice is used only as 'name[i]', 'name.len' or whole as a slice argument");
         if (c->sym[s].kind != SK_SCALAR) {
             snprintf(msg, sizeof msg, "'%s' is %s %s, not a scalar value", c->sym[s].name,
                      c->sym[s].ty.sid ? "a struct" : "an array", c->sym[s].kind == SK_OWNER ? "owner" : "borrow");
@@ -1201,6 +1234,18 @@ static int chk(C *c, int i, OscScalar want)
         int s = resolve(c, n);
         if (s < 0) return -1;
         n->sym = s;
+        if (c->sym[s].kind == SK_SLICE) { /* checked at run time against the length register; result is u64 */
+            if (c->contract == 2 && c->sym[s].ty.s == OSC_T_CELLS) {
+                osc_diag_set(c->d, OSC_DIAG_CONTRACT_INVALID, n->line, n->col, c->sym[s].name, c->sym[s].line, NULL,
+                             "cells read in ensures", "an ensures clause may not read the written slice '%s'", c->sym[s].name);
+                return -1;
+            }
+            int r = chk(c, n->a, ctxfree(c, n->a) ? OSC_T_I64 : 0);
+            if (r < 0) return -1;
+            if (!osc_scalar_is_int((OscScalar)r)) return tmismatch(c, NODE(n->a), tname((OscScalar)r), "slice index must be an integer");
+            t = OSC_T_U64;
+            break;
+        }
         if (c->contract == 2 && c->sym[s].kind != SK_SCALAR && !(c->sym[s].kind == SK_BORROW && c->sym[s].ty.ref == OSC_REF_SHARED)) {
             osc_diag_set(c->d, OSC_DIAG_CONTRACT_INVALID, n->line, n->col, c->sym[s].name, c->sym[s].line, NULL,
                          "array read in ensures",
@@ -1223,13 +1268,21 @@ static int chk(C *c, int i, OscScalar want)
         int s = resolve(c, n);
         if (s < 0) return -1;
         n->sym = s;
-        if (c->contract == 2 && c->sym[s].kind != SK_SCALAR &&
+        if (c->contract == 2 && c->sym[s].kind != SK_SCALAR && c->sym[s].kind != SK_SLICE && /* a slice length is immutable */
             !(c->sym[s].kind == SK_BORROW && c->sym[s].ty.ref == OSC_REF_SHARED)) {
             osc_diag_set(c->d, OSC_DIAG_CONTRACT_INVALID, n->line, n->col, c->sym[s].name, c->sym[s].line, NULL,
                          "struct field read in ensures",
                          "an ensures clause may read fields only through a shared '&' parameter ('%s' is not one)",
                          c->sym[s].name);
             return -1;
+        }
+        if (c->sym[s].kind == SK_SLICE) { /* NAME.len */
+            char fname[64];
+            osc_tok_text(c->ast->src, &c->ast->toks[n->lo], fname, sizeof fname);
+            if (strcmp(fname, "len") != 0 || n->a >= 0)
+                return slice_diag(c, n, OSC_DIAG_SLICE_VALUE, &c->sym[s], "slice member", "the only member of a slice is '.len'");
+            t = OSC_T_U64;
+            break;
         }
         const OscField *fd = chk_field(c, n, s);
         if (!fd) return -1;
@@ -1484,7 +1537,7 @@ static int chk_call_requires(C *c, int i, int g, const int *args, int na)
     env.nk = na;
     int k = 0;
     for (int p = f->a; p >= 0 && k < na; p = NODE(p)->next, k++)
-        if (NODE(p)->ty.s != OSC_T_REF && ceval(c, args[k], &none, &env.v[k])) env.k[k] = 1;
+        if (NODE(p)->ty.s != OSC_T_REF && NODE(p)->ty.s != OSC_T_BYTES && NODE(p)->ty.s != OSC_T_CELLS && ceval(c, args[k], &none, &env.v[k])) env.k[k] = 1;
     uint64_t v;
     if (ceval(c, a->reqn[g], &env, &v) && !v) {
         char name[64];
@@ -1529,6 +1582,27 @@ static int chk_call(C *c, int i, OscScalar want, int as_stmt)
     for (int k = 0; k < na; k++) {
         OscNode *a = NODE(args[k]);
         const OscType *pt = &NODE(params[k])->ty;
+        if (pt->s == OSC_T_BYTES || pt->s == OSC_T_CELLS) { /* a slice goes down whole, by name, to a slice of the same type */
+            int ss = slice_name(c, args[k]);
+            if (ss < 0) {
+                if (a->kind == ON_BORROW) return tmismatch(c, a, name, "borrow passed to a slice parameter");
+                if (a->kind == ON_NAME) { int ns = resolve(c, a); if (ns < 0) return -1; }
+                return tmismatch(c, a, name, "a slice parameter takes the name of a slice of the same type");
+            }
+            a->sym = ss;
+            if (c->sym[ss].ty.s != pt->s) {
+                snprintf(msg, sizeof msg, "'%s' is a %s slice where '%s' takes a %s slice", c->sym[ss].name,
+                         c->sym[ss].ty.s == OSC_T_BYTES ? "bytes" : "cells", name, pt->s == OSC_T_BYTES ? "bytes" : "cells");
+                return tmismatch(c, a, c->sym[ss].name, msg);
+            }
+            for (int j = 0; j < k; j++) /* the same cells twice would give the callee two aliasing parameters */
+                if (c->sym[ss].ty.s == OSC_T_CELLS && NODE(args[j])->kind == ON_NAME && NODE(args[j])->sym == ss &&
+                    (NODE(params[j])->ty.s == OSC_T_CELLS || NODE(params[j])->ty.s == OSC_T_BYTES)) {
+                    snprintf(msg, sizeof msg, "cells slice '%s' is passed twice to '%s': the parameters would alias", c->sym[ss].name, name);
+                    return slice_diag(c, a, OSC_DIAG_SLICE_ALIAS, &c->sym[ss], "slice passed twice", msg);
+                }
+            continue;
+        }
         if (pt->s != OSC_T_REF) {
             if (a->kind == ON_BORROW) return tmismatch(c, a, name, "borrow passed to a scalar parameter");
             if (chk(c, args[k], pt->s) < 0) return -1;
@@ -1556,6 +1630,8 @@ static int chk_call(C *c, int i, OscScalar want, int as_stmt)
         int s = resolve(c, a);
         if (s < 0) return -1;
         a->sym = s;
+        if (c->sym[s].kind == SK_SLICE)
+            return slice_diag(c, a, OSC_DIAG_SLICE_VALUE, &c->sym[s], "borrow of a slice", "a slice is passed whole by name, never borrowed with '&'");
         if (c->sym[s].kind == SK_SCALAR || !same_arr(&c->sym[s].ty, pt)) {
             char tb[72];
             snprintf(msg, sizeof msg, "'%s' is not %s %s", c->sym[s].name, pt->sid ? "a struct" : "an array",
@@ -1644,6 +1720,7 @@ static int chk_borrow_src(C *c, OscNode *bn, const OscType *ty, int *src)
     if (s < 0) return -1;
     bn->sym = s;
     *src = s;
+    if (c->sym[s].kind == SK_SLICE) return slice_diag(c, bn, OSC_DIAG_SLICE_VALUE, &c->sym[s], "borrow of a slice", "a slice is passed whole by name, never borrowed with '&'");
     if (c->sym[s].kind == SK_SCALAR) {
         snprintf(msg, sizeof msg, "'%s' is a scalar; only arrays are borrowed", c->sym[s].name);
         return tmismatch(c, bn, c->sym[s].name, msg);
@@ -1826,6 +1903,7 @@ static int chk_stmt(C *c, int i)
         osc_node_name(c->ast, n, name, sizeof name);
         int prev = lookup(c, name);
         if (prev >= 0) return declare(c, n, SK_SCALAR, &n->ty, n->mut) < 0 ? -1 : -1;
+        if (slice_noescape(c, n->a)) return -1;
         if (chk(c, n->a, n->ty.s) < 0) return -1;
         int s = declare(c, n, SK_SCALAR, &n->ty, n->mut);
         if (s < 0) return -1;
@@ -1840,8 +1918,8 @@ static int chk_stmt(C *c, int i)
         if (n->ty.sid) {  /* struct literal: field values in source order */
             const OscStruct *st = &c->ast->structs[n->ty.sid - 1];
             for (int fi = n->a; fi >= 0; fi = NODE(fi)->next)
-                if (chk(c, NODE(fi)->a, st->fields[NODE(fi)->hi].s) < 0) return -1;
-        } else if (chk(c, n->a, n->ty.elem) < 0) return -1;
+                if (slice_noescape(c, NODE(fi)->a) || chk(c, NODE(fi)->a, st->fields[NODE(fi)->hi].s) < 0) return -1;
+        } else if (slice_noescape(c, n->a) || chk(c, n->a, n->ty.elem) < 0) return -1;
         int as = -1;
         if (n->c >= 0 && (as = arena_alloc_site(c, n, NODE(n->c))) < 0) return -1;
         int s = declare(c, n, SK_OWNER, &n->ty, 0);
@@ -1944,6 +2022,7 @@ static int chk_stmt(C *c, int i)
         OscNode *v = NODE(n->a);
         if (y->kind == SK_SCALAR) {
             if (v->kind == ON_BORROW) return tmismatch(c, v, y->name, "a borrow cannot be assigned to a scalar");
+            if (slice_noescape(c, n->a)) return -1;
             return chk(c, n->a, y->ty.s) < 0 ? -1 : 0;
         }
         /* borrow binding */
@@ -1989,18 +2068,29 @@ static int chk_stmt(C *c, int i)
             n->sym = ps;
             n->sym2 = hs;
             NODE(n->a)->sym = hs;
-            if (chk(c, n->b, c->sym[ps].ty.s) < 0) return -1;
+            if (slice_noescape(c, n->b) || chk(c, n->b, c->sym[ps].ty.s) < 0) return -1;
             return handle_use(c, n, hs, 1);
         }
         int s = resolve(c, n);
         if (s < 0) return -1;
         n->sym = s;
         Sym *y = &c->sym[s];
+        if (y->kind == SK_SLICE) { /* cells[i] = e (u64); bytes are read-only */
+            if (y->ty.s == OSC_T_BYTES)
+                return slice_diag(c, n, OSC_DIAG_SLICE_WRITE, y, "write to a bytes slice",
+                                  "a 'bytes' slice is read-only: there is no way to write an element of it");
+            if (slice_noescape(c, n->b)) return -1;
+            int r = chk(c, n->a, ctxfree(c, n->a) ? OSC_T_I64 : 0);
+            if (r < 0) return -1;
+            if (!osc_scalar_is_int((OscScalar)r)) return tmismatch(c, NODE(n->a), tname((OscScalar)r), "slice index must be an integer");
+            return chk(c, n->b, OSC_T_U64) < 0 ? -1 : 0;
+        }
         if (y->kind == SK_SCALAR || y->ty.sid) {
             snprintf(msg, sizeof msg, "'%s' is a %s, not an array", y->name, y->ty.sid ? "struct" : "scalar");
             return tmismatch(c, n, y->name, msg);
         }
         if (chk_index(c, s, n->a, n)) return -1;
+        if (slice_noescape(c, n->b)) return -1;
         if (chk(c, n->b, y->ty.elem) < 0) return -1;
         return access(c, s, 1, n->line, n->col);
     }
@@ -2009,8 +2099,11 @@ static int chk_stmt(C *c, int i)
         int s = resolve(c, n);
         if (s < 0) return -1;
         n->sym = s;
+        if (c->sym[s].kind == SK_SLICE)
+            return slice_diag(c, n, OSC_DIAG_SLICE_WRITE, &c->sym[s], "write to a slice member", "the length of a slice is read-only");
         const OscField *fd = chk_field(c, n, s);
         if (!fd) return -1;
+        if (slice_noescape(c, n->b)) return -1;
         if (chk(c, n->b, fd->s) < 0) return -1;
         return access(c, s, 1, n->line, n->col);
     }
@@ -2027,6 +2120,7 @@ static int chk_stmt(C *c, int i)
             OscNode *bn = NODE(n->a);
             int s = resolve(c, bn);
             if (s < 0) return -1;
+            if (c->sym[s].kind == SK_SLICE) return slice_diag(c, bn, OSC_DIAG_SLICE_ESCAPE, &c->sym[s], "return a borrow of a slice", "a slice is never returned");
             if (c->sym[s].kind == SK_SCALAR) return tmismatch(c, bn, c->sym[s].name, "only arrays are borrowed");
             int b = take_borrow(c, s, bn->mut, bn->line, bn->col);
             if (b < 0) return -1;
@@ -2041,6 +2135,7 @@ static int chk_stmt(C *c, int i)
                              "type mismatch", "'return;' in a function returning %s", tname(c->fret.s));
                 return -1;
             }
+            if (slice_noescape(c, n->a)) return -1;
             if (chk(c, n->a, c->fret.s) < 0) return -1;
             if (chk_return_ensures(c, n)) return -1;
         }
@@ -2194,7 +2289,8 @@ static int chk_fn(C *c, int fi)
     if (push_scope(c, fn->line)) return -1;
     for (int p = fn->a; p >= 0; p = NODE(p)->next) {
         OscNode *pn = NODE(p);
-        uint8_t kind = pn->ty.s != OSC_T_REF ? SK_SCALAR : pn->ty.ref == OSC_REF_OWN ? SK_OWNER : SK_BORROW;
+        uint8_t kind = pn->ty.s == OSC_T_BYTES || pn->ty.s == OSC_T_CELLS ? SK_SLICE :
+                       pn->ty.s != OSC_T_REF ? SK_SCALAR : pn->ty.ref == OSC_REF_OWN ? SK_OWNER : SK_BORROW;
         int s = declare(c, pn, kind, &pn->ty, 0);
         if (s < 0) return -1;
         pn->sym = s;

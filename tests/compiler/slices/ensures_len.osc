@@ -1,0 +1,9 @@
+// slice-entry: clip
+// ensures may read the immutable length of a slice (result <= b.len); never the written cells.
+// slice-run: clip bytes:010203 -> 3
+// slice-run: clip bytes: -> 0
+fn clip(b: bytes) -> u64
+    ensures result <= b.len
+{
+    return b.len;
+}
