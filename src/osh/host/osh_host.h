@@ -134,6 +134,7 @@ typedef struct OshSession {
     OshPermHook perm_hook;
     void *hook_ctx;
     int exit_requested, exit_status; /* set by the parent `exit` builtin */
+    int abort_list;              /* set by the parent `exit` with too many arguments: bash drops the rest of the list */
     /* test-only fault injection; all zero in production */
     int fail_fork_at;                          /* 1-based index of the command whose fork() is made to fail */
     void (*after_launch_hook)(void *);         /* called after the last command is started, before waiting */

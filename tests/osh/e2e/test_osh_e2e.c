@@ -7,6 +7,8 @@
  * "@A" in a case is replaced by the argprint path and "@T" by the fixture directory. Final line OSH_E2E_PASS/FAIL.
  */
 #include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -168,6 +170,17 @@ static const Case CASES[] = {
     {"comments and blank lines", 1, "# comment\n\n@A a # not b\n  \n@A b\n", NULL, "[a]\n[b]\n", NULL, 0},
     {"script with arguments", 1, "@A \"$0\" \"$1\" $#\n", A_NAME_AB, "[@T/script.osh]\n[name]\n[3]\n", NULL, 0},
     {"continuation lines", 1, "@A a \\\nb \\\n  c\n", NULL, "[a]\n[b]\n[c]\n", NULL, 0},
+    {"-c: trailing backslash is literal (bash 5.2)", 0, "@A a\\", NULL, "[a\\]\n", NULL, 0},
+    {"-c: a list ending in ; at end of input runs", 0, "@A a;", NULL, "[a]\n", NULL, 0},
+    {"-c: two lists, the last ending in ;", 0, "@A a; @A b; ", NULL, "[a]\n[b]\n", NULL, 0},
+    {"script: trailing backslash with no newline joins nothing", 1, "@A a\\", NULL, "[a]\n", NULL, 0},
+    {"stdin: trailing backslash with no newline joins nothing", 2, "@A a\\", NULL, "[a]\n", NULL, 0},
+    {"script: last line ends in ; with no newline", 1, "@A a\n@A b;", NULL, "[a]\n[b]\n", NULL, 0},
+    {"printf option is refused and prints nothing", 0, "printf -v x '%s' hi; @A \"$x\" $?", NULL, "[]\n[2]\n", "option not supported", 0},
+    {"exit with two arguments drops the rest of the list (bash)", 1, "exit 1 2; @A same\n@A next $?\n", NULL, "[next]\n[1]\n", "too many arguments", 0},
+    {"export NAME=$v is not split", 0, "Y='a  b'; export A=$Y; @A -e A", NULL, "[a  b]\n", NULL, 0},
+    {"quoted empty var then $@ with no arguments gives no argument", 0, "E=; @A x \"$E$@\" y", NULL, "[x]\n[y]\n", NULL, 0},
+    {"colon is refused before anything runs", 0, "@A a; : ; @A b", NULL, "[a]\n", "UNSUPPORTED_BUILTIN", 2},
     {"quote across lines", 1, "@A \"a\nb\" 'c\nd'\n", NULL, "[a\nb]\n[c\nd]\n", NULL, 0},
     {"and-or across lines", 1, "@A a &&\n@A b ||\n@A c\n@A -x 1 |\n@A -cat\n", NULL, "[a]\n[b]\n", NULL, 0},
     {"missing newline at end", 1, "@A a\n@A b", NULL, "[a]\n[b]\n", NULL, 0},
@@ -215,6 +228,73 @@ static const Case CASES[] = {
     {"refusal after earlier output keeps it", 1, "@A a\nG='*'; @A $G\n@A b\n", NULL, "[a]\n", "refused: VALUE_GLOB", 2},
 };
 
+/* Read the pseudo-terminal into buf until it holds want, for up to secs seconds. 1 found, 0 not. */
+static int pty_wait(int fd, char *buf, size_t cap, size_t *n, const char *want, int secs)
+{
+    for (int i = 0; i < secs * 10; i++) {
+        buf[*n] = 0;
+        if (strstr(buf, want)) return 1;
+        struct pollfd p = {fd, POLLIN, 0};
+        if (poll(&p, 1, 100) <= 0) continue;
+        ssize_t r = read(fd, buf + *n, cap - 1 - *n);
+        if (r <= 0) break;
+        *n += (size_t)r;
+    }
+    buf[*n] = 0;
+    return strstr(buf, want) != NULL;
+}
+
+/* ^C typed at an idle interactive prompt (review of #340, BUG-5): the shell drops the half-typed line, prompts again,
+ * keeps running and sets $? to 130, as bash does. Before the fix the shell died of SIGINT. Needs a pseudo-terminal. */
+static void test_prompt_ctrl_c(void)
+{
+    int master = posix_openpt(O_RDWR | O_NOCTTY);
+    if (master < 0 || grantpt(master) || unlockpt(master) || !ptsname(master)) {
+        printf("note: no pseudo-terminal available, prompt ^C test skipped\n");
+        return;
+    }
+    char sname[256];
+    snprintf(sname, sizeof sname, "%s", ptsname(master));
+    pid_t pid = fork();
+    if (pid == 0) {
+        setsid();
+        int s = open(sname, O_RDWR); /* the new session leader acquires the terminal */
+        if (s < 0) _exit(126);
+        dup2(s, 0); dup2(s, 1); dup2(s, 2);
+        if (s > 2) close(s);
+        close(master);
+        if (chdir(TMP) != 0) _exit(126);
+        unsetenv("OSH_INTERP");
+        char *av[] = {(char *)OSH, NULL};
+        execv(OSH, av);
+        _exit(127);
+    }
+    char buf[16384], line[1200];
+    size_t n = 0;
+    int ok = pty_wait(master, buf, sizeof buf, &n, "osh$ ", 5);
+    check(ok, "prompt ^C: first prompt");
+    snprintf(line, sizeof line, "%s half", ARG);
+    if (write(master, line, strlen(line)) < 0) {}
+    usleep(200000);
+    size_t mark = n;
+    if (write(master, "\003", 1) < 0) {}
+    ok = pty_wait(master, buf + mark, sizeof buf - mark, &(size_t){0}, "osh$ ", 5);
+    n = strlen(buf);
+    check(ok, "prompt ^C: a new prompt after ^C");
+    snprintf(line, sizeof line, "%s \"st=$?\"\n", ARG);
+    if (write(master, line, strlen(line)) < 0) {}
+    ok = pty_wait(master, buf, sizeof buf, &n, "[st=130]", 5);
+    check(ok, "prompt ^C: the shell still runs commands and $? is 130");
+    check(strstr(buf, "[half]") == NULL, "prompt ^C: the abandoned line did not run");
+    if (write(master, "exit 0\n", 7) < 0) {}
+    int st = -1;
+    for (int i = 0; i < 50 && waitpid(pid, &st, WNOHANG) == 0; i++) usleep(100000);
+    if (st == -1) { kill(pid, SIGKILL); waitpid(pid, &st, 0); }
+    check(WIFEXITED(st) && WEXITSTATUS(st) == 0, "prompt ^C: shell exits 0 on exit 0 (raw status %d)", st);
+    if (fails) fprintf(stderr, "  prompt ^C transcript:\n%s\n", buf);
+    close(master);
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 3) { fprintf(stderr, "usage: %s OSH ARGPRINT\n", argv[0]); return 2; }
@@ -254,6 +334,7 @@ int main(int argc, char **argv)
         free(want_out);
         free(r[0].out); free(r[0].err); free(r[1].out); free(r[1].err);
     }
+    test_prompt_ctrl_c();
     printf("e2e cases %lu (each run native and OSH_INTERP=1), checks %lu, failures %lu\n", ncases, checks, fails);
     /* clean the fixture: only files this test created */
     char rm[600];

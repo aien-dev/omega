@@ -80,7 +80,7 @@
         },
         {
           "digest": "18e933f213d7958215bb0ecf09116e5c21d3b335cfdabc1ffbf7a2a4e98b5250",
-          "last_commit": "eb8dedf",
+          "last_commit": "f7b4389",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
         },
@@ -115,8 +115,8 @@
           "purpose": "Directory src/language. Purpose not yet described by a human."
         },
         {
-          "digest": "e5b7c04cf57f1637ebeb8b1be76abd5cd690c17b3d346420cbcd81ade9c001a1",
-          "last_commit": "468174d",
+          "digest": "168f7f89e406979fb365f8a9bf850cb73ee5ffbf12a5d98632d2c5dcce8b1630",
+          "last_commit": "c46d783",
           "name": "osh",
           "purpose": "osh (Omega-native shell, arch#158) lexer unit: layout list, generator, osh_lex.osc, C reference "
         },
@@ -175,15 +175,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:c9f287c18725f0692cee1390920a2fb400f996b15fc8af6ddc346dae03b145c2",
-      "compiled_at": "2026-10-08T12:03:11Z",
+      "children_root": "sha256:457fec39510f143da425bd460290d22598f4b04f05714a47b1535665eaf1e0d9",
+      "compiled_at": "2026-10-08T12:03:27Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:8a31ee815b86c61ec1a2ac9079d874c19e3be4387a415e07a28411d606bb0308",
+      "digest": "sha256:afa582c61fd1f324850f28ae7a060ae4d29a295ec88d1e25b97fd71ff4cbe1ac",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 441,
-      "generated_at_commit": "468174d410435480f45097f2e93215dc06c50d47",
-      "source_tree": "sha256:3e06acb8206d1e45aefdd431593876a7b5b4f3b327de4c3ac6aaadfcb723c9f9"
+      "generated_at_commit": "c46d78396a8af0c3d39f0f64f80c11518f0f1433",
+      "source_tree": "sha256:982131df83e6782c32c30c75108faf8390fc82b1b69937fde7cb043f34a92ffc"
     },
     "owner_lane": "",
     "provenance": {
