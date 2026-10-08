@@ -1,15 +1,22 @@
 {
   "extensions": {
     "generated": {
-      "children": [],
-      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-08T01:00:05Z",
+      "children": [
+        {
+          "digest": "d282ce93fb2cd89069393118bb1aca7f63780d472838f06dccf0b35fb199540d",
+          "last_commit": "",
+          "name": "host",
+          "purpose": "osh Linux host adapter execution service: request decoder, resolution, builtins, redirections, p"
+        }
+      ],
+      "children_root": "sha256:1645b042ddbdbd505d28c756ba9fa4473d970402346fc2de0e103c4eea33ea10",
+      "compiled_at": "2026-10-08T01:17:14Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:60af08597da103df1bf69625c01dac5949b697beeba73286a0b39853a89f7c0b",
+      "digest": "sha256:bcb67aed3b329ff0886b2c1241bd69d8ff07ad3d7d5ad5e48c93f25ed6cb8a73",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 7,
-      "generated_at_commit": "a01986733533884ecbda5d7ef3f84f0306fc7778",
+      "generated_at_commit": "ac4aef8d4f1ccc3968451ff03aa9373965910d1c",
       "source_tree": "sha256:71bc862d7987352b0fa366d3cba10b138d6b4b07bba8b010cbc768e0782220ad"
     }
   },

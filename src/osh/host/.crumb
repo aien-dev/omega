@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-08T01:17:14Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:d282ce93fb2cd89069393118bb1aca7f63780d472838f06dccf0b35fb199540d",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 0,
+      "generated_at_commit": "ac4aef8d4f1ccc3968451ff03aa9373965910d1c",
+      "source_tree": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "name": "host",
+  "purpose": "osh Linux host adapter execution service: request decoder, resolution, builtins, redirections, pipelines (arch#158; replaceable scaffolding per ADR 0024)",
+  "schema_version": "1.0.0"
+}

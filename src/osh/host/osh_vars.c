@@ -1,0 +1,164 @@
+/*
+ * osh_vars.c -- the shell's variable table and the fresh-per-exec environment (ABI section 4.5, 7.2, 9.1).
+ * The environment of a child is built from this table only; the process-global environ is read once, at
+ * osh_session_init, and never again. Names and values are raw bytes without NUL.
+ */
+#include "osh_host.h"
+#include "osh_priv.h"
+
+#include <errno.h>
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+static OshVar *find(const OshSession *s, const char *name)
+{
+    for (size_t i = 0; i < s->nvars; i++)
+        if (strcmp(s->vars[i].name, name) == 0) return &s->vars[i];
+    return NULL;
+}
+
+static OshVar *add(OshSession *s, const char *name)
+{
+    if (s->nvars == s->capvars) {
+        size_t nc = s->capvars ? s->capvars * 2 : 32;
+        OshVar *nv = realloc(s->vars, nc * sizeof *nv);
+        if (!nv) return NULL;
+        s->vars = nv;
+        s->capvars = nc;
+    }
+    char *n = strdup(name);
+    if (!n) return NULL;
+    OshVar *v = &s->vars[s->nvars++];
+    v->name = n;
+    v->value = NULL;
+    v->exported = 0;
+    return v;
+}
+
+const char *osh_var_get(const OshSession *s, const char *name)
+{
+    OshVar *v = find(s, name);
+    return v ? v->value : NULL;
+}
+
+static int setval(OshVar *v, const char *value)
+{
+    char *d = strdup(value);
+    if (!d) return -1;
+    free(v->value);
+    v->value = d;
+    return 0;
+}
+
+int osh_var_set(OshSession *s, const char *name, const char *value)
+{
+    if (!osh_name_valid(name)) return -1;
+    OshVar *v = find(s, name);
+    if (!v && !(v = add(s, name))) return -1;
+    return setval(v, value);
+}
+
+int osh_var_export(OshSession *s, const char *name, const char *value)
+{
+    if (!osh_name_valid(name)) return -1;
+    OshVar *v = find(s, name);
+    if (!v && !(v = add(s, name))) return -1;
+    if (value && setval(v, value)) return -1;
+    v->exported = 1;
+    return 0;
+}
+
+int osh_var_unset(OshSession *s, const char *name)
+{
+    for (size_t i = 0; i < s->nvars; i++)
+        if (strcmp(s->vars[i].name, name) == 0) {
+            free(s->vars[i].name);
+            free(s->vars[i].value);
+            s->vars[i] = s->vars[--s->nvars];
+            return 0;
+        }
+    return 0;
+}
+
+static int pwd_names_cwd(const char *p)
+{
+    struct stat a, b;
+    return p && p[0] == '/' && stat(p, &a) == 0 && stat(".", &b) == 0 && a.st_dev == b.st_dev && a.st_ino == b.st_ino;
+}
+
+int osh_session_init(OshSession *s, char *const *envp)
+{
+    memset(s, 0, sizeof *s);
+    s->fd[0] = 0; s->fd[1] = 1; s->fd[2] = 2;
+    s->tty_fd = -1;
+    s->session_epoch = 1;
+    for (; envp && *envp; envp++) {
+        const char *eq = strchr(*envp, '=');
+        if (!eq || eq == *envp) continue;
+        size_t nl = (size_t)(eq - *envp);
+        char name[256];
+        if (nl >= sizeof name) continue;
+        memcpy(name, *envp, nl);
+        name[nl] = 0;
+        if (!osh_name_valid(name)) continue;
+        if (osh_var_export(s, name, eq + 1)) { osh_session_free(s); return -1; }
+    }
+    if (!pwd_names_cwd(osh_var_get(s, "PWD"))) {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof cwd) && osh_var_export(s, "PWD", cwd) == 0) return 0;
+        osh_session_free(s);
+        return -1;
+    }
+    return 0;
+}
+
+void osh_session_free(OshSession *s)
+{
+    for (size_t i = 0; i < s->nvars; i++) { free(s->vars[i].name); free(s->vars[i].value); }
+    free(s->vars);
+    s->vars = NULL;
+    s->nvars = s->capvars = 0;
+}
+
+void osh_envp_free(char **envp)
+{
+    if (!envp) return;
+    for (char **p = envp; *p; p++) free(*p);
+    free(envp);
+}
+
+char **osh_build_envp(const OshSession *s, const OshAssign *ov, int nov)
+{
+    char **e = calloc(s->nvars + (size_t)nov + 1, sizeof *e);
+    if (!e) return NULL;
+    size_t n = 0;
+    for (size_t i = 0; i < s->nvars; i++) {
+        const OshVar *v = &s->vars[i];
+        if (!v->exported || !v->value) continue;
+        size_t nl = strlen(v->name), vl = strlen(v->value);
+        char *str = malloc(nl + vl + 2);
+        if (!str) { osh_envp_free(e); return NULL; }
+        memcpy(str, v->name, nl);
+        str[nl] = '=';
+        memcpy(str + nl + 1, v->value, vl + 1);
+        e[n++] = str;
+    }
+    for (int k = 0; k < nov; k++) {
+        size_t nl = strlen(ov[k].name), vl = strlen(ov[k].value);
+        char *str = malloc(nl + vl + 2);
+        if (!str) { osh_envp_free(e); return NULL; }
+        memcpy(str, ov[k].name, nl);
+        str[nl] = '=';
+        memcpy(str + nl + 1, ov[k].value, vl + 1);
+        size_t j = 0;
+        for (; j < n; j++)
+            if (strncmp(e[j], ov[k].name, nl) == 0 && e[j][nl] == '=') break;
+        if (j < n) { free(e[j]); e[j] = str; }
+        else e[n++] = str;
+    }
+    e[n] = NULL;
+    return e;
+}

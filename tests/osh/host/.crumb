@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-08T01:17:14Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:19f6c09a062a6261f446e96e2f9076ce0e5a573c90797519d9182e56ff7451e7",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 0,
+      "generated_at_commit": "ac4aef8d4f1ccc3968451ff03aa9373965910d1c",
+      "source_tree": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "name": "host-tests",
+  "purpose": "tests for the osh Linux host adapter execution service (hand-built request records, helper-mode test binary)",
+  "schema_version": "1.0.0"
+}
