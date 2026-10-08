@@ -62,7 +62,7 @@ test-osh-parse: osh-gen-check $(OSH_DIR)/test_osh_parse $(OSH_DIR)/test_osh_pars
 
 OSH_XSRCS = tests/osh/test_osh_expand.c src/osh/osh_lex_ref.c src/osh/osh_parse_ref.c src/osh/osh_expand_ref.c src/osh/host/osh_core.c src/osh/host/osh_codes.c src/osh/host/osh_req.c $(OSC_LIB)
 OSH_XHDRS = $(OSH_HDRS) src/osh/osh_expand_ref.h src/osh/host/osh_core.h src/osh/host/osh_host.h
-OSH_XFLAGS = $(OSH_FLAGS) -Isrc/osh/host
+OSH_XFLAGS = $(OSH_FLAGS) -Isrc/osh/host -Isrc/runtime
 
 $(OSH_DIR)/test_osh_expand: $(OSH_XSRCS) $(OSH_XHDRS)
 	@mkdir -p $(OSH_DIR)
@@ -81,7 +81,7 @@ test-osh-expand: osh-gen-check $(OSH_DIR)/test_osh_expand $(OSH_DIR)/test_osh_ex
 
 OSH_UNIT_SRCS = src/osh/osh_lex.osc src/osh/osh_parse.osc src/osh/osh_expand.osc
 OSH_PROG_HOSTSRCS = $(wildcard src/osh/host/osh_*.c)
-OSH_BIN_SRCS = $(OSH_DIR)/osh_units.c $(filter-out src/osh/host/osh_codes.c,$(OSH_PROG_HOSTSRCS)) src/osh/host/osh_codes.c $(OSC_LIB)
+OSH_BIN_SRCS = $(OSH_DIR)/osh_units.c $(filter-out src/osh/host/osh_codes.c,$(OSH_PROG_HOSTSRCS)) src/osh/host/osh_codes.c $(OSC_LIB) src/runtime/rx_caproot.c
 
 # the three unit sources become C arrays (od + sed, no scripting language)
 $(OSH_DIR)/osh_units.c: $(OSH_UNIT_SRCS)

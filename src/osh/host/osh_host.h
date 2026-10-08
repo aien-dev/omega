@@ -119,7 +119,12 @@ struct OshSession;
 typedef int (*OshClassHook)(void *ctx, const char *name);
 /* PERM_CHECK hook: return OSH_E_OK or a denial reason (OSH_E_*). NULL means any valid binding is allowed. */
 typedef int (*OshPermHook)(void *ctx, const OshBinding *b, int op);
-enum { OSH_OP_SPAWN = 1, OSH_OP_CHDIR = 2, OSH_OP_OPEN_WRITE = 3 };
+enum { OSH_OP_SPAWN = 1, OSH_OP_CHDIR = 2, OSH_OP_OPEN_WRITE = 3, OSH_OP_OPEN_READ = 4 };
+/* EFFECT hook (ABI section 9.2): called with the canonical-able target path immediately before the syscall that would
+ * make the effect (execve/fork of a resolved program, open for a redirection, chdir). Return OSH_E_OK or a denial
+ * (OSH_E_DENIED / REVOKED / STALE / CAP_DOMAIN_MISMATCH ...). On denial the effect does not happen. NULL = not gated
+ * (embedder-supplied authorization only; the osh program installs one when started with --caps). */
+typedef int (*OshEffectHook)(void *ctx, const OshBinding *b, int op, const char *path);
 
 typedef struct OshSession {
     OshVar *vars;
@@ -133,6 +138,8 @@ typedef struct OshSession {
     OshClassHook class_hook;
     OshPermHook perm_hook;
     void *hook_ctx;
+    OshEffectHook effect_hook;   /* per-effect authority check, see OshEffectHook */
+    void *effect_ctx;
     int exit_requested, exit_status; /* set by the parent `exit` builtin */
     /* test-only fault injection; all zero in production */
     int fail_fork_at;                          /* 1-based index of the command whose fork() is made to fail */

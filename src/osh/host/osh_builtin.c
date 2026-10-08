@@ -131,6 +131,7 @@ static int bi_cd(OshSession *s, const OshCmd *c, const int io[3], int in_parent)
         }
     }
     if (canon(joined, cur, sizeof cur)) { osh_diag(io[2], "cd: %s: File name too long", dir); return 1; }
+    if (osh_effect_check(s, OSH_OP_CHDIR, cur, io[2]) != OSH_E_OK) return 1;
     if (chdir(cur) != 0) { osh_diag(io[2], "cd: %s: %s", dir, strerror(errno)); return 1; }
     /* A child context keeps its own copy of the table, so setting here is safe in both cases. */
     (void)in_parent;
