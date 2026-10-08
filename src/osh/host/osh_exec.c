@@ -12,20 +12,37 @@
  *  - PATH comes from the shell's table (a prefix assignment PATH=... on the command counts, as in bash). PATH unset:
  *    bare names are not found (127); process-global environ is never consulted after osh_session_init. An empty
  *    element means the current directory (POSIX). Names containing '/' are used as given, never searched.
- *  - Statuses: not found 127; found but not executable, a directory, or execve refused 126; killed by signal 128+n.
- *    A stopped child (SIGTSTP etc.) is cancelled (SIGTERM+SIGCONT, reaped), status 128+stopsig, err INTERRUPTED:
- *    there is no job control, a pipeline either ends or is killed.
+ *  - Statuses: not found 127; found but not executable, a directory, or execve refused (including ENOEXEC: a script
+ *    without a shebang is NOT run through sh) 126; killed by signal 128+n.
+ *  - STOPPED MEMBERS (no job control in R1): the wait loop notices a stop of ANY member (SIGSTOP, SIGTSTP, ...), sends
+ *    SIGKILL to the pipeline (killpg when it has its own group, else to each unreaped member), reaps all, writes a
+ *    diagnostic, and the pipeline status is 128+stopsig of the first member seen stopped. The stopped member is
+ *    CANCELLED with err INTERRUPTED; members killed by that SIGKILL are CANCELLED too (termsig 9). Same for
+ *    interactive and non-interactive sessions. Job control (fg/bg, resuming) is R1.2+.
+ *  - PROCESS GROUPS AND SIGNALS. Non-interactive (osh -c, scripts, embedder default): no new process group; children
+ *    stay in the shell's group, so a terminal ^C or a pgroup SIGINT reaches them and the shell together. While
+ *    waiting, the shell does not die of SIGINT/SIGQUIT: it notes them (result sigint_seen) and acts on the child's
+ *    status. If the last command died of SIGINT/SIGQUIT the session sets exit_requested with exit_status 128+sig
+ *    (130 for SIGINT) after the pipeline, as bash does for scripts; osh_run_list stops there. A SIGINT sent only to
+ *    the shell pid is not forwarded (nothing is in a separate group). If SIGINT/SIGQUIT were ignored when osh_exec
+ *    was entered, they stay ignored and the children inherit that (POSIX). Interactive (s->interactive): every
+ *    pipeline is its own process group; with tty_fd the shell hands it the terminal (tcsetpgrp) and takes the terminal
+ *    back afterwards; the shell ignores SIGINT/SIGQUIT/SIGTSTP/SIGTTOU/SIGTTIN itself (noted, never fatal); a ^C goes
+ *    to the foreground group = the pipeline; a SIGINT/SIGQUIT sent to the shell pid while it waits is forwarded once to
+ *    the pipeline's group (killpg). Interactive children always start with default dispositions; the interactive
+ *    session does not exit when a child dies of SIGINT (osh_run_list only stops the list). SIGINT/SIGQUIT stay blocked
+ *    across fork so a signal cannot run the shell's handler inside a new child.
  *  - A failed redirection prints a diagnostic, the command does not run, its status is 1; its pipe ends are closed so
  *    neighbours see EOF/SIGPIPE. Redirections are applied in the CHILD for external commands (so opening a FIFO cannot
- *    deadlock the parent) and in the parent (on a private descriptor table, never on fds 0-2) for parent builtins.
+ *    deadlock the parent) and in the parent (on a private descriptor table, never on fds 0-2) for parent builtins and
+ *    standalone assignments. A parent-side redirection of a FIFO with no peer therefore BLOCKS the shell in open(),
+ *    exactly as bash does (`cd < fifo`, `A=1 > fifo`); only a signal ends it. Intentionally not worked around.
  *  - Standalone assignment (empty argv): redirections first, then variables set in the session; inside a multi-command
  *    pipeline it runs in a child and has no effect on the parent.
- *  - Fork failure after some commands started: PARTIAL_LAUNCH; the started ones get SIGTERM+SIGCONT to their group
- *    and are reaped (outcome CANCELLED); not-yet-started commands are NOT_STARTED; status 1.
+ *  - Fork failure after some commands started: PARTIAL_LAUNCH; the started ones get SIGTERM+SIGCONT (to their group
+ *    when interactive, else to each pid) and are reaped (outcome CANCELLED); not-yet-started commands are NOT_STARTED; status 1.
  *  - waitpid ECHILD for a started child (someone else reaped it): that command is OUTCOME_UNKNOWN, status 1, err
- *    OUTCOME_UNKNOWN. SIGINT/SIGQUIT delivered to the shell while it waits are caught, noted in the result
- *    (sigint_seen) and never forwarded: the terminal sends them to the foreground group; the wait is simply retried
- *    (EINTR). A pipeline whose last command died of SIGINT/SIGQUIT sets killed_by_int and osh_run_list stops there.
+ *    OUTCOME_UNKNOWN. A pipeline whose last command died of SIGINT/SIGQUIT sets killed_by_int and osh_run_list stops there.
  *  - No durable intent/outcome record (ABI section 10) is written: outcomes live in the result only. NOT DONE.
  */
 #ifndef _GNU_SOURCE
@@ -47,28 +64,44 @@
 
 /* ---------------- signals ---------------- */
 
-static volatile sig_atomic_t g_sig_seen;
-static void on_sig(int sig) { g_sig_seen = sig; }
+static volatile sig_atomic_t g_sig_seen, g_sig_count;
+static void on_sig(int sig) { g_sig_seen = sig; g_sig_count++; }
+static void on_chld(int sig) { (void)sig; } /* only here so that sigsuspend wakes on a child state change */
 
 static const int k_sigs[] = {SIGINT, SIGQUIT, SIGTSTP, SIGTTOU, SIGTTIN, SIGPIPE, SIGCHLD};
 #define NSIGS ((int)(sizeof k_sigs / sizeof k_sigs[0]))
+
+/* SIGINT / SIGQUIT were ignored when osh_exec was entered (nohup, `cmd &` in a parent shell, an embedder choice).
+ * POSIX: a non-interactive shell leaves them ignored and its children inherit that. Set by guard_enter. */
+static int g_entry_ign[2];
 
 typedef struct {
     struct sigaction old[NSIGS];
 } SigGuard;
 
-static void guard_enter(SigGuard *g)
+static void guard_enter(SigGuard *g, int interactive)
 {
     g_sig_seen = 0;
+    g_sig_count = 0;
+    g_entry_ign[0] = g_entry_ign[1] = 0;
     for (int i = 0; i < NSIGS; i++) {
         struct sigaction sa;
         memset(&sa, 0, sizeof sa);
         sigemptyset(&sa.sa_mask);
         int sig = k_sigs[i];
-        if (sig == SIGINT || sig == SIGQUIT) sa.sa_handler = on_sig; /* no SA_RESTART: waitpid must see EINTR */
-        else if (sig == SIGCHLD) sa.sa_handler = SIG_DFL;
-        else sa.sa_handler = SIG_IGN;
-        sigaction(sig, &sa, &g->old[i]);
+        sigaction(sig, NULL, &g->old[i]);
+        if (sig == SIGINT || sig == SIGQUIT) {
+            int ign = g->old[i].sa_handler == SIG_IGN;
+            g_entry_ign[sig == SIGQUIT] = ign && !interactive;
+            /* The shell never dies of these while it waits: it notes them (no SA_RESTART: waitpid/sigsuspend must see
+             * EINTR) and acts on the child's status. An inherited ignore stays an ignore (non-interactive only). */
+            sa.sa_handler = ign && !interactive ? SIG_IGN : on_sig;
+        } else if (sig == SIGCHLD) {
+            sa.sa_handler = on_chld;
+        } else {
+            sa.sa_handler = SIG_IGN; /* TSTP, TTOU, TTIN, PIPE */
+        }
+        sigaction(sig, &sa, NULL);
     }
 }
 
@@ -77,7 +110,8 @@ static void guard_leave(SigGuard *g)
     for (int i = 0; i < NSIGS; i++) sigaction(k_sigs[i], &g->old[i], NULL);
 }
 
-/* in a freshly forked child: everything back to default, nothing blocked */
+/* in a freshly forked child: everything back to default, nothing blocked. The one exception is a non-interactive
+ * shell that inherited SIGINT / SIGQUIT as ignored: its children keep them ignored (POSIX). */
 static void child_signals(void)
 {
     struct sigaction sa;
@@ -85,6 +119,9 @@ static void child_signals(void)
     sigemptyset(&sa.sa_mask);
     sa.sa_handler = SIG_DFL;
     for (int i = 0; i < NSIGS; i++) sigaction(k_sigs[i], &sa, NULL);
+    sa.sa_handler = SIG_IGN;
+    if (g_entry_ign[0]) sigaction(SIGINT, &sa, NULL);
+    if (g_entry_ign[1]) sigaction(SIGQUIT, &sa, NULL);
     sigset_t all;
     sigemptyset(&all);
     sigprocmask(SIG_SETMASK, &all, NULL);
@@ -297,41 +334,99 @@ static void run_in_parent(OshSession *s, const OshCmd *c, OshResult *res)
 
 typedef struct {
     pid_t pid;
-    int stopped; /* stop signal seen */
+    int done;      /* reaped (or lost) */
+    int lost;      /* waitpid said ECHILD: somebody else reaped it, the fate is unknown */
+    int stopped;   /* stop signal seen */
+    int cancelled; /* we sent it SIGKILL because a member stopped */
+    int st;        /* wait status when done */
 } Child;
 
-static void wait_all(OshSession *s, OshResult *res, Child *ch, int n, pid_t pgid)
+/* Send sig to every member that is still running. Interactive sessions put the pipeline in its own process group, so
+ * one killpg does it. Non-interactive sessions share the shell's group and must NEVER killpg: signal each pid, which
+ * is safe because an unreaped child's pid cannot be reused. */
+static void signal_kids(const Child *ch, int n, pid_t pgid, int own_pg, int sig)
 {
-    for (int i = 0; i < n; i++) {
-        if (ch[i].pid <= 0) continue;
-        int st = 0;
-        pid_t w;
-        for (;;) {
-            w = waitpid(ch[i].pid, &st, WUNTRACED);
-            if (w < 0 && errno == EINTR) continue; /* a signal arrived; the effect is not re-run, just wait again */
-            if (w == ch[i].pid && WIFSTOPPED(st)) {
-                /* no job control: a stopped pipeline is ended, not parked */
-                ch[i].stopped = WSTOPSIG(st);
-                killpg(pgid, SIGTERM);
-                killpg(pgid, SIGCONT);
+    if (own_pg) {
+        if (pgid > 0) killpg(pgid, sig);
+        return;
+    }
+    for (int i = 0; i < n; i++)
+        if (ch[i].pid > 0 && !ch[i].done) kill(ch[i].pid, sig);
+}
+
+/* Wait for every member, noticing a stop of ANY member (not just the one being waited on). R1 has no job control: the
+ * first stop cancels the pipeline with SIGKILL (to the group when there is one, else to each member), then all are
+ * reaped. Returns the first stop signal seen, or 0. While waiting, SIGINT/SIGQUIT delivered to the shell itself are
+ * forwarded to the pipeline's group once per delivery when it has its own group (interactive); a non-interactive
+ * pipeline shares the shell's group and gets the terminal's signal directly, so nothing extra is sent. */
+static int wait_all(OshSession *s, OshResult *res, Child *ch, int n, pid_t pgid, int own_pg)
+{
+    sigset_t blk, old, susp;
+    sigemptyset(&blk);
+    sigaddset(&blk, SIGCHLD);
+    sigaddset(&blk, SIGINT);
+    sigaddset(&blk, SIGQUIT);
+    sigprocmask(SIG_BLOCK, &blk, &old); /* blocked while scanning: sigsuspend then wakes for anything that arrived */
+    susp = old;
+    sigdelset(&susp, SIGCHLD);
+    int pending = 0, first_stop = 0, cancel_sent = 0;
+    for (int i = 0; i < n; i++) if (ch[i].pid > 0) pending++;
+    int seen = 0; /* g_sig_count restarts at 0 for every osh_exec: a signal that landed during launch is forwarded too */
+    while (pending > 0) {
+        for (int i = 0; i < n; i++) {
+            if (ch[i].pid <= 0 || ch[i].done) continue;
+            int st = 0;
+            pid_t w = waitpid(ch[i].pid, &st, WNOHANG | WUNTRACED);
+            if (w == 0) continue;
+            if (w < 0) {
+                if (errno == EINTR) { i--; continue; }
+                ch[i].done = ch[i].lost = 1;
+                pending--;
                 continue;
             }
-            break;
+            if (WIFSTOPPED(st)) {
+                if (!ch[i].stopped) {
+                    ch[i].stopped = WSTOPSIG(st);
+                    if (!first_stop) first_stop = ch[i].stopped;
+                }
+                continue; /* it is killed below; the next pass reaps it */
+            }
+            ch[i].st = st;
+            ch[i].done = 1;
+            pending--;
         }
+        if (pending == 0) break;
+        if (first_stop && !cancel_sent) {
+            cancel_sent = 1;
+            osh_diag(s->fd[2], "pipeline stopped (signal %d); there is no job control yet, so it is cancelled", first_stop);
+            for (int i = 0; i < n; i++) if (ch[i].pid > 0 && !ch[i].done) ch[i].cancelled = 1;
+            signal_kids(ch, n, pgid, own_pg, SIGKILL);
+        }
+        if (own_pg && !cancel_sent && g_sig_count != seen && pgid > 0) {
+            seen = g_sig_count;
+            killpg(pgid, g_sig_seen == SIGQUIT ? SIGQUIT : SIGINT);
+        }
+        sigsuspend(&susp); /* returns after a handled signal: SIGCHLD, or SIGINT/SIGQUIT noted for the next pass */
+    }
+    sigprocmask(SIG_SETMASK, &old, NULL);
+    for (int i = 0; i < n; i++) {
+        if (ch[i].pid <= 0) continue;
         OshCmdResult *r = &res->cmd[i];
-        if (w < 0) {
+        int st = ch[i].st;
+        if (ch[i].lost) {
             set_cmd(r, 1, OSH_OUT_UNKNOWN, OSH_E_OUTCOME_UNKNOWN); /* fate cannot be determined */
         } else if (ch[i].stopped) {
             r->termsig = WIFSIGNALED(st) ? WTERMSIG(st) : 0;
             set_cmd(r, 128 + ch[i].stopped, OSH_OUT_CANCELLED, OSH_E_INTERRUPTED);
         } else if (WIFSIGNALED(st)) {
             r->termsig = WTERMSIG(st);
-            set_cmd(r, 128 + r->termsig, OSH_OUT_COMPLETED, OSH_E_OK);
+            if (ch[i].cancelled && r->termsig == SIGKILL) set_cmd(r, 128 + r->termsig, OSH_OUT_CANCELLED, OSH_E_INTERRUPTED);
+            else set_cmd(r, 128 + r->termsig, OSH_OUT_COMPLETED, OSH_E_OK);
         } else {
             set_cmd(r, WEXITSTATUS(st), OSH_OUT_COMPLETED, OSH_E_OK);
         }
     }
-    (void)s;
+    return first_stop;
 }
 
 static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
@@ -351,7 +446,14 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
     memset(ch, 0, sizeof ch);
     pid_t pgid = 0;
     int started = 0, launch_failed = 0;
-    int tty = s->interactive && s->tty_fd >= 0;
+    /* Interactive: each pipeline is its own process group and (with a terminal) owns the terminal while it runs.
+     * Non-interactive: no new group at all; the children stay in the shell's group like bash does for scripts. */
+    int own_pg = s->interactive;
+    int tty = own_pg && s->tty_fd >= 0;
+    sigset_t fork_blk, fork_old;
+    sigemptyset(&fork_blk);
+    sigaddset(&fork_blk, SIGINT);
+    sigaddset(&fork_blk, SIGQUIT);
 
     for (int i = 0; i < n; i++) {
         const OshCmd *c = &r->cmd[i];
@@ -379,9 +481,15 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
         }
 
         pid_t pid;
+        /* SIGINT/SIGQUIT stay blocked across fork: a signal that lands before the child has reset its handlers would
+         * otherwise run the shell's handler inside the child. They are delivered once the child's signals are default. */
+        sigprocmask(SIG_BLOCK, &fork_blk, &fork_old);
         if (s->fail_fork_at == i + 1) { pid = -1; errno = EAGAIN; }
         else pid = fork();
         if (pid < 0) {
+            int saved = errno;
+            sigprocmask(SIG_SETMASK, &fork_old, NULL);
+            errno = saved;
             osh_diag(s->fd[2], "fork: %s", strerror(errno));
             osh_envp_free(envp);
             set_cmd(&res->cmd[i], 1, OSH_OUT_NOT_STARTED, OSH_E_LIMIT);
@@ -390,19 +498,26 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
         }
         if (pid == 0) {
             /* ---- child ---- */
-            setpgid(0, pgid); /* pgid 0 on the first one: become a leader */
+            if (own_pg) setpgid(0, pgid); /* pgid 0 on the first one: become a leader */
             if (tty && pgid == 0) tcsetpgrp(s->tty_fd, getpid()); /* SIGTTOU is still ignored here */
             child_signals();
             int st = 1;
             if (apply_redirs(&t, c, s->fd[2]) == 0 && child_install(&t) == 0) {
+                /* close every descriptor that is not 0..2, each exactly once (no double close) */
+                int cl[2 * OSH_MAX_CMDS + OSH_MAX_REDIR + 8], ncl = 0;
                 for (int k = 0; k < p.n; k++)
-                    for (int e = 0; e < 2; e++) if (p.pp[k][e] >= 0) close(p.pp[k][e]);
-                tab_close_owned(&t);
+                    for (int e = 0; e < 2; e++) if (p.pp[k][e] >= 0) cl[ncl++] = p.pp[k][e];
+                for (int k = 0; k < t.nown; k++) cl[ncl++] = t.own[k];
                 for (int k = 0; k < 3; k++) {
-                    if (t.fd[k] >= 3) close(t.fd[k]);
-                    if (s->fd[k] >= 3) close(s->fd[k]);
+                    cl[ncl++] = t.fd[k];
+                    cl[ncl++] = s->fd[k];
                 }
-                if (tty && s->tty_fd >= 3) close(s->tty_fd);
+                if (tty) cl[ncl++] = s->tty_fd;
+                for (int k = 0; k < ncl; k++) {
+                    int dup = cl[k] < 3;
+                    for (int j = 0; j < k && !dup; j++) dup = cl[j] == cl[k];
+                    if (!dup) close(cl[k]);
+                }
                 if (external) {
                     execve(path, (char *const *)c->argv, envp);
                     osh_diag(2, "%s: %s", c->argv[0], strerror(errno));
@@ -417,9 +532,10 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
             _exit(st);
         }
         /* ---- parent ---- */
+        sigprocmask(SIG_SETMASK, &fork_old, NULL);
         osh_envp_free(envp);
         if (pgid == 0) pgid = pid;
-        setpgid(pid, pgid);
+        if (own_pg) setpgid(pid, pgid);
         if (tty && started == 0) tcsetpgrp(s->tty_fd, pgid);
         ch[i].pid = pid;
         res->cmd[i].pid = pid;
@@ -431,10 +547,10 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
 
     if (launch_failed) {
         if (started > 0) {
-            killpg(pgid, SIGTERM);
-            killpg(pgid, SIGCONT);
+            signal_kids(ch, n, pgid, own_pg, SIGTERM);
+            signal_kids(ch, n, pgid, own_pg, SIGCONT);
         }
-        wait_all(s, res, ch, n, pgid);
+        wait_all(s, res, ch, n, pgid, own_pg);
         for (int i = 0; i < n; i++)
             if (ch[i].pid > 0 && res->cmd[i].outcome == OSH_OUT_COMPLETED) res->cmd[i].outcome = OSH_OUT_CANCELLED;
         if (tty) tcsetpgrp(s->tty_fd, getpgrp());
@@ -443,9 +559,9 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
         return;
     }
     if (s->after_launch_hook) s->after_launch_hook(s->after_launch_ctx);
-    wait_all(s, res, ch, n, pgid);
+    int stopsig = wait_all(s, res, ch, n, pgid, own_pg);
     if (tty) tcsetpgrp(s->tty_fd, getpgrp());
-    res->status = res->cmd[n - 1].status;
+    res->status = stopsig ? 128 + stopsig : res->cmd[n - 1].status;
     for (int i = 0; i < n; i++)
         if (res->cmd[i].err != OSH_E_OK && res->cmd[i].err != OSH_E_NOT_FOUND && res->err == OSH_E_OK) res->err = res->cmd[i].err;
 }
@@ -475,12 +591,16 @@ int osh_exec(OshSession *s, const OshRequest *r, OshResult *res)
         }
     }
     SigGuard g;
-    guard_enter(&g);
+    guard_enter(&g, s->interactive);
     if (r->ncmds == 1 && (r->cmd[0].builtin_id != OSH_B_NONE || r->cmd[0].nargv == 0)) run_in_parent(s, &r->cmd[0], res);
     else run_pipeline(s, r, res);
     res->sigint_seen = g_sig_seen == SIGINT;
     const OshCmdResult *last = &res->cmd[r->ncmds - 1];
     res->killed_by_int = last->termsig == SIGINT || last->termsig == SIGQUIT;
+    if (res->killed_by_int && !s->interactive) { /* bash, non-interactive: the foreground child died of SIGINT/SIGQUIT, so the shell ends too */
+        s->exit_requested = 1;
+        s->exit_status = 128 + last->termsig;
+    }
     guard_leave(&g);
     res->exit_requested = s->exit_requested;
     s->last_status = res->status;

@@ -166,7 +166,7 @@ typedef struct {
     int err;        /* OSH_E_*: OK, DENIED, UNAVAILABLE, PARTIAL_LAUNCH, OUTCOME_UNKNOWN ... */
     int ncmds;
     OshCmdResult cmd[OSH_MAX_CMDS];
-    int sigint_seen;     /* the shell itself received SIGINT while waiting (nothing was forwarded) */
+    int sigint_seen;     /* the shell itself received SIGINT while waiting (forwarded to the pipeline only when interactive; see osh_exec.c) */
     int killed_by_int;   /* the last command died of SIGINT or SIGQUIT: list execution must stop */
     int exit_requested;  /* mirrors session: parent `exit` ran */
     int refusal;         /* decoder refusal code if the request was refused before any effect, else 0 */

@@ -200,13 +200,24 @@ static int bi_printf(const OshCmd *c, const int io[3])
     if (ai >= c->nargv) { osh_diag(io[2], "printf: usage: printf format [arguments]"); return 1; }
     const char *fmt = c->argv[ai++];
     int first = ai, nspec = 0;
+    /* Validate EVERY conversion before anything is printed. The scan and the print loop below agree on what a
+     * backslash does: it always takes the next byte with it (a known escape, or an unknown one that is printed
+     * verbatim, as coreutils does), so `\%` is two literal bytes and never starts a conversion. A `%` or `\` that is
+     * the last byte never reads past the terminator. */
     for (const char *p = fmt; *p; p++) {
-        if (*p == '\\' && p[1]) { p++; continue; }
+        if (*p == '\\') {
+            if (p[1]) p++;
+            continue;
+        }
         if (*p != '%') continue;
         p++;
         if (*p == '%') continue;
+        if (!*p) {
+            osh_diag(io[2], "printf: %%: invalid conversion specification (the format ends after %%)");
+            return 1;
+        }
         if (!is_conv(*p)) {
-            osh_diag(io[2], "printf: %%%c: unsupported conversion", *p ? *p : ' ');
+            osh_diag(io[2], "printf: %%%c: unsupported conversion (supported: %%s %%d %%i %%u %%x %%o %%c %%%%)", *p);
             return 1;
         }
         nspec++;
@@ -227,19 +238,23 @@ static int bi_printf(const OshCmd *c, const int io[3])
                     while (k < 3 && p[1] >= '0' && p[1] <= '7') { v = v * 8 + (p[1] - '0'); p++; k++; }
                     char b = (char)(v & 0xff);
                     out_bytes(&o, &b, 1);
+                } else if (e) {
+                    out_bytes(&o, p, 2); /* unknown escape: both bytes verbatim, as coreutils does */
+                    p++;
                 } else {
-                    out_bytes(&o, p, 1);
+                    out_bytes(&o, p, 1); /* lone trailing backslash */
                 }
             } else if (*p != '%') {
                 out_bytes(&o, p, 1);
             } else {
                 p++;
                 if (*p == '%') { out_bytes(&o, "%", 1); continue; }
+                if (!*p) break; /* unreachable: the scan refuses a final %; never step past the terminator */
                 const char *arg = ci < c->nargv ? c->argv[ci++] : NULL;
                 if (*p == 's') {
                     if (arg) out_bytes(&o, arg, strlen(arg));
                 } else if (*p == 'c') {
-                    if (arg && *arg) out_bytes(&o, arg, 1);
+                    out_bytes(&o, arg && *arg ? arg : "", 1); /* coreutils: an empty or missing argument prints a NUL byte */
                 } else {
                     char num[64];
                     int bad = 0;
@@ -265,7 +280,8 @@ static int bi_printf(const OshCmd *c, const int io[3])
                     case 'd': case 'i': n = snprintf(num, sizeof num, "%jd", sv); break;
                     case 'u': n = snprintf(num, sizeof num, "%ju", u); break;
                     case 'x': n = snprintf(num, sizeof num, "%jx", u); break;
-                    default: n = snprintf(num, sizeof num, "%jo", u); break;
+                    case 'o': n = snprintf(num, sizeof num, "%jo", u); break;
+                    default: n = 0; break; /* unreachable: the scan admitted only d i u x o here */
                     }
                     out_bytes(&o, num, (size_t)n);
                 }

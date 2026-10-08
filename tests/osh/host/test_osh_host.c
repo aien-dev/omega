@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -108,6 +109,20 @@ static int helper_main(int argc, char **argv)
         return 0;
     }
     if (!strcmp(op, "exit")) return atoi(argv[3]);
+    if (!strcmp(op, "pgid")) { printf("%d\n", (int)getpgrp()); return 0; }
+    if (!strcmp(op, "sigdisp")) { /* how SIGINT / SIGQUIT arrive in this process */
+        struct sigaction a, q;
+        sigaction(SIGINT, NULL, &a);
+        sigaction(SIGQUIT, NULL, &q);
+        printf("INT %s QUIT %s\n", a.sa_handler == SIG_IGN ? "ign" : a.sa_handler == SIG_DFL ? "dfl" : "handler", q.sa_handler == SIG_IGN ? "ign" : q.sa_handler == SIG_DFL ? "dfl" : "handler");
+        return 0;
+    }
+    if (!strcmp(op, "sigblk")) { /* number of signals TERM/USR1/INT/QUIT blocked here */
+        sigset_t m;
+        sigprocmask(SIG_BLOCK, NULL, &m);
+        printf("blocked %d\n", sigismember(&m, SIGTERM) + sigismember(&m, SIGUSR1) + sigismember(&m, SIGINT) + sigismember(&m, SIGQUIT));
+        return 0;
+    }
     if (!strcmp(op, "both")) { /* write to stdout and stderr */
         printf("out\n"); fflush(stdout);
         fprintf(stderr, "err\n");
@@ -123,11 +138,14 @@ static char g_self[4096], g_tmp[4096];
 
 #define CHECK(cond, ...) do { if (cond) g_pass++; else { g_fail++; printf("FAIL %s:%d: %s -- ", __FILE__, __LINE__, #cond); printf(__VA_ARGS__); printf("\n"); } } while (0)
 
+static size_t g_slurp_len;
+
 static char *slurp(const char *path)
 {
+    g_slurp_len = 0;
     FILE *f = fopen(path, "rb");
     char *b = calloc(1, 1 << 20);
-    if (f) { size_t n = fread(b, 1, (1 << 20) - 1, f); b[n] = 0; fclose(f); }
+    if (f) { size_t n = fread(b, 1, (1 << 20) - 1, f); b[n] = 0; g_slurp_len = n; fclose(f); }
     return b;
 }
 
@@ -857,26 +875,6 @@ static void test_pipelines(void)
 
 static void raise_int(void *ctx) { (void)ctx; kill(getpid(), SIGINT); }
 
-static void test_interrupted_wait(void)
-{
-    T t;
-    t_begin(&t, "/usr/bin:/bin");
-    OshResult r;
-    OshBuilder *b = nb(0, 0);
-    helper(b, "sleep", "300", NULL);
-    t.s.after_launch_hook = raise_int;
-    int st = go(&t, b, &r);
-    CHECK(r.sigint_seen == 1 && st == 0 && r.cmd[0].outcome == OSH_OUT_COMPLETED && r.cmd[0].termsig == 0,
-          "SIGINT to the shell while waiting: seen=%d status=%d (child ran to completion, nothing forwarded)", r.sigint_seen, st);
-    CHECK(!r.killed_by_int, "child not killed by SIGINT");
-    t.s.after_launch_hook = NULL;
-    /* the shell's own SIGINT disposition is restored afterwards (default here) */
-    struct sigaction cur;
-    sigaction(SIGINT, NULL, &cur);
-    CHECK(cur.sa_handler == SIG_DFL, "SIGINT disposition restored");
-    t_end(&t);
-}
-
 static void test_partial_launch(void)
 {
     T t;
@@ -1298,6 +1296,656 @@ static void test_session_env(void)
     osh_session_free(&s);
 }
 
+/* ================= review fixes (PR 337): isolation helper ================= */
+
+/* Results of a test that ran in its own process (so a hang or a signal storm cannot take the suite with it). */
+typedef struct {
+    int status, err, outcome0, outcome1, outcome2, termsig0, termsig1, sigint_seen, killed_by_int, exit_requested, exit_status;
+    int extra[6];
+    double dt;
+    char text[256];
+} Rep;
+
+static int g_only_set;
+static const char *g_only;
+static int want(const char *name) { return !g_only_set || strstr(name, g_only) != NULL; }
+
+/* Run fn in a forked process (own process group if new_group, with a SIGALRM watchdog). Returns 0 when it reported,
+ * -1 when it hung or crashed (then any members of its group are killed). */
+static int run_isolated(void (*fn)(Rep *), Rep *out, int new_group, unsigned secs)
+{
+    int pf[2];
+    memset(out, 0, sizeof *out);
+    if (pipe(pf)) return -1;
+    fflush(stdout);
+    pid_t pid = fork();
+    if (pid < 0) return -1;
+    if (pid == 0) {
+        if (new_group) setpgid(0, 0);
+        close(pf[0]);
+        alarm(secs);
+        Rep r;
+        memset(&r, 0, sizeof r);
+        fn(&r);
+        if (write(pf[1], &r, sizeof r) < 0) {}
+        _exit(0);
+    }
+    close(pf[1]);
+    if (new_group) setpgid(pid, pid);
+    size_t got = 0;
+    while (got < sizeof *out) {
+        ssize_t n = read(pf[0], (char *)out + got, sizeof *out - got);
+        if (n <= 0) break;
+        got += (size_t)n;
+    }
+    close(pf[0]);
+    int st;
+    waitpid(pid, &st, 0);
+    if (new_group) kill(-pid, SIGKILL); /* leftovers of a failed run */
+    if (got != sizeof *out) { memset(out, 0, sizeof *out); return -1; }
+    return 0;
+}
+
+static void rep_fill(Rep *rp, const OshResult *r, int st, double dt)
+{
+    rp->status = st;
+    rp->err = r->err;
+    rp->outcome0 = r->cmd[0].outcome;
+    rp->outcome1 = r->ncmds > 1 ? r->cmd[1].outcome : 0;
+    rp->outcome2 = r->ncmds > 2 ? r->cmd[2].outcome : 0;
+    rp->termsig0 = r->cmd[0].termsig;
+    rp->termsig1 = r->ncmds > 1 ? r->cmd[1].termsig : 0;
+    rp->sigint_seen = r->sigint_seen;
+    rp->killed_by_int = r->killed_by_int;
+    rp->exit_requested = r->exit_requested;
+    rp->dt = dt;
+}
+
+static void raise_int_group(void *ctx) { (void)ctx; kill(0, SIGINT); } /* what the terminal does on ^C: the whole group */
+
+/* ---- BUG1: non-interactive session ---- */
+
+static void iso_sigint_group(Rep *rp)
+{
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    helper(b, "pgid", NULL);
+    helper(b, "sleep", "20000", NULL);
+    helper(b, "cat", NULL);
+    t.s.after_launch_hook = raise_int_group;
+    double t0 = now();
+    int st = go(&t, b, &r);
+    rep_fill(rp, &r, st, now() - t0);
+    rp->exit_status = t.s.exit_status;
+    rp->exit_requested = t.s.exit_requested;
+    rp->termsig1 = r.cmd[1].termsig;
+    t.s.after_launch_hook = NULL;
+    t_clear(&t);
+    b = nb(0, 0);
+    helper(b, "pgid", NULL);
+    t.s.exit_requested = 0;
+    go(&t, b, &r);
+    char *o = t_out(&t);
+    rp->extra[0] = atoi(o) == (int)getpgrp(); /* child stays in the shell's own process group */
+    free(o);
+    t_end(&t);
+}
+
+static void test_sigint_noninteractive(void)
+{
+    Rep rp;
+    int rc = run_isolated(iso_sigint_group, &rp, 1, 15);
+    CHECK(rc == 0, "group SIGINT test hung or crashed");
+    CHECK(rc == 0 && rp.dt < 3.0, "pipeline with a terminal-style SIGINT to the group ended in %.2fs (hung until the child finished?)", rp.dt);
+    CHECK(rc == 0 && rp.termsig1 == SIGINT && rp.killed_by_int == 1 && rp.sigint_seen == 1,
+          "sleeping child died of SIGINT (termsig %d) and the shell saw it (seen %d, killed_by_int %d)", rp.termsig1, rp.sigint_seen, rp.killed_by_int);
+    CHECK(rc == 0 && rp.exit_requested == 1 && rp.exit_status == 130,
+          "non-interactive shell exits 128+2 after the pipeline whose foreground child died of SIGINT (requested %d status %d)", rp.exit_requested, rp.exit_status);
+    CHECK(rc == 0 && rp.extra[0] == 1, "non-interactive children stay in the shell's process group");
+}
+
+static void iso_sigint_direct(Rep *rp)
+{
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    helper(b, "sleep", "400", NULL);
+    t.s.after_launch_hook = raise_int;
+    double t0 = now();
+    int st = go(&t, b, &r);
+    rep_fill(rp, &r, st, now() - t0);
+    rp->exit_requested = t.s.exit_requested;
+    t_end(&t);
+}
+
+static void test_sigint_direct_noninteractive(void)
+{
+    Rep rp;
+    int rc = run_isolated(iso_sigint_direct, &rp, 1, 15);
+    CHECK(rc == 0 && rp.sigint_seen == 1 && rp.status == 0 && rp.termsig0 == 0 && rp.dt >= 0.3 && !rp.killed_by_int && !rp.exit_requested,
+          "kill -INT <shell pid> while waiting (non-interactive): nothing forwarded, child finished (status %d termsig %d dt %.2f exit %d)",
+          rp.status, rp.termsig0, rp.dt, rp.exit_requested);
+}
+
+static void iso_ign_inherited(Rep *rp)
+{
+    signal(SIGINT, SIG_IGN);
+    signal(SIGQUIT, SIG_IGN);
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    helper(b, "sigdisp", NULL);
+    int st = go(&t, b, &r);
+    char *o = t_out(&t);
+    rp->extra[0] = strcmp(o, "INT ign QUIT ign\n") == 0;
+    snprintf(rp->text, sizeof rp->text, "%s", o);
+    free(o);
+    struct sigaction sa;
+    sigaction(SIGINT, NULL, &sa);
+    rp->extra[1] = sa.sa_handler == SIG_IGN; /* the embedder's own disposition is restored */
+    rp->status = st;
+    t_end(&t);
+}
+
+static void iso_ign_not_inherited(Rep *rp)
+{
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    helper(b, "sigdisp", NULL);
+    go(&t, b, &r);
+    char *o = t_out(&t);
+    rp->extra[0] = strcmp(o, "INT dfl QUIT dfl\n") == 0;
+    snprintf(rp->text, sizeof rp->text, "%s", o);
+    free(o);
+    t_end(&t);
+}
+
+static void test_inherited_ignore(void)
+{
+    Rep rp;
+    int rc = run_isolated(iso_ign_inherited, &rp, 0, 15);
+    CHECK(rc == 0 && rp.extra[0] == 1, "SIGINT/SIGQUIT ignored at entry stay ignored in children (POSIX); child saw: %s", rp.text);
+    CHECK(rc == 0 && rp.extra[1] == 1, "embedder's ignore disposition restored after the run");
+    rc = run_isolated(iso_ign_not_inherited, &rp, 0, 15);
+    CHECK(rc == 0 && rp.extra[0] == 1, "children get default SIGINT/SIGQUIT when the shell did not have them ignored; child saw: %s", rp.text);
+}
+
+/* ---- BUG3: a stopped member anywhere ends the pipeline ---- */
+
+static void iso_stop_tail(Rep *rp)
+{
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    cmd(b, 0, "yes", NULL);
+    cmd(b, 0, "sh", "-c", "kill -STOP $$", NULL);
+    double t0 = now();
+    int st = go(&t, b, &r);
+    rep_fill(rp, &r, st, now() - t0);
+    rp->extra[0] = waitpid(-1, NULL, WNOHANG) == -1 && errno == ECHILD; /* nothing left unreaped */
+    char *e = t_err(&t);
+    rp->extra[1] = strstr(e, "stopped") != NULL;
+    free(e);
+    t_end(&t);
+}
+
+static void iso_stop_head(Rep *rp)
+{
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    helper(b, "kill", "19", NULL);
+    helper(b, "sleep", "20000", NULL);
+    helper(b, "cat", NULL);
+    double t0 = now();
+    int st = go(&t, b, &r);
+    rep_fill(rp, &r, st, now() - t0);
+    rp->extra[0] = waitpid(-1, NULL, WNOHANG) == -1 && errno == ECHILD;
+    t_end(&t);
+}
+
+static void iso_stop_middle(Rep *rp)
+{
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    helper(b, "sleep", "20000", NULL);
+    helper(b, "kill", "20", NULL);
+    helper(b, "cat", NULL);
+    double t0 = now();
+    int st = go(&t, b, &r);
+    rep_fill(rp, &r, st, now() - t0);
+    rp->extra[0] = waitpid(-1, NULL, WNOHANG) == -1 && errno == ECHILD;
+    t_end(&t);
+}
+
+static void test_stopped_member(void)
+{
+    Rep rp;
+    int rc = run_isolated(iso_stop_tail, &rp, 1, 10);
+    CHECK(rc == 0 && rp.dt < 2.0, "yes | sh -c 'kill -STOP $$' finishes within 2 s (took %.2f, rc %d)", rp.dt, rc);
+    CHECK(rc == 0 && rp.status == 128 + SIGSTOP && rp.outcome1 == OSH_OUT_CANCELLED && rp.outcome0 == OSH_OUT_CANCELLED && rp.err == OSH_E_INTERRUPTED,
+          "stopped last member: status %d (want 147), outcomes %d/%d, err %d", rp.status, rp.outcome0, rp.outcome1, rp.err);
+    CHECK(rc == 0 && rp.extra[0] == 1 && rp.extra[1] == 1, "no child left unreaped (%d) and a diagnostic mentions 'stopped' (%d)", rp.extra[0], rp.extra[1]);
+    rc = run_isolated(iso_stop_head, &rp, 1, 10);
+    CHECK(rc == 0 && rp.dt < 2.0 && rp.status == 128 + SIGSTOP && rp.extra[0] == 1,
+          "stopped FIRST member of a 3-stage pipeline ends it: dt %.2f status %d reaped %d", rp.dt, rp.status, rp.extra[0]);
+    rc = run_isolated(iso_stop_middle, &rp, 1, 10);
+    CHECK(rc == 0 && rp.dt < 2.0 && rp.status == 128 + SIGTSTP && rp.extra[0] == 1,
+          "stopped MIDDLE member (SIGTSTP) ends it: dt %.2f status %d reaped %d", rp.dt, rp.status, rp.extra[0]);
+}
+
+/* ---- BUG1: interactive session on a pseudo-terminal ---- */
+
+static void iso_pty_common(Rep *rp, int mode)
+{
+    /* mode 0: ^C typed on the terminal; 1: kill -INT <shell pid>; 2: stopped member */
+    setsid();
+    int master = posix_openpt(O_RDWR | O_NOCTTY);
+    if (master < 0 || grantpt(master) || unlockpt(master)) { rp->extra[5] = -1; return; }
+    char *sn = ptsname(master);
+    int slave = sn ? open(sn, O_RDWR) : -1; /* the session leader without a terminal acquires it */
+    if (slave < 0) { rp->extra[5] = -1; return; }
+    rp->extra[2] = tcgetpgrp(slave) == getpgrp(); /* shell owns the terminal before */
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    t.s.interactive = 1;
+    t.s.tty_fd = slave;
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    if (mode == 2) {
+        cmd(b, 0, "yes", NULL);
+        cmd(b, 0, "sh", "-c", "kill -STOP $$", NULL);
+    } else {
+        helper(b, "sleep", "8000", NULL);
+        helper(b, "cat", NULL);
+    }
+    t.s.after_launch_hook = mode == 1 ? raise_int : NULL;
+    if (mode == 0) {
+        /* the terminal driver sends ^C to the FOREGROUND group: type it once the pipeline owns the terminal */
+        pid_t kid = fork();
+        if (kid == 0) {
+            usleep(400000);
+            if (write(master, "\003", 1) < 0) {}
+            _exit(0);
+        }
+        double t0 = now();
+        int st = go(&t, b, &r);
+        rep_fill(rp, &r, st, now() - t0);
+        waitpid(kid, NULL, 0);
+    } else {
+        double t0 = now();
+        int st = go(&t, b, &r);
+        rep_fill(rp, &r, st, now() - t0);
+    }
+    rp->extra[3] = tcgetpgrp(slave) == getpgrp(); /* the shell took the terminal back */
+    rp->exit_requested = t.s.exit_requested;
+    rp->extra[4] = waitpid(-1, NULL, WNOHANG) == -1 && errno == ECHILD;
+    t_end(&t);
+}
+
+static void iso_pty_ctrl_c(Rep *rp) { iso_pty_common(rp, 0); }
+static void iso_pty_kill_shell(Rep *rp) { iso_pty_common(rp, 1); }
+static void iso_pty_stop(Rep *rp) { iso_pty_common(rp, 2); }
+
+static void iso_pty_pgid(Rep *rp)
+{
+    setsid();
+    int master = posix_openpt(O_RDWR | O_NOCTTY);
+    if (master < 0 || grantpt(master) || unlockpt(master)) { rp->extra[5] = -1; return; }
+    char *sn = ptsname(master);
+    int slave = sn ? open(sn, O_RDWR) : -1;
+    if (slave < 0) { rp->extra[5] = -1; return; }
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    t.s.interactive = 1;
+    t.s.tty_fd = slave;
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    helper(b, "pgid", NULL);
+    helper(b, "cat", NULL);
+    go(&t, b, &r);
+    char *o = t_out(&t);
+    int pg = atoi(o);
+    free(o);
+    rp->extra[0] = pg > 0 && pg != (int)getpgrp(); /* its own group, not the shell's */
+    /* SIGINT delivered to a child in an interactive session is back to default: even if ignored at entry */
+    signal(SIGINT, SIG_IGN);
+    t_clear(&t);
+    b = nb(0, 0);
+    helper(b, "sigdisp", NULL);
+    go(&t, b, &r);
+    o = t_out(&t);
+    rp->extra[1] = strcmp(o, "INT dfl QUIT dfl\n") == 0;
+    free(o);
+    t_end(&t);
+}
+
+static void test_interactive_pty(void)
+{
+    Rep rp;
+    int rc = run_isolated(iso_pty_pgid, &rp, 0, 15);
+    if (rc == 0 && rp.extra[5] == -1) { printf("note: no pseudo-terminal available, interactive tests skipped\n"); g_pass++; return; }
+    CHECK(rc == 0 && rp.extra[0] == 1, "interactive: pipeline runs in its own process group");
+    CHECK(rc == 0 && rp.extra[1] == 1, "interactive: children get default SIGINT/SIGQUIT");
+    rc = run_isolated(iso_pty_ctrl_c, &rp, 0, 20);
+    CHECK(rc == 0 && rp.extra[2] == 1, "interactive: shell owns the terminal before the pipeline");
+    CHECK(rc == 0 && rp.dt < 4.0 && rp.termsig0 == SIGINT && rp.termsig1 == SIGINT && rp.killed_by_int == 1,
+          "^C on the terminal reaches the pipeline's group (dt %.2f termsig %d/%d)", rp.dt, rp.termsig0, rp.termsig1);
+    CHECK(rc == 0 && rp.sigint_seen == 0 && rp.exit_requested == 0, "^C does not reach the interactive shell (seen %d) and the shell does not exit", rp.sigint_seen);
+    CHECK(rc == 0 && rp.extra[3] == 1 && rp.extra[4] == 1, "shell takes the terminal back after the pipeline (%d) and nothing is left unreaped (%d)", rp.extra[3], rp.extra[4]);
+    rc = run_isolated(iso_pty_kill_shell, &rp, 0, 20);
+    CHECK(rc == 0 && rp.dt < 4.0 && rp.termsig0 == SIGINT && rp.sigint_seen == 1,
+          "kill -INT <shell pid> while waiting (interactive): forwarded to the pipeline's group (dt %.2f termsig %d seen %d)", rp.dt, rp.termsig0, rp.sigint_seen);
+    CHECK(rc == 0 && rp.extra[3] == 1 && rp.exit_requested == 0, "terminal returned, interactive shell does not exit");
+    rc = run_isolated(iso_pty_stop, &rp, 0, 20);
+    CHECK(rc == 0 && rp.dt < 2.0 && rp.status == 128 + SIGSTOP && rp.outcome1 == OSH_OUT_CANCELLED && rp.extra[3] == 1 && rp.extra[4] == 1,
+          "interactive stopped member: cancelled within 2 s (dt %.2f status %d), terminal returned %d, reaped %d", rp.dt, rp.status, rp.extra[3], rp.extra[4]);
+}
+
+/* ================= review fixes (PR 337): printf table and wired adversarial checks ================= */
+
+typedef struct {
+    const char *fmt, *a1, *a2, *a3;
+} PfRow;
+
+/* SAME: stdout and status equal /usr/bin/printf (its stderr is not compared). */
+static const PfRow k_pf_same[] = {
+    {"\\%q|\\n", "5", NULL, NULL},          /* review B2: backslash hides % from the old validator */
+    {"\\%", "x", NULL, NULL},               /* review B2: % at the very end after a backslash, extra arg follows */
+    {"\\%d\\n", "7", NULL, NULL},
+    {"\\\\%d\\n", "7", NULL, NULL},
+    {"a\\", NULL, NULL, NULL},              /* lone trailing backslash */
+    {"\\", "x", NULL, NULL},
+    {"\\%s|\\n", "a", NULL, NULL},
+    {"%%%%\\n", NULL, NULL, NULL},
+    {"%%d\\n", "5", NULL, NULL},
+    {"%s%%%s\\n", "a", "b", NULL},
+    {"%s\\n", "", NULL, NULL},
+    {"%d\\n", "-5", NULL, NULL},
+    {"%d\\n", "9223372036854775807", NULL, NULL},
+    {"%d\\n", "9223372036854775808", NULL, NULL},
+    {"%u\\n", "-1", NULL, NULL},
+    {"%x\\n", "-1", NULL, NULL},
+    {"%o\\n", "0777", NULL, NULL},
+    {"%c|\\n", "", NULL, NULL},
+    {"%c|\\n", "hello", NULL, NULL},
+    {"%s %s %s\\n", "a", "b", NULL},
+    {"%s\\n", "a", "b", "c"},
+    {"%d\\n", "1", "2", "3"},
+    {"%i\\n", "0x10", NULL, NULL},
+    {"%d\\n", "'x", NULL, NULL},
+    {"%d\\n", "\"ab", NULL, NULL},
+    {"\\101\\102\\n", NULL, NULL, NULL},
+    {"\\1012\\n", NULL, NULL, NULL},
+    {"\\8\\n", NULL, NULL, NULL},
+    {"\\\"q\\\"\\n", NULL, NULL, NULL},
+    {"x\\ty\\n", NULL, NULL, NULL},
+    {"%s\\\\n", "a", NULL, NULL},
+    {"%d%d\\n", "1", "2", NULL},
+    {"%s", "-", NULL, NULL},
+    {"\\a\\b\\f\\r\\v", NULL, NULL, NULL},
+    {"\\q\\z\\n", NULL, NULL, NULL},
+};
+
+/* REFUSE: outside the documented subset or malformed. The builtin refuses BEFORE printing anything and returns 1;
+ * /usr/bin/printf prints what precedes the bad conversion, then fails (also 1). Intentional difference. */
+static const PfRow k_pf_refuse[] = {
+    {"%q\\n", "5", NULL, NULL},
+    {"ab%q", "5", NULL, NULL},
+    {"%s%q\\n", "x", "y", NULL},
+    {"%", NULL, NULL, NULL},
+    {"a%", "x", NULL, NULL},
+    {"%\\n", NULL, NULL, NULL},
+    {"\\%%\\n", NULL, NULL, NULL},
+    {"%5d\\n", "3", NULL, NULL},
+    {"%-3s|\\n", "a", NULL, NULL},
+    {"%.2s\\n", "abc", NULL, NULL},
+    {"%ld\\n", "5", NULL, NULL},
+    {"%X\\n", "255", NULL, NULL},
+    {"%b\\n", "a", NULL, NULL},
+    {"%e\\n", "1", NULL, NULL},
+    {"%s %z\\n", "a", NULL, NULL},
+};
+
+/* DIFF: accepted by the builtin but intentionally not like coreutils (documented in OSH_PLATFORM_ABI / PR body). */
+static const struct { const char *fmt, *want; } k_pf_diff[] = {
+    {"\\x41\\n", "\\x41\n"},
+    {"\\u0041\\n", "\\u0041\n"},
+    {"a\\cb\\n", "a\\cb\n"},
+};
+
+static void test_printf_review(void)
+{
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    OshResult r;
+    int nsame = (int)(sizeof k_pf_same / sizeof k_pf_same[0]);
+    for (int i = 0; i < nsame; i++) {
+        const PfRow *w = &k_pf_same[i];
+        t_clear(&t);
+        char *res[2];
+        size_t len[2] = {0, 0};
+        int st[2];
+        for (int k = 0; k < 2; k++) {
+            t_clear(&t);
+            OshBuilder *b = nb(0, 0);
+            if (k == 0) cmd(b, OSH_B_PRINTF, "printf", w->fmt, NULL);
+            else cmd(b, 0, "/usr/bin/printf", w->fmt, NULL);
+            if (w->a1) osh_rb_arg(b, w->a1);
+            if (w->a2) osh_rb_arg(b, w->a2);
+            if (w->a3) osh_rb_arg(b, w->a3);
+            st[k] = go(&t, b, &r);
+            res[k] = t_out(&t);
+            len[k] = g_slurp_len;
+        }
+        CHECK(len[0] == len[1] && memcmp(res[0], res[1], len[0]) == 0 && st[0] == st[1], "printf table #%d fmt '%s': builtin '%s' (%d) vs /usr/bin/printf '%s' (%d)", i, w->fmt, res[0], st[0], res[1], st[1]);
+        free(res[0]);
+        free(res[1]);
+    }
+    int nref = (int)(sizeof k_pf_refuse / sizeof k_pf_refuse[0]);
+    for (int i = 0; i < nref; i++) {
+        const PfRow *w = &k_pf_refuse[i];
+        t_clear(&t);
+        OshBuilder *b = nb(0, 0);
+        cmd(b, OSH_B_PRINTF, "printf", w->fmt, NULL);
+        if (w->a1) osh_rb_arg(b, w->a1);
+        if (w->a2) osh_rb_arg(b, w->a2);
+        int st = go(&t, b, &r);
+        char *o = t_out(&t), *e = t_err(&t);
+        CHECK(st == 1 && o[0] == 0 && e[0] != 0, "printf refuse #%d fmt '%s': status %d, stdout '%s', stderr '%s'", i, w->fmt, st, o, e);
+        free(o);
+        free(e);
+    }
+    int ndiff = (int)(sizeof k_pf_diff / sizeof k_pf_diff[0]);
+    for (int i = 0; i < ndiff; i++) {
+        t_clear(&t);
+        OshBuilder *b = nb(0, 0);
+        cmd(b, OSH_B_PRINTF, "printf", k_pf_diff[i].fmt, NULL);
+        int st = go(&t, b, &r);
+        char *o = t_out(&t);
+        CHECK(st == 0 && strcmp(o, k_pf_diff[i].want) == 0, "printf documented difference '%s': got '%s'", k_pf_diff[i].fmt, o);
+        free(o);
+    }
+    /* never read past the NUL: the argument after a trailing % or \ must never show up as format text */
+    t_clear(&t);
+    OshBuilder *b = nb(0, 0);
+    cmd(b, OSH_B_PRINTF, "printf", "\\%", "SECRET", NULL);
+    go(&t, b, &r);
+    char *o = t_out(&t);
+    CHECK(strstr(o, "SECRET") == NULL, "format scan stopped at the terminator, got '%s'", o);
+    free(o);
+    t_end(&t);
+}
+
+static void test_adversarial(void)
+{
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    t.s.fd[0] = open("/dev/null", O_RDONLY | O_CLOEXEC);
+    OshResult r;
+    OshBuilder *b;
+    /* fd and zombie hygiene on six error-path shapes, repeated (review R1) */
+    int base = count_fds(), zomb = 0;
+    for (int it = 0; it < 150; it++) {
+        b = nb(0, 0); cmd(b, 0, "true", NULL); cmd(b, 0, "true", NULL); cmd(b, 0, "true", NULL);
+        t.s.fail_fork_at = 3; go(&t, b, &r); t.s.fail_fork_at = 0;
+        b = nb(0, 0); cmd(b, 0, "true", NULL); cmd(b, 0, "cat", NULL); osh_rb_redir(b, OSH_R_IN, 0, "/nonexistent/x", 0); go(&t, b, &r);
+        b = nb(0, 0); cmd(b, 0, "true", NULL); cmd(b, 0, "nope-zz", NULL); cmd(b, 0, "cat", NULL); go(&t, b, &r);
+        b = nb(0, 0); cmd(b, OSH_B_PWD, "pwd", NULL); osh_rb_redir(b, OSH_R_OUT, 1, "/dev/null", 0); osh_rb_redir(b, OSH_R_IN, 0, "/nonexistent/x", 0); go(&t, b, &r);
+        b = nb(0, 0); cmd(b, OSH_B_PWD, "pwd", NULL); osh_rb_redir(b, OSH_R_OUT, 1, "/dev/null", 0); osh_rb_redir(b, OSH_R_DUP, 2, NULL, 1); go(&t, b, &r);
+        b = nb(0, 0); cmd(b, OSH_B_PWD, "pwd", NULL); cmd(b, 0, "cat", NULL); go(&t, b, &r);
+    }
+    if (!(waitpid(-1, NULL, WNOHANG) == -1 && errno == ECHILD)) zomb = 1;
+    CHECK(!zomb, "no unreaped child after 900 error-path runs");
+    CHECK(count_fds() == base, "no descriptor leak after 900 error-path runs (%d vs %d)", count_fds(), base);
+    /* exit / cd / export inside a pipeline do not touch the parent */
+    b = nb(0, 0); cmd(b, OSH_B_EXIT, "exit", "3", NULL); cmd(b, 0, "cat", NULL);
+    go(&t, b, &r);
+    CHECK(!r.exit_requested && !t.s.exit_requested, "exit in a pipeline does not exit the shell");
+    char *cwd0 = getcwd(NULL, 0);
+    b = nb(0, 0); cmd(b, OSH_B_CD, "cd", "/", NULL); cmd(b, OSH_B_EXPORT, "export", "QQ=1", NULL); go(&t, b, &r);
+    char *cwd1 = getcwd(NULL, 0);
+    CHECK(strcmp(cwd0, cwd1) == 0 && osh_var_get(&t.s, "QQ") == NULL, "cd/export in a pipeline do not touch the shell");
+    free(cwd0);
+    free(cwd1);
+    /* PATH edge cases */
+    char longn[5000], longp[5000], out[PATH_MAX];
+    memset(longn, 'a', 4999); longn[4999] = 0;
+    b = nb(0, 0); cmd(b, 0, longn, NULL);
+    CHECK(go(&t, b, &r) == 127, "over-long command name is not found");
+    longp[0] = '/'; memset(longp + 1, 'a', 4990); longp[4991] = 0;
+    b = nb(0, 0); cmd(b, 0, longp, NULL);
+    int st = go(&t, b, &r);
+    CHECK(st == 127 || st == 126, "over-long path status %d", st);
+    osh_var_unset(&t.s, "PATH");
+    CHECK(osh_resolve_linux(&t.s, "true", out, sizeof out) == 127, "PATH unset: not found");
+    osh_var_export(&t.s, "PATH", "/usr/bin:/bin");
+    CHECK(osh_resolve_linux(&t.s, "true", out, sizeof out) == 0 && osh_resolve_linux(&t.s, "", out, sizeof out) == 127, "PATH resolution and empty name");
+    /* duplicate prefix assignments keep the last one, nothing leaks into the session, unexported stays private */
+    t_clear(&t);
+    b = nb(0, 0); cmd(b, 0, "printenv", "ZZV", NULL); osh_rb_assign(b, "ZZV", "1"); osh_rb_assign(b, "ZZV", "2");
+    go(&t, b, &r);
+    char *o = t_out(&t);
+    CHECK(strcmp(o, "2\n") == 0 && osh_var_get(&t.s, "ZZV") == NULL, "duplicate prefix assignment: '%s'", o);
+    free(o);
+    osh_var_set(&t.s, "UNEXP", "v");
+    b = nb(0, 0); cmd(b, 0, "printenv", "UNEXP", NULL);
+    CHECK(go(&t, b, &r) == 1, "unexported variable is not passed to children");
+    /* printf to a full device reports a write error */
+    b = nb(0, 0); cmd(b, OSH_B_PRINTF, "printf", "%s\n", "x", NULL); osh_rb_redir(b, OSH_R_OUT, 1, "/dev/full", 0);
+    CHECK(go(&t, b, &r) == 1, "printf to /dev/full fails with status 1");
+    /* a script without a shebang: DECISION (review N1): the adapter does not fall back to sh; execve's ENOEXEC is
+     * reported as 126, like a file that is found but cannot be executed. */
+    wfile(P("noshebang.sh"), "echo hi\n", 0755);
+    b = nb(0, 0); cmd(b, 0, P("noshebang.sh"), NULL);
+    CHECK(go(&t, b, &r) == 126, "no-shebang script is 126 (documented: no sh fallback)");
+    close(t.s.fd[0]);
+    t_end(&t);
+}
+
+static void iso_low_nofile(Rep *rp)
+{
+    struct rlimit rl;
+    getrlimit(RLIMIT_NOFILE, &rl);
+    rl.rlim_cur = 12;
+    setrlimit(RLIMIT_NOFILE, &rl);
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    t.s.fd[0] = open("/dev/null", O_RDONLY | O_CLOEXEC);
+    int base = count_fds();
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    for (int i = 0; i < 5; i++) cmd(b, 0, "cat", NULL);
+    int st = go(&t, b, &r);
+    rp->status = st;
+    rp->extra[0] = waitpid(-1, NULL, WNOHANG) == -1 && errno == ECHILD;
+    rp->extra[1] = count_fds() == base;
+    for (int i = 0; i < 100; i++) {
+        b = nb(0, 0); cmd(b, 0, "true", NULL); osh_rb_redir(b, OSH_R_OUT, 1, "/dev/null", 0); go(&t, b, &r);
+        b = nb(0, 0); cmd(b, 0, "true", NULL); cmd(b, 0, "cat", NULL); cmd(b, 0, "cat", NULL); cmd(b, 0, "cat", NULL); cmd(b, 0, "cat", NULL); go(&t, b, &r);
+    }
+    rp->extra[2] = waitpid(-1, NULL, WNOHANG) == -1 && errno == ECHILD && count_fds() == base;
+    close(t.s.fd[0]);
+    t_end(&t);
+}
+
+static void iso_child_mask(Rep *rp)
+{
+    sigset_t m;
+    sigemptyset(&m);
+    sigaddset(&m, SIGTERM);
+    sigaddset(&m, SIGUSR1);
+    sigprocmask(SIG_BLOCK, &m, NULL);
+    T t;
+    t_begin(&t, "/usr/bin:/bin");
+    OshResult r;
+    OshBuilder *b = nb(0, 0);
+    helper(b, "sigblk", NULL);
+    go(&t, b, &r);
+    char *o = t_out(&t);
+    rp->extra[0] = strcmp(o, "blocked 0\n") == 0;
+    free(o);
+    sigset_t cur;
+    sigprocmask(SIG_BLOCK, NULL, &cur);
+    rp->extra[1] = sigismember(&cur, SIGTERM) && sigismember(&cur, SIGUSR1); /* embedder's mask restored */
+    t_end(&t);
+}
+
+static void test_adversarial_isolated(void)
+{
+    Rep rp;
+    int rc = run_isolated(iso_low_nofile, &rp, 1, 60);
+    CHECK(rc == 0 && rp.extra[0] && rp.extra[1] && rp.extra[2], "RLIMIT_NOFILE=12: 5-stage pipeline status %d, no zombie %d, no leak %d/%d", rp.status, rp.extra[0], rp.extra[1], rp.extra[2]);
+    rc = run_isolated(iso_child_mask, &rp, 0, 15);
+    CHECK(rc == 0 && rp.extra[0] == 1 && rp.extra[1] == 1, "children start with an empty signal mask; the embedder's mask is restored");
+    /* decoder fuzz: mutated records are accepted or refused, never crash, accepted pointers stay inside the arena */
+    OshBuilder g;
+    osh_rb_init(&g, 0, 0);
+    osh_rb_cmd(&g, 0); osh_rb_arg(&g, "true");
+    osh_rb_cmd(&g, 0); osh_rb_arg(&g, "cat"); osh_rb_assign(&g, "A", "b"); osh_rb_redir(&g, OSH_R_OUT, 1, "/dev/null", 0);
+    osh_rb_seal(&g);
+    static OshRequest rq;
+    static uint64_t rec[OSH_REQ_HDR_CELLS + OSH_MAX_CMDS * OSH_CMD_CELLS], out[OSH_OUT_CAP];
+    unsigned seed = 1;
+    int accepted = 0, refused = 0, badptr = 0;
+    for (int i = 0; i < 100000; i++) {
+        memcpy(rec, g.rec, sizeof rec);
+        memcpy(out, g.out, sizeof out);
+        int k = 1 + rand_r(&seed) % 3;
+        for (int j = 0; j < k; j++) {
+            size_t idx = rand_r(&seed) % (OSH_REQ_HDR_CELLS + 2 * OSH_CMD_CELLS + 4);
+            uint64_t v;
+            switch (rand_r(&seed) % 5) {
+            case 0: v = ~0ull; break;
+            case 1: v = (uint64_t)rand_r(&seed); break;
+            case 2: v = 1ull << 63; break;
+            case 3: v = 0xFFFFFFFFull; break;
+            default: v = (uint64_t)(rand_r(&seed) % 9000);
+            }
+            rec[idx] = v;
+        }
+        size_t nrec = OSH_REQ_HDR_CELLS + 2 * OSH_CMD_CELLS;
+        if (rand_r(&seed) % 8 == 0) nrec = (size_t)rand_r(&seed) % (nrec + 1);
+        int dc = osh_req_decode(rec, nrec, out, rand_r(&seed) % 4 ? OSH_OUT_CAP : (size_t)(rand_r(&seed) % 100), &rq);
+        if (dc) { refused++; continue; }
+        accepted++;
+        for (int c = 0; c < rq.ncmds; c++)
+            for (int a = 0; a < rq.cmd[c].nargv; a++)
+                if (!rq.cmd[c].argv[a] || rq.cmd[c].argv[a] < rq.arena || rq.cmd[c].argv[a] > rq.arena + sizeof rq.arena) badptr++;
+    }
+    CHECK(badptr == 0 && accepted > 0 && refused > 0, "decoder fuzz: %d accepted, %d refused, %d pointers outside the arena", accepted, refused, badptr);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 2 && !strcmp(argv[1], "--helper")) return helper_main(argc, argv);
@@ -1310,19 +1958,24 @@ int main(int argc, char **argv)
     char *cwd0 = getcwd(NULL, 0);
     setvbuf(stdout, NULL, _IOLBF, 0);
 
-    test_session_env();
-    test_simple_and_path();
-    test_builtins();
-    test_printf();
-    test_redirs();
-    test_pipelines();
-    test_interrupted_wait();
-    test_partial_launch();
-    test_fd_leaks();
-    test_connectors();
-    test_refusals();
-    test_destinations_and_authority();
-    test_direct_equals_record();
+    if (argc > 2 && !strcmp(argv[1], "--only")) { g_only_set = 1; g_only = argv[2]; }
+    alarm(300); /* watchdog: a hang must fail the run, not stall it */
+    if (want("env")) test_session_env();
+    if (want("simple")) test_simple_and_path();
+    if (want("builtins")) test_builtins();
+    if (want("printf")) { test_printf(); test_printf_review(); }
+    if (want("redirs")) test_redirs();
+    if (want("pipelines")) test_pipelines();
+    if (want("sigint")) { test_sigint_noninteractive(); test_sigint_direct_noninteractive(); test_inherited_ignore(); }
+    if (want("stop")) test_stopped_member();
+    if (want("pty")) test_interactive_pty();
+    if (want("adversarial")) { test_adversarial(); test_adversarial_isolated(); }
+    if (want("partial")) test_partial_launch();
+    if (want("fdleaks")) test_fd_leaks();
+    if (want("connectors")) test_connectors();
+    if (want("refusals")) test_refusals();
+    if (want("destinations")) test_destinations_and_authority();
+    if (want("direct")) test_direct_equals_record();
 
     if (chdir(cwd0)) {}
     free(cwd0);
