@@ -110,145 +110,145 @@
       "children": [
         {
           "digest": "e7498eca87fe5ca8dc27d92f2d99be0de3e4c804711f9d8cba5bb1e47ca95f74",
-          "last_commit": "c0369e6",
+          "last_commit": "28911be",
           "name": "algebra",
           "purpose": "Directory tests/algebra. Purpose not yet described by a human."
         },
         {
           "digest": "d484ca176e9932b098df5664d01bdd679c78f5b89f4d15a77eb30f43d235f570",
-          "last_commit": "c0369e6",
+          "last_commit": "834ee93",
           "name": "ans",
           "purpose": "Tests 1-10 for ANS (docs/ans/INERTIAL_ALIGNMENT_SPEC_V1.md): freeze/digest, hostile reference mu"
         },
         {
           "digest": "bd7114b42f99c7e51741abdf24329d20713c73a332bd5f349e04384fd0241e91",
-          "last_commit": "c0369e6",
+          "last_commit": "e722877",
           "name": "brownian",
           "purpose": "Directory tests/brownian. Purpose not yet described by a human."
         },
         {
           "digest": "1cbe9561b87b394e200f67996ce1407c377025d07ad033b27cdd542625e277d4",
-          "last_commit": "c0369e6",
+          "last_commit": "30bb116",
           "name": "canonicalization",
           "purpose": "Directory tests/canonicalization. Purpose not yet described by a human."
         },
         {
           "digest": "d93d50a07f61b032e5476e0066cad83c42d51427a0b206585e05fff56350e12e",
-          "last_commit": "c0369e6",
+          "last_commit": "dce821c",
           "name": "compiler",
           "purpose": "Directory tests/compiler. Purpose not yet described by a human."
         },
         {
           "digest": "47683e6a56ca8e14ee526004b2a90dd08498507e8d4b0b42c3d85d22afb07d28",
-          "last_commit": "c0369e6",
+          "last_commit": "28b8793",
           "name": "constraints",
           "purpose": "Directory tests/constraints. Purpose not yet described by a human."
         },
         {
           "digest": "95b2041562face1ba7baa6c57456bf07d77a0f44e093b989ec18f559064e22d9",
-          "last_commit": "c0369e6",
+          "last_commit": "49abb02",
           "name": "crumbline",
           "purpose": "Directory tests/crumbline. Purpose not yet described by a human."
         },
         {
           "digest": "d57833fb3f63ef6475cf25e2e16319d818a0a407b825d5b4c5cbdd3cc0e06492",
-          "last_commit": "c0369e6",
+          "last_commit": "00f54b6",
           "name": "dual_experiment",
           "purpose": "Tests for the DUAL applicability experiment: determinism (same seed, byte-identical results dige"
         },
         {
           "digest": "fb0a9296a93d065d5e016ad0a950fc6b9691f8ddca12ad0111cee2e35791cdb4",
-          "last_commit": "c0369e6",
+          "last_commit": "c819b37",
           "name": "effect",
           "purpose": "Directory tests/effect. Purpose not yet described by a human."
         },
         {
           "digest": "bc2473da101ba5a74c32021a9d27ecb2007897f07a9689ba50ccc99b9030bf0c",
-          "last_commit": "c0369e6",
+          "last_commit": "1a147e4",
           "name": "estimation",
           "purpose": "Directory tests/estimation. Purpose not yet described by a human."
         },
         {
           "digest": "de2bc4e310a257dbd21cc5c9624641b137b1b4487d8876cb52469aea2af5b904",
-          "last_commit": "c0369e6",
+          "last_commit": "3108fc2",
           "name": "fabric",
           "purpose": "Directory tests/fabric. Purpose not yet described by a human."
         },
         {
           "digest": "90418926706f827aafd72938aee1dea89222cb5e465fba06a8df5a83253e0412",
-          "last_commit": "c0369e6",
+          "last_commit": "28b8793",
           "name": "identity",
           "purpose": "Directory tests/identity. Purpose not yet described by a human."
         },
         {
           "digest": "c653c851c8934ce9ac4eabaa32a9df65d858c9ac7a556e76b265b1ee81494443",
-          "last_commit": "c0369e6",
+          "last_commit": "4f55f45",
           "name": "language",
           "purpose": "Directory tests/language. Purpose not yet described by a human."
         },
         {
           "digest": "e485aa0a00f0a588e22d55caa704db8581a5da1b53080b311086e6edd38f6044",
-          "last_commit": "c0369e6",
+          "last_commit": "30bb116",
           "name": "malformed",
           "purpose": "Directory tests/malformed. Purpose not yet described by a human."
         },
         {
           "digest": "adba9b5ea1c000db36078fca7d1bfef0b2769b73c8fb474024d9409bd48bdbc1",
-          "last_commit": "c0369e6",
+          "last_commit": "40d1ea3",
           "name": "numeric_native",
           "purpose": "Simulated M16 driver for numeric resource-lifecycle tests. No device execution or numeric parity"
         },
         {
           "digest": "a4d320b3203650a28c43ea954957d8902d1cc25cbdc8aecd15628c01a92f68f8",
-          "last_commit": "c0369e6",
+          "last_commit": "d550b70",
           "name": "path",
           "purpose": "Directory tests/path. Purpose not yet described by a human."
         },
         {
           "digest": "1fd5f914f326a1a51fc343ab633ac411e86bea22beee718b1460db066807f292",
-          "last_commit": "c0369e6",
+          "last_commit": "8a2e268",
           "name": "physics0",
           "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential"
         },
         {
           "digest": "4619a90a957e77cd3d5680132ab4d1a5ef65f43419ddcc089743ca5b7a7719ee",
-          "last_commit": "c0369e6",
+          "last_commit": "8f8babe",
           "name": "polyglot",
           "purpose": "Directory tests/polyglot. Purpose not yet described by a human."
         },
         {
           "digest": "16bea65aa50f0b3ab8b90cb286de048639fa8e635ff84e517e138c6f9f26a059",
-          "last_commit": "c0369e6",
+          "last_commit": "3c82389",
           "name": "program",
           "purpose": "Directory tests/program. Purpose not yet described by a human."
         },
         {
           "digest": "ba0c09f67d12b5d7de906129bdbe2f6e0a228e1a34236ecc4b779c523cb2061e",
-          "last_commit": "c0369e6",
+          "last_commit": "6fdc4c3",
           "name": "r16_inventory",
           "purpose": "Directory tests/r16_inventory. Purpose not yet described by a human."
         },
         {
           "digest": "000c487afa8f600842eff25a22a671afb5e29b26845105405de9542a21b70746",
-          "last_commit": "c0369e6",
+          "last_commit": "79a805d",
           "name": "r16_negative",
           "purpose": "Directory tests/r16_negative. Purpose not yet described by a human."
         },
         {
           "digest": "25cabf47d18353539db28146434d246a2f81bf9c323471566451aca56806f279",
-          "last_commit": "c0369e6",
+          "last_commit": "44d8c06",
           "name": "r16_surface",
           "purpose": "Directory tests/r16_surface. Purpose not yet described by a human."
         },
         {
           "digest": "9106f2ea57e8f453322f0a988b61cfcbd06631573c9ff32a777903d27d7741e1",
-          "last_commit": "c0369e6",
+          "last_commit": "40d1ea3",
           "name": "realize",
           "purpose": "Directory tests/realize. Purpose not yet described by a human."
         },
         {
           "digest": "381184e79b26920b256dd4a774fb11f17a92afa8ceda4813eada241bac4163a9",
-          "last_commit": "c0369e6",
+          "last_commit": "30bb116",
           "name": "relations",
           "purpose": "Directory tests/relations. Purpose not yet described by a human."
         },
@@ -260,38 +260,38 @@
         },
         {
           "digest": "b1311025a3bfd8dd7b5e07b1adf1d7ece502a15200f7207f515334f7083b8315",
-          "last_commit": "c0369e6",
+          "last_commit": "5ae192a",
           "name": "searchtrace",
           "purpose": "Directory tests/searchtrace. Purpose not yet described by a human."
         },
         {
           "digest": "3ecf636e2923038708cafa062895b8d8f2664dc1865cdff38575911eaa9f1b2d",
-          "last_commit": "c0369e6",
+          "last_commit": "54826a3",
           "name": "train",
           "purpose": "Directory tests/train. Purpose not yet described by a human."
         },
         {
           "digest": "75d5e576c38a0497a55e9f5ee79550cb94f9b75008f3e4e126312802704b3f86",
-          "last_commit": "c0369e6",
+          "last_commit": "2564f57",
           "name": "turing",
           "purpose": "Directory tests/turing. Purpose not yet described by a human."
         },
         {
           "digest": "3f19e3034ff999211cb13ab8995ca6c38d0d8e1f5bfbbbd621caaa08412d3f1f",
-          "last_commit": "c0369e6",
+          "last_commit": "fed4f07",
           "name": "visor",
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
       "children_root": "sha256:e4b130835499158755721627147fd30866f0679d7cdbc125bec754e9c0a94396",
-      "compiled_at": "2026-10-07T22:12:35Z",
+      "compiled_at": "2026-10-08T01:41:12Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:daa6072bbb4f876d9e0e0a8cc88c56e1fe98aad01a4b9b18bfc8cea84845f7f0",
+      "digest": "sha256:c55e3996f2cc3fad5a2802699614c26b71db329e2ab234d6a58fb06e7b9455e2",
       "evidence_files": 11,
       "evidence_root": "sha256:d5c1bceb4d57ef0eb42797c58801b5926509711614c3e38bb7105b6efa3942f2",
       "files": 819,
-      "generated_at_commit": "884360a67256afc14fa6e6035292ad609fab337f",
-      "source_tree": "sha256:468b08b466d9d007c04db67cdc70329c1dc6b17fc06b5e8dd1291c570ad7f21f"
+      "generated_at_commit": "0ca9bf147a24700aa017a0c2b5308bf7083739cf",
+      "source_tree": "sha256:fe6d4696cd6e3d9ceddb7979919634d5606c0279962ca464bd496b9f419a47f0"
     },
     "owner_lane": "",
     "provenance": {
