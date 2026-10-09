@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/random.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -399,10 +400,19 @@ int osh_journal_open(OshJournal *j, const char *path)
             return jfail(j, EACCES, "journal %s must be a regular file owned by you with mode 0600 (found mode %04o); refusing it, fix or remove it", path, (unsigned)(st.st_mode & 07777));
         size = (long)st.st_size;
     }
-    int krc = load_key(j, path, size > 0);
-    if (krc) return krc;
     int fd = open(path, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (fd < 0) return jfail(j, errno, "cannot open journal %s%u", path, 0);
+    /* ONE SESSION PER JOURNAL: take the lock first, before the key is read or created and before recovery runs, so a live
+     * session's open intents are never reported UNKNOWN by another. The kernel drops the lock when this process exits or dies. */
+    if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
+        int e = errno;
+        close(fd);
+        if (e == EWOULDBLOCK) return jfail(j, EBUSY, "journal %s is in use by another osh session (one session per journal); start this one with --journal FILE to use a separate journal%u", path, 0);
+        return jfail(j, e, "cannot lock journal %s%u", path, 0);
+    }
+    if (fstat(fd, &st) == 0) size = (long)st.st_size; /* re-read under the lock */
+    int krc = load_key(j, path, size > 0);
+    if (krc) { close(fd); return krc; }
     if (!existed) {
         int rc = sync_fd(fd) == 0 ? fsync_parent(path) : -errno;
         if (rc) { close(fd); return jfail(j, rc < 0 ? -rc : EIO, "cannot sync new journal %s%u", path, 0); }

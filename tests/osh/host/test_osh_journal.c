@@ -1052,6 +1052,72 @@ static void test_cli_explicit_dir(const char *osh)
     CHECK(run_osh(osh, pol, jp, sc, ef, NULL, "/tmp") == 0 && fsize(mk) == 0, "control: with a private directory it runs");
 }
 
+/* ONE SESSION PER JOURNAL (flock). Start osh in its own process group without waiting. */
+static pid_t start_osh(const char *osh, const char *caps, const char *jpath, const char *script, const char *errf)
+{
+    pid_t pid = fork();
+    if (pid == 0) {
+        setpgid(0, 0);
+        int fd = open(errf, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        dup2(fd, 2);
+        dup2(g_null, 1);
+        const char *av[8] = {osh, "--caps", caps, "--journal", jpath, "-c", script, NULL};
+        execv(osh, (char *const *)av);
+        _exit(127);
+    }
+    setpgid(pid, pid);
+    return pid;
+}
+
+static void test_cli_one_session(const char *osh)
+{
+    char pol[700], jp[900], ef1[700], ef2[700], ef3[700], mk[700], sc[1500], key[1000];
+    snprintf(pol, sizeof pol, "%s/cli.policy", g_dir);
+    snprintf(jp, sizeof jp, "%s/lock.log", g_dir);
+    snprintf(key, sizeof key, "%s.key", jp);
+    snprintf(ef1, sizeof ef1, "%s/lk1.err", g_dir);
+    snprintf(ef2, sizeof ef2, "%s/lk2.err", g_dir);
+    snprintf(ef3, sizeof ef3, "%s/lk3.err", g_dir);
+    snprintf(mk, sizeof mk, "%s/lk.marker", g_dir);
+    pid_t a = start_osh(osh, pol, jp, "/bin/sleep 2; /bin/true", ef1);
+    for (int i = 0; i < 200 && !(fsize(jp) > 0); i++) msleep(25);
+    CHECK(fsize(jp) > 0, "first session holds the journal and has written its intent");
+    /* second session on the SAME journal: effects refused by name, nothing launched, builtins still work */
+    snprintf(sc, sizeof sc, "/bin/touch %s", mk);
+    CHECK(run_osh(osh, pol, jp, sc, ef2, NULL, "/tmp") == 1 && fsize(mk) < 0, "second session: effect refused, nothing launched");
+    char *e = slurp(ef2, NULL);
+    CHECK(strstr(e, "in use by another osh session") && strstr(e, "--journal"), "named, and says to use --journal:\n%s", e);
+    free(e);
+    CHECK(run_osh(osh, pol, jp, "printf x", ef2, NULL, "/tmp") == 0, "second session: a builtin without a write still runs");
+    int st = 0;
+    waitpid(a, &st, 0);
+    CHECK(WIFEXITED(st) && WEXITSTATUS(st) == 0, "first session unaffected (exit %d)", WIFEXITED(st) ? WEXITSTATUS(st) : -1);
+    char *j = slurp(jp, NULL);
+    CHECK(count_sub(j, " I ") == 2 && count_sub(j, " O ") == 2 && rec_numbers_unique(j) == 0, "no duplicate record numbers, nothing from the refused session:\n%s", j);
+    free(j);
+    /* the lock dies with the process: SIGKILL a session mid-command, a new session takes the lock and recovery reports the open intent once */
+    unlink(jp);
+    unlink(key);
+    pid_t b = start_osh(osh, pol, jp, "/bin/sleep 30", ef1);
+    for (int i = 0; i < 200 && !(fsize(jp) > 0); i++) msleep(25);
+    CHECK(fsize(jp) > 0, "second run: intent written");
+    kill(-b, SIGKILL);
+    waitpid(b, NULL, 0);
+    msleep(100);
+    snprintf(sc, sizeof sc, "/bin/touch %s", mk);
+    CHECK(run_osh(osh, pol, jp, sc, ef3, NULL, "/tmp") == 0 && fsize(mk) == 0, "after the holder was killed, a new session gets the lock and runs");
+    e = slurp(ef3, NULL);
+    CHECK(count_sub(e, "has outcome UNKNOWN") == 1, "recovery marks the killed session's open intent UNKNOWN exactly once:\n%s", e);
+    free(e);
+    CHECK(run_osh(osh, pol, jp, "/bin/true", ef3, NULL, "/tmp") == 0, "next start");
+    e = slurp(ef3, NULL);
+    CHECK(count_sub(e, "UNKNOWN") == 0, "and not again");
+    free(e);
+    j = slurp(jp, NULL);
+    CHECK(rec_numbers_unique(j) == 0, "record numbers unique across sessions:\n%s", j);
+    free(j);
+}
+
 int main(int argc, char **argv)
 {
     if (argc >= 2 && !strcmp(argv[1], "--helper")) return helper_main(argc, argv);
@@ -1082,7 +1148,7 @@ int main(int argc, char **argv)
     test_pipeline_later_intent_fails();
     test_sticky_failure();
     test_explicit_journal_modes();
-    if (osh_bin) { test_cli(osh_bin); test_cli_explicit_dir(osh_bin); }
+    if (osh_bin) { test_cli(osh_bin); test_cli_explicit_dir(osh_bin); test_cli_one_session(osh_bin); }
     close(g_null);
     char cmd[4400];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", g_dir);
