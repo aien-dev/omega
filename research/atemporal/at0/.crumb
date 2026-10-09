@@ -4,9 +4,15 @@
       "children": [
         {
           "digest": "190980a2004ccf444ac557f03a736fa621e7aa238d4123b70244d9727da704ab",
-          "last_commit": "9027080",
+          "last_commit": "216b817",
           "name": "evaluator",
           "purpose": "Agent 4 independent adversarial evaluator for AT-0: independent AT0_CASE_V1 codec, exact-arithme"
+        },
+        {
+          "digest": "d2b983f44cc5a729702d696b262ed45db193f7d02f0b59375ada9b92721fcb03",
+          "last_commit": "a801641",
+          "name": "integration",
+          "purpose": "AT-0 Agent 5 integration runner, exact result assembler/judge, hygiene and isolation controls, a"
         },
         {
           "digest": "470b8c119df44842fffddc8393b528c87f163bb6e0155341cbc6da0650e19483",
@@ -21,15 +27,15 @@
           "purpose": "AT-0 reference oracle (Rust, standard library only, built by rustc directly; research cross-chec"
         }
       ],
-      "children_root": "sha256:5d89794813236e7dddb2c249c5229c0442267263b1f04578560660e78984455f",
-      "compiled_at": "2026-10-09T23:11:27Z",
+      "children_root": "sha256:27a02833f248b5a11e380e2c65e0e9990bcb44656214643fb65812f68eb9bc3b",
+      "compiled_at": "2026-10-09T23:49:30Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:13d3241cfe12653f3f34e11c5c440c4034bd00c67b45cb97db307a20339597fb",
+      "digest": "sha256:f873df3566e459cfeb62239664a94726dbe9b3aa02441db659dd96dbf23bf717",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 161,
-      "generated_at_commit": "902708063784b32f77b61912e18fadd4c4389ab9",
-      "source_tree": "sha256:7bf8ace64c2d4f19bdcd1e64a5c7bc13dd7854a40f26f50c5825a627bf09ab10"
+      "files": 168,
+      "generated_at_commit": "a8016410b5cd528d88d990c12814f61fa51d7b4e",
+      "source_tree": "sha256:565952033536bcac047abcba4bccbd854d0a657d6dbcc9e264973f9c5367ad03"
     }
   },
   "name": "at0",

@@ -1,0 +1,63 @@
+# path	class	expected tool response (my codec and the candidate's must both give it)
+positive/P1-kat-ideal-qubit-n4.case	P1	AT0_CASE_OK
+positive/P1b-ideal-n4-tau8-m8.case	P1	AT0_CASE_OK
+positive/P1c-ideal-n6-m6.case	P1	AT0_CASE_OK
+positive/P1d-ref-offset-t2.case	P1	AT0_CASE_OK
+positive/P1e-x-axis-rotation.case	P1	AT0_CASE_OK
+positive/P1f-y-axis-rotation.case	P1	AT0_CASE_OK
+positive/P1g-complex-psi-yplus.case	P1	AT0_CASE_OK
+positive/P2-tilted-h0.case	P2	AT0_CASE_OK
+positive/P2b-h0-shift-control.case	P2	AT0_CASE_OK
+positive/P3-spec-reference-model.case	P3	AT0_CASE_OK
+positive/P4-degenerate-identity-h.case	P4	AT0_CASE_OK
+positive/P5-large-rationals.case	P5	AT0_CASE_OK
+negative/N1-uncovered-spectrum.case	N1	AT0_CASE_OK
+negative/N2-half-covered.case	N2	AT0_CASE_OK
+negative/N3-broken-clock-tau3.case	N3	AT0_CASE_OK
+negative/N4-wrong-weight-2.case	N4	AT0_CASE_OK
+negative/N4b-wrong-weight-5.case	N4	AT0_CASE_OK
+negative/N5-precision-demand.case	N5	AT0_CASE_OK
+negative/N6-zero-kernel-component.case	N6	AT0_CASE_OK
+negative/N7-unreachable-labels.case	N7	AT0_CASE_OK
+refuse/R01-noncanonical-rational.case	R1	AT0_CASE_REFUSED CASE_NONCANONICAL
+refuse/R02-header-v2.case	R2	AT0_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/R03-clock-dim-1.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R04-irrational-spectrum.case	R4	AT0_CASE_REFUSED CASE_IRRATIONAL_SPECTRUM
+refuse/R05-wrong-case-id.case	R5	AT0_CASE_REFUSED CASE_ID_MISMATCH
+refuse/R06-codes-with-pass.case	R6	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R06b-codes-unsorted.case	R6	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R06c-codes-unknown.case	R6	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R06d-fail-without-codes.case	R6	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R07-crlf.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R08-tab.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R09-blank-line.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R10-trailing-space.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R11-double-space.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R12-missing-key.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R13-unknown-key.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R14-duplicate-key.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R15-out-of-order.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R16-float-text.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R17-noncanonical-integer.case	R1	AT0_CASE_REFUSED CASE_NONCANONICAL
+refuse/R18-noncanonical-scaled.case	R1	AT0_CASE_REFUSED CASE_NONCANONICAL
+refuse/R19-label-uppercase.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R20-energies-not-increasing.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R21-psi-zero.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R22-tau-zero.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R23-weight-negative.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R24-wrong-domain.case	R2	AT0_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/R25-wrong-contract.case	R2	AT0_CASE_REFUSED CASE_UNSUPPORTED_VERSION
+refuse/R26-clock-dim-65.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R39-huge-digits-tau.case	R39	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R27-rational-over-limit.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R28-duplicate-label.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R29-ref-label-missing.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R30-negative-zero.case	R1	AT0_CASE_REFUSED CASE_NONCANONICAL
+refuse/R31-control-kind-bad.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R32-case-name-two-tokens.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R33-missing-final-lf.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R34-empty.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R35-trailing-line.case	R1	AT0_CASE_REFUSED CASE_PARSE_ERROR
+refuse/R36-label-count-mismatch.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R37-model-family-bad.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R38-acceptance-id-wrong.case	R5	AT0_CASE_REFUSED CASE_ID_MISMATCH
