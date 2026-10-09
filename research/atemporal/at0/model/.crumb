@@ -1,0 +1,26 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "00390187112a79c29ef1a2f6280502adc84a2e7b327a6e45215f2f8553d73ffb",
+          "last_commit": "",
+          "name": "tests",
+          "purpose": "Component tests and case files for the candidate engine"
+        }
+      ],
+      "children_root": "sha256:cf64430c04397d4f40010713352848e8e778aa3b116edb39bbb655889079ed95",
+      "compiled_at": "2026-10-09T22:31:27Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:3a876234f227f5afe25b81ac6bc0299b76d97eeb2d4d765dc51d6819b0f9b606",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 0,
+      "generated_at_commit": "19f73c709d77c80bbaec5d2fa8e955b6c69ce5d3",
+      "source_tree": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "name": "model",
+  "purpose": "Agent 3 candidate relational quantum engine in portable C11: state, Hamiltonians, constraint kernel, clock POVM, conditional states, Pauli probabilities, versioned case input and engine output",
+  "schema_version": "1.0.0"
+}
