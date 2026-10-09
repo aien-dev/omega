@@ -1,0 +1,27 @@
+; Predictive law: location = b*prev, scale = sqrt(v*gap). Two fitted numbers (b, v).
+; Sets whose first value is exactly 0: AR(1) toward 0, coefficient shrunk toward 0.95.
+; Other sets: random walk, with a significant drift folded into a growth ratio b.
+fit {
+  last_t first_t sub store r13
+  ; AR branch: ridge OLS phi, its squared standard error, positive-part shrink toward 0.95
+  sum_inc { prevobs dup mul } 2 add store r4
+  sum_inc { obs prevobs mul } 1.6 add load r4 div store r5
+  sum_inc { obs load r5 prevobs mul sub dup mul } countinc div load r4 div store r6
+  load r5 0.95 sub store r7
+  0.95 load r7 1 load r6 3 mul load r7 dup mul 0.000000000000000000000000000001 add div sub 0 max mul add store r8
+  ; RW branch: drift d, residual variance, shrunk drift ds (off for very short prefixes)
+  last_y first_y sub load r13 div store r3
+  sum_inc { obs prevobs sub load r3 gap mul sub dup mul gap div } countinc div store r9
+  load r3 1 load r9 2 mul load r3 dup mul load r13 mul 0.000000000000000000000000000001 add div sub 0 max mul 16 count le mul store r10
+  ; expected future level ybar; b = 1 + ds*ybar/(ybar^2 + (ds*span/4)^2)
+  last_y load r10 load r13 mul 0.5 mul add store r11
+  load r10 load r11 mul load r11 dup mul load r10 load r13 mul 0.25 mul dup mul add 0.000000000000000000000000000001 add div 1 add
+  load r8 swap first_y abs 0.000000476837158203125 le sel store r1
+  ; variance per unit time with a weak prior
+  sum_inc { obs load r1 prevobs mul sub dup mul gap div } 1.5 add countinc 0.5 add div store r2
+}
+predict {
+  load r1 prevobs mul
+  load r2 gap mul sqrt 0.001953125 max
+  emit_normal
+}

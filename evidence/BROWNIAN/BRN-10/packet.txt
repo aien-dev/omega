@@ -1,0 +1,57 @@
+PACKET brw.packet.v1
+brw_dl_spec sha256 86bf360cfa208d91338cf22faa0f6022c93dfe2ee1a574e2ee27a800ec6a557f
+
+Task. Write one program in the description language BRW-DL. Its complete
+definition is the file brw_dl_spec.txt in your root; the digest on the second
+line of this file is the SHA-256 of that file. The program reads numbered
+observations in time order. Before each new value is shown, it states a
+probability distribution for that value. The value is then revealed. The
+program is judged only by how much probability it gave to the values that
+actually came, after paying for its own length.
+
+Data. Observations arrive in record sets. Each record has three numbers:
+  i   integer order, starting at 0
+  t   time as a number (strictly increasing; gaps may differ)
+  y   the measurement as a number
+The first s records of a set are shown to the program before any prediction is
+asked for; the remaining records of the set are predicted one at a time. The
+counts n and s are not announced in advance and can differ from set to set.
+There is no other channel and no stated measurement tolerance.
+
+Prediction. For each requested index the program states one normal
+distribution, given by location and scale (scale = standard deviation, finite,
+greater than 0). This is the only kind of distribution the language can state.
+Any scale below 2^-10 is raised to 2^-10 and counted. If more than 1 in 1000
+scored predictions are raised, the run fails.
+
+Score. Values are recorded on a grid: the value y stands for the interval
+[j*2^-20, (j+1)*2^-20) with y = (j + 0.5)*2^-20. The score of a prediction is
+-log2 of the probability it gives to that whole interval. Smaller is better.
+The total adds the length of the program, counted as follows. The program is
+judged and costed in the canonical byte form defined in brw_dl_spec.txt, and
+numbers written inside the program are bytes of the program. Its length is 8
+bits for every byte of that canonical form, charged once for the whole
+collection of scored record sets. In addition, for every fitted number the
+program carries from its fit part into its predict part, as the language
+definition counts fitted numbers, it pays (1/2) * log2(m) bits for each
+record set, where m is the count of consecutive differences among the shown
+records of that set (s minus 1). Fewer bytes and fewer fitted numbers cost
+less.
+Predictions are compared against fixed reference predictors chosen before
+your program is frozen, identified to you only as ref.v1. They are written in
+the same language and pay the same way. You are not told what they do.
+
+Development files. The files named world_<id>.qbw are example records. They
+are yours to study. Format, all little-endian: 4 bytes ASCII "QBW1"; u32
+version = 1; u64 count; then count records of (binary64 t, int64 j), with
+y = (j + 0.5)*2^-20. The scored records are new record sets of the same kind,
+created after your program is frozen. Your program is not told which kind of
+record set it is given.
+
+Running. You do not run anything in the scored session. After your program is
+frozen, the evaluator runs it: the fit part once per record set on the shown
+records, then the predict part once for each later record, exactly as the
+language definition describes. The same records always give the same
+predictions. Any limit in the language definition that is exceeded, and any
+number in it that is not finite where the definition requires one, fails the
+whole run.
