@@ -1946,9 +1946,33 @@ static void test_adversarial_isolated(void)
     CHECK(badptr == 0 && accepted > 0 && refused > 0, "decoder fuzz: %d accepted, %d refused, %d pointers outside the arena", accepted, refused, badptr);
 }
 
+/* Issue #347: the kernel silently discards SIGTSTP/SIGTTIN/SIGTTOU sent to a member of an ORPHANED process group (one where no
+ * member has a parent in another group of the same session; man 7 signal, setpgid(2)). Run from a detached background loop or
+ * under `setsid`, the test's own group is orphaned, so the "stopped child" checks saw the helper exit 0 instead of stopping.
+ * The product is correct (it only observes stops the kernel delivers). The test must own its conditions: run the whole suite in
+ * a child that leads a fresh group whose parent (this process) sits in the caller's group, so the group is never orphaned. */
+static void anchor_pgrp(void)
+{
+    pid_t kid = fork();
+    if (kid < 0) { printf("fork failed\n"); exit(2); }
+    if (kid == 0) { setpgid(0, 0); return; }
+    setpgid(kid, kid);
+    int tty_fg = isatty(0) && tcgetpgrp(0) == getpgrp();
+    struct sigaction ign = {.sa_handler = SIG_IGN}, old;
+    sigaction(SIGTTOU, &ign, &old);
+    if (tty_fg) tcsetpgrp(0, kid);
+    int st = 0;
+    while (waitpid(kid, &st, 0) < 0 && errno == EINTR) {}
+    if (tty_fg) tcsetpgrp(0, getpgrp());
+    sigaction(SIGTTOU, &old, NULL);
+    if (WIFSIGNALED(st)) { printf("test run died of signal %d\n", WTERMSIG(st)); exit(128 + WTERMSIG(st)); }
+    exit(WEXITSTATUS(st));
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 2 && !strcmp(argv[1], "--helper")) return helper_main(argc, argv);
+    anchor_pgrp();
     ssize_t n = readlink("/proc/self/exe", g_self, sizeof g_self - 1);
     if (n <= 0) { printf("cannot find own path\n"); return 2; }
     g_self[n] = 0;
