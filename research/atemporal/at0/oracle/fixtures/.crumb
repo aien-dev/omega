@@ -3,14 +3,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-09T22:30:39Z",
+      "compiled_at": "2026-10-09T22:50:50Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:677e765b88ed23396affaf9f69693c742cc9c6f71493f15668a7bb24835187d5",
+      "digest": "sha256:34e48910c68fa6e767c6f054b865af1be8ab4482f42baec5de00561f31a5ed20",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 43,
-      "generated_at_commit": "07ef76d37a545e64ed54ef4957235e1850778cae",
-      "source_tree": "sha256:8e14c99ff1ef6e821dd324d57280a7485d355eacf72e5c79957ccbf64f6c523e"
+      "generated_at_commit": "9e10d61488f571083d2d2cc7b9b5b893ab0534ca",
+      "source_tree": "sha256:09e4b23bf31ed2aabe57762e1667dad51d26a3f800399b073ed3556a636fc6e7"
     }
   },
   "name": "fixtures",
