@@ -1,0 +1,26 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "ad454f336751fe02900ed1a66172f4ed7a13a454b20d586d9ce6736441022fe5",
+          "last_commit": "547cda8",
+          "name": "at0",
+          "purpose": "AT-0 V1: finite clock plus one qubit under the AT0_CASE_V1 / AT0_RESULT_V1 contracts"
+        }
+      ],
+      "children_root": "sha256:ca3c1b6e303d3574080cd75bbb7f7a55904db335b217b6183d55610877bda5c1",
+      "compiled_at": "2026-10-09T22:41:51Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:fe3abca7c4f63727ca468b2a8deec5056c6efc45557a6d3b3919469a43849204",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 18,
+      "generated_at_commit": "f5ece3506f5451e4b8e13145a96e758fe0359b86",
+      "source_tree": "sha256:6cbcb6a090eedd9120d7bc2e3aa818ab6bff80e2eebe7e0e1eceb647ceeff69a"
+    }
+  },
+  "name": "atemporal",
+  "purpose": "AT-0 Clock-Free Universe research program: relational (Page-Wootters) quantum models with no external time parameter; contracts live in aien-architecture docs/plans/atemporal",
+  "schema_version": "1.0.0"
+}

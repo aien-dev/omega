@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-09T22:33:14Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:3f458e7cbb850b27968d4de4597067b979707b6230e5259a523d7538006967b6",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 1,
+      "generated_at_commit": "547cda8fefd174045da3b7833972ae5d22496878",
+      "source_tree": "sha256:e846c823a32f900e5e0cbd6cd17f13ade7d2ff7bf98d17ffeae31c2d3f41d008"
+    }
+  },
+  "name": "cases",
+  "purpose": "AT0_CASE_V1 case files used by the tests; the KAT file is the contract section 6 example byte for byte",
+  "schema_version": "1.0.0"
+}

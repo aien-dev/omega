@@ -1,0 +1,26 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "f141e0a1f4d8e0008df9ea042d820f0cf18355a0ed185115ada9c31b2dd58cff",
+          "last_commit": "547cda8",
+          "name": "model",
+          "purpose": "Agent 3 candidate relational quantum engine in portable C11: state, Hamiltonians, constraint ker"
+        }
+      ],
+      "children_root": "sha256:99f8832d532a5420c7f6a480108ac882aca7416cf9d0de28f8f69de3d45eea84",
+      "compiled_at": "2026-10-09T22:41:51Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:ad454f336751fe02900ed1a66172f4ed7a13a454b20d586d9ce6736441022fe5",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 18,
+      "generated_at_commit": "f5ece3506f5451e4b8e13145a96e758fe0359b86",
+      "source_tree": "sha256:6cbcb6a090eedd9120d7bc2e3aa818ab6bff80e2eebe7e0e1eceb647ceeff69a"
+    }
+  },
+  "name": "at0",
+  "purpose": "AT-0 V1: finite clock plus one qubit under the AT0_CASE_V1 / AT0_RESULT_V1 contracts",
+  "schema_version": "1.0.0"
+}
