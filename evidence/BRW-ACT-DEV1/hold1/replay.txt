@@ -1,0 +1,4 @@
+DEV1 hold1 replay: two runs, same binary, spark-b87b, 2026-10-09T15:47:26Z, commit 4c408be, B=2000 from power receipt
+hold1-a table sha256 3365c8e84b10dffa07daf3e98d090a6d0fdab0ccfc1f3903b65b0919a3026fd7
+hold1-b table sha256 3365c8e84b10dffa07daf3e98d090a6d0fdab0ccfc1f3903b65b0919a3026fd7
+run once per profile; no deviations
