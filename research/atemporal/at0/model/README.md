@@ -1,7 +1,7 @@
 # AT-0 candidate relational quantum engine (research model)
 
 **Status:** candidate implementation, research directory. Not a gate, not evidence, not a contract.
-**Program:** AT-0 Clock-Free Universe, tracking issue aien-dev/omega#358. Pinned to: frozen contracts `AT0_CASE_V1` / `AT0_RESULT_V1` at aien-architecture `044c9d1`; charter (ownership, gates) at aien-architecture `d390939`; draft `AT0_SPEC.md` at aien-architecture PR #176 head `0efd1a14` (DRAFT, not merged: the hand tables used by the tests must be re-verified when it merges).
+**Program:** AT-0 Clock-Free Universe, tracking issue aien-dev/omega#358. Pinned to: frozen contracts `AT0_CASE_V1` at aien-architecture `044c9d1` and `AT0_RESULT_V2` (Agent 0 ruling on omega#358; `AT0_RESULT_V1` superseded, same section numbers); charter (ownership, gates) at aien-architecture `d390939`; draft `AT0_SPEC.md` at aien-architecture PR #176 head `0efd1a14` (DRAFT, not merged: the hand tables used by the tests must be re-verified when it merges).
 **Built from:** omega `19f73c7`. **Language:** portable C11 (`__int128` via `__extension__` for exact rationals),
 `-lm` only, single thread, no GPU, no network, no Python.
 
@@ -50,15 +50,17 @@ Nothing is added to omega's `Makefile` or `mk/`; `make test` is unaffected. `tes
 the published digests of the contract's section 6 example.
 
 Exit codes of `at0-model`: 0 success (engine text on stdout); 2 case refused (`AT0_CASE_REFUSED <code>`
-on stderr, one line, per AT0_RESULT_V1 section 5); 1 any other error (`AT0_ENGINE_ERROR <code>`).
+on stderr, one line, per AT0_RESULT_V2 section 5); 1 any other error (`AT0_ENGINE_ERROR <code>`).
 
 ## Output format: `OMEGA-AT0-ENGINE v1`
 
-A private format of this directory (not a contract, not an identity, no digest is defined over it).
+Ruled a component output, not a third interface (Agent 0, omega#358): no identity or digest is defined over it. Its
+values-block lines must stay byte-valid `AT0_RESULT_V2` values-block grammar so that Agent 5's runner can splice them
+verbatim; the wrapper lines are owned here and versioned, and any change to them is a version bump plus Agent 5 re-review.
 Header lines, then the case identities and `case_file_sha256`, then a `numerics` block
 (`arithmetic BINARY64`, `bound_kind ESTIMATED`, `threads 1`), then a `values` block that is exactly the
-AT0_RESULT_V1 section 1 values block **without** the oracle's `reference` lines. A runner can splice this
-block, plus the oracle's reference lines, into a full result. Value tokens follow AT0_RESULT_V1 section 2.
+AT0_RESULT_V2 section 1 values block **without** the oracle's `reference` lines. A runner can splice this
+block, plus the oracle's reference lines, into a full result. Value tokens follow AT0_RESULT_V2 section 2.
 
 ## Mathematical assumptions
 
@@ -111,7 +113,7 @@ field, weight and tau within the contract limits, any nonzero rational reference
 spectrum, non-normalized POVMs, exactly-zero projections.
 
 **Unsupported / not provided:** clock-system interaction (`interaction NONE` only); system dimension other
-than 2; `RIGOROUS` bounds; shot sampling; the oracle's `reference` lines and the full `AT0_RESULT_V1` file
+than 2; `RIGOROUS` bounds; shot sampling; the oracle's `reference` lines and the full `AT0_RESULT_V2` file
 (provenance, verdict, digests belong to the runner/verifier); CI wiring; GPU or parallel execution.
 
 ## Behaviour in corner cases (to be confirmed against Agent 4's hand derivations)

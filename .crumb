@@ -75,8 +75,8 @@
           "purpose": "Directory polyglot. Purpose not yet described by a human."
         },
         {
-          "digest": "0edca877e06d54b6be1e1a55ef36c288345b8d860bd07a74c38c736b4bd39ffb",
-          "last_commit": "547cda8",
+          "digest": "44e165ded3c0da0114cf29ee58b52602b028850cf14adc1f7a1784e6d62f0ece",
+          "last_commit": "84fd7ab",
           "name": "research",
           "purpose": "Directory research. Purpose not yet described by a human."
         },
@@ -105,15 +105,15 @@
           "purpose": "Directory tools. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:8e0588da14677e6de9ced1545c791d06096eb1e86f2d3e6a1ddbc9536985fa33",
-      "compiled_at": "2026-10-09T22:41:51Z",
+      "children_root": "sha256:be86fdd09629e1a2d56ccfe72ceb5c5fba3545ee56e8f9cb50183c27cbc93965",
+      "compiled_at": "2026-10-09T22:45:44Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:1447ea246c5527ec792d747b91d5c27f5541904ef04c165ec01b21b8571c3b05",
+      "digest": "sha256:9b439fcd36855d398eea2d233e1d32ee7ef9f27bf44f05e2c906e65028000a30",
       "evidence_files": 4847,
       "evidence_root": "sha256:8a1e306ee977789a3394c51305afc3121a0ba0d5e1735b29b2cc16ffd12f668a",
       "files": 6876,
-      "generated_at_commit": "f5ece3506f5451e4b8e13145a96e758fe0359b86",
-      "source_tree": "sha256:0e6281e4b57b2856f45b9d1ddf5f77fdbfa6bce864b575c783b66eb30f80de33"
+      "generated_at_commit": "84fd7ab949fc95594f62c201618a17dcb0dc610e",
+      "source_tree": "sha256:a00da1ca4c7ff798d6ace49766b8fdd8230d467f7409ba5db1a2d5e35b7c370e"
     },
     "owner_lane": "",
     "provenance": {
