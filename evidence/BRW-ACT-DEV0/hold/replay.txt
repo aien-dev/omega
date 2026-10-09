@@ -1,0 +1,5 @@
+DEV0 hold replay: two runs of the same binary on spark-b87b, 2026-10-09T15:40:14Z
+hold-a table sha256 588b87a04e3dd42eeb0155df1423e65e4a8aebc21076606940cd8046bff59793
+hold-b table sha256 588b87a04e3dd42eeb0155df1423e65e4a8aebc21076606940cd8046bff59793
+wall time per run about 39 s (one CPU core)
+run once per profile section 6; DEV1 profile (c9030a0) was committed before this output was read
