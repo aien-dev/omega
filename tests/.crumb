@@ -121,8 +121,8 @@
           "purpose": "Tests 1-10 for ANS (docs/ans/INERTIAL_ALIGNMENT_SPEC_V1.md): freeze/digest, hostile reference mu"
         },
         {
-          "digest": "bd7114b42f99c7e51741abdf24329d20713c73a332bd5f349e04384fd0241e91",
-          "last_commit": "e722877",
+          "digest": "23d72ac4f53b2477a130ed808d6e5304a3f94a6a3ea023c68d8e341ff582c843",
+          "last_commit": "1f85669",
           "name": "brownian",
           "purpose": "Directory tests/brownian. Purpose not yet described by a human."
         },
@@ -200,7 +200,7 @@
         },
         {
           "digest": "73b1c903b94cd9f94314eb99e32a0245756c4ad241c49c92339ee9978cacd532",
-          "last_commit": "7adf33e",
+          "last_commit": "22f7fb7",
           "name": "osh",
           "purpose": "osh lexer host driver, vendored aien-protocols PR#16 draft vectors (5ae5292)"
         },
@@ -289,15 +289,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:04c0254e511c24620f8aae767387f111847991d21249677fe2025e051f983604",
-      "compiled_at": "2026-10-09T04:11:18Z",
+      "children_root": "sha256:66b7759d007da734c0da420966ee77159fe71278f914244399f5da057110aa31",
+      "compiled_at": "2026-10-09T15:42:59Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:4010554a7244d3f0837e6b31a4fc8d17ca0db18038afaa5de90bbec8a08e8496",
+      "digest": "sha256:3c34368255315b76534c31a3ce30d3f0723718601247894e45bfae30006364a3",
       "evidence_files": 11,
       "evidence_root": "sha256:d5c1bceb4d57ef0eb42797c58801b5926509711614c3e38bb7105b6efa3942f2",
-      "files": 942,
-      "generated_at_commit": "7adf33efee7b590d919662b54df824f0c2cf2cbf",
-      "source_tree": "sha256:757423745ccfad30d07024dfe038709ff04c9ae73a4e337f40f906d86025e094"
+      "files": 944,
+      "generated_at_commit": "d83c1e207b3d3422601486a205644753e9d9a17c",
+      "source_tree": "sha256:fc3adba27de6b0e21863a5c8d9730e229db4aa308a09d207238ccf349c41adc2"
     },
     "owner_lane": "",
     "provenance": {

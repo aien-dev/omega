@@ -26,19 +26,19 @@
       "children": [
         {
           "digest": "9cd3943087595dd868914a23a9fef7bebda3d78b773762c287ac4b7a6c2e2f40",
-          "last_commit": "80ca5d4",
+          "last_commit": "05ed1a1",
           "name": "argus",
           "purpose": "Directory tools/argus. Purpose not yet described by a human."
         },
         {
-          "digest": "1ccbb2bd2ac34a90fdd96376bcca759d4a2c0262ac43aa41839c0cc6e48f0693",
-          "last_commit": "80ca5d4",
+          "digest": "870928d3974d2e90f8bd2999a69a0e81e8d6026feecc2bd133988da61d8b4bba",
+          "last_commit": "ee0c99d",
           "name": "brownian",
           "purpose": "Directory tools/brownian. Purpose not yet described by a human."
         },
         {
           "digest": "64fe22fe57fab7e61e65cb7652e73dbde613c260cb8677b05d8b98a067231e83",
-          "last_commit": "80ca5d4",
+          "last_commit": "00f54b6",
           "name": "dual_experiment",
           "purpose": "Runner for the DUAL applicability experiment: runs the pre-registered campaign and writes result"
         },
@@ -50,20 +50,20 @@
         },
         {
           "digest": "98d1f4d802b90006977d73b14acb92971927f2cf5bdf05d8dc5653a1b10fcf1b",
-          "last_commit": "80ca5d4",
+          "last_commit": "ae1dd00",
           "name": "turing_verify_indep",
           "purpose": "Directory tools/turing_verify_indep. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:8a042dc49a250f0d1b7ae1358fc70bf7bdc9eff651a5ff7c9ee41fd49d329041",
-      "compiled_at": "2026-10-08T12:58:10Z",
+      "children_root": "sha256:3051f793dc23155cfff1c4a549e97d3bfe74b3e094d3bd812985bba517919051",
+      "compiled_at": "2026-10-09T15:42:59Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:8d09b39d6d457128ffa8b3a3e3a8bc16cb619d952dd8db04dc3fc3cda7d38890",
+      "digest": "sha256:acd42de9387a133f34b4b6afca962c82d340fba67c6a770a74852406769b4186",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 137,
-      "generated_at_commit": "97d1b9a512a72ff766b832361d178eb3e87f97a9",
-      "source_tree": "sha256:415cebf26d234547c66bcecfa540b9d3cfc1f419628124b2270b5248ead4aeab"
+      "files": 139,
+      "generated_at_commit": "d83c1e207b3d3422601486a205644753e9d9a17c",
+      "source_tree": "sha256:7ffcb20eb7e4660174aebbb20b9e188d0f32726e4b780e9a86a0d27cd6e14b3c"
     },
     "owner_lane": "",
     "provenance": {
