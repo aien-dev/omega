@@ -1,0 +1,26 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [
+        {
+          "digest": "34e48910c68fa6e767c6f054b865af1be8ab4482f42baec5de00561f31a5ed20",
+          "last_commit": "9e10d61",
+          "name": "fixtures",
+          "purpose": "Deterministic AT-0 oracle calibration fixtures: case files, computed values/verdict blocks, CALI"
+        }
+      ],
+      "children_root": "sha256:8b48d10c3058cfc94212b896439d5b49c787a861767ee556a7cb06f0d48310b7",
+      "compiled_at": "2026-10-09T22:54:25Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:f210d0c620bca32c38a0a62c888bd82cdc020e8da40269b050199dcc34a886be",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 60,
+      "generated_at_commit": "98624882f542a3ad77b6edbd5e431af08fb4b625",
+      "source_tree": "sha256:16344701b9d010aec27afacd8ac78f4f911077eb483f1831d8dba79b42c78411"
+    }
+  },
+  "name": "oracle",
+  "purpose": "AT-0 reference oracle (Rust, standard library only, built by rustc directly; research cross-check, not part of active execution): AT0_CASE_V1 parser, direct-matrix and analytic paths, exact judge, AT0_RESULT_V2 writer, tests, isolation gate",
+  "schema_version": "1.0.0"
+}
