@@ -56,6 +56,8 @@ Compute: active used 4.7e10 quadrature evaluations over the 500 hold1 worlds, th
 evaluations are similar for all (4.3e7 to 5.3e7). The comparison is in measurement time only; compute is not
 converted to time.
 
+Provenance: the `omega_commit` values in the receipts (3ddaa6d, 58bd6a1, 596cc49, 8ca24dd, 4c408be) are the original branch history, kept reachable by tag `brw-act-dev-provenance-2026-10-09` (the branch was later rebased and will be squash-merged).
+
 Replay: every run was executed twice; table digests match (DEV0 hold 588b87a0..., DEV1 hold1 3365c8e8...). Cross-machine
 replay is not guaranteed (libm `exp`, `log`, `sqrt`, `cos`).
 
