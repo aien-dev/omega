@@ -7,7 +7,7 @@
 # The `hold` worlds are run by hand once: build/brownian-active/brw_active_dev0 hold <fresh-dir> <commit>
 ifndef BROWNIAN_ACTIVE_MK
 BROWNIAN_ACTIVE_MK := 1
-.PHONY: test-brownian-active brownian-active-dev0 brwa-purity brwa-cli brownian-active-dev1-power brownian-active-dev1 brownian-active-dev0-regress
+.PHONY: brownian-active-reanalyse test-brownian-active brownian-active-dev0 brwa-purity brwa-cli brownian-active-dev1-power brownian-active-dev1 brownian-active-dev0-regress
 BRWA_FLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -Isrc -Itools -ffp-contract=off -fno-fast-math
 BRWA_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
 BRWA_LIB = tools/brownian/brw_active.c src/turing/ty_prd2.c src/turing/ty_qcont.c src/turing/ty_prd.c src/turing/ty_math.c
@@ -42,7 +42,15 @@ brwa-cli: $(BRWA_DIR)/brw_active_dev0
 	@$(BRWA_DIR)/brw_active_dev0 bogus $(BRWA_DIR)/cli-x t >/dev/null 2>&1; [ $$? -eq 64 ] || { echo "unknown profile id must exit 64"; exit 1; }
 	@echo "brwa-cli: runner argument contract holds"
 
-test-brownian-active: brwa-purity brwa-cli $(BRWA_DIR)/test_brw_active $(BRWA_DIR)/test_brw_active_asan
+$(BRWA_DIR)/test_brw_act_report: tests/brownian/test_brw_act_report.c tests/brownian/brw_act_report.h
+	@mkdir -p $(BRWA_DIR)
+	$(CC) $(BRWA_FLAGS) $(BRWA_ASAN) -o $@ tests/brownian/test_brw_act_report.c -lm
+$(BRWA_DIR)/brw_act_reanalyse: tests/brownian/brw_act_reanalyse.c tests/brownian/brw_act_report.h
+	@mkdir -p $(BRWA_DIR)
+	$(CC) $(BRWA_FLAGS) -o $@ tests/brownian/brw_act_reanalyse.c -lm
+
+test-brownian-active: brwa-purity brwa-cli $(BRWA_DIR)/test_brw_active $(BRWA_DIR)/test_brw_active_asan $(BRWA_DIR)/test_brw_act_report
+	./$(BRWA_DIR)/test_brw_act_report
 	./$(BRWA_DIR)/test_brw_active
 	./$(BRWA_DIR)/test_brw_active_asan
 	@echo "test-brownian-active: candidate library unit tests pass in plain and ASan/UBSan builds; purity holds"
@@ -84,4 +92,16 @@ brownian-active-dev1: $(BRWA1_DIR)/brw_active_dev0
 	  a=$$(sha256sum < $(BRWA1_DIR)/dev1-a/table.tsv); b=$$(sha256sum < $(BRWA1_DIR)/dev1-b/table.tsv); \
 	  if [ "$$a" != "$$b" ]; then echo "brownian-active-dev1: REPLAY MISMATCH"; exit 1; fi; \
 	  echo "brownian-active-dev1: two dev1 runs produced identical tables ($$a)"
+# Re-analysis of the committed held-out tables (reads table.tsv only, runs no world). Writes a new evidence file,
+# never over an existing one: evidence/BRW-ACT-DEV<n>/<run>-reanalysis/reanalysis.txt.
+brownian-active-reanalyse: $(BRWA_DIR)/brw_act_reanalyse
+	@for r in DEV0:hold:dev0 DEV1:hold1:dev1; do \
+	  d=$${r%%:*}; rest=$${r#*:}; run=$${rest%%:*}; p=$${rest#*:}; t=evidence/BRW-ACT-$$d/$$run/table.tsv; \
+	  o=evidence/BRW-ACT-$$d/$$run-reanalysis; test -e $$o/reanalysis.txt && { echo "$$o/reanalysis.txt exists, not overwritten"; continue; }; \
+	  mkdir -p $$o; { echo "source commit: $(BRWA_COMMIT)"; echo "input: $$t sha256 $$(sha256sum < $$t | cut -c1-64)"; \
+	    echo "tool: tests/brownian/brw_act_reanalyse.c sha256 $$(sha256sum < tests/brownian/brw_act_reanalyse.c | cut -c1-64)"; \
+	    echo "flags: $(BRWA_FLAGS)"; ./$(BRWA_DIR)/brw_act_reanalyse $$p $$t; } > $$o/reanalysis.txt.tmp || { rm -f $$o/reanalysis.txt.tmp; exit 1; }; \
+	  mv $$o/reanalysis.txt.tmp $$o/reanalysis.txt; \
+	  echo "wrote $$o/reanalysis.txt"; done
+
 endif

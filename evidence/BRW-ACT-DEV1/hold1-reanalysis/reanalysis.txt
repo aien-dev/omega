@@ -1,0 +1,17 @@
+source commit: 4be83d129999caa041720b0028c4752301412fdb
+input: evidence/BRW-ACT-DEV1/hold1/table.tsv sha256 3365c8e84b10dffa07daf3e98d090a6d0fdab0ccfc1f3903b65b0919a3026fd7
+tool: tests/brownian/brw_act_reanalyse.c sha256 7742439b3e5ba150cd0cbd4afb9bd57f70dbb199fdbc23580588060b706ad7d8
+flags: -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -Isrc -Itools -ffp-contract=off -fno-fast-math
+BRW-ACT re-analysis (dev1), 2000 table rows, 200 discoverable worlds per strategy
+
+Held-out coverage, per-world 95% interval (replaces the pooled Wilson interval):
+  active  cov50 0.4969 [0.4871,0.5068]  cov90 0.8949 [0.8892,0.9006]
+  random  cov50 0.5011 [0.4910,0.5111]  cov90 0.8965 [0.8907,0.9023]
+  fixed8  cov50 0.5058 [0.4961,0.5156]  cov90 0.9013 [0.8960,0.9067]
+  cycle   cov50 0.4981 [0.4884,0.5077]  cov90 0.8950 [0.8894,0.9006]
+
+Computation charged (active minus baseline, per discoverable world):
+  vs         extra evals       time saved [95%]      break-even evals/time
+  random       1.118e+08    115.9 [  55.9, 176.0]    9.65e+05 (2e+06 at the low end of the saving)
+  fixed8       1.118e+08    387.9 [ 308.1, 467.8]    2.88e+05 (3.63e+05 at the low end of the saving)
+  cycle        1.118e+08    160.0 [  98.7, 221.3]    6.99e+05 (1.13e+06 at the low end of the saving)
