@@ -100,7 +100,8 @@ brownian-active-reanalyse: $(BRWA_DIR)/brw_act_reanalyse
 	  o=evidence/BRW-ACT-$$d/$$run-reanalysis; test -e $$o/reanalysis.txt && { echo "$$o/reanalysis.txt exists, not overwritten"; continue; }; \
 	  mkdir -p $$o; { echo "source commit: $(BRWA_COMMIT)"; echo "input: $$t sha256 $$(sha256sum < $$t | cut -c1-64)"; \
 	    echo "tool: tests/brownian/brw_act_reanalyse.c sha256 $$(sha256sum < tests/brownian/brw_act_reanalyse.c | cut -c1-64)"; \
-	    echo "flags: $(BRWA_FLAGS)"; ./$(BRWA_DIR)/brw_act_reanalyse $$p $$t; } > $$o/reanalysis.txt || exit 1; \
+	    echo "flags: $(BRWA_FLAGS)"; ./$(BRWA_DIR)/brw_act_reanalyse $$p $$t; } > $$o/reanalysis.txt.tmp || { rm -f $$o/reanalysis.txt.tmp; exit 1; }; \
+	  mv $$o/reanalysis.txt.tmp $$o/reanalysis.txt; \
 	  echo "wrote $$o/reanalysis.txt"; done
 
 endif
