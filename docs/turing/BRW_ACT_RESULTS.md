@@ -73,7 +73,7 @@ committed before DEV0's held-out output was read.
 The hypothesis classes are given. The worlds are simple and mostly Gaussian. The advantage is concentrated in
 mean-reversion worlds; on drift worlds active is level with random. Held-out prediction quality does not improve
 over random or cycle at the end of the budget: the benefit is faster discrimination, not better final prediction.
-Known reporting issues (display only, no result affected): the Wilson coverage intervals treat the 60 held-out readings of a world as independent, so they are too narrow (P3 uses the point estimate); in DEV1 output the P4 noise line prints the combined noise-and-diffusion result (both passed on hold1; the separate diffusion line is correct). Left unchanged after results to keep the runner that produced the evidence.
+Known reporting issues (display only, no result affected), as found at merge: the Wilson coverage intervals treated the 60 held-out readings of a world as independent, so they were too narrow (P3 uses the point estimate); in DEV1 output the P4 noise line printed the combined noise-and-nested-null verdict (both controls passed on hold1, so no printed verdict was wrong). Both fixed after merge, see section 7; the receipts above are unchanged.
 These are development results on a self-chosen world family by the same session that wrote the profile; an
 independent evaluator, sealing and EXP-003's contract are all still required.
 
@@ -81,3 +81,34 @@ independent evaluator, sealing and EXP-003's contract are all still required.
 
 Not integrated. There is no consumer whose decision this would improve today (section 1). If one appears, the first
 connection must be observational: TURING measures and does not authorise actions.
+
+## 7. Follow-up 2026-10-09: report fixes and computation charged
+
+Added after the results above were read; nothing here changes a verdict and no world was re-run.
+
+- Report fixes (omega PR "BRW-ACT report fixes"): coverage intervals now use the world as the independent unit
+  (`tests/brownian/brw_act_report.h`), and the P4 noise line prints the noise verdict alone. Regression test
+  `test_brw_act_report` (in `make test-brownian-active`): 3 of 7 checks fail on the old code, 7 of 7 pass after.
+  The per-world table is byte-identical (DEV0 regress digest 373dc7d7... unchanged).
+- Re-analysis of the committed held-out tables (`make brownian-active-reanalyse`, reads `table.tsv` only):
+  `evidence/BRW-ACT-DEV0/hold-reanalysis/` and `evidence/BRW-ACT-DEV1/hold1-reanalysis/`, each with source commit,
+  input and tool digests; generated twice, identical. Source commit kept reachable by tag
+  `brw-act-reanalysis-provenance-2026-10-09`.
+- Corrected coverage, DEV1 hold1 active: 90% intervals held 0.8949 [0.8892, 0.9006] of held-out readings, 50% held
+  0.4969 [0.4871, 0.5068]. Barely wider than the Wilson figures: the clustering was real but small.
+- Computation charged. Extra evaluations (likelihood, quadrature and cdf counted alike) of active per discoverable
+  world, against the time it saved, give a break-even exchange rate: active is ahead only while one time unit of
+  measurement is worth more than this many evaluations.
+
+| run | vs | extra evaluations per world | time saved per world [normal 95%] | break-even evaluations per time unit (at the low end of the saving) |
+|---|---|---|---|---|
+| DEV1 hold1 | random | 1.12e8 | 115.9 [55.9, 176.0] | 9.7e5 (2.0e6) |
+| DEV1 hold1 | cycle | 1.12e8 | 160.0 [98.7, 221.3] | 7.0e5 (1.1e6) |
+| DEV1 hold1 | fixed8 | 1.12e8 | 387.9 [308.1, 467.8] | 2.9e5 (3.6e5) |
+| DEV0 hold | random | 3.9e7 | 7.5 [2.7, 12.3] | 5.2e6 (1.5e7) |
+
+  Reading: when a measurement is slow or costly (a lab reading, a long benchmark, a GPU hold), a few million cheap
+  arithmetic evaluations per time unit saved is a good trade; when measurements are as cheap as the arithmetic, the
+  active chooser does not pay for itself. No wall-clock or energy figure was measured, so no speed or energy claim
+  follows. Treating the three evaluation kinds as equal is a simplification (quadrature evaluations dominate).
+
