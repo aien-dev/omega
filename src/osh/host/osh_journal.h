@@ -34,9 +34,16 @@ typedef struct OshJournal {
     uint64_t next_rec;
     uint8_t key[32];       /* per-journal HMAC key (loaded from <journal>.key) */
     char why[4700];         /* why osh_journal_open or osh_journal_check_dir refused */
-    /* test-only fault injection; zero in production */
+    int poisoned;          /* sticky: the first failed write or fsync ends all journaling for this session; every later effect is refused */
+    int tail_clean;        /* after a failed write the fragment was cut back, so an outcome may still be appended */
+#ifdef OSH_JOURNAL_TEST_HOOKS
+    /* test-only fault injection; compiled out of the shipped binary */
     int die_after_intent; /* _exit(77) right after the Nth intent became durable (simulates a crash before launch) */
     int n_intent;
+    int fail_write_at;    /* the Nth commit writes only half its bytes, then fails with ENOSPC */
+    int fail_fsync_at;    /* the Nth commit fails its fsync with EIO */
+    int n_commit;
+#endif
 } OshJournal;
 
 typedef struct {

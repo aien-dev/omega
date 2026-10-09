@@ -392,6 +392,7 @@ static int jc_intent(JCtx *jc, const OshRequest *r, int idx)
 static void jc_refuse(OshSession *s, const JCtx *jc, int rc)
 {
     if (rc == -2) osh_diag(s->fd[2], "effect journal unavailable (%s); effect refused, nothing was run", jc->why);
+    else if (jc->j && jc->j->poisoned) osh_diag(s->fd[2], "effect journal failed (a write or fsync did not succeed) and is closed for this session; effect refused, nothing was run");
     else osh_diag(s->fd[2], "effect journal: intent could not be made durable; effect refused, nothing was run");
 }
 
@@ -621,6 +622,7 @@ static void run_pipeline(OshSession *s, const OshRequest *r, JCtx *jc, OshResult
             set_cmd(&res->cmd[i], 1, OSH_OUT_FAILED_NO_EFFECT, OSH_E_IO);
             if (rd >= 0) { close(rd); p.pp[i - 1][0] = -1; }
             if (wr >= 0) { close(wr); p.pp[i][1] = -1; }
+            if (started > 0) { launch_failed = 1; break; } /* earlier members already run: cancel and reap them (PARTIAL_LAUNCH, ABI s10) */
             continue;
         }
 

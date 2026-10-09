@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -836,6 +837,221 @@ static void test_required_without_journal(void)
     t_end(&t);
 }
 
+/* ---------------- review round: partial launch on a failed later intent, sticky failure, fsync, modes, hooks ---------------- */
+
+void osh_hmac_for_test(const uint8_t key[32], const uint8_t *msg, size_t n, uint8_t out[32]);
+
+static void test_hmac_vectors(void)
+{
+    /* RFC 4231 test cases 1 and 2 (keys shorter than 32 bytes are zero-extended, which HMAC treats as the same key) */
+    uint8_t key[32] = {0}, out[32];
+    char h[65];
+    memset(key, 0x0b, 20);
+    osh_hmac_for_test(key, (const uint8_t *)"Hi There", 8, out);
+    hexs(out, h);
+    CHECK(!strcmp(h, "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7"), "RFC 4231 case 1: %s", h);
+    memset(key, 0, sizeof key);
+    memcpy(key, "Jefe", 4);
+    osh_hmac_for_test(key, (const uint8_t *)"what do ya want for nothing?", 28, out);
+    hexs(out, h);
+    CHECK(!strcmp(h, "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843"), "RFC 4231 case 2: %s", h);
+}
+
+/* The test program supplies its own fsync(2); calls on the journal's descriptor are counted, then really performed. If the
+ * journal stopped calling fsync, the count below would fall short and this test fails. */
+static int g_fsync_fd = -1, g_fsync_n;
+int fsync(int fd)
+{
+    if (fd == g_fsync_fd) g_fsync_n++;
+    return (int)syscall(SYS_fsync, fd);
+}
+
+static void test_fsync_counted(void)
+{
+    T t;
+    t_begin(&t, 1);
+    g_fsync_fd = t.j.fd;
+    g_fsync_n = 0;
+    OshBuilder *b = nb();
+    helper(b, "quiet", NULL);
+    OshResult r;
+    run(&t, b, &r);
+    free(b);
+    CHECK(t.j.n_commit == 2 && g_fsync_n == 2, "one intent + one outcome = 2 commits, each followed by a real fsync on the journal (commits %d, fsyncs %d)", t.j.n_commit, g_fsync_n);
+    g_fsync_fd = -1;
+    t_end(&t);
+}
+
+static int zombies(void)
+{
+    int n = 0;
+    while (waitpid(-1, NULL, WNOHANG) > 0) n++;
+    return n;
+}
+
+static void test_pipeline_later_intent_fails(void)
+{
+    T t;
+    t_begin(&t, 1);
+    char m1[4400], m2[4400], m3[4400];
+    mpath(&t, "pl1", m1, sizeof m1);
+    mpath(&t, "pl2", m2, sizeof m2);
+    mpath(&t, "pl3", m3, sizeof m3);
+    OshBuilder *b = nb();
+    helper(b, "sleep", "30000");   /* a: starts */
+    helper(b, "append", m2);       /* b: its intent write fails */
+    helper(b, "append", m3);       /* c: never reached */
+    t.j.fail_write_at = 2;         /* commit 1 = a's intent, commit 2 = b's intent */
+    OshResult r;
+    int st = run(&t, b, &r);
+    free(b);
+    msleep(200);
+    CHECK(st == 1 && r.err == OSH_E_PARTIAL_LAUNCH, "journal failure on member 2 of 3: PARTIAL_LAUNCH (st %d err %d)", st, r.err);
+    CHECK(r.cmd[0].outcome == OSH_OUT_CANCELLED && r.cmd[0].pid > 0, "member 1 was started and is CANCELLED (%d)", r.cmd[0].outcome);
+    CHECK(kill(r.cmd[0].pid, 0) != 0 && errno == ESRCH, "member 1 is gone, not running");
+    CHECK(zombies() == 0, "and reaped: no zombie left");
+    CHECK(r.cmd[1].outcome == OSH_OUT_FAILED_NO_EFFECT && r.cmd[1].pid == 0 && r.cmd[2].outcome == OSH_OUT_NOT_STARTED && r.cmd[2].pid == 0,
+          "members 2 and 3 never launched (%d, %d)", r.cmd[1].outcome, r.cmd[2].outcome);
+    CHECK(fsize(m2) < 0 && fsize(m3) < 0, "their marker files do not exist");
+    CHECK(same_account(&t, 3, &r) == 0, "records match the result");
+    char *j = jtext(&t);
+    CHECK(count_sub(j, " I ") == 1 && strstr(j, " 0/3 CANCELLED") && strstr(j, " 1/3 FAILED_NO_EFFECT"), "journal: one intent, member 1 cancelled:\n%s", j);
+    free(j);
+    t_end(&t);
+}
+
+static int rec_numbers_unique(const char *text)
+{
+    unsigned long long seen[512];
+    int n = 0, bad = 0;
+    for (const char *p = text; p && *p;) {
+        unsigned long long v;
+        if (!strncmp(p, "OSHJ1 ", 6) && sscanf(p + 6, "%llu", &v) == 1) {
+            for (int i = 0; i < n; i++) bad += seen[i] == v;
+            if (n < 512) seen[n++] = v;
+        }
+        p = strchr(p, '\n');
+        if (p) p++;
+    }
+    return bad;
+}
+
+static void sticky_case(int write_fail)
+{
+    T t;
+    t_begin(&t, 1);
+    char m1[4400], m2[4400];
+    mpath(&t, write_fail ? "sk1" : "sk3", m1, sizeof m1);
+    mpath(&t, write_fail ? "sk2" : "sk4", m2, sizeof m2);
+    if (write_fail) t.j.fail_write_at = 1; else t.j.fail_fsync_at = 1;
+    OshBuilder *b = nb();
+    helper(b, "append", m1);
+    OshResult r;
+    int st = run(&t, b, &r);
+    free(b);
+    msleep(150);
+    CHECK(st == 1 && fsize(m1) < 0, "%s: first command refused (st %d), nothing launched", write_fail ? "short write" : "fsync failure", st);
+    CHECK(t.j.poisoned, "journal is poisoned");
+    long size1 = fsize(t.jpath);
+    char *before = slurp(t.jpath, NULL);
+    int intents_before = count_sub(before, " I ");
+    free(before);
+    int commits = t.j.n_commit;
+    /* the injected fault is one-shot; a second command must STILL be refused, by name, and write nothing */
+    int err = dup(2), ef = open("/dev/null", O_WRONLY);
+    char errf[4400];
+    mpath(&t, "sk.err", errf, sizeof errf);
+    int efd = open(errf, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    t.s.fd[2] = efd;
+    b = nb();
+    helper(b, "append", m2);
+    st = run(&t, b, &r);
+    free(b);
+    close(efd); close(ef); close(err);
+    msleep(150);
+    char *e = slurp(errf, NULL);
+    CHECK(st == 1 && r.err == OSH_E_IO && r.cmd[0].outcome == OSH_OUT_FAILED_NO_EFFECT && fsize(m2) < 0, "second command refused, nothing launched (st %d)", st);
+    CHECK(e && strstr(e, "effect journal failed") && strstr(e, "nothing was run"), "refusal is named:\n%s", e ? e : "(none)");
+    free(e);
+    char *after = slurp(t.jpath, NULL);
+    CHECK(count_sub(after, " I ") == intents_before, "no new intent was written after the poison");
+    CHECK(write_fail || fsize(t.jpath) == size1, "after a failed fsync nothing at all is written (%ld vs %ld)", fsize(t.jpath), size1);
+    CHECK(t.j.n_commit <= commits + 1, "at most an intent-less outcome line was attempted (%d vs %d)", t.j.n_commit, commits);
+    free(after);
+    /* recovery reads the file sanely: reopen, then run a command; record numbers never repeat and every line parses */
+    osh_journal_close(&t.j);
+    OshJournal j2;
+    CHECK(osh_journal_open(&j2, t.jpath) == 0, "reopen after the failure: %s", j2.why);
+    OshJournalUnknown u[8];
+    int bad = 0;
+    int nu = osh_journal_recover(&j2, t.jpath, u, 8, &bad);
+    CHECK(nu >= 0 && bad == 0, "recovery reads the file sanely (unknown %d, unreadable lines %d)", nu, bad);
+    t.s.journal = &j2;
+    t.s.fd[2] = g_null;
+    b = nb();
+    helper(b, "quiet", NULL);
+    st = run(&t, b, &r);
+    free(b);
+    char *txt = slurp(t.jpath, NULL);
+    CHECK(st == 0 && rec_numbers_unique(txt) == 0, "after reopening, a new command runs and no record number repeats:\n%s", txt);
+    free(txt);
+    osh_journal_close(&j2);
+    t.s.journal = NULL;
+    osh_session_free(&t.s);
+}
+
+static void test_sticky_failure(void)
+{
+    sticky_case(1);
+    sticky_case(0);
+}
+
+static void test_explicit_journal_modes(void)
+{
+    char dir[700], p[1400], k[1500];
+    snprintf(dir, sizeof dir, "%s/em", g_dir);
+    mkdir(dir, 0700);
+    snprintf(p, sizeof p, "%s/j.log", dir);
+    snprintf(k, sizeof k, "%s.key", p);
+    OshJournal j;
+    CHECK(osh_journal_open(&j, p) == 0, "fresh");
+    osh_journal_close(&j);
+    chmod(p, 0400);
+    CHECK(osh_journal_open(&j, p) != 0 && strstr(j.why, "0600"), "journal mode 0400 refused: %s", j.why);
+    chmod(p, 0700);
+    CHECK(osh_journal_open(&j, p) != 0 && strstr(j.why, "0600"), "journal mode 0700 refused: %s", j.why);
+    chmod(p, 0600);
+    CHECK(osh_journal_open(&j, p) == 0, "exactly 0600 accepted");
+    osh_journal_close(&j);
+    /* mkparents creates every missing level at 0700 */
+    char deep[1800];
+    snprintf(deep, sizeof deep, "%s/mp/a/b/effects.journal", g_dir);
+    CHECK(osh_journal_mkparents(deep) == 0, "mkparents");
+    struct stat sb;
+    char d1[1800];
+    snprintf(d1, sizeof d1, "%s/mp/a/b", g_dir);
+    CHECK(stat(d1, &sb) == 0 && (sb.st_mode & 0777) == 0700, "created directory is 0700");
+    CHECK(osh_journal_mkparents(deep) == 0, "and is idempotent");
+}
+
+static void test_cli_explicit_dir(const char *osh)
+{
+    char pol[700], ef[700], sd[700], jp[900], mk[700], sc[1500];
+    snprintf(pol, sizeof pol, "%s/cli.policy", g_dir);
+    snprintf(ef, sizeof ef, "%s/cli2.err", g_dir);
+    snprintf(sd, sizeof sd, "%s/ed", g_dir);
+    snprintf(jp, sizeof jp, "%s/j.log", sd);
+    snprintf(mk, sizeof mk, "%s/cli2.marker", g_dir);
+    snprintf(sc, sizeof sc, "/bin/touch %s", mk);
+    mkdir(sd, 0755);
+    CHECK(run_osh(osh, pol, jp, sc, ef, NULL, "/tmp") == 1 && fsize(mk) < 0, "explicit --journal in a 0755 directory: effect refused, nothing launched");
+    char *e = slurp(ef, NULL);
+    CHECK(strstr(e, "state directory") && strstr(e, "0700"), "named: %s", e);
+    free(e);
+    chmod(sd, 0700);
+    CHECK(run_osh(osh, pol, jp, sc, ef, NULL, "/tmp") == 0 && fsize(mk) == 0, "control: with a private directory it runs");
+}
+
 int main(int argc, char **argv)
 {
     if (argc >= 2 && !strcmp(argv[1], "--helper")) return helper_main(argc, argv);
@@ -861,7 +1077,12 @@ int main(int argc, char **argv)
     test_torn_tail_and_cleanup();
     test_required_without_journal();
     test_key_and_modes();
-    if (osh_bin) test_cli(osh_bin);
+    test_hmac_vectors();
+    test_fsync_counted();
+    test_pipeline_later_intent_fails();
+    test_sticky_failure();
+    test_explicit_journal_modes();
+    if (osh_bin) { test_cli(osh_bin); test_cli_explicit_dir(osh_bin); }
     close(g_null);
     char cmd[4400];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", g_dir);

@@ -53,13 +53,17 @@ OSH_JOURNAL_SRCS = tests/osh/host/test_osh_journal.c src/osh/host/osh_req.c src/
 
 $(OSH_HOST_DIR)/test_osh_journal: $(OSH_JOURNAL_SRCS) $(OSH_HOST_HDRS)
 	@mkdir -p $(OSH_HOST_DIR)
-	$(CC) $(OSH_HOST_FLAGS) -O2 -o $@ $(OSH_JOURNAL_SRCS)
+	$(CC) $(OSH_HOST_FLAGS) -DOSH_JOURNAL_TEST_HOOKS -O2 -o $@ $(OSH_JOURNAL_SRCS)
 
 $(OSH_HOST_DIR)/test_osh_journal_asan: $(OSH_JOURNAL_SRCS) $(OSH_HOST_HDRS)
 	@mkdir -p $(OSH_HOST_DIR)
-	$(CC) $(OSH_HOST_FLAGS) $(OSH_HOST_ASAN) -o $@ $(OSH_JOURNAL_SRCS)
+	$(CC) $(OSH_HOST_FLAGS) -DOSH_JOURNAL_TEST_HOOKS $(OSH_HOST_ASAN) -o $@ $(OSH_JOURNAL_SRCS)
 
 test-osh-journal: $(OSH_HOST_DIR)/test_osh_journal $(OSH_HOST_DIR)/test_osh_journal_asan $(OUT_DIR)/osh/osh
+	@nm $(OUT_DIR)/osh/osh | grep -q osh_journal_intent || { echo "FAIL: shipped osh is stripped, cannot check"; exit 1; }
+	@if nm $(OUT_DIR)/osh/osh | grep -q osh_journal_test_hooks_compiled; then echo "FAIL: shipped osh contains the journal test hooks"; exit 1; fi
+	@nm $(abspath $(OSH_HOST_DIR)/test_osh_journal) | grep -q osh_journal_test_hooks_compiled || { echo "FAIL: test build lacks the hooks"; exit 1; }
+	@echo "test hooks: absent from the shipped osh, present in the test build"
 	$(abspath $(OSH_HOST_DIR)/test_osh_journal) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/journal.out; rc=$$?; tail -5 $(OSH_HOST_DIR)/journal.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/journal.out | grep -q '^OSH_JOURNAL_PASS$$'
 	$(abspath $(OSH_HOST_DIR)/test_osh_journal_asan) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/journal_asan.out; rc=$$?; tail -3 $(OSH_HOST_DIR)/journal_asan.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/journal_asan.out | grep -q '^OSH_JOURNAL_PASS$$'
 	@echo "test-osh-journal: PASS (durable intent/outcome journal; plain and ASan/UBSan)"

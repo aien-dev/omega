@@ -57,11 +57,17 @@ static int journal_attach(OshShell *sh)
         }
         int mk = osh_journal_mkparents(def);
         if (mk) { snprintf(why, sizeof why, "%s: %s", def, strerror(-mk)); journal_unavailable(sh, why); return 0; }
-        char dir[4200];
-        snprintf(dir, sizeof dir, "%s", def);
-        *strrchr(dir, '/') = 0;
-        if (osh_journal_check_dir(&g_journal, dir)) { journal_unavailable(sh, g_journal.why); return 0; }
         path = def;
+    }
+    /* default or explicit: the directory holding the journal must be ours and private */
+    {
+        char dir[4200];
+        snprintf(dir, sizeof dir, "%s", path);
+        char *sl = strrchr(dir, '/');
+        if (!sl) strcpy(dir, ".");
+        else if (sl == dir) dir[1] = 0;
+        else *sl = 0;
+        if (osh_journal_check_dir(&g_journal, dir)) { journal_unavailable(sh, g_journal.why); return 0; }
     }
     int rc = osh_journal_open(&g_journal, path);
     if (rc) { journal_unavailable(sh, g_journal.why); return 0; }

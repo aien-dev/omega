@@ -97,23 +97,45 @@ void osh_req_digest_unkeyed(const OshRequest *r, uint8_t out[32])
 
 /* HMAC-SHA256 (RFC 2104) over omega's src/sha256.c, key 32 bytes. (src/fabric/fab_hmac.c is a test-only stand-in that refuses to
  * build in a production program, so it is not used.) */
-void osh_req_digest(const OshJournal *j, const OshRequest *r, uint8_t out[32])
+static void hmac_begin(sha256_ctx *h, const uint8_t key[32])
+{
+    uint8_t pad[64];
+    memset(pad, 0x36, sizeof pad);
+    for (int i = 0; i < 32; i++) pad[i] ^= key[i];
+    sha256_init(h);
+    sha256_update(h, pad, sizeof pad);
+}
+
+static void hmac_end(sha256_ctx *h, const uint8_t key[32], uint8_t out[32])
 {
     uint8_t pad[64], inner[32];
-    memset(pad, 0x36, sizeof pad);
-    for (int i = 0; i < 32; i++) pad[i] ^= j->key[i];
-    sha256_ctx h;
-    sha256_init(&h);
-    sha256_update(&h, pad, sizeof pad);
-    canon(&h, r);
-    sha256_final(&h, inner);
+    sha256_final(h, inner);
     memset(pad, 0x5c, sizeof pad);
-    for (int i = 0; i < 32; i++) pad[i] ^= j->key[i];
-    sha256_init(&h);
-    sha256_update(&h, pad, sizeof pad);
-    sha256_update(&h, inner, sizeof inner);
-    sha256_final(&h, out);
+    for (int i = 0; i < 32; i++) pad[i] ^= key[i];
+    sha256_init(h);
+    sha256_update(h, pad, sizeof pad);
+    sha256_update(h, inner, sizeof inner);
+    sha256_final(h, out);
 }
+
+void osh_req_digest(const OshJournal *j, const OshRequest *r, uint8_t out[32])
+{
+    sha256_ctx h;
+    hmac_begin(&h, j->key);
+    canon(&h, r);
+    hmac_end(&h, j->key, out);
+}
+
+#ifdef OSH_JOURNAL_TEST_HOOKS
+/* the same HMAC, over a byte string, so the test can check RFC 4231 vectors (key given zero-extended to 32 bytes, which HMAC treats as the shorter key) */
+void osh_hmac_for_test(const uint8_t key[32], const uint8_t *msg, size_t n, uint8_t out[32])
+{
+    sha256_ctx h;
+    hmac_begin(&h, key);
+    sha256_update(&h, msg, n);
+    hmac_end(&h, key, out);
+}
+#endif
 
 static void hex(const uint8_t d[32], char out[65])
 {
@@ -165,12 +187,50 @@ static int fsync_parent(const char *path)
     return rc;
 }
 
-/* append one batch and make it durable */
-static int commit(OshJournal *j, const char *buf, size_t n)
+/* the journal's own fsync; the test build can make one fail (the tests also count real fsync(2) calls) */
+static int jsync(OshJournal *j)
+{
+#ifdef OSH_JOURNAL_TEST_HOOKS
+    if (j->fail_fsync_at && j->n_commit == j->fail_fsync_at) { errno = EIO; return -1; }
+#endif
+    return sync_fd(j->fd);
+}
+
+/* Append one batch and make it durable. STICKY: the first failed write or fsync poisons the journal for the rest of the
+ * session, and after that no new intent is written (every later effect is refused instead). Reason: a short write can
+ * leave a fragment with no newline, and a record appended after it would be glued onto it and be unreadable, so an effect
+ * could run with no readable intent. On a failed write the fragment is cut back to the previous end (tail_clean); only
+ * then may an OUTCOME for an effect that already started still be appended (is_outcome), because it cannot be glued. After
+ * a failed fsync the tail is unknown and nothing more is written. Reopening also closes a torn tail with a newline. */
+static int commit(OshJournal *j, const char *buf, size_t n, int is_outcome)
 {
     if (j->fd < 0) return -1;
-    if (write_all(j->fd, buf, n) != 0) return -1;
-    return sync_fd(j->fd);
+    if (j->poisoned && !(is_outcome && j->tail_clean)) { errno = EIO; return -1; }
+    off_t pre = lseek(j->fd, 0, SEEK_END);
+    int rc = 0, e = 0, wrote_failed = 0;
+#ifdef OSH_JOURNAL_TEST_HOOKS
+    j->n_commit++;
+    if (j->fail_write_at && j->n_commit == j->fail_write_at) {
+        if (n > 1) (void)write_all(j->fd, buf, n / 2);
+        rc = -1;
+        e = ENOSPC;
+        wrote_failed = 1;
+    }
+#endif
+    if (!rc && write_all(j->fd, buf, n) != 0) { rc = -1; e = errno; wrote_failed = 1; }
+    if (wrote_failed) {
+        j->tail_clean = pre >= 0 && ftruncate(j->fd, pre) == 0;
+    } else if (!rc && jsync(j) != 0) {
+        rc = -1;
+        e = errno;
+        j->tail_clean = 0;
+    }
+    if (rc) {
+        j->poisoned = 1;
+        errno = e ? e : EIO;
+        return -1;
+    }
+    return 0;
 }
 
 /* ---- parsing (shared by open and recover) ---- */
@@ -335,7 +395,7 @@ int osh_journal_open(OshJournal *j, const char *path)
     int existed = lstat(path, &st) == 0;
     long size = 0;
     if (existed) {
-        if (!S_ISREG(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 077) != 0)
+        if (!S_ISREG(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 07777) != 0600)
             return jfail(j, EACCES, "journal %s must be a regular file owned by you with mode 0600 (found mode %04o); refusing it, fix or remove it", path, (unsigned)(st.st_mode & 07777));
         size = (long)st.st_size;
     }
@@ -356,7 +416,7 @@ int osh_journal_open(OshJournal *j, const char *path)
     }
     j->fd = fd;
     j->next_rec = mx + 1;
-    if (!nl && commit(j, "\n", 1) != 0) { int e = errno; close(fd); j->fd = -1; return jfail(j, e ? e : EIO, "cannot repair journal tail %s%u", path, 0); }
+    if (!nl && commit(j, "\n", 1, 0) != 0) { int e = errno; close(fd); j->fd = -1; return jfail(j, e ? e : EIO, "cannot repair journal tail %s%u", path, 0); }
     return 0;
 }
 
@@ -408,9 +468,11 @@ uint64_t osh_journal_intent(OshJournal *j, const uint8_t dig[32], const OshReque
     int n = snprintf(line, sizeof line, "OSHJ1 %llu I %s %d/%d b=%d argc=%d wr=%d a0=%s lens=%s\n", (unsigned long long)rec, dh, idx,
                      r->ncmds, c->builtin_id, c->nargv, wr, a0, lens);
     if (n <= 0 || (size_t)n >= sizeof line) return 0;
-    if (commit(j, line, (size_t)n) != 0) return 0;
+    if (commit(j, line, (size_t)n, 0) != 0) return 0;
     j->next_rec++;
+#ifdef OSH_JOURNAL_TEST_HOOKS
     if (j->die_after_intent && ++j->n_intent == j->die_after_intent) _exit(77);
+#endif
     return rec;
 }
 
@@ -429,7 +491,7 @@ int osh_journal_outcomes(OshJournal *j, const uint8_t dig[32], int ncmds, const 
         len += (size_t)snprintf(buf + len, 160, "OSHJ1 %llu O %llu %s %d/%d %s st=%d err=%d\n", (unsigned long long)rec++,
                                 (unsigned long long)o[i].ref, dh, o[i].idx, ncmds, k_outcome[oc], o[i].status, o[i].err);
     }
-    int rc = commit(j, buf, len);
+    int rc = commit(j, buf, len, 1);
     free(buf);
     if (rc != 0) return -1;
     j->next_rec = rec;
@@ -495,7 +557,7 @@ int osh_journal_recover(OshJournal *j, const char *path, OshJournalUnknown *out,
         int n = snprintf(line, sizeof line, "OSHJ1 %llu O %llu %s %d/%d OUTCOME_UNKNOWN st=-1 err=%d recovered=1\n",
                          (unsigned long long)j->next_rec, (unsigned long long)r.open[i].rec, r.open[i].digest, r.open[i].idx,
                          r.open[i].ncmds, OSH_E_OUTCOME_UNKNOWN);
-        if (commit(j, line, (size_t)n) != 0) { found = -EIO; break; }
+        if (commit(j, line, (size_t)n, 1) != 0) { found = -EIO; break; }
         j->next_rec++;
     }
     free(r.open);
@@ -526,10 +588,23 @@ int osh_journal_mkparents(const char *path)
         if (*p == '/' || *p == 0) {
             char c = *p;
             *p = 0;
-            if (mkdir(d, 0700) != 0 && errno != EEXIST) return -errno;
+            if (mkdir(d, 0700) == 0) { /* newly created: make it and its place in the parent durable */
+                int dfd = open(d, O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+                if (dfd < 0) return -errno;
+                int sr = sync_fd(dfd) == 0 ? 0 : -errno;
+                close(dfd);
+                if (sr) return sr;
+                int pr = fsync_parent(d);
+                if (pr) return pr;
+            } else if (errno != EEXIST) return -errno;
             *p = c;
             if (!c) break;
         }
     }
     return 0;
 }
+
+#ifdef OSH_JOURNAL_TEST_HOOKS
+/* marker symbol: the build checks the shipped osh does NOT contain it (so no test hook is compiled into production) */
+int osh_journal_test_hooks_compiled(void) { return 1; }
+#endif
