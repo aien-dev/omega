@@ -17,7 +17,7 @@ name: Host suites 2
 #   visor     : test-visor (all Visor lanes + language + physics-free build) 25 s
 #   turing    : test-turing test-turing-exp001-a test-turing-exp001-coders 3 min
 #               test-turing-verify-indep test-turing-qcont test-turing-qrecord
-#   brownian  : test-brownian-tps 4 min
+#   brownian  : test-brownian-tps 4 min, test-brownian-active 1 s
 #   polyglot  : test-polyglot-asm test-polyglot-encoder 1 min
 #   algebra   : test-algebra test-algebra-asan test-realize test-phase-twin
 #               test-ma-digital-bottom 3.5 min
@@ -145,7 +145,7 @@ jobs:
           }
           sel visor     "$core|^src/(visor|language)/|^tests/(visor|language)/|^mk/(00-visor-core|visor-[^/]*)\.mk$|^tools/omega\.c$|^src/runtime/rx_(aegis|caproot|coherent|generation|world)\.|^aienos\.lock$"
           sel turing    "^src/(turing|algebra)/|^tests/turing/|^tools/turing_|^mk/turing_(exp001_[a-z]+|qcont|qrecord)\.mk$|^src/(omega_canonical|omega_types|sha256)\.|^data/(crumbline|turing-cal)/|^evidence/TURING_YIELD/|^docs/turing/|^calibration/"
-          sel brownian  "^tests/brownian/|^tools/brownian/|^mk/brownian_tps\.mk$|^src/turing/(tc_|ty_math|ty_qcont)|^src/sha256\."
+          sel brownian  "^tests/brownian/|^tools/brownian/|^mk/brownian_(tps|active)\.mk$|^src/turing/ty_prd2?\.|^src/turing/(tc_|ty_math|ty_qcont)|^src/sha256\."
           sel polyglot  "^src/(polyglot|algebra)/|^tests/polyglot/|^mk/polyglot[^/]*\.mk$|^src/(aarch64_|sha256\.)|^spec/polyglot-0\.md$|^evidence/POLYGLOT/"
           sel algebra   "^src/(algebra|turing)/|^tests/algebra/|^src/(omega_canonical|omega_types|sha256)\.|^evidence/MIXED_ALGEBRA/"
           sel path      "^src/path/|^tests/path/|^src/(omega_types|sha256)\."
@@ -212,6 +212,8 @@ jobs:
           fetch-depth: 0
       - name: Brownian TPS adapter
         run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-brownian-tps
+      - name: Brownian active measurement choice (BRW-ACT-DEV0 library)
+        run: make PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 test-brownian-active
 
   polyglot:
     needs: changes
