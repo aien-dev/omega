@@ -1,0 +1,171 @@
+# BRW-DL v0 (description language for predictors)
+
+Status: draft v0, candidate-visible after review. Every predictor, reference or discovered, is a BRW-DL program.
+Its cost is 8 times the number of canonical bytes, plus a per-world rider for fitted parameters (section 6).
+
+## 1. What a program does
+
+A program has three parts, stored in this order: functions, fit block, predict block.
+
+- The fit block runs once per world. It sees only the prefix (points 0..S-1, times t_j and values y_j) and may
+  write 16 registers r0..r15 (binary64).
+- The predict block runs once per held-out index i = S..N-1. It sees the time t_i, the previous time t_{i-1},
+  the previous value y_{i-1} (revealed), the index i, and the registers. It never sees y_i or any earlier
+  held-out value other than y_{i-1}. It ends with `emit_normal`, giving the predictive Normal law: location, then scale.
+- Functions (0 to 4) are small expressions, numbered f0..f3, callable from any block. A function may call only a
+  function with a lower number. Every function must be called at least once.
+
+The output family is fixed: `emit_normal` is the only family in Wave 1 (family field = Normal). Other families
+would need new opcodes and a new language version.
+
+## 2. Values, numerics
+
+All values are IEEE binary64, round to nearest even, no fused multiply-add, no extended precision.
+`+ - * / sqrt` are exact IEEE operations. `exp`, `log`, `expm1` are taken from the evaluator's C library and are
+authoritative as run by the evaluator (same binary for every candidate). Any operation that produces NaN or an
+infinity (including division by zero, log of a non-positive number, sqrt of a negative number) ends the run with
+FAIL_PROTOCOL. Subnormal values are allowed. At emit, a scale that is not finite or not > 0 is FAIL_PROTOCOL.
+A finite scale below sd_min is raised to sd_min by the evaluator; the program does not do it.
+Comparisons give 1 (true) or 0 (false).
+
+## 3. Opcode table (complete; every other byte value is invalid)
+
+Stack effects are written (inputs -> outputs), top of stack on the right. Each body (function, loop body) has its
+own operand stack of at most 16 values that starts empty.
+
+| byte | mnemonic | effect |
+|---|---|---|
+| 0x00-0x1F | (integer) | push the integer 0..31 |
+| 0x20 u8 | (integer) | push 32..255 (u8 must be >= 32) |
+| 0x21 u8 | (integer) | push -1..-255, value is -u8 (u8 must be >= 1) |
+| 0x22 f32 | (float) | push a float32, 4 bytes little endian, widened exactly |
+| 0x23 f64 | (float) | push a binary64, 8 bytes little endian |
+| 0x30 | add | a b -> a+b |
+| 0x31 | sub | a b -> a-b |
+| 0x32 | mul | a b -> a*b |
+| 0x33 | div | a b -> a/b |
+| 0x34 | neg | a -> -a |
+| 0x35 | exp | a -> e^a |
+| 0x36 | log | a -> natural log of a |
+| 0x37 | sqrt | a -> square root of a |
+| 0x38 | expm1 | a -> e^a - 1 (accurate near 0) |
+| 0x39 | abs | a -> absolute value |
+| 0x3A | min | a b -> smaller (a if a < b else b) |
+| 0x3B | max | a b -> larger (a if a > b else b) |
+| 0x3C | lt | a b -> 1 if a < b else 0 |
+| 0x3D | le | a b -> 1 if a <= b else 0 |
+| 0x3E | sel | a b s -> a if s != 0 else b |
+| 0x40 | dup | a -> a a |
+| 0x41 | swap | a b -> b a |
+| 0x42 | drop | a -> |
+| 0x43 | over | a b -> a b a |
+| 0x50 | now | push current time (section 4) |
+| 0x51 | gap | push current time minus previous time |
+| 0x52 | prevt | push previous time |
+| 0x53 | idx | push current index |
+| 0x54 | obs | push current value (loops only) |
+| 0x55 | prevobs | push previous value |
+| 0x56 | count | push S, the number of prefix points (fit-time only) |
+| 0x57 | countinc | push S-1, the number of prefix increments (fit-time only) |
+| 0x58 | first_t | push t_0 (fit-time only) |
+| 0x59 | last_t | push t_{S-1} (fit-time only) |
+| 0x5A | first_y | push y_0 (fit-time only) |
+| 0x5B | last_y | push y_{S-1} (fit-time only) |
+| 0x60 LEB body | sum_pts | push the sum over j = 0..S-1 of the body value (fit block only) |
+| 0x61 LEB body | sum_inc | push the sum over j = 1..S-1 of the body value (fit block only) |
+| 0x64-0x67 dst f.. | lsq | least squares, p = opcode - 0x63 columns (section 5); fit block only |
+| 0x80-0x8F | load rN | push register N (N = low nibble) |
+| 0x90-0x9F | store rN | pop into register N (fit block only) |
+| 0xA0-0xA3 | call fN | run function N on a fresh stack, push its one result |
+| 0xE0 | emit_normal | location scale -> (end of predict); must be the last byte of the predict block |
+
+"Fit-time only" opcodes (count..last_y) are allowed in the fit block, loop bodies, functions used there and lsq
+columns, and are rejected in the predict block. This is what keeps the prefix out of the predict block.
+
+## 4. Contexts
+
+| context | now | gap | prevt | idx | obs | prevobs |
+|---|---|---|---|---|---|---|
+| fit block (top level) | - | - | - | - | - | - |
+| sum_pts body, point j | t_j | - | - | j | y_j | - |
+| sum_inc body, step j (j >= 1) | t_j | t_j - t_{j-1} | t_{j-1} | j | y_j | y_{j-1} |
+| lsq column, point j | t_j | - | - | j | - | - |
+| predict block, index i | t_i | t_i - t_{i-1} | t_{i-1} | i | - | y_{i-1} |
+
+"-" = opcode rejected in that context by the checker. Sums run in increasing j, plain binary64 addition starting
+from +0, no reordering, no compensated summation. Loops cannot nest. sum_inc needs S >= 2 (else FAIL_PROTOCOL).
+Lag products of the revealed past are `obs prevobs mul` (lag 1) and `prevobs dup mul`; mean of increments is
+`sum_inc { obs prevobs sub } countinc div`; mean of squared increments likewise with `dup mul`; running sums of
+values and squares are `sum_pts { obs }` and `sum_pts { obs dup mul }`.
+
+## 5. Least squares (lsq)
+
+Encoding: `0x63+p, dst, f_1 .. f_p` (p in 1..4; dst is a register number, dst+p <= 15; each f is a function number 0..3).
+Column k of the design matrix at point j is the value of function f_k with context "lsq column, point j"
+(it may use `now`, `idx`, registers, and calls to lower functions). The response is y_j, j = 0..S-1. Solve the
+least squares problem by unpivoted Householder QR in binary64:
+
+for m = 0..p-1: x = column m rows m..S-1; norm = sqrt(sum x_r^2) (increasing r); alpha = -copysign(norm, x_m);
+v = x with v_m = x_m - alpha; vtv = sum v_r^2. For each later column and for the response, in increasing column
+order (response last): s = sum v_r * z_r (increasing r), f = 2*s/vtv, z_r = z_r - f*v_r for r >= m. R[m][m] = alpha,
+R[m][k] = transformed column k at row m. Then back substitution for q = p-1 down to 0:
+beta_q = (rhs_q - sum_{k>q, increasing k} R[q][k]*beta_k) / R[q][q].
+Residuals are computed directly with the untransformed columns: fit_j = row_1*beta_0, then + row_k*beta_{k-1}
+in increasing k; e_j = y_j - fit_j; v = (sum e_j^2)/S (divisor S, never S-p).
+Writes r[dst..dst+p-1] = beta_0..beta_{p-1} and r[dst+p] = v. If norm or vtv is 0, or any R diagonal is 0:
+FAIL_PROTOCOL. Needs S >= p.
+
+## 6. Fitted parameters and the rider (k)
+
+Every stack value carries a flag "depends on y": it is set by `obs` (in sum_pts and sum_inc bodies), by `prevobs`
+inside a sum_inc body, by `first_y` and `last_y`, and by every lsq output register; it propagates through every
+operation to every result (sel, min, max, comparisons included; dup, swap, over copy per-value flags). A register's
+flag is the flag of the last value written to it by `store` or `lsq` in the fit block. Times, counts and constants do
+not set it. `prevobs` in the predict block is a revealed conditioning value, not a fitted quantity.
+
+    k = the number of registers whose flag is set AND that are loaded (by `load`, directly in the predict block or
+        inside any function called from it) in the predict block.
+
+The checker computes k from the bytes (static analysis, no data needed; there is no data-dependent control flow).
+A register written from y in the fit block but never read in the predict block is free. A register holding only
+times or constants (a standardization) is free. Packing two estimates into one register is impossible (one
+register = one number); an estimate must pass through a register to reach the predict block, so k cannot be evaded.
+
+    L(M) per world = 8 * bytes + (k/2) * log2(n_prefix_incr) bits, where n_prefix_incr = S - 1.
+
+(How the byte cost is spread over worlds is set by the scoring rule, not by this language.)
+
+## 7. Canonical byte form
+
+    program  = LEB(nf) { LEB(len) body }^nf  LEB(fitlen) fitbody  LEB(predlen) predbody
+
+nf is in 0..4; every function body is non-empty; the predict body is non-empty. LEB = unsigned LEB128, shortest
+form only (no padding bytes, no leading 0x80 continuation of zero). Loop and function bodies carry their length as LEB in
+front. No padding, no comments, no trailing bytes, at most 4096 bytes. Text form (the assembler) accepts comments
+after `;`, but comments never reach the bytes.
+
+Canonical literals (exactly one encoding per value): a value that is a non-negative integer (sign bit clear) 0..31 uses
+its one-byte form; 32..255 uses 0x20; integers -1..-255 use 0x21; any other value exactly representable as float32
+uses 0x22; every other finite value uses 0x23 (9 bytes = 72 bits, all counted as program bytes).
+Negative zero is a float32 literal. NaN and infinities are not encodable. A byte string is a valid
+program only if the checker accepts it, including literal canonicity, exact body lengths, stack rules (every body
+ends with exactly one value; fit ends empty; predict ends with emit_normal holding exactly two values), context
+rules, every load reads a register already written, and every function is called. Given the text form, the assembler
+produces the one canonical byte string; given a byte string, the checker accepts or rejects it.
+
+Program id = SHA-256 of the canonical bytes, lowercase hex.
+
+## 8. Limits
+
+- at most 4096 bytes; at most 4 functions; call depth at most 3 (calls go to lower numbers only)
+- at most 16 values on any one operand stack; at most 16 registers
+- S and N at most 4096
+- fit block: at most 4,194,304 executed opcodes (loop iterations count each opcode; an lsq counts S*p)
+- predict block: at most 1024 executed opcodes per held-out step (calls included)
+- exceeding a limit, or any numeric failure in section 2, is FAIL_PROTOCOL for the whole run
+
+## 9. What the language does not contain
+
+There is no operator that bundles a model family. Every model is built from arithmetic, exp/log/sqrt, sums over
+the revealed prefix, and least squares over columns the author writes. Model structure lives in the program
+bytes and is paid for there.

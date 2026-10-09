@@ -57,8 +57,8 @@
           "purpose": "M21 OMEGA_AUTODIFF scope, op and error-contract table, status (not qualified)"
         },
         {
-          "digest": "dd0a3cb3b594b46d164431ba80606e527ded1d221c7fb60fb42a50fea03e5fd7",
-          "last_commit": "09b5c37",
+          "digest": "7eaa8d1e4f325f8677c7483d53b1ddb5ea784c1c708a7eaacf0fbdd8688019f6",
+          "last_commit": "d535d03",
           "name": "brownian",
           "purpose": "Directory docs/brownian. Purpose not yet described by a human."
         },
@@ -117,15 +117,15 @@
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:be18ffe196f53266da46ea3e507d2512469e4f0d472e3c2712e7ae5cebb8bf25",
-      "compiled_at": "2026-10-09T18:23:41Z",
+      "children_root": "sha256:da58bf6e537aad9a195116aa064fa6522f154dee20b000dd43a2fd9808e3b5a7",
+      "compiled_at": "2026-10-09T19:22:31Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:fda44bccaf7897b9d22cb867d6b1c2737d5f96a99191a5aa49153585afd10d34",
+      "digest": "sha256:ebfd1e2d97480af083bd387bba60ef95ddc5053bb12dcfe2319f6d08adcc0b8c",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
-      "files": 117,
-      "generated_at_commit": "09b5c374cfef663634f2cf29288b47ec62e3378c",
-      "source_tree": "sha256:e92cdc8f5aa178f05f222c767e3e6cb7e23984215bb17af70883c8c41baa9141"
+      "files": 118,
+      "generated_at_commit": "d535d03a3eaed681b10f62fabc809b43109f4550",
+      "source_tree": "sha256:cb3fcb48cf38146275e476bb38a24fea9194baf945c808586970273ca2d66922"
     },
     "owner_lane": "",
     "provenance": {
