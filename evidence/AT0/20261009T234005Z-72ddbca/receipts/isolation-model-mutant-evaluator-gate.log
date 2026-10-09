@@ -1,0 +1,2 @@
+FAIL: /tmp/at0-run.cVbDag/iso/mut/at0_engine_hidden_clock.o references clock_gettime
+AT0_ISOLATION: FAIL

@@ -1,0 +1,5 @@
+model (build.sh, plain, -lm): -std=c11 -Wall -Wextra -Werror -pedantic -D_POSIX_C_SOURCE=200809L -I$HERE -I$ROOT/src -O2
+model (build.sh asan): -std=c11 -Wall -Wextra -Werror -pedantic -D_POSIX_C_SOURCE=200809L -I$HERE -I$ROOT/src -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
+oracle (build.sh build): rustc --edition 2021 -C opt-level=2 -C codegen-units=1 -C debuginfo=0 -C panic=abort -D warnings --crate-name at0_oracle src/main.rs
+evaluator (Makefile): -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -Isrc -I../../../../src ... -lm
+integration (this runner): -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -I../../../../src ... (no -lm needed)

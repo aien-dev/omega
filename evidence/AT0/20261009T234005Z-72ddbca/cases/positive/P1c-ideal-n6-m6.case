@@ -1,0 +1,42 @@
+OMEGA-AT0-CASE v1
+domain omega.at0.case.v1
+contract AT0_CASE_V1
+case_name at0-p1c-ideal-n6-m6
+begin semantic
+model_family PAGE_WOOTTERS_FINITE_IDEAL
+energy_unit DIMENSIONLESS_HBAR_1
+clock_dim 6
+clock_energies -5/2,-3/2,-1/2,1/2,3/2,5/2
+system_dim 2
+system_hamiltonian_pauli 0/1,0/1,0/1,1/2
+interaction NONE
+constraint SUM_HC_HS
+physical_state NULLSPACE_PROJECTION
+reference_clock_label t0
+reference_system_state (1/1;0/1),(1/1;0/1)
+clock_povm COVARIANT_DISCRETE
+povm_tau_turns 1/6
+povm_weight 1/1
+clock_label_count 6
+clock_label 0 t0
+clock_label 1 t1
+clock_label 2 t2
+clock_label 3 t3
+clock_label 4 t4
+clock_label 5 t5
+observables PAULI_X,PAULI_Y,PAULI_Z
+end semantic
+begin acceptance
+control_kind POSITIVE
+expected_outcome PASS
+expected_failure_codes none
+min_bound_kind ESTIMATED
+tol_constraint_residual 1@12
+tol_povm_residual 1@12
+tol_probability 1@12
+tol_zero_probability 1@9
+tol_schrodinger 1@12
+end acceptance
+case_id 606e0140b8c2baf2e4a65775ba8917c8e6c8b1549aef4dd189e534d9c997edf9
+acceptance_id a13fb02dd674b8042ef8c0a197f03d58768709f782ba59cd26545eef6d41a228
+end
