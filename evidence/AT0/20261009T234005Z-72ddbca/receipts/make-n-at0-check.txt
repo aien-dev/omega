@@ -1,1 +1,0 @@
-sh research/atemporal/at0/integration/run.sh --out build/at0/check

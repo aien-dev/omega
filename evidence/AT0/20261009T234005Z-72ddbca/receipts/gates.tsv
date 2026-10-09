@@ -1,5 +1,0 @@
-AT0-G2	PASS	controls C7-C13 in controls.tsv (isolation_check.sh and evaluator/gates/isolation.sh on model and Rust oracle objects incl. mutants; make -n hygiene; make parses with PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0)	adaptation for Rust verified by Agent 4's gate on the same objects (C9, C10); Agent 4 independent sign-off still to be given on omega#358
-AT0-G4	FAIL	every positive case: outcome PASS and expectation_met YES	11/12
-AT0-G5	PASS	every negative case: outcome FAIL with exactly its expected codes and expectation_met YES; axis-swap and Y-sign mutants caught (C5, C6); hidden-clock mutants caught (C8, C10)	8/8 negative cases
-AT0-G6	PASS	at0-eval result <result> --case <case> on every assembled result (verify/*.json) plus evaluator/run.sh with this runner as candidate; wall-clock control C3	evaluator PASS on 19 of 20 valid cases (the other 1 produced no result file, see G4); evaluator self-tests, mutants and gates with this runner as candidate: 0 FAIL; evidence folder committed by the PR
-AT0-G7	NOT_RUN	-	Agent 6 (scientific review) owns G7; Agent 5 does not run it

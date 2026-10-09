@@ -1,1 +1,0 @@
-test -n 'build/at0' && test 'build/at0' != / && rm -rf -- 'build/at0'

@@ -1,8 +1,0 @@
-omega_commit 72ddbca6affb78586c80e0e290eff4303524a0b3
-source_tree_clean YES
-contract_commit fe86e43aae63370b3084f78e971a33b81ce75a9d
-stamp 20261009T234005Z
-cases 62 valid 20 refused 42
-G4 positive 11/12; G5 negative 8/8; G6 evaluator agreement 19/19; refusal rows where model, oracle and manifest agree 37/42
-mutant axis_swap: 11/11 caught
-mutant y_sign_flip: 8/11 caught; not caught (swap invisible on that case, see QUALIFICATION.md): P1f-y-axis-rotation P2-tilted-h0 P4-degenerate-identity-h
