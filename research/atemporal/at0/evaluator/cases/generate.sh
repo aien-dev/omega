@@ -19,6 +19,7 @@ G $P/P2-tilted-h0.case          name=at0-p2-tilted-h0 E=-3/4,-1/4,1/4,3/4 h=1/4,
 G $P/P2b-h0-shift-control.case  name=at0-p2b-h0-shift-control h=1/1,0/1,0/1,1/2
 G $P/P3-spec-reference-model.case name=at0-p3-spec-reference-model E=-1/1,0/1 h=1/2,0/1,0/1,-1/2 tau=1/4 w=1/2 M=4
 G $P/P4-degenerate-identity-h.case name=at0-p4-degenerate-identity-h E=-1/2,1/2,3/2,5/2 h=1/2,0/1,0/1,0/1 tau=1/4 w=1/1 M=4
+G $P/P5-large-rationals.case name=at0-p5-large-rationals E=-7/1048573,7/1048573 h=0/1,2/1048573,3/1048573,6/1048573 'psi=(1/1048571;0/1),(1/1048569;1/1048567)' tau=1048573/28 w=1/1 M=2
 # ---- negative controls (expected FAIL with exactly these codes) ----
 G $N/N1-uncovered-spectrum.case name=at0-n1-uncovered-spectrum E=1/1,2/1,3/1,4/1 control=NEGATIVE expected=FAIL codes=TRIVIAL_PHYSICAL_STATE
 G $N/N2-half-covered.case       name=at0-n2-half-covered E=-3/2,1/2,3/2,7/2 control=NEGATIVE expected=FAIL codes=SCHRODINGER_DEVIATION_EXCEEDED
@@ -60,6 +61,7 @@ E $R/R24-wrong-domain.case             's|^domain omega.at0.case.v1$|domain omeg
 E $R/R25-wrong-contract.case           's|^contract AT0_CASE_V1$|contract AT0_CASE_V2|'
 E65=$(i=0; s=""; while [ $i -lt 65 ]; do s="$s${s:+,}$i/1"; i=$((i+1)); done; printf "%s" "$s")
 E $R/R26-clock-dim-65.case "s|^clock_dim 4$|clock_dim 65|; s|^clock_energies .*$|clock_energies $E65|"
+E $R/R39-huge-digits-tau.case          's|^povm_tau_turns .*$|povm_tau_turns 340282366920938463463374607431768211457/4|'
 "$T" gen name=at0-r27-rational-over-limit E=-1048577/1,-1/2,1/2,3/2 > $R/R27-rational-over-limit.case
 "$T" gen name=at0-r28-duplicate-label labels=t0,t1,t1,t3 > $R/R28-duplicate-label.case
 "$T" gen name=at0-r29-ref-label-missing ref=t9 > $R/R29-ref-label-missing.case

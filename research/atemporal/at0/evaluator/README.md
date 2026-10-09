@@ -34,7 +34,7 @@ src/                   evaluator sources (see "Design")
 cases/positive/        P* cases expected to PASS the physics
 cases/negative/        N* negative controls expected to FAIL with named codes
 cases/refuse/          R* malformed or invalid cases expected to be REFUSED with a named code
-cases/MANIFEST.tsv     path, class, exact expected response for all 60 public cases
+cases/MANIFEST.tsv     path, class, exact expected response for all 62 public cases
 cases/generate.sh      regenerates every public case from `at0-eval gen` plus byte edits
 gates/isolation.sh     symbol-level isolation gate with positive and negative control objects
 HIDDEN_COMMITMENT.txt  SHA-256 of the six hidden cases (contents withheld until candidate freeze)
@@ -169,3 +169,19 @@ INCONCLUSIVE, NOT_RUN, BLOCKED_NO_CANDIDATE with a specific reason. UNISOLATED
 is a property of the whole run (see ISOLATION_REPORT.md), never a test status.
 A PASS here is software conformance to the frozen contracts. It is not, and
 must not be cited as, a scientific result about time or quantum mechanics.
+
+## Independent review (2026-10-09)
+
+Before merge the sources were reviewed by Opus 5.5 in a separate session with
+none of this session's context (Codex was out of usage). It confirmed the
+physics derivations and the exact arithmetic and found two blocking bugs, both
+fixed and both now covered by public cases: fractions with parts above 2^63
+were truncated before conversion to long double in the shadow oracle (P5,
+large rationals, checks P(Z+) = 1/3 at the reference reading), and a 39-digit
+integer overflowed the fraction parser so an out-of-range value could reach the
+id check (R39, refused CASE_INVALID_PARAMETER). Its further points are applied:
+a verification without `--case` is INCONCLUSIVE (E4-UNBOUND-NO-CASE-FILE), a
+mutant counts as caught only on FAIL, gate control objects that fail to compile
+record NOT_RUN instead of a false PASS, the isolation gate reads dynamic symbol
+tables and forbids `syscall`, scaled-decimal bounds above 2^64 convert exactly,
+and the shadow bound follows the long double width.

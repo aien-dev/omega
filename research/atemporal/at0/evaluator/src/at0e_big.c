@@ -62,7 +62,7 @@ static int parse_int_text(const char *s, size_t len, i128 *out, int *canonical) 
     i128 v = 0;
     for (size_t j = i; j < len; j++) {
         if (s[j] < '0' || s[j] > '9') return 0;
-        if (j - i >= 39) return 0;       /* far beyond any limit; refuse before overflow */
+        if (j - i >= 20) { v = (i128)1 << 100; if (*canonical == 1) *canonical = -1; continue; }  /* beyond any contract limit: saturate (no overflow) and flag; rat_parse refuses it as CASE_INVALID_PARAMETER */
         v = v * 10 + (s[j] - '0');
     }
     if (len - i > 1 && s[i] == '0') *canonical = 0;   /* leading zero */
@@ -84,9 +84,12 @@ int rat_parse(const char *tok, rat *out, int *canonical) {
     if (!parse_int_text(tok, (size_t)(slash - tok), &n, &canon)) return 0;
     if (!parse_int_text(slash + 1, strlen(slash + 1), &d, &canon)) return 0;
     if (d < 1) return 0;                                   /* "d >= 1" is shape */
-    if (iabs(n) > AT0E_RAT_LIMIT || d > AT0E_RAT_LIMIT) canon = -1; /* beyond the section 2 limits: INVALID_PARAMETER (ambiguity A2) */
-    if (igcd(n, d) != 1) canon = 0;
-    if (n == 0 && d != 1) canon = 0;
+    int huge = canon == -1;                                /* a part saturated in parse_int_text: beyond any limit, reduction unknowable */
+    if (!huge) {
+        if (igcd(n, d) != 1) canon = 0;
+        if (n == 0 && d != 1) canon = 0;
+    }
+    if (canon != 0 && (huge || iabs(n) > AT0E_RAT_LIMIT || d > AT0E_RAT_LIMIT)) canon = -1; /* beyond the section 2 limits: INVALID_PARAMETER (ambiguity A2); encoding errors still win */
     *canonical = canon;
     *out = rat_make(n, d);
     return 1;

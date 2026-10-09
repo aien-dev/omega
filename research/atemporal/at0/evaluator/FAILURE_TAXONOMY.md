@@ -157,3 +157,14 @@ Severity: F = FAIL, I = INCONCLUSIVE. Any F finding makes the result FAIL.
 Blind pairs are listed in `run.sh` and reported INCONCLUSIVE with the reason
 "indistinguishable from truth on this case by construction" so that the
 coverage gap is visible in the machine-readable results rather than hidden.
+
+## Additions after independent review (Opus 5.5, 2026-10-09)
+
+| code | sev | meaning |
+|---|---|---|
+| E4-UNBOUND-NO-CASE-FILE | I | `result` was run without `--case`; the embedded case is trusted, so the verification is not citable |
+
+Mutant grading rule: a planted defect counts as caught only when the evaluator
+grades the mutant file FAIL. INCONCLUSIVE, a crash or an empty status is an
+escape. The two mutants that are INCONCLUSIVE by design (dirty tree, unknown
+contract commit) are tested separately for exactly that status.

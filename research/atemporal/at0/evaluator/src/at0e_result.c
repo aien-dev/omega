@@ -369,7 +369,7 @@ void result_rederive(const at0_result *r, rederived *d) {
 
 /* ---------------- verification ---------------- */
 static long double f64_ld(uint64_t bits) { double x; memcpy(&x, &bits, 8); return (long double)x; }
-static long double scaled_ld(scaled s) { long double v = (long double)(unsigned long long)(s.n & 0xffffffffffffffffULL); for (int i = 0; i < s.k; i++) v /= 10.0L; return v; }
+static long double scaled_ld(scaled s) { long double v = (long double)(unsigned long long)(s.n >> 64) * 18446744073709551616.0L + (long double)(unsigned long long)s.n; for (int i = 0; i < s.k; i++) v /= 10.0L; return v; }
 static const char *const fail_codes_sev[] = {
     "E4-STRUCT-", "E4-ID-", "E4-BIND-", "E4-CHECK-", "E4-OUTCOME-", "E4-CODES-", "E4-EXPECTATION-", "E4-LABEL-",
     "E4-SHADOW-", "E4-BOUND-", "E4-PLACEHOLDER-", "E4-TIME-", "E4-PROV-ORACLE-IS-ENGINE", "E4-PROV-NONE-", NULL };
@@ -382,7 +382,7 @@ const char *result_verify(const textfile *tf, const at0_result *r, const textfil
     /* identities */
     {
         char pre[200]; int pl = snprintf(pre, sizeof pre, "case_id %s\nacceptance_id %s\n", c->case_id, c->acceptance_id);
-        uint8_t *buf = malloc((size_t)pl + r->ver_len); memcpy(buf, pre, (size_t)pl); memcpy(buf + pl, r->ver_block, r->ver_len);
+        uint8_t *buf = malloc((size_t)pl + r->ver_len); if (!buf) { findings_add(fs, "E4-STRUCT-UNREADABLE", "out of memory"); return "FAIL"; } memcpy(buf, pre, (size_t)pl); memcpy(buf + pl, r->ver_block, r->ver_len);
         sha256_tagged_hex(r->version == 2 ? AT0E_VERDICT_DOMAIN_V2 : AT0E_VERDICT_DOMAIN_V1, buf, (size_t)pl + r->ver_len, id); free(buf);
         if (strcmp(id, r->verdict_id)) findings_add(fs, "E4-ID-VERDICT", "verdict_id %s does not recompute (expected %s)", r->verdict_id, id);
         size_t upto = 0;
@@ -391,6 +391,7 @@ const char *result_verify(const textfile *tf, const at0_result *r, const textfil
         if (strcmp(id, r->evidence_digest)) findings_add(fs, "E4-ID-EVIDENCE", "evidence_digest does not recompute: record altered or digest forged (expected %s)", id);
     }
     /* binding to the supplied case file */
+    if (!case_tf) { findings_add(fs, "E4-UNBOUND-NO-CASE-FILE", "no case file supplied: the embedded case is trusted, so this verification is not citable (run with --case)"); inconclusive = 1; }
     if (case_tf) {
         at0_case cc; const char *d;
         refusal rf = case_parse_validate(case_tf, &cc, &d);
@@ -407,7 +408,7 @@ const char *result_verify(const textfile *tf, const at0_result *r, const textfil
     }
     /* provenance */
     { int known = 0; for (int i = 0; at0e_contract_commits[i]; i++) if (!strcmp(r->contract_commit, at0e_contract_commits[i])) known = 1;
-      if (!known) { findings_add(fs, "E4-PROV-CONTRACT-UNVERIFIED", "contract_commit %s is not a commit verified to hold the frozen contract bytes (verified: %s, %s)", r->contract_commit, at0e_contract_commits[0], at0e_contract_commits[1]); inconclusive = 1; } }
+      if (!known) { findings_add(fs, "E4-PROV-CONTRACT-UNVERIFIED", "contract_commit %s is not in the verified allowlist at0e_contract_commits (src/at0e_result.c); verify its contract-file digests and add it, or treat this record as not citable", r->contract_commit); inconclusive = 1; } }
     if (!r->source_tree_clean) { findings_add(fs, "E4-PROV-DIRTY", "source_tree_clean NO: result may not be cited for a gate (AT0_RESULT_V1 section 7)"); inconclusive = 1; }
     int placeholder = r->outcome == OUT_ERROR || r->outcome == OUT_NOT_RUN;
     if (!placeholder) {

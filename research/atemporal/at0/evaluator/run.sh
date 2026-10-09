@@ -81,7 +81,7 @@ P1-kat-ideal-qubit-n4:dephased_state P1-kat-ideal-qubit-n4:kernel_dim_wrong P1-k
 P1-kat-ideal-qubit-n4:evidence_corrupt P1-kat-ideal-qubit-n4:verdict_id_corrupt P1-kat-ideal-qubit-n4:case_id_altered P1-kat-ideal-qubit-n4:tolerance_altered
 P1-kat-ideal-qubit-n4:binding_rebound P1-kat-ideal-qubit-n4:times_reversed P1-kat-ideal-qubit-n4:oracle_is_engine P1-kat-ideal-qubit-n4:bound_none_nonzero
 P1-kat-ideal-qubit-n4:label_status_wrong P1-kat-ideal-qubit-n4:placeholder_with_values P1-kat-ideal-qubit-n4:crlf P1-kat-ideal-qubit-n4:trailing_space
-P1e-x-axis-rotation:conjugate_bug P1e-x-axis-rotation:y_sign_swap P1e-x-axis-rotation:axis_swap P1g-complex-psi-yplus:conjugate_bug P2-tilted-h0:axis_swap P1e-x-axis-rotation:reversed_reference P1g-complex-psi-yplus:reversed_reference
+P1e-x-axis-rotation:conjugate_bug P1e-x-axis-rotation:y_sign_swap P1e-x-axis-rotation:axis_swap P1g-complex-psi-yplus:conjugate_bug P2-tilted-h0:axis_swap P5-large-rationals:conjugate_bug P5-large-rationals:axis_swap P5-large-rationals:hardcoded_table P1e-x-axis-rotation:reversed_reference P1g-complex-psi-yplus:reversed_reference
 P1b-ideal-n4-tau8-m8:hardcoded_table P1d-ref-offset-t2:hardcoded_table P1c-ideal-n6-m6:hardcoded_table N4-wrong-weight-2:wrong_weight_hidden N4b-wrong-weight-5:wrong_weight_hidden
 N2-half-covered:verdict_forged N3-broken-clock-tau3:verdict_forged N1-uncovered-spectrum:verdict_forged N6-zero-kernel-component:verdict_forged N7-unreachable-labels:verdict_forged N7-unreachable-labels:label_claimed_defined"
 esc_n=0; tot=0
@@ -89,7 +89,7 @@ for pair in $MATRIX; do
     c=${pair%%:*}; m=${pair##*:}; f=$(ls cases/*/"$c".case); tot=$((tot+1))
     $T synth "$f" "$m" > "$TMP/m.result" 2>/dev/null || { esc_n=$((esc_n+1)); rec "MUTANT-$c-$m" mutant FAIL "synth failed"; continue; }
     st=$($T result "$TMP/m.result" --case "$f" | head -1 | awk '{print $2}')
-    [ "$st" = PASS ] && { esc_n=$((esc_n+1)); rec "MUTANT-$c-$m" mutant FAIL "defect not detected"; }
+    [ "$st" = FAIL ] || { esc_n=$((esc_n+1)); rec "MUTANT-$c-$m" mutant FAIL "defect not graded FAIL (status ${st:-none})"; }
 done
 # documented INCONCLUSIVE pairs (the defect is invisible on that case by construction)
 for pair in P1-kat-ideal-qubit-n4:hardcoded_table P1-kat-ideal-qubit-n4:wrong_weight_hidden P1-kat-ideal-qubit-n4:verdict_forged P1f-y-axis-rotation:conjugate_bug P2b-h0-shift-control:hardcoded_table P2-tilted-h0:reversed_reference N7-unreachable-labels:label_status_wrong P1-kat-ideal-qubit-n4:label_claimed_defined; do
@@ -114,10 +114,13 @@ if [ -x build/at0-eval-asan ]; then
 else rec SELF-ASAN sanitizer NOT_RUN "no sanitizer binary"; fi
 
 # ---- isolation gate controls ----
-cc -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -c gates/hidden_clock_mutant.c -o build/hidden_clock_mutant.o 2>/dev/null
-cc -std=c11 -Wall -Wextra -Werror -pedantic -O2 -c gates/clean_control.c -o build/clean_control.o 2>/dev/null
+gate_build=1
+${CC:-cc} -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -c gates/hidden_clock_mutant.c -o build/hidden_clock_mutant.o 2>"$TMP/g.err" || gate_build=0
+${CC:-cc} -std=c11 -Wall -Wextra -Werror -pedantic -O2 -c gates/clean_control.c -o build/clean_control.o 2>>"$TMP/g.err" || gate_build=0
+if [ $gate_build = 0 ]; then rec GATE-ISOLATION-MUTANT-CAUGHT gate NOT_RUN "control object failed to compile: $(head -1 "$TMP/g.err")"; rec GATE-ISOLATION-CLEAN-PASSES gate NOT_RUN "control object failed to compile"; else
 if sh gates/isolation.sh build/hidden_clock_mutant.o >/dev/null 2>&1; then rec GATE-ISOLATION-MUTANT-CAUGHT gate FAIL "hidden clock_gettime mutant passed the gate"; else rec GATE-ISOLATION-MUTANT-CAUGHT gate PASS "hidden-clock mutant rejected"; fi
 if sh gates/isolation.sh build/clean_control.o >/dev/null 2>&1; then rec GATE-ISOLATION-CLEAN-PASSES gate PASS "clean arithmetic object accepted"; else rec GATE-ISOLATION-CLEAN-PASSES gate FAIL "clean object rejected"; fi
+fi
 
 # ---- hidden set commitment ----
 HD=${AT0_HIDDEN_DIR:-$HOME/at0-private/agent4}
@@ -140,7 +143,8 @@ else rec CAND-CODEC-CONFORMANCE candidate BLOCKED_NO_CANDIDATE "AT0_CANDIDATE_CA
 if [ -n "${AT0_CANDIDATE_RUN:-}" ]; then
     for f in cases/positive/*.case cases/negative/*.case $( [ -d "$HD" ] && ls "$HD"/H*.case ); do
         id=$(basename "$f" .case)
-        if ! $AT0_CANDIDATE_RUN "$f" > "$TMP/c.result" 2>"$TMP/c.err"; then rec "CAND-RUN-$id" candidate FAIL "runner exit $? : $(head -1 "$TMP/c.err")"; continue; fi
+        $AT0_CANDIDATE_RUN "$f" > "$TMP/c.result" 2>"$TMP/c.err"; rc=$?
+        if [ $rc -ne 0 ]; then rec "CAND-RUN-$id" candidate FAIL "runner exit $rc : $(head -1 "$TMP/c.err")"; continue; fi
         out=$($T result "$TMP/c.result" --case "$f" --json); st=$(printf '%s' "$out" | sed 's/.*"status":"\([A-Z]*\)".*/\1/')
         em=$(grep '^expectation_met' "$TMP/c.result" | awk '{print $2}')
         if [ "$st" = PASS ] && [ "$em" = YES ]; then rec "CAND-VERIFY-$id" candidate PASS "independent verification agrees; expectation met"

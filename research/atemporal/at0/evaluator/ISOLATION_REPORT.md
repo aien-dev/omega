@@ -58,11 +58,28 @@ Everything in this directory is deterministic.
 
 To reproduce: `make && sh run.sh --self-only` from this directory on any POSIX
 system with a C11 compiler. The known-answer digests, the hand table, the
-60-case manifest, the 38 discriminating mutant pairs and the two isolation
+62-case manifest, the 41 discriminating mutant pairs and the two isolation
 controls are all checked without any candidate present. On a platform whose
 `long double` is only 64 bits the shadow bound of 1e-20 would be false; the
 shadow would then need its stated bound raised, and `run.sh` should be read
 with that in mind. No such platform was used here.
+
+## Known limits of the isolation gate
+
+The symbol scan reads both the static and the dynamic symbol table, so a
+stripped executable that imports a clock through the dynamic loader is still
+caught, and `syscall` is on the forbidden list. It cannot see inline system
+calls, raw counter reads (CNTVCT_EL0 on aarch64, rdtsc on x86-64) or symbols
+resolved at run time without `dlsym`. Those are run-time behaviours, and the
+wall-clock independence control is the only check that touches them. A
+candidate that wants a stronger claim must be reviewed at source level.
+
+Portability: `run.sh` needs GNU coreutils (`sha256sum`), `nm` from binutils and
+a C11 compiler named by `CC` (default `cc`). On a platform whose `long double`
+has a 64-bit mantissa (x86-64) the shadow states a 1e-14 bound instead of
+1e-20; the evaluator refuses to run the shadow below 64 bits. Every run,
+including `--self-only`, rewrites `results/qualification.json`; that file is the
+deliverable and is meant to be committed with the run it describes.
 
 ## Scope of any PASS
 

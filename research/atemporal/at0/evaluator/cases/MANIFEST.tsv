@@ -10,6 +10,7 @@ positive/P2-tilted-h0.case	P2	AT0_CASE_OK
 positive/P2b-h0-shift-control.case	P2	AT0_CASE_OK
 positive/P3-spec-reference-model.case	P3	AT0_CASE_OK
 positive/P4-degenerate-identity-h.case	P4	AT0_CASE_OK
+positive/P5-large-rationals.case	P5	AT0_CASE_OK
 negative/N1-uncovered-spectrum.case	N1	AT0_CASE_OK
 negative/N2-half-covered.case	N2	AT0_CASE_OK
 negative/N3-broken-clock-tau3.case	N3	AT0_CASE_OK
@@ -47,6 +48,7 @@ refuse/R23-weight-negative.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
 refuse/R24-wrong-domain.case	R2	AT0_CASE_REFUSED CASE_UNSUPPORTED_VERSION
 refuse/R25-wrong-contract.case	R2	AT0_CASE_REFUSED CASE_UNSUPPORTED_VERSION
 refuse/R26-clock-dim-65.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
+refuse/R39-huge-digits-tau.case	R39	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
 refuse/R27-rational-over-limit.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
 refuse/R28-duplicate-label.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER
 refuse/R29-ref-label-missing.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER

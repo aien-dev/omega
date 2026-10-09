@@ -27,7 +27,8 @@ static cld cmul(cld a, cld b) { return cmk(a.re * b.re - a.im * b.im, a.re * b.i
 static cld cconj(cld a) { return cmk(a.re, -a.im); }
 static long double cabs2(cld a) { return a.re * a.re + a.im * a.im; }
 static cld cscale(cld a, long double s) { return cmk(a.re * s, a.im * s); }
-static long double rat_ld(rat a) { return (long double)(long long)a.n / (long double)(long long)a.d; }
+static long double i128_ld(i128 v) { int neg = v < 0; u128 u = neg ? (u128)0 - (u128)v : (u128)v; long double r = (long double)(unsigned long long)(u >> 64) * 18446744073709551616.0L + (long double)(unsigned long long)u; return neg ? -r : r; }
+static long double rat_ld(rat a) { return i128_ld(a.n) / i128_ld(a.d); }
 static cld crat_ld(crat z) { return cmk(rat_ld(z.re), rat_ld(z.im)); }
 /* exp(-2 pi i theta) with theta a rational, reduced mod 1 exactly first */
 static cld expm2pi(rat theta) {
@@ -87,7 +88,8 @@ int shadow_compute(const at0_case *c, shadow *s, const char **why) {
     memset(s, 0, sizeof *s);
     *why = NULL;
     if (LDBL_MANT_DIG < 64) { *why = "long double narrower than 64 bits; shadow refuses"; return 0; }
-    s->bound = 1e-20L;
+    /* stated ESTIMATED bound: 1e-20 needs the 113-bit binary128 long double (aarch64); a 64-bit mantissa (x86-64) gets 1e-14 */
+    s->bound = LDBL_MANT_DIG >= 113 ? 1e-20L : 1e-14L;
 
     crat v[2][2]; rat e[2];
     eigvecs(c, v, e);
@@ -110,7 +112,7 @@ int shadow_compute(const at0_case *c, shadow *s, const char **why) {
             rat dtm = rat_mul(dt, rat_make(c->M, 1));
             if (rat_is_int(dt) || !rat_is_int(dtm)) { s->povm_exact_identity = 0; break; }
         }
-    /* numeric POVM residual: Frobenius norm of (w/N) sum_k |t_k><t_k| - I */
+    /* numeric POVM residual: Frobenius norm of w sum_k |t_k><t_k| - I */
     {
         long double fro = 0.0L, wn = rat_ld(c->w) / (long double)c->N;
         for (int j = 0; j < c->N; j++)
