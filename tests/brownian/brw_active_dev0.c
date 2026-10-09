@@ -8,6 +8,7 @@
 #include "sha256.h"
 #include "turing/ty_prd2.h"
 #include "turing/ty_qcont.h"
+#include "brw_act_report.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -29,6 +30,7 @@
 static int budget = 400;                  /* DEV0: 400; DEV1: B from the power receipt */
 #define NHELD_PER_TAU 10
 #define NHELD (BRW_NT * NHELD_PER_TAU)
+#define NPER_MAX 100              /* worlds per class in the largest profile run (hold, hold1) */
 #define NBOOT 10000
 #define BOOT_SEED 0x0B5E55ED00000001ull
 enum { C_DIFF, C_DRIFT, C_OU, C_NOISE, C_MIS, NCLS };
@@ -249,14 +251,6 @@ static void boot(const double *d, size_t n, double *mean, double *lo, double *hi
     *lo = m[(size_t)(0.025 * NBOOT)];
     *hi = m[(size_t)(0.975 * NBOOT) - 1];
     free(m);
-}
-
-static void wilson(double k, double n, double *lo, double *hi)
-{
-    const double z = 1.959964;
-    double p = k / n, d = 1.0 + z * z / n, c = p + z * z / (2 * n), h = z * sqrt(p * (1 - p) / n + z * z / (4 * n * n));
-    *lo = (c - h) / d;
-    *hi = (c + h) / d;
 }
 
 /* ---- growing text buffer ---- */
@@ -485,18 +479,16 @@ int main(int argc, char **argv)
     double lo50[NSTRAT], hi50[NSTRAT], lo90[NSTRAT], hi90[NSTRAT];
     uint64_t lik[NSTRAT] = {0}, quad[NSTRAT] = {0}, cdf[NSTRAT] = {0};
     for (int st = 0; st < NSTRAT; st++) {
-        double f[3] = {0, 0, 0}, mc = 0, nm = 0, mp = 0, mb = 0, k50 = 0, k90 = 0;
+        double f[3] = {0, 0, 0}, mc = 0, nm = 0, mp = 0, mb = 0, w50[NCLS * NPER_MAX], w90[NCLS * NPER_MAX];
         for (int wi = 0; wi < nd; wi++) {
             const run_t *r = &R[di[wi] * NSTRAT + st];
             f[r->outcome] += 1;
-            mc += r->cost_restr; nm += r->nmeas; mp += r->p_true; mb += r->bits; k50 += r->c50; k90 += r->c90;
+            mc += r->cost_restr; nm += r->nmeas; mp += r->p_true; mb += r->bits; w50[wi] = r->c50; w90[wi] = r->c90;
         }
         for (int o = 0; o < 3; o++) frac[st][o] = f[o] / nd;
         meancost[st] = mc / nd; meannm[st] = nm / nd; meanp[st] = mp / nd; meanbits[st] = mb / nd;
-        cov50[st] = k50 / ((double)nd * NHELD);
-        cov90[st] = k90 / ((double)nd * NHELD);
-        wilson(k50, (double)nd * NHELD, &lo50[st], &hi50[st]);
-        wilson(k90, (double)nd * NHELD, &lo90[st], &hi90[st]);
+        brwr_coverage(w50, nd, NHELD, &cov50[st], &lo50[st], &hi50[st]);
+        brwr_coverage(w90, nd, NHELD, &cov90[st], &lo90[st], &hi90[st]);
         for (int wi = 0; wi < nw; wi++) {
             lik[st] += R[wi * NSTRAT + st].lik;
             quad[st] += R[wi * NSTRAT + st].quad;
@@ -505,7 +497,7 @@ int main(int argc, char **argv)
     }
     bprintf(&rep, "\nDiscoverable classes pooled (restricted mean cost, horizon %d):\n", budget);
     bprintf(&rep, "%-8s %7s %7s %7s %9s %6s %7s %9s %20s %20s\n", "strategy", "success", "wrong", "censor", "mean_cost", "n_meas",
-            "P(true)", "bits/read", "cov50 [Wilson95]", "cov90 [Wilson95]");
+            "P(true)", "bits/read", "cov50 [world95]", "cov90 [world95]");
     for (int st = 0; st < NSTRAT; st++)
         bprintf(&rep, "%-8s %7.4f %7.4f %7.4f %9.3f %6.2f %7.4f %9.4f %.4f [%.4f,%.4f] %.4f [%.4f,%.4f]\n", str_name[st],
                 frac[st][0], frac[st][1], frac[st][2], meancost[st], meannm[st], meanp[st], meanbits[st], cov50[st], lo50[st],
@@ -561,15 +553,15 @@ int main(int argc, char **argv)
         int v = R[(C_DIFF * nper + i) * NSTRAT + S_ACTIVE].verdict;
         claims_diff += (v == BRW_V_M1 || v == BRW_V_M2);
     }
-    int p4 = (double)claims <= 0.05 * nper && (!dev1 || (double)claims_diff <= 0.05 * nper);
+    int p4_noise, p4_diff, p4 = brwr_p4(claims, claims_diff, nper, dev1, &p4_noise, &p4_diff);
     int confident = ctl_mis[S_ACTIVE][BRW_V_M0] + ctl_mis[S_ACTIVE][BRW_V_M1] + ctl_mis[S_ACTIVE][BRW_V_M2];
     int p5 = (double)confident <= 0.20 * nper;
     bprintf(&rep, "\nPass rules (%s worlds):\n", argv[1]);
     bprintf(&rep, "  P1 active cost interval entirely below 0 vs random, fixed8, cycle: %s\n", p1 ? "PASS" : "FAIL");
     bprintf(&rep, "  P2 active wrong %.4f <= 0.05 and <= max baseline wrong %.4f + 0.02: %s\n", frac[S_ACTIVE][1], maxbase, p2 ? "PASS" : "FAIL");
     bprintf(&rep, "  P3 active coverage 90%% %.4f in [0.85,0.95], 50%% %.4f in [0.45,0.55]: %s\n", cov90[S_ACTIVE], cov50[S_ACTIVE], p3 ? "PASS" : "FAIL");
-    bprintf(&rep, "  P4 noise control: active claims M1 or M2 in %d of %d worlds (limit %.1f): %s\n", claims, nper, 0.05 * nper, p4 ? "PASS" : "FAIL");
-    if (dev1) bprintf(&rep, "  P4 (DEV1) nested-null control: active claims M1 or M2 in %d of %d diffusion worlds (limit %.1f): %s\n", claims_diff, nper, 0.05 * nper, (double)claims_diff <= 0.05 * nper ? "PASS" : "FAIL");
+    bprintf(&rep, "  P4 noise control: active claims M1 or M2 in %d of %d worlds (limit %.1f): %s\n", claims, nper, 0.05 * nper, p4_noise ? "PASS" : "FAIL");
+    if (dev1) bprintf(&rep, "  P4 (DEV1) nested-null control: active claims M1 or M2 in %d of %d diffusion worlds (limit %.1f): %s\n", claims_diff, nper, 0.05 * nper, p4_diff ? "PASS" : "FAIL");
     bprintf(&rep, "  P5 mismatch control: active confident model verdict in %d of %d worlds (limit %.1f): %s\n", confident, nper, 0.20 * nper, p5 ? "PASS" : "FAIL");
     bprintf(&rep, "BRW_ACT_%s %s: %s\n", dev1 ? "DEV1" : "DEV0", argv[1], (p1 && p2 && p3 && p4 && p5 && !nfail) ? "PASS" : "FAIL");
     bprintf(&rep, "failed runs (validation or scorer refusals): %d\n", nfail);
