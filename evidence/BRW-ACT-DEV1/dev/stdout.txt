@@ -1,0 +1,46 @@
+== BRW-ACT-DEV1 dev1: 200 worlds (40 per class), 80 discoverable ==
+
+Discoverable classes pooled (restricted mean cost, horizon 2000):
+strategy success   wrong  censor mean_cost n_meas P(true) bits/read     cov50 [Wilson95]     cov90 [Wilson95]
+active    0.7125  0.0000  0.2875  1072.537 218.20  0.8785   23.1705 0.4946 [0.4804,0.5087] 0.8977 [0.8888,0.9060]
+random    0.6625  0.0000  0.3375  1163.338 160.51  0.8770   23.1709 0.4946 [0.4804,0.5087] 0.8985 [0.8897,0.9068]
+fixed8    0.4125  0.0125  0.5750  1416.000 200.00  0.7087   23.1813 0.5025 [0.4884,0.5166] 0.9023 [0.8936,0.9104]
+cycle     0.6625  0.0000  0.3375  1176.513 163.00  0.8601   23.1685 0.4919 [0.4777,0.5060] 0.8983 [0.8895,0.9066]
+
+Per class success/wrong/censored and mean cost:
+  drift     active  0.825 0.000 0.175 cost 785.80
+  drift     random  0.825 0.000 0.175 cost 821.38
+  drift     fixed8  0.825 0.000 0.175 cost 832.00
+  drift     cycle   0.825 0.000 0.175 cost 831.15
+  ou        active  0.600 0.000 0.400 cost 1359.28
+  ou        random  0.500 0.000 0.500 cost 1505.30
+  ou        fixed8  0.000 0.025 0.975 cost 2000.00
+  ou        cycle   0.500 0.000 0.500 cost 1521.88
+
+Paired bootstrap (10000 resamples of worlds, xorshift64* seed 0x0B5E55ED00000001), active minus baseline, 95% percentile:
+  vs random  cost diff   -90.800 [ -184.137,     1.275]   held-out bits/reading diff  -0.0004 [ -0.0076,   0.0066]
+  vs fixed8  cost diff  -343.462 [ -476.488,  -218.762]   held-out bits/reading diff  -0.0108 [ -0.0203,  -0.0015]
+  vs cycle   cost diff  -103.975 [ -178.562,   -33.913]   held-out bits/reading diff   0.0020 [ -0.0037,   0.0083]
+
+Control verdict counts (INADEQUATE, M0, M1, M2, UNDETERMINED) of 40 worlds each:
+  active  noise 0 0 0 0 40    mismatch 0 0 0 1 39
+  random  noise 0 0 0 0 40    mismatch 0 0 0 0 40
+  fixed8  noise 0 0 0 0 40    mismatch 2 0 0 0 38
+  cycle   noise 0 0 0 0 40    mismatch 2 0 0 1 37
+
+Compute per strategy, all 200 worlds (likelihood evals / design-quadrature evals / cdf evals):
+  active  18150000 / 17813025280 / 24486000
+  random  17051760 / 0 / 23387760
+  fixed8  21120000 / 0 / 27456000
+  cycle   17212800 / 0 / 23548800
+
+Pass rules (dev1 worlds):
+  P1 active cost interval entirely below 0 vs random, fixed8, cycle: FAIL
+  P2 active wrong 0.0000 <= 0.05 and <= max baseline wrong 0.0125 + 0.02: PASS
+  P3 active coverage 90% 0.8977 in [0.85,0.95], 50% 0.4946 in [0.45,0.55]: PASS
+  P4 noise control: active claims M1 or M2 in 0 of 40 worlds (limit 2.0): PASS
+  P4 (DEV1) nested-null control: active claims M1 or M2 in 1 of 40 diffusion worlds (limit 2.0): PASS
+  P5 mismatch control: active confident model verdict in 1 of 40 worlds (limit 8.0): PASS
+BRW_ACT_DEV1 dev1: FAIL
+failed runs (validation or scorer refusals): 0
+table_sha256 7ebc112857cd8b1781aa385d5c8935a5c0c6f62020800edd3727789052dce18d

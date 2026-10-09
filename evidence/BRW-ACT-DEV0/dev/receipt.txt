@@ -1,0 +1,80 @@
+BRW-ACT-DEV0 receipt
+tag: dev
+omega_commit: 3ddaa6d63464d666daeaf100f097362ece0b9344
+profile: docs/turing/BRW_ACT_DEV0_PROFILE.md sha256 7ef3ba429d554b45046b88f0782f9c6e12f1074d9ea7287822ba5a1688efbfd4
+source: tools/brownian/brw_active.c sha256 761ba495ebee9a5455beaf4bb4c3d2386a4bce2f7cc333ee687d9fdba1646ac7
+source: tools/brownian/brw_active.h sha256 7d4ca7fd606151c8433abf1d93c17198b5d0b8de202889ff9307da08486717cd
+source: tests/brownian/brw_active_dev0.c sha256 a4df8cb7385732c8347434c9a468cccf0301e05b06f2d9133a48a95c933590ce
+source: tests/brownian/test_brw_active.c sha256 7129b188434a4ded44a16907bad767da681761da7d9b5f55a0868c1a4acecc01
+source: mk/brownian_active.mk sha256 a220ae9b53380acb56ffa25c2e9d268b21c5b99a7a3d3e60a99cbb9751dadff3
+source: src/turing/ty_prd2.c sha256 5f559526cd2825ec241ccbb68bd200c35b10684c7528a1e82cc8d47c1b255aa9
+source: src/turing/ty_prd2.h sha256 a2e2a7babef811166e909f9fa14507ea9b230792599495fe4db7e847184b393e
+source: src/turing/ty_qcont.c sha256 5ae3dcedf40e08b22e0624dc62e54b9a7054ed70a09befff1110a146346f8b6e
+source: src/turing/ty_qcont.h sha256 a05f265945851b4e736b10ca84fbec43b081680e66739095f0cf7b99e55ca0bc
+source: src/turing/ty_prd.c sha256 9f65a4579533325ca5fa87f20c457ef265846e0e294cf2501a0d7678c0313eed
+source: src/turing/ty_prd.h sha256 7baf81e9e2be635a388ac0cc8c8a35396cf54084f6ca50a3f93d4f476600dcef
+source: src/turing/ty_math.c sha256 a4617277f8f18aa183e512f09d738ea06ab904048526c8f7f4d40a7afc84415d
+source: src/turing/ty_math.h sha256 4b378a47597a7a929232669da26bffe41803771ecd844c4921c60be901767893
+source: src/sha256.c sha256 84d418f4e2c663b74698fe94012040282bcfc2f263d2417adaa41a05bdbb86e4
+source: src/sha256.h sha256 f4ae8b01061a4fa352c1013d649ee4045e98aef83ff4d586d7b11801d8365660
+runner_binary: /proc/self/exe sha256 638fddc4ff91b43cf92dc592b363e8b487915aec465e79b86f26c0b0a3231f78
+table: table.tsv sha256 373dc7d75eed7b5bd31c40b8d487cc7cc5db4131a5ef2b09fd2ea86de2c0c32c
+compiler: 13.3.0
+flags: -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -Isrc -Itools -ffp-contract=off -fno-fast-math
+rng: world seed splitmix64(tag ^ (class<<32) ^ index), tag dev=0x646576 hold=0x686F6C64; class order diffusion,drift,ou,noise,mismatch = 0..4;
+     substream(world, tag, j) = splitmix64(world_seed ^ splitmix64(tag)) mixed the same way with j; tags PARM=0x5041524D READ=0x52454144 HELD=0x48454C44 RAND=0x52414E44;
+     xorshift64* (Vigna: 12,25,27; multiplier 0x2545F4914F6CDD1D); uniforms from top 53 bits; Box-Muller cosine branch; Poisson by inversion;
+     held-out reading idx = tau_index*10 + q from substream tag HELD; bootstrap xorshift64* seed 0x0B5E55ED00000001, 10000 resamples, percentile indices 250 and 9749
+budget: 400 time units per run, menu {1,2,4,8,16,32}, cost tau+2, sigma_m 1, held-out readings per world 60
+worlds: 40 per class, 200 total
+deviations: none
+replay: not guaranteed across machines (libm exp, log, sqrt, cos, erfc, lgamma)
+
+== BRW-ACT-DEV0 dev: 200 worlds (40 per class), 120 discoverable ==
+
+Discoverable classes pooled (restricted mean cost, horizon 400):
+strategy success   wrong  censor mean_cost n_meas P(true) bits/read     cov50 [Wilson95]     cov90 [Wilson95]
+active    0.2000  0.0000  0.8000   367.692  40.65  0.6557   23.1585 0.4911 [0.4796,0.5027] 0.8878 [0.8803,0.8949]
+random    0.1750  0.0000  0.8250   370.092  34.08  0.6372   23.1535 0.4942 [0.4826,0.5057] 0.8921 [0.8847,0.8990]
+fixed8    0.1833  0.0000  0.8167   367.083  40.00  0.5458   23.1580 0.4996 [0.4880,0.5111] 0.8978 [0.8906,0.9046]
+cycle     0.2167  0.0000  0.7833   363.575  34.00  0.6301   23.1548 0.4935 [0.4819,0.5050] 0.8904 [0.8830,0.8974]
+
+Per class success/wrong/censored and mean cost:
+  diffusion active  0.000 0.000 1.000 cost 400.00
+  diffusion random  0.000 0.000 1.000 cost 400.00
+  diffusion fixed8  0.000 0.000 1.000 cost 400.00
+  diffusion cycle   0.000 0.000 1.000 cost 400.00
+  drift     active  0.600 0.000 0.400 cost 303.07
+  drift     random  0.500 0.000 0.500 cost 312.48
+  drift     fixed8  0.550 0.000 0.450 cost 301.25
+  drift     cycle   0.650 0.000 0.350 cost 290.73
+  ou        active  0.000 0.000 1.000 cost 400.00
+  ou        random  0.025 0.000 0.975 cost 397.80
+  ou        fixed8  0.000 0.000 1.000 cost 400.00
+  ou        cycle   0.000 0.000 1.000 cost 400.00
+
+Paired bootstrap (10000 resamples of worlds, xorshift64* seed 0x0B5E55ED00000001), active minus baseline, 95% percentile:
+  vs random  cost diff    -2.400 [  -10.475,     5.975]   held-out bits/reading diff   0.0051 [ -0.0066,   0.0170]
+  vs fixed8  cost diff     0.608 [   -7.133,    10.300]   held-out bits/reading diff   0.0005 [ -0.0105,   0.0115]
+  vs cycle   cost diff     4.117 [   -3.658,    12.583]   held-out bits/reading diff   0.0037 [ -0.0072,   0.0144]
+
+Control verdict counts (INADEQUATE, M0, M1, M2, UNDETERMINED) of 40 worlds each:
+  active  noise 0 0 0 0 40    mismatch 0 0 0 1 39
+  random  noise 0 0 0 0 40    mismatch 0 0 0 0 40
+  fixed8  noise 0 0 0 0 40    mismatch 0 0 0 0 40
+  cycle   noise 0 0 0 0 40    mismatch 0 0 0 0 40
+
+Compute per strategy, all 200 worlds (likelihood evals / design-quadrature evals / cdf evals):
+  active  3892944 / 7147994624 / 10228944
+  random  3540768 / 0 / 9876768
+  fixed8  4224000 / 0 / 10560000
+  cycle   3590400 / 0 / 9926400
+
+Pass rules (dev worlds):
+  P1 active cost interval entirely below 0 vs random, fixed8, cycle: FAIL
+  P2 active wrong 0.0000 <= 0.05 and <= max baseline wrong 0.0000 + 0.02: PASS
+  P3 active coverage 90% 0.8878 in [0.85,0.95], 50% 0.4911 in [0.45,0.55]: PASS
+  P4 noise control: active claims M1 or M2 in 0 of 40 worlds (limit 2.0): PASS
+  P5 mismatch control: active confident model verdict in 1 of 40 worlds (limit 8.0): PASS
+BRW_ACT_DEV0 dev: FAIL
+failed runs (validation or scorer refusals): 0
