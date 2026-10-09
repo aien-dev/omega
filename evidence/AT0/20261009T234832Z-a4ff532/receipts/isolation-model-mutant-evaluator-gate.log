@@ -1,0 +1,2 @@
+FAIL: /tmp/at0-run.KXC1UZ/iso/mut/at0_engine_hidden_clock.o references clock_gettime
+AT0_ISOLATION: FAIL

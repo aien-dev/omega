@@ -1,11 +1,11 @@
 # AT-0 qualification report (Agent 5, first run)
 
-**Status: FIRST RUN RECORDED. Gate G4 FAIL (11 of 12 positive cases), G2 PASS, G5 PASS, G6 PASS (scoped), G7 NOT_RUN (Agent 6).**
+**Status: FIRST RUN RECORDED. G4 FAIL (11 of 12 positive cases). G2 INCONCLUSIVE (runner checks pass; Agent 4 sign-off pending, D5). G5 PASS (8 of 8). G6 INCONCLUSIVE (19 of 19 produced results verified; P5 produced none). G7 NOT_RUN (Agent 6).**
 Program status moves from NOT_RUN to "first run recorded, one candidate defect open". This is software conformance of the
 AT-0 implementation to its frozen contracts. It is not a result about time, gravity or quantum mechanics, and no PASS here may be
 cited as one (charter section 1; omega#358 "Decision sought").
 
-Evidence: `evidence/AT0/20261009T234005Z-72ddbca/` (62 case copies, 19 results per pass over two passes, 24 mutant files, 39 component files, 19 verifier JSONs,
+Evidence: `evidence/AT0/20261009T234832Z-a4ff532/` (62 case copies, 19 results per pass over two passes, 24 mutant files, 39 component files, 19 verifier JSONs,
 receipts, `run.log`). Runner: `research/atemporal/at0/integration/run.sh`. Reproduce: `make at0-check` (or `sh research/atemporal/at0/integration/run.sh --evidence`).
 
 ## 1. What was inspected
@@ -50,32 +50,32 @@ Agent 5 owns G2 and runs G4, G5, G6 (section 7 and 9 of the charter). Results of
 
 | Gate | Result | Command / evidence | Detail |
 |---|---|---|---|
-| AT0-G2 | **PASS** | controls C7-C13 in controls.tsv (isolation_check.sh and evaluator/gates/isolation.sh on model and Rust oracle objects incl. mutants; make -n hygiene; make parses with PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0) | adaptation for Rust verified by Agent 4's gate on the same objects (C9, C10); Agent 4 independent sign-off still to be given on omega#358 |
+| AT0-G2 | **INCONCLUSIVE** | controls C7-C13 in controls.tsv (isolation_check.sh and evaluator/gates/isolation.sh on model and Rust oracle objects incl. mutants; make -n hygiene; make parses with PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0) | all runner checks C7-C13 pass, but the charter requires Agent 4 independent sign-off of the Rust adaptation (not yet given) and Agent 4 gate misses the Rust std::time mutant (C10, D5): status stays INCONCLUSIVE until both are resolved |
 | AT0-G4 | **FAIL** | every positive case: outcome PASS and expectation_met YES | 11/12 |
 | AT0-G5 | **PASS** | every negative case: outcome FAIL with exactly its expected codes and expectation_met YES; axis-swap and Y-sign mutants caught (C5, C6); hidden-clock mutants caught (C8, C10) | 8/8 negative cases |
-| AT0-G6 | **PASS** | at0-eval result <result> --case <case> on every assembled result (verify/*.json) plus evaluator/run.sh with this runner as candidate; wall-clock control C3 | evaluator PASS on 19 of 20 valid cases (the other 1 produced no result file, see G4); evaluator self-tests, mutants and gates with this runner as candidate: 0 FAIL; evidence folder committed by the PR |
+| AT0-G6 | **INCONCLUSIVE** | verifier agreed with every result produced, but not every valid case produced a result | evaluator PASS on 19 of 20 valid cases; 1 produced no result (see G4); evaluator self-tests, mutants and gates with this runner as candidate: 0 FAIL |
 | AT0-G7 | **NOT_RUN** | - | Agent 6 (scientific review) owns G7; Agent 5 does not run it |
 
 G0 (contract freeze), G1 (codec conformance, Agents 2 to 4 each for their parser) and G3 (oracle calibration, Agent 2) are not Agent 5 gates and were not claimed; the runner witnessed parts of them (controls C1, C17 and the refusal table below).
-G2 is PASS on this run's evidence; Agent 4's independent sign-off of the Rust adaptation, which the charter requires, is still to be given and is asked for on omega#358.
-G6 is PASS **scoped**: the verifier agreed with every result the runner could assemble (19 of the 20 valid cases); P5 produced no result file because the model stopped (see G4 and discrepancy D1).
+G2 is INCONCLUSIVE by rule: every runner check C7-C13 passes, but the charter requires Agent 4 to sign off the Rust adaptation independently ("never skipped"), that sign-off is not given, and Agent 4 gate itself misses the Rust std::time mutant (D5). Requested on omega#358.
+G6 is INCONCLUSIVE: the verifier agreed with every result the runner could assemble (19 of 19), but P5 produced no result file because the model stopped (D1), so not every valid case was re-derived.
 
 ## 5. Controls (receipts/controls.tsv; every one has its command in that file)
 
 | Control | Result | What it shows |
 |---|---|---|
-| C0-CONTRACT-DIGESTS | PASS | contract files match contract.lock (arch HEAD 68f47e2) |
+| C0-CONTRACT-DIGESTS | NOT_RUN | no local aien-architecture clone given; digests only recorded in contract.lock |
 | C0-RUSTC-PIN | PASS | rustc 1.98.1 (48a229cea 2026-09-01) (pin 1.98.1) |
 | C1-MODEL-TESTS | PASS | plain rc=0, ASan/UBSan rc=0 (at0-tests: 12/12 passed) |
-| C1-ORACLE-TESTS | PASS | rc=0 (test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s) |
+| C1-ORACLE-TESTS | PASS | rc=0 (test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s) |
 | C1-ORACLE-OWN-ISOLATION | PASS | Agent 2's own gate rc=0 (ISOLATION PASS) |
 | C2-REPEATABILITY | PASS | 19 results: values blocks byte-identical 19/19, verdict_id equal 19/19, case_id/acceptance_id equal, evidence_digest differs 19/19 |
 | C3-WALLCLOCK-INDEPENDENCE | PASS | equal case_id, acceptance_id, verdict_id and values block; different evidence_digest |
 | C4-EVALUATION-ORDER | PASS | 19/19 bit-identical (labels evaluated in reverse order) |
 | C5-AXIS-SWAP-MUTANT | PASS | 11/11 caught; every P1 case caught except: none |
 | C6-Y-SIGN-MUTANT | PASS | 8/11 caught; not caught (swap invisible on that case, see QUALIFICATION.md): P1f-y-axis-rotation P2-tilted-h0 P4-degenerate-identity-h |
-| C7-ISOLATION-MODEL-CLEAN | PASS | 10 compute objects clean under both scanners; at0_case.o clean apart from the case-file reader (strict scan rc=1: HIT /tmp/at0-run.cVbDag/iso/clean/at0_case.o: fopen ), which the charter wants in a thin outer layer (see QUALIFICAT... |
-| C8-ISOLATION-MODEL-HIDDEN-CLOCK-MUTANT | PASS | caught by both: HIT /tmp/at0-run.cVbDag/iso/mut/at0_engine_hidden_clock.o: clock_gettime  |
+| C7-ISOLATION-MODEL-CLEAN | PASS | 10 compute objects clean under both scanners; at0_case.o clean apart from the case-file reader (strict scan rc=1: HIT /tmp/at0-run.KXC1UZ/iso/clean/at0_case.o: fopen ), which the charter wants in a thin outer layer (see QUALIFICAT... |
+| C8-ISOLATION-MODEL-HIDDEN-CLOCK-MUTANT | PASS | caught by both: HIT /tmp/at0-run.KXC1UZ/iso/mut/at0_engine_hidden_clock.o: clock_gettime  |
 | C9-ISOLATION-ORACLE-CLEAN | PASS | 1 rlib members clean under both scanners (compute crate src/at0 only; main.rs is the I/O layer and is excluded by design) |
 | C10-ISOLATION-ORACLE-HIDDEN-CLOCK-MUTANTS | PASS | own scanner flags both; evaluator gate flags std-time mutant rc=0 and extern-clock mutant rc=1 (0 would mean not flagged) |
 | C11-MAKE-N-HYGIENE | PASS | byte-identical in all four comparisons (all: 64 lines, test: 64 lines; exit 2 both ways because the physics checkout is absent, a pre-existing condition) |
@@ -86,6 +86,7 @@ G6 is PASS **scoped**: the verifier agreed with every result the runner could as
 | C16-EVALUATOR-ISOLATION-CAND | PASS | passes |
 | C17-JUDGE-CALIBRATION | FAIL | identical 20/21; differ: n1-uncovered (see QUALIFICATION.md discrepancies) |
 | C18-ASSEMBLER-REFUSALS | PASS | all refused with exit 3 and the expected message |
+| C19-REFUSAL-AGREEMENT | FAIL | 5 of 42 refuse cases differ (or a refuse case was accepted); see cases.tsv and QUALIFICATION.md D2, D3 |
 
 Charter "postulate-derived controls": hidden clock read (C8 model, C10 oracle: caught), wall-clock independence (C3: 19 of 19 results equal `case_id`, `acceptance_id`, `verdict_id` and values block; `evidence_digest` differs 19 of 19; second pass ran 2 s later with `TZ=Asia/Tokyo`),
 evaluation order (C4: `--reversed` output bit-identical on 19 of 19), axis swap (C5: caught on every positive case, 11 of 11), plus a Y-sign mutant (C6: caught on 8 of 11; the 3 uncaught are P1f, P2, P4, where Agent 4 documents that <Y> stays 0 at every sampled reading; the KAT, P1e and P1g catch it).
@@ -155,9 +156,12 @@ Refusal cases (42): the model and the oracle each answered every file with `AT0_
 - **One platform.** aarch64 Linux, glibc, gcc 13.3, rustc 1.98.1. The model's `cos`/`sin` depend on the C library; its bounds assume 1 ulp. No other platform was run.
 - **Bounds are ESTIMATED.** The model and oracle both state ESTIMATED bounds; no RIGOROUS claim exists (N5 passes as designed).
 - **Judge independence.** The assembler's judge was written by this agent after reading the contract; it agrees with the evaluator on 19 of 19 assembled results and with the oracle's verdicts on 20 of 21 fixtures (D4). It is evidence of consistent reading, not a proof of the contract reading (A3, A6 are readings; the A6 reading is Agent 0's ruling).
+- **C3 note.** evidence_digest differing is guaranteed by construction (the runner writes the timestamps); the informative part is that values blocks and verdict_id are equal.
+- **C11 limit.** With the physics checkout absent, make -k stops before the test recipe, so the comparison of the test recipe is empty; it proves the build commands are unchanged, not the test recipe.
+- **Evidence paths.** Verifier JSON and some logs carry absolute temp paths, so their digests differ on a re-run elsewhere; values blocks and verdict_id do not.
 - **Single clone.** All numbers come from one clean-clone run plus a second pass; run-to-run differences in values blocks were zero (C2).
-- **Not claimed.** The physical emergence of time, gravity, or any new law; `make at0-check` exits non-zero while G4 is FAIL.
+- **Not claimed.** The physical emergence of time, gravity, or any new law; `make at0-check` exits non-zero while any gate or control FAILs (now G4, C14, C17, C19).
 
 ## 9. Files
 
-`mk/at0.mk` (targets `at0-check`, `at0-clean`; names prefixed `AT0_`/`at0`), `research/atemporal/at0/integration/{run.sh, candidate_run.sh, case_tool.sh, isolation_check.sh, at0_assemble.c, contract.lock, QUALIFICATION.md}`, `evidence/AT0/20261009T234005Z-72ddbca/`.
+`mk/at0.mk` (targets `at0-check`, `at0-clean`; names prefixed `AT0_`/`at0`), `research/atemporal/at0/integration/{run.sh, candidate_run.sh, case_tool.sh, isolation_check.sh, at0_assemble.c, contract.lock, QUALIFICATION.md}`, `evidence/AT0/20261009T234832Z-a4ff532/`.

@@ -1,0 +1,7 @@
+== source rule (src/at0/)
+ok: no clock, file, process, thread, network, environment or random facility named
+== object rule (nm -u on the compute rlib)
+ok: no clock, random, thread, socket, file, process or environment symbol referenced
+== negative control: a copy that reads the clock must be caught
+ok: mutant caught by the source rule
+ISOLATION PASS
