@@ -71,6 +71,7 @@ brownian-active-dev0-regress: $(BRWA1_DIR)/brw_active_dev0
 	  if [ "$$a" != "$$b" ]; then echo "DEV0 regress: table differs ($$a vs $$b)"; exit 1; fi; echo "DEV0 regress: table identical to evidence/BRW-ACT-DEV0/dev ($$a)"
 
 brownian-active-dev1-power: $(BRWA1_DIR)/brw_active_dev0
+	@mkdir -p $(dir $(BRWA1_POWER))
 	./$(BRWA1_DIR)/brw_active_dev0 power $(BRWA1_POWER) $(BRWA_COMMIT) "$(BRW_DEVIATIONS)"
 
 brownian-active-dev1: $(BRWA1_DIR)/brw_active_dev0
