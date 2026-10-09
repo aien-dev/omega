@@ -3,21 +3,21 @@
     "generated": {
       "children": [
         {
-          "digest": "3a876234f227f5afe25b81ac6bc0299b76d97eeb2d4d765dc51d6819b0f9b606",
-          "last_commit": "",
+          "digest": "2185445e0d198420c1441ae03356fc590e52fc6695393c21aad533ea7d6796e8",
+          "last_commit": "547cda8",
           "name": "model",
           "purpose": "Agent 3 candidate relational quantum engine in portable C11: state, Hamiltonians, constraint ker"
         }
       ],
-      "children_root": "sha256:9de48d0c35fde295f12dd9110f983aebe57379dc6a93f67d279c3b0fdd1f683e",
-      "compiled_at": "2026-10-09T22:31:27Z",
+      "children_root": "sha256:5aebd808242ee112a90cfabaa9e00ab46a8ddd5b33be7813d5958c815a27be6f",
+      "compiled_at": "2026-10-09T22:33:14Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:07cafda6e971db261af0f787a3e771dea5433ff60a1d36da69d07657505b7581",
+      "digest": "sha256:556701058af688a10c53ea0ce78190a15f47815345e4fb0c4c27267ae903a9af",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 0,
-      "generated_at_commit": "19f73c709d77c80bbaec5d2fa8e955b6c69ce5d3",
-      "source_tree": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      "files": 18,
+      "generated_at_commit": "547cda8fefd174045da3b7833972ae5d22496878",
+      "source_tree": "sha256:0c5965295d4467d60c7ea6ff97d760cb8d337f854c6e8405da1f0b12fa99fa24"
     }
   },
   "name": "at0",
