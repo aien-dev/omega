@@ -33,6 +33,7 @@ Found structure on 8 cells (B0-regular, B0-irregular, B0-short, B1-3, B1-4n, B2-
 
 ## Claim ceiling and limitations
 - EXP-002D and H4 remain INCOMPLETE; this PASS does not lift them. EXP-003 (Wave 2) is not started.
+- Status note 2026-10-09: EXP-002D later reached PASS, scoped to scorer 2564f57, see docs/turing/TURING_SCIENTIFIC_QUALIFICATION_STATE.md. H4 is still INCOMPLETE. The line above is kept as written at the time.
 - The pre-seal audit was done by the same model family as the producer.
 - Stability and one-byte lengthening confirmations (stops 6 and 8) are carried from the v1.3 protocol checks, not run on this candidate.
 - The producer sandbox shared the host network namespace; network control was by tool restrictions, no network client in the sandbox, and the transcript scan.

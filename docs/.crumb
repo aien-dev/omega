@@ -57,8 +57,8 @@
           "purpose": "M21 OMEGA_AUTODIFF scope, op and error-contract table, status (not qualified)"
         },
         {
-          "digest": "7eaa8d1e4f325f8677c7483d53b1ddb5ea784c1c708a7eaacf0fbdd8688019f6",
-          "last_commit": "d535d03",
+          "digest": "62907e0ce847e7558d0d77191622d3f208cc06dbe70aca27016b2dcc12277da6",
+          "last_commit": "35492f5",
           "name": "brownian",
           "purpose": "Directory docs/brownian. Purpose not yet described by a human."
         },
@@ -111,21 +111,21 @@
           "purpose": "Directory docs/train. Purpose not yet described by a human."
         },
         {
-          "digest": "ba181063e0532f849da7092223145ae7843659615f1c8534734f298544c8e2c9",
+          "digest": "0c7aadec66484284529b6633942ac901ef5240d4963ed945f3eecfeab222c005",
           "last_commit": "1b0e296",
           "name": "turing",
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:da58bf6e537aad9a195116aa064fa6522f154dee20b000dd43a2fd9808e3b5a7",
-      "compiled_at": "2026-10-09T19:22:31Z",
+      "children_root": "sha256:ddfd2e68ded245352bd7b5ef6ed692728ecbd940e8e4556312ab8fcaf4d08e82",
+      "compiled_at": "2026-10-09T20:43:24Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:ebfd1e2d97480af083bd387bba60ef95ddc5053bb12dcfe2319f6d08adcc0b8c",
+      "digest": "sha256:3673104df86f5f0de1d235244dc6f42823fd82cdd99abca341250579bbfc65bc",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
       "files": 118,
-      "generated_at_commit": "d535d03a3eaed681b10f62fabc809b43109f4550",
-      "source_tree": "sha256:cb3fcb48cf38146275e476bb38a24fea9194baf945c808586970273ca2d66922"
+      "generated_at_commit": "35492f58825f65a5d0e2fee6763beae3b1c86fac",
+      "source_tree": "sha256:e171aa9c03bc32f5b472ba5f5ce0826d9729a36d87b0e339cab8baec99269fdf"
     },
     "owner_lane": "",
     "provenance": {
