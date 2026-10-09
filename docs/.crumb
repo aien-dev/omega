@@ -111,21 +111,21 @@
           "purpose": "Directory docs/train. Purpose not yet described by a human."
         },
         {
-          "digest": "6b619c2f56758f1af237e926b035df360da7b6a8d3fd60e31e062b8d95d52141",
-          "last_commit": "7a9a3a3",
+          "digest": "ba181063e0532f849da7092223145ae7843659615f1c8534734f298544c8e2c9",
+          "last_commit": "84ec3f3",
           "name": "turing",
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:05b0b49c778b4b2c7ae8803c1805d4db5914aa7aceb7fcffe6c3108b76b7c26a",
-      "compiled_at": "2026-10-09T16:22:14Z",
+      "children_root": "sha256:c6b56ffbccb2064234ea9091d8c0cb5ed5b4573d46643341558feddace8214f6",
+      "compiled_at": "2026-10-09T16:23:46Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:6a60171f2e489bb46ec396950f02538690003aea2746b485ac6d09048e2586a1",
+      "digest": "sha256:206b9c1ef7b4b3472b916b5ad9c435e6997512bb95f8a6d9633df12a14b491b0",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
       "files": 117,
-      "generated_at_commit": "7a9a3a34a93df74e2a226db8de6ba8ea0cfad672",
-      "source_tree": "sha256:2c229ba2a9a974d9b8e028741f107ffc431eb7e9f43e2c741892db4b48718f17"
+      "generated_at_commit": "84ec3f3e0914fad457ce7f6d7580536d4a931b10",
+      "source_tree": "sha256:2404856db7b9deb938fe0acf02eff616f3b50f08977130694b3c2e3e0791dfb7"
     },
     "owner_lane": "",
     "provenance": {
