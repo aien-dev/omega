@@ -88,7 +88,7 @@
         },
         {
           "digest": "b74a984c8e826ce7525ba56043963b3d38655ec32356f264a9329baa9b51dbdb",
-          "last_commit": "e55e2af",
+          "last_commit": "eb8dedf",
           "name": "osc",
           "purpose": "Directory docs/osc. Purpose not yet described by a human."
         },
@@ -111,21 +111,21 @@
           "purpose": "Directory docs/train. Purpose not yet described by a human."
         },
         {
-          "digest": "ffa867828f99320f04160e9bddec89669e9e7cfec9ca9c0316e947d80c9c3617",
-          "last_commit": "6d85a16",
+          "digest": "32d733846b925bd9f413445167875994d1808356aef498bed9a483f13b66ab82",
+          "last_commit": "341ef26",
           "name": "turing",
           "purpose": "Directory docs/turing. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:de4f76a39f2b5f513ca2681db7e1f2bf5080c5329b70c88e44597cbfea746a07",
-      "compiled_at": "2026-10-08T00:52:21Z",
+      "children_root": "sha256:dca60267379fbd6b7f4df08b1abf240bb16c66a9c083415060da0d5bf76eebf0",
+      "compiled_at": "2026-10-09T15:31:13Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:8866a8956d43941abb4d929d3fa65dff33792d9c429b20554f701592669714e4",
+      "digest": "sha256:1be85b2aefe2b09231c02f3207bed9e9224c58e5e98363cb29d7e8c4243ae7f2",
       "evidence_files": 34,
       "evidence_root": "sha256:589d8b3706e6d7a202ab20b278dac5fc5bafc973f1c2a867b2668aa7210b65cc",
       "files": 114,
-      "generated_at_commit": "e55e2af915671d324f1b12bb9f21c1f51de050cc",
-      "source_tree": "sha256:63b6bdd4ea696f55356c3b04b24ba1435f31d1bea2986c22ecf132d06cf94442"
+      "generated_at_commit": "2e256fe1523ff0f82f3f1b8bf3191971fbd110f1",
+      "source_tree": "sha256:8b98d40c777855e5ed2ac0a002603bff5f8985098ed255e7ad1e6dce62d46a64"
     },
     "owner_lane": "",
     "provenance": {
