@@ -1,5 +1,7 @@
 /* BRW-ACT-DEV0 runner (harness side: the world generator lives only here).
- * usage: brw_active_dev0 <dev|hold> <out-dir> <commit> [deviations]
+ * usage: brw_active_dev0 <dev|hold|dev1|hold1> <out-dir> <commit> [B=<budget>] [deviations]
+ *        brw_active_dev0 power <out-dir> <commit> [deviations]     (DEV1 power rule, cycle strategy only)
+ * dev, hold: BRW-ACT-DEV0, budget 400. dev1, hold1: BRW-ACT-DEV1, B= is required (from the committed power receipt).
  * Writes <out-dir>/table.tsv and <out-dir>/receipt.txt, both with O_EXCL (never overwritten).
  * Spec: docs/turing/BRW_ACT_DEV0_PROFILE.md. Held-out tag `hold` is run once by the orchestrator. */
 #include "brownian/brw_active.h"
@@ -24,7 +26,7 @@
 #define BRW_PROFILE "docs/turing/BRW_ACT_DEV0_PROFILE.md"
 #endif
 
-#define BUDGET 400
+static int budget = 400;                  /* DEV0: 400; DEV1: B from the power receipt */
 #define NHELD_PER_TAU 10
 #define NHELD (BRW_NT * NHELD_PER_TAU)
 #define NBOOT 10000
@@ -35,6 +37,8 @@ static const char *cls_name[NCLS] = {"diffusion", "drift", "ou", "noise", "misma
 static const char *str_name[NSTRAT] = {"active", "random", "fixed8", "cycle"};
 #define TAG_DEV 0x646576ull        /* "dev" */
 #define TAG_HOLD 0x686F6C64ull     /* "hold" */
+#define TAG_DEV1 0x64657631ull     /* "dev1", same ASCII rule */
+#define TAG_HOLD1 0x686F6C6431ull  /* "hold1": bits above 31 are XORed with class<<32, still one distinct seed per (class, index) */
 #define TG_PARAM 0x5041524Dull     /* "PARM" */
 #define TG_READ 0x52454144ull      /* "READ" */
 #define TG_HELD 0x48454C44ull      /* "HELD" */
@@ -128,6 +132,9 @@ typedef struct {
     unsigned n_out99;
 } run_t;
 
+static int dev1;                     /* 0: DEV0 roles, 1: DEV1 roles */
+static int disc_class(int c) { return dev1 ? (c == C_DRIFT || c == C_OU) : (c <= C_OU); }
+
 static run_t run_world(const brw_grid *g, const world_t *w, int strat, char *errbuf, size_t errlen)
 {
     run_t R;
@@ -140,7 +147,7 @@ static run_t run_world(const brw_grid *g, const world_t *w, int strat, char *err
     int spent = 0, cyc = 0;
     unsigned j = 0;
     for (;;) {
-        int rem = BUDGET - spent, ti = -1;
+        int rem = budget - spent, ti = -1;
         if (strat == S_ACTIVE) {
             ti = brw_choose(&s, rem, NULL);
         } else if (strat == S_RANDOM) {
@@ -176,14 +183,14 @@ static run_t run_world(const brw_grid *g, const world_t *w, int strat, char *err
     brw_model_post(&s, R.pm);
     R.verdict = brw_verdict(&s);
     R.n_out99 = s.n_out99;
-    if (w->cls <= C_OU) {
+    if (disc_class(w->cls)) {
         R.p_true = R.pm[w->cls];
         R.outcome = R.first_model < 0 ? 2 : (R.first_model == w->cls ? 0 : 1);
-        R.cost_restr = R.outcome == 0 ? (double)R.first_cost : (double)BUDGET;
+        R.cost_restr = R.outcome == 0 ? (double)R.first_cost : (double)budget;
     } else {
         R.outcome = 3;
         R.p_true = -1.0;
-        R.cost_restr = R.first_model < 0 ? (double)BUDGET : (double)R.first_cost;
+        R.cost_restr = R.first_model < 0 ? (double)budget : (double)R.first_cost;
     }
     /* held-out: 10 readings at each menu tau, substream no strategy reads */
     tyq_pred pr[BRW_NT];
@@ -303,17 +310,131 @@ static int write_excl(const char *path, const char *data, size_t n)
     return close(fd);
 }
 
+/* ---- receipt pieces shared by the run and power modes ---- */
+static int parse_mode(const char *a)
+{
+    static const char *m[] = {"dev", "hold", "dev1", "hold1"};
+    for (int i = 0; i < 4; i++)
+        if (!strcmp(a, m[i])) return i;
+    return -1;
+}
+
+static void receipt_head(buf_t *rc, const char *title, const char *tagname, const char *commit)
+{
+    char sha[65];
+    const char *prof = dev1 ? "docs/turing/BRW_ACT_DEV1_PROFILE.md" : BRW_PROFILE;
+    bprintf(rc, "%s receipt\n", title);
+    bprintf(rc, "tag: %s\nomega_commit: %s\n", tagname, commit);
+    bprintf(rc, "profile: %s sha256 %s\n", prof, file_sha(prof, sha) ? "UNREADABLE" : sha);
+    if (dev1) bprintf(rc, "predecessor_profile: %s sha256 %s\n", BRW_PROFILE, file_sha(BRW_PROFILE, sha) ? "UNREADABLE" : sha);
+    static const char *srcs[] = {"tools/brownian/brw_active.c", "tools/brownian/brw_active.h", "tests/brownian/brw_active_dev0.c",
+                                 "tests/brownian/test_brw_active.c", "mk/brownian_active.mk", "src/turing/ty_prd2.c",
+                                 "src/turing/ty_prd2.h", "src/turing/ty_qcont.c", "src/turing/ty_qcont.h", "src/turing/ty_prd.c",
+                                 "src/turing/ty_prd.h", "src/turing/ty_math.c", "src/turing/ty_math.h", "src/sha256.c", "src/sha256.h"};
+    for (size_t i = 0; i < sizeof srcs / sizeof *srcs; i++)
+        bprintf(rc, "source: %s sha256 %s\n", srcs[i], file_sha(srcs[i], sha) ? "UNREADABLE" : sha);
+    bprintf(rc, "runner_binary: /proc/self/exe sha256 %s\n", file_sha("/proc/self/exe", sha) ? "UNREADABLE" : sha);
+}
+
+static void receipt_tail(buf_t *rc, int nper, int nw, const char *dev_note)
+{
+    bprintf(rc, "compiler: %s\nflags: %s\n", __VERSION__, BRW_FLAGS);
+    bprintf(rc, "rng: world seed splitmix64(tag ^ (class<<32) ^ index), tag dev=0x%llX hold=0x%llX dev1=0x%llX hold1=0x%llX; class order diffusion,drift,ou,noise,mismatch = 0..4;\n"
+                "     substream(world, tag, j) = splitmix64(world_seed ^ splitmix64(tag)) mixed the same way with j; tags PARM=0x%llX READ=0x%llX HELD=0x%llX RAND=0x%llX;\n"
+                "     xorshift64* (Vigna: 12,25,27; multiplier 0x2545F4914F6CDD1D); uniforms from top 53 bits; Box-Muller cosine branch; Poisson by inversion;\n"
+                "     held-out reading idx = tau_index*10 + q from substream tag HELD; bootstrap xorshift64* seed 0x%016llX, %d resamples, percentile indices 250 and 9749\n",
+            (unsigned long long)TAG_DEV, (unsigned long long)TAG_HOLD, (unsigned long long)TAG_DEV1, (unsigned long long)TAG_HOLD1,
+            (unsigned long long)TG_PARAM, (unsigned long long)TG_READ, (unsigned long long)TG_HELD, (unsigned long long)TG_RAND,
+            (unsigned long long)BOOT_SEED, NBOOT);
+    bprintf(rc, "budget: %d time units per run, menu {1,2,4,8,16,32}, cost tau+2, sigma_m 1, held-out readings per world %d\n", budget, NHELD);
+    bprintf(rc, "worlds: %d per class, %d total\n", nper, nw);
+    bprintf(rc, "deviations: %s\n", dev_note);
+    bprintf(rc, "replay: not guaranteed across machines (libm exp, log, sqrt, cos, erfc, lgamma)\n\n");
+}
+
+static int write_pair(const char *outdir, const buf_t *tab, const buf_t *rc)
+{
+    char path[1024];
+    snprintf(path, sizeof path, "%s/table.tsv", outdir);
+    int rcode = write_excl(path, tab->p, tab->n);
+    snprintf(path, sizeof path, "%s/receipt.txt", outdir);
+    if (!rcode) rcode = write_excl(path, rc->p, rc->n);
+    return rcode;
+}
+
+/* DEV1 power rule: cycle strategy alone, dev1 drift and ou worlds, budgets 1000/2000/4000. */
+static int power_main(const char *outdir, const char *commit, const char *dev_note)
+{
+    static const int budgets[3] = {1000, 2000, 4000};
+    const int nper = 40;
+    dev1 = 1;
+    if (mkdir(outdir, 0755) && errno != EEXIST) { perror("mkdir"); return 1; }
+    brw_grid *g = malloc(sizeof *g);
+    if (!g) return 1;
+    brw_grid_init(g);
+    buf_t tab = {0}, rep = {0}, rc = {0};
+    bprintf(&tab, "budget\tclass\tindex\tseed\toutcome\tfirst_model\tfirst_cost\tnmeas\tspent\tp_true\n");
+    static const char *oc[4] = {"success", "wrong", "censored", "control"};
+    int chosen = 4000, found = 0, nfail = 0;
+    double sf[3];
+    for (int b = 0; b < 3; b++) {
+        budget = budgets[b];
+        int ok = 0, n = 0;
+        for (int c = C_DRIFT; c <= C_OU; c++)
+            for (int i = 0; i < nper; i++) {
+                world_t w;
+                char err[96] = "";
+                world_make(&w, c, TAG_DEV1, (uint32_t)i);
+                run_t r = run_world(g, &w, S_CYCLE, err, sizeof err);
+                nfail += r.fail;
+                ok += r.outcome == 0;
+                n++;
+                bprintf(&tab, "%d\t%s\t%d\t%016llx\t%s\t%d\t%d\t%d\t%d\t%.17g\n", budget, cls_name[c], i, (unsigned long long)w.seed,
+                        oc[r.outcome], r.first_model, r.first_model < 0 ? -1 : r.first_cost, r.nmeas, r.spent, r.p_true);
+            }
+        sf[b] = (double)ok / n;
+        bprintf(&rep, "budget %4d: cycle success %d of %d = %.4f\n", budget, ok, n, sf[b]);
+        if (!found && 2 * ok >= n) { chosen = budget; found = 1; }
+    }
+    bprintf(&rep, "chosen_B: %d\n", chosen);
+    if (!found) bprintf(&rep, "no tested budget reached the correct model at P >= 0.99 in at least half of the 80 worlds; B = 4000 and the primary outcome may still be censored often\n");
+    bprintf(&rep, "failed runs: %d\n", nfail);
+    uint8_t dg[32];
+    char tabsha[65];
+    sha256_hash((const uint8_t *)tab.p, tab.n, dg);
+    hex(dg, tabsha);
+    receipt_head(&rc, "BRW-ACT-DEV1 power", "dev1 (cycle only, drift and ou)", commit);
+    bprintf(&rc, "table: table.tsv sha256 %s\n", tabsha);
+    budget = chosen;
+    receipt_tail(&rc, nper, 2 * nper, dev_note);
+    bprintf(&rc, "(budget line above shows the chosen B; the three tested budgets were 1000, 2000, 4000)\n%s", rep.p);
+    int rcode = write_pair(outdir, &tab, &rc);
+    fputs(rep.p, stdout);
+    printf("table_sha256 %s\n", tabsha);
+    return rcode || nfail ? 1 : 0;
+}
+
 /* ---- main ---- */
 int main(int argc, char **argv)
 {
-    if (argc < 4 || (strcmp(argv[1], "dev") && strcmp(argv[1], "hold"))) {
-        fprintf(stderr, "usage: %s <dev|hold> <out-dir> <commit> [deviations]\n", argv[0]);
+    const int is_power = argc >= 4 && !strcmp(argv[1], "power");
+    const int k = !is_power && argc >= 4 ? parse_mode(argv[1]) : -1;
+    if (argc < 4 || (!is_power && k < 0)) {
+        fprintf(stderr, "usage: %s <dev|hold|dev1|hold1> <out-dir> <commit> [B=<budget>] [deviations]\n       %s power <out-dir> <commit> [deviations]\n", argv[0], argv[0]);
         return 64;
     }
-    const int is_dev = !strcmp(argv[1], "dev");
-    const uint64_t tag = is_dev ? TAG_DEV : TAG_HOLD;
+    int ai = 4;
+    if (is_power) return power_main(argv[2], argv[3], argc > 4 ? argv[4] : "none");
+    dev1 = k >= 2;
+    if (dev1) {
+        if (argc < 5 || strncmp(argv[4], "B=", 2) || atoi(argv[4] + 2) < 3) { fprintf(stderr, "dev1/hold1 need B=<budget>\n"); return 64; }
+        budget = atoi(argv[4] + 2);
+        ai = 5;
+    }
+    const int is_dev = (k & 1) == 0;
+    const uint64_t tag = k == 0 ? TAG_DEV : k == 1 ? TAG_HOLD : k == 2 ? TAG_DEV1 : TAG_HOLD1;
     const int nper = is_dev ? 40 : 100, nw = nper * NCLS;
-    const char *outdir = argv[2], *commit = argv[3], *dev_note = argc > 4 ? argv[4] : "none";
+    const char *outdir = argv[2], *commit = argv[3], *dev_note = argc > ai ? argv[ai] : "none";
     if (mkdir(outdir, 0755) && errno != EEXIST) { perror("mkdir"); return 1; }
 
     brw_grid *g = malloc(sizeof *g);
@@ -347,24 +468,26 @@ int main(int argc, char **argv)
     hex(dg, tabsha);
 
     /* ---- analysis ---- */
-    int nd = nper * 3;                       /* discoverable worlds */
+    const int ndc = dev1 ? 2 : 3, nd = nper * ndc;     /* discoverable worlds: DEV0 diffusion, drift, ou; DEV1 drift, ou */
+    int *di = malloc((size_t)nd * sizeof *di);
+    for (int i = 0; i < nd; i++) di[i] = (dev1 ? nper : 0) + i;
     double *cost[NSTRAT], *bits[NSTRAT];
     for (int st = 0; st < NSTRAT; st++) {
         cost[st] = malloc((size_t)nd * sizeof(double));
         bits[st] = malloc((size_t)nd * sizeof(double));
         for (int wi = 0; wi < nd; wi++) {
-            cost[st][wi] = R[wi * NSTRAT + st].cost_restr;
-            bits[st][wi] = R[wi * NSTRAT + st].bits;
+            cost[st][wi] = R[di[wi] * NSTRAT + st].cost_restr;
+            bits[st][wi] = R[di[wi] * NSTRAT + st].bits;
         }
     }
-    bprintf(&rep, "== BRW-ACT-DEV0 %s: %d worlds (%d per class), %d discoverable ==\n", argv[1], nw, nper, nd);
+    bprintf(&rep, "== BRW-ACT-%s %s: %d worlds (%d per class), %d discoverable ==\n", dev1 ? "DEV1" : "DEV0", argv[1], nw, nper, nd);
     double frac[NSTRAT][3], meancost[NSTRAT], meannm[NSTRAT], meanp[NSTRAT], meanbits[NSTRAT], cov50[NSTRAT], cov90[NSTRAT];
     double lo50[NSTRAT], hi50[NSTRAT], lo90[NSTRAT], hi90[NSTRAT];
     uint64_t lik[NSTRAT] = {0}, quad[NSTRAT] = {0}, cdf[NSTRAT] = {0};
     for (int st = 0; st < NSTRAT; st++) {
         double f[3] = {0, 0, 0}, mc = 0, nm = 0, mp = 0, mb = 0, k50 = 0, k90 = 0;
         for (int wi = 0; wi < nd; wi++) {
-            const run_t *r = &R[wi * NSTRAT + st];
+            const run_t *r = &R[di[wi] * NSTRAT + st];
             f[r->outcome] += 1;
             mc += r->cost_restr; nm += r->nmeas; mp += r->p_true; mb += r->bits; k50 += r->c50; k90 += r->c90;
         }
@@ -380,7 +503,7 @@ int main(int argc, char **argv)
             cdf[st] += R[wi * NSTRAT + st].cdf;
         }
     }
-    bprintf(&rep, "\nDiscoverable classes pooled (restricted mean cost, horizon %d):\n", BUDGET);
+    bprintf(&rep, "\nDiscoverable classes pooled (restricted mean cost, horizon %d):\n", budget);
     bprintf(&rep, "%-8s %7s %7s %7s %9s %6s %7s %9s %20s %20s\n", "strategy", "success", "wrong", "censor", "mean_cost", "n_meas",
             "P(true)", "bits/read", "cov50 [Wilson95]", "cov90 [Wilson95]");
     for (int st = 0; st < NSTRAT; st++)
@@ -389,7 +512,7 @@ int main(int argc, char **argv)
                 hi50[st], cov90[st], lo90[st], hi90[st]);
     bprintf(&rep, "\nPer class success/wrong/censored and mean cost:\n");
     for (int c = 0; c < 3; c++)
-        for (int st = 0; st < NSTRAT; st++) {
+        for (int st = 0; disc_class(c) && st < NSTRAT; st++) {
             double f[3] = {0, 0, 0}, mc = 0;
             for (int i = 0; i < nper; i++) {
                 const run_t *r = &R[(c * nper + i) * NSTRAT + st];
@@ -433,7 +556,12 @@ int main(int argc, char **argv)
     int p2 = frac[S_ACTIVE][1] <= 0.05 && frac[S_ACTIVE][1] <= maxbase + 0.02;
     int p3 = cov90[S_ACTIVE] >= 0.85 && cov90[S_ACTIVE] <= 0.95 && cov50[S_ACTIVE] >= 0.45 && cov50[S_ACTIVE] <= 0.55;
     int claims = ctl_noise[S_ACTIVE][BRW_V_M1] + ctl_noise[S_ACTIVE][BRW_V_M2];
-    int p4 = (double)claims <= 0.05 * nper;
+    int claims_diff = 0;
+    for (int i = 0; i < nper; i++) {
+        int v = R[(C_DIFF * nper + i) * NSTRAT + S_ACTIVE].verdict;
+        claims_diff += (v == BRW_V_M1 || v == BRW_V_M2);
+    }
+    int p4 = (double)claims <= 0.05 * nper && (!dev1 || (double)claims_diff <= 0.05 * nper);
     int confident = ctl_mis[S_ACTIVE][BRW_V_M0] + ctl_mis[S_ACTIVE][BRW_V_M1] + ctl_mis[S_ACTIVE][BRW_V_M2];
     int p5 = (double)confident <= 0.20 * nper;
     bprintf(&rep, "\nPass rules (%s worlds):\n", argv[1]);
@@ -441,43 +569,20 @@ int main(int argc, char **argv)
     bprintf(&rep, "  P2 active wrong %.4f <= 0.05 and <= max baseline wrong %.4f + 0.02: %s\n", frac[S_ACTIVE][1], maxbase, p2 ? "PASS" : "FAIL");
     bprintf(&rep, "  P3 active coverage 90%% %.4f in [0.85,0.95], 50%% %.4f in [0.45,0.55]: %s\n", cov90[S_ACTIVE], cov50[S_ACTIVE], p3 ? "PASS" : "FAIL");
     bprintf(&rep, "  P4 noise control: active claims M1 or M2 in %d of %d worlds (limit %.1f): %s\n", claims, nper, 0.05 * nper, p4 ? "PASS" : "FAIL");
+    if (dev1) bprintf(&rep, "  P4 (DEV1) nested-null control: active claims M1 or M2 in %d of %d diffusion worlds (limit %.1f): %s\n", claims_diff, nper, 0.05 * nper, (double)claims_diff <= 0.05 * nper ? "PASS" : "FAIL");
     bprintf(&rep, "  P5 mismatch control: active confident model verdict in %d of %d worlds (limit %.1f): %s\n", confident, nper, 0.20 * nper, p5 ? "PASS" : "FAIL");
-    bprintf(&rep, "BRW_ACT_DEV0 %s: %s\n", argv[1], (p1 && p2 && p3 && p4 && p5 && !nfail) ? "PASS" : "FAIL");
+    bprintf(&rep, "BRW_ACT_%s %s: %s\n", dev1 ? "DEV1" : "DEV0", argv[1], (p1 && p2 && p3 && p4 && p5 && !nfail) ? "PASS" : "FAIL");
     bprintf(&rep, "failed runs (validation or scorer refusals): %d\n", nfail);
     for (int k = 0; k < nw * NSTRAT; k++)
         if (R[k].fail) bprintf(&rep, "  FAILURE world %d strategy %s: %s\n", k / NSTRAT, str_name[k % NSTRAT], err[k]);
 
     /* ---- receipt ---- */
     buf_t rc = {0};
-    char sha[65];
-    bprintf(&rc, "BRW-ACT-DEV0 receipt\n");
-    bprintf(&rc, "tag: %s\nomega_commit: %s\n", argv[1], commit);
-    bprintf(&rc, "profile: %s sha256 %s\n", BRW_PROFILE, file_sha(BRW_PROFILE, sha) ? "UNREADABLE" : sha);
-    static const char *srcs[] = {"tools/brownian/brw_active.c", "tools/brownian/brw_active.h", "tests/brownian/brw_active_dev0.c",
-                                 "tests/brownian/test_brw_active.c", "mk/brownian_active.mk", "src/turing/ty_prd2.c",
-                                 "src/turing/ty_prd2.h", "src/turing/ty_qcont.c", "src/turing/ty_qcont.h", "src/turing/ty_prd.c",
-                                 "src/turing/ty_prd.h", "src/turing/ty_math.c", "src/turing/ty_math.h", "src/sha256.c", "src/sha256.h"};
-    for (size_t i = 0; i < sizeof srcs / sizeof *srcs; i++)
-        bprintf(&rc, "source: %s sha256 %s\n", srcs[i], file_sha(srcs[i], sha) ? "UNREADABLE" : sha);
-    bprintf(&rc, "runner_binary: /proc/self/exe sha256 %s\n", file_sha("/proc/self/exe", sha) ? "UNREADABLE" : sha);
+    receipt_head(&rc, dev1 ? "BRW-ACT-DEV1" : "BRW-ACT-DEV0", argv[1], commit);
     bprintf(&rc, "table: table.tsv sha256 %s\n", tabsha);
-    bprintf(&rc, "compiler: %s\nflags: %s\n", __VERSION__, BRW_FLAGS);
-    bprintf(&rc, "rng: world seed splitmix64(tag ^ (class<<32) ^ index), tag dev=0x%llX hold=0x%llX; class order diffusion,drift,ou,noise,mismatch = 0..4;\n"
-                 "     substream(world, tag, j) = splitmix64(world_seed ^ splitmix64(tag)) mixed the same way with j; tags PARM=0x%llX READ=0x%llX HELD=0x%llX RAND=0x%llX;\n"
-                 "     xorshift64* (Vigna: 12,25,27; multiplier 0x2545F4914F6CDD1D); uniforms from top 53 bits; Box-Muller cosine branch; Poisson by inversion;\n"
-                 "     held-out reading idx = tau_index*10 + q from substream tag HELD; bootstrap xorshift64* seed 0x%016llX, %d resamples, percentile indices 250 and 9749\n",
-            (unsigned long long)TAG_DEV, (unsigned long long)TAG_HOLD, (unsigned long long)TG_PARAM, (unsigned long long)TG_READ,
-            (unsigned long long)TG_HELD, (unsigned long long)TG_RAND, (unsigned long long)BOOT_SEED, NBOOT);
-    bprintf(&rc, "budget: %d time units per run, menu {1,2,4,8,16,32}, cost tau+2, sigma_m 1, held-out readings per world %d\n", BUDGET, NHELD);
-    bprintf(&rc, "worlds: %d per class, %d total\n", nper, nw);
-    bprintf(&rc, "deviations: %s\n", dev_note);
-    bprintf(&rc, "replay: not guaranteed across machines (libm exp, log, sqrt, cos, erfc, lgamma)\n\n");
+    receipt_tail(&rc, nper, nw, dev_note);
     bprintf(&rc, "%s", rep.p);
-    char path[1024];
-    snprintf(path, sizeof path, "%s/table.tsv", outdir);
-    int rcode = write_excl(path, tab.p, tab.n);
-    snprintf(path, sizeof path, "%s/receipt.txt", outdir);
-    if (!rcode) rcode = write_excl(path, rc.p, rc.n);
+    int rcode = write_pair(outdir, &tab, &rc);
     fputs(rep.p, stdout);
     printf("table_sha256 %s\n", tabsha);
     return rcode ? 1 : 0;

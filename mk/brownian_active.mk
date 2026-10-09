@@ -7,7 +7,7 @@
 # The `hold` worlds are run by hand once: build/brownian-active/brw_active_dev0 hold <fresh-dir> <commit>
 ifndef BROWNIAN_ACTIVE_MK
 BROWNIAN_ACTIVE_MK := 1
-.PHONY: test-brownian-active brownian-active-dev0 brwa-purity
+.PHONY: test-brownian-active brownian-active-dev0 brwa-purity brwa-cli brownian-active-dev1-power brownian-active-dev1 brownian-active-dev0-regress
 BRWA_FLAGS = -std=c11 -Wall -Wextra -Werror -pedantic -O2 -D_POSIX_C_SOURCE=200809L -Isrc -Itools -ffp-contract=off -fno-fast-math
 BRWA_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
 BRWA_LIB = tools/brownian/brw_active.c src/turing/ty_prd2.c src/turing/ty_qcont.c src/turing/ty_prd.c src/turing/ty_math.c
@@ -35,7 +35,14 @@ brwa-purity:
 	@if nm $(BRWA_DIR)/purity/brw_active.o | grep -i -E $(BRWA_FORBIDDEN); then echo "brw_active object references a generator or world symbol"; exit 1; fi
 	@echo "brwa-purity: brw_active carries no world, truth or generator symbol"
 
-test-brownian-active: brwa-purity $(BRWA_DIR)/test_brw_active $(BRWA_DIR)/test_brw_active_asan
+# runner argument contract: DEV1 needs an explicit budget, unknown profile ids are refused
+brwa-cli: $(BRWA_DIR)/brw_active_dev0
+	@$(BRWA_DIR)/brw_active_dev0 dev1 $(BRWA_DIR)/cli-x t none >/dev/null 2>&1; [ $$? -eq 64 ] || { echo "dev1 without B= must exit 64"; exit 1; }
+	@$(BRWA_DIR)/brw_active_dev0 hold1 $(BRWA_DIR)/cli-x t B=2 >/dev/null 2>&1; [ $$? -eq 64 ] || { echo "B below 3 must exit 64"; exit 1; }
+	@$(BRWA_DIR)/brw_active_dev0 bogus $(BRWA_DIR)/cli-x t >/dev/null 2>&1; [ $$? -eq 64 ] || { echo "unknown profile id must exit 64"; exit 1; }
+	@echo "brwa-cli: runner argument contract holds"
+
+test-brownian-active: brwa-purity brwa-cli $(BRWA_DIR)/test_brw_active $(BRWA_DIR)/test_brw_active_asan
 	./$(BRWA_DIR)/test_brw_active
 	./$(BRWA_DIR)/test_brw_active_asan
 	@echo "test-brownian-active: candidate library unit tests pass in plain and ASan/UBSan builds; purity holds"
@@ -47,4 +54,33 @@ brownian-active-dev0: $(BRWA_DIR)/brw_active_dev0
 	@a=$$(sha256sum < $(BRWA_DIR)/dev-a/table.tsv); b=$$(sha256sum < $(BRWA_DIR)/dev-b/table.tsv); \
 	  if [ "$$a" != "$$b" ]; then echo "brownian-active-dev0: REPLAY MISMATCH ($$a vs $$b)"; exit 1; fi; \
 	  echo "brownian-active-dev0: two dev runs produced identical tables ($$a)"
+
+# ---- BRW-ACT-DEV1 (docs/turing/BRW_ACT_DEV1_PROFILE.md): same runner, profile ids dev1/hold1 and the power sub-command.
+# Built into its own directory. The power receipt (evidence/BRW-ACT-DEV1/power/receipt.txt, never overwritten) fixes B.
+BRWA1_DIR = $(OUT_DIR)/brownian-active-dev1
+BRWA1_POWER = evidence/BRW-ACT-DEV1/power
+$(BRWA1_DIR)/brw_active_dev0: tests/brownian/brw_active_dev0.c $(BRWA_LIB) src/sha256.c $(BRWA_HDRS)
+	@mkdir -p $(BRWA1_DIR)
+	$(CC) $(BRWA_FLAGS) -DBRW_FLAGS='"$(BRWA_FLAGS)"' -o $@ tests/brownian/brw_active_dev0.c $(BRWA_LIB) src/sha256.c -lm
+
+# DEV0 must stay bit-identical under the parametrised runner: the table digest of the committed DEV0 dev run.
+brownian-active-dev0-regress: $(BRWA1_DIR)/brw_active_dev0
+	@rm -rf $(BRWA1_DIR)/regress0
+	./$(BRWA1_DIR)/brw_active_dev0 dev $(BRWA1_DIR)/regress0 $(BRWA_COMMIT) none > /dev/null
+	@a=$$(sha256sum < $(BRWA1_DIR)/regress0/table.tsv); b=$$(sha256sum < evidence/BRW-ACT-DEV0/dev/table.tsv); \
+	  if [ "$$a" != "$$b" ]; then echo "DEV0 regress: table differs ($$a vs $$b)"; exit 1; fi; echo "DEV0 regress: table identical to evidence/BRW-ACT-DEV0/dev ($$a)"
+
+brownian-active-dev1-power: $(BRWA1_DIR)/brw_active_dev0
+	./$(BRWA1_DIR)/brw_active_dev0 power $(BRWA1_POWER) $(BRWA_COMMIT) "$(BRW_DEVIATIONS)"
+
+brownian-active-dev1: $(BRWA1_DIR)/brw_active_dev0
+	@test -f $(BRWA1_POWER)/receipt.txt || { echo "run brownian-active-dev1-power first and commit its evidence"; exit 1; }
+	@B=$$(sed -n 's/^chosen_B: //p' $(BRWA1_POWER)/receipt.txt); test -n "$$B" || { echo "no chosen_B in power receipt"; exit 1; }; \
+	  rm -rf $(BRWA1_DIR)/dev1-a $(BRWA1_DIR)/dev1-b; \
+	  echo "B=$$B"; \
+	  ./$(BRWA1_DIR)/brw_active_dev0 dev1 $(BRWA1_DIR)/dev1-a $(BRWA_COMMIT) B=$$B "$(BRW_DEVIATIONS)" | tee $(BRWA1_DIR)/dev1-a.out | tail -14; \
+	  ./$(BRWA1_DIR)/brw_active_dev0 dev1 $(BRWA1_DIR)/dev1-b $(BRWA_COMMIT) B=$$B "$(BRW_DEVIATIONS)" > $(BRWA1_DIR)/dev1-b.out; \
+	  a=$$(sha256sum < $(BRWA1_DIR)/dev1-a/table.tsv); b=$$(sha256sum < $(BRWA1_DIR)/dev1-b/table.tsv); \
+	  if [ "$$a" != "$$b" ]; then echo "brownian-active-dev1: REPLAY MISMATCH"; exit 1; fi; \
+	  echo "brownian-active-dev1: two dev1 runs produced identical tables ($$a)"
 endif
