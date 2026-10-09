@@ -80,7 +80,7 @@
         },
         {
           "digest": "18e933f213d7958215bb0ecf09116e5c21d3b335cfdabc1ffbf7a2a4e98b5250",
-          "last_commit": "eb8dedf",
+          "last_commit": "f7b4389",
           "name": "compiler",
           "purpose": "Directory src/compiler. Purpose not yet described by a human."
         },
@@ -115,8 +115,8 @@
           "purpose": "Directory src/language. Purpose not yet described by a human."
         },
         {
-          "digest": "e8f706b54de6ee42d3f96b1fc7ab5e94fe8cc132928e213604fe8b247db9fcad",
-          "last_commit": "6211ebf",
+          "digest": "bac52a0d2c450354c2862c720e19363d5eb7bed4b5b47615c7ca734a729e1ab7",
+          "last_commit": "7adf33e",
           "name": "osh",
           "purpose": "osh (Omega-native shell, arch#158) lexer unit: layout list, generator, osh_lex.osc, C reference "
         },
@@ -175,15 +175,15 @@
           "purpose": "Directory src/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:412f19f9f99b190238677ac44ed7112cb7028d8aae98bc10d2f03e4243cb1903",
-      "compiled_at": "2026-10-08T12:46:55Z",
+      "children_root": "sha256:1fe047c4933784ac25ab5bd834b9677180143f30a22f91432c009878d5a00b97",
+      "compiled_at": "2026-10-09T04:11:18Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:db9d74f63064d34f9e3c9c0195b3c6a2e9d599a4b0c4304dfeb8c662d7bc7191",
+      "digest": "sha256:c06c116644765d66e2c7346e99179861cbb7bba7e8e932ff40b6c51983d90d01",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 443,
-      "generated_at_commit": "6211ebf08d0d51eafe24d6962fdd22d643612347",
-      "source_tree": "sha256:419e9b3f62ed45c271d89920b6e1eb934efa1bf58ddeeaa6133e20d20cab3bfc"
+      "files": 445,
+      "generated_at_commit": "7adf33efee7b590d919662b54df824f0c2cf2cbf",
+      "source_tree": "sha256:53cb7c5b9b55f98a01b5efadbc049231a9fbd485731c0d91b84516b3d594e23f"
     },
     "owner_lane": "",
     "provenance": {

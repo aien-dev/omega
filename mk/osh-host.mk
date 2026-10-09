@@ -6,9 +6,9 @@ OSH_HOST_MK := 1
 .PHONY: test-osh-host
 OSH_HOST_DIR = $(OUT_DIR)/osh-host
 OSH_HOST_SRCS = tests/osh/host/test_osh_host.c src/osh/host/osh_req.c src/osh/host/osh_vars.c \
-	src/osh/host/osh_builtin.c src/osh/host/osh_exec.c
-OSH_HOST_HDRS = src/osh/host/osh_host.h src/osh/host/osh_priv.h
-OSH_HOST_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -Isrc/osh/host
+	src/osh/host/osh_builtin.c src/osh/host/osh_exec.c src/osh/host/osh_journal.c src/sha256.c
+OSH_HOST_HDRS = src/osh/host/osh_host.h src/osh/host/osh_priv.h src/osh/host/osh_journal.h src/sha256.h
+OSH_HOST_FLAGS = -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -Isrc/osh/host -Isrc
 OSH_HOST_ASAN = -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all
 
 $(OSH_HOST_DIR)/test_osh_host: $(OSH_HOST_SRCS) $(OSH_HOST_HDRS)
@@ -29,7 +29,7 @@ test-osh-host: $(OSH_HOST_DIR)/test_osh_host $(OSH_HOST_DIR)/test_osh_host_asan
 #   make test-osh-caps   plain and under ASan/UBSan
 .PHONY: test-osh-caps
 OSH_CAPS_SRCS = tests/osh/host/test_osh_caps.c src/osh/host/osh_caps.c src/runtime/rx_caproot.c src/osh/host/osh_req.c \
-	src/osh/host/osh_vars.c src/osh/host/osh_builtin.c src/osh/host/osh_exec.c
+	src/osh/host/osh_vars.c src/osh/host/osh_builtin.c src/osh/host/osh_exec.c src/osh/host/osh_journal.c src/sha256.c
 OSH_CAPS_HDRS = $(OSH_HOST_HDRS) src/osh/host/osh_caps.h src/runtime/rx_caproot.h
 OSH_CAPS_FLAGS = $(OSH_HOST_FLAGS) -Isrc/runtime -Wno-format-truncation
 
@@ -42,7 +42,29 @@ $(OSH_HOST_DIR)/test_osh_caps_asan: $(OSH_CAPS_SRCS) $(OSH_CAPS_HDRS)
 	$(CC) $(OSH_CAPS_FLAGS) $(OSH_HOST_ASAN) -o $@ $(OSH_CAPS_SRCS)
 
 test-osh-caps: $(OSH_HOST_DIR)/test_osh_caps $(OSH_HOST_DIR)/test_osh_caps_asan $(OUT_DIR)/osh/osh
-	$(abspath $(OSH_HOST_DIR)/test_osh_caps) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/caps.out; rc=$$?; tail -5 $(OSH_HOST_DIR)/caps.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/caps.out | grep -q '^OSH_CAPS_PASS$$'
-	$(abspath $(OSH_HOST_DIR)/test_osh_caps_asan) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/caps_asan.out; rc=$$?; tail -3 $(OSH_HOST_DIR)/caps_asan.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/caps_asan.out | grep -q '^OSH_CAPS_PASS$$'
+	rm -rf $(abspath $(OSH_HOST_DIR))/state; XDG_STATE_HOME=$(abspath $(OSH_HOST_DIR))/state $(abspath $(OSH_HOST_DIR)/test_osh_caps) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/caps.out; rc=$$?; tail -5 $(OSH_HOST_DIR)/caps.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/caps.out | grep -q '^OSH_CAPS_PASS$$'
+	rm -rf $(abspath $(OSH_HOST_DIR))/state; XDG_STATE_HOME=$(abspath $(OSH_HOST_DIR))/state $(abspath $(OSH_HOST_DIR)/test_osh_caps_asan) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/caps_asan.out; rc=$$?; tail -3 $(OSH_HOST_DIR)/caps_asan.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/caps_asan.out | grep -q '^OSH_CAPS_PASS$$'
 	@echo "test-osh-caps: PASS (capability enforcement; plain and ASan/UBSan)"
+# durable intent/outcome journal (ABI section 10): intent before each effect, outcome after, recovery never replays.
+#   make test-osh-journal   plain and under ASan/UBSan
+.PHONY: test-osh-journal
+OSH_JOURNAL_SRCS = tests/osh/host/test_osh_journal.c src/osh/host/osh_req.c src/osh/host/osh_vars.c src/osh/host/osh_builtin.c \
+	src/osh/host/osh_exec.c src/osh/host/osh_journal.c src/sha256.c
+
+$(OSH_HOST_DIR)/test_osh_journal: $(OSH_JOURNAL_SRCS) $(OSH_HOST_HDRS)
+	@mkdir -p $(OSH_HOST_DIR)
+	$(CC) $(OSH_HOST_FLAGS) -DOSH_JOURNAL_TEST_HOOKS -O2 -o $@ $(OSH_JOURNAL_SRCS)
+
+$(OSH_HOST_DIR)/test_osh_journal_asan: $(OSH_JOURNAL_SRCS) $(OSH_HOST_HDRS)
+	@mkdir -p $(OSH_HOST_DIR)
+	$(CC) $(OSH_HOST_FLAGS) -DOSH_JOURNAL_TEST_HOOKS $(OSH_HOST_ASAN) -o $@ $(OSH_JOURNAL_SRCS)
+
+test-osh-journal: $(OSH_HOST_DIR)/test_osh_journal $(OSH_HOST_DIR)/test_osh_journal_asan $(OUT_DIR)/osh/osh
+	@nm $(OUT_DIR)/osh/osh | grep -q osh_journal_intent || { echo "FAIL: shipped osh is stripped, cannot check"; exit 1; }
+	@if nm $(OUT_DIR)/osh/osh | grep -q osh_journal_test_hooks_compiled; then echo "FAIL: shipped osh contains the journal test hooks"; exit 1; fi
+	@nm $(abspath $(OSH_HOST_DIR)/test_osh_journal) | grep -q osh_journal_test_hooks_compiled || { echo "FAIL: test build lacks the hooks"; exit 1; }
+	@echo "test hooks: absent from the shipped osh, present in the test build"
+	$(abspath $(OSH_HOST_DIR)/test_osh_journal) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/journal.out; rc=$$?; tail -5 $(OSH_HOST_DIR)/journal.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/journal.out | grep -q '^OSH_JOURNAL_PASS$$'
+	$(abspath $(OSH_HOST_DIR)/test_osh_journal_asan) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/journal_asan.out; rc=$$?; tail -3 $(OSH_HOST_DIR)/journal_asan.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/journal_asan.out | grep -q '^OSH_JOURNAL_PASS$$'
+	@echo "test-osh-journal: PASS (durable intent/outcome journal; plain and ASan/UBSan)"
 endif

@@ -142,6 +142,9 @@ typedef struct OshSession {
     void *effect_ctx;
     int exit_requested, exit_status; /* set by the parent `exit` builtin */
     int abort_list;              /* set by the parent `exit` with too many arguments: bash drops the rest of the list */
+    struct OshJournal *journal;  /* durable intent/outcome journal (osh_journal.h, ABI section 10); NULL = none */
+    int journal_required;        /* the effect journal is mandatory (ABI section 10): with journal NULL every effect is refused */
+    const char *journal_error;   /* why the mandatory journal is unavailable (named in the refusal) */
     /* test-only fault injection; all zero in production */
     int fail_fork_at;                          /* 1-based index of the command whose fork() is made to fail */
     void (*after_launch_hook)(void *);         /* called after the last command is started, before waiting */
@@ -178,6 +181,7 @@ typedef struct {
     int killed_by_int;   /* the last command died of SIGINT or SIGQUIT: list execution must stop */
     int exit_requested;  /* mirrors session: parent `exit` ran */
     int refusal;         /* decoder refusal code if the request was refused before any effect, else 0 */
+    int journal_failed;  /* an outcome record could not be made durable (the intent stays; recovery reports UNKNOWN) */
 } OshResult;
 
 /* Execute one decoded request (one pipeline). Returns the pipeline status. */
