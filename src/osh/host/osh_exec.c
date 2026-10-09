@@ -43,13 +43,25 @@
  *    when interactive, else to each pid) and are reaped (outcome CANCELLED); not-yet-started commands are NOT_STARTED; status 1.
  *  - waitpid ECHILD for a started child (someone else reaped it): that command is OUTCOME_UNKNOWN, status 1, err
  *    OUTCOME_UNKNOWN. A pipeline whose last command died of SIGINT/SIGQUIT sets killed_by_int and osh_run_list stops there.
- *  - No durable intent/outcome record (ABI section 10) is written: outcomes live in the result only. NOT DONE.
+ *  - DURABLE INTENT/OUTCOME (ABI section 10), when s->journal is set (osh_journal.h; the osh program: --journal FILE).
+ *    An effect is one external spawn or one write-class open (output/append redirection), so a command is an effect
+ *    iff it is external or has such a redirection; builtins, standalone assignments and read-only/dup redirections
+ *    are not (section 10 defines the term that way). Just before each effect an INTENT record is appended and fsynced
+ *    (file; directory on creation); if that fails the command is NOT launched (FAILED_NO_EFFECT, err IO, status 1:
+ *    mandatory records fail closed). After the pipeline is reaped one OUTCOME record per effect is appended and fsynced:
+ *    a refusal or denial before the intent is an outcome with no intent (ref 0, FAILED_NO_EFFECT, nothing launched), a
+ *    command never reached is NOT_STARTED. ASSUMPTION: a command that ended by SIGINT/SIGQUIT is recorded CANCELLED
+ *    (interrupted by the user), its status 128+sig is kept; the in-memory result still says COMPLETED for it. If an
+ *    outcome cannot be made durable the intent stays open (recovery reports it UNKNOWN) and res->journal_failed is set.
+ *    Recovery never launches anything. The journal holds no argument values (osh_journal.h, redaction rule). Without
+ *    s->journal nothing is written and behaviour is unchanged.
  */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
 #include "osh_host.h"
 #include "osh_priv.h"
+#include "osh_journal.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -336,13 +348,79 @@ static void fail_all(OshResult *res, int n, int status, int err)
     res->err = err;
 }
 
-/* single parent-side command: builtin, or standalone assignment / redirection-only */
-static void run_in_parent(OshSession *s, const OshCmd *c, OshResult *res)
+/* ---------------- durable intent/outcome (ABI section 10) ---------------- */
+
+typedef struct {
+    OshJournal *j;
+    uint8_t dig[32];
+    uint64_t ref[OSH_MAX_CMDS]; /* intent rec per command, 0 = none */
+} JCtx;
+
+/* an effect per ABI section 10: one external spawn or one write-class open */
+static int cmd_effect(const OshCmd *c)
 {
+    if (c->nargv > 0 && c->builtin_id == OSH_B_NONE) return 1;
+    for (int k = 0; k < c->nredir; k++)
+        if (c->redir[k].kind == OSH_R_OUT || c->redir[k].kind == OSH_R_APPEND) return 1;
+    return 0;
+}
+
+static void jc_init(JCtx *jc, OshSession *s, const OshRequest *r)
+{
+    memset(jc, 0, sizeof *jc);
+    jc->j = s->journal;
+    if (jc->j) osh_req_digest(r, jc->dig);
+}
+
+/* 0: durable (or no journal / not an effect); -1: the intent could not be made durable and the effect must not run */
+static int jc_intent(JCtx *jc, const OshRequest *r, int idx)
+{
+    if (!jc->j || !cmd_effect(&r->cmd[idx])) return 0;
+    jc->ref[idx] = osh_journal_intent(jc->j, jc->dig, r, idx);
+    return jc->ref[idx] ? 0 : -1;
+}
+
+static int jc_outcome(const OshCmdResult *c)
+{
+    if (c->outcome == OSH_OUT_COMPLETED && (c->termsig == SIGINT || c->termsig == SIGQUIT)) return OSH_OUT_CANCELLED;
+    return c->outcome;
+}
+
+/* one outcome per effect, one write, one fsync */
+static void jc_finish(JCtx *jc, const OshRequest *r, OshResult *res)
+{
+    if (!jc->j) return;
+    OshJournalOutcome o[OSH_MAX_CMDS];
+    int n = 0;
+    for (int i = 0; i < r->ncmds; i++) {
+        if (!cmd_effect(&r->cmd[i])) continue;
+        o[n].idx = i;
+        o[n].ref = jc->ref[i];
+        o[n].outcome = jc_outcome(&res->cmd[i]);
+        o[n].status = res->cmd[i].status;
+        o[n].err = res->cmd[i].err;
+        n++;
+    }
+    if (osh_journal_outcomes(jc->j, jc->dig, r->ncmds, o, n) != 0) {
+        res->journal_failed = 1;
+        osh_diag(2, "journal: an outcome could not be made durable; recovery will report it UNKNOWN");
+    }
+}
+
+/* single parent-side command: builtin, or standalone assignment / redirection-only */
+static void run_in_parent(OshSession *s, const OshRequest *rq, JCtx *jc, OshResult *res)
+{
+    const OshCmd *c = &rq->cmd[0];
     FdTab t;
     tab_init(&t, s);
     int st;
     int rerr = OSH_E_IO;
+    if (jc_intent(jc, rq, 0) != 0) {
+        osh_diag(s->fd[2], "journal: intent could not be made durable; nothing was run");
+        set_cmd(&res->cmd[0], 1, OSH_OUT_FAILED_NO_EFFECT, OSH_E_IO);
+        res->status = 1;
+        return;
+    }
     if (apply_redirs(s, &t, c, s->fd[2], &rerr) != 0) {
         st = 1;
         set_cmd(&res->cmd[0], st, OSH_OUT_FAILED_NO_EFFECT, rerr);
@@ -456,7 +534,7 @@ static int wait_all(OshSession *s, OshResult *res, Child *ch, int n, pid_t pgid,
     return first_stop;
 }
 
-static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
+static void run_pipeline(OshSession *s, const OshRequest *r, JCtx *jc, OshResult *res)
 {
     int n = r->ncmds;
     Pipes p;
@@ -522,6 +600,15 @@ static void run_pipeline(OshSession *s, const OshRequest *r, OshResult *res)
             }
             envp = osh_build_envp(s, c->assign, c->nassign);
             if (!envp) { launch_failed = 1; set_cmd(&res->cmd[i], 1, OSH_OUT_NOT_STARTED, OSH_E_LIMIT); break; }
+        }
+
+        if (jc_intent(jc, r, i) != 0) { /* mandatory record not durable: fail closed, launch nothing */
+            osh_diag(s->fd[2], "journal: intent could not be made durable; nothing was run");
+            osh_envp_free(envp);
+            set_cmd(&res->cmd[i], 1, OSH_OUT_FAILED_NO_EFFECT, OSH_E_IO);
+            if (rd >= 0) { close(rd); p.pp[i - 1][0] = -1; }
+            if (wr >= 0) { close(wr); p.pp[i][1] = -1; }
+            continue;
         }
 
         pid_t pid;
@@ -617,10 +704,13 @@ int osh_exec(OshSession *s, const OshRequest *r, OshResult *res)
 {
     memset(res, 0, sizeof *res);
     res->ncmds = r->ncmds;
+    JCtx jc;
+    jc_init(&jc, s, r);
     int a = authorize(s, r);
     if (a != OSH_E_OK) {
         osh_diag(s->fd[2], "%s: not permitted (platform error %d); nothing was run", r->cmd[0].nargv ? r->cmd[0].argv[0] : "request", a);
         fail_all(res, r->ncmds, 126, a);
+        jc_finish(&jc, r, res);
         s->last_status = res->status;
         return res->status;
     }
@@ -631,14 +721,16 @@ int osh_exec(OshSession *s, const OshRequest *r, OshResult *res)
         if (cls != OSH_CLASS_LINUX) {
             osh_diag(s->fd[2], "%s: destination class %d is not a Linux executable and is unavailable on this host; refused", c->argv[0], cls);
             fail_all(res, r->ncmds, 126, OSH_E_UNAVAILABLE);
+            jc_finish(&jc, r, res);
             s->last_status = res->status;
             return res->status;
         }
     }
     SigGuard g;
     guard_enter(&g, s->interactive);
-    if (r->ncmds == 1 && (r->cmd[0].builtin_id != OSH_B_NONE || r->cmd[0].nargv == 0)) run_in_parent(s, &r->cmd[0], res);
-    else run_pipeline(s, r, res);
+    if (r->ncmds == 1 && (r->cmd[0].builtin_id != OSH_B_NONE || r->cmd[0].nargv == 0)) run_in_parent(s, r, &jc, res);
+    else run_pipeline(s, r, &jc, res);
+    jc_finish(&jc, r, res);
     res->sigint_seen = g_sig_seen == SIGINT;
     const OshCmdResult *last = &res->cmd[r->ncmds - 1];
     res->killed_by_int = last->termsig == SIGINT || last->termsig == SIGQUIT;
