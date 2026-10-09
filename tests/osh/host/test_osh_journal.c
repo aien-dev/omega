@@ -1086,7 +1086,7 @@ static void test_cli_one_session(const char *osh)
     snprintf(sc, sizeof sc, "/bin/touch %s", mk);
     CHECK(run_osh(osh, pol, jp, sc, ef2, NULL, "/tmp") == 1 && fsize(mk) < 0, "second session: effect refused, nothing launched");
     char *e = slurp(ef2, NULL);
-    CHECK(strstr(e, "in use by another osh session") && strstr(e, "--journal"), "named, and says to use --journal:\n%s", e);
+    CHECK(strstr(e, "in use by another osh session") && strstr(e, "--journal") && strstr(e, "use a separate journal);") && !strstr(e, "journal0"), "named, says to use --journal, exact ending (no stray digit):\n%s", e);
     free(e);
     CHECK(run_osh(osh, pol, jp, "printf x", ef2, NULL, "/tmp") == 0, "second session: a builtin without a write still runs");
     int st = 0;
@@ -1116,6 +1116,39 @@ static void test_cli_one_session(const char *osh)
     j = slurp(jp, NULL);
     CHECK(rec_numbers_unique(j) == 0, "record numbers unique across sessions:\n%s", j);
     free(j);
+}
+
+/* a forked builtin never execs: it must not keep the journal descriptor (and so the flock) after the shell is SIGKILLed */
+static void test_cli_orphan_builtin(const char *osh)
+{
+    char pol[700], jp[900], ef[700], mk[700], fifo[700], sc[1500];
+    snprintf(pol, sizeof pol, "%s/orphan.policy", g_dir);
+    snprintf(jp, sizeof jp, "%s/orphan.log", g_dir);
+    snprintf(ef, sizeof ef, "%s/orphan.err", g_dir);
+    snprintf(mk, sizeof mk, "%s/orphan.marker", g_dir);
+    snprintf(fifo, sizeof fifo, "%s/orphan.fifo", g_dir);
+    FILE *pf = fopen(pol, "w");
+    fprintf(pf, "principal 77\nallow spawn /bin\nallow spawn /usr/bin\nallow write %s\n", g_dir);
+    fclose(pf);
+    CHECK(mkfifo(fifo, 0600) == 0, "fifo");
+    snprintf(sc, sizeof sc, "pwd > %s | /bin/true", fifo);
+    pid_t a = start_osh(osh, pol, jp, sc, ef);
+    for (int i = 0; i < 200 && !(fsize(jp) > 0); i++) msleep(25);
+    msleep(400); /* the forked builtin is now blocked opening the fifo */
+    kill(a, SIGKILL); /* only the shell: the blocked builtin child is orphaned and still alive */
+    waitpid(a, NULL, 0);
+    msleep(100);
+    snprintf(sc, sizeof sc, "/bin/touch %s", mk);
+    CHECK(run_osh(osh, pol, jp, sc, ef, NULL, "/tmp") == 0 && fsize(mk) == 0, "new session gets the lock at once while the orphan still holds the fifo");
+    char *e = slurp(ef, NULL);
+    CHECK(!strstr(e, "in use by another"), "no 'in use' refusal:\n%s", e);
+    free(e);
+    int rd = open(fifo, O_RDONLY | O_NONBLOCK); /* let the orphan go */
+    char buf[4400];
+    for (int i = 0; i < 40; i++) { if (read(rd, buf, sizeof buf) > 0) break; msleep(25); }
+    close(rd);
+    msleep(100);
+    unlink(fifo);
 }
 
 int main(int argc, char **argv)
@@ -1148,7 +1181,7 @@ int main(int argc, char **argv)
     test_pipeline_later_intent_fails();
     test_sticky_failure();
     test_explicit_journal_modes();
-    if (osh_bin) { test_cli(osh_bin); test_cli_explicit_dir(osh_bin); test_cli_one_session(osh_bin); }
+    if (osh_bin) { test_cli(osh_bin); test_cli_explicit_dir(osh_bin); test_cli_one_session(osh_bin); test_cli_orphan_builtin(osh_bin); }
     close(g_null);
     char cmd[4400];
     snprintf(cmd, sizeof cmd, "rm -rf '%s'", g_dir);

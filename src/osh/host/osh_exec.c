@@ -644,6 +644,8 @@ static void run_pipeline(OshSession *s, const OshRequest *r, JCtx *jc, OshResult
         }
         if (pid == 0) {
             /* ---- child ---- */
+            /* a forked builtin never execs, so the O_CLOEXEC journal descriptor (and its flock) would outlive the shell: close it now */
+            if (s->journal && s->journal->fd >= 0) close(s->journal->fd);
             if (own_pg) setpgid(0, pgid); /* pgid 0 on the first one: become a leader */
             if (tty && pgid == 0) tcsetpgrp(s->tty_fd, getpid()); /* SIGTTOU is still ignored here */
             child_signals();

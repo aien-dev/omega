@@ -350,14 +350,14 @@ static int random_bytes(uint8_t *b, size_t n)
 static int load_key(OshJournal *j, const char *path, int have_records)
 {
     char kp[4200];
-    if (snprintf(kp, sizeof kp, "%s.key", path) >= (int)sizeof kp) return jfail(j, ENAMETOOLONG, "journal path too long%s%u", "", 0);
+    if (snprintf(kp, sizeof kp, "%s.key", path) >= (int)sizeof kp) return jfail(j, ENAMETOOLONG, "journal path too long%s", "", 0);
     int fd = open(kp, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
     if (fd < 0 && errno == ENOENT) {
-        if (have_records) return jfail(j, ENOENT, "key file %s is missing but the journal already has records; refusing to start a new key%u", kp, 0);
+        if (have_records) return jfail(j, ENOENT, "key file %s is missing but the journal already has records; refusing to start a new key", kp, 0);
         char tmp[4300];
         snprintf(tmp, sizeof tmp, "%s.tmp.%ld", kp, (long)getpid());
         int tfd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
-        if (tfd < 0) return jfail(j, errno, "cannot create key file %s%u", kp, 0);
+        if (tfd < 0) return jfail(j, errno, "cannot create key file %s", kp, 0);
         uint8_t k[32];
         int ok = random_bytes(k, sizeof k) == 0 && write_all(tfd, (const char *)k, sizeof k) == 0 && sync_fd(tfd) == 0;
         int e = ok ? 0 : (errno ? errno : EIO);
@@ -365,14 +365,14 @@ static int load_key(OshJournal *j, const char *path, int have_records)
         memset(k, 0, sizeof k);
         if (ok && link(tmp, kp) != 0 && errno != EEXIST) { ok = 0; e = errno; }
         unlink(tmp);
-        if (!ok) return jfail(j, e, "cannot create key file %s%u", kp, 0);
+        if (!ok) return jfail(j, e, "cannot create key file %s", kp, 0);
         int dr = fsync_parent(kp);
-        if (dr) return jfail(j, -dr, "cannot sync the directory of key file %s%u", kp, 0);
+        if (dr) return jfail(j, -dr, "cannot sync the directory of key file %s", kp, 0);
         fd = open(kp, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
     }
-    if (fd < 0) return jfail(j, errno, "cannot open key file %s%u", kp, 0);
+    if (fd < 0) return jfail(j, errno, "cannot open key file %s", kp, 0);
     struct stat st;
-    if (fstat(fd, &st) != 0) { int e = errno; close(fd); return jfail(j, e, "cannot stat key file %s%u", kp, 0); }
+    if (fstat(fd, &st) != 0) { int e = errno; close(fd); return jfail(j, e, "cannot stat key file %s", kp, 0); }
     if (!S_ISREG(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 0777) != 0600 || st.st_size != 32) {
         close(fd);
         return jfail(j, EACCES, "key file %s must be a regular file of 32 bytes, owned by you, mode 0600 (found mode %04o); refusing it", kp, (unsigned)(st.st_mode & 07777));
@@ -381,7 +381,7 @@ static int load_key(OshJournal *j, const char *path, int have_records)
     while (got < 32) {
         ssize_t r = read(fd, j->key + got, 32 - got);
         if (r < 0 && errno == EINTR) continue;
-        if (r <= 0) { close(fd); return jfail(j, EIO, "cannot read key file %s%u", kp, 0); }
+        if (r <= 0) { close(fd); return jfail(j, EIO, "cannot read key file %s", kp, 0); }
         got += (size_t)r;
     }
     close(fd);
@@ -401,32 +401,38 @@ int osh_journal_open(OshJournal *j, const char *path)
         size = (long)st.st_size;
     }
     int fd = open(path, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
-    if (fd < 0) return jfail(j, errno, "cannot open journal %s%u", path, 0);
+    if (fd < 0) return jfail(j, errno, "cannot open journal %s", path, 0);
     /* ONE SESSION PER JOURNAL: take the lock first, before the key is read or created and before recovery runs, so a live
      * session's open intents are never reported UNKNOWN by another. The kernel drops the lock when this process exits or dies. */
     if (flock(fd, LOCK_EX | LOCK_NB) != 0) {
         int e = errno;
         close(fd);
-        if (e == EWOULDBLOCK) return jfail(j, EBUSY, "journal %s is in use by another osh session (one session per journal); start this one with --journal FILE to use a separate journal%u", path, 0);
-        return jfail(j, e, "cannot lock journal %s%u", path, 0);
+        if (e == EWOULDBLOCK) return jfail(j, EBUSY, "journal %s is in use by another osh session (one session per journal); start this one with --journal FILE to use a separate journal", path, 0);
+        return jfail(j, e, "cannot lock journal %s", path, 0);
     }
-    if (fstat(fd, &st) == 0) size = (long)st.st_size; /* re-read under the lock */
+    /* everything below is decided from the locked descriptor, not from the earlier lstat (another session may have created or filled the file meanwhile) */
+    if (fstat(fd, &st) != 0) { int e = errno; close(fd); return jfail(j, e, "cannot stat journal %s", path, 0); }
+    if (!S_ISREG(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 07777) != 0600) {
+        close(fd);
+        return jfail(j, EACCES, "journal %s must be a regular file owned by you with mode 0600 (found mode %04o); refusing it, fix or remove it", path, (unsigned)(st.st_mode & 07777));
+    }
+    size = (long)st.st_size;
     int krc = load_key(j, path, size > 0);
     if (krc) { close(fd); return krc; }
-    if (!existed) {
+    if (size == 0) { /* empty: new, so make it and its directory entry durable */
         int rc = sync_fd(fd) == 0 ? fsync_parent(path) : -errno;
-        if (rc) { close(fd); return jfail(j, rc < 0 ? -rc : EIO, "cannot sync new journal %s%u", path, 0); }
+        if (rc) { close(fd); return jfail(j, rc < 0 ? -rc : EIO, "cannot sync new journal %s", path, 0); }
     }
     uint64_t mx = 0;
     int nl = 1;
-    if (existed) {
+    if (size > 0) {
         int bad = 0;
         int rc = scan(path, max_cb, &mx, &bad, &nl);
-        if (rc && rc != -ENOENT) { close(fd); return jfail(j, -rc, "cannot read journal %s%u", path, 0); }
+        if (rc && rc != -ENOENT) { close(fd); return jfail(j, -rc, "cannot read journal %s", path, 0); }
     }
     j->fd = fd;
     j->next_rec = mx + 1;
-    if (!nl && commit(j, "\n", 1, 0) != 0) { int e = errno; close(fd); j->fd = -1; return jfail(j, e ? e : EIO, "cannot repair journal tail %s%u", path, 0); }
+    if (!nl && commit(j, "\n", 1, 0) != 0) { int e = errno; close(fd); j->fd = -1; return jfail(j, e ? e : EIO, "cannot repair journal tail %s", path, 0); }
     return 0;
 }
 
@@ -434,7 +440,7 @@ int osh_journal_open(OshJournal *j, const char *path)
 int osh_journal_check_dir(OshJournal *j, const char *dir)
 {
     struct stat st;
-    if (stat(dir, &st) != 0) return jfail(j, errno, "cannot stat state directory %s%u", dir, 0);
+    if (stat(dir, &st) != 0) return jfail(j, errno, "cannot stat state directory %s", dir, 0);
     if (!S_ISDIR(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 077) != 0)
         return jfail(j, EACCES, "state directory %s must be owned by you with mode 0700 (found mode %04o); refusing it, fix it with chmod 700", dir, (unsigned)(st.st_mode & 07777));
     return 0;
