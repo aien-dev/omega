@@ -1,5 +1,19 @@
 {
-  "schema_version": "1.0.0",
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-09T22:59:20Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:43d0b36f5ec7a9293dd0ecbaa3eab001d3a1315ddf9928777fcabfd49dda84fa",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 81,
+      "generated_at_commit": "1d02dcc3b26decf72945b2d69893e62843f1f137",
+      "source_tree": "sha256:588ae852f69d88ae3f1637b60ecea16ca00001f03c48c708d1d3c331e6aa595b"
+    }
+  },
   "name": "evaluator",
-  "purpose": "Agent 4 independent adversarial evaluator for AT-0: independent AT0_CASE_V1 codec, exact-arithmetic AT0_RESULT_V2 checker, long-double shadow oracle, 25 planted-defect mutants, 59-case public corpus, hidden-set commitment, isolation gate, qualification harness (run.sh) and machine-readable results"
+  "purpose": "Agent 4 independent adversarial evaluator for AT-0: independent AT0_CASE_V1 codec, exact-arithmetic AT0_RESULT_V2 checker, long-double shadow oracle, 25 planted-defect mutants, 59-case public corpus, hidden-set commitment, isolation gate, qualification harness (run.sh) and machine-readable results",
+  "schema_version": "1.0.0"
 }

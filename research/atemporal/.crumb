@@ -3,21 +3,21 @@
     "generated": {
       "children": [
         {
-          "digest": "47989e5a75e0c57d727c4e30df41409c6f1b19d788b448cba9c78e08271eec5e",
-          "last_commit": "9862488",
+          "digest": "142467e342417586ef119dd333983ce252bd44ed17b4ab330b45ad39e82ac444",
+          "last_commit": "1d02dcc",
           "name": "at0",
           "purpose": "AT-0 V1: finite clock plus one qubit under the AT0_CASE_V1 / AT0_RESULT_V1 contracts"
         }
       ],
-      "children_root": "sha256:5e1db8ab35a7e3b9ea51606f3dc16453e2780216653078997dd74c614276c219",
-      "compiled_at": "2026-10-09T22:54:25Z",
+      "children_root": "sha256:f5e460cdb952cb38366edfbe054c815155972586656c8d506f0f56cd39a2653a",
+      "compiled_at": "2026-10-09T22:59:20Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:39bd5d405d08cb1c080b4b886b5e36fff9b609102394cc81234917e5e376d40d",
+      "digest": "sha256:42ff6f7848d17826d6d62e6276efe0a9e1dd3dc9d119c12e08285a48dc7592ae",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 78,
-      "generated_at_commit": "98624882f542a3ad77b6edbd5e431af08fb4b625",
-      "source_tree": "sha256:a6bcb1bd91f996955e1c5fcc0d231c126a473b077fc8f93a032ff802ca419627"
+      "files": 159,
+      "generated_at_commit": "1d02dcc3b26decf72945b2d69893e62843f1f137",
+      "source_tree": "sha256:f135842a538e40230f890be5da056348f080aa06df8175204bc34bd7e6b65b0f"
     }
   },
   "name": "atemporal",
