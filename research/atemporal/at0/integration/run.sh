@@ -156,6 +156,7 @@ while read -r c; do
         printf '%s\t%s\tREFUSED\t%s\tREFUSED\t%s\tNOT_APPLICABLE\tNOT_APPLICABLE\t-\t-\tmodel[%s] oracle[%s]\t%s\n' "$c" "$cls" "$want" "$got" "$got" "$orc_line" "$want" >> "$CT"
         [ "$ok" = SAME ] || NDIFF_TOOL=$((NDIFF_TOOL+1)); continue
     fi
+    [ "$cls" = refuse ] && [ $rc -eq 0 ] && NDIFF_TOOL=$((NDIFF_TOOL+1))
     if [ $rc -ne 0 ]; then
         "$ORACLE" emit "$case_abs" -o "$OUT/components/$name.oracle" 2>/dev/null
         printf '%s\t%s\t-\t-\tERROR\t%s\tNO\tNOT_RUN\t%s\t%s\trc=%s\t%s\n' "$c" "$cls" "$(head -1 "$WORK/err" | cut -c1-80)" "$(field "$OUT/components/$name.oracle" outcome)" "$(field "$OUT/components/$name.oracle" failure_codes)" "$rc" "$want" >> "$CT"; rm -f "$res"; continue
@@ -253,12 +254,12 @@ AXALL=$(awk -F'\t' '$1 ~ /^P1/ && !($4=="NO" && $3=="SCHRODINGER_DEVIATION_EXCEE
 
 # ---------- 11. isolation (G2) ----------
 ISO="$WORK/iso"; mkdir -p "$ISO/clean" "$ISO/mut"
-ok=1
+ISOOK=1
 for f in "$AT0"/model/at0_*.c "$S/src/sha256.c"; do
     b=$(basename "$f" .c); [ "$b" = at0_main ] && continue
-    cc $CF -I"$AT0/model" -I"$S/src" -c "$f" -o "$ISO/clean/$b.o" >> "$LOG" 2>&1 || ok=0
+    cc $CF -I"$AT0/model" -I"$S/src" -c "$f" -o "$ISO/clean/$b.o" >> "$LOG" 2>&1 || ISOOK=0
 done
-[ $ok = 1 ] || say "NOTE model objects did not all compile"
+[ $ISOOK = 1 ] || say "NOTE model objects did not all compile (C7 will FAIL)"
 CLEANOBJS=$(ls "$ISO"/clean/*.o | grep -v /at0_case\.o)
 sh "$HERE/isolation_check.sh" $CLEANOBJS > "$R/isolation-model-own.log" 2>&1; i1=$?
 ALLOW='^(fopen|fclose|fread|ferror)$' sh "$HERE/isolation_check.sh" "$ISO/clean/at0_case.o" > "$R/isolation-model-case-reader.log" 2>&1; i3=$?
@@ -271,7 +272,7 @@ cc $CF -I"$AT0/model" -I"$S/src" -c "$ISO/mut/at0_engine_hidden_clock.c" -o "$IS
 sh "$HERE/isolation_check.sh" "$ISO/mut/at0_engine_hidden_clock.o" > "$R/isolation-model-mutant-own.log" 2>&1; m1=$?
 sh "$AT0/evaluator/gates/isolation.sh" "$ISO/mut/at0_engine_hidden_clock.o" > "$R/isolation-model-mutant-evaluator-gate.log" 2>&1; m2=$?
 # a hidden-clock mutant that reads CNTVCT_EL0 or the like is invisible to any symbol scan: recorded as a limit, not tested
-[ $i1 -eq 0 ] && [ $i2 -eq 0 ] && [ $i3 -eq 0 ] && ctrl C7-ISOLATION-MODEL-CLEAN PASS "nm -u over model compute objects (all model .c except at0_main.c and at0_case.c, plus src/sha256.c): isolation_check.sh and evaluator/gates/isolation.sh; at0_case.o scanned with only fopen/fread/fclose/ferror exempt" "$(echo $CLEANOBJS | wc -w) compute objects clean under both scanners; at0_case.o clean apart from the case-file reader (strict scan rc=$i3s: $(head -1 "$R/isolation-model-case-reader-strict.log" | cut -c1-120)), which the charter wants in a thin outer layer (see QUALIFICATION.md)" \
+[ $ISOOK = 1 ] && [ $i1 -eq 0 ] && [ $i2 -eq 0 ] && [ $i3 -eq 0 ] && ctrl C7-ISOLATION-MODEL-CLEAN PASS "nm -u over model compute objects (all model .c except at0_main.c and at0_case.c, plus src/sha256.c): isolation_check.sh and evaluator/gates/isolation.sh; at0_case.o scanned with only fopen/fread/fclose/ferror exempt" "$(echo $CLEANOBJS | wc -w) compute objects clean under both scanners; at0_case.o clean apart from the case-file reader (strict scan rc=$i3s: $(head -1 "$R/isolation-model-case-reader-strict.log" | cut -c1-120)), which the charter wants in a thin outer layer (see QUALIFICATION.md)" \
     || ctrl C7-ISOLATION-MODEL-CLEAN FAIL "nm -u over model compute objects" "own rc=$i1 evaluator-gate rc=$i2 case-reader rc=$i3: $(head -2 "$R/isolation-model-own.log" | tr '\n' ' ')"
 [ $m1 -eq 1 ] && [ $m2 -ne 0 ] && ctrl C8-ISOLATION-MODEL-HIDDEN-CLOCK-MUTANT PASS "same scanners on at0_engine.c plus a clock_gettime call" "caught by both: $(head -1 "$R/isolation-model-mutant-own.log")" \
     || ctrl C8-ISOLATION-MODEL-HIDDEN-CLOCK-MUTANT FAIL "same scanners on the hidden-clock mutant" "own rc=$m1 evaluator-gate rc=$m2 (both must flag)"
@@ -306,7 +307,7 @@ if [ -f "$S/mk/at0.mk" ]; then
             ( cd "$D" && make -n -k $g PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 ) > "$HY/$1.$g" 2>&1; echo "exit $?" >> "$HY/$1.$g"
             ( cd "$D" && make -n -k $g ) > "$HY/$1.$g.default" 2>&1; echo "exit $?" >> "$HY/$1.$g.default"
         done
-        ( cd "$D" && make -pn -k all PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 ) 2>/dev/null | grep -v '^#' | sed -E 's/[0-9a-f]{12,40}/SHA/g; s/ at0-check at0-clean//; s| mk/at0\.mk||g' | grep -vi at0 | grep -v -E '^(MAKEFILE_LIST|MA2_RUN_ID|R16_STAMP)' | LC_ALL=C sort -u > "$HY/$1.db"
+        ( cd "$D" && make -pn -k all PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0 ) 2>/dev/null | grep -v '^#' | sed -E 's/[0-9a-f]{12,40}/SHA/g; s/ at0-check at0-clean//; s| mk/at0\.mk||g' | grep -v -E '^(AT0_[A-Z_]* |at0-(check|clean):|AT0_MK|MAKEFILE_LIST|MA2_RUN_ID|R16_STAMP)' | grep -v -E '^\t.*(AT0_|integration/run\.sh|at0-clean|build/at0)' | LC_ALL=C sort -u > "$HY/$1.db"
     }
     # "without": a second clone with mk/at0.mk removed and committed, so both trees are clean and the comparison is not polluted by dirty-tree stamps
     S2="$WORK/src-without"; git clone -q --no-hardlinks "$S" "$S2" && git -C "$S2" rm -q mk/at0.mk && git -C "$S2" -c user.email=a5@example.invalid -c user.name=a5 commit -q -m "without at0.mk (control)"
@@ -375,18 +376,27 @@ sed '/^reference /d' "$OUT/components/P1-kat-ideal-qubit-n4.oracle" > "$WORK/o2"
 ar oracle-without-reference "no reference lines" "$KC" "$OUT/components/P1-kat-ideal-qubit-n4.engine" "$WORK/o2"
 [ -z "$AR_BAD" ] && ctrl C18-ASSEMBLER-REFUSALS PASS "at0-assemble assemble on $AR_N tampered or mismatched inputs (altered case_id, oracle or engine of another case, reference lines in the engine output, unmarked oracle record, oracle without reference lines)" "all refused with exit 3 and the expected message" \
     || ctrl C18-ASSEMBLER-REFUSALS FAIL "at0-assemble assemble on tampered inputs" "not refused as expected:$AR_BAD"
+[ "$NDIFF_TOOL" = 0 ] && ctrl C19-REFUSAL-AGREEMENT PASS "model and oracle refusal codes against evaluator manifest on all refuse cases" "all $REFN refuse cases agree" || ctrl C19-REFUSAL-AGREEMENT FAIL "model and oracle refusal codes against evaluator manifest on all refuse cases" "$NDIFF_TOOL of $REFN refuse cases differ (or a refuse case was accepted); see cases.tsv and QUALIFICATION.md D2, D3"
 # ---------- 15. gates ----------
 isoG=PASS
 for k in C7 C8 C9 C10 C11 C12 C13; do st=$(awk -F'\t' -v k="$k" '$1 ~ "^"k"-" {print $2}' "$CTRL"); [ "$st" = PASS ] || isoG=$(awk -F'\t' -v k="$k" -v cur="$isoG" 'BEGIN{r=cur} $1 ~ "^"k"-" && $2=="FAIL" {r="FAIL"} $1 ~ "^"k"-" && $2=="NOT_RUN" && r!="FAIL" {r="NOT_RUN"} END{print r}' "$CTRL"); done
-gate AT0-G2 "$isoG" "controls C7-C13 in controls.tsv (isolation_check.sh and evaluator/gates/isolation.sh on model and Rust oracle objects incl. mutants; make -n hygiene; make parses with PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0)" "adaptation for Rust verified by Agent 4's gate on the same objects (C9, C10); Agent 4 independent sign-off still to be given on omega#358"
+[ "$isoG" = PASS ] && isoG=INCONCLUSIVE
+gate AT0-G2 "$isoG" "controls C7-C13 in controls.tsv (isolation_check.sh and evaluator/gates/isolation.sh on model and Rust oracle objects incl. mutants; make -n hygiene; make parses with PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0)" "all runner checks C7-C13 pass, but the charter requires Agent 4 independent sign-off of the Rust adaptation (not yet given) and Agent 4 gate misses the Rust std::time mutant (C10, D5): status stays INCONCLUSIVE until both are resolved"
 [ "$G4N" -gt 0 ] && [ "$G4OK" = "$G4N" ] && gate AT0-G4 PASS "every positive case: outcome PASS and expectation_met YES (cases.tsv)" "$G4OK/$G4N" || gate AT0-G4 FAIL "every positive case: outcome PASS and expectation_met YES" "$G4OK/$G4N"
 G5C=$(awk -F'\t' '$2=="PASS" && $1 ~ /^C(5|6)-/ {n++} END {print n+0}' "$CTRL")
 [ "$G5N" -gt 0 ] && [ "$G5OK" = "$G5N" ] && [ "$G5C" = 2 ] && gate AT0-G5 PASS "every negative case: outcome FAIL with exactly its expected codes and expectation_met YES; axis-swap and Y-sign mutants caught (C5, C6); hidden-clock mutants caught (C8, C10)" "$G5OK/$G5N negative cases" \
     || gate AT0-G5 FAIL "negative arm" "negative $G5OK/$G5N, mutant controls passing $G5C/2"
 EVSELF=$(grep -E '^(SELF|DERIV|MUTANT|GATE|CAND-WALLCLOCK|CAND-ISOLATION)[^ ]* +[a-z]+ +FAIL' "$R/evaluator-run.log" | wc -l)
 C3ST=$(awk -F'\t' '$1 ~ /^C3-/ {print $2}' "$CTRL"); NVALID=$((NCASE-REFN))
-[ "$G6T" -gt 0 ] && [ "$G6OK" = "$G6T" ] && [ "$EVSELF" = 0 ] && [ "$C3ST" = PASS ] && gate AT0-G6 PASS "at0-eval result <result> --case <case> on every assembled result (verify/*.json) plus evaluator/run.sh with this runner as candidate; wall-clock control C3" "evaluator PASS on $G6OK of $NVALID valid cases (the other $((NVALID-G6T)) produced no result file, see G4); evaluator self-tests, mutants and gates with this runner as candidate: 0 FAIL; evidence folder committed by the PR" \
-    || gate AT0-G6 FAIL "independent verification" "evaluator PASS on $G6OK/$G6T results, evaluator self/gate failures $EVSELF, wall-clock $C3ST"
+if [ "$G6T" -gt 0 ] && [ "$G6OK" = "$G6T" ] && [ "$EVSELF" = 0 ] && [ "$C3ST" = PASS ]; then
+    if [ "$G6T" = "$NVALID" ]; then
+        gate AT0-G6 PASS "at0-eval result <result> --case <case> on every assembled result (verify/*.json) plus evaluator/run.sh with this runner as candidate; wall-clock control C3" "evaluator PASS on $G6OK of $NVALID valid cases (the other $((NVALID-G6T)) produced no result file, see G4); evaluator self-tests, mutants and gates with this runner as candidate: 0 FAIL; evidence folder committed by the PR"
+    else
+        gate AT0-G6 INCONCLUSIVE "verifier agreed with every result produced, but not every valid case produced a result" "evaluator PASS on $G6OK of $NVALID valid cases; $((NVALID-G6T)) produced no result (see G4); evaluator self-tests, mutants and gates with this runner as candidate: 0 FAIL"
+    fi
+else
+    gate AT0-G6 FAIL "independent verification" "evaluator PASS on $G6OK/$G6T results, evaluator self/gate failures $EVSELF, wall-clock $C3ST"
+fi
 gate AT0-G7 NOT_RUN "-" "Agent 6 (scientific review) owns G7; Agent 5 does not run it"
 
 # ---------- 16. result digests and summary ----------

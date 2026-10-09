@@ -12,8 +12,8 @@
  * Exact arithmetic: every binary64 and every scaled decimal is lifted to an integer multiple of
  * the unit 2^-1074 * 10^-40 (all binary64 exponents >= -1074, all scaled decimals have k <= 40),
  * held in a 2304-bit two's complement integer. Nothing is ever compared as a float.
- * A binary64 magnitude of 2^100 or more is clamped to 2^100: it exceeds every tolerance
- * (all <= 1) either way, so no verdict changes. */
+ * No clamping: the largest binary64 lifted to these units needs about 2230 bits and the sums in section 4
+ * add about 12 bits, so everything fits the 2304-bit signed integer. */
 #include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -79,7 +79,6 @@ static void from_f64(Big *r, uint64_t bits)
     int neg = (int)(bits >> 63), ex = (int)((bits >> 52) & 0x7ff);
     uint64_t fr = bits & 0xfffffffffffffULL, mant = ex ? (fr | (1ULL << 52)) : fr;
     int e = ex ? ex - 1075 : -1074, shift = e + 1074;
-    if (shift > 1074 + 40) { mant = 1; shift = 1074 + 100; }   /* clamp, see header */
     b_zero(r);
     r->w[0] = (uint32_t)mant; r->w[1] = (uint32_t)(mant >> 32);
     b_shl(r, (unsigned)shift);
@@ -202,14 +201,14 @@ static int axis_index(const char *a, const char *s)
 static int parse_values(char **lines, int from, int to, Values *V, char *err, size_t ecap)
 {
     memset(V, 0, sizeof *V); V->kernel_dim = -1;
-    int nlabel = 0, nclock = 0, npauli = 0, nref = 0;
+    int nlabel = 0, nclock = 0, npauli = 0, nref = 0, hk = 0, hc = 0, hp = 0;
     char t[8][96];
     for (int i = from; i < to; i++) {
         int n = tokens(lines[i], t, 8);
         if (n < 1) continue;
-        if (!strcmp(t[0], "physical_state_kernel_dim") && n == 2) V->kernel_dim = atoi(t[1]);
-        else if (!strcmp(t[0], "constraint_residual") && n == 3) { if (parse_value(&V->constraint, t[1], t[2])) goto bad; }
-        else if (!strcmp(t[0], "povm_residual") && n == 3) { if (parse_value(&V->povm, t[1], t[2])) goto bad; }
+        if (!strcmp(t[0], "physical_state_kernel_dim") && n == 2) { char *e; long kd = strtol(t[1], &e, 10); if (hk++ || *e || kd < 0 || kd > 4096) goto bad; V->kernel_dim = (int)kd; }
+        else if (!strcmp(t[0], "constraint_residual") && n == 3) { if (hc++ || parse_value(&V->constraint, t[1], t[2])) goto bad; }
+        else if (!strcmp(t[0], "povm_residual") && n == 3) { if (hp++ || parse_value(&V->povm, t[1], t[2])) goto bad; }
         else if (!strcmp(t[0], "label") && n == 4) {
             int k = atoi(t[1]); if (k != nlabel || k >= MAXM) goto bad;
             V->status[k] = !strcmp(t[3], "DEFINED") ? 0 : !strcmp(t[3], "UNDEFINED") ? 1 : !strcmp(t[3], "INDETERMINATE") ? 2 : -1;
@@ -230,7 +229,7 @@ static int parse_values(char **lines, int from, int to, Values *V, char *err, si
         snprintf(err, ecap, "unparseable or out-of-order values line: %.80s", lines[i]); return -1;
     }
     V->M = nlabel;
-    if (V->kernel_dim < 0 || nclock != nlabel || npauli != 6 * nlabel || (nref != 0 && nref != 6 * nlabel)) {
+    if (!hk || !hc || !hp || V->kernel_dim < 0 || nclock != nlabel || npauli != 6 * nlabel || (nref != 0 && nref != 6 * nlabel)) {
         snprintf(err, ecap, "values block counts: labels %d clock %d pauli %d reference %d", nlabel, nclock, npauli, nref); return -1;
     }
     V->have_ref = nref != 0;
