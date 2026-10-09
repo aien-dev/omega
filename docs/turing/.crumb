@@ -14,20 +14,20 @@
       "children": [
         {
           "digest": "b89d63e1e54100fab00e608e20b7c0de1497d64dcd28e2580046b9235b1d2782",
-          "last_commit": "2d52219",
+          "last_commit": "a9b9d0d",
           "name": "protocols",
           "purpose": "Directory docs/turing/protocols. Purpose not yet described by a human."
         }
       ],
       "children_root": "sha256:fe77bf98001350090630834e0d4555e4eab5fa4a20c67d8820b60be154eb7094",
-      "compiled_at": "2026-10-09T15:55:39Z",
+      "compiled_at": "2026-10-09T16:22:14Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:e96878d9e530244ed2e8a8bfdc3293ece772457c8a66a201353854ac50e4925a",
+      "digest": "sha256:6b619c2f56758f1af237e926b035df360da7b6a8d3fd60e31e062b8d95d52141",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 19,
-      "generated_at_commit": "e2e08e9adb27b7f7bd7d69d554000f859c2862c2",
-      "source_tree": "sha256:9dccf6f8aebf77120cdd21a47c8328932f1a5d52379df7fcbec75f25a15f9159"
+      "generated_at_commit": "7a9a3a34a93df74e2a226db8de6ba8ea0cfad672",
+      "source_tree": "sha256:58dc43c4834ffab60a9ba2d2abd879ae9dea8fba451ed8c08fe4b8fa700a28a3"
     },
     "owner_lane": "",
     "provenance": {
