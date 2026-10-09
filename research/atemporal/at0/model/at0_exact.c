@@ -38,16 +38,21 @@ static at0_i128 i128_gcd(at0_i128 a, at0_i128 b)
 /* reduce n/d (d != 0) and check the contract limits */
 static at0_status rat_from_i128(at0_i128 n, at0_i128 d, at0_rat *out)
 {
+    /* reduce; the only limit here is representability (|n|, d < 2^62) so that every further
+     * product of two rationals fits in 128 bits. The contract limit 2^20 applies to tokens
+     * written in a case file and is enforced by validity rule 3 (at0_rat_in_limits). */
     if (!out || d == 0) return AT0_ERR_ARGUMENT;
     if (d < 0) { n = -n; d = -d; }
     at0_i128 g = i128_gcd(n, d);
     if (g > 1) { n /= g; d /= g; }
-    if (i128_abs(n) > AT0_RATIONAL_LIMIT || d > AT0_RATIONAL_LIMIT) return AT0_ERR_OVERFLOW;
+    if (i128_abs(n) > AT0_RAT_REPR_LIMIT || d > AT0_RAT_REPR_LIMIT) return AT0_ERR_OVERFLOW;
     out->n = (int64_t)n; out->d = (int64_t)d;
     return AT0_OK;
 }
 
 at0_status at0_rat_make(int64_t n, int64_t d, at0_rat *out) { return rat_from_i128(n, d, out); }
+int at0_rat_in_limits(at0_rat a) { return a.d >= 1 && a.d <= AT0_RATIONAL_LIMIT && a.n <= AT0_RATIONAL_LIMIT && a.n >= -AT0_RATIONAL_LIMIT; }
+int at0_scaled_in_limits(at0_scaled s) { return s.k >= 0 && s.k <= AT0_SCALED_K_MAX && s.n < (uint64_t)AT0_INT_SATURATED; }
 
 at0_status at0_rat_add(at0_rat a, at0_rat b, at0_rat *out)
 {
@@ -108,19 +113,25 @@ at0_status at0_rat_reduce_turn(at0_rat x, at0_rat *out)
 }
 
 /* ---- canonical integer token -------------------------------------------- */
+/* A canonical digit string longer than 18 digits cannot fit the contract limits; it is
+ * parsed as the saturation value AT0_INT_SATURATED (above every limit, not divisible by 10)
+ * so that rule 3 refuses it as CASE_INVALID_PARAMETER after the version check, and no
+ * int64 arithmetic can overflow. */
 static int parse_canonical_int(const char *s, size_t len, int64_t *out)
 {
     /* decimal, optional '-', no leading zeros, no '+', no "-0" */
-    if (len == 0 || len > 19) return 0;
+    if (len == 0 || len > 64) return 0;
     size_t i = 0; int neg = 0;
     if (s[0] == '-') { neg = 1; i = 1; if (len == 1) return 0; }
     if (s[i] == '0' && len - i > 1) return 0;
     if (neg && s[i] == '0') return 0;
     int64_t v = 0;
+    size_t digits = len - i;
     for (; i < len; i++) {
         if (!isdigit((unsigned char)s[i])) return 0;
-        v = v * 10 + (s[i] - '0');
+        if (digits <= 18) v = v * 10 + (s[i] - '0');
     }
+    if (digits > 18) v = AT0_INT_SATURATED;
     *out = neg ? -v : v;
     return 1;
 }
@@ -134,8 +145,8 @@ at0_status at0_rat_parse(const char *tok, at0_rat *out)
     if (!parse_canonical_int(tok, (size_t)(slash - tok), &n)) return AT0_CASE_PARSE_ERROR;
     if (!parse_canonical_int(slash + 1, strlen(slash + 1), &d)) return AT0_CASE_PARSE_ERROR;
     if (d < 1) return AT0_CASE_NONCANONICAL;
-    if (n > AT0_RATIONAL_LIMIT || n < -AT0_RATIONAL_LIMIT || d > AT0_RATIONAL_LIMIT) return AT0_CASE_INVALID_PARAMETER;
-    if (i128_gcd(n, d) != 1) return AT0_CASE_NONCANONICAL;   /* covers 0/5 and 2/4 */
+    int saturated = n == AT0_INT_SATURATED || n == -AT0_INT_SATURATED || d == AT0_INT_SATURATED;
+    if (!saturated && i128_gcd(n, d) != 1) return AT0_CASE_NONCANONICAL;   /* covers 0/5 and 2/4; limits are rule 3 */
     out->n = n; out->d = d;
     return AT0_OK;
 }
@@ -166,7 +177,7 @@ at0_status at0_scaled_parse(const char *tok, at0_scaled *out)
     if (!parse_canonical_int(tok, (size_t)(at - tok), &n)) return AT0_CASE_PARSE_ERROR;
     if (!parse_canonical_int(at + 1, strlen(at + 1), &k)) return AT0_CASE_PARSE_ERROR;
     if (n < 0 || k < 0) return AT0_CASE_NONCANONICAL;
-    if (k > AT0_SCALED_K_MAX) return AT0_CASE_INVALID_PARAMETER;
+    if (k > 1000) k = 1000;                 /* above every limit; rule 3 refuses it */
     if (n == 0 && k != 0) return AT0_CASE_NONCANONICAL;
     if (n != 0 && k != 0 && n % 10 == 0) return AT0_CASE_NONCANONICAL;
     out->n = (uint64_t)n; out->k = (int)k;

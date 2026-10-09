@@ -114,7 +114,9 @@ static int test_exact_arithmetic(void)
     OK(at0_rat_reduce_turn(R(7, 4), &r)); CHECK(r.n == -1 && r.d == 4, "7/4 mod turn -> -1/4, got %lld/%lld", (long long)r.n, (long long)r.d);
     OK(at0_rat_reduce_turn(R(-1, 2), &r)); CHECK(r.n == -1 && r.d == 2, "-1/2 stays -1/2");
     OK(at0_rat_reduce_turn(R(1, 2), &r)); CHECK(r.n == -1 && r.d == 2, "1/2 -> -1/2");
-    CHECK(at0_rat_make(AT0_RATIONAL_LIMIT + 1, 1, &r) == AT0_ERR_OVERFLOW, "limit");
+    OK(at0_rat_make(AT0_RATIONAL_LIMIT + 1, 1, &r)); CHECK(!at0_rat_in_limits(r), "contract limit is a rule-3 property, not an arithmetic one");
+    CHECK(at0_rat_make(INT64_MAX, 1, &r) == AT0_ERR_OVERFLOW, "representability limit");
+    OK(at0_rat_make(1000, 1, &r)); OK(at0_rat_mul(r, r, &r)); OK(at0_rat_mul(r, r, &r)); CHECK(r.n == 1000000000000LL, "wide product");
     CHECK(at0_rat_parse("2/4", &r) == AT0_CASE_NONCANONICAL, "2/4");
     CHECK(at0_rat_parse("-0/1", &r) == AT0_CASE_PARSE_ERROR, "-0/1");
     CHECK(at0_rat_parse("+1/1", &r) == AT0_CASE_PARSE_ERROR, "+1/1");
@@ -122,7 +124,7 @@ static int test_exact_arithmetic(void)
     at0_scaled s;
     CHECK(at0_scaled_parse("10@13", &s) == AT0_CASE_NONCANONICAL, "10@13");
     CHECK(at0_scaled_parse("0@3", &s) == AT0_CASE_NONCANONICAL, "0@3");
-    CHECK(at0_scaled_parse("1@41", &s) == AT0_CASE_INVALID_PARAMETER, "1@41");
+    OK(at0_scaled_parse("1@41", &s)); CHECK(!at0_scaled_in_limits(s), "1@41 parses, rule 3 refuses it");
     OK(at0_scaled_parse("25@2", &s)); CHECK(s.n == 25 && s.k == 2, "25@2");
     /* exact comparison: p = 0.25, b = 1e-15, tol = 1e-9 -> defined */
     int le, gt;
@@ -450,6 +452,7 @@ static int test_repeatability_and_order(void)
     return 0;
 }
 
+static int test_review_findings(void);
 int main(int argc, char **argv)
 {
     if (argc != 2) { fprintf(stderr, "usage: at0-tests <cases-dir>\n"); return 2; }
@@ -469,6 +472,7 @@ int main(int argc, char **argv)
         { "global_phase_invariance", test_global_phase_invariance },
         { "invalid_input_refusal", test_invalid_input_refusal },
         { "repeatability_and_order", test_repeatability_and_order },
+        { "review_findings_f1_f5", test_review_findings },
     };
     int total = (int)(sizeof tests / sizeof tests[0]), passed = 0;
     for (int i = 0; i < total; i++) {
@@ -480,4 +484,38 @@ int main(int argc, char **argv)
     }
     printf("at0-tests: %d/%d passed\n", passed, total);
     return passed == total ? 0 : 1;
+}
+
+/* regression tests for the independent review of PR omega#360 (findings F1..F5) */
+static int test_review_findings(void)
+{
+    static at0_engine_result res; at0_engine_result *r = &res;
+    /* F1: tiny |h| = 1/1025 is a valid rational spectrum */
+    at0_case c = kat; c.hz = R(1, 1025);
+    at0_status st = finalize(&c); CHECK(st == AT0_OK, "F1 refused: %s", at0_status_name(st));
+    /* F2: energies and h0 at the contract limit */
+    c = kat; c.clock_energies[0] = R(-1048576, 1); c.h0 = R(1048576, 1);
+    OK(finalize(&c)); OK(at0_engine_run(&c, r)); CHECK(r->kernel_dim == 0, "F2 kernel %d", r->kernel_dim);
+    /* F3: large overlaps in the exact zero test */
+    c = kat; c.clock_energies[0] = R(-1000, 1); c.clock_energies[3] = R(1000, 1); c.hx = R(600, 1); c.hz = R(800, 1);
+    c.psi0[0].re = R(1000, 1);
+    OK(finalize(&c)); OK(at0_engine_run(&c, r)); CHECK(r->kernel_dim == 2 && r->psi_nonzero, "F3 run");
+    /* F4: 19-digit tokens never overflow and are refused as out of range */
+    int f = 0;
+    f |= expect_refusal("F4 long denominator", "povm_weight 1/1", "povm_weight 1/9999999999999999999", AT0_CASE_INVALID_PARAMETER);
+    f |= expect_refusal("F4 long scaled", "tol_probability 1@12", "tol_probability 9999999999999999999@0", AT0_CASE_INVALID_PARAMETER);
+    f |= expect_refusal("scaled k above 40", "tol_probability 1@12", "tol_probability 1@41", AT0_CASE_INVALID_PARAMETER);
+    f |= expect_refusal("rational above limit", "povm_weight 1/1", "povm_weight 2000000/1", AT0_CASE_INVALID_PARAMETER);
+    /* F5: version check (rule 2) precedes the limit check (rule 3) */
+    f |= expect_refusal("F5 version before limit", "OMEGA-AT0-CASE v1\n", "OMEGA-AT0-CASE v2\n", AT0_CASE_UNSUPPORTED_VERSION);
+    {
+        static char text[8192]; at0_case d;
+        memcpy(text, kat_bytes, kat_len); text[kat_len] = 0;
+        char *p = strstr(text, "OMEGA-AT0-CASE v1"); p[15] = '2';
+        char *q = strstr(text, "povm_weight 1/1"); memcpy(q, "povm_weight 2/1", 15);   /* same length, over no limit yet */
+        at0_status s2 = at0_case_parse((const uint8_t *)text, strlen(text), &d);
+        CHECK(s2 == AT0_CASE_UNSUPPORTED_VERSION, "F5: %s", at0_status_name(s2));
+    }
+    f |= expect_refusal("F5 noncanonical is rule 1, before the limit", "povm_weight 1/1", "povm_weight 2000000/4000000", AT0_CASE_NONCANONICAL);
+    return f;
 }

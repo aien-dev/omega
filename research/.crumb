@@ -21,7 +21,7 @@
     "generated": {
       "children": [
         {
-          "digest": "b8b204653d120cd5e720547a93f336c0b40b2d460b5fac2531ec59fc99235e56",
+          "digest": "fe3abca7c4f63727ca468b2a8deec5056c6efc45557a6d3b3919469a43849204",
           "last_commit": "547cda8",
           "name": "atemporal",
           "purpose": "AT-0 Clock-Free Universe research program: relational (Page-Wootters) quantum models with no ext"
@@ -33,15 +33,15 @@
           "purpose": "Directory research/dirac-oracle. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:dd001a61d963462945c86e1fdf41888c9e8dfea1a09bafa400104dc6ba77c2c4",
-      "compiled_at": "2026-10-09T22:33:14Z",
+      "children_root": "sha256:c2425e92d104ec358aae0d416df92fcb01ea9da33e7a143221a658509d628854",
+      "compiled_at": "2026-10-09T22:41:51Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:c0f67146021b2af24cf2beb6f2c383c7b5c8a803eef0719c864d5f57580b4cb7",
+      "digest": "sha256:0edca877e06d54b6be1e1a55ef36c288345b8d860bd07a74c38c736b4bd39ffb",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 164,
-      "generated_at_commit": "547cda8fefd174045da3b7833972ae5d22496878",
-      "source_tree": "sha256:8360873a9a3cdafaf7946cf52cf0b46f3b0f7dd3f5bba40ad4172f614d022538"
+      "generated_at_commit": "f5ece3506f5451e4b8e13145a96e758fe0359b86",
+      "source_tree": "sha256:bdcdca5f66f5bc4ad17e95704b536bf9b8e32c5a0a3ceca3c0bdb920e5a90cff"
     },
     "owner_lane": "",
     "provenance": {

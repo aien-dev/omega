@@ -248,6 +248,16 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
 /* rule 3: ranges and fixed values */
 static at0_status check_parameters(at0_case *c, const raw_t *r)
 {
+    /* contract limits on written tokens (AT0_CASE_V1 section 2), judged here so that rules 1 and 2 come first */
+    for (int j = 0; j < r->energies_seen && j < AT0_CLOCK_DIM_MAX; j++)
+        if (!at0_rat_in_limits(c->clock_energies[j])) return AT0_CASE_INVALID_PARAMETER;
+    if (!at0_rat_in_limits(c->h0) || !at0_rat_in_limits(c->hx) || !at0_rat_in_limits(c->hy) || !at0_rat_in_limits(c->hz)) return AT0_CASE_INVALID_PARAMETER;
+    for (int s = 0; s < AT0_SYSTEM_DIM; s++)
+        if (!at0_rat_in_limits(c->psi0[s].re) || !at0_rat_in_limits(c->psi0[s].im)) return AT0_CASE_INVALID_PARAMETER;
+    if (!at0_rat_in_limits(c->povm_tau_turns) || !at0_rat_in_limits(c->povm_weight)) return AT0_CASE_INVALID_PARAMETER;
+    if (!at0_scaled_in_limits(c->tol_constraint_residual) || !at0_scaled_in_limits(c->tol_povm_residual) ||
+        !at0_scaled_in_limits(c->tol_probability) || !at0_scaled_in_limits(c->tol_zero_probability) ||
+        !at0_scaled_in_limits(c->tol_schrodinger)) return AT0_CASE_INVALID_PARAMETER;
     if (strcmp(r->model_family, "PAGE_WOOTTERS_FINITE_IDEAL") != 0) return AT0_CASE_INVALID_PARAMETER;
     if (strcmp(r->energy_unit, "DIMENSIONLESS_HBAR_1") != 0) return AT0_CASE_INVALID_PARAMETER;
     if (strcmp(r->system_dim, "2") != 0) return AT0_CASE_INVALID_PARAMETER;
@@ -281,13 +291,13 @@ static at0_status check_spectrum(at0_case *c)
 {
     at0_rat x2, y2, z2, s;
     at0_status st;
-    if ((st = at0_rat_mul(c->hx, c->hx, &x2)) != AT0_OK) return AT0_CASE_INVALID_PARAMETER;
-    if ((st = at0_rat_mul(c->hy, c->hy, &y2)) != AT0_OK) return AT0_CASE_INVALID_PARAMETER;
-    if ((st = at0_rat_mul(c->hz, c->hz, &z2)) != AT0_OK) return AT0_CASE_INVALID_PARAMETER;
-    if ((st = at0_rat_add(x2, y2, &s)) != AT0_OK) return AT0_CASE_INVALID_PARAMETER;
-    if ((st = at0_rat_add(s, z2, &s)) != AT0_OK) return AT0_CASE_INVALID_PARAMETER;
+    if ((st = at0_rat_mul(c->hx, c->hx, &x2)) != AT0_OK) return AT0_ERR_OVERFLOW;
+    if ((st = at0_rat_mul(c->hy, c->hy, &y2)) != AT0_OK) return AT0_ERR_OVERFLOW;
+    if ((st = at0_rat_mul(c->hz, c->hz, &z2)) != AT0_OK) return AT0_ERR_OVERFLOW;
+    if ((st = at0_rat_add(x2, y2, &s)) != AT0_OK) return AT0_ERR_OVERFLOW;
+    if ((st = at0_rat_add(s, z2, &s)) != AT0_OK) return AT0_ERR_OVERFLOW;
     int sq;
-    if ((st = at0_rat_sqrt_exact(s, &c->h_norm, &sq)) != AT0_OK) return AT0_CASE_INVALID_PARAMETER;
+    if ((st = at0_rat_sqrt_exact(s, &c->h_norm, &sq)) != AT0_OK) return AT0_ERR_OVERFLOW;
     if (!sq) return AT0_CASE_IRRATIONAL_SPECTRUM;
     return AT0_OK;
 }

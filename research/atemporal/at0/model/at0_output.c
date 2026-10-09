@@ -37,7 +37,7 @@ long at0_engine_emit(const at0_case *c, const at0_engine_result *r, char *buf, s
     out_t o = { buf, cap, 0, 0 };
     char t[512];
     buf[0] = 0;
-    put(&o, "OMEGA-AT0-ENGINE v1\ndomain omega.at0.engine.v1\ncontract AT0_RESULT_V1\n");
+    put(&o, "OMEGA-AT0-ENGINE v1\ndomain omega.at0.engine.v1\ncontract AT0_RESULT_V2\n");
     snprintf(t, sizeof t, "case_name %s\ncase_id %s\nacceptance_id %s\ncase_file_sha256 %s\n",
              c->name, c->case_id, c->acceptance_id, c->case_file_sha256); put(&o, t);
     put(&o, "begin numerics\narithmetic BINARY64\n");

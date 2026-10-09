@@ -28,8 +28,10 @@
 #define AT0_CLOCK_DIM_MAX 64
 #define AT0_LABEL_MAX 256
 #define AT0_SYSTEM_DIM 2
-#define AT0_RATIONAL_LIMIT 1048576LL
+#define AT0_RATIONAL_LIMIT 1048576LL          /* contract limit on written tokens */
+#define AT0_RAT_REPR_LIMIT 4611686018427387904LL /* 2^62: representability of derived rationals */
 #define AT0_SCALED_K_MAX 40
+#define AT0_INT_SATURATED 999999999999999999LL /* parsed value of any token longer than 18 digits */
 #define AT0_LABEL_LEN 32
 #define AT0_NAME_LEN 64
 #define AT0_DIGEST_HEX 64
@@ -69,6 +71,8 @@ at0_status at0_rat_sub(at0_rat a, at0_rat b, at0_rat *out);
 at0_status at0_rat_mul(at0_rat a, at0_rat b, at0_rat *out);
 int        at0_rat_cmp(at0_rat a, at0_rat b);                 /* exact sign of a-b */
 int        at0_rat_is_zero(at0_rat a);
+int        at0_rat_in_limits(at0_rat a);        /* contract limit |n|, d <= 2^20 */
+int        at0_scaled_in_limits(at0_scaled s);  /* contract limit k <= 40 */
 double     at0_rat_to_double(at0_rat a);                      /* one correctly-rounded division */
 /* exact test: is a a square of a rational? if yes, *root is the nonnegative root */
 at0_status at0_rat_sqrt_exact(at0_rat a, at0_rat *root, int *is_square);

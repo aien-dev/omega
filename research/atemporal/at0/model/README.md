@@ -119,8 +119,18 @@ than 2; `RIGOROUS` bounds; shot sampling; the oracle's `reference` lines and the
 - Trivial kernel or exactly-zero projection: `constraint_residual undefined 0@0`, every label `UNDEFINED`,
   every `clock_probability` and `pauli` value `undefined 0@0`. AT0_RESULT_V1 does not say which label status
   to write when `Psi = 0`; `UNDEFINED` is the choice here and is an open contract question for Agent 0.
-- Rational limit overflow in validation is reported as `CASE_INVALID_PARAMETER` (AT0_CASE_V1 section 2),
-  never wrapped.
+- Contract limits on written tokens (|n|, d <= 2^20; scaled k <= 40) are judged in rule 3 as `CASE_INVALID_PARAMETER`,
+  after the shape (rule 1) and version (rule 2) checks. A token longer than 18 digits is parsed as a saturation value
+  (never an integer overflow) and refused the same way; a scaled numerator above 10^18 - 1 is refused as unsupported.
+- Derived exact quantities (`|h|`, `h0 +/- |h|`, kernel sums, exact overlaps) use 128-bit intermediates and must fit
+  63-bit numerators and denominators; a case whose derived rationals do not fit stops with `AT0_ENGINE_ERROR ERR_OVERFLOW`
+  (explicit, never a wrong number). No valid case within the contract limits is known to hit this.
+- Trivial kernel ruling (Agent 0, omega#358): `povm_residual` is still computed, nothing is divided, every label is
+  `UNDEFINED`; this engine already behaves that way. Result files move to `AT0_RESULT_V2`; the `contract` line of the
+  engine output names it, and the values block is unchanged.
+- Independent review (Claude Opus 5.5 over the full diff, 2026-10-09) found five arithmetic-limit defects, all fixed and
+  covered by `test_review_findings`; it confirmed the eigenvectors, kernel projection, phase reduction, Born rule and
+  identity hashing. Codex review was unavailable (usage limit).
 - `tests/cases/kat-ideal-qubit-n4.case` is the contract's section 6 example byte for byte
   (`case_file_sha256 ed16c95c...`).
 
