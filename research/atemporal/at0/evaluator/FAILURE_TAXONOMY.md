@@ -55,7 +55,7 @@ Severity: F = FAIL, I = INCONCLUSIVE. Any F finding makes the result FAIL.
 | E4-STRUCT-CASE-SHAPE | the embedded case block is not shaped as AT0_CASE_V1 |
 | E4-STRUCT-CASE-REFUSED | the embedded case is refused by the independent codec |
 | E4-STRUCT-ERROR-CODE | the error code is not in the closed set or disagrees with the outcome |
-| E4-STRUCT-UNDEFINED-TOKEN | `undefined` appears where the contract never allows it |
+| E4-STRUCT-UNDEFINED-TOKEN | `undefined` on constraint_residual, povm_residual, a clock_probability or a reference while the kernel is nontrivial (pauli `undefined` is governed by the label status rules below) |
 | E4-STRUCT-TRIVIAL-KERNEL-SHAPE | the kernel is trivial but the values block is not in the trivial-kernel shape |
 | E4-STRUCT-UNDEFINED-ON-DEFINED | `undefined` is used for a label that is physically defined |
 | E4-STRUCT-VALUE-ON-UNDEFINED | a number is reported for a label that is undefined |
@@ -137,7 +137,7 @@ Severity: F = FAIL, I = INCONCLUSIVE. Any F finding makes the result FAIL.
 | kernel_dim_wrong | E4-SHADOW-KERNEL-DIM | KAT |
 | residual_over_bound | E4-CHECK-MISMATCH | KAT |
 | nonfinite_hidden | E4-STRUCT-ENCODING or E4-CHECK-MISMATCH | KAT |
-| verdict_forged | E4-CHECK-/OUTCOME-/CODES-MISMATCH | N1, N2, N3, N6 (blind: KAT) |
+| verdict_forged | E4-CHECK-/OUTCOME-/CODES-MISMATCH | N1, N2, N3, N6, N7 (blind: KAT) |
 | evidence_corrupt | E4-ID-EVIDENCE | KAT |
 | verdict_id_corrupt | E4-ID-VERDICT | KAT |
 | case_id_altered | E4-ID-CASE, E4-BIND-CASE-ID | KAT |
@@ -148,7 +148,8 @@ Severity: F = FAIL, I = INCONCLUSIVE. Any F finding makes the result FAIL.
 | times_reversed | E4-TIME-ORDER | KAT |
 | oracle_is_engine | E4-PROV-ORACLE-IS-ENGINE | KAT |
 | bound_none_nonzero | E4-BOUND-NONE-NONZERO | KAT |
-| label_status_wrong | E4-LABEL-STATUS | KAT |
+| label_status_wrong | E4-LABEL-STATUS | KAT (blind: N7, labels already UNDEFINED) |
+| label_claimed_defined | E4-LABEL-STATUS | N7 (blind: KAT, labels already DEFINED) |
 | placeholder_with_values | E4-PLACEHOLDER-SHAPE | KAT |
 | crlf | E4-STRUCT-BYTES | KAT |
 | trailing_space | E4-STRUCT-BYTES | KAT |

@@ -58,7 +58,7 @@ Everything in this directory is deterministic.
 
 To reproduce: `make && sh run.sh --self-only` from this directory on any POSIX
 system with a C11 compiler. The known-answer digests, the hand table, the
-59-case manifest, the 36 discriminating mutant pairs and the two isolation
+60-case manifest, the 38 discriminating mutant pairs and the two isolation
 controls are all checked without any candidate present. On a platform whose
 `long double` is only 64 bits the shadow bound of 1e-20 would be false; the
 shadow would then need its stated bound raised, and `run.sh` should be read

@@ -14,7 +14,7 @@ Pinned references (frozen bytes, verified by digest):
 | AT0_CASE_V1.md, AT0_RESULT_V1.md, AT0_FREEZE.md (frozen) | aien-architecture `044c9d11256d8642f80eedd42cbae8763faf63f5` |
 | AT0_CHARTER.md (updated, contract bytes unchanged) | aien-architecture `00e9f2308666f74e58f524b177b2a31eccdc69ba` |
 | AT0_SPEC.md draft (PR #176 head) | aien-architecture `0efd1a14cbdf117bc694b556bb61d031cf80c8f9` |
-| AT0_RESULT_V2 (Agent 0 ruling on omega#358: v2 header, domain, contract, verdict/evidence tags, trivial-kernel rule) | implemented; freeze commit to be added to the allowlist in `src/at0e_result.c` when published |
+| AT0_RESULT_V2.md (frozen; digest bd0f9eb8cf3ef7226c3ea18c1c9fbd4db62e0c23a0481afa519830fc1f514b5e; AT0_CASE_V1.md unchanged, d90af74bf818598d28114a73e618f5073706797d7d92d472acc2df404cd663d9) | aien-architecture `c7a7181eda57e353dbff3b7d20cde33fb65faeb2` (#180) and `fe86e43aae63370b3084f78e971a33b81ce75a9d` (#181), both verified here by digest and allowlisted |
 
 The evaluator reads only complete `AT0_RESULT_V2` files (Agent 0 ruling,
 omega#358): the engine and the reference oracle emit component outputs, Agent
@@ -34,7 +34,7 @@ src/                   evaluator sources (see "Design")
 cases/positive/        P* cases expected to PASS the physics
 cases/negative/        N* negative controls expected to FAIL with named codes
 cases/refuse/          R* malformed or invalid cases expected to be REFUSED with a named code
-cases/MANIFEST.tsv     path, class, exact expected response for all 59 public cases
+cases/MANIFEST.tsv     path, class, exact expected response for all 60 public cases
 cases/generate.sh      regenerates every public case from `at0-eval gen` plus byte edits
 gates/isolation.sh     symbol-level isolation gate with positive and negative control objects
 HIDDEN_COMMITMENT.txt  SHA-256 of the six hidden cases (contents withheld until candidate freeze)
@@ -69,7 +69,7 @@ build/at0-eval result <file> [--case <case>] [--no-shadow] [--json]
                                                   verify a result: AT0E_VERIFY PASS|FAIL|INCONCLUSIVE plus findings
 build/at0-eval shadow <case>                     shadow oracle table (kernel, POVM residual, p(k), Pauli, reference)
 build/at0-eval synth <case> [mutant]             honest synthetic result, or one with a planted defect
-build/at0-eval mutants                           list the 25 planted defects
+build/at0-eval mutants                           list the 26 planted defects
 build/at0-eval gen key=value ...                 emit a canonical case (name, E, h, ref, psi, tau, w, M, labels, control, expected, codes, minbk, tol*)
 ```
 
@@ -115,13 +115,13 @@ UTC time order, placeholder discipline); undefined-token discipline for the
 trivial-kernel shape; independent re-derivation of all ten checks, outcome,
 failure codes and `expectation_met`; shadow comparison of every value.
 
-**Mutants** (`at0e_synth.c`). Twenty-five planted defects covering wrong axis,
+**Mutants** (`at0e_synth.c`). Twenty-six planted defects covering wrong axis,
 wrong Y sign, conjugation bug, reversed reference, dephased state, hidden
 weight error, hardcoded table, wrong kernel dimension, residual over bound,
 hidden non-finite, forged verdict, corrupted evidence, corrupted verdict id,
 altered case id, altered tolerance, rebound case, wrong contract commit, dirty
 tree, reversed times, oracle equal to engine, NONE bound with non-zero value,
-wrong label status, placeholder with values, CRLF, trailing space. `run.sh`
+wrong label status (both directions), placeholder with values, CRLF, trailing space. `run.sh`
 demands that every defect is caught on a case where it bites (red before
 green) and records the pairs where a defect is invisible by construction as
 INCONCLUSIVE rather than silently skipping them.
@@ -157,6 +157,7 @@ INCONCLUSIVE rather than silently skipping them.
   well as the reported ones.
 - A4: N5 (minimum bound kind RIGOROUS) fails only because the engine states
   ESTIMATED bounds; an engine with rigorous interval arithmetic would pass it.
+- A6: V2 says a check whose input contains `undefined` is NOT_EVALUATED "for that input". The evaluator reads this per input: with mixed label statuses, checks 7, 8 and 10 are evaluated on the DEFINED labels (and on the clock and reference probabilities, which are always real) and NOT_EVALUATED only when no input remains. N7 (all labels UNDEFINED with a nontrivial kernel, tol_zero_probability = 1) exercises the all-undefined shape; it fails with exactly CONDITIONAL_UNDEFINED.
 - A5: the charter's N1 example spectrum (1/2, 1, 3/2, 2) is half-covered with a
   broken clock, not uncovered; the corpus uses 1, 2, 3, 4. Agent 0 redefined N1
   the same way independently.

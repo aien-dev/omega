@@ -35,6 +35,7 @@ static const char *const mutant_names[] = {
     "placeholder_with_values", /* NOT_RUN result carrying values */
     "crlf",                 /* CRLF line endings */
     "trailing_space",
+    "label_claimed_defined", /* an UNDEFINED label marked DEFINED with fabricated (correct-looking) pauli values */
     NULL };
 const char *const *synth_mutant_names(int *count) { int n = 0; while (mutant_names[n]) n++; *count = n; return mutant_names; }
 
@@ -149,6 +150,7 @@ long result_synth(const at0_case *c, const uint8_t *case_bytes, size_t case_len,
     if (!strcmp(m, "residual_over_bound") && nontrivial) { set_val(&r.constraint_residual, 5e-13L, 15); }
     if (!strcmp(m, "nonfinite_hidden") && c->M > 0) { memset(&r.reference[0][2][0], 0, sizeof(rval)); r.reference[0][2][0].is_nonfinite = 1; }
     if (!strcmp(m, "label_status_wrong") && c->M > 0 && nontrivial) { r.label_status[0] = LS_UNDEFINED; for (int a = 0; a < 3; a++) for (int s = 0; s < 2; s++) set_undef(&r.pauli[0][a][s]); }
+    if (!strcmp(m, "label_claimed_defined") && c->M > 0 && nontrivial) { r.label_status[0] = LS_DEFINED; for (int a = 0; a < 3; a++) for (int s = 0; s < 2; s++) set_val(&r.pauli[0][a][s], sh.pauli[0][a][s], 15); }
     if (!strcmp(m, "bound_none_nonzero")) r.bound_kind = BK_NONE;
 
     /* honest verdict from the exact checker on these values */

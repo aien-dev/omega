@@ -83,7 +83,7 @@ P1-kat-ideal-qubit-n4:binding_rebound P1-kat-ideal-qubit-n4:times_reversed P1-ka
 P1-kat-ideal-qubit-n4:label_status_wrong P1-kat-ideal-qubit-n4:placeholder_with_values P1-kat-ideal-qubit-n4:crlf P1-kat-ideal-qubit-n4:trailing_space
 P1e-x-axis-rotation:conjugate_bug P1e-x-axis-rotation:y_sign_swap P1e-x-axis-rotation:axis_swap P1g-complex-psi-yplus:conjugate_bug P2-tilted-h0:axis_swap P1e-x-axis-rotation:reversed_reference P1g-complex-psi-yplus:reversed_reference
 P1b-ideal-n4-tau8-m8:hardcoded_table P1d-ref-offset-t2:hardcoded_table P1c-ideal-n6-m6:hardcoded_table N4-wrong-weight-2:wrong_weight_hidden N4b-wrong-weight-5:wrong_weight_hidden
-N2-half-covered:verdict_forged N3-broken-clock-tau3:verdict_forged N1-uncovered-spectrum:verdict_forged N6-zero-kernel-component:verdict_forged"
+N2-half-covered:verdict_forged N3-broken-clock-tau3:verdict_forged N1-uncovered-spectrum:verdict_forged N6-zero-kernel-component:verdict_forged N7-unreachable-labels:verdict_forged N7-unreachable-labels:label_claimed_defined"
 esc_n=0; tot=0
 for pair in $MATRIX; do
     c=${pair%%:*}; m=${pair##*:}; f=$(ls cases/*/"$c".case); tot=$((tot+1))
@@ -92,7 +92,7 @@ for pair in $MATRIX; do
     [ "$st" = PASS ] && { esc_n=$((esc_n+1)); rec "MUTANT-$c-$m" mutant FAIL "defect not detected"; }
 done
 # documented INCONCLUSIVE pairs (the defect is invisible on that case by construction)
-for pair in P1-kat-ideal-qubit-n4:hardcoded_table P1-kat-ideal-qubit-n4:wrong_weight_hidden P1-kat-ideal-qubit-n4:verdict_forged P1f-y-axis-rotation:conjugate_bug P2b-h0-shift-control:hardcoded_table P2-tilted-h0:reversed_reference; do
+for pair in P1-kat-ideal-qubit-n4:hardcoded_table P1-kat-ideal-qubit-n4:wrong_weight_hidden P1-kat-ideal-qubit-n4:verdict_forged P1f-y-axis-rotation:conjugate_bug P2b-h0-shift-control:hardcoded_table P2-tilted-h0:reversed_reference N7-unreachable-labels:label_status_wrong P1-kat-ideal-qubit-n4:label_claimed_defined; do
     c=${pair%%:*}; m=${pair##*:}; f=$(ls cases/*/"$c".case)
     $T synth "$f" "$m" > "$TMP/m.result" 2>/dev/null; st=$($T result "$TMP/m.result" --case "$f" | head -1 | awk '{print $2}')
     rec "MUTANT-BLIND-$c-$m" mutant INCONCLUSIVE "defect indistinguishable from truth on this case by construction (status $st); covered by another pair"

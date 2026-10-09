@@ -7,7 +7,9 @@
 #include <string.h>
 
 /* aien-architecture commits verified (sha256sum) to hold AT0_CASE_V1.md d90af74b... and AT0_RESULT_V1.md dc52c573... unchanged */
-const char *const at0e_contract_commits[] = { AT0E_CONTRACT_COMMIT, "00e9f2308666f74e58f524b177b2a31eccdc69ba", NULL };
+/* commits verified by Agent 4 to hold the frozen contract bytes (AT0_CASE_V1.md d90af74b..., AT0_RESULT_V2.md bd0f9eb8... at the last two) */
+const char *const at0e_contract_commits[] = { AT0E_CONTRACT_COMMIT, "00e9f2308666f74e58f524b177b2a31eccdc69ba",
+    "c7a7181eda57e353dbff3b7d20cde33fb65faeb2", "fe86e43aae63370b3084f78e971a33b81ce75a9d", NULL };
 const char *const at0e_check_names[AT0E_NCHECKS] = {
     "bound_kind_sufficient", "values_finite", "physical_state_nontrivial", "constraint_residual",
     "povm_normalization", "clock_probability_sum", "probability_range", "pauli_pair_sum",
@@ -430,8 +432,8 @@ const char *result_verify(const textfile *tf, const at0_result *r, const textfil
         shadow sx; const char *wx; int triv = shadow_compute(c, &sx, &wx) ? !(sx.kernel_dim >= 1 && sx.psi_nonzero) : 0;
         if (!triv) {
             int u = r->constraint_residual.is_undefined || r->povm_residual.is_undefined;
-            for (int k = 0; k < c->M; k++) { u |= r->clock_p[k].is_undefined; for (int a = 0; a < 3; a++) for (int s = 0; s < 2; s++) u |= r->pauli[k][a][s].is_undefined || r->reference[k][a][s].is_undefined; }
-            if (u) findings_add(fs, "E4-STRUCT-UNDEFINED-TOKEN", "undefined token in a result whose kernel is nontrivial (refusal under AT0_RESULT_V2)");
+            for (int k = 0; k < c->M; k++) { u |= r->clock_p[k].is_undefined; for (int a = 0; a < 3; a++) for (int s = 0; s < 2; s++) u |= r->reference[k][a][s].is_undefined; }  /* pauli undefined is governed by label status (V2 section 1) */
+            if (u) findings_add(fs, "E4-STRUCT-UNDEFINED-TOKEN", "undefined token on constraint_residual, povm_residual, clock_probability or reference in a result whose kernel is nontrivial (refusal under AT0_RESULT_V2 section 2)");
         } else {
             int bad = !r->constraint_residual.is_undefined || r->povm_residual.is_undefined;
             for (int k = 0; k < c->M; k++) { bad |= !r->clock_p[k].is_undefined || r->label_status[k] != LS_UNDEFINED; for (int a = 0; a < 3; a++) for (int s = 0; s < 2; s++) bad |= !r->pauli[k][a][s].is_undefined || r->reference[k][a][s].is_undefined; }

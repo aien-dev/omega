@@ -17,6 +17,7 @@ negative/N4-wrong-weight-2.case	N4	AT0_CASE_OK
 negative/N4b-wrong-weight-5.case	N4	AT0_CASE_OK
 negative/N5-precision-demand.case	N5	AT0_CASE_OK
 negative/N6-zero-kernel-component.case	N6	AT0_CASE_OK
+negative/N7-unreachable-labels.case	N7	AT0_CASE_OK
 refuse/R01-noncanonical-rational.case	R1	AT0_CASE_REFUSED CASE_NONCANONICAL
 refuse/R02-header-v2.case	R2	AT0_CASE_REFUSED CASE_UNSUPPORTED_VERSION
 refuse/R03-clock-dim-1.case	R3	AT0_CASE_REFUSED CASE_INVALID_PARAMETER

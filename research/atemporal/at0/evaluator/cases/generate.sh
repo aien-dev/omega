@@ -27,6 +27,7 @@ G $N/N4-wrong-weight-2.case     name=at0-n4-wrong-weight-2 w=2/1 control=NEGATIV
 G $N/N4b-wrong-weight-5.case    name=at0-n4b-wrong-weight-5 w=5/1 control=NEGATIVE expected=FAIL codes=POVM_NORMALIZATION_EXCEEDED,PROBABILITY_OUT_OF_RANGE,PROBABILITY_SUM_EXCEEDED
 G $N/N5-precision-demand.case   name=at0-n5-precision-demand minbk=RIGOROUS control=NEGATIVE expected=FAIL codes=BOUND_KIND_INSUFFICIENT
 G $N/N6-zero-kernel-component.case name=at0-n6-zero-kernel-component E=-3/2,1/2,3/2,7/2 'psi=(1/1;0/1),(0/1;0/1)' control=NEGATIVE expected=FAIL codes=TRIVIAL_PHYSICAL_STATE
+G $N/N7-unreachable-labels.case  name=at0-n7-unreachable-labels tolz=1@0 control=NEGATIVE expected=FAIL codes=CONDITIONAL_UNDEFINED
 # ---- refusal controls: byte edits of the example; expected code in MANIFEST.tsv ----
 E() { out=$1; shift; sed "$@" "$K" > "$out"; }
 E $R/R01-noncanonical-rational.case    's|^povm_weight 1/1$|povm_weight 2/2|'
