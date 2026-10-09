@@ -91,7 +91,7 @@ fn emit(args: &[String]) -> i32 {
         "aien-dev/omega".to_string(),
         commit.unwrap_or_else(|| "0".repeat(40)),
         exe,
-        format!("{} {}{}", rustc, option_env!("AT0_RUSTC_HOST").unwrap_or("unknown-host"), if dephased { " (dephased control)" } else { "" }),
+        format!("oracle {} {}{}", rustc, option_env!("AT0_RUSTC_HOST").unwrap_or("unknown-host"), if dephased { " (dephased control)" } else { "" }),
         format!("rustc {} src/main.rs", flags),
         hostname(),
         started,
@@ -461,7 +461,7 @@ mod tests {
     }
 
     fn provenance(stamp: &str) -> Vec<(&'static str, String)> {
-        let vals = ["aien-dev/omega", "0000000000000000000000000000000000000000", "NO", super::CONTRACT_COMMIT, &"1".repeat(64), "aien-dev/omega", "0000000000000000000000000000000000000000", &"2".repeat(64), "rustc test", "std", "test", stamp, stamp];
+        let vals = ["aien-dev/omega", "0000000000000000000000000000000000000000", "NO", super::CONTRACT_COMMIT, &"1".repeat(64), "aien-dev/omega", "0000000000000000000000000000000000000000", &"1".repeat(64), "oracle rustc test", "std", "test", stamp, stamp];
         PROVENANCE_KEYS.iter().cloned().zip(vals.iter().map(|s| s.to_string())).collect()
     }
 
@@ -486,6 +486,14 @@ mod tests {
             assert!(text.bytes().all(|b| b == b'\n' || (0x20..=0x7E).contains(&b)));
         }
         let pick = |d: &Vec<u8>, key: &str| String::from_utf8(d.clone()).unwrap().lines().find(|l| l.starts_with(key)).unwrap().to_string();
+        // Agent 0 condition: records are marked as oracle output or not written at all
+        let mut p = provenance("2026-10-09T00:00:00Z");
+        p[8].1 = "rustc test".to_string();
+        assert!(result_bytes(&c, &comp, &p).is_err());
+        let mut p = provenance("2026-10-09T00:00:00Z");
+        p[7].1 = "2".repeat(64);
+        assert!(result_bytes(&c, &comp, &p).is_err());
+        assert!(String::from_utf8(a.clone()).unwrap().contains("\nbuild_cc oracle "));
         assert_eq!(pick(&a, "verdict_id"), pick(&b, "verdict_id"));
         assert_ne!(pick(&a, "evidence_digest"), pick(&b, "evidence_digest"));
         assert_eq!(comp.verdict_id, result::verdict_id(&c, &comp.verdict_lines));

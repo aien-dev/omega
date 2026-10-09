@@ -394,6 +394,10 @@ pub fn result_bytes(c: &Case, computed: &Computed, provenance: &[(&str, String)]
     if provenance.len() != PROVENANCE_KEYS.len() {
         return Err("provenance key count".to_string());
     }
+    let find = |k: &str| provenance.iter().find(|(key, _)| *key == k).map(|(_, v)| v.as_str());
+    if find("engine_sha256") != find("oracle_sha256") {
+        return Err("engine_sha256 must equal oracle_sha256 (both are the oracle binary)".to_string());
+    }
     for ((key, val), want) in provenance.iter().zip(PROVENANCE_KEYS.iter()) {
         if key != want {
             return Err(format!("provenance order: {} vs {}", key, want));
@@ -401,6 +405,11 @@ pub fn result_bytes(c: &Case, computed: &Computed, provenance: &[(&str, String)]
         let ok = !val.is_empty() && val.len() <= 200 && val.trim() == val && val.bytes().all(|b| (0x20..=0x7E).contains(&b));
         if !ok {
             return Err(format!("bad provenance text for {}", key));
+        }
+        // Agent 0 condition (omega#359 approval): every record this oracle writes is marked
+        // as oracle output so it can never be cited as the candidate engine's result.
+        if *key == "build_cc" && !val.starts_with("oracle ") {
+            return Err("build_cc must begin with \"oracle \"".to_string());
         }
         lines.push(format!("{} {}", key, val));
     }

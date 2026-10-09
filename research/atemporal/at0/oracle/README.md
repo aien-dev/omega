@@ -103,9 +103,12 @@ A refused case prints exactly `AT0_CASE_REFUSED <code>` on stderr, writes nothin
 control) and marks `build_cc` with `(dephased control)`; such a record is a control, never
 a qualification result.
 
-Provenance: `source_commit`/`source_tree_clean` come from `git` run in this directory;
-`engine_sha256` and `oracle_sha256` are both the SHA-256 of the running executable, because
-the matrix path and the analytic path are two modules of one binary. `verdict_id` depends
+Provenance: `source_commit`/`source_tree_clean` come from `git` run in this directory.
+Every record is marked as oracle output so it can never be cited as the candidate engine's
+result (Agent 0 condition on the omega#359 approval): `build_cc` begins with the literal
+`oracle ` and `engine_sha256` equals `oracle_sha256`, both the SHA-256 of the running
+oracle executable (the matrix path and the analytic path are two modules of one binary).
+The writer refuses to produce a record that violates either rule (tested). `verdict_id` depends
 only on the case and the values; `evidence_digest` covers the timestamps too, so two runs
 agree on `verdict_id` and differ in `evidence_digest` (tested).
 
