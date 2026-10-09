@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -58,10 +59,9 @@ static void h_str(sha256_ctx *h, const char *s)
 
 /* Canonical encoding: domain tag, ncmds, connector, flags, then per command the builtin id, argv, assignments
  * (name, value; a secret name's value is replaced by the marker "\x01REDACTED"), redirections. Lengths are prefixed. */
-void osh_req_digest(const OshRequest *r, uint8_t out[32])
+static void canon(sha256_ctx *hp, const OshRequest *r)
 {
-    sha256_ctx h;
-    sha256_init(&h);
+    sha256_ctx h = *hp;
     h_str(&h, "OSHREQ1");
     h_u64(&h, (uint64_t)r->ncmds);
     h_u64(&h, (uint64_t)r->connector_after);
@@ -84,6 +84,34 @@ void osh_req_digest(const OshRequest *r, uint8_t out[32])
             h_str(&h, c->redir[k].path);
         }
     }
+    *hp = h;
+}
+
+void osh_req_digest_unkeyed(const OshRequest *r, uint8_t out[32])
+{
+    sha256_ctx h;
+    sha256_init(&h);
+    canon(&h, r);
+    sha256_final(&h, out);
+}
+
+/* HMAC-SHA256 (RFC 2104) over omega's src/sha256.c, key 32 bytes. (src/fabric/fab_hmac.c is a test-only stand-in that refuses to
+ * build in a production program, so it is not used.) */
+void osh_req_digest(const OshJournal *j, const OshRequest *r, uint8_t out[32])
+{
+    uint8_t pad[64], inner[32];
+    memset(pad, 0x36, sizeof pad);
+    for (int i = 0; i < 32; i++) pad[i] ^= j->key[i];
+    sha256_ctx h;
+    sha256_init(&h);
+    sha256_update(&h, pad, sizeof pad);
+    canon(&h, r);
+    sha256_final(&h, inner);
+    memset(pad, 0x5c, sizeof pad);
+    for (int i = 0; i < 32; i++) pad[i] ^= j->key[i];
+    sha256_init(&h);
+    sha256_update(&h, pad, sizeof pad);
+    sha256_update(&h, inner, sizeof inner);
     sha256_final(&h, out);
 }
 
@@ -225,27 +253,120 @@ static int scan(const char *path, void (*cb)(void *, const Line *), void *ctx, i
 
 static void max_cb(void *ctx, const Line *l) { uint64_t *m = ctx; if (l->rec > *m) *m = l->rec; }
 
+static int jfail(OshJournal *j, int e, const char *fmt, const char *a, unsigned m)
+{
+    snprintf(j->why, sizeof j->why, fmt, a, m);
+    return -e;
+}
+
+static int random_bytes(uint8_t *b, size_t n)
+{
+    size_t got = 0;
+    while (got < n) {
+        ssize_t r = getrandom(b + got, n - got, 0);
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) break;
+        got += (size_t)r;
+    }
+    if (got == n) return 0;
+    int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return -1;
+    while (got < n) {
+        ssize_t r = read(fd, b + got, n - got);
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) { close(fd); return -1; }
+        got += (size_t)r;
+    }
+    close(fd);
+    return 0;
+}
+
+/* The per-journal HMAC key lives beside the journal as <journal>.key (32 random bytes, 0600, owned by the caller).
+ * Created atomically (temporary file with O_EXCL, fsync, link(2) which never overwrites, fsync of the directory) and
+ * reused when present. FAIL CLOSED: an existing key with another owner, a mode other than 0600, a size other than 32 or
+ * that cannot be read refuses the journal; so does a missing key beside a journal that already holds records (a new
+ * key would silently make every earlier digest meaningless). */
+static int load_key(OshJournal *j, const char *path, int have_records)
+{
+    char kp[4200];
+    if (snprintf(kp, sizeof kp, "%s.key", path) >= (int)sizeof kp) return jfail(j, ENAMETOOLONG, "journal path too long%s%u", "", 0);
+    int fd = open(kp, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    if (fd < 0 && errno == ENOENT) {
+        if (have_records) return jfail(j, ENOENT, "key file %s is missing but the journal already has records; refusing to start a new key%u", kp, 0);
+        char tmp[4300];
+        snprintf(tmp, sizeof tmp, "%s.tmp.%ld", kp, (long)getpid());
+        int tfd = open(tmp, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+        if (tfd < 0) return jfail(j, errno, "cannot create key file %s%u", kp, 0);
+        uint8_t k[32];
+        int ok = random_bytes(k, sizeof k) == 0 && write_all(tfd, (const char *)k, sizeof k) == 0 && sync_fd(tfd) == 0;
+        int e = ok ? 0 : (errno ? errno : EIO);
+        close(tfd);
+        memset(k, 0, sizeof k);
+        if (ok && link(tmp, kp) != 0 && errno != EEXIST) { ok = 0; e = errno; }
+        unlink(tmp);
+        if (!ok) return jfail(j, e, "cannot create key file %s%u", kp, 0);
+        int dr = fsync_parent(kp);
+        if (dr) return jfail(j, -dr, "cannot sync the directory of key file %s%u", kp, 0);
+        fd = open(kp, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
+    }
+    if (fd < 0) return jfail(j, errno, "cannot open key file %s%u", kp, 0);
+    struct stat st;
+    if (fstat(fd, &st) != 0) { int e = errno; close(fd); return jfail(j, e, "cannot stat key file %s%u", kp, 0); }
+    if (!S_ISREG(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 0777) != 0600 || st.st_size != 32) {
+        close(fd);
+        return jfail(j, EACCES, "key file %s must be a regular file of 32 bytes, owned by you, mode 0600 (found mode %04o); refusing it", kp, (unsigned)(st.st_mode & 07777));
+    }
+    size_t got = 0;
+    while (got < 32) {
+        ssize_t r = read(fd, j->key + got, 32 - got);
+        if (r < 0 && errno == EINTR) continue;
+        if (r <= 0) { close(fd); return jfail(j, EIO, "cannot read key file %s%u", kp, 0); }
+        got += (size_t)r;
+    }
+    close(fd);
+    return 0;
+}
+
 int osh_journal_open(OshJournal *j, const char *path)
 {
     memset(j, 0, sizeof *j);
     j->fd = -1;
-    int existed = access(path, F_OK) == 0;
-    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0600);
-    if (fd < 0) return -errno;
+    struct stat st;
+    int existed = lstat(path, &st) == 0;
+    long size = 0;
+    if (existed) {
+        if (!S_ISREG(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 077) != 0)
+            return jfail(j, EACCES, "journal %s must be a regular file owned by you with mode 0600 (found mode %04o); refusing it, fix or remove it", path, (unsigned)(st.st_mode & 07777));
+        size = (long)st.st_size;
+    }
+    int krc = load_key(j, path, size > 0);
+    if (krc) return krc;
+    int fd = open(path, O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd < 0) return jfail(j, errno, "cannot open journal %s%u", path, 0);
     if (!existed) {
         int rc = sync_fd(fd) == 0 ? fsync_parent(path) : -errno;
-        if (rc) { close(fd); return rc < 0 ? rc : -EIO; }
+        if (rc) { close(fd); return jfail(j, rc < 0 ? -rc : EIO, "cannot sync new journal %s%u", path, 0); }
     }
     uint64_t mx = 0;
     int nl = 1;
     if (existed) {
         int bad = 0;
         int rc = scan(path, max_cb, &mx, &bad, &nl);
-        if (rc && rc != -ENOENT) { close(fd); return rc; }
+        if (rc && rc != -ENOENT) { close(fd); return jfail(j, -rc, "cannot read journal %s%u", path, 0); }
     }
     j->fd = fd;
     j->next_rec = mx + 1;
-    if (!nl && commit(j, "\n", 1) != 0) { int e = errno; close(fd); j->fd = -1; return -(e ? e : EIO); }
+    if (!nl && commit(j, "\n", 1) != 0) { int e = errno; close(fd); j->fd = -1; return jfail(j, e ? e : EIO, "cannot repair journal tail %s%u", path, 0); }
+    return 0;
+}
+
+/* a state directory made by an earlier run must be ours and private; otherwise refuse (0 ok, -EACCES with why) */
+int osh_journal_check_dir(OshJournal *j, const char *dir)
+{
+    struct stat st;
+    if (stat(dir, &st) != 0) return jfail(j, errno, "cannot stat state directory %s%u", dir, 0);
+    if (!S_ISDIR(st.st_mode) || st.st_uid != geteuid() || (st.st_mode & 077) != 0)
+        return jfail(j, EACCES, "state directory %s must be owned by you with mode 0700 (found mode %04o); refusing it, fix it with chmod 700", dir, (unsigned)(st.st_mode & 07777));
     return 0;
 }
 
@@ -253,6 +374,7 @@ void osh_journal_close(OshJournal *j)
 {
     if (j->fd >= 0) close(j->fd);
     j->fd = -1;
+    memset(j->key, 0, sizeof j->key);
 }
 
 /* ---- records ---- */

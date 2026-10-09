@@ -31,7 +31,7 @@ extern char **environ;
 static const char *g_journal_file;
 static OshJournal g_journal = {.fd = -1};
 
-static char g_journal_err[4400];
+static char g_journal_err[4700];
 
 /* The effect journal is MANDATORY (ABI section 10 has no off switch). Open it (default location when no --journal was
  * given), report what a previous run left unfinished, attach it. If it cannot be opened, recovered or written, the shell
@@ -57,10 +57,14 @@ static int journal_attach(OshShell *sh)
         }
         int mk = osh_journal_mkparents(def);
         if (mk) { snprintf(why, sizeof why, "%s: %s", def, strerror(-mk)); journal_unavailable(sh, why); return 0; }
+        char dir[4200];
+        snprintf(dir, sizeof dir, "%s", def);
+        *strrchr(dir, '/') = 0;
+        if (osh_journal_check_dir(&g_journal, dir)) { journal_unavailable(sh, g_journal.why); return 0; }
         path = def;
     }
     int rc = osh_journal_open(&g_journal, path);
-    if (rc) { snprintf(why, sizeof why, "%s: cannot open: %s", path, strerror(-rc)); journal_unavailable(sh, why); return 0; }
+    if (rc) { journal_unavailable(sh, g_journal.why); return 0; }
     OshJournalUnknown u[16];
     int bad = 0, n = osh_journal_recover(&g_journal, path, u, 16, &bad);
     if (n < 0) { snprintf(why, sizeof why, "%s: recovery failed: %s", path, strerror(-n)); journal_unavailable(sh, why); return 0; }

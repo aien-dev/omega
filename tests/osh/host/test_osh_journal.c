@@ -241,6 +241,10 @@ static void test_normal_and_redaction(void)
     t_end(&t);
 
     /* digest: a secret-named assignment's VALUE does not change it; an ordinary value and an argument do (control) */
+    char kpa[700];
+    snprintf(kpa, sizeof kpa, "%s/digest-a.log", g_dir);
+    OshJournal ja;
+    CHECK(osh_journal_open(&ja, kpa) == 0, "open journal A: %s", ja.why);
     static OshRequest ra, rb, rc, rd;
     OshBuilder *x[4];
     OshRequest *rq[4] = {&ra, &rb, &rc, &rd};
@@ -255,11 +259,79 @@ static void test_normal_and_redaction(void)
         osh_rb_assign(x[i], "PLAINVAR", pv[i]);
         osh_rb_seal(x[i]);
         CHECK(osh_req_decode(x[i]->rec, osh_rb_cells(x[i]), x[i]->out, x[i]->out_used, rq[i]) == 0, "decode");
-        osh_req_digest(rq[i], dg[i]);
+        osh_req_digest(&ja, rq[i], dg[i]);
         free(x[i]);
     }
     CHECK(!memcmp(dg[0], dg[1], 32), "secret value masked in the digest");
     CHECK(memcmp(dg[0], dg[2], 32) && memcmp(dg[0], dg[3], 32), "ordinary value and argument change the digest");
+    osh_journal_close(&ja);
+}
+
+static void hexs(const uint8_t d[32], char o[65])
+{
+    for (int i = 0; i < 32; i++) snprintf(o + 2 * i, 3, "%02x", d[i]);
+}
+
+/* The digest is keyed: two journals give two digests for one request, and a low-entropy secret passed as a plain argument
+ * cannot be confirmed by hashing guesses (the plain SHA-256 of every PIN does not match the recorded digest). */
+static void test_keyed_digest(void)
+{
+    char pa[700], pb[700];
+    snprintf(pa, sizeof pa, "%s/keyed-a.log", g_dir);
+    snprintf(pb, sizeof pb, "%s/keyed-b.log", g_dir);
+    OshJournal a, b2, a2;
+    CHECK(osh_journal_open(&a, pa) == 0 && osh_journal_open(&b2, pb) == 0, "two journals, two keys");
+    CHECK(memcmp(a.key, b2.key, 32) != 0, "keys differ between journals");
+    OshBuilder *x = nb();
+    osh_rb_cmd(x, 0);
+    osh_rb_arg(x, "login");
+    osh_rb_arg(x, "--pin");
+    osh_rb_arg(x, "1234");
+    osh_rb_seal(x);
+    static OshRequest rq;
+    CHECK(osh_req_decode(x->rec, osh_rb_cells(x), x->out, x->out_used, &rq) == 0, "decode");
+    free(x);
+    uint8_t da[32], db[32], da2[32], pl[32];
+    osh_req_digest(&a, &rq, da);
+    osh_req_digest(&b2, &rq, db);
+    CHECK(memcmp(da, db, 32) != 0, "same request under two journal keys: different digests");
+    osh_journal_close(&a);
+    CHECK(osh_journal_open(&a2, pa) == 0, "reopen: %s", a2.why);
+    osh_req_digest(&a2, &rq, da2);
+    CHECK(!memcmp(da, da2, 32), "the key is reused on reopen: same digest");
+    struct stat sb;
+    char kp[720];
+    snprintf(kp, sizeof kp, "%s.key", pa);
+    CHECK(stat(kp, &sb) == 0 && sb.st_size == 32 && (sb.st_mode & 0777) == 0600, "key file: 32 bytes, mode 0600");
+    /* an attacker who knows the encoding and the argument shape but not the key */
+    osh_req_digest_unkeyed(&rq, pl);
+    CHECK(memcmp(da, pl, 32) != 0, "recorded digest is not the plain SHA-256 of the request");
+    char want[65], plain[65], got[65];
+    hexs(da, want);
+    hexs(pl, plain);
+    int hit = 0, ctl = 0;
+    for (int pin = 0; pin < 10000; pin++) {
+        char s[16];
+        snprintf(s, sizeof s, "%04d", pin);
+        OshBuilder *y = nb();
+        osh_rb_cmd(y, 0);
+        osh_rb_arg(y, "login");
+        osh_rb_arg(y, "--pin");
+        osh_rb_arg(y, s);
+        osh_rb_seal(y);
+        static OshRequest rg;
+        osh_req_decode(y->rec, osh_rb_cells(y), y->out, y->out_used, &rg);
+        free(y);
+        uint8_t g[32];
+        osh_req_digest_unkeyed(&rg, g);
+        hexs(g, got);
+        hit += !strcmp(got, want);
+        ctl += !strcmp(got, plain);
+    }
+    CHECK(hit == 0, "none of the 10000 PIN guesses hashed with plain SHA-256 matches the recorded digest (control: see next check)");
+    CHECK(ctl == 1, "control: the same loop does find the PIN against the PLAIN digest of the request (%d)", ctl);
+    osh_journal_close(&a2);
+    osh_journal_close(&b2);
 }
 
 static int deny_all(void *c, const OshBinding *bd, int op, const char *p) { (void)c; (void)bd; (void)op; (void)p; return OSH_E_DENIED; }
@@ -415,6 +487,22 @@ static void test_kill_between_and_recovery(void)
     int bad = -1, n = osh_journal_recover(&j2, t.jpath, u, 4, &bad);
     CHECK(n == 1 && bad == 0 && u[0].idx == 0 && u[0].ncmds == 1 && strlen(u[0].digest) == 64, "one UNKNOWN reported (n %d)", n);
     CHECK(strstr(u[0].argv0, "test_osh_journal") != NULL, "with argv0 (%s)", u[0].argv0);
+    {
+        OshBuilder *kb = nb();
+        helper(kb, "append", marker);
+        osh_rb_seal(kb);
+        static OshRequest kr;
+        uint8_t kd[32];
+        char kh[65];
+        CHECK(osh_req_decode(kb->rec, osh_rb_cells(kb), kb->out, kb->out_used, &kr) == 0, "decode");
+        free(kb);
+        osh_req_digest(&j2, &kr, kd);
+        hexs(kd, kh);
+        CHECK(!strcmp(kh, u[0].digest), "recovery reports the KEYED digest of the request (recomputed with the journal key)");
+        osh_req_digest_unkeyed(&kr, kd);
+        hexs(kd, kh);
+        CHECK(strcmp(kh, u[0].digest) != 0, "and it is not the plain SHA-256");
+    }
     msleep(700);
     CHECK(fsize(marker) == 1, "recovery did not replay: marker still 1 byte (%ld)", fsize(marker));
     j = jtext(&t);
@@ -548,9 +636,9 @@ static void test_torn_tail_and_cleanup(void)
     int files = 0;
     DIR *d = opendir(t.dir);
     struct dirent *e;
-    while ((e = readdir(d))) if (e->d_name[0] != '.') files++;
+    while ((e = readdir(d))) if (e->d_name[0] != '.' && strcmp(e->d_name, "journal.log") && strcmp(e->d_name, "journal.log.key")) files++;
     closedir(d);
-    CHECK(files == 1, "only the journal file exists, no temp files (%d)", files);
+    CHECK(files == 0, "only the journal and its key exist, no temp files (%d stray)", files);
     t_end(&t);
 }
 
@@ -653,8 +741,73 @@ static void test_cli(const char *osh)
     /* an explicit --journal that cannot be opened is the same refusal (no silent fallback) */
     snprintf(sc, sizeof sc, "/bin/touch %s", mk);
     CHECK(run_osh(osh, pol, "/nonexistent-dir/j.log", sc, ef, xdg, home) == 1 && fsize(mk) < 0, "explicit unopenable --journal: effect refused");
+    /* the key file sits beside the default journal: 32 bytes, 0600 */
+    snprintf(jd, sizeof jd, "%s/.local/state/osh/effects.journal.key", home);
+    CHECK(stat(jd, &sb) == 0 && sb.st_size == 32 && (sb.st_mode & 0777) == 0600, "default key file: 32 bytes, 0600");
+    /* wrong-mode key, wrong-mode journal, wrong-mode state dir: refused by name, nothing launched; fixing them restores service */
+    char kd[3000], jf[2900], sd[1500];
+    snprintf(sd, sizeof sd, "%s/.local/state/osh", home);
+    snprintf(jf, sizeof jf, "%s/effects.journal", sd);
+    snprintf(kd, sizeof kd, "%s.key", jf);
+    snprintf(sc, sizeof sc, "/bin/touch %s", mk);
+    unlink(mk);
+    chmod(kd, 0644);
+    CHECK(run_osh(osh, pol, NULL, sc, ef, NULL, home) == 1 && fsize(mk) < 0, "key with mode 0644: effect refused, nothing launched");
+    e = slurp(ef, NULL);
+    CHECK(strstr(e, "effect journal unavailable") && strstr(e, "key file"), "named: %s", e);
+    free(e);
+    chmod(kd, 0600);
+    chmod(jf, 0644);
+    CHECK(run_osh(osh, pol, NULL, sc, ef, NULL, home) == 1 && fsize(mk) < 0, "journal with mode 0644: effect refused");
+    chmod(jf, 0600);
+    chmod(sd, 0755);
+    CHECK(run_osh(osh, pol, NULL, sc, ef, NULL, home) == 1 && fsize(mk) < 0, "state directory with mode 0755: effect refused");
+    e = slurp(ef, NULL);
+    CHECK(strstr(e, "state directory") && strstr(e, "0700"), "named: %s", e);
+    free(e);
+    chmod(sd, 0700);
+    unlink(kd);
+    CHECK(run_osh(osh, pol, NULL, sc, ef, NULL, home) == 1 && fsize(mk) < 0, "key deleted beside a journal with records: effect refused");
+    snprintf(sc, sizeof sc, "/bin/touch %s", mk);
     /* control: the same command with a working journal does run */
     CHECK(run_osh(osh, pol, jp, sc, ef, xdg, home) == 0 && fsize(mk) == 0, "control: with a working journal the marker is created");
+}
+
+static void test_key_and_modes(void)
+{
+    char p[1400], k[1500], dir[700];
+    snprintf(dir, sizeof dir, "%s/km", g_dir);
+    mkdir(dir, 0700);
+    snprintf(p, sizeof p, "%s/j.log", dir);
+    snprintf(k, sizeof k, "%s.key", p);
+    OshJournal j;
+    CHECK(osh_journal_open(&j, p) == 0, "fresh journal and key: %s", j.why);
+    osh_journal_close(&j);
+    chmod(k, 0644);
+    CHECK(osh_journal_open(&j, p) != 0 && strstr(j.why, "mode 0600"), "key with mode 0644 refused: %s", j.why);
+    chmod(k, 0600);
+    CHECK(truncate(k, 16) == 0 && osh_journal_open(&j, p) != 0, "key of the wrong size refused");
+    unlink(k);
+    mkdir(k, 0700);
+    CHECK(osh_journal_open(&j, p) != 0, "unreadable key (a directory) refused");
+    rmdir(k);
+    /* a missing key beside a journal with records: refused, no silent new key */
+    FILE *f = fopen(p, "ab");
+    fputs("OSHJ1 1 O 0 00 0/1 NOT_STARTED st=0 err=0\n", f);
+    fclose(f);
+    CHECK(osh_journal_open(&j, p) != 0 && strstr(j.why, "missing") && access(k, F_OK) != 0, "missing key beside a journal with records refused, no key invented: %s", j.why);
+    /* a pre-existing journal with a wrong mode is REFUSED (not silently fixed), and nothing is changed */
+    unlink(p);
+    f = fopen(p, "w");
+    fclose(f);
+    chmod(p, 0644);
+    CHECK(osh_journal_open(&j, p) != 0 && strstr(j.why, "mode 0600"), "journal with mode 0644 refused: %s", j.why);
+    struct stat sb;
+    CHECK(stat(p, &sb) == 0 && (sb.st_mode & 0777) == 0644, "and its mode was left alone");
+    CHECK(osh_journal_check_dir(&j, dir) == 0, "private directory accepted");
+    chmod(dir, 0755);
+    CHECK(osh_journal_check_dir(&j, dir) != 0 && strstr(j.why, "0700"), "directory with mode 0755 refused: %s", j.why);
+    chmod(dir, 0700);
 }
 
 /* library level: journal_required with no journal open refuses every effect and launches nothing */
@@ -695,6 +848,7 @@ int main(int argc, char **argv)
     if (!mkdtemp(g_dir)) return 1;
     g_null = open("/dev/null", O_RDWR);
     test_secret_names();
+    test_keyed_digest();
     test_normal_and_redaction();
     test_denial();
     test_interrupt();
@@ -706,6 +860,7 @@ int main(int argc, char **argv)
     test_non_effects_and_direct();
     test_torn_tail_and_cleanup();
     test_required_without_journal();
+    test_key_and_modes();
     if (osh_bin) test_cli(osh_bin);
     close(g_null);
     char cmd[4400];

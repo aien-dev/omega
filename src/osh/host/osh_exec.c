@@ -376,7 +376,7 @@ static void jc_init(JCtx *jc, OshSession *s, const OshRequest *r)
     jc->j = s->journal;
     jc->required = s->journal_required && !s->journal;
     jc->why = s->journal_error ? s->journal_error : "not opened";
-    if (jc->j) osh_req_digest(r, jc->dig);
+    if (jc->j) osh_req_digest(jc->j, r, jc->dig);
 }
 
 /* 0: durable (or no journal / not an effect); -1: the intent could not be made durable and the effect must not run */

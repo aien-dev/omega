@@ -112,7 +112,7 @@ $(OSH_DIR)/test_osh_e2e: tests/osh/e2e/test_osh_e2e.c
 	$(CC) -std=gnu11 -Wall -Wextra -Werror -D_GNU_SOURCE -O2 -o $@ $<
 
 test-osh-e2e: osh-gen-check $(OSH_DIR)/osh $(OSH_DIR)/argprint $(OSH_DIR)/test_osh_e2e
-	XDG_STATE_HOME=$(abspath $(OSH_DIR))/state $(abspath $(OSH_DIR)/test_osh_e2e) $(abspath $(OSH_DIR)/osh) $(abspath $(OSH_DIR)/argprint) > $(OSH_DIR)/e2e.out
+	rm -rf $(abspath $(OSH_DIR))/state; XDG_STATE_HOME=$(abspath $(OSH_DIR))/state $(abspath $(OSH_DIR)/test_osh_e2e) $(abspath $(OSH_DIR)/osh) $(abspath $(OSH_DIR)/argprint) > $(OSH_DIR)/e2e.out
 	@tail -3 $(OSH_DIR)/e2e.out; tail -1 $(OSH_DIR)/e2e.out | grep -q '^OSH_E2E_PASS$$'
 	@echo "test-osh-e2e: PASS"
 
