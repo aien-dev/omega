@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-09T23:43:26Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:142c3860e08839ddbe88bc723c2e94688eae948ca275ff38567bd9c34077869b",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 7,
+      "generated_at_commit": "eced140a0d60734ce4cbe6fa0ab8fd8600de9719",
+      "source_tree": "sha256:7ab3174c51c42b7ae16a76780983a09829df07d97c908911aab46450b1f23277"
+    }
+  },
+  "name": "at0-integration",
+  "purpose": "AT-0 Agent 5 integration runner, exact result assembler/judge, hygiene and isolation controls, and the first-run qualification report",
+  "schema_version": "1.0.0"
+}
