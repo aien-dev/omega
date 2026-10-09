@@ -1,0 +1,79 @@
+note values computed from the DEPHASED kernel-branch mixture of this case (negative control)
+begin values
+physical_state_kernel_dim 2
+constraint_residual f64:0000000000000000 1421087@20
+povm_residual f64:3cb2a8eb3f35f924 1421087@20
+label 0 t0 DEFINED
+label 1 t1 DEFINED
+label 2 t2 DEFINED
+label 3 t3 DEFINED
+clock_probability 0 f64:3fd0000000000000 1421087@20
+clock_probability 1 f64:3fd0000000000000 1421087@20
+clock_probability 2 f64:3fd0000000000000 1421087@20
+clock_probability 3 f64:3fd0000000000000 1421087@20
+pauli 0 X PLUS f64:3fe0000000000000 1421087@20
+pauli 0 X MINUS f64:3fe0000000000000 1421087@20
+pauli 0 Y PLUS f64:3fe0000000000000 1421087@20
+pauli 0 Y MINUS f64:3fe0000000000000 1421087@20
+pauli 0 Z PLUS f64:3fe0000000000000 1421087@20
+pauli 0 Z MINUS f64:3fe0000000000000 1421087@20
+pauli 1 X PLUS f64:3fe0000000000000 1421087@20
+pauli 1 X MINUS f64:3fe0000000000000 1421087@20
+pauli 1 Y PLUS f64:3fe0000000000000 1421087@20
+pauli 1 Y MINUS f64:3fe0000000000000 1421087@20
+pauli 1 Z PLUS f64:3fe0000000000000 1421087@20
+pauli 1 Z MINUS f64:3fe0000000000000 1421087@20
+pauli 2 X PLUS f64:3fe0000000000000 1421087@20
+pauli 2 X MINUS f64:3fe0000000000000 1421087@20
+pauli 2 Y PLUS f64:3fe0000000000000 1421087@20
+pauli 2 Y MINUS f64:3fe0000000000000 1421087@20
+pauli 2 Z PLUS f64:3fe0000000000000 1421087@20
+pauli 2 Z MINUS f64:3fe0000000000000 1421087@20
+pauli 3 X PLUS f64:3fe0000000000000 1421087@20
+pauli 3 X MINUS f64:3fe0000000000000 1421087@20
+pauli 3 Y PLUS f64:3fe0000000000000 1421087@20
+pauli 3 Y MINUS f64:3fe0000000000000 1421087@20
+pauli 3 Z PLUS f64:3fe0000000000000 1421087@20
+pauli 3 Z MINUS f64:3fe0000000000000 1421087@20
+reference 0 X PLUS f64:3feffffffffffffe 1421087@20
+reference 0 X MINUS f64:0000000000000000 1421087@20
+reference 0 Y PLUS f64:3fdffffffffffffe 1421087@20
+reference 0 Y MINUS f64:3fdffffffffffffe 1421087@20
+reference 0 Z PLUS f64:3fdffffffffffffe 1421087@20
+reference 0 Z MINUS f64:3fdffffffffffffe 1421087@20
+reference 1 X PLUS f64:3fe0000000000000 2537205@20
+reference 1 X MINUS f64:3fdffffffffffffc 2537205@20
+reference 1 Y PLUS f64:3feffffffffffffe 2537205@20
+reference 1 Y MINUS f64:3950000000000000 2537205@20
+reference 1 Z PLUS f64:3fdffffffffffffe 2537205@20
+reference 1 Z MINUS f64:3fdffffffffffffe 2537205@20
+reference 2 X PLUS f64:393377ce858a5d46 3653323@20
+reference 2 X MINUS f64:3feffffffffffffe 3653323@20
+reference 2 Y PLUS f64:3fdffffffffffffe 3653323@20
+reference 2 Y MINUS f64:3fdffffffffffffe 3653323@20
+reference 2 Z PLUS f64:3fdffffffffffffe 3653323@20
+reference 2 Z MINUS f64:3fdffffffffffffe 3653323@20
+reference 3 X PLUS f64:3fdffffffffffffc 4769441@20
+reference 3 X MINUS f64:3fe0000000000000 4769441@20
+reference 3 Y PLUS f64:3950000000000000 4769441@20
+reference 3 Y MINUS f64:3feffffffffffffe 4769441@20
+reference 3 Z PLUS f64:3fdffffffffffffe 4769441@20
+reference 3 Z MINUS f64:3fdffffffffffffe 4769441@20
+end values
+begin verdict
+check bound_kind_sufficient PASS
+check values_finite PASS
+check physical_state_nontrivial PASS
+check constraint_residual PASS
+check povm_normalization PASS
+check clock_probability_sum PASS
+check probability_range PASS
+check pauli_pair_sum PASS
+check conditional_defined PASS
+check schrodinger_agreement FAIL
+outcome FAIL
+failure_codes SCHRODINGER_DEVIATION_EXCEEDED
+error_code none
+expectation_met YES
+end verdict
+verdict_id eec3e050cf5e0a509d6121dd22b8b1dfe80529ded33384a65558b1dec53e0a64

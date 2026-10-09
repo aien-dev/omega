@@ -1,0 +1,64 @@
+begin values
+physical_state_kernel_dim 2
+constraint_residual f64:0000000000000000 1065816@20
+povm_residual f64:3ccafb41f432002e 1065816@20
+label 0 t0 DEFINED
+label 1 t1 DEFINED
+label 2 t2 DEFINED
+clock_probability 0 f64:3fd5555555555557 1065816@20
+clock_probability 1 f64:3fd5555555555556 1065816@20
+clock_probability 2 f64:3fd5555555555557 1065816@20
+pauli 0 X PLUS f64:3ff0000000000000 1065816@20
+pauli 0 X MINUS f64:0000000000000000 1065816@20
+pauli 0 Y PLUS f64:3fe0000000000000 1065816@20
+pauli 0 Y MINUS f64:3fe0000000000000 1065816@20
+pauli 0 Z PLUS f64:3fe0000000000000 1065816@20
+pauli 0 Z MINUS f64:3fe0000000000000 1065816@20
+pauli 1 X PLUS f64:3fcffffffffffffc 1065816@20
+pauli 1 X MINUS f64:3fe8000000000001 1065816@20
+pauli 1 Y PLUS f64:3fb126145e9ecd58 1065816@20
+pauli 1 Y MINUS f64:3feddb3d742c2655 1065816@20
+pauli 1 Z PLUS f64:3fe0000000000000 1065816@20
+pauli 1 Z MINUS f64:3fe0000000000000 1065816@20
+pauli 2 X PLUS f64:3fd0000000000008 1065816@20
+pauli 2 X MINUS f64:3fe7fffffffffffc 1065816@20
+pauli 2 Y PLUS f64:3feddb3d742c2658 1065816@20
+pauli 2 Y MINUS f64:3fb126145e9ecd44 1065816@20
+pauli 2 Z PLUS f64:3fe0000000000000 1065816@20
+pauli 2 Z MINUS f64:3fe0000000000000 1065816@20
+reference 0 X PLUS f64:3feffffffffffffe 1421087@20
+reference 0 X MINUS f64:0000000000000000 1421087@20
+reference 0 Y PLUS f64:3fdffffffffffffe 1421087@20
+reference 0 Y MINUS f64:3fdffffffffffffe 1421087@20
+reference 0 Z PLUS f64:3fdffffffffffffe 1421087@20
+reference 0 Z MINUS f64:3fdffffffffffffe 1421087@20
+reference 1 X PLUS f64:3fcffffffffffff6 4397401@20
+reference 1 X MINUS f64:3fe7ffffffffffff 4397401@20
+reference 1 Y PLUS f64:3fb126145e9ecd5c 4397401@20
+reference 1 Y MINUS f64:3feddb3d742c2650 4397401@20
+reference 1 Z PLUS f64:3fdffffffffffffc 4397401@20
+reference 1 Z MINUS f64:3fdffffffffffffc 4397401@20
+reference 2 X PLUS f64:3fd0000000000008 7373716@20
+reference 2 X MINUS f64:3fe7fffffffffffa 7373716@20
+reference 2 Y PLUS f64:3feddb3d742c2656 7373716@20
+reference 2 Y MINUS f64:3fb126145e9ecd41 7373716@20
+reference 2 Z PLUS f64:3fdffffffffffffe 7373716@20
+reference 2 Z MINUS f64:3fdffffffffffffe 7373716@20
+end values
+begin verdict
+check bound_kind_sufficient PASS
+check values_finite PASS
+check physical_state_nontrivial PASS
+check constraint_residual PASS
+check povm_normalization PASS
+check clock_probability_sum PASS
+check probability_range PASS
+check pauli_pair_sum PASS
+check conditional_defined PASS
+check schrodinger_agreement PASS
+outcome PASS
+failure_codes none
+error_code none
+expectation_met YES
+end verdict
+verdict_id f34f003c4c52e9ce811051dcc3a8c9c4929f2b1bb9bac59565250d69286fbd7b
