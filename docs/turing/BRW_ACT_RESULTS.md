@@ -73,6 +73,7 @@ committed before DEV0's held-out output was read.
 The hypothesis classes are given. The worlds are simple and mostly Gaussian. The advantage is concentrated in
 mean-reversion worlds; on drift worlds active is level with random. Held-out prediction quality does not improve
 over random or cycle at the end of the budget: the benefit is faster discrimination, not better final prediction.
+Known reporting issues (display only, no result affected): the Wilson coverage intervals treat the 60 held-out readings of a world as independent, so they are too narrow (P3 uses the point estimate); in DEV1 output the P4 noise line prints the combined noise-and-diffusion result (both passed on hold1; the separate diffusion line is correct). Left unchanged after results to keep the runner that produced the evidence.
 These are development results on a self-chosen world family by the same session that wrote the profile; an
 independent evaluator, sealing and EXP-003's contract are all still required.
 
