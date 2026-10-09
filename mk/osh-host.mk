@@ -42,8 +42,8 @@ $(OSH_HOST_DIR)/test_osh_caps_asan: $(OSH_CAPS_SRCS) $(OSH_CAPS_HDRS)
 	$(CC) $(OSH_CAPS_FLAGS) $(OSH_HOST_ASAN) -o $@ $(OSH_CAPS_SRCS)
 
 test-osh-caps: $(OSH_HOST_DIR)/test_osh_caps $(OSH_HOST_DIR)/test_osh_caps_asan $(OUT_DIR)/osh/osh
-	$(abspath $(OSH_HOST_DIR)/test_osh_caps) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/caps.out; rc=$$?; tail -5 $(OSH_HOST_DIR)/caps.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/caps.out | grep -q '^OSH_CAPS_PASS$$'
-	$(abspath $(OSH_HOST_DIR)/test_osh_caps_asan) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/caps_asan.out; rc=$$?; tail -3 $(OSH_HOST_DIR)/caps_asan.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/caps_asan.out | grep -q '^OSH_CAPS_PASS$$'
+	XDG_STATE_HOME=$(abspath $(OSH_HOST_DIR))/state $(abspath $(OSH_HOST_DIR)/test_osh_caps) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/caps.out; rc=$$?; tail -5 $(OSH_HOST_DIR)/caps.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/caps.out | grep -q '^OSH_CAPS_PASS$$'
+	XDG_STATE_HOME=$(abspath $(OSH_HOST_DIR))/state $(abspath $(OSH_HOST_DIR)/test_osh_caps_asan) $(abspath $(OUT_DIR)/osh/osh) > $(OSH_HOST_DIR)/caps_asan.out; rc=$$?; tail -3 $(OSH_HOST_DIR)/caps_asan.out; test $$rc -eq 0 && tail -1 $(OSH_HOST_DIR)/caps_asan.out | grep -q '^OSH_CAPS_PASS$$'
 	@echo "test-osh-caps: PASS (capability enforcement; plain and ASan/UBSan)"
 # durable intent/outcome journal (ABI section 10): intent before each effect, outcome after, recovery never replays.
 #   make test-osh-journal   plain and under ASan/UBSan

@@ -48,6 +48,12 @@ typedef struct {
 int osh_journal_open(OshJournal *j, const char *path);
 void osh_journal_close(OshJournal *j);
 
+/* Default location of the mandatory journal: $XDG_STATE_HOME/osh/effects.journal, else $HOME/.local/state/osh/effects.journal
+ * (XDG Base Directory spec; the ABI draft and the osh docs name no location). 0 ok, -1 when neither variable is usable. */
+int osh_journal_default_path(const char *xdg_state_home, const char *home, char *out, size_t cap);
+/* mkdir -p the parent directories of path with mode 0700. 0 ok, -errno. */
+int osh_journal_mkparents(const char *path);
+
 /* Recovery: report every intent with no outcome as UNKNOWN (never replayed; nothing is launched here) and append an
  * OUTCOME_UNKNOWN record (recovered=1) for each so it is reported once. Returns the number found (all counted, at most
  * cap stored in out), or -errno. *bad (optional) gets the number of unparsable (torn) lines. */

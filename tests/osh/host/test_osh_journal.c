@@ -25,7 +25,7 @@
 static int g_fail, g_checks;
 #define CHECK(c, ...) do { g_checks++; if (!(c)) { g_fail++; printf("FAIL line %d: %s -- ", __LINE__, #c); printf(__VA_ARGS__); printf("\n"); } } while (0)
 
-static char g_self[4096], g_dir[4096];
+static char g_self[1024], g_dir[512];
 static int g_null;
 
 static void msleep(int ms) { struct timespec ts = {ms / 1000, (ms % 1000) * 1000000L}; nanosleep(&ts, NULL); }
@@ -148,6 +148,32 @@ static int line_has(const char *text, int n, const char *needle)
     return ok;
 }
 
+/* ONE ACCOUNT: for every command of the request the LAST outcome record in the journal names the same outcome and status as
+ * the in-memory result. Returns the number of commands that disagree (or have no outcome record). */
+static int same_account(const T *t, int ncmds, const OshResult *r)
+{
+    static const char *const nm[] = {"NOT_STARTED", "COMPLETED", "FAILED_NO_EFFECT", "CANCELLED", "OUTCOME_UNKNOWN"};
+    char *j = jtext(t);
+    int bad = 0;
+    for (int i = 0; i < ncmds; i++) {
+        char key[32], want[96], *hit = NULL;
+        snprintf(key, sizeof key, " %d/%d ", i, ncmds);
+        snprintf(want, sizeof want, "%s st=%d err=%d", nm[r->cmd[i].outcome], r->cmd[i].status, r->cmd[i].err);
+        for (char *p = j; p && *p;) {
+            char *e = strchr(p, '\n');
+            if (strstr(p, " O ") && strstr(p, key) && (!e || strstr(p, key) < e)) hit = p;
+            p = e ? e + 1 : NULL;
+        }
+        char *e = hit ? strchr(hit, '\n') : NULL;
+        if (!hit || !(e ? (size_t)(e - hit) : strlen(hit)) || !memmem(hit, e ? (size_t)(e - hit) : strlen(hit), want, strlen(want))) {
+            bad++;
+            printf("  account mismatch cmd %d: want '%s' in: %.*s\n", i, want, hit ? (int)(e ? e - hit : (long)strlen(hit)) : 4, hit ? hit : "none");
+        }
+    }
+    free(j);
+    return bad;
+}
+
 static int wait_file(const char *path, long size, int ms)
 {
     for (int i = 0; i < ms / 20; i++) { if (fsize(path) >= size) return 1; msleep(20); }
@@ -199,6 +225,7 @@ static void test_normal_and_redaction(void)
     int st = run(&t, b, &r);
     free(b);
     CHECK(st == 0 && r.cmd[0].outcome == OSH_OUT_COMPLETED && fsize(marker) == 1, "ran once (st %d)", st);
+    CHECK(same_account(&t, 1, &r) == 0, "normal: record == result");
     char *j = jtext(&t);
     CHECK(count_sub(j, " I ") == 1 && count_sub(j, " O ") == 1, "one intent and one outcome:\n%s", j);
     CHECK(line_has(j, 0, " I ") && line_has(j, 1, " O 1 ") && line_has(j, 1, "COMPLETED st=0 err=0"), "order and ref:\n%s", j);
@@ -292,6 +319,7 @@ static void child_sigint(T *t, void *arg)
     t->s.after_launch_hook = raise_int_group;
     OshResult r;
     run(t, b, &r);
+    _exit(same_account(t, 2, &r) == 0 && r.cmd[0].outcome == OSH_OUT_COMPLETED && r.cmd[1].outcome == OSH_OUT_COMPLETED ? 0 : 3);
 }
 
 static void test_interrupt(void)
@@ -299,9 +327,9 @@ static void test_interrupt(void)
     T t;
     t_begin(&t, 1);
     int st = in_child(child_sigint, &t, NULL, 1);
-    CHECK(WIFEXITED(st), "child ended normally");
+    CHECK(WIFEXITED(st) && WEXITSTATUS(st) == 0, "SIGINT: record == result for both commands, both COMPLETED (child status %d)", st);
     char *j = jtext(&t);
-    CHECK(count_sub(j, " I ") == 2 && count_sub(j, " O ") == 2 && count_sub(j, "CANCELLED st=130") == 2, "both CANCELLED (130):\n%s", j);
+    CHECK(count_sub(j, " I ") == 2 && count_sub(j, " O ") == 2 && count_sub(j, "COMPLETED st=130") == 2, "both ended by the signal: COMPLETED st=130 (ABI 8.4 convention):\n%s", j);
     CHECK(line_has(j, 2, " O 1 ") && line_has(j, 3, " O 2 "), "outcomes close their intents:\n%s", j);
     free(j);
     osh_journal_close(&t.j);
@@ -327,6 +355,7 @@ static void test_partial_launch(void)
     int st = run(&t, b, &r);
     free(b);
     CHECK(st == 1 && r.err == OSH_E_PARTIAL_LAUNCH, "partial launch (st %d err %d)", st, r.err);
+    CHECK(same_account(&t, 3, &r) == 0, "partial launch: record == result");
     char *j = jtext(&t);
     CHECK(count_sub(j, " I ") == 2, "first and second have intents, third never reached:\n%s", j);
     CHECK(count_sub(j, " O ") == 3, "three outcomes");
@@ -349,6 +378,7 @@ static void test_echild_unknown(void)
     run(&t, b, &r);
     free(b);
     CHECK(r.cmd[0].outcome == OSH_OUT_UNKNOWN && r.err == OSH_E_OUTCOME_UNKNOWN, "result says unknown");
+    CHECK(same_account(&t, 1, &r) == 0, "ECHILD: record == result");
     char *j = jtext(&t);
     CHECK(strstr(j, " O 1 ") && strstr(j, "OUTCOME_UNKNOWN st=1 err=11"), "durably mirrored:\n%s", j);
     free(j);
@@ -524,16 +554,26 @@ static void test_torn_tail_and_cleanup(void)
     t_end(&t);
 }
 
-/* the real program: --journal records, and a leftover intent is reported UNKNOWN at the next start and not re-run */
-static int run_osh(const char *osh, const char *caps, const char *jpath, const char *script, const char *errf)
+/* the real program. jpath NULL = no --journal (default location from xdg/home); xdg/home NULL = variable unset */
+static int run_osh(const char *osh, const char *caps, const char *jpath, const char *script, const char *errf, const char *xdg,
+                   const char *home)
 {
     pid_t pid = fork();
     if (pid == 0) {
         int fd = open(errf, O_WRONLY | O_CREAT | O_TRUNC, 0600);
         dup2(fd, 2);
         dup2(g_null, 1);
-        if (caps) execl(osh, osh, "--caps", caps, "--journal", jpath, "-c", script, (char *)NULL);
-        execl(osh, osh, "--journal", jpath, "-c", script, (char *)NULL);
+        if (xdg) setenv("XDG_STATE_HOME", xdg, 1); else unsetenv("XDG_STATE_HOME");
+        if (home) setenv("HOME", home, 1); else unsetenv("HOME");
+        const char *av[12];
+        int n = 0;
+        av[n++] = osh;
+        if (caps) { av[n++] = "--caps"; av[n++] = caps; }
+        if (jpath) { av[n++] = "--journal"; av[n++] = jpath; }
+        av[n++] = "-c";
+        av[n++] = script;
+        av[n] = NULL;
+        execv(osh, (char *const *)av);
         _exit(127);
     }
     int st = 0;
@@ -543,36 +583,104 @@ static int run_osh(const char *osh, const char *caps, const char *jpath, const c
 
 static void test_cli(const char *osh)
 {
-    char jp[4400], ef[4400], pol[4400], sc[64];
+    char jp[700], ef[700], pol[700], xdg[700], home[700], jd[1400], mk[700], sc[1500];
     snprintf(jp, sizeof jp, "%s/cli.log", g_dir);
     snprintf(ef, sizeof ef, "%s/cli.err", g_dir);
     snprintf(pol, sizeof pol, "%s/cli.policy", g_dir);
+    snprintf(xdg, sizeof xdg, "%s/xdg", g_dir);
+    snprintf(home, sizeof home, "%s/home", g_dir);
+    snprintf(mk, sizeof mk, "%s/cli.marker", g_dir);
     FILE *pf = fopen(pol, "w");
-    fputs("principal 77\nallow spawn /bin\nallow spawn /usr/bin\n", pf);
+    fputs("principal 77\nallow spawn /bin\nallow spawn /usr/bin\nallow spawn /home\nallow write /home\n", pf);
     fclose(pf);
     /* default policy (no grants): the spawns are denied; denials are recorded, no intents, nothing ran */
-    CHECK(run_osh(osh, NULL, jp, "/bin/true", ef) == 126, "denied by the default policy");
+    CHECK(run_osh(osh, NULL, jp, "/bin/true", ef, xdg, home) == 126, "denied by the default policy");
     char *d0 = slurp(jp, NULL);
     CHECK(count_sub(d0, " I ") == 0 && count_sub(d0, "FAILED_NO_EFFECT st=126 err=1") == 1, "program records the denial:\n%s", d0);
     free(d0);
     unlink(jp);
-    CHECK(run_osh(osh, pol, jp, "/bin/true; /bin/false", ef) == 1, "osh --journal runs the script");
+    CHECK(run_osh(osh, pol, jp, "/bin/true; /bin/false", ef, xdg, home) == 1, "osh --journal runs the script");
     char *j = slurp(jp, NULL);
     CHECK(count_sub(j, " I ") == 2 && count_sub(j, " O ") == 2 && strstr(j, "COMPLETED st=0") && strstr(j, "COMPLETED st=1"), "program writes intents and outcomes:\n%s", j);
     free(j);
     FILE *f = fopen(jp, "ab"); /* a previous run died after its intent */
     fprintf(f, "OSHJ1 50 I %064d 0/1 b=0 argc=2 wr=0 a0=/bin/touch lens=10,3\n", 7);
     fclose(f);
-    snprintf(sc, sizeof sc, "/bin/echo second-run");
-    CHECK(run_osh(osh, pol, jp, sc, ef) == 0, "second start");
+    CHECK(run_osh(osh, pol, jp, "/bin/echo second-run", ef, xdg, home) == 0, "second start");
     char *e = slurp(ef, NULL);
     CHECK(strstr(e, "has outcome UNKNOWN; it is not re-run") && strstr(e, "/bin/touch"), "UNKNOWN reported at start:\n%s", e);
     free(e);
-    CHECK(run_osh(osh, pol, jp, "/bin/true", ef) == 0, "third start");
+    CHECK(run_osh(osh, pol, jp, "/bin/true", ef, xdg, home) == 0, "third start");
     e = slurp(ef, NULL);
     CHECK(!strstr(e, "UNKNOWN"), "reported once only");
     free(e);
-    CHECK(run_osh(osh, pol, "/nonexistent-dir/j.log", "/bin/true", ef) == 70, "unopenable journal: the shell does not start");
+
+    /* MANDATORY: no --journal -> the default location is used ($XDG_STATE_HOME/osh/effects.journal), 0700 dirs, 0600 file */
+    snprintf(jd, sizeof jd, "%s/osh/effects.journal", xdg);
+    CHECK(run_osh(osh, pol, NULL, "/bin/true", ef, xdg, home) == 0, "no --journal still runs");
+    struct stat sb;
+    char xo[1000];
+    snprintf(xo, sizeof xo, "%s/osh", xdg);
+    CHECK(stat(jd, &sb) == 0 && (sb.st_mode & 0777) == 0600, "default journal exists with mode 0600");
+    CHECK(stat(xo, &sb) == 0 && (sb.st_mode & 0777) == 0700, "its directory is 0700");
+    j = slurp(jd, NULL);
+    CHECK(count_sub(j, " I ") == 1 && count_sub(j, " O ") == 1, "the effect was recorded there:\n%s", j);
+    free(j);
+    /* fallback: no XDG_STATE_HOME -> $HOME/.local/state/osh/effects.journal */
+    snprintf(jd, sizeof jd, "%s/.local/state/osh/effects.journal", home);
+    mkdir(home, 0700);
+    CHECK(run_osh(osh, pol, NULL, "/bin/true", ef, NULL, home) == 0 && stat(jd, &sb) == 0 && (sb.st_mode & 0777) == 0600,
+          "HOME fallback location used");
+    char dd[1200];
+    snprintf(dd, sizeof dd, "%s/.local/state/osh", home);
+    CHECK(stat(dd, &sb) == 0 && (sb.st_mode & 0777) == 0700, "fallback directory is 0700");
+
+    /* unwritable journal: effects refused by name, nothing launched, non-effect builtins still run */
+    snprintf(jd, sizeof jd, "%s/not-a-dir", g_dir);
+    FILE *nf = fopen(jd, "w"); /* a regular file where the state directory must be */
+    fclose(nf);
+    unlink(mk);
+    snprintf(sc, sizeof sc, "/bin/touch %s", mk);
+    CHECK(run_osh(osh, pol, NULL, sc, ef, jd, home) == 1, "effect refused when the journal cannot be opened");
+    e = slurp(ef, NULL);
+    CHECK(strstr(e, "effect journal unavailable") && strstr(e, "effect refused, nothing was run"), "named error:\n%s", e);
+    free(e);
+    msleep(150);
+    CHECK(fsize(mk) < 0, "no child was launched (marker absent)");
+    CHECK(run_osh(osh, pol, NULL, "printf x", ef, jd, home) == 0, "a builtin without a write redirection is unaffected");
+    snprintf(sc, sizeof sc, "printf x > %s", mk);
+    CHECK(run_osh(osh, pol, NULL, sc, ef, jd, home) == 1 && fsize(mk) < 0, "a write-class redirection is an effect: refused, no file");
+    /* an explicit --journal that cannot be opened is the same refusal (no silent fallback) */
+    snprintf(sc, sizeof sc, "/bin/touch %s", mk);
+    CHECK(run_osh(osh, pol, "/nonexistent-dir/j.log", sc, ef, xdg, home) == 1 && fsize(mk) < 0, "explicit unopenable --journal: effect refused");
+    /* control: the same command with a working journal does run */
+    CHECK(run_osh(osh, pol, jp, sc, ef, xdg, home) == 0 && fsize(mk) == 0, "control: with a working journal the marker is created");
+}
+
+/* library level: journal_required with no journal open refuses every effect and launches nothing */
+static void test_required_without_journal(void)
+{
+    T t;
+    t_begin(&t, 0);
+    t.s.journal_required = 1;
+    t.s.journal_error = "test: unwritable";
+    char marker[4400];
+    mpath(&t, "mreq", marker, sizeof marker);
+    OshBuilder *b = nb();
+    helper(b, "append", marker);
+    OshResult r;
+    int st = run(&t, b, &r);
+    free(b);
+    msleep(150);
+    CHECK(st == 1 && r.err == OSH_E_IO && r.cmd[0].outcome == OSH_OUT_FAILED_NO_EFFECT && r.cmd[0].pid == 0 && fsize(marker) < 0,
+          "required journal missing -> effect refused (st %d)", st);
+    b = nb();
+    osh_rb_cmd(b, OSH_B_PWD);
+    osh_rb_arg(b, "pwd");
+    st = run(&t, b, &r);
+    free(b);
+    CHECK(st == 0 && r.cmd[0].outcome == OSH_OUT_COMPLETED, "non-effect builtin unaffected");
+    t_end(&t);
 }
 
 int main(int argc, char **argv)
@@ -597,6 +705,7 @@ int main(int argc, char **argv)
     test_fail_closed();
     test_non_effects_and_direct();
     test_torn_tail_and_cleanup();
+    test_required_without_journal();
     if (osh_bin) test_cli(osh_bin);
     close(g_null);
     char cmd[4400];

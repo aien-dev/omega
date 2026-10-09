@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "sha256.h"
@@ -378,4 +379,35 @@ int osh_journal_recover(OshJournal *j, const char *path, OshJournalUnknown *out,
     free(r.open);
     free(r.closed);
     return found;
+}
+
+/* ---- default location ---- */
+
+int osh_journal_default_path(const char *xdg, const char *home, char *out, size_t cap)
+{
+    int n;
+    if (xdg && xdg[0] == '/') n = snprintf(out, cap, "%s/osh/effects.journal", xdg);
+    else if (home && home[0] == '/') n = snprintf(out, cap, "%s/.local/state/osh/effects.journal", home);
+    else return -1;
+    return n > 0 && (size_t)n < cap ? 0 : -1;
+}
+
+int osh_journal_mkparents(const char *path)
+{
+    char d[4096];
+    if (strlen(path) >= sizeof d) return -ENAMETOOLONG;
+    strcpy(d, path);
+    char *last = strrchr(d, '/');
+    if (!last) return 0;
+    *last = 0;
+    for (char *p = d + 1; ; p++) {
+        if (*p == '/' || *p == 0) {
+            char c = *p;
+            *p = 0;
+            if (mkdir(d, 0700) != 0 && errno != EEXIST) return -errno;
+            *p = c;
+            if (!c) break;
+        }
+    }
+    return 0;
 }

@@ -43,18 +43,21 @@
  *    when interactive, else to each pid) and are reaped (outcome CANCELLED); not-yet-started commands are NOT_STARTED; status 1.
  *  - waitpid ECHILD for a started child (someone else reaped it): that command is OUTCOME_UNKNOWN, status 1, err
  *    OUTCOME_UNKNOWN. A pipeline whose last command died of SIGINT/SIGQUIT sets killed_by_int and osh_run_list stops there.
- *  - DURABLE INTENT/OUTCOME (ABI section 10), when s->journal is set (osh_journal.h; the osh program: --journal FILE).
+ *  - DURABLE INTENT/OUTCOME (ABI section 10), when s->journal is set (osh_journal.h; the osh program always sets it).
  *    An effect is one external spawn or one write-class open (output/append redirection), so a command is an effect
  *    iff it is external or has such a redirection; builtins, standalone assignments and read-only/dup redirections
  *    are not (section 10 defines the term that way). Just before each effect an INTENT record is appended and fsynced
  *    (file; directory on creation); if that fails the command is NOT launched (FAILED_NO_EFFECT, err IO, status 1:
  *    mandatory records fail closed). After the pipeline is reaped one OUTCOME record per effect is appended and fsynced:
  *    a refusal or denial before the intent is an outcome with no intent (ref 0, FAILED_NO_EFFECT, nothing launched), a
- *    command never reached is NOT_STARTED. ASSUMPTION: a command that ended by SIGINT/SIGQUIT is recorded CANCELLED
- *    (interrupted by the user), its status 128+sig is kept; the in-memory result still says COMPLETED for it. If an
+ *    command never reached is NOT_STARTED. ONE ACCOUNT: the record and the result give the same outcome
+ *    for every command. A command that died of a signal it was sent (^C, kill) is COMPLETED with status 128+sig
+ *    (ABI 8.4 exit status convention); CANCELLED is the adapter's own act (stopped member, partial-launch cleanup). If an
  *    outcome cannot be made durable the intent stays open (recovery reports it UNKNOWN) and res->journal_failed is set.
  *    Recovery never launches anything. The journal holds no argument values (osh_journal.h, redaction rule). Without
- *    s->journal nothing is written and behaviour is unchanged.
+ *    s->journal and without s->journal_required nothing is written and behaviour is unchanged (library embedders). With
+ *    journal_required set and no journal open (the osh program when the journal cannot be opened) every effect is refused with
+ *    a named diagnostic (status 1, FAILED_NO_EFFECT, err IO); commands that are not effects still run.
  */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -352,6 +355,8 @@ static void fail_all(OshResult *res, int n, int status, int err)
 
 typedef struct {
     OshJournal *j;
+    int required;               /* mandatory journal: no journal means every effect is refused */
+    const char *why;
     uint8_t dig[32];
     uint64_t ref[OSH_MAX_CMDS]; /* intent rec per command, 0 = none */
 } JCtx;
@@ -369,22 +374,28 @@ static void jc_init(JCtx *jc, OshSession *s, const OshRequest *r)
 {
     memset(jc, 0, sizeof *jc);
     jc->j = s->journal;
+    jc->required = s->journal_required && !s->journal;
+    jc->why = s->journal_error ? s->journal_error : "not opened";
     if (jc->j) osh_req_digest(r, jc->dig);
 }
 
 /* 0: durable (or no journal / not an effect); -1: the intent could not be made durable and the effect must not run */
 static int jc_intent(JCtx *jc, const OshRequest *r, int idx)
 {
+    if (jc->required && cmd_effect(&r->cmd[idx])) return -2;
     if (!jc->j || !cmd_effect(&r->cmd[idx])) return 0;
     jc->ref[idx] = osh_journal_intent(jc->j, jc->dig, r, idx);
     return jc->ref[idx] ? 0 : -1;
 }
 
-static int jc_outcome(const OshCmdResult *c)
+/* the named refusal: -2 = the journal is not open at all, -1 = the intent record was not durable */
+static void jc_refuse(OshSession *s, const JCtx *jc, int rc)
 {
-    if (c->outcome == OSH_OUT_COMPLETED && (c->termsig == SIGINT || c->termsig == SIGQUIT)) return OSH_OUT_CANCELLED;
-    return c->outcome;
+    if (rc == -2) osh_diag(s->fd[2], "effect journal unavailable (%s); effect refused, nothing was run", jc->why);
+    else osh_diag(s->fd[2], "effect journal: intent could not be made durable; effect refused, nothing was run");
 }
+
+static int jc_outcome(const OshCmdResult *c) { return c->outcome; } /* one account: the record says exactly what the result says */
 
 /* one outcome per effect, one write, one fsync */
 static void jc_finish(JCtx *jc, const OshRequest *r, OshResult *res)
@@ -415,8 +426,9 @@ static void run_in_parent(OshSession *s, const OshRequest *rq, JCtx *jc, OshResu
     tab_init(&t, s);
     int st;
     int rerr = OSH_E_IO;
-    if (jc_intent(jc, rq, 0) != 0) {
-        osh_diag(s->fd[2], "journal: intent could not be made durable; nothing was run");
+    int jrc = jc_intent(jc, rq, 0);
+    if (jrc != 0) {
+        jc_refuse(s, jc, jrc);
         set_cmd(&res->cmd[0], 1, OSH_OUT_FAILED_NO_EFFECT, OSH_E_IO);
         res->status = 1;
         return;
@@ -602,8 +614,9 @@ static void run_pipeline(OshSession *s, const OshRequest *r, JCtx *jc, OshResult
             if (!envp) { launch_failed = 1; set_cmd(&res->cmd[i], 1, OSH_OUT_NOT_STARTED, OSH_E_LIMIT); break; }
         }
 
-        if (jc_intent(jc, r, i) != 0) { /* mandatory record not durable: fail closed, launch nothing */
-            osh_diag(s->fd[2], "journal: intent could not be made durable; nothing was run");
+        int jrc = jc_intent(jc, r, i);
+        if (jrc != 0) { /* mandatory record not durable: fail closed, launch nothing */
+            jc_refuse(s, jc, jrc);
             osh_envp_free(envp);
             set_cmd(&res->cmd[i], 1, OSH_OUT_FAILED_NO_EFFECT, OSH_E_IO);
             if (rd >= 0) { close(rd); p.pp[i - 1][0] = -1; }
