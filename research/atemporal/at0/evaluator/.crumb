@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0.0",
+  "name": "evaluator",
+  "purpose": "Agent 4 independent adversarial evaluator for AT-0: independent AT0_CASE_V1 codec, exact-arithmetic AT0_RESULT_V2 checker, long-double shadow oracle, 25 planted-defect mutants, 59-case public corpus, hidden-set commitment, isolation gate, qualification harness (run.sh) and machine-readable results"
+}
