@@ -121,6 +121,22 @@ if [ $gate_build = 0 ]; then rec GATE-ISOLATION-MUTANT-CAUGHT gate NOT_RUN "cont
 if sh gates/isolation.sh build/hidden_clock_mutant.o >/dev/null 2>&1; then rec GATE-ISOLATION-MUTANT-CAUGHT gate FAIL "hidden clock_gettime mutant passed the gate"; else rec GATE-ISOLATION-MUTANT-CAUGHT gate PASS "hidden-clock mutant rejected"; fi
 if sh gates/isolation.sh build/clean_control.o >/dev/null 2>&1; then rec GATE-ISOLATION-CLEAN-PASSES gate PASS "clean arithmetic object accepted"; else rec GATE-ISOLATION-CLEAN-PASSES gate FAIL "clean object rejected"; fi
 fi
+# Rust controls (D5, omega#358): the oracle compute crate alone, plus a std::time mutant and an extern "C" clock mutant.
+ORACLE_SRC=../oracle/src/at0
+if command -v rustc >/dev/null 2>&1 && command -v ar >/dev/null 2>&1 && [ -d "$ORACLE_SRC" ]; then
+    RI="$TMP/riso"; rm -rf "$RI"; rbuild=1
+    RFL="--edition 2021 -C opt-level=2 -C codegen-units=1 -C debuginfo=0 -C panic=abort -D warnings --crate-type lib --crate-name at0"
+    for m in clean m1 m2; do mkdir -p "$RI/$m" && cp -r "$ORACLE_SRC" "$RI/$m/at0"; done
+    printf '\npub fn hidden_clock() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }\n' >> "$RI/m1/at0/mod.rs"
+    printf '\n#[repr(C)] pub struct Ts { s: i64, n: i64 }\nextern "C" { fn clock_gettime(c: i32, t: *mut Ts) -> i32; }\npub fn hidden_clock() -> i64 { let mut t = Ts { s: 0, n: 0 }; unsafe { clock_gettime(0, &mut t); } t.n }\n' >> "$RI/m2/at0/mod.rs"
+    for m in clean m1 m2; do ( cd "$RI/$m" && rustc $RFL at0/mod.rs -o lib.rlib && ar x lib.rlib ) >"$TMP/r.err" 2>&1 || rbuild=0; done
+    if [ $rbuild = 0 ]; then rec GATE-ISOLATION-RUST-STD-TIME-CAUGHT gate NOT_RUN "rust control failed to build: $(head -1 "$TMP/r.err")"; rec GATE-ISOLATION-RUST-EXTERN-CLOCK-CAUGHT gate NOT_RUN "rust control failed to build"; rec GATE-ISOLATION-RUST-CLEAN-PASSES gate NOT_RUN "rust control failed to build"
+    else
+        if sh gates/isolation.sh "$RI"/m1/*.o >/dev/null 2>&1; then rec GATE-ISOLATION-RUST-STD-TIME-CAUGHT gate FAIL "Rust std::time::SystemTime mutant passed the gate (D5)"; else rec GATE-ISOLATION-RUST-STD-TIME-CAUGHT gate PASS "Rust std::time::SystemTime mutant rejected (v0/legacy mangling and demangled forms scanned)"; fi
+        if sh gates/isolation.sh "$RI"/m2/*.o >/dev/null 2>&1; then rec GATE-ISOLATION-RUST-EXTERN-CLOCK-CAUGHT gate FAIL "Rust extern clock_gettime mutant passed the gate"; else rec GATE-ISOLATION-RUST-EXTERN-CLOCK-CAUGHT gate PASS "Rust extern \"C\" clock_gettime mutant rejected"; fi
+        if sh gates/isolation.sh "$RI"/clean/*.o >/dev/null 2>&1; then rec GATE-ISOLATION-RUST-CLEAN-PASSES gate PASS "oracle compute crate alone ($(ls "$RI"/clean/*.o | wc -l | tr -d ' ') rlib members) accepted"; else rec GATE-ISOLATION-RUST-CLEAN-PASSES gate FAIL "oracle compute crate rejected: $(sh gates/isolation.sh "$RI"/clean/*.o 2>&1 | grep -m1 FAIL)"; fi
+    fi
+else rec GATE-ISOLATION-RUST-STD-TIME-CAUGHT gate NOT_RUN "rustc, ar or ../oracle/src/at0 not available"; fi
 
 # ---- hidden set commitment ----
 HD=${AT0_HIDDEN_DIR:-$HOME/at0-private/agent4}

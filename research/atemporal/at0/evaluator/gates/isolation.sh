@@ -19,8 +19,10 @@ for o in "$@"; do
     for bad in $FORBIDDEN; do
         if echo "$syms" | grep -qx "_\{0,1\}${bad}" ; then echo "FAIL: $o references $bad"; fail=1; fi
     done
-    # Rust std time/random/env/fs/net/process/thread paths in mangled names
-    if grep -qE 'std\.\.time|std\.\.env|std\.\.fs|std\.\.net|std\.\.process|std\.\.thread|rand\.\.|getrandom' "$o.nm"; then
+    # Rust std time/random/env/fs/net/process/thread paths: legacy (_ZN3std4time..) and v0 (_RNv..3std4time..) mangling,
+    # plus the demangled spelling (nm -C), so a toolchain change in mangling cannot blind the gate
+    { nm -C -p "$o" 2>/dev/null; nm -C -D "$o" 2>/dev/null; } >> "$o.nm"
+    if grep -qE '3std4time|3std3env|3std2fs|3std3net|3std7process|3std6thread|3std2io5stdio|10SystemTime|7Instant|4rand[0-9A-Za-z_]*|getrandom|std::(time|env|fs|net|process|thread|io::stdio)|SystemTime|Instant::|rand::' "$o.nm"; then
         echo "FAIL: $o references a Rust std time/env/fs/net/process/thread or rand path"; fail=1
     fi
     rm -f "$o.nm"

@@ -193,7 +193,6 @@ refusal case_parse_blocks(char **lines, size_t n, size_t *consumed, at0_case *c,
         if (p.i >= p.n) goto parse_err_eof;
         int nt = split_tokens(p.lines[p.i], tok, 8);
         if (nt != 3 || strcmp(tok[0], "clock_label") != 0) {
-            if (nt == 2 && strcmp(tok[0], "observables") == 0) { mark_param(&p, "clock_label_count larger than label lines"); c->M = k; break; }
             p.detail = p.lines[p.i]; goto parse_err;
         }
         long kk;
@@ -210,7 +209,7 @@ refusal case_parse_blocks(char **lines, size_t n, size_t *consumed, at0_case *c,
     size_t acc_start = p.i;
     if (!expect_exact(&p, "begin acceptance")) goto parse_err;
     if (!expect_key(&p, "control_kind", &v)) goto parse_err;
-    if (!strcmp(v, "POSITIVE")) c->control_positive = 1; else if (!strcmp(v, "NEGATIVE")) c->control_positive = 0; else mark_param(&p, p.lines[p.i - 1]);
+    if (!strcmp(v, "POSITIVE")) c->control_positive = 1; else if (!strcmp(v, "NEGATIVE")) c->control_positive = 0; else { p.detail = p.lines[p.i - 1]; goto parse_err; }  /* token set is line grammar: shape (Agent 0 ruling D3) */
     if (!expect_key(&p, "expected_outcome", &v)) goto parse_err;
     if (!strcmp(v, "PASS")) c->expected_pass = 1; else if (!strcmp(v, "FAIL")) c->expected_pass = 0; else mark_param(&p, p.lines[p.i - 1]);
     if (!expect_key(&p, "expected_failure_codes", &v)) goto parse_err;
