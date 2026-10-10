@@ -13,19 +13,19 @@
 void *at1_xmalloc(size_t n)
 {
     void *p = malloc(n ? n : 1);
-    if (!p) { fputs("AT1_ENGINE_ERROR RESOURCE_LIMIT\n", stderr); exit(1); }
+    if (!p) at1_fatal("RESOURCE_LIMIT");
     return p;
 }
 void *at1_xcalloc(size_t n, size_t sz)
 {
     void *p = calloc(n ? n : 1, sz ? sz : 1);
-    if (!p) { fputs("AT1_ENGINE_ERROR RESOURCE_LIMIT\n", stderr); exit(1); }
+    if (!p) at1_fatal("RESOURCE_LIMIT");
     return p;
 }
 void *at1_xrealloc(void *p, size_t n)
 {
     void *q = realloc(p, n ? n : 1);
-    if (!q) { fputs("AT1_ENGINE_ERROR RESOURCE_LIMIT\n", stderr); exit(1); }
+    if (!q) at1_fatal("RESOURCE_LIMIT");
     return q;
 }
 
@@ -156,7 +156,7 @@ static int clz32(uint32_t x) { int n = 0; if (!x) return 32; while (!(x & 0x8000
 /* Knuth TAOCP vol. 2, 4.3.1 algorithm D, on magnitudes; truncated signs applied after */
 void bn_divmod(bn *q, bn *rem, const bn *a, const bn *b)
 {
-    if (b->n == 0) { fputs("AT1_ENGINE_ERROR INTERNAL_ERROR division by zero\n", stderr); exit(1); }
+    if (b->n == 0) at1_fatal("INTERNAL_ERROR division by zero");
     int qneg = a->neg != b->neg, rneg = a->neg;
     if (bn_cmp_abs(a, b) < 0) {
         if (rem) { bn_copy(rem, a); }
