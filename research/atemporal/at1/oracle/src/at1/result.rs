@@ -9,7 +9,7 @@
 //! tokens only, in exact rational arithmetic: a binary64 token is an exact dyadic rational,
 //! a scaled decimal an exact decimal rational, and the ideal marginal w/N an exact rational.
 
-use super::big::Q;
+use super::big::{Nat, Q};
 use super::case::{Case, BOUND_KINDS};
 use super::closed::{self, IdealRef, LabelRef};
 use super::matrix::{self, MatrixValues};
@@ -63,21 +63,29 @@ pub fn f64_token(x: f64) -> String {
     format!("f64:{:016x}", x.to_bits())
 }
 
-/// Scaled decimal >= b: twenty decimal places, rounded up, plus one unit of slack; the
-/// canonical form strips trailing zeros. A bound at or above 1e18 is clipped to 1e18
-/// (never reached by a valid case; it would only make every comparison indeterminate).
+/// Scaled decimal >= b: the exact binary64 value times 10^20, rounded up in exact integer
+/// arithmetic, plus one unit of slack; the canonical form strips trailing zeros. A bound at
+/// or above 1e18 (or not finite) is written as 1e18 plus one unit (never reached by a valid
+/// case; it would only make every comparison indeterminate). Review finding 10: no float
+/// multiply happens before the rounding.
 pub fn bound_token(b: f64) -> String {
     if b == 0.0 {
         return "0@0".to_string();
     }
-    let scaled = (b * 1e20).ceil().min(1e38);
-    let mut n = scaled as u128 + 1;
+    let q = if b.is_finite() && b > 0.0 && b < 1e18 { Q::from_f64(b).expect("finite") } else { Q::int(1_000_000_000_000_000_000) };
+    let e20 = Nat::from_decimal("100000000000000000000");
+    let (mut n, r) = q.num.mag.mul(&e20).divrem(&q.den);
+    if !r.is_zero() {
+        n = n.add(&Nat::one());
+    }
+    n = n.add(&Nat::one());
+    let mut digits = n.to_decimal();
     let mut k = 20u32;
-    while k > 0 && n % 10 == 0 {
-        n /= 10;
+    while k > 0 && digits.ends_with('0') {
+        digits.pop();
         k -= 1;
     }
-    format!("{}@{}", n, k)
+    format!("{}@{}", digits, k)
 }
 
 /// Exact value of a value token: Ok(Some) for `f64:`, Ok(None) for `undefined`/`nonfinite`.
@@ -221,7 +229,9 @@ pub fn parse_values(lines: &[String], c: &Case) -> Result<Values, String> {
         return Err("begin values".into());
     }
     let t = r.next("physical_state_kernel_dim")?;
-    v.kernel_dim = t.get(1).and_then(|s| s.parse().ok()).ok_or("kernel_dim")?;
+    // canonical decimal only: `0` or `[1-9][0-9]*` (no sign, no leading zero)
+    let kd = t.get(1).filter(|s| !s.is_empty() && s.len() <= 9 && s.bytes().all(|b| b.is_ascii_digit()) && (s.len() == 1 || !s.starts_with('0'))).ok_or("kernel_dim")?;
+    v.kernel_dim = kd.parse().map_err(|_| "kernel_dim")?;
     let t = r.next("constraint_residual")?;
     v.constraint_undefined = t.get(1).map(|s| s == "undefined").unwrap_or(false);
     v.constraint = Some(r.vb(&t[1..])?);

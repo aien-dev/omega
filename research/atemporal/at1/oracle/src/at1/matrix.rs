@@ -12,8 +12,8 @@
 use super::big::Q;
 use super::case::Case;
 use super::closed::{pauli_bounds, CIS_ERR, SAFETY, U};
-use super::complex::{kron, matvec, outer, real_mat, trace, vnorm2, zeros, Mat, C};
-use super::model::{cis_turns, gq_f64, LevelKind, Levels};
+use super::complex::{matvec, outer, real_mat, trace, vnorm2, zeros, Mat, C};
+use super::model::{cis_turns, gq_f64, CSum, LevelKind, Levels};
 
 #[derive(Clone, Debug)]
 pub struct LabelVal {
@@ -42,10 +42,6 @@ fn pauli_projectors() -> [[Mat; 2]; 3] {
     [[real_mat(&x), real_mat(&xm)], [yp, ym], [real_mat(&[[1.0, 0.0], [0.0, 0.0]]), real_mat(&[[0.0, 0.0], [0.0, 1.0]])]]
 }
 
-fn sigma(v: &[f64; 3]) -> Mat {
-    vec![vec![C::new(v[2], 0.0), C::new(v[0], -v[1])], vec![C::new(v[0], v[1]), C::new(-v[2], 0.0)]]
-}
-
 /// |t_k> = N^(-1/2) sum_j exp(-2 pi i E_j k tau) |E_j>, phase reduced exactly.
 fn clock_state(c: &Case, k: usize) -> Vec<C> {
     let inv = 1.0 / (c.clock_dim as f64).sqrt();
@@ -57,34 +53,29 @@ pub fn evaluate(c: &Case, lv: &Levels) -> MatrixValues {
     let m = c.labels.len();
     let dim = 2 * n;
     let w = c.weight.to_f64();
-    // H_total
-    let mut hc = zeros(n, n);
+    // H_total = H_C (x) I + I (x) H_S + V, dense 2N x 2N. Each 2 x 2 diagonal block
+    // (E_j + h0) I + n_j . sigma, n_j = h + v_j, is formed in exact rationals and converted to
+    // binary64 once per entry, so a large h cancelling a large v_j costs nothing (review
+    // finding 1). Off-diagonal blocks are exact zeros.
+    let mut h_total = zeros(dim, dim);
+    // largest operator norm of a block that carries part of Psi: a kernel block has
+    // eigenvalues 0 and E_j + h0 - s R_j = -2 s R_j, so its norm is 2 R_j (0 when degenerate)
+    let mut gmax: f64 = 0.0;
     for j in 0..n {
-        hc[j][j] = C::real(c.energies[j].to_f64());
-    }
-    let hvec = [c.h[0].to_f64(), c.h[1].to_f64(), c.h[2].to_f64()];
-    let mut hs = sigma(&hvec);
-    let h0 = c.h0.to_f64();
-    hs[0][0] = hs[0][0] + C::real(h0);
-    hs[1][1] = hs[1][1] + C::real(h0);
-    let i2 = real_mat(&[[1.0, 0.0], [0.0, 1.0]]);
-    let mut eye_n = zeros(n, n);
-    for (j, row) in eye_n.iter_mut().enumerate() {
-        row[j] = C::ONE;
-    }
-    let mut h_total = kron(&hc, &i2);
-    let ihs = kron(&eye_n, &hs);
-    let mut hmax: f64 = 0.0;
-    for j in 0..n {
-        let vj = [c.v[j][0].to_f64(), c.v[j][1].to_f64(), c.v[j][2].to_f64()];
-        let sv = sigma(&vj);
+        let nj = c.level_vector(j);
+        let d = c.energies[j].add(&c.h0);
+        let blk = [
+            [C::real(d.add(&nj[2]).to_f64()), C::new(nj[0].to_f64(), nj[1].neg().to_f64())],
+            [C::new(nj[0].to_f64(), nj[1].to_f64()), C::real(d.sub(&nj[2]).to_f64())],
+        ];
         for a in 0..2 {
             for b in 0..2 {
-                h_total[2 * j + a][2 * j + b] = h_total[2 * j + a][2 * j + b] + ihs[2 * j + a][2 * j + b] + sv[a][b];
+                h_total[2 * j + a][2 * j + b] = blk[a][b];
             }
         }
-        let nj = c.level_vector(j);
-        hmax = hmax.max(c.energies[j].to_f64().abs() + h0.abs() + nj.iter().map(|q| q.to_f64().abs()).sum::<f64>());
+        if let LevelKind::Pair { .. } = lv.kinds[j] {
+            gmax = gmax.max(2.0 * c.level_norm[j].to_f64());
+        }
     }
     // kernel projector from the exact kernel pairs
     let mut p0 = zeros(dim, dim);
@@ -114,21 +105,32 @@ pub fn evaluate(c: &Case, lv: &Levels) -> MatrixValues {
         }
     }
     let clocks: Vec<Vec<C>> = (0..m).map(|k| clock_state(c, k)).collect();
-    // POVM residual
-    let mut fsum = zeros(n, n);
-    for t in &clocks {
-        let o = outer(t, t);
-        for a in 0..n {
-            for b in 0..n {
-                fsum[a][b] = fsum[a][b] + o[a][b].scale(w);
+    // POVM residual: the explicit sum of the effects F_k = w |t_k><t_k| minus I. Entry (a, b)
+    // of F_k is (w / N) exp(-2 pi i (E_a - E_b) k tau); its phase is reduced exactly as one
+    // turn count (the product of the two clock-state entries, an exact identity), and the M
+    // terms are summed with compensation, so the entry error is about
+    // (CIS_ERR + 4) U w M / N independent of M (review finding 2).
+    let wn = c.weight.div(&Q::int(n as i64));
+    let wn_f = wn.to_f64();
+    let mut fro2 = 0.0;
+    for a in 0..n {
+        for b in 0..n {
+            let mut acc = CSum::new();
+            let d = c.energies[a].sub(&c.energies[b]).mul(&c.tau).neg();
+            for k in 0..m {
+                acc.add(cis_turns(&d.mul(&Q::int(k as i64))).scale(wn_f));
             }
+            let mut e = acc.value();
+            if a == b {
+                e = e - C::ONE;
+            }
+            fro2 += e.norm2();
         }
     }
-    for (a, row) in fsum.iter_mut().enumerate() {
-        row[a] = row[a] - C::ONE;
-    }
-    let povm_val = fsum.iter().flatten().map(|x| x.norm2()).sum::<f64>().sqrt();
-    let povm_bound = SAFETY * ((16.0 + m as f64) * U * w * m as f64 + 8.0 * U * povm_val);
+    let povm_val = fro2.sqrt();
+    // Frobenius norm over N^2 entries of size error (CIS_ERR + 4) U w M / N: at most
+    // N (CIS_ERR + 4) U w M; then the rounding of the norm itself
+    let povm_bound = SAFETY * ((CIS_ERR + 4.0) * U * w * m as f64 + 8.0 * U * povm_val);
     if lv.trivial {
         return MatrixValues { kernel_dim: lv.kernel_dim, trivial: true, constraint: None, povm: (povm_val, povm_bound), labels: Vec::new() };
     }
@@ -155,9 +157,11 @@ pub fn evaluate(c: &Case, lv: &Levels) -> MatrixValues {
     let dpsi = (CIS_ERR + 28.0) * U * k_levels * psi0_norm / (n as f64).sqrt();
     let hpsi = matvec(&h_total, &psi);
     let constraint_val = (vnorm2(&hpsi) / psi_n2).sqrt();
-    // the exact Psi has H Psi = 0, so the computed residual is about ||H dPsi|| / ||Psi||
-    // plus the rounding of H (inputs and level sums) and of the block rows
-    let constraint_bound = SAFETY * hmax * (dpsi / psi_norm + (16.0 + 4.0 * n as f64) * U);
+    // the exact Psi has H Psi = 0 and lives on kernel blocks only (other blocks of Psi are
+    // exact zeros, degenerate blocks of H are exact zeros), so the computed residual is
+    // ||H dPsi|| / ||Psi|| <= gmax dPsi / ||Psi|| plus the rounding of the block entries (U
+    // each) and of the two-term block rows ((sqrt(5) + 1) U), about 6.2 U gmax; written 8 U
+    let constraint_bound = SAFETY * gmax * (dpsi / psi_norm + 8.0 * U);
     // relative error of ||Psi||^2: twice the relative error of Psi plus the 2N-term sum
     let rel_psi_n2 = 2.0 * dpsi / psi_norm + (2.0 * dim as f64 + 4.0) * U;
     let proj = pauli_projectors();
@@ -165,19 +169,20 @@ pub fn evaluate(c: &Case, lv: &Levels) -> MatrixValues {
     let labels = clocks
         .iter()
         .map(|t| {
-            let mut phi = [C::ZERO, C::ZERO];
+            let (mut p0s, mut p1s) = (CSum::new(), CSum::new());
             let mut mag = 0.0;
             for j in 0..n {
                 let bra = t[j].conj();
-                phi[0] = phi[0] + bra * psi[2 * j];
-                phi[1] = phi[1] + bra * psi[2 * j + 1];
+                p0s.add(bra * psi[2 * j]);
+                p1s.add(bra * psi[2 * j + 1]);
                 mag += (psi[2 * j].norm2() + psi[2 * j + 1].norm2()).sqrt() * inv_sqrt_n;
             }
+            let phi = [p0s.value(), p1s.value()];
             let nn = phi[0].norm2() + phi[1].norm2();
             let p = w * nn / psi_n2;
-            // phi_a = sum_j conj(t_j) Psi_ja: per level |t_j| (||dPsi_j|| + ((CIS_ERR + 3) +
-            // sqrt(5) + (N - 1)) U ||Psi_j||), triangle inequality over (|Psi_j0|, |Psi_j1|)
-            let dphi = dpsi * inv_sqrt_n + (CIS_ERR + 5.0 + n as f64) * U * mag;
+            // phi_a = sum_j conj(t_j) Psi_ja, compensated: per level |t_j| (||dPsi_j|| +
+            // ((CIS_ERR + 3) + sqrt(5) + 2) U ||Psi_j||), triangle inequality over (|Psi_j0|, |Psi_j1|)
+            let dphi = dpsi * inv_sqrt_n + (CIS_ERR + 8.0) * U * mag;
             let norm = nn.sqrt();
             let p_bound = SAFETY * (w * (2.0 * norm * dphi + dphi * dphi) / psi_n2 + p * (rel_psi_n2 + 8.0 * U));
             let (pauli, pauli_bound) = if nn > 0.0 {

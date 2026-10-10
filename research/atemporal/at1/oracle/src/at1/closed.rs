@@ -13,7 +13,7 @@
 use super::big::{Q, GQ};
 use super::case::Case;
 use super::complex::C;
-use super::model::{cis_turns, gq_f64, Levels};
+use super::model::{cis_turns, gq_f64, CSum, Levels};
 
 /// Unit roundoff of binary64.
 pub const U: f64 = 1.0 / 9007199254740992.0; // 2^-53
@@ -83,25 +83,25 @@ pub fn interacting(c: &Case, lv: &Levels) -> Vec<LabelRef> {
     let s = lv.s.to_f64();
     let uf: Vec<[C; 2]> = lv.u.iter().map(|uj| [gq_f64(&uj[0]), gq_f64(&uj[1])]).collect();
     let live: Vec<usize> = (0..c.clock_dim).filter(|&j| !(lv.u[j][0].is_zero() && lv.u[j][1].is_zero())).collect();
-    let l = live.len() as f64;
     let mag: f64 = live.iter().map(|&j| (uf[j][0].norm2() + uf[j][1].norm2()).sqrt()).sum();
     let r = c.ref_index as i64;
     (0..c.labels.len())
         .map(|k| {
-            let mut chi = [C::ZERO, C::ZERO];
+            let (mut c0, mut c1) = (CSum::new(), CSum::new());
             for &j in &live {
                 let turns = c.energies[j].mul(&Q::int(k as i64 - r)).mul(&c.tau);
                 let ph = cis_turns(&turns);
-                chi[0] = chi[0] + ph * uf[j][0];
-                chi[1] = chi[1] + ph * uf[j][1];
+                c0.add(ph * uf[j][0]);
+                c1.add(ph * uf[j][1]);
             }
+            let chi = [c0.value(), c1.value()];
             let nn = chi[0].norm2() + chi[1].norm2();
             let p = w * nn / (n * s);
             // first-order, AT1_SPEC 8.4 item 4: per component |d chi_a| <= sum_j |u_ja| times
-            // (U conversion of the exact u_j + CIS_ERR phase + sqrt(5) U product + (L - 1) U
-            // for the L-term sum), and by the triangle inequality on (|u_j0|, |u_j1|)
-            // ||d chi|| <= (CIS_ERR + 2.3 + L) U sum_j ||u_j||; written as (CIS_ERR + 4 + L).
-            let dchi = (CIS_ERR + 4.0 + l) * U * mag;
+            // (U conversion of the exact u_j + CIS_ERR phase + sqrt(5) U product + 2 U
+            // for the compensated sum), and by the triangle inequality on (|u_j0|, |u_j1|)
+            // ||d chi|| <= (CIS_ERR + 5.3) U sum_j ||u_j||; written as (CIS_ERR + 6).
+            let dchi = (CIS_ERR + 6.0) * U * mag;
             let norm = nn.sqrt();
             let p_bound = SAFETY * (w / (n * s) * (2.0 * norm * dchi + dchi * dchi) + 16.0 * U * p);
             let pauli = pauli_of(chi[0], chi[1]);

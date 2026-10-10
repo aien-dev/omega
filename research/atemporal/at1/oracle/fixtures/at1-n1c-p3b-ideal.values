@@ -1,7 +1,7 @@
 begin values
 physical_state_kernel_dim 4
-constraint_residual f64:3c957e82ecdabe8d 2780911@20
-povm_residual f64:3cbbb67ae8584caa 1332269@20
+constraint_residual f64:3c957e82ecdabe8d 1873337@20
+povm_residual f64:0000000000000000 799362@20
 label 0 t0 DEFINED
 label 1 t1 DEFINED
 label 2 t2 DEFINED
@@ -38,10 +38,10 @@ reference_label 0 t0 DEFINED
 reference_label 1 t1 DEFINED
 reference_label 2 t2 DEFINED
 reference_label 3 t3 DEFINED
-reference_clock_probability 0 f64:3fe0666666666666 58912@19
-reference_clock_probability 1 f64:3fce666666666665 36147@19
-reference_clock_probability 2 f64:3f8999999999999b 68012@20
-reference_clock_probability 3 f64:3fce666666666665 36147@19
+reference_clock_probability 0 f64:3fe0666666666666 561984@20
+reference_clock_probability 1 f64:3fce666666666665 342998@20
+reference_clock_probability 2 f64:3f8999999999999b 63774@20
+reference_clock_probability 3 f64:3fce666666666665 342998@20
 reference_ideal 0 X PLUS f64:3fe0000000000000 1421087@20
 reference_ideal 0 X MINUS f64:3fe0000000000000 1421087@20
 reference_ideal 0 Y PLUS f64:3ff0000000000000 1421087@20
@@ -66,30 +66,30 @@ reference_ideal 3 Y PLUS f64:0000000000000000 1421087@20
 reference_ideal 3 Y MINUS f64:3ff0000000000000 1421087@20
 reference_ideal 3 Z PLUS f64:3fe0000000000000 1421087@20
 reference_ideal 3 Z MINUS f64:3fe0000000000000 1421087@20
-reference_interacting 0 X PLUS f64:3fd6a2576a2576a3 734997@20
-reference_interacting 0 X MINUS f64:3fe4aed44aed44ae 734997@20
-reference_interacting 0 Y PLUS f64:3fef3831f3831f39 477788@20
-reference_interacting 0 Y MINUS f64:3f98f9c18f9c18fc 477788@20
-reference_interacting 0 Z PLUS f64:3fe18f9c18f9c190 750492@20
-reference_interacting 0 Z MINUS f64:3fdce0c7ce0c7ce1 750492@20
-reference_interacting 1 X PLUS f64:3f9af286bca1af2b 54203@19
-reference_interacting 1 X MINUS f64:3fef286bca1af289 54203@19
-reference_interacting 1 Y PLUS f64:3fe0d79435e50d79 937816@20
-reference_interacting 1 Y MINUS f64:3fde50d79435e50f 937816@20
-reference_interacting 1 Z PLUS f64:3fe50d79435e50d8 908774@20
-reference_interacting 1 Z MINUS f64:3fd5e50d79435e51 908774@20
-reference_interacting 2 X PLUS f64:3fdffffffffffffe 2898043@20
-reference_interacting 2 X MINUS f64:3fe0000000000001 2898043@20
+reference_interacting 0 X PLUS f64:3fd6a2576a2576a3 709682@20
+reference_interacting 0 X MINUS f64:3fe4aed44aed44ae 709682@20
+reference_interacting 0 Y PLUS f64:3fef3831f3831f39 469621@20
+reference_interacting 0 Y MINUS f64:3f98f9c18f9c18fc 469621@20
+reference_interacting 0 Z PLUS f64:3fe18f9c18f9c190 724145@20
+reference_interacting 0 Z MINUS f64:3fdce0c7ce0c7ce1 724145@20
+reference_interacting 1 X PLUS f64:3f9af286bca1af2b 52958@19
+reference_interacting 1 X MINUS f64:3fef286bca1af289 52958@19
+reference_interacting 1 Y PLUS f64:3fe0d79435e50d79 89898@19
+reference_interacting 1 Y MINUS f64:3fde50d79435e50f 89898@19
+reference_interacting 1 Z PLUS f64:3fe50d79435e50d8 871874@20
+reference_interacting 1 Z MINUS f64:3fd5e50d79435e51 871874@20
+reference_interacting 2 X PLUS f64:3fdffffffffffffe 2728525@20
+reference_interacting 2 X MINUS f64:3fe0000000000001 2728525@20
 reference_interacting 2 Y PLUS f64:3924000000000000 355273@20
 reference_interacting 2 Y MINUS f64:3fefffffffffffff 355273@20
-reference_interacting 2 Z PLUS f64:3fe0000000000000 2898043@20
-reference_interacting 2 Z MINUS f64:3fdfffffffffffff 2898043@20
-reference_interacting 3 X PLUS f64:3fef286bca1af289 54203@19
-reference_interacting 3 X MINUS f64:3f9af286bca1af2b 54203@19
-reference_interacting 3 Y PLUS f64:3fe0d79435e50d79 937816@20
-reference_interacting 3 Y MINUS f64:3fde50d79435e50f 937816@20
-reference_interacting 3 Z PLUS f64:3fd5e50d79435e51 908774@20
-reference_interacting 3 Z MINUS f64:3fe50d79435e50d8 908774@20
+reference_interacting 2 Z PLUS f64:3fe0000000000000 2728525@20
+reference_interacting 2 Z MINUS f64:3fdfffffffffffff 2728525@20
+reference_interacting 3 X PLUS f64:3fef286bca1af289 52958@19
+reference_interacting 3 X MINUS f64:3f9af286bca1af2b 52958@19
+reference_interacting 3 Y PLUS f64:3fe0d79435e50d79 89898@19
+reference_interacting 3 Y MINUS f64:3fde50d79435e50f 89898@19
+reference_interacting 3 Z PLUS f64:3fd5e50d79435e51 871874@20
+reference_interacting 3 Z MINUS f64:3fe50d79435e50d8 871874@20
 end values
 begin verdict
 check bound_kind_sufficient PASS

@@ -45,15 +45,30 @@ fn utc_now() -> String {
     format!("{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z", y, mo, d, h, m, s)
 }
 
-/// Host name: /etc/hostname (Linux), else `uname -n` (macOS has no /etc/hostname).
-fn hostname() -> String {
-    let from_file = std::fs::read_to_string("/etc/hostname").map(|s| s.trim().to_string()).ok().filter(|s| !s.is_empty());
-    let from_uname = || {
-        Command::new("uname").arg("-n").output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).filter(|s| !s.is_empty())
-    };
-    let raw = from_file.or_else(from_uname).unwrap_or_else(|| "unknown".to_string());
-    // a provenance value is one token: keep it to printable non-space ASCII
-    let clean: String = raw.chars().map(|c| if c.is_ascii_graphic() { c } else { '_' }).collect();
+fn run_text(cmd: &str, args: &[&str]) -> Option<String> {
+    let o = Command::new(cmd).args(args).output().ok().filter(|o| o.status.success())?;
+    let s = String::from_utf8_lossy(&o.stdout).split_whitespace().collect::<Vec<_>>().join(" ");
+    if s.is_empty() { None } else { Some(s) }
+}
+
+/// `host` (AT1_RESULT_V1 section 7: free text that, for a replication run, names the
+/// machine and the OS): host name from /etc/hostname (Linux) or `uname -n` (macOS has no
+/// /etc/hostname), then the OS product line from `sw_vers` when it exists (macOS) and
+/// `uname -srm`. Whitespace runs collapse to one space; anything outside 0x20..0x7E becomes
+/// `_`; at most 200 bytes.
+fn host() -> String {
+    let name = std::fs::read_to_string("/etc/hostname").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).or_else(|| run_text("uname", &["-n"])).unwrap_or_else(|| "unknown".to_string());
+    let mut parts = vec![name];
+    if let (Some(p), Some(v)) = (run_text("sw_vers", &["-productName"]), run_text("sw_vers", &["-productVersion"])) {
+        parts.push(format!("{} {}", p, v));
+    }
+    if let Some(u) = run_text("uname", &["-srm"]) {
+        parts.push(u);
+    }
+    let raw = parts.join(" ").split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut clean: String = raw.chars().map(|c| if (' '..='~').contains(&c) { c } else { '_' }).collect();
+    clean.truncate(200);
+    let clean = clean.trim().to_string();
     if clean.is_empty() { "unknown".to_string() } else { clean }
 }
 
@@ -84,15 +99,20 @@ fn emit(args: &[String]) -> i32 {
         }
     };
     let computed = compute(&case);
-    let commit = git(&["rev-parse", "HEAD"]);
-    let dirty = git(&["status", "--porcelain", "--", "."]).map(|s| !s.is_empty()).unwrap_or(true);
+    // source provenance is the state the binary was BUILT from (AT0_RESULT_V2 section 7),
+    // captured by build.sh; a binary built without build.sh falls back to the checkout it
+    // runs from and never claims a clean tree
+    let (commit, clean) = match (option_env!("AT1_SOURCE_COMMIT"), option_env!("AT1_SOURCE_CLEAN")) {
+        (Some(c), Some(k)) if c.len() == 40 => (Some(c.to_string()), k == "YES"),
+        _ => (git(&["rev-parse", "HEAD"]), false),
+    };
     let exe = exe_sha256();
     let rustc = option_env!("AT1_RUSTC_VERSION").unwrap_or("rustc unknown (built without build.sh)");
     let flags = option_env!("AT1_BUILD_FLAGS").unwrap_or("unknown");
     let values: Vec<String> = vec![
         "aien-dev/omega".to_string(),
         commit.clone().unwrap_or_else(|| "0".repeat(40)),
-        if commit.is_some() && !dirty { "YES" } else { "NO" }.to_string(),
+        if commit.is_some() && clean { "YES" } else { "NO" }.to_string(),
         CONTRACT_COMMIT.to_string(),
         exe.clone(),
         "aien-dev/omega".to_string(),
@@ -100,7 +120,7 @@ fn emit(args: &[String]) -> i32 {
         exe,
         format!("oracle {} {}", rustc, option_env!("AT1_RUSTC_HOST").unwrap_or("unknown-host")),
         format!("rustc {} src/main.rs", flags),
-        hostname(),
+        host(),
         started,
         utc_now(),
     ];

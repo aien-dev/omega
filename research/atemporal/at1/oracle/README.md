@@ -3,7 +3,9 @@
 Independent reference for the AT-1 interacting Page-Wootters qualification. Given an
 `AT1_CASE_V1` file it validates the case in contract order, decides the kernel of
 `H_total = H_C (x) I + I (x) H_S + V` exactly level by level, computes every written quantity
-by two separate routes, judges the twelve checks in exact arithmetic and writes one
+by two routes (a literal matrix route and the closed form; they share only the exact level
+decisions and eigenvectors of `src/at1/model.rs`, the exact phase reduction `cis_turns`, the
+compensated sum and the Pauli bound formula), judges the twelve checks in exact arithmetic and writes one
 `AT1_RESULT_V1` oracle record. A PASS here means conformance with the frozen contracts and
 AT1_SPEC; it says nothing about physics. Reproducing the hand tables is a calibration
 result, not a discovery.
@@ -35,7 +37,10 @@ copied from the AT-0 oracle as a starting point, as charter section 4 allows).
   `clock_energies`, `interaction_pauli` or `clock_label` lines are `CASE_PARSE_ERROR`; a
   rational with denominator below 1 and a negative part of a scaled token are
   `CASE_NONCANONICAL`; a rational over the token limit and a scaled exponent above 40 are
-  `CASE_INVALID_PARAMETER`.
+  `CASE_INVALID_PARAMETER`; `clock_dim 0` (or any value that differs from the number of
+  `clock_energies` entries) is a count-line mismatch, so `CASE_PARSE_ERROR` before the range
+  rule `2 <= N <= 64` is reached. The values-block parser the judge uses takes
+  `physical_state_kernel_dim` only as a canonical decimal (`0` or `[1-9][0-9]*`).
 - Phase sign frozen in `AT1_CASE_V1` section 3: `chi_k = sum_j exp(+2 pi i E_j (k - r) tau) u_j`.
 
 ## What the record contains
@@ -96,14 +101,20 @@ rustc --edition 2021 -C opt-level=2 -C codegen-units=1 -C debuginfo=0 -C panic=a
 ```
 
 The test build uses the same flags without `-C panic=abort`, plus `--test`. `build.sh`
-records `rustc -V`, the host triple and the flag string in the binary, which is where
-`build_cc` and `build_flags` come from. Every digest is computed in Rust; no script calls
+records in the binary `rustc -V`, the host triple and the flag string (the source of
+`build_cc` and `build_flags`), and the source state at build time: `git rev-parse HEAD` and
+whether `git status --porcelain -- .` was empty in this directory (the source of
+`source_commit`, `oracle_commit` and `source_tree_clean`). A binary built without `build.sh`
+falls back to the checkout it runs from and always writes `source_tree_clean NO`. `host` is
+the host name, then `sw_vers` product name and version when present (macOS), then
+`uname -srm`, so a replication record names the machine and the OS. Every digest is computed in Rust; no script calls
 `sha256sum` or `shasum`. No Makefile and no toolchain pin file are shipped, so `rustup`
 never tries to download anything.
 
 MacBook (macOS arm64, rustc 1.97.1): the same three commands. `isolation.sh` accepts the
 leading underscore BSD `nm` puts on C symbols, and the host name falls back to `uname -n`
-when `/etc/hostname` is missing. Verified here with rustc 1.97.1 and 1.98.1 on
+when `/etc/hostname` is missing. No script needs GNU make, `sha256sum` or `shasum`.
+Verified here with rustc 1.97.1 and 1.98.1 on
 `aarch64-unknown-linux-gnu`: both build with `-D warnings`, both pass the suite, and their
 fixtures are byte-identical. It has not been run on macOS by this agent.
 
@@ -113,15 +124,19 @@ fixtures are byte-identical. It has not been run on macOS by this agent.
   `case_id 890980a4...25f1`, `acceptance_id d63246c3...4d8f`, kernel dimension 2 and
   `p = 5/28, 1/4, 9/28, 1/4`; its oracle record has
   `verdict_id a918558b4b1e99e4015813eaefaab18973861b7b7d797ef89bddc9f41637eabb`.
-- Test suite: 24 tests pass (20 suite tests, 4 unit tests of the arithmetic, SHA-256 and
-  complex layers).
+- Test suite: 26 tests pass on rustc 1.98.1 and on rustc 1.97.1 (22 suite tests, 4 unit
+  tests of the arithmetic, SHA-256 and complex layers).
 - Section 13 tables covered: 13.2 P1 (a, b), P1c, P2, P3, P3b, P4, P5, P6; 13.3 deviation
   classes through N1 to N1f; 13.4 N1 to N1f, N2, N3, N4a, N4b, N5, N6; 13.5 R0 to R14 and
-  all 42 inherited AT-0 refusal rows re-expressed on P2. 1409 values compared with the exact
+  all 42 inherited AT-0 refusal rows re-expressed on P2. 1577 values compared with the exact
   tables, largest deviation `6.7e-16`, no value outside its written bound, largest bound
   `1.1e-13` (see `fixtures/CALIBRATION.md`). Every case meets its expectation.
+- Review cases (second-model review, see the PR): a field `h_z = 1048573/15` cancelling
+  couplings `v_z = -1048567/15` (constraint residual `6.8e-17`, bound `1.8e-14`, PASS), and
+  the largest clocks the contract allows, `N = M = 64` and `N = 64, M = 256, w = 1/4`
+  (constraint and POVM residuals `0`, POVM bound `1.7e-13`, PASS).
 - AT1_SPEC section 9: T1, T3 (P1c under IDEAL), T4, T5, T6, T7 and T9 are tests; mutants
-  M1 (drop `V`, including the blind P1 and P1c cases and the N1 route to
+  M1 (drop `V`, including the blind P1c case and the N1 route to
   `ORACLE_DISAGREEMENT`), M3 and M4 are judge tests; a status mismatch fails check 12.
 - Isolation gate: PASS (source rule, `nm -u` object rule, both catch the `std::time` mutant).
 
@@ -135,3 +150,5 @@ fixtures are byte-identical. It has not been run on macOS by this agent.
   on P2 has an irrational spectrum, so it is not a valid case; it stays with Agent 4's
   engine mutants), M5 to M7.
 - One thread, binary64, platform `cos`/`sin`. Not run on macOS by this agent.
+- `source_tree_clean` covers this directory only (the only source the build reads); a
+  change elsewhere in the clone does not mark the record dirty.

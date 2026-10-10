@@ -125,3 +125,32 @@ pub fn cis_turns(x: &Q) -> C {
 pub fn gq_f64(z: &GQ) -> C {
     C::new(z.re.to_f64(), z.im.to_f64())
 }
+
+/// Compensated (Neumaier) summation of complex terms, componentwise. First-order error of
+/// the result at most 2 U times the sum of the absolute values of the terms, independent
+/// of the number of terms (second-order term n U^2, negligible for n <= 256).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CSum {
+    s: [f64; 2],
+    c: [f64; 2],
+}
+
+impl CSum {
+    pub fn new() -> CSum {
+        CSum::default()
+    }
+    pub fn add(&mut self, x: C) {
+        for (i, xi) in [x.re, x.im].into_iter().enumerate() {
+            let t = self.s[i] + xi;
+            if self.s[i].abs() >= xi.abs() {
+                self.c[i] += (self.s[i] - t) + xi;
+            } else {
+                self.c[i] += (xi - t) + self.s[i];
+            }
+            self.s[i] = t;
+        }
+    }
+    pub fn value(&self) -> C {
+        C::new(self.s[0] + self.c[0], self.s[1] + self.c[1])
+    }
+}

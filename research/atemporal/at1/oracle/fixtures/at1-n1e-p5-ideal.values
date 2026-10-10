@@ -1,39 +1,39 @@
 begin values
 physical_state_kernel_dim 2
-constraint_residual f64:3c90bda5e82e59fb 2797691@20
-povm_residual f64:3ca6a09e667f3bcd 88818@19
+constraint_residual f64:3c90bda5e82e59fb 2438566@20
+povm_residual f64:0000000000000000 532909@20
 label 0 t0 DEFINED
 label 1 t1 DEFINED
 label 2 t2 DEFINED
 label 3 t3 DEFINED
-clock_probability 0 f64:3fd00004003682e5 2538818@20
-clock_probability 1 f64:3fcfe95ecbab9701 2533588@20
-clock_probability 2 f64:3fcffff7ff92fa33 2538804@20
-clock_probability 3 f64:3fd00b509a2a3480 2544031@20
-pauli 0 X PLUS f64:3fe000000001001b 2949914@20
-pauli 0 X MINUS f64:3fdffffffffdffca 2949914@20
-pauli 0 Y PLUS f64:3fdfe95ecbab9598 2949904@20
-pauli 0 Y MINUS f64:3fe00b509a2a3534 2949904@20
-pauli 0 Z PLUS f64:3feffffbffca7d34 36244@19
-pauli 0 Z MINUS f64:3ec000d60b2ed592 36244@19
-pauli 1 X PLUS f64:3fe00b549d35047d 29535@18
-pauli 1 X MINUS f64:3fdfe956c595f707 29535@18
-pauli 1 Y PLUS f64:3fe0000400368231 295351@19
-pauli 1 Y MINUS f64:3fdffff7ff92fb9e 295351@19
-pauli 1 Z PLUS f64:3feffffbfcf32e61 36246@19
-pauli 1 Z MINUS f64:3ec00c33467b759a 36246@19
-pauli 2 X PLUS f64:3fdfffefff23f430 2949924@20
-pauli 2 X MINUS f64:3fe00008006e05e8 2949924@20
-pauli 2 Y PLUS f64:3fe00b509a2a33ca 2949914@20
-pauli 2 Y MINUS f64:3fdfe95ecbab986c 2949914@20
-pauli 2 Z PLUS f64:3feffffbffc87cfe 36244@19
-pauli 2 Z MINUS f64:3ec000de0c08e6f9 36244@19
-pauli 3 X PLUS f64:3fdfe966c67002a0 2946332@20
-pauli 3 X MINUS f64:3fe00b4c9cc7feb0 2946332@20
-pauli 3 Y PLUS f64:3fdffff7ff92f8ca 2946342@20
-pauli 3 Y MINUS f64:3fe000040036839b 2946342@20
-pauli 3 Z PLUS f64:3feffffc029bcb64 362421@20
-pauli 3 Z MINUS f64:3ebfeb21a4e0d37f 362421@20
+clock_probability 0 f64:3fd00004003682e5 2549942@20
+clock_probability 1 f64:3fcfe95ecbab9701 2544697@20
+clock_probability 2 f64:3fcffff7ff92fa33 2549928@20
+clock_probability 3 f64:3fd00b509a2a3480 255517@19
+pauli 0 X PLUS f64:3fe000000001001b 2972161@20
+pauli 0 X MINUS f64:3fdffffffffdffca 2972161@20
+pauli 0 Y PLUS f64:3fdfe95ecbab9598 2972151@20
+pauli 0 Y MINUS f64:3fe00b509a2a3534 2972151@20
+pauli 0 Z PLUS f64:3feffffbffca7d34 362502@20
+pauli 0 Z MINUS f64:3ec000d60b2ed592 362502@20
+pauli 1 X PLUS f64:3fe00b549d35047d 2975778@20
+pauli 1 X MINUS f64:3fdfe956c595f707 2975778@20
+pauli 1 Y PLUS f64:3fe0000400368231 2975788@20
+pauli 1 Y MINUS f64:3fdffff7ff92fb9e 2975788@20
+pauli 1 Z PLUS f64:3feffffbfcf32e61 362522@20
+pauli 1 Z MINUS f64:3ec00c33467b759a 362522@20
+pauli 2 X PLUS f64:3fdfffefff23f430 2972171@20
+pauli 2 X MINUS f64:3fe00008006e05e8 2972171@20
+pauli 2 Y PLUS f64:3fe00b509a2a33ca 2972161@20
+pauli 2 Y MINUS f64:3fdfe95ecbab986c 2972161@20
+pauli 2 Z PLUS f64:3feffffbffc87cfe 362502@20
+pauli 2 Z MINUS f64:3ec000de0c08e6f9 362502@20
+pauli 3 X PLUS f64:3fdfe966c67002a0 2968549@20
+pauli 3 X MINUS f64:3fe00b4c9cc7feb0 2968549@20
+pauli 3 Y PLUS f64:3fdffff7ff92f8ca 2968559@20
+pauli 3 Y MINUS f64:3fe000040036839b 2968559@20
+pauli 3 Z PLUS f64:3feffffc029bcb64 362482@20
+pauli 3 Z MINUS f64:3ebfeb21a4e0d37f 362482@20
 reference_label 0 t0 DEFINED
 reference_label 1 t1 DEFINED
 reference_label 2 t2 DEFINED

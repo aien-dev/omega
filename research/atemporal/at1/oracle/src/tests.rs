@@ -283,6 +283,9 @@ fn charter_readings_d_and_e_and_declared_token_readings() {
     assert_eq!(refused_fresh(&shape_late), "CASE_PARSE_ERROR");
     // declared readings (README): integer grammar -?[0-9]+, fixed arities, d < 1
     assert_eq!(refused_fresh(&edit(&t, "clock_dim 4", "clock_dim +4")), "CASE_PARSE_ERROR");
+    // declared reading: `clock_dim 0` cannot match a non-empty clock_energies line, so it is a
+    // count mismatch (shape, CASE_PARSE_ERROR) before the range rule N >= 2 is reached
+    assert_eq!(refused_fresh(&edit(&t, "clock_dim 4", "clock_dim 0")), "CASE_PARSE_ERROR");
     assert_eq!(refused_fresh(&edit(&t, "interaction_pauli 1 0/1,0/1,0/1", "interaction_pauli 1 0/1,0/1")), "CASE_PARSE_ERROR");
     assert_eq!(refused_fresh(&edit(&t, "system_hamiltonian_pauli 0/1,0/1,0/1,1/2", "system_hamiltonian_pauli 0/1,0/1,1/2")), "CASE_PARSE_ERROR");
     assert_eq!(refused_fresh(&edit(&t, "povm_weight 1/1", "povm_weight 1/0")), "CASE_NONCANONICAL");
@@ -333,9 +336,7 @@ fn mutant_m1_drop_v() {
     assert_eq!(result_of(&v, "target_agreement"), "PASS");
     assert_eq!(result_of(&v, "oracle_cross_check"), "FAIL");
     assert_eq!(v.codes, vec!["ORACLE_DISAGREEMENT"]);
-    // blind on P1 (V = 0) and on P1c (coupling outside the kernel)
-    let p1 = fixture("at1-p1a-zero-coupling").spec;
-    assert_eq!(mutant_verdict(&p1, &p1).outcome, "PASS");
+    // blind on P1c (coupling outside the kernel); P1 itself has V = 0, so dropping V is a no-op there
     let p1c = fixture("at1-p1c-spectator-coupling").spec;
     let mut m1c = p1c.clone();
     m1c.v = vec![[Q::zero(), Q::zero(), Q::zero()]; 4];
@@ -412,6 +413,10 @@ fn values_parser_enforces_undefined_placement() {
     let i = swapped.iter().position(|l| l.starts_with("pauli 0 X PLUS")).unwrap();
     swapped.swap(i, i + 1);
     assert!(parse_values(&swapped, &c).is_err());
+    for tok in ["+2", "02", "-2", "2.0", ""] {
+        let bad: Vec<String> = comp.values.iter().map(|l| if l.starts_with("physical_state_kernel_dim ") { format!("physical_state_kernel_dim {}", tok) } else { l.clone() }).collect();
+        assert!(parse_values(&bad, &c).is_err(), "kernel_dim token {:?}", tok);
+    }
     assert!(parse_values(&comp.values, &c).is_ok());
 }
 
@@ -544,4 +549,50 @@ fn bound_tokens_never_round_down() {
     assert_eq!(value_exact("f64:3fd0000000000000").unwrap(), Some(q(1, 4)));
     assert_eq!(value_exact("undefined").unwrap(), None);
     assert!(value_exact("f64:3FD0000000000000").is_err());
+}
+
+// ---------------------------------------------------------------- review cases (PR body, findings 1 and 2)
+
+fn review_case(name: &str, energies: Vec<Q>, hpauli: [Q; 4], v: Vec<[Q; 3]>, tau: Q, weight: Q, labels: usize) -> Spec {
+    let mut s = fixture("at1-p1a-zero-coupling").spec;
+    s.name = name.to_string();
+    s.energies = energies;
+    s.hpauli = hpauli;
+    s.v = v;
+    s.tau = tau;
+    s.weight = weight;
+    s.labels = labels;
+    s
+}
+
+fn assert_review_pass(s: &Spec, kernel_dim: usize) {
+    let (_c, comp) = run(s);
+    let (val, bound) = comp.matrix.constraint.expect("nontrivial kernel");
+    let (pv, pb) = comp.matrix.povm;
+    eprintln!("{}: constraint {:e} bound {:e}; povm {:e} bound {:e}; outcome {} {:?}", s.name, val, bound, pv, pb, comp.verdict.outcome, comp.verdict.codes);
+    assert_eq!(comp.matrix.kernel_dim, kernel_dim, "{}", s.name);
+    assert!(val <= bound, "{}: constraint residual {:e} above its bound {:e}", s.name, val, bound);
+    assert!(pv <= pb, "{}: povm residual {:e} above its bound {:e}", s.name, pv, pb);
+    assert_eq!(comp.verdict.outcome, "PASS", "{}: {:?}", s.name, comp.verdict.codes);
+}
+
+#[test]
+fn review_finding_1_large_field_cancelling_large_coupling() {
+    // reviewer's case: h_z = 1048573/15 and v_j = (3/10, 0, -1048567/15) on both levels, so
+    // n_j = (3/10, 0, 2/5), R_j = 1/2; E = (-1/2, 1/2) puts one kernel vector on each level
+    let vj = [q(3, 10), Q::zero(), q(-1048567, 15)];
+    let s = review_case("at1-review-f1-cancellation", vec![q(-1, 2), q(1, 2)], [Q::zero(), Q::zero(), Q::zero(), q(1048573, 15)], vec![vj.clone(), vj], q(1, 2), qi(1), 2);
+    assert_review_pass(&s, 2);
+}
+
+#[test]
+fn review_finding_2_large_clocks() {
+    // P1-type kernel on E_j = j, h0 = -1/2, h_z = 1/2 (kernel vectors on levels 0 and 1)
+    let h = [q(-1, 2), Q::zero(), Q::zero(), q(1, 2)];
+    let e64: Vec<Q> = (0..64).map(qi).collect();
+    let zero_v = vec![[Q::zero(), Q::zero(), Q::zero()]; 64];
+    let s = review_case("at1-review-f2-n64-m64", e64.clone(), h.clone(), zero_v.clone(), q(1, 64), qi(1), 64);
+    assert_review_pass(&s, 2);
+    let s = review_case("at1-review-f2-n64-m256", e64, h, zero_v, q(1, 256), q(1, 4), 256);
+    assert_review_pass(&s, 2);
 }

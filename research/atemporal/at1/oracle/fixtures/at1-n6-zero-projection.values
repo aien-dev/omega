@@ -1,7 +1,7 @@
 begin values
 physical_state_kernel_dim 1
 constraint_residual undefined 0@0
-povm_residual f64:3cb0000000000000 1776358@20
+povm_residual f64:0000000000000000 1065816@20
 label 0 t0 UNDEFINED
 label 1 t1 UNDEFINED
 label 2 t2 UNDEFINED

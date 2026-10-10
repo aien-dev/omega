@@ -8,7 +8,14 @@ mkdir -p target
 RUSTC_VERSION="$(rustc -V)"
 RUSTC_HOST="$(rustc -vV | sed -n 's/^host: //p')"
 FLAGS="--edition 2021 -C opt-level=2 -C codegen-units=1 -C debuginfo=0 -C panic=abort -D warnings"
+# source provenance is captured at build time (AT0_RESULT_V2 section 7: the commit the
+# binary was built from, and whether this directory, the only source it compiles, had
+# uncommitted changes); a record from a dirty or non-git build says source_tree_clean NO
+SRC_COMMIT="$(git rev-parse HEAD 2>/dev/null || true)"
+SRC_CLEAN=NO
+if [ -n "$SRC_COMMIT" ] && [ -z "$(git status --porcelain -- . 2>/dev/null)" ]; then SRC_CLEAN=YES; fi
 export AT1_RUSTC_VERSION="$RUSTC_VERSION" AT1_RUSTC_HOST="$RUSTC_HOST" AT1_BUILD_FLAGS="$FLAGS"
+export AT1_SOURCE_COMMIT="$SRC_COMMIT" AT1_SOURCE_CLEAN="$SRC_CLEAN"
 case "${1:-build}" in
   build)
     rustc $FLAGS --crate-name at1_oracle src/main.rs -o target/at1-oracle
