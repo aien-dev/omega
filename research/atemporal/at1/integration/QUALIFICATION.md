@@ -61,6 +61,11 @@ G2 to G6 were measured on both commits with the same results. Engine and evaluat
 | engine results per pass | 24 (plus one T9 rerun of the KAT) | pass 2 equals pass 1 on 73/73 result files, outside the three fields the contract lets differ |
 | engine mutant drop_v (H loses the coupling term kron(Pj, Vj); the clock energy stays) | 18 valid cases | 15 killed, 3 blind (P1a, P1b, P1c). Each cell equals Agent 4's predicted KILLED/BLIND in `evaluator/MUTANT_RECEIPT.tsv` |
 | engine mutant wrong_level (coupling v taken from level j-1 instead of j) | 18 valid cases | 16 killed, 2 blind (P1a, P1b), matching the receipt |
+| engine mutant flip_v (M2: sign of every v_j flipped; post-freeze follow-up run on `3f75bac8`, see `evidence/AT1/20261010T062838Z-3f75bac8-engine-mutants/`) | 18 valid cases | 15 killed, 3 blind (P1a, P1b, P1c), matching the receipt |
+| engine mutant phase_sign (M4: clock phase exp(+2 pi i E_j k tau) instead of minus; same follow-up run) | 18 valid cases | 16 killed, 2 blind (P6, N1f), matching the receipt |
+| engine mutant y_sign (M5: Y+ and Y- projectors exchanged; same follow-up run) | 18 valid cases | 16 killed, 2 blind (P6, N1f), matching the receipt |
+| engine mutant axis_swap (M6: X and Y projectors exchanged; same follow-up run) | 18 valid cases | 18 killed, 0 blind, matching the receipt |
+| engine mutant ideal_marginal (M8: clock probability reported as w/N; same follow-up run) | 18 valid cases | 15 killed, 3 blind (P1a, P1b, P1c), matching the receipt |
 | isolation mutants | 3 C (clock_gettime, inline counter read, inline svc) + 3 Rust (std::time, inline cntvct_el0 read, inline svc) | 6/6 caught |
 
 ## Q4. Controls (receipts/controls.tsv holds each command and detail)
