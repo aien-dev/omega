@@ -2,12 +2,16 @@
  * osh_vars.c -- the shell's variable table and the fresh-per-exec environment (ABI section 4.5, 7.2, 9.1).
  * The environment of a child is built from this table only; the process-global environ is read once, at
  * osh_session_init, and never again. Names and values are raw bytes without NUL.
+ * Bookkeeping as bash 5.2 does it: PWD per POSIX; SHLVL = inherited level + 1 (non-numeric counts as 0, never below 0,
+ * above 1000 resets to 1 with a warning); OLDPWD exported, kept only when the inherited value names a directory and
+ * set by cd. `_` (bash's last argument) is not maintained.
  */
 #include "osh_host.h"
 #include "osh_priv.h"
 
 #include <errno.h>
 #include <limits.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -129,9 +133,23 @@ int osh_session_init(OshSession *s, char *const *envp)
     }
     if (!pwd_names_cwd(osh_var_get(s, "PWD"))) {
         char cwd[PATH_MAX];
-        if (getcwd(cwd, sizeof cwd) && osh_var_export(s, "PWD", cwd) == 0) return 0;
-        osh_session_free(s);
-        return -1;
+        if (!getcwd(cwd, sizeof cwd) || osh_var_export(s, "PWD", cwd)) { osh_session_free(s); return -1; }
+    }
+    const char *lv = osh_var_get(s, "SHLVL");
+    long level = (lv ? strtol(lv, NULL, 10) : 0) + 1; /* atoi semantics: junk counts as 0 */
+    if (level < 0) level = 0;
+    if (level >= 1000) {
+        osh_diag(s->fd[2], "osh: warning: shell level (%ld) too high, resetting to 1", level);
+        level = 1;
+    }
+    char lvbuf[24];
+    snprintf(lvbuf, sizeof lvbuf, "%ld", level);
+    if (osh_var_export(s, "SHLVL", lvbuf)) { osh_session_free(s); return -1; }
+    const char *op = osh_var_get(s, "OLDPWD");
+    struct stat st;
+    if (!op || stat(op, &st) != 0 || !S_ISDIR(st.st_mode)) {
+        osh_var_unset(s, "OLDPWD");
+        if (osh_var_export(s, "OLDPWD", NULL)) { osh_session_free(s); return -1; }
     }
     return 0;
 }
