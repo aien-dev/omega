@@ -309,11 +309,12 @@ pub fn verify(bytes: &[u8], case_bytes: Option<&[u8]>, role: Role) -> Report {
         let mut nz = !r.constraint.bound.n.is_zero() || !r.povm.bound.n.is_zero();
         for k in 0..c.m {
             nz |= !r.clock[k].bound.n.is_zero() || !six_all(&r.pauli[k], |v| v.bound.n.is_zero());
-            // AT1_RESULT_V1 section 2: NONE means every bound in the file is 0@0, references included
-            nz |= !r.ref_clock[k].bound.n.is_zero() || !six_all(&r.ref_inter[k], |v| v.bound.n.is_zero()) || !six_all(&r.ref_ideal[k], |v| v.bound.n.is_zero());
+            // Agent 0 ruling 4 (omega#371 comment 6093827495): bound_kind describes the engine's own
+            // lines; the spliced reference_* families keep the oracle's bounds, so the NONE rule of
+            // AT1_RESULT_V1 section 2 is judged on engine lines only.
         }
         if nz {
-            rep.fail("E4-BOUND-NONE-NONZERO", "bound_kind NONE but a line carries a nonzero bound (AT1_RESULT_V1 section 2: every bound 0@0)".into());
+            rep.fail("E4-BOUND-NONE-NONZERO", "bound_kind NONE but an engine line carries a nonzero bound (AT1_RESULT_V1 section 2: every bound 0@0; reference lines keep the oracle's bounds: ruling 4, omega#371)".into());
         }
     }
     // ---- exact re-derivation of the verdict ----
