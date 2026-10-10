@@ -3,14 +3,14 @@
     "generated": {
       "children": [],
       "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "compiled_at": "2026-10-09T21:50:08Z",
+      "compiled_at": "2026-10-10T07:03:49Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:42ff361ad0a9e05937e60d330e1bffaaf647fb0424ed103766d1989b7f2c0804",
+      "digest": "sha256:8cafcafd34533ed60a6372202a13b33e562488f7c39a92e9a6739888dda2ecb2",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 3,
-      "generated_at_commit": "d2ab554be81f4f7d7506afab8a6cfc9a0db64a27",
-      "source_tree": "sha256:7f5e59dff1e027b6bad0cc585cf1dcae1342ac220f21d4a0880c0e7ebc3244d1"
+      "generated_at_commit": "c232f14719faa20164d737af494a368061866e83",
+      "source_tree": "sha256:eb592378cb5f1792745dad3c1e4007ac2432c2ec8b39ad0c79b76e049591ebf9"
     }
   },
   "name": "host-tests",
