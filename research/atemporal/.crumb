@@ -10,14 +10,14 @@
         }
       ],
       "children_root": "sha256:f7bd1d7019a69ef57140cd019f86634f3cb80c1e31ca3063dfdf73ac9deef7c6",
-      "compiled_at": "2026-10-10T06:02:43Z",
+      "compiled_at": "2026-10-10T06:01:52Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:1642c82ac2d6d3df89a655395553936f81a39be40311c0c26732899e3bb6a938",
+      "digest": "sha256:1de1e0e566cc0d0bb51d5455bce0359860c5539182ee49274ac90f378da648f9",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 392,
-      "generated_at_commit": "dba410a938b9f7ebc5329da0ea5f3e06507cbd09",
-      "source_tree": "sha256:a82713c88b17ed12f7fbaba82e2c818418fcf153add462ff470546f9ed196237"
+      "generated_at_commit": "9aa931fe132b988c5dd76c0a2f0da753687178d0",
+      "source_tree": "sha256:75cb123884d5bbcf41bbba561d0a9390f80ae675d0bdd17cab77b530304f2caa"
     }
   },
   "name": "atemporal",
