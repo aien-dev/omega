@@ -1,0 +1,36 @@
+# path	class	expected	codec	engine	oracle	derived_outcome	derived_codes	case_verdict	findings
+H01.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H02.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+H03.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H04.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H05.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H06.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+H07.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	CONDITIONAL_UNDEFINED	PASS	none
+H08.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+H09.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED	PASS	none
+H10.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H11.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+H12.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H13.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H14.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H15.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+H16.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	CONDITIONAL_UNDEFINED	PASS	none
+H17.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+H18.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED	PASS	none
+H19.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H20.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+H21.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H22.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H23.case	hidden	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+H24.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+H25.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	CONDITIONAL_UNDEFINED	PASS	none
+H26.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+H27.case	hidden	AT1_CASE_OK	ok	ran	ran	FAIL	POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED	PASS	none
+# negative: PASS 15 FAIL 0 INDETERMINATE 0
+# positive: PASS 12 FAIL 0 INDETERMINATE 0
+# AT1-G1 codec conformance (my codec, engine and oracle refusals exact; KAT digests copied): PASS
+# T9 wall-clock independence (engine run twice, TZ and environment changed): not run (worked example absent)
+# AT1-G2 isolation: not judged here; run gates/isolation.sh on the compute objects
+# AT1-G3 oracle calibration (every oracle record against the exact shadow, which reproduces the AT1_SPEC 13 hand tables in selftest): PASS
+# AT1-G4 positive arm (every POSITIVE case verifies PASS): PASS
+# AT1-G5 negative arm, candidate part (every NEGATIVE case FAILs with exactly its codes); mutant part: `at1-eval mutants`: PASS
