@@ -1,0 +1,9 @@
+omega_commit 3e18bd71b2d13641be56ccab42cacc447541362c
+source_tree_clean YES
+starting_checkout_clean YES
+contract_commit cbe4c8ed88d28bb96d5209327ecd30aa9cddaf7a
+stamp 20261010T043603Z
+host spark-b87b Linux 7.0.0-1019-nvidia aarch64
+cases 96: positive 12, negative 12, refuse 72; engine results written 24
+evaluator table: positive PASS 12 FAIL 0 INDETERMINATE 0; negative PASS 12 FAIL 0 INDETERMINATE 0; refusal PASS 71 FAIL 1 INDETERMINATE 0
+mutants: drop_v 15/18 killed; wrong_level 16/18 killed; evaluator receipt MUTANT_RECEIPT: PASS (244 cells, 0 unexpected) -> build/MUTANT_RECEIPT.tsv

@@ -1,0 +1,45 @@
+OMEGA-AT1-CASE v1
+domain omega.at1.case.v1
+contract AT1_CASE_V1
+case_name at1-n6-zero-projection
+begin semantic
+model_family PAGE_WOOTTERS_FINITE_CLOCKDIAG
+energy_unit DIMENSIONLESS_HBAR_1
+clock_dim 4
+clock_energies -3/2,-1/2,1/2,3/2
+system_dim 2
+system_hamiltonian_pauli 0/1,0/1,0/1,1/2
+interaction CLOCK_DIAGONAL_PAULI
+interaction_pauli 0 0/1,0/1,0/1
+interaction_pauli 1 0/1,0/1,1/2
+interaction_pauli 2 3/10,0/1,-1/10
+interaction_pauli 3 0/1,0/1,0/1
+constraint SUM_HC_HS_V
+physical_state NULLSPACE_PROJECTION
+reference_clock_label t0
+reference_system_state (3/1;0/1),(1/1;0/1)
+clock_povm COVARIANT_DISCRETE
+povm_tau_turns 1/4
+povm_weight 1/1
+clock_label_count 4
+clock_label 0 t0
+clock_label 1 t1
+clock_label 2 t2
+clock_label 3 t3
+observables PAULI_X,PAULI_Y,PAULI_Z
+end semantic
+begin acceptance
+control_kind NEGATIVE
+prediction_target INTERACTING
+expected_outcome FAIL
+expected_failure_codes TRIVIAL_PHYSICAL_STATE
+min_bound_kind ESTIMATED
+tol_constraint_residual 1@12
+tol_povm_residual 1@12
+tol_probability 1@12
+tol_zero_probability 1@9
+tol_schrodinger 1@12
+end acceptance
+case_id e90b82cb42d511d5f93034e4f66a94802bd56b5c8e14fb18f8ad0d9d03f63887
+acceptance_id 8f79bf3d89d5580452207d6ad16eb99fc29fd7408930147544b07c66ba6329bc
+end
