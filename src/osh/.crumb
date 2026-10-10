@@ -4,20 +4,20 @@
       "children": [
         {
           "digest": "656126a21229ac434420f7f00f0f7133925d87f6719a704d37437a6464d3b8d1",
-          "last_commit": "ad2deba1",
+          "last_commit": "d650a897",
           "name": "host",
           "purpose": "osh Linux host: execution service (request decoder, resolution, builtins, redirections, pipeline"
         }
       ],
       "children_root": "sha256:67270aa2cd0e85d3861f60a2b3d9665e42302d03c952e1ef029956b6c3a2a0ec",
-      "compiled_at": "2026-10-10T07:48:24Z",
+      "compiled_at": "2026-10-10T08:20:59Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:f292900401c59fe21e55b2d83f01e2dc4bc1d16b2f4a90519fe3325534c34f18",
+      "digest": "sha256:03e645c7e36323f785910ad1f21b1c25696dbaa1842f8dd0346694f62dd384e5",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 31,
-      "generated_at_commit": "ad2deba162c8d30b31e1e829b9cd58aa5513b1fd",
-      "source_tree": "sha256:075fc4a95f2878a4356755046f293d825f999a80988d0095f77abc4cd3c07b1d"
+      "generated_at_commit": "ac2ada1f98ae96f6b1d559a6263fd071d84bb63f",
+      "source_tree": "sha256:5ef11782f44ba052c9a5fe88110a31b40396b9b78e3dc70a2e26e86e0ba5d71b"
     }
   },
   "name": "osh",
