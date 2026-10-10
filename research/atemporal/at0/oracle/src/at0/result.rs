@@ -5,7 +5,7 @@
 //! `omega.at0.result.v2`, verdict tag `omega.at0.verdict.v2`, evidence tag
 //! `omega.at0.evidence.v2`; `undefined` only for a trivial kernel. Case files
 //! stay AT0_CASE_V1. Line shape, checks and codes otherwise follow
-//! AT0_RESULT_V1 sections 1 to 7 at aien-architecture 044c9d1.
+//! AT0_RESULT_V2 (aien-architecture docs/plans/atemporal/AT0_RESULT_V2.md at c7a7181, frozen at fe86e43).
 //! Every check is decided in exact arithmetic on the written tokens (exact.rs).
 
 use super::case::{Case, Scaled, BOUND_KINDS};

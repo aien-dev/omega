@@ -29,8 +29,8 @@ echo "== object rule (nm -u on the compute rlib)"
 rm -rf target/iso && mkdir -p target/iso && (cd target/iso && ar x ../libat0.rlib) || { echo "FAIL: cannot unpack rlib"; exit 1; }
 objs=$(ls target/iso/*.o 2>/dev/null)
 [ -n "$objs" ] || { echo "FAIL: no objects in rlib"; exit 1; }
-libc_names='clock_gettime|gettimeofday|^time$|nanosleep|getrandom|/dev/urandom|pthread_create|socket|connect|fopen|open64|openat|read64|write64|fork|execve|system|getenv'
-std_paths='3std4time|3std2fs|3std7process|3std6thread|3std3net|3std3env|3std2io5stdio|3std6random'
+libc_names='clock_gettime|gettimeofday|^time$|nanosleep|getrandom|/dev/urandom|pthread_create|socket|connect|fopen|open64|openat|^read$|^write$|pread64|pwrite64|fork|execve|system|getenv'
+std_paths='3std4time|3std2fs|3std7process|3std6thread|3std3net|3std3env|3std2io5stdio|6random'
 banned="$libc_names|$std_paths"
 object_rule() {
   nm -u "$@" 2>/dev/null | awk '{print $NF}' | sort -u | grep -E "$banned"
