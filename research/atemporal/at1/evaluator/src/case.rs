@@ -160,6 +160,10 @@ impl<'a> P<'a> {
         }
     }
     fn list(&self, s: &str) -> R<Vec<String>> {
+        // AT1_CASE_V1 section 2: "the empty list is `none`"
+        if s == "none" {
+            return Ok(Vec::new());
+        }
         let v: Vec<String> = s.split(',').map(|x| x.to_string()).collect();
         if v.iter().any(|x| x.is_empty()) {
             return perr(format!("line {}: empty list item", self.i));
@@ -569,7 +573,8 @@ impl Spec {
         self
     }
     pub fn lines(&self) -> Vec<String> {
-        let qs = |v: &[Q]| v.iter().map(|q| q.text()).collect::<Vec<_>>().join(",");
+        // the empty list is written `none` (AT1_CASE_V1 section 2)
+        let qs = |v: &[Q]| if v.is_empty() { "none".to_string() } else { v.iter().map(|q| q.text()).collect::<Vec<_>>().join(",") };
         let cs = |z: &Cq| format!("({};{})", z.re.text(), z.im.text());
         let mut sem = vec!["begin semantic".to_string(), "model_family PAGE_WOOTTERS_FINITE_CLOCKDIAG".into(), "energy_unit DIMENSIONLESS_HBAR_1".into()];
         sem.push(format!("clock_dim {}", self.e.len()));

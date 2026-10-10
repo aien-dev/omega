@@ -94,3 +94,4 @@ refuse/X3-coupling-index-01.case	Re	AT1_CASE_REFUSED CASE_NONCANONICAL
 refuse/X4-coupling-index-a.case	Re	AT1_CASE_REFUSED CASE_PARSE_ERROR
 refuse/X5-coupling-index-wrong.case	Re	AT1_CASE_REFUSED CASE_PARSE_ERROR
 refuse/X6-clock-label-index-01.case	Re	AT1_CASE_REFUSED CASE_NONCANONICAL
+refuse/X7-clock-dim-0-none.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER

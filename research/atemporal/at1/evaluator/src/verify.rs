@@ -97,6 +97,21 @@ pub fn claims_trivial(r: &ResultFile) -> bool {
 /// Tri-state agreement of a written value with the shadow: Some(true) when the
 /// value is beyond its tolerance for certain, Some(false) when it is only beyond
 /// its own bound, None when it agrees within its own bound.
+/// Reference lines (oracle families) are calibration data: the value itself must lie
+/// within tolerance of the exact value, whatever bound the file writes beside it, so a
+/// wrong reference cannot hide behind a wide bound (review finding 1).
+fn compare_strict(v: &RVal, s: &Val, tol: &Q) -> Option<bool> {
+    let x = v.q()?;
+    let d = x.sub(&s.q).abs();
+    if d.sub(&s.bound()).cmp(tol) == Ordering::Greater {
+        Some(true)
+    } else if d.cmp(&v.bq().add(&s.bound())) == Ordering::Greater {
+        Some(false)
+    } else {
+        None
+    }
+}
+
 fn compare(v: &RVal, s: &Val, tol: &Q) -> Option<bool> {
     let x = v.q()?;
     let d = x.sub(&s.q).abs();
@@ -113,10 +128,11 @@ fn compare(v: &RVal, s: &Val, tol: &Q) -> Option<bool> {
 struct Cmp<'a> {
     rep: &'a mut Report,
     bk: BoundKind,
+    strict: bool,
 }
 impl<'a> Cmp<'a> {
     fn one(&mut self, code: &str, what: String, v: &RVal, s: &Val, tol: &Q) {
-        match compare(v, s, tol) {
+        match if self.strict { compare_strict(v, s, tol) } else { compare(v, s, tol) } {
             Some(true) => self.rep.fail(code, format!("{} = {:.12e}, shadow {:.12e} (beyond tolerance)", what, v.q().unwrap().to_f64(), s.q.to_f64())),
             Some(false) => self.bound_claim(&what, v, s),
             None => {}
@@ -293,9 +309,11 @@ pub fn verify(bytes: &[u8], case_bytes: Option<&[u8]>, role: Role) -> Report {
         let mut nz = !r.constraint.bound.n.is_zero() || !r.povm.bound.n.is_zero();
         for k in 0..c.m {
             nz |= !r.clock[k].bound.n.is_zero() || !six_all(&r.pauli[k], |v| v.bound.n.is_zero());
+            // AT1_RESULT_V1 section 2: NONE means every bound in the file is 0@0, references included
+            nz |= !r.ref_clock[k].bound.n.is_zero() || !six_all(&r.ref_inter[k], |v| v.bound.n.is_zero()) || !six_all(&r.ref_ideal[k], |v| v.bound.n.is_zero());
         }
         if nz {
-            rep.fail("E4-BOUND-NONE-NONZERO", "bound_kind NONE but an engine line carries a nonzero bound".into());
+            rep.fail("E4-BOUND-NONE-NONZERO", "bound_kind NONE but a line carries a nonzero bound (AT1_RESULT_V1 section 2: every bound 0@0)".into());
         }
     }
     // ---- exact re-derivation of the verdict ----
@@ -334,7 +352,7 @@ pub fn verify(bytes: &[u8], case_bytes: Option<&[u8]>, role: Role) -> Report {
     let tol_prob = Q::from_scaled(&c.tol_prob);
     let tol_schro = Q::from_scaled(&c.tol_schro);
     let tol_povm = Q::from_scaled(&c.tol_povm);
-    let mut cm = Cmp { rep: &mut rep, bk: r.bound_kind };
+    let mut cm = Cmp { rep: &mut rep, bk: r.bound_kind, strict: false };
     {
         if r.kernel_dim as usize != sh.kernel_dim {
             cm.rep.fail("E4-SHADOW-KERNEL-DIM", format!("physical_state_kernel_dim {}, exact value {}", r.kernel_dim, sh.kernel_dim));
@@ -365,6 +383,7 @@ pub fn verify(bytes: &[u8], case_bytes: Option<&[u8]>, role: Role) -> Report {
                     }
                 }
                 // oracle families (gate G3 when the role is Oracle; always reported)
+                cm.strict = true;
                 cm.one("E4-ORACLE-CLOCK", format!("reference_clock_probability {}", k), &r.ref_clock[k], &sh.p[k], &tol_prob);
                 let rs = r.ref_label[k];
                 if rs != Status::Indeterminate && ss != Status::Indeterminate && rs != ss {
@@ -375,9 +394,11 @@ pub fn verify(bytes: &[u8], case_bytes: Option<&[u8]>, role: Role) -> Report {
                         cm.six("E4-ORACLE-INTERACTING", "reference_interacting", k, &r.ref_inter[k], sp, &tol_schro);
                     }
                 }
+                cm.strict = false;
             }
         }
         for k in 0..c.m {
+            cm.strict = true;
             cm.six("E4-ORACLE-IDEAL", "reference_ideal", k, &r.ref_ideal[k], &sh.ideal[k], &tol_schro);
         }
     }

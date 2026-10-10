@@ -29,12 +29,22 @@ scan_one() { # $1 = at1-eval, $2 = object; prints hits, returns 1 on any
         echo "FAIL: $o references a Rust std time/env/fs/net/process/thread or rand path"; bad=1
     fi
     rm -f "$t"
-    if ! "$1" scan-clock "$o" | sed -n 's/^HIT /FAIL: instruction /p; s/^UNREADABLE /FAIL: unreadable /p' | grep . ; then :; else bad=1; fi
+    # instruction scan (skipped only in the symbol-scan-only control, where $1 is `true`);
+    # a scanner that cannot run, or does not end with its PASS line, fails the object
+    if [ "$1" != true ]; then
+        sc=$("$1" scan-clock "$o" 2>&1); st=$?
+        printf '%s\n' "$sc" | sed -n 's/^HIT /FAIL: instruction /p; s/^UNREADABLE /FAIL: unreadable /p'
+        if [ $st -ne 0 ] || ! printf '%s\n' "$sc" | grep -qx "AT1_CLOCK_SCAN: PASS"; then
+            printf '%s\n' "$sc" | grep -qE '^(HIT|UNREADABLE) ' || echo "FAIL: instruction scan did not run on $o (exit $st)"
+            bad=1
+        fi
+    fi
     return $bad
 }
 
 if [ "${1:-}" = "--controls" ]; then
     EVAL=${2:?usage: isolation.sh --controls <at1-eval> [receipt]}
+    if [ ! -x "$EVAL" ]; then echo "AT1_ISOLATION_CONTROLS: FAIL ($EVAL is not an executable at1-eval)"; exit 1; fi
     OUT=${3:-results/ISOLATION_RECEIPT.txt}
     D=$(mktemp -d "${TMPDIR:-/tmp}/at1gate.XXXXXX") || exit 1
     here=$(dirname "$0")
@@ -69,6 +79,7 @@ if [ "${1:-}" = "--controls" ]; then
 fi
 
 EVAL=${1:?usage: isolation.sh <at1-eval> <object>...}
+if [ ! -x "$EVAL" ]; then echo "AT1_ISOLATION: FAIL ($EVAL is not an executable at1-eval)"; exit 1; fi
 shift
 fail=0
 for o in "$@"; do scan_one "$EVAL" "$o" || fail=1; done

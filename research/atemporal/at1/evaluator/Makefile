@@ -17,11 +17,19 @@ build/at1-eval-test: $(SRC)
 	mkdir -p build
 	$(RUSTC) --edition 2021 -O --test src/main.rs -o build/at1-eval-test
 
-# Unit tests, run-time self-test, corpus byte check, mutant receipt, gate controls.
+# Unit tests, run-time self-test, corpus byte check, mutant receipt (compared with the
+# committed one), gate controls. Writes only under build/, so the tree stays clean.
 test: $(BIN) build/at1-eval-test
 	./build/at1-eval-test
 	./$(BIN) selftest
 	./$(BIN) corpus-check cases
+	./$(BIN) mutants build/MUTANT_RECEIPT.tsv
+	cmp build/MUTANT_RECEIPT.tsv results/MUTANT_RECEIPT.tsv
+	CC="$(CC)" sh gates/isolation.sh --controls ./$(BIN) build/ISOLATION_RECEIPT.txt
+
+# Refresh the committed receipts (the mutant receipt is identical on every host;
+# the isolation receipt names the host it ran on).
+receipts: $(BIN)
 	./$(BIN) mutants results/MUTANT_RECEIPT.tsv
 	CC="$(CC)" sh gates/isolation.sh --controls ./$(BIN) results/ISOLATION_RECEIPT.txt
 
@@ -31,4 +39,4 @@ corpus: $(BIN)
 clean:
 	rm -rf build
 
-.PHONY: all test corpus clean
+.PHONY: all test receipts corpus clean

@@ -276,13 +276,19 @@ struct Run {
 }
 
 fn run_tool(tmpl: &str, case: &str, out: &str) -> Run {
+    run_tool_env(tmpl, case, out, &[])
+}
+
+/// Runs a command template through `sh -c`; `envs` are set on the shell process itself, so
+/// they reach every command of the template (`cd dir && ./engine ...` included).
+fn run_tool_env(tmpl: &str, case: &str, out: &str, envs: &[(&str, &str)]) -> Run {
     let mut cmd = tmpl.replace("{case}", &sq(case));
     let capture = !tmpl.contains("{out}");
     cmd = cmd.replace("{out}", &sq(out));
     if capture {
         cmd = format!("{} > {}", cmd, sq(out));
     }
-    match Command::new("sh").arg("-c").arg(&cmd).output() {
+    match Command::new("sh").arg("-c").arg(&cmd).envs(envs.iter().copied()).output() {
         Ok(o) => Run { status: o.status.code(), stderr: String::from_utf8_lossy(&o.stderr).into_owned() },
         Err(e) => Run { status: None, stderr: format!("cannot start sh: {}", e) },
     }
@@ -301,7 +307,7 @@ pub fn qualify(args: &[&str]) -> i32 {
     let mut cases = "cases".to_string();
     let mut engine = String::new();
     let mut oracle = String::new();
-    let mut out = "results/qualify".to_string();
+    let mut out = "build/qualify".to_string();
     let mut limit = usize::MAX;
     let mut i = 0;
     while i < args.len() {
@@ -360,7 +366,8 @@ pub fn qualify(args: &[&str]) -> i32 {
     for line in man.lines().filter(|l| !l.starts_with('#') && !l.is_empty()).take(limit) {
         let f: Vec<&str> = line.split('\t').collect();
         if f.len() != 3 {
-            continue;
+            eprintln!("qualify: malformed manifest line (want 3 tab-separated fields): {:?}", line);
+            return 66;
         }
         let (path, class, expect) = (f[0], f[1], f[2]);
         let cpath = format!("{}/{}", cases, path);
@@ -402,12 +409,28 @@ pub fn qualify(args: &[&str]) -> i32 {
         let mut verdict = "FAIL".to_string();
         let mut findings = String::new();
         let (mut dout, mut dcodes) = ("-".to_string(), "-".to_string());
-        if let (Ok(e), Ok(o)) = (&er, &or) {
-            // oracle record (G3)
-            let rep_o = verify(&ob, Some(&bytes), Role::Oracle);
-            if rep_o.findings.iter().any(|f| f.sev == Sev::Fail) {
-                g3 = false;
+        // oracle record (G3), judged whether or not the engine produced a parsable result
+        let rep_o = match &or {
+            Ok(_) => {
+                let r = verify(&ob, Some(&bytes), Role::Oracle);
+                if r.findings.iter().any(|f| f.sev == Sev::Fail) {
+                    g3 = false;
+                }
+                Some(r)
             }
+            Err(_) => {
+                g3 = false;
+                None
+            }
+        };
+        // refusing a valid case is a codec disagreement (G1)
+        for (who, r) in [("engine", &re), ("oracle", &ro)] {
+            if r.status == Some(2) {
+                g1 = false;
+                findings.push_str(&format!("{}:refused-valid-case ", who));
+            }
+        }
+        if let (Ok(e), Ok(o)) = (&er, &or) {
             // codec agreement on the identities (G1): both tools copied the case and its digest
             for (who, r) in [("engine", e), ("oracle", o)] {
                 if case_bytes_from_body(&r.case.body_lines) != bytes {
@@ -434,14 +457,17 @@ pub fn qualify(args: &[&str]) -> i32 {
                     dout = rep.derived_outcome.clone();
                     dcodes = if rep.derived_codes.is_empty() { "none".into() } else { rep.derived_codes.join(",") };
                     findings.push_str(&rep.codes().join(","));
-                    if !rep_o.codes().is_empty() {
-                        findings.push_str(&format!(" oracle:{}", rep_o.codes().join(",")));
+                    if e.bound_kind != o.bound_kind {
+                        findings.push_str(" NOTE:bound_kind-mixed(engine-vs-oracle)");
                     }
                 }
                 Err(m) => findings.push_str(&format!("SPLICE-REFUSED {}", m)),
             }
-        } else {
-            g3 = g3 && or.is_ok();
+        }
+        if let Some(r) = &rep_o {
+            if !r.codes().is_empty() {
+                findings.push_str(&format!(" oracle:{}", r.codes().join(",")));
+            }
         }
         if verdict != "PASS" {
             if neg { g5 = false } else { g4 = false }
@@ -466,12 +492,12 @@ pub fn qualify(args: &[&str]) -> i32 {
         let kp = man.lines().find(|l| l.starts_with("positive/P2-kat")).and_then(|l| l.split('\t').next()).unwrap_or("");
         let cpath = format!("{}/{}", cases, kp);
         let e2 = format!("{}/engine/T9-second-run.result", out);
-        let _ = run_tool(&format!("TZ=Pacific/Kiritimati AT1_EVAL_T9_PROBE=1 {}", engine), &cpath, &e2);
+        let _ = run_tool_env(&engine, &cpath, &e2, &[("TZ", "Pacific/Kiritimati"), ("AT1_EVAL_T9_PROBE", "1")]);
         let first = fs::read(format!("{}/engine/{}.result", out, kp.replace('/', "_").trim_end_matches(".case"))).ok().and_then(|b| parse(&b).ok());
         let second = fs::read(&e2).ok().and_then(|b| parse(&b).ok());
         t9 = match (first, second) {
-            (Some(a), Some(b)) if a.values_lines() == b.values_lines() && a.verdict_id == b.verdict_id => "PASS (values block and verdict_id identical)".into(),
-            (Some(_), Some(_)) => { t9ok = false; "FAIL (values block or verdict_id differ between runs)".into() }
+            (Some(a), Some(b)) if a.values_lines() == b.values_lines() && a.verdict_id == b.verdict_id && a.case.case_id == b.case.case_id && a.case.acceptance_id == b.case.acceptance_id && a.compute_evidence() == a.evidence_digest && b.compute_evidence() == b.evidence_digest => "PASS (case_id, acceptance_id, values block and verdict_id identical; each evidence_digest recomputes, so it differs whenever the covered bytes differ)".into(),
+            (Some(_), Some(_)) => { t9ok = false; "FAIL (identities, values block or verdict_id differ between runs, or an evidence_digest does not recompute)".into() }
             _ => { t9ok = false; "FAIL (second run produced no parsable result)".into() }
         };
     }

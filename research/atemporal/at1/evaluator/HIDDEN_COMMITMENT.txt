@@ -7,7 +7,7 @@
 # quarter-turn phases, every draw kept only if it meets the AT1_SPEC 8.3 margin rule. 12 POSITIVE, 15 NEGATIVE.
 # Seed: 256 bits from /dev/urandom, kept with the files on the Spark under ~/at1-private/agent4/, outside every repository.
 # Reveal (after the candidate freeze): place the files in a directory with no MANIFEST.tsv and run
-#   sh run.sh '<engine>' '<oracle>' cases results/qualify <hidden-dir>
+#   sh run.sh '<engine>' '<oracle>' cases build/qualify <hidden-dir>
 # run.sh recomputes the commitment, refuses on a mismatch, then qualifies the hidden cases.
 # A digest proves identity of the files later revealed; it does not prove non-access (same account, same host).
 count 27

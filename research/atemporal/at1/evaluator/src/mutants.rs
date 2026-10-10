@@ -67,6 +67,37 @@ fn spec_blind(m: &str, path: &str) -> Option<bool> {
     }
 }
 
+
+/// Flipping the sign of every clock phase (the M4 / O3 defect, which acts on the interacting
+/// conditional states only; the ideal reference is a separate formula) is complex conjugation
+/// of the conditional state when the case data are real (psi_0 real and no Y component in h or any v_j, so every
+/// level vector is real). Conjugation keeps p(k), P(X) and P(Z) and maps P(Y+) to 1 - P(Y+),
+/// so such a case is blind to a phase-sign mutant exactly when P(Y+) = 1/2 on every DEFINED
+/// label (the AT1_SPEC 9.2 M4 reasoning: only a complex relative
+/// phase is visible). N3 is such a case: chi_k = (1 + i^k)(1, 0) (AT1_SPEC 13.2).
+fn conjugation_blind(c: &Case) -> bool {
+    let real = c.psi[0].im.is_zero() && c.psi[1].im.is_zero() && c.h[1].is_zero() && c.v.iter().all(|v| v[1].is_zero());
+    if !real {
+        return false;
+    }
+    let sh = shadow(c, &Mods::default(), false);
+    let half = Q::frac(1, 2);
+    let y_half = |s: &[[crate::model::Val; 2]; 3]| s[1][0].q == half;
+    (0..c.m).all(|k| sh.pauli[k].as_ref().map_or(true, |p| y_half(p)))
+}
+
+/// Predicted blindness of the oracle mutants, from AT1_SPEC 9.2 (no derivation from the
+/// mutant's own output): O2 drops V, so it is blind exactly where M1 is (P1, P1c); O3 flips
+/// the phase sign, so it is blind where M4 is (P6 and its IDEAL-target twin N1f) and on every
+/// trivial kernel, where the trivial-kernel rule leaves all reference values undefined.
+/// O1 (IDEAL reference without h) is predicted never blind; the receipt shows whether that holds.
+fn oracle_predicted_blind(m: &str, path: &str, c: &Case) -> bool {
+    match m {
+        "O2-oracle-drop-v" => spec_blind("M1-drop-v", path) == Some(true),
+        "O3-oracle-phase-sign" => spec_blind("M4-phase-sign", path) == Some(true) || shadow(c, &Mods::default(), false).trivial || conjugation_blind(c),
+        _ => false,
+    }
+}
 fn honest_engine_derived_blind(m: &str, c: &Case) -> bool {
     let sh = shadow(c, &Mods::default(), false);
     if sh.trivial {
@@ -155,7 +186,8 @@ pub fn receipt(out: &str) -> i32 {
             } else {
                 let v = judge_cell(&fails, &flagged, &["E4-EXPECTATION-NOT-MET"], &allowed);
                 let v = if v == "KILLED" && !code_ok { "ACCIDENT" } else { v };
-                if expected_blind { format!("{} (spec predicted blind)", v) } else { v.to_string() }
+                // a kill where blindness was predicted means the mutant is not the one the spec describes
+                if expected_blind { format!("UNEXPECTED ({} although predicted blind)", v) } else { v.to_string() }
             };
             cells.push(Cell { mutant: m.into(), case: path.clone(), runner_codes: codes_of(&r), findings: rep.codes(), intended: intended.into(), verdict });
         }
@@ -188,7 +220,13 @@ pub fn receipt(out: &str) -> i32 {
                 _ => (&["E4-ORACLE-INTERACTING", "E4-ORACLE-CLOCK", "E4-ORACLE-LABEL", "E4-ORACLE-TRIVIAL"], vec!["E4-SHADOW-*", "E4-ORACLE-*", "E4-CHECK-MISMATCH", "E4-OUTCOME-MISMATCH", "E4-CODES-MISMATCH", "E4-EXPECTATION-MISMATCH", "E4-UNDEFINED-DISCIPLINE", "E4-TRIVIAL-SHAPE"]),
             };
             let blind = oracle_values_equal(&o, &ho);
-            let verdict = if blind { "BLIND (values equal the honest oracle's)".to_string() } else { judge_cell(&fails, &flagged, intended, &allowed).to_string() };
+            let predicted = oracle_predicted_blind(m, path, c);
+            let verdict = match (blind, predicted) {
+                (true, true) => "BLIND (predicted)".to_string(),
+                (true, false) => "BLIND (NOT predicted)".to_string(),
+                (false, true) => format!("UNEXPECTED ({} although predicted blind)", judge_cell(&fails, &flagged, intended, &allowed)),
+                (false, false) => judge_cell(&fails, &flagged, intended, &allowed).to_string(),
+            };
             cells.push(Cell { mutant: m.into(), case: path.clone(), runner_codes: codes_of(&o), findings: rep.codes(), intended: intended.join("|"), verdict });
         }
     }
@@ -297,6 +335,22 @@ pub fn receipt(out: &str) -> i32 {
         r.seal();
         Some(r.bytes())
     })));
+    // F19/F20 (review finding 1): every reference_ideal value forged to 1/2 behind a bound of 1,
+    // on a case where no check reads reference_ideal (INTERACTING target) and on a trivial kernel
+    for (name, cp) in [("F19-wide-bound-reference-ideal", "P2-kat"), ("F20-wide-bound-reference-ideal-trivial", "N2-every")] {
+        file_cells.push((name, cp, "E4-ORACLE-IDEAL", Box::new(|r: &mut ResultFile| {
+            let wide = crate::rat::parse_scaled("1@0").expect("bound literal").0;
+            for k in 0..r.ref_ideal.len() {
+                for a in 0..3 {
+                    for g in 0..2 {
+                        r.ref_ideal[k][a][g] = crate::result::RVal::of(0.5, &wide);
+                    }
+                }
+            }
+            r.seal();
+            Some(r.bytes())
+        })));
+    }
     for (m, cp, intended, f) in file_cells.iter() {
         let (path, mut r, cb) = honest_spliced(cp);
         let b = f(&mut r).unwrap();
@@ -344,7 +398,7 @@ pub fn receipt(out: &str) -> i32 {
         }
         if c.verdict.starts_with("KILLED") || c.verdict.starts_with("FLAGGED") {
             t.0 += 1;
-        } else if c.verdict == "BLIND (predicted)" || c.verdict.starts_with("BLIND (values") {
+        } else if c.verdict == "BLIND (predicted)" {
             t.1 += 1;
         } else {
             t.2 += 1;

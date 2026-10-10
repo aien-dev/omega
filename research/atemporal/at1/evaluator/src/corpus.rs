@@ -330,6 +330,11 @@ pub fn refusal_rows() -> Vec<Row> {
     v.push(("X4-coupling-index-a", "Re", pe, edit(|l| sub(l, V1, "interaction_pauli a 0/1,0/1,0/1"))));
     v.push(("X5-coupling-index-wrong", "Re", pe, edit(|l| sub(l, V1, "interaction_pauli 2 0/1,0/1,0/1"))));
     v.push(("X6-clock-label-index-01", "Re", nc, edit(|l| sub_prefix(l, "clock_label 1 ", "clock_label 01 t1"))));
+    // review finding 5: `none` is the empty list, so clock_dim 0 with no energies is a range error
+    let mut s = p2("at1-kat-rotated-level-n4");
+    s.e = Vec::new();
+    s.v = Vec::new();
+    v.push(("X7-clock-dim-0-none", "R3", ip, s.bytes()));
     v.into_iter()
         .map(|(n, cl, code, b)| Row { path: format!("refuse/{}.case", n), class: cl.into(), expect: format!("AT1_CASE_REFUSED {}", code), bytes: b })
         .collect()
