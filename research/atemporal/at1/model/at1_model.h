@@ -57,6 +57,12 @@ const char *at1_status_name(at1_status s);
  * alias an input. Allocation failure prints AT1_ENGINE_ERROR RESOURCE_LIMIT and exits 1. */
 typedef struct { int neg; int n; int cap; uint32_t *d; } bn;
 
+/* Engine error exit: prints one line "AT1_ENGINE_ERROR <reason>" on stderr and
+ * exits 1. Defined in at1_io.c (the I/O object) so that no compute object
+ * references stdio (AT-1 D2, omega#371 comment 6093971637: gcc lowered the
+ * former fputs in at1_bn.c to fwrite, which the isolation gate bans). */
+void at1_fatal(const char *reason);
+
 void bn_init(bn *a);
 void bn_free(bn *a);
 void bn_copy(bn *r, const bn *a);

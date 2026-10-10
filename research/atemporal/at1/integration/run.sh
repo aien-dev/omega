@@ -342,12 +342,12 @@ allowed() {
     [ $alrc -eq 0 ] || grep -q '^FAIL: .* references ' "$WORK/al.out" || return 1
     [ -z "$bad" ]
 }
-STRICT="$ISO/clean/at1_case.o $ISO/clean/at1_exact.o $ISO/clean/at1_numeric.o $ISO/clean/at1_result.o $ISO/clean/sha256.o"
+STRICT="$ISO/clean/at1_bn.o $ISO/clean/at1_case.o $ISO/clean/at1_exact.o $ISO/clean/at1_numeric.o $ISO/clean/at1_result.o $ISO/clean/sha256.o"
 sh "$GATE" "$EVAL" $STRICT > "$R/isolation-engine-strict.log" 2>&1; i1=$?
-allowed "$ISO/clean/at1_bn.o" "fwrite" > "$R/isolation-engine-bn.log" 2>&1; i2=$?
+i2=0 # at1_bn is strict since omega D2 follow-up: its fatal exit moved to at1_io.c (at1_fatal)
 allowed "$ISO/clean/at1_io.o" "fopen fread" > "$R/isolation-engine-io.log" 2>&1; i3=$?
 sh "$GATE" "$EVAL" "$ISO/clean/at1_main.o" > "$R/isolation-engine-main-record-only.log" 2>&1
-[ $ISOOK = 1 ] && [ $i1 -eq 0 ] && [ $i2 -eq 0 ] && [ $i3 -eq 0 ] && ctrl C9-ISOLATION-ENGINE PASS "evaluator/gates/isolation.sh (nm symbol scan + at1-eval scan-clock instruction scan) on every engine object compiled with the model flags: at1_case, at1_exact, at1_numeric, at1_result, sha256 strictly; at1_bn with only fwrite exempt (D2); at1_io (the file reader) with only fopen, fread exempt; at1_main (CLI) recorded, not judged" "strict set clean ($(tail -1 "$R/isolation-engine-strict.log")); at1_bn: only fwrite (the out-of-memory diagnostic to stderr); at1_io: only fopen, fread; no instruction hit anywhere" \
+[ $ISOOK = 1 ] && [ $i1 -eq 0 ] && [ $i2 -eq 0 ] && [ $i3 -eq 0 ] && ctrl C9-ISOLATION-ENGINE PASS "evaluator/gates/isolation.sh (nm symbol scan + at1-eval scan-clock instruction scan) on every engine object compiled with the model flags: at1_bn, at1_case, at1_exact, at1_numeric, at1_result, sha256 strictly (at1_bn strict since the D2 follow-up moved its fatal exit into at1_io.c); at1_io (the file reader) with only fopen, fread exempt; at1_main (CLI) recorded, not judged" "strict set clean ($(tail -1 "$R/isolation-engine-strict.log")); at1_io: only fopen, fread (plus the at1_fatal diagnostic line via fprintf, not a banned symbol); no instruction hit anywhere" \
     || ctrl C9-ISOLATION-ENGINE FAIL "gates/isolation.sh on engine objects" "build=$ISOOK strict rc=$i1 bn rc=$i2 io rc=$i3: $(grep '^FAIL' "$R"/isolation-engine-strict.log "$R/isolation-engine-bn.log" "$R/isolation-engine-io.log" | head -3 | tr '\n' ' ')"
 # the three gate controls of Agent 4, embedded in a real engine compute object
 MUTOK=1; MUTMSG=""
