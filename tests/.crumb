@@ -199,8 +199,8 @@
           "purpose": "Simulated M16 driver for numeric resource-lifecycle tests. No device execution or numeric parity"
         },
         {
-          "digest": "28f6692284fe7212911bd3b34371abcade37106df0f3fc1879c7e283259a660d",
-          "last_commit": "19f73c70",
+          "digest": "cfe2153fbe174096ed94d42ab23fe87a7a0587913166d0ea3fe8636c26f6aaa3",
+          "last_commit": "c232f147",
           "name": "osh",
           "purpose": "osh lexer host driver, vendored aien-protocols PR#16 draft vectors (5ae5292)"
         },
@@ -212,7 +212,7 @@
         },
         {
           "digest": "fe59556d80381a125c896f9667229e57743f21b224e1bfc4195f6d7998cb9531",
-          "last_commit": "63079ac5",
+          "last_commit": "fbc58ab6",
           "name": "physics0",
           "purpose": "PD-0 gates: world self-test, oracle calibration, learner L0/L1/NULL, mutations, OSC differential"
         },
@@ -289,15 +289,15 @@
           "purpose": "Directory tests/visor. Purpose not yet described by a human."
         }
       ],
-      "children_root": "sha256:712eea8a72ff83795cb69b3070f792ccbb5d64b6992acfc4ee3379ba916ff1c3",
-      "compiled_at": "2026-10-10T06:00:18Z",
+      "children_root": "sha256:cfe7652a1025666e2b3abc661c0dd027a504e6b9b3bf009186deca93ed177095",
+      "compiled_at": "2026-10-10T07:03:49Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:ab439a7b4cb25cc9b3169441a99613e076152c3eaf12f976a24fafdc13a2dda5",
+      "digest": "sha256:4405dd867c07c00ecd36438d84cdc032964cbb602acf0e7879e7d04c1b0f0306",
       "evidence_files": 11,
       "evidence_root": "sha256:d5c1bceb4d57ef0eb42797c58801b5926509711614c3e38bb7105b6efa3942f2",
       "files": 948,
-      "generated_at_commit": "0d5b3f2d3e1273587c8c206ac14ea67b551e52e4",
-      "source_tree": "sha256:1bb6b108cb5571ef0aac7766760617bb0c8bf2b91994a585bdf393411040a7fa"
+      "generated_at_commit": "c232f14719faa20164d737af494a368061866e83",
+      "source_tree": "sha256:17ae5796613d62944c9feba7d19078ccdf76aa1c165b29e324d68433e0f0e31a"
     },
     "owner_lane": "",
     "provenance": {

@@ -10,8 +10,9 @@
  *   numbers       strtoimax/strtoumax base 0 (decimal, 0x hex, 0 octal); a leading ' or " gives the next byte's
  *                 value; a bad number prints its numeric prefix (or 0), emits a diagnostic, and the status is 1.
  *   %c            first byte of the argument, nothing for an empty argument.
- * cd: cd [DIR | -]; DIR defaults to $HOME; logical (-L) path handling only: PWD is the lexical result, "." and ".."
- *   resolved textually; CDPATH is NOT supported; no options.
+ * cd: cd [-L|-P] [--] [DIR | -]; DIR defaults to $HOME; -L (default): PWD is the lexical result, "." and ".."
+ *   resolved textually; -P: PWD from getcwd; cd "" is a no-op (bash). CDPATH is NOT searched: a relative DIR not
+ *   anchored with ./ or ../ is refused while CDPATH is set (omega#344).
  */
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
@@ -105,19 +106,36 @@ static int logical_pwd(const OshSession *s, char *out, size_t cap)
 
 static int bi_cd(OshSession *s, const OshCmd *c, const int io[3], int in_parent)
 {
-    int show = 0;
+    int show = 0, physical = 0, i = 1;
     const char *dir;
-    if (c->nargv > 2) { osh_diag(io[2], "cd: too many arguments"); return 1; }
-    if (c->nargv == 1) {
+    /* options as bash: -L (the default) and -P; "--" ends them; anything else is "invalid option", status 2 */
+    for (; i < c->nargv && c->argv[i][0] == '-' && c->argv[i][1]; i++) {
+        if (strcmp(c->argv[i], "--") == 0) { i++; break; }
+        for (const char *o = c->argv[i] + 1; *o; o++) {
+            if (*o == 'L') physical = 0;
+            else if (*o == 'P') physical = 1;
+            else { osh_diag(io[2], "cd: -%c: invalid option\ncd: usage: cd [-L|-P] [dir]", *o); return 2; }
+        }
+    }
+    if (c->nargv - i > 1) { osh_diag(io[2], "cd: too many arguments"); return 1; }
+    if (c->nargv == i) {
         dir = osh_var_get(s, "HOME");
         if (!dir || !*dir) { osh_diag(io[2], "cd: HOME not set"); return 1; }
-    } else if (strcmp(c->argv[1], "-") == 0) {
+    } else if (strcmp(c->argv[i], "-") == 0) {
         dir = osh_var_get(s, "OLDPWD");
         if (!dir || !*dir) { osh_diag(io[2], "cd: OLDPWD not set"); return 1; }
         show = 1;
     } else {
-        dir = c->argv[1];
-        if (!*dir) { osh_diag(io[2], "cd: %s: No such file or directory", dir); return 1; }
+        dir = c->argv[i];
+        if (!*dir) return 0; /* bash 5.2: cd "" changes nothing and succeeds */
+        /* CDPATH is not searched. bash would go to $CDPATH/DIR when that exists, so a relative name that is not
+         * anchored with ./ or ../ could silently mean a different directory: refuse it while CDPATH is set. */
+        const char *cdpath = osh_var_get(s, "CDPATH");
+        int anchored = dir[0] == '/' || (dir[0] == '.' && (dir[1] == 0 || dir[1] == '/' || (dir[1] == '.' && (dir[2] == 0 || dir[2] == '/'))));
+        if (cdpath && *cdpath && !anchored) {
+            osh_diag(io[2], "cd: %s: CDPATH is set and osh does not search it; use ./%s or an absolute path", dir, dir);
+            return 1;
+        }
     }
     char old[PATH_MAX], joined[2 * PATH_MAX + 2], cur[PATH_MAX];
     if (logical_pwd(s, old, sizeof old)) { osh_diag(io[2], "cd: cannot determine current directory"); return 1; }
@@ -133,6 +151,10 @@ static int bi_cd(OshSession *s, const OshCmd *c, const int io[3], int in_parent)
     if (canon(joined, cur, sizeof cur)) { osh_diag(io[2], "cd: %s: File name too long", dir); return 1; }
     if (osh_effect_check(s, OSH_OP_CHDIR, cur, io[2]) != OSH_E_OK) return 1;
     if (chdir(cur) != 0) { osh_diag(io[2], "cd: %s: %s", dir, strerror(errno)); return 1; }
+    if (physical) { /* -P: PWD is the physical directory with symbolic links resolved; the lexical one if the kernel cannot say */
+        char phys[PATH_MAX];
+        if (getcwd(phys, sizeof phys)) strcpy(cur, phys);
+    }
     /* A child context keeps its own copy of the table, so setting here is safe in both cases. */
     (void)in_parent;
     osh_var_set(s, "OLDPWD", old);
@@ -359,7 +381,7 @@ static int bi_unset(OshSession *s, const OshCmd *c, const int io[3])
         return 2;
     }
     for (; i < c->nargv; i++) {
-        if (!osh_name_valid(c->argv[i])) { osh_diag(io[2], "unset: '%s': not a valid identifier", c->argv[i]); status = 1; continue; }
+        if (!osh_name_valid(c->argv[i])) continue; /* bash 5.2: unset of a non-identifier is silent and succeeds (omega#344) */
         osh_var_unset(s, c->argv[i]);
     }
     return status;
