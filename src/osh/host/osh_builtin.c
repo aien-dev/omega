@@ -20,6 +20,7 @@
 #include "osh_host.h"
 #include "osh_priv.h"
 
+#include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -214,7 +215,217 @@ static void out_bytes(Out *o, const char *p, size_t n)
     }
 }
 
-static int is_conv(char ch) { return ch && strchr("sdiuxoc", ch) != NULL; }
+/* printf FORMAT [ARG...] in bash 5.2's shape (#344 RISK-4): flags - + space # 0, width and precision as digits or
+ * `*` (taken from the arguments), length modifiers h l j z t L ignored as bash does, conversions
+ * d i o u x X c s b q e E f F g G a A and %%. The format is reused while arguments remain. %s %c %b %q pad with
+ * spaces even under the 0 flag (bash); %b expands \a \b \e \E \f \n \r \t \v \\ \' \" \0nnn \nnn \xHH \uHHHH
+ * \UHHHHHHHH and stops all output at \c; %q quotes for reuse as shell input (bash's backslash form, or $'...'
+ * when a control byte is present). Every conversion is validated before anything is printed (osh refuses where
+ * bash would print the prefix first). osh limit, not bash's: a width or precision above 1000000 is refused. */
+static int is_conv(char ch) { return ch && strchr("diouxXcsbqeEfFgGaA", ch) != NULL; }
+
+typedef struct {
+    int minus, plus, space, alt, zero;
+    int width, prec;   /* -1: not given */
+    int star_w, star_p; /* taken from the arguments */
+    char conv;
+} PfSpec;
+
+enum { PF_MAX_WIDTH = 1000000 };
+
+/* Parse what follows a '%'. Returns the bytes consumed, or 0 with *bad set to the offending byte (NUL: the
+ * format ended inside the specification). */
+static int pf_parse(const char *p, PfSpec *sp, char *bad)
+{
+    const char *q = p;
+    memset(sp, 0, sizeof *sp);
+    sp->width = sp->prec = -1;
+    for (;; q++) {
+        if (*q == '-') sp->minus = 1;
+        else if (*q == '+') sp->plus = 1;
+        else if (*q == ' ') sp->space = 1;
+        else if (*q == '#') sp->alt = 1;
+        else if (*q == '0') sp->zero = 1;
+        else break;
+    }
+    if (*q == '*') { sp->star_w = 1; q++; }
+    else if (*q >= '1' && *q <= '9') {
+        int w = 0;
+        while (*q >= '0' && *q <= '9') { if (w <= PF_MAX_WIDTH) w = w * 10 + (*q - '0'); q++; }
+        sp->width = w;
+    }
+    if (*q == '.') {
+        q++;
+        if (*q == '*') { sp->star_p = 1; q++; }
+        else {
+            int pr = 0;
+            while (*q >= '0' && *q <= '9') { if (pr <= PF_MAX_WIDTH) pr = pr * 10 + (*q - '0'); q++; }
+            sp->prec = pr;
+        }
+    }
+    while (*q == 'h' || *q == 'l' || *q == 'j' || *q == 'z' || *q == 't' || *q == 'L') q++;
+    if (!is_conv(*q)) { *bad = *q; return 0; }
+    sp->conv = *q++;
+    return (int)(q - p);
+}
+
+typedef struct { char *p; size_t n, cap; int oom; } Buf;
+
+static void buf_add(Buf *b, const char *s, size_t n)
+{
+    if (b->oom) return;
+    if (b->n + n + 1 > b->cap) {
+        size_t cap = b->cap ? b->cap : 64;
+        while (cap < b->n + n + 1) cap *= 2;
+        char *np = realloc(b->p, cap);
+        if (!np) { b->oom = 1; return; }
+        b->p = np;
+        b->cap = cap;
+    }
+    memcpy(b->p + b->n, s, n);
+    b->n += n;
+    b->p[b->n] = 0;
+}
+
+static void buf_ch(Buf *b, char ch) { buf_add(b, &ch, 1); }
+
+/* bash's $'...' form: \a \b \t \n \v \f \r \E, \\ and \', other control bytes as three-digit octal; bytes above
+ * 0x7f as octal when octal_high (declare -x) or raw (%q). */
+static void ansi_c_quote(Buf *b, const char *v, int octal_high)
+{
+    buf_add(b, "$'", 2);
+    for (const unsigned char *q = (const unsigned char *)v; *q; q++) {
+        const char *esc = NULL;
+        switch (*q) {
+        case '\a': esc = "\\a"; break; case '\b': esc = "\\b"; break; case '\t': esc = "\\t"; break;
+        case '\n': esc = "\\n"; break; case '\v': esc = "\\v"; break; case '\f': esc = "\\f"; break;
+        case '\r': esc = "\\r"; break; case 0x1b: esc = "\\E"; break;
+        case '\\': esc = "\\\\"; break; case '\'': esc = "\\'"; break;
+        }
+        if (esc) { buf_add(b, esc, strlen(esc)); continue; }
+        if (*q < 0x20 || *q == 0x7f || (*q >= 0x80 && octal_high)) {
+            char oct[5];
+            snprintf(oct, sizeof oct, "\\%03o", *q);
+            buf_add(b, oct, 4);
+            continue;
+        }
+        buf_ch(b, (char)*q);
+    }
+    buf_ch(b, '\'');
+}
+
+/* %q: bash's sh_backslash_quote. Empty is ''; a control byte switches to $'...'; otherwise a backslash before
+ * space and the shell's special characters, and before ~ or # only at the start. Bytes above 0x7f pass raw. */
+static void quote_q(Buf *b, const char *v)
+{
+    if (!*v) { buf_add(b, "''", 2); return; }
+    for (const unsigned char *q = (const unsigned char *)v; *q; q++)
+        if (*q < 0x20 || *q == 0x7f) { ansi_c_quote(b, v, 0); return; }
+    for (const char *q = v; *q; q++) {
+        if (strchr(" `\"'\\$&()|;<>?![]*{},^", *q) || ((*q == '~' || *q == '#') && q == v)) buf_ch(b, '\\');
+        buf_ch(b, *q);
+    }
+}
+
+static void buf_utf8(Buf *b, unsigned long cp)
+{
+    char u[4];
+    int n;
+    if (cp < 0x80) { u[0] = (char)cp; n = 1; }
+    else if (cp < 0x800) { u[0] = (char)(0xc0 | (cp >> 6)); u[1] = (char)(0x80 | (cp & 0x3f)); n = 2; }
+    else if (cp < 0x10000) { u[0] = (char)(0xe0 | (cp >> 12)); u[1] = (char)(0x80 | ((cp >> 6) & 0x3f)); u[2] = (char)(0x80 | (cp & 0x3f)); n = 3; }
+    else { u[0] = (char)(0xf0 | (cp >> 18)); u[1] = (char)(0x80 | ((cp >> 12) & 0x3f)); u[2] = (char)(0x80 | ((cp >> 6) & 0x3f)); u[3] = (char)(0x80 | (cp & 0x3f)); n = 4; }
+    buf_add(b, u, (size_t)n);
+}
+
+/* %b argument: bash's escape set. Returns 1 when \c was seen (all further output stops). */
+static int expand_b(Buf *b, const char *v)
+{
+    for (const char *p = v; *p; p++) {
+        if (*p != '\\') { buf_ch(b, *p); continue; }
+        char e = p[1];
+        static const char esc_from[] = "abeEfnrtv\\'\"", esc_to[] = "\a\b\033\033\f\n\r\t\v\\'\"";
+        const char *m = e ? strchr(esc_from, e) : NULL;
+        if (m) { buf_ch(b, esc_to[m - esc_from]); p++; continue; }
+        if (e == 'c') return 1;
+        if (e >= '0' && e <= '7') {
+            int v8 = 0, k = 0, lim = e == '0' ? 4 : 3; /* \0nnn: up to three digits after the 0; \nnn: up to three */
+            while (k < lim && p[1] >= '0' && p[1] <= '7') { v8 = v8 * 8 + (p[1] - '0'); p++; k++; }
+            buf_ch(b, (char)(v8 & 0xff));
+            continue;
+        }
+        if (e == 'x' || e == 'u' || e == 'U') {
+            int lim = e == 'x' ? 2 : e == 'u' ? 4 : 8, k = 0;
+            unsigned long cp = 0;
+            const char *q = p + 2;
+            while (k < lim && isxdigit((unsigned char)*q)) { cp = cp * 16 + (unsigned long)(isdigit((unsigned char)*q) ? *q - '0' : (tolower((unsigned char)*q) - 'a' + 10)); q++; k++; }
+            if (k == 0) { buf_ch(b, '\\'); continue; } /* no digits: backslash kept, letter follows normally */
+            if (e == 'x') buf_ch(b, (char)(cp & 0xff)); else buf_utf8(b, cp);
+            p = q - 1;
+            continue;
+        }
+        buf_ch(b, '\\'); /* unknown escape: both bytes verbatim, as bash does */
+        if (!e) break;
+    }
+    return 0;
+}
+
+/* Pad with spaces to the width, honouring '-'. bash pads %s %c %b %q with spaces even under the 0 flag. */
+static void pad_out(Out *o, const char *s, size_t len, const PfSpec *sp)
+{
+    size_t w = sp->width > 0 ? (size_t)sp->width : 0;
+    if (!sp->minus) for (size_t k = len; k < w; k++) out_bytes(o, " ", 1);
+    out_bytes(o, s, len);
+    if (sp->minus) for (size_t k = len; k < w; k++) out_bytes(o, " ", 1);
+}
+
+/* Numeric conversions go through snprintf with the spec rebuilt from the parsed fields (no `*` reaches it). */
+static int num_out(Out *o, const PfSpec *sp, intmax_t sv, uintmax_t u, long double ld)
+{
+    char spec[64];
+    int n = 0;
+    spec[n++] = '%';
+    if (sp->minus) spec[n++] = '-';
+    if (sp->plus) spec[n++] = '+';
+    if (sp->space) spec[n++] = ' ';
+    if (sp->alt) spec[n++] = '#';
+    if (sp->zero) spec[n++] = '0';
+    if (sp->width >= 0) n += snprintf(spec + n, sizeof spec - (size_t)n, "%d", sp->width);
+    if (sp->prec >= 0) n += snprintf(spec + n, sizeof spec - (size_t)n, ".%d", sp->prec);
+    int isf = strchr("eEfFgGaA", sp->conv) != NULL, isd = sp->conv == 'd' || sp->conv == 'i';
+    spec[n++] = isf ? 'L' : 'j';
+    spec[n++] = sp->conv;
+    spec[n] = 0;
+    int len = isf ? snprintf(NULL, 0, spec, ld) : isd ? snprintf(NULL, 0, spec, sv) : snprintf(NULL, 0, spec, u);
+    if (len < 0) return -1;
+    char *buf = malloc((size_t)len + 1);
+    if (!buf) return -1;
+    if (isf) snprintf(buf, (size_t)len + 1, spec, ld);
+    else if (isd) snprintf(buf, (size_t)len + 1, spec, sv);
+    else snprintf(buf, (size_t)len + 1, spec, u);
+    out_bytes(o, buf, (size_t)len);
+    free(buf);
+    return 0;
+}
+
+/* An integer argument as bash reads it: 'x or "x is the byte value, otherwise strtoimax/strtoumax base 0;
+ * trailing junk or overflow is "invalid number" (status 1) with the parsed prefix (0 if none). */
+static int pf_int(const char *arg, int is_signed, intmax_t *sv, uintmax_t *u, int fd_err, int *status)
+{
+    *sv = 0; *u = 0;
+    if (!arg || !*arg) return 0;
+    if (arg[0] == '\'' || arg[0] == '"') { *u = (unsigned char)arg[1]; *sv = (intmax_t)*u; return 0; }
+    char *end;
+    errno = 0;
+    if (is_signed) *sv = strtoimax(arg, &end, 0); else *u = strtoumax(arg, &end, 0);
+    if (end == arg || *end || errno == ERANGE) {
+        if (end == arg) { *sv = 0; *u = 0; }
+        osh_diag(fd_err, "printf: '%s': invalid number", arg);
+        *status = 1;
+        return 1;
+    }
+    return 0;
+}
 
 static int bi_printf(const OshCmd *c, const int io[3])
 {
@@ -227,7 +438,7 @@ static int bi_printf(const OshCmd *c, const int io[3])
     }
     if (ai >= c->nargv) { osh_diag(io[2], "printf: usage: printf format [arguments]"); return 2; } /* bash: 2 */
     const char *fmt = c->argv[ai++];
-    int first = ai, nspec = 0;
+    int first = ai, nargs = 0; /* arguments one pass over the format consumes */
     /* Validate EVERY conversion before anything is printed. The scan and the print loop below agree on what a
      * backslash does: it always takes the next byte with it (a known escape, or an unknown one that is printed
      * verbatim, as coreutils does), so `\%` is two literal bytes and never starts a conversion. A `%` or `\` that is
@@ -240,20 +451,25 @@ static int bi_printf(const OshCmd *c, const int io[3])
         if (*p != '%') continue;
         p++;
         if (*p == '%') continue;
-        if (!*p) {
-            osh_diag(io[2], "printf: %%: invalid conversion specification (the format ends after %%)");
+        PfSpec sp;
+        char bad = 0;
+        int k = pf_parse(p, &sp, &bad);
+        if (!k) {
+            if (!bad) osh_diag(io[2], "printf: `%%%s': missing format character", p);
+            else osh_diag(io[2], "printf: `%c': invalid format character", bad);
             return 1;
         }
-        if (!is_conv(*p)) {
-            osh_diag(io[2], "printf: %%%c: unsupported conversion (supported: %%s %%d %%i %%u %%x %%o %%c %%%%)", *p);
+        if (sp.width > PF_MAX_WIDTH || sp.prec > PF_MAX_WIDTH) {
+            osh_diag(io[2], "printf: width or precision above %d is not supported", PF_MAX_WIDTH);
             return 1;
         }
-        nspec++;
+        nargs += 1 + sp.star_w + sp.star_p;
+        p += k - 1;
     }
     Out o = {.fd = io[1]};
-    int status = 0, ci = first;
+    int status = 0, ci = first, stop = 0;
     do {
-        for (const char *p = fmt; *p; p++) {
+        for (const char *p = fmt; *p && !stop; p++) {
             if (*p == '\\') {
                 char e = p[1];
                 static const char esc_from[] = "\\abfnrtv\"", esc_to[] = "\\\a\b\f\n\r\t\v\"";
@@ -277,45 +493,61 @@ static int bi_printf(const OshCmd *c, const int io[3])
             } else {
                 p++;
                 if (*p == '%') { out_bytes(&o, "%", 1); continue; }
-                if (!*p) break; /* unreachable: the scan refuses a final %; never step past the terminator */
+                PfSpec sp;
+                char bad;
+                int k = pf_parse(p, &sp, &bad);
+                if (!k) break; /* unreachable: the scan admitted every specification */
+                p += k - 1;
+                if (sp.star_w) {
+                    intmax_t sv; uintmax_t u;
+                    pf_int(ci < c->nargv ? c->argv[ci++] : NULL, 1, &sv, &u, io[2], &status);
+                    if (sv < 0) { sp.minus = 1; sv = -sv; }
+                    sp.width = sv > PF_MAX_WIDTH ? PF_MAX_WIDTH : (int)sv;
+                }
+                if (sp.star_p) {
+                    intmax_t sv; uintmax_t u;
+                    pf_int(ci < c->nargv ? c->argv[ci++] : NULL, 1, &sv, &u, io[2], &status);
+                    sp.prec = sv < 0 ? -1 : sv > PF_MAX_WIDTH ? PF_MAX_WIDTH : (int)sv;
+                }
                 const char *arg = ci < c->nargv ? c->argv[ci++] : NULL;
-                if (*p == 's') {
-                    if (arg) out_bytes(&o, arg, strlen(arg));
-                } else if (*p == 'c') {
-                    out_bytes(&o, arg && *arg ? arg : "", 1); /* coreutils: an empty or missing argument prints a NUL byte */
-                } else {
-                    char num[64];
-                    int bad = 0;
-                    errno = 0;
-                    uintmax_t u = 0;
-                    intmax_t sv = 0;
-                    if (arg && (arg[0] == '\'' || arg[0] == '"')) {
-                        u = (unsigned char)arg[1];
-                        sv = (intmax_t)u;
-                    } else if (arg && *arg) {
+                if (sp.conv == 's') {
+                    size_t len = arg ? strlen(arg) : 0;
+                    if (sp.prec >= 0 && (size_t)sp.prec < len) len = (size_t)sp.prec;
+                    pad_out(&o, arg ? arg : "", len, &sp);
+                } else if (sp.conv == 'c') {
+                    char ch = arg && *arg ? arg[0] : 0; /* coreutils: an empty or missing argument prints a NUL byte */
+                    pad_out(&o, &ch, 1, &sp);
+                } else if (sp.conv == 'b' || sp.conv == 'q') {
+                    Buf b = {0};
+                    if (sp.conv == 'b') stop = expand_b(&b, arg ? arg : "");
+                    else quote_q(&b, arg ? arg : "");
+                    if (b.oom) { free(b.p); osh_diag(io[2], "printf: out of memory"); out_flush(&o); return 1; }
+                    size_t len = b.n;
+                    if (sp.prec >= 0 && (size_t)sp.prec < len) len = (size_t)sp.prec;
+                    pad_out(&o, b.p ? b.p : "", len, &sp);
+                    free(b.p);
+                } else if (strchr("eEfFgGaA", sp.conv)) {
+                    long double ld = 0;
+                    if (arg && (arg[0] == '\'' || arg[0] == '"')) ld = (unsigned char)arg[1];
+                    else if (arg && *arg) {
                         char *end;
-                        if (*p == 'd' || *p == 'i') sv = strtoimax(arg, &end, 0);
-                        else u = strtoumax(arg, &end, 0);
-                        if (end == arg || *end || errno == ERANGE) bad = 1;
-                        if (bad && end == arg) { u = 0; sv = 0; }
+                        errno = 0;
+                        ld = strtold(arg, &end);
+                        if (end == arg || *end || errno == ERANGE) {
+                            if (end == arg) ld = 0;
+                            osh_diag(io[2], "printf: '%s': invalid number", arg);
+                            status = 1;
+                        }
                     }
-                    if (bad) {
-                        osh_diag(io[2], "printf: '%s': invalid number", arg);
-                        status = 1;
-                    }
-                    int n;
-                    switch (*p) {
-                    case 'd': case 'i': n = snprintf(num, sizeof num, "%jd", sv); break;
-                    case 'u': n = snprintf(num, sizeof num, "%ju", u); break;
-                    case 'x': n = snprintf(num, sizeof num, "%jx", u); break;
-                    case 'o': n = snprintf(num, sizeof num, "%jo", u); break;
-                    default: n = 0; break; /* unreachable: the scan admitted only d i u x o here */
-                    }
-                    out_bytes(&o, num, (size_t)n);
+                    if (num_out(&o, &sp, 0, 0, ld)) { osh_diag(io[2], "printf: out of memory"); out_flush(&o); return 1; }
+                } else {
+                    intmax_t sv; uintmax_t u;
+                    pf_int(arg, sp.conv == 'd' || sp.conv == 'i', &sv, &u, io[2], &status);
+                    if (num_out(&o, &sp, sv, u, 0)) { osh_diag(io[2], "printf: out of memory"); out_flush(&o); return 1; }
                 }
             }
         }
-    } while (nspec > 0 && ci < c->nargv);
+    } while (!stop && nargs > 0 && ci < c->nargv);
     out_flush(&o);
     if (o.err) { osh_diag(io[2], "printf: write error: %s", strerror(o.err)); return 1; }
     return status;
@@ -329,7 +561,7 @@ static int cmp_var(const void *a, const void *b)
 }
 
 /* `declare -x NAME="value"` quoting as bash 5.2 prints it: double quotes with \ before " \ $ `; when the value holds
- * a control or non-ASCII byte, the $'...' form with \a \b \t \n \v \f \r \E, \\ \' and three-digit octal otherwise. */
+ * a control or non-ASCII byte, bash's $'...' form (ansi_c_quote, octal for bytes above 0x7f). */
 static void out_declare_value(Out *o, const char *v)
 {
     int ansi = 0;
@@ -344,25 +576,10 @@ static void out_declare_value(Out *o, const char *v)
         out_bytes(o, "\"", 1);
         return;
     }
-    out_bytes(o, "$'", 2);
-    for (const unsigned char *q = (const unsigned char *)v; *q; q++) {
-        const char *esc = NULL;
-        switch (*q) {
-        case '\a': esc = "\\a"; break; case '\b': esc = "\\b"; break; case '\t': esc = "\\t"; break;
-        case '\n': esc = "\\n"; break; case '\v': esc = "\\v"; break; case '\f': esc = "\\f"; break;
-        case '\r': esc = "\\r"; break; case 0x1b: esc = "\\E"; break;
-        case '\\': esc = "\\\\"; break; case '\'': esc = "\\'"; break;
-        }
-        if (esc) { out_bytes(o, esc, strlen(esc)); continue; }
-        if (*q < 0x20 || *q >= 0x7f) {
-            char oct[5];
-            snprintf(oct, sizeof oct, "\\%03o", *q);
-            out_bytes(o, oct, 4);
-            continue;
-        }
-        out_bytes(o, (const char *)q, 1);
-    }
-    out_bytes(o, "'", 1);
+    Buf b = {0};
+    ansi_c_quote(&b, v, 1);
+    if (!b.oom) out_bytes(o, b.p, b.n);
+    free(b.p);
 }
 
 /* export [-fn] [name[=value] ...] | export -p   (bash 5.2 shape, #344 RISK-6)
