@@ -201,3 +201,16 @@ and the shadow bound follows the long double width.
   spellings, and `run.sh` builds three Rust controls from the oracle compute
   crate (clean, std::time mutant, extern "C" clock_gettime mutant) whenever
   rustc is available. See ISOLATION_REPORT.md for the G2 sign-off.
+- D11 (Agent 0): a bare literal that does not match its fixed value
+  (`model_family`, `energy_unit`, `clock_povm`, `observables`) is a section 1
+  grammar failure: CASE_PARSE_ERROR. Codec and manifest row R37 changed.
+- Hardened-libc aliases (Agent 5): the gate now normalises `__name_chk` and
+  `__name_2` to `name` before matching, and forbids the plain file-read family
+  (read, write, fread, fwrite, fgets, getline, scanf, mmap, ioctl and friends).
+  Control object `gates/fortified_read_mutant.c`; harness test
+  GATE-ISOLATION-FORTIFIED-READ-CAUGHT.
+- Candidate freeze (Agent 0/6, omega#358, after omega#366): the six withheld
+  cases are revealed in `cases/hidden/`. `run.sh` checks them against the
+  digests committed in HIDDEN_COMMITMENT.txt before the freeze on every run, and
+  the first hidden run against the frozen candidate is recorded under
+  `results/hidden-run-<omega commit>/`.

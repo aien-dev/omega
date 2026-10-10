@@ -1,0 +1,11 @@
+source_repo aien-dev/omega
+source_commit bff4a428441dd7607ecaf866d1dc1f0272a0765a
+source_tree_clean YES
+contract_commit fe86e43aae63370b3084f78e971a33b81ce75a9d
+engine_sha256 c6edaf2ca3b4803313c055125ec53665f35ac6cf00695da113994c14cdc8d9e8
+oracle_repo aien-dev/omega
+oracle_commit bff4a428441dd7607ecaf866d1dc1f0272a0765a
+oracle_sha256 62f06673d745bf4d4a7a28643440d5e934e2fd95bddb7384d7a99a76ca10faf4
+build_cc cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0 (engine); rustc 1.98.1 (48a229cea 2026-09-01) (oracle)
+build_flags engine: -std=c11 -Wall -Wextra -Werror -pedantic -D_POSIX_C_SOURCE=200809L -I$HERE -I$ROOT/src -O2 -lm; oracle: rustc --edition 2021 -C opt-level=2 -C codegen-units=1 -C debuginfo=0 -C panic=abort
+host spark-b87b

@@ -66,7 +66,7 @@ done < cases/MANIFEST.tsv
 
 # ---- hand derivations agree with shadow + exact checker (honest fixture -> expectation_met YES) ----
 bad=0; n=0
-for f in cases/positive/*.case cases/negative/*.case; do
+for f in cases/positive/*.case cases/negative/*.case cases/hidden/*.case; do
     n=$((n+1)); $T synth "$f" > "$TMP/h.result" 2>/dev/null || { bad=$((bad+1)); rec "DERIV-$(basename "$f" .case)" derivation FAIL "synth failed"; continue; }
     em=$(grep '^expectation_met' "$TMP/h.result" | awk '{print $2}')
     v=$($T result "$TMP/h.result" --case "$f" | head -1 | awk '{print $2}')
@@ -121,6 +121,10 @@ if [ $gate_build = 0 ]; then rec GATE-ISOLATION-MUTANT-CAUGHT gate NOT_RUN "cont
 if sh gates/isolation.sh build/hidden_clock_mutant.o >/dev/null 2>&1; then rec GATE-ISOLATION-MUTANT-CAUGHT gate FAIL "hidden clock_gettime mutant passed the gate"; else rec GATE-ISOLATION-MUTANT-CAUGHT gate PASS "hidden-clock mutant rejected"; fi
 if sh gates/isolation.sh build/clean_control.o >/dev/null 2>&1; then rec GATE-ISOLATION-CLEAN-PASSES gate PASS "clean arithmetic object accepted"; else rec GATE-ISOLATION-CLEAN-PASSES gate FAIL "clean object rejected"; fi
 fi
+# hardened-libc alias control (Agent 5 finding, omega#358): __fread_chk / __open_2 must be read as fread / open
+if ${CC:-cc} -std=c11 -Wall -Wextra -Werror -pedantic -O2 -c gates/fortified_read_mutant.c -o build/fortified_read_mutant.o 2>"$TMP/g2.err"; then
+    if sh gates/isolation.sh build/fortified_read_mutant.o >/dev/null 2>&1; then rec GATE-ISOLATION-FORTIFIED-READ-CAUGHT gate FAIL "__fread_chk/__open_2 mutant passed the gate"; else rec GATE-ISOLATION-FORTIFIED-READ-CAUGHT gate PASS "hardened-libc file-read aliases (__fread_chk, __open_2) rejected"; fi
+else rec GATE-ISOLATION-FORTIFIED-READ-CAUGHT gate NOT_RUN "control object failed to compile: $(head -1 "$TMP/g2.err")"; fi
 # Rust controls (D5, omega#358): the oracle compute crate alone, plus a std::time mutant and an extern "C" clock mutant.
 ORACLE_SRC=../oracle/src/at0
 if command -v rustc >/dev/null 2>&1 && command -v ar >/dev/null 2>&1 && [ -d "$ORACLE_SRC" ]; then
@@ -139,10 +143,10 @@ if command -v rustc >/dev/null 2>&1 && command -v ar >/dev/null 2>&1 && [ -d "$O
 else rec GATE-ISOLATION-RUST-STD-TIME-CAUGHT gate NOT_RUN "rustc, ar or ../oracle/src/at0 not available"; fi
 
 # ---- hidden set commitment ----
-HD=${AT0_HIDDEN_DIR:-$HOME/at0-private/agent4}
-if [ -d "$HD" ]; then
-    if (cd "$HD" && grep -v '^#' "$OLDPWD/HIDDEN_COMMITMENT.txt" | sha256sum -c --quiet - >/dev/null 2>&1); then rec HIDDEN-COMMITMENT hidden PASS "private files match the committed digests (identity only, not non-access)"; else rec HIDDEN-COMMITMENT hidden FAIL "digest mismatch or missing private file"; fi
-else rec HIDDEN-COMMITMENT hidden INCONCLUSIVE "private set not present on this host"; fi
+# hidden set: revealed at candidate freeze (omega#358, 2026-10-09); the committed digests must still match the published files
+if [ -d cases/hidden ]; then
+    if (cd cases/hidden && grep -v "^#" ../../HIDDEN_COMMITMENT.txt | sha256sum -c --quiet - >/dev/null 2>&1); then rec HIDDEN-COMMITMENT hidden PASS "published hidden cases match the digests committed before the candidate freeze (identity only, not non-access)"; else rec HIDDEN-COMMITMENT hidden FAIL "digest mismatch or missing hidden case"; fi
+else rec HIDDEN-COMMITMENT hidden FAIL "cases/hidden missing"; fi
 
 # ---- candidate ----
 if [ $SELF_ONLY = 1 ]; then :; else
@@ -154,10 +158,10 @@ if [ -n "${AT0_CANDIDATE_CASE_TOOL:-}" ]; then
         [ "$got" = "$want" ] || { mm=$((mm+1)); rec "CAND-CODEC-$(basename "$path" .case)" "$cls" FAIL "want [$want] got [$got]"; }
     done < cases/MANIFEST.tsv
     [ $mm = 0 ] && rec CAND-CODEC-CONFORMANCE candidate PASS "$mt public cases answered exactly as the contract requires" || rec CAND-CODEC-CONFORMANCE candidate FAIL "$mm of $mt differ"
-    if [ -d "$HD" ]; then hm=0; for f in "$HD"/H*.case; do got=$($AT0_CANDIDATE_CASE_TOOL "$f" 2>&1 | head -1 | cut -d' ' -f1); [ "$got" = AT0_CASE_OK ] || hm=$((hm+1)); done; [ $hm = 0 ] && rec CAND-CODEC-HIDDEN candidate PASS "hidden cases accepted" || rec CAND-CODEC-HIDDEN candidate FAIL "$hm hidden cases refused"; fi
+    if [ -d cases/hidden ]; then hm=0; for f in cases/hidden/H*.case; do got=$($AT0_CANDIDATE_CASE_TOOL "$f" 2>&1 | head -1 | cut -d' ' -f1); [ "$got" = AT0_CASE_OK ] || hm=$((hm+1)); done; [ $hm = 0 ] && rec CAND-CODEC-HIDDEN candidate PASS "hidden cases accepted" || rec CAND-CODEC-HIDDEN candidate FAIL "$hm hidden cases refused"; fi
 else rec CAND-CODEC-CONFORMANCE candidate BLOCKED_NO_CANDIDATE "AT0_CANDIDATE_CASE_TOOL unset"; fi
 if [ -n "${AT0_CANDIDATE_RUN:-}" ]; then
-    for f in cases/positive/*.case cases/negative/*.case $( [ -d "$HD" ] && ls "$HD"/H*.case ); do
+    for f in cases/positive/*.case cases/negative/*.case cases/hidden/*.case; do
         id=$(basename "$f" .case)
         $AT0_CANDIDATE_RUN "$f" > "$TMP/c.result" 2>"$TMP/c.err"; rc=$?
         if [ $rc -ne 0 ]; then rec "CAND-RUN-$id" candidate FAIL "runner exit $rc : $(head -1 "$TMP/c.err")"; continue; fi
@@ -166,7 +170,7 @@ if [ -n "${AT0_CANDIDATE_RUN:-}" ]; then
         if [ "$st" = PASS ] && [ "$em" = YES ]; then rec "CAND-VERIFY-$id" candidate PASS "independent verification agrees; expectation met"
         elif [ "$st" = PASS ]; then rec "CAND-VERIFY-$id" candidate FAIL "record is honest but expectation_met=$em: the physics did not do what the case expects"
         else rec "CAND-VERIFY-$id" candidate "$st" "$(printf '%s' "$out" | sed 's/.*"findings":\[\(.*\)\]}/\1/' | cut -c1-200)"; fi
-        case "$id" in H*) mkdir -p "$HD/results" && cp "$TMP/c.result" "$HD/results/$id.result";; *) cp "$TMP/c.result" "$OUT/candidate-$id.result";; esac
+        cp "$TMP/c.result" "$OUT/candidate-$id.result"
     done
     # wall-clock / environment independence: same case twice, different TZ and a pause
     f=$K; TZ=UTC $AT0_CANDIDATE_RUN "$f" > "$TMP/r1.result" 2>/dev/null; sleep 2; TZ=Asia/Tokyo AT0_EVALUATOR_NOISE=1 $AT0_CANDIDATE_RUN "$f" > "$TMP/r2.result" 2>/dev/null
