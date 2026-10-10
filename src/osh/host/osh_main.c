@@ -16,10 +16,12 @@
  * OSH_INTERP=1 in the environment runs the shell core in the reference interpreter instead of native code.
  * Never runs a command through another shell: programs are started by the host adapter with execve().
  */
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "osh_caps.h"
@@ -158,11 +160,18 @@ int main(int argc, char **argv)
         rc = osh_shell_run_string(&sh, argv[2], strlen(argv[2]));
     } else if (argc >= 2) {
         int fd = open(argv[1], O_RDONLY | O_CLOEXEC);
-        if (fd < 0) { fprintf(stderr, "osh: %s: cannot open\n", argv[1]); return 127; }
+        if (fd < 0) { /* bash: 127 only when the path does not exist, 126 for anything else, with the system's message */
+            int e = errno;
+            fprintf(stderr, "osh: %s: %s\n", argv[1], strerror(e));
+            return (e == ENOENT || e == ENOTDIR) ? 127 : 126;
+        }
+        struct stat st;
+        if (fstat(fd, &st) == 0 && S_ISDIR(st.st_mode)) { fprintf(stderr, "osh: %s: Is a directory\n", argv[1]); close(fd); return 126; }
         size_t n = 0;
         char *text = slurp_fd(fd, &n);
+        int e = errno;
         close(fd);
-        if (!text) { fprintf(stderr, "osh: %s: cannot read\n", argv[1]); return 127; }
+        if (!text) { fprintf(stderr, "osh: %s: %s\n", argv[1], strerror(e)); return 126; }
         if (osh_shell_init(&sh, environ, native, 0, argv[1], argc > 2 ? argv + 2 : NULL, argc > 2 ? argc - 2 : 0) != 0) return 70;
         if (arm(&sh, &caps, caps_file) != 0) { osh_shell_free(&sh); osh_caps_stop(&caps); return 70; }
         rc = osh_shell_run_script(&sh, text, n);
