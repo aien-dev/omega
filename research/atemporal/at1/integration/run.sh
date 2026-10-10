@@ -21,35 +21,51 @@ set -u
 LC_ALL=C; export LC_ALL
 TZ=UTC; export TZ
 # the runner may be started by `make at1-check`: inner makes must not inherit its state
-unset MAKELEVEL MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS
-HERE=$(cd "$(dirname "$0")" && pwd)
-ROOT=$(cd "$HERE/../../../.." && pwd)
-MODE=check; OUT=""; KEEP=0
+unset MAKELEVEL MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS CDPATH
+HERE=$(cd "$(dirname "$0")" && pwd -P)
+ROOT=$(cd "$HERE/../../../.." && pwd -P)
+MODE=check; OUT=""; KEEP=0; OUTSET=0
+usage() { echo "usage: sh run.sh [--out DIR | --evidence] [--keep-work]" >&2; exit 64; }
 while [ $# -gt 0 ]; do
     case "$1" in
         --evidence) MODE=evidence;;
-        --out) shift; OUT=${1:?--out needs a directory};;
+        --out) shift; [ $# -gt 0 ] && [ -n "$1" ] || usage; OUT=$1; OUTSET=1;;
         --keep-work) KEEP=1;;
-        *) echo "usage: sh run.sh [--out DIR | --evidence] [--keep-work]" >&2; exit 64;;
+        *) usage;;
     esac
     shift
 done
+[ "$MODE" = evidence ] && [ $OUTSET = 1 ] && { echo "--out and --evidence exclude each other" >&2; exit 64; }
+case "$ROOT" in *[[:space:]]*) echo "the checkout path contains white space; the evaluator's command templates cannot carry it" >&2; exit 64;; esac
 HEAD=$(git -C "$ROOT" rev-parse HEAD) || { echo "not a git checkout" >&2; exit 64; }
 SHORT=$(git -C "$ROOT" rev-parse --short=7 HEAD)
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-CLEAN=YES; [ -n "$(git -C "$ROOT" status --porcelain)" ] && CLEAN=NO
+# state of the checkout the runner was started from (the components are built from a fresh clone of HEAD)
+OUTER_CLEAN=YES; [ -n "$(git -C "$ROOT" status --porcelain)" ] && OUTER_CLEAN=NO
 if [ "$MODE" = evidence ]; then
+    [ "$OUTER_CLEAN" = YES ] || { echo "--evidence needs a clean checkout (git status --porcelain is not empty)" >&2; exit 64; }
+    [ -n "${AT1_ARCH_DIR:-}" ] || { echo "--evidence needs AT1_ARCH_DIR (a local aien-architecture clone) for the contract digest control C0" >&2; exit 64; }
     OUT="$ROOT/evidence/AT1/$STAMP-$SHORT"
     [ -e "$OUT" ] && { echo "evidence folder exists: $OUT" >&2; exit 64; }
+    mkdir -p "$OUT" || exit 1
 else
     [ -n "$OUT" ] || OUT="$ROOT/build/at1/check"
     case "$OUT" in /*) ;; *) OUT="$PWD/$OUT";; esac
-    case "$OUT" in "$ROOT/evidence"|"$ROOT/evidence/"*) echo "--out must not point into evidence/; use --evidence" >&2; exit 64;; esac
-    rm -rf "$OUT"
+    mkdir -p "$OUT" && OUT=$(cd "$OUT" && pwd -P) || exit 1
+    case "$ROOT/" in "$OUT/"*) echo "--out must not be the checkout or one of its parents: $OUT" >&2; exit 64;; esac
+    case "$OUT/" in "$ROOT/evidence/"*) echo "--out must not point into evidence/; use --evidence" >&2; exit 64;; esac
+    # wipe only an empty folder or one an earlier run of this runner wrote
+    if [ -n "$(ls -A "$OUT")" ]; then
+        [ -f "$OUT/receipts/controls.tsv" ] && [ -f "$OUT/run.log" ] || { echo "--out $OUT is not empty and was not written by this runner; refusing to wipe it" >&2; exit 64; }
+        rm -rf "$OUT" && mkdir -p "$OUT" || exit 1
+    fi
 fi
 mkdir -p "$OUT/receipts" "$OUT/cases" "$OUT/results" "$OUT/components" "$OUT/mutants" || exit 1
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/at1-run.XXXXXX") || exit 1
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/a5run.XXXXXX") || exit 1
+WORK=$(cd "$WORK" && pwd -P) || exit 1
+case "$WORK" in *[[:space:]]*) echo "TMPDIR contains white space: $WORK" >&2; rm -rf "$WORK"; exit 64;; esac
 [ $KEEP = 1 ] || trap 'rm -rf "$WORK"' EXIT
+trap 'exit 130' INT TERM
 LOG="$OUT/run.log"; : > "$LOG"
 R="$OUT/receipts"
 say() { printf '%s\n' "$*" | tee -a "$LOG"; }
@@ -68,14 +84,16 @@ stable() { grep -v -E '^(run_started_utc|run_finished_utc|evidence_digest) ' "$1
 CCBIN=${CC:-cc}
 TAB=$(printf '\t')
 
-say "AT-1 Agent 5 run $STAMP mode=$MODE omega=$HEAD tree_clean=$CLEAN"
+say "AT-1 Agent 5 run $STAMP mode=$MODE omega=$HEAD starting_checkout_clean=$OUTER_CLEAN"
 
 # ---------- 0. contract pin (C0) ----------
 LOCK="$HERE/contract.lock"
 lock() { sed -n "s/^$1 //p" "$LOCK" | head -1; }
 CONTRACT_COMMIT=$(lock contract_commit); SPEC_COMMIT=$(lock spec_commit)
 cp "$LOCK" "$R/contract.lock"
-if [ -n "${AT1_ARCH_DIR:-}" ] && git -C "$AT1_ARCH_DIR" rev-parse HEAD > /dev/null 2>&1; then
+if [ -n "${AT1_ARCH_DIR:-}" ] && ! git -C "$AT1_ARCH_DIR" rev-parse HEAD > /dev/null 2>&1; then
+    ctrl C0-CONTRACT-DIGESTS FAIL "git -C \$AT1_ARCH_DIR rev-parse HEAD" "AT1_ARCH_DIR=$AT1_ARCH_DIR is set but is not a git clone"
+elif [ -n "${AT1_ARCH_DIR:-}" ]; then
     A=$AT1_ARCH_DIR; P=docs/plans/atemporal; c0bad=""
     adig() { git -C "$A" show "$1:$P/$2" 2>/dev/null | shastdin; }
     for row in "AT1_CASE_V1 case_v1_sha256 $CONTRACT_COMMIT" "AT1_RESULT_V1 result_v1_sha256 $CONTRACT_COMMIT" "AT0_RESULT_V2 result_v2_sha256 $CONTRACT_COMMIT" "AT1_SPEC spec_sha256 $SPEC_COMMIT"; do
@@ -88,21 +106,23 @@ if [ -n "${AT1_ARCH_DIR:-}" ] && git -C "$AT1_ARCH_DIR" rev-parse HEAD > /dev/nu
     # the frozen rows of the freeze record carry the same digests
     for k in "AT1_CASE_V1 case_v1_sha256" "AT1_RESULT_V1 result_v1_sha256" "AT0_RESULT_V2 result_v2_sha256"; do
         set -- $k
-        grep -q "^| $1 | .*| \`$(lock "$2")\` |" "$A/$P/AT0_FREEZE.md" || c0bad="$c0bad freeze-row-$1"
+        git -C "$A" show "$(lock freeze_record_commit):$P/AT0_FREEZE.md" 2>/dev/null | grep -q "^| $1 | .*| \`$(lock "$2")\` |" || c0bad="$c0bad freeze-row-$1"
     done
     ch=$(adig "$(lock charter_readings_commit)" AT1_CHARTER.md)
     [ "$ch" = "$(lock charter_sha256_at_readings_commit)" ] || c0bad="$c0bad charter-at-readings-commit($ch)"
     printf 'aien-architecture HEAD %s\n' "$(git -C "$A" rev-parse HEAD)" >> "$R/contract-digests.txt"
-    [ -z "$c0bad" ] && ctrl C0-CONTRACT-DIGESTS PASS "sha256 of AT1_CASE_V1, AT1_RESULT_V1, AT0_RESULT_V2 at contract_commit and AT1_SPEC at spec_commit (git show) and in the working tree of \$AT1_ARCH_DIR; AT0_FREEZE.md rows; AT1_CHARTER at the readings commit" "all match contract.lock and the AT0_FREEZE.md rows (arch HEAD $(git -C "$A" rev-parse --short=7 HEAD))" \
+    [ -z "$c0bad" ] && ctrl C0-CONTRACT-DIGESTS PASS "sha256 of AT1_CASE_V1, AT1_RESULT_V1, AT0_RESULT_V2 at contract_commit and AT1_SPEC at spec_commit (git show) and in the working tree of \$AT1_ARCH_DIR; AT0_FREEZE.md rows at freeze_record_commit; AT1_CHARTER at the readings commit" "all match contract.lock and the AT0_FREEZE.md rows (arch HEAD $(git -C "$A" rev-parse --short=7 HEAD))" \
         || ctrl C0-CONTRACT-DIGESTS FAIL "contract digests" "mismatch:$c0bad"
-else ctrl C0-CONTRACT-DIGESTS NOT_RUN "AT1_ARCH_DIR unset or not a git clone" "no local aien-architecture clone given; digests only recorded in contract.lock"; fi
+else ctrl C0-CONTRACT-DIGESTS NOT_RUN "AT1_ARCH_DIR unset" "no local aien-architecture clone given; digests only recorded in contract.lock"; fi
 
 # ---------- 1. clean checkout and toolchain ----------
 S="$WORK/src"; AT1="$S/research/atemporal/at1"; INT="$AT1/integration"
 logrun "git clone --no-hardlinks $ROOT $S; git checkout --detach $HEAD"
-git clone -q --no-hardlinks "$ROOT" "$S" >> "$LOG" 2>&1 && git -C "$S" checkout -q --detach "$HEAD" >> "$LOG" 2>&1 || { say "FATAL clone failed"; exit 1; }
+git -c core.hooksPath=/dev/null clone -q --no-hardlinks "$ROOT" "$S" >> "$LOG" 2>&1 && git -C "$S" -c core.hooksPath=/dev/null checkout -q --detach "$HEAD" >> "$LOG" 2>&1 || { say "FATAL clone failed"; exit 1; }
 [ "$(git -C "$S" rev-parse HEAD)" = "$HEAD" ] || { say "FATAL clone HEAD mismatch"; exit 1; }
 [ -d "$INT" ] || { say "FATAL HEAD has no research/atemporal/at1/integration (commit the runner first)"; exit 1; }
+# source_tree_clean describes what is built: the fresh clone of HEAD (the starting checkout is in summary.txt)
+CLEAN=YES; [ -n "$(git -C "$S" status --porcelain)" ] && CLEAN=NO
 COMPS="research/atemporal/at1/model research/atemporal/at1/oracle research/atemporal/at1/evaluator src/sha256.c src/sha256.h"
 if [ -n "${AT1_QUALIFY_COMMIT:-}" ]; then
     QC=$(git -C "$S" rev-parse "$AT1_QUALIFY_COMMIT^{commit}" 2>/dev/null)
@@ -133,7 +153,7 @@ bstep() { # label dir cmd...
 }
 BUILD_OK=1
 bstep oracle-build "$AT1/oracle" sh build.sh || BUILD_OK=0
-bstep model-build "$AT1/model" make || BUILD_OK=0
+bstep model-build "$AT1/model" make CC="$CCBIN" || BUILD_OK=0
 bstep evaluator-build "$AT1/evaluator" make all || BUILD_OK=0
 MODEL="$AT1/model/build/at1-model"; ORACLE="$AT1/oracle/target/at1-oracle"; EVAL="$AT1/evaluator/build/at1-eval"
 if [ $BUILD_OK != 1 ] || [ ! -x "$MODEL" ] || [ ! -x "$ORACLE" ] || [ ! -x "$EVAL" ]; then
@@ -144,8 +164,8 @@ fi
 [ -z "$(git -C "$S" status --porcelain)" ] && ctrl C1-BUILD-LEAVES-TREE-CLEAN PASS "git status --porcelain in the clone after the three builds" "empty (build outputs are git-ignored)" \
     || ctrl C1-BUILD-LEAVES-TREE-CLEAN FAIL "git status --porcelain in the clone after the builds" "$(git -C "$S" status --porcelain | head -3 | tr '\n' ' ')"
 OSTATE=$("$ORACLE" emit "$AT1/evaluator/cases/positive/P2-kat-rotated-level-n4.case" 2>/dev/null | sed -n 's/^source_tree_clean //p')
-( cd "$AT1/model" && make test ) > "$R/model-tests.log" 2>&1; mrc=$?
-( cd "$AT1/model" && make asan ) > "$R/model-tests-asan.log" 2>&1; mrca=$?
+( cd "$AT1/model" && make test CC="$CCBIN" ) > "$R/model-tests.log" 2>&1; mrc=$?
+( cd "$AT1/model" && make asan CC="$CCBIN" ) > "$R/model-tests-asan.log" 2>&1; mrca=$?
 ( cd "$AT1/oracle" && sh build.sh test ) > "$R/oracle-tests.log" 2>&1; orc=$?
 ( cd "$AT1/oracle" && sh isolation.sh ) > "$R/oracle-isolation-own.log" 2>&1; oisorc=$?
 ( cd "$AT1/evaluator" && make test CC="$CCBIN" ) > "$R/evaluator-tests.log" 2>&1; erc=$?
@@ -188,10 +208,10 @@ logrun "(cd evaluator && sh run.sh '$ENGT' '$ORAT' cases $P1)"
 ( cd "$AT1/evaluator" && AT1_COMP_DIR="$OUT/components" sh run.sh "$ENGT" "$ORAT" cases "$P1" ) > "$R/evaluator-run-pass1.log" 2>&1; ev1=$?
 say "pass 1: evaluator run.sh rc=$ev1"
 
-# ---------- 7. pass 2 (repeatability): later, other time zone, other working directory ----------
+# ---------- 7. pass 2 (repeatability): later, other time zone ----------
 sleep 2
-logrun "(cd /; TZ=Asia/Tokyo sh evaluator/run.sh '$ENGT' '$ORAT' cases $P2)"
-( cd / && TZ=Asia/Tokyo sh "$AT1/evaluator/run.sh" "$ENGT" "$ORAT" cases "$P2" ) > "$R/evaluator-run-pass2.log" 2>&1; ev2=$?
+logrun "(TZ=Asia/Tokyo sh evaluator/run.sh '$ENGT' '$ORAT' cases $P2)"
+( TZ=Asia/Tokyo sh "$AT1/evaluator/run.sh" "$ENGT" "$ORAT" cases "$P2" ) > "$R/evaluator-run-pass2.log" 2>&1; ev2=$?
 say "pass 2: evaluator run.sh rc=$ev2"
 RP_N=0; RP_BYTE=0; RP_STABLE=0; RP_BAD=""
 for f in "$P1"/engine/*.result "$P1"/oracle/*.result "$P1"/spliced/*.result; do
@@ -204,7 +224,7 @@ for f in "$P1"/engine/*.result "$P1"/oracle/*.result "$P1"/spliced/*.result; do
 done
 for t in TABLE.tsv VERDICT_IDS.tsv; do cmp -s "$P1/$t" "$P2/$t" || RP_BAD="$RP_BAD $t"; done
 if [ $RP_N -gt 0 ] && [ $RP_STABLE = $RP_N ] && [ -z "$RP_BAD" ] && [ $ev1 = $ev2 ]; then
-    ctrl C2-REPEATABILITY PASS "evaluator run.sh twice (2 s apart; TZ=UTC from evaluator/, then TZ=Asia/Tokyo from /); cmp of every engine, oracle and spliced result, TABLE.tsv, VERDICT_IDS.tsv" "$RP_N result files: $RP_STABLE/$RP_N identical outside run_started_utc, run_finished_utc, evidence_digest ($RP_BYTE/$RP_N byte-identical); TABLE.tsv and VERDICT_IDS.tsv byte-identical; both runs rc=$ev1"
+    ctrl C2-REPEATABILITY PASS "evaluator run.sh twice (2 s apart; TZ=UTC, then TZ=Asia/Tokyo); cmp of every engine, oracle and spliced result, TABLE.tsv, VERDICT_IDS.tsv" "$RP_N result files: $RP_STABLE/$RP_N identical outside run_started_utc, run_finished_utc, evidence_digest ($RP_BYTE/$RP_N byte-identical); TABLE.tsv and VERDICT_IDS.tsv byte-identical; both runs rc=$ev1"
 else ctrl C2-REPEATABILITY FAIL "evaluator run.sh twice; compare" "stable $RP_STABLE/$RP_N, rc $ev1/$ev2; differ:$RP_BAD"; fi
 
 # ---------- 8. integration controls over pass 1 ----------
@@ -281,10 +301,11 @@ for mn in drop_v wrong_level; do
     esac
     mkdir -p "$OUT/mutants/$mn"
     if mutant_model $mn "$MS" at1_exact.c; then
-        sed "s/^engine_sha256 .*/engine_sha256 $(sha "$WORK/mut/$mn/at1-model")/" "$PROV" > "$WORK/prov.mut.$mn"
+        MBCC=$(ptext "(MUTANT $mn control, not a qualification result) $CC_V (engine); $RUSTC_V (oracle)"); MBCC=$(printf '%s' "$MBCC" | sed 's/[\/&]/\\&/g')
+        sed "s/^engine_sha256 .*/engine_sha256 $(sha "$WORK/mut/$mn/at1-model")/; s/^build_cc .*/build_cc $MBCC/" "$PROV" > "$WORK/prov.mut.$mn"
         awk -F'\t' -v m="$AM" '$1==m {print $2 "\t" (($6 ~ /^BLIND/) ? "BLIND" : "KILLED")}' "$MR" | while IFS="$(printf '\t')" read -r c pred; do
             stem=$(printf '%s' "$c" | sed 's|/|_|; s|\.case$||'); res="$OUT/mutants/$mn/$stem.result"
-            AT1_MODEL_BIN="$WORK/mut/$mn/at1-model" AT1_PROV_STATIC="$WORK/prov.mut.$mn" AT1_CC_NOTE="(MUTANT $mn control, not a qualification result)" \
+            AT1_MODEL_BIN="$WORK/mut/$mn/at1-model" AT1_PROV_STATIC="$WORK/prov.mut.$mn" \
               sh "$INT/engine_shim.sh" "$EC/$c" "$res" 2> "$WORK/mut.err"; rc=$?
             if [ $rc -ne 0 ]; then got=KILLED; how="no result rc=$rc $(head -1 "$WORK/mut.err" | cut -c1-60)"; rm -f "$res"
             else
@@ -313,9 +334,13 @@ done
 GATE="$AT1/evaluator/gates/isolation.sh"
 # allowed() obj "sym sym": run the gate on one object; PASS iff every FAIL line is "references <sym>" with sym in the list
 allowed() {
-    sh "$GATE" "$EVAL" "$1" > "$WORK/al.out" 2>&1
+    sh "$GATE" "$EVAL" "$1" > "$WORK/al.out" 2>&1; alrc=$?
     bad=$(grep '^FAIL' "$WORK/al.out" | while read -r l; do s=$(printf '%s' "$l" | sed -n 's/^FAIL: .* references \([A-Za-z0-9_]*\)$/\1/p'); case " $2 " in *" $s "*) [ -n "$s" ] || echo "$l";; *) echo "$l";; esac; done)
-    cat "$WORK/al.out"; [ -z "$bad" ]
+    cat "$WORK/al.out"
+    # the gate must have run to its summary line; a nonzero exit is acceptable only with exempt FAIL lines and nothing else
+    grep -q '^AT1_ISOLATION: ' "$WORK/al.out" || return 1
+    [ $alrc -eq 0 ] || grep -q '^FAIL: .* references ' "$WORK/al.out" || return 1
+    [ -z "$bad" ]
 }
 STRICT="$ISO/clean/at1_case.o $ISO/clean/at1_exact.o $ISO/clean/at1_numeric.o $ISO/clean/at1_result.o $ISO/clean/sha256.o"
 sh "$GATE" "$EVAL" $STRICT > "$R/isolation-engine-strict.log" 2>&1; i1=$?
@@ -382,30 +407,38 @@ GC=$(grep -c '^AT1_ISOLATION_CONTROLS: PASS$' "$R/evaluator-isolation-controls.t
 if [ -f "$S/mk/at1.mk" ]; then
     HY="$WORK/hyg"; mkdir -p "$HY"
     MKV="PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0"
+    S2="$WORK/src-without"
     hy() { # tag dir
         D=$2
         for g in all test; do
             ( cd "$D" && make -n -k $g $MKV ) > "$HY/$1.$g" 2>&1; echo "exit $?" >> "$HY/$1.$g"
             ( cd "$D" && make -n -k $g ) > "$HY/$1.$g.default" 2>&1; echo "exit $?" >> "$HY/$1.$g.default"
         done
-        ( cd "$D" && make -pn -k all $MKV ) 2>/dev/null | grep -v '^#' | sed -E 's/[0-9a-f]{12,40}/SHA/g; s/ at1-check at1-clean//; s| mk/at1\.mk||g' \
-          | grep -v -E '^(AT1_[A-Z_]* |at1-(check|clean):|MAKEFILE_LIST|MA2_RUN_ID|R16_STAMP)' | grep -v -E "^${TAB}.*(AT1_|integration/run\\.sh|build/at1)" | LC_ALL=C sort -u > "$HY/$1.db"
+        # database: comments dropped, both clone paths written <src>, commit stamps masked; the fragment's own
+        # names (AT1_* variables, at1-check/at1-clean rules and recipes, its own file entry "mk/at1.mk:",
+        # its MAKEFILE_LIST and .PHONY entries) removed
+        ( cd "$D" && make -pn -k all $MKV ) 2>/dev/null | grep -v '^#' | sed "s|$S2|<src>|g; s|$S|<src>|g" | sed -E 's/[0-9a-f]{12,40}/SHA/g; s/ at1-check at1-clean//; s| mk/at1\.mk||g' \
+          | grep -v -E '^(AT1_[A-Z0-9_]* [:?+]?= |at1-(check|clean):|mk/at1\.mk:|MAKEFILE_LIST|MA2_RUN_ID|R16_STAMP)' | grep -v -E "^${TAB}.*(AT1_|integration/run\\.sh)" | LC_ALL=C sort -u > "$HY/$1.db"
     }
     # "without": a second clone with mk/at1.mk removed and committed, so both trees are clean
-    S2="$WORK/src-without"
-    git clone -q --no-hardlinks "$S" "$S2" && git -C "$S2" rm -q mk/at1.mk && git -C "$S2" -c user.email=a5@example.invalid -c user.name=a5 commit -q -m "without at1.mk (control)"
-    # warm both trees once (first make in a fresh clone may generate files), then compare
+    hok=1; hmsg=""
+    git -C "$S" -c core.hooksPath=/dev/null clone -q --no-hardlinks "$S" "$S2" >> "$LOG" 2>&1 && git -C "$S2" rm -q mk/at1.mk >> "$LOG" 2>&1 \
+      && git -C "$S2" -c core.hooksPath=/dev/null -c commit.gpgsign=false -c user.email=a5@example.invalid -c user.name=a5 commit -q -m "without at1.mk (control)" >> "$LOG" 2>&1 \
+      && [ ! -e "$S2/mk/at1.mk" ] || { hok=0; hmsg=" control-clone-not-made"; }
+    # warm both trees once (a first make in a fresh clone may generate files), then compare
     ( cd "$S" && make -n -k all $MKV ) > /dev/null 2>&1; ( cd "$S2" && make -n -k all $MKV ) > /dev/null 2>&1
     hy with "$S"; hy without "$S2"
-    hok=1; hmsg=""
     for g in all test; do for v in "" ".default"; do cmp -s "$HY/with.$g$v" "$HY/without.$g$v" || { hok=0; hmsg="$hmsg $g$v"; }; done; done
+    # the comparison must not be vacuous: the existing build must actually have been planned
+    grep -q 'omegatool' "$HY/with.all" || { hok=0; hmsg="$hmsg all-plan-empty"; }
     for g in all test; do cp "$HY/with.$g" "$R/make-n-$g.with.txt"; cp "$HY/without.$g" "$R/make-n-$g.without.txt"; done
-    diff "$HY/without.db" "$HY/with.db" > "$R/make-database.diff"
-    extra=$(grep '^[<>]' "$R/make-database.diff" | grep -v -i 'at1' | wc -l | tr -d ' ')
-    [ $hok = 1 ] && ctrl C14-MAKE-N-HYGIENE PASS "make -n -k all|test with $MKV and with defaults, fragment present vs removed-and-committed clone (cmp of stdout+stderr+exit)" "byte-identical in all four comparisons (all: $(wc -l < "$HY/with.all" | tr -d ' ') lines, $(tail -1 "$HY/with.all"); test: $(wc -l < "$HY/with.test" | tr -d ' ') lines, $(tail -1 "$HY/with.test"))" \
-        || ctrl C14-MAKE-N-HYGIENE FAIL "make -n -k all|test with and without mk/at1.mk" "differ:$hmsg"
-    [ "$extra" = 0 ] && ctrl C15-MAKE-DATABASE PASS "make -pn -k all, sorted, fragment present vs removed; diff after dropping AT1_/at1 names, the mk/at1.mk entry in MAKEFILE_LIST and the .PHONY list, 12-40 hex stamps" "empty diff outside at1 names: no variable, rule, target or prerequisite of the existing build changes (SRCS, all, test, clean untouched)" \
-        || ctrl C15-MAKE-DATABASE FAIL "make -pn database diff" "$extra changed lines outside at1 names; see make-database.diff"
+    diff "$HY/without.db" "$HY/with.db" > "$R/make-database.diff"; drc=$?
+    extra=$(grep -c '^[<>]' "$R/make-database.diff")
+    dbok=1; { [ $drc -le 1 ] && grep -q '^SRCS ' "$HY/with.db" && grep -q '^all:' "$HY/with.db" && grep -q '^test:' "$HY/with.db"; } || dbok=0
+    [ $hok = 1 ] && ctrl C14-MAKE-N-HYGIENE PASS "make -n -k all|test with $MKV and with defaults, fragment present vs removed-and-committed clone (cmp of stdout+stderr+exit)" "byte-identical in all four comparisons (all: $(wc -l < "$HY/with.all" | tr -d ' ') lines, $(tail -1 "$HY/with.all"); test: $(wc -l < "$HY/with.test" | tr -d ' ') lines, $(tail -1 "$HY/with.test")); the plan names omegatool" \
+        || ctrl C14-MAKE-N-HYGIENE FAIL "make -n -k all|test with and without mk/at1.mk" "problems:$hmsg"
+    [ "$extra" = 0 ] && [ $dbok = 1 ] && ctrl C15-MAKE-DATABASE PASS "make -pn -k all, sorted, fragment present vs removed; clone paths written <src>; only the fragment's own AT1_* variables, at1-check/at1-clean rules, its MAKEFILE_LIST and .PHONY entries removed" "empty diff over $(wc -l < "$HY/with.db" | tr -d ' ') database lines (SRCS, all, test present): no variable, rule, target or prerequisite of the existing build changes" \
+        || ctrl C15-MAKE-DATABASE FAIL "make -pn database diff" "$extra changed lines, diff rc=$drc, database sane=$dbok; see make-database.diff"
     ( cd "$S" && make -n at1-check $MKV ) > "$R/make-n-at1-check.txt" 2>&1; pc=$?
     ( cd "$S" && make -n at1-clean $MKV ) > "$R/make-n-at1-clean.txt" 2>&1; pc2=$?
     ( cd "$S" && make -n --warn-undefined-variables at1-check at1-clean $MKV ) > "$R/make-warn-undefined.txt" 2>&1
@@ -413,7 +446,7 @@ if [ -f "$S/mk/at1.mk" ]; then
     [ $pc -eq 0 ] && [ $pc2 -eq 0 ] && [ "$wu" = 0 ] && grep -q 'integration/run.sh' "$R/make-n-at1-check.txt" && ctrl C16-MAKE-PARSES PASS "make -n at1-check; make -n at1-clean; make -n --warn-undefined-variables (all with $MKV)" "both plan: $(grep -m1 run.sh "$R/make-n-at1-check.txt" | cut -c1-90); no undefined AT1_ variable" \
         || ctrl C16-MAKE-PARSES FAIL "make -n at1-check at1-clean" "rc=$pc/$pc2 undefined-AT1-warnings=$wu"
 else
-    ctrl C14-MAKE-N-HYGIENE NOT_RUN "mk/at1.mk not committed at HEAD" "fragment absent"; ctrl C15-MAKE-DATABASE NOT_RUN "-" "fragment absent"; ctrl C16-MAKE-PARSES NOT_RUN "-" "fragment absent"
+    for k in C14-MAKE-N-HYGIENE C15-MAKE-DATABASE C16-MAKE-PARSES; do ctrl $k FAIL "test -f mk/at1.mk" "mk/at1.mk is not committed at HEAD (a deliverable of this runner)"; done
 fi
 
 # ---------- 12. gates ----------
@@ -423,7 +456,7 @@ cnt() { grep "^# $1: " "$P1/TABLE.tsv" 2>/dev/null | head -1 | sed 's/^# [a-z]*:
 G1E=$(eg AT1-G1); G3E=$(eg AT1-G3); G4E=$(eg AT1-G4); G5E=$(eg AT1-G5)
 T9L=$(grep '^# T9 ' "$P1/TABLE.tsv" 2>/dev/null | sed 's/^# T9 [^:]*: //' | cut -d' ' -f1)
 G1BAD=$(awk -F'\t' '!/^#/ && $3!="AT1_CASE_OK" && $9!="PASS" {printf " %s(engine: %s; oracle: %s)", $1, $5, $6}' "$P1/TABLE.tsv" 2>/dev/null)
-gate AT1-G0 REFERENCE "AT0_FREEZE.md AT-1 rows, AT1_CHARTER.md section 11; control C0" "freeze recorded by Agent 0 (aien-architecture cbe4c8e, spec 81047f5); this run: C0-CONTRACT-DIGESTS $(cst C0-CONTRACT-DIGESTS)"
+gate AT1-G0 REFERENCE "AT0_FREEZE.md AT-1 rows, AT1_CHARTER.md section 11; control C0" "freeze recorded by Agent 0 (aien-architecture contract $(printf %.7s "$CONTRACT_COMMIT"), spec $(printf %.7s "$SPEC_COMMIT"), from contract.lock); this run: C0-CONTRACT-DIGESTS $(cst C0-CONTRACT-DIGESTS)"
 gate AT1-G1 "${G1E:-NOT_RUN}" "evaluator TABLE.tsv line AT1-G1 (evaluator codec, engine and oracle refusals exact on every refuse row; KAT digests copied)" "refusal rows: $(cnt refusal); failing rows:${G1BAD:- none}"
 isoG=PASS
 for k in C9-ISOLATION-ENGINE C10-ISOLATION-ENGINE-MUTANTS C11-ISOLATION-ORACLE C12-ISOLATION-ORACLE-MUTANTS C13-GATE-CONTROLS C14-MAKE-N-HYGIENE C15-MAKE-DATABASE C16-MAKE-PARSES C1-ORACLE-OWN-ISOLATION; do
@@ -438,7 +471,8 @@ gate AT1-G5 "${G5E:-NOT_RUN}" "evaluator TABLE.tsv line AT1-G5 (every NEGATIVE c
 # only G1 fails, run.sh exits 1 for that reason alone and G6 says so instead of counting it twice.
 EL="$R/evaluator-run-pass1.log"
 E_CORP=$(grep -c '^corpus-check: [0-9]* files, 0 differ$' "$EL"); E_SELF=$(grep -c '^SELFTEST: PASS ' "$EL"); E_MUT=$(grep -c '^MUTANT_RECEIPT: PASS ' "$EL")
-if [ -z "$T9L" ] || [ -z "$G4E" ]; then G6=NOT_RUN
+if [ $ev1 -ne 0 ] && [ ! -s "$P1/TABLE.tsv" ]; then G6=FAIL   # the evaluator stopped in its own self-checks before qualifying
+elif [ -z "$T9L" ] || [ -z "$G4E" ]; then G6=NOT_RUN
 elif [ "$E_CORP" = 1 ] && [ "$E_SELF" = 1 ] && [ "$E_MUT" = 1 ] && [ "$G4E" = PASS ] && [ "$G5E" = PASS ] && [ "$G3E" = PASS ] && [ "$T9L" = PASS ]; then G6=PASS
 else G6=FAIL; fi
 G6WHY="run.sh rc=$ev1"; [ $ev1 -ne 0 ] && [ "$G6" = PASS ] && [ "$G1E" = FAIL ] && G6WHY="run.sh rc=$ev1 caused only by the AT1-G1 row(s) above"
@@ -447,15 +481,17 @@ gate AT1-G7 NOT_RUN "-" "Agent 7 (replication on the MacBook) owns G7"
 gate AT1-G8 NOT_RUN "-" "Agent 6 (scientific review) owns G8"
 
 # receipts name the temporary work directory as <work>, so two runs' receipts compare without noise
+# (both the resolved path and its /private-less or /private-prefixed twin, for macOS /var/folders)
+case "$WORK" in /private/*) WORK_ALT=${WORK#/private};; *) WORK_ALT=/private$WORK;; esac
 for f in "$R"/*.log "$R"/*.txt "$R"/*.tsv "$LOG"; do
     [ -f "$f" ] || continue
-    sed "s|$WORK|<work>|g" "$f" > "$WORK/scrub.tmp" && cat "$WORK/scrub.tmp" > "$f"
+    sed -e "s|$WORK|<work>|g" -e "s|$WORK_ALT|<work>|g" "$f" > "$WORK/scrub.tmp" && cat "$WORK/scrub.tmp" > "$f"
 done
 # ---------- 13. result digests and summary ----------
 ( cd "$OUT" && find results mutants components -type f | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha "$f")" "$f"; done ) > "$R/outputs.sha256"
 NRES=$(ls "$P1"/engine/*.result 2>/dev/null | grep -vc T9-second-run)
 {
-  echo "omega_commit $HEAD"; echo "source_tree_clean $CLEAN"; echo "contract_commit $CONTRACT_COMMIT"; echo "stamp $STAMP"; echo "host $HOSTT"
+  echo "omega_commit $HEAD"; echo "source_tree_clean $CLEAN"; echo "starting_checkout_clean $OUTER_CLEAN"; echo "contract_commit $CONTRACT_COMMIT"; echo "stamp $STAMP"; echo "host $HOSTT"
   echo "cases $NCASE: positive $NPOS, negative $NNEG, refuse $NREF; engine results written $NRES"
   echo "evaluator table: positive $(cnt positive); negative $(cnt negative); refusal $(cnt refusal)"
   echo "mutants: drop_v $(awk -F'\t' '$3=="KILLED"' "$R/mutant-drop_v.tsv" | wc -l | tr -d ' ')/$(wc -l < "$R/mutant-drop_v.tsv" | tr -d ' ') killed; wrong_level $(awk -F'\t' '$3=="KILLED"' "$R/mutant-wrong_level.tsv" | wc -l | tr -d ' ')/$(wc -l < "$R/mutant-wrong_level.tsv" | tr -d ' ') killed; evaluator receipt $(grep -m1 '^MUTANT_RECEIPT' "$R/evaluator-run-pass1.log")"

@@ -1,9 +1,9 @@
 # AT-1 contract pin (AT1_CHARTER.md section 8). Owner: AT-1 Agent 5. Read by run.sh only.
 # Format: "<key> <value>". Digests are plain SHA-256 of the file bytes at the named commit.
-# The *_sha256 rows must also appear in the AT-1 rows of AT0_FREEZE.md (aien-architecture main).
+# The case, result and result_v2 digests must also appear in AT0_FREEZE.md at freeze_record_commit (its AT-1 rows).
 repo aien-dev/aien-architecture
 contract_commit cbe4c8ed88d28bb96d5209327ecd30aa9cddaf7a
-contract_commit_also_accepted 81047f52850f4bd14c2fc5772ec2ac833ac694b9 ea91d7c06507c8e43fdcef2b685f29d88a9e7d81
+freeze_record_commit ea91d7c06507c8e43fdcef2b685f29d88a9e7d81
 case_v1_sha256 e62018d8deec97fffca5cacaf6452d8fc45c395596517665cd73eb0c777a3e8f
 result_v1_sha256 3e6efd7e641a89bf0e425267525afabc51fe7a5497d3d539cdeaf09ddb6fa92d
 result_v2_sha256 bd0f9eb8cf3ef7226c3ea18c1c9fbd4db62e0c23a0481afa519830fc1f514b5e
