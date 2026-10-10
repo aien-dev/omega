@@ -1,0 +1,2 @@
+FAIL: <work>/iso/clean/at1_bn.o references fwrite
+AT1_ISOLATION: FAIL

@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0.0",
+  "name": "at1-integration",
+  "purpose": "AT-1 Agent 5 integration runner (run.sh), engine and oracle shims for the evaluator, contract pin, and the qualification report"
+}
