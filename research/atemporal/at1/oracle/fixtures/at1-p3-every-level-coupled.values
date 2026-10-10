@@ -1,0 +1,112 @@
+begin values
+physical_state_kernel_dim 3
+constraint_residual f64:3c9b4ec9fea6a7f6 9534507@20
+povm_residual f64:3cbbb67ae8584caa 1332269@20
+label 0 t0 DEFINED
+label 1 t1 DEFINED
+label 2 t2 DEFINED
+label 3 t3 DEFINED
+clock_probability 0 f64:3fd875075075074f 3361515@20
+clock_probability 1 f64:3fc83a83a83a83a9 2000444@20
+clock_probability 2 f64:3fb6db6db6db6dbb 118717@19
+clock_probability 3 f64:3fd5b6db6db6db6e 3072057@20
+pauli 0 X PLUS f64:3fed4ef40991f1a7 1523805@20
+pauli 0 X MINUS f64:3fb5885fb37072d6 1523805@20
+pauli 0 Y PLUS f64:3fd37072d753bd02 2291366@20
+pauli 0 Y MINUS f64:3fe647c694562180 2291366@20
+pauli 0 Z PLUS f64:3fd37072d753bd07 2291366@20
+pauli 0 Z MINUS f64:3fe647c69456217e 2291366@20
+pauli 1 X PLUS f64:3fe656f1826a43a0 3101454@20
+pauli 1 X MINUS f64:3fd3521cfb2b78c0 3101454@20
+pauli 1 Y PLUS f64:3fee7d95bc609a90 1623462@20
+pauli 1 Y MINUS f64:3fa826a439f656fc 1623462@20
+pauli 1 Z PLUS f64:3fe26a439f656f1a 3311988@20
+pauli 1 Z MINUS f64:3fdb2b78c13521cb 3311988@20
+pauli 2 X PLUS f64:3fd47ae147ae1482 4418224@20
+pauli 2 X MINUS f64:3fe5c28f5c28f5be 4418224@20
+pauli 2 Y PLUS f64:3fe7ae147ae147af 4175724@20
+pauli 2 Y MINUS f64:3fd0a3d70a3d70a1 4175724@20
+pauli 2 Z PLUS f64:3feccccccccccccd 2968237@20
+pauli 2 Z MINUS f64:3fb9999999999991 2968237@20
+pauli 3 X PLUS f64:3fd8ed2308158ed2 2534044@20
+pauli 3 X MINUS f64:3fe3896e7bf53897 2534044@20
+pauli 3 Y PLUS f64:3fb6e7bf53896e85 1630579@20
+pauli 3 Y MINUS f64:3fed2308158ed230 1630579@20
+pauli 3 Z PLUS f64:3fe86bca1af286be 225485@19
+pauli 3 Z MINUS f64:3fce50d79435e509 225485@19
+reference_label 0 t0 DEFINED
+reference_label 1 t1 DEFINED
+reference_label 2 t2 DEFINED
+reference_label 3 t3 DEFINED
+reference_clock_probability 0 f64:3fd8750750750753 46948@19
+reference_clock_probability 1 f64:3fc83a83a83a83ab 302116@20
+reference_clock_probability 2 f64:3fb6db6db6db6db6 193029@20
+reference_clock_probability 3 f64:3fd5b6db6db6db6f 434985@20
+reference_ideal 0 X PLUS f64:3ff0000000000000 1421087@20
+reference_ideal 0 X MINUS f64:0000000000000000 1421087@20
+reference_ideal 0 Y PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 0 Y MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 0 Z PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 0 Z MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 1 X PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 1 X MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 1 Y PLUS f64:3ff0000000000000 1421087@20
+reference_ideal 1 Y MINUS f64:0000000000000000 1421087@20
+reference_ideal 1 Z PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 1 Z MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 2 X PLUS f64:0000000000000000 1421087@20
+reference_ideal 2 X MINUS f64:3ff0000000000000 1421087@20
+reference_ideal 2 Y PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 2 Y MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 2 Z PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 2 Z MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 3 X PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 3 X MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 3 Y PLUS f64:0000000000000000 1421087@20
+reference_ideal 3 Y MINUS f64:3ff0000000000000 1421087@20
+reference_ideal 3 Z PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 3 Z MINUS f64:3fe0000000000000 1421087@20
+reference_interacting 0 X PLUS f64:3fed4ef40991f1a5 597655@20
+reference_interacting 0 X MINUS f64:3fb5885fb37072d6 597655@20
+reference_interacting 0 Y PLUS f64:3fd37072d753bd02 756865@20
+reference_interacting 0 Y MINUS f64:3fe647c69456217e 756865@20
+reference_interacting 0 Z PLUS f64:3fd37072d753bd02 756865@20
+reference_interacting 0 Z MINUS f64:3fe647c69456217e 756865@20
+reference_interacting 1 X PLUS f64:3fe656f1826a43a0 924897@20
+reference_interacting 1 X MINUS f64:3fd3521cfb2b78c0 924897@20
+reference_interacting 1 Y PLUS f64:3fee7d95bc609a8f 618326@20
+reference_interacting 1 Y MINUS f64:3fa826a439f656ee 618326@20
+reference_interacting 1 Z PLUS f64:3fe26a439f656f18 968567@20
+reference_interacting 1 Z MINUS f64:3fdb2b78c13521d0 968567@20
+reference_interacting 2 X PLUS f64:3fd47ae147ae147b 1198026@20
+reference_interacting 2 X MINUS f64:3fe5c28f5c28f5c3 1198026@20
+reference_interacting 2 Y PLUS f64:3fe7ae147ae147af 1147726@20
+reference_interacting 2 Y MINUS f64:3fd0a3d70a3d70a3 1147726@20
+reference_interacting 2 Z PLUS f64:3feccccccccccccd 897264@20
+reference_interacting 2 Z MINUS f64:3fb999999999999b 897264@20
+reference_interacting 3 X PLUS f64:3fd8ed2308158ed2 807202@20
+reference_interacting 3 X MINUS f64:3fe3896e7bf53897 807202@20
+reference_interacting 3 Y PLUS f64:3fb6e7bf53896e79 619802@20
+reference_interacting 3 Y MINUS f64:3fed2308158ed231 619802@20
+reference_interacting 3 Z PLUS f64:3fe86bca1af286bc 749291@20
+reference_interacting 3 Z MINUS f64:3fce50d79435e510 749291@20
+end values
+begin verdict
+check bound_kind_sufficient PASS
+check values_finite PASS
+check physical_state_nontrivial PASS
+check constraint_residual PASS
+check povm_normalization PASS
+check clock_probability_sum PASS
+check probability_range PASS
+check pauli_pair_sum PASS
+check conditional_defined PASS
+check target_agreement PASS
+check oracle_cross_check NOT_EVALUATED
+check label_status_agreement PASS
+outcome PASS
+failure_codes none
+error_code none
+expectation_met YES
+end verdict
+verdict_id a499e80598f5274364478a9fd65d9e084cbd0648f94659ef353456c169afa683

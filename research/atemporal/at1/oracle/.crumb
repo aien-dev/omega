@@ -1,0 +1,5 @@
+{
+  "schema_version": "1.0.0",
+  "name": "oracle",
+  "purpose": "AT-1 reference oracle (Rust, standard library only, built by rustc directly; research cross-check, not part of active execution): AT1_CASE_V1 validator, exact level kernel, literal matrix route plus closed-form and Bloch references, exact judge, AT1_RESULT_V1 oracle-record writer, tests, isolation gate"
+}

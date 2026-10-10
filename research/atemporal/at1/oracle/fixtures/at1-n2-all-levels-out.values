@@ -1,0 +1,112 @@
+begin values
+physical_state_kernel_dim 0
+constraint_residual undefined 0@0
+povm_residual f64:3cb0000000000000 1776358@20
+label 0 t0 UNDEFINED
+label 1 t1 UNDEFINED
+label 2 t2 UNDEFINED
+label 3 t3 UNDEFINED
+clock_probability 0 undefined 0@0
+clock_probability 1 undefined 0@0
+clock_probability 2 undefined 0@0
+clock_probability 3 undefined 0@0
+pauli 0 X PLUS undefined 0@0
+pauli 0 X MINUS undefined 0@0
+pauli 0 Y PLUS undefined 0@0
+pauli 0 Y MINUS undefined 0@0
+pauli 0 Z PLUS undefined 0@0
+pauli 0 Z MINUS undefined 0@0
+pauli 1 X PLUS undefined 0@0
+pauli 1 X MINUS undefined 0@0
+pauli 1 Y PLUS undefined 0@0
+pauli 1 Y MINUS undefined 0@0
+pauli 1 Z PLUS undefined 0@0
+pauli 1 Z MINUS undefined 0@0
+pauli 2 X PLUS undefined 0@0
+pauli 2 X MINUS undefined 0@0
+pauli 2 Y PLUS undefined 0@0
+pauli 2 Y MINUS undefined 0@0
+pauli 2 Z PLUS undefined 0@0
+pauli 2 Z MINUS undefined 0@0
+pauli 3 X PLUS undefined 0@0
+pauli 3 X MINUS undefined 0@0
+pauli 3 Y PLUS undefined 0@0
+pauli 3 Y MINUS undefined 0@0
+pauli 3 Z PLUS undefined 0@0
+pauli 3 Z MINUS undefined 0@0
+reference_label 0 t0 UNDEFINED
+reference_label 1 t1 UNDEFINED
+reference_label 2 t2 UNDEFINED
+reference_label 3 t3 UNDEFINED
+reference_clock_probability 0 undefined 0@0
+reference_clock_probability 1 undefined 0@0
+reference_clock_probability 2 undefined 0@0
+reference_clock_probability 3 undefined 0@0
+reference_ideal 0 X PLUS f64:3ff0000000000000 1421087@20
+reference_ideal 0 X MINUS f64:0000000000000000 1421087@20
+reference_ideal 0 Y PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 0 Y MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 0 Z PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 0 Z MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 1 X PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 1 X MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 1 Y PLUS f64:3ff0000000000000 1421087@20
+reference_ideal 1 Y MINUS f64:0000000000000000 1421087@20
+reference_ideal 1 Z PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 1 Z MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 2 X PLUS f64:0000000000000000 1421087@20
+reference_ideal 2 X MINUS f64:3ff0000000000000 1421087@20
+reference_ideal 2 Y PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 2 Y MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 2 Z PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 2 Z MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 3 X PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 3 X MINUS f64:3fe0000000000000 1421087@20
+reference_ideal 3 Y PLUS f64:0000000000000000 1421087@20
+reference_ideal 3 Y MINUS f64:3ff0000000000000 1421087@20
+reference_ideal 3 Z PLUS f64:3fe0000000000000 1421087@20
+reference_ideal 3 Z MINUS f64:3fe0000000000000 1421087@20
+reference_interacting 0 X PLUS undefined 0@0
+reference_interacting 0 X MINUS undefined 0@0
+reference_interacting 0 Y PLUS undefined 0@0
+reference_interacting 0 Y MINUS undefined 0@0
+reference_interacting 0 Z PLUS undefined 0@0
+reference_interacting 0 Z MINUS undefined 0@0
+reference_interacting 1 X PLUS undefined 0@0
+reference_interacting 1 X MINUS undefined 0@0
+reference_interacting 1 Y PLUS undefined 0@0
+reference_interacting 1 Y MINUS undefined 0@0
+reference_interacting 1 Z PLUS undefined 0@0
+reference_interacting 1 Z MINUS undefined 0@0
+reference_interacting 2 X PLUS undefined 0@0
+reference_interacting 2 X MINUS undefined 0@0
+reference_interacting 2 Y PLUS undefined 0@0
+reference_interacting 2 Y MINUS undefined 0@0
+reference_interacting 2 Z PLUS undefined 0@0
+reference_interacting 2 Z MINUS undefined 0@0
+reference_interacting 3 X PLUS undefined 0@0
+reference_interacting 3 X MINUS undefined 0@0
+reference_interacting 3 Y PLUS undefined 0@0
+reference_interacting 3 Y MINUS undefined 0@0
+reference_interacting 3 Z PLUS undefined 0@0
+reference_interacting 3 Z MINUS undefined 0@0
+end values
+begin verdict
+check bound_kind_sufficient PASS
+check values_finite PASS
+check physical_state_nontrivial FAIL
+check constraint_residual NOT_EVALUATED
+check povm_normalization PASS
+check clock_probability_sum NOT_EVALUATED
+check probability_range NOT_EVALUATED
+check pauli_pair_sum NOT_EVALUATED
+check conditional_defined NOT_EVALUATED
+check target_agreement NOT_EVALUATED
+check oracle_cross_check NOT_EVALUATED
+check label_status_agreement NOT_EVALUATED
+outcome FAIL
+failure_codes TRIVIAL_PHYSICAL_STATE
+error_code none
+expectation_met YES
+end verdict
+verdict_id 3a2de2486efb6a1414f2f9c2dab6026028de4497a0838ef7f99baa50d82e29b7
