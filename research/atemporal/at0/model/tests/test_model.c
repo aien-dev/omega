@@ -500,7 +500,17 @@ static int test_invalid_input_refusal(void)
     f |= expect_refusal("unknown reference label", "reference_clock_label t0", "reference_clock_label t9", AT0_CASE_INVALID_PARAMETER);
     f |= expect_refusal("duplicate label", "clock_label 3 t3", "clock_label 3 t2", AT0_CASE_INVALID_PARAMETER);
     f |= expect_refusal("zero system state", "(1/1;0/1),(1/1;0/1)", "(0/1;0/1),(0/1;0/1)", AT0_CASE_INVALID_PARAMETER);
-    f |= expect_refusal("wrong fixed value", "interaction NONE", "interaction WEAK", AT0_CASE_INVALID_PARAMETER);
+    /* bare literals of the section 1 grammar are shape (Agent 0 ruling on omega#358 for R37; same reading for all eight) */
+    f |= expect_refusal("R37 model family", "model_family PAGE_WOOTTERS_FINITE_IDEAL", "model_family PAGE_WOOTTERS_INTERACTING", AT0_CASE_PARSE_ERROR);
+    f |= expect_refusal("wrong fixed value", "interaction NONE", "interaction WEAK", AT0_CASE_PARSE_ERROR);
+    f |= expect_refusal("wrong observables", "observables PAULI_X,PAULI_Y,PAULI_Z", "observables PAULI_X,PAULI_Y", AT0_CASE_PARSE_ERROR);
+    f |= expect_refusal2("fixed literal is shape even after a noncanonical token", "clock_dim 4\n", "clock_dim 04\n", "interaction NONE", "interaction WEAK", AT0_CASE_PARSE_ERROR);
+    {   /* Agent 5's R37 file, copied byte for byte */
+        static uint8_t buf[8192]; size_t len; at0_case c;
+        CHECK(load_file("r37-model-family-bad.case", buf, sizeof buf, &len), "cannot read r37 case");
+        at0_status st = at0_case_parse(buf, len, &c);
+        CHECK(st == AT0_CASE_PARSE_ERROR, "R37 file: got %s", at0_status_name(st));
+    }
     f |= expect_refusal("float text", "tol_probability 1@12", "tol_probability 1e-12", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("noncanonical scaled", "tol_probability 1@12", "tol_probability 10@13", AT0_CASE_NONCANONICAL);
     f |= expect_refusal("double space", "clock_dim 4", "clock_dim  4", AT0_CASE_PARSE_ERROR);

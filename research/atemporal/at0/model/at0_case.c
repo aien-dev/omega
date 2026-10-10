@@ -124,8 +124,6 @@ static int split_list(char *s, char **items, int cap, int *count)
 typedef struct {
     /* raw values that are only judged after the shape pass */
     char header[64], domain[64], contract[64];
-    char model_family[64], energy_unit[64], system_dim[16], interaction[32], constraint[32],
-         physical_state[48], clock_povm[48], observables[64];
     long clock_dim, label_count;
     int energies_seen;
     int expected_codes_raw_count;
@@ -162,8 +160,10 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
     if (!valid_name(rest)) return AT0_CASE_PARSE_ERROR;
     strcpy(c->name, rest);
     FIXED(L, "begin semantic");
-    KEYED(L, "model_family", rest);   NEED(copy_tok(rest, r->model_family, sizeof r->model_family));
-    KEYED(L, "energy_unit", rest);    NEED(copy_tok(rest, r->energy_unit, sizeof r->energy_unit));
+    /* bare literals of the section 1 grammar (Agent 0 ruling on omega#358, R37): a different
+     * token is a shape failure, CASE_PARSE_ERROR, not a rule-3 parameter */
+    FIXED(L, "model_family PAGE_WOOTTERS_FINITE_IDEAL");
+    FIXED(L, "energy_unit DIMENSIONLESS_HBAR_1");
     KEYED(L, "clock_dim", rest);      SMALL_INT(rest, &r->clock_dim);
     KEYED(L, "clock_energies", rest);
     {
@@ -175,7 +175,7 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
         for (int i = 0; i < n && i < AT0_CLOCK_DIM_MAX; i++) NEED(at0_rat_parse(items[i], &c->clock_energies[i]));
         r->energies_seen = n;
     }
-    KEYED(L, "system_dim", rest);     NEED(copy_tok(rest, r->system_dim, sizeof r->system_dim));
+    FIXED(L, "system_dim 2");
     KEYED(L, "system_hamiltonian_pauli", rest);
     {
         if (strlen(rest) >= sizeof tmp) return AT0_CASE_PARSE_ERROR;
@@ -185,9 +185,9 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
         NEED(at0_rat_parse(items[0], &c->h0)); NEED(at0_rat_parse(items[1], &c->hx));
         NEED(at0_rat_parse(items[2], &c->hy)); NEED(at0_rat_parse(items[3], &c->hz));
     }
-    KEYED(L, "interaction", rest);    NEED(copy_tok(rest, r->interaction, sizeof r->interaction));
-    KEYED(L, "constraint", rest);     NEED(copy_tok(rest, r->constraint, sizeof r->constraint));
-    KEYED(L, "physical_state", rest); NEED(copy_tok(rest, r->physical_state, sizeof r->physical_state));
+    FIXED(L, "interaction NONE");
+    FIXED(L, "constraint SUM_HC_HS");
+    FIXED(L, "physical_state NULLSPACE_PROJECTION");
     KEYED(L, "reference_clock_label", rest);
     if (!valid_label(rest)) return AT0_CASE_PARSE_ERROR;
     strcpy(c->reference_clock_label, rest);
@@ -199,7 +199,7 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
         if (!split_list(tmp, items, 2, &n) || n != 2) return AT0_CASE_PARSE_ERROR;
         NEED(at0_crat_parse(items[0], &c->psi0[0])); NEED(at0_crat_parse(items[1], &c->psi0[1]));
     }
-    KEYED(L, "clock_povm", rest);     NEED(copy_tok(rest, r->clock_povm, sizeof r->clock_povm));
+    FIXED(L, "clock_povm COVARIANT_DISCRETE");
     KEYED(L, "povm_tau_turns", rest); NEED(at0_rat_parse(rest, &c->povm_tau_turns));
     KEYED(L, "povm_weight", rest);    NEED(at0_rat_parse(rest, &c->povm_weight));
     KEYED(L, "clock_label_count", rest); SMALL_INT(rest, &r->label_count);
@@ -216,7 +216,7 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
         if (!valid_label(sp + 1)) return AT0_CASE_PARSE_ERROR;
         if (k < AT0_LABEL_MAX) strcpy(c->labels[k], sp + 1);
     }
-    KEYED(L, "observables", rest);    NEED(copy_tok(rest, r->observables, sizeof r->observables));
+    FIXED(L, "observables PAULI_X,PAULI_Y,PAULI_Z");
     FIXED(L, "end semantic");
     FIXED(L, "begin acceptance");
     KEYED(L, "control_kind", rest);
@@ -273,14 +273,7 @@ static at0_status check_parameters(at0_case *c, const raw_t *r)
     if (!at0_scaled_in_limits(c->tol_constraint_residual) || !at0_scaled_in_limits(c->tol_povm_residual) ||
         !at0_scaled_in_limits(c->tol_probability) || !at0_scaled_in_limits(c->tol_zero_probability) ||
         !at0_scaled_in_limits(c->tol_schrodinger)) return AT0_CASE_INVALID_PARAMETER;
-    if (strcmp(r->model_family, "PAGE_WOOTTERS_FINITE_IDEAL") != 0) return AT0_CASE_INVALID_PARAMETER;
-    if (strcmp(r->energy_unit, "DIMENSIONLESS_HBAR_1") != 0) return AT0_CASE_INVALID_PARAMETER;
-    if (strcmp(r->system_dim, "2") != 0) return AT0_CASE_INVALID_PARAMETER;
-    if (strcmp(r->interaction, "NONE") != 0) return AT0_CASE_INVALID_PARAMETER;
-    if (strcmp(r->constraint, "SUM_HC_HS") != 0) return AT0_CASE_INVALID_PARAMETER;
-    if (strcmp(r->physical_state, "NULLSPACE_PROJECTION") != 0) return AT0_CASE_INVALID_PARAMETER;
-    if (strcmp(r->clock_povm, "COVARIANT_DISCRETE") != 0) return AT0_CASE_INVALID_PARAMETER;
-    if (strcmp(r->observables, "PAULI_X,PAULI_Y,PAULI_Z") != 0) return AT0_CASE_INVALID_PARAMETER;
+    /* the eight fixed literals of section 1 are judged in the shape pass (parse_shape) */
     if (r->clock_dim < AT0_CLOCK_DIM_MIN || r->clock_dim > AT0_CLOCK_DIM_MAX) return AT0_CASE_INVALID_PARAMETER;
     c->clock_dim = (int)r->clock_dim;
     for (int j = 1; j < c->clock_dim; j++)
