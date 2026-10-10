@@ -1,0 +1,11 @@
+source_repo aien-dev/omega
+source_commit 18e1786251cfa3989a61919ba7dcb0b0f4d4db36
+source_tree_clean YES
+contract_commit cbe4c8ed88d28bb96d5209327ecd30aa9cddaf7a
+engine_sha256 c1876340a6ea9a302cd6036ef6c04b2f1aa2f281dd2c5f850653a9a938a0d4e6
+oracle_repo aien-dev/omega
+oracle_commit 18e1786251cfa3989a61919ba7dcb0b0f4d4db36
+oracle_sha256 913f2065fac104ad93c1fb2e819e8406f69f6e0b19ebd5c083d2ce1edf5e290a
+build_cc cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0 (engine); rustc 1.98.1 (48a229cea 2026-09-01) (oracle)
+build_flags engine: -std=c11 -O2 -ffp-contract=off -Wall -Wextra -Werror -pedantic -lm; oracle: rustc --edition 2021 -C opt-level=2 -C codegen-units=1 -C debuginfo=0 -C panic=abort -D warnings
+host spark-b87b Linux 7.0.0-1019-nvidia aarch64

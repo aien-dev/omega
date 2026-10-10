@@ -1,0 +1,4 @@
+model (model/Makefile CFLAGS, LDLIBS -lm): -std=c11 -O2 -ffp-contract=off -Wall -Wextra -Werror -pedantic
+oracle (oracle/build.sh): rustc --edition 2021 -C opt-level=2 -C codegen-units=1 -C debuginfo=0 -C panic=abort -D warnings --crate-name at1_oracle src/main.rs
+evaluator (evaluator/Makefile): rustc --edition 2021 -O src/main.rs
+integration objects for G2 (this runner): cc -std=c11 -O2 -ffp-contract=off -Wall -Wextra -Werror -pedantic -c
