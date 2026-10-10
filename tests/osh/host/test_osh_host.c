@@ -768,15 +768,74 @@ static void test_printf(void)
     printf_case(&t, "%s", "x", "y", "z", NULL, NULL, NULL);
     printf_case(&t, "100%%\n", NULL, NULL, NULL, NULL, NULL, NULL);
     printf_case(&t, "\\0101\n", NULL, NULL, NULL, NULL, NULL, NULL);
-    /* outside the documented subset: refused, nothing written, status 1 */
+    /* widths, flags, precision, * from arguments, length modifiers, floats, %b and %q, measured against bash 5.2.21
+     * (#344 RISK-4). bash pads %s with spaces even under the 0 flag. */
     OshResult r;
     t_clear(&t);
     OshBuilder *b = nb(0, 0);
-    cmd(b, OSH_B_PRINTF, "printf", "%5d\n", "3", NULL);
-    CHECK(go(&t, b, &r) == 1, "width refused");
+    cmd(b, OSH_B_PRINTF, "printf", "[%5d][%-4s][%.2s][%05d][%+d][% d][%#x][%#o][%*d][%.*s][%05s][%X][%ld %lld %hd]\n",
+        "3", "ab", "xyz", "42", "7", "7", "255", "8", "4", "9", "2", "hello", "cd", "255", "1", "2", "3", NULL);
+    CHECK(go(&t, b, &r) == 0, "widths status");
     char *o = t_out(&t);
-    CHECK(o[0] == 0, "nothing printed on refusal, got '%s'", o);
+    CHECK(strcmp(o, "[    3][ab  ][xy][00042][+7][ 7][0xff][010][   9][he][   cd][FF][1 2 3]\n") == 0, "widths/flags/precision as bash, got '%s'", o);
     free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_PRINTF, "printf", "%5.2f|%e|%g|%08.3f|%G|%.0d|%+.2d|%5c|%-3c|\n", "3.14159", "2.5", "0.0001", "3.14159", "4", "0", "3", "x", "y", NULL);
+    CHECK(go(&t, b, &r) == 0, "floats status");
+    o = t_out(&t);
+    CHECK(strcmp(o, " 3.14|2.500000e+00|0.0001|0003.142|4||+03|    x|y  |\n") == 0, "floats and char widths as bash, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_PRINTF, "printf", "%b|%5.3b|%-4b|%b|%b\n", "a\\tb\\0101\\x41\\u00e9", "abcdef", "xy", "\\e\\E", "\\q\\\\", NULL);
+    CHECK(go(&t, b, &r) == 0, "%%b status");
+    o = t_out(&t);
+    CHECK(strcmp(o, "a\tbAA\xc3\xa9|  abc|xy  |\033\033|\\q\\\n") == 0, "%%b escapes, width and precision as bash, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_PRINTF, "printf", "a%bz\n", "x\\cy", NULL);
+    CHECK(go(&t, b, &r) == 0, "%%b \\c status");
+    o = t_out(&t);
+    CHECK(strcmp(o, "ax") == 0, "%%b \\c stops all output, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_PRINTF, "printf", "%q|%q|%q|%q|%q|%q|%q\n", "a b", "it's", "", "#x~", "a\tb", "x#y,z{w}", "~p", NULL);
+    CHECK(go(&t, b, &r) == 0, "%%q status");
+    o = t_out(&t);
+    CHECK(strcmp(o, "a\\ b|it\\'s|''|\\#x~|$'a\\tb'|x#y\\,z\\{w\\}|\\~p\n") == 0, "%%q quotes as bash, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_PRINTF, "printf", "%*d|\n", "x", "5", NULL); /* bad * width: diagnostic, width 0, status 1 */
+    CHECK(go(&t, b, &r) == 1, "bad * width status 1");
+    o = t_out(&t);
+    char *e = t_err(&t);
+    CHECK(strcmp(o, "5|\n") == 0 && strstr(e, "invalid number"), "bad * width prints with width 0, got '%s' / '%s'", o, e);
+    free(o);
+    free(e);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_PRINTF, "printf", "%5%\n", NULL); /* bash: `%': invalid format character */
+    CHECK(go(&t, b, &r) == 1, "%%5%% refused");
+    o = t_out(&t);
+    e = t_err(&t);
+    CHECK(o[0] == 0 && strstr(e, "`%': invalid format character"), "%%5%% nothing printed, bash's diagnostic, got '%s' / '%s'", o, e);
+    free(o);
+    free(e);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_PRINTF, "printf", "%5", "x", NULL);
+    CHECK(go(&t, b, &r) == 1, "%%5 at the end refused");
+    e = t_err(&t);
+    CHECK(strstr(e, "missing format character") != NULL, "%%5 at the end: bash's diagnostic, got '%s'", e);
+    free(e);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_PRINTF, "printf", "%2000000d\n", "1", NULL); /* osh limit, documented in the builtin header */
+    CHECK(go(&t, b, &r) == 1, "absurd width refused");
     t_clear(&t);
     b = nb(0, 0);
     cmd(b, OSH_B_PRINTF, "printf", "a\\qb\n", NULL);
@@ -1874,18 +1933,6 @@ static const PfRow k_pf_same[] = {
     {"%s", "-", NULL, NULL},
     {"\\a\\b\\f\\r\\v", NULL, NULL, NULL},
     {"\\q\\z\\n", NULL, NULL, NULL},
-};
-
-/* REFUSE: outside the documented subset or malformed. The builtin refuses BEFORE printing anything and returns 1;
- * /usr/bin/printf prints what precedes the bad conversion, then fails (also 1). Intentional difference. */
-static const PfRow k_pf_refuse[] = {
-    {"%q\\n", "5", NULL, NULL},
-    {"ab%q", "5", NULL, NULL},
-    {"%s%q\\n", "x", "y", NULL},
-    {"%", NULL, NULL, NULL},
-    {"a%", "x", NULL, NULL},
-    {"%\\n", NULL, NULL, NULL},
-    {"\\%%\\n", NULL, NULL, NULL},
     {"%5d\\n", "3", NULL, NULL},
     {"%-3s|\\n", "a", NULL, NULL},
     {"%.2s\\n", "abc", NULL, NULL},
@@ -1893,6 +1940,22 @@ static const PfRow k_pf_refuse[] = {
     {"%X\\n", "255", NULL, NULL},
     {"%b\\n", "a", NULL, NULL},
     {"%e\\n", "1", NULL, NULL},
+    {"%q\\n", "5", NULL, NULL},
+    {"ab%q", "5", NULL, NULL},
+    {"%s%q\\n", "x", "y", NULL},
+    {"%5.2f|%-6s|%+.3d|%08.3f\\n", "3.14159", "ab", "5"},
+    {"%b|%b\\n", "a\\tb\\0101", "x\\\\y", NULL},
+    {"%*d|%-*d|\\n", "3", "7", "2"},
+    {"%#x %#o % d\\n", "255", "8", "4"},
+};
+
+/* REFUSE: outside the documented subset or malformed. The builtin refuses BEFORE printing anything and returns 1;
+ * /usr/bin/printf prints what precedes the bad conversion, then fails (also 1). Intentional difference. */
+static const PfRow k_pf_refuse[] = {
+    {"%", NULL, NULL, NULL},
+    {"a%", "x", NULL, NULL},
+    {"%\\n", NULL, NULL, NULL},
+    {"\\%%\\n", NULL, NULL, NULL},
     {"%s %z\\n", "a", NULL, NULL},
 };
 
