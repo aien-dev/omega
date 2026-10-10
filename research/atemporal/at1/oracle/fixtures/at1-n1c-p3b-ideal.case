@@ -1,0 +1,44 @@
+OMEGA-AT1-CASE v1
+domain omega.at1.case.v1
+contract AT1_CASE_V1
+case_name at1-n1c-p3b-ideal
+begin semantic
+model_family PAGE_WOOTTERS_FINITE_CLOCKDIAG
+energy_unit DIMENSIONLESS_HBAR_1
+clock_dim 3
+clock_energies -1/2,0/1,1/2
+system_dim 2
+system_hamiltonian_pauli 0/1,0/1,0/1,1/2
+interaction CLOCK_DIAGONAL_PAULI
+interaction_pauli 0 0/1,0/1,0/1
+interaction_pauli 1 0/1,0/1,-1/2
+interaction_pauli 2 3/10,0/1,-1/10
+constraint SUM_HC_HS_V
+physical_state NULLSPACE_PROJECTION
+reference_clock_label t0
+reference_system_state (1/1;0/1),(0/1;1/1)
+clock_povm COVARIANT_DISCRETE
+povm_tau_turns 1/2
+povm_weight 3/4
+clock_label_count 4
+clock_label 0 t0
+clock_label 1 t1
+clock_label 2 t2
+clock_label 3 t3
+observables PAULI_X,PAULI_Y,PAULI_Z
+end semantic
+begin acceptance
+control_kind NEGATIVE
+prediction_target IDEAL
+expected_outcome FAIL
+expected_failure_codes SCHRODINGER_DEVIATION_EXCEEDED
+min_bound_kind ESTIMATED
+tol_constraint_residual 1@12
+tol_povm_residual 1@12
+tol_probability 1@12
+tol_zero_probability 1@9
+tol_schrodinger 1@12
+end acceptance
+case_id 4790c019ffa88f5e67d632f4a1f95dc30ac3abd3aa98b041e8c98f4778837fb5
+acceptance_id e1923453902b4834198b0f513e1476a122f6327c38fc072e8f0d4b5078a263d1
+end
