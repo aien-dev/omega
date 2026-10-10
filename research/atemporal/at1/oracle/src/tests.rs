@@ -540,12 +540,16 @@ fn oracle_record_marking_is_enforced() {
 
 #[test]
 fn bound_tokens_never_round_down() {
-    for b in [1e-13, 3.3e-16, 2.5e-14, 1.0e-20, 7.77e-17, 0.5, 1.0] {
+    for b in [1e-13, 3.3e-16, 2.5e-14, 1.0e-20, 7.77e-17, 0.5, 1.0, 1e18, 3.7e25, 1e300, f64::MAX] {
         let tok = bound_token(b);
         let exact = bound_exact(&tok).unwrap();
         assert!(exact >= Q::from_f64(b).unwrap(), "{} -> {}", b, tok);
     }
     assert_eq!(bound_token(0.0), "0@0");
+    // non-finite estimates are written as the largest binary64, never below a finite value
+    for b in [f64::INFINITY, f64::NAN] {
+        assert!(bound_exact(&bound_token(b)).unwrap() >= Q::from_f64(f64::MAX).unwrap());
+    }
     assert_eq!(value_exact("f64:3fd0000000000000").unwrap(), Some(q(1, 4)));
     assert_eq!(value_exact("undefined").unwrap(), None);
     assert!(value_exact("f64:3FD0000000000000").is_err());

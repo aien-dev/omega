@@ -72,7 +72,10 @@ pub fn bound_token(b: f64) -> String {
     if b == 0.0 {
         return "0@0".to_string();
     }
-    let q = if b.is_finite() && b > 0.0 && b < 1e18 { Q::from_f64(b).expect("finite") } else { Q::int(1_000_000_000_000_000_000) };
+    // exact for every finite positive bound (no clip: a clipped bound would be written below
+    // the estimate, confirmation review); a non-finite or negative estimate is written as
+    // the largest binary64, which no finite residual can exceed by more than it
+    let q = if b.is_finite() && b > 0.0 { Q::from_f64(b).expect("finite") } else { Q::from_f64(f64::MAX).expect("finite") };
     let e20 = Nat::from_decimal("100000000000000000000");
     let (mut n, r) = q.num.mag.mul(&e20).divrem(&q.den);
     if !r.is_zero() {

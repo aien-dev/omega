@@ -104,6 +104,8 @@ fn emit(args: &[String]) -> i32 {
     // runs from and never claims a clean tree
     let (commit, clean) = match (option_env!("AT1_SOURCE_COMMIT"), option_env!("AT1_SOURCE_CLEAN")) {
         (Some(c), Some(k)) if c.len() == 40 => (Some(c.to_string()), k == "YES"),
+        // built by build.sh outside a git checkout: no commit to name (all zeros, NO)
+        (Some(_), Some(_)) => (None, false),
         _ => (git(&["rev-parse", "HEAD"]), false),
     };
     let exe = exe_sha256();

@@ -66,7 +66,8 @@ they actually have.
 
 Bounds are written as scaled decimals at the twentieth decimal place, rounded up and then
 increased by one further unit (`bound_token`), so the written bound is never smaller than
-the float estimate. A unit test checks this on exact rationals.
+the float estimate. The rounding is exact big-integer arithmetic on the exact binary value of the
+estimate, with no upper clip; a non-finite estimate is written as the largest binary64. A unit test checks this on exact rationals.
 
 ## Measured (fixtures, rustc 1.98.1 and 1.97.1, aarch64-unknown-linux-gnu, glibc libm)
 

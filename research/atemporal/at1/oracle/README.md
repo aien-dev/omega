@@ -105,7 +105,8 @@ records in the binary `rustc -V`, the host triple and the flag string (the sourc
 `build_cc` and `build_flags`), and the source state at build time: `git rev-parse HEAD` and
 whether `git status --porcelain -- .` was empty in this directory (the source of
 `source_commit`, `oracle_commit` and `source_tree_clean`). A binary built without `build.sh`
-falls back to the checkout it runs from and always writes `source_tree_clean NO`. `host` is
+falls back to the checkout it runs from, one built by `build.sh` outside a git checkout
+writes all-zero commits, and both always write `source_tree_clean NO`. `host` is
 the host name, then `sw_vers` product name and version when present (macOS), then
 `uname -srm`, so a replication record names the machine and the OS. Every digest is computed in Rust; no script calls
 `sha256sum` or `shasum`. No Makefile and no toolchain pin file are shipped, so `rustup`
