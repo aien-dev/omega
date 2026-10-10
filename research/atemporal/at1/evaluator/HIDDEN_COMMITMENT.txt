@@ -1,0 +1,14 @@
+# AT-1 Agent 4 hidden qualification set: commitment only. The seed and the case files are withheld.
+# commitment = SHA-256 of the manifest bytes; manifest = one line per .case file,
+# "<sha256 of the file bytes><two spaces><file name>", sorted bytewise by name, LF-terminated
+# (the AT1_SPEC 12.3 item 3 procedure; this is Agent 4's set, separate from Agent 7's).
+# Generator: `at1-eval hidden-gen <seed> <dir>` (src/hidden.rs, public), 27 AT1_CASE_V1 files H01.case..H27.case,
+# family = index mod 9 over the AT1_SPEC 13.1 item 7 families (F0..F8 in src/hidden.rs), Pythagorean axes,
+# quarter-turn phases, every draw kept only if it meets the AT1_SPEC 8.3 margin rule. 12 POSITIVE, 15 NEGATIVE.
+# Seed: 256 bits from /dev/urandom, kept with the files on the Spark under ~/at1-private/agent4/, outside every repository.
+# Reveal (after the candidate freeze): place the files in a directory with no MANIFEST.tsv and run
+#   sh run.sh '<engine>' '<oracle>' cases build/qualify <hidden-dir>
+# run.sh recomputes the commitment, refuses on a mismatch, then qualifies the hidden cases.
+# A digest proves identity of the files later revealed; it does not prove non-access (same account, same host).
+count 27
+commitment 91ad47bfb3d411268f64523dace7eef03a5b8915ee2df821ffa1822701745c38

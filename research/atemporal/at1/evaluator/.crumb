@@ -1,0 +1,19 @@
+{
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-10T03:18:12Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:e7822ba0ba52d08e727eab878485e3141994c5933aabcf3014d77baea6ac936f",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 125,
+      "generated_at_commit": "043552e54f797a60f567937d9365298c4f4d13ce",
+      "source_tree": "sha256:2e4bdd33122856e5ebc891e0ab1624068b89c0bc39cb4467a38e3516028fe570"
+    }
+  },
+  "name": "evaluator",
+  "purpose": "AT-1 Agent 4 adversarial evaluator: independent AT1_CASE_V1 codec, exact-arithmetic AT1_RESULT_V1 / AT0_RESULT_V2 verifier with exact shadow model, runner splice, 95-file public corpus (12 positive, 12 negative, 71 refusals), mutant kill receipt, isolation gate with controls, 27-case hidden-set commitment, qualification harness (run.sh)",
+  "schema_version": "1.0.0"
+}
