@@ -9,8 +9,8 @@
           "purpose": "end-to-end tests of the osh program: argprint helper plus a runner comparing native and OSH_INTE"
         },
         {
-          "digest": "8cafcafd34533ed60a6372202a13b33e562488f7c39a92e9a6739888dda2ecb2",
-          "last_commit": "c232f147",
+          "digest": "4e96eafa5d50a39c3bab64ba958c0f72df2172644e5bb022a1e43409dc36a149",
+          "last_commit": "1e8614cc",
           "name": "host",
           "purpose": "tests for the osh Linux host adapter execution service (hand-built request records, helper-mode "
         },
@@ -21,15 +21,15 @@
           "purpose": "Core-only step traces of the osh shell units over fixture scripts (OSH-AIENOS-0 differential fix"
         }
       ],
-      "children_root": "sha256:5c1280781d81ea21dd8624affb5a98559ef526f34e8b2e3408de11457d5e3364",
-      "compiled_at": "2026-10-10T07:03:49Z",
+      "children_root": "sha256:ff0187ef47106b27e7a54d87c9b5a643faddd20c5733f8c052e96712f973fa01",
+      "compiled_at": "2026-10-10T07:24:11Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:cfe2153fbe174096ed94d42ab23fe87a7a0587913166d0ea3fe8636c26f6aaa3",
+      "digest": "sha256:15237aba0370ba7eb3befdb23addbcf9ecfbd47f7d7e4a518eadb0ebda39f33a",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 93,
-      "generated_at_commit": "c232f14719faa20164d737af494a368061866e83",
-      "source_tree": "sha256:627213beac2cb555eff2b8555b6cdefa8f1c7146ac399c7b6210230de3b1dc82"
+      "generated_at_commit": "1e8614cc3a570e6e626400147489f669d5fba455",
+      "source_tree": "sha256:abfe52976d5e38390e59d12e50b30be34c8deeba14bfa31bf7c60dfb47be8e42"
     }
   },
   "name": "osh-tests",
