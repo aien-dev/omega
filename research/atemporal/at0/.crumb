@@ -4,7 +4,7 @@
       "children": [
         {
           "digest": "7095b71ea2f1ecd9bbb9e8be207e4e6311eeb7f701f5b631575dcbcdb8075881",
-          "last_commit": "39c3503",
+          "last_commit": "f0bac17",
           "name": "evaluator",
           "purpose": "Agent 4 independent adversarial evaluator for AT-0: independent AT0_CASE_V1 codec, exact-arithme"
         },
@@ -21,21 +21,21 @@
           "purpose": "Agent 3 candidate relational quantum engine in portable C11: state, Hamiltonians, constraint ker"
         },
         {
-          "digest": "f210d0c620bca32c38a0a62c888bd82cdc020e8da40269b050199dcc34a886be",
-          "last_commit": "f08faa4",
+          "digest": "24340ae691dce9743ee4d3eedf80ae0d362dd707cac0b6bae6ebbb562dafcf39",
+          "last_commit": "9b74392",
           "name": "oracle",
           "purpose": "AT-0 reference oracle (Rust, standard library only, built by rustc directly; research cross-chec"
         }
       ],
-      "children_root": "sha256:15245bbd2fc936ede92056d8f36379ff65af928ffda2f8ca324849ce45d1c704",
-      "compiled_at": "2026-10-10T00:09:03Z",
+      "children_root": "sha256:a16b37c4005002d52fd7ff41d8e6a5019cff9e7aaf3ddbd7bd9952691d12309d",
+      "compiled_at": "2026-10-10T00:12:06Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:257419dd786e25e4a7ee16a0f5c2d6201ae949fa5b181baf5937f89019a7108a",
+      "digest": "sha256:667ee4f01ea105c463161bb9243e4faee93ac3d6c73f1b92069889b3aa952493",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 168,
-      "generated_at_commit": "39c350332866605ee01491c70580b54b07ef8b45",
-      "source_tree": "sha256:ab99529f9f0913fb6def248129e2b6b2d7471c0a04750d979707f085930cb94b"
+      "files": 170,
+      "generated_at_commit": "9b74392c8a09ff50c9e1056a958bbee8f817dedd",
+      "source_tree": "sha256:990af2160e9e208d534cd7b5db391813ab51218da6839d32eb598947c35d53fe"
     }
   },
   "name": "at0",

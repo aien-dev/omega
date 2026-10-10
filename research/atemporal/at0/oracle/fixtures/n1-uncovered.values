@@ -66,7 +66,7 @@ check physical_state_nontrivial FAIL
 check constraint_residual NOT_EVALUATED
 check povm_normalization PASS
 check clock_probability_sum NOT_EVALUATED
-check probability_range PASS
+check probability_range NOT_EVALUATED
 check pauli_pair_sum NOT_EVALUATED
 check conditional_defined NOT_EVALUATED
 check schrodinger_agreement NOT_EVALUATED
@@ -75,4 +75,4 @@ failure_codes TRIVIAL_PHYSICAL_STATE
 error_code none
 expectation_met YES
 end verdict
-verdict_id 9d5d757ce34242b8b737ebaf11aea8d592671f8b3e7ac60c58f4727b7fb75f71
+verdict_id a5cbe130af7e2b1c81cd356e866286f9fa15cdbd124b783dc0bee182d3965ab8

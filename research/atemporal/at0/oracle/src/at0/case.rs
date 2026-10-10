@@ -5,7 +5,11 @@
 use super::rational::Rat;
 use super::sha256::{sha256_hex, tagged_hex};
 
-pub const CONTRACT_COMMIT: &str = "044c9d11256d8642f80eedd42cbae8763faf63f5";
+/// Freeze commit written as `contract_commit`: AT0_FREEZE lists AT0_RESULT_V2 and marks V1
+/// superseded (aien-architecture#181). AT0_CASE_V1 itself was frozen earlier at
+/// `CASE_CONTRACT_COMMIT` and is unchanged since.
+pub const CONTRACT_COMMIT: &str = "fe86e43aae63370b3084f78e971a33b81ce75a9d";
+pub const CASE_CONTRACT_COMMIT: &str = "044c9d11256d8642f80eedd42cbae8763faf63f5";
 pub const CASE_DOMAIN: &str = "omega.at0.case.v1";
 pub const ACCEPTANCE_DOMAIN: &str = "omega.at0.acceptance.v1";
 pub const RATIONAL_LIMIT: i128 = 1_048_576;

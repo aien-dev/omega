@@ -29,11 +29,14 @@ directory share no source, no parser, no arithmetic and no build step.
   wrapper format of its own: the whole file is one `AT0_RESULT_V2` record. Any future
   wrapper line would be versioned here and would need Agent 5 re-review.
 
-Contracts: `AT0_CASE_V1` and `AT0_RESULT_V1/V2` frozen at `aien-architecture`
-`044c9d11256d8642f80eedd42cbae8763faf63f5` (`contract_commit` in every record). The
-hand-table tests also target the draft mathematical spec `AT0_SPEC` at
-`aien-architecture` pull request 176, commit `0efd1a14cbdf117bc694b556bb61d031cf80c8f9`
-(`SPEC_DRAFT_COMMIT` in `src/at0/mod.rs`); that draft is not merged and the tests say so.
+Contracts: `AT0_CASE_V1` frozen at `aien-architecture` `044c9d1` (`CASE_CONTRACT_COMMIT`),
+`AT0_RESULT_V2` added at `c7a7181` and recorded in `AT0_FREEZE` at
+`fe86e43aae63370b3084f78e971a33b81ce75a9d`, which is the `contract_commit` every record
+writes (`CONTRACT_COMMIT`; Agent 5 finding D7, evaluator allowlist). The hand-table tests
+and the `spec-*` fixtures target the mathematical contract `AT0_SPEC.md`, merged as
+`68f47e26764a9f0b46d91194bf073824d04333bb` (`SPEC_COMMIT` in `src/at0/mod.rs`; Agent 5
+finding D8). Re-verified against that commit on 2026-10-09: section 13.2 P1 and P1c, and
+13.3 N1 to N5 agree with the fixtures below, and 13.2 P2 was added as a fixture.
 
 ## Layout
 
@@ -43,7 +46,7 @@ isolation.sh        symbol-isolation gate for the compute crate (source rule + n
 rust-toolchain.toml rustc 1.98.1 pin (informational; build.sh records the real version)
 src/main.rs         the only file that touches files, git, the process table or the wall clock;
                     CLI (emit | fixtures | check) and the test suite
-src/at0/mod.rs      compute crate root; SPEC_DRAFT_COMMIT
+src/at0/mod.rs      compute crate root; SPEC_COMMIT
 src/at0/rational.rs i128 rationals (exact spectrum, kernel pairs, identities)
 src/at0/sha256.rs   own SHA-256 (case_id, acceptance_id, verdict_id, evidence_digest)
 src/at0/exact.rs    fixed-point big integers: exact comparison of f64 tokens with scaled decimals
@@ -52,7 +55,7 @@ src/at0/case.rs     AT0_CASE_V1 parser/validator in contract order, case builder
 src/at0/matrix_path.rs  H_C, H_S, H_total, kernel projector, Psi, POVM, conditioning, rho_k, Pauli
 src/at0/reference.rs    analytic paths: Schrodinger closed form and Bloch/Rodrigues rotation
 src/at0/result.rs   values block, exact judge, verdict block, AT0_RESULT_V2 writer and values parser
-src/at0/fixtures.rs the 21 calibration fixtures and their hand-derived expectations
+src/at0/fixtures.rs the 22 calibration fixtures and their hand-derived expectations
 fixtures/           <name>.case, <name>.values, CALIBRATION.md (all generated, deterministic)
 NUMERICAL_ERROR.md  stated bounds, measured errors, limitations
 ```
@@ -95,7 +98,7 @@ library links itself.
 ./isolation.sh                     # ISOLATION PASS expected
 target/at0-oracle check   <case>   # validate; prints case_id, acceptance_id, file sha256
 target/at0-oracle emit    <case> [--dephased] [-o out]   # AT0_RESULT_V2 record
-target/at0-oracle fixtures <dir>   # regenerate fixtures/ (43 files)
+target/at0-oracle fixtures <dir>   # regenerate fixtures/ (45 files)
 ```
 
 A refused case prints exactly `AT0_CASE_REFUSED <code>` on stderr, writes nothing and exits
@@ -127,7 +130,10 @@ agree on `verdict_id` and differ in `evidence_digest` (tested).
   threads, network or randomness. `isolation.sh` enforces this in three steps: a source rule
   (grep for the forbidden facilities), an object rule (`nm -u` on the compute rlib for
   `clock_gettime`, `getrandom`, `pthread_create`, `socket`, `open64`, `getenv`, ... ), and a
-  negative control that plants a clock read in a copy and checks it is caught.
+  negative control that plants a `std::time` read in a copy and checks that the source rule
+  and the object rule each catch it on their own. The object rule bans two symbol families:
+  libc entry points and mangled Rust std paths (`3std4time`, `3std2fs`, ...), because a
+  `std::time` call leaves no libc symbol in the rlib (Agent 5 finding D5).
 - Exact judging: every check compares the written `f64:` token, converted exactly, against
   the exact scaled-decimal tolerance. No float comparison decides a verdict.
 
@@ -148,7 +154,7 @@ plus unit tests for SHA-256 (FIPS vectors), rationals, complex algebra and exact
 
 ## Fixtures and how their expectations were derived
 
-`fixtures/` holds 21 cases, their `.values` (values block, verdict block, `verdict_id`) and
+`fixtures/` holds 22 cases, their `.values` (values block, verdict block, `verdict_id`) and
 `CALIBRATION.md`. All of it is written by `target/at0-oracle fixtures fixtures/` with no
 wall clock, so re-running it reproduces the files byte for byte. The `.case` files are
 identical to the ones first published on this branch (checked with `cmp`).
@@ -167,6 +173,11 @@ Expectations are hand-derived exact rationals, not numbers copied from a run:
   `w = 1/2`): the spec's own table; `hz = -1/2` flips the sign of `sin`, so
   `P(Y+) = (1 - sin theta)/2`. T4 (`psi_0 = |0>`): `P(Z+) = 1`, X and Y `1/2` at every label.
   T5 (`psi_0 = (1, i)`): the table shifted one label backwards, i.e. `theta -> theta - pi/2`.
+- Spec section 13.2 P2 (`spec-p2-tilted-h0`: `h0 = 1/10`, `h = (3/10, 0, 2/5)`, clock
+  `E = -3/5, 2/5`, `psi_0 = |0>`, `w = 1/2`): the Bloch vector `(0, 0, 1)` rotated about
+  `n = (3/5, 0, 4/5)` by `k pi / 2` gives `(12/25, -3/5, 16/25)`, `(24/25, 0, 7/25)`,
+  `(12/25, 3/5, 16/25)`, so `P(X+) = 1/2, 37/50, 49/50, 37/50`, `P(Y+) = 1/2, 1/5, 1/2, 4/5`,
+  `P(Z+) = 1, 41/50, 16/25, 41/50`, `p(k) = 1/4`. Fully rational, so all 16 values are checked.
 - Negative controls carry no rational expectations; their expectation is the failure code
   set declared in the case's own acceptance block, and `expectation_met YES` means the
   oracle produced exactly those codes.
@@ -183,7 +194,11 @@ deviation seen; the worst is `2.2e-16` (one unit in the last place of `1/2`).
    closed form and the matrix path agree, so any disagreement with another implementation is
    a convention error, not numerics.
 3. The relational phase `(1, i)` shifts the pattern one label backwards, not forwards.
-4. Dephasing the kernel branches keeps `p(k) = 1/N` and Hermitian unit-trace `rho_k` but
+4. On a trivial kernel (fixture `n1-uncovered`) V2 section 4 fixes check 3 `FAIL` and checks
+   4, 6, 7, 8, 9, 10 `NOT_EVALUATED` even though the `reference` lines are still written;
+   the first release of this oracle evaluated check 7 on those lines (Agent 5 finding D4),
+   fixed and tested since.
+5. Dephasing the kernel branches keeps `p(k) = 1/N` and Hermitian unit-trace `rho_k` but
    flattens every X and Y probability to `1/2`: the clock correlation survives, the
    interference pattern does not. This is the `nc-dephased-control` fixture.
 

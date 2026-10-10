@@ -3,21 +3,21 @@
     "generated": {
       "children": [
         {
-          "digest": "34e48910c68fa6e767c6f054b865af1be8ab4482f42baec5de00561f31a5ed20",
-          "last_commit": "9e10d61",
+          "digest": "e8ffe146a962a5f83ae451493137edeb61aa801e5db79ba6494e36148317dabf",
+          "last_commit": "13b5a12",
           "name": "fixtures",
           "purpose": "Deterministic AT-0 oracle calibration fixtures: case files, computed values/verdict blocks, CALI"
         }
       ],
-      "children_root": "sha256:8b48d10c3058cfc94212b896439d5b49c787a861767ee556a7cb06f0d48310b7",
-      "compiled_at": "2026-10-09T22:54:25Z",
+      "children_root": "sha256:d1b049cf56079c332a7ff86f09e30225dfa91e01bbf6e598e481d521d9b72977",
+      "compiled_at": "2026-10-10T00:12:06Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:f210d0c620bca32c38a0a62c888bd82cdc020e8da40269b050199dcc34a886be",
+      "digest": "sha256:24340ae691dce9743ee4d3eedf80ae0d362dd707cac0b6bae6ebbb562dafcf39",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 60,
-      "generated_at_commit": "98624882f542a3ad77b6edbd5e431af08fb4b625",
-      "source_tree": "sha256:16344701b9d010aec27afacd8ac78f4f911077eb483f1831d8dba79b42c78411"
+      "files": 62,
+      "generated_at_commit": "9b74392c8a09ff50c9e1056a958bbee8f817dedd",
+      "source_tree": "sha256:18bf6d7f84db029544f90befe6321628d9525f06f67825889076a0033e2a9f44"
     }
   },
   "name": "oracle",

@@ -13,6 +13,7 @@ pub mod reference;
 pub mod result;
 pub mod sha256;
 
-/// Draft mathematical contract the hand-table tests target (aien-architecture
-/// pull request 176, not merged): re-check when it merges.
-pub const SPEC_DRAFT_COMMIT: &str = "0efd1a14cbdf117bc694b556bb61d031cf80c8f9";
+/// Mathematical contract AT0_SPEC.md the hand-table tests and the spec-* fixtures target:
+/// aien-architecture pull request 176, merged as this squash commit. Section 13 of it
+/// holds the hand-derived tables; re-verified against this commit on 2026-10-09.
+pub const SPEC_COMMIT: &str = "68f47e26764a9f0b46d91194bf073824d04333bb";
