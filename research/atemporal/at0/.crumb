@@ -9,14 +9,14 @@
           "purpose": "Agent 4 independent adversarial evaluator for AT-0: independent AT0_CASE_V1 codec, exact-arithme"
         },
         {
-          "digest": "d2b983f44cc5a729702d696b262ed45db193f7d02f0b59375ada9b92721fcb03",
-          "last_commit": "7843a74",
+          "digest": "554ae9523d982995a398c5d1a6d3c2cbddcf3d8101339b8be38a27872c07f87a",
+          "last_commit": "6544622",
           "name": "integration",
           "purpose": "AT-0 Agent 5 integration runner, exact result assembler/judge, hygiene and isolation controls, a"
         },
         {
           "digest": "ef28d16f103c0c1c4df8e35be927bd79020d2f22f6dc575e114fa64d6975bbc5",
-          "last_commit": "f21b4d5",
+          "last_commit": "ee29a2c",
           "name": "model",
           "purpose": "Agent 3 candidate relational quantum engine in portable C11: state, Hamiltonians, constraint ker"
         },
@@ -27,15 +27,15 @@
           "purpose": "AT-0 reference oracle (Rust, standard library only, built by rustc directly; research cross-chec"
         }
       ],
-      "children_root": "sha256:2ef6e2392fb23ac01a185b8c57db20ecd1beaadad91b8d23139970dfe7aea4a3",
-      "compiled_at": "2026-10-10T00:22:09Z",
+      "children_root": "sha256:ee5230f13656022c0fcb7288b9afad7235903bb73ee55f434e364c77aab0dfc8",
+      "compiled_at": "2026-10-10T00:35:14Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:550bb945815bfa004ba35bf67687b434869f7cb4d0ae6ba3f040bc3b1c617706",
+      "digest": "sha256:0fc2eb59ee87eca4edb56a3d46c177b11297a2843db24d68881253aa6fb20318",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "files": 172,
-      "generated_at_commit": "f21b4d55d4a8ae1fd32ce435126c83eb82ed3b1c",
-      "source_tree": "sha256:f9b67a6d4e68301b2afa28f8ff52857b1b51de7e3d7e326ea78b3a84531b9599"
+      "generated_at_commit": "65446224ac6ca84fe9de4bdfbbd32b2a9d9f55fe",
+      "source_tree": "sha256:f3e6932c40219b8dca450b77eb75e4656a04bc49a1ff35b91a685e94fbb7353d"
     }
   },
   "name": "at0",
