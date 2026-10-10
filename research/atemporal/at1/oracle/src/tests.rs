@@ -283,9 +283,19 @@ fn charter_readings_d_and_e_and_declared_token_readings() {
     assert_eq!(refused_fresh(&shape_late), "CASE_PARSE_ERROR");
     // declared readings (README): integer grammar -?[0-9]+, fixed arities, d < 1
     assert_eq!(refused_fresh(&edit(&t, "clock_dim 4", "clock_dim +4")), "CASE_PARSE_ERROR");
-    // declared reading: `clock_dim 0` cannot match a non-empty clock_energies line, so it is a
-    // count mismatch (shape, CASE_PARSE_ERROR) before the range rule N >= 2 is reached
+    // `clock_dim 0` against a non-empty clock_energies line is a count mismatch (shape)
     assert_eq!(refused_fresh(&edit(&t, "clock_dim 4", "clock_dim 0")), "CASE_PARSE_ERROR");
+    // X7 (Agent 0 ruling, omega#371 comment 6093816127): `none` is the empty list, so
+    // `clock_dim 0` + `clock_energies none` + no interaction_pauli lines passes the shape pass
+    // and the range rule 2 <= N <= 64 refuses it
+    {
+        let x7: String = edit(&edit(&t, "clock_dim 4", "clock_dim 0"), "clock_energies -3/2,-1/2,1/2,3/2", "clock_energies none")
+            .lines()
+            .filter(|l| !l.starts_with("interaction_pauli "))
+            .map(|l| format!("{}\n", l))
+            .collect();
+        assert_eq!(refused_fresh(&x7), "CASE_INVALID_PARAMETER", "X7 clock-dim-0-none");
+    }
     assert_eq!(refused_fresh(&edit(&t, "interaction_pauli 1 0/1,0/1,0/1", "interaction_pauli 1 0/1,0/1")), "CASE_PARSE_ERROR");
     assert_eq!(refused_fresh(&edit(&t, "system_hamiltonian_pauli 0/1,0/1,0/1,1/2", "system_hamiltonian_pauli 0/1,0/1,1/2")), "CASE_PARSE_ERROR");
     assert_eq!(refused_fresh(&edit(&t, "povm_weight 1/1", "povm_weight 1/0")), "CASE_NONCANONICAL");
