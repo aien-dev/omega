@@ -161,6 +161,7 @@ void osh_session_free(OshSession *s);
 const char *osh_var_get(const OshSession *s, const char *name);               /* NULL if unset */
 int osh_var_set(OshSession *s, const char *name, const char *value);          /* keeps export flag; 0 ok, -1 invalid/oom */
 int osh_var_export(OshSession *s, const char *name, const char *value_or_null);
+int osh_var_unexport(OshSession *s, const char *name);                        /* keeps the variable, drops the export mark */
 int osh_var_unset(OshSession *s, const char *name);
 int osh_name_valid(const char *s);
 char **osh_build_envp(const OshSession *s, const OshAssign *ov, int nov);     /* malloc'd, free with osh_envp_free */

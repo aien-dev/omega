@@ -328,11 +328,61 @@ static int cmp_var(const void *a, const void *b)
     return strcmp((*(const OshVar *const *)a)->name, (*(const OshVar *const *)b)->name);
 }
 
+/* `declare -x NAME="value"` quoting as bash 5.2 prints it: double quotes with \ before " \ $ `; when the value holds
+ * a control or non-ASCII byte, the $'...' form with \a \b \t \n \v \f \r \E, \\ \' and three-digit octal otherwise. */
+static void out_declare_value(Out *o, const char *v)
+{
+    int ansi = 0;
+    for (const unsigned char *q = (const unsigned char *)v; *q; q++)
+        if (*q < 0x20 || *q >= 0x7f) { ansi = 1; break; }
+    if (!ansi) {
+        out_bytes(o, "\"", 1);
+        for (const char *q = v; *q; q++) {
+            if (*q == '"' || *q == '\\' || *q == '$' || *q == '`') out_bytes(o, "\\", 1);
+            out_bytes(o, q, 1);
+        }
+        out_bytes(o, "\"", 1);
+        return;
+    }
+    out_bytes(o, "$'", 2);
+    for (const unsigned char *q = (const unsigned char *)v; *q; q++) {
+        const char *esc = NULL;
+        switch (*q) {
+        case '\a': esc = "\\a"; break; case '\b': esc = "\\b"; break; case '\t': esc = "\\t"; break;
+        case '\n': esc = "\\n"; break; case '\v': esc = "\\v"; break; case '\f': esc = "\\f"; break;
+        case '\r': esc = "\\r"; break; case 0x1b: esc = "\\E"; break;
+        case '\\': esc = "\\\\"; break; case '\'': esc = "\\'"; break;
+        }
+        if (esc) { out_bytes(o, esc, strlen(esc)); continue; }
+        if (*q < 0x20 || *q >= 0x7f) {
+            char oct[5];
+            snprintf(oct, sizeof oct, "\\%03o", *q);
+            out_bytes(o, oct, 4);
+            continue;
+        }
+        out_bytes(o, (const char *)q, 1);
+    }
+    out_bytes(o, "'", 1);
+}
+
+/* export [-fn] [name[=value] ...] | export -p   (bash 5.2 shape, #344 RISK-6)
+ * -p with no names lists `declare -x` lines sorted by name; -p with names is a plain export and prints nothing.
+ * -n assigns NAME=value if given, then drops the export mark but keeps the variable. -f names functions, which osh
+ * does not have, so every -f name is "not a function" (status 1). An unknown option is status 2 with the usage line. */
 static int bi_export(OshSession *s, const OshCmd *c, const int io[3])
 {
-    int i = 1, status = 0;
-    if (i < c->nargv && strcmp(c->argv[i], "--") == 0) i++;
-    if (i < c->nargv && strcmp(c->argv[i], "-p") == 0 && i + 1 == c->nargv) i++;
+    int i = 1, status = 0, unexport = 0, fn = 0;
+    for (; i < c->nargv && c->argv[i][0] == '-' && c->argv[i][1]; i++) {
+        if (strcmp(c->argv[i], "--") == 0) { i++; break; }
+        for (const char *p = c->argv[i] + 1; *p; p++) {
+            if (*p == 'n') unexport = 1;
+            else if (*p == 'f') fn = 1;
+            else if (*p != 'p') {
+                osh_diag(io[2], "export: -%c: invalid option\nexport: usage: export [-fn] [name[=value] ...] or export -p", *p);
+                return 2;
+            }
+        }
+    }
     if (i >= c->nargv) {
         const OshVar **v = malloc((s->nvars + 1) * sizeof *v);
         if (!v) return 1;
@@ -342,16 +392,9 @@ static int bi_export(OshSession *s, const OshCmd *c, const int io[3])
         qsort(v, n, sizeof *v, cmp_var);
         Out o = {.fd = io[1]};
         for (size_t k = 0; k < n; k++) {
-            out_bytes(&o, "export ", 7);
+            out_bytes(&o, "declare -x ", 11);
             out_bytes(&o, v[k]->name, strlen(v[k]->name));
-            if (v[k]->value) {
-                out_bytes(&o, "='", 2);
-                for (const char *q = v[k]->value; *q; q++) {
-                    if (*q == '\'') out_bytes(&o, "'\\''", 4);
-                    else out_bytes(&o, q, 1);
-                }
-                out_bytes(&o, "'", 1);
-            }
+            if (v[k]->value) { out_bytes(&o, "=", 1); out_declare_value(&o, v[k]->value); }
             out_bytes(&o, "\n", 1);
         }
         out_flush(&o);
@@ -362,11 +405,15 @@ static int bi_export(OshSession *s, const OshCmd *c, const int io[3])
         const char *a = c->argv[i], *eq = strchr(a, '=');
         char name[256];
         size_t nl = eq ? (size_t)(eq - a) : strlen(a);
+        if (fn) { osh_diag(io[2], "export: %s: not a function", a); status = 1; continue; }
         if (nl == 0 || nl >= sizeof name) { osh_diag(io[2], "export: '%s': not a valid identifier", a); status = 1; continue; }
         memcpy(name, a, nl);
         name[nl] = 0;
         if (!osh_name_valid(name)) { osh_diag(io[2], "export: '%s': not a valid identifier", a); status = 1; continue; }
-        if (osh_var_export(s, name, eq ? eq + 1 : NULL)) { osh_diag(io[2], "export: out of memory"); status = 1; }
+        if (unexport) {
+            if (eq && osh_var_set(s, name, eq + 1)) { osh_diag(io[2], "export: out of memory"); status = 1; continue; }
+            osh_var_unexport(s, name);
+        } else if (osh_var_export(s, name, eq ? eq + 1 : NULL)) { osh_diag(io[2], "export: out of memory"); status = 1; }
     }
     return status;
 }

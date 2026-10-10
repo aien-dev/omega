@@ -71,6 +71,13 @@ int osh_var_export(OshSession *s, const char *name, const char *value)
     return 0;
 }
 
+int osh_var_unexport(OshSession *s, const char *name)
+{
+    OshVar *v = find(s, name);
+    if (v) v->exported = 0;
+    return 0; /* bash: `export -n` of an unset name is a silent success */
+}
+
 int osh_var_unset(OshSession *s, const char *name)
 {
     for (size_t i = 0; i < s->nvars; i++)
