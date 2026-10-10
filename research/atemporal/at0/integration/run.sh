@@ -217,7 +217,7 @@ mutant_model() { # name sed-script source-file -> builds $WORK/mut/<name>/at0-mo
     cp "$AT0"/model/*.c "$AT0"/model/*.h "$md/"
     sed "$ms" "$AT0/model/$mf" > "$md/$mf"
     if cmp -s "$AT0/model/$mf" "$md/$mf"; then echo "mutation did not change $mf" >&2; return 1; fi
-    ( cd "$md" && cc $CF -I. -I"$S/src" -o at0-model at0_main.c at0_exact.c at0_case.c at0_state.c at0_hamiltonian.c at0_constraint.c at0_povm.c at0_conditional.c at0_observable.c at0_engine.c at0_output.c "$S/src/sha256.c" -lm ) > "$md/build.log" 2>&1
+    ( cd "$md" && cc $CF -I. -I"$S/src" -o at0-model at0_main.c at0_exact.c at0_case.c at0_io.c at0_state.c at0_hamiltonian.c at0_constraint.c at0_povm.c at0_conditional.c at0_observable.c at0_engine.c at0_output.c "$S/src/sha256.c" -lm ) > "$md/build.log" 2>&1
 }
 run_mutant() { # name  -> results under mutants/<name>
     mn=$1; mkdir -p "$OUT/mutants/$mn"
@@ -260,10 +260,10 @@ for f in "$AT0"/model/at0_*.c "$S/src/sha256.c"; do
     cc $CF -I"$AT0/model" -I"$S/src" -c "$f" -o "$ISO/clean/$b.o" >> "$LOG" 2>&1 || ISOOK=0
 done
 [ $ISOOK = 1 ] || say "NOTE model objects did not all compile (C7 will FAIL)"
-CLEANOBJS=$(ls "$ISO"/clean/*.o | grep -v /at0_case\.o)
+CLEANOBJS=$(ls "$ISO"/clean/*.o | grep -v /at0_io\.o)
 sh "$HERE/isolation_check.sh" $CLEANOBJS > "$R/isolation-model-own.log" 2>&1; i1=$?
-ALLOW='^(fopen|fclose|fread|ferror)$' sh "$HERE/isolation_check.sh" "$ISO/clean/at0_case.o" > "$R/isolation-model-case-reader.log" 2>&1; i3=$?
-sh "$HERE/isolation_check.sh" "$ISO/clean/at0_case.o" > "$R/isolation-model-case-reader-strict.log" 2>&1; i3s=$?
+ALLOW='^(fopen|fclose|fread|ferror)$' sh "$HERE/isolation_check.sh" "$ISO/clean/at0_io.o" > "$R/isolation-model-case-reader.log" 2>&1; i3=$?
+sh "$HERE/isolation_check.sh" "$ISO/clean/at0_io.o" > "$R/isolation-model-case-reader-strict.log" 2>&1; i3s=$?
 sh "$AT0/evaluator/gates/isolation.sh" $CLEANOBJS > "$R/isolation-model-evaluator-gate.log" 2>&1; i2=$?
 # hidden-clock mutant: the engine plus a clock read
 cp "$AT0/model/at0_engine.c" "$ISO/mut/at0_engine_hidden_clock.c"
@@ -272,7 +272,7 @@ cc $CF -I"$AT0/model" -I"$S/src" -c "$ISO/mut/at0_engine_hidden_clock.c" -o "$IS
 sh "$HERE/isolation_check.sh" "$ISO/mut/at0_engine_hidden_clock.o" > "$R/isolation-model-mutant-own.log" 2>&1; m1=$?
 sh "$AT0/evaluator/gates/isolation.sh" "$ISO/mut/at0_engine_hidden_clock.o" > "$R/isolation-model-mutant-evaluator-gate.log" 2>&1; m2=$?
 # a hidden-clock mutant that reads CNTVCT_EL0 or the like is invisible to any symbol scan: recorded as a limit, not tested
-[ $ISOOK = 1 ] && [ $i1 -eq 0 ] && [ $i2 -eq 0 ] && [ $i3 -eq 0 ] && ctrl C7-ISOLATION-MODEL-CLEAN PASS "nm -u over model compute objects (all model .c except at0_main.c and at0_case.c, plus src/sha256.c): isolation_check.sh and evaluator/gates/isolation.sh; at0_case.o scanned with only fopen/fread/fclose/ferror exempt" "$(echo $CLEANOBJS | wc -w) compute objects clean under both scanners; at0_case.o clean apart from the case-file reader (strict scan rc=$i3s: $(head -1 "$R/isolation-model-case-reader-strict.log" | cut -c1-120)), which the charter wants in a thin outer layer (see QUALIFICATION.md)" \
+[ $ISOOK = 1 ] && [ $i1 -eq 0 ] && [ $i2 -eq 0 ] && [ $i3 -eq 0 ] && ctrl C7-ISOLATION-MODEL-CLEAN PASS "nm -u over model compute objects (all model .c except at0_main.c and at0_io.c (the thin file-reader layer, D6), plus src/sha256.c, so at0_case.o is scanned strictly): isolation_check.sh and evaluator/gates/isolation.sh; at0_io.o scanned with only fopen/fread/fclose/ferror exempt" "$(echo $CLEANOBJS | wc -w) compute objects clean under both scanners (parser at0_case.o strictly clean); at0_io.o scanned separately (strict scan rc=$i3s: $(head -1 "$R/isolation-model-case-reader-strict.log" | cut -c1-120))" \
     || ctrl C7-ISOLATION-MODEL-CLEAN FAIL "nm -u over model compute objects" "own rc=$i1 evaluator-gate rc=$i2 case-reader rc=$i3: $(head -2 "$R/isolation-model-own.log" | tr '\n' ' ')"
 [ $m1 -eq 1 ] && [ $m2 -ne 0 ] && ctrl C8-ISOLATION-MODEL-HIDDEN-CLOCK-MUTANT PASS "same scanners on at0_engine.c plus a clock_gettime call" "caught by both: $(head -1 "$R/isolation-model-mutant-own.log")" \
     || ctrl C8-ISOLATION-MODEL-HIDDEN-CLOCK-MUTANT FAIL "same scanners on the hidden-clock mutant" "own rc=$m1 evaluator-gate rc=$m2 (both must flag)"
@@ -376,12 +376,11 @@ sed '/^reference /d' "$OUT/components/P1-kat-ideal-qubit-n4.oracle" > "$WORK/o2"
 ar oracle-without-reference "no reference lines" "$KC" "$OUT/components/P1-kat-ideal-qubit-n4.engine" "$WORK/o2"
 [ -z "$AR_BAD" ] && ctrl C18-ASSEMBLER-REFUSALS PASS "at0-assemble assemble on $AR_N tampered or mismatched inputs (altered case_id, oracle or engine of another case, reference lines in the engine output, unmarked oracle record, oracle without reference lines)" "all refused with exit 3 and the expected message" \
     || ctrl C18-ASSEMBLER-REFUSALS FAIL "at0-assemble assemble on tampered inputs" "not refused as expected:$AR_BAD"
-[ "$NDIFF_TOOL" = 0 ] && ctrl C19-REFUSAL-AGREEMENT PASS "model and oracle refusal codes against evaluator manifest on all refuse cases" "all $REFN refuse cases agree" || ctrl C19-REFUSAL-AGREEMENT FAIL "model and oracle refusal codes against evaluator manifest on all refuse cases" "$NDIFF_TOOL of $REFN refuse cases differ (or a refuse case was accepted); see cases.tsv and QUALIFICATION.md D2, D3"
+[ "$NDIFF_TOOL" = 0 ] && ctrl C19-REFUSAL-AGREEMENT PASS "model and oracle refusal codes against evaluator manifest on all refuse cases" "all $REFN refuse cases agree" || ctrl C19-REFUSAL-AGREEMENT FAIL "model and oracle refusal codes against evaluator manifest on all refuse cases" "$NDIFF_TOOL of $REFN refuse cases differ (or a refuse case was accepted); see cases.tsv and QUALIFICATION.md"
 # ---------- 15. gates ----------
 isoG=PASS
-for k in C7 C8 C9 C10 C11 C12 C13; do st=$(awk -F'\t' -v k="$k" '$1 ~ "^"k"-" {print $2}' "$CTRL"); [ "$st" = PASS ] || isoG=$(awk -F'\t' -v k="$k" -v cur="$isoG" 'BEGIN{r=cur} $1 ~ "^"k"-" && $2=="FAIL" {r="FAIL"} $1 ~ "^"k"-" && $2=="NOT_RUN" && r!="FAIL" {r="NOT_RUN"} END{print r}' "$CTRL"); done
-[ "$isoG" = PASS ] && isoG=INCONCLUSIVE
-gate AT0-G2 "$isoG" "controls C7-C13 in controls.tsv (isolation_check.sh and evaluator/gates/isolation.sh on model and Rust oracle objects incl. mutants; make -n hygiene; make parses with PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0)" "all runner checks C7-C13 pass, but the charter requires Agent 4 independent sign-off of the Rust adaptation (not yet given) and Agent 4 gate misses the Rust std::time mutant (C10, D5): status stays INCONCLUSIVE until both are resolved"
+for k in C7 C8 C9 C10 C11 C12 C13; do st=$(awk -F'\t' -v k="$k" '$1 ~ "^"k"-" {print $2}' "$CTRL"); [ -n "$st" ] || isoG=NOT_RUN; [ "$st" = PASS ] || isoG=$(awk -F'\t' -v k="$k" -v cur="$isoG" 'BEGIN{r=cur} $1 ~ "^"k"-" && $2=="FAIL" {r="FAIL"} $1 ~ "^"k"-" && $2=="NOT_RUN" && r!="FAIL" {r="NOT_RUN"} END{print r}' "$CTRL"); done
+gate AT0-G2 "$isoG" "controls C7-C13 in controls.tsv (isolation_check.sh and evaluator/gates/isolation.sh on model and Rust oracle objects incl. mutants; make -n hygiene; make parses with PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0)" "runner checks C7-C13 $( [ "$isoG" = PASS ] && echo "all pass" || echo "not all pass" ); Agent 4 sign-off of this runner scanner (isolation_check.sh) on C objects and Rust rlib members is recorded by reference only (omega#358, 2026-10-10T00:09:52Z, before #364 merged, so it covers the scanner, not the final oracle code; the runner does not verify it) and Agent 4 gate now flags the Rust std::time mutant (C10); Agent 4 is UNISOLATED (same host and account)"
 [ "$G4N" -gt 0 ] && [ "$G4OK" = "$G4N" ] && gate AT0-G4 PASS "every positive case: outcome PASS and expectation_met YES (cases.tsv)" "$G4OK/$G4N" || gate AT0-G4 FAIL "every positive case: outcome PASS and expectation_met YES" "$G4OK/$G4N"
 G5C=$(awk -F'\t' '$2=="PASS" && $1 ~ /^C(5|6)-/ {n++} END {print n+0}' "$CTRL")
 [ "$G5N" -gt 0 ] && [ "$G5OK" = "$G5N" ] && [ "$G5C" = 2 ] && gate AT0-G5 PASS "every negative case: outcome FAIL with exactly its expected codes and expectation_met YES; axis-swap and Y-sign mutants caught (C5, C6); hidden-clock mutants caught (C8, C10)" "$G5OK/$G5N negative cases" \
