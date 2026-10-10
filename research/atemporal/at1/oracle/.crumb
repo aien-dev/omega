@@ -1,5 +1,19 @@
 {
-  "schema_version": "1.0.0",
+  "extensions": {
+    "generated": {
+      "children": [],
+      "children_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "compiled_at": "2026-10-10T03:25:07Z",
+      "compiler": "crumb-compile/1",
+      "digest": "sha256:4a7c3b518487ee4c64704724384fa76a20336422c6538dbbd21f86aee7cbe463",
+      "evidence_files": 0,
+      "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "files": 60,
+      "generated_at_commit": "3bb365b850107cafd3938ec5100c56629c2055e6",
+      "source_tree": "sha256:994804d9b92a3a28b6046035bf8760f0357dd7c9038d89ba74d7e357e188b97f"
+    }
+  },
   "name": "oracle",
-  "purpose": "AT-1 reference oracle (Rust, standard library only, built by rustc directly; research cross-check, not part of active execution): AT1_CASE_V1 validator, exact level kernel, literal matrix route plus closed-form and Bloch references, exact judge, AT1_RESULT_V1 oracle-record writer, tests, isolation gate"
+  "purpose": "AT-1 reference oracle (Rust, standard library only, built by rustc directly; research cross-check, not part of active execution): AT1_CASE_V1 validator, exact level kernel, literal matrix route plus closed-form and Bloch references, exact judge, AT1_RESULT_V1 oracle-record writer, tests, isolation gate",
+  "schema_version": "1.0.0"
 }
