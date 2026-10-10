@@ -300,7 +300,9 @@ done
 [ $DV_N -gt 0 ] && [ $DV_OK = $DV_N ] && ctrl C7-DIRECT-VERIFY PASS "at1-eval verify --case <case> results/pass1/engine/<case>.result" "$DV_OK/$DV_N AT1_VERIFY PASS, each matching the evaluator's TABLE.tsv case verdict" \
     || ctrl C7-DIRECT-VERIFY FAIL "at1-eval verify on engine results" "pass $DV_OK/$DV_N; others:$DV_BAD"
 
-# ---------- 9. real-engine physics mutants (drop V, V on the wrong level) ----------
+# ---------- 9. real-engine physics mutants: M1 drop V, M3 V on the wrong level (freeze record), plus the
+# remaining AT1_SPEC 9.2 physics mutants M2 flip V, M4 phase sign, M5 Y sign, M6 axis swap, M8 ideal marginal
+# (post-freeze follow-up from the G8 review, AT1_RESULTS.md section 5 item 3; predicted cells are Agent 4's) ----------
 MLIB="at1_bn.c at1_case.c at1_exact.c at1_numeric.c at1_result.c at1_io.c"
 mutant_model() { # name sed-script file -> $WORK/mut/<name>/at1-model
     mn=$1; ms=$2; mf=$3; md="$WORK/mut/$mn"; mkdir -p "$md"
@@ -310,13 +312,18 @@ mutant_model() { # name sed-script file -> $WORK/mut/<name>/at1-model
     ( cd "$md" && $CCBIN $MCFLAGS -I"$S/src" -o at1-model $MLIB "$S/src/sha256.c" at1_main.c -lm ) > "$md/build.log" 2>&1
 }
 MR="$AT1/evaluator/results/MUTANT_RECEIPT.tsv"
-for mn in drop_v wrong_level; do
+for mn in drop_v wrong_level flip_v phase_sign y_sign axis_swap ideal_marginal; do
     case $mn in
-      drop_v) MS='s/mat s = kron(&Pj, &Vj); mat_addto(&H, &s);/mat s = kron(\&Pj, \&Vj);/'; AM=M1-drop-v;;
-      wrong_level) MS='s/gq_set_rat(&t, &c->v\[j\]\[a\], NULL);/gq_set_rat(\&t, \&c->v[(j + N - 1) % N][a], NULL);/'; AM=M3-wrong-level;;
+      drop_v) MS='s/mat s = kron(&Pj, &Vj); mat_addto(&H, &s);/mat s = kron(\&Pj, \&Vj);/'; AM=M1-drop-v; MF=at1_exact.c;;
+      wrong_level) MS='s/gq_set_rat(&t, &c->v\[j\]\[a\], NULL);/gq_set_rat(\&t, \&c->v[(j + N - 1) % N][a], NULL);/'; AM=M3-wrong-level; MF=at1_exact.c;;
+      flip_v) MS='s/gq_set_rat(&t, &c->v\[j\]\[a\], NULL);/gq_set_rat(\&t, \&c->v[j][a], NULL); gq_neg(\&t, \&t);/'; AM=M2-flip-v; MF=at1_exact.c;;
+      phase_sign) MS='s/out->re = cos(ang); out->im = -sin(ang);/out->re = cos(ang); out->im = sin(ang);/'; AM=M4-phase-sign; MF=at1_numeric.c;;
+      y_sign) MS='s/{ 0, -0.5 } }, { { 0, 0.5 }/@@TMP@@/; s/{ 0, 0.5 } }, { { 0, -0.5 }/{ 0, -0.5 } }, { { 0, 0.5 }/; s/@@TMP@@/{ 0, 0.5 } }, { { 0, -0.5 }/'; AM=M5-y-sign; MF=at1_numeric.c;;
+      axis_swap) MS='/\/\* X+ \*\//s/{ {.*} },/{ { { 0.5, 0 }, { 0, -0.5 } }, { { 0, 0.5 }, { 0.5, 0 } } },/; /\/\* X- \*\//s/{ {.*} },/{ { { 0.5, 0 }, { 0, 0.5 } }, { { 0, -0.5 }, { 0.5, 0 } } },/; /\/\* Y+ \*\//s/{ {.*} },/{ { { 0.5, 0 }, { 0.5, 0 } }, { { 0.5, 0 }, { 0.5, 0 } } },/; /\/\* Y- \*\//s/{ {.*} },/{ { { 0.5, 0 }, { -0.5, 0 } }, { { -0.5, 0 }, { 0.5, 0 } } },/'; AM=M6-axis-swap; MF=at1_numeric.c;;
+      ideal_marginal) MS='s/double p = w \* n2 \/ norm2;/double p = w \/ (double)N;/'; AM=M8-ideal-marginal; MF=at1_numeric.c;;
     esac
     mkdir -p "$OUT/mutants/$mn"
-    if mutant_model $mn "$MS" at1_exact.c; then
+    if mutant_model $mn "$MS" "$MF"; then
         MBCC=$(ptext "(MUTANT $mn control, not a qualification result) $CC_V (engine); $RUSTC_V (oracle)"); MBCC=$(printf '%s' "$MBCC" | sed 's/[\/&]/\\&/g')
         sed "s/^engine_sha256 .*/engine_sha256 $(sha "$WORK/mut/$mn/at1-model")/; s/^build_cc .*/build_cc $MBCC/" "$PROV" > "$WORK/prov.mut.$mn"
         awk -F'\t' -v m="$AM" '$1==m {print $2 "\t" (($6 ~ /^BLIND/) ? "BLIND" : "KILLED")}' "$MR" | while IFS="$(printf '\t')" read -r c pred; do
@@ -336,7 +343,7 @@ for mn in drop_v wrong_level; do
     MDIFF=$(awk -F'\t' '$2!=$3 {printf " %s(predicted %s, got %s)", $1, $2, $3}' "$R/mutant-$mn.tsv")
     MBL=$(awk -F'\t' '$3=="BLIND" {printf " %s", $1}' "$R/mutant-$mn.tsv")
     KATK=$(awk -F'\t' '$1 ~ /P2-kat/ {print $3}' "$R/mutant-$mn.tsv")
-    [ "$MN" -gt 0 ] && [ -z "$MDIFF" ] && [ "$KATK" = KILLED ] && ctrl "C8-ENGINE-MUTANT-$(echo $mn | tr a-z_ A-Z-)" PASS "copy of model/at1_exact.c with $AM applied ($MS), built with the model flags, every case of Agent 4's $AM receipt rows through the shim and at1-eval verify" "$MK/$MN killed; blind:${MBL:- none}; every cell equals Agent 4's predicted KILLED/BLIND" \
+    [ "$MN" -gt 0 ] && [ -z "$MDIFF" ] && [ "$KATK" = KILLED ] && ctrl "C8-ENGINE-MUTANT-$(echo $mn | tr a-z_ A-Z-)" PASS "copy of model/$MF with $AM applied ($MS), built with the model flags, every case of Agent 4's $AM receipt rows through the shim and at1-eval verify" "$MK/$MN killed; blind:${MBL:- none}; every cell equals Agent 4's predicted KILLED/BLIND" \
         || ctrl "C8-ENGINE-MUTANT-$(echo $mn | tr a-z_ A-Z-)" FAIL "real-engine $AM mutant" "$MK/$MN killed; KAT $KATK; cells differing from the receipt:${MDIFF:- none}"
 done
 
@@ -519,7 +526,8 @@ NRES=$(ls "$P1"/engine/*.result 2>/dev/null | grep -vc T9-second-run)
   echo "omega_commit $HEAD"; echo "source_tree_clean $CLEAN"; echo "starting_checkout_clean $OUTER_CLEAN"; echo "contract_commit $CONTRACT_COMMIT"; echo "stamp $STAMP"; echo "host $HOSTT"
   echo "cases $NCASE: positive $NPOS, negative $NNEG, refuse $NREF; engine results written $NRES"
   echo "evaluator table: positive $(cnt positive); negative $(cnt negative); refusal $(cnt refusal)"
-  echo "mutants: drop_v $(awk -F'\t' '$3=="KILLED"' "$R/mutant-drop_v.tsv" | wc -l | tr -d ' ')/$(wc -l < "$R/mutant-drop_v.tsv" | tr -d ' ') killed; wrong_level $(awk -F'\t' '$3=="KILLED"' "$R/mutant-wrong_level.tsv" | wc -l | tr -d ' ')/$(wc -l < "$R/mutant-wrong_level.tsv" | tr -d ' ') killed; evaluator receipt $(grep -m1 '^MUTANT_RECEIPT' "$R/evaluator-run-pass1.log")"
+  MSUM=""; for mn in drop_v wrong_level flip_v phase_sign y_sign axis_swap ideal_marginal; do MSUM="$MSUM $mn $(awk -F'\t' '$3=="KILLED"' "$R/mutant-$mn.tsv" | wc -l | tr -d ' ')/$(wc -l < "$R/mutant-$mn.tsv" | tr -d ' ') killed;"; done
+  echo "mutants:$MSUM evaluator receipt $(grep -m1 '^MUTANT_RECEIPT' "$R/evaluator-run-pass1.log")"
 } > "$R/summary.txt"
 cat "$R/summary.txt" | tee -a "$LOG"
 NFAIL=$(awk -F'\t' '$2=="FAIL"' "$GATES" | wc -l | tr -d ' '); NCF=$(awk -F'\t' '$2=="FAIL"' "$CTRL" | wc -l | tr -d ' ')
