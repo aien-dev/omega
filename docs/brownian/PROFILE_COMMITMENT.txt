@@ -3,3 +3,11 @@ brownian.profile.v1 evaluator-tree sha256 fc6fcb40d6bce718b88f59c7b9664fea2e611c
 brownian.profile.v1 slice-candidate sha256 4383e7db7804088d323ee964d625fc82e9571f9baf0dcabbde8afba1da19e5c7
 brownian.profile.v1 slice-brwdl sha256 86bf360cfa208d91338cf22faa0f6022c93dfe2ee1a574e2ee27a800ec6a557f
 brownian.profile.v1 slice-private sha256 fca680aa1a4104d65b1d7fa9766cbc3fe1eeb04956a33fff5e3b446a4679194a
+brownian.profile.w2.v1 spec sha256 54418df92b66788f16b3439c3b29ba5a99314de36f302d8f07253aa675eb310e
+brownian.profile.w2.v1 thresholds sha256 30e66c770183a91c855b7cfbd3a9165ff17b06ccd230576fe4a0c87d8d766b12
+brownian.profile.w2.v1 evaluator-tree sha256 c27ede6d594f53131653651b84f2a0fcc66454add2d450017e2b2492f1fb329f
+brownian.profile.w2.v1 slice-private sha256 30e66c770183a91c855b7cfbd3a9165ff17b06ccd230576fe4a0c87d8d766b12
+brownian.profile.w2.v1 contract sha256 5ad3f8f4eafd61339e25946535518a0f3424410cbade0cb46a75326dfcb92344
+brownian.profile.w2.v1 n7-receipt sha256 cdca1cec0b9c0d892b2ee3a6c35992e492264247cf4db88e4d1cffe54dfd36cb
+brownian.profile.w2.v1 slice-candidate none (CERT, no candidate)
+brownian.profile.w2.v1 slice-brwdl none (CERT, no candidate)
