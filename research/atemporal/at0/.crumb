@@ -15,27 +15,27 @@
           "purpose": "AT-0 Agent 5 integration runner, exact result assembler/judge, hygiene and isolation controls, a"
         },
         {
-          "digest": "470b8c119df44842fffddc8393b528c87f163bb6e0155341cbc6da0650e19483",
-          "last_commit": "b3a9476",
+          "digest": "ef28d16f103c0c1c4df8e35be927bd79020d2f22f6dc575e114fa64d6975bbc5",
+          "last_commit": "f21b4d5",
           "name": "model",
           "purpose": "Agent 3 candidate relational quantum engine in portable C11: state, Hamiltonians, constraint ker"
         },
         {
           "digest": "24340ae691dce9743ee4d3eedf80ae0d362dd707cac0b6bae6ebbb562dafcf39",
-          "last_commit": "9b74392",
+          "last_commit": "026bad0",
           "name": "oracle",
           "purpose": "AT-0 reference oracle (Rust, standard library only, built by rustc directly; research cross-chec"
         }
       ],
-      "children_root": "sha256:a16b37c4005002d52fd7ff41d8e6a5019cff9e7aaf3ddbd7bd9952691d12309d",
-      "compiled_at": "2026-10-10T00:12:06Z",
+      "children_root": "sha256:2ef6e2392fb23ac01a185b8c57db20ecd1beaadad91b8d23139970dfe7aea4a3",
+      "compiled_at": "2026-10-10T00:22:09Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:667ee4f01ea105c463161bb9243e4faee93ac3d6c73f1b92069889b3aa952493",
+      "digest": "sha256:550bb945815bfa004ba35bf67687b434869f7cb4d0ae6ba3f040bc3b1c617706",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 170,
-      "generated_at_commit": "9b74392c8a09ff50c9e1056a958bbee8f817dedd",
-      "source_tree": "sha256:990af2160e9e208d534cd7b5db391813ab51218da6839d32eb598947c35d53fe"
+      "files": 172,
+      "generated_at_commit": "f21b4d55d4a8ae1fd32ce435126c83eb82ed3b1c",
+      "source_tree": "sha256:f9b67a6d4e68301b2afa28f8ff52857b1b51de7e3d7e326ea78b3a84531b9599"
     }
   },
   "name": "at0",

@@ -3,21 +3,21 @@
     "generated": {
       "children": [
         {
-          "digest": "e9114c1e9534737dc1a4d49971f6abb3278e4dcf7c5b9c544795c90c8812bccc",
-          "last_commit": "84fd7ab",
+          "digest": "9153a6c121ecfbc87b0d7122afbb68c74d80590f6eb96f85e2cc8625e7020aab",
+          "last_commit": "f21b4d5",
           "name": "tests",
           "purpose": "Component tests and case files for the candidate engine"
         }
       ],
-      "children_root": "sha256:250f09a76e0e74b7f3921f23346262b006f7b267cf456f5d695a2be3c0fa7a65",
-      "compiled_at": "2026-10-09T22:45:44Z",
+      "children_root": "sha256:c7aac0c733e80ca1e02e7df958494d218c0d74b80a34a63c1e5abaa1480bd785",
+      "compiled_at": "2026-10-10T00:22:09Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:470b8c119df44842fffddc8393b528c87f163bb6e0155341cbc6da0650e19483",
+      "digest": "sha256:ef28d16f103c0c1c4df8e35be927bd79020d2f22f6dc575e114fa64d6975bbc5",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 18,
-      "generated_at_commit": "84fd7ab949fc95594f62c201618a17dcb0dc610e",
-      "source_tree": "sha256:5b4bcd2ea2633e7056e743cf7338296a48eeaf4ed8888b4792c721ecc5c79071"
+      "files": 20,
+      "generated_at_commit": "f21b4d55d4a8ae1fd32ce435126c83eb82ed3b1c",
+      "source_tree": "sha256:c3f3c7eba04f7210e7e80a66f0b39478e1e42790ac0cd9132b54f001a236dc63"
     }
   },
   "name": "model",
