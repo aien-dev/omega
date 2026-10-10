@@ -1,0 +1,7 @@
+474612bf20da6ac03dad22c1f695258ef9d90933fe60fe755682f62fb7f96b08  src/research/atemporal/at0/model/build/at0-model
+62f06673d745bf4d4a7a28643440d5e934e2fd95bddb7384d7a99a76ca10faf4  src/research/atemporal/at0/oracle/target/at0-oracle
+b711805b9437cb0f9d59c39e7992bffc88083537a804027df3034f4aa64ec163  src/research/atemporal/at0/evaluator/build/at0-eval
+f2dcf418eee29e420bfefb8fb72bc76a9f9b79649bbbd0d0e7d1189112a95aed  bin/at0-assemble
+fc6d0c0dd21ba2b57f5dae3afecda74ac38c672a6c07ae3ab46755b5545b5a72  src/research/atemporal/at0/model/build/at0-tests
+0ed6e5755a31c50251a72e44d3d4d63f03814dab70ff255a41bb9b081f27b110  src/research/atemporal/at0/model/build-asan/at0-model
+58ab1564206fd2f013ede1ba02122b72995dccc304862cc5a96df5b468922e69  src/research/atemporal/at0/evaluator/build/at0-eval-asan

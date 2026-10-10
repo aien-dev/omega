@@ -1,3 +1,74 @@
+# AT-0 qualification report (Agent 5): second run, then first run (history)
+
+# Second run (re-qualification on omega `ee29a2c`)
+
+**Status: SECOND RUN RECORDED. G2 PASS, G4 PASS (12/12), G5 PASS (8/8), G6 PASS (20/20), G7 NOT_RUN (Agent 6). D1 to D8 FIXED and verified (except as qualified in S5: D5 partly rests on Agent 4 statements, D8 tables not re-derived by me). One new discrepancy open (D11, R37 refusal code). `make at0-check` still exits non-zero because control C19 FAILS on D11.**
+This is software conformance of the AT-0 implementation to its frozen contracts, not a result about time, gravity or quantum mechanics (charter section 1). The hidden set was not run. The platform is one (aarch64 Linux, glibc, gcc 13.3, rustc 1.98.1).
+
+Evidence: `evidence/AT0/20261010T003353Z-aaa2474/` (62 case copies, 20 results per pass, two passes, 24 mutant results, 40 component files, 20 verifier JSONs, `receipts/`, `run.log`). The first evidence folder `evidence/AT0/20261009T234832Z-a4ff532/` is untouched.
+Pins: omega `ee29a2c` (main after #365 `f0bac17`, #364 `026bad0`, #366 `ee29a2c`); the run itself is commit `aaa2474` = `ee29a2c` plus this runner's changes only (`git diff ee29a2c aaa2474` touches only `research/atemporal/at0/integration/run.sh`; model, oracle, evaluator byte-identical to `ee29a2c`). Contracts `fe86e43` (AT0_CASE_V1 `d90af74b...`, AT0_RESULT_V2 `bd0f9eb8...`), spec `68f47e2`. Toolchain unchanged from the first run (gcc 13.3.0, rustc 1.98.1, GNU Make 4.3; `receipts/toolchain.txt`, `flags.txt`).
+
+## S1. Runner changes (my files only)
+- The model's file reader moved to `at0_io.c` (D6 fix): the mutant builds link `at0_io.c`; the isolation control now scans the whole parser object `at0_case.o` strictly and treats `at0_io.o` as the thin outer layer (only `fopen/fclose/fread/ferror` allowed, strict scan recorded).
+- G2 no longer hard-codes INCONCLUSIVE: it is PASS when C7-C13 pass, and its detail records the Agent 4 sign-off of my scanner by reference (omega#358, 2026-10-10T00:09:52Z), not as a runner check.
+- `isolation_check.sh` now strips the `__` prefix and `_chk` suffix, so hardened libc calls (`__fread_chk`, `__read_chk`) are matched (found by the independent review: at -O2 gcc turns `fread` into `__fread_chk`, which the old scan missed; Agent 4 evaluator gate does not strip them, so it still cannot see them: limit S7).
+- G2 now needs a row for every control C7-C13 (a missing row is NOT_RUN).
+- C19 text no longer names D2, D3. Judge, assembler, case set, passes and all other controls are unchanged.
+
+## S2. Gates (charter section 6, as in section 4 below)
+| Gate | Result | Command / evidence | Detail |
+|---|---|---|---|
+| AT0-G2 | **PASS** | `make at0-check`: controls C7-C13 (isolation_check.sh and evaluator/gates/isolation.sh on 10 model compute objects plus sha256.o and the Rust oracle rlib member, hidden-clock mutants in C and Rust incl. `std::time`; make hygiene; make parses) | all pass. Agent 4 sign-off of my scanner `isolation_check.sh` (C objects and Rust rlib members) is on omega#358 at 2026-10-10T00:09:52Z, i.e. before #364 merged: it covers the scanner, not the final oracle code, and the runner does not verify it (Agent 4 is UNISOLATED); C9/C10 are the runner checks on the final oracle; Agent 4's gate now flags the `std::time` mutant (C10) |
+| AT0-G4 | **PASS** | every positive case outcome PASS and expectation_met YES (`receipts/cases.tsv`) | 12/12 |
+| AT0-G5 | **PASS** | every negative case FAIL with exactly its codes; C5, C6, C8, C10 | 8/8; axis-swap mutant 12/12 caught; Y-sign mutant 9/12 caught |
+| AT0-G6 | **PASS** | `at0-eval result <result> --case <case>` on all 20 assembled results plus `evaluator/run.sh` with this runner as candidate (C14, C15, C16) | evaluator PASS 20/20; evaluator harness pass=39 fail=0 inconclusive=9 (documented blind mutant pairs, hidden set not run); wall-clock control PASS |
+| AT0-G7 | **NOT_RUN** | - | Agent 6 owns it |
+
+Commands: `make at0-check` (clean clone, about 45 s, once) and `sh research/atemporal/at0/integration/run.sh --evidence` (the recorded run). Each run has two internal passes. The make run and the evidence run agree: engine components byte-identical, values blocks identical on every result, oracle components differ only in `run_*_utc` lines, 5 of 7 binary digests identical (the two ASan binaries embed the build path).
+
+## S3. Cases: expected vs got
+| Class | Expected | Got |
+|---|---|---|
+| positive (P1, P1b-g, P2, P2b, P3, P4, P5) | 12 PASS, expectation_met YES | 12/12 (P5-large-rationals now PASS: D1) |
+| negative (N1, N2, N3, N4, N4b, N5, N6, N7) | 8 FAIL with exactly the expected codes | 8/8, codes exact |
+| refusals | 42 files, model and oracle both give the manifest code | 41/42 agree; R17 and R30 `CASE_NONCANONICAL` (all three agree), R31 and R36 `CASE_PARSE_ERROR` (all three agree, corrected manifest), R37 differs |
+| R37-model-family-bad | `CASE_INVALID_PARAMETER` (manifest) | model `CASE_INVALID_PARAMETER`, oracle `CASE_PARSE_ERROR` |
+
+Valid cases assembled: 20 of 20; evaluator verdict agrees with the assembled outcome on 20 of 20.
+
+## S4. Controls (receipts/controls.tsv holds every command)
+C0-RUSTC-PIN PASS; C0-CONTRACT-DIGESTS NOT_RUN (no local architecture clone; digests in contract.lock); C1 model tests 13/13 plain and ASan/UBSan PASS; C1 oracle tests 14/14 PASS; C1 oracle own isolation PASS;
+C2 repeatability PASS (20 results: values blocks, verdict_id, case_id, acceptance_id equal; evidence_digest differs 20/20); C3 wall-clock independence PASS (second pass 2 s later, `TZ=Asia/Tokyo`); C4 evaluation order PASS (20/20 bit-identical under `--reversed`);
+C5 axis swap PASS (12/12 caught); C6 Y-sign flip PASS (9/12 caught; P1f, P2, P4 do not show Y at any sampled reading, as in the first run);
+C7 model isolation PASS (11 compute objects clean under both scanners, parser strictly clean; `at0_io.o` scanned separately: fopen, fread); C8 model hidden-clock mutant PASS (caught by both); C9 oracle clean PASS; C10 oracle mutants PASS (Rust `std::time` mutant now caught by both my scanner and Agent 4's gate; extern `clock_gettime` caught);
+C11 make -n hygiene PASS (`make -n -k all` and `test`, with and without `mk/at0.mk`, each with defaults and with `PHYSICS_DIR=/nonexistent PHYSICS_LOCK_CHECK=0`: byte-identical, 64 lines each, exit 2 both ways because the physics checkout is absent; recorded again this run, files `make-n-*.txt`); C12 make database PASS (empty diff);
+C13 make parses PASS; C14 evaluator harness PASS; C15 PASS; C16 PASS; C17 judge calibration PASS (22/22 oracle fixtures reproduce the oracle's own verdict block and verdict_id, including `n1-uncovered` and `spec-p2-tilted-h0`); C18 assembler refusals PASS (6 tampered inputs refused);
+C19 refusal agreement **FAIL** (1 of 42, R37, see D11).
+
+## S5. Status of D1 to D10
+| D | Status | Verified by |
+|---|---|---|
+| D1 model ERR_OVERFLOW on P5 | FIXED (omega#366) | P5 PASS in cases.tsv; evaluator PASS on its assembled result; G4 12/12 |
+| D2 R17/R30 refusal code | FIXED (omega#366) | C19 rows R17, R30: model, oracle, manifest all `CASE_NONCANONICAL` |
+| D3 R31/R36 ruling | FIXED (Agent 0 ruling, manifest corrected in omega#365) | C19 rows R31, R36: all three `CASE_PARSE_ERROR` |
+| D4 oracle fixture n1-uncovered check 7 | FIXED (omega#364) | C17 22/22, including `n1-uncovered` |
+| D5 Rust std::time mutant missed by evaluator gate | FIXED (omega#365 evaluator, omega#364 oracle gate) | C10 and C1-ORACLE-OWN-ISOLATION; evaluator harness CAND-ISOLATION and the Rust gate controls PASS; Agent 4 sign-off on omega#358 |
+| D6 file reader in parser object | FIXED (omega#366, `at0_io.c`) | C7: `at0_case.o` strictly clean |
+| D7 oracle contract_commit | FIXED (omega#364) | oracle components carry `contract_commit fe86e43...`; evaluator accepts all 20 assembled results |
+| D8 spec pin | FIXED (omega#364, #366) | READMEs and `SPEC_COMMIT` name `68f47e2`; oracle fixture `spec-p2-tilted-h0` passes C17. I did not re-derive the section 13 tables myself |
+| D9 make coupling via MAKEFILE_LIST | OPEN, informational, mine, unchanged | C12 |
+| D10 make exit 2 without physics checkout | OPEN, pre-existing, informational | C11 |
+
+## S6. New discrepancy found in this run
+- **D11 (blocks only C19, not a gate).** R37 `model_family PAGE_WOOTTERS_INTERACTING`: manifest and model say `CASE_INVALID_PARAMETER`, oracle says `CASE_PARSE_ERROR`. AT0_CASE_V1 section 1 shows `model_family PAGE_WOOTTERS_FINITE_IDEAL` as a literal in the line grammar, section 3 does not list `model_family` among fixed values; Agent 0's D3 reasoning (a token outside the section 1 line grammar is a shape failure) points to `CASE_PARSE_ERROR`, section 4 rule 3 ("fixed values in section 3") to `CASE_INVALID_PARAMETER`. Needs an Agent 0 ruling, then Agent 4 (manifest), Agent 3 (model) or Agent 2 (oracle) changes whichever side is wrong. Not normalized away: C19 stays FAIL until resolved.
+
+## S7. UNKNOWN and limits
+Hidden set not run (Agent 4 or Agent 6). Evaluator isolation is UNISOLATED (same host and account), so nothing here is blinded. Symbol scans see symbols only (inline `svc`, counter registers, function pointers pass `nm`). One platform. Bounds are ESTIMATED, none RIGOROUS. The judge is my own third implementation of section 4, evidence of a consistent reading, not proof of it. The Agent 4 G2 sign-off is an agent statement that I record but cannot verify. Agent 4 evaluator gate/isolation.sh matches symbols without stripping `__*_chk`, so hardened file reads are invisible to it (my own scanner sees them). C0 contract digests not re-checked locally. Section 13 hand tables not re-derived by me. Absolute temp paths appear in some logs, so those digests differ on re-run. The make-hygiene comparison still cannot see the test recipe because the physics checkout is absent (D10).
+
+---
+
+# First run (history, unchanged below)
+
 # AT-0 qualification report (Agent 5, first run)
 
 **Status: FIRST RUN RECORDED. G4 FAIL (11 of 12 positive cases). G2 INCONCLUSIVE (runner checks pass; Agent 4 sign-off pending, D5). G5 PASS (8 of 8). G6 INCONCLUSIVE (19 of 19 produced results verified; P5 produced none). G7 NOT_RUN (Agent 6).**
