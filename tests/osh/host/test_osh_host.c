@@ -553,7 +553,81 @@ static void test_builtins(void)
     CHECK(strcmp(o, "<unset>\n") == 0, "unset reaches children, got '%s'", o);
     free(o);
 
+    /* export -p / -n / -f / bad option, measured against bash 5.2.21 (#344 RISK-6) */
+    osh_var_export(&t.s, "XQ", "a$b\"c\\d`e");  /* double-quote form escapes \" \\ $ ` */
+    osh_var_export(&t.s, "XT", "x\ty'z\001\177\200"); /* control or non-ASCII bytes: $'...' form */
+    osh_var_export(&t.s, "XE", "");
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_EXPORT, "export", "-p", NULL);
+    CHECK(go(&t, b, &r) == 0, "export -p status");
+    o = t_out(&t);
+    CHECK(strstr(o, "declare -x XB\n") && strstr(o, "declare -x XC=\"3\"\n") && !strstr(o, "export "), "export -p uses declare -x lines, got '%s'", o);
+    CHECK(strstr(o, "declare -x XQ=\"a\\$b\\\"c\\\\d\\`e\"\n") != NULL, "export -p double-quote escaping, got '%s'", o);
+    CHECK(strstr(o, "declare -x XT=$'x\\ty\\'z\\001\\177\\200'\n") != NULL, "export -p $'...' form for control bytes, got '%s'", o);
+    CHECK(strstr(o, "declare -x XE=\"\"\n") != NULL, "export -p empty value, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_EXPORT, "export", "-pn", NULL); /* options with no names still list */
+    CHECK(go(&t, b, &r) == 0, "export -pn status");
+    o = t_out(&t);
+    CHECK(strstr(o, "declare -x XC=\"3\"\n") != NULL, "export -pn lists, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_EXPORT, "export", "-n", "XC", "XN=7", "NOPE", NULL); /* -n keeps the variable, drops the export mark; assigns first */
+    CHECK(go(&t, b, &r) == 0 && osh_var_get(&t.s, "XC") && strcmp(osh_var_get(&t.s, "XC"), "3") == 0, "export -n keeps value");
+    CHECK(osh_var_get(&t.s, "XN") && strcmp(osh_var_get(&t.s, "XN"), "7") == 0, "export -n NAME=value assigns");
+    t_clear(&t);
+    b = nb(0, 0);
+    helper(b, "env", "XC", NULL);
+    go(&t, b, &r);
+    b = nb(0, 0);
+    helper(b, "env", "XN", NULL);
+    go(&t, b, &r);
+    o = t_out(&t);
+    CHECK(strcmp(o, "<unset>\n<unset>\n") == 0, "export -n: children no longer see them, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_EXPORT, "export", "-p", "XC", NULL); /* -p with names is a plain export, prints nothing */
+    CHECK(go(&t, b, &r) == 0, "export -p NAME status");
+    o = t_out(&t);
+    CHECK(*o == 0, "export -p NAME prints nothing, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    helper(b, "env", "XC", NULL);
+    go(&t, b, &r);
+    o = t_out(&t);
+    CHECK(strcmp(o, "3\n") == 0, "export -p NAME re-exported, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_EXPORT, "export", "-q", "XC", NULL);
+    CHECK(go(&t, b, &r) == 2, "export bad option status 2");
+    o = t_err(&t);
+    CHECK(strstr(o, "export: -q: invalid option") && strstr(o, "export: usage: export [-fn] [name[=value] ...] or export -p"), "export bad option diagnostic, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_EXPORT, "export", "-f", "zz", NULL); /* osh has no functions */
+    CHECK(go(&t, b, &r) == 1, "export -f status 1");
+    o = t_err(&t);
+    CHECK(strstr(o, "export: zz: not a function") != NULL, "export -f diagnostic, got '%s'", o);
+    free(o);
+    t_clear(&t);
+    b = nb(0, 0);
+    cmd(b, OSH_B_EXPORT, "export", "-", NULL);
+    CHECK(go(&t, b, &r) == 1, "export - is an invalid identifier");
+    b = nb(0, 0);
+    cmd(b, OSH_B_EXPORT, "export", "--", "-n", NULL);
+    CHECK(go(&t, b, &r) == 1 && osh_var_get(&t.s, "XN") && strcmp(osh_var_get(&t.s, "XN"), "7") == 0, "export -- -n: -n is a (bad) name, not an option");
+    t_clear(&t);
+
     /* exit: parent only when alone */
+
     b = nb(0, 0);
     cmd(b, OSH_B_EXIT, "exit", "7", NULL);
     CHECK(go(&t, b, &r) == 7 && t.s.exit_requested && t.s.exit_status == 7 && r.exit_requested, "exit 7 in parent");
