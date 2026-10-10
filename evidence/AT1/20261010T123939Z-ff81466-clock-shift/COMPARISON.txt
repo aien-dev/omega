@@ -1,0 +1,10 @@
+clock-2028 qualify-hidden verdict_id identical 27/27
+clock-2028 qualify-hidden values_block identical 27/27 (differ 0); evidence_digest same 0/27; run_started year shifted 27/27
+clock-2028 qualify verdict_id identical 24/24
+clock-2028 qualify values_block identical 24/24 (differ 0); evidence_digest same 0/24; run_started year shifted 24/24
+clock-2028 oracle records: 27/27 identical ignoring time lines
+clock-2023 qualify-hidden verdict_id identical 27/27
+clock-2023 qualify-hidden values_block identical 27/27 (differ 0); evidence_digest same 0/27; run_started year shifted 27/27
+clock-2023 qualify verdict_id identical 24/24
+clock-2023 qualify values_block identical 24/24 (differ 0); evidence_digest same 0/24; run_started year shifted 24/24
+clock-2023 oracle records: 27/27 identical ignoring time lines
