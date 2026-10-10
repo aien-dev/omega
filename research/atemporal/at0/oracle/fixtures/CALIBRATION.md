@@ -17,7 +17,7 @@ against them (matrix path and reference path), in absolute probability units.
 | p1-unnormalized-2 | pure | 2 | PASS | none | YES | 28 | 2.220e-16 | `92d215231b6132f3f3877f4c631446d4ca07e175ee7799e659495f367a1f46a6` |
 | p2-tilted-3-10-2-5 | pure | 2 | PASS | none | YES | 0 | 0.000e0 | `3d2d11e9a20fa950566b48a22421d2a165728c10f7e7adceb4f8ab8f3b6a4f32` |
 | p2-h0-shift | pure | 2 | PASS | none | YES | 0 | 0.000e0 | `5e2d2fbe4a8c13fec7eb0f3a7db2bca94b0ecc2227817bc0c1858a219189c034` |
-| n1-uncovered | pure | 0 | FAIL | TRIVIAL_PHYSICAL_STATE | YES | 0 | 0.000e0 | `9d5d757ce34242b8b737ebaf11aea8d592671f8b3e7ac60c58f4727b7fb75f71` |
+| n1-uncovered | pure | 0 | FAIL | TRIVIAL_PHYSICAL_STATE | YES | 0 | 0.000e0 | `a5cbe130af7e2b1c81cd356e866286f9fa15cdbd124b783dc0bee182d3965ab8` |
 | n2-half-covered | pure | 1 | FAIL | SCHRODINGER_DEVIATION_EXCEEDED | YES | 0 | 0.000e0 | `577c0ed350f62b7df313b569f63087c359d0ddf5cae086dc1fce7cf6e2cbe3cf` |
 | n4-wrong-weight | pure | 2 | FAIL | POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED | YES | 0 | 0.000e0 | `3d1b3beb7374055af1ab1c4ea385a65212d2de5c9eb0e73134af0e62d3129836` |
 | n3-broken-clock-tau-1-3 | pure | 2 | FAIL | POVM_NORMALIZATION_EXCEEDED | YES | 0 | 0.000e0 | `471d325ed6b6f7362f1ccc7c75bcc7d0e43f2330c63eb4239f62a810bc3020b4` |
@@ -25,6 +25,7 @@ against them (matrix path and reference path), in absolute probability units.
 | spec-ref-model-n4 | pure | 2 | PASS | none | YES | 28 | 2.220e-16 | `0472c9c93ccb61e4375e3ce3b5aa2bdbd48f2165adf74e9d19042f0c4bd91514` |
 | spec-t4-eigenstate-00 | pure | 2 | PASS | none | YES | 28 | 5.551e-17 | `78224941fd9084a57faa778af485532c345749b2a22396432797b03c2c4c7d10` |
 | spec-t5-relational-phase | pure | 2 | PASS | none | YES | 28 | 2.220e-16 | `407fbb62ccd7180b0abbcdb8ad59399ca29c19a61d6132bb21d68a58ae9d6384` |
+| spec-p2-tilted-h0 | pure | 2 | PASS | none | YES | 28 | 2.220e-16 | `754094bd4ff835859cd62a94e56852a1989cd8aa781c9d442326b484c130714a` |
 | spec-n3-wrong-weight | pure | 2 | FAIL | POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED | YES | 0 | 0.000e0 | `1cfcb09a64ad6aa1042d2c67ebfdcf3f77c4ef77d6c1a3616516e4bc4b0fd150` |
 | spec-n4-dropped-effect | pure | 2 | FAIL | POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED | YES | 0 | 0.000e0 | `88e01e412c8b6e750dc91e6fec54eacd4ddfae337a286fbddcc1748a2623de10` |
 | nc-dephased-control | dephased | 2 | FAIL | SCHRODINGER_DEVIATION_EXCEEDED | YES | 28 | 0.000e0 | `eec3e050cf5e0a509d6121dd22b8b1dfe80529ded33384a65558b1dec53e0a64` |

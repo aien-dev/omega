@@ -47,7 +47,7 @@ At the contract maximum `N = 64`, `M = 256` the matrix bound is `8 * 320 * eps`,
 
 | Measurement | Value | Where |
 |---|---|---|
-| Largest deviation of any matrix-path or analytic-path Pauli probability from its hand-derived exact rational, over the 11 fixtures that carry expectations (N in 3..8, offsets, phases, draft spec) | `2.2e-16` | `fixtures/CALIBRATION.md` |
+| Largest deviation of any matrix-path or analytic-path Pauli probability from its hand-derived exact rational, over the 12 fixtures that carry expectations (N in 3..8, offsets, phases, spec section 13 tables incl. the tilted-field P2 table) | `2.2e-16` | `fixtures/CALIBRATION.md` |
 | Same for the clock probabilities `1/N` | `<= 2.2e-16` | same |
 | `constraint_residual`, ideal cases | exactly `0` | `*.values` |
 | `constraint_residual`, tilted field (`p2-tilted-3-10-2-5`, `p2-h0-shift`) | `9.8e-18` | `*.values` |
@@ -55,7 +55,7 @@ At the contract maximum `N = 64`, `M = 256` the matrix bound is `8 * 320 * eps`,
 | `povm_residual`, `N = 8` | `1.8e-15` | `*.values` |
 | Agreement between the three independent routes (matrix, Schrodinger closed form, Bloch rotation) | `<= 1e-12` asserted, `~1e-16` observed | tests |
 | Agreement between the vector route and the density-matrix route inside the matrix path | `<= 1e-12` asserted | tests |
-| Bit-for-bit agreement of every `f64:` value token with the earlier Python/CPython 3.12 version of this oracle on the same machine | all 21 fixtures identical | checked with `cmp` before that version was removed |
+| Bit-for-bit agreement of every `f64:` value token with the earlier Python/CPython 3.12 version of this oracle on the same machine | all 21 fixtures of the first release identical | checked with `cmp` before that version was removed |
 
 Observed errors sit one to two orders of magnitude below the stated bounds and three to
 four below the `1@12` tolerances. The margin is intentional: ESTIMATED bounds must not be

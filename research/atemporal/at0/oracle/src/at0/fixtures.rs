@@ -89,12 +89,22 @@ pub fn catalogue() -> Vec<Fixture> {
     let mut rig = neg(&["BOUND_KIND_INSUFFICIENT"]);
     rig.min_bound_kind = "RIGOROUS";
     out.push(Fixture { name: "n5-rigorous-demand", case: build_case("n5-rigorous-demand", &clock(4), zhalf, "t0", PLUS, r(1, 4), r(1, 1), &l4, &rig), dephased: false, expected: None });
-    // AT0_SPEC draft (section 12 mapping): two-level clock, H_S = diag(0, 1), omega = 1, phi = 0.
+    // AT0_SPEC.md at SPEC_COMMIT (section 12 mapping, section 13.2 P1c): two-level clock, H_S = diag(0, 1), omega = 1, phi = 0.
     let spec_e = [r(-1, 1), ZEROR];
     let spec_h = [half(), ZEROR, ZEROR, r(-1, 2)];
     out.push(Fixture { name: "spec-ref-model-n4", case: build_case("spec-ref-model-n4", &spec_e, spec_h, "t0", PLUS, r(1, 4), half(), &l4, &pos), dephased: false, expected: Some(table(&[(2, 1, 1, 4), (1, 0, 1, 4), (0, 1, 1, 4), (1, 2, 1, 4)])) });
     out.push(Fixture { name: "spec-t4-eigenstate-00", case: build_case("spec-t4-eigenstate-00", &spec_e, spec_h, "t0", [(r(1, 1), ZEROR), (ZEROR, ZEROR)], r(1, 4), half(), &l4, &pos), dephased: false, expected: Some(table(&[(1, 1, 2, 4); 4])) });
     out.push(Fixture { name: "spec-t5-relational-phase", case: build_case("spec-t5-relational-phase", &spec_e, spec_h, "t0", [(r(1, 1), ZEROR), (ZEROR, r(1, 1))], r(1, 4), half(), &l4, &pos), dephased: false, expected: Some(table(&[(1, 2, 1, 4), (2, 1, 1, 4), (1, 0, 1, 4), (0, 1, 1, 4)])) });
+    // AT0_SPEC.md section 13.2 P2: h0 = 1/10, h = (3/10, 0, 2/5), |h| = 1/2, clock E = -3/5, 2/5, psi_0 = |0>,
+    // tau = 1/4, w = 1/2, M = 4. Bloch vector rotates about n = (3/5, 0, 4/5) by k pi / 2 (Rodrigues):
+    // k=1: (12/25, -3/5, 16/25), k=2: (24/25, 0, 7/25), k=3: (12/25, 3/5, 16/25); P(A+) = (1 + r_A)/2.
+    let p2x = |x: Rat, y: Rat, z: Rat| Some([x, y, z, r(1, 4)]);
+    out.push(Fixture {
+        name: "spec-p2-tilted-h0",
+        case: build_case("spec-p2-tilted-h0", &[r(-3, 5), r(2, 5)], [r(1, 10), r(3, 10), ZEROR, r(2, 5)], "t0", [(r(1, 1), ZEROR), (ZEROR, ZEROR)], r(1, 4), half(), &l4, &pos),
+        dephased: false,
+        expected: Some(vec![p2x(half(), half(), r(1, 1)), p2x(r(37, 50), r(1, 5), r(41, 50)), p2x(r(49, 50), half(), r(16, 25)), p2x(r(37, 50), r(4, 5), r(41, 50))]),
+    });
     out.push(Fixture { name: "spec-n3-wrong-weight", case: build_case("spec-n3-wrong-weight", &spec_e, spec_h, "t0", PLUS, r(1, 4), r(1, 4), &l4, &neg(&["POVM_NORMALIZATION_EXCEEDED", "PROBABILITY_SUM_EXCEEDED"])), dephased: false, expected: None });
     out.push(Fixture { name: "spec-n4-dropped-effect", case: build_case("spec-n4-dropped-effect", &spec_e, spec_h, "t0", PLUS, r(1, 4), half(), &l4[..3], &neg(&["POVM_NORMALIZATION_EXCEEDED", "PROBABILITY_SUM_EXCEEDED"])), dephased: false, expected: None });
     out.push(Fixture { name: "nc-dephased-control", case: build_case("nc-dephased-control", &clock(4), zhalf, "t0", PLUS, r(1, 4), r(1, 1), &l4, &neg(&["SCHRODINGER_DEVIATION_EXCEEDED"])), dephased: true, expected: Some(table(&[(1, 1, 1, 4); 4])) });

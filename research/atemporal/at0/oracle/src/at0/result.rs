@@ -297,7 +297,9 @@ pub fn judge(c: &Case, vlines: &[String], bound_kind: &str) -> Result<Verdict, S
         rng.push(signed_form(&p.neg(), b, &tol_pr));
         rng.push(signed_form(&p.sub(&one), b, &tol_pr));
     }
-    set("probability_range", combine(&rng), "PROBABILITY_OUT_OF_RANGE", &mut checks, &mut codes);
+    // V2 section 4: on a trivial kernel checks 4, 6, 7, 8, 9, 10 are NOT_EVALUATED even though the
+    // reference lines are still written (Agent 5 finding D4).
+    set("probability_range", if live { combine(&rng) } else { "NOT_EVALUATED" }, "PROBABILITY_OUT_OF_RANGE", &mut checks, &mut codes);
     let defined: Vec<usize> = v.label.iter().filter(|(_, st)| st == "DEFINED").map(|(k, _)| *k).collect();
     let find = |list: &[(usize, usize, usize, Option<Exact>, Exact)], k: usize, ax: usize, si: usize| -> Option<(Option<Exact>, Exact)> {
         list.iter().find(|e| e.0 == k && e.1 == ax && e.2 == si).map(|e| (e.3.clone(), e.4.clone()))

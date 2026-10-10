@@ -397,7 +397,11 @@ mod tests {
         // N1 uncovered
         let n1 = compute(&parse_case(&build_case("n1", &[r(1, 1), r(2, 1), r(3, 1), r(4, 1)], zhalf(), "t0", plus(), r(1, 4), r(1, 1), &l4, &Acceptance::negative(&["TRIVIAL_PHYSICAL_STATE"]))).unwrap(), false);
         assert_eq!(n1.verdict.codes, vec!["TRIVIAL_PHYSICAL_STATE"]);
-        assert!(n1.verdict.checks.contains(&("constraint_residual", "NOT_EVALUATED")));
+        // V2 section 4 trivial-kernel table: check 3 FAIL, checks 4, 6, 7, 8, 9, 10 NOT_EVALUATED, 1, 2, 5 evaluated
+        for (i, (name, res)) in n1.verdict.checks.iter().enumerate() {
+            let want = match i + 1 { 3 => "FAIL", 4 | 6 | 7 | 8 | 9 | 10 => "NOT_EVALUATED", _ => "PASS" };
+            assert_eq!(*res, want, "check {} {}", i + 1, name);
+        }
         assert!(n1.verdict_lines.contains(&"expectation_met YES".to_string()));
         assert!(n1.values.iter().filter(|l| l.contains(" undefined 0@0")).count() == 1 + 4 + 24);
         // N2 half covered
@@ -422,7 +426,7 @@ mod tests {
         assert_eq!(n5.verdict.codes, vec!["BOUND_KIND_INSUFFICIENT"]);
     }
 
-    /// AT0_SPEC draft (aien-architecture#176 at SPEC_DRAFT_COMMIT): two-level clock,
+    /// AT0_SPEC.md (aien-architecture#176, merged at SPEC_COMMIT), sections 1 and 13: two-level clock,
     /// H_S = diag(0, 1): P(X+) = (1 + cos th)/2, P(Y+) = (1 - sin th)/2, P(Z+) = 1/2, p_k = 1/4.
     #[test]
     fn spec_draft_reference_model() {
@@ -516,7 +520,7 @@ mod tests {
     #[test]
     fn fixtures_render_and_meet_expectations() {
         let rendered = super::at0::fixtures::render();
-        assert_eq!(rendered.files.len(), 21 * 2 + 1);
+        assert_eq!(rendered.files.len(), 22 * 2 + 1);
         for f in super::at0::fixtures::catalogue() {
             let c = parse_case(&f.case).unwrap();
             let comp = compute(&c, f.dephased);
