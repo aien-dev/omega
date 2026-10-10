@@ -4,38 +4,38 @@
       "children": [
         {
           "digest": "7095b71ea2f1ecd9bbb9e8be207e4e6311eeb7f701f5b631575dcbcdb8075881",
-          "last_commit": "f0bac17",
+          "last_commit": "f0bac17c",
           "name": "evaluator",
           "purpose": "Agent 4 independent adversarial evaluator for AT-0: independent AT0_CASE_V1 codec, exact-arithme"
         },
         {
           "digest": "554ae9523d982995a398c5d1a6d3c2cbddcf3d8101339b8be38a27872c07f87a",
-          "last_commit": "6544622",
+          "last_commit": "ca3fa7c0",
           "name": "integration",
           "purpose": "AT-0 Agent 5 integration runner, exact result assembler/judge, hygiene and isolation controls, a"
         },
         {
-          "digest": "ef28d16f103c0c1c4df8e35be927bd79020d2f22f6dc575e114fa64d6975bbc5",
-          "last_commit": "ee29a2c",
+          "digest": "412b7b17d778908a08547c6555d1bb684e26b8fcf16eae953cd4a23510028ba9",
+          "last_commit": "f768beb0",
           "name": "model",
           "purpose": "Agent 3 candidate relational quantum engine in portable C11: state, Hamiltonians, constraint ker"
         },
         {
           "digest": "24340ae691dce9743ee4d3eedf80ae0d362dd707cac0b6bae6ebbb562dafcf39",
-          "last_commit": "026bad0",
+          "last_commit": "026bad06",
           "name": "oracle",
           "purpose": "AT-0 reference oracle (Rust, standard library only, built by rustc directly; research cross-chec"
         }
       ],
-      "children_root": "sha256:ee5230f13656022c0fcb7288b9afad7235903bb73ee55f434e364c77aab0dfc8",
-      "compiled_at": "2026-10-10T00:35:14Z",
+      "children_root": "sha256:c75e543d08609c5a41f334998f4b9344f6eee4540e605eb15e6162761a0cfa30",
+      "compiled_at": "2026-10-10T00:41:47Z",
       "compiler": "crumb-compile/1",
-      "digest": "sha256:0fc2eb59ee87eca4edb56a3d46c177b11297a2843db24d68881253aa6fb20318",
+      "digest": "sha256:a806ac405f876e1c33a1400260ccb06ffdf1f441979ef57ac5ec809b396344e1",
       "evidence_files": 0,
       "evidence_root": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "files": 172,
-      "generated_at_commit": "65446224ac6ca84fe9de4bdfbbd32b2a9d9f55fe",
-      "source_tree": "sha256:f3e6932c40219b8dca450b77eb75e4656a04bc49a1ff35b91a685e94fbb7353d"
+      "files": 173,
+      "generated_at_commit": "f768beb0f76b857e9bfcf432db02135dd27be780",
+      "source_tree": "sha256:d4b8d221ac594a821f8f9bb503ada232ad5166f40e419f076a95b68572de20c8"
     }
   },
   "name": "at0",

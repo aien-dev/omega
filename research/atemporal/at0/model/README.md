@@ -139,6 +139,11 @@ than 2; `RIGOROUS` bounds; shot sampling; the oracle's `reference` lines and the
 - Independent review (Claude Opus 5.5 over the full diff, 2026-10-09) found five arithmetic-limit defects, all fixed and
   covered by `test_review_findings`; it confirmed the eigenvectors, kernel projection, phase reduction, Born rule and
   identity hashing. Codex review was unavailable (usage limit).
+- Agent 0 ruling (omega#358, third pass, R37): the fixed literals of AT0_CASE_V1 section 1 (`model_family`,
+  `energy_unit`, `system_dim`, `interaction`, `constraint`, `physical_state`, `clock_povm`, `observables`) are bare
+  grammar tokens, so a different token is a shape failure, `CASE_PARSE_ERROR`, judged in the shape pass; they are no
+  longer rule-3 parameters. The ruling named `model_family`; the same reading is applied to all eight (the evaluator
+  codec already does), stated here so it can be overruled.
 - Qualification fixes (Agent 5 first run, omega#363): D1 `ERR_OVERFLOW` on P5 (above), D2 noncanonical integers
   (`clock_dim 04`, `-0/1`) now `CASE_NONCANONICAL` instead of `CASE_PARSE_ERROR`, D6 file reader moved to `at0_io.c`,
   D8 spec pin moved to the merged commit. D3 (R31, R36: rule 1 against rule 3) is an Agent 0 contract call and is unchanged. Second Opus review (2026-10-09)
