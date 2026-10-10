@@ -1,0 +1,1 @@
+sh 'research/atemporal/at1/integration/run.sh' --out 'build/at1-dashnm/check'

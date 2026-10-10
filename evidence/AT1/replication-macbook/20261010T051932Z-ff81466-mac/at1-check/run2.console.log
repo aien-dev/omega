@@ -1,0 +1,25 @@
+AT-1 Agent 5 run 20261010T051243Z mode=check omega=ff814662a19cf7da6b183f3e667c6c921e0ead21 starting_checkout_clean=YES
+CONTROL C0-CONTRACT-DIGESTS PASS  all match contract.lock and the AT0_FREEZE.md rows (arch HEAD ea91d7c)
+CONTROL C0-COMPONENTS-AT-QUALIFIED-COMMIT NOT_RUN  components are those of HEAD
+BUILD oracle-build ok
+BUILD model-build ok
+BUILD evaluator-build ok
+CONTROL C1-BUILD-LEAVES-TREE-CLEAN PASS  empty (build outputs are git-ignored)
+CONTROL C1-MODEL-TESTS PASS  plain rc=0 (1390 passed, 0 failed); asan rc=0 (asan: -fsanitize=address,undefined not supported by /Users/drakestapleton/at1-replication/run-ff814662a19c/ccwrap/cc-nosan here; skipped)
+CONTROL C1-ORACLE-TESTS PASS  rc=0 (test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.61s)
+CONTROL C1-ORACLE-OWN-ISOLATION FAIL  Agent 2's own gate rc=1 (ISOLATION FAIL)
+CONTROL C1-EVALUATOR-TESTS PASS  rc=0; SELFTEST: PASS (550 assertions, 0 failed);corpus-check: 96 files, 0 differ;MUTANT_RECEIPT: PASS (244 cells, 0 unexpected) -> build/MUTANT_RECEIPT.tsv;AT1_ISOLATION_CONTROLS: PASS;
+cases: 96 (positive 12, negative 12, refuse 72); hidden sets not touched
+pass 1: evaluator run.sh rc=0
+pass 2: evaluator run.sh rc=0
+CONTROL C2-REPEATABILITY PASS  73 result files: 73/73 identical outside run_started_utc, run_finished_utc, evidence_digest (0/73 byte-identical); TABLE.tsv and VERDICT_IDS.tsv byte-identical; both runs rc=0
+CONTROL C3-SPLICE-AGREEMENT PASS  24/24 byte-identical (same verdict block, verdict_id, provenance and evidence_digest)
+CONTROL C4-SPLICE-READING-C PASS  24/24: all four reference_* families copied verbatim in values-block order (label, clock_probability, ideal, interacting), nothing else spliced
+CONTROL C5-PROVENANCE-PIN PASS  49/49 name contract_commit cbe4c8ed88d28bb96d5209327ecd30aa9cddaf7a, omega ff81466 and the built binaries; oracle build recorded source_tree_clean YES
+CONTROL C6-EVALUATION-ORDER PASS  24/24 byte-identical
+CONTROL C7-DIRECT-VERIFY PASS  24/24 AT1_VERIFY PASS, each matching the evaluator's TABLE.tsv case verdict
+CONTROL C8-ENGINE-MUTANT-DROP-V PASS  15/18 killed; blind: positive/P1a-zero-coupling-interacting.case positive/P1b-zero-coupling-ideal.case positive/P1c-spectator-coupling-ideal.case; every cell equals Agent 4's predicted KILLED/BLIND
+CONTROL C8-ENGINE-MUTANT-WRONG-LEVEL PASS  16/18 killed; blind: positive/P1a-zero-coupling-interacting.case positive/P1b-zero-coupling-ideal.case; every cell equals Agent 4's predicted KILLED/BLIND
+research/atemporal/at1/integration/run.sh: line 338: syntax error near unexpected token `;;'
+research/atemporal/at1/integration/run.sh: line 338: `    bad=$(grep '^FAIL' "$WORK/al.out" | while read -r l; do s=$(printf '%s' "$l" | sed -n 's/^FAIL: .* references \([A-Za-z0-9_]*\)$/\1/p'); case " $2 " in *" $s "*) [ -n "$s" ] || echo "$l";; *) echo "$l";; esac; done)'
+make: *** [at1-check] Error 2

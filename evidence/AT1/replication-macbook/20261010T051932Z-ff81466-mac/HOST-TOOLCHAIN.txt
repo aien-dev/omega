@@ -1,0 +1,27 @@
+# AT-1 Agent 7 phase 2: MacBook host and toolchain (recorded 2026-10-10T05:19:50Z)
+hostname Macbook.local
+sw_vers ProductName:		macOS
+sw_vers ProductVersion:		26.6.2
+sw_vers BuildVersion:		25G83
+uname Darwin Macbook.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:18:43 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_T8112 arm64
+hw.model Mac14,2
+cpu Apple M2
+cc Apple clang version 17.0.0 (clang-1700.6.4.2)
+cc target Target: arm64-apple-darwin25.6.0
+xcode-select /Library/Developer/CommandLineTools
+make GNU Make 3.81
+shasum 6.02 (/usr/bin/shasum)
+sha256sum /sbin/sha256sum sha256sum (Darwin) 1.0
+git git version 2.50.1 (Apple Git-155)
+rustc rustc 1.97.1 (8bab26f4f 2026-07-14) (LLVM 22.1.6)
+cargo cargo 1.97.1 (c980f4866 2026-06-30)
+rustup rustup 1.29.0 (28d1352db 2026-03-05)
+apple nm Apple LLVM version 17.0.0
+substituted nm /Users/drakestapleton/at1-replication/run-ff814662a19c/nmwrap/nm -> /Users/drakestapleton/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/aarch64-apple-darwin/bin/llvm-nm (LLVM version 22.1.6)
+/bin/sh GNU bash, version 3.2.57(1)-release (arm64-apple-darwin25)
+substituted sh /Users/drakestapleton/at1-replication/run-ff814662a19c/shwrap/sh -> /bin/dash
+otool /usr/bin/otool
+objdump /usr/bin/objdump (Apple LLVM version 17.0.0)
+omega HEAD ff814662a19cf7da6b183f3e667c6c921e0ead21 tree 298bae1846b4c2237b6dad7461a8a5ee825bad2e commits-in-clone 1
+omega remote https://github.com/aien-dev/omega.git
+aien-architecture clone HEAD ea91d7c06507c8e43fdcef2b685f29d88a9e7d81

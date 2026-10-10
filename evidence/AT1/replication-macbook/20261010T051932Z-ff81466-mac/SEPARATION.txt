@@ -1,0 +1,26 @@
+AT-1 Agent 7 (independent replication, MacBook): separation record for phase 2
+
+Facts, stated plainly:
+- Spark session over ssh, same GitHub account; hidden cases held only on the MacBook outside git;
+  builder branches and Spark evidence not read.
+- The orchestrating session runs on the Spark and drives the MacBook over ssh (host "mac").
+  Both machines use the same GitHub account (Drake Stapleton). This is procedural separation,
+  not separation of people or machines-of-record.
+- The hidden set (21 AT1_CASE_V1 files, EXPECTED.tsv, DETAILS.txt) was generated on the MacBook
+  from a seed that never left the MacBook before this commit (~/at1-hidden/private/SEED, mode 600,
+  outside any git checkout). Its commitment 63b2edf061ffe88f4560a31391ed4945e71ed3e607aab87c2b932c7e2438a2e6
+  was posted on omega#371 before the freeze. hidden-set-reveal/RECOMPUTE.log recomputes it.
+- Never read, cloned or inspected: the builder branches at1/oracle-v1, at1/model-v1, at1/evaluator-v1;
+  any Spark evidence/AT1/** folder; integration/QUALIFICATION.md; evaluator/results/.
+- Read after the freeze (as the coordinator instructed, to run the frozen tree): mk/at1.mk,
+  research/atemporal/at1/integration/run.sh, engine_shim.sh, oracle_shim.sh, contract.lock,
+  evaluator/run.sh, the evaluator README usage section, qualify() in the evaluator source,
+  model/Makefile (asan target), oracle/isolation.sh (object rule), to diagnose the Mac-only failures.
+- Seen before this commit: one summary line of the freeze comment on omega#371 (comment 6093971637)
+  reporting the Spark run as "make at1-check exit 0, gates G0 REFERENCE, G1 to G6 PASS, 23 controls".
+  No Spark result file, values block, verdict_id list or receipt was read. The verdict_ids in
+  hidden-run/out/VERDICT_IDS.tsv and at1-check/run4-out/results were not compared with any Spark list
+  before this commit.
+- No builder worker was messaged.
+- No contract, oracle, engine or evaluator file was edited. Substitutions were made only through PATH
+  shims and CC (see G7-REPORT.md section 3).
