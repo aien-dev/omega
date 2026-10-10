@@ -1,6 +1,6 @@
 # AT-1 qualification report (Agent 5): first run and G1 rerun
 
-**Status: QUALIFIED ON SPEC CONFORMANCE. On omega `f2b9e33` (run 2): G1 PASS (refusals 72/72), G2, G3, G4 (12/12), G5 (12/12) and G6 PASS, G0 REFERENCE, G7 and G8 NOT_RUN, 23 controls with 0 failing, runner exit 0. On omega `29e3c37` (run 1): G2 to G6 PASS and G1 FAIL on X7 alone (D1, since FIXED by the ruled oracle change in `f2b9e33`). D1 FIXED; D2 OPEN, informational.**
+**Status: QUALIFIED ON SPEC CONFORMANCE. On omega `f2b9e33` (run 2): G1 PASS (refusals 72/72), G2, G3, G4 (12/12), G5 (12/12) and G6 PASS, G0 REFERENCE, G7 and G8 NOT_RUN, 23 controls with 0 failing, runner exit 0. On omega `29e3c37` (run 1): G2 to G6 PASS and G1 FAIL on X7 alone (D1, since FIXED by the ruled oracle change in `f2b9e33`). D1 FIXED; D2 FIXED (post-freeze follow-up, see table).**
 
 This is software conformance of the AT-1 implementation to its frozen contracts (AT1_CHARTER.md section 1). It is not a result about time or physics. PASS means spec conformance only. The run covers one platform (aarch64 Linux, glibc, gcc 13.3.0, rustc 1.98.1, GNU Make 4.3, dash). The evaluator runs UNISOLATED (same host and same account as the candidates), so nothing here is blinded.
 
@@ -81,7 +81,7 @@ All 23 rows PASS in both runs. They are:
 - C8 engine mutants (Q3).
 - C9 to C13 isolation:
   - the strict engine set `at1_case.o at1_exact.o at1_numeric.o at1_result.o sha256.o` is clean;
-  - `at1_bn.o` has only `fwrite` exempt (D2) and `at1_io.o` only `fopen`/`fread`;
+  - `at1_bn.o` had only `fwrite` exempt (D2, since FIXED: strict after the follow-up below) and `at1_io.o` only `fopen`/`fread`;
   - `at1_main.o` is recorded only;
   - the oracle rlib member is clean;
   - mutants are caught, and the gate controls behave as intended.
@@ -97,7 +97,7 @@ All 23 rows PASS in both runs. They are:
 | D | Status | What | Evidence |
 |---|---|---|---|
 | D1 | **FIXED** (f2b9e33, #378) | Refusal row X7 (`clock_dim 0`, `clock_energies none`). Run 1: engine and evaluator manifest said CASE_INVALID_PARAMETER, the oracle said CASE_PARSE_ERROR. Agent 0 ruled CASE_INVALID_PARAMETER on omega#371 (issuecomment-6093816127). The oracle reading changed in omega `f2b9e33` (#378: `split_list` reads `none` as the empty list), landed by the orchestrator; I did not patch the oracle | Run 2 G1 PASS: refusal PASS 72 FAIL 0 (`evidence/AT1/20261010T044344Z-18e1786/receipts/gates.tsv`) |
-| D2 | OPEN, informational | `model/at1_bn.o` references `fwrite` (gcc lowers its out-of-memory `fputs` to stderr to `fwrite`). Agent 4's gate bans `fwrite`, so a strict scan of that object fails. C9 scans it with only `fwrite` exempt and every other engine compute object strictly | `receipts/isolation-engine-bn.log`. Posted for Agents 3 and 4 on omega#371 (issuecomment-6093822760) |
+| D2 | FIXED (follow-up after the ff81466 freeze; G7 ran on the frozen commit) | `model/at1_bn.o` references `fwrite` (gcc lowers its out-of-memory `fputs` to stderr to `fwrite`). Agent 4's gate bans `fwrite`, so a strict scan of that object fails. C9 scans it with only `fwrite` exempt and every other engine compute object strictly | `receipts/isolation-engine-bn.log`. Posted for Agents 3 and 4 on omega#371 (issuecomment-6093822760). Fix: `at1_fatal` (one `fprintf` line to stderr, exit 1) defined in `at1_io.c`, the four `fputs`+`exit` sites in `at1_bn.c` call it; `at1_bn.o` joins the strict set in `run.sh` |
 
 Also recorded on omega#371 by Agent 0 (no action here): Agent 3's ERROR label token is `UNDEFINED`, and Agent 1's spec 13.6 items 1 to 3 are closed by readings (c), (d) and (e). C4 confirms that all four families are spliced.
 
