@@ -1,0 +1,99 @@
+mkdir -p build
+rustc --edition 2021 -O --test src/main.rs -o build/at1-eval-test
+warning: method `is_even` is never used
+   --> src/big.rs:388:12
+    |
+188 | impl Int {
+    | -------- method in this implementation
+...
+388 |     pub fn is_even(&self) -> bool {
+    |            ^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: fields `name` and `control_positive` are never read
+  --> src/case.rs:62:9
+   |
+61 | pub struct Case {
+   |            ---- fields in this struct
+62 |     pub name: String,
+   |         ^^^^
+...
+75 |     pub control_positive: bool,
+   |         ^^^^^^^^^^^^^^^^
+   |
+   = note: `Case` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+
+warning: method `abs` is never used
+  --> src/dd.rs:96:12
+   |
+43 | impl Dd {
+   | ------- method in this implementation
+...
+96 |     pub fn abs(self) -> Dd {
+   |            ^^^
+
+warning: function `ideal_marginal` is never used
+   --> src/model.rs:505:8
+    |
+505 | pub fn ideal_marginal(c: &Case) -> Q {
+    |        ^^^^^^^^^^^^^^
+
+warning: method `floor` is never used
+  --> src/rat.rs:73:12
+   |
+14 | impl Q {
+   | ------ method in this implementation
+...
+73 |     pub fn floor(&self) -> Int {
+   |            ^^^^^
+
+warning: method `sub` is never used
+   --> src/rat.rs:151:12
+    |
+135 | impl Cq {
+    | ------- method in this implementation
+...
+151 |     pub fn sub(&self, o: &Cq) -> Cq {
+    |            ^^^
+
+warning: function `none_bound` is never used
+   --> src/synth.rs:259:8
+    |
+259 | pub fn none_bound() -> Scaled {
+    |        ^^^^^^^^^^
+
+warning: 7 warnings emitted
+
+./build/at1-eval-test
+
+running 10 tests
+test big::tests::dec_roundtrip_and_division ... ok
+test dd::tests::dd_basics ... ok
+test big::tests::knuth_d_random_like ... ok
+test sha256::tests::vectors ... ok
+test rat::tests::f64_exact ... ok
+test rat::tests::grammars ... ok
+test qualify::tests::scan_detects_patterns_in_a_crafted_elf ... ok
+test text::tests::byte_rules ... ok
+test qualify::tests::selftest_passes ... ok
+test qualify::tests::hidden_generator_is_deterministic_and_valid ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+./build/at1-eval selftest
+SELFTEST: PASS (550 assertions, 0 failed)
+./build/at1-eval corpus-check cases
+corpus-check: 96 files, 0 differ
+./build/at1-eval mutants build/MUTANT_RECEIPT.tsv
+MUTANT_RECEIPT: PASS (244 cells, 0 unexpected) -> build/MUTANT_RECEIPT.tsv
+cmp build/MUTANT_RECEIPT.tsv results/MUTANT_RECEIPT.tsv
+CC="cc" sh gates/isolation.sh --controls ./build/at1-eval build/ISOLATION_RECEIPT.txt
+# AT-1 G2 gate controls: Linux aarch64, CC=cc (cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0)
+clean_control	gate=PASS	want=PASS	AS_INTENDED	
+hidden_clock_mutant	gate=FAIL	want=FAIL	AS_INTENDED	FAIL: hidden_clock_mutant.o references clock_gettime
+counter_mutant	gate=FAIL	want=FAIL	AS_INTENDED	FAIL: instruction counter_mutant.o .text +0x0: d53be040 MRS from the generic timer (CNT*_EL0)
+raw_syscall_mutant	gate=FAIL	want=FAIL	AS_INTENDED	FAIL: instruction raw_syscall_mutant.o .text +0x34: d4000001 SVC (raw system call)
+counter_mutant	symbol-scan-only=PASS (blind, as expected)
+raw_syscall_mutant	symbol-scan-only=PASS (blind, as expected)
+AT1_ISOLATION_CONTROLS: PASS

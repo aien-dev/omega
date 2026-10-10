@@ -1,0 +1,31 @@
+
+running 26 tests
+test at1::complex::tests::algebra ... ok
+test at1::big::tests::nat_int_q_basics ... ok
+test tests::bound_tokens_never_round_down ... ok
+test at1::big::tests::to_f64_is_correctly_rounded ... ok
+test at1::sha256::tests::test_vectors ... ok
+test tests::charter_readings_d_and_e_and_declared_token_readings ... ok
+test tests::inherited_at0_refusal_rows_on_p2 ... ok
+test tests::label_status_mismatch_fails_check_12 ... ok
+test tests::oracle_record_marking_is_enforced ... ok
+test tests::spec_13_5_refusal_classes ... ok
+test tests::review_finding_1_large_field_cancelling_large_coupling ... ok
+test tests::trivial_kernel_rule ... ok
+test tests::n3_zero_label_is_undefined_with_zero_bound_lines ... ok
+test tests::mutants_m3_m4_are_visible_on_p2 ... ok
+test tests::nonfinite_value_fails_check_2 ... ok
+test tests::t4_t5_global_phase_and_scale ... ok
+test tests::worked_example_identities_are_byte_exact ... ok
+test tests::t7_reference_shift_relabels ... ok
+test tests::t9_wall_clock_independence_and_record_shape ... ok
+test tests::values_parser_enforces_undefined_placement ... ok
+test tests::mutant_m1_drop_v ... ok
+test tests::n1_family_fails_check_10_and_passes_check_11 ... ok
+test tests::every_case_meets_its_own_expectation ... ok
+test tests::t6_purity_of_every_defined_label ... ok
+test tests::every_section13_table_matches_on_both_routes_within_bounds ... ok
+test tests::review_finding_2_large_clocks ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.73s
+

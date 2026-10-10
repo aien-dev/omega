@@ -1,0 +1,2 @@
+FAIL: instruction <work>/riso/counter/iso/lib.at1_mutant.714de242230a5bab-cgu.0.rcgu.o .text._RNvCs9J7b2WALHLj_10at1_mutant14hidden_counter +0x8: d53be040 MRS from the generic timer (CNT*_EL0)
+AT1_ISOLATION: FAIL

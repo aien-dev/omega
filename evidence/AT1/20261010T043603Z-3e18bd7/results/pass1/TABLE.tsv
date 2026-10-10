@@ -1,0 +1,106 @@
+# path	class	expected	codec	engine	oracle	derived_outcome	derived_codes	case_verdict	findings
+positive/P1a-zero-coupling-interacting.case	P1	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P1b-zero-coupling-ideal.case	P1	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P1c-spectator-coupling-ideal.case	P1	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P2-kat-rotated-level-n4.case	P2	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P2t4-global-phase-i.case	P2	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P2t5-scale-2.case	P2	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P3-every-level-coupled.case	P3	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P3b-degenerate-level.case	P3	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P4-complex-psi-ref-t1.case	P4	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P4t7-complex-psi-ref-t0.case	P4	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P5-large-rationals.case	P5	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+positive/P6-near-miss-energies.case	P6	AT1_CASE_OK	ok	ran	ran	PASS	none	PASS	none
+negative/N1-p2-target-ideal.case	N1	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+negative/N1b-p3-target-ideal.case	N1	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+negative/N1c-p3b-target-ideal.case	N1	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+negative/N1d-p4-target-ideal.case	N1	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+negative/N1e-p5-target-ideal.case	N1	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+negative/N1f-p6-target-ideal.case	N1	AT1_CASE_OK	ok	ran	ran	FAIL	SCHRODINGER_DEVIATION_EXCEEDED	PASS	none
+negative/N2-every-level-out.case	N2	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+negative/N3-zero-label.case	N3	AT1_CASE_OK	ok	ran	ran	FAIL	CONDITIONAL_UNDEFINED	PASS	none
+negative/N4a-wrong-weight.case	N4	AT1_CASE_OK	ok	ran	ran	FAIL	POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED	PASS	none
+negative/N4b-broken-clock-tau3.case	N4	AT1_CASE_OK	ok	ran	ran	FAIL	POVM_NORMALIZATION_EXCEEDED,PROBABILITY_SUM_EXCEEDED	PASS	none
+negative/N5-precision-demand.case	N5	AT1_CASE_OK	ok	ran	ran	FAIL	BOUND_KIND_INSUFFICIENT	PASS	none
+negative/N6-zero-projection.case	N6	AT1_CASE_OK	ok	ran	ran	FAIL	TRIVIAL_PHYSICAL_STATE	PASS	none
+refuse/R0a-line-removed.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R0b-one-crlf-line.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R1-noncanonical-tau.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R2-header-v2.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R2b-domain-v2.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R2c-contract-v2.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R3-clock-dim-65.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R3b-clock-dim-1.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R4-irrational-level.case	R4	AT1_CASE_REFUSED CASE_IRRATIONAL_SPECTRUM	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R4b-irrational-h.case	R4	AT1_CASE_REFUSED CASE_IRRATIONAL_SPECTRUM	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R5-case-id-digit.case	R5	AT1_CASE_REFUSED CASE_ID_MISMATCH	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R5b-acceptance-id-digit.case	R5	AT1_CASE_REFUSED CASE_ID_MISMATCH	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R6-fail-without-codes.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R6b-code-outside-set.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R7-coupling-count.case	R7	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R8-coupling-order.case	R8	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R9-interaction-none.case	R9	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R10-at0-model-family.case	R10	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R11-at0-constraint.case	R11	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R12-target-both.case	R12	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R12b-target-missing.case	R12	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R13-noncanonical-coupling.case	R13	AT1_CASE_REFUSED CASE_NONCANONICAL	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R14-coupling-over-limit.case	R14	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R01-noncanonical-rational.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R02-header-v2.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R03-clock-dim-1.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R04-irrational-spectrum.case	R4	AT1_CASE_REFUSED CASE_IRRATIONAL_SPECTRUM	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R05-wrong-case-id.case	R5	AT1_CASE_REFUSED CASE_ID_MISMATCH	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R06-codes-with-pass.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R06b-codes-unsorted.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R06c-codes-unknown.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R06d-fail-without-codes.case	R6	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R07-crlf.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R08-tab.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R09-blank-line.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R10-trailing-space.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R11-double-space.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R12-missing-key.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R13-unknown-key.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R14-duplicate-key.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R15-out-of-order.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R16-float-text.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R17-noncanonical-integer.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R18-noncanonical-scaled.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R19-label-uppercase.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R20-energies-not-increasing.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R21-psi-zero.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R22-tau-zero.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R23-weight-negative.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R24-wrong-domain.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R25-wrong-contract.case	R2	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R26-clock-dim-65.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R27-rational-over-limit.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R28-duplicate-label.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R29-ref-label-missing.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R30-negative-zero.case	R1	AT1_CASE_REFUSED CASE_NONCANONICAL	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R31-control-kind-bad.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R32-case-name-two-tokens.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R33-missing-final-lf.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R34-empty.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R35-trailing-line.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R36-label-count-mismatch.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R37-model-family-bad.case	R0	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R38-acceptance-id-wrong.case	R5	AT1_CASE_REFUSED CASE_ID_MISMATCH	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/R39-huge-digits-tau.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/X1-at0-header.case	Rd	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/X2-at0-domain.case	Rd	AT1_CASE_REFUSED CASE_UNSUPPORTED_VERSION	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/X3-coupling-index-01.case	Re	AT1_CASE_REFUSED CASE_NONCANONICAL	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/X4-coupling-index-a.case	Re	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/X5-coupling-index-wrong.case	Re	AT1_CASE_REFUSED CASE_PARSE_ERROR	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/X6-clock-label-index-01.case	Re	AT1_CASE_REFUSED CASE_NONCANONICAL	ok	refused-exactly	refused-exactly	-	-	PASS	-
+refuse/X7-clock-dim-0-none.case	R3	AT1_CASE_REFUSED CASE_INVALID_PARAMETER	ok	refused-exactly	exit Some(2) stderr "AT1_CASE_REFUSED CASE_PARSE_ERROR" (want exit 2 and one line `AT1_CASE_REFUSED CASE_INVALID_PARAMETER`)	-	-	FAIL	-
+# negative: PASS 12 FAIL 0 INDETERMINATE 0
+# positive: PASS 12 FAIL 0 INDETERMINATE 0
+# refusal: PASS 71 FAIL 1 INDETERMINATE 0
+# AT1-G1 codec conformance (my codec, engine and oracle refusals exact; KAT digests copied): FAIL
+# T9 wall-clock independence (engine run twice, TZ and environment changed): PASS (case_id, acceptance_id, values block and verdict_id identical; each evidence_digest recomputes, so it differs whenever the covered bytes differ)
+# AT1-G2 isolation: not judged here; run gates/isolation.sh on the compute objects
+# AT1-G3 oracle calibration (every oracle record against the exact shadow, which reproduces the AT1_SPEC 13 hand tables in selftest): PASS
+# AT1-G4 positive arm (every POSITIVE case verifies PASS): PASS
+# AT1-G5 negative arm, candidate part (every NEGATIVE case FAILs with exactly its codes); mutant part: `at1-eval mutants`: PASS

@@ -1,0 +1,6 @@
+mk/polyglot.mk:127: warning: undefined variable 'POLYGLOT_LANE_OBJS'
+mk/polyglot.mk:135: warning: undefined variable 'POLYGLOT_LANE_OBJS'
+mk/polyglot.mk:145: warning: undefined variable 'POLYGLOT_LANE_OBJS'
+mk/polyglot.mk:131: warning: undefined variable 'POLYGLOT_LANE_OBJS'
+sh 'research/atemporal/at1/integration/run.sh' --out 'build/at1/check'
+case 'build/at1' in at1|*/at1) rm -rf -- 'build/at1';; *) echo "at1-clean: AT1_OUT='build/at1' does not end in /at1; not removed" >&2; exit 1;; esac

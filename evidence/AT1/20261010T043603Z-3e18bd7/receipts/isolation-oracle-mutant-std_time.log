@@ -1,0 +1,2 @@
+FAIL: <work>/riso/std_time/iso/lib.at1_mutant.714de242230a5bab-cgu.0.rcgu.o references a Rust std time/env/fs/net/process/thread or rand path
+AT1_ISOLATION: FAIL

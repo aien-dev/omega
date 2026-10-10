@@ -1,0 +1,9 @@
+AT1-G0	REFERENCE	AT0_FREEZE.md AT-1 rows, AT1_CHARTER.md section 11; control C0	freeze recorded by Agent 0 (aien-architecture contract cbe4c8e, spec 81047f5, from contract.lock); this run: C0-CONTRACT-DIGESTS PASS
+AT1-G1	PASS	evaluator TABLE.tsv line AT1-G1 (evaluator codec, engine and oracle refusals exact on every refuse row; KAT digests copied)	refusal rows: PASS 72 FAIL 0 INDETERMINATE 0; failing rows: none
+AT1-G2	PASS	controls C9-C16 and C1-ORACLE-OWN-ISOLATION (Agent 4's gates/isolation.sh on engine and oracle compute objects, engine-object and Rust mutants for clock symbol, counter read and raw system call; gate controls; make hygiene)	symbol + instruction scans of compute objects only; the evaluator is UNISOLATED (same host, same account); what the scans cannot see is listed in QUALIFICATION.md
+AT1-G3	PASS	evaluator TABLE.tsv line AT1-G3 (every oracle record against the evaluator's exact shadow)	oracle records judged on 24 valid cases
+AT1-G4	PASS	evaluator TABLE.tsv line AT1-G4 (every POSITIVE case verifies PASS)	positive: PASS 12 FAIL 0 INDETERMINATE 0
+AT1-G5	PASS	evaluator TABLE.tsv line AT1-G5 (every NEGATIVE case FAILs with exactly its codes) and evaluator run.sh mutant receipt cmp	negative: PASS 12 FAIL 0 INDETERMINATE 0; MUTANT_RECEIPT: PASS (244 cells, 0 unexpected) -> build/MUTANT_RECEIPT.tsv
+AT1-G6	PASS	evaluator lines on this host: corpus-check 0 differ, SELFTEST PASS, MUTANT_RECEIPT PASS (cmp with the committed receipt), AT1-G3, AT1-G4, AT1-G5 PASS, T9 PASS	run.sh rc=0; SELFTEST: PASS (550 assertions, 0 failed); corpus-check: 96 files, 0 differ; T9 PASS; the evaluator ran on the same host and account as the candidates (UNISOLATED)
+AT1-G7	NOT_RUN	-	Agent 7 (replication on the MacBook) owns G7
+AT1-G8	NOT_RUN	-	Agent 6 (scientific review) owns G8
