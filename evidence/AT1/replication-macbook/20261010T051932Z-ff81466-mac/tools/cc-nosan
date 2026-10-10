@@ -1,0 +1,11 @@
+#!/bin/sh
+# AT-1 Agent 7 build substitution on the MacBook (recorded in the G7 report).
+# Apple's ASan runtime hangs at startup on macOS 26.6.2 arm64 with Apple clang 17.0.0: an empty
+# main() built with -fsanitize=address,undefined spins in __asan::InitializeShadowMemory ->
+# get_dyld_hdr -> dyld_shared_cache_iterate_text_swift (see asan-probe-hang.sample.txt).
+# This wrapper refuses any -fsanitize flag so model/Makefile's own probe reports "skipped";
+# every other compile is passed unchanged to /usr/bin/cc.
+for a in "$@"; do
+  case "$a" in -fsanitize=*) echo "cc-nosan: refusing $a (ASan runtime hangs at startup on this Mac)" >&2; exit 1;; esac
+done
+exec /usr/bin/cc "$@"

@@ -1,0 +1,8 @@
+# AT-1 G2 gate controls: Darwin arm64, CC=/Users/drakestapleton/at1-replication/run-ff814662a19c/ccwrap/cc-nosan (Apple clang version 17.0.0 (clang-1700.6.4.2))
+clean_control	gate=PASS	want=PASS	AS_INTENDED	
+hidden_clock_mutant	gate=FAIL	want=FAIL	AS_INTENDED	FAIL: hidden_clock_mutant.o references clock_gettime
+counter_mutant	gate=FAIL	want=FAIL	AS_INTENDED	FAIL: instruction counter_mutant.o __text +0x0: d53be048 MRS from the generic timer (CNT*_EL0)
+raw_syscall_mutant	gate=FAIL	want=FAIL	AS_INTENDED	FAIL: instruction raw_syscall_mutant.o __text +0x10: d4001001 SVC (raw system call)
+counter_mutant	symbol-scan-only=PASS (blind, as expected)
+raw_syscall_mutant	symbol-scan-only=PASS (blind, as expected)
+AT1_ISOLATION_CONTROLS: PASS
