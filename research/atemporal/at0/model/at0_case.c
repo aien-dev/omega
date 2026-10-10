@@ -83,17 +83,21 @@ static int valid_digest(const char *s)
     return 1;
 }
 /* canonical integer token for counts and indices (same tri-state as the rational tokens:
- * 1 canonical, 0 shape error, -1 noncanonical such as "04" or "-0"), bounded so counts cannot
- * overflow; a negative value is left to rule 3. */
+ * 1 canonical, 0 shape error, -1 noncanonical such as "04" or "-0"). Canonical form is judged
+ * before the length cut, so a long noncanonical token still reports CASE_NONCANONICAL; a canonical
+ * token above 9 digits saturates (above every limit; it then fails the list-count shape check).
+ * A negative value also fails the shape pass (list counts / next key), never silently. */
 static int parse_small_int(const char *s, long *out)
 {
     size_t n = strlen(s), i = 0; int neg = 0;
     if (n > 0 && s[0] == '-') { neg = 1; i = 1; }
-    if (n == i || n - i > 9) return 0;
+    if (n == i) return 0;
     for (size_t j = i; j < n; j++) if (!isdigit((unsigned char)s[j])) return 0;
     int canonical = !(s[i] == '0' && (n - i > 1 || neg));
+    while (i < n - 1 && s[i] == '0') i++;                /* value of a noncanonical token: significant digits only */
     long v = 0;
-    for (; i < n; i++) v = v * 10 + (s[i] - '0');
+    if (n - i > 9) v = 1000000000L;                      /* saturation, above every limit */
+    else for (; i < n; i++) v = v * 10 + (s[i] - '0');
     *out = neg ? -v : v;
     return canonical ? 1 : -1;
 }
@@ -136,8 +140,9 @@ static at0_status copy_tok(const char *src, char *dst, size_t cap)
     strcpy(dst, src); return AT0_OK;
 }
 
-/* token parse: a shape error (rule 1) returns at once; a noncanonical token (rule 2) is recorded
- * and judged after the whole shape pass, so rule 1 anywhere in the file wins over rule 2 */
+/* token parse, both within AT0_CASE_V1 section 4 rule 1 (shape and encodings): a shape error
+ * returns at once; a well-formed but noncanonical token is recorded and judged after the whole
+ * shape pass, so a shape error anywhere in the file wins over canonical form */
 #define NEED(expr) do { at0_status st_ = (expr); if (st_ == AT0_CASE_NONCANONICAL) r->noncanonical = 1; else if (st_ != AT0_OK) return st_; } while (0)
 #define SMALL_INT(tok, out) do { int c_ = parse_small_int((tok), (out)); if (c_ == 0) return AT0_CASE_PARSE_ERROR; if (c_ < 0) r->noncanonical = 1; } while (0)
 #define FIXED(L, text) do { const char *l_ = next_line(L); if (!l_ || strcmp(l_, text) != 0) return AT0_CASE_PARSE_ERROR; } while (0)
@@ -252,7 +257,7 @@ static at0_status parse_shape(lines_t *L, at0_case *c, raw_t *r)
     strcpy(c->acceptance_id, rest);
     FIXED(L, "end");
     if (L->pos != L->count) return AT0_CASE_PARSE_ERROR;      /* trailing lines */
-    return r->noncanonical ? AT0_CASE_NONCANONICAL : AT0_OK;  /* rule 2, after the whole shape pass */
+    return r->noncanonical ? AT0_CASE_NONCANONICAL : AT0_OK;  /* canonical form, after the whole shape pass (still rule 1) */
 }
 
 /* rule 3: ranges and fixed values */

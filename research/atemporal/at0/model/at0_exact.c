@@ -309,7 +309,7 @@ static int rat_in_token_limits(at0_rat a) { return at0_rat_in_limits(a); }
 at0_status at0_rat_norm_exact(at0_rat hx, at0_rat hy, at0_rat hz, at0_rat *norm, int *is_square)
 {
     /* |h|^2 = (nx^2 (dy dz)^2 + ny^2 (dx dz)^2 + nz^2 (dx dy)^2) / (dx dy dz)^2.
-     * With tokens <= 2^20: each term <= 2^40 * 2^80 = 2^120, the sum < 2^122, D = dx dy dz < 2^60.
+     * With tokens <= 2^20: each term <= 2^40 * 2^80 = 2^120, the sum <= 3 * 2^120 < 2^122, D = dx dy dz <= 2^60.
      * The denominator is a perfect square, so |h| is rational iff the numerator is a perfect
      * square S^2, and then |h| = S / D with S < 2^61 (representable). */
     if (!norm || !is_square) return AT0_ERR_ARGUMENT;
@@ -335,7 +335,7 @@ at0_status at0_exact_norm_plus_hz(at0_rat hx, at0_rat hy, at0_rat hz, at0_rat h_
                                   at0_i128 *A, at0_i128 *D)
 {
     /* a = |h| + hz = (S + nz dx dy) / D with D = dx dy dz and |h| = S / D unreduced:
-     * S < 2^61 and nz dx dy < 2^60, so |A| < 2^62. h_norm is the reduced S / D, hence
+     * S <= sqrt3 * 2^60 < 2^61 and |nz dx dy| <= 2^60, so |A| < 2^62. h_norm is the reduced S / D, hence
      * h_norm.d divides D and S = h_norm.n * (D / h_norm.d). */
     if (!A || !D) return AT0_ERR_ARGUMENT;
     if (!rat_in_token_limits(hx) || !rat_in_token_limits(hy) || !rat_in_token_limits(hz)) return AT0_ERR_OVERFLOW;

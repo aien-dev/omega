@@ -463,7 +463,15 @@ static int test_large_rationals_within_limits(void)
             CHECK(fabs(r.label[k].pauli[0][0] - 0.2) <= 1e-14, "X+ label %d = %.17g", k, r.label[k].pauli[0][0]);
             CHECK(fabs(r.label[k].pauli[1][0] - 0.1) <= 1e-14, "Y+ label %d = %.17g", k, r.label[k].pauli[1][0]);
         }
-        /* and the generic (nonzero overlap) branch with the same denominators */
+        /* the exact zero decision itself: with energies {-5/1048572, 1/1} only (j = 0, s = 1) is in the
+         * kernel, and <v_1|psi0> = 0 exactly, so Psi = 0 and the engine must say so (the old engine
+         * overflowed here; a wrong "nonzero" would give a tiny junk state instead) */
+        c.clock_energies[1] = R(1, 1);
+        OK(finalize(&c));
+        OK(at0_engine_run(&c, &r));
+        CHECK(r.kernel_dim == 1 && !r.psi_nonzero, "exact zero: kernel %d nonzero %d", r.kernel_dim, r.psi_nonzero);
+        c.clock_energies[1] = R(5, 1048572);
+        /* and the generic (nonzero overlap) branch with three further denominators */
         c.psi0[0].re = R(1, 1048571); c.psi0[0].im = R(0, 1);
         c.psi0[1].re = R(1, 1048569); c.psi0[1].im = R(1, 1048567);
         OK(finalize(&c));
@@ -499,15 +507,15 @@ static int test_invalid_input_refusal(void)
     f |= expect_refusal("crlf", "clock_dim 4\n", "clock_dim 4\r\n", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("missing final lf", "end\n", "end", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("unknown key", "interaction NONE", "interactions NONE", AT0_CASE_PARSE_ERROR);
-    /* qualification D2: well-formed but noncanonical integers are rule 2, not rule 1 */
+    /* qualification D2: well-formed but noncanonical integers are CASE_NONCANONICAL (rule 1, canonical form) */
     f |= expect_refusal("R17 leading-zero clock_dim", "clock_dim 4\n", "clock_dim 04\n", AT0_CASE_NONCANONICAL);
     f |= expect_refusal("R30 negative zero h0", "0/1,0/1,0/1,1/2", "-0/1,0/1,0/1,1/2", AT0_CASE_NONCANONICAL);
     f |= expect_refusal("leading-zero label count", "clock_label_count 4", "clock_label_count 04", AT0_CASE_NONCANONICAL);
     f |= expect_refusal("leading-zero label index", "clock_label 0 t0", "clock_label 00 t0", AT0_CASE_NONCANONICAL);
     f |= expect_refusal("plus sign is a shape error", "povm_weight 1/1", "povm_weight +1/1", AT0_CASE_PARSE_ERROR);
-    /* rule order across the file: a shape error after a noncanonical token still reports rule 1 */
-    f |= expect_refusal("rule 1 beats rule 2 across lines", "clock_dim 4\n", "clock_dim 04\n", AT0_CASE_NONCANONICAL);
-    f |= expect_refusal2("rule 1 beats rule 2 across lines", "clock_dim 4\n", "clock_dim 04\n", "povm_weight 1/1", "povm_weight 1/x", AT0_CASE_PARSE_ERROR);
+    f |= expect_refusal("long leading-zero count is still noncanonical", "clock_dim 4\n", "clock_dim 0000000004\n", AT0_CASE_NONCANONICAL);
+    /* within rule 1: a shape error after a noncanonical token still reports the shape error */
+    f |= expect_refusal2("shape error beats canonical form across lines", "clock_dim 4\n", "clock_dim 04\n", "povm_weight 1/1", "povm_weight 1/x", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("bad label chars", "clock_label 1 t1", "clock_label 1 T1", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("trailing lines", "end\n", "end\nextra\n", AT0_CASE_PARSE_ERROR);
     f |= expect_refusal("bad failure code with FAIL", "expected_outcome PASS\nexpected_failure_codes none", "expected_outcome FAIL\nexpected_failure_codes NOT_A_CODE", AT0_CASE_ID_MISMATCH);

@@ -24,7 +24,7 @@ emergence of time** (charter section 1, draft spec section 11).
 | Component | File | Entry points |
 |---|---|---|
 | Exact arithmetic | `at0_exact.c` | reduced rationals with 128-bit intermediates and contract limits, scaled decimals, exact phase reduction mod one turn, exact integer comparison of a binary64 against decimal tolerances (`at0_exact_prob_status`), and overflow-free exact helpers for derived quantities whose reduced denominators exceed 2^62 (`at0_rat_norm_exact` for `|h|`, `at0_exact_norm_plus_hz`, `at0_exact_sum_is_zero`; checked 128-bit products, never wrapped) |
-| Versioned input | `at0_case.c` | `at0_case_parse` (AT0_CASE_V1 rules 1 to 6 in contract order; a well-formed but noncanonical token such as `04` or `-0/1` is rule 2, judged after the whole shape pass), `at0_case_emit` (byte-exact), `at0_case_identities` (domain-tagged SHA-256 via omega `src/sha256.c`); works on bytes only |
+| Versioned input | `at0_case.c` | `at0_case_parse` (AT0_CASE_V1 rules 1 to 6 in contract order; a well-formed but noncanonical token such as `04` or `-0/1` is `CASE_NONCANONICAL`, judged after the whole shape pass, both within rule 1), `at0_case_emit` (byte-exact), `at0_case_identities` (domain-tagged SHA-256 via omega `src/sha256.c`); works on bytes only |
 | File input | `at0_io.c` | `at0_case_read_file`: the only object that touches the file system (fopen/fread), hands the bytes to `at0_case_parse` |
 | Quantum state | `at0_state.c` | bounds-checked vector in `C^N (x) C^2`, clock factor first; norms, inner products, finiteness checks |
 | Hamiltonian construction | `at0_hamiltonian.c` | spectrum `h0 +/- |h|` (exact in the case's `h0`, `h_norm`; stored as binary64), binary64 eigenvectors, `H_total` applied to a state |
@@ -130,8 +130,9 @@ than 2; `RIGOROUS` bounds; shot sampling; the oracle's `reference` lines and the
   (qualification finding D1, case P5). They are decided on unreduced 128-bit integers over the common denominator
   `dx dy dz`, with every product bounded at the use site (largest: 2^124 in the overlap test) and checked with
   overflow-detecting arithmetic; an exceeded bound stops with `AT0_ENGINE_ERROR ERR_OVERFLOW` (explicit, never a wrong
-  number), which no in-limit case can reach. `test_large_rationals_within_limits` covers P5 and a three-denominator
-  case with an exactly-zero overlap.
+  number), which no in-limit case can reach. `test_large_rationals_within_limits` covers P5, a case whose
+  overlap with one eigenvector is exactly zero (the kernel then holds that eigenvector only and `Psi = 0` must be
+  decided exactly), and a generic case with four distinct denominators.
 - Trivial kernel ruling (Agent 0, omega#358): `povm_residual` is still computed, nothing is divided, every label is
   `UNDEFINED`; this engine already behaves that way. Result files move to `AT0_RESULT_V2`; the `contract` line of the
   engine output names it, and the values block is unchanged.
@@ -140,7 +141,8 @@ than 2; `RIGOROUS` bounds; shot sampling; the oracle's `reference` lines and the
   identity hashing. Codex review was unavailable (usage limit).
 - Qualification fixes (Agent 5 first run, omega#363): D1 `ERR_OVERFLOW` on P5 (above), D2 noncanonical integers
   (`clock_dim 04`, `-0/1`) now `CASE_NONCANONICAL` instead of `CASE_PARSE_ERROR`, D6 file reader moved to `at0_io.c`,
-  D8 spec pin moved to the merged commit. D3 (R31, R36: rule 1 against rule 3) is an Agent 0 contract call and is unchanged.
+  D8 spec pin moved to the merged commit. D3 (R31, R36: rule 1 against rule 3) is an Agent 0 contract call and is unchanged. Second Opus review (2026-10-09)
+  found no arithmetic defect; its test-strength and wording findings are applied.
 - `tests/cases/kat-ideal-qubit-n4.case` is the contract's section 6 example byte for byte
   (`case_file_sha256 ed16c95c...`).
 

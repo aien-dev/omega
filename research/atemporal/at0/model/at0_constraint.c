@@ -40,7 +40,7 @@ static at0_status overlap_is_zero(const at0_case *c, const at0_system_hamiltonia
         *zero = at0_rat_is_zero(p.re) && at0_rat_is_zero(p.im);
         return AT0_OK;
     }
-    /* a = |h| + hz = A / D with D = dx dy dz (unreduced, |A| < 2^62, D < 2^60) */
+    /* a = |h| + hz = A / D with D = dx dy dz (unreduced, |A| < 2^62, D <= 2^60) */
     at0_i128 A, D;
     at0_status st = at0_exact_norm_plus_hz(c->hx, c->hy, c->hz, c->h_norm, &A, &D);
     if (st != AT0_OK) return st;
